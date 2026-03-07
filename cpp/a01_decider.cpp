@@ -1,8 +1,8 @@
 #include "../hpp/a01_decider.hpp"
 
 a01_decider::a01_decider(
-    a01_goal_store& gs,
-    a01_candidate_store& cs,
+    const a01_goal_store& gs,
+    const a01_candidate_store& cs,
     monte_carlo::simulation<choice, std::mt19937>& sim
 )
     : gs(gs), cs(cs), sim(sim)
