@@ -28,6 +28,10 @@ bool a01_sim_one(
         size_t elim1 = std::erase_if(cs, [&ce](const auto& e) { return ce(e.first, e.second); });
         const auto it = std::find_if(gs.begin(), gs.end(), [&up](const auto& e) { return up(e.first); });
 
+        // enact the propagation
+        if (it != gs.end())
+            gr(it->first, cs.find(it->first)->second);
+
         // continue until fixpoint
         if (elim0 > 0 || elim1 > 0 || it != gs.end())
             continue;
