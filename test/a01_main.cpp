@@ -43,7 +43,6 @@ bool a01_sim_one(
         auto rl = lp.resolution(chosen_goal, chosen_candidate);
 
         ds.insert(rl);
-        rs.insert(rl);
 
     }
 
@@ -110,6 +109,60 @@ void init_ep_3(expr_pool& ep, lineage_pool& lp, a01_database& db, a01_goal_store
     ga(lp.goal(nullptr, 0), ep.atom("a"));
 }
 
+void init_ep_4(expr_pool& ep, lineage_pool& lp, a01_database& db, a01_goal_store& gs, a01_candidate_store& cs) {
+    // a :- b, c.
+    // b.
+    // :- a.
+    // %no c candidates (refuted)
+    
+    // edit database
+    db.push_back(rule{ep.atom("a"), {ep.atom("b"), ep.atom("c")}});
+    db.push_back(rule{ep.atom("b"), {}});
+
+    // construct goal adder
+    a01_goal_adder ga(gs, cs, db);
+
+    // edit goal store
+    ga(lp.goal(nullptr, 0), ep.atom("a"));
+}
+
+void init_ep_5(expr_pool& ep, lineage_pool& lp, a01_database& db, a01_goal_store& gs, a01_candidate_store& cs) {
+    // a :- b, c.
+    // b.
+    // c.
+    // :- a.
+    
+    // edit database
+    db.push_back(rule{ep.atom("a"), {ep.atom("b"), ep.atom("c")}});
+    db.push_back(rule{ep.atom("b"), {}});
+    db.push_back(rule{ep.atom("c"), {}});
+
+    // construct goal adder
+    a01_goal_adder ga(gs, cs, db);
+
+    // edit goal store
+    ga(lp.goal(nullptr, 0), ep.atom("a"));
+}
+
+void init_ep_6(expr_pool& ep, lineage_pool& lp, a01_database& db, a01_goal_store& gs, a01_candidate_store& cs) {
+    // a :- b, c.
+    // a :- d.
+    // b.
+    // %no d or c candidates (refuted inductively)
+    // :- a.
+    
+    // edit database
+    db.push_back(rule{ep.atom("a"), {ep.atom("b"), ep.atom("c")}});
+    db.push_back(rule{ep.atom("a"), {ep.atom("d")}});
+    db.push_back(rule{ep.atom("b"), {}});
+
+    // construct goal adder
+    a01_goal_adder ga(gs, cs, db);
+
+    // edit goal store
+    ga(lp.goal(nullptr, 0), ep.atom("a"));
+}
+
 void a01() {
     trail t;
     bind_map bm(t);
@@ -143,7 +196,7 @@ void a01() {
     t.push();
 
     // CHOOSE EXAMPLE PROBLEM
-    init_ep_3(ep, lp, db, gs_main, cs_main);
+    init_ep_6(ep, lp, db, gs_main, cs_main);
     
     constexpr size_t ITERATIONS_BEFORE_CDCL = 1000;
     constexpr double EXPLORATION_CONSTANT = 1.414;
@@ -178,7 +231,7 @@ void a01() {
 
             // check for refutation
             if (ds_working_copy.empty()) {
-                throw std::runtime_error("No solution exists");
+                throw std::runtime_error("Refuted");
             }
 
             t.pop();
