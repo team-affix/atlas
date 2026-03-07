@@ -6,6 +6,6 @@ solution_detector::solution_detector(
     : gs(gs)
 {}
 
-bool solution_detector::operator()(const goal_lineage* gl) {
+bool solution_detector::operator()() {
     return gs.empty();
 }

@@ -7,7 +7,7 @@ struct solution_detector {
     solution_detector(
         const a01_goal_store&
     );
-    bool operator()(const goal_lineage*);
+    bool operator()();
 #ifndef DEBUG
 private:
 #endif
