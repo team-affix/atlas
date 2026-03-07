@@ -52,8 +52,56 @@ bool a01_sim_one(
 }
 
 void init_ep_0(expr_pool& ep, lineage_pool& lp, a01_database& db, a01_goal_store& gs, a01_candidate_store& cs) {
+    // a.
+    // :- a.
+    
     // edit database
     db.push_back(rule{ep.atom("a"), {}});
+
+    // construct goal adder
+    a01_goal_adder ga(gs, cs, db);
+
+    // edit goal store
+    ga(lp.goal(nullptr, 0), ep.atom("a"));
+}
+
+void init_ep_1(expr_pool& ep, lineage_pool& lp, a01_database& db, a01_goal_store& gs, a01_candidate_store& cs) {
+    // a.
+    // :- b.
+    
+    // edit database
+    db.push_back(rule{ep.atom("a"), {}});
+
+    // construct goal adder
+    a01_goal_adder ga(gs, cs, db);
+
+    // edit goal store
+    ga(lp.goal(nullptr, 0), ep.atom("b"));
+}
+
+void init_ep_2(expr_pool& ep, lineage_pool& lp, a01_database& db, a01_goal_store& gs, a01_candidate_store& cs) {
+    // a :- b.
+    // %no b candidates (refuted)
+    // :- a.
+    
+    // edit database
+    db.push_back(rule{ep.atom("a"), {ep.atom("b")}});
+
+    // construct goal adder
+    a01_goal_adder ga(gs, cs, db);
+
+    // edit goal store
+    ga(lp.goal(nullptr, 0), ep.atom("a"));
+}
+
+void init_ep_3(expr_pool& ep, lineage_pool& lp, a01_database& db, a01_goal_store& gs, a01_candidate_store& cs) {
+    // a :- b.
+    // b.
+    // :- a.
+    
+    // edit database
+    db.push_back(rule{ep.atom("a"), {ep.atom("b")}});
+    db.push_back(rule{ep.atom("b"), {}});
 
     // construct goal adder
     a01_goal_adder ga(gs, cs, db);
@@ -95,7 +143,7 @@ void a01() {
     t.push();
 
     // CHOOSE EXAMPLE PROBLEM
-    init_ep_0(ep, lp, db, gs_main, cs_main);
+    init_ep_3(ep, lp, db, gs_main, cs_main);
     
     constexpr size_t ITERATIONS_BEFORE_CDCL = 1000;
     constexpr double EXPLORATION_CONSTANT = 1.414;
@@ -126,6 +174,11 @@ void a01() {
 
             if (a01_sim_one(lp, gs_working_copy, cs_working_copy, ds_working_copy, rs_working_copy, cd, sd, he, ce, up, gr, dec)) {
                 throw std::runtime_error("Solution found");
+            }
+
+            // check for refutation
+            if (ds_working_copy.empty()) {
+                throw std::runtime_error("No solution exists");
             }
 
             t.pop();
