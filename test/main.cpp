@@ -19479,7 +19479,11 @@ void unit_test_main() {
     TEST(test_a01_decider);
 }
 
+#ifdef DEBUG
+
 int main() {
     unit_test_main();
     return 0;
 }
+
+#endif
