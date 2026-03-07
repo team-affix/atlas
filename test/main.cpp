@@ -10,6 +10,7 @@
 #include "../hpp/a01_goal_resolver.hpp"
 #include "../hpp/a01_head_elimination_detector.hpp"
 #include "../hpp/unit_propagation_detector.hpp"
+#include "../hpp/solution_detector.hpp"
 #include "test_utils.hpp"
 
 void test_trail_constructor() {
@@ -16383,6 +16384,403 @@ void test_unit_propagation_detector() {
     }
 }
 
+void test_solution_detector_constructor() {
+    // Test 1: Basic construction with empty goal store
+    {
+        a01_goal_store gs;
+        
+        solution_detector detector(gs);
+        
+        // Verify reference stored
+        assert(&detector.gs == &gs);
+    }
+    
+    // Test 2: Construction with non-empty goal store
+    {
+        trail t;
+        t.push();
+        expr_pool ep(t);
+        lineage_pool lp;
+        a01_goal_store gs;
+        
+        // Pre-populate goal store
+        const goal_lineage* g1 = lp.goal(nullptr, 1);
+        const goal_lineage* g2 = lp.goal(nullptr, 2);
+        const expr* e1 = ep.atom("p");
+        const expr* e2 = ep.atom("q");
+        gs.insert({g1, e1});
+        gs.insert({g2, e2});
+        
+        assert(gs.size() == 2);
+        
+        solution_detector detector(gs);
+        
+        // Verify reference and that store wasn't modified
+        assert(&detector.gs == &gs);
+        assert(detector.gs.size() == 2);
+    }
+}
+
+void test_solution_detector() {
+    // Test 1: Empty goal store - solution found (returns true)
+    {
+        a01_goal_store gs;
+        
+        assert(gs.empty());
+        
+        solution_detector detector(gs);
+        
+        bool result = detector();
+        
+        // CRITICAL: Should return true (solution found, no goals remain)
+        assert(result == true);
+        
+        // Store unchanged
+        assert(gs.empty());
+    }
+    
+    // Test 2: Goal store with 1 goal - no solution (returns false)
+    {
+        trail t;
+        t.push();
+        expr_pool ep(t);
+        lineage_pool lp;
+        a01_goal_store gs;
+        
+        const goal_lineage* g1 = lp.goal(nullptr, 1);
+        const expr* e1 = ep.atom("p");
+        gs.insert({g1, e1});
+        
+        assert(gs.size() == 1);
+        
+        solution_detector detector(gs);
+        
+        bool result = detector();
+        
+        // Should return false (still have goals to resolve)
+        assert(result == false);
+        
+        // Store unchanged
+        assert(gs.size() == 1);
+        assert(gs.count(g1) == 1);
+    }
+    
+    // Test 3: Goal store with 2 goals - no solution
+    {
+        trail t;
+        t.push();
+        expr_pool ep(t);
+        lineage_pool lp;
+        a01_goal_store gs;
+        
+        const goal_lineage* g1 = lp.goal(nullptr, 1);
+        const goal_lineage* g2 = lp.goal(nullptr, 2);
+        const expr* e1 = ep.atom("p");
+        const expr* e2 = ep.atom("q");
+        gs.insert({g1, e1});
+        gs.insert({g2, e2});
+        
+        assert(gs.size() == 2);
+        
+        solution_detector detector(gs);
+        
+        bool result = detector();
+        
+        // Should return false
+        assert(result == false);
+        
+        // Store unchanged
+        assert(gs.size() == 2);
+    }
+    
+    // Test 4: Goal store with many goals - no solution
+    {
+        trail t;
+        t.push();
+        expr_pool ep(t);
+        lineage_pool lp;
+        a01_goal_store gs;
+        
+        // Add 10 goals
+        for (int i = 0; i < 10; i++) {
+            const goal_lineage* g = lp.goal(nullptr, i);
+            const expr* e = ep.atom("p" + std::to_string(i));
+            gs.insert({g, e});
+        }
+        
+        assert(gs.size() == 10);
+        
+        solution_detector detector(gs);
+        
+        bool result = detector();
+        
+        // Should return false (many unresolved goals)
+        assert(result == false);
+        
+        // Store unchanged
+        assert(gs.size() == 10);
+    }
+    
+    // Test 5: Multiple calls on empty store - verify idempotence
+    {
+        a01_goal_store gs;
+        
+        solution_detector detector(gs);
+        
+        // Call 100 times
+        for (int i = 0; i < 100; i++) {
+            bool result = detector();
+            assert(result == true);
+        }
+        
+        // CRITICAL: Store still empty after 100 calls
+        assert(gs.empty());
+    }
+    
+    // Test 6: Multiple calls on non-empty store - verify idempotence
+    {
+        trail t;
+        t.push();
+        expr_pool ep(t);
+        lineage_pool lp;
+        a01_goal_store gs;
+        
+        const goal_lineage* g1 = lp.goal(nullptr, 1);
+        gs.insert({g1, ep.atom("p")});
+        
+        solution_detector detector(gs);
+        
+        // Call multiple times
+        for (int i = 0; i < 50; i++) {
+            bool result = detector();
+            assert(result == false);
+        }
+        
+        // CRITICAL: Store unchanged
+        assert(gs.size() == 1);
+    }
+    
+    // Test 7: Simulate solver progression - goals → empty (solution reached)
+    {
+        trail t;
+        t.push();
+        expr_pool ep(t);
+        lineage_pool lp;
+        a01_goal_store gs;
+        
+        // Start with 3 goals
+        const goal_lineage* g1 = lp.goal(nullptr, 1);
+        const goal_lineage* g2 = lp.goal(nullptr, 2);
+        const goal_lineage* g3 = lp.goal(nullptr, 3);
+        gs.insert({g1, ep.atom("p")});
+        gs.insert({g2, ep.atom("q")});
+        gs.insert({g3, ep.atom("r")});
+        
+        solution_detector detector(gs);
+        
+        // Initially no solution
+        assert(detector() == false);
+        assert(gs.size() == 3);
+        
+        // "Resolve" goal 1 (simulate by removing)
+        gs.erase(g1);
+        assert(detector() == false);
+        assert(gs.size() == 2);
+        
+        // "Resolve" goal 2
+        gs.erase(g2);
+        assert(detector() == false);
+        assert(gs.size() == 1);
+        
+        // "Resolve" goal 3 (last one)
+        gs.erase(g3);
+        
+        // NOW we have a solution!
+        assert(detector() == true);
+        assert(gs.empty());
+    }
+    
+    // Test 8: Multiple detectors on same store
+    {
+        a01_goal_store gs;
+        
+        solution_detector detector1(gs);
+        solution_detector detector2(gs);
+        
+        // Both should return same result
+        assert(detector1() == true);
+        assert(detector2() == true);
+        
+        // Store unchanged
+        assert(gs.empty());
+    }
+    
+    // Test 9: Goals at different lineage depths - only count matters
+    {
+        trail t;
+        t.push();
+        expr_pool ep(t);
+        lineage_pool lp;
+        a01_goal_store gs;
+        
+        // Root goal
+        const goal_lineage* g_root = lp.goal(nullptr, 0);
+        
+        // Child goal (level 1)
+        const resolution_lineage* rl1 = lp.resolution(g_root, 0);
+        const goal_lineage* g_child = lp.goal(rl1, 0);
+        
+        // Grandchild goal (level 2)
+        const resolution_lineage* rl2 = lp.resolution(g_child, 0);
+        const goal_lineage* g_grandchild = lp.goal(rl2, 0);
+        
+        // Add all three to store
+        gs.insert({g_root, ep.atom("p")});
+        gs.insert({g_child, ep.atom("q")});
+        gs.insert({g_grandchild, ep.atom("r")});
+        
+        solution_detector detector(gs);
+        
+        // CRITICAL: Lineage depth doesn't matter, only that goals exist
+        assert(detector() == false);
+        assert(gs.size() == 3);
+        
+        // Remove all
+        gs.clear();
+        
+        // Now solution found
+        assert(detector() == true);
+        assert(gs.empty());
+    }
+    
+    // Test 10: Boundary - exactly 1 goal vs empty
+    {
+        trail t;
+        t.push();
+        expr_pool ep(t);
+        lineage_pool lp;
+        a01_goal_store gs;
+        
+        const goal_lineage* g1 = lp.goal(nullptr, 1);
+        const expr* e1 = ep.atom("p");
+        
+        solution_detector detector(gs);
+        
+        // Empty: solution
+        assert(detector() == true);
+        
+        // Add 1 goal: no solution
+        gs.insert({g1, e1});
+        assert(detector() == false);
+        assert(gs.size() == 1);
+        
+        // Remove it: solution again
+        gs.erase(g1);
+        assert(detector() == true);
+        assert(gs.empty());
+    }
+    
+    // Test 11: Simulate complete resolution sequence with goal_adder integration
+    {
+        trail t;
+        t.push();
+        expr_pool ep(t);
+        lineage_pool lp;
+        a01_goal_store gs;
+        a01_candidate_store cs;
+        
+        // Database: p :- q, q :- r, r (chain)
+        const expr* p = ep.atom("p");
+        const expr* q = ep.atom("q");
+        const expr* r = ep.atom("r");
+        rule r0{p, {q}};
+        rule r1{q, {r}};
+        rule r2{r, {}};
+        a01_database db = {r0, r1, r2};
+        
+        a01_goal_adder ga(gs, cs, db);
+        solution_detector detector(gs);
+        
+        // Initially empty - solution found (trivially)
+        assert(detector() == true);
+        
+        // Add root goal p
+        const goal_lineage* g_p = lp.goal(nullptr, 0);
+        ga(g_p, p);
+        
+        // Now have 1 goal - no solution
+        assert(detector() == false);
+        assert(gs.size() == 1);
+        
+        // "Resolve" p → creates q
+        gs.erase(g_p);
+        cs.erase(g_p);
+        const resolution_lineage* rl_p = lp.resolution(g_p, 0);
+        const goal_lineage* g_q = lp.goal(rl_p, 0);
+        ga(g_q, q);
+        
+        // Still have 1 goal (q) - no solution
+        assert(detector() == false);
+        assert(gs.size() == 1);
+        
+        // "Resolve" q → creates r
+        gs.erase(g_q);
+        cs.erase(g_q);
+        const resolution_lineage* rl_q = lp.resolution(g_q, 1);
+        const goal_lineage* g_r = lp.goal(rl_q, 0);
+        ga(g_r, r);
+        
+        // Still have 1 goal (r) - no solution
+        assert(detector() == false);
+        assert(gs.size() == 1);
+        
+        // "Resolve" r (fact with empty body)
+        gs.erase(g_r);
+        cs.erase(g_r);
+        
+        // NOW empty - solution found!
+        assert(detector() == true);
+        assert(gs.empty());
+    }
+    
+    // Test 12: Stress test - transition from many goals to solution
+    {
+        trail t;
+        t.push();
+        expr_pool ep(t);
+        lineage_pool lp;
+        a01_goal_store gs;
+        
+        // Add 100 goals
+        std::vector<const goal_lineage*> goals;
+        for (int i = 0; i < 100; i++) {
+            const goal_lineage* g = lp.goal(nullptr, i);
+            gs.insert({g, ep.atom("p" + std::to_string(i))});
+            goals.push_back(g);
+        }
+        
+        solution_detector detector(gs);
+        
+        // Initially no solution
+        assert(detector() == false);
+        
+        // Remove goals one by one
+        for (int i = 0; i < 99; i++) {
+            gs.erase(goals[i]);
+            // Still have goals remaining
+            assert(detector() == false);
+            assert(gs.size() == 100 - i - 1);
+        }
+        
+        // Remove last goal
+        gs.erase(goals[99]);
+        
+        // NOW solution found!
+        assert(detector() == true);
+        assert(gs.empty());
+    }
+}
+
 void unit_test_main() {
     constexpr bool ENABLE_DEBUG_LOGS = true;
 
@@ -16424,6 +16822,8 @@ void unit_test_main() {
     TEST(test_a01_head_elimination_detector);
     TEST(test_unit_propagation_detector_constructor);
     TEST(test_unit_propagation_detector);
+    TEST(test_solution_detector_constructor);
+    TEST(test_solution_detector);
 }
 
 int main() {
