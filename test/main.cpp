@@ -9,6 +9,7 @@
 #include "../hpp/a01_goal_adder.hpp"
 #include "../hpp/a01_goal_resolver.hpp"
 #include "../hpp/a01_head_elimination_detector.hpp"
+#include "../hpp/unit_propagation_detector.hpp"
 #include "test_utils.hpp"
 
 void test_trail_constructor() {
@@ -15843,6 +15844,545 @@ void test_a01_head_elimination_detector() {
     }
 }
 
+void test_unit_propagation_detector_constructor() {
+    // Test 1: Basic construction with empty candidate store
+    {
+        lineage_pool lp;
+        a01_candidate_store cs;
+        
+        unit_propagation_detector detector(cs);
+        
+        // Verify reference stored
+        assert(&detector.cs == &cs);
+    }
+    
+    // Test 2: Construction with non-empty candidate store
+    {
+        lineage_pool lp;
+        a01_candidate_store cs;
+        
+        // Pre-populate candidate store
+        const goal_lineage* g1 = lp.goal(nullptr, 1);
+        const goal_lineage* g2 = lp.goal(nullptr, 2);
+        cs.insert({g1, 0});
+        cs.insert({g1, 1});
+        cs.insert({g2, 0});
+        
+        assert(cs.size() == 3);
+        
+        unit_propagation_detector detector(cs);
+        
+        // Verify reference and that store wasn't modified
+        assert(&detector.cs == &cs);
+        assert(detector.cs.size() == 3);
+    }
+}
+
+void test_unit_propagation_detector() {
+    // Test 1: Goal with exactly 1 candidate - should return true (unit propagation)
+    {
+        lineage_pool lp;
+        a01_candidate_store cs;
+        
+        const goal_lineage* g1 = lp.goal(nullptr, 1);
+        cs.insert({g1, 0});  // Exactly one candidate
+        
+        assert(cs.count(g1) == 1);
+        
+        unit_propagation_detector detector(cs);
+        
+        bool result = detector(g1);
+        
+        // CRITICAL: Should return true (unit propagation detected)
+        assert(result == true);
+        
+        // Candidate store unchanged
+        assert(cs.count(g1) == 1);
+        assert(cs.size() == 1);
+    }
+    
+    // Test 2: Goal with 0 candidates - should return false (no unit propagation)
+    {
+        lineage_pool lp;
+        a01_candidate_store cs;
+        
+        const goal_lineage* g1 = lp.goal(nullptr, 1);
+        // Don't add any candidates for g1
+        
+        assert(cs.count(g1) == 0);
+        
+        unit_propagation_detector detector(cs);
+        
+        bool result = detector(g1);
+        
+        // Should return false (no candidates at all)
+        assert(result == false);
+        
+        // Store unchanged
+        assert(cs.size() == 0);
+    }
+    
+    // Test 3: Goal with 2 candidates - should return false (no unit propagation)
+    {
+        lineage_pool lp;
+        a01_candidate_store cs;
+        
+        const goal_lineage* g1 = lp.goal(nullptr, 1);
+        cs.insert({g1, 0});
+        cs.insert({g1, 1});  // Two candidates
+        
+        assert(cs.count(g1) == 2);
+        
+        unit_propagation_detector detector(cs);
+        
+        bool result = detector(g1);
+        
+        // Should return false (multiple candidates, no forced choice)
+        assert(result == false);
+        
+        // Store unchanged
+        assert(cs.count(g1) == 2);
+        assert(cs.size() == 2);
+    }
+    
+    // Test 4: Goal with many candidates - should return false
+    {
+        lineage_pool lp;
+        a01_candidate_store cs;
+        
+        const goal_lineage* g1 = lp.goal(nullptr, 1);
+        
+        // Add 10 candidates
+        for (size_t i = 0; i < 10; i++) {
+            cs.insert({g1, i});
+        }
+        
+        assert(cs.count(g1) == 10);
+        
+        unit_propagation_detector detector(cs);
+        
+        bool result = detector(g1);
+        
+        // Should return false (many candidates)
+        assert(result == false);
+        
+        // Store unchanged
+        assert(cs.count(g1) == 10);
+        assert(cs.size() == 10);
+    }
+    
+    // Test 5: Multiple goals with varying candidate counts
+    {
+        lineage_pool lp;
+        a01_candidate_store cs;
+        
+        // Goal 1: 0 candidates
+        const goal_lineage* g1 = lp.goal(nullptr, 1);
+        
+        // Goal 2: 1 candidate (unit)
+        const goal_lineage* g2 = lp.goal(nullptr, 2);
+        cs.insert({g2, 0});
+        
+        // Goal 3: 2 candidates
+        const goal_lineage* g3 = lp.goal(nullptr, 3);
+        cs.insert({g3, 0});
+        cs.insert({g3, 1});
+        
+        // Goal 4: 1 candidate (unit)
+        const goal_lineage* g4 = lp.goal(nullptr, 4);
+        cs.insert({g4, 5});
+        
+        // Goal 5: 3 candidates
+        const goal_lineage* g5 = lp.goal(nullptr, 5);
+        cs.insert({g5, 0});
+        cs.insert({g5, 1});
+        cs.insert({g5, 2});
+        
+        assert(cs.size() == 7); // Total entries
+        
+        unit_propagation_detector detector(cs);
+        
+        // Test each goal
+        assert(detector(g1) == false);  // 0 candidates
+        assert(detector(g2) == true);   // 1 candidate (UNIT)
+        assert(detector(g3) == false);  // 2 candidates
+        assert(detector(g4) == true);   // 1 candidate (UNIT)
+        assert(detector(g5) == false);  // 3 candidates
+        
+        // CRITICAL: Multiple calls should be consistent (no side effects)
+        assert(detector(g2) == true);
+        assert(detector(g4) == true);
+        assert(detector(g1) == false);
+        
+        // Store completely unchanged
+        assert(cs.size() == 7);
+        assert(cs.count(g1) == 0);
+        assert(cs.count(g2) == 1);
+        assert(cs.count(g3) == 2);
+        assert(cs.count(g4) == 1);
+        assert(cs.count(g5) == 3);
+    }
+    
+    // Test 6: Goal not in candidate store at all - should return false
+    {
+        lineage_pool lp;
+        a01_candidate_store cs;
+        
+        // Add some goals to the store
+        const goal_lineage* g1 = lp.goal(nullptr, 1);
+        cs.insert({g1, 0});
+        
+        // But check a different goal not in the store
+        const goal_lineage* g_missing = lp.goal(nullptr, 999);
+        
+        unit_propagation_detector detector(cs);
+        
+        bool result = detector(g_missing);
+        
+        // Should return false (not in store means 0 candidates)
+        assert(result == false);
+        assert(cs.count(g_missing) == 0);
+    }
+    
+    // Test 7: Same goal multiple times - verify idempotence
+    {
+        lineage_pool lp;
+        a01_candidate_store cs;
+        
+        const goal_lineage* g1 = lp.goal(nullptr, 1);
+        cs.insert({g1, 0});  // Single candidate
+        
+        unit_propagation_detector detector(cs);
+        
+        // Call multiple times
+        for (int i = 0; i < 100; i++) {
+            bool result = detector(g1);
+            assert(result == true);
+        }
+        
+        // CRITICAL: Store unchanged after 100 calls
+        assert(cs.count(g1) == 1);
+        assert(cs.size() == 1);
+    }
+    
+    // Test 8: Transition from multiple to unit after elimination simulation
+    {
+        lineage_pool lp;
+        a01_candidate_store cs;
+        
+        const goal_lineage* g1 = lp.goal(nullptr, 1);
+        cs.insert({g1, 0});
+        cs.insert({g1, 1});
+        cs.insert({g1, 2});
+        
+        unit_propagation_detector detector(cs);
+        
+        // Initially not a unit (3 candidates)
+        assert(detector(g1) == false);
+        assert(cs.count(g1) == 3);
+        
+        // Simulate elimination: remove candidates
+        auto range = cs.equal_range(g1);
+        auto it = range.first;
+        ++it; // Skip first
+        cs.erase(it); // Erase second
+        
+        // Now 2 candidates
+        assert(cs.count(g1) == 2);
+        assert(detector(g1) == false);
+        
+        // Remove one more
+        range = cs.equal_range(g1);
+        it = range.first;
+        ++it;
+        cs.erase(it);
+        
+        // Now exactly 1 candidate (UNIT!)
+        assert(cs.count(g1) == 1);
+        assert(detector(g1) == true);
+    }
+    
+    // Test 9: Stress test - many goals with varying counts
+    {
+        lineage_pool lp;
+        a01_candidate_store cs;
+        
+        std::vector<const goal_lineage*> goals;
+        std::vector<size_t> expected_counts;
+        
+        // Create 50 goals with varying candidate counts (0-5 each)
+        for (int i = 0; i < 50; i++) {
+            const goal_lineage* g = lp.goal(nullptr, i);
+            goals.push_back(g);
+            
+            size_t num_candidates = i % 6; // 0, 1, 2, 3, 4, 5, 0, 1, ...
+            expected_counts.push_back(num_candidates);
+            
+            for (size_t j = 0; j < num_candidates; j++) {
+                cs.insert({g, j});
+            }
+        }
+        
+        unit_propagation_detector detector(cs);
+        
+        // Verify each goal
+        for (int i = 0; i < 50; i++) {
+            bool result = detector(goals[i]);
+            bool expected_unit = (expected_counts[i] == 1);
+            
+            assert(result == expected_unit);
+            assert(cs.count(goals[i]) == expected_counts[i]);
+        }
+        
+        // Verify total count
+        size_t total = 0;
+        for (size_t count : expected_counts) {
+            total += count;
+        }
+        assert(cs.size() == total);
+    }
+    
+    // Test 10: Multiple detectors on same store - verify independence
+    {
+        lineage_pool lp;
+        a01_candidate_store cs;
+        
+        const goal_lineage* g1 = lp.goal(nullptr, 1);
+        cs.insert({g1, 0});
+        
+        unit_propagation_detector detector1(cs);
+        unit_propagation_detector detector2(cs);
+        
+        // Both should give same result
+        assert(detector1(g1) == true);
+        assert(detector2(g1) == true);
+        
+        // Store unchanged
+        assert(cs.count(g1) == 1);
+    }
+    
+    // Test 11: Edge case - exactly 1 vs exactly 2 (boundary condition)
+    {
+        lineage_pool lp;
+        a01_candidate_store cs;
+        
+        const goal_lineage* g_one = lp.goal(nullptr, 1);
+        cs.insert({g_one, 0});
+        
+        const goal_lineage* g_two = lp.goal(nullptr, 2);
+        cs.insert({g_two, 0});
+        cs.insert({g_two, 1});
+        
+        unit_propagation_detector detector(cs);
+        
+        // CRITICAL: 1 should return true, 2 should return false
+        assert(detector(g_one) == true);
+        assert(detector(g_two) == false);
+        
+        // Verify exact counts
+        assert(cs.count(g_one) == 1);
+        assert(cs.count(g_two) == 2);
+    }
+    
+    // Test 12: Same candidate index for different goals
+    {
+        lineage_pool lp;
+        a01_candidate_store cs;
+        
+        const goal_lineage* g1 = lp.goal(nullptr, 1);
+        const goal_lineage* g2 = lp.goal(nullptr, 2);
+        const goal_lineage* g3 = lp.goal(nullptr, 3);
+        
+        // All have candidate at index 0, but different counts
+        cs.insert({g1, 0});  // 1 candidate
+        
+        cs.insert({g2, 0});  // 2 candidates
+        cs.insert({g2, 1});
+        
+        cs.insert({g3, 0});  // 3 candidates
+        cs.insert({g3, 1});
+        cs.insert({g3, 2});
+        
+        unit_propagation_detector detector(cs);
+        
+        // Only g1 is a unit
+        assert(detector(g1) == true);
+        assert(detector(g2) == false);
+        assert(detector(g3) == false);
+    }
+    
+    // Test 13: Candidates with various indices - verify index doesn't matter
+    {
+        lineage_pool lp;
+        a01_candidate_store cs;
+        
+        const goal_lineage* g1 = lp.goal(nullptr, 1);
+        cs.insert({g1, 42});  // Single candidate at index 42
+        
+        const goal_lineage* g2 = lp.goal(nullptr, 2);
+        cs.insert({g2, 0});   // Single candidate at index 0
+        
+        const goal_lineage* g3 = lp.goal(nullptr, 3);
+        cs.insert({g3, 999}); // Single candidate at index 999
+        
+        unit_propagation_detector detector(cs);
+        
+        // CRITICAL: All are units regardless of index value
+        assert(detector(g1) == true);
+        assert(detector(g2) == true);
+        assert(detector(g3) == true);
+        
+        // Verify indices preserved
+        auto range1 = cs.equal_range(g1);
+        assert(range1.first->second == 42);
+        
+        auto range2 = cs.equal_range(g2);
+        assert(range2.first->second == 0);
+        
+        auto range3 = cs.equal_range(g3);
+        assert(range3.first->second == 999);
+    }
+    
+    // Test 14: Deep lineage tree - unit propagation at different levels
+    {
+        lineage_pool lp;
+        a01_candidate_store cs;
+        
+        // Create tree structure
+        const goal_lineage* g_root = lp.goal(nullptr, 0);
+        const resolution_lineage* rl_1 = lp.resolution(g_root, 0);
+        const goal_lineage* g_child1 = lp.goal(rl_1, 0);
+        const goal_lineage* g_child2 = lp.goal(rl_1, 1);
+        const resolution_lineage* rl_2 = lp.resolution(g_child1, 0);
+        const goal_lineage* g_grandchild = lp.goal(rl_2, 0);
+        
+        // Root: 2 candidates
+        cs.insert({g_root, 0});
+        cs.insert({g_root, 1});
+        
+        // Child 1: 1 candidate (unit)
+        cs.insert({g_child1, 0});
+        
+        // Child 2: 3 candidates
+        cs.insert({g_child2, 0});
+        cs.insert({g_child2, 1});
+        cs.insert({g_child2, 2});
+        
+        // Grandchild: 1 candidate (unit)
+        cs.insert({g_grandchild, 5});
+        
+        unit_propagation_detector detector(cs);
+        
+        // CRITICAL: Only child1 and grandchild are units
+        assert(detector(g_root) == false);      // 2 candidates
+        assert(detector(g_child1) == true);     // 1 candidate (UNIT)
+        assert(detector(g_child2) == false);    // 3 candidates
+        assert(detector(g_grandchild) == true); // 1 candidate (UNIT)
+    }
+    
+    // Test 15: Simulate typical solver workflow
+    {
+        lineage_pool lp;
+        a01_candidate_store cs;
+        
+        // Initial state: 3 goals, each with multiple candidates
+        const goal_lineage* g1 = lp.goal(nullptr, 1);
+        const goal_lineage* g2 = lp.goal(nullptr, 2);
+        const goal_lineage* g3 = lp.goal(nullptr, 3);
+        
+        cs.insert({g1, 0});
+        cs.insert({g1, 1});
+        cs.insert({g1, 2});
+        
+        cs.insert({g2, 0});
+        cs.insert({g2, 1});
+        
+        cs.insert({g3, 0});
+        cs.insert({g3, 1});
+        cs.insert({g3, 2});
+        cs.insert({g3, 3});
+        
+        unit_propagation_detector detector(cs);
+        
+        // Initially no units
+        assert(detector(g1) == false);  // 3 candidates
+        assert(detector(g2) == false);  // 2 candidates
+        assert(detector(g3) == false);  // 4 candidates
+        
+        // Simulate head elimination on g1: remove 2 candidates
+        auto range = cs.equal_range(g1);
+        auto it = range.first;
+        ++it;
+        cs.erase(it);  // Remove second
+        
+        range = cs.equal_range(g1);
+        it = range.first;
+        ++it;
+        cs.erase(it);  // Remove third (now second)
+        
+        // g1 now has 1 candidate (became a unit!)
+        assert(cs.count(g1) == 1);
+        assert(detector(g1) == true);  // NOW it's a unit!
+        
+        // Simulate head elimination on g2: remove 1 candidate
+        range = cs.equal_range(g2);
+        it = range.first;
+        ++it;
+        cs.erase(it);
+        
+        // g2 now has 1 candidate (became a unit!)
+        assert(cs.count(g2) == 1);
+        assert(detector(g2) == true);  // NOW it's a unit!
+        
+        // g3 still has 4 candidates
+        assert(detector(g3) == false);
+        
+        // Final verification
+        assert(cs.count(g1) == 1);
+        assert(cs.count(g2) == 1);
+        assert(cs.count(g3) == 4);
+    }
+    
+    // Test 16: Empty candidate store - all queries return false
+    {
+        lineage_pool lp;
+        a01_candidate_store cs;
+        
+        unit_propagation_detector detector(cs);
+        
+        // Create various goals but don't add candidates
+        const goal_lineage* g1 = lp.goal(nullptr, 1);
+        const goal_lineage* g2 = lp.goal(nullptr, 2);
+        const goal_lineage* g3 = lp.goal(nullptr, 3);
+        
+        // All should return false (empty store)
+        assert(detector(g1) == false);
+        assert(detector(g2) == false);
+        assert(detector(g3) == false);
+        
+        assert(cs.size() == 0);
+    }
+    
+    // Test 17: Large candidate indices - verify only count matters, not index values
+    {
+        lineage_pool lp;
+        a01_candidate_store cs;
+        
+        const goal_lineage* g1 = lp.goal(nullptr, 1);
+        cs.insert({g1, 1000000});  // Very large index, but still just 1 candidate
+        
+        const goal_lineage* g2 = lp.goal(nullptr, 2);
+        cs.insert({g2, 5000});
+        cs.insert({g2, 9999});  // Two large indices
+        
+        unit_propagation_detector detector(cs);
+        
+        // CRITICAL: Index value doesn't matter, only count
+        assert(detector(g1) == true);   // 1 candidate (unit)
+        assert(detector(g2) == false);  // 2 candidates
+    }
+}
+
 void unit_test_main() {
     constexpr bool ENABLE_DEBUG_LOGS = true;
 
@@ -15882,6 +16422,8 @@ void unit_test_main() {
     TEST(test_a01_goal_resolver);
     TEST(test_a01_head_elimination_detector_constructor);
     TEST(test_a01_head_elimination_detector);
+    TEST(test_unit_propagation_detector_constructor);
+    TEST(test_unit_propagation_detector);
 }
 
 int main() {
