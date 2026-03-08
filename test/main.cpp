@@ -19470,6 +19470,41 @@ void test_a01_sim_constructor() {
             // Verify avoidance store is a COPY
             assert(&simulation.as_copy != &as);
             assert(simulation.as_copy.size() == 0);
+            
+            // CRITICAL: Verify public a01_sim member references
+            assert(&simulation.db == &db);
+            assert(&simulation.t == &t);
+            assert(&simulation.lp == &lp);
+            assert(&simulation.as_copy != &as);
+            
+            // CRITICAL: Verify copier references (public in DEBUG)
+            assert(&simulation.cp.sequencer_ref == &seq);
+            assert(&simulation.cp.expr_pool_ref == &ep);
+            
+            // CRITICAL: Verify decider references (public in DEBUG)
+            assert(&simulation.dec.gs == &simulation.gs);
+            assert(&simulation.dec.cs == &simulation.cs);
+            assert(&simulation.dec.sim == &sim);
+            
+            // CRITICAL: Verify goal_adder references (public in DEBUG)
+            assert(&simulation.ga.goals == &simulation.gs);
+            assert(&simulation.ga.candidates == &simulation.cs);
+            assert(&simulation.ga.database == &db);
+            
+            // CRITICAL: Verify goal_resolver references (public in DEBUG)
+            assert(&simulation.gr.rs == &simulation.rs);
+            assert(&simulation.gr.gs == &simulation.gs);
+            assert(&simulation.gr.cs == &simulation.cs);
+            assert(&simulation.gr.db == &db);
+            assert(&simulation.gr.bm == &bm);
+            assert(&simulation.gr.lp == &lp);
+            assert(&simulation.gr.ga == &simulation.ga);
+            assert(&simulation.gr.as == &simulation.as_copy);
+            
+            // CRITICAL: Test decisions() accessor
+            const a01_decision_store& decisions_ref = simulation.decisions();
+            assert(&decisions_ref == &simulation.ds);
+            assert(decisions_ref.size() == 0);
         }
         
         // CRITICAL: After destruction, trail depth restored
@@ -19524,6 +19559,13 @@ void test_a01_sim_constructor() {
             
             // Max resolutions stored
             assert(simulation.max_resolutions == 50);
+            
+            // CRITICAL: Test decisions() accessor
+            assert(&simulation.decisions() == &simulation.ds);
+            assert(simulation.decisions().size() == 0);
+            
+            // CRITICAL: Verify lineage comes from correct pool
+            assert(lp.goal_lineages.count(*gl) == 1);
         }
         
         // Trail popped
@@ -19620,6 +19662,19 @@ void test_a01_sim_constructor() {
         
         // Max resolutions
         assert(simulation.max_resolutions == 200);
+        
+        // CRITICAL: Verify all lineages from correct pool
+        assert(lp.goal_lineages.count(*gl0) == 1);
+        assert(lp.goal_lineages.count(*gl1) == 1);
+        assert(lp.goal_lineages.count(*gl2) == 1);
+        
+        // CRITICAL: Test decisions() accessor
+        assert(&simulation.decisions() == &simulation.ds);
+        assert(simulation.decisions().size() == 0);
+        
+        // CRITICAL: Verify resolution and decision stores empty
+        assert(simulation.rs.size() == 0);
+        assert(simulation.ds.size() == 0);
     }
     
     // Test 4: Goals with no matching database rules - candidates empty for some goals
@@ -19675,6 +19730,21 @@ void test_a01_sim_constructor() {
         assert(simulation.cs.find(gl_p)->second == 0);
         assert(simulation.cs.find(gl_q)->second == 0);
         assert(simulation.cs.find(gl_r)->second == 0);
+        
+        // CRITICAL: Verify resolution and decision stores empty
+        assert(simulation.rs.size() == 0);
+        assert(simulation.ds.size() == 0);
+        assert(simulation.decisions().size() == 0);
+        
+        // CRITICAL: Verify goal expressions are correct
+        assert(simulation.gs.at(gl_p) == ep.atom("p"));
+        assert(simulation.gs.at(gl_q) == ep.atom("q"));
+        assert(simulation.gs.at(gl_r) == ep.atom("r"));
+        
+        // CRITICAL: Verify lineages from correct pool
+        assert(lp.goal_lineages.count(*gl_p) == 1);
+        assert(lp.goal_lineages.count(*gl_q) == 1);
+        assert(lp.goal_lineages.count(*gl_r) == 1);
     }
     
     // Test 5: Database with multiple candidates per goal
@@ -19720,6 +19790,19 @@ void test_a01_sim_constructor() {
         assert(indices.count(0) == 1);
         assert(indices.count(1) == 1);
         assert(indices.count(2) == 1);
+        
+        // CRITICAL: Verify resolution/decision stores empty
+        assert(simulation.rs.size() == 0);
+        assert(simulation.ds.size() == 0);
+        assert(simulation.decisions().size() == 0);
+        
+        // CRITICAL: Verify goal expression content
+        assert(simulation.gs.at(gl) == ep.atom("p"));
+        
+        // CRITICAL: Verify lineage from correct pool
+        assert(lp.goal_lineages.count(*gl) == 1);
+        assert(gl->parent == nullptr);
+        assert(gl->idx == 0);
     }
     
     // Test 6: Avoidance store is copied, not referenced
@@ -19847,6 +19930,34 @@ void test_a01_sim_constructor() {
         
         // Max resolutions
         assert(simulation.max_resolutions == 75);
+        
+        // CRITICAL: Verify resolution/decision stores empty
+        assert(simulation.rs.size() == 0);
+        assert(simulation.ds.size() == 0);
+        assert(simulation.decisions().size() == 0);
+        
+        // CRITICAL: Verify all lineages from correct pool and have correct properties
+        assert(lp.goal_lineages.count(*gl0) == 1);
+        assert(lp.goal_lineages.count(*gl1) == 1);
+        assert(lp.goal_lineages.count(*gl2) == 1);
+        assert(lp.goal_lineages.count(*gl3) == 1);
+        
+        assert(gl0->parent == nullptr && gl0->idx == 0);
+        assert(gl1->parent == nullptr && gl1->idx == 1);
+        assert(gl2->parent == nullptr && gl2->idx == 2);
+        assert(gl3->parent == nullptr && gl3->idx == 3);
+        
+        // CRITICAL: Verify goal expressions match exactly
+        assert(simulation.gs.at(gl0) == ep.atom("p"));
+        assert(simulation.gs.at(gl1) == ep.atom("q"));
+        assert(simulation.gs.at(gl2) == ep.atom("r"));
+        assert(simulation.gs.at(gl3) == ep.atom("s"));
+        
+        // CRITICAL: Verify database reference holds correct content
+        assert(simulation.db.size() == 6);
+        assert(simulation.db[0].head == ep.atom("p"));
+        assert(simulation.db[2].head == ep.atom("q"));
+        assert(simulation.db[5].head == ep.atom("r"));
     }
     
     // Test 8: Trail isolation - bindings inside constructor don't leak
@@ -20027,6 +20138,189 @@ void test_a01_sim_constructor() {
         
         // CRITICAL: After both destroyed, trail restored
         assert(t.depth() == depth_start);
+    }
+    
+    // Test 13: Verify decisions() returns const reference to ds
+    {
+        trail t;
+        t.push();
+        
+        expr_pool ep(t);
+        bind_map bm(t);
+        sequencer seq(t);
+        lineage_pool lp;
+        
+        a01_database db;
+        a01_goals goals;
+        a01_avoidance_store as;
+        
+        monte_carlo::tree_node<a01_decider::choice> root;
+        std::mt19937 rng(42);
+        monte_carlo::simulation<a01_decider::choice, std::mt19937> sim(root, 1.414, rng);
+        
+        a01_sim simulation(100, db, goals, t, seq, ep, bm, lp, as, sim);
+        
+        // CRITICAL: decisions() returns reference to ds
+        const a01_decision_store& decisions_ref = simulation.decisions();
+        assert(&decisions_ref == &simulation.ds);
+        
+        // CRITICAL: Multiple calls return same reference
+        const a01_decision_store& decisions_ref2 = simulation.decisions();
+        assert(&decisions_ref == &decisions_ref2);
+        
+        // Empty at construction
+        assert(decisions_ref.size() == 0);
+    }
+    
+    // Test 14: Verify component initialization with non-empty avoidance store
+    {
+        trail t;
+        t.push();
+        
+        expr_pool ep(t);
+        bind_map bm(t);
+        sequencer seq(t);
+        lineage_pool lp;
+        
+        a01_database db;
+        a01_goals goals;
+        
+        // Pre-populate avoidance store
+        a01_avoidance_store as;
+        const resolution_lineage* rl1 = lp.resolution(lp.goal(nullptr, 0), 0);
+        const resolution_lineage* rl2 = lp.resolution(lp.goal(nullptr, 1), 1);
+        
+        a01_decision_store avoid;
+        avoid.insert(rl1);
+        avoid.insert(rl2);
+        as.insert(avoid);
+        
+        monte_carlo::tree_node<a01_decider::choice> root;
+        std::mt19937 rng(42);
+        monte_carlo::simulation<a01_decider::choice, std::mt19937> sim(root, 1.414, rng);
+        
+        a01_sim simulation(100, db, goals, t, seq, ep, bm, lp, as, sim);
+        
+        // CRITICAL: Verify as_copy has content, original unchanged
+        assert(simulation.as_copy.size() == 1);
+        assert(simulation.as_copy.count(avoid) == 1);
+        assert(as.size() == 1);
+        
+        // CRITICAL: Verify gr resolver references the copy (public in DEBUG)
+        assert(&simulation.gr.as == &simulation.as_copy);
+        
+        // CRITICAL: Verify decisions() accessor works
+        assert(simulation.decisions().size() == 0);
+    }
+    
+    // Test 15: Verify all store sizes after construction with various goal counts
+    {
+        trail t;
+        t.push();
+        
+        expr_pool ep(t);
+        bind_map bm(t);
+        sequencer seq(t);
+        lineage_pool lp;
+        
+        a01_database db;
+        db.push_back(rule{ep.atom("x"), {}});
+        db.push_back(rule{ep.atom("y"), {}});
+        
+        // Add 5 goals
+        a01_goals goals;
+        for (int i = 0; i < 5; i++) {
+            goals.push_back(ep.atom("goal" + std::to_string(i)));
+        }
+        
+        a01_avoidance_store as;
+        
+        monte_carlo::tree_node<a01_decider::choice> root;
+        std::mt19937 rng(42);
+        monte_carlo::simulation<a01_decider::choice, std::mt19937> sim(root, 1.414, rng);
+        
+        a01_sim simulation(500, db, goals, t, seq, ep, bm, lp, as, sim);
+        
+        // CRITICAL: 5 goals added
+        assert(simulation.gs.size() == 5);
+        
+        // CRITICAL: 5 goals * 2 db rules = 10 candidates
+        assert(simulation.cs.size() == 10);
+        
+        // CRITICAL: All other stores empty
+        assert(simulation.rs.size() == 0);
+        assert(simulation.ds.size() == 0);
+        assert(simulation.as_copy.size() == 0);
+        assert(simulation.decisions().size() == 0);
+        
+        // CRITICAL: Verify each goal has 2 candidates
+        for (const auto& [gl, ge] : simulation.gs) {
+            assert(simulation.cs.count(gl) == 2);
+            assert(gl->parent == nullptr);
+            assert(gl->idx >= 0 && gl->idx < 5);
+        }
+    }
+    
+    // Test 16: Verify goal ordering matches list ordering
+    {
+        trail t;
+        t.push();
+        
+        expr_pool ep(t);
+        bind_map bm(t);
+        sequencer seq(t);
+        lineage_pool lp;
+        
+        a01_database db;
+        
+        a01_goals goals;
+        const expr* goal_a = ep.atom("alpha");
+        const expr* goal_b = ep.atom("beta");
+        const expr* goal_c = ep.atom("gamma");
+        const expr* goal_d = ep.atom("delta");
+        
+        goals.push_back(goal_a);
+        goals.push_back(goal_b);
+        goals.push_back(goal_c);
+        goals.push_back(goal_d);
+        
+        a01_avoidance_store as;
+        
+        monte_carlo::tree_node<a01_decider::choice> root;
+        std::mt19937 rng(42);
+        monte_carlo::simulation<a01_decider::choice, std::mt19937> sim(root, 1.414, rng);
+        
+        a01_sim simulation(100, db, goals, t, seq, ep, bm, lp, as, sim);
+        
+        // CRITICAL: Verify ordering - idx matches position in list
+        const goal_lineage* gl_idx0 = nullptr;
+        const goal_lineage* gl_idx1 = nullptr;
+        const goal_lineage* gl_idx2 = nullptr;
+        const goal_lineage* gl_idx3 = nullptr;
+        
+        for (const auto& [gl, ge] : simulation.gs) {
+            if (gl->idx == 0) {
+                gl_idx0 = gl;
+                assert(ge == goal_a);  // First in list
+            } else if (gl->idx == 1) {
+                gl_idx1 = gl;
+                assert(ge == goal_b);  // Second in list
+            } else if (gl->idx == 2) {
+                gl_idx2 = gl;
+                assert(ge == goal_c);  // Third in list
+            } else if (gl->idx == 3) {
+                gl_idx3 = gl;
+                assert(ge == goal_d);  // Fourth in list
+            }
+        }
+        
+        assert(gl_idx0 && gl_idx1 && gl_idx2 && gl_idx3);
+        
+        // CRITICAL: All root goals (parent == nullptr)
+        assert(gl_idx0->parent == nullptr);
+        assert(gl_idx1->parent == nullptr);
+        assert(gl_idx2->parent == nullptr);
+        assert(gl_idx3->parent == nullptr);
     }
 }
 
