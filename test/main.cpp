@@ -21908,7 +21908,7 @@ void test_a01_sim() {
     // Test 26: Single variable in goal binds to atom
     // Database: p(a)., p(b).
     // Goal: :- p(X).
-    // Expected: X binds to a (after head elim removes p(b))
+    // Expected: X binds to a (forced by MCTS to choose idx 0)
     {
         trail t;
         t.push();
@@ -21934,6 +21934,14 @@ void test_a01_sim() {
         
         a01_sim simulation(100, db, goals, t, seq, ep, bm, lp, as, sim);
         
+        // Pre-populate MCTS to force decision on idx 0
+        const goal_lineage* gl0_for_mcts = simulation.gs.begin()->first;
+        root.m_visits = 100;
+        root.m_children[gl0_for_mcts].m_visits = 50;
+        root.m_children[gl0_for_mcts].m_children[size_t(0)].m_visits = 0;  // Force idx 0
+        root.m_children[gl0_for_mcts].m_children[size_t(1)].m_visits = 10;
+        root.m_children[gl0_for_mcts].m_children[size_t(1)].m_value = 10.0;
+        
         bool result = simulation();
         
         // CRITICAL: Solution found
@@ -21942,10 +21950,19 @@ void test_a01_sim() {
         // CRITICAL: Exactly 1 resolution
         assert(simulation.rs.size() == 1);
         
-        // CRITICAL: Verify X is bound using normalizer
+        // CRITICAL: Exactly 1 decision
+        assert(simulation.ds.size() == 1);
+        
+        // CRITICAL: Verify exact resolution
+        const goal_lineage* gl0 = lp.goal(nullptr, 0);
+        const resolution_lineage* rl0 = lp.resolution(gl0, 0);
+        assert(simulation.rs.count(rl0) == 1);
+        assert(simulation.ds.count(rl0) == 1);
+        
+        // CRITICAL: Verify X binds to exactly 'a'
         normalizer norm(ep, bm);
         const expr* X_normalized = norm(X);
-        assert(X_normalized == ep.atom("a") || X_normalized == ep.atom("b"));
+        assert(X_normalized == ep.atom("a"));
     }
     
     // Test 27: Variable binds to compound term
@@ -22420,10 +22437,10 @@ void test_a01_sim() {
         assert(Fruit_normalized == ep.atom("apple"));
     }
     
-    // Test 37: Partial instantiation with variable
+    // Test 37: Partial instantiation with variable (base case)
     // Database: link(a,b)., link(b,c)., path(X,Y) :- link(X,Y)., path(X,Z) :- link(X,Y), path(Y,Z).
     // Goal: :- path(a,Dest).
-    // Expected: Dest binds to b or c depending on resolution
+    // Expected: Dest binds to b (forced to use base case idx 2)
     {
         trail t;
         t.push();
@@ -22465,15 +22482,26 @@ void test_a01_sim() {
         
         a01_sim simulation(100, db, goals, t, seq, ep, bm, lp, as, sim);
         
+        // Pre-populate MCTS to force base case (idx 2)
+        const goal_lineage* gl0_for_mcts = simulation.gs.begin()->first;
+        root.m_visits = 100;
+        root.m_children[gl0_for_mcts].m_visits = 50;
+        root.m_children[gl0_for_mcts].m_children[size_t(2)].m_visits = 0;  // Force idx 2
+        root.m_children[gl0_for_mcts].m_children[size_t(3)].m_visits = 10;
+        root.m_children[gl0_for_mcts].m_children[size_t(3)].m_value = 10.0;
+        
         bool result = simulation();
         
         // CRITICAL: Solution found
         assert(result == true);
         
-        // CRITICAL: Dest binds to b or c
+        // CRITICAL: Exactly 1 decision
+        assert(simulation.ds.size() == 1);
+        
+        // CRITICAL: Dest binds to exactly 'b'
         normalizer norm(ep, bm);
         const expr* Dest_normalized = norm(Dest);
-        assert(Dest_normalized == ep.atom("b") || Dest_normalized == ep.atom("c"));
+        assert(Dest_normalized == ep.atom("b"));
     }
     
     // Test 38: Multiple goals with complex variable sharing
