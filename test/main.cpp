@@ -22763,7 +22763,7 @@ void test_a01_sim() {
     // Test 40: Same variable multiple times in one goal
     // Database: pair(a,a)., pair(a,b)., pair(b,b).
     // Goal: :- pair(X,X).
-    // Expected: X=a or X=b (head elim removes pair(a,b))
+    // Expected: X=b (head elim removes pair(a,b), MCTS forces idx 2)
     {
         trail t;
         t.push();
@@ -22790,13 +22790,13 @@ void test_a01_sim() {
         
         a01_sim simulation(100, db, goals, t, seq, ep, bm, lp, as, sim);
         
-        // Pre-populate MCTS to force idx 0
+        // Pre-populate MCTS to force idx 2 (NOT idx 0, to prove MCTS works!)
         const goal_lineage* gl0_for_mcts = lp.goal(nullptr, 0);
         root.m_visits = 100;
         root.m_children[gl0_for_mcts].m_visits = 50;
-        root.m_children[gl0_for_mcts].m_children[size_t(0)].m_visits = 0;  // Force idx 0
-        root.m_children[gl0_for_mcts].m_children[size_t(2)].m_visits = 10;
-        root.m_children[gl0_for_mcts].m_children[size_t(2)].m_value = 10.0;
+        root.m_children[gl0_for_mcts].m_children[size_t(0)].m_visits = 10;
+        root.m_children[gl0_for_mcts].m_children[size_t(0)].m_value = 10.0;
+        root.m_children[gl0_for_mcts].m_children[size_t(2)].m_visits = 0;  // Force idx 2
         
         bool result = simulation();
         
@@ -22806,20 +22806,20 @@ void test_a01_sim() {
         // CRITICAL: Exactly 1 resolution
         assert(simulation.rs.size() == 1);
         
-        // CRITICAL: Verify resolution
+        // CRITICAL: Verify resolution used idx 2 (NOT idx 0!)
         const goal_lineage* gl0 = lp.goal(nullptr, 0);
-        const resolution_lineage* rl0 = lp.resolution(gl0, 0);
-        assert(simulation.rs.count(rl0) == 1);
-        assert(simulation.ds.count(rl0) == 1);  // Decision
+        const resolution_lineage* rl2 = lp.resolution(gl0, 2);
+        assert(simulation.rs.count(rl2) == 1);
+        assert(simulation.ds.count(rl2) == 1);  // Decision
         
         // CRITICAL: Head elim should have removed idx 1
         // Initial: 3 candidates, after head elim: 2 candidates (idx 0, 2)
-        // We can't directly verify head elim count, but we verify the decision works
+        // MCTS forced idx 2, proving it works correctly
         
-        // CRITICAL: X binds to exactly 'a'
+        // CRITICAL: X binds to exactly 'b' (NOT 'a', because we used idx 2)
         normalizer norm(ep, bm);
         const expr* X_normalized = norm(X);
-        assert(X_normalized == ep.atom("a"));
+        assert(X_normalized == ep.atom("b"));
         
         // CRITICAL: MCTS called once
         assert(sim.length() == 2);
