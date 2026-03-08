@@ -33,7 +33,6 @@ private:
     trail& t;
     bind_map& bm;
     lineage_pool& lp;
-    monte_carlo::simulation<a01_decider::choice, std::mt19937>& sim;
     
     a01_goal_store gs_copy;
     a01_candidate_store cs_copy;

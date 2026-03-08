@@ -16,7 +16,6 @@ a01_sim::a01_sim(
     t(t),
     bm(bm),
     lp(lp),
-    sim(sim),
     gs_copy(gs),
     cs_copy(cs),
     as_copy(as),
