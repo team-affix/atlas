@@ -13,31 +13,31 @@
 #include "a01_goal_resolver.hpp"
 
 struct a01_sim {
+    ~a01_sim();
     a01_sim(
         const a01_database&,
+        const a01_goals&,
         trail&,
         sequencer&,
         expr_pool&,
         bind_map&,
         lineage_pool&,
-        monte_carlo::simulation<a01_decider::choice, std::mt19937>&,
-        a01_goal_store,
-        a01_candidate_store,
-        a01_avoidance_store
+        a01_avoidance_store,
+        monte_carlo::simulation<a01_decider::choice, std::mt19937>&
     );
     bool operator()();
+    const a01_decision_store& decisions() const;
 #ifndef DEBUG
 private:
 #endif
     const a01_database& db;
     trail& t;
-    bind_map& bm;
     lineage_pool& lp;
     
-    a01_goal_store gs_copy;
-    a01_candidate_store cs_copy;
     a01_avoidance_store as_copy;
 
+    a01_goal_store gs;
+    a01_candidate_store cs;
     a01_resolution_store rs;
     a01_decision_store ds;
 
