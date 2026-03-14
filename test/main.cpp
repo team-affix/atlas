@@ -25008,9 +25008,404 @@ void test_a01_next_avoidance() {
         // CRITICAL: soln is nullopt
         assert(!soln.has_value());
     }
+
+    // Test 8: Mixed conflict depths — MCTS converges to the shallower branch.
+    //
+    // Goal {a} has two candidates:
+    //   rule0  →  a :- p.   (depth-4 branch)
+    //   rule1  →  a :- q.   (depth-3 branch)
+    //
+    // Depth-4 subtree (via p):
+    //   p → {r, s}  →  r/s → {t, u, v, w}  →  t/u/v/w → {fail1-8}
+    //   (4 decisions: a, p, r/s, t/u/v/w)
+    //
+    // Depth-3 subtree (via q):
+    //   q → {x, y}  →  x/y → {fail9-12}
+    //   (3 decisions: a, q, x/y)
+    //
+    // After 1000 MCTS iterations the minimum observed ds is 3.
+    // The avoidance must contain the "a → rule1" resolution (the first step of the
+    // depth-3 path) because any 3-decision conflict must go through rule1 for a.
+    {
+        trail t;
+        t.push();
+        expr_pool ep(t);
+        bind_map bm(t);
+        sequencer seq(t);
+        lineage_pool lp;
+
+        a01_database db;
+        // Root
+        db.push_back(rule{ep.atom("a"), {ep.atom("p")}});   // idx 0  (depth-4)
+        db.push_back(rule{ep.atom("a"), {ep.atom("q")}});   // idx 1  (depth-3)
+        // Depth-4 branch: p layer
+        db.push_back(rule{ep.atom("p"), {ep.atom("r")}});   // idx 2
+        db.push_back(rule{ep.atom("p"), {ep.atom("s")}});   // idx 3
+        // Depth-4 branch: r/s layer
+        db.push_back(rule{ep.atom("r"), {ep.atom("t")}});   // idx 4
+        db.push_back(rule{ep.atom("r"), {ep.atom("u")}});   // idx 5
+        db.push_back(rule{ep.atom("s"), {ep.atom("v")}});   // idx 6
+        db.push_back(rule{ep.atom("s"), {ep.atom("w")}});   // idx 7
+        // Depth-4 leaves (each has 2 candidates → one more decision, then conflict)
+        db.push_back(rule{ep.atom("t"), {ep.atom("fail1")}});  // idx 8
+        db.push_back(rule{ep.atom("t"), {ep.atom("fail2")}});  // idx 9
+        db.push_back(rule{ep.atom("u"), {ep.atom("fail3")}});  // idx 10
+        db.push_back(rule{ep.atom("u"), {ep.atom("fail4")}});  // idx 11
+        db.push_back(rule{ep.atom("v"), {ep.atom("fail5")}});  // idx 12
+        db.push_back(rule{ep.atom("v"), {ep.atom("fail6")}});  // idx 13
+        db.push_back(rule{ep.atom("w"), {ep.atom("fail7")}});  // idx 14
+        db.push_back(rule{ep.atom("w"), {ep.atom("fail8")}});  // idx 15
+        // Depth-3 branch: q layer
+        db.push_back(rule{ep.atom("q"), {ep.atom("x")}});   // idx 16
+        db.push_back(rule{ep.atom("q"), {ep.atom("y")}});   // idx 17
+        // Depth-3 leaves
+        db.push_back(rule{ep.atom("x"), {ep.atom("fail9")}});  // idx 18
+        db.push_back(rule{ep.atom("x"), {ep.atom("fail10")}});  // idx 19
+        db.push_back(rule{ep.atom("y"), {ep.atom("fail11")}});  // idx 20
+        db.push_back(rule{ep.atom("y"), {ep.atom("fail12")}});  // idx 21
+        // No rules for fail1-fail12
+
+        a01_goals goals;
+        goals.push_back(ep.atom("a"));
+
+        std::mt19937 rng(42);
+        a01 solver(db, goals, t, seq, ep, bm, lp, 1000, 1000, 1.414, rng);
+
+        a01_decision_store avoidance;
+        std::optional<a01_resolution_store> soln;
+
+        bool result = solver.next_avoidance(avoidance, soln);
+
+        // CRITICAL: Returns true (decisions were made, not a proven refutation)
+        assert(result == true);
+
+        // CRITICAL: No solution (all paths conflict)
+        assert(!soln.has_value());
+
+        // CRITICAL: Minimum conflict depth is 3 (the q branch), not 4 (the p branch)
+        assert(avoidance.size() == 3);
+
+        // CRITICAL: The avoidance must include "a → rule1" (the depth-3 branch entry
+        // point). Any 3-decision conflict necessarily begins with that choice.
+        const goal_lineage* gl_a = lp.goal(nullptr, 0);
+        const resolution_lineage* rl_a1 = lp.resolution(gl_a, 1);
+        assert(avoidance.count(rl_a1) == 1);
+    }
+
+    // Test 9: Needle in a haystack — two depth-4 branches plus one depth-3 branch.
+    //
+    // Goal {a} has THREE candidates:
+    //   rule0  →  a :- p_alpha.  (depth-4)
+    //   rule1  →  a :- p_beta.   (depth-4)
+    //   rule2  →  a :- q.        (depth-3, the needle)
+    //
+    // Two out of three first-level choices lead to a 4-decision conflict.
+    // Only rule2 leads to the shallower 3-decision conflict.
+    // After 1000 MCTS iterations the minimum is 3, and the avoidance identifies
+    // the shallow entry point ("a → rule2").
+    {
+        trail t;
+        t.push();
+        expr_pool ep(t);
+        bind_map bm(t);
+        sequencer seq(t);
+        lineage_pool lp;
+
+        a01_database db;
+        // Three choices for a
+        db.push_back(rule{ep.atom("a"), {ep.atom("p_alpha")}});  // idx 0  (depth-4)
+        db.push_back(rule{ep.atom("a"), {ep.atom("p_beta")}});   // idx 1  (depth-4)
+        db.push_back(rule{ep.atom("a"), {ep.atom("q")}});        // idx 2  (depth-3)
+
+        // Depth-4 branch A (via p_alpha)
+        db.push_back(rule{ep.atom("p_alpha"), {ep.atom("r_alpha")}});  // idx 3
+        db.push_back(rule{ep.atom("p_alpha"), {ep.atom("s_alpha")}});  // idx 4
+        db.push_back(rule{ep.atom("r_alpha"), {ep.atom("t_alpha")}});  // idx 5
+        db.push_back(rule{ep.atom("r_alpha"), {ep.atom("u_alpha")}});  // idx 6
+        db.push_back(rule{ep.atom("t_alpha"), {ep.atom("fail1")}});    // idx 7
+        db.push_back(rule{ep.atom("t_alpha"), {ep.atom("fail2")}});    // idx 8
+        db.push_back(rule{ep.atom("u_alpha"), {ep.atom("fail3")}});    // idx 9
+        db.push_back(rule{ep.atom("u_alpha"), {ep.atom("fail4")}});    // idx 10
+        db.push_back(rule{ep.atom("s_alpha"), {ep.atom("v_alpha")}});  // idx 11
+        db.push_back(rule{ep.atom("s_alpha"), {ep.atom("w_alpha")}});  // idx 12
+        db.push_back(rule{ep.atom("v_alpha"), {ep.atom("fail5")}});    // idx 13
+        db.push_back(rule{ep.atom("v_alpha"), {ep.atom("fail6")}});    // idx 14
+        db.push_back(rule{ep.atom("w_alpha"), {ep.atom("fail7")}});    // idx 15
+        db.push_back(rule{ep.atom("w_alpha"), {ep.atom("fail8")}});    // idx 16
+
+        // Depth-4 branch B (via p_beta)
+        db.push_back(rule{ep.atom("p_beta"), {ep.atom("r_beta")}});   // idx 17
+        db.push_back(rule{ep.atom("p_beta"), {ep.atom("s_beta")}});   // idx 18
+        db.push_back(rule{ep.atom("r_beta"), {ep.atom("t_beta")}});   // idx 19
+        db.push_back(rule{ep.atom("r_beta"), {ep.atom("u_beta")}});   // idx 20
+        db.push_back(rule{ep.atom("t_beta"), {ep.atom("fail9")}});    // idx 21
+        db.push_back(rule{ep.atom("t_beta"), {ep.atom("fail10")}});   // idx 22
+        db.push_back(rule{ep.atom("u_beta"), {ep.atom("fail11")}});   // idx 23
+        db.push_back(rule{ep.atom("u_beta"), {ep.atom("fail12")}});   // idx 24
+        db.push_back(rule{ep.atom("s_beta"), {ep.atom("v_beta")}});   // idx 25
+        db.push_back(rule{ep.atom("s_beta"), {ep.atom("w_beta")}});   // idx 26
+        db.push_back(rule{ep.atom("v_beta"), {ep.atom("fail13")}});   // idx 27
+        db.push_back(rule{ep.atom("v_beta"), {ep.atom("fail14")}});   // idx 28
+        db.push_back(rule{ep.atom("w_beta"), {ep.atom("fail15")}});   // idx 29
+        db.push_back(rule{ep.atom("w_beta"), {ep.atom("fail16")}});   // idx 30
+
+        // Depth-3 branch (via q — the needle)
+        db.push_back(rule{ep.atom("q"), {ep.atom("x")}});             // idx 31
+        db.push_back(rule{ep.atom("q"), {ep.atom("y")}});             // idx 32
+        db.push_back(rule{ep.atom("x"), {ep.atom("fail17")}});        // idx 33
+        db.push_back(rule{ep.atom("x"), {ep.atom("fail18")}});        // idx 34
+        db.push_back(rule{ep.atom("y"), {ep.atom("fail19")}});        // idx 35
+        db.push_back(rule{ep.atom("y"), {ep.atom("fail20")}});        // idx 36
+        // No rules for fail1-fail20
+
+        a01_goals goals;
+        goals.push_back(ep.atom("a"));
+
+        std::mt19937 rng(42);
+        a01 solver(db, goals, t, seq, ep, bm, lp, 1000, 1000, 1.414, rng);
+
+        a01_decision_store avoidance;
+        std::optional<a01_resolution_store> soln;
+
+        bool result = solver.next_avoidance(avoidance, soln);
+
+        // CRITICAL: Returns true
+        assert(result == true);
+
+        // CRITICAL: No solution (all paths conflict)
+        assert(!soln.has_value());
+
+        // CRITICAL: Despite two out of three first-level choices leading to depth-4
+        // conflicts, MCTS finds the depth-3 needle (rule2 → q).
+        assert(avoidance.size() == 3);
+
+        // CRITICAL: "a → rule2" (the q branch entry point) is in the avoidance.
+        // This is the distinguishing feature of the depth-3 path — rules 0 and 1
+        // only appear in 4-decision avoidances, never in 3-decision ones.
+        const goal_lineage* gl_a = lp.goal(nullptr, 0);
+        const resolution_lineage* rl_a2 = lp.resolution(gl_a, 2);
+        assert(avoidance.count(rl_a2) == 1);
+    }
+
+    // Test 10: Two goals share variable X — MCTS finds the unique intersection value.
+    //
+    // This is the motivating example for shared-variable parallel constraints:
+    //   "initial goal A -> rule 1 and initial goal B -> rule 2 causes conflict because
+    //    of having a common variable"
+    //
+    // Goals: { a(X), b(X) }   — same variable X shared across both goals
+    //   Rule 0: a(123).        — X=123; then b(123) has no candidate → CONFLICT
+    //   Rule 1: a(234).        — X=234; then b(234) is the only matching candidate → SOLUTION
+    //   Rule 2: b(234).        — X=234; then a(234) unit-propagates → SOLUTION
+    //   Rule 3: b(345).        — X=345; then a(345) has no candidate → CONFLICT
+    //
+    // Every path is depth-1. The "parallel" effect: choosing a value for X via one goal
+    // immediately determines whether the other goal succeeds or fails — both goals are
+    // constrained in parallel by the same variable binding.
+    //
+    // With 1000 MCTS iterations the solver finds the solution (X=234 satisfies both).
+    {
+        trail t;
+        t.push();
+        expr_pool ep(t);
+        bind_map bm(t);
+        sequencer seq(t);
+        lineage_pool lp;
+
+        const expr* X = ep.var(seq());
+
+        a01_database db;
+        db.push_back(rule{ep.cons(ep.atom("a"), ep.atom("123")), {}});  // idx 0: a(123).
+        db.push_back(rule{ep.cons(ep.atom("a"), ep.atom("234")), {}});  // idx 1: a(234).
+        db.push_back(rule{ep.cons(ep.atom("b"), ep.atom("234")), {}});  // idx 2: b(234).
+        db.push_back(rule{ep.cons(ep.atom("b"), ep.atom("345")), {}});  // idx 3: b(345).
+
+        a01_goals goals;
+        goals.push_back(ep.cons(ep.atom("a"), X));  // a(X)
+        goals.push_back(ep.cons(ep.atom("b"), X));  // b(X) — shares X with a
+
+        std::mt19937 rng(42);
+        a01 solver(db, goals, t, seq, ep, bm, lp, 1000, 1000, 1.414, rng);
+
+        a01_decision_store avoidance;
+        std::optional<a01_resolution_store> soln;
+
+        bool result = solver.next_avoidance(avoidance, soln);
+
+        // CRITICAL: Solution found (X=234 satisfies both)
+        assert(result == true);
+        assert(soln.has_value());
+
+        // CRITICAL: Exactly 2 resolutions — one decision (the decided goal) plus one
+        // unit-propagation (the other goal, whose candidate was forced by X's binding)
+        assert(soln.value().size() == 2);
+
+        // CRITICAL: The solution involves rule 1 for a (a→234) and rule 2 for b (b→234)
+        const goal_lineage* gl_a = lp.goal(nullptr, 0);
+        const goal_lineage* gl_b = lp.goal(nullptr, 1);
+        const resolution_lineage* rl_a1 = lp.resolution(gl_a, 1);  // a(234)
+        const resolution_lineage* rl_b2 = lp.resolution(gl_b, 2);  // b(234)
+        // One of these was the MCTS decision, the other the unit-propagation.
+        // Both must appear in the solution's resolution store.
+        assert(soln.value().count(rl_a1) == 1);
+        assert(soln.value().count(rl_b2) == 1);
+
+        // CRITICAL: The avoidance contains exactly 1 decision (the one MCTS chose)
+        assert(avoidance.size() == 1);
+        assert(avoidance.count(rl_a1) == 1 || avoidance.count(rl_b2) == 1);
+    }
+
+    // Test 2: Three goals share variable X — no single X value satisfies all three.
+    //
+    // Goals: { a(X), b(X), c(X) }   — all three share variable X
+    //   Rule 0: a(1).   Rule 1: a(2).        →  X ∈ {1, 2}  for a
+    //   Rule 2: b(2).   Rule 3: b(3).        →  X ∈ {2, 3}  for b
+    //   Rule 4: c(1).   Rule 5: c(3).        →  X ∈ {1, 3}  for c
+    //
+    // There is no X that satisfies all three simultaneously:
+    //   X=1 → b(1) has no candidate (b needs 2 or 3)
+    //   X=2 → c(2) has no candidate (c needs 1 or 3)
+    //   X=3 → a(3) has no candidate (a needs 1 or 2)
+    //
+    // Every first MCTS decision immediately propagates X to a value that kills one of
+    // the other goals — minimum conflict depth is 1 regardless of which goal is chosen.
+    // MCTS finds and records this depth-1 avoidance after 1000 iterations.
+    {
+        trail t;
+        t.push();
+        expr_pool ep(t);
+        bind_map bm(t);
+        sequencer seq(t);
+        lineage_pool lp;
+
+        const expr* X = ep.var(seq());
+
+        a01_database db;
+        db.push_back(rule{ep.cons(ep.atom("a"), ep.atom("1")), {}});  // idx 0: a(1).
+        db.push_back(rule{ep.cons(ep.atom("a"), ep.atom("2")), {}});  // idx 1: a(2).
+        db.push_back(rule{ep.cons(ep.atom("b"), ep.atom("2")), {}});  // idx 2: b(2).
+        db.push_back(rule{ep.cons(ep.atom("b"), ep.atom("3")), {}});  // idx 3: b(3).
+        db.push_back(rule{ep.cons(ep.atom("c"), ep.atom("1")), {}});  // idx 4: c(1).
+        db.push_back(rule{ep.cons(ep.atom("c"), ep.atom("3")), {}});  // idx 5: c(3).
+
+        a01_goals goals;
+        goals.push_back(ep.cons(ep.atom("a"), X));  // a(X)
+        goals.push_back(ep.cons(ep.atom("b"), X));  // b(X) — shares X with a
+        goals.push_back(ep.cons(ep.atom("c"), X));  // c(X) — shares X with a and b
+
+        std::mt19937 rng(42);
+        a01 solver(db, goals, t, seq, ep, bm, lp, 1000, 1000, 1.414, rng);
+
+        a01_decision_store avoidance;
+        std::optional<a01_resolution_store> soln;
+
+        bool result = solver.next_avoidance(avoidance, soln);
+
+        // CRITICAL: Returns true (at least one decision was made — not an unconditional refutation)
+        assert(result == true);
+
+        // CRITICAL: No solution (the three goals' X-constraints are mutually exclusive)
+        assert(!soln.has_value());
+
+        // CRITICAL: The minimum conflict depth is 1 — one MCTS decision immediately
+        // binds X to a value that eliminates all candidates in at least one other goal
+        assert(avoidance.size() == 1);
+
+        // CRITICAL: The avoided resolution is on one of the three initial goals.
+        // Whichever goal MCTS chose first, that single decision is the avoidance.
+        const goal_lineage* gl_a = lp.goal(nullptr, 0);
+        const goal_lineage* gl_b = lp.goal(nullptr, 1);
+        const goal_lineage* gl_c = lp.goal(nullptr, 2);
+        const resolution_lineage* avoided = *avoidance.begin();
+        // The avoided resolution must involve one of the three goals and one of their rules
+        bool is_a_rule = avoided == lp.resolution(gl_a, 0) || avoided == lp.resolution(gl_a, 1);
+        bool is_b_rule = avoided == lp.resolution(gl_b, 2) || avoided == lp.resolution(gl_b, 3);
+        bool is_c_rule = avoided == lp.resolution(gl_c, 4) || avoided == lp.resolution(gl_c, 5);
+        assert(is_a_rule || is_b_rule || is_c_rule);
+    }
+
+    // Test 3: Two independent variables, compound goal c(X,Y) teaches MCTS goal ordering.
+    //
+    // Goals: { a(X), b(Y), c(X,Y) }   — X shared by a and c; Y shared by b and c
+    //   Rule 0: a(1).  Rule 1: a(2).        →  X ∈ {1, 2}
+    //   Rule 2: b(1).  Rule 3: b(2).        →  Y ∈ {1, 2}
+    //   Rule 4: c(1,5).  Rule 5: c(1,6).   →  (X=1,Y=5) or (X=1,Y=6)
+    //   Rule 6: c(2,5).  Rule 7: c(2,6).   →  (X=2,Y=5) or (X=2,Y=6)
+    //
+    // c requires Y ∈ {5, 6}, but b only produces Y ∈ {1, 2} — ranges are disjoint.
+    // The conflict DEPTH depends on which goal MCTS resolves first:
+    //
+    //   Resolving b first  (Y ∈ {1,2}): c(X, 1/2) has 0 candidates → CONFLICT at depth-1.
+    //   Resolving c first  (X=1/2, Y=5/6): b(5/6) has 0 candidates → CONFLICT at depth-1.
+    //   Resolving a first  (X ∈ {1,2}): c(X,Y) still has 2 candidates, b(Y) still has 2
+    //                       candidates → needs a SECOND decision → depth-2 conflict.
+    //
+    // With 1000 MCTS iterations, the solver learns that starting with b or c (rather than a)
+    // yields a shallower conflict. The minimum avoidance size is 1.
+    // This demonstrates MCTS learning the optimal GOAL ORDERING via shared-variable
+    // constraint propagation.
+    {
+        trail t;
+        t.push();
+        expr_pool ep(t);
+        bind_map bm(t);
+        sequencer seq(t);
+        lineage_pool lp;
+
+        const expr* X = ep.var(seq());
+        const expr* Y = ep.var(seq());
+
+        a01_database db;
+        db.push_back(rule{ep.cons(ep.atom("a"), ep.atom("1")), {}});  // idx 0: a(1).
+        db.push_back(rule{ep.cons(ep.atom("a"), ep.atom("2")), {}});  // idx 1: a(2).
+        db.push_back(rule{ep.cons(ep.atom("b"), ep.atom("1")), {}});  // idx 2: b(1).
+        db.push_back(rule{ep.cons(ep.atom("b"), ep.atom("2")), {}});  // idx 3: b(2).
+        // c(X, Y) represented as ((c . X) . Y)
+        db.push_back(rule{ep.cons(ep.cons(ep.atom("c"), ep.atom("1")), ep.atom("5")), {}});  // idx 4: c(1,5).
+        db.push_back(rule{ep.cons(ep.cons(ep.atom("c"), ep.atom("1")), ep.atom("6")), {}});  // idx 5: c(1,6).
+        db.push_back(rule{ep.cons(ep.cons(ep.atom("c"), ep.atom("2")), ep.atom("5")), {}});  // idx 6: c(2,5).
+        db.push_back(rule{ep.cons(ep.cons(ep.atom("c"), ep.atom("2")), ep.atom("6")), {}});  // idx 7: c(2,6).
+
+        a01_goals goals;
+        goals.push_back(ep.cons(ep.atom("a"), X));                // a(X)
+        goals.push_back(ep.cons(ep.atom("b"), Y));                // b(Y)
+        goals.push_back(ep.cons(ep.cons(ep.atom("c"), X), Y));   // c(X, Y)
+
+        std::mt19937 rng(42);
+        a01 solver(db, goals, t, seq, ep, bm, lp, 1000, 1000, 1.414, rng);
+
+        a01_decision_store avoidance;
+        std::optional<a01_resolution_store> soln;
+
+        bool result = solver.next_avoidance(avoidance, soln);
+
+        // CRITICAL: Returns true (not a proven refutation — the first sim had ≥1 decision)
+        assert(result == true);
+
+        // CRITICAL: No solution (c requires Y ∈ {5,6}, b only gives Y ∈ {1,2} — disjoint)
+        assert(!soln.has_value());
+
+        // CRITICAL: MCTS learns to pick b or c before a, yielding a depth-1 conflict.
+        // The minimum avoidance size is 1, not 2 (which would result from picking a first).
+        assert(avoidance.size() == 1);
+
+        // CRITICAL: The single avoided resolution is on b or c (not on a), confirming
+        // MCTS discovered the optimal goal-first ordering.
+        // Picking b (Y∈{1,2}) → c(X, 1/2) immediately fails.
+        // Picking c (X=1/2, Y=5/6) → b(5/6) immediately fails.
+        // Picking a alone (X∈{1,2}) → c still has 2 candidates → depth-2, NOT chosen.
+        const goal_lineage* gl_b = lp.goal(nullptr, 1);
+        const goal_lineage* gl_c = lp.goal(nullptr, 2);
+        const resolution_lineage* avoided = *avoidance.begin();
+        bool is_b_choice = avoided == lp.resolution(gl_b, 2) || avoided == lp.resolution(gl_b, 3);
+        bool is_c_choice = avoided == lp.resolution(gl_c, 4) || avoided == lp.resolution(gl_c, 5)
+                        || avoided == lp.resolution(gl_c, 6) || avoided == lp.resolution(gl_c, 7);
+        assert(is_b_choice || is_c_choice);
+    }
 }
 
 void unit_test_main() {
+
     constexpr bool ENABLE_DEBUG_LOGS = true;
 
     // test cases
