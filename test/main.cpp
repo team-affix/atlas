@@ -24690,6 +24690,326 @@ void test_a01_constructor_and_destructor() {
     }
 }
 
+void test_a01_next_avoidance() {
+
+    // Test 1: Immediate refutation — goal has no candidates from the start.
+    // DB: empty, goals: {a}
+    // First sim_one: conflict immediately, ds empty → returns false.
+    {
+        trail t;
+        t.push();
+        expr_pool ep(t);
+        bind_map bm(t);
+        sequencer seq(t);
+        lineage_pool lp;
+
+        a01_database db;
+        a01_goals goals;
+        goals.push_back(ep.atom("a"));
+
+        std::mt19937 rng(42);
+        a01 solver(db, goals, t, seq, ep, bm, lp, 1000, 1000, 1.414, rng);
+
+        a01_decision_store avoidance;
+        std::optional<a01_resolution_store> soln;
+
+        bool result = solver.next_avoidance(avoidance, soln);
+
+        // CRITICAL: Returns false (proven refutation — conflict with no decisions)
+        assert(result == false);
+
+        // CRITICAL: soln is nullopt
+        assert(!soln.has_value());
+    }
+
+    // Test 2: Immediate solution via unit propagation.
+    // DB: {a.}, goals: {a}
+    // First sim_one: unit-prop resolves a → solution, ds empty.
+    // Loop first iteration: solution again → soln set, avoidance = {}.
+    {
+        trail t;
+        t.push();
+        expr_pool ep(t);
+        bind_map bm(t);
+        sequencer seq(t);
+        lineage_pool lp;
+
+        a01_database db;
+        db.push_back(rule{ep.atom("a"), {}});  // idx 0: a.
+
+        a01_goals goals;
+        goals.push_back(ep.atom("a"));
+
+        std::mt19937 rng(42);
+        a01 solver(db, goals, t, seq, ep, bm, lp, 1000, 1000, 1.414, rng);
+
+        a01_decision_store avoidance;
+        std::optional<a01_resolution_store> soln;
+
+        bool result = solver.next_avoidance(avoidance, soln);
+
+        // CRITICAL: Returns true (solution found)
+        assert(result == true);
+
+        // CRITICAL: soln has value
+        assert(soln.has_value());
+
+        // CRITICAL: soln has exactly 1 resolution (unit-prop of a with rule 0)
+        assert(soln.value().size() == 1);
+        const goal_lineage* gl0 = lp.goal(nullptr, 0);
+        const resolution_lineage* rl0 = lp.resolution(gl0, 0);
+        assert(soln.value().count(rl0) == 1);
+
+        // CRITICAL: avoidance is empty — unit propagation, no MCTS decisions
+        assert(avoidance.empty());
+    }
+
+    // Test 3: Solution found via MCTS after exploring a conflicting path.
+    // DB:
+    //   Rule 0: q :- r.  (conflict — r has no rules)
+    //   Rule 1: q :- p.  (solution — p is a fact)
+    //   Rule 2: p.
+    // Goals: {q}
+    // q has 2 candidates, so MCTS must decide. Rule 1 leads to solution.
+    // With 1000 iterations the solver reliably finds rule 1.
+    {
+        trail t;
+        t.push();
+        expr_pool ep(t);
+        bind_map bm(t);
+        sequencer seq(t);
+        lineage_pool lp;
+
+        a01_database db;
+        db.push_back(rule{ep.atom("q"), {ep.atom("r")}});  // idx 0: q :- r.
+        db.push_back(rule{ep.atom("q"), {ep.atom("p")}});  // idx 1: q :- p.
+        db.push_back(rule{ep.atom("p"), {}});               // idx 2: p.
+
+        a01_goals goals;
+        goals.push_back(ep.atom("q"));
+
+        std::mt19937 rng(42);
+        a01 solver(db, goals, t, seq, ep, bm, lp, 1000, 1000, 1.414, rng);
+
+        a01_decision_store avoidance;
+        std::optional<a01_resolution_store> soln;
+
+        bool result = solver.next_avoidance(avoidance, soln);
+
+        // CRITICAL: Returns true (solution found)
+        assert(result == true);
+
+        // CRITICAL: soln has value
+        assert(soln.has_value());
+
+        // CRITICAL: soln has exactly 2 resolutions (q→rule1 as decision, p→rule2 as unit prop)
+        assert(soln.value().size() == 2);
+
+        const goal_lineage* gl_q = lp.goal(nullptr, 0);
+        const resolution_lineage* rl_q1 = lp.resolution(gl_q, 1);
+        assert(soln.value().count(rl_q1) == 1);
+
+        const goal_lineage* gl_p = lp.goal(rl_q1, 0);
+        const resolution_lineage* rl_p2 = lp.resolution(gl_p, 2);
+        assert(soln.value().count(rl_p2) == 1);
+
+        // CRITICAL: avoidance = decisions of the solution sim = {rl_q1}
+        // (the decision to pick rule 1 for q; p was unit-propagated, not a decision)
+        assert(avoidance.size() == 1);
+        assert(avoidance.count(rl_q1) == 1);
+    }
+
+    // Test 4: Depth-1 conflict minimum — avoidance.size() == 1.
+    // DB:
+    //   Rule 0: a :- f.  (a → f, no rules for f)
+    //   Rule 1: a :- g.  (a → g, no rules for g)
+    // Goals: {a}
+    // Every MCTS path: exactly 1 decision (choose rule 0 or 1 for a), then
+    // head-elimination leaves f/g with 0 candidates → immediate conflict.
+    // After 1000 iterations the minimum observed ds size is 1.
+    {
+        trail t;
+        t.push();
+        expr_pool ep(t);
+        bind_map bm(t);
+        sequencer seq(t);
+        lineage_pool lp;
+
+        a01_database db;
+        db.push_back(rule{ep.atom("a"), {ep.atom("f")}});  // idx 0: a :- f.
+        db.push_back(rule{ep.atom("a"), {ep.atom("g")}});  // idx 1: a :- g.
+        // No rules for f or g
+
+        a01_goals goals;
+        goals.push_back(ep.atom("a"));
+
+        std::mt19937 rng(42);
+        a01 solver(db, goals, t, seq, ep, bm, lp, 1000, 1000, 1.414, rng);
+
+        a01_decision_store avoidance;
+        std::optional<a01_resolution_store> soln;
+
+        bool result = solver.next_avoidance(avoidance, soln);
+
+        // CRITICAL: Returns true (first sim had 1 decision, not a proven refutation)
+        assert(result == true);
+
+        // CRITICAL: No solution (all paths conflict)
+        assert(!soln.has_value());
+
+        // CRITICAL: Minimum conflict depth is 1 → avoidance.size() == 1
+        assert(avoidance.size() == 1);
+
+        // CRITICAL: The avoided resolution is on the initial goal (gl0) with either rule 0 or 1
+        const goal_lineage* gl0 = lp.goal(nullptr, 0);
+        const resolution_lineage* rl0 = lp.resolution(gl0, 0);
+        const resolution_lineage* rl1 = lp.resolution(gl0, 1);
+        const resolution_lineage* avoided = *avoidance.begin();
+        assert(avoided == rl0 || avoided == rl1);
+    }
+
+    // Test 5: Depth-2 conflict minimum — avoidance.size() == 2.
+    // DB:
+    //   Rule 0: a :- p.   Rule 1: a :- q.
+    //   Rule 2: p :- f1.  Rule 3: p :- f2.
+    //   Rule 4: q :- f3.  Rule 5: q :- f4.
+    //   No rules for f1, f2, f3, f4.
+    // Goals: {a}
+    // Decision 1: a → rule 0 or 1 (p or q, each with 2 candidates).
+    // Decision 2: p/q → rule 2/3 or 4/5 (f1/f2/f3/f4, each with 0 candidates → conflict).
+    // Every path needs exactly 2 decisions. avoidance.size() == 2 after 1000 iterations.
+    {
+        trail t;
+        t.push();
+        expr_pool ep(t);
+        bind_map bm(t);
+        sequencer seq(t);
+        lineage_pool lp;
+
+        a01_database db;
+        db.push_back(rule{ep.atom("a"), {ep.atom("p")}});   // idx 0: a :- p.
+        db.push_back(rule{ep.atom("a"), {ep.atom("q")}});   // idx 1: a :- q.
+        db.push_back(rule{ep.atom("p"), {ep.atom("f1")}});  // idx 2: p :- f1.
+        db.push_back(rule{ep.atom("p"), {ep.atom("f2")}});  // idx 3: p :- f2.
+        db.push_back(rule{ep.atom("q"), {ep.atom("f3")}});  // idx 4: q :- f3.
+        db.push_back(rule{ep.atom("q"), {ep.atom("f4")}});  // idx 5: q :- f4.
+        // No rules for f1, f2, f3, f4
+
+        a01_goals goals;
+        goals.push_back(ep.atom("a"));
+
+        std::mt19937 rng(42);
+        a01 solver(db, goals, t, seq, ep, bm, lp, 1000, 1000, 1.414, rng);
+
+        a01_decision_store avoidance;
+        std::optional<a01_resolution_store> soln;
+
+        bool result = solver.next_avoidance(avoidance, soln);
+
+        // CRITICAL: Returns true (decisions were made, not a proven refutation)
+        assert(result == true);
+
+        // CRITICAL: No solution (all paths conflict)
+        assert(!soln.has_value());
+
+        // CRITICAL: Minimum conflict depth is 2 → avoidance.size() == 2
+        assert(avoidance.size() == 2);
+    }
+
+    // Test 6: Depth-3 conflict minimum — avoidance.size() == 3.
+    // DB forms a complete binary tree of decisions, 3 levels deep:
+    //   Level 0: a → {p, q}
+    //   Level 1: p → {r, s},  q → {t, u}
+    //   Level 2: r → {f1, f2}, s → {f3, f4}, t → {f5, f6}, u → {f7, f8}
+    //   No rules for f1-f8 → all leaves conflict immediately.
+    // Every path takes exactly 3 decisions. avoidance.size() == 3 after 1000 iterations.
+    {
+        trail t;
+        t.push();
+        expr_pool ep(t);
+        bind_map bm(t);
+        sequencer seq(t);
+        lineage_pool lp;
+
+        a01_database db;
+        db.push_back(rule{ep.atom("a"), {ep.atom("p")}});   // idx 0
+        db.push_back(rule{ep.atom("a"), {ep.atom("q")}});   // idx 1
+        db.push_back(rule{ep.atom("p"), {ep.atom("r")}});   // idx 2
+        db.push_back(rule{ep.atom("p"), {ep.atom("s")}});   // idx 3
+        db.push_back(rule{ep.atom("q"), {ep.atom("t")}});   // idx 4
+        db.push_back(rule{ep.atom("q"), {ep.atom("u")}});   // idx 5
+        db.push_back(rule{ep.atom("r"), {ep.atom("f1")}});  // idx 6
+        db.push_back(rule{ep.atom("r"), {ep.atom("f2")}});  // idx 7
+        db.push_back(rule{ep.atom("s"), {ep.atom("f3")}});  // idx 8
+        db.push_back(rule{ep.atom("s"), {ep.atom("f4")}});  // idx 9
+        db.push_back(rule{ep.atom("t"), {ep.atom("f5")}});  // idx 10
+        db.push_back(rule{ep.atom("t"), {ep.atom("f6")}});  // idx 11
+        db.push_back(rule{ep.atom("u"), {ep.atom("f7")}});  // idx 12
+        db.push_back(rule{ep.atom("u"), {ep.atom("f8")}});  // idx 13
+        // No rules for f1-f8
+
+        a01_goals goals;
+        goals.push_back(ep.atom("a"));
+
+        std::mt19937 rng(42);
+        a01 solver(db, goals, t, seq, ep, bm, lp, 1000, 1000, 1.414, rng);
+
+        a01_decision_store avoidance;
+        std::optional<a01_resolution_store> soln;
+
+        bool result = solver.next_avoidance(avoidance, soln);
+
+        // CRITICAL: Returns true (decisions were made, not a proven refutation)
+        assert(result == true);
+
+        // CRITICAL: No solution (all paths conflict)
+        assert(!soln.has_value());
+
+        // CRITICAL: Minimum conflict depth is 3 → avoidance.size() == 3
+        assert(avoidance.size() == 3);
+    }
+
+    // Test 7: Refutation via pre-existing avoidances injected into solver.as.
+    // DB: {a.} (one fact), goals: {a}
+    // Inject singleton avoidance {rl(gl0, 0)} into solver.as before calling.
+    // CDCL-elimination removes the only candidate → conflict with ds empty → returns false.
+    {
+        trail t;
+        t.push();
+        expr_pool ep(t);
+        bind_map bm(t);
+        sequencer seq(t);
+        lineage_pool lp;
+
+        a01_database db;
+        db.push_back(rule{ep.atom("a"), {}});  // idx 0: a.
+
+        a01_goals goals;
+        goals.push_back(ep.atom("a"));
+
+        std::mt19937 rng(42);
+        a01 solver(db, goals, t, seq, ep, bm, lp, 1000, 1000, 1.414, rng);
+
+        // Inject singleton avoidance: CDCL will eliminate rule 0 for gl0
+        const goal_lineage* gl0 = lp.goal(nullptr, 0);
+        const resolution_lineage* rl0 = lp.resolution(gl0, 0);
+        a01_decision_store avoid;
+        avoid.insert(rl0);
+        solver.as.insert(avoid);
+
+        a01_decision_store avoidance;
+        std::optional<a01_resolution_store> soln;
+
+        bool result = solver.next_avoidance(avoidance, soln);
+
+        // CRITICAL: Returns false (CDCL eliminated all candidates → conflict, ds empty → refutation)
+        assert(result == false);
+
+        // CRITICAL: soln is nullopt
+        assert(!soln.has_value());
+    }
+}
+
 void unit_test_main() {
     constexpr bool ENABLE_DEBUG_LOGS = true;
 
@@ -24745,6 +25065,7 @@ void unit_test_main() {
     TEST(test_a01_sim);
     TEST(test_a01_constructor_and_destructor);
     TEST(test_a01_sim_one);
+    TEST(test_a01_next_avoidance);
 }
 
 #ifdef DEBUG
