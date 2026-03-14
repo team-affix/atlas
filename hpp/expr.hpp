@@ -4,6 +4,7 @@
 // This file is dedicated to defining s-expressions used for this project, as well as
 // functions that operate on them such as unifications.
 
+#include <cstdint>
 #include <string>
 #include <variant>
 #include <set>
