@@ -7624,6 +7624,322 @@ void test_bind_map_unify() {
         
         t.pop();
     }
+
+    // ========== STRUCTURAL IDENTITY: DIFFERENT ALLOCATIONS, SAME INDEX ==========
+    // The following tests specifically target the new behavior where pointer equality
+    // is not used. Two expressions with the same structural content (same variable
+    // index, same atom value, same cons shape) must unify correctly regardless of
+    // which expr_pool they came from or whether they live on the stack.
+
+    // Test 87: Same-index var, two different stack allocations → succeed, no binding.
+    // The old pointer-equality shortcut would miss this; the new same-index guard catches it.
+    {
+        trail t;
+        bind_map bm(t);
+        t.push();
+
+        expr v1{expr::var{200}};
+        expr v2{expr::var{200}};  // Same index, different stack address
+        assert(&v1 != &v2);
+
+        assert(bm.unify(&v1, &v2));
+        assert(bm.bindings.size() == 0);  // Same logical variable — no binding needed
+        assert(bm.whnf(&v1) == &v1);      // Still unbound (index 200 has no entry)
+        assert(bm.whnf(&v2) == &v2);
+
+        t.pop();
+    }
+
+    // Test 88: Same-index var — stack allocation vs expr_pool allocation → succeed, no binding.
+    {
+        trail t;
+        bind_map bm(t);
+        t.push();
+        expr_pool ep(t);
+
+        expr      v_stack{expr::var{201}};
+        const expr* v_pool = ep.var(201);  // Same index, allocated inside the pool's set
+        assert(&v_stack != v_pool);
+
+        assert(bm.unify(&v_stack, v_pool));
+        assert(bm.bindings.size() == 0);
+
+        t.pop();
+    }
+
+    // Test 89: Same-index var from two different expr_pools → succeed, no binding.
+    {
+        trail t;
+        bind_map bm(t);
+        t.push();
+        expr_pool ep1(t);
+        expr_pool ep2(t);
+
+        const expr* v1 = ep1.var(202);
+        const expr* v2 = ep2.var(202);  // Same index; different pool, different pointer
+        assert(v1 != v2);
+
+        assert(bm.unify(v1, v2));
+        assert(bm.bindings.size() == 0);
+
+        t.pop();
+    }
+
+    // Test 90: Same-value atoms from two different expr_pools → succeed, no binding (regression).
+    {
+        trail t;
+        bind_map bm(t);
+        t.push();
+        expr_pool ep1(t);
+        expr_pool ep2(t);
+
+        const expr* a1 = ep1.atom("hello");
+        const expr* a2 = ep2.atom("hello");  // Same value, different pool
+        assert(a1 != a2);
+
+        assert(bm.unify(a1, a2));
+        assert(bm.bindings.size() == 0);
+
+        t.pop();
+    }
+
+    // Test 91: Structurally equal cons cells from two different expr_pools → succeed, no binding (regression).
+    {
+        trail t;
+        bind_map bm(t);
+        t.push();
+        expr_pool ep1(t);
+        expr_pool ep2(t);
+
+        const expr* c1 = ep1.cons(ep1.atom("x"), ep1.atom("y"));
+        const expr* c2 = ep2.cons(ep2.atom("x"), ep2.atom("y"));
+        assert(c1 != c2);
+
+        assert(bm.unify(c1, c2));
+        assert(bm.bindings.size() == 0);
+
+        t.pop();
+    }
+
+    // Test 92: Cross-pool var unified with atom from a different pool → correct binding.
+    {
+        trail t;
+        bind_map bm(t);
+        t.push();
+        expr_pool ep1(t);
+        expr_pool ep2(t);
+
+        const expr* v    = ep1.var(203);
+        const expr* atom = ep2.atom("target");
+
+        assert(bm.unify(v, atom));
+        assert(bm.bindings.size() == 1);
+        assert(bm.bindings.count(203) == 1);
+        assert(bm.whnf(v) == atom);
+
+        t.pop();
+    }
+
+    // Test 93: Same-index vars from different pools unified with each other, then with an atom.
+    // Demonstrates that no binding is created for the same-index unification, and a later
+    // binding of that index applies uniformly to all allocations of that variable.
+    {
+        trail t;
+        bind_map bm(t);
+        t.push();
+        expr_pool ep1(t);
+        expr_pool ep2(t);
+
+        const expr* v1   = ep1.var(204);
+        const expr* v2   = ep2.var(204);  // Same index, different pool
+        const expr* atom = ep1.atom("value");
+
+        // Step 1: unify same-index vars → no binding
+        assert(bm.unify(v1, v2));
+        assert(bm.bindings.size() == 0);
+
+        // Step 2: unify either with atom → binding 204 → atom
+        assert(bm.unify(v1, atom));
+        assert(bm.bindings.size() == 1);
+
+        // The binding applies to both pointers (they share the same index)
+        assert(bm.whnf(v1) == atom);
+        assert(bm.whnf(v2) == atom);
+
+        t.pop();
+    }
+
+    // Test 94: Cross-pool cons with a var inside that gets bound to an atom from the other pool.
+    {
+        trail t;
+        bind_map bm(t);
+        t.push();
+        expr_pool ep1(t);
+        expr_pool ep2(t);
+
+        // ep1: cons(var(205), "fixed")
+        const expr* c1 = ep1.cons(ep1.var(205), ep1.atom("fixed"));
+
+        // ep2: cons("bound_val", "fixed")
+        const expr* bound_val = ep2.atom("bound_val");
+        const expr* c2        = ep2.cons(bound_val, ep2.atom("fixed"));
+
+        assert(bm.unify(c1, c2));
+        assert(bm.bindings.size() == 1);
+        assert(bm.bindings.count(205) == 1);
+        assert(bm.whnf(ep1.var(205)) == bound_val);
+
+        t.pop();
+    }
+
+    // Test 95: Stack cons with a var inside, pool cons with atom → correct cross-allocation binding.
+    {
+        trail t;
+        bind_map bm(t);
+        t.push();
+        expr_pool ep(t);
+
+        // Stack: cons(var(206), "hello")
+        expr v_stack{expr::var{206}};
+        expr a_hello{expr::atom{"hello"}};
+        expr c_stack{expr::cons{&v_stack, &a_hello}};
+
+        // Pool: cons("world", "hello")
+        const expr* c_pool = ep.cons(ep.atom("world"), ep.atom("hello"));
+
+        assert(bm.unify(&c_stack, c_pool));
+        assert(bm.bindings.size() == 1);
+        assert(bm.bindings.count(206) == 1);
+
+        const expr* world = ep.atom("world");
+        assert(bm.whnf(&v_stack) == world);
+
+        t.pop();
+    }
+
+    // Test 96: Two pool-allocated cons cells with same-index vars in every position →
+    // succeed, no bindings (structurally identical in every dimension).
+    {
+        trail t;
+        bind_map bm(t);
+        t.push();
+        expr_pool ep1(t);
+        expr_pool ep2(t);
+
+        // ep1: cons(var(207), var(208))
+        const expr* c1 = ep1.cons(ep1.var(207), ep1.var(208));
+        // ep2: cons(var(207), var(208)) — same indices, different pool
+        const expr* c2 = ep2.cons(ep2.var(207), ep2.var(208));
+        assert(c1 != c2);
+
+        // Both children unify via same-index guard — no binding created at any position
+        assert(bm.unify(c1, c2));
+        assert(bm.bindings.size() == 0);
+
+        t.pop();
+    }
+
+    // Test 97: Three pools — var allocated in pool1 gets bound through unification of
+    // a cons from pool2 against a cons from pool3. Binding applies to pool1 var too.
+    {
+        trail t;
+        bind_map bm(t);
+        t.push();
+        expr_pool ep1(t);
+        expr_pool ep2(t);
+        expr_pool ep3(t);
+
+        const expr* v_ep1 = ep1.var(209);
+
+        // ep2: cons(var(209), "a")
+        const expr* c2 = ep2.cons(ep2.var(209), ep2.atom("a"));
+
+        // ep3: cons("bound", "a")
+        const expr* bound = ep3.atom("bound");
+        const expr* c3    = ep3.cons(bound, ep3.atom("a"));
+
+        // Unify ep2's cons with ep3's cons → var(209) gets bound to "bound"
+        assert(bm.unify(c2, c3));
+        assert(bm.bindings.size() == 1);
+        assert(bm.bindings.count(209) == 1);
+
+        // The binding propagates to v_ep1 from ep1, which shares index 209
+        assert(bm.whnf(v_ep1) == bound);
+
+        t.pop();
+    }
+
+    // Test 98: Occurs check works correctly across allocation boundaries.
+    // Stack var(210) vs pool cons containing pool var(210) → same index → cycle detected.
+    {
+        trail t;
+        bind_map bm(t);
+        t.push();
+        expr_pool ep(t);
+
+        expr v_stack{expr::var{210}};
+
+        // Pool: cons(var(210), "a") — var index matches stack var
+        const expr* c_pool = ep.cons(ep.var(210), ep.atom("a"));
+
+        // Attempting to bind var(210) to a structure that contains var(210) must fail
+        assert(!bm.unify(&v_stack, c_pool));
+        assert(bm.bindings.size() == 0);
+
+        t.pop();
+    }
+
+    // Test 99: Occurs check across two pools — pool1 var(211) unified with pool2 cons
+    // containing pool2 var(211). The indices match even though the allocations differ.
+    {
+        trail t;
+        bind_map bm(t);
+        t.push();
+        expr_pool ep1(t);
+        expr_pool ep2(t);
+
+        const expr* v1     = ep1.var(211);
+        const expr* c_pool = ep2.cons(ep2.var(211), ep2.atom("b"));  // contains index 211
+
+        assert(!bm.unify(v1, c_pool));
+        assert(bm.bindings.size() == 0);
+
+        t.pop();
+    }
+
+    // Test 100: Complex cross-pool nested cons with multiple vars, all resolved correctly.
+    // Validates that an entire Prolog-style term from one pool unifies against a ground
+    // term from another pool with no spurious failures from pointer inequality.
+    {
+        trail t;
+        bind_map bm(t);
+        t.push();
+        expr_pool ep1(t);
+        expr_pool ep2(t);
+
+        // ep1: cons(cons(var(212), var(213)), cons(var(214), "leaf"))
+        const expr* c1 = ep1.cons(
+            ep1.cons(ep1.var(212), ep1.var(213)),
+            ep1.cons(ep1.var(214), ep1.atom("leaf"))
+        );
+
+        // ep2: cons(cons("a", "b"), cons("c", "leaf"))
+        const expr* a   = ep2.atom("a");
+        const expr* b   = ep2.atom("b");
+        const expr* c   = ep2.atom("c");
+        const expr* c2  = ep2.cons(
+            ep2.cons(a, b),
+            ep2.cons(c, ep2.atom("leaf"))
+        );
+
+        assert(bm.unify(c1, c2));
+        assert(bm.bindings.size() == 3);
+        assert(bm.whnf(ep1.var(212)) == a);
+        assert(bm.whnf(ep1.var(213)) == b);
+        assert(bm.whnf(ep1.var(214)) == c);
+
+        t.pop();
+    }
 }
 
 void test_lineage_pool_constructor() {
