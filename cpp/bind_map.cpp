@@ -36,23 +36,27 @@ bool bind_map::unify(const expr* lhs, const expr* rhs) {
     lhs = whnf(lhs);
     rhs = whnf(rhs);
 
-    // If the lhs and rhs are the same, unification succeeds
-    if (lhs == rhs)
+    // get the lhs and rhs var handles if they are variables
+    const expr::var* lv = std::get_if<expr::var>(&lhs->content);
+    const expr::var* rv = std::get_if<expr::var>(&rhs->content);
+
+    // if they are the same variable, unification succeeds trivially
+    if (lv && rv && lv->index == rv->index)
         return true;
     
     // If the lhs is a variable, add a binding to the whnf of the rhs
-    if (const expr::var* var = std::get_if<expr::var>(&lhs->content)) {
-        if (occurs_check(var->index, rhs))
+    if (lv) {
+        if (occurs_check(lv->index, rhs))
             return false;
-        bind(var->index, rhs);
+        bind(lv->index, rhs);
         return true;
     }
 
     // If the rhs is a variable, add a binding to the whnf of the lhs
-    if (const expr::var* var = std::get_if<expr::var>(&rhs->content)) {
-        if (occurs_check(var->index, lhs))
+    if (rv) {
+        if (occurs_check(rv->index, lhs))
             return false;
-        bind(var->index, lhs);
+        bind(rv->index, lhs);
         return true;
     }
 
