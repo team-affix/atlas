@@ -25369,7 +25369,7 @@ void test_a01_next_avoidance() {
         assert(is_b_choice || is_c_choice);
     }
 
-    // Test 13: Depth-3 shared-variable needle in a depth-5 haystack.
+    // Test 13: Depth-4 needle in a depth-10 haystack.
     {
         trail t;
         t.push();
@@ -25439,116 +25439,80 @@ void test_a01_next_avoidance() {
         assert(avoidance.count(rl_stuntZ) == 1);
     }
 
-    // // Test 14: Depth-4 shared-variable needle in a depth-6 haystack.
-    // //
-    // // Same concept but with one extra layer of decisions in the needle branch,
-    // // proving MCTS can reliably find a shallowest conflict even deeper in the tree.
-    // //
-    // // NEEDLE  (rule 0): root4 :- layer2.
-    // //   layer2 :- layer3.           [duplicate × 2 — forces decision 2]
-    // //   layer3 :- p2(X), q2(X).    [duplicate × 2 — forces decision 3; adds parallel goals]
-    // //   p2("lv2").                  [duplicate × 2 — fact, gives X="lv2"]
-    // //   q2("lv2") :- c4.            [duplicate × 2 — binds X="lv2", spawns c4]
-    // //   c4 has no rules → conflict.
-    // //
-    // //   MCTS ordering analysis:
-    // //     Decision 1: root4 → rule 0.  Adds {layer2}.
-    // //     Decision 2: layer2 (2 cand). Adds {layer3}.
-    // //     Decision 3: layer3 (2 cand). Adds {p2(X), q2(X)}.
-    // //     Decision 4 — two sub-cases:
-    // //       If q2 first: q2 → X="lv2", c4 added. p2("lv2") 2 cand, but c4 → 0 cand
-    // //                    → CONFLICT at depth-4.   ← minimum
-    // //       If p2 first: p2 → X="lv2". q2("lv2") still 2 cand.
-    // //                    Decision 5 on q2 → c4 → conflict at depth-5.
-    // //   MCTS converges to the depth-4 sub-case (reward -4 > -5).
-    // //
-    // // HAYSTACK (rules 1-8): root4 :- e1.  (8 identical deep branches)
-    // //   e1:-e2, e2:-e3, e3:-e4, e4:-{efv(Z),epv(Z)}.  [duplicate rules at each level]
-    // //   efv("eval4") × 2.  epv("pval4") × 2.  [incompatible ranges → conflict at depth-6]
-    // //
-    // // MCTS with 1000 iterations finds depth-4 needle over depth-6 deep paths.
-    // {
-    //     trail t;
-    //     t.push();
-    //     expr_pool ep(t);
-    //     bind_map bm(t);
-    //     sequencer seq(t);
-    //     lineage_pool lp;
+    // Test 14: Depth-5 shared-variable needle in a depth-10 haystack.
+    {
+        trail t;
+        t.push();
+        expr_pool ep(t);
+        bind_map bm(t);
+        sequencer seq(t);
+        lineage_pool lp;
 
-    //     a01_database db;
+        a01_database db;
 
-    //     // Needle — rule 0: root4 :- layer2.
-    //     db.push_back(rule{ep.atom("root4"), {ep.atom("layer2")}});  // idx 0
+        // say which root to start from
+        db.push_back(rule{ep.atom("root"), {ep.atom("stunt0")}});
+        db.push_back(rule{ep.atom("root"), {ep.atom("stuntX")}});
 
-    //     // Haystack — rules 1-8: root4 :- e1.  (8 identical deep branches)
-    //     for (int i = 0; i < 8; i++)
-    //         db.push_back(rule{ep.atom("root4"), {ep.atom("e1")}});  // idx 1-8
+        // NEEDLE: add the rules which provide a faster route to a conflict
+        db.push_back(rule{ep.atom("stuntX"), {ep.atom("stunt1")}});
+        db.push_back(rule{ep.atom("stuntX"), {ep.atom("stuntY")}});
+        db.push_back(rule{ep.atom("stuntY"), {ep.atom("stunt2")}});
+        db.push_back(rule{ep.atom("stuntY"), {ep.atom("stuntZ")}});
+        db.push_back(rule{ep.atom("stuntZ"), {ep.atom("stunt3")}});
+        db.push_back(rule{ep.atom("stuntZ"), {ep.atom("stuntW")}});
+        db.push_back(rule{ep.atom("stuntW"), {ep.atom("stunt4")}});
+        db.push_back(rule{ep.atom("stuntW"), {ep.atom("stuntU")}});
 
-    //     // layer2 :- layer3.  (duplicate — forces decision 2)
-    //     db.push_back(rule{ep.atom("layer2"), {ep.atom("layer3")}});  // idx 9
-    //     db.push_back(rule{ep.atom("layer2"), {ep.atom("layer3")}});  // idx 10
+        // HAYSTACK: add 2 of each to make fictitious decisions necessary (simulates a perfect binary tree)
+        for (int i = 0; i < 2; ++i) {
+            db.push_back(rule{ep.atom("stunt0"), {ep.atom("stunt1")}});
+            db.push_back(rule{ep.atom("stunt1"), {ep.atom("stunt2")}});
+            db.push_back(rule{ep.atom("stunt2"), {ep.atom("stunt3")}});
+            db.push_back(rule{ep.atom("stunt3"), {ep.atom("stunt4")}});
+            db.push_back(rule{ep.atom("stunt4"), {ep.atom("stunt5")}});
+            db.push_back(rule{ep.atom("stunt5"), {ep.atom("stunt6")}});
+            db.push_back(rule{ep.atom("stunt6"), {ep.atom("stunt7")}});
+            db.push_back(rule{ep.atom("stunt7"), {ep.atom("stunt8")}});
+            db.push_back(rule{ep.atom("stunt8"), {ep.atom("stunt9")}});
+        }
+        
+        a01_goals goals;
 
-    //     // layer3 :- p2(X), q2(X).  (duplicate — forces decision 3; X shared between p2 and q2)
-    //     {
-    //         const expr* X = ep.var(seq());
-    //         db.push_back(rule{ep.atom("layer3"), {ep.cons(ep.atom("p2"), X), ep.cons(ep.atom("q2"), X)}});  // idx 11
-    //         db.push_back(rule{ep.atom("layer3"), {ep.cons(ep.atom("p2"), X), ep.cons(ep.atom("q2"), X)}});  // idx 12
-    //     }
+        goals.push_back(ep.atom("root"));
 
-    //     // p2("lv2").  (duplicate fact — both give X="lv2")
-    //     db.push_back(rule{ep.cons(ep.atom("p2"), ep.atom("lv2")), {}});  // idx 13
-    //     db.push_back(rule{ep.cons(ep.atom("p2"), ep.atom("lv2")), {}});  // idx 14
 
-    //     // q2("lv2") :- c4.  (duplicate — binds X="lv2" and spawns c4; c4 has no rules)
-    //     db.push_back(rule{ep.cons(ep.atom("q2"), ep.atom("lv2")), {ep.atom("c4")}});  // idx 15
-    //     db.push_back(rule{ep.cons(ep.atom("q2"), ep.atom("lv2")), {ep.atom("c4")}});  // idx 16
+        std::mt19937 rng(42);
+        a01 solver(db, goals, t, seq, ep, bm, lp, 1000, 1000, 1.414, rng);
 
-    //     // Haystack deep structure: e1:-e2:-e3:-e4:-{efv(Z),epv(Z)}  (duplicate at each level)
-    //     db.push_back(rule{ep.atom("e1"), {ep.atom("e2")}});  // idx 17
-    //     db.push_back(rule{ep.atom("e1"), {ep.atom("e2")}});  // idx 18
-    //     db.push_back(rule{ep.atom("e2"), {ep.atom("e3")}});  // idx 19
-    //     db.push_back(rule{ep.atom("e2"), {ep.atom("e3")}});  // idx 20
-    //     db.push_back(rule{ep.atom("e3"), {ep.atom("e4")}});  // idx 21
-    //     db.push_back(rule{ep.atom("e3"), {ep.atom("e4")}});  // idx 22
+        a01_decision_store avoidance;
+        std::optional<a01_resolution_store> soln;
 
-    //     // e4 :- efv(Z), epv(Z).  (duplicate — Z shared, parallel incompatible-range goals)
-    //     {
-    //         const expr* Z = ep.var(seq());
-    //         db.push_back(rule{ep.atom("e4"), {ep.cons(ep.atom("efv"), Z), ep.cons(ep.atom("epv"), Z)}});  // idx 23
-    //         db.push_back(rule{ep.atom("e4"), {ep.cons(ep.atom("efv"), Z), ep.cons(ep.atom("epv"), Z)}});  // idx 24
-    //     }
+        bool result = solver.next_avoidance(avoidance, soln);
 
-    //     // efv("eval4").  (duplicate — Y="eval4")
-    //     db.push_back(rule{ep.cons(ep.atom("efv"), ep.atom("eval4")), {}});  // idx 25
-    //     db.push_back(rule{ep.cons(ep.atom("efv"), ep.atom("eval4")), {}});  // idx 26
+        assert(result == true);
+        assert(!soln.has_value());
 
-    //     // epv("pval4").  (duplicate — pval4≠eval4; first of efv/epv to be decided binds Z to a
-    //     //                 value the other rejects → conflict at depth-6)
-    //     db.push_back(rule{ep.cons(ep.atom("epv"), ep.atom("pval4")), {}});  // idx 27
-    //     db.push_back(rule{ep.cons(ep.atom("epv"), ep.atom("pval4")), {}});  // idx 28
+        // CRITICAL: MCTS finds the depth-4 needle.
+        assert(avoidance.size() == 5);
 
-    //     a01_goals goals;
-    //     goals.push_back(ep.atom("root4"));
-
-    //     std::mt19937 rng(42);
-    //     a01 solver(db, goals, t, seq, ep, bm, lp, 1000, 1000, 1.414, rng);
-
-    //     a01_decision_store avoidance;
-    //     std::optional<a01_resolution_store> soln;
-
-    //     bool result = solver.next_avoidance(avoidance, soln);
-
-    //     assert(result == true);
-    //     assert(!soln.has_value());
-
-    //     // CRITICAL: MCTS finds the depth-4 needle (not depth-6 deep paths).
-    //     assert(avoidance.size() == 4);
-
-    //     // CRITICAL: The first decision in the avoidance is root4→rule0 (the needle branch).
-    //     const goal_lineage* gl_root14 = lp.goal(nullptr, 0);
-    //     const resolution_lineage* rl_needle14 = lp.resolution(gl_root14, 0);
-    //     assert(avoidance.count(rl_needle14) == 1);
-    // }
+        // CRITICAL: The first decision in the avoidance is root→rule0 (the needle branch).
+        const goal_lineage* gl_root = lp.goal(nullptr, 0);
+        const resolution_lineage* rl_root = lp.resolution(gl_root, 1);
+        assert(avoidance.count(rl_root) == 1);
+        const goal_lineage* gl_stuntX = lp.goal(rl_root, 0);
+        const resolution_lineage* rl_stuntX = lp.resolution(gl_stuntX, 3);
+        assert(avoidance.count(rl_stuntX) == 1);
+        const goal_lineage* gl_stuntY = lp.goal(rl_stuntX, 0);
+        const resolution_lineage* rl_stuntY = lp.resolution(gl_stuntY, 5);
+        assert(avoidance.count(rl_stuntY) == 1);
+        const goal_lineage* gl_stuntZ = lp.goal(rl_stuntY, 0);
+        const resolution_lineage* rl_stuntZ = lp.resolution(gl_stuntZ, 7);
+        assert(avoidance.count(rl_stuntZ) == 1);
+        const goal_lineage* gl_stuntW = lp.goal(rl_stuntZ, 0);
+        const resolution_lineage* rl_stuntW = lp.resolution(gl_stuntW, 9);
+        assert(avoidance.count(rl_stuntW) == 1);
+    }
 }
 
 void unit_test_main() {
