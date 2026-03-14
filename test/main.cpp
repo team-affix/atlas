@@ -15,6 +15,7 @@
 #include "../hpp/a01_cdcl_elimination_detector.hpp"
 #include "../hpp/a01_decider.hpp"
 #include "../hpp/a01_sim.hpp"
+#include "../hpp/a01.hpp"
 #include "test_utils.hpp"
 
 void test_trail_constructor() {
@@ -24103,6 +24104,214 @@ void test_a01_sim() {
     }
 }
 
+void test_a01_constructor_and_destructor() {
+    // Test 1: Basic construction - verify trail frame pushed and all fields stored correctly
+    {
+        trail t;
+        t.push();
+
+        expr_pool ep(t);
+        bind_map bm(t);
+        sequencer seq(t);
+        lineage_pool lp;
+
+        a01_database db;
+        a01_goals goals;
+        std::mt19937 rng(42);
+
+        size_t depth_before = t.depth();
+        assert(depth_before == 1);
+
+        {
+            a01 solver(db, goals, t, seq, ep, bm, lp, 100, 10, 1.414, rng);
+
+            // CRITICAL: Constructor pushes one trail frame
+            assert(t.depth() == depth_before + 1);
+
+            // CRITICAL: References stored correctly
+            assert(&solver.db == &db);
+            assert(&solver.goals == &goals);
+            assert(&solver.t == &t);
+            assert(&solver.vars == &seq);
+            assert(&solver.ep == &ep);
+            assert(&solver.bm == &bm);
+            assert(&solver.lp == &lp);
+            assert(&solver.rng == &rng);
+
+            // CRITICAL: Scalar fields stored correctly
+            assert(solver.max_resolutions == 100);
+            assert(solver.iterations_per_avoidance == 10);
+            assert(solver.c == 1.414);
+
+            // CRITICAL: Avoidance store initialized empty
+            assert(solver.as.empty());
+        }
+
+        // CRITICAL: Destructor restores trail depth
+        assert(t.depth() == depth_before);
+    }
+
+    // Test 2: Construction on a fresh trail (depth 0 → 1 → 0)
+    {
+        trail t;
+
+        expr_pool ep(t);
+        bind_map bm(t);
+        sequencer seq(t);
+        lineage_pool lp;
+
+        a01_database db;
+        a01_goals goals;
+        std::mt19937 rng(0);
+
+        assert(t.depth() == 0);
+
+        {
+            a01 solver(db, goals, t, seq, ep, bm, lp, 1, 1, 0.0, rng);
+
+            // CRITICAL: Depth goes 0 → 1
+            assert(t.depth() == 1);
+            assert(solver.max_resolutions == 1);
+            assert(solver.iterations_per_avoidance == 1);
+            assert(solver.c == 0.0);
+        }
+
+        // CRITICAL: Depth returns to 0
+        assert(t.depth() == 0);
+    }
+
+    // Test 3: Constructor only adds a frame boundary, no undo actions
+    {
+        trail t;
+        t.push();
+
+        expr_pool ep(t);
+        bind_map bm(t);
+        sequencer seq(t);
+        lineage_pool lp;
+
+        a01_database db;
+        a01_goals goals;
+        std::mt19937 rng(42);
+
+        size_t undo_size_before = t.undo_stack.size();
+        size_t boundary_size_before = t.frame_boundary_stack.size();
+
+        {
+            a01 solver(db, goals, t, seq, ep, bm, lp, 100, 10, 1.414, rng);
+
+            // CRITICAL: Only a frame boundary is pushed, not any undo action
+            assert(t.undo_stack.size() == undo_size_before);
+            assert(t.frame_boundary_stack.size() == boundary_size_before + 1);
+        }
+
+        // CRITICAL: Destructor removes the frame boundary; undo stack is unchanged
+        assert(t.frame_boundary_stack.size() == boundary_size_before);
+        assert(t.undo_stack.size() == undo_size_before);
+    }
+
+    // Test 4: Destructor rolls back undo actions logged within the a01 frame
+    {
+        trail t;
+        t.push();
+
+        expr_pool ep(t);
+        bind_map bm(t);
+        sequencer seq(t);
+        lineage_pool lp;
+
+        a01_database db;
+        a01_goals goals;
+        std::mt19937 rng(42);
+
+        bool undone = false;
+
+        {
+            a01 solver(db, goals, t, seq, ep, bm, lp, 100, 10, 1.414, rng);
+
+            // Log an undo action into the a01's frame
+            t.log([&undone]() { undone = true; });
+
+            assert(!undone);
+        }
+
+        // CRITICAL: Destructor popped the a01 frame, triggering the logged undo action
+        assert(undone);
+    }
+
+    // Test 5: Destructor only pops the a01's frame, not the caller's frame
+    {
+        trail t;
+        t.push();
+
+        expr_pool ep(t);
+        bind_map bm(t);
+        sequencer seq(t);
+        lineage_pool lp;
+
+        a01_database db;
+        a01_goals goals;
+        std::mt19937 rng(42);
+
+        bool caller_undone = false;
+        t.log([&caller_undone]() { caller_undone = true; });
+
+        {
+            a01 solver(db, goals, t, seq, ep, bm, lp, 100, 10, 1.414, rng);
+
+            // a01's frame is stacked on top of the caller's frame
+            assert(t.depth() == 2);
+        }
+
+        // CRITICAL: Only the a01's frame was popped; caller's undo action not triggered
+        assert(!caller_undone);
+        assert(t.depth() == 1);
+    }
+
+    // Test 6: Non-empty db and goals - verify references and contents accessible via solver
+    {
+        trail t;
+        t.push();
+
+        expr_pool ep(t);
+        bind_map bm(t);
+        sequencer seq(t);
+        lineage_pool lp;
+
+        a01_database db;
+        db.push_back(rule{ep.atom("p"), {}});
+        db.push_back(rule{ep.cons(ep.atom("q"), ep.var(seq())), {ep.atom("p")}});
+
+        a01_goals goals;
+        goals.push_back(ep.cons(ep.atom("q"), ep.atom("a")));
+
+        std::mt19937 rng(999);
+
+        size_t depth_before = t.depth();
+
+        {
+            a01 solver(db, goals, t, seq, ep, bm, lp, 50, 5, 1.0, rng);
+
+            // CRITICAL: Frame pushed
+            assert(t.depth() == depth_before + 1);
+
+            // CRITICAL: db reference correct; content accessible through it
+            assert(&solver.db == &db);
+            assert(solver.db.size() == 2);
+
+            // CRITICAL: goals reference correct; content accessible through it
+            assert(&solver.goals == &goals);
+            assert(solver.goals.size() == 1);
+
+            // CRITICAL: Avoidance store empty on construction regardless of db/goals content
+            assert(solver.as.empty());
+        }
+
+        // CRITICAL: Destructor restores depth
+        assert(t.depth() == depth_before);
+    }
+}
+
 void unit_test_main() {
     constexpr bool ENABLE_DEBUG_LOGS = true;
 
@@ -24156,6 +24365,7 @@ void unit_test_main() {
     TEST(test_a01_decider);
     TEST(test_a01_sim_constructor);
     TEST(test_a01_sim);
+    TEST(test_a01_constructor_and_destructor);
 }
 
 #ifdef DEBUG
