@@ -24247,10 +24247,12 @@ void test_a01_sim_one() {
         assert(t.depth() == depth_before);
     }
 
-    // Test 4: MCTS termination reward uses the INCOMING ds, not the simulation's ds.
-    // Use a pure unit-propagation scenario so ds is always empty after each call
-    // (no decisions ever made). This makes the reward unambiguous: terminate(-0) = 0.0.
-    // Two calls share the same root so we can verify MCTS accumulates visits correctly.
+    // Test 4: MCTS termination reward uses the OUTGOING (simulation's) ds, not the incoming ds.
+    // db: {a :- b., a :- c., b., c.} — 2 candidates for a → MCTS must make exactly 1 decision.
+    // The incoming ds is empty on the first call, but the output ds has 1 element (the decision).
+    // With the fix: terminate(-1.0) → root.m_value = -1.0.
+    // With the old bug: terminate(-0.0) → root.m_value = 0.0.
+    // So root.m_value == -1.0 distinguishes correct from buggy behavior.
     {
         trail t;
         t.push();
@@ -24260,10 +24262,11 @@ void test_a01_sim_one() {
         sequencer seq(t);
         lineage_pool lp;
 
-        // db: {a :- b., b.} — each goal has exactly 1 candidate → always unit-propagated
         a01_database db;
         db.push_back(rule{ep.atom("a"), {ep.atom("b")}});  // idx 0
-        db.push_back(rule{ep.atom("b"), {}});               // idx 1
+        db.push_back(rule{ep.atom("a"), {ep.atom("c")}});  // idx 1
+        db.push_back(rule{ep.atom("b"), {}});               // idx 2
+        db.push_back(rule{ep.atom("c"), {}});               // idx 3
 
         a01_goals goals;
         goals.push_back(ep.atom("a"));
@@ -24275,19 +24278,15 @@ void test_a01_sim_one() {
         a01_decision_store ds;
         a01_resolution_store rs;
 
-        // First call: ds is empty going in → terminate(-(size_t)0) → m_value += 0
         solver.sim_one(root, ds, rs);
+
+        // CRITICAL: MCTS made exactly 1 decision (outgoing ds has 1 element)
+        assert(ds.size() == 1);
         assert(root.m_visits == 1);
-        assert(root.m_value == 0.0);
 
-        // CRITICAL: ds still empty (all unit propagations, no MCTS decisions)
-        assert(ds.empty());
-
-        // Second call: ds still empty going in → terminate(0) again → m_value stays 0
-        solver.sim_one(root, ds, rs);
-        assert(root.m_visits == 2);
-        assert(root.m_value == 0.0);
-        assert(ds.empty());
+        // CRITICAL: Reward is based on output ds size (1), NOT input ds size (0).
+        // Old buggy behavior would leave root.m_value == 0.0.
+        assert(root.m_value == -1.0);
     }
 
     // Test 5: CDCL avoidance injected via solver.as after construction
@@ -24404,9 +24403,9 @@ void test_a01_sim_one() {
         assert(rs.count(rl_c) == 1);
         assert(ds.count(rl_c) == 0);  // Unit propagation, not a decision
 
-        // CRITICAL: Root gets incremented by terminate(); ds was empty going in → value += 0
+        // CRITICAL: terminate() uses the OUTPUT ds (1 element) → reward = -1.0
         assert(root.m_visits == 101);  // 100 + 1 from terminate()
-        assert(root.m_value == -1.0);   // root.m_value defaulted to 0; terminate(-1) leaves it at -1
+        assert(root.m_value == -1.0);  // 0.0 (initial) + (-1.0) from terminate(-ds.size())
     }
 
     // Test 7: Multiple sim_one calls sharing one root - MCTS statistics accumulate
