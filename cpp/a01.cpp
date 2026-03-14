@@ -38,17 +38,29 @@ a01::a01(
 bool a01::operator()(size_t iterations, std::optional<a01_resolution_store>& soln) {
     
     for (size_t i = 0; i < iterations; i++) {
-        // construct the decision and resolution stores
+        // trim the lineage pool between iterations
+        lp.trim();
+        
+        // construct avoidance
         a01_decision_store avoidance;
     
         if (!next_avoidance(avoidance, soln))
             return false;
 
-        // add the decisions to the avoidance store
+        // record the avoidance
         as.insert(avoidance);
 
-        if (soln.has_value())
-            return true;
+        // pin the decisions
+        for (const auto& rl : avoidance)
+            lp.pin(rl);
+
+        // check for solution
+        if (soln.has_value()) {
+            // pin the solution
+            for (const auto& rl : soln.value())
+                lp.pin(rl);
+            break;
+        }
     }
     
     return true;
