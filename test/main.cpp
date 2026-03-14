@@ -7940,6 +7940,293 @@ void test_bind_map_unify() {
 
         t.pop();
     }
+
+    // ========== MIXED PRE-BOUND AND FRESH VARS — ALL DIFFERENT ALLOCATIONS ==========
+
+    // Test 101: Pre-bound var from ep1 resolves during cons unification across ep1/ep2/ep3.
+    // var(300) is pre-bound to ep2.atom("x"). Structure A from ep1 holds var(300) and
+    // an unbound var(301). Structure B is entirely from ep3. Unification succeeds:
+    // the pre-bound lhs position matches "x" structurally; the unbound rhs gets a new binding.
+    {
+        trail t;
+        bind_map bm(t);
+        t.push();
+        expr_pool ep1(t), ep2(t), ep3(t);
+
+        bm.bindings[300] = ep2.atom("x");  // pre-bind via raw map — no trail entry needed here
+
+        const expr* A = ep1.cons(ep1.var(300), ep1.var(301));
+        const expr* B = ep3.cons(ep3.atom("x"), ep3.atom("y"));
+
+        assert(bm.unify(A, B));
+        // lhs: var(300) → ep2.atom("x"); ep3.atom("x") → "x"=="x" → no new binding
+        // rhs: var(301) unbound → bind 301 → ep3.atom("y")
+        assert(bm.bindings.size() == 2);
+        assert(bm.bindings.count(301) == 1);
+        assert(bm.whnf(ep1.var(300)) == ep2.atom("x"));
+        assert(bm.whnf(ep1.var(301)) == ep3.atom("y"));
+
+        t.pop();
+    }
+
+    // Test 102: Pre-bound chain spanning three pools — ep1.var(302)→ep2.var(303)→ep3.atom("end").
+    // Unifying ep4.var(302) with ep5.atom("end") succeeds by traversing the chain:
+    // ep4's allocation is irrelevant; only the index matters. No new binding is created.
+    {
+        trail t;
+        bind_map bm(t);
+        t.push();
+        expr_pool ep1(t), ep2(t), ep3(t), ep4(t), ep5(t);
+
+        bm.bindings[302] = ep2.var(303);
+        bm.bindings[303] = ep3.atom("end");
+
+        // ep4.var(302) and ep5.atom("end") are wholly new allocations
+        assert(bm.unify(ep4.var(302), ep5.atom("end")));
+        assert(bm.bindings.size() == 2);  // no new binding; chain resolved to matching atom
+
+        // All allocations of the same index follow the same chain
+        assert(bm.whnf(ep4.var(302)) == ep3.atom("end"));
+        assert(bm.whnf(ep5.var(303)) == ep3.atom("end"));
+
+        t.pop();
+    }
+
+    // Test 103: Two cons from different pools, both sides with pre-bound vars —
+    // the pre-bound values are mutually consistent so no new binding is needed.
+    // var(304) pre-bound to ep2.atom("q"), var(305) pre-bound to ep4.atom("p").
+    // ep1.cons(var(304), "p") unified with ep3.cons("q", var(305)).
+    {
+        trail t;
+        bind_map bm(t);
+        t.push();
+        expr_pool ep1(t), ep2(t), ep3(t), ep4(t);
+
+        bm.bindings[304] = ep2.atom("q");
+        bm.bindings[305] = ep4.atom("p");
+
+        const expr* A = ep1.cons(ep1.var(304), ep1.atom("p"));
+        const expr* B = ep3.cons(ep3.atom("q"), ep3.var(305));
+
+        assert(bm.unify(A, B));
+        assert(bm.bindings.size() == 2);  // pre-bindings only — no new binding created
+        assert(bm.whnf(ep1.var(304)) == ep2.atom("q"));
+        assert(bm.whnf(ep3.var(305)) == ep4.atom("p"));
+
+        t.pop();
+    }
+
+    // Test 104: Nested cons across three pools; one var pre-bound, two freshly bound,
+    // one var left unbound inside the structure that gets captured as a binding target.
+    // Structure A (ep1): cons(cons(var(306), var(307)), var(308))
+    //   var(306) → ep2.atom("alpha"),  var(307) and var(308) unbound.
+    // Structure B (ep3): cons(cons("alpha","beta"), cons(var(309), "gamma"))
+    //   var(309) unbound (it lives inside the cons that var(308) gets bound to).
+    {
+        trail t;
+        bind_map bm(t);
+        t.push();
+        expr_pool ep1(t), ep2(t), ep3(t);
+
+        bm.bindings[306] = ep2.atom("alpha");
+
+        const expr* A = ep1.cons(
+            ep1.cons(ep1.var(306), ep1.var(307)),
+            ep1.var(308)
+        );
+        const expr* B = ep3.cons(
+            ep3.cons(ep3.atom("alpha"), ep3.atom("beta")),
+            ep3.cons(ep3.var(309), ep3.atom("gamma"))
+        );
+
+        assert(bm.unify(A, B));
+        // outer.lhs: var(306)→"alpha" == "alpha" ✓; var(307) → ep3.atom("beta")
+        // outer.rhs: var(308) → ep3.cons(var(309), "gamma")  (var(309) stays unbound inside)
+        assert(bm.bindings.size() == 3);
+        assert(bm.whnf(ep1.var(306)) == ep2.atom("alpha"));
+        assert(bm.whnf(ep1.var(307)) == ep3.atom("beta"));
+
+        const expr* rhs308 = bm.whnf(ep1.var(308));
+        assert(std::holds_alternative<expr::cons>(rhs308->content));
+
+        // var(309) was not unified away — it remains unbound
+        assert(bm.whnf(ep3.var(309)) == ep3.var(309));
+
+        t.pop();
+    }
+
+    // Test 105: Cross-pool occurs check traverses a pre-bound chain correctly.
+    // var(310) → ep2.var(311). Attempting to bind var(311) to a cons that contains
+    // ep4.var(310) must fail: occurs_check walks through the chain (310→311) and
+    // discovers that 311 appears inside the target structure.
+    {
+        trail t;
+        bind_map bm(t);
+        t.push();
+        expr_pool ep2(t), ep3(t), ep4(t);
+
+        bm.bindings[310] = ep2.var(311);  // pre-bound chain
+
+        const expr* target = ep4.cons(ep4.var(310), ep4.atom("x"));
+        assert(!bm.unify(ep3.var(311), target));
+        assert(bm.bindings.size() == 1);  // only the pre-binding; occurs check stopped the bind
+
+        t.pop();
+    }
+
+    // Test 106: Pre-bound var points to a cons from ep2; a fresh cons from ep5 contains
+    // the same structure under a different allocation. Structural unification of the pre-bound
+    // cons with the fresh cons succeeds without creating bindings for the atoms inside.
+    // An unbound var(313) in the other position gets freshly bound.
+    {
+        trail t;
+        bind_map bm(t);
+        t.push();
+        expr_pool ep2(t), ep4(t), ep5(t);
+
+        bm.bindings[312] = ep2.cons(ep2.atom("a"), ep2.atom("b"));
+
+        // ep4: cons(var(312), var(313))
+        const expr* A = ep4.cons(ep4.var(312), ep4.var(313));
+
+        // ep5: cons(cons("a","b"), "result")  — structurally matches the pre-binding
+        const expr* B = ep5.cons(ep5.cons(ep5.atom("a"), ep5.atom("b")), ep5.atom("result"));
+
+        assert(bm.unify(A, B));
+        // lhs: var(312) → ep2.cons("a","b"); ep5.cons("a","b") — different alloc, same structure → ✓
+        // rhs: var(313) unbound → bind 313 → ep5.atom("result")
+        assert(bm.bindings.size() == 2);
+        assert(bm.bindings.count(313) == 1);
+        assert(bm.whnf(ep4.var(313)) == ep5.atom("result"));
+
+        t.pop();
+    }
+
+    // Test 107: Pre-bound chain ends in an unbound var; structural unification extends
+    // the chain by binding the tail var to an atom from a fourth pool.
+    // var(314) → ep2.var(315),  var(315) unbound.
+    // Unify ep3.var(315) with ep4.atom("merged") — binds 315; now var(314) transitively
+    // resolves to ep4.atom("merged") through the chain.
+    {
+        trail t;
+        bind_map bm(t);
+        t.push();
+        expr_pool ep1(t), ep2(t), ep3(t), ep4(t);
+
+        bm.bindings[314] = ep2.var(315);
+
+        assert(bm.unify(ep3.var(315), ep4.atom("merged")));
+        assert(bm.bindings.size() == 2);
+
+        // var(314) from ep1 now resolves through the full chain
+        assert(bm.whnf(ep1.var(314)) == ep4.atom("merged"));
+        assert(bm.whnf(ep3.var(315)) == ep4.atom("merged"));
+
+        t.pop();
+    }
+
+    // Test 108: Rich three-pool scenario — nested cons with a mix of pre-bound vars
+    // (one direct, one chaining through another var) and two freshly unbound vars.
+    // Every atom target comes from a different pool than the var it is matched against.
+    // Structure A (ep1): cons(cons(var(316), var(317)), cons(var(318), var(320)))
+    //   var(316) → ep1.atom("x")   (direct pre-binding)
+    //   var(318) → ep1.var(319)    (chain; var(319) itself unbound)
+    //   var(317), var(320) unbound
+    // Structure B: cons(cons("x","y"), cons("z","w")) — atoms from ep2 and ep3
+    {
+        trail t;
+        bind_map bm(t);
+        t.push();
+        expr_pool ep1(t), ep2(t), ep3(t);
+
+        bm.bindings[316] = ep1.atom("x");
+        bm.bindings[318] = ep1.var(319);
+
+        const expr* A = ep1.cons(
+            ep1.cons(ep1.var(316), ep1.var(317)),
+            ep1.cons(ep1.var(318), ep1.var(320))
+        );
+        const expr* B = ep2.cons(
+            ep2.cons(ep2.atom("x"), ep2.atom("y")),
+            ep2.cons(ep3.atom("z"), ep2.atom("w"))   // ep3 atom for extra cross-pool coverage
+        );
+
+        assert(bm.unify(A, B));
+        // outer.lhs: var(316)→"x" == "x" ✓;  var(317) → ep2.atom("y")
+        // outer.rhs: var(318)→var(319)→unbound → bind 319 → ep3.atom("z");  var(320) → ep2.atom("w")
+        assert(bm.bindings.size() == 5);  // 316(pre) + 318(pre) + 317 + 319 + 320
+
+        assert(bm.whnf(ep1.var(316)) == ep1.atom("x"));
+        assert(bm.whnf(ep1.var(317)) == ep2.atom("y"));
+        assert(bm.whnf(ep1.var(318)) == ep3.atom("z"));  // transitive: 318→319→ep3.atom("z")
+        assert(bm.whnf(ep1.var(319)) == ep3.atom("z"));
+        assert(bm.whnf(ep1.var(320)) == ep2.atom("w"));
+
+        t.pop();
+    }
+
+    // Test 109: Pre-bound chain where the tail var is also used as a structural position;
+    // unification extends the chain via a new binding from yet another pool allocation.
+    // var(321) → ep2.var(322),  var(322) unbound.
+    // ep3.cons(var(321), "x") unified with ep4.cons("a", "x"):
+    //   lhs: var(321)→var(322)→unbound → bind 322 → ep4.atom("a")
+    //   rhs: "x" == "x" ✓
+    // var(321) from ep1 (a different allocation) now also resolves to ep4.atom("a").
+    {
+        trail t;
+        bind_map bm(t);
+        t.push();
+        expr_pool ep1(t), ep2(t), ep3(t), ep4(t);
+
+        bm.bindings[321] = ep2.var(322);
+
+        const expr* A = ep3.cons(ep3.var(321), ep3.atom("x"));
+        const expr* B = ep4.cons(ep4.atom("a"), ep4.atom("x"));
+
+        assert(bm.unify(A, B));
+        assert(bm.bindings.size() == 2);
+        assert(bm.bindings.count(322) == 1);
+
+        assert(bm.whnf(ep1.var(321)) == ep4.atom("a"));  // ep1 allocation, same chain
+        assert(bm.whnf(ep3.var(322)) == ep4.atom("a"));
+
+        t.pop();
+    }
+
+    // Test 110: Maximum cross-pool complexity — every node in both structures from a
+    // different pool. Pre-bound var points to a cons from ep2; that cons is structurally
+    // matched against an equal cons from ep4 (atoms from ep4, different pointers).
+    // A second unbound var in structure A gets bound to an atom from ep5.
+    // The spine of structure A lives in ep6; structure B's spine lives in ep5.
+    {
+        trail t;
+        bind_map bm(t);
+        t.push();
+        expr_pool ep1(t), ep2(t), ep3(t), ep4(t), ep5(t), ep6(t);
+
+        // var(325) pre-bound to a cons from ep2
+        bm.bindings[325] = ep2.cons(ep2.atom("L"), ep2.atom("R"));
+
+        // Structure A: spine from ep6; var(325) ref from ep1, var(326) ref from ep3
+        const expr* A = ep6.cons(ep1.var(325), ep3.var(326));
+
+        // Structure B: outer spine from ep5; inner cons from ep4; atoms from ep4
+        const expr* B = ep5.cons(
+            ep4.cons(ep4.atom("L"), ep4.atom("R")),  // same structure as the pre-binding
+            ep5.atom("result")
+        );
+
+        assert(bm.unify(A, B));
+        // lhs: var(325) → ep2.cons("L","R"); ep4.cons("L","R") — different alloc, same shape
+        //   "L"=="L" ✓  "R"=="R" ✓  (no new bindings for atoms)
+        // rhs: var(326) unbound → bind 326 → ep5.atom("result")
+        assert(bm.bindings.size() == 2);  // pre-binding 325 + new 326
+        assert(bm.bindings.count(326) == 1);
+        assert(bm.whnf(ep1.var(325)) == ep2.cons(ep2.atom("L"), ep2.atom("R")));
+        assert(bm.whnf(ep3.var(326)) == ep5.atom("result"));
+
+        t.pop();
+    }
 }
 
 void test_lineage_pool_constructor() {
