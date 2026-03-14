@@ -24104,6 +24104,384 @@ void test_a01_sim() {
     }
 }
 
+void test_a01_sim_one() {
+    // Test 1: Immediate solution via unit propagation
+    // db: {a.}, goals: {a.}
+    // Expected: returns true, rs has 1 resolution, ds empty,
+    //           trail depth invariant, MCTS root gets 1 visit
+    {
+        trail t;
+        t.push();
+
+        expr_pool ep(t);
+        bind_map bm(t);
+        sequencer seq(t);
+        lineage_pool lp;
+
+        a01_database db;
+        db.push_back(rule{ep.atom("a"), {}});  // idx 0: a.
+
+        a01_goals goals;
+        goals.push_back(ep.atom("a"));
+
+        std::mt19937 rng(42);
+        a01 solver(db, goals, t, seq, ep, bm, lp, 100, 10, 1.414, rng);
+
+        monte_carlo::tree_node<a01_decider::choice> root;
+        a01_decision_store ds;
+        a01_resolution_store rs;
+
+        size_t depth_before = t.depth();
+
+        bool result = solver.sim_one(root, ds, rs);
+
+        // CRITICAL: Solution found
+        assert(result == true);
+
+        // CRITICAL: ds empty (unit prop, no MCTS decision)
+        assert(ds.empty());
+
+        // CRITICAL: rs has the single resolution
+        assert(rs.size() == 1);
+        const goal_lineage* gl0 = lp.goal(nullptr, 0);
+        const resolution_lineage* rl0 = lp.resolution(gl0, 0);
+        assert(rs.count(rl0) == 1);
+
+        // CRITICAL: Trail depth is invariant (pop + push inside sim_one)
+        assert(t.depth() == depth_before);
+
+        // CRITICAL: MCTS root visited exactly once (terminate() always touches root)
+        assert(root.m_visits == 1);
+
+        // CRITICAL: Reward is -ds.size() where ds was EMPTY going in → value == 0
+        assert(root.m_value == 0.0);
+    }
+
+    // Test 2: Immediate conflict - empty database
+    // db: {}, goals: {a.}
+    // Expected: returns false, ds empty, rs empty, trail depth invariant, root visits == 1
+    {
+        trail t;
+        t.push();
+
+        expr_pool ep(t);
+        bind_map bm(t);
+        sequencer seq(t);
+        lineage_pool lp;
+
+        a01_database db;
+
+        a01_goals goals;
+        goals.push_back(ep.atom("a"));
+
+        std::mt19937 rng(42);
+        a01 solver(db, goals, t, seq, ep, bm, lp, 100, 10, 1.414, rng);
+
+        monte_carlo::tree_node<a01_decider::choice> root;
+        a01_decision_store ds;
+        a01_resolution_store rs;
+
+        size_t depth_before = t.depth();
+
+        bool result = solver.sim_one(root, ds, rs);
+
+        // CRITICAL: Conflict detected
+        assert(result == false);
+
+        // CRITICAL: No resolutions or decisions
+        assert(ds.empty());
+        assert(rs.empty());
+
+        // CRITICAL: Trail depth invariant
+        assert(t.depth() == depth_before);
+
+        // CRITICAL: Root visited once, value == 0 (ds was empty going in)
+        assert(root.m_visits == 1);
+        assert(root.m_value == 0.0);
+    }
+
+    // Test 3: Trail pop/push behavior via secondary sequencer
+    // The a01 constructor pushes a frame. Logging actions into that frame
+    // (e.g. calling a secondary sequencer) must be rolled back when sim_one
+    // calls t.pop() at the start of the simulation.
+    {
+        trail t;
+        t.push();
+
+        expr_pool ep(t);
+        bind_map bm(t);
+        sequencer seq(t);
+        lineage_pool lp;
+
+        a01_database db;
+        db.push_back(rule{ep.atom("a"), {}});
+
+        a01_goals goals;
+        goals.push_back(ep.atom("a"));
+
+        std::mt19937 rng(42);
+        a01 solver(db, goals, t, seq, ep, bm, lp, 100, 10, 1.414, rng);
+
+        // Create a secondary sequencer on the SAME trail (after a01's constructor push)
+        sequencer seq2(t);
+        assert(seq2.index == 0);
+
+        // Allocate a variable - this logs a decrement undo into the a01's current frame
+        uint32_t v = seq2();
+        assert(v == 0);
+        assert(seq2.index == 1);
+
+        monte_carlo::tree_node<a01_decider::choice> root;
+        a01_decision_store ds;
+        a01_resolution_store rs;
+
+        size_t depth_before = t.depth();
+
+        solver.sim_one(root, ds, rs);
+
+        // CRITICAL: t.pop() at start of sim_one triggered the seq2 undo action,
+        //           rolling seq2.index back to 0
+        assert(seq2.index == 0);
+
+        // CRITICAL: t.push() after the pop restored the same depth
+        assert(t.depth() == depth_before);
+    }
+
+    // Test 4: MCTS termination reward uses the INCOMING ds, not the simulation's ds.
+    // Use a pure unit-propagation scenario so ds is always empty after each call
+    // (no decisions ever made). This makes the reward unambiguous: terminate(-0) = 0.0.
+    // Two calls share the same root so we can verify MCTS accumulates visits correctly.
+    {
+        trail t;
+        t.push();
+
+        expr_pool ep(t);
+        bind_map bm(t);
+        sequencer seq(t);
+        lineage_pool lp;
+
+        // db: {a :- b., b.} — each goal has exactly 1 candidate → always unit-propagated
+        a01_database db;
+        db.push_back(rule{ep.atom("a"), {ep.atom("b")}});  // idx 0
+        db.push_back(rule{ep.atom("b"), {}});               // idx 1
+
+        a01_goals goals;
+        goals.push_back(ep.atom("a"));
+
+        std::mt19937 rng(42);
+        a01 solver(db, goals, t, seq, ep, bm, lp, 100, 10, 1.414, rng);
+
+        monte_carlo::tree_node<a01_decider::choice> root;
+        a01_decision_store ds;
+        a01_resolution_store rs;
+
+        // First call: ds is empty going in → terminate(-(size_t)0) → m_value += 0
+        solver.sim_one(root, ds, rs);
+        assert(root.m_visits == 1);
+        assert(root.m_value == 0.0);
+
+        // CRITICAL: ds still empty (all unit propagations, no MCTS decisions)
+        assert(ds.empty());
+
+        // Second call: ds still empty going in → terminate(0) again → m_value stays 0
+        solver.sim_one(root, ds, rs);
+        assert(root.m_visits == 2);
+        assert(root.m_value == 0.0);
+        assert(ds.empty());
+
+        // CRITICAL: Sub-test — manually pre-populate ds to verify that the reward
+        //           is based on the INCOMING ds, not the outgoing one.
+        //           When ds.size() == 1 going in, terminate(-(size_t)1) is called.
+        //           -(size_t)1 wraps to SIZE_MAX in unsigned arithmetic, so the
+        //           double reward is (double)(-(size_t)1) ≈ 1.8e19.
+        {
+            trail t2;
+            t2.push();
+            expr_pool ep2(t2);
+            bind_map bm2(t2);
+            sequencer seq2(t2);
+            lineage_pool lp2;
+            std::mt19937 rng2(42);
+            a01 solver2(db, goals, t2, seq2, ep2, bm2, lp2, 100, 10, 1.414, rng2);
+
+            monte_carlo::tree_node<a01_decider::choice> root2;
+            a01_decision_store ds2;
+            a01_resolution_store rs2;
+
+            // Insert a dummy lineage so ds.size() == 1 going into sim_one
+            const goal_lineage* dummy_gl = lp2.goal(nullptr, 99);
+            const resolution_lineage* dummy_rl = lp2.resolution(dummy_gl, 99);
+            ds2.insert(dummy_rl);
+            assert(ds2.size() == 1);
+
+            solver2.sim_one(root2, ds2, rs2);
+
+            // CRITICAL: terminate was called with -(size_t)1; root was incremented
+            assert(root2.m_visits == 1);
+            // CRITICAL: Reward equals (double)(-(size_t)1) — unsigned negation wraps
+            assert(root2.m_value == (double)(-(size_t)1));
+        }
+    }
+
+    // Test 5: CDCL avoidance injected via solver.as after construction
+    // db: {a :- b., a :- c., b., c.}, goals: {a.}
+    // After construction, inject a singleton avoidance for (gl0, idx 0) directly into solver.as.
+    // sim_one's a01_sim will pick up this copy and CDCL-eliminate idx 0,
+    // leaving only idx 1 → unit propagation, so ds remains empty.
+    {
+        trail t;
+        t.push();
+
+        expr_pool ep(t);
+        bind_map bm(t);
+        sequencer seq(t);
+        lineage_pool lp;
+
+        a01_database db;
+        db.push_back(rule{ep.atom("a"), {ep.atom("b")}});  // idx 0
+        db.push_back(rule{ep.atom("a"), {ep.atom("c")}});  // idx 1
+        db.push_back(rule{ep.atom("b"), {}});               // idx 2
+        db.push_back(rule{ep.atom("c"), {}});               // idx 3
+
+        a01_goals goals;
+        goals.push_back(ep.atom("a"));
+
+        std::mt19937 rng(42);
+        a01 solver(db, goals, t, seq, ep, bm, lp, 100, 10, 1.414, rng);
+
+        // Inject avoidance: singleton {rl(gl0, 0)} causes CDCL elimination of idx 0
+        const goal_lineage* gl0 = lp.goal(nullptr, 0);
+        const resolution_lineage* rl0 = lp.resolution(gl0, 0);
+        a01_decision_store avoid;
+        avoid.insert(rl0);
+        solver.as.insert(avoid);
+
+        monte_carlo::tree_node<a01_decider::choice> root;
+        a01_decision_store ds;
+        a01_resolution_store rs;
+
+        bool result = solver.sim_one(root, ds, rs);
+
+        // CRITICAL: Solution found (idx 1 chosen via unit propagation after CDCL elim)
+        assert(result == true);
+
+        // CRITICAL: No decisions made (CDCL reduced to 1 candidate → unit prop)
+        assert(ds.empty());
+
+        // CRITICAL: 2 resolutions: a via idx 1, c via idx 3
+        assert(rs.size() == 2);
+        const resolution_lineage* rl_a = lp.resolution(gl0, 1);
+        assert(rs.count(rl_a) == 1);
+        const resolution_lineage* rl_c = lp.resolution(lp.goal(rl_a, 0), 3);
+        assert(rs.count(rl_c) == 1);
+    }
+
+    // Test 6: Pre-populated MCTS tree forces a specific decision; verify decisions and resolutions
+    // db: {a :- b., a :- c., b., c.}, goals: {a.}
+    // Force MCTS to pick idx 1 (a :- c.) as the decision.
+    {
+        trail t;
+        t.push();
+
+        expr_pool ep(t);
+        bind_map bm(t);
+        sequencer seq(t);
+        lineage_pool lp;
+
+        a01_database db;
+        db.push_back(rule{ep.atom("a"), {ep.atom("b")}});  // idx 0
+        db.push_back(rule{ep.atom("a"), {ep.atom("c")}});  // idx 1
+        db.push_back(rule{ep.atom("b"), {}});               // idx 2
+        db.push_back(rule{ep.atom("c"), {}});               // idx 3
+
+        a01_goals goals;
+        goals.push_back(ep.atom("a"));
+
+        std::mt19937 rng(42);
+        a01 solver(db, goals, t, seq, ep, bm, lp, 100, 10, 1.414, rng);
+
+        monte_carlo::tree_node<a01_decider::choice> root;
+
+        // Pre-populate the MCTS tree so that UCB1 selects idx 1 for the candidate choice.
+        // The only goal is gl0; make its child visited so UCB1 is active at the next level.
+        const goal_lineage* gl0 = lp.goal(nullptr, 0);
+
+        root.m_visits = 100;
+        root.m_children[gl0].m_visits = 50;
+        root.m_children[gl0].m_value = 100.0;
+        // idx 0 visited → UCB1 can score it; idx 1 unvisited → score = +∞ → chosen
+        root.m_children[gl0].m_children[size_t(0)].m_visits = 10;
+        root.m_children[gl0].m_children[size_t(0)].m_value = 20.0;
+        root.m_children[gl0].m_children[size_t(1)].m_visits = 0;  // Unvisited → chosen!
+
+        a01_decision_store ds;
+        a01_resolution_store rs;
+
+        bool result = solver.sim_one(root, ds, rs);
+
+        // CRITICAL: Solution found
+        assert(result == true);
+
+        // CRITICAL: Exactly 1 decision (MCTS chose a→c)
+        assert(ds.size() == 1);
+
+        // CRITICAL: Exactly 2 resolutions (decision on a→idx1, unit prop on c→idx3)
+        assert(rs.size() == 2);
+
+        const resolution_lineage* rl_a = lp.resolution(gl0, 1);
+        assert(rs.count(rl_a) == 1);
+        assert(ds.count(rl_a) == 1);  // This was the decision
+
+        const goal_lineage* gl_c = lp.goal(rl_a, 0);
+        const resolution_lineage* rl_c = lp.resolution(gl_c, 3);
+        assert(rs.count(rl_c) == 1);
+        assert(ds.count(rl_c) == 0);  // Unit propagation, not a decision
+
+        // CRITICAL: Root gets incremented by terminate(); ds was empty going in → value += 0
+        assert(root.m_visits == 101);  // 100 + 1 from terminate()
+        assert(root.m_value == 0.0);   // root.m_value defaulted to 0; terminate(0) leaves it at 0
+    }
+
+    // Test 7: Multiple sim_one calls sharing one root - MCTS statistics accumulate
+    // Each call increments root.m_visits by exactly 1 via terminate().
+    {
+        trail t;
+        t.push();
+
+        expr_pool ep(t);
+        bind_map bm(t);
+        sequencer seq(t);
+        lineage_pool lp;
+
+        a01_database db;
+        db.push_back(rule{ep.atom("a"), {ep.atom("b")}});  // idx 0
+        db.push_back(rule{ep.atom("a"), {ep.atom("c")}});  // idx 1
+        db.push_back(rule{ep.atom("b"), {}});               // idx 2
+        db.push_back(rule{ep.atom("c"), {}});               // idx 3
+
+        a01_goals goals;
+        goals.push_back(ep.atom("a"));
+
+        std::mt19937 rng(42);
+        a01 solver(db, goals, t, seq, ep, bm, lp, 100, 10, 1.414, rng);
+
+        monte_carlo::tree_node<a01_decider::choice> root;
+        a01_decision_store ds;
+        a01_resolution_store rs;
+
+        assert(root.m_visits == 0);
+
+        solver.sim_one(root, ds, rs);
+        assert(root.m_visits == 1);
+
+        solver.sim_one(root, ds, rs);
+        assert(root.m_visits == 2);
+
+        solver.sim_one(root, ds, rs);
+        assert(root.m_visits == 3);
+    }
+}
+
 void test_a01_constructor_and_destructor() {
     // Test 1: Basic construction - verify trail frame pushed and all fields stored correctly
     {
@@ -24366,6 +24744,7 @@ void unit_test_main() {
     TEST(test_a01_sim_constructor);
     TEST(test_a01_sim);
     TEST(test_a01_constructor_and_destructor);
+    TEST(test_a01_sim_one);
 }
 
 #ifdef DEBUG
