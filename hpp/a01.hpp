@@ -19,9 +19,7 @@ struct a01 {
         const a01_goals&,
         trail&,
         sequencer&,
-        expr_pool&,
         bind_map&,
-        lineage_pool&,
         size_t,
         size_t,
         double,
@@ -38,10 +36,11 @@ private:
     const a01_goals& goals;
     trail& t;
     sequencer& vars;
-    expr_pool& ep;
     bind_map& bm;
-    lineage_pool& lp;
-
+    
+    expr_pool ep;
+    lineage_pool lp;
+    
     size_t max_resolutions;
     size_t iterations_per_avoidance;
     double c;
