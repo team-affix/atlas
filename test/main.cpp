@@ -2129,61 +2129,68 @@ void test_expr_pool_cons() {
 }
 
 void test_expr_pool_import() {
-    trail t;
-    expr_pool pool(t);
-    t.push();
 
     // Test 1: Import an atom from the stack - result must be a pool pointer
     {
-        expr stack_atom{expr::atom{"import_t1_atom"}};
-        size_t before = pool.size();
+        trail t;
+        expr_pool pool(t);
+        t.push();
+        expr stack_atom{expr::atom{"hello"}};
         const expr* imported = pool.import(&stack_atom);
         assert(imported != nullptr);
         assert(imported != &stack_atom);
         assert(std::holds_alternative<expr::atom>(imported->content));
-        assert(std::get<expr::atom>(imported->content).value == "import_t1_atom");
+        assert(std::get<expr::atom>(imported->content).value == "hello");
         assert(pool.exprs.count(*imported) == 1);
-        assert(pool.size() == before + 1);
+        assert(pool.size() == 1);
+        t.pop();
     }
 
     // Test 2: Import a var from the stack - result must be a pool pointer
     {
-        expr stack_var{expr::var{701}};
-        size_t before = pool.size();
+        trail t;
+        expr_pool pool(t);
+        t.push();
+        expr stack_var{expr::var{42}};
         const expr* imported = pool.import(&stack_var);
         assert(imported != nullptr);
         assert(imported != &stack_var);
         assert(std::holds_alternative<expr::var>(imported->content));
-        assert(std::get<expr::var>(imported->content).index == 701);
+        assert(std::get<expr::var>(imported->content).index == 42);
         assert(pool.exprs.count(*imported) == 1);
-        assert(pool.size() == before + 1);
+        assert(pool.size() == 1);
+        t.pop();
     }
 
     // Test 3: Import a var with edge-case indices (0 and UINT32_MAX)
     {
+        trail t;
+        expr_pool pool(t);
+        t.push();
         expr stack_var0{expr::var{0}};
-        size_t before = pool.size();
         const expr* imported0 = pool.import(&stack_var0);
         assert(imported0 != &stack_var0);
         assert(std::get<expr::var>(imported0->content).index == 0);
         assert(pool.exprs.count(*imported0) == 1);
-        assert(pool.size() == before + 1);
+        assert(pool.size() == 1);
 
         expr stack_var_max{expr::var{UINT32_MAX}};
-        before = pool.size();
         const expr* imported_max = pool.import(&stack_var_max);
         assert(imported_max != &stack_var_max);
         assert(std::get<expr::var>(imported_max->content).index == UINT32_MAX);
         assert(pool.exprs.count(*imported_max) == 1);
-        assert(pool.size() == before + 1);
+        assert(pool.size() == 2);
+        t.pop();
     }
 
     // Test 4: Import a simple cons (all three nodes on stack) - children must land in pool
     {
-        expr l{expr::atom{"import_t4_l"}};
-        expr r{expr::atom{"import_t4_r"}};
+        trail t;
+        expr_pool pool(t);
+        t.push();
+        expr l{expr::atom{"left"}};
+        expr r{expr::atom{"right"}};
         expr c{expr::cons{&l, &r}};
-        size_t before = pool.size();
         const expr* imported = pool.import(&c);
         assert(imported != nullptr);
         assert(imported != &c);
@@ -2194,238 +2201,286 @@ void test_expr_pool_import() {
         assert(pool.exprs.count(*ic.lhs) == 1);
         assert(pool.exprs.count(*ic.rhs) == 1);
         assert(pool.exprs.count(*imported) == 1);
-        assert(std::get<expr::atom>(ic.lhs->content).value == "import_t4_l");
-        assert(std::get<expr::atom>(ic.rhs->content).value == "import_t4_r");
-        assert(pool.size() == before + 3);  // l, r, cons
+        assert(std::get<expr::atom>(ic.lhs->content).value == "left");
+        assert(std::get<expr::atom>(ic.rhs->content).value == "right");
+        assert(pool.size() == 3);  // l, r, cons
+        t.pop();
     }
 
     // Test 5: Import nested structure entirely on stack: cons(cons(atom, var), atom)
     {
-        expr a{expr::atom{"import_t5_a"}};
-        expr v{expr::var{702}};
+        trail t;
+        expr_pool pool(t);
+        t.push();
+        expr a{expr::atom{"a"}};
+        expr v{expr::var{1}};
         expr inner{expr::cons{&a, &v}};
-        expr b{expr::atom{"import_t5_b"}};
+        expr b{expr::atom{"b"}};
         expr root{expr::cons{&inner, &b}};
-        size_t before = pool.size();
         const expr* imported = pool.import(&root);
         assert(imported != nullptr);
-        assert(pool.size() == before + 5);  // a, v, inner, b, root
+        assert(pool.size() == 5);  // a, v, inner, b, root
         const expr::cons& rc = std::get<expr::cons>(imported->content);
         const expr::cons& ic = std::get<expr::cons>(rc.lhs->content);
-        assert(std::get<expr::atom>(ic.lhs->content).value == "import_t5_a");
-        assert(std::get<expr::var>(ic.rhs->content).index == 702);
-        assert(std::get<expr::atom>(rc.rhs->content).value == "import_t5_b");
+        assert(std::get<expr::atom>(ic.lhs->content).value == "a");
+        assert(std::get<expr::var>(ic.rhs->content).index == 1);
+        assert(std::get<expr::atom>(rc.rhs->content).value == "b");
         assert(pool.exprs.count(*rc.lhs) == 1);
         assert(pool.exprs.count(*rc.rhs) == 1);
         assert(pool.exprs.count(*imported) == 1);
+        t.pop();
     }
 
     // Test 6: cons with LHS already in pool, RHS on stack - pool pointer must be preserved
     {
-        const expr* pool_x = pool.atom("import_t6_x");
-        expr stack_r{expr::atom{"import_t6_r"}};
+        trail t;
+        expr_pool pool(t);
+        t.push();
+        const expr* pool_x = pool.atom("x");
+        expr stack_r{expr::atom{"r"}};
         expr stack_c{expr::cons{pool_x, &stack_r}};
-        size_t before = pool.size();
         const expr* imported = pool.import(&stack_c);
         assert(imported != nullptr);
         const expr::cons& ic = std::get<expr::cons>(imported->content);
         assert(ic.lhs == pool_x);       // pool LHS pointer is preserved exactly
         assert(ic.rhs != &stack_r);     // stack RHS got a fresh pool pointer
         assert(pool.exprs.count(*ic.rhs) == 1);
-        assert(std::get<expr::atom>(ic.rhs->content).value == "import_t6_r");
-        assert(pool.size() == before + 2);  // stack_r atom + cons
+        assert(std::get<expr::atom>(ic.rhs->content).value == "r");
+        assert(pool.size() == 3);  // pool_x + stack_r atom + cons
+        t.pop();
     }
 
     // Test 7: cons with LHS on stack, RHS already in pool - pool pointer must be preserved
     {
-        const expr* pool_y = pool.atom("import_t7_y");
-        expr stack_l{expr::atom{"import_t7_l"}};
+        trail t;
+        expr_pool pool(t);
+        t.push();
+        const expr* pool_y = pool.atom("y");
+        expr stack_l{expr::atom{"l"}};
         expr stack_c{expr::cons{&stack_l, pool_y}};
-        size_t before = pool.size();
         const expr* imported = pool.import(&stack_c);
         assert(imported != nullptr);
         const expr::cons& ic = std::get<expr::cons>(imported->content);
         assert(ic.lhs != &stack_l);     // stack LHS got a fresh pool pointer
         assert(ic.rhs == pool_y);       // pool RHS pointer is preserved exactly
         assert(pool.exprs.count(*ic.lhs) == 1);
-        assert(pool.size() == before + 2);  // stack_l atom + cons
+        assert(pool.size() == 3);  // pool_y + stack_l atom + cons
+        t.pop();
     }
 
     // Test 8: nested cons where the inner cons is already in pool but outer is on stack
     {
-        const expr* pool_p = pool.atom("import_t8_p");
-        const expr* pool_q = pool.atom("import_t8_q");
+        trail t;
+        expr_pool pool(t);
+        t.push();
+        const expr* pool_p = pool.atom("p");
+        const expr* pool_q = pool.atom("q");
         const expr* pool_inner = pool.cons(pool_p, pool_q);
-        expr stack_r{expr::atom{"import_t8_r"}};
+        expr stack_r{expr::atom{"r"}};
         expr stack_outer{expr::cons{pool_inner, &stack_r}};
-        size_t before = pool.size();
         const expr* imported = pool.import(&stack_outer);
         assert(imported != nullptr);
         const expr::cons& oc = std::get<expr::cons>(imported->content);
         assert(oc.lhs == pool_inner);   // inner cons pointer is preserved exactly
         assert(oc.rhs != &stack_r);
         assert(pool.exprs.count(*oc.rhs) == 1);
-        assert(pool.size() == before + 2);  // stack_r + outer cons
+        assert(pool.size() == 5);  // p, q, inner, stack_r atom, outer cons
+        t.pop();
     }
 
     // Test 9: Import atom already entirely in pool - returns same pointer, pool unchanged
     {
-        const expr* pool_atom = pool.atom("import_t9_already");
-        size_t before = pool.size();
+        trail t;
+        expr_pool pool(t);
+        t.push();
+        const expr* pool_atom = pool.atom("already");
         const expr* imported = pool.import(pool_atom);
         assert(imported == pool_atom);
-        assert(pool.size() == before);
+        assert(pool.size() == 1);
+        t.pop();
     }
 
     // Test 10: Import var already entirely in pool - returns same pointer, pool unchanged
     {
-        const expr* pool_var = pool.var(703);
-        size_t before = pool.size();
+        trail t;
+        expr_pool pool(t);
+        t.push();
+        const expr* pool_var = pool.var(99);
         const expr* imported = pool.import(pool_var);
         assert(imported == pool_var);
-        assert(pool.size() == before);
+        assert(pool.size() == 1);
+        t.pop();
     }
 
     // Test 11: Import cons already entirely in pool - returns same pointer, pool unchanged
     {
-        const expr* pl = pool.atom("import_t11_pl");
-        const expr* pr = pool.atom("import_t11_pr");
+        trail t;
+        expr_pool pool(t);
+        t.push();
+        const expr* pl = pool.atom("pl");
+        const expr* pr = pool.atom("pr");
         const expr* pc = pool.cons(pl, pr);
-        size_t before = pool.size();
         const expr* imported = pool.import(pc);
         assert(imported == pc);
-        assert(pool.size() == before);
+        assert(pool.size() == 3);
+        t.pop();
     }
 
     // Test 12: Import stack atom with same value as existing pool atom - must deduplicate
     // (i.e. return the pool pointer, not the stack pointer)
     {
-        const expr* pool_dup = pool.atom("import_t12_dup");
-        expr stack_dup{expr::atom{"import_t12_dup"}};
-        size_t before = pool.size();
+        trail t;
+        expr_pool pool(t);
+        t.push();
+        const expr* pool_dup = pool.atom("dup");
+        expr stack_dup{expr::atom{"dup"}};
         const expr* imported = pool.import(&stack_dup);
         assert(imported == pool_dup);   // must return pool pointer, not &stack_dup
-        assert(pool.size() == before);  // pool must not grow
+        assert(pool.size() == 1);       // pool must not grow
+        t.pop();
     }
 
     // Test 13: Import stack cons structurally identical to an existing pool cons - must deduplicate
     {
-        const expr* pa = pool.atom("import_t13_a");
-        const expr* pb = pool.atom("import_t13_b");
+        trail t;
+        expr_pool pool(t);
+        t.push();
+        const expr* pa = pool.atom("a");
+        const expr* pb = pool.atom("b");
         const expr* pc = pool.cons(pa, pb);
-        expr stack_a{expr::atom{"import_t13_a"}};
-        expr stack_b{expr::atom{"import_t13_b"}};
+        expr stack_a{expr::atom{"a"}};
+        expr stack_b{expr::atom{"b"}};
         expr stack_c{expr::cons{&stack_a, &stack_b}};
-        size_t before = pool.size();
         const expr* imported = pool.import(&stack_c);
         assert(imported == pc);         // must deduplicate to the existing pool pointer
-        assert(pool.size() == before);
+        assert(pool.size() == 3);
+        t.pop();
     }
 
     // Test 14: Deeply nested all-stack structure - 9 distinct nodes
     // Shape: cons(cons(cons(atom,var), cons(var,atom)), atom)
     {
-        expr d0{expr::atom{"import_t14_d0"}};
-        expr x0{expr::var{704}};
+        trail t;
+        expr_pool pool(t);
+        t.push();
+        expr d0{expr::atom{"d0"}};
+        expr x0{expr::var{0}};
         expr ll{expr::cons{&d0, &x0}};
-        expr x1{expr::var{705}};
-        expr d1{expr::atom{"import_t14_d1"}};
+        expr x1{expr::var{1}};
+        expr d1{expr::atom{"d1"}};
         expr lr{expr::cons{&x1, &d1}};
         expr l{expr::cons{&ll, &lr}};
-        expr d2{expr::atom{"import_t14_d2"}};
+        expr d2{expr::atom{"d2"}};
         expr root{expr::cons{&l, &d2}};
-        size_t before = pool.size();
         const expr* imported = pool.import(&root);
         assert(imported != nullptr);
-        assert(pool.size() == before + 9);
+        assert(pool.size() == 9);
         const expr::cons& rc = std::get<expr::cons>(imported->content);
-        assert(std::get<expr::atom>(rc.rhs->content).value == "import_t14_d2");
+        assert(std::get<expr::atom>(rc.rhs->content).value == "d2");
         assert(pool.exprs.count(*rc.rhs) == 1);
         const expr::cons& lc = std::get<expr::cons>(rc.lhs->content);
         assert(pool.exprs.count(*rc.lhs) == 1);
         const expr::cons& llc = std::get<expr::cons>(lc.lhs->content);
         assert(pool.exprs.count(*lc.lhs) == 1);
-        assert(std::get<expr::atom>(llc.lhs->content).value == "import_t14_d0");
-        assert(std::get<expr::var>(llc.rhs->content).index == 704);
+        assert(std::get<expr::atom>(llc.lhs->content).value == "d0");
+        assert(std::get<expr::var>(llc.rhs->content).index == 0);
         const expr::cons& lrc = std::get<expr::cons>(lc.rhs->content);
         assert(pool.exprs.count(*lc.rhs) == 1);
-        assert(std::get<expr::var>(lrc.lhs->content).index == 705);
-        assert(std::get<expr::atom>(lrc.rhs->content).value == "import_t14_d1");
+        assert(std::get<expr::var>(lrc.lhs->content).index == 1);
+        assert(std::get<expr::atom>(lrc.rhs->content).value == "d1");
         assert(pool.exprs.count(*imported) == 1);
+        t.pop();
     }
 
     // Test 15: cons with the same pool pointer on both sides
     {
-        const expr* pool_s = pool.atom("import_t15_s");
+        trail t;
+        expr_pool pool(t);
+        t.push();
+        const expr* pool_s = pool.atom("s");
         expr stack_c{expr::cons{pool_s, pool_s}};
-        size_t before = pool.size();
         const expr* imported = pool.import(&stack_c);
         assert(imported != nullptr);
         const expr::cons& ic = std::get<expr::cons>(imported->content);
         assert(ic.lhs == pool_s);
         assert(ic.rhs == pool_s);
-        assert(pool.size() == before + 1);  // only the cons itself is new
+        assert(pool.size() == 2);  // pool_s + cons
+        t.pop();
     }
 
     // Test 16: Trail integration - import in a nested frame; pop removes imported expressions
     {
-        size_t before = pool.size();
+        trail t;
+        expr_pool pool(t);
         t.push();
-        expr stack_trail{expr::atom{"import_t16_trail"}};
-        const expr* imported = pool.import(&stack_trail);
+        t.push();
+        expr stack_atom{expr::atom{"trail_atom"}};
+        const expr* imported = pool.import(&stack_atom);
         assert(imported != nullptr);
-        assert(pool.size() == before + 1);
+        assert(pool.size() == 1);
         t.pop();
-        assert(pool.size() == before);
+        assert(pool.size() == 0);
+        t.pop();
     }
 
     // Test 17: Trail - import cons in inner frame where LHS comes from outer frame
     {
-        const expr* outer_atom = pool.atom("import_t17_outer");
-        size_t before = pool.size();
+        trail t;
+        expr_pool pool(t);
         t.push();
-        expr stack_inner{expr::atom{"import_t17_inner"}};
+        const expr* outer_atom = pool.atom("outer");
+        assert(pool.size() == 1);
+        t.push();
+        expr stack_inner{expr::atom{"inner"}};
         expr stack_c{expr::cons{outer_atom, &stack_inner}};
         const expr* imported = pool.import(&stack_c);
         assert(imported != nullptr);
         const expr::cons& ic = std::get<expr::cons>(imported->content);
         assert(ic.lhs == outer_atom);   // outer-frame pool pointer is preserved
-        assert(pool.size() == before + 2);  // inner atom + cons
+        assert(pool.size() == 3);       // outer_atom + inner atom + cons
         t.pop();
         // inner atom and cons were rolled back; outer_atom must survive
-        assert(pool.size() == before);
+        assert(pool.size() == 1);
         assert(pool.exprs.count(*outer_atom) == 1);
+        t.pop();
     }
 
-    // Test 18: Importing an expression that is already in pool must not alter pool size,
+    // Test 18: Importing an expression already in pool must not alter pool size,
     // even when called multiple times in a row
     {
-        const expr* pa = pool.atom("import_t18_a");
-        const expr* pb = pool.var(706);
+        trail t;
+        expr_pool pool(t);
+        t.push();
+        const expr* pa = pool.atom("a");
+        const expr* pb = pool.var(0);
         const expr* pc = pool.cons(pa, pb);
-        size_t before = pool.size();
+        assert(pool.size() == 3);
         assert(pool.import(pa) == pa);
         assert(pool.import(pb) == pb);
         assert(pool.import(pc) == pc);
         assert(pool.import(pa) == pa);  // repeat
         assert(pool.import(pc) == pc);  // repeat
-        assert(pool.size() == before);  // absolutely no growth
+        assert(pool.size() == 3);       // absolutely no growth
+        t.pop();
     }
 
     // Test 19: cons created via pool.cons() with raw stack pointers as children,
     // then imported. The cons itself is already in the pool's set, but its children
     // are not - import must still recurse into them and return a fully-interned cons.
     {
-        expr stack_e1{expr::atom{"import_t19_e1"}};
-        expr stack_e2{expr::atom{"import_t19_e2"}};
+        trail t;
+        expr_pool pool(t);
+        t.push();
+        expr stack_e1{expr::atom{"e1"}};
+        expr stack_e2{expr::atom{"e2"}};
 
         // Deliberately construct a cons in the pool whose children are stack pointers
         const expr* pool_cons_bad = pool.cons(&stack_e1, &stack_e2);
         assert(pool.exprs.count(*pool_cons_bad) == 1);  // cons is in pool
         assert(pool.exprs.count(stack_e1) == 0);        // but children are NOT
         assert(pool.exprs.count(stack_e2) == 0);
+        assert(pool.size() == 1);
 
-        size_t before = pool.size();
         const expr* imported = pool.import(pool_cons_bad);
 
         // import must recurse through the children even though the cons itself
@@ -2436,14 +2491,12 @@ void test_expr_pool_import() {
         assert(pool.exprs.count(*ic.rhs) == 1);  // e2 now in pool
         assert(ic.lhs != &stack_e1);              // pool pointer, not stack
         assert(ic.rhs != &stack_e2);
-        assert(std::get<expr::atom>(ic.lhs->content).value == "import_t19_e1");
-        assert(std::get<expr::atom>(ic.rhs->content).value == "import_t19_e2");
-        // pool must have grown by at least the two children
-        assert(pool.size() >= before + 2);
+        assert(std::get<expr::atom>(ic.lhs->content).value == "e1");
+        assert(std::get<expr::atom>(ic.rhs->content).value == "e2");
+        // pool has: pool_cons_bad (with stack children) + e1 + e2 + proper cons
+        assert(pool.size() == 4);
+        t.pop();
     }
-
-    t.pop();
-    assert(pool.size() == 0);
 }
 
 void test_bind_map_bind() {
