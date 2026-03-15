@@ -26838,6 +26838,193 @@ void test_a01() {
             return {norm(P), norm(Q), norm(R)};
         });
     }
+
+    // Test 12: 3-colouring of "K3 + tail" — 4 nodes, 8 goals, 12 solutions
+    //
+    // Graph: nodes A, B, C, D.
+    //   Edges: A-B, A-C, B-C  (triangle — A, B, C all-different)
+    //          A-D             (tail — D only constrained to differ from A)
+    //
+    // Colours: red, green, blue.
+    //
+    // Each of the 6 K3 colourings of (A,B,C) combines with 2 choices for D
+    // (any colour ≠ A), giving 6 × 2 = 12 distinct solutions.
+    //
+    // Compared to Test 10 (K3, 6 goals): one extra node, one extra colour goal,
+    // one extra diff goal, and twice as many solutions — a meaningfully harder instance.
+    {
+        trail t;
+        t.push();
+        expr_pool ep(t);
+        bind_map bm(t);
+        sequencer seq(t);
+        lineage_pool lp;
+
+        a01_database db;
+        db.push_back(rule{ep.cons(ep.atom("color"), ep.atom("red")),   {}});  // idx 0
+        db.push_back(rule{ep.cons(ep.atom("color"), ep.atom("green")), {}});  // idx 1
+        db.push_back(rule{ep.cons(ep.atom("color"), ep.atom("blue")),  {}});  // idx 2
+        // All 6 ordered diff pairs among {red, green, blue}
+        db.push_back(rule{ep.cons(ep.cons(ep.atom("diff"), ep.atom("red")),   ep.atom("green")), {}});  // idx 3
+        db.push_back(rule{ep.cons(ep.cons(ep.atom("diff"), ep.atom("red")),   ep.atom("blue")),  {}});  // idx 4
+        db.push_back(rule{ep.cons(ep.cons(ep.atom("diff"), ep.atom("green")), ep.atom("red")),   {}});  // idx 5
+        db.push_back(rule{ep.cons(ep.cons(ep.atom("diff"), ep.atom("green")), ep.atom("blue")),  {}});  // idx 6
+        db.push_back(rule{ep.cons(ep.cons(ep.atom("diff"), ep.atom("blue")),  ep.atom("red")),   {}});  // idx 7
+        db.push_back(rule{ep.cons(ep.cons(ep.atom("diff"), ep.atom("blue")),  ep.atom("green")), {}});  // idx 8
+
+        const expr* A = ep.var(seq());
+        const expr* B = ep.var(seq());
+        const expr* C = ep.var(seq());
+        const expr* D = ep.var(seq());
+
+        a01_goals goals;
+        goals.push_back(ep.cons(ep.atom("color"), A));                 // goal 0: color(A)
+        goals.push_back(ep.cons(ep.atom("color"), B));                 // goal 1: color(B)
+        goals.push_back(ep.cons(ep.atom("color"), C));                 // goal 2: color(C)
+        goals.push_back(ep.cons(ep.atom("color"), D));                 // goal 3: color(D)
+        goals.push_back(ep.cons(ep.cons(ep.atom("diff"), A), B));      // goal 4: diff(A,B)
+        goals.push_back(ep.cons(ep.cons(ep.atom("diff"), A), C));      // goal 5: diff(A,C)
+        goals.push_back(ep.cons(ep.cons(ep.atom("diff"), B), C));      // goal 6: diff(B,C)
+        goals.push_back(ep.cons(ep.cons(ep.atom("diff"), A), D));      // goal 7: diff(A,D)
+
+        std::mt19937 rng(42);
+        a01 solver(db, goals, t, seq, ep, bm, lp, 1000, 1000, 1.414, rng);
+
+        normalizer norm(ep, bm);
+
+        const expr* R_ = ep.atom("red");
+        const expr* G_ = ep.atom("green");
+        const expr* B_ = ep.atom("blue");
+
+        // 6 K3 colourings of (A,B,C), each with 2 choices for D (any colour ≠ A)
+        std::set<solution> expected = {
+            {R_, G_, B_, G_}, {R_, G_, B_, B_},
+            {R_, B_, G_, G_}, {R_, B_, G_, B_},
+            {G_, R_, B_, R_}, {G_, R_, B_, B_},
+            {G_, B_, R_, R_}, {G_, B_, R_, B_},
+            {B_, R_, G_, R_}, {B_, R_, G_, G_},
+            {B_, G_, R_, R_}, {B_, G_, R_, G_},
+        };
+
+        next_until_refuted(solver, expected, [&]() -> solution {
+            return {norm(A), norm(B), norm(C), norm(D)};
+        });
+    }
+
+    // Test 13: 4-variable SAT — (P ∨ Q) ∧ (R ∨ S) ∧ (¬P ∨ ¬R)
+    //
+    // Three clauses, four boolean variables. The third clause forbids P and R
+    // both being true, while the first two require each pair to cover true.
+    //
+    // Using the same relational OR/AND/NOT encoding as Test 11, plus NOT rules
+    // for each primary variable. Intermediate result variables (PQ, RS, NP, NR,
+    // NPR, PQ_RS) connect the clause structure. All 11 goals are listed below.
+    //
+    // Propagation chain (deterministic, no MCTS decisions needed for these steps):
+    //   and(PQ_RS, NPR, true): head-elim removes and(false,_,false); unit-prop
+    //     → PQ_RS = true, NPR = true.
+    //   and(PQ, RS, PQ_RS=true): same → PQ = true, RS = true.
+    //   Remaining: or(P,Q,true), or(R,S,true), or(NP,NR,true) each have 2 candidates.
+    //   not rules propagate as soon as P or R is bound.
+    //
+    // Satisfying assignments (5):
+    //   (T,T,F,T), (T,F,F,T), (F,T,T,T), (F,T,T,F), (F,T,F,T)
+    //
+    // Every solution needs ≥ 2 MCTS decisions, so all avoidances are non-empty
+    // and CDCL learning drives refutation after all 5 are found.
+    {
+        trail t;
+        t.push();
+        expr_pool ep(t);
+        bind_map bm(t);
+        sequencer seq(t);
+        lineage_pool lp;
+
+        a01_database db;
+        db.push_back(rule{ep.cons(ep.atom("bool"), ep.atom("true")),  {}});  // idx 0
+        db.push_back(rule{ep.cons(ep.atom("bool"), ep.atom("false")), {}});  // idx 1
+        db.push_back(rule{ep.cons(ep.cons(ep.atom("not"), ep.atom("true")),  ep.atom("false")), {}});  // idx 2
+        db.push_back(rule{ep.cons(ep.cons(ep.atom("not"), ep.atom("false")), ep.atom("true")),  {}});  // idx 3
+        // or(true, X, true) :- bool(X).
+        {
+            const expr* X = ep.var(seq());
+            db.push_back(rule{
+                ep.cons(ep.cons(ep.cons(ep.atom("or"), ep.atom("true")), X), ep.atom("true")),
+                {ep.cons(ep.atom("bool"), X)}
+            });  // idx 4
+        }
+        // or(false, X, X) :- bool(X).
+        {
+            const expr* X = ep.var(seq());
+            db.push_back(rule{
+                ep.cons(ep.cons(ep.cons(ep.atom("or"), ep.atom("false")), X), X),
+                {ep.cons(ep.atom("bool"), X)}
+            });  // idx 5
+        }
+        // and(true, X, X) :- bool(X).
+        {
+            const expr* X = ep.var(seq());
+            db.push_back(rule{
+                ep.cons(ep.cons(ep.cons(ep.atom("and"), ep.atom("true")), X), X),
+                {ep.cons(ep.atom("bool"), X)}
+            });  // idx 6
+        }
+        // and(false, X, false) :- bool(X).
+        {
+            const expr* X = ep.var(seq());
+            db.push_back(rule{
+                ep.cons(ep.cons(ep.cons(ep.atom("and"), ep.atom("false")), X), ep.atom("false")),
+                {ep.cons(ep.atom("bool"), X)}
+            });  // idx 7
+        }
+
+        // Primary variables
+        const expr* P     = ep.var(seq());
+        const expr* Q     = ep.var(seq());
+        const expr* R     = ep.var(seq());
+        const expr* S     = ep.var(seq());
+        // Intermediate result variables
+        const expr* PQ    = ep.var(seq());   // P ∨ Q
+        const expr* RS    = ep.var(seq());   // R ∨ S
+        const expr* NP    = ep.var(seq());   // ¬P
+        const expr* NR    = ep.var(seq());   // ¬R
+        const expr* NPR   = ep.var(seq());   // ¬P ∨ ¬R
+        const expr* PQ_RS = ep.var(seq());   // (P∨Q) ∧ (R∨S)
+
+        a01_goals goals;
+        goals.push_back(ep.cons(ep.atom("bool"), P));                                               // goal  0: bool(P)
+        goals.push_back(ep.cons(ep.atom("bool"), Q));                                               // goal  1: bool(Q)
+        goals.push_back(ep.cons(ep.atom("bool"), R));                                               // goal  2: bool(R)
+        goals.push_back(ep.cons(ep.atom("bool"), S));                                               // goal  3: bool(S)
+        goals.push_back(ep.cons(ep.cons(ep.cons(ep.atom("or"),  P),  Q),  PQ));                    // goal  4: or(P,Q,PQ)
+        goals.push_back(ep.cons(ep.cons(ep.cons(ep.atom("or"),  R),  S),  RS));                    // goal  5: or(R,S,RS)
+        goals.push_back(ep.cons(ep.cons(ep.atom("not"), P), NP));                                   // goal  6: not(P,NP)
+        goals.push_back(ep.cons(ep.cons(ep.atom("not"), R), NR));                                   // goal  7: not(R,NR)
+        goals.push_back(ep.cons(ep.cons(ep.cons(ep.atom("or"),  NP), NR), NPR));                   // goal  8: or(NP,NR,NPR)
+        goals.push_back(ep.cons(ep.cons(ep.cons(ep.atom("and"), PQ), RS),  PQ_RS));                // goal  9: and(PQ,RS,PQ_RS)
+        goals.push_back(ep.cons(ep.cons(ep.cons(ep.atom("and"), PQ_RS), NPR), ep.atom("true")));   // goal 10: and(PQ_RS,NPR,true)
+
+        std::mt19937 rng(42);
+        a01 solver(db, goals, t, seq, ep, bm, lp, 1000, 1000, 1.414, rng);
+
+        normalizer norm(ep, bm);
+
+        const expr* T_ = ep.atom("true");
+        const expr* F_ = ep.atom("false");
+
+        // All 5 satisfying assignments to (P, Q, R, S)
+        std::set<solution> expected = {
+            {T_, T_, F_, T_},   // P=T, Q=T, R=F, S=T
+            {T_, F_, F_, T_},   // P=T, Q=F, R=F, S=T
+            {F_, T_, T_, T_},   // P=F, Q=T, R=T, S=T
+            {F_, T_, T_, F_},   // P=F, Q=T, R=T, S=F
+            {F_, T_, F_, T_},   // P=F, Q=T, R=F, S=T
+        };
+
+        next_until_refuted(solver, expected, [&]() -> solution {
+            return {norm(P), norm(Q), norm(R), norm(S)};
+        });
+    }
 }
 
 void unit_test_main() {
