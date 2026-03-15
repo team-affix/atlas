@@ -26118,7 +26118,7 @@ void test_a01_next_avoidance() {
     }
 }
 
-void test_a01_operator() {
+void test_a01() {
 
     // Test 1: Budget = 0 — no iterations execute; operator() returns true with nullopt.
     // The solver makes no progress at all, so it cannot prove refutation or find a
@@ -26897,7 +26897,7 @@ void unit_test_main() {
     TEST(test_a01_constructor_and_destructor);
     TEST(test_a01_sim_one);
     TEST(test_a01_next_avoidance);
-    TEST(test_a01_operator);
+    TEST(test_a01);
 }
 
 #ifdef DEBUG
