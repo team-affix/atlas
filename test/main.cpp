@@ -26118,6 +26118,507 @@ void test_a01_next_avoidance() {
     }
 }
 
+void test_a01_operator() {
+
+    // Test 1: Budget = 0 — no iterations execute; operator() returns true with nullopt.
+    // The solver makes no progress at all, so it cannot prove refutation or find a
+    // solution. This validates the edge case of calling with zero budget.
+    {
+        trail t;
+        t.push();
+        expr_pool ep(t);
+        bind_map bm(t);
+        sequencer seq(t);
+        lineage_pool lp;
+
+        a01_database db;
+        db.push_back(rule{ep.atom("a"), {}});
+
+        a01_goals goals;
+        goals.push_back(ep.atom("a"));
+
+        std::mt19937 rng(42);
+        a01 solver(db, goals, t, seq, ep, bm, lp, 1000, 1000, 1.414, rng);
+
+        std::optional<a01_resolution_store> soln;
+        bool result = solver(0, soln);
+
+        // CRITICAL: returns true (no refutation proved) and soln defaults to nullopt
+        assert(result == true);
+        assert(!soln.has_value());
+        // The avoidance store is empty — no iterations ran, no avoidances recorded
+        assert(solver.as.empty());
+    }
+
+    // Test 2: Simple ground solution — DB: a.  Goal: a
+    // The single goal is unit-propagated immediately. The resolution store contains
+    // exactly one lineage entry: the unit-prop of goal 0 via rule 0.
+    {
+        trail t;
+        t.push();
+        expr_pool ep(t);
+        bind_map bm(t);
+        sequencer seq(t);
+        lineage_pool lp;
+
+        a01_database db;
+        db.push_back(rule{ep.atom("a"), {}});  // idx 0: a.
+
+        a01_goals goals;
+        goals.push_back(ep.atom("a"));
+
+        std::mt19937 rng(42);
+        a01 solver(db, goals, t, seq, ep, bm, lp, 1000, 1000, 1.414, rng);
+
+        std::optional<a01_resolution_store> soln;
+        bool result = solver(1, soln);
+
+        assert(result == true);
+        assert(soln.has_value());
+
+        // CRITICAL: exactly one resolution (unit-prop of a with rule 0)
+        assert(soln.value().size() == 1);
+        const goal_lineage* gl0 = lp.goal(nullptr, 0);
+        const resolution_lineage* rl0 = lp.resolution(gl0, 0);
+        assert(soln.value().count(rl0) == 1);
+
+        // CRITICAL: avoidance store has one entry — the empty decision set from the
+        // unit-prop solution (no MCTS decision was needed)
+        assert(solver.as.size() == 1);
+    }
+
+    // Test 3: Variable binding verified via normalizer
+    // DB: answer(42).   Goal: answer(X)
+    // The copier creates a fresh copy of the ground rule (no vars to freshen), then
+    // the goal-resolver unifies cons("answer","42") with cons("answer",X), binding X.
+    // After operator() returns, bm holds X → atom("42"), which the normalizer resolves.
+    {
+        trail t;
+        t.push();
+        expr_pool ep(t);
+        bind_map bm(t);
+        sequencer seq(t);
+        lineage_pool lp;
+
+        a01_database db;
+        // idx 0: answer(42).
+        db.push_back(rule{ep.cons(ep.atom("answer"), ep.atom("42")), {}});
+
+        const expr* X = ep.var(seq());
+        a01_goals goals;
+        goals.push_back(ep.cons(ep.atom("answer"), X));
+
+        std::mt19937 rng(42);
+        a01 solver(db, goals, t, seq, ep, bm, lp, 1000, 1000, 1.414, rng);
+
+        std::optional<a01_resolution_store> soln;
+        bool result = solver(1, soln);
+
+        assert(result == true);
+        assert(soln.has_value());
+
+        // CRITICAL: one resolution, binding X to "42"
+        assert(soln.value().size() == 1);
+        assert(soln.value().count(lp.resolution(lp.goal(nullptr, 0), 0)) == 1);
+
+        // CRITICAL: normalizer follows bm chain and returns atom("42")
+        normalizer norm(ep, bm);
+        const expr* X_val = norm(X);
+        assert(std::holds_alternative<expr::atom>(X_val->content));
+        assert(std::get<expr::atom>(X_val->content).value == "42");
+    }
+
+    // Test 4: Immediate refutation — empty database, goal has no candidates.
+    // head-elimination fires before any MCTS decision: conflict with ds = {} on
+    // the very first sim_one. next_avoidance returns false → operator() returns false.
+    {
+        trail t;
+        t.push();
+        expr_pool ep(t);
+        bind_map bm(t);
+        sequencer seq(t);
+        lineage_pool lp;
+
+        a01_database db;  // intentionally empty
+
+        a01_goals goals;
+        goals.push_back(ep.atom("a"));
+
+        std::mt19937 rng(42);
+        a01 solver(db, goals, t, seq, ep, bm, lp, 1000, 1000, 1.414, rng);
+
+        std::optional<a01_resolution_store> soln;
+        bool result = solver(1000, soln);
+
+        assert(result == false);
+        assert(!soln.has_value());
+    }
+
+    // Test 5: 2-call CDCL-driven refutation — unsatisfiable, 2-path problem.
+    // DB: a :- b.  (idx 0)   a :- c.  (idx 1)   (no rules for b or c)
+    //
+    // Call 1: MCTS picks one of {rule0, rule1} for goal a. Whichever is chosen, the
+    // resulting sub-goal (b or c) has no candidates → conflict. ds = {rl_chosen}.
+    // After 1000 inner iterations the minimum conflict is size 1. Avoidance recorded.
+    //
+    // Call 2: CDCL eliminates the avoided rule. The remaining rule is unit-propagated.
+    // The new sub-goal (c or b) again has no candidates → conflict with ds = {} (the
+    // unit-prop added no decision) → next_avoidance returns false → operator() false.
+    {
+        trail t;
+        t.push();
+        expr_pool ep(t);
+        bind_map bm(t);
+        sequencer seq(t);
+        lineage_pool lp;
+
+        a01_database db;
+        db.push_back(rule{ep.atom("a"), {ep.atom("b")}});  // idx 0: a :- b.
+        db.push_back(rule{ep.atom("a"), {ep.atom("c")}});  // idx 1: a :- c.
+
+        a01_goals goals;
+        goals.push_back(ep.atom("a"));
+
+        std::mt19937 rng(42);
+        a01 solver(db, goals, t, seq, ep, bm, lp, 1000, 1000, 1.414, rng);
+
+        std::optional<a01_resolution_store> soln;
+
+        // Call 1: one depth-1 avoidance recorded
+        bool result1 = solver(1, soln);
+        assert(result1 == true);
+        assert(!soln.has_value());
+        assert(solver.as.size() == 1);
+
+        // Call 2: CDCL + unit-prop leads to conflict with empty ds → refutation
+        bool result2 = solver(1, soln);
+        assert(result2 == false);
+        assert(!soln.has_value());
+    }
+
+    // Test 6: Unique-solution conjunction query — is_a(X) ∧ is_b(X)
+    // DB:
+    //   idx 0: is_a(1).   idx 1: is_a(2).
+    //   idx 2: is_b(2).   idx 3: is_b(3).
+    //
+    // The only satisfying X is 2. Each of the 4 MCTS choices leads to either
+    // a solution (X=2) or immediate conflict (X=1 kills is_b; X=3 kills is_a).
+    //
+    // Call 1: MCTS finds X=2 via one decision (size-1 avoidance recorded).
+    //         Normalizer verifies X → "2". Lineage is deterministic:
+    //         soln always = {rl(gl_a,1), rl(gl_b,2)}, regardless of which goal MCTS
+    //         decided first — both rules apply to X=2, the other is unit-propagated.
+    //
+    // Call 2: CDCL eliminates the solution decision (rule idx for X=2). The only
+    //         remaining candidate for that goal resolves to X=1 or X=3, which
+    //         immediately conflicts with the other goal (0 candidates, ds={}) →
+    //         next_avoidance returns false → operator() returns false.
+    {
+        trail t;
+        t.push();
+        expr_pool ep(t);
+        bind_map bm(t);
+        sequencer seq(t);
+        lineage_pool lp;
+
+        a01_database db;
+        db.push_back(rule{ep.cons(ep.atom("is_a"), ep.atom("1")), {}});  // idx 0
+        db.push_back(rule{ep.cons(ep.atom("is_a"), ep.atom("2")), {}});  // idx 1
+        db.push_back(rule{ep.cons(ep.atom("is_b"), ep.atom("2")), {}});  // idx 2
+        db.push_back(rule{ep.cons(ep.atom("is_b"), ep.atom("3")), {}});  // idx 3
+
+        const expr* X = ep.var(seq());
+        a01_goals goals;
+        goals.push_back(ep.cons(ep.atom("is_a"), X));  // goal 0: is_a(X)
+        goals.push_back(ep.cons(ep.atom("is_b"), X));  // goal 1: is_b(X)
+
+        std::mt19937 rng(42);
+        a01 solver(db, goals, t, seq, ep, bm, lp, 1000, 1000, 1.414, rng);
+
+        normalizer norm(ep, bm);
+        std::optional<a01_resolution_store> soln;
+
+        // Call 1: unique solution X=2
+        bool result1 = solver(1000, soln);
+        assert(result1 == true);
+        assert(soln.has_value());
+
+        // CRITICAL: bm binds X to "2"
+        const expr* X_val = norm(X);
+        assert(std::holds_alternative<expr::atom>(X_val->content));
+        assert(std::get<expr::atom>(X_val->content).value == "2");
+
+        // CRITICAL: soln contains exactly the two resolutions for X=2 — one per goal.
+        // Regardless of which goal MCTS decided first, both rl(gl_a,1) and rl(gl_b,2)
+        // always appear (one as the decision, the other as unit-propagation).
+        assert(soln.value().size() == 2);
+        const goal_lineage* gl_a = lp.goal(nullptr, 0);
+        const goal_lineage* gl_b = lp.goal(nullptr, 1);
+        const resolution_lineage* rl_a1 = lp.resolution(gl_a, 1);  // is_a(2)
+        const resolution_lineage* rl_b2 = lp.resolution(gl_b, 2);  // is_b(2)
+        assert(soln.value().count(rl_a1) == 1);
+        assert(soln.value().count(rl_b2) == 1);
+
+        // Call 2: the solution path is blocked; the only remaining path conflicts → refutation
+        bool result2 = solver(1000, soln);
+        assert(result2 == false);
+        assert(!soln.has_value());
+    }
+
+    // Test 7: Multi-solution enumeration — all parents of alice
+    // DB:
+    //   idx 0: parent(bob,   alice).
+    //   idx 1: parent(carol, alice).
+    //   idx 2: parent(dave,  bob).     ← head-elim removes this (alice ≠ bob)
+    //
+    // Goal: parent(X, alice)  — head-elim leaves only rules 0 and 1.
+    // MCTS must decide between bob and carol. Each is a depth-1 solution.
+    //
+    // Call 1 finds one parent; Call 2 finds the other (via CDCL elimination of the
+    // first decision, leaving a unit-prop that resolves to the remaining parent).
+    // bm binds X differently after each call; normalizer verifies the two names differ.
+    {
+        trail t;
+        t.push();
+        expr_pool ep(t);
+        bind_map bm(t);
+        sequencer seq(t);
+        lineage_pool lp;
+
+        a01_database db;
+        // parent(A, B) encoded as cons(cons(atom("parent"), A), B)
+        db.push_back(rule{ep.cons(ep.cons(ep.atom("parent"), ep.atom("bob")),   ep.atom("alice")), {}});  // idx 0
+        db.push_back(rule{ep.cons(ep.cons(ep.atom("parent"), ep.atom("carol")), ep.atom("alice")), {}});  // idx 1
+        db.push_back(rule{ep.cons(ep.cons(ep.atom("parent"), ep.atom("dave")),  ep.atom("bob")),  {}});   // idx 2
+
+        const expr* X = ep.var(seq());
+        a01_goals goals;
+        goals.push_back(ep.cons(ep.cons(ep.atom("parent"), X), ep.atom("alice")));
+
+        std::mt19937 rng(42);
+        a01 solver(db, goals, t, seq, ep, bm, lp, 1000, 1000, 1.414, rng);
+
+        normalizer norm(ep, bm);
+        std::optional<a01_resolution_store> soln;
+
+        // First parent of alice
+        bool result1 = solver(1000, soln);
+        assert(result1 == true);
+        assert(soln.has_value());
+        assert(soln.value().size() == 1);
+
+        const expr* X_val1 = norm(X);
+        assert(std::holds_alternative<expr::atom>(X_val1->content));
+        std::string parent1 = std::get<expr::atom>(X_val1->content).value;
+        assert(parent1 == "bob" || parent1 == "carol");
+
+        // Second parent of alice — sim_one rolls back bm then unit-props the other rule
+        bool result2 = solver(1000, soln);
+        assert(result2 == true);
+        assert(soln.has_value());
+        assert(soln.value().size() == 1);
+
+        const expr* X_val2 = norm(X);
+        assert(std::holds_alternative<expr::atom>(X_val2->content));
+        std::string parent2 = std::get<expr::atom>(X_val2->content).value;
+        assert(parent2 == "bob" || parent2 == "carol");
+
+        // CRITICAL: the two solutions bind X to different names
+        assert(parent1 != parent2);
+    }
+
+    // Test 8: Boolean SAT — formula (P ∨ Q) ∧ (¬P ∨ Q)
+    //
+    // This 2-clause formula is equivalent to Q. The satisfying assignments are:
+    //   Solution A: P = true,  Q = true,  NP = false
+    //   Solution B: P = false, Q = true,  NP = true
+    //
+    // Encoding (all predicates as right-nested cons cells):
+    //   bool(X)    → cons(atom("bool"), X)
+    //   not(X, Y)  → cons(cons(atom("not"), X), Y)
+    //   or(X, Y, Z)→ cons(cons(cons(atom("or"), X), Y), Z)
+    //
+    // DB: bool(true) idx0, bool(false) idx1,
+    //     not(true,false) idx2, not(false,true) idx3,
+    //     or(true,true,true) idx4, or(true,false,true) idx5,
+    //     or(false,true,true) idx6, or(false,false,false) idx7.
+    //
+    // Goals: bool(P), bool(Q), or(P,Q,true), not(P,NP), or(NP,Q,true).
+    //
+    // With 1000 inner iterations MCTS learns to decide bool(P) first (1-decision
+    // solutions, negative reward -1), rather than bool(Q) (requires 2+ decisions).
+    // Deciding P=true propagates: NP=false, or(false,Q,true)→Q=true, bool(Q)→true,
+    //   or(true,true,true). Deciding P=false propagates analogously.
+    //
+    // Both calls return with Q=true and opposite values for P.
+    {
+        trail t;
+        t.push();
+        expr_pool ep(t);
+        bind_map bm(t);
+        sequencer seq(t);
+        lineage_pool lp;
+
+        a01_database db;
+        db.push_back(rule{ep.cons(ep.atom("bool"), ep.atom("true")),  {}});  // idx 0
+        db.push_back(rule{ep.cons(ep.atom("bool"), ep.atom("false")), {}});  // idx 1
+        db.push_back(rule{ep.cons(ep.cons(ep.atom("not"), ep.atom("true")),  ep.atom("false")), {}});  // idx 2
+        db.push_back(rule{ep.cons(ep.cons(ep.atom("not"), ep.atom("false")), ep.atom("true")),  {}});  // idx 3
+        db.push_back(rule{ep.cons(ep.cons(ep.cons(ep.atom("or"), ep.atom("true")),  ep.atom("true")),  ep.atom("true")),  {}});  // idx 4
+        db.push_back(rule{ep.cons(ep.cons(ep.cons(ep.atom("or"), ep.atom("true")),  ep.atom("false")), ep.atom("true")),  {}});  // idx 5
+        db.push_back(rule{ep.cons(ep.cons(ep.cons(ep.atom("or"), ep.atom("false")), ep.atom("true")),  ep.atom("true")),  {}});  // idx 6
+        db.push_back(rule{ep.cons(ep.cons(ep.cons(ep.atom("or"), ep.atom("false")), ep.atom("false")), ep.atom("false")), {}});  // idx 7
+
+        const expr* P  = ep.var(seq());
+        const expr* Q  = ep.var(seq());
+        const expr* NP = ep.var(seq());
+
+        a01_goals goals;
+        // goal 0: bool(P)
+        goals.push_back(ep.cons(ep.atom("bool"), P));
+        // goal 1: bool(Q)
+        goals.push_back(ep.cons(ep.atom("bool"), Q));
+        // goal 2: or(P, Q, true) — P ∨ Q = true
+        goals.push_back(ep.cons(ep.cons(ep.cons(ep.atom("or"), P), Q), ep.atom("true")));
+        // goal 3: not(P, NP) — compute ¬P
+        goals.push_back(ep.cons(ep.cons(ep.atom("not"), P), NP));
+        // goal 4: or(NP, Q, true) — ¬P ∨ Q = true
+        goals.push_back(ep.cons(ep.cons(ep.cons(ep.atom("or"), NP), Q), ep.atom("true")));
+
+        std::mt19937 rng(42);
+        a01 solver(db, goals, t, seq, ep, bm, lp, 1000, 1000, 1.414, rng);
+
+        normalizer norm(ep, bm);
+        std::optional<a01_resolution_store> soln;
+
+        // First solution: P=true or P=false, but Q must be true
+        bool result1 = solver(1000, soln);
+        assert(result1 == true);
+        assert(soln.has_value());
+
+        const expr* Q_val1 = norm(Q);
+        const expr* P_val1 = norm(P);
+        assert(std::holds_alternative<expr::atom>(Q_val1->content));
+        assert(std::holds_alternative<expr::atom>(P_val1->content));
+
+        // CRITICAL: Q = true in every solution of (P∨Q)∧(¬P∨Q)
+        assert(std::get<expr::atom>(Q_val1->content).value == "true");
+        std::string P_str1 = std::get<expr::atom>(P_val1->content).value;
+        assert(P_str1 == "true" || P_str1 == "false");
+
+        // Second solution: CDCL eliminates first P choice; the other propagates
+        bool result2 = solver(1000, soln);
+        assert(result2 == true);
+        assert(soln.has_value());
+
+        const expr* Q_val2 = norm(Q);
+        const expr* P_val2 = norm(P);
+        assert(std::holds_alternative<expr::atom>(Q_val2->content));
+        assert(std::holds_alternative<expr::atom>(P_val2->content));
+
+        // CRITICAL: Q still true after finding the second solution
+        assert(std::get<expr::atom>(Q_val2->content).value == "true");
+        std::string P_str2 = std::get<expr::atom>(P_val2->content).value;
+
+        // CRITICAL: the two solutions assign opposite values to P
+        assert(P_str2 != P_str1);
+    }
+
+    // Test 9: Graph 2-coloring synthesis — find valid 2-colorings of a 3-node path A-B-C
+    //
+    // DB:
+    //   idx 0: color(red).     idx 1: color(blue).
+    //   idx 2: diff(red, blue).  idx 3: diff(blue, red).
+    //
+    // Goals:
+    //   goal 0: color(A)   goal 1: color(B)   goal 2: color(C)
+    //   goal 3: diff(A, B)  goal 4: diff(B, C)
+    //
+    // A single MCTS decision (e.g. deciding diff(A,B)→red-blue) immediately binds
+    // A and B, unit-propagates color(A), color(B), diff(B,C), and color(C).
+    // This produces exactly two valid 2-colorings:
+    //   Coloring 1: A=red,  B=blue, C=red
+    //   Coloring 2: A=blue, B=red,  C=blue
+    //
+    // Both calls return valid alternating colorings that satisfy:
+    //   A ≠ B,  B ≠ C,  A = C  (necessary for a 2-colored path of 3 nodes).
+    // The two solutions bind A differently, confirming both colorings are enumerated.
+    // All 5 goals appear in the solution's resolution store.
+    {
+        trail t;
+        t.push();
+        expr_pool ep(t);
+        bind_map bm(t);
+        sequencer seq(t);
+        lineage_pool lp;
+
+        a01_database db;
+        db.push_back(rule{ep.cons(ep.atom("color"), ep.atom("red")),  {}});  // idx 0
+        db.push_back(rule{ep.cons(ep.atom("color"), ep.atom("blue")), {}});  // idx 1
+        // diff(X, Y) encoded as cons(cons(atom("diff"), X), Y)
+        db.push_back(rule{ep.cons(ep.cons(ep.atom("diff"), ep.atom("red")),  ep.atom("blue")), {}});  // idx 2
+        db.push_back(rule{ep.cons(ep.cons(ep.atom("diff"), ep.atom("blue")), ep.atom("red")),  {}});  // idx 3
+
+        const expr* A = ep.var(seq());
+        const expr* B = ep.var(seq());
+        const expr* C = ep.var(seq());
+
+        a01_goals goals;
+        goals.push_back(ep.cons(ep.atom("color"), A));                 // goal 0: color(A)
+        goals.push_back(ep.cons(ep.atom("color"), B));                 // goal 1: color(B)
+        goals.push_back(ep.cons(ep.atom("color"), C));                 // goal 2: color(C)
+        goals.push_back(ep.cons(ep.cons(ep.atom("diff"), A), B));      // goal 3: diff(A, B)
+        goals.push_back(ep.cons(ep.cons(ep.atom("diff"), B), C));      // goal 4: diff(B, C)
+
+        std::mt19937 rng(42);
+        a01 solver(db, goals, t, seq, ep, bm, lp, 1000, 1000, 1.414, rng);
+
+        normalizer norm(ep, bm);
+        std::optional<a01_resolution_store> soln;
+
+        auto is_valid_color = [](const std::string& s) {
+            return s == "red" || s == "blue";
+        };
+
+        // First valid 2-coloring of the path A-B-C
+        bool result1 = solver(1000, soln);
+        assert(result1 == true);
+        assert(soln.has_value());
+
+        // All 5 goals are resolved in every solution
+        assert(soln.value().size() == 5);
+
+        std::string A1 = std::get<expr::atom>(norm(A)->content).value;
+        std::string B1 = std::get<expr::atom>(norm(B)->content).value;
+        std::string C1 = std::get<expr::atom>(norm(C)->content).value;
+
+        assert(is_valid_color(A1) && is_valid_color(B1) && is_valid_color(C1));
+        // CRITICAL: adjacent nodes have different colors
+        assert(A1 != B1);
+        assert(B1 != C1);
+        // CRITICAL: the path is symmetrically 2-colored — endpoints share a color
+        assert(A1 == C1);
+
+        // Second valid 2-coloring — bm is refreshed by the next sim_one's trail pop
+        bool result2 = solver(1000, soln);
+        assert(result2 == true);
+        assert(soln.has_value());
+        assert(soln.value().size() == 5);
+
+        std::string A2 = std::get<expr::atom>(norm(A)->content).value;
+        std::string B2 = std::get<expr::atom>(norm(B)->content).value;
+        std::string C2 = std::get<expr::atom>(norm(C)->content).value;
+
+        assert(is_valid_color(A2) && is_valid_color(B2) && is_valid_color(C2));
+        assert(A2 != B2);
+        assert(B2 != C2);
+        assert(A2 == C2);
+
+        // CRITICAL: the second coloring is the complement of the first
+        assert(A2 != A1);
+    }
+}
+
 void unit_test_main() {
 
     constexpr bool ENABLE_DEBUG_LOGS = true;
@@ -26175,6 +26676,7 @@ void unit_test_main() {
     TEST(test_a01_constructor_and_destructor);
     TEST(test_a01_sim_one);
     TEST(test_a01_next_avoidance);
+    TEST(test_a01_operator);
 }
 
 #ifdef DEBUG
