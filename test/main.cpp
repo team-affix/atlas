@@ -26526,6 +26526,10 @@ void test_a01_operator() {
 
         // CRITICAL: the two solutions assign opposite values to P
         assert(P_str2 != P_str1);
+
+        // Test for refutation
+        bool result3 = solver(1000, soln);
+        assert(result3 == false);
     }
 
     // Test 9: Graph 2-coloring synthesis — find valid 2-colorings of a 3-node path A-B-C
@@ -26620,6 +26624,10 @@ void test_a01_operator() {
 
         // CRITICAL: the second coloring is the complement of the first
         assert(A2 != A1);
+
+        // Test for refutation
+        bool result3 = solver(1000, soln);
+        assert(result3 == false);
     }
 }
 
