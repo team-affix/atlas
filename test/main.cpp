@@ -2497,6 +2497,77 @@ void test_expr_pool_import() {
         assert(pool.size() == 4);
         t.pop();
     }
+
+    // Test 20: Same stack atom referenced multiple times throughout the tree -
+    // all references must collapse to a single pool entry
+    {
+        trail t;
+        expr_pool pool(t);
+        t.push();
+        expr a{expr::atom{"a"}};
+        // &a appears as both children of inner, and again as the rhs of root
+        expr inner{expr::cons{&a, &a}};
+        expr root{expr::cons{&inner, &a}};
+        const expr* imported = pool.import(&root);
+        assert(imported != nullptr);
+        // Only 3 pool entries: atom "a", cons(a,a), root cons
+        assert(pool.size() == 3);
+        const expr::cons& rc = std::get<expr::cons>(imported->content);
+        const expr::cons& ic = std::get<expr::cons>(rc.lhs->content);
+        // All four leaf references resolve to the exact same pool pointer
+        assert(ic.lhs == ic.rhs);
+        assert(ic.lhs == rc.rhs);
+        assert(pool.exprs.count(*ic.lhs) == 1);
+        t.pop();
+    }
+
+    // Test 21: Same stack atom as both direct children of a single cons -
+    // pool must contain exactly one copy of the atom
+    {
+        trail t;
+        expr_pool pool(t);
+        t.push();
+        expr a{expr::atom{"a"}};
+        expr c{expr::cons{&a, &a}}; 
+        const expr* imported = pool.import(&c);
+        assert(imported != nullptr);
+        assert(pool.size() == 2);  // atom "a" + cons, not 3
+        const expr::cons& ic = std::get<expr::cons>(imported->content);
+        assert(ic.lhs == ic.rhs);  // both sides are the same pool pointer
+        assert(pool.exprs.count(*ic.lhs) == 1);
+        t.pop();
+    }
+
+    // Test 22: Import from a different pool - pool1 pointers are foreign to pool2
+    // so the entire tree must be re-interned into pool2 with fresh pool2 pointers
+    {
+        trail t1;
+        expr_pool pool1(t1);
+        t1.push();
+        const expr* p1_atom = pool1.atom("x");
+        const expr* p1_var  = pool1.var(5);
+        const expr* p1_cons = pool1.cons(p1_atom, p1_var);
+        assert(pool1.size() == 3);
+
+        trail t2;
+        expr_pool pool2(t2);
+        t2.push();
+        const expr* p2_cons = pool2.import(p1_cons);
+        assert(p2_cons != p1_cons);         // different pool, different pointer
+        assert(pool2.size() == 3);          // x, var(5), cons re-interned into pool2
+        const expr::cons& c = std::get<expr::cons>(p2_cons->content);
+        assert(c.lhs != p1_atom);           // pool2 pointer, not pool1's
+        assert(c.rhs != p1_var);
+        assert(pool2.exprs.count(*c.lhs) == 1);
+        assert(pool2.exprs.count(*c.rhs) == 1);
+        assert(pool2.exprs.count(*p2_cons) == 1);
+        assert(std::get<expr::atom>(c.lhs->content).value == "x");
+        assert(std::get<expr::var>(c.rhs->content).index == 5);
+        // pool1 is unaffected
+        assert(pool1.size() == 3);
+        t1.pop();
+        t2.pop();
+    }
 }
 
 void test_bind_map_bind() {
