@@ -36,6 +36,8 @@ a01::a01(
 }
 
 bool a01::operator()(size_t iterations, std::optional<a01_resolution_store>& soln) {
+    // default to no solution
+    soln = std::nullopt;
     
     for (size_t i = 0; i < iterations; i++) {
         // trim the lineage pool between iterations
