@@ -27279,7 +27279,7 @@ void test_a01() {
         };
 
         next_until_refuted(solver, expected, [&]() -> solution {
-            return {norm(A), norm(B), norm(C)};
+            return {ep.import(norm(A)), ep.import(norm(B)), ep.import(norm(C))};
         });
     }
 
@@ -27378,7 +27378,7 @@ void test_a01() {
         };
 
         next_until_refuted(solver, expected, [&]() -> solution {
-            return {norm(P), norm(Q), norm(R)};
+            return {ep.import(norm(P)), ep.import(norm(Q)), ep.import(norm(R))};
         });
     }
 
@@ -27449,7 +27449,7 @@ void test_a01() {
         };
 
         next_until_refuted(solver, expected, [&]() -> solution {
-            return {norm(A), norm(B), norm(C), norm(D)};
+            return {ep.import(norm(A)), ep.import(norm(B)), ep.import(norm(C)), ep.import(norm(D))};
         });
     }
 
@@ -27563,7 +27563,7 @@ void test_a01() {
         };
 
         next_until_refuted(solver, expected, [&]() -> solution {
-            return {norm(P), norm(Q), norm(R), norm(S)};
+            return {ep.import(norm(P)), ep.import(norm(Q)), ep.import(norm(R)), ep.import(norm(S))};
         });
     }
 }
