@@ -27845,6 +27845,113 @@ void test_a01() {
             return {ep.import(norm(N))};
         });
     }
+
+    // Test 15: Addition + less-than — enumerate all pairs (X, Y) with X + Y < 10
+    //
+    // Rules:
+    //   idx 0: nat(zero).
+    //   idx 1: nat(suc(X))           :- nat(X).
+    //   idx 2: add(zero, Y, Y)       :- nat(Y).
+    //   idx 3: add(suc(X), Y, suc(Z)):- add(X, Y, Z).
+    //   idx 4: lt(zero, suc(X))      :- nat(X).
+    //   idx 5: lt(suc(X), suc(Y))    :- lt(X, Y).
+    //
+    // Goals: add(X, Y, S),  lt(S, ten)   where ten = suc^10(zero)
+    //
+    // Exactly 55 pairs satisfy X + Y < 10: sum s = 0..9 contributes (10-s) pairs.
+    // next_until_refuted verifies all 55 are found and the solver then refutes.
+    {
+        trail t;
+        t.push();
+        expr_pool ep(t);
+        bind_map bm(t);
+        sequencer seq(t);
+
+        auto peano = [&](int n) -> const expr* {
+            const expr* r = ep.atom("zero");
+            for (int i = 0; i < n; ++i)
+                r = ep.cons(ep.atom("suc"), r);
+            return r;
+        };
+
+        a01_database db;
+
+        // idx 0: nat(zero).
+        db.push_back(rule{ep.cons(ep.atom("nat"), ep.atom("zero")), {}});
+
+        // idx 1: nat(suc(X)) :- nat(X).
+        {
+            const expr* X = ep.var(seq());
+            db.push_back(rule{
+                ep.cons(ep.atom("nat"), ep.cons(ep.atom("suc"), X)),
+                {ep.cons(ep.atom("nat"), X)}
+            });
+        }
+
+        // idx 2: add(zero, Y, Y) :- nat(Y).
+        {
+            const expr* Y = ep.var(seq());
+            db.push_back(rule{
+                ep.cons(ep.cons(ep.cons(ep.atom("add"), ep.atom("zero")), Y), Y),
+                {ep.cons(ep.atom("nat"), Y)}
+            });
+        }
+
+        // idx 3: add(suc(X), Y, suc(Z)) :- add(X, Y, Z).
+        {
+            const expr* X = ep.var(seq());
+            const expr* Y = ep.var(seq());
+            const expr* Z = ep.var(seq());
+            db.push_back(rule{
+                ep.cons(ep.cons(ep.cons(ep.atom("add"), ep.cons(ep.atom("suc"), X)), Y), ep.cons(ep.atom("suc"), Z)),
+                {ep.cons(ep.cons(ep.cons(ep.atom("add"), X), Y), Z)}
+            });
+        }
+
+        // idx 4: lt(zero, suc(X)) :- nat(X).
+        {
+            const expr* X = ep.var(seq());
+            db.push_back(rule{
+                ep.cons(ep.cons(ep.atom("lt"), ep.atom("zero")), ep.cons(ep.atom("suc"), X)),
+                {ep.cons(ep.atom("nat"), X)}
+            });
+        }
+
+        // idx 5: lt(suc(X), suc(Y)) :- lt(X, Y).
+        {
+            const expr* X = ep.var(seq());
+            const expr* Y = ep.var(seq());
+            db.push_back(rule{
+                ep.cons(ep.cons(ep.atom("lt"), ep.cons(ep.atom("suc"), X)), ep.cons(ep.atom("suc"), Y)),
+                {ep.cons(ep.cons(ep.atom("lt"), X), Y)}
+            });
+        }
+
+        const expr* X   = ep.var(seq());
+        const expr* Y   = ep.var(seq());
+        const expr* S   = ep.var(seq());
+        const expr* ten = peano(10);
+
+        a01_goals goals;
+        goals.push_back(ep.cons(ep.cons(ep.cons(ep.atom("add"), X), Y), S));  // goal 0: add(X, Y, S)
+        goals.push_back(ep.cons(ep.cons(ep.atom("lt"), S), ten));              // goal 1: lt(S, ten)
+
+        std::mt19937 rng(42);
+        a01 solver(db, goals, t, seq, bm, 1000, 1000, 1.414, rng);
+
+        normalizer norm(ep, bm);
+
+        // All 55 pairs (x, y) with x + y < 10
+        std::set<solution> expected;
+        for (int x = 0; x < 10; ++x)
+            for (int y = 0; y < 10 - x; ++y)
+                expected.insert({peano(x), peano(y)});
+        assert(expected.size() == 55);
+
+        next_until_refuted(solver, expected, [&]() -> solution {
+            return {ep.import(norm(X)), ep.import(norm(Y))};
+        });
+    }
 }
 
 void test_expr_printer_constructor() {
