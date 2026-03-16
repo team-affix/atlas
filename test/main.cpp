@@ -28034,6 +28034,117 @@ void test_a01() {
             return {ep.import(norm(X)), ep.import(norm(Y))};
         });
     }
+
+    // Test 17: Enumerate all pairs (X, Y) whose product is exactly 8
+    //
+    // Rules:
+    //   idx 0: nat(zero).
+    //   idx 1: nat(suc(X))           :- nat(X).
+    //   idx 2: add(zero, Y, Y)       :- nat(Y).
+    //   idx 3: add(suc(X), Y, suc(Z)):- add(X, Y, Z).
+    //   idx 4: mul(zero, Y, zero)    :- nat(Y).
+    //   idx 5: mul(suc(X), Y, Z)     :- mul(X, Y, W), add(W, Y, Z).
+    //
+    // Goal: mul(X, Y, eight)   where eight = suc^8(zero)
+    //
+    // Exactly 4 solutions: (1,8),(2,4),(4,2),(8,1).
+    // Zero is excluded because mul(zero,Y,zero) can never unify with eight.
+    {
+        trail t;
+        t.push();
+        expr_pool ep(t);
+        bind_map bm(t);
+        sequencer seq(t);
+
+        auto peano = [&](int n) -> const expr* {
+            const expr* r = ep.atom("zero");
+            for (int i = 0; i < n; ++i)
+                r = ep.cons(ep.atom("suc"), r);
+            return r;
+        };
+
+        a01_database db;
+
+        // idx 0: nat(zero).
+        db.push_back(rule{ep.cons(ep.atom("nat"), ep.atom("zero")), {}});
+
+        // idx 1: nat(suc(X)) :- nat(X).
+        {
+            const expr* X = ep.var(seq());
+            db.push_back(rule{
+                ep.cons(ep.atom("nat"), ep.cons(ep.atom("suc"), X)),
+                {ep.cons(ep.atom("nat"), X)}
+            });
+        }
+
+        // idx 2: add(zero, Y, Y) :- nat(Y).
+        {
+            const expr* Y = ep.var(seq());
+            db.push_back(rule{
+                ep.cons(ep.cons(ep.cons(ep.atom("add"), ep.atom("zero")), Y), Y),
+                {ep.cons(ep.atom("nat"), Y)}
+            });
+        }
+
+        // idx 3: add(suc(X), Y, suc(Z)) :- add(X, Y, Z).
+        {
+            const expr* X = ep.var(seq());
+            const expr* Y = ep.var(seq());
+            const expr* Z = ep.var(seq());
+            db.push_back(rule{
+                ep.cons(ep.cons(ep.cons(ep.atom("add"), ep.cons(ep.atom("suc"), X)), Y), ep.cons(ep.atom("suc"), Z)),
+                {ep.cons(ep.cons(ep.cons(ep.atom("add"), X), Y), Z)}
+            });
+        }
+
+        // idx 4: mul(zero, Y, zero) :- nat(Y).
+        {
+            const expr* Y = ep.var(seq());
+            db.push_back(rule{
+                ep.cons(ep.cons(ep.cons(ep.atom("mul"), ep.atom("zero")), Y), ep.atom("zero")),
+                {ep.cons(ep.atom("nat"), Y)}
+            });
+        }
+
+        // idx 5: mul(suc(X), Y, Z) :- mul(X, Y, W), add(W, Y, Z).
+        {
+            const expr* X = ep.var(seq());
+            const expr* Y = ep.var(seq());
+            const expr* Z = ep.var(seq());
+            const expr* W = ep.var(seq());
+            db.push_back(rule{
+                ep.cons(ep.cons(ep.cons(ep.atom("mul"), ep.cons(ep.atom("suc"), X)), Y), Z),
+                {
+                    ep.cons(ep.cons(ep.cons(ep.atom("mul"), X), Y), W),
+                    ep.cons(ep.cons(ep.cons(ep.atom("add"), W), Y), Z)
+                }
+            });
+        }
+
+        const expr* X     = ep.var(seq());
+        const expr* Y     = ep.var(seq());
+        const expr* eight = peano(8);
+
+        a01_goals goals;
+        goals.push_back(ep.cons(ep.cons(ep.cons(ep.atom("mul"), X), Y), eight));  // goal 0: mul(X, Y, eight)
+
+        std::mt19937 rng(42);
+        a01 solver(db, goals, t, seq, bm, 1000, 10, 1.414, rng);
+
+        normalizer norm(ep, bm);
+
+        // All 4 factor pairs of 8
+        std::set<solution> expected = {
+            {peano(1), peano(8)},
+            {peano(2), peano(4)},
+            {peano(4), peano(2)},
+            {peano(8), peano(1)},
+        };
+
+        next_until_refuted(solver, expected, [&]() -> solution {
+            return {ep.import(norm(X)), ep.import(norm(Y))};
+        });
+    }
 }
 
 void test_expr_printer_constructor() {
