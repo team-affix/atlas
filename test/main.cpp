@@ -27739,6 +27739,102 @@ void test_a01() {
             return {ep.import(norm(P)), ep.import(norm(Q)), ep.import(norm(R)), ep.import(norm(S))};
         });
     }
+
+    // Test 14: Peano arithmetic — enumerate all naturals less than 7
+    //
+    // Rules:
+    //   idx 0: nat(zero).
+    //   idx 1: nat(suc(X))    :- nat(X).
+    //   idx 2: lt(zero, suc(X)) :- nat(X).
+    //   idx 3: lt(suc(X), suc(Y)) :- lt(X, Y).
+    //
+    // Encoding:
+    //   zero    = atom("zero")
+    //   suc(X)  = cons(atom("suc"), X)
+    //   nat(X)  = cons(atom("nat"), X)
+    //   lt(X,Y) = cons(cons(atom("lt"), X), Y)
+    //
+    // Goal: lt(N, seven)   where seven = suc^7(zero)
+    //
+    // Exactly 7 solutions exist: N ∈ {0, 1, 2, 3, 4, 5, 6} in Peano encoding.
+    // Reaching N=k requires k unfoldings of rule 3, one application of rule 2,
+    // then k unfoldings of rule 1 (to discharge the nat subgoal), bottoming out
+    // at rule 0.  next_until_refuted verifies all 7 solutions are found and that
+    // the solver then proves refutation.
+    {
+        trail t;
+        t.push();
+        expr_pool ep(t);
+        bind_map bm(t);
+        sequencer seq(t);
+
+        // Build the Peano numeral for n: suc^n(zero)
+        auto peano = [&](int n) -> const expr* {
+            const expr* result = ep.atom("zero");
+            for (int i = 0; i < n; ++i)
+                result = ep.cons(ep.atom("suc"), result);
+            return result;
+        };
+
+        a01_database db;
+
+        // idx 0: nat(zero).
+        db.push_back(rule{ep.cons(ep.atom("nat"), ep.atom("zero")), {}});
+
+        // idx 1: nat(suc(X)) :- nat(X).
+        {
+            const expr* X = ep.var(seq());
+            db.push_back(rule{
+                ep.cons(ep.atom("nat"), ep.cons(ep.atom("suc"), X)),
+                {ep.cons(ep.atom("nat"), X)}
+            });
+        }
+
+        // idx 2: lt(zero, suc(X)) :- nat(X).
+        {
+            const expr* X = ep.var(seq());
+            db.push_back(rule{
+                ep.cons(ep.cons(ep.atom("lt"), ep.atom("zero")), ep.cons(ep.atom("suc"), X)),
+                {ep.cons(ep.atom("nat"), X)}
+            });
+        }
+
+        // idx 3: lt(suc(X), suc(Y)) :- lt(X, Y).
+        {
+            const expr* X = ep.var(seq());
+            const expr* Y = ep.var(seq());
+            db.push_back(rule{
+                ep.cons(ep.cons(ep.atom("lt"), ep.cons(ep.atom("suc"), X)), ep.cons(ep.atom("suc"), Y)),
+                {ep.cons(ep.cons(ep.atom("lt"), X), Y)}
+            });
+        }
+
+        const expr* N     = ep.var(seq());
+        const expr* seven = peano(7);
+
+        a01_goals goals;
+        goals.push_back(ep.cons(ep.cons(ep.atom("lt"), N), seven));  // goal 0: lt(N, seven)
+
+        std::mt19937 rng(42);
+        a01 solver(db, goals, t, seq, bm, 1000, 1000, 1.414, rng);
+
+        normalizer norm(ep, bm);
+
+        // All 7 Peano naturals strictly less than 7
+        std::set<solution> expected = {
+            {peano(0)},
+            {peano(1)},
+            {peano(2)},
+            {peano(3)},
+            {peano(4)},
+            {peano(5)},
+            {peano(6)},
+        };
+
+        next_until_refuted(solver, expected, [&]() -> solution {
+            return {ep.import(norm(N))};
+        });
+    }
 }
 
 void unit_test_main() {
