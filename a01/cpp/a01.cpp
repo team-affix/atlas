@@ -1,6 +1,6 @@
 #include "../hpp/a01.hpp"
 #include "../hpp/sim.hpp"
-#include "../../common/hpp/decider.hpp"
+#include "../../common/hpp/mcts_decider.hpp"
 
 a01::~a01() {
     t.pop();
@@ -67,13 +67,13 @@ bool a01::operator()(size_t iterations, std::optional<a01_resolution_store>& sol
     return true;
 }
 
-bool a01::sim_one(monte_carlo::tree_node<decider::choice>& root, a01_decision_store& ds, a01_resolution_store& rs) {
+bool a01::sim_one(monte_carlo::tree_node<mcts_decider::choice>& root, a01_decision_store& ds, a01_resolution_store& rs) {
     // reset the trail
     t.pop();
     t.push();
 
     // construct the simulation
-    monte_carlo::simulation<decider::choice, std::mt19937> sim(root, c, rng);
+    monte_carlo::simulation<mcts_decider::choice, std::mt19937> sim(root, c, rng);
 
     // construct the a01_sim
     a01_sim sim_instance(max_resolutions, db, goals, t, vars, ep, bm, lp, rs, ds, as, sim);
@@ -94,7 +94,7 @@ bool a01::next_avoidance(a01_decision_store& avoidance, std::optional<a01_resolu
     soln = std::nullopt;
     
     // construct the tree for finidng the next avoidance
-    monte_carlo::tree_node<decider::choice> root;
+    monte_carlo::tree_node<mcts_decider::choice> root;
 
     // construct the decision and resolution stores
     a01_decision_store ds;

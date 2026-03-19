@@ -12,7 +12,7 @@ a01_sim::a01_sim(
     a01_resolution_store& rs,
     a01_decision_store& ds,
     a01_avoidance_store as,
-    monte_carlo::simulation<decider::choice, std::mt19937>& sim
+    monte_carlo::simulation<mcts_decider::choice, std::mt19937>& sim
 ) :
     max_resolutions(max_resolutions),
     db(db),

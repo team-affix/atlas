@@ -9,7 +9,7 @@
 #include "../../common/hpp/lineage.hpp"
 #include "../../common/hpp/sequencer.hpp"
 #include "defs.hpp"
-#include "../../common/hpp/decider.hpp"
+#include "../../common/hpp/mcts_decider.hpp"
 #include "../../mcts/include/mcts.hpp"
 
 struct a01 {
@@ -29,7 +29,7 @@ struct a01 {
 #ifndef DEBUG
 private:
 #endif
-    bool sim_one(monte_carlo::tree_node<decider::choice>&, a01_decision_store&, a01_resolution_store&);
+    bool sim_one(monte_carlo::tree_node<mcts_decider::choice>&, a01_decision_store&, a01_resolution_store&);
     bool next_avoidance(a01_decision_store&, std::optional<a01_resolution_store>&);
     
     const a01_database& db;

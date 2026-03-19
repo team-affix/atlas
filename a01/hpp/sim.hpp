@@ -3,7 +3,7 @@
 
 #include "../../mcts/include/mcts.hpp"
 #include "defs.hpp"
-#include "../../common/hpp/decider.hpp"
+#include "../../common/hpp/mcts_decider.hpp"
 #include "../../common/hpp/solution_detector.hpp"
 #include "../../common/hpp/conflict_detector.hpp"
 #include "../../common/hpp/head_elimination_detector.hpp"
@@ -25,7 +25,7 @@ struct a01_sim {
         a01_resolution_store&,
         a01_decision_store&,
         a01_avoidance_store,
-        monte_carlo::simulation<decider::choice, std::mt19937>&
+        monte_carlo::simulation<mcts_decider::choice, std::mt19937>&
     );
     bool operator()();
 #ifndef DEBUG
@@ -54,7 +54,7 @@ private:
     cdcl_elimination_detector ce;
     unit_propagation_detector up;
 
-    decider dec;
+    mcts_decider dec;
 
     a01_goal_adder ga;
     a01_goal_resolver gr;

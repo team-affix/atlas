@@ -1,12 +1,12 @@
-#ifndef DECIDER_HPP
-#define DECIDER_HPP
+#ifndef MCTS_DECIDER_HPP
+#define MCTS_DECIDER_HPP
 
 #include "../../mcts/include/mcts.hpp"
 #include "defs.hpp"
 
-struct decider {
+struct mcts_decider {
     using choice = std::variant<const goal_lineage*, size_t>;
-    decider(
+    mcts_decider(
         const goal_store& gs,
         const candidate_store& cs,
         monte_carlo::simulation<choice, std::mt19937>& sim
