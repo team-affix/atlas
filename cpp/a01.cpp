@@ -14,7 +14,7 @@ a01::a01(
     bind_map& bm,
     size_t max_resolutions,
     size_t iterations_per_avoidance,
-    double c,
+    double exploration_constant,
     std::mt19937& rng
 ) :
     db(db),
@@ -26,11 +26,9 @@ a01::a01(
     lp(),
     max_resolutions(max_resolutions),
     iterations_per_avoidance(iterations_per_avoidance),
-    c(c),
+    exploration_constant(exploration_constant),
     rng(rng),
-    as({}),
-    am({}),
-    aa(as, am)
+    c()
 {
     t.push();
 }
@@ -41,7 +39,7 @@ bool a01::operator()(size_t iterations, std::optional<resolution_store>& soln) {
 
     // if the a01 has already found the last solution, then it is refuted
     // this is required if the last solution found required no decisions
-    if (as.contains({}))
+    if (c.refuted())
         return false;
     
     for (size_t i = 0; i < iterations; i++) {
@@ -55,7 +53,7 @@ bool a01::operator()(size_t iterations, std::optional<resolution_store>& soln) {
             return false;
 
         // record the avoidance
-        aa(avoidance);
+        c.insert(avoidance);
 
         // pin the decisions
         for (const auto& rl : avoidance)
@@ -75,10 +73,10 @@ bool a01::sim_one(monte_carlo::tree_node<mcts_decider::choice>& root, decision_s
     t.push();
 
     // construct the simulation
-    monte_carlo::simulation<mcts_decider::choice, std::mt19937> sim(root, c, rng);
+    monte_carlo::simulation<mcts_decider::choice, std::mt19937> sim(root, exploration_constant, rng);
 
     // construct the a01_sim
-    a01_sim sim_instance(max_resolutions, db, gl, t, vars, ep, bm, lp, rs, ds, as, am, sim);
+    a01_sim sim_instance(max_resolutions, db, gl, t, vars, ep, bm, lp, rs, ds, c, sim);
 
     // run the simulation
     bool sim_result = sim_instance();

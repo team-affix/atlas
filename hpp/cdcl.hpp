@@ -10,7 +10,7 @@ struct cdcl {
     size_t insert(const avoidance&);
     void constrain(const resolution_lineage*);
     bool refuted() const;
-    const std::set<const resolution_lineage*>& eliminated() const;
+    bool eliminated(const resolution_lineage*) const;
     #ifndef DEBUG
     private:
     #endif

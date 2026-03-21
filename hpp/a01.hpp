@@ -10,7 +10,7 @@
 #include "sequencer.hpp"
 #include "defs.hpp"
 #include "mcts_decider.hpp"
-#include "avoidance_adder.hpp"
+#include "cdcl.hpp"
 #include "../mcts/include/mcts.hpp"
 
 struct a01 {
@@ -44,13 +44,10 @@ private:
     
     size_t max_resolutions;
     size_t iterations_per_avoidance;
-    double c;
+    double exploration_constant;
     std::mt19937& rng;
 
-    avoidance_store as;
-    avoidance_map am;
-
-    avoidance_adder aa;
+    cdcl c;
 };
 
 #endif

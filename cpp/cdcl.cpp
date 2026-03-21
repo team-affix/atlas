@@ -68,3 +68,11 @@ void cdcl::erase(size_t id) {
     // 3. remove the avoidance from the store
     avoidances.erase(id);
 }
+
+bool cdcl::refuted() const {
+    return is_refuted;
+}
+
+bool cdcl::eliminated(const resolution_lineage* rl) const {
+    return eliminated_resolutions.contains(rl);
+}

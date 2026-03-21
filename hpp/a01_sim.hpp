@@ -7,11 +7,10 @@
 #include "solution_detector.hpp"
 #include "conflict_detector.hpp"
 #include "head_elimination_detector.hpp"
-#include "cdcl_elimination_detector.hpp"
+#include "cdcl.hpp"
 #include "unit_propagation_detector.hpp"
 #include "goal_adder.hpp"
 #include "goal_resolver.hpp"
-#include "avoidance_trimmer.hpp"
 
 struct a01_sim {
     a01_sim(
@@ -25,8 +24,7 @@ struct a01_sim {
         lineage_pool&,
         resolution_store&,
         decision_store&,
-        const avoidance_map&,
-        avoidance_store,
+        cdcl c,
         monte_carlo::simulation<mcts_decider::choice, std::mt19937>&
     );
     bool operator()();
@@ -40,29 +38,25 @@ private:
     lineage_pool& lp;
     resolution_store& rs;
     decision_store& ds;
-    const avoidance_map& am;
-    
-    avoidance_store as_copy;
     
     goal_store gs;
     candidate_store cs;
-
+    
     
     copier cp;
-
+    
     solution_detector sd;
     conflict_detector cd;
-
+    
     head_elimination_detector he;
-    cdcl_elimination_detector ce;
     unit_propagation_detector up;
-
+    
     mcts_decider dec;
-
+    
     goal_adder ga;
     goal_resolver gr;
-
-    avoidance_trimmer at;
+    
+    cdcl c;
 };
 
 #endif
