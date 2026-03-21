@@ -12408,6 +12408,242 @@ void test_goal_adder() {
     }
 }
 
+void test_goal_resolver_constructor() {
+    // Test 1: Basic construction - verify all references stored correctly
+    {
+        trail t;
+        expr_pool ep(t);
+        sequencer seq(t);
+        bind_map bm(t);
+        copier cp(seq, ep);
+        lineage_pool lp;
+
+        resolution_store rs;
+        goal_store gs;
+        candidate_store cs;
+
+        expr e{expr::atom{"p"}};
+        rule r{&e, {}};
+        database db = {r};
+
+        goal_adder ga(gs, cs, db);
+        goal_resolver resolver(rs, gs, cs, db, cp, bm, lp, ga);
+
+        assert(&resolver.rs == &rs);
+        assert(&resolver.gs == &gs);
+        assert(&resolver.cs == &cs);
+        assert(&resolver.db == &db);
+        assert(&resolver.cp == &cp);
+        assert(&resolver.bm == &bm);
+        assert(&resolver.lp == &lp);
+        assert(&resolver.ga == &ga);
+    }
+
+    // Test 2: Construction with pre-populated stores - references still point there
+    {
+        trail t;
+        expr_pool ep(t);
+        sequencer seq(t);
+        bind_map bm(t);
+        copier cp(seq, ep);
+        lineage_pool lp;
+
+        resolution_store rs;
+        goal_store gs;
+        candidate_store cs;
+
+        expr e{expr::atom{"q"}};
+        rule r{&e, {}};
+        database db = {r};
+
+        const goal_lineage* g0 = lp.goal(nullptr, 0);
+        const resolution_lineage* rl0 = lp.resolution(g0, 0);
+        rs.insert(rl0);
+        gs.insert({g0, ep.atom("q")});
+        cs.insert({g0, 0});
+
+        goal_adder ga(gs, cs, db);
+        goal_resolver resolver(rs, gs, cs, db, cp, bm, lp, ga);
+
+        assert(&resolver.rs == &rs);
+        assert(&resolver.gs == &gs);
+        assert(&resolver.cs == &cs);
+        assert(&resolver.db == &db);
+        assert(resolver.rs.size() == 1);
+        assert(resolver.gs.size() == 1);
+        assert(resolver.cs.size() == 1);
+    }
+}
+
+void test_goal_resolver() {
+    // Test 1: Resolve fact (empty body) - returns correct rl, goal removed, no new goals
+    {
+        trail t;
+        t.push();
+        expr_pool ep(t);
+        sequencer seq(t);
+        bind_map bm(t);
+        copier cp(seq, ep);
+        lineage_pool lp;
+
+        resolution_store rs;
+        goal_store gs;
+        candidate_store cs;
+
+        const expr* p_expr = ep.atom("p");
+        rule r_fact{p_expr, {}};
+        database db = {r_fact};
+
+        goal_adder ga(gs, cs, db);
+        goal_resolver resolver(rs, gs, cs, db, cp, bm, lp, ga);
+
+        const goal_lineage* g1 = lp.goal(nullptr, 0);
+        ga(g1, ep.atom("p"));
+
+        assert(gs.size() == 1);
+        assert(cs.size() == 1);
+        assert(rs.size() == 0);
+
+        const resolution_lineage* rl = resolver(g1, 0);
+
+        // Return value must be the interned resolution lineage for (g1, 0)
+        assert(rl != nullptr);
+        assert(rl == lp.resolution(g1, 0));
+        assert(rl->parent == g1);
+        assert(rl->idx == 0);
+
+        // Goal and candidates removed
+        assert(gs.empty());
+        assert(cs.empty());
+
+        // Resolution added to rs
+        assert(rs.size() == 1);
+        assert(rs.count(rl) == 1);
+    }
+
+    // Test 2: Resolve rule with body - returns correct rl, two child goals created
+    {
+        trail t;
+        t.push();
+        expr_pool ep(t);
+        sequencer seq(t);
+        bind_map bm(t);
+        copier cp(seq, ep);
+        lineage_pool lp;
+
+        resolution_store rs;
+        goal_store gs;
+        candidate_store cs;
+
+        const expr* p_expr = ep.atom("p");
+        const expr* q_expr = ep.atom("q");
+        const expr* r_expr = ep.atom("r");
+        rule r1{p_expr, {q_expr, r_expr}};
+        database db = {r1};
+
+        goal_adder ga(gs, cs, db);
+        goal_resolver resolver(rs, gs, cs, db, cp, bm, lp, ga);
+
+        const goal_lineage* g1 = lp.goal(nullptr, 0);
+        ga(g1, ep.atom("p"));
+
+        assert(gs.size() == 1);
+
+        const resolution_lineage* rl = resolver(g1, 0);
+
+        // Return value is the correct resolution lineage
+        assert(rl != nullptr);
+        assert(rl == lp.resolution(g1, 0));
+        assert(rl->parent == g1);
+        assert(rl->idx == 0);
+
+        // g1 removed, 2 child goals added
+        assert(gs.count(g1) == 0);
+        assert(gs.size() == 2);
+
+        // Child lineages are (rl, 0) and (rl, 1)
+        const goal_lineage* child0 = lp.goal(rl, 0);
+        const goal_lineage* child1 = lp.goal(rl, 1);
+        assert(gs.count(child0) == 1);
+        assert(gs.count(child1) == 1);
+
+        // Each child has one candidate (db has 1 rule)
+        assert(cs.count(child0) == 1);
+        assert(cs.count(child1) == 1);
+
+        assert(rs.size() == 1);
+        assert(rs.count(rl) == 1);
+    }
+
+    // Test 3: Return value matches what lp.resolution() would give for the same (gl, i)
+    {
+        trail t;
+        t.push();
+        expr_pool ep(t);
+        sequencer seq(t);
+        bind_map bm(t);
+        copier cp(seq, ep);
+        lineage_pool lp;
+
+        resolution_store rs;
+        goal_store gs;
+        candidate_store cs;
+
+        const expr* p_expr = ep.atom("p");
+        rule r_fact{p_expr, {}};
+        database db = {r_fact};
+
+        goal_adder ga(gs, cs, db);
+        goal_resolver resolver(rs, gs, cs, db, cp, bm, lp, ga);
+
+        const goal_lineage* g1 = lp.goal(nullptr, 7);
+
+        // Get the interned rl *before* resolving - it should be the same pointer returned
+        const resolution_lineage* rl_expected = lp.resolution(g1, 0);
+
+        ga(g1, ep.atom("p"));
+        const resolution_lineage* rl_returned = resolver(g1, 0);
+
+        assert(rl_returned == rl_expected);
+    }
+
+    // Test 4: Resolve with two-rule database using second rule (index 1)
+    {
+        trail t;
+        t.push();
+        expr_pool ep(t);
+        sequencer seq(t);
+        bind_map bm(t);
+        copier cp(seq, ep);
+        lineage_pool lp;
+
+        resolution_store rs;
+        goal_store gs;
+        candidate_store cs;
+
+        const expr* p_expr = ep.atom("p");
+        const expr* q_expr = ep.atom("q");
+        rule r0{p_expr, {}};
+        rule r1{q_expr, {}};
+        database db = {r0, r1};
+
+        goal_adder ga(gs, cs, db);
+        goal_resolver resolver(rs, gs, cs, db, cp, bm, lp, ga);
+
+        const goal_lineage* g1 = lp.goal(nullptr, 0);
+        ga(g1, ep.atom("q"));
+
+        const resolution_lineage* rl = resolver(g1, 1);
+
+        assert(rl != nullptr);
+        assert(rl == lp.resolution(g1, 1));
+        assert(rl->idx == 1);
+        assert(rs.count(rl) == 1);
+        assert(gs.empty());
+        assert(cs.empty());
+    }
+}
+
 // void test_goal_resolver_constructor() {
 //     // Test 1: Basic construction with all required references
 //     {
@@ -19868,6 +20104,597 @@ void test_mcts_decider() {
         
         // Simulation length = 20 (10 calls * 2)
         assert(sim.length() == 20);
+    }
+}
+
+void test_cdcl_constructor() {
+    // Test 1: Default construction - all containers empty
+    {
+        cdcl c;
+        assert(c.avoidances.empty());
+        assert(c.watched_goals.empty());
+        assert(c.eliminated_resolutions.empty());
+    }
+
+    // Test 2: Two independently constructed instances are independent
+    {
+        cdcl c1;
+        cdcl c2;
+        assert(&c1.avoidances != &c2.avoidances);
+        assert(&c1.watched_goals != &c2.watched_goals);
+        assert(&c1.eliminated_resolutions != &c2.eliminated_resolutions);
+        assert(c1.avoidances.empty());
+        assert(c2.avoidances.empty());
+    }
+}
+
+void test_cdcl_upsert() {
+    // Test 1: Upsert multi-element avoidance - stored, no elimination
+    {
+        lineage_pool lp;
+        cdcl c;
+
+        const goal_lineage* g1 = lp.goal(nullptr, 0);
+        const goal_lineage* g2 = lp.goal(nullptr, 1);
+        const resolution_lineage* rl1 = lp.resolution(g1, 0);
+        const resolution_lineage* rl2 = lp.resolution(g2, 0);
+
+        avoidance av;
+        av.insert(rl1);
+        av.insert(rl2);
+
+        c.upsert(0, av);
+
+        assert(c.avoidances.size() == 1);
+        assert(c.avoidances.at(0) == av);
+        assert(c.eliminated_resolutions.empty());
+    }
+
+    // Test 2: Upsert singleton avoidance - rl added to eliminated_resolutions
+    {
+        lineage_pool lp;
+        cdcl c;
+
+        const goal_lineage* g1 = lp.goal(nullptr, 0);
+        const resolution_lineage* rl1 = lp.resolution(g1, 0);
+
+        avoidance av;
+        av.insert(rl1);
+
+        c.upsert(0, av);
+
+        assert(c.avoidances.size() == 1);
+        assert(c.avoidances.at(0) == av);
+        assert(c.eliminated_resolutions.size() == 1);
+        assert(c.eliminated_resolutions.count(rl1) == 1);
+    }
+
+    // Test 3: Upsert to overwrite existing id - avoidance replaced, elimination updated
+    {
+        lineage_pool lp;
+        cdcl c;
+
+        const goal_lineage* g1 = lp.goal(nullptr, 0);
+        const goal_lineage* g2 = lp.goal(nullptr, 1);
+        const resolution_lineage* rl1 = lp.resolution(g1, 0);
+        const resolution_lineage* rl2 = lp.resolution(g2, 0);
+
+        avoidance av_multi;
+        av_multi.insert(rl1);
+        av_multi.insert(rl2);
+
+        c.upsert(0, av_multi);
+        assert(c.avoidances.at(0) == av_multi);
+        assert(c.eliminated_resolutions.empty());
+
+        // Overwrite with singleton - now rl1 becomes eliminated
+        avoidance av_single;
+        av_single.insert(rl1);
+
+        c.upsert(0, av_single);
+
+        assert(c.avoidances.size() == 1);
+        assert(c.avoidances.at(0) == av_single);
+        assert(c.eliminated_resolutions.size() == 1);
+        assert(c.eliminated_resolutions.count(rl1) == 1);
+    }
+
+    // Test 4: Upsert empty avoidance - stored, no elimination, is_refuted NOT set by upsert
+    {
+        cdcl c;
+
+        avoidance empty_av;
+        c.upsert(0, empty_av);
+
+        assert(c.avoidances.size() == 1);
+        assert(c.avoidances.at(0).empty());
+        assert(c.eliminated_resolutions.empty());
+        // is_refuted is only set by insert(), not upsert()
+        assert(!c.is_refuted);
+    }
+}
+
+void test_cdcl_erase() {
+    // Test 1: Erase single avoidance with one rl - avoidance removed and watched_goals unlinked
+    {
+        lineage_pool lp;
+        cdcl c;
+
+        const goal_lineage* g1 = lp.goal(nullptr, 0);
+        const resolution_lineage* rl1 = lp.resolution(g1, 0);
+
+        avoidance av;
+        av.insert(rl1);
+
+        // Manually set up state as instructed
+        c.avoidances[0] = av;
+        c.watched_goals[g1].insert(0);
+
+        assert(c.avoidances.size() == 1);
+        assert(c.watched_goals.at(g1).size() == 1);
+
+        c.erase(0);
+
+        assert(c.avoidances.empty());
+        assert(c.watched_goals.at(g1).empty());
+    }
+
+    // Test 2: Erase avoidance with multiple rls with distinct parents - all links removed
+    {
+        lineage_pool lp;
+        cdcl c;
+
+        const goal_lineage* g1 = lp.goal(nullptr, 0);
+        const goal_lineage* g2 = lp.goal(nullptr, 1);
+        const goal_lineage* g3 = lp.goal(nullptr, 2);
+        const resolution_lineage* rl1 = lp.resolution(g1, 0);
+        const resolution_lineage* rl2 = lp.resolution(g2, 0);
+        const resolution_lineage* rl3 = lp.resolution(g3, 0);
+
+        avoidance av;
+        av.insert(rl1);
+        av.insert(rl2);
+        av.insert(rl3);
+
+        c.avoidances[0] = av;
+        c.watched_goals[g1].insert(0);
+        c.watched_goals[g2].insert(0);
+        c.watched_goals[g3].insert(0);
+
+        c.erase(0);
+
+        assert(c.avoidances.empty());
+        assert(c.watched_goals.at(g1).empty());
+        assert(c.watched_goals.at(g2).empty());
+        assert(c.watched_goals.at(g3).empty());
+    }
+
+    // Test 3: Two avoidances sharing a parent - erasing one leaves the other's link intact
+    {
+        lineage_pool lp;
+        cdcl c;
+
+        const goal_lineage* g1 = lp.goal(nullptr, 0);
+        const resolution_lineage* rl1 = lp.resolution(g1, 0);
+        const resolution_lineage* rl2 = lp.resolution(g1, 1);
+
+        avoidance av0;
+        av0.insert(rl1);
+        avoidance av1;
+        av1.insert(rl2);
+
+        c.avoidances[0] = av0;
+        c.avoidances[1] = av1;
+        c.watched_goals[g1].insert(0);
+        c.watched_goals[g1].insert(1);
+
+        assert(c.watched_goals.at(g1).size() == 2);
+
+        c.erase(0);
+
+        // avoidance 0 gone, avoidance 1 intact
+        assert(c.avoidances.size() == 1);
+        assert(c.avoidances.count(1) == 1);
+
+        // link to avoidance 0 gone, link to avoidance 1 still there
+        assert(c.watched_goals.at(g1).size() == 1);
+        assert(c.watched_goals.at(g1).count(0) == 0);
+        assert(c.watched_goals.at(g1).count(1) == 1);
+    }
+
+    // Test 4: Erase empty avoidance - no watched_goals cleanup needed, just removed from avoidances
+    {
+        cdcl c;
+
+        avoidance empty_av;
+        c.avoidances[0] = empty_av;
+
+        c.erase(0);
+
+        assert(c.avoidances.empty());
+        assert(c.watched_goals.empty());
+    }
+}
+
+void test_cdcl_insert() {
+    // Test 1: Insert two-element avoidance - id = 0, avoidances and watched_goals populated
+    {
+        lineage_pool lp;
+        cdcl c;
+
+        const goal_lineage* g1 = lp.goal(nullptr, 0);
+        const goal_lineage* g2 = lp.goal(nullptr, 1);
+        const resolution_lineage* rl1 = lp.resolution(g1, 0);
+        const resolution_lineage* rl2 = lp.resolution(g2, 0);
+
+        avoidance av;
+        av.insert(rl1);
+        av.insert(rl2);
+
+        size_t id = c.insert(av);
+
+        assert(id == 0);
+        assert(c.avoidances.size() == 1);
+        assert(c.avoidances.at(0) == av);
+        assert(c.watched_goals.at(g1).count(0) == 1);
+        assert(c.watched_goals.at(g2).count(0) == 1);
+        assert(c.eliminated_resolutions.empty());
+    }
+
+    // Test 2: Insert two avoidances in sequence - ids are 0 and 1
+    {
+        lineage_pool lp;
+        cdcl c;
+
+        const goal_lineage* g1 = lp.goal(nullptr, 0);
+        const goal_lineage* g2 = lp.goal(nullptr, 1);
+        const resolution_lineage* rl1 = lp.resolution(g1, 0);
+        const resolution_lineage* rl2 = lp.resolution(g2, 0);
+
+        avoidance av1;
+        av1.insert(rl1);
+        avoidance av2;
+        av2.insert(rl2);
+
+        size_t id0 = c.insert(av1);
+        size_t id1 = c.insert(av2);
+
+        assert(id0 == 0);
+        assert(id1 == 1);
+        assert(c.avoidances.size() == 2);
+        assert(c.avoidances.at(0) == av1);
+        assert(c.avoidances.at(1) == av2);
+        assert(c.watched_goals.at(g1).count(0) == 1);
+        assert(c.watched_goals.at(g2).count(1) == 1);
+    }
+
+    // Test 3: Insert empty avoidance - is_refuted becomes true
+    {
+        cdcl c;
+
+        avoidance empty_av;
+        size_t id = c.insert(empty_av);
+
+        assert(id == 0);
+        assert(c.is_refuted);
+        assert(c.avoidances.size() == 1);
+        assert(c.avoidances.at(0).empty());
+    }
+
+    // Test 4: Insert singleton avoidance - eliminated_resolutions populated
+    {
+        lineage_pool lp;
+        cdcl c;
+
+        const goal_lineage* g1 = lp.goal(nullptr, 0);
+        const resolution_lineage* rl1 = lp.resolution(g1, 0);
+
+        avoidance av;
+        av.insert(rl1);
+
+        size_t id = c.insert(av);
+
+        assert(id == 0);
+        assert(c.eliminated_resolutions.size() == 1);
+        assert(c.eliminated_resolutions.count(rl1) == 1);
+        assert(c.watched_goals.at(g1).count(0) == 1);
+    }
+
+    // Test 5: Two avoidances sharing the same parent goal - both links recorded in watched_goals
+    {
+        lineage_pool lp;
+        cdcl c;
+
+        const goal_lineage* g1 = lp.goal(nullptr, 0);
+        const resolution_lineage* rl1 = lp.resolution(g1, 0);
+        const resolution_lineage* rl2 = lp.resolution(g1, 1);
+
+        avoidance av1;
+        av1.insert(rl1);
+        avoidance av2;
+        av2.insert(rl2);
+
+        c.insert(av1);
+        c.insert(av2);
+
+        // g1 watches both avoidances
+        assert(c.watched_goals.at(g1).size() == 2);
+        assert(c.watched_goals.at(g1).count(0) == 1);
+        assert(c.watched_goals.at(g1).count(1) == 1);
+    }
+}
+
+void test_cdcl_constrain() {
+    // Test 1: rl IS in a two-element avoidance - rl removed, remaining rl becomes eliminated
+    {
+        lineage_pool lp;
+        cdcl c;
+
+        const goal_lineage* g1 = lp.goal(nullptr, 0);
+        const goal_lineage* g2 = lp.goal(nullptr, 1);
+        const resolution_lineage* rl1 = lp.resolution(g1, 0);
+        const resolution_lineage* rl2 = lp.resolution(g2, 0);
+
+        avoidance av;
+        av.insert(rl1);
+        av.insert(rl2);
+        c.insert(av);
+
+        assert(c.avoidances.at(0).size() == 2);
+        assert(c.eliminated_resolutions.empty());
+
+        c.constrain(rl1);
+
+        // rl1 removed; avoidance is now singleton {rl2}
+        assert(c.avoidances.at(0).size() == 1);
+        assert(c.avoidances.at(0).count(rl1) == 0);
+        assert(c.avoidances.at(0).count(rl2) == 1);
+
+        // Singleton → rl2 is now eliminated
+        assert(c.eliminated_resolutions.size() == 1);
+        assert(c.eliminated_resolutions.count(rl2) == 1);
+    }
+
+    // Test 2: rl IS the singleton in an avoidance - rl removed, avoidance becomes empty;
+    //         is_refuted NOT set (only insert() does that, not upsert())
+    {
+        lineage_pool lp;
+        cdcl c;
+
+        const goal_lineage* g1 = lp.goal(nullptr, 0);
+        const resolution_lineage* rl1 = lp.resolution(g1, 0);
+
+        avoidance av;
+        av.insert(rl1);
+        c.insert(av);
+
+        // Singleton insert already marks rl1 eliminated
+        assert(c.eliminated_resolutions.count(rl1) == 1);
+
+        c.constrain(rl1);
+
+        // rl1 removed; avoidance is now empty (upsert called, not insert - no refutation)
+        assert(c.avoidances.at(0).empty());
+        assert(!c.is_refuted);
+    }
+
+    // Test 3: rl NOT in avoidance but parent goal IS watched - conflicting, erase called;
+    //         avoidance and all its watched_goals links removed
+    {
+        lineage_pool lp;
+        cdcl c;
+
+        const goal_lineage* g1 = lp.goal(nullptr, 0);
+        const goal_lineage* g2 = lp.goal(nullptr, 1);
+        const resolution_lineage* rl1 = lp.resolution(g1, 0);
+        const resolution_lineage* rl2 = lp.resolution(g2, 0);
+        // rl_constrain has same parent g1 as rl1, but different idx - not in the avoidance
+        const resolution_lineage* rl_constrain = lp.resolution(g1, 1);
+
+        avoidance av;
+        av.insert(rl1);
+        av.insert(rl2);
+        c.insert(av);
+
+        assert(c.avoidances.size() == 1);
+        assert(c.watched_goals.at(g1).count(0) == 1);
+        assert(c.watched_goals.at(g2).count(0) == 1);
+
+        // rl_constrain not in avoidance but g1 is watched → erase(0)
+        c.constrain(rl_constrain);
+
+        assert(c.avoidances.empty());
+        assert(c.watched_goals.at(g1).empty());
+        assert(c.watched_goals.at(g2).empty());
+    }
+
+    // Test 4: Multiple avoidances - constrain only affects those watched by the constrained rl's parent
+    {
+        lineage_pool lp;
+        cdcl c;
+
+        const goal_lineage* g1 = lp.goal(nullptr, 0);
+        const goal_lineage* g2 = lp.goal(nullptr, 1);
+        const resolution_lineage* rl1 = lp.resolution(g1, 0);
+        const resolution_lineage* rl2 = lp.resolution(g2, 0);
+        const resolution_lineage* rl3 = lp.resolution(g2, 1);
+
+        // av0 = {rl1, rl2}: watched by g1 (via rl1) and g2 (via rl2)
+        avoidance av0;
+        av0.insert(rl1);
+        av0.insert(rl2);
+        c.insert(av0);
+
+        // av1 = {rl3}: watched only by g2; constrain(rl1) does not touch g2-only avoidances
+        avoidance av1;
+        av1.insert(rl3);
+        c.insert(av1);
+
+        assert(c.avoidances.size() == 2);
+
+        c.constrain(rl1);
+
+        // av0 reduced: rl1 removed → {rl2}, upsert → rl2 eliminated
+        assert(c.avoidances.at(0).size() == 1);
+        assert(c.avoidances.at(0).count(rl2) == 1);
+        assert(c.eliminated_resolutions.count(rl2) == 1);
+
+        // av1 untouched (g1 does not watch it)
+        assert(c.avoidances.at(1) == av1);
+    }
+
+    // Test 5: Erase path - conflicting avoidance's watched_goals links for ALL its rls are cleaned up
+    {
+        lineage_pool lp;
+        cdcl c;
+
+        const goal_lineage* g1 = lp.goal(nullptr, 0);
+        const goal_lineage* g2 = lp.goal(nullptr, 1);
+        const resolution_lineage* rl1 = lp.resolution(g1, 0);
+        const resolution_lineage* rl2 = lp.resolution(g2, 0);
+        const resolution_lineage* rl_constrain = lp.resolution(g1, 1);
+
+        // Avoidance contains rl1 (parent g1) and rl2 (parent g2)
+        // rl_constrain (parent g1) is not in the avoidance → triggers erase
+        avoidance av;
+        av.insert(rl1);
+        av.insert(rl2);
+        c.insert(av);
+
+        assert(c.watched_goals.at(g1).count(0) == 1);
+        assert(c.watched_goals.at(g2).count(0) == 1);
+
+        c.constrain(rl_constrain);
+
+        // erase(0): avoidance removed, g1's link to 0 removed, g2's link to 0 removed
+        assert(c.avoidances.empty());
+        assert(c.watched_goals.at(g1).empty());
+        assert(c.watched_goals.at(g2).empty());
+    }
+}
+
+void test_cdcl_refuted() {
+    // Test 1: Insert non-empty avoidance - not refuted
+    {
+        lineage_pool lp;
+        cdcl c;
+
+        const goal_lineage* g1 = lp.goal(nullptr, 0);
+        const resolution_lineage* rl1 = lp.resolution(g1, 0);
+
+        avoidance av;
+        av.insert(rl1);
+        c.insert(av);
+
+        assert(!c.refuted());
+    }
+
+    // Test 2: Insert empty avoidance - refuted immediately
+    {
+        cdcl c;
+
+        avoidance empty_av;
+        c.insert(empty_av);
+
+        assert(c.refuted());
+    }
+
+    // Test 3: Insert non-empty then empty - refuted after second insert
+    {
+        lineage_pool lp;
+        cdcl c;
+
+        const goal_lineage* g1 = lp.goal(nullptr, 0);
+        const resolution_lineage* rl1 = lp.resolution(g1, 0);
+
+        avoidance av;
+        av.insert(rl1);
+        c.insert(av);
+        assert(!c.refuted());
+
+        avoidance empty_av;
+        c.insert(empty_av);
+        assert(c.refuted());
+    }
+}
+
+void test_cdcl_eliminated() {
+    // Test 1: Multi-element avoidance - no rls are eliminated
+    {
+        lineage_pool lp;
+        cdcl c;
+
+        const goal_lineage* g1 = lp.goal(nullptr, 0);
+        const goal_lineage* g2 = lp.goal(nullptr, 1);
+        const resolution_lineage* rl1 = lp.resolution(g1, 0);
+        const resolution_lineage* rl2 = lp.resolution(g2, 0);
+
+        avoidance av;
+        av.insert(rl1);
+        av.insert(rl2);
+        c.insert(av);
+
+        assert(!c.eliminated(rl1));
+        assert(!c.eliminated(rl2));
+    }
+
+    // Test 2: Singleton avoidance - its rl is eliminated
+    {
+        lineage_pool lp;
+        cdcl c;
+
+        const goal_lineage* g1 = lp.goal(nullptr, 0);
+        const resolution_lineage* rl1 = lp.resolution(g1, 0);
+
+        avoidance av;
+        av.insert(rl1);
+        c.insert(av);
+
+        assert(c.eliminated(rl1));
+    }
+
+    // Test 3: rl not in any avoidance - not eliminated
+    {
+        lineage_pool lp;
+        cdcl c;
+
+        const goal_lineage* g1 = lp.goal(nullptr, 0);
+        const goal_lineage* g2 = lp.goal(nullptr, 1);
+        const resolution_lineage* rl1 = lp.resolution(g1, 0);
+        const resolution_lineage* rl2 = lp.resolution(g2, 0);
+
+        avoidance av;
+        av.insert(rl1);
+        c.insert(av);
+
+        // rl1 is eliminated (singleton), rl2 was never inserted
+        assert(c.eliminated(rl1));
+        assert(!c.eliminated(rl2));
+    }
+
+    // Test 4: Constrain reduces avoidance to singleton - the remaining rl becomes eliminated
+    {
+        lineage_pool lp;
+        cdcl c;
+
+        const goal_lineage* g1 = lp.goal(nullptr, 0);
+        const goal_lineage* g2 = lp.goal(nullptr, 1);
+        const resolution_lineage* rl1 = lp.resolution(g1, 0);
+        const resolution_lineage* rl2 = lp.resolution(g2, 0);
+
+        avoidance av;
+        av.insert(rl1);
+        av.insert(rl2);
+        c.insert(av);
+
+        assert(!c.eliminated(rl1));
+        assert(!c.eliminated(rl2));
+
+        c.constrain(rl1);
+
+        // avoidance reduced to {rl2} → rl2 now eliminated
+        assert(!c.eliminated(rl1));
+        assert(c.eliminated(rl2));
     }
 }
 
@@ -27593,8 +28420,8 @@ void unit_test_main() {
     TEST(test_normalizer);
     TEST(test_goal_adder_constructor);
     TEST(test_goal_adder);
-    // TEST(test_goal_resolver_constructor);
-    // TEST(test_goal_resolver);
+    TEST(test_goal_resolver_constructor);
+    TEST(test_goal_resolver);
     TEST(test_head_elimination_detector_constructor);
     TEST(test_head_elimination_detector);
     TEST(test_unit_propagation_detector_constructor);
@@ -27607,6 +28434,13 @@ void unit_test_main() {
     TEST(test_mcts_decider_choose_goal);
     TEST(test_mcts_decider_choose_candidate);
     TEST(test_mcts_decider);
+    TEST(test_cdcl_constructor);
+    TEST(test_cdcl_upsert);
+    TEST(test_cdcl_erase);
+    TEST(test_cdcl_insert);
+    TEST(test_cdcl_constrain);
+    TEST(test_cdcl_refuted);
+    TEST(test_cdcl_eliminated);
     // TEST(test_a01_sim_constructor);
     // TEST(test_a01_sim);
     // TEST(test_a01_constructor_and_destructor);
