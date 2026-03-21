@@ -5,13 +5,15 @@
 
 struct avoidance_trimmer {
     avoidance_trimmer(
-        avoidance_map&
+        avoidance_store&,
+        const avoidance_map&
     );
     void operator()(const resolution_lineage*);
 #ifndef DEBUG
 private:
 #endif
-    avoidance_map& am;
+    avoidance_store& as;
+    const avoidance_map& am;
 };
 
 #endif

@@ -1,7 +1,8 @@
 #include "../hpp/avoidance_trimmer.hpp"
 
 avoidance_trimmer::avoidance_trimmer(
-    avoidance_map& am) : am(am) {
+    avoidance_store& as,
+    const avoidance_map& am) : as(as), am(am) {
 }
 
 void avoidance_trimmer::operator()(const resolution_lineage* rl) {
@@ -9,15 +10,13 @@ void avoidance_trimmer::operator()(const resolution_lineage* rl) {
     const goal_lineage* gl = rl->parent;
     
     // get the range of avoidances concerning the parent goal
-    auto concerned_avs = am.equal_range(gl);
+    auto [first, last] = am.equal_range(gl);
 
-    // trim the avoidances concerning the resolution
-    for (auto it = concerned_avs.first; it != concerned_avs.second; ++it) {
-        if (it->second->contains(rl))
-            it->second->erase(rl);
+    // remove the resolution from the concerned avoidances
+    for (auto it = first; it != last; ++it) {
+        avoidance& av = as.at(it->second);
+        if (av.contains(rl))
+            av.erase(rl);
     }
-
-    // remove the goal from the avoidance map
-    am.erase(gl);
 
 }

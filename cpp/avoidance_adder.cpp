@@ -5,11 +5,11 @@ avoidance_adder::avoidance_adder(
     avoidance_map& am) : as(as), am(am) {
 }
 
-void avoidance_adder::operator()(const avoidance& avoidance) {
+void avoidance_adder::operator()(const avoidance& av) {
 
-    auto& av = as.emplace_back(avoidance);
+    for (const auto& rl : av)
+        am.insert({rl->parent, as.size()});
 
-    for (const auto& rl : avoidance)
-        am.insert({rl->parent, &av});
-
+    as.push_back(av);
+    
 }
