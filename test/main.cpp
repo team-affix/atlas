@@ -20317,6 +20317,63 @@ void test_cdcl_erase() {
         assert(c.avoidances.empty());
         assert(c.watched_goals.empty());
     }
+
+    // Test 5: Multiple avoidances, multiple rls per avoidance - erasing one avoidance removes
+    //         only its specific links; all links belonging to other avoidances remain intact
+    {
+        lineage_pool lp;
+        cdcl c;
+
+        const goal_lineage* g1 = lp.goal(nullptr, 0);
+        const goal_lineage* g2 = lp.goal(nullptr, 1);
+        const goal_lineage* g3 = lp.goal(nullptr, 2);
+
+        const resolution_lineage* rl_a1 = lp.resolution(g1, 0); // av0: parent g1
+        const resolution_lineage* rl_a2 = lp.resolution(g2, 0); // av0: parent g2
+        const resolution_lineage* rl_b1 = lp.resolution(g2, 1); // av1: parent g2
+        const resolution_lineage* rl_b2 = lp.resolution(g3, 0); // av1: parent g3
+
+        avoidance av0;
+        av0.insert(rl_a1);
+        av0.insert(rl_a2);
+
+        avoidance av1;
+        av1.insert(rl_b1);
+        av1.insert(rl_b2);
+
+        // Manually set up: av0 watched by g1 and g2; av1 watched by g2 and g3
+        c.avoidances[0] = av0;
+        c.avoidances[1] = av1;
+        c.watched_goals[g1].insert(0);
+        c.watched_goals[g2].insert(0);
+        c.watched_goals[g2].insert(1);
+        c.watched_goals[g3].insert(1);
+
+        assert(c.avoidances.size() == 2);
+        assert(c.watched_goals.at(g1).size() == 1);
+        assert(c.watched_goals.at(g2).size() == 2);
+        assert(c.watched_goals.at(g3).size() == 1);
+
+        // Erase av0 - should remove id 0 from g1 and g2, leave av1 and g3's link untouched
+        c.erase(0);
+
+        assert(c.avoidances.size() == 1);
+        assert(c.avoidances.count(0) == 0);
+        assert(c.avoidances.count(1) == 1);
+        assert(c.avoidances.at(1) == av1);
+
+        // g1 exclusively watched av0 - its set is now empty
+        assert(c.watched_goals.at(g1).empty());
+
+        // g2 watched both - only the link to av0 (id 0) is gone; link to av1 (id 1) remains
+        assert(c.watched_goals.at(g2).size() == 1);
+        assert(c.watched_goals.at(g2).count(0) == 0);
+        assert(c.watched_goals.at(g2).count(1) == 1);
+
+        // g3 only watched av1 - completely untouched
+        assert(c.watched_goals.at(g3).size() == 1);
+        assert(c.watched_goals.at(g3).count(1) == 1);
+    }
 }
 
 void test_cdcl_insert() {
