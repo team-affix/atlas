@@ -9,9 +9,8 @@ goal_resolver::goal_resolver(
     copier& copier,
     bind_map& b,
     lineage_pool& l,
-    goal_adder& a,
-    avoidance_store& ast)
-    : rs(r), gs(g), cs(c), db(d), cp(copier), bm(b), lp(l), ga(a), as(ast)
+    goal_adder& a)
+    : rs(r), gs(g), cs(c), db(d), cp(copier), bm(b), lp(l), ga(a)
 {
 }
 
@@ -56,8 +55,4 @@ void goal_resolver::operator()(const goal_lineage* gl, size_t i)
         const goal_lineage* child_gl = lp.goal(rl, j);
         ga(child_gl, e);
     }
-
-    // erase this resolution from each avoidance
-    for (auto it = as.begin(); it != as.end(); ++it)
-        it->erase(rl);
 }

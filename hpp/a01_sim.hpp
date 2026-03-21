@@ -11,6 +11,7 @@
 #include "unit_propagation_detector.hpp"
 #include "goal_adder.hpp"
 #include "goal_resolver.hpp"
+#include "avoidance_trimmer.hpp"
 
 struct a01_sim {
     a01_sim(
@@ -25,6 +26,7 @@ struct a01_sim {
         resolution_store&,
         decision_store&,
         avoidance_store,
+        avoidance_map,
         monte_carlo::simulation<mcts_decider::choice, std::mt19937>&
     );
     bool operator()();
@@ -40,7 +42,8 @@ private:
     decision_store& ds;
     
     avoidance_store as_copy;
-
+    avoidance_map am_copy;
+    
     goal_store gs;
     candidate_store cs;
 
@@ -58,6 +61,8 @@ private:
 
     goal_adder ga;
     goal_resolver gr;
+
+    avoidance_trimmer at;
 };
 
 #endif

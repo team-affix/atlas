@@ -28,7 +28,9 @@ a01::a01(
     iterations_per_avoidance(iterations_per_avoidance),
     c(c),
     rng(rng),
-    as({})
+    as({}),
+    am({}),
+    aa(as, am)
 {
     t.push();
 }
@@ -53,7 +55,7 @@ bool a01::operator()(size_t iterations, std::optional<resolution_store>& soln) {
             return false;
 
         // record the avoidance
-        as.insert(avoidance);
+        aa(avoidance);
 
         // pin the decisions
         for (const auto& rl : avoidance)
@@ -76,7 +78,7 @@ bool a01::sim_one(monte_carlo::tree_node<mcts_decider::choice>& root, decision_s
     monte_carlo::simulation<mcts_decider::choice, std::mt19937> sim(root, c, rng);
 
     // construct the a01_sim
-    a01_sim sim_instance(max_resolutions, db, gl, t, vars, ep, bm, lp, rs, ds, as, sim);
+    a01_sim sim_instance(max_resolutions, db, gl, t, vars, ep, bm, lp, rs, ds, as, am, sim);
 
     // run the simulation
     bool sim_result = sim_instance();

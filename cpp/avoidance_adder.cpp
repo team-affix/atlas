@@ -2,15 +2,17 @@
 
 avoidance_adder::avoidance_adder(
     avoidance_store& as,
-    avoidance_map& am
-) : as(as), am(am) {
+    avoidance_map& am) : as(as), am(am) {
 }
 
 void avoidance_adder::operator()(const avoidance& avoidance) {
-    
-    auto it = as.insert(as.end(), avoidance);
+
+    auto [it, inserted] = as.insert(avoidance);
+
+    if (!inserted)
+        return;
     
     for (const auto& rl : avoidance)
-        am.insert({rl->parent, it});
+        am.insert({rl->parent, avoidance});
 
 }
