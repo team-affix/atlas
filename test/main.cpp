@@ -13,6 +13,7 @@
 #include "../hpp/solution_detector.hpp"
 #include "../hpp/conflict_detector.hpp"
 #include "../hpp/cdcl_elimination_detector.hpp"
+#include "../hpp/avoidance_adder.hpp"
 #include "../hpp/mcts_decider.hpp"
 #include "../hpp/a01_sim.hpp"
 #include "../hpp/a01.hpp"
@@ -28332,6 +28333,163 @@ void test_expr_printer() {
     }
 }
 
+void test_avoidance_adder_constructor() {
+    // Test 1: Basic construction - verify references are stored
+    {
+        avoidance_store as;
+        avoidance_map am;
+
+        avoidance_adder adder(as, am);
+
+        assert(&adder.as == &as);
+        assert(&adder.am == &am);
+    }
+
+    // Test 2: Construction with pre-populated stores - references still point there
+    {
+        lineage_pool lp;
+        avoidance_store as;
+        avoidance_map am;
+
+        const goal_lineage* g1 = lp.goal(nullptr, 0);
+        const resolution_lineage* rl1 = lp.resolution(g1, 0);
+        avoidance av;
+        av.insert(rl1);
+        auto [it, inserted] = as.insert(av);
+        am.insert({g1, it});
+
+        assert(as.size() == 1);
+        assert(am.size() == 1);
+
+        avoidance_adder adder(as, am);
+
+        assert(&adder.as == &as);
+        assert(&adder.am == &am);
+        assert(adder.as.size() == 1);
+        assert(adder.am.size() == 1);
+    }
+}
+
+void test_avoidance_adder() {
+    // Test 1: Empty avoidance - as gets the empty set, am stays empty (no resolutions to iterate)
+    {
+        avoidance_store as;
+        avoidance_map am;
+        avoidance_adder adder(as, am);
+
+        avoidance empty_av;
+        adder(empty_av);
+
+        assert(as.size() == 1);
+        assert(am.size() == 0);
+    }
+
+    // Test 2: Single-resolution avoidance - as gets one entry, am gets one entry for the parent goal
+    {
+        lineage_pool lp;
+        avoidance_store as;
+        avoidance_map am;
+        avoidance_adder adder(as, am);
+
+        const goal_lineage* g1 = lp.goal(nullptr, 0);
+        const resolution_lineage* rl1 = lp.resolution(g1, 0);
+
+        avoidance av;
+        av.insert(rl1);
+        adder(av);
+
+        assert(as.size() == 1);
+        assert(am.size() == 1);
+
+        auto it = am.find(g1);
+        assert(it != am.end());
+        assert(it->first == g1);
+        assert(*it->second == av);
+    }
+
+    // Test 3: Multi-resolution avoidance with distinct parent goals - am gets one entry per resolution
+    {
+        lineage_pool lp;
+        avoidance_store as;
+        avoidance_map am;
+        avoidance_adder adder(as, am);
+
+        const goal_lineage* g1 = lp.goal(nullptr, 0);
+        const goal_lineage* g2 = lp.goal(nullptr, 1);
+        const resolution_lineage* rl1 = lp.resolution(g1, 0);
+        const resolution_lineage* rl2 = lp.resolution(g2, 0);
+
+        avoidance av;
+        av.insert(rl1);
+        av.insert(rl2);
+        adder(av);
+
+        assert(as.size() == 1);
+        assert(am.size() == 2);
+
+        assert(am.count(g1) == 1);
+        assert(am.count(g2) == 1);
+
+        // Both am entries should point to the same avoidance in as
+        auto it1 = am.find(g1);
+        auto it2 = am.find(g2);
+        assert(it1->second == it2->second);
+        assert(*it1->second == av);
+    }
+
+    // Test 4: Duplicate avoidance - second call is a no-op; as and am unchanged
+    {
+        lineage_pool lp;
+        avoidance_store as;
+        avoidance_map am;
+        avoidance_adder adder(as, am);
+
+        const goal_lineage* g1 = lp.goal(nullptr, 0);
+        const resolution_lineage* rl1 = lp.resolution(g1, 0);
+
+        avoidance av;
+        av.insert(rl1);
+
+        adder(av);
+        assert(as.size() == 1);
+        assert(am.size() == 1);
+
+        adder(av);
+        assert(as.size() == 1);
+        assert(am.size() == 1);
+    }
+
+    // Test 5: Two different avoidances sharing the same parent goal - am gets two entries for that goal
+    {
+        lineage_pool lp;
+        avoidance_store as;
+        avoidance_map am;
+        avoidance_adder adder(as, am);
+
+        const goal_lineage* g1 = lp.goal(nullptr, 0);
+        const resolution_lineage* rl1 = lp.resolution(g1, 0);
+        const resolution_lineage* rl2 = lp.resolution(g1, 1);
+
+        avoidance av1;
+        av1.insert(rl1);
+        avoidance av2;
+        av2.insert(rl2);
+
+        adder(av1);
+        adder(av2);
+
+        assert(as.size() == 2);
+        assert(am.count(g1) == 2);
+
+        // The two am entries for g1 must point to different avoidances
+        auto range = am.equal_range(g1);
+        auto entry_a = range.first->second;
+        auto entry_b = (++range.first)->second;
+        assert(entry_a != entry_b);
+        assert((*entry_a == av1 && *entry_b == av2) || (*entry_a == av2 && *entry_b == av1));
+    }
+}
+
 void unit_test_main() {
 
     constexpr bool ENABLE_DEBUG_LOGS = true;
@@ -28394,6 +28552,8 @@ void unit_test_main() {
     TEST(test_a01);
     TEST(test_expr_printer_constructor);
     TEST(test_expr_printer);
+    TEST(test_avoidance_adder_constructor);
+    TEST(test_avoidance_adder);
 }
 
 #ifdef DEBUG
