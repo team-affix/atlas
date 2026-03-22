@@ -12409,7 +12409,7 @@ void test_goal_adder() {
 }
 
 void test_goal_resolver_constructor() {
-    // Test 1: Basic construction - verify all references stored correctly
+    // Test 1: Basic construction with all required references
     {
         trail t;
         expr_pool ep(t);
@@ -12417,18 +12417,16 @@ void test_goal_resolver_constructor() {
         bind_map bm(t);
         copier cp(seq, ep);
         lineage_pool lp;
-
+        
         resolution_store rs;
         goal_store gs;
         candidate_store cs;
-
-        expr e{expr::atom{"p"}};
-        rule r{&e, {}};
-        database db = {r};
-
+        database db;
+        cdcl c;
         goal_adder ga(gs, cs, db);
-        goal_resolver resolver(rs, gs, cs, db, cp, bm, lp, ga);
-
+        
+        goal_resolver resolver(rs, gs, cs, db, cp, bm, lp, ga, as);
+        
         assert(&resolver.rs == &rs);
         assert(&resolver.gs == &gs);
         assert(&resolver.cs == &cs);
@@ -12437,9 +12435,10 @@ void test_goal_resolver_constructor() {
         assert(&resolver.bm == &bm);
         assert(&resolver.lp == &lp);
         assert(&resolver.ga == &ga);
+        assert(&resolver.as == &as);
     }
-
-    // Test 2: Construction with pre-populated stores - references still point there
+    
+    // Test 2: Construction with non-empty stores including avoidances
     {
         trail t;
         expr_pool ep(t);
@@ -12447,36 +12446,54 @@ void test_goal_resolver_constructor() {
         bind_map bm(t);
         copier cp(seq, ep);
         lineage_pool lp;
-
+        
         resolution_store rs;
         goal_store gs;
         candidate_store cs;
-
-        expr e{expr::atom{"q"}};
-        rule r{&e, {}};
-        database db = {r};
-
+        cdcl c;
+        
+        // Add some initial data to resolution store
         const goal_lineage* g0 = lp.goal(nullptr, 0);
         const resolution_lineage* rl0 = lp.resolution(g0, 0);
         rs.insert(rl0);
-        gs.insert({g0, ep.atom("q")});
-        cs.insert({g0, 0});
-
+        
+        // Add some initial data to goal store
+        const goal_lineage* g1 = lp.goal(nullptr, 1);
+        const expr* e1 = ep.atom("test");
+        gs.insert({g1, e1});
+        cs.insert({g1, 0});
+        cs.insert({g1, 1});
+        
+        expr::atom a1{"rule1"};
+        expr rule_expr{a1};
+        rule r1{&rule_expr, {}};
+        database db = {r1};
+        
+        // Pre-populate avoidance store with some avoidances
+        decision_store avoidance1;
+        avoidance1.insert(rl0);
+        c.insert(avoidance1);
+        
+        const goal_lineage* g2 = lp.goal(nullptr, 2);
+        const resolution_lineage* rl2 = lp.resolution(g2, 0);
+        decision_store avoidance2;
+        avoidance2.insert(rl0);
+        avoidance2.insert(rl2);
+        c.insert(avoidance2);
+        
         goal_adder ga(gs, cs, db);
-        goal_resolver resolver(rs, gs, cs, db, cp, bm, lp, ga);
-
-        assert(&resolver.rs == &rs);
-        assert(&resolver.gs == &gs);
-        assert(&resolver.cs == &cs);
-        assert(&resolver.db == &db);
+        goal_resolver resolver(rs, gs, cs, db, cp, bm, lp, ga, as);
+        
         assert(resolver.rs.size() == 1);
         assert(resolver.gs.size() == 1);
-        assert(resolver.cs.size() == 1);
+        assert(resolver.cs.size() == 2);
+        assert(resolver.db.size() == 1);
+        assert(resolver.as.size() == 2);
     }
 }
 
 void test_goal_resolver() {
-    // Test 1: Resolve fact (empty body) - returns correct rl, goal removed, no new goals
+    // Test 1: Resolve with simple fact (empty body) - no new goals
     {
         trail t;
         t.push();
@@ -12485,43 +12502,95 @@ void test_goal_resolver() {
         bind_map bm(t);
         copier cp(seq, ep);
         lineage_pool lp;
-
+        
         resolution_store rs;
         goal_store gs;
         candidate_store cs;
-
+        
+        // Database: single fact "p"
         const expr* p_expr = ep.atom("p");
         rule r_fact{p_expr, {}};
         database db = {r_fact};
-
+        
         goal_adder ga(gs, cs, db);
-        goal_resolver resolver(rs, gs, cs, db, cp, bm, lp, ga);
-
-        const goal_lineage* g1 = lp.goal(nullptr, 0);
-        ga(g1, ep.atom("p"));
-
+        cdcl c;
+        
+        // Pre-populate avoidance store: single avoidance containing the rl we're about to create
+        const goal_lineage* g1 = lp.goal(nullptr, 1);
+        const resolution_lineage* rl_expected = lp.resolution(g1, 0);
+        
+        decision_store avoidance1;
+        avoidance1.insert(rl_expected);
+        c.insert(avoidance1);
+        
+        assert(as.size() == 1);
+        assert(as.begin()->size() == 1);
+        assert(as.begin()->count(rl_expected) == 1);
+        
+        goal_resolver resolver(rs, gs, cs, db, cp, bm, lp, ga, as);
+        
+        // Add goal "p" using goal_adder
+        const expr* goal_p = ep.atom("p");
+        ga(g1, goal_p);
+        
+        // Pre-resolution assertions: goal and candidates exist
         assert(gs.size() == 1);
         assert(cs.size() == 1);
-        assert(rs.size() == 0);
-
-        const resolution_lineage* rl = resolver(g1, 0);
-
-        // Return value must be the interned resolution lineage for (g1, 0)
+        assert(gs.count(g1) == 1);
+        assert(cs.count(g1) == 1);
+        assert(gs.at(g1) == goal_p);
+        assert(rs.size() == 0); // No resolutions yet
+        
+        // Check goal lineage structure before resolution
+        assert(g1->parent == nullptr);
+        assert(g1->idx == 1);
+        
+        // Store initial bind_map size to check unification
+        size_t bindings_before = bm.bindings.size();
+        
+        // Resolve g1 with rule 0
+        resolver(g1, 0);
+        
+        // Get the resolution lineage that was created
+        const resolution_lineage* rl = lp.resolution(g1, 0);
+        assert(rl == rl_expected); // Should be same interned instance
+        
+        // Check resolution lineage structure
         assert(rl != nullptr);
-        assert(rl == lp.resolution(g1, 0));
         assert(rl->parent == g1);
         assert(rl->idx == 0);
-
-        // Goal and candidates removed
-        assert(gs.empty());
-        assert(cs.empty());
-
-        // Resolution added to rs
+        
+        // Check resolution was added to resolution store
         assert(rs.size() == 1);
         assert(rs.count(rl) == 1);
+        
+        // CRITICAL: Verify rl was erased from all avoidances
+        assert(as.size() == 1);
+        assert(as.begin()->count(rl) == 0); // rl should be removed
+        assert(as.begin()->size() == 0);    // Avoidance now empty
+        
+        // Check goal was removed from goal store
+        assert(gs.size() == 0);
+        assert(gs.count(g1) == 0);
+        
+        // Check candidates were removed from candidate store
+        assert(cs.size() == 0);
+        assert(cs.count(g1) == 0);
+        
+        // Check unification occurred (p unifies with p trivially, may not add bindings)
+        // For atoms, unification should succeed without new bindings
+        size_t bindings_after = bm.bindings.size();
+        assert(bindings_after >= bindings_before);
+        
+        // Check no new goals were added (empty body)
+        assert(gs.size() == 0);
+        assert(cs.size() == 0);
+        
+        // Check lineage pool internals
+        assert(lp.resolution_lineages.count(*rl) == 1);
     }
-
-    // Test 2: Resolve rule with body - returns correct rl, two child goals created
+    
+    // Test 2: Resolve with rule with single body clause
     {
         trail t;
         t.push();
@@ -12530,52 +12599,1387 @@ void test_goal_resolver() {
         bind_map bm(t);
         copier cp(seq, ep);
         lineage_pool lp;
-
+        
         resolution_store rs;
         goal_store gs;
         candidate_store cs;
-
+        
+        // Database: rule "p :- q"
+        const expr* p_expr = ep.atom("p");
+        const expr* q_expr = ep.atom("q");
+        rule r1{p_expr, {q_expr}};
+        database db = {r1};
+        
+        goal_adder ga(gs, cs, db);
+        cdcl c;
+        
+        // Pre-populate avoidance store with mixed avoidances
+        const goal_lineage* g1 = lp.goal(nullptr, 1);
+        const resolution_lineage* rl_expected = lp.resolution(g1, 0);
+        
+        // Create some unrelated resolutions for avoidances
+        const goal_lineage* g_other1 = lp.goal(nullptr, 100);
+        const goal_lineage* g_other2 = lp.goal(nullptr, 200);
+        const resolution_lineage* rl_other1 = lp.resolution(g_other1, 0);
+        const resolution_lineage* rl_other2 = lp.resolution(g_other2, 1);
+        
+        // Avoidance 1: contains rl_expected + another resolution
+        decision_store avoidance1;
+        avoidance1.insert(rl_expected);
+        avoidance1.insert(rl_other1);
+        c.insert(avoidance1);
+        
+        // Avoidance 2: contains only rl_expected
+        decision_store avoidance2;
+        avoidance2.insert(rl_expected);
+        c.insert(avoidance2);
+        
+        // Avoidance 3: doesn't contain rl_expected at all
+        decision_store avoidance3;
+        avoidance3.insert(rl_other1);
+        avoidance3.insert(rl_other2);
+        c.insert(avoidance3);
+        
+        assert(as.size() == 3);
+        
+        goal_resolver resolver(rs, gs, cs, db, cp, bm, lp, ga, as);
+        
+        // Add goal "p" using goal_adder
+        const expr* goal_p = ep.atom("p");
+        ga(g1, goal_p);
+        
+        // Pre-resolution checks
+        assert(gs.size() == 1);
+        assert(gs.at(g1) == goal_p);
+        assert(cs.size() == 1); // One rule in database
+        assert(rs.size() == 0); // No resolutions yet
+        assert(g1->parent == nullptr);
+        assert(g1->idx == 1);
+        
+        // Resolve g1 with rule 0
+        resolver(g1, 0);
+        
+        // Get the resolution lineage that was created
+        const resolution_lineage* rl = lp.resolution(g1, 0);
+        assert(rl == rl_expected);
+        
+        // Check resolution lineage structure
+        assert(rl != nullptr);
+        assert(rl->parent == g1);
+        assert(rl->idx == 0);
+        
+        // Check resolution was added to resolution store
+        assert(rs.size() == 1);
+        assert(rs.count(rl) == 1);
+        
+        // Goal "p" should be removed from stores
+        assert(gs.count(g1) == 0);
+        assert(cs.count(g1) == 0);
+        
+        // Resolution lineage should be in pool
+        assert(lp.resolution_lineages.count(*rl) == 1);
+        
+        // One new goal "q" should be added as child of resolution
+        assert(gs.size() == 1);
+        const goal_lineage* child_g = lp.goal(rl, 0);
+        assert(gs.count(child_g) == 1);
+        assert(child_g->parent == rl);
+        assert(child_g->idx == 0);
+        
+        // Check the goal expression is "q"
+        const expr* child_expr = gs.at(child_g);
+        assert(child_expr != nullptr);
+        assert(std::holds_alternative<expr::atom>(child_expr->content));
+        assert(std::get<expr::atom>(child_expr->content).value == std::string("q"));
+        
+        // Check it's the weak head normal form version
+        const expr* normalized = bm.whnf(child_expr);
+        assert(normalized == child_expr);
+        
+        // New goal should have been added via goal_adder, so it has candidates
+        assert(cs.size() == 1);
+        assert(cs.count(child_g) == 1);
+        
+        // Verify child goal is in lineage pool
+        assert(lp.goal_lineages.count(*child_g) == 1);
+        
+        // CRITICAL: Verify avoidance store state after resolution
+        assert(as.size() == 3);
+        
+        // Count avoidances by size and content (order not guaranteed by std::set)
+        int empty_count = 0;
+        int size_one_count = 0;
+        int size_two_count = 0;
+        bool found_rl_other1_only = false;
+        bool found_rl_other1_and_rl_other2 = false;
+        
+        for (const auto& avoidance : as) {
+            assert(avoidance.count(rl) == 0); // rl should be gone from all
+            
+            if (avoidance.size() == 0) {
+                empty_count++;
+            } else if (avoidance.size() == 1) {
+                size_one_count++;
+                if (avoidance.count(rl_other1) == 1) {
+                    found_rl_other1_only = true;
+                }
+            } else if (avoidance.size() == 2) {
+                size_two_count++;
+                if (avoidance.count(rl_other1) == 1 && avoidance.count(rl_other2) == 1) {
+                    found_rl_other1_and_rl_other2 = true;
+                }
+            }
+        }
+        
+        // Verify we have the expected avoidances
+        assert(empty_count == 1);      // One became empty (was {rl})
+        assert(size_one_count == 1);   // One has {rl_other1} (was {rl, rl_other1})
+        assert(size_two_count == 1);   // One unchanged {rl_other1, rl_other2}
+        assert(found_rl_other1_only);
+        assert(found_rl_other1_and_rl_other2);
+    }
+    
+    // Test 3: Resolve with rule with multiple body clauses
+    {
+        trail t;
+        t.push();
+        expr_pool ep(t);
+        sequencer seq(t);
+        bind_map bm(t);
+        copier cp(seq, ep);
+        lineage_pool lp;
+        
+        resolution_store rs;
+        goal_store gs;
+        candidate_store cs;
+        
+        // Database: rule "p :- q, r, s"
+        const expr* p_expr = ep.atom("p");
+        const expr* q_expr = ep.atom("q");
+        const expr* r_expr = ep.atom("r");
+        const expr* s_expr = ep.atom("s");
+        rule r1{p_expr, {q_expr, r_expr, s_expr}};
+        database db = {r1};
+        
+        goal_adder ga(gs, cs, db);
+        cdcl c;
+        
+        // Empty avoidance store for this test (baseline)
+        const goal_lineage* g1 = lp.goal(nullptr, 1);
+        
+        goal_resolver resolver(rs, gs, cs, db, cp, bm, lp, ga, as);
+        
+        // Add goal "p" using goal_adder
+        const expr* goal_p = ep.atom("p");
+        ga(g1, goal_p);
+        
+        // Pre-resolution state
+        assert(gs.size() == 1);
+        assert(cs.size() == 1);
+        assert(gs.at(g1) == goal_p);
+        assert(as.size() == 0); // Empty avoidance store
+        
+        // Resolve g1 with rule 0
+        resolver(g1, 0);
+        const resolution_lineage* rl = lp.resolution(g1, 0);
+        
+        // Check return value
+        assert(rl != nullptr);
+        assert(rl->parent == g1);
+        assert(rl->idx == 0);
+        
+        // Goal "p" should be removed
+        assert(gs.count(g1) == 0);
+        assert(cs.count(g1) == 0);
+        
+        // Resolution should be in pool
+        assert(lp.resolution_lineages.count(*rl) == 1);
+        
+        // Three new goals should be added: q, r, s
+        assert(gs.size() == 3);
+        const goal_lineage* child_g0 = lp.goal(rl, 0);
+        const goal_lineage* child_g1 = lp.goal(rl, 1);
+        const goal_lineage* child_g2 = lp.goal(rl, 2);
+        
+        // Check all children are in goal store
+        assert(gs.count(child_g0) == 1);
+        assert(gs.count(child_g1) == 1);
+        assert(gs.count(child_g2) == 1);
+        
+        // Check lineage structure for each child
+        assert(child_g0->parent == rl);
+        assert(child_g0->idx == 0);
+        assert(child_g1->parent == rl);
+        assert(child_g1->idx == 1);
+        assert(child_g2->parent == rl);
+        assert(child_g2->idx == 2);
+        
+        // Check goal expressions match body literals
+        const expr* expr0 = gs.at(child_g0);
+        const expr* expr1 = gs.at(child_g1);
+        const expr* expr2 = gs.at(child_g2);
+        
+        assert(std::holds_alternative<expr::atom>(expr0->content));
+        assert(std::get<expr::atom>(expr0->content).value == std::string("q"));
+        assert(std::holds_alternative<expr::atom>(expr1->content));
+        assert(std::get<expr::atom>(expr1->content).value == std::string("r"));
+        assert(std::holds_alternative<expr::atom>(expr2->content));
+        assert(std::get<expr::atom>(expr2->content).value == std::string("s"));
+        
+        // Each new goal should have candidates (via goal_adder)
+        assert(cs.size() == 3);
+        assert(cs.count(child_g0) == 1);
+        assert(cs.count(child_g1) == 1);
+        assert(cs.count(child_g2) == 1);
+        
+        // All children should be in lineage pool
+        assert(lp.goal_lineages.count(*child_g0) == 1);
+        assert(lp.goal_lineages.count(*child_g1) == 1);
+        assert(lp.goal_lineages.count(*child_g2) == 1);
+        
+        // Avoidance store should still be empty
+        assert(as.size() == 0);
+    }
+    
+    // Test 4: Resolve with variable unification - VERIFY COPYING AND RENAMING
+    {
+        trail t;
+        t.push();
+        expr_pool ep(t);
+        sequencer seq(t);
+        bind_map bm(t);
+        copier cp(seq, ep);
+        lineage_pool lp;
+        
+        resolution_store rs;
+        goal_store gs;
+        candidate_store cs;
+        
+        // Database: rule "p(X) :- q(X)" where X is an original variable
+        const expr* var_x = ep.var(seq());
+        uint32_t original_var_idx = std::get<expr::var>(var_x->content).index;
+        const expr* p_x = ep.cons(ep.atom("p"), var_x);
+        const expr* q_x = ep.cons(ep.atom("q"), var_x);
+        rule r1{p_x, {q_x}};
+        database db = {r1};
+        
+        goal_adder ga(gs, cs, db);
+        cdcl c;
+        
+        // Pre-populate: avoidance containing the rl about to be created
+        const goal_lineage* g1 = lp.goal(nullptr, 1);
+        const resolution_lineage* rl_expected = lp.resolution(g1, 0);
+        decision_store avoidance1;
+        avoidance1.insert(rl_expected);
+        c.insert(avoidance1);
+        
+        goal_resolver resolver(rs, gs, cs, db, cp, bm, lp, ga, as);
+        
+        // Record sequencer state before resolution
+        uint32_t seq_before = seq.index;
+        
+        // Add goal "p(a)" using goal_adder
+        const expr* atom_a = ep.atom("a");
+        const expr* goal_p_a = ep.cons(ep.atom("p"), atom_a);
+        ga(g1, goal_p_a);
+        
+        // Pre-resolution checks
+        assert(gs.size() == 1);
+        assert(gs.at(g1) == goal_p_a);
+        assert(cs.size() == 1);
+        size_t bindings_before = bm.bindings.size();
+        
+        // CRITICAL: Original variable should NOT be in bind_map yet
+        assert(bm.bindings.count(original_var_idx) == 0);
+        
+        // Resolve g1 with rule 0
+        resolver(g1, 0);
+        const resolution_lineage* rl = lp.resolution(g1, 0);
+        
+        // Check sequencer advanced (new variable was allocated for copying)
+        uint32_t seq_after = seq.index;
+        assert(seq_after > seq_before); // At least one new variable was created
+        
+        // Check return value
+        assert(rl != nullptr);
+        assert(rl->parent == g1);
+        assert(rl->idx == 0);
+        
+        // Goal should be removed from stores
+        assert(gs.count(g1) == 0);
+        assert(cs.count(g1) == 0);
+        
+        // Resolution should be in pool
+        assert(lp.resolution_lineages.count(*rl) == 1);
+        
+        // One new goal should be added: q(a) after substitution
+        assert(gs.size() == 1);
+        const goal_lineage* child_g = lp.goal(rl, 0);
+        assert(gs.count(child_g) == 1);
+        assert(child_g->parent == rl);
+        assert(child_g->idx == 0);
+        
+        // Get the child goal expression (this is the copied body literal)
+        const expr* child_expr = gs.at(child_g);
+        assert(child_expr != nullptr);
+        assert(std::holds_alternative<expr::cons>(child_expr->content));
+        
+        // Extract the variable from the copied expression before normalization
+        const expr::cons& child_cons_raw = std::get<expr::cons>(child_expr->content);
+        const expr* child_arg_raw = child_cons_raw.rhs;
+        
+        // This should be a RENAMED variable (not the original)
+        if (std::holds_alternative<expr::var>(child_arg_raw->content)) {
+            uint32_t renamed_var_idx = std::get<expr::var>(child_arg_raw->content).index;
+            // CRITICAL: Renamed variable should be DIFFERENT from original
+            assert(renamed_var_idx != original_var_idx);
+            // CRITICAL: Renamed variable SHOULD be in bind_map (bound to "a")
+            assert(bm.bindings.count(renamed_var_idx) == 1);
+        }
+        
+        // Normalize to get final form after unification
+        const expr* normalized_child = bm.whnf(child_expr);
+        assert(std::holds_alternative<expr::cons>(normalized_child->content));
+        
+        // Should be q(...) where ... is either "a" or a variable bound to "a"
+        const expr::cons& child_cons = std::get<expr::cons>(normalized_child->content);
+        const expr* child_head = child_cons.lhs;
+        const expr* child_tail = child_cons.rhs;
+        assert(std::holds_alternative<expr::atom>(child_head->content));
+        assert(std::get<expr::atom>(child_head->content).value == std::string("q"));
+        
+        // The argument should normalize to "a"
+        const expr* normalized_arg = bm.whnf(child_tail);
+        assert(std::holds_alternative<expr::atom>(normalized_arg->content));
+        assert(std::get<expr::atom>(normalized_arg->content).value == std::string("a"));
+        
+        // Unification should have created bindings (the renamed var bound to "a")
+        size_t bindings_after = bm.bindings.size();
+        assert(bindings_after > bindings_before);
+        
+        // CRITICAL: Original variable should STILL NOT be in bind_map
+        // (only the renamed copy should be bound)
+        assert(bm.bindings.count(original_var_idx) == 0);
+        
+        // Verify child is in lineage pool
+        assert(lp.goal_lineages.count(*child_g) == 1);
+        
+        // Verify candidate was added
+        assert(cs.count(child_g) == 1);
+        
+        // CRITICAL: Verify rl was erased from avoidance
+        assert(as.size() == 1);
+        assert(as.begin()->count(rl) == 0);
+        assert(as.begin()->size() == 0);
+    }
+    
+    // Test 5: Multiple goals with multiple candidates - resolve only one
+    {
+        trail t;
+        t.push();
+        expr_pool ep(t);
+        sequencer seq(t);
+        bind_map bm(t);
+        copier cp(seq, ep);
+        lineage_pool lp;
+        
+        resolution_store rs;
+        goal_store gs;
+        candidate_store cs;
+        
+        // Database: two facts
+        const expr* p_expr = ep.atom("p");
+        const expr* q_expr = ep.atom("q");
+        rule r1{p_expr, {}};
+        rule r2{q_expr, {}};
+        database db = {r1, r2};
+        
+        goal_adder ga(gs, cs, db);
+        cdcl c;
+        goal_resolver resolver(rs, gs, cs, db, cp, bm, lp, ga, as);
+        
+        // Add two goals using goal_adder
+        const goal_lineage* g1 = lp.goal(nullptr, 1);
+        const expr* goal1 = ep.atom("p");
+        ga(g1, goal1);
+        
+        const goal_lineage* g2 = lp.goal(nullptr, 2);
+        const expr* goal2 = ep.atom("q");
+        ga(g2, goal2);
+        
+        // Pre-resolution: both goals present with all candidates
+        assert(gs.size() == 2);
+        assert(gs.at(g1) == goal1);
+        assert(gs.at(g2) == goal2);
+        assert(cs.size() == 4); // Each goal has 2 candidates
+        assert(cs.count(g1) == 2);
+        assert(cs.count(g2) == 2);
+        
+        // Resolve g1 with rule 0 (first rule "p")
+        resolver(g1, 0);
+        const resolution_lineage* rl = lp.resolution(g1, 0);
+        
+        // Check return value
+        assert(rl != nullptr);
+        assert(rl->parent == g1);
+        assert(rl->idx == 0);
+        
+        // g1 should be removed, g2 should remain
+        assert(gs.count(g1) == 0);
+        assert(gs.count(g2) == 1);
+        assert(gs.size() == 1);
+        assert(gs.at(g2) == goal2);
+        
+        // g1 candidates removed, g2 candidates remain
+        assert(cs.count(g1) == 0);
+        assert(cs.count(g2) == 2);
+        assert(cs.size() == 2);
+        
+        // Resolution lineage should be in pool
+        assert(lp.resolution_lineages.count(*rl) == 1);
+        
+        // No new goals added (empty body)
+        assert(gs.size() == 1);
+        
+        // Empty avoidance store (no avoidances for this test)
+        assert(as.size() == 0);
+    }
+    
+    // Test 6: Verify lineage structure after resolution (deep tree)
+    {
+        trail t;
+        t.push();
+        expr_pool ep(t);
+        sequencer seq(t);
+        bind_map bm(t);
+        copier cp(seq, ep);
+        lineage_pool lp;
+        
+        resolution_store rs;
+        goal_store gs;
+        candidate_store cs;
+        
+        // Database: rule "p :- q, r"
         const expr* p_expr = ep.atom("p");
         const expr* q_expr = ep.atom("q");
         const expr* r_expr = ep.atom("r");
         rule r1{p_expr, {q_expr, r_expr}};
         database db = {r1};
-
+        
         goal_adder ga(gs, cs, db);
-        goal_resolver resolver(rs, gs, cs, db, cp, bm, lp, ga);
-
-        const goal_lineage* g1 = lp.goal(nullptr, 0);
-        ga(g1, ep.atom("p"));
-
+        cdcl c;
+        goal_resolver resolver(rs, gs, cs, db, cp, bm, lp, ga, as);
+        
+        // Add goal with specific parent lineage using goal_adder
+        const resolution_lineage* parent_rl = lp.resolution(nullptr, 5);
+        const goal_lineage* g1 = lp.goal(parent_rl, 10);
+        const expr* goal_p = ep.atom("p");
+        ga(g1, goal_p);
+        
+        // Check pre-resolution lineage structure
+        assert(g1->parent == parent_rl);
+        assert(g1->idx == 10);
+        assert(parent_rl->parent == nullptr);
+        assert(parent_rl->idx == 5);
         assert(gs.size() == 1);
-
-        const resolution_lineage* rl = resolver(g1, 0);
-
-        // Return value is the correct resolution lineage
+        
+        // Resolve g1 with rule 0
+        resolver(g1, 0);
+        const resolution_lineage* rl = lp.resolution(g1, 0);
+        
+        // Check returned resolution lineage structure
         assert(rl != nullptr);
-        assert(rl == lp.resolution(g1, 0));
         assert(rl->parent == g1);
         assert(rl->idx == 0);
-
-        // g1 removed, 2 child goals added
+        assert(lp.resolution_lineages.count(*rl) == 1);
+        
+        // Original goal should be removed
         assert(gs.count(g1) == 0);
+        assert(cs.count(g1) == 0);
+        
+        // Check new goal lineages structure
+        const goal_lineage* child_g0 = lp.goal(rl, 0);
+        const goal_lineage* child_g1 = lp.goal(rl, 1);
+        
+        assert(child_g0->parent == rl);
+        assert(child_g0->idx == 0);
+        assert(child_g1->parent == rl);
+        assert(child_g1->idx == 1);
+        
+        // Both children should be in goal store
+        assert(gs.count(child_g0) == 1);
+        assert(gs.count(child_g1) == 1);
         assert(gs.size() == 2);
-
-        // Child lineages are (rl, 0) and (rl, 1)
+        
+        // Check expressions of children
+        const expr* expr0 = gs.at(child_g0);
+        const expr* expr1 = gs.at(child_g1);
+        assert(std::holds_alternative<expr::atom>(expr0->content));
+        assert(std::get<expr::atom>(expr0->content).value == std::string("q"));
+        assert(std::holds_alternative<expr::atom>(expr1->content));
+        assert(std::get<expr::atom>(expr1->content).value == std::string("r"));
+        
+        // Both should be in lineage pool
+        assert(lp.goal_lineages.count(*child_g0) == 1);
+        assert(lp.goal_lineages.count(*child_g1) == 1);
+        
+        // Both should have candidates
+        assert(cs.count(child_g0) == 1);
+        assert(cs.count(child_g1) == 1);
+        
+        // Empty avoidance store
+        assert(as.size() == 0);
+    }
+    
+    // Test 7: CRITICAL - Verify copier uses consistent translation_map
+    // Same variable X in original rule must map to same renamed variable in all occurrences
+    {
+        trail t;
+        t.push();
+        expr_pool ep(t);
+        sequencer seq(t);
+        bind_map bm(t);
+        copier cp(seq, ep);
+        lineage_pool lp;
+        
+        resolution_store rs;
+        goal_store gs;
+        candidate_store cs;
+        
+        // Database: rule "p(X) :- q(X), r(X)"
+        // The same variable X appears in head and both body literals
+        const expr* var_x = ep.var(seq());
+        uint32_t original_var_idx = std::get<expr::var>(var_x->content).index;
+        const expr* p_x = ep.cons(ep.atom("p"), var_x);
+        const expr* q_x = ep.cons(ep.atom("q"), var_x);
+        const expr* r_x = ep.cons(ep.atom("r"), var_x);
+        rule r1{p_x, {q_x, r_x}};
+        database db = {r1};
+        
+        goal_adder ga(gs, cs, db);
+        cdcl c;
+        goal_resolver resolver(rs, gs, cs, db, cp, bm, lp, ga, as);
+        
+        // Record sequencer state
+        uint32_t seq_before = seq.index;
+        
+        // Add goal "p(a)" using goal_adder
+        const goal_lineage* g1 = lp.goal(nullptr, 1);
+        const expr* atom_a = ep.atom("a");
+        const expr* goal_p_a = ep.cons(ep.atom("p"), atom_a);
+        ga(g1, goal_p_a);
+        
+        // Pre-resolution
+        assert(gs.size() == 1);
+        assert(cs.size() == 1);
+        size_t bindings_before = bm.bindings.size();
+        
+        // CRITICAL: Original variable should NOT be in bind_map
+        assert(bm.bindings.count(original_var_idx) == 0);
+        
+        // Resolve g1 with rule 0
+        resolver(g1, 0);
+        const resolution_lineage* rl = lp.resolution(g1, 0);
+        
+        // Check sequencer advanced (new variable allocated)
+        uint32_t seq_after = seq.index;
+        assert(seq_after > seq_before);
+        
+        // Check return value
+        assert(rl != nullptr);
+        assert(rl->parent == g1);
+        assert(rl->idx == 0);
+        
+        // Goal removed
+        assert(gs.count(g1) == 0);
+        
+        // Two new goals should be added: q(X') and r(X') where X' is the renamed variable
+        assert(gs.size() == 2);
+        const goal_lineage* child_g0 = lp.goal(rl, 0);
+        const goal_lineage* child_g1 = lp.goal(rl, 1);
+        
+        // Both should be in goal store
+        assert(gs.count(child_g0) == 1);
+        assert(gs.count(child_g1) == 1);
+        
+        // Get the RAW (not normalized) expressions for both goals
+        const expr* expr0 = gs.at(child_g0);
+        const expr* expr1 = gs.at(child_g1);
+        
+        // Both should be cons cells
+        assert(std::holds_alternative<expr::cons>(expr0->content));
+        assert(std::holds_alternative<expr::cons>(expr1->content));
+        
+        // Extract the argument variables from BOTH expressions (before whnf)
+        const expr::cons& cons0_raw = std::get<expr::cons>(expr0->content);
+        const expr::cons& cons1_raw = std::get<expr::cons>(expr1->content);
+        const expr* arg0_raw = cons0_raw.rhs;
+        const expr* arg1_raw = cons1_raw.rhs;
+        
+        // CRITICAL CHECK: Both arguments should be THE SAME RENAMED VARIABLE
+        // This verifies the translation_map was consistent across both body literals
+        uint32_t renamed_var_idx_0 = 0;
+        uint32_t renamed_var_idx_1 = 0;
+        
+        if (std::holds_alternative<expr::var>(arg0_raw->content)) {
+            renamed_var_idx_0 = std::get<expr::var>(arg0_raw->content).index;
+            // Should NOT be the original variable
+            assert(renamed_var_idx_0 != original_var_idx);
+        }
+        
+        if (std::holds_alternative<expr::var>(arg1_raw->content)) {
+            renamed_var_idx_1 = std::get<expr::var>(arg1_raw->content).index;
+            // Should NOT be the original variable
+            assert(renamed_var_idx_1 != original_var_idx);
+        }
+        
+        // CRITICAL: Both should be the SAME renamed variable
+        // This proves translation_map was consistent!
+        assert(renamed_var_idx_0 == renamed_var_idx_1);
+        assert(renamed_var_idx_0 != 0); // Should have found a variable
+        
+        // Both renamed variables should be bound in bind_map to "a"
+        assert(bm.bindings.count(renamed_var_idx_0) == 1);
+        
+        // Normalize both expressions to verify they both become "a"
+        const expr* norm0 = bm.whnf(expr0);
+        const expr* norm1 = bm.whnf(expr1);
+        
+        // Both should be cons cells
+        assert(std::holds_alternative<expr::cons>(norm0->content));
+        assert(std::holds_alternative<expr::cons>(norm1->content));
+        
+        // Check heads are q and r
+        const expr::cons& cons0 = std::get<expr::cons>(norm0->content);
+        const expr::cons& cons1 = std::get<expr::cons>(norm1->content);
+        assert(std::holds_alternative<expr::atom>(cons0.lhs->content));
+        assert(std::get<expr::atom>(cons0.lhs->content).value == std::string("q"));
+        assert(std::holds_alternative<expr::atom>(cons1.lhs->content));
+        assert(std::get<expr::atom>(cons1.lhs->content).value == std::string("r"));
+        
+        // Check arguments normalize to "a" - this verifies the binding worked
+        const expr* arg0 = bm.whnf(cons0.rhs);
+        const expr* arg1 = bm.whnf(cons1.rhs);
+        
+        assert(std::holds_alternative<expr::atom>(arg0->content));
+        assert(std::get<expr::atom>(arg0->content).value == std::string("a"));
+        assert(std::holds_alternative<expr::atom>(arg1->content));
+        assert(std::get<expr::atom>(arg1->content).value == std::string("a"));
+        
+        // Unification created bindings
+        size_t bindings_after = bm.bindings.size();
+        assert(bindings_after > bindings_before);
+        
+        // CRITICAL: Original variable should STILL NOT be in bind_map
+        assert(bm.bindings.count(original_var_idx) == 0);
+        
+        // Both should have candidates
+        assert(cs.count(child_g0) == 1);
+        assert(cs.count(child_g1) == 1);
+        
+        // Both should be in lineage pool
+        assert(lp.goal_lineages.count(*child_g0) == 1);
+        assert(lp.goal_lineages.count(*child_g1) == 1);
+        assert(lp.resolution_lineages.count(*rl) == 1);
+        
+        // Empty avoidance store
+        assert(as.size() == 0);
+    }
+    
+    // Test 8: Database with multiple rules, resolve with non-zero index
+    {
+        trail t;
+        t.push();
+        expr_pool ep(t);
+        sequencer seq(t);
+        bind_map bm(t);
+        copier cp(seq, ep);
+        lineage_pool lp;
+        
+        resolution_store rs;
+        goal_store gs;
+        candidate_store cs;
+        
+        // Database: multiple rules
+        const expr* p_expr = ep.atom("p");
+        const expr* q_expr = ep.atom("q");
+        const expr* r_expr = ep.atom("r");
+        rule r1{p_expr, {}};         // Rule 0: p
+        rule r2{q_expr, {r_expr}};   // Rule 1: q :- r
+        rule r3{r_expr, {}};         // Rule 2: r
+        database db = {r1, r2, r3};
+        
+        goal_adder ga(gs, cs, db);
+        cdcl c;
+        goal_resolver resolver(rs, gs, cs, db, cp, bm, lp, ga, as);
+        
+        // Add goal "q" using goal_adder (adds all rules as candidates)
+        const goal_lineage* g1 = lp.goal(nullptr, 1);
+        const expr* goal_q = ep.atom("q");
+        ga(g1, goal_q);
+        
+        // Pre-resolution: goal has all 3 rules as candidates
+        assert(gs.size() == 1);
+        assert(gs.at(g1) == goal_q);
+        assert(cs.size() == 3);
+        assert(cs.count(g1) == 3);
+        
+        // Resolve g1 with rule 1 (index 1) - "q :- r"
+        resolver(g1, 1);
+        const resolution_lineage* rl = lp.resolution(g1, 1);
+        
+        // Check return value
+        assert(rl != nullptr);
+        assert(rl->parent == g1);
+        assert(rl->idx == 1);  // CRITICAL: idx should match the rule index
+        
+        // Goal removed from stores
+        assert(gs.count(g1) == 0);
+        assert(cs.count(g1) == 0);
+        
+        // Resolution should be in pool
+        assert(lp.resolution_lineages.count(*rl) == 1);
+        
+        // One new goal "r" should be added
+        assert(gs.size() == 1);
+        const goal_lineage* child_g = lp.goal(rl, 0);
+        assert(gs.count(child_g) == 1);
+        assert(child_g->parent == rl);
+        assert(child_g->idx == 0);
+        
+        // Check the goal expression is "r"
+        const expr* child_expr = gs.at(child_g);
+        assert(std::holds_alternative<expr::atom>(child_expr->content));
+        assert(std::get<expr::atom>(child_expr->content).value == std::string("r"));
+        
+        // New goal has all database rules as candidates
+        assert(cs.size() == 3);
+        assert(cs.count(child_g) == 3);
+        
+        // Verify in lineage pool
+        assert(lp.goal_lineages.count(*child_g) == 1);
+        
+        // Empty avoidance store
+        assert(as.size() == 0);
+    }
+    
+    // Test 9: Resolve goal that's part of an existing AND-OR tree (deep goal)
+    {
+        trail t;
+        t.push();
+        expr_pool ep(t);
+        sequencer seq(t);
+        bind_map bm(t);
+        copier cp(seq, ep);
+        lineage_pool lp;
+        
+        resolution_store rs;
+        goal_store gs;
+        candidate_store cs;
+        
+        // Database: rule "p :- q"
+        const expr* p_expr = ep.atom("p");
+        const expr* q_expr = ep.atom("q");
+        rule r1{p_expr, {q_expr}};
+        database db = {r1};
+        
+        goal_adder ga(gs, cs, db);
+        cdcl c;
+        goal_resolver resolver(rs, gs, cs, db, cp, bm, lp, ga, as);
+        
+        // Create a goal that's deep in the tree (Level 0 -> Level 1 -> Level 2)
+        const goal_lineage* root = lp.goal(nullptr, 0);
+        const resolution_lineage* r_level1 = lp.resolution(root, 0);
+        const goal_lineage* g_level2 = lp.goal(r_level1, 0);
+        
+        // Verify tree structure before resolution
+        assert(root->parent == nullptr);
+        assert(root->idx == 0);
+        assert(r_level1->parent == root);
+        assert(r_level1->idx == 0);
+        assert(g_level2->parent == r_level1);
+        assert(g_level2->idx == 0);
+        
+        const expr* goal_p = ep.atom("p");
+        ga(g_level2, goal_p);
+        
+        // Pre-resolution state
+        assert(gs.size() == 1);
+        assert(gs.at(g_level2) == goal_p);
+        assert(cs.size() == 1);
+        
+        // Resolve the deep goal
+        resolver(g_level2, 0);
+        const resolution_lineage* rl = lp.resolution(g_level2, 0);
+        
+        // Check return value
+        assert(rl != nullptr);
+        assert(rl->parent == g_level2);
+        assert(rl->idx == 0);
+        
+        // Goal removed
+        assert(gs.count(g_level2) == 0);
+        assert(cs.count(g_level2) == 0);
+        
+        // Resolution should be in pool
+        assert(lp.resolution_lineages.count(*rl) == 1);
+        
+        // New goal created as child of new resolution (Level 3)
+        const goal_lineage* new_goal = lp.goal(rl, 0);
+        assert(gs.count(new_goal) == 1);
+        assert(new_goal->parent == rl);
+        assert(new_goal->idx == 0);
+        
+        // Verify tree integrity: new_goal -> rl -> g_level2 -> r_level1 -> root -> nullptr
+        assert(new_goal->parent == rl);
+        assert(rl->parent == g_level2);
+        assert(g_level2->parent == r_level1);
+        assert(r_level1->parent == root);
+        assert(root->parent == nullptr);
+        
+        // Check new goal expression
+        const expr* new_expr = gs.at(new_goal);
+        assert(std::holds_alternative<expr::atom>(new_expr->content));
+        assert(std::get<expr::atom>(new_expr->content).value == std::string("q"));
+        
+        // Verify in pool
+        assert(lp.goal_lineages.count(*new_goal) == 1);
+        
+        // Verify candidates
+        assert(cs.count(new_goal) == 1);
+        
+        // Empty avoidance store
+        assert(as.size() == 0);
+    }
+    
+    // Test 10: Resolve with multiple distinct variables - verify independent renaming
+    {
+        trail t;
+        t.push();
+        expr_pool ep(t);
+        sequencer seq(t);
+        bind_map bm(t);
+        copier cp(seq, ep);
+        lineage_pool lp;
+        
+        resolution_store rs;
+        goal_store gs;
+        candidate_store cs;
+        
+        // Database: rule "p(X, Y) :- q(X), r(Y)"
+        // Two distinct variables X and Y
+        const expr* var_x = ep.var(seq());
+        const expr* var_y = ep.var(seq());
+        uint32_t original_x_idx = std::get<expr::var>(var_x->content).index;
+        uint32_t original_y_idx = std::get<expr::var>(var_y->content).index;
+        assert(original_x_idx != original_y_idx); // Sanity check
+        const expr* p_xy = ep.cons(ep.atom("p"), ep.cons(var_x, var_y));
+        const expr* q_x = ep.cons(ep.atom("q"), var_x);
+        const expr* r_y = ep.cons(ep.atom("r"), var_y);
+        rule r1{p_xy, {q_x, r_y}};
+        database db = {r1};
+        
+        goal_adder ga(gs, cs, db);
+        cdcl c;
+        goal_resolver resolver(rs, gs, cs, db, cp, bm, lp, ga, as);
+        
+        // Record sequencer state
+        uint32_t seq_before = seq.index;
+        
+        // Add goal "p(a, b)" using goal_adder
+        const goal_lineage* g1 = lp.goal(nullptr, 1);
+        const expr* atom_a = ep.atom("a");
+        const expr* atom_b = ep.atom("b");
+        const expr* goal_p_ab = ep.cons(ep.atom("p"), ep.cons(atom_a, atom_b));
+        ga(g1, goal_p_ab);
+        
+        // Pre-resolution
+        assert(gs.size() == 1);
+        assert(gs.at(g1) == goal_p_ab);
+        assert(cs.size() == 1);
+        size_t bindings_before = bm.bindings.size();
+        
+        // CRITICAL: Original variables should NOT be in bind_map
+        assert(bm.bindings.count(original_x_idx) == 0);
+        assert(bm.bindings.count(original_y_idx) == 0);
+        
+        // Resolve g1 with rule 0
+        resolver(g1, 0);
+        const resolution_lineage* rl = lp.resolution(g1, 0);
+        
+        // Check sequencer advanced (two new variables allocated: X' and Y')
+        uint32_t seq_after = seq.index;
+        assert(seq_after > seq_before);
+        // Should have allocated at least 2 new variables
+        assert(seq_after >= seq_before + 2);
+        
+        // Check return value
+        assert(rl != nullptr);
+        assert(rl->parent == g1);
+        assert(rl->idx == 0);
+        
+        // Goal removed
+        assert(gs.count(g1) == 0);
+        assert(cs.count(g1) == 0);
+        
+        // Resolution should be in pool
+        assert(lp.resolution_lineages.count(*rl) == 1);
+        
+        // Two new goals should be added: q(X') and r(Y') where X' and Y' are renamed
+        assert(gs.size() == 2);
+        const goal_lineage* child_g0 = lp.goal(rl, 0);
+        const goal_lineage* child_g1 = lp.goal(rl, 1);
+        assert(gs.count(child_g0) == 1);
+        assert(gs.count(child_g1) == 1);
+        
+        // Check lineage structure
+        assert(child_g0->parent == rl);
+        assert(child_g0->idx == 0);
+        assert(child_g1->parent == rl);
+        assert(child_g1->idx == 1);
+        
+        // Get RAW goal expressions (before normalization)
+        const expr* expr0 = gs.at(child_g0);
+        const expr* expr1 = gs.at(child_g1);
+        
+        // Extract variables from raw expressions
+        assert(std::holds_alternative<expr::cons>(expr0->content));
+        assert(std::holds_alternative<expr::cons>(expr1->content));
+        const expr::cons& cons0_raw = std::get<expr::cons>(expr0->content);
+        const expr::cons& cons1_raw = std::get<expr::cons>(expr1->content);
+        const expr* arg0_raw = cons0_raw.rhs;
+        const expr* arg1_raw = cons1_raw.rhs;
+        
+        // Extract renamed variable indices
+        uint32_t renamed_x_idx = 0;
+        uint32_t renamed_y_idx = 0;
+        
+        if (std::holds_alternative<expr::var>(arg0_raw->content)) {
+            renamed_x_idx = std::get<expr::var>(arg0_raw->content).index;
+            // Should NOT be the original X
+            assert(renamed_x_idx != original_x_idx);
+            assert(renamed_x_idx != original_y_idx);
+        }
+        
+        if (std::holds_alternative<expr::var>(arg1_raw->content)) {
+            renamed_y_idx = std::get<expr::var>(arg1_raw->content).index;
+            // Should NOT be the original Y
+            assert(renamed_y_idx != original_y_idx);
+            assert(renamed_y_idx != original_x_idx);
+        }
+        
+        // CRITICAL: The two renamed variables should be DIFFERENT
+        // (X and Y were distinct, so X' and Y' should also be distinct)
+        assert(renamed_x_idx != renamed_y_idx);
+        assert(renamed_x_idx != 0);
+        assert(renamed_y_idx != 0);
+        
+        // Both renamed variables should be in bind_map
+        assert(bm.bindings.count(renamed_x_idx) == 1);
+        assert(bm.bindings.count(renamed_y_idx) == 1);
+        
+        // Normalize both
+        const expr* norm0 = bm.whnf(expr0);
+        const expr* norm1 = bm.whnf(expr1);
+        
+        // Both should be cons cells
+        assert(std::holds_alternative<expr::cons>(norm0->content));
+        assert(std::holds_alternative<expr::cons>(norm1->content));
+        
+        // Check heads: q and r
+        const expr::cons& cons0 = std::get<expr::cons>(norm0->content);
+        const expr::cons& cons1 = std::get<expr::cons>(norm1->content);
+        const expr* head0 = cons0.lhs;
+        const expr* head1 = cons1.lhs;
+        assert(std::holds_alternative<expr::atom>(head0->content));
+        assert(std::get<expr::atom>(head0->content).value == std::string("q"));
+        assert(std::holds_alternative<expr::atom>(head1->content));
+        assert(std::get<expr::atom>(head1->content).value == std::string("r"));
+        
+        // Check arguments: q(a) and r(b)
+        const expr* arg0 = bm.whnf(cons0.rhs);
+        const expr* arg1 = bm.whnf(cons1.rhs);
+        
+        assert(std::holds_alternative<expr::atom>(arg0->content));
+        assert(std::get<expr::atom>(arg0->content).value == std::string("a"));
+        assert(std::holds_alternative<expr::atom>(arg1->content));
+        assert(std::get<expr::atom>(arg1->content).value == std::string("b"));
+        
+        // Unification created bindings (X'=a and Y'=b)
+        size_t bindings_after = bm.bindings.size();
+        assert(bindings_after > bindings_before);
+        assert(bindings_after >= bindings_before + 2); // At least 2 new bindings
+        
+        // CRITICAL: Original variables should STILL NOT be in bind_map
+        assert(bm.bindings.count(original_x_idx) == 0);
+        assert(bm.bindings.count(original_y_idx) == 0);
+        
+        // Both should have candidates
+        assert(cs.count(child_g0) == 1);
+        assert(cs.count(child_g1) == 1);
+        assert(cs.size() == 2);
+        
+        // Both should be in lineage pool
+        assert(lp.goal_lineages.count(*child_g0) == 1);
+        assert(lp.goal_lineages.count(*child_g1) == 1);
+        
+        // Empty avoidance store
+        assert(as.size() == 0);
+    }
+    
+    // Test 11: Variable-on-variable unification during resolution
+    {
+        trail t;
+        t.push();
+        expr_pool ep(t);
+        sequencer seq(t);
+        bind_map bm(t);
+        copier cp(seq, ep);
+        lineage_pool lp;
+        
+        resolution_store rs;
+        goal_store gs;
+        candidate_store cs;
+        
+        // Database: rule "p(Y) :- q(Y)" where Y is a variable in the rule
+        const expr* var_y = ep.var(seq());
+        uint32_t original_y_idx = std::get<expr::var>(var_y->content).index;
+        const expr* p_y = ep.cons(ep.atom("p"), var_y);
+        const expr* q_y = ep.cons(ep.atom("q"), var_y);
+        rule r1{p_y, {q_y}};
+        database db = {r1};
+        
+        goal_adder ga(gs, cs, db);
+        cdcl c;
+        goal_resolver resolver(rs, gs, cs, db, cp, bm, lp, ga, as);
+        
+        // Record sequencer state
+        uint32_t seq_before = seq.index;
+        
+        // Create goal "p(X)" where X is ALSO a variable (not a constant!)
+        const goal_lineage* g1 = lp.goal(nullptr, 1);
+        const expr* var_x = ep.var(seq());
+        uint32_t goal_var_x_idx = std::get<expr::var>(var_x->content).index;
+        const expr* goal_p_x = ep.cons(ep.atom("p"), var_x);
+        ga(g1, goal_p_x);
+        
+        // Pre-resolution
+        assert(gs.size() == 1);
+        assert(gs.at(g1) == goal_p_x);
+        assert(cs.size() == 1);
+        size_t bindings_before = bm.bindings.size();
+        
+        // CRITICAL: Neither the original rule variable nor the goal variable
+        // should be in bind_map yet
+        assert(bm.bindings.count(original_y_idx) == 0);
+        assert(bm.bindings.count(goal_var_x_idx) == 0);
+        
+        // Resolve g1 with rule 0
+        // This will unify p(X) with p(Y') where Y' is the renamed version of Y
+        resolver(g1, 0);
+        const resolution_lineage* rl = lp.resolution(g1, 0);
+        
+        // Check sequencer advanced (Y was renamed to Y')
+        uint32_t seq_after = seq.index;
+        assert(seq_after > seq_before);
+        
+        // Check return value
+        assert(rl != nullptr);
+        assert(rl->parent == g1);
+        assert(rl->idx == 0);
+        
+        // Goal removed
+        assert(gs.count(g1) == 0);
+        assert(cs.count(g1) == 0);
+        
+        // Resolution should be in pool
+        assert(lp.resolution_lineages.count(*rl) == 1);
+        
+        // One new goal should be added: q(Y') or q(X) depending on binding direction
+        assert(gs.size() == 1);
+        const goal_lineage* child_g = lp.goal(rl, 0);
+        assert(gs.count(child_g) == 1);
+        
+        // Get the RAW child goal expression
+        const expr* child_expr = gs.at(child_g);
+        assert(std::holds_alternative<expr::cons>(child_expr->content));
+        const expr::cons& child_cons = std::get<expr::cons>(child_expr->content);
+        
+        // Head should be "q"
+        assert(std::holds_alternative<expr::atom>(child_cons.lhs->content));
+        assert(std::get<expr::atom>(child_cons.lhs->content).value == std::string("q"));
+        
+        // Tail should be a variable
+        const expr* child_arg = child_cons.rhs;
+        assert(std::holds_alternative<expr::var>(child_arg->content));
+        uint32_t child_var_idx = std::get<expr::var>(child_arg->content).index;
+        
+        // The child variable should be the renamed Y' (not the original Y)
+        assert(child_var_idx != original_y_idx);
+        
+        // CRITICAL: Variable-on-variable unification occurred
+        // Either X=Y' or Y'=X, but at least one should be in bind_map
+        // The unification should have created a binding between X and Y'
+        size_t bindings_after = bm.bindings.size();
+        assert(bindings_after > bindings_before);
+        
+        // At least one of the variables should be bound
+        bool x_bound = bm.bindings.count(goal_var_x_idx) > 0;
+        bool y_prime_bound = bm.bindings.count(child_var_idx) > 0;
+        assert(x_bound || y_prime_bound);
+        
+        // If we normalize the child argument, it should give us a variable
+        // (either X or Y' depending on binding direction)
+        const expr* normalized_arg = bm.whnf(child_arg);
+        assert(std::holds_alternative<expr::var>(normalized_arg->content));
+        
+        // CRITICAL: Original rule variable Y should STILL NOT be in bind_map
+        assert(bm.bindings.count(original_y_idx) == 0);
+        
+        // Verify in pools
+        assert(lp.goal_lineages.count(*child_g) == 1);
+        assert(lp.resolution_lineages.count(*rl) == 1);
+        
+        // Should have candidates
+        assert(cs.count(child_g) == 1);
+        
+        // Empty avoidance store
+        assert(as.size() == 0);
+    }
+    
+    // Test 12: Multiple database rules - resolve with middle rule to verify indexing
+    {
+        trail t;
+        t.push();
+        expr_pool ep(t);
+        sequencer seq(t);
+        bind_map bm(t);
+        copier cp(seq, ep);
+        lineage_pool lp;
+        
+        resolution_store rs;
+        goal_store gs;
+        candidate_store cs;
+        
+        // Database: 5 different rules with different heads and bodies
+        // We'll resolve using rule at index 2 (middle)
+        const expr* p_expr = ep.atom("p");
+        const expr* q_expr = ep.atom("q");
+        const expr* r_expr = ep.atom("r");
+        const expr* s_expr = ep.atom("s");
+        const expr* t_expr = ep.atom("t");
+        const expr* u_expr = ep.atom("u");
+        
+        rule r0{p_expr, {}};                    // Rule 0: p
+        rule r1{q_expr, {r_expr}};              // Rule 1: q :- r
+        rule r2{r_expr, {s_expr, t_expr}};      // Rule 2: r :- s, t  <-- We'll use this one
+        rule r3{s_expr, {u_expr}};              // Rule 3: s :- u
+        rule r4{t_expr, {}};                    // Rule 4: t
+        database db = {r0, r1, r2, r3, r4};
+        
+        goal_adder ga(gs, cs, db);
+        cdcl c;
+        goal_resolver resolver(rs, gs, cs, db, cp, bm, lp, ga, as);
+        
+        // Add goal "r" which matches rule 2
+        const goal_lineage* g1 = lp.goal(nullptr, 1);
+        ga(g1, r_expr);
+        
+        // Pre-resolution: goal has all 5 rules as candidates
+        assert(gs.size() == 1);
+        assert(gs.at(g1) == r_expr);
+        assert(cs.size() == 5);
+        assert(cs.count(g1) == 5);
+        
+        // Resolve with rule 2 (middle of database)
+        resolver(g1, 2);
+        const resolution_lineage* rl = lp.resolution(g1, 2);
+        
+        // Verify return value has correct index
+        assert(rl != nullptr);
+        assert(rl->parent == g1);
+        assert(rl->idx == 2);  // CRITICAL: Must be index 2, not 0 or 1
+        
+        // Goal removed
+        assert(gs.count(g1) == 0);
+        assert(cs.count(g1) == 0);
+        
+        // Resolution in pool
+        assert(lp.resolution_lineages.count(*rl) == 1);
+        
+        // Two new goals should be added from rule 2's body: s and t
+        assert(gs.size() == 2);
+        const goal_lineage* child_g0 = lp.goal(rl, 0);
+        const goal_lineage* child_g1 = lp.goal(rl, 1);
+        
+        // Verify lineage structure
+        assert(child_g0->parent == rl);
+        assert(child_g0->idx == 0);
+        assert(child_g1->parent == rl);
+        assert(child_g1->idx == 1);
+        
+        // Verify expressions are from rule 2's body (s and t, NOT r or u)
+        const expr* expr0 = gs.at(child_g0);
+        const expr* expr1 = gs.at(child_g1);
+        
+        assert(std::holds_alternative<expr::atom>(expr0->content));
+        assert(std::get<expr::atom>(expr0->content).value == std::string("s"));
+        assert(std::holds_alternative<expr::atom>(expr1->content));
+        assert(std::get<expr::atom>(expr1->content).value == std::string("t"));
+        
+        // Both children should have all 5 database rules as candidates
+        assert(cs.size() == 10); // 2 goals * 5 rules each
+        assert(cs.count(child_g0) == 5);
+        assert(cs.count(child_g1) == 5);
+        
+        // Verify in pools
+        assert(lp.goal_lineages.count(*child_g0) == 1);
+        assert(lp.goal_lineages.count(*child_g1) == 1);
+        
+        // Empty avoidance store
+        assert(as.size() == 0);
+    }
+    
+    // Test 13: Multiple goals in store - resolve specific one, others untouched
+    {
+        trail t;
+        t.push();
+        expr_pool ep(t);
+        sequencer seq(t);
+        bind_map bm(t);
+        copier cp(seq, ep);
+        lineage_pool lp;
+        
+        resolution_store rs;
+        goal_store gs;
+        candidate_store cs;
+        
+        // Database: simple rules for various predicates
+        const expr* p_expr = ep.atom("p");
+        const expr* q_expr = ep.atom("q");
+        const expr* r_expr = ep.atom("r");
+        const expr* s_expr = ep.atom("s");
+        const expr* t_expr = ep.atom("t");
+        
+        rule r0{p_expr, {q_expr}};              // p :- q
+        rule r1{q_expr, {r_expr, s_expr}};      // q :- r, s  <-- We'll resolve with this
+        rule r2{r_expr, {}};                    // r
+        rule r3{s_expr, {}};                    // s
+        rule r4{t_expr, {}};                    // t
+        database db = {r0, r1, r2, r3, r4};
+        
+        goal_adder ga(gs, cs, db);
+        cdcl c;
+        goal_resolver resolver(rs, gs, cs, db, cp, bm, lp, ga, as);
+        
+        // Add 5 different goals with different lineage structures
+        const goal_lineage* g0 = lp.goal(nullptr, 0);
+        ga(g0, p_expr);
+        
+        const goal_lineage* g1 = lp.goal(nullptr, 1);
+        ga(g1, q_expr);  // <-- We'll resolve THIS one
+        
+        const goal_lineage* g2 = lp.goal(nullptr, 2);
+        ga(g2, r_expr);
+        
+        const resolution_lineage* rl_other = lp.resolution(nullptr, 99);
+        const goal_lineage* g3 = lp.goal(rl_other, 3);
+        ga(g3, s_expr);
+        
+        const goal_lineage* g4 = lp.goal(nullptr, 4);
+        ga(g4, t_expr);
+        
+        // Pre-resolution: 5 goals, each with 5 candidates
+        assert(gs.size() == 5);
+        assert(gs.at(g0) == p_expr);
+        assert(gs.at(g1) == q_expr);
+        assert(gs.at(g2) == r_expr);
+        assert(gs.at(g3) == s_expr);
+        assert(gs.at(g4) == t_expr);
+        assert(cs.size() == 25); // 5 goals * 5 rules each
+        
+        // Record the exact expressions for later comparison
+        const expr* g0_expr = gs.at(g0);
+        const expr* g2_expr = gs.at(g2);
+        const expr* g3_expr = gs.at(g3);
+        const expr* g4_expr = gs.at(g4);
+        
+        // Resolve ONLY g1 (the middle one) with rule 1
+        resolver(g1, 1);
+        const resolution_lineage* rl = lp.resolution(g1, 1);
+        
+        // Verify resolution lineage
+        assert(rl != nullptr);
+        assert(rl->parent == g1);
+        assert(rl->idx == 1);
+        
+        // CRITICAL: g1 should be removed, ALL OTHERS should remain
+        assert(gs.count(g1) == 0);
+        assert(gs.count(g0) == 1);  // Still there
+        assert(gs.count(g2) == 1);  // Still there
+        assert(gs.count(g3) == 1);  // Still there
+        assert(gs.count(g4) == 1);  // Still there
+        
+        // CRITICAL: Expressions of remaining goals should be UNCHANGED
+        assert(gs.at(g0) == g0_expr);  // Same pointer
+        assert(gs.at(g2) == g2_expr);  // Same pointer
+        assert(gs.at(g3) == g3_expr);  // Same pointer
+        assert(gs.at(g4) == g4_expr);  // Same pointer
+        
+        // g1's candidates removed, others remain
+        assert(cs.count(g1) == 0);
+        assert(cs.count(g0) == 5);  // Still has all candidates
+        assert(cs.count(g2) == 5);  // Still has all candidates
+        assert(cs.count(g3) == 5);  // Still has all candidates
+        assert(cs.count(g4) == 5);  // Still has all candidates
+        
+        // Two new goals added as children of g1's resolution (rule 1: q :- r, s)
         const goal_lineage* child0 = lp.goal(rl, 0);
         const goal_lineage* child1 = lp.goal(rl, 1);
+        
         assert(gs.count(child0) == 1);
         assert(gs.count(child1) == 1);
-
-        // Each child has one candidate (db has 1 rule)
-        assert(cs.count(child0) == 1);
-        assert(cs.count(child1) == 1);
-
-        assert(rs.size() == 1);
-        assert(rs.count(rl) == 1);
+        
+        // Total goals: 4 original (g0, g2, g3, g4) + 2 new (child0, child1) = 6
+        assert(gs.size() == 6);
+        
+        // Verify new children have correct expressions (from rule 1's body: r, s)
+        const expr* child0_expr = gs.at(child0);
+        const expr* child1_expr = gs.at(child1);
+        
+        assert(std::holds_alternative<expr::atom>(child0_expr->content));
+        assert(std::get<expr::atom>(child0_expr->content).value == std::string("r"));
+        assert(std::holds_alternative<expr::atom>(child1_expr->content));
+        assert(std::get<expr::atom>(child1_expr->content).value == std::string("s"));
+        
+        // Verify lineage structure: new children are under rl, which is under g1
+        assert(child0->parent == rl);
+        assert(child0->idx == 0);
+        assert(child1->parent == rl);
+        assert(child1->idx == 1);
+        assert(rl->parent == g1);
+        
+        // New children should have candidates
+        assert(cs.count(child0) == 5);
+        assert(cs.count(child1) == 5);
+        
+        // Total candidates: 4 old goals * 5 + 2 new goals * 5 = 30
+        assert(cs.size() == 30);
+        
+        // Verify all goals are in lineage pool
+        assert(lp.goal_lineages.count(*g0) == 1);
+        assert(lp.goal_lineages.count(*g2) == 1);
+        assert(lp.goal_lineages.count(*g3) == 1);
+        assert(lp.goal_lineages.count(*g4) == 1);
+        assert(lp.goal_lineages.count(*child0) == 1);
+        assert(lp.goal_lineages.count(*child1) == 1);
+        assert(lp.resolution_lineages.count(*rl) == 1);
+        
+        // Empty avoidance store
+        assert(as.size() == 0);
     }
-
-    // Test 3: Return value matches what lp.resolution() would give for the same (gl, i)
+    
+    // Test 14: Database indexing with variables - resolve with last rule
     {
         trail t;
         t.push();
@@ -12584,30 +13988,80 @@ void test_goal_resolver() {
         bind_map bm(t);
         copier cp(seq, ep);
         lineage_pool lp;
-
+        
         resolution_store rs;
         goal_store gs;
         candidate_store cs;
-
+        
+        // Database: rules with variables at different indices
+        const expr* var0 = ep.var(seq());
+        const expr* var1 = ep.var(seq());
+        const expr* var2 = ep.var(seq());
+        
         const expr* p_expr = ep.atom("p");
-        rule r_fact{p_expr, {}};
-        database db = {r_fact};
-
+        const expr* q_expr = ep.atom("q");
+        const expr* r_expr = ep.atom("r");
+        
+        const expr* p_v0 = ep.cons(p_expr, var0);
+        const expr* q_v0 = ep.cons(q_expr, var0);
+        const expr* q_v1 = ep.cons(q_expr, var1);
+        const expr* r_v1 = ep.cons(r_expr, var1);
+        const expr* r_v2 = ep.cons(r_expr, var2);
+        
+        rule r0{p_v0, {q_v0}};                  // Rule 0: p(X) :- q(X)
+        rule r1{p_expr, {}};                    // Rule 1: p
+        rule r2{q_v1, {r_v1}};                  // Rule 2: q(Y) :- r(Y)
+        rule r3{r_v2, {}};                      // Rule 3: r(Z)  <-- We'll use this (last)
+        database db = {r0, r1, r2, r3};
+        
         goal_adder ga(gs, cs, db);
-        goal_resolver resolver(rs, gs, cs, db, cp, bm, lp, ga);
-
-        const goal_lineage* g1 = lp.goal(nullptr, 7);
-
-        // Get the interned rl *before* resolving - it should be the same pointer returned
-        const resolution_lineage* rl_expected = lp.resolution(g1, 0);
-
-        ga(g1, ep.atom("p"));
-        const resolution_lineage* rl_returned = resolver(g1, 0);
-
-        assert(rl_returned == rl_expected);
+        cdcl c;
+        goal_resolver resolver(rs, gs, cs, db, cp, bm, lp, ga, as);
+        
+        // Add goal "r(a)"
+        const goal_lineage* g1 = lp.goal(nullptr, 1);
+        const expr* atom_a = ep.atom("a");
+        const expr* goal_r_a = ep.cons(r_expr, atom_a);
+        ga(g1, goal_r_a);
+        
+        // Pre-resolution
+        assert(gs.size() == 1);
+        assert(gs.at(g1) == goal_r_a);
+        assert(cs.size() == 4);
+        
+        // Record sequencer and bindings before
+        uint32_t seq_before = seq.index;
+        size_t bindings_before = bm.bindings.size();
+        
+        // Resolve with rule 3 (LAST rule, index 3)
+        resolver(g1, 3);
+        const resolution_lineage* rl = lp.resolution(g1, 3);
+        
+        // Verify correct rule was used
+        assert(rl != nullptr);
+        assert(rl->parent == g1);
+        assert(rl->idx == 3);  // CRITICAL: Must be 3 (last rule)
+        
+        // Sequencer should have advanced (var2 was copied)
+        assert(seq.index > seq_before);
+        
+        // Goal removed
+        assert(gs.count(g1) == 0);
+        
+        // Rule 3 has empty body, so no new goals
+        assert(gs.size() == 0);
+        
+        // Unification should have occurred (r(Z') with r(a))
+        assert(bm.bindings.size() > bindings_before);
+        
+        // Resolution in pool
+        assert(lp.resolution_lineages.count(*rl) == 1);
+        
+        // Empty avoidance store
+        assert(as.size() == 0);
     }
-
-    // Test 4: Resolve with two-rule database using second rule (index 1)
+    
+    // Test 15: Multiple goals, resolve multiple times in sequence
     {
         trail t;
         t.push();
@@ -12616,3663 +14070,1973 @@ void test_goal_resolver() {
         bind_map bm(t);
         copier cp(seq, ep);
         lineage_pool lp;
-
+        
         resolution_store rs;
         goal_store gs;
         candidate_store cs;
-
+        
+        // Database
+        const expr* p_expr = ep.atom("p");
+        const expr* q_expr = ep.atom("q");
+        const expr* r_expr = ep.atom("r");
+        
+        rule r0{p_expr, {q_expr}};      // p :- q
+        rule r1{q_expr, {r_expr}};      // q :- r
+        rule r2{r_expr, {}};            // r
+        database db = {r0, r1, r2};
+        
+        goal_adder ga(gs, cs, db);
+        cdcl c;
+        goal_resolver resolver(rs, gs, cs, db, cp, bm, lp, ga, as);
+        
+        // Add three goals
+        const goal_lineage* g_p = lp.goal(nullptr, 10);
+        ga(g_p, p_expr);
+        
+        const goal_lineage* g_q = lp.goal(nullptr, 20);
+        ga(g_q, q_expr);
+        
+        const goal_lineage* g_r = lp.goal(nullptr, 30);
+        ga(g_r, r_expr);
+        
+        // Pre-resolution: 3 goals
+        assert(gs.size() == 3);
+        assert(cs.size() == 9); // 3 goals * 3 rules
+        
+        // First resolution: resolve g_q with rule 1 (q :- r)
+        resolver(g_q, 1);
+        const resolution_lineage* rl_q = lp.resolution(g_q, 1);
+        
+        assert(rl_q->parent == g_q);
+        assert(rl_q->idx == 1);
+        
+        // g_q removed, g_p and g_r remain
+        assert(gs.count(g_q) == 0);
+        assert(gs.count(g_p) == 1);
+        assert(gs.count(g_r) == 1);
+        
+        // One new goal from q's resolution
+        const goal_lineage* child_of_q = lp.goal(rl_q, 0);
+        assert(gs.count(child_of_q) == 1);
+        assert(gs.size() == 3); // g_p, g_r, child_of_q
+        
+        // Verify child_of_q has correct expression (r)
+        const expr* child_of_q_expr = gs.at(child_of_q);
+        assert(std::holds_alternative<expr::atom>(child_of_q_expr->content));
+        assert(std::get<expr::atom>(child_of_q_expr->content).value == std::string("r"));
+        
+        // Second resolution: resolve g_p with rule 0 (p :- q)
+        resolver(g_p, 0);
+        const resolution_lineage* rl_p = lp.resolution(g_p, 0);
+        
+        assert(rl_p->parent == g_p);
+        assert(rl_p->idx == 0);
+        
+        // g_p removed, g_r and child_of_q remain
+        assert(gs.count(g_p) == 0);
+        assert(gs.count(g_q) == 0);  // Still gone from first resolution
+        assert(gs.count(g_r) == 1);
+        assert(gs.count(child_of_q) == 1);
+        
+        // One new goal from p's resolution
+        const goal_lineage* child_of_p = lp.goal(rl_p, 0);
+        assert(gs.count(child_of_p) == 1);
+        assert(gs.size() == 3); // g_r, child_of_q, child_of_p
+        
+        // Verify child_of_p has correct expression (q)
+        const expr* child_of_p_expr = gs.at(child_of_p);
+        assert(std::holds_alternative<expr::atom>(child_of_p_expr->content));
+        assert(std::get<expr::atom>(child_of_p_expr->content).value == std::string("q"));
+        
+        // Third resolution: resolve g_r with rule 2 (r - fact)
+        resolver(g_r, 2);
+        const resolution_lineage* rl_r = lp.resolution(g_r, 2);
+        
+        assert(rl_r->parent == g_r);
+        assert(rl_r->idx == 2);
+        
+        // g_r removed, only children remain
+        assert(gs.count(g_r) == 0);
+        assert(gs.count(child_of_q) == 1);
+        assert(gs.count(child_of_p) == 1);
+        assert(gs.size() == 2); // child_of_q, child_of_p
+        
+        // No new goals from g_r (empty body)
+        
+        // Verify all resolutions in pool
+        assert(lp.resolution_lineages.count(*rl_p) == 1);
+        assert(lp.resolution_lineages.count(*rl_q) == 1);
+        assert(lp.resolution_lineages.count(*rl_r) == 1);
+        
+        // Verify all resolutions in resolution store
+        assert(rs.size() == 3);
+        assert(rs.count(rl_p) == 1);
+        assert(rs.count(rl_q) == 1);
+        assert(rs.count(rl_r) == 1);
+        
+        // Verify lineage structures remain correct
+        assert(child_of_p->parent == rl_p);
+        assert(rl_p->parent == g_p);
+        assert(child_of_q->parent == rl_q);
+        assert(rl_q->parent == g_q);
+        
+        // Empty avoidance store
+        assert(as.size() == 0);
+    }
+    
+    // Test 16: Resolution store with pre-existing resolutions
+    {
+        trail t;
+        t.push();
+        expr_pool ep(t);
+        sequencer seq(t);
+        bind_map bm(t);
+        copier cp(seq, ep);
+        lineage_pool lp;
+        
+        resolution_store rs;
+        goal_store gs;
+        candidate_store cs;
+        
+        // Database
         const expr* p_expr = ep.atom("p");
         const expr* q_expr = ep.atom("q");
         rule r0{p_expr, {}};
         rule r1{q_expr, {}};
         database db = {r0, r1};
-
+        
         goal_adder ga(gs, cs, db);
-        goal_resolver resolver(rs, gs, cs, db, cp, bm, lp, ga);
-
-        const goal_lineage* g1 = lp.goal(nullptr, 0);
-        ga(g1, ep.atom("q"));
-
-        const resolution_lineage* rl = resolver(g1, 1);
-
-        assert(rl != nullptr);
-        assert(rl == lp.resolution(g1, 1));
-        assert(rl->idx == 1);
+        cdcl c;
+        goal_resolver resolver(rs, gs, cs, db, cp, bm, lp, ga, as);
+        
+        // Pre-populate resolution store with some existing resolutions
+        const goal_lineage* g_old1 = lp.goal(nullptr, 100);
+        const goal_lineage* g_old2 = lp.goal(nullptr, 200);
+        const resolution_lineage* rl_old1 = lp.resolution(g_old1, 5);
+        const resolution_lineage* rl_old2 = lp.resolution(g_old2, 7);
+        rs.insert(rl_old1);
+        rs.insert(rl_old2);
+        
+        // Pre-resolution: 2 existing resolutions
+        assert(rs.size() == 2);
+        assert(rs.count(rl_old1) == 1);
+        assert(rs.count(rl_old2) == 1);
+        
+        // Add a new goal and resolve it
+        const goal_lineage* g_new = lp.goal(nullptr, 1);
+        ga(g_new, p_expr);
+        
+        assert(gs.size() == 1);
+        
+        // Resolve the new goal
+        resolver(g_new, 0);
+        const resolution_lineage* rl_new = lp.resolution(g_new, 0);
+        
+        // Verify resolution store now has 3 resolutions (2 old + 1 new)
+        assert(rs.size() == 3);
+        assert(rs.count(rl_old1) == 1);  // Old ones still there
+        assert(rs.count(rl_old2) == 1);  // Old ones still there
+        assert(rs.count(rl_new) == 1);   // New one added
+        
+        // Verify new resolution has correct structure
+        assert(rl_new->parent == g_new);
+        assert(rl_new->idx == 0);
+        
+        // Goal was removed
+        assert(gs.count(g_new) == 0);
+        
+        // All resolutions in pool
+        assert(lp.resolution_lineages.count(*rl_old1) == 1);
+        assert(lp.resolution_lineages.count(*rl_old2) == 1);
+        assert(lp.resolution_lineages.count(*rl_new) == 1);
+        
+        // Empty avoidance store
+        assert(as.size() == 0);
+    }
+    
+    // Test 17: Complex nested expressions with deep structures AND variables
+    {
+        trail t;
+        t.push();
+        expr_pool ep(t);
+        sequencer seq(t);
+        bind_map bm(t);
+        copier cp(seq, ep);
+        lineage_pool lp;
+        
+        resolution_store rs;
+        goal_store gs;
+        candidate_store cs;
+        
+        // Build nested expression with VARIABLE: p(f(g(h(X))))
+        const expr* var_x = ep.var(seq());
+        uint32_t original_x_idx = std::get<expr::var>(var_x->content).index;
+        const expr* h_x = ep.cons(ep.atom("h"), var_x);
+        const expr* g_h_x = ep.cons(ep.atom("g"), h_x);
+        const expr* f_g_h_x = ep.cons(ep.atom("f"), g_h_x);
+        const expr* p_nested = ep.cons(ep.atom("p"), f_g_h_x);
+        
+        // Build rule with nested expression in body: p(f(g(h(X)))) :- q(f(g(h(X))))
+        const expr* q_nested = ep.cons(ep.atom("q"), f_g_h_x);
+        rule r1{p_nested, {q_nested}};
+        database db = {r1};
+        
+        goal_adder ga(gs, cs, db);
+        cdcl c;
+        goal_resolver resolver(rs, gs, cs, db, cp, bm, lp, ga, as);
+        
+        // Add goal with concrete value: p(f(g(h(a))))
+        const expr* atom_a = ep.atom("a");
+        const expr* h_a = ep.cons(ep.atom("h"), atom_a);
+        const expr* g_h_a = ep.cons(ep.atom("g"), h_a);
+        const expr* f_g_h_a = ep.cons(ep.atom("f"), g_h_a);
+        const expr* goal_p_nested = ep.cons(ep.atom("p"), f_g_h_a);
+        
+        const goal_lineage* g1 = lp.goal(nullptr, 1);
+        ga(g1, goal_p_nested);
+        
+        // Store expression pool size and original pointers
+        size_t ep_size_before = ep.size();
+        const expr* original_body_expr = q_nested;
+        
+        // Pre-resolution: original variable not bound
+        assert(bm.bindings.count(original_x_idx) == 0);
+        
+        uint32_t seq_before = seq.index;
+        
+        // Resolve
+        resolver(g1, 0);
+        const resolution_lineage* rl = lp.resolution(g1, 0);
+        
+        // Sequencer advanced (variable copied)
+        assert(seq.index > seq_before);
+        
+        // Verify resolution created
+        assert(rs.size() == 1);
         assert(rs.count(rl) == 1);
-        assert(gs.empty());
-        assert(cs.empty());
+        
+        // One child goal added
+        assert(gs.size() == 1);
+        const goal_lineage* child = lp.goal(rl, 0);
+        assert(gs.count(child) == 1);
+        
+        // Get the child expression
+        const expr* child_expr = gs.at(child);
+        
+        // CRITICAL: Copied expression must be DIFFERENT pointer from original
+        assert(child_expr != original_body_expr);
+        
+        // CRITICAL: Expression pool grew (new expressions created during copy)
+        assert(ep.size() > ep_size_before);
+        
+        // Navigate through the nested structure: q(f(g(h(a))))
+        assert(std::holds_alternative<expr::cons>(child_expr->content));
+        const expr::cons& cons1 = std::get<expr::cons>(child_expr->content);
+        assert(std::holds_alternative<expr::atom>(cons1.lhs->content));
+        assert(std::get<expr::atom>(cons1.lhs->content).value == "q");
+        
+        // Get f(g(h(a))) after unification
+        const expr* f_part = bm.whnf(cons1.rhs);
+        assert(std::holds_alternative<expr::cons>(f_part->content));
+        const expr::cons& cons2 = std::get<expr::cons>(f_part->content);
+        assert(std::get<expr::atom>(cons2.lhs->content).value == "f");
+        
+        // Get g(h(a))
+        const expr* g_part = bm.whnf(cons2.rhs);
+        assert(std::holds_alternative<expr::cons>(g_part->content));
+        const expr::cons& cons3 = std::get<expr::cons>(g_part->content);
+        assert(std::get<expr::atom>(cons3.lhs->content).value == "g");
+        
+        // Get h(a)
+        const expr* h_part = bm.whnf(cons3.rhs);
+        assert(std::holds_alternative<expr::cons>(h_part->content));
+        const expr::cons& cons4 = std::get<expr::cons>(h_part->content);
+        assert(std::get<expr::atom>(cons4.lhs->content).value == "h");
+        
+        // Get a (after following all bindings)
+        const expr* a_part = bm.whnf(cons4.rhs);
+        assert(std::holds_alternative<expr::atom>(a_part->content));
+        assert(std::get<expr::atom>(a_part->content).value == "a");
+        
+        // CRITICAL: Original variable still not in bind_map
+        assert(bm.bindings.count(original_x_idx) == 0);
+        
+        // CRITICAL: Renamed variable IS in bind_map
+        assert(bm.bindings.size() == 1);
+        
+        // Empty avoidance store
+        assert(as.size() == 0);
+    }
+    
+    // Test 18: Large body clauses (10+ literals)
+    {
+        trail t;
+        t.push();
+        expr_pool ep(t);
+        sequencer seq(t);
+        bind_map bm(t);
+        copier cp(seq, ep);
+        lineage_pool lp;
+        
+        resolution_store rs;
+        goal_store gs;
+        candidate_store cs;
+        
+        // Create rule with 15 body literals: p :- q1, q2, ..., q15
+        const expr* p_expr = ep.atom("p");
+        std::vector<const expr*> body_literals;
+        for (int i = 1; i <= 15; i++) {
+            body_literals.push_back(ep.atom("q" + std::to_string(i)));
+        }
+        
+        rule r1{p_expr, {body_literals.begin(), body_literals.end()}};
+        database db = {r1};
+        
+        goal_adder ga(gs, cs, db);
+        cdcl c;
+        goal_resolver resolver(rs, gs, cs, db, cp, bm, lp, ga, as);
+        
+        // Add goal
+        const goal_lineage* g1 = lp.goal(nullptr, 1);
+        ga(g1, p_expr);
+        
+        assert(gs.size() == 1);
+        assert(cs.size() == 1);
+        
+        // Resolve
+        resolver(g1, 0);
+        const resolution_lineage* rl = lp.resolution(g1, 0);
+        
+        // Verify resolution
+        assert(rs.size() == 1);
+        assert(rs.count(rl) == 1);
+        
+        // Goal removed
+        assert(gs.count(g1) == 0);
+        
+        // 15 child goals should be added
+        assert(gs.size() == 15);
+        
+        // Verify each child
+        for (size_t i = 0; i < 15; i++) {
+            const goal_lineage* child = lp.goal(rl, i);
+            assert(gs.count(child) == 1);
+            assert(child->parent == rl);
+            assert(child->idx == i);
+            
+            // Verify expression
+            const expr* child_expr = gs.at(child);
+            assert(std::holds_alternative<expr::atom>(child_expr->content));
+            assert(std::get<expr::atom>(child_expr->content).value == "q" + std::to_string(i + 1));
+            
+            // Each child should have candidates
+            assert(cs.count(child) == 1);
+        }
+        
+        // Total: 15 children * 1 candidate each
+        assert(cs.size() == 15);
+        
+        // Empty avoidance store
+        assert(as.size() == 0);
+    }
+    
+    // Test 19: CRITICAL - Goal with multiple variables
+    {
+        trail t;
+        t.push();
+        expr_pool ep(t);
+        sequencer seq(t);
+        bind_map bm(t);
+        copier cp(seq, ep);
+        lineage_pool lp;
+        
+        resolution_store rs;
+        goal_store gs;
+        candidate_store cs;
+        
+        // Database: rule "p(A, B) :- q(A), r(B)"
+        const expr* var_a = ep.var(seq());
+        const expr* var_b = ep.var(seq());
+        uint32_t original_a_idx = std::get<expr::var>(var_a->content).index;
+        uint32_t original_b_idx = std::get<expr::var>(var_b->content).index;
+        
+        const expr* p_ab = ep.cons(ep.atom("p"), ep.cons(var_a, var_b));
+        const expr* q_a = ep.cons(ep.atom("q"), var_a);
+        const expr* r_b = ep.cons(ep.atom("r"), var_b);
+        rule r1{p_ab, {q_a, r_b}};
+        database db = {r1};
+        
+        goal_adder ga(gs, cs, db);
+        cdcl c;
+        goal_resolver resolver(rs, gs, cs, db, cp, bm, lp, ga, as);
+        
+        // CRITICAL: Create goal with VARIABLES: p(X, Y) where X and Y are goal variables
+        const expr* goal_var_x = ep.var(seq());
+        const expr* goal_var_y = ep.var(seq());
+        uint32_t goal_x_idx = std::get<expr::var>(goal_var_x->content).index;
+        uint32_t goal_y_idx = std::get<expr::var>(goal_var_y->content).index;
+        
+        const expr* goal_p_xy = ep.cons(ep.atom("p"), ep.cons(goal_var_x, goal_var_y));
+        const goal_lineage* g1 = lp.goal(nullptr, 1);
+        ga(g1, goal_p_xy);
+        
+        // Pre-resolution: NO variables should be in bind_map
+        assert(bm.bindings.count(original_a_idx) == 0);
+        assert(bm.bindings.count(original_b_idx) == 0);
+        assert(bm.bindings.count(goal_x_idx) == 0);
+        assert(bm.bindings.count(goal_y_idx) == 0);
+        
+        uint32_t seq_before = seq.index;
+        
+        // Resolve - this will do variable-on-variable unification
+        resolver(g1, 0);
+        const resolution_lineage* rl = lp.resolution(g1, 0);
+        
+        // Sequencer advanced (rule variables renamed)
+        assert(seq.index > seq_before);
+        
+        // CRITICAL: Original rule variables should STILL NOT be in bind_map
+        assert(bm.bindings.count(original_a_idx) == 0);
+        assert(bm.bindings.count(original_b_idx) == 0);
+        
+        // Two children added
+        assert(gs.size() == 2);
+        const goal_lineage* child0 = lp.goal(rl, 0);
+        const goal_lineage* child1 = lp.goal(rl, 1);
+        
+        // Get child expressions
+        const expr* expr0 = gs.at(child0);
+        const expr* expr1 = gs.at(child1);
+        
+        // Both should be cons cells with variables
+        assert(std::holds_alternative<expr::cons>(expr0->content));
+        assert(std::holds_alternative<expr::cons>(expr1->content));
+        
+        const expr::cons& cons0 = std::get<expr::cons>(expr0->content);
+        const expr::cons& cons1 = std::get<expr::cons>(expr1->content);
+        
+        // Heads should be q and r
+        assert(std::get<expr::atom>(cons0.lhs->content).value == "q");
+        assert(std::get<expr::atom>(cons1.lhs->content).value == "r");
+        
+        // Arguments should be variables (unified with goal variables)
+        const expr* arg0 = cons0.rhs;
+        const expr* arg1 = cons1.rhs;
+        
+        assert(std::holds_alternative<expr::var>(arg0->content));
+        assert(std::holds_alternative<expr::var>(arg1->content));
+        
+        // These are the renamed rule variables
+        uint32_t renamed_a_idx = std::get<expr::var>(arg0->content).index;
+        uint32_t renamed_b_idx = std::get<expr::var>(arg1->content).index;
+        
+        // They should be different from originals
+        assert(renamed_a_idx != original_a_idx);
+        assert(renamed_b_idx != original_b_idx);
+        
+        // CRITICAL: Check bind_map bindings - variable-on-variable unification occurred
+        // Either goal vars are bound to renamed vars, or renamed vars are bound to goal vars
+        bool a_binding_exists = (bm.bindings.count(goal_x_idx) > 0) || (bm.bindings.count(renamed_a_idx) > 0);
+        bool b_binding_exists = (bm.bindings.count(goal_y_idx) > 0) || (bm.bindings.count(renamed_b_idx) > 0);
+        assert(a_binding_exists);
+        assert(b_binding_exists);
+        
+        // Normalize both to verify they point to same ultimate variable
+        const expr* norm0 = bm.whnf(arg0);
+        const expr* norm1 = bm.whnf(arg1);
+        
+        // Both should still be variables (not atoms)
+        assert(std::holds_alternative<expr::var>(norm0->content));
+        assert(std::holds_alternative<expr::var>(norm1->content));
+        
+        // Empty avoidance store
+        assert(as.size() == 0);
+    }
+    
+    // Test 20: EXTREMELY IMPORTANT - Check exact binding contents
+    {
+        trail t;
+        t.push();
+        expr_pool ep(t);
+        sequencer seq(t);
+        bind_map bm(t);
+        copier cp(seq, ep);
+        lineage_pool lp;
+        
+        resolution_store rs;
+        goal_store gs;
+        candidate_store cs;
+        
+        // Database: rule "p(X, Y) :- q(X), r(Y)"
+        const expr* var_x = ep.var(seq());
+        const expr* var_y = ep.var(seq());
+        uint32_t original_x_idx = std::get<expr::var>(var_x->content).index;
+        uint32_t original_y_idx = std::get<expr::var>(var_y->content).index;
+        
+        const expr* p_xy = ep.cons(ep.atom("p"), ep.cons(var_x, var_y));
+        const expr* q_x = ep.cons(ep.atom("q"), var_x);
+        const expr* r_y = ep.cons(ep.atom("r"), var_y);
+        rule r1{p_xy, {q_x, r_y}};
+        database db = {r1};
+        
+        goal_adder ga(gs, cs, db);
+        cdcl c;
+        goal_resolver resolver(rs, gs, cs, db, cp, bm, lp, ga, as);
+        
+        // Goal: p(a, b) - instantiated
+        const expr* atom_a = ep.atom("a");
+        const expr* atom_b = ep.atom("b");
+        const expr* goal_p_ab = ep.cons(ep.atom("p"), ep.cons(atom_a, atom_b));
+        const goal_lineage* g1 = lp.goal(nullptr, 1);
+        ga(g1, goal_p_ab);
+        
+        // Pre-resolution: bind_map should be empty
+        assert(bm.bindings.size() == 0);
+        assert(bm.bindings.count(original_x_idx) == 0);
+        assert(bm.bindings.count(original_y_idx) == 0);
+        
+        uint32_t seq_before = seq.index;
+        
+        // Resolve
+        resolver(g1, 0);
+        const resolution_lineage* rl = lp.resolution(g1, 0);
+        
+        // Two new variables were created (renamed X and Y)
+        uint32_t seq_after = seq.index;
+        assert(seq_after >= seq_before + 2);
+        
+        // CRITICAL: Original variables still not in bind_map
+        assert(bm.bindings.count(original_x_idx) == 0);
+        assert(bm.bindings.count(original_y_idx) == 0);
+        
+        // Get the child goals to extract renamed variables
+        const goal_lineage* child0 = lp.goal(rl, 0);
+        const goal_lineage* child1 = lp.goal(rl, 1);
+        
+        const expr* expr0 = gs.at(child0);
+        const expr* expr1 = gs.at(child1);
+        
+        // Extract renamed variables from children
+        const expr::cons& cons0 = std::get<expr::cons>(expr0->content);
+        const expr::cons& cons1 = std::get<expr::cons>(expr1->content);
+        const expr* arg0 = cons0.rhs;
+        const expr* arg1 = cons1.rhs;
+        
+        uint32_t renamed_x_idx = 0;
+        uint32_t renamed_y_idx = 0;
+        
+        if (std::holds_alternative<expr::var>(arg0->content)) {
+            renamed_x_idx = std::get<expr::var>(arg0->content).index;
+        }
+        if (std::holds_alternative<expr::var>(arg1->content)) {
+            renamed_y_idx = std::get<expr::var>(arg1->content).index;
+        }
+        
+        // CRITICAL: Verify exact bind_map contents
+        // Bind_map should have exactly 2 entries (one for each renamed variable)
+        assert(bm.bindings.size() == 2);
+        
+        // CRITICAL: Renamed X should be bound to "a"
+        assert(bm.bindings.count(renamed_x_idx) == 1);
+        const expr* x_binding = bm.bindings.at(renamed_x_idx);
+        assert(x_binding != nullptr);
+        assert(std::holds_alternative<expr::atom>(x_binding->content));
+        assert(std::get<expr::atom>(x_binding->content).value == "a");
+        
+        // CRITICAL: Renamed Y should be bound to "b"
+        assert(bm.bindings.count(renamed_y_idx) == 1);
+        const expr* y_binding = bm.bindings.at(renamed_y_idx);
+        assert(y_binding != nullptr);
+        assert(std::holds_alternative<expr::atom>(y_binding->content));
+        assert(std::get<expr::atom>(y_binding->content).value == "b");
+        
+        // Verify whnf returns the atoms
+        const expr* x_normalized = bm.whnf(arg0);
+        const expr* y_normalized = bm.whnf(arg1);
+        assert(x_normalized == atom_a);
+        assert(y_normalized == atom_b);
+        
+        // Empty avoidance store
+        assert(as.size() == 0);
+    }
+    
+    // Test 21: EXTREMELY IMPORTANT - Verify copied expressions are new instances
+    {
+        trail t;
+        t.push();
+        expr_pool ep(t);
+        sequencer seq(t);
+        bind_map bm(t);
+        copier cp(seq, ep);
+        lineage_pool lp;
+        
+        resolution_store rs;
+        goal_store gs;
+        candidate_store cs;
+        
+        // Database: rule "p(X) :- q(X), r(X)"
+        const expr* var_x = ep.var(seq());
+        const expr* p_x = ep.cons(ep.atom("p"), var_x);
+        const expr* q_x = ep.cons(ep.atom("q"), var_x);
+        const expr* r_x = ep.cons(ep.atom("r"), var_x);
+        rule r1{p_x, {q_x, r_x}};
+        database db = {r1};
+        
+        goal_adder ga(gs, cs, db);
+        cdcl c;
+        goal_resolver resolver(rs, gs, cs, db, cp, bm, lp, ga, as);
+        
+        // Store original expression pointers
+        const expr* original_head = r1.head;
+        const expr* original_body0 = *r1.body.begin();
+        const expr* original_body1 = *(++r1.body.begin());
+        
+        // Goal: p(a)
+        const expr* goal_p_a = ep.cons(ep.atom("p"), ep.atom("a"));
+        const goal_lineage* g1 = lp.goal(nullptr, 1);
+        ga(g1, goal_p_a);
+        
+        size_t ep_size_before = ep.size();
+        
+        // Resolve
+        resolver(g1, 0);
+        const resolution_lineage* rl = lp.resolution(g1, 0);
+        
+        // CRITICAL: Expression pool should have grown
+        size_t ep_size_after = ep.size();
+        assert(ep_size_after > ep_size_before);
+        
+        // Get child expressions
+        const goal_lineage* child0 = lp.goal(rl, 0);
+        const goal_lineage* child1 = lp.goal(rl, 1);
+        const expr* copied_body0 = gs.at(child0);
+        const expr* copied_body1 = gs.at(child1);
+        
+        // CRITICAL: Copied expressions should be DIFFERENT pointers from originals
+        assert(copied_body0 != original_body0);
+        assert(copied_body1 != original_body1);
+        
+        // CRITICAL: But they should be EQUAL in structure (before substitution)
+        // Since variables were renamed, the structure is similar but vars differ
+        // The head atom "q" should match
+        const expr::cons& copied_cons0 = std::get<expr::cons>(copied_body0->content);
+        const expr::cons& copied_cons1 = std::get<expr::cons>(copied_body1->content);
+        const expr::cons& original_cons0 = std::get<expr::cons>(original_body0->content);
+        const expr::cons& original_cons1 = std::get<expr::cons>(original_body1->content);
+        
+        // Heads match
+        assert(std::get<expr::atom>(copied_cons0.lhs->content).value == 
+               std::get<expr::atom>(original_cons0.lhs->content).value);
+        assert(std::get<expr::atom>(copied_cons1.lhs->content).value == 
+               std::get<expr::atom>(original_cons1.lhs->content).value);
+        
+        // But the tail (variables) should be different pointers
+        assert(copied_cons0.rhs != original_cons0.rhs);
+        assert(copied_cons1.rhs != original_cons1.rhs);
+        
+        // Empty avoidance store
+        assert(as.size() == 0);
+    }
+    
+    // Test 22: Exact candidate indices verification
+    {
+        trail t;
+        t.push();
+        expr_pool ep(t);
+        sequencer seq(t);
+        bind_map bm(t);
+        copier cp(seq, ep);
+        lineage_pool lp;
+        
+        resolution_store rs;
+        goal_store gs;
+        candidate_store cs;
+        
+        // Database: 5 rules
+        const expr* p = ep.atom("p");
+        const expr* q = ep.atom("q");
+        rule r0{p, {}};
+        rule r1{p, {q}};
+        rule r2{q, {}};
+        rule r3{q, {p}};
+        rule r4{p, {q, q}};
+        database db = {r0, r1, r2, r3, r4};
+        
+        goal_adder ga(gs, cs, db);
+        cdcl c;
+        goal_resolver resolver(rs, gs, cs, db, cp, bm, lp, ga, as);
+        
+        // Add goal p
+        const goal_lineage* g1 = lp.goal(nullptr, 1);
+        ga(g1, p);
+        
+        // Verify exact candidate indices for g1 (should be 0,1,2,3,4)
+        assert(cs.count(g1) == 5);
+        auto range = cs.equal_range(g1);
+        std::vector<size_t> candidates;
+        for (auto it = range.first; it != range.second; ++it) {
+            candidates.push_back(it->second);
+        }
+        std::sort(candidates.begin(), candidates.end());
+        assert(candidates.size() == 5);
+        assert(candidates[0] == 0);
+        assert(candidates[1] == 1);
+        assert(candidates[2] == 2);
+        assert(candidates[3] == 3);
+        assert(candidates[4] == 4);
+        
+        // Resolve with rule 1
+        resolver(g1, 1);
+        const resolution_lineage* rl = lp.resolution(g1, 1);
+        
+        // CRITICAL: All candidates for g1 should be removed
+        assert(cs.count(g1) == 0);
+        
+        // New child goal q should have been added
+        const goal_lineage* child = lp.goal(rl, 0);
+        assert(gs.count(child) == 1);
+        
+        // CRITICAL: Verify exact candidate indices for child (should be 0,1,2,3,4)
+        assert(cs.count(child) == 5);
+        auto child_range = cs.equal_range(child);
+        std::vector<size_t> child_candidates;
+        for (auto it = child_range.first; it != child_range.second; ++it) {
+            child_candidates.push_back(it->second);
+        }
+        std::sort(child_candidates.begin(), child_candidates.end());
+        assert(child_candidates.size() == 5);
+        assert(child_candidates[0] == 0);
+        assert(child_candidates[1] == 1);
+        assert(child_candidates[2] == 2);
+        assert(child_candidates[3] == 3);
+        assert(child_candidates[4] == 4);
+        
+        // Empty avoidance store
+        assert(as.size() == 0);
+    }
+    
+    // Test 23: Variable indirection chains through multiple resolutions
+    {
+        trail t;
+        t.push();
+        expr_pool ep(t);
+        sequencer seq(t);
+        bind_map bm(t);
+        copier cp(seq, ep);
+        lineage_pool lp;
+        
+        resolution_store rs;
+        goal_store gs;
+        candidate_store cs;
+        
+        // Database:
+        // p(X) :- q(X)
+        // q(Y) :- r(Y)
+        // r(a)
+        const expr* var_x = ep.var(seq());
+        const expr* var_y = ep.var(seq());
+        const expr* atom_a = ep.atom("a");
+        
+        const expr* p_x = ep.cons(ep.atom("p"), var_x);
+        const expr* q_x = ep.cons(ep.atom("q"), var_x);
+        const expr* q_y = ep.cons(ep.atom("q"), var_y);
+        const expr* r_y = ep.cons(ep.atom("r"), var_y);
+        const expr* r_a = ep.cons(ep.atom("r"), atom_a);
+        
+        rule r0{p_x, {q_x}};
+        rule r1{q_y, {r_y}};
+        rule r2{r_a, {}};
+        database db = {r0, r1, r2};
+        
+        goal_adder ga(gs, cs, db);
+        cdcl c;
+        goal_resolver resolver(rs, gs, cs, db, cp, bm, lp, ga, as);
+        
+        // Start with goal p(Z) where Z is a variable
+        const expr* var_z = ep.var(seq());
+        uint32_t z_idx = std::get<expr::var>(var_z->content).index;
+        const expr* goal_p_z = ep.cons(ep.atom("p"), var_z);
+        const goal_lineage* g_p = lp.goal(nullptr, 1);
+        ga(g_p, goal_p_z);
+        
+        // Resolution 1: p(Z) with rule 0 creates q(Z') where Z binds to Z'
+        resolver(g_p, 0);
+        const resolution_lineage* rl_p = lp.resolution(g_p, 0);
+        const goal_lineage* g_q = lp.goal(rl_p, 0);
+        
+        // Extract variable from q(Z')
+        const expr* expr_q = gs.at(g_q);
+        const expr::cons& cons_q = std::get<expr::cons>(expr_q->content);
+        const expr* arg_q = cons_q.rhs;
+        assert(std::holds_alternative<expr::var>(arg_q->content));
+        uint32_t z_prime_idx = std::get<expr::var>(arg_q->content).index;
+        
+        // Check binding: either Z→Z' or Z'→Z
+        bool first_binding_exists = (bm.bindings.count(z_idx) > 0) || (bm.bindings.count(z_prime_idx) > 0);
+        assert(first_binding_exists);
+        
+        // Resolution 2: q(Z') with rule 1 creates r(Z'') where Z' binds to Z''
+        resolver(g_q, 1);
+        const resolution_lineage* rl_q = lp.resolution(g_q, 1);
+        const goal_lineage* g_r = lp.goal(rl_q, 0);
+        
+        // Extract variable from r(Z'')
+        const expr* expr_r = gs.at(g_r);
+        const expr::cons& cons_r = std::get<expr::cons>(expr_r->content);
+        const expr* arg_r = cons_r.rhs;
+        assert(std::holds_alternative<expr::var>(arg_r->content));
+        uint32_t z_double_prime_idx = std::get<expr::var>(arg_r->content).index;
+        
+        // Resolution 3: r(Z'') with rule 2 (r(a)) unifies Z'' with 'a'
+        resolver(g_r, 2);
+        
+        // CRITICAL: Now test the chain: Z → Z' → Z'' → 'a'
+        // whnf should resolve the entire chain by following bindings
+        
+        // Test 1: whnf on Z'' (most recent variable in chain)
+        const expr* resolved_z_double = bm.whnf(arg_r);
+        // MUST resolve to 'a' (no fallback)
+        assert(std::holds_alternative<expr::atom>(resolved_z_double->content));
+        assert(std::get<expr::atom>(resolved_z_double->content).value == "a");
+        
+        // Test 2: whnf on Z' (middle variable in chain)
+        const expr* resolved_z_prime = bm.whnf(arg_q);
+        // MUST resolve to 'a' through the chain (no fallback)
+        assert(std::holds_alternative<expr::atom>(resolved_z_prime->content));
+        assert(std::get<expr::atom>(resolved_z_prime->content).value == "a");
+        
+        // Test 3: whnf on Z (original goal variable) - STRONGEST TEST
+        // Create a variable expression pointing to Z
+        const expr* test_var_z = ep.var(z_idx);
+        const expr* resolved_z = bm.whnf(test_var_z);
+        // MUST resolve to 'a' through the full chain: Z → Z' → Z'' → 'a'
+        // This is the CRITICAL assertion - no fallback paths allowed
+        assert(std::holds_alternative<expr::atom>(resolved_z->content));
+        assert(std::get<expr::atom>(resolved_z->content).value == "a");
+        
+        // Verify the chain works by checking that each step is connected
+        // At least 3 bindings should exist (connecting the chain)
+        assert(bm.bindings.size() >= 3);
+        
+        // Empty avoidance store
+        assert(as.size() == 0);
+    }
+    
+    // Test 24: Empty body with variables in head (fact with variable)
+    {
+        trail t;
+        t.push();
+        expr_pool ep(t);
+        sequencer seq(t);
+        bind_map bm(t);
+        copier cp(seq, ep);
+        lineage_pool lp;
+        
+        resolution_store rs;
+        goal_store gs;
+        candidate_store cs;
+        
+        // Database: p(X). (fact with variable - empty body)
+        const expr* var_x = ep.var(seq());
+        uint32_t original_x_idx = std::get<expr::var>(var_x->content).index;
+        const expr* p_x = ep.cons(ep.atom("p"), var_x);
+        rule r1{p_x, {}};  // Empty body
+        database db = {r1};
+        
+        goal_adder ga(gs, cs, db);
+        cdcl c;
+        goal_resolver resolver(rs, gs, cs, db, cp, bm, lp, ga, as);
+        
+        // Goal: p(a) - concrete atom
+        const expr* atom_a = ep.atom("a");
+        const expr* goal_p_a = ep.cons(ep.atom("p"), atom_a);
+        const goal_lineage* g1 = lp.goal(nullptr, 1);
+        ga(g1, goal_p_a);
+        
+        // Pre-resolution
+        assert(gs.size() == 1);
+        assert(bm.bindings.count(original_x_idx) == 0);
+        
+        uint32_t seq_before = seq.index;
+        
+        // Resolve with the fact
+        resolver(g1, 0);
+        const resolution_lineage* rl = lp.resolution(g1, 0);
+        
+        // Sequencer advanced (variable was copied)
+        assert(seq.index > seq_before);
+        
+        // Resolution created
+        assert(rs.size() == 1);
+        assert(rs.count(rl) == 1);
+        
+        // Goal removed
+        assert(gs.count(g1) == 0);
+        
+        // CRITICAL: No new goals (empty body)
+        assert(gs.size() == 0);
+        
+        // CRITICAL: But unification occurred (X' = a)
+        // Exactly one variable should be in bind_map
+        assert(bm.bindings.size() == 1);
+        
+        // CRITICAL: Original variable still not in bind_map
+        assert(bm.bindings.count(original_x_idx) == 0);
+        
+        // Extract the renamed variable from bind_map (don't assume index)
+        // There should be exactly one binding
+        auto it = bm.bindings.begin();
+        uint32_t renamed_x_idx = it->first;
+        const expr* x_binding = it->second;
+        
+        // Verify the renamed variable is different from original
+        assert(renamed_x_idx != original_x_idx);
+        
+        // Verify the binding content is 'a'
+        assert(x_binding != nullptr);
+        assert(std::holds_alternative<expr::atom>(x_binding->content));
+        assert(std::get<expr::atom>(x_binding->content).value == "a");
+        
+        // Double-check through whnf
+        const expr* test_var = ep.var(renamed_x_idx);
+        const expr* normalized = bm.whnf(test_var);
+        assert(normalized == atom_a);
+        
+        // Empty avoidance store
+        assert(as.size() == 0);
+    }
+    
+    // Test 25: Multiple rules with same head
+    {
+        trail t;
+        t.push();
+        expr_pool ep(t);
+        sequencer seq(t);
+        bind_map bm(t);
+        copier cp(seq, ep);
+        lineage_pool lp;
+        
+        resolution_store rs;
+        goal_store gs;
+        candidate_store cs;
+        
+        // Database: Three rules all with head p(X)
+        const expr* var_x1 = ep.var(seq());
+        const expr* var_x2 = ep.var(seq());
+        const expr* var_x3 = ep.var(seq());
+        
+        const expr* p_x1 = ep.cons(ep.atom("p"), var_x1);
+        const expr* p_x2 = ep.cons(ep.atom("p"), var_x2);
+        const expr* p_x3 = ep.cons(ep.atom("p"), var_x3);
+        
+        const expr* q_x1 = ep.cons(ep.atom("q"), var_x1);
+        const expr* r_x2 = ep.cons(ep.atom("r"), var_x2);
+        const expr* s_x3 = ep.cons(ep.atom("s"), var_x3);
+        
+        rule r0{p_x1, {q_x1}};  // p(X) :- q(X)
+        rule r1{p_x2, {r_x2}};  // p(X) :- r(X)
+        rule r2{p_x3, {s_x3}};  // p(X) :- s(X)
+        database db = {r0, r1, r2};
+        
+        goal_adder ga(gs, cs, db);
+        cdcl c;
+        goal_resolver resolver(rs, gs, cs, db, cp, bm, lp, ga, as);
+        
+        // Goal: p(a)
+        const expr* goal_p_a = ep.cons(ep.atom("p"), ep.atom("a"));
+        const goal_lineage* g1 = lp.goal(nullptr, 1);
+        ga(g1, goal_p_a);
+        
+        // All three rules are candidates
+        assert(cs.count(g1) == 3);
+        
+        // Resolve with rule 1 (middle one: p(X) :- r(X))
+        resolver(g1, 1);
+        const resolution_lineage* rl = lp.resolution(g1, 1);
+        
+        // Resolution has correct index
+        assert(rl->idx == 1);
+        
+        // One child: r(a)
+        assert(gs.size() == 1);
+        const goal_lineage* child = lp.goal(rl, 0);
+        const expr* child_expr = gs.at(child);
+        
+        // CRITICAL: Child should be r(a), NOT q(a) or s(a)
+        const expr::cons& cons = std::get<expr::cons>(child_expr->content);
+        assert(std::get<expr::atom>(cons.lhs->content).value == "r");
+        
+        // Verify the argument
+        const expr* arg = bm.whnf(cons.rhs);
+        assert(std::holds_alternative<expr::atom>(arg->content));
+        assert(std::get<expr::atom>(arg->content).value == "a");
+        
+        // Empty avoidance store
+        assert(as.size() == 0);
+    }
+    
+    // Test 26: Resolution sequence - parent then child (depth-first order)
+    {
+        trail t;
+        t.push();
+        expr_pool ep(t);
+        sequencer seq(t);
+        bind_map bm(t);
+        copier cp(seq, ep);
+        lineage_pool lp;
+        
+        resolution_store rs;
+        goal_store gs;
+        candidate_store cs;
+        
+        // Database: chained rules
+        const expr* p = ep.atom("p");
+        const expr* q = ep.atom("q");
+        const expr* r = ep.atom("r");
+        
+        rule r0{p, {q}};      // p :- q
+        rule r1{q, {r}};      // q :- r
+        rule r2{r, {}};       // r
+        database db = {r0, r1, r2};
+        
+        goal_adder ga(gs, cs, db);
+        cdcl c;
+        goal_resolver resolver(rs, gs, cs, db, cp, bm, lp, ga, as);
+        
+        // Add root goal p
+        const goal_lineage* g_p = lp.goal(nullptr, 0);
+        ga(g_p, p);
+        
+        // Resolution 1: p with rule 0 → creates q
+        resolver(g_p, 0);
+        const resolution_lineage* rl_p = lp.resolution(g_p, 0);
+        const goal_lineage* g_q = lp.goal(rl_p, 0);
+        
+        // Verify lineage: g_q → rl_p → g_p → nullptr
+        assert(g_q->parent == rl_p);
+        assert(rl_p->parent == g_p);
+        assert(g_p->parent == nullptr);
+        
+        // Resolution 2: q with rule 1 → creates r (child immediately after parent)
+        resolver(g_q, 1);
+        const resolution_lineage* rl_q = lp.resolution(g_q, 1);
+        const goal_lineage* g_r = lp.goal(rl_q, 0);
+        
+        // CRITICAL: Verify full lineage chain: g_r → rl_q → g_q → rl_p → g_p → nullptr
+        assert(g_r->parent == rl_q);
+        assert(g_r->idx == 0);
+        assert(rl_q->parent == g_q);
+        assert(rl_q->idx == 1);
+        assert(g_q->parent == rl_p);
+        assert(g_q->idx == 0);
+        assert(rl_p->parent == g_p);
+        assert(rl_p->idx == 0);
+        assert(g_p->parent == nullptr);
+        assert(g_p->idx == 0);
+        
+        // Resolution 3: r with rule 2
+        resolver(g_r, 2);
+        const resolution_lineage* rl_r = lp.resolution(g_r, 2);
+        
+        // Verify lineage still correct after third resolution
+        assert(rl_r->parent == g_r);
+        assert(g_r->parent == rl_q);
+        assert(rl_q->parent == g_q);
+        assert(g_q->parent == rl_p);
+        assert(rl_p->parent == g_p);
+        assert(g_p->parent == nullptr);
+        
+        // Verify all in stores
+        assert(rs.size() == 3);
+        assert(rs.count(rl_p) == 1);
+        assert(rs.count(rl_q) == 1);
+        assert(rs.count(rl_r) == 1);
+        
+        // Empty avoidance store
+        assert(as.size() == 0);
+    }
+    
+    // Test 27: Resolution sequence - parent, independent goal, then child
+    {
+        trail t;
+        t.push();
+        expr_pool ep(t);
+        sequencer seq(t);
+        bind_map bm(t);
+        copier cp(seq, ep);
+        lineage_pool lp;
+        
+        resolution_store rs;
+        goal_store gs;
+        candidate_store cs;
+        
+        // Database
+        const expr* p = ep.atom("p");
+        const expr* q = ep.atom("q");
+        const expr* x = ep.atom("x");
+        const expr* y = ep.atom("y");
+        const expr* z = ep.atom("z");
+        
+        rule r0{p, {q}};      // p :- q
+        rule r1{q, {}};       // q
+        rule r2{x, {y}};      // x :- y (independent branch)
+        rule r3{y, {z}};      // y :- z
+        rule r4{z, {}};       // z
+        database db = {r0, r1, r2, r3, r4};
+        
+        goal_adder ga(gs, cs, db);
+        cdcl c;
+        goal_resolver resolver(rs, gs, cs, db, cp, bm, lp, ga, as);
+        
+        // Add two independent root goals
+        const goal_lineage* g_p = lp.goal(nullptr, 0);
+        ga(g_p, p);
+        const goal_lineage* g_x = lp.goal(nullptr, 1);
+        ga(g_x, x);
+        
+        assert(gs.size() == 2);
+        
+        // Resolution 1: p with rule 0 → creates child q
+        resolver(g_p, 0);
+        const resolution_lineage* rl_p = lp.resolution(g_p, 0);
+        const goal_lineage* g_q = lp.goal(rl_p, 0);
+        
+        // Verify lineage for first branch: g_q → rl_p → g_p → nullptr
+        assert(g_q->parent == rl_p);
+        assert(rl_p->parent == g_p);
+        assert(g_p->parent == nullptr);
+        
+        // Resolution 2: x (independent goal) with rule 2 → creates y
+        resolver(g_x, 2);
+        const resolution_lineage* rl_x = lp.resolution(g_x, 2);
+        const goal_lineage* g_y = lp.goal(rl_x, 0);
+        
+        // CRITICAL: Verify lineage for second branch: g_y → rl_x → g_x → nullptr
+        assert(g_y->parent == rl_x);
+        assert(rl_x->parent == g_x);
+        assert(g_x->parent == nullptr);
+        
+        // CRITICAL: First branch lineage should be UNCHANGED
+        assert(g_q->parent == rl_p);
+        assert(rl_p->parent == g_p);
+        assert(g_p->parent == nullptr);
+        
+        // Resolution 3: q (child of first branch) with rule 1
+        resolver(g_q, 1);
+        const resolution_lineage* rl_q = lp.resolution(g_q, 1);
+        
+        // CRITICAL: Verify first branch lineage still correct after resolving child
+        assert(rl_q->parent == g_q);
+        assert(g_q->parent == rl_p);
+        assert(rl_p->parent == g_p);
+        assert(g_p->parent == nullptr);
+        
+        // CRITICAL: Second branch lineage should STILL be unchanged
+        assert(g_y->parent == rl_x);
+        assert(rl_x->parent == g_x);
+        assert(g_x->parent == nullptr);
+        
+        // Resolution 4: y (child of second branch)
+        resolver(g_y, 3);
+        const resolution_lineage* rl_y = lp.resolution(g_y, 3);
+        const goal_lineage* g_z = lp.goal(rl_y, 0);
+        
+        // Verify second branch lineage: g_z → rl_y → g_y → rl_x → g_x → nullptr
+        assert(g_z->parent == rl_y);
+        assert(rl_y->parent == g_y);
+        assert(g_y->parent == rl_x);
+        assert(rl_x->parent == g_x);
+        assert(g_x->parent == nullptr);
+        
+        // First branch still unchanged
+        assert(rl_q->parent == g_q);
+        assert(g_q->parent == rl_p);
+        assert(rl_p->parent == g_p);
+        
+        // Resolution 5: z (leaf of second branch)
+        resolver(g_z, 4);
+        const resolution_lineage* rl_z = lp.resolution(g_z, 4);
+        
+        // Full second branch: rl_z → g_z → rl_y → g_y → rl_x → g_x → nullptr
+        assert(rl_z->parent == g_z);
+        assert(g_z->parent == rl_y);
+        assert(rl_y->parent == g_y);
+        assert(g_y->parent == rl_x);
+        assert(rl_x->parent == g_x);
+        assert(g_x->parent == nullptr);
+        
+        // All resolutions tracked
+        assert(rs.size() == 5);
+        assert(rs.count(rl_p) == 1);
+        assert(rs.count(rl_x) == 1);
+        assert(rs.count(rl_q) == 1);
+        assert(rs.count(rl_y) == 1);
+        assert(rs.count(rl_z) == 1);
+        
+        // Empty avoidance store
+        assert(as.size() == 0);
+    }
+    
+    // Test 28: Complex resolution order - branching tree
+    {
+        trail t;
+        t.push();
+        expr_pool ep(t);
+        sequencer seq(t);
+        bind_map bm(t);
+        copier cp(seq, ep);
+        lineage_pool lp;
+        
+        resolution_store rs;
+        goal_store gs;
+        candidate_store cs;
+        
+        // Database
+        const expr* p = ep.atom("p");
+        const expr* q = ep.atom("q");
+        const expr* r = ep.atom("r");
+        const expr* s = ep.atom("s");
+        const expr* t_atom = ep.atom("t");
+        
+        rule r0{p, {q, r}};   // p :- q, r (2 children)
+        rule r1{q, {s}};      // q :- s
+        rule r2{r, {t_atom}};  // r :- t
+        rule r3{s, {}};       // s
+        rule r4{t_atom, {}};  // t
+        database db = {r0, r1, r2, r3, r4};
+        
+        goal_adder ga(gs, cs, db);
+        cdcl c;
+        goal_resolver resolver(rs, gs, cs, db, cp, bm, lp, ga, as);
+        
+        // Start with root p
+        const goal_lineage* g_p = lp.goal(nullptr, 0);
+        ga(g_p, p);
+        
+        // Resolution 1: p → creates q and r (two children)
+        resolver(g_p, 0);
+        const resolution_lineage* rl_p = lp.resolution(g_p, 0);
+        const goal_lineage* g_q = lp.goal(rl_p, 0);
+        const goal_lineage* g_r = lp.goal(rl_p, 1);
+        
+        // Verify both children have same parent
+        assert(g_q->parent == rl_p);
+        assert(g_q->idx == 0);
+        assert(g_r->parent == rl_p);
+        assert(g_r->idx == 1);
+        assert(rl_p->parent == g_p);
+        
+        // Resolution 2: r (right child) BEFORE q (left child)
+        resolver(g_r, 2);
+        const resolution_lineage* rl_r = lp.resolution(g_r, 2);
+        const goal_lineage* g_t = lp.goal(rl_r, 0);
+        
+        // Verify right branch: g_t → rl_r → g_r → rl_p → g_p → nullptr
+        assert(g_t->parent == rl_r);
+        assert(rl_r->parent == g_r);
+        assert(g_r->parent == rl_p);
+        assert(rl_p->parent == g_p);
+        assert(g_p->parent == nullptr);
+        
+        // CRITICAL: Left branch (g_q) should be UNCHANGED
+        assert(g_q->parent == rl_p);
+        assert(rl_p->parent == g_p);
+        
+        // Resolution 3: q (left child) AFTER resolving right child
+        resolver(g_q, 1);
+        const resolution_lineage* rl_q = lp.resolution(g_q, 1);
+        const goal_lineage* g_s = lp.goal(rl_q, 0);
+        
+        // CRITICAL: Verify left branch lineage: g_s → rl_q → g_q → rl_p → g_p → nullptr
+        // This should be correct even though we resolved right branch first
+        assert(g_s->parent == rl_q);
+        assert(rl_q->parent == g_q);
+        assert(g_q->parent == rl_p);
+        assert(rl_p->parent == g_p);
+        assert(g_p->parent == nullptr);
+        
+        // CRITICAL: Right branch lineage should still be correct
+        assert(g_t->parent == rl_r);
+        assert(rl_r->parent == g_r);
+        assert(g_r->parent == rl_p);
+        
+        // Both branches share the same resolution parent (rl_p)
+        assert(g_q->parent == rl_p);
+        assert(g_r->parent == rl_p);
+        
+        // Resolution 4: t (leaf of right branch)
+        resolver(g_t, 4);
+        const resolution_lineage* rl_t = lp.resolution(g_t, 4);
+        
+        // Resolution 5: s (leaf of left branch)
+        resolver(g_s, 3);
+        const resolution_lineage* rl_s = lp.resolution(g_s, 3);
+        
+        // Verify final lineages for both branches
+        // Right: rl_t → g_t → rl_r → g_r → rl_p → g_p → nullptr
+        assert(rl_t->parent == g_t);
+        assert(g_t->parent == rl_r);
+        assert(rl_r->parent == g_r);
+        assert(g_r->parent == rl_p);
+        assert(rl_p->parent == g_p);
+        assert(g_p->parent == nullptr);
+        
+        // Left: rl_s → g_s → rl_q → g_q → rl_p → g_p → nullptr
+        assert(rl_s->parent == g_s);
+        assert(g_s->parent == rl_q);
+        assert(rl_q->parent == g_q);
+        assert(g_q->parent == rl_p);
+        assert(rl_p->parent == g_p);
+        assert(g_p->parent == nullptr);
+        
+        // All 5 resolutions tracked
+        assert(rs.size() == 5);
+        
+        // Empty avoidance store
+        assert(as.size() == 0);
+    }
+    
+    // Test 29: Complex interleaved resolution order - 7 resolutions
+    {
+        trail t;
+        t.push();
+        expr_pool ep(t);
+        sequencer seq(t);
+        bind_map bm(t);
+        copier cp(seq, ep);
+        lineage_pool lp;
+        
+        resolution_store rs;
+        goal_store gs;
+        candidate_store cs;
+        
+        // Database with various rules
+        const expr* a = ep.atom("a");
+        const expr* b = ep.atom("b");
+        const expr* c = ep.atom("c");
+        const expr* d = ep.atom("d");
+        const expr* e = ep.atom("e");
+        const expr* f = ep.atom("f");
+        const expr* g = ep.atom("g");
+        
+        rule r0{a, {b, c}};   // a :- b, c
+        rule r1{b, {d}};      // b :- d
+        rule r2{c, {e}};      // c :- e
+        rule r3{d, {}};       // d
+        rule r4{e, {f, g}};   // e :- f, g
+        rule r5{f, {}};       // f
+        rule r6{g, {}};       // g
+        database db = {r0, r1, r2, r3, r4, r5, r6};
+        
+        goal_adder ga(gs, cs, db);
+        cdcl c;
+        goal_resolver resolver(rs, gs, cs, db, cp, bm, lp, ga, as);
+        
+        // Root: a
+        const goal_lineage* g_a = lp.goal(nullptr, 0);
+        ga(g_a, a);
+        
+        // Res 1: a → {b, c}
+        resolver(g_a, 0);
+        const resolution_lineage* rl_a = lp.resolution(g_a, 0);
+        const goal_lineage* g_b = lp.goal(rl_a, 0);
+        const goal_lineage* g_c = lp.goal(rl_a, 1);
+        
+        // Lineages after res 1
+        assert(g_b->parent == rl_a);
+        assert(g_c->parent == rl_a);
+        assert(rl_a->parent == g_a);
+        assert(g_a->parent == nullptr);
+        
+        // Res 2: c → {e} (resolve RIGHT child first)
+        resolver(g_c, 2);
+        const resolution_lineage* rl_c = lp.resolution(g_c, 2);
+        const goal_lineage* g_e = lp.goal(rl_c, 0);
+        
+        // Right branch: g_e → rl_c → g_c → rl_a → g_a → nullptr
+        assert(g_e->parent == rl_c);
+        assert(rl_c->parent == g_c);
+        assert(g_c->parent == rl_a);
+        assert(rl_a->parent == g_a);
+        
+        // CRITICAL: Left branch (g_b) unchanged
+        assert(g_b->parent == rl_a);
+        
+        // Res 3: e → {f, g} (continue on right branch)
+        resolver(g_e, 4);
+        const resolution_lineage* rl_e = lp.resolution(g_e, 4);
+        const goal_lineage* g_f = lp.goal(rl_e, 0);
+        const goal_lineage* g_g = lp.goal(rl_e, 1);
+        
+        // Right branch splits: both g_f and g_g → rl_e → g_e → rl_c → g_c → rl_a → g_a
+        assert(g_f->parent == rl_e);
+        assert(g_g->parent == rl_e);
+        assert(rl_e->parent == g_e);
+        assert(g_e->parent == rl_c);
+        assert(rl_c->parent == g_c);
+        assert(g_c->parent == rl_a);
+        
+        // CRITICAL: Left branch still unchanged
+        assert(g_b->parent == rl_a);
+        assert(rl_a->parent == g_a);
+        
+        // Res 4: b → {d} (NOW resolve left child - was waiting)
+        resolver(g_b, 1);
+        const resolution_lineage* rl_b = lp.resolution(g_b, 1);
+        const goal_lineage* g_d = lp.goal(rl_b, 0);
+        
+        // CRITICAL: Left branch lineage: g_d → rl_b → g_b → rl_a → g_a → nullptr
+        // Should be correct even though we resolved many other things first
+        assert(g_d->parent == rl_b);
+        assert(rl_b->parent == g_b);
+        assert(g_b->parent == rl_a);
+        assert(rl_a->parent == g_a);
+        assert(g_a->parent == nullptr);
+        
+        // CRITICAL: Right branch still correct
+        assert(g_f->parent == rl_e);
+        assert(g_g->parent == rl_e);
+        assert(rl_e->parent == g_e);
+        assert(g_e->parent == rl_c);
+        assert(g_c->parent == rl_a);
+        
+        // Res 5: f (leaf of right-left branch)
+        resolver(g_f, 5);
+        const resolution_lineage* rl_f = lp.resolution(g_f, 5);
+        
+        // Res 6: g (leaf of right-right branch)
+        resolver(g_g, 6);
+        const resolution_lineage* rl_g = lp.resolution(g_g, 6);
+        
+        // Res 7: d (leaf of left branch)
+        resolver(g_d, 3);
+        const resolution_lineage* rl_d = lp.resolution(g_d, 3);
+        
+        // FINAL VERIFICATION: All lineages correct after 7 resolutions
+        
+        // Right-left leaf: rl_f → g_f → rl_e → g_e → rl_c → g_c → rl_a → g_a → nullptr
+        assert(rl_f->parent == g_f);
+        assert(g_f->parent == rl_e);
+        assert(rl_e->parent == g_e);
+        assert(g_e->parent == rl_c);
+        assert(rl_c->parent == g_c);
+        assert(g_c->parent == rl_a);
+        assert(rl_a->parent == g_a);
+        assert(g_a->parent == nullptr);
+        
+        // Right-right leaf: rl_g → g_g → rl_e → g_e → rl_c → g_c → rl_a → g_a → nullptr
+        assert(rl_g->parent == g_g);
+        assert(g_g->parent == rl_e);
+        // (rest same as right-left)
+        
+        // Left leaf: rl_d → g_d → rl_b → g_b → rl_a → g_a → nullptr
+        assert(rl_d->parent == g_d);
+        assert(g_d->parent == rl_b);
+        assert(rl_b->parent == g_b);
+        assert(g_b->parent == rl_a);
+        assert(rl_a->parent == g_a);
+        assert(g_a->parent == nullptr);
+        
+        // All 7 resolutions in store
+        assert(rs.size() == 7);
+        
+        // Empty avoidance store
+        assert(as.size() == 0);
+    }
+    
+    // Test 30: Large sequence - 10 resolutions with random order
+    {
+        trail t;
+        t.push();
+        expr_pool ep(t);
+        sequencer seq(t);
+        bind_map bm(t);
+        copier cp(seq, ep);
+        lineage_pool lp;
+        
+        resolution_store rs;
+        goal_store gs;
+        candidate_store cs;
+        
+        // Database: chain of 10 rules
+        std::vector<const expr*> atoms;
+        for (int i = 0; i < 10; i++) {
+            atoms.push_back(ep.atom("p" + std::to_string(i)));
+        }
+        
+        std::vector<rule> rules;
+        for (int i = 0; i < 9; i++) {
+            rules.push_back(rule{atoms[i], {atoms[i+1]}});  // p0 :- p1, p1 :- p2, ...
+        }
+        rules.push_back(rule{atoms[9], {}});  // p9 (fact)
+        
+        database db(rules.begin(), rules.end());
+        
+        goal_adder ga(gs, cs, db);
+        cdcl c;
+        goal_resolver resolver(rs, gs, cs, db, cp, bm, lp, ga, as);
+        
+        // Start with root p0
+        const goal_lineage* g_p0 = lp.goal(nullptr, 0);
+        ga(g_p0, atoms[0]);
+        
+        // Store all goal lineages and resolution lineages
+        std::vector<const goal_lineage*> goals;
+        std::vector<const resolution_lineage*> resolutions;
+        
+        goals.push_back(g_p0);
+        
+        // Resolve in order: p0, p1, p2, ..., p9
+        for (int i = 0; i < 10; i++) {
+            const goal_lineage* current_goal = goals[i];
+            
+            // Resolve current goal
+            resolver(current_goal, i);
+            const resolution_lineage* rl = lp.resolution(current_goal, i);
+            resolutions.push_back(rl);
+            
+            // Verify resolution parent and index
+            assert(rl->parent == current_goal);
+            assert(rl->idx == (size_t)i);
+            
+            // If not the last rule, a child goal was created
+            if (i < 9) {
+                const goal_lineage* child = lp.goal(rl, 0);
+                goals.push_back(child);
+                assert(child->parent == rl);
+                assert(child->idx == 0);
+            }
+        }
+        
+        // CRITICAL: Verify full chain from leaf to root
+        // Start at p9's resolution (deepest) and walk back to root
+        const resolution_lineage* current_rl = resolutions[9];
+        const goal_lineage* current_g = goals[9];
+        
+        // Walk backward verifying the chain
+        for (int i = 9; i >= 0; i--) {
+            assert(current_rl == resolutions[i]);
+            assert(current_g == goals[i]);
+            assert(current_rl->parent == current_g);
+            assert(current_rl->idx == (size_t)i);
+            
+            if (i > 0) {
+                // Not root, should have resolution parent
+                const resolution_lineage* parent_rl = resolutions[i-1];
+                assert(current_g->parent == parent_rl);
+                assert(current_g->idx == 0);
+                current_g = goals[i-1];
+                current_rl = parent_rl;
+            } else {
+                // Root goal
+                assert(current_g->parent == nullptr);
+                assert(current_g->idx == 0);
+            }
+        }
+        
+        // All 10 resolutions tracked
+        assert(rs.size() == 10);
+        for (int i = 0; i < 10; i++) {
+            assert(rs.count(resolutions[i]) == 1);
+        }
+        
+        // Empty avoidance store
+        assert(as.size() == 0);
+    }
+    
+    // Test 31: Out-of-order resolution with multiple independent trees
+    {
+        trail t;
+        t.push();
+        expr_pool ep(t);
+        sequencer seq(t);
+        bind_map bm(t);
+        copier cp(seq, ep);
+        lineage_pool lp;
+        
+        resolution_store rs;
+        goal_store gs;
+        candidate_store cs;
+        
+        // Database
+        const expr* p1 = ep.atom("p1");
+        const expr* p2 = ep.atom("p2");
+        const expr* p3 = ep.atom("p3");
+        const expr* q1 = ep.atom("q1");
+        const expr* q2 = ep.atom("q2");
+        const expr* q3 = ep.atom("q3");
+        
+        rule r0{p1, {p2}};    // p1 :- p2
+        rule r1{p2, {p3}};    // p2 :- p3
+        rule r2{p3, {}};      // p3
+        rule r3{q1, {q2}};    // q1 :- q2
+        rule r4{q2, {q3}};    // q2 :- q3
+        rule r5{q3, {}};      // q3
+        database db = {r0, r1, r2, r3, r4, r5};
+        
+        goal_adder ga(gs, cs, db);
+        cdcl c;
+        goal_resolver resolver(rs, gs, cs, db, cp, bm, lp, ga, as);
+        
+        // Create TWO independent root goals
+        const goal_lineage* g_p1 = lp.goal(nullptr, 10);
+        ga(g_p1, p1);
+        const goal_lineage* g_q1 = lp.goal(nullptr, 20);
+        ga(g_q1, q1);
+        
+        // Resolution order: p1, q1, q2, p2, q3, p3
+        // (alternating between two trees)
+        
+        // Res 1: p1 → p2 (tree 1, level 1)
+        resolver(g_p1, 0);
+        const resolution_lineage* rl_p1 = lp.resolution(g_p1, 0);
+        const goal_lineage* g_p2 = lp.goal(rl_p1, 0);
+        
+        assert(g_p2->parent == rl_p1);
+        assert(rl_p1->parent == g_p1);
+        assert(g_p1->parent == nullptr);
+        assert(g_p1->idx == 10);
+        
+        // Res 2: q1 → q2 (tree 2, level 1)
+        resolver(g_q1, 3);
+        const resolution_lineage* rl_q1 = lp.resolution(g_q1, 3);
+        const goal_lineage* g_q2 = lp.goal(rl_q1, 0);
+        
+        assert(g_q2->parent == rl_q1);
+        assert(rl_q1->parent == g_q1);
+        assert(g_q1->parent == nullptr);
+        assert(g_q1->idx == 20);
+        
+        // CRITICAL: Tree 1 unchanged after resolving tree 2
+        assert(g_p2->parent == rl_p1);
+        assert(rl_p1->parent == g_p1);
+        
+        // Res 3: q2 → q3 (tree 2, level 2)
+        resolver(g_q2, 4);
+        const resolution_lineage* rl_q2 = lp.resolution(g_q2, 4);
+        const goal_lineage* g_q3 = lp.goal(rl_q2, 0);
+        
+        assert(g_q3->parent == rl_q2);
+        assert(rl_q2->parent == g_q2);
+        assert(g_q2->parent == rl_q1);
+        assert(rl_q1->parent == g_q1);
+        assert(g_q1->parent == nullptr);
+        
+        // CRITICAL: Tree 1 still unchanged
+        assert(g_p2->parent == rl_p1);
+        assert(rl_p1->parent == g_p1);
+        assert(g_p1->parent == nullptr);
+        
+        // Res 4: p2 → p3 (back to tree 1, level 2)
+        resolver(g_p2, 1);
+        const resolution_lineage* rl_p2 = lp.resolution(g_p2, 1);
+        const goal_lineage* g_p3 = lp.goal(rl_p2, 0);
+        
+        // CRITICAL: Tree 1 full chain: g_p3 → rl_p2 → g_p2 → rl_p1 → g_p1 → nullptr
+        assert(g_p3->parent == rl_p2);
+        assert(rl_p2->parent == g_p2);
+        assert(g_p2->parent == rl_p1);
+        assert(rl_p1->parent == g_p1);
+        assert(g_p1->parent == nullptr);
+        
+        // CRITICAL: Tree 2 unchanged
+        assert(g_q3->parent == rl_q2);
+        assert(rl_q2->parent == g_q2);
+        assert(g_q2->parent == rl_q1);
+        assert(rl_q1->parent == g_q1);
+        
+        // Res 5: q3 (tree 2 leaf)
+        resolver(g_q3, 5);
+        const resolution_lineage* rl_q3 = lp.resolution(g_q3, 5);
+        
+        // Tree 2 complete: rl_q3 → g_q3 → rl_q2 → g_q2 → rl_q1 → g_q1 → nullptr
+        assert(rl_q3->parent == g_q3);
+        assert(g_q3->parent == rl_q2);
+        assert(rl_q2->parent == g_q2);
+        assert(g_q2->parent == rl_q1);
+        assert(rl_q1->parent == g_q1);
+        assert(g_q1->parent == nullptr);
+        assert(g_q1->idx == 20);
+        
+        // Res 6: p3 (tree 1 leaf)
+        resolver(g_p3, 2);
+        const resolution_lineage* rl_p3 = lp.resolution(g_p3, 2);
+        
+        // CRITICAL: Tree 1 complete: rl_p3 → g_p3 → rl_p2 → g_p2 → rl_p1 → g_p1 → nullptr
+        assert(rl_p3->parent == g_p3);
+        assert(g_p3->parent == rl_p2);
+        assert(rl_p2->parent == g_p2);
+        assert(g_p2->parent == rl_p1);
+        assert(rl_p1->parent == g_p1);
+        assert(g_p1->parent == nullptr);
+        assert(g_p1->idx == 10);
+        
+        // CRITICAL: Both trees coexist with correct independent lineages
+        // Tree 1 root has idx 10, Tree 2 root has idx 20
+        // All resolutions tracked
+        assert(rs.size() == 6);
+        
+        // Empty avoidance store
+        assert(as.size() == 0);
+    }
+    
+    // Test 32: Resolution order - breadth-first style (all siblings before children)
+    {
+        trail t;
+        t.push();
+        expr_pool ep(t);
+        sequencer seq(t);
+        bind_map bm(t);
+        copier cp(seq, ep);
+        lineage_pool lp;
+        
+        resolution_store rs;
+        goal_store gs;
+        candidate_store cs;
+        
+        // Database
+        const expr* root = ep.atom("root");
+        const expr* a = ep.atom("a");
+        const expr* b = ep.atom("b");
+        const expr* c = ep.atom("c");
+        const expr* a1 = ep.atom("a1");
+        const expr* b1 = ep.atom("b1");
+        const expr* c1 = ep.atom("c1");
+        
+        rule r0{root, {a, b, c}};  // root :- a, b, c (3 children)
+        rule r1{a, {a1}};          // a :- a1
+        rule r2{b, {b1}};          // b :- b1
+        rule r3{c, {c1}};          // c :- c1
+        rule r4{a1, {}};           // a1
+        rule r5{b1, {}};           // b1
+        rule r6{c1, {}};           // c1
+        database db = {r0, r1, r2, r3, r4, r5, r6};
+        
+        goal_adder ga(gs, cs, db);
+        cdcl c;
+        goal_resolver resolver(rs, gs, cs, db, cp, bm, lp, ga, as);
+        
+        // Root
+        const goal_lineage* g_root = lp.goal(nullptr, 0);
+        ga(g_root, root);
+        
+        // Res 1: root → {a, b, c}
+        resolver(g_root, 0);
+        const resolution_lineage* rl_root = lp.resolution(g_root, 0);
+        const goal_lineage* g_a = lp.goal(rl_root, 0);
+        const goal_lineage* g_b = lp.goal(rl_root, 1);
+        const goal_lineage* g_c = lp.goal(rl_root, 2);
+        
+        // All three children share same parent
+        assert(g_a->parent == rl_root);
+        assert(g_a->idx == 0);
+        assert(g_b->parent == rl_root);
+        assert(g_b->idx == 1);
+        assert(g_c->parent == rl_root);
+        assert(g_c->idx == 2);
+        
+        // Res 2: a → a1 (first sibling)
+        resolver(g_a, 1);
+        const resolution_lineage* rl_a = lp.resolution(g_a, 1);
+        const goal_lineage* g_a1 = lp.goal(rl_a, 0);
+        
+        // Res 3: b → b1 (second sibling)
+        resolver(g_b, 2);
+        const resolution_lineage* rl_b = lp.resolution(g_b, 2);
+        const goal_lineage* g_b1 = lp.goal(rl_b, 0);
+        
+        // Res 4: c → c1 (third sibling)
+        resolver(g_c, 3);
+        const resolution_lineage* rl_c = lp.resolution(g_c, 3);
+        const goal_lineage* g_c1 = lp.goal(rl_c, 0);
+        
+        // CRITICAL: After resolving all siblings, verify each branch maintains lineage
+        
+        // Branch A: g_a1 → rl_a → g_a → rl_root → g_root → nullptr
+        assert(g_a1->parent == rl_a);
+        assert(rl_a->parent == g_a);
+        assert(g_a->parent == rl_root);
+        assert(rl_root->parent == g_root);
+        assert(g_root->parent == nullptr);
+        
+        // Branch B: g_b1 → rl_b → g_b → rl_root → g_root → nullptr
+        assert(g_b1->parent == rl_b);
+        assert(rl_b->parent == g_b);
+        assert(g_b->parent == rl_root);
+        assert(rl_root->parent == g_root);
+        
+        // Branch C: g_c1 → rl_c → g_c → rl_root → g_root → nullptr
+        assert(g_c1->parent == rl_c);
+        assert(rl_c->parent == g_c);
+        assert(g_c->parent == rl_root);
+        assert(rl_root->parent == g_root);
+        
+        // CRITICAL: All three branches share same rl_root
+        assert(g_a->parent == rl_root);
+        assert(g_b->parent == rl_root);
+        assert(g_c->parent == rl_root);
+        
+        // Res 5-7: Resolve all three leaf goals
+        resolver(g_a1, 4);
+        const resolution_lineage* rl_a1 = lp.resolution(g_a1, 4);
+        
+        resolver(g_b1, 5);
+        const resolution_lineage* rl_b1 = lp.resolution(g_b1, 5);
+        
+        resolver(g_c1, 6);
+        const resolution_lineage* rl_c1 = lp.resolution(g_c1, 6);
+        
+        // Final verification - all three branches still have correct lineages
+        assert(rl_a1->parent == g_a1);
+        assert(g_a1->parent == rl_a);
+        assert(rl_a->parent == g_a);
+        assert(g_a->parent == rl_root);
+        
+        assert(rl_b1->parent == g_b1);
+        assert(g_b1->parent == rl_b);
+        assert(rl_b->parent == g_b);
+        assert(g_b->parent == rl_root);
+        
+        assert(rl_c1->parent == g_c1);
+        assert(g_c1->parent == rl_c);
+        assert(rl_c->parent == g_c);
+        assert(g_c->parent == rl_root);
+        
+        // All share same root
+        assert(rl_root->parent == g_root);
+        assert(g_root->parent == nullptr);
+        
+        // All 7 resolutions tracked
+        assert(rs.size() == 7);
+        
+        // Empty avoidance store
+        assert(as.size() == 0);
+    }
+    
+    // Test 33: Random interleaving - resolve grandchild before parent's sibling
+    {
+        trail t;
+        t.push();
+        expr_pool ep(t);
+        sequencer seq(t);
+        bind_map bm(t);
+        copier cp(seq, ep);
+        lineage_pool lp;
+        
+        resolution_store rs;
+        goal_store gs;
+        candidate_store cs;
+        
+        // Database creating deep tree
+        const expr* p = ep.atom("p");
+        const expr* q = ep.atom("q");
+        const expr* r = ep.atom("r");
+        const expr* s = ep.atom("s");
+        const expr* t_atom = ep.atom("t");
+        const expr* u = ep.atom("u");
+        
+        rule r0{p, {q, r}};   // p :- q, r
+        rule r1{q, {s}};      // q :- s
+        rule r2{r, {t_atom}};  // r :- t
+        rule r3{s, {u}};      // s :- u
+        rule r4{t_atom, {}};  // t
+        rule r5{u, {}};       // u
+        database db = {r0, r1, r2, r3, r4, r5};
+        
+        goal_adder ga(gs, cs, db);
+        cdcl c;
+        goal_resolver resolver(rs, gs, cs, db, cp, bm, lp, ga, as);
+        
+        // Root
+        const goal_lineage* g_p = lp.goal(nullptr, 0);
+        ga(g_p, p);
+        
+        // Res 1: p → {q, r}
+        resolver(g_p, 0);
+        const resolution_lineage* rl_p = lp.resolution(g_p, 0);
+        const goal_lineage* g_q = lp.goal(rl_p, 0);
+        const goal_lineage* g_r = lp.goal(rl_p, 1);
+        
+        // Res 2: q → {s} (left branch level 2)
+        resolver(g_q, 1);
+        const resolution_lineage* rl_q = lp.resolution(g_q, 1);
+        const goal_lineage* g_s = lp.goal(rl_q, 0);
+        
+        // Res 3: s → {u} (left branch level 3, going deep before touching right)
+        resolver(g_s, 3);
+        const resolution_lineage* rl_s = lp.resolution(g_s, 3);
+        const goal_lineage* g_u = lp.goal(rl_s, 0);
+        
+        // Verify left branch (went 3 levels deep): g_u → rl_s → g_s → rl_q → g_q → rl_p → g_p
+        assert(g_u->parent == rl_s);
+        assert(rl_s->parent == g_s);
+        assert(g_s->parent == rl_q);
+        assert(rl_q->parent == g_q);
+        assert(g_q->parent == rl_p);
+        assert(rl_p->parent == g_p);
+        assert(g_p->parent == nullptr);
+        
+        // CRITICAL: Right branch (g_r) should be untouched at level 1
+        assert(g_r->parent == rl_p);
+        assert(rl_p->parent == g_p);
+        
+        // Res 4: r → {t} (NOW resolve right branch)
+        resolver(g_r, 2);
+        const resolution_lineage* rl_r = lp.resolution(g_r, 2);
+        const goal_lineage* g_t = lp.goal(rl_r, 0);
+        
+        // CRITICAL: Right branch: g_t → rl_r → g_r → rl_p → g_p → nullptr
+        // Should have correct lineage even though left branch went 3 levels deep first
+        assert(g_t->parent == rl_r);
+        assert(rl_r->parent == g_r);
+        assert(g_r->parent == rl_p);
+        assert(rl_p->parent == g_p);
+        assert(g_p->parent == nullptr);
+        
+        // CRITICAL: Left branch still correct after resolving right
+        assert(g_u->parent == rl_s);
+        assert(rl_s->parent == g_s);
+        assert(g_s->parent == rl_q);
+        assert(rl_q->parent == g_q);
+        assert(g_q->parent == rl_p);
+        
+        // Both branches share rl_p and g_p
+        assert(g_q->parent == rl_p);
+        assert(g_r->parent == rl_p);
+        
+        // Res 5: u (left leaf)
+        resolver(g_u, 5);
+        const resolution_lineage* rl_u = lp.resolution(g_u, 5);
+        
+        // Res 6: t (right leaf)
+        resolver(g_t, 4);
+        const resolution_lineage* rl_t = lp.resolution(g_t, 4);
+        
+        // Final verification: both branches have complete lineages to root
+        // Left: rl_u → g_u → rl_s → g_s → rl_q → g_q → rl_p → g_p → nullptr
+        assert(rl_u->parent == g_u);
+        assert(g_u->parent == rl_s);
+        assert(rl_s->parent == g_s);
+        assert(g_s->parent == rl_q);
+        assert(rl_q->parent == g_q);
+        assert(g_q->parent == rl_p);
+        assert(rl_p->parent == g_p);
+        assert(g_p->parent == nullptr);
+        
+        // Right: rl_t → g_t → rl_r → g_r → rl_p → g_p → nullptr
+        assert(rl_t->parent == g_t);
+        assert(g_t->parent == rl_r);
+        assert(rl_r->parent == g_r);
+        assert(g_r->parent == rl_p);
+        assert(rl_p->parent == g_p);
+        
+        // All 6 resolutions
+        assert(rs.size() == 6);
+        
+        // Empty avoidance store
+        assert(as.size() == 0);
     }
 }
-
-// void test_goal_resolver_constructor() {
-//     // Test 1: Basic construction with all required references
-//     {
-//         trail t;
-//         expr_pool ep(t);
-//         sequencer seq(t);
-//         bind_map bm(t);
-//         copier cp(seq, ep);
-//         lineage_pool lp;
-        
-//         resolution_store rs;
-//         goal_store gs;
-//         candidate_store cs;
-//         database db;
-//         avoidance_store as;
-//         goal_adder ga(gs, cs, db);
-        
-//         goal_resolver resolver(rs, gs, cs, db, cp, bm, lp, ga, as);
-        
-//         assert(&resolver.rs == &rs);
-//         assert(&resolver.gs == &gs);
-//         assert(&resolver.cs == &cs);
-//         assert(&resolver.db == &db);
-//         assert(&resolver.cp == &cp);
-//         assert(&resolver.bm == &bm);
-//         assert(&resolver.lp == &lp);
-//         assert(&resolver.ga == &ga);
-//         assert(&resolver.as == &as);
-//     }
-    
-//     // Test 2: Construction with non-empty stores including avoidances
-//     {
-//         trail t;
-//         expr_pool ep(t);
-//         sequencer seq(t);
-//         bind_map bm(t);
-//         copier cp(seq, ep);
-//         lineage_pool lp;
-        
-//         resolution_store rs;
-//         goal_store gs;
-//         candidate_store cs;
-//         avoidance_store as;
-        
-//         // Add some initial data to resolution store
-//         const goal_lineage* g0 = lp.goal(nullptr, 0);
-//         const resolution_lineage* rl0 = lp.resolution(g0, 0);
-//         rs.insert(rl0);
-        
-//         // Add some initial data to goal store
-//         const goal_lineage* g1 = lp.goal(nullptr, 1);
-//         const expr* e1 = ep.atom("test");
-//         gs.insert({g1, e1});
-//         cs.insert({g1, 0});
-//         cs.insert({g1, 1});
-        
-//         expr::atom a1{"rule1"};
-//         expr rule_expr{a1};
-//         rule r1{&rule_expr, {}};
-//         database db = {r1};
-        
-//         // Pre-populate avoidance store with some avoidances
-//         decision_store avoidance1;
-//         avoidance1.insert(rl0);
-//         as.insert(avoidance1);
-        
-//         const goal_lineage* g2 = lp.goal(nullptr, 2);
-//         const resolution_lineage* rl2 = lp.resolution(g2, 0);
-//         decision_store avoidance2;
-//         avoidance2.insert(rl0);
-//         avoidance2.insert(rl2);
-//         as.insert(avoidance2);
-        
-//         goal_adder ga(gs, cs, db);
-//         goal_resolver resolver(rs, gs, cs, db, cp, bm, lp, ga, as);
-        
-//         assert(resolver.rs.size() == 1);
-//         assert(resolver.gs.size() == 1);
-//         assert(resolver.cs.size() == 2);
-//         assert(resolver.db.size() == 1);
-//         assert(resolver.as.size() == 2);
-//     }
-// }
-
-// void test_goal_resolver() {
-//     // Test 1: Resolve with simple fact (empty body) - no new goals
-//     {
-//         trail t;
-//         t.push();
-//         expr_pool ep(t);
-//         sequencer seq(t);
-//         bind_map bm(t);
-//         copier cp(seq, ep);
-//         lineage_pool lp;
-        
-//         resolution_store rs;
-//         goal_store gs;
-//         candidate_store cs;
-        
-//         // Database: single fact "p"
-//         const expr* p_expr = ep.atom("p");
-//         rule r_fact{p_expr, {}};
-//         database db = {r_fact};
-        
-//         goal_adder ga(gs, cs, db);
-//         avoidance_store as;
-        
-//         // Pre-populate avoidance store: single avoidance containing the rl we're about to create
-//         const goal_lineage* g1 = lp.goal(nullptr, 1);
-//         const resolution_lineage* rl_expected = lp.resolution(g1, 0);
-        
-//         decision_store avoidance1;
-//         avoidance1.insert(rl_expected);
-//         as.insert(avoidance1);
-        
-//         assert(as.size() == 1);
-//         assert(as.begin()->size() == 1);
-//         assert(as.begin()->count(rl_expected) == 1);
-        
-//         goal_resolver resolver(rs, gs, cs, db, cp, bm, lp, ga, as);
-        
-//         // Add goal "p" using goal_adder
-//         const expr* goal_p = ep.atom("p");
-//         ga(g1, goal_p);
-        
-//         // Pre-resolution assertions: goal and candidates exist
-//         assert(gs.size() == 1);
-//         assert(cs.size() == 1);
-//         assert(gs.count(g1) == 1);
-//         assert(cs.count(g1) == 1);
-//         assert(gs.at(g1) == goal_p);
-//         assert(rs.size() == 0); // No resolutions yet
-        
-//         // Check goal lineage structure before resolution
-//         assert(g1->parent == nullptr);
-//         assert(g1->idx == 1);
-        
-//         // Store initial bind_map size to check unification
-//         size_t bindings_before = bm.bindings.size();
-        
-//         // Resolve g1 with rule 0
-//         resolver(g1, 0);
-        
-//         // Get the resolution lineage that was created
-//         const resolution_lineage* rl = lp.resolution(g1, 0);
-//         assert(rl == rl_expected); // Should be same interned instance
-        
-//         // Check resolution lineage structure
-//         assert(rl != nullptr);
-//         assert(rl->parent == g1);
-//         assert(rl->idx == 0);
-        
-//         // Check resolution was added to resolution store
-//         assert(rs.size() == 1);
-//         assert(rs.count(rl) == 1);
-        
-//         // CRITICAL: Verify rl was erased from all avoidances
-//         assert(as.size() == 1);
-//         assert(as.begin()->count(rl) == 0); // rl should be removed
-//         assert(as.begin()->size() == 0);    // Avoidance now empty
-        
-//         // Check goal was removed from goal store
-//         assert(gs.size() == 0);
-//         assert(gs.count(g1) == 0);
-        
-//         // Check candidates were removed from candidate store
-//         assert(cs.size() == 0);
-//         assert(cs.count(g1) == 0);
-        
-//         // Check unification occurred (p unifies with p trivially, may not add bindings)
-//         // For atoms, unification should succeed without new bindings
-//         size_t bindings_after = bm.bindings.size();
-//         assert(bindings_after >= bindings_before);
-        
-//         // Check no new goals were added (empty body)
-//         assert(gs.size() == 0);
-//         assert(cs.size() == 0);
-        
-//         // Check lineage pool internals
-//         assert(lp.resolution_lineages.count(*rl) == 1);
-//     }
-    
-//     // Test 2: Resolve with rule with single body clause
-//     {
-//         trail t;
-//         t.push();
-//         expr_pool ep(t);
-//         sequencer seq(t);
-//         bind_map bm(t);
-//         copier cp(seq, ep);
-//         lineage_pool lp;
-        
-//         resolution_store rs;
-//         goal_store gs;
-//         candidate_store cs;
-        
-//         // Database: rule "p :- q"
-//         const expr* p_expr = ep.atom("p");
-//         const expr* q_expr = ep.atom("q");
-//         rule r1{p_expr, {q_expr}};
-//         database db = {r1};
-        
-//         goal_adder ga(gs, cs, db);
-//         avoidance_store as;
-        
-//         // Pre-populate avoidance store with mixed avoidances
-//         const goal_lineage* g1 = lp.goal(nullptr, 1);
-//         const resolution_lineage* rl_expected = lp.resolution(g1, 0);
-        
-//         // Create some unrelated resolutions for avoidances
-//         const goal_lineage* g_other1 = lp.goal(nullptr, 100);
-//         const goal_lineage* g_other2 = lp.goal(nullptr, 200);
-//         const resolution_lineage* rl_other1 = lp.resolution(g_other1, 0);
-//         const resolution_lineage* rl_other2 = lp.resolution(g_other2, 1);
-        
-//         // Avoidance 1: contains rl_expected + another resolution
-//         decision_store avoidance1;
-//         avoidance1.insert(rl_expected);
-//         avoidance1.insert(rl_other1);
-//         as.insert(avoidance1);
-        
-//         // Avoidance 2: contains only rl_expected
-//         decision_store avoidance2;
-//         avoidance2.insert(rl_expected);
-//         as.insert(avoidance2);
-        
-//         // Avoidance 3: doesn't contain rl_expected at all
-//         decision_store avoidance3;
-//         avoidance3.insert(rl_other1);
-//         avoidance3.insert(rl_other2);
-//         as.insert(avoidance3);
-        
-//         assert(as.size() == 3);
-        
-//         goal_resolver resolver(rs, gs, cs, db, cp, bm, lp, ga, as);
-        
-//         // Add goal "p" using goal_adder
-//         const expr* goal_p = ep.atom("p");
-//         ga(g1, goal_p);
-        
-//         // Pre-resolution checks
-//         assert(gs.size() == 1);
-//         assert(gs.at(g1) == goal_p);
-//         assert(cs.size() == 1); // One rule in database
-//         assert(rs.size() == 0); // No resolutions yet
-//         assert(g1->parent == nullptr);
-//         assert(g1->idx == 1);
-        
-//         // Resolve g1 with rule 0
-//         resolver(g1, 0);
-        
-//         // Get the resolution lineage that was created
-//         const resolution_lineage* rl = lp.resolution(g1, 0);
-//         assert(rl == rl_expected);
-        
-//         // Check resolution lineage structure
-//         assert(rl != nullptr);
-//         assert(rl->parent == g1);
-//         assert(rl->idx == 0);
-        
-//         // Check resolution was added to resolution store
-//         assert(rs.size() == 1);
-//         assert(rs.count(rl) == 1);
-        
-//         // Goal "p" should be removed from stores
-//         assert(gs.count(g1) == 0);
-//         assert(cs.count(g1) == 0);
-        
-//         // Resolution lineage should be in pool
-//         assert(lp.resolution_lineages.count(*rl) == 1);
-        
-//         // One new goal "q" should be added as child of resolution
-//         assert(gs.size() == 1);
-//         const goal_lineage* child_g = lp.goal(rl, 0);
-//         assert(gs.count(child_g) == 1);
-//         assert(child_g->parent == rl);
-//         assert(child_g->idx == 0);
-        
-//         // Check the goal expression is "q"
-//         const expr* child_expr = gs.at(child_g);
-//         assert(child_expr != nullptr);
-//         assert(std::holds_alternative<expr::atom>(child_expr->content));
-//         assert(std::get<expr::atom>(child_expr->content).value == std::string("q"));
-        
-//         // Check it's the weak head normal form version
-//         const expr* normalized = bm.whnf(child_expr);
-//         assert(normalized == child_expr);
-        
-//         // New goal should have been added via goal_adder, so it has candidates
-//         assert(cs.size() == 1);
-//         assert(cs.count(child_g) == 1);
-        
-//         // Verify child goal is in lineage pool
-//         assert(lp.goal_lineages.count(*child_g) == 1);
-        
-//         // CRITICAL: Verify avoidance store state after resolution
-//         assert(as.size() == 3);
-        
-//         // Count avoidances by size and content (order not guaranteed by std::set)
-//         int empty_count = 0;
-//         int size_one_count = 0;
-//         int size_two_count = 0;
-//         bool found_rl_other1_only = false;
-//         bool found_rl_other1_and_rl_other2 = false;
-        
-//         for (const auto& avoidance : as) {
-//             assert(avoidance.count(rl) == 0); // rl should be gone from all
-            
-//             if (avoidance.size() == 0) {
-//                 empty_count++;
-//             } else if (avoidance.size() == 1) {
-//                 size_one_count++;
-//                 if (avoidance.count(rl_other1) == 1) {
-//                     found_rl_other1_only = true;
-//                 }
-//             } else if (avoidance.size() == 2) {
-//                 size_two_count++;
-//                 if (avoidance.count(rl_other1) == 1 && avoidance.count(rl_other2) == 1) {
-//                     found_rl_other1_and_rl_other2 = true;
-//                 }
-//             }
-//         }
-        
-//         // Verify we have the expected avoidances
-//         assert(empty_count == 1);      // One became empty (was {rl})
-//         assert(size_one_count == 1);   // One has {rl_other1} (was {rl, rl_other1})
-//         assert(size_two_count == 1);   // One unchanged {rl_other1, rl_other2}
-//         assert(found_rl_other1_only);
-//         assert(found_rl_other1_and_rl_other2);
-//     }
-    
-//     // Test 3: Resolve with rule with multiple body clauses
-//     {
-//         trail t;
-//         t.push();
-//         expr_pool ep(t);
-//         sequencer seq(t);
-//         bind_map bm(t);
-//         copier cp(seq, ep);
-//         lineage_pool lp;
-        
-//         resolution_store rs;
-//         goal_store gs;
-//         candidate_store cs;
-        
-//         // Database: rule "p :- q, r, s"
-//         const expr* p_expr = ep.atom("p");
-//         const expr* q_expr = ep.atom("q");
-//         const expr* r_expr = ep.atom("r");
-//         const expr* s_expr = ep.atom("s");
-//         rule r1{p_expr, {q_expr, r_expr, s_expr}};
-//         database db = {r1};
-        
-//         goal_adder ga(gs, cs, db);
-//         avoidance_store as;
-        
-//         // Empty avoidance store for this test (baseline)
-//         const goal_lineage* g1 = lp.goal(nullptr, 1);
-        
-//         goal_resolver resolver(rs, gs, cs, db, cp, bm, lp, ga, as);
-        
-//         // Add goal "p" using goal_adder
-//         const expr* goal_p = ep.atom("p");
-//         ga(g1, goal_p);
-        
-//         // Pre-resolution state
-//         assert(gs.size() == 1);
-//         assert(cs.size() == 1);
-//         assert(gs.at(g1) == goal_p);
-//         assert(as.size() == 0); // Empty avoidance store
-        
-//         // Resolve g1 with rule 0
-//         resolver(g1, 0);
-//         const resolution_lineage* rl = lp.resolution(g1, 0);
-        
-//         // Check return value
-//         assert(rl != nullptr);
-//         assert(rl->parent == g1);
-//         assert(rl->idx == 0);
-        
-//         // Goal "p" should be removed
-//         assert(gs.count(g1) == 0);
-//         assert(cs.count(g1) == 0);
-        
-//         // Resolution should be in pool
-//         assert(lp.resolution_lineages.count(*rl) == 1);
-        
-//         // Three new goals should be added: q, r, s
-//         assert(gs.size() == 3);
-//         const goal_lineage* child_g0 = lp.goal(rl, 0);
-//         const goal_lineage* child_g1 = lp.goal(rl, 1);
-//         const goal_lineage* child_g2 = lp.goal(rl, 2);
-        
-//         // Check all children are in goal store
-//         assert(gs.count(child_g0) == 1);
-//         assert(gs.count(child_g1) == 1);
-//         assert(gs.count(child_g2) == 1);
-        
-//         // Check lineage structure for each child
-//         assert(child_g0->parent == rl);
-//         assert(child_g0->idx == 0);
-//         assert(child_g1->parent == rl);
-//         assert(child_g1->idx == 1);
-//         assert(child_g2->parent == rl);
-//         assert(child_g2->idx == 2);
-        
-//         // Check goal expressions match body literals
-//         const expr* expr0 = gs.at(child_g0);
-//         const expr* expr1 = gs.at(child_g1);
-//         const expr* expr2 = gs.at(child_g2);
-        
-//         assert(std::holds_alternative<expr::atom>(expr0->content));
-//         assert(std::get<expr::atom>(expr0->content).value == std::string("q"));
-//         assert(std::holds_alternative<expr::atom>(expr1->content));
-//         assert(std::get<expr::atom>(expr1->content).value == std::string("r"));
-//         assert(std::holds_alternative<expr::atom>(expr2->content));
-//         assert(std::get<expr::atom>(expr2->content).value == std::string("s"));
-        
-//         // Each new goal should have candidates (via goal_adder)
-//         assert(cs.size() == 3);
-//         assert(cs.count(child_g0) == 1);
-//         assert(cs.count(child_g1) == 1);
-//         assert(cs.count(child_g2) == 1);
-        
-//         // All children should be in lineage pool
-//         assert(lp.goal_lineages.count(*child_g0) == 1);
-//         assert(lp.goal_lineages.count(*child_g1) == 1);
-//         assert(lp.goal_lineages.count(*child_g2) == 1);
-        
-//         // Avoidance store should still be empty
-//         assert(as.size() == 0);
-//     }
-    
-//     // Test 4: Resolve with variable unification - VERIFY COPYING AND RENAMING
-//     {
-//         trail t;
-//         t.push();
-//         expr_pool ep(t);
-//         sequencer seq(t);
-//         bind_map bm(t);
-//         copier cp(seq, ep);
-//         lineage_pool lp;
-        
-//         resolution_store rs;
-//         goal_store gs;
-//         candidate_store cs;
-        
-//         // Database: rule "p(X) :- q(X)" where X is an original variable
-//         const expr* var_x = ep.var(seq());
-//         uint32_t original_var_idx = std::get<expr::var>(var_x->content).index;
-//         const expr* p_x = ep.cons(ep.atom("p"), var_x);
-//         const expr* q_x = ep.cons(ep.atom("q"), var_x);
-//         rule r1{p_x, {q_x}};
-//         database db = {r1};
-        
-//         goal_adder ga(gs, cs, db);
-//         avoidance_store as;
-        
-//         // Pre-populate: avoidance containing the rl about to be created
-//         const goal_lineage* g1 = lp.goal(nullptr, 1);
-//         const resolution_lineage* rl_expected = lp.resolution(g1, 0);
-//         decision_store avoidance1;
-//         avoidance1.insert(rl_expected);
-//         as.insert(avoidance1);
-        
-//         goal_resolver resolver(rs, gs, cs, db, cp, bm, lp, ga, as);
-        
-//         // Record sequencer state before resolution
-//         uint32_t seq_before = seq.index;
-        
-//         // Add goal "p(a)" using goal_adder
-//         const expr* atom_a = ep.atom("a");
-//         const expr* goal_p_a = ep.cons(ep.atom("p"), atom_a);
-//         ga(g1, goal_p_a);
-        
-//         // Pre-resolution checks
-//         assert(gs.size() == 1);
-//         assert(gs.at(g1) == goal_p_a);
-//         assert(cs.size() == 1);
-//         size_t bindings_before = bm.bindings.size();
-        
-//         // CRITICAL: Original variable should NOT be in bind_map yet
-//         assert(bm.bindings.count(original_var_idx) == 0);
-        
-//         // Resolve g1 with rule 0
-//         resolver(g1, 0);
-//         const resolution_lineage* rl = lp.resolution(g1, 0);
-        
-//         // Check sequencer advanced (new variable was allocated for copying)
-//         uint32_t seq_after = seq.index;
-//         assert(seq_after > seq_before); // At least one new variable was created
-        
-//         // Check return value
-//         assert(rl != nullptr);
-//         assert(rl->parent == g1);
-//         assert(rl->idx == 0);
-        
-//         // Goal should be removed from stores
-//         assert(gs.count(g1) == 0);
-//         assert(cs.count(g1) == 0);
-        
-//         // Resolution should be in pool
-//         assert(lp.resolution_lineages.count(*rl) == 1);
-        
-//         // One new goal should be added: q(a) after substitution
-//         assert(gs.size() == 1);
-//         const goal_lineage* child_g = lp.goal(rl, 0);
-//         assert(gs.count(child_g) == 1);
-//         assert(child_g->parent == rl);
-//         assert(child_g->idx == 0);
-        
-//         // Get the child goal expression (this is the copied body literal)
-//         const expr* child_expr = gs.at(child_g);
-//         assert(child_expr != nullptr);
-//         assert(std::holds_alternative<expr::cons>(child_expr->content));
-        
-//         // Extract the variable from the copied expression before normalization
-//         const expr::cons& child_cons_raw = std::get<expr::cons>(child_expr->content);
-//         const expr* child_arg_raw = child_cons_raw.rhs;
-        
-//         // This should be a RENAMED variable (not the original)
-//         if (std::holds_alternative<expr::var>(child_arg_raw->content)) {
-//             uint32_t renamed_var_idx = std::get<expr::var>(child_arg_raw->content).index;
-//             // CRITICAL: Renamed variable should be DIFFERENT from original
-//             assert(renamed_var_idx != original_var_idx);
-//             // CRITICAL: Renamed variable SHOULD be in bind_map (bound to "a")
-//             assert(bm.bindings.count(renamed_var_idx) == 1);
-//         }
-        
-//         // Normalize to get final form after unification
-//         const expr* normalized_child = bm.whnf(child_expr);
-//         assert(std::holds_alternative<expr::cons>(normalized_child->content));
-        
-//         // Should be q(...) where ... is either "a" or a variable bound to "a"
-//         const expr::cons& child_cons = std::get<expr::cons>(normalized_child->content);
-//         const expr* child_head = child_cons.lhs;
-//         const expr* child_tail = child_cons.rhs;
-//         assert(std::holds_alternative<expr::atom>(child_head->content));
-//         assert(std::get<expr::atom>(child_head->content).value == std::string("q"));
-        
-//         // The argument should normalize to "a"
-//         const expr* normalized_arg = bm.whnf(child_tail);
-//         assert(std::holds_alternative<expr::atom>(normalized_arg->content));
-//         assert(std::get<expr::atom>(normalized_arg->content).value == std::string("a"));
-        
-//         // Unification should have created bindings (the renamed var bound to "a")
-//         size_t bindings_after = bm.bindings.size();
-//         assert(bindings_after > bindings_before);
-        
-//         // CRITICAL: Original variable should STILL NOT be in bind_map
-//         // (only the renamed copy should be bound)
-//         assert(bm.bindings.count(original_var_idx) == 0);
-        
-//         // Verify child is in lineage pool
-//         assert(lp.goal_lineages.count(*child_g) == 1);
-        
-//         // Verify candidate was added
-//         assert(cs.count(child_g) == 1);
-        
-//         // CRITICAL: Verify rl was erased from avoidance
-//         assert(as.size() == 1);
-//         assert(as.begin()->count(rl) == 0);
-//         assert(as.begin()->size() == 0);
-//     }
-    
-//     // Test 5: Multiple goals with multiple candidates - resolve only one
-//     {
-//         trail t;
-//         t.push();
-//         expr_pool ep(t);
-//         sequencer seq(t);
-//         bind_map bm(t);
-//         copier cp(seq, ep);
-//         lineage_pool lp;
-        
-//         resolution_store rs;
-//         goal_store gs;
-//         candidate_store cs;
-        
-//         // Database: two facts
-//         const expr* p_expr = ep.atom("p");
-//         const expr* q_expr = ep.atom("q");
-//         rule r1{p_expr, {}};
-//         rule r2{q_expr, {}};
-//         database db = {r1, r2};
-        
-//         goal_adder ga(gs, cs, db);
-//         avoidance_store as;
-//         goal_resolver resolver(rs, gs, cs, db, cp, bm, lp, ga, as);
-        
-//         // Add two goals using goal_adder
-//         const goal_lineage* g1 = lp.goal(nullptr, 1);
-//         const expr* goal1 = ep.atom("p");
-//         ga(g1, goal1);
-        
-//         const goal_lineage* g2 = lp.goal(nullptr, 2);
-//         const expr* goal2 = ep.atom("q");
-//         ga(g2, goal2);
-        
-//         // Pre-resolution: both goals present with all candidates
-//         assert(gs.size() == 2);
-//         assert(gs.at(g1) == goal1);
-//         assert(gs.at(g2) == goal2);
-//         assert(cs.size() == 4); // Each goal has 2 candidates
-//         assert(cs.count(g1) == 2);
-//         assert(cs.count(g2) == 2);
-        
-//         // Resolve g1 with rule 0 (first rule "p")
-//         resolver(g1, 0);
-//         const resolution_lineage* rl = lp.resolution(g1, 0);
-        
-//         // Check return value
-//         assert(rl != nullptr);
-//         assert(rl->parent == g1);
-//         assert(rl->idx == 0);
-        
-//         // g1 should be removed, g2 should remain
-//         assert(gs.count(g1) == 0);
-//         assert(gs.count(g2) == 1);
-//         assert(gs.size() == 1);
-//         assert(gs.at(g2) == goal2);
-        
-//         // g1 candidates removed, g2 candidates remain
-//         assert(cs.count(g1) == 0);
-//         assert(cs.count(g2) == 2);
-//         assert(cs.size() == 2);
-        
-//         // Resolution lineage should be in pool
-//         assert(lp.resolution_lineages.count(*rl) == 1);
-        
-//         // No new goals added (empty body)
-//         assert(gs.size() == 1);
-        
-//         // Empty avoidance store (no avoidances for this test)
-//         assert(as.size() == 0);
-//     }
-    
-//     // Test 6: Verify lineage structure after resolution (deep tree)
-//     {
-//         trail t;
-//         t.push();
-//         expr_pool ep(t);
-//         sequencer seq(t);
-//         bind_map bm(t);
-//         copier cp(seq, ep);
-//         lineage_pool lp;
-        
-//         resolution_store rs;
-//         goal_store gs;
-//         candidate_store cs;
-        
-//         // Database: rule "p :- q, r"
-//         const expr* p_expr = ep.atom("p");
-//         const expr* q_expr = ep.atom("q");
-//         const expr* r_expr = ep.atom("r");
-//         rule r1{p_expr, {q_expr, r_expr}};
-//         database db = {r1};
-        
-//         goal_adder ga(gs, cs, db);
-//         avoidance_store as;
-//         goal_resolver resolver(rs, gs, cs, db, cp, bm, lp, ga, as);
-        
-//         // Add goal with specific parent lineage using goal_adder
-//         const resolution_lineage* parent_rl = lp.resolution(nullptr, 5);
-//         const goal_lineage* g1 = lp.goal(parent_rl, 10);
-//         const expr* goal_p = ep.atom("p");
-//         ga(g1, goal_p);
-        
-//         // Check pre-resolution lineage structure
-//         assert(g1->parent == parent_rl);
-//         assert(g1->idx == 10);
-//         assert(parent_rl->parent == nullptr);
-//         assert(parent_rl->idx == 5);
-//         assert(gs.size() == 1);
-        
-//         // Resolve g1 with rule 0
-//         resolver(g1, 0);
-//         const resolution_lineage* rl = lp.resolution(g1, 0);
-        
-//         // Check returned resolution lineage structure
-//         assert(rl != nullptr);
-//         assert(rl->parent == g1);
-//         assert(rl->idx == 0);
-//         assert(lp.resolution_lineages.count(*rl) == 1);
-        
-//         // Original goal should be removed
-//         assert(gs.count(g1) == 0);
-//         assert(cs.count(g1) == 0);
-        
-//         // Check new goal lineages structure
-//         const goal_lineage* child_g0 = lp.goal(rl, 0);
-//         const goal_lineage* child_g1 = lp.goal(rl, 1);
-        
-//         assert(child_g0->parent == rl);
-//         assert(child_g0->idx == 0);
-//         assert(child_g1->parent == rl);
-//         assert(child_g1->idx == 1);
-        
-//         // Both children should be in goal store
-//         assert(gs.count(child_g0) == 1);
-//         assert(gs.count(child_g1) == 1);
-//         assert(gs.size() == 2);
-        
-//         // Check expressions of children
-//         const expr* expr0 = gs.at(child_g0);
-//         const expr* expr1 = gs.at(child_g1);
-//         assert(std::holds_alternative<expr::atom>(expr0->content));
-//         assert(std::get<expr::atom>(expr0->content).value == std::string("q"));
-//         assert(std::holds_alternative<expr::atom>(expr1->content));
-//         assert(std::get<expr::atom>(expr1->content).value == std::string("r"));
-        
-//         // Both should be in lineage pool
-//         assert(lp.goal_lineages.count(*child_g0) == 1);
-//         assert(lp.goal_lineages.count(*child_g1) == 1);
-        
-//         // Both should have candidates
-//         assert(cs.count(child_g0) == 1);
-//         assert(cs.count(child_g1) == 1);
-        
-//         // Empty avoidance store
-//         assert(as.size() == 0);
-//     }
-    
-//     // Test 7: CRITICAL - Verify copier uses consistent translation_map
-//     // Same variable X in original rule must map to same renamed variable in all occurrences
-//     {
-//         trail t;
-//         t.push();
-//         expr_pool ep(t);
-//         sequencer seq(t);
-//         bind_map bm(t);
-//         copier cp(seq, ep);
-//         lineage_pool lp;
-        
-//         resolution_store rs;
-//         goal_store gs;
-//         candidate_store cs;
-        
-//         // Database: rule "p(X) :- q(X), r(X)"
-//         // The same variable X appears in head and both body literals
-//         const expr* var_x = ep.var(seq());
-//         uint32_t original_var_idx = std::get<expr::var>(var_x->content).index;
-//         const expr* p_x = ep.cons(ep.atom("p"), var_x);
-//         const expr* q_x = ep.cons(ep.atom("q"), var_x);
-//         const expr* r_x = ep.cons(ep.atom("r"), var_x);
-//         rule r1{p_x, {q_x, r_x}};
-//         database db = {r1};
-        
-//         goal_adder ga(gs, cs, db);
-//         avoidance_store as;
-//         goal_resolver resolver(rs, gs, cs, db, cp, bm, lp, ga, as);
-        
-//         // Record sequencer state
-//         uint32_t seq_before = seq.index;
-        
-//         // Add goal "p(a)" using goal_adder
-//         const goal_lineage* g1 = lp.goal(nullptr, 1);
-//         const expr* atom_a = ep.atom("a");
-//         const expr* goal_p_a = ep.cons(ep.atom("p"), atom_a);
-//         ga(g1, goal_p_a);
-        
-//         // Pre-resolution
-//         assert(gs.size() == 1);
-//         assert(cs.size() == 1);
-//         size_t bindings_before = bm.bindings.size();
-        
-//         // CRITICAL: Original variable should NOT be in bind_map
-//         assert(bm.bindings.count(original_var_idx) == 0);
-        
-//         // Resolve g1 with rule 0
-//         resolver(g1, 0);
-//         const resolution_lineage* rl = lp.resolution(g1, 0);
-        
-//         // Check sequencer advanced (new variable allocated)
-//         uint32_t seq_after = seq.index;
-//         assert(seq_after > seq_before);
-        
-//         // Check return value
-//         assert(rl != nullptr);
-//         assert(rl->parent == g1);
-//         assert(rl->idx == 0);
-        
-//         // Goal removed
-//         assert(gs.count(g1) == 0);
-        
-//         // Two new goals should be added: q(X') and r(X') where X' is the renamed variable
-//         assert(gs.size() == 2);
-//         const goal_lineage* child_g0 = lp.goal(rl, 0);
-//         const goal_lineage* child_g1 = lp.goal(rl, 1);
-        
-//         // Both should be in goal store
-//         assert(gs.count(child_g0) == 1);
-//         assert(gs.count(child_g1) == 1);
-        
-//         // Get the RAW (not normalized) expressions for both goals
-//         const expr* expr0 = gs.at(child_g0);
-//         const expr* expr1 = gs.at(child_g1);
-        
-//         // Both should be cons cells
-//         assert(std::holds_alternative<expr::cons>(expr0->content));
-//         assert(std::holds_alternative<expr::cons>(expr1->content));
-        
-//         // Extract the argument variables from BOTH expressions (before whnf)
-//         const expr::cons& cons0_raw = std::get<expr::cons>(expr0->content);
-//         const expr::cons& cons1_raw = std::get<expr::cons>(expr1->content);
-//         const expr* arg0_raw = cons0_raw.rhs;
-//         const expr* arg1_raw = cons1_raw.rhs;
-        
-//         // CRITICAL CHECK: Both arguments should be THE SAME RENAMED VARIABLE
-//         // This verifies the translation_map was consistent across both body literals
-//         uint32_t renamed_var_idx_0 = 0;
-//         uint32_t renamed_var_idx_1 = 0;
-        
-//         if (std::holds_alternative<expr::var>(arg0_raw->content)) {
-//             renamed_var_idx_0 = std::get<expr::var>(arg0_raw->content).index;
-//             // Should NOT be the original variable
-//             assert(renamed_var_idx_0 != original_var_idx);
-//         }
-        
-//         if (std::holds_alternative<expr::var>(arg1_raw->content)) {
-//             renamed_var_idx_1 = std::get<expr::var>(arg1_raw->content).index;
-//             // Should NOT be the original variable
-//             assert(renamed_var_idx_1 != original_var_idx);
-//         }
-        
-//         // CRITICAL: Both should be the SAME renamed variable
-//         // This proves translation_map was consistent!
-//         assert(renamed_var_idx_0 == renamed_var_idx_1);
-//         assert(renamed_var_idx_0 != 0); // Should have found a variable
-        
-//         // Both renamed variables should be bound in bind_map to "a"
-//         assert(bm.bindings.count(renamed_var_idx_0) == 1);
-        
-//         // Normalize both expressions to verify they both become "a"
-//         const expr* norm0 = bm.whnf(expr0);
-//         const expr* norm1 = bm.whnf(expr1);
-        
-//         // Both should be cons cells
-//         assert(std::holds_alternative<expr::cons>(norm0->content));
-//         assert(std::holds_alternative<expr::cons>(norm1->content));
-        
-//         // Check heads are q and r
-//         const expr::cons& cons0 = std::get<expr::cons>(norm0->content);
-//         const expr::cons& cons1 = std::get<expr::cons>(norm1->content);
-//         assert(std::holds_alternative<expr::atom>(cons0.lhs->content));
-//         assert(std::get<expr::atom>(cons0.lhs->content).value == std::string("q"));
-//         assert(std::holds_alternative<expr::atom>(cons1.lhs->content));
-//         assert(std::get<expr::atom>(cons1.lhs->content).value == std::string("r"));
-        
-//         // Check arguments normalize to "a" - this verifies the binding worked
-//         const expr* arg0 = bm.whnf(cons0.rhs);
-//         const expr* arg1 = bm.whnf(cons1.rhs);
-        
-//         assert(std::holds_alternative<expr::atom>(arg0->content));
-//         assert(std::get<expr::atom>(arg0->content).value == std::string("a"));
-//         assert(std::holds_alternative<expr::atom>(arg1->content));
-//         assert(std::get<expr::atom>(arg1->content).value == std::string("a"));
-        
-//         // Unification created bindings
-//         size_t bindings_after = bm.bindings.size();
-//         assert(bindings_after > bindings_before);
-        
-//         // CRITICAL: Original variable should STILL NOT be in bind_map
-//         assert(bm.bindings.count(original_var_idx) == 0);
-        
-//         // Both should have candidates
-//         assert(cs.count(child_g0) == 1);
-//         assert(cs.count(child_g1) == 1);
-        
-//         // Both should be in lineage pool
-//         assert(lp.goal_lineages.count(*child_g0) == 1);
-//         assert(lp.goal_lineages.count(*child_g1) == 1);
-//         assert(lp.resolution_lineages.count(*rl) == 1);
-        
-//         // Empty avoidance store
-//         assert(as.size() == 0);
-//     }
-    
-//     // Test 8: Database with multiple rules, resolve with non-zero index
-//     {
-//         trail t;
-//         t.push();
-//         expr_pool ep(t);
-//         sequencer seq(t);
-//         bind_map bm(t);
-//         copier cp(seq, ep);
-//         lineage_pool lp;
-        
-//         resolution_store rs;
-//         goal_store gs;
-//         candidate_store cs;
-        
-//         // Database: multiple rules
-//         const expr* p_expr = ep.atom("p");
-//         const expr* q_expr = ep.atom("q");
-//         const expr* r_expr = ep.atom("r");
-//         rule r1{p_expr, {}};         // Rule 0: p
-//         rule r2{q_expr, {r_expr}};   // Rule 1: q :- r
-//         rule r3{r_expr, {}};         // Rule 2: r
-//         database db = {r1, r2, r3};
-        
-//         goal_adder ga(gs, cs, db);
-//         avoidance_store as;
-//         goal_resolver resolver(rs, gs, cs, db, cp, bm, lp, ga, as);
-        
-//         // Add goal "q" using goal_adder (adds all rules as candidates)
-//         const goal_lineage* g1 = lp.goal(nullptr, 1);
-//         const expr* goal_q = ep.atom("q");
-//         ga(g1, goal_q);
-        
-//         // Pre-resolution: goal has all 3 rules as candidates
-//         assert(gs.size() == 1);
-//         assert(gs.at(g1) == goal_q);
-//         assert(cs.size() == 3);
-//         assert(cs.count(g1) == 3);
-        
-//         // Resolve g1 with rule 1 (index 1) - "q :- r"
-//         resolver(g1, 1);
-//         const resolution_lineage* rl = lp.resolution(g1, 1);
-        
-//         // Check return value
-//         assert(rl != nullptr);
-//         assert(rl->parent == g1);
-//         assert(rl->idx == 1);  // CRITICAL: idx should match the rule index
-        
-//         // Goal removed from stores
-//         assert(gs.count(g1) == 0);
-//         assert(cs.count(g1) == 0);
-        
-//         // Resolution should be in pool
-//         assert(lp.resolution_lineages.count(*rl) == 1);
-        
-//         // One new goal "r" should be added
-//         assert(gs.size() == 1);
-//         const goal_lineage* child_g = lp.goal(rl, 0);
-//         assert(gs.count(child_g) == 1);
-//         assert(child_g->parent == rl);
-//         assert(child_g->idx == 0);
-        
-//         // Check the goal expression is "r"
-//         const expr* child_expr = gs.at(child_g);
-//         assert(std::holds_alternative<expr::atom>(child_expr->content));
-//         assert(std::get<expr::atom>(child_expr->content).value == std::string("r"));
-        
-//         // New goal has all database rules as candidates
-//         assert(cs.size() == 3);
-//         assert(cs.count(child_g) == 3);
-        
-//         // Verify in lineage pool
-//         assert(lp.goal_lineages.count(*child_g) == 1);
-        
-//         // Empty avoidance store
-//         assert(as.size() == 0);
-//     }
-    
-//     // Test 9: Resolve goal that's part of an existing AND-OR tree (deep goal)
-//     {
-//         trail t;
-//         t.push();
-//         expr_pool ep(t);
-//         sequencer seq(t);
-//         bind_map bm(t);
-//         copier cp(seq, ep);
-//         lineage_pool lp;
-        
-//         resolution_store rs;
-//         goal_store gs;
-//         candidate_store cs;
-        
-//         // Database: rule "p :- q"
-//         const expr* p_expr = ep.atom("p");
-//         const expr* q_expr = ep.atom("q");
-//         rule r1{p_expr, {q_expr}};
-//         database db = {r1};
-        
-//         goal_adder ga(gs, cs, db);
-//         avoidance_store as;
-//         goal_resolver resolver(rs, gs, cs, db, cp, bm, lp, ga, as);
-        
-//         // Create a goal that's deep in the tree (Level 0 -> Level 1 -> Level 2)
-//         const goal_lineage* root = lp.goal(nullptr, 0);
-//         const resolution_lineage* r_level1 = lp.resolution(root, 0);
-//         const goal_lineage* g_level2 = lp.goal(r_level1, 0);
-        
-//         // Verify tree structure before resolution
-//         assert(root->parent == nullptr);
-//         assert(root->idx == 0);
-//         assert(r_level1->parent == root);
-//         assert(r_level1->idx == 0);
-//         assert(g_level2->parent == r_level1);
-//         assert(g_level2->idx == 0);
-        
-//         const expr* goal_p = ep.atom("p");
-//         ga(g_level2, goal_p);
-        
-//         // Pre-resolution state
-//         assert(gs.size() == 1);
-//         assert(gs.at(g_level2) == goal_p);
-//         assert(cs.size() == 1);
-        
-//         // Resolve the deep goal
-//         resolver(g_level2, 0);
-//         const resolution_lineage* rl = lp.resolution(g_level2, 0);
-        
-//         // Check return value
-//         assert(rl != nullptr);
-//         assert(rl->parent == g_level2);
-//         assert(rl->idx == 0);
-        
-//         // Goal removed
-//         assert(gs.count(g_level2) == 0);
-//         assert(cs.count(g_level2) == 0);
-        
-//         // Resolution should be in pool
-//         assert(lp.resolution_lineages.count(*rl) == 1);
-        
-//         // New goal created as child of new resolution (Level 3)
-//         const goal_lineage* new_goal = lp.goal(rl, 0);
-//         assert(gs.count(new_goal) == 1);
-//         assert(new_goal->parent == rl);
-//         assert(new_goal->idx == 0);
-        
-//         // Verify tree integrity: new_goal -> rl -> g_level2 -> r_level1 -> root -> nullptr
-//         assert(new_goal->parent == rl);
-//         assert(rl->parent == g_level2);
-//         assert(g_level2->parent == r_level1);
-//         assert(r_level1->parent == root);
-//         assert(root->parent == nullptr);
-        
-//         // Check new goal expression
-//         const expr* new_expr = gs.at(new_goal);
-//         assert(std::holds_alternative<expr::atom>(new_expr->content));
-//         assert(std::get<expr::atom>(new_expr->content).value == std::string("q"));
-        
-//         // Verify in pool
-//         assert(lp.goal_lineages.count(*new_goal) == 1);
-        
-//         // Verify candidates
-//         assert(cs.count(new_goal) == 1);
-        
-//         // Empty avoidance store
-//         assert(as.size() == 0);
-//     }
-    
-//     // Test 10: Resolve with multiple distinct variables - verify independent renaming
-//     {
-//         trail t;
-//         t.push();
-//         expr_pool ep(t);
-//         sequencer seq(t);
-//         bind_map bm(t);
-//         copier cp(seq, ep);
-//         lineage_pool lp;
-        
-//         resolution_store rs;
-//         goal_store gs;
-//         candidate_store cs;
-        
-//         // Database: rule "p(X, Y) :- q(X), r(Y)"
-//         // Two distinct variables X and Y
-//         const expr* var_x = ep.var(seq());
-//         const expr* var_y = ep.var(seq());
-//         uint32_t original_x_idx = std::get<expr::var>(var_x->content).index;
-//         uint32_t original_y_idx = std::get<expr::var>(var_y->content).index;
-//         assert(original_x_idx != original_y_idx); // Sanity check
-//         const expr* p_xy = ep.cons(ep.atom("p"), ep.cons(var_x, var_y));
-//         const expr* q_x = ep.cons(ep.atom("q"), var_x);
-//         const expr* r_y = ep.cons(ep.atom("r"), var_y);
-//         rule r1{p_xy, {q_x, r_y}};
-//         database db = {r1};
-        
-//         goal_adder ga(gs, cs, db);
-//         avoidance_store as;
-//         goal_resolver resolver(rs, gs, cs, db, cp, bm, lp, ga, as);
-        
-//         // Record sequencer state
-//         uint32_t seq_before = seq.index;
-        
-//         // Add goal "p(a, b)" using goal_adder
-//         const goal_lineage* g1 = lp.goal(nullptr, 1);
-//         const expr* atom_a = ep.atom("a");
-//         const expr* atom_b = ep.atom("b");
-//         const expr* goal_p_ab = ep.cons(ep.atom("p"), ep.cons(atom_a, atom_b));
-//         ga(g1, goal_p_ab);
-        
-//         // Pre-resolution
-//         assert(gs.size() == 1);
-//         assert(gs.at(g1) == goal_p_ab);
-//         assert(cs.size() == 1);
-//         size_t bindings_before = bm.bindings.size();
-        
-//         // CRITICAL: Original variables should NOT be in bind_map
-//         assert(bm.bindings.count(original_x_idx) == 0);
-//         assert(bm.bindings.count(original_y_idx) == 0);
-        
-//         // Resolve g1 with rule 0
-//         resolver(g1, 0);
-//         const resolution_lineage* rl = lp.resolution(g1, 0);
-        
-//         // Check sequencer advanced (two new variables allocated: X' and Y')
-//         uint32_t seq_after = seq.index;
-//         assert(seq_after > seq_before);
-//         // Should have allocated at least 2 new variables
-//         assert(seq_after >= seq_before + 2);
-        
-//         // Check return value
-//         assert(rl != nullptr);
-//         assert(rl->parent == g1);
-//         assert(rl->idx == 0);
-        
-//         // Goal removed
-//         assert(gs.count(g1) == 0);
-//         assert(cs.count(g1) == 0);
-        
-//         // Resolution should be in pool
-//         assert(lp.resolution_lineages.count(*rl) == 1);
-        
-//         // Two new goals should be added: q(X') and r(Y') where X' and Y' are renamed
-//         assert(gs.size() == 2);
-//         const goal_lineage* child_g0 = lp.goal(rl, 0);
-//         const goal_lineage* child_g1 = lp.goal(rl, 1);
-//         assert(gs.count(child_g0) == 1);
-//         assert(gs.count(child_g1) == 1);
-        
-//         // Check lineage structure
-//         assert(child_g0->parent == rl);
-//         assert(child_g0->idx == 0);
-//         assert(child_g1->parent == rl);
-//         assert(child_g1->idx == 1);
-        
-//         // Get RAW goal expressions (before normalization)
-//         const expr* expr0 = gs.at(child_g0);
-//         const expr* expr1 = gs.at(child_g1);
-        
-//         // Extract variables from raw expressions
-//         assert(std::holds_alternative<expr::cons>(expr0->content));
-//         assert(std::holds_alternative<expr::cons>(expr1->content));
-//         const expr::cons& cons0_raw = std::get<expr::cons>(expr0->content);
-//         const expr::cons& cons1_raw = std::get<expr::cons>(expr1->content);
-//         const expr* arg0_raw = cons0_raw.rhs;
-//         const expr* arg1_raw = cons1_raw.rhs;
-        
-//         // Extract renamed variable indices
-//         uint32_t renamed_x_idx = 0;
-//         uint32_t renamed_y_idx = 0;
-        
-//         if (std::holds_alternative<expr::var>(arg0_raw->content)) {
-//             renamed_x_idx = std::get<expr::var>(arg0_raw->content).index;
-//             // Should NOT be the original X
-//             assert(renamed_x_idx != original_x_idx);
-//             assert(renamed_x_idx != original_y_idx);
-//         }
-        
-//         if (std::holds_alternative<expr::var>(arg1_raw->content)) {
-//             renamed_y_idx = std::get<expr::var>(arg1_raw->content).index;
-//             // Should NOT be the original Y
-//             assert(renamed_y_idx != original_y_idx);
-//             assert(renamed_y_idx != original_x_idx);
-//         }
-        
-//         // CRITICAL: The two renamed variables should be DIFFERENT
-//         // (X and Y were distinct, so X' and Y' should also be distinct)
-//         assert(renamed_x_idx != renamed_y_idx);
-//         assert(renamed_x_idx != 0);
-//         assert(renamed_y_idx != 0);
-        
-//         // Both renamed variables should be in bind_map
-//         assert(bm.bindings.count(renamed_x_idx) == 1);
-//         assert(bm.bindings.count(renamed_y_idx) == 1);
-        
-//         // Normalize both
-//         const expr* norm0 = bm.whnf(expr0);
-//         const expr* norm1 = bm.whnf(expr1);
-        
-//         // Both should be cons cells
-//         assert(std::holds_alternative<expr::cons>(norm0->content));
-//         assert(std::holds_alternative<expr::cons>(norm1->content));
-        
-//         // Check heads: q and r
-//         const expr::cons& cons0 = std::get<expr::cons>(norm0->content);
-//         const expr::cons& cons1 = std::get<expr::cons>(norm1->content);
-//         const expr* head0 = cons0.lhs;
-//         const expr* head1 = cons1.lhs;
-//         assert(std::holds_alternative<expr::atom>(head0->content));
-//         assert(std::get<expr::atom>(head0->content).value == std::string("q"));
-//         assert(std::holds_alternative<expr::atom>(head1->content));
-//         assert(std::get<expr::atom>(head1->content).value == std::string("r"));
-        
-//         // Check arguments: q(a) and r(b)
-//         const expr* arg0 = bm.whnf(cons0.rhs);
-//         const expr* arg1 = bm.whnf(cons1.rhs);
-        
-//         assert(std::holds_alternative<expr::atom>(arg0->content));
-//         assert(std::get<expr::atom>(arg0->content).value == std::string("a"));
-//         assert(std::holds_alternative<expr::atom>(arg1->content));
-//         assert(std::get<expr::atom>(arg1->content).value == std::string("b"));
-        
-//         // Unification created bindings (X'=a and Y'=b)
-//         size_t bindings_after = bm.bindings.size();
-//         assert(bindings_after > bindings_before);
-//         assert(bindings_after >= bindings_before + 2); // At least 2 new bindings
-        
-//         // CRITICAL: Original variables should STILL NOT be in bind_map
-//         assert(bm.bindings.count(original_x_idx) == 0);
-//         assert(bm.bindings.count(original_y_idx) == 0);
-        
-//         // Both should have candidates
-//         assert(cs.count(child_g0) == 1);
-//         assert(cs.count(child_g1) == 1);
-//         assert(cs.size() == 2);
-        
-//         // Both should be in lineage pool
-//         assert(lp.goal_lineages.count(*child_g0) == 1);
-//         assert(lp.goal_lineages.count(*child_g1) == 1);
-        
-//         // Empty avoidance store
-//         assert(as.size() == 0);
-//     }
-    
-//     // Test 11: Variable-on-variable unification during resolution
-//     {
-//         trail t;
-//         t.push();
-//         expr_pool ep(t);
-//         sequencer seq(t);
-//         bind_map bm(t);
-//         copier cp(seq, ep);
-//         lineage_pool lp;
-        
-//         resolution_store rs;
-//         goal_store gs;
-//         candidate_store cs;
-        
-//         // Database: rule "p(Y) :- q(Y)" where Y is a variable in the rule
-//         const expr* var_y = ep.var(seq());
-//         uint32_t original_y_idx = std::get<expr::var>(var_y->content).index;
-//         const expr* p_y = ep.cons(ep.atom("p"), var_y);
-//         const expr* q_y = ep.cons(ep.atom("q"), var_y);
-//         rule r1{p_y, {q_y}};
-//         database db = {r1};
-        
-//         goal_adder ga(gs, cs, db);
-//         avoidance_store as;
-//         goal_resolver resolver(rs, gs, cs, db, cp, bm, lp, ga, as);
-        
-//         // Record sequencer state
-//         uint32_t seq_before = seq.index;
-        
-//         // Create goal "p(X)" where X is ALSO a variable (not a constant!)
-//         const goal_lineage* g1 = lp.goal(nullptr, 1);
-//         const expr* var_x = ep.var(seq());
-//         uint32_t goal_var_x_idx = std::get<expr::var>(var_x->content).index;
-//         const expr* goal_p_x = ep.cons(ep.atom("p"), var_x);
-//         ga(g1, goal_p_x);
-        
-//         // Pre-resolution
-//         assert(gs.size() == 1);
-//         assert(gs.at(g1) == goal_p_x);
-//         assert(cs.size() == 1);
-//         size_t bindings_before = bm.bindings.size();
-        
-//         // CRITICAL: Neither the original rule variable nor the goal variable
-//         // should be in bind_map yet
-//         assert(bm.bindings.count(original_y_idx) == 0);
-//         assert(bm.bindings.count(goal_var_x_idx) == 0);
-        
-//         // Resolve g1 with rule 0
-//         // This will unify p(X) with p(Y') where Y' is the renamed version of Y
-//         resolver(g1, 0);
-//         const resolution_lineage* rl = lp.resolution(g1, 0);
-        
-//         // Check sequencer advanced (Y was renamed to Y')
-//         uint32_t seq_after = seq.index;
-//         assert(seq_after > seq_before);
-        
-//         // Check return value
-//         assert(rl != nullptr);
-//         assert(rl->parent == g1);
-//         assert(rl->idx == 0);
-        
-//         // Goal removed
-//         assert(gs.count(g1) == 0);
-//         assert(cs.count(g1) == 0);
-        
-//         // Resolution should be in pool
-//         assert(lp.resolution_lineages.count(*rl) == 1);
-        
-//         // One new goal should be added: q(Y') or q(X) depending on binding direction
-//         assert(gs.size() == 1);
-//         const goal_lineage* child_g = lp.goal(rl, 0);
-//         assert(gs.count(child_g) == 1);
-        
-//         // Get the RAW child goal expression
-//         const expr* child_expr = gs.at(child_g);
-//         assert(std::holds_alternative<expr::cons>(child_expr->content));
-//         const expr::cons& child_cons = std::get<expr::cons>(child_expr->content);
-        
-//         // Head should be "q"
-//         assert(std::holds_alternative<expr::atom>(child_cons.lhs->content));
-//         assert(std::get<expr::atom>(child_cons.lhs->content).value == std::string("q"));
-        
-//         // Tail should be a variable
-//         const expr* child_arg = child_cons.rhs;
-//         assert(std::holds_alternative<expr::var>(child_arg->content));
-//         uint32_t child_var_idx = std::get<expr::var>(child_arg->content).index;
-        
-//         // The child variable should be the renamed Y' (not the original Y)
-//         assert(child_var_idx != original_y_idx);
-        
-//         // CRITICAL: Variable-on-variable unification occurred
-//         // Either X=Y' or Y'=X, but at least one should be in bind_map
-//         // The unification should have created a binding between X and Y'
-//         size_t bindings_after = bm.bindings.size();
-//         assert(bindings_after > bindings_before);
-        
-//         // At least one of the variables should be bound
-//         bool x_bound = bm.bindings.count(goal_var_x_idx) > 0;
-//         bool y_prime_bound = bm.bindings.count(child_var_idx) > 0;
-//         assert(x_bound || y_prime_bound);
-        
-//         // If we normalize the child argument, it should give us a variable
-//         // (either X or Y' depending on binding direction)
-//         const expr* normalized_arg = bm.whnf(child_arg);
-//         assert(std::holds_alternative<expr::var>(normalized_arg->content));
-        
-//         // CRITICAL: Original rule variable Y should STILL NOT be in bind_map
-//         assert(bm.bindings.count(original_y_idx) == 0);
-        
-//         // Verify in pools
-//         assert(lp.goal_lineages.count(*child_g) == 1);
-//         assert(lp.resolution_lineages.count(*rl) == 1);
-        
-//         // Should have candidates
-//         assert(cs.count(child_g) == 1);
-        
-//         // Empty avoidance store
-//         assert(as.size() == 0);
-//     }
-    
-//     // Test 12: Multiple database rules - resolve with middle rule to verify indexing
-//     {
-//         trail t;
-//         t.push();
-//         expr_pool ep(t);
-//         sequencer seq(t);
-//         bind_map bm(t);
-//         copier cp(seq, ep);
-//         lineage_pool lp;
-        
-//         resolution_store rs;
-//         goal_store gs;
-//         candidate_store cs;
-        
-//         // Database: 5 different rules with different heads and bodies
-//         // We'll resolve using rule at index 2 (middle)
-//         const expr* p_expr = ep.atom("p");
-//         const expr* q_expr = ep.atom("q");
-//         const expr* r_expr = ep.atom("r");
-//         const expr* s_expr = ep.atom("s");
-//         const expr* t_expr = ep.atom("t");
-//         const expr* u_expr = ep.atom("u");
-        
-//         rule r0{p_expr, {}};                    // Rule 0: p
-//         rule r1{q_expr, {r_expr}};              // Rule 1: q :- r
-//         rule r2{r_expr, {s_expr, t_expr}};      // Rule 2: r :- s, t  <-- We'll use this one
-//         rule r3{s_expr, {u_expr}};              // Rule 3: s :- u
-//         rule r4{t_expr, {}};                    // Rule 4: t
-//         database db = {r0, r1, r2, r3, r4};
-        
-//         goal_adder ga(gs, cs, db);
-//         avoidance_store as;
-//         goal_resolver resolver(rs, gs, cs, db, cp, bm, lp, ga, as);
-        
-//         // Add goal "r" which matches rule 2
-//         const goal_lineage* g1 = lp.goal(nullptr, 1);
-//         ga(g1, r_expr);
-        
-//         // Pre-resolution: goal has all 5 rules as candidates
-//         assert(gs.size() == 1);
-//         assert(gs.at(g1) == r_expr);
-//         assert(cs.size() == 5);
-//         assert(cs.count(g1) == 5);
-        
-//         // Resolve with rule 2 (middle of database)
-//         resolver(g1, 2);
-//         const resolution_lineage* rl = lp.resolution(g1, 2);
-        
-//         // Verify return value has correct index
-//         assert(rl != nullptr);
-//         assert(rl->parent == g1);
-//         assert(rl->idx == 2);  // CRITICAL: Must be index 2, not 0 or 1
-        
-//         // Goal removed
-//         assert(gs.count(g1) == 0);
-//         assert(cs.count(g1) == 0);
-        
-//         // Resolution in pool
-//         assert(lp.resolution_lineages.count(*rl) == 1);
-        
-//         // Two new goals should be added from rule 2's body: s and t
-//         assert(gs.size() == 2);
-//         const goal_lineage* child_g0 = lp.goal(rl, 0);
-//         const goal_lineage* child_g1 = lp.goal(rl, 1);
-        
-//         // Verify lineage structure
-//         assert(child_g0->parent == rl);
-//         assert(child_g0->idx == 0);
-//         assert(child_g1->parent == rl);
-//         assert(child_g1->idx == 1);
-        
-//         // Verify expressions are from rule 2's body (s and t, NOT r or u)
-//         const expr* expr0 = gs.at(child_g0);
-//         const expr* expr1 = gs.at(child_g1);
-        
-//         assert(std::holds_alternative<expr::atom>(expr0->content));
-//         assert(std::get<expr::atom>(expr0->content).value == std::string("s"));
-//         assert(std::holds_alternative<expr::atom>(expr1->content));
-//         assert(std::get<expr::atom>(expr1->content).value == std::string("t"));
-        
-//         // Both children should have all 5 database rules as candidates
-//         assert(cs.size() == 10); // 2 goals * 5 rules each
-//         assert(cs.count(child_g0) == 5);
-//         assert(cs.count(child_g1) == 5);
-        
-//         // Verify in pools
-//         assert(lp.goal_lineages.count(*child_g0) == 1);
-//         assert(lp.goal_lineages.count(*child_g1) == 1);
-        
-//         // Empty avoidance store
-//         assert(as.size() == 0);
-//     }
-    
-//     // Test 13: Multiple goals in store - resolve specific one, others untouched
-//     {
-//         trail t;
-//         t.push();
-//         expr_pool ep(t);
-//         sequencer seq(t);
-//         bind_map bm(t);
-//         copier cp(seq, ep);
-//         lineage_pool lp;
-        
-//         resolution_store rs;
-//         goal_store gs;
-//         candidate_store cs;
-        
-//         // Database: simple rules for various predicates
-//         const expr* p_expr = ep.atom("p");
-//         const expr* q_expr = ep.atom("q");
-//         const expr* r_expr = ep.atom("r");
-//         const expr* s_expr = ep.atom("s");
-//         const expr* t_expr = ep.atom("t");
-        
-//         rule r0{p_expr, {q_expr}};              // p :- q
-//         rule r1{q_expr, {r_expr, s_expr}};      // q :- r, s  <-- We'll resolve with this
-//         rule r2{r_expr, {}};                    // r
-//         rule r3{s_expr, {}};                    // s
-//         rule r4{t_expr, {}};                    // t
-//         database db = {r0, r1, r2, r3, r4};
-        
-//         goal_adder ga(gs, cs, db);
-//         avoidance_store as;
-//         goal_resolver resolver(rs, gs, cs, db, cp, bm, lp, ga, as);
-        
-//         // Add 5 different goals with different lineage structures
-//         const goal_lineage* g0 = lp.goal(nullptr, 0);
-//         ga(g0, p_expr);
-        
-//         const goal_lineage* g1 = lp.goal(nullptr, 1);
-//         ga(g1, q_expr);  // <-- We'll resolve THIS one
-        
-//         const goal_lineage* g2 = lp.goal(nullptr, 2);
-//         ga(g2, r_expr);
-        
-//         const resolution_lineage* rl_other = lp.resolution(nullptr, 99);
-//         const goal_lineage* g3 = lp.goal(rl_other, 3);
-//         ga(g3, s_expr);
-        
-//         const goal_lineage* g4 = lp.goal(nullptr, 4);
-//         ga(g4, t_expr);
-        
-//         // Pre-resolution: 5 goals, each with 5 candidates
-//         assert(gs.size() == 5);
-//         assert(gs.at(g0) == p_expr);
-//         assert(gs.at(g1) == q_expr);
-//         assert(gs.at(g2) == r_expr);
-//         assert(gs.at(g3) == s_expr);
-//         assert(gs.at(g4) == t_expr);
-//         assert(cs.size() == 25); // 5 goals * 5 rules each
-        
-//         // Record the exact expressions for later comparison
-//         const expr* g0_expr = gs.at(g0);
-//         const expr* g2_expr = gs.at(g2);
-//         const expr* g3_expr = gs.at(g3);
-//         const expr* g4_expr = gs.at(g4);
-        
-//         // Resolve ONLY g1 (the middle one) with rule 1
-//         resolver(g1, 1);
-//         const resolution_lineage* rl = lp.resolution(g1, 1);
-        
-//         // Verify resolution lineage
-//         assert(rl != nullptr);
-//         assert(rl->parent == g1);
-//         assert(rl->idx == 1);
-        
-//         // CRITICAL: g1 should be removed, ALL OTHERS should remain
-//         assert(gs.count(g1) == 0);
-//         assert(gs.count(g0) == 1);  // Still there
-//         assert(gs.count(g2) == 1);  // Still there
-//         assert(gs.count(g3) == 1);  // Still there
-//         assert(gs.count(g4) == 1);  // Still there
-        
-//         // CRITICAL: Expressions of remaining goals should be UNCHANGED
-//         assert(gs.at(g0) == g0_expr);  // Same pointer
-//         assert(gs.at(g2) == g2_expr);  // Same pointer
-//         assert(gs.at(g3) == g3_expr);  // Same pointer
-//         assert(gs.at(g4) == g4_expr);  // Same pointer
-        
-//         // g1's candidates removed, others remain
-//         assert(cs.count(g1) == 0);
-//         assert(cs.count(g0) == 5);  // Still has all candidates
-//         assert(cs.count(g2) == 5);  // Still has all candidates
-//         assert(cs.count(g3) == 5);  // Still has all candidates
-//         assert(cs.count(g4) == 5);  // Still has all candidates
-        
-//         // Two new goals added as children of g1's resolution (rule 1: q :- r, s)
-//         const goal_lineage* child0 = lp.goal(rl, 0);
-//         const goal_lineage* child1 = lp.goal(rl, 1);
-        
-//         assert(gs.count(child0) == 1);
-//         assert(gs.count(child1) == 1);
-        
-//         // Total goals: 4 original (g0, g2, g3, g4) + 2 new (child0, child1) = 6
-//         assert(gs.size() == 6);
-        
-//         // Verify new children have correct expressions (from rule 1's body: r, s)
-//         const expr* child0_expr = gs.at(child0);
-//         const expr* child1_expr = gs.at(child1);
-        
-//         assert(std::holds_alternative<expr::atom>(child0_expr->content));
-//         assert(std::get<expr::atom>(child0_expr->content).value == std::string("r"));
-//         assert(std::holds_alternative<expr::atom>(child1_expr->content));
-//         assert(std::get<expr::atom>(child1_expr->content).value == std::string("s"));
-        
-//         // Verify lineage structure: new children are under rl, which is under g1
-//         assert(child0->parent == rl);
-//         assert(child0->idx == 0);
-//         assert(child1->parent == rl);
-//         assert(child1->idx == 1);
-//         assert(rl->parent == g1);
-        
-//         // New children should have candidates
-//         assert(cs.count(child0) == 5);
-//         assert(cs.count(child1) == 5);
-        
-//         // Total candidates: 4 old goals * 5 + 2 new goals * 5 = 30
-//         assert(cs.size() == 30);
-        
-//         // Verify all goals are in lineage pool
-//         assert(lp.goal_lineages.count(*g0) == 1);
-//         assert(lp.goal_lineages.count(*g2) == 1);
-//         assert(lp.goal_lineages.count(*g3) == 1);
-//         assert(lp.goal_lineages.count(*g4) == 1);
-//         assert(lp.goal_lineages.count(*child0) == 1);
-//         assert(lp.goal_lineages.count(*child1) == 1);
-//         assert(lp.resolution_lineages.count(*rl) == 1);
-        
-//         // Empty avoidance store
-//         assert(as.size() == 0);
-//     }
-    
-//     // Test 14: Database indexing with variables - resolve with last rule
-//     {
-//         trail t;
-//         t.push();
-//         expr_pool ep(t);
-//         sequencer seq(t);
-//         bind_map bm(t);
-//         copier cp(seq, ep);
-//         lineage_pool lp;
-        
-//         resolution_store rs;
-//         goal_store gs;
-//         candidate_store cs;
-        
-//         // Database: rules with variables at different indices
-//         const expr* var0 = ep.var(seq());
-//         const expr* var1 = ep.var(seq());
-//         const expr* var2 = ep.var(seq());
-        
-//         const expr* p_expr = ep.atom("p");
-//         const expr* q_expr = ep.atom("q");
-//         const expr* r_expr = ep.atom("r");
-        
-//         const expr* p_v0 = ep.cons(p_expr, var0);
-//         const expr* q_v0 = ep.cons(q_expr, var0);
-//         const expr* q_v1 = ep.cons(q_expr, var1);
-//         const expr* r_v1 = ep.cons(r_expr, var1);
-//         const expr* r_v2 = ep.cons(r_expr, var2);
-        
-//         rule r0{p_v0, {q_v0}};                  // Rule 0: p(X) :- q(X)
-//         rule r1{p_expr, {}};                    // Rule 1: p
-//         rule r2{q_v1, {r_v1}};                  // Rule 2: q(Y) :- r(Y)
-//         rule r3{r_v2, {}};                      // Rule 3: r(Z)  <-- We'll use this (last)
-//         database db = {r0, r1, r2, r3};
-        
-//         goal_adder ga(gs, cs, db);
-//         avoidance_store as;
-//         goal_resolver resolver(rs, gs, cs, db, cp, bm, lp, ga, as);
-        
-//         // Add goal "r(a)"
-//         const goal_lineage* g1 = lp.goal(nullptr, 1);
-//         const expr* atom_a = ep.atom("a");
-//         const expr* goal_r_a = ep.cons(r_expr, atom_a);
-//         ga(g1, goal_r_a);
-        
-//         // Pre-resolution
-//         assert(gs.size() == 1);
-//         assert(gs.at(g1) == goal_r_a);
-//         assert(cs.size() == 4);
-        
-//         // Record sequencer and bindings before
-//         uint32_t seq_before = seq.index;
-//         size_t bindings_before = bm.bindings.size();
-        
-//         // Resolve with rule 3 (LAST rule, index 3)
-//         resolver(g1, 3);
-//         const resolution_lineage* rl = lp.resolution(g1, 3);
-        
-//         // Verify correct rule was used
-//         assert(rl != nullptr);
-//         assert(rl->parent == g1);
-//         assert(rl->idx == 3);  // CRITICAL: Must be 3 (last rule)
-        
-//         // Sequencer should have advanced (var2 was copied)
-//         assert(seq.index > seq_before);
-        
-//         // Goal removed
-//         assert(gs.count(g1) == 0);
-        
-//         // Rule 3 has empty body, so no new goals
-//         assert(gs.size() == 0);
-        
-//         // Unification should have occurred (r(Z') with r(a))
-//         assert(bm.bindings.size() > bindings_before);
-        
-//         // Resolution in pool
-//         assert(lp.resolution_lineages.count(*rl) == 1);
-        
-//         // Empty avoidance store
-//         assert(as.size() == 0);
-//     }
-    
-//     // Test 15: Multiple goals, resolve multiple times in sequence
-//     {
-//         trail t;
-//         t.push();
-//         expr_pool ep(t);
-//         sequencer seq(t);
-//         bind_map bm(t);
-//         copier cp(seq, ep);
-//         lineage_pool lp;
-        
-//         resolution_store rs;
-//         goal_store gs;
-//         candidate_store cs;
-        
-//         // Database
-//         const expr* p_expr = ep.atom("p");
-//         const expr* q_expr = ep.atom("q");
-//         const expr* r_expr = ep.atom("r");
-        
-//         rule r0{p_expr, {q_expr}};      // p :- q
-//         rule r1{q_expr, {r_expr}};      // q :- r
-//         rule r2{r_expr, {}};            // r
-//         database db = {r0, r1, r2};
-        
-//         goal_adder ga(gs, cs, db);
-//         avoidance_store as;
-//         goal_resolver resolver(rs, gs, cs, db, cp, bm, lp, ga, as);
-        
-//         // Add three goals
-//         const goal_lineage* g_p = lp.goal(nullptr, 10);
-//         ga(g_p, p_expr);
-        
-//         const goal_lineage* g_q = lp.goal(nullptr, 20);
-//         ga(g_q, q_expr);
-        
-//         const goal_lineage* g_r = lp.goal(nullptr, 30);
-//         ga(g_r, r_expr);
-        
-//         // Pre-resolution: 3 goals
-//         assert(gs.size() == 3);
-//         assert(cs.size() == 9); // 3 goals * 3 rules
-        
-//         // First resolution: resolve g_q with rule 1 (q :- r)
-//         resolver(g_q, 1);
-//         const resolution_lineage* rl_q = lp.resolution(g_q, 1);
-        
-//         assert(rl_q->parent == g_q);
-//         assert(rl_q->idx == 1);
-        
-//         // g_q removed, g_p and g_r remain
-//         assert(gs.count(g_q) == 0);
-//         assert(gs.count(g_p) == 1);
-//         assert(gs.count(g_r) == 1);
-        
-//         // One new goal from q's resolution
-//         const goal_lineage* child_of_q = lp.goal(rl_q, 0);
-//         assert(gs.count(child_of_q) == 1);
-//         assert(gs.size() == 3); // g_p, g_r, child_of_q
-        
-//         // Verify child_of_q has correct expression (r)
-//         const expr* child_of_q_expr = gs.at(child_of_q);
-//         assert(std::holds_alternative<expr::atom>(child_of_q_expr->content));
-//         assert(std::get<expr::atom>(child_of_q_expr->content).value == std::string("r"));
-        
-//         // Second resolution: resolve g_p with rule 0 (p :- q)
-//         resolver(g_p, 0);
-//         const resolution_lineage* rl_p = lp.resolution(g_p, 0);
-        
-//         assert(rl_p->parent == g_p);
-//         assert(rl_p->idx == 0);
-        
-//         // g_p removed, g_r and child_of_q remain
-//         assert(gs.count(g_p) == 0);
-//         assert(gs.count(g_q) == 0);  // Still gone from first resolution
-//         assert(gs.count(g_r) == 1);
-//         assert(gs.count(child_of_q) == 1);
-        
-//         // One new goal from p's resolution
-//         const goal_lineage* child_of_p = lp.goal(rl_p, 0);
-//         assert(gs.count(child_of_p) == 1);
-//         assert(gs.size() == 3); // g_r, child_of_q, child_of_p
-        
-//         // Verify child_of_p has correct expression (q)
-//         const expr* child_of_p_expr = gs.at(child_of_p);
-//         assert(std::holds_alternative<expr::atom>(child_of_p_expr->content));
-//         assert(std::get<expr::atom>(child_of_p_expr->content).value == std::string("q"));
-        
-//         // Third resolution: resolve g_r with rule 2 (r - fact)
-//         resolver(g_r, 2);
-//         const resolution_lineage* rl_r = lp.resolution(g_r, 2);
-        
-//         assert(rl_r->parent == g_r);
-//         assert(rl_r->idx == 2);
-        
-//         // g_r removed, only children remain
-//         assert(gs.count(g_r) == 0);
-//         assert(gs.count(child_of_q) == 1);
-//         assert(gs.count(child_of_p) == 1);
-//         assert(gs.size() == 2); // child_of_q, child_of_p
-        
-//         // No new goals from g_r (empty body)
-        
-//         // Verify all resolutions in pool
-//         assert(lp.resolution_lineages.count(*rl_p) == 1);
-//         assert(lp.resolution_lineages.count(*rl_q) == 1);
-//         assert(lp.resolution_lineages.count(*rl_r) == 1);
-        
-//         // Verify all resolutions in resolution store
-//         assert(rs.size() == 3);
-//         assert(rs.count(rl_p) == 1);
-//         assert(rs.count(rl_q) == 1);
-//         assert(rs.count(rl_r) == 1);
-        
-//         // Verify lineage structures remain correct
-//         assert(child_of_p->parent == rl_p);
-//         assert(rl_p->parent == g_p);
-//         assert(child_of_q->parent == rl_q);
-//         assert(rl_q->parent == g_q);
-        
-//         // Empty avoidance store
-//         assert(as.size() == 0);
-//     }
-    
-//     // Test 16: Resolution store with pre-existing resolutions
-//     {
-//         trail t;
-//         t.push();
-//         expr_pool ep(t);
-//         sequencer seq(t);
-//         bind_map bm(t);
-//         copier cp(seq, ep);
-//         lineage_pool lp;
-        
-//         resolution_store rs;
-//         goal_store gs;
-//         candidate_store cs;
-        
-//         // Database
-//         const expr* p_expr = ep.atom("p");
-//         const expr* q_expr = ep.atom("q");
-//         rule r0{p_expr, {}};
-//         rule r1{q_expr, {}};
-//         database db = {r0, r1};
-        
-//         goal_adder ga(gs, cs, db);
-//         avoidance_store as;
-//         goal_resolver resolver(rs, gs, cs, db, cp, bm, lp, ga, as);
-        
-//         // Pre-populate resolution store with some existing resolutions
-//         const goal_lineage* g_old1 = lp.goal(nullptr, 100);
-//         const goal_lineage* g_old2 = lp.goal(nullptr, 200);
-//         const resolution_lineage* rl_old1 = lp.resolution(g_old1, 5);
-//         const resolution_lineage* rl_old2 = lp.resolution(g_old2, 7);
-//         rs.insert(rl_old1);
-//         rs.insert(rl_old2);
-        
-//         // Pre-resolution: 2 existing resolutions
-//         assert(rs.size() == 2);
-//         assert(rs.count(rl_old1) == 1);
-//         assert(rs.count(rl_old2) == 1);
-        
-//         // Add a new goal and resolve it
-//         const goal_lineage* g_new = lp.goal(nullptr, 1);
-//         ga(g_new, p_expr);
-        
-//         assert(gs.size() == 1);
-        
-//         // Resolve the new goal
-//         resolver(g_new, 0);
-//         const resolution_lineage* rl_new = lp.resolution(g_new, 0);
-        
-//         // Verify resolution store now has 3 resolutions (2 old + 1 new)
-//         assert(rs.size() == 3);
-//         assert(rs.count(rl_old1) == 1);  // Old ones still there
-//         assert(rs.count(rl_old2) == 1);  // Old ones still there
-//         assert(rs.count(rl_new) == 1);   // New one added
-        
-//         // Verify new resolution has correct structure
-//         assert(rl_new->parent == g_new);
-//         assert(rl_new->idx == 0);
-        
-//         // Goal was removed
-//         assert(gs.count(g_new) == 0);
-        
-//         // All resolutions in pool
-//         assert(lp.resolution_lineages.count(*rl_old1) == 1);
-//         assert(lp.resolution_lineages.count(*rl_old2) == 1);
-//         assert(lp.resolution_lineages.count(*rl_new) == 1);
-        
-//         // Empty avoidance store
-//         assert(as.size() == 0);
-//     }
-    
-//     // Test 17: Complex nested expressions with deep structures AND variables
-//     {
-//         trail t;
-//         t.push();
-//         expr_pool ep(t);
-//         sequencer seq(t);
-//         bind_map bm(t);
-//         copier cp(seq, ep);
-//         lineage_pool lp;
-        
-//         resolution_store rs;
-//         goal_store gs;
-//         candidate_store cs;
-        
-//         // Build nested expression with VARIABLE: p(f(g(h(X))))
-//         const expr* var_x = ep.var(seq());
-//         uint32_t original_x_idx = std::get<expr::var>(var_x->content).index;
-//         const expr* h_x = ep.cons(ep.atom("h"), var_x);
-//         const expr* g_h_x = ep.cons(ep.atom("g"), h_x);
-//         const expr* f_g_h_x = ep.cons(ep.atom("f"), g_h_x);
-//         const expr* p_nested = ep.cons(ep.atom("p"), f_g_h_x);
-        
-//         // Build rule with nested expression in body: p(f(g(h(X)))) :- q(f(g(h(X))))
-//         const expr* q_nested = ep.cons(ep.atom("q"), f_g_h_x);
-//         rule r1{p_nested, {q_nested}};
-//         database db = {r1};
-        
-//         goal_adder ga(gs, cs, db);
-//         avoidance_store as;
-//         goal_resolver resolver(rs, gs, cs, db, cp, bm, lp, ga, as);
-        
-//         // Add goal with concrete value: p(f(g(h(a))))
-//         const expr* atom_a = ep.atom("a");
-//         const expr* h_a = ep.cons(ep.atom("h"), atom_a);
-//         const expr* g_h_a = ep.cons(ep.atom("g"), h_a);
-//         const expr* f_g_h_a = ep.cons(ep.atom("f"), g_h_a);
-//         const expr* goal_p_nested = ep.cons(ep.atom("p"), f_g_h_a);
-        
-//         const goal_lineage* g1 = lp.goal(nullptr, 1);
-//         ga(g1, goal_p_nested);
-        
-//         // Store expression pool size and original pointers
-//         size_t ep_size_before = ep.size();
-//         const expr* original_body_expr = q_nested;
-        
-//         // Pre-resolution: original variable not bound
-//         assert(bm.bindings.count(original_x_idx) == 0);
-        
-//         uint32_t seq_before = seq.index;
-        
-//         // Resolve
-//         resolver(g1, 0);
-//         const resolution_lineage* rl = lp.resolution(g1, 0);
-        
-//         // Sequencer advanced (variable copied)
-//         assert(seq.index > seq_before);
-        
-//         // Verify resolution created
-//         assert(rs.size() == 1);
-//         assert(rs.count(rl) == 1);
-        
-//         // One child goal added
-//         assert(gs.size() == 1);
-//         const goal_lineage* child = lp.goal(rl, 0);
-//         assert(gs.count(child) == 1);
-        
-//         // Get the child expression
-//         const expr* child_expr = gs.at(child);
-        
-//         // CRITICAL: Copied expression must be DIFFERENT pointer from original
-//         assert(child_expr != original_body_expr);
-        
-//         // CRITICAL: Expression pool grew (new expressions created during copy)
-//         assert(ep.size() > ep_size_before);
-        
-//         // Navigate through the nested structure: q(f(g(h(a))))
-//         assert(std::holds_alternative<expr::cons>(child_expr->content));
-//         const expr::cons& cons1 = std::get<expr::cons>(child_expr->content);
-//         assert(std::holds_alternative<expr::atom>(cons1.lhs->content));
-//         assert(std::get<expr::atom>(cons1.lhs->content).value == "q");
-        
-//         // Get f(g(h(a))) after unification
-//         const expr* f_part = bm.whnf(cons1.rhs);
-//         assert(std::holds_alternative<expr::cons>(f_part->content));
-//         const expr::cons& cons2 = std::get<expr::cons>(f_part->content);
-//         assert(std::get<expr::atom>(cons2.lhs->content).value == "f");
-        
-//         // Get g(h(a))
-//         const expr* g_part = bm.whnf(cons2.rhs);
-//         assert(std::holds_alternative<expr::cons>(g_part->content));
-//         const expr::cons& cons3 = std::get<expr::cons>(g_part->content);
-//         assert(std::get<expr::atom>(cons3.lhs->content).value == "g");
-        
-//         // Get h(a)
-//         const expr* h_part = bm.whnf(cons3.rhs);
-//         assert(std::holds_alternative<expr::cons>(h_part->content));
-//         const expr::cons& cons4 = std::get<expr::cons>(h_part->content);
-//         assert(std::get<expr::atom>(cons4.lhs->content).value == "h");
-        
-//         // Get a (after following all bindings)
-//         const expr* a_part = bm.whnf(cons4.rhs);
-//         assert(std::holds_alternative<expr::atom>(a_part->content));
-//         assert(std::get<expr::atom>(a_part->content).value == "a");
-        
-//         // CRITICAL: Original variable still not in bind_map
-//         assert(bm.bindings.count(original_x_idx) == 0);
-        
-//         // CRITICAL: Renamed variable IS in bind_map
-//         assert(bm.bindings.size() == 1);
-        
-//         // Empty avoidance store
-//         assert(as.size() == 0);
-//     }
-    
-//     // Test 18: Large body clauses (10+ literals)
-//     {
-//         trail t;
-//         t.push();
-//         expr_pool ep(t);
-//         sequencer seq(t);
-//         bind_map bm(t);
-//         copier cp(seq, ep);
-//         lineage_pool lp;
-        
-//         resolution_store rs;
-//         goal_store gs;
-//         candidate_store cs;
-        
-//         // Create rule with 15 body literals: p :- q1, q2, ..., q15
-//         const expr* p_expr = ep.atom("p");
-//         std::vector<const expr*> body_literals;
-//         for (int i = 1; i <= 15; i++) {
-//             body_literals.push_back(ep.atom("q" + std::to_string(i)));
-//         }
-        
-//         rule r1{p_expr, {body_literals.begin(), body_literals.end()}};
-//         database db = {r1};
-        
-//         goal_adder ga(gs, cs, db);
-//         avoidance_store as;
-//         goal_resolver resolver(rs, gs, cs, db, cp, bm, lp, ga, as);
-        
-//         // Add goal
-//         const goal_lineage* g1 = lp.goal(nullptr, 1);
-//         ga(g1, p_expr);
-        
-//         assert(gs.size() == 1);
-//         assert(cs.size() == 1);
-        
-//         // Resolve
-//         resolver(g1, 0);
-//         const resolution_lineage* rl = lp.resolution(g1, 0);
-        
-//         // Verify resolution
-//         assert(rs.size() == 1);
-//         assert(rs.count(rl) == 1);
-        
-//         // Goal removed
-//         assert(gs.count(g1) == 0);
-        
-//         // 15 child goals should be added
-//         assert(gs.size() == 15);
-        
-//         // Verify each child
-//         for (size_t i = 0; i < 15; i++) {
-//             const goal_lineage* child = lp.goal(rl, i);
-//             assert(gs.count(child) == 1);
-//             assert(child->parent == rl);
-//             assert(child->idx == i);
-            
-//             // Verify expression
-//             const expr* child_expr = gs.at(child);
-//             assert(std::holds_alternative<expr::atom>(child_expr->content));
-//             assert(std::get<expr::atom>(child_expr->content).value == "q" + std::to_string(i + 1));
-            
-//             // Each child should have candidates
-//             assert(cs.count(child) == 1);
-//         }
-        
-//         // Total: 15 children * 1 candidate each
-//         assert(cs.size() == 15);
-        
-//         // Empty avoidance store
-//         assert(as.size() == 0);
-//     }
-    
-//     // Test 19: CRITICAL - Goal with multiple variables
-//     {
-//         trail t;
-//         t.push();
-//         expr_pool ep(t);
-//         sequencer seq(t);
-//         bind_map bm(t);
-//         copier cp(seq, ep);
-//         lineage_pool lp;
-        
-//         resolution_store rs;
-//         goal_store gs;
-//         candidate_store cs;
-        
-//         // Database: rule "p(A, B) :- q(A), r(B)"
-//         const expr* var_a = ep.var(seq());
-//         const expr* var_b = ep.var(seq());
-//         uint32_t original_a_idx = std::get<expr::var>(var_a->content).index;
-//         uint32_t original_b_idx = std::get<expr::var>(var_b->content).index;
-        
-//         const expr* p_ab = ep.cons(ep.atom("p"), ep.cons(var_a, var_b));
-//         const expr* q_a = ep.cons(ep.atom("q"), var_a);
-//         const expr* r_b = ep.cons(ep.atom("r"), var_b);
-//         rule r1{p_ab, {q_a, r_b}};
-//         database db = {r1};
-        
-//         goal_adder ga(gs, cs, db);
-//         avoidance_store as;
-//         goal_resolver resolver(rs, gs, cs, db, cp, bm, lp, ga, as);
-        
-//         // CRITICAL: Create goal with VARIABLES: p(X, Y) where X and Y are goal variables
-//         const expr* goal_var_x = ep.var(seq());
-//         const expr* goal_var_y = ep.var(seq());
-//         uint32_t goal_x_idx = std::get<expr::var>(goal_var_x->content).index;
-//         uint32_t goal_y_idx = std::get<expr::var>(goal_var_y->content).index;
-        
-//         const expr* goal_p_xy = ep.cons(ep.atom("p"), ep.cons(goal_var_x, goal_var_y));
-//         const goal_lineage* g1 = lp.goal(nullptr, 1);
-//         ga(g1, goal_p_xy);
-        
-//         // Pre-resolution: NO variables should be in bind_map
-//         assert(bm.bindings.count(original_a_idx) == 0);
-//         assert(bm.bindings.count(original_b_idx) == 0);
-//         assert(bm.bindings.count(goal_x_idx) == 0);
-//         assert(bm.bindings.count(goal_y_idx) == 0);
-        
-//         uint32_t seq_before = seq.index;
-        
-//         // Resolve - this will do variable-on-variable unification
-//         resolver(g1, 0);
-//         const resolution_lineage* rl = lp.resolution(g1, 0);
-        
-//         // Sequencer advanced (rule variables renamed)
-//         assert(seq.index > seq_before);
-        
-//         // CRITICAL: Original rule variables should STILL NOT be in bind_map
-//         assert(bm.bindings.count(original_a_idx) == 0);
-//         assert(bm.bindings.count(original_b_idx) == 0);
-        
-//         // Two children added
-//         assert(gs.size() == 2);
-//         const goal_lineage* child0 = lp.goal(rl, 0);
-//         const goal_lineage* child1 = lp.goal(rl, 1);
-        
-//         // Get child expressions
-//         const expr* expr0 = gs.at(child0);
-//         const expr* expr1 = gs.at(child1);
-        
-//         // Both should be cons cells with variables
-//         assert(std::holds_alternative<expr::cons>(expr0->content));
-//         assert(std::holds_alternative<expr::cons>(expr1->content));
-        
-//         const expr::cons& cons0 = std::get<expr::cons>(expr0->content);
-//         const expr::cons& cons1 = std::get<expr::cons>(expr1->content);
-        
-//         // Heads should be q and r
-//         assert(std::get<expr::atom>(cons0.lhs->content).value == "q");
-//         assert(std::get<expr::atom>(cons1.lhs->content).value == "r");
-        
-//         // Arguments should be variables (unified with goal variables)
-//         const expr* arg0 = cons0.rhs;
-//         const expr* arg1 = cons1.rhs;
-        
-//         assert(std::holds_alternative<expr::var>(arg0->content));
-//         assert(std::holds_alternative<expr::var>(arg1->content));
-        
-//         // These are the renamed rule variables
-//         uint32_t renamed_a_idx = std::get<expr::var>(arg0->content).index;
-//         uint32_t renamed_b_idx = std::get<expr::var>(arg1->content).index;
-        
-//         // They should be different from originals
-//         assert(renamed_a_idx != original_a_idx);
-//         assert(renamed_b_idx != original_b_idx);
-        
-//         // CRITICAL: Check bind_map bindings - variable-on-variable unification occurred
-//         // Either goal vars are bound to renamed vars, or renamed vars are bound to goal vars
-//         bool a_binding_exists = (bm.bindings.count(goal_x_idx) > 0) || (bm.bindings.count(renamed_a_idx) > 0);
-//         bool b_binding_exists = (bm.bindings.count(goal_y_idx) > 0) || (bm.bindings.count(renamed_b_idx) > 0);
-//         assert(a_binding_exists);
-//         assert(b_binding_exists);
-        
-//         // Normalize both to verify they point to same ultimate variable
-//         const expr* norm0 = bm.whnf(arg0);
-//         const expr* norm1 = bm.whnf(arg1);
-        
-//         // Both should still be variables (not atoms)
-//         assert(std::holds_alternative<expr::var>(norm0->content));
-//         assert(std::holds_alternative<expr::var>(norm1->content));
-        
-//         // Empty avoidance store
-//         assert(as.size() == 0);
-//     }
-    
-//     // Test 20: EXTREMELY IMPORTANT - Check exact binding contents
-//     {
-//         trail t;
-//         t.push();
-//         expr_pool ep(t);
-//         sequencer seq(t);
-//         bind_map bm(t);
-//         copier cp(seq, ep);
-//         lineage_pool lp;
-        
-//         resolution_store rs;
-//         goal_store gs;
-//         candidate_store cs;
-        
-//         // Database: rule "p(X, Y) :- q(X), r(Y)"
-//         const expr* var_x = ep.var(seq());
-//         const expr* var_y = ep.var(seq());
-//         uint32_t original_x_idx = std::get<expr::var>(var_x->content).index;
-//         uint32_t original_y_idx = std::get<expr::var>(var_y->content).index;
-        
-//         const expr* p_xy = ep.cons(ep.atom("p"), ep.cons(var_x, var_y));
-//         const expr* q_x = ep.cons(ep.atom("q"), var_x);
-//         const expr* r_y = ep.cons(ep.atom("r"), var_y);
-//         rule r1{p_xy, {q_x, r_y}};
-//         database db = {r1};
-        
-//         goal_adder ga(gs, cs, db);
-//         avoidance_store as;
-//         goal_resolver resolver(rs, gs, cs, db, cp, bm, lp, ga, as);
-        
-//         // Goal: p(a, b) - instantiated
-//         const expr* atom_a = ep.atom("a");
-//         const expr* atom_b = ep.atom("b");
-//         const expr* goal_p_ab = ep.cons(ep.atom("p"), ep.cons(atom_a, atom_b));
-//         const goal_lineage* g1 = lp.goal(nullptr, 1);
-//         ga(g1, goal_p_ab);
-        
-//         // Pre-resolution: bind_map should be empty
-//         assert(bm.bindings.size() == 0);
-//         assert(bm.bindings.count(original_x_idx) == 0);
-//         assert(bm.bindings.count(original_y_idx) == 0);
-        
-//         uint32_t seq_before = seq.index;
-        
-//         // Resolve
-//         resolver(g1, 0);
-//         const resolution_lineage* rl = lp.resolution(g1, 0);
-        
-//         // Two new variables were created (renamed X and Y)
-//         uint32_t seq_after = seq.index;
-//         assert(seq_after >= seq_before + 2);
-        
-//         // CRITICAL: Original variables still not in bind_map
-//         assert(bm.bindings.count(original_x_idx) == 0);
-//         assert(bm.bindings.count(original_y_idx) == 0);
-        
-//         // Get the child goals to extract renamed variables
-//         const goal_lineage* child0 = lp.goal(rl, 0);
-//         const goal_lineage* child1 = lp.goal(rl, 1);
-        
-//         const expr* expr0 = gs.at(child0);
-//         const expr* expr1 = gs.at(child1);
-        
-//         // Extract renamed variables from children
-//         const expr::cons& cons0 = std::get<expr::cons>(expr0->content);
-//         const expr::cons& cons1 = std::get<expr::cons>(expr1->content);
-//         const expr* arg0 = cons0.rhs;
-//         const expr* arg1 = cons1.rhs;
-        
-//         uint32_t renamed_x_idx = 0;
-//         uint32_t renamed_y_idx = 0;
-        
-//         if (std::holds_alternative<expr::var>(arg0->content)) {
-//             renamed_x_idx = std::get<expr::var>(arg0->content).index;
-//         }
-//         if (std::holds_alternative<expr::var>(arg1->content)) {
-//             renamed_y_idx = std::get<expr::var>(arg1->content).index;
-//         }
-        
-//         // CRITICAL: Verify exact bind_map contents
-//         // Bind_map should have exactly 2 entries (one for each renamed variable)
-//         assert(bm.bindings.size() == 2);
-        
-//         // CRITICAL: Renamed X should be bound to "a"
-//         assert(bm.bindings.count(renamed_x_idx) == 1);
-//         const expr* x_binding = bm.bindings.at(renamed_x_idx);
-//         assert(x_binding != nullptr);
-//         assert(std::holds_alternative<expr::atom>(x_binding->content));
-//         assert(std::get<expr::atom>(x_binding->content).value == "a");
-        
-//         // CRITICAL: Renamed Y should be bound to "b"
-//         assert(bm.bindings.count(renamed_y_idx) == 1);
-//         const expr* y_binding = bm.bindings.at(renamed_y_idx);
-//         assert(y_binding != nullptr);
-//         assert(std::holds_alternative<expr::atom>(y_binding->content));
-//         assert(std::get<expr::atom>(y_binding->content).value == "b");
-        
-//         // Verify whnf returns the atoms
-//         const expr* x_normalized = bm.whnf(arg0);
-//         const expr* y_normalized = bm.whnf(arg1);
-//         assert(x_normalized == atom_a);
-//         assert(y_normalized == atom_b);
-        
-//         // Empty avoidance store
-//         assert(as.size() == 0);
-//     }
-    
-//     // Test 21: EXTREMELY IMPORTANT - Verify copied expressions are new instances
-//     {
-//         trail t;
-//         t.push();
-//         expr_pool ep(t);
-//         sequencer seq(t);
-//         bind_map bm(t);
-//         copier cp(seq, ep);
-//         lineage_pool lp;
-        
-//         resolution_store rs;
-//         goal_store gs;
-//         candidate_store cs;
-        
-//         // Database: rule "p(X) :- q(X), r(X)"
-//         const expr* var_x = ep.var(seq());
-//         const expr* p_x = ep.cons(ep.atom("p"), var_x);
-//         const expr* q_x = ep.cons(ep.atom("q"), var_x);
-//         const expr* r_x = ep.cons(ep.atom("r"), var_x);
-//         rule r1{p_x, {q_x, r_x}};
-//         database db = {r1};
-        
-//         goal_adder ga(gs, cs, db);
-//         avoidance_store as;
-//         goal_resolver resolver(rs, gs, cs, db, cp, bm, lp, ga, as);
-        
-//         // Store original expression pointers
-//         const expr* original_head = r1.head;
-//         const expr* original_body0 = *r1.body.begin();
-//         const expr* original_body1 = *(++r1.body.begin());
-        
-//         // Goal: p(a)
-//         const expr* goal_p_a = ep.cons(ep.atom("p"), ep.atom("a"));
-//         const goal_lineage* g1 = lp.goal(nullptr, 1);
-//         ga(g1, goal_p_a);
-        
-//         size_t ep_size_before = ep.size();
-        
-//         // Resolve
-//         resolver(g1, 0);
-//         const resolution_lineage* rl = lp.resolution(g1, 0);
-        
-//         // CRITICAL: Expression pool should have grown
-//         size_t ep_size_after = ep.size();
-//         assert(ep_size_after > ep_size_before);
-        
-//         // Get child expressions
-//         const goal_lineage* child0 = lp.goal(rl, 0);
-//         const goal_lineage* child1 = lp.goal(rl, 1);
-//         const expr* copied_body0 = gs.at(child0);
-//         const expr* copied_body1 = gs.at(child1);
-        
-//         // CRITICAL: Copied expressions should be DIFFERENT pointers from originals
-//         assert(copied_body0 != original_body0);
-//         assert(copied_body1 != original_body1);
-        
-//         // CRITICAL: But they should be EQUAL in structure (before substitution)
-//         // Since variables were renamed, the structure is similar but vars differ
-//         // The head atom "q" should match
-//         const expr::cons& copied_cons0 = std::get<expr::cons>(copied_body0->content);
-//         const expr::cons& copied_cons1 = std::get<expr::cons>(copied_body1->content);
-//         const expr::cons& original_cons0 = std::get<expr::cons>(original_body0->content);
-//         const expr::cons& original_cons1 = std::get<expr::cons>(original_body1->content);
-        
-//         // Heads match
-//         assert(std::get<expr::atom>(copied_cons0.lhs->content).value == 
-//                std::get<expr::atom>(original_cons0.lhs->content).value);
-//         assert(std::get<expr::atom>(copied_cons1.lhs->content).value == 
-//                std::get<expr::atom>(original_cons1.lhs->content).value);
-        
-//         // But the tail (variables) should be different pointers
-//         assert(copied_cons0.rhs != original_cons0.rhs);
-//         assert(copied_cons1.rhs != original_cons1.rhs);
-        
-//         // Empty avoidance store
-//         assert(as.size() == 0);
-//     }
-    
-//     // Test 22: Exact candidate indices verification
-//     {
-//         trail t;
-//         t.push();
-//         expr_pool ep(t);
-//         sequencer seq(t);
-//         bind_map bm(t);
-//         copier cp(seq, ep);
-//         lineage_pool lp;
-        
-//         resolution_store rs;
-//         goal_store gs;
-//         candidate_store cs;
-        
-//         // Database: 5 rules
-//         const expr* p = ep.atom("p");
-//         const expr* q = ep.atom("q");
-//         rule r0{p, {}};
-//         rule r1{p, {q}};
-//         rule r2{q, {}};
-//         rule r3{q, {p}};
-//         rule r4{p, {q, q}};
-//         database db = {r0, r1, r2, r3, r4};
-        
-//         goal_adder ga(gs, cs, db);
-//         avoidance_store as;
-//         goal_resolver resolver(rs, gs, cs, db, cp, bm, lp, ga, as);
-        
-//         // Add goal p
-//         const goal_lineage* g1 = lp.goal(nullptr, 1);
-//         ga(g1, p);
-        
-//         // Verify exact candidate indices for g1 (should be 0,1,2,3,4)
-//         assert(cs.count(g1) == 5);
-//         auto range = cs.equal_range(g1);
-//         std::vector<size_t> candidates;
-//         for (auto it = range.first; it != range.second; ++it) {
-//             candidates.push_back(it->second);
-//         }
-//         std::sort(candidates.begin(), candidates.end());
-//         assert(candidates.size() == 5);
-//         assert(candidates[0] == 0);
-//         assert(candidates[1] == 1);
-//         assert(candidates[2] == 2);
-//         assert(candidates[3] == 3);
-//         assert(candidates[4] == 4);
-        
-//         // Resolve with rule 1
-//         resolver(g1, 1);
-//         const resolution_lineage* rl = lp.resolution(g1, 1);
-        
-//         // CRITICAL: All candidates for g1 should be removed
-//         assert(cs.count(g1) == 0);
-        
-//         // New child goal q should have been added
-//         const goal_lineage* child = lp.goal(rl, 0);
-//         assert(gs.count(child) == 1);
-        
-//         // CRITICAL: Verify exact candidate indices for child (should be 0,1,2,3,4)
-//         assert(cs.count(child) == 5);
-//         auto child_range = cs.equal_range(child);
-//         std::vector<size_t> child_candidates;
-//         for (auto it = child_range.first; it != child_range.second; ++it) {
-//             child_candidates.push_back(it->second);
-//         }
-//         std::sort(child_candidates.begin(), child_candidates.end());
-//         assert(child_candidates.size() == 5);
-//         assert(child_candidates[0] == 0);
-//         assert(child_candidates[1] == 1);
-//         assert(child_candidates[2] == 2);
-//         assert(child_candidates[3] == 3);
-//         assert(child_candidates[4] == 4);
-        
-//         // Empty avoidance store
-//         assert(as.size() == 0);
-//     }
-    
-//     // Test 23: Variable indirection chains through multiple resolutions
-//     {
-//         trail t;
-//         t.push();
-//         expr_pool ep(t);
-//         sequencer seq(t);
-//         bind_map bm(t);
-//         copier cp(seq, ep);
-//         lineage_pool lp;
-        
-//         resolution_store rs;
-//         goal_store gs;
-//         candidate_store cs;
-        
-//         // Database:
-//         // p(X) :- q(X)
-//         // q(Y) :- r(Y)
-//         // r(a)
-//         const expr* var_x = ep.var(seq());
-//         const expr* var_y = ep.var(seq());
-//         const expr* atom_a = ep.atom("a");
-        
-//         const expr* p_x = ep.cons(ep.atom("p"), var_x);
-//         const expr* q_x = ep.cons(ep.atom("q"), var_x);
-//         const expr* q_y = ep.cons(ep.atom("q"), var_y);
-//         const expr* r_y = ep.cons(ep.atom("r"), var_y);
-//         const expr* r_a = ep.cons(ep.atom("r"), atom_a);
-        
-//         rule r0{p_x, {q_x}};
-//         rule r1{q_y, {r_y}};
-//         rule r2{r_a, {}};
-//         database db = {r0, r1, r2};
-        
-//         goal_adder ga(gs, cs, db);
-//         avoidance_store as;
-//         goal_resolver resolver(rs, gs, cs, db, cp, bm, lp, ga, as);
-        
-//         // Start with goal p(Z) where Z is a variable
-//         const expr* var_z = ep.var(seq());
-//         uint32_t z_idx = std::get<expr::var>(var_z->content).index;
-//         const expr* goal_p_z = ep.cons(ep.atom("p"), var_z);
-//         const goal_lineage* g_p = lp.goal(nullptr, 1);
-//         ga(g_p, goal_p_z);
-        
-//         // Resolution 1: p(Z) with rule 0 creates q(Z') where Z binds to Z'
-//         resolver(g_p, 0);
-//         const resolution_lineage* rl_p = lp.resolution(g_p, 0);
-//         const goal_lineage* g_q = lp.goal(rl_p, 0);
-        
-//         // Extract variable from q(Z')
-//         const expr* expr_q = gs.at(g_q);
-//         const expr::cons& cons_q = std::get<expr::cons>(expr_q->content);
-//         const expr* arg_q = cons_q.rhs;
-//         assert(std::holds_alternative<expr::var>(arg_q->content));
-//         uint32_t z_prime_idx = std::get<expr::var>(arg_q->content).index;
-        
-//         // Check binding: either Z→Z' or Z'→Z
-//         bool first_binding_exists = (bm.bindings.count(z_idx) > 0) || (bm.bindings.count(z_prime_idx) > 0);
-//         assert(first_binding_exists);
-        
-//         // Resolution 2: q(Z') with rule 1 creates r(Z'') where Z' binds to Z''
-//         resolver(g_q, 1);
-//         const resolution_lineage* rl_q = lp.resolution(g_q, 1);
-//         const goal_lineage* g_r = lp.goal(rl_q, 0);
-        
-//         // Extract variable from r(Z'')
-//         const expr* expr_r = gs.at(g_r);
-//         const expr::cons& cons_r = std::get<expr::cons>(expr_r->content);
-//         const expr* arg_r = cons_r.rhs;
-//         assert(std::holds_alternative<expr::var>(arg_r->content));
-//         uint32_t z_double_prime_idx = std::get<expr::var>(arg_r->content).index;
-        
-//         // Resolution 3: r(Z'') with rule 2 (r(a)) unifies Z'' with 'a'
-//         resolver(g_r, 2);
-        
-//         // CRITICAL: Now test the chain: Z → Z' → Z'' → 'a'
-//         // whnf should resolve the entire chain by following bindings
-        
-//         // Test 1: whnf on Z'' (most recent variable in chain)
-//         const expr* resolved_z_double = bm.whnf(arg_r);
-//         // MUST resolve to 'a' (no fallback)
-//         assert(std::holds_alternative<expr::atom>(resolved_z_double->content));
-//         assert(std::get<expr::atom>(resolved_z_double->content).value == "a");
-        
-//         // Test 2: whnf on Z' (middle variable in chain)
-//         const expr* resolved_z_prime = bm.whnf(arg_q);
-//         // MUST resolve to 'a' through the chain (no fallback)
-//         assert(std::holds_alternative<expr::atom>(resolved_z_prime->content));
-//         assert(std::get<expr::atom>(resolved_z_prime->content).value == "a");
-        
-//         // Test 3: whnf on Z (original goal variable) - STRONGEST TEST
-//         // Create a variable expression pointing to Z
-//         const expr* test_var_z = ep.var(z_idx);
-//         const expr* resolved_z = bm.whnf(test_var_z);
-//         // MUST resolve to 'a' through the full chain: Z → Z' → Z'' → 'a'
-//         // This is the CRITICAL assertion - no fallback paths allowed
-//         assert(std::holds_alternative<expr::atom>(resolved_z->content));
-//         assert(std::get<expr::atom>(resolved_z->content).value == "a");
-        
-//         // Verify the chain works by checking that each step is connected
-//         // At least 3 bindings should exist (connecting the chain)
-//         assert(bm.bindings.size() >= 3);
-        
-//         // Empty avoidance store
-//         assert(as.size() == 0);
-//     }
-    
-//     // Test 24: Empty body with variables in head (fact with variable)
-//     {
-//         trail t;
-//         t.push();
-//         expr_pool ep(t);
-//         sequencer seq(t);
-//         bind_map bm(t);
-//         copier cp(seq, ep);
-//         lineage_pool lp;
-        
-//         resolution_store rs;
-//         goal_store gs;
-//         candidate_store cs;
-        
-//         // Database: p(X). (fact with variable - empty body)
-//         const expr* var_x = ep.var(seq());
-//         uint32_t original_x_idx = std::get<expr::var>(var_x->content).index;
-//         const expr* p_x = ep.cons(ep.atom("p"), var_x);
-//         rule r1{p_x, {}};  // Empty body
-//         database db = {r1};
-        
-//         goal_adder ga(gs, cs, db);
-//         avoidance_store as;
-//         goal_resolver resolver(rs, gs, cs, db, cp, bm, lp, ga, as);
-        
-//         // Goal: p(a) - concrete atom
-//         const expr* atom_a = ep.atom("a");
-//         const expr* goal_p_a = ep.cons(ep.atom("p"), atom_a);
-//         const goal_lineage* g1 = lp.goal(nullptr, 1);
-//         ga(g1, goal_p_a);
-        
-//         // Pre-resolution
-//         assert(gs.size() == 1);
-//         assert(bm.bindings.count(original_x_idx) == 0);
-        
-//         uint32_t seq_before = seq.index;
-        
-//         // Resolve with the fact
-//         resolver(g1, 0);
-//         const resolution_lineage* rl = lp.resolution(g1, 0);
-        
-//         // Sequencer advanced (variable was copied)
-//         assert(seq.index > seq_before);
-        
-//         // Resolution created
-//         assert(rs.size() == 1);
-//         assert(rs.count(rl) == 1);
-        
-//         // Goal removed
-//         assert(gs.count(g1) == 0);
-        
-//         // CRITICAL: No new goals (empty body)
-//         assert(gs.size() == 0);
-        
-//         // CRITICAL: But unification occurred (X' = a)
-//         // Exactly one variable should be in bind_map
-//         assert(bm.bindings.size() == 1);
-        
-//         // CRITICAL: Original variable still not in bind_map
-//         assert(bm.bindings.count(original_x_idx) == 0);
-        
-//         // Extract the renamed variable from bind_map (don't assume index)
-//         // There should be exactly one binding
-//         auto it = bm.bindings.begin();
-//         uint32_t renamed_x_idx = it->first;
-//         const expr* x_binding = it->second;
-        
-//         // Verify the renamed variable is different from original
-//         assert(renamed_x_idx != original_x_idx);
-        
-//         // Verify the binding content is 'a'
-//         assert(x_binding != nullptr);
-//         assert(std::holds_alternative<expr::atom>(x_binding->content));
-//         assert(std::get<expr::atom>(x_binding->content).value == "a");
-        
-//         // Double-check through whnf
-//         const expr* test_var = ep.var(renamed_x_idx);
-//         const expr* normalized = bm.whnf(test_var);
-//         assert(normalized == atom_a);
-        
-//         // Empty avoidance store
-//         assert(as.size() == 0);
-//     }
-    
-//     // Test 25: Multiple rules with same head
-//     {
-//         trail t;
-//         t.push();
-//         expr_pool ep(t);
-//         sequencer seq(t);
-//         bind_map bm(t);
-//         copier cp(seq, ep);
-//         lineage_pool lp;
-        
-//         resolution_store rs;
-//         goal_store gs;
-//         candidate_store cs;
-        
-//         // Database: Three rules all with head p(X)
-//         const expr* var_x1 = ep.var(seq());
-//         const expr* var_x2 = ep.var(seq());
-//         const expr* var_x3 = ep.var(seq());
-        
-//         const expr* p_x1 = ep.cons(ep.atom("p"), var_x1);
-//         const expr* p_x2 = ep.cons(ep.atom("p"), var_x2);
-//         const expr* p_x3 = ep.cons(ep.atom("p"), var_x3);
-        
-//         const expr* q_x1 = ep.cons(ep.atom("q"), var_x1);
-//         const expr* r_x2 = ep.cons(ep.atom("r"), var_x2);
-//         const expr* s_x3 = ep.cons(ep.atom("s"), var_x3);
-        
-//         rule r0{p_x1, {q_x1}};  // p(X) :- q(X)
-//         rule r1{p_x2, {r_x2}};  // p(X) :- r(X)
-//         rule r2{p_x3, {s_x3}};  // p(X) :- s(X)
-//         database db = {r0, r1, r2};
-        
-//         goal_adder ga(gs, cs, db);
-//         avoidance_store as;
-//         goal_resolver resolver(rs, gs, cs, db, cp, bm, lp, ga, as);
-        
-//         // Goal: p(a)
-//         const expr* goal_p_a = ep.cons(ep.atom("p"), ep.atom("a"));
-//         const goal_lineage* g1 = lp.goal(nullptr, 1);
-//         ga(g1, goal_p_a);
-        
-//         // All three rules are candidates
-//         assert(cs.count(g1) == 3);
-        
-//         // Resolve with rule 1 (middle one: p(X) :- r(X))
-//         resolver(g1, 1);
-//         const resolution_lineage* rl = lp.resolution(g1, 1);
-        
-//         // Resolution has correct index
-//         assert(rl->idx == 1);
-        
-//         // One child: r(a)
-//         assert(gs.size() == 1);
-//         const goal_lineage* child = lp.goal(rl, 0);
-//         const expr* child_expr = gs.at(child);
-        
-//         // CRITICAL: Child should be r(a), NOT q(a) or s(a)
-//         const expr::cons& cons = std::get<expr::cons>(child_expr->content);
-//         assert(std::get<expr::atom>(cons.lhs->content).value == "r");
-        
-//         // Verify the argument
-//         const expr* arg = bm.whnf(cons.rhs);
-//         assert(std::holds_alternative<expr::atom>(arg->content));
-//         assert(std::get<expr::atom>(arg->content).value == "a");
-        
-//         // Empty avoidance store
-//         assert(as.size() == 0);
-//     }
-    
-//     // Test 26: Resolution sequence - parent then child (depth-first order)
-//     {
-//         trail t;
-//         t.push();
-//         expr_pool ep(t);
-//         sequencer seq(t);
-//         bind_map bm(t);
-//         copier cp(seq, ep);
-//         lineage_pool lp;
-        
-//         resolution_store rs;
-//         goal_store gs;
-//         candidate_store cs;
-        
-//         // Database: chained rules
-//         const expr* p = ep.atom("p");
-//         const expr* q = ep.atom("q");
-//         const expr* r = ep.atom("r");
-        
-//         rule r0{p, {q}};      // p :- q
-//         rule r1{q, {r}};      // q :- r
-//         rule r2{r, {}};       // r
-//         database db = {r0, r1, r2};
-        
-//         goal_adder ga(gs, cs, db);
-//         avoidance_store as;
-//         goal_resolver resolver(rs, gs, cs, db, cp, bm, lp, ga, as);
-        
-//         // Add root goal p
-//         const goal_lineage* g_p = lp.goal(nullptr, 0);
-//         ga(g_p, p);
-        
-//         // Resolution 1: p with rule 0 → creates q
-//         resolver(g_p, 0);
-//         const resolution_lineage* rl_p = lp.resolution(g_p, 0);
-//         const goal_lineage* g_q = lp.goal(rl_p, 0);
-        
-//         // Verify lineage: g_q → rl_p → g_p → nullptr
-//         assert(g_q->parent == rl_p);
-//         assert(rl_p->parent == g_p);
-//         assert(g_p->parent == nullptr);
-        
-//         // Resolution 2: q with rule 1 → creates r (child immediately after parent)
-//         resolver(g_q, 1);
-//         const resolution_lineage* rl_q = lp.resolution(g_q, 1);
-//         const goal_lineage* g_r = lp.goal(rl_q, 0);
-        
-//         // CRITICAL: Verify full lineage chain: g_r → rl_q → g_q → rl_p → g_p → nullptr
-//         assert(g_r->parent == rl_q);
-//         assert(g_r->idx == 0);
-//         assert(rl_q->parent == g_q);
-//         assert(rl_q->idx == 1);
-//         assert(g_q->parent == rl_p);
-//         assert(g_q->idx == 0);
-//         assert(rl_p->parent == g_p);
-//         assert(rl_p->idx == 0);
-//         assert(g_p->parent == nullptr);
-//         assert(g_p->idx == 0);
-        
-//         // Resolution 3: r with rule 2
-//         resolver(g_r, 2);
-//         const resolution_lineage* rl_r = lp.resolution(g_r, 2);
-        
-//         // Verify lineage still correct after third resolution
-//         assert(rl_r->parent == g_r);
-//         assert(g_r->parent == rl_q);
-//         assert(rl_q->parent == g_q);
-//         assert(g_q->parent == rl_p);
-//         assert(rl_p->parent == g_p);
-//         assert(g_p->parent == nullptr);
-        
-//         // Verify all in stores
-//         assert(rs.size() == 3);
-//         assert(rs.count(rl_p) == 1);
-//         assert(rs.count(rl_q) == 1);
-//         assert(rs.count(rl_r) == 1);
-        
-//         // Empty avoidance store
-//         assert(as.size() == 0);
-//     }
-    
-//     // Test 27: Resolution sequence - parent, independent goal, then child
-//     {
-//         trail t;
-//         t.push();
-//         expr_pool ep(t);
-//         sequencer seq(t);
-//         bind_map bm(t);
-//         copier cp(seq, ep);
-//         lineage_pool lp;
-        
-//         resolution_store rs;
-//         goal_store gs;
-//         candidate_store cs;
-        
-//         // Database
-//         const expr* p = ep.atom("p");
-//         const expr* q = ep.atom("q");
-//         const expr* x = ep.atom("x");
-//         const expr* y = ep.atom("y");
-//         const expr* z = ep.atom("z");
-        
-//         rule r0{p, {q}};      // p :- q
-//         rule r1{q, {}};       // q
-//         rule r2{x, {y}};      // x :- y (independent branch)
-//         rule r3{y, {z}};      // y :- z
-//         rule r4{z, {}};       // z
-//         database db = {r0, r1, r2, r3, r4};
-        
-//         goal_adder ga(gs, cs, db);
-//         avoidance_store as;
-//         goal_resolver resolver(rs, gs, cs, db, cp, bm, lp, ga, as);
-        
-//         // Add two independent root goals
-//         const goal_lineage* g_p = lp.goal(nullptr, 0);
-//         ga(g_p, p);
-//         const goal_lineage* g_x = lp.goal(nullptr, 1);
-//         ga(g_x, x);
-        
-//         assert(gs.size() == 2);
-        
-//         // Resolution 1: p with rule 0 → creates child q
-//         resolver(g_p, 0);
-//         const resolution_lineage* rl_p = lp.resolution(g_p, 0);
-//         const goal_lineage* g_q = lp.goal(rl_p, 0);
-        
-//         // Verify lineage for first branch: g_q → rl_p → g_p → nullptr
-//         assert(g_q->parent == rl_p);
-//         assert(rl_p->parent == g_p);
-//         assert(g_p->parent == nullptr);
-        
-//         // Resolution 2: x (independent goal) with rule 2 → creates y
-//         resolver(g_x, 2);
-//         const resolution_lineage* rl_x = lp.resolution(g_x, 2);
-//         const goal_lineage* g_y = lp.goal(rl_x, 0);
-        
-//         // CRITICAL: Verify lineage for second branch: g_y → rl_x → g_x → nullptr
-//         assert(g_y->parent == rl_x);
-//         assert(rl_x->parent == g_x);
-//         assert(g_x->parent == nullptr);
-        
-//         // CRITICAL: First branch lineage should be UNCHANGED
-//         assert(g_q->parent == rl_p);
-//         assert(rl_p->parent == g_p);
-//         assert(g_p->parent == nullptr);
-        
-//         // Resolution 3: q (child of first branch) with rule 1
-//         resolver(g_q, 1);
-//         const resolution_lineage* rl_q = lp.resolution(g_q, 1);
-        
-//         // CRITICAL: Verify first branch lineage still correct after resolving child
-//         assert(rl_q->parent == g_q);
-//         assert(g_q->parent == rl_p);
-//         assert(rl_p->parent == g_p);
-//         assert(g_p->parent == nullptr);
-        
-//         // CRITICAL: Second branch lineage should STILL be unchanged
-//         assert(g_y->parent == rl_x);
-//         assert(rl_x->parent == g_x);
-//         assert(g_x->parent == nullptr);
-        
-//         // Resolution 4: y (child of second branch)
-//         resolver(g_y, 3);
-//         const resolution_lineage* rl_y = lp.resolution(g_y, 3);
-//         const goal_lineage* g_z = lp.goal(rl_y, 0);
-        
-//         // Verify second branch lineage: g_z → rl_y → g_y → rl_x → g_x → nullptr
-//         assert(g_z->parent == rl_y);
-//         assert(rl_y->parent == g_y);
-//         assert(g_y->parent == rl_x);
-//         assert(rl_x->parent == g_x);
-//         assert(g_x->parent == nullptr);
-        
-//         // First branch still unchanged
-//         assert(rl_q->parent == g_q);
-//         assert(g_q->parent == rl_p);
-//         assert(rl_p->parent == g_p);
-        
-//         // Resolution 5: z (leaf of second branch)
-//         resolver(g_z, 4);
-//         const resolution_lineage* rl_z = lp.resolution(g_z, 4);
-        
-//         // Full second branch: rl_z → g_z → rl_y → g_y → rl_x → g_x → nullptr
-//         assert(rl_z->parent == g_z);
-//         assert(g_z->parent == rl_y);
-//         assert(rl_y->parent == g_y);
-//         assert(g_y->parent == rl_x);
-//         assert(rl_x->parent == g_x);
-//         assert(g_x->parent == nullptr);
-        
-//         // All resolutions tracked
-//         assert(rs.size() == 5);
-//         assert(rs.count(rl_p) == 1);
-//         assert(rs.count(rl_x) == 1);
-//         assert(rs.count(rl_q) == 1);
-//         assert(rs.count(rl_y) == 1);
-//         assert(rs.count(rl_z) == 1);
-        
-//         // Empty avoidance store
-//         assert(as.size() == 0);
-//     }
-    
-//     // Test 28: Complex resolution order - branching tree
-//     {
-//         trail t;
-//         t.push();
-//         expr_pool ep(t);
-//         sequencer seq(t);
-//         bind_map bm(t);
-//         copier cp(seq, ep);
-//         lineage_pool lp;
-        
-//         resolution_store rs;
-//         goal_store gs;
-//         candidate_store cs;
-        
-//         // Database
-//         const expr* p = ep.atom("p");
-//         const expr* q = ep.atom("q");
-//         const expr* r = ep.atom("r");
-//         const expr* s = ep.atom("s");
-//         const expr* t_atom = ep.atom("t");
-        
-//         rule r0{p, {q, r}};   // p :- q, r (2 children)
-//         rule r1{q, {s}};      // q :- s
-//         rule r2{r, {t_atom}};  // r :- t
-//         rule r3{s, {}};       // s
-//         rule r4{t_atom, {}};  // t
-//         database db = {r0, r1, r2, r3, r4};
-        
-//         goal_adder ga(gs, cs, db);
-//         avoidance_store as;
-//         goal_resolver resolver(rs, gs, cs, db, cp, bm, lp, ga, as);
-        
-//         // Start with root p
-//         const goal_lineage* g_p = lp.goal(nullptr, 0);
-//         ga(g_p, p);
-        
-//         // Resolution 1: p → creates q and r (two children)
-//         resolver(g_p, 0);
-//         const resolution_lineage* rl_p = lp.resolution(g_p, 0);
-//         const goal_lineage* g_q = lp.goal(rl_p, 0);
-//         const goal_lineage* g_r = lp.goal(rl_p, 1);
-        
-//         // Verify both children have same parent
-//         assert(g_q->parent == rl_p);
-//         assert(g_q->idx == 0);
-//         assert(g_r->parent == rl_p);
-//         assert(g_r->idx == 1);
-//         assert(rl_p->parent == g_p);
-        
-//         // Resolution 2: r (right child) BEFORE q (left child)
-//         resolver(g_r, 2);
-//         const resolution_lineage* rl_r = lp.resolution(g_r, 2);
-//         const goal_lineage* g_t = lp.goal(rl_r, 0);
-        
-//         // Verify right branch: g_t → rl_r → g_r → rl_p → g_p → nullptr
-//         assert(g_t->parent == rl_r);
-//         assert(rl_r->parent == g_r);
-//         assert(g_r->parent == rl_p);
-//         assert(rl_p->parent == g_p);
-//         assert(g_p->parent == nullptr);
-        
-//         // CRITICAL: Left branch (g_q) should be UNCHANGED
-//         assert(g_q->parent == rl_p);
-//         assert(rl_p->parent == g_p);
-        
-//         // Resolution 3: q (left child) AFTER resolving right child
-//         resolver(g_q, 1);
-//         const resolution_lineage* rl_q = lp.resolution(g_q, 1);
-//         const goal_lineage* g_s = lp.goal(rl_q, 0);
-        
-//         // CRITICAL: Verify left branch lineage: g_s → rl_q → g_q → rl_p → g_p → nullptr
-//         // This should be correct even though we resolved right branch first
-//         assert(g_s->parent == rl_q);
-//         assert(rl_q->parent == g_q);
-//         assert(g_q->parent == rl_p);
-//         assert(rl_p->parent == g_p);
-//         assert(g_p->parent == nullptr);
-        
-//         // CRITICAL: Right branch lineage should still be correct
-//         assert(g_t->parent == rl_r);
-//         assert(rl_r->parent == g_r);
-//         assert(g_r->parent == rl_p);
-        
-//         // Both branches share the same resolution parent (rl_p)
-//         assert(g_q->parent == rl_p);
-//         assert(g_r->parent == rl_p);
-        
-//         // Resolution 4: t (leaf of right branch)
-//         resolver(g_t, 4);
-//         const resolution_lineage* rl_t = lp.resolution(g_t, 4);
-        
-//         // Resolution 5: s (leaf of left branch)
-//         resolver(g_s, 3);
-//         const resolution_lineage* rl_s = lp.resolution(g_s, 3);
-        
-//         // Verify final lineages for both branches
-//         // Right: rl_t → g_t → rl_r → g_r → rl_p → g_p → nullptr
-//         assert(rl_t->parent == g_t);
-//         assert(g_t->parent == rl_r);
-//         assert(rl_r->parent == g_r);
-//         assert(g_r->parent == rl_p);
-//         assert(rl_p->parent == g_p);
-//         assert(g_p->parent == nullptr);
-        
-//         // Left: rl_s → g_s → rl_q → g_q → rl_p → g_p → nullptr
-//         assert(rl_s->parent == g_s);
-//         assert(g_s->parent == rl_q);
-//         assert(rl_q->parent == g_q);
-//         assert(g_q->parent == rl_p);
-//         assert(rl_p->parent == g_p);
-//         assert(g_p->parent == nullptr);
-        
-//         // All 5 resolutions tracked
-//         assert(rs.size() == 5);
-        
-//         // Empty avoidance store
-//         assert(as.size() == 0);
-//     }
-    
-//     // Test 29: Complex interleaved resolution order - 7 resolutions
-//     {
-//         trail t;
-//         t.push();
-//         expr_pool ep(t);
-//         sequencer seq(t);
-//         bind_map bm(t);
-//         copier cp(seq, ep);
-//         lineage_pool lp;
-        
-//         resolution_store rs;
-//         goal_store gs;
-//         candidate_store cs;
-        
-//         // Database with various rules
-//         const expr* a = ep.atom("a");
-//         const expr* b = ep.atom("b");
-//         const expr* c = ep.atom("c");
-//         const expr* d = ep.atom("d");
-//         const expr* e = ep.atom("e");
-//         const expr* f = ep.atom("f");
-//         const expr* g = ep.atom("g");
-        
-//         rule r0{a, {b, c}};   // a :- b, c
-//         rule r1{b, {d}};      // b :- d
-//         rule r2{c, {e}};      // c :- e
-//         rule r3{d, {}};       // d
-//         rule r4{e, {f, g}};   // e :- f, g
-//         rule r5{f, {}};       // f
-//         rule r6{g, {}};       // g
-//         database db = {r0, r1, r2, r3, r4, r5, r6};
-        
-//         goal_adder ga(gs, cs, db);
-//         avoidance_store as;
-//         goal_resolver resolver(rs, gs, cs, db, cp, bm, lp, ga, as);
-        
-//         // Root: a
-//         const goal_lineage* g_a = lp.goal(nullptr, 0);
-//         ga(g_a, a);
-        
-//         // Res 1: a → {b, c}
-//         resolver(g_a, 0);
-//         const resolution_lineage* rl_a = lp.resolution(g_a, 0);
-//         const goal_lineage* g_b = lp.goal(rl_a, 0);
-//         const goal_lineage* g_c = lp.goal(rl_a, 1);
-        
-//         // Lineages after res 1
-//         assert(g_b->parent == rl_a);
-//         assert(g_c->parent == rl_a);
-//         assert(rl_a->parent == g_a);
-//         assert(g_a->parent == nullptr);
-        
-//         // Res 2: c → {e} (resolve RIGHT child first)
-//         resolver(g_c, 2);
-//         const resolution_lineage* rl_c = lp.resolution(g_c, 2);
-//         const goal_lineage* g_e = lp.goal(rl_c, 0);
-        
-//         // Right branch: g_e → rl_c → g_c → rl_a → g_a → nullptr
-//         assert(g_e->parent == rl_c);
-//         assert(rl_c->parent == g_c);
-//         assert(g_c->parent == rl_a);
-//         assert(rl_a->parent == g_a);
-        
-//         // CRITICAL: Left branch (g_b) unchanged
-//         assert(g_b->parent == rl_a);
-        
-//         // Res 3: e → {f, g} (continue on right branch)
-//         resolver(g_e, 4);
-//         const resolution_lineage* rl_e = lp.resolution(g_e, 4);
-//         const goal_lineage* g_f = lp.goal(rl_e, 0);
-//         const goal_lineage* g_g = lp.goal(rl_e, 1);
-        
-//         // Right branch splits: both g_f and g_g → rl_e → g_e → rl_c → g_c → rl_a → g_a
-//         assert(g_f->parent == rl_e);
-//         assert(g_g->parent == rl_e);
-//         assert(rl_e->parent == g_e);
-//         assert(g_e->parent == rl_c);
-//         assert(rl_c->parent == g_c);
-//         assert(g_c->parent == rl_a);
-        
-//         // CRITICAL: Left branch still unchanged
-//         assert(g_b->parent == rl_a);
-//         assert(rl_a->parent == g_a);
-        
-//         // Res 4: b → {d} (NOW resolve left child - was waiting)
-//         resolver(g_b, 1);
-//         const resolution_lineage* rl_b = lp.resolution(g_b, 1);
-//         const goal_lineage* g_d = lp.goal(rl_b, 0);
-        
-//         // CRITICAL: Left branch lineage: g_d → rl_b → g_b → rl_a → g_a → nullptr
-//         // Should be correct even though we resolved many other things first
-//         assert(g_d->parent == rl_b);
-//         assert(rl_b->parent == g_b);
-//         assert(g_b->parent == rl_a);
-//         assert(rl_a->parent == g_a);
-//         assert(g_a->parent == nullptr);
-        
-//         // CRITICAL: Right branch still correct
-//         assert(g_f->parent == rl_e);
-//         assert(g_g->parent == rl_e);
-//         assert(rl_e->parent == g_e);
-//         assert(g_e->parent == rl_c);
-//         assert(g_c->parent == rl_a);
-        
-//         // Res 5: f (leaf of right-left branch)
-//         resolver(g_f, 5);
-//         const resolution_lineage* rl_f = lp.resolution(g_f, 5);
-        
-//         // Res 6: g (leaf of right-right branch)
-//         resolver(g_g, 6);
-//         const resolution_lineage* rl_g = lp.resolution(g_g, 6);
-        
-//         // Res 7: d (leaf of left branch)
-//         resolver(g_d, 3);
-//         const resolution_lineage* rl_d = lp.resolution(g_d, 3);
-        
-//         // FINAL VERIFICATION: All lineages correct after 7 resolutions
-        
-//         // Right-left leaf: rl_f → g_f → rl_e → g_e → rl_c → g_c → rl_a → g_a → nullptr
-//         assert(rl_f->parent == g_f);
-//         assert(g_f->parent == rl_e);
-//         assert(rl_e->parent == g_e);
-//         assert(g_e->parent == rl_c);
-//         assert(rl_c->parent == g_c);
-//         assert(g_c->parent == rl_a);
-//         assert(rl_a->parent == g_a);
-//         assert(g_a->parent == nullptr);
-        
-//         // Right-right leaf: rl_g → g_g → rl_e → g_e → rl_c → g_c → rl_a → g_a → nullptr
-//         assert(rl_g->parent == g_g);
-//         assert(g_g->parent == rl_e);
-//         // (rest same as right-left)
-        
-//         // Left leaf: rl_d → g_d → rl_b → g_b → rl_a → g_a → nullptr
-//         assert(rl_d->parent == g_d);
-//         assert(g_d->parent == rl_b);
-//         assert(rl_b->parent == g_b);
-//         assert(g_b->parent == rl_a);
-//         assert(rl_a->parent == g_a);
-//         assert(g_a->parent == nullptr);
-        
-//         // All 7 resolutions in store
-//         assert(rs.size() == 7);
-        
-//         // Empty avoidance store
-//         assert(as.size() == 0);
-//     }
-    
-//     // Test 30: Large sequence - 10 resolutions with random order
-//     {
-//         trail t;
-//         t.push();
-//         expr_pool ep(t);
-//         sequencer seq(t);
-//         bind_map bm(t);
-//         copier cp(seq, ep);
-//         lineage_pool lp;
-        
-//         resolution_store rs;
-//         goal_store gs;
-//         candidate_store cs;
-        
-//         // Database: chain of 10 rules
-//         std::vector<const expr*> atoms;
-//         for (int i = 0; i < 10; i++) {
-//             atoms.push_back(ep.atom("p" + std::to_string(i)));
-//         }
-        
-//         std::vector<rule> rules;
-//         for (int i = 0; i < 9; i++) {
-//             rules.push_back(rule{atoms[i], {atoms[i+1]}});  // p0 :- p1, p1 :- p2, ...
-//         }
-//         rules.push_back(rule{atoms[9], {}});  // p9 (fact)
-        
-//         database db(rules.begin(), rules.end());
-        
-//         goal_adder ga(gs, cs, db);
-//         avoidance_store as;
-//         goal_resolver resolver(rs, gs, cs, db, cp, bm, lp, ga, as);
-        
-//         // Start with root p0
-//         const goal_lineage* g_p0 = lp.goal(nullptr, 0);
-//         ga(g_p0, atoms[0]);
-        
-//         // Store all goal lineages and resolution lineages
-//         std::vector<const goal_lineage*> goals;
-//         std::vector<const resolution_lineage*> resolutions;
-        
-//         goals.push_back(g_p0);
-        
-//         // Resolve in order: p0, p1, p2, ..., p9
-//         for (int i = 0; i < 10; i++) {
-//             const goal_lineage* current_goal = goals[i];
-            
-//             // Resolve current goal
-//             resolver(current_goal, i);
-//             const resolution_lineage* rl = lp.resolution(current_goal, i);
-//             resolutions.push_back(rl);
-            
-//             // Verify resolution parent and index
-//             assert(rl->parent == current_goal);
-//             assert(rl->idx == (size_t)i);
-            
-//             // If not the last rule, a child goal was created
-//             if (i < 9) {
-//                 const goal_lineage* child = lp.goal(rl, 0);
-//                 goals.push_back(child);
-//                 assert(child->parent == rl);
-//                 assert(child->idx == 0);
-//             }
-//         }
-        
-//         // CRITICAL: Verify full chain from leaf to root
-//         // Start at p9's resolution (deepest) and walk back to root
-//         const resolution_lineage* current_rl = resolutions[9];
-//         const goal_lineage* current_g = goals[9];
-        
-//         // Walk backward verifying the chain
-//         for (int i = 9; i >= 0; i--) {
-//             assert(current_rl == resolutions[i]);
-//             assert(current_g == goals[i]);
-//             assert(current_rl->parent == current_g);
-//             assert(current_rl->idx == (size_t)i);
-            
-//             if (i > 0) {
-//                 // Not root, should have resolution parent
-//                 const resolution_lineage* parent_rl = resolutions[i-1];
-//                 assert(current_g->parent == parent_rl);
-//                 assert(current_g->idx == 0);
-//                 current_g = goals[i-1];
-//                 current_rl = parent_rl;
-//             } else {
-//                 // Root goal
-//                 assert(current_g->parent == nullptr);
-//                 assert(current_g->idx == 0);
-//             }
-//         }
-        
-//         // All 10 resolutions tracked
-//         assert(rs.size() == 10);
-//         for (int i = 0; i < 10; i++) {
-//             assert(rs.count(resolutions[i]) == 1);
-//         }
-        
-//         // Empty avoidance store
-//         assert(as.size() == 0);
-//     }
-    
-//     // Test 31: Out-of-order resolution with multiple independent trees
-//     {
-//         trail t;
-//         t.push();
-//         expr_pool ep(t);
-//         sequencer seq(t);
-//         bind_map bm(t);
-//         copier cp(seq, ep);
-//         lineage_pool lp;
-        
-//         resolution_store rs;
-//         goal_store gs;
-//         candidate_store cs;
-        
-//         // Database
-//         const expr* p1 = ep.atom("p1");
-//         const expr* p2 = ep.atom("p2");
-//         const expr* p3 = ep.atom("p3");
-//         const expr* q1 = ep.atom("q1");
-//         const expr* q2 = ep.atom("q2");
-//         const expr* q3 = ep.atom("q3");
-        
-//         rule r0{p1, {p2}};    // p1 :- p2
-//         rule r1{p2, {p3}};    // p2 :- p3
-//         rule r2{p3, {}};      // p3
-//         rule r3{q1, {q2}};    // q1 :- q2
-//         rule r4{q2, {q3}};    // q2 :- q3
-//         rule r5{q3, {}};      // q3
-//         database db = {r0, r1, r2, r3, r4, r5};
-        
-//         goal_adder ga(gs, cs, db);
-//         avoidance_store as;
-//         goal_resolver resolver(rs, gs, cs, db, cp, bm, lp, ga, as);
-        
-//         // Create TWO independent root goals
-//         const goal_lineage* g_p1 = lp.goal(nullptr, 10);
-//         ga(g_p1, p1);
-//         const goal_lineage* g_q1 = lp.goal(nullptr, 20);
-//         ga(g_q1, q1);
-        
-//         // Resolution order: p1, q1, q2, p2, q3, p3
-//         // (alternating between two trees)
-        
-//         // Res 1: p1 → p2 (tree 1, level 1)
-//         resolver(g_p1, 0);
-//         const resolution_lineage* rl_p1 = lp.resolution(g_p1, 0);
-//         const goal_lineage* g_p2 = lp.goal(rl_p1, 0);
-        
-//         assert(g_p2->parent == rl_p1);
-//         assert(rl_p1->parent == g_p1);
-//         assert(g_p1->parent == nullptr);
-//         assert(g_p1->idx == 10);
-        
-//         // Res 2: q1 → q2 (tree 2, level 1)
-//         resolver(g_q1, 3);
-//         const resolution_lineage* rl_q1 = lp.resolution(g_q1, 3);
-//         const goal_lineage* g_q2 = lp.goal(rl_q1, 0);
-        
-//         assert(g_q2->parent == rl_q1);
-//         assert(rl_q1->parent == g_q1);
-//         assert(g_q1->parent == nullptr);
-//         assert(g_q1->idx == 20);
-        
-//         // CRITICAL: Tree 1 unchanged after resolving tree 2
-//         assert(g_p2->parent == rl_p1);
-//         assert(rl_p1->parent == g_p1);
-        
-//         // Res 3: q2 → q3 (tree 2, level 2)
-//         resolver(g_q2, 4);
-//         const resolution_lineage* rl_q2 = lp.resolution(g_q2, 4);
-//         const goal_lineage* g_q3 = lp.goal(rl_q2, 0);
-        
-//         assert(g_q3->parent == rl_q2);
-//         assert(rl_q2->parent == g_q2);
-//         assert(g_q2->parent == rl_q1);
-//         assert(rl_q1->parent == g_q1);
-//         assert(g_q1->parent == nullptr);
-        
-//         // CRITICAL: Tree 1 still unchanged
-//         assert(g_p2->parent == rl_p1);
-//         assert(rl_p1->parent == g_p1);
-//         assert(g_p1->parent == nullptr);
-        
-//         // Res 4: p2 → p3 (back to tree 1, level 2)
-//         resolver(g_p2, 1);
-//         const resolution_lineage* rl_p2 = lp.resolution(g_p2, 1);
-//         const goal_lineage* g_p3 = lp.goal(rl_p2, 0);
-        
-//         // CRITICAL: Tree 1 full chain: g_p3 → rl_p2 → g_p2 → rl_p1 → g_p1 → nullptr
-//         assert(g_p3->parent == rl_p2);
-//         assert(rl_p2->parent == g_p2);
-//         assert(g_p2->parent == rl_p1);
-//         assert(rl_p1->parent == g_p1);
-//         assert(g_p1->parent == nullptr);
-        
-//         // CRITICAL: Tree 2 unchanged
-//         assert(g_q3->parent == rl_q2);
-//         assert(rl_q2->parent == g_q2);
-//         assert(g_q2->parent == rl_q1);
-//         assert(rl_q1->parent == g_q1);
-        
-//         // Res 5: q3 (tree 2 leaf)
-//         resolver(g_q3, 5);
-//         const resolution_lineage* rl_q3 = lp.resolution(g_q3, 5);
-        
-//         // Tree 2 complete: rl_q3 → g_q3 → rl_q2 → g_q2 → rl_q1 → g_q1 → nullptr
-//         assert(rl_q3->parent == g_q3);
-//         assert(g_q3->parent == rl_q2);
-//         assert(rl_q2->parent == g_q2);
-//         assert(g_q2->parent == rl_q1);
-//         assert(rl_q1->parent == g_q1);
-//         assert(g_q1->parent == nullptr);
-//         assert(g_q1->idx == 20);
-        
-//         // Res 6: p3 (tree 1 leaf)
-//         resolver(g_p3, 2);
-//         const resolution_lineage* rl_p3 = lp.resolution(g_p3, 2);
-        
-//         // CRITICAL: Tree 1 complete: rl_p3 → g_p3 → rl_p2 → g_p2 → rl_p1 → g_p1 → nullptr
-//         assert(rl_p3->parent == g_p3);
-//         assert(g_p3->parent == rl_p2);
-//         assert(rl_p2->parent == g_p2);
-//         assert(g_p2->parent == rl_p1);
-//         assert(rl_p1->parent == g_p1);
-//         assert(g_p1->parent == nullptr);
-//         assert(g_p1->idx == 10);
-        
-//         // CRITICAL: Both trees coexist with correct independent lineages
-//         // Tree 1 root has idx 10, Tree 2 root has idx 20
-//         // All resolutions tracked
-//         assert(rs.size() == 6);
-        
-//         // Empty avoidance store
-//         assert(as.size() == 0);
-//     }
-    
-//     // Test 32: Resolution order - breadth-first style (all siblings before children)
-//     {
-//         trail t;
-//         t.push();
-//         expr_pool ep(t);
-//         sequencer seq(t);
-//         bind_map bm(t);
-//         copier cp(seq, ep);
-//         lineage_pool lp;
-        
-//         resolution_store rs;
-//         goal_store gs;
-//         candidate_store cs;
-        
-//         // Database
-//         const expr* root = ep.atom("root");
-//         const expr* a = ep.atom("a");
-//         const expr* b = ep.atom("b");
-//         const expr* c = ep.atom("c");
-//         const expr* a1 = ep.atom("a1");
-//         const expr* b1 = ep.atom("b1");
-//         const expr* c1 = ep.atom("c1");
-        
-//         rule r0{root, {a, b, c}};  // root :- a, b, c (3 children)
-//         rule r1{a, {a1}};          // a :- a1
-//         rule r2{b, {b1}};          // b :- b1
-//         rule r3{c, {c1}};          // c :- c1
-//         rule r4{a1, {}};           // a1
-//         rule r5{b1, {}};           // b1
-//         rule r6{c1, {}};           // c1
-//         database db = {r0, r1, r2, r3, r4, r5, r6};
-        
-//         goal_adder ga(gs, cs, db);
-//         avoidance_store as;
-//         goal_resolver resolver(rs, gs, cs, db, cp, bm, lp, ga, as);
-        
-//         // Root
-//         const goal_lineage* g_root = lp.goal(nullptr, 0);
-//         ga(g_root, root);
-        
-//         // Res 1: root → {a, b, c}
-//         resolver(g_root, 0);
-//         const resolution_lineage* rl_root = lp.resolution(g_root, 0);
-//         const goal_lineage* g_a = lp.goal(rl_root, 0);
-//         const goal_lineage* g_b = lp.goal(rl_root, 1);
-//         const goal_lineage* g_c = lp.goal(rl_root, 2);
-        
-//         // All three children share same parent
-//         assert(g_a->parent == rl_root);
-//         assert(g_a->idx == 0);
-//         assert(g_b->parent == rl_root);
-//         assert(g_b->idx == 1);
-//         assert(g_c->parent == rl_root);
-//         assert(g_c->idx == 2);
-        
-//         // Res 2: a → a1 (first sibling)
-//         resolver(g_a, 1);
-//         const resolution_lineage* rl_a = lp.resolution(g_a, 1);
-//         const goal_lineage* g_a1 = lp.goal(rl_a, 0);
-        
-//         // Res 3: b → b1 (second sibling)
-//         resolver(g_b, 2);
-//         const resolution_lineage* rl_b = lp.resolution(g_b, 2);
-//         const goal_lineage* g_b1 = lp.goal(rl_b, 0);
-        
-//         // Res 4: c → c1 (third sibling)
-//         resolver(g_c, 3);
-//         const resolution_lineage* rl_c = lp.resolution(g_c, 3);
-//         const goal_lineage* g_c1 = lp.goal(rl_c, 0);
-        
-//         // CRITICAL: After resolving all siblings, verify each branch maintains lineage
-        
-//         // Branch A: g_a1 → rl_a → g_a → rl_root → g_root → nullptr
-//         assert(g_a1->parent == rl_a);
-//         assert(rl_a->parent == g_a);
-//         assert(g_a->parent == rl_root);
-//         assert(rl_root->parent == g_root);
-//         assert(g_root->parent == nullptr);
-        
-//         // Branch B: g_b1 → rl_b → g_b → rl_root → g_root → nullptr
-//         assert(g_b1->parent == rl_b);
-//         assert(rl_b->parent == g_b);
-//         assert(g_b->parent == rl_root);
-//         assert(rl_root->parent == g_root);
-        
-//         // Branch C: g_c1 → rl_c → g_c → rl_root → g_root → nullptr
-//         assert(g_c1->parent == rl_c);
-//         assert(rl_c->parent == g_c);
-//         assert(g_c->parent == rl_root);
-//         assert(rl_root->parent == g_root);
-        
-//         // CRITICAL: All three branches share same rl_root
-//         assert(g_a->parent == rl_root);
-//         assert(g_b->parent == rl_root);
-//         assert(g_c->parent == rl_root);
-        
-//         // Res 5-7: Resolve all three leaf goals
-//         resolver(g_a1, 4);
-//         const resolution_lineage* rl_a1 = lp.resolution(g_a1, 4);
-        
-//         resolver(g_b1, 5);
-//         const resolution_lineage* rl_b1 = lp.resolution(g_b1, 5);
-        
-//         resolver(g_c1, 6);
-//         const resolution_lineage* rl_c1 = lp.resolution(g_c1, 6);
-        
-//         // Final verification - all three branches still have correct lineages
-//         assert(rl_a1->parent == g_a1);
-//         assert(g_a1->parent == rl_a);
-//         assert(rl_a->parent == g_a);
-//         assert(g_a->parent == rl_root);
-        
-//         assert(rl_b1->parent == g_b1);
-//         assert(g_b1->parent == rl_b);
-//         assert(rl_b->parent == g_b);
-//         assert(g_b->parent == rl_root);
-        
-//         assert(rl_c1->parent == g_c1);
-//         assert(g_c1->parent == rl_c);
-//         assert(rl_c->parent == g_c);
-//         assert(g_c->parent == rl_root);
-        
-//         // All share same root
-//         assert(rl_root->parent == g_root);
-//         assert(g_root->parent == nullptr);
-        
-//         // All 7 resolutions tracked
-//         assert(rs.size() == 7);
-        
-//         // Empty avoidance store
-//         assert(as.size() == 0);
-//     }
-    
-//     // Test 33: Random interleaving - resolve grandchild before parent's sibling
-//     {
-//         trail t;
-//         t.push();
-//         expr_pool ep(t);
-//         sequencer seq(t);
-//         bind_map bm(t);
-//         copier cp(seq, ep);
-//         lineage_pool lp;
-        
-//         resolution_store rs;
-//         goal_store gs;
-//         candidate_store cs;
-        
-//         // Database creating deep tree
-//         const expr* p = ep.atom("p");
-//         const expr* q = ep.atom("q");
-//         const expr* r = ep.atom("r");
-//         const expr* s = ep.atom("s");
-//         const expr* t_atom = ep.atom("t");
-//         const expr* u = ep.atom("u");
-        
-//         rule r0{p, {q, r}};   // p :- q, r
-//         rule r1{q, {s}};      // q :- s
-//         rule r2{r, {t_atom}};  // r :- t
-//         rule r3{s, {u}};      // s :- u
-//         rule r4{t_atom, {}};  // t
-//         rule r5{u, {}};       // u
-//         database db = {r0, r1, r2, r3, r4, r5};
-        
-//         goal_adder ga(gs, cs, db);
-//         avoidance_store as;
-//         goal_resolver resolver(rs, gs, cs, db, cp, bm, lp, ga, as);
-        
-//         // Root
-//         const goal_lineage* g_p = lp.goal(nullptr, 0);
-//         ga(g_p, p);
-        
-//         // Res 1: p → {q, r}
-//         resolver(g_p, 0);
-//         const resolution_lineage* rl_p = lp.resolution(g_p, 0);
-//         const goal_lineage* g_q = lp.goal(rl_p, 0);
-//         const goal_lineage* g_r = lp.goal(rl_p, 1);
-        
-//         // Res 2: q → {s} (left branch level 2)
-//         resolver(g_q, 1);
-//         const resolution_lineage* rl_q = lp.resolution(g_q, 1);
-//         const goal_lineage* g_s = lp.goal(rl_q, 0);
-        
-//         // Res 3: s → {u} (left branch level 3, going deep before touching right)
-//         resolver(g_s, 3);
-//         const resolution_lineage* rl_s = lp.resolution(g_s, 3);
-//         const goal_lineage* g_u = lp.goal(rl_s, 0);
-        
-//         // Verify left branch (went 3 levels deep): g_u → rl_s → g_s → rl_q → g_q → rl_p → g_p
-//         assert(g_u->parent == rl_s);
-//         assert(rl_s->parent == g_s);
-//         assert(g_s->parent == rl_q);
-//         assert(rl_q->parent == g_q);
-//         assert(g_q->parent == rl_p);
-//         assert(rl_p->parent == g_p);
-//         assert(g_p->parent == nullptr);
-        
-//         // CRITICAL: Right branch (g_r) should be untouched at level 1
-//         assert(g_r->parent == rl_p);
-//         assert(rl_p->parent == g_p);
-        
-//         // Res 4: r → {t} (NOW resolve right branch)
-//         resolver(g_r, 2);
-//         const resolution_lineage* rl_r = lp.resolution(g_r, 2);
-//         const goal_lineage* g_t = lp.goal(rl_r, 0);
-        
-//         // CRITICAL: Right branch: g_t → rl_r → g_r → rl_p → g_p → nullptr
-//         // Should have correct lineage even though left branch went 3 levels deep first
-//         assert(g_t->parent == rl_r);
-//         assert(rl_r->parent == g_r);
-//         assert(g_r->parent == rl_p);
-//         assert(rl_p->parent == g_p);
-//         assert(g_p->parent == nullptr);
-        
-//         // CRITICAL: Left branch still correct after resolving right
-//         assert(g_u->parent == rl_s);
-//         assert(rl_s->parent == g_s);
-//         assert(g_s->parent == rl_q);
-//         assert(rl_q->parent == g_q);
-//         assert(g_q->parent == rl_p);
-        
-//         // Both branches share rl_p and g_p
-//         assert(g_q->parent == rl_p);
-//         assert(g_r->parent == rl_p);
-        
-//         // Res 5: u (left leaf)
-//         resolver(g_u, 5);
-//         const resolution_lineage* rl_u = lp.resolution(g_u, 5);
-        
-//         // Res 6: t (right leaf)
-//         resolver(g_t, 4);
-//         const resolution_lineage* rl_t = lp.resolution(g_t, 4);
-        
-//         // Final verification: both branches have complete lineages to root
-//         // Left: rl_u → g_u → rl_s → g_s → rl_q → g_q → rl_p → g_p → nullptr
-//         assert(rl_u->parent == g_u);
-//         assert(g_u->parent == rl_s);
-//         assert(rl_s->parent == g_s);
-//         assert(g_s->parent == rl_q);
-//         assert(rl_q->parent == g_q);
-//         assert(g_q->parent == rl_p);
-//         assert(rl_p->parent == g_p);
-//         assert(g_p->parent == nullptr);
-        
-//         // Right: rl_t → g_t → rl_r → g_r → rl_p → g_p → nullptr
-//         assert(rl_t->parent == g_t);
-//         assert(g_t->parent == rl_r);
-//         assert(rl_r->parent == g_r);
-//         assert(g_r->parent == rl_p);
-//         assert(rl_p->parent == g_p);
-        
-//         // All 6 resolutions
-//         assert(rs.size() == 6);
-        
-//         // Empty avoidance store
-//         assert(as.size() == 0);
-//     }
-// }
 
 void test_head_elimination_detector_constructor() {
     // Test 1: Basic construction - should not crash
@@ -20758,7504 +20522,7485 @@ void test_cdcl_eliminated() {
     }
 }
 
-// void test_a01_sim_constructor() {
-//     // Test 1: Empty goals - verify initialization
-//     {
-//         trail t;
-//         t.push();
+void test_a01_sim_constructor() {
+    // Test 1: Empty goals - verify initialization
+    {
+        trail t;
+        t.push();
         
-//         expr_pool ep(t);
-//         bind_map bm(t);
-//         sequencer seq(t);
-//         lineage_pool lp;
+        expr_pool ep(t);
+        bind_map bm(t);
+        sequencer seq(t);
+        lineage_pool lp;
         
-//         database db;
-//         goals goals;  // Empty
-//         avoidance_store as;
+        database db;
+        goals goals;  // Empty
+        cdcl c;
         
-//         monte_carlo::tree_node<mcts_decider::choice> root;
-//         std::mt19937 rng(42);
-//         monte_carlo::simulation<mcts_decider::choice, std::mt19937> sim(root, 1.414, rng);
+        monte_carlo::tree_node<mcts_decider::choice> root;
+        std::mt19937 rng(42);
+        monte_carlo::simulation<mcts_decider::choice, std::mt19937> sim(root, 1.414, rng);
         
-//         {
-//             resolution_store rs;
-//             decision_store ds;
-//             a01_sim simulation(100, db, goals, t, seq, ep, bm, lp, rs, ds, as, sim);
+        {
+            resolution_store rs;
+            decision_store ds;
+            a01_sim simulation(100, db, goals, t, seq, ep, bm, lp, rs, ds, c, sim);
             
-//             // Verify max_resolutions stored
-//             assert(simulation.max_resolutions == 100);
+            // Verify max_resolutions stored
+            assert(simulation.max_resolutions == 100);
             
-//             // Verify references
-//             assert(&simulation.db == &db);
-//             assert(&simulation.t == &t);
-//             assert(&simulation.lp == &lp);
+            // Verify references
+            assert(&simulation.db == &db);
+            assert(&simulation.t == &t);
+            assert(&simulation.lp == &lp);
             
-//             // Verify stores initialized
-//             assert(simulation.gs.size() == 0);
-//             assert(simulation.cs.size() == 0);
-//             assert(simulation.rs.size() == 0);
-//             assert(simulation.ds.size() == 0);
+            // Verify stores initialized
+            assert(simulation.gs.size() == 0);
+            assert(simulation.cs.size() == 0);
+            assert(simulation.rs.size() == 0);
+            assert(simulation.ds.size() == 0);
             
-//             // Verify avoidance store is a COPY
-//             assert(&simulation.as_copy != &as);
-//             assert(simulation.as_copy.size() == 0);
+            // Verify cdcl copy is empty
+            assert(simulation.c.avoidances.size() == 0);
             
-//             // CRITICAL: Verify public a01_sim member references
-//             assert(&simulation.db == &db);
-//             assert(&simulation.t == &t);
-//             assert(&simulation.lp == &lp);
-//             assert(&simulation.as_copy != &as);
+            // CRITICAL: Verify public a01_sim member references
+            assert(&simulation.db == &db);
+            assert(&simulation.t == &t);
+            assert(&simulation.lp == &lp);
             
-//             // CRITICAL: Verify copier references (public in DEBUG)
-//             assert(&simulation.cp.sequencer_ref == &seq);
-//             assert(&simulation.cp.expr_pool_ref == &ep);
+            // CRITICAL: Verify copier references (public in DEBUG)
+            assert(&simulation.cp.sequencer_ref == &seq);
+            assert(&simulation.cp.expr_pool_ref == &ep);
             
-//             // CRITICAL: Verify decider references (public in DEBUG)
-//             assert(&simulation.dec.gs == &simulation.gs);
-//             assert(&simulation.dec.cs == &simulation.cs);
-//             assert(&simulation.dec.sim == &sim);
+            // CRITICAL: Verify decider references (public in DEBUG)
+            assert(&simulation.dec.gs == &simulation.gs);
+            assert(&simulation.dec.cs == &simulation.cs);
+            assert(&simulation.dec.sim == &sim);
             
-//             // CRITICAL: Verify goal_adder references (public in DEBUG)
-//             assert(&simulation.ga.goals == &simulation.gs);
-//             assert(&simulation.ga.candidates == &simulation.cs);
-//             assert(&simulation.ga.db == &db);
+            // CRITICAL: Verify goal_adder references (public in DEBUG)
+            assert(&simulation.ga.goals == &simulation.gs);
+            assert(&simulation.ga.candidates == &simulation.cs);
+            assert(&simulation.ga.db == &db);
             
-//             // CRITICAL: Verify goal_resolver references (public in DEBUG)
-//             assert(&simulation.gr.rs == &simulation.rs);
-//             assert(&simulation.gr.gs == &simulation.gs);
-//             assert(&simulation.gr.cs == &simulation.cs);
-//             assert(&simulation.gr.db == &db);
-//             assert(&simulation.gr.bm == &bm);
-//             assert(&simulation.gr.lp == &lp);
-//             assert(&simulation.rs == &rs);
-//             assert(&simulation.ds == &ds);
-//             assert(&simulation.gr.ga == &simulation.ga);
-//             assert(&simulation.gr.as == &simulation.as_copy);
-//         }
-//     }
+            // CRITICAL: Verify goal_resolver references (public in DEBUG)
+            assert(&simulation.gr.rs == &simulation.rs);
+            assert(&simulation.gr.gs == &simulation.gs);
+            assert(&simulation.gr.cs == &simulation.cs);
+            assert(&simulation.gr.db == &db);
+            assert(&simulation.gr.bm == &bm);
+            assert(&simulation.gr.lp == &lp);
+            assert(&simulation.rs == &rs);
+            assert(&simulation.ds == &ds);
+            assert(&simulation.gr.ga == &simulation.ga);
+        }
+    }
     
-//     // Test 2: Single goal - verify goal_adder called correctly
-//     {
-//         trail t;
-//         t.push();
+    // Test 2: Single goal - verify goal_adder called correctly
+    {
+        trail t;
+        t.push();
         
-//         expr_pool ep(t);
-//         bind_map bm(t);
-//         sequencer seq(t);
-//         lineage_pool lp;
+        expr_pool ep(t);
+        bind_map bm(t);
+        sequencer seq(t);
+        lineage_pool lp;
         
-//         database db;
-//         db.push_back(rule{ep.atom("p"), {}});
+        database db;
+        db.push_back(rule{ep.atom("p"), {}});
         
-//         goals goals;
-//         goals.push_back(ep.atom("p"));
+        goals goals;
+        goals.push_back(ep.atom("p"));
         
-//         avoidance_store as;
+        cdcl c;
         
-//         monte_carlo::tree_node<mcts_decider::choice> root;
-//         std::mt19937 rng(42);
-//         monte_carlo::simulation<mcts_decider::choice, std::mt19937> sim(root, 1.414, rng);
+        monte_carlo::tree_node<mcts_decider::choice> root;
+        std::mt19937 rng(42);
+        monte_carlo::simulation<mcts_decider::choice, std::mt19937> sim(root, 1.414, rng);
 
-//         {
-//             resolution_store rs;
-//             decision_store ds;
+        {
+            resolution_store rs;
+            decision_store ds;
 
-//             a01_sim simulation(50, db, goals, t, seq, ep, bm, lp, rs, ds, as, sim);
+            a01_sim simulation(50, db, goals, t, seq, ep, bm, lp, rs, ds, c, sim);
             
-//             // CRITICAL: Goal added to goal_store with index 0
-//             assert(simulation.gs.size() == 1);
-//             const goal_lineage* gl = lp.goal(nullptr, 0);
-//             assert(gl->parent == nullptr);
-//             assert(gl->idx == 0);
-//             assert(simulation.gs.at(gl) == ep.atom("p"));
+            // CRITICAL: Goal added to goal_store with index 0
+            assert(simulation.gs.size() == 1);
+            const goal_lineage* gl = lp.goal(nullptr, 0);
+            assert(gl->parent == nullptr);
+            assert(gl->idx == 0);
+            assert(simulation.gs.at(gl) == ep.atom("p"));
             
-//             // CRITICAL: Candidate added to candidate_store (1 goal * 1 db rule = 1 candidate)
-//             assert(simulation.cs.size() == 1);
-//             assert(simulation.cs.count(gl) == 1);
-//             assert(simulation.cs.begin()->first == gl);
-//             assert(simulation.cs.begin()->second == 0);  // db[0] as candidate
+            // CRITICAL: Candidate added to candidate_store (1 goal * 1 db rule = 1 candidate)
+            assert(simulation.cs.size() == 1);
+            assert(simulation.cs.count(gl) == 1);
+            assert(simulation.cs.begin()->first == gl);
+            assert(simulation.cs.begin()->second == 0);  // db[0] as candidate
             
-//             // Other stores empty
-//             assert(simulation.rs.size() == 0);
-//             assert(simulation.ds.size() == 0);
+            // Other stores empty
+            assert(simulation.rs.size() == 0);
+            assert(simulation.ds.size() == 0);
             
-//             // Max resolutions stored
-//             assert(simulation.max_resolutions == 50);
+            // Max resolutions stored
+            assert(simulation.max_resolutions == 50);
             
-//             // CRITICAL: Verify lineage comes from correct pool
-//             assert(lp.goal_lineages.count(*gl) == 1);
-//         }
-//     }
-    
-//     // Test 3: Multiple goals - verify sequential indexing
-//     {
-//         trail t;
-//         t.push();
-        
-//         expr_pool ep(t);
-//         bind_map bm(t);
-//         sequencer seq(t);
-//         lineage_pool lp;
-        
-//         database db;
-//         db.push_back(rule{ep.atom("p"), {}});
-//         db.push_back(rule{ep.atom("q"), {}});
-//         db.push_back(rule{ep.atom("r"), {}});
-        
-//         goals goals;
-//         goals.push_back(ep.atom("p"));
-//         goals.push_back(ep.atom("q"));
-//         goals.push_back(ep.atom("r"));
-        
-//         avoidance_store as;
-        
-//         monte_carlo::tree_node<mcts_decider::choice> root;
-//         std::mt19937 rng(42);
-//         monte_carlo::simulation<mcts_decider::choice, std::mt19937> sim(root, 1.414, rng);
-        
-//         resolution_store rs;
-//         decision_store ds;
-
-//         a01_sim simulation(200, db, goals, t, seq, ep, bm, lp, rs, ds, as, sim);
-        
-//         // CRITICAL: Three goals added with indices 0, 1, 2
-//         assert(simulation.gs.size() == 3);
-        
-//         // Find each lineage by index
-//         const goal_lineage* gl0 = nullptr;
-//         const goal_lineage* gl1 = nullptr;
-//         const goal_lineage* gl2 = nullptr;
-        
-//         for (const auto& [gl, ge] : simulation.gs) {
-//             if (gl->idx == 0) {
-//                 gl0 = gl;
-//                 assert(ge == ep.atom("p"));
-//             } else if (gl->idx == 1) {
-//                 gl1 = gl;
-//                 assert(ge == ep.atom("q"));
-//             } else if (gl->idx == 2) {
-//                 gl2 = gl;
-//                 assert(ge == ep.atom("r"));
-//             }
-//         }
-        
-//         assert(gl0 != nullptr);
-//         assert(gl1 != nullptr);
-//         assert(gl2 != nullptr);
-        
-//         // CRITICAL: All have nullptr parent (root goals)
-//         assert(gl0->parent == nullptr);
-//         assert(gl1->parent == nullptr);
-//         assert(gl2->parent == nullptr);
-        
-//         // CRITICAL: Total candidates = 3 goals * 3 db rules = 9
-//         assert(simulation.cs.size() == 9);
-        
-//         // CRITICAL: Each goal has ALL 3 rules as candidates (goal_adder adds all, trivially)
-//         assert(simulation.cs.count(gl0) == 3);
-//         assert(simulation.cs.count(gl1) == 3);
-//         assert(simulation.cs.count(gl2) == 3);
-        
-//         // Verify each goal has candidates 0, 1, 2
-//         auto range0 = simulation.cs.equal_range(gl0);
-//         std::set<size_t> indices0;
-//         for (auto it = range0.first; it != range0.second; ++it) {
-//             indices0.insert(it->second);
-//         }
-//         assert(indices0 == std::set<size_t>({0, 1, 2}));
-        
-//         auto range1 = simulation.cs.equal_range(gl1);
-//         std::set<size_t> indices1;
-//         for (auto it = range1.first; it != range1.second; ++it) {
-//             indices1.insert(it->second);
-//         }
-//         assert(indices1 == std::set<size_t>({0, 1, 2}));
-        
-//         auto range2 = simulation.cs.equal_range(gl2);
-//         std::set<size_t> indices2;
-//         for (auto it = range2.first; it != range2.second; ++it) {
-//             indices2.insert(it->second);
-//         }
-//         assert(indices2 == std::set<size_t>({0, 1, 2}));
-        
-//         // Max resolutions
-//         assert(simulation.max_resolutions == 200);
-        
-//         // CRITICAL: Verify all lineages from correct pool
-//         assert(lp.goal_lineages.count(*gl0) == 1);
-//         assert(lp.goal_lineages.count(*gl1) == 1);
-//         assert(lp.goal_lineages.count(*gl2) == 1);
-        
-//         // CRITICAL: Verify resolution and decision stores empty
-//         assert(simulation.rs.size() == 0);
-//         assert(simulation.ds.size() == 0);
-//     }
-    
-//     // Test 4: Goals with no matching database rules - candidates empty for some goals
-//     {
-//         trail t;
-//         t.push();
-        
-//         expr_pool ep(t);
-//         bind_map bm(t);
-//         sequencer seq(t);
-//         lineage_pool lp;
-        
-//         database db;
-//         db.push_back(rule{ep.atom("p"), {}});
-//         // No rule for "q" or "r"
-        
-//         goals goals;
-//         goals.push_back(ep.atom("p"));
-//         goals.push_back(ep.atom("q"));
-//         goals.push_back(ep.atom("r"));
-        
-//         avoidance_store as;
-        
-//         monte_carlo::tree_node<mcts_decider::choice> root;
-//         std::mt19937 rng(42);
-//         monte_carlo::simulation<mcts_decider::choice, std::mt19937> sim(root, 1.414, rng);
-        
-//         resolution_store rs;
-//         decision_store ds;
-//         a01_sim simulation(100, db, goals, t, seq, ep, bm, lp, rs, ds, as, sim);
-        
-//         // CRITICAL: All goals added to goal_store
-//         assert(simulation.gs.size() == 3);
-        
-//         // CRITICAL: goal_adder adds ALL db rules to ALL goals (trivially, before elimination)
-//         // 3 goals * 1 db rule = 3 total candidates
-//         assert(simulation.cs.size() == 3);
-        
-//         const goal_lineage* gl_p = nullptr;
-//         const goal_lineage* gl_q = nullptr;
-//         const goal_lineage* gl_r = nullptr;
-        
-//         for (const auto& [gl, ge] : simulation.gs) {
-//             if (gl->idx == 0) gl_p = gl;
-//             else if (gl->idx == 1) gl_q = gl;
-//             else if (gl->idx == 2) gl_r = gl;
-//         }
-        
-//         // Each goal has the single db rule as a candidate
-//         assert(simulation.cs.count(gl_p) == 1);
-//         assert(simulation.cs.count(gl_q) == 1);
-//         assert(simulation.cs.count(gl_r) == 1);
-        
-//         // All have db[0] as candidate
-//         assert(simulation.cs.find(gl_p)->second == 0);
-//         assert(simulation.cs.find(gl_q)->second == 0);
-//         assert(simulation.cs.find(gl_r)->second == 0);
-        
-//         // CRITICAL: Verify resolution and decision stores empty
-//         assert(simulation.rs.size() == 0);
-//         assert(simulation.ds.size() == 0);
-        
-//         // CRITICAL: Verify goal expressions are correct
-//         assert(simulation.gs.at(gl_p) == ep.atom("p"));
-//         assert(simulation.gs.at(gl_q) == ep.atom("q"));
-//         assert(simulation.gs.at(gl_r) == ep.atom("r"));
-        
-//         // CRITICAL: Verify lineages from correct pool
-//         assert(lp.goal_lineages.count(*gl_p) == 1);
-//         assert(lp.goal_lineages.count(*gl_q) == 1);
-//         assert(lp.goal_lineages.count(*gl_r) == 1);
-//     }
-    
-//     // Test 5: Database with multiple candidates per goal
-//     {
-//         trail t;
-//         t.push();
-        
-//         expr_pool ep(t);
-//         bind_map bm(t);
-//         sequencer seq(t);
-//         lineage_pool lp;
-        
-//         database db;
-//         db.push_back(rule{ep.atom("p"), {}});
-//         db.push_back(rule{ep.atom("p"), {ep.atom("q")}});
-//         db.push_back(rule{ep.atom("p"), {ep.atom("r")}});
-        
-//         goals goals;
-//         goals.push_back(ep.atom("p"));
-        
-//         avoidance_store as;
-        
-//         monte_carlo::tree_node<mcts_decider::choice> root;
-//         std::mt19937 rng(42);
-//         monte_carlo::simulation<mcts_decider::choice, std::mt19937> sim(root, 1.414, rng);
-        
-//         resolution_store rs;
-//         decision_store ds;
-//         a01_sim simulation(100, db, goals, t, seq, ep, bm, lp, rs, ds, as, sim);
-        
-//         // Goal added
-//         assert(simulation.gs.size() == 1);
-//         const goal_lineage* gl = lp.goal(nullptr, 0);
-        
-//         // CRITICAL: Three candidates for the same goal
-//         assert(simulation.cs.count(gl) == 3);
-        
-//         // Verify candidate indices are 0, 1, 2
-//         auto range = simulation.cs.equal_range(gl);
-//         std::set<size_t> indices;
-//         for (auto it = range.first; it != range.second; ++it) {
-//             indices.insert(it->second);
-//         }
-//         assert(indices.size() == 3);
-//         assert(indices.count(0) == 1);
-//         assert(indices.count(1) == 1);
-//         assert(indices.count(2) == 1);
-        
-//         // CRITICAL: Verify resolution/decision stores empty
-//         assert(simulation.rs.size() == 0);
-//         assert(simulation.ds.size() == 0);
-        
-//         // CRITICAL: Verify goal expression content
-//         assert(simulation.gs.at(gl) == ep.atom("p"));
-        
-//         // CRITICAL: Verify lineage from correct pool
-//         assert(lp.goal_lineages.count(*gl) == 1);
-//         assert(gl->parent == nullptr);
-//         assert(gl->idx == 0);
-//     }
-    
-//     // Test 6: Avoidance store is copied, not referenced
-//     {
-//         trail t;
-//         t.push();
-        
-//         expr_pool ep(t);
-//         bind_map bm(t);
-//         sequencer seq(t);
-//         lineage_pool lp;
-        
-//         database db;
-//         goals goals;
-        
-//         // Pre-populate avoidance store
-//         avoidance_store as;
-//         const resolution_lineage* rl1 = lp.resolution(lp.goal(nullptr, 0), 0);
-//         const resolution_lineage* rl2 = lp.resolution(lp.goal(nullptr, 1), 1);
-        
-//         decision_store avoid1;
-//         avoid1.insert(rl1);
-//         avoid1.insert(rl2);
-        
-//         as.insert(avoid1);
-        
-//         size_t as_size_before = as.size();
-        
-//         monte_carlo::tree_node<mcts_decider::choice> root;
-//         std::mt19937 rng(42);
-//         monte_carlo::simulation<mcts_decider::choice, std::mt19937> sim(root, 1.414, rng);
-        
-//         resolution_store rs;
-//         decision_store ds;
-//         a01_sim simulation(100, db, goals, t, seq, ep, bm, lp, rs, ds, as, sim);
-        
-//         // CRITICAL: as_copy is a COPY, not a reference
-//         assert(&simulation.as_copy != &as);
-//         assert(simulation.as_copy.size() == 1);
-        
-//         // Original unchanged
-//         assert(as.size() == as_size_before);
-        
-//         // Content matches
-//         assert(simulation.as_copy.count(avoid1) == 1);
-//         assert(as.count(avoid1) == 1);
-//     }
-    
-//     // Test 7: Complex database and goals - verify all candidates found
-//     {
-//         trail t;
-//         t.push();
-        
-//         expr_pool ep(t);
-//         bind_map bm(t);
-//         sequencer seq(t);
-//         lineage_pool lp;
-        
-//         database db;
-//         db.push_back(rule{ep.atom("p"), {}});
-//         db.push_back(rule{ep.atom("p"), {ep.atom("x")}});
-//         db.push_back(rule{ep.atom("q"), {}});
-//         db.push_back(rule{ep.atom("q"), {ep.atom("y")}});
-//         db.push_back(rule{ep.atom("q"), {ep.atom("z")}});
-//         db.push_back(rule{ep.atom("r"), {ep.atom("w")}});
-        
-//         goals goals;
-//         goals.push_back(ep.atom("p"));
-//         goals.push_back(ep.atom("q"));
-//         goals.push_back(ep.atom("r"));
-//         goals.push_back(ep.atom("s"));  // No matching rule
-        
-//         avoidance_store as;
-        
-//         monte_carlo::tree_node<mcts_decider::choice> root;
-//         std::mt19937 rng(42);
-//         monte_carlo::simulation<mcts_decider::choice, std::mt19937> sim(root, 1.414, rng);
-        
-//         resolution_store rs;
-//         decision_store ds;
-//         a01_sim simulation(75, db, goals, t, seq, ep, bm, lp, rs, ds, as, sim);
-        
-//         // CRITICAL: 4 goals added
-//         assert(simulation.gs.size() == 4);
-        
-//         // Find each lineage
-//         const goal_lineage* gl0 = nullptr;
-//         const goal_lineage* gl1 = nullptr;
-//         const goal_lineage* gl2 = nullptr;
-//         const goal_lineage* gl3 = nullptr;
-        
-//         for (const auto& [gl, ge] : simulation.gs) {
-//             if (gl->idx == 0) {
-//                 gl0 = gl;
-//                 assert(ge == ep.atom("p"));
-//             } else if (gl->idx == 1) {
-//                 gl1 = gl;
-//                 assert(ge == ep.atom("q"));
-//             } else if (gl->idx == 2) {
-//                 gl2 = gl;
-//                 assert(ge == ep.atom("r"));
-//             } else if (gl->idx == 3) {
-//                 gl3 = gl;
-//                 assert(ge == ep.atom("s"));
-//             }
-//         }
-        
-//         assert(gl0 && gl1 && gl2 && gl3);
-        
-//         // CRITICAL: goal_adder adds ALL rules to ALL goals (trivially)
-//         // 4 goals * 6 db rules = 24 total candidates
-//         assert(simulation.cs.size() == 24);
-        
-//         // Each goal has all 6 rules as candidates
-//         assert(simulation.cs.count(gl0) == 6);
-//         assert(simulation.cs.count(gl1) == 6);
-//         assert(simulation.cs.count(gl2) == 6);
-//         assert(simulation.cs.count(gl3) == 6);
-        
-//         // Verify all have indices 0-5
-//         for (const goal_lineage* gl : {gl0, gl1, gl2, gl3}) {
-//             auto range = simulation.cs.equal_range(gl);
-//             std::set<size_t> indices;
-//             for (auto it = range.first; it != range.second; ++it) {
-//                 indices.insert(it->second);
-//             }
-//             assert(indices == std::set<size_t>({0, 1, 2, 3, 4, 5}));
-//         }
-        
-//         // Max resolutions
-//         assert(simulation.max_resolutions == 75);
-        
-//         // CRITICAL: Verify resolution/decision stores empty
-//         assert(simulation.rs.size() == 0);
-//         assert(simulation.ds.size() == 0);
-        
-//         // CRITICAL: Verify all lineages from correct pool and have correct properties
-//         assert(lp.goal_lineages.count(*gl0) == 1);
-//         assert(lp.goal_lineages.count(*gl1) == 1);
-//         assert(lp.goal_lineages.count(*gl2) == 1);
-//         assert(lp.goal_lineages.count(*gl3) == 1);
-        
-//         assert(gl0->parent == nullptr && gl0->idx == 0);
-//         assert(gl1->parent == nullptr && gl1->idx == 1);
-//         assert(gl2->parent == nullptr && gl2->idx == 2);
-//         assert(gl3->parent == nullptr && gl3->idx == 3);
-        
-//         // CRITICAL: Verify goal expressions match exactly
-//         assert(simulation.gs.at(gl0) == ep.atom("p"));
-//         assert(simulation.gs.at(gl1) == ep.atom("q"));
-//         assert(simulation.gs.at(gl2) == ep.atom("r"));
-//         assert(simulation.gs.at(gl3) == ep.atom("s"));
-        
-//         // CRITICAL: Verify database reference holds correct content
-//         assert(simulation.db.size() == 6);
-//         assert(simulation.db[0].head == ep.atom("p"));
-//         assert(simulation.db[2].head == ep.atom("q"));
-//         assert(simulation.db[5].head == ep.atom("r"));
-//     }
-    
-//     // Test 9: Pre-populated avoidance store is copied
-//     {
-//         trail t;
-//         t.push();
-        
-//         expr_pool ep(t);
-//         bind_map bm(t);
-//         sequencer seq(t);
-//         lineage_pool lp;
-        
-//         database db;
-//         goals goals;
-        
-//         // Pre-populate avoidance store with multiple avoidances
-//         avoidance_store as;
-        
-//         const resolution_lineage* rl1 = lp.resolution(lp.goal(nullptr, 0), 0);
-//         const resolution_lineage* rl2 = lp.resolution(lp.goal(nullptr, 1), 1);
-//         const resolution_lineage* rl3 = lp.resolution(lp.goal(nullptr, 2), 2);
-        
-//         decision_store avoid1;
-//         avoid1.insert(rl1);
-//         avoid1.insert(rl2);
-        
-//         decision_store avoid2;
-//         avoid2.insert(rl3);
-        
-//         as.insert(avoid1);
-//         as.insert(avoid2);
-        
-//         monte_carlo::tree_node<mcts_decider::choice> root;
-//         std::mt19937 rng(42);
-//         monte_carlo::simulation<mcts_decider::choice, std::mt19937> sim(root, 1.414, rng);
-        
-//         size_t as_size_before = as.size();
-        
-//         resolution_store rs;
-//         decision_store ds;
-//         a01_sim simulation(100, db, goals, t, seq, ep, bm, lp, rs, ds, as, sim);
-        
-//         // CRITICAL: as_copy has same content
-//         assert(simulation.as_copy.size() == 2);
-//         assert(simulation.as_copy.count(avoid1) == 1);
-//         assert(simulation.as_copy.count(avoid2) == 1);
-        
-//         // CRITICAL: Original unchanged
-//         assert(as.size() == as_size_before);
-//     }
-    
-//     // Test 10: Verify sequencer and expr_pool passed correctly to copier
-//     {
-//         trail t;
-//         t.push();
-        
-//         expr_pool ep(t);
-//         bind_map bm(t);
-//         sequencer seq(t);
-//         lineage_pool lp;
-        
-//         database db;
-//         goals goals;
-//         goals.push_back(ep.atom("p"));
-        
-//         avoidance_store as;
-        
-//         monte_carlo::tree_node<mcts_decider::choice> root;
-//         std::mt19937 rng(42);
-//         monte_carlo::simulation<mcts_decider::choice, std::mt19937> sim(root, 1.414, rng);
-        
-//         resolution_store rs;
-//         decision_store ds;
-//         a01_sim simulation(100, db, goals, t, seq, ep, bm, lp, rs, ds, as, sim);
-        
-//         // Verify copier references match (via members)
-//         assert(&simulation.cp.expr_pool_ref == &ep);
-//         assert(&simulation.cp.sequencer_ref == &seq);
-//     }
-    
-//     // Test 11: Different max_resolutions values stored correctly
-//     {
-//         trail t;
-//         t.push();
-        
-//         expr_pool ep(t);
-//         bind_map bm(t);
-//         sequencer seq(t);
-//         lineage_pool lp;
-        
-//         database db;
-//         goals goals;
-        
-//         avoidance_store as;
-        
-//         monte_carlo::tree_node<mcts_decider::choice> root;
-//         std::mt19937 rng(42);
-//         monte_carlo::simulation<mcts_decider::choice, std::mt19937> sim(root, 1.414, rng);
-        
-//         // Test various limits
-//         {
-//             resolution_store rs;
-//             decision_store ds;
-//             a01_sim sim1(1, db, goals, t, seq, ep, bm, lp, rs, ds, as, sim);
-//             assert(sim1.max_resolutions == 1);
-//         }
-        
-//         {
-//             resolution_store rs;
-//             decision_store ds;
-//             a01_sim sim2(1000, db, goals, t, seq, ep, bm, lp, rs, ds, as, sim);
-//             assert(sim2.max_resolutions == 1000);
-//         }
-        
-//         {
-//             resolution_store rs;
-//             decision_store ds;
-//             a01_sim sim3(999999, db, goals, t, seq, ep, bm, lp, rs, ds, as, sim);
-//             assert(sim3.max_resolutions == 999999);
-//         }
-//     }
-    
-//     // Test 13: Verify decisions() returns const reference to ds
-//     {
-//         trail t;
-//         t.push();
-        
-//         expr_pool ep(t);
-//         bind_map bm(t);
-//         sequencer seq(t);
-//         lineage_pool lp;
-        
-//         database db;
-//         goals goals;
-//         avoidance_store as;
-        
-//         monte_carlo::tree_node<mcts_decider::choice> root;
-//         std::mt19937 rng(42);
-//         monte_carlo::simulation<mcts_decider::choice, std::mt19937> sim(root, 1.414, rng);
-        
-//         resolution_store rs;
-//         decision_store ds;
-//         a01_sim simulation(100, db, goals, t, seq, ep, bm, lp, rs, ds, as, sim);
-        
-//         // CRITICAL: decisions() returns reference to ds
-//         assert(&simulation.ds == &ds);
-//         assert(&simulation.rs == &rs);
-//     }
-    
-//     // Test 14: Verify component initialization with non-empty avoidance store
-//     {
-//         trail t;
-//         t.push();
-        
-//         expr_pool ep(t);
-//         bind_map bm(t);
-//         sequencer seq(t);
-//         lineage_pool lp;
-        
-//         database db;
-//         goals goals;
-        
-//         // Pre-populate avoidance store
-//         avoidance_store as;
-//         const resolution_lineage* rl1 = lp.resolution(lp.goal(nullptr, 0), 0);
-//         const resolution_lineage* rl2 = lp.resolution(lp.goal(nullptr, 1), 1);
-        
-//         decision_store avoid;
-//         avoid.insert(rl1);
-//         avoid.insert(rl2);
-//         as.insert(avoid);
-        
-//         monte_carlo::tree_node<mcts_decider::choice> root;
-//         std::mt19937 rng(42);
-//         monte_carlo::simulation<mcts_decider::choice, std::mt19937> sim(root, 1.414, rng);
-        
-//         resolution_store rs;
-//         decision_store ds;
-//         a01_sim simulation(100, db, goals, t, seq, ep, bm, lp, rs, ds, as, sim);
-        
-//         // CRITICAL: Verify as_copy has content, original unchanged
-//         assert(simulation.as_copy.size() == 1);
-//         assert(simulation.as_copy.count(avoid) == 1);
-//         assert(as.size() == 1);
-        
-//         // CRITICAL: Verify gr resolver references the copy (public in DEBUG)
-//         assert(&simulation.gr.as == &simulation.as_copy);
-        
-//         assert(&simulation.ds == &ds);
-//         assert(&simulation.rs == &rs);
-//     }
-    
-//     // Test 15: Verify all store sizes after construction with various goal counts
-//     {
-//         trail t;
-//         t.push();
-        
-//         expr_pool ep(t);
-//         bind_map bm(t);
-//         sequencer seq(t);
-//         lineage_pool lp;
-        
-//         database db;
-//         db.push_back(rule{ep.atom("x"), {}});
-//         db.push_back(rule{ep.atom("y"), {}});
-        
-//         // Add 5 goals
-//         goals goals;
-//         for (int i = 0; i < 5; i++) {
-//             goals.push_back(ep.atom("goal" + std::to_string(i)));
-//         }
-        
-//         avoidance_store as;
-        
-//         monte_carlo::tree_node<mcts_decider::choice> root;
-//         std::mt19937 rng(42);
-//         monte_carlo::simulation<mcts_decider::choice, std::mt19937> sim(root, 1.414, rng);
-        
-//         resolution_store rs;
-//         decision_store ds;
-//         a01_sim simulation(500, db, goals, t, seq, ep, bm, lp, rs, ds, as, sim);
-        
-//         // CRITICAL: 5 goals added
-//         assert(simulation.gs.size() == 5);
-        
-//         // CRITICAL: 5 goals * 2 db rules = 10 candidates
-//         assert(simulation.cs.size() == 10);
-        
-//         // CRITICAL: All other stores empty
-//         assert(simulation.rs.size() == 0);
-//         assert(simulation.ds.size() == 0);
-//         assert(simulation.as_copy.size() == 0);
-//         assert(simulation.ds.size() == 0);
-//         assert(simulation.rs.size() == 0);
-        
-//         // CRITICAL: Verify each goal has 2 candidates
-//         for (const auto& [gl, ge] : simulation.gs) {
-//             assert(simulation.cs.count(gl) == 2);
-//             assert(gl->parent == nullptr);
-//             assert(gl->idx >= 0 && gl->idx < 5);
-//         }
-//     }
-    
-//     // Test 16: Verify goal ordering matches list ordering
-//     {
-//         trail t;
-//         t.push();
-        
-//         expr_pool ep(t);
-//         bind_map bm(t);
-//         sequencer seq(t);
-//         lineage_pool lp;
-        
-//         database db;
-        
-//         goals goals;
-//         const expr* goal_a = ep.atom("alpha");
-//         const expr* goal_b = ep.atom("beta");
-//         const expr* goal_c = ep.atom("gamma");
-//         const expr* goal_d = ep.atom("delta");
-        
-//         goals.push_back(goal_a);
-//         goals.push_back(goal_b);
-//         goals.push_back(goal_c);
-//         goals.push_back(goal_d);
-        
-//         avoidance_store as;
-        
-//         monte_carlo::tree_node<mcts_decider::choice> root;
-//         std::mt19937 rng(42);
-//         monte_carlo::simulation<mcts_decider::choice, std::mt19937> sim(root, 1.414, rng);
-        
-//         resolution_store rs;
-//         decision_store ds;
-//         a01_sim simulation(100, db, goals, t, seq, ep, bm, lp, rs, ds, as, sim);
-        
-//         // CRITICAL: Verify ordering - idx matches position in list
-//         const goal_lineage* gl_idx0 = nullptr;
-//         const goal_lineage* gl_idx1 = nullptr;
-//         const goal_lineage* gl_idx2 = nullptr;
-//         const goal_lineage* gl_idx3 = nullptr;
-        
-//         for (const auto& [gl, ge] : simulation.gs) {
-//             if (gl->idx == 0) {
-//                 gl_idx0 = gl;
-//                 assert(ge == goal_a);  // First in list
-//             } else if (gl->idx == 1) {
-//                 gl_idx1 = gl;
-//                 assert(ge == goal_b);  // Second in list
-//             } else if (gl->idx == 2) {
-//                 gl_idx2 = gl;
-//                 assert(ge == goal_c);  // Third in list
-//             } else if (gl->idx == 3) {
-//                 gl_idx3 = gl;
-//                 assert(ge == goal_d);  // Fourth in list
-//             }
-//         }
-        
-//         assert(gl_idx0 && gl_idx1 && gl_idx2 && gl_idx3);
-        
-//         // CRITICAL: All root goals (parent == nullptr)
-//         assert(gl_idx0->parent == nullptr);
-//         assert(gl_idx1->parent == nullptr);
-//         assert(gl_idx2->parent == nullptr);
-//         assert(gl_idx3->parent == nullptr);
-//     }
-// }
-
-// void test_a01_sim() {
-//     // Test 1: Immediate solution - single goal with matching fact
-//     // Database: a.
-//     // Goals: :- a.
-//     // Expected: Solution found (unit propagation resolves immediately)
-//     {
-//         trail t;
-//         t.push();
-        
-//         expr_pool ep(t);
-//         bind_map bm(t);
-//         sequencer seq(t);
-//         lineage_pool lp;
-        
-//         database db;
-//         db.push_back(rule{ep.atom("a"), {}});  // Fact: a.
-        
-//         goals goals;
-//         goals.push_back(ep.atom("a"));  // Goal: :- a.
-        
-//         avoidance_store as;
-        
-//         monte_carlo::tree_node<mcts_decider::choice> root;
-//         std::mt19937 rng(42);
-//         monte_carlo::simulation<mcts_decider::choice, std::mt19937> sim(root, 1.414, rng);
-        
-//         resolution_store rs;
-//         decision_store ds;
-//         a01_sim simulation(100, db, goals, t, seq, ep, bm, lp, rs, ds, as, sim);
-        
-//         // Execute simulation
-//         bool result = simulation();
-        
-//         // CRITICAL: Should return true (solution found)
-//         assert(result == true);
-        
-//         // CRITICAL: Goal store is empty (solution_detector check)
-//         assert(simulation.gs.size() == 0);
-        
-//         // CRITICAL: No decisions made (unit propagation only, no dec() calls)
-//         assert(simulation.ds.size() == 0);
-        
-//         // CRITICAL: Resolution store has exactly 1 resolution (the unit propagation)
-//         assert(simulation.rs.size() == 1);
-        
-//         // CRITICAL: Verify exact resolution using lineage_pool
-//         const resolution_lineage* expected_rl = lp.resolution(lp.goal(nullptr, 0), 0);
-//         assert(simulation.rs.count(expected_rl) == 1);
-        
-//         // CRITICAL: Candidate store should be empty (goal resolved)
-//         assert(simulation.cs.size() == 0);
-        
-//         // CRITICAL: Trail still valid after execution
-//         assert(t.depth() > 0);
-        
-//         // CRITICAL: Max resolutions not exceeded
-//         assert(simulation.rs.size() < simulation.max_resolutions);
-//     }
-    
-//     // Test 2: Immediate conflict - no matching rules
-//     // Database: empty
-//     // Goal: :- a.
-//     // Expected: Conflict (no candidates for goal)
-//     {
-//         trail t;
-//         t.push();
-        
-//         expr_pool ep(t);
-//         bind_map bm(t);
-//         sequencer seq(t);
-//         lineage_pool lp;
-        
-//         database db;  // Empty database
-        
-//         goals goals;
-//         goals.push_back(ep.atom("a"));
-        
-//         avoidance_store as;
-        
-//         monte_carlo::tree_node<mcts_decider::choice> root;
-//         std::mt19937 rng(42);
-//         monte_carlo::simulation<mcts_decider::choice, std::mt19937> sim(root, 1.414, rng);
-        
-//         resolution_store rs;
-//         decision_store ds;
-//         a01_sim simulation(100, db, goals, t, seq, ep, bm, lp, rs, ds, as, sim);
-        
-//         bool result = simulation();
-        
-//         // CRITICAL: Should return false (conflict)
-//         assert(result == false);
-        
-//         // CRITICAL: Goal store NOT empty (unresolved goal remains)
-//         assert(simulation.gs.size() == 1);
-        
-//         // CRITICAL: Candidate store empty (no candidates available)
-//         assert(simulation.cs.size() == 0);
-        
-//         // CRITICAL: No resolutions or decisions made
-//         assert(simulation.rs.size() == 0);
-//         assert(simulation.ds.size() == 0);
-//         assert(simulation.rs.size() == 0);
-//     }
-    
-//     // Test 3: Head elimination removes non-unifying candidates
-//     // Database: a., b.
-//     // Goal: :- a.
-//     // Expected: Head elim removes b, then unit prop on a
-//     {
-//         trail t;
-//         t.push();
-        
-//         expr_pool ep(t);
-//         bind_map bm(t);
-//         sequencer seq(t);
-//         lineage_pool lp;
-        
-//         database db;
-//         db.push_back(rule{ep.atom("a"), {}});  // idx 0
-//         db.push_back(rule{ep.atom("b"), {}});  // idx 1
-        
-//         goals goals;
-//         goals.push_back(ep.atom("a"));
-        
-//         avoidance_store as;
-        
-//         monte_carlo::tree_node<mcts_decider::choice> root;
-//         std::mt19937 rng(42);
-//         monte_carlo::simulation<mcts_decider::choice, std::mt19937> sim(root, 1.414, rng);
-        
-//         resolution_store rs;
-//         decision_store ds;
-//         a01_sim simulation(100, db, goals, t, seq, ep, bm, lp, rs, ds, as, sim);
-        
-//         bool result = simulation();
-        
-//         // CRITICAL: Solution found
-//         assert(result == true);
-        
-//         // CRITICAL: Goal store empty
-//         assert(simulation.gs.size() == 0);
-        
-//         // CRITICAL: Exactly 1 resolution (unit prop on a with idx 0)
-//         assert(simulation.rs.size() == 1);
-        
-//         // CRITICAL: Verify exact resolution using lineage_pool
-//         const resolution_lineage* expected_rl = lp.resolution(lp.goal(nullptr, 0), 0);
-//         assert(simulation.rs.count(expected_rl) == 1);
-        
-//         // CRITICAL: No decisions (only unit prop)
-//         assert(simulation.ds.size() == 0);
-        
-//         // Candidate store empty after resolution
-//         assert(simulation.cs.size() == 0);
-//     }
-    
-//     // Test 4: CDCL elimination removes avoided candidates
-//     // Database: a :- b., a :- c., b., c.
-//     // Goal: :- a.
-//     // Avoidance: avoid (gl0, idx 0)
-//     // Expected: CDCL removes idx 0, decision/unit prop on idx 1
-//     {
-//         trail t;
-//         t.push();
-        
-//         expr_pool ep(t);
-//         bind_map bm(t);
-//         sequencer seq(t);
-//         lineage_pool lp;
-        
-//         database db;
-//         db.push_back(rule{ep.atom("a"), {ep.atom("b")}});  // idx 0
-//         db.push_back(rule{ep.atom("a"), {ep.atom("c")}});  // idx 1
-//         db.push_back(rule{ep.atom("b"), {}});  // idx 2
-//         db.push_back(rule{ep.atom("c"), {}});  // idx 3
-        
-//         goals goals;
-//         goals.push_back(ep.atom("a"));
-        
-//         // Pre-populate avoidance: avoid (gl0, idx 0)
-//         const goal_lineage* gl0_avoid = lp.goal(nullptr, 0);
-//         const resolution_lineage* rl0_avoid = lp.resolution(gl0_avoid, 0);
-        
-//         decision_store avoid;
-//         avoid.insert(rl0_avoid);
-        
-//         avoidance_store as;
-//         as.insert(avoid);
-        
-//         monte_carlo::tree_node<mcts_decider::choice> root;
-//         std::mt19937 rng(42);
-//         monte_carlo::simulation<mcts_decider::choice, std::mt19937> sim(root, 1.414, rng);
-        
-//         resolution_store rs;
-//         decision_store ds;
-//         a01_sim simulation(100, db, goals, t, seq, ep, bm, lp, rs, ds, as, sim);
-        
-//         bool result = simulation();
-        
-//         // CRITICAL: Solution found
-//         assert(result == true);
-        
-//         // CRITICAL: Goal store empty
-//         assert(simulation.gs.size() == 0);
-        
-//         // CRITICAL: Exactly 2 resolutions (a with idx 1, then c)
-//         assert(simulation.rs.size() == 2);
-        
-//         // CRITICAL: Verify exact resolutions using lineage_pool
-//         // First resolution: root goal (idx 0) with db rule idx 1
-//         const goal_lineage* gl0 = lp.goal(nullptr, 0);
-//         const resolution_lineage* rl_a = lp.resolution(gl0, 1);
-//         assert(simulation.rs.count(rl_a) == 1);
-        
-//         // Second resolution: child goal (body idx 0 of rl_a) with db rule idx 3
-//         const goal_lineage* gl_c = lp.goal(rl_a, 0);
-//         const resolution_lineage* rl_c = lp.resolution(gl_c, 3);
-//         assert(simulation.rs.count(rl_c) == 1);
-        
-//         // CRITICAL: No decisions (unit propagations)
-//         assert(simulation.ds.size() == 0);
-        
-//         // CRITICAL: Original avoidance store unchanged
-//         assert(as.size() == 1);
-//     }
-    
-//     // Test 5: Unit propagation chain
-//     // Database: a :- b., b :- c., c.
-//     // Goal: :- a.
-//     // Expected: Chain of 3 unit propagations
-//     {
-//         trail t;
-//         t.push();
-        
-//         expr_pool ep(t);
-//         bind_map bm(t);
-//         sequencer seq(t);
-//         lineage_pool lp;
-        
-//         database db;
-//         db.push_back(rule{ep.atom("a"), {ep.atom("b")}});  // idx 0
-//         db.push_back(rule{ep.atom("b"), {ep.atom("c")}});  // idx 1
-//         db.push_back(rule{ep.atom("c"), {}});  // idx 2
-        
-//         goals goals;
-//         goals.push_back(ep.atom("a"));
-        
-//         avoidance_store as;
-        
-//         monte_carlo::tree_node<mcts_decider::choice> root;
-//         std::mt19937 rng(42);
-//         monte_carlo::simulation<mcts_decider::choice, std::mt19937> sim(root, 1.414, rng);
-        
-//         resolution_store rs;
-//         decision_store ds;
-//         a01_sim simulation(100, db, goals, t, seq, ep, bm, lp, rs, ds, as, sim);
-        
-//         bool result = simulation();
-        
-//         // CRITICAL: Solution found
-//         assert(result == true);
-        
-//         // CRITICAL: Exactly 3 resolutions (a, b, c)
-//         assert(simulation.rs.size() == 3);
-        
-//         // CRITICAL: No decisions (all unit propagations)
-//         assert(simulation.ds.size() == 0);
-        
-//         // CRITICAL: Verify exact lineage chain using lineage_pool
-//         // First: root goal (idx 0) with db rule idx 0
-//         const goal_lineage* gl_a = lp.goal(nullptr, 0);
-//         const resolution_lineage* rl_a = lp.resolution(gl_a, 0);
-//         assert(simulation.rs.count(rl_a) == 1);
-        
-//         // Second: child goal (body idx 0 of rl_a) with db rule idx 1
-//         const goal_lineage* gl_b = lp.goal(rl_a, 0);
-//         const resolution_lineage* rl_b = lp.resolution(gl_b, 1);
-//         assert(simulation.rs.count(rl_b) == 1);
-        
-//         // Third: child goal (body idx 0 of rl_b) with db rule idx 2
-//         const goal_lineage* gl_c = lp.goal(rl_b, 0);
-//         const resolution_lineage* rl_c = lp.resolution(gl_c, 2);
-//         assert(simulation.rs.count(rl_c) == 1);
-        
-//         // Goal and candidate stores empty
-//         assert(simulation.gs.size() == 0);
-//         assert(simulation.cs.size() == 0);
-//     }
-    
-//     // Test 6: Single decision made (pre-populated MCTS)
-//     // Database: a :- b., a :- c., b., c.
-//     // Goal: :- a.
-//     // Force decision on (a, idx 1) via MCTS tree
-//     // Expected: Decision on a→c, then unit prop on c
-//     {
-//         trail t;
-//         t.push();
-        
-//         expr_pool ep(t);
-//         bind_map bm(t);
-//         sequencer seq(t);
-//         lineage_pool lp;
-        
-//         database db;
-//         db.push_back(rule{ep.atom("a"), {ep.atom("b")}});  // idx 0
-//         db.push_back(rule{ep.atom("a"), {ep.atom("c")}});  // idx 1
-//         db.push_back(rule{ep.atom("b"), {}});  // idx 2
-//         db.push_back(rule{ep.atom("c"), {}});  // idx 3
-        
-//         goals goals;
-//         goals.push_back(ep.atom("a"));
-        
-//         avoidance_store as;
-        
-//         monte_carlo::tree_node<mcts_decider::choice> root;
-//         std::mt19937 rng(42);
-//         monte_carlo::simulation<mcts_decider::choice, std::mt19937> sim(root, 1.414, rng);
-        
-//         resolution_store rs;
-//         decision_store ds;
-//         a01_sim simulation(100, db, goals, t, seq, ep, bm, lp, rs, ds, as, sim);
-        
-//         // CRITICAL: Pre-populate MCTS tree to force decision on (gl0, idx 1)
-//         // Get the actual goal pointer from simulation.gs
-//         const goal_lineage* gl0_for_mcts = lp.goal(nullptr, 0);
-        
-//         // Force gl0 selection at level 1 (only goal anyway)
-//         root.m_visits = 100;
-//         root.m_children[gl0_for_mcts].m_visits = 50;
-//         root.m_children[gl0_for_mcts].m_value = 100.0;
-        
-//         // Force idx 1 selection at level 2 (using unvisited node)
-//         root.m_children[gl0_for_mcts].m_children[size_t(0)].m_visits = 10;
-//         root.m_children[gl0_for_mcts].m_children[size_t(0)].m_value = 20.0;
-        
-//         root.m_children[gl0_for_mcts].m_children[size_t(1)].m_visits = 0;  // UNVISITED - will be chosen!
-        
-//         bool result = simulation();
-        
-//         // CRITICAL: Solution found
-//         assert(result == true);
-        
-//         // CRITICAL: Exactly 2 resolutions (decision on a→c, unit prop on c)
-//         assert(simulation.rs.size() == 2);
-        
-//         // CRITICAL: Exactly 1 decision
-//         assert(simulation.ds.size() == 1);
-        
-//         // CRITICAL: Verify exact resolutions
-//         // First: decision on root goal (idx 0) with db rule idx 1
-//         const goal_lineage* gl0 = lp.goal(nullptr, 0);
-//         const resolution_lineage* rl_a = lp.resolution(gl0, 1);
-//         assert(simulation.rs.count(rl_a) == 1);
-//         assert(simulation.ds.count(rl_a) == 1);  // This is the decision
-        
-//         // Second: unit prop on child goal (body idx 0 of rl_a) with db rule idx 3
-//         const goal_lineage* gl_c = lp.goal(rl_a, 0);
-//         const resolution_lineage* rl_c = lp.resolution(gl_c, 3);
-//         assert(simulation.rs.count(rl_c) == 1);
-//         assert(simulation.ds.count(rl_c) == 0);  // Not a decision
-        
-//         // CRITICAL: MCTS simulation length is 2 (one decision call = goal + candidate)
-//         assert(sim.length() == 2);
-        
-//         // Stores empty
-//         assert(simulation.gs.size() == 0);
-//         assert(simulation.cs.size() == 0);
-//     }
-    
-//     // Test 7: Decision followed by unit propagation
-//     // Database: a :- b., b.
-//     // Goal: :- a.
-//     // Force decision via MCTS (even though could be unit prop)
-//     {
-//         trail t;
-//         t.push();
-        
-//         expr_pool ep(t);
-//         bind_map bm(t);
-//         sequencer seq(t);
-//         lineage_pool lp;
-        
-//         database db;
-//         db.push_back(rule{ep.atom("a"), {ep.atom("b")}});  // idx 0
-//         db.push_back(rule{ep.atom("b"), {}});  // idx 1
-        
-//         goals goals;
-//         goals.push_back(ep.atom("a"));
-        
-//         avoidance_store as;
-        
-//         monte_carlo::tree_node<mcts_decider::choice> root;
-//         std::mt19937 rng(42);
-//         monte_carlo::simulation<mcts_decider::choice, std::mt19937> sim(root, 1.414, rng);
-        
-//         resolution_store rs;
-//         decision_store ds;
-//         a01_sim simulation(100, db, goals, t, seq, ep, bm, lp, rs, ds, as, sim);
-        
-//         // Note: With only 1 candidate per goal, both will be unit props
-        
-//         bool result = simulation();
-        
-//         // CRITICAL: Solution found
-//         assert(result == true);
-        
-//         // CRITICAL: Exactly 2 resolutions
-//         assert(simulation.rs.size() == 2);
-        
-//         // CRITICAL: Verify exact resolutions
-//         const goal_lineage* gl_a = lp.goal(nullptr, 0);
-//         const resolution_lineage* rl_a = lp.resolution(gl_a, 0);
-//         assert(simulation.rs.count(rl_a) == 1);
-        
-//         const goal_lineage* gl_b = lp.goal(rl_a, 0);
-//         const resolution_lineage* rl_b = lp.resolution(gl_b, 1);
-//         assert(simulation.rs.count(rl_b) == 1);
-        
-//         // CRITICAL: Both are unit propagations (no decisions)
-//         assert(simulation.ds.size() == 0);
-        
-//         // Stores empty
-//         assert(simulation.gs.size() == 0);
-//         assert(simulation.cs.size() == 0);
-//     }
-    
-//     // Test 8: Conflict after multiple resolutions with unsat children
-//     // Database: a :- b., a :- c., b :- d., c :- e.
-//     // Goal: :- a.
-//     // Expected: Decision on a, spawn children, conflict on unsat child
-//     {
-//         trail t;
-//         t.push();
-        
-//         expr_pool ep(t);
-//         bind_map bm(t);
-//         sequencer seq(t);
-//         lineage_pool lp;
-        
-//         database db;
-//         db.push_back(rule{ep.atom("a"), {ep.atom("b")}});  // idx 0
-//         db.push_back(rule{ep.atom("a"), {ep.atom("c")}});  // idx 1
-//         db.push_back(rule{ep.atom("b"), {ep.atom("d")}});  // idx 2
-//         db.push_back(rule{ep.atom("c"), {ep.atom("e")}});  // idx 3
-//         // No rules for d or e
-        
-//         goals goals;
-//         goals.push_back(ep.atom("a"));
-        
-//         avoidance_store as;
-        
-//         monte_carlo::tree_node<mcts_decider::choice> root;
-//         std::mt19937 rng(42);
-//         monte_carlo::simulation<mcts_decider::choice, std::mt19937> sim(root, 1.414, rng);
-        
-//         resolution_store rs;
-//         decision_store ds;
-//         a01_sim simulation(100, db, goals, t, seq, ep, bm, lp, rs, ds, as, sim);
-        
-//         // Pre-populate MCTS to force decision on idx 0
-//         const goal_lineage* gl0_for_mcts = lp.goal(nullptr, 0);
-        
-//         root.m_visits = 100;
-//         root.m_children[gl0_for_mcts].m_visits = 50;
-//         root.m_children[gl0_for_mcts].m_children[size_t(0)].m_visits = 0;  // Force idx 0
-//         root.m_children[gl0_for_mcts].m_children[size_t(1)].m_visits = 10;
-//         root.m_children[gl0_for_mcts].m_children[size_t(1)].m_value = 20.0;
-        
-//         bool result = simulation();
-        
-//         // CRITICAL: Should return false (conflict)
-//         assert(result == false);
-        
-//         // CRITICAL: Exactly 2 resolutions (a→b decision, b→d unit prop)
-//         assert(simulation.rs.size() == 2);
-        
-//         // CRITICAL: Verify exact resolutions
-//         const goal_lineage* gl_a = lp.goal(nullptr, 0);
-//         const resolution_lineage* rl_a = lp.resolution(gl_a, 0);
-//         assert(simulation.rs.count(rl_a) == 1);
-        
-//         const goal_lineage* gl_b = lp.goal(rl_a, 0);
-//         const resolution_lineage* rl_b = lp.resolution(gl_b, 2);
-//         assert(simulation.rs.count(rl_b) == 1);
-        
-//         // CRITICAL: First is decision, second is unit prop
-//         assert(simulation.ds.size() == 1);
-//         assert(simulation.ds.count(rl_a) == 1);
-//         assert(simulation.ds.count(rl_b) == 0);
-        
-//         // CRITICAL: Goal store NOT empty (d is unresolved)
-//         assert(simulation.gs.size() == 1);
-        
-//         // CRITICAL: Conflict detected (d has no candidates)
-//         const goal_lineage* gl_d = lp.goal(rl_b, 0);
-//         assert(simulation.cs.count(gl_d) == 0);
-        
-//         // Verify MCTS was called once
-//         assert(sim.length() == 2);
-//     }
-    
-//     // Test 9: Max resolutions exceeded
-//     // Database: a :- b., b :- c., c :- d., d :- e., e :- f., f :- g., g.
-//     // Goal: :- a.
-//     // max_resolutions = 3
-//     // Expected: Stops after 3 resolutions, returns false
-//     {
-//         trail t;
-//         t.push();
-        
-//         expr_pool ep(t);
-//         bind_map bm(t);
-//         sequencer seq(t);
-//         lineage_pool lp;
-        
-//         database db;
-//         db.push_back(rule{ep.atom("a"), {ep.atom("b")}});
-//         db.push_back(rule{ep.atom("b"), {ep.atom("c")}});
-//         db.push_back(rule{ep.atom("c"), {ep.atom("d")}});
-//         db.push_back(rule{ep.atom("d"), {ep.atom("e")}});
-//         db.push_back(rule{ep.atom("e"), {ep.atom("f")}});
-//         db.push_back(rule{ep.atom("f"), {ep.atom("g")}});
-//         db.push_back(rule{ep.atom("g"), {}});
-        
-//         goals goals;
-//         goals.push_back(ep.atom("a"));
-        
-//         avoidance_store as;
-        
-//         monte_carlo::tree_node<mcts_decider::choice> root;
-//         std::mt19937 rng(42);
-//         monte_carlo::simulation<mcts_decider::choice, std::mt19937> sim(root, 1.414, rng);
-        
-//         resolution_store rs;
-//         decision_store ds;
-//         a01_sim simulation(3, db, goals, t, seq, ep, bm, lp, rs, ds, as, sim);  // Max 3 resolutions!
-        
-//         bool result = simulation();
-        
-//         // CRITICAL: Should return false (max exceeded, not solved)
-//         assert(result == false);
-        
-//         // CRITICAL: Exactly 3 resolutions (limit reached)
-//         assert(simulation.rs.size() == 3);
-        
-//         // CRITICAL: Goal store NOT empty (not all goals resolved)
-//         assert(simulation.gs.size() > 0);
-        
-//         // CRITICAL: No conflict (still have candidates)
-//         // After 3 resolutions: a→b→c→d, so d is in gs and should have candidates
-//         bool has_candidates = false;
-//         for (const auto& [gl, ge] : simulation.gs) {
-//             if (simulation.cs.count(gl) > 0) {
-//                 has_candidates = true;
-//                 break;
-//             }
-//         }
-//         assert(has_candidates == true);
-        
-//         // All 3 resolutions are unit propagations (no decisions made at limit)
-//         assert(simulation.ds.size() == 0);
-        
-//         // CRITICAL: Verify exact resolutions (a, b, c)
-//         const goal_lineage* gl_a = lp.goal(nullptr, 0);
-//         const resolution_lineage* rl_a = lp.resolution(gl_a, 0);
-//         assert(simulation.rs.count(rl_a) == 1);
-        
-//         const goal_lineage* gl_b = lp.goal(rl_a, 0);
-//         const resolution_lineage* rl_b = lp.resolution(gl_b, 1);
-//         assert(simulation.rs.count(rl_b) == 1);
-        
-//         const goal_lineage* gl_c = lp.goal(rl_b, 0);
-//         const resolution_lineage* rl_c = lp.resolution(gl_c, 2);
-//         assert(simulation.rs.count(rl_c) == 1);
-//     }
-    
-//     // Test 10: Fixpoint iteration - multiple head eliminations before decision
-//     // Database: a., b., c., d., e :- f.
-//     // Goal: :- e.
-//     // Expected: Head elim removes a,b,c,d (4 candidates), unit prop on e→f, conflict on f
-//     {
-//         trail t;
-//         t.push();
-        
-//         expr_pool ep(t);
-//         bind_map bm(t);
-//         sequencer seq(t);
-//         lineage_pool lp;
-        
-//         database db;
-//         db.push_back(rule{ep.atom("a"), {}});  // idx 0
-//         db.push_back(rule{ep.atom("b"), {}});  // idx 1
-//         db.push_back(rule{ep.atom("c"), {}});  // idx 2
-//         db.push_back(rule{ep.atom("d"), {}});  // idx 3
-//         db.push_back(rule{ep.atom("e"), {ep.atom("f")}});  // idx 4
-        
-//         goals goals;
-//         goals.push_back(ep.atom("e"));
-        
-//         avoidance_store as;
-        
-//         monte_carlo::tree_node<mcts_decider::choice> root;
-//         std::mt19937 rng(42);
-//         monte_carlo::simulation<mcts_decider::choice, std::mt19937> sim(root, 1.414, rng);
-        
-//         resolution_store rs;
-//         decision_store ds;
-//         a01_sim simulation(100, db, goals, t, seq, ep, bm, lp, rs, ds, as, sim);
-        
-//         // Before execution, verify 5 candidates added
-//         const goal_lineage* gl0_for_check = lp.goal(nullptr, 0);
-//         assert(simulation.cs.count(gl0_for_check) == 5);
-        
-//         bool result = simulation();
-        
-//         // CRITICAL: Should return false (conflict on f)
-//         assert(result == false);
-        
-//         // CRITICAL: Exactly 1 resolution (e→f)
-//         assert(simulation.rs.size() == 1);
-        
-//         // CRITICAL: Verify exact resolution
-//         const goal_lineage* gl_e = lp.goal(nullptr, 0);
-//         const resolution_lineage* rl_e = lp.resolution(gl_e, 4);
-//         assert(simulation.rs.count(rl_e) == 1);
-        
-//         // CRITICAL: No decisions (unit prop)
-//         assert(simulation.ds.size() == 0);
-        
-//         // CRITICAL: Goal store has f (unresolved)
-//         assert(simulation.gs.size() == 1);
-        
-//         const goal_lineage* gl_f = lp.goal(rl_e, 0);
-//         assert(simulation.cs.count(gl_f) == 0);  // No candidates for f
-        
-//         // CRITICAL: Candidate store empty (head elim removed 4, resolution removed 1)
-//         assert(simulation.cs.size() == 0);
-//     }
-    
-//     // Test 11: Avoidance store erasure during resolution
-//     // Database: a :- b., b.
-//     // Goal: :- a.
-//     // Avoidance: {{rl(gl0,0), rl_dummy}}
-//     // Expected: After making rl(gl0,0), it gets erased from avoidance
-//     {
-//         trail t;
-//         t.push();
-        
-//         expr_pool ep(t);
-//         bind_map bm(t);
-//         sequencer seq(t);
-//         lineage_pool lp;
-        
-//         database db;
-//         db.push_back(rule{ep.atom("a"), {ep.atom("b")}});  // idx 0
-//         db.push_back(rule{ep.atom("b"), {}});  // idx 1
-        
-//         goals goals;
-//         goals.push_back(ep.atom("a"));
-        
-//         // Pre-populate avoidance with the future resolution plus a dummy
-//         const goal_lineage* gl0_pre = lp.goal(nullptr, 0);
-//         const resolution_lineage* rl_a0_pre = lp.resolution(gl0_pre, 0);
-        
-//         // Add dummy resolution to keep avoidance non-singleton
-//         const goal_lineage* gl_dummy = lp.goal(nullptr, 99);
-//         const resolution_lineage* rl_dummy = lp.resolution(gl_dummy, 99);
-        
-//         decision_store avoid;
-//         avoid.insert(rl_a0_pre);
-//         avoid.insert(rl_dummy);
-        
-//         avoidance_store as;
-//         as.insert(avoid);
-        
-//         monte_carlo::tree_node<mcts_decider::choice> root;
-//         std::mt19937 rng(42);
-//         monte_carlo::simulation<mcts_decider::choice, std::mt19937> sim(root, 1.414, rng);
-        
-//         resolution_store rs;
-//         decision_store ds;
-//         a01_sim simulation(100, db, goals, t, seq, ep, bm, lp, rs, ds, as, sim);
-        
-//         // Verify avoidance copied
-//         assert(simulation.as_copy.size() == 1);
-        
-//         bool result = simulation();
-        
-//         // CRITICAL: Solution found
-//         assert(result == true);
-        
-//         // CRITICAL: Exactly 2 resolutions (a, b)
-//         assert(simulation.rs.size() == 2);
-        
-//         // CRITICAL: All unit propagations (no decisions)
-//         assert(simulation.ds.size() == 0);
-        
-//         // CRITICAL: Avoidance store modified (rl(gl0,0) erased after resolution)
-//         assert(simulation.as_copy.size() == 1);
-//         const decision_store& remaining = *simulation.as_copy.begin();
-//         assert(remaining.size() == 1);  // Only dummy remains
-//         assert(remaining.count(rl_dummy) == 1);
-//         assert(remaining.count(rl_a0_pre) == 0);  // This was erased
-        
-//         // Stores empty
-//         assert(simulation.gs.size() == 0);
-//         assert(simulation.cs.size() == 0);
-//     }
-    
-//     // Test 12: Mixed decisions and unit propagations (complex)
-//     // Database: a :- b., a :- c., b :- d., c :- e., d., e.
-//     // Goal: :- a.
-//     // Force decision on idx 0 (a→b), then unit prop on d
-//     {
-//         trail t;
-//         t.push();
-        
-//         expr_pool ep(t);
-//         bind_map bm(t);
-//         sequencer seq(t);
-//         lineage_pool lp;
-        
-//         database db;
-//         db.push_back(rule{ep.atom("a"), {ep.atom("b")}});  // idx 0
-//         db.push_back(rule{ep.atom("a"), {ep.atom("c")}});  // idx 1
-//         db.push_back(rule{ep.atom("b"), {ep.atom("d")}});  // idx 2
-//         db.push_back(rule{ep.atom("c"), {ep.atom("e")}});  // idx 3
-//         db.push_back(rule{ep.atom("d"), {}});  // idx 4
-//         db.push_back(rule{ep.atom("e"), {}});  // idx 5
-        
-//         goals goals;
-//         goals.push_back(ep.atom("a"));
-        
-//         avoidance_store as;
-        
-//         monte_carlo::tree_node<mcts_decider::choice> root;
-//         std::mt19937 rng(42);
-//         monte_carlo::simulation<mcts_decider::choice, std::mt19937> sim(root, 1.414, rng);
-        
-//         resolution_store rs;
-//         decision_store ds;
-//         a01_sim simulation(100, db, goals, t, seq, ep, bm, lp, rs, ds, as, sim);
-        
-//         // Pre-populate MCTS to force decision on (gl0, idx 0)
-//         const goal_lineage* gl0_for_mcts = lp.goal(nullptr, 0);
-        
-//         root.m_visits = 100;
-//         root.m_children[gl0_for_mcts].m_visits = 50;
-//         root.m_children[gl0_for_mcts].m_children[size_t(0)].m_visits = 0;  // Force idx 0
-//         root.m_children[gl0_for_mcts].m_children[size_t(1)].m_visits = 10;
-//         root.m_children[gl0_for_mcts].m_children[size_t(1)].m_value = 20.0;
-        
-//         bool result = simulation();
-        
-//         // CRITICAL: Solution found
-//         assert(result == true);
-        
-//         // CRITICAL: Exactly 3 resolutions (a→b decision, b→d unit prop, d unit prop)
-//         assert(simulation.rs.size() == 3);
-        
-//         // CRITICAL: Exactly 1 decision
-//         assert(simulation.ds.size() == 1);
-        
-//         // CRITICAL: ds ⊆ rs (decision store is subset of resolution store)
-//         for (const resolution_lineage* rl : simulation.ds) {
-//             assert(simulation.rs.count(rl) == 1);
-//         }
-        
-//         // CRITICAL: Verify exact resolutions
-//         const goal_lineage* gl_a = lp.goal(nullptr, 0);
-//         const resolution_lineage* rl_a = lp.resolution(gl_a, 0);
-//         assert(simulation.rs.count(rl_a) == 1);
-//         assert(simulation.ds.count(rl_a) == 1);  // Decision
-        
-//         const goal_lineage* gl_b = lp.goal(rl_a, 0);
-//         const resolution_lineage* rl_b = lp.resolution(gl_b, 2);
-//         assert(simulation.rs.count(rl_b) == 1);
-//         assert(simulation.ds.count(rl_b) == 0);  // Unit prop
-        
-//         const goal_lineage* gl_d = lp.goal(rl_b, 0);
-//         const resolution_lineage* rl_d = lp.resolution(gl_d, 4);
-//         assert(simulation.rs.count(rl_d) == 1);
-//         assert(simulation.ds.count(rl_d) == 0);  // Unit prop
-        
-//         // Stores empty
-//         assert(simulation.gs.size() == 0);
-//         assert(simulation.cs.size() == 0);
-//     }
-    
-//     // Test 13: Empty goals - already solved
-//     {
-//         trail t;
-//         t.push();
-        
-//         expr_pool ep(t);
-//         bind_map bm(t);
-//         sequencer seq(t);
-//         lineage_pool lp;
-        
-//         database db;
-//         goals goals;  // Empty - already solved!
-        
-//         avoidance_store as;
-        
-//         monte_carlo::tree_node<mcts_decider::choice> root;
-//         std::mt19937 rng(42);
-//         monte_carlo::simulation<mcts_decider::choice, std::mt19937> sim(root, 1.414, rng);
-        
-//         resolution_store rs;
-//         decision_store ds;
-//         a01_sim simulation(100, db, goals, t, seq, ep, bm, lp, rs, ds, as, sim);
-        
-//         bool result = simulation();
-        
-//         // CRITICAL: Returns true (solution - no goals to resolve)
-//         assert(result == true);
-        
-//         // CRITICAL: No resolutions made
-//         assert(simulation.rs.size() == 0);
-//         assert(simulation.ds.size() == 0);
-        
-//         // CRITICAL: Stores all empty
-//         assert(simulation.gs.size() == 0);
-//         assert(simulation.cs.size() == 0);
-        
-//         // CRITICAL: MCTS never called
-//         assert(sim.length() == 0);
-//     }
-    
-//     // Test 14: Multi-goal resolution with sub-goals
-//     // Database: a :- b, c., b., c.
-//     // Goal: :- a.
-//     // Expected: Unit prop on a spawns b and c, both resolve via unit prop
-//     {
-//         trail t;
-//         t.push();
-        
-//         expr_pool ep(t);
-//         bind_map bm(t);
-//         sequencer seq(t);
-//         lineage_pool lp;
-        
-//         database db;
-//         db.push_back(rule{ep.atom("a"), {ep.atom("b"), ep.atom("c")}});  // idx 0
-//         db.push_back(rule{ep.atom("b"), {}});  // idx 1
-//         db.push_back(rule{ep.atom("c"), {}});  // idx 2
-        
-//         goals goals;
-//         goals.push_back(ep.atom("a"));
-        
-//         avoidance_store as;
-        
-//         monte_carlo::tree_node<mcts_decider::choice> root;
-//         std::mt19937 rng(42);
-//         monte_carlo::simulation<mcts_decider::choice, std::mt19937> sim(root, 1.414, rng);
-        
-//         resolution_store rs;
-//         decision_store ds;
-//         a01_sim simulation(100, db, goals, t, seq, ep, bm, lp, rs, ds, as, sim);
-        
-//         bool result = simulation();
-        
-//         // CRITICAL: Solution found
-//         assert(result == true);
-        
-//         // CRITICAL: Exactly 3 resolutions (a, b, c)
-//         assert(simulation.rs.size() == 3);
-        
-//         // CRITICAL: No decisions (all unit props)
-//         assert(simulation.ds.size() == 0);
-        
-//         // CRITICAL: Verify exact resolutions
-//         const goal_lineage* gl_a = lp.goal(nullptr, 0);
-//         const resolution_lineage* rl_a = lp.resolution(gl_a, 0);
-//         assert(simulation.rs.count(rl_a) == 1);
-        
-//         // b is body index 0, c is body index 1
-//         const goal_lineage* gl_b = lp.goal(rl_a, 0);
-//         const resolution_lineage* rl_b = lp.resolution(gl_b, 1);
-//         assert(simulation.rs.count(rl_b) == 1);
-        
-//         const goal_lineage* gl_c = lp.goal(rl_a, 1);
-//         const resolution_lineage* rl_c = lp.resolution(gl_c, 2);
-//         assert(simulation.rs.count(rl_c) == 1);
-        
-//         // Stores empty
-//         assert(simulation.gs.size() == 0);
-//         assert(simulation.cs.size() == 0);
-//     }
-    
-//     // Test 15: Simple variable unification
-//     // Database: p(X) :- q(X)., q(a).
-//     // Goal: :- p(a).
-//     // Expected: Unify and solve
-//     {
-//         trail t;
-//         t.push();
-        
-//         expr_pool ep(t);
-//         bind_map bm(t);
-//         sequencer seq(t);
-//         lineage_pool lp;
-        
-//         database db;
-//         // p(X) :- q(X).
-//         const expr* X = ep.var(seq());
-//         db.push_back(rule{
-//             ep.cons(ep.atom("p"), X),
-//             {ep.cons(ep.atom("q"), X)}
-//         });
-//         // q(a).
-//         db.push_back(rule{ep.cons(ep.atom("q"), ep.atom("a")), {}});
-        
-//         goals goals;
-//         goals.push_back(ep.cons(ep.atom("p"), ep.atom("a")));  // :- p(a).
-        
-//         avoidance_store as;
-        
-//         monte_carlo::tree_node<mcts_decider::choice> root;
-//         std::mt19937 rng(42);
-//         monte_carlo::simulation<mcts_decider::choice, std::mt19937> sim(root, 1.414, rng);
-        
-//         resolution_store rs;
-//         decision_store ds;
-//         a01_sim simulation(100, db, goals, t, seq, ep, bm, lp, rs, ds, as, sim);
-        
-//         bool result = simulation();
-        
-//         // CRITICAL: Solution found
-//         assert(result == true);
-        
-//         // CRITICAL: Exactly 2 resolutions
-//         assert(simulation.rs.size() == 2);
-        
-//         // CRITICAL: Verify exact resolutions
-//         const goal_lineage* gl_p = lp.goal(nullptr, 0);
-//         const resolution_lineage* rl_p = lp.resolution(gl_p, 0);
-//         assert(simulation.rs.count(rl_p) == 1);
-        
-//         const goal_lineage* gl_q = lp.goal(rl_p, 0);
-//         const resolution_lineage* rl_q = lp.resolution(gl_q, 1);
-//         assert(simulation.rs.count(rl_q) == 1);
-        
-//         // CRITICAL: No decisions
-//         assert(simulation.ds.size() == 0);
-        
-//         // Stores empty
-//         assert(simulation.gs.size() == 0);
-//         assert(simulation.cs.size() == 0);
-//     }
-    
-//     // Test 16: Variable binds to variable
-//     // Database: p(X) :- q(X)., q(Y) :- r(Y)., r(a).
-//     // Goal: :- p(a).
-//     // Expected: Chain of variable unifications
-//     {
-//         trail t;
-//         t.push();
-        
-//         expr_pool ep(t);
-//         bind_map bm(t);
-//         sequencer seq(t);
-//         lineage_pool lp;
-        
-//         database db;
-//         const expr* X = ep.var(seq());
-//         const expr* Y = ep.var(seq());
-        
-//         db.push_back(rule{ep.cons(ep.atom("p"), X), {ep.cons(ep.atom("q"), X)}});
-//         db.push_back(rule{ep.cons(ep.atom("q"), Y), {ep.cons(ep.atom("r"), Y)}});
-//         db.push_back(rule{ep.cons(ep.atom("r"), ep.atom("a")), {}});
-        
-//         goals goals;
-//         goals.push_back(ep.cons(ep.atom("p"), ep.atom("a")));
-        
-//         avoidance_store as;
-        
-//         monte_carlo::tree_node<mcts_decider::choice> root;
-//         std::mt19937 rng(42);
-//         monte_carlo::simulation<mcts_decider::choice, std::mt19937> sim(root, 1.414, rng);
-        
-//         resolution_store rs;
-//         decision_store ds;
-//         a01_sim simulation(100, db, goals, t, seq, ep, bm, lp, rs, ds, as, sim);
-        
-//         bool result = simulation();
-        
-//         // CRITICAL: Solution found
-//         assert(result == true);
-        
-//         // CRITICAL: Exactly 3 resolutions
-//         assert(simulation.rs.size() == 3);
-        
-//         // CRITICAL: Verify exact resolutions
-//         const goal_lineage* gl_p = lp.goal(nullptr, 0);
-//         const resolution_lineage* rl_p = lp.resolution(gl_p, 0);
-//         assert(simulation.rs.count(rl_p) == 1);
-        
-//         const goal_lineage* gl_q = lp.goal(rl_p, 0);
-//         const resolution_lineage* rl_q = lp.resolution(gl_q, 1);
-//         assert(simulation.rs.count(rl_q) == 1);
-        
-//         const goal_lineage* gl_r = lp.goal(rl_q, 0);
-//         const resolution_lineage* rl_r = lp.resolution(gl_r, 2);
-//         assert(simulation.rs.count(rl_r) == 1);
-        
-//         // No decisions
-//         assert(simulation.ds.size() == 0);
-        
-//         // Stores empty
-//         assert(simulation.gs.size() == 0);
-//         assert(simulation.cs.size() == 0);
-//     }
-    
-//     // Test 17: Complex multi-variable with multiple goals
-//     // Database: p(X,Y) :- q(X), r(Y)., q(a)., r(b).
-//     // Goal: :- p(a,b).
-//     // Expected: Resolve p, spawn q(a) and r(b), both resolve
-//     {
-//         trail t;
-//         t.push();
-        
-//         expr_pool ep(t);
-//         bind_map bm(t);
-//         sequencer seq(t);
-//         lineage_pool lp;
-        
-//         database db;
-//         const expr* X = ep.var(seq());
-//         const expr* Y = ep.var(seq());
-        
-//         db.push_back(rule{
-//             ep.cons(ep.atom("p"), ep.cons(X, Y)),
-//             {ep.cons(ep.atom("q"), X), ep.cons(ep.atom("r"), Y)}
-//         });
-//         db.push_back(rule{ep.cons(ep.atom("q"), ep.atom("a")), {}});
-//         db.push_back(rule{ep.cons(ep.atom("r"), ep.atom("b")), {}});
-        
-//         goals goals;
-//         goals.push_back(ep.cons(ep.atom("p"), ep.cons(ep.atom("a"), ep.atom("b"))));
-        
-//         avoidance_store as;
-        
-//         monte_carlo::tree_node<mcts_decider::choice> root;
-//         std::mt19937 rng(42);
-//         monte_carlo::simulation<mcts_decider::choice, std::mt19937> sim(root, 1.414, rng);
-        
-//         resolution_store rs;
-//         decision_store ds;
-//         a01_sim simulation(100, db, goals, t, seq, ep, bm, lp, rs, ds, as, sim);
-        
-//         bool result = simulation();
-        
-//         // CRITICAL: Solution found
-//         assert(result == true);
-        
-//         // CRITICAL: Exactly 3 resolutions
-//         assert(simulation.rs.size() == 3);
-        
-//         // CRITICAL: Verify exact resolutions
-//         const goal_lineage* gl_p = lp.goal(nullptr, 0);
-//         const resolution_lineage* rl_p = lp.resolution(gl_p, 0);
-//         assert(simulation.rs.count(rl_p) == 1);
-        
-//         const goal_lineage* gl_q = lp.goal(rl_p, 0);
-//         const resolution_lineage* rl_q = lp.resolution(gl_q, 1);
-//         assert(simulation.rs.count(rl_q) == 1);
-        
-//         const goal_lineage* gl_r = lp.goal(rl_p, 1);
-//         const resolution_lineage* rl_r = lp.resolution(gl_r, 2);
-//         assert(simulation.rs.count(rl_r) == 1);
-        
-//         // No decisions
-//         assert(simulation.ds.size() == 0);
-        
-//         // Stores empty
-//         assert(simulation.gs.size() == 0);
-//         assert(simulation.cs.size() == 0);
-//     }
-    
-//     // Test 18: Complex nested variables with decisions
-//     // Database: p(X) :- q(X)., p(X) :- r(X)., q(a)., r(b).
-//     // Goal: :- p(a).
-//     // Force decision on idx 0, verify unification
-//     {
-//         trail t;
-//         t.push();
-        
-//         expr_pool ep(t);
-//         bind_map bm(t);
-//         sequencer seq(t);
-//         lineage_pool lp;
-        
-//         database db;
-//         const expr* X1 = ep.var(seq());
-//         const expr* X2 = ep.var(seq());
-        
-//         db.push_back(rule{ep.cons(ep.atom("p"), X1), {ep.cons(ep.atom("q"), X1)}});  // idx 0
-//         db.push_back(rule{ep.cons(ep.atom("p"), X2), {ep.cons(ep.atom("r"), X2)}});  // idx 1
-//         db.push_back(rule{ep.cons(ep.atom("q"), ep.atom("a")), {}});  // idx 2
-//         db.push_back(rule{ep.cons(ep.atom("r"), ep.atom("b")), {}});  // idx 3
-        
-//         goals goals;
-//         goals.push_back(ep.cons(ep.atom("p"), ep.atom("a")));
-        
-//         avoidance_store as;
-        
-//         monte_carlo::tree_node<mcts_decider::choice> root;
-//         std::mt19937 rng(42);
-//         monte_carlo::simulation<mcts_decider::choice, std::mt19937> sim(root, 1.414, rng);
-        
-//         resolution_store rs;
-//         decision_store ds;
-//         a01_sim simulation(100, db, goals, t, seq, ep, bm, lp, rs, ds, as, sim);
-        
-//         // Force decision on idx 0
-//         const goal_lineage* gl0_for_mcts = lp.goal(nullptr, 0);
-        
-//         root.m_visits = 100;
-//         root.m_children[gl0_for_mcts].m_visits = 50;
-//         root.m_children[gl0_for_mcts].m_children[size_t(0)].m_visits = 50;
-//         root.m_children[gl0_for_mcts].m_children[size_t(0)].m_value = 5000.0;  // Massive reward
-//         root.m_children[gl0_for_mcts].m_children[size_t(1)].m_visits = 10;
-//         root.m_children[gl0_for_mcts].m_children[size_t(1)].m_value = 10.0;
-        
-//         bool result = simulation();
-        
-//         // CRITICAL: Solution found
-//         assert(result == true);
-        
-//         // CRITICAL: Exactly 2 resolutions
-//         assert(simulation.rs.size() == 2);
-        
-//         // CRITICAL: Exactly 1 decision
-//         assert(simulation.ds.size() == 1);
-        
-//         // CRITICAL: Verify exact resolutions
-//         const goal_lineage* gl0 = lp.goal(nullptr, 0);
-//         const resolution_lineage* rl_p = lp.resolution(gl0, 0);
-//         assert(simulation.rs.count(rl_p) == 1);
-//         assert(simulation.ds.count(rl_p) == 1);  // Decision
-        
-//         const goal_lineage* gl_q = lp.goal(rl_p, 0);
-//         const resolution_lineage* rl_q = lp.resolution(gl_q, 2);
-//         assert(simulation.rs.count(rl_q) == 1);
-//         assert(simulation.ds.count(rl_q) == 0);  // Unit prop
-        
-//         // Stores empty
-//         assert(simulation.gs.size() == 0);
-//         assert(simulation.cs.size() == 0);
-//     }
-    
-//     // Test 19: Many database entries (20 rules)
-//     {
-//         trail t;
-//         t.push();
-        
-//         expr_pool ep(t);
-//         bind_map bm(t);
-//         sequencer seq(t);
-//         lineage_pool lp;
-        
-//         database db;
-        
-//         // Add 19 non-matching rules
-//         for (int i = 0; i < 19; i++) {
-//             db.push_back(rule{ep.atom("x" + std::to_string(i)), {}});
-//         }
-//         // Add 1 matching rule
-//         db.push_back(rule{ep.atom("target"), {}});  // idx 19
-        
-//         goals goals;
-//         goals.push_back(ep.atom("target"));
-        
-//         avoidance_store as;
-        
-//         monte_carlo::tree_node<mcts_decider::choice> root;
-//         std::mt19937 rng(42);
-//         monte_carlo::simulation<mcts_decider::choice, std::mt19937> sim(root, 1.414, rng);
-        
-//         resolution_store rs;
-//         decision_store ds;
-//         a01_sim simulation(100, db, goals, t, seq, ep, bm, lp, rs, ds, as, sim);
-        
-//         // Initial state: 20 candidates
-//         const goal_lineage* gl0_for_check = lp.goal(nullptr, 0);
-//         assert(simulation.cs.count(gl0_for_check) == 20);
-        
-//         bool result = simulation();
-        
-//         // CRITICAL: Solution found
-//         assert(result == true);
-        
-//         // CRITICAL: Exactly 1 resolution (head elim removes 19, unit prop on idx 19)
-//         assert(simulation.rs.size() == 1);
-        
-//         // CRITICAL: Verify exact resolution
-//         const goal_lineage* gl0 = lp.goal(nullptr, 0);
-//         const resolution_lineage* rl = lp.resolution(gl0, 19);
-//         assert(simulation.rs.count(rl) == 1);
-        
-//         // No decisions
-//         assert(simulation.ds.size() == 0);
-        
-//         // Stores empty
-//         assert(simulation.gs.size() == 0);
-//         assert(simulation.cs.size() == 0);
-//     }
-    
-//     // Test 20: Many goals (10 goals, all solvable)
-//     {
-//         trail t;
-//         t.push();
-        
-//         expr_pool ep(t);
-//         bind_map bm(t);
-//         sequencer seq(t);
-//         lineage_pool lp;
-        
-//         database db;
-//         goals goals;
-        
-//         // Create 10 independent facts and goals
-//         for (int i = 0; i < 10; i++) {
-//             db.push_back(rule{ep.atom("g" + std::to_string(i)), {}});
-//             goals.push_back(ep.atom("g" + std::to_string(i)));
-//         }
-        
-//         avoidance_store as;
-        
-//         monte_carlo::tree_node<mcts_decider::choice> root;
-//         std::mt19937 rng(42);
-//         monte_carlo::simulation<mcts_decider::choice, std::mt19937> sim(root, 1.414, rng);
-        
-//         resolution_store rs;
-//         decision_store ds;
-//         a01_sim simulation(100, db, goals, t, seq, ep, bm, lp, rs, ds, as, sim);
-        
-//         bool result = simulation();
-        
-//         // CRITICAL: Solution found
-//         assert(result == true);
-        
-//         // CRITICAL: Exactly 10 resolutions (one per goal)
-//         assert(simulation.rs.size() == 10);
-        
-//         // CRITICAL: No decisions (all unit props)
-//         assert(simulation.ds.size() == 0);
-        
-//         // CRITICAL: Verify all 10 exact resolutions
-//         for (int i = 0; i < 10; i++) {
-//             const goal_lineage* gl = lp.goal(nullptr, i);
-//             const resolution_lineage* rl = lp.resolution(gl, i);
-//             assert(simulation.rs.count(rl) == 1);
-//         }
-        
-//         // Stores empty
-//         assert(simulation.gs.size() == 0);
-//         assert(simulation.cs.size() == 0);
-//     }
-    
-//     // Test 21: Complex with decisions, unit props, and avoidance erasure
-//     // Database: a :- b., a :- c., b :- d., c., d.
-//     // Goal: :- a.
-//     // Avoidance: {{rl(gl0,0), rl(gl_b,2)}}
-//     // Force decision on idx 1 (a→c), verify avoidance erasure
-//     {
-//         trail t;
-//         t.push();
-        
-//         expr_pool ep(t);
-//         bind_map bm(t);
-//         sequencer seq(t);
-//         lineage_pool lp;
-        
-//         database db;
-//         db.push_back(rule{ep.atom("a"), {ep.atom("b")}});  // idx 0
-//         db.push_back(rule{ep.atom("a"), {ep.atom("c")}});  // idx 1
-//         db.push_back(rule{ep.atom("b"), {ep.atom("d")}});  // idx 2
-//         db.push_back(rule{ep.atom("c"), {}});  // idx 3
-//         db.push_back(rule{ep.atom("d"), {}});  // idx 4
-        
-//         goals goals;
-//         goals.push_back(ep.atom("a"));
-        
-//         // Pre-populate avoidance
-//         const goal_lineage* gl0_pre = lp.goal(nullptr, 0);
-//         const resolution_lineage* rl_a0_pre = lp.resolution(gl0_pre, 0);
-//         const goal_lineage* gl_b_pre = lp.goal(rl_a0_pre, 0);
-//         const resolution_lineage* rl_b_pre = lp.resolution(gl_b_pre, 2);
-        
-//         decision_store avoid;
-//         avoid.insert(rl_a0_pre);
-//         avoid.insert(rl_b_pre);
-        
-//         avoidance_store as;
-//         as.insert(avoid);
-        
-//         monte_carlo::tree_node<mcts_decider::choice> root;
-//         std::mt19937 rng(42);
-//         monte_carlo::simulation<mcts_decider::choice, std::mt19937> sim(root, 1.414, rng);
-        
-//         resolution_store rs;
-//         decision_store ds;
-//         a01_sim simulation(100, db, goals, t, seq, ep, bm, lp, rs, ds, as, sim);
-        
-//         // Force decision on idx 1
-//         const goal_lineage* gl0_for_mcts = lp.goal(nullptr, 0);
-        
-//         root.m_visits = 100;
-//         root.m_children[gl0_for_mcts].m_visits = 50;
-//         root.m_children[gl0_for_mcts].m_children[size_t(0)].m_visits = 10;
-//         root.m_children[gl0_for_mcts].m_children[size_t(0)].m_value = 10.0;
-//         root.m_children[gl0_for_mcts].m_children[size_t(1)].m_visits = 0;  // Force idx 1
-        
-//         bool result = simulation();
-        
-//         // CRITICAL: Solution found
-//         assert(result == true);
-        
-//         // CRITICAL: Exactly 2 resolutions (a→c decision, c unit prop)
-//         assert(simulation.rs.size() == 2);
-        
-//         // CRITICAL: Exactly 1 decision
-//         assert(simulation.ds.size() == 1);
-        
-//         // CRITICAL: Verify exact resolutions
-//         const goal_lineage* gl0 = lp.goal(nullptr, 0);
-//         const resolution_lineage* rl_a = lp.resolution(gl0, 1);
-//         assert(simulation.rs.count(rl_a) == 1);
-//         assert(simulation.ds.count(rl_a) == 1);  // Decision
-        
-//         const goal_lineage* gl_c = lp.goal(rl_a, 0);
-//         const resolution_lineage* rl_c = lp.resolution(gl_c, 3);
-//         assert(simulation.rs.count(rl_c) == 1);
-//         assert(simulation.ds.count(rl_c) == 0);  // Unit prop
-        
-//         // CRITICAL: Avoidance modified (rl_a erased after resolution)
-//         assert(simulation.as_copy.size() == 1);
-//         const decision_store& remaining = *simulation.as_copy.begin();
-//         // After making rl(gl0,1), it should be erased from avoidance
-//         // But our avoidance had rl(gl0,0) and rl(gl_b,2), not rl(gl0,1)
-//         // So avoidance should be unchanged
-//         assert(remaining.size() == 2);
-        
-//         // Stores empty
-//         assert(simulation.gs.size() == 0);
-//         assert(simulation.cs.size() == 0);
-//     }
-    
-//     // Test 22: Conflict with variables - unification fails
-//     // Database: p(a) :- q(b).
-//     // Goal: :- p(a).
-//     // Expected: Spawn q(b), conflict (no rule for q(b))
-//     {
-//         trail t;
-//         t.push();
-        
-//         expr_pool ep(t);
-//         bind_map bm(t);
-//         sequencer seq(t);
-//         lineage_pool lp;
-        
-//         database db;
-//         db.push_back(rule{ep.cons(ep.atom("p"), ep.atom("a")), {ep.cons(ep.atom("q"), ep.atom("b"))}});
-        
-//         goals goals;
-//         goals.push_back(ep.cons(ep.atom("p"), ep.atom("a")));
-        
-//         avoidance_store as;
-        
-//         monte_carlo::tree_node<mcts_decider::choice> root;
-//         std::mt19937 rng(42);
-//         monte_carlo::simulation<mcts_decider::choice, std::mt19937> sim(root, 1.414, rng);
-        
-//         resolution_store rs;
-//         decision_store ds;
-//         a01_sim simulation(100, db, goals, t, seq, ep, bm, lp, rs, ds, as, sim);
-        
-//         bool result = simulation();
-        
-//         // CRITICAL: Conflict detected
-//         assert(result == false);
-        
-//         // CRITICAL: Exactly 1 resolution (p(a)→q(b))
-//         assert(simulation.rs.size() == 1);
-        
-//         // CRITICAL: Verify exact resolution
-//         const goal_lineage* gl_p = lp.goal(nullptr, 0);
-//         const resolution_lineage* rl = lp.resolution(gl_p, 0);
-//         assert(simulation.rs.count(rl) == 1);
-        
-//         // CRITICAL: No decisions (unit prop)
-//         assert(simulation.ds.size() == 0);
-        
-//         // CRITICAL: Goal store has q(b) unresolved
-//         assert(simulation.gs.size() == 1);
-        
-//         const goal_lineage* gl_q = lp.goal(rl, 0);
-//         assert(simulation.cs.count(gl_q) == 0);
-//     }
-    
-//     // Test 23: Multiple decisions with pre-populated MCTS
-//     // Database: a :- b., a :- c., b :- d., b :- e., c., d., e.
-//     // Goal: :- a.
-//     // Force decision on (a, idx 0), then decision on (b, idx 3)
-//     {
-//         trail t;
-//         t.push();
-        
-//         expr_pool ep(t);
-//         bind_map bm(t);
-//         sequencer seq(t);
-//         lineage_pool lp;
-        
-//         database db;
-//         db.push_back(rule{ep.atom("a"), {ep.atom("b")}});  // idx 0
-//         db.push_back(rule{ep.atom("a"), {ep.atom("c")}});  // idx 1
-//         db.push_back(rule{ep.atom("b"), {ep.atom("d")}});  // idx 2
-//         db.push_back(rule{ep.atom("b"), {ep.atom("e")}});  // idx 3
-//         db.push_back(rule{ep.atom("c"), {}});  // idx 4
-//         db.push_back(rule{ep.atom("d"), {}});  // idx 5
-//         db.push_back(rule{ep.atom("e"), {}});  // idx 6
-        
-//         goals goals;
-//         goals.push_back(ep.atom("a"));
-        
-//         avoidance_store as;
-        
-//         monte_carlo::tree_node<mcts_decider::choice> root;
-//         std::mt19937 rng(42);
-//         monte_carlo::simulation<mcts_decider::choice, std::mt19937> sim(root, 1.414, rng);
-        
-//         resolution_store rs;
-//         decision_store ds;
-//         a01_sim simulation(100, db, goals, t, seq, ep, bm, lp, rs, ds, as, sim);
-        
-//         // Force first decision on (gl0, idx 0)
-//         const goal_lineage* gl0_for_mcts = lp.goal(nullptr, 0);
-        
-//         root.m_visits = 100;
-//         root.m_children[gl0_for_mcts].m_visits = 50;
-//         root.m_children[gl0_for_mcts].m_children[size_t(0)].m_visits = 0;  // Force idx 0
-//         root.m_children[gl0_for_mcts].m_children[size_t(1)].m_visits = 10;
-//         root.m_children[gl0_for_mcts].m_children[size_t(1)].m_value = 10.0;
-        
-//         // After first decision, need to pre-populate for second decision
-//         // gl_b will be created during simulation, can't pre-populate here
-//         // Just verify result
-        
-//         bool result = simulation();
-        
-//         // CRITICAL: Solution found
-//         assert(result == true);
-        
-//         // CRITICAL: Exactly 3 resolutions (a→b decision, b→? decision, ? unit prop)
-//         assert(simulation.rs.size() == 3);
-        
-//         // CRITICAL: Exactly 2 decisions (a and b both have 2 candidates)
-//         assert(simulation.ds.size() == 2);
-        
-//         // CRITICAL: Verify first decision (a with idx 0)
-//         const goal_lineage* gl_a = lp.goal(nullptr, 0);
-//         const resolution_lineage* rl_a = lp.resolution(gl_a, 0);
-//         assert(simulation.rs.count(rl_a) == 1);
-//         assert(simulation.ds.count(rl_a) == 1);
-        
-//         // CRITICAL: ds ⊆ rs
-//         for (const resolution_lineage* rl : simulation.ds) {
-//             assert(simulation.rs.count(rl) == 1);
-//         }
-        
-//         // Stores empty
-//         assert(simulation.gs.size() == 0);
-//         assert(simulation.cs.size() == 0);
-//     }
-    
-//     // Test 24: Complex variable scenario with list structures
-//     // Database: append(nil, X, X)., append(cons(H,T), X, cons(H,R)) :- append(T, X, R).
-//     // Goal: :- append(cons(a,nil), cons(b,nil), cons(a,cons(b,nil))).
-//     // Expected: Resolution with recursive rule
-//     {
-//         trail t;
-//         t.push();
-        
-//         expr_pool ep(t);
-//         bind_map bm(t);
-//         sequencer seq(t);
-//         lineage_pool lp;
-        
-//         database db;
-        
-//         // append(nil, X, X).
-//         const expr* X1 = ep.var(seq());
-//         db.push_back(rule{
-//             ep.cons(ep.atom("append"), ep.cons(ep.atom("nil"), ep.cons(X1, X1))),
-//             {}
-//         });
-        
-//         // append(cons(H,T), X, cons(H,R)) :- append(T, X, R).
-//         const expr* H = ep.var(seq());
-//         const expr* T = ep.var(seq());
-//         const expr* X2 = ep.var(seq());
-//         const expr* R = ep.var(seq());
-        
-//         db.push_back(rule{
-//             ep.cons(ep.atom("append"), ep.cons(
-//                 ep.cons(ep.atom("cons"), ep.cons(H, T)),
-//                 ep.cons(X2, ep.cons(ep.atom("cons"), ep.cons(H, R)))
-//             )),
-//             {ep.cons(ep.atom("append"), ep.cons(T, ep.cons(X2, R)))}
-//         });
-        
-//         goals goals;
-//         goals.push_back(ep.cons(ep.atom("append"), ep.cons(
-//             ep.cons(ep.atom("cons"), ep.cons(ep.atom("a"), ep.atom("nil"))),
-//             ep.cons(ep.cons(ep.atom("cons"), ep.cons(ep.atom("b"), ep.atom("nil"))),
-//                     ep.cons(ep.atom("cons"), ep.cons(ep.atom("a"), ep.cons(ep.atom("cons"), ep.cons(ep.atom("b"), ep.atom("nil"))))))
-//         )));
-        
-//         avoidance_store as;
-        
-//         monte_carlo::tree_node<mcts_decider::choice> root;
-//         std::mt19937 rng(42);
-//         monte_carlo::simulation<mcts_decider::choice, std::mt19937> sim(root, 1.414, rng);
-        
-//         resolution_store rs;
-//         decision_store ds;
-//         a01_sim simulation(100, db, goals, t, seq, ep, bm, lp, rs, ds, as, sim);
-        
-//         bool result = simulation();
-        
-//         // CRITICAL: Solution found
-//         assert(result == true);
-        
-//         // CRITICAL: Exactly 2 resolutions (recursive case, base case)
-//         assert(simulation.rs.size() == 2);
-        
-//         // CRITICAL: Verify exact resolutions
-//         const goal_lineage* gl_append1 = lp.goal(nullptr, 0);
-//         const resolution_lineage* rl_recursive = lp.resolution(gl_append1, 1);
-//         assert(simulation.rs.count(rl_recursive) == 1);
-        
-//         const goal_lineage* gl_append2 = lp.goal(rl_recursive, 0);
-//         const resolution_lineage* rl_base = lp.resolution(gl_append2, 0);
-//         assert(simulation.rs.count(rl_base) == 1);
-        
-//         // No decisions (both unit props after head elim)
-//         assert(simulation.ds.size() == 0);
-        
-//         // Stores empty
-//         assert(simulation.gs.size() == 0);
-//         assert(simulation.cs.size() == 0);
-//     }
-    
-//     // Test 25: Large complex problem with 30 rules and multiple goals
-//     {
-//         trail t;
-//         t.push();
-        
-//         expr_pool ep(t);
-//         bind_map bm(t);
-//         sequencer seq(t);
-//         lineage_pool lp;
-        
-//         database db;
-        
-//         // Create a complex dependency graph
-//         // 30 rules total
-//         for (int i = 0; i < 10; i++) {
-//             db.push_back(rule{ep.atom("noise" + std::to_string(i)), {}});
-//         }
-        
-//         // Main rules: p :- q, r., q., r.
-//         db.push_back(rule{ep.atom("p"), {ep.atom("q"), ep.atom("r")}});
-//         db.push_back(rule{ep.atom("q"), {}});
-//         db.push_back(rule{ep.atom("r"), {}});
-        
-//         // More noise
-//         for (int i = 10; i < 27; i++) {
-//             db.push_back(rule{ep.atom("noise" + std::to_string(i)), {}});
-//         }
-        
-//         goals goals;
-//         goals.push_back(ep.atom("p"));
-        
-//         avoidance_store as;
-        
-//         monte_carlo::tree_node<mcts_decider::choice> root;
-//         std::mt19937 rng(42);
-//         monte_carlo::simulation<mcts_decider::choice, std::mt19937> sim(root, 1.414, rng);
-        
-//         resolution_store rs;
-//         decision_store ds;
-//         a01_sim simulation(100, db, goals, t, seq, ep, bm, lp, rs, ds, as, sim);
-        
-//         // Verify 30 candidates initially
-//         const goal_lineage* gl0 = lp.goal(nullptr, 0);
-//         assert(simulation.cs.count(gl0) == 30);
-        
-//         bool result = simulation();
-        
-//         // CRITICAL: Solution found
-//         assert(result == true);
-        
-//         // CRITICAL: Exactly 3 resolutions (p, q, r)
-//         assert(simulation.rs.size() == 3);
-        
-//         // No decisions (all unit props after massive head elimination)
-//         assert(simulation.ds.size() == 0);
-        
-//         // CRITICAL: Verify exact resolutions (should be db indices 10, 11, 12)
-//         const goal_lineage* gl_p = lp.goal(nullptr, 0);
-//         const resolution_lineage* rl_p = lp.resolution(gl_p, 10);
-//         assert(simulation.rs.count(rl_p) == 1);
-        
-//         const goal_lineage* gl_q = lp.goal(rl_p, 0);
-//         const resolution_lineage* rl_q = lp.resolution(gl_q, 11);
-//         assert(simulation.rs.count(rl_q) == 1);
-        
-//         const goal_lineage* gl_r = lp.goal(rl_p, 1);
-//         const resolution_lineage* rl_r = lp.resolution(gl_r, 12);
-//         assert(simulation.rs.count(rl_r) == 1);
-        
-//         // Stores empty
-//         assert(simulation.gs.size() == 0);
-//         assert(simulation.cs.size() == 0);
-//     }
-    
-//     // ========== TESTS WITH VARIABLES IN GOALS ==========
-    
-//     // Test 26: Single variable in goal binds to atom
-//     // Database: p(a)., p(b).
-//     // Goal: :- p(X).
-//     // Expected: X binds to a (forced by MCTS to choose idx 0)
-//     {
-//         trail t;
-//         t.push();
-        
-//         expr_pool ep(t);
-//         bind_map bm(t);
-//         sequencer seq(t);
-//         lineage_pool lp;
-        
-//         database db;
-//         db.push_back(rule{ep.cons(ep.atom("p"), ep.atom("a")), {}});  // idx 0
-//         db.push_back(rule{ep.cons(ep.atom("p"), ep.atom("b")), {}});  // idx 1
-        
-//         goals goals;
-//         const expr* X = ep.var(seq());
-//         goals.push_back(ep.cons(ep.atom("p"), X));
-        
-//         avoidance_store as;
-        
-//         monte_carlo::tree_node<mcts_decider::choice> root;
-//         std::mt19937 rng(42);
-//         monte_carlo::simulation<mcts_decider::choice, std::mt19937> sim(root, 1.414, rng);
-        
-//         resolution_store rs;
-//         decision_store ds;
-//         a01_sim simulation(100, db, goals, t, seq, ep, bm, lp, rs, ds, as, sim);
-        
-//         // Pre-populate MCTS to force decision on idx 0
-//         const goal_lineage* gl0_for_mcts = lp.goal(nullptr, 0);
-//         root.m_visits = 100;
-//         root.m_children[gl0_for_mcts].m_visits = 50;
-//         root.m_children[gl0_for_mcts].m_children[size_t(0)].m_visits = 0;  // Force idx 0
-//         root.m_children[gl0_for_mcts].m_children[size_t(1)].m_visits = 10;
-//         root.m_children[gl0_for_mcts].m_children[size_t(1)].m_value = 10.0;
-        
-//         bool result = simulation();
-        
-//         // CRITICAL: Solution found
-//         assert(result == true);
-        
-//         // CRITICAL: Exactly 1 resolution
-//         assert(simulation.rs.size() == 1);
-        
-//         // CRITICAL: Exactly 1 decision
-//         assert(simulation.ds.size() == 1);
-        
-//         // CRITICAL: Verify exact resolution
-//         const goal_lineage* gl0 = lp.goal(nullptr, 0);
-//         const resolution_lineage* rl0 = lp.resolution(gl0, 0);
-//         assert(simulation.rs.count(rl0) == 1);
-//         assert(simulation.ds.count(rl0) == 1);
-        
-//         // CRITICAL: Verify X binds to exactly 'a'
-//         normalizer norm(ep, bm);
-//         const expr* X_normalized = norm(X);
-//         assert(X_normalized == ep.atom("a"));
-//     }
-    
-//     // Test 27: Variable binds to compound term
-//     // Database: q(cons(a,nil)).
-//     // Goal: :- q(X).
-//     // Expected: X binds to cons(a,nil)
-//     {
-//         trail t;
-//         t.push();
-        
-//         expr_pool ep(t);
-//         bind_map bm(t);
-//         sequencer seq(t);
-//         lineage_pool lp;
-        
-//         database db;
-//         const expr* cons_a_nil = ep.cons(ep.atom("cons"), ep.cons(ep.atom("a"), ep.atom("nil")));
-//         db.push_back(rule{ep.cons(ep.atom("q"), cons_a_nil), {}});  // idx 0
-        
-//         goals goals;
-//         const expr* X = ep.var(seq());
-//         goals.push_back(ep.cons(ep.atom("q"), X));
-        
-//         avoidance_store as;
-        
-//         monte_carlo::tree_node<mcts_decider::choice> root;
-//         std::mt19937 rng(42);
-//         monte_carlo::simulation<mcts_decider::choice, std::mt19937> sim(root, 1.414, rng);
-        
-//         resolution_store rs;
-//         decision_store ds;
-//         a01_sim simulation(100, db, goals, t, seq, ep, bm, lp, rs, ds, as, sim);
-        
-//         bool result = simulation();
-        
-//         // CRITICAL: Solution found
-//         assert(result == true);
-        
-//         // CRITICAL: X binds to cons(a,nil)
-//         normalizer norm(ep, bm);
-//         const expr* X_normalized = norm(X);
-//         assert(X_normalized == cons_a_nil);
-//     }
-    
-//     // Test 28: Multiple variables in single goal
-//     // Database: pair(a,b).
-//     // Goal: :- pair(X,Y).
-//     // Expected: X binds to a, Y binds to b
-//     {
-//         trail t;
-//         t.push();
-        
-//         expr_pool ep(t);
-//         bind_map bm(t);
-//         sequencer seq(t);
-//         lineage_pool lp;
-        
-//         database db;
-//         const expr* pair_a_b = ep.cons(ep.atom("pair"), ep.cons(ep.atom("a"), ep.atom("b")));
-//         db.push_back(rule{pair_a_b, {}});  // idx 0
-        
-//         goals goals;
-//         const expr* X = ep.var(seq());
-//         const expr* Y = ep.var(seq());
-//         const expr* pair_X_Y = ep.cons(ep.atom("pair"), ep.cons(X, Y));
-//         goals.push_back(pair_X_Y);
-        
-//         avoidance_store as;
-        
-//         monte_carlo::tree_node<mcts_decider::choice> root;
-//         std::mt19937 rng(42);
-//         monte_carlo::simulation<mcts_decider::choice, std::mt19937> sim(root, 1.414, rng);
-        
-//         resolution_store rs;
-//         decision_store ds;
-//         a01_sim simulation(100, db, goals, t, seq, ep, bm, lp, rs, ds, as, sim);
-        
-//         bool result = simulation();
-        
-//         // CRITICAL: Solution found
-//         assert(result == true);
-        
-//         // CRITICAL: Verify X and Y bindings
-//         normalizer norm(ep, bm);
-//         const expr* X_normalized = norm(X);
-//         const expr* Y_normalized = norm(Y);
-//         assert(X_normalized == ep.atom("a"));
-//         assert(Y_normalized == ep.atom("b"));
-//     }
-    
-//     // Test 29: Variable binds through rule chain
-//     // Database: p(X) :- q(X)., q(hello).
-//     // Goal: :- p(Y).
-//     // Expected: Y binds to hello
-//     {
-//         trail t;
-//         t.push();
-        
-//         expr_pool ep(t);
-//         bind_map bm(t);
-//         sequencer seq(t);
-//         lineage_pool lp;
-        
-//         database db;
-//         const expr* X_rule = ep.var(seq());
-//         db.push_back(rule{ep.cons(ep.atom("p"), X_rule), {ep.cons(ep.atom("q"), X_rule)}});  // idx 0
-//         db.push_back(rule{ep.cons(ep.atom("q"), ep.atom("hello")), {}});  // idx 1
-        
-//         goals goals;
-//         const expr* Y_goal = ep.var(seq());
-//         goals.push_back(ep.cons(ep.atom("p"), Y_goal));
-        
-//         avoidance_store as;
-        
-//         monte_carlo::tree_node<mcts_decider::choice> root;
-//         std::mt19937 rng(42);
-//         monte_carlo::simulation<mcts_decider::choice, std::mt19937> sim(root, 1.414, rng);
-        
-//         resolution_store rs;
-//         decision_store ds;
-//         a01_sim simulation(100, db, goals, t, seq, ep, bm, lp, rs, ds, as, sim);
-        
-//         bool result = simulation();
-        
-//         // CRITICAL: Solution found
-//         assert(result == true);
-        
-//         // CRITICAL: Verify Y binds to hello through chain
-//         normalizer norm(ep, bm);
-//         const expr* Y_normalized = norm(Y_goal);
-//         assert(Y_normalized == ep.atom("hello"));
-//     }
-    
-//     // Test 30: Two starting goals with variables
-//     // Database: p(a)., q(b).
-//     // Goals: :- p(X), q(Y).
-//     // Expected: X binds to a, Y binds to b
-//     {
-//         trail t;
-//         t.push();
-        
-//         expr_pool ep(t);
-//         bind_map bm(t);
-//         sequencer seq(t);
-//         lineage_pool lp;
-        
-//         database db;
-//         db.push_back(rule{ep.cons(ep.atom("p"), ep.atom("a")), {}});  // idx 0
-//         db.push_back(rule{ep.cons(ep.atom("q"), ep.atom("b")), {}});  // idx 1
-        
-//         goals goals;
-//         const expr* X = ep.var(seq());
-//         const expr* Y = ep.var(seq());
-//         goals.push_back(ep.cons(ep.atom("p"), X));
-//         goals.push_back(ep.cons(ep.atom("q"), Y));
-        
-//         avoidance_store as;
-        
-//         monte_carlo::tree_node<mcts_decider::choice> root;
-//         std::mt19937 rng(42);
-//         monte_carlo::simulation<mcts_decider::choice, std::mt19937> sim(root, 1.414, rng);
-        
-//         resolution_store rs;
-//         decision_store ds;
-//         a01_sim simulation(100, db, goals, t, seq, ep, bm, lp, rs, ds, as, sim);
-        
-//         bool result = simulation();
-        
-//         // CRITICAL: Solution found
-//         assert(result == true);
-        
-//         // CRITICAL: 2 resolutions (one per goal)
-//         assert(simulation.rs.size() == 2);
-        
-//         // CRITICAL: Verify exact resolutions
-//         const goal_lineage* gl_p = lp.goal(nullptr, 0);
-//         const resolution_lineage* rl_p = lp.resolution(gl_p, 0);
-//         assert(simulation.rs.count(rl_p) == 1);
-        
-//         const goal_lineage* gl_q = lp.goal(nullptr, 1);
-//         const resolution_lineage* rl_q = lp.resolution(gl_q, 1);
-//         assert(simulation.rs.count(rl_q) == 1);
-        
-//         // CRITICAL: No decisions (both unit props)
-//         assert(simulation.ds.size() == 0);
-        
-//         // CRITICAL: Verify both variable bindings
-//         normalizer norm(ep, bm);
-//         const expr* X_normalized = norm(X);
-//         const expr* Y_normalized = norm(Y);
-//         assert(X_normalized == ep.atom("a"));
-//         assert(Y_normalized == ep.atom("b"));
-//     }
-    
-//     // Test 31: Three starting goals with shared variable
-//     // Database: p(a)., q(a)., r(a).
-//     // Goals: :- p(X), q(X), r(X).
-//     // Expected: X binds to a (unifies across all three)
-//     {
-//         trail t;
-//         t.push();
-        
-//         expr_pool ep(t);
-//         bind_map bm(t);
-//         sequencer seq(t);
-//         lineage_pool lp;
-        
-//         database db;
-//         db.push_back(rule{ep.cons(ep.atom("p"), ep.atom("a")), {}});  // idx 0
-//         db.push_back(rule{ep.cons(ep.atom("q"), ep.atom("a")), {}});  // idx 1
-//         db.push_back(rule{ep.cons(ep.atom("r"), ep.atom("a")), {}});  // idx 2
-        
-//         goals goals;
-//         const expr* X = ep.var(seq());
-//         goals.push_back(ep.cons(ep.atom("p"), X));
-//         goals.push_back(ep.cons(ep.atom("q"), X));
-//         goals.push_back(ep.cons(ep.atom("r"), X));
-        
-//         avoidance_store as;
-        
-//         monte_carlo::tree_node<mcts_decider::choice> root;
-//         std::mt19937 rng(42);
-//         monte_carlo::simulation<mcts_decider::choice, std::mt19937> sim(root, 1.414, rng);
-        
-//         resolution_store rs;
-//         decision_store ds;
-//         a01_sim simulation(100, db, goals, t, seq, ep, bm, lp, rs, ds, as, sim);
-        
-//         bool result = simulation();
-        
-//         // CRITICAL: Solution found
-//         assert(result == true);
-        
-//         // CRITICAL: 3 resolutions
-//         assert(simulation.rs.size() == 3);
-        
-//         // CRITICAL: Verify exact lineages for all 3 resolutions
-//         const goal_lineage* gl_p = lp.goal(nullptr, 0);
-//         const resolution_lineage* rl_p = lp.resolution(gl_p, 0);
-//         assert(simulation.rs.count(rl_p) == 1);
-        
-//         const goal_lineage* gl_q = lp.goal(nullptr, 1);
-//         const resolution_lineage* rl_q = lp.resolution(gl_q, 1);
-//         assert(simulation.rs.count(rl_q) == 1);
-        
-//         const goal_lineage* gl_r = lp.goal(nullptr, 2);
-//         const resolution_lineage* rl_r = lp.resolution(gl_r, 2);
-//         assert(simulation.rs.count(rl_r) == 1);
-        
-//         // CRITICAL: No decisions (all unit props)
-//         assert(simulation.ds.size() == 0);
-        
-//         // CRITICAL: MCTS never called
-//         assert(sim.length() == 0);
-        
-//         // CRITICAL: X binds to a
-//         normalizer norm(ep, bm);
-//         const expr* X_normalized = norm(X);
-//         assert(X_normalized == ep.atom("a"));
-//     }
-    
-//     // Test 32: Multiple goals with dependent variables
-//     // Database: f(a,b)., g(b,c).
-//     // Goals: :- f(X,Y), g(Y,Z).
-//     // Expected: X=a, Y=b, Z=c (Y is shared and must unify)
-//     {
-//         trail t;
-//         t.push();
-        
-//         expr_pool ep(t);
-//         bind_map bm(t);
-//         sequencer seq(t);
-//         lineage_pool lp;
-        
-//         database db;
-//         const expr* f_a_b = ep.cons(ep.atom("f"), ep.cons(ep.atom("a"), ep.atom("b")));
-//         const expr* g_b_c = ep.cons(ep.atom("g"), ep.cons(ep.atom("b"), ep.atom("c")));
-//         db.push_back(rule{f_a_b, {}});  // idx 0
-//         db.push_back(rule{g_b_c, {}});  // idx 1
-        
-//         goals goals;
-//         const expr* X = ep.var(seq());
-//         const expr* Y = ep.var(seq());
-//         const expr* Z = ep.var(seq());
-//         goals.push_back(ep.cons(ep.atom("f"), ep.cons(X, Y)));
-//         goals.push_back(ep.cons(ep.atom("g"), ep.cons(Y, Z)));
-        
-//         avoidance_store as;
-        
-//         monte_carlo::tree_node<mcts_decider::choice> root;
-//         std::mt19937 rng(42);
-//         monte_carlo::simulation<mcts_decider::choice, std::mt19937> sim(root, 1.414, rng);
-        
-//         resolution_store rs;
-//         decision_store ds;
-//         a01_sim simulation(100, db, goals, t, seq, ep, bm, lp, rs, ds, as, sim);
-        
-//         bool result = simulation();
-        
-//         // CRITICAL: Solution found
-//         assert(result == true);
-        
-//         // CRITICAL: Exactly 2 resolutions
-//         assert(simulation.rs.size() == 2);
-        
-//         // CRITICAL: Verify exact lineages
-//         const goal_lineage* gl_f = lp.goal(nullptr, 0);
-//         const resolution_lineage* rl_f = lp.resolution(gl_f, 0);
-//         assert(simulation.rs.count(rl_f) == 1);
-        
-//         const goal_lineage* gl_g = lp.goal(nullptr, 1);
-//         const resolution_lineage* rl_g = lp.resolution(gl_g, 1);
-//         assert(simulation.rs.count(rl_g) == 1);
-        
-//         // CRITICAL: No decisions (both unit props)
-//         assert(simulation.ds.size() == 0);
-        
-//         // CRITICAL: MCTS never called
-//         assert(sim.length() == 0);
-        
-//         // CRITICAL: Verify all three variables
-//         normalizer norm(ep, bm);
-//         const expr* X_normalized = norm(X);
-//         const expr* Y_normalized = norm(Y);
-//         const expr* Z_normalized = norm(Z);
-//         assert(X_normalized == ep.atom("a"));
-//         assert(Y_normalized == ep.atom("b"));
-//         assert(Z_normalized == ep.atom("c"));
-//     }
-    
-//     // Test 33: Variable binds to complex nested structure
-//     // Database: tree(node(leaf(1), leaf(2))).
-//     // Goal: :- tree(X).
-//     // Expected: X binds to node(leaf(1), leaf(2))
-//     {
-//         trail t;
-//         t.push();
-        
-//         expr_pool ep(t);
-//         bind_map bm(t);
-//         sequencer seq(t);
-//         lineage_pool lp;
-        
-//         database db;
-//         const expr* leaf1 = ep.cons(ep.atom("leaf"), ep.atom("1"));
-//         const expr* leaf2 = ep.cons(ep.atom("leaf"), ep.atom("2"));
-//         const expr* node = ep.cons(ep.atom("node"), ep.cons(leaf1, leaf2));
-//         const expr* tree = ep.cons(ep.atom("tree"), node);
-//         db.push_back(rule{tree, {}});  // idx 0
-        
-//         goals goals;
-//         const expr* X = ep.var(seq());
-//         goals.push_back(ep.cons(ep.atom("tree"), X));
-        
-//         avoidance_store as;
-        
-//         monte_carlo::tree_node<mcts_decider::choice> root;
-//         std::mt19937 rng(42);
-//         monte_carlo::simulation<mcts_decider::choice, std::mt19937> sim(root, 1.414, rng);
-        
-//         resolution_store rs;
-//         decision_store ds;
-//         a01_sim simulation(100, db, goals, t, seq, ep, bm, lp, rs, ds, as, sim);
-        
-//         bool result = simulation();
-        
-//         // CRITICAL: Solution found
-//         assert(result == true);
-        
-//         // CRITICAL: X binds to the nested structure
-//         normalizer norm(ep, bm);
-//         const expr* X_normalized = norm(X);
-//         assert(X_normalized == node);
-//     }
-    
-//     // Test 34: Multiple goals with rules spawning sub-goals with variables
-//     // Database: p(X) :- q(X)., q(Y) :- r(Y)., r(hello).
-//     // Goals: :- p(A), p(B).
-//     // Expected: A=hello, B=hello
-//     {
-//         trail t;
-//         t.push();
-        
-//         expr_pool ep(t);
-//         bind_map bm(t);
-//         sequencer seq(t);
-//         lineage_pool lp;
-        
-//         database db;
-//         const expr* X = ep.var(seq());
-//         const expr* Y = ep.var(seq());
-//         db.push_back(rule{ep.cons(ep.atom("p"), X), {ep.cons(ep.atom("q"), X)}});  // idx 0
-//         db.push_back(rule{ep.cons(ep.atom("q"), Y), {ep.cons(ep.atom("r"), Y)}});  // idx 1
-//         db.push_back(rule{ep.cons(ep.atom("r"), ep.atom("hello")), {}});  // idx 2
-        
-//         goals goals;
-//         const expr* A = ep.var(seq());
-//         const expr* B = ep.var(seq());
-//         goals.push_back(ep.cons(ep.atom("p"), A));
-//         goals.push_back(ep.cons(ep.atom("p"), B));
-        
-//         avoidance_store as;
-        
-//         monte_carlo::tree_node<mcts_decider::choice> root;
-//         std::mt19937 rng(42);
-//         monte_carlo::simulation<mcts_decider::choice, std::mt19937> sim(root, 1.414, rng);
-        
-//         resolution_store rs;
-//         decision_store ds;
-//         a01_sim simulation(100, db, goals, t, seq, ep, bm, lp, rs, ds, as, sim);
-        
-//         bool result = simulation();
-        
-//         // CRITICAL: Solution found
-//         assert(result == true);
-        
-//         // CRITICAL: 6 resolutions (p(A), q(...), r(...), p(B), q(...), r(...))
-//         assert(simulation.rs.size() == 6);
-        
-//         // CRITICAL: Verify exact lineages for first chain (A)
-//         const goal_lineage* gl_pA = lp.goal(nullptr, 0);
-//         const resolution_lineage* rl_pA = lp.resolution(gl_pA, 0);
-//         assert(simulation.rs.count(rl_pA) == 1);
-        
-//         const goal_lineage* gl_qA = lp.goal(rl_pA, 0);
-//         const resolution_lineage* rl_qA = lp.resolution(gl_qA, 1);
-//         assert(simulation.rs.count(rl_qA) == 1);
-        
-//         const goal_lineage* gl_rA = lp.goal(rl_qA, 0);
-//         const resolution_lineage* rl_rA = lp.resolution(gl_rA, 2);
-//         assert(simulation.rs.count(rl_rA) == 1);
-        
-//         // CRITICAL: Verify exact lineages for second chain (B)
-//         const goal_lineage* gl_pB = lp.goal(nullptr, 1);
-//         const resolution_lineage* rl_pB = lp.resolution(gl_pB, 0);
-//         assert(simulation.rs.count(rl_pB) == 1);
-        
-//         const goal_lineage* gl_qB = lp.goal(rl_pB, 0);
-//         const resolution_lineage* rl_qB = lp.resolution(gl_qB, 1);
-//         assert(simulation.rs.count(rl_qB) == 1);
-        
-//         const goal_lineage* gl_rB = lp.goal(rl_qB, 0);
-//         const resolution_lineage* rl_rB = lp.resolution(gl_rB, 2);
-//         assert(simulation.rs.count(rl_rB) == 1);
-        
-//         // CRITICAL: No decisions (all unit props)
-//         assert(simulation.ds.size() == 0);
-        
-//         // CRITICAL: MCTS never called
-//         assert(sim.length() == 0);
-        
-//         // CRITICAL: Both A and B bind to hello
-//         normalizer norm(ep, bm);
-//         const expr* A_normalized = norm(A);
-//         const expr* B_normalized = norm(B);
-//         assert(A_normalized == ep.atom("hello"));
-//         assert(B_normalized == ep.atom("hello"));
-//     }
-    
-//     // Test 35: Five starting goals with mixed variables
-//     // Database: a(1)., b(2)., c(3)., d(4)., e(5).
-//     // Goals: :- a(V1), b(V2), c(V3), d(V4), e(V5).
-//     // Expected: V1=1, V2=2, V3=3, V4=4, V5=5
-//     {
-//         trail t;
-//         t.push();
-        
-//         expr_pool ep(t);
-//         bind_map bm(t);
-//         sequencer seq(t);
-//         lineage_pool lp;
-        
-//         database db;
-//         db.push_back(rule{ep.cons(ep.atom("a"), ep.atom("1")), {}});  // idx 0
-//         db.push_back(rule{ep.cons(ep.atom("b"), ep.atom("2")), {}});  // idx 1
-//         db.push_back(rule{ep.cons(ep.atom("c"), ep.atom("3")), {}});  // idx 2
-//         db.push_back(rule{ep.cons(ep.atom("d"), ep.atom("4")), {}});  // idx 3
-//         db.push_back(rule{ep.cons(ep.atom("e"), ep.atom("5")), {}});  // idx 4
-        
-//         goals goals;
-//         const expr* V1 = ep.var(seq());
-//         const expr* V2 = ep.var(seq());
-//         const expr* V3 = ep.var(seq());
-//         const expr* V4 = ep.var(seq());
-//         const expr* V5 = ep.var(seq());
-//         goals.push_back(ep.cons(ep.atom("a"), V1));
-//         goals.push_back(ep.cons(ep.atom("b"), V2));
-//         goals.push_back(ep.cons(ep.atom("c"), V3));
-//         goals.push_back(ep.cons(ep.atom("d"), V4));
-//         goals.push_back(ep.cons(ep.atom("e"), V5));
-        
-//         avoidance_store as;
-        
-//         monte_carlo::tree_node<mcts_decider::choice> root;
-//         std::mt19937 rng(42);
-//         monte_carlo::simulation<mcts_decider::choice, std::mt19937> sim(root, 1.414, rng);
-        
-//         resolution_store rs;
-//         decision_store ds;
-//         a01_sim simulation(100, db, goals, t, seq, ep, bm, lp, rs, ds, as, sim);
-        
-//         bool result = simulation();
-        
-//         // CRITICAL: Solution found
-//         assert(result == true);
-        
-//         // CRITICAL: 5 resolutions
-//         assert(simulation.rs.size() == 5);
-        
-//         // CRITICAL: Verify exact lineages for all 5 resolutions
-//         const goal_lineage* gl_a = lp.goal(nullptr, 0);
-//         const resolution_lineage* rl_a = lp.resolution(gl_a, 0);
-//         assert(simulation.rs.count(rl_a) == 1);
-        
-//         const goal_lineage* gl_b = lp.goal(nullptr, 1);
-//         const resolution_lineage* rl_b = lp.resolution(gl_b, 1);
-//         assert(simulation.rs.count(rl_b) == 1);
-        
-//         const goal_lineage* gl_c = lp.goal(nullptr, 2);
-//         const resolution_lineage* rl_c = lp.resolution(gl_c, 2);
-//         assert(simulation.rs.count(rl_c) == 1);
-        
-//         const goal_lineage* gl_d = lp.goal(nullptr, 3);
-//         const resolution_lineage* rl_d = lp.resolution(gl_d, 3);
-//         assert(simulation.rs.count(rl_d) == 1);
-        
-//         const goal_lineage* gl_e = lp.goal(nullptr, 4);
-//         const resolution_lineage* rl_e = lp.resolution(gl_e, 4);
-//         assert(simulation.rs.count(rl_e) == 1);
-        
-//         // CRITICAL: No decisions (all unit props)
-//         assert(simulation.ds.size() == 0);
-        
-//         // CRITICAL: MCTS never called
-//         assert(sim.length() == 0);
-        
-//         // CRITICAL: Verify all five variables
-//         normalizer norm(ep, bm);
-//         assert(norm(V1) == ep.atom("1"));
-//         assert(norm(V2) == ep.atom("2"));
-//         assert(norm(V3) == ep.atom("3"));
-//         assert(norm(V4) == ep.atom("4"));
-//         assert(norm(V5) == ep.atom("5"));
-//     }
-    
-//     // Test 36: Variable in goal with decision required
-//     // Database: p(X) :- q(X)., p(X) :- r(X)., q(apple)., r(banana).
-//     // Goal: :- p(Fruit).
-//     // Expected: Fruit binds to apple or banana (depends on MCTS decision)
-//     {
-//         trail t;
-//         t.push();
-        
-//         expr_pool ep(t);
-//         bind_map bm(t);
-//         sequencer seq(t);
-//         lineage_pool lp;
-        
-//         database db;
-//         const expr* X1 = ep.var(seq());
-//         const expr* X2 = ep.var(seq());
-//         db.push_back(rule{ep.cons(ep.atom("p"), X1), {ep.cons(ep.atom("q"), X1)}});  // idx 0
-//         db.push_back(rule{ep.cons(ep.atom("p"), X2), {ep.cons(ep.atom("r"), X2)}});  // idx 1
-//         db.push_back(rule{ep.cons(ep.atom("q"), ep.atom("apple")), {}});  // idx 2
-//         db.push_back(rule{ep.cons(ep.atom("r"), ep.atom("banana")), {}});  // idx 3
-        
-//         goals goals;
-//         const expr* Fruit = ep.var(seq());
-//         goals.push_back(ep.cons(ep.atom("p"), Fruit));
-        
-//         avoidance_store as;
-        
-//         monte_carlo::tree_node<mcts_decider::choice> root;
-//         std::mt19937 rng(42);
-//         monte_carlo::simulation<mcts_decider::choice, std::mt19937> sim(root, 1.414, rng);
-        
-//         resolution_store rs;
-//         decision_store ds;
-//         a01_sim simulation(100, db, goals, t, seq, ep, bm, lp, rs, ds, as, sim);
-        
-//         // Force decision on idx 0 (q path -> apple)
-//         const goal_lineage* gl0_for_mcts = lp.goal(nullptr, 0);
-//         root.m_visits = 100;
-//         root.m_children[gl0_for_mcts].m_visits = 50;
-//         root.m_children[gl0_for_mcts].m_children[size_t(0)].m_visits = 0;  // Force idx 0
-//         root.m_children[gl0_for_mcts].m_children[size_t(1)].m_visits = 10;
-//         root.m_children[gl0_for_mcts].m_children[size_t(1)].m_value = 10.0;
-        
-//         bool result = simulation();
-        
-//         // CRITICAL: Solution found
-//         assert(result == true);
-        
-//         // CRITICAL: Exactly 1 decision
-//         assert(simulation.ds.size() == 1);
-        
-//         // CRITICAL: Fruit binds to apple (based on forced decision)
-//         normalizer norm(ep, bm);
-//         const expr* Fruit_normalized = norm(Fruit);
-//         assert(Fruit_normalized == ep.atom("apple"));
-//     }
-    
-//     // Test 37: Partial instantiation with variable (base case)
-//     // Database: link(a,b)., link(b,c)., path(X,Y) :- link(X,Y)., path(X,Z) :- link(X,Y), path(Y,Z).
-//     // Goal: :- path(a,Dest).
-//     // Expected: Dest binds to b (forced to use base case idx 2)
-//     {
-//         trail t;
-//         t.push();
-        
-//         expr_pool ep(t);
-//         bind_map bm(t);
-//         sequencer seq(t);
-//         lineage_pool lp;
-        
-//         database db;
-//         const expr* link_a_b = ep.cons(ep.atom("link"), ep.cons(ep.atom("a"), ep.atom("b")));
-//         const expr* link_b_c = ep.cons(ep.atom("link"), ep.cons(ep.atom("b"), ep.atom("c")));
-//         db.push_back(rule{link_a_b, {}});  // idx 0
-//         db.push_back(rule{link_b_c, {}});  // idx 1
-        
-//         const expr* X1 = ep.var(seq());
-//         const expr* Y1 = ep.var(seq());
-//         const expr* path_base = ep.cons(ep.atom("path"), ep.cons(X1, Y1));
-//         const expr* link_X1_Y1 = ep.cons(ep.atom("link"), ep.cons(X1, Y1));
-//         db.push_back(rule{path_base, {link_X1_Y1}});  // idx 2
-        
-//         const expr* X2 = ep.var(seq());
-//         const expr* Y2 = ep.var(seq());
-//         const expr* Z2 = ep.var(seq());
-//         const expr* path_rec = ep.cons(ep.atom("path"), ep.cons(X2, Z2));
-//         const expr* link_X2_Y2 = ep.cons(ep.atom("link"), ep.cons(X2, Y2));
-//         const expr* path_Y2_Z2 = ep.cons(ep.atom("path"), ep.cons(Y2, Z2));
-//         db.push_back(rule{path_rec, {link_X2_Y2, path_Y2_Z2}});  // idx 3
-        
-//         goals goals;
-//         const expr* Dest = ep.var(seq());
-//         goals.push_back(ep.cons(ep.atom("path"), ep.cons(ep.atom("a"), Dest)));
-        
-//         avoidance_store as;
-        
-//         monte_carlo::tree_node<mcts_decider::choice> root;
-//         std::mt19937 rng(42);
-//         monte_carlo::simulation<mcts_decider::choice, std::mt19937> sim(root, 1.414, rng);
-        
-//         resolution_store rs;
-//         decision_store ds;
-//         a01_sim simulation(100, db, goals, t, seq, ep, bm, lp, rs, ds, as, sim);
-        
-//         // Pre-populate MCTS to force base case (idx 2)
-//         const goal_lineage* gl0_for_mcts = lp.goal(nullptr, 0);
-//         root.m_visits = 100;
-//         root.m_children[gl0_for_mcts].m_visits = 50;
-//         root.m_children[gl0_for_mcts].m_children[size_t(2)].m_visits = 0;  // Force idx 2
-//         root.m_children[gl0_for_mcts].m_children[size_t(3)].m_visits = 10;
-//         root.m_children[gl0_for_mcts].m_children[size_t(3)].m_value = 10.0;
-        
-//         bool result = simulation();
-        
-//         // CRITICAL: Solution found
-//         assert(result == true);
-        
-//         // CRITICAL: Exactly 2 resolutions (path→link)
-//         assert(simulation.rs.size() == 2);
-        
-//         // CRITICAL: Exactly 1 decision
-//         assert(simulation.ds.size() == 1);
-        
-//         // CRITICAL: Verify exact lineage chain
-//         const goal_lineage* gl_path = lp.goal(nullptr, 0);
-//         const resolution_lineage* rl_path = lp.resolution(gl_path, 2);  // Base case
-//         assert(simulation.rs.count(rl_path) == 1);
-//         assert(simulation.ds.count(rl_path) == 1);  // This is the decision
-        
-//         const goal_lineage* gl_link = lp.goal(rl_path, 0);
-//         const resolution_lineage* rl_link = lp.resolution(gl_link, 0);  // link(a,b)
-//         assert(simulation.rs.count(rl_link) == 1);
-//         assert(simulation.ds.count(rl_link) == 0);  // Unit prop
-        
-//         // CRITICAL: MCTS called once (2 calls: goal + candidate)
-//         assert(sim.length() == 2);
-        
-//         // CRITICAL: Dest binds to exactly 'b'
-//         normalizer norm(ep, bm);
-//         const expr* Dest_normalized = norm(Dest);
-//         assert(Dest_normalized == ep.atom("b"));
-//     }
-    
-//     // Test 38: Multiple goals with complex variable sharing
-//     // Database: add(X,Y,Z) :- plus(X,Y,Z)., plus(1,2,3)., mul(A,B,C) :- times(A,B,C)., times(2,3,6).
-//     // Goals: :- add(1,2,Sum), mul(2,3,Prod).
-//     // Expected: Sum=3, Prod=6
-//     {
-//         trail t;
-//         t.push();
-        
-//         expr_pool ep(t);
-//         bind_map bm(t);
-//         sequencer seq(t);
-//         lineage_pool lp;
-        
-//         database db;
-//         const expr* X = ep.var(seq());
-//         const expr* Y = ep.var(seq());
-//         const expr* Z = ep.var(seq());
-//         const expr* add_rule = ep.cons(ep.atom("add"), ep.cons(X, ep.cons(Y, Z)));
-//         const expr* plus_body = ep.cons(ep.atom("plus"), ep.cons(X, ep.cons(Y, Z)));
-//         db.push_back(rule{add_rule, {plus_body}});  // idx 0
-        
-//         const expr* plus_fact = ep.cons(ep.atom("plus"), ep.cons(ep.atom("1"), ep.cons(ep.atom("2"), ep.atom("3"))));
-//         db.push_back(rule{plus_fact, {}});  // idx 1
-        
-//         const expr* A = ep.var(seq());
-//         const expr* B = ep.var(seq());
-//         const expr* C = ep.var(seq());
-//         const expr* mul_rule = ep.cons(ep.atom("mul"), ep.cons(A, ep.cons(B, C)));
-//         const expr* times_body = ep.cons(ep.atom("times"), ep.cons(A, ep.cons(B, C)));
-//         db.push_back(rule{mul_rule, {times_body}});  // idx 2
-        
-//         const expr* times_fact = ep.cons(ep.atom("times"), ep.cons(ep.atom("2"), ep.cons(ep.atom("3"), ep.atom("6"))));
-//         db.push_back(rule{times_fact, {}});  // idx 3
-        
-//         goals goals;
-//         const expr* Sum = ep.var(seq());
-//         const expr* Prod = ep.var(seq());
-//         goals.push_back(ep.cons(ep.atom("add"), ep.cons(ep.atom("1"), ep.cons(ep.atom("2"), Sum))));
-//         goals.push_back(ep.cons(ep.atom("mul"), ep.cons(ep.atom("2"), ep.cons(ep.atom("3"), Prod))));
-        
-//         avoidance_store as;
-        
-//         monte_carlo::tree_node<mcts_decider::choice> root;
-//         std::mt19937 rng(42);
-//         monte_carlo::simulation<mcts_decider::choice, std::mt19937> sim(root, 1.414, rng);
-        
-//         resolution_store rs;
-//         decision_store ds;
-//         a01_sim simulation(100, db, goals, t, seq, ep, bm, lp, rs, ds, as, sim);
-        
-//         bool result = simulation();
-        
-//         // CRITICAL: Solution found
-//         assert(result == true);
-        
-//         // CRITICAL: 4 resolutions (add->plus fact, mul->times fact)
-//         assert(simulation.rs.size() == 4);
-        
-//         // CRITICAL: Verify exact lineages for add chain
-//         const goal_lineage* gl_add = lp.goal(nullptr, 0);
-//         const resolution_lineage* rl_add = lp.resolution(gl_add, 0);
-//         assert(simulation.rs.count(rl_add) == 1);
-        
-//         const goal_lineage* gl_plus = lp.goal(rl_add, 0);
-//         const resolution_lineage* rl_plus = lp.resolution(gl_plus, 1);
-//         assert(simulation.rs.count(rl_plus) == 1);
-        
-//         // CRITICAL: Verify exact lineages for mul chain
-//         const goal_lineage* gl_mul = lp.goal(nullptr, 1);
-//         const resolution_lineage* rl_mul = lp.resolution(gl_mul, 2);
-//         assert(simulation.rs.count(rl_mul) == 1);
-        
-//         const goal_lineage* gl_times = lp.goal(rl_mul, 0);
-//         const resolution_lineage* rl_times = lp.resolution(gl_times, 3);
-//         assert(simulation.rs.count(rl_times) == 1);
-        
-//         // CRITICAL: No decisions (all unit props)
-//         assert(simulation.ds.size() == 0);
-        
-//         // CRITICAL: MCTS never called
-//         assert(sim.length() == 0);
-        
-//         // CRITICAL: Verify both results
-//         normalizer norm(ep, bm);
-//         const expr* Sum_normalized = norm(Sum);
-//         const expr* Prod_normalized = norm(Prod);
-//         assert(Sum_normalized == ep.atom("3"));
-//         assert(Prod_normalized == ep.atom("6"));
-//     }
-    
-//     // ========== NEW TESTS: CONFLICT AND EDGE CASES ==========
-    
-//     // Test 39: Unification failure with shared variable
-//     // Database: p(a)., q(b).
-//     // Goals: :- p(X), q(X).
-//     // Expected: CONFLICT (X cannot be both 'a' and 'b')
-//     {
-//         trail t;
-//         t.push();
-        
-//         expr_pool ep(t);
-//         bind_map bm(t);
-//         sequencer seq(t);
-//         lineage_pool lp;
-        
-//         database db;
-//         db.push_back(rule{ep.cons(ep.atom("p"), ep.atom("a")), {}});  // idx 0
-//         db.push_back(rule{ep.cons(ep.atom("q"), ep.atom("b")), {}});  // idx 1
-        
-//         goals goals;
-//         const expr* X = ep.var(seq());
-//         goals.push_back(ep.cons(ep.atom("p"), X));
-//         goals.push_back(ep.cons(ep.atom("q"), X));
-        
-//         avoidance_store as;
-        
-//         monte_carlo::tree_node<mcts_decider::choice> root;
-//         std::mt19937 rng(42);
-//         monte_carlo::simulation<mcts_decider::choice, std::mt19937> sim(root, 1.414, rng);
-        
-//         resolution_store rs;
-//         decision_store ds;
-//         a01_sim simulation(100, db, goals, t, seq, ep, bm, lp, rs, ds, as, sim);
-        
-//         bool result = simulation();
-        
-//         // CRITICAL: Conflict (unification failure)
-//         assert(result == false);
-        
-//         // CRITICAL: Exactly 1 resolution (one goal resolves, other becomes unsatisfiable)
-//         assert(simulation.rs.size() == 1);
-        
-//         // CRITICAL: One goal still in goal store with no candidates
-//         assert(simulation.gs.size() == 1);
-        
-//         // CRITICAL: The remaining goal has no candidates
-//         const goal_lineage* remaining_goal = simulation.gs.begin()->first;
-//         assert(simulation.cs.count(remaining_goal) == 0);
-        
-//         // CRITICAL: No decisions
-//         assert(simulation.ds.size() == 0);
-//     }
-    
-//     // Test 40: Same variable multiple times in one goal
-//     // Database: pair(a,a)., pair(a,b)., pair(b,b).
-//     // Goal: :- pair(X,X).
-//     // Expected: X=b (head elim removes pair(a,b), MCTS forces idx 2)
-//     {
-//         trail t;
-//         t.push();
-        
-//         expr_pool ep(t);
-//         bind_map bm(t);
-//         sequencer seq(t);
-//         lineage_pool lp;
-        
-//         database db;
-//         db.push_back(rule{ep.cons(ep.atom("pair"), ep.cons(ep.atom("a"), ep.atom("a"))), {}});  // idx 0
-//         db.push_back(rule{ep.cons(ep.atom("pair"), ep.cons(ep.atom("a"), ep.atom("b"))), {}});  // idx 1
-//         db.push_back(rule{ep.cons(ep.atom("pair"), ep.cons(ep.atom("b"), ep.atom("b"))), {}});  // idx 2
-        
-//         goals goals;
-//         const expr* X = ep.var(seq());
-//         goals.push_back(ep.cons(ep.atom("pair"), ep.cons(X, X)));
-        
-//         avoidance_store as;
-        
-//         monte_carlo::tree_node<mcts_decider::choice> root;
-//         std::mt19937 rng(42);
-//         monte_carlo::simulation<mcts_decider::choice, std::mt19937> sim(root, 1.414, rng);
-        
-//         resolution_store rs;
-//         decision_store ds;
-//         a01_sim simulation(100, db, goals, t, seq, ep, bm, lp, rs, ds, as, sim);
-        
-//         // Pre-populate MCTS to force idx 2 (NOT idx 0, to prove MCTS works!)
-//         const goal_lineage* gl0_for_mcts = lp.goal(nullptr, 0);
-//         root.m_visits = 100;
-//         root.m_children[gl0_for_mcts].m_visits = 50;
-//         root.m_children[gl0_for_mcts].m_children[size_t(0)].m_visits = 10;
-//         root.m_children[gl0_for_mcts].m_children[size_t(0)].m_value = 10.0;
-//         root.m_children[gl0_for_mcts].m_children[size_t(2)].m_visits = 0;  // Force idx 2
-        
-//         bool result = simulation();
-        
-//         // CRITICAL: Solution found
-//         assert(result == true);
-        
-//         // CRITICAL: Exactly 1 resolution
-//         assert(simulation.rs.size() == 1);
-        
-//         // CRITICAL: Verify resolution used idx 2 (NOT idx 0!)
-//         const goal_lineage* gl0 = lp.goal(nullptr, 0);
-//         const resolution_lineage* rl2 = lp.resolution(gl0, 2);
-//         assert(simulation.rs.count(rl2) == 1);
-//         assert(simulation.ds.count(rl2) == 1);  // Decision
-        
-//         // CRITICAL: Head elim should have removed idx 1
-//         // Initial: 3 candidates, after head elim: 2 candidates (idx 0, 2)
-//         // MCTS forced idx 2, proving it works correctly
-        
-//         // CRITICAL: X binds to exactly 'b' (NOT 'a', because we used idx 2)
-//         normalizer norm(ep, bm);
-//         const expr* X_normalized = norm(X);
-//         assert(X_normalized == ep.atom("b"));
-        
-//         // CRITICAL: MCTS called once
-//         assert(sim.length() == 2);
-//     }
-    
-//     // Test 41: Conflict with variable goal (no matching rules)
-//     // Database: q(a).
-//     // Goal: :- p(X).
-//     // Expected: CONFLICT (no candidates for p(X))
-//     {
-//         trail t;
-//         t.push();
-        
-//         expr_pool ep(t);
-//         bind_map bm(t);
-//         sequencer seq(t);
-//         lineage_pool lp;
-        
-//         database db;
-//         db.push_back(rule{ep.cons(ep.atom("q"), ep.atom("a")), {}});  // idx 0
-        
-//         goals goals;
-//         const expr* X = ep.var(seq());
-//         goals.push_back(ep.cons(ep.atom("p"), X));
-        
-//         avoidance_store as;
-        
-//         monte_carlo::tree_node<mcts_decider::choice> root;
-//         std::mt19937 rng(42);
-//         monte_carlo::simulation<mcts_decider::choice, std::mt19937> sim(root, 1.414, rng);
-        
-//         resolution_store rs;
-//         decision_store ds;
-//         a01_sim simulation(100, db, goals, t, seq, ep, bm, lp, rs, ds, as, sim);
-        
-//         bool result = simulation();
-        
-//         // CRITICAL: Immediate conflict (no candidates)
-//         assert(result == false);
-        
-//         // CRITICAL: No resolutions made
-//         assert(simulation.rs.size() == 0);
-        
-//         // CRITICAL: Goal still in store
-//         const goal_lineage* gl_p = lp.goal(nullptr, 0);
-//         assert(simulation.gs.count(gl_p) == 1);
-//         assert(simulation.cs.count(gl_p) == 0);  // No candidates
-        
-//         // CRITICAL: No decisions
-//         assert(simulation.ds.size() == 0);
-        
-//         // CRITICAL: MCTS never called
-//         assert(sim.length() == 0);
-//     }
-    
-//     // Test 42: Complex variable chain with conflict
-//     // Database: p(X) :- q(X)., q(Y) :- r(Y).
-//     // Goal: :- p(Z).
-//     // Expected: CONFLICT (no r facts)
-//     {
-//         trail t;
-//         t.push();
-        
-//         expr_pool ep(t);
-//         bind_map bm(t);
-//         sequencer seq(t);
-//         lineage_pool lp;
-        
-//         database db;
-//         const expr* X_rule = ep.var(seq());
-//         const expr* Y_rule = ep.var(seq());
-//         db.push_back(rule{ep.cons(ep.atom("p"), X_rule), {ep.cons(ep.atom("q"), X_rule)}});  // idx 0
-//         db.push_back(rule{ep.cons(ep.atom("q"), Y_rule), {ep.cons(ep.atom("r"), Y_rule)}});  // idx 1
-//         // No r facts
-        
-//         goals goals;
-//         const expr* Z_goal = ep.var(seq());
-//         goals.push_back(ep.cons(ep.atom("p"), Z_goal));
-        
-//         avoidance_store as;
-        
-//         monte_carlo::tree_node<mcts_decider::choice> root;
-//         std::mt19937 rng(42);
-//         monte_carlo::simulation<mcts_decider::choice, std::mt19937> sim(root, 1.414, rng);
-        
-//         resolution_store rs;
-//         decision_store ds;
-//         a01_sim simulation(100, db, goals, t, seq, ep, bm, lp, rs, ds, as, sim);
-        
-//         bool result = simulation();
-        
-//         // CRITICAL: Conflict after chain
-//         assert(result == false);
-        
-//         // CRITICAL: Exactly 2 resolutions (p→q, q→r)
-//         assert(simulation.rs.size() == 2);
-        
-//         // CRITICAL: Verify lineage chain
-//         const goal_lineage* gl_p = lp.goal(nullptr, 0);
-//         const resolution_lineage* rl_p = lp.resolution(gl_p, 0);
-//         assert(simulation.rs.count(rl_p) == 1);
-        
-//         const goal_lineage* gl_q = lp.goal(rl_p, 0);
-//         const resolution_lineage* rl_q = lp.resolution(gl_q, 1);
-//         assert(simulation.rs.count(rl_q) == 1);
-        
-//         // CRITICAL: r has no candidates
-//         const goal_lineage* gl_r = lp.goal(rl_q, 0);
-//         assert(simulation.gs.count(gl_r) == 1);
-//         assert(simulation.cs.count(gl_r) == 0);
-        
-//         // CRITICAL: No decisions (all unit props)
-//         assert(simulation.ds.size() == 0);
-        
-//         // CRITICAL: MCTS never called
-//         assert(sim.length() == 0);
-//     }
-    
-//     // Test 43: Mixed instantiated and variable goals
-//     // Database: p(a)., q(b).
-//     // Goals: :- p(a), q(X).
-//     // Expected: X=b
-//     {
-//         trail t;
-//         t.push();
-        
-//         expr_pool ep(t);
-//         bind_map bm(t);
-//         sequencer seq(t);
-//         lineage_pool lp;
-        
-//         database db;
-//         db.push_back(rule{ep.cons(ep.atom("p"), ep.atom("a")), {}});  // idx 0
-//         db.push_back(rule{ep.cons(ep.atom("q"), ep.atom("b")), {}});  // idx 1
-        
-//         goals goals;
-//         goals.push_back(ep.cons(ep.atom("p"), ep.atom("a")));  // Instantiated
-//         const expr* X = ep.var(seq());
-//         goals.push_back(ep.cons(ep.atom("q"), X));  // Variable
-        
-//         avoidance_store as;
-        
-//         monte_carlo::tree_node<mcts_decider::choice> root;
-//         std::mt19937 rng(42);
-//         monte_carlo::simulation<mcts_decider::choice, std::mt19937> sim(root, 1.414, rng);
-        
-//         resolution_store rs;
-//         decision_store ds;
-//         a01_sim simulation(100, db, goals, t, seq, ep, bm, lp, rs, ds, as, sim);
-        
-//         bool result = simulation();
-        
-//         // CRITICAL: Solution found
-//         assert(result == true);
-        
-//         // CRITICAL: 2 resolutions
-//         assert(simulation.rs.size() == 2);
-        
-//         // CRITICAL: Verify lineages
-//         const goal_lineage* gl_p = lp.goal(nullptr, 0);
-//         const resolution_lineage* rl_p = lp.resolution(gl_p, 0);
-//         assert(simulation.rs.count(rl_p) == 1);
-        
-//         const goal_lineage* gl_q = lp.goal(nullptr, 1);
-//         const resolution_lineage* rl_q = lp.resolution(gl_q, 1);
-//         assert(simulation.rs.count(rl_q) == 1);
-        
-//         // CRITICAL: No decisions
-//         assert(simulation.ds.size() == 0);
-        
-//         // CRITICAL: MCTS never called
-//         assert(sim.length() == 0);
-        
-//         // CRITICAL: X binds to 'b'
-//         normalizer norm(ep, bm);
-//         const expr* X_normalized = norm(X);
-//         assert(X_normalized == ep.atom("b"));
-//     }
-    
-//     // Test 44: Deep variable chain (6 levels)
-//     // Database: a(X) :- b(X)., b(Y) :- c(Y)., c(Z) :- d(Z).,
-//     //           d(W) :- e(W)., e(V) :- f(V)., f(hello).
-//     // Goal: :- a(Result).
-//     // Expected: Result = hello (verify all 6 resolutions)
-//     {
-//         trail t;
-//         t.push();
-        
-//         expr_pool ep(t);
-//         bind_map bm(t);
-//         sequencer seq(t);
-//         lineage_pool lp;
-        
-//         database db;
-//         const expr* X = ep.var(seq());
-//         const expr* Y = ep.var(seq());
-//         const expr* Z = ep.var(seq());
-//         const expr* W = ep.var(seq());
-//         const expr* V = ep.var(seq());
-        
-//         db.push_back(rule{ep.cons(ep.atom("a"), X), {ep.cons(ep.atom("b"), X)}});  // idx 0
-//         db.push_back(rule{ep.cons(ep.atom("b"), Y), {ep.cons(ep.atom("c"), Y)}});  // idx 1
-//         db.push_back(rule{ep.cons(ep.atom("c"), Z), {ep.cons(ep.atom("d"), Z)}});  // idx 2
-//         db.push_back(rule{ep.cons(ep.atom("d"), W), {ep.cons(ep.atom("e"), W)}});  // idx 3
-//         db.push_back(rule{ep.cons(ep.atom("e"), V), {ep.cons(ep.atom("f"), V)}});  // idx 4
-//         db.push_back(rule{ep.cons(ep.atom("f"), ep.atom("hello")), {}});  // idx 5
-        
-//         goals goals;
-//         const expr* Result = ep.var(seq());
-//         goals.push_back(ep.cons(ep.atom("a"), Result));
-        
-//         avoidance_store as;
-        
-//         monte_carlo::tree_node<mcts_decider::choice> root;
-//         std::mt19937 rng(42);
-//         monte_carlo::simulation<mcts_decider::choice, std::mt19937> sim(root, 1.414, rng);
-        
-//         resolution_store rs;
-//         decision_store ds;
-//         a01_sim simulation(100, db, goals, t, seq, ep, bm, lp, rs, ds, as, sim);
-        
-//         bool result = simulation();
-        
-//         // CRITICAL: Solution found
-//         assert(result == true);
-        
-//         // CRITICAL: Exactly 6 resolutions
-//         assert(simulation.rs.size() == 6);
-        
-//         // CRITICAL: Verify entire lineage chain
-//         const goal_lineage* gl_a = lp.goal(nullptr, 0);
-//         const resolution_lineage* rl_a = lp.resolution(gl_a, 0);
-//         assert(simulation.rs.count(rl_a) == 1);
-        
-//         const goal_lineage* gl_b = lp.goal(rl_a, 0);
-//         const resolution_lineage* rl_b = lp.resolution(gl_b, 1);
-//         assert(simulation.rs.count(rl_b) == 1);
-        
-//         const goal_lineage* gl_c = lp.goal(rl_b, 0);
-//         const resolution_lineage* rl_c = lp.resolution(gl_c, 2);
-//         assert(simulation.rs.count(rl_c) == 1);
-        
-//         const goal_lineage* gl_d = lp.goal(rl_c, 0);
-//         const resolution_lineage* rl_d = lp.resolution(gl_d, 3);
-//         assert(simulation.rs.count(rl_d) == 1);
-        
-//         const goal_lineage* gl_e = lp.goal(rl_d, 0);
-//         const resolution_lineage* rl_e = lp.resolution(gl_e, 4);
-//         assert(simulation.rs.count(rl_e) == 1);
-        
-//         const goal_lineage* gl_f = lp.goal(rl_e, 0);
-//         const resolution_lineage* rl_f = lp.resolution(gl_f, 5);
-//         assert(simulation.rs.count(rl_f) == 1);
-        
-//         // CRITICAL: No decisions (all unit props)
-//         assert(simulation.ds.size() == 0);
-        
-//         // CRITICAL: MCTS never called
-//         assert(sim.length() == 0);
-        
-//         // CRITICAL: Result binds to 'hello'
-//         normalizer norm(ep, bm);
-//         const expr* Result_normalized = norm(Result);
-//         assert(Result_normalized == ep.atom("hello"));
-//     }
-    
-//     // Test 45: Variables in multiple body goals
-//     // Database: foo(X,Y,Z) :- bar(X,Y), baz(Y,Z)., bar(1,2)., baz(2,3).
-//     // Goal: :- foo(A,B,C).
-//     // Expected: A=1, B=2, C=3 (Y propagates through)
-//     {
-//         trail t;
-//         t.push();
-        
-//         expr_pool ep(t);
-//         bind_map bm(t);
-//         sequencer seq(t);
-//         lineage_pool lp;
-        
-//         database db;
-//         const expr* X = ep.var(seq());
-//         const expr* Y = ep.var(seq());
-//         const expr* Z = ep.var(seq());
-        
-//         const expr* foo_head = ep.cons(ep.atom("foo"), ep.cons(X, ep.cons(Y, Z)));
-//         const expr* bar_body = ep.cons(ep.atom("bar"), ep.cons(X, Y));
-//         const expr* baz_body = ep.cons(ep.atom("baz"), ep.cons(Y, Z));
-//         db.push_back(rule{foo_head, {bar_body, baz_body}});  // idx 0
-        
-//         const expr* bar_fact = ep.cons(ep.atom("bar"), ep.cons(ep.atom("1"), ep.atom("2")));
-//         db.push_back(rule{bar_fact, {}});  // idx 1
-        
-//         const expr* baz_fact = ep.cons(ep.atom("baz"), ep.cons(ep.atom("2"), ep.atom("3")));
-//         db.push_back(rule{baz_fact, {}});  // idx 2
-        
-//         goals goals;
-//         const expr* A = ep.var(seq());
-//         const expr* B = ep.var(seq());
-//         const expr* C = ep.var(seq());
-//         goals.push_back(ep.cons(ep.atom("foo"), ep.cons(A, ep.cons(B, C))));
-        
-//         avoidance_store as;
-        
-//         monte_carlo::tree_node<mcts_decider::choice> root;
-//         std::mt19937 rng(42);
-//         monte_carlo::simulation<mcts_decider::choice, std::mt19937> sim(root, 1.414, rng);
-        
-//         resolution_store rs;
-//         decision_store ds;
-//         a01_sim simulation(100, db, goals, t, seq, ep, bm, lp, rs, ds, as, sim);
-        
-//         bool result = simulation();
-        
-//         // CRITICAL: Solution found
-//         assert(result == true);
-        
-//         // CRITICAL: Exactly 3 resolutions (foo, bar, baz)
-//         assert(simulation.rs.size() == 3);
-        
-//         // CRITICAL: Verify lineages
-//         const goal_lineage* gl_foo = lp.goal(nullptr, 0);
-//         const resolution_lineage* rl_foo = lp.resolution(gl_foo, 0);
-//         assert(simulation.rs.count(rl_foo) == 1);
-        
-//         const goal_lineage* gl_bar = lp.goal(rl_foo, 0);
-//         const resolution_lineage* rl_bar = lp.resolution(gl_bar, 1);
-//         assert(simulation.rs.count(rl_bar) == 1);
-        
-//         const goal_lineage* gl_baz = lp.goal(rl_foo, 1);
-//         const resolution_lineage* rl_baz = lp.resolution(gl_baz, 2);
-//         assert(simulation.rs.count(rl_baz) == 1);
-        
-//         // CRITICAL: No decisions
-//         assert(simulation.ds.size() == 0);
-        
-//         // CRITICAL: MCTS never called
-//         assert(sim.length() == 0);
-        
-//         // CRITICAL: Verify all three variables
-//         normalizer norm(ep, bm);
-//         const expr* A_normalized = norm(A);
-//         const expr* B_normalized = norm(B);
-//         const expr* C_normalized = norm(C);
-//         assert(A_normalized == ep.atom("1"));
-//         assert(B_normalized == ep.atom("2"));
-//         assert(C_normalized == ep.atom("3"));
-//     }
-    
-//     // Test 46: Head elimination with variables
-//     // Database: p(cons(a,X))., p(cons(b,Y))., p(atom(z)).
-//     // Goal: :- p(cons(a, nil)).
-//     // Expected: Only first rule remains after head elim
-//     {
-//         trail t;
-//         t.push();
-        
-//         expr_pool ep(t);
-//         bind_map bm(t);
-//         sequencer seq(t);
-//         lineage_pool lp;
-        
-//         database db;
-//         const expr* X = ep.var(seq());
-//         const expr* Y = ep.var(seq());
-        
-//         const expr* cons_a_X = ep.cons(ep.atom("cons"), ep.cons(ep.atom("a"), X));
-//         db.push_back(rule{ep.cons(ep.atom("p"), cons_a_X), {}});  // idx 0
-        
-//         const expr* cons_b_Y = ep.cons(ep.atom("cons"), ep.cons(ep.atom("b"), Y));
-//         db.push_back(rule{ep.cons(ep.atom("p"), cons_b_Y), {}});  // idx 1
-        
-//         const expr* atom_z = ep.cons(ep.atom("atom"), ep.atom("z"));
-//         db.push_back(rule{ep.cons(ep.atom("p"), atom_z), {}});  // idx 2
-        
-//         goals goals;
-//         const expr* cons_a_nil = ep.cons(ep.atom("cons"), ep.cons(ep.atom("a"), ep.atom("nil")));
-//         goals.push_back(ep.cons(ep.atom("p"), cons_a_nil));
-        
-//         avoidance_store as;
-        
-//         monte_carlo::tree_node<mcts_decider::choice> root;
-//         std::mt19937 rng(42);
-//         monte_carlo::simulation<mcts_decider::choice, std::mt19937> sim(root, 1.414, rng);
-        
-//         resolution_store rs;
-//         decision_store ds;
-//         a01_sim simulation(100, db, goals, t, seq, ep, bm, lp, rs, ds, as, sim);
-        
-//         bool result = simulation();
-        
-//         // CRITICAL: Solution found
-//         assert(result == true);
-        
-//         // CRITICAL: Exactly 1 resolution (head elim removed idx 1 and 2)
-//         assert(simulation.rs.size() == 1);
-        
-//         // CRITICAL: Verify resolution
-//         const goal_lineage* gl0 = lp.goal(nullptr, 0);
-//         const resolution_lineage* rl0 = lp.resolution(gl0, 0);
-//         assert(simulation.rs.count(rl0) == 1);
-        
-//         // CRITICAL: No decisions (unit prop)
-//         assert(simulation.ds.size() == 0);
-        
-//         // CRITICAL: MCTS never called
-//         assert(sim.length() == 0);
-//     }
-    
-//     // Test 47: Empty body rule query (multiple facts)
-//     // Database: person(alice)., person(bob)., person(charlie).
-//     // Goal: :- person(Who).
-//     // Expected: Who binds to one of {alice, bob, charlie}
-//     {
-//         trail t;
-//         t.push();
-        
-//         expr_pool ep(t);
-//         bind_map bm(t);
-//         sequencer seq(t);
-//         lineage_pool lp;
-        
-//         database db;
-//         db.push_back(rule{ep.cons(ep.atom("person"), ep.atom("alice")), {}});    // idx 0
-//         db.push_back(rule{ep.cons(ep.atom("person"), ep.atom("bob")), {}});      // idx 1
-//         db.push_back(rule{ep.cons(ep.atom("person"), ep.atom("charlie")), {}});  // idx 2
-        
-//         goals goals;
-//         const expr* Who = ep.var(seq());
-//         goals.push_back(ep.cons(ep.atom("person"), Who));
-        
-//         avoidance_store as;
-        
-//         monte_carlo::tree_node<mcts_decider::choice> root;
-//         std::mt19937 rng(42);
-//         monte_carlo::simulation<mcts_decider::choice, std::mt19937> sim(root, 1.414, rng);
-        
-//         resolution_store rs;
-//         decision_store ds;
-//         a01_sim simulation(100, db, goals, t, seq, ep, bm, lp, rs, ds, as, sim);
-        
-//         // Pre-populate MCTS to force idx 1 (bob)
-//         const goal_lineage* gl0_for_mcts = lp.goal(nullptr, 0);
-//         root.m_visits = 100;
-//         root.m_children[gl0_for_mcts].m_visits = 50;
-//         root.m_children[gl0_for_mcts].m_children[size_t(0)].m_visits = 10;
-//         root.m_children[gl0_for_mcts].m_children[size_t(0)].m_value = 10.0;
-//         root.m_children[gl0_for_mcts].m_children[size_t(1)].m_visits = 0;  // Force idx 1
-//         root.m_children[gl0_for_mcts].m_children[size_t(2)].m_visits = 10;
-//         root.m_children[gl0_for_mcts].m_children[size_t(2)].m_value = 10.0;
-        
-//         bool result = simulation();
-        
-//         // CRITICAL: Solution found
-//         assert(result == true);
-        
-//         // CRITICAL: Exactly 1 resolution
-//         assert(simulation.rs.size() == 1);
-        
-//         // CRITICAL: Verify resolution (forced idx 1)
-//         const goal_lineage* gl0 = lp.goal(nullptr, 0);
-//         const resolution_lineage* rl1 = lp.resolution(gl0, 1);
-//         assert(simulation.rs.count(rl1) == 1);
-//         assert(simulation.ds.count(rl1) == 1);  // Decision
-        
-//         // CRITICAL: MCTS called once
-//         assert(sim.length() == 2);
-        
-//         // CRITICAL: Who binds to exactly 'bob'
-//         normalizer norm(ep, bm);
-//         const expr* Who_normalized = norm(Who);
-//         assert(Who_normalized == ep.atom("bob"));
-//     }
-    
-//     // Test 48: Avoidance store with variable resolution
-//     // Database: p(X) :- q(X)., p(Y) :- r(Y)., q(a)., r(b).
-//     // Goal: :- p(Z).
-//     // Avoidance: {rl(p(Z), idx 0)} (avoid p→q path)
-//     // Expected: Z=b (forced to use p→r path)
-//     {
-//         trail t;
-//         t.push();
-        
-//         expr_pool ep(t);
-//         bind_map bm(t);
-//         sequencer seq(t);
-//         lineage_pool lp;
-        
-//         database db;
-//         const expr* X = ep.var(seq());
-//         const expr* Y = ep.var(seq());
-        
-//         db.push_back(rule{ep.cons(ep.atom("p"), X), {ep.cons(ep.atom("q"), X)}});  // idx 0
-//         db.push_back(rule{ep.cons(ep.atom("p"), Y), {ep.cons(ep.atom("r"), Y)}});  // idx 1
-//         db.push_back(rule{ep.cons(ep.atom("q"), ep.atom("a")), {}});  // idx 2
-//         db.push_back(rule{ep.cons(ep.atom("r"), ep.atom("b")), {}});  // idx 3
-        
-//         goals goals;
-//         const expr* Z = ep.var(seq());
-//         goals.push_back(ep.cons(ep.atom("p"), Z));
-        
-//         // Pre-populate avoidance store to avoid idx 0
-//         const goal_lineage* gl_p = lp.goal(nullptr, 0);
-//         const resolution_lineage* rl_avoid = lp.resolution(gl_p, 0);
-//         decision_store avoidance;
-//         avoidance.insert(rl_avoid);
-//         avoidance_store as;
-//         as.insert(avoidance);
-        
-//         monte_carlo::tree_node<mcts_decider::choice> root;
-//         std::mt19937 rng(42);
-//         monte_carlo::simulation<mcts_decider::choice, std::mt19937> sim(root, 1.414, rng);
-        
-//         resolution_store rs;
-//         decision_store ds;
-//         a01_sim simulation(100, db, goals, t, seq, ep, bm, lp, rs, ds, as, sim);
-        
-//         bool result = simulation();
-        
-//         // CRITICAL: Solution found
-//         assert(result == true);
-        
-//         // CRITICAL: Exactly 2 resolutions (p→r, r)
-//         assert(simulation.rs.size() == 2);
-        
-//         // CRITICAL: Verify lineages (used idx 1, not idx 0)
-//         const resolution_lineage* rl_p = lp.resolution(gl_p, 1);
-//         assert(simulation.rs.count(rl_p) == 1);
-        
-//         const goal_lineage* gl_r = lp.goal(rl_p, 0);
-//         const resolution_lineage* rl_r = lp.resolution(gl_r, 3);
-//         assert(simulation.rs.count(rl_r) == 1);
-        
-//         // CRITICAL: No decisions (CDCL elim removed idx 0, leaving unit prop)
-//         assert(simulation.ds.size() == 0);
-        
-//         // CRITICAL: MCTS never called
-//         assert(sim.length() == 0);
-        
-//         // CRITICAL: Z binds to 'b'
-//         normalizer norm(ep, bm);
-//         const expr* Z_normalized = norm(Z);
-//         assert(Z_normalized == ep.atom("b"));
-//     }
-    
-//     // Test 49: Existential variables (variables only in body)
-//     // Database: p(X) :- q(Y)., q(a).
-//     // Goal: :- p(hello).
-//     // Expected: Solution (X=hello, Y=a, Y is existential)
-//     {
-//         trail t;
-//         t.push();
-        
-//         expr_pool ep(t);
-//         bind_map bm(t);
-//         sequencer seq(t);
-//         lineage_pool lp;
-        
-//         database db;
-//         const expr* X = ep.var(seq());
-//         const expr* Y = ep.var(seq());
-//         db.push_back(rule{ep.cons(ep.atom("p"), X), {ep.cons(ep.atom("q"), Y)}});  // idx 0
-//         db.push_back(rule{ep.cons(ep.atom("q"), ep.atom("a")), {}});  // idx 1
-        
-//         goals goals;
-//         goals.push_back(ep.cons(ep.atom("p"), ep.atom("hello")));
-        
-//         avoidance_store as;
-        
-//         monte_carlo::tree_node<mcts_decider::choice> root;
-//         std::mt19937 rng(42);
-//         monte_carlo::simulation<mcts_decider::choice, std::mt19937> sim(root, 1.414, rng);
-        
-//         resolution_store rs;
-//         decision_store ds;
-//         a01_sim simulation(100, db, goals, t, seq, ep, bm, lp, rs, ds, as, sim);
-        
-//         bool result = simulation();
-        
-//         // CRITICAL: Solution found
-//         assert(result == true);
-        
-//         // CRITICAL: 2 resolutions
-//         assert(simulation.rs.size() == 2);
-        
-//         // CRITICAL: Verify lineages
-//         const goal_lineage* gl_p = lp.goal(nullptr, 0);
-//         const resolution_lineage* rl_p = lp.resolution(gl_p, 0);
-//         assert(simulation.rs.count(rl_p) == 1);
-        
-//         const goal_lineage* gl_q = lp.goal(rl_p, 0);
-//         const resolution_lineage* rl_q = lp.resolution(gl_q, 1);
-//         assert(simulation.rs.count(rl_q) == 1);
-        
-//         // CRITICAL: No decisions
-//         assert(simulation.ds.size() == 0);
-        
-//         // NOTE: X and Y are database variables that get copied during resolution.
-//         // The COPIED versions bind correctly (X'=hello, Y'=a), but we can't check
-//         // the original database variables since they remain unbound.
-//     }
-    
-//     // Test 50: Self-referential rule (immediate cycle)
-//     // Database: p(X) :- p(X).
-//     // Goal: :- p(a).
-//     // Expected: Max resolutions exceeded (infinite loop detection)
-//     {
-//         trail t;
-//         t.push();
-        
-//         expr_pool ep(t);
-//         bind_map bm(t);
-//         sequencer seq(t);
-//         lineage_pool lp;
-        
-//         database db;
-//         const expr* X = ep.var(seq());
-//         db.push_back(rule{ep.cons(ep.atom("p"), X), {ep.cons(ep.atom("p"), X)}});  // idx 0: p(X) :- p(X)
-        
-//         goals goals;
-//         goals.push_back(ep.cons(ep.atom("p"), ep.atom("a")));
-        
-//         avoidance_store as;
-        
-//         monte_carlo::tree_node<mcts_decider::choice> root;
-//         std::mt19937 rng(42);
-//         monte_carlo::simulation<mcts_decider::choice, std::mt19937> sim(root, 1.414, rng);
-        
-//         resolution_store rs;
-//         decision_store ds;
-//         a01_sim simulation(5, db, goals, t, seq, ep, bm, lp, rs, ds, as, sim);  // Low max_resolutions
-        
-//         bool result = simulation();
-        
-//         // CRITICAL: Max resolutions exceeded (not a solution)
-//         assert(result == false);
-        
-//         // CRITICAL: Exactly 5 resolutions (hit the limit)
-//         assert(simulation.rs.size() == 5);
-        
-//         // CRITICAL: All unit propagations (only one candidate)
-//         assert(simulation.ds.size() == 0);
-        
-//         // CRITICAL: Goal store not empty (still has unresolved goals)
-//         assert(simulation.gs.size() > 0);
-//     }
-    
-//     // Test 51: Empty database
-//     // Database: (empty)
-//     // Goal: :- p(X).
-//     // Expected: Immediate conflict (no rules at all)
-//     {
-//         trail t;
-//         t.push();
-        
-//         expr_pool ep(t);
-//         bind_map bm(t);
-//         sequencer seq(t);
-//         lineage_pool lp;
-        
-//         database db;  // Empty!
-        
-//         goals goals;
-//         const expr* X = ep.var(seq());
-//         goals.push_back(ep.cons(ep.atom("p"), X));
-        
-//         avoidance_store as;
-        
-//         monte_carlo::tree_node<mcts_decider::choice> root;
-//         std::mt19937 rng(42);
-//         monte_carlo::simulation<mcts_decider::choice, std::mt19937> sim(root, 1.414, rng);
-        
-//         resolution_store rs;
-//         decision_store ds;
-//         a01_sim simulation(100, db, goals, t, seq, ep, bm, lp, rs, ds, as, sim);
-        
-//         bool result = simulation();
-        
-//         // CRITICAL: Immediate conflict
-//         assert(result == false);
-        
-//         // CRITICAL: No resolutions
-//         assert(simulation.rs.size() == 0);
-        
-//         // CRITICAL: Goal still in store with no candidates
-//         const goal_lineage* gl_p = lp.goal(nullptr, 0);
-//         assert(simulation.gs.count(gl_p) == 1);
-//         assert(simulation.cs.count(gl_p) == 0);
-//     }
-    
-//     // Test 52: Fact with variable in head
-//     // Database: p(X).
-//     // Goal: :- p(hello).
-//     // Expected: Solution (X unifies with hello)
-//     {
-//         trail t;
-//         t.push();
-        
-//         expr_pool ep(t);
-//         bind_map bm(t);
-//         sequencer seq(t);
-//         lineage_pool lp;
-        
-//         database db;
-//         const expr* X = ep.var(seq());
-//         db.push_back(rule{ep.cons(ep.atom("p"), X), {}});  // idx 0: p(X). (fact with variable)
-        
-//         goals goals;
-//         goals.push_back(ep.cons(ep.atom("p"), ep.atom("hello")));
-        
-//         avoidance_store as;
-        
-//         monte_carlo::tree_node<mcts_decider::choice> root;
-//         std::mt19937 rng(42);
-//         monte_carlo::simulation<mcts_decider::choice, std::mt19937> sim(root, 1.414, rng);
-        
-//         resolution_store rs;
-//         decision_store ds;
-//         a01_sim simulation(100, db, goals, t, seq, ep, bm, lp, rs, ds, as, sim);
-        
-//         bool result = simulation();
-        
-//         // CRITICAL: Solution found
-//         assert(result == true);
-        
-//         // CRITICAL: Exactly 1 resolution
-//         assert(simulation.rs.size() == 1);
-        
-//         // CRITICAL: Verify resolution
-//         const goal_lineage* gl_p = lp.goal(nullptr, 0);
-//         const resolution_lineage* rl_p = lp.resolution(gl_p, 0);
-//         assert(simulation.rs.count(rl_p) == 1);
-        
-//         // CRITICAL: No decisions (unit prop)
-//         assert(simulation.ds.size() == 0);
-        
-//         // NOTE: X is a database variable that gets copied during resolution.
-//         // The COPIED version X' binds to 'hello', but we can't check the
-//         // original database variable since it remains unbound.
-//     }
-    
-//     // Test 53: Very wide goal (many body goals)
-//     // Database: big(W,X,Y,Z) :- a(W), b(X), c(Y), d(Z)., a(1)., b(2)., c(3)., d(4).
-//     // Goal: :- big(A,B,C,D).
-//     // Expected: A=1, B=2, C=3, D=4 (4 sub-goals spawned)
-//     {
-//         trail t;
-//         t.push();
-        
-//         expr_pool ep(t);
-//         bind_map bm(t);
-//         sequencer seq(t);
-//         lineage_pool lp;
-        
-//         database db;
-//         const expr* W = ep.var(seq());
-//         const expr* X = ep.var(seq());
-//         const expr* Y = ep.var(seq());
-//         const expr* Z = ep.var(seq());
-        
-//         const expr* big_head = ep.cons(ep.atom("big"), ep.cons(W, ep.cons(X, ep.cons(Y, Z))));
-//         const expr* a_body = ep.cons(ep.atom("a"), W);
-//         const expr* b_body = ep.cons(ep.atom("b"), X);
-//         const expr* c_body = ep.cons(ep.atom("c"), Y);
-//         const expr* d_body = ep.cons(ep.atom("d"), Z);
-//         db.push_back(rule{big_head, {a_body, b_body, c_body, d_body}});  // idx 0
-        
-//         db.push_back(rule{ep.cons(ep.atom("a"), ep.atom("1")), {}});  // idx 1
-//         db.push_back(rule{ep.cons(ep.atom("b"), ep.atom("2")), {}});  // idx 2
-//         db.push_back(rule{ep.cons(ep.atom("c"), ep.atom("3")), {}});  // idx 3
-//         db.push_back(rule{ep.cons(ep.atom("d"), ep.atom("4")), {}});  // idx 4
-        
-//         goals goals;
-//         const expr* A = ep.var(seq());
-//         const expr* B = ep.var(seq());
-//         const expr* C = ep.var(seq());
-//         const expr* D = ep.var(seq());
-//         goals.push_back(ep.cons(ep.atom("big"), ep.cons(A, ep.cons(B, ep.cons(C, D)))));
-        
-//         avoidance_store as;
-        
-//         monte_carlo::tree_node<mcts_decider::choice> root;
-//         std::mt19937 rng(42);
-//         monte_carlo::simulation<mcts_decider::choice, std::mt19937> sim(root, 1.414, rng);
-        
-//         resolution_store rs;
-//         decision_store ds;
-//         a01_sim simulation(100, db, goals, t, seq, ep, bm, lp, rs, ds, as, sim);
-        
-//         bool result = simulation();
-        
-//         // CRITICAL: Solution found
-//         assert(result == true);
-        
-//         // CRITICAL: Exactly 5 resolutions (big + 4 sub-goals)
-//         assert(simulation.rs.size() == 5);
-        
-//         // CRITICAL: Verify lineages
-//         const goal_lineage* gl_big = lp.goal(nullptr, 0);
-//         const resolution_lineage* rl_big = lp.resolution(gl_big, 0);
-//         assert(simulation.rs.count(rl_big) == 1);
-        
-//         const goal_lineage* gl_a = lp.goal(rl_big, 0);
-//         const resolution_lineage* rl_a = lp.resolution(gl_a, 1);
-//         assert(simulation.rs.count(rl_a) == 1);
-        
-//         const goal_lineage* gl_b = lp.goal(rl_big, 1);
-//         const resolution_lineage* rl_b = lp.resolution(gl_b, 2);
-//         assert(simulation.rs.count(rl_b) == 1);
-        
-//         const goal_lineage* gl_c = lp.goal(rl_big, 2);
-//         const resolution_lineage* rl_c = lp.resolution(gl_c, 3);
-//         assert(simulation.rs.count(rl_c) == 1);
-        
-//         const goal_lineage* gl_d = lp.goal(rl_big, 3);
-//         const resolution_lineage* rl_d = lp.resolution(gl_d, 4);
-//         assert(simulation.rs.count(rl_d) == 1);
-        
-//         // CRITICAL: No decisions (all unit props)
-//         assert(simulation.ds.size() == 0);
-        
-//         // CRITICAL: Verify all four variables
-//         normalizer norm(ep, bm);
-//         assert(norm(A) == ep.atom("1"));
-//         assert(norm(B) == ep.atom("2"));
-//         assert(norm(C) == ep.atom("3"));
-//         assert(norm(D) == ep.atom("4"));
-//     }
-    
-//     // Test 54: Multiple avoidances in avoidance store
-//     // Database: p(X) :- q(X)., p(Y) :- r(Y)., q(a)., r(b).
-//     // Goal: :- p(Z).
-//     // Avoidances: {{rl1}, {rl2}} where both become singletons
-//     // Expected: Both get CDCL eliminated, leaving conflict
-//     {
-//         trail t;
-//         t.push();
-        
-//         expr_pool ep(t);
-//         bind_map bm(t);
-//         sequencer seq(t);
-//         lineage_pool lp;
-        
-//         database db;
-//         const expr* X = ep.var(seq());
-//         const expr* Y = ep.var(seq());
-        
-//         db.push_back(rule{ep.cons(ep.atom("p"), X), {ep.cons(ep.atom("q"), X)}});  // idx 0
-//         db.push_back(rule{ep.cons(ep.atom("p"), Y), {ep.cons(ep.atom("r"), Y)}});  // idx 1
-//         db.push_back(rule{ep.cons(ep.atom("q"), ep.atom("a")), {}});  // idx 2
-//         db.push_back(rule{ep.cons(ep.atom("r"), ep.atom("b")), {}});  // idx 3
-        
-//         goals goals;
-//         const expr* Z = ep.var(seq());
-//         goals.push_back(ep.cons(ep.atom("p"), Z));
-        
-//         // Pre-populate avoidance store with BOTH resolutions
-//         const goal_lineage* gl_p = lp.goal(nullptr, 0);
-//         const resolution_lineage* rl0 = lp.resolution(gl_p, 0);
-//         const resolution_lineage* rl1 = lp.resolution(gl_p, 1);
-        
-//         decision_store avoidance1;
-//         avoidance1.insert(rl0);
-        
-//         decision_store avoidance2;
-//         avoidance2.insert(rl1);
-        
-//         avoidance_store as;
-//         as.insert(avoidance1);
-//         as.insert(avoidance2);
-        
-//         monte_carlo::tree_node<mcts_decider::choice> root;
-//         std::mt19937 rng(42);
-//         monte_carlo::simulation<mcts_decider::choice, std::mt19937> sim(root, 1.414, rng);
-        
-//         resolution_store rs;
-//         decision_store ds;
-//         a01_sim simulation(100, db, goals, t, seq, ep, bm, lp, rs, ds, as, sim);
-        
-//         bool result = simulation();
-        
-//         // CRITICAL: Conflict (both candidates eliminated)
-//         assert(result == false);
-        
-//         // CRITICAL: No resolutions made
-//         assert(simulation.rs.size() == 0);
-        
-//         // CRITICAL: Goal still in store with no candidates
-//         assert(simulation.gs.count(gl_p) == 1);
-//         assert(simulation.cs.count(gl_p) == 0);  // Both eliminated by CDCL
-//     }
-    
-//     // Test 55: Head elimination removes all candidates
-//     // Database: p(cons(a,X))., p(cons(b,Y)).
-//     // Goal: :- p(atom(z)).
-//     // Expected: Immediate conflict (head elim removes both)
-//     {
-//         trail t;
-//         t.push();
-        
-//         expr_pool ep(t);
-//         bind_map bm(t);
-//         sequencer seq(t);
-//         lineage_pool lp;
-        
-//         database db;
-//         const expr* X = ep.var(seq());
-//         const expr* Y = ep.var(seq());
-        
-//         const expr* cons_a_X = ep.cons(ep.atom("cons"), ep.cons(ep.atom("a"), X));
-//         db.push_back(rule{ep.cons(ep.atom("p"), cons_a_X), {}});  // idx 0
-        
-//         const expr* cons_b_Y = ep.cons(ep.atom("cons"), ep.cons(ep.atom("b"), Y));
-//         db.push_back(rule{ep.cons(ep.atom("p"), cons_b_Y), {}});  // idx 1
-        
-//         goals goals;
-//         const expr* atom_z = ep.cons(ep.atom("atom"), ep.atom("z"));
-//         goals.push_back(ep.cons(ep.atom("p"), atom_z));
-        
-//         avoidance_store as;
-        
-//         monte_carlo::tree_node<mcts_decider::choice> root;
-//         std::mt19937 rng(42);
-//         monte_carlo::simulation<mcts_decider::choice, std::mt19937> sim(root, 1.414, rng);
-        
-//         resolution_store rs;
-//         decision_store ds;
-//         a01_sim simulation(100, db, goals, t, seq, ep, bm, lp, rs, ds, as, sim);
-        
-//         bool result = simulation();
-        
-//         // CRITICAL: Immediate conflict (head elim removes all)
-//         assert(result == false);
-        
-//         // CRITICAL: No resolutions
-//         assert(simulation.rs.size() == 0);
-        
-//         // CRITICAL: Goal in store with no candidates
-//         const goal_lineage* gl_p = lp.goal(nullptr, 0);
-//         assert(simulation.gs.count(gl_p) == 1);
-//         assert(simulation.cs.count(gl_p) == 0);
-//     }
-    
-//     // Test 56: Deeply nested compound terms
-//     // Database: deep(cons(cons(cons(cons(cons(a,b),c),d),e),f)).
-//     // Goal: :- deep(X).
-//     // Expected: X binds to the deeply nested structure
-//     {
-//         trail t;
-//         t.push();
-        
-//         expr_pool ep(t);
-//         bind_map bm(t);
-//         sequencer seq(t);
-//         lineage_pool lp;
-        
-//         database db;
-//         const expr* level1 = ep.cons(ep.atom("cons"), ep.cons(ep.atom("a"), ep.atom("b")));
-//         const expr* level2 = ep.cons(ep.atom("cons"), ep.cons(level1, ep.atom("c")));
-//         const expr* level3 = ep.cons(ep.atom("cons"), ep.cons(level2, ep.atom("d")));
-//         const expr* level4 = ep.cons(ep.atom("cons"), ep.cons(level3, ep.atom("e")));
-//         const expr* level5 = ep.cons(ep.atom("cons"), ep.cons(level4, ep.atom("f")));
-//         db.push_back(rule{ep.cons(ep.atom("deep"), level5), {}});  // idx 0
-        
-//         goals goals;
-//         const expr* X = ep.var(seq());
-//         goals.push_back(ep.cons(ep.atom("deep"), X));
-        
-//         avoidance_store as;
-        
-//         monte_carlo::tree_node<mcts_decider::choice> root;
-//         std::mt19937 rng(42);
-//         monte_carlo::simulation<mcts_decider::choice, std::mt19937> sim(root, 1.414, rng);
-        
-//         resolution_store rs;
-//         decision_store ds;
-//         a01_sim simulation(100, db, goals, t, seq, ep, bm, lp, rs, ds, as, sim);
-        
-//         bool result = simulation();
-        
-//         // CRITICAL: Solution found
-//         assert(result == true);
-        
-//         // CRITICAL: X binds to deeply nested structure
-//         normalizer norm(ep, bm);
-//         assert(norm(X) == level5);
-//     }
-    
-//     // Test 57: Max resolutions hit during variable binding
-//     // Database: 10 chained rules
-//     // Goal: :- a(X).
-//     // Max resolutions: 5
-//     // Expected: Returns false (max exceeded)
-//     {
-//         trail t;
-//         t.push();
-        
-//         expr_pool ep(t);
-//         bind_map bm(t);
-//         sequencer seq(t);
-//         lineage_pool lp;
-        
-//         database db;
-//         const expr* vars[10];
-//         for (int i = 0; i < 10; i++) {
-//             vars[i] = ep.var(seq());
-//         }
-        
-//         // Build chain: a→b→c→d→e→f→g→h→i→j→end
-//         db.push_back(rule{ep.cons(ep.atom("a"), vars[0]), {ep.cons(ep.atom("b"), vars[0])}});
-//         db.push_back(rule{ep.cons(ep.atom("b"), vars[1]), {ep.cons(ep.atom("c"), vars[1])}});
-//         db.push_back(rule{ep.cons(ep.atom("c"), vars[2]), {ep.cons(ep.atom("d"), vars[2])}});
-//         db.push_back(rule{ep.cons(ep.atom("d"), vars[3]), {ep.cons(ep.atom("e"), vars[3])}});
-//         db.push_back(rule{ep.cons(ep.atom("e"), vars[4]), {ep.cons(ep.atom("f"), vars[4])}});
-//         db.push_back(rule{ep.cons(ep.atom("f"), vars[5]), {ep.cons(ep.atom("g"), vars[5])}});
-//         db.push_back(rule{ep.cons(ep.atom("g"), vars[6]), {ep.cons(ep.atom("h"), vars[6])}});
-//         db.push_back(rule{ep.cons(ep.atom("h"), vars[7]), {ep.cons(ep.atom("i"), vars[7])}});
-//         db.push_back(rule{ep.cons(ep.atom("i"), vars[8]), {ep.cons(ep.atom("j"), vars[8])}});
-//         db.push_back(rule{ep.cons(ep.atom("j"), ep.atom("end")), {}});
-        
-//         goals goals;
-//         const expr* X = ep.var(seq());
-//         goals.push_back(ep.cons(ep.atom("a"), X));
-        
-//         avoidance_store as;
-        
-//         monte_carlo::tree_node<mcts_decider::choice> root;
-//         std::mt19937 rng(42);
-//         monte_carlo::simulation<mcts_decider::choice, std::mt19937> sim(root, 1.414, rng);
-        
-//         resolution_store rs;
-//         decision_store ds;
-//         a01_sim simulation(5, db, goals, t, seq, ep, bm, lp, rs, ds, as, sim);  // Max 5
-        
-//         bool result = simulation();
-        
-//         // CRITICAL: Max exceeded (not solution)
-//         assert(result == false);
-        
-//         // CRITICAL: Exactly 5 resolutions
-//         assert(simulation.rs.size() == 5);
-        
-//         // CRITICAL: Goal store not empty
-//         assert(simulation.gs.size() > 0);
-//     }
-    
-//     // Test 58: Decision creates conflict immediately
-//     // Database: p(a) :- q(b)., q(c).
-//     // Goal: :- p(a).
-//     // Expected: Conflict (q(b) has no candidates)
-//     {
-//         trail t;
-//         t.push();
-        
-//         expr_pool ep(t);
-//         bind_map bm(t);
-//         sequencer seq(t);
-//         lineage_pool lp;
-        
-//         database db;
-//         db.push_back(rule{ep.cons(ep.atom("p"), ep.atom("a")), {ep.cons(ep.atom("q"), ep.atom("b"))}});  // idx 0
-//         db.push_back(rule{ep.cons(ep.atom("q"), ep.atom("c")), {}});  // idx 1: q(c) not q(b)!
-        
-//         goals goals;
-//         goals.push_back(ep.cons(ep.atom("p"), ep.atom("a")));
-        
-//         avoidance_store as;
-        
-//         monte_carlo::tree_node<mcts_decider::choice> root;
-//         std::mt19937 rng(42);
-//         monte_carlo::simulation<mcts_decider::choice, std::mt19937> sim(root, 1.414, rng);
-        
-//         resolution_store rs;
-//         decision_store ds;
-//         a01_sim simulation(100, db, goals, t, seq, ep, bm, lp, rs, ds, as, sim);
-        
-//         bool result = simulation();
-        
-//         // CRITICAL: Conflict after first resolution
-//         assert(result == false);
-        
-//         // CRITICAL: Exactly 1 resolution (p→q(b))
-//         assert(simulation.rs.size() == 1);
-        
-//         // CRITICAL: Verify resolution
-//         const goal_lineage* gl_p = lp.goal(nullptr, 0);
-//         const resolution_lineage* rl_p = lp.resolution(gl_p, 0);
-//         assert(simulation.rs.count(rl_p) == 1);
-        
-//         // CRITICAL: q(b) has no candidates
-//         const goal_lineage* gl_q = lp.goal(rl_p, 0);
-//         assert(simulation.gs.count(gl_q) == 1);
-//         assert(simulation.cs.count(gl_q) == 0);
-//     }
-    
-//     // Test 59: Variables in goal match multiple rules (ambiguity)
-//     // Database: edge(a,b)., edge(a,c)., edge(a,d).
-//     // Goal: :- edge(a,X).
-//     // Expected: X could be b, c, or d (MCTS decides, force d)
-//     {
-//         trail t;
-//         t.push();
-        
-//         expr_pool ep(t);
-//         bind_map bm(t);
-//         sequencer seq(t);
-//         lineage_pool lp;
-        
-//         database db;
-//         db.push_back(rule{ep.cons(ep.atom("edge"), ep.cons(ep.atom("a"), ep.atom("b"))), {}});  // idx 0
-//         db.push_back(rule{ep.cons(ep.atom("edge"), ep.cons(ep.atom("a"), ep.atom("c"))), {}});  // idx 1
-//         db.push_back(rule{ep.cons(ep.atom("edge"), ep.cons(ep.atom("a"), ep.atom("d"))), {}});  // idx 2
-        
-//         goals goals;
-//         const expr* X = ep.var(seq());
-//         goals.push_back(ep.cons(ep.atom("edge"), ep.cons(ep.atom("a"), X)));
-        
-//         avoidance_store as;
-        
-//         monte_carlo::tree_node<mcts_decider::choice> root;
-//         std::mt19937 rng(42);
-//         monte_carlo::simulation<mcts_decider::choice, std::mt19937> sim(root, 1.414, rng);
-        
-//         resolution_store rs;
-//         decision_store ds;
-//         a01_sim simulation(100, db, goals, t, seq, ep, bm, lp, rs, ds, as, sim);
-        
-//         // Pre-populate MCTS to force idx 2
-//         const goal_lineage* gl0_for_mcts = lp.goal(nullptr, 0);
-//         root.m_visits = 100;
-//         root.m_children[gl0_for_mcts].m_visits = 50;
-//         root.m_children[gl0_for_mcts].m_children[size_t(0)].m_visits = 10;
-//         root.m_children[gl0_for_mcts].m_children[size_t(0)].m_value = 10.0;
-//         root.m_children[gl0_for_mcts].m_children[size_t(1)].m_visits = 10;
-//         root.m_children[gl0_for_mcts].m_children[size_t(1)].m_value = 10.0;
-//         root.m_children[gl0_for_mcts].m_children[size_t(2)].m_visits = 0;  // Force idx 2
-        
-//         bool result = simulation();
-        
-//         // CRITICAL: Solution found
-//         assert(result == true);
-        
-//         // CRITICAL: Exactly 1 resolution (forced idx 2)
-//         assert(simulation.rs.size() == 1);
-        
-//         const goal_lineage* gl0 = lp.goal(nullptr, 0);
-//         const resolution_lineage* rl2 = lp.resolution(gl0, 2);
-//         assert(simulation.rs.count(rl2) == 1);
-//         assert(simulation.ds.count(rl2) == 1);  // Decision
-        
-//         // CRITICAL: X binds to 'd'
-//         normalizer norm(ep, bm);
-//         assert(norm(X) == ep.atom("d"));
-//     }
-    
-//     // Test 60: Unification failure due to nested structure mismatch
-//     // Database: p(cons(a,cons(b,nil))).
-//     // Goal: :- p(cons(a,cons(c,nil))).
-//     // Expected: Conflict (b ≠ c in nested position)
-//     {
-//         trail t;
-//         t.push();
-        
-//         expr_pool ep(t);
-//         bind_map bm(t);
-//         sequencer seq(t);
-//         lineage_pool lp;
-        
-//         database db;
-//         const expr* nested_db = ep.cons(ep.atom("cons"), 
-//                                    ep.cons(ep.atom("a"), 
-//                                       ep.cons(ep.atom("cons"), 
-//                                          ep.cons(ep.atom("b"), ep.atom("nil")))));
-//         db.push_back(rule{ep.cons(ep.atom("p"), nested_db), {}});  // idx 0
-        
-//         goals goals;
-//         const expr* nested_goal = ep.cons(ep.atom("cons"), 
-//                                      ep.cons(ep.atom("a"), 
-//                                         ep.cons(ep.atom("cons"), 
-//                                            ep.cons(ep.atom("c"), ep.atom("nil")))));
-//         goals.push_back(ep.cons(ep.atom("p"), nested_goal));
-        
-//         avoidance_store as;
-        
-//         monte_carlo::tree_node<mcts_decider::choice> root;
-//         std::mt19937 rng(42);
-//         monte_carlo::simulation<mcts_decider::choice, std::mt19937> sim(root, 1.414, rng);
-        
-//         resolution_store rs;
-//         decision_store ds;
-//         a01_sim simulation(100, db, goals, t, seq, ep, bm, lp, rs, ds, as, sim);
-        
-//         bool result = simulation();
-        
-//         // CRITICAL: Immediate conflict (head elim fails)
-//         assert(result == false);
-        
-//         // CRITICAL: No resolutions
-//         assert(simulation.rs.size() == 0);
-        
-//         // CRITICAL: Goal has no candidates
-//         const goal_lineage* gl_p = lp.goal(nullptr, 0);
-//         assert(simulation.cs.count(gl_p) == 0);
-//     }
-    
-//     // Test 61: Variable occurs in multiple positions in same goal
-//     // Database: weird(X,X,X).
-//     // Goal: :- weird(a,Y,a).
-//     // Expected: Y=a (all three positions must unify)
-//     {
-//         trail t;
-//         t.push();
-        
-//         expr_pool ep(t);
-//         bind_map bm(t);
-//         sequencer seq(t);
-//         lineage_pool lp;
-        
-//         database db;
-//         const expr* X = ep.var(seq());
-//         const expr* weird = ep.cons(ep.atom("weird"), ep.cons(X, ep.cons(X, X)));
-//         db.push_back(rule{weird, {}});  // idx 0: weird(X,X,X)
-        
-//         goals goals;
-//         const expr* Y = ep.var(seq());
-//         const expr* goal = ep.cons(ep.atom("weird"), ep.cons(ep.atom("a"), ep.cons(Y, ep.atom("a"))));
-//         goals.push_back(goal);
-        
-//         avoidance_store as;
-        
-//         monte_carlo::tree_node<mcts_decider::choice> root;
-//         std::mt19937 rng(42);
-//         monte_carlo::simulation<mcts_decider::choice, std::mt19937> sim(root, 1.414, rng);
-        
-//         resolution_store rs;
-//         decision_store ds;
-//         a01_sim simulation(100, db, goals, t, seq, ep, bm, lp, rs, ds, as, sim);
-        
-//         bool result = simulation();
-        
-//         // CRITICAL: Solution found
-//         assert(result == true);
-        
-//         // CRITICAL: Exactly 1 resolution
-//         assert(simulation.rs.size() == 1);
-        
-//         // CRITICAL: Y binds to 'a'
-//         normalizer norm(ep, bm);
-//         assert(norm(Y) == ep.atom("a"));
-//     }
-    
-//     // Test 62: CDCL elimination chain reaction
-//     // Pre-populate avoidance to create cascade of eliminations
-//     {
-//         trail t;
-//         t.push();
-        
-//         expr_pool ep(t);
-//         bind_map bm(t);
-//         sequencer seq(t);
-//         lineage_pool lp;
-        
-//         database db;
-//         const expr* X1 = ep.var(seq());
-//         const expr* X2 = ep.var(seq());
-//         const expr* X3 = ep.var(seq());
-        
-//         db.push_back(rule{ep.cons(ep.atom("p"), X1), {ep.cons(ep.atom("q"), X1)}});  // idx 0
-//         db.push_back(rule{ep.cons(ep.atom("p"), X2), {ep.cons(ep.atom("r"), X2)}});  // idx 1
-//         db.push_back(rule{ep.cons(ep.atom("p"), X3), {ep.cons(ep.atom("s"), X3)}});  // idx 2
-//         db.push_back(rule{ep.cons(ep.atom("q"), ep.atom("a")), {}});  // idx 3
-//         db.push_back(rule{ep.cons(ep.atom("r"), ep.atom("b")), {}});  // idx 4
-//         db.push_back(rule{ep.cons(ep.atom("s"), ep.atom("c")), {}});  // idx 5
-        
-//         goals goals;
-//         const expr* Z = ep.var(seq());
-//         goals.push_back(ep.cons(ep.atom("p"), Z));
-        
-//         // Pre-populate avoidance to eliminate idx 0 and 1
-//         const goal_lineage* gl_p = lp.goal(nullptr, 0);
-//         const resolution_lineage* rl0 = lp.resolution(gl_p, 0);
-//         const resolution_lineage* rl1 = lp.resolution(gl_p, 1);
-        
-//         decision_store av1;
-//         av1.insert(rl0);
-//         decision_store av2;
-//         av2.insert(rl1);
-        
-//         avoidance_store as;
-//         as.insert(av1);
-//         as.insert(av2);
-        
-//         monte_carlo::tree_node<mcts_decider::choice> root;
-//         std::mt19937 rng(42);
-//         monte_carlo::simulation<mcts_decider::choice, std::mt19937> sim(root, 1.414, rng);
-        
-//         resolution_store rs;
-//         decision_store ds;
-//         a01_sim simulation(100, db, goals, t, seq, ep, bm, lp, rs, ds, as, sim);
-        
-//         bool result = simulation();
-        
-//         // CRITICAL: Solution found (only idx 2 remains)
-//         assert(result == true);
-        
-//         // CRITICAL: 2 resolutions (p→s, s)
-//         assert(simulation.rs.size() == 2);
-        
-//         // CRITICAL: Z binds to 'c'
-//         normalizer norm(ep, bm);
-//         assert(norm(Z) == ep.atom("c"));
-//     }
-    
-//     // Test 63: Unbound variables in normalizer
-//     // Goal with variable that never binds
-//     {
-//         trail t;
-//         t.push();
-        
-//         expr_pool ep(t);
-//         bind_map bm(t);
-//         sequencer seq(t);
-//         lineage_pool lp;
-        
-//         database db;
-//         db.push_back(rule{ep.atom("p"), {}});  // idx 0: p. (no variables)
-        
-//         goals goals;
-//         goals.push_back(ep.atom("p"));
-        
-//         avoidance_store as;
-        
-//         monte_carlo::tree_node<mcts_decider::choice> root;
-//         std::mt19937 rng(42);
-//         monte_carlo::simulation<mcts_decider::choice, std::mt19937> sim(root, 1.414, rng);
-        
-//         resolution_store rs;
-//         decision_store ds;
-//         a01_sim simulation(100, db, goals, t, seq, ep, bm, lp, rs, ds, as, sim);
-        
-//         bool result = simulation();
-        
-//         // CRITICAL: Solution found
-//         assert(result == true);
-        
-//         // Create an unbound variable AFTER solving
-//         const expr* unbound_var = ep.var(seq());
-        
-//         // CRITICAL: Normalizer returns variable itself (identity)
-//         normalizer norm(ep, bm);
-//         assert(norm(unbound_var) == unbound_var);
-//     }
-    
-//     // Test 64: Rule whose head IS a variable
-//     // Database: X :- q(a).
-//     // Goal: :- p(hello).
-//     // Expected: Solution (X unifies with p(hello))
-//     {
-//         trail t;
-//         t.push();
-        
-//         expr_pool ep(t);
-//         bind_map bm(t);
-//         sequencer seq(t);
-//         lineage_pool lp;
-        
-//         database db;
-//         const expr* X = ep.var(seq());
-//         db.push_back(rule{X, {ep.cons(ep.atom("q"), ep.atom("a"))}});  // idx 0: X :- q(a).
-//         db.push_back(rule{ep.cons(ep.atom("q"), ep.atom("a")), {}});  // idx 1: q(a).
-        
-//         goals goals;
-//         goals.push_back(ep.cons(ep.atom("p"), ep.atom("hello")));
-        
-//         avoidance_store as;
-        
-//         monte_carlo::tree_node<mcts_decider::choice> root;
-//         std::mt19937 rng(42);
-//         monte_carlo::simulation<mcts_decider::choice, std::mt19937> sim(root, 1.414, rng);
-        
-//         resolution_store rs;
-//         decision_store ds;
-//         a01_sim simulation(100, db, goals, t, seq, ep, bm, lp, rs, ds, as, sim);
-        
-//         bool result = simulation();
-        
-//         // CRITICAL: Solution found
-//         assert(result == true);
-        
-//         // CRITICAL: 2 resolutions
-//         assert(simulation.rs.size() == 2);
-        
-//         // CRITICAL: Verify lineages
-//         const goal_lineage* gl_goal = lp.goal(nullptr, 0);
-//         const resolution_lineage* rl_goal = lp.resolution(gl_goal, 0);
-//         assert(simulation.rs.count(rl_goal) == 1);
-        
-//         const goal_lineage* gl_q = lp.goal(rl_goal, 0);
-//         const resolution_lineage* rl_q = lp.resolution(gl_q, 1);
-//         assert(simulation.rs.count(rl_q) == 1);
-        
-//         // NOTE: X is a database variable (used as rule head!) that gets copied
-//         // during resolution. The copied version X' binds to p(hello), but we
-//         // can't check the original database variable.
-//     }
-// }
-
-// void test_a01_constructor_and_destructor() {
-//     // Test 1: Basic construction - verify trail frame pushed and all fields stored correctly
-//     {
-//         trail t;
-//         t.push();
-
-//         expr_pool ep(t);
-//         bind_map bm(t);
-//         sequencer seq(t);
-
-//         database db;
-//         goals goals;
-//         std::mt19937 rng(42);
-
-//         size_t depth_before = t.depth();
-//         assert(depth_before == 1);
-
-//         {
-//             a01 solver(db, goals, t, seq, bm, 100, 10, 1.414, rng);
-
-//             // CRITICAL: Constructor pushes one trail frame
-//             assert(t.depth() == depth_before + 1);
-
-//             // CRITICAL: References stored correctly
-//             assert(&solver.db == &db);
-//             assert(&solver.gl == &goals);
-//             assert(&solver.t == &t);
-//             assert(&solver.vars == &seq);
-//             assert(&solver.bm == &bm);
-//             assert(&solver.rng == &rng);
-
-//             // CRITICAL: Scalar fields stored correctly
-//             assert(solver.max_resolutions == 100);
-//             assert(solver.iterations_per_avoidance == 10);
-//             assert(solver.c == 1.414);
-
-//             // CRITICAL: Avoidance store initialized empty
-//             assert(solver.as.empty());
-//         }
-
-//         // CRITICAL: Destructor restores trail depth
-//         assert(t.depth() == depth_before);
-//     }
-
-//     // Test 2: Construction on a fresh trail (depth 0 → 1 → 0)
-//     {
-//         trail t;
-
-//         expr_pool ep(t);
-//         bind_map bm(t);
-//         sequencer seq(t);
-
-//         database db;
-//         goals goals;
-//         std::mt19937 rng(0);
-
-//         assert(t.depth() == 0);
-
-//         {
-//             a01 solver(db, goals, t, seq, bm, 1, 1, 0.0, rng);
-
-//             // CRITICAL: Depth goes 0 → 1
-//             assert(t.depth() == 1);
-//             assert(solver.max_resolutions == 1);
-//             assert(solver.iterations_per_avoidance == 1);
-//             assert(solver.c == 0.0);
-//         }
-
-//         // CRITICAL: Depth returns to 0
-//         assert(t.depth() == 0);
-//     }
-
-//     // Test 3: Constructor only adds a frame boundary, no undo actions
-//     {
-//         trail t;
-//         t.push();
-
-//         expr_pool ep(t);
-//         bind_map bm(t);
-//         sequencer seq(t);
-
-//         database db;
-//         goals goals;
-//         std::mt19937 rng(42);
-
-//         size_t undo_size_before = t.undo_stack.size();
-//         size_t boundary_size_before = t.frame_boundary_stack.size();
-
-//         {
-//             a01 solver(db, goals, t, seq, bm, 100, 10, 1.414, rng);
-
-//             // CRITICAL: Only a frame boundary is pushed, not any undo action
-//             assert(t.undo_stack.size() == undo_size_before);
-//             assert(t.frame_boundary_stack.size() == boundary_size_before + 1);
-//         }
-
-//         // CRITICAL: Destructor removes the frame boundary; undo stack is unchanged
-//         assert(t.frame_boundary_stack.size() == boundary_size_before);
-//         assert(t.undo_stack.size() == undo_size_before);
-//     }
-
-//     // Test 4: Destructor rolls back undo actions logged within the a01 frame
-//     {
-//         trail t;
-//         t.push();
-
-//         expr_pool ep(t);
-//         bind_map bm(t);
-//         sequencer seq(t);
-
-//         database db;
-//         goals goals;
-//         std::mt19937 rng(42);
-
-//         bool undone = false;
-
-//         {
-//             a01 solver(db, goals, t, seq, bm, 100, 10, 1.414, rng);
-
-//             // Log an undo action into the a01's frame
-//             t.log([&undone]() { undone = true; });
-
-//             assert(!undone);
-//         }
-
-//         // CRITICAL: Destructor popped the a01 frame, triggering the logged undo action
-//         assert(undone);
-//     }
-
-//     // Test 5: Destructor only pops the a01's frame, not the caller's frame
-//     {
-//         trail t;
-//         t.push();
-
-//         expr_pool ep(t);
-//         bind_map bm(t);
-//         sequencer seq(t);
-
-//         database db;
-//         goals goals;
-//         std::mt19937 rng(42);
-
-//         bool caller_undone = false;
-//         t.log([&caller_undone]() { caller_undone = true; });
-
-//         {
-//             a01 solver(db, goals, t, seq, bm, 100, 10, 1.414, rng);
-
-//             // a01's frame is stacked on top of the caller's frame
-//             assert(t.depth() == 2);
-//         }
-
-//         // CRITICAL: Only the a01's frame was popped; caller's undo action not triggered
-//         assert(!caller_undone);
-//         assert(t.depth() == 1);
-//     }
-
-//     // Test 6: Non-empty db and goals - verify references and contents accessible via solver
-//     {
-//         trail t;
-//         t.push();
-
-//         expr_pool ep(t);
-//         bind_map bm(t);
-//         sequencer seq(t);
-
-//         database db;
-//         db.push_back(rule{ep.atom("p"), {}});
-//         db.push_back(rule{ep.cons(ep.atom("q"), ep.var(seq())), {ep.atom("p")}});
-
-//         goals goals;
-//         goals.push_back(ep.cons(ep.atom("q"), ep.atom("a")));
-
-//         std::mt19937 rng(999);
-
-//         size_t depth_before = t.depth();
-
-//         {
-//             a01 solver(db, goals, t, seq, bm, 50, 5, 1.0, rng);
-
-//             // CRITICAL: Frame pushed
-//             assert(t.depth() == depth_before + 1);
-
-//             // CRITICAL: db reference correct; content accessible through it
-//             assert(&solver.db == &db);
-//             assert(solver.db.size() == 2);
-
-//             // CRITICAL: goals reference correct; content accessible through it
-//             assert(&solver.gl == &goals);
-//             assert(solver.gl.size() == 1);
-
-//             // CRITICAL: Avoidance store empty on construction regardless of db/goals content
-//             assert(solver.as.empty());
-//         }
-
-//         // CRITICAL: Destructor restores depth
-//         assert(t.depth() == depth_before);
-//     }
-// }
-
-// void test_a01_sim_one() {
-//     // Test 1: Immediate solution via unit propagation
-//     // db: {a.}, goals: {a.}
-//     // Expected: returns true, rs has 1 resolution, ds empty,
-//     //           trail depth invariant, MCTS root gets 1 visit
-//     {
-//         trail t;
-//         t.push();
-
-//         expr_pool ep(t);
-//         bind_map bm(t);
-//         sequencer seq(t);
-
-//         database db;
-//         db.push_back(rule{ep.atom("a"), {}});  // idx 0: a.
-
-//         goals goals;
-//         goals.push_back(ep.atom("a"));
-
-//         std::mt19937 rng(42);
-//         a01 solver(db, goals, t, seq, bm, 100, 10, 1.414, rng);
-
-//         monte_carlo::tree_node<mcts_decider::choice> root;
-//         decision_store ds;
-//         resolution_store rs;
-
-//         size_t depth_before = t.depth();
-
-//         bool result = solver.sim_one(root, ds, rs);
-
-//         // CRITICAL: Solution found
-//         assert(result == true);
-
-//         // CRITICAL: ds empty (unit prop, no MCTS decision)
-//         assert(ds.empty());
-
-//         // CRITICAL: rs has the single resolution
-//         assert(rs.size() == 1);
-//         const goal_lineage* gl0 = solver.lp.goal(nullptr, 0);
-//         const resolution_lineage* rl0 = solver.lp.resolution(gl0, 0);
-//         assert(rs.count(rl0) == 1);
-
-//         // CRITICAL: Trail depth is invariant (pop + push inside sim_one)
-//         assert(t.depth() == depth_before);
-
-//         // CRITICAL: MCTS root visited exactly once (terminate() always touches root)
-//         assert(root.m_visits == 1);
-
-//         // CRITICAL: Reward is -ds.size() where ds was EMPTY going in → value == 0
-//         assert(root.m_value == 0.0);
-//     }
-
-//     // Test 2: Immediate conflict - empty database
-//     // db: {}, goals: {a.}
-//     // Expected: returns false, ds empty, rs empty, trail depth invariant, root visits == 1
-//     {
-//         trail t;
-//         t.push();
-
-//         expr_pool ep(t);
-//         bind_map bm(t);
-//         sequencer seq(t);
-
-//         database db;
-
-//         goals goals;
-//         goals.push_back(ep.atom("a"));
-
-//         std::mt19937 rng(42);
-//         a01 solver(db, goals, t, seq, bm, 100, 10, 1.414, rng);
-
-//         monte_carlo::tree_node<mcts_decider::choice> root;
-//         decision_store ds;
-//         resolution_store rs;
-
-//         size_t depth_before = t.depth();
-
-//         bool result = solver.sim_one(root, ds, rs);
-
-//         // CRITICAL: Conflict detected
-//         assert(result == false);
-
-//         // CRITICAL: No resolutions or decisions
-//         assert(ds.empty());
-//         assert(rs.empty());
-
-//         // CRITICAL: Trail depth invariant
-//         assert(t.depth() == depth_before);
-
-//         // CRITICAL: Root visited once, value == 0 (ds was empty going in)
-//         assert(root.m_visits == 1);
-//         assert(root.m_value == 0.0);
-//     }
-
-//     // Test 3: Trail pop/push behavior via secondary sequencer
-//     // The a01 constructor pushes a frame. Logging actions into that frame
-//     // (e.g. calling a secondary sequencer) must be rolled back when sim_one
-//     // calls t.pop() at the start of the simulation.
-//     {
-//         trail t;
-//         t.push();
-
-//         expr_pool ep(t);
-//         bind_map bm(t);
-//         sequencer seq(t);
-
-//         database db;
-//         db.push_back(rule{ep.atom("a"), {}});
-
-//         goals goals;
-//         goals.push_back(ep.atom("a"));
-
-//         std::mt19937 rng(42);
-//         a01 solver(db, goals, t, seq, bm, 100, 10, 1.414, rng);
-
-//         // Create a secondary sequencer on the SAME trail (after a01's constructor push)
-//         sequencer seq2(t);
-//         assert(seq2.index == 0);
-
-//         // Allocate a variable - this logs a decrement undo into the a01's current frame
-//         uint32_t v = seq2();
-//         assert(v == 0);
-//         assert(seq2.index == 1);
-
-//         monte_carlo::tree_node<mcts_decider::choice> root;
-//         decision_store ds;
-//         resolution_store rs;
-
-//         size_t depth_before = t.depth();
-
-//         solver.sim_one(root, ds, rs);
-
-//         // CRITICAL: t.pop() at start of sim_one triggered the seq2 undo action,
-//         //           rolling seq2.index back to 0
-//         assert(seq2.index == 0);
-
-//         // CRITICAL: t.push() after the pop restored the same depth
-//         assert(t.depth() == depth_before);
-//     }
-
-//     // Test 4: MCTS termination reward uses the OUTGOING (simulation's) ds, not the incoming ds.
-//     // db: {a :- b., a :- c., b., c.} — 2 candidates for a → MCTS must make exactly 1 decision.
-//     // The incoming ds is empty on the first call, but the output ds has 1 element (the decision).
-//     // With the fix: terminate(-1.0) → root.m_value = -1.0.
-//     // With the old bug: terminate(-0.0) → root.m_value = 0.0.
-//     // So root.m_value == -1.0 distinguishes correct from buggy behavior.
-//     {
-//         trail t;
-//         t.push();
-
-//         expr_pool ep(t);
-//         bind_map bm(t);
-//         sequencer seq(t);
-
-//         database db;
-//         db.push_back(rule{ep.atom("a"), {ep.atom("b")}});  // idx 0
-//         db.push_back(rule{ep.atom("a"), {ep.atom("c")}});  // idx 1
-//         db.push_back(rule{ep.atom("b"), {}});               // idx 2
-//         db.push_back(rule{ep.atom("c"), {}});               // idx 3
-
-//         goals goals;
-//         goals.push_back(ep.atom("a"));
-
-//         std::mt19937 rng(42);
-//         a01 solver(db, goals, t, seq, bm, 100, 10, 1.414, rng);
-
-//         monte_carlo::tree_node<mcts_decider::choice> root;
-//         decision_store ds;
-//         resolution_store rs;
-
-//         solver.sim_one(root, ds, rs);
-
-//         // CRITICAL: MCTS made exactly 1 decision (outgoing ds has 1 element)
-//         assert(ds.size() == 1);
-//         assert(root.m_visits == 1);
-
-//         // CRITICAL: Reward is based on output ds size (1), NOT input ds size (0).
-//         // Old buggy behavior would leave root.m_value == 0.0.
-//         assert(root.m_value == -1.0);
-//     }
-
-//     // Test 5: CDCL avoidance injected via solver.as after construction
-//     // db: {a :- b., a :- c., b., c.}, goals: {a.}
-//     // After construction, inject a singleton avoidance for (gl0, idx 0) directly into solver.as.
-//     // sim_one's a01_sim will pick up this copy and CDCL-eliminate idx 0,
-//     // leaving only idx 1 → unit propagation, so ds remains empty.
-//     {
-//         trail t;
-//         t.push();
-
-//         expr_pool ep(t);
-//         bind_map bm(t);
-//         sequencer seq(t);
-
-//         database db;
-//         db.push_back(rule{ep.atom("a"), {ep.atom("b")}});  // idx 0
-//         db.push_back(rule{ep.atom("a"), {ep.atom("c")}});  // idx 1
-//         db.push_back(rule{ep.atom("b"), {}});               // idx 2
-//         db.push_back(rule{ep.atom("c"), {}});               // idx 3
-
-//         goals goals;
-//         goals.push_back(ep.atom("a"));
-
-//         std::mt19937 rng(42);
-//         a01 solver(db, goals, t, seq, bm, 100, 10, 1.414, rng);
-
-//         // Inject avoidance: singleton {rl(gl0, 0)} causes CDCL elimination of idx 0
-//         const goal_lineage* gl0 = solver.lp.goal(nullptr, 0);
-//         const resolution_lineage* rl0 = solver.lp.resolution(gl0, 0);
-//         decision_store avoid;
-//         avoid.insert(rl0);
-//         solver.as.insert(avoid);
-
-//         monte_carlo::tree_node<mcts_decider::choice> root;
-//         decision_store ds;
-//         resolution_store rs;
-
-//         bool result = solver.sim_one(root, ds, rs);
-
-//         // CRITICAL: Solution found (idx 1 chosen via unit propagation after CDCL elim)
-//         assert(result == true);
-
-//         // CRITICAL: No decisions made (CDCL reduced to 1 candidate → unit prop)
-//         assert(ds.empty());
-
-//         // CRITICAL: 2 resolutions: a via idx 1, c via idx 3
-//         assert(rs.size() == 2);
-//         const resolution_lineage* rl_a = solver.lp.resolution(gl0, 1);
-//         assert(rs.count(rl_a) == 1);
-//         const resolution_lineage* rl_c = solver.lp.resolution(solver.lp.goal(rl_a, 0), 3);
-//         assert(rs.count(rl_c) == 1);
-//     }
-
-//     // Test 6: Pre-populated MCTS tree forces a specific decision; verify decisions and resolutions
-//     // db: {a :- b., a :- c., b., c.}, goals: {a.}
-//     // Force MCTS to pick idx 1 (a :- c.) as the decision.
-//     {
-//         trail t;
-//         t.push();
-
-//         expr_pool ep(t);
-//         bind_map bm(t);
-//         sequencer seq(t);
-
-//         database db;
-//         db.push_back(rule{ep.atom("a"), {ep.atom("b")}});  // idx 0
-//         db.push_back(rule{ep.atom("a"), {ep.atom("c")}});  // idx 1
-//         db.push_back(rule{ep.atom("b"), {}});               // idx 2
-//         db.push_back(rule{ep.atom("c"), {}});               // idx 3
-
-//         goals goals;
-//         goals.push_back(ep.atom("a"));
-
-//         std::mt19937 rng(42);
-//         a01 solver(db, goals, t, seq, bm, 100, 10, 1.414, rng);
-
-//         monte_carlo::tree_node<mcts_decider::choice> root;
-
-//         // Pre-populate the MCTS tree so that UCB1 selects idx 1 for the candidate choice.
-//         // The only goal is gl0; make its child visited so UCB1 is active at the next level.
-//         const goal_lineage* gl0 = solver.lp.goal(nullptr, 0);
-
-//         root.m_visits = 100;
-//         root.m_children[gl0].m_visits = 50;
-//         root.m_children[gl0].m_value = 100.0;
-//         // idx 0 visited → UCB1 can score it; idx 1 unvisited → score = +∞ → chosen
-//         root.m_children[gl0].m_children[size_t(0)].m_visits = 10;
-//         root.m_children[gl0].m_children[size_t(0)].m_value = 20.0;
-//         root.m_children[gl0].m_children[size_t(1)].m_visits = 0;  // Unvisited → chosen!
-
-//         decision_store ds;
-//         resolution_store rs;
-
-//         bool result = solver.sim_one(root, ds, rs);
-
-//         // CRITICAL: Solution found
-//         assert(result == true);
-
-//         // CRITICAL: Exactly 1 decision (MCTS chose a→c)
-//         assert(ds.size() == 1);
-
-//         // CRITICAL: Exactly 2 resolutions (decision on a→idx1, unit prop on c→idx3)
-//         assert(rs.size() == 2);
-
-//         const resolution_lineage* rl_a = solver.lp.resolution(gl0, 1);
-//         assert(rs.count(rl_a) == 1);
-//         assert(ds.count(rl_a) == 1);  // This was the decision
-
-//         const goal_lineage* gl_c = solver.lp.goal(rl_a, 0);
-//         const resolution_lineage* rl_c = solver.lp.resolution(gl_c, 3);
-//         assert(rs.count(rl_c) == 1);
-//         assert(ds.count(rl_c) == 0);  // Unit propagation, not a decision
-
-//         // CRITICAL: terminate() uses the OUTPUT ds (1 element) → reward = -1.0
-//         assert(root.m_visits == 101);  // 100 + 1 from terminate()
-//         assert(root.m_value == -1.0);  // 0.0 (initial) + (-1.0) from terminate(-ds.size())
-//     }
-
-//     // Test 7: Multiple sim_one calls sharing one root - MCTS statistics accumulate
-//     // Each call increments root.m_visits by exactly 1 via terminate().
-//     {
-//         trail t;
-//         t.push();
-
-//         expr_pool ep(t);
-//         bind_map bm(t);
-//         sequencer seq(t);
-
-//         database db;
-//         db.push_back(rule{ep.atom("a"), {ep.atom("b")}});  // idx 0
-//         db.push_back(rule{ep.atom("a"), {ep.atom("c")}});  // idx 1
-//         db.push_back(rule{ep.atom("b"), {}});               // idx 2
-//         db.push_back(rule{ep.atom("c"), {}});               // idx 3
-
-//         goals goals;
-//         goals.push_back(ep.atom("a"));
-
-//         std::mt19937 rng(42);
-//         a01 solver(db, goals, t, seq, bm, 100, 10, 1.414, rng);
-
-//         monte_carlo::tree_node<mcts_decider::choice> root;
-//         decision_store ds;
-//         resolution_store rs;
-
-//         assert(root.m_visits == 0);
-
-//         solver.sim_one(root, ds, rs);
-//         assert(root.m_visits == 1);
-
-//         solver.sim_one(root, ds, rs);
-//         assert(root.m_visits == 2);
-
-//         solver.sim_one(root, ds, rs);
-//         assert(root.m_visits == 3);
-//     }
-// }
-
-// void test_a01_next_avoidance() {
-
-//     // Test 1: Immediate refutation — goal has no candidates from the start.
-//     // DB: empty, goals: {a}
-//     // First sim_one: conflict immediately, ds empty → returns false.
-//     {
-//         trail t;
-//         t.push();
-//         expr_pool ep(t);
-//         bind_map bm(t);
-//         sequencer seq(t);
-
-//         database db;
-//         goals goals;
-//         goals.push_back(ep.atom("a"));
-
-//         std::mt19937 rng(42);
-//         a01 solver(db, goals, t, seq, bm, 1000, 1000, 1.414, rng);
-
-//         decision_store avoidance;
-//         std::optional<resolution_store> soln;
-
-//         bool result = solver.next_avoidance(avoidance, soln);
-
-//         // CRITICAL: Returns false (proven refutation — conflict with no decisions)
-//         assert(result == false);
-
-//         // CRITICAL: soln is nullopt
-//         assert(!soln.has_value());
-//     }
-
-//     // Test 2: Immediate solution via unit propagation.
-//     // DB: {a.}, goals: {a}
-//     // First sim_one: unit-prop resolves a → solution, ds empty.
-//     // Loop first iteration: solution again → soln set, avoidance = {}.
-//     {
-//         trail t;
-//         t.push();
-//         expr_pool ep(t);
-//         bind_map bm(t);
-//         sequencer seq(t);
-
-//         database db;
-//         db.push_back(rule{ep.atom("a"), {}});  // idx 0: a.
-
-//         goals goals;
-//         goals.push_back(ep.atom("a"));
-
-//         std::mt19937 rng(42);
-//         a01 solver(db, goals, t, seq, bm, 1000, 1000, 1.414, rng);
-
-//         decision_store avoidance;
-//         std::optional<resolution_store> soln;
-
-//         bool result = solver.next_avoidance(avoidance, soln);
-
-//         // CRITICAL: Returns true (solution found)
-//         assert(result == true);
-
-//         // CRITICAL: soln has value
-//         assert(soln.has_value());
-
-//         // CRITICAL: soln has exactly 1 resolution (unit-prop of a with rule 0)
-//         assert(soln.value().size() == 1);
-//         const goal_lineage* gl0 = solver.lp.goal(nullptr, 0);
-//         const resolution_lineage* rl0 = solver.lp.resolution(gl0, 0);
-//         assert(soln.value().count(rl0) == 1);
-
-//         // CRITICAL: avoidance is empty — unit propagation, no MCTS decisions
-//         assert(avoidance.empty());
-//     }
-
-//     // Test 3: Solution found via MCTS after exploring a conflicting path.
-//     // DB:
-//     //   Rule 0: q :- r.  (conflict — r has no rules)
-//     //   Rule 1: q :- p.  (solution — p is a fact)
-//     //   Rule 2: p.
-//     // Goals: {q}
-//     // q has 2 candidates, so MCTS must decide. Rule 1 leads to solution.
-//     // With 1000 iterations the solver reliably finds rule 1.
-//     {
-//         trail t;
-//         t.push();
-//         expr_pool ep(t);
-//         bind_map bm(t);
-//         sequencer seq(t);
-
-//         database db;
-//         db.push_back(rule{ep.atom("q"), {ep.atom("r")}});  // idx 0: q :- r.
-//         db.push_back(rule{ep.atom("q"), {ep.atom("p")}});  // idx 1: q :- p.
-//         db.push_back(rule{ep.atom("p"), {}});               // idx 2: p.
-
-//         goals goals;
-//         goals.push_back(ep.atom("q"));
-
-//         std::mt19937 rng(42);
-//         a01 solver(db, goals, t, seq, bm, 1000, 1000, 1.414, rng);
-
-//         decision_store avoidance;
-//         std::optional<resolution_store> soln;
-
-//         bool result = solver.next_avoidance(avoidance, soln);
-
-//         // CRITICAL: Returns true (solution found)
-//         assert(result == true);
-
-//         // CRITICAL: soln has value
-//         assert(soln.has_value());
-
-//         // CRITICAL: soln has exactly 2 resolutions (q→rule1 as decision, p→rule2 as unit prop)
-//         assert(soln.value().size() == 2);
-
-//         const goal_lineage* gl_q = solver.lp.goal(nullptr, 0);
-//         const resolution_lineage* rl_q1 = solver.lp.resolution(gl_q, 1);
-//         assert(soln.value().count(rl_q1) == 1);
-
-//         const goal_lineage* gl_p = solver.lp.goal(rl_q1, 0);
-//         const resolution_lineage* rl_p2 = solver.lp.resolution(gl_p, 2);
-//         assert(soln.value().count(rl_p2) == 1);
-
-//         // CRITICAL: avoidance = decisions of the solution sim = {rl_q1}
-//         // (the decision to pick rule 1 for q; p was unit-propagated, not a decision)
-//         assert(avoidance.size() == 1);
-//         assert(avoidance.count(rl_q1) == 1);
-//     }
-
-//     // Test 4: Depth-1 conflict minimum — avoidance.size() == 1.
-//     // DB:
-//     //   Rule 0: a :- f.  (a → f, no rules for f)
-//     //   Rule 1: a :- g.  (a → g, no rules for g)
-//     // Goals: {a}
-//     // Every MCTS path: exactly 1 decision (choose rule 0 or 1 for a), then
-//     // head-elimination leaves f/g with 0 candidates → immediate conflict.
-//     // After 1000 iterations the minimum observed ds size is 1.
-//     {
-//         trail t;
-//         t.push();
-//         expr_pool ep(t);
-//         bind_map bm(t);
-//         sequencer seq(t);
-
-//         database db;
-//         db.push_back(rule{ep.atom("a"), {ep.atom("f")}});  // idx 0: a :- f.
-//         db.push_back(rule{ep.atom("a"), {ep.atom("g")}});  // idx 1: a :- g.
-//         // No rules for f or g
-
-//         goals goals;
-//         goals.push_back(ep.atom("a"));
-
-//         std::mt19937 rng(42);
-//         a01 solver(db, goals, t, seq, bm, 1000, 1000, 1.414, rng);
-
-//         decision_store avoidance;
-//         std::optional<resolution_store> soln;
-
-//         bool result = solver.next_avoidance(avoidance, soln);
-
-//         // CRITICAL: Returns true (first sim had 1 decision, not a proven refutation)
-//         assert(result == true);
-
-//         // CRITICAL: No solution (all paths conflict)
-//         assert(!soln.has_value());
-
-//         // CRITICAL: Minimum conflict depth is 1 → avoidance.size() == 1
-//         assert(avoidance.size() == 1);
-
-//         // CRITICAL: The avoided resolution is on the initial goal (gl0) with either rule 0 or 1
-//         const goal_lineage* gl0 = solver.lp.goal(nullptr, 0);
-//         const resolution_lineage* rl0 = solver.lp.resolution(gl0, 0);
-//         const resolution_lineage* rl1 = solver.lp.resolution(gl0, 1);
-//         const resolution_lineage* avoided = *avoidance.begin();
-//         assert(avoided == rl0 || avoided == rl1);
-//     }
-
-//     // Test 5: Depth-2 conflict minimum — avoidance.size() == 2.
-//     // DB:
-//     //   Rule 0: a :- p.   Rule 1: a :- q.
-//     //   Rule 2: p :- f1.  Rule 3: p :- f2.
-//     //   Rule 4: q :- f3.  Rule 5: q :- f4.
-//     //   No rules for f1, f2, f3, f4.
-//     // Goals: {a}
-//     // Decision 1: a → rule 0 or 1 (p or q, each with 2 candidates).
-//     // Decision 2: p/q → rule 2/3 or 4/5 (f1/f2/f3/f4, each with 0 candidates → conflict).
-//     // Every path needs exactly 2 decisions. avoidance.size() == 2 after 1000 iterations.
-//     {
-//         trail t;
-//         t.push();
-//         expr_pool ep(t);
-//         bind_map bm(t);
-//         sequencer seq(t);
-
-//         database db;
-//         db.push_back(rule{ep.atom("a"), {ep.atom("p")}});   // idx 0: a :- p.
-//         db.push_back(rule{ep.atom("a"), {ep.atom("q")}});   // idx 1: a :- q.
-//         db.push_back(rule{ep.atom("p"), {ep.atom("f1")}});  // idx 2: p :- f1.
-//         db.push_back(rule{ep.atom("p"), {ep.atom("f2")}});  // idx 3: p :- f2.
-//         db.push_back(rule{ep.atom("q"), {ep.atom("f3")}});  // idx 4: q :- f3.
-//         db.push_back(rule{ep.atom("q"), {ep.atom("f4")}});  // idx 5: q :- f4.
-//         // No rules for f1, f2, f3, f4
-
-//         goals goals;
-//         goals.push_back(ep.atom("a"));
-
-//         std::mt19937 rng(42);
-//         a01 solver(db, goals, t, seq, bm, 1000, 1000, 1.414, rng);
-
-//         decision_store avoidance;
-//         std::optional<resolution_store> soln;
-
-//         bool result = solver.next_avoidance(avoidance, soln);
-
-//         // CRITICAL: Returns true (decisions were made, not a proven refutation)
-//         assert(result == true);
-
-//         // CRITICAL: No solution (all paths conflict)
-//         assert(!soln.has_value());
-
-//         // CRITICAL: Minimum conflict depth is 2 → avoidance.size() == 2
-//         assert(avoidance.size() == 2);
-//     }
-
-//     // Test 6: Depth-3 conflict minimum — avoidance.size() == 3.
-//     // DB forms a complete binary tree of decisions, 3 levels deep:
-//     //   Level 0: a → {p, q}
-//     //   Level 1: p → {r, s},  q → {t, u}
-//     //   Level 2: r → {f1, f2}, s → {f3, f4}, t → {f5, f6}, u → {f7, f8}
-//     //   No rules for f1-f8 → all leaves conflict immediately.
-//     // Every path takes exactly 3 decisions. avoidance.size() == 3 after 1000 iterations.
-//     {
-//         trail t;
-//         t.push();
-//         expr_pool ep(t);
-//         bind_map bm(t);
-//         sequencer seq(t);
-
-//         database db;
-//         db.push_back(rule{ep.atom("a"), {ep.atom("p")}});   // idx 0
-//         db.push_back(rule{ep.atom("a"), {ep.atom("q")}});   // idx 1
-//         db.push_back(rule{ep.atom("p"), {ep.atom("r")}});   // idx 2
-//         db.push_back(rule{ep.atom("p"), {ep.atom("s")}});   // idx 3
-//         db.push_back(rule{ep.atom("q"), {ep.atom("t")}});   // idx 4
-//         db.push_back(rule{ep.atom("q"), {ep.atom("u")}});   // idx 5
-//         db.push_back(rule{ep.atom("r"), {ep.atom("f1")}});  // idx 6
-//         db.push_back(rule{ep.atom("r"), {ep.atom("f2")}});  // idx 7
-//         db.push_back(rule{ep.atom("s"), {ep.atom("f3")}});  // idx 8
-//         db.push_back(rule{ep.atom("s"), {ep.atom("f4")}});  // idx 9
-//         db.push_back(rule{ep.atom("t"), {ep.atom("f5")}});  // idx 10
-//         db.push_back(rule{ep.atom("t"), {ep.atom("f6")}});  // idx 11
-//         db.push_back(rule{ep.atom("u"), {ep.atom("f7")}});  // idx 12
-//         db.push_back(rule{ep.atom("u"), {ep.atom("f8")}});  // idx 13
-//         // No rules for f1-f8
-
-//         goals goals;
-//         goals.push_back(ep.atom("a"));
-
-//         std::mt19937 rng(42);
-//         a01 solver(db, goals, t, seq, bm, 1000, 1000, 1.414, rng);
-
-//         decision_store avoidance;
-//         std::optional<resolution_store> soln;
-
-//         bool result = solver.next_avoidance(avoidance, soln);
-
-//         // CRITICAL: Returns true (decisions were made, not a proven refutation)
-//         assert(result == true);
-
-//         // CRITICAL: No solution (all paths conflict)
-//         assert(!soln.has_value());
-
-//         // CRITICAL: Minimum conflict depth is 3 → avoidance.size() == 3
-//         assert(avoidance.size() == 3);
-//     }
-
-//     // Test 7: Refutation via pre-existing avoidances injected into solver.as.
-//     // DB: {a.} (one fact), goals: {a}
-//     // Inject singleton avoidance {rl(gl0, 0)} into solver.as before calling.
-//     // CDCL-elimination removes the only candidate → conflict with ds empty → returns false.
-//     {
-//         trail t;
-//         t.push();
-//         expr_pool ep(t);
-//         bind_map bm(t);
-//         sequencer seq(t);
-
-//         database db;
-//         db.push_back(rule{ep.atom("a"), {}});  // idx 0: a.
-
-//         goals goals;
-//         goals.push_back(ep.atom("a"));
-
-//         std::mt19937 rng(42);
-//         a01 solver(db, goals, t, seq, bm, 1000, 1000, 1.414, rng);
-
-//         // Inject singleton avoidance: CDCL will eliminate rule 0 for gl0
-//         const goal_lineage* gl0 = solver.lp.goal(nullptr, 0);
-//         const resolution_lineage* rl0 = solver.lp.resolution(gl0, 0);
-//         decision_store avoid;
-//         avoid.insert(rl0);
-//         solver.as.insert(avoid);
-
-//         decision_store avoidance;
-//         std::optional<resolution_store> soln;
-
-//         bool result = solver.next_avoidance(avoidance, soln);
-
-//         // CRITICAL: Returns false (CDCL eliminated all candidates → conflict, ds empty → refutation)
-//         assert(result == false);
-
-//         // CRITICAL: soln is nullopt
-//         assert(!soln.has_value());
-//     }
-
-//     // Test 8: Mixed conflict depths — MCTS converges to the shallower branch.
-//     //
-//     // Goal {a} has two candidates:
-//     //   rule0  →  a :- p.   (depth-4 branch)
-//     //   rule1  →  a :- q.   (depth-3 branch)
-//     //
-//     // Depth-4 subtree (via p):
-//     //   p → {r, s}  →  r/s → {t, u, v, w}  →  t/u/v/w → {fail1-8}
-//     //   (4 decisions: a, p, r/s, t/u/v/w)
-//     //
-//     // Depth-3 subtree (via q):
-//     //   q → {x, y}  →  x/y → {fail9-12}
-//     //   (3 decisions: a, q, x/y)
-//     //
-//     // After 1000 MCTS iterations the minimum observed ds is 3.
-//     // The avoidance must contain the "a → rule1" resolution (the first step of the
-//     // depth-3 path) because any 3-decision conflict must go through rule1 for a.
-//     {
-//         trail t;
-//         t.push();
-//         expr_pool ep(t);
-//         bind_map bm(t);
-//         sequencer seq(t);
-
-//         database db;
-//         // Root
-//         db.push_back(rule{ep.atom("a"), {ep.atom("p")}});   // idx 0  (depth-4)
-//         db.push_back(rule{ep.atom("a"), {ep.atom("q")}});   // idx 1  (depth-3)
-//         // Depth-4 branch: p layer
-//         db.push_back(rule{ep.atom("p"), {ep.atom("r")}});   // idx 2
-//         db.push_back(rule{ep.atom("p"), {ep.atom("s")}});   // idx 3
-//         // Depth-4 branch: r/s layer
-//         db.push_back(rule{ep.atom("r"), {ep.atom("t")}});   // idx 4
-//         db.push_back(rule{ep.atom("r"), {ep.atom("u")}});   // idx 5
-//         db.push_back(rule{ep.atom("s"), {ep.atom("v")}});   // idx 6
-//         db.push_back(rule{ep.atom("s"), {ep.atom("w")}});   // idx 7
-//         // Depth-4 leaves (each has 2 candidates → one more decision, then conflict)
-//         db.push_back(rule{ep.atom("t"), {ep.atom("fail1")}});  // idx 8
-//         db.push_back(rule{ep.atom("t"), {ep.atom("fail2")}});  // idx 9
-//         db.push_back(rule{ep.atom("u"), {ep.atom("fail3")}});  // idx 10
-//         db.push_back(rule{ep.atom("u"), {ep.atom("fail4")}});  // idx 11
-//         db.push_back(rule{ep.atom("v"), {ep.atom("fail5")}});  // idx 12
-//         db.push_back(rule{ep.atom("v"), {ep.atom("fail6")}});  // idx 13
-//         db.push_back(rule{ep.atom("w"), {ep.atom("fail7")}});  // idx 14
-//         db.push_back(rule{ep.atom("w"), {ep.atom("fail8")}});  // idx 15
-//         // Depth-3 branch: q layer
-//         db.push_back(rule{ep.atom("q"), {ep.atom("x")}});   // idx 16
-//         db.push_back(rule{ep.atom("q"), {ep.atom("y")}});   // idx 17
-//         // Depth-3 leaves
-//         db.push_back(rule{ep.atom("x"), {ep.atom("fail9")}});  // idx 18
-//         db.push_back(rule{ep.atom("x"), {ep.atom("fail10")}});  // idx 19
-//         db.push_back(rule{ep.atom("y"), {ep.atom("fail11")}});  // idx 20
-//         db.push_back(rule{ep.atom("y"), {ep.atom("fail12")}});  // idx 21
-//         // No rules for fail1-fail12
-
-//         goals goals;
-//         goals.push_back(ep.atom("a"));
-
-//         std::mt19937 rng(42);
-//         a01 solver(db, goals, t, seq, bm, 1000, 1000, 1.414, rng);
-
-//         decision_store avoidance;
-//         std::optional<resolution_store> soln;
-
-//         bool result = solver.next_avoidance(avoidance, soln);
-
-//         // CRITICAL: Returns true (decisions were made, not a proven refutation)
-//         assert(result == true);
-
-//         // CRITICAL: No solution (all paths conflict)
-//         assert(!soln.has_value());
-
-//         // CRITICAL: Minimum conflict depth is 3 (the q branch), not 4 (the p branch)
-//         assert(avoidance.size() == 3);
-
-//         // CRITICAL: The avoidance must include "a → rule1" (the depth-3 branch entry
-//         // point). Any 3-decision conflict necessarily begins with that choice.
-//         const goal_lineage* gl_a = solver.lp.goal(nullptr, 0);
-//         const resolution_lineage* rl_a1 = solver.lp.resolution(gl_a, 1);
-//         assert(avoidance.count(rl_a1) == 1);
-//     }
-
-//     // Test 9: Needle in a haystack — two depth-4 branches plus one depth-3 branch.
-//     //
-//     // Goal {a} has THREE candidates:
-//     //   rule0  →  a :- p_alpha.  (depth-4)
-//     //   rule1  →  a :- p_beta.   (depth-4)
-//     //   rule2  →  a :- q.        (depth-3, the needle)
-//     //
-//     // Two out of three first-level choices lead to a 4-decision conflict.
-//     // Only rule2 leads to the shallower 3-decision conflict.
-//     // After 1000 MCTS iterations the minimum is 3, and the avoidance identifies
-//     // the shallow entry point ("a → rule2").
-//     {
-//         trail t;
-//         t.push();
-//         expr_pool ep(t);
-//         bind_map bm(t);
-//         sequencer seq(t);
-
-//         database db;
-//         // Three choices for a
-//         db.push_back(rule{ep.atom("a"), {ep.atom("p_alpha")}});  // idx 0  (depth-4)
-//         db.push_back(rule{ep.atom("a"), {ep.atom("p_beta")}});   // idx 1  (depth-4)
-//         db.push_back(rule{ep.atom("a"), {ep.atom("q")}});        // idx 2  (depth-3)
-
-//         // Depth-4 branch A (via p_alpha)
-//         db.push_back(rule{ep.atom("p_alpha"), {ep.atom("r_alpha")}});  // idx 3
-//         db.push_back(rule{ep.atom("p_alpha"), {ep.atom("s_alpha")}});  // idx 4
-//         db.push_back(rule{ep.atom("r_alpha"), {ep.atom("t_alpha")}});  // idx 5
-//         db.push_back(rule{ep.atom("r_alpha"), {ep.atom("u_alpha")}});  // idx 6
-//         db.push_back(rule{ep.atom("t_alpha"), {ep.atom("fail1")}});    // idx 7
-//         db.push_back(rule{ep.atom("t_alpha"), {ep.atom("fail2")}});    // idx 8
-//         db.push_back(rule{ep.atom("u_alpha"), {ep.atom("fail3")}});    // idx 9
-//         db.push_back(rule{ep.atom("u_alpha"), {ep.atom("fail4")}});    // idx 10
-//         db.push_back(rule{ep.atom("s_alpha"), {ep.atom("v_alpha")}});  // idx 11
-//         db.push_back(rule{ep.atom("s_alpha"), {ep.atom("w_alpha")}});  // idx 12
-//         db.push_back(rule{ep.atom("v_alpha"), {ep.atom("fail5")}});    // idx 13
-//         db.push_back(rule{ep.atom("v_alpha"), {ep.atom("fail6")}});    // idx 14
-//         db.push_back(rule{ep.atom("w_alpha"), {ep.atom("fail7")}});    // idx 15
-//         db.push_back(rule{ep.atom("w_alpha"), {ep.atom("fail8")}});    // idx 16
-
-//         // Depth-4 branch B (via p_beta)
-//         db.push_back(rule{ep.atom("p_beta"), {ep.atom("r_beta")}});   // idx 17
-//         db.push_back(rule{ep.atom("p_beta"), {ep.atom("s_beta")}});   // idx 18
-//         db.push_back(rule{ep.atom("r_beta"), {ep.atom("t_beta")}});   // idx 19
-//         db.push_back(rule{ep.atom("r_beta"), {ep.atom("u_beta")}});   // idx 20
-//         db.push_back(rule{ep.atom("t_beta"), {ep.atom("fail9")}});    // idx 21
-//         db.push_back(rule{ep.atom("t_beta"), {ep.atom("fail10")}});   // idx 22
-//         db.push_back(rule{ep.atom("u_beta"), {ep.atom("fail11")}});   // idx 23
-//         db.push_back(rule{ep.atom("u_beta"), {ep.atom("fail12")}});   // idx 24
-//         db.push_back(rule{ep.atom("s_beta"), {ep.atom("v_beta")}});   // idx 25
-//         db.push_back(rule{ep.atom("s_beta"), {ep.atom("w_beta")}});   // idx 26
-//         db.push_back(rule{ep.atom("v_beta"), {ep.atom("fail13")}});   // idx 27
-//         db.push_back(rule{ep.atom("v_beta"), {ep.atom("fail14")}});   // idx 28
-//         db.push_back(rule{ep.atom("w_beta"), {ep.atom("fail15")}});   // idx 29
-//         db.push_back(rule{ep.atom("w_beta"), {ep.atom("fail16")}});   // idx 30
-
-//         // Depth-3 branch (via q — the needle)
-//         db.push_back(rule{ep.atom("q"), {ep.atom("x")}});             // idx 31
-//         db.push_back(rule{ep.atom("q"), {ep.atom("y")}});             // idx 32
-//         db.push_back(rule{ep.atom("x"), {ep.atom("fail17")}});        // idx 33
-//         db.push_back(rule{ep.atom("x"), {ep.atom("fail18")}});        // idx 34
-//         db.push_back(rule{ep.atom("y"), {ep.atom("fail19")}});        // idx 35
-//         db.push_back(rule{ep.atom("y"), {ep.atom("fail20")}});        // idx 36
-//         // No rules for fail1-fail20
-
-//         goals goals;
-//         goals.push_back(ep.atom("a"));
-
-//         std::mt19937 rng(42);
-//         a01 solver(db, goals, t, seq, bm, 1000, 1000, 1.414, rng);
-
-//         decision_store avoidance;
-//         std::optional<resolution_store> soln;
-
-//         bool result = solver.next_avoidance(avoidance, soln);
-
-//         // CRITICAL: Returns true
-//         assert(result == true);
-
-//         // CRITICAL: No solution (all paths conflict)
-//         assert(!soln.has_value());
-
-//         // CRITICAL: Despite two out of three first-level choices leading to depth-4
-//         // conflicts, MCTS finds the depth-3 needle (rule2 → q).
-//         assert(avoidance.size() == 3);
-
-//         // CRITICAL: "a → rule2" (the q branch entry point) is in the avoidance.
-//         // This is the distinguishing feature of the depth-3 path — rules 0 and 1
-//         // only appear in 4-decision avoidances, never in 3-decision ones.
-//         const goal_lineage* gl_a = solver.lp.goal(nullptr, 0);
-//         const resolution_lineage* rl_a2 = solver.lp.resolution(gl_a, 2);
-//         assert(avoidance.count(rl_a2) == 1);
-//     }
-
-//     // Test 10: Two goals share variable X — MCTS finds the unique intersection value.
-//     //
-//     // This is the motivating example for shared-variable parallel constraints:
-//     //   "initial goal A -> rule 1 and initial goal B -> rule 2 causes conflict because
-//     //    of having a common variable"
-//     //
-//     // Goals: { a(X), b(X) }   — same variable X shared across both goals
-//     //   Rule 0: a(123).        — X=123; then b(123) has no candidate → CONFLICT
-//     //   Rule 1: a(234).        — X=234; then b(234) is the only matching candidate → SOLUTION
-//     //   Rule 2: b(234).        — X=234; then a(234) unit-propagates → SOLUTION
-//     //   Rule 3: b(345).        — X=345; then a(345) has no candidate → CONFLICT
-//     //
-//     // Every path is depth-1. The "parallel" effect: choosing a value for X via one goal
-//     // immediately determines whether the other goal succeeds or fails — both goals are
-//     // constrained in parallel by the same variable binding.
-//     //
-//     // With 1000 MCTS iterations the solver finds the solution (X=234 satisfies both).
-//     {
-//         trail t;
-//         t.push();
-//         expr_pool ep(t);
-//         bind_map bm(t);
-//         sequencer seq(t);
-
-//         const expr* X = ep.var(seq());
-
-//         database db;
-//         db.push_back(rule{ep.cons(ep.atom("a"), ep.atom("123")), {}});  // idx 0: a(123).
-//         db.push_back(rule{ep.cons(ep.atom("a"), ep.atom("234")), {}});  // idx 1: a(234).
-//         db.push_back(rule{ep.cons(ep.atom("b"), ep.atom("234")), {}});  // idx 2: b(234).
-//         db.push_back(rule{ep.cons(ep.atom("b"), ep.atom("345")), {}});  // idx 3: b(345).
-
-//         goals goals;
-//         goals.push_back(ep.cons(ep.atom("a"), X));  // a(X)
-//         goals.push_back(ep.cons(ep.atom("b"), X));  // b(X) — shares X with a
-
-//         std::mt19937 rng(42);
-//         a01 solver(db, goals, t, seq, bm, 1000, 1000, 1.414, rng);
-
-//         decision_store avoidance;
-//         std::optional<resolution_store> soln;
-
-//         bool result = solver.next_avoidance(avoidance, soln);
-
-//         // CRITICAL: Solution found (X=234 satisfies both)
-//         assert(result == true);
-//         assert(soln.has_value());
-
-//         // CRITICAL: Exactly 2 resolutions — one decision (the decided goal) plus one
-//         // unit-propagation (the other goal, whose candidate was forced by X's binding)
-//         assert(soln.value().size() == 2);
-
-//         // CRITICAL: The solution involves rule 1 for a (a→234) and rule 2 for b (b→234)
-//         const goal_lineage* gl_a = solver.lp.goal(nullptr, 0);
-//         const goal_lineage* gl_b = solver.lp.goal(nullptr, 1);
-//         const resolution_lineage* rl_a1 = solver.lp.resolution(gl_a, 1);  // a(234)
-//         const resolution_lineage* rl_b2 = solver.lp.resolution(gl_b, 2);  // b(234)
-//         // One of these was the MCTS decision, the other the unit-propagation.
-//         // Both must appear in the solution's resolution store.
-//         assert(soln.value().count(rl_a1) == 1);
-//         assert(soln.value().count(rl_b2) == 1);
-
-//         // CRITICAL: The avoidance contains exactly 1 decision (the one MCTS chose)
-//         assert(avoidance.size() == 1);
-//         assert(avoidance.count(rl_a1) == 1 || avoidance.count(rl_b2) == 1);
-//     }
-
-//     // Test 11: Three goals share variable X — no single X value satisfies all three.
-//     //
-//     // Goals: { a(X), b(X), c(X) }   — all three share variable X
-//     //   Rule 0: a(1).   Rule 1: a(2).        →  X ∈ {1, 2}  for a
-//     //   Rule 2: b(2).   Rule 3: b(3).        →  X ∈ {2, 3}  for b
-//     //   Rule 4: c(1).   Rule 5: c(3).        →  X ∈ {1, 3}  for c
-//     //
-//     // There is no X that satisfies all three simultaneously:
-//     //   X=1 → b(1) has no candidate (b needs 2 or 3)
-//     //   X=2 → c(2) has no candidate (c needs 1 or 3)
-//     //   X=3 → a(3) has no candidate (a needs 1 or 2)
-//     //
-//     // Every first MCTS decision immediately propagates X to a value that kills one of
-//     // the other goals — minimum conflict depth is 1 regardless of which goal is chosen.
-//     // MCTS finds and records this depth-1 avoidance after 1000 iterations.
-//     {
-//         trail t;
-//         t.push();
-//         expr_pool ep(t);
-//         bind_map bm(t);
-//         sequencer seq(t);
-
-//         const expr* X = ep.var(seq());
-
-//         database db;
-//         db.push_back(rule{ep.cons(ep.atom("a"), ep.atom("1")), {}});  // idx 0: a(1).
-//         db.push_back(rule{ep.cons(ep.atom("a"), ep.atom("2")), {}});  // idx 1: a(2).
-//         db.push_back(rule{ep.cons(ep.atom("b"), ep.atom("2")), {}});  // idx 2: b(2).
-//         db.push_back(rule{ep.cons(ep.atom("b"), ep.atom("3")), {}});  // idx 3: b(3).
-//         db.push_back(rule{ep.cons(ep.atom("c"), ep.atom("1")), {}});  // idx 4: c(1).
-//         db.push_back(rule{ep.cons(ep.atom("c"), ep.atom("3")), {}});  // idx 5: c(3).
-
-//         goals goals;
-//         goals.push_back(ep.cons(ep.atom("a"), X));  // a(X)
-//         goals.push_back(ep.cons(ep.atom("b"), X));  // b(X) — shares X with a
-//         goals.push_back(ep.cons(ep.atom("c"), X));  // c(X) — shares X with a and b
-
-//         std::mt19937 rng(42);
-//         a01 solver(db, goals, t, seq, bm, 1000, 1000, 1.414, rng);
-
-//         decision_store avoidance;
-//         std::optional<resolution_store> soln;
-
-//         bool result = solver.next_avoidance(avoidance, soln);
-
-//         // CRITICAL: Returns true (at least one decision was made — not an unconditional refutation)
-//         assert(result == true);
-
-//         // CRITICAL: No solution (the three goals' X-constraints are mutually exclusive)
-//         assert(!soln.has_value());
-
-//         // CRITICAL: The minimum conflict depth is 1 — one MCTS decision immediately
-//         // binds X to a value that eliminates all candidates in at least one other goal
-//         assert(avoidance.size() == 1);
-
-//         // CRITICAL: The avoided resolution is on one of the three initial goals.
-//         // Whichever goal MCTS chose first, that single decision is the avoidance.
-//         const goal_lineage* gl_a = solver.lp.goal(nullptr, 0);
-//         const goal_lineage* gl_b = solver.lp.goal(nullptr, 1);
-//         const goal_lineage* gl_c = solver.lp.goal(nullptr, 2);
-//         const resolution_lineage* avoided = *avoidance.begin();
-//         // The avoided resolution must involve one of the three goals and one of their rules
-//         bool is_a_rule = avoided == solver.lp.resolution(gl_a, 0) || avoided == solver.lp.resolution(gl_a, 1);
-//         bool is_b_rule = avoided == solver.lp.resolution(gl_b, 2) || avoided == solver.lp.resolution(gl_b, 3);
-//         bool is_c_rule = avoided == solver.lp.resolution(gl_c, 4) || avoided == solver.lp.resolution(gl_c, 5);
-//         assert(is_a_rule || is_b_rule || is_c_rule);
-//     }
-
-//     // Test 12: Two independent variables, compound goal c(X,Y) teaches MCTS goal ordering.
-//     //
-//     // Goals: { a(X), b(Y), c(X,Y) }   — X shared by a and c; Y shared by b and c
-//     //   Rule 0: a(1).  Rule 1: a(2).        →  X ∈ {1, 2}
-//     //   Rule 2: b(1).  Rule 3: b(2).        →  Y ∈ {1, 2}
-//     //   Rule 4: c(1,5).  Rule 5: c(1,6).   →  (X=1,Y=5) or (X=1,Y=6)
-//     //   Rule 6: c(2,5).  Rule 7: c(2,6).   →  (X=2,Y=5) or (X=2,Y=6)
-//     //
-//     // c requires Y ∈ {5, 6}, but b only produces Y ∈ {1, 2} — ranges are disjoint.
-//     // The conflict DEPTH depends on which goal MCTS resolves first:
-//     //
-//     //   Resolving b first  (Y ∈ {1,2}): c(X, 1/2) has 0 candidates → CONFLICT at depth-1.
-//     //   Resolving c first  (X=1/2, Y=5/6): b(5/6) has 0 candidates → CONFLICT at depth-1.
-//     //   Resolving a first  (X ∈ {1,2}): c(X,Y) still has 2 candidates, b(Y) still has 2
-//     //                       candidates → needs a SECOND decision → depth-2 conflict.
-//     //
-//     // With 1000 MCTS iterations, the solver learns that starting with b or c (rather than a)
-//     // yields a shallower conflict. The minimum avoidance size is 1.
-//     // This demonstrates MCTS learning the optimal GOAL ORDERING via shared-variable
-//     // constraint propagation.
-//     {
-//         trail t;
-//         t.push();
-//         expr_pool ep(t);
-//         bind_map bm(t);
-//         sequencer seq(t);
-
-//         const expr* X = ep.var(seq());
-//         const expr* Y = ep.var(seq());
-
-//         database db;
-//         db.push_back(rule{ep.cons(ep.atom("a"), ep.atom("1")), {}});  // idx 0: a(1).
-//         db.push_back(rule{ep.cons(ep.atom("a"), ep.atom("2")), {}});  // idx 1: a(2).
-//         db.push_back(rule{ep.cons(ep.atom("b"), ep.atom("1")), {}});  // idx 2: b(1).
-//         db.push_back(rule{ep.cons(ep.atom("b"), ep.atom("2")), {}});  // idx 3: b(2).
-//         // c(X, Y) represented as ((c . X) . Y)
-//         db.push_back(rule{ep.cons(ep.cons(ep.atom("c"), ep.atom("1")), ep.atom("5")), {}});  // idx 4: c(1,5).
-//         db.push_back(rule{ep.cons(ep.cons(ep.atom("c"), ep.atom("1")), ep.atom("6")), {}});  // idx 5: c(1,6).
-//         db.push_back(rule{ep.cons(ep.cons(ep.atom("c"), ep.atom("2")), ep.atom("5")), {}});  // idx 6: c(2,5).
-//         db.push_back(rule{ep.cons(ep.cons(ep.atom("c"), ep.atom("2")), ep.atom("6")), {}});  // idx 7: c(2,6).
-
-//         goals goals;
-//         goals.push_back(ep.cons(ep.atom("a"), X));                // a(X)
-//         goals.push_back(ep.cons(ep.atom("b"), Y));                // b(Y)
-//         goals.push_back(ep.cons(ep.cons(ep.atom("c"), X), Y));   // c(X, Y)
-
-//         std::mt19937 rng(42);
-//         a01 solver(db, goals, t, seq, bm, 1000, 1000, 1.414, rng);
-
-//         decision_store avoidance;
-//         std::optional<resolution_store> soln;
-
-//         bool result = solver.next_avoidance(avoidance, soln);
-
-//         // CRITICAL: Returns true (not a proven refutation — the first sim had ≥1 decision)
-//         assert(result == true);
-
-//         // CRITICAL: No solution (c requires Y ∈ {5,6}, b only gives Y ∈ {1,2} — disjoint)
-//         assert(!soln.has_value());
-
-//         // CRITICAL: MCTS learns to pick b or c before a, yielding a depth-1 conflict.
-//         // The minimum avoidance size is 1, not 2 (which would result from picking a first).
-//         assert(avoidance.size() == 1);
-
-//         // CRITICAL: The single avoided resolution is on b or c (not on a), confirming
-//         // MCTS discovered the optimal goal-first ordering.
-//         // Picking b (Y∈{1,2}) → c(X, 1/2) immediately fails.
-//         // Picking c (X=1/2, Y=5/6) → b(5/6) immediately fails.
-//         // Picking a alone (X∈{1,2}) → c still has 2 candidates → depth-2, NOT chosen.
-//         const goal_lineage* gl_b = solver.lp.goal(nullptr, 1);
-//         const goal_lineage* gl_c = solver.lp.goal(nullptr, 2);
-//         const resolution_lineage* avoided = *avoidance.begin();
-//         bool is_b_choice = avoided == solver.lp.resolution(gl_b, 2) || avoided == solver.lp.resolution(gl_b, 3);
-//         bool is_c_choice = avoided == solver.lp.resolution(gl_c, 4) || avoided == solver.lp.resolution(gl_c, 5)
-//                         || avoided == solver.lp.resolution(gl_c, 6) || avoided == solver.lp.resolution(gl_c, 7);
-//         assert(is_b_choice || is_c_choice);
-//     }
-
-//     // Test 13: Depth-4 needle in a depth-10 haystack.
-//     {
-//         trail t;
-//         t.push();
-//         expr_pool ep(t);
-//         bind_map bm(t);
-//         sequencer seq(t);
-
-//         database db;
-
-//         // say which root to start from
-//         db.push_back(rule{ep.atom("root"), {ep.atom("stunt0")}});
-//         db.push_back(rule{ep.atom("root"), {ep.atom("stuntX")}});
-
-//         // NEEDLE: add the rules which provide a faster route to a conflict
-//         db.push_back(rule{ep.atom("stuntX"), {ep.atom("stunt1")}});
-//         db.push_back(rule{ep.atom("stuntX"), {ep.atom("stuntY")}});
-//         db.push_back(rule{ep.atom("stuntY"), {ep.atom("stunt2")}});
-//         db.push_back(rule{ep.atom("stuntY"), {ep.atom("stuntZ")}});
-//         db.push_back(rule{ep.atom("stuntZ"), {ep.atom("stunt3")}});
-//         db.push_back(rule{ep.atom("stuntZ"), {ep.atom("stuntW")}});
-
-//         // HAYSTACK: add 2 of each to make fictitious decisions necessary (simulates a perfect binary tree)
-//         for (int i = 0; i < 2; ++i) {
-//             db.push_back(rule{ep.atom("stunt0"), {ep.atom("stunt1")}});
-//             db.push_back(rule{ep.atom("stunt1"), {ep.atom("stunt2")}});
-//             db.push_back(rule{ep.atom("stunt2"), {ep.atom("stunt3")}});
-//             db.push_back(rule{ep.atom("stunt3"), {ep.atom("stunt4")}});
-//             db.push_back(rule{ep.atom("stunt4"), {ep.atom("stunt5")}});
-//             db.push_back(rule{ep.atom("stunt5"), {ep.atom("stunt6")}});
-//             db.push_back(rule{ep.atom("stunt6"), {ep.atom("stunt7")}});
-//             db.push_back(rule{ep.atom("stunt7"), {ep.atom("stunt8")}});
-//             db.push_back(rule{ep.atom("stunt8"), {ep.atom("stunt9")}});
-//         }
-        
-//         goals goals;
-
-//         goals.push_back(ep.atom("root"));
-
-
-//         std::mt19937 rng(42);
-//         a01 solver(db, goals, t, seq, bm, 1000, 1000, 1.414, rng);
-
-//         decision_store avoidance;
-//         std::optional<resolution_store> soln;
-
-//         bool result = solver.next_avoidance(avoidance, soln);
-
-//         assert(result == true);
-//         assert(!soln.has_value());
-
-//         // CRITICAL: MCTS finds the depth-4 needle.
-//         assert(avoidance.size() == 4);
-
-//         // CRITICAL: The first decision in the avoidance is root→rule0 (the needle branch).
-//         const goal_lineage* gl_root = solver.lp.goal(nullptr, 0);
-//         const resolution_lineage* rl_root = solver.lp.resolution(gl_root, 1);
-//         assert(avoidance.count(rl_root) == 1);
-//         const goal_lineage* gl_stuntX = solver.lp.goal(rl_root, 0);
-//         const resolution_lineage* rl_stuntX = solver.lp.resolution(gl_stuntX, 3);
-//         assert(avoidance.count(rl_stuntX) == 1);
-//         const goal_lineage* gl_stuntY = solver.lp.goal(rl_stuntX, 0);
-//         const resolution_lineage* rl_stuntY = solver.lp.resolution(gl_stuntY, 5);
-//         assert(avoidance.count(rl_stuntY) == 1);
-//         const goal_lineage* gl_stuntZ = solver.lp.goal(rl_stuntY, 0);
-//         const resolution_lineage* rl_stuntZ = solver.lp.resolution(gl_stuntZ, 7);
-//         assert(avoidance.count(rl_stuntZ) == 1);
-//     }
-
-//     // Test 14: Depth-5 shared-variable needle in a depth-10 haystack.
-//     {
-//         trail t;
-//         t.push();
-//         expr_pool ep(t);
-//         bind_map bm(t);
-//         sequencer seq(t);
-
-//         database db;
-
-//         // say which root to start from
-//         db.push_back(rule{ep.atom("root"), {ep.atom("stunt0")}});
-//         db.push_back(rule{ep.atom("root"), {ep.atom("stuntX")}});
-
-//         // NEEDLE: add the rules which provide a faster route to a conflict
-//         db.push_back(rule{ep.atom("stuntX"), {ep.atom("stunt1")}});
-//         db.push_back(rule{ep.atom("stuntX"), {ep.atom("stuntY")}});
-//         db.push_back(rule{ep.atom("stuntY"), {ep.atom("stunt2")}});
-//         db.push_back(rule{ep.atom("stuntY"), {ep.atom("stuntZ")}});
-//         db.push_back(rule{ep.atom("stuntZ"), {ep.atom("stunt3")}});
-//         db.push_back(rule{ep.atom("stuntZ"), {ep.atom("stuntW")}});
-//         db.push_back(rule{ep.atom("stuntW"), {ep.atom("stunt4")}});
-//         db.push_back(rule{ep.atom("stuntW"), {ep.atom("stuntU")}});
-
-//         // HAYSTACK: add 2 of each to make fictitious decisions necessary (simulates a perfect binary tree)
-//         for (int i = 0; i < 2; ++i) {
-//             db.push_back(rule{ep.atom("stunt0"), {ep.atom("stunt1")}});
-//             db.push_back(rule{ep.atom("stunt1"), {ep.atom("stunt2")}});
-//             db.push_back(rule{ep.atom("stunt2"), {ep.atom("stunt3")}});
-//             db.push_back(rule{ep.atom("stunt3"), {ep.atom("stunt4")}});
-//             db.push_back(rule{ep.atom("stunt4"), {ep.atom("stunt5")}});
-//             db.push_back(rule{ep.atom("stunt5"), {ep.atom("stunt6")}});
-//             db.push_back(rule{ep.atom("stunt6"), {ep.atom("stunt7")}});
-//             db.push_back(rule{ep.atom("stunt7"), {ep.atom("stunt8")}});
-//             db.push_back(rule{ep.atom("stunt8"), {ep.atom("stunt9")}});
-//         }
-        
-//         goals goals;
-
-//         goals.push_back(ep.atom("root"));
-
-
-//         std::mt19937 rng(42);
-//         a01 solver(db, goals, t, seq, bm, 1000, 1000, 1.414, rng);
-
-//         decision_store avoidance;
-//         std::optional<resolution_store> soln;
-
-//         bool result = solver.next_avoidance(avoidance, soln);
-
-//         assert(result == true);
-//         assert(!soln.has_value());
-
-//         // CRITICAL: MCTS finds the depth-4 needle.
-//         assert(avoidance.size() == 5);
-
-//         // CRITICAL: The first decision in the avoidance is root→rule0 (the needle branch).
-//         const goal_lineage* gl_root = solver.lp.goal(nullptr, 0);
-//         const resolution_lineage* rl_root = solver.lp.resolution(gl_root, 1);
-//         assert(avoidance.count(rl_root) == 1);
-//         const goal_lineage* gl_stuntX = solver.lp.goal(rl_root, 0);
-//         const resolution_lineage* rl_stuntX = solver.lp.resolution(gl_stuntX, 3);
-//         assert(avoidance.count(rl_stuntX) == 1);
-//         const goal_lineage* gl_stuntY = solver.lp.goal(rl_stuntX, 0);
-//         const resolution_lineage* rl_stuntY = solver.lp.resolution(gl_stuntY, 5);
-//         assert(avoidance.count(rl_stuntY) == 1);
-//         const goal_lineage* gl_stuntZ = solver.lp.goal(rl_stuntY, 0);
-//         const resolution_lineage* rl_stuntZ = solver.lp.resolution(gl_stuntZ, 7);
-//         assert(avoidance.count(rl_stuntZ) == 1);
-//         const goal_lineage* gl_stuntW = solver.lp.goal(rl_stuntZ, 0);
-//         const resolution_lineage* rl_stuntW = solver.lp.resolution(gl_stuntW, 9);
-//         assert(avoidance.count(rl_stuntW) == 1);
-//     }
-// }
-
-// void test_a01() {
-
-//     // Test 1: Budget = 0 — no iterations execute; operator() returns true with nullopt.
-//     // The solver makes no progress at all, so it cannot prove refutation or find a
-//     // solution. This validates the edge case of calling with zero budget.
-//     {
-//         trail t;
-//         t.push();
-//         expr_pool ep(t);
-//         bind_map bm(t);
-//         sequencer seq(t);
-
-//         database db;
-//         db.push_back(rule{ep.atom("a"), {}});
-
-//         goals goals;
-//         goals.push_back(ep.atom("a"));
-
-//         std::mt19937 rng(42);
-//         a01 solver(db, goals, t, seq, bm, 1000, 1000, 1.414, rng);
-
-//         std::optional<resolution_store> soln;
-//         bool result = solver(0, soln);
-
-//         // CRITICAL: returns true (no refutation proved) and soln defaults to nullopt
-//         assert(result == true);
-//         assert(!soln.has_value());
-//         // The avoidance store is empty — no iterations ran, no avoidances recorded
-//         assert(solver.as.empty());
-//     }
-
-//     // Test 2: Simple ground solution — DB: a.  Goal: a
-//     // The single goal is unit-propagated immediately. The resolution store contains
-//     // exactly one lineage entry: the unit-prop of goal 0 via rule 0.
-//     {
-//         trail t;
-//         t.push();
-//         expr_pool ep(t);
-//         bind_map bm(t);
-//         sequencer seq(t);
-
-//         database db;
-//         db.push_back(rule{ep.atom("a"), {}});  // idx 0: a.
-
-//         goals goals;
-//         goals.push_back(ep.atom("a"));
-
-//         std::mt19937 rng(42);
-//         a01 solver(db, goals, t, seq, bm, 1000, 1000, 1.414, rng);
-
-//         std::optional<resolution_store> soln;
-//         bool result = solver(1, soln);
-
-//         assert(result == true);
-//         assert(soln.has_value());
-
-//         // CRITICAL: exactly one resolution (unit-prop of a with rule 0)
-//         assert(soln.value().size() == 1);
-//         const goal_lineage* gl0 = solver.lp.goal(nullptr, 0);
-//         const resolution_lineage* rl0 = solver.lp.resolution(gl0, 0);
-//         assert(soln.value().count(rl0) == 1);
-
-//         // CRITICAL: avoidance store has one entry — the empty decision set from the
-//         // unit-prop solution (no MCTS decision was needed)
-//         assert(solver.as.size() == 1);
-//     }
-
-//     // Test 3: Variable binding verified via normalizer
-//     // DB: answer(42).   Goal: answer(X)
-//     // The copier creates a fresh copy of the ground rule (no vars to freshen), then
-//     // the goal-resolver unifies cons("answer","42") with cons("answer",X), binding X.
-//     // After operator() returns, bm holds X → atom("42"), which the normalizer resolves.
-//     {
-//         trail t;
-//         t.push();
-//         expr_pool ep(t);
-//         bind_map bm(t);
-//         sequencer seq(t);
-
-//         database db;
-//         // idx 0: answer(42).
-//         db.push_back(rule{ep.cons(ep.atom("answer"), ep.atom("42")), {}});
-
-//         const expr* X = ep.var(seq());
-//         goals goals;
-//         goals.push_back(ep.cons(ep.atom("answer"), X));
-
-//         std::mt19937 rng(42);
-//         a01 solver(db, goals, t, seq, bm, 1000, 1000, 1.414, rng);
-
-//         std::optional<resolution_store> soln;
-//         bool result = solver(1, soln);
-
-//         assert(result == true);
-//         assert(soln.has_value());
-
-//         // CRITICAL: one resolution, binding X to "42"
-//         assert(soln.value().size() == 1);
-//         assert(soln.value().count(solver.lp.resolution(solver.lp.goal(nullptr, 0), 0)) == 1);
-
-//         // CRITICAL: normalizer follows bm chain and returns atom("42")
-//         normalizer norm(ep, bm);
-//         const expr* X_val = norm(X);
-//         assert(std::holds_alternative<expr::atom>(X_val->content));
-//         assert(std::get<expr::atom>(X_val->content).value == "42");
-//     }
-
-//     // Test 4: Immediate refutation — empty database, goal has no candidates.
-//     // head-elimination fires before any MCTS decision: conflict with ds = {} on
-//     // the very first sim_one. next_avoidance returns false → operator() returns false.
-//     {
-//         trail t;
-//         t.push();
-//         expr_pool ep(t);
-//         bind_map bm(t);
-//         sequencer seq(t);
-
-//         database db;  // intentionally empty
-
-//         goals goals;
-//         goals.push_back(ep.atom("a"));
-
-//         std::mt19937 rng(42);
-//         a01 solver(db, goals, t, seq, bm, 1000, 1000, 1.414, rng);
-
-//         std::optional<resolution_store> soln;
-//         bool result = solver(1000, soln);
-
-//         assert(result == false);
-//         assert(!soln.has_value());
-//     }
-
-//     // Test 5: 2-call CDCL-driven refutation — unsatisfiable, 2-path problem.
-//     // DB: a :- b.  (idx 0)   a :- c.  (idx 1)   (no rules for b or c)
-//     //
-//     // Call 1: MCTS picks one of {rule0, rule1} for goal a. Whichever is chosen, the
-//     // resulting sub-goal (b or c) has no candidates → conflict. ds = {rl_chosen}.
-//     // After 1000 inner iterations the minimum conflict is size 1. Avoidance recorded.
-//     //
-//     // Call 2: CDCL eliminates the avoided rule. The remaining rule is unit-propagated.
-//     // The new sub-goal (c or b) again has no candidates → conflict with ds = {} (the
-//     // unit-prop added no decision) → next_avoidance returns false → operator() false.
-//     {
-//         trail t;
-//         t.push();
-//         expr_pool ep(t);
-//         bind_map bm(t);
-//         sequencer seq(t);
-
-//         database db;
-//         db.push_back(rule{ep.atom("a"), {ep.atom("b")}});  // idx 0: a :- b.
-//         db.push_back(rule{ep.atom("a"), {ep.atom("c")}});  // idx 1: a :- c.
-
-//         goals goals;
-//         goals.push_back(ep.atom("a"));
-
-//         std::mt19937 rng(42);
-//         a01 solver(db, goals, t, seq, bm, 1000, 1000, 1.414, rng);
-
-//         std::optional<resolution_store> soln;
-
-//         // Call 1: one depth-1 avoidance recorded
-//         bool result1 = solver(1, soln);
-//         assert(result1 == true);
-//         assert(!soln.has_value());
-//         assert(solver.as.size() == 1);
-
-//         // Call 2: CDCL + unit-prop leads to conflict with empty ds → refutation
-//         bool result2 = solver(1, soln);
-//         assert(result2 == false);
-//         assert(!soln.has_value());
-//     }
-
-//     // Test 6: Unique-solution conjunction query — is_a(X) ∧ is_b(X)
-//     // DB:
-//     //   idx 0: is_a(1).   idx 1: is_a(2).
-//     //   idx 2: is_b(2).   idx 3: is_b(3).
-//     //
-//     // The only satisfying X is 2. Each of the 4 MCTS choices leads to either
-//     // a solution (X=2) or immediate conflict (X=1 kills is_b; X=3 kills is_a).
-//     //
-//     // Call 1: MCTS finds X=2 via one decision (size-1 avoidance recorded).
-//     //         Normalizer verifies X → "2". Lineage is deterministic:
-//     //         soln always = {rl(gl_a,1), rl(gl_b,2)}, regardless of which goal MCTS
-//     //         decided first — both rules apply to X=2, the other is unit-propagated.
-//     //
-//     // Call 2: CDCL eliminates the solution decision (rule idx for X=2). The only
-//     //         remaining candidate for that goal resolves to X=1 or X=3, which
-//     //         immediately conflicts with the other goal (0 candidates, ds={}) →
-//     //         next_avoidance returns false → operator() returns false.
-//     {
-//         trail t;
-//         t.push();
-//         expr_pool ep(t);
-//         bind_map bm(t);
-//         sequencer seq(t);
-
-//         database db;
-//         db.push_back(rule{ep.cons(ep.atom("is_a"), ep.atom("1")), {}});  // idx 0
-//         db.push_back(rule{ep.cons(ep.atom("is_a"), ep.atom("2")), {}});  // idx 1
-//         db.push_back(rule{ep.cons(ep.atom("is_b"), ep.atom("2")), {}});  // idx 2
-//         db.push_back(rule{ep.cons(ep.atom("is_b"), ep.atom("3")), {}});  // idx 3
-
-//         const expr* X = ep.var(seq());
-//         goals goals;
-//         goals.push_back(ep.cons(ep.atom("is_a"), X));  // goal 0: is_a(X)
-//         goals.push_back(ep.cons(ep.atom("is_b"), X));  // goal 1: is_b(X)
-
-//         std::mt19937 rng(42);
-//         a01 solver(db, goals, t, seq, bm, 1000, 1000, 1.414, rng);
-
-//         normalizer norm(ep, bm);
-//         std::optional<resolution_store> soln;
-
-//         // Call 1: unique solution X=2
-//         bool result1 = solver(1000, soln);
-//         assert(result1 == true);
-//         assert(soln.has_value());
-
-//         // CRITICAL: bm binds X to "2"
-//         const expr* X_val = norm(X);
-//         assert(std::holds_alternative<expr::atom>(X_val->content));
-//         assert(std::get<expr::atom>(X_val->content).value == "2");
-
-//         // CRITICAL: soln contains exactly the two resolutions for X=2 — one per goal.
-//         // Regardless of which goal MCTS decided first, both rl(gl_a,1) and rl(gl_b,2)
-//         // always appear (one as the decision, the other as unit-propagation).
-//         assert(soln.value().size() == 2);
-//         const goal_lineage* gl_a = solver.lp.goal(nullptr, 0);
-//         const goal_lineage* gl_b = solver.lp.goal(nullptr, 1);
-//         const resolution_lineage* rl_a1 = solver.lp.resolution(gl_a, 1);  // is_a(2)
-//         const resolution_lineage* rl_b2 = solver.lp.resolution(gl_b, 2);  // is_b(2)
-//         assert(soln.value().count(rl_a1) == 1);
-//         assert(soln.value().count(rl_b2) == 1);
-
-//         // Call 2: the solution path is blocked; the only remaining path conflicts → refutation
-//         bool result2 = solver(1000, soln);
-//         assert(result2 == false);
-//         assert(!soln.has_value());
-//     }
-
-//     // Test 7: Multi-solution enumeration — all parents of alice
-//     // DB:
-//     //   idx 0: parent(bob,   alice).
-//     //   idx 1: parent(carol, alice).
-//     //   idx 2: parent(dave,  bob).     ← head-elim removes this (alice ≠ bob)
-//     //
-//     // Goal: parent(X, alice)  — head-elim leaves only rules 0 and 1.
-//     // MCTS must decide between bob and carol. Each is a depth-1 solution.
-//     //
-//     // Call 1 finds one parent; Call 2 finds the other (via CDCL elimination of the
-//     // first decision, leaving a unit-prop that resolves to the remaining parent).
-//     // bm binds X differently after each call; normalizer verifies the two names differ.
-//     {
-//         trail t;
-//         t.push();
-//         expr_pool ep(t);
-//         bind_map bm(t);
-//         sequencer seq(t);
-
-//         database db;
-//         // parent(A, B) encoded as cons(cons(atom("parent"), A), B)
-//         db.push_back(rule{ep.cons(ep.cons(ep.atom("parent"), ep.atom("bob")),   ep.atom("alice")), {}});  // idx 0
-//         db.push_back(rule{ep.cons(ep.cons(ep.atom("parent"), ep.atom("carol")), ep.atom("alice")), {}});  // idx 1
-//         db.push_back(rule{ep.cons(ep.cons(ep.atom("parent"), ep.atom("dave")),  ep.atom("bob")),  {}});   // idx 2
-
-//         const expr* X = ep.var(seq());
-//         goals goals;
-//         goals.push_back(ep.cons(ep.cons(ep.atom("parent"), X), ep.atom("alice")));
-
-//         std::mt19937 rng(42);
-//         a01 solver(db, goals, t, seq, bm, 1000, 1000, 1.414, rng);
-
-//         normalizer norm(ep, bm);
-//         std::optional<resolution_store> soln;
-
-//         // First parent of alice
-//         bool result1 = solver(1000, soln);
-//         assert(result1 == true);
-//         assert(soln.has_value());
-//         assert(soln.value().size() == 1);
-
-//         const expr* X_val1 = norm(X);
-//         assert(std::holds_alternative<expr::atom>(X_val1->content));
-//         std::string parent1 = std::get<expr::atom>(X_val1->content).value;
-//         assert(parent1 == "bob" || parent1 == "carol");
-
-//         // Second parent of alice — sim_one rolls back bm then unit-props the other rule
-//         bool result2 = solver(1000, soln);
-//         assert(result2 == true);
-//         assert(soln.has_value());
-//         assert(soln.value().size() == 1);
-
-//         const expr* X_val2 = norm(X);
-//         assert(std::holds_alternative<expr::atom>(X_val2->content));
-//         std::string parent2 = std::get<expr::atom>(X_val2->content).value;
-//         assert(parent2 == "bob" || parent2 == "carol");
-
-//         // CRITICAL: the two solutions bind X to different names
-//         assert(parent1 != parent2);
-
-//         // Test for refutation
-//         bool result3 = solver(1000, soln);
-//         assert(result3 == false);
-//     }
-
-//     // Test 8: Boolean SAT — formula (P ∨ Q) ∧ (¬P ∨ Q)
-//     //
-//     // This 2-clause formula is equivalent to Q. The satisfying assignments are:
-//     //   Solution A: P = true,  Q = true,  NP = false
-//     //   Solution B: P = false, Q = true,  NP = true
-//     //
-//     // Encoding (all predicates as right-nested cons cells):
-//     //   bool(X)    → cons(atom("bool"), X)
-//     //   not(X, Y)  → cons(cons(atom("not"), X), Y)
-//     //   or(X, Y, Z)→ cons(cons(cons(atom("or"), X), Y), Z)
-//     //
-//     // DB: bool(true) idx0, bool(false) idx1,
-//     //     not(true,false) idx2, not(false,true) idx3,
-//     //     or(true,true,true) idx4, or(true,false,true) idx5,
-//     //     or(false,true,true) idx6, or(false,false,false) idx7.
-//     //
-//     // Goals: bool(P), bool(Q), or(P,Q,true), not(P,NP), or(NP,Q,true).
-//     //
-//     // With 1000 inner iterations MCTS learns to decide bool(P) first (1-decision
-//     // solutions, negative reward -1), rather than bool(Q) (requires 2+ decisions).
-//     // Deciding P=true propagates: NP=false, or(false,Q,true)→Q=true, bool(Q)→true,
-//     //   or(true,true,true). Deciding P=false propagates analogously.
-//     //
-//     // Both calls return with Q=true and opposite values for P.
-//     {
-//         trail t;
-//         t.push();
-//         expr_pool ep(t);
-//         bind_map bm(t);
-//         sequencer seq(t);
-
-//         database db;
-//         db.push_back(rule{ep.cons(ep.atom("bool"), ep.atom("true")),  {}});  // idx 0
-//         db.push_back(rule{ep.cons(ep.atom("bool"), ep.atom("false")), {}});  // idx 1
-//         db.push_back(rule{ep.cons(ep.cons(ep.atom("not"), ep.atom("true")),  ep.atom("false")), {}});  // idx 2
-//         db.push_back(rule{ep.cons(ep.cons(ep.atom("not"), ep.atom("false")), ep.atom("true")),  {}});  // idx 3
-//         db.push_back(rule{ep.cons(ep.cons(ep.cons(ep.atom("or"), ep.atom("true")),  ep.atom("true")),  ep.atom("true")),  {}});  // idx 4
-//         db.push_back(rule{ep.cons(ep.cons(ep.cons(ep.atom("or"), ep.atom("true")),  ep.atom("false")), ep.atom("true")),  {}});  // idx 5
-//         db.push_back(rule{ep.cons(ep.cons(ep.cons(ep.atom("or"), ep.atom("false")), ep.atom("true")),  ep.atom("true")),  {}});  // idx 6
-//         db.push_back(rule{ep.cons(ep.cons(ep.cons(ep.atom("or"), ep.atom("false")), ep.atom("false")), ep.atom("false")), {}});  // idx 7
-
-//         const expr* P  = ep.var(seq());
-//         const expr* Q  = ep.var(seq());
-//         const expr* NP = ep.var(seq());
-
-//         goals goals;
-//         // goal 0: bool(P)
-//         goals.push_back(ep.cons(ep.atom("bool"), P));
-//         // goal 1: bool(Q)
-//         goals.push_back(ep.cons(ep.atom("bool"), Q));
-//         // goal 2: or(P, Q, true) — P ∨ Q = true
-//         goals.push_back(ep.cons(ep.cons(ep.cons(ep.atom("or"), P), Q), ep.atom("true")));
-//         // goal 3: not(P, NP) — compute ¬P
-//         goals.push_back(ep.cons(ep.cons(ep.atom("not"), P), NP));
-//         // goal 4: or(NP, Q, true) — ¬P ∨ Q = true
-//         goals.push_back(ep.cons(ep.cons(ep.cons(ep.atom("or"), NP), Q), ep.atom("true")));
-
-//         std::mt19937 rng(42);
-//         a01 solver(db, goals, t, seq, bm, 1000, 1000, 1.414, rng);
-
-//         normalizer norm(ep, bm);
-//         std::optional<resolution_store> soln;
-
-//         // First solution: P=true or P=false, but Q must be true
-//         bool result1 = solver(1000, soln);
-//         assert(result1 == true);
-//         assert(soln.has_value());
-
-//         const expr* Q_val1 = norm(Q);
-//         const expr* P_val1 = norm(P);
-//         assert(std::holds_alternative<expr::atom>(Q_val1->content));
-//         assert(std::holds_alternative<expr::atom>(P_val1->content));
-
-//         // CRITICAL: Q = true in every solution of (P∨Q)∧(¬P∨Q)
-//         assert(std::get<expr::atom>(Q_val1->content).value == "true");
-//         std::string P_str1 = std::get<expr::atom>(P_val1->content).value;
-//         assert(P_str1 == "true" || P_str1 == "false");
-
-//         // Second solution: CDCL eliminates first P choice; the other propagates
-//         bool result2 = solver(1000, soln);
-//         assert(result2 == true);
-//         assert(soln.has_value());
-
-//         const expr* Q_val2 = norm(Q);
-//         const expr* P_val2 = norm(P);
-//         assert(std::holds_alternative<expr::atom>(Q_val2->content));
-//         assert(std::holds_alternative<expr::atom>(P_val2->content));
-
-//         // CRITICAL: Q still true after finding the second solution
-//         assert(std::get<expr::atom>(Q_val2->content).value == "true");
-//         std::string P_str2 = std::get<expr::atom>(P_val2->content).value;
-
-//         // CRITICAL: the two solutions assign opposite values to P
-//         assert(P_str2 != P_str1);
-
-//         // Test for refutation
-//         bool result3 = solver(1000, soln);
-//         assert(result3 == false);
-//     }
-
-//     // Test 9: Graph 2-coloring synthesis — find valid 2-colorings of a 3-node path A-B-C
-//     //
-//     // DB:
-//     //   idx 0: color(red).     idx 1: color(blue).
-//     //   idx 2: diff(red, blue).  idx 3: diff(blue, red).
-//     //
-//     // Goals:
-//     //   goal 0: color(A)   goal 1: color(B)   goal 2: color(C)
-//     //   goal 3: diff(A, B)  goal 4: diff(B, C)
-//     //
-//     // A single MCTS decision (e.g. deciding diff(A,B)→red-blue) immediately binds
-//     // A and B, unit-propagates color(A), color(B), diff(B,C), and color(C).
-//     // This produces exactly two valid 2-colorings:
-//     //   Coloring 1: A=red,  B=blue, C=red
-//     //   Coloring 2: A=blue, B=red,  C=blue
-//     //
-//     // Both calls return valid alternating colorings that satisfy:
-//     //   A ≠ B,  B ≠ C,  A = C  (necessary for a 2-colored path of 3 nodes).
-//     // The two solutions bind A differently, confirming both colorings are enumerated.
-//     // All 5 goals appear in the solution's resolution store.
-//     {
-//         trail t;
-//         t.push();
-//         expr_pool ep(t);
-//         bind_map bm(t);
-//         sequencer seq(t);
-
-//         database db;
-//         db.push_back(rule{ep.cons(ep.atom("color"), ep.atom("red")),  {}});  // idx 0
-//         db.push_back(rule{ep.cons(ep.atom("color"), ep.atom("blue")), {}});  // idx 1
-//         // diff(X, Y) encoded as cons(cons(atom("diff"), X), Y)
-//         db.push_back(rule{ep.cons(ep.cons(ep.atom("diff"), ep.atom("red")),  ep.atom("blue")), {}});  // idx 2
-//         db.push_back(rule{ep.cons(ep.cons(ep.atom("diff"), ep.atom("blue")), ep.atom("red")),  {}});  // idx 3
-
-//         const expr* A = ep.var(seq());
-//         const expr* B = ep.var(seq());
-//         const expr* C = ep.var(seq());
-
-//         goals goals;
-//         goals.push_back(ep.cons(ep.atom("color"), A));                 // goal 0: color(A)
-//         goals.push_back(ep.cons(ep.atom("color"), B));                 // goal 1: color(B)
-//         goals.push_back(ep.cons(ep.atom("color"), C));                 // goal 2: color(C)
-//         goals.push_back(ep.cons(ep.cons(ep.atom("diff"), A), B));      // goal 3: diff(A, B)
-//         goals.push_back(ep.cons(ep.cons(ep.atom("diff"), B), C));      // goal 4: diff(B, C)
-
-//         std::mt19937 rng(42);
-//         a01 solver(db, goals, t, seq, bm, 1000, 1000, 1.414, rng);
-
-//         normalizer norm(ep, bm);
-//         std::optional<resolution_store> soln;
-
-//         auto is_valid_color = [](const std::string& s) {
-//             return s == "red" || s == "blue";
-//         };
-
-//         // First valid 2-coloring of the path A-B-C
-//         bool result1 = solver(1000, soln);
-//         assert(result1 == true);
-//         assert(soln.has_value());
-
-//         // All 5 goals are resolved in every solution
-//         assert(soln.value().size() == 5);
-
-//         std::string A1 = std::get<expr::atom>(norm(A)->content).value;
-//         std::string B1 = std::get<expr::atom>(norm(B)->content).value;
-//         std::string C1 = std::get<expr::atom>(norm(C)->content).value;
-
-//         assert(is_valid_color(A1) && is_valid_color(B1) && is_valid_color(C1));
-//         // CRITICAL: adjacent nodes have different colors
-//         assert(A1 != B1);
-//         assert(B1 != C1);
-//         // CRITICAL: the path is symmetrically 2-colored — endpoints share a color
-//         assert(A1 == C1);
-
-//         // Second valid 2-coloring — bm is refreshed by the next sim_one's trail pop
-//         bool result2 = solver(1000, soln);
-//         assert(result2 == true);
-//         assert(soln.has_value());
-//         assert(soln.value().size() == 5);
-
-//         std::string A2 = std::get<expr::atom>(norm(A)->content).value;
-//         std::string B2 = std::get<expr::atom>(norm(B)->content).value;
-//         std::string C2 = std::get<expr::atom>(norm(C)->content).value;
-
-//         assert(is_valid_color(A2) && is_valid_color(B2) && is_valid_color(C2));
-//         assert(A2 != B2);
-//         assert(B2 != C2);
-//         assert(A2 == C2);
-
-//         // CRITICAL: the second coloring is the complement of the first
-//         assert(A2 != A1);
-
-//         // Test for refutation
-//         bool result3 = solver(1000, soln);
-//         assert(result3 == false);
-//     }
-
-//     // =========================================================================
-//     // Structured multi-solution enumeration helpers (Tests 10 and 11)
-//     // =========================================================================
-
-//     // solution = ordered vector of normalised const expr* values for the variables
-//     // of interest. Comparison uses pointer identity, which is correct because
-//     // expr_pool interns: same content → same pointer within the same pool.
-//     using solution = std::vector<const expr*>;
-
-//     // Enumerate all expected solutions in any order, skipping calls that return
-//     // the same variable bindings via a different resolution path (valid behaviour),
-//     // then assert that the solver refutes when the search space is exhausted.
-//     auto next_until_refuted = [](
-//         a01& solver,
-//         std::set<solution> expected,
-//         auto get_solution,
-//         size_t iterations = 1000
-//     ) {
-//         std::set<solution> visited;
-//         std::optional<resolution_store> soln;
-//         while (!expected.empty()) {
-//             solution s;
-//             do {
-//                 bool r = solver(iterations, soln);
-//                 assert(r == true);
-//                 s = get_solution();
-//             } while (visited.count(s));
-//             assert(expected.count(s) == 1);
-//             expected.erase(s);
-//             visited.insert(s);
-
-//             std::cout << "Solution: " << std::endl;
-//             expr_printer printer(std::cout);
-//             for (const auto& e : s) {
-//                 printer(e);
-//                 std::cout << std::endl;
-//             }
-//             std::cout << std::endl;
-//         }
-//         // All solutions found — next call must refute
-//         bool r = solver(iterations, soln);
-//         assert(r == false);
-//         assert(!soln.has_value());
-//     };
-
-//     // Test 10: 3-colouring of K3 (the triangle) with colours {red, green, blue}
-//     //
-//     // All 3 nodes A, B, C are mutually adjacent, so every valid colouring assigns
-//     // a distinct colour to each node.  Exactly 3! = 6 proper 3-colourings exist.
-//     //
-//     // DB:
-//     //   idx 0-2: color(red), color(green), color(blue).
-//     //   idx 3-8: diff(X,Y) for every ordered pair of distinct colours (6 facts).
-//     //
-//     // Goals: color(A), color(B), color(C), diff(A,B), diff(A,C), diff(B,C).
-//     //
-//     // One MCTS decision (e.g. diff(A,B)→red-green) propagates A and B immediately.
-//     // diff(A,C) and diff(B,C) then narrow C to the unique remaining colour, which
-//     // unit-propagates everything else.  Multiple resolution orderings reach the same
-//     // (A,B,C) binding; the visited loop deduplicates those paths.
-//     {
-//         trail t;
-//         t.push();
-//         expr_pool ep(t);
-//         bind_map bm(t);
-//         sequencer seq(t);
-
-//         database db;
-//         db.push_back(rule{ep.cons(ep.atom("color"), ep.atom("red")),   {}});  // idx 0
-//         db.push_back(rule{ep.cons(ep.atom("color"), ep.atom("green")), {}});  // idx 1
-//         db.push_back(rule{ep.cons(ep.atom("color"), ep.atom("blue")),  {}});  // idx 2
-//         // diff(X, Y) = cons(cons(atom("diff"), X), Y) — all 6 asymmetric pairs
-//         db.push_back(rule{ep.cons(ep.cons(ep.atom("diff"), ep.atom("red")),   ep.atom("green")), {}});  // idx 3
-//         db.push_back(rule{ep.cons(ep.cons(ep.atom("diff"), ep.atom("red")),   ep.atom("blue")),  {}});  // idx 4
-//         db.push_back(rule{ep.cons(ep.cons(ep.atom("diff"), ep.atom("green")), ep.atom("red")),   {}});  // idx 5
-//         db.push_back(rule{ep.cons(ep.cons(ep.atom("diff"), ep.atom("green")), ep.atom("blue")),  {}});  // idx 6
-//         db.push_back(rule{ep.cons(ep.cons(ep.atom("diff"), ep.atom("blue")),  ep.atom("red")),   {}});  // idx 7
-//         db.push_back(rule{ep.cons(ep.cons(ep.atom("diff"), ep.atom("blue")),  ep.atom("green")), {}});  // idx 8
-
-//         const expr* A = ep.var(seq());
-//         const expr* B = ep.var(seq());
-//         const expr* C = ep.var(seq());
-
-//         goals goals;
-//         goals.push_back(ep.cons(ep.atom("color"), A));                 // goal 0: color(A)
-//         goals.push_back(ep.cons(ep.atom("color"), B));                 // goal 1: color(B)
-//         goals.push_back(ep.cons(ep.atom("color"), C));                 // goal 2: color(C)
-//         goals.push_back(ep.cons(ep.cons(ep.atom("diff"), A), B));      // goal 3: diff(A,B)
-//         goals.push_back(ep.cons(ep.cons(ep.atom("diff"), A), C));      // goal 4: diff(A,C)
-//         goals.push_back(ep.cons(ep.cons(ep.atom("diff"), B), C));      // goal 5: diff(B,C)
-
-//         std::mt19937 rng(42);
-//         a01 solver(db, goals, t, seq, bm, 1000, 1000, 1.414, rng);
-
-//         normalizer norm(ep, bm);
-
-//         // Interned atoms from ep — same pointer as those embedded in the rules
-//         const expr* red   = ep.atom("red");
-//         const expr* green = ep.atom("green");
-//         const expr* blue  = ep.atom("blue");
-
-//         // Every permutation of {red, green, blue} assigned to {A, B, C}
-//         std::set<solution> expected = {
-//             {red,   green, blue },
-//             {red,   blue,  green},
-//             {green, red,   blue },
-//             {green, blue,  red  },
-//             {blue,  red,   green},
-//             {blue,  green, red  },
-//         };
-
-//         next_until_refuted(solver, expected, [&]() -> solution {
-//             return {ep.import(norm(A)), ep.import(norm(B)), ep.import(norm(C))};
-//         });
-//     }
-
-//     // Test 11: SAT — P ∧ (Q ∨ R) using relational OR/AND encoding
-//     //
-//     // The OR and AND predicates are encoded relationally with a bool/1 body goal
-//     // that constrains the free argument to the boolean domain:
-//     //
-//     //   or(true,  X, true) :- bool(X).   — true ∨ anything = true
-//     //   or(false, X, X)    :- bool(X).   — false ∨ X = X
-//     //   and(true,  X, X)   :- bool(X).   — true ∧ X = X
-//     //   and(false, X, false):- bool(X).  — false ∧ anything = false
-//     //
-//     // Formula: P ∧ (Q ∨ R)
-//     // Goals: bool(P), bool(Q), bool(R), or(Q, R, QR), and(P, QR, true)
-//     //
-//     // Propagation chain (derived):
-//     //   and(P, QR, true): head-elim removes and(false,X,false) (result false≠true)
-//     //   → unit-prop via and(true,X,X): P=true, QR=true.
-//     //   or(Q, R, true):
-//     //     or(true,X,true)  → Q=true,  R free, adds bool(R) subgoal  (2 solutions)
-//     //     or(false,X,X)    → Q=false, X=R=true, adds bool(true) subgoal (1 solution)
-//     //
-//     // Solutions: (P=T,Q=T,R=T), (P=T,Q=T,R=F), (P=T,Q=F,R=T).
-//     // Note: different resolution orderings of the two bool(R) goals (the initial one
-//     // and the subgoal from the or rule) reach the same binding — the visited loop
-//     // deduplicates these identical-binding, distinct-path solutions.
-//     {
-//         trail t;
-//         t.push();
-//         expr_pool ep(t);
-//         bind_map bm(t);
-//         sequencer seq(t);
-
-//         database db;
-//         db.push_back(rule{ep.cons(ep.atom("bool"), ep.atom("true")),  {}});  // idx 0: bool(true).
-//         db.push_back(rule{ep.cons(ep.atom("bool"), ep.atom("false")), {}});  // idx 1: bool(false).
-
-//         // or(true, X, true) :- bool(X).
-//         {
-//             const expr* X = ep.var(seq());
-//             db.push_back(rule{
-//                 ep.cons(ep.cons(ep.cons(ep.atom("or"), ep.atom("true")), X), ep.atom("true")),
-//                 {ep.cons(ep.atom("bool"), X)}
-//             });  // idx 2
-//         }
-//         // or(false, X, X) :- bool(X).
-//         {
-//             const expr* X = ep.var(seq());
-//             db.push_back(rule{
-//                 ep.cons(ep.cons(ep.cons(ep.atom("or"), ep.atom("false")), X), X),
-//                 {ep.cons(ep.atom("bool"), X)}
-//             });  // idx 3
-//         }
-//         // and(true, X, X) :- bool(X).
-//         {
-//             const expr* X = ep.var(seq());
-//             db.push_back(rule{
-//                 ep.cons(ep.cons(ep.cons(ep.atom("and"), ep.atom("true")), X), X),
-//                 {ep.cons(ep.atom("bool"), X)}
-//             });  // idx 4
-//         }
-//         // and(false, X, false) :- bool(X).
-//         {
-//             const expr* X = ep.var(seq());
-//             db.push_back(rule{
-//                 ep.cons(ep.cons(ep.cons(ep.atom("and"), ep.atom("false")), X), ep.atom("false")),
-//                 {ep.cons(ep.atom("bool"), X)}
-//             });  // idx 5
-//         }
-
-//         const expr* P  = ep.var(seq());
-//         const expr* Q  = ep.var(seq());
-//         const expr* R  = ep.var(seq());
-//         const expr* QR = ep.var(seq());
-
-//         goals goals;
-//         goals.push_back(ep.cons(ep.atom("bool"), P));                                           // goal 0: bool(P)
-//         goals.push_back(ep.cons(ep.atom("bool"), Q));                                           // goal 1: bool(Q)
-//         goals.push_back(ep.cons(ep.atom("bool"), R));                                           // goal 2: bool(R)
-//         goals.push_back(ep.cons(ep.cons(ep.cons(ep.atom("or"),  Q), R),  QR));                 // goal 3: or(Q,R,QR)
-//         goals.push_back(ep.cons(ep.cons(ep.cons(ep.atom("and"), P), QR), ep.atom("true")));    // goal 4: and(P,QR,true)
-
-//         std::mt19937 rng(42);
-//         a01 solver(db, goals, t, seq, bm, 1000, 1000, 1.414, rng);
-
-//         normalizer norm(ep, bm);
-
-//         const expr* T_ = ep.atom("true");
-//         const expr* F_ = ep.atom("false");
-
-//         std::set<solution> expected = {
-//             {T_, T_, T_},   // P=T, Q=T, R=T
-//             {T_, T_, F_},   // P=T, Q=T, R=F
-//             {T_, F_, T_},   // P=T, Q=F, R=T
-//         };
-
-//         next_until_refuted(solver, expected, [&]() -> solution {
-//             return {ep.import(norm(P)), ep.import(norm(Q)), ep.import(norm(R))};
-//         });
-//     }
-
-//     // Test 12: 3-colouring of "K3 + tail" — 4 nodes, 8 goals, 12 solutions
-//     //
-//     // Graph: nodes A, B, C, D.
-//     //   Edges: A-B, A-C, B-C  (triangle — A, B, C all-different)
-//     //          A-D             (tail — D only constrained to differ from A)
-//     //
-//     // Colours: red, green, blue.
-//     //
-//     // Each of the 6 K3 colourings of (A,B,C) combines with 2 choices for D
-//     // (any colour ≠ A), giving 6 × 2 = 12 distinct solutions.
-//     //
-//     // Compared to Test 10 (K3, 6 goals): one extra node, one extra colour goal,
-//     // one extra diff goal, and twice as many solutions — a meaningfully harder instance.
-//     {
-//         trail t;
-//         t.push();
-//         expr_pool ep(t);
-//         bind_map bm(t);
-//         sequencer seq(t);
-
-//         database db;
-//         db.push_back(rule{ep.cons(ep.atom("color"), ep.atom("red")),   {}});  // idx 0
-//         db.push_back(rule{ep.cons(ep.atom("color"), ep.atom("green")), {}});  // idx 1
-//         db.push_back(rule{ep.cons(ep.atom("color"), ep.atom("blue")),  {}});  // idx 2
-//         // All 6 ordered diff pairs among {red, green, blue}
-//         db.push_back(rule{ep.cons(ep.cons(ep.atom("diff"), ep.atom("red")),   ep.atom("green")), {}});  // idx 3
-//         db.push_back(rule{ep.cons(ep.cons(ep.atom("diff"), ep.atom("red")),   ep.atom("blue")),  {}});  // idx 4
-//         db.push_back(rule{ep.cons(ep.cons(ep.atom("diff"), ep.atom("green")), ep.atom("red")),   {}});  // idx 5
-//         db.push_back(rule{ep.cons(ep.cons(ep.atom("diff"), ep.atom("green")), ep.atom("blue")),  {}});  // idx 6
-//         db.push_back(rule{ep.cons(ep.cons(ep.atom("diff"), ep.atom("blue")),  ep.atom("red")),   {}});  // idx 7
-//         db.push_back(rule{ep.cons(ep.cons(ep.atom("diff"), ep.atom("blue")),  ep.atom("green")), {}});  // idx 8
-
-//         const expr* A = ep.var(seq());
-//         const expr* B = ep.var(seq());
-//         const expr* C = ep.var(seq());
-//         const expr* D = ep.var(seq());
-
-//         goals goals;
-//         goals.push_back(ep.cons(ep.atom("color"), A));                 // goal 0: color(A)
-//         goals.push_back(ep.cons(ep.atom("color"), B));                 // goal 1: color(B)
-//         goals.push_back(ep.cons(ep.atom("color"), C));                 // goal 2: color(C)
-//         goals.push_back(ep.cons(ep.atom("color"), D));                 // goal 3: color(D)
-//         goals.push_back(ep.cons(ep.cons(ep.atom("diff"), A), B));      // goal 4: diff(A,B)
-//         goals.push_back(ep.cons(ep.cons(ep.atom("diff"), A), C));      // goal 5: diff(A,C)
-//         goals.push_back(ep.cons(ep.cons(ep.atom("diff"), B), C));      // goal 6: diff(B,C)
-//         goals.push_back(ep.cons(ep.cons(ep.atom("diff"), A), D));      // goal 7: diff(A,D)
-
-//         std::mt19937 rng(42);
-//         a01 solver(db, goals, t, seq, bm, 1000, 1000, 1.414, rng);
-
-//         normalizer norm(ep, bm);
-
-//         const expr* R_ = ep.atom("red");
-//         const expr* G_ = ep.atom("green");
-//         const expr* B_ = ep.atom("blue");
-
-//         // 6 K3 colourings of (A,B,C), each with 2 choices for D (any colour ≠ A)
-//         std::set<solution> expected = {
-//             {R_, G_, B_, G_}, {R_, G_, B_, B_},
-//             {R_, B_, G_, G_}, {R_, B_, G_, B_},
-//             {G_, R_, B_, R_}, {G_, R_, B_, B_},
-//             {G_, B_, R_, R_}, {G_, B_, R_, B_},
-//             {B_, R_, G_, R_}, {B_, R_, G_, G_},
-//             {B_, G_, R_, R_}, {B_, G_, R_, G_},
-//         };
-
-//         next_until_refuted(solver, expected, [&]() -> solution {
-//             return {ep.import(norm(A)), ep.import(norm(B)), ep.import(norm(C)), ep.import(norm(D))};
-//         });
-//     }
-
-//     // Test 13: 4-variable SAT — (P ∨ Q) ∧ (R ∨ S) ∧ (¬P ∨ ¬R)
-//     //
-//     // Three clauses, four boolean variables. The third clause forbids P and R
-//     // both being true, while the first two require each pair to cover true.
-//     //
-//     // Using the same relational OR/AND/NOT encoding as Test 11, plus NOT rules
-//     // for each primary variable. Intermediate result variables (PQ, RS, NP, NR,
-//     // NPR, PQ_RS) connect the clause structure. All 11 goals are listed below.
-//     //
-//     // Propagation chain (deterministic, no MCTS decisions needed for these steps):
-//     //   and(PQ_RS, NPR, true): head-elim removes and(false,_,false); unit-prop
-//     //     → PQ_RS = true, NPR = true.
-//     //   and(PQ, RS, PQ_RS=true): same → PQ = true, RS = true.
-//     //   Remaining: or(P,Q,true), or(R,S,true), or(NP,NR,true) each have 2 candidates.
-//     //   not rules propagate as soon as P or R is bound.
-//     //
-//     // Satisfying assignments (5):
-//     //   (T,T,F,T), (T,F,F,T), (F,T,T,T), (F,T,T,F), (F,T,F,T)
-//     //
-//     // Every solution needs ≥ 2 MCTS decisions, so all avoidances are non-empty
-//     // and CDCL learning drives refutation after all 5 are found.
-//     {
-//         trail t;
-//         t.push();
-//         expr_pool ep(t);
-//         bind_map bm(t);
-//         sequencer seq(t);
-
-//         database db;
-//         db.push_back(rule{ep.cons(ep.atom("bool"), ep.atom("true")),  {}});  // idx 0
-//         db.push_back(rule{ep.cons(ep.atom("bool"), ep.atom("false")), {}});  // idx 1
-//         db.push_back(rule{ep.cons(ep.cons(ep.atom("not"), ep.atom("true")),  ep.atom("false")), {}});  // idx 2
-//         db.push_back(rule{ep.cons(ep.cons(ep.atom("not"), ep.atom("false")), ep.atom("true")),  {}});  // idx 3
-//         // or(true, X, true) :- bool(X).
-//         {
-//             const expr* X = ep.var(seq());
-//             db.push_back(rule{
-//                 ep.cons(ep.cons(ep.cons(ep.atom("or"), ep.atom("true")), X), ep.atom("true")),
-//                 {ep.cons(ep.atom("bool"), X)}
-//             });  // idx 4
-//         }
-//         // or(false, X, X) :- bool(X).
-//         {
-//             const expr* X = ep.var(seq());
-//             db.push_back(rule{
-//                 ep.cons(ep.cons(ep.cons(ep.atom("or"), ep.atom("false")), X), X),
-//                 {ep.cons(ep.atom("bool"), X)}
-//             });  // idx 5
-//         }
-//         // and(true, X, X) :- bool(X).
-//         {
-//             const expr* X = ep.var(seq());
-//             db.push_back(rule{
-//                 ep.cons(ep.cons(ep.cons(ep.atom("and"), ep.atom("true")), X), X),
-//                 {ep.cons(ep.atom("bool"), X)}
-//             });  // idx 6
-//         }
-//         // and(false, X, false) :- bool(X).
-//         {
-//             const expr* X = ep.var(seq());
-//             db.push_back(rule{
-//                 ep.cons(ep.cons(ep.cons(ep.atom("and"), ep.atom("false")), X), ep.atom("false")),
-//                 {ep.cons(ep.atom("bool"), X)}
-//             });  // idx 7
-//         }
-
-//         // Primary variables
-//         const expr* P     = ep.var(seq());
-//         const expr* Q     = ep.var(seq());
-//         const expr* R     = ep.var(seq());
-//         const expr* S     = ep.var(seq());
-//         // Intermediate result variables
-//         const expr* PQ    = ep.var(seq());   // P ∨ Q
-//         const expr* RS    = ep.var(seq());   // R ∨ S
-//         const expr* NP    = ep.var(seq());   // ¬P
-//         const expr* NR    = ep.var(seq());   // ¬R
-//         const expr* NPR   = ep.var(seq());   // ¬P ∨ ¬R
-//         const expr* PQ_RS = ep.var(seq());   // (P∨Q) ∧ (R∨S)
-
-//         goals goals;
-//         goals.push_back(ep.cons(ep.atom("bool"), P));                                               // goal  0: bool(P)
-//         goals.push_back(ep.cons(ep.atom("bool"), Q));                                               // goal  1: bool(Q)
-//         goals.push_back(ep.cons(ep.atom("bool"), R));                                               // goal  2: bool(R)
-//         goals.push_back(ep.cons(ep.atom("bool"), S));                                               // goal  3: bool(S)
-//         goals.push_back(ep.cons(ep.cons(ep.cons(ep.atom("or"),  P),  Q),  PQ));                    // goal  4: or(P,Q,PQ)
-//         goals.push_back(ep.cons(ep.cons(ep.cons(ep.atom("or"),  R),  S),  RS));                    // goal  5: or(R,S,RS)
-//         goals.push_back(ep.cons(ep.cons(ep.atom("not"), P), NP));                                   // goal  6: not(P,NP)
-//         goals.push_back(ep.cons(ep.cons(ep.atom("not"), R), NR));                                   // goal  7: not(R,NR)
-//         goals.push_back(ep.cons(ep.cons(ep.cons(ep.atom("or"),  NP), NR), NPR));                   // goal  8: or(NP,NR,NPR)
-//         goals.push_back(ep.cons(ep.cons(ep.cons(ep.atom("and"), PQ), RS),  PQ_RS));                // goal  9: and(PQ,RS,PQ_RS)
-//         goals.push_back(ep.cons(ep.cons(ep.cons(ep.atom("and"), PQ_RS), NPR), ep.atom("true")));   // goal 10: and(PQ_RS,NPR,true)
-
-//         std::mt19937 rng(42);
-//         a01 solver(db, goals, t, seq, bm, 1000, 1000, 1.414, rng);
-
-//         normalizer norm(ep, bm);
-
-//         const expr* T_ = ep.atom("true");
-//         const expr* F_ = ep.atom("false");
-
-//         // All 5 satisfying assignments to (P, Q, R, S)
-//         std::set<solution> expected = {
-//             {T_, T_, F_, T_},   // P=T, Q=T, R=F, S=T
-//             {T_, F_, F_, T_},   // P=T, Q=F, R=F, S=T
-//             {F_, T_, T_, T_},   // P=F, Q=T, R=T, S=T
-//             {F_, T_, T_, F_},   // P=F, Q=T, R=T, S=F
-//             {F_, T_, F_, T_},   // P=F, Q=T, R=F, S=T
-//         };
-
-//         next_until_refuted(solver, expected, [&]() -> solution {
-//             return {ep.import(norm(P)), ep.import(norm(Q)), ep.import(norm(R)), ep.import(norm(S))};
-//         });
-//     }
-
-//     // Test 14: Peano arithmetic — enumerate all naturals less than 7
-//     //
-//     // Rules:
-//     //   idx 0: nat(zero).
-//     //   idx 1: nat(suc(X))    :- nat(X).
-//     //   idx 2: lt(zero, suc(X)) :- nat(X).
-//     //   idx 3: lt(suc(X), suc(Y)) :- lt(X, Y).
-//     //
-//     // Encoding:
-//     //   zero    = atom("zero")
-//     //   suc(X)  = cons(atom("suc"), X)
-//     //   nat(X)  = cons(atom("nat"), X)
-//     //   lt(X,Y) = cons(cons(atom("lt"), X), Y)
-//     //
-//     // Goal: lt(N, seven)   where seven = suc^7(zero)
-//     //
-//     // Exactly 7 solutions exist: N ∈ {0, 1, 2, 3, 4, 5, 6} in Peano encoding.
-//     // Reaching N=k requires k unfoldings of rule 3, one application of rule 2,
-//     // then k unfoldings of rule 1 (to discharge the nat subgoal), bottoming out
-//     // at rule 0.  next_until_refuted verifies all 7 solutions are found and that
-//     // the solver then proves refutation.
-//     {
-//         trail t;
-//         t.push();
-//         expr_pool ep(t);
-//         bind_map bm(t);
-//         sequencer seq(t);
-
-//         // Build the Peano numeral for n: suc^n(zero)
-//         auto peano = [&](int n) -> const expr* {
-//             const expr* result = ep.atom("zero");
-//             for (int i = 0; i < n; ++i)
-//                 result = ep.cons(ep.atom("suc"), result);
-//             return result;
-//         };
-
-//         database db;
-
-//         // idx 0: nat(zero).
-//         db.push_back(rule{ep.cons(ep.atom("nat"), ep.atom("zero")), {}});
-
-//         // idx 1: nat(suc(X)) :- nat(X).
-//         {
-//             const expr* X = ep.var(seq());
-//             db.push_back(rule{
-//                 ep.cons(ep.atom("nat"), ep.cons(ep.atom("suc"), X)),
-//                 {ep.cons(ep.atom("nat"), X)}
-//             });
-//         }
-
-//         // idx 2: lt(zero, suc(X)) :- nat(X).
-//         {
-//             const expr* X = ep.var(seq());
-//             db.push_back(rule{
-//                 ep.cons(ep.cons(ep.atom("lt"), ep.atom("zero")), ep.cons(ep.atom("suc"), X)),
-//                 {ep.cons(ep.atom("nat"), X)}
-//             });
-//         }
-
-//         // idx 3: lt(suc(X), suc(Y)) :- lt(X, Y).
-//         {
-//             const expr* X = ep.var(seq());
-//             const expr* Y = ep.var(seq());
-//             db.push_back(rule{
-//                 ep.cons(ep.cons(ep.atom("lt"), ep.cons(ep.atom("suc"), X)), ep.cons(ep.atom("suc"), Y)),
-//                 {ep.cons(ep.cons(ep.atom("lt"), X), Y)}
-//             });
-//         }
-
-//         const expr* N     = ep.var(seq());
-//         const expr* seven = peano(7);
-
-//         goals goals;
-//         goals.push_back(ep.cons(ep.cons(ep.atom("lt"), N), seven));  // goal 0: lt(N, seven)
-
-//         std::mt19937 rng(42);
-//         a01 solver(db, goals, t, seq, bm, 1000, 1000, 1.414, rng);
-
-//         normalizer norm(ep, bm);
-
-//         // All 7 Peano naturals strictly less than 7
-//         std::set<solution> expected = {
-//             {peano(0)},
-//             {peano(1)},
-//             {peano(2)},
-//             {peano(3)},
-//             {peano(4)},
-//             {peano(5)},
-//             {peano(6)},
-//         };
-
-//         next_until_refuted(solver, expected, [&]() -> solution {
-//             return {ep.import(norm(N))};
-//         });
-//     }
-
-//     // Test 15: Addition + less-than — enumerate all pairs (X, Y) with X + Y < 10
-//     //
-//     // Rules:
-//     //   idx 0: nat(zero).
-//     //   idx 1: nat(suc(X))           :- nat(X).
-//     //   idx 2: add(zero, Y, Y)       :- nat(Y).
-//     //   idx 3: add(suc(X), Y, suc(Z)):- add(X, Y, Z).
-//     //   idx 4: lt(zero, suc(X))      :- nat(X).
-//     //   idx 5: lt(suc(X), suc(Y))    :- lt(X, Y).
-//     //
-//     // Goals: add(X, Y, S),  lt(S, ten)   where ten = suc^10(zero)
-//     //
-//     // Exactly 55 pairs satisfy X + Y < 10: sum s = 0..9 contributes (10-s) pairs.
-//     // next_until_refuted verifies all 55 are found and the solver then refutes.
-//     {
-//         trail t;
-//         t.push();
-//         expr_pool ep(t);
-//         bind_map bm(t);
-//         sequencer seq(t);
-
-//         auto peano = [&](int n) -> const expr* {
-//             const expr* r = ep.atom("zero");
-//             for (int i = 0; i < n; ++i)
-//                 r = ep.cons(ep.atom("suc"), r);
-//             return r;
-//         };
-
-//         database db;
-
-//         // idx 0: nat(zero).
-//         db.push_back(rule{ep.cons(ep.atom("nat"), ep.atom("zero")), {}});
-
-//         // idx 1: nat(suc(X)) :- nat(X).
-//         {
-//             const expr* X = ep.var(seq());
-//             db.push_back(rule{
-//                 ep.cons(ep.atom("nat"), ep.cons(ep.atom("suc"), X)),
-//                 {ep.cons(ep.atom("nat"), X)}
-//             });
-//         }
-
-//         // idx 2: add(zero, Y, Y) :- nat(Y).
-//         {
-//             const expr* Y = ep.var(seq());
-//             db.push_back(rule{
-//                 ep.cons(ep.cons(ep.cons(ep.atom("add"), ep.atom("zero")), Y), Y),
-//                 {ep.cons(ep.atom("nat"), Y)}
-//             });
-//         }
-
-//         // idx 3: add(suc(X), Y, suc(Z)) :- add(X, Y, Z).
-//         {
-//             const expr* X = ep.var(seq());
-//             const expr* Y = ep.var(seq());
-//             const expr* Z = ep.var(seq());
-//             db.push_back(rule{
-//                 ep.cons(ep.cons(ep.cons(ep.atom("add"), ep.cons(ep.atom("suc"), X)), Y), ep.cons(ep.atom("suc"), Z)),
-//                 {ep.cons(ep.cons(ep.cons(ep.atom("add"), X), Y), Z)}
-//             });
-//         }
-
-//         // idx 4: lt(zero, suc(X)) :- nat(X).
-//         {
-//             const expr* X = ep.var(seq());
-//             db.push_back(rule{
-//                 ep.cons(ep.cons(ep.atom("lt"), ep.atom("zero")), ep.cons(ep.atom("suc"), X)),
-//                 {ep.cons(ep.atom("nat"), X)}
-//             });
-//         }
-
-//         // idx 5: lt(suc(X), suc(Y)) :- lt(X, Y).
-//         {
-//             const expr* X = ep.var(seq());
-//             const expr* Y = ep.var(seq());
-//             db.push_back(rule{
-//                 ep.cons(ep.cons(ep.atom("lt"), ep.cons(ep.atom("suc"), X)), ep.cons(ep.atom("suc"), Y)),
-//                 {ep.cons(ep.cons(ep.atom("lt"), X), Y)}
-//             });
-//         }
-
-//         const expr* X   = ep.var(seq());
-//         const expr* Y   = ep.var(seq());
-//         const expr* S   = ep.var(seq());
-//         const expr* ten = peano(10);
-
-//         goals goals;
-//         goals.push_back(ep.cons(ep.cons(ep.cons(ep.atom("add"), X), Y), S));  // goal 0: add(X, Y, S)
-//         goals.push_back(ep.cons(ep.cons(ep.atom("lt"), S), ten));              // goal 1: lt(S, ten)
-
-//         std::mt19937 rng(42);
-//         a01 solver(db, goals, t, seq, bm, 1000, 100, 1.414, rng);
-
-//         normalizer norm(ep, bm);
-
-//         // All 55 pairs (x, y) with x + y < 10
-//         std::set<solution> expected;
-//         for (int x = 0; x < 10; ++x)
-//             for (int y = 0; y < 10 - x; ++y)
-//                 expected.insert({peano(x), peano(y)});
-//         assert(expected.size() == 55);
-
-//         next_until_refuted(solver, expected, [&]() -> solution {
-//             return {ep.import(norm(X)), ep.import(norm(Y))};
-//         });
-//     }
-
-//     // Test 16: Enumerate all pairs (X, Y) whose sum is exactly 10
-//     //
-//     // Rules:
-//     //   idx 0: nat(zero).
-//     //   idx 1: nat(suc(X))           :- nat(X).
-//     //   idx 2: add(zero, Y, Y)       :- nat(Y).
-//     //   idx 3: add(suc(X), Y, suc(Z)):- add(X, Y, Z).
-//     //
-//     // Goal: add(X, Y, ten)   where ten = suc^10(zero)
-//     //
-//     // Exactly 11 solutions: (0,10),(1,9),(2,8),...,(10,0).
-//     {
-//         trail t;
-//         t.push();
-//         expr_pool ep(t);
-//         bind_map bm(t);
-//         sequencer seq(t);
-
-//         auto peano = [&](int n) -> const expr* {
-//             const expr* r = ep.atom("zero");
-//             for (int i = 0; i < n; ++i)
-//                 r = ep.cons(ep.atom("suc"), r);
-//             return r;
-//         };
-
-//         database db;
-
-//         // idx 0: nat(zero).
-//         db.push_back(rule{ep.cons(ep.atom("nat"), ep.atom("zero")), {}});
-
-//         // idx 1: nat(suc(X)) :- nat(X).
-//         {
-//             const expr* X = ep.var(seq());
-//             db.push_back(rule{
-//                 ep.cons(ep.atom("nat"), ep.cons(ep.atom("suc"), X)),
-//                 {ep.cons(ep.atom("nat"), X)}
-//             });
-//         }
-
-//         // idx 2: add(zero, Y, Y) :- nat(Y).
-//         {
-//             const expr* Y = ep.var(seq());
-//             db.push_back(rule{
-//                 ep.cons(ep.cons(ep.cons(ep.atom("add"), ep.atom("zero")), Y), Y),
-//                 {ep.cons(ep.atom("nat"), Y)}
-//             });
-//         }
-
-//         // idx 3: add(suc(X), Y, suc(Z)) :- add(X, Y, Z).
-//         {
-//             const expr* X = ep.var(seq());
-//             const expr* Y = ep.var(seq());
-//             const expr* Z = ep.var(seq());
-//             db.push_back(rule{
-//                 ep.cons(ep.cons(ep.cons(ep.atom("add"), ep.cons(ep.atom("suc"), X)), Y), ep.cons(ep.atom("suc"), Z)),
-//                 {ep.cons(ep.cons(ep.cons(ep.atom("add"), X), Y), Z)}
-//             });
-//         }
-
-//         const expr* X   = ep.var(seq());
-//         const expr* Y   = ep.var(seq());
-//         const expr* ten = peano(10);
-
-//         goals goals;
-//         goals.push_back(ep.cons(ep.cons(ep.cons(ep.atom("add"), X), Y), ten));  // goal 0: add(X, Y, ten)
-
-//         std::mt19937 rng(42);
-//         a01 solver(db, goals, t, seq, bm, 1000, 1000, 1.414, rng);
-
-//         normalizer norm(ep, bm);
-
-//         // All 11 pairs (x, y) with x + y = 10
-//         std::set<solution> expected;
-//         for (int x = 0; x <= 10; ++x)
-//             expected.insert({peano(x), peano(10 - x)});
-//         assert(expected.size() == 11);
-
-//         next_until_refuted(solver, expected, [&]() -> solution {
-//             return {ep.import(norm(X)), ep.import(norm(Y))};
-//         });
-//     }
-
-//     // Test 17: Enumerate all pairs (X, Y) whose product is exactly 8
-//     //
-//     // Rules:
-//     //   idx 0: nat(zero).
-//     //   idx 1: nat(suc(X))           :- nat(X).
-//     //   idx 2: add(zero, Y, Y)       :- nat(Y).
-//     //   idx 3: add(suc(X), Y, suc(Z)):- add(X, Y, Z).
-//     //   idx 4: mul(zero, Y, zero)    :- nat(Y).
-//     //   idx 5: mul(suc(X), Y, Z)     :- mul(X, Y, W), add(W, Y, Z).
-//     //
-//     // Goal: mul(X, Y, eight)   where eight = suc^8(zero)
-//     //
-//     // Exactly 4 solutions: (1,8),(2,4),(4,2),(8,1).
-//     // Zero is excluded because mul(zero,Y,zero) can never unify with eight.
-//     {
-//         trail t;
-//         t.push();
-//         expr_pool ep(t);
-//         bind_map bm(t);
-//         sequencer seq(t);
-
-//         auto peano = [&](int n) -> const expr* {
-//             const expr* r = ep.atom("zero");
-//             for (int i = 0; i < n; ++i)
-//                 r = ep.cons(ep.atom("suc"), r);
-//             return r;
-//         };
-
-//         database db;
-
-//         // idx 0: nat(zero).
-//         db.push_back(rule{ep.cons(ep.atom("nat"), ep.atom("zero")), {}});
-
-//         // idx 1: nat(suc(X)) :- nat(X).
-//         {
-//             const expr* X = ep.var(seq());
-//             db.push_back(rule{
-//                 ep.cons(ep.atom("nat"), ep.cons(ep.atom("suc"), X)),
-//                 {ep.cons(ep.atom("nat"), X)}
-//             });
-//         }
-
-//         // idx 2: add(zero, Y, Y) :- nat(Y).
-//         {
-//             const expr* Y = ep.var(seq());
-//             db.push_back(rule{
-//                 ep.cons(ep.cons(ep.cons(ep.atom("add"), ep.atom("zero")), Y), Y),
-//                 {ep.cons(ep.atom("nat"), Y)}
-//             });
-//         }
-
-//         // idx 3: add(suc(X), Y, suc(Z)) :- add(X, Y, Z).
-//         {
-//             const expr* X = ep.var(seq());
-//             const expr* Y = ep.var(seq());
-//             const expr* Z = ep.var(seq());
-//             db.push_back(rule{
-//                 ep.cons(ep.cons(ep.cons(ep.atom("add"), ep.cons(ep.atom("suc"), X)), Y), ep.cons(ep.atom("suc"), Z)),
-//                 {ep.cons(ep.cons(ep.cons(ep.atom("add"), X), Y), Z)}
-//             });
-//         }
-
-//         // idx 4: mul(zero, Y, zero) :- nat(Y).
-//         {
-//             const expr* Y = ep.var(seq());
-//             db.push_back(rule{
-//                 ep.cons(ep.cons(ep.cons(ep.atom("mul"), ep.atom("zero")), Y), ep.atom("zero")),
-//                 {ep.cons(ep.atom("nat"), Y)}
-//             });
-//         }
-
-//         // idx 5: mul(suc(X), Y, Z) :- mul(X, Y, W), add(W, Y, Z).
-//         {
-//             const expr* X = ep.var(seq());
-//             const expr* Y = ep.var(seq());
-//             const expr* Z = ep.var(seq());
-//             const expr* W = ep.var(seq());
-//             db.push_back(rule{
-//                 ep.cons(ep.cons(ep.cons(ep.atom("mul"), ep.cons(ep.atom("suc"), X)), Y), Z),
-//                 {
-//                     ep.cons(ep.cons(ep.cons(ep.atom("mul"), X), Y), W),
-//                     ep.cons(ep.cons(ep.cons(ep.atom("add"), W), Y), Z)
-//                 }
-//             });
-//         }
-
-//         const expr* X     = ep.var(seq());
-//         const expr* Y     = ep.var(seq());
-//         const expr* eight = peano(8);
-
-//         goals goals;
-//         goals.push_back(ep.cons(ep.cons(ep.cons(ep.atom("mul"), X), Y), eight));  // goal 0: mul(X, Y, eight)
-
-//         std::mt19937 rng(42);
-//         a01 solver(db, goals, t, seq, bm, 1000, 10, 1.414, rng);
-
-//         normalizer norm(ep, bm);
-
-//         // All 4 factor pairs of 8
-//         std::set<solution> expected = {
-//             {peano(1), peano(8)},
-//             {peano(2), peano(4)},
-//             {peano(4), peano(2)},
-//             {peano(8), peano(1)},
-//         };
-
-//         next_until_refuted(solver, expected, [&]() -> solution {
-//             return {ep.import(norm(X)), ep.import(norm(Y))};
-//         });
-//     }
-// }
+            // CRITICAL: Verify lineage comes from correct pool
+            assert(lp.goal_lineages.count(*gl) == 1);
+        }
+    }
+    
+    // Test 3: Multiple goals - verify sequential indexing
+    {
+        trail t;
+        t.push();
+        
+        expr_pool ep(t);
+        bind_map bm(t);
+        sequencer seq(t);
+        lineage_pool lp;
+        
+        database db;
+        db.push_back(rule{ep.atom("p"), {}});
+        db.push_back(rule{ep.atom("q"), {}});
+        db.push_back(rule{ep.atom("r"), {}});
+        
+        goals goals;
+        goals.push_back(ep.atom("p"));
+        goals.push_back(ep.atom("q"));
+        goals.push_back(ep.atom("r"));
+        
+        cdcl c;
+        
+        monte_carlo::tree_node<mcts_decider::choice> root;
+        std::mt19937 rng(42);
+        monte_carlo::simulation<mcts_decider::choice, std::mt19937> sim(root, 1.414, rng);
+        
+        resolution_store rs;
+        decision_store ds;
+
+        a01_sim simulation(200, db, goals, t, seq, ep, bm, lp, rs, ds, c, sim);
+        
+        // CRITICAL: Three goals added with indices 0, 1, 2
+        assert(simulation.gs.size() == 3);
+        
+        // Find each lineage by index
+        const goal_lineage* gl0 = nullptr;
+        const goal_lineage* gl1 = nullptr;
+        const goal_lineage* gl2 = nullptr;
+        
+        for (const auto& [gl, ge] : simulation.gs) {
+            if (gl->idx == 0) {
+                gl0 = gl;
+                assert(ge == ep.atom("p"));
+            } else if (gl->idx == 1) {
+                gl1 = gl;
+                assert(ge == ep.atom("q"));
+            } else if (gl->idx == 2) {
+                gl2 = gl;
+                assert(ge == ep.atom("r"));
+            }
+        }
+        
+        assert(gl0 != nullptr);
+        assert(gl1 != nullptr);
+        assert(gl2 != nullptr);
+        
+        // CRITICAL: All have nullptr parent (root goals)
+        assert(gl0->parent == nullptr);
+        assert(gl1->parent == nullptr);
+        assert(gl2->parent == nullptr);
+        
+        // CRITICAL: Total candidates = 3 goals * 3 db rules = 9
+        assert(simulation.cs.size() == 9);
+        
+        // CRITICAL: Each goal has ALL 3 rules as candidates (goal_adder adds all, trivially)
+        assert(simulation.cs.count(gl0) == 3);
+        assert(simulation.cs.count(gl1) == 3);
+        assert(simulation.cs.count(gl2) == 3);
+        
+        // Verify each goal has candidates 0, 1, 2
+        auto range0 = simulation.cs.equal_range(gl0);
+        std::set<size_t> indices0;
+        for (auto it = range0.first; it != range0.second; ++it) {
+            indices0.insert(it->second);
+        }
+        assert(indices0 == std::set<size_t>({0, 1, 2}));
+        
+        auto range1 = simulation.cs.equal_range(gl1);
+        std::set<size_t> indices1;
+        for (auto it = range1.first; it != range1.second; ++it) {
+            indices1.insert(it->second);
+        }
+        assert(indices1 == std::set<size_t>({0, 1, 2}));
+        
+        auto range2 = simulation.cs.equal_range(gl2);
+        std::set<size_t> indices2;
+        for (auto it = range2.first; it != range2.second; ++it) {
+            indices2.insert(it->second);
+        }
+        assert(indices2 == std::set<size_t>({0, 1, 2}));
+        
+        // Max resolutions
+        assert(simulation.max_resolutions == 200);
+        
+        // CRITICAL: Verify all lineages from correct pool
+        assert(lp.goal_lineages.count(*gl0) == 1);
+        assert(lp.goal_lineages.count(*gl1) == 1);
+        assert(lp.goal_lineages.count(*gl2) == 1);
+        
+        // CRITICAL: Verify resolution and decision stores empty
+        assert(simulation.rs.size() == 0);
+        assert(simulation.ds.size() == 0);
+    }
+    
+    // Test 4: Goals with no matching database rules - candidates empty for some goals
+    {
+        trail t;
+        t.push();
+        
+        expr_pool ep(t);
+        bind_map bm(t);
+        sequencer seq(t);
+        lineage_pool lp;
+        
+        database db;
+        db.push_back(rule{ep.atom("p"), {}});
+        // No rule for "q" or "r"
+        
+        goals goals;
+        goals.push_back(ep.atom("p"));
+        goals.push_back(ep.atom("q"));
+        goals.push_back(ep.atom("r"));
+        
+        cdcl c;
+        
+        monte_carlo::tree_node<mcts_decider::choice> root;
+        std::mt19937 rng(42);
+        monte_carlo::simulation<mcts_decider::choice, std::mt19937> sim(root, 1.414, rng);
+        
+        resolution_store rs;
+        decision_store ds;
+        a01_sim simulation(100, db, goals, t, seq, ep, bm, lp, rs, ds, c, sim);
+        
+        // CRITICAL: All goals added to goal_store
+        assert(simulation.gs.size() == 3);
+        
+        // CRITICAL: goal_adder adds ALL db rules to ALL goals (trivially, before elimination)
+        // 3 goals * 1 db rule = 3 total candidates
+        assert(simulation.cs.size() == 3);
+        
+        const goal_lineage* gl_p = nullptr;
+        const goal_lineage* gl_q = nullptr;
+        const goal_lineage* gl_r = nullptr;
+        
+        for (const auto& [gl, ge] : simulation.gs) {
+            if (gl->idx == 0) gl_p = gl;
+            else if (gl->idx == 1) gl_q = gl;
+            else if (gl->idx == 2) gl_r = gl;
+        }
+        
+        // Each goal has the single db rule as a candidate
+        assert(simulation.cs.count(gl_p) == 1);
+        assert(simulation.cs.count(gl_q) == 1);
+        assert(simulation.cs.count(gl_r) == 1);
+        
+        // All have db[0] as candidate
+        assert(simulation.cs.find(gl_p)->second == 0);
+        assert(simulation.cs.find(gl_q)->second == 0);
+        assert(simulation.cs.find(gl_r)->second == 0);
+        
+        // CRITICAL: Verify resolution and decision stores empty
+        assert(simulation.rs.size() == 0);
+        assert(simulation.ds.size() == 0);
+        
+        // CRITICAL: Verify goal expressions are correct
+        assert(simulation.gs.at(gl_p) == ep.atom("p"));
+        assert(simulation.gs.at(gl_q) == ep.atom("q"));
+        assert(simulation.gs.at(gl_r) == ep.atom("r"));
+        
+        // CRITICAL: Verify lineages from correct pool
+        assert(lp.goal_lineages.count(*gl_p) == 1);
+        assert(lp.goal_lineages.count(*gl_q) == 1);
+        assert(lp.goal_lineages.count(*gl_r) == 1);
+    }
+    
+    // Test 5: Database with multiple candidates per goal
+    {
+        trail t;
+        t.push();
+        
+        expr_pool ep(t);
+        bind_map bm(t);
+        sequencer seq(t);
+        lineage_pool lp;
+        
+        database db;
+        db.push_back(rule{ep.atom("p"), {}});
+        db.push_back(rule{ep.atom("p"), {ep.atom("q")}});
+        db.push_back(rule{ep.atom("p"), {ep.atom("r")}});
+        
+        goals goals;
+        goals.push_back(ep.atom("p"));
+        
+        cdcl c;
+        
+        monte_carlo::tree_node<mcts_decider::choice> root;
+        std::mt19937 rng(42);
+        monte_carlo::simulation<mcts_decider::choice, std::mt19937> sim(root, 1.414, rng);
+        
+        resolution_store rs;
+        decision_store ds;
+        a01_sim simulation(100, db, goals, t, seq, ep, bm, lp, rs, ds, c, sim);
+        
+        // Goal added
+        assert(simulation.gs.size() == 1);
+        const goal_lineage* gl = lp.goal(nullptr, 0);
+        
+        // CRITICAL: Three candidates for the same goal
+        assert(simulation.cs.count(gl) == 3);
+        
+        // Verify candidate indices are 0, 1, 2
+        auto range = simulation.cs.equal_range(gl);
+        std::set<size_t> indices;
+        for (auto it = range.first; it != range.second; ++it) {
+            indices.insert(it->second);
+        }
+        assert(indices.size() == 3);
+        assert(indices.count(0) == 1);
+        assert(indices.count(1) == 1);
+        assert(indices.count(2) == 1);
+        
+        // CRITICAL: Verify resolution/decision stores empty
+        assert(simulation.rs.size() == 0);
+        assert(simulation.ds.size() == 0);
+        
+        // CRITICAL: Verify goal expression content
+        assert(simulation.gs.at(gl) == ep.atom("p"));
+        
+        // CRITICAL: Verify lineage from correct pool
+        assert(lp.goal_lineages.count(*gl) == 1);
+        assert(gl->parent == nullptr);
+        assert(gl->idx == 0);
+    }
+    
+    // Test 6: Avoidance store is copied, not referenced
+    {
+        trail t;
+        t.push();
+        
+        expr_pool ep(t);
+        bind_map bm(t);
+        sequencer seq(t);
+        lineage_pool lp;
+        
+        database db;
+        goals goals;
+        
+        // Pre-populate avoidance store
+        cdcl c;
+        const resolution_lineage* rl1 = lp.resolution(lp.goal(nullptr, 0), 0);
+        const resolution_lineage* rl2 = lp.resolution(lp.goal(nullptr, 1), 1);
+        
+        decision_store avoid1;
+        avoid1.insert(rl1);
+        avoid1.insert(rl2);
+        
+        c.insert(avoid1);
+        
+        monte_carlo::tree_node<mcts_decider::choice> root;
+        std::mt19937 rng(42);
+        monte_carlo::simulation<mcts_decider::choice, std::mt19937> sim(root, 1.414, rng);
+        
+        resolution_store rs;
+        decision_store ds;
+        a01_sim simulation(100, db, goals, t, seq, ep, bm, lp, rs, ds, c, sim);
+        
+        // CRITICAL: cdcl is passed by value — simulation.c is a separate copy
+        assert(simulation.c.avoidances.size() == 1);
+        
+        // Content matches
+        assert(std::any_of(simulation.c.avoidances.begin(), simulation.c.avoidances.end(),
+            [&](const auto& p){ return p.second == avoid1; }));
+    }
+    
+    // Test 7: Complex database and goals - verify all candidates found
+    {
+        trail t;
+        t.push();
+        
+        expr_pool ep(t);
+        bind_map bm(t);
+        sequencer seq(t);
+        lineage_pool lp;
+        
+        database db;
+        db.push_back(rule{ep.atom("p"), {}});
+        db.push_back(rule{ep.atom("p"), {ep.atom("x")}});
+        db.push_back(rule{ep.atom("q"), {}});
+        db.push_back(rule{ep.atom("q"), {ep.atom("y")}});
+        db.push_back(rule{ep.atom("q"), {ep.atom("z")}});
+        db.push_back(rule{ep.atom("r"), {ep.atom("w")}});
+        
+        goals goals;
+        goals.push_back(ep.atom("p"));
+        goals.push_back(ep.atom("q"));
+        goals.push_back(ep.atom("r"));
+        goals.push_back(ep.atom("s"));  // No matching rule
+        
+        cdcl c;
+        
+        monte_carlo::tree_node<mcts_decider::choice> root;
+        std::mt19937 rng(42);
+        monte_carlo::simulation<mcts_decider::choice, std::mt19937> sim(root, 1.414, rng);
+        
+        resolution_store rs;
+        decision_store ds;
+        a01_sim simulation(75, db, goals, t, seq, ep, bm, lp, rs, ds, c, sim);
+        
+        // CRITICAL: 4 goals added
+        assert(simulation.gs.size() == 4);
+        
+        // Find each lineage
+        const goal_lineage* gl0 = nullptr;
+        const goal_lineage* gl1 = nullptr;
+        const goal_lineage* gl2 = nullptr;
+        const goal_lineage* gl3 = nullptr;
+        
+        for (const auto& [gl, ge] : simulation.gs) {
+            if (gl->idx == 0) {
+                gl0 = gl;
+                assert(ge == ep.atom("p"));
+            } else if (gl->idx == 1) {
+                gl1 = gl;
+                assert(ge == ep.atom("q"));
+            } else if (gl->idx == 2) {
+                gl2 = gl;
+                assert(ge == ep.atom("r"));
+            } else if (gl->idx == 3) {
+                gl3 = gl;
+                assert(ge == ep.atom("s"));
+            }
+        }
+        
+        assert(gl0 && gl1 && gl2 && gl3);
+        
+        // CRITICAL: goal_adder adds ALL rules to ALL goals (trivially)
+        // 4 goals * 6 db rules = 24 total candidates
+        assert(simulation.cs.size() == 24);
+        
+        // Each goal has all 6 rules as candidates
+        assert(simulation.cs.count(gl0) == 6);
+        assert(simulation.cs.count(gl1) == 6);
+        assert(simulation.cs.count(gl2) == 6);
+        assert(simulation.cs.count(gl3) == 6);
+        
+        // Verify all have indices 0-5
+        for (const goal_lineage* gl : {gl0, gl1, gl2, gl3}) {
+            auto range = simulation.cs.equal_range(gl);
+            std::set<size_t> indices;
+            for (auto it = range.first; it != range.second; ++it) {
+                indices.insert(it->second);
+            }
+            assert(indices == std::set<size_t>({0, 1, 2, 3, 4, 5}));
+        }
+        
+        // Max resolutions
+        assert(simulation.max_resolutions == 75);
+        
+        // CRITICAL: Verify resolution/decision stores empty
+        assert(simulation.rs.size() == 0);
+        assert(simulation.ds.size() == 0);
+        
+        // CRITICAL: Verify all lineages from correct pool and have correct properties
+        assert(lp.goal_lineages.count(*gl0) == 1);
+        assert(lp.goal_lineages.count(*gl1) == 1);
+        assert(lp.goal_lineages.count(*gl2) == 1);
+        assert(lp.goal_lineages.count(*gl3) == 1);
+        
+        assert(gl0->parent == nullptr && gl0->idx == 0);
+        assert(gl1->parent == nullptr && gl1->idx == 1);
+        assert(gl2->parent == nullptr && gl2->idx == 2);
+        assert(gl3->parent == nullptr && gl3->idx == 3);
+        
+        // CRITICAL: Verify goal expressions match exactly
+        assert(simulation.gs.at(gl0) == ep.atom("p"));
+        assert(simulation.gs.at(gl1) == ep.atom("q"));
+        assert(simulation.gs.at(gl2) == ep.atom("r"));
+        assert(simulation.gs.at(gl3) == ep.atom("s"));
+        
+        // CRITICAL: Verify database reference holds correct content
+        assert(simulation.db.size() == 6);
+        assert(simulation.db[0].head == ep.atom("p"));
+        assert(simulation.db[2].head == ep.atom("q"));
+        assert(simulation.db[5].head == ep.atom("r"));
+    }
+    
+    // Test 9: Pre-populated avoidance store is copied
+    {
+        trail t;
+        t.push();
+        
+        expr_pool ep(t);
+        bind_map bm(t);
+        sequencer seq(t);
+        lineage_pool lp;
+        
+        database db;
+        goals goals;
+        
+        // Pre-populate avoidance store with multiple avoidances
+        cdcl c;
+        
+        const resolution_lineage* rl1 = lp.resolution(lp.goal(nullptr, 0), 0);
+        const resolution_lineage* rl2 = lp.resolution(lp.goal(nullptr, 1), 1);
+        const resolution_lineage* rl3 = lp.resolution(lp.goal(nullptr, 2), 2);
+        
+        decision_store avoid1;
+        avoid1.insert(rl1);
+        avoid1.insert(rl2);
+        
+        decision_store avoid2;
+        avoid2.insert(rl3);
+        
+        c.insert(avoid1);
+        c.insert(avoid2);
+        
+        monte_carlo::tree_node<mcts_decider::choice> root;
+        std::mt19937 rng(42);
+        monte_carlo::simulation<mcts_decider::choice, std::mt19937> sim(root, 1.414, rng);
+        
+        resolution_store rs;
+        decision_store ds;
+        a01_sim simulation(100, db, goals, t, seq, ep, bm, lp, rs, ds, c, sim);
+        
+        // CRITICAL: cdcl copy has same content
+        assert(simulation.c.avoidances.size() == 2);
+        assert(std::any_of(simulation.c.avoidances.begin(), simulation.c.avoidances.end(),
+            [&](const auto& p){ return p.second == avoid1; }));
+        assert(std::any_of(simulation.c.avoidances.begin(), simulation.c.avoidances.end(),
+            [&](const auto& p){ return p.second == avoid2; }));
+    }
+    
+    // Test 10: Verify sequencer and expr_pool passed correctly to copier
+    {
+        trail t;
+        t.push();
+        
+        expr_pool ep(t);
+        bind_map bm(t);
+        sequencer seq(t);
+        lineage_pool lp;
+        
+        database db;
+        goals goals;
+        goals.push_back(ep.atom("p"));
+        
+        cdcl c;
+        
+        monte_carlo::tree_node<mcts_decider::choice> root;
+        std::mt19937 rng(42);
+        monte_carlo::simulation<mcts_decider::choice, std::mt19937> sim(root, 1.414, rng);
+        
+        resolution_store rs;
+        decision_store ds;
+        a01_sim simulation(100, db, goals, t, seq, ep, bm, lp, rs, ds, c, sim);
+        
+        // Verify copier references match (via members)
+        assert(&simulation.cp.expr_pool_ref == &ep);
+        assert(&simulation.cp.sequencer_ref == &seq);
+    }
+    
+    // Test 11: Different max_resolutions values stored correctly
+    {
+        trail t;
+        t.push();
+        
+        expr_pool ep(t);
+        bind_map bm(t);
+        sequencer seq(t);
+        lineage_pool lp;
+        
+        database db;
+        goals goals;
+        
+        cdcl c;
+        
+        monte_carlo::tree_node<mcts_decider::choice> root;
+        std::mt19937 rng(42);
+        monte_carlo::simulation<mcts_decider::choice, std::mt19937> sim(root, 1.414, rng);
+        
+        // Test various limits
+        {
+            resolution_store rs;
+            decision_store ds;
+            a01_sim sim1(1, db, goals, t, seq, ep, bm, lp, rs, ds, c, sim);
+            assert(sim1.max_resolutions == 1);
+        }
+        
+        {
+            resolution_store rs;
+            decision_store ds;
+            a01_sim sim2(1000, db, goals, t, seq, ep, bm, lp, rs, ds, c, sim);
+            assert(sim2.max_resolutions == 1000);
+        }
+        
+        {
+            resolution_store rs;
+            decision_store ds;
+            a01_sim sim3(999999, db, goals, t, seq, ep, bm, lp, rs, ds, c, sim);
+            assert(sim3.max_resolutions == 999999);
+        }
+    }
+    
+    // Test 13: Verify decisions() returns const reference to ds
+    {
+        trail t;
+        t.push();
+        
+        expr_pool ep(t);
+        bind_map bm(t);
+        sequencer seq(t);
+        lineage_pool lp;
+        
+        database db;
+        goals goals;
+        cdcl c;
+        
+        monte_carlo::tree_node<mcts_decider::choice> root;
+        std::mt19937 rng(42);
+        monte_carlo::simulation<mcts_decider::choice, std::mt19937> sim(root, 1.414, rng);
+        
+        resolution_store rs;
+        decision_store ds;
+        a01_sim simulation(100, db, goals, t, seq, ep, bm, lp, rs, ds, c, sim);
+        
+        // CRITICAL: decisions() returns reference to ds
+        assert(&simulation.ds == &ds);
+        assert(&simulation.rs == &rs);
+    }
+    
+    // Test 14: Verify component initialization with non-empty avoidance store
+    {
+        trail t;
+        t.push();
+        
+        expr_pool ep(t);
+        bind_map bm(t);
+        sequencer seq(t);
+        lineage_pool lp;
+        
+        database db;
+        goals goals;
+        
+        // Pre-populate avoidance store
+        cdcl c;
+        const resolution_lineage* rl1 = lp.resolution(lp.goal(nullptr, 0), 0);
+        const resolution_lineage* rl2 = lp.resolution(lp.goal(nullptr, 1), 1);
+        
+        decision_store avoid;
+        avoid.insert(rl1);
+        avoid.insert(rl2);
+        c.insert(avoid);
+        
+        monte_carlo::tree_node<mcts_decider::choice> root;
+        std::mt19937 rng(42);
+        monte_carlo::simulation<mcts_decider::choice, std::mt19937> sim(root, 1.414, rng);
+        
+        resolution_store rs;
+        decision_store ds;
+        a01_sim simulation(100, db, goals, t, seq, ep, bm, lp, rs, ds, c, sim);
+        
+        // CRITICAL: Verify cdcl copy has expected content
+        assert(simulation.c.avoidances.size() == 1);
+        assert(std::any_of(simulation.c.avoidances.begin(), simulation.c.avoidances.end(),
+            [&](const auto& p){ return p.second == avoid; }));
+        
+        assert(&simulation.ds == &ds);
+        assert(&simulation.rs == &rs);
+    }
+    
+    // Test 15: Verify all store sizes after construction with various goal counts
+    {
+        trail t;
+        t.push();
+        
+        expr_pool ep(t);
+        bind_map bm(t);
+        sequencer seq(t);
+        lineage_pool lp;
+        
+        database db;
+        db.push_back(rule{ep.atom("x"), {}});
+        db.push_back(rule{ep.atom("y"), {}});
+        
+        // Add 5 goals
+        goals goals;
+        for (int i = 0; i < 5; i++) {
+            goals.push_back(ep.atom("goal" + std::to_string(i)));
+        }
+        
+        cdcl c;
+        
+        monte_carlo::tree_node<mcts_decider::choice> root;
+        std::mt19937 rng(42);
+        monte_carlo::simulation<mcts_decider::choice, std::mt19937> sim(root, 1.414, rng);
+        
+        resolution_store rs;
+        decision_store ds;
+        a01_sim simulation(500, db, goals, t, seq, ep, bm, lp, rs, ds, c, sim);
+        
+        // CRITICAL: 5 goals added
+        assert(simulation.gs.size() == 5);
+        
+        // CRITICAL: 5 goals * 2 db rules = 10 candidates
+        assert(simulation.cs.size() == 10);
+        
+        // CRITICAL: All other stores empty
+        assert(simulation.rs.size() == 0);
+        assert(simulation.ds.size() == 0);
+        assert(simulation.c.avoidances.size() == 0);
+        assert(simulation.ds.size() == 0);
+        assert(simulation.rs.size() == 0);
+        
+        // CRITICAL: Verify each goal has 2 candidates
+        for (const auto& [gl, ge] : simulation.gs) {
+            assert(simulation.cs.count(gl) == 2);
+            assert(gl->parent == nullptr);
+            assert(gl->idx >= 0 && gl->idx < 5);
+        }
+    }
+    
+    // Test 16: Verify goal ordering matches list ordering
+    {
+        trail t;
+        t.push();
+        
+        expr_pool ep(t);
+        bind_map bm(t);
+        sequencer seq(t);
+        lineage_pool lp;
+        
+        database db;
+        
+        goals goals;
+        const expr* goal_a = ep.atom("alpha");
+        const expr* goal_b = ep.atom("beta");
+        const expr* goal_c = ep.atom("gamma");
+        const expr* goal_d = ep.atom("delta");
+        
+        goals.push_back(goal_a);
+        goals.push_back(goal_b);
+        goals.push_back(goal_c);
+        goals.push_back(goal_d);
+        
+        cdcl c;
+        
+        monte_carlo::tree_node<mcts_decider::choice> root;
+        std::mt19937 rng(42);
+        monte_carlo::simulation<mcts_decider::choice, std::mt19937> sim(root, 1.414, rng);
+        
+        resolution_store rs;
+        decision_store ds;
+        a01_sim simulation(100, db, goals, t, seq, ep, bm, lp, rs, ds, c, sim);
+        
+        // CRITICAL: Verify ordering - idx matches position in list
+        const goal_lineage* gl_idx0 = nullptr;
+        const goal_lineage* gl_idx1 = nullptr;
+        const goal_lineage* gl_idx2 = nullptr;
+        const goal_lineage* gl_idx3 = nullptr;
+        
+        for (const auto& [gl, ge] : simulation.gs) {
+            if (gl->idx == 0) {
+                gl_idx0 = gl;
+                assert(ge == goal_a);  // First in list
+            } else if (gl->idx == 1) {
+                gl_idx1 = gl;
+                assert(ge == goal_b);  // Second in list
+            } else if (gl->idx == 2) {
+                gl_idx2 = gl;
+                assert(ge == goal_c);  // Third in list
+            } else if (gl->idx == 3) {
+                gl_idx3 = gl;
+                assert(ge == goal_d);  // Fourth in list
+            }
+        }
+        
+        assert(gl_idx0 && gl_idx1 && gl_idx2 && gl_idx3);
+        
+        // CRITICAL: All root goals (parent == nullptr)
+        assert(gl_idx0->parent == nullptr);
+        assert(gl_idx1->parent == nullptr);
+        assert(gl_idx2->parent == nullptr);
+        assert(gl_idx3->parent == nullptr);
+    }
+}
+
+void test_a01_sim() {
+    // Test 1: Immediate solution - single goal with matching fact
+    // Database: a.
+    // Goals: :- a.
+    // Expected: Solution found (unit propagation resolves immediately)
+    {
+        trail t;
+        t.push();
+        
+        expr_pool ep(t);
+        bind_map bm(t);
+        sequencer seq(t);
+        lineage_pool lp;
+        
+        database db;
+        db.push_back(rule{ep.atom("a"), {}});  // Fact: a.
+        
+        goals goals;
+        goals.push_back(ep.atom("a"));  // Goal: :- a.
+        
+        cdcl c;
+        
+        monte_carlo::tree_node<mcts_decider::choice> root;
+        std::mt19937 rng(42);
+        monte_carlo::simulation<mcts_decider::choice, std::mt19937> sim(root, 1.414, rng);
+        
+        resolution_store rs;
+        decision_store ds;
+        a01_sim simulation(100, db, goals, t, seq, ep, bm, lp, rs, ds, c, sim);
+        
+        // Execute simulation
+        bool result = simulation();
+        
+        // CRITICAL: Should return true (solution found)
+        assert(result == true);
+        
+        // CRITICAL: Goal store is empty (solution_detector check)
+        assert(simulation.gs.size() == 0);
+        
+        // CRITICAL: No decisions made (unit propagation only, no dec() calls)
+        assert(simulation.ds.size() == 0);
+        
+        // CRITICAL: Resolution store has exactly 1 resolution (the unit propagation)
+        assert(simulation.rs.size() == 1);
+        
+        // CRITICAL: Verify exact resolution using lineage_pool
+        const resolution_lineage* expected_rl = lp.resolution(lp.goal(nullptr, 0), 0);
+        assert(simulation.rs.count(expected_rl) == 1);
+        
+        // CRITICAL: Candidate store should be empty (goal resolved)
+        assert(simulation.cs.size() == 0);
+        
+        // CRITICAL: Trail still valid after execution
+        assert(t.depth() > 0);
+        
+        // CRITICAL: Max resolutions not exceeded
+        assert(simulation.rs.size() < simulation.max_resolutions);
+    }
+    
+    // Test 2: Immediate conflict - no matching rules
+    // Database: empty
+    // Goal: :- a.
+    // Expected: Conflict (no candidates for goal)
+    {
+        trail t;
+        t.push();
+        
+        expr_pool ep(t);
+        bind_map bm(t);
+        sequencer seq(t);
+        lineage_pool lp;
+        
+        database db;  // Empty database
+        
+        goals goals;
+        goals.push_back(ep.atom("a"));
+        
+        cdcl c;
+        
+        monte_carlo::tree_node<mcts_decider::choice> root;
+        std::mt19937 rng(42);
+        monte_carlo::simulation<mcts_decider::choice, std::mt19937> sim(root, 1.414, rng);
+        
+        resolution_store rs;
+        decision_store ds;
+        a01_sim simulation(100, db, goals, t, seq, ep, bm, lp, rs, ds, c, sim);
+        
+        bool result = simulation();
+        
+        // CRITICAL: Should return false (conflict)
+        assert(result == false);
+        
+        // CRITICAL: Goal store NOT empty (unresolved goal remains)
+        assert(simulation.gs.size() == 1);
+        
+        // CRITICAL: Candidate store empty (no candidates available)
+        assert(simulation.cs.size() == 0);
+        
+        // CRITICAL: No resolutions or decisions made
+        assert(simulation.rs.size() == 0);
+        assert(simulation.ds.size() == 0);
+        assert(simulation.rs.size() == 0);
+    }
+    
+    // Test 3: Head elimination removes non-unifying candidates
+    // Database: a., b.
+    // Goal: :- a.
+    // Expected: Head elim removes b, then unit prop on a
+    {
+        trail t;
+        t.push();
+        
+        expr_pool ep(t);
+        bind_map bm(t);
+        sequencer seq(t);
+        lineage_pool lp;
+        
+        database db;
+        db.push_back(rule{ep.atom("a"), {}});  // idx 0
+        db.push_back(rule{ep.atom("b"), {}});  // idx 1
+        
+        goals goals;
+        goals.push_back(ep.atom("a"));
+        
+        cdcl c;
+        
+        monte_carlo::tree_node<mcts_decider::choice> root;
+        std::mt19937 rng(42);
+        monte_carlo::simulation<mcts_decider::choice, std::mt19937> sim(root, 1.414, rng);
+        
+        resolution_store rs;
+        decision_store ds;
+        a01_sim simulation(100, db, goals, t, seq, ep, bm, lp, rs, ds, c, sim);
+        
+        bool result = simulation();
+        
+        // CRITICAL: Solution found
+        assert(result == true);
+        
+        // CRITICAL: Goal store empty
+        assert(simulation.gs.size() == 0);
+        
+        // CRITICAL: Exactly 1 resolution (unit prop on a with idx 0)
+        assert(simulation.rs.size() == 1);
+        
+        // CRITICAL: Verify exact resolution using lineage_pool
+        const resolution_lineage* expected_rl = lp.resolution(lp.goal(nullptr, 0), 0);
+        assert(simulation.rs.count(expected_rl) == 1);
+        
+        // CRITICAL: No decisions (only unit prop)
+        assert(simulation.ds.size() == 0);
+        
+        // Candidate store empty after resolution
+        assert(simulation.cs.size() == 0);
+    }
+    
+    // Test 4: CDCL elimination removes avoided candidates
+    // Database: a :- b., a :- c., b., c.
+    // Goal: :- a.
+    // Avoidance: avoid (gl0, idx 0)
+    // Expected: CDCL removes idx 0, decision/unit prop on idx 1
+    {
+        trail t;
+        t.push();
+        
+        expr_pool ep(t);
+        bind_map bm(t);
+        sequencer seq(t);
+        lineage_pool lp;
+        
+        database db;
+        db.push_back(rule{ep.atom("a"), {ep.atom("b")}});  // idx 0
+        db.push_back(rule{ep.atom("a"), {ep.atom("c")}});  // idx 1
+        db.push_back(rule{ep.atom("b"), {}});  // idx 2
+        db.push_back(rule{ep.atom("c"), {}});  // idx 3
+        
+        goals goals;
+        goals.push_back(ep.atom("a"));
+        
+        // Pre-populate avoidance: avoid (gl0, idx 0)
+        const goal_lineage* gl0_avoid = lp.goal(nullptr, 0);
+        const resolution_lineage* rl0_avoid = lp.resolution(gl0_avoid, 0);
+        
+        decision_store avoid;
+        avoid.insert(rl0_avoid);
+        
+        cdcl c;
+        c.insert(avoid);
+        
+        monte_carlo::tree_node<mcts_decider::choice> root;
+        std::mt19937 rng(42);
+        monte_carlo::simulation<mcts_decider::choice, std::mt19937> sim(root, 1.414, rng);
+        
+        resolution_store rs;
+        decision_store ds;
+        a01_sim simulation(100, db, goals, t, seq, ep, bm, lp, rs, ds, c, sim);
+        
+        bool result = simulation();
+        
+        // CRITICAL: Solution found
+        assert(result == true);
+        
+        // CRITICAL: Goal store empty
+        assert(simulation.gs.size() == 0);
+        
+        // CRITICAL: Exactly 2 resolutions (a with idx 1, then c)
+        assert(simulation.rs.size() == 2);
+        
+        // CRITICAL: Verify exact resolutions using lineage_pool
+        // First resolution: root goal (idx 0) with db rule idx 1
+        const goal_lineage* gl0 = lp.goal(nullptr, 0);
+        const resolution_lineage* rl_a = lp.resolution(gl0, 1);
+        assert(simulation.rs.count(rl_a) == 1);
+        
+        // Second resolution: child goal (body idx 0 of rl_a) with db rule idx 3
+        const goal_lineage* gl_c = lp.goal(rl_a, 0);
+        const resolution_lineage* rl_c = lp.resolution(gl_c, 3);
+        assert(simulation.rs.count(rl_c) == 1);
+        
+        // CRITICAL: No decisions (unit propagations)
+        assert(simulation.ds.size() == 0);
+        
+    }
+    
+    // Test 5: Unit propagation chain
+    // Database: a :- b., b :- c., c.
+    // Goal: :- a.
+    // Expected: Chain of 3 unit propagations
+    {
+        trail t;
+        t.push();
+        
+        expr_pool ep(t);
+        bind_map bm(t);
+        sequencer seq(t);
+        lineage_pool lp;
+        
+        database db;
+        db.push_back(rule{ep.atom("a"), {ep.atom("b")}});  // idx 0
+        db.push_back(rule{ep.atom("b"), {ep.atom("c")}});  // idx 1
+        db.push_back(rule{ep.atom("c"), {}});  // idx 2
+        
+        goals goals;
+        goals.push_back(ep.atom("a"));
+        
+        cdcl c;
+        
+        monte_carlo::tree_node<mcts_decider::choice> root;
+        std::mt19937 rng(42);
+        monte_carlo::simulation<mcts_decider::choice, std::mt19937> sim(root, 1.414, rng);
+        
+        resolution_store rs;
+        decision_store ds;
+        a01_sim simulation(100, db, goals, t, seq, ep, bm, lp, rs, ds, c, sim);
+        
+        bool result = simulation();
+        
+        // CRITICAL: Solution found
+        assert(result == true);
+        
+        // CRITICAL: Exactly 3 resolutions (a, b, c)
+        assert(simulation.rs.size() == 3);
+        
+        // CRITICAL: No decisions (all unit propagations)
+        assert(simulation.ds.size() == 0);
+        
+        // CRITICAL: Verify exact lineage chain using lineage_pool
+        // First: root goal (idx 0) with db rule idx 0
+        const goal_lineage* gl_a = lp.goal(nullptr, 0);
+        const resolution_lineage* rl_a = lp.resolution(gl_a, 0);
+        assert(simulation.rs.count(rl_a) == 1);
+        
+        // Second: child goal (body idx 0 of rl_a) with db rule idx 1
+        const goal_lineage* gl_b = lp.goal(rl_a, 0);
+        const resolution_lineage* rl_b = lp.resolution(gl_b, 1);
+        assert(simulation.rs.count(rl_b) == 1);
+        
+        // Third: child goal (body idx 0 of rl_b) with db rule idx 2
+        const goal_lineage* gl_c = lp.goal(rl_b, 0);
+        const resolution_lineage* rl_c = lp.resolution(gl_c, 2);
+        assert(simulation.rs.count(rl_c) == 1);
+        
+        // Goal and candidate stores empty
+        assert(simulation.gs.size() == 0);
+        assert(simulation.cs.size() == 0);
+    }
+    
+    // Test 6: Single decision made (pre-populated MCTS)
+    // Database: a :- b., a :- c., b., c.
+    // Goal: :- a.
+    // Force decision on (a, idx 1) via MCTS tree
+    // Expected: Decision on a→c, then unit prop on c
+    {
+        trail t;
+        t.push();
+        
+        expr_pool ep(t);
+        bind_map bm(t);
+        sequencer seq(t);
+        lineage_pool lp;
+        
+        database db;
+        db.push_back(rule{ep.atom("a"), {ep.atom("b")}});  // idx 0
+        db.push_back(rule{ep.atom("a"), {ep.atom("c")}});  // idx 1
+        db.push_back(rule{ep.atom("b"), {}});  // idx 2
+        db.push_back(rule{ep.atom("c"), {}});  // idx 3
+        
+        goals goals;
+        goals.push_back(ep.atom("a"));
+        
+        cdcl c;
+        
+        monte_carlo::tree_node<mcts_decider::choice> root;
+        std::mt19937 rng(42);
+        monte_carlo::simulation<mcts_decider::choice, std::mt19937> sim(root, 1.414, rng);
+        
+        resolution_store rs;
+        decision_store ds;
+        a01_sim simulation(100, db, goals, t, seq, ep, bm, lp, rs, ds, c, sim);
+        
+        // CRITICAL: Pre-populate MCTS tree to force decision on (gl0, idx 1)
+        // Get the actual goal pointer from simulation.gs
+        const goal_lineage* gl0_for_mcts = lp.goal(nullptr, 0);
+        
+        // Force gl0 selection at level 1 (only goal anyway)
+        root.m_visits = 100;
+        root.m_children[gl0_for_mcts].m_visits = 50;
+        root.m_children[gl0_for_mcts].m_value = 100.0;
+        
+        // Force idx 1 selection at level 2 (using unvisited node)
+        root.m_children[gl0_for_mcts].m_children[size_t(0)].m_visits = 10;
+        root.m_children[gl0_for_mcts].m_children[size_t(0)].m_value = 20.0;
+        
+        root.m_children[gl0_for_mcts].m_children[size_t(1)].m_visits = 0;  // UNVISITED - will be chosen!
+        
+        bool result = simulation();
+        
+        // CRITICAL: Solution found
+        assert(result == true);
+        
+        // CRITICAL: Exactly 2 resolutions (decision on a→c, unit prop on c)
+        assert(simulation.rs.size() == 2);
+        
+        // CRITICAL: Exactly 1 decision
+        assert(simulation.ds.size() == 1);
+        
+        // CRITICAL: Verify exact resolutions
+        // First: decision on root goal (idx 0) with db rule idx 1
+        const goal_lineage* gl0 = lp.goal(nullptr, 0);
+        const resolution_lineage* rl_a = lp.resolution(gl0, 1);
+        assert(simulation.rs.count(rl_a) == 1);
+        assert(simulation.ds.count(rl_a) == 1);  // This is the decision
+        
+        // Second: unit prop on child goal (body idx 0 of rl_a) with db rule idx 3
+        const goal_lineage* gl_c = lp.goal(rl_a, 0);
+        const resolution_lineage* rl_c = lp.resolution(gl_c, 3);
+        assert(simulation.rs.count(rl_c) == 1);
+        assert(simulation.ds.count(rl_c) == 0);  // Not a decision
+        
+        // CRITICAL: MCTS simulation length is 2 (one decision call = goal + candidate)
+        assert(sim.length() == 2);
+        
+        // Stores empty
+        assert(simulation.gs.size() == 0);
+        assert(simulation.cs.size() == 0);
+    }
+    
+    // Test 7: Decision followed by unit propagation
+    // Database: a :- b., b.
+    // Goal: :- a.
+    // Force decision via MCTS (even though could be unit prop)
+    {
+        trail t;
+        t.push();
+        
+        expr_pool ep(t);
+        bind_map bm(t);
+        sequencer seq(t);
+        lineage_pool lp;
+        
+        database db;
+        db.push_back(rule{ep.atom("a"), {ep.atom("b")}});  // idx 0
+        db.push_back(rule{ep.atom("b"), {}});  // idx 1
+        
+        goals goals;
+        goals.push_back(ep.atom("a"));
+        
+        cdcl c;
+        
+        monte_carlo::tree_node<mcts_decider::choice> root;
+        std::mt19937 rng(42);
+        monte_carlo::simulation<mcts_decider::choice, std::mt19937> sim(root, 1.414, rng);
+        
+        resolution_store rs;
+        decision_store ds;
+        a01_sim simulation(100, db, goals, t, seq, ep, bm, lp, rs, ds, c, sim);
+        
+        // Note: With only 1 candidate per goal, both will be unit props
+        
+        bool result = simulation();
+        
+        // CRITICAL: Solution found
+        assert(result == true);
+        
+        // CRITICAL: Exactly 2 resolutions
+        assert(simulation.rs.size() == 2);
+        
+        // CRITICAL: Verify exact resolutions
+        const goal_lineage* gl_a = lp.goal(nullptr, 0);
+        const resolution_lineage* rl_a = lp.resolution(gl_a, 0);
+        assert(simulation.rs.count(rl_a) == 1);
+        
+        const goal_lineage* gl_b = lp.goal(rl_a, 0);
+        const resolution_lineage* rl_b = lp.resolution(gl_b, 1);
+        assert(simulation.rs.count(rl_b) == 1);
+        
+        // CRITICAL: Both are unit propagations (no decisions)
+        assert(simulation.ds.size() == 0);
+        
+        // Stores empty
+        assert(simulation.gs.size() == 0);
+        assert(simulation.cs.size() == 0);
+    }
+    
+    // Test 8: Conflict after multiple resolutions with unsat children
+    // Database: a :- b., a :- c., b :- d., c :- e.
+    // Goal: :- a.
+    // Expected: Decision on a, spawn children, conflict on unsat child
+    {
+        trail t;
+        t.push();
+        
+        expr_pool ep(t);
+        bind_map bm(t);
+        sequencer seq(t);
+        lineage_pool lp;
+        
+        database db;
+        db.push_back(rule{ep.atom("a"), {ep.atom("b")}});  // idx 0
+        db.push_back(rule{ep.atom("a"), {ep.atom("c")}});  // idx 1
+        db.push_back(rule{ep.atom("b"), {ep.atom("d")}});  // idx 2
+        db.push_back(rule{ep.atom("c"), {ep.atom("e")}});  // idx 3
+        // No rules for d or e
+        
+        goals goals;
+        goals.push_back(ep.atom("a"));
+        
+        cdcl c;
+        
+        monte_carlo::tree_node<mcts_decider::choice> root;
+        std::mt19937 rng(42);
+        monte_carlo::simulation<mcts_decider::choice, std::mt19937> sim(root, 1.414, rng);
+        
+        resolution_store rs;
+        decision_store ds;
+        a01_sim simulation(100, db, goals, t, seq, ep, bm, lp, rs, ds, c, sim);
+        
+        // Pre-populate MCTS to force decision on idx 0
+        const goal_lineage* gl0_for_mcts = lp.goal(nullptr, 0);
+        
+        root.m_visits = 100;
+        root.m_children[gl0_for_mcts].m_visits = 50;
+        root.m_children[gl0_for_mcts].m_children[size_t(0)].m_visits = 0;  // Force idx 0
+        root.m_children[gl0_for_mcts].m_children[size_t(1)].m_visits = 10;
+        root.m_children[gl0_for_mcts].m_children[size_t(1)].m_value = 20.0;
+        
+        bool result = simulation();
+        
+        // CRITICAL: Should return false (conflict)
+        assert(result == false);
+        
+        // CRITICAL: Exactly 2 resolutions (a→b decision, b→d unit prop)
+        assert(simulation.rs.size() == 2);
+        
+        // CRITICAL: Verify exact resolutions
+        const goal_lineage* gl_a = lp.goal(nullptr, 0);
+        const resolution_lineage* rl_a = lp.resolution(gl_a, 0);
+        assert(simulation.rs.count(rl_a) == 1);
+        
+        const goal_lineage* gl_b = lp.goal(rl_a, 0);
+        const resolution_lineage* rl_b = lp.resolution(gl_b, 2);
+        assert(simulation.rs.count(rl_b) == 1);
+        
+        // CRITICAL: First is decision, second is unit prop
+        assert(simulation.ds.size() == 1);
+        assert(simulation.ds.count(rl_a) == 1);
+        assert(simulation.ds.count(rl_b) == 0);
+        
+        // CRITICAL: Goal store NOT empty (d is unresolved)
+        assert(simulation.gs.size() == 1);
+        
+        // CRITICAL: Conflict detected (d has no candidates)
+        const goal_lineage* gl_d = lp.goal(rl_b, 0);
+        assert(simulation.cs.count(gl_d) == 0);
+        
+        // Verify MCTS was called once
+        assert(sim.length() == 2);
+    }
+    
+    // Test 9: Max resolutions exceeded
+    // Database: a :- b., b :- c., c :- d., d :- e., e :- f., f :- g., g.
+    // Goal: :- a.
+    // max_resolutions = 3
+    // Expected: Stops after 3 resolutions, returns false
+    {
+        trail t;
+        t.push();
+        
+        expr_pool ep(t);
+        bind_map bm(t);
+        sequencer seq(t);
+        lineage_pool lp;
+        
+        database db;
+        db.push_back(rule{ep.atom("a"), {ep.atom("b")}});
+        db.push_back(rule{ep.atom("b"), {ep.atom("c")}});
+        db.push_back(rule{ep.atom("c"), {ep.atom("d")}});
+        db.push_back(rule{ep.atom("d"), {ep.atom("e")}});
+        db.push_back(rule{ep.atom("e"), {ep.atom("f")}});
+        db.push_back(rule{ep.atom("f"), {ep.atom("g")}});
+        db.push_back(rule{ep.atom("g"), {}});
+        
+        goals goals;
+        goals.push_back(ep.atom("a"));
+        
+        cdcl c;
+        
+        monte_carlo::tree_node<mcts_decider::choice> root;
+        std::mt19937 rng(42);
+        monte_carlo::simulation<mcts_decider::choice, std::mt19937> sim(root, 1.414, rng);
+        
+        resolution_store rs;
+        decision_store ds;
+        a01_sim simulation(3, db, goals, t, seq, ep, bm, lp, rs, ds, c, sim);  // Max 3 resolutions!
+        
+        bool result = simulation();
+        
+        // CRITICAL: Should return false (max exceeded, not solved)
+        assert(result == false);
+        
+        // CRITICAL: Exactly 3 resolutions (limit reached)
+        assert(simulation.rs.size() == 3);
+        
+        // CRITICAL: Goal store NOT empty (not all goals resolved)
+        assert(simulation.gs.size() > 0);
+        
+        // CRITICAL: No conflict (still have candidates)
+        // After 3 resolutions: a→b→c→d, so d is in gs and should have candidates
+        bool has_candidates = false;
+        for (const auto& [gl, ge] : simulation.gs) {
+            if (simulation.cs.count(gl) > 0) {
+                has_candidates = true;
+                break;
+            }
+        }
+        assert(has_candidates == true);
+        
+        // All 3 resolutions are unit propagations (no decisions made at limit)
+        assert(simulation.ds.size() == 0);
+        
+        // CRITICAL: Verify exact resolutions (a, b, c)
+        const goal_lineage* gl_a = lp.goal(nullptr, 0);
+        const resolution_lineage* rl_a = lp.resolution(gl_a, 0);
+        assert(simulation.rs.count(rl_a) == 1);
+        
+        const goal_lineage* gl_b = lp.goal(rl_a, 0);
+        const resolution_lineage* rl_b = lp.resolution(gl_b, 1);
+        assert(simulation.rs.count(rl_b) == 1);
+        
+        const goal_lineage* gl_c = lp.goal(rl_b, 0);
+        const resolution_lineage* rl_c = lp.resolution(gl_c, 2);
+        assert(simulation.rs.count(rl_c) == 1);
+    }
+    
+    // Test 10: Fixpoint iteration - multiple head eliminations before decision
+    // Database: a., b., c., d., e :- f.
+    // Goal: :- e.
+    // Expected: Head elim removes a,b,c,d (4 candidates), unit prop on e→f, conflict on f
+    {
+        trail t;
+        t.push();
+        
+        expr_pool ep(t);
+        bind_map bm(t);
+        sequencer seq(t);
+        lineage_pool lp;
+        
+        database db;
+        db.push_back(rule{ep.atom("a"), {}});  // idx 0
+        db.push_back(rule{ep.atom("b"), {}});  // idx 1
+        db.push_back(rule{ep.atom("c"), {}});  // idx 2
+        db.push_back(rule{ep.atom("d"), {}});  // idx 3
+        db.push_back(rule{ep.atom("e"), {ep.atom("f")}});  // idx 4
+        
+        goals goals;
+        goals.push_back(ep.atom("e"));
+        
+        cdcl c;
+        
+        monte_carlo::tree_node<mcts_decider::choice> root;
+        std::mt19937 rng(42);
+        monte_carlo::simulation<mcts_decider::choice, std::mt19937> sim(root, 1.414, rng);
+        
+        resolution_store rs;
+        decision_store ds;
+        a01_sim simulation(100, db, goals, t, seq, ep, bm, lp, rs, ds, c, sim);
+        
+        // Before execution, verify 5 candidates added
+        const goal_lineage* gl0_for_check = lp.goal(nullptr, 0);
+        assert(simulation.cs.count(gl0_for_check) == 5);
+        
+        bool result = simulation();
+        
+        // CRITICAL: Should return false (conflict on f)
+        assert(result == false);
+        
+        // CRITICAL: Exactly 1 resolution (e→f)
+        assert(simulation.rs.size() == 1);
+        
+        // CRITICAL: Verify exact resolution
+        const goal_lineage* gl_e = lp.goal(nullptr, 0);
+        const resolution_lineage* rl_e = lp.resolution(gl_e, 4);
+        assert(simulation.rs.count(rl_e) == 1);
+        
+        // CRITICAL: No decisions (unit prop)
+        assert(simulation.ds.size() == 0);
+        
+        // CRITICAL: Goal store has f (unresolved)
+        assert(simulation.gs.size() == 1);
+        
+        const goal_lineage* gl_f = lp.goal(rl_e, 0);
+        assert(simulation.cs.count(gl_f) == 0);  // No candidates for f
+        
+        // CRITICAL: Candidate store empty (head elim removed 4, resolution removed 1)
+        assert(simulation.cs.size() == 0);
+    }
+    
+    // Test 11: Avoidance store erasure during resolution
+    // Database: a :- b., b.
+    // Goal: :- a.
+    // Avoidance: {{rl(gl0,0), rl_dummy}}
+    // Expected: After making rl(gl0,0), it gets erased from avoidance
+    {
+        trail t;
+        t.push();
+        
+        expr_pool ep(t);
+        bind_map bm(t);
+        sequencer seq(t);
+        lineage_pool lp;
+        
+        database db;
+        db.push_back(rule{ep.atom("a"), {ep.atom("b")}});  // idx 0
+        db.push_back(rule{ep.atom("b"), {}});  // idx 1
+        
+        goals goals;
+        goals.push_back(ep.atom("a"));
+        
+        // Pre-populate avoidance with the future resolution plus a dummy
+        const goal_lineage* gl0_pre = lp.goal(nullptr, 0);
+        const resolution_lineage* rl_a0_pre = lp.resolution(gl0_pre, 0);
+        
+        // Add dummy resolution to keep avoidance non-singleton
+        const goal_lineage* gl_dummy = lp.goal(nullptr, 99);
+        const resolution_lineage* rl_dummy = lp.resolution(gl_dummy, 99);
+        
+        decision_store avoid;
+        avoid.insert(rl_a0_pre);
+        avoid.insert(rl_dummy);
+        
+        cdcl c;
+        c.insert(avoid);
+        
+        monte_carlo::tree_node<mcts_decider::choice> root;
+        std::mt19937 rng(42);
+        monte_carlo::simulation<mcts_decider::choice, std::mt19937> sim(root, 1.414, rng);
+        
+        resolution_store rs;
+        decision_store ds;
+        a01_sim simulation(100, db, goals, t, seq, ep, bm, lp, rs, ds, c, sim);
+        
+        // Verify avoidance copied
+        assert(simulation.c.avoidances.size() == 1);
+        
+        bool result = simulation();
+        
+        // CRITICAL: Solution found
+        assert(result == true);
+        
+        // CRITICAL: Exactly 2 resolutions (a, b)
+        assert(simulation.rs.size() == 2);
+        
+        // CRITICAL: All unit propagations (no decisions)
+        assert(simulation.ds.size() == 0);
+        
+        // CRITICAL: Avoidance store modified (rl(gl0,0) erased after resolution)
+        assert(simulation.c.avoidances.size() == 1);
+        const avoidance& remaining = simulation.c.avoidances.begin()->second;
+        assert(remaining.size() == 1);  // Only dummy remains
+        assert(remaining.count(rl_dummy) == 1);
+        assert(remaining.count(rl_a0_pre) == 0);  // This was erased
+        
+        // Stores empty
+        assert(simulation.gs.size() == 0);
+        assert(simulation.cs.size() == 0);
+    }
+    
+    // Test 12: Mixed decisions and unit propagations (complex)
+    // Database: a :- b., a :- c., b :- d., c :- e., d., e.
+    // Goal: :- a.
+    // Force decision on idx 0 (a→b), then unit prop on d
+    {
+        trail t;
+        t.push();
+        
+        expr_pool ep(t);
+        bind_map bm(t);
+        sequencer seq(t);
+        lineage_pool lp;
+        
+        database db;
+        db.push_back(rule{ep.atom("a"), {ep.atom("b")}});  // idx 0
+        db.push_back(rule{ep.atom("a"), {ep.atom("c")}});  // idx 1
+        db.push_back(rule{ep.atom("b"), {ep.atom("d")}});  // idx 2
+        db.push_back(rule{ep.atom("c"), {ep.atom("e")}});  // idx 3
+        db.push_back(rule{ep.atom("d"), {}});  // idx 4
+        db.push_back(rule{ep.atom("e"), {}});  // idx 5
+        
+        goals goals;
+        goals.push_back(ep.atom("a"));
+        
+        cdcl c;
+        
+        monte_carlo::tree_node<mcts_decider::choice> root;
+        std::mt19937 rng(42);
+        monte_carlo::simulation<mcts_decider::choice, std::mt19937> sim(root, 1.414, rng);
+        
+        resolution_store rs;
+        decision_store ds;
+        a01_sim simulation(100, db, goals, t, seq, ep, bm, lp, rs, ds, c, sim);
+        
+        // Pre-populate MCTS to force decision on (gl0, idx 0)
+        const goal_lineage* gl0_for_mcts = lp.goal(nullptr, 0);
+        
+        root.m_visits = 100;
+        root.m_children[gl0_for_mcts].m_visits = 50;
+        root.m_children[gl0_for_mcts].m_children[size_t(0)].m_visits = 0;  // Force idx 0
+        root.m_children[gl0_for_mcts].m_children[size_t(1)].m_visits = 10;
+        root.m_children[gl0_for_mcts].m_children[size_t(1)].m_value = 20.0;
+        
+        bool result = simulation();
+        
+        // CRITICAL: Solution found
+        assert(result == true);
+        
+        // CRITICAL: Exactly 3 resolutions (a→b decision, b→d unit prop, d unit prop)
+        assert(simulation.rs.size() == 3);
+        
+        // CRITICAL: Exactly 1 decision
+        assert(simulation.ds.size() == 1);
+        
+        // CRITICAL: ds ⊆ rs (decision store is subset of resolution store)
+        for (const resolution_lineage* rl : simulation.ds) {
+            assert(simulation.rs.count(rl) == 1);
+        }
+        
+        // CRITICAL: Verify exact resolutions
+        const goal_lineage* gl_a = lp.goal(nullptr, 0);
+        const resolution_lineage* rl_a = lp.resolution(gl_a, 0);
+        assert(simulation.rs.count(rl_a) == 1);
+        assert(simulation.ds.count(rl_a) == 1);  // Decision
+        
+        const goal_lineage* gl_b = lp.goal(rl_a, 0);
+        const resolution_lineage* rl_b = lp.resolution(gl_b, 2);
+        assert(simulation.rs.count(rl_b) == 1);
+        assert(simulation.ds.count(rl_b) == 0);  // Unit prop
+        
+        const goal_lineage* gl_d = lp.goal(rl_b, 0);
+        const resolution_lineage* rl_d = lp.resolution(gl_d, 4);
+        assert(simulation.rs.count(rl_d) == 1);
+        assert(simulation.ds.count(rl_d) == 0);  // Unit prop
+        
+        // Stores empty
+        assert(simulation.gs.size() == 0);
+        assert(simulation.cs.size() == 0);
+    }
+    
+    // Test 13: Empty goals - already solved
+    {
+        trail t;
+        t.push();
+        
+        expr_pool ep(t);
+        bind_map bm(t);
+        sequencer seq(t);
+        lineage_pool lp;
+        
+        database db;
+        goals goals;  // Empty - already solved!
+        
+        cdcl c;
+        
+        monte_carlo::tree_node<mcts_decider::choice> root;
+        std::mt19937 rng(42);
+        monte_carlo::simulation<mcts_decider::choice, std::mt19937> sim(root, 1.414, rng);
+        
+        resolution_store rs;
+        decision_store ds;
+        a01_sim simulation(100, db, goals, t, seq, ep, bm, lp, rs, ds, c, sim);
+        
+        bool result = simulation();
+        
+        // CRITICAL: Returns true (solution - no goals to resolve)
+        assert(result == true);
+        
+        // CRITICAL: No resolutions made
+        assert(simulation.rs.size() == 0);
+        assert(simulation.ds.size() == 0);
+        
+        // CRITICAL: Stores all empty
+        assert(simulation.gs.size() == 0);
+        assert(simulation.cs.size() == 0);
+        
+        // CRITICAL: MCTS never called
+        assert(sim.length() == 0);
+    }
+    
+    // Test 14: Multi-goal resolution with sub-goals
+    // Database: a :- b, c., b., c.
+    // Goal: :- a.
+    // Expected: Unit prop on a spawns b and c, both resolve via unit prop
+    {
+        trail t;
+        t.push();
+        
+        expr_pool ep(t);
+        bind_map bm(t);
+        sequencer seq(t);
+        lineage_pool lp;
+        
+        database db;
+        db.push_back(rule{ep.atom("a"), {ep.atom("b"), ep.atom("c")}});  // idx 0
+        db.push_back(rule{ep.atom("b"), {}});  // idx 1
+        db.push_back(rule{ep.atom("c"), {}});  // idx 2
+        
+        goals goals;
+        goals.push_back(ep.atom("a"));
+        
+        cdcl c;
+        
+        monte_carlo::tree_node<mcts_decider::choice> root;
+        std::mt19937 rng(42);
+        monte_carlo::simulation<mcts_decider::choice, std::mt19937> sim(root, 1.414, rng);
+        
+        resolution_store rs;
+        decision_store ds;
+        a01_sim simulation(100, db, goals, t, seq, ep, bm, lp, rs, ds, c, sim);
+        
+        bool result = simulation();
+        
+        // CRITICAL: Solution found
+        assert(result == true);
+        
+        // CRITICAL: Exactly 3 resolutions (a, b, c)
+        assert(simulation.rs.size() == 3);
+        
+        // CRITICAL: No decisions (all unit props)
+        assert(simulation.ds.size() == 0);
+        
+        // CRITICAL: Verify exact resolutions
+        const goal_lineage* gl_a = lp.goal(nullptr, 0);
+        const resolution_lineage* rl_a = lp.resolution(gl_a, 0);
+        assert(simulation.rs.count(rl_a) == 1);
+        
+        // b is body index 0, c is body index 1
+        const goal_lineage* gl_b = lp.goal(rl_a, 0);
+        const resolution_lineage* rl_b = lp.resolution(gl_b, 1);
+        assert(simulation.rs.count(rl_b) == 1);
+        
+        const goal_lineage* gl_c = lp.goal(rl_a, 1);
+        const resolution_lineage* rl_c = lp.resolution(gl_c, 2);
+        assert(simulation.rs.count(rl_c) == 1);
+        
+        // Stores empty
+        assert(simulation.gs.size() == 0);
+        assert(simulation.cs.size() == 0);
+    }
+    
+    // Test 15: Simple variable unification
+    // Database: p(X) :- q(X)., q(a).
+    // Goal: :- p(a).
+    // Expected: Unify and solve
+    {
+        trail t;
+        t.push();
+        
+        expr_pool ep(t);
+        bind_map bm(t);
+        sequencer seq(t);
+        lineage_pool lp;
+        
+        database db;
+        // p(X) :- q(X).
+        const expr* X = ep.var(seq());
+        db.push_back(rule{
+            ep.cons(ep.atom("p"), X),
+            {ep.cons(ep.atom("q"), X)}
+        });
+        // q(a).
+        db.push_back(rule{ep.cons(ep.atom("q"), ep.atom("a")), {}});
+        
+        goals goals;
+        goals.push_back(ep.cons(ep.atom("p"), ep.atom("a")));  // :- p(a).
+        
+        cdcl c;
+        
+        monte_carlo::tree_node<mcts_decider::choice> root;
+        std::mt19937 rng(42);
+        monte_carlo::simulation<mcts_decider::choice, std::mt19937> sim(root, 1.414, rng);
+        
+        resolution_store rs;
+        decision_store ds;
+        a01_sim simulation(100, db, goals, t, seq, ep, bm, lp, rs, ds, c, sim);
+        
+        bool result = simulation();
+        
+        // CRITICAL: Solution found
+        assert(result == true);
+        
+        // CRITICAL: Exactly 2 resolutions
+        assert(simulation.rs.size() == 2);
+        
+        // CRITICAL: Verify exact resolutions
+        const goal_lineage* gl_p = lp.goal(nullptr, 0);
+        const resolution_lineage* rl_p = lp.resolution(gl_p, 0);
+        assert(simulation.rs.count(rl_p) == 1);
+        
+        const goal_lineage* gl_q = lp.goal(rl_p, 0);
+        const resolution_lineage* rl_q = lp.resolution(gl_q, 1);
+        assert(simulation.rs.count(rl_q) == 1);
+        
+        // CRITICAL: No decisions
+        assert(simulation.ds.size() == 0);
+        
+        // Stores empty
+        assert(simulation.gs.size() == 0);
+        assert(simulation.cs.size() == 0);
+    }
+    
+    // Test 16: Variable binds to variable
+    // Database: p(X) :- q(X)., q(Y) :- r(Y)., r(a).
+    // Goal: :- p(a).
+    // Expected: Chain of variable unifications
+    {
+        trail t;
+        t.push();
+        
+        expr_pool ep(t);
+        bind_map bm(t);
+        sequencer seq(t);
+        lineage_pool lp;
+        
+        database db;
+        const expr* X = ep.var(seq());
+        const expr* Y = ep.var(seq());
+        
+        db.push_back(rule{ep.cons(ep.atom("p"), X), {ep.cons(ep.atom("q"), X)}});
+        db.push_back(rule{ep.cons(ep.atom("q"), Y), {ep.cons(ep.atom("r"), Y)}});
+        db.push_back(rule{ep.cons(ep.atom("r"), ep.atom("a")), {}});
+        
+        goals goals;
+        goals.push_back(ep.cons(ep.atom("p"), ep.atom("a")));
+        
+        cdcl c;
+        
+        monte_carlo::tree_node<mcts_decider::choice> root;
+        std::mt19937 rng(42);
+        monte_carlo::simulation<mcts_decider::choice, std::mt19937> sim(root, 1.414, rng);
+        
+        resolution_store rs;
+        decision_store ds;
+        a01_sim simulation(100, db, goals, t, seq, ep, bm, lp, rs, ds, c, sim);
+        
+        bool result = simulation();
+        
+        // CRITICAL: Solution found
+        assert(result == true);
+        
+        // CRITICAL: Exactly 3 resolutions
+        assert(simulation.rs.size() == 3);
+        
+        // CRITICAL: Verify exact resolutions
+        const goal_lineage* gl_p = lp.goal(nullptr, 0);
+        const resolution_lineage* rl_p = lp.resolution(gl_p, 0);
+        assert(simulation.rs.count(rl_p) == 1);
+        
+        const goal_lineage* gl_q = lp.goal(rl_p, 0);
+        const resolution_lineage* rl_q = lp.resolution(gl_q, 1);
+        assert(simulation.rs.count(rl_q) == 1);
+        
+        const goal_lineage* gl_r = lp.goal(rl_q, 0);
+        const resolution_lineage* rl_r = lp.resolution(gl_r, 2);
+        assert(simulation.rs.count(rl_r) == 1);
+        
+        // No decisions
+        assert(simulation.ds.size() == 0);
+        
+        // Stores empty
+        assert(simulation.gs.size() == 0);
+        assert(simulation.cs.size() == 0);
+    }
+    
+    // Test 17: Complex multi-variable with multiple goals
+    // Database: p(X,Y) :- q(X), r(Y)., q(a)., r(b).
+    // Goal: :- p(a,b).
+    // Expected: Resolve p, spawn q(a) and r(b), both resolve
+    {
+        trail t;
+        t.push();
+        
+        expr_pool ep(t);
+        bind_map bm(t);
+        sequencer seq(t);
+        lineage_pool lp;
+        
+        database db;
+        const expr* X = ep.var(seq());
+        const expr* Y = ep.var(seq());
+        
+        db.push_back(rule{
+            ep.cons(ep.atom("p"), ep.cons(X, Y)),
+            {ep.cons(ep.atom("q"), X), ep.cons(ep.atom("r"), Y)}
+        });
+        db.push_back(rule{ep.cons(ep.atom("q"), ep.atom("a")), {}});
+        db.push_back(rule{ep.cons(ep.atom("r"), ep.atom("b")), {}});
+        
+        goals goals;
+        goals.push_back(ep.cons(ep.atom("p"), ep.cons(ep.atom("a"), ep.atom("b"))));
+        
+        cdcl c;
+        
+        monte_carlo::tree_node<mcts_decider::choice> root;
+        std::mt19937 rng(42);
+        monte_carlo::simulation<mcts_decider::choice, std::mt19937> sim(root, 1.414, rng);
+        
+        resolution_store rs;
+        decision_store ds;
+        a01_sim simulation(100, db, goals, t, seq, ep, bm, lp, rs, ds, c, sim);
+        
+        bool result = simulation();
+        
+        // CRITICAL: Solution found
+        assert(result == true);
+        
+        // CRITICAL: Exactly 3 resolutions
+        assert(simulation.rs.size() == 3);
+        
+        // CRITICAL: Verify exact resolutions
+        const goal_lineage* gl_p = lp.goal(nullptr, 0);
+        const resolution_lineage* rl_p = lp.resolution(gl_p, 0);
+        assert(simulation.rs.count(rl_p) == 1);
+        
+        const goal_lineage* gl_q = lp.goal(rl_p, 0);
+        const resolution_lineage* rl_q = lp.resolution(gl_q, 1);
+        assert(simulation.rs.count(rl_q) == 1);
+        
+        const goal_lineage* gl_r = lp.goal(rl_p, 1);
+        const resolution_lineage* rl_r = lp.resolution(gl_r, 2);
+        assert(simulation.rs.count(rl_r) == 1);
+        
+        // No decisions
+        assert(simulation.ds.size() == 0);
+        
+        // Stores empty
+        assert(simulation.gs.size() == 0);
+        assert(simulation.cs.size() == 0);
+    }
+    
+    // Test 18: Complex nested variables with decisions
+    // Database: p(X) :- q(X)., p(X) :- r(X)., q(a)., r(b).
+    // Goal: :- p(a).
+    // Force decision on idx 0, verify unification
+    {
+        trail t;
+        t.push();
+        
+        expr_pool ep(t);
+        bind_map bm(t);
+        sequencer seq(t);
+        lineage_pool lp;
+        
+        database db;
+        const expr* X1 = ep.var(seq());
+        const expr* X2 = ep.var(seq());
+        
+        db.push_back(rule{ep.cons(ep.atom("p"), X1), {ep.cons(ep.atom("q"), X1)}});  // idx 0
+        db.push_back(rule{ep.cons(ep.atom("p"), X2), {ep.cons(ep.atom("r"), X2)}});  // idx 1
+        db.push_back(rule{ep.cons(ep.atom("q"), ep.atom("a")), {}});  // idx 2
+        db.push_back(rule{ep.cons(ep.atom("r"), ep.atom("b")), {}});  // idx 3
+        
+        goals goals;
+        goals.push_back(ep.cons(ep.atom("p"), ep.atom("a")));
+        
+        cdcl c;
+        
+        monte_carlo::tree_node<mcts_decider::choice> root;
+        std::mt19937 rng(42);
+        monte_carlo::simulation<mcts_decider::choice, std::mt19937> sim(root, 1.414, rng);
+        
+        resolution_store rs;
+        decision_store ds;
+        a01_sim simulation(100, db, goals, t, seq, ep, bm, lp, rs, ds, c, sim);
+        
+        // Force decision on idx 0
+        const goal_lineage* gl0_for_mcts = lp.goal(nullptr, 0);
+        
+        root.m_visits = 100;
+        root.m_children[gl0_for_mcts].m_visits = 50;
+        root.m_children[gl0_for_mcts].m_children[size_t(0)].m_visits = 50;
+        root.m_children[gl0_for_mcts].m_children[size_t(0)].m_value = 5000.0;  // Massive reward
+        root.m_children[gl0_for_mcts].m_children[size_t(1)].m_visits = 10;
+        root.m_children[gl0_for_mcts].m_children[size_t(1)].m_value = 10.0;
+        
+        bool result = simulation();
+        
+        // CRITICAL: Solution found
+        assert(result == true);
+        
+        // CRITICAL: Exactly 2 resolutions
+        assert(simulation.rs.size() == 2);
+        
+        // CRITICAL: Exactly 1 decision
+        assert(simulation.ds.size() == 1);
+        
+        // CRITICAL: Verify exact resolutions
+        const goal_lineage* gl0 = lp.goal(nullptr, 0);
+        const resolution_lineage* rl_p = lp.resolution(gl0, 0);
+        assert(simulation.rs.count(rl_p) == 1);
+        assert(simulation.ds.count(rl_p) == 1);  // Decision
+        
+        const goal_lineage* gl_q = lp.goal(rl_p, 0);
+        const resolution_lineage* rl_q = lp.resolution(gl_q, 2);
+        assert(simulation.rs.count(rl_q) == 1);
+        assert(simulation.ds.count(rl_q) == 0);  // Unit prop
+        
+        // Stores empty
+        assert(simulation.gs.size() == 0);
+        assert(simulation.cs.size() == 0);
+    }
+    
+    // Test 19: Many database entries (20 rules)
+    {
+        trail t;
+        t.push();
+        
+        expr_pool ep(t);
+        bind_map bm(t);
+        sequencer seq(t);
+        lineage_pool lp;
+        
+        database db;
+        
+        // Add 19 non-matching rules
+        for (int i = 0; i < 19; i++) {
+            db.push_back(rule{ep.atom("x" + std::to_string(i)), {}});
+        }
+        // Add 1 matching rule
+        db.push_back(rule{ep.atom("target"), {}});  // idx 19
+        
+        goals goals;
+        goals.push_back(ep.atom("target"));
+        
+        cdcl c;
+        
+        monte_carlo::tree_node<mcts_decider::choice> root;
+        std::mt19937 rng(42);
+        monte_carlo::simulation<mcts_decider::choice, std::mt19937> sim(root, 1.414, rng);
+        
+        resolution_store rs;
+        decision_store ds;
+        a01_sim simulation(100, db, goals, t, seq, ep, bm, lp, rs, ds, c, sim);
+        
+        // Initial state: 20 candidates
+        const goal_lineage* gl0_for_check = lp.goal(nullptr, 0);
+        assert(simulation.cs.count(gl0_for_check) == 20);
+        
+        bool result = simulation();
+        
+        // CRITICAL: Solution found
+        assert(result == true);
+        
+        // CRITICAL: Exactly 1 resolution (head elim removes 19, unit prop on idx 19)
+        assert(simulation.rs.size() == 1);
+        
+        // CRITICAL: Verify exact resolution
+        const goal_lineage* gl0 = lp.goal(nullptr, 0);
+        const resolution_lineage* rl = lp.resolution(gl0, 19);
+        assert(simulation.rs.count(rl) == 1);
+        
+        // No decisions
+        assert(simulation.ds.size() == 0);
+        
+        // Stores empty
+        assert(simulation.gs.size() == 0);
+        assert(simulation.cs.size() == 0);
+    }
+    
+    // Test 20: Many goals (10 goals, all solvable)
+    {
+        trail t;
+        t.push();
+        
+        expr_pool ep(t);
+        bind_map bm(t);
+        sequencer seq(t);
+        lineage_pool lp;
+        
+        database db;
+        goals goals;
+        
+        // Create 10 independent facts and goals
+        for (int i = 0; i < 10; i++) {
+            db.push_back(rule{ep.atom("g" + std::to_string(i)), {}});
+            goals.push_back(ep.atom("g" + std::to_string(i)));
+        }
+        
+        cdcl c;
+        
+        monte_carlo::tree_node<mcts_decider::choice> root;
+        std::mt19937 rng(42);
+        monte_carlo::simulation<mcts_decider::choice, std::mt19937> sim(root, 1.414, rng);
+        
+        resolution_store rs;
+        decision_store ds;
+        a01_sim simulation(100, db, goals, t, seq, ep, bm, lp, rs, ds, c, sim);
+        
+        bool result = simulation();
+        
+        // CRITICAL: Solution found
+        assert(result == true);
+        
+        // CRITICAL: Exactly 10 resolutions (one per goal)
+        assert(simulation.rs.size() == 10);
+        
+        // CRITICAL: No decisions (all unit props)
+        assert(simulation.ds.size() == 0);
+        
+        // CRITICAL: Verify all 10 exact resolutions
+        for (int i = 0; i < 10; i++) {
+            const goal_lineage* gl = lp.goal(nullptr, i);
+            const resolution_lineage* rl = lp.resolution(gl, i);
+            assert(simulation.rs.count(rl) == 1);
+        }
+        
+        // Stores empty
+        assert(simulation.gs.size() == 0);
+        assert(simulation.cs.size() == 0);
+    }
+    
+    // Test 21: Complex with decisions, unit props, and avoidance erasure
+    // Database: a :- b., a :- c., b :- d., c., d.
+    // Goal: :- a.
+    // Avoidance: {{rl(gl0,0), rl(gl_b,2)}}
+    // Force decision on idx 1 (a→c), verify avoidance erasure
+    {
+        trail t;
+        t.push();
+        
+        expr_pool ep(t);
+        bind_map bm(t);
+        sequencer seq(t);
+        lineage_pool lp;
+        
+        database db;
+        db.push_back(rule{ep.atom("a"), {ep.atom("b")}});  // idx 0
+        db.push_back(rule{ep.atom("a"), {ep.atom("c")}});  // idx 1
+        db.push_back(rule{ep.atom("b"), {ep.atom("d")}});  // idx 2
+        db.push_back(rule{ep.atom("c"), {}});  // idx 3
+        db.push_back(rule{ep.atom("d"), {}});  // idx 4
+        
+        goals goals;
+        goals.push_back(ep.atom("a"));
+        
+        // Pre-populate avoidance
+        const goal_lineage* gl0_pre = lp.goal(nullptr, 0);
+        const resolution_lineage* rl_a0_pre = lp.resolution(gl0_pre, 0);
+        const goal_lineage* gl_b_pre = lp.goal(rl_a0_pre, 0);
+        const resolution_lineage* rl_b_pre = lp.resolution(gl_b_pre, 2);
+        
+        decision_store avoid;
+        avoid.insert(rl_a0_pre);
+        avoid.insert(rl_b_pre);
+        
+        cdcl c;
+        c.insert(avoid);
+        
+        monte_carlo::tree_node<mcts_decider::choice> root;
+        std::mt19937 rng(42);
+        monte_carlo::simulation<mcts_decider::choice, std::mt19937> sim(root, 1.414, rng);
+        
+        resolution_store rs;
+        decision_store ds;
+        a01_sim simulation(100, db, goals, t, seq, ep, bm, lp, rs, ds, c, sim);
+        
+        // Force decision on idx 1
+        const goal_lineage* gl0_for_mcts = lp.goal(nullptr, 0);
+        
+        root.m_visits = 100;
+        root.m_children[gl0_for_mcts].m_visits = 50;
+        root.m_children[gl0_for_mcts].m_children[size_t(0)].m_visits = 10;
+        root.m_children[gl0_for_mcts].m_children[size_t(0)].m_value = 10.0;
+        root.m_children[gl0_for_mcts].m_children[size_t(1)].m_visits = 0;  // Force idx 1
+        
+        bool result = simulation();
+        
+        // CRITICAL: Solution found
+        assert(result == true);
+        
+        // CRITICAL: Exactly 2 resolutions (a→c decision, c unit prop)
+        assert(simulation.rs.size() == 2);
+        
+        // CRITICAL: Exactly 1 decision
+        assert(simulation.ds.size() == 1);
+        
+        // CRITICAL: Verify exact resolutions
+        const goal_lineage* gl0 = lp.goal(nullptr, 0);
+        const resolution_lineage* rl_a = lp.resolution(gl0, 1);
+        assert(simulation.rs.count(rl_a) == 1);
+        assert(simulation.ds.count(rl_a) == 1);  // Decision
+        
+        const goal_lineage* gl_c = lp.goal(rl_a, 0);
+        const resolution_lineage* rl_c = lp.resolution(gl_c, 3);
+        assert(simulation.rs.count(rl_c) == 1);
+        assert(simulation.ds.count(rl_c) == 0);  // Unit prop
+        
+        // CRITICAL: Avoidance erased — making rl(gl0,1) for a goal that was watched
+        // with rl(gl0,0) causes cdcl to erase the avoidance (conflicting branch).
+        // The avoidance {rl(gl0,0), rl(gl_b,2)} no longer applies since we went
+        // a different way for gl0.
+        assert(simulation.c.avoidances.size() == 0);
+        
+        // Stores empty
+        assert(simulation.gs.size() == 0);
+        assert(simulation.cs.size() == 0);
+    }
+    
+    // Test 22: Conflict with variables - unification fails
+    // Database: p(a) :- q(b).
+    // Goal: :- p(a).
+    // Expected: Spawn q(b), conflict (no rule for q(b))
+    {
+        trail t;
+        t.push();
+        
+        expr_pool ep(t);
+        bind_map bm(t);
+        sequencer seq(t);
+        lineage_pool lp;
+        
+        database db;
+        db.push_back(rule{ep.cons(ep.atom("p"), ep.atom("a")), {ep.cons(ep.atom("q"), ep.atom("b"))}});
+        
+        goals goals;
+        goals.push_back(ep.cons(ep.atom("p"), ep.atom("a")));
+        
+        cdcl c;
+        
+        monte_carlo::tree_node<mcts_decider::choice> root;
+        std::mt19937 rng(42);
+        monte_carlo::simulation<mcts_decider::choice, std::mt19937> sim(root, 1.414, rng);
+        
+        resolution_store rs;
+        decision_store ds;
+        a01_sim simulation(100, db, goals, t, seq, ep, bm, lp, rs, ds, c, sim);
+        
+        bool result = simulation();
+        
+        // CRITICAL: Conflict detected
+        assert(result == false);
+        
+        // CRITICAL: Exactly 1 resolution (p(a)→q(b))
+        assert(simulation.rs.size() == 1);
+        
+        // CRITICAL: Verify exact resolution
+        const goal_lineage* gl_p = lp.goal(nullptr, 0);
+        const resolution_lineage* rl = lp.resolution(gl_p, 0);
+        assert(simulation.rs.count(rl) == 1);
+        
+        // CRITICAL: No decisions (unit prop)
+        assert(simulation.ds.size() == 0);
+        
+        // CRITICAL: Goal store has q(b) unresolved
+        assert(simulation.gs.size() == 1);
+        
+        const goal_lineage* gl_q = lp.goal(rl, 0);
+        assert(simulation.cs.count(gl_q) == 0);
+    }
+    
+    // Test 23: Multiple decisions with pre-populated MCTS
+    // Database: a :- b., a :- c., b :- d., b :- e., c., d., e.
+    // Goal: :- a.
+    // Force decision on (a, idx 0), then decision on (b, idx 3)
+    {
+        trail t;
+        t.push();
+        
+        expr_pool ep(t);
+        bind_map bm(t);
+        sequencer seq(t);
+        lineage_pool lp;
+        
+        database db;
+        db.push_back(rule{ep.atom("a"), {ep.atom("b")}});  // idx 0
+        db.push_back(rule{ep.atom("a"), {ep.atom("c")}});  // idx 1
+        db.push_back(rule{ep.atom("b"), {ep.atom("d")}});  // idx 2
+        db.push_back(rule{ep.atom("b"), {ep.atom("e")}});  // idx 3
+        db.push_back(rule{ep.atom("c"), {}});  // idx 4
+        db.push_back(rule{ep.atom("d"), {}});  // idx 5
+        db.push_back(rule{ep.atom("e"), {}});  // idx 6
+        
+        goals goals;
+        goals.push_back(ep.atom("a"));
+        
+        cdcl c;
+        
+        monte_carlo::tree_node<mcts_decider::choice> root;
+        std::mt19937 rng(42);
+        monte_carlo::simulation<mcts_decider::choice, std::mt19937> sim(root, 1.414, rng);
+        
+        resolution_store rs;
+        decision_store ds;
+        a01_sim simulation(100, db, goals, t, seq, ep, bm, lp, rs, ds, c, sim);
+        
+        // Force first decision on (gl0, idx 0)
+        const goal_lineage* gl0_for_mcts = lp.goal(nullptr, 0);
+        
+        root.m_visits = 100;
+        root.m_children[gl0_for_mcts].m_visits = 50;
+        root.m_children[gl0_for_mcts].m_children[size_t(0)].m_visits = 0;  // Force idx 0
+        root.m_children[gl0_for_mcts].m_children[size_t(1)].m_visits = 10;
+        root.m_children[gl0_for_mcts].m_children[size_t(1)].m_value = 10.0;
+        
+        // After first decision, need to pre-populate for second decision
+        // gl_b will be created during simulation, can't pre-populate here
+        // Just verify result
+        
+        bool result = simulation();
+        
+        // CRITICAL: Solution found
+        assert(result == true);
+        
+        // CRITICAL: Exactly 3 resolutions (a→b decision, b→? decision, ? unit prop)
+        assert(simulation.rs.size() == 3);
+        
+        // CRITICAL: Exactly 2 decisions (a and b both have 2 candidates)
+        assert(simulation.ds.size() == 2);
+        
+        // CRITICAL: Verify first decision (a with idx 0)
+        const goal_lineage* gl_a = lp.goal(nullptr, 0);
+        const resolution_lineage* rl_a = lp.resolution(gl_a, 0);
+        assert(simulation.rs.count(rl_a) == 1);
+        assert(simulation.ds.count(rl_a) == 1);
+        
+        // CRITICAL: ds ⊆ rs
+        for (const resolution_lineage* rl : simulation.ds) {
+            assert(simulation.rs.count(rl) == 1);
+        }
+        
+        // Stores empty
+        assert(simulation.gs.size() == 0);
+        assert(simulation.cs.size() == 0);
+    }
+    
+    // Test 24: Complex variable scenario with list structures
+    // Database: append(nil, X, X)., append(cons(H,T), X, cons(H,R)) :- append(T, X, R).
+    // Goal: :- append(cons(a,nil), cons(b,nil), cons(a,cons(b,nil))).
+    // Expected: Resolution with recursive rule
+    {
+        trail t;
+        t.push();
+        
+        expr_pool ep(t);
+        bind_map bm(t);
+        sequencer seq(t);
+        lineage_pool lp;
+        
+        database db;
+        
+        // append(nil, X, X).
+        const expr* X1 = ep.var(seq());
+        db.push_back(rule{
+            ep.cons(ep.atom("append"), ep.cons(ep.atom("nil"), ep.cons(X1, X1))),
+            {}
+        });
+        
+        // append(cons(H,T), X, cons(H,R)) :- append(T, X, R).
+        const expr* H = ep.var(seq());
+        const expr* T = ep.var(seq());
+        const expr* X2 = ep.var(seq());
+        const expr* R = ep.var(seq());
+        
+        db.push_back(rule{
+            ep.cons(ep.atom("append"), ep.cons(
+                ep.cons(ep.atom("cons"), ep.cons(H, T)),
+                ep.cons(X2, ep.cons(ep.atom("cons"), ep.cons(H, R)))
+            )),
+            {ep.cons(ep.atom("append"), ep.cons(T, ep.cons(X2, R)))}
+        });
+        
+        goals goals;
+        goals.push_back(ep.cons(ep.atom("append"), ep.cons(
+            ep.cons(ep.atom("cons"), ep.cons(ep.atom("a"), ep.atom("nil"))),
+            ep.cons(ep.cons(ep.atom("cons"), ep.cons(ep.atom("b"), ep.atom("nil"))),
+                    ep.cons(ep.atom("cons"), ep.cons(ep.atom("a"), ep.cons(ep.atom("cons"), ep.cons(ep.atom("b"), ep.atom("nil"))))))
+        )));
+        
+        cdcl c;
+        
+        monte_carlo::tree_node<mcts_decider::choice> root;
+        std::mt19937 rng(42);
+        monte_carlo::simulation<mcts_decider::choice, std::mt19937> sim(root, 1.414, rng);
+        
+        resolution_store rs;
+        decision_store ds;
+        a01_sim simulation(100, db, goals, t, seq, ep, bm, lp, rs, ds, c, sim);
+        
+        bool result = simulation();
+        
+        // CRITICAL: Solution found
+        assert(result == true);
+        
+        // CRITICAL: Exactly 2 resolutions (recursive case, base case)
+        assert(simulation.rs.size() == 2);
+        
+        // CRITICAL: Verify exact resolutions
+        const goal_lineage* gl_append1 = lp.goal(nullptr, 0);
+        const resolution_lineage* rl_recursive = lp.resolution(gl_append1, 1);
+        assert(simulation.rs.count(rl_recursive) == 1);
+        
+        const goal_lineage* gl_append2 = lp.goal(rl_recursive, 0);
+        const resolution_lineage* rl_base = lp.resolution(gl_append2, 0);
+        assert(simulation.rs.count(rl_base) == 1);
+        
+        // No decisions (both unit props after head elim)
+        assert(simulation.ds.size() == 0);
+        
+        // Stores empty
+        assert(simulation.gs.size() == 0);
+        assert(simulation.cs.size() == 0);
+    }
+    
+    // Test 25: Large complex problem with 30 rules and multiple goals
+    {
+        trail t;
+        t.push();
+        
+        expr_pool ep(t);
+        bind_map bm(t);
+        sequencer seq(t);
+        lineage_pool lp;
+        
+        database db;
+        
+        // Create a complex dependency graph
+        // 30 rules total
+        for (int i = 0; i < 10; i++) {
+            db.push_back(rule{ep.atom("noise" + std::to_string(i)), {}});
+        }
+        
+        // Main rules: p :- q, r., q., r.
+        db.push_back(rule{ep.atom("p"), {ep.atom("q"), ep.atom("r")}});
+        db.push_back(rule{ep.atom("q"), {}});
+        db.push_back(rule{ep.atom("r"), {}});
+        
+        // More noise
+        for (int i = 10; i < 27; i++) {
+            db.push_back(rule{ep.atom("noise" + std::to_string(i)), {}});
+        }
+        
+        goals goals;
+        goals.push_back(ep.atom("p"));
+        
+        cdcl c;
+        
+        monte_carlo::tree_node<mcts_decider::choice> root;
+        std::mt19937 rng(42);
+        monte_carlo::simulation<mcts_decider::choice, std::mt19937> sim(root, 1.414, rng);
+        
+        resolution_store rs;
+        decision_store ds;
+        a01_sim simulation(100, db, goals, t, seq, ep, bm, lp, rs, ds, c, sim);
+        
+        // Verify 30 candidates initially
+        const goal_lineage* gl0 = lp.goal(nullptr, 0);
+        assert(simulation.cs.count(gl0) == 30);
+        
+        bool result = simulation();
+        
+        // CRITICAL: Solution found
+        assert(result == true);
+        
+        // CRITICAL: Exactly 3 resolutions (p, q, r)
+        assert(simulation.rs.size() == 3);
+        
+        // No decisions (all unit props after massive head elimination)
+        assert(simulation.ds.size() == 0);
+        
+        // CRITICAL: Verify exact resolutions (should be db indices 10, 11, 12)
+        const goal_lineage* gl_p = lp.goal(nullptr, 0);
+        const resolution_lineage* rl_p = lp.resolution(gl_p, 10);
+        assert(simulation.rs.count(rl_p) == 1);
+        
+        const goal_lineage* gl_q = lp.goal(rl_p, 0);
+        const resolution_lineage* rl_q = lp.resolution(gl_q, 11);
+        assert(simulation.rs.count(rl_q) == 1);
+        
+        const goal_lineage* gl_r = lp.goal(rl_p, 1);
+        const resolution_lineage* rl_r = lp.resolution(gl_r, 12);
+        assert(simulation.rs.count(rl_r) == 1);
+        
+        // Stores empty
+        assert(simulation.gs.size() == 0);
+        assert(simulation.cs.size() == 0);
+    }
+    
+    // ========== TESTS WITH VARIABLES IN GOALS ==========
+    
+    // Test 26: Single variable in goal binds to atom
+    // Database: p(a)., p(b).
+    // Goal: :- p(X).
+    // Expected: X binds to a (forced by MCTS to choose idx 0)
+    {
+        trail t;
+        t.push();
+        
+        expr_pool ep(t);
+        bind_map bm(t);
+        sequencer seq(t);
+        lineage_pool lp;
+        
+        database db;
+        db.push_back(rule{ep.cons(ep.atom("p"), ep.atom("a")), {}});  // idx 0
+        db.push_back(rule{ep.cons(ep.atom("p"), ep.atom("b")), {}});  // idx 1
+        
+        goals goals;
+        const expr* X = ep.var(seq());
+        goals.push_back(ep.cons(ep.atom("p"), X));
+        
+        cdcl c;
+        
+        monte_carlo::tree_node<mcts_decider::choice> root;
+        std::mt19937 rng(42);
+        monte_carlo::simulation<mcts_decider::choice, std::mt19937> sim(root, 1.414, rng);
+        
+        resolution_store rs;
+        decision_store ds;
+        a01_sim simulation(100, db, goals, t, seq, ep, bm, lp, rs, ds, c, sim);
+        
+        // Pre-populate MCTS to force decision on idx 0
+        const goal_lineage* gl0_for_mcts = lp.goal(nullptr, 0);
+        root.m_visits = 100;
+        root.m_children[gl0_for_mcts].m_visits = 50;
+        root.m_children[gl0_for_mcts].m_children[size_t(0)].m_visits = 0;  // Force idx 0
+        root.m_children[gl0_for_mcts].m_children[size_t(1)].m_visits = 10;
+        root.m_children[gl0_for_mcts].m_children[size_t(1)].m_value = 10.0;
+        
+        bool result = simulation();
+        
+        // CRITICAL: Solution found
+        assert(result == true);
+        
+        // CRITICAL: Exactly 1 resolution
+        assert(simulation.rs.size() == 1);
+        
+        // CRITICAL: Exactly 1 decision
+        assert(simulation.ds.size() == 1);
+        
+        // CRITICAL: Verify exact resolution
+        const goal_lineage* gl0 = lp.goal(nullptr, 0);
+        const resolution_lineage* rl0 = lp.resolution(gl0, 0);
+        assert(simulation.rs.count(rl0) == 1);
+        assert(simulation.ds.count(rl0) == 1);
+        
+        // CRITICAL: Verify X binds to exactly 'a'
+        normalizer norm(ep, bm);
+        const expr* X_normalized = norm(X);
+        assert(X_normalized == ep.atom("a"));
+    }
+    
+    // Test 27: Variable binds to compound term
+    // Database: q(cons(a,nil)).
+    // Goal: :- q(X).
+    // Expected: X binds to cons(a,nil)
+    {
+        trail t;
+        t.push();
+        
+        expr_pool ep(t);
+        bind_map bm(t);
+        sequencer seq(t);
+        lineage_pool lp;
+        
+        database db;
+        const expr* cons_a_nil = ep.cons(ep.atom("cons"), ep.cons(ep.atom("a"), ep.atom("nil")));
+        db.push_back(rule{ep.cons(ep.atom("q"), cons_a_nil), {}});  // idx 0
+        
+        goals goals;
+        const expr* X = ep.var(seq());
+        goals.push_back(ep.cons(ep.atom("q"), X));
+        
+        cdcl c;
+        
+        monte_carlo::tree_node<mcts_decider::choice> root;
+        std::mt19937 rng(42);
+        monte_carlo::simulation<mcts_decider::choice, std::mt19937> sim(root, 1.414, rng);
+        
+        resolution_store rs;
+        decision_store ds;
+        a01_sim simulation(100, db, goals, t, seq, ep, bm, lp, rs, ds, c, sim);
+        
+        bool result = simulation();
+        
+        // CRITICAL: Solution found
+        assert(result == true);
+        
+        // CRITICAL: X binds to cons(a,nil)
+        normalizer norm(ep, bm);
+        const expr* X_normalized = norm(X);
+        assert(X_normalized == cons_a_nil);
+    }
+    
+    // Test 28: Multiple variables in single goal
+    // Database: pair(a,b).
+    // Goal: :- pair(X,Y).
+    // Expected: X binds to a, Y binds to b
+    {
+        trail t;
+        t.push();
+        
+        expr_pool ep(t);
+        bind_map bm(t);
+        sequencer seq(t);
+        lineage_pool lp;
+        
+        database db;
+        const expr* pair_a_b = ep.cons(ep.atom("pair"), ep.cons(ep.atom("a"), ep.atom("b")));
+        db.push_back(rule{pair_a_b, {}});  // idx 0
+        
+        goals goals;
+        const expr* X = ep.var(seq());
+        const expr* Y = ep.var(seq());
+        const expr* pair_X_Y = ep.cons(ep.atom("pair"), ep.cons(X, Y));
+        goals.push_back(pair_X_Y);
+        
+        cdcl c;
+        
+        monte_carlo::tree_node<mcts_decider::choice> root;
+        std::mt19937 rng(42);
+        monte_carlo::simulation<mcts_decider::choice, std::mt19937> sim(root, 1.414, rng);
+        
+        resolution_store rs;
+        decision_store ds;
+        a01_sim simulation(100, db, goals, t, seq, ep, bm, lp, rs, ds, c, sim);
+        
+        bool result = simulation();
+        
+        // CRITICAL: Solution found
+        assert(result == true);
+        
+        // CRITICAL: Verify X and Y bindings
+        normalizer norm(ep, bm);
+        const expr* X_normalized = norm(X);
+        const expr* Y_normalized = norm(Y);
+        assert(X_normalized == ep.atom("a"));
+        assert(Y_normalized == ep.atom("b"));
+    }
+    
+    // Test 29: Variable binds through rule chain
+    // Database: p(X) :- q(X)., q(hello).
+    // Goal: :- p(Y).
+    // Expected: Y binds to hello
+    {
+        trail t;
+        t.push();
+        
+        expr_pool ep(t);
+        bind_map bm(t);
+        sequencer seq(t);
+        lineage_pool lp;
+        
+        database db;
+        const expr* X_rule = ep.var(seq());
+        db.push_back(rule{ep.cons(ep.atom("p"), X_rule), {ep.cons(ep.atom("q"), X_rule)}});  // idx 0
+        db.push_back(rule{ep.cons(ep.atom("q"), ep.atom("hello")), {}});  // idx 1
+        
+        goals goals;
+        const expr* Y_goal = ep.var(seq());
+        goals.push_back(ep.cons(ep.atom("p"), Y_goal));
+        
+        cdcl c;
+        
+        monte_carlo::tree_node<mcts_decider::choice> root;
+        std::mt19937 rng(42);
+        monte_carlo::simulation<mcts_decider::choice, std::mt19937> sim(root, 1.414, rng);
+        
+        resolution_store rs;
+        decision_store ds;
+        a01_sim simulation(100, db, goals, t, seq, ep, bm, lp, rs, ds, c, sim);
+        
+        bool result = simulation();
+        
+        // CRITICAL: Solution found
+        assert(result == true);
+        
+        // CRITICAL: Verify Y binds to hello through chain
+        normalizer norm(ep, bm);
+        const expr* Y_normalized = norm(Y_goal);
+        assert(Y_normalized == ep.atom("hello"));
+    }
+    
+    // Test 30: Two starting goals with variables
+    // Database: p(a)., q(b).
+    // Goals: :- p(X), q(Y).
+    // Expected: X binds to a, Y binds to b
+    {
+        trail t;
+        t.push();
+        
+        expr_pool ep(t);
+        bind_map bm(t);
+        sequencer seq(t);
+        lineage_pool lp;
+        
+        database db;
+        db.push_back(rule{ep.cons(ep.atom("p"), ep.atom("a")), {}});  // idx 0
+        db.push_back(rule{ep.cons(ep.atom("q"), ep.atom("b")), {}});  // idx 1
+        
+        goals goals;
+        const expr* X = ep.var(seq());
+        const expr* Y = ep.var(seq());
+        goals.push_back(ep.cons(ep.atom("p"), X));
+        goals.push_back(ep.cons(ep.atom("q"), Y));
+        
+        cdcl c;
+        
+        monte_carlo::tree_node<mcts_decider::choice> root;
+        std::mt19937 rng(42);
+        monte_carlo::simulation<mcts_decider::choice, std::mt19937> sim(root, 1.414, rng);
+        
+        resolution_store rs;
+        decision_store ds;
+        a01_sim simulation(100, db, goals, t, seq, ep, bm, lp, rs, ds, c, sim);
+        
+        bool result = simulation();
+        
+        // CRITICAL: Solution found
+        assert(result == true);
+        
+        // CRITICAL: 2 resolutions (one per goal)
+        assert(simulation.rs.size() == 2);
+        
+        // CRITICAL: Verify exact resolutions
+        const goal_lineage* gl_p = lp.goal(nullptr, 0);
+        const resolution_lineage* rl_p = lp.resolution(gl_p, 0);
+        assert(simulation.rs.count(rl_p) == 1);
+        
+        const goal_lineage* gl_q = lp.goal(nullptr, 1);
+        const resolution_lineage* rl_q = lp.resolution(gl_q, 1);
+        assert(simulation.rs.count(rl_q) == 1);
+        
+        // CRITICAL: No decisions (both unit props)
+        assert(simulation.ds.size() == 0);
+        
+        // CRITICAL: Verify both variable bindings
+        normalizer norm(ep, bm);
+        const expr* X_normalized = norm(X);
+        const expr* Y_normalized = norm(Y);
+        assert(X_normalized == ep.atom("a"));
+        assert(Y_normalized == ep.atom("b"));
+    }
+    
+    // Test 31: Three starting goals with shared variable
+    // Database: p(a)., q(a)., r(a).
+    // Goals: :- p(X), q(X), r(X).
+    // Expected: X binds to a (unifies across all three)
+    {
+        trail t;
+        t.push();
+        
+        expr_pool ep(t);
+        bind_map bm(t);
+        sequencer seq(t);
+        lineage_pool lp;
+        
+        database db;
+        db.push_back(rule{ep.cons(ep.atom("p"), ep.atom("a")), {}});  // idx 0
+        db.push_back(rule{ep.cons(ep.atom("q"), ep.atom("a")), {}});  // idx 1
+        db.push_back(rule{ep.cons(ep.atom("r"), ep.atom("a")), {}});  // idx 2
+        
+        goals goals;
+        const expr* X = ep.var(seq());
+        goals.push_back(ep.cons(ep.atom("p"), X));
+        goals.push_back(ep.cons(ep.atom("q"), X));
+        goals.push_back(ep.cons(ep.atom("r"), X));
+        
+        cdcl c;
+        
+        monte_carlo::tree_node<mcts_decider::choice> root;
+        std::mt19937 rng(42);
+        monte_carlo::simulation<mcts_decider::choice, std::mt19937> sim(root, 1.414, rng);
+        
+        resolution_store rs;
+        decision_store ds;
+        a01_sim simulation(100, db, goals, t, seq, ep, bm, lp, rs, ds, c, sim);
+        
+        bool result = simulation();
+        
+        // CRITICAL: Solution found
+        assert(result == true);
+        
+        // CRITICAL: 3 resolutions
+        assert(simulation.rs.size() == 3);
+        
+        // CRITICAL: Verify exact lineages for all 3 resolutions
+        const goal_lineage* gl_p = lp.goal(nullptr, 0);
+        const resolution_lineage* rl_p = lp.resolution(gl_p, 0);
+        assert(simulation.rs.count(rl_p) == 1);
+        
+        const goal_lineage* gl_q = lp.goal(nullptr, 1);
+        const resolution_lineage* rl_q = lp.resolution(gl_q, 1);
+        assert(simulation.rs.count(rl_q) == 1);
+        
+        const goal_lineage* gl_r = lp.goal(nullptr, 2);
+        const resolution_lineage* rl_r = lp.resolution(gl_r, 2);
+        assert(simulation.rs.count(rl_r) == 1);
+        
+        // CRITICAL: No decisions (all unit props)
+        assert(simulation.ds.size() == 0);
+        
+        // CRITICAL: MCTS never called
+        assert(sim.length() == 0);
+        
+        // CRITICAL: X binds to a
+        normalizer norm(ep, bm);
+        const expr* X_normalized = norm(X);
+        assert(X_normalized == ep.atom("a"));
+    }
+    
+    // Test 32: Multiple goals with dependent variables
+    // Database: f(a,b)., g(b,c).
+    // Goals: :- f(X,Y), g(Y,Z).
+    // Expected: X=a, Y=b, Z=c (Y is shared and must unify)
+    {
+        trail t;
+        t.push();
+        
+        expr_pool ep(t);
+        bind_map bm(t);
+        sequencer seq(t);
+        lineage_pool lp;
+        
+        database db;
+        const expr* f_a_b = ep.cons(ep.atom("f"), ep.cons(ep.atom("a"), ep.atom("b")));
+        const expr* g_b_c = ep.cons(ep.atom("g"), ep.cons(ep.atom("b"), ep.atom("c")));
+        db.push_back(rule{f_a_b, {}});  // idx 0
+        db.push_back(rule{g_b_c, {}});  // idx 1
+        
+        goals goals;
+        const expr* X = ep.var(seq());
+        const expr* Y = ep.var(seq());
+        const expr* Z = ep.var(seq());
+        goals.push_back(ep.cons(ep.atom("f"), ep.cons(X, Y)));
+        goals.push_back(ep.cons(ep.atom("g"), ep.cons(Y, Z)));
+        
+        cdcl c;
+        
+        monte_carlo::tree_node<mcts_decider::choice> root;
+        std::mt19937 rng(42);
+        monte_carlo::simulation<mcts_decider::choice, std::mt19937> sim(root, 1.414, rng);
+        
+        resolution_store rs;
+        decision_store ds;
+        a01_sim simulation(100, db, goals, t, seq, ep, bm, lp, rs, ds, c, sim);
+        
+        bool result = simulation();
+        
+        // CRITICAL: Solution found
+        assert(result == true);
+        
+        // CRITICAL: Exactly 2 resolutions
+        assert(simulation.rs.size() == 2);
+        
+        // CRITICAL: Verify exact lineages
+        const goal_lineage* gl_f = lp.goal(nullptr, 0);
+        const resolution_lineage* rl_f = lp.resolution(gl_f, 0);
+        assert(simulation.rs.count(rl_f) == 1);
+        
+        const goal_lineage* gl_g = lp.goal(nullptr, 1);
+        const resolution_lineage* rl_g = lp.resolution(gl_g, 1);
+        assert(simulation.rs.count(rl_g) == 1);
+        
+        // CRITICAL: No decisions (both unit props)
+        assert(simulation.ds.size() == 0);
+        
+        // CRITICAL: MCTS never called
+        assert(sim.length() == 0);
+        
+        // CRITICAL: Verify all three variables
+        normalizer norm(ep, bm);
+        const expr* X_normalized = norm(X);
+        const expr* Y_normalized = norm(Y);
+        const expr* Z_normalized = norm(Z);
+        assert(X_normalized == ep.atom("a"));
+        assert(Y_normalized == ep.atom("b"));
+        assert(Z_normalized == ep.atom("c"));
+    }
+    
+    // Test 33: Variable binds to complex nested structure
+    // Database: tree(node(leaf(1), leaf(2))).
+    // Goal: :- tree(X).
+    // Expected: X binds to node(leaf(1), leaf(2))
+    {
+        trail t;
+        t.push();
+        
+        expr_pool ep(t);
+        bind_map bm(t);
+        sequencer seq(t);
+        lineage_pool lp;
+        
+        database db;
+        const expr* leaf1 = ep.cons(ep.atom("leaf"), ep.atom("1"));
+        const expr* leaf2 = ep.cons(ep.atom("leaf"), ep.atom("2"));
+        const expr* node = ep.cons(ep.atom("node"), ep.cons(leaf1, leaf2));
+        const expr* tree = ep.cons(ep.atom("tree"), node);
+        db.push_back(rule{tree, {}});  // idx 0
+        
+        goals goals;
+        const expr* X = ep.var(seq());
+        goals.push_back(ep.cons(ep.atom("tree"), X));
+        
+        cdcl c;
+        
+        monte_carlo::tree_node<mcts_decider::choice> root;
+        std::mt19937 rng(42);
+        monte_carlo::simulation<mcts_decider::choice, std::mt19937> sim(root, 1.414, rng);
+        
+        resolution_store rs;
+        decision_store ds;
+        a01_sim simulation(100, db, goals, t, seq, ep, bm, lp, rs, ds, c, sim);
+        
+        bool result = simulation();
+        
+        // CRITICAL: Solution found
+        assert(result == true);
+        
+        // CRITICAL: X binds to the nested structure
+        normalizer norm(ep, bm);
+        const expr* X_normalized = norm(X);
+        assert(X_normalized == node);
+    }
+    
+    // Test 34: Multiple goals with rules spawning sub-goals with variables
+    // Database: p(X) :- q(X)., q(Y) :- r(Y)., r(hello).
+    // Goals: :- p(A), p(B).
+    // Expected: A=hello, B=hello
+    {
+        trail t;
+        t.push();
+        
+        expr_pool ep(t);
+        bind_map bm(t);
+        sequencer seq(t);
+        lineage_pool lp;
+        
+        database db;
+        const expr* X = ep.var(seq());
+        const expr* Y = ep.var(seq());
+        db.push_back(rule{ep.cons(ep.atom("p"), X), {ep.cons(ep.atom("q"), X)}});  // idx 0
+        db.push_back(rule{ep.cons(ep.atom("q"), Y), {ep.cons(ep.atom("r"), Y)}});  // idx 1
+        db.push_back(rule{ep.cons(ep.atom("r"), ep.atom("hello")), {}});  // idx 2
+        
+        goals goals;
+        const expr* A = ep.var(seq());
+        const expr* B = ep.var(seq());
+        goals.push_back(ep.cons(ep.atom("p"), A));
+        goals.push_back(ep.cons(ep.atom("p"), B));
+        
+        cdcl c;
+        
+        monte_carlo::tree_node<mcts_decider::choice> root;
+        std::mt19937 rng(42);
+        monte_carlo::simulation<mcts_decider::choice, std::mt19937> sim(root, 1.414, rng);
+        
+        resolution_store rs;
+        decision_store ds;
+        a01_sim simulation(100, db, goals, t, seq, ep, bm, lp, rs, ds, c, sim);
+        
+        bool result = simulation();
+        
+        // CRITICAL: Solution found
+        assert(result == true);
+        
+        // CRITICAL: 6 resolutions (p(A), q(...), r(...), p(B), q(...), r(...))
+        assert(simulation.rs.size() == 6);
+        
+        // CRITICAL: Verify exact lineages for first chain (A)
+        const goal_lineage* gl_pA = lp.goal(nullptr, 0);
+        const resolution_lineage* rl_pA = lp.resolution(gl_pA, 0);
+        assert(simulation.rs.count(rl_pA) == 1);
+        
+        const goal_lineage* gl_qA = lp.goal(rl_pA, 0);
+        const resolution_lineage* rl_qA = lp.resolution(gl_qA, 1);
+        assert(simulation.rs.count(rl_qA) == 1);
+        
+        const goal_lineage* gl_rA = lp.goal(rl_qA, 0);
+        const resolution_lineage* rl_rA = lp.resolution(gl_rA, 2);
+        assert(simulation.rs.count(rl_rA) == 1);
+        
+        // CRITICAL: Verify exact lineages for second chain (B)
+        const goal_lineage* gl_pB = lp.goal(nullptr, 1);
+        const resolution_lineage* rl_pB = lp.resolution(gl_pB, 0);
+        assert(simulation.rs.count(rl_pB) == 1);
+        
+        const goal_lineage* gl_qB = lp.goal(rl_pB, 0);
+        const resolution_lineage* rl_qB = lp.resolution(gl_qB, 1);
+        assert(simulation.rs.count(rl_qB) == 1);
+        
+        const goal_lineage* gl_rB = lp.goal(rl_qB, 0);
+        const resolution_lineage* rl_rB = lp.resolution(gl_rB, 2);
+        assert(simulation.rs.count(rl_rB) == 1);
+        
+        // CRITICAL: No decisions (all unit props)
+        assert(simulation.ds.size() == 0);
+        
+        // CRITICAL: MCTS never called
+        assert(sim.length() == 0);
+        
+        // CRITICAL: Both A and B bind to hello
+        normalizer norm(ep, bm);
+        const expr* A_normalized = norm(A);
+        const expr* B_normalized = norm(B);
+        assert(A_normalized == ep.atom("hello"));
+        assert(B_normalized == ep.atom("hello"));
+    }
+    
+    // Test 35: Five starting goals with mixed variables
+    // Database: a(1)., b(2)., c(3)., d(4)., e(5).
+    // Goals: :- a(V1), b(V2), c(V3), d(V4), e(V5).
+    // Expected: V1=1, V2=2, V3=3, V4=4, V5=5
+    {
+        trail t;
+        t.push();
+        
+        expr_pool ep(t);
+        bind_map bm(t);
+        sequencer seq(t);
+        lineage_pool lp;
+        
+        database db;
+        db.push_back(rule{ep.cons(ep.atom("a"), ep.atom("1")), {}});  // idx 0
+        db.push_back(rule{ep.cons(ep.atom("b"), ep.atom("2")), {}});  // idx 1
+        db.push_back(rule{ep.cons(ep.atom("c"), ep.atom("3")), {}});  // idx 2
+        db.push_back(rule{ep.cons(ep.atom("d"), ep.atom("4")), {}});  // idx 3
+        db.push_back(rule{ep.cons(ep.atom("e"), ep.atom("5")), {}});  // idx 4
+        
+        goals goals;
+        const expr* V1 = ep.var(seq());
+        const expr* V2 = ep.var(seq());
+        const expr* V3 = ep.var(seq());
+        const expr* V4 = ep.var(seq());
+        const expr* V5 = ep.var(seq());
+        goals.push_back(ep.cons(ep.atom("a"), V1));
+        goals.push_back(ep.cons(ep.atom("b"), V2));
+        goals.push_back(ep.cons(ep.atom("c"), V3));
+        goals.push_back(ep.cons(ep.atom("d"), V4));
+        goals.push_back(ep.cons(ep.atom("e"), V5));
+        
+        cdcl c;
+        
+        monte_carlo::tree_node<mcts_decider::choice> root;
+        std::mt19937 rng(42);
+        monte_carlo::simulation<mcts_decider::choice, std::mt19937> sim(root, 1.414, rng);
+        
+        resolution_store rs;
+        decision_store ds;
+        a01_sim simulation(100, db, goals, t, seq, ep, bm, lp, rs, ds, c, sim);
+        
+        bool result = simulation();
+        
+        // CRITICAL: Solution found
+        assert(result == true);
+        
+        // CRITICAL: 5 resolutions
+        assert(simulation.rs.size() == 5);
+        
+        // CRITICAL: Verify exact lineages for all 5 resolutions
+        const goal_lineage* gl_a = lp.goal(nullptr, 0);
+        const resolution_lineage* rl_a = lp.resolution(gl_a, 0);
+        assert(simulation.rs.count(rl_a) == 1);
+        
+        const goal_lineage* gl_b = lp.goal(nullptr, 1);
+        const resolution_lineage* rl_b = lp.resolution(gl_b, 1);
+        assert(simulation.rs.count(rl_b) == 1);
+        
+        const goal_lineage* gl_c = lp.goal(nullptr, 2);
+        const resolution_lineage* rl_c = lp.resolution(gl_c, 2);
+        assert(simulation.rs.count(rl_c) == 1);
+        
+        const goal_lineage* gl_d = lp.goal(nullptr, 3);
+        const resolution_lineage* rl_d = lp.resolution(gl_d, 3);
+        assert(simulation.rs.count(rl_d) == 1);
+        
+        const goal_lineage* gl_e = lp.goal(nullptr, 4);
+        const resolution_lineage* rl_e = lp.resolution(gl_e, 4);
+        assert(simulation.rs.count(rl_e) == 1);
+        
+        // CRITICAL: No decisions (all unit props)
+        assert(simulation.ds.size() == 0);
+        
+        // CRITICAL: MCTS never called
+        assert(sim.length() == 0);
+        
+        // CRITICAL: Verify all five variables
+        normalizer norm(ep, bm);
+        assert(norm(V1) == ep.atom("1"));
+        assert(norm(V2) == ep.atom("2"));
+        assert(norm(V3) == ep.atom("3"));
+        assert(norm(V4) == ep.atom("4"));
+        assert(norm(V5) == ep.atom("5"));
+    }
+    
+    // Test 36: Variable in goal with decision required
+    // Database: p(X) :- q(X)., p(X) :- r(X)., q(apple)., r(banana).
+    // Goal: :- p(Fruit).
+    // Expected: Fruit binds to apple or banana (depends on MCTS decision)
+    {
+        trail t;
+        t.push();
+        
+        expr_pool ep(t);
+        bind_map bm(t);
+        sequencer seq(t);
+        lineage_pool lp;
+        
+        database db;
+        const expr* X1 = ep.var(seq());
+        const expr* X2 = ep.var(seq());
+        db.push_back(rule{ep.cons(ep.atom("p"), X1), {ep.cons(ep.atom("q"), X1)}});  // idx 0
+        db.push_back(rule{ep.cons(ep.atom("p"), X2), {ep.cons(ep.atom("r"), X2)}});  // idx 1
+        db.push_back(rule{ep.cons(ep.atom("q"), ep.atom("apple")), {}});  // idx 2
+        db.push_back(rule{ep.cons(ep.atom("r"), ep.atom("banana")), {}});  // idx 3
+        
+        goals goals;
+        const expr* Fruit = ep.var(seq());
+        goals.push_back(ep.cons(ep.atom("p"), Fruit));
+        
+        cdcl c;
+        
+        monte_carlo::tree_node<mcts_decider::choice> root;
+        std::mt19937 rng(42);
+        monte_carlo::simulation<mcts_decider::choice, std::mt19937> sim(root, 1.414, rng);
+        
+        resolution_store rs;
+        decision_store ds;
+        a01_sim simulation(100, db, goals, t, seq, ep, bm, lp, rs, ds, c, sim);
+        
+        // Force decision on idx 0 (q path -> apple)
+        const goal_lineage* gl0_for_mcts = lp.goal(nullptr, 0);
+        root.m_visits = 100;
+        root.m_children[gl0_for_mcts].m_visits = 50;
+        root.m_children[gl0_for_mcts].m_children[size_t(0)].m_visits = 0;  // Force idx 0
+        root.m_children[gl0_for_mcts].m_children[size_t(1)].m_visits = 10;
+        root.m_children[gl0_for_mcts].m_children[size_t(1)].m_value = 10.0;
+        
+        bool result = simulation();
+        
+        // CRITICAL: Solution found
+        assert(result == true);
+        
+        // CRITICAL: Exactly 1 decision
+        assert(simulation.ds.size() == 1);
+        
+        // CRITICAL: Fruit binds to apple (based on forced decision)
+        normalizer norm(ep, bm);
+        const expr* Fruit_normalized = norm(Fruit);
+        assert(Fruit_normalized == ep.atom("apple"));
+    }
+    
+    // Test 37: Partial instantiation with variable (base case)
+    // Database: link(a,b)., link(b,c)., path(X,Y) :- link(X,Y)., path(X,Z) :- link(X,Y), path(Y,Z).
+    // Goal: :- path(a,Dest).
+    // Expected: Dest binds to b (forced to use base case idx 2)
+    {
+        trail t;
+        t.push();
+        
+        expr_pool ep(t);
+        bind_map bm(t);
+        sequencer seq(t);
+        lineage_pool lp;
+        
+        database db;
+        const expr* link_a_b = ep.cons(ep.atom("link"), ep.cons(ep.atom("a"), ep.atom("b")));
+        const expr* link_b_c = ep.cons(ep.atom("link"), ep.cons(ep.atom("b"), ep.atom("c")));
+        db.push_back(rule{link_a_b, {}});  // idx 0
+        db.push_back(rule{link_b_c, {}});  // idx 1
+        
+        const expr* X1 = ep.var(seq());
+        const expr* Y1 = ep.var(seq());
+        const expr* path_base = ep.cons(ep.atom("path"), ep.cons(X1, Y1));
+        const expr* link_X1_Y1 = ep.cons(ep.atom("link"), ep.cons(X1, Y1));
+        db.push_back(rule{path_base, {link_X1_Y1}});  // idx 2
+        
+        const expr* X2 = ep.var(seq());
+        const expr* Y2 = ep.var(seq());
+        const expr* Z2 = ep.var(seq());
+        const expr* path_rec = ep.cons(ep.atom("path"), ep.cons(X2, Z2));
+        const expr* link_X2_Y2 = ep.cons(ep.atom("link"), ep.cons(X2, Y2));
+        const expr* path_Y2_Z2 = ep.cons(ep.atom("path"), ep.cons(Y2, Z2));
+        db.push_back(rule{path_rec, {link_X2_Y2, path_Y2_Z2}});  // idx 3
+        
+        goals goals;
+        const expr* Dest = ep.var(seq());
+        goals.push_back(ep.cons(ep.atom("path"), ep.cons(ep.atom("a"), Dest)));
+        
+        cdcl c;
+        
+        monte_carlo::tree_node<mcts_decider::choice> root;
+        std::mt19937 rng(42);
+        monte_carlo::simulation<mcts_decider::choice, std::mt19937> sim(root, 1.414, rng);
+        
+        resolution_store rs;
+        decision_store ds;
+        a01_sim simulation(100, db, goals, t, seq, ep, bm, lp, rs, ds, c, sim);
+        
+        // Pre-populate MCTS to force base case (idx 2)
+        const goal_lineage* gl0_for_mcts = lp.goal(nullptr, 0);
+        root.m_visits = 100;
+        root.m_children[gl0_for_mcts].m_visits = 50;
+        root.m_children[gl0_for_mcts].m_children[size_t(2)].m_visits = 0;  // Force idx 2
+        root.m_children[gl0_for_mcts].m_children[size_t(3)].m_visits = 10;
+        root.m_children[gl0_for_mcts].m_children[size_t(3)].m_value = 10.0;
+        
+        bool result = simulation();
+        
+        // CRITICAL: Solution found
+        assert(result == true);
+        
+        // CRITICAL: Exactly 2 resolutions (path→link)
+        assert(simulation.rs.size() == 2);
+        
+        // CRITICAL: Exactly 1 decision
+        assert(simulation.ds.size() == 1);
+        
+        // CRITICAL: Verify exact lineage chain
+        const goal_lineage* gl_path = lp.goal(nullptr, 0);
+        const resolution_lineage* rl_path = lp.resolution(gl_path, 2);  // Base case
+        assert(simulation.rs.count(rl_path) == 1);
+        assert(simulation.ds.count(rl_path) == 1);  // This is the decision
+        
+        const goal_lineage* gl_link = lp.goal(rl_path, 0);
+        const resolution_lineage* rl_link = lp.resolution(gl_link, 0);  // link(a,b)
+        assert(simulation.rs.count(rl_link) == 1);
+        assert(simulation.ds.count(rl_link) == 0);  // Unit prop
+        
+        // CRITICAL: MCTS called once (2 calls: goal + candidate)
+        assert(sim.length() == 2);
+        
+        // CRITICAL: Dest binds to exactly 'b'
+        normalizer norm(ep, bm);
+        const expr* Dest_normalized = norm(Dest);
+        assert(Dest_normalized == ep.atom("b"));
+    }
+    
+    // Test 38: Multiple goals with complex variable sharing
+    // Database: add(X,Y,Z) :- plus(X,Y,Z)., plus(1,2,3)., mul(A,B,C) :- times(A,B,C)., times(2,3,6).
+    // Goals: :- add(1,2,Sum), mul(2,3,Prod).
+    // Expected: Sum=3, Prod=6
+    {
+        trail t;
+        t.push();
+        
+        expr_pool ep(t);
+        bind_map bm(t);
+        sequencer seq(t);
+        lineage_pool lp;
+        
+        database db;
+        const expr* X = ep.var(seq());
+        const expr* Y = ep.var(seq());
+        const expr* Z = ep.var(seq());
+        const expr* add_rule = ep.cons(ep.atom("add"), ep.cons(X, ep.cons(Y, Z)));
+        const expr* plus_body = ep.cons(ep.atom("plus"), ep.cons(X, ep.cons(Y, Z)));
+        db.push_back(rule{add_rule, {plus_body}});  // idx 0
+        
+        const expr* plus_fact = ep.cons(ep.atom("plus"), ep.cons(ep.atom("1"), ep.cons(ep.atom("2"), ep.atom("3"))));
+        db.push_back(rule{plus_fact, {}});  // idx 1
+        
+        const expr* A = ep.var(seq());
+        const expr* B = ep.var(seq());
+        const expr* C = ep.var(seq());
+        const expr* mul_rule = ep.cons(ep.atom("mul"), ep.cons(A, ep.cons(B, C)));
+        const expr* times_body = ep.cons(ep.atom("times"), ep.cons(A, ep.cons(B, C)));
+        db.push_back(rule{mul_rule, {times_body}});  // idx 2
+        
+        const expr* times_fact = ep.cons(ep.atom("times"), ep.cons(ep.atom("2"), ep.cons(ep.atom("3"), ep.atom("6"))));
+        db.push_back(rule{times_fact, {}});  // idx 3
+        
+        goals goals;
+        const expr* Sum = ep.var(seq());
+        const expr* Prod = ep.var(seq());
+        goals.push_back(ep.cons(ep.atom("add"), ep.cons(ep.atom("1"), ep.cons(ep.atom("2"), Sum))));
+        goals.push_back(ep.cons(ep.atom("mul"), ep.cons(ep.atom("2"), ep.cons(ep.atom("3"), Prod))));
+        
+        cdcl c;
+        
+        monte_carlo::tree_node<mcts_decider::choice> root;
+        std::mt19937 rng(42);
+        monte_carlo::simulation<mcts_decider::choice, std::mt19937> sim(root, 1.414, rng);
+        
+        resolution_store rs;
+        decision_store ds;
+        a01_sim simulation(100, db, goals, t, seq, ep, bm, lp, rs, ds, c, sim);
+        
+        bool result = simulation();
+        
+        // CRITICAL: Solution found
+        assert(result == true);
+        
+        // CRITICAL: 4 resolutions (add->plus fact, mul->times fact)
+        assert(simulation.rs.size() == 4);
+        
+        // CRITICAL: Verify exact lineages for add chain
+        const goal_lineage* gl_add = lp.goal(nullptr, 0);
+        const resolution_lineage* rl_add = lp.resolution(gl_add, 0);
+        assert(simulation.rs.count(rl_add) == 1);
+        
+        const goal_lineage* gl_plus = lp.goal(rl_add, 0);
+        const resolution_lineage* rl_plus = lp.resolution(gl_plus, 1);
+        assert(simulation.rs.count(rl_plus) == 1);
+        
+        // CRITICAL: Verify exact lineages for mul chain
+        const goal_lineage* gl_mul = lp.goal(nullptr, 1);
+        const resolution_lineage* rl_mul = lp.resolution(gl_mul, 2);
+        assert(simulation.rs.count(rl_mul) == 1);
+        
+        const goal_lineage* gl_times = lp.goal(rl_mul, 0);
+        const resolution_lineage* rl_times = lp.resolution(gl_times, 3);
+        assert(simulation.rs.count(rl_times) == 1);
+        
+        // CRITICAL: No decisions (all unit props)
+        assert(simulation.ds.size() == 0);
+        
+        // CRITICAL: MCTS never called
+        assert(sim.length() == 0);
+        
+        // CRITICAL: Verify both results
+        normalizer norm(ep, bm);
+        const expr* Sum_normalized = norm(Sum);
+        const expr* Prod_normalized = norm(Prod);
+        assert(Sum_normalized == ep.atom("3"));
+        assert(Prod_normalized == ep.atom("6"));
+    }
+    
+    // ========== NEW TESTS: CONFLICT AND EDGE CASES ==========
+    
+    // Test 39: Unification failure with shared variable
+    // Database: p(a)., q(b).
+    // Goals: :- p(X), q(X).
+    // Expected: CONFLICT (X cannot be both 'a' and 'b')
+    {
+        trail t;
+        t.push();
+        
+        expr_pool ep(t);
+        bind_map bm(t);
+        sequencer seq(t);
+        lineage_pool lp;
+        
+        database db;
+        db.push_back(rule{ep.cons(ep.atom("p"), ep.atom("a")), {}});  // idx 0
+        db.push_back(rule{ep.cons(ep.atom("q"), ep.atom("b")), {}});  // idx 1
+        
+        goals goals;
+        const expr* X = ep.var(seq());
+        goals.push_back(ep.cons(ep.atom("p"), X));
+        goals.push_back(ep.cons(ep.atom("q"), X));
+        
+        cdcl c;
+        
+        monte_carlo::tree_node<mcts_decider::choice> root;
+        std::mt19937 rng(42);
+        monte_carlo::simulation<mcts_decider::choice, std::mt19937> sim(root, 1.414, rng);
+        
+        resolution_store rs;
+        decision_store ds;
+        a01_sim simulation(100, db, goals, t, seq, ep, bm, lp, rs, ds, c, sim);
+        
+        bool result = simulation();
+        
+        // CRITICAL: Conflict (unification failure)
+        assert(result == false);
+        
+        // CRITICAL: Exactly 1 resolution (one goal resolves, other becomes unsatisfiable)
+        assert(simulation.rs.size() == 1);
+        
+        // CRITICAL: One goal still in goal store with no candidates
+        assert(simulation.gs.size() == 1);
+        
+        // CRITICAL: The remaining goal has no candidates
+        const goal_lineage* remaining_goal = simulation.gs.begin()->first;
+        assert(simulation.cs.count(remaining_goal) == 0);
+        
+        // CRITICAL: No decisions
+        assert(simulation.ds.size() == 0);
+    }
+    
+    // Test 40: Same variable multiple times in one goal
+    // Database: pair(a,a)., pair(a,b)., pair(b,b).
+    // Goal: :- pair(X,X).
+    // Expected: X=b (head elim removes pair(a,b), MCTS forces idx 2)
+    {
+        trail t;
+        t.push();
+        
+        expr_pool ep(t);
+        bind_map bm(t);
+        sequencer seq(t);
+        lineage_pool lp;
+        
+        database db;
+        db.push_back(rule{ep.cons(ep.atom("pair"), ep.cons(ep.atom("a"), ep.atom("a"))), {}});  // idx 0
+        db.push_back(rule{ep.cons(ep.atom("pair"), ep.cons(ep.atom("a"), ep.atom("b"))), {}});  // idx 1
+        db.push_back(rule{ep.cons(ep.atom("pair"), ep.cons(ep.atom("b"), ep.atom("b"))), {}});  // idx 2
+        
+        goals goals;
+        const expr* X = ep.var(seq());
+        goals.push_back(ep.cons(ep.atom("pair"), ep.cons(X, X)));
+        
+        cdcl c;
+        
+        monte_carlo::tree_node<mcts_decider::choice> root;
+        std::mt19937 rng(42);
+        monte_carlo::simulation<mcts_decider::choice, std::mt19937> sim(root, 1.414, rng);
+        
+        resolution_store rs;
+        decision_store ds;
+        a01_sim simulation(100, db, goals, t, seq, ep, bm, lp, rs, ds, c, sim);
+        
+        // Pre-populate MCTS to force idx 2 (NOT idx 0, to prove MCTS works!)
+        const goal_lineage* gl0_for_mcts = lp.goal(nullptr, 0);
+        root.m_visits = 100;
+        root.m_children[gl0_for_mcts].m_visits = 50;
+        root.m_children[gl0_for_mcts].m_children[size_t(0)].m_visits = 10;
+        root.m_children[gl0_for_mcts].m_children[size_t(0)].m_value = 10.0;
+        root.m_children[gl0_for_mcts].m_children[size_t(2)].m_visits = 0;  // Force idx 2
+        
+        bool result = simulation();
+        
+        // CRITICAL: Solution found
+        assert(result == true);
+        
+        // CRITICAL: Exactly 1 resolution
+        assert(simulation.rs.size() == 1);
+        
+        // CRITICAL: Verify resolution used idx 2 (NOT idx 0!)
+        const goal_lineage* gl0 = lp.goal(nullptr, 0);
+        const resolution_lineage* rl2 = lp.resolution(gl0, 2);
+        assert(simulation.rs.count(rl2) == 1);
+        assert(simulation.ds.count(rl2) == 1);  // Decision
+        
+        // CRITICAL: Head elim should have removed idx 1
+        // Initial: 3 candidates, after head elim: 2 candidates (idx 0, 2)
+        // MCTS forced idx 2, proving it works correctly
+        
+        // CRITICAL: X binds to exactly 'b' (NOT 'a', because we used idx 2)
+        normalizer norm(ep, bm);
+        const expr* X_normalized = norm(X);
+        assert(X_normalized == ep.atom("b"));
+        
+        // CRITICAL: MCTS called once
+        assert(sim.length() == 2);
+    }
+    
+    // Test 41: Conflict with variable goal (no matching rules)
+    // Database: q(a).
+    // Goal: :- p(X).
+    // Expected: CONFLICT (no candidates for p(X))
+    {
+        trail t;
+        t.push();
+        
+        expr_pool ep(t);
+        bind_map bm(t);
+        sequencer seq(t);
+        lineage_pool lp;
+        
+        database db;
+        db.push_back(rule{ep.cons(ep.atom("q"), ep.atom("a")), {}});  // idx 0
+        
+        goals goals;
+        const expr* X = ep.var(seq());
+        goals.push_back(ep.cons(ep.atom("p"), X));
+        
+        cdcl c;
+        
+        monte_carlo::tree_node<mcts_decider::choice> root;
+        std::mt19937 rng(42);
+        monte_carlo::simulation<mcts_decider::choice, std::mt19937> sim(root, 1.414, rng);
+        
+        resolution_store rs;
+        decision_store ds;
+        a01_sim simulation(100, db, goals, t, seq, ep, bm, lp, rs, ds, c, sim);
+        
+        bool result = simulation();
+        
+        // CRITICAL: Immediate conflict (no candidates)
+        assert(result == false);
+        
+        // CRITICAL: No resolutions made
+        assert(simulation.rs.size() == 0);
+        
+        // CRITICAL: Goal still in store
+        const goal_lineage* gl_p = lp.goal(nullptr, 0);
+        assert(simulation.gs.count(gl_p) == 1);
+        assert(simulation.cs.count(gl_p) == 0);  // No candidates
+        
+        // CRITICAL: No decisions
+        assert(simulation.ds.size() == 0);
+        
+        // CRITICAL: MCTS never called
+        assert(sim.length() == 0);
+    }
+    
+    // Test 42: Complex variable chain with conflict
+    // Database: p(X) :- q(X)., q(Y) :- r(Y).
+    // Goal: :- p(Z).
+    // Expected: CONFLICT (no r facts)
+    {
+        trail t;
+        t.push();
+        
+        expr_pool ep(t);
+        bind_map bm(t);
+        sequencer seq(t);
+        lineage_pool lp;
+        
+        database db;
+        const expr* X_rule = ep.var(seq());
+        const expr* Y_rule = ep.var(seq());
+        db.push_back(rule{ep.cons(ep.atom("p"), X_rule), {ep.cons(ep.atom("q"), X_rule)}});  // idx 0
+        db.push_back(rule{ep.cons(ep.atom("q"), Y_rule), {ep.cons(ep.atom("r"), Y_rule)}});  // idx 1
+        // No r facts
+        
+        goals goals;
+        const expr* Z_goal = ep.var(seq());
+        goals.push_back(ep.cons(ep.atom("p"), Z_goal));
+        
+        cdcl c;
+        
+        monte_carlo::tree_node<mcts_decider::choice> root;
+        std::mt19937 rng(42);
+        monte_carlo::simulation<mcts_decider::choice, std::mt19937> sim(root, 1.414, rng);
+        
+        resolution_store rs;
+        decision_store ds;
+        a01_sim simulation(100, db, goals, t, seq, ep, bm, lp, rs, ds, c, sim);
+        
+        bool result = simulation();
+        
+        // CRITICAL: Conflict after chain
+        assert(result == false);
+        
+        // CRITICAL: Exactly 2 resolutions (p→q, q→r)
+        assert(simulation.rs.size() == 2);
+        
+        // CRITICAL: Verify lineage chain
+        const goal_lineage* gl_p = lp.goal(nullptr, 0);
+        const resolution_lineage* rl_p = lp.resolution(gl_p, 0);
+        assert(simulation.rs.count(rl_p) == 1);
+        
+        const goal_lineage* gl_q = lp.goal(rl_p, 0);
+        const resolution_lineage* rl_q = lp.resolution(gl_q, 1);
+        assert(simulation.rs.count(rl_q) == 1);
+        
+        // CRITICAL: r has no candidates
+        const goal_lineage* gl_r = lp.goal(rl_q, 0);
+        assert(simulation.gs.count(gl_r) == 1);
+        assert(simulation.cs.count(gl_r) == 0);
+        
+        // CRITICAL: No decisions (all unit props)
+        assert(simulation.ds.size() == 0);
+        
+        // CRITICAL: MCTS never called
+        assert(sim.length() == 0);
+    }
+    
+    // Test 43: Mixed instantiated and variable goals
+    // Database: p(a)., q(b).
+    // Goals: :- p(a), q(X).
+    // Expected: X=b
+    {
+        trail t;
+        t.push();
+        
+        expr_pool ep(t);
+        bind_map bm(t);
+        sequencer seq(t);
+        lineage_pool lp;
+        
+        database db;
+        db.push_back(rule{ep.cons(ep.atom("p"), ep.atom("a")), {}});  // idx 0
+        db.push_back(rule{ep.cons(ep.atom("q"), ep.atom("b")), {}});  // idx 1
+        
+        goals goals;
+        goals.push_back(ep.cons(ep.atom("p"), ep.atom("a")));  // Instantiated
+        const expr* X = ep.var(seq());
+        goals.push_back(ep.cons(ep.atom("q"), X));  // Variable
+        
+        cdcl c;
+        
+        monte_carlo::tree_node<mcts_decider::choice> root;
+        std::mt19937 rng(42);
+        monte_carlo::simulation<mcts_decider::choice, std::mt19937> sim(root, 1.414, rng);
+        
+        resolution_store rs;
+        decision_store ds;
+        a01_sim simulation(100, db, goals, t, seq, ep, bm, lp, rs, ds, c, sim);
+        
+        bool result = simulation();
+        
+        // CRITICAL: Solution found
+        assert(result == true);
+        
+        // CRITICAL: 2 resolutions
+        assert(simulation.rs.size() == 2);
+        
+        // CRITICAL: Verify lineages
+        const goal_lineage* gl_p = lp.goal(nullptr, 0);
+        const resolution_lineage* rl_p = lp.resolution(gl_p, 0);
+        assert(simulation.rs.count(rl_p) == 1);
+        
+        const goal_lineage* gl_q = lp.goal(nullptr, 1);
+        const resolution_lineage* rl_q = lp.resolution(gl_q, 1);
+        assert(simulation.rs.count(rl_q) == 1);
+        
+        // CRITICAL: No decisions
+        assert(simulation.ds.size() == 0);
+        
+        // CRITICAL: MCTS never called
+        assert(sim.length() == 0);
+        
+        // CRITICAL: X binds to 'b'
+        normalizer norm(ep, bm);
+        const expr* X_normalized = norm(X);
+        assert(X_normalized == ep.atom("b"));
+    }
+    
+    // Test 44: Deep variable chain (6 levels)
+    // Database: a(X) :- b(X)., b(Y) :- c(Y)., c(Z) :- d(Z).,
+    //           d(W) :- e(W)., e(V) :- f(V)., f(hello).
+    // Goal: :- a(Result).
+    // Expected: Result = hello (verify all 6 resolutions)
+    {
+        trail t;
+        t.push();
+        
+        expr_pool ep(t);
+        bind_map bm(t);
+        sequencer seq(t);
+        lineage_pool lp;
+        
+        database db;
+        const expr* X = ep.var(seq());
+        const expr* Y = ep.var(seq());
+        const expr* Z = ep.var(seq());
+        const expr* W = ep.var(seq());
+        const expr* V = ep.var(seq());
+        
+        db.push_back(rule{ep.cons(ep.atom("a"), X), {ep.cons(ep.atom("b"), X)}});  // idx 0
+        db.push_back(rule{ep.cons(ep.atom("b"), Y), {ep.cons(ep.atom("c"), Y)}});  // idx 1
+        db.push_back(rule{ep.cons(ep.atom("c"), Z), {ep.cons(ep.atom("d"), Z)}});  // idx 2
+        db.push_back(rule{ep.cons(ep.atom("d"), W), {ep.cons(ep.atom("e"), W)}});  // idx 3
+        db.push_back(rule{ep.cons(ep.atom("e"), V), {ep.cons(ep.atom("f"), V)}});  // idx 4
+        db.push_back(rule{ep.cons(ep.atom("f"), ep.atom("hello")), {}});  // idx 5
+        
+        goals goals;
+        const expr* Result = ep.var(seq());
+        goals.push_back(ep.cons(ep.atom("a"), Result));
+        
+        cdcl c;
+        
+        monte_carlo::tree_node<mcts_decider::choice> root;
+        std::mt19937 rng(42);
+        monte_carlo::simulation<mcts_decider::choice, std::mt19937> sim(root, 1.414, rng);
+        
+        resolution_store rs;
+        decision_store ds;
+        a01_sim simulation(100, db, goals, t, seq, ep, bm, lp, rs, ds, c, sim);
+        
+        bool result = simulation();
+        
+        // CRITICAL: Solution found
+        assert(result == true);
+        
+        // CRITICAL: Exactly 6 resolutions
+        assert(simulation.rs.size() == 6);
+        
+        // CRITICAL: Verify entire lineage chain
+        const goal_lineage* gl_a = lp.goal(nullptr, 0);
+        const resolution_lineage* rl_a = lp.resolution(gl_a, 0);
+        assert(simulation.rs.count(rl_a) == 1);
+        
+        const goal_lineage* gl_b = lp.goal(rl_a, 0);
+        const resolution_lineage* rl_b = lp.resolution(gl_b, 1);
+        assert(simulation.rs.count(rl_b) == 1);
+        
+        const goal_lineage* gl_c = lp.goal(rl_b, 0);
+        const resolution_lineage* rl_c = lp.resolution(gl_c, 2);
+        assert(simulation.rs.count(rl_c) == 1);
+        
+        const goal_lineage* gl_d = lp.goal(rl_c, 0);
+        const resolution_lineage* rl_d = lp.resolution(gl_d, 3);
+        assert(simulation.rs.count(rl_d) == 1);
+        
+        const goal_lineage* gl_e = lp.goal(rl_d, 0);
+        const resolution_lineage* rl_e = lp.resolution(gl_e, 4);
+        assert(simulation.rs.count(rl_e) == 1);
+        
+        const goal_lineage* gl_f = lp.goal(rl_e, 0);
+        const resolution_lineage* rl_f = lp.resolution(gl_f, 5);
+        assert(simulation.rs.count(rl_f) == 1);
+        
+        // CRITICAL: No decisions (all unit props)
+        assert(simulation.ds.size() == 0);
+        
+        // CRITICAL: MCTS never called
+        assert(sim.length() == 0);
+        
+        // CRITICAL: Result binds to 'hello'
+        normalizer norm(ep, bm);
+        const expr* Result_normalized = norm(Result);
+        assert(Result_normalized == ep.atom("hello"));
+    }
+    
+    // Test 45: Variables in multiple body goals
+    // Database: foo(X,Y,Z) :- bar(X,Y), baz(Y,Z)., bar(1,2)., baz(2,3).
+    // Goal: :- foo(A,B,C).
+    // Expected: A=1, B=2, C=3 (Y propagates through)
+    {
+        trail t;
+        t.push();
+        
+        expr_pool ep(t);
+        bind_map bm(t);
+        sequencer seq(t);
+        lineage_pool lp;
+        
+        database db;
+        const expr* X = ep.var(seq());
+        const expr* Y = ep.var(seq());
+        const expr* Z = ep.var(seq());
+        
+        const expr* foo_head = ep.cons(ep.atom("foo"), ep.cons(X, ep.cons(Y, Z)));
+        const expr* bar_body = ep.cons(ep.atom("bar"), ep.cons(X, Y));
+        const expr* baz_body = ep.cons(ep.atom("baz"), ep.cons(Y, Z));
+        db.push_back(rule{foo_head, {bar_body, baz_body}});  // idx 0
+        
+        const expr* bar_fact = ep.cons(ep.atom("bar"), ep.cons(ep.atom("1"), ep.atom("2")));
+        db.push_back(rule{bar_fact, {}});  // idx 1
+        
+        const expr* baz_fact = ep.cons(ep.atom("baz"), ep.cons(ep.atom("2"), ep.atom("3")));
+        db.push_back(rule{baz_fact, {}});  // idx 2
+        
+        goals goals;
+        const expr* A = ep.var(seq());
+        const expr* B = ep.var(seq());
+        const expr* C = ep.var(seq());
+        goals.push_back(ep.cons(ep.atom("foo"), ep.cons(A, ep.cons(B, C))));
+        
+        cdcl c;
+        
+        monte_carlo::tree_node<mcts_decider::choice> root;
+        std::mt19937 rng(42);
+        monte_carlo::simulation<mcts_decider::choice, std::mt19937> sim(root, 1.414, rng);
+        
+        resolution_store rs;
+        decision_store ds;
+        a01_sim simulation(100, db, goals, t, seq, ep, bm, lp, rs, ds, c, sim);
+        
+        bool result = simulation();
+        
+        // CRITICAL: Solution found
+        assert(result == true);
+        
+        // CRITICAL: Exactly 3 resolutions (foo, bar, baz)
+        assert(simulation.rs.size() == 3);
+        
+        // CRITICAL: Verify lineages
+        const goal_lineage* gl_foo = lp.goal(nullptr, 0);
+        const resolution_lineage* rl_foo = lp.resolution(gl_foo, 0);
+        assert(simulation.rs.count(rl_foo) == 1);
+        
+        const goal_lineage* gl_bar = lp.goal(rl_foo, 0);
+        const resolution_lineage* rl_bar = lp.resolution(gl_bar, 1);
+        assert(simulation.rs.count(rl_bar) == 1);
+        
+        const goal_lineage* gl_baz = lp.goal(rl_foo, 1);
+        const resolution_lineage* rl_baz = lp.resolution(gl_baz, 2);
+        assert(simulation.rs.count(rl_baz) == 1);
+        
+        // CRITICAL: No decisions
+        assert(simulation.ds.size() == 0);
+        
+        // CRITICAL: MCTS never called
+        assert(sim.length() == 0);
+        
+        // CRITICAL: Verify all three variables
+        normalizer norm(ep, bm);
+        const expr* A_normalized = norm(A);
+        const expr* B_normalized = norm(B);
+        const expr* C_normalized = norm(C);
+        assert(A_normalized == ep.atom("1"));
+        assert(B_normalized == ep.atom("2"));
+        assert(C_normalized == ep.atom("3"));
+    }
+    
+    // Test 46: Head elimination with variables
+    // Database: p(cons(a,X))., p(cons(b,Y))., p(atom(z)).
+    // Goal: :- p(cons(a, nil)).
+    // Expected: Only first rule remains after head elim
+    {
+        trail t;
+        t.push();
+        
+        expr_pool ep(t);
+        bind_map bm(t);
+        sequencer seq(t);
+        lineage_pool lp;
+        
+        database db;
+        const expr* X = ep.var(seq());
+        const expr* Y = ep.var(seq());
+        
+        const expr* cons_a_X = ep.cons(ep.atom("cons"), ep.cons(ep.atom("a"), X));
+        db.push_back(rule{ep.cons(ep.atom("p"), cons_a_X), {}});  // idx 0
+        
+        const expr* cons_b_Y = ep.cons(ep.atom("cons"), ep.cons(ep.atom("b"), Y));
+        db.push_back(rule{ep.cons(ep.atom("p"), cons_b_Y), {}});  // idx 1
+        
+        const expr* atom_z = ep.cons(ep.atom("atom"), ep.atom("z"));
+        db.push_back(rule{ep.cons(ep.atom("p"), atom_z), {}});  // idx 2
+        
+        goals goals;
+        const expr* cons_a_nil = ep.cons(ep.atom("cons"), ep.cons(ep.atom("a"), ep.atom("nil")));
+        goals.push_back(ep.cons(ep.atom("p"), cons_a_nil));
+        
+        cdcl c;
+        
+        monte_carlo::tree_node<mcts_decider::choice> root;
+        std::mt19937 rng(42);
+        monte_carlo::simulation<mcts_decider::choice, std::mt19937> sim(root, 1.414, rng);
+        
+        resolution_store rs;
+        decision_store ds;
+        a01_sim simulation(100, db, goals, t, seq, ep, bm, lp, rs, ds, c, sim);
+        
+        bool result = simulation();
+        
+        // CRITICAL: Solution found
+        assert(result == true);
+        
+        // CRITICAL: Exactly 1 resolution (head elim removed idx 1 and 2)
+        assert(simulation.rs.size() == 1);
+        
+        // CRITICAL: Verify resolution
+        const goal_lineage* gl0 = lp.goal(nullptr, 0);
+        const resolution_lineage* rl0 = lp.resolution(gl0, 0);
+        assert(simulation.rs.count(rl0) == 1);
+        
+        // CRITICAL: No decisions (unit prop)
+        assert(simulation.ds.size() == 0);
+        
+        // CRITICAL: MCTS never called
+        assert(sim.length() == 0);
+    }
+    
+    // Test 47: Empty body rule query (multiple facts)
+    // Database: person(alice)., person(bob)., person(charlie).
+    // Goal: :- person(Who).
+    // Expected: Who binds to one of {alice, bob, charlie}
+    {
+        trail t;
+        t.push();
+        
+        expr_pool ep(t);
+        bind_map bm(t);
+        sequencer seq(t);
+        lineage_pool lp;
+        
+        database db;
+        db.push_back(rule{ep.cons(ep.atom("person"), ep.atom("alice")), {}});    // idx 0
+        db.push_back(rule{ep.cons(ep.atom("person"), ep.atom("bob")), {}});      // idx 1
+        db.push_back(rule{ep.cons(ep.atom("person"), ep.atom("charlie")), {}});  // idx 2
+        
+        goals goals;
+        const expr* Who = ep.var(seq());
+        goals.push_back(ep.cons(ep.atom("person"), Who));
+        
+        cdcl c;
+        
+        monte_carlo::tree_node<mcts_decider::choice> root;
+        std::mt19937 rng(42);
+        monte_carlo::simulation<mcts_decider::choice, std::mt19937> sim(root, 1.414, rng);
+        
+        resolution_store rs;
+        decision_store ds;
+        a01_sim simulation(100, db, goals, t, seq, ep, bm, lp, rs, ds, c, sim);
+        
+        // Pre-populate MCTS to force idx 1 (bob)
+        const goal_lineage* gl0_for_mcts = lp.goal(nullptr, 0);
+        root.m_visits = 100;
+        root.m_children[gl0_for_mcts].m_visits = 50;
+        root.m_children[gl0_for_mcts].m_children[size_t(0)].m_visits = 10;
+        root.m_children[gl0_for_mcts].m_children[size_t(0)].m_value = 10.0;
+        root.m_children[gl0_for_mcts].m_children[size_t(1)].m_visits = 0;  // Force idx 1
+        root.m_children[gl0_for_mcts].m_children[size_t(2)].m_visits = 10;
+        root.m_children[gl0_for_mcts].m_children[size_t(2)].m_value = 10.0;
+        
+        bool result = simulation();
+        
+        // CRITICAL: Solution found
+        assert(result == true);
+        
+        // CRITICAL: Exactly 1 resolution
+        assert(simulation.rs.size() == 1);
+        
+        // CRITICAL: Verify resolution (forced idx 1)
+        const goal_lineage* gl0 = lp.goal(nullptr, 0);
+        const resolution_lineage* rl1 = lp.resolution(gl0, 1);
+        assert(simulation.rs.count(rl1) == 1);
+        assert(simulation.ds.count(rl1) == 1);  // Decision
+        
+        // CRITICAL: MCTS called once
+        assert(sim.length() == 2);
+        
+        // CRITICAL: Who binds to exactly 'bob'
+        normalizer norm(ep, bm);
+        const expr* Who_normalized = norm(Who);
+        assert(Who_normalized == ep.atom("bob"));
+    }
+    
+    // Test 48: Avoidance store with variable resolution
+    // Database: p(X) :- q(X)., p(Y) :- r(Y)., q(a)., r(b).
+    // Goal: :- p(Z).
+    // Avoidance: {rl(p(Z), idx 0)} (avoid p→q path)
+    // Expected: Z=b (forced to use p→r path)
+    {
+        trail t;
+        t.push();
+        
+        expr_pool ep(t);
+        bind_map bm(t);
+        sequencer seq(t);
+        lineage_pool lp;
+        
+        database db;
+        const expr* X = ep.var(seq());
+        const expr* Y = ep.var(seq());
+        
+        db.push_back(rule{ep.cons(ep.atom("p"), X), {ep.cons(ep.atom("q"), X)}});  // idx 0
+        db.push_back(rule{ep.cons(ep.atom("p"), Y), {ep.cons(ep.atom("r"), Y)}});  // idx 1
+        db.push_back(rule{ep.cons(ep.atom("q"), ep.atom("a")), {}});  // idx 2
+        db.push_back(rule{ep.cons(ep.atom("r"), ep.atom("b")), {}});  // idx 3
+        
+        goals goals;
+        const expr* Z = ep.var(seq());
+        goals.push_back(ep.cons(ep.atom("p"), Z));
+        
+        // Pre-populate avoidance store to avoid idx 0
+        const goal_lineage* gl_p = lp.goal(nullptr, 0);
+        const resolution_lineage* rl_avoid = lp.resolution(gl_p, 0);
+        decision_store avoidance;
+        avoidance.insert(rl_avoid);
+        cdcl c;
+        c.insert(avoidance);
+        
+        monte_carlo::tree_node<mcts_decider::choice> root;
+        std::mt19937 rng(42);
+        monte_carlo::simulation<mcts_decider::choice, std::mt19937> sim(root, 1.414, rng);
+        
+        resolution_store rs;
+        decision_store ds;
+        a01_sim simulation(100, db, goals, t, seq, ep, bm, lp, rs, ds, c, sim);
+        
+        bool result = simulation();
+        
+        // CRITICAL: Solution found
+        assert(result == true);
+        
+        // CRITICAL: Exactly 2 resolutions (p→r, r)
+        assert(simulation.rs.size() == 2);
+        
+        // CRITICAL: Verify lineages (used idx 1, not idx 0)
+        const resolution_lineage* rl_p = lp.resolution(gl_p, 1);
+        assert(simulation.rs.count(rl_p) == 1);
+        
+        const goal_lineage* gl_r = lp.goal(rl_p, 0);
+        const resolution_lineage* rl_r = lp.resolution(gl_r, 3);
+        assert(simulation.rs.count(rl_r) == 1);
+        
+        // CRITICAL: No decisions (CDCL elim removed idx 0, leaving unit prop)
+        assert(simulation.ds.size() == 0);
+        
+        // CRITICAL: MCTS never called
+        assert(sim.length() == 0);
+        
+        // CRITICAL: Z binds to 'b'
+        normalizer norm(ep, bm);
+        const expr* Z_normalized = norm(Z);
+        assert(Z_normalized == ep.atom("b"));
+    }
+    
+    // Test 49: Existential variables (variables only in body)
+    // Database: p(X) :- q(Y)., q(a).
+    // Goal: :- p(hello).
+    // Expected: Solution (X=hello, Y=a, Y is existential)
+    {
+        trail t;
+        t.push();
+        
+        expr_pool ep(t);
+        bind_map bm(t);
+        sequencer seq(t);
+        lineage_pool lp;
+        
+        database db;
+        const expr* X = ep.var(seq());
+        const expr* Y = ep.var(seq());
+        db.push_back(rule{ep.cons(ep.atom("p"), X), {ep.cons(ep.atom("q"), Y)}});  // idx 0
+        db.push_back(rule{ep.cons(ep.atom("q"), ep.atom("a")), {}});  // idx 1
+        
+        goals goals;
+        goals.push_back(ep.cons(ep.atom("p"), ep.atom("hello")));
+        
+        cdcl c;
+        
+        monte_carlo::tree_node<mcts_decider::choice> root;
+        std::mt19937 rng(42);
+        monte_carlo::simulation<mcts_decider::choice, std::mt19937> sim(root, 1.414, rng);
+        
+        resolution_store rs;
+        decision_store ds;
+        a01_sim simulation(100, db, goals, t, seq, ep, bm, lp, rs, ds, c, sim);
+        
+        bool result = simulation();
+        
+        // CRITICAL: Solution found
+        assert(result == true);
+        
+        // CRITICAL: 2 resolutions
+        assert(simulation.rs.size() == 2);
+        
+        // CRITICAL: Verify lineages
+        const goal_lineage* gl_p = lp.goal(nullptr, 0);
+        const resolution_lineage* rl_p = lp.resolution(gl_p, 0);
+        assert(simulation.rs.count(rl_p) == 1);
+        
+        const goal_lineage* gl_q = lp.goal(rl_p, 0);
+        const resolution_lineage* rl_q = lp.resolution(gl_q, 1);
+        assert(simulation.rs.count(rl_q) == 1);
+        
+        // CRITICAL: No decisions
+        assert(simulation.ds.size() == 0);
+        
+        // NOTE: X and Y are database variables that get copied during resolution.
+        // The COPIED versions bind correctly (X'=hello, Y'=a), but we can't check
+        // the original database variables since they remain unbound.
+    }
+    
+    // Test 50: Self-referential rule (immediate cycle)
+    // Database: p(X) :- p(X).
+    // Goal: :- p(a).
+    // Expected: Max resolutions exceeded (infinite loop detection)
+    {
+        trail t;
+        t.push();
+        
+        expr_pool ep(t);
+        bind_map bm(t);
+        sequencer seq(t);
+        lineage_pool lp;
+        
+        database db;
+        const expr* X = ep.var(seq());
+        db.push_back(rule{ep.cons(ep.atom("p"), X), {ep.cons(ep.atom("p"), X)}});  // idx 0: p(X) :- p(X)
+        
+        goals goals;
+        goals.push_back(ep.cons(ep.atom("p"), ep.atom("a")));
+        
+        cdcl c;
+        
+        monte_carlo::tree_node<mcts_decider::choice> root;
+        std::mt19937 rng(42);
+        monte_carlo::simulation<mcts_decider::choice, std::mt19937> sim(root, 1.414, rng);
+        
+        resolution_store rs;
+        decision_store ds;
+        a01_sim simulation(5, db, goals, t, seq, ep, bm, lp, rs, ds, c, sim);  // Low max_resolutions
+        
+        bool result = simulation();
+        
+        // CRITICAL: Max resolutions exceeded (not a solution)
+        assert(result == false);
+        
+        // CRITICAL: Exactly 5 resolutions (hit the limit)
+        assert(simulation.rs.size() == 5);
+        
+        // CRITICAL: All unit propagations (only one candidate)
+        assert(simulation.ds.size() == 0);
+        
+        // CRITICAL: Goal store not empty (still has unresolved goals)
+        assert(simulation.gs.size() > 0);
+    }
+    
+    // Test 51: Empty database
+    // Database: (empty)
+    // Goal: :- p(X).
+    // Expected: Immediate conflict (no rules at all)
+    {
+        trail t;
+        t.push();
+        
+        expr_pool ep(t);
+        bind_map bm(t);
+        sequencer seq(t);
+        lineage_pool lp;
+        
+        database db;  // Empty!
+        
+        goals goals;
+        const expr* X = ep.var(seq());
+        goals.push_back(ep.cons(ep.atom("p"), X));
+        
+        cdcl c;
+        
+        monte_carlo::tree_node<mcts_decider::choice> root;
+        std::mt19937 rng(42);
+        monte_carlo::simulation<mcts_decider::choice, std::mt19937> sim(root, 1.414, rng);
+        
+        resolution_store rs;
+        decision_store ds;
+        a01_sim simulation(100, db, goals, t, seq, ep, bm, lp, rs, ds, c, sim);
+        
+        bool result = simulation();
+        
+        // CRITICAL: Immediate conflict
+        assert(result == false);
+        
+        // CRITICAL: No resolutions
+        assert(simulation.rs.size() == 0);
+        
+        // CRITICAL: Goal still in store with no candidates
+        const goal_lineage* gl_p = lp.goal(nullptr, 0);
+        assert(simulation.gs.count(gl_p) == 1);
+        assert(simulation.cs.count(gl_p) == 0);
+    }
+    
+    // Test 52: Fact with variable in head
+    // Database: p(X).
+    // Goal: :- p(hello).
+    // Expected: Solution (X unifies with hello)
+    {
+        trail t;
+        t.push();
+        
+        expr_pool ep(t);
+        bind_map bm(t);
+        sequencer seq(t);
+        lineage_pool lp;
+        
+        database db;
+        const expr* X = ep.var(seq());
+        db.push_back(rule{ep.cons(ep.atom("p"), X), {}});  // idx 0: p(X). (fact with variable)
+        
+        goals goals;
+        goals.push_back(ep.cons(ep.atom("p"), ep.atom("hello")));
+        
+        cdcl c;
+        
+        monte_carlo::tree_node<mcts_decider::choice> root;
+        std::mt19937 rng(42);
+        monte_carlo::simulation<mcts_decider::choice, std::mt19937> sim(root, 1.414, rng);
+        
+        resolution_store rs;
+        decision_store ds;
+        a01_sim simulation(100, db, goals, t, seq, ep, bm, lp, rs, ds, c, sim);
+        
+        bool result = simulation();
+        
+        // CRITICAL: Solution found
+        assert(result == true);
+        
+        // CRITICAL: Exactly 1 resolution
+        assert(simulation.rs.size() == 1);
+        
+        // CRITICAL: Verify resolution
+        const goal_lineage* gl_p = lp.goal(nullptr, 0);
+        const resolution_lineage* rl_p = lp.resolution(gl_p, 0);
+        assert(simulation.rs.count(rl_p) == 1);
+        
+        // CRITICAL: No decisions (unit prop)
+        assert(simulation.ds.size() == 0);
+        
+        // NOTE: X is a database variable that gets copied during resolution.
+        // The COPIED version X' binds to 'hello', but we can't check the
+        // original database variable since it remains unbound.
+    }
+    
+    // Test 53: Very wide goal (many body goals)
+    // Database: big(W,X,Y,Z) :- a(W), b(X), c(Y), d(Z)., a(1)., b(2)., c(3)., d(4).
+    // Goal: :- big(A,B,C,D).
+    // Expected: A=1, B=2, C=3, D=4 (4 sub-goals spawned)
+    {
+        trail t;
+        t.push();
+        
+        expr_pool ep(t);
+        bind_map bm(t);
+        sequencer seq(t);
+        lineage_pool lp;
+        
+        database db;
+        const expr* W = ep.var(seq());
+        const expr* X = ep.var(seq());
+        const expr* Y = ep.var(seq());
+        const expr* Z = ep.var(seq());
+        
+        const expr* big_head = ep.cons(ep.atom("big"), ep.cons(W, ep.cons(X, ep.cons(Y, Z))));
+        const expr* a_body = ep.cons(ep.atom("a"), W);
+        const expr* b_body = ep.cons(ep.atom("b"), X);
+        const expr* c_body = ep.cons(ep.atom("c"), Y);
+        const expr* d_body = ep.cons(ep.atom("d"), Z);
+        db.push_back(rule{big_head, {a_body, b_body, c_body, d_body}});  // idx 0
+        
+        db.push_back(rule{ep.cons(ep.atom("a"), ep.atom("1")), {}});  // idx 1
+        db.push_back(rule{ep.cons(ep.atom("b"), ep.atom("2")), {}});  // idx 2
+        db.push_back(rule{ep.cons(ep.atom("c"), ep.atom("3")), {}});  // idx 3
+        db.push_back(rule{ep.cons(ep.atom("d"), ep.atom("4")), {}});  // idx 4
+        
+        goals goals;
+        const expr* A = ep.var(seq());
+        const expr* B = ep.var(seq());
+        const expr* C = ep.var(seq());
+        const expr* D = ep.var(seq());
+        goals.push_back(ep.cons(ep.atom("big"), ep.cons(A, ep.cons(B, ep.cons(C, D)))));
+        
+        cdcl c;
+        
+        monte_carlo::tree_node<mcts_decider::choice> root;
+        std::mt19937 rng(42);
+        monte_carlo::simulation<mcts_decider::choice, std::mt19937> sim(root, 1.414, rng);
+        
+        resolution_store rs;
+        decision_store ds;
+        a01_sim simulation(100, db, goals, t, seq, ep, bm, lp, rs, ds, c, sim);
+        
+        bool result = simulation();
+        
+        // CRITICAL: Solution found
+        assert(result == true);
+        
+        // CRITICAL: Exactly 5 resolutions (big + 4 sub-goals)
+        assert(simulation.rs.size() == 5);
+        
+        // CRITICAL: Verify lineages
+        const goal_lineage* gl_big = lp.goal(nullptr, 0);
+        const resolution_lineage* rl_big = lp.resolution(gl_big, 0);
+        assert(simulation.rs.count(rl_big) == 1);
+        
+        const goal_lineage* gl_a = lp.goal(rl_big, 0);
+        const resolution_lineage* rl_a = lp.resolution(gl_a, 1);
+        assert(simulation.rs.count(rl_a) == 1);
+        
+        const goal_lineage* gl_b = lp.goal(rl_big, 1);
+        const resolution_lineage* rl_b = lp.resolution(gl_b, 2);
+        assert(simulation.rs.count(rl_b) == 1);
+        
+        const goal_lineage* gl_c = lp.goal(rl_big, 2);
+        const resolution_lineage* rl_c = lp.resolution(gl_c, 3);
+        assert(simulation.rs.count(rl_c) == 1);
+        
+        const goal_lineage* gl_d = lp.goal(rl_big, 3);
+        const resolution_lineage* rl_d = lp.resolution(gl_d, 4);
+        assert(simulation.rs.count(rl_d) == 1);
+        
+        // CRITICAL: No decisions (all unit props)
+        assert(simulation.ds.size() == 0);
+        
+        // CRITICAL: Verify all four variables
+        normalizer norm(ep, bm);
+        assert(norm(A) == ep.atom("1"));
+        assert(norm(B) == ep.atom("2"));
+        assert(norm(C) == ep.atom("3"));
+        assert(norm(D) == ep.atom("4"));
+    }
+    
+    // Test 54: Multiple avoidances in avoidance store
+    // Database: p(X) :- q(X)., p(Y) :- r(Y)., q(a)., r(b).
+    // Goal: :- p(Z).
+    // Avoidances: {{rl1}, {rl2}} where both become singletons
+    // Expected: Both get CDCL eliminated, leaving conflict
+    {
+        trail t;
+        t.push();
+        
+        expr_pool ep(t);
+        bind_map bm(t);
+        sequencer seq(t);
+        lineage_pool lp;
+        
+        database db;
+        const expr* X = ep.var(seq());
+        const expr* Y = ep.var(seq());
+        
+        db.push_back(rule{ep.cons(ep.atom("p"), X), {ep.cons(ep.atom("q"), X)}});  // idx 0
+        db.push_back(rule{ep.cons(ep.atom("p"), Y), {ep.cons(ep.atom("r"), Y)}});  // idx 1
+        db.push_back(rule{ep.cons(ep.atom("q"), ep.atom("a")), {}});  // idx 2
+        db.push_back(rule{ep.cons(ep.atom("r"), ep.atom("b")), {}});  // idx 3
+        
+        goals goals;
+        const expr* Z = ep.var(seq());
+        goals.push_back(ep.cons(ep.atom("p"), Z));
+        
+        // Pre-populate avoidance store with BOTH resolutions
+        const goal_lineage* gl_p = lp.goal(nullptr, 0);
+        const resolution_lineage* rl0 = lp.resolution(gl_p, 0);
+        const resolution_lineage* rl1 = lp.resolution(gl_p, 1);
+        
+        decision_store avoidance1;
+        avoidance1.insert(rl0);
+        
+        decision_store avoidance2;
+        avoidance2.insert(rl1);
+        
+        cdcl c;
+        c.insert(avoidance1);
+        c.insert(avoidance2);
+        
+        monte_carlo::tree_node<mcts_decider::choice> root;
+        std::mt19937 rng(42);
+        monte_carlo::simulation<mcts_decider::choice, std::mt19937> sim(root, 1.414, rng);
+        
+        resolution_store rs;
+        decision_store ds;
+        a01_sim simulation(100, db, goals, t, seq, ep, bm, lp, rs, ds, c, sim);
+        
+        bool result = simulation();
+        
+        // CRITICAL: Conflict (both candidates eliminated)
+        assert(result == false);
+        
+        // CRITICAL: No resolutions made
+        assert(simulation.rs.size() == 0);
+        
+        // CRITICAL: Goal still in store with no candidates
+        assert(simulation.gs.count(gl_p) == 1);
+        assert(simulation.cs.count(gl_p) == 0);  // Both eliminated by CDCL
+    }
+    
+    // Test 55: Head elimination removes all candidates
+    // Database: p(cons(a,X))., p(cons(b,Y)).
+    // Goal: :- p(atom(z)).
+    // Expected: Immediate conflict (head elim removes both)
+    {
+        trail t;
+        t.push();
+        
+        expr_pool ep(t);
+        bind_map bm(t);
+        sequencer seq(t);
+        lineage_pool lp;
+        
+        database db;
+        const expr* X = ep.var(seq());
+        const expr* Y = ep.var(seq());
+        
+        const expr* cons_a_X = ep.cons(ep.atom("cons"), ep.cons(ep.atom("a"), X));
+        db.push_back(rule{ep.cons(ep.atom("p"), cons_a_X), {}});  // idx 0
+        
+        const expr* cons_b_Y = ep.cons(ep.atom("cons"), ep.cons(ep.atom("b"), Y));
+        db.push_back(rule{ep.cons(ep.atom("p"), cons_b_Y), {}});  // idx 1
+        
+        goals goals;
+        const expr* atom_z = ep.cons(ep.atom("atom"), ep.atom("z"));
+        goals.push_back(ep.cons(ep.atom("p"), atom_z));
+        
+        cdcl c;
+        
+        monte_carlo::tree_node<mcts_decider::choice> root;
+        std::mt19937 rng(42);
+        monte_carlo::simulation<mcts_decider::choice, std::mt19937> sim(root, 1.414, rng);
+        
+        resolution_store rs;
+        decision_store ds;
+        a01_sim simulation(100, db, goals, t, seq, ep, bm, lp, rs, ds, c, sim);
+        
+        bool result = simulation();
+        
+        // CRITICAL: Immediate conflict (head elim removes all)
+        assert(result == false);
+        
+        // CRITICAL: No resolutions
+        assert(simulation.rs.size() == 0);
+        
+        // CRITICAL: Goal in store with no candidates
+        const goal_lineage* gl_p = lp.goal(nullptr, 0);
+        assert(simulation.gs.count(gl_p) == 1);
+        assert(simulation.cs.count(gl_p) == 0);
+    }
+    
+    // Test 56: Deeply nested compound terms
+    // Database: deep(cons(cons(cons(cons(cons(a,b),c),d),e),f)).
+    // Goal: :- deep(X).
+    // Expected: X binds to the deeply nested structure
+    {
+        trail t;
+        t.push();
+        
+        expr_pool ep(t);
+        bind_map bm(t);
+        sequencer seq(t);
+        lineage_pool lp;
+        
+        database db;
+        const expr* level1 = ep.cons(ep.atom("cons"), ep.cons(ep.atom("a"), ep.atom("b")));
+        const expr* level2 = ep.cons(ep.atom("cons"), ep.cons(level1, ep.atom("c")));
+        const expr* level3 = ep.cons(ep.atom("cons"), ep.cons(level2, ep.atom("d")));
+        const expr* level4 = ep.cons(ep.atom("cons"), ep.cons(level3, ep.atom("e")));
+        const expr* level5 = ep.cons(ep.atom("cons"), ep.cons(level4, ep.atom("f")));
+        db.push_back(rule{ep.cons(ep.atom("deep"), level5), {}});  // idx 0
+        
+        goals goals;
+        const expr* X = ep.var(seq());
+        goals.push_back(ep.cons(ep.atom("deep"), X));
+        
+        cdcl c;
+        
+        monte_carlo::tree_node<mcts_decider::choice> root;
+        std::mt19937 rng(42);
+        monte_carlo::simulation<mcts_decider::choice, std::mt19937> sim(root, 1.414, rng);
+        
+        resolution_store rs;
+        decision_store ds;
+        a01_sim simulation(100, db, goals, t, seq, ep, bm, lp, rs, ds, c, sim);
+        
+        bool result = simulation();
+        
+        // CRITICAL: Solution found
+        assert(result == true);
+        
+        // CRITICAL: X binds to deeply nested structure
+        normalizer norm(ep, bm);
+        assert(norm(X) == level5);
+    }
+    
+    // Test 57: Max resolutions hit during variable binding
+    // Database: 10 chained rules
+    // Goal: :- a(X).
+    // Max resolutions: 5
+    // Expected: Returns false (max exceeded)
+    {
+        trail t;
+        t.push();
+        
+        expr_pool ep(t);
+        bind_map bm(t);
+        sequencer seq(t);
+        lineage_pool lp;
+        
+        database db;
+        const expr* vars[10];
+        for (int i = 0; i < 10; i++) {
+            vars[i] = ep.var(seq());
+        }
+        
+        // Build chain: a→b→c→d→e→f→g→h→i→j→end
+        db.push_back(rule{ep.cons(ep.atom("a"), vars[0]), {ep.cons(ep.atom("b"), vars[0])}});
+        db.push_back(rule{ep.cons(ep.atom("b"), vars[1]), {ep.cons(ep.atom("c"), vars[1])}});
+        db.push_back(rule{ep.cons(ep.atom("c"), vars[2]), {ep.cons(ep.atom("d"), vars[2])}});
+        db.push_back(rule{ep.cons(ep.atom("d"), vars[3]), {ep.cons(ep.atom("e"), vars[3])}});
+        db.push_back(rule{ep.cons(ep.atom("e"), vars[4]), {ep.cons(ep.atom("f"), vars[4])}});
+        db.push_back(rule{ep.cons(ep.atom("f"), vars[5]), {ep.cons(ep.atom("g"), vars[5])}});
+        db.push_back(rule{ep.cons(ep.atom("g"), vars[6]), {ep.cons(ep.atom("h"), vars[6])}});
+        db.push_back(rule{ep.cons(ep.atom("h"), vars[7]), {ep.cons(ep.atom("i"), vars[7])}});
+        db.push_back(rule{ep.cons(ep.atom("i"), vars[8]), {ep.cons(ep.atom("j"), vars[8])}});
+        db.push_back(rule{ep.cons(ep.atom("j"), ep.atom("end")), {}});
+        
+        goals goals;
+        const expr* X = ep.var(seq());
+        goals.push_back(ep.cons(ep.atom("a"), X));
+        
+        cdcl c;
+        
+        monte_carlo::tree_node<mcts_decider::choice> root;
+        std::mt19937 rng(42);
+        monte_carlo::simulation<mcts_decider::choice, std::mt19937> sim(root, 1.414, rng);
+        
+        resolution_store rs;
+        decision_store ds;
+        a01_sim simulation(5, db, goals, t, seq, ep, bm, lp, rs, ds, c, sim);  // Max 5
+        
+        bool result = simulation();
+        
+        // CRITICAL: Max exceeded (not solution)
+        assert(result == false);
+        
+        // CRITICAL: Exactly 5 resolutions
+        assert(simulation.rs.size() == 5);
+        
+        // CRITICAL: Goal store not empty
+        assert(simulation.gs.size() > 0);
+    }
+    
+    // Test 58: Decision creates conflict immediately
+    // Database: p(a) :- q(b)., q(c).
+    // Goal: :- p(a).
+    // Expected: Conflict (q(b) has no candidates)
+    {
+        trail t;
+        t.push();
+        
+        expr_pool ep(t);
+        bind_map bm(t);
+        sequencer seq(t);
+        lineage_pool lp;
+        
+        database db;
+        db.push_back(rule{ep.cons(ep.atom("p"), ep.atom("a")), {ep.cons(ep.atom("q"), ep.atom("b"))}});  // idx 0
+        db.push_back(rule{ep.cons(ep.atom("q"), ep.atom("c")), {}});  // idx 1: q(c) not q(b)!
+        
+        goals goals;
+        goals.push_back(ep.cons(ep.atom("p"), ep.atom("a")));
+        
+        cdcl c;
+        
+        monte_carlo::tree_node<mcts_decider::choice> root;
+        std::mt19937 rng(42);
+        monte_carlo::simulation<mcts_decider::choice, std::mt19937> sim(root, 1.414, rng);
+        
+        resolution_store rs;
+        decision_store ds;
+        a01_sim simulation(100, db, goals, t, seq, ep, bm, lp, rs, ds, c, sim);
+        
+        bool result = simulation();
+        
+        // CRITICAL: Conflict after first resolution
+        assert(result == false);
+        
+        // CRITICAL: Exactly 1 resolution (p→q(b))
+        assert(simulation.rs.size() == 1);
+        
+        // CRITICAL: Verify resolution
+        const goal_lineage* gl_p = lp.goal(nullptr, 0);
+        const resolution_lineage* rl_p = lp.resolution(gl_p, 0);
+        assert(simulation.rs.count(rl_p) == 1);
+        
+        // CRITICAL: q(b) has no candidates
+        const goal_lineage* gl_q = lp.goal(rl_p, 0);
+        assert(simulation.gs.count(gl_q) == 1);
+        assert(simulation.cs.count(gl_q) == 0);
+    }
+    
+    // Test 59: Variables in goal match multiple rules (ambiguity)
+    // Database: edge(a,b)., edge(a,c)., edge(a,d).
+    // Goal: :- edge(a,X).
+    // Expected: X could be b, c, or d (MCTS decides, force d)
+    {
+        trail t;
+        t.push();
+        
+        expr_pool ep(t);
+        bind_map bm(t);
+        sequencer seq(t);
+        lineage_pool lp;
+        
+        database db;
+        db.push_back(rule{ep.cons(ep.atom("edge"), ep.cons(ep.atom("a"), ep.atom("b"))), {}});  // idx 0
+        db.push_back(rule{ep.cons(ep.atom("edge"), ep.cons(ep.atom("a"), ep.atom("c"))), {}});  // idx 1
+        db.push_back(rule{ep.cons(ep.atom("edge"), ep.cons(ep.atom("a"), ep.atom("d"))), {}});  // idx 2
+        
+        goals goals;
+        const expr* X = ep.var(seq());
+        goals.push_back(ep.cons(ep.atom("edge"), ep.cons(ep.atom("a"), X)));
+        
+        cdcl c;
+        
+        monte_carlo::tree_node<mcts_decider::choice> root;
+        std::mt19937 rng(42);
+        monte_carlo::simulation<mcts_decider::choice, std::mt19937> sim(root, 1.414, rng);
+        
+        resolution_store rs;
+        decision_store ds;
+        a01_sim simulation(100, db, goals, t, seq, ep, bm, lp, rs, ds, c, sim);
+        
+        // Pre-populate MCTS to force idx 2
+        const goal_lineage* gl0_for_mcts = lp.goal(nullptr, 0);
+        root.m_visits = 100;
+        root.m_children[gl0_for_mcts].m_visits = 50;
+        root.m_children[gl0_for_mcts].m_children[size_t(0)].m_visits = 10;
+        root.m_children[gl0_for_mcts].m_children[size_t(0)].m_value = 10.0;
+        root.m_children[gl0_for_mcts].m_children[size_t(1)].m_visits = 10;
+        root.m_children[gl0_for_mcts].m_children[size_t(1)].m_value = 10.0;
+        root.m_children[gl0_for_mcts].m_children[size_t(2)].m_visits = 0;  // Force idx 2
+        
+        bool result = simulation();
+        
+        // CRITICAL: Solution found
+        assert(result == true);
+        
+        // CRITICAL: Exactly 1 resolution (forced idx 2)
+        assert(simulation.rs.size() == 1);
+        
+        const goal_lineage* gl0 = lp.goal(nullptr, 0);
+        const resolution_lineage* rl2 = lp.resolution(gl0, 2);
+        assert(simulation.rs.count(rl2) == 1);
+        assert(simulation.ds.count(rl2) == 1);  // Decision
+        
+        // CRITICAL: X binds to 'd'
+        normalizer norm(ep, bm);
+        assert(norm(X) == ep.atom("d"));
+    }
+    
+    // Test 60: Unification failure due to nested structure mismatch
+    // Database: p(cons(a,cons(b,nil))).
+    // Goal: :- p(cons(a,cons(c,nil))).
+    // Expected: Conflict (b ≠ c in nested position)
+    {
+        trail t;
+        t.push();
+        
+        expr_pool ep(t);
+        bind_map bm(t);
+        sequencer seq(t);
+        lineage_pool lp;
+        
+        database db;
+        const expr* nested_db = ep.cons(ep.atom("cons"), 
+                                   ep.cons(ep.atom("a"), 
+                                      ep.cons(ep.atom("cons"), 
+                                         ep.cons(ep.atom("b"), ep.atom("nil")))));
+        db.push_back(rule{ep.cons(ep.atom("p"), nested_db), {}});  // idx 0
+        
+        goals goals;
+        const expr* nested_goal = ep.cons(ep.atom("cons"), 
+                                     ep.cons(ep.atom("a"), 
+                                        ep.cons(ep.atom("cons"), 
+                                           ep.cons(ep.atom("c"), ep.atom("nil")))));
+        goals.push_back(ep.cons(ep.atom("p"), nested_goal));
+        
+        cdcl c;
+        
+        monte_carlo::tree_node<mcts_decider::choice> root;
+        std::mt19937 rng(42);
+        monte_carlo::simulation<mcts_decider::choice, std::mt19937> sim(root, 1.414, rng);
+        
+        resolution_store rs;
+        decision_store ds;
+        a01_sim simulation(100, db, goals, t, seq, ep, bm, lp, rs, ds, c, sim);
+        
+        bool result = simulation();
+        
+        // CRITICAL: Immediate conflict (head elim fails)
+        assert(result == false);
+        
+        // CRITICAL: No resolutions
+        assert(simulation.rs.size() == 0);
+        
+        // CRITICAL: Goal has no candidates
+        const goal_lineage* gl_p = lp.goal(nullptr, 0);
+        assert(simulation.cs.count(gl_p) == 0);
+    }
+    
+    // Test 61: Variable occurs in multiple positions in same goal
+    // Database: weird(X,X,X).
+    // Goal: :- weird(a,Y,a).
+    // Expected: Y=a (all three positions must unify)
+    {
+        trail t;
+        t.push();
+        
+        expr_pool ep(t);
+        bind_map bm(t);
+        sequencer seq(t);
+        lineage_pool lp;
+        
+        database db;
+        const expr* X = ep.var(seq());
+        const expr* weird = ep.cons(ep.atom("weird"), ep.cons(X, ep.cons(X, X)));
+        db.push_back(rule{weird, {}});  // idx 0: weird(X,X,X)
+        
+        goals goals;
+        const expr* Y = ep.var(seq());
+        const expr* goal = ep.cons(ep.atom("weird"), ep.cons(ep.atom("a"), ep.cons(Y, ep.atom("a"))));
+        goals.push_back(goal);
+        
+        cdcl c;
+        
+        monte_carlo::tree_node<mcts_decider::choice> root;
+        std::mt19937 rng(42);
+        monte_carlo::simulation<mcts_decider::choice, std::mt19937> sim(root, 1.414, rng);
+        
+        resolution_store rs;
+        decision_store ds;
+        a01_sim simulation(100, db, goals, t, seq, ep, bm, lp, rs, ds, c, sim);
+        
+        bool result = simulation();
+        
+        // CRITICAL: Solution found
+        assert(result == true);
+        
+        // CRITICAL: Exactly 1 resolution
+        assert(simulation.rs.size() == 1);
+        
+        // CRITICAL: Y binds to 'a'
+        normalizer norm(ep, bm);
+        assert(norm(Y) == ep.atom("a"));
+    }
+    
+    // Test 62: CDCL elimination chain reaction
+    // Pre-populate avoidance to create cascade of eliminations
+    {
+        trail t;
+        t.push();
+        
+        expr_pool ep(t);
+        bind_map bm(t);
+        sequencer seq(t);
+        lineage_pool lp;
+        
+        database db;
+        const expr* X1 = ep.var(seq());
+        const expr* X2 = ep.var(seq());
+        const expr* X3 = ep.var(seq());
+        
+        db.push_back(rule{ep.cons(ep.atom("p"), X1), {ep.cons(ep.atom("q"), X1)}});  // idx 0
+        db.push_back(rule{ep.cons(ep.atom("p"), X2), {ep.cons(ep.atom("r"), X2)}});  // idx 1
+        db.push_back(rule{ep.cons(ep.atom("p"), X3), {ep.cons(ep.atom("s"), X3)}});  // idx 2
+        db.push_back(rule{ep.cons(ep.atom("q"), ep.atom("a")), {}});  // idx 3
+        db.push_back(rule{ep.cons(ep.atom("r"), ep.atom("b")), {}});  // idx 4
+        db.push_back(rule{ep.cons(ep.atom("s"), ep.atom("c")), {}});  // idx 5
+        
+        goals goals;
+        const expr* Z = ep.var(seq());
+        goals.push_back(ep.cons(ep.atom("p"), Z));
+        
+        // Pre-populate avoidance to eliminate idx 0 and 1
+        const goal_lineage* gl_p = lp.goal(nullptr, 0);
+        const resolution_lineage* rl0 = lp.resolution(gl_p, 0);
+        const resolution_lineage* rl1 = lp.resolution(gl_p, 1);
+        
+        decision_store av1;
+        av1.insert(rl0);
+        decision_store av2;
+        av2.insert(rl1);
+        
+        cdcl c;
+        c.insert(av1);
+        c.insert(av2);
+        
+        monte_carlo::tree_node<mcts_decider::choice> root;
+        std::mt19937 rng(42);
+        monte_carlo::simulation<mcts_decider::choice, std::mt19937> sim(root, 1.414, rng);
+        
+        resolution_store rs;
+        decision_store ds;
+        a01_sim simulation(100, db, goals, t, seq, ep, bm, lp, rs, ds, c, sim);
+        
+        bool result = simulation();
+        
+        // CRITICAL: Solution found (only idx 2 remains)
+        assert(result == true);
+        
+        // CRITICAL: 2 resolutions (p→s, s)
+        assert(simulation.rs.size() == 2);
+        
+        // CRITICAL: Z binds to 'c'
+        normalizer norm(ep, bm);
+        assert(norm(Z) == ep.atom("c"));
+    }
+    
+    // Test 63: Unbound variables in normalizer
+    // Goal with variable that never binds
+    {
+        trail t;
+        t.push();
+        
+        expr_pool ep(t);
+        bind_map bm(t);
+        sequencer seq(t);
+        lineage_pool lp;
+        
+        database db;
+        db.push_back(rule{ep.atom("p"), {}});  // idx 0: p. (no variables)
+        
+        goals goals;
+        goals.push_back(ep.atom("p"));
+        
+        cdcl c;
+        
+        monte_carlo::tree_node<mcts_decider::choice> root;
+        std::mt19937 rng(42);
+        monte_carlo::simulation<mcts_decider::choice, std::mt19937> sim(root, 1.414, rng);
+        
+        resolution_store rs;
+        decision_store ds;
+        a01_sim simulation(100, db, goals, t, seq, ep, bm, lp, rs, ds, c, sim);
+        
+        bool result = simulation();
+        
+        // CRITICAL: Solution found
+        assert(result == true);
+        
+        // Create an unbound variable AFTER solving
+        const expr* unbound_var = ep.var(seq());
+        
+        // CRITICAL: Normalizer returns variable itself (identity)
+        normalizer norm(ep, bm);
+        assert(norm(unbound_var) == unbound_var);
+    }
+    
+    // Test 64: Rule whose head IS a variable
+    // Database: X :- q(a).
+    // Goal: :- p(hello).
+    // Expected: Solution (X unifies with p(hello))
+    {
+        trail t;
+        t.push();
+        
+        expr_pool ep(t);
+        bind_map bm(t);
+        sequencer seq(t);
+        lineage_pool lp;
+        
+        database db;
+        const expr* X = ep.var(seq());
+        db.push_back(rule{X, {ep.cons(ep.atom("q"), ep.atom("a"))}});  // idx 0: X :- q(a).
+        db.push_back(rule{ep.cons(ep.atom("q"), ep.atom("a")), {}});  // idx 1: q(a).
+        
+        goals goals;
+        goals.push_back(ep.cons(ep.atom("p"), ep.atom("hello")));
+        
+        cdcl c;
+        
+        monte_carlo::tree_node<mcts_decider::choice> root;
+        std::mt19937 rng(42);
+        monte_carlo::simulation<mcts_decider::choice, std::mt19937> sim(root, 1.414, rng);
+        
+        resolution_store rs;
+        decision_store ds;
+        a01_sim simulation(100, db, goals, t, seq, ep, bm, lp, rs, ds, c, sim);
+        
+        bool result = simulation();
+        
+        // CRITICAL: Solution found
+        assert(result == true);
+        
+        // CRITICAL: 2 resolutions
+        assert(simulation.rs.size() == 2);
+        
+        // CRITICAL: Verify lineages
+        const goal_lineage* gl_goal = lp.goal(nullptr, 0);
+        const resolution_lineage* rl_goal = lp.resolution(gl_goal, 0);
+        assert(simulation.rs.count(rl_goal) == 1);
+        
+        const goal_lineage* gl_q = lp.goal(rl_goal, 0);
+        const resolution_lineage* rl_q = lp.resolution(gl_q, 1);
+        assert(simulation.rs.count(rl_q) == 1);
+        
+        // NOTE: X is a database variable (used as rule head!) that gets copied
+        // during resolution. The copied version X' binds to p(hello), but we
+        // can't check the original database variable.
+    }
+}
+
+void test_a01_constructor_and_destructor() {
+    // Test 1: Basic construction - verify trail frame pushed and all fields stored correctly
+    {
+        trail t;
+        t.push();
+
+        expr_pool ep(t);
+        bind_map bm(t);
+        sequencer seq(t);
+
+        database db;
+        goals goals;
+        std::mt19937 rng(42);
+
+        size_t depth_before = t.depth();
+        assert(depth_before == 1);
+
+        {
+            a01 solver(db, goals, t, seq, bm, 100, 10, 1.414, rng);
+
+            // CRITICAL: Constructor pushes one trail frame
+            assert(t.depth() == depth_before + 1);
+
+            // CRITICAL: References stored correctly
+            assert(&solver.db == &db);
+            assert(&solver.gl == &goals);
+            assert(&solver.t == &t);
+            assert(&solver.vars == &seq);
+            assert(&solver.bm == &bm);
+            assert(&solver.rng == &rng);
+
+            // CRITICAL: Scalar fields stored correctly
+            assert(solver.max_resolutions == 100);
+            assert(solver.iterations_per_avoidance == 10);
+            assert(solver.exploration_constant == 1.414);
+
+            // CRITICAL: Avoidance store initialized empty
+            assert(solver.c.avoidances.empty());
+        }
+
+        // CRITICAL: Destructor restores trail depth
+        assert(t.depth() == depth_before);
+    }
+
+    // Test 2: Construction on a fresh trail (depth 0 → 1 → 0)
+    {
+        trail t;
+
+        expr_pool ep(t);
+        bind_map bm(t);
+        sequencer seq(t);
+
+        database db;
+        goals goals;
+        std::mt19937 rng(0);
+
+        assert(t.depth() == 0);
+
+        {
+            a01 solver(db, goals, t, seq, bm, 1, 1, 0.0, rng);
+
+            // CRITICAL: Depth goes 0 → 1
+            assert(t.depth() == 1);
+            assert(solver.max_resolutions == 1);
+            assert(solver.iterations_per_avoidance == 1);
+            assert(solver.exploration_constant == 0.0);
+        }
+
+        // CRITICAL: Depth returns to 0
+        assert(t.depth() == 0);
+    }
+
+    // Test 3: Constructor only adds a frame boundary, no undo actions
+    {
+        trail t;
+        t.push();
+
+        expr_pool ep(t);
+        bind_map bm(t);
+        sequencer seq(t);
+
+        database db;
+        goals goals;
+        std::mt19937 rng(42);
+
+        size_t undo_size_before = t.undo_stack.size();
+        size_t boundary_size_before = t.frame_boundary_stack.size();
+
+        {
+            a01 solver(db, goals, t, seq, bm, 100, 10, 1.414, rng);
+
+            // CRITICAL: Only a frame boundary is pushed, not any undo action
+            assert(t.undo_stack.size() == undo_size_before);
+            assert(t.frame_boundary_stack.size() == boundary_size_before + 1);
+        }
+
+        // CRITICAL: Destructor removes the frame boundary; undo stack is unchanged
+        assert(t.frame_boundary_stack.size() == boundary_size_before);
+        assert(t.undo_stack.size() == undo_size_before);
+    }
+
+    // Test 4: Destructor rolls back undo actions logged within the a01 frame
+    {
+        trail t;
+        t.push();
+
+        expr_pool ep(t);
+        bind_map bm(t);
+        sequencer seq(t);
+
+        database db;
+        goals goals;
+        std::mt19937 rng(42);
+
+        bool undone = false;
+
+        {
+            a01 solver(db, goals, t, seq, bm, 100, 10, 1.414, rng);
+
+            // Log an undo action into the a01's frame
+            t.log([&undone]() { undone = true; });
+
+            assert(!undone);
+        }
+
+        // CRITICAL: Destructor popped the a01 frame, triggering the logged undo action
+        assert(undone);
+    }
+
+    // Test 5: Destructor only pops the a01's frame, not the caller's frame
+    {
+        trail t;
+        t.push();
+
+        expr_pool ep(t);
+        bind_map bm(t);
+        sequencer seq(t);
+
+        database db;
+        goals goals;
+        std::mt19937 rng(42);
+
+        bool caller_undone = false;
+        t.log([&caller_undone]() { caller_undone = true; });
+
+        {
+            a01 solver(db, goals, t, seq, bm, 100, 10, 1.414, rng);
+
+            // a01's frame is stacked on top of the caller's frame
+            assert(t.depth() == 2);
+        }
+
+        // CRITICAL: Only the a01's frame was popped; caller's undo action not triggered
+        assert(!caller_undone);
+        assert(t.depth() == 1);
+    }
+
+    // Test 6: Non-empty db and goals - verify references and contents accessible via solver
+    {
+        trail t;
+        t.push();
+
+        expr_pool ep(t);
+        bind_map bm(t);
+        sequencer seq(t);
+
+        database db;
+        db.push_back(rule{ep.atom("p"), {}});
+        db.push_back(rule{ep.cons(ep.atom("q"), ep.var(seq())), {ep.atom("p")}});
+
+        goals goals;
+        goals.push_back(ep.cons(ep.atom("q"), ep.atom("a")));
+
+        std::mt19937 rng(999);
+
+        size_t depth_before = t.depth();
+
+        {
+            a01 solver(db, goals, t, seq, bm, 50, 5, 1.0, rng);
+
+            // CRITICAL: Frame pushed
+            assert(t.depth() == depth_before + 1);
+
+            // CRITICAL: db reference correct; content accessible through it
+            assert(&solver.db == &db);
+            assert(solver.db.size() == 2);
+
+            // CRITICAL: goals reference correct; content accessible through it
+            assert(&solver.gl == &goals);
+            assert(solver.gl.size() == 1);
+
+            // CRITICAL: Avoidance store empty on construction regardless of db/goals content
+            assert(solver.c.avoidances.empty());
+        }
+
+        // CRITICAL: Destructor restores depth
+        assert(t.depth() == depth_before);
+    }
+}
+
+void test_a01_sim_one() {
+    // Test 1: Immediate solution via unit propagation
+    // db: {a.}, goals: {a.}
+    // Expected: returns true, rs has 1 resolution, ds empty,
+    //           trail depth invariant, MCTS root gets 1 visit
+    {
+        trail t;
+        t.push();
+
+        expr_pool ep(t);
+        bind_map bm(t);
+        sequencer seq(t);
+
+        database db;
+        db.push_back(rule{ep.atom("a"), {}});  // idx 0: a.
+
+        goals goals;
+        goals.push_back(ep.atom("a"));
+
+        std::mt19937 rng(42);
+        a01 solver(db, goals, t, seq, bm, 100, 10, 1.414, rng);
+
+        monte_carlo::tree_node<mcts_decider::choice> root;
+        decision_store ds;
+        resolution_store rs;
+
+        size_t depth_before = t.depth();
+
+        bool result = solver.sim_one(root, ds, rs);
+
+        // CRITICAL: Solution found
+        assert(result == true);
+
+        // CRITICAL: ds empty (unit prop, no MCTS decision)
+        assert(ds.empty());
+
+        // CRITICAL: rs has the single resolution
+        assert(rs.size() == 1);
+        const goal_lineage* gl0 = solver.lp.goal(nullptr, 0);
+        const resolution_lineage* rl0 = solver.lp.resolution(gl0, 0);
+        assert(rs.count(rl0) == 1);
+
+        // CRITICAL: Trail depth is invariant (pop + push inside sim_one)
+        assert(t.depth() == depth_before);
+
+        // CRITICAL: MCTS root visited exactly once (terminate() always touches root)
+        assert(root.m_visits == 1);
+
+        // CRITICAL: Reward is -ds.size() where ds was EMPTY going in → value == 0
+        assert(root.m_value == 0.0);
+    }
+
+    // Test 2: Immediate conflict - empty database
+    // db: {}, goals: {a.}
+    // Expected: returns false, ds empty, rs empty, trail depth invariant, root visits == 1
+    {
+        trail t;
+        t.push();
+
+        expr_pool ep(t);
+        bind_map bm(t);
+        sequencer seq(t);
+
+        database db;
+
+        goals goals;
+        goals.push_back(ep.atom("a"));
+
+        std::mt19937 rng(42);
+        a01 solver(db, goals, t, seq, bm, 100, 10, 1.414, rng);
+
+        monte_carlo::tree_node<mcts_decider::choice> root;
+        decision_store ds;
+        resolution_store rs;
+
+        size_t depth_before = t.depth();
+
+        bool result = solver.sim_one(root, ds, rs);
+
+        // CRITICAL: Conflict detected
+        assert(result == false);
+
+        // CRITICAL: No resolutions or decisions
+        assert(ds.empty());
+        assert(rs.empty());
+
+        // CRITICAL: Trail depth invariant
+        assert(t.depth() == depth_before);
+
+        // CRITICAL: Root visited once, value == 0 (ds was empty going in)
+        assert(root.m_visits == 1);
+        assert(root.m_value == 0.0);
+    }
+
+    // Test 3: Trail pop/push behavior via secondary sequencer
+    // The a01 constructor pushes a frame. Logging actions into that frame
+    // (e.g. calling a secondary sequencer) must be rolled back when sim_one
+    // calls t.pop() at the start of the simulation.
+    {
+        trail t;
+        t.push();
+
+        expr_pool ep(t);
+        bind_map bm(t);
+        sequencer seq(t);
+
+        database db;
+        db.push_back(rule{ep.atom("a"), {}});
+
+        goals goals;
+        goals.push_back(ep.atom("a"));
+
+        std::mt19937 rng(42);
+        a01 solver(db, goals, t, seq, bm, 100, 10, 1.414, rng);
+
+        // Create a secondary sequencer on the SAME trail (after a01's constructor push)
+        sequencer seq2(t);
+        assert(seq2.index == 0);
+
+        // Allocate a variable - this logs a decrement undo into the a01's current frame
+        uint32_t v = seq2();
+        assert(v == 0);
+        assert(seq2.index == 1);
+
+        monte_carlo::tree_node<mcts_decider::choice> root;
+        decision_store ds;
+        resolution_store rs;
+
+        size_t depth_before = t.depth();
+
+        solver.sim_one(root, ds, rs);
+
+        // CRITICAL: t.pop() at start of sim_one triggered the seq2 undo action,
+        //           rolling seq2.index back to 0
+        assert(seq2.index == 0);
+
+        // CRITICAL: t.push() after the pop restored the same depth
+        assert(t.depth() == depth_before);
+    }
+
+    // Test 4: MCTS termination reward uses the OUTGOING (simulation's) ds, not the incoming ds.
+    // db: {a :- b., a :- c., b., c.} — 2 candidates for a → MCTS must make exactly 1 decision.
+    // The incoming ds is empty on the first call, but the output ds has 1 element (the decision).
+    // With the fix: terminate(-1.0) → root.m_value = -1.0.
+    // With the old bug: terminate(-0.0) → root.m_value = 0.0.
+    // So root.m_value == -1.0 distinguishes correct from buggy behavior.
+    {
+        trail t;
+        t.push();
+
+        expr_pool ep(t);
+        bind_map bm(t);
+        sequencer seq(t);
+
+        database db;
+        db.push_back(rule{ep.atom("a"), {ep.atom("b")}});  // idx 0
+        db.push_back(rule{ep.atom("a"), {ep.atom("c")}});  // idx 1
+        db.push_back(rule{ep.atom("b"), {}});               // idx 2
+        db.push_back(rule{ep.atom("c"), {}});               // idx 3
+
+        goals goals;
+        goals.push_back(ep.atom("a"));
+
+        std::mt19937 rng(42);
+        a01 solver(db, goals, t, seq, bm, 100, 10, 1.414, rng);
+
+        monte_carlo::tree_node<mcts_decider::choice> root;
+        decision_store ds;
+        resolution_store rs;
+
+        solver.sim_one(root, ds, rs);
+
+        // CRITICAL: MCTS made exactly 1 decision (outgoing ds has 1 element)
+        assert(ds.size() == 1);
+        assert(root.m_visits == 1);
+
+        // CRITICAL: Reward is based on output ds size (1), NOT input ds size (0).
+        // Old buggy behavior would leave root.m_value == 0.0.
+        assert(root.m_value == -1.0);
+    }
+
+    // Test 5: CDCL avoidance injected via solver.as after construction
+    // db: {a :- b., a :- c., b., c.}, goals: {a.}
+    // After construction, inject a singleton avoidance for (gl0, idx 0) directly into solver.as.
+    // sim_one's a01_sim will pick up this copy and CDCL-eliminate idx 0,
+    // leaving only idx 1 → unit propagation, so ds remains empty.
+    {
+        trail t;
+        t.push();
+
+        expr_pool ep(t);
+        bind_map bm(t);
+        sequencer seq(t);
+
+        database db;
+        db.push_back(rule{ep.atom("a"), {ep.atom("b")}});  // idx 0
+        db.push_back(rule{ep.atom("a"), {ep.atom("c")}});  // idx 1
+        db.push_back(rule{ep.atom("b"), {}});               // idx 2
+        db.push_back(rule{ep.atom("c"), {}});               // idx 3
+
+        goals goals;
+        goals.push_back(ep.atom("a"));
+
+        std::mt19937 rng(42);
+        a01 solver(db, goals, t, seq, bm, 100, 10, 1.414, rng);
+
+        // Inject avoidance: singleton {rl(gl0, 0)} causes CDCL elimination of idx 0
+        const goal_lineage* gl0 = solver.lp.goal(nullptr, 0);
+        const resolution_lineage* rl0 = solver.lp.resolution(gl0, 0);
+        decision_store avoid;
+        avoid.insert(rl0);
+        solver.c.insert(avoid);
+
+        monte_carlo::tree_node<mcts_decider::choice> root;
+        decision_store ds;
+        resolution_store rs;
+
+        bool result = solver.sim_one(root, ds, rs);
+
+        // CRITICAL: Solution found (idx 1 chosen via unit propagation after CDCL elim)
+        assert(result == true);
+
+        // CRITICAL: No decisions made (CDCL reduced to 1 candidate → unit prop)
+        assert(ds.empty());
+
+        // CRITICAL: 2 resolutions: a via idx 1, c via idx 3
+        assert(rs.size() == 2);
+        const resolution_lineage* rl_a = solver.lp.resolution(gl0, 1);
+        assert(rs.count(rl_a) == 1);
+        const resolution_lineage* rl_c = solver.lp.resolution(solver.lp.goal(rl_a, 0), 3);
+        assert(rs.count(rl_c) == 1);
+    }
+
+    // Test 6: Pre-populated MCTS tree forces a specific decision; verify decisions and resolutions
+    // db: {a :- b., a :- c., b., c.}, goals: {a.}
+    // Force MCTS to pick idx 1 (a :- c.) as the decision.
+    {
+        trail t;
+        t.push();
+
+        expr_pool ep(t);
+        bind_map bm(t);
+        sequencer seq(t);
+
+        database db;
+        db.push_back(rule{ep.atom("a"), {ep.atom("b")}});  // idx 0
+        db.push_back(rule{ep.atom("a"), {ep.atom("c")}});  // idx 1
+        db.push_back(rule{ep.atom("b"), {}});               // idx 2
+        db.push_back(rule{ep.atom("c"), {}});               // idx 3
+
+        goals goals;
+        goals.push_back(ep.atom("a"));
+
+        std::mt19937 rng(42);
+        a01 solver(db, goals, t, seq, bm, 100, 10, 1.414, rng);
+
+        monte_carlo::tree_node<mcts_decider::choice> root;
+
+        // Pre-populate the MCTS tree so that UCB1 selects idx 1 for the candidate choice.
+        // The only goal is gl0; make its child visited so UCB1 is active at the next level.
+        const goal_lineage* gl0 = solver.lp.goal(nullptr, 0);
+
+        root.m_visits = 100;
+        root.m_children[gl0].m_visits = 50;
+        root.m_children[gl0].m_value = 100.0;
+        // idx 0 visited → UCB1 can score it; idx 1 unvisited → score = +∞ → chosen
+        root.m_children[gl0].m_children[size_t(0)].m_visits = 10;
+        root.m_children[gl0].m_children[size_t(0)].m_value = 20.0;
+        root.m_children[gl0].m_children[size_t(1)].m_visits = 0;  // Unvisited → chosen!
+
+        decision_store ds;
+        resolution_store rs;
+
+        bool result = solver.sim_one(root, ds, rs);
+
+        // CRITICAL: Solution found
+        assert(result == true);
+
+        // CRITICAL: Exactly 1 decision (MCTS chose a→c)
+        assert(ds.size() == 1);
+
+        // CRITICAL: Exactly 2 resolutions (decision on a→idx1, unit prop on c→idx3)
+        assert(rs.size() == 2);
+
+        const resolution_lineage* rl_a = solver.lp.resolution(gl0, 1);
+        assert(rs.count(rl_a) == 1);
+        assert(ds.count(rl_a) == 1);  // This was the decision
+
+        const goal_lineage* gl_c = solver.lp.goal(rl_a, 0);
+        const resolution_lineage* rl_c = solver.lp.resolution(gl_c, 3);
+        assert(rs.count(rl_c) == 1);
+        assert(ds.count(rl_c) == 0);  // Unit propagation, not a decision
+
+        // CRITICAL: terminate() uses the OUTPUT ds (1 element) → reward = -1.0
+        assert(root.m_visits == 101);  // 100 + 1 from terminate()
+        assert(root.m_value == -1.0);  // 0.0 (initial) + (-1.0) from terminate(-ds.size())
+    }
+
+    // Test 7: Multiple sim_one calls sharing one root - MCTS statistics accumulate
+    // Each call increments root.m_visits by exactly 1 via terminate().
+    {
+        trail t;
+        t.push();
+
+        expr_pool ep(t);
+        bind_map bm(t);
+        sequencer seq(t);
+
+        database db;
+        db.push_back(rule{ep.atom("a"), {ep.atom("b")}});  // idx 0
+        db.push_back(rule{ep.atom("a"), {ep.atom("c")}});  // idx 1
+        db.push_back(rule{ep.atom("b"), {}});               // idx 2
+        db.push_back(rule{ep.atom("c"), {}});               // idx 3
+
+        goals goals;
+        goals.push_back(ep.atom("a"));
+
+        std::mt19937 rng(42);
+        a01 solver(db, goals, t, seq, bm, 100, 10, 1.414, rng);
+
+        monte_carlo::tree_node<mcts_decider::choice> root;
+        decision_store ds;
+        resolution_store rs;
+
+        assert(root.m_visits == 0);
+
+        solver.sim_one(root, ds, rs);
+        assert(root.m_visits == 1);
+
+        solver.sim_one(root, ds, rs);
+        assert(root.m_visits == 2);
+
+        solver.sim_one(root, ds, rs);
+        assert(root.m_visits == 3);
+    }
+}
+
+void test_a01_next_avoidance() {
+
+    // Test 1: Immediate refutation — goal has no candidates from the start.
+    // DB: empty, goals: {a}
+    // First sim_one: conflict immediately, ds empty → returns false.
+    {
+        trail t;
+        t.push();
+        expr_pool ep(t);
+        bind_map bm(t);
+        sequencer seq(t);
+
+        database db;
+        goals goals;
+        goals.push_back(ep.atom("a"));
+
+        std::mt19937 rng(42);
+        a01 solver(db, goals, t, seq, bm, 1000, 1000, 1.414, rng);
+
+        decision_store avoidance;
+        std::optional<resolution_store> soln;
+
+        bool result = solver.next_avoidance(avoidance, soln);
+
+        // CRITICAL: Returns false (proven refutation — conflict with no decisions)
+        assert(result == false);
+
+        // CRITICAL: soln is nullopt
+        assert(!soln.has_value());
+    }
+
+    // Test 2: Immediate solution via unit propagation.
+    // DB: {a.}, goals: {a}
+    // First sim_one: unit-prop resolves a → solution, ds empty.
+    // Loop first iteration: solution again → soln set, avoidance = {}.
+    {
+        trail t;
+        t.push();
+        expr_pool ep(t);
+        bind_map bm(t);
+        sequencer seq(t);
+
+        database db;
+        db.push_back(rule{ep.atom("a"), {}});  // idx 0: a.
+
+        goals goals;
+        goals.push_back(ep.atom("a"));
+
+        std::mt19937 rng(42);
+        a01 solver(db, goals, t, seq, bm, 1000, 1000, 1.414, rng);
+
+        decision_store avoidance;
+        std::optional<resolution_store> soln;
+
+        bool result = solver.next_avoidance(avoidance, soln);
+
+        // CRITICAL: Returns true (solution found)
+        assert(result == true);
+
+        // CRITICAL: soln has value
+        assert(soln.has_value());
+
+        // CRITICAL: soln has exactly 1 resolution (unit-prop of a with rule 0)
+        assert(soln.value().size() == 1);
+        const goal_lineage* gl0 = solver.lp.goal(nullptr, 0);
+        const resolution_lineage* rl0 = solver.lp.resolution(gl0, 0);
+        assert(soln.value().count(rl0) == 1);
+
+        // CRITICAL: avoidance is empty — unit propagation, no MCTS decisions
+        assert(avoidance.empty());
+    }
+
+    // Test 3: Solution found via MCTS after exploring a conflicting path.
+    // DB:
+    //   Rule 0: q :- r.  (conflict — r has no rules)
+    //   Rule 1: q :- p.  (solution — p is a fact)
+    //   Rule 2: p.
+    // Goals: {q}
+    // q has 2 candidates, so MCTS must decide. Rule 1 leads to solution.
+    // With 1000 iterations the solver reliably finds rule 1.
+    {
+        trail t;
+        t.push();
+        expr_pool ep(t);
+        bind_map bm(t);
+        sequencer seq(t);
+
+        database db;
+        db.push_back(rule{ep.atom("q"), {ep.atom("r")}});  // idx 0: q :- r.
+        db.push_back(rule{ep.atom("q"), {ep.atom("p")}});  // idx 1: q :- p.
+        db.push_back(rule{ep.atom("p"), {}});               // idx 2: p.
+
+        goals goals;
+        goals.push_back(ep.atom("q"));
+
+        std::mt19937 rng(42);
+        a01 solver(db, goals, t, seq, bm, 1000, 1000, 1.414, rng);
+
+        decision_store avoidance;
+        std::optional<resolution_store> soln;
+
+        bool result = solver.next_avoidance(avoidance, soln);
+
+        // CRITICAL: Returns true (solution found)
+        assert(result == true);
+
+        // CRITICAL: soln has value
+        assert(soln.has_value());
+
+        // CRITICAL: soln has exactly 2 resolutions (q→rule1 as decision, p→rule2 as unit prop)
+        assert(soln.value().size() == 2);
+
+        const goal_lineage* gl_q = solver.lp.goal(nullptr, 0);
+        const resolution_lineage* rl_q1 = solver.lp.resolution(gl_q, 1);
+        assert(soln.value().count(rl_q1) == 1);
+
+        const goal_lineage* gl_p = solver.lp.goal(rl_q1, 0);
+        const resolution_lineage* rl_p2 = solver.lp.resolution(gl_p, 2);
+        assert(soln.value().count(rl_p2) == 1);
+
+        // CRITICAL: avoidance = decisions of the solution sim = {rl_q1}
+        // (the decision to pick rule 1 for q; p was unit-propagated, not a decision)
+        assert(avoidance.size() == 1);
+        assert(avoidance.count(rl_q1) == 1);
+    }
+
+    // Test 4: Depth-1 conflict minimum — avoidance.size() == 1.
+    // DB:
+    //   Rule 0: a :- f.  (a → f, no rules for f)
+    //   Rule 1: a :- g.  (a → g, no rules for g)
+    // Goals: {a}
+    // Every MCTS path: exactly 1 decision (choose rule 0 or 1 for a), then
+    // head-elimination leaves f/g with 0 candidates → immediate conflict.
+    // After 1000 iterations the minimum observed ds size is 1.
+    {
+        trail t;
+        t.push();
+        expr_pool ep(t);
+        bind_map bm(t);
+        sequencer seq(t);
+
+        database db;
+        db.push_back(rule{ep.atom("a"), {ep.atom("f")}});  // idx 0: a :- f.
+        db.push_back(rule{ep.atom("a"), {ep.atom("g")}});  // idx 1: a :- g.
+        // No rules for f or g
+
+        goals goals;
+        goals.push_back(ep.atom("a"));
+
+        std::mt19937 rng(42);
+        a01 solver(db, goals, t, seq, bm, 1000, 1000, 1.414, rng);
+
+        decision_store avoidance;
+        std::optional<resolution_store> soln;
+
+        bool result = solver.next_avoidance(avoidance, soln);
+
+        // CRITICAL: Returns true (first sim had 1 decision, not a proven refutation)
+        assert(result == true);
+
+        // CRITICAL: No solution (all paths conflict)
+        assert(!soln.has_value());
+
+        // CRITICAL: Minimum conflict depth is 1 → avoidance.size() == 1
+        assert(avoidance.size() == 1);
+
+        // CRITICAL: The avoided resolution is on the initial goal (gl0) with either rule 0 or 1
+        const goal_lineage* gl0 = solver.lp.goal(nullptr, 0);
+        const resolution_lineage* rl0 = solver.lp.resolution(gl0, 0);
+        const resolution_lineage* rl1 = solver.lp.resolution(gl0, 1);
+        const resolution_lineage* avoided = *avoidance.begin();
+        assert(avoided == rl0 || avoided == rl1);
+    }
+
+    // Test 5: Depth-2 conflict minimum — avoidance.size() == 2.
+    // DB:
+    //   Rule 0: a :- p.   Rule 1: a :- q.
+    //   Rule 2: p :- f1.  Rule 3: p :- f2.
+    //   Rule 4: q :- f3.  Rule 5: q :- f4.
+    //   No rules for f1, f2, f3, f4.
+    // Goals: {a}
+    // Decision 1: a → rule 0 or 1 (p or q, each with 2 candidates).
+    // Decision 2: p/q → rule 2/3 or 4/5 (f1/f2/f3/f4, each with 0 candidates → conflict).
+    // Every path needs exactly 2 decisions. avoidance.size() == 2 after 1000 iterations.
+    {
+        trail t;
+        t.push();
+        expr_pool ep(t);
+        bind_map bm(t);
+        sequencer seq(t);
+
+        database db;
+        db.push_back(rule{ep.atom("a"), {ep.atom("p")}});   // idx 0: a :- p.
+        db.push_back(rule{ep.atom("a"), {ep.atom("q")}});   // idx 1: a :- q.
+        db.push_back(rule{ep.atom("p"), {ep.atom("f1")}});  // idx 2: p :- f1.
+        db.push_back(rule{ep.atom("p"), {ep.atom("f2")}});  // idx 3: p :- f2.
+        db.push_back(rule{ep.atom("q"), {ep.atom("f3")}});  // idx 4: q :- f3.
+        db.push_back(rule{ep.atom("q"), {ep.atom("f4")}});  // idx 5: q :- f4.
+        // No rules for f1, f2, f3, f4
+
+        goals goals;
+        goals.push_back(ep.atom("a"));
+
+        std::mt19937 rng(42);
+        a01 solver(db, goals, t, seq, bm, 1000, 1000, 1.414, rng);
+
+        decision_store avoidance;
+        std::optional<resolution_store> soln;
+
+        bool result = solver.next_avoidance(avoidance, soln);
+
+        // CRITICAL: Returns true (decisions were made, not a proven refutation)
+        assert(result == true);
+
+        // CRITICAL: No solution (all paths conflict)
+        assert(!soln.has_value());
+
+        // CRITICAL: Minimum conflict depth is 2 → avoidance.size() == 2
+        assert(avoidance.size() == 2);
+    }
+
+    // Test 6: Depth-3 conflict minimum — avoidance.size() == 3.
+    // DB forms a complete binary tree of decisions, 3 levels deep:
+    //   Level 0: a → {p, q}
+    //   Level 1: p → {r, s},  q → {t, u}
+    //   Level 2: r → {f1, f2}, s → {f3, f4}, t → {f5, f6}, u → {f7, f8}
+    //   No rules for f1-f8 → all leaves conflict immediately.
+    // Every path takes exactly 3 decisions. avoidance.size() == 3 after 1000 iterations.
+    {
+        trail t;
+        t.push();
+        expr_pool ep(t);
+        bind_map bm(t);
+        sequencer seq(t);
+
+        database db;
+        db.push_back(rule{ep.atom("a"), {ep.atom("p")}});   // idx 0
+        db.push_back(rule{ep.atom("a"), {ep.atom("q")}});   // idx 1
+        db.push_back(rule{ep.atom("p"), {ep.atom("r")}});   // idx 2
+        db.push_back(rule{ep.atom("p"), {ep.atom("s")}});   // idx 3
+        db.push_back(rule{ep.atom("q"), {ep.atom("t")}});   // idx 4
+        db.push_back(rule{ep.atom("q"), {ep.atom("u")}});   // idx 5
+        db.push_back(rule{ep.atom("r"), {ep.atom("f1")}});  // idx 6
+        db.push_back(rule{ep.atom("r"), {ep.atom("f2")}});  // idx 7
+        db.push_back(rule{ep.atom("s"), {ep.atom("f3")}});  // idx 8
+        db.push_back(rule{ep.atom("s"), {ep.atom("f4")}});  // idx 9
+        db.push_back(rule{ep.atom("t"), {ep.atom("f5")}});  // idx 10
+        db.push_back(rule{ep.atom("t"), {ep.atom("f6")}});  // idx 11
+        db.push_back(rule{ep.atom("u"), {ep.atom("f7")}});  // idx 12
+        db.push_back(rule{ep.atom("u"), {ep.atom("f8")}});  // idx 13
+        // No rules for f1-f8
+
+        goals goals;
+        goals.push_back(ep.atom("a"));
+
+        std::mt19937 rng(42);
+        a01 solver(db, goals, t, seq, bm, 1000, 1000, 1.414, rng);
+
+        decision_store avoidance;
+        std::optional<resolution_store> soln;
+
+        bool result = solver.next_avoidance(avoidance, soln);
+
+        // CRITICAL: Returns true (decisions were made, not a proven refutation)
+        assert(result == true);
+
+        // CRITICAL: No solution (all paths conflict)
+        assert(!soln.has_value());
+
+        // CRITICAL: Minimum conflict depth is 3 → avoidance.size() == 3
+        assert(avoidance.size() == 3);
+    }
+
+    // Test 7: Refutation via pre-existing avoidances injected into solver.as.
+    // DB: {a.} (one fact), goals: {a}
+    // Inject singleton avoidance {rl(gl0, 0)} into solver.as before calling.
+    // CDCL-elimination removes the only candidate → conflict with ds empty → returns false.
+    {
+        trail t;
+        t.push();
+        expr_pool ep(t);
+        bind_map bm(t);
+        sequencer seq(t);
+
+        database db;
+        db.push_back(rule{ep.atom("a"), {}});  // idx 0: a.
+
+        goals goals;
+        goals.push_back(ep.atom("a"));
+
+        std::mt19937 rng(42);
+        a01 solver(db, goals, t, seq, bm, 1000, 1000, 1.414, rng);
+
+        // Inject singleton avoidance: CDCL will eliminate rule 0 for gl0
+        const goal_lineage* gl0 = solver.lp.goal(nullptr, 0);
+        const resolution_lineage* rl0 = solver.lp.resolution(gl0, 0);
+        decision_store avoid;
+        avoid.insert(rl0);
+        solver.c.insert(avoid);
+
+        decision_store avoidance;
+        std::optional<resolution_store> soln;
+
+        bool result = solver.next_avoidance(avoidance, soln);
+
+        // CRITICAL: Returns false (CDCL eliminated all candidates → conflict, ds empty → refutation)
+        assert(result == false);
+
+        // CRITICAL: soln is nullopt
+        assert(!soln.has_value());
+    }
+
+    // Test 8: Mixed conflict depths — MCTS converges to the shallower branch.
+    //
+    // Goal {a} has two candidates:
+    //   rule0  →  a :- p.   (depth-4 branch)
+    //   rule1  →  a :- q.   (depth-3 branch)
+    //
+    // Depth-4 subtree (via p):
+    //   p → {r, s}  →  r/s → {t, u, v, w}  →  t/u/v/w → {fail1-8}
+    //   (4 decisions: a, p, r/s, t/u/v/w)
+    //
+    // Depth-3 subtree (via q):
+    //   q → {x, y}  →  x/y → {fail9-12}
+    //   (3 decisions: a, q, x/y)
+    //
+    // After 1000 MCTS iterations the minimum observed ds is 3.
+    // The avoidance must contain the "a → rule1" resolution (the first step of the
+    // depth-3 path) because any 3-decision conflict must go through rule1 for a.
+    {
+        trail t;
+        t.push();
+        expr_pool ep(t);
+        bind_map bm(t);
+        sequencer seq(t);
+
+        database db;
+        // Root
+        db.push_back(rule{ep.atom("a"), {ep.atom("p")}});   // idx 0  (depth-4)
+        db.push_back(rule{ep.atom("a"), {ep.atom("q")}});   // idx 1  (depth-3)
+        // Depth-4 branch: p layer
+        db.push_back(rule{ep.atom("p"), {ep.atom("r")}});   // idx 2
+        db.push_back(rule{ep.atom("p"), {ep.atom("s")}});   // idx 3
+        // Depth-4 branch: r/s layer
+        db.push_back(rule{ep.atom("r"), {ep.atom("t")}});   // idx 4
+        db.push_back(rule{ep.atom("r"), {ep.atom("u")}});   // idx 5
+        db.push_back(rule{ep.atom("s"), {ep.atom("v")}});   // idx 6
+        db.push_back(rule{ep.atom("s"), {ep.atom("w")}});   // idx 7
+        // Depth-4 leaves (each has 2 candidates → one more decision, then conflict)
+        db.push_back(rule{ep.atom("t"), {ep.atom("fail1")}});  // idx 8
+        db.push_back(rule{ep.atom("t"), {ep.atom("fail2")}});  // idx 9
+        db.push_back(rule{ep.atom("u"), {ep.atom("fail3")}});  // idx 10
+        db.push_back(rule{ep.atom("u"), {ep.atom("fail4")}});  // idx 11
+        db.push_back(rule{ep.atom("v"), {ep.atom("fail5")}});  // idx 12
+        db.push_back(rule{ep.atom("v"), {ep.atom("fail6")}});  // idx 13
+        db.push_back(rule{ep.atom("w"), {ep.atom("fail7")}});  // idx 14
+        db.push_back(rule{ep.atom("w"), {ep.atom("fail8")}});  // idx 15
+        // Depth-3 branch: q layer
+        db.push_back(rule{ep.atom("q"), {ep.atom("x")}});   // idx 16
+        db.push_back(rule{ep.atom("q"), {ep.atom("y")}});   // idx 17
+        // Depth-3 leaves
+        db.push_back(rule{ep.atom("x"), {ep.atom("fail9")}});  // idx 18
+        db.push_back(rule{ep.atom("x"), {ep.atom("fail10")}});  // idx 19
+        db.push_back(rule{ep.atom("y"), {ep.atom("fail11")}});  // idx 20
+        db.push_back(rule{ep.atom("y"), {ep.atom("fail12")}});  // idx 21
+        // No rules for fail1-fail12
+
+        goals goals;
+        goals.push_back(ep.atom("a"));
+
+        std::mt19937 rng(42);
+        a01 solver(db, goals, t, seq, bm, 1000, 1000, 1.414, rng);
+
+        decision_store avoidance;
+        std::optional<resolution_store> soln;
+
+        bool result = solver.next_avoidance(avoidance, soln);
+
+        // CRITICAL: Returns true (decisions were made, not a proven refutation)
+        assert(result == true);
+
+        // CRITICAL: No solution (all paths conflict)
+        assert(!soln.has_value());
+
+        // CRITICAL: Minimum conflict depth is 3 (the q branch), not 4 (the p branch)
+        assert(avoidance.size() == 3);
+
+        // CRITICAL: The avoidance must include "a → rule1" (the depth-3 branch entry
+        // point). Any 3-decision conflict necessarily begins with that choice.
+        const goal_lineage* gl_a = solver.lp.goal(nullptr, 0);
+        const resolution_lineage* rl_a1 = solver.lp.resolution(gl_a, 1);
+        assert(avoidance.count(rl_a1) == 1);
+    }
+
+    // Test 9: Needle in a haystack — two depth-4 branches plus one depth-3 branch.
+    //
+    // Goal {a} has THREE candidates:
+    //   rule0  →  a :- p_alpha.  (depth-4)
+    //   rule1  →  a :- p_beta.   (depth-4)
+    //   rule2  →  a :- q.        (depth-3, the needle)
+    //
+    // Two out of three first-level choices lead to a 4-decision conflict.
+    // Only rule2 leads to the shallower 3-decision conflict.
+    // After 1000 MCTS iterations the minimum is 3, and the avoidance identifies
+    // the shallow entry point ("a → rule2").
+    {
+        trail t;
+        t.push();
+        expr_pool ep(t);
+        bind_map bm(t);
+        sequencer seq(t);
+
+        database db;
+        // Three choices for a
+        db.push_back(rule{ep.atom("a"), {ep.atom("p_alpha")}});  // idx 0  (depth-4)
+        db.push_back(rule{ep.atom("a"), {ep.atom("p_beta")}});   // idx 1  (depth-4)
+        db.push_back(rule{ep.atom("a"), {ep.atom("q")}});        // idx 2  (depth-3)
+
+        // Depth-4 branch A (via p_alpha)
+        db.push_back(rule{ep.atom("p_alpha"), {ep.atom("r_alpha")}});  // idx 3
+        db.push_back(rule{ep.atom("p_alpha"), {ep.atom("s_alpha")}});  // idx 4
+        db.push_back(rule{ep.atom("r_alpha"), {ep.atom("t_alpha")}});  // idx 5
+        db.push_back(rule{ep.atom("r_alpha"), {ep.atom("u_alpha")}});  // idx 6
+        db.push_back(rule{ep.atom("t_alpha"), {ep.atom("fail1")}});    // idx 7
+        db.push_back(rule{ep.atom("t_alpha"), {ep.atom("fail2")}});    // idx 8
+        db.push_back(rule{ep.atom("u_alpha"), {ep.atom("fail3")}});    // idx 9
+        db.push_back(rule{ep.atom("u_alpha"), {ep.atom("fail4")}});    // idx 10
+        db.push_back(rule{ep.atom("s_alpha"), {ep.atom("v_alpha")}});  // idx 11
+        db.push_back(rule{ep.atom("s_alpha"), {ep.atom("w_alpha")}});  // idx 12
+        db.push_back(rule{ep.atom("v_alpha"), {ep.atom("fail5")}});    // idx 13
+        db.push_back(rule{ep.atom("v_alpha"), {ep.atom("fail6")}});    // idx 14
+        db.push_back(rule{ep.atom("w_alpha"), {ep.atom("fail7")}});    // idx 15
+        db.push_back(rule{ep.atom("w_alpha"), {ep.atom("fail8")}});    // idx 16
+
+        // Depth-4 branch B (via p_beta)
+        db.push_back(rule{ep.atom("p_beta"), {ep.atom("r_beta")}});   // idx 17
+        db.push_back(rule{ep.atom("p_beta"), {ep.atom("s_beta")}});   // idx 18
+        db.push_back(rule{ep.atom("r_beta"), {ep.atom("t_beta")}});   // idx 19
+        db.push_back(rule{ep.atom("r_beta"), {ep.atom("u_beta")}});   // idx 20
+        db.push_back(rule{ep.atom("t_beta"), {ep.atom("fail9")}});    // idx 21
+        db.push_back(rule{ep.atom("t_beta"), {ep.atom("fail10")}});   // idx 22
+        db.push_back(rule{ep.atom("u_beta"), {ep.atom("fail11")}});   // idx 23
+        db.push_back(rule{ep.atom("u_beta"), {ep.atom("fail12")}});   // idx 24
+        db.push_back(rule{ep.atom("s_beta"), {ep.atom("v_beta")}});   // idx 25
+        db.push_back(rule{ep.atom("s_beta"), {ep.atom("w_beta")}});   // idx 26
+        db.push_back(rule{ep.atom("v_beta"), {ep.atom("fail13")}});   // idx 27
+        db.push_back(rule{ep.atom("v_beta"), {ep.atom("fail14")}});   // idx 28
+        db.push_back(rule{ep.atom("w_beta"), {ep.atom("fail15")}});   // idx 29
+        db.push_back(rule{ep.atom("w_beta"), {ep.atom("fail16")}});   // idx 30
+
+        // Depth-3 branch (via q — the needle)
+        db.push_back(rule{ep.atom("q"), {ep.atom("x")}});             // idx 31
+        db.push_back(rule{ep.atom("q"), {ep.atom("y")}});             // idx 32
+        db.push_back(rule{ep.atom("x"), {ep.atom("fail17")}});        // idx 33
+        db.push_back(rule{ep.atom("x"), {ep.atom("fail18")}});        // idx 34
+        db.push_back(rule{ep.atom("y"), {ep.atom("fail19")}});        // idx 35
+        db.push_back(rule{ep.atom("y"), {ep.atom("fail20")}});        // idx 36
+        // No rules for fail1-fail20
+
+        goals goals;
+        goals.push_back(ep.atom("a"));
+
+        std::mt19937 rng(42);
+        a01 solver(db, goals, t, seq, bm, 1000, 1000, 1.414, rng);
+
+        decision_store avoidance;
+        std::optional<resolution_store> soln;
+
+        bool result = solver.next_avoidance(avoidance, soln);
+
+        // CRITICAL: Returns true
+        assert(result == true);
+
+        // CRITICAL: No solution (all paths conflict)
+        assert(!soln.has_value());
+
+        // CRITICAL: Despite two out of three first-level choices leading to depth-4
+        // conflicts, MCTS finds the depth-3 needle (rule2 → q).
+        assert(avoidance.size() == 3);
+
+        // CRITICAL: "a → rule2" (the q branch entry point) is in the avoidance.
+        // This is the distinguishing feature of the depth-3 path — rules 0 and 1
+        // only appear in 4-decision avoidances, never in 3-decision ones.
+        const goal_lineage* gl_a = solver.lp.goal(nullptr, 0);
+        const resolution_lineage* rl_a2 = solver.lp.resolution(gl_a, 2);
+        assert(avoidance.count(rl_a2) == 1);
+    }
+
+    // Test 10: Two goals share variable X — MCTS finds the unique intersection value.
+    //
+    // This is the motivating example for shared-variable parallel constraints:
+    //   "initial goal A -> rule 1 and initial goal B -> rule 2 causes conflict because
+    //    of having a common variable"
+    //
+    // Goals: { a(X), b(X) }   — same variable X shared across both goals
+    //   Rule 0: a(123).        — X=123; then b(123) has no candidate → CONFLICT
+    //   Rule 1: a(234).        — X=234; then b(234) is the only matching candidate → SOLUTION
+    //   Rule 2: b(234).        — X=234; then a(234) unit-propagates → SOLUTION
+    //   Rule 3: b(345).        — X=345; then a(345) has no candidate → CONFLICT
+    //
+    // Every path is depth-1. The "parallel" effect: choosing a value for X via one goal
+    // immediately determines whether the other goal succeeds or fails — both goals are
+    // constrained in parallel by the same variable binding.
+    //
+    // With 1000 MCTS iterations the solver finds the solution (X=234 satisfies both).
+    {
+        trail t;
+        t.push();
+        expr_pool ep(t);
+        bind_map bm(t);
+        sequencer seq(t);
+
+        const expr* X = ep.var(seq());
+
+        database db;
+        db.push_back(rule{ep.cons(ep.atom("a"), ep.atom("123")), {}});  // idx 0: a(123).
+        db.push_back(rule{ep.cons(ep.atom("a"), ep.atom("234")), {}});  // idx 1: a(234).
+        db.push_back(rule{ep.cons(ep.atom("b"), ep.atom("234")), {}});  // idx 2: b(234).
+        db.push_back(rule{ep.cons(ep.atom("b"), ep.atom("345")), {}});  // idx 3: b(345).
+
+        goals goals;
+        goals.push_back(ep.cons(ep.atom("a"), X));  // a(X)
+        goals.push_back(ep.cons(ep.atom("b"), X));  // b(X) — shares X with a
+
+        std::mt19937 rng(42);
+        a01 solver(db, goals, t, seq, bm, 1000, 1000, 1.414, rng);
+
+        decision_store avoidance;
+        std::optional<resolution_store> soln;
+
+        bool result = solver.next_avoidance(avoidance, soln);
+
+        // CRITICAL: Solution found (X=234 satisfies both)
+        assert(result == true);
+        assert(soln.has_value());
+
+        // CRITICAL: Exactly 2 resolutions — one decision (the decided goal) plus one
+        // unit-propagation (the other goal, whose candidate was forced by X's binding)
+        assert(soln.value().size() == 2);
+
+        // CRITICAL: The solution involves rule 1 for a (a→234) and rule 2 for b (b→234)
+        const goal_lineage* gl_a = solver.lp.goal(nullptr, 0);
+        const goal_lineage* gl_b = solver.lp.goal(nullptr, 1);
+        const resolution_lineage* rl_a1 = solver.lp.resolution(gl_a, 1);  // a(234)
+        const resolution_lineage* rl_b2 = solver.lp.resolution(gl_b, 2);  // b(234)
+        // One of these was the MCTS decision, the other the unit-propagation.
+        // Both must appear in the solution's resolution store.
+        assert(soln.value().count(rl_a1) == 1);
+        assert(soln.value().count(rl_b2) == 1);
+
+        // CRITICAL: The avoidance contains exactly 1 decision (the one MCTS chose)
+        assert(avoidance.size() == 1);
+        assert(avoidance.count(rl_a1) == 1 || avoidance.count(rl_b2) == 1);
+    }
+
+    // Test 11: Three goals share variable X — no single X value satisfies all three.
+    //
+    // Goals: { a(X), b(X), c(X) }   — all three share variable X
+    //   Rule 0: a(1).   Rule 1: a(2).        →  X ∈ {1, 2}  for a
+    //   Rule 2: b(2).   Rule 3: b(3).        →  X ∈ {2, 3}  for b
+    //   Rule 4: c(1).   Rule 5: c(3).        →  X ∈ {1, 3}  for c
+    //
+    // There is no X that satisfies all three simultaneously:
+    //   X=1 → b(1) has no candidate (b needs 2 or 3)
+    //   X=2 → c(2) has no candidate (c needs 1 or 3)
+    //   X=3 → a(3) has no candidate (a needs 1 or 2)
+    //
+    // Every first MCTS decision immediately propagates X to a value that kills one of
+    // the other goals — minimum conflict depth is 1 regardless of which goal is chosen.
+    // MCTS finds and records this depth-1 avoidance after 1000 iterations.
+    {
+        trail t;
+        t.push();
+        expr_pool ep(t);
+        bind_map bm(t);
+        sequencer seq(t);
+
+        const expr* X = ep.var(seq());
+
+        database db;
+        db.push_back(rule{ep.cons(ep.atom("a"), ep.atom("1")), {}});  // idx 0: a(1).
+        db.push_back(rule{ep.cons(ep.atom("a"), ep.atom("2")), {}});  // idx 1: a(2).
+        db.push_back(rule{ep.cons(ep.atom("b"), ep.atom("2")), {}});  // idx 2: b(2).
+        db.push_back(rule{ep.cons(ep.atom("b"), ep.atom("3")), {}});  // idx 3: b(3).
+        db.push_back(rule{ep.cons(ep.atom("c"), ep.atom("1")), {}});  // idx 4: c(1).
+        db.push_back(rule{ep.cons(ep.atom("c"), ep.atom("3")), {}});  // idx 5: c(3).
+
+        goals goals;
+        goals.push_back(ep.cons(ep.atom("a"), X));  // a(X)
+        goals.push_back(ep.cons(ep.atom("b"), X));  // b(X) — shares X with a
+        goals.push_back(ep.cons(ep.atom("c"), X));  // c(X) — shares X with a and b
+
+        std::mt19937 rng(42);
+        a01 solver(db, goals, t, seq, bm, 1000, 1000, 1.414, rng);
+
+        decision_store avoidance;
+        std::optional<resolution_store> soln;
+
+        bool result = solver.next_avoidance(avoidance, soln);
+
+        // CRITICAL: Returns true (at least one decision was made — not an unconditional refutation)
+        assert(result == true);
+
+        // CRITICAL: No solution (the three goals' X-constraints are mutually exclusive)
+        assert(!soln.has_value());
+
+        // CRITICAL: The minimum conflict depth is 1 — one MCTS decision immediately
+        // binds X to a value that eliminates all candidates in at least one other goal
+        assert(avoidance.size() == 1);
+
+        // CRITICAL: The avoided resolution is on one of the three initial goals.
+        // Whichever goal MCTS chose first, that single decision is the avoidance.
+        const goal_lineage* gl_a = solver.lp.goal(nullptr, 0);
+        const goal_lineage* gl_b = solver.lp.goal(nullptr, 1);
+        const goal_lineage* gl_c = solver.lp.goal(nullptr, 2);
+        const resolution_lineage* avoided = *avoidance.begin();
+        // The avoided resolution must involve one of the three goals and one of their rules
+        bool is_a_rule = avoided == solver.lp.resolution(gl_a, 0) || avoided == solver.lp.resolution(gl_a, 1);
+        bool is_b_rule = avoided == solver.lp.resolution(gl_b, 2) || avoided == solver.lp.resolution(gl_b, 3);
+        bool is_c_rule = avoided == solver.lp.resolution(gl_c, 4) || avoided == solver.lp.resolution(gl_c, 5);
+        assert(is_a_rule || is_b_rule || is_c_rule);
+    }
+
+    // Test 12: Two independent variables, compound goal c(X,Y) teaches MCTS goal ordering.
+    //
+    // Goals: { a(X), b(Y), c(X,Y) }   — X shared by a and c; Y shared by b and c
+    //   Rule 0: a(1).  Rule 1: a(2).        →  X ∈ {1, 2}
+    //   Rule 2: b(1).  Rule 3: b(2).        →  Y ∈ {1, 2}
+    //   Rule 4: c(1,5).  Rule 5: c(1,6).   →  (X=1,Y=5) or (X=1,Y=6)
+    //   Rule 6: c(2,5).  Rule 7: c(2,6).   →  (X=2,Y=5) or (X=2,Y=6)
+    //
+    // c requires Y ∈ {5, 6}, but b only produces Y ∈ {1, 2} — ranges are disjoint.
+    // The conflict DEPTH depends on which goal MCTS resolves first:
+    //
+    //   Resolving b first  (Y ∈ {1,2}): c(X, 1/2) has 0 candidates → CONFLICT at depth-1.
+    //   Resolving c first  (X=1/2, Y=5/6): b(5/6) has 0 candidates → CONFLICT at depth-1.
+    //   Resolving a first  (X ∈ {1,2}): c(X,Y) still has 2 candidates, b(Y) still has 2
+    //                       candidates → needs a SECOND decision → depth-2 conflict.
+    //
+    // With 1000 MCTS iterations, the solver learns that starting with b or c (rather than a)
+    // yields a shallower conflict. The minimum avoidance size is 1.
+    // This demonstrates MCTS learning the optimal GOAL ORDERING via shared-variable
+    // constraint propagation.
+    {
+        trail t;
+        t.push();
+        expr_pool ep(t);
+        bind_map bm(t);
+        sequencer seq(t);
+
+        const expr* X = ep.var(seq());
+        const expr* Y = ep.var(seq());
+
+        database db;
+        db.push_back(rule{ep.cons(ep.atom("a"), ep.atom("1")), {}});  // idx 0: a(1).
+        db.push_back(rule{ep.cons(ep.atom("a"), ep.atom("2")), {}});  // idx 1: a(2).
+        db.push_back(rule{ep.cons(ep.atom("b"), ep.atom("1")), {}});  // idx 2: b(1).
+        db.push_back(rule{ep.cons(ep.atom("b"), ep.atom("2")), {}});  // idx 3: b(2).
+        // c(X, Y) represented as ((c . X) . Y)
+        db.push_back(rule{ep.cons(ep.cons(ep.atom("c"), ep.atom("1")), ep.atom("5")), {}});  // idx 4: c(1,5).
+        db.push_back(rule{ep.cons(ep.cons(ep.atom("c"), ep.atom("1")), ep.atom("6")), {}});  // idx 5: c(1,6).
+        db.push_back(rule{ep.cons(ep.cons(ep.atom("c"), ep.atom("2")), ep.atom("5")), {}});  // idx 6: c(2,5).
+        db.push_back(rule{ep.cons(ep.cons(ep.atom("c"), ep.atom("2")), ep.atom("6")), {}});  // idx 7: c(2,6).
+
+        goals goals;
+        goals.push_back(ep.cons(ep.atom("a"), X));                // a(X)
+        goals.push_back(ep.cons(ep.atom("b"), Y));                // b(Y)
+        goals.push_back(ep.cons(ep.cons(ep.atom("c"), X), Y));   // c(X, Y)
+
+        std::mt19937 rng(42);
+        a01 solver(db, goals, t, seq, bm, 1000, 1000, 1.414, rng);
+
+        decision_store avoidance;
+        std::optional<resolution_store> soln;
+
+        bool result = solver.next_avoidance(avoidance, soln);
+
+        // CRITICAL: Returns true (not a proven refutation — the first sim had ≥1 decision)
+        assert(result == true);
+
+        // CRITICAL: No solution (c requires Y ∈ {5,6}, b only gives Y ∈ {1,2} — disjoint)
+        assert(!soln.has_value());
+
+        // CRITICAL: MCTS learns to pick b or c before a, yielding a depth-1 conflict.
+        // The minimum avoidance size is 1, not 2 (which would result from picking a first).
+        assert(avoidance.size() == 1);
+
+        // CRITICAL: The single avoided resolution is on b or c (not on a), confirming
+        // MCTS discovered the optimal goal-first ordering.
+        // Picking b (Y∈{1,2}) → c(X, 1/2) immediately fails.
+        // Picking c (X=1/2, Y=5/6) → b(5/6) immediately fails.
+        // Picking a alone (X∈{1,2}) → c still has 2 candidates → depth-2, NOT chosen.
+        const goal_lineage* gl_b = solver.lp.goal(nullptr, 1);
+        const goal_lineage* gl_c = solver.lp.goal(nullptr, 2);
+        const resolution_lineage* avoided = *avoidance.begin();
+        bool is_b_choice = avoided == solver.lp.resolution(gl_b, 2) || avoided == solver.lp.resolution(gl_b, 3);
+        bool is_c_choice = avoided == solver.lp.resolution(gl_c, 4) || avoided == solver.lp.resolution(gl_c, 5)
+                        || avoided == solver.lp.resolution(gl_c, 6) || avoided == solver.lp.resolution(gl_c, 7);
+        assert(is_b_choice || is_c_choice);
+    }
+
+    // Test 13: Depth-4 needle in a depth-10 haystack.
+    {
+        trail t;
+        t.push();
+        expr_pool ep(t);
+        bind_map bm(t);
+        sequencer seq(t);
+
+        database db;
+
+        // say which root to start from
+        db.push_back(rule{ep.atom("root"), {ep.atom("stunt0")}});
+        db.push_back(rule{ep.atom("root"), {ep.atom("stuntX")}});
+
+        // NEEDLE: add the rules which provide a faster route to a conflict
+        db.push_back(rule{ep.atom("stuntX"), {ep.atom("stunt1")}});
+        db.push_back(rule{ep.atom("stuntX"), {ep.atom("stuntY")}});
+        db.push_back(rule{ep.atom("stuntY"), {ep.atom("stunt2")}});
+        db.push_back(rule{ep.atom("stuntY"), {ep.atom("stuntZ")}});
+        db.push_back(rule{ep.atom("stuntZ"), {ep.atom("stunt3")}});
+        db.push_back(rule{ep.atom("stuntZ"), {ep.atom("stuntW")}});
+
+        // HAYSTACK: add 2 of each to make fictitious decisions necessary (simulates a perfect binary tree)
+        for (int i = 0; i < 2; ++i) {
+            db.push_back(rule{ep.atom("stunt0"), {ep.atom("stunt1")}});
+            db.push_back(rule{ep.atom("stunt1"), {ep.atom("stunt2")}});
+            db.push_back(rule{ep.atom("stunt2"), {ep.atom("stunt3")}});
+            db.push_back(rule{ep.atom("stunt3"), {ep.atom("stunt4")}});
+            db.push_back(rule{ep.atom("stunt4"), {ep.atom("stunt5")}});
+            db.push_back(rule{ep.atom("stunt5"), {ep.atom("stunt6")}});
+            db.push_back(rule{ep.atom("stunt6"), {ep.atom("stunt7")}});
+            db.push_back(rule{ep.atom("stunt7"), {ep.atom("stunt8")}});
+            db.push_back(rule{ep.atom("stunt8"), {ep.atom("stunt9")}});
+        }
+        
+        goals goals;
+
+        goals.push_back(ep.atom("root"));
+
+
+        std::mt19937 rng(42);
+        a01 solver(db, goals, t, seq, bm, 1000, 1000, 1.414, rng);
+
+        decision_store avoidance;
+        std::optional<resolution_store> soln;
+
+        bool result = solver.next_avoidance(avoidance, soln);
+
+        assert(result == true);
+        assert(!soln.has_value());
+
+        // CRITICAL: MCTS finds the depth-4 needle.
+        assert(avoidance.size() == 4);
+
+        // CRITICAL: The first decision in the avoidance is root→rule0 (the needle branch).
+        const goal_lineage* gl_root = solver.lp.goal(nullptr, 0);
+        const resolution_lineage* rl_root = solver.lp.resolution(gl_root, 1);
+        assert(avoidance.count(rl_root) == 1);
+        const goal_lineage* gl_stuntX = solver.lp.goal(rl_root, 0);
+        const resolution_lineage* rl_stuntX = solver.lp.resolution(gl_stuntX, 3);
+        assert(avoidance.count(rl_stuntX) == 1);
+        const goal_lineage* gl_stuntY = solver.lp.goal(rl_stuntX, 0);
+        const resolution_lineage* rl_stuntY = solver.lp.resolution(gl_stuntY, 5);
+        assert(avoidance.count(rl_stuntY) == 1);
+        const goal_lineage* gl_stuntZ = solver.lp.goal(rl_stuntY, 0);
+        const resolution_lineage* rl_stuntZ = solver.lp.resolution(gl_stuntZ, 7);
+        assert(avoidance.count(rl_stuntZ) == 1);
+    }
+
+    // Test 14: Depth-5 shared-variable needle in a depth-10 haystack.
+    {
+        trail t;
+        t.push();
+        expr_pool ep(t);
+        bind_map bm(t);
+        sequencer seq(t);
+
+        database db;
+
+        // say which root to start from
+        db.push_back(rule{ep.atom("root"), {ep.atom("stunt0")}});
+        db.push_back(rule{ep.atom("root"), {ep.atom("stuntX")}});
+
+        // NEEDLE: add the rules which provide a faster route to a conflict
+        db.push_back(rule{ep.atom("stuntX"), {ep.atom("stunt1")}});
+        db.push_back(rule{ep.atom("stuntX"), {ep.atom("stuntY")}});
+        db.push_back(rule{ep.atom("stuntY"), {ep.atom("stunt2")}});
+        db.push_back(rule{ep.atom("stuntY"), {ep.atom("stuntZ")}});
+        db.push_back(rule{ep.atom("stuntZ"), {ep.atom("stunt3")}});
+        db.push_back(rule{ep.atom("stuntZ"), {ep.atom("stuntW")}});
+        db.push_back(rule{ep.atom("stuntW"), {ep.atom("stunt4")}});
+        db.push_back(rule{ep.atom("stuntW"), {ep.atom("stuntU")}});
+
+        // HAYSTACK: add 2 of each to make fictitious decisions necessary (simulates a perfect binary tree)
+        for (int i = 0; i < 2; ++i) {
+            db.push_back(rule{ep.atom("stunt0"), {ep.atom("stunt1")}});
+            db.push_back(rule{ep.atom("stunt1"), {ep.atom("stunt2")}});
+            db.push_back(rule{ep.atom("stunt2"), {ep.atom("stunt3")}});
+            db.push_back(rule{ep.atom("stunt3"), {ep.atom("stunt4")}});
+            db.push_back(rule{ep.atom("stunt4"), {ep.atom("stunt5")}});
+            db.push_back(rule{ep.atom("stunt5"), {ep.atom("stunt6")}});
+            db.push_back(rule{ep.atom("stunt6"), {ep.atom("stunt7")}});
+            db.push_back(rule{ep.atom("stunt7"), {ep.atom("stunt8")}});
+            db.push_back(rule{ep.atom("stunt8"), {ep.atom("stunt9")}});
+        }
+        
+        goals goals;
+
+        goals.push_back(ep.atom("root"));
+
+
+        std::mt19937 rng(42);
+        a01 solver(db, goals, t, seq, bm, 1000, 1000, 1.414, rng);
+
+        decision_store avoidance;
+        std::optional<resolution_store> soln;
+
+        bool result = solver.next_avoidance(avoidance, soln);
+
+        assert(result == true);
+        assert(!soln.has_value());
+
+        // CRITICAL: MCTS finds the depth-4 needle.
+        assert(avoidance.size() == 5);
+
+        // CRITICAL: The first decision in the avoidance is root→rule0 (the needle branch).
+        const goal_lineage* gl_root = solver.lp.goal(nullptr, 0);
+        const resolution_lineage* rl_root = solver.lp.resolution(gl_root, 1);
+        assert(avoidance.count(rl_root) == 1);
+        const goal_lineage* gl_stuntX = solver.lp.goal(rl_root, 0);
+        const resolution_lineage* rl_stuntX = solver.lp.resolution(gl_stuntX, 3);
+        assert(avoidance.count(rl_stuntX) == 1);
+        const goal_lineage* gl_stuntY = solver.lp.goal(rl_stuntX, 0);
+        const resolution_lineage* rl_stuntY = solver.lp.resolution(gl_stuntY, 5);
+        assert(avoidance.count(rl_stuntY) == 1);
+        const goal_lineage* gl_stuntZ = solver.lp.goal(rl_stuntY, 0);
+        const resolution_lineage* rl_stuntZ = solver.lp.resolution(gl_stuntZ, 7);
+        assert(avoidance.count(rl_stuntZ) == 1);
+        const goal_lineage* gl_stuntW = solver.lp.goal(rl_stuntZ, 0);
+        const resolution_lineage* rl_stuntW = solver.lp.resolution(gl_stuntW, 9);
+        assert(avoidance.count(rl_stuntW) == 1);
+    }
+}
+
+void test_a01() {
+
+    // Test 1: Budget = 0 — no iterations execute; operator() returns true with nullopt.
+    // The solver makes no progress at all, so it cannot prove refutation or find a
+    // solution. This validates the edge case of calling with zero budget.
+    {
+        trail t;
+        t.push();
+        expr_pool ep(t);
+        bind_map bm(t);
+        sequencer seq(t);
+
+        database db;
+        db.push_back(rule{ep.atom("a"), {}});
+
+        goals goals;
+        goals.push_back(ep.atom("a"));
+
+        std::mt19937 rng(42);
+        a01 solver(db, goals, t, seq, bm, 1000, 1000, 1.414, rng);
+
+        std::optional<resolution_store> soln;
+        bool result = solver(0, soln);
+
+        // CRITICAL: returns true (no refutation proved) and soln defaults to nullopt
+        assert(result == true);
+        assert(!soln.has_value());
+        // The avoidance store is empty — no iterations ran, no avoidances recorded
+        assert(solver.c.avoidances.empty());
+    }
+
+    // Test 2: Simple ground solution — DB: a.  Goal: a
+    // The single goal is unit-propagated immediately. The resolution store contains
+    // exactly one lineage entry: the unit-prop of goal 0 via rule 0.
+    {
+        trail t;
+        t.push();
+        expr_pool ep(t);
+        bind_map bm(t);
+        sequencer seq(t);
+
+        database db;
+        db.push_back(rule{ep.atom("a"), {}});  // idx 0: a.
+
+        goals goals;
+        goals.push_back(ep.atom("a"));
+
+        std::mt19937 rng(42);
+        a01 solver(db, goals, t, seq, bm, 1000, 1000, 1.414, rng);
+
+        std::optional<resolution_store> soln;
+        bool result = solver(1, soln);
+
+        assert(result == true);
+        assert(soln.has_value());
+
+        // CRITICAL: exactly one resolution (unit-prop of a with rule 0)
+        assert(soln.value().size() == 1);
+        const goal_lineage* gl0 = solver.lp.goal(nullptr, 0);
+        const resolution_lineage* rl0 = solver.lp.resolution(gl0, 0);
+        assert(soln.value().count(rl0) == 1);
+
+        // CRITICAL: avoidance store has one entry — the empty decision set from the
+        // unit-prop solution (no MCTS decision was needed)
+        assert(solver.c.avoidances.size() == 1);
+    }
+
+    // Test 3: Variable binding verified via normalizer
+    // DB: answer(42).   Goal: answer(X)
+    // The copier creates a fresh copy of the ground rule (no vars to freshen), then
+    // the goal-resolver unifies cons("answer","42") with cons("answer",X), binding X.
+    // After operator() returns, bm holds X → atom("42"), which the normalizer resolves.
+    {
+        trail t;
+        t.push();
+        expr_pool ep(t);
+        bind_map bm(t);
+        sequencer seq(t);
+
+        database db;
+        // idx 0: answer(42).
+        db.push_back(rule{ep.cons(ep.atom("answer"), ep.atom("42")), {}});
+
+        const expr* X = ep.var(seq());
+        goals goals;
+        goals.push_back(ep.cons(ep.atom("answer"), X));
+
+        std::mt19937 rng(42);
+        a01 solver(db, goals, t, seq, bm, 1000, 1000, 1.414, rng);
+
+        std::optional<resolution_store> soln;
+        bool result = solver(1, soln);
+
+        assert(result == true);
+        assert(soln.has_value());
+
+        // CRITICAL: one resolution, binding X to "42"
+        assert(soln.value().size() == 1);
+        assert(soln.value().count(solver.lp.resolution(solver.lp.goal(nullptr, 0), 0)) == 1);
+
+        // CRITICAL: normalizer follows bm chain and returns atom("42")
+        normalizer norm(ep, bm);
+        const expr* X_val = norm(X);
+        assert(std::holds_alternative<expr::atom>(X_val->content));
+        assert(std::get<expr::atom>(X_val->content).value == "42");
+    }
+
+    // Test 4: Immediate refutation — empty database, goal has no candidates.
+    // head-elimination fires before any MCTS decision: conflict with ds = {} on
+    // the very first sim_one. next_avoidance returns false → operator() returns false.
+    {
+        trail t;
+        t.push();
+        expr_pool ep(t);
+        bind_map bm(t);
+        sequencer seq(t);
+
+        database db;  // intentionally empty
+
+        goals goals;
+        goals.push_back(ep.atom("a"));
+
+        std::mt19937 rng(42);
+        a01 solver(db, goals, t, seq, bm, 1000, 1000, 1.414, rng);
+
+        std::optional<resolution_store> soln;
+        bool result = solver(1000, soln);
+
+        assert(result == false);
+        assert(!soln.has_value());
+    }
+
+    // Test 5: 2-call CDCL-driven refutation — unsatisfiable, 2-path problem.
+    // DB: a :- b.  (idx 0)   a :- c.  (idx 1)   (no rules for b or c)
+    //
+    // Call 1: MCTS picks one of {rule0, rule1} for goal a. Whichever is chosen, the
+    // resulting sub-goal (b or c) has no candidates → conflict. ds = {rl_chosen}.
+    // After 1000 inner iterations the minimum conflict is size 1. Avoidance recorded.
+    //
+    // Call 2: CDCL eliminates the avoided rule. The remaining rule is unit-propagated.
+    // The new sub-goal (c or b) again has no candidates → conflict with ds = {} (the
+    // unit-prop added no decision) → next_avoidance returns false → operator() false.
+    {
+        trail t;
+        t.push();
+        expr_pool ep(t);
+        bind_map bm(t);
+        sequencer seq(t);
+
+        database db;
+        db.push_back(rule{ep.atom("a"), {ep.atom("b")}});  // idx 0: a :- b.
+        db.push_back(rule{ep.atom("a"), {ep.atom("c")}});  // idx 1: a :- c.
+
+        goals goals;
+        goals.push_back(ep.atom("a"));
+
+        std::mt19937 rng(42);
+        a01 solver(db, goals, t, seq, bm, 1000, 1000, 1.414, rng);
+
+        std::optional<resolution_store> soln;
+
+        // Call 1: one depth-1 avoidance recorded
+        bool result1 = solver(1, soln);
+        assert(result1 == true);
+        assert(!soln.has_value());
+        assert(solver.c.avoidances.size() == 1);
+
+        // Call 2: CDCL + unit-prop leads to conflict with empty ds → refutation
+        bool result2 = solver(1, soln);
+        assert(result2 == false);
+        assert(!soln.has_value());
+    }
+
+    // Test 6: Unique-solution conjunction query — is_a(X) ∧ is_b(X)
+    // DB:
+    //   idx 0: is_a(1).   idx 1: is_a(2).
+    //   idx 2: is_b(2).   idx 3: is_b(3).
+    //
+    // The only satisfying X is 2. Each of the 4 MCTS choices leads to either
+    // a solution (X=2) or immediate conflict (X=1 kills is_b; X=3 kills is_a).
+    //
+    // Call 1: MCTS finds X=2 via one decision (size-1 avoidance recorded).
+    //         Normalizer verifies X → "2". Lineage is deterministic:
+    //         soln always = {rl(gl_a,1), rl(gl_b,2)}, regardless of which goal MCTS
+    //         decided first — both rules apply to X=2, the other is unit-propagated.
+    //
+    // Call 2: CDCL eliminates the solution decision (rule idx for X=2). The only
+    //         remaining candidate for that goal resolves to X=1 or X=3, which
+    //         immediately conflicts with the other goal (0 candidates, ds={}) →
+    //         next_avoidance returns false → operator() returns false.
+    {
+        trail t;
+        t.push();
+        expr_pool ep(t);
+        bind_map bm(t);
+        sequencer seq(t);
+
+        database db;
+        db.push_back(rule{ep.cons(ep.atom("is_a"), ep.atom("1")), {}});  // idx 0
+        db.push_back(rule{ep.cons(ep.atom("is_a"), ep.atom("2")), {}});  // idx 1
+        db.push_back(rule{ep.cons(ep.atom("is_b"), ep.atom("2")), {}});  // idx 2
+        db.push_back(rule{ep.cons(ep.atom("is_b"), ep.atom("3")), {}});  // idx 3
+
+        const expr* X = ep.var(seq());
+        goals goals;
+        goals.push_back(ep.cons(ep.atom("is_a"), X));  // goal 0: is_a(X)
+        goals.push_back(ep.cons(ep.atom("is_b"), X));  // goal 1: is_b(X)
+
+        std::mt19937 rng(42);
+        a01 solver(db, goals, t, seq, bm, 1000, 1000, 1.414, rng);
+
+        normalizer norm(ep, bm);
+        std::optional<resolution_store> soln;
+
+        // Call 1: unique solution X=2
+        bool result1 = solver(1000, soln);
+        assert(result1 == true);
+        assert(soln.has_value());
+
+        // CRITICAL: bm binds X to "2"
+        const expr* X_val = norm(X);
+        assert(std::holds_alternative<expr::atom>(X_val->content));
+        assert(std::get<expr::atom>(X_val->content).value == "2");
+
+        // CRITICAL: soln contains exactly the two resolutions for X=2 — one per goal.
+        // Regardless of which goal MCTS decided first, both rl(gl_a,1) and rl(gl_b,2)
+        // always appear (one as the decision, the other as unit-propagation).
+        assert(soln.value().size() == 2);
+        const goal_lineage* gl_a = solver.lp.goal(nullptr, 0);
+        const goal_lineage* gl_b = solver.lp.goal(nullptr, 1);
+        const resolution_lineage* rl_a1 = solver.lp.resolution(gl_a, 1);  // is_a(2)
+        const resolution_lineage* rl_b2 = solver.lp.resolution(gl_b, 2);  // is_b(2)
+        assert(soln.value().count(rl_a1) == 1);
+        assert(soln.value().count(rl_b2) == 1);
+
+        // Call 2: the solution path is blocked; the only remaining path conflicts → refutation
+        bool result2 = solver(1000, soln);
+        assert(result2 == false);
+        assert(!soln.has_value());
+    }
+
+    // Test 7: Multi-solution enumeration — all parents of alice
+    // DB:
+    //   idx 0: parent(bob,   alice).
+    //   idx 1: parent(carol, alice).
+    //   idx 2: parent(dave,  bob).     ← head-elim removes this (alice ≠ bob)
+    //
+    // Goal: parent(X, alice)  — head-elim leaves only rules 0 and 1.
+    // MCTS must decide between bob and carol. Each is a depth-1 solution.
+    //
+    // Call 1 finds one parent; Call 2 finds the other (via CDCL elimination of the
+    // first decision, leaving a unit-prop that resolves to the remaining parent).
+    // bm binds X differently after each call; normalizer verifies the two names differ.
+    {
+        trail t;
+        t.push();
+        expr_pool ep(t);
+        bind_map bm(t);
+        sequencer seq(t);
+
+        database db;
+        // parent(A, B) encoded as cons(cons(atom("parent"), A), B)
+        db.push_back(rule{ep.cons(ep.cons(ep.atom("parent"), ep.atom("bob")),   ep.atom("alice")), {}});  // idx 0
+        db.push_back(rule{ep.cons(ep.cons(ep.atom("parent"), ep.atom("carol")), ep.atom("alice")), {}});  // idx 1
+        db.push_back(rule{ep.cons(ep.cons(ep.atom("parent"), ep.atom("dave")),  ep.atom("bob")),  {}});   // idx 2
+
+        const expr* X = ep.var(seq());
+        goals goals;
+        goals.push_back(ep.cons(ep.cons(ep.atom("parent"), X), ep.atom("alice")));
+
+        std::mt19937 rng(42);
+        a01 solver(db, goals, t, seq, bm, 1000, 1000, 1.414, rng);
+
+        normalizer norm(ep, bm);
+        std::optional<resolution_store> soln;
+
+        // First parent of alice
+        bool result1 = solver(1000, soln);
+        assert(result1 == true);
+        assert(soln.has_value());
+        assert(soln.value().size() == 1);
+
+        const expr* X_val1 = norm(X);
+        assert(std::holds_alternative<expr::atom>(X_val1->content));
+        std::string parent1 = std::get<expr::atom>(X_val1->content).value;
+        assert(parent1 == "bob" || parent1 == "carol");
+
+        // Second parent of alice — sim_one rolls back bm then unit-props the other rule
+        bool result2 = solver(1000, soln);
+        assert(result2 == true);
+        assert(soln.has_value());
+        assert(soln.value().size() == 1);
+
+        const expr* X_val2 = norm(X);
+        assert(std::holds_alternative<expr::atom>(X_val2->content));
+        std::string parent2 = std::get<expr::atom>(X_val2->content).value;
+        assert(parent2 == "bob" || parent2 == "carol");
+
+        // CRITICAL: the two solutions bind X to different names
+        assert(parent1 != parent2);
+
+        // Test for refutation
+        bool result3 = solver(1000, soln);
+        assert(result3 == false);
+    }
+
+    // Test 8: Boolean SAT — formula (P ∨ Q) ∧ (¬P ∨ Q)
+    //
+    // This 2-clause formula is equivalent to Q. The satisfying assignments are:
+    //   Solution A: P = true,  Q = true,  NP = false
+    //   Solution B: P = false, Q = true,  NP = true
+    //
+    // Encoding (all predicates as right-nested cons cells):
+    //   bool(X)    → cons(atom("bool"), X)
+    //   not(X, Y)  → cons(cons(atom("not"), X), Y)
+    //   or(X, Y, Z)→ cons(cons(cons(atom("or"), X), Y), Z)
+    //
+    // DB: bool(true) idx0, bool(false) idx1,
+    //     not(true,false) idx2, not(false,true) idx3,
+    //     or(true,true,true) idx4, or(true,false,true) idx5,
+    //     or(false,true,true) idx6, or(false,false,false) idx7.
+    //
+    // Goals: bool(P), bool(Q), or(P,Q,true), not(P,NP), or(NP,Q,true).
+    //
+    // With 1000 inner iterations MCTS learns to decide bool(P) first (1-decision
+    // solutions, negative reward -1), rather than bool(Q) (requires 2+ decisions).
+    // Deciding P=true propagates: NP=false, or(false,Q,true)→Q=true, bool(Q)→true,
+    //   or(true,true,true). Deciding P=false propagates analogously.
+    //
+    // Both calls return with Q=true and opposite values for P.
+    {
+        trail t;
+        t.push();
+        expr_pool ep(t);
+        bind_map bm(t);
+        sequencer seq(t);
+
+        database db;
+        db.push_back(rule{ep.cons(ep.atom("bool"), ep.atom("true")),  {}});  // idx 0
+        db.push_back(rule{ep.cons(ep.atom("bool"), ep.atom("false")), {}});  // idx 1
+        db.push_back(rule{ep.cons(ep.cons(ep.atom("not"), ep.atom("true")),  ep.atom("false")), {}});  // idx 2
+        db.push_back(rule{ep.cons(ep.cons(ep.atom("not"), ep.atom("false")), ep.atom("true")),  {}});  // idx 3
+        db.push_back(rule{ep.cons(ep.cons(ep.cons(ep.atom("or"), ep.atom("true")),  ep.atom("true")),  ep.atom("true")),  {}});  // idx 4
+        db.push_back(rule{ep.cons(ep.cons(ep.cons(ep.atom("or"), ep.atom("true")),  ep.atom("false")), ep.atom("true")),  {}});  // idx 5
+        db.push_back(rule{ep.cons(ep.cons(ep.cons(ep.atom("or"), ep.atom("false")), ep.atom("true")),  ep.atom("true")),  {}});  // idx 6
+        db.push_back(rule{ep.cons(ep.cons(ep.cons(ep.atom("or"), ep.atom("false")), ep.atom("false")), ep.atom("false")), {}});  // idx 7
+
+        const expr* P  = ep.var(seq());
+        const expr* Q  = ep.var(seq());
+        const expr* NP = ep.var(seq());
+
+        goals goals;
+        // goal 0: bool(P)
+        goals.push_back(ep.cons(ep.atom("bool"), P));
+        // goal 1: bool(Q)
+        goals.push_back(ep.cons(ep.atom("bool"), Q));
+        // goal 2: or(P, Q, true) — P ∨ Q = true
+        goals.push_back(ep.cons(ep.cons(ep.cons(ep.atom("or"), P), Q), ep.atom("true")));
+        // goal 3: not(P, NP) — compute ¬P
+        goals.push_back(ep.cons(ep.cons(ep.atom("not"), P), NP));
+        // goal 4: or(NP, Q, true) — ¬P ∨ Q = true
+        goals.push_back(ep.cons(ep.cons(ep.cons(ep.atom("or"), NP), Q), ep.atom("true")));
+
+        std::mt19937 rng(42);
+        a01 solver(db, goals, t, seq, bm, 1000, 1000, 1.414, rng);
+
+        normalizer norm(ep, bm);
+        std::optional<resolution_store> soln;
+
+        // First solution: P=true or P=false, but Q must be true
+        bool result1 = solver(1000, soln);
+        assert(result1 == true);
+        assert(soln.has_value());
+
+        const expr* Q_val1 = norm(Q);
+        const expr* P_val1 = norm(P);
+        assert(std::holds_alternative<expr::atom>(Q_val1->content));
+        assert(std::holds_alternative<expr::atom>(P_val1->content));
+
+        // CRITICAL: Q = true in every solution of (P∨Q)∧(¬P∨Q)
+        assert(std::get<expr::atom>(Q_val1->content).value == "true");
+        std::string P_str1 = std::get<expr::atom>(P_val1->content).value;
+        assert(P_str1 == "true" || P_str1 == "false");
+
+        // Second solution: CDCL eliminates first P choice; the other propagates
+        bool result2 = solver(1000, soln);
+        assert(result2 == true);
+        assert(soln.has_value());
+
+        const expr* Q_val2 = norm(Q);
+        const expr* P_val2 = norm(P);
+        assert(std::holds_alternative<expr::atom>(Q_val2->content));
+        assert(std::holds_alternative<expr::atom>(P_val2->content));
+
+        // CRITICAL: Q still true after finding the second solution
+        assert(std::get<expr::atom>(Q_val2->content).value == "true");
+        std::string P_str2 = std::get<expr::atom>(P_val2->content).value;
+
+        // CRITICAL: the two solutions assign opposite values to P
+        assert(P_str2 != P_str1);
+
+        // Test for refutation
+        bool result3 = solver(1000, soln);
+        assert(result3 == false);
+    }
+
+    // Test 9: Graph 2-coloring synthesis — find valid 2-colorings of a 3-node path A-B-C
+    //
+    // DB:
+    //   idx 0: color(red).     idx 1: color(blue).
+    //   idx 2: diff(red, blue).  idx 3: diff(blue, red).
+    //
+    // Goals:
+    //   goal 0: color(A)   goal 1: color(B)   goal 2: color(C)
+    //   goal 3: diff(A, B)  goal 4: diff(B, C)
+    //
+    // A single MCTS decision (e.g. deciding diff(A,B)→red-blue) immediately binds
+    // A and B, unit-propagates color(A), color(B), diff(B,C), and color(C).
+    // This produces exactly two valid 2-colorings:
+    //   Coloring 1: A=red,  B=blue, C=red
+    //   Coloring 2: A=blue, B=red,  C=blue
+    //
+    // Both calls return valid alternating colorings that satisfy:
+    //   A ≠ B,  B ≠ C,  A = C  (necessary for a 2-colored path of 3 nodes).
+    // The two solutions bind A differently, confirming both colorings are enumerated.
+    // All 5 goals appear in the solution's resolution store.
+    {
+        trail t;
+        t.push();
+        expr_pool ep(t);
+        bind_map bm(t);
+        sequencer seq(t);
+
+        database db;
+        db.push_back(rule{ep.cons(ep.atom("color"), ep.atom("red")),  {}});  // idx 0
+        db.push_back(rule{ep.cons(ep.atom("color"), ep.atom("blue")), {}});  // idx 1
+        // diff(X, Y) encoded as cons(cons(atom("diff"), X), Y)
+        db.push_back(rule{ep.cons(ep.cons(ep.atom("diff"), ep.atom("red")),  ep.atom("blue")), {}});  // idx 2
+        db.push_back(rule{ep.cons(ep.cons(ep.atom("diff"), ep.atom("blue")), ep.atom("red")),  {}});  // idx 3
+
+        const expr* A = ep.var(seq());
+        const expr* B = ep.var(seq());
+        const expr* C = ep.var(seq());
+
+        goals goals;
+        goals.push_back(ep.cons(ep.atom("color"), A));                 // goal 0: color(A)
+        goals.push_back(ep.cons(ep.atom("color"), B));                 // goal 1: color(B)
+        goals.push_back(ep.cons(ep.atom("color"), C));                 // goal 2: color(C)
+        goals.push_back(ep.cons(ep.cons(ep.atom("diff"), A), B));      // goal 3: diff(A, B)
+        goals.push_back(ep.cons(ep.cons(ep.atom("diff"), B), C));      // goal 4: diff(B, C)
+
+        std::mt19937 rng(42);
+        a01 solver(db, goals, t, seq, bm, 1000, 1000, 1.414, rng);
+
+        normalizer norm(ep, bm);
+        std::optional<resolution_store> soln;
+
+        auto is_valid_color = [](const std::string& s) {
+            return s == "red" || s == "blue";
+        };
+
+        // First valid 2-coloring of the path A-B-C
+        bool result1 = solver(1000, soln);
+        assert(result1 == true);
+        assert(soln.has_value());
+
+        // All 5 goals are resolved in every solution
+        assert(soln.value().size() == 5);
+
+        std::string A1 = std::get<expr::atom>(norm(A)->content).value;
+        std::string B1 = std::get<expr::atom>(norm(B)->content).value;
+        std::string C1 = std::get<expr::atom>(norm(C)->content).value;
+
+        assert(is_valid_color(A1) && is_valid_color(B1) && is_valid_color(C1));
+        // CRITICAL: adjacent nodes have different colors
+        assert(A1 != B1);
+        assert(B1 != C1);
+        // CRITICAL: the path is symmetrically 2-colored — endpoints share a color
+        assert(A1 == C1);
+
+        // Second valid 2-coloring — bm is refreshed by the next sim_one's trail pop
+        bool result2 = solver(1000, soln);
+        assert(result2 == true);
+        assert(soln.has_value());
+        assert(soln.value().size() == 5);
+
+        std::string A2 = std::get<expr::atom>(norm(A)->content).value;
+        std::string B2 = std::get<expr::atom>(norm(B)->content).value;
+        std::string C2 = std::get<expr::atom>(norm(C)->content).value;
+
+        assert(is_valid_color(A2) && is_valid_color(B2) && is_valid_color(C2));
+        assert(A2 != B2);
+        assert(B2 != C2);
+        assert(A2 == C2);
+
+        // CRITICAL: the second coloring is the complement of the first
+        assert(A2 != A1);
+
+        // Test for refutation
+        bool result3 = solver(1000, soln);
+        assert(result3 == false);
+    }
+
+    // =========================================================================
+    // Structured multi-solution enumeration helpers (Tests 10 and 11)
+    // =========================================================================
+
+    // solution = ordered vector of normalised const expr* values for the variables
+    // of interest. Comparison uses pointer identity, which is correct because
+    // expr_pool interns: same content → same pointer within the same pool.
+    using solution = std::vector<const expr*>;
+
+    // Enumerate all expected solutions in any order, skipping calls that return
+    // the same variable bindings via a different resolution path (valid behaviour),
+    // then assert that the solver refutes when the search space is exhausted.
+    auto next_until_refuted = [](
+        a01& solver,
+        std::set<solution> expected,
+        auto get_solution,
+        size_t iterations = 1000
+    ) {
+        std::set<solution> visited;
+        std::optional<resolution_store> soln;
+        while (!expected.empty()) {
+            solution s;
+            do {
+                bool r = solver(iterations, soln);
+                assert(r == true);
+                s = get_solution();
+            } while (visited.count(s));
+            assert(expected.count(s) == 1);
+            expected.erase(s);
+            visited.insert(s);
+
+            std::cout << "Solution: " << std::endl;
+            expr_printer printer(std::cout);
+            for (const auto& e : s) {
+                printer(e);
+                std::cout << std::endl;
+            }
+            std::cout << std::endl;
+        }
+        // All solutions found — next call must refute
+        bool r = solver(iterations, soln);
+        assert(r == false);
+        assert(!soln.has_value());
+    };
+
+    // Test 10: 3-colouring of K3 (the triangle) with colours {red, green, blue}
+    //
+    // All 3 nodes A, B, C are mutually adjacent, so every valid colouring assigns
+    // a distinct colour to each node.  Exactly 3! = 6 proper 3-colourings exist.
+    //
+    // DB:
+    //   idx 0-2: color(red), color(green), color(blue).
+    //   idx 3-8: diff(X,Y) for every ordered pair of distinct colours (6 facts).
+    //
+    // Goals: color(A), color(B), color(C), diff(A,B), diff(A,C), diff(B,C).
+    //
+    // One MCTS decision (e.g. diff(A,B)→red-green) propagates A and B immediately.
+    // diff(A,C) and diff(B,C) then narrow C to the unique remaining colour, which
+    // unit-propagates everything else.  Multiple resolution orderings reach the same
+    // (A,B,C) binding; the visited loop deduplicates those paths.
+    {
+        trail t;
+        t.push();
+        expr_pool ep(t);
+        bind_map bm(t);
+        sequencer seq(t);
+
+        database db;
+        db.push_back(rule{ep.cons(ep.atom("color"), ep.atom("red")),   {}});  // idx 0
+        db.push_back(rule{ep.cons(ep.atom("color"), ep.atom("green")), {}});  // idx 1
+        db.push_back(rule{ep.cons(ep.atom("color"), ep.atom("blue")),  {}});  // idx 2
+        // diff(X, Y) = cons(cons(atom("diff"), X), Y) — all 6 asymmetric pairs
+        db.push_back(rule{ep.cons(ep.cons(ep.atom("diff"), ep.atom("red")),   ep.atom("green")), {}});  // idx 3
+        db.push_back(rule{ep.cons(ep.cons(ep.atom("diff"), ep.atom("red")),   ep.atom("blue")),  {}});  // idx 4
+        db.push_back(rule{ep.cons(ep.cons(ep.atom("diff"), ep.atom("green")), ep.atom("red")),   {}});  // idx 5
+        db.push_back(rule{ep.cons(ep.cons(ep.atom("diff"), ep.atom("green")), ep.atom("blue")),  {}});  // idx 6
+        db.push_back(rule{ep.cons(ep.cons(ep.atom("diff"), ep.atom("blue")),  ep.atom("red")),   {}});  // idx 7
+        db.push_back(rule{ep.cons(ep.cons(ep.atom("diff"), ep.atom("blue")),  ep.atom("green")), {}});  // idx 8
+
+        const expr* A = ep.var(seq());
+        const expr* B = ep.var(seq());
+        const expr* C = ep.var(seq());
+
+        goals goals;
+        goals.push_back(ep.cons(ep.atom("color"), A));                 // goal 0: color(A)
+        goals.push_back(ep.cons(ep.atom("color"), B));                 // goal 1: color(B)
+        goals.push_back(ep.cons(ep.atom("color"), C));                 // goal 2: color(C)
+        goals.push_back(ep.cons(ep.cons(ep.atom("diff"), A), B));      // goal 3: diff(A,B)
+        goals.push_back(ep.cons(ep.cons(ep.atom("diff"), A), C));      // goal 4: diff(A,C)
+        goals.push_back(ep.cons(ep.cons(ep.atom("diff"), B), C));      // goal 5: diff(B,C)
+
+        std::mt19937 rng(42);
+        a01 solver(db, goals, t, seq, bm, 1000, 1000, 1.414, rng);
+
+        normalizer norm(ep, bm);
+
+        // Interned atoms from ep — same pointer as those embedded in the rules
+        const expr* red   = ep.atom("red");
+        const expr* green = ep.atom("green");
+        const expr* blue  = ep.atom("blue");
+
+        // Every permutation of {red, green, blue} assigned to {A, B, C}
+        std::set<solution> expected = {
+            {red,   green, blue },
+            {red,   blue,  green},
+            {green, red,   blue },
+            {green, blue,  red  },
+            {blue,  red,   green},
+            {blue,  green, red  },
+        };
+
+        next_until_refuted(solver, expected, [&]() -> solution {
+            return {ep.import(norm(A)), ep.import(norm(B)), ep.import(norm(C))};
+        });
+    }
+
+    // Test 11: SAT — P ∧ (Q ∨ R) using relational OR/AND encoding
+    //
+    // The OR and AND predicates are encoded relationally with a bool/1 body goal
+    // that constrains the free argument to the boolean domain:
+    //
+    //   or(true,  X, true) :- bool(X).   — true ∨ anything = true
+    //   or(false, X, X)    :- bool(X).   — false ∨ X = X
+    //   and(true,  X, X)   :- bool(X).   — true ∧ X = X
+    //   and(false, X, false):- bool(X).  — false ∧ anything = false
+    //
+    // Formula: P ∧ (Q ∨ R)
+    // Goals: bool(P), bool(Q), bool(R), or(Q, R, QR), and(P, QR, true)
+    //
+    // Propagation chain (derived):
+    //   and(P, QR, true): head-elim removes and(false,X,false) (result false≠true)
+    //   → unit-prop via and(true,X,X): P=true, QR=true.
+    //   or(Q, R, true):
+    //     or(true,X,true)  → Q=true,  R free, adds bool(R) subgoal  (2 solutions)
+    //     or(false,X,X)    → Q=false, X=R=true, adds bool(true) subgoal (1 solution)
+    //
+    // Solutions: (P=T,Q=T,R=T), (P=T,Q=T,R=F), (P=T,Q=F,R=T).
+    // Note: different resolution orderings of the two bool(R) goals (the initial one
+    // and the subgoal from the or rule) reach the same binding — the visited loop
+    // deduplicates these identical-binding, distinct-path solutions.
+    {
+        trail t;
+        t.push();
+        expr_pool ep(t);
+        bind_map bm(t);
+        sequencer seq(t);
+
+        database db;
+        db.push_back(rule{ep.cons(ep.atom("bool"), ep.atom("true")),  {}});  // idx 0: bool(true).
+        db.push_back(rule{ep.cons(ep.atom("bool"), ep.atom("false")), {}});  // idx 1: bool(false).
+
+        // or(true, X, true) :- bool(X).
+        {
+            const expr* X = ep.var(seq());
+            db.push_back(rule{
+                ep.cons(ep.cons(ep.cons(ep.atom("or"), ep.atom("true")), X), ep.atom("true")),
+                {ep.cons(ep.atom("bool"), X)}
+            });  // idx 2
+        }
+        // or(false, X, X) :- bool(X).
+        {
+            const expr* X = ep.var(seq());
+            db.push_back(rule{
+                ep.cons(ep.cons(ep.cons(ep.atom("or"), ep.atom("false")), X), X),
+                {ep.cons(ep.atom("bool"), X)}
+            });  // idx 3
+        }
+        // and(true, X, X) :- bool(X).
+        {
+            const expr* X = ep.var(seq());
+            db.push_back(rule{
+                ep.cons(ep.cons(ep.cons(ep.atom("and"), ep.atom("true")), X), X),
+                {ep.cons(ep.atom("bool"), X)}
+            });  // idx 4
+        }
+        // and(false, X, false) :- bool(X).
+        {
+            const expr* X = ep.var(seq());
+            db.push_back(rule{
+                ep.cons(ep.cons(ep.cons(ep.atom("and"), ep.atom("false")), X), ep.atom("false")),
+                {ep.cons(ep.atom("bool"), X)}
+            });  // idx 5
+        }
+
+        const expr* P  = ep.var(seq());
+        const expr* Q  = ep.var(seq());
+        const expr* R  = ep.var(seq());
+        const expr* QR = ep.var(seq());
+
+        goals goals;
+        goals.push_back(ep.cons(ep.atom("bool"), P));                                           // goal 0: bool(P)
+        goals.push_back(ep.cons(ep.atom("bool"), Q));                                           // goal 1: bool(Q)
+        goals.push_back(ep.cons(ep.atom("bool"), R));                                           // goal 2: bool(R)
+        goals.push_back(ep.cons(ep.cons(ep.cons(ep.atom("or"),  Q), R),  QR));                 // goal 3: or(Q,R,QR)
+        goals.push_back(ep.cons(ep.cons(ep.cons(ep.atom("and"), P), QR), ep.atom("true")));    // goal 4: and(P,QR,true)
+
+        std::mt19937 rng(42);
+        a01 solver(db, goals, t, seq, bm, 1000, 1000, 1.414, rng);
+
+        normalizer norm(ep, bm);
+
+        const expr* T_ = ep.atom("true");
+        const expr* F_ = ep.atom("false");
+
+        std::set<solution> expected = {
+            {T_, T_, T_},   // P=T, Q=T, R=T
+            {T_, T_, F_},   // P=T, Q=T, R=F
+            {T_, F_, T_},   // P=T, Q=F, R=T
+        };
+
+        next_until_refuted(solver, expected, [&]() -> solution {
+            return {ep.import(norm(P)), ep.import(norm(Q)), ep.import(norm(R))};
+        });
+    }
+
+    // Test 12: 3-colouring of "K3 + tail" — 4 nodes, 8 goals, 12 solutions
+    //
+    // Graph: nodes A, B, C, D.
+    //   Edges: A-B, A-C, B-C  (triangle — A, B, C all-different)
+    //          A-D             (tail — D only constrained to differ from A)
+    //
+    // Colours: red, green, blue.
+    //
+    // Each of the 6 K3 colourings of (A,B,C) combines with 2 choices for D
+    // (any colour ≠ A), giving 6 × 2 = 12 distinct solutions.
+    //
+    // Compared to Test 10 (K3, 6 goals): one extra node, one extra colour goal,
+    // one extra diff goal, and twice as many solutions — a meaningfully harder instance.
+    {
+        trail t;
+        t.push();
+        expr_pool ep(t);
+        bind_map bm(t);
+        sequencer seq(t);
+
+        database db;
+        db.push_back(rule{ep.cons(ep.atom("color"), ep.atom("red")),   {}});  // idx 0
+        db.push_back(rule{ep.cons(ep.atom("color"), ep.atom("green")), {}});  // idx 1
+        db.push_back(rule{ep.cons(ep.atom("color"), ep.atom("blue")),  {}});  // idx 2
+        // All 6 ordered diff pairs among {red, green, blue}
+        db.push_back(rule{ep.cons(ep.cons(ep.atom("diff"), ep.atom("red")),   ep.atom("green")), {}});  // idx 3
+        db.push_back(rule{ep.cons(ep.cons(ep.atom("diff"), ep.atom("red")),   ep.atom("blue")),  {}});  // idx 4
+        db.push_back(rule{ep.cons(ep.cons(ep.atom("diff"), ep.atom("green")), ep.atom("red")),   {}});  // idx 5
+        db.push_back(rule{ep.cons(ep.cons(ep.atom("diff"), ep.atom("green")), ep.atom("blue")),  {}});  // idx 6
+        db.push_back(rule{ep.cons(ep.cons(ep.atom("diff"), ep.atom("blue")),  ep.atom("red")),   {}});  // idx 7
+        db.push_back(rule{ep.cons(ep.cons(ep.atom("diff"), ep.atom("blue")),  ep.atom("green")), {}});  // idx 8
+
+        const expr* A = ep.var(seq());
+        const expr* B = ep.var(seq());
+        const expr* C = ep.var(seq());
+        const expr* D = ep.var(seq());
+
+        goals goals;
+        goals.push_back(ep.cons(ep.atom("color"), A));                 // goal 0: color(A)
+        goals.push_back(ep.cons(ep.atom("color"), B));                 // goal 1: color(B)
+        goals.push_back(ep.cons(ep.atom("color"), C));                 // goal 2: color(C)
+        goals.push_back(ep.cons(ep.atom("color"), D));                 // goal 3: color(D)
+        goals.push_back(ep.cons(ep.cons(ep.atom("diff"), A), B));      // goal 4: diff(A,B)
+        goals.push_back(ep.cons(ep.cons(ep.atom("diff"), A), C));      // goal 5: diff(A,C)
+        goals.push_back(ep.cons(ep.cons(ep.atom("diff"), B), C));      // goal 6: diff(B,C)
+        goals.push_back(ep.cons(ep.cons(ep.atom("diff"), A), D));      // goal 7: diff(A,D)
+
+        std::mt19937 rng(42);
+        a01 solver(db, goals, t, seq, bm, 1000, 1000, 1.414, rng);
+
+        normalizer norm(ep, bm);
+
+        const expr* R_ = ep.atom("red");
+        const expr* G_ = ep.atom("green");
+        const expr* B_ = ep.atom("blue");
+
+        // 6 K3 colourings of (A,B,C), each with 2 choices for D (any colour ≠ A)
+        std::set<solution> expected = {
+            {R_, G_, B_, G_}, {R_, G_, B_, B_},
+            {R_, B_, G_, G_}, {R_, B_, G_, B_},
+            {G_, R_, B_, R_}, {G_, R_, B_, B_},
+            {G_, B_, R_, R_}, {G_, B_, R_, B_},
+            {B_, R_, G_, R_}, {B_, R_, G_, G_},
+            {B_, G_, R_, R_}, {B_, G_, R_, G_},
+        };
+
+        next_until_refuted(solver, expected, [&]() -> solution {
+            return {ep.import(norm(A)), ep.import(norm(B)), ep.import(norm(C)), ep.import(norm(D))};
+        });
+    }
+
+    // Test 13: 4-variable SAT — (P ∨ Q) ∧ (R ∨ S) ∧ (¬P ∨ ¬R)
+    //
+    // Three clauses, four boolean variables. The third clause forbids P and R
+    // both being true, while the first two require each pair to cover true.
+    //
+    // Using the same relational OR/AND/NOT encoding as Test 11, plus NOT rules
+    // for each primary variable. Intermediate result variables (PQ, RS, NP, NR,
+    // NPR, PQ_RS) connect the clause structure. All 11 goals are listed below.
+    //
+    // Propagation chain (deterministic, no MCTS decisions needed for these steps):
+    //   and(PQ_RS, NPR, true): head-elim removes and(false,_,false); unit-prop
+    //     → PQ_RS = true, NPR = true.
+    //   and(PQ, RS, PQ_RS=true): same → PQ = true, RS = true.
+    //   Remaining: or(P,Q,true), or(R,S,true), or(NP,NR,true) each have 2 candidates.
+    //   not rules propagate as soon as P or R is bound.
+    //
+    // Satisfying assignments (5):
+    //   (T,T,F,T), (T,F,F,T), (F,T,T,T), (F,T,T,F), (F,T,F,T)
+    //
+    // Every solution needs ≥ 2 MCTS decisions, so all avoidances are non-empty
+    // and CDCL learning drives refutation after all 5 are found.
+    {
+        trail t;
+        t.push();
+        expr_pool ep(t);
+        bind_map bm(t);
+        sequencer seq(t);
+
+        database db;
+        db.push_back(rule{ep.cons(ep.atom("bool"), ep.atom("true")),  {}});  // idx 0
+        db.push_back(rule{ep.cons(ep.atom("bool"), ep.atom("false")), {}});  // idx 1
+        db.push_back(rule{ep.cons(ep.cons(ep.atom("not"), ep.atom("true")),  ep.atom("false")), {}});  // idx 2
+        db.push_back(rule{ep.cons(ep.cons(ep.atom("not"), ep.atom("false")), ep.atom("true")),  {}});  // idx 3
+        // or(true, X, true) :- bool(X).
+        {
+            const expr* X = ep.var(seq());
+            db.push_back(rule{
+                ep.cons(ep.cons(ep.cons(ep.atom("or"), ep.atom("true")), X), ep.atom("true")),
+                {ep.cons(ep.atom("bool"), X)}
+            });  // idx 4
+        }
+        // or(false, X, X) :- bool(X).
+        {
+            const expr* X = ep.var(seq());
+            db.push_back(rule{
+                ep.cons(ep.cons(ep.cons(ep.atom("or"), ep.atom("false")), X), X),
+                {ep.cons(ep.atom("bool"), X)}
+            });  // idx 5
+        }
+        // and(true, X, X) :- bool(X).
+        {
+            const expr* X = ep.var(seq());
+            db.push_back(rule{
+                ep.cons(ep.cons(ep.cons(ep.atom("and"), ep.atom("true")), X), X),
+                {ep.cons(ep.atom("bool"), X)}
+            });  // idx 6
+        }
+        // and(false, X, false) :- bool(X).
+        {
+            const expr* X = ep.var(seq());
+            db.push_back(rule{
+                ep.cons(ep.cons(ep.cons(ep.atom("and"), ep.atom("false")), X), ep.atom("false")),
+                {ep.cons(ep.atom("bool"), X)}
+            });  // idx 7
+        }
+
+        // Primary variables
+        const expr* P     = ep.var(seq());
+        const expr* Q     = ep.var(seq());
+        const expr* R     = ep.var(seq());
+        const expr* S     = ep.var(seq());
+        // Intermediate result variables
+        const expr* PQ    = ep.var(seq());   // P ∨ Q
+        const expr* RS    = ep.var(seq());   // R ∨ S
+        const expr* NP    = ep.var(seq());   // ¬P
+        const expr* NR    = ep.var(seq());   // ¬R
+        const expr* NPR   = ep.var(seq());   // ¬P ∨ ¬R
+        const expr* PQ_RS = ep.var(seq());   // (P∨Q) ∧ (R∨S)
+
+        goals goals;
+        goals.push_back(ep.cons(ep.atom("bool"), P));                                               // goal  0: bool(P)
+        goals.push_back(ep.cons(ep.atom("bool"), Q));                                               // goal  1: bool(Q)
+        goals.push_back(ep.cons(ep.atom("bool"), R));                                               // goal  2: bool(R)
+        goals.push_back(ep.cons(ep.atom("bool"), S));                                               // goal  3: bool(S)
+        goals.push_back(ep.cons(ep.cons(ep.cons(ep.atom("or"),  P),  Q),  PQ));                    // goal  4: or(P,Q,PQ)
+        goals.push_back(ep.cons(ep.cons(ep.cons(ep.atom("or"),  R),  S),  RS));                    // goal  5: or(R,S,RS)
+        goals.push_back(ep.cons(ep.cons(ep.atom("not"), P), NP));                                   // goal  6: not(P,NP)
+        goals.push_back(ep.cons(ep.cons(ep.atom("not"), R), NR));                                   // goal  7: not(R,NR)
+        goals.push_back(ep.cons(ep.cons(ep.cons(ep.atom("or"),  NP), NR), NPR));                   // goal  8: or(NP,NR,NPR)
+        goals.push_back(ep.cons(ep.cons(ep.cons(ep.atom("and"), PQ), RS),  PQ_RS));                // goal  9: and(PQ,RS,PQ_RS)
+        goals.push_back(ep.cons(ep.cons(ep.cons(ep.atom("and"), PQ_RS), NPR), ep.atom("true")));   // goal 10: and(PQ_RS,NPR,true)
+
+        std::mt19937 rng(42);
+        a01 solver(db, goals, t, seq, bm, 1000, 1000, 1.414, rng);
+
+        normalizer norm(ep, bm);
+
+        const expr* T_ = ep.atom("true");
+        const expr* F_ = ep.atom("false");
+
+        // All 5 satisfying assignments to (P, Q, R, S)
+        std::set<solution> expected = {
+            {T_, T_, F_, T_},   // P=T, Q=T, R=F, S=T
+            {T_, F_, F_, T_},   // P=T, Q=F, R=F, S=T
+            {F_, T_, T_, T_},   // P=F, Q=T, R=T, S=T
+            {F_, T_, T_, F_},   // P=F, Q=T, R=T, S=F
+            {F_, T_, F_, T_},   // P=F, Q=T, R=F, S=T
+        };
+
+        next_until_refuted(solver, expected, [&]() -> solution {
+            return {ep.import(norm(P)), ep.import(norm(Q)), ep.import(norm(R)), ep.import(norm(S))};
+        });
+    }
+
+    // Test 14: Peano arithmetic — enumerate all naturals less than 7
+    //
+    // Rules:
+    //   idx 0: nat(zero).
+    //   idx 1: nat(suc(X))    :- nat(X).
+    //   idx 2: lt(zero, suc(X)) :- nat(X).
+    //   idx 3: lt(suc(X), suc(Y)) :- lt(X, Y).
+    //
+    // Encoding:
+    //   zero    = atom("zero")
+    //   suc(X)  = cons(atom("suc"), X)
+    //   nat(X)  = cons(atom("nat"), X)
+    //   lt(X,Y) = cons(cons(atom("lt"), X), Y)
+    //
+    // Goal: lt(N, seven)   where seven = suc^7(zero)
+    //
+    // Exactly 7 solutions exist: N ∈ {0, 1, 2, 3, 4, 5, 6} in Peano encoding.
+    // Reaching N=k requires k unfoldings of rule 3, one application of rule 2,
+    // then k unfoldings of rule 1 (to discharge the nat subgoal), bottoming out
+    // at rule 0.  next_until_refuted verifies all 7 solutions are found and that
+    // the solver then proves refutation.
+    {
+        trail t;
+        t.push();
+        expr_pool ep(t);
+        bind_map bm(t);
+        sequencer seq(t);
+
+        // Build the Peano numeral for n: suc^n(zero)
+        auto peano = [&](int n) -> const expr* {
+            const expr* result = ep.atom("zero");
+            for (int i = 0; i < n; ++i)
+                result = ep.cons(ep.atom("suc"), result);
+            return result;
+        };
+
+        database db;
+
+        // idx 0: nat(zero).
+        db.push_back(rule{ep.cons(ep.atom("nat"), ep.atom("zero")), {}});
+
+        // idx 1: nat(suc(X)) :- nat(X).
+        {
+            const expr* X = ep.var(seq());
+            db.push_back(rule{
+                ep.cons(ep.atom("nat"), ep.cons(ep.atom("suc"), X)),
+                {ep.cons(ep.atom("nat"), X)}
+            });
+        }
+
+        // idx 2: lt(zero, suc(X)) :- nat(X).
+        {
+            const expr* X = ep.var(seq());
+            db.push_back(rule{
+                ep.cons(ep.cons(ep.atom("lt"), ep.atom("zero")), ep.cons(ep.atom("suc"), X)),
+                {ep.cons(ep.atom("nat"), X)}
+            });
+        }
+
+        // idx 3: lt(suc(X), suc(Y)) :- lt(X, Y).
+        {
+            const expr* X = ep.var(seq());
+            const expr* Y = ep.var(seq());
+            db.push_back(rule{
+                ep.cons(ep.cons(ep.atom("lt"), ep.cons(ep.atom("suc"), X)), ep.cons(ep.atom("suc"), Y)),
+                {ep.cons(ep.cons(ep.atom("lt"), X), Y)}
+            });
+        }
+
+        const expr* N     = ep.var(seq());
+        const expr* seven = peano(7);
+
+        goals goals;
+        goals.push_back(ep.cons(ep.cons(ep.atom("lt"), N), seven));  // goal 0: lt(N, seven)
+
+        std::mt19937 rng(42);
+        a01 solver(db, goals, t, seq, bm, 1000, 1000, 1.414, rng);
+
+        normalizer norm(ep, bm);
+
+        // All 7 Peano naturals strictly less than 7
+        std::set<solution> expected = {
+            {peano(0)},
+            {peano(1)},
+            {peano(2)},
+            {peano(3)},
+            {peano(4)},
+            {peano(5)},
+            {peano(6)},
+        };
+
+        next_until_refuted(solver, expected, [&]() -> solution {
+            return {ep.import(norm(N))};
+        });
+    }
+
+    // Test 15: Addition + less-than — enumerate all pairs (X, Y) with X + Y < 10
+    //
+    // Rules:
+    //   idx 0: nat(zero).
+    //   idx 1: nat(suc(X))           :- nat(X).
+    //   idx 2: add(zero, Y, Y)       :- nat(Y).
+    //   idx 3: add(suc(X), Y, suc(Z)):- add(X, Y, Z).
+    //   idx 4: lt(zero, suc(X))      :- nat(X).
+    //   idx 5: lt(suc(X), suc(Y))    :- lt(X, Y).
+    //
+    // Goals: add(X, Y, S),  lt(S, ten)   where ten = suc^10(zero)
+    //
+    // Exactly 55 pairs satisfy X + Y < 10: sum s = 0..9 contributes (10-s) pairs.
+    // next_until_refuted verifies all 55 are found and the solver then refutes.
+    {
+        trail t;
+        t.push();
+        expr_pool ep(t);
+        bind_map bm(t);
+        sequencer seq(t);
+
+        auto peano = [&](int n) -> const expr* {
+            const expr* r = ep.atom("zero");
+            for (int i = 0; i < n; ++i)
+                r = ep.cons(ep.atom("suc"), r);
+            return r;
+        };
+
+        database db;
+
+        // idx 0: nat(zero).
+        db.push_back(rule{ep.cons(ep.atom("nat"), ep.atom("zero")), {}});
+
+        // idx 1: nat(suc(X)) :- nat(X).
+        {
+            const expr* X = ep.var(seq());
+            db.push_back(rule{
+                ep.cons(ep.atom("nat"), ep.cons(ep.atom("suc"), X)),
+                {ep.cons(ep.atom("nat"), X)}
+            });
+        }
+
+        // idx 2: add(zero, Y, Y) :- nat(Y).
+        {
+            const expr* Y = ep.var(seq());
+            db.push_back(rule{
+                ep.cons(ep.cons(ep.cons(ep.atom("add"), ep.atom("zero")), Y), Y),
+                {ep.cons(ep.atom("nat"), Y)}
+            });
+        }
+
+        // idx 3: add(suc(X), Y, suc(Z)) :- add(X, Y, Z).
+        {
+            const expr* X = ep.var(seq());
+            const expr* Y = ep.var(seq());
+            const expr* Z = ep.var(seq());
+            db.push_back(rule{
+                ep.cons(ep.cons(ep.cons(ep.atom("add"), ep.cons(ep.atom("suc"), X)), Y), ep.cons(ep.atom("suc"), Z)),
+                {ep.cons(ep.cons(ep.cons(ep.atom("add"), X), Y), Z)}
+            });
+        }
+
+        // idx 4: lt(zero, suc(X)) :- nat(X).
+        {
+            const expr* X = ep.var(seq());
+            db.push_back(rule{
+                ep.cons(ep.cons(ep.atom("lt"), ep.atom("zero")), ep.cons(ep.atom("suc"), X)),
+                {ep.cons(ep.atom("nat"), X)}
+            });
+        }
+
+        // idx 5: lt(suc(X), suc(Y)) :- lt(X, Y).
+        {
+            const expr* X = ep.var(seq());
+            const expr* Y = ep.var(seq());
+            db.push_back(rule{
+                ep.cons(ep.cons(ep.atom("lt"), ep.cons(ep.atom("suc"), X)), ep.cons(ep.atom("suc"), Y)),
+                {ep.cons(ep.cons(ep.atom("lt"), X), Y)}
+            });
+        }
+
+        const expr* X   = ep.var(seq());
+        const expr* Y   = ep.var(seq());
+        const expr* S   = ep.var(seq());
+        const expr* ten = peano(10);
+
+        goals goals;
+        goals.push_back(ep.cons(ep.cons(ep.cons(ep.atom("add"), X), Y), S));  // goal 0: add(X, Y, S)
+        goals.push_back(ep.cons(ep.cons(ep.atom("lt"), S), ten));              // goal 1: lt(S, ten)
+
+        std::mt19937 rng(42);
+        a01 solver(db, goals, t, seq, bm, 1000, 100, 1.414, rng);
+
+        normalizer norm(ep, bm);
+
+        // All 55 pairs (x, y) with x + y < 10
+        std::set<solution> expected;
+        for (int x = 0; x < 10; ++x)
+            for (int y = 0; y < 10 - x; ++y)
+                expected.insert({peano(x), peano(y)});
+        assert(expected.size() == 55);
+
+        next_until_refuted(solver, expected, [&]() -> solution {
+            return {ep.import(norm(X)), ep.import(norm(Y))};
+        });
+    }
+
+    // Test 16: Enumerate all pairs (X, Y) whose sum is exactly 10
+    //
+    // Rules:
+    //   idx 0: nat(zero).
+    //   idx 1: nat(suc(X))           :- nat(X).
+    //   idx 2: add(zero, Y, Y)       :- nat(Y).
+    //   idx 3: add(suc(X), Y, suc(Z)):- add(X, Y, Z).
+    //
+    // Goal: add(X, Y, ten)   where ten = suc^10(zero)
+    //
+    // Exactly 11 solutions: (0,10),(1,9),(2,8),...,(10,0).
+    {
+        trail t;
+        t.push();
+        expr_pool ep(t);
+        bind_map bm(t);
+        sequencer seq(t);
+
+        auto peano = [&](int n) -> const expr* {
+            const expr* r = ep.atom("zero");
+            for (int i = 0; i < n; ++i)
+                r = ep.cons(ep.atom("suc"), r);
+            return r;
+        };
+
+        database db;
+
+        // idx 0: nat(zero).
+        db.push_back(rule{ep.cons(ep.atom("nat"), ep.atom("zero")), {}});
+
+        // idx 1: nat(suc(X)) :- nat(X).
+        {
+            const expr* X = ep.var(seq());
+            db.push_back(rule{
+                ep.cons(ep.atom("nat"), ep.cons(ep.atom("suc"), X)),
+                {ep.cons(ep.atom("nat"), X)}
+            });
+        }
+
+        // idx 2: add(zero, Y, Y) :- nat(Y).
+        {
+            const expr* Y = ep.var(seq());
+            db.push_back(rule{
+                ep.cons(ep.cons(ep.cons(ep.atom("add"), ep.atom("zero")), Y), Y),
+                {ep.cons(ep.atom("nat"), Y)}
+            });
+        }
+
+        // idx 3: add(suc(X), Y, suc(Z)) :- add(X, Y, Z).
+        {
+            const expr* X = ep.var(seq());
+            const expr* Y = ep.var(seq());
+            const expr* Z = ep.var(seq());
+            db.push_back(rule{
+                ep.cons(ep.cons(ep.cons(ep.atom("add"), ep.cons(ep.atom("suc"), X)), Y), ep.cons(ep.atom("suc"), Z)),
+                {ep.cons(ep.cons(ep.cons(ep.atom("add"), X), Y), Z)}
+            });
+        }
+
+        const expr* X   = ep.var(seq());
+        const expr* Y   = ep.var(seq());
+        const expr* ten = peano(10);
+
+        goals goals;
+        goals.push_back(ep.cons(ep.cons(ep.cons(ep.atom("add"), X), Y), ten));  // goal 0: add(X, Y, ten)
+
+        std::mt19937 rng(42);
+        a01 solver(db, goals, t, seq, bm, 1000, 1000, 1.414, rng);
+
+        normalizer norm(ep, bm);
+
+        // All 11 pairs (x, y) with x + y = 10
+        std::set<solution> expected;
+        for (int x = 0; x <= 10; ++x)
+            expected.insert({peano(x), peano(10 - x)});
+        assert(expected.size() == 11);
+
+        next_until_refuted(solver, expected, [&]() -> solution {
+            return {ep.import(norm(X)), ep.import(norm(Y))};
+        });
+    }
+
+    // Test 17: Enumerate all pairs (X, Y) whose product is exactly 8
+    //
+    // Rules:
+    //   idx 0: nat(zero).
+    //   idx 1: nat(suc(X))           :- nat(X).
+    //   idx 2: add(zero, Y, Y)       :- nat(Y).
+    //   idx 3: add(suc(X), Y, suc(Z)):- add(X, Y, Z).
+    //   idx 4: mul(zero, Y, zero)    :- nat(Y).
+    //   idx 5: mul(suc(X), Y, Z)     :- mul(X, Y, W), add(W, Y, Z).
+    //
+    // Goal: mul(X, Y, eight)   where eight = suc^8(zero)
+    //
+    // Exactly 4 solutions: (1,8),(2,4),(4,2),(8,1).
+    // Zero is excluded because mul(zero,Y,zero) can never unify with eight.
+    {
+        trail t;
+        t.push();
+        expr_pool ep(t);
+        bind_map bm(t);
+        sequencer seq(t);
+
+        auto peano = [&](int n) -> const expr* {
+            const expr* r = ep.atom("zero");
+            for (int i = 0; i < n; ++i)
+                r = ep.cons(ep.atom("suc"), r);
+            return r;
+        };
+
+        database db;
+
+        // idx 0: nat(zero).
+        db.push_back(rule{ep.cons(ep.atom("nat"), ep.atom("zero")), {}});
+
+        // idx 1: nat(suc(X)) :- nat(X).
+        {
+            const expr* X = ep.var(seq());
+            db.push_back(rule{
+                ep.cons(ep.atom("nat"), ep.cons(ep.atom("suc"), X)),
+                {ep.cons(ep.atom("nat"), X)}
+            });
+        }
+
+        // idx 2: add(zero, Y, Y) :- nat(Y).
+        {
+            const expr* Y = ep.var(seq());
+            db.push_back(rule{
+                ep.cons(ep.cons(ep.cons(ep.atom("add"), ep.atom("zero")), Y), Y),
+                {ep.cons(ep.atom("nat"), Y)}
+            });
+        }
+
+        // idx 3: add(suc(X), Y, suc(Z)) :- add(X, Y, Z).
+        {
+            const expr* X = ep.var(seq());
+            const expr* Y = ep.var(seq());
+            const expr* Z = ep.var(seq());
+            db.push_back(rule{
+                ep.cons(ep.cons(ep.cons(ep.atom("add"), ep.cons(ep.atom("suc"), X)), Y), ep.cons(ep.atom("suc"), Z)),
+                {ep.cons(ep.cons(ep.cons(ep.atom("add"), X), Y), Z)}
+            });
+        }
+
+        // idx 4: mul(zero, Y, zero) :- nat(Y).
+        {
+            const expr* Y = ep.var(seq());
+            db.push_back(rule{
+                ep.cons(ep.cons(ep.cons(ep.atom("mul"), ep.atom("zero")), Y), ep.atom("zero")),
+                {ep.cons(ep.atom("nat"), Y)}
+            });
+        }
+
+        // idx 5: mul(suc(X), Y, Z) :- mul(X, Y, W), add(W, Y, Z).
+        {
+            const expr* X = ep.var(seq());
+            const expr* Y = ep.var(seq());
+            const expr* Z = ep.var(seq());
+            const expr* W = ep.var(seq());
+            db.push_back(rule{
+                ep.cons(ep.cons(ep.cons(ep.atom("mul"), ep.cons(ep.atom("suc"), X)), Y), Z),
+                {
+                    ep.cons(ep.cons(ep.cons(ep.atom("mul"), X), Y), W),
+                    ep.cons(ep.cons(ep.cons(ep.atom("add"), W), Y), Z)
+                }
+            });
+        }
+
+        const expr* X     = ep.var(seq());
+        const expr* Y     = ep.var(seq());
+        const expr* eight = peano(8);
+
+        goals goals;
+        goals.push_back(ep.cons(ep.cons(ep.cons(ep.atom("mul"), X), Y), eight));  // goal 0: mul(X, Y, eight)
+
+        std::mt19937 rng(42);
+        a01 solver(db, goals, t, seq, bm, 1000, 10, 1.414, rng);
+
+        normalizer norm(ep, bm);
+
+        // All 4 factor pairs of 8
+        std::set<solution> expected = {
+            {peano(1), peano(8)},
+            {peano(2), peano(4)},
+            {peano(4), peano(2)},
+            {peano(8), peano(1)},
+        };
+
+        next_until_refuted(solver, expected, [&]() -> solution {
+            return {ep.import(norm(X)), ep.import(norm(Y))};
+        });
+    }
+}
 
 void test_expr_printer_constructor() {
     // Test 1: Construct with std::cout - reference is stored correctly
@@ -28501,12 +28246,12 @@ void unit_test_main() {
     TEST(test_cdcl_constrain);
     TEST(test_cdcl_refuted);
     TEST(test_cdcl_eliminated);
-    // TEST(test_a01_sim_constructor);
-    // TEST(test_a01_sim);
-    // TEST(test_a01_constructor_and_destructor);
-    // TEST(test_a01_sim_one);
-    // TEST(test_a01_next_avoidance);
-    // TEST(test_a01);
+    TEST(test_a01_sim_constructor);
+    TEST(test_a01_sim);
+    TEST(test_a01_constructor_and_destructor);
+    TEST(test_a01_sim_one);
+    TEST(test_a01_next_avoidance);
+    TEST(test_a01);
     TEST(test_expr_printer_constructor);
     TEST(test_expr_printer);
 }
