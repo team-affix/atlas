@@ -8,25 +8,28 @@ cdcl::cdcl() :
 
 }
 
-size_t cdcl::insert(const avoidance& av) {
-    // 1. get a new id for the avoidance
+size_t cdcl::learn(const decision_store& ds) {
+    // 1. reduce the decision store to a set of leaf resolutions
+    avoidance av = reduce(ds);
+
+    // 2. get a new id for the avoidance
     size_t id = avoidances.size();
 
-    // 2. if the avoidance is empty, we are refuted.
+    // 3. if the avoidance is empty, we are refuted.
     //    we should never achieve refutation in upsert() since we should never make
     //    moves that are eliminated which would lead to refutation.
     if (av.empty())
         is_refuted = true;
     
-    // 3. add the avoidance to the store
+    // 4. add the avoidance to the store
     upsert(id, av);
 
-    // 4. get all the goals that are watching this avoidance
+    // 5. get all the goals that are watching this avoidance
     //    and link the avoidance to the goals
     for (const resolution_lineage* rl : av)
         watched_goals[rl->parent].insert(id);
 
-    // 5. return the id
+    // 6. return the id
     return id;
 
 }
@@ -75,6 +78,45 @@ void cdcl::erase(size_t id) {
     
     // 3. remove the avoidance from the store
     avoidances.erase(id);
+}
+
+avoidance cdcl::reduce(const decision_store& ds) {
+    // 1. create sets of visited lineages
+    std::set<const resolution_lineage*> visited;
+
+    // 2. create result avoidance
+    avoidance av = ds;
+
+    // 3. iterate over ds, and for each entry, remove all ancestors from av
+    for (const resolution_lineage* rl : ds)
+        remove_ancestors(rl, av, visited);
+
+    // 4. return the avoidance
+    return av;
+    
+}
+
+void cdcl::remove_ancestors(const resolution_lineage* rl, avoidance& av, std::set<const resolution_lineage*>& visited) {
+    while (rl) {
+        // 1. get grandparent
+        //    (double-dereference safe because resolutions should
+        //     never have null parent goals)
+        const resolution_lineage* grandparent = rl->parent->parent;
+        
+        // 2. check grandparent visited
+        if (visited.contains(grandparent))
+            break;
+
+        // 3. visit grandparent
+        visited.insert(grandparent);
+
+        // 4. remove grandparent from av
+        av.erase(grandparent);
+
+        // 5. rl = grandparent
+        rl = grandparent;
+
+    }
 }
 
 bool cdcl::refuted() const {
