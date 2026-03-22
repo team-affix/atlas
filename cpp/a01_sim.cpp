@@ -69,10 +69,7 @@ bool a01_sim::operator()() {
         auto [chosen_goal, chosen_candidate] = dec();
 
         // resolve the chosen goal and candidate
-        gr(chosen_goal, chosen_candidate);
-
-        // construct the resolution lineage
-        auto rl = lp.resolution(chosen_goal, chosen_candidate);
+        auto rl = gr(chosen_goal, chosen_candidate);
 
         // trim the avoidances concerning the resolution
         c.constrain(rl);
