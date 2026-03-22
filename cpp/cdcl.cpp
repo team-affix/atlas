@@ -33,27 +33,33 @@ void cdcl::learn(const decision_store& ds) {
 }
 
 void cdcl::constrain(const resolution_lineage* rl) {
-    // 1. get the set of avoidances that concern this resolution
-    std::set<size_t> ids = watched_goals[rl->parent];
+    // 1. get the parent goal
+    const goal_lineage* gl = rl->parent;
+    
+    // 2. get the set of avoidances that concern this resolution
+    std::set<size_t> ids = watched_goals[gl];
 
-    // 2. for each avoidance, if the avoidance contains the resolution,
+    // 3. for each avoidance, if the avoidance contains the resolution,
     //    reduce the avoidance. Else, remove the avoidance from the store.
     for (size_t id : ids) {
 
-        // 3. get the avoidance
+        // 4. get the avoidance
         avoidance av = avoidances.at(id);
 
-        // 4. reduce the avoidance
+        // 5. reduce the avoidance
         size_t erased = av.erase(rl);
 
-        // 5a. if the resolution was found, then it is consistent
+        // 6a. if the resolution was found, then it is consistent
         if (erased > 0)
             upsert(id, av);
 
-        // 5b. if the resolution was not found, then it is conflicting
+        // 6b. if the resolution was not found, then it is conflicting
         else
             erase(id);
     }
+
+    // 7. Remove the parent goal from the watched goals
+    watched_goals.erase(gl);
 }
 
 void cdcl::upsert(size_t id, const avoidance& av) {

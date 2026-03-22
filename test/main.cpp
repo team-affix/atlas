@@ -20683,7 +20683,9 @@ void test_cdcl_constrain() {
         c.constrain(rl_constrain);
 
         assert(c.avoidances.empty());
-        assert(c.watched_goals.at(g1).empty());
+        // g1 is the constrained parent: its key is removed entirely from watched_goals
+        assert(c.watched_goals.count(g1) == 0);
+        // g2 had its link cleaned by erase(); key still present but set is now empty
         assert(c.watched_goals.at(g2).empty());
     }
 
@@ -20745,10 +20747,82 @@ void test_cdcl_constrain() {
 
         c.constrain(rl_constrain);
 
-        // erase(0): avoidance removed, g1's link to 0 removed, g2's link to 0 removed
+        // erase(0): avoidance removed, g2's link to 0 cleared by erase(); g1's key removed entirely
         assert(c.avoidances.empty());
-        assert(c.watched_goals.at(g1).empty());
+        assert(c.watched_goals.count(g1) == 0);
         assert(c.watched_goals.at(g2).empty());
+    }
+
+    // Test 4: Multiple avoidances - constrain only affects those watched by the constrained rl's parent
+    // (already exists above — this numbering continues from the existing tests)
+
+    // Test 6: constrain() for a goal with no avoidances watching it — must be a no-op;
+    //         no spurious empty entry should appear in watched_goals.
+    //         Bug: operator[] in "watched_goals[rl->parent]" creates an empty set entry
+    //         for any goal passed to constrain(), even if nothing watches it.
+    {
+        lineage_pool lp;
+        cdcl c;
+
+        const goal_lineage* g1 = lp.goal(nullptr, 0);
+        const resolution_lineage* rl1 = lp.resolution(g1, 0);
+
+        assert(c.watched_goals.empty());
+
+        // g1 has no avoidances watching it — constrain must be a no-op
+        c.constrain(rl1);
+
+        assert(c.avoidances.empty());
+        // watched_goals must remain empty; no spurious entry for g1 must be created
+        assert(c.watched_goals.empty());
+    }
+
+    // Test 7: Stale watched_goals link after reduce-then-erase causes crash on a
+    //         second constrain for the same parent.
+    //
+    //         Sequence:
+    //           learn({rl1, rl2})          → av0 watched by g1 and g2
+    //           constrain(rl1)             → rl1 found; av0 reduced to {rl2};
+    //                                        watched_goals[g1] still = {0}  ← stale!
+    //           constrain(rl2_sibling)     → g2 watched, rl2_sibling not in {rl2}
+    //                                        → erase(av0); only g2 is unlinked by erase();
+    //                                        watched_goals[g1] = {0} still dangling!
+    //           constrain(rl1_sibling)     → ids = watched_goals[g1] = {0}
+    //                                        → avoidances.at(0) throws (av0 was erased) → CRASH
+    //
+    //         Correct behaviour: after av0 is erased, constraining anything under g1 must
+    //         be a no-op (g1 is no longer relevant to any live avoidance).
+    {
+        lineage_pool lp;
+        cdcl c;
+
+        const goal_lineage* g1 = lp.goal(nullptr, 0);
+        const goal_lineage* g2 = lp.goal(nullptr, 1);
+        const resolution_lineage* rl1         = lp.resolution(g1, 0);
+        const resolution_lineage* rl1_sibling = lp.resolution(g1, 1); // triggers the crash
+        const resolution_lineage* rl2         = lp.resolution(g2, 0);
+        const resolution_lineage* rl2_sibling = lp.resolution(g2, 1); // triggers erase
+
+        decision_store ds;
+        ds.insert(rl1);
+        ds.insert(rl2);
+        c.learn(ds); // av0 = {rl1, rl2}, watched by g1 and g2
+
+        // Step 1: constrain(rl1) — reduces av0 to {rl2}; watched_goals[g1] goes stale
+        c.constrain(rl1);
+        assert(c.avoidances.at(0).size() == 1);
+        assert(c.avoidances.at(0).count(rl2) == 1);
+
+        // Step 2: constrain(rl2_sibling) — g2 is watched but rl2_sibling not in {rl2}
+        //         → erase(av0); only g2's link is cleaned up; g1's link is left dangling
+        c.constrain(rl2_sibling);
+        assert(c.avoidances.empty());
+
+        // Step 3: constrain(rl1_sibling) — g1 has stale link to the now-deleted av0;
+        //         must be a no-op, but currently crashes via avoidances.at(stale_id)
+        c.constrain(rl1_sibling);
+
+        assert(c.avoidances.empty()); // still empty — no avoidance resurrected
     }
 }
 
