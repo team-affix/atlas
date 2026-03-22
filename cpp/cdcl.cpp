@@ -4,7 +4,8 @@ cdcl::cdcl() :
     avoidances(),
     watched_goals(),
     is_refuted(false),
-    eliminated_resolutions() {
+    eliminated_resolutions(),
+    next_avoidance_id(0) {
 
 }
 
@@ -13,7 +14,7 @@ void cdcl::learn(const decision_store& ds) {
     avoidance av = reduce(ds);
 
     // 2. get a new id for the avoidance
-    size_t id = avoidances.size();
+    size_t id = next_avoidance_id++;
 
     // 3. if the avoidance is empty, we are refuted.
     //    we should never achieve refutation in upsert() since we should never make

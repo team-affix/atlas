@@ -20386,6 +20386,221 @@ void test_cdcl_learn() {
         assert(c.eliminated_resolutions.size() == 1);
         assert(c.eliminated_resolutions.count(rl1) == 1);
     }
+
+    // Test 7: Three sequential learns — ids are 0, 1, 2 respectively
+    {
+        lineage_pool lp;
+        cdcl c;
+
+        const goal_lineage* g1 = lp.goal(nullptr, 0);
+        const goal_lineage* g2 = lp.goal(nullptr, 1);
+        const goal_lineage* g3 = lp.goal(nullptr, 2);
+        const resolution_lineage* rl1 = lp.resolution(g1, 0);
+        const resolution_lineage* rl2 = lp.resolution(g2, 0);
+        const resolution_lineage* rl3 = lp.resolution(g3, 0);
+
+        decision_store ds1; ds1.insert(rl1);
+        decision_store ds2; ds2.insert(rl2);
+        decision_store ds3; ds3.insert(rl3);
+
+        c.learn(ds1);
+        c.learn(ds2);
+        c.learn(ds3);
+
+        assert(c.avoidances.size() == 3);
+        assert(c.avoidances.count(0) == 1);
+        assert(c.avoidances.count(1) == 1);
+        assert(c.avoidances.count(2) == 1);
+        assert(c.avoidances.at(0).count(rl1) == 1);
+        assert(c.avoidances.at(1).count(rl2) == 1);
+        assert(c.avoidances.at(2).count(rl3) == 1);
+        assert(c.watched_goals.at(g1).count(0) == 1);
+        assert(c.watched_goals.at(g2).count(1) == 1);
+        assert(c.watched_goals.at(g3).count(2) == 1);
+    }
+
+    // Test 8: Constraining the stripped ancestor has no effect on the stored avoidance.
+    //         After reduction, the ancestor's parent goal is not watched, so constrain()
+    //         ignores it entirely.
+    {
+        lineage_pool lp;
+        cdcl c;
+
+        const goal_lineage* g0 = lp.goal(nullptr, 0);
+        const resolution_lineage* rl0 = lp.resolution(g0, 0); // ancestor
+        const goal_lineage* g1 = lp.goal(rl0, 0);
+        const resolution_lineage* rl1 = lp.resolution(g1, 0); // leaf
+
+        decision_store ds;
+        ds.insert(rl0);
+        ds.insert(rl1);
+        c.learn(ds); // stored avoidance = {rl1}; g0 not watched
+
+        // Constrain with a sibling of rl0 — g0 is not watched, so no avoidance is affected
+        const resolution_lineage* rl0_alt = lp.resolution(g0, 1);
+        c.constrain(rl0_alt);
+
+        assert(c.avoidances.size() == 1);
+        assert(c.avoidances.at(0).size() == 1);
+        assert(c.avoidances.at(0).count(rl1) == 1);
+    }
+
+    // Test 9: Same decision store learned twice — two independent avoidances at ids 0 and 1
+    {
+        lineage_pool lp;
+        cdcl c;
+
+        const goal_lineage* g1 = lp.goal(nullptr, 0);
+        const goal_lineage* g2 = lp.goal(nullptr, 1);
+        const resolution_lineage* rl1 = lp.resolution(g1, 0);
+        const resolution_lineage* rl2 = lp.resolution(g2, 0);
+
+        decision_store ds;
+        ds.insert(rl1);
+        ds.insert(rl2);
+
+        c.learn(ds);
+        c.learn(ds);
+
+        // Two distinct avoidance entries with the same content
+        assert(c.avoidances.size() == 2);
+        assert(c.avoidances.at(0) == c.avoidances.at(1));
+        // Both avoidances watched by both goals
+        assert(c.watched_goals.at(g1).count(0) == 1);
+        assert(c.watched_goals.at(g1).count(1) == 1);
+        assert(c.watched_goals.at(g2).count(0) == 1);
+        assert(c.watched_goals.at(g2).count(1) == 1);
+    }
+
+    // Test 10: is_refuted persists across subsequent learns
+    {
+        lineage_pool lp;
+        cdcl c;
+
+        const goal_lineage* g1 = lp.goal(nullptr, 0);
+        const resolution_lineage* rl1 = lp.resolution(g1, 0);
+
+        decision_store empty_ds;
+        c.learn(empty_ds); // triggers refutation
+        assert(c.is_refuted);
+
+        decision_store ds;
+        ds.insert(rl1);
+        c.learn(ds); // additional learn after refutation
+
+        assert(c.is_refuted); // still refuted
+        assert(c.avoidances.size() == 2);
+    }
+
+    // Test 11: Multi-level chain (3 levels) — only the deepest leaf's parent is watched
+    {
+        lineage_pool lp;
+        cdcl c;
+
+        const goal_lineage* g0 = lp.goal(nullptr, 0);
+        const resolution_lineage* rl0 = lp.resolution(g0, 0);
+        const goal_lineage* g1 = lp.goal(rl0, 0);
+        const resolution_lineage* rl1 = lp.resolution(g1, 0);
+        const goal_lineage* g2 = lp.goal(rl1, 0);
+        const resolution_lineage* rl2 = lp.resolution(g2, 0);
+
+        decision_store ds;
+        ds.insert(rl0);
+        ds.insert(rl1);
+        ds.insert(rl2);
+
+        c.learn(ds);
+
+        // Only rl2 survives reduction
+        assert(c.avoidances.at(0).size() == 1);
+        assert(c.avoidances.at(0).count(rl2) == 1);
+        // Only g2 is watched; g0 and g1 are not
+        assert(c.watched_goals.count(g0) == 0);
+        assert(c.watched_goals.count(g1) == 0);
+        assert(c.watched_goals.at(g2).count(0) == 1);
+        // Singleton → rl2 immediately eliminated
+        assert(c.eliminated_resolutions.count(rl2) == 1);
+        assert(c.eliminated_resolutions.count(rl1) == 0);
+        assert(c.eliminated_resolutions.count(rl0) == 0);
+    }
+
+    // Test 12: Eliminated resolution persists in eliminated_resolutions even after
+    //          the singleton avoidance that caused it is subsequently erased.
+    //          erase() removes the avoidance but does not clean eliminated_resolutions.
+    {
+        lineage_pool lp;
+        cdcl c;
+
+        const goal_lineage* g1 = lp.goal(nullptr, 0);
+        const resolution_lineage* rl1 = lp.resolution(g1, 0); // the singleton
+        const resolution_lineage* rl1_alt = lp.resolution(g1, 1); // sibling (for conflict)
+
+        decision_store ds;
+        ds.insert(rl1);
+        c.learn(ds); // singleton → rl1 eliminated, avoidance watched by g1
+
+        assert(c.eliminated_resolutions.count(rl1) == 1);
+        assert(c.avoidances.size() == 1);
+
+        // Constrain with sibling of rl1: g1 is watched but rl1_alt is not in avoidance → erase
+        c.constrain(rl1_alt);
+
+        assert(c.avoidances.empty()); // avoidance erased
+        // rl1 remains in eliminated_resolutions even though the avoidance is gone
+        assert(c.eliminated_resolutions.count(rl1) == 1);
+    }
+
+    // Test 13: Id collision bug — learn() uses avoidances.size() as the next id.
+    //          After an erasure the size shrinks, so a subsequent learn() can assign
+    //          an id that is already occupied by a surviving avoidance.
+    //
+    //          Sequence:
+    //            learn(ds1) → id 0        avoidances = {0, 1} (size 2)
+    //            learn(ds2) → id 1        |
+    //            constrain (erase av0)   → avoidances = {1}   (size 1)
+    //            learn(ds3) → id should be 2, but avoidances.size() == 1 → id 1 → COLLISION
+    //
+    //          Correct behaviour: three learns with one erasure in between should yield
+    //          exactly two avoidances with distinct ids.
+    {
+        lineage_pool lp;
+        cdcl c;
+
+        const goal_lineage* g1 = lp.goal(nullptr, 0);
+        const goal_lineage* g2 = lp.goal(nullptr, 1);
+        const goal_lineage* g3 = lp.goal(nullptr, 2);
+        const resolution_lineage* rl1 = lp.resolution(g1, 0); // in av0
+        const resolution_lineage* rl1_alt = lp.resolution(g1, 1); // conflict for g1
+        const resolution_lineage* rl2 = lp.resolution(g2, 0); // in av1
+        const resolution_lineage* rl3 = lp.resolution(g3, 0); // in av2 (third learn)
+
+        decision_store ds1; ds1.insert(rl1);
+        decision_store ds2; ds2.insert(rl2);
+        decision_store ds3; ds3.insert(rl3);
+
+        c.learn(ds1); // avoidances = {0: {rl1}}
+        c.learn(ds2); // avoidances = {0: {rl1}, 1: {rl2}}
+
+        assert(c.avoidances.size() == 2);
+
+        // Erase av0: constrain with sibling of rl1 (g1 is watched, rl1_alt not in av0 → erase)
+        c.constrain(rl1_alt);
+
+        assert(c.avoidances.size() == 1);
+        assert(c.avoidances.count(0) == 0);
+        assert(c.avoidances.count(1) == 1);
+        assert(c.avoidances.at(1).count(rl2) == 1); // av1 intact
+
+        // Third learn — must get a fresh id (2) and must NOT overwrite av1 at id 1
+        c.learn(ds3);
+
+        assert(c.avoidances.size() == 2);                   // av1 + av2
+        assert(c.avoidances.at(1).count(rl2) == 1);         // av1 untouched
+        assert(c.avoidances.count(2) == 1);                 // av2 at fresh id 2
+        assert(c.avoidances.at(2).count(rl3) == 1);         // av2 content correct
+        assert(c.watched_goals.at(g2).count(1) == 1);       // g2 still links to av1
+        assert(c.watched_goals.at(g3).count(2) == 1);       // g3 links to av2 at id 2
+    }
 }
 
 void test_cdcl_constrain() {

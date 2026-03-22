@@ -25,6 +25,7 @@ struct cdcl {
     std::map<const goal_lineage*, std::set<size_t>> watched_goals;
     bool is_refuted;
     std::set<const resolution_lineage*> eliminated_resolutions;
+    size_t next_avoidance_id;
 };
 
 #endif
