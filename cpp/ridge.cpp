@@ -1,12 +1,12 @@
-#include "../hpp/a01.hpp"
-#include "../hpp/a01_sim.hpp"
+#include "../hpp/ridge.hpp"
+#include "../hpp/ridge_sim.hpp"
 #include "../hpp/mcts_decider.hpp"
 
-a01::~a01() {
+ridge::~ridge() {
     t.pop();
 }
 
-a01::a01(
+ridge::ridge(
     const database& db,
     const goals& goals,
     trail& t,
@@ -33,7 +33,7 @@ a01::a01(
     t.push();
 }
 
-bool a01::operator()(size_t iterations, std::optional<resolutions>& soln) {
+bool ridge::operator()(size_t iterations, std::optional<resolutions>& soln) {
     // default to no solution
     soln = std::nullopt;
 
@@ -67,7 +67,7 @@ bool a01::operator()(size_t iterations, std::optional<resolutions>& soln) {
     return true;
 }
 
-bool a01::sim_one(monte_carlo::tree_node<mcts_decider::choice>& root, decisions& ds, resolutions& rs) {
+bool ridge::sim_one(monte_carlo::tree_node<mcts_decider::choice>& root, decisions& ds, resolutions& rs) {
     // reset the trail
     t.pop();
     t.push();
@@ -76,7 +76,7 @@ bool a01::sim_one(monte_carlo::tree_node<mcts_decider::choice>& root, decisions&
     monte_carlo::simulation<mcts_decider::choice, std::mt19937> sim(root, exploration_constant, rng);
 
     // construct the a01_sim
-    a01_sim sim_instance(max_resolutions, db, gl, t, vars, ep, bm, lp, rs, ds, c, sim);
+    ridge_sim sim_instance(max_resolutions, db, gl, t, vars, ep, bm, lp, rs, ds, c, sim);
 
     // run the simulation
     bool sim_result = sim_instance();
@@ -89,7 +89,7 @@ bool a01::sim_one(monte_carlo::tree_node<mcts_decider::choice>& root, decisions&
 
 }
 
-bool a01::next_avoidance(decisions& avoidance, std::optional<resolutions>& soln) {
+bool ridge::next_avoidance(decisions& avoidance, std::optional<resolutions>& soln) {
     // default to no solution
     soln = std::nullopt;
     

@@ -13,9 +13,9 @@
 #include "cdcl.hpp"
 #include "../mcts/include/mcts.hpp"
 
-struct a01 {
-    ~a01();
-    a01(
+struct ridge {
+    ~ridge();
+    ridge(
         const database&,
         const goals&,
         trail&,

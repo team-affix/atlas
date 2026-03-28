@@ -1,6 +1,6 @@
-#include "../hpp/a01_sim.hpp"
+#include "../hpp/ridge_sim.hpp"
 
-a01_sim::a01_sim(
+ridge_sim::ridge_sim(
     size_t max_resolutions,
     const database& db,
     const goals& goals,
@@ -32,7 +32,7 @@ a01_sim::a01_sim(
     ds.clear();
 }
 
-bool a01_sim::operator()() {
+bool ridge_sim::operator()() {
 
     while ((rs.size() < max_resolutions) && !cs.conflicted() && !gs.empty()) {
 
@@ -73,7 +73,7 @@ bool a01_sim::operator()() {
     return gs.empty();
 }
 
-void a01_sim::resolve(const resolution_lineage* rl) {
+void ridge_sim::resolve(const resolution_lineage* rl) {
     gs.resolve(rl);
     cs.resolve(rl);
     c.constrain(rl);

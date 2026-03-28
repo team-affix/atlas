@@ -10,8 +10,8 @@
 #include "mcts_decider.hpp"
 #include "cdcl.hpp"
 
-struct a01_sim {
-    a01_sim(
+struct ridge_sim {
+    ridge_sim(
         size_t,
         const database&,
         const goals&,

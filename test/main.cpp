@@ -7,8 +7,8 @@
 #include "../hpp/rule.hpp"
 #include "../hpp/defs.hpp"
 #include "../hpp/mcts_decider.hpp"
-#include "../hpp/a01_sim.hpp"
-#include "../hpp/a01.hpp"
+#include "../hpp/ridge_sim.hpp"
+#include "../hpp/ridge.hpp"
 #include "../hpp/expr_printer.hpp"
 #include "../hpp/cdcl.hpp"
 #include <algorithm>
@@ -16928,7 +16928,7 @@ void test_a01_sim_constructor() {
         {
             resolution_store rs;
             decision_store ds;
-            a01_sim simulation(100, db, goals, t, seq, ep, bm, lp, rs, ds, c, sim);
+            ridge_sim simulation(100, db, goals, t, seq, ep, bm, lp, rs, ds, c, sim);
             
             // Verify max_resolutions stored
             assert(simulation.max_resolutions == 100);
@@ -16991,7 +16991,7 @@ void test_a01_sim_constructor() {
             resolution_store rs;
             decision_store ds;
 
-            a01_sim simulation(50, db, goals, t, seq, ep, bm, lp, rs, ds, c, sim);
+            ridge_sim simulation(50, db, goals, t, seq, ep, bm, lp, rs, ds, c, sim);
             
             // CRITICAL: Goal added to goal_store with index 0
             assert(simulation.gs.size() == 1);
@@ -17046,7 +17046,7 @@ void test_a01_sim_constructor() {
         resolution_store rs;
         decision_store ds;
 
-        a01_sim simulation(200, db, goals, t, seq, ep, bm, lp, rs, ds, c, sim);
+        ridge_sim simulation(200, db, goals, t, seq, ep, bm, lp, rs, ds, c, sim);
         
         // CRITICAL: Three goals added with indices 0, 1, 2
         assert(simulation.gs.size() == 3);
@@ -17129,7 +17129,7 @@ void test_a01_sim_constructor() {
         
         resolution_store rs;
         decision_store ds;
-        a01_sim simulation(100, db, goals, t, seq, ep, bm, lp, rs, ds, c, sim);
+        ridge_sim simulation(100, db, goals, t, seq, ep, bm, lp, rs, ds, c, sim);
         
         // CRITICAL: All goals added to goal_store
         assert(simulation.gs.size() == 3);
@@ -17193,7 +17193,7 @@ void test_a01_sim_constructor() {
         
         resolution_store rs;
         decision_store ds;
-        a01_sim simulation(100, db, goals, t, seq, ep, bm, lp, rs, ds, c, sim);
+        ridge_sim simulation(100, db, goals, t, seq, ep, bm, lp, rs, ds, c, sim);
         
         // Goal added
         assert(simulation.gs.size() == 1);
@@ -17246,7 +17246,7 @@ void test_a01_sim_constructor() {
         resolution_store rs;
         decision_store ds;
         size_t c_size_before = c.avoidances.size();
-        a01_sim simulation(100, db, goals, t, seq, ep, bm, lp, rs, ds, c, sim);
+        ridge_sim simulation(100, db, goals, t, seq, ep, bm, lp, rs, ds, c, sim);
         
         // CRITICAL: cdcl is passed by value — simulation.c is a separate copy
         assert(&simulation.c != &c);
@@ -17290,7 +17290,7 @@ void test_a01_sim_constructor() {
         
         resolution_store rs;
         decision_store ds;
-        a01_sim simulation(75, db, goals, t, seq, ep, bm, lp, rs, ds, c, sim);
+        ridge_sim simulation(75, db, goals, t, seq, ep, bm, lp, rs, ds, c, sim);
         
         // CRITICAL: 4 goals added
         assert(simulation.gs.size() == 4);
@@ -17398,7 +17398,7 @@ void test_a01_sim_constructor() {
         resolution_store rs;
         decision_store ds;
         size_t c_size_before = c.avoidances.size();
-        a01_sim simulation(100, db, goals, t, seq, ep, bm, lp, rs, ds, c, sim);
+        ridge_sim simulation(100, db, goals, t, seq, ep, bm, lp, rs, ds, c, sim);
         
         // CRITICAL: cdcl copy has same content but is a distinct object
         assert(&simulation.c != &c);
@@ -17432,7 +17432,7 @@ void test_a01_sim_constructor() {
         
         resolution_store rs;
         decision_store ds;
-        a01_sim simulation(100, db, goals, t, seq, ep, bm, lp, rs, ds, c, sim);
+        ridge_sim simulation(100, db, goals, t, seq, ep, bm, lp, rs, ds, c, sim);
         
         // Verify copier references match (via members)
         assert(&simulation.cp.expr_pool_ref == &ep);
@@ -17462,21 +17462,21 @@ void test_a01_sim_constructor() {
         {
             resolution_store rs;
             decision_store ds;
-            a01_sim sim1(1, db, goals, t, seq, ep, bm, lp, rs, ds, c, sim);
+            ridge_sim sim1(1, db, goals, t, seq, ep, bm, lp, rs, ds, c, sim);
             assert(sim1.max_resolutions == 1);
         }
         
         {
             resolution_store rs;
             decision_store ds;
-            a01_sim sim2(1000, db, goals, t, seq, ep, bm, lp, rs, ds, c, sim);
+            ridge_sim sim2(1000, db, goals, t, seq, ep, bm, lp, rs, ds, c, sim);
             assert(sim2.max_resolutions == 1000);
         }
         
         {
             resolution_store rs;
             decision_store ds;
-            a01_sim sim3(999999, db, goals, t, seq, ep, bm, lp, rs, ds, c, sim);
+            ridge_sim sim3(999999, db, goals, t, seq, ep, bm, lp, rs, ds, c, sim);
             assert(sim3.max_resolutions == 999999);
         }
     }
@@ -17501,7 +17501,7 @@ void test_a01_sim_constructor() {
         
         resolution_store rs;
         decision_store ds;
-        a01_sim simulation(100, db, goals, t, seq, ep, bm, lp, rs, ds, c, sim);
+        ridge_sim simulation(100, db, goals, t, seq, ep, bm, lp, rs, ds, c, sim);
         
         // CRITICAL: decisions() returns reference to ds
         assert(&simulation.ds == &ds);
@@ -17538,7 +17538,7 @@ void test_a01_sim_constructor() {
         resolution_store rs;
         decision_store ds;
         size_t c_size_before = c.avoidances.size();
-        a01_sim simulation(100, db, goals, t, seq, ep, bm, lp, rs, ds, c, sim);
+        ridge_sim simulation(100, db, goals, t, seq, ep, bm, lp, rs, ds, c, sim);
         
         // CRITICAL: Verify cdcl copy is distinct and has expected content
         assert(&simulation.c != &c);
@@ -17579,7 +17579,7 @@ void test_a01_sim_constructor() {
         
         resolution_store rs;
         decision_store ds;
-        a01_sim simulation(500, db, goals, t, seq, ep, bm, lp, rs, ds, c, sim);
+        ridge_sim simulation(500, db, goals, t, seq, ep, bm, lp, rs, ds, c, sim);
         
         // CRITICAL: 5 goals added
         assert(simulation.gs.size() == 5);
@@ -17631,7 +17631,7 @@ void test_a01_sim_constructor() {
         
         resolution_store rs;
         decision_store ds;
-        a01_sim simulation(100, db, goals, t, seq, ep, bm, lp, rs, ds, c, sim);
+        ridge_sim simulation(100, db, goals, t, seq, ep, bm, lp, rs, ds, c, sim);
         
         // CRITICAL: Verify ordering - idx matches position in list
         const goal_lineage* gl_idx0 = nullptr;
@@ -17693,7 +17693,7 @@ void test_a01_sim() {
         
         resolution_store rs;
         decision_store ds;
-        a01_sim simulation(100, db, goals, t, seq, ep, bm, lp, rs, ds, c, sim);
+        ridge_sim simulation(100, db, goals, t, seq, ep, bm, lp, rs, ds, c, sim);
         
         // Execute simulation
         bool result = simulation();
@@ -17750,7 +17750,7 @@ void test_a01_sim() {
         
         resolution_store rs;
         decision_store ds;
-        a01_sim simulation(100, db, goals, t, seq, ep, bm, lp, rs, ds, c, sim);
+        ridge_sim simulation(100, db, goals, t, seq, ep, bm, lp, rs, ds, c, sim);
         
         bool result = simulation();
         
@@ -17798,7 +17798,7 @@ void test_a01_sim() {
         
         resolution_store rs;
         decision_store ds;
-        a01_sim simulation(100, db, goals, t, seq, ep, bm, lp, rs, ds, c, sim);
+        ridge_sim simulation(100, db, goals, t, seq, ep, bm, lp, rs, ds, c, sim);
         
         bool result = simulation();
         
@@ -17861,7 +17861,7 @@ void test_a01_sim() {
         
         resolution_store rs;
         decision_store ds;
-        a01_sim simulation(100, db, goals, t, seq, ep, bm, lp, rs, ds, c, sim);
+        ridge_sim simulation(100, db, goals, t, seq, ep, bm, lp, rs, ds, c, sim);
         
         bool result = simulation();
         
@@ -17919,7 +17919,7 @@ void test_a01_sim() {
         
         resolution_store rs;
         decision_store ds;
-        a01_sim simulation(100, db, goals, t, seq, ep, bm, lp, rs, ds, c, sim);
+        ridge_sim simulation(100, db, goals, t, seq, ep, bm, lp, rs, ds, c, sim);
         
         bool result = simulation();
         
@@ -17984,7 +17984,7 @@ void test_a01_sim() {
         
         resolution_store rs;
         decision_store ds;
-        a01_sim simulation(100, db, goals, t, seq, ep, bm, lp, rs, ds, c, sim);
+        ridge_sim simulation(100, db, goals, t, seq, ep, bm, lp, rs, ds, c, sim);
         
         // CRITICAL: Pre-populate MCTS tree to force decision on (gl0, idx 1)
         // Get the actual goal pointer from simulation.gs
@@ -18061,7 +18061,7 @@ void test_a01_sim() {
         
         resolution_store rs;
         decision_store ds;
-        a01_sim simulation(100, db, goals, t, seq, ep, bm, lp, rs, ds, c, sim);
+        ridge_sim simulation(100, db, goals, t, seq, ep, bm, lp, rs, ds, c, sim);
         
         // Note: With only 1 candidate per goal, both will be unit props
         
@@ -18121,7 +18121,7 @@ void test_a01_sim() {
         
         resolution_store rs;
         decision_store ds;
-        a01_sim simulation(100, db, goals, t, seq, ep, bm, lp, rs, ds, c, sim);
+        ridge_sim simulation(100, db, goals, t, seq, ep, bm, lp, rs, ds, c, sim);
         
         // Pre-populate MCTS to force decision on idx 0
         const goal_lineage* gl0_for_mcts = lp.goal(nullptr, 0);
@@ -18199,7 +18199,7 @@ void test_a01_sim() {
         
         resolution_store rs;
         decision_store ds;
-        a01_sim simulation(3, db, goals, t, seq, ep, bm, lp, rs, ds, c, sim);  // Max 3 resolutions!
+        ridge_sim simulation(3, db, goals, t, seq, ep, bm, lp, rs, ds, c, sim);  // Max 3 resolutions!
         
         bool result = simulation();
         
@@ -18271,7 +18271,7 @@ void test_a01_sim() {
         
         resolution_store rs;
         decision_store ds;
-        a01_sim simulation(100, db, goals, t, seq, ep, bm, lp, rs, ds, c, sim);
+        ridge_sim simulation(100, db, goals, t, seq, ep, bm, lp, rs, ds, c, sim);
         
         // Before execution, verify 5 candidates added
         const goal_lineage* gl0_for_check = lp.goal(nullptr, 0);
@@ -18344,7 +18344,7 @@ void test_a01_sim() {
         
         resolution_store rs;
         decision_store ds;
-        a01_sim simulation(100, db, goals, t, seq, ep, bm, lp, rs, ds, c, sim);
+        ridge_sim simulation(100, db, goals, t, seq, ep, bm, lp, rs, ds, c, sim);
         
         // Verify avoidance copied
         assert(simulation.c.avoidances.size() == 1);
@@ -18404,7 +18404,7 @@ void test_a01_sim() {
         
         resolution_store rs;
         decision_store ds;
-        a01_sim simulation(100, db, goals, t, seq, ep, bm, lp, rs, ds, c, sim);
+        ridge_sim simulation(100, db, goals, t, seq, ep, bm, lp, rs, ds, c, sim);
         
         // Pre-populate MCTS to force decision on (gl0, idx 0)
         const goal_lineage* gl0_for_mcts = lp.goal(nullptr, 0);
@@ -18473,7 +18473,7 @@ void test_a01_sim() {
         
         resolution_store rs;
         decision_store ds;
-        a01_sim simulation(100, db, goals, t, seq, ep, bm, lp, rs, ds, c, sim);
+        ridge_sim simulation(100, db, goals, t, seq, ep, bm, lp, rs, ds, c, sim);
         
         bool result = simulation();
         
@@ -18521,7 +18521,7 @@ void test_a01_sim() {
         
         resolution_store rs;
         decision_store ds;
-        a01_sim simulation(100, db, goals, t, seq, ep, bm, lp, rs, ds, c, sim);
+        ridge_sim simulation(100, db, goals, t, seq, ep, bm, lp, rs, ds, c, sim);
         
         bool result = simulation();
         
@@ -18587,7 +18587,7 @@ void test_a01_sim() {
         
         resolution_store rs;
         decision_store ds;
-        a01_sim simulation(100, db, goals, t, seq, ep, bm, lp, rs, ds, c, sim);
+        ridge_sim simulation(100, db, goals, t, seq, ep, bm, lp, rs, ds, c, sim);
         
         bool result = simulation();
         
@@ -18646,7 +18646,7 @@ void test_a01_sim() {
         
         resolution_store rs;
         decision_store ds;
-        a01_sim simulation(100, db, goals, t, seq, ep, bm, lp, rs, ds, c, sim);
+        ridge_sim simulation(100, db, goals, t, seq, ep, bm, lp, rs, ds, c, sim);
         
         bool result = simulation();
         
@@ -18712,7 +18712,7 @@ void test_a01_sim() {
         
         resolution_store rs;
         decision_store ds;
-        a01_sim simulation(100, db, goals, t, seq, ep, bm, lp, rs, ds, c, sim);
+        ridge_sim simulation(100, db, goals, t, seq, ep, bm, lp, rs, ds, c, sim);
         
         bool result = simulation();
         
@@ -18776,7 +18776,7 @@ void test_a01_sim() {
         
         resolution_store rs;
         decision_store ds;
-        a01_sim simulation(100, db, goals, t, seq, ep, bm, lp, rs, ds, c, sim);
+        ridge_sim simulation(100, db, goals, t, seq, ep, bm, lp, rs, ds, c, sim);
         
         // Force decision on idx 0
         const goal_lineage* gl0_for_mcts = lp.goal(nullptr, 0);
@@ -18845,7 +18845,7 @@ void test_a01_sim() {
         
         resolution_store rs;
         decision_store ds;
-        a01_sim simulation(100, db, goals, t, seq, ep, bm, lp, rs, ds, c, sim);
+        ridge_sim simulation(100, db, goals, t, seq, ep, bm, lp, rs, ds, c, sim);
         
         // Initial state: 20 candidates
         const goal_lineage* gl0_for_check = lp.goal(nullptr, 0);
@@ -18899,7 +18899,7 @@ void test_a01_sim() {
         
         resolution_store rs;
         decision_store ds;
-        a01_sim simulation(100, db, goals, t, seq, ep, bm, lp, rs, ds, c, sim);
+        ridge_sim simulation(100, db, goals, t, seq, ep, bm, lp, rs, ds, c, sim);
         
         bool result = simulation();
         
@@ -18968,7 +18968,7 @@ void test_a01_sim() {
         
         resolution_store rs;
         decision_store ds;
-        a01_sim simulation(100, db, goals, t, seq, ep, bm, lp, rs, ds, c, sim);
+        ridge_sim simulation(100, db, goals, t, seq, ep, bm, lp, rs, ds, c, sim);
         
         // Force decision on idx 1
         const goal_lineage* gl0_for_mcts = lp.goal(nullptr, 0);
@@ -19042,7 +19042,7 @@ void test_a01_sim() {
         
         resolution_store rs;
         decision_store ds;
-        a01_sim simulation(100, db, goals, t, seq, ep, bm, lp, rs, ds, c, sim);
+        ridge_sim simulation(100, db, goals, t, seq, ep, bm, lp, rs, ds, c, sim);
         
         bool result = simulation();
         
@@ -19100,7 +19100,7 @@ void test_a01_sim() {
         
         resolution_store rs;
         decision_store ds;
-        a01_sim simulation(100, db, goals, t, seq, ep, bm, lp, rs, ds, c, sim);
+        ridge_sim simulation(100, db, goals, t, seq, ep, bm, lp, rs, ds, c, sim);
         
         // Force first decision on (gl0, idx 0)
         const goal_lineage* gl0_for_mcts = lp.goal(nullptr, 0);
@@ -19193,7 +19193,7 @@ void test_a01_sim() {
         
         resolution_store rs;
         decision_store ds;
-        a01_sim simulation(100, db, goals, t, seq, ep, bm, lp, rs, ds, c, sim);
+        ridge_sim simulation(100, db, goals, t, seq, ep, bm, lp, rs, ds, c, sim);
         
         bool result = simulation();
         
@@ -19259,7 +19259,7 @@ void test_a01_sim() {
         
         resolution_store rs;
         decision_store ds;
-        a01_sim simulation(100, db, goals, t, seq, ep, bm, lp, rs, ds, c, sim);
+        ridge_sim simulation(100, db, goals, t, seq, ep, bm, lp, rs, ds, c, sim);
         
         // Verify 30 candidates initially
         const goal_lineage* gl0 = lp.goal(nullptr, 0);
@@ -19325,7 +19325,7 @@ void test_a01_sim() {
         
         resolution_store rs;
         decision_store ds;
-        a01_sim simulation(100, db, goals, t, seq, ep, bm, lp, rs, ds, c, sim);
+        ridge_sim simulation(100, db, goals, t, seq, ep, bm, lp, rs, ds, c, sim);
         
         // Pre-populate MCTS to force decision on idx 0
         const goal_lineage* gl0_for_mcts = lp.goal(nullptr, 0);
@@ -19387,7 +19387,7 @@ void test_a01_sim() {
         
         resolution_store rs;
         decision_store ds;
-        a01_sim simulation(100, db, goals, t, seq, ep, bm, lp, rs, ds, c, sim);
+        ridge_sim simulation(100, db, goals, t, seq, ep, bm, lp, rs, ds, c, sim);
         
         bool result = simulation();
         
@@ -19431,7 +19431,7 @@ void test_a01_sim() {
         
         resolution_store rs;
         decision_store ds;
-        a01_sim simulation(100, db, goals, t, seq, ep, bm, lp, rs, ds, c, sim);
+        ridge_sim simulation(100, db, goals, t, seq, ep, bm, lp, rs, ds, c, sim);
         
         bool result = simulation();
         
@@ -19476,7 +19476,7 @@ void test_a01_sim() {
         
         resolution_store rs;
         decision_store ds;
-        a01_sim simulation(100, db, goals, t, seq, ep, bm, lp, rs, ds, c, sim);
+        ridge_sim simulation(100, db, goals, t, seq, ep, bm, lp, rs, ds, c, sim);
         
         bool result = simulation();
         
@@ -19520,7 +19520,7 @@ void test_a01_sim() {
         
         resolution_store rs;
         decision_store ds;
-        a01_sim simulation(100, db, goals, t, seq, ep, bm, lp, rs, ds, c, sim);
+        ridge_sim simulation(100, db, goals, t, seq, ep, bm, lp, rs, ds, c, sim);
         
         bool result = simulation();
         
@@ -19582,7 +19582,7 @@ void test_a01_sim() {
         
         resolution_store rs;
         decision_store ds;
-        a01_sim simulation(100, db, goals, t, seq, ep, bm, lp, rs, ds, c, sim);
+        ridge_sim simulation(100, db, goals, t, seq, ep, bm, lp, rs, ds, c, sim);
         
         bool result = simulation();
         
@@ -19651,7 +19651,7 @@ void test_a01_sim() {
         
         resolution_store rs;
         decision_store ds;
-        a01_sim simulation(100, db, goals, t, seq, ep, bm, lp, rs, ds, c, sim);
+        ridge_sim simulation(100, db, goals, t, seq, ep, bm, lp, rs, ds, c, sim);
         
         bool result = simulation();
         
@@ -19718,7 +19718,7 @@ void test_a01_sim() {
         
         resolution_store rs;
         decision_store ds;
-        a01_sim simulation(100, db, goals, t, seq, ep, bm, lp, rs, ds, c, sim);
+        ridge_sim simulation(100, db, goals, t, seq, ep, bm, lp, rs, ds, c, sim);
         
         bool result = simulation();
         
@@ -19765,7 +19765,7 @@ void test_a01_sim() {
         
         resolution_store rs;
         decision_store ds;
-        a01_sim simulation(100, db, goals, t, seq, ep, bm, lp, rs, ds, c, sim);
+        ridge_sim simulation(100, db, goals, t, seq, ep, bm, lp, rs, ds, c, sim);
         
         bool result = simulation();
         
@@ -19855,7 +19855,7 @@ void test_a01_sim() {
         
         resolution_store rs;
         decision_store ds;
-        a01_sim simulation(100, db, goals, t, seq, ep, bm, lp, rs, ds, c, sim);
+        ridge_sim simulation(100, db, goals, t, seq, ep, bm, lp, rs, ds, c, sim);
         
         bool result = simulation();
         
@@ -19934,7 +19934,7 @@ void test_a01_sim() {
         
         resolution_store rs;
         decision_store ds;
-        a01_sim simulation(100, db, goals, t, seq, ep, bm, lp, rs, ds, c, sim);
+        ridge_sim simulation(100, db, goals, t, seq, ep, bm, lp, rs, ds, c, sim);
         
         // Force decision on idx 0 (q path -> apple)
         const goal_lineage* gl0_for_mcts = lp.goal(nullptr, 0);
@@ -20003,7 +20003,7 @@ void test_a01_sim() {
         
         resolution_store rs;
         decision_store ds;
-        a01_sim simulation(100, db, goals, t, seq, ep, bm, lp, rs, ds, c, sim);
+        ridge_sim simulation(100, db, goals, t, seq, ep, bm, lp, rs, ds, c, sim);
         
         // Pre-populate MCTS to force base case (idx 2)
         const goal_lineage* gl0_for_mcts = lp.goal(nullptr, 0);
@@ -20092,7 +20092,7 @@ void test_a01_sim() {
         
         resolution_store rs;
         decision_store ds;
-        a01_sim simulation(100, db, goals, t, seq, ep, bm, lp, rs, ds, c, sim);
+        ridge_sim simulation(100, db, goals, t, seq, ep, bm, lp, rs, ds, c, sim);
         
         bool result = simulation();
         
@@ -20166,7 +20166,7 @@ void test_a01_sim() {
         
         resolution_store rs;
         decision_store ds;
-        a01_sim simulation(100, db, goals, t, seq, ep, bm, lp, rs, ds, c, sim);
+        ridge_sim simulation(100, db, goals, t, seq, ep, bm, lp, rs, ds, c, sim);
         
         bool result = simulation();
         
@@ -20217,7 +20217,7 @@ void test_a01_sim() {
         
         resolution_store rs;
         decision_store ds;
-        a01_sim simulation(100, db, goals, t, seq, ep, bm, lp, rs, ds, c, sim);
+        ridge_sim simulation(100, db, goals, t, seq, ep, bm, lp, rs, ds, c, sim);
         
         // Pre-populate MCTS to force idx 2 (NOT idx 0, to prove MCTS works!)
         const goal_lineage* gl0_for_mcts = lp.goal(nullptr, 0);
@@ -20282,7 +20282,7 @@ void test_a01_sim() {
         
         resolution_store rs;
         decision_store ds;
-        a01_sim simulation(100, db, goals, t, seq, ep, bm, lp, rs, ds, c, sim);
+        ridge_sim simulation(100, db, goals, t, seq, ep, bm, lp, rs, ds, c, sim);
         
         bool result = simulation();
         
@@ -20336,7 +20336,7 @@ void test_a01_sim() {
         
         resolution_store rs;
         decision_store ds;
-        a01_sim simulation(100, db, goals, t, seq, ep, bm, lp, rs, ds, c, sim);
+        ridge_sim simulation(100, db, goals, t, seq, ep, bm, lp, rs, ds, c, sim);
         
         bool result = simulation();
         
@@ -20397,7 +20397,7 @@ void test_a01_sim() {
         
         resolution_store rs;
         decision_store ds;
-        a01_sim simulation(100, db, goals, t, seq, ep, bm, lp, rs, ds, c, sim);
+        ridge_sim simulation(100, db, goals, t, seq, ep, bm, lp, rs, ds, c, sim);
         
         bool result = simulation();
         
@@ -20468,7 +20468,7 @@ void test_a01_sim() {
         
         resolution_store rs;
         decision_store ds;
-        a01_sim simulation(100, db, goals, t, seq, ep, bm, lp, rs, ds, c, sim);
+        ridge_sim simulation(100, db, goals, t, seq, ep, bm, lp, rs, ds, c, sim);
         
         bool result = simulation();
         
@@ -20558,7 +20558,7 @@ void test_a01_sim() {
         
         resolution_store rs;
         decision_store ds;
-        a01_sim simulation(100, db, goals, t, seq, ep, bm, lp, rs, ds, c, sim);
+        ridge_sim simulation(100, db, goals, t, seq, ep, bm, lp, rs, ds, c, sim);
         
         bool result = simulation();
         
@@ -20635,7 +20635,7 @@ void test_a01_sim() {
         
         resolution_store rs;
         decision_store ds;
-        a01_sim simulation(100, db, goals, t, seq, ep, bm, lp, rs, ds, c, sim);
+        ridge_sim simulation(100, db, goals, t, seq, ep, bm, lp, rs, ds, c, sim);
         
         bool result = simulation();
         
@@ -20687,7 +20687,7 @@ void test_a01_sim() {
         
         resolution_store rs;
         decision_store ds;
-        a01_sim simulation(100, db, goals, t, seq, ep, bm, lp, rs, ds, c, sim);
+        ridge_sim simulation(100, db, goals, t, seq, ep, bm, lp, rs, ds, c, sim);
         
         // Pre-populate MCTS to force idx 1 (bob)
         const goal_lineage* gl0_for_mcts = lp.goal(nullptr, 0);
@@ -20763,7 +20763,7 @@ void test_a01_sim() {
         
         resolution_store rs;
         decision_store ds;
-        a01_sim simulation(100, db, goals, t, seq, ep, bm, lp, rs, ds, c, sim);
+        ridge_sim simulation(100, db, goals, t, seq, ep, bm, lp, rs, ds, c, sim);
         
         bool result = simulation();
         
@@ -20823,7 +20823,7 @@ void test_a01_sim() {
         
         resolution_store rs;
         decision_store ds;
-        a01_sim simulation(100, db, goals, t, seq, ep, bm, lp, rs, ds, c, sim);
+        ridge_sim simulation(100, db, goals, t, seq, ep, bm, lp, rs, ds, c, sim);
         
         bool result = simulation();
         
@@ -20878,7 +20878,7 @@ void test_a01_sim() {
         
         resolution_store rs;
         decision_store ds;
-        a01_sim simulation(5, db, goals, t, seq, ep, bm, lp, rs, ds, c, sim);  // Low max_resolutions
+        ridge_sim simulation(5, db, goals, t, seq, ep, bm, lp, rs, ds, c, sim);  // Low max_resolutions
         
         bool result = simulation();
         
@@ -20922,7 +20922,7 @@ void test_a01_sim() {
         
         resolution_store rs;
         decision_store ds;
-        a01_sim simulation(100, db, goals, t, seq, ep, bm, lp, rs, ds, c, sim);
+        ridge_sim simulation(100, db, goals, t, seq, ep, bm, lp, rs, ds, c, sim);
         
         bool result = simulation();
         
@@ -20966,7 +20966,7 @@ void test_a01_sim() {
         
         resolution_store rs;
         decision_store ds;
-        a01_sim simulation(100, db, goals, t, seq, ep, bm, lp, rs, ds, c, sim);
+        ridge_sim simulation(100, db, goals, t, seq, ep, bm, lp, rs, ds, c, sim);
         
         bool result = simulation();
         
@@ -21035,7 +21035,7 @@ void test_a01_sim() {
         
         resolution_store rs;
         decision_store ds;
-        a01_sim simulation(100, db, goals, t, seq, ep, bm, lp, rs, ds, c, sim);
+        ridge_sim simulation(100, db, goals, t, seq, ep, bm, lp, rs, ds, c, sim);
         
         bool result = simulation();
         
@@ -21125,7 +21125,7 @@ void test_a01_sim() {
         
         resolution_store rs;
         decision_store ds;
-        a01_sim simulation(100, db, goals, t, seq, ep, bm, lp, rs, ds, c, sim);
+        ridge_sim simulation(100, db, goals, t, seq, ep, bm, lp, rs, ds, c, sim);
         
         bool result = simulation();
         
@@ -21175,7 +21175,7 @@ void test_a01_sim() {
         
         resolution_store rs;
         decision_store ds;
-        a01_sim simulation(100, db, goals, t, seq, ep, bm, lp, rs, ds, c, sim);
+        ridge_sim simulation(100, db, goals, t, seq, ep, bm, lp, rs, ds, c, sim);
         
         bool result = simulation();
         
@@ -21224,7 +21224,7 @@ void test_a01_sim() {
         
         resolution_store rs;
         decision_store ds;
-        a01_sim simulation(100, db, goals, t, seq, ep, bm, lp, rs, ds, c, sim);
+        ridge_sim simulation(100, db, goals, t, seq, ep, bm, lp, rs, ds, c, sim);
         
         bool result = simulation();
         
@@ -21280,7 +21280,7 @@ void test_a01_sim() {
         
         resolution_store rs;
         decision_store ds;
-        a01_sim simulation(5, db, goals, t, seq, ep, bm, lp, rs, ds, c, sim);  // Max 5
+        ridge_sim simulation(5, db, goals, t, seq, ep, bm, lp, rs, ds, c, sim);  // Max 5
         
         bool result = simulation();
         
@@ -21322,7 +21322,7 @@ void test_a01_sim() {
         
         resolution_store rs;
         decision_store ds;
-        a01_sim simulation(100, db, goals, t, seq, ep, bm, lp, rs, ds, c, sim);
+        ridge_sim simulation(100, db, goals, t, seq, ep, bm, lp, rs, ds, c, sim);
         
         bool result = simulation();
         
@@ -21373,7 +21373,7 @@ void test_a01_sim() {
         
         resolution_store rs;
         decision_store ds;
-        a01_sim simulation(100, db, goals, t, seq, ep, bm, lp, rs, ds, c, sim);
+        ridge_sim simulation(100, db, goals, t, seq, ep, bm, lp, rs, ds, c, sim);
         
         // Pre-populate MCTS to force idx 2
         const goal_lineage* gl0_for_mcts = lp.goal(nullptr, 0);
@@ -21438,7 +21438,7 @@ void test_a01_sim() {
         
         resolution_store rs;
         decision_store ds;
-        a01_sim simulation(100, db, goals, t, seq, ep, bm, lp, rs, ds, c, sim);
+        ridge_sim simulation(100, db, goals, t, seq, ep, bm, lp, rs, ds, c, sim);
         
         bool result = simulation();
         
@@ -21484,7 +21484,7 @@ void test_a01_sim() {
         
         resolution_store rs;
         decision_store ds;
-        a01_sim simulation(100, db, goals, t, seq, ep, bm, lp, rs, ds, c, sim);
+        ridge_sim simulation(100, db, goals, t, seq, ep, bm, lp, rs, ds, c, sim);
         
         bool result = simulation();
         
@@ -21546,7 +21546,7 @@ void test_a01_sim() {
         
         resolution_store rs;
         decision_store ds;
-        a01_sim simulation(100, db, goals, t, seq, ep, bm, lp, rs, ds, c, sim);
+        ridge_sim simulation(100, db, goals, t, seq, ep, bm, lp, rs, ds, c, sim);
         
         bool result = simulation();
         
@@ -21586,7 +21586,7 @@ void test_a01_sim() {
         
         resolution_store rs;
         decision_store ds;
-        a01_sim simulation(100, db, goals, t, seq, ep, bm, lp, rs, ds, c, sim);
+        ridge_sim simulation(100, db, goals, t, seq, ep, bm, lp, rs, ds, c, sim);
         
         bool result = simulation();
         
@@ -21630,7 +21630,7 @@ void test_a01_sim() {
         
         resolution_store rs;
         decision_store ds;
-        a01_sim simulation(100, db, goals, t, seq, ep, bm, lp, rs, ds, c, sim);
+        ridge_sim simulation(100, db, goals, t, seq, ep, bm, lp, rs, ds, c, sim);
         
         bool result = simulation();
         
@@ -21673,7 +21673,7 @@ void test_a01_constructor_and_destructor() {
         assert(depth_before == 1);
 
         {
-            a01 solver(db, goals, t, seq, bm, 100, 10, 1.414, rng);
+            ridge solver(db, goals, t, seq, bm, 100, 10, 1.414, rng);
 
             // CRITICAL: Constructor pushes one trail frame
             assert(t.depth() == depth_before + 1);
@@ -21714,7 +21714,7 @@ void test_a01_constructor_and_destructor() {
         assert(t.depth() == 0);
 
         {
-            a01 solver(db, goals, t, seq, bm, 1, 1, 0.0, rng);
+            ridge solver(db, goals, t, seq, bm, 1, 1, 0.0, rng);
 
             // CRITICAL: Depth goes 0 → 1
             assert(t.depth() == 1);
@@ -21744,7 +21744,7 @@ void test_a01_constructor_and_destructor() {
         size_t boundary_size_before = t.frame_boundary_stack.size();
 
         {
-            a01 solver(db, goals, t, seq, bm, 100, 10, 1.414, rng);
+            ridge solver(db, goals, t, seq, bm, 100, 10, 1.414, rng);
 
             // CRITICAL: Only a frame boundary is pushed, not any undo action
             assert(t.undo_stack.size() == undo_size_before);
@@ -21772,7 +21772,7 @@ void test_a01_constructor_and_destructor() {
         bool undone = false;
 
         {
-            a01 solver(db, goals, t, seq, bm, 100, 10, 1.414, rng);
+            ridge solver(db, goals, t, seq, bm, 100, 10, 1.414, rng);
 
             // Log an undo action into the a01's frame
             t.log([&undone]() { undone = true; });
@@ -21801,7 +21801,7 @@ void test_a01_constructor_and_destructor() {
         t.log([&caller_undone]() { caller_undone = true; });
 
         {
-            a01 solver(db, goals, t, seq, bm, 100, 10, 1.414, rng);
+            ridge solver(db, goals, t, seq, bm, 100, 10, 1.414, rng);
 
             // a01's frame is stacked on top of the caller's frame
             assert(t.depth() == 2);
@@ -21833,7 +21833,7 @@ void test_a01_constructor_and_destructor() {
         size_t depth_before = t.depth();
 
         {
-            a01 solver(db, goals, t, seq, bm, 50, 5, 1.0, rng);
+            ridge solver(db, goals, t, seq, bm, 50, 5, 1.0, rng);
 
             // CRITICAL: Frame pushed
             assert(t.depth() == depth_before + 1);
@@ -21875,7 +21875,7 @@ void test_a01_sim_one() {
         goals.push_back(ep.atom("a"));
 
         std::mt19937 rng(42);
-        a01 solver(db, goals, t, seq, bm, 100, 10, 1.414, rng);
+        ridge solver(db, goals, t, seq, bm, 100, 10, 1.414, rng);
 
         monte_carlo::tree_node<mcts_decider::choice> root;
         decision_store ds;
@@ -21924,7 +21924,7 @@ void test_a01_sim_one() {
         goals.push_back(ep.atom("a"));
 
         std::mt19937 rng(42);
-        a01 solver(db, goals, t, seq, bm, 100, 10, 1.414, rng);
+        ridge solver(db, goals, t, seq, bm, 100, 10, 1.414, rng);
 
         monte_carlo::tree_node<mcts_decider::choice> root;
         decision_store ds;
@@ -21968,7 +21968,7 @@ void test_a01_sim_one() {
         goals.push_back(ep.atom("a"));
 
         std::mt19937 rng(42);
-        a01 solver(db, goals, t, seq, bm, 100, 10, 1.414, rng);
+        ridge solver(db, goals, t, seq, bm, 100, 10, 1.414, rng);
 
         // Create a secondary sequencer on the SAME trail (after a01's constructor push)
         sequencer seq2(t);
@@ -22019,7 +22019,7 @@ void test_a01_sim_one() {
         goals.push_back(ep.atom("a"));
 
         std::mt19937 rng(42);
-        a01 solver(db, goals, t, seq, bm, 100, 10, 1.414, rng);
+        ridge solver(db, goals, t, seq, bm, 100, 10, 1.414, rng);
 
         monte_carlo::tree_node<mcts_decider::choice> root;
         decision_store ds;
@@ -22059,7 +22059,7 @@ void test_a01_sim_one() {
         goals.push_back(ep.atom("a"));
 
         std::mt19937 rng(42);
-        a01 solver(db, goals, t, seq, bm, 100, 10, 1.414, rng);
+        ridge solver(db, goals, t, seq, bm, 100, 10, 1.414, rng);
 
         // Inject avoidance: singleton {rl(gl0, 0)} causes CDCL elimination of idx 0
         const goal_lineage* gl0 = solver.lp.goal(nullptr, 0);
@@ -22109,7 +22109,7 @@ void test_a01_sim_one() {
         goals.push_back(ep.atom("a"));
 
         std::mt19937 rng(42);
-        a01 solver(db, goals, t, seq, bm, 100, 10, 1.414, rng);
+        ridge solver(db, goals, t, seq, bm, 100, 10, 1.414, rng);
 
         monte_carlo::tree_node<mcts_decider::choice> root;
 
@@ -22173,7 +22173,7 @@ void test_a01_sim_one() {
         goals.push_back(ep.atom("a"));
 
         std::mt19937 rng(42);
-        a01 solver(db, goals, t, seq, bm, 100, 10, 1.414, rng);
+        ridge solver(db, goals, t, seq, bm, 100, 10, 1.414, rng);
 
         monte_carlo::tree_node<mcts_decider::choice> root;
         decision_store ds;
@@ -22209,7 +22209,7 @@ void test_a01_next_avoidance() {
         goals.push_back(ep.atom("a"));
 
         std::mt19937 rng(42);
-        a01 solver(db, goals, t, seq, bm, 1000, 1000, 1.414, rng);
+        ridge solver(db, goals, t, seq, bm, 1000, 1000, 1.414, rng);
 
         decision_store avoidance;
         std::optional<resolution_store> soln;
@@ -22241,7 +22241,7 @@ void test_a01_next_avoidance() {
         goals.push_back(ep.atom("a"));
 
         std::mt19937 rng(42);
-        a01 solver(db, goals, t, seq, bm, 1000, 1000, 1.414, rng);
+        ridge solver(db, goals, t, seq, bm, 1000, 1000, 1.414, rng);
 
         decision_store avoidance;
         std::optional<resolution_store> soln;
@@ -22288,7 +22288,7 @@ void test_a01_next_avoidance() {
         goals.push_back(ep.atom("q"));
 
         std::mt19937 rng(42);
-        a01 solver(db, goals, t, seq, bm, 1000, 1000, 1.414, rng);
+        ridge solver(db, goals, t, seq, bm, 1000, 1000, 1.414, rng);
 
         decision_store avoidance;
         std::optional<resolution_store> soln;
@@ -22342,7 +22342,7 @@ void test_a01_next_avoidance() {
         goals.push_back(ep.atom("a"));
 
         std::mt19937 rng(42);
-        a01 solver(db, goals, t, seq, bm, 1000, 1000, 1.414, rng);
+        ridge solver(db, goals, t, seq, bm, 1000, 1000, 1.414, rng);
 
         decision_store avoidance;
         std::optional<resolution_store> soln;
@@ -22396,7 +22396,7 @@ void test_a01_next_avoidance() {
         goals.push_back(ep.atom("a"));
 
         std::mt19937 rng(42);
-        a01 solver(db, goals, t, seq, bm, 1000, 1000, 1.414, rng);
+        ridge solver(db, goals, t, seq, bm, 1000, 1000, 1.414, rng);
 
         decision_store avoidance;
         std::optional<resolution_store> soln;
@@ -22448,7 +22448,7 @@ void test_a01_next_avoidance() {
         goals.push_back(ep.atom("a"));
 
         std::mt19937 rng(42);
-        a01 solver(db, goals, t, seq, bm, 1000, 1000, 1.414, rng);
+        ridge solver(db, goals, t, seq, bm, 1000, 1000, 1.414, rng);
 
         decision_store avoidance;
         std::optional<resolution_store> soln;
@@ -22483,7 +22483,7 @@ void test_a01_next_avoidance() {
         goals.push_back(ep.atom("a"));
 
         std::mt19937 rng(42);
-        a01 solver(db, goals, t, seq, bm, 1000, 1000, 1.414, rng);
+        ridge solver(db, goals, t, seq, bm, 1000, 1000, 1.414, rng);
 
         // Inject singleton avoidance: CDCL will eliminate rule 0 for gl0
         const goal_lineage* gl0 = solver.lp.goal(nullptr, 0);
@@ -22563,7 +22563,7 @@ void test_a01_next_avoidance() {
         goals.push_back(ep.atom("a"));
 
         std::mt19937 rng(42);
-        a01 solver(db, goals, t, seq, bm, 1000, 1000, 1.414, rng);
+        ridge solver(db, goals, t, seq, bm, 1000, 1000, 1.414, rng);
 
         decision_store avoidance;
         std::optional<resolution_store> soln;
@@ -22655,7 +22655,7 @@ void test_a01_next_avoidance() {
         goals.push_back(ep.atom("a"));
 
         std::mt19937 rng(42);
-        a01 solver(db, goals, t, seq, bm, 1000, 1000, 1.414, rng);
+        ridge solver(db, goals, t, seq, bm, 1000, 1000, 1.414, rng);
 
         decision_store avoidance;
         std::optional<resolution_store> soln;
@@ -22717,7 +22717,7 @@ void test_a01_next_avoidance() {
         goals.push_back(ep.cons(ep.atom("b"), X));  // b(X) — shares X with a
 
         std::mt19937 rng(42);
-        a01 solver(db, goals, t, seq, bm, 1000, 1000, 1.414, rng);
+        ridge solver(db, goals, t, seq, bm, 1000, 1000, 1.414, rng);
 
         decision_store avoidance;
         std::optional<resolution_store> soln;
@@ -22785,7 +22785,7 @@ void test_a01_next_avoidance() {
         goals.push_back(ep.cons(ep.atom("c"), X));  // c(X) — shares X with a and b
 
         std::mt19937 rng(42);
-        a01 solver(db, goals, t, seq, bm, 1000, 1000, 1.414, rng);
+        ridge solver(db, goals, t, seq, bm, 1000, 1000, 1.414, rng);
 
         decision_store avoidance;
         std::optional<resolution_store> soln;
@@ -22862,7 +22862,7 @@ void test_a01_next_avoidance() {
         goals.push_back(ep.cons(ep.cons(ep.atom("c"), X), Y));   // c(X, Y)
 
         std::mt19937 rng(42);
-        a01 solver(db, goals, t, seq, bm, 1000, 1000, 1.414, rng);
+        ridge solver(db, goals, t, seq, bm, 1000, 1000, 1.414, rng);
 
         decision_store avoidance;
         std::optional<resolution_store> soln;
@@ -22934,7 +22934,7 @@ void test_a01_next_avoidance() {
 
 
         std::mt19937 rng(42);
-        a01 solver(db, goals, t, seq, bm, 1000, 1000, 1.414, rng);
+        ridge solver(db, goals, t, seq, bm, 1000, 1000, 1.414, rng);
 
         decision_store avoidance;
         std::optional<resolution_store> soln;
@@ -23005,7 +23005,7 @@ void test_a01_next_avoidance() {
 
 
         std::mt19937 rng(42);
-        a01 solver(db, goals, t, seq, bm, 1000, 1000, 1.414, rng);
+        ridge solver(db, goals, t, seq, bm, 1000, 1000, 1.414, rng);
 
         decision_store avoidance;
         std::optional<resolution_store> soln;
@@ -23056,7 +23056,7 @@ void test_a01() {
         goals.push_back(ep.atom("a"));
 
         std::mt19937 rng(42);
-        a01 solver(db, goals, t, seq, bm, 1000, 1000, 1.414, rng);
+        ridge solver(db, goals, t, seq, bm, 1000, 1000, 1.414, rng);
 
         std::optional<resolution_store> soln;
         bool result = solver(0, soln);
@@ -23085,7 +23085,7 @@ void test_a01() {
         goals.push_back(ep.atom("a"));
 
         std::mt19937 rng(42);
-        a01 solver(db, goals, t, seq, bm, 1000, 1000, 1.414, rng);
+        ridge solver(db, goals, t, seq, bm, 1000, 1000, 1.414, rng);
 
         std::optional<resolution_store> soln;
         bool result = solver(1, soln);
@@ -23125,7 +23125,7 @@ void test_a01() {
         goals.push_back(ep.cons(ep.atom("answer"), X));
 
         std::mt19937 rng(42);
-        a01 solver(db, goals, t, seq, bm, 1000, 1000, 1.414, rng);
+        ridge solver(db, goals, t, seq, bm, 1000, 1000, 1.414, rng);
 
         std::optional<resolution_store> soln;
         bool result = solver(1, soln);
@@ -23160,7 +23160,7 @@ void test_a01() {
         goals.push_back(ep.atom("a"));
 
         std::mt19937 rng(42);
-        a01 solver(db, goals, t, seq, bm, 1000, 1000, 1.414, rng);
+        ridge solver(db, goals, t, seq, bm, 1000, 1000, 1.414, rng);
 
         std::optional<resolution_store> soln;
         bool result = solver(1000, soln);
@@ -23194,7 +23194,7 @@ void test_a01() {
         goals.push_back(ep.atom("a"));
 
         std::mt19937 rng(42);
-        a01 solver(db, goals, t, seq, bm, 1000, 1000, 1.414, rng);
+        ridge solver(db, goals, t, seq, bm, 1000, 1000, 1.414, rng);
 
         std::optional<resolution_store> soln;
 
@@ -23246,7 +23246,7 @@ void test_a01() {
         goals.push_back(ep.cons(ep.atom("is_b"), X));  // goal 1: is_b(X)
 
         std::mt19937 rng(42);
-        a01 solver(db, goals, t, seq, bm, 1000, 1000, 1.414, rng);
+        ridge solver(db, goals, t, seq, bm, 1000, 1000, 1.414, rng);
 
         normalizer norm(ep, bm);
         std::optional<resolution_store> soln;
@@ -23308,7 +23308,7 @@ void test_a01() {
         goals.push_back(ep.cons(ep.cons(ep.atom("parent"), X), ep.atom("alice")));
 
         std::mt19937 rng(42);
-        a01 solver(db, goals, t, seq, bm, 1000, 1000, 1.414, rng);
+        ridge solver(db, goals, t, seq, bm, 1000, 1000, 1.414, rng);
 
         normalizer norm(ep, bm);
         std::optional<resolution_store> soln;
@@ -23401,7 +23401,7 @@ void test_a01() {
         goals.push_back(ep.cons(ep.cons(ep.cons(ep.atom("or"), NP), Q), ep.atom("true")));
 
         std::mt19937 rng(42);
-        a01 solver(db, goals, t, seq, bm, 1000, 1000, 1.414, rng);
+        ridge solver(db, goals, t, seq, bm, 1000, 1000, 1.414, rng);
 
         normalizer norm(ep, bm);
         std::optional<resolution_store> soln;
@@ -23489,7 +23489,7 @@ void test_a01() {
         goals.push_back(ep.cons(ep.cons(ep.atom("diff"), B), C));      // goal 4: diff(B, C)
 
         std::mt19937 rng(42);
-        a01 solver(db, goals, t, seq, bm, 1000, 1000, 1.414, rng);
+        ridge solver(db, goals, t, seq, bm, 1000, 1000, 1.414, rng);
 
         normalizer norm(ep, bm);
         std::optional<resolution_store> soln;
@@ -23553,7 +23553,7 @@ void test_a01() {
     // the same variable bindings via a different resolution path (valid behaviour),
     // then assert that the solver refutes when the search space is exhausted.
     auto next_until_refuted = [](
-        a01& solver,
+        ridge& solver,
         std::set<solution> expected,
         auto get_solution,
         size_t iterations = 1000
@@ -23632,7 +23632,7 @@ void test_a01() {
         goals.push_back(ep.cons(ep.cons(ep.atom("diff"), B), C));      // goal 5: diff(B,C)
 
         std::mt19937 rng(42);
-        a01 solver(db, goals, t, seq, bm, 1000, 1000, 1.414, rng);
+        ridge solver(db, goals, t, seq, bm, 1000, 1000, 1.414, rng);
 
         normalizer norm(ep, bm);
 
@@ -23737,7 +23737,7 @@ void test_a01() {
         goals.push_back(ep.cons(ep.cons(ep.cons(ep.atom("and"), P), QR), ep.atom("true")));    // goal 4: and(P,QR,true)
 
         std::mt19937 rng(42);
-        a01 solver(db, goals, t, seq, bm, 1000, 1000, 1.414, rng);
+        ridge solver(db, goals, t, seq, bm, 1000, 1000, 1.414, rng);
 
         normalizer norm(ep, bm);
 
@@ -23803,7 +23803,7 @@ void test_a01() {
         goals.push_back(ep.cons(ep.cons(ep.atom("diff"), A), D));      // goal 7: diff(A,D)
 
         std::mt19937 rng(42);
-        a01 solver(db, goals, t, seq, bm, 1000, 1000, 1.414, rng);
+        ridge solver(db, goals, t, seq, bm, 1000, 1000, 1.414, rng);
 
         normalizer norm(ep, bm);
 
@@ -23919,7 +23919,7 @@ void test_a01() {
         goals.push_back(ep.cons(ep.cons(ep.cons(ep.atom("and"), PQ_RS), NPR), ep.atom("true")));   // goal 10: and(PQ_RS,NPR,true)
 
         std::mt19937 rng(42);
-        a01 solver(db, goals, t, seq, bm, 1000, 1000, 1.414, rng);
+        ridge solver(db, goals, t, seq, bm, 1000, 1000, 1.414, rng);
 
         normalizer norm(ep, bm);
 
@@ -24016,7 +24016,7 @@ void test_a01() {
         goals.push_back(ep.cons(ep.cons(ep.atom("lt"), N), seven));  // goal 0: lt(N, seven)
 
         std::mt19937 rng(42);
-        a01 solver(db, goals, t, seq, bm, 1000, 1000, 1.414, rng);
+        ridge solver(db, goals, t, seq, bm, 1000, 1000, 1.414, rng);
 
         normalizer norm(ep, bm);
 
@@ -24127,7 +24127,7 @@ void test_a01() {
         goals.push_back(ep.cons(ep.cons(ep.atom("lt"), S), ten));              // goal 1: lt(S, ten)
 
         std::mt19937 rng(42);
-        a01 solver(db, goals, t, seq, bm, 1000, 100, 1.414, rng);
+        ridge solver(db, goals, t, seq, bm, 1000, 100, 1.414, rng);
 
         normalizer norm(ep, bm);
 
@@ -24210,7 +24210,7 @@ void test_a01() {
         goals.push_back(ep.cons(ep.cons(ep.cons(ep.atom("add"), X), Y), ten));  // goal 0: add(X, Y, ten)
 
         std::mt19937 rng(42);
-        a01 solver(db, goals, t, seq, bm, 1000, 1000, 1.414, rng);
+        ridge solver(db, goals, t, seq, bm, 1000, 1000, 1.414, rng);
 
         normalizer norm(ep, bm);
 
@@ -24319,7 +24319,7 @@ void test_a01() {
         goals.push_back(ep.cons(ep.cons(ep.cons(ep.atom("mul"), X), Y), eight));  // goal 0: mul(X, Y, eight)
 
         std::mt19937 rng(42);
-        a01 solver(db, goals, t, seq, bm, 1000, 10, 1.414, rng);
+        ridge solver(db, goals, t, seq, bm, 1000, 10, 1.414, rng);
 
         normalizer norm(ep, bm);
 
