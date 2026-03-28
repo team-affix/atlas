@@ -11923,6 +11923,779 @@ void test_normalizer() {
     }
 }
 
+// Concrete frontier for use in frontier tests.
+// Each active goal maps to an int; expand returns (parent_val + 1) for each
+// body literal so that child values are deterministically derived from the
+// parent and the rule arity.
+struct int_frontier : frontier<int> {
+    int_frontier(const database& db, lineage_pool& lp)
+        : frontier<int>(db, lp) {}
+    std::vector<int> expand(const int& val, const rule& r) override {
+        std::vector<int> result;
+        for (size_t i = 0; i < r.body.size(); i++)
+            result.push_back(val + 1);
+        return result;
+    }
+};
+
+void test_frontier_constructor() {
+    // Test 1: empty database and fresh pool - frontier starts empty
+    {
+        database db;
+        lineage_pool lp;
+        int_frontier f(db, lp);
+        assert(f.empty());
+        assert(f.size() == 0);
+        assert(&f.db == &db);
+        assert(&f.lp == &lp);
+    }
+
+    // Test 2: non-empty database - frontier still starts empty
+    {
+        trail t;
+        expr_pool ep(t);
+        t.push();
+        const expr* a = ep.atom("head");
+        database db;
+        db.push_back({a, {}});
+        lineage_pool lp;
+        int_frontier f(db, lp);
+        assert(f.empty());
+        assert(f.size() == 0);
+        assert(&f.db == &db);
+        t.pop();
+    }
+
+    // Test 3: two frontiers sharing the same db and lp reference the same objects
+    {
+        database db;
+        lineage_pool lp;
+        int_frontier f1(db, lp);
+        int_frontier f2(db, lp);
+        assert(&f1.db == &f2.db);
+        assert(&f1.lp == &f2.lp);
+        assert(f1.empty());
+        assert(f2.empty());
+    }
+
+    // Test 4: large database - frontier still starts empty
+    {
+        trail t;
+        expr_pool ep(t);
+        t.push();
+        const expr* h = ep.atom("h");
+        const expr* b = ep.atom("b");
+        database db;
+        for (int i = 0; i < 10; i++)
+            db.push_back({h, {b}});
+        lineage_pool lp;
+        int_frontier f(db, lp);
+        assert(f.empty());
+        assert(f.size() == 0);
+        t.pop();
+    }
+}
+
+void test_frontier_empty() {
+    // Test 1: empty() returns true for a freshly constructed frontier
+    {
+        database db;
+        lineage_pool lp;
+        int_frontier f(db, lp);
+        assert(f.empty());
+    }
+
+    // Test 2: empty() returns false after inserting one goal
+    {
+        database db;
+        lineage_pool lp;
+        int_frontier f(db, lp);
+        const goal_lineage* gl = lp.goal(nullptr, 0);
+        f.insert(gl, 0);
+        assert(!f.empty());
+    }
+
+    // Test 3: empty() returns false with multiple goals inserted
+    {
+        database db;
+        lineage_pool lp;
+        int_frontier f(db, lp);
+        const goal_lineage* gl0 = lp.goal(nullptr, 0);
+        const goal_lineage* gl1 = lp.goal(nullptr, 1);
+        f.insert(gl0, 10);
+        f.insert(gl1, 20);
+        assert(!f.empty());
+    }
+
+    // Test 4: empty() returns true after resolve with no-body rule removes the only goal
+    {
+        trail t;
+        expr_pool ep(t);
+        t.push();
+        const expr* h = ep.atom("h");
+        database db;
+        db.push_back({h, {}});
+        lineage_pool lp;
+        int_frontier f(db, lp);
+        const goal_lineage* gl = lp.goal(nullptr, 0);
+        f.insert(gl, 0);
+        assert(!f.empty());
+        const resolution_lineage* rl = lp.resolution(gl, 0);
+        f.resolve(rl);
+        assert(f.empty());
+        t.pop();
+    }
+
+    // Test 5: empty() returns false after resolve that replaces goal with children
+    {
+        trail t;
+        expr_pool ep(t);
+        t.push();
+        const expr* h = ep.atom("h");
+        const expr* b = ep.atom("b");
+        database db;
+        db.push_back({h, {b}});
+        lineage_pool lp;
+        int_frontier f(db, lp);
+        const goal_lineage* gl = lp.goal(nullptr, 0);
+        f.insert(gl, 0);
+        const resolution_lineage* rl = lp.resolution(gl, 0);
+        f.resolve(rl);
+        assert(!f.empty());
+        t.pop();
+    }
+}
+
+void test_frontier_size() {
+    // Test 1: size() is 0 for a freshly constructed frontier
+    {
+        database db;
+        lineage_pool lp;
+        int_frontier f(db, lp);
+        assert(f.size() == 0);
+    }
+
+    // Test 2: size() increments with each insert
+    {
+        database db;
+        lineage_pool lp;
+        int_frontier f(db, lp);
+        const goal_lineage* gl0 = lp.goal(nullptr, 0);
+        const goal_lineage* gl1 = lp.goal(nullptr, 1);
+        const goal_lineage* gl2 = lp.goal(nullptr, 2);
+        f.insert(gl0, 1);
+        assert(f.size() == 1);
+        f.insert(gl1, 2);
+        assert(f.size() == 2);
+        f.insert(gl2, 3);
+        assert(f.size() == 3);
+    }
+
+    // Test 3: resolve with 0-body rule decrements size by 1
+    {
+        trail t;
+        expr_pool ep(t);
+        t.push();
+        const expr* h = ep.atom("h");
+        database db;
+        db.push_back({h, {}});
+        lineage_pool lp;
+        int_frontier f(db, lp);
+        const goal_lineage* gl = lp.goal(nullptr, 0);
+        f.insert(gl, 0);
+        assert(f.size() == 1);
+        const resolution_lineage* rl = lp.resolution(gl, 0);
+        f.resolve(rl);
+        assert(f.size() == 0);
+        t.pop();
+    }
+
+    // Test 4: resolve with 1-body rule keeps size the same (1 removed, 1 added)
+    {
+        trail t;
+        expr_pool ep(t);
+        t.push();
+        const expr* h = ep.atom("h");
+        const expr* b = ep.atom("b");
+        database db;
+        db.push_back({h, {b}});
+        lineage_pool lp;
+        int_frontier f(db, lp);
+        const goal_lineage* gl = lp.goal(nullptr, 0);
+        f.insert(gl, 0);
+        assert(f.size() == 1);
+        const resolution_lineage* rl = lp.resolution(gl, 0);
+        f.resolve(rl);
+        assert(f.size() == 1);
+        t.pop();
+    }
+
+    // Test 5: resolve with 2-body rule increments size by 1 (1 removed, 2 added)
+    {
+        trail t;
+        expr_pool ep(t);
+        t.push();
+        const expr* h = ep.atom("h");
+        const expr* b1 = ep.atom("b1");
+        const expr* b2 = ep.atom("b2");
+        database db;
+        db.push_back({h, {b1, b2}});
+        lineage_pool lp;
+        int_frontier f(db, lp);
+        const goal_lineage* gl = lp.goal(nullptr, 0);
+        f.insert(gl, 0);
+        assert(f.size() == 1);
+        const resolution_lineage* rl = lp.resolution(gl, 0);
+        f.resolve(rl);
+        assert(f.size() == 2);
+        t.pop();
+    }
+
+    // Test 6: two goals in frontier, resolve one - other remains counted
+    {
+        trail t;
+        expr_pool ep(t);
+        t.push();
+        const expr* h = ep.atom("h");
+        database db;
+        db.push_back({h, {}});
+        lineage_pool lp;
+        int_frontier f(db, lp);
+        const goal_lineage* gl0 = lp.goal(nullptr, 0);
+        const goal_lineage* gl1 = lp.goal(nullptr, 1);
+        f.insert(gl0, 10);
+        f.insert(gl1, 20);
+        assert(f.size() == 2);
+        const resolution_lineage* rl = lp.resolution(gl0, 0);
+        f.resolve(rl);
+        assert(f.size() == 1);
+        t.pop();
+    }
+}
+
+void test_frontier_insert() {
+    // Test 1: insert single goal stores the value
+    {
+        database db;
+        lineage_pool lp;
+        int_frontier f(db, lp);
+        const goal_lineage* gl = lp.goal(nullptr, 0);
+        f.insert(gl, 42);
+        assert(f.size() == 1);
+        assert(!f.empty());
+        assert(f.at(gl) == 42);
+    }
+
+    // Test 2: insert multiple distinct goals all stored independently
+    {
+        database db;
+        lineage_pool lp;
+        int_frontier f(db, lp);
+        const goal_lineage* gl0 = lp.goal(nullptr, 0);
+        const goal_lineage* gl1 = lp.goal(nullptr, 1);
+        const goal_lineage* gl2 = lp.goal(nullptr, 2);
+        f.insert(gl0, 10);
+        f.insert(gl1, 20);
+        f.insert(gl2, 30);
+        assert(f.size() == 3);
+        assert(f.at(gl0) == 10);
+        assert(f.at(gl1) == 20);
+        assert(f.at(gl2) == 30);
+    }
+
+    // Test 3: insert goals that are children of a resolution lineage
+    {
+        database db;
+        lineage_pool lp;
+        int_frontier f(db, lp);
+        const goal_lineage* root = lp.goal(nullptr, 0);
+        const resolution_lineage* rl = lp.resolution(root, 0);
+        const goal_lineage* child0 = lp.goal(rl, 0);
+        const goal_lineage* child1 = lp.goal(rl, 1);
+        f.insert(child0, 100);
+        f.insert(child1, 200);
+        assert(f.size() == 2);
+        assert(f.at(child0) == 100);
+        assert(f.at(child1) == 200);
+    }
+
+    // Test 4: insert value 0 (zero boundary)
+    {
+        database db;
+        lineage_pool lp;
+        int_frontier f(db, lp);
+        const goal_lineage* gl = lp.goal(nullptr, 0);
+        f.insert(gl, 0);
+        assert(f.size() == 1);
+        assert(f.at(gl) == 0);
+    }
+
+    // Test 5: insert negative value
+    {
+        database db;
+        lineage_pool lp;
+        int_frontier f(db, lp);
+        const goal_lineage* gl = lp.goal(nullptr, 0);
+        f.insert(gl, -99);
+        assert(f.size() == 1);
+        assert(f.at(gl) == -99);
+    }
+
+    // Test 6: goals with same body index but different resolution parents are distinct
+    {
+        database db;
+        lineage_pool lp;
+        int_frontier f(db, lp);
+        const goal_lineage* root0 = lp.goal(nullptr, 0);
+        const goal_lineage* root1 = lp.goal(nullptr, 1);
+        const resolution_lineage* rl0 = lp.resolution(root0, 0);
+        const resolution_lineage* rl1 = lp.resolution(root1, 0);
+        const goal_lineage* child_a = lp.goal(rl0, 0);
+        const goal_lineage* child_b = lp.goal(rl1, 0);
+        f.insert(child_a, 1);
+        f.insert(child_b, 2);
+        assert(f.size() == 2);
+        assert(f.at(child_a) == 1);
+        assert(f.at(child_b) == 2);
+    }
+}
+
+void test_frontier_at() {
+    // Test 1: at() retrieves the inserted value
+    {
+        database db;
+        lineage_pool lp;
+        int_frontier f(db, lp);
+        const goal_lineage* gl = lp.goal(nullptr, 0);
+        f.insert(gl, 77);
+        assert(f.at(gl) == 77);
+    }
+
+    // Test 2: at() returns independent values for distinct goals
+    {
+        database db;
+        lineage_pool lp;
+        int_frontier f(db, lp);
+        const goal_lineage* gl0 = lp.goal(nullptr, 0);
+        const goal_lineage* gl1 = lp.goal(nullptr, 1);
+        f.insert(gl0, 5);
+        f.insert(gl1, 15);
+        assert(f.at(gl0) == 5);
+        assert(f.at(gl1) == 15);
+    }
+
+    // Test 3: const at() returns the same value as mutable at()
+    {
+        database db;
+        lineage_pool lp;
+        int_frontier f(db, lp);
+        const goal_lineage* gl = lp.goal(nullptr, 0);
+        f.insert(gl, 55);
+        const int_frontier& cf = f;
+        assert(cf.at(gl) == 55);
+        assert(cf.at(gl) == f.at(gl));
+    }
+
+    // Test 4: mutable at() allows value modification in-place
+    {
+        database db;
+        lineage_pool lp;
+        int_frontier f(db, lp);
+        const goal_lineage* gl = lp.goal(nullptr, 0);
+        f.insert(gl, 1);
+        f.at(gl) = 999;
+        assert(f.at(gl) == 999);
+    }
+
+    // Test 5: at() throws std::out_of_range for a goal not in the frontier
+    {
+        database db;
+        lineage_pool lp;
+        int_frontier f(db, lp);
+        const goal_lineage* gl = lp.goal(nullptr, 0);
+        assert_throws(f.at(gl), std::out_of_range);
+    }
+
+    // Test 6: const at() throws std::out_of_range for a missing goal
+    {
+        database db;
+        lineage_pool lp;
+        int_frontier f(db, lp);
+        const goal_lineage* gl = lp.goal(nullptr, 0);
+        const int_frontier& cf = f;
+        assert_throws(cf.at(gl), std::out_of_range);
+    }
+
+    // Test 7: at() on a child goal produced by resolve
+    {
+        trail t;
+        expr_pool ep(t);
+        t.push();
+        const expr* h = ep.atom("h");
+        const expr* b = ep.atom("b");
+        database db;
+        db.push_back({h, {b}});
+        lineage_pool lp;
+        int_frontier f(db, lp);
+        const goal_lineage* gl = lp.goal(nullptr, 0);
+        f.insert(gl, 10);
+        const resolution_lineage* rl = lp.resolution(gl, 0);
+        f.resolve(rl);
+        const goal_lineage* child = lp.goal(rl, 0);
+        assert(f.at(child) == 11);
+        t.pop();
+    }
+
+    // Test 8: at() on the parent goal after resolve throws (parent erased)
+    {
+        trail t;
+        expr_pool ep(t);
+        t.push();
+        const expr* h = ep.atom("h");
+        const expr* b = ep.atom("b");
+        database db;
+        db.push_back({h, {b}});
+        lineage_pool lp;
+        int_frontier f(db, lp);
+        const goal_lineage* gl = lp.goal(nullptr, 0);
+        f.insert(gl, 5);
+        const resolution_lineage* rl = lp.resolution(gl, 0);
+        f.resolve(rl);
+        assert_throws(f.at(gl), std::out_of_range);
+        t.pop();
+    }
+}
+
+void test_frontier_begin_end() {
+    // Test 1: begin() == end() for an empty frontier
+    {
+        database db;
+        lineage_pool lp;
+        int_frontier f(db, lp);
+        assert(f.begin() == f.end());
+    }
+
+    // Test 2: const begin() == const end() for an empty frontier
+    {
+        database db;
+        lineage_pool lp;
+        int_frontier f(db, lp);
+        const int_frontier& cf = f;
+        assert(cf.begin() == cf.end());
+    }
+
+    // Test 3: range-for over a single element yields the correct key-value pair
+    {
+        database db;
+        lineage_pool lp;
+        int_frontier f(db, lp);
+        const goal_lineage* gl = lp.goal(nullptr, 0);
+        f.insert(gl, 42);
+        int count = 0;
+        for (auto& [k, v] : f) {
+            assert(k == gl);
+            assert(v == 42);
+            count++;
+        }
+        assert(count == 1);
+    }
+
+    // Test 4: range-for over multiple elements visits every entry exactly once
+    {
+        database db;
+        lineage_pool lp;
+        int_frontier f(db, lp);
+        const goal_lineage* gl0 = lp.goal(nullptr, 0);
+        const goal_lineage* gl1 = lp.goal(nullptr, 1);
+        const goal_lineage* gl2 = lp.goal(nullptr, 2);
+        f.insert(gl0, 10);
+        f.insert(gl1, 20);
+        f.insert(gl2, 30);
+        int sum = 0;
+        int count = 0;
+        for (auto& [k, v] : f) {
+            sum += v;
+            count++;
+        }
+        assert(count == 3);
+        assert(sum == 60);
+    }
+
+    // Test 5: const range-for works correctly
+    {
+        database db;
+        lineage_pool lp;
+        int_frontier f(db, lp);
+        const goal_lineage* gl = lp.goal(nullptr, 0);
+        f.insert(gl, 7);
+        const int_frontier& cf = f;
+        int count = 0;
+        for (const auto& [k, v] : cf) {
+            assert(k == gl);
+            assert(v == 7);
+            count++;
+        }
+        assert(count == 1);
+    }
+
+    // Test 6: iteration after resolve reflects the updated frontier (parent gone, children present)
+    {
+        trail t;
+        expr_pool ep(t);
+        t.push();
+        const expr* h = ep.atom("h");
+        const expr* b1 = ep.atom("b1");
+        const expr* b2 = ep.atom("b2");
+        database db;
+        db.push_back({h, {b1, b2}});
+        lineage_pool lp;
+        int_frontier f(db, lp);
+        const goal_lineage* gl = lp.goal(nullptr, 0);
+        f.insert(gl, 0);
+        const resolution_lineage* rl = lp.resolution(gl, 0);
+        f.resolve(rl);
+        int sum = 0;
+        int count = 0;
+        for (auto& [k, v] : f) {
+            sum += v;
+            count++;
+        }
+        assert(count == 2);
+        assert(sum == 2);  // both children have value 0+1=1
+        t.pop();
+    }
+
+    // Test 7: mutable iterator allows value modification during iteration
+    {
+        database db;
+        lineage_pool lp;
+        int_frontier f(db, lp);
+        const goal_lineage* gl0 = lp.goal(nullptr, 0);
+        const goal_lineage* gl1 = lp.goal(nullptr, 1);
+        f.insert(gl0, 1);
+        f.insert(gl1, 2);
+        for (auto& [k, v] : f)
+            v *= 10;
+        assert(f.at(gl0) == 10);
+        assert(f.at(gl1) == 20);
+    }
+}
+
+void test_frontier_resolve() {
+    // Test 1: resolve with 0-body rule erases the goal and adds no children
+    {
+        trail t;
+        expr_pool ep(t);
+        t.push();
+        const expr* h = ep.atom("h");
+        database db;
+        db.push_back({h, {}});
+        lineage_pool lp;
+        int_frontier f(db, lp);
+        const goal_lineage* gl = lp.goal(nullptr, 0);
+        f.insert(gl, 10);
+        assert(f.size() == 1);
+        const resolution_lineage* rl = lp.resolution(gl, 0);
+        f.resolve(rl);
+        assert(f.size() == 0);
+        assert(f.empty());
+        assert_throws(f.at(gl), std::out_of_range);
+        t.pop();
+    }
+
+    // Test 2: resolve with 1-body rule replaces goal with exactly one child
+    {
+        trail t;
+        expr_pool ep(t);
+        t.push();
+        const expr* h = ep.atom("h");
+        const expr* b = ep.atom("b");
+        database db;
+        db.push_back({h, {b}});
+        lineage_pool lp;
+        int_frontier f(db, lp);
+        const goal_lineage* gl = lp.goal(nullptr, 0);
+        f.insert(gl, 5);
+        const resolution_lineage* rl = lp.resolution(gl, 0);
+        f.resolve(rl);
+        assert(f.size() == 1);
+        const goal_lineage* child = lp.goal(rl, 0);
+        assert(f.at(child) == 6);
+        assert_throws(f.at(gl), std::out_of_range);
+        t.pop();
+    }
+
+    // Test 3: resolve with 2-body rule replaces goal with two children
+    {
+        trail t;
+        expr_pool ep(t);
+        t.push();
+        const expr* h = ep.atom("h");
+        const expr* b1 = ep.atom("b1");
+        const expr* b2 = ep.atom("b2");
+        database db;
+        db.push_back({h, {b1, b2}});
+        lineage_pool lp;
+        int_frontier f(db, lp);
+        const goal_lineage* gl = lp.goal(nullptr, 0);
+        f.insert(gl, 3);
+        const resolution_lineage* rl = lp.resolution(gl, 0);
+        f.resolve(rl);
+        assert(f.size() == 2);
+        const goal_lineage* c0 = lp.goal(rl, 0);
+        const goal_lineage* c1 = lp.goal(rl, 1);
+        assert(f.at(c0) == 4);
+        assert(f.at(c1) == 4);
+        t.pop();
+    }
+
+    // Test 4: resolve with 3-body rule produces three indexed children
+    {
+        trail t;
+        expr_pool ep(t);
+        t.push();
+        const expr* h = ep.atom("h");
+        const expr* b1 = ep.atom("b1");
+        const expr* b2 = ep.atom("b2");
+        const expr* b3 = ep.atom("b3");
+        database db;
+        db.push_back({h, {b1, b2, b3}});
+        lineage_pool lp;
+        int_frontier f(db, lp);
+        const goal_lineage* gl = lp.goal(nullptr, 0);
+        f.insert(gl, 0);
+        const resolution_lineage* rl = lp.resolution(gl, 0);
+        f.resolve(rl);
+        assert(f.size() == 3);
+        assert(f.at(lp.goal(rl, 0)) == 1);
+        assert(f.at(lp.goal(rl, 1)) == 1);
+        assert(f.at(lp.goal(rl, 2)) == 1);
+        t.pop();
+    }
+
+    // Test 5: resolve selects the correct rule from the database by index
+    {
+        trail t;
+        expr_pool ep(t);
+        t.push();
+        const expr* h = ep.atom("h");
+        const expr* b1 = ep.atom("b1");
+        const expr* b2 = ep.atom("b2");
+        database db;
+        db.push_back({h, {}});         // rule 0: 0 body literals
+        db.push_back({h, {b1}});       // rule 1: 1 body literal
+        db.push_back({h, {b1, b2}});   // rule 2: 2 body literals
+        lineage_pool lp;
+        int_frontier f(db, lp);
+        const goal_lineage* gl = lp.goal(nullptr, 0);
+        f.insert(gl, 0);
+        const resolution_lineage* rl = lp.resolution(gl, 2);  // use rule 2
+        f.resolve(rl);
+        assert(f.size() == 2);  // rule 2 has 2 body literals
+        t.pop();
+    }
+
+    // Test 6: resolving one goal in a multi-goal frontier leaves others untouched
+    {
+        trail t;
+        expr_pool ep(t);
+        t.push();
+        const expr* h = ep.atom("h");
+        database db;
+        db.push_back({h, {}});
+        lineage_pool lp;
+        int_frontier f(db, lp);
+        const goal_lineage* gl0 = lp.goal(nullptr, 0);
+        const goal_lineage* gl1 = lp.goal(nullptr, 1);
+        f.insert(gl0, 100);
+        f.insert(gl1, 200);
+        const resolution_lineage* rl = lp.resolution(gl0, 0);
+        f.resolve(rl);
+        assert(f.size() == 1);
+        assert(f.at(gl1) == 200);
+        assert_throws(f.at(gl0), std::out_of_range);
+        t.pop();
+    }
+
+    // Test 7: two consecutive resolves - chained resolution tree
+    {
+        trail t;
+        expr_pool ep(t);
+        t.push();
+        const expr* h = ep.atom("h");
+        const expr* b = ep.atom("b");
+        database db;
+        db.push_back({h, {b, b}});  // rule 0: 2 body
+        db.push_back({h, {}});      // rule 1: 0 body
+        lineage_pool lp;
+        int_frontier f(db, lp);
+        const goal_lineage* gl = lp.goal(nullptr, 0);
+        f.insert(gl, 0);
+        // First resolve: gl → 2 children with value 1
+        const resolution_lineage* rl0 = lp.resolution(gl, 0);
+        f.resolve(rl0);
+        assert(f.size() == 2);
+        const goal_lineage* c0 = lp.goal(rl0, 0);
+        const goal_lineage* c1 = lp.goal(rl0, 1);
+        assert(f.at(c0) == 1);
+        assert(f.at(c1) == 1);
+        // Second resolve: c0 with rule 1 (no body) → c0 removed, c1 untouched
+        const resolution_lineage* rl1 = lp.resolution(c0, 1);
+        f.resolve(rl1);
+        assert(f.size() == 1);
+        assert(f.at(c1) == 1);
+        assert_throws(f.at(c0), std::out_of_range);
+        t.pop();
+    }
+
+    // Test 8: parent value is passed to expand correctly (high initial value propagates)
+    {
+        trail t;
+        expr_pool ep(t);
+        t.push();
+        const expr* h = ep.atom("h");
+        const expr* b = ep.atom("b");
+        database db;
+        db.push_back({h, {b}});
+        lineage_pool lp;
+        int_frontier f(db, lp);
+        const goal_lineage* gl = lp.goal(nullptr, 0);
+        f.insert(gl, 1000);
+        const resolution_lineage* rl = lp.resolution(gl, 0);
+        f.resolve(rl);
+        const goal_lineage* child = lp.goal(rl, 0);
+        assert(f.at(child) == 1001);
+        t.pop();
+    }
+
+    // Test 9: child goal lineage pointers are keyed by (resolution, body_index) pair
+    {
+        trail t;
+        expr_pool ep(t);
+        t.push();
+        const expr* h = ep.atom("h");
+        const expr* b1 = ep.atom("b1");
+        const expr* b2 = ep.atom("b2");
+        database db;
+        db.push_back({h, {b1, b2}});
+        lineage_pool lp;
+        int_frontier f(db, lp);
+        const goal_lineage* gl = lp.goal(nullptr, 0);
+        f.insert(gl, 0);
+        const resolution_lineage* rl = lp.resolution(gl, 0);
+        f.resolve(rl);
+        // Children are indexed 0 and 1 under the same resolution lineage
+        const goal_lineage* c0 = lp.goal(rl, 0);
+        const goal_lineage* c1 = lp.goal(rl, 1);
+        assert(c0 != c1);
+        assert(c0->parent == rl);
+        assert(c0->idx == 0);
+        assert(c1->parent == rl);
+        assert(c1->idx == 1);
+        t.pop();
+    }
+}
+
 // void test_goal_adder_constructor() {
 //     // Test 1: Basic construction with empty stores and empty database
 //     {
@@ -26949,6 +27722,13 @@ void unit_test_main() {
     TEST(test_copier);
     TEST(test_normalizer_constructor);
     TEST(test_normalizer);
+    TEST(test_frontier_constructor);
+    TEST(test_frontier_empty);
+    TEST(test_frontier_size);
+    TEST(test_frontier_insert);
+    TEST(test_frontier_at);
+    TEST(test_frontier_begin_end);
+    TEST(test_frontier_resolve);
     // TEST(test_goal_adder_constructor);
     // TEST(test_goal_adder);
     // TEST(test_goal_resolver_constructor);
