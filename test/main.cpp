@@ -12800,8 +12800,8 @@ void test_goal_store_expand() {
     // ---- Group B: Variable renaming ----
 
     // Test 5: variable head, empty body, atom goal
-    // seq starts at 0; var(1) in head copies to fresh var(0);
-    // unify(var(0), atom("x")) binds var(0); body empty -> frontier empty
+    // seq() used to get the rule variable index; fresh_idx tracks what index
+    // expand will allocate next when it copies the head variable.
     {
         trail t;
         expr_pool ep(t);
@@ -12810,7 +12810,7 @@ void test_goal_store_expand() {
         copier cp(seq, ep);
         bind_map bm(t);
         lineage_pool lp;
-        const expr* h = ep.var(1);
+        const expr* h = ep.var(seq());
         database db;
         db.push_back({h, {}});
         const expr* goal_atom = ep.atom("x");
@@ -12818,17 +12818,16 @@ void test_goal_store_expand() {
         goal_store gs(db, gs_init, cp, bm, lp);
         const goal_lineage* gl = lp.goal(nullptr, 0);
         const resolution_lineage* rl = lp.resolution(gl, 0);
+        uint32_t fresh_idx = seq.index;  // next index expand will allocate
         gs.resolve(rl);
         assert(gs.empty());
-        // var(0) should be bound to "x"
-        assert(bm.whnf(ep.var(0)) == goal_atom);
+        assert(bm.whnf(ep.var(fresh_idx)) == goal_atom);
         t.pop();
     }
 
-    // Test 6: head var shared with body var - same translation map entry
-    // Rule: var(1) :- var(1). Goal: atom("x").
-    // var(1) -> fresh 0 for both head and body copy.
-    // unify(var(0), "x") binds var(0); child is ep.var(0), which resolves to "x".
+    // Test 6: head var shared with body var - same translation map entry means same fresh copy
+    // Rule: V :- V.  Goal: atom("x").
+    // Both head and body copies of V get the same fresh index; child resolves to "x".
     {
         trail t;
         expr_pool ep(t);
@@ -12837,9 +12836,9 @@ void test_goal_store_expand() {
         copier cp(seq, ep);
         bind_map bm(t);
         lineage_pool lp;
-        const expr* v1 = ep.var(1);
+        const expr* v = ep.var(seq());
         database db;
-        db.push_back({v1, {v1}});
+        db.push_back({v, {v}});
         const expr* goal_atom = ep.atom("x");
         goals gs_init = {goal_atom};
         goal_store gs(db, gs_init, cp, bm, lp);
@@ -12847,18 +12846,15 @@ void test_goal_store_expand() {
         const resolution_lineage* rl = lp.resolution(gl, 0);
         gs.resolve(rl);
         assert(gs.size() == 1);
-        const goal_lineage* child = lp.goal(rl, 0);
-        // child expression is the fresh copy of var(1) = ep.var(0)
-        assert(gs.at(child) == ep.var(0));
-        // var(0) is bound to "x" via unification
-        assert(bm.whnf(ep.var(0)) == goal_atom);
+        const expr* child_expr = gs.at(lp.goal(rl, 0));
+        assert(std::holds_alternative<expr::var>(child_expr->content));
+        assert(bm.whnf(child_expr) == goal_atom);
         t.pop();
     }
 
     // Test 7: distinct vars in head and body - separate fresh indices
-    // Rule: var(1) :- var(2). Goal: atom("x").
-    // var(1) -> fresh 0 (head copy), var(2) -> fresh 1 (body copy).
-    // unify(var(0), "x") binds var(0); child is ep.var(1), unbound.
+    // Rule: V1 :- V2.  Goal: atom("x").
+    // V1's fresh copy is bound to "x"; V2's fresh copy is unbound and becomes the child.
     {
         trail t;
         expr_pool ep(t);
@@ -12867,8 +12863,8 @@ void test_goal_store_expand() {
         copier cp(seq, ep);
         bind_map bm(t);
         lineage_pool lp;
-        const expr* v1 = ep.var(1);
-        const expr* v2 = ep.var(2);
+        const expr* v1 = ep.var(seq());
+        const expr* v2 = ep.var(seq());
         database db;
         db.push_back({v1, {v2}});
         const expr* goal_atom = ep.atom("x");
@@ -12878,18 +12874,16 @@ void test_goal_store_expand() {
         const resolution_lineage* rl = lp.resolution(gl, 0);
         gs.resolve(rl);
         assert(gs.size() == 1);
-        const goal_lineage* child = lp.goal(rl, 0);
-        assert(gs.at(child) == ep.var(1));  // fresh copy of var(2) is var(1)
-        // var(0) bound to "x", var(1) unbound
-        assert(bm.whnf(ep.var(0)) == goal_atom);
-        assert(bm.whnf(ep.var(1)) == ep.var(1));
+        const expr* child_expr = gs.at(lp.goal(rl, 0));
+        assert(std::holds_alternative<expr::var>(child_expr->content));
+        assert(bm.whnf(child_expr) == child_expr);  // unbound fresh copy of v2
+        assert(bm.bindings.size() == 1);  // only v1's fresh copy is bound to goal
         t.pop();
     }
 
-    // Test 8: body-only variable (not in head) - gets fresh rename, child is unbound
-    // Rule: atom("h") :- var(5). Goal: atom("h").
-    // Head is atom (no vars), so translation_map is empty before body copy.
-    // var(5) -> fresh 0 during body copy; child is ep.var(0), unbound.
+    // Test 8: body-only variable (not in head) - gets a fresh rename, stays unbound
+    // Rule: atom("h") :- V.  Goal: atom("h").
+    // Head has no vars; V first appears during body copy so it gets a fresh index.
     {
         trail t;
         expr_pool ep(t);
@@ -12899,24 +12893,25 @@ void test_goal_store_expand() {
         bind_map bm(t);
         lineage_pool lp;
         const expr* h = ep.atom("h");
-        const expr* v5 = ep.var(5);
+        const expr* v = ep.var(seq());
         database db;
-        db.push_back({h, {v5}});
+        db.push_back({h, {v}});
         goals gs_init = {ep.atom("h")};
         goal_store gs(db, gs_init, cp, bm, lp);
         const goal_lineage* gl = lp.goal(nullptr, 0);
         const resolution_lineage* rl = lp.resolution(gl, 0);
         gs.resolve(rl);
         assert(gs.size() == 1);
-        const goal_lineage* child = lp.goal(rl, 0);
-        assert(gs.at(child) == ep.var(0));  // fresh rename of var(5)
-        assert(bm.whnf(ep.var(0)) == ep.var(0));  // unbound
+        const expr* child_expr = gs.at(lp.goal(rl, 0));
+        assert(std::holds_alternative<expr::var>(child_expr->content));
+        assert(bm.whnf(child_expr) == child_expr);  // unbound
+        assert(bm.bindings.empty());  // atom head matched atom goal: no var bindings
         t.pop();
     }
 
-    // Test 9: same var appears twice in body - both children use the same fresh index
-    // Rule: atom("h") :- var(1), var(1). Goal: atom("h").
-    // var(1) -> fresh 0 for both body copies.
+    // Test 9: same var appears twice in body - both children are the same fresh pointer
+    // Rule: atom("h") :- V, V.  Goal: atom("h").
+    // Single translation map entry for V -> both body copies are identical.
     {
         trail t;
         expr_pool ep(t);
@@ -12926,25 +12921,25 @@ void test_goal_store_expand() {
         bind_map bm(t);
         lineage_pool lp;
         const expr* h = ep.atom("h");
-        const expr* v1 = ep.var(1);
+        const expr* v = ep.var(seq());
         database db;
-        db.push_back({h, {v1, v1}});
+        db.push_back({h, {v, v}});
         goals gs_init = {ep.atom("h")};
         goal_store gs(db, gs_init, cp, bm, lp);
         const goal_lineage* gl = lp.goal(nullptr, 0);
         const resolution_lineage* rl = lp.resolution(gl, 0);
         gs.resolve(rl);
         assert(gs.size() == 2);
-        assert(gs.at(lp.goal(rl, 0)) == ep.var(0));
-        assert(gs.at(lp.goal(rl, 1)) == ep.var(0));
-        // both are the same fresh var (unbound)
-        assert(bm.whnf(ep.var(0)) == ep.var(0));
+        const expr* c0 = gs.at(lp.goal(rl, 0));
+        const expr* c1 = gs.at(lp.goal(rl, 1));
+        assert(c0 == c1);  // same pointer - same fresh var (same translation map entry)
+        assert(std::holds_alternative<expr::var>(c0->content));
+        assert(bm.whnf(c0) == c0);  // unbound
         t.pop();
     }
 
-    // Test 10: two distinct body vars get distinct fresh indices
-    // Rule: atom("h") :- var(1), var(2). Goal: atom("h").
-    // var(1)->0, var(2)->1. Children are ep.var(0) and ep.var(1), both unbound.
+    // Test 10: two distinct body vars get distinct fresh indices and distinct pointers
+    // Rule: atom("h") :- V1, V2.  Goal: atom("h").
     {
         trail t;
         expr_pool ep(t);
@@ -12954,8 +12949,8 @@ void test_goal_store_expand() {
         bind_map bm(t);
         lineage_pool lp;
         const expr* h = ep.atom("h");
-        const expr* v1 = ep.var(1);
-        const expr* v2 = ep.var(2);
+        const expr* v1 = ep.var(seq());
+        const expr* v2 = ep.var(seq());
         database db;
         db.push_back({h, {v1, v2}});
         goals gs_init = {ep.atom("h")};
@@ -12964,11 +12959,13 @@ void test_goal_store_expand() {
         const resolution_lineage* rl = lp.resolution(gl, 0);
         gs.resolve(rl);
         assert(gs.size() == 2);
-        assert(gs.at(lp.goal(rl, 0)) == ep.var(0));
-        assert(gs.at(lp.goal(rl, 1)) == ep.var(1));
-        assert(gs.at(lp.goal(rl, 0)) != gs.at(lp.goal(rl, 1)));
-        assert(bm.whnf(ep.var(0)) == ep.var(0));
-        assert(bm.whnf(ep.var(1)) == ep.var(1));
+        const expr* c0 = gs.at(lp.goal(rl, 0));
+        const expr* c1 = gs.at(lp.goal(rl, 1));
+        assert(c0 != c1);  // different pointers - distinct fresh vars
+        assert(std::holds_alternative<expr::var>(c0->content));
+        assert(std::holds_alternative<expr::var>(c1->content));
+        assert(bm.whnf(c0) == c0);  // both unbound
+        assert(bm.whnf(c1) == c1);
         t.pop();
     }
 
@@ -13086,8 +13083,8 @@ void test_goal_store_expand() {
     }
 
     // Test 16: goal cons(atom, atom), head cons(var, atom) - var binds to goal lhs
-    // Rule: cons(var(1), atom("b")) :- atom("child").  Goal: cons(atom("a"), atom("b")).
-    // var(1) -> fresh 0; unify(cons(var(0), "b"), cons("a","b")) binds var(0) to "a".
+    // Rule: cons(V, atom("b")) :- atom("child").  Goal: cons(atom("a"), atom("b")).
+    // V's fresh copy is bound to "a" after unification.
     {
         trail t;
         expr_pool ep(t);
@@ -13096,29 +13093,30 @@ void test_goal_store_expand() {
         copier cp(seq, ep);
         bind_map bm(t);
         lineage_pool lp;
-        const expr* v1 = ep.var(1);
+        const expr* v = ep.var(seq());
         const expr* b_atom = ep.atom("b");
-        const expr* h = ep.cons(v1, b_atom);
+        const expr* h = ep.cons(v, b_atom);
         const expr* body_lit = ep.atom("child");
         database db;
         db.push_back({h, {body_lit}});
-        const expr* goal = ep.cons(ep.atom("a"), ep.atom("b"));
+        const expr* ga = ep.atom("a");
+        const expr* goal = ep.cons(ga, ep.atom("b"));
         goals gs_init = {goal};
         goal_store gs(db, gs_init, cp, bm, lp);
         const goal_lineage* gl = lp.goal(nullptr, 0);
         const resolution_lineage* rl = lp.resolution(gl, 0);
+        uint32_t fresh_idx = seq.index;  // fresh copy of v will get this index
         gs.resolve(rl);
         assert(gs.size() == 1);
         assert(gs.at(lp.goal(rl, 0)) == body_lit);
-        assert(bm.whnf(ep.var(0)) == ep.atom("a"));
+        assert(bm.whnf(ep.var(fresh_idx)) == ga);
         t.pop();
     }
 
     // ---- Group D: Fresh variable isolation between calls ----
 
-    // Test 17: two consecutive resolves don't share fresh variable indices
-    // Two goals, both resolved with same rule (head var(1), empty body).
-    // First resolve: var(1)->0; second resolve: var(1)->1. Bindings coexist.
+    // Test 17: two consecutive resolves use distinct fresh indices
+    // Two goals resolved with the same var-head rule; each resolve allocates a new fresh index.
     {
         trail t;
         expr_pool ep(t);
@@ -13127,25 +13125,25 @@ void test_goal_store_expand() {
         copier cp(seq, ep);
         bind_map bm(t);
         lineage_pool lp;
-        const expr* v1 = ep.var(1);
+        const expr* v = ep.var(seq());
         database db;
-        db.push_back({v1, {}});
+        db.push_back({v, {}});
         const expr* goal0 = ep.atom("first");
         const expr* goal1 = ep.atom("second");
         goals gs_init = {goal0, goal1};
         goal_store gs(db, gs_init, cp, bm, lp);
-        // resolve goal 0
         const goal_lineage* gl0 = lp.goal(nullptr, 0);
         const resolution_lineage* rl0 = lp.resolution(gl0, 0);
+        uint32_t fresh0 = seq.index;  // first fresh index to be allocated
         gs.resolve(rl0);
-        assert(bm.whnf(ep.var(0)) == goal0);  // var(0) bound to "first"
-        // resolve goal 1
+        assert(bm.whnf(ep.var(fresh0)) == goal0);
         const goal_lineage* gl1 = lp.goal(nullptr, 1);
         const resolution_lineage* rl1 = lp.resolution(gl1, 0);
+        uint32_t fresh1 = seq.index;  // second fresh index to be allocated
         gs.resolve(rl1);
-        assert(bm.whnf(ep.var(1)) == goal1);  // var(1) bound to "second"
-        // original binding still intact
-        assert(bm.whnf(ep.var(0)) == goal0);
+        assert(fresh0 != fresh1);  // sequencer advanced between the two resolves
+        assert(bm.whnf(ep.var(fresh1)) == goal1);
+        assert(bm.whnf(ep.var(fresh0)) == goal0);  // first binding still intact
         assert(gs.empty());
         t.pop();
     }
@@ -13204,17 +13202,15 @@ void test_goal_store_expand() {
         assert(gs.size() == 1);
         const goal_lineage* child = lp.goal(rl0, 0);
         assert(gs.at(child) == ep.atom("step2"));
-        // resolve the child with rule 1
         const resolution_lineage* rl1 = lp.resolution(child, 1);
         gs.resolve(rl1);
         assert(gs.empty());
         t.pop();
     }
 
-    // Test 20: nested cons head with two vars - both bindings correct
-    // Rule: cons(var(1), var(2)) :- atom("done").  Goal: cons(atom("a"), atom("b")).
-    // var(1)->fresh 0, var(2)->fresh 1.
-    // unify(cons(var(0), var(1)), cons("a","b")) -> var(0)="a", var(1)="b".
+    // Test 20: nested cons head with two vars - both vars bound to matching goal parts
+    // Rule: cons(V1, V2) :- atom("done").  Goal: cons(atom("a"), atom("b")).
+    // Copier processes lhs first, then rhs: V1->fresh_start, V2->fresh_start+1.
     {
         trail t;
         expr_pool ep(t);
@@ -13223,8 +13219,8 @@ void test_goal_store_expand() {
         copier cp(seq, ep);
         bind_map bm(t);
         lineage_pool lp;
-        const expr* v1 = ep.var(1);
-        const expr* v2 = ep.var(2);
+        const expr* v1 = ep.var(seq());
+        const expr* v2 = ep.var(seq());
         const expr* h = ep.cons(v1, v2);
         const expr* done = ep.atom("done");
         database db;
@@ -13236,11 +13232,12 @@ void test_goal_store_expand() {
         goal_store gs(db, gs_init, cp, bm, lp);
         const goal_lineage* gl = lp.goal(nullptr, 0);
         const resolution_lineage* rl = lp.resolution(gl, 0);
+        uint32_t fresh_start = seq.index;
         gs.resolve(rl);
         assert(gs.size() == 1);
         assert(gs.at(lp.goal(rl, 0)) == done);
-        assert(bm.whnf(ep.var(0)) == ga);
-        assert(bm.whnf(ep.var(1)) == gb);
+        assert(bm.whnf(ep.var(fresh_start))     == ga);
+        assert(bm.whnf(ep.var(fresh_start + 1)) == gb);
         t.pop();
     }
 
@@ -13267,9 +13264,8 @@ void test_goal_store_expand() {
         t.pop();
     }
 
-    // Test 22: goal is an unbound variable - unification is symmetric, binds the var
-    // Rule: atom("h") :- atom("b").  Goal: ep.var(7) (unbound).
-    // unify(atom("h"), var(7)) binds var(7) to atom("h"). Succeeds.
+    // Test 22: goal is an unbound variable - unification symmetric, binds goal var to head
+    // Rule: atom("h") :- atom("b").  Goal: V (unbound, created via seq).
     {
         trail t;
         expr_pool ep(t);
@@ -13282,7 +13278,7 @@ void test_goal_store_expand() {
         const expr* b = ep.atom("b");
         database db;
         db.push_back({h, {b}});
-        const expr* goal_var = ep.var(7);
+        const expr* goal_var = ep.var(seq());
         goals gs_init = {goal_var};
         goal_store gs(db, gs_init, cp, bm, lp);
         const goal_lineage* gl = lp.goal(nullptr, 0);
@@ -13290,14 +13286,13 @@ void test_goal_store_expand() {
         gs.resolve(rl);
         assert(gs.size() == 1);
         assert(gs.at(lp.goal(rl, 0)) == b);
-        assert(bm.whnf(ep.var(7)) == h);
+        assert(bm.whnf(goal_var) == h);
         t.pop();
     }
 
     // Test 23: head var shared with two body literals - binding flows to both children
-    // Rule: var(1) :- var(1), var(1).  Goal: atom("val").
-    // var(1)->fresh 0; unify(var(0), "val") binds it;
-    // both children are ep.var(0), which resolves to "val" via bm.
+    // Rule: V :- V, V.  Goal: atom("val").
+    // Single fresh copy for V; both children are the same pointer, both resolve to "val".
     {
         trail t;
         expr_pool ep(t);
@@ -13306,9 +13301,9 @@ void test_goal_store_expand() {
         copier cp(seq, ep);
         bind_map bm(t);
         lineage_pool lp;
-        const expr* v1 = ep.var(1);
+        const expr* v = ep.var(seq());
         database db;
-        db.push_back({v1, {v1, v1}});
+        db.push_back({v, {v, v}});
         const expr* goal_atom = ep.atom("val");
         goals gs_init = {goal_atom};
         goal_store gs(db, gs_init, cp, bm, lp);
@@ -13318,17 +13313,16 @@ void test_goal_store_expand() {
         assert(gs.size() == 2);
         const expr* c0 = gs.at(lp.goal(rl, 0));
         const expr* c1 = gs.at(lp.goal(rl, 1));
-        assert(c0 == ep.var(0));
-        assert(c1 == ep.var(0));
+        assert(c0 == c1);  // same fresh var pointer
         assert(bm.whnf(c0) == goal_atom);
         assert(bm.whnf(c1) == goal_atom);
         t.pop();
     }
 
-    // Test 24: rule with N vars - all consistently renamed, no collisions
-    // Rule: cons(var(1), cons(var(2), var(3))) :- var(1), var(2), var(3).
-    // Goal: cons(atom("a"), cons(atom("b"), atom("c"))).
-    // var(1)->0="a", var(2)->1="b", var(3)->2="c". Children are var(0), var(1), var(2).
+    // Test 24: rule with N vars - all consistently renamed, no index collisions
+    // Rule: cons(V1, cons(V2, V3)) :- V1, V2, V3.
+    // Goal: cons("a", cons("b", "c")).
+    // Children are the fresh copies of V1, V2, V3, each bound to the matching atom.
     {
         trail t;
         expr_pool ep(t);
@@ -13337,9 +13331,9 @@ void test_goal_store_expand() {
         copier cp(seq, ep);
         bind_map bm(t);
         lineage_pool lp;
-        const expr* v1 = ep.var(1);
-        const expr* v2 = ep.var(2);
-        const expr* v3 = ep.var(3);
+        const expr* v1 = ep.var(seq());
+        const expr* v2 = ep.var(seq());
+        const expr* v3 = ep.var(seq());
         const expr* h = ep.cons(v1, ep.cons(v2, v3));
         database db;
         db.push_back({h, {v1, v2, v3}});
@@ -13353,12 +13347,16 @@ void test_goal_store_expand() {
         const resolution_lineage* rl = lp.resolution(gl, 0);
         gs.resolve(rl);
         assert(gs.size() == 3);
-        assert(bm.whnf(ep.var(0)) == ga);
-        assert(bm.whnf(ep.var(1)) == gb);
-        assert(bm.whnf(ep.var(2)) == gc);
-        assert(gs.at(lp.goal(rl, 0)) == ep.var(0));
-        assert(gs.at(lp.goal(rl, 1)) == ep.var(1));
-        assert(gs.at(lp.goal(rl, 2)) == ep.var(2));
+        const expr* c0 = gs.at(lp.goal(rl, 0));
+        const expr* c1 = gs.at(lp.goal(rl, 1));
+        const expr* c2 = gs.at(lp.goal(rl, 2));
+        assert(c0 != c1 && c1 != c2 && c0 != c2);  // all distinct fresh vars
+        assert(std::holds_alternative<expr::var>(c0->content));
+        assert(std::holds_alternative<expr::var>(c1->content));
+        assert(std::holds_alternative<expr::var>(c2->content));
+        assert(bm.whnf(c0) == ga);
+        assert(bm.whnf(c1) == gb);
+        assert(bm.whnf(c2) == gc);
         t.pop();
     }
 
@@ -13383,7 +13381,6 @@ void test_goal_store_expand() {
         const goal_lineage* gl = lp.goal(nullptr, 0);
         const resolution_lineage* rl = lp.resolution(gl, 0);
         assert_throws(gs.resolve(rl), std::runtime_error);
-        // parent was never erased - frontier is exactly as before
         assert(gs.size() == 1);
         assert(gs.at(gl) == original_goal);
         t.pop();
@@ -13406,25 +13403,21 @@ void test_goal_store_expand() {
         db.push_back({h_bad,  {}});      // rule 1
         goals gs_init = {ep.atom("good"), ep.atom("good")};
         goal_store gs(db, gs_init, cp, bm, lp);
-        // resolve gl0 with rule 0 (succeeds): gl0 removed, child added
         const goal_lineage* gl0 = lp.goal(nullptr, 0);
         const resolution_lineage* rl0 = lp.resolution(gl0, 0);
         gs.resolve(rl0);
         assert(gs.size() == 2);  // child of rl0 + gl1
-        // attempt to resolve gl1 with rule 1 ("good" vs "bad" -> throws)
         const goal_lineage* gl1 = lp.goal(nullptr, 1);
         const resolution_lineage* rl1 = lp.resolution(gl1, 1);
         assert_throws(gs.resolve(rl1), std::runtime_error);
-        // gl1 was never erased; still size 2
-        assert(gs.size() == 2);
+        assert(gs.size() == 2);  // gl1 was never erased
         assert(gs.at(gl1) == ep.atom("good"));
         t.pop();
     }
 
     // Test 27: deeply nested cons goal and matching head - all vars correctly bound
-    // Rule: cons(var(1), cons(atom("mid"), var(2))) :- atom("leaf").
-    // Goal: cons(atom("left"), cons(atom("mid"), atom("right"))).
-    // var(1)->0="left", var(2)->1="right".
+    // Rule: cons(V1, cons(atom("mid"), V2)) :- atom("leaf").
+    // Copier traverses lhs-first: V1->fresh_start, V2->fresh_start+1.
     {
         trail t;
         expr_pool ep(t);
@@ -13433,8 +13426,8 @@ void test_goal_store_expand() {
         copier cp(seq, ep);
         bind_map bm(t);
         lineage_pool lp;
-        const expr* v1 = ep.var(1);
-        const expr* v2 = ep.var(2);
+        const expr* v1 = ep.var(seq());
+        const expr* v2 = ep.var(seq());
         const expr* mid = ep.atom("mid");
         const expr* h = ep.cons(v1, ep.cons(mid, v2));
         const expr* leaf = ep.atom("leaf");
@@ -13447,11 +13440,12 @@ void test_goal_store_expand() {
         goal_store gs(db, gs_init, cp, bm, lp);
         const goal_lineage* gl = lp.goal(nullptr, 0);
         const resolution_lineage* rl = lp.resolution(gl, 0);
+        uint32_t fresh_start = seq.index;
         gs.resolve(rl);
         assert(gs.size() == 1);
         assert(gs.at(lp.goal(rl, 0)) == leaf);
-        assert(bm.whnf(ep.var(0)) == left);
-        assert(bm.whnf(ep.var(1)) == right);
+        assert(bm.whnf(ep.var(fresh_start))     == left);
+        assert(bm.whnf(ep.var(fresh_start + 1)) == right);
         t.pop();
     }
 }
