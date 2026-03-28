@@ -5,6 +5,8 @@ weight_store::weight_store(
     const database& db,
     lineage_pool& lp
 ) : frontier<double>(db, lp), cgw(0.0) {
+    if (goals.size() == 0)
+        return;
     double weight_per_goal = 1.0 / (double)goals.size();
     for (size_t i = 0; i < goals.size(); ++i)
         insert(lp.goal(nullptr, i), weight_per_goal);
