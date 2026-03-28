@@ -11,7 +11,9 @@
 #include "../hpp/ridge.hpp"
 #include "../hpp/expr_printer.hpp"
 #include "../hpp/cdcl.hpp"
+#include "../hpp/weight_store.hpp"
 #include <algorithm>
+#include <cmath>
 #include <sstream>
 #include <vector>
 #include "test_utils.hpp"
@@ -24859,6 +24861,11 @@ void unit_test_main() {
     TEST(test_frontier_at);
     TEST(test_frontier_begin_end);
     TEST(test_frontier_resolve);
+    // weight_store: same order as hpp (constructor → total → expand); constructor TEST must be first.
+    TEST(test_weight_store_constructor);
+    TEST(test_weight_store_expand);
+    TEST(test_weight_store_total);
+    TEST(test_weight_store);
     TEST(test_goal_store_constructor);
     TEST(test_goal_store_try_unify_head);
     TEST(test_goal_store_applicable);
