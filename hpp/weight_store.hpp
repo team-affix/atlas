@@ -10,7 +10,12 @@ struct weight_store : frontier<double> {
         const database&,
         lineage_pool&
     );
+    double total() const;
     std::vector<double> expand(const double&, const rule&) override;
+#ifndef DEBUG
+private:
+#endif
+    double cgw;
 };
 
 #endif
