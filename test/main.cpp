@@ -12697,6 +12697,521 @@ void test_goal_store_constructor() {
     }
 }
 
+void test_goal_store_try_unify_head() {
+    // Test 1: atom head == atom goal -> returns true, no bindings, translation_map untouched
+    {
+        trail t;
+        expr_pool ep(t);
+        t.push();
+        sequencer seq(t);
+        copier cp(seq, ep);
+        bind_map bm(t);
+        lineage_pool lp;
+        database db;
+        goals gs_init = {};
+        goal_store gs(db, gs_init, t, cp, bm, lp);
+        const expr* h = ep.atom("match");
+        rule r = {h, {}};
+        const expr* goal = ep.atom("match");
+        std::map<uint32_t, uint32_t> tm;
+        assert(t.depth() == 1);
+        bool result = gs.try_unify_head(goal, r, tm);
+        assert(result == true);
+        assert(bm.bindings.empty());
+        assert(tm.empty());  // no vars in head
+        assert(t.depth() == 1);
+        t.pop();
+    }
+
+    // Test 2: atom head != atom goal -> returns false, no bindings, no map entries
+    {
+        trail t;
+        expr_pool ep(t);
+        t.push();
+        sequencer seq(t);
+        copier cp(seq, ep);
+        bind_map bm(t);
+        lineage_pool lp;
+        database db;
+        goals gs_init = {};
+        goal_store gs(db, gs_init, t, cp, bm, lp);
+        const expr* h = ep.atom("foo");
+        rule r = {h, {}};
+        const expr* goal = ep.atom("bar");
+        std::map<uint32_t, uint32_t> tm;
+        assert(t.depth() == 1);
+        bool result = gs.try_unify_head(goal, r, tm);
+        assert(!result);
+        assert(bm.bindings.empty());
+        assert(tm.empty());
+        assert(t.depth() == 1);
+        t.pop();
+    }
+
+    // Test 3: cons head vs atom goal -> returns false (type mismatch, no vars)
+    {
+        trail t;
+        expr_pool ep(t);
+        t.push();
+        sequencer seq(t);
+        copier cp(seq, ep);
+        bind_map bm(t);
+        lineage_pool lp;
+        database db;
+        goals gs_init = {};
+        goal_store gs(db, gs_init, t, cp, bm, lp);
+        const expr* h = ep.cons(ep.atom("a"), ep.atom("b"));
+        rule r = {h, {}};
+        const expr* goal = ep.atom("a");
+        std::map<uint32_t, uint32_t> tm;
+        assert(t.depth() == 1);
+        bool result = gs.try_unify_head(goal, r, tm);
+        assert(!result);
+        assert(bm.bindings.empty());
+        assert(t.depth() == 1);
+        t.pop();
+    }
+
+    // Test 4: atom head vs cons goal -> returns false (type mismatch, no vars)
+    {
+        trail t;
+        expr_pool ep(t);
+        t.push();
+        sequencer seq(t);
+        copier cp(seq, ep);
+        bind_map bm(t);
+        lineage_pool lp;
+        database db;
+        goals gs_init = {};
+        goal_store gs(db, gs_init, t, cp, bm, lp);
+        const expr* h = ep.atom("h");
+        rule r = {h, {}};
+        const expr* goal = ep.cons(ep.atom("a"), ep.atom("b"));
+        std::map<uint32_t, uint32_t> tm;
+        assert(t.depth() == 1);
+        bool result = gs.try_unify_head(goal, r, tm);
+        assert(!result);
+        assert(bm.bindings.empty());
+        assert(t.depth() == 1);
+        t.pop();
+    }
+
+    // Test 5: variable head, atom goal -> returns true; fresh var bound to atom
+    {
+        trail t;
+        expr_pool ep(t);
+        t.push();
+        sequencer seq(t);
+        copier cp(seq, ep);
+        bind_map bm(t);
+        lineage_pool lp;
+        database db;
+        goals gs_init = {};
+        goal_store gs(db, gs_init, t, cp, bm, lp);
+        const expr* v = ep.var(seq());
+        rule r = {v, {}};
+        const expr* goal = ep.atom("x");
+        std::map<uint32_t, uint32_t> tm;
+        assert(t.depth() == 1);
+        bool result = gs.try_unify_head(goal, r, tm);
+        assert(result == true);
+        assert(t.depth() == 1);
+        // get the fresh index from the translation_map and verify the binding
+        uint32_t var_idx = std::get<expr::var>(v->content).index;
+        const expr* fresh_var = ep.var(tm.at(var_idx));
+        assert(bm.whnf(fresh_var) == goal);
+        t.pop();
+    }
+
+    // Test 6: variable head, cons goal -> returns true; fresh var bound to cons
+    {
+        trail t;
+        expr_pool ep(t);
+        t.push();
+        sequencer seq(t);
+        copier cp(seq, ep);
+        bind_map bm(t);
+        lineage_pool lp;
+        database db;
+        goals gs_init = {};
+        goal_store gs(db, gs_init, t, cp, bm, lp);
+        const expr* v = ep.var(seq());
+        rule r = {v, {}};
+        const expr* goal = ep.cons(ep.atom("l"), ep.atom("r"));
+        std::map<uint32_t, uint32_t> tm;
+        assert(t.depth() == 1);
+        bool result = gs.try_unify_head(goal, r, tm);
+        assert(result == true);
+        assert(t.depth() == 1);
+        uint32_t var_idx = std::get<expr::var>(v->content).index;
+        const expr* fresh_var = ep.var(tm.at(var_idx));
+        assert(bm.whnf(fresh_var) == goal);
+        t.pop();
+    }
+
+    // Test 7: translation_map is populated correctly after a single-var call
+    {
+        trail t;
+        expr_pool ep(t);
+        t.push();
+        sequencer seq(t);
+        copier cp(seq, ep);
+        bind_map bm(t);
+        lineage_pool lp;
+        database db;
+        goals gs_init = {};
+        goal_store gs(db, gs_init, t, cp, bm, lp);
+        const expr* v = ep.var(seq());
+        uint32_t var_idx = std::get<expr::var>(v->content).index;
+        rule r = {v, {}};
+        const expr* goal = ep.atom("target");
+        std::map<uint32_t, uint32_t> tm;
+        assert(t.depth() == 1);
+        gs.try_unify_head(goal, r, tm);
+        assert(t.depth() == 1);
+        assert(tm.size() == 1);
+        assert(tm.count(var_idx) == 1);
+        assert(bm.whnf(ep.var(tm.at(var_idx))) == goal);
+        t.pop();
+    }
+
+    // Test 8: cons head with one var, matching cons goal -> var's fresh copy bound correctly
+    {
+        trail t;
+        expr_pool ep(t);
+        t.push();
+        sequencer seq(t);
+        copier cp(seq, ep);
+        bind_map bm(t);
+        lineage_pool lp;
+        database db;
+        goals gs_init = {};
+        goal_store gs(db, gs_init, t, cp, bm, lp);
+        const expr* v = ep.var(seq());
+        const expr* h = ep.cons(v, ep.atom("b"));
+        rule r = {h, {}};
+        const expr* goal = ep.cons(ep.atom("a"), ep.atom("b"));
+        std::map<uint32_t, uint32_t> tm;
+        assert(t.depth() == 1);
+        bool result = gs.try_unify_head(goal, r, tm);
+        assert(result == true);
+        assert(t.depth() == 1);
+        uint32_t var_idx = std::get<expr::var>(v->content).index;
+        assert(bm.whnf(ep.var(tm.at(var_idx))) == ep.atom("a"));
+        t.pop();
+    }
+
+    // Test 9: cons head with two distinct vars -> translation_map has 2 entries, both bound
+    {
+        trail t;
+        expr_pool ep(t);
+        t.push();
+        sequencer seq(t);
+        copier cp(seq, ep);
+        bind_map bm(t);
+        lineage_pool lp;
+        database db;
+        goals gs_init = {};
+        goal_store gs(db, gs_init, t, cp, bm, lp);
+        const expr* v1 = ep.var(seq());
+        const expr* v2 = ep.var(seq());
+        const expr* h = ep.cons(v1, v2);
+        rule r = {h, {}};
+        const expr* goal = ep.cons(ep.atom("a"), ep.atom("b"));
+        std::map<uint32_t, uint32_t> tm;
+        assert(t.depth() == 1);
+        bool result = gs.try_unify_head(goal, r, tm);
+        assert(result == true);
+        assert(tm.size() == 2);
+        assert(t.depth() == 1);
+        uint32_t idx1 = std::get<expr::var>(v1->content).index;
+        uint32_t idx2 = std::get<expr::var>(v2->content).index;
+        assert(bm.whnf(ep.var(tm.at(idx1))) == ep.atom("a"));
+        assert(bm.whnf(ep.var(tm.at(idx2))) == ep.atom("b"));
+        t.pop();
+    }
+
+    // Test 10: pre-populated translation_map -> copier reuses existing mapping, no new seq() call
+    {
+        trail t;
+        expr_pool ep(t);
+        t.push();
+        sequencer seq(t);
+        copier cp(seq, ep);
+        bind_map bm(t);
+        lineage_pool lp;
+        database db;
+        goals gs_init = {};
+        goal_store gs(db, gs_init, t, cp, bm, lp);
+        const expr* v = ep.var(seq());
+        uint32_t var_idx = std::get<expr::var>(v->content).index;
+        rule r = {v, {}};
+        // pre-populate translation_map: map var_idx to a manually allocated fresh index
+        uint32_t pre_fresh = seq();
+        std::map<uint32_t, uint32_t> tm;
+        tm[var_idx] = pre_fresh;
+        uint32_t idx_before = seq.index;  // snapshot: copier should not advance seq further
+        const expr* goal = ep.atom("reuse");
+        assert(t.depth() == 1);
+        bool result = gs.try_unify_head(goal, r, tm);
+        assert(result == true);
+        assert(seq.index == idx_before);  // no new seq() call was made by the copier
+        assert(tm.size() == 1);           // no new entry added to translation_map
+        assert(bm.whnf(ep.var(pre_fresh)) == goal);
+        assert(t.depth() == 1);
+        t.pop();
+    }
+}
+
+void test_goal_store_applicable() {
+    // Test 1: atom head == atom goal -> returns true, bm unchanged
+    {
+        trail t;
+        expr_pool ep(t);
+        t.push();
+        sequencer seq(t);
+        copier cp(seq, ep);
+        bind_map bm(t);
+        lineage_pool lp;
+        database db;
+        goals gs_init = {};
+        goal_store gs(db, gs_init, t, cp, bm, lp);
+        const expr* h = ep.atom("match");
+        rule r = {h, {}};
+        const expr* goal = ep.atom("match");
+        assert(t.depth() == 1);
+        bool result = gs.applicable(goal, r);
+        assert(result == true);
+        assert(bm.bindings.empty());
+        assert(t.depth() == 1);
+        t.pop();
+    }
+
+    // Test 2: atom head != atom goal -> returns false, bm unchanged
+    {
+        trail t;
+        expr_pool ep(t);
+        t.push();
+        sequencer seq(t);
+        copier cp(seq, ep);
+        bind_map bm(t);
+        lineage_pool lp;
+        database db;
+        goals gs_init = {};
+        goal_store gs(db, gs_init, t, cp, bm, lp);
+        const expr* h = ep.atom("foo");
+        rule r = {h, {}};
+        const expr* goal = ep.atom("bar");
+        assert(t.depth() == 1);
+        bool result = gs.applicable(goal, r);
+        assert(!result);
+        assert(bm.bindings.empty());
+        assert(t.depth() == 1);
+        t.pop();
+    }
+
+    // Test 3: variable head, atom goal -> returns true; binding rolled back, bm empty
+    {
+        trail t;
+        expr_pool ep(t);
+        t.push();
+        sequencer seq(t);
+        copier cp(seq, ep);
+        bind_map bm(t);
+        lineage_pool lp;
+        database db;
+        goals gs_init = {};
+        goal_store gs(db, gs_init, t, cp, bm, lp);
+        const expr* v = ep.var(seq());
+        rule r = {v, {}};
+        const expr* goal = ep.atom("x");
+        assert(t.depth() == 1);
+        bool result = gs.applicable(goal, r);
+        assert(result == true);
+        assert(bm.bindings.empty());  // binding was rolled back
+        assert(t.depth() == 1);
+        t.pop();
+    }
+
+    // Test 4: cons head with var, fully matching cons goal -> true; binding rolled back
+    {
+        trail t;
+        expr_pool ep(t);
+        t.push();
+        sequencer seq(t);
+        copier cp(seq, ep);
+        bind_map bm(t);
+        lineage_pool lp;
+        database db;
+        goals gs_init = {};
+        goal_store gs(db, gs_init, t, cp, bm, lp);
+        const expr* v = ep.var(seq());
+        const expr* h = ep.cons(v, ep.atom("b"));
+        rule r = {h, {}};
+        const expr* goal = ep.cons(ep.atom("a"), ep.atom("b"));
+        assert(t.depth() == 1);
+        bool result = gs.applicable(goal, r);
+        assert(result == true);
+        assert(bm.bindings.empty());
+        assert(t.depth() == 1);
+        t.pop();
+    }
+
+    // Test 5: type mismatch (atom head vs cons goal) -> false, bm empty
+    {
+        trail t;
+        expr_pool ep(t);
+        t.push();
+        sequencer seq(t);
+        copier cp(seq, ep);
+        bind_map bm(t);
+        lineage_pool lp;
+        database db;
+        goals gs_init = {};
+        goal_store gs(db, gs_init, t, cp, bm, lp);
+        const expr* h = ep.atom("h");
+        rule r = {h, {}};
+        const expr* goal = ep.cons(ep.atom("a"), ep.atom("b"));
+        assert(t.depth() == 1);
+        bool result = gs.applicable(goal, r);
+        assert(!result);
+        assert(bm.bindings.empty());
+        assert(t.depth() == 1);
+        t.pop();
+    }
+
+    // Test 6: partial-unification failure - cons(V, atom("c")) vs cons(atom("a"), atom("d"))
+    // V's fresh copy binds to "a" before "c" != "d" fails; partial binding rolled back
+    {
+        trail t;
+        expr_pool ep(t);
+        t.push();
+        sequencer seq(t);
+        copier cp(seq, ep);
+        bind_map bm(t);
+        lineage_pool lp;
+        database db;
+        goals gs_init = {};
+        goal_store gs(db, gs_init, t, cp, bm, lp);
+        const expr* v = ep.var(seq());
+        const expr* h = ep.cons(v, ep.atom("c"));
+        rule r = {h, {}};
+        const expr* goal = ep.cons(ep.atom("a"), ep.atom("d"));
+        assert(t.depth() == 1);
+        bool result = gs.applicable(goal, r);
+        assert(!result);
+        assert(bm.bindings.empty());  // partial binding of v's fresh copy was rolled back
+        assert(t.depth() == 1);
+        t.pop();
+    }
+
+    // Test 7: seq.index is restored after a successful call
+    {
+        trail t;
+        expr_pool ep(t);
+        t.push();
+        sequencer seq(t);
+        copier cp(seq, ep);
+        bind_map bm(t);
+        lineage_pool lp;
+        database db;
+        goals gs_init = {};
+        goal_store gs(db, gs_init, t, cp, bm, lp);
+        const expr* v = ep.var(seq());
+        rule r = {v, {}};
+        const expr* goal = ep.atom("x");
+        uint32_t idx_before = seq.index;
+        assert(t.depth() == 1);
+        bool result = gs.applicable(goal, r);
+        assert(result == true);
+        assert(seq.index == idx_before);  // fresh index allocation was rolled back
+        assert(bm.bindings.empty());
+        assert(t.depth() == 1);
+        t.pop();
+    }
+
+    // Test 8: seq.index is restored after a failed call (partial unification with a var)
+    {
+        trail t;
+        expr_pool ep(t);
+        t.push();
+        sequencer seq(t);
+        copier cp(seq, ep);
+        bind_map bm(t);
+        lineage_pool lp;
+        database db;
+        goals gs_init = {};
+        goal_store gs(db, gs_init, t, cp, bm, lp);
+        const expr* v = ep.var(seq());
+        const expr* h = ep.cons(v, ep.atom("c"));
+        rule r = {h, {}};
+        const expr* goal = ep.cons(ep.atom("a"), ep.atom("d"));
+        uint32_t idx_before = seq.index;
+        assert(t.depth() == 1);
+        bool result = gs.applicable(goal, r);
+        assert(!result);
+        assert(seq.index == idx_before);  // seq rolled back even though var was allocated
+        assert(bm.bindings.empty());
+        assert(t.depth() == 1);
+        t.pop();
+    }
+
+    // Test 9: two successive calls - no state bleed between them
+    {
+        trail t;
+        expr_pool ep(t);
+        t.push();
+        sequencer seq(t);
+        copier cp(seq, ep);
+        bind_map bm(t);
+        lineage_pool lp;
+        database db;
+        goals gs_init = {};
+        goal_store gs(db, gs_init, t, cp, bm, lp);
+        const expr* v = ep.var(seq());
+        rule r = {v, {}};
+        const expr* goal = ep.atom("x");
+        assert(t.depth() == 1);
+        bool result1 = gs.applicable(goal, r);
+        assert(result1 == true);
+        assert(bm.bindings.empty());
+        assert(t.depth() == 1);
+        bool result2 = gs.applicable(goal, r);
+        assert(result2 == true);
+        assert(bm.bindings.empty());
+        assert(t.depth() == 1);
+        t.pop();
+    }
+
+    // Test 10: cons head with two distinct vars, cons goal -> true; both bindings and both
+    // fresh indices rolled back, bm empty, seq.index restored
+    {
+        trail t;
+        expr_pool ep(t);
+        t.push();
+        sequencer seq(t);
+        copier cp(seq, ep);
+        bind_map bm(t);
+        lineage_pool lp;
+        database db;
+        goals gs_init = {};
+        goal_store gs(db, gs_init, t, cp, bm, lp);
+        const expr* v1 = ep.var(seq());
+        const expr* v2 = ep.var(seq());
+        const expr* h = ep.cons(v1, v2);
+        rule r = {h, {}};
+        const expr* goal = ep.cons(ep.atom("a"), ep.atom("b"));
+        uint32_t idx_before = seq.index;
+        assert(t.depth() == 1);
+        bool result = gs.applicable(goal, r);
+        assert(result == true);
+        assert(bm.bindings.empty());      // both bindings rolled back
+        assert(seq.index == idx_before);  // both fresh index allocations rolled back
+        assert(t.depth() == 1);
+        t.pop();
+    }
+}
+
 void test_goal_store_expand() {
     // ---- Group A: Body arity ----
 
@@ -29305,6 +29820,8 @@ void unit_test_main() {
     TEST(test_frontier_begin_end);
     TEST(test_frontier_resolve);
     TEST(test_goal_store_constructor);
+    TEST(test_goal_store_try_unify_head);
+    TEST(test_goal_store_applicable);
     TEST(test_goal_store_expand);
     TEST(test_candidate_store_constructor);
     TEST(test_candidate_store_eliminate);
