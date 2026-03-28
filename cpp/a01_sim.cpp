@@ -20,7 +20,7 @@ a01_sim::a01_sim(
     lp(lp),
     rs(rs),
     ds(ds),
-    gs(db, goals, cp, bm, lp),
+    gs(db, goals, t, cp, bm, lp),
     cs(db, goals, lp),
     cp(vars, ep),
     he(t, bm, gs, db),

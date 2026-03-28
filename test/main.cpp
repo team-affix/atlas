@@ -12604,7 +12604,7 @@ void test_goal_store_constructor() {
         lineage_pool lp;
         database db;
         goals gs_init;
-        goal_store gs(db, gs_init, cp, bm, lp);
+        goal_store gs(db, gs_init, t, cp, bm, lp);
         assert(gs.empty());
         assert(gs.size() == 0);
         assert(&gs.db == &db);
@@ -12625,7 +12625,7 @@ void test_goal_store_constructor() {
         database db;
         const expr* a = ep.atom("p");
         goals gs_init = {a};
-        goal_store gs(db, gs_init, cp, bm, lp);
+        goal_store gs(db, gs_init, t, cp, bm, lp);
         assert(gs.size() == 1);
         assert(!gs.empty());
         assert(gs.at(lp.goal(nullptr, 0)) == a);
@@ -12645,7 +12645,7 @@ void test_goal_store_constructor() {
         const expr* a0 = ep.atom("first");
         const expr* a1 = ep.atom("second");
         goals gs_init = {a0, a1};
-        goal_store gs(db, gs_init, cp, bm, lp);
+        goal_store gs(db, gs_init, t, cp, bm, lp);
         assert(gs.size() == 2);
         assert(gs.at(lp.goal(nullptr, 0)) == a0);
         assert(gs.at(lp.goal(nullptr, 1)) == a1);
@@ -12668,7 +12668,7 @@ void test_goal_store_constructor() {
         const expr* e3 = ep.atom("d");
         const expr* e4 = ep.atom("e");
         goals gs_init = {e0, e1, e2, e3, e4};
-        goal_store gs(db, gs_init, cp, bm, lp);
+        goal_store gs(db, gs_init, t, cp, bm, lp);
         assert(gs.size() == 5);
         assert(gs.at(lp.goal(nullptr, 0)) == e0);
         assert(gs.at(lp.goal(nullptr, 1)) == e1);
@@ -12690,7 +12690,7 @@ void test_goal_store_constructor() {
         database db;
         const expr* a = ep.atom("goal");
         goals gs_init = {a};
-        goal_store gs(db, gs_init, cp, bm, lp);
+        goal_store gs(db, gs_init, t, cp, bm, lp);
         const expr* stored = gs.at(lp.goal(nullptr, 0));
         assert(stored == a);  // same pointer, not a copy
         t.pop();
@@ -12713,7 +12713,7 @@ void test_goal_store_expand() {
         database db;
         db.push_back({h, {}});
         goals gs_init = {ep.atom("fact")};
-        goal_store gs(db, gs_init, cp, bm, lp);
+        goal_store gs(db, gs_init, t, cp, bm, lp);
         assert(gs.size() == 1);
         const goal_lineage* gl = lp.goal(nullptr, 0);
         const resolution_lineage* rl = lp.resolution(gl, 0);
@@ -12736,7 +12736,7 @@ void test_goal_store_expand() {
         database db;
         db.push_back({h, {b}});
         goals gs_init = {ep.atom("h")};
-        goal_store gs(db, gs_init, cp, bm, lp);
+        goal_store gs(db, gs_init, t, cp, bm, lp);
         const goal_lineage* gl = lp.goal(nullptr, 0);
         const resolution_lineage* rl = lp.resolution(gl, 0);
         gs.resolve(rl);
@@ -12760,7 +12760,7 @@ void test_goal_store_expand() {
         database db;
         db.push_back({h, {b1, b2}});
         goals gs_init = {ep.atom("h")};
-        goal_store gs(db, gs_init, cp, bm, lp);
+        goal_store gs(db, gs_init, t, cp, bm, lp);
         const goal_lineage* gl = lp.goal(nullptr, 0);
         const resolution_lineage* rl = lp.resolution(gl, 0);
         gs.resolve(rl);
@@ -12786,7 +12786,7 @@ void test_goal_store_expand() {
         database db;
         db.push_back({h, {b1, b2, b3}});
         goals gs_init = {ep.atom("h")};
-        goal_store gs(db, gs_init, cp, bm, lp);
+        goal_store gs(db, gs_init, t, cp, bm, lp);
         const goal_lineage* gl = lp.goal(nullptr, 0);
         const resolution_lineage* rl = lp.resolution(gl, 0);
         gs.resolve(rl);
@@ -12815,7 +12815,7 @@ void test_goal_store_expand() {
         db.push_back({h, {}});
         const expr* goal_atom = ep.atom("x");
         goals gs_init = {goal_atom};
-        goal_store gs(db, gs_init, cp, bm, lp);
+        goal_store gs(db, gs_init, t, cp, bm, lp);
         const goal_lineage* gl = lp.goal(nullptr, 0);
         const resolution_lineage* rl = lp.resolution(gl, 0);
         uint32_t fresh_idx = seq.index;  // next index expand will allocate
@@ -12841,7 +12841,7 @@ void test_goal_store_expand() {
         db.push_back({v, {v}});
         const expr* goal_atom = ep.atom("x");
         goals gs_init = {goal_atom};
-        goal_store gs(db, gs_init, cp, bm, lp);
+        goal_store gs(db, gs_init, t, cp, bm, lp);
         const goal_lineage* gl = lp.goal(nullptr, 0);
         const resolution_lineage* rl = lp.resolution(gl, 0);
         gs.resolve(rl);
@@ -12869,7 +12869,7 @@ void test_goal_store_expand() {
         db.push_back({v1, {v2}});
         const expr* goal_atom = ep.atom("x");
         goals gs_init = {goal_atom};
-        goal_store gs(db, gs_init, cp, bm, lp);
+        goal_store gs(db, gs_init, t, cp, bm, lp);
         const goal_lineage* gl = lp.goal(nullptr, 0);
         const resolution_lineage* rl = lp.resolution(gl, 0);
         gs.resolve(rl);
@@ -12897,7 +12897,7 @@ void test_goal_store_expand() {
         database db;
         db.push_back({h, {v}});
         goals gs_init = {ep.atom("h")};
-        goal_store gs(db, gs_init, cp, bm, lp);
+        goal_store gs(db, gs_init, t, cp, bm, lp);
         const goal_lineage* gl = lp.goal(nullptr, 0);
         const resolution_lineage* rl = lp.resolution(gl, 0);
         gs.resolve(rl);
@@ -12925,7 +12925,7 @@ void test_goal_store_expand() {
         database db;
         db.push_back({h, {v, v}});
         goals gs_init = {ep.atom("h")};
-        goal_store gs(db, gs_init, cp, bm, lp);
+        goal_store gs(db, gs_init, t, cp, bm, lp);
         const goal_lineage* gl = lp.goal(nullptr, 0);
         const resolution_lineage* rl = lp.resolution(gl, 0);
         gs.resolve(rl);
@@ -12954,7 +12954,7 @@ void test_goal_store_expand() {
         database db;
         db.push_back({h, {v1, v2}});
         goals gs_init = {ep.atom("h")};
-        goal_store gs(db, gs_init, cp, bm, lp);
+        goal_store gs(db, gs_init, t, cp, bm, lp);
         const goal_lineage* gl = lp.goal(nullptr, 0);
         const resolution_lineage* rl = lp.resolution(gl, 0);
         gs.resolve(rl);
@@ -12985,7 +12985,7 @@ void test_goal_store_expand() {
         database db;
         db.push_back({h, {b}});
         goals gs_init = {ep.atom("match")};
-        goal_store gs(db, gs_init, cp, bm, lp);
+        goal_store gs(db, gs_init, t, cp, bm, lp);
         const goal_lineage* gl = lp.goal(nullptr, 0);
         const resolution_lineage* rl = lp.resolution(gl, 0);
         gs.resolve(rl);
@@ -13008,7 +13008,7 @@ void test_goal_store_expand() {
         database db;
         db.push_back({h, {}});
         goals gs_init = {ep.atom("foo")};
-        goal_store gs(db, gs_init, cp, bm, lp);
+        goal_store gs(db, gs_init, t, cp, bm, lp);
         const goal_lineage* gl = lp.goal(nullptr, 0);
         const resolution_lineage* rl = lp.resolution(gl, 0);
         assert_throws(gs.resolve(rl), std::runtime_error);
@@ -13030,7 +13030,7 @@ void test_goal_store_expand() {
         database db;
         db.push_back({h, {}});
         goals gs_init = {ep.atom("x")};
-        goal_store gs(db, gs_init, cp, bm, lp);
+        goal_store gs(db, gs_init, t, cp, bm, lp);
         const goal_lineage* gl = lp.goal(nullptr, 0);
         const resolution_lineage* rl = lp.resolution(gl, 0);
         assert_throws(gs.resolve(rl), std::runtime_error);
@@ -13051,7 +13051,7 @@ void test_goal_store_expand() {
         db.push_back({h, {}});
         const expr* goal = ep.cons(ep.atom("a"), ep.atom("b"));
         goals gs_init = {goal};
-        goal_store gs(db, gs_init, cp, bm, lp);
+        goal_store gs(db, gs_init, t, cp, bm, lp);
         const goal_lineage* gl = lp.goal(nullptr, 0);
         const resolution_lineage* rl = lp.resolution(gl, 0);
         assert_throws(gs.resolve(rl), std::runtime_error);
@@ -13075,7 +13075,7 @@ void test_goal_store_expand() {
         db.push_back({h, {}});
         const expr* goal = ep.cons(a, b);
         goals gs_init = {goal};
-        goal_store gs(db, gs_init, cp, bm, lp);
+        goal_store gs(db, gs_init, t, cp, bm, lp);
         const goal_lineage* gl = lp.goal(nullptr, 0);
         const resolution_lineage* rl = lp.resolution(gl, 0);
         assert_throws(gs.resolve(rl), std::runtime_error);
@@ -13102,7 +13102,7 @@ void test_goal_store_expand() {
         const expr* ga = ep.atom("a");
         const expr* goal = ep.cons(ga, ep.atom("b"));
         goals gs_init = {goal};
-        goal_store gs(db, gs_init, cp, bm, lp);
+        goal_store gs(db, gs_init, t, cp, bm, lp);
         const goal_lineage* gl = lp.goal(nullptr, 0);
         const resolution_lineage* rl = lp.resolution(gl, 0);
         uint32_t fresh_idx = seq.index;  // fresh copy of v will get this index
@@ -13131,7 +13131,7 @@ void test_goal_store_expand() {
         const expr* goal0 = ep.atom("first");
         const expr* goal1 = ep.atom("second");
         goals gs_init = {goal0, goal1};
-        goal_store gs(db, gs_init, cp, bm, lp);
+        goal_store gs(db, gs_init, t, cp, bm, lp);
         const goal_lineage* gl0 = lp.goal(nullptr, 0);
         const resolution_lineage* rl0 = lp.resolution(gl0, 0);
         uint32_t fresh0 = seq.index;  // first fresh index to be allocated
@@ -13165,7 +13165,7 @@ void test_goal_store_expand() {
         db.push_back({h0, {b0}});  // rule 0
         db.push_back({h1, {b1}});  // rule 1
         goals gs_init = {ep.atom("p"), ep.atom("q")};
-        goal_store gs(db, gs_init, cp, bm, lp);
+        goal_store gs(db, gs_init, t, cp, bm, lp);
         const goal_lineage* gl0 = lp.goal(nullptr, 0);
         const goal_lineage* gl1 = lp.goal(nullptr, 1);
         const resolution_lineage* rl0 = lp.resolution(gl0, 0);
@@ -13195,7 +13195,7 @@ void test_goal_store_expand() {
         db.push_back({h1, {ep.atom("step2")}});  // rule 0: step1 :- step2
         db.push_back({h2, {}});                   // rule 1: step2 (fact)
         goals gs_init = {ep.atom("step1")};
-        goal_store gs(db, gs_init, cp, bm, lp);
+        goal_store gs(db, gs_init, t, cp, bm, lp);
         const goal_lineage* gl = lp.goal(nullptr, 0);
         const resolution_lineage* rl0 = lp.resolution(gl, 0);
         gs.resolve(rl0);
@@ -13229,7 +13229,7 @@ void test_goal_store_expand() {
         const expr* gb = ep.atom("b");
         const expr* goal = ep.cons(ga, gb);
         goals gs_init = {goal};
-        goal_store gs(db, gs_init, cp, bm, lp);
+        goal_store gs(db, gs_init, t, cp, bm, lp);
         const goal_lineage* gl = lp.goal(nullptr, 0);
         const resolution_lineage* rl = lp.resolution(gl, 0);
         uint32_t fresh_start = seq.index;
@@ -13255,7 +13255,7 @@ void test_goal_store_expand() {
         database db;
         db.push_back({h, {body_cons}});
         goals gs_init = {ep.atom("h")};
-        goal_store gs(db, gs_init, cp, bm, lp);
+        goal_store gs(db, gs_init, t, cp, bm, lp);
         const goal_lineage* gl = lp.goal(nullptr, 0);
         const resolution_lineage* rl = lp.resolution(gl, 0);
         gs.resolve(rl);
@@ -13280,7 +13280,7 @@ void test_goal_store_expand() {
         db.push_back({h, {b}});
         const expr* goal_var = ep.var(seq());
         goals gs_init = {goal_var};
-        goal_store gs(db, gs_init, cp, bm, lp);
+        goal_store gs(db, gs_init, t, cp, bm, lp);
         const goal_lineage* gl = lp.goal(nullptr, 0);
         const resolution_lineage* rl = lp.resolution(gl, 0);
         gs.resolve(rl);
@@ -13306,7 +13306,7 @@ void test_goal_store_expand() {
         db.push_back({v, {v, v}});
         const expr* goal_atom = ep.atom("val");
         goals gs_init = {goal_atom};
-        goal_store gs(db, gs_init, cp, bm, lp);
+        goal_store gs(db, gs_init, t, cp, bm, lp);
         const goal_lineage* gl = lp.goal(nullptr, 0);
         const resolution_lineage* rl = lp.resolution(gl, 0);
         gs.resolve(rl);
@@ -13342,7 +13342,7 @@ void test_goal_store_expand() {
         const expr* gc = ep.atom("c");
         const expr* goal = ep.cons(ga, ep.cons(gb, gc));
         goals gs_init = {goal};
-        goal_store gs(db, gs_init, cp, bm, lp);
+        goal_store gs(db, gs_init, t, cp, bm, lp);
         const goal_lineage* gl = lp.goal(nullptr, 0);
         const resolution_lineage* rl = lp.resolution(gl, 0);
         gs.resolve(rl);
@@ -13376,7 +13376,7 @@ void test_goal_store_expand() {
         db.push_back({h, {}});
         const expr* original_goal = ep.atom("right");
         goals gs_init = {original_goal};
-        goal_store gs(db, gs_init, cp, bm, lp);
+        goal_store gs(db, gs_init, t, cp, bm, lp);
         assert(gs.size() == 1);
         const goal_lineage* gl = lp.goal(nullptr, 0);
         const resolution_lineage* rl = lp.resolution(gl, 0);
@@ -13402,7 +13402,7 @@ void test_goal_store_expand() {
         db.push_back({h_good, {body}});  // rule 0
         db.push_back({h_bad,  {}});      // rule 1
         goals gs_init = {ep.atom("good"), ep.atom("good")};
-        goal_store gs(db, gs_init, cp, bm, lp);
+        goal_store gs(db, gs_init, t, cp, bm, lp);
         const goal_lineage* gl0 = lp.goal(nullptr, 0);
         const resolution_lineage* rl0 = lp.resolution(gl0, 0);
         gs.resolve(rl0);
@@ -13437,7 +13437,7 @@ void test_goal_store_expand() {
         const expr* right = ep.atom("right");
         const expr* goal = ep.cons(left, ep.cons(mid, right));
         goals gs_init = {goal};
-        goal_store gs(db, gs_init, cp, bm, lp);
+        goal_store gs(db, gs_init, t, cp, bm, lp);
         const goal_lineage* gl = lp.goal(nullptr, 0);
         const resolution_lineage* rl = lp.resolution(gl, 0);
         uint32_t fresh_start = seq.index;
