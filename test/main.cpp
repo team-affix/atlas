@@ -24335,6 +24335,103 @@ void test_ridge() {
             return {ep.import(norm(X)), ep.import(norm(Y))};
         });
     }
+
+    // Test 18: Dual bounded sums with shared X — add(X,Y,S), add(X,Z,T), both sums < 4
+    //
+    // Reuses nat/add/lt from Test 15. Four goals tie the same X to two independent sums S and T,
+    // each strictly below B = suc^4(zero) (numeric sums in {0,1,2,3}).
+    //
+    // For x in 0..3: y,z each range 0..(3-x), giving 16+9+4+1 = 30 triples (X,Y,Z).
+    {
+        trail t;
+        t.push();
+        expr_pool ep(t);
+        bind_map bm(t);
+        sequencer seq(t);
+
+        auto peano = [&](int n) -> const expr* {
+            const expr* r = ep.atom("zero");
+            for (int i = 0; i < n; ++i)
+                r = ep.cons(ep.atom("suc"), r);
+            return r;
+        };
+
+        database db;
+
+        db.push_back(rule{ep.cons(ep.atom("nat"), ep.atom("zero")), {}});
+
+        {
+            const expr* X = ep.var(seq());
+            db.push_back(rule{
+                ep.cons(ep.atom("nat"), ep.cons(ep.atom("suc"), X)),
+                {ep.cons(ep.atom("nat"), X)}
+            });
+        }
+
+        {
+            const expr* Y = ep.var(seq());
+            db.push_back(rule{
+                ep.cons(ep.cons(ep.cons(ep.atom("add"), ep.atom("zero")), Y), Y),
+                {ep.cons(ep.atom("nat"), Y)}
+            });
+        }
+
+        {
+            const expr* X = ep.var(seq());
+            const expr* Y = ep.var(seq());
+            const expr* Z = ep.var(seq());
+            db.push_back(rule{
+                ep.cons(ep.cons(ep.cons(ep.atom("add"), ep.cons(ep.atom("suc"), X)), Y), ep.cons(ep.atom("suc"), Z)),
+                {ep.cons(ep.cons(ep.cons(ep.atom("add"), X), Y), Z)}
+            });
+        }
+
+        {
+            const expr* X = ep.var(seq());
+            db.push_back(rule{
+                ep.cons(ep.cons(ep.atom("lt"), ep.atom("zero")), ep.cons(ep.atom("suc"), X)),
+                {ep.cons(ep.atom("nat"), X)}
+            });
+        }
+
+        {
+            const expr* X = ep.var(seq());
+            const expr* Y = ep.var(seq());
+            db.push_back(rule{
+                ep.cons(ep.cons(ep.atom("lt"), ep.cons(ep.atom("suc"), X)), ep.cons(ep.atom("suc"), Y)),
+                {ep.cons(ep.cons(ep.atom("lt"), X), Y)}
+            });
+        }
+
+        const expr* X = ep.var(seq());
+        const expr* Y = ep.var(seq());
+        const expr* Z = ep.var(seq());
+        const expr* S = ep.var(seq());
+        const expr* T = ep.var(seq());
+        const expr* B = peano(4);
+
+        goals goals;
+        goals.push_back(ep.cons(ep.cons(ep.cons(ep.atom("add"), X), Y), S));
+        goals.push_back(ep.cons(ep.cons(ep.cons(ep.atom("add"), X), Z), T));
+        goals.push_back(ep.cons(ep.cons(ep.atom("lt"), S), B));
+        goals.push_back(ep.cons(ep.cons(ep.atom("lt"), T), B));
+
+        std::mt19937 rng(42);
+        ridge solver(db, goals, t, seq, bm, 1000, 100, 1.414, rng);
+
+        normalizer norm(ep, bm);
+
+        std::set<solution> expected;
+        for (int x = 0; x < 4; ++x)
+            for (int y = 0; y < 4 - x; ++y)
+                for (int z = 0; z < 4 - x; ++z)
+                    expected.insert({peano(x), peano(y), peano(z)});
+        assert(expected.size() == 30);
+
+        next_until_refuted(solver, expected, [&]() -> solution {
+            return {ep.import(norm(X)), ep.import(norm(Y)), ep.import(norm(Z))};
+        });
+    }
 }
 
 void test_expr_printer_constructor() {
