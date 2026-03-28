@@ -23567,10 +23567,6 @@ void test_ridge() {
                 assert(r == true);
                 s = get_solution();
             } while (visited.count(s));
-            assert(expected.count(s) == 1);
-            expected.erase(s);
-            visited.insert(s);
-
             std::cout << "Solution: " << std::endl;
             expr_printer printer(std::cout);
             for (const auto& e : s) {
@@ -23578,6 +23574,9 @@ void test_ridge() {
                 std::cout << std::endl;
             }
             std::cout << std::endl;
+            assert(expected.count(s) == 1);
+            expected.erase(s);
+            visited.insert(s);
         }
         // All solutions found — next call must refute
         bool r = solver(iterations, soln);
@@ -24430,6 +24429,198 @@ void test_ridge() {
 
         next_until_refuted(solver, expected, [&]() -> solution {
             return {ep.import(norm(X)), ep.import(norm(Y)), ep.import(norm(Z))};
+        });
+
+        std::cout << "";
+    }
+
+    // Test 19: Catalan binary trees with exactly 5 nodes (C_5 = 42).
+    //
+    // nil = 0 nodes; bin(L,R) = cons(cons(bin,L),R) counts 1+|L|+|R|.  Two coupled goals on
+    // the same T: wf(T) and nodes(T, suc^5(zero)).  Only nat/add (no lt).  Expected trees are
+    // enumerated explicitly below (42 total), built bottom-up from named sub-shapes — no search
+    // or recurrence over the Catalan family.
+    {
+        trail t;
+        t.push();
+        expr_pool ep(t);
+        bind_map bm(t);
+        sequencer seq(t);
+
+        auto peano = [&](int n) -> const expr* {
+            const expr* r = ep.atom("zero");
+            for (int i = 0; i < n; ++i)
+                r = ep.cons(ep.atom("suc"), r);
+            return r;
+        };
+
+        auto B = [&](const expr* L, const expr* R) -> const expr* {
+            return ep.cons(ep.cons(ep.atom("bin"), L), R);
+        };
+
+        database db;
+
+        db.push_back(rule{ep.cons(ep.atom("nat"), ep.atom("zero")), {}});
+
+        {
+            const expr* X = ep.var(seq());
+            db.push_back(rule{
+                ep.cons(ep.atom("nat"), ep.cons(ep.atom("suc"), X)),
+                {ep.cons(ep.atom("nat"), X)}
+            });
+        }
+
+        {
+            const expr* Y = ep.var(seq());
+            db.push_back(rule{
+                ep.cons(ep.cons(ep.cons(ep.atom("add"), ep.atom("zero")), Y), Y),
+                {ep.cons(ep.atom("nat"), Y)}
+            });
+        }
+
+        {
+            const expr* X = ep.var(seq());
+            const expr* Y = ep.var(seq());
+            const expr* Z = ep.var(seq());
+            db.push_back(rule{
+                ep.cons(ep.cons(ep.cons(ep.atom("add"), ep.cons(ep.atom("suc"), X)), Y), ep.cons(ep.atom("suc"), Z)),
+                {ep.cons(ep.cons(ep.cons(ep.atom("add"), X), Y), Z)}
+            });
+        }
+
+        db.push_back(rule{ep.cons(ep.atom("wf"), ep.atom("nil")), {}});
+
+        {
+            const expr* L = ep.var(seq());
+            const expr* R = ep.var(seq());
+            db.push_back(rule{
+                ep.cons(ep.atom("wf"), ep.cons(ep.cons(ep.atom("bin"), L), R)),
+                {
+                    ep.cons(ep.atom("wf"), L),
+                    ep.cons(ep.atom("wf"), R),
+                }
+            });
+        }
+
+        db.push_back(rule{
+            ep.cons(ep.cons(ep.atom("nodes"), ep.atom("nil")), ep.atom("zero")),
+            {},
+        });
+
+        {
+            const expr* L = ep.var(seq());
+            const expr* R = ep.var(seq());
+            const expr* S = ep.var(seq());
+            const expr* NL = ep.var(seq());
+            const expr* NR = ep.var(seq());
+            const expr* Tmp = ep.var(seq());
+            const expr* one = peano(1);
+            db.push_back(rule{
+                ep.cons(ep.cons(ep.atom("nodes"), ep.cons(ep.cons(ep.atom("bin"), L), R)), S),
+                {
+                    ep.cons(ep.cons(ep.atom("nodes"), L), NL),
+                    ep.cons(ep.cons(ep.atom("nodes"), R), NR),
+                    ep.cons(ep.cons(ep.cons(ep.atom("add"), NL), NR), Tmp),
+                    ep.cons(ep.cons(ep.cons(ep.atom("add"), one), Tmp), S),
+                }
+            });
+        }
+
+        const expr* N  = ep.atom("nil");
+        const expr* s1 = B(N, N);                 // 1 node
+        const expr* s2_left_chain  = B(N, s1);    // 2 nodes (spine left)
+        const expr* s2_right_chain = B(s1, N);    // 2 nodes (spine right)
+
+        // 3 nodes (5 shapes)
+        const expr* s3_0 = B(N, s2_left_chain);
+        const expr* s3_1 = B(N, s2_right_chain);
+        const expr* s3_2 = B(s1, s1);
+        const expr* s3_3 = B(s2_left_chain, N);
+        const expr* s3_4 = B(s2_right_chain, N);
+
+        // 4 nodes (14 shapes): B(N,·) on each 3-node tree; B(s1,·) on each 2-node; B(2-node,s1);
+        // B(3-node,N)
+        const expr* s4_0  = B(N, s3_0);
+        const expr* s4_1  = B(N, s3_1);
+        const expr* s4_2  = B(N, s3_2);
+        const expr* s4_3  = B(N, s3_3);
+        const expr* s4_4  = B(N, s3_4);
+        const expr* s4_5  = B(s1, s2_left_chain);
+        const expr* s4_6  = B(s1, s2_right_chain);
+        const expr* s4_7  = B(s2_left_chain, s1);
+        const expr* s4_8  = B(s2_right_chain, s1);
+        const expr* s4_9  = B(s3_0, N);
+        const expr* s4_10 = B(s3_1, N);
+        const expr* s4_11 = B(s3_2, N);
+        const expr* s4_12 = B(s3_3, N);
+        const expr* s4_13 = B(s3_4, N);
+
+        const expr* T    = ep.var(seq());
+        const expr* five = peano(5);
+
+        goals goals;
+        goals.push_back(ep.cons(ep.atom("wf"), T));
+        goals.push_back(ep.cons(ep.cons(ep.atom("nodes"), T), five));
+
+        std::mt19937 rng(42);
+        ridge solver(db, goals, t, seq, bm, 1000, 200, 1.414, rng);
+
+        normalizer norm(ep, bm);
+
+        // 5 nodes — 42 trees: split (0,4): B(N,s4_i); (1,3): B(s1,s3_j); (2,2): all B(si,sj) for
+        // si,sj in {s2_left_chain,s2_right_chain}; (3,1): B(s3_j,s1); (4,0): B(s4_i,N).
+        std::set<solution> expected;
+        expected.insert({ep.import(B(N, s4_0))});
+        expected.insert({ep.import(B(N, s4_1))});
+        expected.insert({ep.import(B(N, s4_2))});
+        expected.insert({ep.import(B(N, s4_3))});
+        expected.insert({ep.import(B(N, s4_4))});
+        expected.insert({ep.import(B(N, s4_5))});
+        expected.insert({ep.import(B(N, s4_6))});
+        expected.insert({ep.import(B(N, s4_7))});
+        expected.insert({ep.import(B(N, s4_8))});
+        expected.insert({ep.import(B(N, s4_9))});
+        expected.insert({ep.import(B(N, s4_10))});
+        expected.insert({ep.import(B(N, s4_11))});
+        expected.insert({ep.import(B(N, s4_12))});
+        expected.insert({ep.import(B(N, s4_13))});
+
+        expected.insert({ep.import(B(s1, s3_0))});
+        expected.insert({ep.import(B(s1, s3_1))});
+        expected.insert({ep.import(B(s1, s3_2))});
+        expected.insert({ep.import(B(s1, s3_3))});
+        expected.insert({ep.import(B(s1, s3_4))});
+
+        expected.insert({ep.import(B(s2_left_chain, s2_left_chain))});
+        expected.insert({ep.import(B(s2_left_chain, s2_right_chain))});
+        expected.insert({ep.import(B(s2_right_chain, s2_left_chain))});
+        expected.insert({ep.import(B(s2_right_chain, s2_right_chain))});
+
+        expected.insert({ep.import(B(s3_0, s1))});
+        expected.insert({ep.import(B(s3_1, s1))});
+        expected.insert({ep.import(B(s3_2, s1))});
+        expected.insert({ep.import(B(s3_3, s1))});
+        expected.insert({ep.import(B(s3_4, s1))});
+
+        expected.insert({ep.import(B(s4_0, N))});
+        expected.insert({ep.import(B(s4_1, N))});
+        expected.insert({ep.import(B(s4_2, N))});
+        expected.insert({ep.import(B(s4_3, N))});
+        expected.insert({ep.import(B(s4_4, N))});
+        expected.insert({ep.import(B(s4_5, N))});
+        expected.insert({ep.import(B(s4_6, N))});
+        expected.insert({ep.import(B(s4_7, N))});
+        expected.insert({ep.import(B(s4_8, N))});
+        expected.insert({ep.import(B(s4_9, N))});
+        expected.insert({ep.import(B(s4_10, N))});
+        expected.insert({ep.import(B(s4_11, N))});
+        expected.insert({ep.import(B(s4_12, N))});
+        expected.insert({ep.import(B(s4_13, N))});
+
+        assert(expected.size() == 42);
+
+        next_until_refuted(solver, expected, [&]() -> solution {
+            return {ep.import(norm(T))};
         });
     }
 }
