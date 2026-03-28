@@ -11,8 +11,13 @@
 #include "../hpp/a01.hpp"
 #include "../hpp/expr_printer.hpp"
 #include "../hpp/cdcl.hpp"
+#include <algorithm>
 #include <sstream>
+#include <vector>
 #include "test_utils.hpp"
+
+using resolution_store = resolutions;
+using decision_store = decisions;
 
 void test_trail_constructor() {
     // Basic construction - should not crash
@@ -14792,17 +14797,16 @@ void test_mcts_decider_constructor() {
         t.push();
         expr_pool ep(t);
         lineage_pool lp;
-        goal_store gs;
-        candidate_store cs;
+        database db;
+        goals empty_goals;
+        candidate_store cs(db, empty_goals, lp);
         
         monte_carlo::tree_node<mcts_decider::choice> root;
         std::mt19937 rng(42);
         monte_carlo::simulation<mcts_decider::choice, std::mt19937> sim(root, 1.414, rng);
         
-        mcts_decider decider(gs, cs, sim);
+        mcts_decider decider(cs, sim);
         
-        // Verify references stored
-        assert(&decider.gs == &gs);
         assert(&decider.cs == &cs);
         assert(&decider.sim == &sim);
     }
@@ -14813,30 +14817,25 @@ void test_mcts_decider_constructor() {
         t.push();
         expr_pool ep(t);
         lineage_pool lp;
-        goal_store gs;
-        candidate_store cs;
+        database db;
+        goals empty_goals;
+        candidate_store cs(db, empty_goals, lp);
         
-        // Pre-populate stores
         const goal_lineage* g1 = lp.goal(nullptr, 1);
         const goal_lineage* g2 = lp.goal(nullptr, 2);
-        gs.insert({g1, ep.atom("p")});
-        gs.insert({g2, ep.atom("q")});
-        
-        cs.insert({g1, 0});
-        cs.insert({g1, 1});
-        cs.insert({g2, 0});
+        cs.insert(g1, std::vector<size_t>{0, 1});
+        cs.insert(g2, std::vector<size_t>{0});
         
         monte_carlo::tree_node<mcts_decider::choice> root;
         std::mt19937 rng(42);
         monte_carlo::simulation<mcts_decider::choice, std::mt19937> sim(root, 2.0, rng);
         
-        mcts_decider decider(gs, cs, sim);
+        mcts_decider decider(cs, sim);
         
-        // Verify references and stores unchanged
-        assert(&decider.gs == &gs);
         assert(&decider.cs == &cs);
-        assert(decider.gs.size() == 2);
-        assert(decider.cs.size() == 3);
+        assert(decider.cs.size() == 2);
+        assert(decider.cs.at(g1).size() == 2);
+        assert(decider.cs.at(g2).size() == 1);
     }
 }
 
@@ -14847,30 +14846,26 @@ void test_mcts_decider_choose_goal() {
         t.push();
         expr_pool ep(t);
         lineage_pool lp;
-        goal_store gs;
-        candidate_store cs;
+        database db;
+        goals empty_goals;
+        candidate_store cs(db, empty_goals, lp);
         
         const goal_lineage* g1 = lp.goal(nullptr, 1);
-        gs.insert({g1, ep.atom("p")});
+        cs.insert(g1, std::vector<size_t>{0});
         
         monte_carlo::tree_node<mcts_decider::choice> root;
         std::mt19937 rng(42);
         monte_carlo::simulation<mcts_decider::choice, std::mt19937> sim(root, 1.414, rng);
         
-        mcts_decider decider(gs, cs, sim);
+        mcts_decider decider(cs, sim);
         
         size_t length_before = sim.length();
         
         const goal_lineage* chosen = decider.choose_goal();
         
-        // CRITICAL: Should return the only goal
         assert(chosen == g1);
-        
-        // CRITICAL: Simulation length increments by 1
         assert(sim.length() == length_before + 1);
-        
-        // Store unchanged
-        assert(gs.size() == 1);
+        assert(cs.size() == 1);
     }
     
     // Test 2: Multiple goals with unvisited node - unvisited chosen first
@@ -14879,40 +14874,36 @@ void test_mcts_decider_choose_goal() {
         t.push();
         expr_pool ep(t);
         lineage_pool lp;
-        goal_store gs;
-        candidate_store cs;
+        database db;
+        goals empty_goals;
+        candidate_store cs(db, empty_goals, lp);
         
         const goal_lineage* g1 = lp.goal(nullptr, 1);
         const goal_lineage* g2 = lp.goal(nullptr, 2);
         const goal_lineage* g3 = lp.goal(nullptr, 3);
-        
-        gs.insert({g1, ep.atom("p")});
-        gs.insert({g2, ep.atom("q")});
-        gs.insert({g3, ep.atom("r")});
+        cs.insert(g1, std::vector<size_t>{0});
+        cs.insert(g2, std::vector<size_t>{0});
+        cs.insert(g3, std::vector<size_t>{0});
         
         monte_carlo::tree_node<mcts_decider::choice> root;
         std::mt19937 rng(42);
         monte_carlo::simulation<mcts_decider::choice, std::mt19937> sim(root, 1.414, rng);
         
-        // Pre-populate tree: g1 and g3 visited, g2 unvisited
         root.m_visits = 10;
         root.m_children[g1].m_visits = 5;
         root.m_children[g1].m_value = 10.0;
         
-        root.m_children[g2].m_visits = 0;  // UNVISITED - infinity UCB1!
+        root.m_children[g2].m_visits = 0;
         root.m_children[g2].m_value = 0.0;
         
         root.m_children[g3].m_visits = 5;
         root.m_children[g3].m_value = 10.0;
         
-        mcts_decider decider(gs, cs, sim);
+        mcts_decider decider(cs, sim);
         
         const goal_lineage* chosen = decider.choose_goal();
         
-        // CRITICAL: Should choose g2 (unvisited = infinity UCB1)
         assert(chosen == g2);
-        
-        // Simulation length incremented
         assert(sim.length() == 1);
     }
     
@@ -14922,44 +14913,37 @@ void test_mcts_decider_choose_goal() {
         t.push();
         expr_pool ep(t);
         lineage_pool lp;
-        goal_store gs;
-        candidate_store cs;
+        database db;
+        goals empty_goals;
+        candidate_store cs(db, empty_goals, lp);
         
         const goal_lineage* g1 = lp.goal(nullptr, 1);
         const goal_lineage* g2 = lp.goal(nullptr, 2);
         const goal_lineage* g3 = lp.goal(nullptr, 3);
-        
-        gs.insert({g1, ep.atom("p")});
-        gs.insert({g2, ep.atom("q")});
-        gs.insert({g3, ep.atom("r")});
+        cs.insert(g1, std::vector<size_t>{0});
+        cs.insert(g2, std::vector<size_t>{0});
+        cs.insert(g3, std::vector<size_t>{0});
         
         monte_carlo::tree_node<mcts_decider::choice> root;
         std::mt19937 rng(42);
         monte_carlo::simulation<mcts_decider::choice, std::mt19937> sim(root, 1.414, rng);
         
-        // Pre-populate tree: all visited, g2 has highest average reward
         root.m_visits = 100;
         
-        // g1: avg = 50/10 = 5.0
         root.m_children[g1].m_visits = 10;
         root.m_children[g1].m_value = 50.0;
         
-        // g2: avg = 900/10 = 90.0 (HIGHEST!)
         root.m_children[g2].m_visits = 10;
         root.m_children[g2].m_value = 900.0;
         
-        // g3: avg = 30/10 = 3.0
         root.m_children[g3].m_visits = 10;
         root.m_children[g3].m_value = 30.0;
         
-        mcts_decider decider(gs, cs, sim);
+        mcts_decider decider(cs, sim);
         
         const goal_lineage* chosen = decider.choose_goal();
         
-        // CRITICAL: Should choose g2 (highest average reward)
         assert(chosen == g2);
-        
-        // Length incremented
         assert(sim.length() == 1);
     }
     
@@ -14969,33 +14953,28 @@ void test_mcts_decider_choose_goal() {
         t.push();
         expr_pool ep(t);
         lineage_pool lp;
-        goal_store gs;
-        candidate_store cs;
+        database db;
+        goals empty_goals;
+        candidate_store cs(db, empty_goals, lp);
         
         const goal_lineage* g1 = lp.goal(nullptr, 1);
         const goal_lineage* g2 = lp.goal(nullptr, 2);
         const goal_lineage* g3 = lp.goal(nullptr, 3);
-        
-        gs.insert({g1, ep.atom("p")});
-        gs.insert({g2, ep.atom("q")});
-        gs.insert({g3, ep.atom("r")});
+        cs.insert(g1, std::vector<size_t>{0});
+        cs.insert(g2, std::vector<size_t>{0});
+        cs.insert(g3, std::vector<size_t>{0});
         
         monte_carlo::tree_node<mcts_decider::choice> root;
         std::mt19937 rng(42);
         monte_carlo::simulation<mcts_decider::choice, std::mt19937> sim(root, 2.0, rng);
         
-        mcts_decider decider(gs, cs, sim);
+        mcts_decider decider(cs, sim);
         
-        // Call multiple times
         for (int i = 0; i < 20; i++) {
             const goal_lineage* chosen = decider.choose_goal();
-            
-            // CRITICAL: Result must be one of the three goals
             assert(chosen == g1 || chosen == g2 || chosen == g3);
-            assert(gs.count(chosen) == 1);
         }
         
-        // Simulation length should be 20
         assert(sim.length() == 20);
     }
     
@@ -15005,31 +14984,29 @@ void test_mcts_decider_choose_goal() {
         t.push();
         expr_pool ep(t);
         lineage_pool lp;
-        goal_store gs;
-        candidate_store cs;
+        database db;
+        goals empty_goals;
+        candidate_store cs(db, empty_goals, lp);
         
         const goal_lineage* g1 = lp.goal(nullptr, 1);
         const goal_lineage* g2 = lp.goal(nullptr, 2);
-        
-        gs.insert({g1, ep.atom("p")});
-        gs.insert({g2, ep.atom("q")});
+        cs.insert(g1, std::vector<size_t>{0});
+        cs.insert(g2, std::vector<size_t>{0});
         
         monte_carlo::tree_node<mcts_decider::choice> root;
         std::mt19937 rng(42);
         monte_carlo::simulation<mcts_decider::choice, std::mt19937> sim(root, 1.5, rng);
         
-        // Pre-populate with similar rewards
         root.m_visits = 50;
         root.m_children[g1].m_visits = 20;
-        root.m_children[g1].m_value = 60.0;  // avg = 3.0
+        root.m_children[g1].m_value = 60.0;
         root.m_children[g2].m_visits = 20;
-        root.m_children[g2].m_value = 62.0;  // avg = 3.1 (slightly higher)
+        root.m_children[g2].m_value = 62.0;
         
-        mcts_decider decider(gs, cs, sim);
+        mcts_decider decider(cs, sim);
         
         const goal_lineage* chosen = decider.choose_goal();
         
-        // Should choose g2 (slightly higher average)
         assert(chosen == g2);
         assert(sim.length() == 1);
     }
@@ -15040,31 +15017,28 @@ void test_mcts_decider_choose_goal() {
         t.push();
         expr_pool ep(t);
         lineage_pool lp;
-        goal_store gs;
-        candidate_store cs;
+        database db;
+        goals empty_goals;
+        candidate_store cs(db, empty_goals, lp);
         
-        std::vector<const goal_lineage*> goals;
+        std::vector<const goal_lineage*> gl_vec;
         for (int i = 0; i < 20; i++) {
             const goal_lineage* g = lp.goal(nullptr, i);
-            gs.insert({g, ep.atom("p" + std::to_string(i))});
-            goals.push_back(g);
+            cs.insert(g, std::vector<size_t>{0});
+            gl_vec.push_back(g);
         }
         
         monte_carlo::tree_node<mcts_decider::choice> root;
         std::mt19937 rng(123);
         monte_carlo::simulation<mcts_decider::choice, std::mt19937> sim(root, 1.414, rng);
         
-        mcts_decider decider(gs, cs, sim);
+        mcts_decider decider(cs, sim);
         
         size_t length_before = sim.length();
         const goal_lineage* chosen = decider.choose_goal();
         
-        // CRITICAL: Result must be in goal store
-        assert(gs.count(chosen) == 1);
-        
-        // Verify it's one of our goals
         bool found = false;
-        for (const auto* g : goals) {
+        for (const auto* g : gl_vec) {
             if (chosen == g) {
                 found = true;
                 break;
@@ -15072,7 +15046,6 @@ void test_mcts_decider_choose_goal() {
         }
         assert(found == true);
         
-        // Length incremented by 1
         assert(sim.length() == length_before + 1);
     }
 }
@@ -15084,31 +15057,26 @@ void test_mcts_decider_choose_candidate() {
         t.push();
         expr_pool ep(t);
         lineage_pool lp;
-        goal_store gs;
-        candidate_store cs;
+        database db;
+        goals empty_goals;
+        candidate_store cs(db, empty_goals, lp);
         
         const goal_lineage* g1 = lp.goal(nullptr, 1);
-        gs.insert({g1, ep.atom("p")});
-        cs.insert({g1, 5});  // Only candidate is index 5
+        cs.insert(g1, std::vector<size_t>{5});
         
         monte_carlo::tree_node<mcts_decider::choice> root;
         std::mt19937 rng(42);
         monte_carlo::simulation<mcts_decider::choice, std::mt19937> sim(root, 1.414, rng);
         
-        mcts_decider decider(gs, cs, sim);
+        mcts_decider decider(cs, sim);
         
         size_t length_before = sim.length();
         
         size_t chosen = decider.choose_candidate(g1);
         
-        // CRITICAL: Should return the only candidate
         assert(chosen == 5);
-        
-        // CRITICAL: Simulation length increments by 1
         assert(sim.length() == length_before + 1);
-        
-        // Store unchanged
-        assert(cs.count(g1) == 1);
+        assert(cs.at(g1).size() == 1);
     }
     
     // Test 2: Multiple candidates with unvisited node - unvisited chosen first
@@ -15117,40 +15085,33 @@ void test_mcts_decider_choose_candidate() {
         t.push();
         expr_pool ep(t);
         lineage_pool lp;
-        goal_store gs;
-        candidate_store cs;
+        database db;
+        goals empty_goals;
+        candidate_store cs(db, empty_goals, lp);
         
         const goal_lineage* g1 = lp.goal(nullptr, 1);
-        gs.insert({g1, ep.atom("p")});
-        
-        cs.insert({g1, 0});
-        cs.insert({g1, 1});
-        cs.insert({g1, 2});
+        cs.insert(g1, std::vector<size_t>{0, 1, 2});
         
         monte_carlo::tree_node<mcts_decider::choice> root;
         std::mt19937 rng(42);
         monte_carlo::simulation<mcts_decider::choice, std::mt19937> sim(root, 1.414, rng);
         
-        // Pre-populate tree: indices 0 and 2 visited, index 1 unvisited
         root.m_visits = 10;
         
         root.m_children[size_t(0)].m_visits = 3;
         root.m_children[size_t(0)].m_value = 9.0;
         
-        root.m_children[size_t(1)].m_visits = 0;  // UNVISITED - infinity UCB1!
+        root.m_children[size_t(1)].m_visits = 0;
         root.m_children[size_t(1)].m_value = 0.0;
         
         root.m_children[size_t(2)].m_visits = 3;
         root.m_children[size_t(2)].m_value = 9.0;
         
-        mcts_decider decider(gs, cs, sim);
+        mcts_decider decider(cs, sim);
         
         size_t chosen = decider.choose_candidate(g1);
         
-        // CRITICAL: Should choose index 1 (unvisited = infinity UCB1)
         assert(chosen == 1);
-        
-        // Length incremented
         assert(sim.length() == 1);
     }
     
@@ -15160,48 +15121,36 @@ void test_mcts_decider_choose_candidate() {
         t.push();
         expr_pool ep(t);
         lineage_pool lp;
-        goal_store gs;
-        candidate_store cs;
+        database db;
+        goals empty_goals;
+        candidate_store cs(db, empty_goals, lp);
         
         const goal_lineage* g1 = lp.goal(nullptr, 1);
-        gs.insert({g1, ep.atom("p")});
-        
-        cs.insert({g1, 0});
-        cs.insert({g1, 1});
-        cs.insert({g1, 2});
-        cs.insert({g1, 3});
+        cs.insert(g1, std::vector<size_t>{0, 1, 2, 3});
         
         monte_carlo::tree_node<mcts_decider::choice> root;
         std::mt19937 rng(42);
         monte_carlo::simulation<mcts_decider::choice, std::mt19937> sim(root, 1.414, rng);
         
-        // Pre-populate tree: all visited, index 2 has highest average reward
         root.m_visits = 100;
         
-        // idx 0: avg = 40/10 = 4.0
         root.m_children[size_t(0)].m_visits = 10;
         root.m_children[size_t(0)].m_value = 40.0;
         
-        // idx 1: avg = 50/10 = 5.0
         root.m_children[size_t(1)].m_visits = 10;
         root.m_children[size_t(1)].m_value = 50.0;
         
-        // idx 2: avg = 800/10 = 80.0 (HIGHEST!)
         root.m_children[size_t(2)].m_visits = 10;
         root.m_children[size_t(2)].m_value = 800.0;
         
-        // idx 3: avg = 30/10 = 3.0
         root.m_children[size_t(3)].m_visits = 10;
         root.m_children[size_t(3)].m_value = 30.0;
         
-        mcts_decider decider(gs, cs, sim);
+        mcts_decider decider(cs, sim);
         
         size_t chosen = decider.choose_candidate(g1);
         
-        // CRITICAL: Should choose index 2 (highest average reward)
         assert(chosen == 2);
-        
-        // Length incremented
         assert(sim.length() == 1);
     }
     
@@ -15211,44 +15160,27 @@ void test_mcts_decider_choose_candidate() {
         t.push();
         expr_pool ep(t);
         lineage_pool lp;
-        goal_store gs;
-        candidate_store cs;
+        database db;
+        goals empty_goals;
+        candidate_store cs(db, empty_goals, lp);
         
         const goal_lineage* g1 = lp.goal(nullptr, 1);
-        gs.insert({g1, ep.atom("p")});
-        
-        cs.insert({g1, 0});
-        cs.insert({g1, 1});
-        cs.insert({g1, 2});
-        cs.insert({g1, 3});
-        cs.insert({g1, 4});
+        cs.insert(g1, std::vector<size_t>{0, 1, 2, 3, 4});
         
         monte_carlo::tree_node<mcts_decider::choice> root;
         std::mt19937 rng(999);
         monte_carlo::simulation<mcts_decider::choice, std::mt19937> sim(root, 2.0, rng);
         
-        mcts_decider decider(gs, cs, sim);
+        mcts_decider decider(cs, sim);
         
-        // Call multiple times
         for (int i = 0; i < 15; i++) {
             size_t chosen = decider.choose_candidate(g1);
-            
-            // CRITICAL: Result must be valid candidate index
             assert(chosen >= 0 && chosen <= 4);
-            
-            // Verify it's actually in candidate store
-            bool found = false;
-            auto range = cs.equal_range(g1);
-            for (auto it = range.first; it != range.second; ++it) {
-                if (it->second == chosen) {
-                    found = true;
-                    break;
-                }
-            }
+            const auto& vec = cs.at(g1);
+            bool found = std::find(vec.begin(), vec.end(), chosen) != vec.end();
             assert(found == true);
         }
         
-        // Simulation length should be 15
         assert(sim.length() == 15);
     }
     
@@ -15258,38 +15190,32 @@ void test_mcts_decider_choose_candidate() {
         t.push();
         expr_pool ep(t);
         lineage_pool lp;
-        goal_store gs;
-        candidate_store cs;
+        database db;
+        goals empty_goals;
+        candidate_store cs(db, empty_goals, lp);
         
         const goal_lineage* g1 = lp.goal(nullptr, 1);
-        gs.insert({g1, ep.atom("p")});
-        
-        // Sparse indices: 5, 17, 42
-        cs.insert({g1, 5});
-        cs.insert({g1, 17});
-        cs.insert({g1, 42});
+        cs.insert(g1, std::vector<size_t>{5, 17, 42});
         
         monte_carlo::tree_node<mcts_decider::choice> root;
         std::mt19937 rng(42);
         monte_carlo::simulation<mcts_decider::choice, std::mt19937> sim(root, 1.414, rng);
         
-        // Pre-populate: index 42 has highest reward
         root.m_visits = 50;
         
         root.m_children[size_t(5)].m_visits = 10;
-        root.m_children[size_t(5)].m_value = 20.0;  // avg = 2.0
+        root.m_children[size_t(5)].m_value = 20.0;
         
         root.m_children[size_t(17)].m_visits = 10;
-        root.m_children[size_t(17)].m_value = 30.0; // avg = 3.0
+        root.m_children[size_t(17)].m_value = 30.0;
         
         root.m_children[size_t(42)].m_visits = 10;
-        root.m_children[size_t(42)].m_value = 500.0; // avg = 50.0 (HIGHEST!)
+        root.m_children[size_t(42)].m_value = 500.0;
         
-        mcts_decider decider(gs, cs, sim);
+        mcts_decider decider(cs, sim);
         
         size_t chosen = decider.choose_candidate(g1);
         
-        // CRITICAL: Should choose 42 (highest average)
         assert(chosen == 42);
         assert(sim.length() == 1);
     }
@@ -15300,37 +15226,27 @@ void test_mcts_decider_choose_candidate() {
         t.push();
         expr_pool ep(t);
         lineage_pool lp;
-        goal_store gs;
-        candidate_store cs;
+        database db;
+        goals empty_goals;
+        candidate_store cs(db, empty_goals, lp);
         
         const goal_lineage* g1 = lp.goal(nullptr, 1);
-        gs.insert({g1, ep.atom("p")});
-        
-        // Add 30 candidates
-        for (size_t i = 0; i < 30; i++) {
-            cs.insert({g1, i});
-        }
+        std::vector<size_t> cand;
+        for (size_t i = 0; i < 30; i++)
+            cand.push_back(i);
+        cs.insert(g1, cand);
         
         monte_carlo::tree_node<mcts_decider::choice> root;
         std::mt19937 rng(777);
         monte_carlo::simulation<mcts_decider::choice, std::mt19937> sim(root, 1.414, rng);
         
-        mcts_decider decider(gs, cs, sim);
+        mcts_decider decider(cs, sim);
         
         size_t chosen = decider.choose_candidate(g1);
         
-        // Result must be valid
         assert(chosen < 30);
-        
-        // Verify in store
-        auto range = cs.equal_range(g1);
-        bool found = false;
-        for (auto it = range.first; it != range.second; ++it) {
-            if (it->second == chosen) {
-                found = true;
-                break;
-            }
-        }
+        const auto& vec = cs.at(g1);
+        bool found = std::find(vec.begin(), vec.end(), chosen) != vec.end();
         assert(found == true);
         
         assert(sim.length() == 1);
@@ -15342,37 +15258,29 @@ void test_mcts_decider_choose_candidate() {
         t.push();
         expr_pool ep(t);
         lineage_pool lp;
-        goal_store gs;
-        candidate_store cs;
+        database db;
+        goals empty_goals;
+        candidate_store cs(db, empty_goals, lp);
         
         const goal_lineage* g1 = lp.goal(nullptr, 1);
-        gs.insert({g1, ep.atom("p")});
-        
-        cs.insert({g1, 0});
-        cs.insert({g1, 1});
+        cs.insert(g1, std::vector<size_t>{0, 1});
         
         monte_carlo::tree_node<mcts_decider::choice> root;
         std::mt19937 rng(42);
         monte_carlo::simulation<mcts_decider::choice, std::mt19937> sim(root, 2.0, rng);
         
-        // Pre-populate: idx 0 higher reward BUT much more visited (less exploration bonus)
-        // idx 1 lower reward but less visited (higher exploration bonus)
         root.m_visits = 100;
         
-        // idx 0: avg = 600/90 = 6.67, but exploration = sqrt(ln(100)/90) = very small
         root.m_children[size_t(0)].m_visits = 90;
         root.m_children[size_t(0)].m_value = 600.0;
         
-        // idx 1: avg = 5/1 = 5.0, but exploration = sqrt(ln(100)/1) = 2.145 (LARGE!)
-        // UCB1 = 5.0 + 2.0 * 2.145 = 9.29 vs 6.67 + 2.0 * 0.048 = 6.77
         root.m_children[size_t(1)].m_visits = 1;
         root.m_children[size_t(1)].m_value = 5.0;
         
-        mcts_decider decider(gs, cs, sim);
+        mcts_decider decider(cs, sim);
         
         size_t chosen = decider.choose_candidate(g1);
         
-        // CRITICAL: Should choose idx 1 (exploration bonus outweighs lower average)
         assert(chosen == 1);
     }
 }
@@ -15384,33 +15292,28 @@ void test_mcts_decider() {
         t.push();
         expr_pool ep(t);
         lineage_pool lp;
-        goal_store gs;
-        candidate_store cs;
+        database db;
+        goals empty_goals;
+        candidate_store cs(db, empty_goals, lp);
         
         const goal_lineage* g1 = lp.goal(nullptr, 1);
-        gs.insert({g1, ep.atom("p")});
-        cs.insert({g1, 0});
+        cs.insert(g1, std::vector<size_t>{0});
         
         monte_carlo::tree_node<mcts_decider::choice> root;
         std::mt19937 rng(42);
         monte_carlo::simulation<mcts_decider::choice, std::mt19937> sim(root, 1.414, rng);
         
-        mcts_decider decider(gs, cs, sim);
+        mcts_decider decider(cs, sim);
         
         size_t length_before = sim.length();
         
         auto [chosen_goal, chosen_candidate] = decider();
         
-        // CRITICAL: Should choose g1 and index 0
         assert(chosen_goal == g1);
         assert(chosen_candidate == 0);
-        
-        // CRITICAL: Simulation length increments by 2 (two choose() calls)
         assert(sim.length() == length_before + 2);
-        
-        // Stores unchanged
-        assert(gs.size() == 1);
-        assert(cs.count(g1) == 1);
+        assert(cs.size() == 1);
+        assert(cs.at(g1).size() == 1);
     }
     
     // Test 2: Multiple goals and candidates - verify deterministic selection
@@ -15419,69 +15322,52 @@ void test_mcts_decider() {
         t.push();
         expr_pool ep(t);
         lineage_pool lp;
-        goal_store gs;
-        candidate_store cs;
+        database db;
+        goals empty_goals;
+        candidate_store cs(db, empty_goals, lp);
         
         const goal_lineage* g1 = lp.goal(nullptr, 1);
         const goal_lineage* g2 = lp.goal(nullptr, 2);
         const goal_lineage* g3 = lp.goal(nullptr, 3);
         
-        gs.insert({g1, ep.atom("p")});
-        gs.insert({g2, ep.atom("q")});
-        gs.insert({g3, ep.atom("r")});
-        
-        cs.insert({g1, 0});
-        cs.insert({g1, 1});
-        cs.insert({g2, 0});
-        cs.insert({g2, 1});
-        cs.insert({g2, 2});
-        cs.insert({g3, 0});
+        cs.insert(g1, std::vector<size_t>{0, 1});
+        cs.insert(g2, std::vector<size_t>{0, 1, 2});
+        cs.insert(g3, std::vector<size_t>{0});
         
         monte_carlo::tree_node<mcts_decider::choice> root;
         std::mt19937 rng(42);
         monte_carlo::simulation<mcts_decider::choice, std::mt19937> sim(root, 1.414, rng);
         
-        // Pre-populate tree to force g2 selection (level 1)
         root.m_visits = 100;
         
-        // g1: avg = 20/10 = 2.0
         root.m_children[g1].m_visits = 10;
         root.m_children[g1].m_value = 20.0;
         
-        // g2: avg = 800/10 = 80.0 (HIGHEST!)
         root.m_children[g2].m_visits = 10;
         root.m_children[g2].m_value = 800.0;
         
-        // g3: avg = 30/10 = 3.0
         root.m_children[g3].m_visits = 10;
         root.m_children[g3].m_value = 30.0;
         
-        // Now pre-populate g2's children to force candidate index 1 selection (level 2)
         root.m_children[g2].m_visits = 50;
         
-        // idx 0: avg = 10/10 = 1.0
         root.m_children[g2].m_children[size_t(0)].m_visits = 10;
         root.m_children[g2].m_children[size_t(0)].m_value = 10.0;
         
-        // idx 1: avg = 900/10 = 90.0 (HIGHEST!)
         root.m_children[g2].m_children[size_t(1)].m_visits = 10;
         root.m_children[g2].m_children[size_t(1)].m_value = 900.0;
         
-        // idx 2: avg = 20/10 = 2.0
         root.m_children[g2].m_children[size_t(2)].m_visits = 10;
         root.m_children[g2].m_children[size_t(2)].m_value = 20.0;
         
-        mcts_decider decider(gs, cs, sim);
+        mcts_decider decider(cs, sim);
         
         size_t length_before = sim.length();
         
         auto [chosen_goal, chosen_candidate] = decider();
         
-        // CRITICAL: Should choose g2 (highest goal reward) and index 1 (highest candidate reward)
         assert(chosen_goal == g2);
         assert(chosen_candidate == 1);
-        
-        // CRITICAL: Two choose() calls made
         assert(sim.length() == length_before + 2);
     }
     
@@ -15491,47 +15377,39 @@ void test_mcts_decider() {
         t.push();
         expr_pool ep(t);
         lineage_pool lp;
-        goal_store gs;
-        candidate_store cs;
+        database db;
+        goals empty_goals;
+        candidate_store cs(db, empty_goals, lp);
         
         const goal_lineage* g1 = lp.goal(nullptr, 1);
         const goal_lineage* g2 = lp.goal(nullptr, 2);
         
-        gs.insert({g1, ep.atom("p")});
-        gs.insert({g2, ep.atom("q")});
-        
-        cs.insert({g1, 10});
-        cs.insert({g1, 20});
-        cs.insert({g2, 30});
+        cs.insert(g1, std::vector<size_t>{10, 20});
+        cs.insert(g2, std::vector<size_t>{30});
         
         monte_carlo::tree_node<mcts_decider::choice> root;
         std::mt19937 rng(42);
         monte_carlo::simulation<mcts_decider::choice, std::mt19937> sim(root, 1.414, rng);
         
-        // Force g1 selection at level 1 (highest reward)
         root.m_visits = 100;
         
         root.m_children[g1].m_visits = 20;
-        root.m_children[g1].m_value = 1800.0;  // avg = 90.0 (HIGHEST!)
+        root.m_children[g1].m_value = 1800.0;
         
         root.m_children[g2].m_visits = 20;
-        root.m_children[g2].m_value = 60.0;   // avg = 3.0
+        root.m_children[g2].m_value = 60.0;
         
-        // Pre-populate g1's children: force index 20 selection
         root.m_children[g1].m_children[size_t(10)].m_visits = 5;
-        root.m_children[g1].m_children[size_t(10)].m_value = 10.0;  // avg = 2.0
+        root.m_children[g1].m_children[size_t(10)].m_value = 10.0;
         
-        root.m_children[g1].m_children[size_t(20)].m_visits = 0;  // UNVISITED - infinity UCB1!
+        root.m_children[g1].m_children[size_t(20)].m_visits = 0;
         
-        mcts_decider decider(gs, cs, sim);
+        mcts_decider decider(cs, sim);
         
         auto [chosen_goal, chosen_candidate] = decider();
         
-        // CRITICAL: g1 chosen (highest avg), then index 20 chosen (unvisited)
         assert(chosen_goal == g1);
         assert(chosen_candidate == 20);
-        
-        // Two steps
         assert(sim.length() == 2);
     }
     
@@ -15541,48 +15419,31 @@ void test_mcts_decider() {
         t.push();
         expr_pool ep(t);
         lineage_pool lp;
-        goal_store gs;
-        candidate_store cs;
+        database db;
+        goals empty_goals;
+        candidate_store cs(db, empty_goals, lp);
         
         const goal_lineage* g1 = lp.goal(nullptr, 1);
         const goal_lineage* g2 = lp.goal(nullptr, 2);
         
-        gs.insert({g1, ep.atom("p")});
-        gs.insert({g2, ep.atom("q")});
-        
-        cs.insert({g1, 0});
-        cs.insert({g1, 1});
-        cs.insert({g2, 0});
-        cs.insert({g2, 1});
-        cs.insert({g2, 2});
+        cs.insert(g1, std::vector<size_t>{0, 1});
+        cs.insert(g2, std::vector<size_t>{0, 1, 2});
         
         monte_carlo::tree_node<mcts_decider::choice> root;
         std::mt19937 rng(555);
         monte_carlo::simulation<mcts_decider::choice, std::mt19937> sim(root, 1.5, rng);
         
-        mcts_decider decider(gs, cs, sim);
+        mcts_decider decider(cs, sim);
         
-        // Call 10 times
         for (int i = 0; i < 10; i++) {
             auto [chosen_goal, chosen_candidate] = decider();
             
-            // CRITICAL: Goal must be in goal store
-            assert(gs.count(chosen_goal) == 1);
             assert(chosen_goal == g1 || chosen_goal == g2);
-            
-            // CRITICAL: Candidate must be valid for chosen goal
-            bool found = false;
-            auto range = cs.equal_range(chosen_goal);
-            for (auto it = range.first; it != range.second; ++it) {
-                if (it->second == chosen_candidate) {
-                    found = true;
-                    break;
-                }
-            }
+            const auto& vec = cs.at(chosen_goal);
+            bool found = std::find(vec.begin(), vec.end(), chosen_candidate) != vec.end();
             assert(found == true);
         }
         
-        // Simulation length should be 20 (10 calls * 2 steps each)
         assert(sim.length() == 20);
     }
     
@@ -15592,67 +15453,53 @@ void test_mcts_decider() {
         t.push();
         expr_pool ep(t);
         lineage_pool lp;
-        goal_store gs;
-        candidate_store cs;
+        database db;
+        goals empty_goals;
+        candidate_store cs(db, empty_goals, lp);
         
         const goal_lineage* g1 = lp.goal(nullptr, 1);
         const goal_lineage* g2 = lp.goal(nullptr, 2);
         const goal_lineage* g3 = lp.goal(nullptr, 3);
         
-        gs.insert({g1, ep.atom("p")});
-        gs.insert({g2, ep.atom("q")});
-        gs.insert({g3, ep.atom("r")});
-        
-        cs.insert({g1, 0});
-        cs.insert({g1, 1});
-        cs.insert({g1, 2});
-        cs.insert({g2, 0});
-        cs.insert({g2, 1});
-        cs.insert({g3, 0});
-        cs.insert({g3, 1});
-        cs.insert({g3, 2});
-        cs.insert({g3, 3});
+        cs.insert(g1, std::vector<size_t>{0, 1, 2});
+        cs.insert(g2, std::vector<size_t>{0, 1});
+        cs.insert(g3, std::vector<size_t>{0, 1, 2, 3});
         
         monte_carlo::tree_node<mcts_decider::choice> root;
         std::mt19937 rng(42);
         monte_carlo::simulation<mcts_decider::choice, std::mt19937> sim(root, 1.0, rng);
         
-        // Force selection of g3 (level 1): give it massively higher average reward
         root.m_visits = 200;
         
         root.m_children[g1].m_visits = 20;
-        root.m_children[g1].m_value = 40.0;   // avg = 2.0
+        root.m_children[g1].m_value = 40.0;
         
         root.m_children[g2].m_visits = 20;
-        root.m_children[g2].m_value = 60.0;   // avg = 3.0
+        root.m_children[g2].m_value = 60.0;
         
         root.m_children[g3].m_visits = 20;
-        root.m_children[g3].m_value = 2000.0; // avg = 100.0 (MASSIVELY HIGHER!)
+        root.m_children[g3].m_value = 2000.0;
         
-        // Force selection of index 2 for g3 (level 2): give it highest reward
         root.m_children[g3].m_visits = 100;
         
         root.m_children[g3].m_children[size_t(0)].m_visits = 10;
-        root.m_children[g3].m_children[size_t(0)].m_value = 20.0;  // avg = 2.0
+        root.m_children[g3].m_children[size_t(0)].m_value = 20.0;
         
         root.m_children[g3].m_children[size_t(1)].m_visits = 10;
-        root.m_children[g3].m_children[size_t(1)].m_value = 30.0;  // avg = 3.0
+        root.m_children[g3].m_children[size_t(1)].m_value = 30.0;
         
         root.m_children[g3].m_children[size_t(2)].m_visits = 10;
-        root.m_children[g3].m_children[size_t(2)].m_value = 1000.0; // avg = 100.0 (HIGHEST!)
+        root.m_children[g3].m_children[size_t(2)].m_value = 1000.0;
         
         root.m_children[g3].m_children[size_t(3)].m_visits = 10;
-        root.m_children[g3].m_children[size_t(3)].m_value = 40.0;  // avg = 4.0
+        root.m_children[g3].m_children[size_t(3)].m_value = 40.0;
         
-        mcts_decider decider(gs, cs, sim);
+        mcts_decider decider(cs, sim);
         
         auto [chosen_goal, chosen_candidate] = decider();
         
-        // CRITICAL: Should choose g3 and index 2 (both have highest rewards)
         assert(chosen_goal == g3);
         assert(chosen_candidate == 2);
-        
-        // Two choose() calls
         assert(sim.length() == 2);
     }
     
@@ -15662,48 +15509,38 @@ void test_mcts_decider() {
         t.push();
         expr_pool ep(t);
         lineage_pool lp;
-        goal_store gs;
-        candidate_store cs;
+        database db;
+        goals empty_goals;
+        candidate_store cs(db, empty_goals, lp);
         
         const goal_lineage* g1 = lp.goal(nullptr, 1);
         const goal_lineage* g2 = lp.goal(nullptr, 2);
         
-        gs.insert({g1, ep.atom("p")});
-        gs.insert({g2, ep.atom("q")});
-        
-        cs.insert({g1, 0});
-        cs.insert({g1, 1});
-        cs.insert({g2, 0});
-        cs.insert({g2, 1});
-        cs.insert({g2, 2});
+        cs.insert(g1, std::vector<size_t>{0, 1});
+        cs.insert(g2, std::vector<size_t>{0, 1, 2});
         
         monte_carlo::tree_node<mcts_decider::choice> root;
         std::mt19937 rng(42);
         monte_carlo::simulation<mcts_decider::choice, std::mt19937> sim(root, 1.414, rng);
         
-        // Force g1 (highest reward at level 1)
         root.m_visits = 100;
         
         root.m_children[g1].m_visits = 30;
-        root.m_children[g1].m_value = 2700.0;  // avg = 90.0 (HIGHEST!)
+        root.m_children[g1].m_value = 2700.0;
         
         root.m_children[g2].m_visits = 30;
-        root.m_children[g2].m_value = 90.0;    // avg = 3.0
+        root.m_children[g2].m_value = 90.0;
         
-        // Force index 1 for g1 (unvisited at level 2)
         root.m_children[g1].m_children[size_t(0)].m_visits = 15;
         root.m_children[g1].m_children[size_t(0)].m_value = 50.0;
-        root.m_children[g1].m_children[size_t(1)].m_visits = 0;  // UNVISITED - infinity UCB1!
+        root.m_children[g1].m_children[size_t(1)].m_visits = 0;
         
-        mcts_decider decider(gs, cs, sim);
+        mcts_decider decider(cs, sim);
         
         auto [chosen_goal, chosen_candidate] = decider();
         
-        // CRITICAL: Should choose g1 (highest avg) and index 1 (unvisited)
         assert(chosen_goal == g1);
         assert(chosen_candidate == 1);
-        
-        // Two steps
         assert(sim.length() == 2);
     }
     
@@ -15713,47 +15550,30 @@ void test_mcts_decider() {
         t.push();
         expr_pool ep(t);
         lineage_pool lp;
-        goal_store gs;
-        candidate_store cs;
+        database db;
+        goals empty_goals;
+        candidate_store cs(db, empty_goals, lp);
         
         const goal_lineage* g1 = lp.goal(nullptr, 1);
         const goal_lineage* g2 = lp.goal(nullptr, 2);
         
-        gs.insert({g1, ep.atom("p")});
-        gs.insert({g2, ep.atom("q")});
-        
-        cs.insert({g1, 5});
-        cs.insert({g1, 10});
-        cs.insert({g1, 15});
-        cs.insert({g2, 20});
-        cs.insert({g2, 25});
+        cs.insert(g1, std::vector<size_t>{5, 10, 15});
+        cs.insert(g2, std::vector<size_t>{20, 25});
         
         monte_carlo::tree_node<mcts_decider::choice> root;
         std::mt19937 rng(999);
         monte_carlo::simulation<mcts_decider::choice, std::mt19937> sim(root, 2.0, rng);
         
-        mcts_decider decider(gs, cs, sim);
+        mcts_decider decider(cs, sim);
         
-        // Call 15 times
         for (int i = 0; i < 15; i++) {
             auto [chosen_goal, chosen_candidate] = decider();
             
-            // CRITICAL: Goal must be valid
-            assert(gs.count(chosen_goal) == 1);
-            
-            // CRITICAL: Candidate must be valid for chosen goal
-            bool found = false;
-            auto range = cs.equal_range(chosen_goal);
-            for (auto it = range.first; it != range.second; ++it) {
-                if (it->second == chosen_candidate) {
-                    found = true;
-                    break;
-                }
-            }
+            const auto& vec = cs.at(chosen_goal);
+            bool found = std::find(vec.begin(), vec.end(), chosen_candidate) != vec.end();
             assert(found == true);
         }
         
-        // CRITICAL: 15 calls * 2 steps = 30 total
         assert(sim.length() == 30);
     }
     
@@ -15763,67 +15583,55 @@ void test_mcts_decider() {
         t.push();
         expr_pool ep(t);
         lineage_pool lp;
-        goal_store gs;
-        candidate_store cs;
+        database db;
+        goals empty_goals;
+        candidate_store cs(db, empty_goals, lp);
         
         const goal_lineage* g1 = lp.goal(nullptr, 1);
         const goal_lineage* g2 = lp.goal(nullptr, 2);
         const goal_lineage* g3 = lp.goal(nullptr, 3);
         const goal_lineage* g4 = lp.goal(nullptr, 4);
         
-        gs.insert({g1, ep.atom("p")});
-        gs.insert({g2, ep.atom("q")});
-        gs.insert({g3, ep.atom("r")});
-        gs.insert({g4, ep.atom("s")});
-        
-        cs.insert({g1, 0});
-        cs.insert({g2, 0});
-        cs.insert({g2, 1});
-        cs.insert({g3, 0});
-        cs.insert({g3, 1});
-        cs.insert({g3, 2});
-        cs.insert({g4, 0});
-        cs.insert({g4, 1});
+        cs.insert(g1, std::vector<size_t>{0});
+        cs.insert(g2, std::vector<size_t>{0, 1});
+        cs.insert(g3, std::vector<size_t>{0, 1, 2});
+        cs.insert(g4, std::vector<size_t>{0, 1});
         
         monte_carlo::tree_node<mcts_decider::choice> root;
         std::mt19937 rng(12345);
         monte_carlo::simulation<mcts_decider::choice, std::mt19937> sim(root, 1.5, rng);
         
-        // Setup level 1: force g3 selection
         root.m_visits = 150;
         
         root.m_children[g1].m_visits = 15;
-        root.m_children[g1].m_value = 30.0;   // avg = 2.0
+        root.m_children[g1].m_value = 30.0;
         
         root.m_children[g2].m_visits = 15;
-        root.m_children[g2].m_value = 45.0;   // avg = 3.0
+        root.m_children[g2].m_value = 45.0;
         
         root.m_children[g3].m_visits = 15;
-        root.m_children[g3].m_value = 1500.0; // avg = 100.0 (HIGHEST!)
+        root.m_children[g3].m_value = 1500.0;
         
         root.m_children[g4].m_visits = 15;
-        root.m_children[g4].m_value = 60.0;   // avg = 4.0
+        root.m_children[g4].m_value = 60.0;
         
-        // Setup level 2: force index 1 for g3
         root.m_children[g3].m_visits = 60;
         
         root.m_children[g3].m_children[size_t(0)].m_visits = 10;
-        root.m_children[g3].m_children[size_t(0)].m_value = 30.0;  // avg = 3.0
+        root.m_children[g3].m_children[size_t(0)].m_value = 30.0;
         
         root.m_children[g3].m_children[size_t(1)].m_visits = 10;
-        root.m_children[g3].m_children[size_t(1)].m_value = 800.0; // avg = 80.0 (HIGHEST!)
+        root.m_children[g3].m_children[size_t(1)].m_value = 800.0;
         
         root.m_children[g3].m_children[size_t(2)].m_visits = 10;
-        root.m_children[g3].m_children[size_t(2)].m_value = 50.0;  // avg = 5.0
+        root.m_children[g3].m_children[size_t(2)].m_value = 50.0;
         
-        mcts_decider decider(gs, cs, sim);
+        mcts_decider decider(cs, sim);
         
         auto [chosen_goal, chosen_candidate] = decider();
         
-        // CRITICAL: Should choose g3 and index 1
         assert(chosen_goal == g3);
         assert(chosen_candidate == 1);
-        
         assert(sim.length() == 2);
     }
     
@@ -15833,42 +15641,33 @@ void test_mcts_decider() {
         t.push();
         expr_pool ep(t);
         lineage_pool lp;
-        goal_store gs;
-        candidate_store cs;
+        database db;
+        goals empty_goals;
+        candidate_store cs(db, empty_goals, lp);
         
         const goal_lineage* g1 = lp.goal(nullptr, 1);
         const goal_lineage* g2 = lp.goal(nullptr, 2);
         
-        gs.insert({g1, ep.atom("p")});
-        gs.insert({g2, ep.atom("q")});
+        cs.insert(g1, std::vector<size_t>{0, 1});
+        cs.insert(g2, std::vector<size_t>{0});
         
-        cs.insert({g1, 0});
-        cs.insert({g1, 1});
-        cs.insert({g2, 0});
-        
-        size_t gs_size_before = gs.size();
         size_t cs_size_before = cs.size();
+        std::vector<size_t> g1_before = cs.at(g1);
+        std::vector<size_t> g2_before = cs.at(g2);
         
         monte_carlo::tree_node<mcts_decider::choice> root;
         std::mt19937 rng(42);
         monte_carlo::simulation<mcts_decider::choice, std::mt19937> sim(root, 1.414, rng);
         
-        mcts_decider decider(gs, cs, sim);
+        mcts_decider decider(cs, sim);
         
-        // Call 10 times
         for (int i = 0; i < 10; i++) {
             decider();
         }
         
-        // CRITICAL: Stores completely unchanged
-        assert(gs.size() == gs_size_before);
         assert(cs.size() == cs_size_before);
-        assert(gs.count(g1) == 1);
-        assert(gs.count(g2) == 1);
-        assert(cs.count(g1) == 2);
-        assert(cs.count(g2) == 1);
-        
-        // Simulation length = 20 (10 calls * 2)
+        assert(cs.at(g1) == g1_before);
+        assert(cs.at(g2) == g2_before);
         assert(sim.length() == 20);
     }
 }
@@ -17159,25 +16958,10 @@ void test_a01_sim_constructor() {
             assert(&simulation.cp.expr_pool_ref == &ep);
             
             // CRITICAL: Verify decider references (public in DEBUG)
-            assert(&simulation.dec.gs == &simulation.gs);
             assert(&simulation.dec.cs == &simulation.cs);
             assert(&simulation.dec.sim == &sim);
-            
-            // CRITICAL: Verify goal_adder references (public in DEBUG)
-            assert(&simulation.ga.goals == &simulation.gs);
-            assert(&simulation.ga.candidates == &simulation.cs);
-            assert(&simulation.ga.db == &db);
-            
-            // CRITICAL: Verify goal_resolver references (public in DEBUG)
-            assert(&simulation.gr.rs == &simulation.rs);
-            assert(&simulation.gr.gs == &simulation.gs);
-            assert(&simulation.gr.cs == &simulation.cs);
-            assert(&simulation.gr.db == &db);
-            assert(&simulation.gr.bm == &bm);
-            assert(&simulation.gr.lp == &lp);
             assert(&simulation.rs == &rs);
             assert(&simulation.ds == &ds);
-            assert(&simulation.gr.ga == &simulation.ga);
         }
     }
     
@@ -17218,9 +17002,8 @@ void test_a01_sim_constructor() {
             
             // CRITICAL: Candidate added to candidate_store (1 goal * 1 db rule = 1 candidate)
             assert(simulation.cs.size() == 1);
-            assert(simulation.cs.count(gl) == 1);
             assert(simulation.cs.begin()->first == gl);
-            assert(simulation.cs.begin()->second == 0);  // db[0] as candidate
+            assert(simulation.cs.at(gl) == std::vector<size_t>({0}));
             
             // Other stores empty
             assert(simulation.rs.size() == 0);
@@ -17295,35 +17078,16 @@ void test_a01_sim_constructor() {
         assert(gl1->parent == nullptr);
         assert(gl2->parent == nullptr);
         
-        // CRITICAL: Total candidates = 3 goals * 3 db rules = 9
-        assert(simulation.cs.size() == 9);
+        // CRITICAL: Three goals, each with all 3 db rules as candidates
+        assert(simulation.cs.size() == 3);
         
-        // CRITICAL: Each goal has ALL 3 rules as candidates (goal_adder adds all, trivially)
-        assert(simulation.cs.count(gl0) == 3);
-        assert(simulation.cs.count(gl1) == 3);
-        assert(simulation.cs.count(gl2) == 3);
+        assert(simulation.cs.at(gl0).size() == 3);
+        assert(simulation.cs.at(gl1).size() == 3);
+        assert(simulation.cs.at(gl2).size() == 3);
         
-        // Verify each goal has candidates 0, 1, 2
-        auto range0 = simulation.cs.equal_range(gl0);
-        std::set<size_t> indices0;
-        for (auto it = range0.first; it != range0.second; ++it) {
-            indices0.insert(it->second);
-        }
-        assert(indices0 == std::set<size_t>({0, 1, 2}));
-        
-        auto range1 = simulation.cs.equal_range(gl1);
-        std::set<size_t> indices1;
-        for (auto it = range1.first; it != range1.second; ++it) {
-            indices1.insert(it->second);
-        }
-        assert(indices1 == std::set<size_t>({0, 1, 2}));
-        
-        auto range2 = simulation.cs.equal_range(gl2);
-        std::set<size_t> indices2;
-        for (auto it = range2.first; it != range2.second; ++it) {
-            indices2.insert(it->second);
-        }
-        assert(indices2 == std::set<size_t>({0, 1, 2}));
+        assert(std::set<size_t>(simulation.cs.at(gl0).begin(), simulation.cs.at(gl0).end()) == std::set<size_t>({0, 1, 2}));
+        assert(std::set<size_t>(simulation.cs.at(gl1).begin(), simulation.cs.at(gl1).end()) == std::set<size_t>({0, 1, 2}));
+        assert(std::set<size_t>(simulation.cs.at(gl2).begin(), simulation.cs.at(gl2).end()) == std::set<size_t>({0, 1, 2}));
         
         // Max resolutions
         assert(simulation.max_resolutions == 200);
@@ -17384,15 +17148,9 @@ void test_a01_sim_constructor() {
             else if (gl->idx == 2) gl_r = gl;
         }
         
-        // Each goal has the single db rule as a candidate
-        assert(simulation.cs.count(gl_p) == 1);
-        assert(simulation.cs.count(gl_q) == 1);
-        assert(simulation.cs.count(gl_r) == 1);
-        
-        // All have db[0] as candidate
-        assert(simulation.cs.find(gl_p)->second == 0);
-        assert(simulation.cs.find(gl_q)->second == 0);
-        assert(simulation.cs.find(gl_r)->second == 0);
+        assert(simulation.cs.at(gl_p) == std::vector<size_t>({0}));
+        assert(simulation.cs.at(gl_q) == std::vector<size_t>({0}));
+        assert(simulation.cs.at(gl_r) == std::vector<size_t>({0}));
         
         // CRITICAL: Verify resolution and decision stores empty
         assert(simulation.rs.size() == 0);
@@ -17441,19 +17199,8 @@ void test_a01_sim_constructor() {
         assert(simulation.gs.size() == 1);
         const goal_lineage* gl = lp.goal(nullptr, 0);
         
-        // CRITICAL: Three candidates for the same goal
-        assert(simulation.cs.count(gl) == 3);
-        
-        // Verify candidate indices are 0, 1, 2
-        auto range = simulation.cs.equal_range(gl);
-        std::set<size_t> indices;
-        for (auto it = range.first; it != range.second; ++it) {
-            indices.insert(it->second);
-        }
-        assert(indices.size() == 3);
-        assert(indices.count(0) == 1);
-        assert(indices.count(1) == 1);
-        assert(indices.count(2) == 1);
+        assert(simulation.cs.at(gl).size() == 3);
+        assert(std::set<size_t>(simulation.cs.at(gl).begin(), simulation.cs.at(gl).end()) == std::set<size_t>({0, 1, 2}));
         
         // CRITICAL: Verify resolution/decision stores empty
         assert(simulation.rs.size() == 0);
@@ -17572,24 +17319,15 @@ void test_a01_sim_constructor() {
         
         assert(gl0 && gl1 && gl2 && gl3);
         
-        // CRITICAL: goal_adder adds ALL rules to ALL goals (trivially)
-        // 4 goals * 6 db rules = 24 total candidates
-        assert(simulation.cs.size() == 24);
+        assert(simulation.cs.size() == 4);
         
-        // Each goal has all 6 rules as candidates
-        assert(simulation.cs.count(gl0) == 6);
-        assert(simulation.cs.count(gl1) == 6);
-        assert(simulation.cs.count(gl2) == 6);
-        assert(simulation.cs.count(gl3) == 6);
+        assert(simulation.cs.at(gl0).size() == 6);
+        assert(simulation.cs.at(gl1).size() == 6);
+        assert(simulation.cs.at(gl2).size() == 6);
+        assert(simulation.cs.at(gl3).size() == 6);
         
-        // Verify all have indices 0-5
         for (const goal_lineage* gl : {gl0, gl1, gl2, gl3}) {
-            auto range = simulation.cs.equal_range(gl);
-            std::set<size_t> indices;
-            for (auto it = range.first; it != range.second; ++it) {
-                indices.insert(it->second);
-            }
-            assert(indices == std::set<size_t>({0, 1, 2, 3, 4, 5}));
+            assert(std::set<size_t>(simulation.cs.at(gl).begin(), simulation.cs.at(gl).end()) == std::set<size_t>({0, 1, 2, 3, 4, 5}));
         }
         
         // Max resolutions
@@ -17846,10 +17584,8 @@ void test_a01_sim_constructor() {
         // CRITICAL: 5 goals added
         assert(simulation.gs.size() == 5);
         
-        // CRITICAL: 5 goals * 2 db rules = 10 candidates
-        assert(simulation.cs.size() == 10);
+        assert(simulation.cs.size() == 5);
         
-        // CRITICAL: All other stores empty; cdcl is a distinct copy
         assert(&simulation.c != &c);
         assert(simulation.rs.size() == 0);
         assert(simulation.ds.size() == 0);
@@ -17857,9 +17593,8 @@ void test_a01_sim_constructor() {
         assert(simulation.ds.size() == 0);
         assert(simulation.rs.size() == 0);
         
-        // CRITICAL: Verify each goal has 2 candidates
         for (const auto& [gl, ge] : simulation.gs) {
-            assert(simulation.cs.count(gl) == 2);
+            assert(simulation.cs.at(gl).size() == 2);
             assert(gl->parent == nullptr);
             assert(gl->idx >= 0 && gl->idx < 5);
         }
@@ -18025,8 +17760,9 @@ void test_a01_sim() {
         // CRITICAL: Goal store NOT empty (unresolved goal remains)
         assert(simulation.gs.size() == 1);
         
-        // CRITICAL: Candidate store empty (no candidates available)
-        assert(simulation.cs.size() == 0);
+        const goal_lineage* gl_conflict = lp.goal(nullptr, 0);
+        assert(simulation.cs.size() == 1);
+        assert(simulation.cs.at(gl_conflict).empty());
         
         // CRITICAL: No resolutions or decisions made
         assert(simulation.rs.size() == 0);
@@ -18423,7 +18159,7 @@ void test_a01_sim() {
         
         // CRITICAL: Conflict detected (d has no candidates)
         const goal_lineage* gl_d = lp.goal(rl_b, 0);
-        assert(simulation.cs.count(gl_d) == 0);
+        assert(simulation.cs.at(gl_d).empty());
         
         // Verify MCTS was called once
         assert(sim.length() == 2);
@@ -18480,7 +18216,7 @@ void test_a01_sim() {
         // After 3 resolutions: a→b→c→d, so d is in gs and should have candidates
         bool has_candidates = false;
         for (const auto& [gl, ge] : simulation.gs) {
-            if (simulation.cs.count(gl) > 0) {
+            if (!simulation.cs.at(gl).empty()) {
                 has_candidates = true;
                 break;
             }
@@ -18539,7 +18275,7 @@ void test_a01_sim() {
         
         // Before execution, verify 5 candidates added
         const goal_lineage* gl0_for_check = lp.goal(nullptr, 0);
-        assert(simulation.cs.count(gl0_for_check) == 5);
+        assert(simulation.cs.at(gl0_for_check).size() == 5);
         
         bool result = simulation();
         
@@ -18561,10 +18297,9 @@ void test_a01_sim() {
         assert(simulation.gs.size() == 1);
         
         const goal_lineage* gl_f = lp.goal(rl_e, 0);
-        assert(simulation.cs.count(gl_f) == 0);  // No candidates for f
+        assert(simulation.cs.at(gl_f).empty());
         
-        // CRITICAL: Candidate store empty (head elim removed 4, resolution removed 1)
-        assert(simulation.cs.size() == 0);
+        assert(simulation.cs.size() == 1);
     }
     
     // Test 11: Avoidance store erasure during resolution
@@ -19114,7 +18849,7 @@ void test_a01_sim() {
         
         // Initial state: 20 candidates
         const goal_lineage* gl0_for_check = lp.goal(nullptr, 0);
-        assert(simulation.cs.count(gl0_for_check) == 20);
+        assert(simulation.cs.at(gl0_for_check).size() == 20);
         
         bool result = simulation();
         
@@ -19329,7 +19064,7 @@ void test_a01_sim() {
         assert(simulation.gs.size() == 1);
         
         const goal_lineage* gl_q = lp.goal(rl, 0);
-        assert(simulation.cs.count(gl_q) == 0);
+        assert(simulation.cs.at(gl_q).empty());
     }
     
     // Test 23: Multiple decisions with pre-populated MCTS
@@ -19528,7 +19263,7 @@ void test_a01_sim() {
         
         // Verify 30 candidates initially
         const goal_lineage* gl0 = lp.goal(nullptr, 0);
-        assert(simulation.cs.count(gl0) == 30);
+        assert(simulation.cs.at(gl0).size() == 30);
         
         bool result = simulation();
         
@@ -20446,7 +20181,7 @@ void test_a01_sim() {
         
         // CRITICAL: The remaining goal has no candidates
         const goal_lineage* remaining_goal = simulation.gs.begin()->first;
-        assert(simulation.cs.count(remaining_goal) == 0);
+        assert(simulation.cs.at(remaining_goal).empty());
         
         // CRITICAL: No decisions
         assert(simulation.ds.size() == 0);
@@ -20559,8 +20294,8 @@ void test_a01_sim() {
         
         // CRITICAL: Goal still in store
         const goal_lineage* gl_p = lp.goal(nullptr, 0);
-        assert(simulation.gs.count(gl_p) == 1);
-        assert(simulation.cs.count(gl_p) == 0);  // No candidates
+        assert(simulation.gs.members.count(gl_p) == 1);
+        assert(simulation.cs.at(gl_p).empty());
         
         // CRITICAL: No decisions
         assert(simulation.ds.size() == 0);
@@ -20622,8 +20357,8 @@ void test_a01_sim() {
         
         // CRITICAL: r has no candidates
         const goal_lineage* gl_r = lp.goal(rl_q, 0);
-        assert(simulation.gs.count(gl_r) == 1);
-        assert(simulation.cs.count(gl_r) == 0);
+        assert(simulation.gs.members.count(gl_r) == 1);
+        assert(simulation.cs.at(gl_r).empty());
         
         // CRITICAL: No decisions (all unit props)
         assert(simulation.ds.size() == 0);
@@ -21199,8 +20934,8 @@ void test_a01_sim() {
         
         // CRITICAL: Goal still in store with no candidates
         const goal_lineage* gl_p = lp.goal(nullptr, 0);
-        assert(simulation.gs.count(gl_p) == 1);
-        assert(simulation.cs.count(gl_p) == 0);
+        assert(simulation.gs.members.count(gl_p) == 1);
+        assert(simulation.cs.at(gl_p).empty());
     }
     
     // Test 52: Fact with variable in head
@@ -21401,8 +21136,8 @@ void test_a01_sim() {
         assert(simulation.rs.size() == 0);
         
         // CRITICAL: Goal still in store with no candidates
-        assert(simulation.gs.count(gl_p) == 1);
-        assert(simulation.cs.count(gl_p) == 0);  // Both eliminated by CDCL
+        assert(simulation.gs.members.count(gl_p) == 1);
+        assert(simulation.cs.at(gl_p).empty());  // Both eliminated by CDCL
     }
     
     // Test 55: Head elimination removes all candidates
@@ -21452,8 +21187,8 @@ void test_a01_sim() {
         
         // CRITICAL: Goal in store with no candidates
         const goal_lineage* gl_p = lp.goal(nullptr, 0);
-        assert(simulation.gs.count(gl_p) == 1);
-        assert(simulation.cs.count(gl_p) == 0);
+        assert(simulation.gs.members.count(gl_p) == 1);
+        assert(simulation.cs.at(gl_p).empty());
     }
     
     // Test 56: Deeply nested compound terms
@@ -21604,8 +21339,8 @@ void test_a01_sim() {
         
         // CRITICAL: q(b) has no candidates
         const goal_lineage* gl_q = lp.goal(rl_p, 0);
-        assert(simulation.gs.count(gl_q) == 1);
-        assert(simulation.cs.count(gl_q) == 0);
+        assert(simulation.gs.members.count(gl_q) == 1);
+        assert(simulation.cs.at(gl_q).empty());
     }
     
     // Test 59: Variables in goal match multiple rules (ambiguity)
@@ -21715,7 +21450,7 @@ void test_a01_sim() {
         
         // CRITICAL: Goal has no candidates
         const goal_lineage* gl_p = lp.goal(nullptr, 0);
-        assert(simulation.cs.count(gl_p) == 0);
+        assert(simulation.cs.at(gl_p).empty());
     }
     
     // Test 61: Variable occurs in multiple positions in same goal
