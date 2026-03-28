@@ -1,11 +1,10 @@
 #include "../hpp/mcts_decider.hpp"
 
 mcts_decider::mcts_decider(
-    const frontier& f,
     const candidate_store& cs,
     monte_carlo::simulation<choice, std::mt19937>& sim
 )
-    : f(f), cs(cs), sim(sim)
+    : cs(cs), sim(sim)
 {}
 
 std::pair<const goal_lineage*, size_t> mcts_decider::operator()() {
@@ -17,11 +16,11 @@ std::pair<const goal_lineage*, size_t> mcts_decider::operator()() {
 const goal_lineage* mcts_decider::choose_goal() {
     // Get the goals to choose from
     std::vector<choice> goals;
-    goals.reserve(f.members().size());
+    goals.reserve(cs.size());
 
     // Convert the goals to choices
-    for (const auto& gl : f.members())
-        goals.push_back(gl);
+    for (auto it = cs.begin(); it != cs.end(); ++it)
+        goals.push_back(it->first);
 
     // Choose a goal to resolve
     const choice choice_a = sim.choose(goals);

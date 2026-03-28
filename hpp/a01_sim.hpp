@@ -37,7 +37,6 @@ private:
     resolutions& rs;
     decisions& ds;
     
-    frontier f;
     goal_store gs;
     candidate_store cs;
     

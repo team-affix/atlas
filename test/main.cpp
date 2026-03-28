@@ -11923,6 +11923,1287 @@ void test_normalizer() {
     }
 }
 
+void test_frontier_constructor() {
+    // Test 1: empty database -> internal_members is empty
+    {
+        trail t;
+        expr_pool ep(t);
+        database db;
+        lineage_pool lp;
+        frontier f(db, lp);
+
+        assert(f.internal_members.empty());
+        assert(f.members().empty());
+    }
+
+    // Test 2: non-empty database (3 rules) -> still empty, constructor does not add goals
+    {
+        trail t;
+        expr_pool ep(t);
+        const expr* h0 = ep.atom("p");
+        const expr* h1 = ep.atom("q");
+        const expr* h2 = ep.atom("r");
+        database db = {rule{h0, {}}, rule{h1, {}}, rule{h2, {}}};
+        lineage_pool lp;
+        frontier f(db, lp);
+
+        assert(db.size() == 3);
+        assert(f.internal_members.empty());
+        assert(f.members().empty());
+    }
+}
+
+void test_frontier_add() {
+    // Test 1: add one root goal
+    {
+        trail t;
+        expr_pool ep(t);
+        database db;
+        lineage_pool lp;
+        frontier f(db, lp);
+
+        assert(f.internal_members.empty());
+
+        const goal_lineage* gl = lp.goal(nullptr, 0);
+        f.add(gl);
+
+        assert(f.internal_members.size() == 1);
+        assert(f.internal_members.count(gl) == 1);
+    }
+
+    // Test 2: add 3 distinct goals
+    {
+        trail t;
+        expr_pool ep(t);
+        database db;
+        lineage_pool lp;
+        frontier f(db, lp);
+
+        const goal_lineage* gl0 = lp.goal(nullptr, 0);
+        const goal_lineage* gl1 = lp.goal(nullptr, 1);
+        const goal_lineage* gl2 = lp.goal(nullptr, 2);
+
+        f.add(gl0);
+        f.add(gl1);
+        f.add(gl2);
+
+        assert(f.internal_members.size() == 3);
+        assert(f.internal_members.count(gl0) == 1);
+        assert(f.internal_members.count(gl1) == 1);
+        assert(f.internal_members.count(gl2) == 1);
+    }
+
+    // Test 3: add same pointer twice -> unordered_set deduplication
+    {
+        trail t;
+        expr_pool ep(t);
+        database db;
+        lineage_pool lp;
+        frontier f(db, lp);
+
+        const goal_lineage* gl = lp.goal(nullptr, 0);
+
+        f.add(gl);
+        assert(f.internal_members.size() == 1);
+
+        f.add(gl);
+        assert(f.internal_members.size() == 1);
+        assert(f.internal_members.count(gl) == 1);
+    }
+
+    // Test 4: add a non-root goal (has a resolution lineage parent)
+    {
+        trail t;
+        expr_pool ep(t);
+        const expr* h = ep.atom("p");
+        const expr* b = ep.atom("q");
+        database db = {rule{h, {b}}};
+        lineage_pool lp;
+        frontier f(db, lp);
+
+        const goal_lineage* root = lp.goal(nullptr, 0);
+        const resolution_lineage* rl = lp.resolution(root, 0);
+        const goal_lineage* child = lp.goal(rl, 0);
+
+        assert(child->parent == rl);
+        assert(child->idx == 0);
+        assert(f.internal_members.empty());
+
+        f.add(child);
+
+        assert(f.internal_members.size() == 1);
+        assert(f.internal_members.count(child) == 1);
+    }
+}
+
+void test_frontier_resolve() {
+    // Test 1: rule with empty body -> parent removed, no children, frontier empty
+    {
+        trail t;
+        expr_pool ep(t);
+        const expr* h = ep.atom("p");
+        database db = {rule{h, {}}};
+        lineage_pool lp;
+        frontier f(db, lp);
+
+        const goal_lineage* gl = lp.goal(nullptr, 0);
+        f.internal_members.insert(gl);
+
+        assert(f.internal_members.size() == 1);
+        assert(f.internal_members.count(gl) == 1);
+
+        const resolution_lineage* rl = lp.resolution(gl, 0);
+        f.resolve(rl);
+
+        assert(f.internal_members.empty());
+    }
+
+    // Test 2: rule with 1-element body -> parent removed, 1 child added
+    {
+        trail t;
+        expr_pool ep(t);
+        const expr* h = ep.atom("p");
+        const expr* b = ep.atom("q");
+        database db = {rule{h, {b}}};
+        lineage_pool lp;
+        frontier f(db, lp);
+
+        const goal_lineage* gl = lp.goal(nullptr, 0);
+        f.internal_members.insert(gl);
+
+        assert(f.internal_members.size() == 1);
+        assert(f.internal_members.count(gl) == 1);
+
+        const resolution_lineage* rl = lp.resolution(gl, 0);
+        f.resolve(rl);
+
+        const goal_lineage* child = lp.goal(rl, 0);
+
+        assert(f.internal_members.size() == 1);
+        assert(f.internal_members.count(gl) == 0);
+        assert(f.internal_members.count(child) == 1);
+    }
+
+    // Test 3: rule with 2-element body -> parent removed, 2 children added
+    {
+        trail t;
+        expr_pool ep(t);
+        const expr* h = ep.atom("p");
+        const expr* b0 = ep.atom("q");
+        const expr* b1 = ep.atom("r");
+        database db = {rule{h, {b0, b1}}};
+        lineage_pool lp;
+        frontier f(db, lp);
+
+        const goal_lineage* gl = lp.goal(nullptr, 0);
+        f.internal_members.insert(gl);
+
+        assert(f.internal_members.size() == 1);
+        assert(f.internal_members.count(gl) == 1);
+
+        const resolution_lineage* rl = lp.resolution(gl, 0);
+        f.resolve(rl);
+
+        const goal_lineage* child0 = lp.goal(rl, 0);
+        const goal_lineage* child1 = lp.goal(rl, 1);
+
+        assert(f.internal_members.size() == 2);
+        assert(f.internal_members.count(gl) == 0);
+        assert(f.internal_members.count(child0) == 1);
+        assert(f.internal_members.count(child1) == 1);
+    }
+
+    // Test 4: 2 goals in frontier, resolve one -> only resolved goal removed, other stays
+    {
+        trail t;
+        expr_pool ep(t);
+        const expr* h = ep.atom("p");
+        database db = {rule{h, {}}};
+        lineage_pool lp;
+        frontier f(db, lp);
+
+        const goal_lineage* gl0 = lp.goal(nullptr, 0);
+        const goal_lineage* gl1 = lp.goal(nullptr, 1);
+        f.internal_members.insert(gl0);
+        f.internal_members.insert(gl1);
+
+        assert(f.internal_members.size() == 2);
+        assert(f.internal_members.count(gl0) == 1);
+        assert(f.internal_members.count(gl1) == 1);
+
+        const resolution_lineage* rl = lp.resolution(gl0, 0);
+        f.resolve(rl);
+
+        assert(f.internal_members.size() == 1);
+        assert(f.internal_members.count(gl0) == 0);
+        assert(f.internal_members.count(gl1) == 1);
+    }
+
+    // Test 5: chained resolve — resolve root producing a child, then resolve that child
+    {
+        trail t;
+        expr_pool ep(t);
+        const expr* hp = ep.atom("p");
+        const expr* hq = ep.atom("q");
+        const expr* bq = ep.atom("q");
+        database db = {
+            rule{hp, {bq}},  // rule 0: p :- q  (1-body)
+            rule{hq, {}}     // rule 1: q :-     (0-body)
+        };
+        lineage_pool lp;
+        frontier f(db, lp);
+
+        const goal_lineage* root = lp.goal(nullptr, 0);
+        f.add(root);
+        assert(f.internal_members.size() == 1);
+        assert(f.internal_members.count(root) == 1);
+
+        const resolution_lineage* rl0 = lp.resolution(root, 0);
+        f.resolve(rl0);
+
+        const goal_lineage* child = lp.goal(rl0, 0);
+        assert(f.internal_members.size() == 1);
+        assert(f.internal_members.count(root) == 0);
+        assert(f.internal_members.count(child) == 1);
+
+        const resolution_lineage* rl1 = lp.resolution(child, 1);
+        f.resolve(rl1);
+
+        assert(f.internal_members.empty());
+    }
+}
+
+void test_frontier_members() {
+    // Test 1: freshly constructed -> members() returns empty set
+    {
+        trail t;
+        expr_pool ep(t);
+        database db;
+        lineage_pool lp;
+        frontier f(db, lp);
+
+        assert(f.members().empty());
+        assert(&f.members() == &f.internal_members);
+    }
+
+    // Test 2: insert 3 pointers directly -> members() returns set containing all 3
+    {
+        trail t;
+        expr_pool ep(t);
+        database db;
+        lineage_pool lp;
+        frontier f(db, lp);
+
+        const goal_lineage* gl0 = lp.goal(nullptr, 0);
+        const goal_lineage* gl1 = lp.goal(nullptr, 1);
+        const goal_lineage* gl2 = lp.goal(nullptr, 2);
+
+        f.internal_members.insert(gl0);
+        f.internal_members.insert(gl1);
+        f.internal_members.insert(gl2);
+
+        const auto& m = f.members();
+        assert(&m == &f.internal_members);
+        assert(m.size() == 3);
+        assert(m.count(gl0) == 1);
+        assert(m.count(gl1) == 1);
+        assert(m.count(gl2) == 1);
+    }
+
+    // Test 3: insert 1 pointer directly, then resolve with empty-body rule -> members() empty
+    {
+        trail t;
+        expr_pool ep(t);
+        const expr* h = ep.atom("p");
+        database db = {rule{h, {}}};
+        lineage_pool lp;
+        frontier f(db, lp);
+
+        const goal_lineage* gl = lp.goal(nullptr, 0);
+        f.internal_members.insert(gl);
+
+        assert(f.members().size() == 1);
+        assert(f.members().count(gl) == 1);
+
+        const resolution_lineage* rl = lp.resolution(gl, 0);
+        f.resolve(rl);
+
+        assert(f.members().empty());
+    }
+}
+
+void test_goal_store_constructor() {
+    // Test 1: construct with empty database -> goals map is empty, solved() is true
+    {
+        trail t;
+        expr_pool ep(t);
+        sequencer vars(t);
+        copier cp(vars, ep);
+        bind_map bm(t);
+        lineage_pool lp;
+        database db;
+        goal_store gs(db, cp, bm, lp);
+
+        assert(gs.goals.empty());
+        assert(gs.solved());
+        assert(&gs.db == &db);
+        assert(&gs.cp == &cp);
+        assert(&gs.bm == &bm);
+        assert(&gs.lp == &lp);
+    }
+}
+
+void test_goal_store_add() {
+    // Test 1: add one goal -> goals map has 1 entry, at() returns correct expr*
+    {
+        trail t;
+        expr_pool ep(t);
+        sequencer vars(t);
+        copier cp(vars, ep);
+        bind_map bm(t);
+        lineage_pool lp;
+        database db;
+        goal_store gs(db, cp, bm, lp);
+
+        const goal_lineage* gl = lp.goal(nullptr, 0);
+        const expr* e = ep.atom("p");
+
+        assert(gs.goals.empty());
+
+        gs.add(gl, e);
+
+        assert(gs.goals.size() == 1);
+        assert(gs.goals.count(gl) == 1);
+        assert(gs.goals.at(gl) == e);
+    }
+
+    // Test 2: add 3 distinct goals -> each maps to the correct expression
+    {
+        trail t;
+        expr_pool ep(t);
+        sequencer vars(t);
+        copier cp(vars, ep);
+        bind_map bm(t);
+        lineage_pool lp;
+        database db;
+        goal_store gs(db, cp, bm, lp);
+
+        const goal_lineage* gl0 = lp.goal(nullptr, 0);
+        const goal_lineage* gl1 = lp.goal(nullptr, 1);
+        const goal_lineage* gl2 = lp.goal(nullptr, 2);
+        const expr* e0 = ep.atom("p");
+        const expr* e1 = ep.atom("q");
+        const expr* e2 = ep.atom("r");
+
+        gs.add(gl0, e0);
+        gs.add(gl1, e1);
+        gs.add(gl2, e2);
+
+        assert(gs.goals.size() == 3);
+        assert(gs.goals.at(gl0) == e0);
+        assert(gs.goals.at(gl1) == e1);
+        assert(gs.goals.at(gl2) == e2);
+    }
+
+    // Test 3: add goal with a non-root lineage (has a resolution lineage parent)
+    {
+        trail t;
+        expr_pool ep(t);
+        sequencer vars(t);
+        copier cp(vars, ep);
+        bind_map bm(t);
+        lineage_pool lp;
+        database db;
+        goal_store gs(db, cp, bm, lp);
+
+        const goal_lineage* root = lp.goal(nullptr, 0);
+        const resolution_lineage* rl = lp.resolution(root, 0);
+        const goal_lineage* child = lp.goal(rl, 0);
+        const expr* e = ep.atom("child_goal");
+
+        assert(child->parent == rl);
+        assert(child->idx == 0);
+        assert(gs.goals.empty());
+
+        gs.add(child, e);
+
+        assert(gs.goals.size() == 1);
+        assert(gs.goals.count(child) == 1);
+        assert(gs.goals.at(child) == e);
+    }
+}
+
+void test_goal_store_resolve() {
+    // Test 1: resolve with empty-body fact rule (atom-to-atom match) -> goal removed, goals empty
+    {
+        trail t;
+        expr_pool ep(t);
+        sequencer vars(t);
+        copier cp(vars, ep);
+        bind_map bm(t);
+        lineage_pool lp;
+        const expr* rule_head = ep.atom("p");
+        database db = {rule{rule_head, {}}};
+        goal_store gs(db, cp, bm, lp);
+
+        const goal_lineage* gl = lp.goal(nullptr, 0);
+        const expr* goal_expr = ep.atom("p");
+        gs.goals.insert({gl, goal_expr});
+
+        assert(gs.goals.size() == 1);
+        assert(gs.goals.at(gl) == goal_expr);
+
+        const resolution_lineage* rl = lp.resolution(gl, 0);
+        gs.resolve(rl);
+
+        assert(gs.goals.empty());
+    }
+
+    // Test 2: resolve with 1-body rule -> goal removed, 1 child added
+    {
+        trail t;
+        expr_pool ep(t);
+        sequencer vars(t);
+        copier cp(vars, ep);
+        bind_map bm(t);
+        lineage_pool lp;
+        const expr* rule_head = ep.atom("p");
+        const expr* rule_body = ep.atom("q");
+        database db = {rule{rule_head, {rule_body}}};
+        goal_store gs(db, cp, bm, lp);
+
+        const goal_lineage* gl = lp.goal(nullptr, 0);
+        const expr* goal_expr = ep.atom("p");
+        gs.goals.insert({gl, goal_expr});
+
+        assert(gs.goals.size() == 1);
+        assert(gs.goals.at(gl) == goal_expr);
+
+        const resolution_lineage* rl = lp.resolution(gl, 0);
+        gs.resolve(rl);
+
+        const goal_lineage* child = lp.goal(rl, 0);
+
+        assert(gs.goals.size() == 1);
+        assert(gs.goals.count(gl) == 0);
+        assert(gs.goals.count(child) == 1);
+        // atom "q" is returned as-is by copier
+        assert(gs.goals.at(child) == rule_body);
+    }
+
+    // Test 3: resolve with 2-body rule -> goal removed, 2 children added
+    {
+        trail t;
+        expr_pool ep(t);
+        sequencer vars(t);
+        copier cp(vars, ep);
+        bind_map bm(t);
+        lineage_pool lp;
+        const expr* rule_head = ep.atom("p");
+        const expr* rule_body0 = ep.atom("q");
+        const expr* rule_body1 = ep.atom("r");
+        database db = {rule{rule_head, {rule_body0, rule_body1}}};
+        goal_store gs(db, cp, bm, lp);
+
+        const goal_lineage* gl = lp.goal(nullptr, 0);
+        const expr* goal_expr = ep.atom("p");
+        gs.goals.insert({gl, goal_expr});
+
+        assert(gs.goals.size() == 1);
+
+        const resolution_lineage* rl = lp.resolution(gl, 0);
+        gs.resolve(rl);
+
+        const goal_lineage* child0 = lp.goal(rl, 0);
+        const goal_lineage* child1 = lp.goal(rl, 1);
+
+        assert(gs.goals.size() == 2);
+        assert(gs.goals.count(gl) == 0);
+        assert(gs.goals.count(child0) == 1);
+        assert(gs.goals.count(child1) == 1);
+        assert(gs.goals.at(child0) == rule_body0);
+        assert(gs.goals.at(child1) == rule_body1);
+    }
+
+    // Test 4: resolve with variable in rule head -> unification binds variable,
+    //         body atom (no variables) propagates as-is
+    {
+        trail t;
+        expr_pool ep(t);
+        sequencer vars(t);
+        copier cp(vars, ep);
+        bind_map bm(t);
+        lineage_pool lp;
+        // Rule: X :- q   (head is var(1), body is atom "q")
+        const expr* rule_head = ep.var(1);
+        const expr* rule_body = ep.atom("q");
+        database db = {rule{rule_head, {rule_body}}};
+        goal_store gs(db, cp, bm, lp);
+
+        const goal_lineage* gl = lp.goal(nullptr, 0);
+        const expr* goal_expr = ep.atom("p");
+        gs.goals.insert({gl, goal_expr});
+
+        assert(gs.goals.size() == 1);
+        assert(bm.bindings.empty());
+
+        const resolution_lineage* rl = lp.resolution(gl, 0);
+        gs.resolve(rl);
+
+        const goal_lineage* child = lp.goal(rl, 0);
+
+        // goal removed, child added
+        assert(gs.goals.size() == 1);
+        assert(gs.goals.count(gl) == 0);
+        assert(gs.goals.count(child) == 1);
+        // body atom "q" has no variables, copied as same pointer
+        assert(gs.goals.at(child) == rule_body);
+        // unification bound the fresh copy of var(1) to "p"
+        assert(!bm.bindings.empty());
+    }
+
+    // Test 5: resolve where head atom doesn't match goal atom -> throws std::runtime_error
+    {
+        trail t;
+        expr_pool ep(t);
+        sequencer vars(t);
+        copier cp(vars, ep);
+        bind_map bm(t);
+        lineage_pool lp;
+        const expr* rule_head = ep.atom("q");
+        database db = {rule{rule_head, {}}};
+        goal_store gs(db, cp, bm, lp);
+
+        const goal_lineage* gl = lp.goal(nullptr, 0);
+        const expr* goal_expr = ep.atom("p");
+        gs.goals.insert({gl, goal_expr});
+
+        assert(gs.goals.size() == 1);
+
+        const resolution_lineage* rl = lp.resolution(gl, 0);
+        assert_throws(gs.resolve(rl), std::runtime_error);
+    }
+}
+
+void test_goal_store_solved() {
+    // Test 1: freshly constructed -> solved() is true
+    {
+        trail t;
+        expr_pool ep(t);
+        sequencer vars(t);
+        copier cp(vars, ep);
+        bind_map bm(t);
+        lineage_pool lp;
+        database db;
+        goal_store gs(db, cp, bm, lp);
+
+        assert(gs.goals.empty());
+        assert(gs.solved());
+    }
+
+    // Test 2: insert one entry directly -> solved() is false
+    {
+        trail t;
+        expr_pool ep(t);
+        sequencer vars(t);
+        copier cp(vars, ep);
+        bind_map bm(t);
+        lineage_pool lp;
+        database db;
+        goal_store gs(db, cp, bm, lp);
+
+        const goal_lineage* gl = lp.goal(nullptr, 0);
+        const expr* e = ep.atom("p");
+        gs.goals.insert({gl, e});
+
+        assert(gs.goals.size() == 1);
+        assert(!gs.solved());
+    }
+
+    // Test 3: insert directly, then resolve with empty-body rule -> solved() is true again
+    {
+        trail t;
+        expr_pool ep(t);
+        sequencer vars(t);
+        copier cp(vars, ep);
+        bind_map bm(t);
+        lineage_pool lp;
+        const expr* rule_head = ep.atom("p");
+        database db = {rule{rule_head, {}}};
+        goal_store gs(db, cp, bm, lp);
+
+        const goal_lineage* gl = lp.goal(nullptr, 0);
+        const expr* goal_expr = ep.atom("p");
+        gs.goals.insert({gl, goal_expr});
+
+        assert(!gs.solved());
+
+        const resolution_lineage* rl = lp.resolution(gl, 0);
+        gs.resolve(rl);
+
+        assert(gs.goals.empty());
+        assert(gs.solved());
+    }
+}
+
+void test_goal_store_at() {
+    // Test 1: insert {gl, e} directly -> at(gl) returns the exact same pointer
+    {
+        trail t;
+        expr_pool ep(t);
+        sequencer vars(t);
+        copier cp(vars, ep);
+        bind_map bm(t);
+        lineage_pool lp;
+        database db;
+        goal_store gs(db, cp, bm, lp);
+
+        const goal_lineage* gl = lp.goal(nullptr, 0);
+        const expr* e = ep.atom("p");
+        gs.goals.insert({gl, e});
+
+        assert(gs.goals.size() == 1);
+        assert(gs.at(gl) == e);
+    }
+
+    // Test 2: empty goals -> at() for non-existent key throws std::out_of_range
+    {
+        trail t;
+        expr_pool ep(t);
+        sequencer vars(t);
+        copier cp(vars, ep);
+        bind_map bm(t);
+        lineage_pool lp;
+        database db;
+        goal_store gs(db, cp, bm, lp);
+
+        const goal_lineage* gl = lp.goal(nullptr, 0);
+
+        assert(gs.goals.empty());
+        assert_throws(gs.at(gl), std::out_of_range);
+    }
+
+    // Test 3: insert directly, resolve (empty-body rule), then:
+    //         at(original_gl) throws, at(child_gl) succeeds for child in body-1 case
+    {
+        trail t;
+        expr_pool ep(t);
+        sequencer vars(t);
+        copier cp(vars, ep);
+        bind_map bm(t);
+        lineage_pool lp;
+        const expr* rule_head = ep.atom("p");
+        const expr* rule_body = ep.atom("q");
+        database db = {rule{rule_head, {rule_body}}};
+        goal_store gs(db, cp, bm, lp);
+
+        const goal_lineage* gl = lp.goal(nullptr, 0);
+        const expr* goal_expr = ep.atom("p");
+        gs.goals.insert({gl, goal_expr});
+
+        assert(gs.goals.size() == 1);
+
+        const resolution_lineage* rl = lp.resolution(gl, 0);
+        gs.resolve(rl);
+
+        const goal_lineage* child = lp.goal(rl, 0);
+
+        assert_throws(gs.at(gl), std::out_of_range);
+        assert(gs.at(child) == rule_body);
+    }
+}
+
+void test_candidate_store_constructor() {
+    // Test 1: empty database -> initial_candidates is empty, no candidates, not conflicted
+    {
+        lineage_pool lp;
+        database db;
+        candidate_store cs(db, lp);
+
+        assert(cs.initial_candidates.empty());
+        assert(cs.candidates.empty());
+        assert(!cs.conflicted());
+        assert(&cs.db == &db);
+        assert(&cs.lp == &lp);
+    }
+
+    // Test 2: 1-rule database -> initial_candidates == {0}
+    {
+        trail t;
+        expr_pool ep(t);
+        const expr* h = ep.atom("p");
+        database db = {rule{h, {}}};
+        lineage_pool lp;
+        candidate_store cs(db, lp);
+
+        assert(cs.initial_candidates.size() == 1);
+        assert(cs.initial_candidates[0] == 0);
+        assert(cs.candidates.empty());
+    }
+
+    // Test 3: 3-rule database -> initial_candidates == {0, 1, 2}
+    {
+        trail t;
+        expr_pool ep(t);
+        const expr* h0 = ep.atom("p");
+        const expr* h1 = ep.atom("q");
+        const expr* h2 = ep.atom("r");
+        database db = {rule{h0, {}}, rule{h1, {}}, rule{h2, {}}};
+        lineage_pool lp;
+        candidate_store cs(db, lp);
+
+        assert(cs.initial_candidates.size() == 3);
+        assert(cs.initial_candidates[0] == 0);
+        assert(cs.initial_candidates[1] == 1);
+        assert(cs.initial_candidates[2] == 2);
+        assert(cs.candidates.empty());
+    }
+}
+
+void test_candidate_store_add() {
+    // Test 1: empty database, add goal -> candidates entry has empty vector
+    {
+        lineage_pool lp;
+        database db;
+        candidate_store cs(db, lp);
+
+        const goal_lineage* gl = lp.goal(nullptr, 0);
+        assert(cs.candidates.empty());
+
+        cs.add(gl);
+
+        assert(cs.candidates.size() == 1);
+        assert(cs.candidates.count(gl) == 1);
+        assert(cs.candidates.at(gl).empty());
+    }
+
+    // Test 2: 1-rule database, add goal -> candidates[gl] == {0}
+    {
+        trail t;
+        expr_pool ep(t);
+        const expr* h = ep.atom("p");
+        database db = {rule{h, {}}};
+        lineage_pool lp;
+        candidate_store cs(db, lp);
+
+        const goal_lineage* gl = lp.goal(nullptr, 0);
+        assert(cs.candidates.empty());
+
+        cs.add(gl);
+
+        assert(cs.candidates.size() == 1);
+        assert(cs.candidates.at(gl).size() == 1);
+        assert(cs.candidates.at(gl)[0] == 0);
+    }
+
+    // Test 3: 3-rule database, add goal -> candidates[gl] has size 3, contains 0, 1, 2
+    {
+        trail t;
+        expr_pool ep(t);
+        const expr* h0 = ep.atom("p");
+        const expr* h1 = ep.atom("q");
+        const expr* h2 = ep.atom("r");
+        database db = {rule{h0, {}}, rule{h1, {}}, rule{h2, {}}};
+        lineage_pool lp;
+        candidate_store cs(db, lp);
+
+        const goal_lineage* gl = lp.goal(nullptr, 0);
+        cs.add(gl);
+
+        const auto& v = cs.candidates.at(gl);
+        assert(v.size() == 3);
+        assert(std::count(v.begin(), v.end(), 0) == 1);
+        assert(std::count(v.begin(), v.end(), 1) == 1);
+        assert(std::count(v.begin(), v.end(), 2) == 1);
+    }
+
+    // Test 4: add 2 distinct goals -> each gets an independent copy of initial_candidates
+    {
+        trail t;
+        expr_pool ep(t);
+        const expr* h0 = ep.atom("p");
+        const expr* h1 = ep.atom("q");
+        database db = {rule{h0, {}}, rule{h1, {}}};
+        lineage_pool lp;
+        candidate_store cs(db, lp);
+
+        const goal_lineage* gl0 = lp.goal(nullptr, 0);
+        const goal_lineage* gl1 = lp.goal(nullptr, 1);
+
+        cs.add(gl0);
+        cs.add(gl1);
+
+        assert(cs.candidates.size() == 2);
+
+        const auto& v0 = cs.candidates.at(gl0);
+        const auto& v1 = cs.candidates.at(gl1);
+        assert(v0.size() == 2);
+        assert(v1.size() == 2);
+        // They are independent copies: modifying one doesn't affect the other
+        assert(&v0 != &v1);
+    }
+}
+
+void test_candidate_store_resolve() {
+    // Test 1: resolve with empty-body rule -> parent entry removed, no children added
+    {
+        trail t;
+        expr_pool ep(t);
+        const expr* h = ep.atom("p");
+        database db = {rule{h, {}}};
+        lineage_pool lp;
+        candidate_store cs(db, lp);
+
+        const goal_lineage* gl = lp.goal(nullptr, 0);
+        cs.candidates.insert({gl, {0}});
+
+        assert(cs.candidates.size() == 1);
+        assert(cs.candidates.count(gl) == 1);
+
+        const resolution_lineage* rl = lp.resolution(gl, 0);
+        cs.resolve(rl);
+
+        assert(cs.candidates.empty());
+    }
+
+    // Test 2: resolve with 1-body rule -> parent removed, 1 child added with initial_candidates
+    {
+        trail t;
+        expr_pool ep(t);
+        const expr* h = ep.atom("p");
+        const expr* b = ep.atom("q");
+        database db = {rule{h, {b}}};
+        lineage_pool lp;
+        candidate_store cs(db, lp);
+
+        const goal_lineage* gl = lp.goal(nullptr, 0);
+        cs.candidates.insert({gl, {0}});
+
+        assert(cs.candidates.size() == 1);
+        assert(cs.candidates.count(gl) == 1);
+
+        const resolution_lineage* rl = lp.resolution(gl, 0);
+        cs.resolve(rl);
+
+        const goal_lineage* child = lp.goal(rl, 0);
+
+        assert(cs.candidates.size() == 1);
+        assert(cs.candidates.count(gl) == 0);
+        assert(cs.candidates.count(child) == 1);
+        // child gets initial_candidates = {0}
+        assert(cs.candidates.at(child).size() == 1);
+        assert(cs.candidates.at(child)[0] == 0);
+    }
+
+    // Test 3: resolve with 2-body rule -> parent removed, 2 children added
+    {
+        trail t;
+        expr_pool ep(t);
+        const expr* h = ep.atom("p");
+        const expr* b0 = ep.atom("q");
+        const expr* b1 = ep.atom("r");
+        database db = {rule{h, {b0, b1}}};
+        lineage_pool lp;
+        candidate_store cs(db, lp);
+
+        const goal_lineage* gl = lp.goal(nullptr, 0);
+        cs.candidates.insert({gl, {0}});
+
+        assert(cs.candidates.size() == 1);
+
+        const resolution_lineage* rl = lp.resolution(gl, 0);
+        cs.resolve(rl);
+
+        const goal_lineage* child0 = lp.goal(rl, 0);
+        const goal_lineage* child1 = lp.goal(rl, 1);
+
+        assert(cs.candidates.size() == 2);
+        assert(cs.candidates.count(gl) == 0);
+        assert(cs.candidates.count(child0) == 1);
+        assert(cs.candidates.count(child1) == 1);
+        assert(cs.candidates.at(child0).size() == 1);
+        assert(cs.candidates.at(child1).size() == 1);
+    }
+
+    // Test 4: 2 goals in store, resolve one -> only that one removed, other untouched
+    {
+        trail t;
+        expr_pool ep(t);
+        const expr* h = ep.atom("p");
+        database db = {rule{h, {}}};
+        lineage_pool lp;
+        candidate_store cs(db, lp);
+
+        const goal_lineage* gl0 = lp.goal(nullptr, 0);
+        const goal_lineage* gl1 = lp.goal(nullptr, 1);
+        cs.candidates.insert({gl0, {0}});
+        cs.candidates.insert({gl1, {0}});
+
+        assert(cs.candidates.size() == 2);
+        assert(cs.candidates.count(gl0) == 1);
+        assert(cs.candidates.count(gl1) == 1);
+
+        const resolution_lineage* rl = lp.resolution(gl0, 0);
+        cs.resolve(rl);
+
+        assert(cs.candidates.size() == 1);
+        assert(cs.candidates.count(gl0) == 0);
+        assert(cs.candidates.count(gl1) == 1);
+        assert(cs.candidates.at(gl1).size() == 1);
+        assert(cs.candidates.at(gl1)[0] == 0);
+    }
+}
+
+void test_candidate_store_eliminate() {
+    // Test 1: predicate always false -> returns 0, candidates unchanged
+    {
+        lineage_pool lp;
+        database db;
+        candidate_store cs(db, lp);
+
+        const goal_lineage* gl = lp.goal(nullptr, 0);
+        cs.candidates.insert({gl, {0, 1, 2}});
+
+        assert(cs.candidates.at(gl).size() == 3);
+
+        size_t eliminated = cs.eliminate([](const goal_lineage*, size_t) { return false; });
+
+        assert(eliminated == 0);
+        assert(cs.candidates.at(gl).size() == 3);
+    }
+
+    // Test 2: predicate always true, 1 goal with 3 candidates -> all eliminated
+    {
+        lineage_pool lp;
+        database db;
+        candidate_store cs(db, lp);
+
+        const goal_lineage* gl = lp.goal(nullptr, 0);
+        cs.candidates.insert({gl, {0, 1, 2}});
+
+        assert(cs.candidates.at(gl).size() == 3);
+
+        size_t eliminated = cs.eliminate([](const goal_lineage*, size_t) { return true; });
+
+        assert(eliminated == 3);
+        assert(cs.candidates.count(gl) == 1);
+        assert(cs.candidates.at(gl).empty());
+    }
+
+    // Test 3: 2 goals with {0,1,2} each, predicate matches only rule index 0 ->
+    //         returns 2 (one per goal), each goal's vector has 2 remaining elements
+    {
+        lineage_pool lp;
+        database db;
+        candidate_store cs(db, lp);
+
+        const goal_lineage* gl0 = lp.goal(nullptr, 0);
+        const goal_lineage* gl1 = lp.goal(nullptr, 1);
+        cs.candidates.insert({gl0, {0, 1, 2}});
+        cs.candidates.insert({gl1, {0, 1, 2}});
+
+        assert(cs.candidates.at(gl0).size() == 3);
+        assert(cs.candidates.at(gl1).size() == 3);
+
+        size_t eliminated = cs.eliminate([](const goal_lineage*, size_t i) { return i == 0; });
+
+        assert(eliminated == 2);
+        assert(cs.candidates.at(gl0).size() == 2);
+        assert(cs.candidates.at(gl1).size() == 2);
+        assert(std::count(cs.candidates.at(gl0).begin(), cs.candidates.at(gl0).end(), 0) == 0);
+        assert(std::count(cs.candidates.at(gl1).begin(), cs.candidates.at(gl1).end(), 0) == 0);
+    }
+
+    // Test 4: 2 goals, predicate targets one specific gl only -> other untouched
+    {
+        lineage_pool lp;
+        database db;
+        candidate_store cs(db, lp);
+
+        const goal_lineage* gl0 = lp.goal(nullptr, 0);
+        const goal_lineage* gl1 = lp.goal(nullptr, 1);
+        cs.candidates.insert({gl0, {0, 1, 2}});
+        cs.candidates.insert({gl1, {0, 1, 2}});
+
+        assert(cs.candidates.at(gl0).size() == 3);
+        assert(cs.candidates.at(gl1).size() == 3);
+
+        size_t eliminated = cs.eliminate([&gl0](const goal_lineage* gl, size_t) { return gl == gl0; });
+
+        assert(eliminated == 3);
+        assert(cs.candidates.at(gl0).empty());
+        assert(cs.candidates.at(gl1).size() == 3);
+    }
+
+    // Test 5: empty candidates map -> eliminate returns 0
+    {
+        lineage_pool lp;
+        database db;
+        candidate_store cs(db, lp);
+
+        assert(cs.candidates.empty());
+
+        size_t eliminated = cs.eliminate([](const goal_lineage*, size_t) { return true; });
+
+        assert(eliminated == 0);
+        assert(cs.candidates.empty());
+    }
+
+    // Test 6: swap-and-pop integrity - eliminate middle element from {0,1,2},
+    //         remaining two elements are both present (order-independent)
+    {
+        lineage_pool lp;
+        database db;
+        candidate_store cs(db, lp);
+
+        const goal_lineage* gl = lp.goal(nullptr, 0);
+        cs.candidates.insert({gl, {0, 1, 2}});
+
+        assert(cs.candidates.at(gl).size() == 3);
+
+        size_t eliminated = cs.eliminate([](const goal_lineage*, size_t i) { return i == 1; });
+
+        assert(eliminated == 1);
+        const auto& v = cs.candidates.at(gl);
+        assert(v.size() == 2);
+        assert(std::count(v.begin(), v.end(), 0) == 1);
+        assert(std::count(v.begin(), v.end(), 1) == 0);
+        assert(std::count(v.begin(), v.end(), 2) == 1);
+    }
+}
+
+void test_candidate_store_unit() {
+    // Test 1: empty candidates -> unit() returns false
+    {
+        lineage_pool lp;
+        database db;
+        candidate_store cs(db, lp);
+
+        assert(cs.candidates.empty());
+
+        const goal_lineage* gl_out = nullptr;
+        size_t i_out = 999;
+        bool result = cs.unit(gl_out, i_out);
+
+        assert(!result);
+        assert(gl_out == nullptr);
+        assert(i_out == 999);
+    }
+
+    // Test 2: 1 goal with 3 candidates -> unit() returns false
+    {
+        lineage_pool lp;
+        database db;
+        candidate_store cs(db, lp);
+
+        const goal_lineage* gl = lp.goal(nullptr, 0);
+        cs.candidates.insert({gl, {0, 1, 2}});
+
+        assert(cs.candidates.at(gl).size() == 3);
+
+        const goal_lineage* gl_out = nullptr;
+        size_t i_out = 999;
+        bool result = cs.unit(gl_out, i_out);
+
+        assert(!result);
+    }
+
+    // Test 3: 1 goal with exactly 1 candidate -> unit() returns true, correct outputs
+    {
+        lineage_pool lp;
+        database db;
+        candidate_store cs(db, lp);
+
+        const goal_lineage* gl = lp.goal(nullptr, 0);
+        cs.candidates.insert({gl, {5}});
+
+        assert(cs.candidates.at(gl).size() == 1);
+
+        const goal_lineage* gl_out = nullptr;
+        size_t i_out = 999;
+        bool result = cs.unit(gl_out, i_out);
+
+        assert(result);
+        assert(gl_out == gl);
+        assert(i_out == 5);
+    }
+
+    // Test 4: 1 goal with 0 candidates (empty vector) -> unit() returns false
+    {
+        lineage_pool lp;
+        database db;
+        candidate_store cs(db, lp);
+
+        const goal_lineage* gl = lp.goal(nullptr, 0);
+        cs.candidates.insert({gl, {}});
+
+        assert(cs.candidates.at(gl).empty());
+
+        const goal_lineage* gl_out = nullptr;
+        size_t i_out = 999;
+        bool result = cs.unit(gl_out, i_out);
+
+        assert(!result);
+    }
+
+    // Test 5: 2 goals: one with 3 candidates, one with 1 -> finds the unit one
+    {
+        lineage_pool lp;
+        database db;
+        candidate_store cs(db, lp);
+
+        const goal_lineage* gl0 = lp.goal(nullptr, 0);
+        const goal_lineage* gl1 = lp.goal(nullptr, 1);
+        cs.candidates.insert({gl0, {0, 1, 2}});
+        cs.candidates.insert({gl1, {7}});
+
+        assert(cs.candidates.at(gl0).size() == 3);
+        assert(cs.candidates.at(gl1).size() == 1);
+
+        const goal_lineage* gl_out = nullptr;
+        size_t i_out = 999;
+        bool result = cs.unit(gl_out, i_out);
+
+        assert(result);
+        assert(gl_out == gl1);
+        assert(i_out == 7);
+    }
+
+    // Test 6: 2 goals both with 1 candidate -> returns true, i_out matches the returned gl_out
+    {
+        lineage_pool lp;
+        database db;
+        candidate_store cs(db, lp);
+
+        const goal_lineage* gl0 = lp.goal(nullptr, 0);
+        const goal_lineage* gl1 = lp.goal(nullptr, 1);
+        cs.candidates.insert({gl0, {3}});
+        cs.candidates.insert({gl1, {8}});
+
+        assert(cs.candidates.at(gl0).size() == 1);
+        assert(cs.candidates.at(gl1).size() == 1);
+
+        const goal_lineage* gl_out = nullptr;
+        size_t i_out = 999;
+        bool result = cs.unit(gl_out, i_out);
+
+        assert(result);
+        assert(gl_out != nullptr);
+        // i_out must match the single candidate of whichever goal was returned
+        assert(i_out == cs.candidates.at(gl_out)[0]);
+    }
+}
+
+void test_candidate_store_conflicted() {
+    // Test 1: empty candidates map -> not conflicted
+    {
+        lineage_pool lp;
+        database db;
+        candidate_store cs(db, lp);
+
+        assert(cs.candidates.empty());
+        assert(!cs.conflicted());
+    }
+
+    // Test 2: goal with non-empty candidates -> not conflicted
+    {
+        lineage_pool lp;
+        database db;
+        candidate_store cs(db, lp);
+
+        const goal_lineage* gl = lp.goal(nullptr, 0);
+        cs.candidates.insert({gl, {0, 1, 2}});
+
+        assert(cs.candidates.at(gl).size() == 3);
+        assert(!cs.conflicted());
+    }
+
+    // Test 3: goal with empty candidates vector -> conflicted
+    {
+        lineage_pool lp;
+        database db;
+        candidate_store cs(db, lp);
+
+        const goal_lineage* gl = lp.goal(nullptr, 0);
+        cs.candidates.insert({gl, {}});
+
+        assert(cs.candidates.at(gl).empty());
+        assert(cs.conflicted());
+    }
+
+    // Test 4: 3 goals: 2 with candidates, 1 empty -> conflicted
+    {
+        lineage_pool lp;
+        database db;
+        candidate_store cs(db, lp);
+
+        const goal_lineage* gl0 = lp.goal(nullptr, 0);
+        const goal_lineage* gl1 = lp.goal(nullptr, 1);
+        const goal_lineage* gl2 = lp.goal(nullptr, 2);
+        cs.candidates.insert({gl0, {0, 1}});
+        cs.candidates.insert({gl1, {2}});
+        cs.candidates.insert({gl2, {}});
+
+        assert(cs.candidates.at(gl0).size() == 2);
+        assert(cs.candidates.at(gl1).size() == 1);
+        assert(cs.candidates.at(gl2).empty());
+        assert(cs.conflicted());
+    }
+}
+
+void test_candidate_store_at() {
+    // Test 1: insert {gl, {0,1,2}} directly -> at(gl) returns reference containing 0, 1, 2
+    {
+        lineage_pool lp;
+        database db;
+        candidate_store cs(db, lp);
+
+        const goal_lineage* gl = lp.goal(nullptr, 0);
+        cs.candidates.insert({gl, {0, 1, 2}});
+
+        assert(cs.candidates.at(gl).size() == 3);
+
+        const auto& v = cs.at(gl);
+        assert(&v == &cs.candidates.at(gl));
+        assert(v.size() == 3);
+        assert(std::count(v.begin(), v.end(), 0) == 1);
+        assert(std::count(v.begin(), v.end(), 1) == 1);
+        assert(std::count(v.begin(), v.end(), 2) == 1);
+    }
+
+    // Test 2: empty candidates -> at() for non-existent key throws std::out_of_range
+    {
+        lineage_pool lp;
+        database db;
+        candidate_store cs(db, lp);
+
+        const goal_lineage* gl = lp.goal(nullptr, 0);
+
+        assert(cs.candidates.empty());
+        assert_throws(cs.at(gl), std::out_of_range);
+    }
+
+    // Test 3: insert directly, eliminate index 1, then at() shows reduced vector
+    {
+        lineage_pool lp;
+        database db;
+        candidate_store cs(db, lp);
+
+        const goal_lineage* gl = lp.goal(nullptr, 0);
+        cs.candidates.insert({gl, {0, 1, 2}});
+
+        assert(cs.candidates.at(gl).size() == 3);
+
+        cs.eliminate([](const goal_lineage*, size_t i) { return i == 1; });
+
+        const auto& v = cs.at(gl);
+        assert(v.size() == 2);
+        assert(std::count(v.begin(), v.end(), 0) == 1);
+        assert(std::count(v.begin(), v.end(), 1) == 0);
+        assert(std::count(v.begin(), v.end(), 2) == 1);
+    }
+}
+
 // void test_goal_adder_constructor() {
 //     // Test 1: Basic construction with empty stores and empty database
 //     {
@@ -26949,6 +28230,22 @@ void unit_test_main() {
     TEST(test_copier);
     TEST(test_normalizer_constructor);
     TEST(test_normalizer);
+    TEST(test_frontier_constructor);
+    TEST(test_frontier_add);
+    TEST(test_frontier_resolve);
+    TEST(test_frontier_members);
+    TEST(test_goal_store_constructor);
+    TEST(test_goal_store_add);
+    TEST(test_goal_store_resolve);
+    TEST(test_goal_store_solved);
+    TEST(test_goal_store_at);
+    TEST(test_candidate_store_constructor);
+    TEST(test_candidate_store_add);
+    TEST(test_candidate_store_resolve);
+    TEST(test_candidate_store_eliminate);
+    TEST(test_candidate_store_unit);
+    TEST(test_candidate_store_conflicted);
+    TEST(test_candidate_store_at);
     // TEST(test_goal_adder_constructor);
     // TEST(test_goal_adder);
     // TEST(test_goal_resolver_constructor);

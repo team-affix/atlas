@@ -5,27 +5,24 @@
 #include "copier.hpp"
 #include "bind_map.hpp"
 #include "lineage.hpp"
+#include "frontier.hpp"
 
-struct goal_store {
+struct goal_store : frontier<const expr*> {
     goal_store(
         const database&,
+        const goals&,
         copier&,
         bind_map&,
         lineage_pool&
     );
-    void add(const goal_lineage*, const expr*);
-    void resolve(const resolution_lineage*);
-    bool solved() const;
-    const expr* at(const goal_lineage*) const;
 #ifndef DEBUG
 private:
 #endif
+    std::vector<const expr*> expand(const expr* const&, const rule&) override;
     const database& db;
     copier& cp;
     bind_map& bm;
     lineage_pool& lp;
-
-    std::map<const goal_lineage*, const expr*> goals;
 };
 
 #endif

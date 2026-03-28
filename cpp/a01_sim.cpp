@@ -20,27 +20,22 @@ a01_sim::a01_sim(
     lp(lp),
     rs(rs),
     ds(ds),
-    f(db, lp),
-    gs(db, cp, bm, lp),
-    cs(db, lp),
+    gs(db, goals, cp, bm, lp),
+    cs(db, goals, lp),
     cp(vars, ep),
     he(t, bm, gs, db),
-    dec(f, cs, sim),
+    dec(cs, sim),
     c(c)
 {
     // clear the resolution and decision stores
     // for the start of the simulation
     rs.clear();
     ds.clear();
-
-    size_t i = 0;
-    for (const auto& goal : goals)
-        add(lp.goal(nullptr, i++), goal);
 }
 
 bool a01_sim::operator()() {
 
-    while ((rs.size() < max_resolutions) && !cs.conflicted() && !f.members().empty()) {
+    while ((rs.size() < max_resolutions) && !cs.conflicted() && !gs.empty()) {
 
         // head elimination
         size_t elim0 = cs.eliminate([this](const goal_lineage* gl, size_t i) { return he(gl, i); });
@@ -76,18 +71,10 @@ bool a01_sim::operator()() {
     }
 
     // return whether a solution was found
-    return f.members().empty();
-}
-
-
-void a01_sim::add(const goal_lineage* gl, const expr* e) {
-    f.add(gl);
-    gs.add(gl, e);
-    cs.add(gl);
+    return gs.empty();
 }
 
 void a01_sim::resolve(const resolution_lineage* rl) {
-    f.resolve(rl);
     gs.resolve(rl);
     cs.resolve(rl);
     c.constrain(rl);

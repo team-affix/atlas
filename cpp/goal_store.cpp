@@ -3,33 +3,23 @@
 
 goal_store::goal_store(
     const database& db,
+    const goals& goals,
     copier& cp,
     bind_map& bm,
     lineage_pool& lp)
-    : db(db), cp(cp), bm(bm), lp(lp), goals({})
+    :
+    frontier<const expr*>(db, lp),
+    db(db),
+    cp(cp),
+    bm(bm),
+    lp(lp)
 {
+    // add the goals to the frontier
+    for (int i = 0; i < goals.size(); ++i)
+        insert(lp.goal(nullptr, i), goals.at(i));
 }
 
-void goal_store::add(const goal_lineage* gl, const expr* e) {
-    goals.insert({gl, e});
-}
-
-void goal_store::resolve(const resolution_lineage* rl) {
-    // get the goal lineage
-    const goal_lineage* gl = rl->parent;
-
-    // get the goal index
-    size_t i = rl->idx;
-    
-    // get the goal expression
-    const expr* goal_expr = goals.at(gl);
-
-    // remove the goal from the goals store
-    goals.erase(gl);
-
-    // get the rule in the db
-    const rule& r = db.at(i);
-
+std::vector<const expr*> goal_store::expand(const expr* const& e, const rule& r) {
     // create the translation map for copying the rule
     std::map<uint32_t, uint32_t> translation_map;
 
@@ -42,21 +32,8 @@ void goal_store::resolve(const resolution_lineage* rl) {
         copied_body.push_back(cp(e, translation_map));
 
     // unify the head with the goal
-    if (!bm.unify(copied_head, goal_expr))
+    if (!bm.unify(copied_head, e))
         throw std::runtime_error("Failed to unify the head with the goal");
 
-    // add the body expressions to the goal store
-    for (size_t j = 0; j < copied_body.size(); ++j) {
-        const expr* e = copied_body[j];
-        const goal_lineage* child_gl = lp.goal(rl, j);
-        add(child_gl, e);
-    }
-}
-
-bool goal_store::solved() const {
-    return goals.empty();
-}
-
-const expr* goal_store::at(const goal_lineage* gl) const {
-    return goals.at(gl);
+    return copied_body;
 }
