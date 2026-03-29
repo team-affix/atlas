@@ -12,8 +12,8 @@ struct sim {
 #ifndef DEBUG
 private:
 #endif
-    virtual bool solved() const = 0;
-    virtual bool conflicted() const = 0;
+    virtual bool solved() = 0;
+    virtual bool conflicted() = 0;
     virtual const resolution_lineage* derive_one() = 0;
     virtual const resolution_lineage* decide_one() = 0;
     virtual void on_resolve(const resolution_lineage*) = 0;

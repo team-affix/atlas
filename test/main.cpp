@@ -17144,12 +17144,12 @@ struct sim_mock : sim {
         if (iteration >= (int)event_types.size())
             throw std::out_of_range("sim_mock: iteration beyond end of event sequence");
     }
-    bool solved() const override {
+    bool solved() override {
         solve_calls++;
         check_bounds();
         return event_types[iteration] == "solved";
     }
-    bool conflicted() const override {
+    bool conflicted() override {
         check_bounds();
         return event_types[iteration] == "conflict";
     }

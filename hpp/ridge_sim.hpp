@@ -9,8 +9,9 @@
 #include "candidate_store.hpp"
 #include "mcts_decider.hpp"
 #include "cdcl.hpp"
+#include "sim.hpp"
 
-struct ridge_sim {
+struct ridge_sim : sim {
     ridge_sim(
         size_t,
         const database&,
@@ -20,25 +21,23 @@ struct ridge_sim {
         expr_pool&,
         bind_map&,
         lineage_pool&,
-        resolutions&,
-        decisions&,
         cdcl c,
         monte_carlo::simulation<mcts_decider::choice, std::mt19937>&
     );
-    bool operator()();
 #ifndef DEBUG
 private:
 #endif
-    void add(const goal_lineage*, const expr*);
-    void resolve(const resolution_lineage*);
+    bool solved() override;
+    bool conflicted() override;
+    const resolution_lineage* derive_one() override;
+    const resolution_lineage* decide_one() override;
+    void on_resolve(const resolution_lineage*) override;
 
     size_t max_resolutions;
 
     const database& db;
     trail& t;
     lineage_pool& lp;
-    resolutions& rs;
-    decisions& ds;
     
     goal_store gs;
     candidate_store cs;
