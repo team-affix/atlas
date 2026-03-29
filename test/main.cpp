@@ -12599,6 +12599,219 @@ void test_frontier_resolve() {
     }
 }
 
+void test_weight_store_constructor() {
+    auto near = [](double a, double b, double eps = 1e-9) {
+        return std::abs(a - b) < eps;
+    };
+
+    // Empty goals: members stays empty, cgw initialised to 0
+    {
+        trail t;
+        expr_pool ep(t);
+        t.push();
+        database db;
+        lineage_pool lp;
+        goals gs;
+
+        weight_store ws(gs, db, lp);
+        assert(ws.members.empty());
+        assert(near(ws.cgw, 0.0));
+
+        t.pop();
+    }
+
+    // One goal: full unit mass in members under lp.goal(nullptr,0)
+    {
+        trail t;
+        expr_pool ep(t);
+        t.push();
+        const expr* h = ep.atom("h");
+        database db;
+        lineage_pool lp;
+        goals gs = {h};
+
+        weight_store ws(gs, db, lp);
+        assert(ws.members.size() == 1);
+        assert(near(ws.cgw, 0.0));
+        const goal_lineage* gl = lp.goal(nullptr, 0);
+        assert(ws.members.count(gl) == 1);
+        assert(near(ws.members.at(gl), 1.0));
+
+        t.pop();
+    }
+
+    // Three goals: 1/3 each in members, cgw still 0
+    {
+        trail t;
+        expr_pool ep(t);
+        t.push();
+        database db;
+        lineage_pool lp;
+        goals gs = {ep.atom("a"), ep.atom("b"), ep.atom("c")};
+
+        weight_store ws(gs, db, lp);
+        assert(ws.members.size() == 3);
+        assert(near(ws.cgw, 0.0));
+        for (size_t i = 0; i < 3; ++i) {
+            const goal_lineage* gl = lp.goal(nullptr, i);
+            assert(ws.members.count(gl) == 1);
+            assert(near(ws.members.at(gl), 1.0 / 3.0));
+        }
+
+        t.pop();
+    }
+}
+
+void test_weight_store_total() {
+    auto near = [](double a, double b, double eps = 1e-9) {
+        return std::abs(a - b) < eps;
+    };
+
+    // total() returns cgw, which is 0 right after construction
+    {
+        trail t;
+        expr_pool ep(t);
+        t.push();
+        const expr* h = ep.atom("h");
+        database db;
+        lineage_pool lp;
+        goals gs = {h};
+
+        weight_store ws(gs, db, lp);
+        assert(near(ws.total(), 0.0));
+        assert(near(ws.total(), ws.cgw));
+
+        t.pop();
+    }
+
+    // total() matches cgw when there are no goals either
+    {
+        trail t;
+        expr_pool ep(t);
+        t.push();
+        database db;
+        lineage_pool lp;
+        goals gs;
+
+        weight_store ws(gs, db, lp);
+        assert(near(ws.total(), 0.0));
+        assert(near(ws.total(), ws.cgw));
+
+        t.pop();
+    }
+
+    // total() reads whatever cgw is set to directly
+    {
+        trail t;
+        expr_pool ep(t);
+        t.push();
+        database db;
+        lineage_pool lp;
+        goals gs;
+
+        weight_store ws(gs, db, lp);
+        ws.cgw = 0.75;
+        assert(near(ws.total(), 0.75));
+        ws.cgw = 1.0;
+        assert(near(ws.total(), 1.0));
+
+        t.pop();
+    }
+}
+
+void test_weight_store_expand() {
+    auto near = [](double a, double b, double eps = 1e-9) {
+        return std::abs(a - b) < eps;
+    };
+
+    // Fact rule (empty body): returns empty vector, cgw accumulates weight
+    {
+        trail t;
+        expr_pool ep(t);
+        t.push();
+        const expr* h = ep.atom("h");
+        database db;
+        lineage_pool lp;
+        goals gs;
+
+        weight_store ws(gs, db, lp);
+        rule r{h, {}};
+        auto children = ws.expand(1.0, r);
+        assert(children.empty());
+        assert(near(ws.cgw, 1.0));
+
+        t.pop();
+    }
+
+    // 1-body rule: one child with full weight, cgw unchanged
+    {
+        trail t;
+        expr_pool ep(t);
+        t.push();
+        const expr* h = ep.atom("h");
+        const expr* b = ep.atom("b");
+        database db;
+        lineage_pool lp;
+        goals gs;
+
+        weight_store ws(gs, db, lp);
+        rule r{h, {b}};
+        auto children = ws.expand(1.0, r);
+        assert(children.size() == 1);
+        assert(near(children[0], 1.0));
+        assert(near(ws.cgw, 0.0));
+
+        t.pop();
+    }
+
+    // 2-body rule: two children each with half weight
+    {
+        trail t;
+        expr_pool ep(t);
+        t.push();
+        const expr* h = ep.atom("h");
+        const expr* b1 = ep.atom("b1");
+        const expr* b2 = ep.atom("b2");
+        database db;
+        lineage_pool lp;
+        goals gs;
+
+        weight_store ws(gs, db, lp);
+        rule r{h, {b1, b2}};
+        auto children = ws.expand(1.0, r);
+        assert(children.size() == 2);
+        assert(near(children[0], 0.5));
+        assert(near(children[1], 0.5));
+        assert(near(ws.cgw, 0.0));
+
+        t.pop();
+    }
+
+    // 3-body rule: three children each with a third
+    {
+        trail t;
+        expr_pool ep(t);
+        t.push();
+        const expr* h = ep.atom("h");
+        const expr* b1 = ep.atom("b1");
+        const expr* b2 = ep.atom("b2");
+        const expr* b3 = ep.atom("b3");
+        database db;
+        lineage_pool lp;
+        goals gs;
+
+        weight_store ws(gs, db, lp);
+        rule r{h, {b1, b2, b3}};
+        auto children = ws.expand(1.0, r);
+        assert(children.size() == 3);
+        for (size_t i = 0; i < 3; ++i)
+            assert(near(children[i], 1.0 / 3.0));
+        assert(near(ws.cgw, 0.0));
+
+        t.pop();
+    }
+}
+
 void test_goal_store_constructor() {
     // Test 1: empty goals list - frontier is empty, all refs stored correctly
     {
@@ -24861,11 +25074,9 @@ void unit_test_main() {
     TEST(test_frontier_at);
     TEST(test_frontier_begin_end);
     TEST(test_frontier_resolve);
-    // weight_store: same order as hpp (constructor → total → expand); constructor TEST must be first.
     TEST(test_weight_store_constructor);
-    TEST(test_weight_store_expand);
     TEST(test_weight_store_total);
-    TEST(test_weight_store);
+    TEST(test_weight_store_expand);
     TEST(test_goal_store_constructor);
     TEST(test_goal_store_try_unify_head);
     TEST(test_goal_store_applicable);
