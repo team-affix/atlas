@@ -17252,7 +17252,7 @@ void test_sim_get_decisions() {
     }
 }
 
-void test_sim_operator() {
+void test_sim() {
     // Test 1: Solved immediately - loop body never executes
     {
         sim_mock s(10);
@@ -25854,7 +25854,7 @@ void unit_test_main() {
     TEST(test_sim_constructor);
     TEST(test_sim_get_resolutions);
     TEST(test_sim_get_decisions);
-    TEST(test_sim_operator);
+    TEST(test_sim);
     TEST(test_ridge_sim_constructor);
     TEST(test_ridge_sim);
     TEST(test_ridge_constructor_and_destructor);
