@@ -18632,6 +18632,21 @@ void test_ridge_sim_constructor() {
     }
 }
 
+void test_ridge_sim_solved() {
+}
+
+void test_ridge_sim_conflicted() {
+}
+
+void test_ridge_sim_derive_one() {
+}
+
+void test_ridge_sim_decide_one() {
+}
+
+void test_ridge_sim_on_resolve() {
+}
+
 void test_ridge_sim() {
     // Test 1: Immediate solution - single goal with matching fact
     // Database: a.
