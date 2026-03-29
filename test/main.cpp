@@ -17626,6 +17626,260 @@ void test_sim_operator() {
         assert(s.iteration == 1); // consumed iter 0 (derivation), stopped at iter 1 (conflict)
         assert(s.rs.size() == 1);
     }
+
+    // Test 17: Decision capped by max=1 - ds also gets the entry before cap
+    {
+        lineage_pool lp;
+        const goal_lineage* g = lp.goal(nullptr, 0);
+        const resolution_lineage* rl = lp.resolution(g, 0);
+
+        sim_mock s(1);
+        s.event_types = {"decision", "conflict"};
+        s.event_resolutions[0] = rl;
+
+        bool result = s();
+        // Cap after 1 decision; return solved() at iter=1 (event="conflict") → false
+        assert(result == false);
+        assert(s.rs.size() == 1);
+        assert(s.rs.count(rl) == 1);
+        assert(s.ds.size() == 1);
+        assert(s.ds.count(rl) == 1);
+        assert(s.on_resolve_calls == 1);
+        assert(s.derive_calls == 1);
+        assert(s.decide_calls == 1);
+        // solved() called once in the while condition (iter=0, event="decision") and once for return (iter=1)
+        assert(s.solve_calls == 2);
+    }
+
+    // Test 18: Decisions capped mid-run - only first N decisions are recorded
+    {
+        lineage_pool lp;
+        const goal_lineage* g0 = lp.goal(nullptr, 0);
+        const goal_lineage* g1 = lp.goal(nullptr, 1);
+        const goal_lineage* g2 = lp.goal(nullptr, 2);
+        const resolution_lineage* rl0 = lp.resolution(g0, 0);
+        const resolution_lineage* rl1 = lp.resolution(g1, 0);
+        const resolution_lineage* rl2 = lp.resolution(g2, 0);
+
+        sim_mock s(2);
+        s.event_types = {"decision", "decision", "decision", "conflict"};
+        s.event_resolutions[0] = rl0;
+        s.event_resolutions[1] = rl1;
+        s.event_resolutions[2] = rl2;
+
+        bool result = s();
+        // Cap after 2 decisions; return solved() at iter=2 (event="decision") → false
+        assert(result == false);
+        assert(s.rs.size() == 2);
+        assert(s.rs.count(rl0) == 1);
+        assert(s.rs.count(rl1) == 1);
+        assert(s.rs.count(rl2) == 0);
+        assert(s.ds.size() == 2);
+        assert(s.ds.count(rl0) == 1);
+        assert(s.ds.count(rl1) == 1);
+        assert(s.ds.count(rl2) == 0);
+        assert(s.on_resolve_calls == 2);
+        assert(s.decide_calls == 2);
+    }
+
+    // Test 19: Cap with "solved" as the next event - return solved() sees "solved" → returns true
+    {
+        lineage_pool lp;
+        const goal_lineage* g0 = lp.goal(nullptr, 0);
+        const goal_lineage* g1 = lp.goal(nullptr, 1);
+        const resolution_lineage* rl0 = lp.resolution(g0, 0);
+        const resolution_lineage* rl1 = lp.resolution(g1, 0);
+
+        sim_mock s(2);
+        s.event_types = {"derivation", "derivation", "solved"};
+        s.event_resolutions[0] = rl0;
+        s.event_resolutions[1] = rl1;
+
+        bool result = s();
+        // Cap after 2 derivations; return solved() at iter=2 (event="solved") → true
+        assert(result == true);
+        assert(s.rs.size() == 2);
+        assert(s.rs.count(rl0) == 1);
+        assert(s.rs.count(rl1) == 1);
+        assert(s.ds.size() == 0);
+        assert(s.on_resolve_calls == 2);
+        assert(s.decide_calls == 0);
+    }
+
+    // Test 20: Long alternating sequence - derivation, decision repeated, then solved
+    {
+        lineage_pool lp;
+        const goal_lineage* g0 = lp.goal(nullptr, 0);
+        const goal_lineage* g1 = lp.goal(nullptr, 1);
+        const goal_lineage* g2 = lp.goal(nullptr, 2);
+        const goal_lineage* g3 = lp.goal(nullptr, 3);
+        const goal_lineage* g4 = lp.goal(nullptr, 4);
+        const resolution_lineage* rl0 = lp.resolution(g0, 0);
+        const resolution_lineage* rl1 = lp.resolution(g1, 0);
+        const resolution_lineage* rl2 = lp.resolution(g2, 0);
+        const resolution_lineage* rl3 = lp.resolution(g3, 0);
+        const resolution_lineage* rl4 = lp.resolution(g4, 0);
+
+        sim_mock s(10);
+        s.event_types = {"derivation", "decision", "derivation", "decision", "derivation", "solved"};
+        s.event_resolutions[0] = rl0;
+        s.event_resolutions[1] = rl1;
+        s.event_resolutions[2] = rl2;
+        s.event_resolutions[3] = rl3;
+        s.event_resolutions[4] = rl4;
+
+        bool result = s();
+        assert(result == true);
+        assert(s.rs.size() == 5);
+        assert(s.rs.count(rl0) == 1);
+        assert(s.rs.count(rl1) == 1);
+        assert(s.rs.count(rl2) == 1);
+        assert(s.rs.count(rl3) == 1);
+        assert(s.rs.count(rl4) == 1);
+        assert(s.ds.size() == 2);
+        assert(s.ds.count(rl1) == 1); // decisions only
+        assert(s.ds.count(rl3) == 1);
+        assert(s.ds.count(rl0) == 0); // derivations not in ds
+        assert(s.ds.count(rl2) == 0);
+        assert(s.ds.count(rl4) == 0);
+        assert(s.on_resolve_calls == 5);
+        assert(s.derive_calls == 5); // called once per active iteration
+        assert(s.decide_calls == 2);
+    }
+
+    // Test 21: solve_calls is counted precisely across multi-step sequences
+    // solved() is called in each while-condition check AND once for the return value
+    {
+        lineage_pool lp;
+        const goal_lineage* g0 = lp.goal(nullptr, 0);
+        const goal_lineage* g1 = lp.goal(nullptr, 1);
+        const resolution_lineage* rl0 = lp.resolution(g0, 0);
+        const resolution_lineage* rl1 = lp.resolution(g1, 0);
+
+        sim_mock s(10);
+        s.event_types = {"derivation", "derivation", "solved"};
+        s.event_resolutions[0] = rl0;
+        s.event_resolutions[1] = rl1;
+
+        bool result = s();
+        assert(result == true);
+        // Iter 0: solved()→false (1), derive, on_resolve
+        // Iter 1: solved()→false (2), derive, on_resolve
+        // Iter 2: solved()→true (3), loop exits
+        // return solved() (4)
+        assert(s.solve_calls == 4);
+    }
+
+    // Test 22: conflicted() short-circuits before solved() in while condition
+    // When conflicted, solved() is NOT called in the while check - only in the return
+    {
+        lineage_pool lp;
+        const goal_lineage* g = lp.goal(nullptr, 0);
+        const resolution_lineage* rl = lp.resolution(g, 0);
+
+        sim_mock s(10);
+        s.event_types = {"derivation", "conflict"};
+        s.event_resolutions[0] = rl;
+
+        bool result = s();
+        assert(result == false);
+        // Iter 0: conflicted()→false, solved()→false (1), derive, on_resolve
+        // Iter 1: conflicted()→true → short-circuit, solved() NOT called in while
+        // return solved() at iter=1 (2)
+        assert(s.solve_calls == 2);
+        assert(s.rs.size() == 1);
+        assert(s.on_resolve_calls == 1);
+    }
+
+    // Test 23: Two decisions then one derivation then solved
+    // Verifies ds contains only decisions regardless of order
+    {
+        lineage_pool lp;
+        const goal_lineage* g0 = lp.goal(nullptr, 0);
+        const goal_lineage* g1 = lp.goal(nullptr, 1);
+        const goal_lineage* g2 = lp.goal(nullptr, 2);
+        const resolution_lineage* rl0 = lp.resolution(g0, 0);
+        const resolution_lineage* rl1 = lp.resolution(g1, 0);
+        const resolution_lineage* rl2 = lp.resolution(g2, 0);
+
+        sim_mock s(10);
+        s.event_types = {"decision", "decision", "derivation", "solved"};
+        s.event_resolutions[0] = rl0;
+        s.event_resolutions[1] = rl1;
+        s.event_resolutions[2] = rl2;
+
+        bool result = s();
+        assert(result == true);
+        assert(s.rs.size() == 3);
+        assert(s.ds.size() == 2);
+        assert(s.ds.count(rl0) == 1);
+        assert(s.ds.count(rl1) == 1);
+        assert(s.ds.count(rl2) == 0); // derivation not in ds
+        assert(s.on_resolve_calls == 3);
+        assert(s.derive_calls == 3); // called once per iteration for all events
+        assert(s.decide_calls == 2);
+    }
+
+    // Test 24: Cap at exactly max=3, next event is "solved" - returns true from cap
+    {
+        lineage_pool lp;
+        const goal_lineage* g0 = lp.goal(nullptr, 0);
+        const goal_lineage* g1 = lp.goal(nullptr, 1);
+        const goal_lineage* g2 = lp.goal(nullptr, 2);
+        const resolution_lineage* rl0 = lp.resolution(g0, 0);
+        const resolution_lineage* rl1 = lp.resolution(g1, 0);
+        const resolution_lineage* rl2 = lp.resolution(g2, 0);
+
+        sim_mock s(3);
+        s.event_types = {"decision", "decision", "decision", "solved"};
+        s.event_resolutions[0] = rl0;
+        s.event_resolutions[1] = rl1;
+        s.event_resolutions[2] = rl2;
+
+        bool result = s();
+        // Cap after 3 decisions; return solved() at iter=3 (event="solved") → true
+        assert(result == true);
+        assert(s.rs.size() == 3);
+        assert(s.ds.size() == 3);
+        assert(s.on_resolve_calls == 3);
+    }
+
+    // Test 25: Derivations interspersed with decisions, capped before terminal
+    // Verifies ds never contains derivation rls even under cap
+    {
+        lineage_pool lp;
+        const goal_lineage* g0 = lp.goal(nullptr, 0);
+        const goal_lineage* g1 = lp.goal(nullptr, 1);
+        const goal_lineage* g2 = lp.goal(nullptr, 2);
+        const goal_lineage* g3 = lp.goal(nullptr, 3);
+        const resolution_lineage* rl0 = lp.resolution(g0, 0);
+        const resolution_lineage* rl1 = lp.resolution(g1, 0);
+        const resolution_lineage* rl2 = lp.resolution(g2, 0);
+        const resolution_lineage* rl3 = lp.resolution(g3, 0);
+
+        sim_mock s(3);
+        // derivation, decision, derivation, decision, ... but capped at 3
+        s.event_types = {"derivation", "decision", "derivation", "decision", "solved"};
+        s.event_resolutions[0] = rl0;
+        s.event_resolutions[1] = rl1;
+        s.event_resolutions[2] = rl2;
+        s.event_resolutions[3] = rl3;
+
+        bool result = s();
+        // After 3 events (derivation, decision, derivation): cap
+        // return solved() at iter=3 (event="decision") → false
+        assert(result == false);
+        assert(s.rs.size() == 3);
+        assert(s.rs.count(rl0) == 1);
+        assert(s.rs.count(rl1) == 1);
+        assert(s.rs.count(rl2) == 1);
+        assert(s.rs.count(rl3) == 0);
+        assert(s.ds.size() == 1);
+        assert(s.ds.count(rl1) == 1); // only the one decision before cap
+        assert(s.ds.count(rl0) == 0);
+        assert(s.ds.count(rl2) == 0);
+        assert(s.on_resolve_calls == 3);
+    }
 }
 
 void test_ridge_sim_constructor() {

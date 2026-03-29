@@ -16,7 +16,7 @@ private:
     virtual bool conflicted() const = 0;
     virtual const resolution_lineage* derive_one() = 0;
     virtual const resolution_lineage* decide_one() = 0;
-    virtual void on_resolve(const resolution_lineage* rl) = 0;
+    virtual void on_resolve(const resolution_lineage*) = 0;
 
     resolutions rs;
     decisions ds;
