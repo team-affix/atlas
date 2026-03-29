@@ -1,5 +1,5 @@
-#ifndef A01_HPP
-#define A01_HPP
+#ifndef RIDGE_HPP
+#define RIDGE_HPP
 
 #include <optional>
 #include <random>

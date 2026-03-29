@@ -1,5 +1,5 @@
-#ifndef A01_SIM_HPP
-#define A01_SIM_HPP
+#ifndef RIDGE_SIM_HPP
+#define RIDGE_SIM_HPP
 
 #include "../mcts/include/mcts.hpp"
 #include "defs.hpp"
