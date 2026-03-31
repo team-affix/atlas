@@ -20544,6 +20544,814 @@ void test_horizon() {
         bool result3 = solver(1000, soln);
         assert(result3 == false);
     }
+
+    // Test 9: Multi-body rule with variables in rule head/body and in the goal.
+    //
+    // DB:
+    //   idx 0: parent(alice, carol).
+    //   idx 1: parent(bob,   carol).
+    //   idx 2: parent(carol, dave).
+    //   idx 3: grandparent(X, Z) :- parent(X, Y), parent(Y, Z).
+    //
+    // Goal: grandparent(G, dave)  — G is a logic variable.
+    //
+    // Resolution trace per solution (3 steps each):
+    //   1. grandparent(G, dave) via idx 3 → fresh Y'; adds parent(G, Y') and parent(Y', dave).
+    //   2. parent(Y', dave)  → unit-prop via idx 2 → Y' = carol.
+    //   3. parent(G, carol)  → MCTS picks idx 0 (G=alice) or idx 1 (G=bob).
+    //
+    // Both solutions are found before refutation is proved on the third call.
+    // Each soln contains exactly 3 resolution_lineage pointers.
+    {
+        trail t;
+        t.push();
+        expr_pool ep(t);
+        bind_map bm(t);
+        sequencer seq(t);
+
+        // Facts: parent(alice,carol), parent(bob,carol), parent(carol,dave)
+        database db;
+        db.push_back(rule{ep.cons(ep.cons(ep.atom("parent"), ep.atom("alice")), ep.atom("carol")), {}});  // idx 0
+        db.push_back(rule{ep.cons(ep.cons(ep.atom("parent"), ep.atom("bob")),   ep.atom("carol")), {}});  // idx 1
+        db.push_back(rule{ep.cons(ep.cons(ep.atom("parent"), ep.atom("carol")), ep.atom("dave")),  {}});  // idx 2
+
+        // grandparent(X, Z) :- parent(X, Y), parent(Y, Z).
+        {
+            const expr* X = ep.var(seq());
+            const expr* Y = ep.var(seq());
+            const expr* Z = ep.var(seq());
+            db.push_back(rule{
+                ep.cons(ep.cons(ep.atom("grandparent"), X), Z),
+                {ep.cons(ep.cons(ep.atom("parent"), X), Y),
+                 ep.cons(ep.cons(ep.atom("parent"), Y), Z)}
+            });  // idx 3
+        }
+
+        const expr* G = ep.var(seq());
+        goals goals;
+        goals.push_back(ep.cons(ep.cons(ep.atom("grandparent"), G), ep.atom("dave")));
+
+        std::mt19937 rng(42);
+        horizon solver(db, goals, t, seq, bm, 1000, 1.414, rng);
+
+        normalizer norm(ep, bm);
+        std::optional<resolution_store> soln;
+
+        // Call 1: first grandparent of dave
+        bool result1 = solver(1000, soln);
+        assert(result1 == true);
+        assert(soln.has_value());
+        assert(soln.value().size() == 3);
+
+        const expr* G_val1 = norm(G);
+        assert(std::holds_alternative<expr::atom>(G_val1->content));
+        std::string gp1 = std::get<expr::atom>(G_val1->content).value;
+        assert(gp1 == "alice" || gp1 == "bob");
+
+        // Call 2: second grandparent of dave — must differ from the first
+        bool result2 = solver(1000, soln);
+        assert(result2 == true);
+        assert(soln.has_value());
+        assert(soln.value().size() == 3);
+
+        const expr* G_val2 = norm(G);
+        assert(std::holds_alternative<expr::atom>(G_val2->content));
+        std::string gp2 = std::get<expr::atom>(G_val2->content).value;
+        assert(gp2 == "alice" || gp2 == "bob");
+
+        // CRITICAL: the two solutions bind G to different names
+        assert(gp1 != gp2);
+
+        // Call 3: both paths exhausted → refutation
+        bool result3 = solver(1000, soln);
+        assert(result3 == false);
+        assert(!soln.has_value());
+    }
+
+    // ---------------------------------------------------------------------------
+    // Multi-solution enumeration tests using next_until_refuted
+    //
+    // The lambda enumerates all expected solutions in any order (deduplicating paths
+    // that produce the same variable bindings), then asserts that the next call
+    // proves refutation.
+    // ---------------------------------------------------------------------------
+
+    using solution = std::vector<const expr*>;
+
+    auto next_until_refuted = [](
+        horizon& solver,
+        std::set<solution> expected,
+        auto get_solution,
+        size_t iterations = 1000
+    ) {
+        std::set<solution> visited;
+        std::optional<resolution_store> soln;
+        while (!expected.empty()) {
+            solution s;
+            do {
+                bool r = solver(iterations, soln);
+                assert(r == true);
+                s = get_solution();
+            } while (visited.count(s));
+            std::cout << "Solution: " << visited.size() << " resolutions: " << soln.value().size() << std::endl;
+            expr_printer printer(std::cout);
+            for (const auto& e : s) {
+                printer(e);
+                std::cout << std::endl;
+            }
+            std::cout << std::endl;
+            assert(expected.count(s) == 1);
+            expected.erase(s);
+            visited.insert(s);
+        }
+        // All solutions found — next call must refute
+        bool r = solver(iterations, soln);
+        assert(r == false);
+        assert(!soln.has_value());
+    };
+
+    // Test 10: 3-colouring of K3 (the triangle) with colours {red, green, blue}.
+    //
+    // All 3 nodes A, B, C are mutually adjacent, so every valid colouring assigns
+    // a distinct colour to each node.  Exactly 3! = 6 proper 3-colourings exist.
+    //
+    // DB:
+    //   idx 0-2: color(red), color(green), color(blue).
+    //   idx 3-8: diff(X,Y) for every ordered pair of distinct colours (6 facts).
+    //
+    // Goals: color(A), color(B), color(C), diff(A,B), diff(A,C), diff(B,C).
+    //
+    // An MCTS decision (e.g. diff(A,B)→red-green) binds two nodes and unit-propagates
+    // the remaining diff goals to the unique third colour.  Multiple resolution orderings
+    // reaching the same binding are deduplicated by the visited loop.
+    {
+        trail t;
+        t.push();
+        expr_pool ep(t);
+        bind_map bm(t);
+        sequencer seq(t);
+
+        database db;
+        db.push_back(rule{ep.cons(ep.atom("color"), ep.atom("red")),   {}});  // idx 0
+        db.push_back(rule{ep.cons(ep.atom("color"), ep.atom("green")), {}});  // idx 1
+        db.push_back(rule{ep.cons(ep.atom("color"), ep.atom("blue")),  {}});  // idx 2
+        db.push_back(rule{ep.cons(ep.cons(ep.atom("diff"), ep.atom("red")),   ep.atom("green")), {}});  // idx 3
+        db.push_back(rule{ep.cons(ep.cons(ep.atom("diff"), ep.atom("red")),   ep.atom("blue")),  {}});  // idx 4
+        db.push_back(rule{ep.cons(ep.cons(ep.atom("diff"), ep.atom("green")), ep.atom("red")),   {}});  // idx 5
+        db.push_back(rule{ep.cons(ep.cons(ep.atom("diff"), ep.atom("green")), ep.atom("blue")),  {}});  // idx 6
+        db.push_back(rule{ep.cons(ep.cons(ep.atom("diff"), ep.atom("blue")),  ep.atom("red")),   {}});  // idx 7
+        db.push_back(rule{ep.cons(ep.cons(ep.atom("diff"), ep.atom("blue")),  ep.atom("green")), {}});  // idx 8
+
+        const expr* A = ep.var(seq());
+        const expr* B = ep.var(seq());
+        const expr* C = ep.var(seq());
+
+        goals goals;
+        goals.push_back(ep.cons(ep.atom("color"), A));
+        goals.push_back(ep.cons(ep.atom("color"), B));
+        goals.push_back(ep.cons(ep.atom("color"), C));
+        goals.push_back(ep.cons(ep.cons(ep.atom("diff"), A), B));
+        goals.push_back(ep.cons(ep.cons(ep.atom("diff"), A), C));
+        goals.push_back(ep.cons(ep.cons(ep.atom("diff"), B), C));
+
+        const expr* red   = ep.atom("red");
+        const expr* green = ep.atom("green");
+        const expr* blue  = ep.atom("blue");
+
+        std::set<solution> expected = {
+            {red,   green, blue },
+            {red,   blue,  green},
+            {green, red,   blue },
+            {green, blue,  red  },
+            {blue,  red,   green},
+            {blue,  green, red  },
+        };
+
+        std::mt19937 rng(42);
+        horizon solver(db, goals, t, seq, bm, 1000, 1.414, rng);
+
+        normalizer norm(ep, bm);
+
+        next_until_refuted(solver, expected, [&]() -> solution {
+            return {ep.import(norm(A)), ep.import(norm(B)), ep.import(norm(C))};
+        });
+    }
+
+    // Test 11: SAT — P ∧ (Q ∨ R) using relational OR/AND encoding.
+    //
+    // The OR and AND predicates are encoded relationally with a bool/1 body goal:
+    //   or(true,  X, true) :- bool(X).   — true  ∨ anything = true
+    //   or(false, X, X)    :- bool(X).   — false ∨ X = X
+    //   and(true,  X, X)   :- bool(X).   — true  ∧ X = X
+    //   and(false, X, false):- bool(X).  — false ∧ anything = false
+    //
+    // Formula: P ∧ (Q ∨ R).
+    // Goals: bool(P), bool(Q), bool(R), or(Q,R,QR), and(P,QR,true).
+    //
+    // and(P,QR,true) unit-props P=true, QR=true.
+    // or(Q,R,true) then has 3 satisfying assignments.
+    // Solutions: (P=T,Q=T,R=T), (P=T,Q=T,R=F), (P=T,Q=F,R=T).
+    {
+        trail t;
+        t.push();
+        expr_pool ep(t);
+        bind_map bm(t);
+        sequencer seq(t);
+
+        database db;
+        db.push_back(rule{ep.cons(ep.atom("bool"), ep.atom("true")),  {}});  // idx 0
+        db.push_back(rule{ep.cons(ep.atom("bool"), ep.atom("false")), {}});  // idx 1
+
+        // or(true, X, true) :- bool(X).
+        {
+            const expr* X = ep.var(seq());
+            db.push_back(rule{
+                ep.cons(ep.cons(ep.cons(ep.atom("or"), ep.atom("true")), X), ep.atom("true")),
+                {ep.cons(ep.atom("bool"), X)}
+            });  // idx 2
+        }
+        // or(false, X, X) :- bool(X).
+        {
+            const expr* X = ep.var(seq());
+            db.push_back(rule{
+                ep.cons(ep.cons(ep.cons(ep.atom("or"), ep.atom("false")), X), X),
+                {ep.cons(ep.atom("bool"), X)}
+            });  // idx 3
+        }
+        // and(true, X, X) :- bool(X).
+        {
+            const expr* X = ep.var(seq());
+            db.push_back(rule{
+                ep.cons(ep.cons(ep.cons(ep.atom("and"), ep.atom("true")), X), X),
+                {ep.cons(ep.atom("bool"), X)}
+            });  // idx 4
+        }
+        // and(false, X, false) :- bool(X).
+        {
+            const expr* X = ep.var(seq());
+            db.push_back(rule{
+                ep.cons(ep.cons(ep.cons(ep.atom("and"), ep.atom("false")), X), ep.atom("false")),
+                {ep.cons(ep.atom("bool"), X)}
+            });  // idx 5
+        }
+
+        const expr* P  = ep.var(seq());
+        const expr* Q  = ep.var(seq());
+        const expr* R  = ep.var(seq());
+        const expr* QR = ep.var(seq());
+
+        goals goals;
+        goals.push_back(ep.cons(ep.atom("bool"), P));
+        goals.push_back(ep.cons(ep.atom("bool"), Q));
+        goals.push_back(ep.cons(ep.atom("bool"), R));
+        goals.push_back(ep.cons(ep.cons(ep.cons(ep.atom("or"),  Q), R),  QR));
+        goals.push_back(ep.cons(ep.cons(ep.cons(ep.atom("and"), P), QR), ep.atom("true")));
+
+        const expr* T_ = ep.atom("true");
+        const expr* F_ = ep.atom("false");
+
+        std::set<solution> expected = {
+            {T_, T_, T_},
+            {T_, T_, F_},
+            {T_, F_, T_},
+        };
+
+        std::mt19937 rng(42);
+        horizon solver(db, goals, t, seq, bm, 1000, 1.414, rng);
+
+        normalizer norm(ep, bm);
+
+        next_until_refuted(solver, expected, [&]() -> solution {
+            return {ep.import(norm(P)), ep.import(norm(Q)), ep.import(norm(R))};
+        });
+    }
+
+    // Test 12: Peano arithmetic — enumerate all naturals less than 5.
+    //
+    // Rules:
+    //   idx 0: nat(zero).
+    //   idx 1: nat(suc(X))      :- nat(X).
+    //   idx 2: lt(zero, suc(X)) :- nat(X).
+    //   idx 3: lt(suc(X), suc(Y)) :- lt(X, Y).
+    //
+    // Goal: lt(N, five)   where five = suc^5(zero).
+    // Exactly 5 solutions: N ∈ {0, 1, 2, 3, 4} in Peano encoding.
+    // Reaching N=k requires k unfoldings of rule 3, then rule 2, then k of rule 1.
+    {
+        trail t;
+        t.push();
+        expr_pool ep(t);
+        bind_map bm(t);
+        sequencer seq(t);
+
+        auto peano = [&](int n) -> const expr* {
+            const expr* r = ep.atom("zero");
+            for (int i = 0; i < n; ++i)
+                r = ep.cons(ep.atom("suc"), r);
+            return r;
+        };
+
+        database db;
+        db.push_back(rule{ep.cons(ep.atom("nat"), ep.atom("zero")), {}});  // idx 0
+
+        {
+            const expr* X = ep.var(seq());
+            db.push_back(rule{
+                ep.cons(ep.atom("nat"), ep.cons(ep.atom("suc"), X)),
+                {ep.cons(ep.atom("nat"), X)}
+            });  // idx 1
+        }
+        {
+            const expr* X = ep.var(seq());
+            db.push_back(rule{
+                ep.cons(ep.cons(ep.atom("lt"), ep.atom("zero")), ep.cons(ep.atom("suc"), X)),
+                {ep.cons(ep.atom("nat"), X)}
+            });  // idx 2
+        }
+        {
+            const expr* X = ep.var(seq());
+            const expr* Y = ep.var(seq());
+            db.push_back(rule{
+                ep.cons(ep.cons(ep.atom("lt"), ep.cons(ep.atom("suc"), X)), ep.cons(ep.atom("suc"), Y)),
+                {ep.cons(ep.cons(ep.atom("lt"), X), Y)}
+            });  // idx 3
+        }
+
+        const expr* N    = ep.var(seq());
+        const expr* five = peano(5);
+
+        goals goals;
+        goals.push_back(ep.cons(ep.cons(ep.atom("lt"), N), five));
+
+        std::set<solution> expected = {
+            {peano(0)}, {peano(1)}, {peano(2)}, {peano(3)}, {peano(4)},
+        };
+
+        std::mt19937 rng(42);
+        horizon solver(db, goals, t, seq, bm, 1000, 1.414, rng);
+
+        normalizer norm(ep, bm);
+
+        next_until_refuted(solver, expected, [&]() -> solution {
+            return {ep.import(norm(N))};
+        });
+    }
+
+    // Test 13: Sibling query — multi-body rule with shared existential variable.
+    //
+    // Rule: sibling(X, Y) :- parent(P, X), parent(P, Y).
+    //   The intermediate variable P is existential: it does not appear in the head
+    //   or the query goal, only in the two body atoms.  Both body goals must be
+    //   resolved to the same parent, so P is unified across the two sub-goals.
+    //
+    // DB:
+    //   idx 0: parent(tom,   alice).
+    //   idx 1: parent(tom,   bob).
+    //   idx 2: parent(sue,   carol).
+    //   idx 3: sibling(X, Y) :- parent(P, X), parent(P, Y).
+    //
+    // Goal: sibling(X, alice).
+    //
+    // Resolutions:
+    //   sibling(X, alice) via idx 3 → parent(P', X) and parent(P', alice).
+    //   parent(P', alice) unit-props → P' = tom.
+    //   parent(tom, X) → X = alice (idx 0) or X = bob (idx 1).
+    //   carol is pruned because parent(sue, alice) has no match.
+    //
+    // Solutions: X = alice (self-sibling, since the rule carries no ≠ constraint),
+    //            X = bob.
+    {
+        trail t;
+        t.push();
+        expr_pool ep(t);
+        bind_map bm(t);
+        sequencer seq(t);
+
+        database db;
+        db.push_back(rule{ep.cons(ep.cons(ep.atom("parent"), ep.atom("tom")), ep.atom("alice")), {}});  // idx 0
+        db.push_back(rule{ep.cons(ep.cons(ep.atom("parent"), ep.atom("tom")), ep.atom("bob")),   {}});  // idx 1
+        db.push_back(rule{ep.cons(ep.cons(ep.atom("parent"), ep.atom("sue")), ep.atom("carol")), {}});  // idx 2
+
+        // sibling(X, Y) :- parent(P, X), parent(P, Y).
+        {
+            const expr* X = ep.var(seq());
+            const expr* Y = ep.var(seq());
+            const expr* Pv = ep.var(seq());
+            db.push_back(rule{
+                ep.cons(ep.cons(ep.atom("sibling"), X), Y),
+                {ep.cons(ep.cons(ep.atom("parent"), Pv), X),
+                 ep.cons(ep.cons(ep.atom("parent"), Pv), Y)}
+            });  // idx 3
+        }
+
+        const expr* X = ep.var(seq());
+        goals goals;
+        goals.push_back(ep.cons(ep.cons(ep.atom("sibling"), X), ep.atom("alice")));
+
+        const expr* alice = ep.atom("alice");
+        const expr* bob   = ep.atom("bob");
+
+        std::set<solution> expected = {
+            {alice},
+            {bob},
+        };
+
+        std::mt19937 rng(42);
+        horizon solver(db, goals, t, seq, bm, 1000, 1.414, rng);
+
+        normalizer norm(ep, bm);
+
+        next_until_refuted(solver, expected, [&]() -> solution {
+            return {ep.import(norm(X))};
+        });
+    }
+
+    // Test 14: 3-colouring of "K3 + tail" — 4 nodes, 8 goals, 12 solutions.
+    //
+    // Graph: nodes A, B, C, D.
+    //   Edges: A-B, A-C, B-C  (triangle — A, B, C all-different)
+    //          A-D             (tail — D only constrained to differ from A)
+    //
+    // Colours: red, green, blue.
+    //
+    // Each of the 6 K3 colourings of (A,B,C) combines with 2 choices for D
+    // (any colour ≠ A), giving 6 × 2 = 12 distinct solutions.
+    {
+        trail t;
+        t.push();
+        expr_pool ep(t);
+        bind_map bm(t);
+        sequencer seq(t);
+
+        database db;
+        db.push_back(rule{ep.cons(ep.atom("color"), ep.atom("red")),   {}});  // idx 0
+        db.push_back(rule{ep.cons(ep.atom("color"), ep.atom("green")), {}});  // idx 1
+        db.push_back(rule{ep.cons(ep.atom("color"), ep.atom("blue")),  {}});  // idx 2
+        db.push_back(rule{ep.cons(ep.cons(ep.atom("diff"), ep.atom("red")),   ep.atom("green")), {}});  // idx 3
+        db.push_back(rule{ep.cons(ep.cons(ep.atom("diff"), ep.atom("red")),   ep.atom("blue")),  {}});  // idx 4
+        db.push_back(rule{ep.cons(ep.cons(ep.atom("diff"), ep.atom("green")), ep.atom("red")),   {}});  // idx 5
+        db.push_back(rule{ep.cons(ep.cons(ep.atom("diff"), ep.atom("green")), ep.atom("blue")),  {}});  // idx 6
+        db.push_back(rule{ep.cons(ep.cons(ep.atom("diff"), ep.atom("blue")),  ep.atom("red")),   {}});  // idx 7
+        db.push_back(rule{ep.cons(ep.cons(ep.atom("diff"), ep.atom("blue")),  ep.atom("green")), {}});  // idx 8
+
+        const expr* A = ep.var(seq());
+        const expr* B = ep.var(seq());
+        const expr* C = ep.var(seq());
+        const expr* D = ep.var(seq());
+
+        goals goals;
+        goals.push_back(ep.cons(ep.atom("color"), A));
+        goals.push_back(ep.cons(ep.atom("color"), B));
+        goals.push_back(ep.cons(ep.atom("color"), C));
+        goals.push_back(ep.cons(ep.atom("color"), D));
+        goals.push_back(ep.cons(ep.cons(ep.atom("diff"), A), B));
+        goals.push_back(ep.cons(ep.cons(ep.atom("diff"), A), C));
+        goals.push_back(ep.cons(ep.cons(ep.atom("diff"), B), C));
+        goals.push_back(ep.cons(ep.cons(ep.atom("diff"), A), D));
+
+        const expr* R_ = ep.atom("red");
+        const expr* G_ = ep.atom("green");
+        const expr* B_ = ep.atom("blue");
+
+        std::set<solution> expected = {
+            {R_, G_, B_, G_}, {R_, G_, B_, B_},
+            {R_, B_, G_, G_}, {R_, B_, G_, B_},
+            {G_, R_, B_, R_}, {G_, R_, B_, B_},
+            {G_, B_, R_, R_}, {G_, B_, R_, B_},
+            {B_, R_, G_, R_}, {B_, R_, G_, G_},
+            {B_, G_, R_, R_}, {B_, G_, R_, G_},
+        };
+
+        std::mt19937 rng(42);
+        horizon solver(db, goals, t, seq, bm, 1000, 1.414, rng);
+
+        normalizer norm(ep, bm);
+
+        next_until_refuted(solver, expected, [&]() -> solution {
+            return {ep.import(norm(A)), ep.import(norm(B)), ep.import(norm(C)), ep.import(norm(D))};
+        });
+    }
+
+    // Test 15: 4-variable SAT — (P ∨ Q) ∧ (R ∨ S) ∧ (¬P ∨ ¬R).
+    //
+    // Three clauses, four boolean variables.  Clause three forbids P and R
+    // both being true, while the first two require each pair to cover true.
+    //
+    // Uses the same relational OR/AND/NOT encoding as Test 11, plus NOT rules.
+    // Propagation chain:
+    //   and(PQ_RS, NPR, true) → PQ_RS=true, NPR=true.
+    //   and(PQ, RS, true)     → PQ=true, RS=true.
+    //   Remaining: or(P,Q,true), or(R,S,true), or(NP,NR,true) each need a decision.
+    //
+    // Satisfying assignments (5):
+    //   (T,T,F,T), (T,F,F,T), (F,T,T,T), (F,T,T,F), (F,T,F,T).
+    {
+        trail t;
+        t.push();
+        expr_pool ep(t);
+        bind_map bm(t);
+        sequencer seq(t);
+
+        database db;
+        db.push_back(rule{ep.cons(ep.atom("bool"), ep.atom("true")),  {}});  // idx 0
+        db.push_back(rule{ep.cons(ep.atom("bool"), ep.atom("false")), {}});  // idx 1
+        db.push_back(rule{ep.cons(ep.cons(ep.atom("not"), ep.atom("true")),  ep.atom("false")), {}});  // idx 2
+        db.push_back(rule{ep.cons(ep.cons(ep.atom("not"), ep.atom("false")), ep.atom("true")),  {}});  // idx 3
+
+        {
+            const expr* X = ep.var(seq());
+            db.push_back(rule{
+                ep.cons(ep.cons(ep.cons(ep.atom("or"), ep.atom("true")), X), ep.atom("true")),
+                {ep.cons(ep.atom("bool"), X)}
+            });  // idx 4
+        }
+        {
+            const expr* X = ep.var(seq());
+            db.push_back(rule{
+                ep.cons(ep.cons(ep.cons(ep.atom("or"), ep.atom("false")), X), X),
+                {ep.cons(ep.atom("bool"), X)}
+            });  // idx 5
+        }
+        {
+            const expr* X = ep.var(seq());
+            db.push_back(rule{
+                ep.cons(ep.cons(ep.cons(ep.atom("and"), ep.atom("true")), X), X),
+                {ep.cons(ep.atom("bool"), X)}
+            });  // idx 6
+        }
+        {
+            const expr* X = ep.var(seq());
+            db.push_back(rule{
+                ep.cons(ep.cons(ep.cons(ep.atom("and"), ep.atom("false")), X), ep.atom("false")),
+                {ep.cons(ep.atom("bool"), X)}
+            });  // idx 7
+        }
+
+        const expr* P     = ep.var(seq());
+        const expr* Q     = ep.var(seq());
+        const expr* R     = ep.var(seq());
+        const expr* S     = ep.var(seq());
+        const expr* PQ    = ep.var(seq());
+        const expr* RS    = ep.var(seq());
+        const expr* NP    = ep.var(seq());
+        const expr* NR    = ep.var(seq());
+        const expr* NPR   = ep.var(seq());
+        const expr* PQ_RS = ep.var(seq());
+
+        goals goals;
+        goals.push_back(ep.cons(ep.atom("bool"), P));
+        goals.push_back(ep.cons(ep.atom("bool"), Q));
+        goals.push_back(ep.cons(ep.atom("bool"), R));
+        goals.push_back(ep.cons(ep.atom("bool"), S));
+        goals.push_back(ep.cons(ep.cons(ep.cons(ep.atom("or"),  P),  Q),  PQ));
+        goals.push_back(ep.cons(ep.cons(ep.cons(ep.atom("or"),  R),  S),  RS));
+        goals.push_back(ep.cons(ep.cons(ep.atom("not"), P), NP));
+        goals.push_back(ep.cons(ep.cons(ep.atom("not"), R), NR));
+        goals.push_back(ep.cons(ep.cons(ep.cons(ep.atom("or"),  NP), NR), NPR));
+        goals.push_back(ep.cons(ep.cons(ep.cons(ep.atom("and"), PQ), RS),  PQ_RS));
+        goals.push_back(ep.cons(ep.cons(ep.cons(ep.atom("and"), PQ_RS), NPR), ep.atom("true")));
+
+        const expr* T_ = ep.atom("true");
+        const expr* F_ = ep.atom("false");
+
+        std::set<solution> expected = {
+            {T_, T_, F_, T_},
+            {T_, F_, F_, T_},
+            {F_, T_, T_, T_},
+            {F_, T_, T_, F_},
+            {F_, T_, F_, T_},
+        };
+
+        std::mt19937 rng(42);
+        horizon solver(db, goals, t, seq, bm, 1000, 1.414, rng);
+
+        normalizer norm(ep, bm);
+
+        next_until_refuted(solver, expected, [&]() -> solution {
+            return {ep.import(norm(P)), ep.import(norm(Q)), ep.import(norm(R)), ep.import(norm(S))};
+        });
+    }
+
+    // Test 16: Unsatisfiable problem — 0 solutions, immediate refutation.
+    //
+    // DB:
+    //   idx 0: q(a).
+    //   idx 1: p(X) :- q(X), r(X).   (no rules for r/1 at all)
+    //
+    // Goal: p(a).
+    //
+    // MCTS resolves p(a) via idx 1, introducing sub-goals q(a) and r(a).
+    // q(a) unit-props via idx 0.  r(a) has no candidates → conflict.
+    // The only decision (choosing idx 1) is learned.  On the next call p(a)
+    // has no remaining candidates → ds = {} → immediate refutation.
+    //
+    // next_until_refuted with 0 expected solutions therefore asserts the very
+    // first call returns false.
+    {
+        trail t;
+        t.push();
+        expr_pool ep(t);
+        bind_map bm(t);
+        sequencer seq(t);
+
+        database db;
+        db.push_back(rule{ep.cons(ep.atom("q"), ep.atom("a")), {}});  // idx 0: q(a).
+
+        // p(X) :- q(X), r(X).
+        {
+            const expr* X = ep.var(seq());
+            db.push_back(rule{
+                ep.cons(ep.atom("p"), X),
+                {ep.cons(ep.atom("q"), X),
+                 ep.cons(ep.atom("r"), X)}
+            });  // idx 1
+        }
+
+        goals goals;
+        goals.push_back(ep.cons(ep.atom("p"), ep.atom("a")));
+
+        std::mt19937 rng(42);
+        horizon solver(db, goals, t, seq, bm, 1000, 1.414, rng);
+
+        next_until_refuted(solver, {}, [&]() -> solution { return {}; });
+    }
+
+    // Test 17: Cartesian product — type(X) × type(Y) with 3 ground values.
+    //
+    // DB: type(a). type(b). type(c).
+    // Goals: type(X), type(Y)   — X and Y are independent variables.
+    //
+    // X and Y have no shared goals, so each can be resolved independently.
+    // Every combination is a valid solution; 3 × 3 = 9 solutions total.
+    //
+    // This tests that horizon correctly enumerates two-variable Cartesian
+    // products where MCTS must make separate decisions for each variable.
+    {
+        trail t;
+        t.push();
+        expr_pool ep(t);
+        bind_map bm(t);
+        sequencer seq(t);
+
+        database db;
+        db.push_back(rule{ep.cons(ep.atom("type"), ep.atom("a")), {}});  // idx 0
+        db.push_back(rule{ep.cons(ep.atom("type"), ep.atom("b")), {}});  // idx 1
+        db.push_back(rule{ep.cons(ep.atom("type"), ep.atom("c")), {}});  // idx 2
+
+        const expr* X = ep.var(seq());
+        const expr* Y = ep.var(seq());
+        goals goals;
+        goals.push_back(ep.cons(ep.atom("type"), X));
+        goals.push_back(ep.cons(ep.atom("type"), Y));
+
+        const expr* a = ep.atom("a");
+        const expr* b = ep.atom("b");
+        const expr* c = ep.atom("c");
+
+        std::set<solution> expected = {
+            {a, a}, {a, b}, {a, c},
+            {b, a}, {b, b}, {b, c},
+            {c, a}, {c, b}, {c, c},
+        };
+
+        std::mt19937 rng(42);
+        horizon solver(db, goals, t, seq, bm, 1000, 1.414, rng);
+
+        normalizer norm(ep, bm);
+
+        next_until_refuted(solver, expected, [&]() -> solution {
+            return {ep.import(norm(X)), ep.import(norm(Y))};
+        });
+    }
+
+    // Test 18: Relational join / intersection — fruit(X) ∧ sweet(X).
+    //
+    // DB:
+    //   idx 0: fruit(apple).
+    //   idx 1: fruit(banana).
+    //   idx 2: fruit(cherry).
+    //   idx 3: sweet(banana).
+    //   idx 4: sweet(cherry).
+    //
+    // Goals: fruit(X), sweet(X)   — X shared between both goals.
+    //
+    // Head-elimination prunes fruit(apple) because sweet(apple) has no matching
+    // rule, leaving X ∈ {banana, cherry} as the only two solutions.
+    //
+    // This tests that unit propagation and head-elimination together narrow the
+    // search space correctly when a single variable appears in multiple goals.
+    {
+        trail t;
+        t.push();
+        expr_pool ep(t);
+        bind_map bm(t);
+        sequencer seq(t);
+
+        database db;
+        db.push_back(rule{ep.cons(ep.atom("fruit"), ep.atom("apple")),  {}});  // idx 0
+        db.push_back(rule{ep.cons(ep.atom("fruit"), ep.atom("banana")), {}});  // idx 1
+        db.push_back(rule{ep.cons(ep.atom("fruit"), ep.atom("cherry")), {}});  // idx 2
+        db.push_back(rule{ep.cons(ep.atom("sweet"), ep.atom("banana")), {}});  // idx 3
+        db.push_back(rule{ep.cons(ep.atom("sweet"), ep.atom("cherry")), {}});  // idx 4
+
+        const expr* X = ep.var(seq());
+        goals goals;
+        goals.push_back(ep.cons(ep.atom("fruit"), X));
+        goals.push_back(ep.cons(ep.atom("sweet"), X));
+
+        const expr* banana = ep.atom("banana");
+        const expr* cherry = ep.atom("cherry");
+
+        std::set<solution> expected = {
+            {banana},
+            {cherry},
+        };
+
+        std::mt19937 rng(42);
+        horizon solver(db, goals, t, seq, bm, 1000, 1.414, rng);
+
+        normalizer norm(ep, bm);
+
+        next_until_refuted(solver, expected, [&]() -> solution {
+            return {ep.import(norm(X))};
+        });
+    }
+
+    // Test 19: Peano addition — enumerate all pairs (X, Y) whose sum is 5.
+    //
+    // Rules:
+    //   idx 0: nat(zero).
+    //   idx 1: nat(suc(X))            :- nat(X).
+    //   idx 2: add(zero, Y, Y)        :- nat(Y).
+    //   idx 3: add(suc(X), Y, suc(Z)) :- add(X, Y, Z).
+    //
+    // Goal: add(X, Y, five)   where five = suc^5(zero).
+    //
+    // Exactly 6 solutions: (0,5),(1,4),(2,3),(3,2),(4,1),(5,0).
+    // Each solution requires recursive unfolding of rule 3 (depth equal to X)
+    // followed by rule 2 (base case), then nat(Y) resolution via rules 0/1.
+    {
+        trail t;
+        t.push();
+        expr_pool ep(t);
+        bind_map bm(t);
+        sequencer seq(t);
+
+        auto peano = [&](int n) -> const expr* {
+            const expr* r = ep.atom("zero");
+            for (int i = 0; i < n; ++i)
+                r = ep.cons(ep.atom("suc"), r);
+            return r;
+        };
+
+        database db;
+        db.push_back(rule{ep.cons(ep.atom("nat"), ep.atom("zero")), {}});  // idx 0
+
+        {
+            const expr* X = ep.var(seq());
+            db.push_back(rule{
+                ep.cons(ep.atom("nat"), ep.cons(ep.atom("suc"), X)),
+                {ep.cons(ep.atom("nat"), X)}
+            });  // idx 1
+        }
+        {
+            const expr* Y = ep.var(seq());
+            db.push_back(rule{
+                ep.cons(ep.cons(ep.cons(ep.atom("add"), ep.atom("zero")), Y), Y),
+                {ep.cons(ep.atom("nat"), Y)}
+            });  // idx 2
+        }
+        {
+            const expr* X = ep.var(seq());
+            const expr* Y = ep.var(seq());
+            const expr* Z = ep.var(seq());
+            db.push_back(rule{
+                ep.cons(ep.cons(ep.cons(ep.atom("add"), ep.cons(ep.atom("suc"), X)), Y), ep.cons(ep.atom("suc"), Z)),
+                {ep.cons(ep.cons(ep.cons(ep.atom("add"), X), Y), Z)}
+            });  // idx 3
+        }
+
+        const expr* X    = ep.var(seq());
+        const expr* Y    = ep.var(seq());
+        const expr* five = peano(5);
+
+        goals goals;
+        goals.push_back(ep.cons(ep.cons(ep.cons(ep.atom("add"), X), Y), five));
+
+        std::set<solution> expected;
+        for (int x = 0; x <= 5; ++x)
+            expected.insert({peano(x), peano(5 - x)});
+        assert(expected.size() == 6);
+
+        std::mt19937 rng(42);
+        horizon solver(db, goals, t, seq, bm, 1000, 1.414, rng);
+
+        normalizer norm(ep, bm);
+
+        next_until_refuted(solver, expected, [&]() -> solution {
+            return {ep.import(norm(X)), ep.import(norm(Y))};
+        });
+    }
 }
 
 void test_ridge_sim() {
