@@ -13,7 +13,6 @@ horizon::horizon(
     sequencer& vars,
     bind_map& bm,
     size_t max_resolutions,
-    size_t iterations_per_avoidance,
     double exploration_constant,
     std::mt19937& rng
 ) :
@@ -25,7 +24,6 @@ horizon::horizon(
     ep(t),
     lp(),
     max_resolutions(max_resolutions),
-    iterations_per_avoidance(iterations_per_avoidance),
     exploration_constant(exploration_constant),
     rng(rng),
     c()
@@ -37,7 +35,7 @@ bool horizon::operator()(size_t iterations, std::optional<resolutions>& soln) {
     // default to no solution
     soln = std::nullopt;
 
-    // if the a01 has already found the last solution, then it is refuted
+    // if the solver has already found the last solution, then it is refuted
     // this is required if the last solution found required no decisions
     if (c.refuted())
         return false;
@@ -91,7 +89,7 @@ bool horizon::sim_one(monte_carlo::tree_node<mcts_decider::choice>& root, decisi
     ds = sim_instance.get_decisions();
 
     // terminate the simulation
-    sim.terminate(-(double)ds.size());
+    sim.terminate(sim_instance.reward());
 
     // return the result of the simulation
     return sim_result;

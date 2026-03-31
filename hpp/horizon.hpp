@@ -22,7 +22,6 @@ struct horizon {
         sequencer&,
         bind_map&,
         size_t,
-        size_t,
         double,
         std::mt19937&
     );
