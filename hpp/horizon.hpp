@@ -41,7 +41,6 @@ private:
     lineage_pool lp;
     
     size_t max_resolutions;
-    size_t iterations_per_avoidance;
     double exploration_constant;
     std::mt19937& rng;
 
