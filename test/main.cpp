@@ -11,6 +11,7 @@
 #include "../hpp/ridge_sim.hpp"
 #include "../hpp/horizon_sim.hpp"
 #include "../hpp/ridge.hpp"
+#include "../hpp/horizon.hpp"
 #include "../hpp/expr_printer.hpp"
 #include "../hpp/cdcl.hpp"
 #include "../hpp/weight_store.hpp"
@@ -19766,6 +19767,410 @@ void test_horizon_sim_on_resolve() {
     }
 }
 
+void test_horizon_sim_one() {
+
+    // Test 1: Immediate solution via unit propagation
+    // db: {a.}, goals: {a}
+    // Expected: returns true, rs has 1 resolution, ds empty,
+    //           trail depth invariant, MCTS root gets 1 visit, value == 1.0
+    // (All goal weight grounded → reward() == 1.0. Ridge gives 0.0 here.)
+    {
+        trail t;
+        t.push();
+
+        expr_pool ep(t);
+        bind_map bm(t);
+        sequencer seq(t);
+
+        database db;
+        db.push_back(rule{ep.atom("a"), {}});  // idx 0: a.
+
+        goals goals;
+        goals.push_back(ep.atom("a"));
+
+        std::mt19937 rng(42);
+        horizon solver(db, goals, t, seq, bm, 100, 1.414, rng);
+
+        monte_carlo::tree_node<mcts_decider::choice> root;
+        decision_store ds;
+        resolution_store rs;
+
+        size_t depth_before = t.depth();
+
+        bool result = solver.sim_one(root, ds, rs);
+
+        // CRITICAL: Solution found
+        assert(result == true);
+
+        // CRITICAL: No decisions (unit propagation)
+        assert(ds.empty());
+
+        // CRITICAL: One resolution
+        assert(rs.size() == 1);
+        const goal_lineage* gl0 = solver.lp.goal(nullptr, 0);
+        const resolution_lineage* rl0 = solver.lp.resolution(gl0, 0);
+        assert(rs.count(rl0) == 1);
+
+        // CRITICAL: Trail depth invariant (pop + push inside sim_one)
+        assert(t.depth() == depth_before);
+
+        // CRITICAL: Root visited exactly once
+        assert(root.m_visits == 1);
+
+        // CRITICAL: reward() == 1.0 — all weight grounded
+        // Ridge would give root.m_value == 0.0 (-(ds.size()==0))
+        assert(root.m_value == 1.0);
+    }
+
+    // Test 2: Immediate conflict — empty database
+    // db: {}, goals: {a}
+    // Expected: returns false, ds empty, rs empty,
+    //           trail depth invariant, root visits == 1, value == 0.0
+    {
+        trail t;
+        t.push();
+
+        expr_pool ep(t);
+        bind_map bm(t);
+        sequencer seq(t);
+
+        database db;
+
+        goals goals;
+        goals.push_back(ep.atom("a"));
+
+        std::mt19937 rng(42);
+        horizon solver(db, goals, t, seq, bm, 100, 1.414, rng);
+
+        monte_carlo::tree_node<mcts_decider::choice> root;
+        decision_store ds;
+        resolution_store rs;
+
+        size_t depth_before = t.depth();
+
+        bool result = solver.sim_one(root, ds, rs);
+
+        // CRITICAL: Conflict detected
+        assert(result == false);
+
+        // CRITICAL: No resolutions or decisions
+        assert(ds.empty());
+        assert(rs.empty());
+
+        // CRITICAL: Trail depth invariant
+        assert(t.depth() == depth_before);
+
+        // CRITICAL: Root visited once; value == 0.0 (no weight grounded)
+        // Same numeric value as ridge, but for a different reason:
+        // horizon: reward() == 0.0 (nothing grounded); ridge: -(ds.size()==0) == 0.0
+        assert(root.m_visits == 1);
+        assert(root.m_value == 0.0);
+    }
+
+    // Test 3: Trail pop/push rollback via secondary sequencer
+    // Allocate a variable in the horizon's frame; sim_one's t.pop() must roll it back.
+    {
+        trail t;
+        t.push();
+
+        expr_pool ep(t);
+        bind_map bm(t);
+        sequencer seq(t);
+
+        database db;
+        db.push_back(rule{ep.atom("a"), {}});
+
+        goals goals;
+        goals.push_back(ep.atom("a"));
+
+        std::mt19937 rng(42);
+        horizon solver(db, goals, t, seq, bm, 100, 1.414, rng);
+
+        // Secondary sequencer on the same trail — allocation logs into the horizon's frame
+        sequencer seq2(t);
+        assert(seq2.index == 0);
+
+        uint32_t v = seq2();
+        assert(v == 0);
+        assert(seq2.index == 1);
+
+        monte_carlo::tree_node<mcts_decider::choice> root;
+        decision_store ds;
+        resolution_store rs;
+
+        size_t depth_before = t.depth();
+
+        solver.sim_one(root, ds, rs);
+
+        // CRITICAL: t.pop() inside sim_one triggered the undo action → seq2 rolled back
+        assert(seq2.index == 0);
+
+        // CRITICAL: t.push() after the pop restored the same depth
+        assert(t.depth() == depth_before);
+    }
+
+    // Test 4: Reward is sim_instance.reward(), NOT -(double)ds.size()  [key divergence from ridge]
+    // db: {a :- b., a :- c., b., c.}, goals: {a}
+    // MCTS makes 1 decision (two candidates for a); then unit-prop grounds the chosen sub-goal.
+    // horizon: terminate(reward() == 1.0)  → root.m_value == 1.0
+    // ridge:   terminate(-ds.size() == -1) → root.m_value == -1.0
+    {
+        trail t;
+        t.push();
+
+        expr_pool ep(t);
+        bind_map bm(t);
+        sequencer seq(t);
+
+        database db;
+        db.push_back(rule{ep.atom("a"), {ep.atom("b")}});  // idx 0
+        db.push_back(rule{ep.atom("a"), {ep.atom("c")}});  // idx 1
+        db.push_back(rule{ep.atom("b"), {}});               // idx 2
+        db.push_back(rule{ep.atom("c"), {}});               // idx 3
+
+        goals goals;
+        goals.push_back(ep.atom("a"));
+
+        std::mt19937 rng(42);
+        horizon solver(db, goals, t, seq, bm, 100, 1.414, rng);
+
+        monte_carlo::tree_node<mcts_decider::choice> root;
+        decision_store ds;
+        resolution_store rs;
+
+        bool result = solver.sim_one(root, ds, rs);
+
+        // CRITICAL: Solution found with 1 MCTS decision
+        assert(result == true);
+        assert(ds.size() == 1);
+
+        // CRITICAL: Root visited once
+        assert(root.m_visits == 1);
+
+        // CRITICAL: Reward-based termination: all weight grounded → 1.0
+        // If ridge logic were used, value would be -1.0 (-(ds.size()==1))
+        assert(root.m_value == 1.0);
+    }
+
+    // Test 5: Partial reward via CDCL — horizon-specific, no ridge analogue
+    // db: {a., b.}, goals: {a, b} (each weight 0.5)
+    // Inject CDCL clause {rl_a, rl_b}: whichever fact is resolved first,
+    // constrain() reduces the clause to a singleton that CDCL-eliminates the other.
+    // Either way, exactly one fact is grounded (cgw = 0.5) before the conflict.
+    // reward = 0.5 regardless of which goal is resolved first (unordered_map order).
+    // Ridge would give 0.0 here (-(ds.size()==0)); horizon gives 0.5.
+    {
+        trail t;
+        t.push();
+
+        expr_pool ep(t);
+        bind_map bm(t);
+        sequencer seq(t);
+
+        database db;
+        db.push_back(rule{ep.atom("a"), {}}); // idx 0: a.
+        db.push_back(rule{ep.atom("b"), {}}); // idx 1: b.
+
+        goals goals;
+        goals.push_back(ep.atom("a")); // weight = 0.5
+        goals.push_back(ep.atom("b")); // weight = 0.5
+
+        std::mt19937 rng(42);
+        horizon solver(db, goals, t, seq, bm, 100, 1.414, rng);
+
+        // Inject CDCL clause {rl_a, rl_b}.
+        // When rl_a is constrained, the clause reduces to singleton {rl_b} → rl_b is eliminated.
+        // When rl_b is constrained, the clause reduces to singleton {rl_a} → rl_a is eliminated.
+        // Either way, the second goal is CDCL-eliminated after the first is grounded.
+        const goal_lineage* gl_a = solver.lp.goal(nullptr, 0);
+        const goal_lineage* gl_b = solver.lp.goal(nullptr, 1);
+        const resolution_lineage* rl_a = solver.lp.resolution(gl_a, 0);
+        const resolution_lineage* rl_b = solver.lp.resolution(gl_b, 1);
+        decision_store cdcl_clause;
+        cdcl_clause.insert(rl_a);
+        cdcl_clause.insert(rl_b);
+        solver.c.learn(cdcl_clause);
+
+        monte_carlo::tree_node<mcts_decider::choice> root;
+        decision_store ds;
+        resolution_store rs;
+
+        bool result = solver.sim_one(root, ds, rs);
+
+        // CRITICAL: Conflict (one goal CDCL-eliminated after the other is grounded)
+        assert(result == false);
+
+        // CRITICAL: No MCTS decisions (unit prop + CDCL drove everything)
+        assert(ds.empty());
+
+        // CRITICAL: Exactly 1 resolution (the fact that was grounded)
+        assert(rs.size() == 1);
+
+        // CRITICAL: Root visited once
+        assert(root.m_visits == 1);
+
+        // CRITICAL: Partial reward — exactly one of two equal-weight facts grounded → 0.5
+        // Ridge would give 0.0 here (-(ds.size()==0))
+        assert(root.m_value == 0.5);
+    }
+
+    // Test 6: CDCL avoidance injected via solver.c reduces two candidates to one → unit prop
+    // db: {a :- b., a :- c., b., c.}, goals: {a}
+    // Inject avoidance {rl(gl0, 0)} → CDCL eliminates idx 0 → idx 1 becomes unit.
+    {
+        trail t;
+        t.push();
+
+        expr_pool ep(t);
+        bind_map bm(t);
+        sequencer seq(t);
+
+        database db;
+        db.push_back(rule{ep.atom("a"), {ep.atom("b")}});  // idx 0
+        db.push_back(rule{ep.atom("a"), {ep.atom("c")}});  // idx 1
+        db.push_back(rule{ep.atom("b"), {}});               // idx 2
+        db.push_back(rule{ep.atom("c"), {}});               // idx 3
+
+        goals goals;
+        goals.push_back(ep.atom("a"));
+
+        std::mt19937 rng(42);
+        horizon solver(db, goals, t, seq, bm, 100, 1.414, rng);
+
+        // Inject avoidance: singleton {rl(gl0, 0)} causes CDCL elimination of idx 0
+        const goal_lineage* gl0 = solver.lp.goal(nullptr, 0);
+        const resolution_lineage* rl0 = solver.lp.resolution(gl0, 0);
+        decision_store avoid;
+        avoid.insert(rl0);
+        solver.c.learn(avoid);
+
+        monte_carlo::tree_node<mcts_decider::choice> root;
+        decision_store ds;
+        resolution_store rs;
+
+        bool result = solver.sim_one(root, ds, rs);
+
+        // CRITICAL: Solution found (idx 1 chosen via unit prop after CDCL elim of idx 0)
+        assert(result == true);
+
+        // CRITICAL: No decisions (CDCL reduced to 1 candidate → unit prop)
+        assert(ds.empty());
+
+        // CRITICAL: 2 resolutions: a via idx 1, then c via idx 3
+        assert(rs.size() == 2);
+        const resolution_lineage* rl_a = solver.lp.resolution(gl0, 1);
+        assert(rs.count(rl_a) == 1);
+        const resolution_lineage* rl_c = solver.lp.resolution(solver.lp.goal(rl_a, 0), 3);
+        assert(rs.count(rl_c) == 1);
+
+        // CRITICAL: All weight grounded → reward = 1.0
+        assert(root.m_value == 1.0);
+    }
+
+    // Test 7: Pre-populated MCTS tree forces a specific decision; reward = 1.0, not -1.0
+    // db: {a :- b., a :- c., b., c.}, goals: {a}
+    // Pre-populate root so UCB1 picks idx 1 (a :- c.) as the decision.
+    {
+        trail t;
+        t.push();
+
+        expr_pool ep(t);
+        bind_map bm(t);
+        sequencer seq(t);
+
+        database db;
+        db.push_back(rule{ep.atom("a"), {ep.atom("b")}});  // idx 0
+        db.push_back(rule{ep.atom("a"), {ep.atom("c")}});  // idx 1
+        db.push_back(rule{ep.atom("b"), {}});               // idx 2
+        db.push_back(rule{ep.atom("c"), {}});               // idx 3
+
+        goals goals;
+        goals.push_back(ep.atom("a"));
+
+        std::mt19937 rng(42);
+        horizon solver(db, goals, t, seq, bm, 100, 1.414, rng);
+
+        monte_carlo::tree_node<mcts_decider::choice> root;
+
+        // Pre-populate: idx 0 already visited, idx 1 unvisited → UCB1 chooses idx 1
+        const goal_lineage* gl0 = solver.lp.goal(nullptr, 0);
+        root.m_visits = 100;
+        root.m_children[gl0].m_visits = 50;
+        root.m_children[gl0].m_value = 100.0;
+        root.m_children[gl0].m_children[size_t(0)].m_visits = 10;
+        root.m_children[gl0].m_children[size_t(0)].m_value = 20.0;
+        root.m_children[gl0].m_children[size_t(1)].m_visits = 0;  // unvisited → chosen
+
+        decision_store ds;
+        resolution_store rs;
+
+        bool result = solver.sim_one(root, ds, rs);
+
+        // CRITICAL: Solution found (a→idx1→c, then c→idx3)
+        assert(result == true);
+
+        // CRITICAL: Exactly 1 decision (the MCTS choice for a→c)
+        assert(ds.size() == 1);
+
+        // CRITICAL: 2 resolutions
+        assert(rs.size() == 2);
+
+        const resolution_lineage* rl_a = solver.lp.resolution(gl0, 1);
+        assert(rs.count(rl_a) == 1);
+        assert(ds.count(rl_a) == 1);  // this was the decision
+
+        const goal_lineage* gl_c = solver.lp.goal(rl_a, 0);
+        const resolution_lineage* rl_c = solver.lp.resolution(gl_c, 3);
+        assert(rs.count(rl_c) == 1);
+        assert(ds.count(rl_c) == 0);  // unit propagation, not a decision
+
+        // CRITICAL: root.m_visits incremented by 1
+        assert(root.m_visits == 101);
+
+        // CRITICAL: terminate(reward() == 1.0) → root.m_value increased by 1.0
+        // Ridge would give root.m_value == -1.0 (terminate(-ds.size()==-1))
+        assert(root.m_value == 1.0);
+    }
+
+    // Test 8: Multiple sim_one calls share one root — MCTS statistics accumulate
+    // Each call increments root.m_visits by exactly 1 via terminate().
+    {
+        trail t;
+        t.push();
+
+        expr_pool ep(t);
+        bind_map bm(t);
+        sequencer seq(t);
+
+        database db;
+        db.push_back(rule{ep.atom("a"), {ep.atom("b")}});  // idx 0
+        db.push_back(rule{ep.atom("a"), {ep.atom("c")}});  // idx 1
+        db.push_back(rule{ep.atom("b"), {}});               // idx 2
+        db.push_back(rule{ep.atom("c"), {}});               // idx 3
+
+        goals goals;
+        goals.push_back(ep.atom("a"));
+
+        std::mt19937 rng(42);
+        horizon solver(db, goals, t, seq, bm, 100, 1.414, rng);
+
+        monte_carlo::tree_node<mcts_decider::choice> root;
+        decision_store ds;
+        resolution_store rs;
+
+        assert(root.m_visits == 0);
+
+        solver.sim_one(root, ds, rs);
+        assert(root.m_visits == 1);
+
+        solver.sim_one(root, ds, rs);
+        assert(root.m_visits == 2);
+
+        solver.sim_one(root, ds, rs);
+        assert(root.m_visits == 3);
+    }
+}
+
 void test_ridge_sim() {
     // Test 1: Immediate solution - single goal with matching fact
     // Database: a.
@@ -26997,6 +27402,7 @@ void unit_test_main() {
     TEST(test_ridge_sim_on_resolve);
     TEST(test_horizon_sim_reward);
     TEST(test_horizon_sim_on_resolve);
+    TEST(test_horizon_sim_one);
     TEST(test_ridge_sim);
     TEST(test_ridge_constructor_and_destructor);
     TEST(test_ridge_sim_one);
