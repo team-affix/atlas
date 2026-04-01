@@ -21675,6 +21675,164 @@ void test_horizon() {
             return {ep.import(norm(M))};
         });
     }
+
+    // Test 22: Mini Sudoku (4×4).
+    //
+    // A 4×4 Sudoku requires filling a grid from domain {d1,d2,d3,d4} such that
+    // every row, column, and 2×2 box contains all four values exactly once.
+    //
+    // This showcases horizon's ability to navigate a deeply constrained search
+    // space with 79 conjoined goals and 7 free variables.  The weight-based MCTS
+    // reward gives partial credit for each grounded cell, guiding the solver
+    // toward consistent assignments rather than treating every early conflict
+    // the same way.
+    //
+    // Puzzle layout (d_i = ground atom, Vrc = free variable at row r, col c):
+    //
+    //   d1   d2   V13  d4
+    //   V21  d4   d1   V24
+    //   V31  d1   d4   V34
+    //   d4   V42  V43  d1
+    //
+    // The extra pre-filled cell d2 at (1,2) breaks the symmetry that would
+    // otherwise allow a second valid solution (d2↔d3 swap throughout).
+    //
+    // Unique solution:
+    //   d1  d2  d3  d4
+    //   d3  d4  d1  d2
+    //   d2  d1  d4  d3
+    //   d4  d3  d2  d1
+    //
+    // So: V13=d3, V21=d3, V24=d2, V31=d2, V34=d3, V42=d3, V43=d2.
+    //
+    // Derivation — all 7 free cells are logically forced:
+    //   Row 1 [d1,d2,V13,d4]: V13 must be d3 (only remaining digit).
+    //   Box 2 [V13,d4,d1,V24]: V13=d3 ⇒ V24=d2.
+    //   Row 2 [V21,d4,d1,d2]: V21 must be d3.
+    //   Col 1 [d1,d3,V31,d4]: V31 must be d2.
+    //   Col 2 [d2,d4,d1,V42]: V42 must be d3.
+    //   Row 4 [d4,d3,V43,d1]: V43 must be d2.
+    //   Row 3 [d2,d1,d4,V34]: V34 must be d3.
+    //
+    // Goals (79 total):
+    //   7  domain:  digit(Vrc)   for each variable cell
+    //   24 row:     diff(cell[r][i], cell[r][j])  for i<j, all 4 rows
+    //   24 col:     diff(cell[i][c], cell[j][c])  for i<j, all 4 cols
+    //   24 box:     diff(box[i], box[j])           for i<j, all 4 2×2 boxes
+    //
+    // Of the 72 diff goals, 12 are ground-ground (trivially resolved in 1 step);
+    // the remaining 60 involve at least one variable and drive the search.
+    {
+        trail t;
+        t.push();
+        expr_pool ep(t);
+        bind_map bm(t);
+        sequencer seq(t);
+
+        database db;
+
+        const expr* d1 = ep.atom("d1");
+        const expr* d2 = ep.atom("d2");
+        const expr* d3 = ep.atom("d3");
+        const expr* d4 = ep.atom("d4");
+
+        // digit/1 facts — the 4-element domain
+        db.push_back(rule{ep.cons(ep.atom("digit"), d1), {}});  // idx 0
+        db.push_back(rule{ep.cons(ep.atom("digit"), d2), {}});  // idx 1
+        db.push_back(rule{ep.cons(ep.atom("digit"), d3), {}});  // idx 2
+        db.push_back(rule{ep.cons(ep.atom("digit"), d4), {}});  // idx 3
+
+        // diff/2 facts — all 12 ordered pairs of distinct values
+        db.push_back(rule{ep.cons(ep.cons(ep.atom("diff"), d1), d2), {}});  // idx 4
+        db.push_back(rule{ep.cons(ep.cons(ep.atom("diff"), d2), d1), {}});  // idx 5
+        db.push_back(rule{ep.cons(ep.cons(ep.atom("diff"), d1), d3), {}});  // idx 6
+        db.push_back(rule{ep.cons(ep.cons(ep.atom("diff"), d3), d1), {}});  // idx 7
+        db.push_back(rule{ep.cons(ep.cons(ep.atom("diff"), d1), d4), {}});  // idx 8
+        db.push_back(rule{ep.cons(ep.cons(ep.atom("diff"), d4), d1), {}});  // idx 9
+        db.push_back(rule{ep.cons(ep.cons(ep.atom("diff"), d2), d3), {}});  // idx 10
+        db.push_back(rule{ep.cons(ep.cons(ep.atom("diff"), d3), d2), {}});  // idx 11
+        db.push_back(rule{ep.cons(ep.cons(ep.atom("diff"), d2), d4), {}});  // idx 12
+        db.push_back(rule{ep.cons(ep.cons(ep.atom("diff"), d4), d2), {}});  // idx 13
+        db.push_back(rule{ep.cons(ep.cons(ep.atom("diff"), d3), d4), {}});  // idx 14
+        db.push_back(rule{ep.cons(ep.cons(ep.atom("diff"), d4), d3), {}});  // idx 15
+
+        // Variable cells — 7 unknowns (row 1 col 2 pre-filled as d2 to force uniqueness)
+        const expr* V13 = ep.var(seq());  // row 1, col 3
+        const expr* V21 = ep.var(seq());  // row 2, col 1
+        const expr* V24 = ep.var(seq());  // row 2, col 4
+        const expr* V31 = ep.var(seq());  // row 3, col 1
+        const expr* V34 = ep.var(seq());  // row 3, col 4
+        const expr* V42 = ep.var(seq());  // row 4, col 2
+        const expr* V43 = ep.var(seq());  // row 4, col 3
+
+        // Grid (0-indexed): cell[row][col]
+        const expr* cell[4][4] = {
+            {d1,  d2,  V13, d4 },
+            {V21, d4,  d1,  V24},
+            {V31, d1,  d4,  V34},
+            {d4,  V42, V43, d1 },
+        };
+
+        goals goals;
+
+        // Domain goals — only for variable cells
+        for (auto* v : {V13, V21, V24, V31, V34, V42, V43}) {
+            goals.push_back(ep.cons(ep.atom("digit"), v));
+        }
+
+        // Row distinctness constraints (i < j, one direction per pair)
+        for (int r = 0; r < 4; r++) {
+            for (int i = 0; i < 4; i++) {
+                for (int j = i + 1; j < 4; j++) {
+                    goals.push_back(ep.cons(ep.cons(ep.atom("diff"), cell[r][i]), cell[r][j]));
+                }
+            }
+        }
+
+        // Column distinctness constraints
+        for (int c = 0; c < 4; c++) {
+            for (int i = 0; i < 4; i++) {
+                for (int j = i + 1; j < 4; j++) {
+                    goals.push_back(ep.cons(ep.cons(ep.atom("diff"), cell[i][c]), cell[j][c]));
+                }
+            }
+        }
+
+        // Box distinctness constraints — four 2×2 sub-grids
+        for (int br = 0; br < 2; br++) {
+            for (int bc = 0; bc < 2; bc++) {
+                const expr* box[4] = {
+                    cell[br * 2    ][bc * 2],
+                    cell[br * 2    ][bc * 2 + 1],
+                    cell[br * 2 + 1][bc * 2],
+                    cell[br * 2 + 1][bc * 2 + 1],
+                };
+                for (int i = 0; i < 4; i++) {
+                    for (int j = i + 1; j < 4; j++) {
+                        goals.push_back(ep.cons(ep.cons(ep.atom("diff"), box[i]), box[j]));
+                    }
+                }
+            }
+        }
+
+        assert(goals.size() == 79);
+
+        // Expected: the single valid completion of the puzzle
+        const std::set<solution> expected = {{d3, d3, d2, d2, d3, d3, d2}};
+
+        std::mt19937 rng(42);
+        horizon solver(db, goals, t, seq, bm, 1000, 1.414, rng);
+        normalizer norm(ep, bm);
+
+        enumerate_all_solutions(solver, expected, [&]() -> solution {
+            return {
+                ep.import(norm(V13)),
+                ep.import(norm(V21)), ep.import(norm(V24)),
+                ep.import(norm(V31)), ep.import(norm(V34)),
+                ep.import(norm(V42)), ep.import(norm(V43)),
+            };
+        });
+    }
 }
 
 void test_ridge_sim() {
