@@ -4,4 +4,5 @@ a01_main
 build
 libchc.a
 libchc_debug.a
+libchc_fastdebug.a
 syntax/generated
