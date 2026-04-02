@@ -39,14 +39,23 @@ CORE_OBJ            = $(patsubst core/cpp/%.cpp, build/obj/core/%.o,            
 CORE_DEBUG_OBJ      = $(patsubst core/cpp/%.cpp, build/obj/core_debug/%.o,      $(CORE_SRC))
 CORE_DEBUG_FAST_OBJ = $(patsubst core/cpp/%.cpp, build/obj/core_debug_fast/%.o, $(CORE_SRC))
 
-# Parser: hardcoded because parser/generated/ may not exist at parse time,
-# so $(wildcard ...) would expand to nothing.  ANTLR4 always emits exactly
-# these four files from CHC.g4.
-PARSER_STEMS = CHCLexer CHCParser CHCBaseVisitor CHCVisitor
+# Parser generated: hardcoded because parser/generated/ may not exist at parse
+# time, so $(wildcard ...) would expand to nothing.  ANTLR4 always emits
+# exactly these four files from CHC.g4.
+PARSER_GENERATED_STEMS = CHCLexer CHCParser CHCBaseVisitor CHCVisitor
 
-PARSER_OBJ            = $(patsubst %, build/obj/parser/%.o,            $(PARSER_STEMS))
-PARSER_DEBUG_OBJ      = $(patsubst %, build/obj/parser_debug/%.o,      $(PARSER_STEMS))
-PARSER_DEBUG_FAST_OBJ = $(patsubst %, build/obj/parser_debug_fast/%.o, $(PARSER_STEMS))
+# Parser hand-written: safe to wildcard — parser/cpp/ always exists.
+PARSER_SRC = $(wildcard parser/cpp/*.cpp)
+
+PARSER_OBJ = \
+    $(patsubst %,                build/obj/parser/%.o,            $(PARSER_GENERATED_STEMS)) \
+    $(patsubst parser/cpp/%.cpp, build/obj/parser/%.o,            $(PARSER_SRC))
+PARSER_DEBUG_OBJ = \
+    $(patsubst %,                build/obj/parser_debug/%.o,      $(PARSER_GENERATED_STEMS)) \
+    $(patsubst parser/cpp/%.cpp, build/obj/parser_debug/%.o,      $(PARSER_SRC))
+PARSER_DEBUG_FAST_OBJ = \
+    $(patsubst %,                build/obj/parser_debug_fast/%.o, $(PARSER_GENERATED_STEMS)) \
+    $(patsubst parser/cpp/%.cpp, build/obj/parser_debug_fast/%.o, $(PARSER_SRC))
 
 # ==============================================================================
 # User-facing targets
@@ -71,23 +80,23 @@ parser:
 	$(MAKE) parser/generated
 	$(MAKE) $(PARSER_LIB)
 
-parser_debug:
+parser_debug: $(CORE_DEBUG_LIB)
 	$(MAKE) parser/generated
 	$(MAKE) $(PARSER_DEBUG_LIB)
 	$(CXX) $(CXXFLAGS) -DDEBUG -g \
 	    -I$(ANTLR4_INC) \
 	    parser/test/main.cpp \
-	    -Lbuild -lchc_parser_debug \
+	    -Lbuild -lchc_parser_debug -lchc_core_debug \
 	    -L$(ANTLR4_LIB) -lantlr4-runtime \
 	    -o build/parser_debug
 
-parser_debug_fast:
+parser_debug_fast: $(CORE_DEBUG_FAST_LIB)
 	$(MAKE) parser/generated
 	$(MAKE) $(PARSER_DEBUG_FAST_LIB)
 	$(CXX) $(CXXFLAGS) -DDEBUG -O3 \
 	    -I$(ANTLR4_INC) \
 	    parser/test/main.cpp \
-	    -Lbuild -lchc_parser_debug_fast \
+	    -Lbuild -lchc_parser_debug_fast -lchc_core_debug_fast \
 	    -L$(ANTLR4_LIB) -lantlr4-runtime \
 	    -o build/parser_debug_fast
 
@@ -137,6 +146,15 @@ build/obj/parser_debug/%.o: parser/generated/%.cpp | parser/generated build/obj/
 	$(CXX) $(CXXFLAGS) -I$(ANTLR4_INC) -DDEBUG -g -c $< -o $@
 
 build/obj/parser_debug_fast/%.o: parser/generated/%.cpp | parser/generated build/obj/parser_debug_fast
+	$(CXX) $(CXXFLAGS) -I$(ANTLR4_INC) -DDEBUG -O3 -c $< -o $@
+
+build/obj/parser/%.o: parser/cpp/%.cpp | build/obj/parser
+	$(CXX) $(CXXFLAGS) -I$(ANTLR4_INC) -O3 -c $< -o $@
+
+build/obj/parser_debug/%.o: parser/cpp/%.cpp | build/obj/parser_debug
+	$(CXX) $(CXXFLAGS) -I$(ANTLR4_INC) -DDEBUG -g -c $< -o $@
+
+build/obj/parser_debug_fast/%.o: parser/cpp/%.cpp | build/obj/parser_debug_fast
 	$(CXX) $(CXXFLAGS) -I$(ANTLR4_INC) -DDEBUG -O3 -c $< -o $@
 
 # ==============================================================================
