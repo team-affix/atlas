@@ -18,10 +18,10 @@ struct horizon_sim : ridge_sim {
         monte_carlo::simulation<mcts_decider::choice, std::mt19937>&
     );
     double reward();
+    void on_resolve(const resolution_lineage*) override;
 #ifndef DEBUG
 private:
 #endif
-    void on_resolve(const resolution_lineage*) override;
 
     weight_store ws;
 };

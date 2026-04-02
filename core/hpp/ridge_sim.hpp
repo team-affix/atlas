@@ -24,14 +24,14 @@ struct ridge_sim : sim {
         cdcl c,
         monte_carlo::simulation<mcts_decider::choice, std::mt19937>&
     );
-#ifndef DEBUG
-private:
-#endif
     bool solved() override;
     bool conflicted() override;
     const resolution_lineage* derive_one() override;
     const resolution_lineage* decide_one() override;
     void on_resolve(const resolution_lineage*) override;
+#ifndef DEBUG
+private:
+#endif
 
     const database& db;
     trail& t;

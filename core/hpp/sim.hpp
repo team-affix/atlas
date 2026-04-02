@@ -9,15 +9,14 @@ struct sim {
     bool operator()();
     const resolutions& get_resolutions() const;
     const decisions& get_decisions() const;
-#ifndef DEBUG
-private:
-#endif
     virtual bool solved() = 0;
     virtual bool conflicted() = 0;
     virtual const resolution_lineage* derive_one() = 0;
     virtual const resolution_lineage* decide_one() = 0;
     virtual void on_resolve(const resolution_lineage*) = 0;
-
+#ifndef DEBUG
+private:
+#endif
     resolutions rs;
     decisions ds;
     size_t max_resolutions;
