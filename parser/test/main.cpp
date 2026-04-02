@@ -217,6 +217,55 @@ void test_expr_visitor_visitVar_sharing() {
                     pool.cons(x, pool.atom("nil")))));
 }
 
+void test_expr_visitor_visitVar_discard() {
+    trail t;
+    expr_pool pool(t);
+    sequencer seq(t);
+    std::map<std::string, uint32_t> var_map;
+    expr_visitor ev(pool, seq, var_map);
+
+    // Each _ gets a fresh index — they must not be the same expr*.
+    std::string input = "(_ . _)";
+    antlr4::ANTLRInputStream stream(input);
+    CHCLexer lexer(&stream);
+    antlr4::CommonTokenStream tokens(&lexer);
+    CHCParser parser(&tokens);
+    auto* sexp = first_sexp(stream, tokens, lexer, parser);
+
+    const expr* result = std::any_cast<const expr*>(ev.visitSexp(sexp));
+    // Extract the two arms of the cons.
+    const expr* lhs = std::get<expr::cons>(result->content).lhs;
+    const expr* rhs = std::get<expr::cons>(result->content).rhs;
+    assert(lhs != rhs);
+    // Neither _ should appear in var_map.
+    assert(var_map.find("_") == var_map.end());
+}
+
+void test_expr_visitor_visitVar_discard_inList() {
+    trail t;
+    expr_pool pool(t);
+    sequencer seq(t);
+    std::map<std::string, uint32_t> var_map;
+    expr_visitor ev(pool, seq, var_map);
+
+    // (f _ _) — both discards are distinct, X is tracked normally
+    std::string input = "(f _ _)";
+    antlr4::ANTLRInputStream stream(input);
+    CHCLexer lexer(&stream);
+    antlr4::CommonTokenStream tokens(&lexer);
+    CHCParser parser(&tokens);
+    auto* sexp = first_sexp(stream, tokens, lexer, parser);
+
+    const expr* result = std::any_cast<const expr*>(ev.visitSexp(sexp));
+    // cons(f, cons(d1, cons(d2, nil)))
+    auto& outer = std::get<expr::cons>(result->content);
+    assert(outer.lhs == pool.atom("f"));
+    auto& mid   = std::get<expr::cons>(outer.rhs->content);
+    auto& inner = std::get<expr::cons>(mid.rhs->content);
+    assert(mid.lhs != inner.lhs);   // the two _ are distinct
+    assert(var_map.find("_") == var_map.end());
+}
+
 void unit_test_main() {
     constexpr bool ENABLE_DEBUG_LOGS = true;
 
@@ -229,6 +278,8 @@ void unit_test_main() {
     TEST(test_expr_visitor_visitList_withVars);
     TEST(test_expr_visitor_visitList_nestedList);
     TEST(test_expr_visitor_visitVar_sharing);
+    TEST(test_expr_visitor_visitVar_discard);
+    TEST(test_expr_visitor_visitVar_discard_inList);
 }
 
 int main() {

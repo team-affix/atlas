@@ -27,6 +27,8 @@ const expr* expr_visitor::visitAtom(antlr4::tree::TerminalNode* node) {
 
 const expr* expr_visitor::visitVar(antlr4::tree::TerminalNode* node) {
     const std::string& name = node->getText();
+    if (name == "_")
+        return pool.var(seq());
     auto [it, inserted] = var_map.emplace(name, 0u);
     if (inserted) it->second = seq();
     return pool.var(it->second);
