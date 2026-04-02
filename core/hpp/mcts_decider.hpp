@@ -1,7 +1,7 @@
 #ifndef MCTS_DECIDER_HPP
 #define MCTS_DECIDER_HPP
 
-#include "../mcts/include/mcts.hpp"
+#include "../../mcts/include/mcts.hpp"
 #include "candidate_store.hpp"
 
 struct mcts_decider {

@@ -19,7 +19,7 @@
 #include <cmath>
 #include <sstream>
 #include <vector>
-#include "test_utils.hpp"
+#include "../../test_utils.hpp"
 
 using resolution_store = resolutions;
 using decision_store = decisions;

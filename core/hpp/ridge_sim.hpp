@@ -1,7 +1,7 @@
 #ifndef RIDGE_SIM_HPP
 #define RIDGE_SIM_HPP
 
-#include "../mcts/include/mcts.hpp"
+#include "../../mcts/include/mcts.hpp"
 #include "defs.hpp"
 #include "sequencer.hpp"
 #include "bind_map.hpp"

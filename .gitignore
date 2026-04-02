@@ -1,8 +1,5 @@
-main
 a01_main
 .vscode
-build
-libchc.a
-libchc_debug.a
-libchc_fastdebug.a
-syntax/generated
+build/
+parser/generated
+tools/

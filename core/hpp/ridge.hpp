@@ -1,5 +1,5 @@
-#ifndef HORIZON_HPP
-#define HORIZON_HPP
+#ifndef RIDGE_HPP
+#define RIDGE_HPP
 
 #include <optional>
 #include <random>
@@ -11,16 +11,17 @@
 #include "defs.hpp"
 #include "mcts_decider.hpp"
 #include "cdcl.hpp"
-#include "../mcts/include/mcts.hpp"
+#include "../../mcts/include/mcts.hpp"
 
-struct horizon {
-    ~horizon();
-    horizon(
+struct ridge {
+    ~ridge();
+    ridge(
         const database&,
         const goals&,
         trail&,
         sequencer&,
         bind_map&,
+        size_t,
         size_t,
         double,
         std::mt19937&
@@ -30,6 +31,7 @@ struct horizon {
 private:
 #endif
     bool sim_one(monte_carlo::tree_node<mcts_decider::choice>&, decisions&, resolutions&);
+    bool next_avoidance(decisions&, std::optional<resolutions>&);
     
     const database& db;
     const goals& gl;
@@ -41,11 +43,11 @@ private:
     lineage_pool lp;
     
     size_t max_resolutions;
+    size_t iterations_per_avoidance;
     double exploration_constant;
     std::mt19937& rng;
 
     cdcl c;
-    monte_carlo::tree_node<mcts_decider::choice> root;
 };
 
 #endif
