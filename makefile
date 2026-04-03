@@ -16,6 +16,8 @@ ANTLR4_LIB = /usr/lib/x86_64-linux-gnu
 ANTLR4_JAR = tools/antlr4-4.10.1-complete.jar
 ANTLR4_URL = https://www.antlr.org/download/antlr-4.10.1-complete.jar
 
+CLI11_INC = CLI11/include
+
 # ==============================================================================
 # Output names  (all under build/)
 # ==============================================================================
@@ -27,6 +29,10 @@ CORE_DEBUG_FAST_LIB = build/libchc_core_debug_fast.a
 PARSER_LIB            = build/libchc_parser.a
 PARSER_DEBUG_LIB      = build/libchc_parser_debug.a
 PARSER_DEBUG_FAST_LIB = build/libchc_parser_debug_fast.a
+
+CLI_BIN            = build/cli
+CLI_DEBUG_BIN      = build/cli_debug
+CLI_DEBUG_FAST_BIN = build/cli_debug_fast
 
 # ==============================================================================
 # Object lists  (object files live in build/obj/<variant>/)
@@ -61,9 +67,11 @@ PARSER_DEBUG_FAST_OBJ = \
 # User-facing targets
 # ==============================================================================
 
-.PHONY: all core core_debug core_debug_fast parser parser_debug parser_debug_fast clean
+.PHONY: all core core_debug core_debug_fast parser parser_debug parser_debug_fast \
+        cli cli_debug cli_debug_fast clean
 
-all: core core_debug core_debug_fast parser parser_debug parser_debug_fast
+all: core core_debug core_debug_fast parser parser_debug parser_debug_fast \
+     cli cli_debug cli_debug_fast
 
 core: $(CORE_LIB)
 
@@ -99,6 +107,36 @@ parser_debug_fast: $(CORE_DEBUG_FAST_LIB)
 	    -Lbuild -lchc_parser_debug_fast -lchc_core_debug_fast \
 	    -L$(ANTLR4_LIB) -lantlr4-runtime \
 	    -o build/parser_debug_fast
+
+cli: $(CORE_LIB)
+	$(MAKE) parser/generated
+	$(MAKE) $(PARSER_LIB)
+	$(CXX) $(CXXFLAGS) -O3 \
+	    -I$(ANTLR4_INC) -I$(CLI11_INC) \
+	    cli/main.cpp \
+	    -Lbuild -lchc_parser -lchc_core \
+	    -L$(ANTLR4_LIB) -lantlr4-runtime \
+	    -o $(CLI_BIN)
+
+cli_debug: $(CORE_DEBUG_LIB)
+	$(MAKE) parser/generated
+	$(MAKE) $(PARSER_DEBUG_LIB)
+	$(CXX) $(CXXFLAGS) -DDEBUG -g \
+	    -I$(ANTLR4_INC) -I$(CLI11_INC) \
+	    cli/main.cpp \
+	    -Lbuild -lchc_parser_debug -lchc_core_debug \
+	    -L$(ANTLR4_LIB) -lantlr4-runtime \
+	    -o $(CLI_DEBUG_BIN)
+
+cli_debug_fast: $(CORE_DEBUG_FAST_LIB)
+	$(MAKE) parser/generated
+	$(MAKE) $(PARSER_DEBUG_FAST_LIB)
+	$(CXX) $(CXXFLAGS) -DDEBUG -O3 \
+	    -I$(ANTLR4_INC) -I$(CLI11_INC) \
+	    cli/main.cpp \
+	    -Lbuild -lchc_parser_debug_fast -lchc_core_debug_fast \
+	    -L$(ANTLR4_LIB) -lantlr4-runtime \
+	    -o $(CLI_DEBUG_FAST_BIN)
 
 clean:
 	rm -rf build
