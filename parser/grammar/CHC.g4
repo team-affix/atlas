@@ -1,6 +1,6 @@
 grammar CHC;
 
-program
+database
     : clause* EOF
     ;
 

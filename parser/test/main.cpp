@@ -36,7 +36,7 @@ void test_visitor_traversal() {
     CHCLexer lexer(&stream);
     antlr4::CommonTokenStream tokens(&lexer);
     CHCParser parser(&tokens);
-    auto* tree = parser.program();
+    auto* tree = parser.database();
 
     assert(parser.getNumberOfSyntaxErrors() == 0);
 
