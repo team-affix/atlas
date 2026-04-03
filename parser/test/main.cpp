@@ -291,14 +291,11 @@ void test_clause_visitor_visitClause_fact() {
     CHCParser parser(&tokens);
 
     rule r = std::any_cast<rule>(cv.visitClause(parse_clause(stream, tokens, lexer, parser)));
+    // Right-fold visits Y first (index 0), then X (index 1).
+    const expr* y = pool.var(0);
+    const expr* x = pool.var(1);
+    assert(r.head == pool.cons(pool.atom("p"), pool.cons(x, pool.cons(y, pool.atom("nil")))));
     assert(r.body.empty());
-    // head = cons(p, cons(X, cons(Y, nil))) — extract X and Y from the structure.
-    auto& outer = std::get<expr::cons>(r.head->content);
-    assert(outer.lhs == pool.atom("p"));
-    auto& mid   = std::get<expr::cons>(outer.rhs->content);
-    auto& inner = std::get<expr::cons>(mid.rhs->content);
-    assert(mid.lhs != inner.lhs);           // X and Y are distinct vars
-    assert(inner.rhs == pool.atom("nil"));
 }
 
 void test_clause_visitor_visitClause_rule() {
@@ -315,9 +312,8 @@ void test_clause_visitor_visitClause_rule() {
     CHCParser parser(&tokens);
 
     rule r = std::any_cast<rule>(cv.visitClause(parse_clause(stream, tokens, lexer, parser)));
-    // Extract X from head: cons(p, cons(X, nil))
-    const expr* x = std::get<expr::cons>(
-                    std::get<expr::cons>(r.head->content).rhs->content).lhs;
+    // Right-fold of (p X) visits X first → index 0.
+    const expr* x = pool.var(0);
     assert(r.head == pool.cons(pool.atom("p"), pool.cons(x, pool.atom("nil"))));
     assert(r.body.size() == 2);
     assert(r.body[0] == pool.cons(pool.atom("q"), pool.cons(x, pool.atom("nil"))));
@@ -330,9 +326,8 @@ void test_clause_visitor_visitClause_varScope() {
     sequencer seq(t);
     clause_visitor cv(pool, seq);
 
-    // X in the first clause and X in the second must be distinct interned expr*.
-    const expr* x1;
-    const expr* x2;
+    // seq is shared across clauses; var_map is reset each time.
+    // Clause 1's X gets index 0, clause 2's X gets index 1.
     {
         std::string input = "(p X).";
         antlr4::ANTLRInputStream stream(input);
@@ -340,8 +335,7 @@ void test_clause_visitor_visitClause_varScope() {
         antlr4::CommonTokenStream tokens(&lexer);
         CHCParser parser(&tokens);
         rule r = std::any_cast<rule>(cv.visitClause(parse_clause(stream, tokens, lexer, parser)));
-        x1 = std::get<expr::cons>(
-             std::get<expr::cons>(r.head->content).rhs->content).lhs;
+        assert(r.head == pool.cons(pool.atom("p"), pool.cons(pool.var(0), pool.atom("nil"))));
     }
     {
         std::string input = "(p X).";
@@ -350,10 +344,9 @@ void test_clause_visitor_visitClause_varScope() {
         antlr4::CommonTokenStream tokens(&lexer);
         CHCParser parser(&tokens);
         rule r = std::any_cast<rule>(cv.visitClause(parse_clause(stream, tokens, lexer, parser)));
-        x2 = std::get<expr::cons>(
-             std::get<expr::cons>(r.head->content).rhs->content).lhs;
+        assert(r.head == pool.cons(pool.atom("p"), pool.cons(pool.var(1), pool.atom("nil"))));
     }
-    assert(x1 != x2);
+    assert(pool.var(0) != pool.var(1));
 }
 
 void unit_test_main() {
