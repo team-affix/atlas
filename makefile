@@ -119,7 +119,7 @@ cli: $(CORE_LIB)
 	$(MAKE) $(PARSER_LIB)
 	$(CXX) $(CXXFLAGS) -O3 \
 	    -I$(ANTLR4_INC) -I$(CLI11_INC) \
-	    cli/main.cpp \
+	    cli/entry/main.cpp \
 	    -Lbuild -lchc_parser -lchc_core \
 	    -L$(ANTLR4_LIB) -lantlr4-runtime \
 	    -o $(CLI_BIN)
@@ -129,7 +129,7 @@ cli_debug: $(CORE_DEBUG_LIB)
 	$(MAKE) $(PARSER_DEBUG_LIB)
 	$(CXX) $(CXXFLAGS) -DDEBUG -g \
 	    -I$(ANTLR4_INC) -I$(CLI11_INC) \
-	    cli/main.cpp \
+	    cli/entry/main.cpp \
 	    -Lbuild -lchc_parser_debug -lchc_core_debug \
 	    -L$(ANTLR4_LIB) -lantlr4-runtime \
 	    -o $(CLI_DEBUG_BIN)
@@ -139,7 +139,7 @@ cli_debug_fast: $(CORE_DEBUG_FAST_LIB)
 	$(MAKE) $(PARSER_DEBUG_FAST_LIB)
 	$(CXX) $(CXXFLAGS) -DDEBUG -O3 \
 	    -I$(ANTLR4_INC) -I$(CLI11_INC) \
-	    cli/main.cpp \
+	    cli/entry/main.cpp \
 	    -Lbuild -lchc_parser_debug_fast -lchc_core_debug_fast \
 	    -L$(ANTLR4_LIB) -lantlr4-runtime \
 	    -o $(CLI_DEBUG_FAST_BIN)

@@ -1,8 +1,8 @@
 #include <CLI/CLI.hpp>
-#include "../core/hpp/trail.hpp"
-#include "../core/hpp/expr.hpp"
-#include "../core/hpp/sequencer.hpp"
-#include "../parser/hpp/import_database_from_file.hpp"
+#include "../../core/hpp/trail.hpp"
+#include "../../core/hpp/expr.hpp"
+#include "../../core/hpp/sequencer.hpp"
+#include "../../parser/hpp/import_database_from_file.hpp"
 
 int main(int argc, char** argv) {
     CLI::App app{"CHC Solver"};
