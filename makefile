@@ -30,6 +30,12 @@ PARSER_LIB            = build/libchc_parser.a
 PARSER_DEBUG_LIB      = build/libchc_parser_debug.a
 PARSER_DEBUG_FAST_LIB = build/libchc_parser_debug_fast.a
 
+CORE_DEBUG_BIN      = build/core_debug
+CORE_DEBUG_FAST_BIN = build/core_debug_fast
+
+PARSER_DEBUG_BIN      = build/parser_debug
+PARSER_DEBUG_FAST_BIN = build/parser_debug_fast
+
 CLI_BIN            = build/cli
 CLI_DEBUG_BIN      = build/cli_debug
 CLI_DEBUG_FAST_BIN = build/cli_debug_fast
@@ -76,10 +82,10 @@ all: core core_debug core_debug_fast parser parser_debug parser_debug_fast \
 core: $(CORE_LIB)
 
 core_debug: $(CORE_DEBUG_LIB)
-	$(CXX) $(CXXFLAGS) -DDEBUG -g core/test/main.cpp -Lbuild -lchc_core_debug -o build/core_debug
+	$(CXX) $(CXXFLAGS) -DDEBUG -g core/test/main.cpp -Lbuild -lchc_core_debug -o $(CORE_DEBUG_BIN)
 
 core_debug_fast: $(CORE_DEBUG_FAST_LIB)
-	$(CXX) $(CXXFLAGS) -DDEBUG -O3 core/test/main.cpp -Lbuild -lchc_core_debug_fast -o build/core_debug_fast
+	$(CXX) $(CXXFLAGS) -DDEBUG -O3 core/test/main.cpp -Lbuild -lchc_core_debug_fast -o $(CORE_DEBUG_FAST_BIN)
 
 # Parser targets use recursive make: the dependency graph is resolved statically
 # at startup, before codegen has produced the .cpp files.  Phase 1 runs ANTLR4;
@@ -96,7 +102,7 @@ parser_debug: $(CORE_DEBUG_LIB)
 	    parser/test/main.cpp \
 	    -Lbuild -lchc_parser_debug -lchc_core_debug \
 	    -L$(ANTLR4_LIB) -lantlr4-runtime \
-	    -o build/parser_debug
+	    -o $(PARSER_DEBUG_BIN)
 
 parser_debug_fast: $(CORE_DEBUG_FAST_LIB)
 	$(MAKE) parser/generated
@@ -106,7 +112,7 @@ parser_debug_fast: $(CORE_DEBUG_FAST_LIB)
 	    parser/test/main.cpp \
 	    -Lbuild -lchc_parser_debug_fast -lchc_core_debug_fast \
 	    -L$(ANTLR4_LIB) -lantlr4-runtime \
-	    -o build/parser_debug_fast
+	    -o $(PARSER_DEBUG_FAST_BIN)
 
 cli: $(CORE_LIB)
 	$(MAKE) parser/generated
