@@ -5,6 +5,7 @@
 #include <string>
 #include "../generated/CHCBaseVisitor.h"
 #include "../hpp/expr_visitor.hpp"
+#include "../hpp/body_visitor.hpp"
 #include "../../core/hpp/rule.hpp"
 #include "../../core/hpp/sequencer.hpp"
 

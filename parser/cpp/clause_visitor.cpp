@@ -9,14 +9,10 @@ antlrcpp::Any clause_visitor::visitClause(CHCParser::ClauseContext* ctx) {
 
     const expr* head = std::any_cast<const expr*>(ev.visitExpr(ctx->expr()));
 
-    // In case of facts
     auto* b = ctx->body();
     if (!b) return rule{head, {}};
 
-    // In case of non-fact rules
-    std::vector<const expr*> body;
-    for (auto* e : b->expr())
-        body.push_back(std::any_cast<const expr*>(ev.visitExpr(e)));
-
+    body_visitor bv(pool, seq, var_map);
+    auto body = std::any_cast<std::vector<const expr*>>(bv.visitBody(b));
     return rule{head, body};
 }

@@ -2,14 +2,13 @@
 #define RIDGE_COMMAND_HANDLER_HPP
 
 #include <string>
-#include <vector>
 #include <cstdint>
 #include <cstddef>
 
 struct ridge_command_handler {
     ridge_command_handler(
         const std::string& file,
-        const std::vector<std::string>& goals,
+        const std::string& goals_str,
         size_t max_resolutions,
         size_t iterations_per_avoidance,
         double exploration_constant,
@@ -19,7 +18,7 @@ struct ridge_command_handler {
     void operator()();
 private:
     std::string file;
-    std::vector<std::string> goals;
+    std::string goals_str;
     size_t max_resolutions;
     size_t iterations_per_avoidance;
     double exploration_constant;

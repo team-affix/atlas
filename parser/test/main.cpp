@@ -3,9 +3,11 @@
 #include "../generated/CHCParser.h"
 #include "../generated/CHCBaseVisitor.h"
 #include "../hpp/expr_visitor.hpp"
+#include "../hpp/body_visitor.hpp"
 #include "../hpp/clause_visitor.hpp"
 #include "../hpp/database_visitor.hpp"
 #include "../hpp/import_database_from_file.hpp"
+#include "../hpp/import_goals_from_string.hpp"
 
 // Lightweight parse/lex helpers — return true iff the input matches.
 static bool lexes_atom(const std::string& s) {
@@ -436,6 +438,119 @@ void test_expr_visitor_visitVar_discard_inList() {
     assert(var_map.find("_") == var_map.end());
 }
 
+// Helper: parse a body context from a string.
+static CHCParser::BodyContext* parse_body(antlr4::ANTLRInputStream& stream,
+                                          antlr4::CommonTokenStream& tokens,
+                                          CHCLexer& lexer,
+                                          CHCParser& parser) {
+    (void)stream; (void)tokens; (void)lexer;
+    auto* ctx = parser.body();
+    assert(parser.getNumberOfSyntaxErrors() == 0);
+    return ctx;
+}
+
+void test_body_visitor_single_atom() {
+    trail t;
+    expr_pool pool(t);
+    sequencer seq(t);
+    std::map<std::string, uint32_t> var_map;
+    body_visitor bv(pool, seq, var_map);
+
+    std::string input = "foo";
+    antlr4::ANTLRInputStream stream(input);
+    CHCLexer lexer(&stream);
+    antlr4::CommonTokenStream tokens(&lexer);
+    CHCParser parser(&tokens);
+
+    auto body = std::any_cast<std::vector<const expr*>>(bv.visitBody(parse_body(stream, tokens, lexer, parser)));
+    assert(body.size() == 1);
+    assert(body[0] == pool.atom("foo"));
+}
+
+void test_body_visitor_multiple() {
+    trail t;
+    expr_pool pool(t);
+    sequencer seq(t);
+    std::map<std::string, uint32_t> var_map;
+    body_visitor bv(pool, seq, var_map);
+
+    // (p X), (q X) — X gets index 0, shared across both atoms.
+    std::string input = "(p X), (q X)";
+    antlr4::ANTLRInputStream stream(input);
+    CHCLexer lexer(&stream);
+    antlr4::CommonTokenStream tokens(&lexer);
+    CHCParser parser(&tokens);
+
+    auto body = std::any_cast<std::vector<const expr*>>(bv.visitBody(parse_body(stream, tokens, lexer, parser)));
+    assert(body.size() == 2);
+
+    // Right-fold of (p X): visit X first → idx 0.
+    const expr* x = pool.var(0);
+    assert(body[0] == pool.cons(pool.atom("p"), pool.cons(x, pool.atom("nil"))));
+    assert(body[1] == pool.cons(pool.atom("q"), pool.cons(x, pool.atom("nil"))));
+}
+
+void test_body_visitor_varSharing() {
+    trail t;
+    expr_pool pool(t);
+    sequencer seq(t);
+    std::map<std::string, uint32_t> var_map;
+    body_visitor bv(pool, seq, var_map);
+
+    // (f X Y), (g Y Z) — X=0, Y=1, Z=2 (right-fold order within each list).
+    std::string input = "(f X Y), (g Y Z)";
+    antlr4::ANTLRInputStream stream(input);
+    CHCLexer lexer(&stream);
+    antlr4::CommonTokenStream tokens(&lexer);
+    CHCParser parser(&tokens);
+
+    auto body = std::any_cast<std::vector<const expr*>>(bv.visitBody(parse_body(stream, tokens, lexer, parser)));
+    assert(body.size() == 2);
+
+    // (f X Y): right-fold visits Y first → 0, X next → 1.
+    const expr* y = pool.var(0);
+    const expr* x = pool.var(1);
+    assert(body[0] == pool.cons(pool.atom("f"), pool.cons(x, pool.cons(y, pool.atom("nil")))));
+
+    // (g Y Z): Y already 0, Z → 2.
+    const expr* z = pool.var(2);
+    assert(body[1] == pool.cons(pool.atom("g"), pool.cons(y, pool.cons(z, pool.atom("nil")))));
+}
+
+void test_import_goals_from_string_single() {
+    trail t;
+    expr_pool pool(t);
+    sequencer seq(t);
+
+    goals gl = import_goals_from_string("(reach 0 2)", pool, seq);
+    assert(gl.size() == 1);
+    assert(gl[0] == pool.cons(pool.atom("reach"),
+                   pool.cons(pool.atom("0"),
+                   pool.cons(pool.atom("2"), pool.atom("nil")))));
+}
+
+void test_import_goals_from_string_multiple() {
+    trail t;
+    expr_pool pool(t);
+    sequencer seq(t);
+
+    goals gl = import_goals_from_string("(p X), (q X)", pool, seq);
+    assert(gl.size() == 2);
+
+    // Right-fold of (p X): X → idx 0.
+    const expr* x = pool.var(0);
+    assert(gl[0] == pool.cons(pool.atom("p"), pool.cons(x, pool.atom("nil"))));
+    assert(gl[1] == pool.cons(pool.atom("q"), pool.cons(x, pool.atom("nil"))));
+}
+
+void test_import_goals_from_string_bad() {
+    trail t;
+    expr_pool pool(t);
+    sequencer seq(t);
+
+    assert_throws(import_goals_from_string(":-", pool, seq), const std::runtime_error&);
+}
+
 // Helper: parse a string as a clause (trailing period required by grammar).
 static CHCParser::ClauseContext* parse_clause(antlr4::ANTLRInputStream& stream,
                                               antlr4::CommonTokenStream& tokens,
@@ -640,6 +755,12 @@ void unit_test_main() {
     TEST(test_expr_visitor_visitVar_sharing);
     TEST(test_expr_visitor_visitVar_discard);
     TEST(test_expr_visitor_visitVar_discard_inList);
+    TEST(test_body_visitor_single_atom);
+    TEST(test_body_visitor_multiple);
+    TEST(test_body_visitor_varSharing);
+    TEST(test_import_goals_from_string_single);
+    TEST(test_import_goals_from_string_multiple);
+    TEST(test_import_goals_from_string_bad);
     TEST(test_clause_visitor_visitClause_fact);
     TEST(test_clause_visitor_visitClause_rule);
     TEST(test_clause_visitor_visitClause_varScope);

@@ -1,0 +1,21 @@
+#include "../hpp/import_goals_from_string.hpp"
+#include "../hpp/body_visitor.hpp"
+#include "../generated/CHCLexer.h"
+#include "../generated/CHCParser.h"
+#include <stdexcept>
+
+goals import_goals_from_string(const std::string& body, expr_pool& pool, sequencer& seq) {
+    antlr4::ANTLRInputStream stream(body);
+    CHCLexer lexer(&stream);
+    antlr4::CommonTokenStream tokens(&lexer);
+    CHCParser parser(&tokens);
+    parser.removeErrorListeners();
+
+    auto* ctx = parser.body();
+    if (parser.getNumberOfSyntaxErrors() > 0)
+        throw std::runtime_error("parse error in goal string: " + body);
+
+    std::map<std::string, uint32_t> var_map;
+    body_visitor bv(pool, seq, var_map);
+    return std::any_cast<goals>(bv.visitBody(ctx));
+}
