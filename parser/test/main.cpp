@@ -37,21 +37,26 @@ static bool parses_expr(const std::string& s) {
     parser.expr();
     return parser.getNumberOfSyntaxErrors() == 0;
 }
-static bool parses_clause(const std::string& s) {
+// expected_body: 0 = fact (no body), n>0 = rule with n body atoms.
+static bool parses_clause(const std::string& s, size_t expected_body = 0) {
     antlr4::ANTLRInputStream stream(s);
     CHCLexer lexer(&stream);
     antlr4::CommonTokenStream tokens(&lexer);
     CHCParser parser(&tokens);
-    parser.clause();
-    return parser.getNumberOfSyntaxErrors() == 0;
+    auto* ctx = parser.clause();
+    if (parser.getNumberOfSyntaxErrors() != 0) return false;
+    auto* b = ctx->body();
+    size_t actual = b ? b->expr().size() : 0;
+    return actual == expected_body;
 }
-static bool parses_database(const std::string& s) {
+static bool parses_database(const std::string& s, size_t expected_clauses) {
     antlr4::ANTLRInputStream stream(s);
     CHCLexer lexer(&stream);
     antlr4::CommonTokenStream tokens(&lexer);
     CHCParser parser(&tokens);
-    parser.database();
-    return parser.getNumberOfSyntaxErrors() == 0;
+    auto* ctx = parser.database();
+    return parser.getNumberOfSyntaxErrors() == 0
+        && ctx->clause().size() == expected_clauses;
 }
 void test_lex_atom() {
     // Lowercase identifiers
@@ -129,39 +134,25 @@ void test_parse_list() {
 }
 
 void test_parse_clause() {
-    // Facts
-    assert(parses_clause("foo."));
-    assert(parses_clause("(p X)."));
-    assert(parses_clause("42."));
+    // Facts (0 body atoms)
+    assert(parses_clause("foo.",    0));
+    assert(parses_clause("(p X).", 0));
+    assert(parses_clause("42.",     0));
     // Rules with one body atom
-    assert(parses_clause("(p X) :- (q X)."));
+    assert(parses_clause("(p X) :- (q X).",           1));
     // Rules with multiple body atoms
-    assert(parses_clause("(p X) :- (q X), (r X)."));
-    assert(parses_clause("(p X Y) :- (q X), (r Y), (s X Y)."));
+    assert(parses_clause("(p X) :- (q X), (r X).",    2));
+    assert(parses_clause("(p X Y) :- (q X), (r Y), (s X Y).", 3));
     // Whitespace variations
-    assert(parses_clause("(p X)\n:-\n(q X)."));
+    assert(parses_clause("(p X)\n:-\n(q X).", 1));
 }
 
 void test_parse_database() {
-    // Empty database
-    assert(parses_database(""));
-    // Single fact
-    assert(parses_database("foo."));
-    // Multiple clauses
-    assert(parses_database("(base X). (step X) :- (base X)."));
-    // Newlines between clauses
-    assert(parses_database("(base X).\n(step X) :- (base X)."));
-    // Verify clause count
-    {
-        std::string input = "(a). (b). (c X) :- (a), (b).";
-        antlr4::ANTLRInputStream stream(input);
-        CHCLexer lexer(&stream);
-        antlr4::CommonTokenStream tokens(&lexer);
-        CHCParser parser(&tokens);
-        auto* ctx = parser.database();
-        assert(parser.getNumberOfSyntaxErrors() == 0);
-        assert(ctx->clause().size() == 3);
-    }
+    assert(parses_database("",                                           0));
+    assert(parses_database("foo.",                                       1));
+    assert(parses_database("(base X). (step X) :- (base X).",           2));
+    assert(parses_database("(base X).\n(step X) :- (base X).",          2));
+    assert(parses_database("(a). (b). (c X) :- (a), (b).",              3));
 }
 
 struct TestVisitor : public CHCBaseVisitor {
