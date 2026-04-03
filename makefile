@@ -85,7 +85,7 @@ core_debug: $(CORE_DEBUG_LIB)
 	$(CXX) $(CXXFLAGS) -DDEBUG -g core/test/main.cpp -Lbuild -lchc_core_debug -o $(CORE_DEBUG_BIN)
 
 core_debug_fast: $(CORE_DEBUG_FAST_LIB)
-	$(CXX) $(CXXFLAGS) -DDEBUG -O3 core/test/main.cpp -Lbuild -lchc_core_debug_fast -o $(CORE_DEBUG_FAST_BIN)
+	$(CXX) $(CXXFLAGS) -DDEBUG -g -O3 core/test/main.cpp -Lbuild -lchc_core_debug_fast -o $(CORE_DEBUG_FAST_BIN)
 
 # Parser targets use recursive make: the dependency graph is resolved statically
 # at startup, before codegen has produced the .cpp files.  Phase 1 runs ANTLR4;
@@ -107,7 +107,7 @@ parser_debug: $(CORE_DEBUG_LIB)
 parser_debug_fast: $(CORE_DEBUG_FAST_LIB)
 	$(MAKE) parser/generated
 	$(MAKE) $(PARSER_DEBUG_FAST_LIB)
-	$(CXX) $(CXXFLAGS) -DDEBUG -O3 \
+	$(CXX) $(CXXFLAGS) -DDEBUG -g -O3 \
 	    -I$(ANTLR4_INC) \
 	    parser/test/main.cpp \
 	    -Lbuild -lchc_parser_debug_fast -lchc_core_debug_fast \
@@ -137,7 +137,7 @@ cli_debug: $(CORE_DEBUG_LIB)
 cli_debug_fast: $(CORE_DEBUG_FAST_LIB)
 	$(MAKE) parser/generated
 	$(MAKE) $(PARSER_DEBUG_FAST_LIB)
-	$(CXX) $(CXXFLAGS) -DDEBUG -O3 \
+	$(CXX) $(CXXFLAGS) -DDEBUG -g -O3 \
 	    -I$(ANTLR4_INC) -I$(CLI11_INC) \
 	    cli/entry/main.cpp \
 	    -Lbuild -lchc_parser_debug_fast -lchc_core_debug_fast \
@@ -181,7 +181,7 @@ build/obj/core_debug/%.o: core/cpp/%.cpp | build/obj/core_debug
 	$(CXX) $(CXXFLAGS) -DDEBUG -g -c $< -o $@
 
 build/obj/core_debug_fast/%.o: core/cpp/%.cpp | build/obj/core_debug_fast
-	$(CXX) $(CXXFLAGS) -DDEBUG -O3 -c $< -o $@
+	$(CXX) $(CXXFLAGS) -DDEBUG -g -O3 -c $< -o $@
 
 build/obj/parser/%.o: parser/generated/%.cpp | parser/generated build/obj/parser
 	$(CXX) $(CXXFLAGS) -I$(ANTLR4_INC) -O3 -c $< -o $@
@@ -190,7 +190,7 @@ build/obj/parser_debug/%.o: parser/generated/%.cpp | parser/generated build/obj/
 	$(CXX) $(CXXFLAGS) -I$(ANTLR4_INC) -DDEBUG -g -c $< -o $@
 
 build/obj/parser_debug_fast/%.o: parser/generated/%.cpp | parser/generated build/obj/parser_debug_fast
-	$(CXX) $(CXXFLAGS) -I$(ANTLR4_INC) -DDEBUG -O3 -c $< -o $@
+	$(CXX) $(CXXFLAGS) -I$(ANTLR4_INC) -DDEBUG -g -O3 -c $< -o $@
 
 build/obj/parser/%.o: parser/cpp/%.cpp | build/obj/parser
 	$(CXX) $(CXXFLAGS) -I$(ANTLR4_INC) -O3 -c $< -o $@
@@ -199,7 +199,7 @@ build/obj/parser_debug/%.o: parser/cpp/%.cpp | build/obj/parser_debug
 	$(CXX) $(CXXFLAGS) -I$(ANTLR4_INC) -DDEBUG -g -c $< -o $@
 
 build/obj/parser_debug_fast/%.o: parser/cpp/%.cpp | build/obj/parser_debug_fast
-	$(CXX) $(CXXFLAGS) -I$(ANTLR4_INC) -DDEBUG -O3 -c $< -o $@
+	$(CXX) $(CXXFLAGS) -I$(ANTLR4_INC) -DDEBUG -g -O3 -c $< -o $@
 
 # ==============================================================================
 # Build directory creation
