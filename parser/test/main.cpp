@@ -6,6 +6,164 @@
 #include "../hpp/clause_visitor.hpp"
 #include "../hpp/database_visitor.hpp"
 
+// Lightweight parse/lex helpers — return true iff the input matches.
+static bool lexes_atom(const std::string& s) {
+    antlr4::ANTLRInputStream stream(s);
+    CHCLexer lexer(&stream);
+    antlr4::CommonTokenStream tokens(&lexer);
+    CHCParser parser(&tokens);
+    auto* ctx = parser.expr();
+    return parser.getNumberOfSyntaxErrors() == 0
+        && ctx->ATOM() != nullptr
+        && ctx->VARIABLE() == nullptr
+        && ctx->expr().empty();
+}
+static bool lexes_var(const std::string& s) {
+    antlr4::ANTLRInputStream stream(s);
+    CHCLexer lexer(&stream);
+    antlr4::CommonTokenStream tokens(&lexer);
+    CHCParser parser(&tokens);
+    auto* ctx = parser.expr();
+    return parser.getNumberOfSyntaxErrors() == 0
+        && ctx->VARIABLE() != nullptr
+        && ctx->ATOM() == nullptr
+        && ctx->expr().empty();
+}
+static bool parses_expr(const std::string& s) {
+    antlr4::ANTLRInputStream stream(s);
+    CHCLexer lexer(&stream);
+    antlr4::CommonTokenStream tokens(&lexer);
+    CHCParser parser(&tokens);
+    parser.expr();
+    return parser.getNumberOfSyntaxErrors() == 0;
+}
+static bool parses_clause(const std::string& s) {
+    antlr4::ANTLRInputStream stream(s);
+    CHCLexer lexer(&stream);
+    antlr4::CommonTokenStream tokens(&lexer);
+    CHCParser parser(&tokens);
+    parser.clause();
+    return parser.getNumberOfSyntaxErrors() == 0;
+}
+static bool parses_database(const std::string& s) {
+    antlr4::ANTLRInputStream stream(s);
+    CHCLexer lexer(&stream);
+    antlr4::CommonTokenStream tokens(&lexer);
+    CHCParser parser(&tokens);
+    parser.database();
+    return parser.getNumberOfSyntaxErrors() == 0;
+}
+void test_lex_atom() {
+    // Lowercase identifiers
+    assert(lexes_atom("foo"));
+    assert(lexes_atom("bar_baz"));
+    assert(lexes_atom("hello123"));
+    assert(lexes_atom("a"));
+    // Numeric literals
+    assert(lexes_atom("0"));
+    assert(lexes_atom("42"));
+    assert(lexes_atom("100"));
+    // Quoted strings
+    assert(lexes_atom("'hello'"));
+    assert(lexes_atom("'hello world'"));
+    assert(lexes_atom("'it\\'s fine'"));
+}
+
+void test_lex_var() {
+    // Uppercase-initial identifiers
+    assert(lexes_var("X"));
+    assert(lexes_var("Y"));
+    assert(lexes_var("Foo"));
+    assert(lexes_var("MyVar"));
+    assert(lexes_var("ABC123"));
+    // Underscore-initial (discard and named)
+    assert(lexes_var("_"));
+    assert(lexes_var("_X"));
+    assert(lexes_var("_foo"));
+}
+
+void test_parse_cons() {
+    // Normal spacing
+    assert(parses_expr("(a . b)"));
+    // No spaces around dot
+    assert(parses_expr("(a.b)"));
+    // Extra spaces
+    assert(parses_expr("( a . b )"));
+    // Newlines as whitespace
+    assert(parses_expr("(a\n.\nb)"));
+    // Nested cons
+    assert(parses_expr("(a . (b . c))"));
+    assert(parses_expr("((a . b) . c)"));
+    // Cons of variables
+    assert(parses_expr("(X . Y)"));
+    // Mixed
+    assert(parses_expr("(foo . X)"));
+
+    // Confirm it really is a cons: exactly 2 sub-exprs with a dot between.
+    {
+        std::string input = "(a.b)";
+        antlr4::ANTLRInputStream stream(input);
+        CHCLexer lexer(&stream);
+        antlr4::CommonTokenStream tokens(&lexer);
+        CHCParser parser(&tokens);
+        auto* ctx = parser.expr();
+        assert(parser.getNumberOfSyntaxErrors() == 0);
+        assert(ctx->expr().size() == 2);
+        assert(ctx->children[2]->getText() == ".");
+    }
+}
+
+void test_parse_list() {
+    // Single-element list
+    assert(parses_expr("(f x)"));
+    // Multi-element list
+    assert(parses_expr("(f x y)"));
+    assert(parses_expr("(f x y z)"));
+    // Newlines as whitespace
+    assert(parses_expr("(f\nx\ny)"));
+    // Nested lists
+    assert(parses_expr("(f (g x) y)"));
+    assert(parses_expr("(f (g (h x)))"));
+    // Variables in list
+    assert(parses_expr("(p X Y)"));
+}
+
+void test_parse_clause() {
+    // Facts
+    assert(parses_clause("foo."));
+    assert(parses_clause("(p X)."));
+    assert(parses_clause("42."));
+    // Rules with one body atom
+    assert(parses_clause("(p X) :- (q X)."));
+    // Rules with multiple body atoms
+    assert(parses_clause("(p X) :- (q X), (r X)."));
+    assert(parses_clause("(p X Y) :- (q X), (r Y), (s X Y)."));
+    // Whitespace variations
+    assert(parses_clause("(p X)\n:-\n(q X)."));
+}
+
+void test_parse_database() {
+    // Empty database
+    assert(parses_database(""));
+    // Single fact
+    assert(parses_database("foo."));
+    // Multiple clauses
+    assert(parses_database("(base X). (step X) :- (base X)."));
+    // Newlines between clauses
+    assert(parses_database("(base X).\n(step X) :- (base X)."));
+    // Verify clause count
+    {
+        std::string input = "(a). (b). (c X) :- (a), (b).";
+        antlr4::ANTLRInputStream stream(input);
+        CHCLexer lexer(&stream);
+        antlr4::CommonTokenStream tokens(&lexer);
+        CHCParser parser(&tokens);
+        auto* ctx = parser.database();
+        assert(parser.getNumberOfSyntaxErrors() == 0);
+        assert(ctx->clause().size() == 3);
+    }
+}
+
 struct TestVisitor : public CHCBaseVisitor {
     int clause_count = 0;
     int expr_count   = 0;
@@ -382,6 +540,12 @@ void test_database_visitor_visitDatabase() {
 void unit_test_main() {
     constexpr bool ENABLE_DEBUG_LOGS = true;
 
+    TEST(test_lex_atom);
+    TEST(test_lex_var);
+    TEST(test_parse_cons);
+    TEST(test_parse_list);
+    TEST(test_parse_clause);
+    TEST(test_parse_database);
     TEST(test_visitor_traversal);
     TEST(test_expr_visitor_visitAtom);
     TEST(test_expr_visitor_visitVar);
