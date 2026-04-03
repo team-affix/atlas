@@ -4,6 +4,8 @@
 #include "../../core/hpp/sequencer.hpp"
 #include "../../core/hpp/bind_map.hpp"
 #include "../../core/hpp/defs.hpp"
+#include "../../core/hpp/normalizer.hpp"
+#include "../../core/hpp/expr_printer.hpp"
 #include "../../core/hpp/horizon.hpp"
 #include "../../parser/hpp/import_database_from_file.hpp"
 #include "../../parser/hpp/import_goals_from_string.hpp"
@@ -34,11 +36,22 @@ void horizon_command_handler::operator()() {
     std::mt19937 rng(seed);
 
     database db = import_database_from_file(file, pool, seq);
-    goals gl = import_goals_from_string(goals_str, pool, seq);
+    auto [gl, var_map] = import_goals_from_string(goals_str, pool, seq);
 
     horizon solver(db, gl, t, seq, bm,
                    max_resolutions, exploration_constant, rng);
     std::optional<resolutions> res;
     bool sat = solver(steps, res);
-    std::cout << (sat ? "SAT" : "UNSAT") << "\n";
+
+    if (sat) {
+        normalizer norm(pool, bm);
+        expr_printer print(std::cout);
+        for (const auto& [name, idx] : var_map) {
+            std::cout << name << " = ";
+            print(norm(pool.var(idx)));
+            std::cout << "\n";
+        }
+    } else {
+        std::cout << "UNSAT\n";
+    }
 }
