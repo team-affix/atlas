@@ -4,6 +4,13 @@
 #include <string>
 #include <cstdint>
 #include <cstddef>
+#include <map>
+#include "../../core/hpp/trail.hpp"
+#include "../../core/hpp/expr.hpp"
+#include "../../core/hpp/sequencer.hpp"
+#include "../../core/hpp/bind_map.hpp"
+#include "../../core/hpp/defs.hpp"
+#include "../../core/hpp/normalizer.hpp"
 
 struct ridge_command_handler {
     ridge_command_handler(
@@ -16,8 +23,20 @@ struct ridge_command_handler {
     );
     void operator()();
 private:
-    std::string file;
-    std::string goals_str;
+    void on_solved();
+    void on_refuted();
+
+    // trail must be declared first — pool, seq, bm are initialised from it
+    trail t;
+    expr_pool pool;
+    sequencer seq;
+    bind_map bm;
+    normalizer norm;
+
+    database db;
+    goals gl;
+    std::map<std::string, uint32_t> var_map;
+
     size_t max_resolutions;
     size_t iterations_per_avoidance;
     double exploration_constant;
