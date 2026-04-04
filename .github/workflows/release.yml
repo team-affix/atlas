@@ -1,0 +1,76 @@
+name: CI/CD
+
+on:
+  push:
+    branches: [master]
+    tags: ['v*']
+  pull_request:
+
+jobs:
+  build-and-test:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Checkout submodules
+        run: git submodule update --init --recursive
+
+      - name: Install dependencies
+        run: sudo apt-get update && sudo apt-get install -y build-essential default-jre libantlr4-runtime-dev
+
+      - name: Build core tests
+        run: make core_debug_fast
+
+      - name: Build parser tests
+        run: make parser_debug_fast
+
+      - name: Run core tests
+        run: ./build/core_debug_fast
+
+      - name: Run parser tests
+        run: ./build/parser_debug_fast
+
+  release:
+    needs: build-and-test
+    runs-on: ubuntu-latest
+    if: startsWith(github.ref, 'refs/tags/v')
+    permissions:
+      contents: write
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Checkout submodules
+        run: git submodule update --init --recursive
+
+      - name: Install dependencies
+        run: sudo apt-get update && sudo apt-get install -y build-essential default-jre libantlr4-runtime-dev
+
+      - name: Build release core library
+        run: make core
+
+      - name: Build release parser library
+        run: make parser
+
+      - name: Build release CLI binary
+        run: make cli
+
+      - name: Rename release binary
+        run: mv build/cli build/atlas
+
+      - name: Create release lib folder
+        run: |
+          mkdir -p release/lib release/include
+          cp build/libatlas_core.a release/lib/
+          cp build/libatlas_parser.a release/lib/
+          cp -r core/hpp release/include/core
+          cp -r parser/hpp release/include/parser
+
+      - name: Tar release lib folder
+        run: tar -czf release-lib.tar.gz release/
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v1
+        with:
+          files: ./build/atlas ./release-lib.tar.gz
