@@ -11975,12 +11975,12 @@ void test_expr_printer_constructor() {
         assert(&ep1.os == &ep2.os);
     }
 
-    // Test 5: var_names map is copy-constructed into the member
+    // Test 5: var_names map is stored by reference in the member
     {
         std::ostringstream oss;
         std::map<uint32_t, std::string> var_names = {{0, "X"}, {1, "Y"}};
         expr_printer ep(oss, var_names);
-        assert(ep.var_names == var_names);
+        assert(&ep.var_names == &var_names);
     }
 
     // Test 6: default argument gives an empty var_names map

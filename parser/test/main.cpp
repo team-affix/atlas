@@ -634,12 +634,12 @@ void test_import_goals_from_string_single() {
     expr_pool pool(t);
     sequencer seq(t);
 
-    auto [gl, var_names] = import_goals_from_string("(reach 0 2)", pool, seq);
+    auto [gl, var_name_to_idx] = import_goals_from_string("(reach 0 2)", pool, seq);
     assert(gl.size() == 1);
     assert(gl[0] == pool.cons(pool.atom("reach"),
                    pool.cons(pool.atom("0"),
                    pool.cons(pool.atom("2"), pool.atom("nil")))));
-    assert(var_names.empty());
+    assert(var_name_to_idx.empty());
 }
 
 void test_import_goals_from_string_multiple() {
@@ -647,14 +647,14 @@ void test_import_goals_from_string_multiple() {
     expr_pool pool(t);
     sequencer seq(t);
 
-    auto [gl, var_names] = import_goals_from_string("(p X), (q X)", pool, seq);
+    auto [gl, var_name_to_idx] = import_goals_from_string("(p X), (q X)", pool, seq);
     assert(gl.size() == 2);
 
     // Right-fold of (p X): X → idx 0.
     const expr* x = pool.var(0);
     assert(gl[0] == pool.cons(pool.atom("p"), pool.cons(x, pool.atom("nil"))));
     assert(gl[1] == pool.cons(pool.atom("q"), pool.cons(x, pool.atom("nil"))));
-    assert(var_names.at(0) == "X");
+    assert(var_name_to_idx.at("X") == 0);
 }
 
 void test_import_goals_from_string_complex() {
@@ -667,13 +667,13 @@ void test_import_goals_from_string_complex() {
     //   (reach X Y) : Y visited first → 0, X next → 1
     //   (next Y Z)  : Y already 0, Z → 2
     //   (base Z)    : Z already 2
-    auto [gl, var_names] = import_goals_from_string("(reach X Y), (next Y Z), (base Z)", pool, seq);
+    auto [gl, var_name_to_idx] = import_goals_from_string("(reach X Y), (next Y Z), (base Z)", pool, seq);
 
     assert(gl.size() == 3);
-    assert(var_names.size() == 3);
-    assert(var_names.at(1) == "X");
-    assert(var_names.at(0) == "Y");
-    assert(var_names.at(2) == "Z");
+    assert(var_name_to_idx.size() == 3);
+    assert(var_name_to_idx.at("X") == 1);
+    assert(var_name_to_idx.at("Y") == 0);
+    assert(var_name_to_idx.at("Z") == 2);
 
     const expr* x = pool.var(1);
     const expr* y = pool.var(0);

@@ -1,5 +1,7 @@
 #include "../hpp/expr_printer.hpp"
 
+const std::map<uint32_t, std::string> expr_printer::empty_var_names;
+
 expr_printer::expr_printer(std::ostream& os, const std::map<uint32_t, std::string>& var_names)
     : os(os), var_names(var_names)
 {}

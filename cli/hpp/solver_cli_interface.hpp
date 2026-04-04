@@ -8,6 +8,7 @@
 #include "../../core/hpp/sequencer.hpp"
 #include "../../core/hpp/bind_map.hpp"
 #include "../../core/hpp/normalizer.hpp"
+#include "../../core/hpp/expr_printer.hpp"
 #include "../../core/hpp/defs.hpp"
 
 struct solver_cli_interface {
@@ -27,7 +28,13 @@ protected:
 
     database db;
     goals gl;
-    std::map<uint32_t, std::string> var_names;
+private:
+    static std::map<uint32_t, std::string> invert(const std::map<std::string, uint32_t>&);
+
+    std::map<std::string, uint32_t> var_name_to_idx;
+    std::map<uint32_t, std::string> var_idx_to_name;
+    // printer holds a const& to var_idx_to_name — must be declared after it
+    expr_printer printer;
 };
 
 #endif
