@@ -1,0 +1,6 @@
+(tree nil).
+(tree (X.Y)) :- (tree X),(tree Y).
+
+(in X X).
+(in X (Y._)) :- (in X Y).
+(in X (_.Y)) :- (in X Y).
