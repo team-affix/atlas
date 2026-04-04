@@ -1,0 +1,11 @@
+% List membership using cons-cell notation.
+% A list [a, b, c] is written as (a . (b . (c . ()))).
+
+% member(X, [X|_]): X is the head of the list
+(member X (X . _)).
+
+% member(X, [_|T]): X is in the tail T
+(member X (_ . T)) :- (member X T).
+
+% Example goal: atlas horizon member/db.chc --goal "(member X (a . (b . (c . ()))))"
+% Expected solutions: X = a, X = b, X = c

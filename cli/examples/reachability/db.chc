@@ -1,0 +1,12 @@
+% Directed graph edges: 0 -> 1 -> 2 -> 3, with a shortcut 0 -> 2
+(edge 0 1).
+(edge 1 2).
+(edge 2 3).
+(edge 0 2).
+
+% reach(X, Y): Y is reachable from X in one or more steps
+(reach X Y) :- (edge X Y).
+(reach X Z) :- (reach X Y), (edge Y Z).
+
+% Example goal: atlas horizon reachability/db.chc --goal "(reach 0 X)"
+% Expected solutions: X = 1, X = 2, X = 3
