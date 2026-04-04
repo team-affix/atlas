@@ -657,6 +657,33 @@ void test_import_goals_from_string_multiple() {
     assert(var_map.at("X") == 0);
 }
 
+void test_import_goals_from_string_complex() {
+    trail t;
+    expr_pool pool(t);
+    sequencer seq(t);
+
+    // Three goals, three distinct variables X, Y, Z.
+    // Right-fold order within each list determines index assignment:
+    //   (reach X Y) : Y visited first → 0, X next → 1
+    //   (next Y Z)  : Y already 0, Z → 2
+    //   (base Z)    : Z already 2
+    auto [gl, var_map] = import_goals_from_string("(reach X Y), (next Y Z), (base Z)", pool, seq);
+
+    assert(gl.size() == 3);
+    assert(var_map.size() == 3);
+    assert(var_map.at("X") == 1);
+    assert(var_map.at("Y") == 0);
+    assert(var_map.at("Z") == 2);
+
+    const expr* x = pool.var(1);
+    const expr* y = pool.var(0);
+    const expr* z = pool.var(2);
+
+    assert(gl[0] == pool.cons(pool.atom("reach"), pool.cons(x, pool.cons(y, pool.atom("nil")))));
+    assert(gl[1] == pool.cons(pool.atom("next"),  pool.cons(y, pool.cons(z, pool.atom("nil")))));
+    assert(gl[2] == pool.cons(pool.atom("base"),  pool.cons(z, pool.atom("nil"))));
+}
+
 void test_import_goals_from_string_bad() {
     trail t;
     expr_pool pool(t);
@@ -766,6 +793,7 @@ void unit_test_main() {
     TEST(test_database_visitor_visitDatabase);
     TEST(test_import_goals_from_string_single);
     TEST(test_import_goals_from_string_multiple);
+    TEST(test_import_goals_from_string_complex);
     TEST(test_import_goals_from_string_bad);
     TEST(test_import_database_from_file_facts);
     TEST(test_import_database_from_file_rules);
