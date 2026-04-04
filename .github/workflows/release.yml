@@ -12,9 +12,8 @@ jobs:
 
     steps:
       - uses: actions/checkout@v4
-
-      - name: Checkout submodules
-        run: git submodule update --init --recursive
+        with:
+          submodules: recursive
 
       - name: Install dependencies
         run: sudo apt-get update && sudo apt-get install -y build-essential default-jre libantlr4-runtime-dev
@@ -40,9 +39,8 @@ jobs:
 
     steps:
       - uses: actions/checkout@v4
-
-      - name: Checkout submodules
-        run: git submodule update --init --recursive
+        with:
+          submodules: recursive
 
       - name: Install dependencies
         run: sudo apt-get update && sudo apt-get install -y build-essential default-jre libantlr4-runtime-dev
