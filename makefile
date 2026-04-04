@@ -22,13 +22,13 @@ CLI11_INC = CLI11/include
 # Output names  (all under build/)
 # ==============================================================================
 
-CORE_LIB            = build/libchc_core.a
-CORE_DEBUG_LIB      = build/libchc_core_debug.a
-CORE_DEBUG_FAST_LIB = build/libchc_core_debug_fast.a
+CORE_LIB            = build/libatlas_core.a
+CORE_DEBUG_LIB      = build/libatlas_core_debug.a
+CORE_DEBUG_FAST_LIB = build/libatlas_core_debug_fast.a
 
-PARSER_LIB            = build/libchc_parser.a
-PARSER_DEBUG_LIB      = build/libchc_parser_debug.a
-PARSER_DEBUG_FAST_LIB = build/libchc_parser_debug_fast.a
+PARSER_LIB            = build/libatlas_parser.a
+PARSER_DEBUG_LIB      = build/libatlas_parser_debug.a
+PARSER_DEBUG_FAST_LIB = build/libatlas_parser_debug_fast.a
 
 CORE_DEBUG_BIN      = build/core_debug
 CORE_DEBUG_FAST_BIN = build/core_debug_fast
@@ -84,10 +84,10 @@ all: core core_debug core_debug_fast parser parser_debug parser_debug_fast \
 core: $(CORE_LIB)
 
 core_debug: $(CORE_DEBUG_LIB)
-	$(CXX) $(CXXFLAGS) -DDEBUG -g core/test/main.cpp -Lbuild -lchc_core_debug -o $(CORE_DEBUG_BIN)
+	$(CXX) $(CXXFLAGS) -DDEBUG -g core/test/main.cpp -Lbuild -latlas_core_debug -o $(CORE_DEBUG_BIN)
 
 core_debug_fast: $(CORE_DEBUG_FAST_LIB)
-	$(CXX) $(CXXFLAGS) -DDEBUG -g -O3 core/test/main.cpp -Lbuild -lchc_core_debug_fast -o $(CORE_DEBUG_FAST_BIN)
+	$(CXX) $(CXXFLAGS) -DDEBUG -g -O3 core/test/main.cpp -Lbuild -latlas_core_debug_fast -o $(CORE_DEBUG_FAST_BIN)
 
 # Parser targets use recursive make: the dependency graph is resolved statically
 # at startup, before codegen has produced the .cpp files.  Phase 1 runs ANTLR4;
@@ -102,7 +102,7 @@ parser_debug: $(CORE_DEBUG_LIB)
 	$(CXX) $(CXXFLAGS) -DDEBUG -g \
 	    -I$(ANTLR4_INC) \
 	    parser/test/main.cpp \
-	    -Lbuild -lchc_parser_debug -lchc_core_debug \
+	    -Lbuild -latlas_parser_debug -latlas_core_debug \
 	    -L$(ANTLR4_LIB) -lantlr4-runtime \
 	    -o $(PARSER_DEBUG_BIN)
 
@@ -112,7 +112,7 @@ parser_debug_fast: $(CORE_DEBUG_FAST_LIB)
 	$(CXX) $(CXXFLAGS) -DDEBUG -g -O3 \
 	    -I$(ANTLR4_INC) \
 	    parser/test/main.cpp \
-	    -Lbuild -lchc_parser_debug_fast -lchc_core_debug_fast \
+	    -Lbuild -latlas_parser_debug_fast -latlas_core_debug_fast \
 	    -L$(ANTLR4_LIB) -lantlr4-runtime \
 	    -o $(PARSER_DEBUG_FAST_BIN)
 
@@ -122,7 +122,7 @@ cli: $(CORE_LIB)
 	$(CXX) $(CXXFLAGS) -O3 \
 	    -I$(ANTLR4_INC) -I$(CLI11_INC) \
 	    cli/entry/main.cpp $(CLI_SRC) \
-	    -Lbuild -lchc_parser -lchc_core \
+	    -Lbuild -latlas_parser -latlas_core \
 	    -L$(ANTLR4_LIB) -lantlr4-runtime \
 	    -o $(CLI_BIN)
 
@@ -132,7 +132,7 @@ cli_debug: $(CORE_DEBUG_LIB)
 	$(CXX) $(CXXFLAGS) -DDEBUG -g \
 	    -I$(ANTLR4_INC) -I$(CLI11_INC) \
 	    cli/entry/main.cpp $(CLI_SRC) \
-	    -Lbuild -lchc_parser_debug -lchc_core_debug \
+	    -Lbuild -latlas_parser_debug -latlas_core_debug \
 	    -L$(ANTLR4_LIB) -lantlr4-runtime \
 	    -o $(CLI_DEBUG_BIN)
 
@@ -142,7 +142,7 @@ cli_debug_fast: $(CORE_DEBUG_FAST_LIB)
 	$(CXX) $(CXXFLAGS) -DDEBUG -g -O3 \
 	    -I$(ANTLR4_INC) -I$(CLI11_INC) \
 	    cli/entry/main.cpp $(CLI_SRC) \
-	    -Lbuild -lchc_parser_debug_fast -lchc_core_debug_fast \
+	    -Lbuild -latlas_parser_debug_fast -latlas_core_debug_fast \
 	    -L$(ANTLR4_LIB) -lantlr4-runtime \
 	    -o $(CLI_DEBUG_FAST_BIN)
 
