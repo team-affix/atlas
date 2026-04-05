@@ -8,7 +8,7 @@
 #include "expr.hpp"
 #include "rule.hpp"
 
-using goals = std::vector<const expr*>;
+using goals = std::vector<expr_id>;
 using resolutions = std::unordered_set<const resolution_lineage*>;
 using decisions = std::unordered_set<const resolution_lineage*>;
 using database = std::vector<rule>;
