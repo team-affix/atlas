@@ -43,6 +43,9 @@ expr_id expr_pool::intern(expr&& e) {
 
     // Generate a new id for the expression
     expr_id id = seq();
+
+    // Insert the expression into the registry
+    er.insert(id, &*it);
     
     trail_ref.log(
         [this, val = *it, id]() { exprs.erase(val); er.erase(id); },

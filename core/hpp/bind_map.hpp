@@ -5,16 +5,17 @@
 #include "expr.hpp"
 
 struct bind_map {
-    bind_map(trail&);
-    const expr* whnf(const expr*);
-    bool unify(const expr*, const expr*);
+    bind_map(trail&, registry<expr>&);
+    expr_id whnf(expr_id);
+    bool unify(expr_id, expr_id);
 #ifndef DEBUG
 private:
 #endif
-    bool occurs_check(uint32_t, const expr*);
-    void bind(uint32_t, const expr*);
-    std::map<uint32_t, const expr*> bindings;
+    bool occurs_check(uint32_t, expr_id);
+    void bind(uint32_t, expr_id);
+    std::map<uint32_t, expr_id> bindings;
     trail& trail_ref;
+    registry<expr>& er;
 };
 
 #endif

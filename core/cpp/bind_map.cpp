@@ -1,16 +1,20 @@
 #include "../hpp/bind_map.hpp"
 
-bind_map::bind_map(trail& trail_ref) : trail_ref(trail_ref) {
+bind_map::bind_map(trail& trail_ref, registry<expr>& er) :
+    trail_ref(trail_ref), er(er) {
 
 }
 
-const expr* bind_map::whnf(const expr* key) {
+expr_id bind_map::whnf(expr_id key) {
+    // Get the expression from the registry
+    const expr* e = er.deref(key);
+    
     // If the key is not a variable, it is already in WHNF
-    if (!std::holds_alternative<expr::var>(key->content))
+    if (!std::holds_alternative<expr::var>(e->content))
         return key;
 
     // Get the variable out of the key
-    const expr::var& var = std::get<expr::var>(key->content);
+    const expr::var& var = std::get<expr::var>(e->content);
 
     // Check if the variable is bound
     auto it = bindings.find(var.index);
@@ -20,10 +24,10 @@ const expr* bind_map::whnf(const expr* key) {
         return key;
 
     // Get the bound value
-    const expr* bound_value = it->second;
+    expr_id bound_value = it->second;
         
     // WHNF the bound value
-    const expr* whnf_bound_value = whnf(bound_value);
+    expr_id whnf_bound_value = whnf(bound_value);
 
     // Collapse the binding
     bind(var.index, whnf_bound_value);
@@ -31,14 +35,18 @@ const expr* bind_map::whnf(const expr* key) {
     return whnf_bound_value;
 }
 
-bool bind_map::unify(const expr* lhs, const expr* rhs) {
+bool bind_map::unify(expr_id lhs, expr_id rhs) {
     // WHNF the lhs and rhs
     lhs = whnf(lhs);
     rhs = whnf(rhs);
 
+    // Get the lhs and rhs expressions from the registry
+    const expr* lhs_e = er.deref(lhs);
+    const expr* rhs_e = er.deref(rhs);
+
     // get the lhs and rhs var handles if they are variables
-    const expr::var* lv = std::get_if<expr::var>(&lhs->content);
-    const expr::var* rv = std::get_if<expr::var>(&rhs->content);
+    const expr::var* lv = std::get_if<expr::var>(&lhs_e->content);
+    const expr::var* rv = std::get_if<expr::var>(&rhs_e->content);
 
     // if they are the same variable, unification succeeds trivially
     if (lv && rv && lv->index == rv->index)
@@ -61,20 +69,20 @@ bool bind_map::unify(const expr* lhs, const expr* rhs) {
     }
 
     // If they are not the same type, unification fails
-    if (lhs->content.index() != rhs->content.index())
+    if (lhs_e->content.index() != rhs_e->content.index())
         return false;
 
     // If they are both atoms, unify the values
-    if (std::holds_alternative<expr::atom>(lhs->content)) {
-        const expr::atom& lAtom = std::get<expr::atom>(lhs->content);
-        const expr::atom& rAtom = std::get<expr::atom>(rhs->content);
+    if (std::holds_alternative<expr::atom>(lhs_e->content)) {
+        const expr::atom& lAtom = std::get<expr::atom>(lhs_e->content);
+        const expr::atom& rAtom = std::get<expr::atom>(rhs_e->content);
         return lAtom.value == rAtom.value;
     }
 
     // If they are both cons cells, unify the children
-    if (std::holds_alternative<expr::cons>(lhs->content)) {
-        const expr::cons& lCons = std::get<expr::cons>(lhs->content);
-        const expr::cons& rCons = std::get<expr::cons>(rhs->content);
+    if (std::holds_alternative<expr::cons>(lhs_e->content)) {
+        const expr::cons& lCons = std::get<expr::cons>(lhs_e->content);
+        const expr::cons& rCons = std::get<expr::cons>(rhs_e->content);
         return unify(lCons.lhs, rCons.lhs) && unify(lCons.rhs, rCons.rhs);
     }
 
@@ -82,38 +90,46 @@ bool bind_map::unify(const expr* lhs, const expr* rhs) {
 
 }
 
-bool bind_map::occurs_check(uint32_t index, const expr* key) {
+bool bind_map::occurs_check(uint32_t index, expr_id key) {
     key = whnf(key);
 
-    if (const expr::var* var = std::get_if<expr::var>(&key->content))
+    const expr* key_e = er.deref(key);
+
+    if (const expr::var* var = std::get_if<expr::var>(&key_e->content))
         return var->index == index;
 
-    if (const expr::cons* cons = std::get_if<expr::cons>(&key->content)) {
+    if (const expr::cons* cons = std::get_if<expr::cons>(&key_e->content)) {
         return occurs_check(index, cons->lhs) || occurs_check(index, cons->rhs);
     }
 
     return false;
 }
 
-void bind_map::bind(uint32_t index, const expr* value) {
+void bind_map::bind(uint32_t index, expr_id value) {
     // look up the entry for the index
     auto it = bindings.find(index);
 
     if (it == bindings.end()) {
         // if the value is not found, insert it
-        trail_ref.log([this, index]{bindings.erase(index);});
+        trail_ref.log(
+            [this, index]{bindings.erase(index);},
+            [this, index, value]{bindings.insert({index, value});}
+        );
         it = bindings.insert({index, value}).first;
     }
     else {
         // Get the old value
-        const expr* old_value = it->second;
+        expr_id old_value = it->second;
         
         // If the new value is the same as the old value, do nothing
         if (old_value == value)
             return;
 
         // If the new value is different from the old value, insert it
-        trail_ref.log([it, old_value]{it->second = old_value;});
+        trail_ref.log(
+            [this, index, old_value]{bindings[index] = old_value;},
+            [this, index, value]{bindings[index] = value;}
+        );
 
         // Update the value
         it->second = value;
