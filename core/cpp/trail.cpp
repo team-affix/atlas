@@ -1,27 +1,46 @@
 #include "../hpp/trail.hpp"
 
 void trail::push() {
-    frame_boundary_stack.push(undo_stack.size());
+    frame& c = current();
+    c.children.emplace_front();
+    path.push(c.children.begin());
 }
 
 void trail::pop() {
-    // get the last frame boundary
-    auto checkpoint = frame_boundary_stack.top();
-    // pop the frame boundary
-    frame_boundary_stack.pop();
-    // pop the undo stack up to the last frame boundary
-    while (undo_stack.size() > checkpoint) {
-        // execute the undo function
-        undo_stack.top()();
-        // pop the undo function
-        undo_stack.pop();
-    }
+    auto it = undo();
+    current().children.erase(it);
 }
 
-void trail::log(const std::function<void()>& a_function) {
-    undo_stack.push(a_function);
+std::list<frame>::iterator trail::undo() {
+    auto result = path.top();
+    for (
+        auto it = result->actions.rbegin();
+        it != result->actions.rend();
+        ++it)
+        it->undo();
+    path.pop();
+    return result;
+}
+
+void trail::redo(std::list<frame>::iterator frame) {
+    for (
+        auto it = frame->actions.begin();
+        it != frame->actions.end();
+        ++it)
+        it->redo();
+    path.push(frame);
+}
+
+void trail::log(const std::function<void()>& undo, const std::function<void()>& redo) {
+    current().actions.emplace_back(action{undo, redo});
 }
 
 size_t trail::depth() const {
-    return frame_boundary_stack.size();
+    return path.size();
+}
+
+frame& trail::current() {
+    if (path.empty())
+        return root;
+    return *path.top();
 }
