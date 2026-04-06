@@ -1562,21 +1562,39 @@ void test_expr_pool_atom() {
         auto iterB = t.undo();
         assert(pool.size() == 0);
 
-        // Redo A: only "parallel_a" present; pointer pa is the same address
+        // Cycle 1
         t.redo(iterA);
         assert(pool.size() == 1);
         assert(pool.exprs.count(*pa) == 1);
-        assert(pool.exprs.count(*pb) == 0);  // "parallel_b" not in this branch
-        assert(pool.atom("parallel_a") == pa);  // same address as before undo
+        assert(pool.exprs.count(*pb) == 0);
+        assert(pool.atom("parallel_a") == pa);
         t.undo();
+        assert(pool.size() == 0);
 
-        // Redo B: only "parallel_b" present; pointer pb is the same address
         t.redo(iterB);
         assert(pool.size() == 1);
         assert(pool.exprs.count(*pb) == 1);
-        assert(pool.exprs.count(*pa) == 0);  // "parallel_a" not in this branch
-        assert(pool.atom("parallel_b") == pb);  // same address as before undo
+        assert(pool.exprs.count(*pa) == 0);
+        assert(pool.atom("parallel_b") == pb);
         t.undo();
+        assert(pool.size() == 0);
+
+        // Cycle 2 — prove fixpoint: same pointer identities on repeated switching
+        t.redo(iterA);
+        assert(pool.size() == 1);
+        assert(pool.exprs.count(*pa) == 1);
+        assert(pool.exprs.count(*pb) == 0);
+        assert(pool.atom("parallel_a") == pa);
+        t.undo();
+        assert(pool.size() == 0);
+
+        t.redo(iterB);
+        assert(pool.size() == 1);
+        assert(pool.exprs.count(*pb) == 1);
+        assert(pool.exprs.count(*pa) == 0);
+        assert(pool.atom("parallel_b") == pb);
+        t.undo();
+        assert(pool.size() == 0);
     }
 
     // Test B2: Pointer stability — const expr* address is invariant across many undo/redo cycles
@@ -1621,19 +1639,35 @@ void test_expr_pool_atom() {
         auto iterB = t.undo();
         assert(pool.size() == 0);
 
-        // Redo A: all three atoms restored; B's atoms absent
+        // Cycle 1
         t.redo(iterA);
         assert(pool.size() == 3);
         assert(pool.atom("bA_0") == a0 && pool.atom("bA_1") == a1 && pool.atom("bA_2") == a2);
         assert(pool.exprs.count(*b0) == 0 && pool.exprs.count(*b1) == 0);
         t.undo();
+        assert(pool.size() == 0);
 
-        // Redo B: B's atoms restored; A's atoms absent
         t.redo(iterB);
         assert(pool.size() == 2);
         assert(pool.atom("bB_0") == b0 && pool.atom("bB_1") == b1);
         assert(pool.exprs.count(*a0) == 0);
         t.undo();
+        assert(pool.size() == 0);
+
+        // Cycle 2 — prove fixpoint: same pointer identities on repeated switching
+        t.redo(iterA);
+        assert(pool.size() == 3);
+        assert(pool.atom("bA_0") == a0 && pool.atom("bA_1") == a1 && pool.atom("bA_2") == a2);
+        assert(pool.exprs.count(*b0) == 0 && pool.exprs.count(*b1) == 0);
+        t.undo();
+        assert(pool.size() == 0);
+
+        t.redo(iterB);
+        assert(pool.size() == 2);
+        assert(pool.atom("bB_0") == b0 && pool.atom("bB_1") == b1);
+        assert(pool.exprs.count(*a0) == 0);
+        t.undo();
+        assert(pool.size() == 0);
     }
 }
 
@@ -3448,15 +3482,27 @@ void test_bind_map_bind() {
         auto iterB = t.undo();
         assert(bm.bindings.size() == 0);
 
-        // Redo A: key 1000 → a1
+        // Cycle 1
         t.redo(iterA);
         assert(bm.bindings.size() == 1 && bm.bindings.at(1000) == &a1);
         t.undo();
+        assert(bm.bindings.size() == 0);
 
-        // Redo B: key 1000 → a2
         t.redo(iterB);
         assert(bm.bindings.size() == 1 && bm.bindings.at(1000) == &a2);
         t.undo();
+        assert(bm.bindings.size() == 0);
+
+        // Cycle 2 — prove fixpoint: same results on repeated switching
+        t.redo(iterA);
+        assert(bm.bindings.size() == 1 && bm.bindings.at(1000) == &a1);
+        t.undo();
+        assert(bm.bindings.size() == 0);
+
+        t.redo(iterB);
+        assert(bm.bindings.size() == 1 && bm.bindings.at(1000) == &a2);
+        t.undo();
+        assert(bm.bindings.size() == 0);
     }
 
     // Test B2: Both branches exercise the UPDATE path of bind() (existing key).
@@ -3489,15 +3535,27 @@ void test_bind_map_bind() {
         auto iterB = t.undo();
         assert(bm.bindings.at(1001) == &initial);
 
-        // Redo A: key 1001 → val_a
+        // Cycle 1
         t.redo(iterA);
-        assert(bm.bindings.at(1001) == &val_a);
+        assert(bm.bindings.size() == 1 && bm.bindings.at(1001) == &val_a);
         t.undo();
+        assert(bm.bindings.at(1001) == &initial);
 
-        // Redo B: key 1001 → val_b
         t.redo(iterB);
-        assert(bm.bindings.at(1001) == &val_b);
+        assert(bm.bindings.size() == 1 && bm.bindings.at(1001) == &val_b);
         t.undo();
+        assert(bm.bindings.at(1001) == &initial);
+
+        // Cycle 2 — prove fixpoint: same results on repeated switching
+        t.redo(iterA);
+        assert(bm.bindings.size() == 1 && bm.bindings.at(1001) == &val_a);
+        t.undo();
+        assert(bm.bindings.at(1001) == &initial);
+
+        t.redo(iterB);
+        assert(bm.bindings.size() == 1 && bm.bindings.at(1001) == &val_b);
+        t.undo();
+        assert(bm.bindings.at(1001) == &initial);
 
         t.pop();  // parent frame removed
         assert(bm.bindings.size() == 0);
@@ -3545,14 +3603,26 @@ void test_bind_map_bind() {
         assert(bm.bindings.at(1002) == &v2);
         assert(bm.bindings.count(1003) == 0);
 
-        // Redo A: compression to atom_a restored; whnf is a no-op (already compressed)
+        // Cycle 1
         t.redo(iterA);
         assert(bm.bindings.at(1002) == &atom_a && bm.bindings.at(1003) == &atom_a);
         assert(bm.whnf(&v1) == &atom_a);
         t.undo();
         assert(bm.bindings.at(1002) == &v2 && bm.bindings.count(1003) == 0);
 
-        // Redo B: compression to atom_b restored
+        t.redo(iterB);
+        assert(bm.bindings.at(1002) == &atom_b && bm.bindings.at(1003) == &atom_b);
+        assert(bm.whnf(&v1) == &atom_b);
+        t.undo();
+        assert(bm.bindings.at(1002) == &v2 && bm.bindings.count(1003) == 0);
+
+        // Cycle 2 — prove fixpoint: repeated switching yields identical state each time
+        t.redo(iterA);
+        assert(bm.bindings.at(1002) == &atom_a && bm.bindings.at(1003) == &atom_a);
+        assert(bm.whnf(&v1) == &atom_a);
+        t.undo();
+        assert(bm.bindings.at(1002) == &v2 && bm.bindings.count(1003) == 0);
+
         t.redo(iterB);
         assert(bm.bindings.at(1002) == &atom_b && bm.bindings.at(1003) == &atom_b);
         assert(bm.whnf(&v1) == &atom_b);
@@ -4966,7 +5036,7 @@ void test_bind_map_whnf() {
         assert(bm.bindings.at(6000) == &v3);
         assert(bm.bindings.count(6002) == 0);
 
-        // Redo A: v1 compressed to end_a; whnf is an immediate lookup (no chain walk)
+        // Cycle 1
         t.redo(iterA);
         assert(bm.bindings.at(6000) == &end_a);
         assert(bm.bindings.at(6001) == &v3);
@@ -4975,7 +5045,23 @@ void test_bind_map_whnf() {
         t.undo();
         assert(bm.bindings.at(6000) == &v3 && bm.bindings.count(6002) == 0);
 
-        // Redo B: v1 compressed to end_b
+        t.redo(iterB);
+        assert(bm.bindings.at(6000) == &end_b);
+        assert(bm.bindings.at(6001) == &v3);
+        assert(bm.bindings.at(6002) == &end_b);
+        assert(bm.whnf(&v1) == &end_b);
+        t.undo();
+        assert(bm.bindings.at(6000) == &v3 && bm.bindings.count(6002) == 0);
+
+        // Cycle 2 — prove fixpoint: same compression state on repeated switching
+        t.redo(iterA);
+        assert(bm.bindings.at(6000) == &end_a);
+        assert(bm.bindings.at(6001) == &v3);
+        assert(bm.bindings.at(6002) == &end_a);
+        assert(bm.whnf(&v1) == &end_a);
+        t.undo();
+        assert(bm.bindings.at(6000) == &v3 && bm.bindings.count(6002) == 0);
+
         t.redo(iterB);
         assert(bm.bindings.at(6000) == &end_b);
         assert(bm.bindings.at(6001) == &v3);
@@ -5020,12 +5106,23 @@ void test_bind_map_whnf() {
         // In the restored state whnf must traverse the full v1→v2 chain (v2 is unbound)
         assert(bm.whnf(&v1) == &v2);  // chain ends at unbound v2
 
-        // Redo A: compression restored; whnf is a direct lookup again
+        // Cycle 1: redo restores compression; undo removes it again
         t.redo(iterA);
         assert(bm.bindings.at(6100) == &atom1);
         assert(bm.bindings.at(6101) == &atom1);
         assert(bm.whnf(&v1) == &atom1);
         t.undo();
+        assert(bm.bindings.at(6100) == &v2 && bm.bindings.count(6101) == 0);
+        assert(bm.whnf(&v1) == &v2);  // full chain traversal again
+
+        // Cycle 2 — prove fixpoint
+        t.redo(iterA);
+        assert(bm.bindings.at(6100) == &atom1);
+        assert(bm.bindings.at(6101) == &atom1);
+        assert(bm.whnf(&v1) == &atom1);
+        t.undo();
+        assert(bm.bindings.at(6100) == &v2 && bm.bindings.count(6101) == 0);
+        assert(bm.whnf(&v1) == &v2);  // full chain traversal again
 
         // Clean up
         t.pop();
