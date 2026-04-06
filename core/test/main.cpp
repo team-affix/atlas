@@ -1541,6 +1541,100 @@ void test_expr_pool_atom() {
     assert(pool.size() == 0);
     assert(pool.exprs.size() == 0);
     assert(pool.exprs.empty());
+
+    // ========== PARALLEL BRANCH TESTS ==========
+
+    // Test B1: Two parallel branches — each contains a different atom; only the active
+    //          branch's atom is present in the pool; const expr* is stable across undo+redo
+    {
+        trail t;
+        expr_pool pool(t);
+
+        t.push();
+        const expr* pa = pool.atom("parallel_a");
+        assert(pool.size() == 1);
+        auto iterA = t.undo();
+        assert(pool.size() == 0);
+
+        t.push();
+        const expr* pb = pool.atom("parallel_b");
+        assert(pool.size() == 1);
+        auto iterB = t.undo();
+        assert(pool.size() == 0);
+
+        // Redo A: only "parallel_a" present; pointer pa is the same address
+        t.redo(iterA);
+        assert(pool.size() == 1);
+        assert(pool.exprs.count(*pa) == 1);
+        assert(pool.exprs.count(*pb) == 0);  // "parallel_b" not in this branch
+        assert(pool.atom("parallel_a") == pa);  // same address as before undo
+        t.undo();
+
+        // Redo B: only "parallel_b" present; pointer pb is the same address
+        t.redo(iterB);
+        assert(pool.size() == 1);
+        assert(pool.exprs.count(*pb) == 1);
+        assert(pool.exprs.count(*pa) == 0);  // "parallel_a" not in this branch
+        assert(pool.atom("parallel_b") == pb);  // same address as before undo
+        t.undo();
+    }
+
+    // Test B2: Pointer stability — const expr* address is invariant across many undo/redo cycles
+    {
+        trail t;
+        expr_pool pool(t);
+
+        t.push();
+        const expr* p = pool.atom("stable_ptr");
+        assert(pool.size() == 1);
+        auto it = t.undo();
+        assert(pool.size() == 0);
+
+        for (int i = 0; i < 5; i++) {
+            t.redo(it);
+            assert(pool.size() == 1);
+            assert(pool.atom("stable_ptr") == p);  // same address every cycle
+            t.undo();
+            assert(pool.size() == 0);
+        }
+    }
+
+    // Test B3: Multi-expr branches — each branch's full set of atoms is isolated
+    {
+        trail t;
+        expr_pool pool(t);
+
+        // Branch A: three atoms
+        t.push();
+        const expr* a0 = pool.atom("bA_0");
+        const expr* a1 = pool.atom("bA_1");
+        const expr* a2 = pool.atom("bA_2");
+        assert(pool.size() == 3);
+        auto iterA = t.undo();
+        assert(pool.size() == 0);
+
+        // Branch B: two different atoms
+        t.push();
+        const expr* b0 = pool.atom("bB_0");
+        const expr* b1 = pool.atom("bB_1");
+        assert(pool.size() == 2);
+        auto iterB = t.undo();
+        assert(pool.size() == 0);
+
+        // Redo A: all three atoms restored; B's atoms absent
+        t.redo(iterA);
+        assert(pool.size() == 3);
+        assert(pool.atom("bA_0") == a0 && pool.atom("bA_1") == a1 && pool.atom("bA_2") == a2);
+        assert(pool.exprs.count(*b0) == 0 && pool.exprs.count(*b1) == 0);
+        t.undo();
+
+        // Redo B: B's atoms restored; A's atoms absent
+        t.redo(iterB);
+        assert(pool.size() == 2);
+        assert(pool.atom("bB_0") == b0 && pool.atom("bB_1") == b1);
+        assert(pool.exprs.count(*a0) == 0);
+        t.undo();
+    }
 }
 
 void test_expr_pool_var() {
@@ -3327,6 +3421,147 @@ void test_bind_map_bind() {
         t.pop();
         assert(bm.bindings.size() == 0);
     }
+
+    // ========== PARALLEL BRANCH TESTS (undo/redo branching) ==========
+
+    // Test B1: Both branches exercise the INSERT path of bind() (new key).
+    //          Each branch independently sets a new binding; undo removes it completely;
+    //          redo restores exactly the value that branch set.
+    {
+        trail t;
+        bind_map bm(t);
+
+        expr a1{expr::atom{"branch_val_a"}};
+        expr a2{expr::atom{"branch_val_b"}};
+
+        // Branch A: INSERT key 1000 → a1
+        t.push();
+        bm.bind(1000, &a1);
+        assert(bm.bindings.size() == 1 && bm.bindings.at(1000) == &a1);
+        auto iterA = t.undo();
+        assert(bm.bindings.size() == 0);  // INSERT undone: key erased
+
+        // Branch B: INSERT same key 1000 → a2 (also INSERT, map is empty again)
+        t.push();
+        bm.bind(1000, &a2);
+        assert(bm.bindings.size() == 1 && bm.bindings.at(1000) == &a2);
+        auto iterB = t.undo();
+        assert(bm.bindings.size() == 0);
+
+        // Redo A: key 1000 → a1
+        t.redo(iterA);
+        assert(bm.bindings.size() == 1 && bm.bindings.at(1000) == &a1);
+        t.undo();
+
+        // Redo B: key 1000 → a2
+        t.redo(iterB);
+        assert(bm.bindings.size() == 1 && bm.bindings.at(1000) == &a2);
+        t.undo();
+    }
+
+    // Test B2: Both branches exercise the UPDATE path of bind() (existing key).
+    //          A parent frame establishes the key; each branch updates it to a different
+    //          value; undo restores the parent-frame value; redo restores the branch value.
+    {
+        trail t;
+        bind_map bm(t);
+
+        expr initial{expr::atom{"initial"}};
+        expr val_a{expr::atom{"val_a"}};
+        expr val_b{expr::atom{"val_b"}};
+
+        // Parent frame: establish key 1001 → initial (INSERT path)
+        t.push();
+        bm.bind(1001, &initial);
+        assert(bm.bindings.at(1001) == &initial);
+
+        // Branch A: UPDATE key 1001 to val_a
+        t.push();
+        bm.bind(1001, &val_a);  // UPDATE branch of bind()
+        assert(bm.bindings.size() == 1 && bm.bindings.at(1001) == &val_a);
+        auto iterA = t.undo();
+        assert(bm.bindings.at(1001) == &initial);  // UPDATE undone: old value restored
+
+        // Branch B: UPDATE key 1001 to val_b
+        t.push();
+        bm.bind(1001, &val_b);  // UPDATE branch of bind()
+        assert(bm.bindings.size() == 1 && bm.bindings.at(1001) == &val_b);
+        auto iterB = t.undo();
+        assert(bm.bindings.at(1001) == &initial);
+
+        // Redo A: key 1001 → val_a
+        t.redo(iterA);
+        assert(bm.bindings.at(1001) == &val_a);
+        t.undo();
+
+        // Redo B: key 1001 → val_b
+        t.redo(iterB);
+        assert(bm.bindings.at(1001) == &val_b);
+        t.undo();
+
+        t.pop();  // parent frame removed
+        assert(bm.bindings.size() == 0);
+    }
+
+    // Test B3: Chained bindings (v1→v2→atom) in parallel branches with whnf coalescing.
+    //   Parent:   v1 → v2 (key 1002 → var(1003))
+    //   Branch A: v2 → atom_a, then whnf(v1) collapses v1→atom_a via UPDATE branch of bind().
+    //   Branch B: v2 → atom_b, then whnf(v1) collapses v1→atom_b via UPDATE branch of bind().
+    //   Switching between A and B via undo/redo correctly restores both the chain and compression.
+    {
+        trail t;
+        bind_map bm(t);
+
+        expr v1{expr::var{1002}};
+        expr v2{expr::var{1003}};
+        expr atom_a{expr::atom{"chain_end_a"}};
+        expr atom_b{expr::atom{"chain_end_b"}};
+
+        // Parent: v1 → v2 (INSERT branch)
+        t.push();
+        bm.bind(1002, &v2);
+        assert(bm.bindings.at(1002) == &v2 && bm.bindings.size() == 1);
+
+        // Branch A: INSERT v2 → atom_a, then whnf collapses v1 → atom_a (UPDATE branch)
+        // whnf's call to bind(1003, &atom_a) is a no-op (already &atom_a)
+        t.push();
+        bm.bind(1003, &atom_a);                    // INSERT: v2 → atom_a
+        assert(bm.whnf(&v1) == &atom_a);           // traverse v1→v2→atom_a, compress v1→atom_a
+        assert(bm.bindings.at(1002) == &atom_a);   // v1 compressed (UPDATE branch)
+        assert(bm.bindings.at(1003) == &atom_a);   // v2→atom_a, no-op during whnf
+        assert(t.path.top()->actions.size() == 2); // INSERT(1003) + UPDATE(1002)
+        auto iterA = t.undo();
+        // Both actions reversed: v2 binding erased, v1 decompressed to &v2
+        assert(bm.bindings.at(1002) == &v2);
+        assert(bm.bindings.count(1003) == 0);
+
+        // Branch B: INSERT v2 → atom_b, then whnf collapses v1 → atom_b (UPDATE branch)
+        t.push();
+        bm.bind(1003, &atom_b);
+        assert(bm.whnf(&v1) == &atom_b);
+        assert(bm.bindings.at(1002) == &atom_b);
+        assert(bm.bindings.at(1003) == &atom_b);
+        auto iterB = t.undo();
+        assert(bm.bindings.at(1002) == &v2);
+        assert(bm.bindings.count(1003) == 0);
+
+        // Redo A: compression to atom_a restored; whnf is a no-op (already compressed)
+        t.redo(iterA);
+        assert(bm.bindings.at(1002) == &atom_a && bm.bindings.at(1003) == &atom_a);
+        assert(bm.whnf(&v1) == &atom_a);
+        t.undo();
+        assert(bm.bindings.at(1002) == &v2 && bm.bindings.count(1003) == 0);
+
+        // Redo B: compression to atom_b restored
+        t.redo(iterB);
+        assert(bm.bindings.at(1002) == &atom_b && bm.bindings.at(1003) == &atom_b);
+        assert(bm.whnf(&v1) == &atom_b);
+        t.undo();
+        assert(bm.bindings.at(1002) == &v2 && bm.bindings.count(1003) == 0);
+
+        t.pop();
+        assert(bm.bindings.size() == 0);
+    }
 }
 
 void test_bind_map_whnf() {
@@ -4681,6 +4916,120 @@ void test_bind_map_whnf() {
         assert(bm.whnf(&v1) == &v1);
         assert(bm.whnf(&v2) == &v2);
         assert(bm.whnf(&v3) == &v3);
+    }
+
+    // ========== PARALLEL BRANCH TESTS (undo/redo branching) ==========
+
+    // Test C1: 3-hop chain v1→v2→v3 built in parent, compressed by whnf to v1→v3 (skipping v2).
+    //          Each branch then binds v3 to a different atom and runs whnf, which compresses
+    //          v1→atom via the UPDATE branch of bind().  Switching between branches via undo/redo
+    //          correctly restores the intermediate compression state and each branch's terminal.
+    {
+        trail t;
+        bind_map bm(t);
+
+        expr v1{expr::var{6000}};
+        expr v2{expr::var{6001}};
+        expr v3{expr::var{6002}};
+        expr end_a{expr::atom{"end_a"}};
+        expr end_b{expr::atom{"end_b"}};
+
+        // Parent: build chain v1→v2→v3 then whnf compresses v1→v3 (skipping v2)
+        t.push();
+        bm.bind(6000, &v2);   // INSERT: v1 → v2
+        bm.bind(6001, &v3);   // INSERT: v2 → v3
+        // whnf(v1): follows v1→v2→v3(unbound); bind(6001,&v3) is no-op; bind(6000,&v3) UPDATE
+        assert(bm.whnf(&v1) == &v3);
+        assert(bm.bindings.at(6000) == &v3);   // v1 compressed to v3
+        assert(bm.bindings.at(6001) == &v3);   // v2 unchanged (no-op during compression)
+
+        // Branch A: INSERT v3 → end_a, whnf follows v1→v3→end_a and compresses v1→end_a (UPDATE)
+        t.push();
+        bm.bind(6002, &end_a);           // INSERT: v3 → end_a
+        assert(bm.whnf(&v1) == &end_a); // v1(→v3→end_a) → compress v1→end_a
+        assert(bm.bindings.at(6000) == &end_a);  // v1 compressed
+        assert(bm.bindings.at(6001) == &v3);     // v2→v3 unchanged (parent frame)
+        assert(bm.bindings.at(6002) == &end_a);  // v3 → end_a
+        auto iterA = t.undo();
+        // INSERT(6002) reversed: 6002 erased; UPDATE(6000) reversed: v1 → v3 again
+        assert(bm.bindings.at(6000) == &v3);
+        assert(bm.bindings.count(6002) == 0);
+
+        // Branch B: INSERT v3 → end_b, same compression pattern
+        t.push();
+        bm.bind(6002, &end_b);
+        assert(bm.whnf(&v1) == &end_b);
+        assert(bm.bindings.at(6000) == &end_b);
+        assert(bm.bindings.at(6001) == &v3);    // v2 still unchanged
+        assert(bm.bindings.at(6002) == &end_b);
+        auto iterB = t.undo();
+        assert(bm.bindings.at(6000) == &v3);
+        assert(bm.bindings.count(6002) == 0);
+
+        // Redo A: v1 compressed to end_a; whnf is an immediate lookup (no chain walk)
+        t.redo(iterA);
+        assert(bm.bindings.at(6000) == &end_a);
+        assert(bm.bindings.at(6001) == &v3);
+        assert(bm.bindings.at(6002) == &end_a);
+        assert(bm.whnf(&v1) == &end_a);
+        t.undo();
+        assert(bm.bindings.at(6000) == &v3 && bm.bindings.count(6002) == 0);
+
+        // Redo B: v1 compressed to end_b
+        t.redo(iterB);
+        assert(bm.bindings.at(6000) == &end_b);
+        assert(bm.bindings.at(6001) == &v3);
+        assert(bm.bindings.at(6002) == &end_b);
+        assert(bm.whnf(&v1) == &end_b);
+        t.undo();
+        assert(bm.bindings.at(6000) == &v3 && bm.bindings.count(6002) == 0);
+
+        // Pop parent: all bindings removed (INSERT 6001, INSERT 6000, UPDATE 6000 all undone)
+        t.pop();
+        assert(bm.bindings.size() == 0);
+    }
+
+    // Test C2: After undoing a branch where whnf compressed v1→v2→atom down to v1→atom,
+    //          calling whnf again in the restored state traverses the FULL original chain
+    //          (the compression is genuinely gone, not just hidden).
+    {
+        trail t;
+        bind_map bm(t);
+
+        expr v1{expr::var{6100}};
+        expr v2{expr::var{6101}};
+        expr atom1{expr::atom{"atom1"}};
+
+        // Parent: v1 → v2 (uncompressed, v2 unbound)
+        t.push();
+        bm.bind(6100, &v2);
+        assert(bm.bindings.at(6100) == &v2 && bm.bindings.count(6101) == 0);
+
+        // Branch A: v2 → atom1, whnf compresses v1 → atom1 (logs INSERT + UPDATE)
+        t.push();
+        bm.bind(6101, &atom1);
+        assert(bm.whnf(&v1) == &atom1);
+        assert(bm.bindings.at(6100) == &atom1);   // v1 compressed
+        assert(t.path.top()->actions.size() == 2); // INSERT(6101) + UPDATE(6100)
+
+        auto iterA = t.undo();
+        // Compression fully reversed: v1 → v2 again, v2 unbound
+        assert(bm.bindings.at(6100) == &v2);
+        assert(bm.bindings.count(6101) == 0);
+
+        // In the restored state whnf must traverse the full v1→v2 chain (v2 is unbound)
+        assert(bm.whnf(&v1) == &v2);  // chain ends at unbound v2
+
+        // Redo A: compression restored; whnf is a direct lookup again
+        t.redo(iterA);
+        assert(bm.bindings.at(6100) == &atom1);
+        assert(bm.bindings.at(6101) == &atom1);
+        assert(bm.whnf(&v1) == &atom1);
+        t.undo();
+
+        // Clean up
+        t.pop();
+        assert(bm.bindings.size() == 0);
     }
 }
 
