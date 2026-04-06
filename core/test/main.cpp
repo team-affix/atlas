@@ -25,885 +25,729 @@ using resolution_store = resolutions;
 using decision_store = decisions;
 
 void test_trail_constructor() {
-    // Basic construction - should not crash
-    trail t1;
-    assert(t1.depth() == 0);
-    assert(t1.path.size() == 0);
-    
-    // Multiple trails can be constructed
-    trail t2;
-    trail t3;
-    assert(t2.depth() == 0);
-    assert(t3.depth() == 0);
-    assert(t2.path.size() == 0);
-    assert(t3.path.size() == 0);
-    
-    // Trail should be usable immediately after construction
-    t1.push();
-    assert(t1.depth() == 1);
-    assert(t1.path.size() == 1);
-    assert(t1.path.top()->actions.size() == 0);
-    t1.pop();
-    assert(t1.depth() == 0);
-    assert(t1.path.size() == 0);
+    // Single trail: verify default internal state without calling any methods
+    {
+        trail t;
+        assert(t.path.size() == 0);
+        assert(t.root.children.size() == 0);
+        assert(t.root.actions.size() == 0);
+    }
+
+    // Multiple independent trails: each starts with the same empty state
+    {
+        trail t1, t2, t3;
+        assert(t1.path.size() == 0);
+        assert(t1.root.children.size() == 0);
+        assert(t1.root.actions.size() == 0);
+        assert(t2.path.size() == 0);
+        assert(t2.root.children.size() == 0);
+        assert(t2.root.actions.size() == 0);
+        assert(t3.path.size() == 0);
+        assert(t3.root.children.size() == 0);
+        assert(t3.root.actions.size() == 0);
+    }
 }
 
-void test_trail_push_pop() {
-    trail t;
-    assert(t.depth() == 0);
-    assert(t.path.size() == 0);
-    
-    // Single push/pop with no logged operations
-    t.push();
-    assert(t.depth() == 1);
-    assert(t.path.size() == 1);
-    assert(t.path.top()->actions.size() == 0);
-    t.pop();
-    assert(t.depth() == 0);
-    assert(t.path.size() == 0);
-    
-    // Multiple push/pop pairs with no logged operations
-    t.push();
-    assert(t.depth() == 1);
-    assert(t.path.size() == 1);
-    t.pop();
-    assert(t.depth() == 0);
-    assert(t.path.size() == 0);
-    
-    t.push();
-    assert(t.depth() == 1);
-    assert(t.path.size() == 1);
-    t.pop();
-    assert(t.depth() == 0);
-    assert(t.path.size() == 0);
-    
-    t.push();
-    assert(t.depth() == 1);
-    assert(t.path.size() == 1);
-    t.pop();
-    assert(t.depth() == 0);
-    assert(t.path.size() == 0);
-    
-    // Nested push/pop
-    t.push();
-    assert(t.depth() == 1);
-    assert(t.path.size() == 1);
-    t.push();
-    assert(t.depth() == 2);
-    assert(t.path.size() == 2);
-    t.pop();
-    assert(t.depth() == 1);
-    assert(t.path.size() == 1);
-    t.pop();
-    assert(t.depth() == 0);
-    assert(t.path.size() == 0);
-    
-    // Deeper nesting
-    t.push();
-    assert(t.depth() == 1);
-    assert(t.path.size() == 1);
-    t.push();
-    assert(t.depth() == 2);
-    assert(t.path.size() == 2);
-    t.push();
-    assert(t.depth() == 3);
-    assert(t.path.size() == 3);
-    t.pop();
-    assert(t.depth() == 2);
-    assert(t.path.size() == 2);
-    t.pop();
-    assert(t.depth() == 1);
-    assert(t.path.size() == 1);
-    t.pop();
-    assert(t.depth() == 0);
-    assert(t.path.size() == 0);
-    
-    // Mixed nesting
-    t.push();
-    assert(t.depth() == 1);
-    assert(t.path.size() == 1);
-    t.push();
-    assert(t.depth() == 2);
-    assert(t.path.size() == 2);
-    t.pop();
-    assert(t.depth() == 1);
-    assert(t.path.size() == 1);
-    t.push();
-    assert(t.depth() == 2);
-    assert(t.path.size() == 2);
-    t.pop();
-    assert(t.depth() == 1);
-    assert(t.path.size() == 1);
-    t.pop();
-    assert(t.depth() == 0);
-    assert(t.path.size() == 0);
+void test_trail_current() {
+    // Before any push: path is empty, so current() returns root
+    {
+        trail t;
+        assert(&t.current() == &t.root);
+    }
+
+    // After manually adding a root child and pushing its iterator:
+    // current() returns that child, not root
+    {
+        trail t;
+        t.root.children.emplace_front();
+        t.path.push(t.root.children.begin());
+
+        assert(&t.current() == &*t.path.top());
+        assert(&t.current() != &t.root);
+        assert(&t.current() == &t.root.children.front());
+    }
+
+    // After simulating two nested pushes: current() tracks the innermost frame
+    {
+        trail t;
+        // Level 1: add child to root
+        t.root.children.emplace_front();
+        t.path.push(t.root.children.begin());
+        frame* level1 = &t.current();
+        assert(level1 == &t.root.children.front());
+
+        // Level 2: add child to level1 frame
+        auto it1 = t.path.top();
+        it1->children.emplace_front();
+        t.path.push(it1->children.begin());
+        frame* level2 = &t.current();
+
+        assert(level2 != level1);
+        assert(level2 == &t.root.children.front().children.front());
+        assert(level2 == &*t.path.top());
+    }
+
+    // current() always equals &*path.top() through three levels of manual simulation
+    {
+        trail t;
+        // Level 1
+        t.root.children.emplace_front();
+        t.path.push(t.root.children.begin());
+        assert(&t.current() == &*t.path.top());
+
+        // Level 2
+        auto it1 = t.path.top();
+        it1->children.emplace_front();
+        t.path.push(it1->children.begin());
+        assert(&t.current() == &*t.path.top());
+
+        // Level 3
+        auto it2 = t.path.top();
+        it2->children.emplace_front();
+        t.path.push(it2->children.begin());
+        assert(&t.current() == &*t.path.top());
+    }
+}
+
+void test_trail_push() {
+    // Single push: path grows, root gets one child, new frame is empty
+    {
+        trail t;
+        t.push();
+        assert(t.path.size() == 1);
+        assert(t.root.children.size() == 1);
+        assert(t.path.top() == t.root.children.begin());
+        assert(t.path.top()->actions.size() == 0);
+        assert(t.path.top()->children.size() == 0);
+    }
+
+    // Each pushed frame starts with no actions and no children
+    {
+        trail t;
+        t.push();
+        assert(t.path.top()->actions.size() == 0);
+        assert(t.path.top()->children.size() == 0);
+        t.push();
+        assert(t.path.top()->actions.size() == 0);
+        assert(t.path.top()->children.size() == 0);
+    }
+
+    // Push creates a child of current(), not always of root
+    {
+        trail t;
+        t.push();  // child of root
+        frame* first_child = &t.root.children.front();
+        t.push();  // child of first_child (current frame at time of call)
+        assert(&t.root.children.front() == first_child);
+        assert(first_child->children.size() == 1);
+        assert(t.path.top() == first_child->children.begin());
+    }
+
+    // Sequential nested pushes — root maintains exactly one child
+    {
+        trail t;
+        t.push(); assert(t.path.size() == 1 && t.root.children.size() == 1);
+        t.push(); assert(t.path.size() == 2 && t.root.children.size() == 1);
+        t.push(); assert(t.path.size() == 3 && t.root.children.size() == 1);
+        assert(t.root.children.front().children.size() == 1);
+        assert(t.root.children.front().children.front().children.size() == 1);
+        assert(t.root.children.front().children.front().children.front().children.size() == 0);
+    }
+
+    // Deep nesting: 5 levels, path grows, root still has 1 child
+    {
+        trail t;
+        t.push(); assert(t.path.size() == 1 && t.root.children.size() == 1);
+        t.push(); assert(t.path.size() == 2 && t.root.children.size() == 1);
+        t.push(); assert(t.path.size() == 3 && t.root.children.size() == 1);
+        t.push(); assert(t.path.size() == 4 && t.root.children.size() == 1);
+        t.push(); assert(t.path.size() == 5 && t.root.children.size() == 1);
+        assert(t.path.top()->actions.size() == 0);
+        assert(t.path.top()->children.size() == 0);
+    }
 }
 
 void test_trail_log() {
-    // Test 1: Single log operation
+    // Test 1: Single log — action stored, undo and redo lambdas work
     {
         trail t;
         int x = 5;
-        assert(t.path.size() == 0);
-        
+
         t.push();
-        assert(t.path.size() == 1);
         assert(t.path.top()->actions.size() == 0);
-        
+
         x = 10;
-        t.log([&x]() { x = 5; }, []{});
-        assert(x == 10);
+        t.log([&x]() { x = 5; }, [&x]() { x = 10; });
         assert(t.path.top()->actions.size() == 1);
-        assert(t.path.size() == 1);
-        
-        t.pop();
+        assert(x == 10);
+
+        // Verify undo lambda directly via internal member access
+        t.path.top()->actions.back().undo();
         assert(x == 5);
-        assert(t.path.size() == 0);
+
+        // Verify redo lambda directly via internal member access
+        t.path.top()->actions.back().redo();
+        assert(x == 10);
     }
     
-    // Test 2: Multiple log operations in one frame
+    // Test 2: Multiple actions per frame — appended in order, each lambda independent
     {
         trail t;
         int a = 1, b = 2, c = 3;
         t.push();
-        assert(t.path.size() == 1);
-        assert(t.path.top()->actions.size() == 0);
-        
-        a = 10;
-        t.log([&a]() { a = 1; }, []{});
+
+        a = 10; t.log([&a]() { a = 1; }, [&a]() { a = 10; });
         assert(t.path.top()->actions.size() == 1);
-        
-        b = 20;
-        t.log([&b]() { b = 2; }, []{});
+        b = 20; t.log([&b]() { b = 2; }, [&b]() { b = 20; });
         assert(t.path.top()->actions.size() == 2);
-        
-        c = 30;
-        t.log([&c]() { c = 3; }, []{});
+        c = 30; t.log([&c]() { c = 3; }, [&c]() { c = 30; });
         assert(t.path.top()->actions.size() == 3);
-        assert(t.path.size() == 1);
-        
-        assert(a == 10 && b == 20 && c == 30);
-        t.pop();
-        assert(a == 1 && b == 2 && c == 3);
-        assert(t.path.size() == 0);
+
+        // front() == first logged action (a's)
+        t.path.top()->actions.front().undo();
+        assert(a == 1 && b == 20 && c == 30);
+        t.path.top()->actions.front().redo();
+        assert(a == 10);
+
+        // back() == last logged action (c's)
+        t.path.top()->actions.back().undo();
+        assert(c == 3 && a == 10 && b == 20);
+        t.path.top()->actions.back().redo();
+        assert(c == 30);
     }
     
-    // Test 3: Nested frames with logs
+    // Test 3: Log targets current() — per-frame isolation
     {
         trail t;
-
         int x = 0;
-        
+
         t.push();  // Frame 1
-        assert(t.path.size() == 1);
-        
         x = 1;
-        t.log([&x]() { x = 0; }, []{});
-        assert(t.path.top()->actions.size() == 1);
-        
-        t.push();  // Frame 2
-        assert(t.path.size() == 2);
+        t.log([&x]() { x = 0; }, [&x]() { x = 1; });
+        assert(t.root.children.front().actions.size() == 1);
+
+        t.push();  // Frame 2 (nested inside Frame 1)
         assert(t.path.top()->actions.size() == 0);
-        
         x = 2;
-        t.log([&x]() { x = 1; }, []{});
+        t.log([&x]() { x = 1; }, [&x]() { x = 2; });
         assert(t.path.top()->actions.size() == 1);
+
+        // Frame 1's action count is unchanged
+        assert(t.root.children.front().actions.size() == 1);
         assert(t.path.size() == 2);
-        
-        assert(x == 2);
-        t.pop();  // Pop frame 2
-        assert(x == 1);
-        assert(t.path.top()->actions.size() == 1);
-        assert(t.path.size() == 1);
-        
-        t.pop();  // Pop frame 1
-        assert(x == 0);
-        assert(t.path.size() == 0);
     }
-    
-    // Test 4: Multiple operations per frame with nesting
+
+    // Test 4: Many actions in one frame
     {
         trail t;
+        std::vector<int> vals(10, 0);
+        t.push();
 
-        int a = 100, b = 200, c = 300;
-        
-        t.push();  // Frame 1
-        assert(t.path.size() == 1);
-        
-        a = 111;
-        t.log([&a]() { a = 100; }, []{});
-        assert(t.path.top()->actions.size() == 1);
-        
-        b = 222;
-        t.log([&b]() { b = 200; }, []{});
-        assert(t.path.top()->actions.size() == 2);
-        
-        t.push();  // Frame 2
-        assert(t.path.size() == 2);
-        assert(t.path.top()->actions.size() == 0);
-        
-        b = 333;
-        t.log([&b]() { b = 222; }, []{});
-        assert(t.path.top()->actions.size() == 1);
-        
-        c = 444;
-        t.log([&c]() { c = 300; }, []{});
-        assert(t.path.top()->actions.size() == 2);
-        
-        t.push();  // Frame 3
-        assert(t.path.size() == 3);
-        assert(t.path.top()->actions.size() == 0);
-        
-        a = 555;
-        t.log([&a]() { a = 111; }, []{});
-        assert(t.path.top()->actions.size() == 1);
-        assert(t.path.size() == 3);
-        
-        assert(a == 555 && b == 333 && c == 444);
-        
-        t.pop();  // Pop frame 3
-        assert(a == 111 && b == 333 && c == 444);
-        assert(t.path.top()->actions.size() == 2);
-        assert(t.path.size() == 2);
-        
-        t.pop();  // Pop frame 2
-        assert(a == 111 && b == 222 && c == 300);
-        assert(t.path.top()->actions.size() == 2);
-        assert(t.path.size() == 1);
-        
-        t.pop();  // Pop frame 1
-        assert(a == 100 && b == 200 && c == 300);
-        assert(t.path.size() == 0);
-    }
-    
-    // Test 5: Empty frame (push/pop with no logs)
-    {
-        trail t;
-
-        int x = 42;
-        t.push();
-        assert(t.path.size() == 1);
-        assert(t.path.top()->actions.size() == 0);
-        
-        // No logs
-        x = 99;
-        assert(x == 99);
-        assert(t.path.top()->actions.size() == 0);
-        
-        t.pop();
-        assert(x == 99);  // Should remain unchanged since no undo was logged
-        assert(t.path.size() == 0);
-    }
-    
-    // Test 6: Complex nested scenario with partial pops
-    {
-        trail t;
-
-        int val = 0;
-        
-        t.push();  // Frame A
-        assert(t.path.size() == 1);
-        
-        val = 1;
-        t.log([&val]() { val = 0; }, []{});
-        assert(t.path.top()->actions.size() == 1);
-        
-        t.push();  // Frame B
-        assert(t.path.size() == 2);
-        
-        val = 2;
-        t.log([&val]() { val = 1; }, []{});
-        assert(t.path.top()->actions.size() == 1);
-        
-        t.push();  // Frame C
-        assert(t.path.size() == 3);
-        
-        val = 3;
-        t.log([&val]() { val = 2; }, []{});
-        assert(t.path.top()->actions.size() == 1);
-        
-        assert(val == 3);
-        t.pop();  // Pop C
-        assert(val == 2);
-        assert(t.path.top()->actions.size() == 1);
-        assert(t.path.size() == 2);
-        
-        // Add more to frame B
-        val = 4;
-        t.log([&val]() { val = 2; }, []{});
-        assert(t.path.top()->actions.size() == 2);
-        
-        assert(val == 4);
-        t.pop();  // Pop B (should undo both operations in B)
-        assert(val == 1);
-        assert(t.path.top()->actions.size() == 1);
-        assert(t.path.size() == 1);
-        
-        t.pop();  // Pop A
-        assert(val == 0);
-        assert(t.path.size() == 0);
-    }
-    
-    // Test 7: Multiple variables with complex state changes
-    {
-        trail t;
-
-        int x = 10, y = 20, z = 30;
-        
-        t.push();  // Level 1
-        assert(t.path.size() == 1);
-        
-        x += 5;
-        t.log([&x]() { x -= 5; }, []{});
-        y *= 2;
-        t.log([&y]() { y /= 2; }, []{});
-        assert(t.path.top()->actions.size() == 2);
-        
-        assert(x == 15 && y == 40 && z == 30);
-        
-        t.push();  // Level 2
-        assert(t.path.size() == 2);
-        
-        z = x + y;  // z = 55
-        t.log([&z]() { z = 30; }, []{});
-        x = 0;
-        t.log([&x]() { x = 15; }, []{});
-        assert(t.path.top()->actions.size() == 2);
-        
-        assert(x == 0 && y == 40 && z == 55);
-        
-        t.push();  // Level 3
-        assert(t.path.size() == 3);
-        
-        y = 100;
-        t.log([&y]() { y = 40; }, []{});
-        assert(t.path.top()->actions.size() == 1);
-        
-        assert(x == 0 && y == 100 && z == 55);
-        
-        t.pop();  // Pop level 3
-        assert(x == 0 && y == 40 && z == 55);
-        assert(t.path.top()->actions.size() == 2);
-        assert(t.path.size() == 2);
-        
-        t.pop();  // Pop level 2
-        assert(x == 15 && y == 40 && z == 30);
-        assert(t.path.top()->actions.size() == 2);
-        assert(t.path.size() == 1);
-        
-        t.pop();  // Pop level 1
-        assert(x == 10 && y == 20 && z == 30);
-        assert(t.path.size() == 0);
-    }
-    
-    // Test 8: Deeply nested frames (5 levels)
-    {
-        trail t;
-
-        int depth = 0;
-        
-        t.push();
-        assert(t.path.size() == 1);
-        depth = 1;
-        t.log([&depth]() { depth = 0; }, []{});
-        assert(t.path.top()->actions.size() == 1);
-        
-        t.push();
-        assert(t.path.size() == 2);
-        depth = 2;
-        t.log([&depth]() { depth = 1; }, []{});
-        assert(t.path.top()->actions.size() == 1);
-        
-        t.push();
-        assert(t.path.size() == 3);
-        depth = 3;
-        t.log([&depth]() { depth = 2; }, []{});
-        assert(t.path.top()->actions.size() == 1);
-        
-        t.push();
-        assert(t.path.size() == 4);
-        depth = 4;
-        t.log([&depth]() { depth = 3; }, []{});
-        assert(t.path.top()->actions.size() == 1);
-        
-        t.push();
-        assert(t.path.size() == 5);
-        depth = 5;
-        t.log([&depth]() { depth = 4; }, []{});
-        assert(t.path.top()->actions.size() == 1);
-        
-        assert(depth == 5);
-        t.pop();
-        assert(depth == 4);
-        assert(t.path.top()->actions.size() == 1);
-        assert(t.path.size() == 4);
-        t.pop();
-        assert(depth == 3);
-        assert(t.path.top()->actions.size() == 1);
-        assert(t.path.size() == 3);
-        t.pop();
-        assert(depth == 2);
-        assert(t.path.top()->actions.size() == 1);
-        assert(t.path.size() == 2);
-        t.pop();
-        assert(depth == 1);
-        assert(t.path.top()->actions.size() == 1);
-        assert(t.path.size() == 1);
-        t.pop();
-        assert(depth == 0);
-        assert(t.path.size() == 0);
-    }
-    
-    // Test 9: Many operations in a single frame
-    {
-        trail t;
-
-        std::vector<int> values(10, 0);
-        
-        t.push();
-        assert(t.path.size() == 1);
-        
         for (int i = 0; i < 10; i++) {
-            values[i] = i + 1;
-            t.log([&values, i]() { values[i] = 0; }, []{});
+            vals[i] = i + 1;
+            t.log([&vals, i]() { vals[i] = 0; }, [&vals, i]() { vals[i] = i + 1; });
         }
+
         assert(t.path.top()->actions.size() == 10);
-        assert(t.path.size() == 1);
-        
-        for (int i = 0; i < 10; i++) {
-            assert(values[i] == i + 1);
-        }
-        
-        t.pop();
-        assert(t.path.size() == 0);
-        
-        for (int i = 0; i < 10; i++) {
-            assert(values[i] == 0);
-        }
-    }
-    
-    // Test 10: Interleaved push/pop/log operations
-    {
-        trail t;
+        for (int i = 0; i < 10; i++) assert(vals[i] == i + 1);
 
-        int state = 0;
-        
-        t.push();  // Frame 1
-        assert(t.path.size() == 1);
-        state = 1;
-        t.log([&state]() { state = 0; }, []{});
-        assert(t.path.top()->actions.size() == 1);
-        
-        t.push();  // Frame 2
-        assert(t.path.size() == 2);
-        state = 2;
-        t.log([&state]() { state = 1; }, []{});
-        assert(t.path.top()->actions.size() == 1);
-        
-        t.pop();  // Pop frame 2
-        assert(state == 1);
-        assert(t.path.top()->actions.size() == 1);
-        assert(t.path.size() == 1);
-        
-        t.push();  // New frame 2
-        assert(t.path.size() == 2);
-        state = 3;
-        t.log([&state]() { state = 1; }, []{});
-        assert(t.path.top()->actions.size() == 1);
-        
-        t.push();  // Frame 3
-        assert(t.path.size() == 3);
-        state = 4;
-        t.log([&state]() { state = 3; }, []{});
-        assert(t.path.top()->actions.size() == 1);
-        
-        assert(state == 4);
-        t.pop();  // Pop frame 3
-        assert(state == 3);
-        assert(t.path.top()->actions.size() == 1);
-        assert(t.path.size() == 2);
-        t.pop();  // Pop frame 2
-        assert(state == 1);
-        assert(t.path.top()->actions.size() == 1);
-        assert(t.path.size() == 1);
-        t.pop();  // Pop frame 1
-        assert(state == 0);
-        assert(t.path.size() == 0);
+        // Verify first and last lambdas independently
+        t.path.top()->actions.front().undo(); assert(vals[0] == 0);
+        t.path.top()->actions.front().redo(); assert(vals[0] == 1);
+        t.path.top()->actions.back().undo();  assert(vals[9] == 0);
+        t.path.top()->actions.back().redo();  assert(vals[9] == 10);
     }
-    
-    // Test 11: String modifications
-    {
-        trail t;
-        
-        std::string str = "original";
-        
-        t.push();
-        assert(t.path.size() == 1);
-        str = "modified";
-        t.log([&str]() { str = "original"; }, []{});
-        assert(t.path.top()->actions.size() == 1);
-        
-        assert(str == "modified");
-        t.pop();
-        assert(str == "original");
-        assert(t.path.size() == 0);
-    }
-    
-    // Test 12: Multiple independent trails
+
+    // Test 5: Multiple independent trails — isolated action lists
     {
         trail t1, t2;
-        int x = 1, y = 2;
-        
-        t1.push();
-        assert(t1.path.size() == 1);
-        assert(t2.path.size() == 0);  // t2 unaffected
-        x = 10;
-        t1.log([&x]() { x = 1; }, []{});
+        int x = 0, y = 0;
+
+        t1.push(); x = 1; t1.log([&x]() { x = 0; }, [&x]() { x = 1; });
+        t2.push(); y = 2; t2.log([&y]() { y = 0; }, [&y]() { y = 2; });
+
         assert(t1.path.top()->actions.size() == 1);
-        
-        t2.push();
-        assert(t2.path.size() == 1);
-        assert(t1.path.size() == 1);  // t1 unaffected
-        y = 20;
-        t2.log([&y]() { y = 2; }, []{});
         assert(t2.path.top()->actions.size() == 1);
-        
-        assert(x == 10 && y == 20);
-        
-        t1.pop();
-        assert(x == 1 && y == 20);
-        assert(t1.path.size() == 0);
-        assert(t2.path.top()->actions.size() == 1);
-        
-        t2.pop();
-        assert(x == 1 && y == 2);
-        assert(t2.path.size() == 0);
-    }
-    
-    // Test 13: Complex multiple independent trails with nested frames
-    {
-        trail t1, t2, t3;
-        
-        // Each trail manages its own independent data
-        int data1 = 100;
-        int data2 = 200;
-        int data3 = 300;
-        
-        assert(t1.depth() == 0);
-        assert(t2.depth() == 0);
-        assert(t3.depth() == 0);
-        
-        // === Trail 1: Nested frames with data1 ===
-        t1.push();  // Frame 1.1
-        assert(t1.depth() == 1);
-        assert(t1.path.size() == 1);
-        data1 += 10;  // 110
-        t1.log([&data1]() { data1 -= 10; }, []{});
-        assert(t1.path.top()->actions.size() == 1);
-        
-        t1.push();  // Frame 1.2
-        assert(t1.depth() == 2);
-        assert(t1.path.size() == 2);
-        data1 *= 2;  // 220
-        t1.log([&data1]() { data1 /= 2; }, []{});
-        assert(t1.path.top()->actions.size() == 1);
-        
-        t1.push();  // Frame 1.3
-        assert(t1.depth() == 3);
-        assert(t1.path.size() == 3);
-        data1 += 80;  // 300
-        t1.log([&data1]() { data1 -= 80; }, []{});
-        assert(t1.path.top()->actions.size() == 1);
-        
-        assert(data1 == 300);
-        
-        // === Trail 2: Nested frames with data2 ===
-        t2.push();  // Frame 2.1
-        assert(t2.depth() == 1);
-        assert(t2.path.size() == 1);
-        data2 -= 50;  // 150
-        t2.log([&data2]() { data2 += 50; }, []{});
-        assert(t2.path.top()->actions.size() == 1);
-        
-        t2.push();  // Frame 2.2
-        assert(t2.depth() == 2);
-        assert(t2.path.size() == 2);
-        data2 *= 3;  // 450
-        t2.log([&data2]() { data2 /= 3; }, []{});
-        assert(t2.path.top()->actions.size() == 1);
-        
-        assert(data2 == 450);
-        
-        // === Trail 3: Single frame with multiple operations on data3 ===
-        t3.push();  // Frame 3.1
-        assert(t3.depth() == 1);
-        assert(t3.path.size() == 1);
-        data3 /= 3;  // 100
-        t3.log([&data3]() { data3 *= 3; }, []{});
-        assert(t3.path.top()->actions.size() == 1);
-        data3 += 50;  // 150
-        t3.log([&data3]() { data3 -= 50; }, []{});
-        assert(t3.path.top()->actions.size() == 2);
-        data3 *= 4;  // 600
-        t3.log([&data3]() { data3 /= 4; }, []{});
-        assert(t3.path.top()->actions.size() == 3);
-        
-        assert(data3 == 600);
-        
-        // Verify all data is at expected state
-        assert(data1 == 300 && data2 == 450 && data3 == 600);
-        
-        // === Pop trail 1 innermost frame ===
-        t1.pop();  // Pop frame 1.3
-        assert(t1.depth() == 2);
-        assert(t1.path.top()->actions.size() == 1);
-        assert(t1.path.size() == 2);
-        assert(data1 == 220);  // Restored from frame 1.3
-        assert(data2 == 450);  // Unchanged
-        assert(data3 == 600);  // Unchanged
-        
-        // === Add more to trail 2 ===
-        t2.push();  // Frame 2.3
-        assert(t2.depth() == 3);
-        assert(t2.path.size() == 3);
-        data2 += 50;  // 500
-        t2.log([&data2]() { data2 -= 50; }, []{});
-        assert(t2.path.top()->actions.size() == 1);
-        
-        assert(data1 == 220 && data2 == 500 && data3 == 600);
-        
-        // === Pop trail 3 completely ===
-        t3.pop();  // Pop frame 3.1
-        assert(t3.depth() == 0);
-        assert(t3.path.size() == 0);
-        assert(data1 == 220);  // Unchanged
-        assert(data2 == 500);  // Unchanged
-        assert(data3 == 300);  // Restored to original
-        
-        // === Add new frame to trail 3 ===
-        t3.push();  // New frame 3.1
-        assert(t3.depth() == 1);
-        assert(t3.path.size() == 1);
-        data3 -= 100;  // 200
-        t3.log([&data3]() { data3 += 100; }, []{});
-        assert(t3.path.top()->actions.size() == 1);
-        data3 *= 5;  // 1000
-        t3.log([&data3]() { data3 /= 5; }, []{});
-        assert(t3.path.top()->actions.size() == 2);
-        
-        assert(data1 == 220 && data2 == 500 && data3 == 1000);
-        
-        // === Pop trail 2 innermost frame ===
-        t2.pop();  // Pop frame 2.3
-        assert(t2.depth() == 2);
-        assert(t2.path.top()->actions.size() == 1);
-        assert(t2.path.size() == 2);
-        assert(data1 == 220);  // Unchanged
-        assert(data2 == 450);  // Restored from frame 2.3
-        assert(data3 == 1000);  // Unchanged
-        
-        // === Pop trail 1 middle frame ===
-        t1.pop();  // Pop frame 1.2
-        assert(t1.depth() == 1);
-        assert(data1 == 110);  // Restored from frame 1.2
-        assert(data2 == 450);  // Unchanged
-        assert(data3 == 1000);  // Unchanged
-        
-        // === Pop trail 2 all remaining frames ===
-        t2.pop();  // Pop frame 2.2
-        assert(t2.depth() == 1);
-        assert(t2.path.top()->actions.size() == 1);
-        assert(t2.path.size() == 1);
-        assert(data2 == 150);  // Restored from frame 2.2
-        
-        t2.pop();  // Pop frame 2.1
-        assert(t2.depth() == 0);
-        assert(t2.path.size() == 0);
-        assert(data2 == 200);  // Restored to original
-        
-        assert(data1 == 110 && data2 == 200 && data3 == 1000);
-        
-        // === Pop trail 3 ===
-        t3.pop();  // Pop frame 3.1
-        assert(t3.depth() == 0);
-        assert(t3.path.size() == 0);
-        assert(data3 == 300);  // Restored to original
-        
-        assert(data1 == 110 && data2 == 200 && data3 == 300);
-        
-        // === Pop trail 1 last frame ===
-        t1.pop();  // Pop frame 1.1
-        assert(t1.depth() == 0);
-        assert(t1.path.size() == 0);
-        assert(data1 == 100);  // Restored to original
-        
-        // All data restored to original values
-        assert(data1 == 100 && data2 == 200 && data3 == 300);
-        assert(t1.depth() == 0 && t2.depth() == 0 && t3.depth() == 0);
+
+        // Invoking t1's lambda doesn't affect y, and vice versa
+        t1.path.top()->actions.back().undo();
+        assert(x == 0 && y == 2);
+        t2.path.top()->actions.back().undo();
+        assert(x == 0 && y == 0);
     }
 
-    // Test 14: COMPREHENSIVE SEQUENCE REVERSAL TEST WITH CHECKPOINTS
+    // Test 6: String modification lambda
     {
         trail t;
-        
-        int val = 100;  // Starting value
-        
-        // === FRAME 1 ===
+        std::string s = "original";
         t.push();
-        assert(t.depth() == 1);
-        
-        // Step 1: Add 5 -> 105
-        val += 5;
-        t.log([&val]() { val -= 5; }, []{});
-        assert(val == 105);
-        
-        // Step 2: Multiply by 2 -> 210
-        val *= 2;
-        t.log([&val]() { val /= 2; }, []{});
-        assert(val == 210);
-        
-        // Step 3: Subtract 10 -> 200
-        val -= 10;
-        t.log([&val]() { val += 10; }, []{});
-        assert(val == 200);
-        
-        // Step 4: Add 50 -> 250
-        val += 50;
-        t.log([&val]() { val -= 50; }, []{});
-        assert(val == 250);
-        
-        // CHECKPOINT 1: val should be 250
-        int checkpoint1 = val;
-        assert(checkpoint1 == 250);
-        
-        // === FRAME 2 ===
+        s = "modified";
+        t.log([&s]() { s = "original"; }, [&s]() { s = "modified"; });
+        assert(t.path.top()->actions.size() == 1);
+        assert(s == "modified");
+
+        t.path.top()->actions.back().undo(); assert(s == "original");
+        t.path.top()->actions.back().redo(); assert(s == "modified");
+    }
+
+    // Test 7: Multiple frames with multiple logs each — per-frame counts independent
+    {
+        trail t;
+        int a = 0, b = 0;
+
+        t.push();  // Frame 1: 3 actions
+        a = 1; t.log([&a]() { a = 0; }, [&a]() { a = 1; });
+        a = 2; t.log([&a]() { a = 1; }, [&a]() { a = 2; });
+        a = 3; t.log([&a]() { a = 2; }, [&a]() { a = 3; });
+        assert(t.path.top()->actions.size() == 3);
+
+        t.push();  // Frame 2: 2 actions
+        b = 10; t.log([&b]() { b = 0;  }, [&b]() { b = 10; });
+        b = 20; t.log([&b]() { b = 10; }, [&b]() { b = 20; });
+        assert(t.path.top()->actions.size() == 2);
+        assert(t.path.size() == 2);
+
+        // Frame 1 (root's front child) still has exactly 3 actions
+        assert(t.root.children.front().actions.size() == 3);
+    }
+
+    // Test 8: Dependent lambdas — each lambda operates on the current value, not a
+    // constant, so the intermediate assertions only hold when applied in the right order
+    {
+        trail t;
+        int x = 6;
         t.push();
-        assert(t.depth() == 2);
-        
-        // Step 5: Divide by 5 -> 50
-        val /= 5;
-        t.log([&val]() { val *= 5; }, []{});
-        assert(val == 50);
-        
-        // Step 6: Add 150 -> 200
-        val += 150;
-        t.log([&val]() { val -= 150; }, []{});
-        assert(val == 200);
-        
-        // Step 7: Multiply by 3 -> 600
-        val *= 3;
-        t.log([&val]() { val /= 3; }, []{});
-        assert(val == 600);
-        
-        // Step 8: Subtract 100 -> 500
-        val -= 100;
-        t.log([&val]() { val += 100; }, []{});
-        assert(val == 500);
-        
-        // Step 9: Add 25 -> 525
-        val += 25;
-        t.log([&val]() { val -= 25; }, []{});
-        assert(val == 525);
-        
-        // CHECKPOINT 2: val should be 525
-        int checkpoint2 = val;
-        assert(checkpoint2 == 525);
-        
-        // === FRAME 3 ===
+
+        // Action 1: halve x  (6 → 3)
+        x /= 2;
+        t.log([&x]() { x *= 2; }, [&x]() { x /= 2; });
+        assert(x == 3);
+
+        // Action 2: shift x by 10  (3 → 13)
+        x += 10;
+        t.log([&x]() { x -= 10; }, [&x]() { x += 10; });
+        assert(x == 13);
+
+        // Undo LIFO: action 2 first, then action 1.
+        // Calling front().undo() from x==13 would give 26, not 3 — proof of dependency.
+        t.path.top()->actions.back().undo();
+        assert(x == 3);   // 13 - 10
+
+        t.path.top()->actions.front().undo();
+        assert(x == 6);   // 3 * 2
+
+        // Redo FIFO: action 1 first, then action 2.
+        // Calling back().redo() from x==6 would give 16, not 3 — proof of dependency.
+        t.path.top()->actions.front().redo();
+        assert(x == 3);   // 6 / 2
+
+        t.path.top()->actions.back().redo();
+        assert(x == 13);  // 3 + 10
+    }
+}
+
+void test_trail_undo() {
+    // Test 1: Single action — undone, path shrinks, frame stays in children
+    {
+        trail t;
+        int x = 5;
         t.push();
-        assert(t.depth() == 3);
-        
-        // Step 10: Subtract 25 -> 500
-        val -= 25;
-        t.log([&val]() { val += 25; }, []{});
-        assert(val == 500);
-        
-        // Step 11: Divide by 4 -> 125
-        val /= 4;
-        t.log([&val]() { val *= 4; }, []{});
-        assert(val == 125);
-        
-        // Step 12: Add 75 -> 200
-        val += 75;
-        t.log([&val]() { val -= 75; }, []{});
-        assert(val == 200);
-        
-        // Step 13: Multiply by 2 -> 400
-        val *= 2;
-        t.log([&val]() { val /= 2; }, []{});
-        assert(val == 400);
-        
-        // Step 14: Subtract 50 -> 350
-        val -= 50;
-        t.log([&val]() { val += 50; }, []{});
-        assert(val == 350);
-        
-        // Step 15: Add 150 -> 500
-        val += 150;
-        t.log([&val]() { val -= 150; }, []{});
-        assert(val == 500);
-        
-        // CHECKPOINT 3: val should be 500
-        int checkpoint3 = val;
-        assert(checkpoint3 == 500);
-        
-        // === FRAME 4 ===
+        x = 10;
+        t.log([&x]() { x = 5; }, [&x]() { x = 10; });
+        assert(x == 10 && t.path.size() == 1 && t.root.children.size() == 1);
+
+        auto it = t.undo();
+        assert(x == 5);
+        assert(t.path.size() == 0);
+        assert(t.root.children.size() == 1);  // frame NOT erased (unlike pop)
+        assert(&*it == &t.root.children.front());
+    }
+
+    // Test 2: Multiple actions — reversed in LIFO order
+    {
+        trail t;
+        std::vector<int> order;
+        int a = 0, b = 0, c = 0;
         t.push();
-        assert(t.depth() == 4);
-        
-        // Step 16: Divide by 10 -> 50
-        val /= 10;
-        t.log([&val]() { val *= 10; }, []{});
-        assert(val == 50);
-        
-        // Step 17: Add 450 -> 500
-        val += 450;
-        t.log([&val]() { val -= 450; }, []{});
-        assert(val == 500);
-        
-        // Step 18: Multiply by 2 -> 1000
-        val *= 2;
-        t.log([&val]() { val /= 2; }, []{});
-        assert(val == 1000);
-        
-        // Step 19: Subtract 200 -> 800
-        val -= 200;
-        t.log([&val]() { val += 200; }, []{});
-        assert(val == 800);
-        
-        // Step 20: Add 100 -> 900
-        val += 100;
-        t.log([&val]() { val -= 100; }, []{});
-        assert(val == 900);
-        
-        // CHECKPOINT 4: val should be 900
-        int checkpoint4 = val;
-        assert(checkpoint4 == 900);
-        
-        // === NOW UNDO IN REVERSE ORDER ===
-        
-        // Pop frame 4 - should restore to checkpoint 3 (500)
+        a = 1; t.log([&a, &order]() { a = 0; order.push_back(1); }, []{});
+        b = 2; t.log([&b, &order]() { b = 0; order.push_back(2); }, []{});
+        c = 3; t.log([&c, &order]() { c = 0; order.push_back(3); }, []{});
+
+        t.undo();
+
+        // c undone first, then b, then a (LIFO)
+        assert(order.size() == 3);
+        assert(order[0] == 3 && order[1] == 2 && order[2] == 1);
+        assert(a == 0 && b == 0 && c == 0);
+    }
+
+    // Test 3: Empty frame — path shrinks, frame stays in children
+    {
+        trail t;
+        t.push();
+        assert(t.path.size() == 1 && t.root.children.size() == 1);
+
+        auto it = t.undo();
+        assert(t.path.size() == 0);
+        assert(t.root.children.size() == 1);
+        assert(&*it == &t.root.children.front());
+    }
+
+    // Test 4: Nested frames — sequential undos restore state step by step
+    {
+        trail t;
+        int x = 0;
+        t.push(); x = 1; t.log([&x]() { x = 0; }, []{});
+        t.push(); x = 2; t.log([&x]() { x = 1; }, []{});
+        t.push(); x = 3; t.log([&x]() { x = 2; }, []{});
+
+        assert(x == 3 && t.path.size() == 3);
+        t.undo(); assert(x == 2 && t.path.size() == 2);
+        t.undo(); assert(x == 1 && t.path.size() == 1);
+        t.undo(); assert(x == 0 && t.path.size() == 0);
+
+        // All frames still retained in their respective children lists
+        assert(t.root.children.size() == 1);
+        assert(t.root.children.front().children.size() == 1);
+        assert(t.root.children.front().children.front().children.size() == 1);
+    }
+
+    // Test 5: Branching — undo + push creates sibling branches under root
+    {
+        trail t;
+        int x = 0;
+
+        // Branch 1
+        t.push(); x = 1; t.log([&x]() { x = 0; }, [&x]() { x = 1; });
+        assert(t.root.children.size() == 1);
+        auto iter1 = t.undo();
+        assert(x == 0 && t.path.size() == 0);
+        assert(t.root.children.size() == 1);  // branch 1 retained
+
+        // Branch 2 (sibling of branch 1 under root, added at front)
+        t.push(); x = 2; t.log([&x]() { x = 0; }, [&x]() { x = 2; });
+        assert(t.root.children.size() == 2);  // both branches present
+        auto iter2 = t.undo();
+        assert(x == 0 && t.path.size() == 0);
+        assert(t.root.children.size() == 2);  // both still retained
+
+        // The two iterators point to different frames
+        assert(&*iter1 != &*iter2);
+    }
+
+    // Test 6: Undo restores path.top() to parent frame correctly
+    {
+        trail t;
+        int x = 0;
+        t.push(); x = 1; t.log([&x]() { x = 0; }, []{});
+        t.push(); x = 2; t.log([&x]() { x = 1; }, []{});
+
+        auto inner_frame = t.path.top();
+        t.undo();
+        // Now at depth 1; path.top() is the outer frame
+        assert(t.path.top() != inner_frame);
+        assert(x == 1);
+    }
+}
+
+void test_trail_redo() {
+    // Test 1: Basic undo + redo restores state
+    {
+        trail t;
+        int x = 0;
+        t.push(); x = 1; t.log([&x]() { x = 0; }, [&x]() { x = 1; });
+
+        auto it = t.undo();
+        assert(x == 0 && t.path.size() == 0);
+
+        t.redo(it);
+        assert(x == 1 && t.path.size() == 1);
+        assert(t.path.top() == it);
+    }
+
+    // Test 2: Multiple undo/redo cycles with the same iterator
+    {
+        trail t;
+        int x = 0;
+        t.push(); x = 42; t.log([&x]() { x = 0; }, [&x]() { x = 42; });
+
+        auto it = t.undo(); assert(x == 0);
+        t.redo(it);          assert(x == 42);
+        t.undo();            assert(x == 0);
+        t.redo(it);          assert(x == 42);
+        t.undo();            assert(x == 0);
+        t.redo(it);          assert(x == 42);
+    }
+
+    // Test 3: Multiple actions — redo applies them in FIFO order
+    {
+        trail t;
+        std::vector<int> order;
+        int a = 0, b = 0, c = 0;
+        t.push();
+        a = 1; t.log([&a]() { a = 0; }, [&a, &order]() { a = 1; order.push_back(1); });
+        b = 2; t.log([&b]() { b = 0; }, [&b, &order]() { b = 2; order.push_back(2); });
+        c = 3; t.log([&c]() { c = 0; }, [&c, &order]() { c = 3; order.push_back(3); });
+
+        auto it = t.undo();
+        assert(a == 0 && b == 0 && c == 0);
+        order.clear();
+
+        t.redo(it);
+        // FIFO: a first, then b, then c
+        assert(order.size() == 3);
+        assert(order[0] == 1 && order[1] == 2 && order[2] == 3);
+        assert(a == 1 && b == 2 && c == 3);
+    }
+
+    // Test 4: Branching redo — two competing iterators, each restores different state
+    {
+        trail t;
+        int x = 0;
+
+        t.push(); x = 10; t.log([&x]() { x = 0; }, [&x]() { x = 10; });
+        auto iter1 = t.undo();
+        assert(x == 0);
+
+        t.push(); x = 20; t.log([&x]() { x = 0; }, [&x]() { x = 20; });
+        auto iter2 = t.undo();
+        assert(x == 0);
+
+        assert(iter1 != iter2);
+
+        // Redo branch 1
+        t.redo(iter1);
+        assert(x == 10 && t.path.top() == iter1);
+        t.undo(); assert(x == 0);
+
+        // Redo branch 2
+        t.redo(iter2);
+        assert(x == 20 && t.path.top() == iter2);
+        t.undo(); assert(x == 0);
+
+        // Branches can be alternated repeatedly
+        t.redo(iter1); assert(x == 10);
+        t.undo();
+        t.redo(iter2); assert(x == 20);
+        t.undo();
+    }
+
+    // Test 5: Redo of empty-action frame — path restored, no state side effects
+    {
+        trail t;
+        int x = 99;
+        t.push();
+        auto it = t.undo();
+        assert(t.path.size() == 0);
+
+        t.redo(it);
+        assert(t.path.size() == 1);
+        assert(t.path.top() == it);
+        assert(x == 99);
+    }
+
+    // Test 6: Nested undo + redo sequence
+    {
+        trail t;
+        int x = 0;
+        t.push(); x = 1; t.log([&x]() { x = 0; }, [&x]() { x = 1; });
+        t.push(); x = 2; t.log([&x]() { x = 1; }, [&x]() { x = 2; });
+
+        auto it2 = t.undo(); assert(x == 1 && t.path.size() == 1);
+        auto it1 = t.undo(); assert(x == 0 && t.path.size() == 0);
+
+        t.redo(it1); assert(x == 1 && t.path.size() == 1);
+        t.redo(it2); assert(x == 2 && t.path.size() == 2);
+        t.undo();    assert(x == 1 && t.path.size() == 1);
+        t.undo();    assert(x == 0 && t.path.size() == 0);
+    }
+}
+
+void test_trail_pop() {
+    // Test 1: Push + log + pop — actions undone AND frame erased from children
+    {
+        trail t;
+        int x = 5;
+        t.push();
+        x = 10;
+        t.log([&x]() { x = 5; }, [&x]() { x = 10; });
+        assert(t.root.children.size() == 1);
+
         t.pop();
-        assert(t.depth() == 3);
-        assert(val == checkpoint3);
-        assert(val == 500);
-        
-        // Pop frame 3 - should restore to checkpoint 2 (525)
+        assert(x == 5);
+        assert(t.path.size() == 0);
+        assert(t.root.children.size() == 0);  // frame ERASED (unlike undo)
+    }
+
+    // Test 2: Contrast with undo — undo retains frame, pop erases it
+    {
+        trail t;
+        int x = 0;
+        t.push();
+        x = 1;
+        t.log([&x]() { x = 0; }, [&x]() { x = 1; });
+
+        // undo: frame stays in children
+        auto it = t.undo();
+        assert(t.root.children.size() == 1);
+
+        // redo to return to the frame, then pop
+        t.redo(it);
+        assert(t.root.children.size() == 1);
+
         t.pop();
-        assert(t.depth() == 2);
-        assert(val == checkpoint2);
-        assert(val == 525);
-        
-        // Pop frame 2 - should restore to checkpoint 1 (250)
+        assert(t.root.children.size() == 0);  // frame erased by pop
+        assert(x == 0);
+    }
+
+    // Test 3: Nested pops — full restoration, all frames erased
+    {
+        trail t;
+        int a = 1, b = 2, c = 3;
+        t.push(); a = 10; t.log([&a]() { a = 1; }, []{});
+        t.push(); b = 20; t.log([&b]() { b = 2; }, []{});
+        t.push(); c = 30; t.log([&c]() { c = 3; }, []{});
+
+        assert(t.path.size() == 3);
+        t.pop(); assert(c == 3  && t.path.size() == 2);
+        t.pop(); assert(b == 2  && t.path.size() == 1);
+        t.pop(); assert(a == 1  && t.path.size() == 0);
+        assert(t.root.children.size() == 0);
+    }
+
+    // Test 4: Pop of empty frame — frame erased, no state change
+    {
+        trail t;
+        int x = 42;
+        t.push();
+        assert(t.root.children.size() == 1);
+
         t.pop();
-        assert(t.depth() == 1);
-        assert(val == checkpoint1);
-        assert(val == 250);
-        
-        // Pop frame 1 - should restore to original (100)
+        assert(t.root.children.size() == 0);
+        assert(x == 42);
+    }
+
+    // Test 5: Multiple actions reversed in LIFO order by pop
+    {
+        trail t;
+        int a = 0, b = 0, c = 0;
+        t.push();
+        a = 1; t.log([&a]() { a = 0; }, []{});
+        b = 2; t.log([&b]() { b = 0; }, []{});
+        c = 3; t.log([&c]() { c = 0; }, []{});
+
         t.pop();
+        assert(a == 0 && b == 0 && c == 0);
+        assert(t.path.size() == 0);
+        assert(t.root.children.size() == 0);
+    }
+
+    // Test 6: Nested pushes/pops — children.size() tracks frame lifecycle correctly
+    {
+        trail t;
+        int x = 0;
+
+        t.push(); x = 1; t.log([&x]() { x = 0; }, []{});
+        assert(t.root.children.size() == 1);
+
+        t.push(); x = 2; t.log([&x]() { x = 1; }, []{});
+        assert(t.root.children.size() == 1);
+        assert(t.root.children.front().children.size() == 1);
+
+        t.pop(); assert(x == 1);
+        assert(t.root.children.size() == 1);
+        assert(t.root.children.front().children.size() == 0);  // inner frame erased
+
+        t.pop(); assert(x == 0);
+        assert(t.root.children.size() == 0);  // outer frame erased
+    }
+
+    // Test 7: Independent trails — pop on one does not affect the other
+    {
+        trail t1, t2;
+        int x = 0, y = 0;
+
+        t1.push(); x = 1; t1.log([&x]() { x = 0; }, []{});
+        t2.push(); y = 2; t2.log([&y]() { y = 0; }, []{});
+
+        t1.pop();
+        assert(x == 0 && y == 2);
+        assert(t1.root.children.size() == 0);
+        assert(t2.root.children.size() == 1);
+
+        t2.pop();
+        assert(x == 0 && y == 0);
+        assert(t2.root.children.size() == 0);
+    }
+}
+
+void test_trail_depth() {
+    // At construction: depth() == 0
+    {
+        trail t;
         assert(t.depth() == 0);
-        assert(val == 100);
+        assert(t.depth() == t.path.size());
+    }
+
+    // After each push: depth() == path.size()
+    {
+        trail t;
+        t.push(); assert(t.depth() == 1 && t.depth() == t.path.size());
+        t.push(); assert(t.depth() == 2 && t.depth() == t.path.size());
+        t.push(); assert(t.depth() == 3 && t.depth() == t.path.size());
+        t.push(); assert(t.depth() == 4 && t.depth() == t.path.size());
+        t.push(); assert(t.depth() == 5 && t.depth() == t.path.size());
+    }
+
+    // After undo: depth() decreases and matches path.size()
+    {
+        trail t;
+        int x = 0;
+        t.push(); x = 1; t.log([&x]() { x = 0; }, [&x]() { x = 1; });
+        assert(t.depth() == 1 && t.depth() == t.path.size());
+
+        auto it = t.undo();
+        assert(t.depth() == 0 && t.depth() == t.path.size());
+
+        t.redo(it);
+        assert(t.depth() == 1 && t.depth() == t.path.size());
+    }
+
+    // After pop: depth() decreases and matches path.size()
+    {
+        trail t;
+        int x = 0;
+        t.push(); x = 1; t.log([&x]() { x = 0; }, []{});
+        t.push(); x = 2; t.log([&x]() { x = 1; }, []{});
+
+        assert(t.depth() == 2 && t.depth() == t.path.size());
+        t.pop(); assert(t.depth() == 1 && t.depth() == t.path.size());
+        t.pop(); assert(t.depth() == 0 && t.depth() == t.path.size());
+    }
+
+    // Mixed sequence: depth() always == path.size()
+    {
+        trail t;
+        int x = 0;
+
+        assert(t.depth() == t.path.size());
+        t.push(); x = 1; t.log([&x]() { x = 0; }, [&x]() { x = 1; });
+        assert(t.depth() == t.path.size());
+        t.push(); x = 2; t.log([&x]() { x = 1; }, [&x]() { x = 2; });
+        assert(t.depth() == t.path.size());
+
+        auto it = t.undo();
+        assert(t.depth() == t.path.size());
+
+        t.redo(it);
+        assert(t.depth() == t.path.size());
+
+        t.pop();
+        assert(t.depth() == t.path.size());
+
+        t.pop();
+        assert(t.depth() == t.path.size());
+        assert(t.depth() == 0);
     }
 }
 
@@ -29017,8 +28861,13 @@ void unit_test_main() {
 
     // test cases
     TEST(test_trail_constructor);
-    TEST(test_trail_push_pop);
+    TEST(test_trail_current);
+    TEST(test_trail_push);
     TEST(test_trail_log);
+    TEST(test_trail_undo);
+    TEST(test_trail_redo);
+    TEST(test_trail_pop);
+    TEST(test_trail_depth);
     TEST(test_atom_constructor);
     TEST(test_var_constructor);
     TEST(test_cons_constructor);
