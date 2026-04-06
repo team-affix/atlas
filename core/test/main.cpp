@@ -11143,6 +11143,107 @@ void test_sequencer() {
         
         t.pop();
     }
+
+    // ========== PARALLEL BRANCH TESTS (undo/redo branching) ==========
+
+    // Test B1: Two branches generate different numbers of indices from index=0.
+    //          undo restores index to 0; redo restores to each branch's endpoint.
+    //          Two full A↔B cycles verify the fixpoint property.
+    {
+        trail t;
+        sequencer vars(t);
+
+        // Branch A: generate 3 indices (0, 1, 2)
+        t.push();
+        assert(vars() == 0 && vars() == 1 && vars() == 2);
+        assert(vars.index == 3);
+        auto iterA = t.undo();
+        assert(vars.index == 0);
+
+        // Branch B: generate 2 indices (0, 1)
+        t.push();
+        assert(vars() == 0 && vars() == 1);
+        assert(vars.index == 2);
+        auto iterB = t.undo();
+        assert(vars.index == 0);
+
+        // Cycle 1
+        t.redo(iterA);
+        assert(vars.index == 3);
+        t.undo();
+        assert(vars.index == 0);
+
+        t.redo(iterB);
+        assert(vars.index == 2);
+        t.undo();
+        assert(vars.index == 0);
+
+        // Cycle 2 — fixpoint
+        t.redo(iterA);
+        assert(vars.index == 3);
+        t.undo();
+        assert(vars.index == 0);
+
+        t.redo(iterB);
+        assert(vars.index == 2);
+        t.undo();
+        assert(vars.index == 0);
+    }
+
+    // Test B2: Parent frame establishes a non-zero index baseline; two child branches
+    //          each advance the counter by different amounts.  undo restores to the
+    //          parent baseline; redo restores each branch's endpoint.  Two full cycles.
+    {
+        trail t;
+        sequencer vars(t);
+
+        // Parent: advance to index 2
+        t.push();
+        assert(vars() == 0 && vars() == 1);
+        assert(vars.index == 2);
+
+        // Branch A: 3 more indices (2, 3, 4)
+        t.push();
+        assert(vars() == 2 && vars() == 3 && vars() == 4);
+        assert(vars.index == 5);
+        assert(t.path.top()->actions.size() == 3);
+        auto iterA = t.undo();
+        assert(vars.index == 2);  // restored to parent baseline
+
+        // Branch B: 1 more index (2)
+        t.push();
+        assert(vars() == 2);
+        assert(vars.index == 3);
+        assert(t.path.top()->actions.size() == 1);
+        auto iterB = t.undo();
+        assert(vars.index == 2);
+
+        // Cycle 1
+        t.redo(iterA);
+        assert(vars.index == 5);
+        t.undo();
+        assert(vars.index == 2);
+
+        t.redo(iterB);
+        assert(vars.index == 3);
+        t.undo();
+        assert(vars.index == 2);
+
+        // Cycle 2 — fixpoint
+        t.redo(iterA);
+        assert(vars.index == 5);
+        t.undo();
+        assert(vars.index == 2);
+
+        t.redo(iterB);
+        assert(vars.index == 3);
+        t.undo();
+        assert(vars.index == 2);
+
+        // Clean up parent frame
+        t.pop();
+        assert(vars.index == 0);
+    }
 }
 
 void test_copier_constructor() {
