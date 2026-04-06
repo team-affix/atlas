@@ -344,6 +344,55 @@ void test_trail_log() {
         t.path.top()->actions.back().redo();
         assert(x == 13);  // 3 + 10
     }
+
+    // Test 9: log() without push — current() returns root, so action is appended to root.actions
+    {
+        trail t;
+        int x = 0;
+        assert(t.root.actions.size() == 0);
+
+        x = 1;
+        t.log([&x]() { x = 0; }, [&x]() { x = 1; });
+
+        assert(t.root.actions.size() == 1);
+        assert(t.path.size() == 0);  // no push, still at root level
+
+        t.root.actions.back().undo(); assert(x == 0);
+        t.root.actions.back().redo(); assert(x == 1);
+    }
+
+    // Test 10: root.actions stays empty when every log() is preceded by push()
+    {
+        trail t;
+        int x = 0;
+
+        t.push();
+        x = 1; t.log([&x]() { x = 0; }, [&x]() { x = 1; });
+        t.push();
+        x = 2; t.log([&x]() { x = 1; }, [&x]() { x = 2; });
+
+        assert(t.root.actions.size() == 0);
+        assert(t.root.children.front().actions.size() == 1);  // Frame 1 has 1 action
+        assert(t.path.top()->actions.size() == 1);            // Frame 2 has 1 action
+    }
+
+    // Test 11: Multiple log() calls to root — ordered, independent, all callable
+    {
+        trail t;
+        int x = 0, y = 0;
+
+        x = 1; t.log([&x]() { x = 0; }, [&x]() { x = 1; });
+        y = 2; t.log([&y]() { y = 0; }, [&y]() { y = 2; });
+
+        assert(t.root.actions.size() == 2);
+        assert(t.path.size() == 0);
+
+        // front() is the first-logged action (x), back() is the second (y)
+        t.root.actions.front().undo(); assert(x == 0 && y == 2);
+        t.root.actions.front().redo(); assert(x == 1 && y == 2);
+        t.root.actions.back().undo();  assert(x == 1 && y == 0);
+        t.root.actions.back().redo();  assert(x == 1 && y == 2);
+    }
 }
 
 void test_trail_undo() {
@@ -447,6 +496,67 @@ void test_trail_undo() {
         // Now at depth 1; path.top() is the outer frame
         assert(t.path.top() != inner_frame);
         assert(x == 1);
+    }
+
+    // Test 7: Branching at non-root level — siblings created under an intermediate frame
+    {
+        trail t;
+        int x = 0;
+
+        t.push(); x = 1; t.log([&x]() { x = 0; }, [&x]() { x = 1; });  // Frame A
+        t.push(); x = 2; t.log([&x]() { x = 1; }, [&x]() { x = 2; });  // Frame B (child of A)
+        assert(t.root.children.size() == 1);
+        assert(t.root.children.front().children.size() == 1);
+
+        auto iterB = t.undo();  // back in A; B retained in A.children
+        assert(x == 1 && t.path.size() == 1);
+        assert(t.root.children.front().children.size() == 1);  // B still there
+
+        // Create C: sibling of B, both children of A (not of root)
+        t.push(); x = 3; t.log([&x]() { x = 1; }, [&x]() { x = 3; });  // Frame C
+        assert(t.root.children.size() == 1);                       // A still the only root child
+        assert(t.root.children.front().children.size() == 2);  // A now has B and C
+
+        auto iterC = t.undo();  // back in A
+        assert(x == 1 && t.path.size() == 1);
+        assert(t.root.children.front().children.size() == 2);  // both B and C retained
+
+        assert(&*iterB != &*iterC);
+    }
+
+    // Test 8: Returned iterator lives in the correct parent's children list (non-root)
+    {
+        trail t;
+        int x = 0;
+
+        t.push(); x = 1; t.log([&x]() { x = 0; }, []{});  // Frame A in root.children
+        t.push(); x = 2; t.log([&x]() { x = 1; }, []{});  // Frame B in A.children
+
+        auto iterB = t.undo();  // iterator to B, which lives in A.children
+        assert(x == 1 && t.path.size() == 1);
+        assert(&*iterB == &t.root.children.front().children.front());
+
+        auto iterA = t.undo();  // iterator to A, which lives in root.children
+        assert(x == 0 && t.path.size() == 0);
+        assert(&*iterA == &t.root.children.front());
+    }
+
+    // Test 9: push() uses emplace_front — newer branches are at the front of children
+    {
+        trail t;
+        int x = 0;
+
+        // First branch
+        t.push(); x = 10; t.log([&x]() { x = 0; }, [&x]() { x = 10; });
+        auto iter1 = t.undo();  // iter1 = first (and only) root child
+
+        // Second branch added via emplace_front — should be at front, iter1 at back
+        t.push(); x = 20; t.log([&x]() { x = 0; }, [&x]() { x = 20; });
+        auto iter2 = t.undo();
+
+        assert(t.root.children.size() == 2);
+        assert(&t.root.children.front() == &*iter2);  // iter2 is the newer, at front
+        assert(&t.root.children.back()  == &*iter1);  // iter1 is the older, at back
     }
 }
 
@@ -560,6 +670,63 @@ void test_trail_redo() {
         t.redo(it2); assert(x == 2 && t.path.size() == 2);
         t.undo();    assert(x == 1 && t.path.size() == 1);
         t.undo();    assert(x == 0 && t.path.size() == 0);
+    }
+
+    // Test 7: After redo into one branch, the other branch is still in the children list
+    {
+        trail t;
+        int x = 0;
+
+        t.push(); x = 10; t.log([&x]() { x = 0; }, [&x]() { x = 10; });
+        auto iter1 = t.undo();
+        t.push(); x = 20; t.log([&x]() { x = 0; }, [&x]() { x = 20; });
+        auto iter2 = t.undo();
+        assert(t.root.children.size() == 2);
+
+        // Redo branch 1 — branch 2 must still exist in root.children
+        t.redo(iter1);
+        assert(x == 10 && t.path.top() == iter1);
+        assert(t.root.children.size() == 2);  // branch 2 not erased by redo
+        t.undo();
+
+        // Redo branch 2 — branch 1 must still exist in root.children
+        t.redo(iter2);
+        assert(x == 20 && t.path.top() == iter2);
+        assert(t.root.children.size() == 2);  // branch 1 not erased by redo
+        t.undo();
+    }
+
+    // Test 8: log() after redo() — new actions are appended to the redone frame;
+    // subsequent undo/redo cycles include the new action in LIFO/FIFO order
+    {
+        trail t;
+        int x = 0;
+
+        t.push();
+        x = 1; t.log([&x]() { x = 0; }, [&x]() { x = 1; });
+        assert(t.path.top()->actions.size() == 1);
+
+        auto it = t.undo();
+        assert(x == 0 && t.path.size() == 0);
+
+        t.redo(it);
+        assert(x == 1 && t.path.size() == 1);
+        assert(t.path.top()->actions.size() == 1);
+
+        // Log a new action while sitting in the redone frame
+        x = 5; t.log([&x]() { x = 1; }, [&x]() { x = 5; });
+        assert(t.path.top()->actions.size() == 2);  // new action appended
+        assert(x == 5);
+
+        // Undo reverses LIFO: new action (5→1) then original (1→0)
+        auto it2 = t.undo();
+        assert(x == 0 && t.path.size() == 0);
+        assert(it == it2);  // same frame
+
+        // Redo replays FIFO: original (0→1) then new action (1→5)
+        t.redo(it2);
+        assert(x == 5 && t.path.size() == 1);
+        assert(t.path.top()->actions.size() == 2);  // both actions still in frame
     }
 }
 
@@ -678,6 +845,71 @@ void test_trail_pop() {
         t2.pop();
         assert(x == 0 && y == 0);
         assert(t2.root.children.size() == 0);
+    }
+
+    // Test 8: Popping a frame destroys all of its descendants transitively
+    {
+        trail t;
+        int x = 0;
+
+        t.push(); x = 1; t.log([&x]() { x = 0; }, []{});  // Frame A
+        t.push(); x = 2; t.log([&x]() { x = 1; }, []{});  // Frame B (child of A)
+
+        t.undo();  // back in A; B retained as A's child
+        assert(t.root.children.front().children.size() == 1);
+        assert(t.path.size() == 1);
+
+        // Create Frame C: sibling of B, also a child of A
+        t.push(); x = 3; t.log([&x]() { x = 1; }, []{});  // Frame C
+        t.undo();  // back in A; A now has both B and C as children
+        assert(t.root.children.front().children.size() == 2);
+
+        // Pop A from within A: erases A from root.children, destroying B and C with it
+        t.pop();
+        assert(x == 0);                      // A's action undone
+        assert(t.path.size() == 0);
+        assert(t.root.children.size() == 0); // A gone; B and C destroyed transitively
+    }
+
+    // Test 9: pop() in a branching scenario — only the target branch is erased,
+    // sibling branches are unaffected
+    {
+        trail t;
+        int x = 0;
+
+        // Create two sibling branches under root
+        t.push(); x = 10; t.log([&x]() { x = 0;  }, [&x]() { x = 10; });
+        auto iter1 = t.undo();
+        t.push(); x = 20; t.log([&x]() { x = 0;  }, [&x]() { x = 20; });
+        auto iter2 = t.undo();
+        assert(t.root.children.size() == 2);
+
+        // Redo into branch 1 and pop it — branch 2 must survive
+        t.redo(iter1);
+        assert(x == 10);
+        t.pop();
+        assert(x == 0);
+        assert(t.root.children.size() == 1);   // branch 1 erased
+        assert(&t.root.children.front() == &*iter2);  // branch 2 still intact
+    }
+
+    // Test 10: push/pop/push cycle — trail is fully clean between cycles
+    {
+        trail t;
+        int x = 0;
+
+        // First cycle
+        t.push(); x = 1; t.log([&x]() { x = 0; }, [&x]() { x = 1; });
+        assert(t.root.children.size() == 1 && t.path.size() == 1);
+        t.pop();
+        assert(x == 0 && t.root.children.size() == 0 && t.path.size() == 0);
+
+        // Second cycle — should behave identically to the first
+        t.push(); x = 2; t.log([&x]() { x = 0; }, [&x]() { x = 2; });
+        assert(t.root.children.size() == 1 && t.path.size() == 1);
+        assert(t.path.top()->actions.size() == 1);
+        t.pop();
+        assert(x == 0 && t.root.children.size() == 0 && t.path.size() == 0);
     }
 }
 
