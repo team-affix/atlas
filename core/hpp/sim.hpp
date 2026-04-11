@@ -9,7 +9,7 @@ struct sim {
     sim(trail&, size_t);
     bool operator()();
     const resolutions& get_resolutions() const;
-    const decisions& get_decisions() const;
+    const resolutions& get_decisions() const;
 #ifndef DEBUG
 protected:
 #endif
@@ -24,7 +24,7 @@ protected:
     size_t max_resolutions;
 
     delta<resolutions> rs;
-    delta<decisions> ds;
+    delta<resolutions> ds;
 };
 
 #endif

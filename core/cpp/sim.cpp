@@ -34,6 +34,6 @@ const resolutions& sim::get_resolutions() const {
     return rs.get();
 }
 
-const decisions& sim::get_decisions() const {
+const resolutions& sim::get_decisions() const {
     return ds.get();
 }
