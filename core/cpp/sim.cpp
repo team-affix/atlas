@@ -1,14 +1,14 @@
 #include "../hpp/sim.hpp"
 
-sim::sim(size_t max_resolutions) :
+sim::sim(trail& t, size_t max_resolutions) :
     max_resolutions(max_resolutions),
-    rs({}),
-    ds({})
+    rs(t, {}),
+    ds(t, {})
 {}
 
 bool sim::operator()() {
     
-    while ((rs.size() < max_resolutions) && !conflicted() && !solved()) {
+    while ((rs.get().size() < max_resolutions) && !conflicted() && !solved()) {
         // continue until fixpoint
         if (const resolution_lineage* rl = derive_one()) {
             rs.insert(rl);
@@ -31,9 +31,9 @@ bool sim::operator()() {
 }
 
 const resolutions& sim::get_resolutions() const {
-    return rs;
+    return rs.get();
 }
 
 const decisions& sim::get_decisions() const {
-    return ds;
+    return ds.get();
 }
