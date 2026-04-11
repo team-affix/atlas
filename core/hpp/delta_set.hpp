@@ -9,6 +9,7 @@
 
 template<typename T>
 struct delta<std::set<T>> {
+    virtual ~delta<std::set<T>>() = default;
     delta(trail& t, const std::set<T>& value) : underlying(t, value) {}
     void insert(const T& value) {
         // if the value is already in the set, do nothing

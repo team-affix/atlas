@@ -11,6 +11,7 @@
 
 template<typename K, typename V>
 struct delta<std::map<K, V>> {
+    virtual ~delta<std::map<K, V>>() = default;
     delta(trail& t, const std::map<K, V>& value) : underlying(t, value) {}
     void insert(const K& key, const V& value) {
         // create the key register
