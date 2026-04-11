@@ -6,6 +6,7 @@
 #include "defs.hpp"
 
 struct candidate_store : frontier<std::vector<size_t>> {
+    virtual ~candidate_store() = default;
     candidate_store(
         const database&,
         const goals&,
@@ -18,11 +19,7 @@ struct candidate_store : frontier<std::vector<size_t>> {
 #ifndef DEBUG
 private:
 #endif
-    std::vector<std::vector<size_t>> expand(const std::vector<size_t>&, const rule&) override;
-
-    const database& db;
-    lineage_pool& lp;
-    trail& t;
+    std::optional<std::vector<std::vector<size_t>>> expand(const std::vector<size_t>&, const rule&) override;
 
     std::vector<size_t> initial_candidates;
 };
