@@ -1,14 +1,15 @@
 #include "../hpp/sequencer.hpp"
 
-sequencer::sequencer(trail& trail_ref)
-    : trail_ref(trail_ref), index(0) {
+sequencer::sequencer(trail& t)
+    : index(t, 0) {
 
 }
 
 uint32_t sequencer::operator()() {
-    trail_ref.log(
-        [this]{--index;},
-        [this]{++index;}
+    uint32_t result = index.get();
+    index.mutate(
+        [](uint32_t& index) { ++index; },
+        [](uint32_t& index) { --index; }
     );
-    return index++;
+    return result;
 }

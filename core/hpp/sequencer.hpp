@@ -3,6 +3,7 @@
 
 #include <cstdint>
 #include "trail.hpp"
+#include "tracked.hpp"
 
 struct sequencer {
     sequencer(trail&);
@@ -10,8 +11,7 @@ struct sequencer {
 #ifndef DEBUG
 private:
 #endif
-    trail& trail_ref;
-    uint32_t index;
+    tracked<uint32_t> index;
 };
 
 #endif
