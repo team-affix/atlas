@@ -13,7 +13,7 @@ struct frontier : delta<std::map<const goal_lineage*, T>> {
         trail&
     );
     bool resolve(const resolution_lineage*);
-    virtual std::optional<std::vector<T>> expand(const T&, const rule&) = 0;
+    virtual std::vector<T> expand(const T&, const rule&) = 0;
 #ifndef DEBUG
 private:
 #endif
@@ -42,10 +42,6 @@ bool frontier<T>::resolve(const resolution_lineage* r) {
     
     // expand the parent's value with the rule at the resolution index
     auto child_values = expand(parent_value, db.at(r->idx));
-
-    // if the expansion failed, return false
-    if (!child_values.has_value())
-        return false;
 
     // erase the parent from the frontier
     delta<std::map<const goal_lineage*, T>>::erase(parent);
