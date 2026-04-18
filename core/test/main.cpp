@@ -16198,6 +16198,297 @@ void test_mcts_decider() {
     }
 }
 
+void test_lemma_constructor() {
+    // Test 1: Empty input — rs is empty
+    {
+        resolutions input;
+        lemma l(input);
+        assert(l.rs.empty());
+    }
+
+    // Test 2: Single root-level rl (parent goal has nullptr parent resolution) — kept as-is
+    {
+        lineage_pool lp;
+        const goal_lineage* g0 = lp.goal(nullptr, 0);
+        const resolution_lineage* rl0 = lp.resolution(g0, 0);
+
+        resolutions input;
+        input.insert(rl0);
+        lemma l(input);
+
+        assert(l.rs.size() == 1);
+        assert(l.rs.count(rl0) == 1);
+    }
+
+    // Test 3: Two unrelated root-level rls — both kept (neither is an ancestor of the other)
+    {
+        lineage_pool lp;
+        const goal_lineage* g0 = lp.goal(nullptr, 0);
+        const goal_lineage* g1 = lp.goal(nullptr, 1);
+        const resolution_lineage* rl0 = lp.resolution(g0, 0);
+        const resolution_lineage* rl1 = lp.resolution(g1, 0);
+
+        resolutions input;
+        input.insert(rl0);
+        input.insert(rl1);
+        lemma l(input);
+
+        assert(l.rs.size() == 2);
+        assert(l.rs.count(rl0) == 1);
+        assert(l.rs.count(rl1) == 1);
+    }
+
+    // Test 4: Two-element chain {rl0, rl1} — ancestor rl0 removed, leaf rl1 kept
+    {
+        lineage_pool lp;
+        const goal_lineage* g0 = lp.goal(nullptr, 0);
+        const resolution_lineage* rl0 = lp.resolution(g0, 0);
+        const goal_lineage* g1 = lp.goal(rl0, 0);
+        const resolution_lineage* rl1 = lp.resolution(g1, 0);
+
+        resolutions input;
+        input.insert(rl0);
+        input.insert(rl1);
+        lemma l(input);
+
+        assert(l.rs.size() == 1);
+        assert(l.rs.count(rl0) == 0);
+        assert(l.rs.count(rl1) == 1);
+    }
+
+    // Test 5: Three-element chain {rl0, rl1, rl2} — only deepest leaf rl2 kept
+    {
+        lineage_pool lp;
+        const goal_lineage* g0 = lp.goal(nullptr, 0);
+        const resolution_lineage* rl0 = lp.resolution(g0, 0);
+        const goal_lineage* g1 = lp.goal(rl0, 0);
+        const resolution_lineage* rl1 = lp.resolution(g1, 0);
+        const goal_lineage* g2 = lp.goal(rl1, 0);
+        const resolution_lineage* rl2 = lp.resolution(g2, 0);
+
+        resolutions input;
+        input.insert(rl0);
+        input.insert(rl1);
+        input.insert(rl2);
+        lemma l(input);
+
+        assert(l.rs.size() == 1);
+        assert(l.rs.count(rl2) == 1);
+        assert(l.rs.count(rl1) == 0);
+        assert(l.rs.count(rl0) == 0);
+    }
+
+    // Test 6: Two siblings sharing one ancestor — ancestor removed, both siblings kept
+    {
+        lineage_pool lp;
+        const goal_lineage* g0 = lp.goal(nullptr, 0);
+        const resolution_lineage* rl0 = lp.resolution(g0, 0);
+        const goal_lineage* g1 = lp.goal(rl0, 0);
+        const resolution_lineage* rl1 = lp.resolution(g1, 0);
+        const goal_lineage* g2 = lp.goal(rl0, 1);
+        const resolution_lineage* rl2 = lp.resolution(g2, 0);
+
+        resolutions input;
+        input.insert(rl0);
+        input.insert(rl1);
+        input.insert(rl2);
+        lemma l(input);
+
+        assert(l.rs.size() == 2);
+        assert(l.rs.count(rl1) == 1);
+        assert(l.rs.count(rl2) == 1);
+        assert(l.rs.count(rl0) == 0);
+    }
+
+    // Test 7: Only the leaf in input, ancestor absent — leaf preserved unchanged
+    {
+        lineage_pool lp;
+        const goal_lineage* g0 = lp.goal(nullptr, 0);
+        const resolution_lineage* rl0 = lp.resolution(g0, 0);
+        const goal_lineage* g1 = lp.goal(rl0, 0);
+        const resolution_lineage* rl1 = lp.resolution(g1, 0);
+
+        resolutions input;
+        input.insert(rl1); // rl0 absent from input
+        lemma l(input);
+
+        assert(l.rs.size() == 1);
+        assert(l.rs.count(rl1) == 1);
+    }
+
+    // Test 8: Input is unchanged after construction (deep copy, not a reference)
+    {
+        lineage_pool lp;
+        const goal_lineage* g0 = lp.goal(nullptr, 0);
+        const resolution_lineage* rl0 = lp.resolution(g0, 0);
+        const goal_lineage* g1 = lp.goal(rl0, 0);
+        const resolution_lineage* rl1 = lp.resolution(g1, 0);
+
+        resolutions input;
+        input.insert(rl0);
+        input.insert(rl1);
+        lemma l(input);
+
+        // The original input must be unmodified
+        assert(input.size() == 2);
+        assert(input.count(rl0) == 1);
+        assert(input.count(rl1) == 1);
+    }
+}
+
+void test_lemma_get_resolutions() {
+    // Test 1: Empty lemma — get_resolutions returns empty set
+    {
+        resolutions input;
+        lemma l(input);
+        const resolutions& rs = l.get_resolutions();
+        assert(rs.empty());
+    }
+
+    // Test 2: Single root-level rl — get_resolutions contains it
+    {
+        lineage_pool lp;
+        const goal_lineage* g0 = lp.goal(nullptr, 0);
+        const resolution_lineage* rl0 = lp.resolution(g0, 0);
+
+        resolutions input;
+        input.insert(rl0);
+        lemma l(input);
+
+        const resolutions& rs = l.get_resolutions();
+        assert(rs.size() == 1);
+        assert(rs.count(rl0) == 1);
+    }
+
+    // Test 3: Chain — get_resolutions contains only the leaf
+    {
+        lineage_pool lp;
+        const goal_lineage* g0 = lp.goal(nullptr, 0);
+        const resolution_lineage* rl0 = lp.resolution(g0, 0);
+        const goal_lineage* g1 = lp.goal(rl0, 0);
+        const resolution_lineage* rl1 = lp.resolution(g1, 0);
+
+        resolutions input;
+        input.insert(rl0);
+        input.insert(rl1);
+        lemma l(input);
+
+        const resolutions& rs = l.get_resolutions();
+        assert(rs.size() == 1);
+        assert(rs.count(rl1) == 1);
+        assert(rs.count(rl0) == 0);
+    }
+
+    // Test 4: Returns a const reference (same address as internal member)
+    {
+        lineage_pool lp;
+        const goal_lineage* g0 = lp.goal(nullptr, 0);
+        const resolution_lineage* rl0 = lp.resolution(g0, 0);
+
+        resolutions input;
+        input.insert(rl0);
+        lemma l(input);
+
+        const resolutions& rs1 = l.get_resolutions();
+        const resolutions& rs2 = l.get_resolutions();
+        assert(&rs1 == &rs2);
+        assert(&rs1 == &l.rs);
+    }
+}
+
+void test_lemma_remove_ancestors() {
+    // Test 1: Root-level rl — grandparent is nullptr, rs unchanged
+    {
+        lineage_pool lp;
+        const goal_lineage* g0 = lp.goal(nullptr, 0);
+        const resolution_lineage* rl0 = lp.resolution(g0, 0);
+
+        resolutions input;
+        input.insert(rl0);
+        lemma l(input);
+
+        // After construction the root rl must still be present
+        assert(l.rs.size() == 1);
+        assert(l.rs.count(rl0) == 1);
+
+        // Call remove_ancestors directly with a fresh visited set to confirm
+        // the loop stops immediately at nullptr (visited once, rs untouched)
+        std::set<const resolution_lineage*> visited;
+        l.remove_ancestors(rl0, visited);
+
+        assert(l.rs.size() == 1);
+        assert(l.rs.count(rl0) == 1);
+        assert(visited.count(nullptr) == 1);
+    }
+
+    // Test 2: One-level chain — direct call removes ancestor from rs
+    {
+        lineage_pool lp;
+        const goal_lineage* g0 = lp.goal(nullptr, 0);
+        const resolution_lineage* rl0 = lp.resolution(g0, 0);
+        const goal_lineage* g1 = lp.goal(rl0, 0);
+        const resolution_lineage* rl1 = lp.resolution(g1, 0);
+
+        // Seed rs manually: both rl0 and rl1 present, then call remove_ancestors on rl1
+        resolutions input;
+        input.insert(rl0);
+        input.insert(rl1);
+        lemma l(input);
+
+        // Constructor already trims; rl0 should already be gone.
+        // Re-insert rl0 to test the helper in isolation.
+        l.rs.insert(rl0);
+        assert(l.rs.size() == 2);
+
+        std::set<const resolution_lineage*> visited;
+        l.remove_ancestors(rl1, visited);
+
+        assert(l.rs.size() == 1);
+        assert(l.rs.count(rl1) == 1);
+        assert(l.rs.count(rl0) == 0);
+        assert(visited.count(rl0) == 1);
+        assert(visited.count(nullptr) == 1);
+    }
+
+    // Test 3: Pre-visited ancestor — walk stops early, no double removal
+    {
+        lineage_pool lp;
+        const goal_lineage* g0 = lp.goal(nullptr, 0);
+        const resolution_lineage* rl_root = lp.resolution(g0, 0);
+        const goal_lineage* g1 = lp.goal(rl_root, 0);
+        const resolution_lineage* rl1 = lp.resolution(g1, 0);
+        const goal_lineage* g2 = lp.goal(rl_root, 1);
+        const resolution_lineage* rl2 = lp.resolution(g2, 0);
+
+        // Build a lemma that starts with all three and trim in constructor
+        resolutions input;
+        input.insert(rl_root);
+        input.insert(rl1);
+        input.insert(rl2);
+        lemma l(input);
+
+        // After construction: rl_root removed, leaves rl1 and rl2 kept
+        assert(l.rs.size() == 2);
+        assert(l.rs.count(rl1) == 1);
+        assert(l.rs.count(rl2) == 1);
+
+        // Re-insert rl_root so we can observe the early-break behaviour
+        l.rs.insert(rl_root);
+
+        std::set<const resolution_lineage*> visited;
+        // First call: rl_root removed and marked visited
+        l.remove_ancestors(rl1, visited);
+        assert(l.rs.count(rl_root) == 0);
+        assert(visited.count(rl_root) == 1);
+
+        // Second call: rl_root already visited — early break, rl1 and rl2 intact
+        l.remove_ancestors(rl2, visited);
+        assert(l.rs.size() == 2);
+        assert(l.rs.count(rl1) == 1);
+        assert(l.rs.count(rl2) == 1);
+    }
+}
+
 void test_cdcl_constructor() {
     // Test 1: Default construction - all containers empty, is_refuted false
     {
@@ -17159,297 +17450,6 @@ void test_cdcl_eliminated() {
         // avoidance reduced to {rl2} → rl2 now eliminated
         assert(!c.eliminated(rl1));
         assert(c.eliminated(rl2));
-    }
-}
-
-void test_lemma_constructor() {
-    // Test 1: Empty input — rs is empty
-    {
-        resolutions input;
-        lemma l(input);
-        assert(l.rs.empty());
-    }
-
-    // Test 2: Single root-level rl (parent goal has nullptr parent resolution) — kept as-is
-    {
-        lineage_pool lp;
-        const goal_lineage* g0 = lp.goal(nullptr, 0);
-        const resolution_lineage* rl0 = lp.resolution(g0, 0);
-
-        resolutions input;
-        input.insert(rl0);
-        lemma l(input);
-
-        assert(l.rs.size() == 1);
-        assert(l.rs.count(rl0) == 1);
-    }
-
-    // Test 3: Two unrelated root-level rls — both kept (neither is an ancestor of the other)
-    {
-        lineage_pool lp;
-        const goal_lineage* g0 = lp.goal(nullptr, 0);
-        const goal_lineage* g1 = lp.goal(nullptr, 1);
-        const resolution_lineage* rl0 = lp.resolution(g0, 0);
-        const resolution_lineage* rl1 = lp.resolution(g1, 0);
-
-        resolutions input;
-        input.insert(rl0);
-        input.insert(rl1);
-        lemma l(input);
-
-        assert(l.rs.size() == 2);
-        assert(l.rs.count(rl0) == 1);
-        assert(l.rs.count(rl1) == 1);
-    }
-
-    // Test 4: Two-element chain {rl0, rl1} — ancestor rl0 removed, leaf rl1 kept
-    {
-        lineage_pool lp;
-        const goal_lineage* g0 = lp.goal(nullptr, 0);
-        const resolution_lineage* rl0 = lp.resolution(g0, 0);
-        const goal_lineage* g1 = lp.goal(rl0, 0);
-        const resolution_lineage* rl1 = lp.resolution(g1, 0);
-
-        resolutions input;
-        input.insert(rl0);
-        input.insert(rl1);
-        lemma l(input);
-
-        assert(l.rs.size() == 1);
-        assert(l.rs.count(rl0) == 0);
-        assert(l.rs.count(rl1) == 1);
-    }
-
-    // Test 5: Three-element chain {rl0, rl1, rl2} — only deepest leaf rl2 kept
-    {
-        lineage_pool lp;
-        const goal_lineage* g0 = lp.goal(nullptr, 0);
-        const resolution_lineage* rl0 = lp.resolution(g0, 0);
-        const goal_lineage* g1 = lp.goal(rl0, 0);
-        const resolution_lineage* rl1 = lp.resolution(g1, 0);
-        const goal_lineage* g2 = lp.goal(rl1, 0);
-        const resolution_lineage* rl2 = lp.resolution(g2, 0);
-
-        resolutions input;
-        input.insert(rl0);
-        input.insert(rl1);
-        input.insert(rl2);
-        lemma l(input);
-
-        assert(l.rs.size() == 1);
-        assert(l.rs.count(rl2) == 1);
-        assert(l.rs.count(rl1) == 0);
-        assert(l.rs.count(rl0) == 0);
-    }
-
-    // Test 6: Two siblings sharing one ancestor — ancestor removed, both siblings kept
-    {
-        lineage_pool lp;
-        const goal_lineage* g0 = lp.goal(nullptr, 0);
-        const resolution_lineage* rl0 = lp.resolution(g0, 0);
-        const goal_lineage* g1 = lp.goal(rl0, 0);
-        const resolution_lineage* rl1 = lp.resolution(g1, 0);
-        const goal_lineage* g2 = lp.goal(rl0, 1);
-        const resolution_lineage* rl2 = lp.resolution(g2, 0);
-
-        resolutions input;
-        input.insert(rl0);
-        input.insert(rl1);
-        input.insert(rl2);
-        lemma l(input);
-
-        assert(l.rs.size() == 2);
-        assert(l.rs.count(rl1) == 1);
-        assert(l.rs.count(rl2) == 1);
-        assert(l.rs.count(rl0) == 0);
-    }
-
-    // Test 7: Only the leaf in input, ancestor absent — leaf preserved unchanged
-    {
-        lineage_pool lp;
-        const goal_lineage* g0 = lp.goal(nullptr, 0);
-        const resolution_lineage* rl0 = lp.resolution(g0, 0);
-        const goal_lineage* g1 = lp.goal(rl0, 0);
-        const resolution_lineage* rl1 = lp.resolution(g1, 0);
-
-        resolutions input;
-        input.insert(rl1); // rl0 absent from input
-        lemma l(input);
-
-        assert(l.rs.size() == 1);
-        assert(l.rs.count(rl1) == 1);
-    }
-
-    // Test 8: Input is unchanged after construction (deep copy, not a reference)
-    {
-        lineage_pool lp;
-        const goal_lineage* g0 = lp.goal(nullptr, 0);
-        const resolution_lineage* rl0 = lp.resolution(g0, 0);
-        const goal_lineage* g1 = lp.goal(rl0, 0);
-        const resolution_lineage* rl1 = lp.resolution(g1, 0);
-
-        resolutions input;
-        input.insert(rl0);
-        input.insert(rl1);
-        lemma l(input);
-
-        // The original input must be unmodified
-        assert(input.size() == 2);
-        assert(input.count(rl0) == 1);
-        assert(input.count(rl1) == 1);
-    }
-}
-
-void test_lemma_get_resolutions() {
-    // Test 1: Empty lemma — get_resolutions returns empty set
-    {
-        resolutions input;
-        lemma l(input);
-        const resolutions& rs = l.get_resolutions();
-        assert(rs.empty());
-    }
-
-    // Test 2: Single root-level rl — get_resolutions contains it
-    {
-        lineage_pool lp;
-        const goal_lineage* g0 = lp.goal(nullptr, 0);
-        const resolution_lineage* rl0 = lp.resolution(g0, 0);
-
-        resolutions input;
-        input.insert(rl0);
-        lemma l(input);
-
-        const resolutions& rs = l.get_resolutions();
-        assert(rs.size() == 1);
-        assert(rs.count(rl0) == 1);
-    }
-
-    // Test 3: Chain — get_resolutions contains only the leaf
-    {
-        lineage_pool lp;
-        const goal_lineage* g0 = lp.goal(nullptr, 0);
-        const resolution_lineage* rl0 = lp.resolution(g0, 0);
-        const goal_lineage* g1 = lp.goal(rl0, 0);
-        const resolution_lineage* rl1 = lp.resolution(g1, 0);
-
-        resolutions input;
-        input.insert(rl0);
-        input.insert(rl1);
-        lemma l(input);
-
-        const resolutions& rs = l.get_resolutions();
-        assert(rs.size() == 1);
-        assert(rs.count(rl1) == 1);
-        assert(rs.count(rl0) == 0);
-    }
-
-    // Test 4: Returns a const reference (same address as internal member)
-    {
-        lineage_pool lp;
-        const goal_lineage* g0 = lp.goal(nullptr, 0);
-        const resolution_lineage* rl0 = lp.resolution(g0, 0);
-
-        resolutions input;
-        input.insert(rl0);
-        lemma l(input);
-
-        const resolutions& rs1 = l.get_resolutions();
-        const resolutions& rs2 = l.get_resolutions();
-        assert(&rs1 == &rs2);
-        assert(&rs1 == &l.rs);
-    }
-}
-
-void test_lemma_remove_ancestors() {
-    // Test 1: Root-level rl — grandparent is nullptr, rs unchanged
-    {
-        lineage_pool lp;
-        const goal_lineage* g0 = lp.goal(nullptr, 0);
-        const resolution_lineage* rl0 = lp.resolution(g0, 0);
-
-        resolutions input;
-        input.insert(rl0);
-        lemma l(input);
-
-        // After construction the root rl must still be present
-        assert(l.rs.size() == 1);
-        assert(l.rs.count(rl0) == 1);
-
-        // Call remove_ancestors directly with a fresh visited set to confirm
-        // the loop stops immediately at nullptr (visited once, rs untouched)
-        std::set<const resolution_lineage*> visited;
-        l.remove_ancestors(rl0, visited);
-
-        assert(l.rs.size() == 1);
-        assert(l.rs.count(rl0) == 1);
-        assert(visited.count(nullptr) == 1);
-    }
-
-    // Test 2: One-level chain — direct call removes ancestor from rs
-    {
-        lineage_pool lp;
-        const goal_lineage* g0 = lp.goal(nullptr, 0);
-        const resolution_lineage* rl0 = lp.resolution(g0, 0);
-        const goal_lineage* g1 = lp.goal(rl0, 0);
-        const resolution_lineage* rl1 = lp.resolution(g1, 0);
-
-        // Seed rs manually: both rl0 and rl1 present, then call remove_ancestors on rl1
-        resolutions input;
-        input.insert(rl0);
-        input.insert(rl1);
-        lemma l(input);
-
-        // Constructor already trims; rl0 should already be gone.
-        // Re-insert rl0 to test the helper in isolation.
-        l.rs.insert(rl0);
-        assert(l.rs.size() == 2);
-
-        std::set<const resolution_lineage*> visited;
-        l.remove_ancestors(rl1, visited);
-
-        assert(l.rs.size() == 1);
-        assert(l.rs.count(rl1) == 1);
-        assert(l.rs.count(rl0) == 0);
-        assert(visited.count(rl0) == 1);
-        assert(visited.count(nullptr) == 1);
-    }
-
-    // Test 3: Pre-visited ancestor — walk stops early, no double removal
-    {
-        lineage_pool lp;
-        const goal_lineage* g0 = lp.goal(nullptr, 0);
-        const resolution_lineage* rl_root = lp.resolution(g0, 0);
-        const goal_lineage* g1 = lp.goal(rl_root, 0);
-        const resolution_lineage* rl1 = lp.resolution(g1, 0);
-        const goal_lineage* g2 = lp.goal(rl_root, 1);
-        const resolution_lineage* rl2 = lp.resolution(g2, 0);
-
-        // Build a lemma that starts with all three and trim in constructor
-        resolutions input;
-        input.insert(rl_root);
-        input.insert(rl1);
-        input.insert(rl2);
-        lemma l(input);
-
-        // After construction: rl_root removed, leaves rl1 and rl2 kept
-        assert(l.rs.size() == 2);
-        assert(l.rs.count(rl1) == 1);
-        assert(l.rs.count(rl2) == 1);
-
-        // Re-insert rl_root so we can observe the early-break behaviour
-        l.rs.insert(rl_root);
-
-        std::set<const resolution_lineage*> visited;
-        // First call: rl_root removed and marked visited
-        l.remove_ancestors(rl1, visited);
-        assert(l.rs.count(rl_root) == 0);
-        assert(visited.count(rl_root) == 1);
-
-        // Second call: rl_root already visited — early break, rl1 and rl2 intact
-        l.remove_ancestors(rl2, visited);
-        assert(l.rs.size() == 2);
-        assert(l.rs.count(rl1) == 1);
-        assert(l.rs.count(rl2) == 1);
     }
 }
 
@@ -27119,6 +27119,9 @@ void unit_test_main() {
     TEST(test_mcts_decider_choose_goal);
     TEST(test_mcts_decider_choose_candidate);
     TEST(test_mcts_decider);
+    TEST(test_lemma_constructor);
+    TEST(test_lemma_get_resolutions);
+    TEST(test_lemma_remove_ancestors);
     TEST(test_cdcl_constructor);
     TEST(test_cdcl_upsert);
     TEST(test_cdcl_erase);
@@ -27126,9 +27129,6 @@ void unit_test_main() {
     TEST(test_cdcl_constrain);
     TEST(test_cdcl_refuted);
     TEST(test_cdcl_eliminated);
-    TEST(test_lemma_constructor);
-    TEST(test_lemma_get_resolutions);
-    TEST(test_lemma_remove_ancestors);
     TEST(test_sim_constructor);
     TEST(test_sim_get_resolutions);
     TEST(test_sim_get_decisions);
