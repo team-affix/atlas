@@ -6,8 +6,8 @@ body_visitor::body_visitor(expr_pool& pool, sequencer& seq, std::map<std::string
 
 antlrcpp::Any body_visitor::visitBody(CHCParser::BodyContext* ctx) {
     pred_visitor pv(pool, seq, var_map);
-    std::vector<const expr*> body;
+    std::vector<const expr::pred*> body;
     for (auto* p : ctx->pred())
-        body.push_back(std::any_cast<const expr*>(pv.visitPred(p)));
+        body.push_back(std::any_cast<const expr::pred*>(pv.visitPred(p)));
     return body;
 }

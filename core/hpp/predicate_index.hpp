@@ -7,13 +7,12 @@
 #include "defs.hpp"
 
 struct predicate_index {
-    explicit predicate_index(const database&);
+    predicate_index(const database&);
     const std::vector<size_t>& at(const std::string& name) const;
 #ifndef DEBUG
 private:
 #endif
     std::unordered_map<std::string, std::vector<size_t>> index;
-    static const std::vector<size_t> empty_candidates;
 };
 
 #endif

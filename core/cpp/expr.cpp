@@ -17,8 +17,8 @@ const expr* expr_pool::cons(const expr* l, const expr* r) {
     return intern(expr{expr::cons{l, r}});
 }
 
-const expr* expr_pool::pred(const std::string& name, std::vector<const expr*> args) {
-    return intern(expr{expr::pred{name, std::move(args)}});
+const expr::pred* expr_pool::pred(const std::string& name, std::vector<const expr*> args) {
+    return &std::get<expr::pred>(intern(expr{expr::pred{name, std::move(args)}})->content);
 }
 
 const expr* expr_pool::import(const expr* e) {
@@ -37,7 +37,7 @@ const expr* expr_pool::import(const expr* e) {
         imported_args.reserve(p->args.size());
         for (const expr* arg : p->args)
             imported_args.push_back(import(arg));
-        return pred(p->name, std::move(imported_args));
+        return intern(expr{expr::pred{p->name, std::move(imported_args)}});
     }
 
     throw std::runtime_error("Unsupported expression type");

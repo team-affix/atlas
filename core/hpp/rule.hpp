@@ -5,8 +5,8 @@
 #include "expr.hpp"
 
 struct rule {
-    const expr* head;
-    std::vector<const expr*> body;
+    const expr::pred* head;
+    std::vector<const expr::pred*> body;
     auto operator<=>(const rule&) const = default;
 };
 
