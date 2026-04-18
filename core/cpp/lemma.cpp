@@ -10,6 +10,10 @@ lemma::lemma(const resolutions& input) :
 
 }
 
+const resolutions& lemma::get_resolutions() const {
+    return rs;
+}
+
 void lemma::remove_ancestors(const resolution_lineage* rl, std::set<const resolution_lineage*>& visited) {
     while (rl) {
         const resolution_lineage* grandparent = rl->parent->parent;

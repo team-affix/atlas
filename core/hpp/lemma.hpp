@@ -6,6 +6,7 @@
 
 struct lemma {
     lemma(const resolutions&);
+    const resolutions& get_resolutions() const;
 #ifndef DEBUG
 private:
 #endif
