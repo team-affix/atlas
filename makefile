@@ -30,17 +30,20 @@ PARSER_LIB            = build/libatlas_parser.a
 PARSER_DEBUG_LIB      = build/libatlas_parser_debug.a
 PARSER_DEBUG_FAST_LIB = build/libatlas_parser_debug_fast.a
 
+CLI_LIB            = build/libatlas_cli.a
+CLI_DEBUG_LIB      = build/libatlas_cli_debug.a
+CLI_DEBUG_FAST_LIB = build/libatlas_cli_debug_fast.a
+
 CORE_DEBUG_BIN      = build/core_debug
 CORE_DEBUG_FAST_BIN = build/core_debug_fast
 
 PARSER_DEBUG_BIN      = build/parser_debug
 PARSER_DEBUG_FAST_BIN = build/parser_debug_fast
 
-CLI_BIN            = build/cli
 CLI_DEBUG_BIN      = build/cli_debug
 CLI_DEBUG_FAST_BIN = build/cli_debug_fast
 
-CLI_SRC = $(wildcard cli/cpp/*.cpp)
+ATLAS_BIN = build/atlas
 
 # ==============================================================================
 # Object lists  (object files live in build/obj/<variant>/)
@@ -71,15 +74,23 @@ PARSER_DEBUG_FAST_OBJ = \
     $(patsubst %,                build/obj/parser_debug_fast/%.o, $(PARSER_GENERATED_STEMS)) \
     $(patsubst parser/cpp/%.cpp, build/obj/parser_debug_fast/%.o, $(PARSER_SRC))
 
+# CLI: source files are always present; no codegen needed for compilation.
+# cli/cpp/ contains the library sources; cli/entry/ contains the entrypoint.
+CLI_SRC = $(wildcard cli/cpp/*.cpp)
+
+CLI_OBJ            = $(patsubst cli/cpp/%.cpp, build/obj/cli/%.o,            $(CLI_SRC))
+CLI_DEBUG_OBJ      = $(patsubst cli/cpp/%.cpp, build/obj/cli_debug/%.o,      $(CLI_SRC))
+CLI_DEBUG_FAST_OBJ = $(patsubst cli/cpp/%.cpp, build/obj/cli_debug_fast/%.o, $(CLI_SRC))
+
 # ==============================================================================
 # User-facing targets
 # ==============================================================================
 
 .PHONY: all core core_debug core_debug_fast parser parser_debug parser_debug_fast \
-        cli cli_debug cli_debug_fast clean
+        cli cli_debug cli_debug_fast atlas clean
 
 all: core core_debug core_debug_fast parser parser_debug parser_debug_fast \
-     cli cli_debug cli_debug_fast
+     cli cli_debug cli_debug_fast atlas
 
 core: $(CORE_LIB)
 
@@ -116,35 +127,41 @@ parser_debug_fast: $(CORE_DEBUG_FAST_LIB)
 	    -L$(ANTLR4_LIB) -lantlr4-runtime \
 	    -o $(PARSER_DEBUG_FAST_BIN)
 
-cli: $(CORE_LIB)
-	$(MAKE) parser/generated
-	$(MAKE) $(PARSER_LIB)
-	$(CXX) $(CXXFLAGS) -O3 \
-	    -I$(ANTLR4_INC) -I$(CLI11_INC) \
-	    cli/entry/main.cpp $(CLI_SRC) \
-	    -Lbuild -latlas_parser -latlas_core \
-	    -L$(ANTLR4_LIB) -lantlr4-runtime \
-	    -o $(CLI_BIN)
+# CLI lib: sources never require codegen, so no recursive make needed.
+cli: $(CLI_LIB)
 
 cli_debug: $(CORE_DEBUG_LIB)
 	$(MAKE) parser/generated
 	$(MAKE) $(PARSER_DEBUG_LIB)
+	$(MAKE) $(CLI_DEBUG_LIB)
 	$(CXX) $(CXXFLAGS) -DDEBUG -g \
-	    -I$(ANTLR4_INC) -I$(CLI11_INC) \
-	    cli/entry/main.cpp $(CLI_SRC) \
-	    -Lbuild -latlas_parser_debug -latlas_core_debug \
+	    cli/test/main.cpp \
+	    -Lbuild -latlas_cli_debug -latlas_parser_debug -latlas_core_debug \
 	    -L$(ANTLR4_LIB) -lantlr4-runtime \
 	    -o $(CLI_DEBUG_BIN)
 
 cli_debug_fast: $(CORE_DEBUG_FAST_LIB)
 	$(MAKE) parser/generated
 	$(MAKE) $(PARSER_DEBUG_FAST_LIB)
+	$(MAKE) $(CLI_DEBUG_FAST_LIB)
 	$(CXX) $(CXXFLAGS) -DDEBUG -g -O3 \
-	    -I$(ANTLR4_INC) -I$(CLI11_INC) \
-	    cli/entry/main.cpp $(CLI_SRC) \
-	    -Lbuild -latlas_parser_debug_fast -latlas_core_debug_fast \
+	    cli/test/main.cpp \
+	    -Lbuild -latlas_cli_debug_fast -latlas_parser_debug_fast -latlas_core_debug_fast \
 	    -L$(ANTLR4_LIB) -lantlr4-runtime \
 	    -o $(CLI_DEBUG_FAST_BIN)
+
+# Release entrypoint: links cli/entry/main.cpp against the three release libs.
+# CLI11 headers are only needed here (the library sources don't use CLI11).
+atlas: $(CORE_LIB)
+	$(MAKE) parser/generated
+	$(MAKE) $(PARSER_LIB)
+	$(MAKE) $(CLI_LIB)
+	$(CXX) $(CXXFLAGS) -O3 \
+	    -I$(CLI11_INC) \
+	    cli/entry/main.cpp \
+	    -Lbuild -latlas_cli -latlas_parser -latlas_core \
+	    -L$(ANTLR4_LIB) -lantlr4-runtime \
+	    -o $(ATLAS_BIN)
 
 clean:
 	rm -rf build
@@ -170,6 +187,15 @@ $(PARSER_DEBUG_LIB): $(PARSER_DEBUG_OBJ) | build
 	$(AR) $(ARFLAGS) $@ $^
 
 $(PARSER_DEBUG_FAST_LIB): $(PARSER_DEBUG_FAST_OBJ) | build
+	$(AR) $(ARFLAGS) $@ $^
+
+$(CLI_LIB): $(CLI_OBJ) | build
+	$(AR) $(ARFLAGS) $@ $^
+
+$(CLI_DEBUG_LIB): $(CLI_DEBUG_OBJ) | build
+	$(AR) $(ARFLAGS) $@ $^
+
+$(CLI_DEBUG_FAST_LIB): $(CLI_DEBUG_FAST_OBJ) | build
 	$(AR) $(ARFLAGS) $@ $^
 
 # ==============================================================================
@@ -203,12 +229,22 @@ build/obj/parser_debug/%.o: parser/cpp/%.cpp | build/obj/parser_debug
 build/obj/parser_debug_fast/%.o: parser/cpp/%.cpp | build/obj/parser_debug_fast
 	$(CXX) $(CXXFLAGS) -I$(ANTLR4_INC) -DDEBUG -g -O3 -c $< -o $@
 
+build/obj/cli/%.o: cli/cpp/%.cpp | build/obj/cli
+	$(CXX) $(CXXFLAGS) -O3 -c $< -o $@
+
+build/obj/cli_debug/%.o: cli/cpp/%.cpp | build/obj/cli_debug
+	$(CXX) $(CXXFLAGS) -DDEBUG -g -c $< -o $@
+
+build/obj/cli_debug_fast/%.o: cli/cpp/%.cpp | build/obj/cli_debug_fast
+	$(CXX) $(CXXFLAGS) -DDEBUG -g -O3 -c $< -o $@
+
 # ==============================================================================
 # Build directory creation
 # ==============================================================================
 
 build build/obj/core build/obj/core_debug build/obj/core_debug_fast \
-build/obj/parser build/obj/parser_debug build/obj/parser_debug_fast:
+build/obj/parser build/obj/parser_debug build/obj/parser_debug_fast \
+build/obj/cli build/obj/cli_debug build/obj/cli_debug_fast:
 	mkdir -p $@
 
 # ==============================================================================

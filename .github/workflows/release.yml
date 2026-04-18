@@ -24,11 +24,17 @@ jobs:
       - name: Build parser tests
         run: make parser_debug_fast
 
+      - name: Build CLI tests
+        run: make cli_debug_fast
+
       - name: Run core tests
         run: ./build/core_debug_fast
 
       - name: Run parser tests
         run: ./build/parser_debug_fast
+
+      - name: Run CLI tests
+        run: ./build/cli_debug_fast
 
   release:
     needs: build-and-test
@@ -45,25 +51,18 @@ jobs:
       - name: Install dependencies
         run: sudo apt-get update && sudo apt-get install -y build-essential default-jre libantlr4-runtime-dev
 
-      - name: Build release core library
-        run: make core
-
-      - name: Build release parser library
-        run: make parser
-
-      - name: Build release CLI binary
-        run: make cli
-
-      - name: Rename release binary
-        run: mv build/cli build/atlas
+      - name: Build release entrypoint
+        run: make atlas
 
       - name: Create release lib folder
         run: |
           mkdir -p release/lib release/include
           cp build/libatlas_core.a release/lib/
           cp build/libatlas_parser.a release/lib/
+          cp build/libatlas_cli.a release/lib/
           cp -r core/hpp release/include/core
           cp -r parser/hpp release/include/parser
+          cp -r cli/hpp release/include/cli
 
       - name: Tar release lib folder
         run: tar -czf release-lib.tar.gz release/
