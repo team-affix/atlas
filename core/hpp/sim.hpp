@@ -30,7 +30,7 @@ protected:
     bool conflicted();
     const resolution_lineage* derive_one();
     virtual const resolution_lineage* decide_one() = 0;
-    virtual void on_resolve(const resolution_lineage*) = 0;
+    virtual void on_resolve(const resolution_lineage*);
 
     const database& db;
     trail& t;
