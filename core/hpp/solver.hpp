@@ -2,6 +2,7 @@
 #define SOLVER_HPP
 
 #include <memory>
+#include <optional>
 #include "defs.hpp"
 #include "trail.hpp"
 #include "expr.hpp"
@@ -21,7 +22,7 @@ struct solver {
         size_t max_resolutions
     );
     virtual ~solver();
-    bool operator()();
+    bool operator()(std::optional<resolutions>&);
 #ifndef DEBUG
 protected:
 #endif

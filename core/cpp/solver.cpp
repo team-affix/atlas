@@ -26,9 +26,8 @@ solver::~solver() {
     t.pop();
 }
 
-bool solver::operator()() {
-    if (c.refuted())
-        return false;
+bool solver::operator()(std::optional<resolutions>& soln) {
+    soln = std::nullopt;
 
     // tear down the previous frame and sim, then set up a fresh frame
     t.pop();
@@ -36,9 +35,12 @@ bool solver::operator()() {
     lp.trim();
     t.push();
 
+    if (c.refuted())
+        return false;
+
     // build and run the simulation for this iteration
     managed_sim = construct_sim();
-    bool result = (*managed_sim)();
+    bool solved = (*managed_sim)();
 
     // derived-class post-processing (e.g. MCTS backpropagation)
     terminate(*managed_sim);
@@ -52,5 +54,11 @@ bool solver::operator()() {
     for (const resolution_lineage* rl : ds)
         lp.pin(rl);
 
-    return result;
+    if (solved)
+        soln = managed_sim->get_resolutions();
+
+    // return true while still going; false only when refuted.
+    // if this sim produced a solution, always return true so the caller can
+    // consume it before the next call detects (or triggers) refutation.
+    return solved || !c.refuted();
 }
