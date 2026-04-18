@@ -38,6 +38,15 @@
 - The interface only allows construction with references, not nullable pointers
 - Moved-from cons objects are invalid and should not be used (standard C++ behavior)
 
+## Test Coverage and Completeness
+
+- **100% method coverage:** every public (and protected-in-DEBUG) method must have at least one dedicated test function.
+- **100% functionality coverage:** every distinct behavior, branch, and edge case of each method must be covered by an assertion somewhere in the suite. A method that has multiple logical paths needs test cases that exercise all of them.
+- **Hardcore testing:** do not write token tests that merely call a method and ignore the result. Every test must assert concrete, specific values — sizes, member states, return values, side effects on collaborators.
+- **Contiguous grouping:** all test functions for the same class must be declared together in one uninterrupted block. Never interleave tests from different classes.
+- **Declaration order = invocation order:** the order in which test functions are defined in the file must exactly match the order in which they are called in `unit_test_main`. No exceptions.
+- **Topological sort:** classes that depend on other classes must have their tests appear after the tests of their dependencies (strong foundation rule). Within a class block, test simpler/foundational methods before methods that build on them.
+
 ## Bug Finding and Testing
 
 - Actively think about common bugs that happen with certain function types:
