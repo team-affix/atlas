@@ -17432,103 +17432,136 @@ void test_cdcl_eliminated() {
 }
 
 // ---------------------------------------------------------------------------
-// sim_mock: concrete derived type used to test the sim base class
+// sim_mock: minimal concrete sim subclass used to test the sim base class.
+// Overrides decide_one() with a scripted, deterministic sequence.
+// Overrides on_resolve() to count calls while delegating to the real base.
 // ---------------------------------------------------------------------------
 
 struct sim_mock : sim {
-    sim_mock(size_t max) : sim(max) {}
+    sim_mock(size_t mr, const database& db_, const goals& gs_,
+             trail& t_, sequencer& seq_, expr_pool& ep_,
+             bind_map& bm_, lineage_pool& lp_, cdcl c_)
+        : sim(mr, db_, gs_, t_, seq_, ep_, bm_, lp_, c_) {}
 
-    // "derivation" | "decision" | "solved" | "conflict", one entry per iteration
-    std::vector<std::string> event_types;
-    // only derivation/decision events carry a resolution pointer
-    std::map<int, const resolution_lineage*> event_resolutions;
+    std::vector<const resolution_lineage*> scripted;
+    size_t decision_idx   = 0;
+    size_t on_resolve_cnt = 0;
 
-    int iteration = 0;
-    mutable int solve_calls = 0;
-    int derive_calls = 0;
-    int decide_calls = 0;
-    int on_resolve_calls = 0;
-
-    void check_bounds() const {
-        if (iteration >= (int)event_types.size())
-            throw std::out_of_range("sim_mock: iteration beyond end of event sequence");
-    }
-    bool solved() override {
-        solve_calls++;
-        check_bounds();
-        return event_types[iteration] == "solved";
-    }
-    bool conflicted() override {
-        check_bounds();
-        return event_types[iteration] == "conflict";
-    }
-    const resolution_lineage* derive_one() override {
-        derive_calls++;
-        check_bounds();
-        if (event_types[iteration] == "derivation")
-            return event_resolutions.at(iteration);
-        return nullptr;
-    }
     const resolution_lineage* decide_one() override {
-        decide_calls++;
-        check_bounds();
-        // decide_one must NEVER be called when a derivation is available
-        assert(event_types[iteration] != "derivation");
-        return event_resolutions.at(iteration);
+        return scripted.at(decision_idx++);
     }
-    void on_resolve(const resolution_lineage*) override {
-        on_resolve_calls++;
-        iteration++;
+    void on_resolve(const resolution_lineage* rl) override {
+        ++on_resolve_cnt;
+        sim::on_resolve(rl);
     }
 };
 
 // ---------------------------------------------------------------------------
 
 void test_sim_constructor() {
-    // max=10: fields initialized correctly
+    // Test 1: Empty goals — verify base class fields initialized correctly
     {
-        sim_mock s(10);
+        trail t; t.push();
+        expr_pool ep(t); bind_map bm(t); sequencer seq(t); lineage_pool lp;
+        database db; goals gs; cdcl c;
+        sim_mock s(10, db, gs, t, seq, ep, bm, lp, c);
+
         assert(s.max_resolutions == 10);
         assert(s.rs.size() == 0);
         assert(s.ds.size() == 0);
-        assert(s.iteration == 0);
+        assert(&s.db == &db);
+        assert(&s.t  == &t);
+        assert(&s.lp == &lp);
+        assert(&s.cp.sequencer_ref == &seq);
+        assert(&s.cp.expr_pool_ref == &ep);
+        assert(&s.c  != &c);  // cdcl is copied by value
+        assert(s.gs.empty());
+        assert(s.cs.empty());
+        assert(s.decision_idx   == 0);
+        assert(s.on_resolve_cnt == 0);
     }
 
-    // max=0: still initializes cleanly
+    // Test 2: max_resolutions=0
     {
-        sim_mock s(0);
+        trail t; t.push();
+        expr_pool ep(t); bind_map bm(t); sequencer seq(t); lineage_pool lp;
+        database db; goals gs; cdcl c;
+        sim_mock s(0, db, gs, t, seq, ep, bm, lp, c);
+
         assert(s.max_resolutions == 0);
         assert(s.rs.size() == 0);
         assert(s.ds.size() == 0);
     }
 
-    // max=SIZE_MAX: large value stored correctly
+    // Test 3: max_resolutions=SIZE_MAX
     {
-        sim_mock s(SIZE_MAX);
+        trail t; t.push();
+        expr_pool ep(t); bind_map bm(t); sequencer seq(t); lineage_pool lp;
+        database db; goals gs; cdcl c;
+        sim_mock s(SIZE_MAX, db, gs, t, seq, ep, bm, lp, c);
+
         assert(s.max_resolutions == SIZE_MAX);
-        assert(s.rs.size() == 0);
-        assert(s.ds.size() == 0);
+    }
+
+    // Test 4: Single goal — gs and cs populated on construction
+    {
+        trail t; t.push();
+        expr_pool ep(t); bind_map bm(t); sequencer seq(t); lineage_pool lp;
+        database db;
+        db.push_back(rule{ep.atom("p"), {}});
+        goals gs;
+        gs.push_back(ep.atom("p"));
+        cdcl c;
+        sim_mock s(100, db, gs, t, seq, ep, bm, lp, c);
+
+        assert(s.gs.size() == 1);
+        assert(s.cs.size() == 1);
+        const goal_lineage* gl0 = lp.goal(nullptr, 0);
+        assert(s.gs.at(gl0) == ep.atom("p"));
+        assert(s.cs.at(gl0) == std::vector<size_t>({0}));
+    }
+
+    // Test 5: Pre-populated cdcl is deep-copied, original unchanged
+    {
+        trail t; t.push();
+        expr_pool ep(t); bind_map bm(t); sequencer seq(t); lineage_pool lp;
+        database db; goals gs;
+        cdcl c;
+        const resolution_lineage* rl = lp.resolution(lp.goal(nullptr, 0), 0);
+        avoidance av; av.insert(rl);
+        c.learn(av);
+        size_t c_size = c.avoidances.size();
+        sim_mock s(100, db, gs, t, seq, ep, bm, lp, c);
+
+        assert(&s.c != &c);
+        assert(c.avoidances.size() == c_size);   // original unchanged
+        assert(s.c.avoidances.size() == 1);
     }
 }
 
 void test_sim_get_resolutions() {
-    // Returns a const reference to rs; empty initially
+    // Returns const ref to rs; empty initially
     {
-        sim_mock s(10);
+        trail t; t.push();
+        expr_pool ep(t); bind_map bm(t); sequencer seq(t); lineage_pool lp;
+        database db; goals gs; cdcl c;
+        sim_mock s(10, db, gs, t, seq, ep, bm, lp, c);
+
         const resolutions& r = s.get_resolutions();
         assert(r.size() == 0);
         assert(&r == &s.rs);
     }
 
-    // Reference reflects mutations made directly to rs (DEBUG mode)
+    // Reference is live: direct mutation to rs is visible through get_resolutions()
     {
-        lineage_pool lp;
-        sim_mock s(10);
-        const resolutions& r = s.get_resolutions();
-        assert(r.size() == 0);
+        trail t; t.push();
+        expr_pool ep(t); bind_map bm(t); sequencer seq(t); lineage_pool lp;
+        database db; goals gs; cdcl c;
+        sim_mock s(10, db, gs, t, seq, ep, bm, lp, c);
 
-        const goal_lineage* g = lp.goal(nullptr, 0);
-        const resolution_lineage* rl = lp.resolution(g, 0);
+        const resolutions& r = s.get_resolutions();
+        const goal_lineage* gl = lp.goal(nullptr, 0);
+        const resolution_lineage* rl = lp.resolution(gl, 0);
         s.rs.insert(rl);
 
         assert(r.size() == 1);
@@ -17537,23 +17570,28 @@ void test_sim_get_resolutions() {
 }
 
 void test_sim_get_decisions() {
-    // Returns a const reference to ds; empty initially
+    // Returns const ref to ds; empty initially
     {
-        sim_mock s(10);
+        trail t; t.push();
+        expr_pool ep(t); bind_map bm(t); sequencer seq(t); lineage_pool lp;
+        database db; goals gs; cdcl c;
+        sim_mock s(10, db, gs, t, seq, ep, bm, lp, c);
+
         const decisions& d = s.get_decisions();
         assert(d.size() == 0);
         assert(&d == &s.ds);
     }
 
-    // Reference reflects mutations made directly to ds (DEBUG mode)
+    // Reference is live: direct mutation to ds is visible through get_decisions()
     {
-        lineage_pool lp;
-        sim_mock s(10);
-        const decisions& d = s.get_decisions();
-        assert(d.size() == 0);
+        trail t; t.push();
+        expr_pool ep(t); bind_map bm(t); sequencer seq(t); lineage_pool lp;
+        database db; goals gs; cdcl c;
+        sim_mock s(10, db, gs, t, seq, ep, bm, lp, c);
 
-        const goal_lineage* g = lp.goal(nullptr, 0);
-        const resolution_lineage* rl = lp.resolution(g, 0);
+        const decisions& d = s.get_decisions();
+        const goal_lineage* gl = lp.goal(nullptr, 0);
+        const resolution_lineage* rl = lp.resolution(gl, 0);
         s.ds.insert(rl);
 
         assert(d.size() == 1);
@@ -17561,633 +17599,655 @@ void test_sim_get_decisions() {
     }
 }
 
+void test_sim_solved() {
+    // Test 1: Empty goals → gs.empty() → true
+    {
+        trail t;
+        t.push();
+        expr_pool ep(t);
+        bind_map bm(t);
+        sequencer seq(t);
+        lineage_pool lp;
+        database db;
+        goals goals;
+        cdcl c;
+        monte_carlo::tree_node<mcts_decider::choice> root;
+        std::mt19937 rng(42);
+        monte_carlo::simulation<mcts_decider::choice, std::mt19937> mc(root, 1.414, rng);
+        ridge_sim sim(100, db, goals, t, seq, ep, bm, lp, c, mc);
+
+        assert(sim.solved() == true);
+        assert(sim.gs.empty() == true);
+    }
+
+    // Test 2: Single goal → gs not empty → false
+    {
+        trail t;
+        t.push();
+        expr_pool ep(t);
+        bind_map bm(t);
+        sequencer seq(t);
+        lineage_pool lp;
+        database db;
+        db.push_back(rule{ep.atom("p"), {}});
+        goals goals;
+        goals.push_back(ep.atom("p"));
+        cdcl c;
+        monte_carlo::tree_node<mcts_decider::choice> root;
+        std::mt19937 rng(42);
+        monte_carlo::simulation<mcts_decider::choice, std::mt19937> mc(root, 1.414, rng);
+        ridge_sim sim(100, db, goals, t, seq, ep, bm, lp, c, mc);
+
+        assert(sim.solved() == false);
+        assert(sim.gs.size() == 1);
+    }
+
+    // Test 3: Multiple goals → gs not empty → false
+    {
+        trail t;
+        t.push();
+        expr_pool ep(t);
+        bind_map bm(t);
+        sequencer seq(t);
+        lineage_pool lp;
+        database db;
+        db.push_back(rule{ep.atom("p"), {}});
+        db.push_back(rule{ep.atom("q"), {}});
+        goals goals;
+        goals.push_back(ep.atom("p"));
+        goals.push_back(ep.atom("q"));
+        cdcl c;
+        monte_carlo::tree_node<mcts_decider::choice> root;
+        std::mt19937 rng(42);
+        monte_carlo::simulation<mcts_decider::choice, std::mt19937> mc(root, 1.414, rng);
+        ridge_sim sim(100, db, goals, t, seq, ep, bm, lp, c, mc);
+
+        assert(sim.solved() == false);
+        assert(sim.gs.size() == 2);
+    }
+}
+
+void test_sim_conflicted() {
+    // Test 1: Goal with matching rule → head elimination keeps candidate → not conflicted
+    {
+        trail t;
+        t.push();
+        expr_pool ep(t);
+        bind_map bm(t);
+        sequencer seq(t);
+        lineage_pool lp;
+        database db;
+        db.push_back(rule{ep.atom("p"), {}});
+        goals goals;
+        goals.push_back(ep.atom("p"));
+        cdcl c;
+        monte_carlo::tree_node<mcts_decider::choice> root;
+        std::mt19937 rng(42);
+        monte_carlo::simulation<mcts_decider::choice, std::mt19937> mc(root, 1.414, rng);
+        ridge_sim sim(100, db, goals, t, seq, ep, bm, lp, c, mc);
+
+        assert(sim.conflicted() == false);
+        // Rule 0 still present for gl0
+        const goal_lineage* gl0 = lp.goal(nullptr, 0);
+        assert(sim.cs.at(gl0).size() == 1);
+        assert(sim.cs.at(gl0)[0] == 0);
+    }
+
+    // Test 2: Empty database → no candidates from the start → conflicted
+    {
+        trail t;
+        t.push();
+        expr_pool ep(t);
+        bind_map bm(t);
+        sequencer seq(t);
+        lineage_pool lp;
+        database db;
+        goals goals;
+        goals.push_back(ep.atom("p"));
+        cdcl c;
+        monte_carlo::tree_node<mcts_decider::choice> root;
+        std::mt19937 rng(42);
+        monte_carlo::simulation<mcts_decider::choice, std::mt19937> mc(root, 1.414, rng);
+        ridge_sim sim(100, db, goals, t, seq, ep, bm, lp, c, mc);
+
+        assert(sim.conflicted() == true);
+        const goal_lineage* gl0 = lp.goal(nullptr, 0);
+        assert(sim.cs.at(gl0).empty());
+    }
+
+    // Test 3: Rule head doesn't match goal → eliminated → conflicted
+    {
+        trail t;
+        t.push();
+        expr_pool ep(t);
+        bind_map bm(t);
+        sequencer seq(t);
+        lineage_pool lp;
+        database db;
+        db.push_back(rule{ep.atom("q"), {}}); // rule for q, goal is p → mismatch
+        goals goals;
+        goals.push_back(ep.atom("p"));
+        cdcl c;
+        monte_carlo::tree_node<mcts_decider::choice> root;
+        std::mt19937 rng(42);
+        monte_carlo::simulation<mcts_decider::choice, std::mt19937> mc(root, 1.414, rng);
+        ridge_sim sim(100, db, goals, t, seq, ep, bm, lp, c, mc);
+
+        assert(sim.conflicted() == true);
+        const goal_lineage* gl0 = lp.goal(nullptr, 0);
+        assert(sim.cs.at(gl0).empty());
+    }
+
+    // Test 4: CDCL singleton avoidance eliminates the only candidate → conflicted
+    {
+        trail t;
+        t.push();
+        expr_pool ep(t);
+        bind_map bm(t);
+        sequencer seq(t);
+        lineage_pool lp;
+        database db;
+        db.push_back(rule{ep.atom("p"), {}});
+        goals goals;
+        goals.push_back(ep.atom("p"));
+
+        // Pre-populate cdcl: singleton avoidance {rl} → rl is eliminated
+        const goal_lineage* gl0 = lp.goal(nullptr, 0);
+        const resolution_lineage* rl = lp.resolution(gl0, 0);
+        cdcl c;
+        avoidance av;
+        av.insert(rl);
+        c.learn(av);
+        assert(c.eliminated(rl));
+
+        monte_carlo::tree_node<mcts_decider::choice> root;
+        std::mt19937 rng(42);
+        monte_carlo::simulation<mcts_decider::choice, std::mt19937> mc(root, 1.414, rng);
+        ridge_sim sim(100, db, goals, t, seq, ep, bm, lp, c, mc);
+
+        assert(sim.conflicted() == true);
+        assert(sim.cs.at(gl0).empty());
+    }
+
+    // Test 5: Two goals, one goal's rule head mismatches → conflicted regardless of other goal
+    {
+        trail t;
+        t.push();
+        expr_pool ep(t);
+        bind_map bm(t);
+        sequencer seq(t);
+        lineage_pool lp;
+        database db;
+        db.push_back(rule{ep.atom("p"), {}});
+        goals goals;
+        goals.push_back(ep.atom("p")); // gl0: matches rule 0
+        goals.push_back(ep.atom("q")); // gl1: no matching rule
+        cdcl c;
+        monte_carlo::tree_node<mcts_decider::choice> root;
+        std::mt19937 rng(42);
+        monte_carlo::simulation<mcts_decider::choice, std::mt19937> mc(root, 1.414, rng);
+        ridge_sim sim(100, db, goals, t, seq, ep, bm, lp, c, mc);
+
+        assert(sim.conflicted() == true);
+        const goal_lineage* gl0 = lp.goal(nullptr, 0);
+        const goal_lineage* gl1 = lp.goal(nullptr, 1);
+        assert(!sim.cs.at(gl0).empty()); // p still has rule 0
+        assert(sim.cs.at(gl1).empty());  // q has no matching rule
+    }
+
+    // Test 6: conflicted() is idempotent - calling twice gives same result
+    {
+        trail t;
+        t.push();
+        expr_pool ep(t);
+        bind_map bm(t);
+        sequencer seq(t);
+        lineage_pool lp;
+        database db;
+        goals goals;
+        goals.push_back(ep.atom("p"));
+        cdcl c;
+        monte_carlo::tree_node<mcts_decider::choice> root;
+        std::mt19937 rng(42);
+        monte_carlo::simulation<mcts_decider::choice, std::mt19937> mc(root, 1.414, rng);
+        ridge_sim sim(100, db, goals, t, seq, ep, bm, lp, c, mc);
+
+        assert(sim.conflicted() == true);
+        assert(sim.conflicted() == true); // second call same result
+    }
+}
+
+void test_sim_derive_one() {
+    // Test 1: Single goal with multiple candidates → not unit → nullptr
+    {
+        trail t;
+        t.push();
+        expr_pool ep(t);
+        bind_map bm(t);
+        sequencer seq(t);
+        lineage_pool lp;
+        database db;
+        db.push_back(rule{ep.atom("p"), {}});
+        db.push_back(rule{ep.atom("p"), {}}); // two rules for p → 2 candidates → not unit
+        goals goals;
+        goals.push_back(ep.atom("p"));
+        cdcl c;
+        monte_carlo::tree_node<mcts_decider::choice> root;
+        std::mt19937 rng(42);
+        monte_carlo::simulation<mcts_decider::choice, std::mt19937> mc(root, 1.414, rng);
+        ridge_sim sim(100, db, goals, t, seq, ep, bm, lp, c, mc);
+
+        assert(sim.derive_one() == nullptr);
+    }
+
+    // Test 2: Single rule in db → cs starts with 1 candidate → unit → returns expected rl
+    {
+        trail t;
+        t.push();
+        expr_pool ep(t);
+        bind_map bm(t);
+        sequencer seq(t);
+        lineage_pool lp;
+        database db;
+        db.push_back(rule{ep.atom("p"), {}});
+        goals goals;
+        goals.push_back(ep.atom("p"));
+        cdcl c;
+        monte_carlo::tree_node<mcts_decider::choice> root;
+        std::mt19937 rng(42);
+        monte_carlo::simulation<mcts_decider::choice, std::mt19937> mc(root, 1.414, rng);
+        ridge_sim sim(100, db, goals, t, seq, ep, bm, lp, c, mc);
+
+        const goal_lineage* gl0 = lp.goal(nullptr, 0);
+        const resolution_lineage* expected = lp.resolution(gl0, 0);
+        const resolution_lineage* result = sim.derive_one();
+        assert(result != nullptr);
+        assert(result == expected);
+    }
+
+    // Test 3: Empty goal store → cs is also empty → unit() false → nullptr
+    {
+        trail t;
+        t.push();
+        expr_pool ep(t);
+        bind_map bm(t);
+        sequencer seq(t);
+        lineage_pool lp;
+        database db;
+        goals goals;
+        cdcl c;
+        monte_carlo::tree_node<mcts_decider::choice> root;
+        std::mt19937 rng(42);
+        monte_carlo::simulation<mcts_decider::choice, std::mt19937> mc(root, 1.414, rng);
+        ridge_sim sim(100, db, goals, t, seq, ep, bm, lp, c, mc);
+
+        assert(sim.derive_one() == nullptr);
+    }
+
+    // Test 4: Two rules but only one matches the goal → after conflicted() reduces to 1 → unit
+    {
+        trail t;
+        t.push();
+        expr_pool ep(t);
+        bind_map bm(t);
+        sequencer seq(t);
+        lineage_pool lp;
+        database db;
+        db.push_back(rule{ep.atom("p"), {}}); // rule 0: p :- (matches)
+        db.push_back(rule{ep.atom("q"), {}}); // rule 1: q :- (doesn't match goal p)
+        goals goals;
+        goals.push_back(ep.atom("p"));
+        cdcl c;
+        monte_carlo::tree_node<mcts_decider::choice> root;
+        std::mt19937 rng(42);
+        monte_carlo::simulation<mcts_decider::choice, std::mt19937> mc(root, 1.414, rng);
+        ridge_sim sim(100, db, goals, t, seq, ep, bm, lp, c, mc);
+
+        // Initially, derive_one() returns nullptr
+        assert(sim.derive_one() == nullptr);
+
+        // Initially 2 candidates; conflicted() eliminates rule 1 (q head ≠ p goal)
+        assert(sim.conflicted() == false);
+        const goal_lineage* gl0 = lp.goal(nullptr, 0);
+        assert(sim.cs.at(gl0).size() == 1);
+
+        const resolution_lineage* expected = lp.resolution(gl0, 0);
+        const resolution_lineage* result = sim.derive_one();
+        assert(result != nullptr);
+        assert(result == expected);
+    }
+}
+
+void test_sim_on_resolve() {
+    // Test 1: Resolve goal with fact (empty body) → gs and cs become empty
+    {
+        trail t;
+        t.push();
+        expr_pool ep(t);
+        bind_map bm(t);
+        sequencer seq(t);
+        lineage_pool lp;
+        database db;
+        db.push_back(rule{ep.atom("p"), {}}); // p :-
+        goals goals;
+        goals.push_back(ep.atom("p"));
+        cdcl c;
+        monte_carlo::tree_node<mcts_decider::choice> root;
+        std::mt19937 rng(42);
+        monte_carlo::simulation<mcts_decider::choice, std::mt19937> mc(root, 1.414, rng);
+        ridge_sim sim(100, db, goals, t, seq, ep, bm, lp, c, mc);
+
+        assert(sim.gs.size() == 1);
+        assert(sim.cs.size() == 1);
+
+        const goal_lineage* gl0 = lp.goal(nullptr, 0);
+        const resolution_lineage* rl = lp.resolution(gl0, 0);
+        sim.on_resolve(rl);
+
+        // Empty body → no sub-goals added; both stores now empty
+        assert(sim.gs.empty());
+        assert(sim.cs.empty());
+    }
+
+    // Test 2: Resolve goal with non-empty body → old goal removed, sub-goal added
+    {
+        trail t;
+        t.push();
+        expr_pool ep(t);
+        bind_map bm(t);
+        sequencer seq(t);
+        lineage_pool lp;
+        database db;
+        db.push_back(rule{ep.atom("p"), {ep.atom("q")}}); // p :- q.
+        goals goals;
+        goals.push_back(ep.atom("p"));
+        cdcl c;
+        monte_carlo::tree_node<mcts_decider::choice> root;
+        std::mt19937 rng(42);
+        monte_carlo::simulation<mcts_decider::choice, std::mt19937> mc(root, 1.414, rng);
+        ridge_sim sim(100, db, goals, t, seq, ep, bm, lp, c, mc);
+
+        const goal_lineage* gl0 = lp.goal(nullptr, 0);
+        const resolution_lineage* rl = lp.resolution(gl0, 0);
+        sim.on_resolve(rl);
+
+        // p removed, q added as sub-goal
+        assert(sim.gs.size() == 1);
+        assert(!sim.gs.empty());
+
+        // Sub-goal lineage: lp.goal(rl, 0)
+        const goal_lineage* sub_gl = lp.goal(rl, 0);
+        assert(sim.gs.at(sub_gl) == ep.atom("q"));
+
+        // cs tracks the same sub-goal
+        assert(sim.cs.size() == 1);
+        // Old goal no longer in cs
+        assert(sim.cs.at(sub_gl).size() == 1); // db has 1 rule
+    }
+
+    // Test 3: c.constrain effect - avoidance reduced from 2 to 1 → remaining rl eliminated
+    {
+        trail t;
+        t.push();
+        expr_pool ep(t);
+        bind_map bm(t);
+        sequencer seq(t);
+        lineage_pool lp;
+        database db;
+        db.push_back(rule{ep.atom("p"), {}}); // p :-
+        goals goals;
+        goals.push_back(ep.atom("p"));
+
+        // Set up cdcl: 2-element avoidance {rl0, rl1}; neither eliminated yet
+        const goal_lineage* gl0 = lp.goal(nullptr, 0);
+        const resolution_lineage* rl0 = lp.resolution(gl0, 0);
+        const goal_lineage* gl_ghost = lp.goal(nullptr, 99); // sentinel goal for rl1
+        const resolution_lineage* rl1 = lp.resolution(gl_ghost, 0);
+
+        cdcl c;
+        avoidance av;
+        av.insert(rl0);
+        av.insert(rl1);
+        c.learn(av);
+        assert(!c.eliminated(rl0));
+        assert(!c.eliminated(rl1));
+
+        monte_carlo::tree_node<mcts_decider::choice> root;
+        std::mt19937 rng(42);
+        monte_carlo::simulation<mcts_decider::choice, std::mt19937> mc(root, 1.414, rng);
+        ridge_sim sim(100, db, goals, t, seq, ep, bm, lp, c, mc);
+
+        // on_resolve(rl0) calls sim.c.constrain(rl0) → {rl0, rl1} reduces to {rl1} → rl1 eliminated
+        sim.on_resolve(rl0);
+        assert(sim.c.eliminated(rl1));
+    }
+
+    // Test 4: on_resolve with two-level chain - verify gs and cs sizes at each step
+    {
+        trail t;
+        t.push();
+        expr_pool ep(t);
+        bind_map bm(t);
+        sequencer seq(t);
+        lineage_pool lp;
+        database db;
+        db.push_back(rule{ep.atom("p"), {ep.atom("q"), ep.atom("r")}}); // p :- q, r.
+        goals goals;
+        goals.push_back(ep.atom("p"));
+        cdcl c;
+        monte_carlo::tree_node<mcts_decider::choice> root;
+        std::mt19937 rng(42);
+        monte_carlo::simulation<mcts_decider::choice, std::mt19937> mc(root, 1.414, rng);
+        ridge_sim sim(100, db, goals, t, seq, ep, bm, lp, c, mc);
+
+        assert(sim.gs.size() == 1);
+
+        const goal_lineage* gl0 = lp.goal(nullptr, 0);
+        const resolution_lineage* rl = lp.resolution(gl0, 0);
+        sim.on_resolve(rl);
+
+        // p removed; q and r added (body has 2 sub-goals)
+        assert(sim.gs.size() == 2);
+        assert(sim.cs.size() == 2);
+
+        const goal_lineage* sub_gl0 = lp.goal(rl, 0);
+        const goal_lineage* sub_gl1 = lp.goal(rl, 1);
+        assert(sim.gs.at(sub_gl0) == ep.atom("q"));
+        assert(sim.gs.at(sub_gl1) == ep.atom("r"));
+    }
+}
+
 void test_sim() {
-    // Test 1: Solved immediately - loop body never executes
+    // Test 1: Empty goals → solved() true immediately, loop never runs
     {
-        sim_mock s(10);
-        s.event_types = {"solved"};
+        trail t; t.push();
+        expr_pool ep(t); bind_map bm(t); sequencer seq(t); lineage_pool lp;
+        database db; goals gs; cdcl c;
+        sim_mock s(10, db, gs, t, seq, ep, bm, lp, c);
 
         bool result = s();
         assert(result == true);
         assert(s.rs.size() == 0);
         assert(s.ds.size() == 0);
-        assert(s.on_resolve_calls == 0);
-        assert(s.derive_calls == 0);
-        assert(s.decide_calls == 0);
-        // solved() called once during the while condition, once for return
-        assert(s.solve_calls == 2);
+        assert(s.on_resolve_cnt == 0);
+        assert(s.decision_idx == 0);
     }
 
-    // Test 2: Conflicted immediately - loop body never executes, returns false
+    // Test 2: Conflicted immediately → returns false, loop body never runs
     {
-        sim_mock s(10);
-        s.event_types = {"conflict"};
+        trail t; t.push();
+        expr_pool ep(t); bind_map bm(t); sequencer seq(t); lineage_pool lp;
+        database db;
+        db.push_back(rule{ep.atom("q"), {}});  // only rule for q
+        goals gs;
+        gs.push_back(ep.atom("p"));            // goal is p: no matching rule
+        cdcl c;
+        sim_mock s(10, db, gs, t, seq, ep, bm, lp, c);
 
         bool result = s();
         assert(result == false);
         assert(s.rs.size() == 0);
         assert(s.ds.size() == 0);
-        assert(s.on_resolve_calls == 0);
-        assert(s.derive_calls == 0);
-        assert(s.decide_calls == 0);
-        // solved() called once for return value only (conflicted() short-circuits before solved() in the while condition)
-        assert(s.solve_calls == 1);
+        assert(s.on_resolve_cnt == 0);
+        assert(s.decision_idx == 0);
     }
 
-    // Test 3: max_resolutions=0 - cap check fails before any virtual call in the loop;
-    // return solved() still calls solved() once at iter=0
+    // Test 3: max_resolutions=0 → while condition (0 < 0) is false immediately
     {
-        sim_mock s(0);
-        s.event_types = {"conflict"};
+        trail t; t.push();
+        expr_pool ep(t); bind_map bm(t); sequencer seq(t); lineage_pool lp;
+        database db;
+        db.push_back(rule{ep.atom("p"), {}});
+        goals gs;
+        gs.push_back(ep.atom("p"));
+        cdcl c;
+        sim_mock s(0, db, gs, t, seq, ep, bm, lp, c);
 
         bool result = s();
-        assert(result == false);
+        assert(result == false);  // solved() = false: p still pending
         assert(s.rs.size() == 0);
-        assert(s.ds.size() == 0);
-        assert(s.on_resolve_calls == 0);
-        assert(s.derive_calls == 0);
-        assert(s.decide_calls == 0);
-        assert(s.solve_calls == 1); // only the final return solved()
+        assert(s.on_resolve_cnt == 0);
+        assert(s.decision_idx == 0);
     }
 
-    // Test 4: Single derivation then solved - rl goes to rs only, not ds
+    // Test 4: Single fact → unit propagation resolves goal → solved
+    // derive_one() path taken; decide_one() never called
     {
-        lineage_pool lp;
-        const goal_lineage* g = lp.goal(nullptr, 0);
-        const resolution_lineage* rl1 = lp.resolution(g, 0);
-
-        sim_mock s(10);
-        s.event_types = {"derivation", "solved"};
-        s.event_resolutions[0] = rl1;
+        trail t; t.push();
+        expr_pool ep(t); bind_map bm(t); sequencer seq(t); lineage_pool lp;
+        database db;
+        db.push_back(rule{ep.atom("p"), {}});  // p :- .
+        goals gs;
+        gs.push_back(ep.atom("p"));
+        cdcl c;
+        sim_mock s(10, db, gs, t, seq, ep, bm, lp, c);
 
         bool result = s();
         assert(result == true);
         assert(s.rs.size() == 1);
-        assert(s.rs.count(rl1) == 1);
-        assert(s.ds.size() == 0);
-        assert(s.on_resolve_calls == 1);
-        assert(s.derive_calls == 1);
-        assert(s.decide_calls == 0);
+        assert(s.ds.size() == 0);      // derived, not decided
+        assert(s.on_resolve_cnt == 1);
+        assert(s.decision_idx == 0);   // decide_one never called
     }
 
-    // Test 5: Single decision then solved - rl goes to both rs and ds
+    // Test 5: Two candidates for goal → decide_one() invoked with scripted decision
+    // Rule 0 is a non-terminating branch (p :- r.); rule 1 is the fact (p :- .).
+    // Scripted decision picks rule 1 to verify we correctly select a non-zero index.
     {
-        lineage_pool lp;
-        const goal_lineage* g = lp.goal(nullptr, 0);
-        const resolution_lineage* rl1 = lp.resolution(g, 0);
+        trail t; t.push();
+        expr_pool ep(t); bind_map bm(t); sequencer seq(t); lineage_pool lp;
+        database db;
+        db.push_back(rule{ep.atom("p"), {ep.atom("r")}});  // rule 0: p :- r.
+        db.push_back(rule{ep.atom("p"), {}});               // rule 1: p :- .
+        goals gs;
+        gs.push_back(ep.atom("p"));
+        cdcl c;
 
-        sim_mock s(10);
-        s.event_types = {"decision", "solved"};
-        s.event_resolutions[0] = rl1;
+        const goal_lineage* gl0 = lp.goal(nullptr, 0);
+        sim_mock s(10, db, gs, t, seq, ep, bm, lp, c);
+        s.scripted.push_back(lp.resolution(gl0, 1));  // choose rule 1 (the fact)
 
         bool result = s();
         assert(result == true);
         assert(s.rs.size() == 1);
-        assert(s.rs.count(rl1) == 1);
-        assert(s.ds.size() == 1);
-        assert(s.ds.count(rl1) == 1);
-        assert(s.on_resolve_calls == 1);
-        assert(s.derive_calls == 1);
-        assert(s.decide_calls == 1);
+        assert(s.ds.size() == 1);          // it was a decision
+        assert(s.on_resolve_cnt == 1);
+        assert(s.decision_idx == 1);
+        assert(s.rs.count(lp.resolution(gl0, 1)) == 1);
+        assert(s.ds.count(lp.resolution(gl0, 1)) == 1);
     }
 
-    // Test 6: Mixed - derivation, then decision, then conflict
+    // Test 6: Unit-propagation chain: p :- q. then q :- . → two derives → solved
     {
-        lineage_pool lp;
-        const goal_lineage* g1 = lp.goal(nullptr, 0);
-        const goal_lineage* g2 = lp.goal(nullptr, 1);
-        const resolution_lineage* rl1 = lp.resolution(g1, 0);
-        const resolution_lineage* rl2 = lp.resolution(g2, 0);
-
-        sim_mock s(10);
-        s.event_types = {"derivation", "decision", "conflict"};
-        s.event_resolutions[0] = rl1;
-        s.event_resolutions[1] = rl2;
-
-        bool result = s();
-        assert(result == false);
-        assert(s.rs.size() == 2);
-        assert(s.rs.count(rl1) == 1);
-        assert(s.rs.count(rl2) == 1);
-        assert(s.ds.size() == 1);
-        assert(s.ds.count(rl2) == 1);
-        assert(s.on_resolve_calls == 2);
-        assert(s.derive_calls == 2);
-        assert(s.decide_calls == 1);
-    }
-
-    // Test 7: max_resolutions cap - loop exits on cap before terminal event
-    {
-        lineage_pool lp;
-        const goal_lineage* g1 = lp.goal(nullptr, 0);
-        const goal_lineage* g2 = lp.goal(nullptr, 1);
-        const resolution_lineage* rl1 = lp.resolution(g1, 0);
-        const resolution_lineage* rl2 = lp.resolution(g2, 0);
-
-        sim_mock s(2);
-        s.event_types = {"derivation", "derivation", "conflict"};
-        s.event_resolutions[0] = rl1;
-        s.event_resolutions[1] = rl2;
-
-        bool result = s();
-        // Cap triggered: rs hit max_resolutions=2, loop exits; solved() at iter=2 → "conflict" → false
-        assert(result == false);
-        assert(s.rs.size() == 2);
-        assert(s.rs.count(rl1) == 1);
-        assert(s.rs.count(rl2) == 1);
-        assert(s.ds.size() == 0);
-        assert(s.on_resolve_calls == 2);
-    }
-
-    // Test 8: Two derivations then two decisions then solved
-    {
-        lineage_pool lp;
-        const goal_lineage* g0 = lp.goal(nullptr, 0);
-        const goal_lineage* g1 = lp.goal(nullptr, 1);
-        const goal_lineage* g2 = lp.goal(nullptr, 2);
-        const goal_lineage* g3 = lp.goal(nullptr, 3);
-        const resolution_lineage* rl0 = lp.resolution(g0, 0);
-        const resolution_lineage* rl1 = lp.resolution(g1, 0);
-        const resolution_lineage* rl2 = lp.resolution(g2, 0);
-        const resolution_lineage* rl3 = lp.resolution(g3, 0);
-
-        sim_mock s(10);
-        s.event_types = {"derivation", "derivation", "decision", "decision", "solved"};
-        s.event_resolutions[0] = rl0;
-        s.event_resolutions[1] = rl1;
-        s.event_resolutions[2] = rl2;
-        s.event_resolutions[3] = rl3;
-
-        bool result = s();
-        assert(result == true);
-        assert(s.rs.size() == 4);
-        assert(s.rs.count(rl0) == 1);
-        assert(s.rs.count(rl1) == 1);
-        assert(s.rs.count(rl2) == 1);
-        assert(s.rs.count(rl3) == 1);
-        assert(s.ds.size() == 2);
-        assert(s.ds.count(rl2) == 1);
-        assert(s.ds.count(rl3) == 1);
-        assert(s.on_resolve_calls == 4);
-        assert(s.derive_calls == 4); // called once per iteration (derivation or decision)
-        assert(s.decide_calls == 2);
-    }
-
-    // Test 9: Alternating derivation and decision, ending in conflict
-    {
-        lineage_pool lp;
-        const goal_lineage* g0 = lp.goal(nullptr, 0);
-        const goal_lineage* g1 = lp.goal(nullptr, 1);
-        const goal_lineage* g2 = lp.goal(nullptr, 2);
-        const resolution_lineage* rl0 = lp.resolution(g0, 0);
-        const resolution_lineage* rl1 = lp.resolution(g1, 0);
-        const resolution_lineage* rl2 = lp.resolution(g2, 0);
-
-        sim_mock s(10);
-        s.event_types = {"derivation", "decision", "derivation", "conflict"};
-        s.event_resolutions[0] = rl0;
-        s.event_resolutions[1] = rl1;
-        s.event_resolutions[2] = rl2;
-
-        bool result = s();
-        assert(result == false);
-        assert(s.rs.size() == 3);
-        assert(s.rs.count(rl0) == 1);
-        assert(s.rs.count(rl1) == 1);
-        assert(s.rs.count(rl2) == 1);
-        assert(s.ds.size() == 1);
-        assert(s.ds.count(rl1) == 1);
-        assert(s.on_resolve_calls == 3);
-        assert(s.derive_calls == 3);
-        assert(s.decide_calls == 1);
-    }
-
-    // Test 10: Long all-derivation run capped by max_resolutions
-    {
-        lineage_pool lp;
-        const goal_lineage* g0 = lp.goal(nullptr, 0);
-        const goal_lineage* g1 = lp.goal(nullptr, 1);
-        const goal_lineage* g2 = lp.goal(nullptr, 2);
-        const goal_lineage* g3 = lp.goal(nullptr, 3);
-        const goal_lineage* g4 = lp.goal(nullptr, 4);
-        const resolution_lineage* rl0 = lp.resolution(g0, 0);
-        const resolution_lineage* rl1 = lp.resolution(g1, 0);
-        const resolution_lineage* rl2 = lp.resolution(g2, 0);
-        const resolution_lineage* rl3 = lp.resolution(g3, 0);
-        const resolution_lineage* rl4 = lp.resolution(g4, 0);
-
-        sim_mock s(3);
-        // 5 derivations available but cap is 3; terminal must still be present
-        s.event_types = {"derivation", "derivation", "derivation", "derivation", "derivation", "solved"};
-        s.event_resolutions[0] = rl0;
-        s.event_resolutions[1] = rl1;
-        s.event_resolutions[2] = rl2;
-        s.event_resolutions[3] = rl3;
-        s.event_resolutions[4] = rl4;
-
-        bool result = s();
-        // Cap at 3: only rl0, rl1, rl2 added; return solved() at iter=3 → "derivation" → false
-        assert(result == false);
-        assert(s.rs.size() == 3);
-        assert(s.rs.count(rl0) == 1);
-        assert(s.rs.count(rl1) == 1);
-        assert(s.rs.count(rl2) == 1);
-        assert(s.rs.count(rl3) == 0);
-        assert(s.rs.count(rl4) == 0);
-        assert(s.ds.size() == 0);
-        assert(s.on_resolve_calls == 3);
-    }
-
-    // Test 11: Decision then conflict - ds has the decision, rs also has it
-    {
-        lineage_pool lp;
-        const goal_lineage* g = lp.goal(nullptr, 0);
-        const resolution_lineage* rl = lp.resolution(g, 0);
-
-        sim_mock s(10);
-        s.event_types = {"decision", "conflict"};
-        s.event_resolutions[0] = rl;
-
-        bool result = s();
-        assert(result == false);
-        assert(s.rs.size() == 1);
-        assert(s.rs.count(rl) == 1);
-        assert(s.ds.size() == 1);
-        assert(s.ds.count(rl) == 1);
-        assert(s.on_resolve_calls == 1);
-        assert(s.derive_calls == 1);
-        assert(s.decide_calls == 1);
-    }
-
-    // Test 12: Three decisions then solved - all decisions land in both rs and ds
-    {
-        lineage_pool lp;
-        const goal_lineage* g0 = lp.goal(nullptr, 0);
-        const goal_lineage* g1 = lp.goal(nullptr, 1);
-        const goal_lineage* g2 = lp.goal(nullptr, 2);
-        const resolution_lineage* rl0 = lp.resolution(g0, 0);
-        const resolution_lineage* rl1 = lp.resolution(g1, 0);
-        const resolution_lineage* rl2 = lp.resolution(g2, 0);
-
-        sim_mock s(10);
-        s.event_types = {"decision", "decision", "decision", "solved"};
-        s.event_resolutions[0] = rl0;
-        s.event_resolutions[1] = rl1;
-        s.event_resolutions[2] = rl2;
-
-        bool result = s();
-        assert(result == true);
-        assert(s.rs.size() == 3);
-        assert(s.ds.size() == 3);
-        assert(s.ds.count(rl0) == 1);
-        assert(s.ds.count(rl1) == 1);
-        assert(s.ds.count(rl2) == 1);
-        assert(s.on_resolve_calls == 3);
-        assert(s.derive_calls == 3);
-        assert(s.decide_calls == 3);
-    }
-
-    // Test 13: Derivation then decision capped by max_resolutions=1 (cap after first derivation)
-    {
-        lineage_pool lp;
-        const goal_lineage* g0 = lp.goal(nullptr, 0);
-        const goal_lineage* g1 = lp.goal(nullptr, 1);
-        const resolution_lineage* rl0 = lp.resolution(g0, 0);
-        const resolution_lineage* rl1 = lp.resolution(g1, 0);
-
-        sim_mock s(1);
-        s.event_types = {"derivation", "decision", "solved"};
-        s.event_resolutions[0] = rl0;
-        s.event_resolutions[1] = rl1;
-
-        bool result = s();
-        // Cap after 1 derivation; return solved() at iter=1 → "decision" → false
-        assert(result == false);
-        assert(s.rs.size() == 1);
-        assert(s.rs.count(rl0) == 1);
-        assert(s.ds.size() == 0);
-        assert(s.on_resolve_calls == 1);
-        assert(s.decide_calls == 0);
-    }
-
-    // Test 14: Decision then derivation then solved - on_resolve advances iteration correctly
-    {
-        lineage_pool lp;
-        const goal_lineage* g0 = lp.goal(nullptr, 0);
-        const goal_lineage* g1 = lp.goal(nullptr, 1);
-        const resolution_lineage* rl0 = lp.resolution(g0, 0);
-        const resolution_lineage* rl1 = lp.resolution(g1, 0);
-
-        sim_mock s(10);
-        s.event_types = {"decision", "derivation", "solved"};
-        s.event_resolutions[0] = rl0;
-        s.event_resolutions[1] = rl1;
+        trail t; t.push();
+        expr_pool ep(t); bind_map bm(t); sequencer seq(t); lineage_pool lp;
+        database db;
+        db.push_back(rule{ep.atom("p"), {ep.atom("q")}});  // rule 0: p :- q.
+        db.push_back(rule{ep.atom("q"), {}});               // rule 1: q :- .
+        goals gs;
+        gs.push_back(ep.atom("p"));
+        cdcl c;
+        sim_mock s(10, db, gs, t, seq, ep, bm, lp, c);
 
         bool result = s();
         assert(result == true);
         assert(s.rs.size() == 2);
-        assert(s.rs.count(rl0) == 1);
-        assert(s.rs.count(rl1) == 1);
-        assert(s.ds.size() == 1);
-        assert(s.ds.count(rl0) == 1);
-        assert(s.ds.count(rl1) == 0); // derivation: not a decision
-        assert(s.on_resolve_calls == 2);
-        assert(s.derive_calls == 2);
-        assert(s.decide_calls == 1);
+        assert(s.ds.size() == 0);      // all derived, no decisions
+        assert(s.on_resolve_cnt == 2);
+        assert(s.decision_idx == 0);
     }
 
-    // Test 15: get_resolutions and get_decisions reflect operator() results
+    // Test 7: max_resolutions cap mid-run: p :- q :- r :- . needs 3 steps but cap=2
     {
-        lineage_pool lp;
-        const goal_lineage* g0 = lp.goal(nullptr, 0);
-        const goal_lineage* g1 = lp.goal(nullptr, 1);
-        const resolution_lineage* rl0 = lp.resolution(g0, 0);
-        const resolution_lineage* rl1 = lp.resolution(g1, 0);
+        trail t; t.push();
+        expr_pool ep(t); bind_map bm(t); sequencer seq(t); lineage_pool lp;
+        database db;
+        db.push_back(rule{ep.atom("p"), {ep.atom("q")}});  // rule 0: p :- q.
+        db.push_back(rule{ep.atom("q"), {ep.atom("r")}});  // rule 1: q :- r.
+        db.push_back(rule{ep.atom("r"), {}});               // rule 2: r :- .
+        goals gs;
+        gs.push_back(ep.atom("p"));
+        cdcl c;
+        sim_mock s(2, db, gs, t, seq, ep, bm, lp, c);
 
-        sim_mock s(10);
-        s.event_types = {"derivation", "decision", "solved"};
-        s.event_resolutions[0] = rl0;
-        s.event_resolutions[1] = rl1;
+        bool result = s();
+        // Resolves p→q then q→r (2 steps hits cap); r still pending → not solved
+        assert(result == false);
+        assert(s.rs.size() == 2);
+        assert(s.ds.size() == 0);
+        assert(s.on_resolve_cnt == 2);
+        assert(s.decision_idx == 0);
+    }
+
+    // Test 8: Decision then unit-propagation: two candidates for p,
+    // rule 0 is a dead-end branch (p :- r.); rule 1 leads to q which unit-propagates.
+    // Scripted to choose rule 1 (non-zero index) → sub-goal q → fact q :- . → solved.
+    {
+        trail t; t.push();
+        expr_pool ep(t); bind_map bm(t); sequencer seq(t); lineage_pool lp;
+        database db;
+        db.push_back(rule{ep.atom("p"), {ep.atom("r")}});  // rule 0: p :- r.
+        db.push_back(rule{ep.atom("p"), {ep.atom("q")}});  // rule 1: p :- q.
+        db.push_back(rule{ep.atom("q"), {}});               // rule 2: q :- .
+        goals gs;
+        gs.push_back(ep.atom("p"));
+        cdcl c;
+
+        const goal_lineage* gl0 = lp.goal(nullptr, 0);
+        sim_mock s(10, db, gs, t, seq, ep, bm, lp, c);
+        s.scripted.push_back(lp.resolution(gl0, 1));  // decide: choose rule 1
+
+        bool result = s();
+        assert(result == true);
+        assert(s.rs.size() == 2);      // 1 decision + 1 derive
+        assert(s.ds.size() == 1);      // only the decision
+        assert(s.on_resolve_cnt == 2);
+        assert(s.decision_idx == 1);
+
+        const resolution_lineage* decision_rl = lp.resolution(gl0, 1);
+        assert(s.ds.count(decision_rl) == 1);
+        assert(s.rs.count(decision_rl) == 1);
+    }
+
+    // Test 9: get_resolutions() and get_decisions() reflect operator() results
+    {
+        trail t; t.push();
+        expr_pool ep(t); bind_map bm(t); sequencer seq(t); lineage_pool lp;
+        database db;
+        db.push_back(rule{ep.atom("p"), {}});
+        goals gs;
+        gs.push_back(ep.atom("p"));
+        cdcl c;
+        sim_mock s(10, db, gs, t, seq, ep, bm, lp, c);
 
         s();
 
         const resolutions& r = s.get_resolutions();
-        const decisions& d = s.get_decisions();
-        assert(r.size() == 2);
-        assert(r.count(rl0) == 1);
-        assert(r.count(rl1) == 1);
-        assert(d.size() == 1);
-        assert(d.count(rl1) == 1);
-    }
-
-    // Test 16: Multiple runs on the same sim_mock - iteration persists after first run
-    {
-        lineage_pool lp;
-        const goal_lineage* g = lp.goal(nullptr, 0);
-        const resolution_lineage* rl = lp.resolution(g, 0);
-
-        sim_mock s(10);
-        s.event_types = {"derivation", "conflict"};
-        s.event_resolutions[0] = rl;
-
-        bool r1 = s();
-        assert(r1 == false);
-        assert(s.iteration == 1); // consumed iter 0 (derivation), stopped at iter 1 (conflict)
-        assert(s.rs.size() == 1);
-    }
-
-    // Test 17: Decision capped by max=1 - ds also gets the entry before cap
-    {
-        lineage_pool lp;
-        const goal_lineage* g = lp.goal(nullptr, 0);
-        const resolution_lineage* rl = lp.resolution(g, 0);
-
-        sim_mock s(1);
-        s.event_types = {"decision", "conflict"};
-        s.event_resolutions[0] = rl;
-
-        bool result = s();
-        // Cap after 1 decision; return solved() at iter=1 (event="conflict") → false
-        assert(result == false);
-        assert(s.rs.size() == 1);
-        assert(s.rs.count(rl) == 1);
-        assert(s.ds.size() == 1);
-        assert(s.ds.count(rl) == 1);
-        assert(s.on_resolve_calls == 1);
-        assert(s.derive_calls == 1);
-        assert(s.decide_calls == 1);
-        // solved() called once in the while condition (iter=0, event="decision") and once for return (iter=1)
-        assert(s.solve_calls == 2);
-    }
-
-    // Test 18: Decisions capped mid-run - only first N decisions are recorded
-    {
-        lineage_pool lp;
-        const goal_lineage* g0 = lp.goal(nullptr, 0);
-        const goal_lineage* g1 = lp.goal(nullptr, 1);
-        const goal_lineage* g2 = lp.goal(nullptr, 2);
-        const resolution_lineage* rl0 = lp.resolution(g0, 0);
-        const resolution_lineage* rl1 = lp.resolution(g1, 0);
-        const resolution_lineage* rl2 = lp.resolution(g2, 0);
-
-        sim_mock s(2);
-        s.event_types = {"decision", "decision", "decision", "conflict"};
-        s.event_resolutions[0] = rl0;
-        s.event_resolutions[1] = rl1;
-        s.event_resolutions[2] = rl2;
-
-        bool result = s();
-        // Cap after 2 decisions; return solved() at iter=2 (event="decision") → false
-        assert(result == false);
-        assert(s.rs.size() == 2);
-        assert(s.rs.count(rl0) == 1);
-        assert(s.rs.count(rl1) == 1);
-        assert(s.rs.count(rl2) == 0);
-        assert(s.ds.size() == 2);
-        assert(s.ds.count(rl0) == 1);
-        assert(s.ds.count(rl1) == 1);
-        assert(s.ds.count(rl2) == 0);
-        assert(s.on_resolve_calls == 2);
-        assert(s.decide_calls == 2);
-    }
-
-    // Test 19: Cap with "solved" as the next event - return solved() sees "solved" → returns true
-    {
-        lineage_pool lp;
-        const goal_lineage* g0 = lp.goal(nullptr, 0);
-        const goal_lineage* g1 = lp.goal(nullptr, 1);
-        const resolution_lineage* rl0 = lp.resolution(g0, 0);
-        const resolution_lineage* rl1 = lp.resolution(g1, 0);
-
-        sim_mock s(2);
-        s.event_types = {"derivation", "derivation", "solved"};
-        s.event_resolutions[0] = rl0;
-        s.event_resolutions[1] = rl1;
-
-        bool result = s();
-        // Cap after 2 derivations; return solved() at iter=2 (event="solved") → true
-        assert(result == true);
-        assert(s.rs.size() == 2);
-        assert(s.rs.count(rl0) == 1);
-        assert(s.rs.count(rl1) == 1);
-        assert(s.ds.size() == 0);
-        assert(s.on_resolve_calls == 2);
-        assert(s.decide_calls == 0);
-    }
-
-    // Test 20: Long alternating sequence - derivation, decision repeated, then solved
-    {
-        lineage_pool lp;
-        const goal_lineage* g0 = lp.goal(nullptr, 0);
-        const goal_lineage* g1 = lp.goal(nullptr, 1);
-        const goal_lineage* g2 = lp.goal(nullptr, 2);
-        const goal_lineage* g3 = lp.goal(nullptr, 3);
-        const goal_lineage* g4 = lp.goal(nullptr, 4);
-        const resolution_lineage* rl0 = lp.resolution(g0, 0);
-        const resolution_lineage* rl1 = lp.resolution(g1, 0);
-        const resolution_lineage* rl2 = lp.resolution(g2, 0);
-        const resolution_lineage* rl3 = lp.resolution(g3, 0);
-        const resolution_lineage* rl4 = lp.resolution(g4, 0);
-
-        sim_mock s(10);
-        s.event_types = {"derivation", "decision", "derivation", "decision", "derivation", "solved"};
-        s.event_resolutions[0] = rl0;
-        s.event_resolutions[1] = rl1;
-        s.event_resolutions[2] = rl2;
-        s.event_resolutions[3] = rl3;
-        s.event_resolutions[4] = rl4;
-
-        bool result = s();
-        assert(result == true);
-        assert(s.rs.size() == 5);
-        assert(s.rs.count(rl0) == 1);
-        assert(s.rs.count(rl1) == 1);
-        assert(s.rs.count(rl2) == 1);
-        assert(s.rs.count(rl3) == 1);
-        assert(s.rs.count(rl4) == 1);
-        assert(s.ds.size() == 2);
-        assert(s.ds.count(rl1) == 1); // decisions only
-        assert(s.ds.count(rl3) == 1);
-        assert(s.ds.count(rl0) == 0); // derivations not in ds
-        assert(s.ds.count(rl2) == 0);
-        assert(s.ds.count(rl4) == 0);
-        assert(s.on_resolve_calls == 5);
-        assert(s.derive_calls == 5); // called once per active iteration
-        assert(s.decide_calls == 2);
-    }
-
-    // Test 21: solve_calls is counted precisely across multi-step sequences
-    // solved() is called in each while-condition check AND once for the return value
-    {
-        lineage_pool lp;
-        const goal_lineage* g0 = lp.goal(nullptr, 0);
-        const goal_lineage* g1 = lp.goal(nullptr, 1);
-        const resolution_lineage* rl0 = lp.resolution(g0, 0);
-        const resolution_lineage* rl1 = lp.resolution(g1, 0);
-
-        sim_mock s(10);
-        s.event_types = {"derivation", "derivation", "solved"};
-        s.event_resolutions[0] = rl0;
-        s.event_resolutions[1] = rl1;
-
-        bool result = s();
-        assert(result == true);
-        // Iter 0: solved()→false (1), derive, on_resolve
-        // Iter 1: solved()→false (2), derive, on_resolve
-        // Iter 2: solved()→true (3), loop exits
-        // return solved() (4)
-        assert(s.solve_calls == 4);
-    }
-
-    // Test 22: conflicted() short-circuits before solved() in while condition
-    // When conflicted, solved() is NOT called in the while check - only in the return
-    {
-        lineage_pool lp;
-        const goal_lineage* g = lp.goal(nullptr, 0);
-        const resolution_lineage* rl = lp.resolution(g, 0);
-
-        sim_mock s(10);
-        s.event_types = {"derivation", "conflict"};
-        s.event_resolutions[0] = rl;
-
-        bool result = s();
-        assert(result == false);
-        // Iter 0: conflicted()→false, solved()→false (1), derive, on_resolve
-        // Iter 1: conflicted()→true → short-circuit, solved() NOT called in while
-        // return solved() at iter=1 (2)
-        assert(s.solve_calls == 2);
-        assert(s.rs.size() == 1);
-        assert(s.on_resolve_calls == 1);
-    }
-
-    // Test 23: Two decisions then one derivation then solved
-    // Verifies ds contains only decisions regardless of order
-    {
-        lineage_pool lp;
-        const goal_lineage* g0 = lp.goal(nullptr, 0);
-        const goal_lineage* g1 = lp.goal(nullptr, 1);
-        const goal_lineage* g2 = lp.goal(nullptr, 2);
-        const resolution_lineage* rl0 = lp.resolution(g0, 0);
-        const resolution_lineage* rl1 = lp.resolution(g1, 0);
-        const resolution_lineage* rl2 = lp.resolution(g2, 0);
-
-        sim_mock s(10);
-        s.event_types = {"decision", "decision", "derivation", "solved"};
-        s.event_resolutions[0] = rl0;
-        s.event_resolutions[1] = rl1;
-        s.event_resolutions[2] = rl2;
-
-        bool result = s();
-        assert(result == true);
-        assert(s.rs.size() == 3);
-        assert(s.ds.size() == 2);
-        assert(s.ds.count(rl0) == 1);
-        assert(s.ds.count(rl1) == 1);
-        assert(s.ds.count(rl2) == 0); // derivation not in ds
-        assert(s.on_resolve_calls == 3);
-        assert(s.derive_calls == 3); // called once per iteration for all events
-        assert(s.decide_calls == 2);
-    }
-
-    // Test 24: Cap at exactly max=3, next event is "solved" - returns true from cap
-    {
-        lineage_pool lp;
-        const goal_lineage* g0 = lp.goal(nullptr, 0);
-        const goal_lineage* g1 = lp.goal(nullptr, 1);
-        const goal_lineage* g2 = lp.goal(nullptr, 2);
-        const resolution_lineage* rl0 = lp.resolution(g0, 0);
-        const resolution_lineage* rl1 = lp.resolution(g1, 0);
-        const resolution_lineage* rl2 = lp.resolution(g2, 0);
-
-        sim_mock s(3);
-        s.event_types = {"decision", "decision", "decision", "solved"};
-        s.event_resolutions[0] = rl0;
-        s.event_resolutions[1] = rl1;
-        s.event_resolutions[2] = rl2;
-
-        bool result = s();
-        // Cap after 3 decisions; return solved() at iter=3 (event="solved") → true
-        assert(result == true);
-        assert(s.rs.size() == 3);
-        assert(s.ds.size() == 3);
-        assert(s.on_resolve_calls == 3);
-    }
-
-    // Test 25: Derivations interspersed with decisions, capped before terminal
-    // Verifies ds never contains derivation rls even under cap
-    {
-        lineage_pool lp;
-        const goal_lineage* g0 = lp.goal(nullptr, 0);
-        const goal_lineage* g1 = lp.goal(nullptr, 1);
-        const goal_lineage* g2 = lp.goal(nullptr, 2);
-        const goal_lineage* g3 = lp.goal(nullptr, 3);
-        const resolution_lineage* rl0 = lp.resolution(g0, 0);
-        const resolution_lineage* rl1 = lp.resolution(g1, 0);
-        const resolution_lineage* rl2 = lp.resolution(g2, 0);
-        const resolution_lineage* rl3 = lp.resolution(g3, 0);
-
-        sim_mock s(3);
-        // derivation, decision, derivation, decision, ... but capped at 3
-        s.event_types = {"derivation", "decision", "derivation", "decision", "solved"};
-        s.event_resolutions[0] = rl0;
-        s.event_resolutions[1] = rl1;
-        s.event_resolutions[2] = rl2;
-        s.event_resolutions[3] = rl3;
-
-        bool result = s();
-        // After 3 events (derivation, decision, derivation): cap
-        // return solved() at iter=3 (event="decision") → false
-        assert(result == false);
-        assert(s.rs.size() == 3);
-        assert(s.rs.count(rl0) == 1);
-        assert(s.rs.count(rl1) == 1);
-        assert(s.rs.count(rl2) == 1);
-        assert(s.rs.count(rl3) == 0);
-        assert(s.ds.size() == 1);
-        assert(s.ds.count(rl1) == 1); // only the one decision before cap
-        assert(s.ds.count(rl0) == 0);
-        assert(s.ds.count(rl2) == 0);
-        assert(s.on_resolve_calls == 3);
+        const decisions& d   = s.get_decisions();
+        assert(r.size() == 1);
+        assert(d.size() == 0);
+        assert(&r == &s.rs);
+        assert(&d == &s.ds);
     }
 }
 
@@ -18211,8 +18271,6 @@ void test_ridge_sim_constructor() {
         monte_carlo::simulation<mcts_decider::choice, std::mt19937> sim(root, 1.414, rng);
         
         {
-            resolution_store rs;
-            decision_store ds;
             ridge_sim simulation(100, db, goals, t, seq, ep, bm, lp, c, sim);
             
             // Verify max_resolutions stored
@@ -18271,8 +18329,6 @@ void test_ridge_sim_constructor() {
         monte_carlo::simulation<mcts_decider::choice, std::mt19937> sim(root, 1.414, rng);
 
         {
-            resolution_store rs;
-            decision_store ds;
 
             ridge_sim simulation(50, db, goals, t, seq, ep, bm, lp, c, sim);
             
@@ -18326,8 +18382,6 @@ void test_ridge_sim_constructor() {
         std::mt19937 rng(42);
         monte_carlo::simulation<mcts_decider::choice, std::mt19937> sim(root, 1.414, rng);
         
-        resolution_store rs;
-        decision_store ds;
 
         ridge_sim simulation(200, db, goals, t, seq, ep, bm, lp, c, sim);
         
@@ -18410,8 +18464,6 @@ void test_ridge_sim_constructor() {
         std::mt19937 rng(42);
         monte_carlo::simulation<mcts_decider::choice, std::mt19937> sim(root, 1.414, rng);
         
-        resolution_store rs;
-        decision_store ds;
         ridge_sim simulation(100, db, goals, t, seq, ep, bm, lp, c, sim);
         
         // CRITICAL: All goals added to goal_store
@@ -18474,8 +18526,6 @@ void test_ridge_sim_constructor() {
         std::mt19937 rng(42);
         monte_carlo::simulation<mcts_decider::choice, std::mt19937> sim(root, 1.414, rng);
         
-        resolution_store rs;
-        decision_store ds;
         ridge_sim simulation(100, db, goals, t, seq, ep, bm, lp, c, sim);
         
         // Goal added
@@ -18571,8 +18621,6 @@ void test_ridge_sim_constructor() {
         std::mt19937 rng(42);
         monte_carlo::simulation<mcts_decider::choice, std::mt19937> sim(root, 1.414, rng);
         
-        resolution_store rs;
-        decision_store ds;
         ridge_sim simulation(75, db, goals, t, seq, ep, bm, lp, c, sim);
         
         // CRITICAL: 4 goals added
@@ -18853,8 +18901,6 @@ void test_ridge_sim_constructor() {
         std::mt19937 rng(42);
         monte_carlo::simulation<mcts_decider::choice, std::mt19937> sim(root, 1.414, rng);
         
-        resolution_store rs;
-        decision_store ds;
         ridge_sim simulation(500, db, goals, t, seq, ep, bm, lp, c, sim);
         
         // CRITICAL: 5 goals added
@@ -18905,8 +18951,6 @@ void test_ridge_sim_constructor() {
         std::mt19937 rng(42);
         monte_carlo::simulation<mcts_decider::choice, std::mt19937> sim(root, 1.414, rng);
         
-        resolution_store rs;
-        decision_store ds;
         ridge_sim simulation(100, db, goals, t, seq, ep, bm, lp, c, sim);
         
         // CRITICAL: Verify ordering - idx matches position in list
@@ -18938,325 +18982,6 @@ void test_ridge_sim_constructor() {
         assert(gl_idx1->parent == nullptr);
         assert(gl_idx2->parent == nullptr);
         assert(gl_idx3->parent == nullptr);
-    }
-}
-
-void test_ridge_sim_solved() {
-    // Test 1: Empty goals → gs.empty() → true
-    {
-        trail t;
-        t.push();
-        expr_pool ep(t);
-        bind_map bm(t);
-        sequencer seq(t);
-        lineage_pool lp;
-        database db;
-        goals goals;
-        cdcl c;
-        monte_carlo::tree_node<mcts_decider::choice> root;
-        std::mt19937 rng(42);
-        monte_carlo::simulation<mcts_decider::choice, std::mt19937> mc(root, 1.414, rng);
-        ridge_sim sim(100, db, goals, t, seq, ep, bm, lp, c, mc);
-
-        assert(sim.solved() == true);
-        assert(sim.gs.empty() == true);
-    }
-
-    // Test 2: Single goal → gs not empty → false
-    {
-        trail t;
-        t.push();
-        expr_pool ep(t);
-        bind_map bm(t);
-        sequencer seq(t);
-        lineage_pool lp;
-        database db;
-        db.push_back(rule{ep.atom("p"), {}});
-        goals goals;
-        goals.push_back(ep.atom("p"));
-        cdcl c;
-        monte_carlo::tree_node<mcts_decider::choice> root;
-        std::mt19937 rng(42);
-        monte_carlo::simulation<mcts_decider::choice, std::mt19937> mc(root, 1.414, rng);
-        ridge_sim sim(100, db, goals, t, seq, ep, bm, lp, c, mc);
-
-        assert(sim.solved() == false);
-        assert(sim.gs.size() == 1);
-    }
-
-    // Test 3: Multiple goals → gs not empty → false
-    {
-        trail t;
-        t.push();
-        expr_pool ep(t);
-        bind_map bm(t);
-        sequencer seq(t);
-        lineage_pool lp;
-        database db;
-        db.push_back(rule{ep.atom("p"), {}});
-        db.push_back(rule{ep.atom("q"), {}});
-        goals goals;
-        goals.push_back(ep.atom("p"));
-        goals.push_back(ep.atom("q"));
-        cdcl c;
-        monte_carlo::tree_node<mcts_decider::choice> root;
-        std::mt19937 rng(42);
-        monte_carlo::simulation<mcts_decider::choice, std::mt19937> mc(root, 1.414, rng);
-        ridge_sim sim(100, db, goals, t, seq, ep, bm, lp, c, mc);
-
-        assert(sim.solved() == false);
-        assert(sim.gs.size() == 2);
-    }
-}
-
-void test_ridge_sim_conflicted() {
-    // Test 1: Goal with matching rule → head elimination keeps candidate → not conflicted
-    {
-        trail t;
-        t.push();
-        expr_pool ep(t);
-        bind_map bm(t);
-        sequencer seq(t);
-        lineage_pool lp;
-        database db;
-        db.push_back(rule{ep.atom("p"), {}});
-        goals goals;
-        goals.push_back(ep.atom("p"));
-        cdcl c;
-        monte_carlo::tree_node<mcts_decider::choice> root;
-        std::mt19937 rng(42);
-        monte_carlo::simulation<mcts_decider::choice, std::mt19937> mc(root, 1.414, rng);
-        ridge_sim sim(100, db, goals, t, seq, ep, bm, lp, c, mc);
-
-        assert(sim.conflicted() == false);
-        // Rule 0 still present for gl0
-        const goal_lineage* gl0 = lp.goal(nullptr, 0);
-        assert(sim.cs.at(gl0).size() == 1);
-        assert(sim.cs.at(gl0)[0] == 0);
-    }
-
-    // Test 2: Empty database → no candidates from the start → conflicted
-    {
-        trail t;
-        t.push();
-        expr_pool ep(t);
-        bind_map bm(t);
-        sequencer seq(t);
-        lineage_pool lp;
-        database db;
-        goals goals;
-        goals.push_back(ep.atom("p"));
-        cdcl c;
-        monte_carlo::tree_node<mcts_decider::choice> root;
-        std::mt19937 rng(42);
-        monte_carlo::simulation<mcts_decider::choice, std::mt19937> mc(root, 1.414, rng);
-        ridge_sim sim(100, db, goals, t, seq, ep, bm, lp, c, mc);
-
-        assert(sim.conflicted() == true);
-        const goal_lineage* gl0 = lp.goal(nullptr, 0);
-        assert(sim.cs.at(gl0).empty());
-    }
-
-    // Test 3: Rule head doesn't match goal → eliminated → conflicted
-    {
-        trail t;
-        t.push();
-        expr_pool ep(t);
-        bind_map bm(t);
-        sequencer seq(t);
-        lineage_pool lp;
-        database db;
-        db.push_back(rule{ep.atom("q"), {}}); // rule for q, goal is p → mismatch
-        goals goals;
-        goals.push_back(ep.atom("p"));
-        cdcl c;
-        monte_carlo::tree_node<mcts_decider::choice> root;
-        std::mt19937 rng(42);
-        monte_carlo::simulation<mcts_decider::choice, std::mt19937> mc(root, 1.414, rng);
-        ridge_sim sim(100, db, goals, t, seq, ep, bm, lp, c, mc);
-
-        assert(sim.conflicted() == true);
-        const goal_lineage* gl0 = lp.goal(nullptr, 0);
-        assert(sim.cs.at(gl0).empty());
-    }
-
-    // Test 4: CDCL singleton avoidance eliminates the only candidate → conflicted
-    {
-        trail t;
-        t.push();
-        expr_pool ep(t);
-        bind_map bm(t);
-        sequencer seq(t);
-        lineage_pool lp;
-        database db;
-        db.push_back(rule{ep.atom("p"), {}});
-        goals goals;
-        goals.push_back(ep.atom("p"));
-
-        // Pre-populate cdcl: singleton avoidance {rl} → rl is eliminated
-        const goal_lineage* gl0 = lp.goal(nullptr, 0);
-        const resolution_lineage* rl = lp.resolution(gl0, 0);
-        cdcl c;
-        avoidance av;
-        av.insert(rl);
-        c.learn(av);
-        assert(c.eliminated(rl));
-
-        monte_carlo::tree_node<mcts_decider::choice> root;
-        std::mt19937 rng(42);
-        monte_carlo::simulation<mcts_decider::choice, std::mt19937> mc(root, 1.414, rng);
-        ridge_sim sim(100, db, goals, t, seq, ep, bm, lp, c, mc);
-
-        assert(sim.conflicted() == true);
-        assert(sim.cs.at(gl0).empty());
-    }
-
-    // Test 5: Two goals, one goal's rule head mismatches → conflicted regardless of other goal
-    {
-        trail t;
-        t.push();
-        expr_pool ep(t);
-        bind_map bm(t);
-        sequencer seq(t);
-        lineage_pool lp;
-        database db;
-        db.push_back(rule{ep.atom("p"), {}});
-        goals goals;
-        goals.push_back(ep.atom("p")); // gl0: matches rule 0
-        goals.push_back(ep.atom("q")); // gl1: no matching rule
-        cdcl c;
-        monte_carlo::tree_node<mcts_decider::choice> root;
-        std::mt19937 rng(42);
-        monte_carlo::simulation<mcts_decider::choice, std::mt19937> mc(root, 1.414, rng);
-        ridge_sim sim(100, db, goals, t, seq, ep, bm, lp, c, mc);
-
-        assert(sim.conflicted() == true);
-        const goal_lineage* gl0 = lp.goal(nullptr, 0);
-        const goal_lineage* gl1 = lp.goal(nullptr, 1);
-        assert(!sim.cs.at(gl0).empty()); // p still has rule 0
-        assert(sim.cs.at(gl1).empty());  // q has no matching rule
-    }
-
-    // Test 6: conflicted() is idempotent - calling twice gives same result
-    {
-        trail t;
-        t.push();
-        expr_pool ep(t);
-        bind_map bm(t);
-        sequencer seq(t);
-        lineage_pool lp;
-        database db;
-        goals goals;
-        goals.push_back(ep.atom("p"));
-        cdcl c;
-        monte_carlo::tree_node<mcts_decider::choice> root;
-        std::mt19937 rng(42);
-        monte_carlo::simulation<mcts_decider::choice, std::mt19937> mc(root, 1.414, rng);
-        ridge_sim sim(100, db, goals, t, seq, ep, bm, lp, c, mc);
-
-        assert(sim.conflicted() == true);
-        assert(sim.conflicted() == true); // second call same result
-    }
-}
-
-void test_ridge_sim_derive_one() {
-    // Test 1: Single goal with multiple candidates → not unit → nullptr
-    {
-        trail t;
-        t.push();
-        expr_pool ep(t);
-        bind_map bm(t);
-        sequencer seq(t);
-        lineage_pool lp;
-        database db;
-        db.push_back(rule{ep.atom("p"), {}});
-        db.push_back(rule{ep.atom("p"), {}}); // two rules for p → 2 candidates → not unit
-        goals goals;
-        goals.push_back(ep.atom("p"));
-        cdcl c;
-        monte_carlo::tree_node<mcts_decider::choice> root;
-        std::mt19937 rng(42);
-        monte_carlo::simulation<mcts_decider::choice, std::mt19937> mc(root, 1.414, rng);
-        ridge_sim sim(100, db, goals, t, seq, ep, bm, lp, c, mc);
-
-        assert(sim.derive_one() == nullptr);
-    }
-
-    // Test 2: Single rule in db → cs starts with 1 candidate → unit → returns expected rl
-    {
-        trail t;
-        t.push();
-        expr_pool ep(t);
-        bind_map bm(t);
-        sequencer seq(t);
-        lineage_pool lp;
-        database db;
-        db.push_back(rule{ep.atom("p"), {}});
-        goals goals;
-        goals.push_back(ep.atom("p"));
-        cdcl c;
-        monte_carlo::tree_node<mcts_decider::choice> root;
-        std::mt19937 rng(42);
-        monte_carlo::simulation<mcts_decider::choice, std::mt19937> mc(root, 1.414, rng);
-        ridge_sim sim(100, db, goals, t, seq, ep, bm, lp, c, mc);
-
-        const goal_lineage* gl0 = lp.goal(nullptr, 0);
-        const resolution_lineage* expected = lp.resolution(gl0, 0);
-        const resolution_lineage* result = sim.derive_one();
-        assert(result != nullptr);
-        assert(result == expected);
-    }
-
-    // Test 3: Empty goal store → cs is also empty → unit() false → nullptr
-    {
-        trail t;
-        t.push();
-        expr_pool ep(t);
-        bind_map bm(t);
-        sequencer seq(t);
-        lineage_pool lp;
-        database db;
-        goals goals;
-        cdcl c;
-        monte_carlo::tree_node<mcts_decider::choice> root;
-        std::mt19937 rng(42);
-        monte_carlo::simulation<mcts_decider::choice, std::mt19937> mc(root, 1.414, rng);
-        ridge_sim sim(100, db, goals, t, seq, ep, bm, lp, c, mc);
-
-        assert(sim.derive_one() == nullptr);
-    }
-
-    // Test 4: Two rules but only one matches the goal → after conflicted() reduces to 1 → unit
-    {
-        trail t;
-        t.push();
-        expr_pool ep(t);
-        bind_map bm(t);
-        sequencer seq(t);
-        lineage_pool lp;
-        database db;
-        db.push_back(rule{ep.atom("p"), {}}); // rule 0: p :- (matches)
-        db.push_back(rule{ep.atom("q"), {}}); // rule 1: q :- (doesn't match goal p)
-        goals goals;
-        goals.push_back(ep.atom("p"));
-        cdcl c;
-        monte_carlo::tree_node<mcts_decider::choice> root;
-        std::mt19937 rng(42);
-        monte_carlo::simulation<mcts_decider::choice, std::mt19937> mc(root, 1.414, rng);
-        ridge_sim sim(100, db, goals, t, seq, ep, bm, lp, c, mc);
-
-        // Initially, derive_one() returns nullptr
-        assert(sim.derive_one() == nullptr);
-
-        // Initially 2 candidates; conflicted() eliminates rule 1 (q head ≠ p goal)
-        assert(sim.conflicted() == false);
-        const goal_lineage* gl0 = lp.goal(nullptr, 0);
-        assert(sim.cs.at(gl0).size() == 1);
-
-        const resolution_lineage* expected = lp.resolution(gl0, 0);
-        const resolution_lineage* result = sim.derive_one();
-        assert(result != nullptr);
-        assert(result == expected);
     }
 }
 
@@ -19368,145 +19093,6 @@ void test_ridge_sim_decide_one() {
         const resolution_lineage* result = sim.decide_one();
         assert(result != nullptr);
         assert(result == lp.resolution(gl0, 0));
-    }
-}
-
-void test_ridge_sim_on_resolve() {
-    // Test 1: Resolve goal with fact (empty body) → gs and cs become empty
-    {
-        trail t;
-        t.push();
-        expr_pool ep(t);
-        bind_map bm(t);
-        sequencer seq(t);
-        lineage_pool lp;
-        database db;
-        db.push_back(rule{ep.atom("p"), {}}); // p :-
-        goals goals;
-        goals.push_back(ep.atom("p"));
-        cdcl c;
-        monte_carlo::tree_node<mcts_decider::choice> root;
-        std::mt19937 rng(42);
-        monte_carlo::simulation<mcts_decider::choice, std::mt19937> mc(root, 1.414, rng);
-        ridge_sim sim(100, db, goals, t, seq, ep, bm, lp, c, mc);
-
-        assert(sim.gs.size() == 1);
-        assert(sim.cs.size() == 1);
-
-        const goal_lineage* gl0 = lp.goal(nullptr, 0);
-        const resolution_lineage* rl = lp.resolution(gl0, 0);
-        sim.on_resolve(rl);
-
-        // Empty body → no sub-goals added; both stores now empty
-        assert(sim.gs.empty());
-        assert(sim.cs.empty());
-    }
-
-    // Test 2: Resolve goal with non-empty body → old goal removed, sub-goal added
-    {
-        trail t;
-        t.push();
-        expr_pool ep(t);
-        bind_map bm(t);
-        sequencer seq(t);
-        lineage_pool lp;
-        database db;
-        db.push_back(rule{ep.atom("p"), {ep.atom("q")}}); // p :- q.
-        goals goals;
-        goals.push_back(ep.atom("p"));
-        cdcl c;
-        monte_carlo::tree_node<mcts_decider::choice> root;
-        std::mt19937 rng(42);
-        monte_carlo::simulation<mcts_decider::choice, std::mt19937> mc(root, 1.414, rng);
-        ridge_sim sim(100, db, goals, t, seq, ep, bm, lp, c, mc);
-
-        const goal_lineage* gl0 = lp.goal(nullptr, 0);
-        const resolution_lineage* rl = lp.resolution(gl0, 0);
-        sim.on_resolve(rl);
-
-        // p removed, q added as sub-goal
-        assert(sim.gs.size() == 1);
-        assert(!sim.gs.empty());
-
-        // Sub-goal lineage: lp.goal(rl, 0)
-        const goal_lineage* sub_gl = lp.goal(rl, 0);
-        assert(sim.gs.at(sub_gl) == ep.atom("q"));
-
-        // cs tracks the same sub-goal
-        assert(sim.cs.size() == 1);
-        // Old goal no longer in cs
-        assert(sim.cs.at(sub_gl).size() == 1); // db has 1 rule
-    }
-
-    // Test 3: c.constrain effect - avoidance reduced from 2 to 1 → remaining rl eliminated
-    {
-        trail t;
-        t.push();
-        expr_pool ep(t);
-        bind_map bm(t);
-        sequencer seq(t);
-        lineage_pool lp;
-        database db;
-        db.push_back(rule{ep.atom("p"), {}}); // p :-
-        goals goals;
-        goals.push_back(ep.atom("p"));
-
-        // Set up cdcl: 2-element avoidance {rl0, rl1}; neither eliminated yet
-        const goal_lineage* gl0 = lp.goal(nullptr, 0);
-        const resolution_lineage* rl0 = lp.resolution(gl0, 0);
-        const goal_lineage* gl_ghost = lp.goal(nullptr, 99); // sentinel goal for rl1
-        const resolution_lineage* rl1 = lp.resolution(gl_ghost, 0);
-
-        cdcl c;
-        avoidance av;
-        av.insert(rl0);
-        av.insert(rl1);
-        c.learn(av);
-        assert(!c.eliminated(rl0));
-        assert(!c.eliminated(rl1));
-
-        monte_carlo::tree_node<mcts_decider::choice> root;
-        std::mt19937 rng(42);
-        monte_carlo::simulation<mcts_decider::choice, std::mt19937> mc(root, 1.414, rng);
-        ridge_sim sim(100, db, goals, t, seq, ep, bm, lp, c, mc);
-
-        // on_resolve(rl0) calls sim.c.constrain(rl0) → {rl0, rl1} reduces to {rl1} → rl1 eliminated
-        sim.on_resolve(rl0);
-        assert(sim.c.eliminated(rl1));
-    }
-
-    // Test 4: on_resolve with two-level chain - verify gs and cs sizes at each step
-    {
-        trail t;
-        t.push();
-        expr_pool ep(t);
-        bind_map bm(t);
-        sequencer seq(t);
-        lineage_pool lp;
-        database db;
-        db.push_back(rule{ep.atom("p"), {ep.atom("q"), ep.atom("r")}}); // p :- q, r.
-        goals goals;
-        goals.push_back(ep.atom("p"));
-        cdcl c;
-        monte_carlo::tree_node<mcts_decider::choice> root;
-        std::mt19937 rng(42);
-        monte_carlo::simulation<mcts_decider::choice, std::mt19937> mc(root, 1.414, rng);
-        ridge_sim sim(100, db, goals, t, seq, ep, bm, lp, c, mc);
-
-        assert(sim.gs.size() == 1);
-
-        const goal_lineage* gl0 = lp.goal(nullptr, 0);
-        const resolution_lineage* rl = lp.resolution(gl0, 0);
-        sim.on_resolve(rl);
-
-        // p removed; q and r added (body has 2 sub-goals)
-        assert(sim.gs.size() == 2);
-        assert(sim.cs.size() == 2);
-
-        const goal_lineage* sub_gl0 = lp.goal(rl, 0);
-        const goal_lineage* sub_gl1 = lp.goal(rl, 1);
-        assert(sim.gs.at(sub_gl0) == ep.atom("q"));
-        assert(sim.gs.at(sub_gl1) == ep.atom("r"));
     }
 }
 
@@ -22170,8 +21756,6 @@ void test_ridge_sim() {
         std::mt19937 rng(42);
         monte_carlo::simulation<mcts_decider::choice, std::mt19937> sim(root, 1.414, rng);
         
-        resolution_store rs;
-        decision_store ds;
         ridge_sim simulation(100, db, goals, t, seq, ep, bm, lp, c, sim);
         
         // Execute simulation
@@ -22275,8 +21859,6 @@ void test_ridge_sim() {
         std::mt19937 rng(42);
         monte_carlo::simulation<mcts_decider::choice, std::mt19937> sim(root, 1.414, rng);
         
-        resolution_store rs;
-        decision_store ds;
         ridge_sim simulation(100, db, goals, t, seq, ep, bm, lp, c, sim);
         
         bool result = simulation();
@@ -22338,8 +21920,6 @@ void test_ridge_sim() {
         std::mt19937 rng(42);
         monte_carlo::simulation<mcts_decider::choice, std::mt19937> sim(root, 1.414, rng);
         
-        resolution_store rs;
-        decision_store ds;
         ridge_sim simulation(100, db, goals, t, seq, ep, bm, lp, c, sim);
         
         bool result = simulation();
@@ -22396,8 +21976,6 @@ void test_ridge_sim() {
         std::mt19937 rng(42);
         monte_carlo::simulation<mcts_decider::choice, std::mt19937> sim(root, 1.414, rng);
         
-        resolution_store rs;
-        decision_store ds;
         ridge_sim simulation(100, db, goals, t, seq, ep, bm, lp, c, sim);
         
         bool result = simulation();
@@ -22461,8 +22039,6 @@ void test_ridge_sim() {
         std::mt19937 rng(42);
         monte_carlo::simulation<mcts_decider::choice, std::mt19937> sim(root, 1.414, rng);
         
-        resolution_store rs;
-        decision_store ds;
         ridge_sim simulation(100, db, goals, t, seq, ep, bm, lp, c, sim);
         
         // CRITICAL: Pre-populate MCTS tree to force decision on (gl0, idx 1)
@@ -22538,8 +22114,6 @@ void test_ridge_sim() {
         std::mt19937 rng(42);
         monte_carlo::simulation<mcts_decider::choice, std::mt19937> sim(root, 1.414, rng);
         
-        resolution_store rs;
-        decision_store ds;
         ridge_sim simulation(100, db, goals, t, seq, ep, bm, lp, c, sim);
         
         // Note: With only 1 candidate per goal, both will be unit props
@@ -22598,8 +22172,6 @@ void test_ridge_sim() {
         std::mt19937 rng(42);
         monte_carlo::simulation<mcts_decider::choice, std::mt19937> sim(root, 1.414, rng);
         
-        resolution_store rs;
-        decision_store ds;
         ridge_sim simulation(100, db, goals, t, seq, ep, bm, lp, c, sim);
         
         // Pre-populate MCTS to force decision on idx 0
@@ -22676,8 +22248,6 @@ void test_ridge_sim() {
         std::mt19937 rng(42);
         monte_carlo::simulation<mcts_decider::choice, std::mt19937> sim(root, 1.414, rng);
         
-        resolution_store rs;
-        decision_store ds;
         ridge_sim simulation(3, db, goals, t, seq, ep, bm, lp, c, sim);  // Max 3 resolutions!
         
         bool result = simulation();
@@ -22748,8 +22318,6 @@ void test_ridge_sim() {
         std::mt19937 rng(42);
         monte_carlo::simulation<mcts_decider::choice, std::mt19937> sim(root, 1.414, rng);
         
-        resolution_store rs;
-        decision_store ds;
         ridge_sim simulation(100, db, goals, t, seq, ep, bm, lp, c, sim);
         
         // Before execution, verify 5 candidates added
@@ -22821,8 +22389,6 @@ void test_ridge_sim() {
         std::mt19937 rng(42);
         monte_carlo::simulation<mcts_decider::choice, std::mt19937> sim(root, 1.414, rng);
         
-        resolution_store rs;
-        decision_store ds;
         ridge_sim simulation(100, db, goals, t, seq, ep, bm, lp, c, sim);
         
         // Verify avoidance copied
@@ -22998,8 +22564,6 @@ void test_ridge_sim() {
         std::mt19937 rng(42);
         monte_carlo::simulation<mcts_decider::choice, std::mt19937> sim(root, 1.414, rng);
         
-        resolution_store rs;
-        decision_store ds;
         ridge_sim simulation(100, db, goals, t, seq, ep, bm, lp, c, sim);
         
         bool result = simulation();
@@ -23064,8 +22628,6 @@ void test_ridge_sim() {
         std::mt19937 rng(42);
         monte_carlo::simulation<mcts_decider::choice, std::mt19937> sim(root, 1.414, rng);
         
-        resolution_store rs;
-        decision_store ds;
         ridge_sim simulation(100, db, goals, t, seq, ep, bm, lp, c, sim);
         
         bool result = simulation();
@@ -23123,8 +22685,6 @@ void test_ridge_sim() {
         std::mt19937 rng(42);
         monte_carlo::simulation<mcts_decider::choice, std::mt19937> sim(root, 1.414, rng);
         
-        resolution_store rs;
-        decision_store ds;
         ridge_sim simulation(100, db, goals, t, seq, ep, bm, lp, c, sim);
         
         bool result = simulation();
@@ -23189,8 +22749,6 @@ void test_ridge_sim() {
         std::mt19937 rng(42);
         monte_carlo::simulation<mcts_decider::choice, std::mt19937> sim(root, 1.414, rng);
         
-        resolution_store rs;
-        decision_store ds;
         ridge_sim simulation(100, db, goals, t, seq, ep, bm, lp, c, sim);
         
         bool result = simulation();
@@ -23253,8 +22811,6 @@ void test_ridge_sim() {
         std::mt19937 rng(42);
         monte_carlo::simulation<mcts_decider::choice, std::mt19937> sim(root, 1.414, rng);
         
-        resolution_store rs;
-        decision_store ds;
         ridge_sim simulation(100, db, goals, t, seq, ep, bm, lp, c, sim);
         
         // Force decision on idx 0
@@ -23322,8 +22878,6 @@ void test_ridge_sim() {
         std::mt19937 rng(42);
         monte_carlo::simulation<mcts_decider::choice, std::mt19937> sim(root, 1.414, rng);
         
-        resolution_store rs;
-        decision_store ds;
         ridge_sim simulation(100, db, goals, t, seq, ep, bm, lp, c, sim);
         
         // Initial state: 20 candidates
@@ -23376,8 +22930,6 @@ void test_ridge_sim() {
         std::mt19937 rng(42);
         monte_carlo::simulation<mcts_decider::choice, std::mt19937> sim(root, 1.414, rng);
         
-        resolution_store rs;
-        decision_store ds;
         ridge_sim simulation(100, db, goals, t, seq, ep, bm, lp, c, sim);
         
         bool result = simulation();
@@ -23445,8 +22997,6 @@ void test_ridge_sim() {
         std::mt19937 rng(42);
         monte_carlo::simulation<mcts_decider::choice, std::mt19937> sim(root, 1.414, rng);
         
-        resolution_store rs;
-        decision_store ds;
         ridge_sim simulation(100, db, goals, t, seq, ep, bm, lp, c, sim);
         
         // Force decision on idx 1
@@ -23519,8 +23069,6 @@ void test_ridge_sim() {
         std::mt19937 rng(42);
         monte_carlo::simulation<mcts_decider::choice, std::mt19937> sim(root, 1.414, rng);
         
-        resolution_store rs;
-        decision_store ds;
         ridge_sim simulation(100, db, goals, t, seq, ep, bm, lp, c, sim);
         
         bool result = simulation();
@@ -23670,8 +23218,6 @@ void test_ridge_sim() {
         std::mt19937 rng(42);
         monte_carlo::simulation<mcts_decider::choice, std::mt19937> sim(root, 1.414, rng);
         
-        resolution_store rs;
-        decision_store ds;
         ridge_sim simulation(100, db, goals, t, seq, ep, bm, lp, c, sim);
         
         bool result = simulation();
@@ -23736,8 +23282,6 @@ void test_ridge_sim() {
         std::mt19937 rng(42);
         monte_carlo::simulation<mcts_decider::choice, std::mt19937> sim(root, 1.414, rng);
         
-        resolution_store rs;
-        decision_store ds;
         ridge_sim simulation(100, db, goals, t, seq, ep, bm, lp, c, sim);
         
         // Verify 30 candidates initially
@@ -23802,8 +23346,6 @@ void test_ridge_sim() {
         std::mt19937 rng(42);
         monte_carlo::simulation<mcts_decider::choice, std::mt19937> sim(root, 1.414, rng);
         
-        resolution_store rs;
-        decision_store ds;
         ridge_sim simulation(100, db, goals, t, seq, ep, bm, lp, c, sim);
         
         // Pre-populate MCTS to force decision on idx 0
@@ -23997,8 +23539,6 @@ void test_ridge_sim() {
         std::mt19937 rng(42);
         monte_carlo::simulation<mcts_decider::choice, std::mt19937> sim(root, 1.414, rng);
         
-        resolution_store rs;
-        decision_store ds;
         ridge_sim simulation(100, db, goals, t, seq, ep, bm, lp, c, sim);
         
         bool result = simulation();
@@ -24059,8 +23599,6 @@ void test_ridge_sim() {
         std::mt19937 rng(42);
         monte_carlo::simulation<mcts_decider::choice, std::mt19937> sim(root, 1.414, rng);
         
-        resolution_store rs;
-        decision_store ds;
         ridge_sim simulation(100, db, goals, t, seq, ep, bm, lp, c, sim);
         
         bool result = simulation();
@@ -24128,8 +23666,6 @@ void test_ridge_sim() {
         std::mt19937 rng(42);
         monte_carlo::simulation<mcts_decider::choice, std::mt19937> sim(root, 1.414, rng);
         
-        resolution_store rs;
-        decision_store ds;
         ridge_sim simulation(100, db, goals, t, seq, ep, bm, lp, c, sim);
         
         bool result = simulation();
@@ -24242,8 +23778,6 @@ void test_ridge_sim() {
         std::mt19937 rng(42);
         monte_carlo::simulation<mcts_decider::choice, std::mt19937> sim(root, 1.414, rng);
         
-        resolution_store rs;
-        decision_store ds;
         ridge_sim simulation(100, db, goals, t, seq, ep, bm, lp, c, sim);
         
         bool result = simulation();
@@ -24332,8 +23866,6 @@ void test_ridge_sim() {
         std::mt19937 rng(42);
         monte_carlo::simulation<mcts_decider::choice, std::mt19937> sim(root, 1.414, rng);
         
-        resolution_store rs;
-        decision_store ds;
         ridge_sim simulation(100, db, goals, t, seq, ep, bm, lp, c, sim);
         
         bool result = simulation();
@@ -24411,8 +23943,6 @@ void test_ridge_sim() {
         std::mt19937 rng(42);
         monte_carlo::simulation<mcts_decider::choice, std::mt19937> sim(root, 1.414, rng);
         
-        resolution_store rs;
-        decision_store ds;
         ridge_sim simulation(100, db, goals, t, seq, ep, bm, lp, c, sim);
         
         // Force decision on idx 0 (q path -> apple)
@@ -24480,8 +24010,6 @@ void test_ridge_sim() {
         std::mt19937 rng(42);
         monte_carlo::simulation<mcts_decider::choice, std::mt19937> sim(root, 1.414, rng);
         
-        resolution_store rs;
-        decision_store ds;
         ridge_sim simulation(100, db, goals, t, seq, ep, bm, lp, c, sim);
         
         // Pre-populate MCTS to force base case (idx 2)
@@ -24569,8 +24097,6 @@ void test_ridge_sim() {
         std::mt19937 rng(42);
         monte_carlo::simulation<mcts_decider::choice, std::mt19937> sim(root, 1.414, rng);
         
-        resolution_store rs;
-        decision_store ds;
         ridge_sim simulation(100, db, goals, t, seq, ep, bm, lp, c, sim);
         
         bool result = simulation();
@@ -24643,8 +24169,6 @@ void test_ridge_sim() {
         std::mt19937 rng(42);
         monte_carlo::simulation<mcts_decider::choice, std::mt19937> sim(root, 1.414, rng);
         
-        resolution_store rs;
-        decision_store ds;
         ridge_sim simulation(100, db, goals, t, seq, ep, bm, lp, c, sim);
         
         bool result = simulation();
@@ -24694,8 +24218,6 @@ void test_ridge_sim() {
         std::mt19937 rng(42);
         monte_carlo::simulation<mcts_decider::choice, std::mt19937> sim(root, 1.414, rng);
         
-        resolution_store rs;
-        decision_store ds;
         ridge_sim simulation(100, db, goals, t, seq, ep, bm, lp, c, sim);
         
         // Pre-populate MCTS to force idx 2 (NOT idx 0, to prove MCTS works!)
@@ -24759,8 +24281,6 @@ void test_ridge_sim() {
         std::mt19937 rng(42);
         monte_carlo::simulation<mcts_decider::choice, std::mt19937> sim(root, 1.414, rng);
         
-        resolution_store rs;
-        decision_store ds;
         ridge_sim simulation(100, db, goals, t, seq, ep, bm, lp, c, sim);
         
         bool result = simulation();
@@ -24813,8 +24333,6 @@ void test_ridge_sim() {
         std::mt19937 rng(42);
         monte_carlo::simulation<mcts_decider::choice, std::mt19937> sim(root, 1.414, rng);
         
-        resolution_store rs;
-        decision_store ds;
         ridge_sim simulation(100, db, goals, t, seq, ep, bm, lp, c, sim);
         
         bool result = simulation();
@@ -24874,8 +24392,6 @@ void test_ridge_sim() {
         std::mt19937 rng(42);
         monte_carlo::simulation<mcts_decider::choice, std::mt19937> sim(root, 1.414, rng);
         
-        resolution_store rs;
-        decision_store ds;
         ridge_sim simulation(100, db, goals, t, seq, ep, bm, lp, c, sim);
         
         bool result = simulation();
@@ -24945,8 +24461,6 @@ void test_ridge_sim() {
         std::mt19937 rng(42);
         monte_carlo::simulation<mcts_decider::choice, std::mt19937> sim(root, 1.414, rng);
         
-        resolution_store rs;
-        decision_store ds;
         ridge_sim simulation(100, db, goals, t, seq, ep, bm, lp, c, sim);
         
         bool result = simulation();
@@ -25035,8 +24549,6 @@ void test_ridge_sim() {
         std::mt19937 rng(42);
         monte_carlo::simulation<mcts_decider::choice, std::mt19937> sim(root, 1.414, rng);
         
-        resolution_store rs;
-        decision_store ds;
         ridge_sim simulation(100, db, goals, t, seq, ep, bm, lp, c, sim);
         
         bool result = simulation();
@@ -25112,8 +24624,6 @@ void test_ridge_sim() {
         std::mt19937 rng(42);
         monte_carlo::simulation<mcts_decider::choice, std::mt19937> sim(root, 1.414, rng);
         
-        resolution_store rs;
-        decision_store ds;
         ridge_sim simulation(100, db, goals, t, seq, ep, bm, lp, c, sim);
         
         bool result = simulation();
@@ -25164,8 +24674,6 @@ void test_ridge_sim() {
         std::mt19937 rng(42);
         monte_carlo::simulation<mcts_decider::choice, std::mt19937> sim(root, 1.414, rng);
         
-        resolution_store rs;
-        decision_store ds;
         ridge_sim simulation(100, db, goals, t, seq, ep, bm, lp, c, sim);
         
         // Pre-populate MCTS to force idx 1 (bob)
@@ -25240,8 +24748,6 @@ void test_ridge_sim() {
         std::mt19937 rng(42);
         monte_carlo::simulation<mcts_decider::choice, std::mt19937> sim(root, 1.414, rng);
         
-        resolution_store rs;
-        decision_store ds;
         ridge_sim simulation(100, db, goals, t, seq, ep, bm, lp, c, sim);
         
         bool result = simulation();
@@ -25300,8 +24806,6 @@ void test_ridge_sim() {
         std::mt19937 rng(42);
         monte_carlo::simulation<mcts_decider::choice, std::mt19937> sim(root, 1.414, rng);
         
-        resolution_store rs;
-        decision_store ds;
         ridge_sim simulation(100, db, goals, t, seq, ep, bm, lp, c, sim);
         
         bool result = simulation();
@@ -25443,8 +24947,6 @@ void test_ridge_sim() {
         std::mt19937 rng(42);
         monte_carlo::simulation<mcts_decider::choice, std::mt19937> sim(root, 1.414, rng);
         
-        resolution_store rs;
-        decision_store ds;
         ridge_sim simulation(100, db, goals, t, seq, ep, bm, lp, c, sim);
         
         bool result = simulation();
@@ -25512,8 +25014,6 @@ void test_ridge_sim() {
         std::mt19937 rng(42);
         monte_carlo::simulation<mcts_decider::choice, std::mt19937> sim(root, 1.414, rng);
         
-        resolution_store rs;
-        decision_store ds;
         ridge_sim simulation(100, db, goals, t, seq, ep, bm, lp, c, sim);
         
         bool result = simulation();
@@ -25701,8 +25201,6 @@ void test_ridge_sim() {
         std::mt19937 rng(42);
         monte_carlo::simulation<mcts_decider::choice, std::mt19937> sim(root, 1.414, rng);
         
-        resolution_store rs;
-        decision_store ds;
         ridge_sim simulation(100, db, goals, t, seq, ep, bm, lp, c, sim);
         
         bool result = simulation();
@@ -25799,8 +25297,6 @@ void test_ridge_sim() {
         std::mt19937 rng(42);
         monte_carlo::simulation<mcts_decider::choice, std::mt19937> sim(root, 1.414, rng);
         
-        resolution_store rs;
-        decision_store ds;
         ridge_sim simulation(100, db, goals, t, seq, ep, bm, lp, c, sim);
         
         bool result = simulation();
@@ -25850,8 +25346,6 @@ void test_ridge_sim() {
         std::mt19937 rng(42);
         monte_carlo::simulation<mcts_decider::choice, std::mt19937> sim(root, 1.414, rng);
         
-        resolution_store rs;
-        decision_store ds;
         ridge_sim simulation(100, db, goals, t, seq, ep, bm, lp, c, sim);
         
         // Pre-populate MCTS to force idx 2
@@ -25961,8 +25455,6 @@ void test_ridge_sim() {
         std::mt19937 rng(42);
         monte_carlo::simulation<mcts_decider::choice, std::mt19937> sim(root, 1.414, rng);
         
-        resolution_store rs;
-        decision_store ds;
         ridge_sim simulation(100, db, goals, t, seq, ep, bm, lp, c, sim);
         
         bool result = simulation();
@@ -26107,8 +25599,6 @@ void test_ridge_sim() {
         std::mt19937 rng(42);
         monte_carlo::simulation<mcts_decider::choice, std::mt19937> sim(root, 1.414, rng);
         
-        resolution_store rs;
-        decision_store ds;
         ridge_sim simulation(100, db, goals, t, seq, ep, bm, lp, c, sim);
         
         bool result = simulation();
@@ -29111,7 +28601,6 @@ void test_ridge() {
     }
 }
 
-
 void unit_test_main() {
 
     constexpr bool ENABLE_DEBUG_LOGS = true;
@@ -29185,13 +28674,13 @@ void unit_test_main() {
     TEST(test_sim_constructor);
     TEST(test_sim_get_resolutions);
     TEST(test_sim_get_decisions);
+    TEST(test_sim_solved);
+    TEST(test_sim_conflicted);
+    TEST(test_sim_derive_one);
+    TEST(test_sim_on_resolve);
     TEST(test_sim);
     TEST(test_ridge_sim_constructor);
-    TEST(test_ridge_sim_solved);
-    TEST(test_ridge_sim_conflicted);
-    TEST(test_ridge_sim_derive_one);
     TEST(test_ridge_sim_decide_one);
-    TEST(test_ridge_sim_on_resolve);
     TEST(test_horizon_sim_reward);
     TEST(test_horizon_sim_on_resolve);
     TEST(test_horizon_sim_one);
