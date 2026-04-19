@@ -26,14 +26,18 @@ const expr* copier::operator()(const expr* e, std::map<uint32_t, uint32_t>& vari
 
     // If the expression is a cons cell, copy the car and cdr
     if (const expr::cons* c = std::get_if<expr::cons>(&e->content)) {
-        // Copy lhs
         const expr* copied_lhs = operator()(c->lhs, variable_map);
-        
-        // Copy rhs
         const expr* copied_rhs = operator()(c->rhs, variable_map);
-        
-        // Return the copied cons cell
         return expr_pool_ref.cons(copied_lhs, copied_rhs);
+    }
+
+    // If the expression is a pred, copy each argument
+    if (const expr::pred* p = std::get_if<expr::pred>(&e->content)) {
+        std::vector<const expr*> copied_args;
+        copied_args.reserve(p->args.size());
+        for (const expr* arg : p->args)
+            copied_args.push_back(operator()(arg, variable_map));
+        return expr_pool_ref.pred(p->name, std::move(copied_args));
     }
 
     throw std::runtime_error("Unsupported expression type");

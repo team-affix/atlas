@@ -78,6 +78,18 @@ bool bind_map::unify(const expr* lhs, const expr* rhs) {
         return unify(lCons.lhs, rCons.lhs) && unify(lCons.rhs, rCons.rhs);
     }
 
+    // If they are both preds, names and arities must match, then unify args
+    if (std::holds_alternative<expr::pred>(lhs->content)) {
+        const expr::pred& lPred = std::get<expr::pred>(lhs->content);
+        const expr::pred& rPred = std::get<expr::pred>(rhs->content);
+        if (lPred.name != rPred.name || lPred.args.size() != rPred.args.size())
+            return false;
+        for (size_t i = 0; i < lPred.args.size(); ++i)
+            if (!unify(lPred.args[i], rPred.args[i]))
+                return false;
+        return true;
+    }
+
     return false;
 
 }
@@ -88,8 +100,14 @@ bool bind_map::occurs_check(uint32_t index, const expr* key) {
     if (const expr::var* var = std::get_if<expr::var>(&key->content))
         return var->index == index;
 
-    if (const expr::cons* cons = std::get_if<expr::cons>(&key->content)) {
+    if (const expr::cons* cons = std::get_if<expr::cons>(&key->content))
         return occurs_check(index, cons->lhs) || occurs_check(index, cons->rhs);
+
+    if (const expr::pred* p = std::get_if<expr::pred>(&key->content)) {
+        for (const expr* arg : p->args)
+            if (occurs_check(index, arg))
+                return true;
+        return false;
     }
 
     return false;

@@ -28,5 +28,15 @@ void expr_printer::operator()(const expr* e) const {
         return;
     }
 
+    if (const expr::pred* p = std::get_if<expr::pred>(&e->content)) {
+        os << p->name << "(";
+        for (size_t i = 0; i < p->args.size(); ++i) {
+            if (i > 0) os << ", ";
+            operator()(p->args[i]);
+        }
+        os << ")";
+        return;
+    }
+
     throw std::runtime_error("Unsupported expression type");
 }

@@ -5,12 +5,17 @@ database
     ;
 
 clause
-    : expr '.'
-    | expr ':-' body '.'
+    : pred '.'
+    | pred ':-' body '.'
     ;
 
 body
-    : expr (',' expr)*
+    : pred (',' pred)*
+    ;
+
+pred
+    : ATOM '(' (expr (',' expr)*)? ')'
+    | ATOM
     ;
 
 expr

@@ -3,13 +3,15 @@
 
 #include "lineage.hpp"
 #include "frontier.hpp"
+#include "predicate_index.hpp"
 #include "defs.hpp"
 
 struct candidate_store : frontier<std::vector<size_t>> {
     candidate_store(
         const database&,
         const goals&,
-        lineage_pool&
+        lineage_pool&,
+        const predicate_index&
     );
     size_t eliminate(const std::function<bool(const goal_lineage*, size_t)>&);
     bool unit(const goal_lineage*&, size_t&) const;
@@ -19,10 +21,8 @@ private:
 #endif
     std::vector<std::vector<size_t>> expand(const std::vector<size_t>&, const rule&) override;
 
-    const database& db;
     lineage_pool& lp;
-
-    std::vector<size_t> initial_candidates;
+    const predicate_index& pi;
 };
 
 #endif

@@ -25,6 +25,15 @@ const expr* normalizer::operator()(const expr* e) {
         return expr_pool_ref.cons(normalized_lhs, normalized_rhs);
     }
 
+    // If the expression is a pred, normalize each argument
+    if (const expr::pred* p = std::get_if<expr::pred>(&e->content)) {
+        std::vector<const expr*> normalized_args;
+        normalized_args.reserve(p->args.size());
+        for (const expr* arg : p->args)
+            normalized_args.push_back(operator()(arg));
+        return expr_pool_ref.pred(p->name, std::move(normalized_args));
+    }
+
     throw std::runtime_error("Unsupported expression type");
     
 }

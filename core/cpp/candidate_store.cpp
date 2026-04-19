@@ -1,19 +1,16 @@
 #include "../hpp/candidate_store.hpp"
-    
+
 candidate_store::candidate_store(
     const database& db,
     const goals& goals,
-    lineage_pool& lp) :
+    lineage_pool& lp,
+    const predicate_index& pi) :
     frontier<std::vector<size_t>>(db, lp),
-    db(db),
-    lp(lp)
+    lp(lp),
+    pi(pi)
 {
-    // make the initial candidates
-    for (int i = 0; i < db.size(); ++i)
-        initial_candidates.push_back(i);
-    // make the initial members
     for (int i = 0; i < goals.size(); ++i)
-        insert(lp.goal(nullptr, i), initial_candidates);
+        insert(lp.goal(nullptr, i), pi.at(goals.at(i)->name));
 }
 
 size_t candidate_store::eliminate(const std::function<bool(const goal_lineage*, size_t)>& pred) {
@@ -50,14 +47,14 @@ bool candidate_store::unit(const goal_lineage*& gl, size_t& candidate) const {
 
 bool candidate_store::conflicted() const {
     return std::any_of(
-       begin(),
+        begin(),
         end(),
         [](const auto& e) { return e.second.size() == 0; });
 }
 
-std::vector<std::vector<size_t>> candidate_store::expand(const std::vector<size_t>& candidates, const rule& r) {
+std::vector<std::vector<size_t>> candidate_store::expand(const std::vector<size_t>&, const rule& r) {
     std::vector<std::vector<size_t>> result;
-    for (int i = 0; i < r.body.size(); ++i)
-        result.push_back(initial_candidates);
+    for (const expr::pred* body_lit : r.body)
+        result.push_back(pi.at(body_lit->name));
     return result;
 }
