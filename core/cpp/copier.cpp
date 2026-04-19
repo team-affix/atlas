@@ -42,3 +42,11 @@ const expr* copier::operator()(const expr* e, std::map<uint32_t, uint32_t>& vari
 
     throw std::runtime_error("Unsupported expression type");
 }
+
+const expr::pred* copier::operator()(const expr::pred* p, std::map<uint32_t, uint32_t>& variable_map) {
+    std::vector<const expr*> copied_args;
+    copied_args.reserve(p->args.size());
+    for (const expr* arg : p->args)
+        copied_args.push_back(operator()(arg, variable_map));
+    return &std::get<expr::pred>(expr_pool_ref.pred(p->name, std::move(copied_args))->content);
+}

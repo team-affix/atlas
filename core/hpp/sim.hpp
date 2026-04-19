@@ -6,6 +6,7 @@
 #include "bind_map.hpp"
 #include "goal_store.hpp"
 #include "candidate_store.hpp"
+#include "predicate_index.hpp"
 #include "cdcl.hpp"
 
 struct sim {
@@ -37,6 +38,7 @@ protected:
     trail& t;
     lineage_pool& lp;
 
+    predicate_index pi;
     goal_store gs;
     candidate_store cs;
 

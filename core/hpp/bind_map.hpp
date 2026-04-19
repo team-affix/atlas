@@ -8,6 +8,7 @@ struct bind_map {
     bind_map(trail&);
     const expr* whnf(const expr*);
     bool unify(const expr*, const expr*);
+    bool unify(const expr::pred*, const expr::pred*);
 #ifndef DEBUG
 private:
 #endif

@@ -21,6 +21,13 @@ const expr* expr_pool::pred(const std::string& name, std::vector<const expr*> ar
     return intern(expr{expr::pred{name, std::move(args)}});
 }
 
+const expr* expr_pool::as_expr(const expr::pred* p) {
+    // Re-intern the pred to get back the stable const expr* container.
+    // The args are already interned pointers so this lookup is idempotent.
+    std::vector<const expr*> args(p->args.begin(), p->args.end());
+    return pred(p->name, std::move(args));
+}
+
 const expr* expr_pool::import(const expr* e) {
     // if the expression is a leaf, just intern it
     if (std::holds_alternative<expr::atom>(e->content) ||
