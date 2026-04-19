@@ -2,22 +2,12 @@
 #define HORIZON_HPP
 
 #include <optional>
-#include <random>
 #include "solver.hpp"
 #include "mcts_decider.hpp"
 #include "../../mcts/include/mcts.hpp"
 
 struct horizon : solver {
-    horizon(
-        const database&,
-        const goals&,
-        trail&,
-        sequencer&,
-        bind_map&,
-        size_t max_resolutions,
-        double exploration_constant,
-        std::mt19937&
-    );
+    horizon(solver_context, mcts_params);
 #ifndef DEBUG
 protected:
 #endif

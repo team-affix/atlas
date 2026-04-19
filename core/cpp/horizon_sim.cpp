@@ -1,20 +1,12 @@
 #include "../hpp/horizon_sim.hpp"
 
 horizon_sim::horizon_sim(
-    size_t max_resolutions,
-    const database& db,
-    const goals& goals,
-    trail& t,
-    sequencer& seq,
-    expr_pool& ep,
-    bind_map& bm,
-    lineage_pool& lp,
-    cdcl c,
+    sim_context ctx,
     monte_carlo::simulation<mcts_decider::choice, std::mt19937>& mc_sim
 ) :
-    sim(max_resolutions, db, goals, t, seq, ep, bm, lp, c),
+    sim(ctx),
     dec(cs, mc_sim),
-    ws(goals, db, lp)
+    ws(ctx.gl, ctx.db, ctx.lp)
 {}
 
 double horizon_sim::reward() {

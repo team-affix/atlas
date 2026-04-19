@@ -2,22 +2,12 @@
 #define RIDGE_HPP
 
 #include <optional>
-#include <random>
 #include "solver.hpp"
 #include "mcts_decider.hpp"
 #include "../../mcts/include/mcts.hpp"
 
 struct ridge : solver {
-    ridge(
-        const database&,
-        const goals&,
-        trail&,
-        sequencer&,
-        bind_map&,
-        size_t max_resolutions,
-        double exploration_constant,
-        std::mt19937&
-    );
+    ridge(solver_context, mcts_params);
 #ifndef DEBUG
 protected:
 #endif

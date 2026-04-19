@@ -1,24 +1,14 @@
 #include "../hpp/sim.hpp"
 
-sim::sim(
-    size_t max_resolutions,
-    const database& db,
-    const goals& goals,
-    trail& t,
-    sequencer& vars,
-    expr_pool& ep,
-    bind_map& bm,
-    lineage_pool& lp,
-    cdcl c
-) :
-    db(db),
-    t(t),
-    lp(lp),
-    gs(db, goals, t, cp, bm, lp),
-    cs(db, goals, lp),
-    cp(vars, ep),
-    c(c),
-    max_resolutions(max_resolutions),
+sim::sim(sim_context ctx) :
+    db(ctx.db),
+    t(ctx.t),
+    lp(ctx.lp),
+    gs(ctx.db, ctx.gl, ctx.t, cp, ctx.bm, ctx.lp),
+    cs(ctx.db, ctx.gl, ctx.lp),
+    cp(ctx.vars, ctx.ep),
+    c(ctx.c),
+    max_resolutions(ctx.max_resolutions),
     rs({}),
     ds({})
 {}

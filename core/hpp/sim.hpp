@@ -8,18 +8,20 @@
 #include "candidate_store.hpp"
 #include "cdcl.hpp"
 
+struct sim_context {
+    size_t          max_resolutions;
+    const database& db;
+    const goals&    gl;
+    trail&          t;
+    sequencer&      vars;
+    expr_pool&      ep;
+    bind_map&       bm;
+    lineage_pool&   lp;
+    cdcl            c;
+};
+
 struct sim {
-    sim(
-        size_t,
-        const database&,
-        const goals&,
-        trail&,
-        sequencer&,
-        expr_pool&,
-        bind_map&,
-        lineage_pool&,
-        cdcl
-    );
+    sim(sim_context);
     bool operator()();
     const resolutions& get_resolutions() const;
     const decisions& get_decisions() const;

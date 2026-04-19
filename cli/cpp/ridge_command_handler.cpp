@@ -9,7 +9,7 @@ ridge_command_handler::ridge_command_handler(
 ) :
     solver_cli_interface(file, goals_str),
     rng(seed),
-    solver(db, gl, t, seq, bm, max_resolutions, exploration_constant, rng)
+    solver(solver_context{db, gl, t, seq, bm, max_resolutions}, mcts_params{exploration_constant, rng})
 {}
 
 bool ridge_command_handler::advance() {

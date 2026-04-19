@@ -3,6 +3,7 @@
 
 #include <memory>
 #include <optional>
+#include <random>
 #include "defs.hpp"
 #include "trail.hpp"
 #include "expr.hpp"
@@ -12,15 +13,22 @@
 #include "cdcl.hpp"
 #include "sim.hpp"
 
+struct solver_context {
+    const database& db;
+    const goals&    gl;
+    trail&          t;
+    sequencer&      vars;
+    bind_map&       bm;
+    size_t          max_resolutions;
+};
+
+struct mcts_params {
+    double        exploration_constant;
+    std::mt19937& rng;
+};
+
 struct solver {
-    solver(
-        const database&,
-        const goals&,
-        trail&,
-        sequencer&,
-        bind_map&,
-        size_t max_resolutions
-    );
+    solver(solver_context);
     virtual ~solver();
     bool operator()(std::optional<resolutions>&);
 #ifndef DEBUG

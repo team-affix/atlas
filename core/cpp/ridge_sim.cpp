@@ -1,18 +1,10 @@
 #include "../hpp/ridge_sim.hpp"
 
 ridge_sim::ridge_sim(
-    size_t max_resolutions,
-    const database& db,
-    const goals& goals,
-    trail& t,
-    sequencer& vars,
-    expr_pool& ep,
-    bind_map& bm,
-    lineage_pool& lp,
-    cdcl c,
+    sim_context ctx,
     monte_carlo::simulation<mcts_decider::choice, std::mt19937>& mc_sim
 ) :
-    sim(max_resolutions, db, goals, t, vars, ep, bm, lp, c),
+    sim(ctx),
     dec(cs, mc_sim)
 {}
 
