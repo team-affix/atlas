@@ -1,25 +1,12 @@
 #ifndef SIM_HPP
 #define SIM_HPP
 
-#include "defs.hpp"
-#include "sequencer.hpp"
-#include "bind_map.hpp"
+#include "sim_args.hpp"
 #include "goal_store.hpp"
 #include "candidate_store.hpp"
-#include "cdcl.hpp"
 
 struct sim {
-    sim(
-        size_t,
-        const database&,
-        const goals&,
-        trail&,
-        sequencer&,
-        expr_pool&,
-        bind_map&,
-        lineage_pool&,
-        cdcl
-    );
+    sim(sim_args);
     bool operator()();
     const resolutions& get_resolutions() const;
     const decisions& get_decisions() const;

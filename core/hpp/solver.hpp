@@ -11,16 +11,10 @@
 #include "sequencer.hpp"
 #include "cdcl.hpp"
 #include "sim.hpp"
+#include "solver_args.hpp"
 
 struct solver {
-    solver(
-        const database&,
-        const goals&,
-        trail&,
-        sequencer&,
-        bind_map&,
-        size_t max_resolutions
-    );
+    solver(solver_args);
     virtual ~solver();
     bool operator()(std::optional<resolutions>&);
 #ifndef DEBUG

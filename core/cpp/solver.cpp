@@ -1,21 +1,14 @@
 #include "../hpp/solver.hpp"
 
-solver::solver(
-    const database& db,
-    const goals& gl,
-    trail& t,
-    sequencer& vars,
-    bind_map& bm,
-    size_t max_resolutions
-) :
-    db(db),
-    gl(gl),
-    t(t),
-    vars(vars),
-    bm(bm),
-    ep(t),
+solver::solver(solver_args args) :
+    db(args.db),
+    gl(args.gl),
+    t(args.t),
+    vars(args.vars),
+    bm(args.bm),
+    ep(args.t),
     lp(),
-    max_resolutions(max_resolutions),
+    max_resolutions(args.max_resolutions),
     c(),
     managed_sim(nullptr)
 {

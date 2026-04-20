@@ -5,20 +5,10 @@
 #include "mcts_decider.hpp"
 #include "sim.hpp"
 #include "weight_store.hpp"
+#include "mcts_sim_args.hpp"
 
 struct horizon_sim : sim {
-    horizon_sim(
-        size_t,
-        const database&,
-        const goals&,
-        trail&,
-        sequencer&,
-        expr_pool&,
-        bind_map&,
-        lineage_pool&,
-        cdcl,
-        monte_carlo::simulation<mcts_decider::choice, std::mt19937>&
-    );
+    horizon_sim(sim_args, mcts_sim_args);
     double reward();
 #ifndef DEBUG
 protected:
