@@ -2,8 +2,14 @@
 #include "../hpp/ridge_command_handler.hpp"
 #include "../hpp/horizon_command_handler.hpp"
 
+#ifndef ATLAS_GIT_TAG
+#define ATLAS_GIT_TAG "unknown"
+#endif
+
 int main(int argc, char** argv) {
     CLI::App app{"Atlas CHC Solver"};
+    app.name("atlas " ATLAS_GIT_TAG);
+    app.set_version_flag("-v,--version", ATLAS_GIT_TAG);
     app.require_subcommand(1);
 
     // --- ridge subcommand ---

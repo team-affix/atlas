@@ -18,6 +18,8 @@ ANTLR4_URL = https://www.antlr.org/download/antlr-4.10.1-complete.jar
 
 CLI11_INC = CLI11/include
 
+GIT_TAG := $(shell git describe --tags --always --dirty)
+
 # ==============================================================================
 # Output names  (all under build/)
 # ==============================================================================
@@ -158,6 +160,7 @@ atlas: $(CORE_LIB)
 	$(MAKE) $(CLI_LIB)
 	$(CXX) $(CXXFLAGS) -O3 \
 	    -I$(CLI11_INC) \
+	    -DATLAS_GIT_TAG=\"$(GIT_TAG)\" \
 	    cli/entry/main.cpp \
 	    -Lbuild -latlas_cli -latlas_parser -latlas_core \
 	    -L$(ANTLR4_LIB) -lantlr4-runtime \
