@@ -64,18 +64,16 @@ bool bind_map::unify(const expr* lhs, const expr* rhs) {
     if (lhs->content.index() != rhs->content.index())
         return false;
 
-    // If they are both atoms, unify the values
-    if (std::holds_alternative<expr::atom>(lhs->content)) {
-        const expr::atom& lAtom = std::get<expr::atom>(lhs->content);
-        const expr::atom& rAtom = std::get<expr::atom>(rhs->content);
-        return lAtom.value == rAtom.value;
-    }
-
-    // If they are both cons cells, unify the children
-    if (std::holds_alternative<expr::cons>(lhs->content)) {
-        const expr::cons& lCons = std::get<expr::cons>(lhs->content);
-        const expr::cons& rCons = std::get<expr::cons>(rhs->content);
-        return unify(lCons.lhs, rCons.lhs) && unify(lCons.rhs, rCons.rhs);
+    // If they are both functors, unify name, arity, and all args
+    if (std::holds_alternative<expr::functor>(lhs->content)) {
+        const expr::functor& lf = std::get<expr::functor>(lhs->content);
+        const expr::functor& rf = std::get<expr::functor>(rhs->content);
+        if (lf.name != rf.name || lf.args.size() != rf.args.size())
+            return false;
+        for (size_t i = 0; i < lf.args.size(); ++i)
+            if (!unify(lf.args[i], rf.args[i]))
+                return false;
+        return true;
     }
 
     return false;
@@ -88,8 +86,11 @@ bool bind_map::occurs_check(uint32_t index, const expr* key) {
     if (const expr::var* var = std::get_if<expr::var>(&key->content))
         return var->index == index;
 
-    if (const expr::cons* cons = std::get_if<expr::cons>(&key->content)) {
-        return occurs_check(index, cons->lhs) || occurs_check(index, cons->rhs);
+    if (const expr::functor* f = std::get_if<expr::functor>(&key->content)) {
+        for (const expr* arg : f->args)
+            if (occurs_check(index, arg))
+                return true;
+        return false;
     }
 
     return false;

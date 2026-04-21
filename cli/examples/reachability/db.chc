@@ -1,21 +1,21 @@
 % Subgraph A: 0 -> 1 -> 2 -> 3, with a shortcut 0 -> 2
-(edge 0 1).
-(edge 1 2).
-(edge 2 3).
-(edge 0 2).
+edge(0, 1).
+edge(1, 2).
+edge(2, 3).
+edge(0, 2).
 
 % Subgraph B: 10 -> 11 -> 12 (disconnected from A)
-(edge 10 11).
-(edge 11 12).
+edge(10, 11).
+edge(11, 12).
 
 % Subgraph C: 20 -> 21, 22 -> 21 (two sources, one sink, disconnected from A and B)
-(edge 20 21).
-(edge 22 21).
+edge(20, 21).
+edge(22, 21).
 
 % reach(X, Y): Y is reachable from X in one or more steps
-(reach X Y) :- (edge X Y).
-(reach X Z) :- (reach X Y), (edge Y Z).
+reach(X, Y) :- edge(X, Y).
+reach(X, Z) :- reach(X, Y), edge(Y, Z).
 
-% Example goal: atlas horizon reachability/db.chc --goal "(reach 0 X)"
+% Example goal: atlas horizon reachability/db.chc --goal "reach(0, X)"
 % Expected solutions: X = 1, 2, 3 only (nodes in subgraph A reachable from 0)
 % Should NOT appear: 11, 12, 21 (unreachable from 0)

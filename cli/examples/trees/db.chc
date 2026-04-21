@@ -1,6 +1,9 @@
-(tree nil).
-(tree (X.Y)) :- (tree X),(tree Y).
+% Binary tree operations using functor notation.
+% A tree is either nil (leaf) or bin(L, R) (internal node with subtrees L and R).
 
-(in X X).
-(in X (Y._)) :- (in X Y).
-(in X (_.Y)) :- (in X Y).
+tree(nil).
+tree(bin(X, Y)) :- tree(X), tree(Y).
+
+in(X, X).
+in(X, bin(Y, _)) :- in(X, Y).
+in(X, bin(_, Y)) :- in(X, Y).

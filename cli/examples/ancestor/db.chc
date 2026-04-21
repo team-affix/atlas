@@ -1,13 +1,13 @@
 % Family tree: parent(X, Y) means X is a parent of Y
-(parent tom bob).
-(parent tom liz).
-(parent bob ann).
-(parent bob pat).
-(parent pat jim).
+parent(tom, bob).
+parent(tom, liz).
+parent(bob, ann).
+parent(bob, pat).
+parent(pat, jim).
 
 % ancestor(X, Y): X is an ancestor of Y
-(ancestor X Y) :- (parent X Y).
-(ancestor X Z) :- (parent X Y), (ancestor Y Z).
+ancestor(X, Y) :- parent(X, Y).
+ancestor(X, Z) :- parent(X, Y), ancestor(Y, Z).
 
-% Example goal: atlas horizon ancestor/db.chc --goal "(ancestor tom X)"
+% Example goal: atlas horizon ancestor/db.chc --goal "ancestor(tom, X)"
 % Expected solutions: X = bob, X = liz, X = ann, X = pat, X = jim

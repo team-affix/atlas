@@ -1,39 +1,39 @@
 % helper rule
-(eq X X).
+eq(X, X).
 
-(nat zero).
-(nat (suc.X)) :- (nat X).
+nat(zero).
+nat(suc(X)) :- nat(X).
 
-(add zero X X).
-(add (suc.X) Y (suc.Z)) :- (add X Y Z).
+add(zero, X, X).
+add(suc(X), Y, suc(Z)) :- add(X, Y, Z).
 
-(lt zero (suc.X)) :- (nat X).
-(lt (suc.X) (suc.Y)) :- (lt X Y).
+lt(zero, suc(X)) :- nat(X).
+lt(suc(X), suc(Y)) :- lt(X, Y).
 
-(le X Y) :- (lt X Y).
-(le X X) :- (nat X).
+le(X, Y) :- lt(X, Y).
+le(X, X) :- nat(X).
 
-(gt X Y) :- (lt Y X).
+gt(X, Y) :- lt(Y, X).
 
-(mul zero X zero) :- (nat X).
-(mul (suc.X) Y Z) :- (mul X Y W), (add W Y Z).
+mul(zero, X, zero) :- nat(X).
+mul(suc(X), Y, Z) :- mul(X, Y, W), add(W, Y, Z).
 
-(even zero).
-(even (suc.(suc.X))) :- (even X).
+even(zero).
+even(suc(suc(X))) :- even(X).
 
-(odd (suc.zero)).
-(odd (suc.(suc.X))) :- (odd X).
+odd(suc(zero)).
+odd(suc(suc(X))) :- odd(X).
 
-(max X Y X) :- (ge X Y).
-(max X Y Y) :- (lt X Y).
+max(X, Y, X) :- ge(X, Y).
+max(X, Y, Y) :- lt(X, Y).
 
-(ge X Y) :- (gt X Y).
-(ge X X) :- (nat X).
+ge(X, Y) :- gt(X, Y).
+ge(X, X) :- nat(X).
 
-(sub X zero X) :- (nat X).
-(sub (suc.X) (suc.Y) Z) :- (sub X Y Z).
+sub(X, zero, X) :- nat(X).
+sub(suc(X), suc(Y), Z) :- sub(X, Y, Z).
 
 % Example goals:
-%   atlas horizon arithmetic/db.chc --goal "(mul (suc.(suc.zero)) (suc.(suc.zero)) R)"
-%   atlas horizon arithmetic/db.chc --goal "(even X), (lt X (suc.(suc.(suc.(suc.(suc.(suc.zero)))))))"
-%   atlas horizon arithmetic/db.chc --goal "(odd X), (lt X (suc.(suc.(suc.(suc.(suc.zero))))))"
+%   atlas horizon arithmetic/db.chc --goal "mul(suc(suc(zero)), suc(suc(zero)), R)"
+%   atlas horizon arithmetic/db.chc --goal "even(X), lt(X, suc(suc(suc(suc(suc(suc(zero)))))))"
+%   atlas horizon arithmetic/db.chc --goal "odd(X), lt(X, suc(suc(suc(suc(suc(zero))))))"

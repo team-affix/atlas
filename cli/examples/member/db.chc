@@ -1,21 +1,21 @@
-% List membership using cons-cell notation.
-% A list [a, b, c] is written as (a . (b . (c . ()))).
+% List membership using functor notation.
+% A list [a, b, c] is written as [a, b, c].
 
 % defines lists
-(list ()).
-(list (_.X)) :- (list X).
+list([]).
+list([_|X]) :- list(X).
 
 % define membership in a list as a relation
-(member X (X . Y)) :- (list Y).
-(member X (_ . T)) :- (member X T).
+member(X, [X|Y]) :- list(Y).
+member(X, [_|T]) :- member(X, T).
 
 % prefix def
-(prefix () X) :- (list X).
-(prefix (X1.X2) (X1.Y2)) :- (prefix X2 Y2).
+prefix([], X) :- list(X).
+prefix([X1|X2], [X1|Y2]) :- prefix(X2, Y2).
 
 % strong_prefix def
-(strong_prefix () (_.X)) :- (list X).
-(strong_prefix (X1.X2) (X1.Y2)) :- (strong_prefix X2 Y2).
+strong_prefix([], [_|X]) :- list(X).
+strong_prefix([X1|X2], [X1|Y2]) :- strong_prefix(X2, Y2).
 
-% Example goal: atlas horizon member/db.chc --goal "(member X (a . (b . (c . ()))))"
+% Example goal: atlas horizon member/db.chc --goal "member(X, [a, b, c])"
 % Expected solutions: X = a, X = b, X = c

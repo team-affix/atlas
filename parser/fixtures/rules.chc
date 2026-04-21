@@ -1,2 +1,2 @@
-(step X Y) :- (base X), (next X Y).
-(step X Z) :- (step X Y), (next Y Z).
+step(X, Y) :- base(X), next(X, Y).
+step(X, Z) :- step(X, Y), next(Y, Z).

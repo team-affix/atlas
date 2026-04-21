@@ -5,27 +5,27 @@ expr_pool::expr_pool(trail& t) : trail_ref(t) {
 
 }
 
-const expr* expr_pool::atom(const std::string& s) {
-    return intern(expr{expr::atom{s}});
+const expr* expr_pool::functor(const std::string& name, std::vector<const expr*> args) {
+    return intern(expr{expr::functor{name, std::move(args)}});
 }
 
 const expr* expr_pool::var(uint32_t i) {
     return intern(expr{expr::var{i}});
 }
 
-const expr* expr_pool::cons(const expr* l, const expr* r) {
-    return intern(expr{expr::cons{l, r}});
-}
-
 const expr* expr_pool::import(const expr* e) {
-    // if the expression is a leaf, just intern it
-    if (std::holds_alternative<expr::atom>(e->content) ||
-        std::holds_alternative<expr::var>(e->content))
+    // if the expression is a var, just intern it
+    if (std::holds_alternative<expr::var>(e->content))
         return intern(expr{e->content});
-    
-    // if the expression is a cons cell, copy the lhs and rhs
-    if (const expr::cons* c = std::get_if<expr::cons>(&e->content))
-        return cons(import(c->lhs), import(c->rhs));
+
+    // if the expression is a functor, recursively import all args then rebuild
+    if (const expr::functor* f = std::get_if<expr::functor>(&e->content)) {
+        std::vector<const expr*> imported_args;
+        imported_args.reserve(f->args.size());
+        for (const expr* arg : f->args)
+            imported_args.push_back(import(arg));
+        return functor(f->name, std::move(imported_args));
+    }
 
     throw std::runtime_error("Unsupported expression type");
 }

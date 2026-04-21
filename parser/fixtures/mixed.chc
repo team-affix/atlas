@@ -1,5 +1,5 @@
-(base 0).
-(next 0 1).
-(next 1 2).
-(reach X Y) :- (base X), (next X Y).
-(reach X Z) :- (reach X Y), (next Y Z).
+base(0).
+next(0, 1).
+next(1, 2).
+reach(X, Y) :- base(X), next(X, Y).
+reach(X, Z) :- reach(X, Y), next(Y, Z).

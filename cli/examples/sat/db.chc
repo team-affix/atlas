@@ -1,13 +1,13 @@
-(eq X X).
+eq(X, X).
 
-(bool true).
-(bool false).
+bool(true).
+bool(false).
 
-(not true false).
-(not false true).
+not(true, false).
+not(false, true).
 
-(or true X true) :- (bool X).
-(or false X X)   :- (bool X).
+or(true, X, true) :- bool(X).
+or(false, X, X)   :- bool(X).
 
-(and true X X)      :- (bool X).
-(and false X false) :- (bool X).
+and(true, X, X)      :- bool(X).
+and(false, X, false) :- bool(X).
