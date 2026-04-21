@@ -25,7 +25,9 @@ std::any expr_visitor::visitFunctor(CHCParser::FunctorContext* ctx) {
         return visitList(ctx->list());
 
     // ATOM with optional parenthesised arg list
-    std::string name = ctx->ATOM()->getText();
+    auto* atom_token = ctx->ATOM();
+    assert(atom_token != nullptr);
+    std::string name = atom_token->getText();
     std::vector<const expr*> args;
     for (auto* sub_expr : ctx->expr())
         args.push_back(std::any_cast<const expr*>(visit(sub_expr)));

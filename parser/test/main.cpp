@@ -10,7 +10,7 @@
 #include "../hpp/import_goals_from_string.hpp"
 
 // Lightweight parse/lex helpers — return true iff the input matches.
-// In the new grammar, an ATOM-only expression appears as ExprContext->FunctorContext->ATOM().
+// In the new grammar, an atom-only expression appears as ExprContext->FunctorContext->ATOM().
 static bool lexes_atom(const std::string& s) {
     antlr4::ANTLRInputStream stream(s);
     CHCLexer lexer(&stream);
