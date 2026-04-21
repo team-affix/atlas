@@ -2,37 +2,30 @@
 %
 % Demonstrates positive completeness: the solver constructs nested expression
 % trees satisfying a recursive semantic constraint (evaluation to a target).
-%
-% Predicates use left-associating cons cells instead of space-separated lists:
-%   (f A)       written  (f.A)
-%   (f A B)     written  ((f.A).B)
-%   (f A B C)   written  (((f.A).B).C)
-% This avoids the implicit nil-terminated list encoding and makes Peano
-% numerals readable: s(s(s(zero))) appears as (s.(s.(s.zero))).
 
 % === Peano naturals ===
-(nat.zero).
-(nat.(s.X)) :- (nat.X).
+nat(zero).
+nat(s(X)) :- nat(X).
 
-(((add.zero).X).X)        :- (nat.X).
-(((add.(s.X)).Y).(s.Z))   :- (((add.X).Y).Z).
+add(zero, X, X)        :- nat(X).
+add(s(X), Y, s(Z))     :- add(X, Y, Z).
 
-(((mul.zero).X).zero)     :- (nat.X).
-(((mul.(s.X)).Y).Z)       :- (((mul.X).Y).W), (((add.W).Y).Z).
+mul(zero, X, zero)     :- nat(X).
+mul(s(X), Y, Z)        :- mul(X, Y, W), add(W, Y, Z).
 
 % === Expression language ===
-(expr.(lit.N))          :- (nat.N).
-(expr.((plus.E1).E2))   :- (expr.E1), (expr.E2).
-(expr.((times.E1).E2))  :- (expr.E1), (expr.E2).
+expr(lit(N))            :- nat(N).
+expr(plus(E1, E2))      :- expr(E1), expr(E2).
+expr(times(E1, E2))     :- expr(E1), expr(E2).
 
 % === Evaluation ===
-((eval.(lit.N)).N)          :- (nat.N).
-((eval.((plus.E1).E2)).R)   :- ((eval.E1).V1), ((eval.E2).V2), (((add.V1).V2).R).
-((eval.((times.E1).E2)).R)  :- ((eval.E1).V1), ((eval.E2).V2), (((mul.V1).V2).R).
+eval(lit(N), N)             :- nat(N).
+eval(plus(E1, E2), R)       :- eval(E1, V1), eval(E2, V2), add(V1, V2, R).
+eval(times(E1, E2), R)      :- eval(E1, V1), eval(E2, V2), mul(V1, V2, R).
 
 % Example goals:
 %   % Synthesize an expression evaluating to 4:
-%   atlas horizon expr/db.chc --goal "((eval.E).(s.(s.(s.(s.zero)))))"
+%   atlas horizon expr/db.chc --goal "eval(E, s(s(s(s(zero)))))"
 %
 %   % Synthesize an expression evaluating to 6:
-%   atlas horizon expr/db.chc --goal "((eval.E).(s.(s.(s.(s.(s.(s.zero)))))))"
+%   atlas horizon expr/db.chc --goal "eval(E, s(s(s(s(s(s(zero)))))))"

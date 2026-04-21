@@ -14,10 +14,18 @@ body
     ;
 
 expr
-    : ATOM
+    : functor
     | VARIABLE
-    | '(' expr '.' expr ')'
-    | '(' expr* ')'
+    ;
+
+functor
+    : ATOM ('(' (expr (',' expr)*)? ')')?
+    | list
+    ;
+
+list
+    : '[' ']'
+    | '[' expr (',' expr)* ('|' expr)? ']'
     ;
 
 ATOM     : [a-z][a-zA-Z0-9_]*

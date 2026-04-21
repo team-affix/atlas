@@ -5,11 +5,6 @@ expr_printer::expr_printer(std::ostream& os, const std::map<uint32_t, std::strin
 {}
 
 void expr_printer::operator()(const expr* e) const {
-    if (const expr::atom* a = std::get_if<expr::atom>(&e->content)) {
-        os << a->value;
-        return;
-    }
-
     if (const expr::var* v = std::get_if<expr::var>(&e->content)) {
         auto it = var_names.find(v->index);
         if (it != var_names.end())
@@ -19,11 +14,47 @@ void expr_printer::operator()(const expr* e) const {
         return;
     }
 
-    if (const expr::cons* c = std::get_if<expr::cons>(&e->content)) {
-        os << "(";
-        operator()(c->lhs);
-        os << " . ";
-        operator()(c->rhs);
+    if (const expr::functor* f = std::get_if<expr::functor>(&e->content)) {
+        // Nullary functor (atom-like)
+        if (f->args.empty()) {
+            if (f->name == "nil")
+                os << "[]";
+            else
+                os << f->name;
+            return;
+        }
+
+        // List spine: cons(head, tail)
+        if (f->name == "cons" && f->args.size() == 2) {
+            os << "[";
+            operator()(f->args[0]);
+            const expr* tail = f->args[1];
+            while (true) {
+                const expr::functor* tf = std::get_if<expr::functor>(&tail->content);
+                if (tf && tf->name == "nil" && tf->args.empty()) {
+                    os << "]";
+                    break;
+                }
+                if (tf && tf->name == "cons" && tf->args.size() == 2) {
+                    os << ", ";
+                    operator()(tf->args[0]);
+                    tail = tf->args[1];
+                } else {
+                    os << "|";
+                    operator()(tail);
+                    os << "]";
+                    break;
+                }
+            }
+            return;
+        }
+
+        // General functor: name(arg1, arg2, ...)
+        os << f->name << "(";
+        for (size_t i = 0; i < f->args.size(); ++i) {
+            if (i > 0) os << ", ";
+            operator()(f->args[i]);
+        }
         os << ")";
         return;
     }

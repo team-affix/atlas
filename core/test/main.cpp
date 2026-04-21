@@ -999,67 +999,67 @@ void test_trail_log() {
     }
 }
 
-void test_atom_constructor() {
+void test_functor_constructor() {
     // Basic string
-    expr::atom a1{"hello"};
-    assert(a1.value == "hello");
+    expr::functor a1{"hello"};
+    assert(a1.name == "hello");
     
     // Empty string
-    expr::atom a2{""};
-    assert(a2.value == "");
+    expr::functor a2{""};
+    assert(a2.name == "");
     
     // Single character
-    expr::atom a3{"x"};
-    assert(a3.value == "x");
+    expr::functor a3{"x"};
+    assert(a3.name == "x");
     
     // Numeric strings
-    expr::atom a4{"0"};
-    assert(a4.value == "0");
-    expr::atom a5{"12345"};
-    assert(a5.value == "12345");
-    expr::atom a6{"-42"};
-    assert(a6.value == "-42");
+    expr::functor a4{"0"};
+    assert(a4.name == "0");
+    expr::functor a5{"12345"};
+    assert(a5.name == "12345");
+    expr::functor a6{"-42"};
+    assert(a6.name == "-42");
     
     // Special characters
-    expr::atom a7{"test_123"};
-    assert(a7.value == "test_123");
-    expr::atom a8{"hello world"};
-    assert(a8.value == "hello world");
-    expr::atom a9{"!@#$%^&*()"};
-    assert(a9.value == "!@#$%^&*()");
+    expr::functor a7{"test_123"};
+    assert(a7.name == "test_123");
+    expr::functor a8{"hello world"};
+    assert(a8.name == "hello world");
+    expr::functor a9{"!@#$%^&*()"};
+    assert(a9.name == "!@#$%^&*()");
     
     // Whitespace variations
-    expr::atom a10{" "};
-    assert(a10.value == " ");
-    expr::atom a11{"\t"};
-    assert(a11.value == "\t");
-    expr::atom a12{"\n"};
-    assert(a12.value == "\n");
+    expr::functor a10{" "};
+    assert(a10.name == " ");
+    expr::functor a11{"\t"};
+    assert(a11.name == "\t");
+    expr::functor a12{"\n"};
+    assert(a12.name == "\n");
     
     // Long string
     std::string long_str(1000, 'a');
-    expr::atom a13{long_str};
-    assert(a13.value == long_str);
+    expr::functor a13{long_str};
+    assert(a13.name == long_str);
     
     // Unicode/special characters
-    expr::atom a14{"αβγδ"};
-    assert(a14.value == "αβγδ");
-    expr::atom a15{"日本語"};
-    assert(a15.value == "日本語");
+    expr::functor a14{"αβγδ"};
+    assert(a14.name == "αβγδ");
+    expr::functor a15{"日本語"};
+    assert(a15.name == "日本語");
     
     // Escape sequences
-    expr::atom a16{"line1\nline2"};
-    assert(a16.value == "line1\nline2");
+    expr::functor a16{"line1\nline2"};
+    assert(a16.name == "line1\nline2");
     
     // Multiple atoms with same value
-    expr::atom a17{"duplicate"};
-    expr::atom a18{"duplicate"};
-    assert(a17.value == a18.value);
+    expr::functor a17{"duplicate"};
+    expr::functor a18{"duplicate"};
+    assert(a17.name == a18.name);
     assert((a17 <=> a18) == 0);
     
     // Test spaceship operator with different values
-    expr::atom a19{"aaa"};
-    expr::atom a20{"bbb"};
+    expr::functor a19{"aaa"};
+    expr::functor a20{"bbb"};
     assert((a19 <=> a20) < 0);
     assert((a20 <=> a19) > 0);
 }
@@ -1110,65 +1110,65 @@ void test_var_constructor() {
     }
 }
 
-void test_cons_constructor() {
+void test_functor_cons_constructor() {
     // Basic cons with raw pointers (testing the struct itself)
-    expr e1{expr::atom{"left"}};
-    expr e2{expr::atom{"right"}};
-    expr::cons c1{&e1, &e2};
+    expr e1{expr::functor{"left", {}}};
+    expr e2{expr::functor{"right", {}}};
+    expr::functor c1{"cons", {&e1, &e2}};
     
-    assert(c1.lhs == &e1);
-    assert(c1.rhs == &e2);
-    assert(std::get<expr::atom>(c1.lhs->content).value == "left");
-    assert(std::get<expr::atom>(c1.rhs->content).value == "right");
+    assert(c1.args[0] == &e1);
+    assert(c1.args[1] == &e2);
+    assert(std::get<expr::functor>(c1.args[0]->content).name == "left");
+    assert(std::get<expr::functor>(c1.args[1]->content).name == "right");
     
     // Cons with variables
     expr e3{expr::var{0}};
     expr e4{expr::var{1}};
-    expr::cons c2{&e3, &e4};
+    expr::functor c2{"cons", {&e3, &e4}};
     
-    assert(std::get<expr::var>(c2.lhs->content).index == 0);
-    assert(std::get<expr::var>(c2.rhs->content).index == 1);
+    assert(std::get<expr::var>(c2.args[0]->content).index == 0);
+    assert(std::get<expr::var>(c2.args[1]->content).index == 1);
     
     // Cons with mixed types
-    expr e5{expr::atom{"atom"}};
+    expr e5{expr::functor{"atom", {}}};
     expr e6{expr::var{42}};
-    expr::cons c3{&e5, &e6};
+    expr::functor c3{"cons", {&e5, &e6}};
     
-    assert(std::get<expr::atom>(c3.lhs->content).value == "atom");
-    assert(std::get<expr::var>(c3.rhs->content).index == 42);
+    assert(std::get<expr::functor>(c3.args[0]->content).name == "atom");
+    assert(std::get<expr::var>(c3.args[1]->content).index == 42);
     
     // Cons with same expr on both sides
-    expr e7{expr::atom{"same"}};
-    expr::cons c4{&e7, &e7};
+    expr e7{expr::functor{"same", {}}};
+    expr::functor c4{"cons", {&e7, &e7}};
     
-    assert(c4.lhs == c4.rhs);
-    assert(c4.lhs == &e7);
+    assert(c4.args[0] == c4.args[1]);
+    assert(c4.args[0] == &e7);
     
     // Test spaceship operator
-    expr e8{expr::atom{"a"}};
-    expr e9{expr::atom{"b"}};
-    expr::cons c5{&e8, &e9};
-    expr::cons c6{&e8, &e9};
+    expr e8{expr::functor{"a", {}}};
+    expr e9{expr::functor{"b", {}}};
+    expr::functor c5{"cons", {&e8, &e9}};
+    expr::functor c6{"cons", {&e8, &e9}};
     
     assert((c5 <=> c6) == 0);
     
     // Different cons
-    expr e10{expr::atom{"c"}};
-    expr::cons c7{&e8, &e10};
+    expr e10{expr::functor{"c", {}}};
+    expr::functor c7{"cons", {&e8, &e10}};
     
     assert((c5 <=> c7) != 0);
 }
 
 void test_expr_constructor() {
     // Expr with atom
-    expr e1{expr::atom{"test"}};
-    assert(std::holds_alternative<expr::atom>(e1.content));
-    assert(std::get<expr::atom>(e1.content).value == "test");
+    expr e1{expr::functor{"test", {}}};
+    assert(std::holds_alternative<expr::functor>(e1.content));
+    assert(std::get<expr::functor>(e1.content).name == "test");
     
     // Expr with empty atom
-    expr e2{expr::atom{""}};
-    assert(std::holds_alternative<expr::atom>(e2.content));
-    assert(std::get<expr::atom>(e2.content).value == "");
+    expr e2{expr::functor{"", {}}};
+    assert(std::holds_alternative<expr::functor>(e2.content));
+    assert(std::get<expr::functor>(e2.content).name == "");
     
     // Expr with var
     expr e3{expr::var{42}};
@@ -1183,21 +1183,21 @@ void test_expr_constructor() {
     assert(std::get<expr::var>(e5.content).index == UINT32_MAX);
     
     // Expr with cons
-    expr left{expr::atom{"left"}};
-    expr right{expr::atom{"right"}};
-    expr e6{expr::cons{&left, &right}};
+    expr left{expr::functor{"left", {}}};
+    expr right{expr::functor{"right", {}}};
+    expr e6{expr::functor{"cons", {&left, &right}}};
     
-    assert(std::holds_alternative<expr::cons>(e6.content));
-    const expr::cons& c1 = std::get<expr::cons>(e6.content);
-    assert(std::get<expr::atom>(c1.lhs->content).value == "left");
-    assert(std::get<expr::atom>(c1.rhs->content).value == "right");
+    assert(std::holds_alternative<expr::functor>(e6.content));
+    const expr::functor& c1 = std::get<expr::functor>(e6.content);
+    assert(std::get<expr::functor>(c1.args[0]->content).name == "left");
+    assert(std::get<expr::functor>(c1.args[1]->content).name == "right");
     
     // Test spaceship operator
-    expr e7{expr::atom{"aaa"}};
-    expr e8{expr::atom{"aaa"}};
+    expr e7{expr::functor{"aaa", {}}};
+    expr e8{expr::functor{"aaa", {}}};
     assert((e7 <=> e8) == 0);
     
-    expr e9{expr::atom{"bbb"}};
+    expr e9{expr::functor{"bbb", {}}};
     assert((e7 <=> e9) < 0);
     assert((e9 <=> e7) > 0);
     
@@ -1207,7 +1207,7 @@ void test_expr_constructor() {
     assert((e7 <=> e10) != 0);
 }
 
-void test_expr_pool_constructor() {
+void test_expr_pool_functor_constructor() {
     trail t;
     
     // Basic construction with trail reference
@@ -1231,7 +1231,7 @@ void test_expr_pool_constructor() {
     
     // Pool should be usable immediately after construction
     t.push();
-    const expr* e1 = pool1.atom("test");
+    const expr* e1 = pool1.functor("test", {});
     assert(e1 != nullptr);
     assert(pool1.size() == 1);
     assert(pool1.exprs.size() == 1);
@@ -1244,7 +1244,7 @@ void test_expr_pool_constructor() {
     assert(pool3.exprs.size() == 0);
     
     // Add to pool2 with same trail
-    const expr* e2 = pool2.atom("test2");
+    const expr* e2 = pool2.functor("test2", {});
     assert(pool2.size() == 1);
     assert(pool2.exprs.size() == 1);
     assert(pool2.exprs.count(*e2) == 1);
@@ -1263,7 +1263,7 @@ void test_expr_pool_constructor() {
     assert(pool3.exprs.size() == 0);
 }
 
-void test_expr_pool_atom() {
+void test_expr_pool_functor() {
     trail t;
     expr_pool pool(t);
     
@@ -1271,40 +1271,40 @@ void test_expr_pool_atom() {
     t.push();
     
     // Basic atom creation
-    const expr* e1 = pool.atom("test");
+    const expr* e1 = pool.functor("test", {});
     assert(e1 != nullptr);
-    assert(std::holds_alternative<expr::atom>(e1->content));
-    assert(std::get<expr::atom>(e1->content).value == "test");
+    assert(std::holds_alternative<expr::functor>(e1->content));
+    assert(std::get<expr::functor>(e1->content).name == "test");
     assert(pool.size() == 1);
     assert(pool.exprs.size() == 1);
     assert(pool.exprs.count(*e1) == 1);
     
     // Empty string
-    const expr* e2 = pool.atom("");
-    assert(std::get<expr::atom>(e2->content).value == "");
+    const expr* e2 = pool.functor("", {});
+    assert(std::get<expr::functor>(e2->content).name == "");
     assert(pool.size() == 2);
     assert(pool.exprs.size() == 2);
     assert(pool.exprs.count(*e2) == 1);
     assert(e1 != e2);
     
     // Interning - same string should return same pointer
-    const expr* e3 = pool.atom("test");
+    const expr* e3 = pool.functor("test", {});
     assert(e1 == e3);
     assert(pool.size() == 2);  // No new entry added
     assert(pool.exprs.size() == 2);
     
     // Different strings should return different pointers
-    const expr* e4 = pool.atom("different");
+    const expr* e4 = pool.functor("different", {});
     assert(e1 != e4);
     assert(pool.size() == 3);
     assert(pool.exprs.size() == 3);
     assert(pool.exprs.count(*e4) == 1);
     
     // Multiple calls with same string
-    const expr* e5 = pool.atom("shared");
+    const expr* e5 = pool.functor("shared", {});
     assert(pool.exprs.size() == 4);
-    const expr* e6 = pool.atom("shared");
-    const expr* e7 = pool.atom("shared");
+    const expr* e6 = pool.functor("shared", {});
+    const expr* e7 = pool.functor("shared", {});
     assert(e5 == e6);
     assert(e6 == e7);
     assert(pool.size() == 4);  // Only one "shared" added
@@ -1312,9 +1312,9 @@ void test_expr_pool_atom() {
     assert(pool.exprs.count(*e5) == 1);
     
     // Special characters
-    const expr* e8 = pool.atom("!@#$");
+    const expr* e8 = pool.functor("!@#$", {});
     assert(pool.exprs.size() == 5);
-    const expr* e9 = pool.atom("!@#$");
+    const expr* e9 = pool.functor("!@#$", {});
     assert(e8 == e9);
     assert(pool.size() == 5);
     assert(pool.exprs.size() == 5);
@@ -1322,9 +1322,9 @@ void test_expr_pool_atom() {
     
     // Long strings
     std::string long_str(1000, 'x');
-    const expr* e10 = pool.atom(long_str);
+    const expr* e10 = pool.functor(long_str, {});
     assert(pool.exprs.size() == 6);
-    const expr* e11 = pool.atom(long_str);
+    const expr* e11 = pool.functor(long_str, {});
     assert(e10 == e11);
     assert(pool.size() == 6);
     assert(pool.exprs.size() == 6);
@@ -1334,8 +1334,8 @@ void test_expr_pool_atom() {
     size_t size_before = pool.size();
     assert(pool.exprs.size() == size_before);
     t.push();
-    const expr* temp1 = pool.atom("temporary1");
-    const expr* temp2 = pool.atom("temporary2");
+    const expr* temp1 = pool.functor("temporary1", {});
+    const expr* temp2 = pool.functor("temporary2", {});
     assert(pool.size() == size_before + 2);
     assert(pool.exprs.size() == size_before + 2);
     assert(pool.exprs.count(*temp1) == 1);
@@ -1346,14 +1346,14 @@ void test_expr_pool_atom() {
     
     // Test corner case: intern same content in nested frames
     t.push();  // Frame 1
-    const expr* content_c = pool.atom("content_c");
+    const expr* content_c = pool.functor("content_c", {});
     size_t checkpoint1 = pool.size();
     assert(content_c != nullptr);
     assert(pool.exprs.size() == checkpoint1);
     assert(pool.exprs.count(*content_c) == 1);
     
     t.push();  // Frame 2
-    const expr* content_c_again = pool.atom("content_c");  // Should return same pointer, no log
+    const expr* content_c_again = pool.functor("content_c", {});  // Should return same pointer, no log
     assert(content_c == content_c_again);
     assert(pool.size() == checkpoint1);  // Size unchanged
     assert(pool.exprs.size() == checkpoint1);
@@ -1363,7 +1363,7 @@ void test_expr_pool_atom() {
     assert(pool.exprs.size() == checkpoint1);
     
     // Verify content_c is still there
-    const expr* content_c_verify = pool.atom("content_c");
+    const expr* content_c_verify = pool.functor("content_c", {});
     assert(content_c == content_c_verify);
     assert(pool.size() == checkpoint1);
     assert(pool.exprs.size() == checkpoint1);
@@ -1380,22 +1380,22 @@ void test_expr_pool_atom() {
     assert(pool.exprs.size() == checkpoint_start);
     
     t.push();  // Level 1
-    pool.atom("level1_a");
-    pool.atom("level1_b");
+    pool.functor("level1_a", {});
+    pool.functor("level1_b", {});
     size_t checkpoint_level1 = pool.size();
     assert(checkpoint_level1 == checkpoint_start + 2);
     assert(pool.exprs.size() == checkpoint_level1);
     
     t.push();  // Level 2
-    pool.atom("level2_a");
-    pool.atom("level2_b");
-    pool.atom("level2_c");
+    pool.functor("level2_a", {});
+    pool.functor("level2_b", {});
+    pool.functor("level2_c", {});
     size_t checkpoint_level2 = pool.size();
     assert(checkpoint_level2 == checkpoint_level1 + 3);
     assert(pool.exprs.size() == checkpoint_level2);
     
     t.push();  // Level 3
-    pool.atom("level3_a");
+    pool.functor("level3_a", {});
     size_t checkpoint_level3 = pool.size();
     assert(checkpoint_level3 == checkpoint_level2 + 1);
     assert(pool.exprs.size() == checkpoint_level3);
@@ -1419,11 +1419,11 @@ void test_expr_pool_atom() {
     t.push();  // Frame A
     assert(pool.exprs.size() == checkpoint_start);
     
-    const expr* early_content_1 = pool.atom("early_1");
+    const expr* early_content_1 = pool.functor("early_1", {});
     assert(pool.exprs.size() == checkpoint_start + 1);
     assert(pool.exprs.count(*early_content_1) == 1);
     
-    const expr* early_content_2 = pool.atom("early_2");
+    const expr* early_content_2 = pool.functor("early_2", {});
     assert(pool.exprs.size() == checkpoint_start + 2);
     assert(pool.exprs.count(*early_content_2) == 1);
     
@@ -1434,7 +1434,7 @@ void test_expr_pool_atom() {
     t.push();  // Frame B
     assert(pool.exprs.size() == checkpoint_a);
     
-    const expr* mid_content = pool.atom("mid_content");
+    const expr* mid_content = pool.functor("mid_content", {});
     assert(pool.exprs.size() == checkpoint_a + 1);
     assert(pool.exprs.count(*mid_content) == 1);
     
@@ -1443,18 +1443,18 @@ void test_expr_pool_atom() {
     assert(pool.exprs.size() == checkpoint_b);
     
     // Re-intern early content in Frame B - should not log since already exists
-    const expr* early_content_1_again = pool.atom("early_1");
+    const expr* early_content_1_again = pool.functor("early_1", {});
     assert(early_content_1 == early_content_1_again);
     assert(pool.size() == checkpoint_b);  // Size unchanged
     assert(pool.exprs.size() == checkpoint_b);  // Set size also unchanged
     assert(pool.exprs.count(*early_content_1) == 1);  // Still in set
     
     // Add more new content in Frame B
-    const expr* late_content_1 = pool.atom("late_1");
+    const expr* late_content_1 = pool.functor("late_1", {});
     assert(pool.exprs.size() == checkpoint_b + 1);
     assert(pool.exprs.count(*late_content_1) == 1);
     
-    const expr* late_content_2 = pool.atom("late_2");
+    const expr* late_content_2 = pool.functor("late_2", {});
     assert(pool.exprs.size() == checkpoint_b + 2);
     assert(pool.exprs.count(*late_content_2) == 1);
     
@@ -1466,19 +1466,19 @@ void test_expr_pool_atom() {
     assert(pool.exprs.size() == checkpoint_b_final);
     
     // Re-intern content from both Frame A and Frame B
-    const expr* early_content_2_again = pool.atom("early_2");
+    const expr* early_content_2_again = pool.functor("early_2", {});
     assert(early_content_2 == early_content_2_again);
     assert(pool.exprs.size() == checkpoint_b_final);  // No change
     assert(pool.exprs.count(*early_content_2) == 1);
     
-    const expr* mid_content_again = pool.atom("mid_content");
+    const expr* mid_content_again = pool.functor("mid_content", {});
     assert(mid_content == mid_content_again);
     assert(pool.size() == checkpoint_b_final);  // Size unchanged
     assert(pool.exprs.size() == checkpoint_b_final);  // Set size unchanged
     assert(pool.exprs.count(*mid_content) == 1);
     
     // Add new content in Frame C
-    const expr* frame_c_content = pool.atom("frame_c");
+    const expr* frame_c_content = pool.functor("frame_c", {});
     assert(pool.exprs.size() == checkpoint_b_final + 1);
     assert(pool.exprs.count(*frame_c_content) == 1);
     
@@ -1504,15 +1504,15 @@ void test_expr_pool_atom() {
     // because the pointer may be invalidated. We can only check what remains.
     
     // Verify early and mid content still exist
-    const expr* verify_early_1 = pool.atom("early_1");
+    const expr* verify_early_1 = pool.functor("early_1", {});
     assert(verify_early_1 == early_content_1);
     assert(pool.exprs.count(*verify_early_1) == 1);
     
-    const expr* verify_mid = pool.atom("mid_content");
+    const expr* verify_mid = pool.functor("mid_content", {});
     assert(verify_mid == mid_content);
     assert(pool.exprs.count(*verify_mid) == 1);
     
-    const expr* verify_late_1 = pool.atom("late_1");
+    const expr* verify_late_1 = pool.functor("late_1", {});
     assert(verify_late_1 == late_content_1);
     assert(pool.exprs.count(*verify_late_1) == 1);
     
@@ -1532,11 +1532,11 @@ void test_expr_pool_atom() {
     assert(pool.exprs.size() == checkpoint_a);
     
     // Verify early content still exists
-    const expr* verify_early_1_after_b = pool.atom("early_1");
+    const expr* verify_early_1_after_b = pool.functor("early_1", {});
     assert(verify_early_1_after_b == early_content_1);
     assert(pool.exprs.count(*verify_early_1_after_b) == 1);
     
-    const expr* verify_early_2_after_b = pool.atom("early_2");
+    const expr* verify_early_2_after_b = pool.functor("early_2", {});
     assert(verify_early_2_after_b == early_content_2);
     assert(pool.exprs.count(*verify_early_2_after_b) == 1);
     
@@ -1832,7 +1832,7 @@ void test_expr_pool_var() {
     assert(pool.exprs.empty());
 }
 
-void test_expr_pool_cons() {
+void test_expr_pool_functor_cons() {
     trail t;
     expr_pool pool(t);
     
@@ -1840,28 +1840,28 @@ void test_expr_pool_cons() {
     t.push();
     
     // Basic cons creation
-    const expr* left = pool.atom("left");
-    const expr* right = pool.atom("right");
+    const expr* left = pool.functor("left", {});
+    const expr* right = pool.functor("right", {});
     assert(pool.exprs.size() == 2);
-    const expr* c1 = pool.cons(left, right);
+    const expr* c1 = pool.functor("cons", {left, right});
     
     assert(c1 != nullptr);
-    assert(std::holds_alternative<expr::cons>(c1->content));
-    const expr::cons& cons1 = std::get<expr::cons>(c1->content);
-    assert(cons1.lhs == left);
-    assert(cons1.rhs == right);
+    assert(std::holds_alternative<expr::functor>(c1->content));
+    const expr::functor& cons1 = std::get<expr::functor>(c1->content);
+    assert(cons1.args[0] == left);
+    assert(cons1.args[1] == right);
     assert(pool.size() == 3);  // left, right, cons
     assert(pool.exprs.size() == 3);
     assert(pool.exprs.count(*c1) == 1);
     
     // Interning - same cons should return same pointer
-    const expr* c2 = pool.cons(left, right);
+    const expr* c2 = pool.functor("cons", {left, right});
     assert(c1 == c2);
     assert(pool.size() == 3);  // No new entry added
     assert(pool.exprs.size() == 3);
     
     // Different cons should return different pointers
-    const expr* c3 = pool.cons(right, left);  // Swapped
+    const expr* c3 = pool.functor("cons", {right, left});  // Swapped
     assert(c1 != c3);
     assert(pool.size() == 4);
     assert(pool.exprs.size() == 4);
@@ -1871,44 +1871,44 @@ void test_expr_pool_cons() {
     const expr* v1 = pool.var(10);
     const expr* v2 = pool.var(20);
     assert(pool.exprs.size() == 6);
-    const expr* c4 = pool.cons(v1, v2);
+    const expr* c4 = pool.functor("cons", {v1, v2});
     assert(pool.exprs.size() == 7);
-    const expr* c5 = pool.cons(v1, v2);
+    const expr* c5 = pool.functor("cons", {v1, v2});
     assert(c4 == c5);
     assert(pool.size() == 7);  // v1, v2, cons(v1,v2)
     assert(pool.exprs.size() == 7);
     assert(pool.exprs.count(*c4) == 1);
     
     // Nested cons
-    const expr* inner = pool.cons(pool.atom("a"), pool.atom("b"));
+    const expr* inner = pool.functor("cons", {pool.functor("a", {}), pool.functor("b", {})});
     assert(pool.exprs.count(*inner) == 1);
-    const expr* outer = pool.cons(inner, pool.atom("c"));
+    const expr* outer = pool.functor("cons", {inner, pool.functor("c", {})});
     assert(pool.exprs.count(*outer) == 1);
-    const expr* outer2 = pool.cons(inner, pool.atom("c"));
+    const expr* outer2 = pool.functor("cons", {inner, pool.functor("c", {})});
     assert(outer == outer2);
     size_t size_after_nested = pool.size();
     assert(pool.exprs.size() == size_after_nested);
     
     // Same expr on both sides
-    const expr* same = pool.atom("same");
-    const expr* c6 = pool.cons(same, same);
+    const expr* same = pool.functor("same", {});
+    const expr* c6 = pool.functor("cons", {same, same});
     assert(pool.exprs.count(*c6) == 1);
-    const expr* c7 = pool.cons(same, same);
+    const expr* c7 = pool.functor("cons", {same, same});
     assert(c6 == c7);
     assert(pool.size() == size_after_nested + 2);  // same, cons(same,same)
     assert(pool.exprs.size() == size_after_nested + 2);
     
     // Deep nesting with interning
-    const expr* d1 = pool.cons(pool.atom("x"), pool.atom("y"));
+    const expr* d1 = pool.functor("cons", {pool.functor("x", {}), pool.functor("y", {})});
     assert(pool.exprs.count(*d1) == 1);
-    const expr* d2 = pool.cons(d1, d1);
+    const expr* d2 = pool.functor("cons", {d1, d1});
     assert(pool.exprs.count(*d2) == 1);
-    const expr* d3 = pool.cons(d2, d2);
+    const expr* d3 = pool.functor("cons", {d2, d2});
     assert(pool.exprs.count(*d3) == 1);
     
-    const expr* d1_dup = pool.cons(pool.atom("x"), pool.atom("y"));
-    const expr* d2_dup = pool.cons(d1_dup, d1_dup);
-    const expr* d3_dup = pool.cons(d2_dup, d2_dup);
+    const expr* d1_dup = pool.functor("cons", {pool.functor("x", {}), pool.functor("y", {})});
+    const expr* d2_dup = pool.functor("cons", {d1_dup, d1_dup});
+    const expr* d3_dup = pool.functor("cons", {d2_dup, d2_dup});
     
     assert(d1 == d1_dup);
     assert(d2 == d2_dup);
@@ -1918,23 +1918,23 @@ void test_expr_pool_cons() {
     // Test backtracking: push frame, add content, pop frame
     size_t size_before = pool.size();
     t.push();
-    const expr* temp_left = pool.atom("temp_left");
-    const expr* temp_right = pool.atom("temp_right");
-    const expr* temp_cons = pool.cons(temp_left, temp_right);
+    const expr* temp_left = pool.functor("temp_left", {});
+    const expr* temp_right = pool.functor("temp_right", {});
+    const expr* temp_cons = pool.functor("cons", {temp_left, temp_right});
     assert(pool.size() == size_before + 3);
     t.pop();
     assert(pool.size() == size_before);  // Should be back to original size
     
     // Test corner case: intern same cons in nested frames
     t.push();  // Frame 1
-    const expr* cons_a = pool.atom("cons_a");
-    const expr* cons_b = pool.atom("cons_b");
-    const expr* cons_ab = pool.cons(cons_a, cons_b);
+    const expr* cons_a = pool.functor("cons_a", {});
+    const expr* cons_b = pool.functor("cons_b", {});
+    const expr* cons_ab = pool.functor("cons", {cons_a, cons_b});
     size_t checkpoint1 = pool.size();
     assert(cons_ab != nullptr);
     
     t.push();  // Frame 2
-    const expr* cons_ab_again = pool.cons(cons_a, cons_b);  // Should return same pointer, no log
+    const expr* cons_ab_again = pool.functor("cons", {cons_a, cons_b});  // Should return same pointer, no log
     assert(cons_ab == cons_ab_again);
     assert(pool.size() == checkpoint1);  // Size unchanged
     
@@ -1942,7 +1942,7 @@ void test_expr_pool_cons() {
     assert(pool.size() == checkpoint1);  // Size still unchanged
     
     // Verify cons_ab is still there
-    const expr* cons_ab_verify = pool.cons(cons_a, cons_b);
+    const expr* cons_ab_verify = pool.functor("cons", {cons_a, cons_b});
     assert(cons_ab == cons_ab_verify);
     assert(pool.size() == checkpoint1);
     
@@ -1953,23 +1953,23 @@ void test_expr_pool_cons() {
     size_t checkpoint_start = pool.size();
     
     t.push();  // Level 1
-    const expr* l1_a = pool.atom("l1_a");
-    const expr* l1_b = pool.atom("l1_b");
-    pool.cons(l1_a, l1_b);
+    const expr* l1_a = pool.functor("l1_a", {});
+    const expr* l1_b = pool.functor("l1_b", {});
+    pool.functor("cons", {l1_a, l1_b});
     size_t checkpoint_level1 = pool.size();
     assert(checkpoint_level1 == checkpoint_start + 3);
     
     t.push();  // Level 2
     const expr* l2_a = pool.var(100);
     const expr* l2_b = pool.var(200);
-    pool.cons(l2_a, l2_b);
-    pool.cons(l1_a, l2_a);  // Mix from level 1 and level 2
+    pool.functor("cons", {l2_a, l2_b});
+    pool.functor("cons", {l1_a, l2_a});  // Mix from level 1 and level 2
     size_t checkpoint_level2 = pool.size();
     assert(checkpoint_level2 == checkpoint_level1 + 4);  // l2_a, l2_b, cons(l2_a,l2_b), cons(l1_a,l2_a)
     
     t.push();  // Level 3
-    pool.cons(l1_a, l1_b);  // Re-intern from level 1, no new entry
-    const expr* l3_cons = pool.cons(l2_a, l1_a);
+    pool.functor("cons", {l1_a, l1_b});  // Re-intern from level 1, no new entry
+    const expr* l3_cons = pool.functor("cons", {l2_a, l1_a});
     size_t checkpoint_level3 = pool.size();
     assert(checkpoint_level3 == checkpoint_level2 + 1);
     
@@ -1989,15 +1989,15 @@ void test_expr_pool_cons() {
     t.push();  // Frame A
     assert(pool.exprs.size() == checkpoint_start);
     
-    const expr* early_atom_1 = pool.atom("early_atom_1");
+    const expr* early_atom_1 = pool.functor("early_atom_1", {});
     assert(pool.exprs.size() == checkpoint_start + 1);
     assert(pool.exprs.count(*early_atom_1) == 1);
     
-    const expr* early_atom_2 = pool.atom("early_atom_2");
+    const expr* early_atom_2 = pool.functor("early_atom_2", {});
     assert(pool.exprs.size() == checkpoint_start + 2);
     assert(pool.exprs.count(*early_atom_2) == 1);
     
-    const expr* early_cons = pool.cons(early_atom_1, early_atom_2);
+    const expr* early_cons = pool.functor("cons", {early_atom_1, early_atom_2});
     assert(pool.exprs.size() == checkpoint_start + 3);
     assert(pool.exprs.count(*early_cons) == 1);
     
@@ -2008,11 +2008,11 @@ void test_expr_pool_cons() {
     t.push();  // Frame B
     assert(pool.exprs.size() == checkpoint_a);
     
-    const expr* mid_atom = pool.atom("mid_atom");
+    const expr* mid_atom = pool.functor("mid_atom", {});
     assert(pool.exprs.size() == checkpoint_a + 1);
     assert(pool.exprs.count(*mid_atom) == 1);
     
-    const expr* mid_cons = pool.cons(early_atom_1, mid_atom);  // Uses early_atom_1
+    const expr* mid_cons = pool.functor("cons", {early_atom_1, mid_atom});  // Uses early_atom_1
     assert(pool.exprs.size() == checkpoint_a + 2);
     assert(pool.exprs.count(*mid_cons) == 1);
     
@@ -2021,18 +2021,18 @@ void test_expr_pool_cons() {
     assert(pool.exprs.size() == checkpoint_b);
     
     // Re-intern early cons in Frame B - should not log since already exists
-    const expr* early_cons_again = pool.cons(early_atom_1, early_atom_2);
+    const expr* early_cons_again = pool.functor("cons", {early_atom_1, early_atom_2});
     assert(early_cons == early_cons_again);
     assert(pool.size() == checkpoint_b);  // Size unchanged
     assert(pool.exprs.size() == checkpoint_b);  // Set size also unchanged
     assert(pool.exprs.count(*early_cons) == 1);  // Still in set
     
     // Add more new content in Frame B
-    const expr* late_atom = pool.atom("late_atom");
+    const expr* late_atom = pool.functor("late_atom", {});
     assert(pool.exprs.size() == checkpoint_b + 1);
     assert(pool.exprs.count(*late_atom) == 1);
     
-    const expr* late_cons = pool.cons(late_atom, mid_atom);
+    const expr* late_cons = pool.functor("cons", {late_atom, mid_atom});
     assert(pool.exprs.size() == checkpoint_b + 2);
     assert(pool.exprs.count(*late_cons) == 1);
     
@@ -2044,23 +2044,23 @@ void test_expr_pool_cons() {
     assert(pool.exprs.size() == checkpoint_b_final);
     
     // Re-intern content from both Frame A and Frame B
-    const expr* early_cons_again2 = pool.cons(early_atom_1, early_atom_2);
+    const expr* early_cons_again2 = pool.functor("cons", {early_atom_1, early_atom_2});
     assert(early_cons == early_cons_again2);
     assert(pool.exprs.size() == checkpoint_b_final);  // No change
     assert(pool.exprs.count(*early_cons) == 1);
     
-    const expr* mid_cons_again = pool.cons(early_atom_1, mid_atom);
+    const expr* mid_cons_again = pool.functor("cons", {early_atom_1, mid_atom});
     assert(mid_cons == mid_cons_again);
     assert(pool.size() == checkpoint_b_final);  // Size unchanged
     assert(pool.exprs.size() == checkpoint_b_final);  // Set size unchanged
     assert(pool.exprs.count(*mid_cons) == 1);
     
     // Add new content in Frame C
-    const expr* frame_c_atom = pool.atom("frame_c_atom");
+    const expr* frame_c_atom = pool.functor("frame_c_atom", {});
     assert(pool.exprs.size() == checkpoint_b_final + 1);
     assert(pool.exprs.count(*frame_c_atom) == 1);
     
-    const expr* frame_c_cons = pool.cons(frame_c_atom, early_atom_1);
+    const expr* frame_c_cons = pool.functor("cons", {frame_c_atom, early_atom_1});
     assert(pool.exprs.size() == checkpoint_b_final + 2);
     assert(pool.exprs.count(*frame_c_cons) == 1);
     
@@ -2085,11 +2085,11 @@ void test_expr_pool_cons() {
     assert(pool.exprs.size() == checkpoint_b_final);
     
     // Verify early and mid content still exist
-    const expr* verify_early_cons = pool.cons(early_atom_1, early_atom_2);
+    const expr* verify_early_cons = pool.functor("cons", {early_atom_1, early_atom_2});
     assert(verify_early_cons == early_cons);
     assert(pool.exprs.count(*verify_early_cons) == 1);
     
-    const expr* verify_mid_cons = pool.cons(early_atom_1, mid_atom);
+    const expr* verify_mid_cons = pool.functor("cons", {early_atom_1, mid_atom});
     assert(verify_mid_cons == mid_cons);
     assert(pool.exprs.count(*verify_mid_cons) == 1);
     
@@ -2111,7 +2111,7 @@ void test_expr_pool_cons() {
     assert(pool.exprs.size() == checkpoint_a);
     
     // Verify early content still exists
-    const expr* verify_early_cons_after_b = pool.cons(early_atom_1, early_atom_2);
+    const expr* verify_early_cons_after_b = pool.functor("cons", {early_atom_1, early_atom_2});
     assert(verify_early_cons_after_b == early_cons);
     assert(pool.exprs.count(*verify_early_cons_after_b) == 1);
     
@@ -2142,12 +2142,12 @@ void test_expr_pool_import() {
         trail t;
         expr_pool pool(t);
         t.push();
-        expr stack_atom{expr::atom{"hello"}};
+        expr stack_atom{expr::functor{"hello", {}}};
         const expr* imported = pool.import(&stack_atom);
         assert(imported != nullptr);
         assert(imported != &stack_atom);
-        assert(std::holds_alternative<expr::atom>(imported->content));
-        assert(std::get<expr::atom>(imported->content).value == "hello");
+        assert(std::holds_alternative<expr::functor>(imported->content));
+        assert(std::get<expr::functor>(imported->content).name == "hello");
         assert(pool.exprs.count(*imported) == 1);
         assert(pool.size() == 1);
         t.pop();
@@ -2195,21 +2195,21 @@ void test_expr_pool_import() {
         trail t;
         expr_pool pool(t);
         t.push();
-        expr l{expr::atom{"left"}};
-        expr r{expr::atom{"right"}};
-        expr c{expr::cons{&l, &r}};
+        expr l{expr::functor{"left", {}}};
+        expr r{expr::functor{"right", {}}};
+        expr c{expr::functor{"cons", {&l, &r}}};
         const expr* imported = pool.import(&c);
         assert(imported != nullptr);
         assert(imported != &c);
-        assert(std::holds_alternative<expr::cons>(imported->content));
-        const expr::cons& ic = std::get<expr::cons>(imported->content);
-        assert(ic.lhs != &l);   // pool copy, not the stack object
-        assert(ic.rhs != &r);
-        assert(pool.exprs.count(*ic.lhs) == 1);
-        assert(pool.exprs.count(*ic.rhs) == 1);
+        assert(std::holds_alternative<expr::functor>(imported->content));
+        const expr::functor& ic = std::get<expr::functor>(imported->content);
+        assert(ic.args[0] != &l);   // pool copy, not the stack object
+        assert(ic.args[1] != &r);
+        assert(pool.exprs.count(*ic.args[0]) == 1);
+        assert(pool.exprs.count(*ic.args[1]) == 1);
         assert(pool.exprs.count(*imported) == 1);
-        assert(std::get<expr::atom>(ic.lhs->content).value == "left");
-        assert(std::get<expr::atom>(ic.rhs->content).value == "right");
+        assert(std::get<expr::functor>(ic.args[0]->content).name == "left");
+        assert(std::get<expr::functor>(ic.args[1]->content).name == "right");
         assert(pool.size() == 3);  // l, r, cons
         t.pop();
     }
@@ -2219,21 +2219,21 @@ void test_expr_pool_import() {
         trail t;
         expr_pool pool(t);
         t.push();
-        expr a{expr::atom{"a"}};
+        expr a{expr::functor{"a", {}}};
         expr v{expr::var{1}};
-        expr inner{expr::cons{&a, &v}};
-        expr b{expr::atom{"b"}};
-        expr root{expr::cons{&inner, &b}};
+        expr inner{expr::functor{"cons", {&a, &v}}};
+        expr b{expr::functor{"b", {}}};
+        expr root{expr::functor{"cons", {&inner, &b}}};
         const expr* imported = pool.import(&root);
         assert(imported != nullptr);
         assert(pool.size() == 5);  // a, v, inner, b, root
-        const expr::cons& rc = std::get<expr::cons>(imported->content);
-        const expr::cons& ic = std::get<expr::cons>(rc.lhs->content);
-        assert(std::get<expr::atom>(ic.lhs->content).value == "a");
-        assert(std::get<expr::var>(ic.rhs->content).index == 1);
-        assert(std::get<expr::atom>(rc.rhs->content).value == "b");
-        assert(pool.exprs.count(*rc.lhs) == 1);
-        assert(pool.exprs.count(*rc.rhs) == 1);
+        const expr::functor& rc = std::get<expr::functor>(imported->content);
+        const expr::functor& ic = std::get<expr::functor>(rc.args[0]->content);
+        assert(std::get<expr::functor>(ic.args[0]->content).name == "a");
+        assert(std::get<expr::var>(ic.args[1]->content).index == 1);
+        assert(std::get<expr::functor>(rc.args[1]->content).name == "b");
+        assert(pool.exprs.count(*rc.args[0]) == 1);
+        assert(pool.exprs.count(*rc.args[1]) == 1);
         assert(pool.exprs.count(*imported) == 1);
         t.pop();
     }
@@ -2243,16 +2243,16 @@ void test_expr_pool_import() {
         trail t;
         expr_pool pool(t);
         t.push();
-        const expr* pool_x = pool.atom("x");
-        expr stack_r{expr::atom{"r"}};
-        expr stack_c{expr::cons{pool_x, &stack_r}};
+        const expr* pool_x = pool.functor("x", {});
+        expr stack_r{expr::functor{"r", {}}};
+        expr stack_c{expr::functor{"cons", {pool_x, &stack_r}}};
         const expr* imported = pool.import(&stack_c);
         assert(imported != nullptr);
-        const expr::cons& ic = std::get<expr::cons>(imported->content);
-        assert(ic.lhs == pool_x);       // pool LHS pointer is preserved exactly
-        assert(ic.rhs != &stack_r);     // stack RHS got a fresh pool pointer
-        assert(pool.exprs.count(*ic.rhs) == 1);
-        assert(std::get<expr::atom>(ic.rhs->content).value == "r");
+        const expr::functor& ic = std::get<expr::functor>(imported->content);
+        assert(ic.args[0] == pool_x);       // pool LHS pointer is preserved exactly
+        assert(ic.args[1] != &stack_r);     // stack RHS got a fresh pool pointer
+        assert(pool.exprs.count(*ic.args[1]) == 1);
+        assert(std::get<expr::functor>(ic.args[1]->content).name == "r");
         assert(pool.size() == 3);  // pool_x + stack_r atom + cons
         t.pop();
     }
@@ -2262,15 +2262,15 @@ void test_expr_pool_import() {
         trail t;
         expr_pool pool(t);
         t.push();
-        const expr* pool_y = pool.atom("y");
-        expr stack_l{expr::atom{"l"}};
-        expr stack_c{expr::cons{&stack_l, pool_y}};
+        const expr* pool_y = pool.functor("y", {});
+        expr stack_l{expr::functor{"l", {}}};
+        expr stack_c{expr::functor{"cons", {&stack_l, pool_y}}};
         const expr* imported = pool.import(&stack_c);
         assert(imported != nullptr);
-        const expr::cons& ic = std::get<expr::cons>(imported->content);
-        assert(ic.lhs != &stack_l);     // stack LHS got a fresh pool pointer
-        assert(ic.rhs == pool_y);       // pool RHS pointer is preserved exactly
-        assert(pool.exprs.count(*ic.lhs) == 1);
+        const expr::functor& ic = std::get<expr::functor>(imported->content);
+        assert(ic.args[0] != &stack_l);     // stack LHS got a fresh pool pointer
+        assert(ic.args[1] == pool_y);       // pool RHS pointer is preserved exactly
+        assert(pool.exprs.count(*ic.args[0]) == 1);
         assert(pool.size() == 3);  // pool_y + stack_l atom + cons
         t.pop();
     }
@@ -2280,17 +2280,17 @@ void test_expr_pool_import() {
         trail t;
         expr_pool pool(t);
         t.push();
-        const expr* pool_p = pool.atom("p");
-        const expr* pool_q = pool.atom("q");
-        const expr* pool_inner = pool.cons(pool_p, pool_q);
-        expr stack_r{expr::atom{"r"}};
-        expr stack_outer{expr::cons{pool_inner, &stack_r}};
+        const expr* pool_p = pool.functor("p", {});
+        const expr* pool_q = pool.functor("q", {});
+        const expr* pool_inner = pool.functor("cons", {pool_p, pool_q});
+        expr stack_r{expr::functor{"r", {}}};
+        expr stack_outer{expr::functor{"cons", {pool_inner, &stack_r}}};
         const expr* imported = pool.import(&stack_outer);
         assert(imported != nullptr);
-        const expr::cons& oc = std::get<expr::cons>(imported->content);
-        assert(oc.lhs == pool_inner);   // inner cons pointer is preserved exactly
-        assert(oc.rhs != &stack_r);
-        assert(pool.exprs.count(*oc.rhs) == 1);
+        const expr::functor& oc = std::get<expr::functor>(imported->content);
+        assert(oc.args[0] == pool_inner);   // inner cons pointer is preserved exactly
+        assert(oc.args[1] != &stack_r);
+        assert(pool.exprs.count(*oc.args[1]) == 1);
         assert(pool.size() == 5);  // p, q, inner, stack_r atom, outer cons
         t.pop();
     }
@@ -2300,7 +2300,7 @@ void test_expr_pool_import() {
         trail t;
         expr_pool pool(t);
         t.push();
-        const expr* pool_atom = pool.atom("already");
+        const expr* pool_atom = pool.functor("already", {});
         const expr* imported = pool.import(pool_atom);
         assert(imported == pool_atom);
         assert(pool.size() == 1);
@@ -2324,9 +2324,9 @@ void test_expr_pool_import() {
         trail t;
         expr_pool pool(t);
         t.push();
-        const expr* pl = pool.atom("pl");
-        const expr* pr = pool.atom("pr");
-        const expr* pc = pool.cons(pl, pr);
+        const expr* pl = pool.functor("pl", {});
+        const expr* pr = pool.functor("pr", {});
+        const expr* pc = pool.functor("cons", {pl, pr});
         const expr* imported = pool.import(pc);
         assert(imported == pc);
         assert(pool.size() == 3);
@@ -2339,8 +2339,8 @@ void test_expr_pool_import() {
         trail t;
         expr_pool pool(t);
         t.push();
-        const expr* pool_dup = pool.atom("dup");
-        expr stack_dup{expr::atom{"dup"}};
+        const expr* pool_dup = pool.functor("dup", {});
+        expr stack_dup{expr::functor{"dup", {}}};
         const expr* imported = pool.import(&stack_dup);
         assert(imported == pool_dup);   // must return pool pointer, not &stack_dup
         assert(pool.size() == 1);       // pool must not grow
@@ -2352,12 +2352,12 @@ void test_expr_pool_import() {
         trail t;
         expr_pool pool(t);
         t.push();
-        const expr* pa = pool.atom("a");
-        const expr* pb = pool.atom("b");
-        const expr* pc = pool.cons(pa, pb);
-        expr stack_a{expr::atom{"a"}};
-        expr stack_b{expr::atom{"b"}};
-        expr stack_c{expr::cons{&stack_a, &stack_b}};
+        const expr* pa = pool.functor("a", {});
+        const expr* pb = pool.functor("b", {});
+        const expr* pc = pool.functor("cons", {pa, pb});
+        expr stack_a{expr::functor{"a", {}}};
+        expr stack_b{expr::functor{"b", {}}};
+        expr stack_c{expr::functor{"cons", {&stack_a, &stack_b}}};
         const expr* imported = pool.import(&stack_c);
         assert(imported == pc);         // must deduplicate to the existing pool pointer
         assert(pool.size() == 3);
@@ -2370,31 +2370,31 @@ void test_expr_pool_import() {
         trail t;
         expr_pool pool(t);
         t.push();
-        expr d0{expr::atom{"d0"}};
+        expr d0{expr::functor{"d0", {}}};
         expr x0{expr::var{0}};
-        expr ll{expr::cons{&d0, &x0}};
+        expr ll{expr::functor{"cons", {&d0, &x0}}};
         expr x1{expr::var{1}};
-        expr d1{expr::atom{"d1"}};
-        expr lr{expr::cons{&x1, &d1}};
-        expr l{expr::cons{&ll, &lr}};
-        expr d2{expr::atom{"d2"}};
-        expr root{expr::cons{&l, &d2}};
+        expr d1{expr::functor{"d1", {}}};
+        expr lr{expr::functor{"cons", {&x1, &d1}}};
+        expr l{expr::functor{"cons", {&ll, &lr}}};
+        expr d2{expr::functor{"d2", {}}};
+        expr root{expr::functor{"cons", {&l, &d2}}};
         const expr* imported = pool.import(&root);
         assert(imported != nullptr);
         assert(pool.size() == 9);
-        const expr::cons& rc = std::get<expr::cons>(imported->content);
-        assert(std::get<expr::atom>(rc.rhs->content).value == "d2");
-        assert(pool.exprs.count(*rc.rhs) == 1);
-        const expr::cons& lc = std::get<expr::cons>(rc.lhs->content);
-        assert(pool.exprs.count(*rc.lhs) == 1);
-        const expr::cons& llc = std::get<expr::cons>(lc.lhs->content);
-        assert(pool.exprs.count(*lc.lhs) == 1);
-        assert(std::get<expr::atom>(llc.lhs->content).value == "d0");
-        assert(std::get<expr::var>(llc.rhs->content).index == 0);
-        const expr::cons& lrc = std::get<expr::cons>(lc.rhs->content);
-        assert(pool.exprs.count(*lc.rhs) == 1);
-        assert(std::get<expr::var>(lrc.lhs->content).index == 1);
-        assert(std::get<expr::atom>(lrc.rhs->content).value == "d1");
+        const expr::functor& rc = std::get<expr::functor>(imported->content);
+        assert(std::get<expr::functor>(rc.args[1]->content).name == "d2");
+        assert(pool.exprs.count(*rc.args[1]) == 1);
+        const expr::functor& lc = std::get<expr::functor>(rc.args[0]->content);
+        assert(pool.exprs.count(*rc.args[0]) == 1);
+        const expr::functor& llc = std::get<expr::functor>(lc.args[0]->content);
+        assert(pool.exprs.count(*lc.args[0]) == 1);
+        assert(std::get<expr::functor>(llc.args[0]->content).name == "d0");
+        assert(std::get<expr::var>(llc.args[1]->content).index == 0);
+        const expr::functor& lrc = std::get<expr::functor>(lc.args[1]->content);
+        assert(pool.exprs.count(*lc.args[1]) == 1);
+        assert(std::get<expr::var>(lrc.args[0]->content).index == 1);
+        assert(std::get<expr::functor>(lrc.args[1]->content).name == "d1");
         assert(pool.exprs.count(*imported) == 1);
         t.pop();
     }
@@ -2404,13 +2404,13 @@ void test_expr_pool_import() {
         trail t;
         expr_pool pool(t);
         t.push();
-        const expr* pool_s = pool.atom("s");
-        expr stack_c{expr::cons{pool_s, pool_s}};
+        const expr* pool_s = pool.functor("s", {});
+        expr stack_c{expr::functor{"cons", {pool_s, pool_s}}};
         const expr* imported = pool.import(&stack_c);
         assert(imported != nullptr);
-        const expr::cons& ic = std::get<expr::cons>(imported->content);
-        assert(ic.lhs == pool_s);
-        assert(ic.rhs == pool_s);
+        const expr::functor& ic = std::get<expr::functor>(imported->content);
+        assert(ic.args[0] == pool_s);
+        assert(ic.args[1] == pool_s);
         assert(pool.size() == 2);  // pool_s + cons
         t.pop();
     }
@@ -2421,7 +2421,7 @@ void test_expr_pool_import() {
         expr_pool pool(t);
         t.push();
         t.push();
-        expr stack_atom{expr::atom{"trail_atom"}};
+        expr stack_atom{expr::functor{"trail_atom", {}}};
         const expr* imported = pool.import(&stack_atom);
         assert(imported != nullptr);
         assert(pool.size() == 1);
@@ -2435,15 +2435,15 @@ void test_expr_pool_import() {
         trail t;
         expr_pool pool(t);
         t.push();
-        const expr* outer_atom = pool.atom("outer");
+        const expr* outer_atom = pool.functor("outer", {});
         assert(pool.size() == 1);
         t.push();
-        expr stack_inner{expr::atom{"inner"}};
-        expr stack_c{expr::cons{outer_atom, &stack_inner}};
+        expr stack_inner{expr::functor{"inner", {}}};
+        expr stack_c{expr::functor{"cons", {outer_atom, &stack_inner}}};
         const expr* imported = pool.import(&stack_c);
         assert(imported != nullptr);
-        const expr::cons& ic = std::get<expr::cons>(imported->content);
-        assert(ic.lhs == outer_atom);   // outer-frame pool pointer is preserved
+        const expr::functor& ic = std::get<expr::functor>(imported->content);
+        assert(ic.args[0] == outer_atom);   // outer-frame pool pointer is preserved
         assert(pool.size() == 3);       // outer_atom + inner atom + cons
         t.pop();
         // inner atom and cons were rolled back; outer_atom must survive
@@ -2458,9 +2458,9 @@ void test_expr_pool_import() {
         trail t;
         expr_pool pool(t);
         t.push();
-        const expr* pa = pool.atom("a");
+        const expr* pa = pool.functor("a", {});
         const expr* pb = pool.var(0);
-        const expr* pc = pool.cons(pa, pb);
+        const expr* pc = pool.functor("cons", {pa, pb});
         assert(pool.size() == 3);
         assert(pool.import(pa) == pa);
         assert(pool.import(pb) == pb);
@@ -2478,11 +2478,11 @@ void test_expr_pool_import() {
         trail t;
         expr_pool pool(t);
         t.push();
-        expr stack_e1{expr::atom{"e1"}};
-        expr stack_e2{expr::atom{"e2"}};
+        expr stack_e1{expr::functor{"e1", {}}};
+        expr stack_e2{expr::functor{"e2", {}}};
 
         // Deliberately construct a cons in the pool whose children are stack pointers
-        const expr* pool_cons_bad = pool.cons(&stack_e1, &stack_e2);
+        const expr* pool_cons_bad = pool.functor("cons", {&stack_e1, &stack_e2});
         assert(pool.exprs.count(*pool_cons_bad) == 1);  // cons is in pool
         assert(pool.exprs.count(stack_e1) == 0);        // but children are NOT
         assert(pool.exprs.count(stack_e2) == 0);
@@ -2493,13 +2493,13 @@ void test_expr_pool_import() {
         // import must recurse through the children even though the cons itself
         // was already in the set; result must be a fully-interned cons
         assert(imported != nullptr);
-        const expr::cons& ic = std::get<expr::cons>(imported->content);
-        assert(pool.exprs.count(*ic.lhs) == 1);  // e1 now in pool
-        assert(pool.exprs.count(*ic.rhs) == 1);  // e2 now in pool
-        assert(ic.lhs != &stack_e1);              // pool pointer, not stack
-        assert(ic.rhs != &stack_e2);
-        assert(std::get<expr::atom>(ic.lhs->content).value == "e1");
-        assert(std::get<expr::atom>(ic.rhs->content).value == "e2");
+        const expr::functor& ic = std::get<expr::functor>(imported->content);
+        assert(pool.exprs.count(*ic.args[0]) == 1);  // e1 now in pool
+        assert(pool.exprs.count(*ic.args[1]) == 1);  // e2 now in pool
+        assert(ic.args[0] != &stack_e1);              // pool pointer, not stack
+        assert(ic.args[1] != &stack_e2);
+        assert(std::get<expr::functor>(ic.args[0]->content).name == "e1");
+        assert(std::get<expr::functor>(ic.args[1]->content).name == "e2");
         // pool has: pool_cons_bad (with stack children) + e1 + e2 + proper cons
         assert(pool.size() == 4);
         t.pop();
@@ -2511,20 +2511,20 @@ void test_expr_pool_import() {
         trail t;
         expr_pool pool(t);
         t.push();
-        expr a{expr::atom{"a"}};
+        expr a{expr::functor{"a", {}}};
         // &a appears as both children of inner, and again as the rhs of root
-        expr inner{expr::cons{&a, &a}};
-        expr root{expr::cons{&inner, &a}};
+        expr inner{expr::functor{"cons", {&a, &a}}};
+        expr root{expr::functor{"cons", {&inner, &a}}};
         const expr* imported = pool.import(&root);
         assert(imported != nullptr);
         // Only 3 pool entries: atom "a", cons(a,a), root cons
         assert(pool.size() == 3);
-        const expr::cons& rc = std::get<expr::cons>(imported->content);
-        const expr::cons& ic = std::get<expr::cons>(rc.lhs->content);
+        const expr::functor& rc = std::get<expr::functor>(imported->content);
+        const expr::functor& ic = std::get<expr::functor>(rc.args[0]->content);
         // All four leaf references resolve to the exact same pool pointer
-        assert(ic.lhs == ic.rhs);
-        assert(ic.lhs == rc.rhs);
-        assert(pool.exprs.count(*ic.lhs) == 1);
+        assert(ic.args[0] == ic.args[1]);
+        assert(ic.args[0] == rc.args[1]);
+        assert(pool.exprs.count(*ic.args[0]) == 1);
         t.pop();
     }
 
@@ -2534,14 +2534,14 @@ void test_expr_pool_import() {
         trail t;
         expr_pool pool(t);
         t.push();
-        expr a{expr::atom{"a"}};
-        expr c{expr::cons{&a, &a}}; 
+        expr a{expr::functor{"a", {}}};
+        expr c{expr::functor{"cons", {&a, &a}}}; 
         const expr* imported = pool.import(&c);
         assert(imported != nullptr);
         assert(pool.size() == 2);  // atom "a" + cons, not 3
-        const expr::cons& ic = std::get<expr::cons>(imported->content);
-        assert(ic.lhs == ic.rhs);  // both sides are the same pool pointer
-        assert(pool.exprs.count(*ic.lhs) == 1);
+        const expr::functor& ic = std::get<expr::functor>(imported->content);
+        assert(ic.args[0] == ic.args[1]);  // both sides are the same pool pointer
+        assert(pool.exprs.count(*ic.args[0]) == 1);
         t.pop();
     }
 
@@ -2551,9 +2551,9 @@ void test_expr_pool_import() {
         trail t1;
         expr_pool pool1(t1);
         t1.push();
-        const expr* p1_atom = pool1.atom("x");
+        const expr* p1_atom = pool1.functor("x", {});
         const expr* p1_var  = pool1.var(5);
-        const expr* p1_cons = pool1.cons(p1_atom, p1_var);
+        const expr* p1_cons = pool1.functor("cons", {p1_atom, p1_var});
         assert(pool1.size() == 3);
 
         trail t2;
@@ -2562,14 +2562,14 @@ void test_expr_pool_import() {
         const expr* p2_cons = pool2.import(p1_cons);
         assert(p2_cons != p1_cons);         // different pool, different pointer
         assert(pool2.size() == 3);          // x, var(5), cons re-interned into pool2
-        const expr::cons& c = std::get<expr::cons>(p2_cons->content);
-        assert(c.lhs != p1_atom);           // pool2 pointer, not pool1's
-        assert(c.rhs != p1_var);
-        assert(pool2.exprs.count(*c.lhs) == 1);
-        assert(pool2.exprs.count(*c.rhs) == 1);
+        const expr::functor& c = std::get<expr::functor>(p2_cons->content);
+        assert(c.args[0] != p1_atom);           // pool2 pointer, not pool1's
+        assert(c.args[1] != p1_var);
+        assert(pool2.exprs.count(*c.args[0]) == 1);
+        assert(pool2.exprs.count(*c.args[1]) == 1);
         assert(pool2.exprs.count(*p2_cons) == 1);
-        assert(std::get<expr::atom>(c.lhs->content).value == "x");
-        assert(std::get<expr::var>(c.rhs->content).index == 5);
+        assert(std::get<expr::functor>(c.args[0]->content).name == "x");
+        assert(std::get<expr::var>(c.args[1]->content).index == 5);
         // pool1 is unaffected
         assert(pool1.size() == 3);
         t1.pop();
@@ -2590,7 +2590,7 @@ void test_bind_map_bind() {
         bind_map bm(t);
         t.push();
         
-        expr a1{expr::atom{"test"}};
+        expr a1{expr::functor{"test", {}}};
         bm.bind(0, &a1);
         
         assert(bm.bindings.size() == 1);
@@ -2609,9 +2609,9 @@ void test_bind_map_bind() {
         bind_map bm(t);
         t.push();
         
-        expr a1{expr::atom{"first"}};
-        expr a2{expr::atom{"second"}};
-        expr a3{expr::atom{"third"}};
+        expr a1{expr::functor{"first", {}}};
+        expr a2{expr::functor{"second", {}}};
+        expr a3{expr::functor{"third", {}}};
         
         bm.bind(0, &a1);
         bm.bind(1, &a2);
@@ -2634,14 +2634,14 @@ void test_bind_map_bind() {
         
         // Frame 1: Create initial binding
         t.push();
-        expr a1{expr::atom{"old"}};
+        expr a1{expr::functor{"old", {}}};
         bm.bind(5, &a1);
         assert(bm.bindings.at(5) == &a1);
         assert(bm.bindings.size() == 1);
         
         // Frame 2: Update to new value
         t.push();
-        expr a2{expr::atom{"new"}};
+        expr a2{expr::functor{"new", {}}};
         bm.bind(5, &a2);
         assert(bm.bindings.size() == 1);
         assert(bm.bindings.at(5) == &a2);
@@ -2662,7 +2662,7 @@ void test_bind_map_bind() {
         bind_map bm(t);
         t.push();
         
-        expr a1{expr::atom{"same"}};
+        expr a1{expr::functor{"same", {}}};
         
         bm.bind(10, &a1);
         assert(bm.bindings.at(10) == &a1);
@@ -2689,9 +2689,9 @@ void test_bind_map_bind() {
         trail t;
         bind_map bm(t);
         
-        expr a1{expr::atom{"first"}};
-        expr a2{expr::atom{"second"}};
-        expr a3{expr::atom{"third"}};
+        expr a1{expr::functor{"first", {}}};
+        expr a2{expr::functor{"second", {}}};
+        expr a3{expr::functor{"third", {}}};
         
         // Frame 1: Initial binding
         t.push();
@@ -2735,21 +2735,21 @@ void test_bind_map_bind() {
         
         // Frame 1
         t.push();
-        expr a1{expr::atom{"frame1"}};
+        expr a1{expr::functor{"frame1", {}}};
         bm.bind(20, &a1);
         assert(bm.bindings.size() == 1);
         std::map<uint32_t, const expr*> checkpoint1 = bm.bindings;
         
         // Frame 2
         t.push();
-        expr a2{expr::atom{"frame2"}};
+        expr a2{expr::functor{"frame2", {}}};
         bm.bind(21, &a2);
         assert(bm.bindings.size() == 2);
         std::map<uint32_t, const expr*> checkpoint2 = bm.bindings;
         
         // Frame 3
         t.push();
-        expr a3{expr::atom{"frame3"}};
+        expr a3{expr::functor{"frame3", {}}};
         bm.bind(22, &a3);
         assert(bm.bindings.size() == 3);
         
@@ -2775,21 +2775,21 @@ void test_bind_map_bind() {
         
         // Frame 1: bind index 30 to a1
         t.push();
-        expr a1{expr::atom{"v1"}};
+        expr a1{expr::functor{"v1", {}}};
         bm.bind(30, &a1);
         assert(bm.bindings.at(30) == &a1);
         std::map<uint32_t, const expr*> checkpoint1 = bm.bindings;
         
         // Frame 2: update index 30 to a2
         t.push();
-        expr a2{expr::atom{"v2"}};
+        expr a2{expr::functor{"v2", {}}};
         bm.bind(30, &a2);
         assert(bm.bindings.at(30) == &a2);
         std::map<uint32_t, const expr*> checkpoint2 = bm.bindings;
         
         // Frame 3: update index 30 to a3
         t.push();
-        expr a3{expr::atom{"v3"}};
+        expr a3{expr::functor{"v3", {}}};
         bm.bind(30, &a3);
         assert(bm.bindings.at(30) == &a3);
         
@@ -2814,21 +2814,21 @@ void test_bind_map_bind() {
         bind_map bm(t);
         
         t.push();
-        expr a1{expr::atom{"a"}};
-        expr a2{expr::atom{"b"}};
+        expr a1{expr::functor{"a", {}}};
+        expr a2{expr::functor{"b", {}}};
         bm.bind(40, &a1);
         bm.bind(41, &a2);
         std::map<uint32_t, const expr*> checkpoint1 = bm.bindings;
         
         t.push();
-        expr a3{expr::atom{"c"}};
-        expr a4{expr::atom{"d"}};
+        expr a3{expr::functor{"c", {}}};
+        expr a4{expr::functor{"d", {}}};
         bm.bind(42, &a3);
         bm.bind(43, &a4);
         std::map<uint32_t, const expr*> checkpoint2 = bm.bindings;
         
         t.push();
-        expr a5{expr::atom{"e"}};
+        expr a5{expr::functor{"e", {}}};
         bm.bind(40, &a5);  // Update existing from frame 1
         assert(bm.bindings.size() == 4);
         assert(bm.bindings.at(40) == &a5);
@@ -2851,11 +2851,11 @@ void test_bind_map_bind() {
         trail t;
         bind_map bm(t);
         
-        expr a1{expr::atom{"atom"}};
+        expr a1{expr::functor{"atom", {}}};
         expr v1{expr::var{50}};
-        expr a2{expr::atom{"x"}};
-        expr a3{expr::atom{"y"}};
-        expr c1{expr::cons{&a2, &a3}};
+        expr a2{expr::functor{"x", {}}};
+        expr a3{expr::functor{"y", {}}};
+        expr c1{expr::functor{"cons", {&a2, &a3}}};
         
         // Frame 1: var -> atom
         t.push();
@@ -2894,7 +2894,7 @@ void test_bind_map_bind() {
         expr v1{expr::var{60}};
         expr v2{expr::var{61}};
         expr v3{expr::var{62}};
-        expr a1{expr::atom{"end"}};
+        expr a1{expr::functor{"end", {}}};
         
         // Frame 1: Start chain 60 -> v1
         t.push();
@@ -2937,14 +2937,14 @@ void test_bind_map_bind() {
         
         expr v1{expr::var{70}};
         expr v2{expr::var{71}};
-        expr a1{expr::atom{"a"}};
+        expr a1{expr::functor{"a", {}}};
         
         // Build nested: cons(cons(v1, a1), v2)
-        expr inner{expr::cons{&v1, &a1}};
-        expr outer{expr::cons{&inner, &v2}};
+        expr inner{expr::functor{"cons", {&v1, &a1}}};
+        expr outer{expr::functor{"cons", {&inner, &v2}}};
         
-        expr a2{expr::atom{"bound1"}};
-        expr a3{expr::atom{"bound2"}};
+        expr a2{expr::functor{"bound1", {}}};
+        expr a3{expr::functor{"bound2", {}}};
         
         // Frame 1: Bind first var
         t.push();
@@ -2980,11 +2980,11 @@ void test_bind_map_bind() {
         trail t;
         bind_map bm(t);
         
-        expr a1{expr::atom{"a"}};
-        expr a2{expr::atom{"b"}};
-        expr a3{expr::atom{"c"}};
-        expr a4{expr::atom{"d"}};
-        expr a5{expr::atom{"e"}};
+        expr a1{expr::functor{"a", {}}};
+        expr a2{expr::functor{"b", {}}};
+        expr a3{expr::functor{"c", {}}};
+        expr a4{expr::functor{"d", {}}};
+        expr a5{expr::functor{"e", {}}};
         
         // Frame 1: Create initial bindings
         t.push();
@@ -3028,7 +3028,7 @@ void test_bind_map_bind() {
         trail t;
         bind_map bm(t);
         
-        expr a1{expr::atom{"same"}};
+        expr a1{expr::functor{"same", {}}};
         
         // Frame 1: Initial binding
         t.push();
@@ -3068,8 +3068,8 @@ void test_bind_map_bind() {
         trail t;
         bind_map bm(t);
         
-        expr a1{expr::atom{"val1"}};
-        expr a2{expr::atom{"val2"}};
+        expr a1{expr::functor{"val1", {}}};
+        expr a2{expr::functor{"val2", {}}};
         
         t.push();
         bm.bind(95, &a1);
@@ -3113,7 +3113,7 @@ void test_bind_map_bind() {
         expr v1{expr::var{100}};
         expr v2{expr::var{101}};
         expr v3{expr::var{102}};
-        expr a1{expr::atom{"end"}};
+        expr a1{expr::functor{"end", {}}};
         
         // Frame 1: Start of chain
         t.push();
@@ -3157,12 +3157,12 @@ void test_bind_map_bind() {
         trail t;
         bind_map bm(t);
         
-        expr a1{expr::atom{"x"}};
-        expr a2{expr::atom{"y"}};
-        expr c1{expr::cons{&a1, &a2}};
+        expr a1{expr::functor{"x", {}}};
+        expr a2{expr::functor{"y", {}}};
+        expr c1{expr::functor{"cons", {&a1, &a2}}};
         
-        expr a3{expr::atom{"z"}};
-        expr c2{expr::cons{&c1, &a3}};
+        expr a3{expr::functor{"z", {}}};
+        expr c2{expr::functor{"cons", {&c1, &a3}}};
         
         t.push();
         bm.bind(110, &c1);
@@ -3185,12 +3185,12 @@ void test_bind_map_bind() {
         trail t;
         bind_map bm(t);
         
-        expr a1{expr::atom{"1"}};
-        expr a2{expr::atom{"2"}};
-        expr a3{expr::atom{"3"}};
-        expr a4{expr::atom{"4"}};
-        expr a5{expr::atom{"5"}};
-        expr a6{expr::atom{"6"}};
+        expr a1{expr::functor{"1", {}}};
+        expr a2{expr::functor{"2", {}}};
+        expr a3{expr::functor{"3", {}}};
+        expr a4{expr::functor{"4", {}}};
+        expr a5{expr::functor{"5", {}}};
+        expr a6{expr::functor{"6", {}}};
         
         // Frame 1
         t.push();
@@ -3231,16 +3231,16 @@ void test_bind_map_bind() {
         expr v1{expr::var{130}};
         expr v2{expr::var{131}};
         expr v3{expr::var{132}};
-        expr a1{expr::atom{"a"}};
+        expr a1{expr::functor{"a", {}}};
         
         // Build: cons(cons(v1, v2), cons(v3, a1))
-        expr left{expr::cons{&v1, &v2}};
-        expr right{expr::cons{&v3, &a1}};
-        expr outer{expr::cons{&left, &right}};
+        expr left{expr::functor{"cons", {&v1, &v2}}};
+        expr right{expr::functor{"cons", {&v3, &a1}}};
+        expr outer{expr::functor{"cons", {&left, &right}}};
         
-        expr a2{expr::atom{"x"}};
-        expr a3{expr::atom{"y"}};
-        expr a4{expr::atom{"z"}};
+        expr a2{expr::functor{"x", {}}};
+        expr a3{expr::functor{"y", {}}};
+        expr a4{expr::functor{"z", {}}};
         
         t.push();
         bm.bind(130, &a2);
@@ -3272,9 +3272,9 @@ void test_bind_map_bind() {
         trail t;
         bind_map bm(t);
         
-        expr a1{expr::atom{"a"}};
-        expr a2{expr::atom{"b"}};
-        expr a3{expr::atom{"c"}};
+        expr a1{expr::functor{"a", {}}};
+        expr a2{expr::functor{"b", {}}};
+        expr a3{expr::functor{"c", {}}};
         
         // Frame 1: 10 bindings
         t.push();
@@ -3317,7 +3317,7 @@ void test_bind_map_bind() {
         trail t;
         bind_map bm(t);
         
-        expr a1{expr::atom{"same"}};
+        expr a1{expr::functor{"same", {}}};
         
         t.push();
         bm.bind(160, &a1);
@@ -3352,7 +3352,7 @@ void test_bind_map_whnf() {
     {
         trail t;
         bind_map bm(t);
-        expr a1{expr::atom{"test"}};
+        expr a1{expr::functor{"test", {}}};
         const expr* result = bm.whnf(&a1);
         assert(result == &a1);
         assert(bm.bindings.size() == 0);  // No bindings created for non-vars
@@ -3362,9 +3362,9 @@ void test_bind_map_whnf() {
     {
         trail t;
         bind_map bm(t);
-        expr a1{expr::atom{"left"}};
-        expr a2{expr::atom{"right"}};
-        expr c1{expr::cons{&a1, &a2}};
+        expr a1{expr::functor{"left", {}}};
+        expr a2{expr::functor{"right", {}}};
+        expr c1{expr::functor{"cons", {&a1, &a2}}};
         const expr* result = bm.whnf(&c1);
         assert(result == &c1);
         assert(bm.bindings.size() == 0);
@@ -3385,7 +3385,7 @@ void test_bind_map_whnf() {
         trail t;
         bind_map bm(t);
         expr v1{expr::var{1}};
-        expr a1{expr::atom{"bound"}};
+        expr a1{expr::functor{"bound", {}}};
         bm.bindings[1] = &a1;
         
         const expr* result = bm.whnf(&v1);
@@ -3402,7 +3402,7 @@ void test_bind_map_whnf() {
         expr v1{expr::var{10}};
         expr v2{expr::var{11}};
         expr v3{expr::var{12}};
-        expr a1{expr::atom{"end"}};
+        expr a1{expr::functor{"end", {}}};
         
         // Create chain: v1 -> v2 -> v3 -> a1
         bm.bindings[10] = &v2;
@@ -3433,7 +3433,7 @@ void test_bind_map_whnf() {
         expr v3{expr::var{22}};
         expr v4{expr::var{23}};
         expr v5{expr::var{24}};
-        expr a1{expr::atom{"final"}};
+        expr a1{expr::functor{"final", {}}};
         
         // Create chain: v1 -> v2 -> v3 -> v4 -> v5 -> a1
         bm.bindings[20] = &v2;
@@ -3461,16 +3461,16 @@ void test_bind_map_whnf() {
         trail t;
         bind_map bm(t);
         expr v1{expr::var{30}};
-        expr a1{expr::atom{"x"}};
-        expr a2{expr::atom{"y"}};
-        expr c1{expr::cons{&a1, &a2}};
+        expr a1{expr::functor{"x", {}}};
+        expr a2{expr::functor{"y", {}}};
+        expr c1{expr::functor{"cons", {&a1, &a2}}};
         
         bm.bindings[30] = &c1;
         assert(bm.bindings.size() == 1);
         
         const expr* result = bm.whnf(&v1);
         assert(result == &c1);
-        assert(std::holds_alternative<expr::cons>(result->content));
+        assert(std::holds_alternative<expr::functor>(result->content));
         assert(bm.bindings.size() == 1);
     }
     
@@ -3482,9 +3482,9 @@ void test_bind_map_whnf() {
         
         expr v1{expr::var{40}};
         expr v2{expr::var{41}};
-        expr a1{expr::atom{"a"}};
-        expr a2{expr::atom{"b"}};
-        expr c1{expr::cons{&a1, &a2}};
+        expr a1{expr::functor{"a", {}}};
+        expr a2{expr::functor{"b", {}}};
+        expr c1{expr::functor{"cons", {&a1, &a2}}};
         
         bm.bindings[40] = &v2;
         bm.bindings[41] = &c1;
@@ -3522,7 +3522,7 @@ void test_bind_map_whnf() {
         trail t;
         bind_map bm(t);
         expr v1{expr::var{60}};
-        expr a1{expr::atom{"repeated"}};
+        expr a1{expr::functor{"repeated", {}}};
         bm.bindings[60] = &a1;
         assert(bm.bindings.size() == 1);
         
@@ -3567,18 +3567,18 @@ void test_bind_map_whnf() {
         trail t;
         bind_map bm(t);
         expr v1{expr::var{80}};
-        expr a1{expr::atom{"inner"}};
-        expr a2{expr::atom{"outer"}};
-        expr inner_cons{expr::cons{&a1, &a2}};
-        expr a3{expr::atom{"wrap"}};
-        expr outer_cons{expr::cons{&inner_cons, &a3}};
+        expr a1{expr::functor{"inner", {}}};
+        expr a2{expr::functor{"outer", {}}};
+        expr inner_cons{expr::functor{"cons", {&a1, &a2}}};
+        expr a3{expr::functor{"wrap", {}}};
+        expr outer_cons{expr::functor{"cons", {&inner_cons, &a3}}};
         
         bm.bindings[80] = &outer_cons;
         assert(bm.bindings.size() == 1);
         
         const expr* result = bm.whnf(&v1);
         assert(result == &outer_cons);
-        assert(std::holds_alternative<expr::cons>(result->content));
+        assert(std::holds_alternative<expr::functor>(result->content));
         assert(bm.bindings.size() == 1);
     }
     
@@ -3588,8 +3588,8 @@ void test_bind_map_whnf() {
         bind_map bm(t);
         expr v_small{expr::var{0}};
         expr v_large{expr::var{UINT32_MAX}};
-        expr a1{expr::atom{"small"}};
-        expr a2{expr::atom{"large"}};
+        expr a1{expr::functor{"small", {}}};
+        expr a2{expr::functor{"large", {}}};
         
         bm.bindings[0] = &a1;
         bm.bindings[UINT32_MAX] = &a2;
@@ -3604,9 +3604,9 @@ void test_bind_map_whnf() {
     {
         trail t;
         bind_map bm(t);
-        expr a1{expr::atom{""}};
-        expr a2{expr::atom{"test123"}};
-        expr a3{expr::atom{"!@#$%"}};
+        expr a1{expr::functor{"", {}}};
+        expr a2{expr::functor{"test123", {}}};
+        expr a3{expr::functor{"!@#$%", {}}};
         
         assert(bm.whnf(&a1) == &a1);
         assert(bm.whnf(&a2) == &a2);
@@ -3623,9 +3623,9 @@ void test_bind_map_whnf() {
         expr v1{expr::var{90}};
         expr v2{expr::var{91}};
         expr v3{expr::var{92}};
-        expr a1{expr::atom{"left"}};
-        expr a2{expr::atom{"right"}};
-        expr c1{expr::cons{&a1, &a2}};
+        expr a1{expr::functor{"left", {}}};
+        expr a2{expr::functor{"right", {}}};
+        expr c1{expr::functor{"cons", {&a1, &a2}}};
         
         // Chain: v1 -> v2 -> v3 -> c1
         bm.bindings[90] = &v2;
@@ -3650,23 +3650,23 @@ void test_bind_map_whnf() {
         bind_map bm(t);
         expr v1{expr::var{100}};
         expr v2{expr::var{101}};
-        expr a1{expr::atom{"bound_atom"}};
+        expr a1{expr::functor{"bound_atom", {}}};
         
         // Bind v2 to an atom
         bm.bindings[101] = &a1;
         
         // Create cons with v1 and v2 as children
-        expr c1{expr::cons{&v1, &v2}};
+        expr c1{expr::functor{"cons", {&v1, &v2}}};
         
         // whnf of the cons should return the cons itself, NOT reduce children
         const expr* result = bm.whnf(&c1);
         assert(result == &c1);
-        assert(std::holds_alternative<expr::cons>(result->content));
+        assert(std::holds_alternative<expr::functor>(result->content));
         
-        const expr::cons& cons_ref = std::get<expr::cons>(result->content);
+        const expr::functor& cons_ref = std::get<expr::functor>(result->content);
         // Children should still be the original var pointers, NOT reduced
-        assert(cons_ref.lhs == &v1);
-        assert(cons_ref.rhs == &v2);
+        assert(cons_ref.args[0] == &v1);
+        assert(cons_ref.args[1] == &v2);
         assert(bm.bindings.size() == 1);
     }
     
@@ -3677,15 +3677,15 @@ void test_bind_map_whnf() {
         expr v_outer{expr::var{110}};
         expr v_left{expr::var{111}};
         expr v_right{expr::var{112}};
-        expr a1{expr::atom{"left_val"}};
-        expr a2{expr::atom{"right_val"}};
+        expr a1{expr::functor{"left_val", {}}};
+        expr a2{expr::functor{"right_val", {}}};
         
         // Bind the inner vars
         bm.bindings[111] = &a1;
         bm.bindings[112] = &a2;
         
         // Create cons with bound vars as children
-        expr c1{expr::cons{&v_left, &v_right}};
+        expr c1{expr::functor{"cons", {&v_left, &v_right}}};
         bm.bindings[110] = &c1;
         assert(bm.bindings.size() == 3);
         
@@ -3693,9 +3693,9 @@ void test_bind_map_whnf() {
         assert(result == &c1);
         
         // The cons children should still point to vars, not atoms
-        const expr::cons& cons_ref = std::get<expr::cons>(result->content);
-        assert(cons_ref.lhs == &v_left);
-        assert(cons_ref.rhs == &v_right);
+        const expr::functor& cons_ref = std::get<expr::functor>(result->content);
+        assert(cons_ref.args[0] == &v_left);
+        assert(cons_ref.args[1] == &v_right);
         assert(bm.bindings.size() == 3);
     }
     
@@ -3709,11 +3709,11 @@ void test_bind_map_whnf() {
         expr v_chain2{expr::var{121}};
         expr v_inner1{expr::var{122}};
         expr v_inner2{expr::var{123}};
-        expr a1{expr::atom{"inner_bound"}};
+        expr a1{expr::functor{"inner_bound", {}}};
         
         bm.bindings[122] = &a1;
         
-        expr c1{expr::cons{&v_inner1, &v_inner2}};
+        expr c1{expr::functor{"cons", {&v_inner1, &v_inner2}}};
         bm.bindings[120] = &v_chain2;
         bm.bindings[121] = &c1;
         assert(bm.bindings.size() == 3);
@@ -3722,9 +3722,9 @@ void test_bind_map_whnf() {
         assert(result == &c1);
         
         // Cons children should be unchanged
-        const expr::cons& cons_ref = std::get<expr::cons>(result->content);
-        assert(cons_ref.lhs == &v_inner1);
-        assert(cons_ref.rhs == &v_inner2);
+        const expr::functor& cons_ref = std::get<expr::functor>(result->content);
+        assert(cons_ref.args[0] == &v_inner1);
+        assert(cons_ref.args[1] == &v_inner2);
         
         // Path compression on outer chain
         assert(bm.bindings.at(120) == &c1);
@@ -3744,15 +3744,15 @@ void test_bind_map_whnf() {
         expr v4{expr::var{134}};
         
         // Bind some inner vars
-        expr a1{expr::atom{"bound1"}};
-        expr a2{expr::atom{"bound2"}};
+        expr a1{expr::functor{"bound1", {}}};
+        expr a2{expr::functor{"bound2", {}}};
         bm.bindings[131] = &a1;
         bm.bindings[133] = &a2;
         
         // Create nested structure: cons(cons(v1, v2), cons(v3, v4))
-        expr inner_left{expr::cons{&v1, &v2}};
-        expr inner_right{expr::cons{&v3, &v4}};
-        expr outer{expr::cons{&inner_left, &inner_right}};
+        expr inner_left{expr::functor{"cons", {&v1, &v2}}};
+        expr inner_right{expr::functor{"cons", {&v3, &v4}}};
+        expr outer{expr::functor{"cons", {&inner_left, &inner_right}}};
         
         bm.bindings[130] = &outer;
         assert(bm.bindings.size() == 3);
@@ -3761,17 +3761,17 @@ void test_bind_map_whnf() {
         assert(result == &outer);
         
         // Verify structure is unchanged - vars inside cons are not reduced
-        const expr::cons& outer_cons = std::get<expr::cons>(result->content);
-        assert(outer_cons.lhs == &inner_left);
-        assert(outer_cons.rhs == &inner_right);
+        const expr::functor& outer_cons = std::get<expr::functor>(result->content);
+        assert(outer_cons.args[0] == &inner_left);
+        assert(outer_cons.args[1] == &inner_right);
         
-        const expr::cons& left_cons = std::get<expr::cons>(outer_cons.lhs->content);
-        assert(left_cons.lhs == &v1);  // Still points to var, not a1
-        assert(left_cons.rhs == &v2);
+        const expr::functor& left_cons = std::get<expr::functor>(outer_cons.args[0]->content);
+        assert(left_cons.args[0] == &v1);  // Still points to var, not a1
+        assert(left_cons.args[1] == &v2);
         
-        const expr::cons& right_cons = std::get<expr::cons>(outer_cons.rhs->content);
-        assert(right_cons.lhs == &v3);  // Still points to var, not a2
-        assert(right_cons.rhs == &v4);
+        const expr::functor& right_cons = std::get<expr::functor>(outer_cons.args[1]->content);
+        assert(right_cons.args[0] == &v3);  // Still points to var, not a2
+        assert(right_cons.args[1] == &v4);
         
         assert(bm.bindings.size() == 3);
     }
@@ -3784,13 +3784,13 @@ void test_bind_map_whnf() {
         expr v_left{expr::var{141}};
         expr v_right{expr::var{142}};
         expr v_chain{expr::var{143}};
-        expr a1{expr::atom{"chained"}};
+        expr a1{expr::functor{"chained", {}}};
         
         // v_left chains to atom
         bm.bindings[141] = &v_chain;
         bm.bindings[143] = &a1;
         
-        expr c1{expr::cons{&v_left, &v_right}};
+        expr c1{expr::functor{"cons", {&v_left, &v_right}}};
         bm.bindings[140] = &c1;
         assert(bm.bindings.size() == 3);
         
@@ -3798,9 +3798,9 @@ void test_bind_map_whnf() {
         assert(result == &c1);
         
         // Cons children should be unchanged - v_left is NOT reduced to a1
-        const expr::cons& cons_ref = std::get<expr::cons>(result->content);
-        assert(cons_ref.lhs == &v_left);
-        assert(cons_ref.rhs == &v_right);
+        const expr::functor& cons_ref = std::get<expr::functor>(result->content);
+        assert(cons_ref.args[0] == &v_left);
+        assert(cons_ref.args[1] == &v_right);
         assert(bm.bindings.size() == 3);
     }
     
@@ -3811,7 +3811,7 @@ void test_bind_map_whnf() {
         expr v1{expr::var{150}};
         expr v2{expr::var{151}};
         expr v3{expr::var{152}};
-        expr a1{expr::atom{"shared"}};
+        expr a1{expr::functor{"shared", {}}};
         
         bm.bindings[150] = &a1;
         bm.bindings[151] = &a1;
@@ -3830,9 +3830,9 @@ void test_bind_map_whnf() {
         bind_map bm(t);
         expr v1{expr::var{160}};
         expr v2{expr::var{161}};
-        expr a1{expr::atom{"x"}};
-        expr a2{expr::atom{"y"}};
-        expr c1{expr::cons{&a1, &a2}};
+        expr a1{expr::functor{"x", {}}};
+        expr a2{expr::functor{"y", {}}};
+        expr c1{expr::functor{"cons", {&a1, &a2}}};
         
         bm.bindings[160] = &c1;
         bm.bindings[161] = &c1;
@@ -3849,15 +3849,15 @@ void test_bind_map_whnf() {
         bind_map bm(t);
         expr v1{expr::var{170}};
         expr v2{expr::var{171}};
-        expr c1{expr::cons{&v1, &v2}};
+        expr c1{expr::functor{"cons", {&v1, &v2}}};
         
         const expr* result = bm.whnf(&c1);
         assert(result == &c1);
         
         // Cons children remain as unbound vars
-        const expr::cons& cons_ref = std::get<expr::cons>(result->content);
-        assert(cons_ref.lhs == &v1);
-        assert(cons_ref.rhs == &v2);
+        const expr::functor& cons_ref = std::get<expr::functor>(result->content);
+        assert(cons_ref.args[0] == &v1);
+        assert(cons_ref.args[1] == &v2);
         assert(bm.bindings.size() == 0);  // No bindings created
     }
     
@@ -3865,16 +3865,16 @@ void test_bind_map_whnf() {
     {
         trail t;
         bind_map bm(t);
-        expr a1{expr::atom{"atom"}};
+        expr a1{expr::functor{"atom", {}}};
         expr v1{expr::var{180}};
-        expr c1{expr::cons{&a1, &v1}};
+        expr c1{expr::functor{"cons", {&a1, &v1}}};
         
         const expr* result = bm.whnf(&c1);
         assert(result == &c1);
         
-        const expr::cons& cons_ref = std::get<expr::cons>(result->content);
-        assert(cons_ref.lhs == &a1);
-        assert(cons_ref.rhs == &v1);  // Var not reduced
+        const expr::functor& cons_ref = std::get<expr::functor>(result->content);
+        assert(cons_ref.args[0] == &a1);
+        assert(cons_ref.args[1] == &v1);  // Var not reduced
         assert(bm.bindings.size() == 0);
     }
     
@@ -3883,17 +3883,17 @@ void test_bind_map_whnf() {
         trail t;
         bind_map bm(t);
         expr v1{expr::var{190}};
-        expr a1{expr::atom{"inner"}};
-        expr a2{expr::atom{"inner2"}};
-        expr inner_cons{expr::cons{&a1, &a2}};
-        expr outer_cons{expr::cons{&v1, &inner_cons}};
+        expr a1{expr::functor{"inner", {}}};
+        expr a2{expr::functor{"inner2", {}}};
+        expr inner_cons{expr::functor{"cons", {&a1, &a2}}};
+        expr outer_cons{expr::functor{"cons", {&v1, &inner_cons}}};
         
         const expr* result = bm.whnf(&outer_cons);
         assert(result == &outer_cons);
         
-        const expr::cons& cons_ref = std::get<expr::cons>(result->content);
-        assert(cons_ref.lhs == &v1);  // Var not reduced
-        assert(cons_ref.rhs == &inner_cons);
+        const expr::functor& cons_ref = std::get<expr::functor>(result->content);
+        assert(cons_ref.args[0] == &v1);  // Var not reduced
+        assert(cons_ref.args[1] == &inner_cons);
         assert(bm.bindings.size() == 0);
     }
     
@@ -3904,15 +3904,15 @@ void test_bind_map_whnf() {
         expr v_outer{expr::var{200}};
         expr v_inner1{expr::var{201}};
         expr v_inner2{expr::var{202}};
-        expr a1{expr::atom{"val1"}};
-        expr a2{expr::atom{"val2"}};
+        expr a1{expr::functor{"val1", {}}};
+        expr a2{expr::functor{"val2", {}}};
         
         // Bind inner vars
         bm.bindings[201] = &a1;
         bm.bindings[202] = &a2;
         
         // Create cons with bound vars
-        expr c1{expr::cons{&v_inner1, &v_inner2}};
+        expr c1{expr::functor{"cons", {&v_inner1, &v_inner2}}};
         bm.bindings[200] = &c1;
         assert(bm.bindings.size() == 3);
         
@@ -3920,11 +3920,11 @@ void test_bind_map_whnf() {
         assert(result == &c1);
         
         // Children should STILL be vars, not reduced to atoms
-        const expr::cons& cons_ref = std::get<expr::cons>(result->content);
-        assert(cons_ref.lhs == &v_inner1);
-        assert(cons_ref.rhs == &v_inner2);
-        assert(std::holds_alternative<expr::var>(cons_ref.lhs->content));
-        assert(std::holds_alternative<expr::var>(cons_ref.rhs->content));
+        const expr::functor& cons_ref = std::get<expr::functor>(result->content);
+        assert(cons_ref.args[0] == &v_inner1);
+        assert(cons_ref.args[1] == &v_inner2);
+        assert(std::holds_alternative<expr::var>(cons_ref.args[0]->content));
+        assert(std::holds_alternative<expr::var>(cons_ref.args[1]->content));
         assert(bm.bindings.size() == 3);
     }
     
@@ -3939,14 +3939,14 @@ void test_bind_map_whnf() {
         expr v_left{expr::var{212}};
         expr v_right{expr::var{213}};
         expr v_left_chain{expr::var{214}};
-        expr a1{expr::atom{"left_end"}};
+        expr a1{expr::functor{"left_end", {}}};
         
         // v_left chains to atom
         bm.bindings[212] = &v_left_chain;
         bm.bindings[214] = &a1;
         
         // Cons contains chained var and unbound var
-        expr c1{expr::cons{&v_left, &v_right}};
+        expr c1{expr::functor{"cons", {&v_left, &v_right}}};
         bm.bindings[210] = &v_mid;
         bm.bindings[211] = &c1;
         assert(bm.bindings.size() == 4);
@@ -3955,9 +3955,9 @@ void test_bind_map_whnf() {
         assert(result == &c1);
         
         // Cons children should be unchanged - not reduced
-        const expr::cons& cons_ref = std::get<expr::cons>(result->content);
-        assert(cons_ref.lhs == &v_left);  // Still v_left, not a1
-        assert(cons_ref.rhs == &v_right);
+        const expr::functor& cons_ref = std::get<expr::functor>(result->content);
+        assert(cons_ref.args[0] == &v_left);  // Still v_left, not a1
+        assert(cons_ref.args[1] == &v_right);
         
         // Outer chain should be compressed
         assert(bm.bindings.at(210) == &c1);
@@ -3974,31 +3974,31 @@ void test_bind_map_whnf() {
         expr v2{expr::var{221}};
         expr v3{expr::var{222}};
         expr v4{expr::var{223}};
-        expr a1{expr::atom{"deep"}};
+        expr a1{expr::functor{"deep", {}}};
         
         // Bind v4
         bm.bindings[223] = &a1;
         
         // Create: cons(cons(v1, v2), cons(v3, v4))
-        expr inner_left{expr::cons{&v1, &v2}};
-        expr inner_right{expr::cons{&v3, &v4}};
-        expr outer{expr::cons{&inner_left, &inner_right}};
+        expr inner_left{expr::functor{"cons", {&v1, &v2}}};
+        expr inner_right{expr::functor{"cons", {&v3, &v4}}};
+        expr outer{expr::functor{"cons", {&inner_left, &inner_right}}};
         
         const expr* result = bm.whnf(&outer);
         assert(result == &outer);
         
         // All structure should be preserved, vars not reduced
-        const expr::cons& outer_cons = std::get<expr::cons>(result->content);
-        assert(outer_cons.lhs == &inner_left);
-        assert(outer_cons.rhs == &inner_right);
+        const expr::functor& outer_cons = std::get<expr::functor>(result->content);
+        assert(outer_cons.args[0] == &inner_left);
+        assert(outer_cons.args[1] == &inner_right);
         
-        const expr::cons& left_cons = std::get<expr::cons>(outer_cons.lhs->content);
-        assert(left_cons.lhs == &v1);
-        assert(left_cons.rhs == &v2);
+        const expr::functor& left_cons = std::get<expr::functor>(outer_cons.args[0]->content);
+        assert(left_cons.args[0] == &v1);
+        assert(left_cons.args[1] == &v2);
         
-        const expr::cons& right_cons = std::get<expr::cons>(outer_cons.rhs->content);
-        assert(right_cons.lhs == &v3);
-        assert(right_cons.rhs == &v4);  // Still v4, not a1
+        const expr::functor& right_cons = std::get<expr::functor>(outer_cons.args[1]->content);
+        assert(right_cons.args[0] == &v3);
+        assert(right_cons.args[1] == &v4);  // Still v4, not a1
         
         assert(bm.bindings.size() == 1);
     }
@@ -4014,15 +4014,15 @@ void test_bind_map_whnf() {
         expr v_left{expr::var{232}};
         expr v_left_chain{expr::var{233}};
         expr v_right{expr::var{234}};
-        expr a_left{expr::atom{"left"}};
-        expr a_right{expr::atom{"right"}};
+        expr a_left{expr::functor{"left", {}}};
+        expr a_right{expr::functor{"right", {}}};
         
         // Setup chains
         bm.bindings[232] = &v_left_chain;
         bm.bindings[233] = &a_left;
         bm.bindings[234] = &a_right;
         
-        expr c1{expr::cons{&v_left, &v_right}};
+        expr c1{expr::functor{"cons", {&v_left, &v_right}}};
         bm.bindings[230] = &v_outer_chain;
         bm.bindings[231] = &c1;
         assert(bm.bindings.size() == 5);
@@ -4031,9 +4031,9 @@ void test_bind_map_whnf() {
         assert(result == &c1);
         
         // Cons children are still original vars, not reduced
-        const expr::cons& cons_ref = std::get<expr::cons>(result->content);
-        assert(cons_ref.lhs == &v_left);
-        assert(cons_ref.rhs == &v_right);
+        const expr::functor& cons_ref = std::get<expr::functor>(result->content);
+        assert(cons_ref.args[0] == &v_left);
+        assert(cons_ref.args[1] == &v_right);
         
         // Outer chain compressed
         assert(bm.bindings.at(230) == &c1);
@@ -4081,7 +4081,7 @@ void test_bind_map_whnf() {
         bind_map bm(t);
         
         expr v1{expr::var{300}};
-        expr a1{expr::atom{"frame1"}};
+        expr a1{expr::functor{"frame1", {}}};
         
         t.push();
         bm.bind(300, &a1);
@@ -4107,8 +4107,8 @@ void test_bind_map_whnf() {
 
         expr v1{expr::var{310}};
         expr v2{expr::var{311}};
-        expr a1{expr::atom{"outer"}};
-        expr a2{expr::atom{"inner"}};
+        expr a1{expr::functor{"outer", {}}};
+        expr a2{expr::functor{"inner", {}}};
         
         // Frame 1: bind v1 to a1
         t.push();
@@ -4143,7 +4143,7 @@ void test_bind_map_whnf() {
         expr v1{expr::var{320}};
         expr v2{expr::var{321}};
         expr v3{expr::var{322}};
-        expr a1{expr::atom{"end"}};
+        expr a1{expr::functor{"end", {}}};
         
         // Frame 1: v1 -> v2
         t.push();
@@ -4190,8 +4190,8 @@ void test_bind_map_whnf() {
         bind_map bm(t);
         
         expr v1{expr::var{330}};
-        expr a1{expr::atom{"first"}};
-        expr a2{expr::atom{"second"}};
+        expr a1{expr::functor{"first", {}}};
+        expr a2{expr::functor{"second", {}}};
         
         // Frame 1: bind v1 to a1
         t.push();
@@ -4225,7 +4225,7 @@ void test_bind_map_whnf() {
         expr v2{expr::var{341}};
         expr v3{expr::var{342}};
         expr v4{expr::var{343}};
-        expr a1{expr::atom{"final"}};
+        expr a1{expr::functor{"final", {}}};
         
         // Frame 1: v1 -> v2
         t.push();
@@ -4275,9 +4275,9 @@ void test_bind_map_whnf() {
         
         expr v1{expr::var{350}};
         expr v2{expr::var{351}};
-        expr a1{expr::atom{"left"}};
-        expr a2{expr::atom{"right"}};
-        expr c1{expr::cons{&v1, &v2}};
+        expr a1{expr::functor{"left", {}}};
+        expr a2{expr::functor{"right", {}}};
+        expr c1{expr::functor{"cons", {&v1, &v2}}};
         
         // Frame 1: bind v1 to a1
         t.push();
@@ -4319,8 +4319,8 @@ void test_bind_map_whnf() {
         expr v2{expr::var{361}};
         expr v3{expr::var{362}};
         expr v4{expr::var{363}};
-        expr a1{expr::atom{"chain1"}};
-        expr a2{expr::atom{"chain2"}};
+        expr a1{expr::functor{"chain1", {}}};
+        expr a2{expr::functor{"chain2", {}}};
         
         // Frame 1: Start two chains
         t.push();
@@ -4359,9 +4359,9 @@ void test_bind_map_whnf() {
         expr v1{expr::var{370}};
         expr v2{expr::var{371}};
         expr v3{expr::var{372}};
-        expr a1{expr::atom{"a"}};
-        expr a2{expr::atom{"b"}};
-        expr a3{expr::atom{"c"}};
+        expr a1{expr::functor{"a", {}}};
+        expr a2{expr::functor{"b", {}}};
+        expr a3{expr::functor{"c", {}}};
         
         // Frame 1: v1 -> a1
         t.push();
@@ -4410,7 +4410,7 @@ void test_bind_map_whnf() {
         expr v1{expr::var{380}};
         expr v2{expr::var{381}};
         expr v3{expr::var{382}};
-        expr a1{expr::atom{"target"}};
+        expr a1{expr::functor{"target", {}}};
         
         // Build chain in single frame: v1 -> v2 -> v3 -> a1
         t.push();
@@ -4442,10 +4442,10 @@ void test_bind_map_whnf() {
         expr v1{expr::var{390}};
         expr v2{expr::var{391}};
         expr v3{expr::var{392}};
-        expr a1{expr::atom{"x"}};
-        expr a2{expr::atom{"y"}};
-        expr c1{expr::cons{&v2, &a1}};
-        expr c2{expr::cons{&v3, &a2}};
+        expr a1{expr::functor{"x", {}}};
+        expr a2{expr::functor{"y", {}}};
+        expr c1{expr::functor{"cons", {&v2, &a1}}};
+        expr c2{expr::functor{"cons", {&v3, &a2}}};
         
         // Frame 1: v1 -> c1
         t.push();
@@ -4501,9 +4501,9 @@ void test_bind_map_whnf() {
         expr v3{expr::var{402}};
         expr v4{expr::var{403}};
         expr v5{expr::var{404}};
-        expr a1{expr::atom{"1"}};
-        expr a2{expr::atom{"2"}};
-        expr a3{expr::atom{"3"}};
+        expr a1{expr::functor{"1", {}}};
+        expr a2{expr::functor{"2", {}}};
+        expr a3{expr::functor{"3", {}}};
         
         // Frame 1: Build chain v1 -> v2 -> a1
         t.push();
@@ -4635,7 +4635,7 @@ void test_bind_map_whnf() {
         expr v4{expr::var{503}};
         expr v5{expr::var{504}};
         expr v6{expr::var{505}};
-        expr a1{expr::atom{"end"}};
+        expr a1{expr::functor{"end", {}}};
         
         // Frame 1: Create a long chain v1 -> v2 -> v3 -> v4 -> a1
         t.push();
@@ -4714,7 +4714,7 @@ void test_bind_map_occurs_check() {
         bind_map bm(t);
         t.push();
         
-        expr a1{expr::atom{"test"}};
+        expr a1{expr::functor{"test", {}}};
         assert(!bm.occurs_check(0, &a1));
         assert(!bm.occurs_check(100, &a1));
         assert(bm.bindings.size() == 0);
@@ -4756,7 +4756,7 @@ void test_bind_map_occurs_check() {
         t.push();
         
         expr v1{expr::var{15}};
-        expr a1{expr::atom{"bound"}};
+        expr a1{expr::functor{"bound", {}}};
         bm.bindings[15] = &a1;
         
         assert(!bm.occurs_check(15, &v1));  // v1 reduces to atom
@@ -4799,7 +4799,7 @@ void test_bind_map_occurs_check() {
         
         expr v1{expr::var{40}};
         expr v2{expr::var{41}};
-        expr a1{expr::atom{"end"}};
+        expr a1{expr::functor{"end", {}}};
         
         // Chain: v1 -> v2 -> atom
         bm.bindings[40] = &v2;
@@ -4819,9 +4819,9 @@ void test_bind_map_occurs_check() {
         bind_map bm(t);
         t.push();
         
-        expr a1{expr::atom{"left"}};
-        expr a2{expr::atom{"right"}};
-        expr c1{expr::cons{&a1, &a2}};
+        expr a1{expr::functor{"left", {}}};
+        expr a2{expr::functor{"right", {}}};
+        expr c1{expr::functor{"cons", {&a1, &a2}}};
         
         assert(!bm.occurs_check(0, &c1));
         assert(!bm.occurs_check(50, &c1));
@@ -4837,8 +4837,8 @@ void test_bind_map_occurs_check() {
         t.push();
         
         expr v1{expr::var{55}};
-        expr a1{expr::atom{"right"}};
-        expr c1{expr::cons{&v1, &a1}};
+        expr a1{expr::functor{"right", {}}};
+        expr c1{expr::functor{"cons", {&v1, &a1}}};
         
         assert(bm.occurs_check(55, &c1));
         assert(!bm.occurs_check(56, &c1));
@@ -4853,9 +4853,9 @@ void test_bind_map_occurs_check() {
         bind_map bm(t);
         t.push();
         
-        expr a1{expr::atom{"left"}};
+        expr a1{expr::functor{"left", {}}};
         expr v1{expr::var{60}};
-        expr c1{expr::cons{&a1, &v1}};
+        expr c1{expr::functor{"cons", {&a1, &v1}}};
         
         assert(bm.occurs_check(60, &c1));
         assert(!bm.occurs_check(61, &c1));
@@ -4872,7 +4872,7 @@ void test_bind_map_occurs_check() {
         
         expr v1{expr::var{65}};
         expr v2{expr::var{65}};  // Same index
-        expr c1{expr::cons{&v1, &v2}};
+        expr c1{expr::functor{"cons", {&v1, &v2}}};
         
         assert(bm.occurs_check(65, &c1));
         assert(bm.bindings.size() == 0);
@@ -4888,7 +4888,7 @@ void test_bind_map_occurs_check() {
         
         expr v1{expr::var{70}};
         expr v2{expr::var{71}};
-        expr c1{expr::cons{&v1, &v2}};
+        expr c1{expr::functor{"cons", {&v1, &v2}}};
         
         assert(bm.occurs_check(70, &c1));
         assert(bm.occurs_check(71, &c1));
@@ -4905,10 +4905,10 @@ void test_bind_map_occurs_check() {
         t.push();
         
         expr v1{expr::var{75}};
-        expr a1{expr::atom{"inner"}};
-        expr inner_cons{expr::cons{&v1, &a1}};
-        expr a2{expr::atom{"outer"}};
-        expr outer_cons{expr::cons{&inner_cons, &a2}};
+        expr a1{expr::functor{"inner", {}}};
+        expr inner_cons{expr::functor{"cons", {&v1, &a1}}};
+        expr a2{expr::functor{"outer", {}}};
+        expr outer_cons{expr::functor{"cons", {&inner_cons, &a2}}};
         
         assert(bm.occurs_check(75, &outer_cons));  // v1 is in nested cons
         assert(!bm.occurs_check(76, &outer_cons));
@@ -4924,14 +4924,14 @@ void test_bind_map_occurs_check() {
         t.push();
         
         expr v1{expr::var{80}};
-        expr a1{expr::atom{"a"}};
-        expr a2{expr::atom{"b"}};
-        expr a3{expr::atom{"c"}};
+        expr a1{expr::functor{"a", {}}};
+        expr a2{expr::functor{"b", {}}};
+        expr a3{expr::functor{"c", {}}};
         
         // Build: cons(cons(cons(v1, a1), a2), a3)
-        expr inner1{expr::cons{&v1, &a1}};
-        expr inner2{expr::cons{&inner1, &a2}};
-        expr outer{expr::cons{&inner2, &a3}};
+        expr inner1{expr::functor{"cons", {&v1, &a1}}};
+        expr inner2{expr::functor{"cons", {&inner1, &a2}}};
+        expr outer{expr::functor{"cons", {&inner2, &a3}}};
         
         assert(bm.occurs_check(80, &outer));
         assert(!bm.occurs_check(81, &outer));
@@ -4946,8 +4946,8 @@ void test_bind_map_occurs_check() {
     //     bind_map bm(t);
     //     expr v1{expr::var{85}};
     //     expr v2{expr::var{85}};  // Same index
-    //     expr a1{expr::atom{"test"}};
-    //     expr c1{expr::cons{&v2, &a1}};
+    //     expr a1{expr::functor{"test", {}}};
+    //     expr c1{expr::functor{"cons", {&v2, &a1}}};
     //     
     //     bm.bindings[85] = &c1;
     //     
@@ -4964,8 +4964,8 @@ void test_bind_map_occurs_check() {
         
         expr v1{expr::var{90}};
         expr v2{expr::var{91}};
-        expr a1{expr::atom{"test"}};
-        expr c1{expr::cons{&v2, &a1}};
+        expr a1{expr::functor{"test", {}}};
+        expr c1{expr::functor{"cons", {&v2, &a1}}};
         
         bm.bindings[90] = &c1;
         
@@ -4985,8 +4985,8 @@ void test_bind_map_occurs_check() {
         expr v1{expr::var{95}};
         expr v2{expr::var{96}};
         expr v3{expr::var{97}};
-        expr a1{expr::atom{"test"}};
-        expr c1{expr::cons{&v3, &a1}};
+        expr a1{expr::functor{"test", {}}};
+        expr c1{expr::functor{"cons", {&v3, &a1}}};
         
         // Chain: v1 -> v2 -> c1 (which contains v3, v3 unbound)
         bm.bindings[95] = &v2;
@@ -5008,12 +5008,12 @@ void test_bind_map_occurs_check() {
         
         expr v1{expr::var{100}};
         expr v2{expr::var{101}};
-        expr a1{expr::atom{"bound"}};
+        expr a1{expr::functor{"bound", {}}};
         
         // Bind v2 to atom
         bm.bindings[101] = &a1;
         
-        expr c1{expr::cons{&v1, &v2}};
+        expr c1{expr::functor{"cons", {&v1, &v2}}};
         
         assert(bm.occurs_check(100, &c1));  // v1 is in cons
         assert(!bm.occurs_check(101, &c1)); // v2 reduces to atom
@@ -5053,13 +5053,13 @@ void test_bind_map_occurs_check() {
         
         expr v1{expr::var{110}};
         expr v2{expr::var{111}};
-        expr a1{expr::atom{"left_bound"}};
-        expr a2{expr::atom{"right_bound"}};
+        expr a1{expr::functor{"left_bound", {}}};
+        expr a2{expr::functor{"right_bound", {}}};
         
         bm.bindings[110] = &a1;
         bm.bindings[111] = &a2;
         
-        expr c1{expr::cons{&v1, &v2}};
+        expr c1{expr::functor{"cons", {&v1, &v2}}};
         
         assert(!bm.occurs_check(110, &c1));  // Both reduce to atoms
         assert(!bm.occurs_check(111, &c1));
@@ -5078,13 +5078,13 @@ void test_bind_map_occurs_check() {
         expr v1{expr::var{115}};
         expr v2{expr::var{116}};
         expr v3{expr::var{117}};
-        expr a1{expr::atom{"rhs"}};
+        expr a1{expr::functor{"rhs", {}}};
         
         // v1 -> v2 -> v3 (v3 unbound)
         bm.bindings[115] = &v2;
         bm.bindings[116] = &v3;
         
-        expr c1{expr::cons{&v1, &a1}};
+        expr c1{expr::functor{"cons", {&v1, &a1}}};
         
         assert(bm.occurs_check(117, &c1));  // v1 chains to v3
         assert(!bm.occurs_check(115, &c1)); // After compression
@@ -5102,10 +5102,10 @@ void test_bind_map_occurs_check() {
         
         expr v1{expr::var{120}};
         expr v2{expr::var{121}};
-        expr a1{expr::atom{"a"}};
+        expr a1{expr::functor{"a", {}}};
         
-        expr inner{expr::cons{&v1, &a1}};
-        expr outer{expr::cons{&inner, &v2}};
+        expr inner{expr::functor{"cons", {&v1, &a1}}};
+        expr outer{expr::functor{"cons", {&inner, &v2}}};
         
         assert(bm.occurs_check(120, &outer));
         assert(bm.occurs_check(121, &outer));
@@ -5123,12 +5123,12 @@ void test_bind_map_occurs_check() {
         
         expr v_outer{expr::var{125}};
         expr v_inner{expr::var{126}};
-        expr a1{expr::atom{"deep"}};
-        expr a2{expr::atom{"deeper"}};
+        expr a1{expr::functor{"deep", {}}};
+        expr a2{expr::functor{"deeper", {}}};
         
         // Build nested: cons(cons(v_inner, a1), a2)
-        expr inner{expr::cons{&v_inner, &a1}};
-        expr outer{expr::cons{&inner, &a2}};
+        expr inner{expr::functor{"cons", {&v_inner, &a1}}};
+        expr outer{expr::functor{"cons", {&inner, &a2}}};
         
         bm.bindings[125] = &outer;
         
@@ -5147,7 +5147,7 @@ void test_bind_map_occurs_check() {
         
         expr v1{expr::var{130}};
         expr v2{expr::var{130}};  // Same var
-        expr c1{expr::cons{&v1, &v2}};
+        expr c1{expr::functor{"cons", {&v1, &v2}}};
         
         assert(bm.occurs_check(130, &c1));
         assert(bm.bindings.size() == 0);  // No explicit bindings
@@ -5178,11 +5178,11 @@ void test_bind_map_occurs_check() {
         
         expr v1{expr::var{140}};
         expr v2{expr::var{141}};
-        expr a1{expr::atom{"base"}};
+        expr a1{expr::functor{"base", {}}};
         
         // Build: cons(cons(a1, v2), a1) where v2 is unbound
-        expr inner{expr::cons{&a1, &v2}};
-        expr outer{expr::cons{&inner, &a1}};
+        expr inner{expr::functor{"cons", {&a1, &v2}}};
+        expr outer{expr::functor{"cons", {&inner, &a1}}};
         
         bm.bindings[140] = &outer;
         
@@ -5199,12 +5199,12 @@ void test_bind_map_occurs_check() {
         bind_map bm(t);
         t.push();
         
-        expr a1{expr::atom{"a"}};
-        expr a2{expr::atom{"b"}};
-        expr a3{expr::atom{"c"}};
+        expr a1{expr::functor{"a", {}}};
+        expr a2{expr::functor{"b", {}}};
+        expr a3{expr::functor{"c", {}}};
         
-        expr c1{expr::cons{&a1, &a2}};
-        expr c2{expr::cons{&c1, &a3}};
+        expr c1{expr::functor{"cons", {&a1, &a2}}};
+        expr c2{expr::functor{"cons", {&c1, &a3}}};
         
         assert(!bm.occurs_check(0, &c2));
         assert(!bm.occurs_check(999, &c2));
@@ -5222,9 +5222,9 @@ void test_bind_map_occurs_check() {
         expr v1{expr::var{145}};
         expr v2{expr::var{146}};
         expr v3{expr::var{147}};
-        expr a1{expr::atom{"test"}};
+        expr a1{expr::functor{"test", {}}};
         
-        expr c1{expr::cons{&v3, &a1}};  // v3 unbound
+        expr c1{expr::functor{"cons", {&v3, &a1}}};  // v3 unbound
         bm.bindings[145] = &v2;
         bm.bindings[146] = &c1;
         
@@ -5286,7 +5286,7 @@ void test_bind_map_occurs_check() {
         expr v5{expr::var{215}};
         expr v6{expr::var{216}};
         expr v7{expr::var{217}};
-        expr a1{expr::atom{"end"}};
+        expr a1{expr::functor{"end", {}}};
         
         bm.bindings[210] = &v1;
         bm.bindings[211] = &v2;
@@ -5312,17 +5312,17 @@ void test_bind_map_occurs_check() {
         t.push();
         
         expr v1{expr::var{220}};
-        expr a1{expr::atom{"a"}};
-        expr a2{expr::atom{"b"}};
-        expr a3{expr::atom{"c"}};
-        expr a4{expr::atom{"d"}};
+        expr a1{expr::functor{"a", {}}};
+        expr a2{expr::functor{"b", {}}};
+        expr a3{expr::functor{"c", {}}};
+        expr a4{expr::functor{"d", {}}};
         
         // Build: cons(cons(cons(cons(cons(v1, a1), a2), a3), a4), a1)
-        expr level1{expr::cons{&v1, &a1}};
-        expr level2{expr::cons{&level1, &a2}};
-        expr level3{expr::cons{&level2, &a3}};
-        expr level4{expr::cons{&level3, &a4}};
-        expr level5{expr::cons{&level4, &a1}};
+        expr level1{expr::functor{"cons", {&v1, &a1}}};
+        expr level2{expr::functor{"cons", {&level1, &a2}}};
+        expr level3{expr::functor{"cons", {&level2, &a3}}};
+        expr level4{expr::functor{"cons", {&level3, &a4}}};
+        expr level5{expr::functor{"cons", {&level4, &a1}}};
         
         assert(bm.occurs_check(220, &level5));
         assert(!bm.occurs_check(221, &level5));
@@ -5340,12 +5340,12 @@ void test_bind_map_occurs_check() {
         expr v1{expr::var{225}};
         expr v2{expr::var{226}};
         expr v3{expr::var{227}};
-        expr a1{expr::atom{"x"}};
+        expr a1{expr::functor{"x", {}}};
         
         // Build: cons(cons(v1, v2), cons(a1, v3))
-        expr left{expr::cons{&v1, &v2}};
-        expr right{expr::cons{&a1, &v3}};
-        expr outer{expr::cons{&left, &right}};
+        expr left{expr::functor{"cons", {&v1, &v2}}};
+        expr right{expr::functor{"cons", {&a1, &v3}}};
+        expr outer{expr::functor{"cons", {&left, &right}}};
         
         assert(bm.occurs_check(225, &outer));  // v1 in left subtree
         assert(bm.occurs_check(226, &outer));  // v2 in left subtree
@@ -5366,17 +5366,17 @@ void test_bind_map_occurs_check() {
         expr v1{expr::var{231}};
         expr v2{expr::var{232}};
         expr v3{expr::var{233}};
-        expr a1{expr::atom{"bound1"}};
-        expr a2{expr::atom{"bound2"}};
+        expr a1{expr::functor{"bound1", {}}};
+        expr a2{expr::functor{"bound2", {}}};
         
         // Bind some vars to atoms
         bm.bindings[231] = &a1;
         bm.bindings[232] = &a2;
         
         // Build: cons(cons(v1, v2), cons(v3, a1))
-        expr left{expr::cons{&v1, &v2}};
-        expr right{expr::cons{&v3, &a1}};
-        expr outer{expr::cons{&left, &right}};
+        expr left{expr::functor{"cons", {&v1, &v2}}};
+        expr right{expr::functor{"cons", {&v3, &a1}}};
+        expr outer{expr::functor{"cons", {&left, &right}}};
         
         bm.bindings[230] = &outer;
         
@@ -5400,13 +5400,13 @@ void test_bind_map_occurs_check() {
         expr v_chain2{expr::var{241}};
         expr v_chain3{expr::var{242}};
         expr v_target{expr::var{243}};
-        expr a1{expr::atom{"a"}};
-        expr a2{expr::atom{"b"}};
+        expr a1{expr::functor{"a", {}}};
+        expr a2{expr::functor{"b", {}}};
         
         // Build nested cons: cons(cons(cons(v_target, a1), a2), a1)
-        expr inner1{expr::cons{&v_target, &a1}};
-        expr inner2{expr::cons{&inner1, &a2}};
-        expr outer{expr::cons{&inner2, &a1}};
+        expr inner1{expr::functor{"cons", {&v_target, &a1}}};
+        expr inner2{expr::functor{"cons", {&inner1, &a2}}};
+        expr outer{expr::functor{"cons", {&inner2, &a1}}};
         
         // Chain: v_chain1 -> v_chain2 -> v_chain3 -> outer
         bm.bindings[240] = &v_chain2;
@@ -5443,7 +5443,7 @@ void test_bind_map_occurs_check() {
         bm.bindings[253] = &v_right2;
         bm.bindings[254] = &v_right3;
         
-        expr c1{expr::cons{&v_left1, &v_right1}};
+        expr c1{expr::functor{"cons", {&v_left1, &v_right1}}};
         
         assert(bm.occurs_check(252, &c1));  // v_left3 via left child
         assert(bm.occurs_check(255, &c1));  // v_right3 via right child
@@ -5465,14 +5465,14 @@ void test_bind_map_occurs_check() {
         expr v3{expr::var{262}};
         expr v4{expr::var{263}};
         expr v5{expr::var{264}};
-        expr a1{expr::atom{"atom"}};
+        expr a1{expr::functor{"atom", {}}};
         
         // Build: cons(cons(v1, cons(v2, v3)), cons(cons(v4, v5), a1))
-        expr inner_left_right{expr::cons{&v2, &v3}};
-        expr inner_left{expr::cons{&v1, &inner_left_right}};
-        expr inner_right_left{expr::cons{&v4, &v5}};
-        expr inner_right{expr::cons{&inner_right_left, &a1}};
-        expr outer{expr::cons{&inner_left, &inner_right}};
+        expr inner_left_right{expr::functor{"cons", {&v2, &v3}}};
+        expr inner_left{expr::functor{"cons", {&v1, &inner_left_right}}};
+        expr inner_right_left{expr::functor{"cons", {&v4, &v5}}};
+        expr inner_right{expr::functor{"cons", {&inner_right_left, &a1}}};
+        expr outer{expr::functor{"cons", {&inner_left, &inner_right}}};
         
         assert(bm.occurs_check(260, &outer));  // v1 in left subtree
         assert(bm.occurs_check(261, &outer));  // v2 in left subtree, nested
@@ -5496,11 +5496,11 @@ void test_bind_map_occurs_check() {
         
         expr v_left1{expr::var{272}};
         expr v_left2{expr::var{273}};
-        expr a_left{expr::atom{"left_end"}};
+        expr a_left{expr::functor{"left_end", {}}};
         
         expr v_right1{expr::var{274}};
         expr v_right2{expr::var{275}};
-        expr a_right{expr::atom{"right_end"}};
+        expr a_right{expr::functor{"right_end", {}}};
         
         // Left chain: v_left1 -> v_left2 -> a_left
         bm.bindings[272] = &v_left2;
@@ -5510,7 +5510,7 @@ void test_bind_map_occurs_check() {
         bm.bindings[274] = &v_right2;
         bm.bindings[275] = &a_right;
         
-        expr c1{expr::cons{&v_left1, &v_right1}};
+        expr c1{expr::functor{"cons", {&v_left1, &v_right1}}};
         
         // Outer chain: v_outer -> v_mid -> c1
         bm.bindings[270] = &v_mid;
@@ -5540,7 +5540,7 @@ void test_bind_map_occurs_check() {
         expr v3{expr::var{282}};
         expr v4{expr::var{283}};
         expr v5{expr::var{284}};
-        expr a1{expr::atom{"other"}};
+        expr a1{expr::functor{"other", {}}};
         
         // Chain: v1 -> v2 -> v3 -> v4 -> v5 (unbound)
         bm.bindings[280] = &v2;
@@ -5548,7 +5548,7 @@ void test_bind_map_occurs_check() {
         bm.bindings[282] = &v4;
         bm.bindings[283] = &v5;
         
-        expr c1{expr::cons{&v1, &a1}};
+        expr c1{expr::functor{"cons", {&v1, &a1}}};
         
         assert(bm.occurs_check(284, &c1));  // v5 is at end of chain in lhs
         assert(!bm.occurs_check(280, &c1)); // After path compression
@@ -5566,12 +5566,12 @@ void test_bind_map_occurs_check() {
         expr v1{expr::var{290}};
         expr v2{expr::var{290}};  // Same index as v1
         expr v3{expr::var{290}};  // Same index as v1
-        expr a1{expr::atom{"x"}};
+        expr a1{expr::functor{"x", {}}};
         
         // Build: cons(cons(v1, a1), cons(v2, v3))
-        expr left{expr::cons{&v1, &a1}};
-        expr right{expr::cons{&v2, &v3}};
-        expr outer{expr::cons{&left, &right}};
+        expr left{expr::functor{"cons", {&v1, &a1}}};
+        expr right{expr::functor{"cons", {&v2, &v3}}};
+        expr outer{expr::functor{"cons", {&left, &right}}};
         
         assert(bm.occurs_check(290, &outer));  // Var 290 appears 3 times
         assert(bm.bindings.size() == 0);  // No explicit bindings
@@ -5586,20 +5586,20 @@ void test_bind_map_occurs_check() {
         t.push();
         
         expr v1{expr::var{300}};
-        expr a1{expr::atom{"a"}};
+        expr a1{expr::functor{"a", {}}};
         
         // Build 10 levels of nesting
         expr* current = &v1;
-        expr level1{expr::cons{current, &a1}};
-        expr level2{expr::cons{&level1, &a1}};
-        expr level3{expr::cons{&level2, &a1}};
-        expr level4{expr::cons{&level3, &a1}};
-        expr level5{expr::cons{&level4, &a1}};
-        expr level6{expr::cons{&level5, &a1}};
-        expr level7{expr::cons{&level6, &a1}};
-        expr level8{expr::cons{&level7, &a1}};
-        expr level9{expr::cons{&level8, &a1}};
-        expr level10{expr::cons{&level9, &a1}};
+        expr level1{expr::functor{"cons", {current, &a1}}};
+        expr level2{expr::functor{"cons", {&level1, &a1}}};
+        expr level3{expr::functor{"cons", {&level2, &a1}}};
+        expr level4{expr::functor{"cons", {&level3, &a1}}};
+        expr level5{expr::functor{"cons", {&level4, &a1}}};
+        expr level6{expr::functor{"cons", {&level5, &a1}}};
+        expr level7{expr::functor{"cons", {&level6, &a1}}};
+        expr level8{expr::functor{"cons", {&level7, &a1}}};
+        expr level9{expr::functor{"cons", {&level8, &a1}}};
+        expr level10{expr::functor{"cons", {&level9, &a1}}};
         
         assert(bm.occurs_check(300, &level10));  // Should find v1 at the bottom
         assert(!bm.occurs_check(301, &level10));
@@ -5637,11 +5637,11 @@ void test_bind_map_occurs_check() {
         
         // Build deeply nested cons (4 levels) with chains at the leaves
         // Structure: cons(cons(cons(cons(v_left1, v_right1), atom), atom), atom)
-        expr a1{expr::atom{"a"}};
-        expr level1{expr::cons{&v_left1, &v_right1}};  // Chains in both children
-        expr level2{expr::cons{&level1, &a1}};
-        expr level3{expr::cons{&level2, &a1}};
-        expr level4{expr::cons{&level3, &a1}};
+        expr a1{expr::functor{"a", {}}};
+        expr level1{expr::functor{"cons", {&v_left1, &v_right1}}};  // Chains in both children
+        expr level2{expr::functor{"cons", {&level1, &a1}}};
+        expr level3{expr::functor{"cons", {&level2, &a1}}};
+        expr level4{expr::functor{"cons", {&level3, &a1}}};
         
         // Setup outer chain
         bm.bindings[400] = &v1;
@@ -5691,9 +5691,9 @@ void test_bind_map_occurs_check() {
         expr vd2{expr::var{507}};
         bm.bindings[506] = &vd2;
         
-        expr left{expr::cons{&va1, &vb1}};
-        expr right{expr::cons{&vc1, &vd1}};
-        expr outer{expr::cons{&left, &right}};
+        expr left{expr::functor{"cons", {&va1, &vb1}}};
+        expr right{expr::functor{"cons", {&vc1, &vd1}}};
+        expr outer{expr::functor{"cons", {&left, &right}}};
         
         // All four target vars should be found
         assert(bm.occurs_check(501, &outer));  // va2
@@ -5731,25 +5731,25 @@ void test_bind_map_occurs_check() {
         
         // Target var deep inside
         expr v_target{expr::var{604}};
-        expr a1{expr::atom{"a"}};
+        expr a1{expr::functor{"a", {}}};
         
         // Build: outer_cons = cons(v_left, v_right)
         //        v_left -> inner_left_cons = cons(v_target, a1)
         //        v_right -> inner_right_cons = cons(a1, a1)
-        expr inner_left_cons{expr::cons{&v_target, &a1}};
-        expr inner_right_cons{expr::cons{&a1, &a1}};
+        expr inner_left_cons{expr::functor{"cons", {&v_target, &a1}}};
+        expr inner_right_cons{expr::functor{"cons", {&a1, &a1}}};
         
         bm.bindings[602] = &inner_left_cons;
         bm.bindings[603] = &inner_right_cons;
         
-        expr outer_cons{expr::cons{&v_left, &v_right}};
+        expr outer_cons{expr::functor{"cons", {&v_left, &v_right}}};
         
         bm.bindings[600] = &v1;
         bm.bindings[601] = &outer_cons;
         
         // v0 -> v1 -> outer_cons
-        // outer_cons.lhs = v_left -> inner_left_cons
-        // inner_left_cons.lhs = v_target
+        // outer_cons.args[0] = v_left -> inner_left_cons
+        // inner_left_cons.args[0] = v_target
         assert(bm.occurs_check(604, &v0));  // Should find v_target through all the indirection
         assert(!bm.occurs_check(600, &v0)); // After path compression
         assert(!bm.occurs_check(602, &v0)); // v_left chains to cons (no var 602 in result)
@@ -5767,13 +5767,13 @@ void test_bind_map_occurs_check() {
         
         expr v1{expr::var{700}};
         expr v2{expr::var{701}};
-        expr a1{expr::atom{"shared"}};
+        expr a1{expr::functor{"shared", {}}};
         
         // Both vars bound to the same atom
         bm.bindings[700] = &a1;
         bm.bindings[701] = &a1;
         
-        expr c1{expr::cons{&v1, &v2}};
+        expr c1{expr::functor{"cons", {&v1, &v2}}};
         
         // Both children reduce to the same atom, so no vars should be found
         assert(!bm.occurs_check(700, &c1));  // v1 reduces to atom
@@ -5798,7 +5798,7 @@ void test_bind_map_occurs_check() {
         bm.bindings[710] = &v_target;
         bm.bindings[711] = &v_target;
         
-        expr c1{expr::cons{&v1, &v2}};
+        expr c1{expr::functor{"cons", {&v1, &v2}}};
         
         // Both children reduce to v_target, so searching for v_target should find it
         assert(bm.occurs_check(712, &c1));   // v_target found in both children
@@ -5818,14 +5818,14 @@ void test_bind_map_occurs_check() {
         expr v1{expr::var{720}};
         expr v2{expr::var{721}};
         expr v_inner{expr::var{722}};
-        expr a1{expr::atom{"x"}};
-        expr shared_cons{expr::cons{&v_inner, &a1}};
+        expr a1{expr::functor{"x", {}}};
+        expr shared_cons{expr::functor{"cons", {&v_inner, &a1}}};
         
         // Both vars bound to the same cons
         bm.bindings[720] = &shared_cons;
         bm.bindings[721] = &shared_cons;
         
-        expr c1{expr::cons{&v1, &v2}};
+        expr c1{expr::functor{"cons", {&v1, &v2}}};
         
         // Both children reduce to shared_cons which contains v_inner
         assert(bm.occurs_check(722, &c1));   // v_inner found in shared_cons
@@ -5856,7 +5856,7 @@ void test_bind_map_occurs_check() {
         bm.bindings[732] = &v_right2;
         bm.bindings[733] = &v_target;
         
-        expr c1{expr::cons{&v_left1, &v_right1}};
+        expr c1{expr::functor{"cons", {&v_left1, &v_right1}}};
         
         // Both chains converge to v_target
         assert(bm.occurs_check(734, &c1));    // v_target found via both chains
@@ -5879,7 +5879,7 @@ void test_bind_map_occurs_check() {
         expr v_left2{expr::var{741}};
         expr v_right1{expr::var{742}};
         expr v_right2{expr::var{743}};
-        expr a_target{expr::atom{"convergence"}};
+        expr a_target{expr::functor{"convergence", {}}};
         
         // Left chain: v_left1 -> v_left2 -> a_target
         bm.bindings[740] = &v_left2;
@@ -5889,7 +5889,7 @@ void test_bind_map_occurs_check() {
         bm.bindings[742] = &v_right2;
         bm.bindings[743] = &a_target;
         
-        expr c1{expr::cons{&v_left1, &v_right1}};
+        expr c1{expr::functor{"cons", {&v_left1, &v_right1}}};
         
         // Both chains converge to atom, so no vars should be found
         assert(!bm.occurs_check(740, &c1));   // v_left1 compressed away
@@ -5913,8 +5913,8 @@ void test_bind_map_occurs_check() {
         expr v_right1{expr::var{752}};
         expr v_right2{expr::var{753}};
         expr v_inner{expr::var{754}};
-        expr a1{expr::atom{"y"}};
-        expr target_cons{expr::cons{&v_inner, &a1}};
+        expr a1{expr::functor{"y", {}}};
+        expr target_cons{expr::functor{"cons", {&v_inner, &a1}}};
         
         // Left chain: v_left1 -> v_left2 -> target_cons
         bm.bindings[750] = &v_left2;
@@ -5924,7 +5924,7 @@ void test_bind_map_occurs_check() {
         bm.bindings[752] = &v_right2;
         bm.bindings[753] = &target_cons;
         
-        expr c1{expr::cons{&v_left1, &v_right1}};
+        expr c1{expr::functor{"cons", {&v_left1, &v_right1}}};
         
         // Both chains converge to target_cons which contains v_inner
         assert(bm.occurs_check(754, &c1));    // v_inner found in target_cons
@@ -5950,7 +5950,7 @@ void test_bind_map_unify() {
         trail t;
         bind_map bm(t);
         t.push();
-        expr a1{expr::atom{"test"}};
+        expr a1{expr::functor{"test", {}}};
         assert(bm.unify(&a1, &a1));
         assert(bm.bindings.size() == 0);
 
@@ -5962,8 +5962,8 @@ void test_bind_map_unify() {
         trail t;
         bind_map bm(t);
         t.push();
-        expr a1{expr::atom{"foo"}};
-        expr a2{expr::atom{"bar"}};
+        expr a1{expr::functor{"foo", {}}};
+        expr a2{expr::functor{"bar", {}}};
         assert(!bm.unify(&a1, &a2));
         assert(bm.bindings.size() == 0);
 
@@ -5975,8 +5975,8 @@ void test_bind_map_unify() {
         trail t;
         bind_map bm(t);
         t.push();
-        expr a1{expr::atom{"foo"}};
-        expr a2{expr::atom{"bar"}};
+        expr a1{expr::functor{"foo", {}}};
+        expr a2{expr::functor{"bar", {}}};
         assert(!bm.unify(&a2, &a1));  // Commuted
         assert(bm.bindings.size() == 0);
 
@@ -5988,8 +5988,8 @@ void test_bind_map_unify() {
         trail t;
         bind_map bm(t);
         t.push();
-        expr a1{expr::atom{"same"}};
-        expr a2{expr::atom{"same"}};
+        expr a1{expr::functor{"same", {}}};
+        expr a2{expr::functor{"same", {}}};
         assert(bm.unify(&a1, &a2));
         assert(bm.bindings.size() == 0);
 
@@ -6001,8 +6001,8 @@ void test_bind_map_unify() {
         trail t;
         bind_map bm(t);
         t.push();
-        expr a1{expr::atom{"same"}};
-        expr a2{expr::atom{"same"}};
+        expr a1{expr::functor{"same", {}}};
+        expr a2{expr::functor{"same", {}}};
         assert(bm.unify(&a2, &a1));  // Commuted
         assert(bm.bindings.size() == 0);
 
@@ -6015,7 +6015,7 @@ void test_bind_map_unify() {
         bind_map bm(t);
         t.push();
         expr v1{expr::var{0}};
-        expr a1{expr::atom{"bound"}};
+        expr a1{expr::functor{"bound", {}}};
         assert(bm.unify(&v1, &a1));
         assert(bm.bindings.size() == 1);  // Just v1 -> a1
         assert(bm.bindings.count(0) == 1);
@@ -6030,7 +6030,7 @@ void test_bind_map_unify() {
         bind_map bm(t);
         t.push();
         expr v1{expr::var{1}};
-        expr a1{expr::atom{"bound"}};
+        expr a1{expr::functor{"bound", {}}};
         assert(bm.unify(&a1, &v1));  // Commuted
         assert(bm.bindings.size() == 1);
         assert(bm.bindings.count(1) == 1);
@@ -6045,9 +6045,9 @@ void test_bind_map_unify() {
         bind_map bm(t);
         t.push();
         expr v1{expr::var{2}};
-        expr a1{expr::atom{"x"}};
-        expr a2{expr::atom{"y"}};
-        expr c1{expr::cons{&a1, &a2}};
+        expr a1{expr::functor{"x", {}}};
+        expr a2{expr::functor{"y", {}}};
+        expr c1{expr::functor{"cons", {&a1, &a2}}};
         assert(bm.unify(&v1, &c1));
         assert(bm.bindings.size() == 1);
         assert(bm.bindings.count(2) == 1);  // v1 is bound
@@ -6062,9 +6062,9 @@ void test_bind_map_unify() {
         bind_map bm(t);
         t.push();
         expr v1{expr::var{3}};
-        expr a1{expr::atom{"x"}};
-        expr a2{expr::atom{"y"}};
-        expr c1{expr::cons{&a1, &a2}};
+        expr a1{expr::functor{"x", {}}};
+        expr a2{expr::functor{"y", {}}};
+        expr c1{expr::functor{"cons", {&a1, &a2}}};
         assert(bm.unify(&c1, &v1));  // Commuted
         assert(bm.bindings.size() == 1);
         assert(bm.bindings.count(3) == 1);  // v1 is bound
@@ -6121,8 +6121,8 @@ void test_bind_map_unify() {
         t.push();
         expr v1{expr::var{10}};
         expr v2{expr::var{10}};  // Same index
-        expr a1{expr::atom{"test"}};
-        expr c1{expr::cons{&v2, &a1}};
+        expr a1{expr::functor{"test", {}}};
+        expr c1{expr::functor{"cons", {&v2, &a1}}};
         assert(!bm.unify(&v1, &c1));  // Should fail occurs check
         assert(bm.bindings.size() == 0);  // No binding created (occurs check before bind)
 
@@ -6136,8 +6136,8 @@ void test_bind_map_unify() {
         t.push();
         expr v1{expr::var{11}};
         expr v2{expr::var{11}};
-        expr a1{expr::atom{"test"}};
-        expr c1{expr::cons{&v2, &a1}};
+        expr a1{expr::functor{"test", {}}};
+        expr c1{expr::functor{"cons", {&v2, &a1}}};
         assert(!bm.unify(&c1, &v1));  // Commuted
         assert(bm.bindings.size() == 0);  // No binding created (occurs check before bind)
 
@@ -6152,12 +6152,12 @@ void test_bind_map_unify() {
         expr v1{expr::var{12}};
         expr v2{expr::var{13}};
         expr v3{expr::var{12}};  // Same as v1
-        expr a1{expr::atom{"test"}};
+        expr a1{expr::functor{"test", {}}};
         
         // v2 -> v3 (which is same index as v1)
         bm.bindings[13] = &v3;
         
-        expr c1{expr::cons{&v2, &a1}};
+        expr c1{expr::functor{"cons", {&v2, &a1}}};
         assert(!bm.unify(&v1, &c1));  // Should fail: v1 with cons containing chain to v1
         assert(bm.bindings.size() == 1);  // Only original binding (v2 -> v3), no new binding
 
@@ -6172,11 +6172,11 @@ void test_bind_map_unify() {
         expr v1{expr::var{14}};
         expr v2{expr::var{15}};
         expr v3{expr::var{14}};
-        expr a1{expr::atom{"test"}};
+        expr a1{expr::functor{"test", {}}};
         
         bm.bindings[15] = &v3;
         
-        expr c1{expr::cons{&v2, &a1}};
+        expr c1{expr::functor{"cons", {&v2, &a1}}};
         assert(!bm.unify(&c1, &v1));  // Commuted
         assert(bm.bindings.size() == 1);  // Only original binding (v2 -> v3), no new binding
 
@@ -6190,12 +6190,12 @@ void test_bind_map_unify() {
         t.push();
         expr v1{expr::var{16}};
         expr v2{expr::var{16}};
-        expr a1{expr::atom{"a"}};
+        expr a1{expr::functor{"a", {}}};
         
         // Build: cons(cons(cons(v2, a1), a1), a1)
-        expr inner1{expr::cons{&v2, &a1}};
-        expr inner2{expr::cons{&inner1, &a1}};
-        expr outer{expr::cons{&inner2, &a1}};
+        expr inner1{expr::functor{"cons", {&v2, &a1}}};
+        expr inner2{expr::functor{"cons", {&inner1, &a1}}};
+        expr outer{expr::functor{"cons", {&inner2, &a1}}};
         
         assert(!bm.unify(&v1, &outer));  // Should fail
         assert(bm.bindings.size() == 0);  // No binding created (occurs check before bind)
@@ -6210,11 +6210,11 @@ void test_bind_map_unify() {
         t.push();
         expr v1{expr::var{17}};
         expr v2{expr::var{17}};
-        expr a1{expr::atom{"a"}};
+        expr a1{expr::functor{"a", {}}};
         
-        expr inner1{expr::cons{&v2, &a1}};
-        expr inner2{expr::cons{&inner1, &a1}};
-        expr outer{expr::cons{&inner2, &a1}};
+        expr inner1{expr::functor{"cons", {&v2, &a1}}};
+        expr inner2{expr::functor{"cons", {&inner1, &a1}}};
+        expr outer{expr::functor{"cons", {&inner2, &a1}}};
         
         assert(!bm.unify(&outer, &v1));  // Commuted
         assert(bm.bindings.size() == 0);  // No binding created (occurs check before bind)
@@ -6231,7 +6231,7 @@ void test_bind_map_unify() {
         t.push();
         expr v1{expr::var{20}};
         expr v2{expr::var{21}};
-        expr a1{expr::atom{"target"}};
+        expr a1{expr::functor{"target", {}}};
         
         // v1 -> v2 (unbound)
         bm.bindings[20] = &v2;
@@ -6252,7 +6252,7 @@ void test_bind_map_unify() {
         t.push();
         expr v1{expr::var{22}};
         expr v2{expr::var{23}};
-        expr a1{expr::atom{"target"}};
+        expr a1{expr::functor{"target", {}}};
         
         bm.bindings[22] = &v2;
         
@@ -6311,7 +6311,7 @@ void test_bind_map_unify() {
         expr v2{expr::var{29}};
         expr v3{expr::var{30}};
         expr v4{expr::var{31}};
-        expr a1{expr::atom{"end"}};
+        expr a1{expr::functor{"end", {}}};
         
         // Chain: v1 -> v2 -> v3 -> v4 (unbound)
         bm.bindings[28] = &v2;
@@ -6336,7 +6336,7 @@ void test_bind_map_unify() {
         expr v2{expr::var{33}};
         expr v3{expr::var{34}};
         expr v4{expr::var{35}};
-        expr a1{expr::atom{"end"}};
+        expr a1{expr::functor{"end", {}}};
         
         bm.bindings[32] = &v2;
         bm.bindings[33] = &v3;
@@ -6358,13 +6358,13 @@ void test_bind_map_unify() {
         trail t;
         bind_map bm(t);
         t.push();
-        expr a1{expr::atom{"x"}};
-        expr a2{expr::atom{"y"}};
-        expr c1{expr::cons{&a1, &a2}};
+        expr a1{expr::functor{"x", {}}};
+        expr a2{expr::functor{"y", {}}};
+        expr c1{expr::functor{"cons", {&a1, &a2}}};
         
-        expr a3{expr::atom{"x"}};
-        expr a4{expr::atom{"y"}};
-        expr c2{expr::cons{&a3, &a4}};
+        expr a3{expr::functor{"x", {}}};
+        expr a4{expr::functor{"y", {}}};
+        expr c2{expr::functor{"cons", {&a3, &a4}}};
         
         assert(bm.unify(&c1, &c2));
         assert(bm.bindings.size() == 0);
@@ -6377,13 +6377,13 @@ void test_bind_map_unify() {
         trail t;
         bind_map bm(t);
         t.push();
-        expr a1{expr::atom{"x"}};
-        expr a2{expr::atom{"y"}};
-        expr c1{expr::cons{&a1, &a2}};
+        expr a1{expr::functor{"x", {}}};
+        expr a2{expr::functor{"y", {}}};
+        expr c1{expr::functor{"cons", {&a1, &a2}}};
         
-        expr a3{expr::atom{"x"}};
-        expr a4{expr::atom{"y"}};
-        expr c2{expr::cons{&a3, &a4}};
+        expr a3{expr::functor{"x", {}}};
+        expr a4{expr::functor{"y", {}}};
+        expr c2{expr::functor{"cons", {&a3, &a4}}};
         
         assert(bm.unify(&c2, &c1));  // Commuted
         assert(bm.bindings.size() == 0);
@@ -6396,13 +6396,13 @@ void test_bind_map_unify() {
         trail t;
         bind_map bm(t);
         t.push();
-        expr a1{expr::atom{"x"}};
-        expr a2{expr::atom{"y"}};
-        expr c1{expr::cons{&a1, &a2}};
+        expr a1{expr::functor{"x", {}}};
+        expr a2{expr::functor{"y", {}}};
+        expr c1{expr::functor{"cons", {&a1, &a2}}};
         
-        expr a3{expr::atom{"z"}};  // Different
-        expr a4{expr::atom{"y"}};
-        expr c2{expr::cons{&a3, &a4}};
+        expr a3{expr::functor{"z", {}}};  // Different
+        expr a4{expr::functor{"y", {}}};
+        expr c2{expr::functor{"cons", {&a3, &a4}}};
         
         assert(!bm.unify(&c1, &c2));
         assert(bm.bindings.size() == 0);  // No bindings created (all atoms)
@@ -6415,13 +6415,13 @@ void test_bind_map_unify() {
         trail t;
         bind_map bm(t);
         t.push();
-        expr a1{expr::atom{"x"}};
-        expr a2{expr::atom{"y"}};
-        expr c1{expr::cons{&a1, &a2}};
+        expr a1{expr::functor{"x", {}}};
+        expr a2{expr::functor{"y", {}}};
+        expr c1{expr::functor{"cons", {&a1, &a2}}};
         
-        expr a3{expr::atom{"x"}};
-        expr a4{expr::atom{"z"}};  // Different
-        expr c2{expr::cons{&a3, &a4}};
+        expr a3{expr::functor{"x", {}}};
+        expr a4{expr::functor{"z", {}}};  // Different
+        expr c2{expr::functor{"cons", {&a3, &a4}}};
         
         assert(!bm.unify(&c1, &c2));
         assert(bm.bindings.size() == 0);  // No bindings created (all atoms)
@@ -6435,12 +6435,12 @@ void test_bind_map_unify() {
         bind_map bm(t);
         t.push();
         expr v1{expr::var{40}};
-        expr a1{expr::atom{"y"}};
-        expr c1{expr::cons{&v1, &a1}};
+        expr a1{expr::functor{"y", {}}};
+        expr c1{expr::functor{"cons", {&v1, &a1}}};
         
-        expr a2{expr::atom{"x"}};
-        expr a3{expr::atom{"y"}};
-        expr c2{expr::cons{&a2, &a3}};
+        expr a2{expr::functor{"x", {}}};
+        expr a3{expr::functor{"y", {}}};
+        expr c2{expr::functor{"cons", {&a2, &a3}}};
         
         assert(bm.unify(&c1, &c2));  // Should bind v1 to a2
         assert(bm.bindings.size() == 1);  // One binding created
@@ -6456,12 +6456,12 @@ void test_bind_map_unify() {
         bind_map bm(t);
         t.push();
         expr v1{expr::var{41}};
-        expr a1{expr::atom{"y"}};
-        expr c1{expr::cons{&v1, &a1}};
+        expr a1{expr::functor{"y", {}}};
+        expr c1{expr::functor{"cons", {&v1, &a1}}};
         
-        expr a2{expr::atom{"x"}};
-        expr a3{expr::atom{"y"}};
-        expr c2{expr::cons{&a2, &a3}};
+        expr a2{expr::functor{"x", {}}};
+        expr a3{expr::functor{"y", {}}};
+        expr c2{expr::functor{"cons", {&a2, &a3}}};
         
         assert(bm.unify(&c2, &c1));  // Commuted
         assert(bm.bindings.size() == 1);  // One binding created
@@ -6477,12 +6477,12 @@ void test_bind_map_unify() {
         bind_map bm(t);
         t.push();
         expr v1{expr::var{42}};
-        expr a1{expr::atom{"y"}};
-        expr c1{expr::cons{&v1, &a1}};
+        expr a1{expr::functor{"y", {}}};
+        expr c1{expr::functor{"cons", {&v1, &a1}}};
         
-        expr a2{expr::atom{"x"}};
-        expr a3{expr::atom{"z"}};  // Conflicts with a1
-        expr c2{expr::cons{&a2, &a3}};
+        expr a2{expr::functor{"x", {}}};
+        expr a3{expr::functor{"z", {}}};  // Conflicts with a1
+        expr c2{expr::functor{"cons", {&a2, &a3}}};
         
         assert(!bm.unify(&c1, &c2));  // rhs children don't match
         // Partial binding left: v1 was bound to a2 before rhs failed
@@ -6498,12 +6498,12 @@ void test_bind_map_unify() {
         bind_map bm(t);
         t.push();
         expr v1{expr::var{43}};
-        expr a1{expr::atom{"y"}};
-        expr c1{expr::cons{&v1, &a1}};
+        expr a1{expr::functor{"y", {}}};
+        expr c1{expr::functor{"cons", {&v1, &a1}}};
         
-        expr a2{expr::atom{"x"}};
-        expr a3{expr::atom{"z"}};
-        expr c2{expr::cons{&a2, &a3}};
+        expr a2{expr::functor{"x", {}}};
+        expr a3{expr::functor{"z", {}}};
+        expr c2{expr::functor{"cons", {&a2, &a3}}};
         
         assert(!bm.unify(&c2, &c1));  // Commuted
         // Partial binding left: v1 was bound to a2 before rhs failed
@@ -6518,17 +6518,17 @@ void test_bind_map_unify() {
         trail t;
         bind_map bm(t);
         t.push();
-        expr a1{expr::atom{"a"}};
-        expr a2{expr::atom{"b"}};
-        expr inner1{expr::cons{&a1, &a2}};
-        expr a3{expr::atom{"c"}};
-        expr outer1{expr::cons{&inner1, &a3}};
+        expr a1{expr::functor{"a", {}}};
+        expr a2{expr::functor{"b", {}}};
+        expr inner1{expr::functor{"cons", {&a1, &a2}}};
+        expr a3{expr::functor{"c", {}}};
+        expr outer1{expr::functor{"cons", {&inner1, &a3}}};
         
-        expr a4{expr::atom{"a"}};
-        expr a5{expr::atom{"b"}};
-        expr inner2{expr::cons{&a4, &a5}};
-        expr a6{expr::atom{"c"}};
-        expr outer2{expr::cons{&inner2, &a6}};
+        expr a4{expr::functor{"a", {}}};
+        expr a5{expr::functor{"b", {}}};
+        expr inner2{expr::functor{"cons", {&a4, &a5}}};
+        expr a6{expr::functor{"c", {}}};
+        expr outer2{expr::functor{"cons", {&inner2, &a6}}};
         
         assert(bm.unify(&outer1, &outer2));
         assert(bm.bindings.size() == 0);
@@ -6541,17 +6541,17 @@ void test_bind_map_unify() {
         trail t;
         bind_map bm(t);
         t.push();
-        expr a1{expr::atom{"a"}};
-        expr a2{expr::atom{"b"}};
-        expr inner1{expr::cons{&a1, &a2}};
-        expr a3{expr::atom{"c"}};
-        expr outer1{expr::cons{&inner1, &a3}};
+        expr a1{expr::functor{"a", {}}};
+        expr a2{expr::functor{"b", {}}};
+        expr inner1{expr::functor{"cons", {&a1, &a2}}};
+        expr a3{expr::functor{"c", {}}};
+        expr outer1{expr::functor{"cons", {&inner1, &a3}}};
         
-        expr a4{expr::atom{"a"}};
-        expr a5{expr::atom{"b"}};
-        expr inner2{expr::cons{&a4, &a5}};
-        expr a6{expr::atom{"c"}};
-        expr outer2{expr::cons{&inner2, &a6}};
+        expr a4{expr::functor{"a", {}}};
+        expr a5{expr::functor{"b", {}}};
+        expr inner2{expr::functor{"cons", {&a4, &a5}}};
+        expr a6{expr::functor{"c", {}}};
+        expr outer2{expr::functor{"cons", {&inner2, &a6}}};
         
         assert(bm.unify(&outer2, &outer1));  // Commuted
         assert(bm.bindings.size() == 0);
@@ -6566,10 +6566,10 @@ void test_bind_map_unify() {
         trail t;
         bind_map bm(t);
         t.push();
-        expr a1{expr::atom{"test"}};
-        expr a2{expr::atom{"x"}};
-        expr a3{expr::atom{"y"}};
-        expr c1{expr::cons{&a2, &a3}};
+        expr a1{expr::functor{"test", {}}};
+        expr a2{expr::functor{"x", {}}};
+        expr a3{expr::functor{"y", {}}};
+        expr c1{expr::functor{"cons", {&a2, &a3}}};
         
         assert(!bm.unify(&a1, &c1));
         assert(bm.bindings.size() == 0);
@@ -6582,10 +6582,10 @@ void test_bind_map_unify() {
         trail t;
         bind_map bm(t);
         t.push();
-        expr a1{expr::atom{"test"}};
-        expr a2{expr::atom{"x"}};
-        expr a3{expr::atom{"y"}};
-        expr c1{expr::cons{&a2, &a3}};
+        expr a1{expr::functor{"test", {}}};
+        expr a2{expr::functor{"x", {}}};
+        expr a3{expr::functor{"y", {}}};
+        expr c1{expr::functor{"cons", {&a2, &a3}}};
         
         assert(!bm.unify(&c1, &a1));  // Commuted
         assert(bm.bindings.size() == 0);
@@ -6601,12 +6601,12 @@ void test_bind_map_unify() {
         bind_map bm(t);
         t.push();
         expr v1{expr::var{50}};
-        expr a1{expr::atom{"a"}};
-        expr c1{expr::cons{&v1, &a1}};
+        expr a1{expr::functor{"a", {}}};
+        expr c1{expr::functor{"cons", {&v1, &a1}}};
         
         expr v2{expr::var{51}};
-        expr a2{expr::atom{"a"}};
-        expr c2{expr::cons{&v2, &a2}};
+        expr a2{expr::functor{"a", {}}};
+        expr c2{expr::functor{"cons", {&v2, &a2}}};
         
         assert(bm.unify(&c1, &c2));  // Should bind v1 to v2
         assert(bm.bindings.size() == 1);  // Verify binding was created
@@ -6625,12 +6625,12 @@ void test_bind_map_unify() {
         bind_map bm(t);
         t.push();
         expr v1{expr::var{52}};
-        expr a1{expr::atom{"a"}};
-        expr c1{expr::cons{&v1, &a1}};
+        expr a1{expr::functor{"a", {}}};
+        expr c1{expr::functor{"cons", {&v1, &a1}}};
         
         expr v2{expr::var{53}};
-        expr a2{expr::atom{"a"}};
-        expr c2{expr::cons{&v2, &a2}};
+        expr a2{expr::functor{"a", {}}};
+        expr c2{expr::functor{"cons", {&v2, &a2}}};
         
         assert(bm.unify(&c2, &c1));  // Commuted
         assert(bm.bindings.size() == 1);  // Verify binding was created
@@ -6650,15 +6650,15 @@ void test_bind_map_unify() {
         t.push();
         expr v1{expr::var{54}};
         expr v2{expr::var{55}};
-        expr a1{expr::atom{"a"}};
-        expr inner1{expr::cons{&v2, &a1}};
-        expr c1{expr::cons{&v1, &inner1}};
+        expr a1{expr::functor{"a", {}}};
+        expr inner1{expr::functor{"cons", {&v2, &a1}}};
+        expr c1{expr::functor{"cons", {&v1, &inner1}}};
         
-        expr a2{expr::atom{"a"}};
-        expr a3{expr::atom{"b"}};
-        expr a4{expr::atom{"a"}};
-        expr inner2{expr::cons{&a3, &a4}};
-        expr c2{expr::cons{&a2, &inner2}};
+        expr a2{expr::functor{"a", {}}};
+        expr a3{expr::functor{"b", {}}};
+        expr a4{expr::functor{"a", {}}};
+        expr inner2{expr::functor{"cons", {&a3, &a4}}};
+        expr c2{expr::functor{"cons", {&a2, &inner2}}};
         
         assert(bm.unify(&c1, &c2));  // v1 -> a2, v2 -> a3
         assert(bm.bindings.size() == 2);  // Two bindings created
@@ -6677,15 +6677,15 @@ void test_bind_map_unify() {
         t.push();
         expr v1{expr::var{56}};
         expr v2{expr::var{57}};
-        expr a1{expr::atom{"a"}};
-        expr inner1{expr::cons{&v2, &a1}};
-        expr c1{expr::cons{&v1, &inner1}};
+        expr a1{expr::functor{"a", {}}};
+        expr inner1{expr::functor{"cons", {&v2, &a1}}};
+        expr c1{expr::functor{"cons", {&v1, &inner1}}};
         
-        expr a2{expr::atom{"a"}};
-        expr a3{expr::atom{"b"}};
-        expr a4{expr::atom{"a"}};
-        expr inner2{expr::cons{&a3, &a4}};
-        expr c2{expr::cons{&a2, &inner2}};
+        expr a2{expr::functor{"a", {}}};
+        expr a3{expr::functor{"b", {}}};
+        expr a4{expr::functor{"a", {}}};
+        expr inner2{expr::functor{"cons", {&a3, &a4}}};
+        expr c2{expr::functor{"cons", {&a2, &inner2}}};
         
         assert(bm.unify(&c2, &c1));  // Commuted
         assert(bm.bindings.size() == 2);  // Two bindings created
@@ -6705,9 +6705,9 @@ void test_bind_map_unify() {
         expr v1{expr::var{60}};
         expr v2{expr::var{61}};
         expr v3{expr::var{62}};
-        expr a1{expr::atom{"x"}};
-        expr a2{expr::atom{"y"}};
-        expr a3{expr::atom{"z"}};
+        expr a1{expr::functor{"x", {}}};
+        expr a2{expr::functor{"y", {}}};
+        expr a3{expr::functor{"z", {}}};
         
         // First unification: v1 with a1
         assert(bm.unify(&v1, &a1));
@@ -6739,7 +6739,7 @@ void test_bind_map_unify() {
         t.push();
         expr v1{expr::var{63}};
         expr v2{expr::var{64}};
-        expr a1{expr::atom{"first"}};
+        expr a1{expr::functor{"first", {}}};
         
         // First: unify v1 with v2
         assert(bm.unify(&v1, &v2));
@@ -6774,7 +6774,7 @@ void test_bind_map_unify() {
         bind_map bm(t);
         t.push();
         expr v1{expr::var{66}};
-        expr a1{expr::atom{"bound"}};
+        expr a1{expr::functor{"bound", {}}};
         
         bm.bindings[66] = &a1;
         
@@ -6791,7 +6791,7 @@ void test_bind_map_unify() {
         t.push();
         expr v1{expr::var{67}};
         expr v2{expr::var{68}};
-        expr a1{expr::atom{"same"}};
+        expr a1{expr::functor{"same", {}}};
         
         bm.bindings[67] = &a1;
         bm.bindings[68] = &a1;
@@ -6809,8 +6809,8 @@ void test_bind_map_unify() {
         t.push();
         expr v1{expr::var{69}};
         expr v2{expr::var{70}};
-        expr a1{expr::atom{"first"}};
-        expr a2{expr::atom{"second"}};
+        expr a1{expr::functor{"first", {}}};
+        expr a2{expr::functor{"second", {}}};
         
         bm.bindings[69] = &a1;
         bm.bindings[70] = &a2;
@@ -6829,22 +6829,22 @@ void test_bind_map_unify() {
         expr v1{expr::var{71}};
         expr v2{expr::var{72}};
         expr v3{expr::var{73}};
-        expr a1{expr::atom{"a"}};
+        expr a1{expr::functor{"a", {}}};
         
         // Build: cons(cons(v1, v2), cons(v3, a1))
-        expr left1{expr::cons{&v1, &v2}};
-        expr right1{expr::cons{&v3, &a1}};
-        expr outer1{expr::cons{&left1, &right1}};
+        expr left1{expr::functor{"cons", {&v1, &v2}}};
+        expr right1{expr::functor{"cons", {&v3, &a1}}};
+        expr outer1{expr::functor{"cons", {&left1, &right1}}};
         
-        expr a2{expr::atom{"x"}};
-        expr a3{expr::atom{"y"}};
-        expr a4{expr::atom{"z"}};
-        expr a5{expr::atom{"a"}};
+        expr a2{expr::functor{"x", {}}};
+        expr a3{expr::functor{"y", {}}};
+        expr a4{expr::functor{"z", {}}};
+        expr a5{expr::functor{"a", {}}};
         
         // Build: cons(cons(a2, a3), cons(a4, a5))
-        expr left2{expr::cons{&a2, &a3}};
-        expr right2{expr::cons{&a4, &a5}};
-        expr outer2{expr::cons{&left2, &right2}};
+        expr left2{expr::functor{"cons", {&a2, &a3}}};
+        expr right2{expr::functor{"cons", {&a4, &a5}}};
+        expr outer2{expr::functor{"cons", {&left2, &right2}}};
         
         assert(bm.unify(&outer1, &outer2));
         assert(bm.bindings.size() == 3);  // Three bindings: v1->a2, v2->a3, v3->a4
@@ -6890,13 +6890,13 @@ void test_bind_map_unify() {
         trail t;
         bind_map bm(t);
         t.push();
-        expr a1{expr::atom{"x"}};
-        expr a2{expr::atom{"y"}};
-        expr c1{expr::cons{&a1, &a2}};
+        expr a1{expr::functor{"x", {}}};
+        expr a2{expr::functor{"y", {}}};
+        expr c1{expr::functor{"cons", {&a1, &a2}}};
         
-        expr a3{expr::atom{"x"}};
-        expr a4{expr::atom{"z"}};  // Different from a2
-        expr c2{expr::cons{&a3, &a4}};
+        expr a3{expr::functor{"x", {}}};
+        expr a4{expr::functor{"z", {}}};  // Different from a2
+        expr c2{expr::functor{"cons", {&a3, &a4}}};
         
         assert(!bm.unify(&c1, &c2));  // lhs matches, rhs doesn't
         assert(bm.bindings.size() == 0);  // No bindings created (all atoms)
@@ -6909,13 +6909,13 @@ void test_bind_map_unify() {
         trail t;
         bind_map bm(t);
         t.push();
-        expr a1{expr::atom{"x"}};
-        expr a2{expr::atom{"y"}};
-        expr c1{expr::cons{&a1, &a2}};
+        expr a1{expr::functor{"x", {}}};
+        expr a2{expr::functor{"y", {}}};
+        expr c1{expr::functor{"cons", {&a1, &a2}}};
         
-        expr a3{expr::atom{"z"}};  // Different from a1
-        expr a4{expr::atom{"y"}};
-        expr c2{expr::cons{&a3, &a4}};
+        expr a3{expr::functor{"z", {}}};  // Different from a1
+        expr a4{expr::functor{"y", {}}};
+        expr c2{expr::functor{"cons", {&a3, &a4}}};
         
         assert(!bm.unify(&c1, &c2));  // Should fail on lhs
         assert(bm.bindings.size() == 0);  // No bindings created (all atoms)
@@ -6932,19 +6932,19 @@ void test_bind_map_unify() {
         expr v2{expr::var{81}};
         
         // Build complex structure with vars
-        expr a1{expr::atom{"a"}};
-        expr inner1{expr::cons{&v1, &a1}};
-        expr inner2{expr::cons{&inner1, &v2}};
-        expr outer1{expr::cons{&inner2, &a1}};
+        expr a1{expr::functor{"a", {}}};
+        expr inner1{expr::functor{"cons", {&v1, &a1}}};
+        expr inner2{expr::functor{"cons", {&inner1, &v2}}};
+        expr outer1{expr::functor{"cons", {&inner2, &a1}}};
         
         // Build matching structure with atoms
-        expr a2{expr::atom{"x"}};
-        expr a3{expr::atom{"a"}};
-        expr inner3{expr::cons{&a2, &a3}};
-        expr a4{expr::atom{"y"}};
-        expr inner4{expr::cons{&inner3, &a4}};
-        expr a5{expr::atom{"a"}};
-        expr outer2{expr::cons{&inner4, &a5}};
+        expr a2{expr::functor{"x", {}}};
+        expr a3{expr::functor{"a", {}}};
+        expr inner3{expr::functor{"cons", {&a2, &a3}}};
+        expr a4{expr::functor{"y", {}}};
+        expr inner4{expr::functor{"cons", {&inner3, &a4}}};
+        expr a5{expr::functor{"a", {}}};
+        expr outer2{expr::functor{"cons", {&inner4, &a5}}};
         
         assert(bm.unify(&outer1, &outer2));
         assert(bm.bindings.size() == 2);  // Two bindings: v1->a2, v2->a4
@@ -6961,13 +6961,13 @@ void test_bind_map_unify() {
         trail t;
         bind_map bm(t);
         expr v1{expr::var{82}};
-        expr a1{expr::atom{"x"}};
-        expr a2{expr::atom{"y"}};
-        expr c1{expr::cons{&v1, &a1}};
+        expr a1{expr::functor{"x", {}}};
+        expr a2{expr::functor{"y", {}}};
+        expr c1{expr::functor{"cons", {&v1, &a1}}};
         
-        expr a3{expr::atom{"z"}};
-        expr a4{expr::atom{"w"}};  // Different from a1
-        expr c2{expr::cons{&a3, &a4}};
+        expr a3{expr::functor{"z", {}}};
+        expr a4{expr::functor{"w", {}}};  // Different from a1
+        expr c2{expr::functor{"cons", {&a3, &a4}}};
         
         // Push frame before unification
         t.push();
@@ -6995,11 +6995,11 @@ void test_bind_map_unify() {
         expr v3{expr::var{85}};
         
         // First structure: cons(V1, V1) - both children are same var
-        expr c1{expr::cons{&v1, &v1}};
+        expr c1{expr::functor{"cons", {&v1, &v1}}};
         
         // Second structure: cons(a, V2)
-        expr a1{expr::atom{"a"}};
-        expr c2{expr::cons{&a1, &v2}};
+        expr a1{expr::functor{"a", {}}};
+        expr c2{expr::functor{"cons", {&a1, &v2}}};
         
         // Unify cons(V1, V1) with cons(a, V2)
         // This should bind V1 to 'a' and V2 to 'a'
@@ -7009,8 +7009,8 @@ void test_bind_map_unify() {
         assert(bm.whnf(&v2) == &a1);
         
         // Now try to unify cons(V1, V1) with cons(V3, k)
-        expr a2{expr::atom{"k"}};
-        expr c3{expr::cons{&v3, &a2}};
+        expr a2{expr::functor{"k", {}}};
+        expr c3{expr::functor{"cons", {&v3, &a2}}};
         
         // This should fail because V1 reduces to 'a', so we're trying to unify
         // cons(a, a) with cons(V3, k), which would bind V3 to 'a', but then
@@ -7034,10 +7034,10 @@ void test_bind_map_unify() {
         expr v3{expr::var{88}};
         
         // First structure: cons(V1, V1)
-        expr c1{expr::cons{&v1, &v1}};
+        expr c1{expr::functor{"cons", {&v1, &v1}}};
         
         // Second structure: cons(V2, V3)
-        expr c2{expr::cons{&v2, &v3}};
+        expr c2{expr::functor{"cons", {&v2, &v3}}};
         
         // Unify cons(V1, V1) with cons(V2, V3)
         // This unifies V1 with V2 (lhs), then V1 with V3 (rhs)
@@ -7056,7 +7056,7 @@ void test_bind_map_unify() {
         assert(result1 == &v1 || result1 == &v2 || result1 == &v3);
         
         // Now unify V3 with atom 'a'
-        expr a1{expr::atom{"a"}};
+        expr a1{expr::functor{"a", {}}};
         assert(bm.unify(&v3, &a1));
         assert(bm.bindings.size() == bindings_after_first + 1);  // One more binding
         
@@ -7077,14 +7077,14 @@ void test_bind_map_unify() {
         t.push();
         expr v1{expr::var{89}};
         expr v2{expr::var{89}};  // Same index
-        expr a1{expr::atom{"a"}};
-        expr a2{expr::atom{"b"}};
+        expr a1{expr::functor{"a", {}}};
+        expr a2{expr::functor{"b", {}}};
         
-        expr c1{expr::cons{&v1, &a1}};
+        expr c1{expr::functor{"cons", {&v1, &a1}}};
         
         // Build cons(cons(V1, b), a) - V1 appears nested inside
-        expr inner{expr::cons{&v2, &a2}};
-        expr c2{expr::cons{&inner, &a1}};
+        expr inner{expr::functor{"cons", {&v2, &a2}}};
+        expr c2{expr::functor{"cons", {&inner, &a1}}};
         
         // Should fail: trying to bind V1 to cons(cons(V1, b), a) which contains V1
         assert(!bm.unify(&c1, &c2));
@@ -7102,14 +7102,14 @@ void test_bind_map_unify() {
         expr v2{expr::var{91}};
         expr v3{expr::var{90}};  // Same as V1
         expr v4{expr::var{91}};  // Same as V2
-        expr a1{expr::atom{"a"}};
+        expr a1{expr::functor{"a", {}}};
         
         // Build cons(V1, V2)
-        expr c1{expr::cons{&v1, &v2}};
+        expr c1{expr::functor{"cons", {&v1, &v2}}};
         
         // Build cons(cons(V1, a), V2)
-        expr inner{expr::cons{&v3, &a1}};
-        expr c2{expr::cons{&inner, &v4}};
+        expr inner{expr::functor{"cons", {&v3, &a1}}};
+        expr c2{expr::functor{"cons", {&inner, &v4}}};
         
         // Unifying cons(V1, V2) with cons(cons(V1, a), V2)
         // lhs: V1 with cons(V1, a) - should fail occurs check (V1 in structure)
@@ -7128,16 +7128,16 @@ void test_bind_map_unify() {
         expr v2{expr::var{93}};
         expr v3{expr::var{92}};  // Same as V1
         expr v4{expr::var{92}};  // Same as V1
-        expr a1{expr::atom{"a"}};
-        expr a2{expr::atom{"b"}};
+        expr a1{expr::functor{"a", {}}};
+        expr a2{expr::functor{"b", {}}};
         
         // Build cons(V1, cons(V2, V1))
-        expr inner1{expr::cons{&v2, &v3}};
-        expr c1{expr::cons{&v1, &inner1}};
+        expr inner1{expr::functor{"cons", {&v2, &v3}}};
+        expr c1{expr::functor{"cons", {&v1, &inner1}}};
         
         // Build cons(cons(V1, a), b)
-        expr inner2{expr::cons{&v4, &a1}};
-        expr c2{expr::cons{&inner2, &a2}};
+        expr inner2{expr::functor{"cons", {&v4, &a1}}};
+        expr c2{expr::functor{"cons", {&inner2, &a2}}};
         
         // Unifying cons(V1, cons(V2, V1)) with cons(cons(V1, a), b)
         // lhs: V1 with cons(V1, a) - should fail occurs check (V1 in structure)
@@ -7156,17 +7156,17 @@ void test_bind_map_unify() {
         expr v2{expr::var{94}};
         expr v3{expr::var{93}};  // Same as V1
         expr v4{expr::var{95}};
-        expr a1{expr::atom{"a"}};
-        expr a2{expr::atom{"b"}};
+        expr a1{expr::functor{"a", {}}};
+        expr a2{expr::functor{"b", {}}};
         
         // Pre-existing chain: V4 -> V1
         bm.bindings[95] = &v1;
         
-        expr c1{expr::cons{&v4, &v2}};
+        expr c1{expr::functor{"cons", {&v4, &v2}}};
         
         // Build cons(a, cons(V1, b))
-        expr inner{expr::cons{&v3, &a2}};
-        expr c2{expr::cons{&a1, &inner}};
+        expr inner{expr::functor{"cons", {&v3, &a2}}};
+        expr c2{expr::functor{"cons", {&a1, &inner}}};
         
         // Unifying cons(V4, V2) with cons(a, cons(V1, b))
         // V4 reduces to V1 via chain
@@ -7188,17 +7188,17 @@ void test_bind_map_unify() {
         expr v1{expr::var{96}};
         expr v2{expr::var{96}};  // Same as V1
         expr v3{expr::var{96}};  // Same as V1
-        expr a1{expr::atom{"a"}};
+        expr a1{expr::functor{"a", {}}};
         
         // Build cons(V1, cons(a, V1)) - V1 appears twice
-        expr inner{expr::cons{&a1, &v2}};
-        expr c1{expr::cons{&v1, &inner}};
+        expr inner{expr::functor{"cons", {&a1, &v2}}};
+        expr c1{expr::functor{"cons", {&v1, &inner}}};
         
         // Build cons(cons(V1, a), cons(a, b))
-        expr a2{expr::atom{"b"}};
-        expr inner2{expr::cons{&v3, &a1}};
-        expr inner3{expr::cons{&a1, &a2}};
-        expr c2{expr::cons{&inner2, &inner3}};
+        expr a2{expr::functor{"b", {}}};
+        expr inner2{expr::functor{"cons", {&v3, &a1}}};
+        expr inner3{expr::functor{"cons", {&a1, &a2}}};
+        expr c2{expr::functor{"cons", {&inner2, &inner3}}};
         
         // Unifying cons(V1, cons(a, V1)) with cons(cons(V1, a), cons(a, b))
         // lhs: V1 with cons(V1, a) - should fail occurs check immediately
@@ -7218,17 +7218,17 @@ void test_bind_map_unify() {
         expr v1{expr::var{97}};
         expr v2{expr::var{97}};  // Same as V1
         expr v3{expr::var{97}};  // Same as V1
-        expr a1{expr::atom{"a"}};
-        expr a2{expr::atom{"a"}};
-        expr a3{expr::atom{"a"}};
+        expr a1{expr::functor{"a", {}}};
+        expr a2{expr::functor{"a", {}}};
+        expr a3{expr::functor{"a", {}}};
         
         // Build cons(V1, cons(V1, V1))
-        expr inner1{expr::cons{&v2, &v3}};
-        expr c1{expr::cons{&v1, &inner1}};
+        expr inner1{expr::functor{"cons", {&v2, &v3}}};
+        expr c1{expr::functor{"cons", {&v1, &inner1}}};
         
         // Build cons(a, cons(a, a))
-        expr inner2{expr::cons{&a2, &a3}};
-        expr c2{expr::cons{&a1, &inner2}};
+        expr inner2{expr::functor{"cons", {&a2, &a3}}};
+        expr c2{expr::functor{"cons", {&a1, &inner2}}};
         
         // All three occurrences of V1 must unify to 'a'
         assert(bm.unify(&c1, &c2));
@@ -7247,17 +7247,17 @@ void test_bind_map_unify() {
         expr v1{expr::var{98}};
         expr v2{expr::var{98}};  // Same as V1
         expr v3{expr::var{98}};  // Same as V1
-        expr a1{expr::atom{"x"}};
-        expr a2{expr::atom{"x"}};
-        expr a3{expr::atom{"x"}};
+        expr a1{expr::functor{"x", {}}};
+        expr a2{expr::functor{"x", {}}};
+        expr a3{expr::functor{"x", {}}};
         
         // Build cons(cons(V1, V1), V1)
-        expr inner1{expr::cons{&v1, &v2}};
-        expr c1{expr::cons{&inner1, &v3}};
+        expr inner1{expr::functor{"cons", {&v1, &v2}}};
+        expr c1{expr::functor{"cons", {&inner1, &v3}}};
         
         // Build cons(cons(x, x), x)
-        expr inner2{expr::cons{&a1, &a2}};
-        expr c2{expr::cons{&inner2, &a3}};
+        expr inner2{expr::functor{"cons", {&a1, &a2}}};
+        expr c2{expr::functor{"cons", {&inner2, &a3}}};
         
         assert(bm.unify(&c1, &c2));
         assert(bm.bindings.size() == 1);  // Just V1->x
@@ -7276,16 +7276,16 @@ void test_bind_map_unify() {
         expr v2{expr::var{99}};  // Same as V1
         expr v3{expr::var{99}};  // Same as V1
         expr v4{expr::var{99}};  // Same as V1
-        expr a1{expr::atom{"a"}};
-        expr a2{expr::atom{"b"}};
+        expr a1{expr::functor{"a", {}}};
+        expr a2{expr::functor{"b", {}}};
         
         // Build cons(V1, cons(V1, V1))
-        expr inner1{expr::cons{&v2, &v3}};
-        expr c1{expr::cons{&v1, &inner1}};
+        expr inner1{expr::functor{"cons", {&v2, &v3}}};
+        expr c1{expr::functor{"cons", {&v1, &inner1}}};
         
         // Build cons(cons(V1, a), b)
-        expr inner2{expr::cons{&v4, &a1}};
-        expr c2{expr::cons{&inner2, &a2}};
+        expr inner2{expr::functor{"cons", {&v4, &a1}}};
+        expr c2{expr::functor{"cons", {&inner2, &a2}}};
         
         // Unifying cons(V1, cons(V1, V1)) with cons(cons(V1, a), b)
         // lhs: V1 with cons(V1, a) - should fail occurs check
@@ -7304,13 +7304,13 @@ void test_bind_map_unify() {
         t.push();
         expr v1{expr::var{100}};
         expr v2{expr::var{101}};
-        expr a1{expr::atom{"a"}};
+        expr a1{expr::functor{"a", {}}};
         
         // Pre-bind V2 to V1
         bm.bindings[101] = &v1;
         
-        expr c1{expr::cons{&v1, &v2}};
-        expr c2{expr::cons{&a1, &v1}};
+        expr c1{expr::functor{"cons", {&v1, &v2}}};
+        expr c2{expr::functor{"cons", {&a1, &v1}}};
         
         // Unifying cons(V1, V2) with cons(a, V1)
         // V2 reduces to V1, so we're unifying cons(V1, V1) with cons(a, V1)
@@ -7333,12 +7333,12 @@ void test_bind_map_unify() {
         expr v2{expr::var{103}};
         
         // Build cons(V1, cons(V2, V1))
-        expr inner1{expr::cons{&v2, &v1}};
-        expr c1{expr::cons{&v1, &inner1}};
+        expr inner1{expr::functor{"cons", {&v2, &v1}}};
+        expr c1{expr::functor{"cons", {&v1, &inner1}}};
         
         // Build cons(V2, cons(V1, V2))
-        expr inner2{expr::cons{&v1, &v2}};
-        expr c2{expr::cons{&v2, &inner2}};
+        expr inner2{expr::functor{"cons", {&v1, &v2}}};
+        expr c2{expr::functor{"cons", {&v2, &inner2}}};
         
         // Unifying cons(V1, cons(V2, V1)) with cons(V2, cons(V1, V2))
         // lhs: V1 with V2 - creates binding (say 102->103)
@@ -7366,13 +7366,13 @@ void test_bind_map_unify() {
         expr v1{expr::var{104}};
         expr v2{expr::var{105}};
         expr v3{expr::var{106}};
-        expr a1{expr::atom{"a"}};
+        expr a1{expr::functor{"a", {}}};
         
         // Pre-existing chain: V1 -> V2
         bm.bindings[104] = &v2;
         
-        expr c1{expr::cons{&v1, &a1}};
-        expr c2{expr::cons{&v3, &a1}};
+        expr c1{expr::functor{"cons", {&v1, &a1}}};
+        expr c2{expr::functor{"cons", {&v3, &a1}}};
         
         // Unify cons(V1, a) with cons(V3, a)
         // V1 reduces to V2, so we unify V2 with V3
@@ -7402,8 +7402,8 @@ void test_bind_map_unify() {
         bm.bindings[109] = &v4;
         
         // Unify cons(V2, V4) with cons(V5, V5)
-        expr c1{expr::cons{&v2, &v4}};
-        expr c2{expr::cons{&v5, &v5}};
+        expr c1{expr::functor{"cons", {&v2, &v4}}};
+        expr c2{expr::functor{"cons", {&v5, &v5}}};
         
         // lhs: V2 with V5 - binds one to the other
         // rhs: V4 with V5 - both now in same equivalence class
@@ -7429,15 +7429,15 @@ void test_bind_map_unify() {
         t.push();
         expr v1{expr::var{112}};
         expr v2{expr::var{113}};
-        expr a1{expr::atom{"a"}};
-        expr a2{expr::atom{"b"}};
+        expr a1{expr::functor{"a", {}}};
+        expr a2{expr::functor{"b", {}}};
         
         // Create shared inner: cons(V1, a)
-        expr inner{expr::cons{&v1, &a1}};
+        expr inner{expr::functor{"cons", {&v1, &a1}}};
         
         // Build cons(inner, V2) and cons(inner, b)
-        expr c1{expr::cons{&inner, &v2}};
-        expr c2{expr::cons{&inner, &a2}};
+        expr c1{expr::functor{"cons", {&inner, &v2}}};
+        expr c2{expr::functor{"cons", {&inner, &a2}}};
         
         // Unify cons(inner, V2) with cons(inner, b)
         // lhs: inner with inner - same pointer, succeeds
@@ -7459,14 +7459,14 @@ void test_bind_map_unify() {
         bind_map bm(t);
         expr v1{expr::var{114}};
         expr v2{expr::var{115}};
-        expr a1{expr::atom{"x"}};
-        expr a2{expr::atom{"y"}};
-        expr a3{expr::atom{"z"}};
+        expr a1{expr::functor{"x", {}}};
+        expr a2{expr::functor{"y", {}}};
+        expr a3{expr::functor{"z", {}}};
         
         // First failure
         t.push();
-        expr c1{expr::cons{&v1, &a1}};
-        expr c2{expr::cons{&a2, &a3}};  // Mismatched rhs
+        expr c1{expr::functor{"cons", {&v1, &a1}}};
+        expr c2{expr::functor{"cons", {&a2, &a3}}};  // Mismatched rhs
         assert(!bm.unify(&c1, &c2));
         assert(bm.bindings.size() == 1);  // Partial: V1->a2
         assert(bm.whnf(&v1) == &a2);
@@ -7479,10 +7479,10 @@ void test_bind_map_unify() {
         
         // Second failure - different partial bindings
         t.push();
-        expr a4{expr::atom{"w"}};
-        expr a5{expr::atom{"q"}};
-        expr c3{expr::cons{&v2, &a4}};
-        expr c4{expr::cons{&a5, &a1}};  // Mismatched rhs
+        expr a4{expr::functor{"w", {}}};
+        expr a5{expr::functor{"q", {}}};
+        expr c3{expr::functor{"cons", {&v2, &a4}}};
+        expr c4{expr::functor{"cons", {&a5, &a1}}};  // Mismatched rhs
         assert(!bm.unify(&c3, &c4));
         assert(bm.bindings.size() == 1);  // Partial: V2->a5
         assert(bm.whnf(&v2) == &a5);
@@ -7506,20 +7506,20 @@ void test_bind_map_unify() {
         expr v2{expr::var{116}};
         expr v3{expr::var{116}};
         expr v4{expr::var{116}};
-        expr a1{expr::atom{"a"}};
-        expr a2{expr::atom{"a"}};
-        expr a3{expr::atom{"a"}};
-        expr a4{expr::atom{"a"}};
+        expr a1{expr::functor{"a", {}}};
+        expr a2{expr::functor{"a", {}}};
+        expr a3{expr::functor{"a", {}}};
+        expr a4{expr::functor{"a", {}}};
         
         // Build cons(cons(V1, V1), cons(V1, V1))
-        expr left1{expr::cons{&v1, &v2}};
-        expr right1{expr::cons{&v3, &v4}};
-        expr c1{expr::cons{&left1, &right1}};
+        expr left1{expr::functor{"cons", {&v1, &v2}}};
+        expr right1{expr::functor{"cons", {&v3, &v4}}};
+        expr c1{expr::functor{"cons", {&left1, &right1}}};
         
         // Build cons(cons(a, a), cons(a, a))
-        expr left2{expr::cons{&a1, &a2}};
-        expr right2{expr::cons{&a3, &a4}};
-        expr c2{expr::cons{&left2, &right2}};
+        expr left2{expr::functor{"cons", {&a1, &a2}}};
+        expr right2{expr::functor{"cons", {&a3, &a4}}};
+        expr c2{expr::functor{"cons", {&left2, &right2}}};
         
         // All four occurrences must bind consistently
         assert(bm.unify(&c1, &c2));
@@ -7539,11 +7539,11 @@ void test_bind_map_unify() {
         t.push();
         expr v1{expr::var{117}};
         expr v2{expr::var{118}};
-        expr a1{expr::atom{"a"}};
-        expr a2{expr::atom{"b"}};
+        expr a1{expr::functor{"a", {}}};
+        expr a2{expr::functor{"b", {}}};
         
         // Create cons(a, b)
-        expr c_ab{expr::cons{&a1, &a2}};
+        expr c_ab{expr::functor{"cons", {&a1, &a2}}};
         
         // Bind both V1 and V2 to the same cons cell
         bm.bindings[117] = &c_ab;
@@ -7566,15 +7566,15 @@ void test_bind_map_unify() {
         expr v1{expr::var{119}};
         expr v2{expr::var{120}};
         expr v3{expr::var{121}};
-        expr a1{expr::atom{"a"}};
-        expr a2{expr::atom{"b"}};
+        expr a1{expr::functor{"a", {}}};
+        expr a2{expr::functor{"b", {}}};
         
         // Create cons(a, b) and bind V1 to it
-        expr c_ab{expr::cons{&a1, &a2}};
+        expr c_ab{expr::functor{"cons", {&a1, &a2}}};
         bm.bindings[119] = &c_ab;
         
         // Unify V1 with cons(V2, V3)
-        expr c2{expr::cons{&v2, &v3}};
+        expr c2{expr::functor{"cons", {&v2, &v3}}};
         
         // V1 reduces to cons(a, b), so we unify cons(a, b) with cons(V2, V3)
         // This should bind V2 to a and V3 to b
@@ -7597,16 +7597,16 @@ void test_bind_map_unify() {
         t.push();
         expr v1{expr::var{122}};
         expr v2{expr::var{123}};
-        expr a1{expr::atom{"a"}};
-        expr a2{expr::atom{"b"}};
-        expr a3{expr::atom{"c"}};
+        expr a1{expr::functor{"a", {}}};
+        expr a2{expr::functor{"b", {}}};
+        expr a3{expr::functor{"c", {}}};
         
         // Pre-bind V1 to 'c'
         bm.bindings[122] = &a3;
         
         // Unify cons(V1, a) with cons(b, V2)
-        expr c1{expr::cons{&v1, &a1}};
-        expr c2{expr::cons{&a2, &v2}};
+        expr c1{expr::functor{"cons", {&v1, &a1}}};
+        expr c2{expr::functor{"cons", {&a2, &v2}}};
         
         // lhs: V1 (reduces to c) with b - should fail
         assert(!bm.unify(&c1, &c2));
@@ -7624,16 +7624,16 @@ void test_bind_map_unify() {
         t.push();
         expr v1{expr::var{124}};
         expr v2{expr::var{125}};
-        expr a1{expr::atom{"a"}};
-        expr a2{expr::atom{"b"}};
-        expr a3{expr::atom{"c"}};
+        expr a1{expr::functor{"a", {}}};
+        expr a2{expr::functor{"b", {}}};
+        expr a3{expr::functor{"c", {}}};
         
         // Pre-bind V2 to 'c'
         bm.bindings[125] = &a3;
         
         // Unify cons(V1, a) with cons(b, V2)
-        expr c1{expr::cons{&v1, &a1}};
-        expr c2{expr::cons{&a2, &v2}};
+        expr c1{expr::functor{"cons", {&v1, &a1}}};
+        expr c2{expr::functor{"cons", {&a2, &v2}}};
         
         // lhs: V1 with b - succeeds, binds V1 to b
         // rhs: a with V2 (reduces to c) - should fail
@@ -7657,20 +7657,20 @@ void test_bind_map_unify() {
         expr v2{expr::var{127}};
         expr v3{expr::var{128}};
         expr v4{expr::var{129}};
-        expr a1{expr::atom{"w"}};
-        expr a2{expr::atom{"x"}};
-        expr a3{expr::atom{"y"}};
-        expr a4{expr::atom{"z"}};
+        expr a1{expr::functor{"w", {}}};
+        expr a2{expr::functor{"x", {}}};
+        expr a3{expr::functor{"y", {}}};
+        expr a4{expr::functor{"z", {}}};
         
         // Build cons(cons(cons(V1, V2), V3), V4)
-        expr inner1{expr::cons{&v1, &v2}};
-        expr inner2{expr::cons{&inner1, &v3}};
-        expr c1{expr::cons{&inner2, &v4}};
+        expr inner1{expr::functor{"cons", {&v1, &v2}}};
+        expr inner2{expr::functor{"cons", {&inner1, &v3}}};
+        expr c1{expr::functor{"cons", {&inner2, &v4}}};
         
         // Build cons(cons(cons(w, x), y), z)
-        expr inner3{expr::cons{&a1, &a2}};
-        expr inner4{expr::cons{&inner3, &a3}};
-        expr c2{expr::cons{&inner4, &a4}};
+        expr inner3{expr::functor{"cons", {&a1, &a2}}};
+        expr inner4{expr::functor{"cons", {&inner3, &a3}}};
+        expr c2{expr::functor{"cons", {&inner4, &a4}}};
         
         assert(bm.unify(&c1, &c2));
         assert(bm.bindings.size() == 4);  // Four bindings created
@@ -7695,23 +7695,23 @@ void test_bind_map_unify() {
         expr v2{expr::var{131}};
         expr v3{expr::var{132}};
         expr v4{expr::var{133}};
-        expr a1{expr::atom{"w"}};
-        expr a2{expr::atom{"x"}};
-        expr a3{expr::atom{"y"}};
-        expr a4{expr::atom{"z"}};
+        expr a1{expr::functor{"w", {}}};
+        expr a2{expr::functor{"x", {}}};
+        expr a3{expr::functor{"y", {}}};
+        expr a4{expr::functor{"z", {}}};
         
         // Pre-bind V2 to x
         bm.bindings[131] = &a2;
         
         // Build cons(cons(cons(V1, V2), V3), V4)
-        expr inner1{expr::cons{&v1, &v2}};
-        expr inner2{expr::cons{&inner1, &v3}};
-        expr c1{expr::cons{&inner2, &v4}};
+        expr inner1{expr::functor{"cons", {&v1, &v2}}};
+        expr inner2{expr::functor{"cons", {&inner1, &v3}}};
+        expr c1{expr::functor{"cons", {&inner2, &v4}}};
         
         // Build cons(cons(cons(w, x), y), z)
-        expr inner3{expr::cons{&a1, &a2}};
-        expr inner4{expr::cons{&inner3, &a3}};
-        expr c2{expr::cons{&inner4, &a4}};
+        expr inner3{expr::functor{"cons", {&a1, &a2}}};
+        expr inner4{expr::functor{"cons", {&inner3, &a3}}};
+        expr c2{expr::functor{"cons", {&inner4, &a4}}};
         
         // V2 is already bound to x, so unification should succeed
         assert(bm.unify(&c1, &c2));
@@ -7742,15 +7742,15 @@ void test_bind_map_unify() {
         expr v6{expr::var{139}};
         
         // First unification: cons(V1, V2) with cons(V3, V4)
-        expr c1{expr::cons{&v1, &v2}};
-        expr c2{expr::cons{&v3, &v4}};
+        expr c1{expr::functor{"cons", {&v1, &v2}}};
+        expr c2{expr::functor{"cons", {&v3, &v4}}};
         assert(bm.unify(&c1, &c2));
         size_t bindings_after_first = bm.bindings.size();
         assert(bindings_after_first == 2);  // V1 and V2 each bound
         
         // Second unification: cons(V3, V5) with cons(V6, V1)
-        expr c3{expr::cons{&v3, &v5}};
-        expr c4{expr::cons{&v6, &v1}};
+        expr c3{expr::functor{"cons", {&v3, &v5}}};
+        expr c4{expr::functor{"cons", {&v6, &v1}}};
         assert(bm.unify(&c3, &c4));
         
         // Now we have a complex network:
@@ -7776,11 +7776,11 @@ void test_bind_map_unify() {
         expr v1{expr::var{140}};
         expr v2{expr::var{140}};  // Same as V1
         expr v3{expr::var{140}};  // Same as V1
-        expr a1{expr::atom{"a"}};
+        expr a1{expr::functor{"a", {}}};
         
         // Build cons(cons(V1, V1), a) - V1 appears twice in nested structure
-        expr inner{expr::cons{&v2, &v3}};
-        expr c1{expr::cons{&inner, &a1}};
+        expr inner{expr::functor{"cons", {&v2, &v3}}};
+        expr c1{expr::functor{"cons", {&inner, &a1}}};
         
         // Try to unify V1 with this structure containing V1
         assert(!bm.unify(&v1, &c1));
@@ -7796,13 +7796,13 @@ void test_bind_map_unify() {
         t.push();
         expr v1{expr::var{141}};
         expr v2{expr::var{142}};
-        expr a1{expr::atom{"a"}};
-        expr a2{expr::atom{"x"}};
+        expr a1{expr::functor{"a", {}}};
+        expr a2{expr::functor{"x", {}}};
         
         // Build deeply nested structure: cons(cons(cons(V1, a), a), a)
-        expr inner1{expr::cons{&v1, &a1}};
-        expr inner2{expr::cons{&inner1, &a1}};
-        expr inner3{expr::cons{&inner2, &a1}};
+        expr inner1{expr::functor{"cons", {&v1, &a1}}};
+        expr inner2{expr::functor{"cons", {&inner1, &a1}}};
+        expr inner3{expr::functor{"cons", {&inner2, &a1}}};
         
         // Unify V2 with this nested structure
         assert(bm.unify(&v2, &inner3));
@@ -7828,14 +7828,14 @@ void test_bind_map_unify() {
         expr v1{expr::var{143}};
         expr v2{expr::var{144}};
         expr v3{expr::var{143}};  // Same as V1
-        expr a1{expr::atom{"a"}};
+        expr a1{expr::functor{"a", {}}};
         
         // Build cons(V1, V2)
-        expr c1{expr::cons{&v1, &v2}};
+        expr c1{expr::functor{"cons", {&v1, &v2}}};
         
         // Build cons(a, cons(V1, a)) - V1 appears in rhs
-        expr inner{expr::cons{&v3, &a1}};
-        expr c2{expr::cons{&a1, &inner}};
+        expr inner{expr::functor{"cons", {&v3, &a1}}};
+        expr c2{expr::functor{"cons", {&a1, &inner}}};
         
         // Unifying cons(V1, V2) with cons(a, cons(V1, a))
         // lhs: V1 with a - succeeds, binds V1 to a
@@ -7845,7 +7845,7 @@ void test_bind_map_unify() {
         assert(bm.whnf(&v1) == &a1);
         // V2 should be bound to a cons cell
         const expr* v2_result = bm.whnf(&v2);
-        assert(std::holds_alternative<expr::cons>(v2_result->content));
+        assert(std::holds_alternative<expr::functor>(v2_result->content));
         
         t.pop();
     }
@@ -7859,14 +7859,14 @@ void test_bind_map_unify() {
         t.push();
         expr v1{expr::var{145}};
         expr v2{expr::var{145}};  // Same as V1
-        expr a1{expr::atom{"a"}};
-        expr a2{expr::atom{"b"}};
+        expr a1{expr::functor{"a", {}}};
+        expr a2{expr::functor{"b", {}}};
         
-        expr c1{expr::cons{&a1, &v1}};
+        expr c1{expr::functor{"cons", {&a1, &v1}}};
         
         // Build cons(a, cons(b, V1))
-        expr inner{expr::cons{&a2, &v2}};
-        expr c2{expr::cons{&a1, &inner}};
+        expr inner{expr::functor{"cons", {&a2, &v2}}};
+        expr c2{expr::functor{"cons", {&a1, &inner}}};
         
         // Unifying cons(a, V1) with cons(a, cons(b, V1))
         // lhs: a with a - succeeds
@@ -7884,18 +7884,18 @@ void test_bind_map_unify() {
         t.push();
         expr v1{expr::var{146}};
         expr v2{expr::var{146}};  // Same as V1
-        expr a1{expr::atom{"a"}};
-        expr a2{expr::atom{"b"}};
-        expr a3{expr::atom{"c"}};
+        expr a1{expr::functor{"a", {}}};
+        expr a2{expr::functor{"b", {}}};
+        expr a3{expr::functor{"c", {}}};
         
         // Build cons(cons(V1, a), b)
-        expr inner1{expr::cons{&v1, &a1}};
-        expr c1{expr::cons{&inner1, &a2}};
+        expr inner1{expr::functor{"cons", {&v1, &a1}}};
+        expr c1{expr::functor{"cons", {&inner1, &a2}}};
         
         // Build cons(cons(cons(V1, c), a), b)
-        expr inner2{expr::cons{&v2, &a3}};
-        expr inner3{expr::cons{&inner2, &a1}};
-        expr c2{expr::cons{&inner3, &a2}};
+        expr inner2{expr::functor{"cons", {&v2, &a3}}};
+        expr inner3{expr::functor{"cons", {&inner2, &a1}}};
+        expr c2{expr::functor{"cons", {&inner3, &a2}}};
         
         // Unifying cons(cons(V1, a), b) with cons(cons(cons(V1, c), a), b)
         // lhs: cons(V1, a) with cons(cons(V1, c), a)
@@ -7915,15 +7915,15 @@ void test_bind_map_unify() {
         expr v2{expr::var{148}};
         expr v3{expr::var{147}};  // Same as V1
         expr v4{expr::var{147}};  // Same as V1
-        expr a1{expr::atom{"a"}};
-        expr a2{expr::atom{"b"}};
+        expr a1{expr::functor{"a", {}}};
+        expr a2{expr::functor{"b", {}}};
         
-        expr c1{expr::cons{&v1, &v2}};
+        expr c1{expr::functor{"cons", {&v1, &v2}}};
         
         // Build cons(cons(V1, a), cons(b, V1))
-        expr inner1{expr::cons{&v3, &a1}};
-        expr inner2{expr::cons{&a2, &v4}};
-        expr c2{expr::cons{&inner1, &inner2}};
+        expr inner1{expr::functor{"cons", {&v3, &a1}}};
+        expr inner2{expr::functor{"cons", {&a2, &v4}}};
+        expr c2{expr::functor{"cons", {&inner1, &inner2}}};
         
         // Unifying cons(V1, V2) with cons(cons(V1, a), cons(b, V1))
         // lhs: V1 with cons(V1, a) - should fail occurs check immediately
@@ -7940,16 +7940,16 @@ void test_bind_map_unify() {
         t.push();
         expr v1{expr::var{149}};
         expr v2{expr::var{149}};  // Same as V1
-        expr a1{expr::atom{"a"}};
-        expr a2{expr::atom{"b"}};
-        expr a3{expr::atom{"c"}};
+        expr a1{expr::functor{"a", {}}};
+        expr a2{expr::functor{"b", {}}};
+        expr a3{expr::functor{"c", {}}};
         
-        expr c1{expr::cons{&v1, &a1}};
+        expr c1{expr::functor{"cons", {&v1, &a1}}};
         
         // Build cons(cons(cons(V1, b), c), a) - V1 deeply nested in lhs
-        expr inner1{expr::cons{&v2, &a2}};
-        expr inner2{expr::cons{&inner1, &a3}};
-        expr c2{expr::cons{&inner2, &a1}};
+        expr inner1{expr::functor{"cons", {&v2, &a2}}};
+        expr inner2{expr::functor{"cons", {&inner1, &a3}}};
+        expr c2{expr::functor{"cons", {&inner2, &a1}}};
         
         // Unifying cons(V1, a) with cons(cons(cons(V1, b), c), a)
         // lhs: V1 with cons(cons(V1, b), c) - should fail occurs check (V1 deeply nested)
@@ -7967,17 +7967,17 @@ void test_bind_map_unify() {
         expr v1{expr::var{150}};
         expr v2{expr::var{151}};
         expr v3{expr::var{151}};  // Same as V2
-        expr a1{expr::atom{"a"}};
-        expr a2{expr::atom{"b"}};
+        expr a1{expr::functor{"a", {}}};
+        expr a2{expr::functor{"b", {}}};
         
         // Pre-existing chain: V2 -> V1
         bm.bindings[151] = &v1;
         
-        expr c1{expr::cons{&v1, &a1}};
+        expr c1{expr::functor{"cons", {&v1, &a1}}};
         
         // Build cons(cons(V2, b), a) - V2 chains to V1
-        expr inner{expr::cons{&v3, &a2}};
-        expr c2{expr::cons{&inner, &a1}};
+        expr inner{expr::functor{"cons", {&v3, &a2}}};
+        expr c2{expr::functor{"cons", {&inner, &a1}}};
         
         // Unifying cons(V1, a) with cons(cons(V2, b), a)
         // lhs: V1 with cons(V2, b)
@@ -7998,13 +7998,13 @@ void test_bind_map_unify() {
         expr v2{expr::var{152}};  // Same as V1
         expr v3{expr::var{152}};  // Same as V1
         expr v4{expr::var{153}};
-        expr a1{expr::atom{"a"}};
-        expr a2{expr::atom{"b"}};
+        expr a1{expr::functor{"a", {}}};
+        expr a2{expr::functor{"b", {}}};
         
         // Build cons(cons(V1, cons(V1, a)), b) - V1 appears twice in nested structure
-        expr inner1{expr::cons{&v2, &a1}};
-        expr inner2{expr::cons{&v3, &inner1}};
-        expr c1{expr::cons{&inner2, &a2}};
+        expr inner1{expr::functor{"cons", {&v2, &a1}}};
+        expr inner2{expr::functor{"cons", {&v3, &inner1}}};
+        expr c1{expr::functor{"cons", {&inner2, &a2}}};
         
         // Try to unify V1 with this structure
         assert(!bm.unify(&v1, &c1));
@@ -8022,17 +8022,17 @@ void test_bind_map_unify() {
         expr v2{expr::var{155}};
         expr v3{expr::var{154}};  // Same as V1
         expr v4{expr::var{155}};  // Same as V2
-        expr a1{expr::atom{"a"}};
-        expr a2{expr::atom{"b"}};
+        expr a1{expr::functor{"a", {}}};
+        expr a2{expr::functor{"b", {}}};
         
         // Build cons(cons(V1, V2), a)
-        expr inner1{expr::cons{&v1, &v2}};
-        expr c1{expr::cons{&inner1, &a1}};
+        expr inner1{expr::functor{"cons", {&v1, &v2}}};
+        expr c1{expr::functor{"cons", {&inner1, &a1}}};
         
         // Build cons(cons(cons(V1, b), V2), a)
-        expr inner2{expr::cons{&v3, &a2}};
-        expr inner3{expr::cons{&inner2, &v4}};
-        expr c2{expr::cons{&inner3, &a1}};
+        expr inner2{expr::functor{"cons", {&v3, &a2}}};
+        expr inner3{expr::functor{"cons", {&inner2, &v4}}};
+        expr c2{expr::functor{"cons", {&inner3, &a1}}};
         
         // Unifying cons(cons(V1, V2), a) with cons(cons(cons(V1, b), V2), a)
         // lhs: cons(V1, V2) with cons(cons(V1, b), V2)
@@ -8052,13 +8052,13 @@ void test_bind_map_unify() {
         expr v2{expr::var{157}};
         expr v3{expr::var{157}};  // Same as V2
         expr v4{expr::var{156}};  // Same as V1
-        expr a1{expr::atom{"a"}};
+        expr a1{expr::functor{"a", {}}};
         
-        expr c1{expr::cons{&v1, &v2}};
+        expr c1{expr::functor{"cons", {&v1, &v2}}};
         
         // Build cons(V2, cons(V1, a))
-        expr inner{expr::cons{&v4, &a1}};
-        expr c2{expr::cons{&v3, &inner}};
+        expr inner{expr::functor{"cons", {&v4, &a1}}};
+        expr c2{expr::functor{"cons", {&v3, &inner}}};
         
         // Unifying cons(V1, V2) with cons(V2, cons(V1, a))
         // lhs: V1 with V2 - creates binding (either 156->157 or 157->156)
@@ -8142,8 +8142,8 @@ void test_bind_map_unify() {
         expr_pool ep1(t);
         expr_pool ep2(t);
 
-        const expr* a1 = ep1.atom("hello");
-        const expr* a2 = ep2.atom("hello");  // Same value, different pool
+        const expr* a1 = ep1.functor("hello", {});
+        const expr* a2 = ep2.functor("hello", {});  // Same value, different pool
         assert(a1 != a2);
 
         assert(bm.unify(a1, a2));
@@ -8160,8 +8160,8 @@ void test_bind_map_unify() {
         expr_pool ep1(t);
         expr_pool ep2(t);
 
-        const expr* c1 = ep1.cons(ep1.atom("x"), ep1.atom("y"));
-        const expr* c2 = ep2.cons(ep2.atom("x"), ep2.atom("y"));
+        const expr* c1 = ep1.functor("cons", {ep1.functor("x", {}), ep1.functor("y", {})});
+        const expr* c2 = ep2.functor("cons", {ep2.functor("x", {}), ep2.functor("y", {})});
         assert(c1 != c2);
 
         assert(bm.unify(c1, c2));
@@ -8179,7 +8179,7 @@ void test_bind_map_unify() {
         expr_pool ep2(t);
 
         const expr* v    = ep1.var(203);
-        const expr* atom = ep2.atom("target");
+        const expr* atom = ep2.functor("target", {});
 
         assert(bm.unify(v, atom));
         assert(bm.bindings.size() == 1);
@@ -8201,7 +8201,7 @@ void test_bind_map_unify() {
 
         const expr* v1   = ep1.var(204);
         const expr* v2   = ep2.var(204);  // Same index, different pool
-        const expr* atom = ep1.atom("value");
+        const expr* atom = ep1.functor("value", {});
 
         // Step 1: unify same-index vars → no binding
         assert(bm.unify(v1, v2));
@@ -8227,11 +8227,11 @@ void test_bind_map_unify() {
         expr_pool ep2(t);
 
         // ep1: cons(var(205), "fixed")
-        const expr* c1 = ep1.cons(ep1.var(205), ep1.atom("fixed"));
+        const expr* c1 = ep1.functor("cons", {ep1.var(205), ep1.functor("fixed", {})});
 
         // ep2: cons("bound_val", "fixed")
-        const expr* bound_val = ep2.atom("bound_val");
-        const expr* c2        = ep2.cons(bound_val, ep2.atom("fixed"));
+        const expr* bound_val = ep2.functor("bound_val", {});
+        const expr* c2        = ep2.functor("cons", {bound_val, ep2.functor("fixed", {})});
 
         assert(bm.unify(c1, c2));
         assert(bm.bindings.size() == 1);
@@ -8250,17 +8250,17 @@ void test_bind_map_unify() {
 
         // Stack: cons(var(206), "hello")
         expr v_stack{expr::var{206}};
-        expr a_hello{expr::atom{"hello"}};
-        expr c_stack{expr::cons{&v_stack, &a_hello}};
+        expr a_hello{expr::functor{"hello", {}}};
+        expr c_stack{expr::functor{"cons", {&v_stack, &a_hello}}};
 
         // Pool: cons("world", "hello")
-        const expr* c_pool = ep.cons(ep.atom("world"), ep.atom("hello"));
+        const expr* c_pool = ep.functor("cons", {ep.functor("world", {}), ep.functor("hello", {})});
 
         assert(bm.unify(&c_stack, c_pool));
         assert(bm.bindings.size() == 1);
         assert(bm.bindings.count(206) == 1);
 
-        const expr* world = ep.atom("world");
+        const expr* world = ep.functor("world", {});
         assert(bm.whnf(&v_stack) == world);
 
         t.pop();
@@ -8276,9 +8276,9 @@ void test_bind_map_unify() {
         expr_pool ep2(t);
 
         // ep1: cons(var(207), var(208))
-        const expr* c1 = ep1.cons(ep1.var(207), ep1.var(208));
+        const expr* c1 = ep1.functor("cons", {ep1.var(207), ep1.var(208)});
         // ep2: cons(var(207), var(208)) — same indices, different pool
-        const expr* c2 = ep2.cons(ep2.var(207), ep2.var(208));
+        const expr* c2 = ep2.functor("cons", {ep2.var(207), ep2.var(208)});
         assert(c1 != c2);
 
         // Both children unify via same-index guard — no binding created at any position
@@ -8301,11 +8301,11 @@ void test_bind_map_unify() {
         const expr* v_ep1 = ep1.var(209);
 
         // ep2: cons(var(209), "a")
-        const expr* c2 = ep2.cons(ep2.var(209), ep2.atom("a"));
+        const expr* c2 = ep2.functor("cons", {ep2.var(209), ep2.functor("a", {})});
 
         // ep3: cons("bound", "a")
-        const expr* bound = ep3.atom("bound");
-        const expr* c3    = ep3.cons(bound, ep3.atom("a"));
+        const expr* bound = ep3.functor("bound", {});
+        const expr* c3    = ep3.functor("cons", {bound, ep3.functor("a", {})});
 
         // Unify ep2's cons with ep3's cons → var(209) gets bound to "bound"
         assert(bm.unify(c2, c3));
@@ -8329,7 +8329,7 @@ void test_bind_map_unify() {
         expr v_stack{expr::var{210}};
 
         // Pool: cons(var(210), "a") — var index matches stack var
-        const expr* c_pool = ep.cons(ep.var(210), ep.atom("a"));
+        const expr* c_pool = ep.functor("cons", {ep.var(210), ep.functor("a", {})});
 
         // Attempting to bind var(210) to a structure that contains var(210) must fail
         assert(!bm.unify(&v_stack, c_pool));
@@ -8348,7 +8348,7 @@ void test_bind_map_unify() {
         expr_pool ep2(t);
 
         const expr* v1     = ep1.var(211);
-        const expr* c_pool = ep2.cons(ep2.var(211), ep2.atom("b"));  // contains index 211
+        const expr* c_pool = ep2.functor("cons", {ep2.var(211), ep2.functor("b", {})});  // contains index 211
 
         assert(!bm.unify(v1, c_pool));
         assert(bm.bindings.size() == 0);
@@ -8367,19 +8367,19 @@ void test_bind_map_unify() {
         expr_pool ep2(t);
 
         // ep1: cons(cons(var(212), var(213)), cons(var(214), "leaf"))
-        const expr* c1 = ep1.cons(
-            ep1.cons(ep1.var(212), ep1.var(213)),
-            ep1.cons(ep1.var(214), ep1.atom("leaf"))
-        );
+        const expr* c1 = ep1.functor("cons", {
+            ep1.functor("cons", {ep1.var(212), ep1.var(213)}), 
+            ep1.functor("cons", {ep1.var(214), ep1.functor("leaf", {})})
+        });
 
         // ep2: cons(cons("a", "b"), cons("c", "leaf"))
-        const expr* a   = ep2.atom("a");
-        const expr* b   = ep2.atom("b");
-        const expr* c   = ep2.atom("c");
-        const expr* c2  = ep2.cons(
-            ep2.cons(a, b),
-            ep2.cons(c, ep2.atom("leaf"))
-        );
+        const expr* a   = ep2.functor("a", {});
+        const expr* b   = ep2.functor("b", {});
+        const expr* c   = ep2.functor("c", {});
+        const expr* c2  = ep2.functor("cons", {
+            ep2.functor("cons", {a, b}), 
+            ep2.functor("cons", {c, ep2.functor("leaf", {})})
+        });
 
         assert(bm.unify(c1, c2));
         assert(bm.bindings.size() == 3);
@@ -8393,7 +8393,7 @@ void test_bind_map_unify() {
     // ========== MIXED PRE-BOUND AND FRESH VARS — ALL DIFFERENT ALLOCATIONS ==========
 
     // Test 101: Pre-bound var from ep1 resolves during cons unification across ep1/ep2/ep3.
-    // var(300) is pre-bound to ep2.atom("x"). Structure A from ep1 holds var(300) and
+    // var(300) is pre-bound to ep2.functor("x", {}). Structure A from ep1 holds var(300) and
     // an unbound var(301). Structure B is entirely from ep3. Unification succeeds:
     // the pre-bound lhs position matches "x" structurally; the unbound rhs gets a new binding.
     {
@@ -8402,24 +8402,24 @@ void test_bind_map_unify() {
         t.push();
         expr_pool ep1(t), ep2(t), ep3(t);
 
-        bm.bindings[300] = ep2.atom("x");  // pre-bind via raw map — no trail entry needed here
+        bm.bindings[300] = ep2.functor("x", {});  // pre-bind via raw map — no trail entry needed here
 
-        const expr* A = ep1.cons(ep1.var(300), ep1.var(301));
-        const expr* B = ep3.cons(ep3.atom("x"), ep3.atom("y"));
+        const expr* A = ep1.functor("cons", {ep1.var(300), ep1.var(301)});
+        const expr* B = ep3.functor("cons", {ep3.functor("x", {}), ep3.functor("y", {})});
 
         assert(bm.unify(A, B));
-        // lhs: var(300) → ep2.atom("x"); ep3.atom("x") → "x"=="x" → no new binding
-        // rhs: var(301) unbound → bind 301 → ep3.atom("y")
+        // lhs: var(300) → ep2.functor("x", {}); ep3.functor("x", {}) → "x"=="x" → no new binding
+        // rhs: var(301) unbound → bind 301 → ep3.functor("y", {})
         assert(bm.bindings.size() == 2);
         assert(bm.bindings.count(301) == 1);
-        assert(bm.whnf(ep1.var(300)) == ep2.atom("x"));
-        assert(bm.whnf(ep1.var(301)) == ep3.atom("y"));
+        assert(bm.whnf(ep1.var(300)) == ep2.functor("x", {}));
+        assert(bm.whnf(ep1.var(301)) == ep3.functor("y", {}));
 
         t.pop();
     }
 
-    // Test 102: Pre-bound chain spanning three pools — ep1.var(302)→ep2.var(303)→ep3.atom("end").
-    // Unifying ep4.var(302) with ep5.atom("end") succeeds by traversing the chain:
+    // Test 102: Pre-bound chain spanning three pools — ep1.var(302)→ep2.var(303)→ep3.functor("end", {}).
+    // Unifying ep4.var(302) with ep5.functor("end", {}) succeeds by traversing the chain:
     // ep4's allocation is irrelevant; only the index matters. No new binding is created.
     {
         trail t;
@@ -8428,39 +8428,39 @@ void test_bind_map_unify() {
         expr_pool ep1(t), ep2(t), ep3(t), ep4(t), ep5(t);
 
         bm.bindings[302] = ep2.var(303);
-        bm.bindings[303] = ep3.atom("end");
+        bm.bindings[303] = ep3.functor("end", {});
 
-        // ep4.var(302) and ep5.atom("end") are wholly new allocations
-        assert(bm.unify(ep4.var(302), ep5.atom("end")));
+        // ep4.var(302) and ep5.functor("end", {}) are wholly new allocations
+        assert(bm.unify(ep4.var(302), ep5.functor("end", {})));
         assert(bm.bindings.size() == 2);  // no new binding; chain resolved to matching atom
 
         // All allocations of the same index follow the same chain
-        assert(bm.whnf(ep4.var(302)) == ep3.atom("end"));
-        assert(bm.whnf(ep5.var(303)) == ep3.atom("end"));
+        assert(bm.whnf(ep4.var(302)) == ep3.functor("end", {}));
+        assert(bm.whnf(ep5.var(303)) == ep3.functor("end", {}));
 
         t.pop();
     }
 
     // Test 103: Two cons from different pools, both sides with pre-bound vars —
     // the pre-bound values are mutually consistent so no new binding is needed.
-    // var(304) pre-bound to ep2.atom("q"), var(305) pre-bound to ep4.atom("p").
-    // ep1.cons(var(304), "p") unified with ep3.cons("q", var(305)).
+    // var(304) pre-bound to ep2.functor("q", {}), var(305) pre-bound to ep4.functor("p", {}).
+    // ep1.functor("cons", {var(304), "p"}) unified with ep3.functor("cons", {"q", var(305)}).
     {
         trail t;
         bind_map bm(t);
         t.push();
         expr_pool ep1(t), ep2(t), ep3(t), ep4(t);
 
-        bm.bindings[304] = ep2.atom("q");
-        bm.bindings[305] = ep4.atom("p");
+        bm.bindings[304] = ep2.functor("q", {});
+        bm.bindings[305] = ep4.functor("p", {});
 
-        const expr* A = ep1.cons(ep1.var(304), ep1.atom("p"));
-        const expr* B = ep3.cons(ep3.atom("q"), ep3.var(305));
+        const expr* A = ep1.functor("cons", {ep1.var(304), ep1.functor("p", {})});
+        const expr* B = ep3.functor("cons", {ep3.functor("q", {}), ep3.var(305)});
 
         assert(bm.unify(A, B));
         assert(bm.bindings.size() == 2);  // pre-bindings only — no new binding created
-        assert(bm.whnf(ep1.var(304)) == ep2.atom("q"));
-        assert(bm.whnf(ep3.var(305)) == ep4.atom("p"));
+        assert(bm.whnf(ep1.var(304)) == ep2.functor("q", {}));
+        assert(bm.whnf(ep3.var(305)) == ep4.functor("p", {}));
 
         t.pop();
     }
@@ -8468,7 +8468,7 @@ void test_bind_map_unify() {
     // Test 104: Nested cons across three pools; one var pre-bound, two freshly bound,
     // one var left unbound inside the structure that gets captured as a binding target.
     // Structure A (ep1): cons(cons(var(306), var(307)), var(308))
-    //   var(306) → ep2.atom("alpha"),  var(307) and var(308) unbound.
+    //   var(306) → ep2.functor("alpha", {}),  var(307) and var(308) unbound.
     // Structure B (ep3): cons(cons("alpha","beta"), cons(var(309), "gamma"))
     //   var(309) unbound (it lives inside the cons that var(308) gets bound to).
     {
@@ -8477,26 +8477,26 @@ void test_bind_map_unify() {
         t.push();
         expr_pool ep1(t), ep2(t), ep3(t);
 
-        bm.bindings[306] = ep2.atom("alpha");
+        bm.bindings[306] = ep2.functor("alpha", {});
 
-        const expr* A = ep1.cons(
-            ep1.cons(ep1.var(306), ep1.var(307)),
+        const expr* A = ep1.functor("cons", {
+            ep1.functor("cons", {ep1.var(306), ep1.var(307)}), 
             ep1.var(308)
-        );
-        const expr* B = ep3.cons(
-            ep3.cons(ep3.atom("alpha"), ep3.atom("beta")),
-            ep3.cons(ep3.var(309), ep3.atom("gamma"))
-        );
+        });
+        const expr* B = ep3.functor("cons", {
+            ep3.functor("cons", {ep3.functor("alpha", {}), ep3.functor("beta", {})}), 
+            ep3.functor("cons", {ep3.var(309), ep3.functor("gamma", {})})
+        });
 
         assert(bm.unify(A, B));
-        // outer.lhs: var(306)→"alpha" == "alpha" ✓; var(307) → ep3.atom("beta")
-        // outer.rhs: var(308) → ep3.cons(var(309), "gamma")  (var(309) stays unbound inside)
+        // outer.args[0]: var(306)→"alpha" == "alpha" ✓; var(307) → ep3.functor("beta", {})
+        // outer.args[1]: var(308) → ep3.functor("cons", {var(309), "gamma"})  (var(309) stays unbound inside)
         assert(bm.bindings.size() == 3);
-        assert(bm.whnf(ep1.var(306)) == ep2.atom("alpha"));
-        assert(bm.whnf(ep1.var(307)) == ep3.atom("beta"));
+        assert(bm.whnf(ep1.var(306)) == ep2.functor("alpha", {}));
+        assert(bm.whnf(ep1.var(307)) == ep3.functor("beta", {}));
 
         const expr* rhs308 = bm.whnf(ep1.var(308));
-        assert(std::holds_alternative<expr::cons>(rhs308->content));
+        assert(std::holds_alternative<expr::functor>(rhs308->content));
 
         // var(309) was not unified away — it remains unbound
         assert(bm.whnf(ep3.var(309)) == ep3.var(309));
@@ -8516,7 +8516,7 @@ void test_bind_map_unify() {
 
         bm.bindings[310] = ep2.var(311);  // pre-bound chain
 
-        const expr* target = ep4.cons(ep4.var(310), ep4.atom("x"));
+        const expr* target = ep4.functor("cons", {ep4.var(310), ep4.functor("x", {})});
         assert(!bm.unify(ep3.var(311), target));
         assert(bm.bindings.size() == 1);  // only the pre-binding; occurs check stopped the bind
 
@@ -8533,20 +8533,20 @@ void test_bind_map_unify() {
         t.push();
         expr_pool ep2(t), ep4(t), ep5(t);
 
-        bm.bindings[312] = ep2.cons(ep2.atom("a"), ep2.atom("b"));
+        bm.bindings[312] = ep2.functor("cons", {ep2.functor("a", {}), ep2.functor("b", {})});
 
         // ep4: cons(var(312), var(313))
-        const expr* A = ep4.cons(ep4.var(312), ep4.var(313));
+        const expr* A = ep4.functor("cons", {ep4.var(312), ep4.var(313)});
 
         // ep5: cons(cons("a","b"), "result")  — structurally matches the pre-binding
-        const expr* B = ep5.cons(ep5.cons(ep5.atom("a"), ep5.atom("b")), ep5.atom("result"));
+        const expr* B = ep5.functor("cons", {ep5.functor("cons", {ep5.functor("a", {}), ep5.functor("b", {})}), ep5.functor("result", {})});
 
         assert(bm.unify(A, B));
-        // lhs: var(312) → ep2.cons("a","b"); ep5.cons("a","b") — different alloc, same structure → ✓
-        // rhs: var(313) unbound → bind 313 → ep5.atom("result")
+        // lhs: var(312) → ep2.functor("cons", {"a", "b"}); ep5.functor("cons", {"a", "b"}) — different alloc, same structure → ✓
+        // rhs: var(313) unbound → bind 313 → ep5.functor("result", {})
         assert(bm.bindings.size() == 2);
         assert(bm.bindings.count(313) == 1);
-        assert(bm.whnf(ep4.var(313)) == ep5.atom("result"));
+        assert(bm.whnf(ep4.var(313)) == ep5.functor("result", {}));
 
         t.pop();
     }
@@ -8554,8 +8554,8 @@ void test_bind_map_unify() {
     // Test 107: Pre-bound chain ends in an unbound var; structural unification extends
     // the chain by binding the tail var to an atom from a fourth pool.
     // var(314) → ep2.var(315),  var(315) unbound.
-    // Unify ep3.var(315) with ep4.atom("merged") — binds 315; now var(314) transitively
-    // resolves to ep4.atom("merged") through the chain.
+    // Unify ep3.var(315) with ep4.functor("merged", {}) — binds 315; now var(314) transitively
+    // resolves to ep4.functor("merged", {}) through the chain.
     {
         trail t;
         bind_map bm(t);
@@ -8564,12 +8564,12 @@ void test_bind_map_unify() {
 
         bm.bindings[314] = ep2.var(315);
 
-        assert(bm.unify(ep3.var(315), ep4.atom("merged")));
+        assert(bm.unify(ep3.var(315), ep4.functor("merged", {})));
         assert(bm.bindings.size() == 2);
 
         // var(314) from ep1 now resolves through the full chain
-        assert(bm.whnf(ep1.var(314)) == ep4.atom("merged"));
-        assert(bm.whnf(ep3.var(315)) == ep4.atom("merged"));
+        assert(bm.whnf(ep1.var(314)) == ep4.functor("merged", {}));
+        assert(bm.whnf(ep3.var(315)) == ep4.functor("merged", {}));
 
         t.pop();
     }
@@ -8578,7 +8578,7 @@ void test_bind_map_unify() {
     // (one direct, one chaining through another var) and two freshly unbound vars.
     // Every atom target comes from a different pool than the var it is matched against.
     // Structure A (ep1): cons(cons(var(316), var(317)), cons(var(318), var(320)))
-    //   var(316) → ep1.atom("x")   (direct pre-binding)
+    //   var(316) → ep1.functor("x", {})   (direct pre-binding)
     //   var(318) → ep1.var(319)    (chain; var(319) itself unbound)
     //   var(317), var(320) unbound
     // Structure B: cons(cons("x","y"), cons("z","w")) — atoms from ep2 and ep3
@@ -8588,28 +8588,28 @@ void test_bind_map_unify() {
         t.push();
         expr_pool ep1(t), ep2(t), ep3(t);
 
-        bm.bindings[316] = ep1.atom("x");
+        bm.bindings[316] = ep1.functor("x", {});
         bm.bindings[318] = ep1.var(319);
 
-        const expr* A = ep1.cons(
-            ep1.cons(ep1.var(316), ep1.var(317)),
-            ep1.cons(ep1.var(318), ep1.var(320))
-        );
-        const expr* B = ep2.cons(
-            ep2.cons(ep2.atom("x"), ep2.atom("y")),
-            ep2.cons(ep3.atom("z"), ep2.atom("w"))   // ep3 atom for extra cross-pool coverage
-        );
+        const expr* A = ep1.functor("cons", {
+            ep1.functor("cons", {ep1.var(316), ep1.var(317)}), 
+            ep1.functor("cons", {ep1.var(318), ep1.var(320)})
+        });
+        const expr* B = ep2.functor("cons", {
+            ep2.functor("cons", {ep2.functor("x", {}), ep2.functor("y", {})}), 
+            ep2.functor("cons", {ep3.functor("z", {}), ep2.functor("w", {})})   // ep3 atom for extra cross-pool coverage
+        });
 
         assert(bm.unify(A, B));
-        // outer.lhs: var(316)→"x" == "x" ✓;  var(317) → ep2.atom("y")
-        // outer.rhs: var(318)→var(319)→unbound → bind 319 → ep3.atom("z");  var(320) → ep2.atom("w")
+        // outer.args[0]: var(316)→"x" == "x" ✓;  var(317) → ep2.functor("y", {})
+        // outer.args[1]: var(318)→var(319)→unbound → bind 319 → ep3.functor("z", {});  var(320) → ep2.functor("w", {})
         assert(bm.bindings.size() == 5);  // 316(pre) + 318(pre) + 317 + 319 + 320
 
-        assert(bm.whnf(ep1.var(316)) == ep1.atom("x"));
-        assert(bm.whnf(ep1.var(317)) == ep2.atom("y"));
-        assert(bm.whnf(ep1.var(318)) == ep3.atom("z"));  // transitive: 318→319→ep3.atom("z")
-        assert(bm.whnf(ep1.var(319)) == ep3.atom("z"));
-        assert(bm.whnf(ep1.var(320)) == ep2.atom("w"));
+        assert(bm.whnf(ep1.var(316)) == ep1.functor("x", {}));
+        assert(bm.whnf(ep1.var(317)) == ep2.functor("y", {}));
+        assert(bm.whnf(ep1.var(318)) == ep3.functor("z", {}));  // transitive: 318→319→ep3.functor("z", {})
+        assert(bm.whnf(ep1.var(319)) == ep3.functor("z", {}));
+        assert(bm.whnf(ep1.var(320)) == ep2.functor("w", {}));
 
         t.pop();
     }
@@ -8617,10 +8617,10 @@ void test_bind_map_unify() {
     // Test 109: Pre-bound chain where the tail var is also used as a structural position;
     // unification extends the chain via a new binding from yet another pool allocation.
     // var(321) → ep2.var(322),  var(322) unbound.
-    // ep3.cons(var(321), "x") unified with ep4.cons("a", "x"):
-    //   lhs: var(321)→var(322)→unbound → bind 322 → ep4.atom("a")
+    // ep3.functor("cons", {var(321), "x"}) unified with ep4.functor("cons", {"a", "x"}):
+    //   lhs: var(321)→var(322)→unbound → bind 322 → ep4.functor("a", {})
     //   rhs: "x" == "x" ✓
-    // var(321) from ep1 (a different allocation) now also resolves to ep4.atom("a").
+    // var(321) from ep1 (a different allocation) now also resolves to ep4.functor("a", {}).
     {
         trail t;
         bind_map bm(t);
@@ -8629,15 +8629,15 @@ void test_bind_map_unify() {
 
         bm.bindings[321] = ep2.var(322);
 
-        const expr* A = ep3.cons(ep3.var(321), ep3.atom("x"));
-        const expr* B = ep4.cons(ep4.atom("a"), ep4.atom("x"));
+        const expr* A = ep3.functor("cons", {ep3.var(321), ep3.functor("x", {})});
+        const expr* B = ep4.functor("cons", {ep4.functor("a", {}), ep4.functor("x", {})});
 
         assert(bm.unify(A, B));
         assert(bm.bindings.size() == 2);
         assert(bm.bindings.count(322) == 1);
 
-        assert(bm.whnf(ep1.var(321)) == ep4.atom("a"));  // ep1 allocation, same chain
-        assert(bm.whnf(ep3.var(322)) == ep4.atom("a"));
+        assert(bm.whnf(ep1.var(321)) == ep4.functor("a", {}));  // ep1 allocation, same chain
+        assert(bm.whnf(ep3.var(322)) == ep4.functor("a", {}));
 
         t.pop();
     }
@@ -8654,25 +8654,25 @@ void test_bind_map_unify() {
         expr_pool ep1(t), ep2(t), ep3(t), ep4(t), ep5(t), ep6(t);
 
         // var(325) pre-bound to a cons from ep2
-        bm.bindings[325] = ep2.cons(ep2.atom("L"), ep2.atom("R"));
+        bm.bindings[325] = ep2.functor("cons", {ep2.functor("L", {}), ep2.functor("R", {})});
 
         // Structure A: spine from ep6; var(325) ref from ep1, var(326) ref from ep3
-        const expr* A = ep6.cons(ep1.var(325), ep3.var(326));
+        const expr* A = ep6.functor("cons", {ep1.var(325), ep3.var(326)});
 
         // Structure B: outer spine from ep5; inner cons from ep4; atoms from ep4
-        const expr* B = ep5.cons(
-            ep4.cons(ep4.atom("L"), ep4.atom("R")),  // same structure as the pre-binding
-            ep5.atom("result")
-        );
+        const expr* B = ep5.functor("cons", {
+            ep4.functor("cons", {ep4.functor("L", {}), ep4.functor("R", {})}), // same structure as the pre-binding
+            ep5.functor("result", {})
+        });
 
         assert(bm.unify(A, B));
-        // lhs: var(325) → ep2.cons("L","R"); ep4.cons("L","R") — different alloc, same shape
+        // lhs: var(325) → ep2.functor("cons", {"L", "R"}); ep4.functor("cons", {"L", "R"}) — different alloc, same shape
         //   "L"=="L" ✓  "R"=="R" ✓  (no new bindings for atoms)
-        // rhs: var(326) unbound → bind 326 → ep5.atom("result")
+        // rhs: var(326) unbound → bind 326 → ep5.functor("result", {})
         assert(bm.bindings.size() == 2);  // pre-binding 325 + new 326
         assert(bm.bindings.count(326) == 1);
-        assert(bm.whnf(ep1.var(325)) == ep2.cons(ep2.atom("L"), ep2.atom("R")));
-        assert(bm.whnf(ep3.var(326)) == ep5.atom("result"));
+        assert(bm.whnf(ep1.var(325)) == ep2.functor("cons", {ep2.functor("L", {}), ep2.functor("R", {})}));
+        assert(bm.whnf(ep3.var(326)) == ep5.functor("result", {}));
 
         t.pop();
     }
@@ -10759,7 +10759,7 @@ void test_copier() {
         
         t.push();
         
-        const expr* original = pool.atom("test");
+        const expr* original = pool.functor("test", {});
         assert(pool.size() == 1);
         assert(pool.exprs.size() == 1);
         
@@ -10849,9 +10849,9 @@ void test_copier() {
         
         t.push();
         
-        const expr* a = pool.atom("a");
-        const expr* b = pool.atom("b");
-        const expr* original = pool.cons(a, b);
+        const expr* a = pool.functor("a", {});
+        const expr* b = pool.functor("b", {});
+        const expr* original = pool.functor("cons", {a, b});
         assert(pool.size() == 3);
         assert(pool.exprs.size() == 3);
         
@@ -10879,17 +10879,17 @@ void test_copier() {
         
         const expr* v1 = pool.var(10);
         const expr* v2 = pool.var(20);
-        const expr* original = pool.cons(v1, v2);
+        const expr* original = pool.functor("cons", {v1, v2});
         std::map<uint32_t, uint32_t> var_map;
         
         const expr* copied = copy(original, var_map);
         
         assert(copied != original);  // Different cons (different vars)
-        assert(std::holds_alternative<expr::cons>(copied->content));
+        assert(std::holds_alternative<expr::functor>(copied->content));
         
-        const expr::cons& copied_cons = std::get<expr::cons>(copied->content);
-        assert(std::get<expr::var>(copied_cons.lhs->content).index == 0);
-        assert(std::get<expr::var>(copied_cons.rhs->content).index == 1);
+        const expr::functor& copied_cons = std::get<expr::functor>(copied->content);
+        assert(std::get<expr::var>(copied_cons.args[0]->content).index == 0);
+        assert(std::get<expr::var>(copied_cons.args[1]->content).index == 1);
         
         assert(var_map.size() == 2);
         assert(var_map.at(10) == 0);
@@ -10902,8 +10902,8 @@ void test_copier() {
         assert(pool.exprs.count(*v1) == 1);
         assert(pool.exprs.count(*v2) == 1);
         assert(pool.exprs.count(*original) == 1);
-        assert(pool.exprs.count(*copied_cons.lhs) == 1);
-        assert(pool.exprs.count(*copied_cons.rhs) == 1);
+        assert(pool.exprs.count(*copied_cons.args[0]) == 1);
+        assert(pool.exprs.count(*copied_cons.args[1]) == 1);
         assert(pool.exprs.count(*copied) == 1);
         
         t.pop();
@@ -10919,17 +10919,17 @@ void test_copier() {
         t.push();
         
         const expr* v = pool.var(5);
-        const expr* original = pool.cons(v, v);
+        const expr* original = pool.functor("cons", {v, v});
         assert(pool.size() == 2);  // var(5) and cons
         
         std::map<uint32_t, uint32_t> var_map;
         
         const expr* copied = copy(original, var_map);
         
-        const expr::cons& copied_cons = std::get<expr::cons>(copied->content);
-        assert(std::get<expr::var>(copied_cons.lhs->content).index == 0);
-        assert(std::get<expr::var>(copied_cons.rhs->content).index == 0);
-        assert(copied_cons.lhs == copied_cons.rhs);  // Same variable
+        const expr::functor& copied_cons = std::get<expr::functor>(copied->content);
+        assert(std::get<expr::var>(copied_cons.args[0]->content).index == 0);
+        assert(std::get<expr::var>(copied_cons.args[1]->content).index == 0);
+        assert(copied_cons.args[0] == copied_cons.args[1]);  // Same variable
         
         assert(var_map.size() == 1);
         assert(var_map.at(5) == 0);
@@ -10940,7 +10940,7 @@ void test_copier() {
         assert(pool.exprs.size() == 4);
         assert(pool.exprs.count(*v) == 1);
         assert(pool.exprs.count(*original) == 1);
-        assert(pool.exprs.count(*copied_cons.lhs) == 1);
+        assert(pool.exprs.count(*copied_cons.args[0]) == 1);
         assert(pool.exprs.count(*copied) == 1);
         
         t.pop();
@@ -10955,21 +10955,21 @@ void test_copier() {
         
         t.push();
         
-        const expr* a = pool.atom("atom");
+        const expr* a = pool.functor("atom", {});
         const expr* v = pool.var(7);
-        const expr* inner = pool.cons(a, v);
-        const expr* original = pool.cons(inner, a);
+        const expr* inner = pool.functor("cons", {a, v});
+        const expr* original = pool.functor("cons", {inner, a});
         std::map<uint32_t, uint32_t> var_map;
         
         const expr* copied = copy(original, var_map);
         
         assert(copied != original);
-        const expr::cons& outer_cons = std::get<expr::cons>(copied->content);
-        assert(outer_cons.rhs == a);  // Atom unchanged
+        const expr::functor& outer_cons = std::get<expr::functor>(copied->content);
+        assert(outer_cons.args[1] == a);  // Atom unchanged
         
-        const expr::cons& inner_cons = std::get<expr::cons>(outer_cons.lhs->content);
-        assert(inner_cons.lhs == a);  // Atom unchanged
-        assert(std::get<expr::var>(inner_cons.rhs->content).index == 0);
+        const expr::functor& inner_cons = std::get<expr::functor>(outer_cons.args[0]->content);
+        assert(inner_cons.args[0] == a);  // Atom unchanged
+        assert(std::get<expr::var>(inner_cons.args[1]->content).index == 0);
         
         assert(var_map.size() == 1);
         assert(var_map.at(7) == 0);
@@ -10990,9 +10990,9 @@ void test_copier() {
         const expr* v1 = pool.var(10);
         const expr* v2 = pool.var(20);
         const expr* v3 = pool.var(30);
-        const expr* c1 = pool.cons(v1, v2);
-        const expr* c2 = pool.cons(c1, v3);
-        const expr* original = pool.cons(c2, v1);  // v1 appears twice
+        const expr* c1 = pool.functor("cons", {v1, v2});
+        const expr* c2 = pool.functor("cons", {c1, v3});
+        const expr* original = pool.functor("cons", {c2, v1});  // v1 appears twice
         
         std::map<uint32_t, uint32_t> var_map;
         const expr* copied = copy(original, var_map);
@@ -11004,15 +11004,15 @@ void test_copier() {
         assert(vars.index == 3);
         
         // Verify structure
-        const expr::cons& top = std::get<expr::cons>(copied->content);
-        assert(std::get<expr::var>(top.rhs->content).index == 0);  // v1 mapped to 0
+        const expr::functor& top = std::get<expr::functor>(copied->content);
+        assert(std::get<expr::var>(top.args[1]->content).index == 0);  // v1 mapped to 0
         
-        const expr::cons& middle = std::get<expr::cons>(top.lhs->content);
-        assert(std::get<expr::var>(middle.rhs->content).index == 2);  // v3 mapped to 2
+        const expr::functor& middle = std::get<expr::functor>(top.args[0]->content);
+        assert(std::get<expr::var>(middle.args[1]->content).index == 2);  // v3 mapped to 2
         
-        const expr::cons& bottom = std::get<expr::cons>(middle.lhs->content);
-        assert(std::get<expr::var>(bottom.lhs->content).index == 0);  // v1 mapped to 0
-        assert(std::get<expr::var>(bottom.rhs->content).index == 1);  // v2 mapped to 1
+        const expr::functor& bottom = std::get<expr::functor>(middle.args[0]->content);
+        assert(std::get<expr::var>(bottom.args[0]->content).index == 0);  // v1 mapped to 0
+        assert(std::get<expr::var>(bottom.args[1]->content).index == 1);  // v2 mapped to 1
         
         t.pop();
     }
@@ -11028,7 +11028,7 @@ void test_copier() {
         
         const expr* v5 = pool.var(5);
         const expr* v10 = pool.var(10);
-        const expr* original = pool.cons(v5, v10);
+        const expr* original = pool.functor("cons", {v5, v10});
         
         // Pre-populate map
         std::map<uint32_t, uint32_t> var_map;
@@ -11041,9 +11041,9 @@ void test_copier() {
         assert(var_map.at(5) == 100);  // Unchanged
         assert(var_map.at(10) == 0);  // Fresh variable
         
-        const expr::cons& copied_cons = std::get<expr::cons>(copied->content);
-        assert(std::get<expr::var>(copied_cons.lhs->content).index == 100);
-        assert(std::get<expr::var>(copied_cons.rhs->content).index == 0);
+        const expr::functor& copied_cons = std::get<expr::functor>(copied->content);
+        assert(std::get<expr::var>(copied_cons.args[0]->content).index == 100);
+        assert(std::get<expr::var>(copied_cons.args[1]->content).index == 0);
         
         assert(vars.index == 1);  // Only one fresh var created
         
@@ -11061,8 +11061,8 @@ void test_copier() {
         
         const expr* v1 = pool.var(1);
         const expr* v2 = pool.var(2);
-        const expr* expr1 = pool.cons(v1, v2);
-        const expr* expr2 = pool.cons(v2, v1);  // Swapped
+        const expr* expr1 = pool.functor("cons", {v1, v2});
+        const expr* expr2 = pool.functor("cons", {v2, v1});  // Swapped
         
         std::map<uint32_t, uint32_t> var_map;
         
@@ -11077,12 +11077,12 @@ void test_copier() {
         assert(vars.index == 2);  // No new variables
         
         // Verify both use same variable mapping
-        const expr::cons& cons1 = std::get<expr::cons>(copied1->content);
-        const expr::cons& cons2 = std::get<expr::cons>(copied2->content);
-        assert(std::get<expr::var>(cons1.lhs->content).index == 0);
-        assert(std::get<expr::var>(cons1.rhs->content).index == 1);
-        assert(std::get<expr::var>(cons2.lhs->content).index == 1);
-        assert(std::get<expr::var>(cons2.rhs->content).index == 0);
+        const expr::functor& cons1 = std::get<expr::functor>(copied1->content);
+        const expr::functor& cons2 = std::get<expr::functor>(copied2->content);
+        assert(std::get<expr::var>(cons1.args[0]->content).index == 0);
+        assert(std::get<expr::var>(cons1.args[1]->content).index == 1);
+        assert(std::get<expr::var>(cons2.args[0]->content).index == 1);
+        assert(std::get<expr::var>(cons2.args[1]->content).index == 0);
         
         t.pop();
     }
@@ -11127,10 +11127,10 @@ void test_copier() {
         // Build: cons(cons(var(1), atom("a")), cons(var(2), var(1)))
         const expr* v1 = pool.var(1);
         const expr* v2 = pool.var(2);
-        const expr* a = pool.atom("a");
-        const expr* left = pool.cons(v1, a);
-        const expr* right = pool.cons(v2, v1);
-        const expr* original = pool.cons(left, right);
+        const expr* a = pool.functor("a", {});
+        const expr* left = pool.functor("cons", {v1, a});
+        const expr* right = pool.functor("cons", {v2, v1});
+        const expr* original = pool.functor("cons", {left, right});
         
         std::map<uint32_t, uint32_t> var_map;
         const expr* copied = copy(original, var_map);
@@ -11141,15 +11141,15 @@ void test_copier() {
         assert(vars.index == 2);
         
         // Verify structure: cons(cons(var(0), atom("a")), cons(var(1), var(0)))
-        const expr::cons& top = std::get<expr::cons>(copied->content);
+        const expr::functor& top = std::get<expr::functor>(copied->content);
         
-        const expr::cons& left_cons = std::get<expr::cons>(top.lhs->content);
-        assert(std::get<expr::var>(left_cons.lhs->content).index == 0);
-        assert(left_cons.rhs == a);
+        const expr::functor& left_cons = std::get<expr::functor>(top.args[0]->content);
+        assert(std::get<expr::var>(left_cons.args[0]->content).index == 0);
+        assert(left_cons.args[1] == a);
         
-        const expr::cons& right_cons = std::get<expr::cons>(top.rhs->content);
-        assert(std::get<expr::var>(right_cons.lhs->content).index == 1);
-        assert(std::get<expr::var>(right_cons.rhs->content).index == 0);
+        const expr::functor& right_cons = std::get<expr::functor>(top.args[1]->content);
+        assert(std::get<expr::var>(right_cons.args[0]->content).index == 1);
+        assert(std::get<expr::var>(right_cons.args[1]->content).index == 0);
         
         t.pop();
     }
@@ -11164,7 +11164,7 @@ void test_copier() {
         t.push();
         
         const expr* v = pool.var(5);
-        const expr* original = pool.cons(v, pool.atom("x"));
+        const expr* original = pool.functor("cons", {v, pool.functor("x", {})});
         
         t.push();
         std::map<uint32_t, uint32_t> var_map;
@@ -11221,11 +11221,11 @@ void test_copier() {
         t.push();
         
         // Build: cons(atom("a"), cons(var(5), atom("b")))
-        const expr* a = pool.atom("a");
-        const expr* b = pool.atom("b");
+        const expr* a = pool.functor("a", {});
+        const expr* b = pool.functor("b", {});
         const expr* v5 = pool.var(5);
-        const expr* inner = pool.cons(v5, b);
-        const expr* original = pool.cons(a, inner);
+        const expr* inner = pool.functor("cons", {v5, b});
+        const expr* original = pool.functor("cons", {a, inner});
         
         std::map<uint32_t, uint32_t> var_map;
         const expr* copied = copy(original, var_map);
@@ -11235,12 +11235,12 @@ void test_copier() {
         assert(vars.index == 1);
         
         // Verify structure
-        const expr::cons& top = std::get<expr::cons>(copied->content);
-        assert(top.lhs == a);  // Atom unchanged
+        const expr::functor& top = std::get<expr::functor>(copied->content);
+        assert(top.args[0] == a);  // Atom unchanged
         
-        const expr::cons& inner_cons = std::get<expr::cons>(top.rhs->content);
-        assert(std::get<expr::var>(inner_cons.lhs->content).index == 0);
-        assert(inner_cons.rhs == b);  // Atom unchanged
+        const expr::functor& inner_cons = std::get<expr::functor>(top.args[1]->content);
+        assert(std::get<expr::var>(inner_cons.args[0]->content).index == 0);
+        assert(inner_cons.args[1] == b);  // Atom unchanged
         
         t.pop();
     }
@@ -11257,9 +11257,9 @@ void test_copier() {
         const expr* v1 = pool.var(1);
         const expr* v2 = pool.var(2);
         // Build: cons(cons(v1, v2), cons(v2, v1))
-        const expr* left = pool.cons(v1, v2);
-        const expr* right = pool.cons(v2, v1);
-        const expr* original = pool.cons(left, right);
+        const expr* left = pool.functor("cons", {v1, v2});
+        const expr* right = pool.functor("cons", {v2, v1});
+        const expr* original = pool.functor("cons", {left, right});
         
         std::map<uint32_t, uint32_t> var_map;
         const expr* copied = copy(original, var_map);
@@ -11270,14 +11270,14 @@ void test_copier() {
         assert(vars.index == 2);
         
         // Verify all occurrences use consistent mapping
-        const expr::cons& top = std::get<expr::cons>(copied->content);
-        const expr::cons& left_cons = std::get<expr::cons>(top.lhs->content);
-        const expr::cons& right_cons = std::get<expr::cons>(top.rhs->content);
+        const expr::functor& top = std::get<expr::functor>(copied->content);
+        const expr::functor& left_cons = std::get<expr::functor>(top.args[0]->content);
+        const expr::functor& right_cons = std::get<expr::functor>(top.args[1]->content);
         
-        assert(std::get<expr::var>(left_cons.lhs->content).index == 0);  // v1
-        assert(std::get<expr::var>(left_cons.rhs->content).index == 1);  // v2
-        assert(std::get<expr::var>(right_cons.lhs->content).index == 1);  // v2
-        assert(std::get<expr::var>(right_cons.rhs->content).index == 0);  // v1
+        assert(std::get<expr::var>(left_cons.args[0]->content).index == 0);  // v1
+        assert(std::get<expr::var>(left_cons.args[1]->content).index == 1);  // v2
+        assert(std::get<expr::var>(right_cons.args[0]->content).index == 1);  // v2
+        assert(std::get<expr::var>(right_cons.args[1]->content).index == 0);  // v1
         
         t.pop();
     }
@@ -11291,11 +11291,11 @@ void test_copier() {
         
         t.push();
         
-        const expr* a1 = pool.atom("a1");
-        const expr* a2 = pool.atom("a2");
-        const expr* a3 = pool.atom("a3");
-        const expr* c1 = pool.cons(a1, a2);
-        const expr* original = pool.cons(c1, a3);
+        const expr* a1 = pool.functor("a1", {});
+        const expr* a2 = pool.functor("a2", {});
+        const expr* a3 = pool.functor("a3", {});
+        const expr* c1 = pool.functor("cons", {a1, a2});
+        const expr* original = pool.functor("cons", {c1, a3});
         
         std::map<uint32_t, uint32_t> var_map;
         const expr* copied = copy(original, var_map);
@@ -11346,8 +11346,8 @@ void test_copier() {
         t.push();
         
         const expr* v1 = pool.var(1);
-        const expr* a = pool.atom("a");
-        const expr* original = pool.cons(v1, a);
+        const expr* a = pool.functor("a", {});
+        const expr* original = pool.functor("cons", {v1, a});
         
         std::map<uint32_t, uint32_t> var_map;
         const expr* copied1 = copy(original, var_map);
@@ -11377,7 +11377,7 @@ void test_copier() {
         
         const expr* v0 = pool.var(0);
         const expr* v1 = pool.var(1);
-        const expr* original = pool.cons(v0, v1);
+        const expr* original = pool.functor("cons", {v0, v1});
         
         std::map<uint32_t, uint32_t> var_map;
         const expr* copied = copy(original, var_map);
@@ -11424,11 +11424,11 @@ void test_normalizer() {
         
         t.push();
         
-        const expr* a = pool.atom("test");
+        const expr* a = pool.functor("test", {});
         const expr* result = norm(a);
         
         assert(result == a);
-        assert(std::holds_alternative<expr::atom>(result->content));
+        assert(std::holds_alternative<expr::functor>(result->content));
         
         t.pop();
     }
@@ -11462,14 +11462,14 @@ void test_normalizer() {
         t.push();
         
         const expr* v = pool.var(1);
-        const expr* a = pool.atom("hello");
+        const expr* a = pool.functor("hello", {});
         bm.bind(1, a);
         
         const expr* result = norm(v);
         
         assert(result == a);
-        assert(std::holds_alternative<expr::atom>(result->content));
-        assert(std::get<expr::atom>(result->content).value == "hello");
+        assert(std::holds_alternative<expr::functor>(result->content));
+        assert(std::get<expr::functor>(result->content).name == "hello");
         
         t.pop();
     }
@@ -11486,7 +11486,7 @@ void test_normalizer() {
         const expr* v1 = pool.var(1);
         const expr* v2 = pool.var(2);
         const expr* v3 = pool.var(3);
-        const expr* a = pool.atom("end");
+        const expr* a = pool.functor("end", {});
         
         bm.bind(1, v2);
         bm.bind(2, v3);
@@ -11495,7 +11495,7 @@ void test_normalizer() {
         const expr* result = norm(v1);
         
         assert(result == a);
-        assert(std::get<expr::atom>(result->content).value == "end");
+        assert(std::get<expr::functor>(result->content).name == "end");
         
         t.pop();
     }
@@ -11509,16 +11509,16 @@ void test_normalizer() {
         
         t.push();
         
-        const expr* a1 = pool.atom("left");
-        const expr* a2 = pool.atom("right");
-        const expr* c = pool.cons(a1, a2);
+        const expr* a1 = pool.functor("left", {});
+        const expr* a2 = pool.functor("right", {});
+        const expr* c = pool.functor("cons", {a1, a2});
         
         const expr* result = norm(c);
         
         assert(result == c);
-        const expr::cons& result_cons = std::get<expr::cons>(result->content);
-        assert(result_cons.lhs == a1);
-        assert(result_cons.rhs == a2);
+        const expr::functor& result_cons = std::get<expr::functor>(result->content);
+        assert(result_cons.args[0] == a1);
+        assert(result_cons.args[1] == a2);
         
         t.pop();
     }
@@ -11534,14 +11534,14 @@ void test_normalizer() {
         
         const expr* v1 = pool.var(1);
         const expr* v2 = pool.var(2);
-        const expr* c = pool.cons(v1, v2);
+        const expr* c = pool.functor("cons", {v1, v2});
         
         const expr* result = norm(c);
         
         assert(result == c);
-        const expr::cons& result_cons = std::get<expr::cons>(result->content);
-        assert(result_cons.lhs == v1);
-        assert(result_cons.rhs == v2);
+        const expr::functor& result_cons = std::get<expr::functor>(result->content);
+        assert(result_cons.args[0] == v1);
+        assert(result_cons.args[1] == v2);
         
         t.pop();
     }
@@ -11557,9 +11557,9 @@ void test_normalizer() {
         
         const expr* v1 = pool.var(1);
         const expr* v2 = pool.var(2);
-        const expr* a1 = pool.atom("a");
-        const expr* a2 = pool.atom("b");
-        const expr* c = pool.cons(v1, v2);
+        const expr* a1 = pool.functor("a", {});
+        const expr* a2 = pool.functor("b", {});
+        const expr* c = pool.functor("cons", {v1, v2});
         
         bm.bind(1, a1);
         bm.bind(2, a2);
@@ -11567,9 +11567,9 @@ void test_normalizer() {
         const expr* result = norm(c);
         
         assert(result != c);
-        const expr::cons& result_cons = std::get<expr::cons>(result->content);
-        assert(result_cons.lhs == a1);
-        assert(result_cons.rhs == a2);
+        const expr::functor& result_cons = std::get<expr::functor>(result->content);
+        assert(result_cons.args[0] == a1);
+        assert(result_cons.args[1] == a2);
         
         t.pop();
     }
@@ -11585,16 +11585,16 @@ void test_normalizer() {
         
         const expr* v1 = pool.var(1);
         const expr* v2 = pool.var(2);
-        const expr* a = pool.atom("bound");
-        const expr* c = pool.cons(v1, v2);
+        const expr* a = pool.functor("bound", {});
+        const expr* c = pool.functor("cons", {v1, v2});
         
         bm.bind(1, a);
         
         const expr* result = norm(c);
         
-        const expr::cons& result_cons = std::get<expr::cons>(result->content);
-        assert(result_cons.lhs == a);
-        assert(result_cons.rhs == v2);
+        const expr::functor& result_cons = std::get<expr::functor>(result->content);
+        assert(result_cons.args[0] == a);
+        assert(result_cons.args[1] == v2);
         
         t.pop();
     }
@@ -11608,11 +11608,11 @@ void test_normalizer() {
         
         t.push();
         
-        const expr* a1 = pool.atom("a");
-        const expr* a2 = pool.atom("b");
-        const expr* a3 = pool.atom("c");
-        const expr* inner = pool.cons(a1, a2);
-        const expr* outer = pool.cons(inner, a3);
+        const expr* a1 = pool.functor("a", {});
+        const expr* a2 = pool.functor("b", {});
+        const expr* a3 = pool.functor("c", {});
+        const expr* inner = pool.functor("cons", {a1, a2});
+        const expr* outer = pool.functor("cons", {inner, a3});
         
         const expr* result = norm(outer);
         
@@ -11632,22 +11632,22 @@ void test_normalizer() {
         
         const expr* v1 = pool.var(1);
         const expr* v2 = pool.var(2);
-        const expr* a1 = pool.atom("x");
-        const expr* a2 = pool.atom("y");
-        const expr* inner = pool.cons(v1, v2);
-        const expr* outer = pool.cons(inner, a1);
+        const expr* a1 = pool.functor("x", {});
+        const expr* a2 = pool.functor("y", {});
+        const expr* inner = pool.functor("cons", {v1, v2});
+        const expr* outer = pool.functor("cons", {inner, a1});
         
         bm.bind(1, a1);
         bm.bind(2, a2);
         
         const expr* result = norm(outer);
         
-        const expr::cons& outer_cons = std::get<expr::cons>(result->content);
-        assert(outer_cons.rhs == a1);
+        const expr::functor& outer_cons = std::get<expr::functor>(result->content);
+        assert(outer_cons.args[1] == a1);
         
-        const expr::cons& inner_cons = std::get<expr::cons>(outer_cons.lhs->content);
-        assert(inner_cons.lhs == a1);
-        assert(inner_cons.rhs == a2);
+        const expr::functor& inner_cons = std::get<expr::functor>(outer_cons.args[0]->content);
+        assert(inner_cons.args[0] == a1);
+        assert(inner_cons.args[1] == a2);
         
         t.pop();
     }
@@ -11662,9 +11662,9 @@ void test_normalizer() {
         t.push();
         
         const expr* v = pool.var(1);
-        const expr* a1 = pool.atom("left");
-        const expr* a2 = pool.atom("right");
-        const expr* c = pool.cons(a1, a2);
+        const expr* a1 = pool.functor("left", {});
+        const expr* a2 = pool.functor("right", {});
+        const expr* c = pool.functor("cons", {a1, a2});
         
         bm.bind(1, c);
         
@@ -11687,9 +11687,9 @@ void test_normalizer() {
         const expr* v1 = pool.var(1);
         const expr* v2 = pool.var(2);
         const expr* v3 = pool.var(3);
-        const expr* a1 = pool.atom("a");
-        const expr* a2 = pool.atom("b");
-        const expr* c = pool.cons(v2, v3);
+        const expr* a1 = pool.functor("a", {});
+        const expr* a2 = pool.functor("b", {});
+        const expr* c = pool.functor("cons", {v2, v3});
         
         bm.bind(1, c);
         bm.bind(2, a1);
@@ -11697,9 +11697,9 @@ void test_normalizer() {
         
         const expr* result = norm(v1);
         
-        const expr::cons& result_cons = std::get<expr::cons>(result->content);
-        assert(result_cons.lhs == a1);
-        assert(result_cons.rhs == a2);
+        const expr::functor& result_cons = std::get<expr::functor>(result->content);
+        assert(result_cons.args[0] == a1);
+        assert(result_cons.args[1] == a2);
         
         t.pop();
     }
@@ -11716,10 +11716,10 @@ void test_normalizer() {
         const expr* v1 = pool.var(1);
         const expr* v2 = pool.var(2);
         const expr* v3 = pool.var(3);
-        const expr* a = pool.atom("atom");
+        const expr* a = pool.functor("atom", {});
         
-        const expr* c1 = pool.cons(v1, v2);
-        const expr* c2 = pool.cons(c1, v3);
+        const expr* c1 = pool.functor("cons", {v1, v2});
+        const expr* c2 = pool.functor("cons", {c1, v3});
         
         bm.bind(1, a);
         bm.bind(2, a);
@@ -11727,12 +11727,12 @@ void test_normalizer() {
         
         const expr* result = norm(c2);
         
-        const expr::cons& top = std::get<expr::cons>(result->content);
-        assert(top.rhs == a);
+        const expr::functor& top = std::get<expr::functor>(result->content);
+        assert(top.args[1] == a);
         
-        const expr::cons& bottom = std::get<expr::cons>(top.lhs->content);
-        assert(bottom.lhs == a);
-        assert(bottom.rhs == a);
+        const expr::functor& bottom = std::get<expr::functor>(top.args[0]->content);
+        assert(bottom.args[0] == a);
+        assert(bottom.args[1] == a);
         
         t.pop();
     }
@@ -11747,17 +11747,17 @@ void test_normalizer() {
         t.push();
         
         const expr* v = pool.var(1);
-        const expr* a = pool.atom("shared");
-        const expr* c = pool.cons(v, v);
+        const expr* a = pool.functor("shared", {});
+        const expr* c = pool.functor("cons", {v, v});
         
         bm.bind(1, a);
         
         const expr* result = norm(c);
         
-        const expr::cons& result_cons = std::get<expr::cons>(result->content);
-        assert(result_cons.lhs == a);
-        assert(result_cons.rhs == a);
-        assert(result_cons.lhs == result_cons.rhs);
+        const expr::functor& result_cons = std::get<expr::functor>(result->content);
+        assert(result_cons.args[0] == a);
+        assert(result_cons.args[1] == a);
+        assert(result_cons.args[0] == result_cons.args[1]);
         
         t.pop();
     }
@@ -11772,8 +11772,8 @@ void test_normalizer() {
         t.push();
         
         const expr* v = pool.var(1);
-        const expr* a1 = pool.atom("first");
-        const expr* a2 = pool.atom("second");
+        const expr* a1 = pool.functor("first", {});
+        const expr* a2 = pool.functor("second", {});
         
         t.push();
         bm.bind(1, a1);
@@ -11807,11 +11807,11 @@ void test_normalizer() {
         const expr* v2 = pool.var(2);
         const expr* v3 = pool.var(3);
         const expr* v4 = pool.var(4);
-        const expr* a = pool.atom("atom");
+        const expr* a = pool.functor("atom", {});
         
-        const expr* c1 = pool.cons(v1, a);
-        const expr* c2 = pool.cons(v2, v3);
-        const expr* c3 = pool.cons(c1, c2);
+        const expr* c1 = pool.functor("cons", {v1, a});
+        const expr* c2 = pool.functor("cons", {v2, v3});
+        const expr* c3 = pool.functor("cons", {c1, c2});
         
         bm.bind(1, a);
         bm.bind(2, v4);
@@ -11820,15 +11820,15 @@ void test_normalizer() {
         
         const expr* result = norm(c3);
         
-        const expr::cons& top = std::get<expr::cons>(result->content);
+        const expr::functor& top = std::get<expr::functor>(result->content);
         
-        const expr::cons& left = std::get<expr::cons>(top.lhs->content);
-        assert(left.lhs == a);
-        assert(left.rhs == a);
+        const expr::functor& left = std::get<expr::functor>(top.args[0]->content);
+        assert(left.args[0] == a);
+        assert(left.args[1] == a);
         
-        const expr::cons& right = std::get<expr::cons>(top.rhs->content);
-        assert(right.lhs == a);
-        assert(right.rhs == v3);
+        const expr::functor& right = std::get<expr::functor>(top.args[1]->content);
+        assert(right.args[0] == a);
+        assert(right.args[1] == v3);
         
         t.pop();
     }
@@ -11844,9 +11844,9 @@ void test_normalizer() {
         
         const expr* v1 = pool.var(1);
         const expr* v2 = pool.var(2);
-        const expr* a = pool.atom("unified");
-        const expr* c1 = pool.cons(v1, a);
-        const expr* c2 = pool.cons(a, v2);
+        const expr* a = pool.functor("unified", {});
+        const expr* c1 = pool.functor("cons", {v1, a});
+        const expr* c2 = pool.functor("cons", {a, v2});
         
         bool unified = bm.unify(c1, c2);
         assert(unified);
@@ -11854,13 +11854,13 @@ void test_normalizer() {
         const expr* result1 = norm(c1);
         const expr* result2 = norm(c2);
         
-        const expr::cons& r1 = std::get<expr::cons>(result1->content);
-        const expr::cons& r2 = std::get<expr::cons>(result2->content);
+        const expr::functor& r1 = std::get<expr::functor>(result1->content);
+        const expr::functor& r2 = std::get<expr::functor>(result2->content);
         
-        assert(r1.lhs == a);
-        assert(r1.rhs == a);
-        assert(r2.lhs == a);
-        assert(r2.rhs == a);
+        assert(r1.args[0] == a);
+        assert(r1.args[1] == a);
+        assert(r2.args[0] == a);
+        assert(r2.args[1] == a);
         
         t.pop();
     }
@@ -11879,7 +11879,7 @@ void test_normalizer() {
         const expr* v3 = pool.var(3);
         const expr* v4 = pool.var(4);
         const expr* v5 = pool.var(5);
-        const expr* a = pool.atom("final");
+        const expr* a = pool.functor("final", {});
         
         bm.bind(1, v2);
         bm.bind(2, v3);
@@ -11906,12 +11906,12 @@ void test_normalizer() {
         const expr* v1 = pool.var(1);
         const expr* v2 = pool.var(2);
         const expr* v3 = pool.var(3);
-        const expr* a1 = pool.atom("a1");
-        const expr* a2 = pool.atom("a2");
+        const expr* a1 = pool.functor("a1", {});
+        const expr* a2 = pool.functor("a2", {});
         
-        const expr* inner1 = pool.cons(v1, a1);
-        const expr* inner2 = pool.cons(v2, v3);
-        const expr* outer = pool.cons(inner1, inner2);
+        const expr* inner1 = pool.functor("cons", {v1, a1});
+        const expr* inner2 = pool.functor("cons", {v2, v3});
+        const expr* outer = pool.functor("cons", {inner1, inner2});
         
         bm.bind(1, a2);
         bm.bind(3, a1);
@@ -11919,15 +11919,15 @@ void test_normalizer() {
         
         const expr* result = norm(outer);
         
-        const expr::cons& top = std::get<expr::cons>(result->content);
+        const expr::functor& top = std::get<expr::functor>(result->content);
         
-        const expr::cons& left = std::get<expr::cons>(top.lhs->content);
-        assert(left.lhs == a2);
-        assert(left.rhs == a1);
+        const expr::functor& left = std::get<expr::functor>(top.args[0]->content);
+        assert(left.args[0] == a2);
+        assert(left.args[1] == a1);
         
-        const expr::cons& right = std::get<expr::cons>(top.rhs->content);
-        assert(right.lhs == v2);
-        assert(right.rhs == a1);
+        const expr::functor& right = std::get<expr::functor>(top.args[1]->content);
+        assert(right.args[0] == v2);
+        assert(right.args[1] == a1);
         
         t.pop();
     }
@@ -12000,7 +12000,7 @@ void test_expr_printer() {
         trail t;
         expr_pool pool(t);
         t.push();
-        const expr* e = pool.atom("hello");
+        const expr* e = pool.functor("hello", {});
         std::ostringstream oss;
         expr_printer ep(oss, no_names);
         ep(e);
@@ -12013,7 +12013,7 @@ void test_expr_printer() {
         trail t;
         expr_pool pool(t);
         t.push();
-        const expr* e = pool.atom("");
+        const expr* e = pool.functor("", {});
         std::ostringstream oss;
         expr_printer ep(oss, no_names);
         ep(e);
@@ -12052,11 +12052,11 @@ void test_expr_printer() {
         trail t;
         expr_pool pool(t);
         t.push();
-        const expr* e = pool.cons(pool.atom("a"), pool.atom("b"));
+        const expr* e = pool.functor("cons", {pool.functor("a", {}), pool.functor("b", {})});
         std::ostringstream oss;
         expr_printer ep(oss, no_names);
         ep(e);
-        assert(oss.str() == "(a . b)");
+        assert(oss.str() == "[a|b]");
         t.pop();
     }
 
@@ -12065,12 +12065,12 @@ void test_expr_printer() {
         trail t;
         expr_pool pool(t);
         t.push();
-        const expr* inner = pool.cons(pool.atom("f"), pool.atom("x"));
-        const expr* outer = pool.cons(inner, pool.atom("y"));
+        const expr* inner = pool.functor("cons", {pool.functor("f", {}), pool.functor("x", {})});
+        const expr* outer = pool.functor("cons", {inner, pool.functor("y", {})});
         std::ostringstream oss;
         expr_printer ep(oss, no_names);
         ep(outer);
-        assert(oss.str() == "((f . x) . y)");
+        assert(oss.str() == "[[f|x]|y]");
         t.pop();
     }
 
@@ -12079,12 +12079,12 @@ void test_expr_printer() {
         trail t;
         expr_pool pool(t);
         t.push();
-        const expr* inner = pool.cons(pool.atom("x"), pool.atom("y"));
-        const expr* outer = pool.cons(pool.atom("f"), inner);
+        const expr* inner = pool.functor("cons", {pool.functor("x", {}), pool.functor("y", {})});
+        const expr* outer = pool.functor("cons", {pool.functor("f", {}), inner});
         std::ostringstream oss;
         expr_printer ep(oss, no_names);
         ep(outer);
-        assert(oss.str() == "(f . (x . y))");
+        assert(oss.str() == "[f, x|y]");
         t.pop();
     }
 
@@ -12093,11 +12093,11 @@ void test_expr_printer() {
         trail t;
         expr_pool pool(t);
         t.push();
-        const expr* e = pool.cons(pool.atom("f"), pool.var(3));
+        const expr* e = pool.functor("cons", {pool.functor("f", {}), pool.var(3)});
         std::ostringstream oss;
         expr_printer ep(oss, no_names);
         ep(e);
-        assert(oss.str() == "(f . ?3)");
+        assert(oss.str() == "[f|?3]");
         t.pop();
     }
 
@@ -12106,7 +12106,7 @@ void test_expr_printer() {
         trail t;
         expr_pool pool(t);
         t.push();
-        const expr* e = pool.atom("x");
+        const expr* e = pool.functor("x", {});
         std::ostringstream oss;
         expr_printer ep(oss, no_names);
         ep(e);
@@ -12120,8 +12120,8 @@ void test_expr_printer() {
         trail t;
         expr_pool pool(t);
         t.push();
-        const expr* a = pool.atom("a");
-        const expr* b = pool.atom("b");
+        const expr* a = pool.functor("a", {});
+        const expr* b = pool.functor("b", {});
         std::ostringstream oss1, oss2;
         expr_printer ep1(oss1, no_names);
         expr_printer ep2(oss2, no_names);
@@ -12139,13 +12139,13 @@ void test_expr_printer() {
         trail t;
         expr_pool pool(t);
         t.push();
-        const expr* e = pool.cons(pool.atom("suc"),
-                        pool.cons(pool.atom("suc"),
-                        pool.cons(pool.atom("suc"), pool.atom("zero"))));
+        const expr* e = pool.functor("cons", {pool.functor("suc", {}), 
+                        pool.functor("cons", {pool.functor("suc", {}), 
+                        pool.functor("cons", {pool.functor("suc", {}), pool.functor("zero", {})})})});
         std::ostringstream oss;
         expr_printer ep(oss, no_names);
         ep(e);
-        assert(oss.str() == "(suc . (suc . (suc . zero)))");
+        assert(oss.str() == "[suc, suc, suc|zero]");
         t.pop();
     }
 
@@ -12210,8 +12210,8 @@ void test_expr_printer() {
         std::map<uint32_t, std::string> var_names = {{0, "Head"}};
         std::ostringstream oss;
         expr_printer ep(oss, var_names);
-        ep(pool.cons(pool.var(0), pool.var(99)));
-        assert(oss.str() == "(Head . ?99)");
+        ep(pool.functor("cons", {pool.var(0), pool.var(99)}));
+        assert(oss.str() == "[Head|?99]");
         t.pop();
     }
 
@@ -12223,8 +12223,8 @@ void test_expr_printer() {
         std::map<uint32_t, std::string> var_names = {{0, "X"}, {1, "Y"}};
         std::ostringstream oss;
         expr_printer ep(oss, var_names);
-        ep(pool.cons(pool.atom("f"), pool.cons(pool.var(0), pool.var(1))));
-        assert(oss.str() == "(f . (X . Y))");
+        ep(pool.functor("cons", {pool.functor("f", {}), pool.functor("cons", {pool.var(0), pool.var(1)})}));
+        assert(oss.str() == "[f, X|Y]");
         t.pop();
     }
 
@@ -12237,8 +12237,8 @@ void test_expr_printer() {
         const expr* xv = pool.var(0);
         std::ostringstream oss;
         expr_printer ep(oss, var_names);
-        ep(pool.cons(xv, xv));
-        assert(oss.str() == "(X . X)");
+        ep(pool.functor("cons", {xv, xv}));
+        assert(oss.str() == "[X|X]");
         t.pop();
     }
 
@@ -12250,8 +12250,8 @@ void test_expr_printer() {
         std::map<uint32_t, std::string> var_names = {{0, "X"}, {1, "Y"}, {2, "Z"}};
         std::ostringstream oss;
         expr_printer ep(oss, var_names);
-        ep(pool.cons(pool.var(0), pool.cons(pool.var(1), pool.cons(pool.var(2), pool.atom("nil")))));
-        assert(oss.str() == "(X . (Y . (Z . nil)))");
+        ep(pool.functor("cons", {pool.var(0), pool.functor("cons", {pool.var(1), pool.functor("cons", {pool.var(2), pool.functor("nil", {})})})}));
+        assert(oss.str() == "[X, Y, Z]");
         t.pop();
     }
 }
@@ -12271,7 +12271,7 @@ void test_frontier_constructor() {
         trail t;
         expr_pool ep(t);
         t.push();
-        const expr* a = ep.atom("head");
+        const expr* a = ep.functor("head", {});
         database db;
         db.push_back({a, {}});
         lineage_pool lp;
@@ -12299,8 +12299,8 @@ void test_frontier_constructor() {
         trail t;
         expr_pool ep(t);
         t.push();
-        const expr* h = ep.atom("h");
-        const expr* b = ep.atom("b");
+        const expr* h = ep.functor("h", {});
+        const expr* b = ep.functor("b", {});
         database db;
         for (int i = 0; i < 10; i++)
             db.push_back({h, {b}});
@@ -12701,7 +12701,7 @@ void test_frontier_resolve() {
         trail t;
         expr_pool ep(t);
         t.push();
-        const expr* h = ep.atom("h");
+        const expr* h = ep.functor("h", {});
         database db;
         db.push_back({h, {}});
         lineage_pool lp;
@@ -12722,8 +12722,8 @@ void test_frontier_resolve() {
         trail t;
         expr_pool ep(t);
         t.push();
-        const expr* h = ep.atom("h");
-        const expr* b = ep.atom("b");
+        const expr* h = ep.functor("h", {});
+        const expr* b = ep.functor("b", {});
         database db;
         db.push_back({h, {b}});
         lineage_pool lp;
@@ -12744,9 +12744,9 @@ void test_frontier_resolve() {
         trail t;
         expr_pool ep(t);
         t.push();
-        const expr* h = ep.atom("h");
-        const expr* b1 = ep.atom("b1");
-        const expr* b2 = ep.atom("b2");
+        const expr* h = ep.functor("h", {});
+        const expr* b1 = ep.functor("b1", {});
+        const expr* b2 = ep.functor("b2", {});
         database db;
         db.push_back({h, {b1, b2}});
         lineage_pool lp;
@@ -12768,10 +12768,10 @@ void test_frontier_resolve() {
         trail t;
         expr_pool ep(t);
         t.push();
-        const expr* h = ep.atom("h");
-        const expr* b1 = ep.atom("b1");
-        const expr* b2 = ep.atom("b2");
-        const expr* b3 = ep.atom("b3");
+        const expr* h = ep.functor("h", {});
+        const expr* b1 = ep.functor("b1", {});
+        const expr* b2 = ep.functor("b2", {});
+        const expr* b3 = ep.functor("b3", {});
         database db;
         db.push_back({h, {b1, b2, b3}});
         lineage_pool lp;
@@ -12792,9 +12792,9 @@ void test_frontier_resolve() {
         trail t;
         expr_pool ep(t);
         t.push();
-        const expr* h = ep.atom("h");
-        const expr* b1 = ep.atom("b1");
-        const expr* b2 = ep.atom("b2");
+        const expr* h = ep.functor("h", {});
+        const expr* b1 = ep.functor("b1", {});
+        const expr* b2 = ep.functor("b2", {});
         database db;
         db.push_back({h, {}});         // rule 0: 0 body literals
         db.push_back({h, {b1}});       // rule 1: 1 body literal
@@ -12814,7 +12814,7 @@ void test_frontier_resolve() {
         trail t;
         expr_pool ep(t);
         t.push();
-        const expr* h = ep.atom("h");
+        const expr* h = ep.functor("h", {});
         database db;
         db.push_back({h, {}});
         lineage_pool lp;
@@ -12836,8 +12836,8 @@ void test_frontier_resolve() {
         trail t;
         expr_pool ep(t);
         t.push();
-        const expr* h = ep.atom("h");
-        const expr* b = ep.atom("b");
+        const expr* h = ep.functor("h", {});
+        const expr* b = ep.functor("b", {});
         database db;
         db.push_back({h, {b, b}});  // rule 0: 2 body
         db.push_back({h, {}});      // rule 1: 0 body
@@ -12867,8 +12867,8 @@ void test_frontier_resolve() {
         trail t;
         expr_pool ep(t);
         t.push();
-        const expr* h = ep.atom("h");
-        const expr* b = ep.atom("b");
+        const expr* h = ep.functor("h", {});
+        const expr* b = ep.functor("b", {});
         database db;
         db.push_back({h, {b}});
         lineage_pool lp;
@@ -12887,9 +12887,9 @@ void test_frontier_resolve() {
         trail t;
         expr_pool ep(t);
         t.push();
-        const expr* h = ep.atom("h");
-        const expr* b1 = ep.atom("b1");
-        const expr* b2 = ep.atom("b2");
+        const expr* h = ep.functor("h", {});
+        const expr* b1 = ep.functor("b1", {});
+        const expr* b2 = ep.functor("b2", {});
         database db;
         db.push_back({h, {b1, b2}});
         lineage_pool lp;
@@ -12936,7 +12936,7 @@ void test_weight_store_constructor() {
         trail t;
         expr_pool ep(t);
         t.push();
-        const expr* h = ep.atom("h");
+        const expr* h = ep.functor("h", {});
         database db;
         lineage_pool lp;
         goals gs = {h};
@@ -12958,7 +12958,7 @@ void test_weight_store_constructor() {
         t.push();
         database db;
         lineage_pool lp;
-        goals gs = {ep.atom("a"), ep.atom("b"), ep.atom("c")};
+        goals gs = {ep.functor("a", {}), ep.functor("b", {}), ep.functor("c", {})};
 
         weight_store ws(gs, db, lp);
         assert(ws.members.size() == 3);
@@ -12983,7 +12983,7 @@ void test_weight_store_total() {
         trail t;
         expr_pool ep(t);
         t.push();
-        const expr* h = ep.atom("h");
+        const expr* h = ep.functor("h", {});
         database db;
         lineage_pool lp;
         goals gs = {h};
@@ -13040,7 +13040,7 @@ void test_weight_store_expand() {
         trail t;
         expr_pool ep(t);
         t.push();
-        const expr* h = ep.atom("h");
+        const expr* h = ep.functor("h", {});
         database db;
         lineage_pool lp;
         goals gs;
@@ -13059,8 +13059,8 @@ void test_weight_store_expand() {
         trail t;
         expr_pool ep(t);
         t.push();
-        const expr* h = ep.atom("h");
-        const expr* b = ep.atom("b");
+        const expr* h = ep.functor("h", {});
+        const expr* b = ep.functor("b", {});
         database db;
         lineage_pool lp;
         goals gs;
@@ -13080,9 +13080,9 @@ void test_weight_store_expand() {
         trail t;
         expr_pool ep(t);
         t.push();
-        const expr* h = ep.atom("h");
-        const expr* b1 = ep.atom("b1");
-        const expr* b2 = ep.atom("b2");
+        const expr* h = ep.functor("h", {});
+        const expr* b1 = ep.functor("b1", {});
+        const expr* b2 = ep.functor("b2", {});
         database db;
         lineage_pool lp;
         goals gs;
@@ -13103,10 +13103,10 @@ void test_weight_store_expand() {
         trail t;
         expr_pool ep(t);
         t.push();
-        const expr* h = ep.atom("h");
-        const expr* b1 = ep.atom("b1");
-        const expr* b2 = ep.atom("b2");
-        const expr* b3 = ep.atom("b3");
+        const expr* h = ep.functor("h", {});
+        const expr* b1 = ep.functor("b1", {});
+        const expr* b2 = ep.functor("b2", {});
+        const expr* b3 = ep.functor("b3", {});
         database db;
         lineage_pool lp;
         goals gs;
@@ -13153,7 +13153,7 @@ void test_goal_store_constructor() {
         bind_map bm(t);
         lineage_pool lp;
         database db;
-        const expr* a = ep.atom("p");
+        const expr* a = ep.functor("p", {});
         goals gs_init = {a};
         goal_store gs(db, gs_init, t, cp, bm, lp);
         assert(gs.size() == 1);
@@ -13172,8 +13172,8 @@ void test_goal_store_constructor() {
         bind_map bm(t);
         lineage_pool lp;
         database db;
-        const expr* a0 = ep.atom("first");
-        const expr* a1 = ep.atom("second");
+        const expr* a0 = ep.functor("first", {});
+        const expr* a1 = ep.functor("second", {});
         goals gs_init = {a0, a1};
         goal_store gs(db, gs_init, t, cp, bm, lp);
         assert(gs.size() == 2);
@@ -13192,11 +13192,11 @@ void test_goal_store_constructor() {
         bind_map bm(t);
         lineage_pool lp;
         database db;
-        const expr* e0 = ep.atom("a");
-        const expr* e1 = ep.atom("b");
-        const expr* e2 = ep.atom("c");
-        const expr* e3 = ep.atom("d");
-        const expr* e4 = ep.atom("e");
+        const expr* e0 = ep.functor("a", {});
+        const expr* e1 = ep.functor("b", {});
+        const expr* e2 = ep.functor("c", {});
+        const expr* e3 = ep.functor("d", {});
+        const expr* e4 = ep.functor("e", {});
         goals gs_init = {e0, e1, e2, e3, e4};
         goal_store gs(db, gs_init, t, cp, bm, lp);
         assert(gs.size() == 5);
@@ -13218,7 +13218,7 @@ void test_goal_store_constructor() {
         bind_map bm(t);
         lineage_pool lp;
         database db;
-        const expr* a = ep.atom("goal");
+        const expr* a = ep.functor("goal", {});
         goals gs_init = {a};
         goal_store gs(db, gs_init, t, cp, bm, lp);
         const expr* stored = gs.at(lp.goal(nullptr, 0));
@@ -13240,9 +13240,9 @@ void test_goal_store_try_unify_head() {
         database db;
         goals gs_init = {};
         goal_store gs(db, gs_init, t, cp, bm, lp);
-        const expr* h = ep.atom("match");
+        const expr* h = ep.functor("match", {});
         rule r = {h, {}};
-        const expr* goal = ep.atom("match");
+        const expr* goal = ep.functor("match", {});
         std::map<uint32_t, uint32_t> tm;
         assert(t.depth() == 1);
         bool result = gs.try_unify_head(goal, r, tm);
@@ -13265,9 +13265,9 @@ void test_goal_store_try_unify_head() {
         database db;
         goals gs_init = {};
         goal_store gs(db, gs_init, t, cp, bm, lp);
-        const expr* h = ep.atom("foo");
+        const expr* h = ep.functor("foo", {});
         rule r = {h, {}};
-        const expr* goal = ep.atom("bar");
+        const expr* goal = ep.functor("bar", {});
         std::map<uint32_t, uint32_t> tm;
         assert(t.depth() == 1);
         bool result = gs.try_unify_head(goal, r, tm);
@@ -13290,9 +13290,9 @@ void test_goal_store_try_unify_head() {
         database db;
         goals gs_init = {};
         goal_store gs(db, gs_init, t, cp, bm, lp);
-        const expr* h = ep.cons(ep.atom("a"), ep.atom("b"));
+        const expr* h = ep.functor("cons", {ep.functor("a", {}), ep.functor("b", {})});
         rule r = {h, {}};
-        const expr* goal = ep.atom("a");
+        const expr* goal = ep.functor("a", {});
         std::map<uint32_t, uint32_t> tm;
         assert(t.depth() == 1);
         bool result = gs.try_unify_head(goal, r, tm);
@@ -13314,9 +13314,9 @@ void test_goal_store_try_unify_head() {
         database db;
         goals gs_init = {};
         goal_store gs(db, gs_init, t, cp, bm, lp);
-        const expr* h = ep.atom("h");
+        const expr* h = ep.functor("h", {});
         rule r = {h, {}};
-        const expr* goal = ep.cons(ep.atom("a"), ep.atom("b"));
+        const expr* goal = ep.functor("cons", {ep.functor("a", {}), ep.functor("b", {})});
         std::map<uint32_t, uint32_t> tm;
         assert(t.depth() == 1);
         bool result = gs.try_unify_head(goal, r, tm);
@@ -13340,7 +13340,7 @@ void test_goal_store_try_unify_head() {
         goal_store gs(db, gs_init, t, cp, bm, lp);
         const expr* v = ep.var(seq());
         rule r = {v, {}};
-        const expr* goal = ep.atom("x");
+        const expr* goal = ep.functor("x", {});
         std::map<uint32_t, uint32_t> tm;
         assert(t.depth() == 1);
         bool result = gs.try_unify_head(goal, r, tm);
@@ -13367,7 +13367,7 @@ void test_goal_store_try_unify_head() {
         goal_store gs(db, gs_init, t, cp, bm, lp);
         const expr* v = ep.var(seq());
         rule r = {v, {}};
-        const expr* goal = ep.cons(ep.atom("l"), ep.atom("r"));
+        const expr* goal = ep.functor("cons", {ep.functor("l", {}), ep.functor("r", {})});
         std::map<uint32_t, uint32_t> tm;
         assert(t.depth() == 1);
         bool result = gs.try_unify_head(goal, r, tm);
@@ -13394,7 +13394,7 @@ void test_goal_store_try_unify_head() {
         const expr* v = ep.var(seq());
         uint32_t var_idx = std::get<expr::var>(v->content).index;
         rule r = {v, {}};
-        const expr* goal = ep.atom("target");
+        const expr* goal = ep.functor("target", {});
         std::map<uint32_t, uint32_t> tm;
         assert(t.depth() == 1);
         gs.try_unify_head(goal, r, tm);
@@ -13418,16 +13418,16 @@ void test_goal_store_try_unify_head() {
         goals gs_init = {};
         goal_store gs(db, gs_init, t, cp, bm, lp);
         const expr* v = ep.var(seq());
-        const expr* h = ep.cons(v, ep.atom("b"));
+        const expr* h = ep.functor("cons", {v, ep.functor("b", {})});
         rule r = {h, {}};
-        const expr* goal = ep.cons(ep.atom("a"), ep.atom("b"));
+        const expr* goal = ep.functor("cons", {ep.functor("a", {}), ep.functor("b", {})});
         std::map<uint32_t, uint32_t> tm;
         assert(t.depth() == 1);
         bool result = gs.try_unify_head(goal, r, tm);
         assert(result == true);
         assert(t.depth() == 1);
         uint32_t var_idx = std::get<expr::var>(v->content).index;
-        assert(bm.whnf(ep.var(tm.at(var_idx))) == ep.atom("a"));
+        assert(bm.whnf(ep.var(tm.at(var_idx))) == ep.functor("a", {}));
         t.pop();
     }
 
@@ -13445,9 +13445,9 @@ void test_goal_store_try_unify_head() {
         goal_store gs(db, gs_init, t, cp, bm, lp);
         const expr* v1 = ep.var(seq());
         const expr* v2 = ep.var(seq());
-        const expr* h = ep.cons(v1, v2);
+        const expr* h = ep.functor("cons", {v1, v2});
         rule r = {h, {}};
-        const expr* goal = ep.cons(ep.atom("a"), ep.atom("b"));
+        const expr* goal = ep.functor("cons", {ep.functor("a", {}), ep.functor("b", {})});
         std::map<uint32_t, uint32_t> tm;
         assert(t.depth() == 1);
         bool result = gs.try_unify_head(goal, r, tm);
@@ -13456,8 +13456,8 @@ void test_goal_store_try_unify_head() {
         assert(t.depth() == 1);
         uint32_t idx1 = std::get<expr::var>(v1->content).index;
         uint32_t idx2 = std::get<expr::var>(v2->content).index;
-        assert(bm.whnf(ep.var(tm.at(idx1))) == ep.atom("a"));
-        assert(bm.whnf(ep.var(tm.at(idx2))) == ep.atom("b"));
+        assert(bm.whnf(ep.var(tm.at(idx1))) == ep.functor("a", {}));
+        assert(bm.whnf(ep.var(tm.at(idx2))) == ep.functor("b", {}));
         t.pop();
     }
 
@@ -13481,7 +13481,7 @@ void test_goal_store_try_unify_head() {
         std::map<uint32_t, uint32_t> tm;
         tm[var_idx] = pre_fresh;
         uint32_t idx_before = seq.index;  // snapshot: copier should not advance seq further
-        const expr* goal = ep.atom("reuse");
+        const expr* goal = ep.functor("reuse", {});
         assert(t.depth() == 1);
         bool result = gs.try_unify_head(goal, r, tm);
         assert(result == true);
@@ -13506,9 +13506,9 @@ void test_goal_store_applicable() {
         database db;
         goals gs_init = {};
         goal_store gs(db, gs_init, t, cp, bm, lp);
-        const expr* h = ep.atom("match");
+        const expr* h = ep.functor("match", {});
         rule r = {h, {}};
-        const expr* goal = ep.atom("match");
+        const expr* goal = ep.functor("match", {});
         assert(t.depth() == 1);
         bool result = gs.applicable(goal, r);
         assert(result == true);
@@ -13529,9 +13529,9 @@ void test_goal_store_applicable() {
         database db;
         goals gs_init = {};
         goal_store gs(db, gs_init, t, cp, bm, lp);
-        const expr* h = ep.atom("foo");
+        const expr* h = ep.functor("foo", {});
         rule r = {h, {}};
-        const expr* goal = ep.atom("bar");
+        const expr* goal = ep.functor("bar", {});
         assert(t.depth() == 1);
         bool result = gs.applicable(goal, r);
         assert(!result);
@@ -13554,7 +13554,7 @@ void test_goal_store_applicable() {
         goal_store gs(db, gs_init, t, cp, bm, lp);
         const expr* v = ep.var(seq());
         rule r = {v, {}};
-        const expr* goal = ep.atom("x");
+        const expr* goal = ep.functor("x", {});
         assert(t.depth() == 1);
         bool result = gs.applicable(goal, r);
         assert(result == true);
@@ -13576,9 +13576,9 @@ void test_goal_store_applicable() {
         goals gs_init = {};
         goal_store gs(db, gs_init, t, cp, bm, lp);
         const expr* v = ep.var(seq());
-        const expr* h = ep.cons(v, ep.atom("b"));
+        const expr* h = ep.functor("cons", {v, ep.functor("b", {})});
         rule r = {h, {}};
-        const expr* goal = ep.cons(ep.atom("a"), ep.atom("b"));
+        const expr* goal = ep.functor("cons", {ep.functor("a", {}), ep.functor("b", {})});
         assert(t.depth() == 1);
         bool result = gs.applicable(goal, r);
         assert(result == true);
@@ -13599,9 +13599,9 @@ void test_goal_store_applicable() {
         database db;
         goals gs_init = {};
         goal_store gs(db, gs_init, t, cp, bm, lp);
-        const expr* h = ep.atom("h");
+        const expr* h = ep.functor("h", {});
         rule r = {h, {}};
-        const expr* goal = ep.cons(ep.atom("a"), ep.atom("b"));
+        const expr* goal = ep.functor("cons", {ep.functor("a", {}), ep.functor("b", {})});
         assert(t.depth() == 1);
         bool result = gs.applicable(goal, r);
         assert(!result);
@@ -13624,9 +13624,9 @@ void test_goal_store_applicable() {
         goals gs_init = {};
         goal_store gs(db, gs_init, t, cp, bm, lp);
         const expr* v = ep.var(seq());
-        const expr* h = ep.cons(v, ep.atom("c"));
+        const expr* h = ep.functor("cons", {v, ep.functor("c", {})});
         rule r = {h, {}};
-        const expr* goal = ep.cons(ep.atom("a"), ep.atom("d"));
+        const expr* goal = ep.functor("cons", {ep.functor("a", {}), ep.functor("d", {})});
         assert(t.depth() == 1);
         bool result = gs.applicable(goal, r);
         assert(!result);
@@ -13649,7 +13649,7 @@ void test_goal_store_applicable() {
         goal_store gs(db, gs_init, t, cp, bm, lp);
         const expr* v = ep.var(seq());
         rule r = {v, {}};
-        const expr* goal = ep.atom("x");
+        const expr* goal = ep.functor("x", {});
         uint32_t idx_before = seq.index;
         assert(t.depth() == 1);
         bool result = gs.applicable(goal, r);
@@ -13673,9 +13673,9 @@ void test_goal_store_applicable() {
         goals gs_init = {};
         goal_store gs(db, gs_init, t, cp, bm, lp);
         const expr* v = ep.var(seq());
-        const expr* h = ep.cons(v, ep.atom("c"));
+        const expr* h = ep.functor("cons", {v, ep.functor("c", {})});
         rule r = {h, {}};
-        const expr* goal = ep.cons(ep.atom("a"), ep.atom("d"));
+        const expr* goal = ep.functor("cons", {ep.functor("a", {}), ep.functor("d", {})});
         uint32_t idx_before = seq.index;
         assert(t.depth() == 1);
         bool result = gs.applicable(goal, r);
@@ -13700,7 +13700,7 @@ void test_goal_store_applicable() {
         goal_store gs(db, gs_init, t, cp, bm, lp);
         const expr* v = ep.var(seq());
         rule r = {v, {}};
-        const expr* goal = ep.atom("x");
+        const expr* goal = ep.functor("x", {});
         assert(t.depth() == 1);
         bool result1 = gs.applicable(goal, r);
         assert(result1 == true);
@@ -13728,9 +13728,9 @@ void test_goal_store_applicable() {
         goal_store gs(db, gs_init, t, cp, bm, lp);
         const expr* v1 = ep.var(seq());
         const expr* v2 = ep.var(seq());
-        const expr* h = ep.cons(v1, v2);
+        const expr* h = ep.functor("cons", {v1, v2});
         rule r = {h, {}};
-        const expr* goal = ep.cons(ep.atom("a"), ep.atom("b"));
+        const expr* goal = ep.functor("cons", {ep.functor("a", {}), ep.functor("b", {})});
         uint32_t idx_before = seq.index;
         assert(t.depth() == 1);
         bool result = gs.applicable(goal, r);
@@ -13754,10 +13754,10 @@ void test_goal_store_expand() {
         copier cp(seq, ep);
         bind_map bm(t);
         lineage_pool lp;
-        const expr* h = ep.atom("fact");
+        const expr* h = ep.functor("fact", {});
         database db;
         db.push_back({h, {}});
-        goals gs_init = {ep.atom("fact")};
+        goals gs_init = {ep.functor("fact", {})};
         goal_store gs(db, gs_init, t, cp, bm, lp);
         assert(gs.size() == 1);
         const goal_lineage* gl = lp.goal(nullptr, 0);
@@ -13776,11 +13776,11 @@ void test_goal_store_expand() {
         copier cp(seq, ep);
         bind_map bm(t);
         lineage_pool lp;
-        const expr* h = ep.atom("h");
-        const expr* b = ep.atom("b");
+        const expr* h = ep.functor("h", {});
+        const expr* b = ep.functor("b", {});
         database db;
         db.push_back({h, {b}});
-        goals gs_init = {ep.atom("h")};
+        goals gs_init = {ep.functor("h", {})};
         goal_store gs(db, gs_init, t, cp, bm, lp);
         const goal_lineage* gl = lp.goal(nullptr, 0);
         const resolution_lineage* rl = lp.resolution(gl, 0);
@@ -13799,12 +13799,12 @@ void test_goal_store_expand() {
         copier cp(seq, ep);
         bind_map bm(t);
         lineage_pool lp;
-        const expr* h = ep.atom("h");
-        const expr* b1 = ep.atom("b1");
-        const expr* b2 = ep.atom("b2");
+        const expr* h = ep.functor("h", {});
+        const expr* b1 = ep.functor("b1", {});
+        const expr* b2 = ep.functor("b2", {});
         database db;
         db.push_back({h, {b1, b2}});
-        goals gs_init = {ep.atom("h")};
+        goals gs_init = {ep.functor("h", {})};
         goal_store gs(db, gs_init, t, cp, bm, lp);
         const goal_lineage* gl = lp.goal(nullptr, 0);
         const resolution_lineage* rl = lp.resolution(gl, 0);
@@ -13824,13 +13824,13 @@ void test_goal_store_expand() {
         copier cp(seq, ep);
         bind_map bm(t);
         lineage_pool lp;
-        const expr* h = ep.atom("h");
-        const expr* b1 = ep.atom("b1");
-        const expr* b2 = ep.atom("b2");
-        const expr* b3 = ep.atom("b3");
+        const expr* h = ep.functor("h", {});
+        const expr* b1 = ep.functor("b1", {});
+        const expr* b2 = ep.functor("b2", {});
+        const expr* b3 = ep.functor("b3", {});
         database db;
         db.push_back({h, {b1, b2, b3}});
-        goals gs_init = {ep.atom("h")};
+        goals gs_init = {ep.functor("h", {})};
         goal_store gs(db, gs_init, t, cp, bm, lp);
         const goal_lineage* gl = lp.goal(nullptr, 0);
         const resolution_lineage* rl = lp.resolution(gl, 0);
@@ -13858,7 +13858,7 @@ void test_goal_store_expand() {
         const expr* h = ep.var(seq());
         database db;
         db.push_back({h, {}});
-        const expr* goal_atom = ep.atom("x");
+        const expr* goal_atom = ep.functor("x", {});
         goals gs_init = {goal_atom};
         goal_store gs(db, gs_init, t, cp, bm, lp);
         const goal_lineage* gl = lp.goal(nullptr, 0);
@@ -13884,7 +13884,7 @@ void test_goal_store_expand() {
         const expr* v = ep.var(seq());
         database db;
         db.push_back({v, {v}});
-        const expr* goal_atom = ep.atom("x");
+        const expr* goal_atom = ep.functor("x", {});
         goals gs_init = {goal_atom};
         goal_store gs(db, gs_init, t, cp, bm, lp);
         const goal_lineage* gl = lp.goal(nullptr, 0);
@@ -13912,7 +13912,7 @@ void test_goal_store_expand() {
         const expr* v2 = ep.var(seq());
         database db;
         db.push_back({v1, {v2}});
-        const expr* goal_atom = ep.atom("x");
+        const expr* goal_atom = ep.functor("x", {});
         goals gs_init = {goal_atom};
         goal_store gs(db, gs_init, t, cp, bm, lp);
         const goal_lineage* gl = lp.goal(nullptr, 0);
@@ -13937,11 +13937,11 @@ void test_goal_store_expand() {
         copier cp(seq, ep);
         bind_map bm(t);
         lineage_pool lp;
-        const expr* h = ep.atom("h");
+        const expr* h = ep.functor("h", {});
         const expr* v = ep.var(seq());
         database db;
         db.push_back({h, {v}});
-        goals gs_init = {ep.atom("h")};
+        goals gs_init = {ep.functor("h", {})};
         goal_store gs(db, gs_init, t, cp, bm, lp);
         const goal_lineage* gl = lp.goal(nullptr, 0);
         const resolution_lineage* rl = lp.resolution(gl, 0);
@@ -13965,11 +13965,11 @@ void test_goal_store_expand() {
         copier cp(seq, ep);
         bind_map bm(t);
         lineage_pool lp;
-        const expr* h = ep.atom("h");
+        const expr* h = ep.functor("h", {});
         const expr* v = ep.var(seq());
         database db;
         db.push_back({h, {v, v}});
-        goals gs_init = {ep.atom("h")};
+        goals gs_init = {ep.functor("h", {})};
         goal_store gs(db, gs_init, t, cp, bm, lp);
         const goal_lineage* gl = lp.goal(nullptr, 0);
         const resolution_lineage* rl = lp.resolution(gl, 0);
@@ -13993,12 +13993,12 @@ void test_goal_store_expand() {
         copier cp(seq, ep);
         bind_map bm(t);
         lineage_pool lp;
-        const expr* h = ep.atom("h");
+        const expr* h = ep.functor("h", {});
         const expr* v1 = ep.var(seq());
         const expr* v2 = ep.var(seq());
         database db;
         db.push_back({h, {v1, v2}});
-        goals gs_init = {ep.atom("h")};
+        goals gs_init = {ep.functor("h", {})};
         goal_store gs(db, gs_init, t, cp, bm, lp);
         const goal_lineage* gl = lp.goal(nullptr, 0);
         const resolution_lineage* rl = lp.resolution(gl, 0);
@@ -14025,11 +14025,11 @@ void test_goal_store_expand() {
         copier cp(seq, ep);
         bind_map bm(t);
         lineage_pool lp;
-        const expr* h = ep.atom("match");
-        const expr* b = ep.atom("result");
+        const expr* h = ep.functor("match", {});
+        const expr* b = ep.functor("result", {});
         database db;
         db.push_back({h, {b}});
-        goals gs_init = {ep.atom("match")};
+        goals gs_init = {ep.functor("match", {})};
         goal_store gs(db, gs_init, t, cp, bm, lp);
         const goal_lineage* gl = lp.goal(nullptr, 0);
         const resolution_lineage* rl = lp.resolution(gl, 0);
@@ -14049,10 +14049,10 @@ void test_goal_store_expand() {
         copier cp(seq, ep);
         bind_map bm(t);
         lineage_pool lp;
-        const expr* h = ep.atom("bar");
+        const expr* h = ep.functor("bar", {});
         database db;
         db.push_back({h, {}});
-        goals gs_init = {ep.atom("foo")};
+        goals gs_init = {ep.functor("foo", {})};
         goal_store gs(db, gs_init, t, cp, bm, lp);
         const goal_lineage* gl = lp.goal(nullptr, 0);
         const resolution_lineage* rl = lp.resolution(gl, 0);
@@ -14069,12 +14069,12 @@ void test_goal_store_expand() {
         copier cp(seq, ep);
         bind_map bm(t);
         lineage_pool lp;
-        const expr* lhs = ep.atom("x");
-        const expr* rhs = ep.atom("y");
-        const expr* h = ep.cons(lhs, rhs);
+        const expr* lhs = ep.functor("x", {});
+        const expr* rhs = ep.functor("y", {});
+        const expr* h = ep.functor("cons", {lhs, rhs});
         database db;
         db.push_back({h, {}});
-        goals gs_init = {ep.atom("x")};
+        goals gs_init = {ep.functor("x", {})};
         goal_store gs(db, gs_init, t, cp, bm, lp);
         const goal_lineage* gl = lp.goal(nullptr, 0);
         const resolution_lineage* rl = lp.resolution(gl, 0);
@@ -14091,10 +14091,10 @@ void test_goal_store_expand() {
         copier cp(seq, ep);
         bind_map bm(t);
         lineage_pool lp;
-        const expr* h = ep.atom("h");
+        const expr* h = ep.functor("h", {});
         database db;
         db.push_back({h, {}});
-        const expr* goal = ep.cons(ep.atom("a"), ep.atom("b"));
+        const expr* goal = ep.functor("cons", {ep.functor("a", {}), ep.functor("b", {})});
         goals gs_init = {goal};
         goal_store gs(db, gs_init, t, cp, bm, lp);
         const goal_lineage* gl = lp.goal(nullptr, 0);
@@ -14112,13 +14112,13 @@ void test_goal_store_expand() {
         copier cp(seq, ep);
         bind_map bm(t);
         lineage_pool lp;
-        const expr* a = ep.atom("a");
-        const expr* b = ep.atom("b");
-        const expr* c = ep.atom("c");
-        const expr* h = ep.cons(a, c);
+        const expr* a = ep.functor("a", {});
+        const expr* b = ep.functor("b", {});
+        const expr* c = ep.functor("c", {});
+        const expr* h = ep.functor("cons", {a, c});
         database db;
         db.push_back({h, {}});
-        const expr* goal = ep.cons(a, b);
+        const expr* goal = ep.functor("cons", {a, b});
         goals gs_init = {goal};
         goal_store gs(db, gs_init, t, cp, bm, lp);
         const goal_lineage* gl = lp.goal(nullptr, 0);
@@ -14139,13 +14139,13 @@ void test_goal_store_expand() {
         bind_map bm(t);
         lineage_pool lp;
         const expr* v = ep.var(seq());
-        const expr* b_atom = ep.atom("b");
-        const expr* h = ep.cons(v, b_atom);
-        const expr* body_lit = ep.atom("child");
+        const expr* b_atom = ep.functor("b", {});
+        const expr* h = ep.functor("cons", {v, b_atom});
+        const expr* body_lit = ep.functor("child", {});
         database db;
         db.push_back({h, {body_lit}});
-        const expr* ga = ep.atom("a");
-        const expr* goal = ep.cons(ga, ep.atom("b"));
+        const expr* ga = ep.functor("a", {});
+        const expr* goal = ep.functor("cons", {ga, ep.functor("b", {})});
         goals gs_init = {goal};
         goal_store gs(db, gs_init, t, cp, bm, lp);
         const goal_lineage* gl = lp.goal(nullptr, 0);
@@ -14173,8 +14173,8 @@ void test_goal_store_expand() {
         const expr* v = ep.var(seq());
         database db;
         db.push_back({v, {}});
-        const expr* goal0 = ep.atom("first");
-        const expr* goal1 = ep.atom("second");
+        const expr* goal0 = ep.functor("first", {});
+        const expr* goal1 = ep.functor("second", {});
         goals gs_init = {goal0, goal1};
         goal_store gs(db, gs_init, t, cp, bm, lp);
         const goal_lineage* gl0 = lp.goal(nullptr, 0);
@@ -14202,14 +14202,14 @@ void test_goal_store_expand() {
         copier cp(seq, ep);
         bind_map bm(t);
         lineage_pool lp;
-        const expr* h0 = ep.atom("p");
-        const expr* h1 = ep.atom("q");
-        const expr* b0 = ep.atom("bp");
-        const expr* b1 = ep.atom("bq");
+        const expr* h0 = ep.functor("p", {});
+        const expr* h1 = ep.functor("q", {});
+        const expr* b0 = ep.functor("bp", {});
+        const expr* b1 = ep.functor("bq", {});
         database db;
         db.push_back({h0, {b0}});  // rule 0
         db.push_back({h1, {b1}});  // rule 1
-        goals gs_init = {ep.atom("p"), ep.atom("q")};
+        goals gs_init = {ep.functor("p", {}), ep.functor("q", {})};
         goal_store gs(db, gs_init, t, cp, bm, lp);
         const goal_lineage* gl0 = lp.goal(nullptr, 0);
         const goal_lineage* gl1 = lp.goal(nullptr, 1);
@@ -14234,19 +14234,19 @@ void test_goal_store_expand() {
         copier cp(seq, ep);
         bind_map bm(t);
         lineage_pool lp;
-        const expr* h1 = ep.atom("step1");
-        const expr* h2 = ep.atom("step2");
+        const expr* h1 = ep.functor("step1", {});
+        const expr* h2 = ep.functor("step2", {});
         database db;
-        db.push_back({h1, {ep.atom("step2")}});  // rule 0: step1 :- step2
+        db.push_back({h1, {ep.functor("step2", {})}});  // rule 0: step1 :- step2
         db.push_back({h2, {}});                   // rule 1: step2 (fact)
-        goals gs_init = {ep.atom("step1")};
+        goals gs_init = {ep.functor("step1", {})};
         goal_store gs(db, gs_init, t, cp, bm, lp);
         const goal_lineage* gl = lp.goal(nullptr, 0);
         const resolution_lineage* rl0 = lp.resolution(gl, 0);
         gs.resolve(rl0);
         assert(gs.size() == 1);
         const goal_lineage* child = lp.goal(rl0, 0);
-        assert(gs.at(child) == ep.atom("step2"));
+        assert(gs.at(child) == ep.functor("step2", {}));
         const resolution_lineage* rl1 = lp.resolution(child, 1);
         gs.resolve(rl1);
         assert(gs.empty());
@@ -14266,13 +14266,13 @@ void test_goal_store_expand() {
         lineage_pool lp;
         const expr* v1 = ep.var(seq());
         const expr* v2 = ep.var(seq());
-        const expr* h = ep.cons(v1, v2);
-        const expr* done = ep.atom("done");
+        const expr* h = ep.functor("cons", {v1, v2});
+        const expr* done = ep.functor("done", {});
         database db;
         db.push_back({h, {done}});
-        const expr* ga = ep.atom("a");
-        const expr* gb = ep.atom("b");
-        const expr* goal = ep.cons(ga, gb);
+        const expr* ga = ep.functor("a", {});
+        const expr* gb = ep.functor("b", {});
+        const expr* goal = ep.functor("cons", {ga, gb});
         goals gs_init = {goal};
         goal_store gs(db, gs_init, t, cp, bm, lp);
         const goal_lineage* gl = lp.goal(nullptr, 0);
@@ -14295,11 +14295,11 @@ void test_goal_store_expand() {
         copier cp(seq, ep);
         bind_map bm(t);
         lineage_pool lp;
-        const expr* h = ep.atom("h");
-        const expr* body_cons = ep.cons(ep.atom("x"), ep.atom("y"));
+        const expr* h = ep.functor("h", {});
+        const expr* body_cons = ep.functor("cons", {ep.functor("x", {}), ep.functor("y", {})});
         database db;
         db.push_back({h, {body_cons}});
-        goals gs_init = {ep.atom("h")};
+        goals gs_init = {ep.functor("h", {})};
         goal_store gs(db, gs_init, t, cp, bm, lp);
         const goal_lineage* gl = lp.goal(nullptr, 0);
         const resolution_lineage* rl = lp.resolution(gl, 0);
@@ -14319,8 +14319,8 @@ void test_goal_store_expand() {
         copier cp(seq, ep);
         bind_map bm(t);
         lineage_pool lp;
-        const expr* h = ep.atom("h");
-        const expr* b = ep.atom("b");
+        const expr* h = ep.functor("h", {});
+        const expr* b = ep.functor("b", {});
         database db;
         db.push_back({h, {b}});
         const expr* goal_var = ep.var(seq());
@@ -14349,7 +14349,7 @@ void test_goal_store_expand() {
         const expr* v = ep.var(seq());
         database db;
         db.push_back({v, {v, v}});
-        const expr* goal_atom = ep.atom("val");
+        const expr* goal_atom = ep.functor("val", {});
         goals gs_init = {goal_atom};
         goal_store gs(db, gs_init, t, cp, bm, lp);
         const goal_lineage* gl = lp.goal(nullptr, 0);
@@ -14379,13 +14379,13 @@ void test_goal_store_expand() {
         const expr* v1 = ep.var(seq());
         const expr* v2 = ep.var(seq());
         const expr* v3 = ep.var(seq());
-        const expr* h = ep.cons(v1, ep.cons(v2, v3));
+        const expr* h = ep.functor("cons", {v1, ep.functor("cons", {v2, v3})});
         database db;
         db.push_back({h, {v1, v2, v3}});
-        const expr* ga = ep.atom("a");
-        const expr* gb = ep.atom("b");
-        const expr* gc = ep.atom("c");
-        const expr* goal = ep.cons(ga, ep.cons(gb, gc));
+        const expr* ga = ep.functor("a", {});
+        const expr* gb = ep.functor("b", {});
+        const expr* gc = ep.functor("c", {});
+        const expr* goal = ep.functor("cons", {ga, ep.functor("cons", {gb, gc})});
         goals gs_init = {goal};
         goal_store gs(db, gs_init, t, cp, bm, lp);
         const goal_lineage* gl = lp.goal(nullptr, 0);
@@ -14416,10 +14416,10 @@ void test_goal_store_expand() {
         copier cp(seq, ep);
         bind_map bm(t);
         lineage_pool lp;
-        const expr* h = ep.atom("wrong");
+        const expr* h = ep.functor("wrong", {});
         database db;
         db.push_back({h, {}});
-        const expr* original_goal = ep.atom("right");
+        const expr* original_goal = ep.functor("right", {});
         goals gs_init = {original_goal};
         goal_store gs(db, gs_init, t, cp, bm, lp);
         assert(gs.size() == 1);
@@ -14440,13 +14440,13 @@ void test_goal_store_expand() {
         copier cp(seq, ep);
         bind_map bm(t);
         lineage_pool lp;
-        const expr* h_good = ep.atom("good");
-        const expr* h_bad  = ep.atom("bad");
-        const expr* body   = ep.atom("result");
+        const expr* h_good = ep.functor("good", {});
+        const expr* h_bad  = ep.functor("bad", {});
+        const expr* body   = ep.functor("result", {});
         database db;
         db.push_back({h_good, {body}});  // rule 0
         db.push_back({h_bad,  {}});      // rule 1
-        goals gs_init = {ep.atom("good"), ep.atom("good")};
+        goals gs_init = {ep.functor("good", {}), ep.functor("good", {})};
         goal_store gs(db, gs_init, t, cp, bm, lp);
         const goal_lineage* gl0 = lp.goal(nullptr, 0);
         const resolution_lineage* rl0 = lp.resolution(gl0, 0);
@@ -14456,7 +14456,7 @@ void test_goal_store_expand() {
         const resolution_lineage* rl1 = lp.resolution(gl1, 1);
         assert_throws(gs.resolve(rl1), std::runtime_error);
         assert(gs.size() == 2);  // gl1 was never erased
-        assert(gs.at(gl1) == ep.atom("good"));
+        assert(gs.at(gl1) == ep.functor("good", {}));
         t.pop();
     }
 
@@ -14473,14 +14473,14 @@ void test_goal_store_expand() {
         lineage_pool lp;
         const expr* v1 = ep.var(seq());
         const expr* v2 = ep.var(seq());
-        const expr* mid = ep.atom("mid");
-        const expr* h = ep.cons(v1, ep.cons(mid, v2));
-        const expr* leaf = ep.atom("leaf");
+        const expr* mid = ep.functor("mid", {});
+        const expr* h = ep.functor("cons", {v1, ep.functor("cons", {mid, v2})});
+        const expr* leaf = ep.functor("leaf", {});
         database db;
         db.push_back({h, {leaf}});
-        const expr* left  = ep.atom("left");
-        const expr* right = ep.atom("right");
-        const expr* goal = ep.cons(left, ep.cons(mid, right));
+        const expr* left  = ep.functor("left", {});
+        const expr* right = ep.functor("right", {});
+        const expr* goal = ep.functor("cons", {left, ep.functor("cons", {mid, right})});
         goals gs_init = {goal};
         goal_store gs(db, gs_init, t, cp, bm, lp);
         const goal_lineage* gl = lp.goal(nullptr, 0);
@@ -14512,7 +14512,7 @@ void test_candidate_store_constructor() {
         expr_pool ep(t);
         t.push();
         lineage_pool lp;
-        const expr* a = ep.atom("a");
+        const expr* a = ep.functor("a", {});
         database db;
         db.push_back({a, {}});
         db.push_back({a, {}});
@@ -14533,7 +14533,7 @@ void test_candidate_store_constructor() {
         expr_pool ep(t);
         t.push();
         lineage_pool lp;
-        const expr* a = ep.atom("a");
+        const expr* a = ep.functor("a", {});
         database db;
         db.push_back({a, {}});
         goals gs_init = {a};
@@ -14552,7 +14552,7 @@ void test_candidate_store_constructor() {
         expr_pool ep(t);
         t.push();
         lineage_pool lp;
-        const expr* a = ep.atom("a");
+        const expr* a = ep.functor("a", {});
         database db;
         db.push_back({a, {}});
         db.push_back({a, {}});
@@ -14573,7 +14573,7 @@ void test_candidate_store_constructor() {
         expr_pool ep(t);
         t.push();
         lineage_pool lp;
-        const expr* a = ep.atom("a");
+        const expr* a = ep.functor("a", {});
         database db;
         db.push_back({a, {}});
         db.push_back({a, {}});
@@ -14598,7 +14598,7 @@ void test_candidate_store_constructor() {
         expr_pool ep(t);
         t.push();
         lineage_pool lp;
-        const expr* a = ep.atom("a");
+        const expr* a = ep.functor("a", {});
         database db;
         db.push_back({a, {}});
         db.push_back({a, {}});
@@ -14623,7 +14623,7 @@ void test_candidate_store_eliminate() {
         expr_pool ep(t);
         t.push();
         lineage_pool lp;
-        const expr* a = ep.atom("a");
+        const expr* a = ep.functor("a", {});
         database db;
         db.push_back({a, {}});
         db.push_back({a, {}});
@@ -14646,7 +14646,7 @@ void test_candidate_store_eliminate() {
         expr_pool ep(t);
         t.push();
         lineage_pool lp;
-        const expr* a = ep.atom("a");
+        const expr* a = ep.functor("a", {});
         database db;
         db.push_back({a, {}});
         db.push_back({a, {}});
@@ -14665,7 +14665,7 @@ void test_candidate_store_eliminate() {
         expr_pool ep(t);
         t.push();
         lineage_pool lp;
-        const expr* a = ep.atom("a");
+        const expr* a = ep.functor("a", {});
         database db;
         db.push_back({a, {}});
         db.push_back({a, {}});
@@ -14688,7 +14688,7 @@ void test_candidate_store_eliminate() {
         expr_pool ep(t);
         t.push();
         lineage_pool lp;
-        const expr* a = ep.atom("a");
+        const expr* a = ep.functor("a", {});
         database db;
         db.push_back({a, {}});
         db.push_back({a, {}});
@@ -14711,7 +14711,7 @@ void test_candidate_store_eliminate() {
         expr_pool ep(t);
         t.push();
         lineage_pool lp;
-        const expr* a = ep.atom("a");
+        const expr* a = ep.functor("a", {});
         database db;
         db.push_back({a, {}});
         db.push_back({a, {}});
@@ -14731,7 +14731,7 @@ void test_candidate_store_eliminate() {
         expr_pool ep(t);
         t.push();
         lineage_pool lp;
-        const expr* a = ep.atom("a");
+        const expr* a = ep.functor("a", {});
         database db;
         db.push_back({a, {}});
         db.push_back({a, {}});
@@ -14752,7 +14752,7 @@ void test_candidate_store_eliminate() {
         expr_pool ep(t);
         t.push();
         lineage_pool lp;
-        const expr* a = ep.atom("a");
+        const expr* a = ep.functor("a", {});
         database db;
         db.push_back({a, {}});
         db.push_back({a, {}});
@@ -14775,7 +14775,7 @@ void test_candidate_store_eliminate() {
         expr_pool ep(t);
         t.push();
         lineage_pool lp;
-        const expr* a = ep.atom("a");
+        const expr* a = ep.functor("a", {});
         database db;
         db.push_back({a, {}});
         db.push_back({a, {}});
@@ -14798,7 +14798,7 @@ void test_candidate_store_eliminate() {
         expr_pool ep(t);
         t.push();
         lineage_pool lp;
-        const expr* a = ep.atom("a");
+        const expr* a = ep.functor("a", {});
         database db;
         db.push_back({a, {}});
         db.push_back({a, {}});
@@ -14819,7 +14819,7 @@ void test_candidate_store_eliminate() {
         expr_pool ep(t);
         t.push();
         lineage_pool lp;
-        const expr* a = ep.atom("a");
+        const expr* a = ep.functor("a", {});
         database db;
         db.push_back({a, {}});
         db.push_back({a, {}});
@@ -14857,7 +14857,7 @@ void test_candidate_store_unit() {
         expr_pool ep(t);
         t.push();
         lineage_pool lp;
-        const expr* a = ep.atom("a");
+        const expr* a = ep.functor("a", {});
         database db;
         db.push_back({a, {}});
         db.push_back({a, {}});
@@ -14876,7 +14876,7 @@ void test_candidate_store_unit() {
         expr_pool ep(t);
         t.push();
         lineage_pool lp;
-        const expr* a = ep.atom("a");
+        const expr* a = ep.functor("a", {});
         database db;
         db.push_back({a, {}});
         db.push_back({a, {}});
@@ -14896,7 +14896,7 @@ void test_candidate_store_unit() {
         expr_pool ep(t);
         t.push();
         lineage_pool lp;
-        const expr* a = ep.atom("a");
+        const expr* a = ep.functor("a", {});
         database db;
         db.push_back({a, {}});
         db.push_back({a, {}});
@@ -14922,7 +14922,7 @@ void test_candidate_store_unit() {
         expr_pool ep(t);
         t.push();
         lineage_pool lp;
-        const expr* a = ep.atom("a");
+        const expr* a = ep.functor("a", {});
         database db;
         db.push_back({a, {}});
         db.push_back({a, {}});
@@ -14951,7 +14951,7 @@ void test_candidate_store_unit() {
         expr_pool ep(t);
         t.push();
         lineage_pool lp;
-        const expr* a = ep.atom("a");
+        const expr* a = ep.functor("a", {});
         database db;
         db.push_back({a, {}});
         db.push_back({a, {}});
@@ -14976,7 +14976,7 @@ void test_candidate_store_unit() {
         expr_pool ep(t);
         t.push();
         lineage_pool lp;
-        const expr* a = ep.atom("a");
+        const expr* a = ep.functor("a", {});
         database db;
         db.push_back({a, {}});
         goals gs_init = {a};
@@ -14995,7 +14995,7 @@ void test_candidate_store_unit() {
         expr_pool ep(t);
         t.push();
         lineage_pool lp;
-        const expr* a = ep.atom("a");
+        const expr* a = ep.functor("a", {});
         database db;
         db.push_back({a, {}});
         db.push_back({a, {}});
@@ -15032,7 +15032,7 @@ void test_candidate_store_conflicted() {
         expr_pool ep(t);
         t.push();
         lineage_pool lp;
-        const expr* a = ep.atom("a");
+        const expr* a = ep.functor("a", {});
         database db;
         db.push_back({a, {}});
         db.push_back({a, {}});
@@ -15049,7 +15049,7 @@ void test_candidate_store_conflicted() {
         expr_pool ep(t);
         t.push();
         lineage_pool lp;
-        const expr* a = ep.atom("a");
+        const expr* a = ep.functor("a", {});
         database db;
         db.push_back({a, {}});
         db.push_back({a, {}});
@@ -15067,7 +15067,7 @@ void test_candidate_store_conflicted() {
         expr_pool ep(t);
         t.push();
         lineage_pool lp;
-        const expr* a = ep.atom("a");
+        const expr* a = ep.functor("a", {});
         database db;
         db.push_back({a, {}});
         db.push_back({a, {}});
@@ -15084,7 +15084,7 @@ void test_candidate_store_conflicted() {
         expr_pool ep(t);
         t.push();
         lineage_pool lp;
-        const expr* a = ep.atom("a");
+        const expr* a = ep.functor("a", {});
         database db;
         db.push_back({a, {}});
         db.push_back({a, {}});
@@ -15101,7 +15101,7 @@ void test_candidate_store_conflicted() {
         expr_pool ep(t);
         t.push();
         lineage_pool lp;
-        const expr* a = ep.atom("a");
+        const expr* a = ep.functor("a", {});
         database db;
         db.push_back({a, {}});
         db.push_back({a, {}});
@@ -15120,7 +15120,7 @@ void test_candidate_store_conflicted() {
         expr_pool ep(t);
         t.push();
         lineage_pool lp;
-        const expr* a = ep.atom("a");
+        const expr* a = ep.functor("a", {});
         database db;
         db.push_back({a, {}});
         db.push_back({a, {}});
@@ -15138,7 +15138,7 @@ void test_candidate_store_conflicted() {
         expr_pool ep(t);
         t.push();
         lineage_pool lp;
-        const expr* a = ep.atom("a");
+        const expr* a = ep.functor("a", {});
         database db;
         db.push_back({a, {}});
         db.push_back({a, {}});
@@ -15159,7 +15159,7 @@ void test_candidate_store_expand() {
         expr_pool ep(t);
         t.push();
         lineage_pool lp;
-        const expr* a = ep.atom("a");
+        const expr* a = ep.functor("a", {});
         database db;
         db.push_back({a, {}});  // rule 0: 0-body
         goals gs_init = {a};
@@ -15177,8 +15177,8 @@ void test_candidate_store_expand() {
         expr_pool ep(t);
         t.push();
         lineage_pool lp;
-        const expr* a = ep.atom("a");
-        const expr* b = ep.atom("b");
+        const expr* a = ep.functor("a", {});
+        const expr* b = ep.functor("b", {});
         database db;
         db.push_back({a, {b}});  // rule 0: 1-body
         db.push_back({a, {}});
@@ -15203,8 +15203,8 @@ void test_candidate_store_expand() {
         expr_pool ep(t);
         t.push();
         lineage_pool lp;
-        const expr* a = ep.atom("a");
-        const expr* b = ep.atom("b");
+        const expr* a = ep.functor("a", {});
+        const expr* b = ep.functor("b", {});
         database db;
         db.push_back({a, {b, b}});  // rule 0: 2-body
         db.push_back({a, {}});
@@ -15230,8 +15230,8 @@ void test_candidate_store_expand() {
         expr_pool ep(t);
         t.push();
         lineage_pool lp;
-        const expr* a = ep.atom("a");
-        const expr* b = ep.atom("b");
+        const expr* a = ep.functor("a", {});
+        const expr* b = ep.functor("b", {});
         database db;
         db.push_back({a, {b, b, b}});  // rule 0: 3-body
         db.push_back({a, {}});
@@ -15258,8 +15258,8 @@ void test_candidate_store_expand() {
         expr_pool ep(t);
         t.push();
         lineage_pool lp;
-        const expr* a = ep.atom("a");
-        const expr* b = ep.atom("b");
+        const expr* a = ep.functor("a", {});
+        const expr* b = ep.functor("b", {});
         database db;
         db.push_back({a, {b}});  // rule 0: 1-body
         db.push_back({a, {}});
@@ -15289,8 +15289,8 @@ void test_candidate_store_expand() {
         expr_pool ep(t);
         t.push();
         lineage_pool lp;
-        const expr* a = ep.atom("a");
-        const expr* b = ep.atom("b");
+        const expr* a = ep.functor("a", {});
+        const expr* b = ep.functor("b", {});
         database db;
         db.push_back({a, {b, b}});  // rule 0: 2-body
         db.push_back({a, {}});
@@ -17529,16 +17529,16 @@ void test_sim_constructor() {
         trail t; t.push();
         expr_pool ep(t); bind_map bm(t); sequencer seq(t); lineage_pool lp;
         database db;
-        db.push_back(rule{ep.atom("p"), {}});
+        db.push_back(rule{ep.functor("p", {}), {}});
         goals gs;
-        gs.push_back(ep.atom("p"));
+        gs.push_back(ep.functor("p", {}));
         cdcl c;
         sim_mock s(100, db, gs, t, seq, ep, bm, lp, c);
 
         assert(s.gs.size() == 1);
         assert(s.cs.size() == 1);
         const goal_lineage* gl0 = lp.goal(nullptr, 0);
-        assert(s.gs.at(gl0) == ep.atom("p"));
+        assert(s.gs.at(gl0) == ep.functor("p", {}));
         assert(s.cs.at(gl0) == std::vector<size_t>({0}));
     }
 
@@ -17650,9 +17650,9 @@ void test_sim_solved() {
         sequencer seq(t);
         lineage_pool lp;
         database db;
-        db.push_back(rule{ep.atom("p"), {}});
+        db.push_back(rule{ep.functor("p", {}), {}});
         goals goals;
-        goals.push_back(ep.atom("p"));
+        goals.push_back(ep.functor("p", {}));
         cdcl c;
         monte_carlo::tree_node<mcts_decider::choice> root;
         std::mt19937 rng(42);
@@ -17672,11 +17672,11 @@ void test_sim_solved() {
         sequencer seq(t);
         lineage_pool lp;
         database db;
-        db.push_back(rule{ep.atom("p"), {}});
-        db.push_back(rule{ep.atom("q"), {}});
+        db.push_back(rule{ep.functor("p", {}), {}});
+        db.push_back(rule{ep.functor("q", {}), {}});
         goals goals;
-        goals.push_back(ep.atom("p"));
-        goals.push_back(ep.atom("q"));
+        goals.push_back(ep.functor("p", {}));
+        goals.push_back(ep.functor("q", {}));
         cdcl c;
         monte_carlo::tree_node<mcts_decider::choice> root;
         std::mt19937 rng(42);
@@ -17698,9 +17698,9 @@ void test_sim_conflicted() {
         sequencer seq(t);
         lineage_pool lp;
         database db;
-        db.push_back(rule{ep.atom("p"), {}});
+        db.push_back(rule{ep.functor("p", {}), {}});
         goals goals;
-        goals.push_back(ep.atom("p"));
+        goals.push_back(ep.functor("p", {}));
         cdcl c;
         monte_carlo::tree_node<mcts_decider::choice> root;
         std::mt19937 rng(42);
@@ -17724,7 +17724,7 @@ void test_sim_conflicted() {
         lineage_pool lp;
         database db;
         goals goals;
-        goals.push_back(ep.atom("p"));
+        goals.push_back(ep.functor("p", {}));
         cdcl c;
         monte_carlo::tree_node<mcts_decider::choice> root;
         std::mt19937 rng(42);
@@ -17745,9 +17745,9 @@ void test_sim_conflicted() {
         sequencer seq(t);
         lineage_pool lp;
         database db;
-        db.push_back(rule{ep.atom("q"), {}}); // rule for q, goal is p → mismatch
+        db.push_back(rule{ep.functor("q", {}), {}}); // rule for q, goal is p → mismatch
         goals goals;
-        goals.push_back(ep.atom("p"));
+        goals.push_back(ep.functor("p", {}));
         cdcl c;
         monte_carlo::tree_node<mcts_decider::choice> root;
         std::mt19937 rng(42);
@@ -17768,9 +17768,9 @@ void test_sim_conflicted() {
         sequencer seq(t);
         lineage_pool lp;
         database db;
-        db.push_back(rule{ep.atom("p"), {}});
+        db.push_back(rule{ep.functor("p", {}), {}});
         goals goals;
-        goals.push_back(ep.atom("p"));
+        goals.push_back(ep.functor("p", {}));
 
         // Pre-populate cdcl: singleton avoidance {rl} → rl is eliminated
         const goal_lineage* gl0 = lp.goal(nullptr, 0);
@@ -17799,10 +17799,10 @@ void test_sim_conflicted() {
         sequencer seq(t);
         lineage_pool lp;
         database db;
-        db.push_back(rule{ep.atom("p"), {}});
+        db.push_back(rule{ep.functor("p", {}), {}});
         goals goals;
-        goals.push_back(ep.atom("p")); // gl0: matches rule 0
-        goals.push_back(ep.atom("q")); // gl1: no matching rule
+        goals.push_back(ep.functor("p", {})); // gl0: matches rule 0
+        goals.push_back(ep.functor("q", {})); // gl1: no matching rule
         cdcl c;
         monte_carlo::tree_node<mcts_decider::choice> root;
         std::mt19937 rng(42);
@@ -17826,7 +17826,7 @@ void test_sim_conflicted() {
         lineage_pool lp;
         database db;
         goals goals;
-        goals.push_back(ep.atom("p"));
+        goals.push_back(ep.functor("p", {}));
         cdcl c;
         monte_carlo::tree_node<mcts_decider::choice> root;
         std::mt19937 rng(42);
@@ -17848,10 +17848,10 @@ void test_sim_derive_one() {
         sequencer seq(t);
         lineage_pool lp;
         database db;
-        db.push_back(rule{ep.atom("p"), {}});
-        db.push_back(rule{ep.atom("p"), {}}); // two rules for p → 2 candidates → not unit
+        db.push_back(rule{ep.functor("p", {}), {}});
+        db.push_back(rule{ep.functor("p", {}), {}}); // two rules for p → 2 candidates → not unit
         goals goals;
-        goals.push_back(ep.atom("p"));
+        goals.push_back(ep.functor("p", {}));
         cdcl c;
         monte_carlo::tree_node<mcts_decider::choice> root;
         std::mt19937 rng(42);
@@ -17870,9 +17870,9 @@ void test_sim_derive_one() {
         sequencer seq(t);
         lineage_pool lp;
         database db;
-        db.push_back(rule{ep.atom("p"), {}});
+        db.push_back(rule{ep.functor("p", {}), {}});
         goals goals;
-        goals.push_back(ep.atom("p"));
+        goals.push_back(ep.functor("p", {}));
         cdcl c;
         monte_carlo::tree_node<mcts_decider::choice> root;
         std::mt19937 rng(42);
@@ -17914,10 +17914,10 @@ void test_sim_derive_one() {
         sequencer seq(t);
         lineage_pool lp;
         database db;
-        db.push_back(rule{ep.atom("p"), {}}); // rule 0: p :- (matches)
-        db.push_back(rule{ep.atom("q"), {}}); // rule 1: q :- (doesn't match goal p)
+        db.push_back(rule{ep.functor("p", {}), {}}); // rule 0: p :- (matches)
+        db.push_back(rule{ep.functor("q", {}), {}}); // rule 1: q :- (doesn't match goal p)
         goals goals;
-        goals.push_back(ep.atom("p"));
+        goals.push_back(ep.functor("p", {}));
         cdcl c;
         monte_carlo::tree_node<mcts_decider::choice> root;
         std::mt19937 rng(42);
@@ -17949,9 +17949,9 @@ void test_sim_resolve() {
         sequencer seq(t);
         lineage_pool lp;
         database db;
-        db.push_back(rule{ep.atom("p"), {}}); // p :-
+        db.push_back(rule{ep.functor("p", {}), {}}); // p :-
         goals goals;
-        goals.push_back(ep.atom("p"));
+        goals.push_back(ep.functor("p", {}));
         cdcl c;
         monte_carlo::tree_node<mcts_decider::choice> root;
         std::mt19937 rng(42);
@@ -17982,9 +17982,9 @@ void test_sim_resolve() {
         sequencer seq(t);
         lineage_pool lp;
         database db;
-        db.push_back(rule{ep.atom("p"), {ep.atom("q")}}); // p :- q.
+        db.push_back(rule{ep.functor("p", {}), {ep.functor("q", {})}}); // p :- q.
         goals goals;
-        goals.push_back(ep.atom("p"));
+        goals.push_back(ep.functor("p", {}));
         cdcl c;
         monte_carlo::tree_node<mcts_decider::choice> root;
         std::mt19937 rng(42);
@@ -18004,7 +18004,7 @@ void test_sim_resolve() {
 
         // Sub-goal lineage: lp.goal(rl, 0)
         const goal_lineage* sub_gl = lp.goal(rl, 0);
-        assert(sim.gs.at(sub_gl) == ep.atom("q"));
+        assert(sim.gs.at(sub_gl) == ep.functor("q", {}));
 
         // cs tracks the same sub-goal
         assert(sim.cs.size() == 1);
@@ -18021,9 +18021,9 @@ void test_sim_resolve() {
         sequencer seq(t);
         lineage_pool lp;
         database db;
-        db.push_back(rule{ep.atom("p"), {}}); // p :-
+        db.push_back(rule{ep.functor("p", {}), {}}); // p :-
         goals goals;
-        goals.push_back(ep.atom("p"));
+        goals.push_back(ep.functor("p", {}));
 
         // Set up cdcl: 2-element avoidance {rl0, rl1}; neither eliminated yet
         const goal_lineage* gl0 = lp.goal(nullptr, 0);
@@ -18060,9 +18060,9 @@ void test_sim_resolve() {
         sequencer seq(t);
         lineage_pool lp;
         database db;
-        db.push_back(rule{ep.atom("p"), {ep.atom("q"), ep.atom("r")}}); // p :- q, r.
+        db.push_back(rule{ep.functor("p", {}), {ep.functor("q", {}), ep.functor("r", {})}}); // p :- q, r.
         goals goals;
-        goals.push_back(ep.atom("p"));
+        goals.push_back(ep.functor("p", {}));
         cdcl c;
         monte_carlo::tree_node<mcts_decider::choice> root;
         std::mt19937 rng(42);
@@ -18084,8 +18084,8 @@ void test_sim_resolve() {
 
         const goal_lineage* sub_gl0 = lp.goal(rl, 0);
         const goal_lineage* sub_gl1 = lp.goal(rl, 1);
-        assert(sim.gs.at(sub_gl0) == ep.atom("q"));
-        assert(sim.gs.at(sub_gl1) == ep.atom("r"));
+        assert(sim.gs.at(sub_gl0) == ep.functor("q", {}));
+        assert(sim.gs.at(sub_gl1) == ep.functor("r", {}));
     }
 }
 
@@ -18110,9 +18110,9 @@ void test_sim() {
         trail t; t.push();
         expr_pool ep(t); bind_map bm(t); sequencer seq(t); lineage_pool lp;
         database db;
-        db.push_back(rule{ep.atom("q"), {}});  // only rule for q
+        db.push_back(rule{ep.functor("q", {}), {}});  // only rule for q
         goals gs;
-        gs.push_back(ep.atom("p"));            // goal is p: no matching rule
+        gs.push_back(ep.functor("p", {}));            // goal is p: no matching rule
         cdcl c;
         sim_mock s(10, db, gs, t, seq, ep, bm, lp, c);
 
@@ -18129,9 +18129,9 @@ void test_sim() {
         trail t; t.push();
         expr_pool ep(t); bind_map bm(t); sequencer seq(t); lineage_pool lp;
         database db;
-        db.push_back(rule{ep.atom("p"), {}});
+        db.push_back(rule{ep.functor("p", {}), {}});
         goals gs;
-        gs.push_back(ep.atom("p"));
+        gs.push_back(ep.functor("p", {}));
         cdcl c;
         sim_mock s(0, db, gs, t, seq, ep, bm, lp, c);
 
@@ -18148,9 +18148,9 @@ void test_sim() {
         trail t; t.push();
         expr_pool ep(t); bind_map bm(t); sequencer seq(t); lineage_pool lp;
         database db;
-        db.push_back(rule{ep.atom("p"), {}});  // p :- .
+        db.push_back(rule{ep.functor("p", {}), {}});  // p :- .
         goals gs;
-        gs.push_back(ep.atom("p"));
+        gs.push_back(ep.functor("p", {}));
         cdcl c;
         sim_mock s(10, db, gs, t, seq, ep, bm, lp, c);
 
@@ -18169,10 +18169,10 @@ void test_sim() {
         trail t; t.push();
         expr_pool ep(t); bind_map bm(t); sequencer seq(t); lineage_pool lp;
         database db;
-        db.push_back(rule{ep.atom("p"), {ep.atom("r")}});  // rule 0: p :- r.
-        db.push_back(rule{ep.atom("p"), {}});               // rule 1: p :- .
+        db.push_back(rule{ep.functor("p", {}), {ep.functor("r", {})}});  // rule 0: p :- r.
+        db.push_back(rule{ep.functor("p", {}), {}});               // rule 1: p :- .
         goals gs;
-        gs.push_back(ep.atom("p"));
+        gs.push_back(ep.functor("p", {}));
         cdcl c;
 
         const goal_lineage* gl0 = lp.goal(nullptr, 0);
@@ -18194,10 +18194,10 @@ void test_sim() {
         trail t; t.push();
         expr_pool ep(t); bind_map bm(t); sequencer seq(t); lineage_pool lp;
         database db;
-        db.push_back(rule{ep.atom("p"), {ep.atom("q")}});  // rule 0: p :- q.
-        db.push_back(rule{ep.atom("q"), {}});               // rule 1: q :- .
+        db.push_back(rule{ep.functor("p", {}), {ep.functor("q", {})}});  // rule 0: p :- q.
+        db.push_back(rule{ep.functor("q", {}), {}});               // rule 1: q :- .
         goals gs;
-        gs.push_back(ep.atom("p"));
+        gs.push_back(ep.functor("p", {}));
         cdcl c;
         sim_mock s(10, db, gs, t, seq, ep, bm, lp, c);
 
@@ -18214,11 +18214,11 @@ void test_sim() {
         trail t; t.push();
         expr_pool ep(t); bind_map bm(t); sequencer seq(t); lineage_pool lp;
         database db;
-        db.push_back(rule{ep.atom("p"), {ep.atom("q")}});  // rule 0: p :- q.
-        db.push_back(rule{ep.atom("q"), {ep.atom("r")}});  // rule 1: q :- r.
-        db.push_back(rule{ep.atom("r"), {}});               // rule 2: r :- .
+        db.push_back(rule{ep.functor("p", {}), {ep.functor("q", {})}});  // rule 0: p :- q.
+        db.push_back(rule{ep.functor("q", {}), {ep.functor("r", {})}});  // rule 1: q :- r.
+        db.push_back(rule{ep.functor("r", {}), {}});               // rule 2: r :- .
         goals gs;
-        gs.push_back(ep.atom("p"));
+        gs.push_back(ep.functor("p", {}));
         cdcl c;
         sim_mock s(2, db, gs, t, seq, ep, bm, lp, c);
 
@@ -18238,11 +18238,11 @@ void test_sim() {
         trail t; t.push();
         expr_pool ep(t); bind_map bm(t); sequencer seq(t); lineage_pool lp;
         database db;
-        db.push_back(rule{ep.atom("p"), {ep.atom("r")}});  // rule 0: p :- r.
-        db.push_back(rule{ep.atom("p"), {ep.atom("q")}});  // rule 1: p :- q.
-        db.push_back(rule{ep.atom("q"), {}});               // rule 2: q :- .
+        db.push_back(rule{ep.functor("p", {}), {ep.functor("r", {})}});  // rule 0: p :- r.
+        db.push_back(rule{ep.functor("p", {}), {ep.functor("q", {})}});  // rule 1: p :- q.
+        db.push_back(rule{ep.functor("q", {}), {}});               // rule 2: q :- .
         goals gs;
-        gs.push_back(ep.atom("p"));
+        gs.push_back(ep.functor("p", {}));
         cdcl c;
 
         const goal_lineage* gl0 = lp.goal(nullptr, 0);
@@ -18266,9 +18266,9 @@ void test_sim() {
         trail t; t.push();
         expr_pool ep(t); bind_map bm(t); sequencer seq(t); lineage_pool lp;
         database db;
-        db.push_back(rule{ep.atom("p"), {}});
+        db.push_back(rule{ep.functor("p", {}), {}});
         goals gs;
-        gs.push_back(ep.atom("p"));
+        gs.push_back(ep.functor("p", {}));
         cdcl c;
         sim_mock s(10, db, gs, t, seq, ep, bm, lp, c);
 
@@ -18349,10 +18349,10 @@ void test_ridge_sim_constructor() {
         lineage_pool lp;
         
         database db;
-        db.push_back(rule{ep.atom("p"), {}});
+        db.push_back(rule{ep.functor("p", {}), {}});
         
         goals goals;
-        goals.push_back(ep.atom("p"));
+        goals.push_back(ep.functor("p", {}));
         
         cdcl c;
         
@@ -18369,7 +18369,7 @@ void test_ridge_sim_constructor() {
             const goal_lineage* gl = lp.goal(nullptr, 0);
             assert(gl->parent == nullptr);
             assert(gl->idx == 0);
-            assert(simulation.gs.at(gl) == ep.atom("p"));
+            assert(simulation.gs.at(gl) == ep.functor("p", {}));
             
             // CRITICAL: Candidate added to candidate_store (1 goal * 1 db rule = 1 candidate)
             assert(simulation.cs.size() == 1);
@@ -18399,14 +18399,14 @@ void test_ridge_sim_constructor() {
         lineage_pool lp;
         
         database db;
-        db.push_back(rule{ep.atom("p"), {}});
-        db.push_back(rule{ep.atom("q"), {}});
-        db.push_back(rule{ep.atom("r"), {}});
+        db.push_back(rule{ep.functor("p", {}), {}});
+        db.push_back(rule{ep.functor("q", {}), {}});
+        db.push_back(rule{ep.functor("r", {}), {}});
         
         goals goals;
-        goals.push_back(ep.atom("p"));
-        goals.push_back(ep.atom("q"));
-        goals.push_back(ep.atom("r"));
+        goals.push_back(ep.functor("p", {}));
+        goals.push_back(ep.functor("q", {}));
+        goals.push_back(ep.functor("r", {}));
         
         cdcl c;
         
@@ -18428,13 +18428,13 @@ void test_ridge_sim_constructor() {
         for (const auto& [gl, ge] : simulation.gs) {
             if (gl->idx == 0) {
                 gl0 = gl;
-                assert(ge == ep.atom("p"));
+                assert(ge == ep.functor("p", {}));
             } else if (gl->idx == 1) {
                 gl1 = gl;
-                assert(ge == ep.atom("q"));
+                assert(ge == ep.functor("q", {}));
             } else if (gl->idx == 2) {
                 gl2 = gl;
-                assert(ge == ep.atom("r"));
+                assert(ge == ep.functor("r", {}));
             }
         }
         
@@ -18482,13 +18482,13 @@ void test_ridge_sim_constructor() {
         lineage_pool lp;
         
         database db;
-        db.push_back(rule{ep.atom("p"), {}});
+        db.push_back(rule{ep.functor("p", {}), {}});
         // No rule for "q" or "r"
         
         goals goals;
-        goals.push_back(ep.atom("p"));
-        goals.push_back(ep.atom("q"));
-        goals.push_back(ep.atom("r"));
+        goals.push_back(ep.functor("p", {}));
+        goals.push_back(ep.functor("q", {}));
+        goals.push_back(ep.functor("r", {}));
         
         cdcl c;
         
@@ -18524,9 +18524,9 @@ void test_ridge_sim_constructor() {
         assert(simulation.ds.size() == 0);
         
         // CRITICAL: Verify goal expressions are correct
-        assert(simulation.gs.at(gl_p) == ep.atom("p"));
-        assert(simulation.gs.at(gl_q) == ep.atom("q"));
-        assert(simulation.gs.at(gl_r) == ep.atom("r"));
+        assert(simulation.gs.at(gl_p) == ep.functor("p", {}));
+        assert(simulation.gs.at(gl_q) == ep.functor("q", {}));
+        assert(simulation.gs.at(gl_r) == ep.functor("r", {}));
         
         // CRITICAL: Verify lineages from correct pool
         assert(lp.goal_lineages.count(*gl_p) == 1);
@@ -18545,12 +18545,12 @@ void test_ridge_sim_constructor() {
         lineage_pool lp;
         
         database db;
-        db.push_back(rule{ep.atom("p"), {}});
-        db.push_back(rule{ep.atom("p"), {ep.atom("q")}});
-        db.push_back(rule{ep.atom("p"), {ep.atom("r")}});
+        db.push_back(rule{ep.functor("p", {}), {}});
+        db.push_back(rule{ep.functor("p", {}), {ep.functor("q", {})}});
+        db.push_back(rule{ep.functor("p", {}), {ep.functor("r", {})}});
         
         goals goals;
-        goals.push_back(ep.atom("p"));
+        goals.push_back(ep.functor("p", {}));
         
         cdcl c;
         
@@ -18572,7 +18572,7 @@ void test_ridge_sim_constructor() {
         assert(simulation.ds.size() == 0);
         
         // CRITICAL: Verify goal expression content
-        assert(simulation.gs.at(gl) == ep.atom("p"));
+        assert(simulation.gs.at(gl) == ep.functor("p", {}));
         
         // CRITICAL: Verify lineage from correct pool
         assert(lp.goal_lineages.count(*gl) == 1);
@@ -18634,18 +18634,18 @@ void test_ridge_sim_constructor() {
         lineage_pool lp;
         
         database db;
-        db.push_back(rule{ep.atom("p"), {}});
-        db.push_back(rule{ep.atom("p"), {ep.atom("x")}});
-        db.push_back(rule{ep.atom("q"), {}});
-        db.push_back(rule{ep.atom("q"), {ep.atom("y")}});
-        db.push_back(rule{ep.atom("q"), {ep.atom("z")}});
-        db.push_back(rule{ep.atom("r"), {ep.atom("w")}});
+        db.push_back(rule{ep.functor("p", {}), {}});
+        db.push_back(rule{ep.functor("p", {}), {ep.functor("x", {})}});
+        db.push_back(rule{ep.functor("q", {}), {}});
+        db.push_back(rule{ep.functor("q", {}), {ep.functor("y", {})}});
+        db.push_back(rule{ep.functor("q", {}), {ep.functor("z", {})}});
+        db.push_back(rule{ep.functor("r", {}), {ep.functor("w", {})}});
         
         goals goals;
-        goals.push_back(ep.atom("p"));
-        goals.push_back(ep.atom("q"));
-        goals.push_back(ep.atom("r"));
-        goals.push_back(ep.atom("s"));  // No matching rule
+        goals.push_back(ep.functor("p", {}));
+        goals.push_back(ep.functor("q", {}));
+        goals.push_back(ep.functor("r", {}));
+        goals.push_back(ep.functor("s", {}));  // No matching rule
         
         cdcl c;
         
@@ -18667,16 +18667,16 @@ void test_ridge_sim_constructor() {
         for (const auto& [gl, ge] : simulation.gs) {
             if (gl->idx == 0) {
                 gl0 = gl;
-                assert(ge == ep.atom("p"));
+                assert(ge == ep.functor("p", {}));
             } else if (gl->idx == 1) {
                 gl1 = gl;
-                assert(ge == ep.atom("q"));
+                assert(ge == ep.functor("q", {}));
             } else if (gl->idx == 2) {
                 gl2 = gl;
-                assert(ge == ep.atom("r"));
+                assert(ge == ep.functor("r", {}));
             } else if (gl->idx == 3) {
                 gl3 = gl;
-                assert(ge == ep.atom("s"));
+                assert(ge == ep.functor("s", {}));
             }
         }
         
@@ -18712,16 +18712,16 @@ void test_ridge_sim_constructor() {
         assert(gl3->parent == nullptr && gl3->idx == 3);
         
         // CRITICAL: Verify goal expressions match exactly
-        assert(simulation.gs.at(gl0) == ep.atom("p"));
-        assert(simulation.gs.at(gl1) == ep.atom("q"));
-        assert(simulation.gs.at(gl2) == ep.atom("r"));
-        assert(simulation.gs.at(gl3) == ep.atom("s"));
+        assert(simulation.gs.at(gl0) == ep.functor("p", {}));
+        assert(simulation.gs.at(gl1) == ep.functor("q", {}));
+        assert(simulation.gs.at(gl2) == ep.functor("r", {}));
+        assert(simulation.gs.at(gl3) == ep.functor("s", {}));
         
         // CRITICAL: Verify database reference holds correct content
         assert(simulation.db.size() == 6);
-        assert(simulation.db[0].head == ep.atom("p"));
-        assert(simulation.db[2].head == ep.atom("q"));
-        assert(simulation.db[5].head == ep.atom("r"));
+        assert(simulation.db[0].head == ep.functor("p", {}));
+        assert(simulation.db[2].head == ep.functor("q", {}));
+        assert(simulation.db[5].head == ep.functor("r", {}));
     }
     
     // Test 9: Pre-populated avoidance store is copied
@@ -18785,7 +18785,7 @@ void test_ridge_sim_constructor() {
         
         database db;
         goals goals;
-        goals.push_back(ep.atom("p"));
+        goals.push_back(ep.functor("p", {}));
         
         cdcl c;
         
@@ -18918,13 +18918,13 @@ void test_ridge_sim_constructor() {
         lineage_pool lp;
         
         database db;
-        db.push_back(rule{ep.atom("x"), {}});
-        db.push_back(rule{ep.atom("y"), {}});
+        db.push_back(rule{ep.functor("x", {}), {}});
+        db.push_back(rule{ep.functor("y", {}), {}});
         
         // Add 5 goals
         goals goals;
         for (int i = 0; i < 5; i++) {
-            goals.push_back(ep.atom("goal" + std::to_string(i)));
+            goals.push_back(ep.functor("goal" + std::to_string(i), {}));
         }
         
         cdcl c;
@@ -18967,10 +18967,10 @@ void test_ridge_sim_constructor() {
         database db;
         
         goals goals;
-        const expr* goal_a = ep.atom("alpha");
-        const expr* goal_b = ep.atom("beta");
-        const expr* goal_c = ep.atom("gamma");
-        const expr* goal_d = ep.atom("delta");
+        const expr* goal_a = ep.functor("alpha", {});
+        const expr* goal_b = ep.functor("beta", {});
+        const expr* goal_c = ep.functor("gamma", {});
+        const expr* goal_d = ep.functor("delta", {});
         
         goals.push_back(goal_a);
         goals.push_back(goal_b);
@@ -19027,10 +19027,10 @@ void test_ridge_sim_decide_one() {
         sequencer seq(t);
         lineage_pool lp;
         database db;
-        db.push_back(rule{ep.atom("p"), {}}); // rule 0
-        db.push_back(rule{ep.atom("p"), {}}); // rule 1
+        db.push_back(rule{ep.functor("p", {}), {}}); // rule 0
+        db.push_back(rule{ep.functor("p", {}), {}}); // rule 1
         goals goals;
-        goals.push_back(ep.atom("p"));
+        goals.push_back(ep.functor("p", {}));
         cdcl c;
 
         const goal_lineage* gl0 = lp.goal(nullptr, 0);
@@ -19066,11 +19066,11 @@ void test_ridge_sim_decide_one() {
         sequencer seq(t);
         lineage_pool lp;
         database db;
-        db.push_back(rule{ep.atom("p"), {}}); // rule 0
-        db.push_back(rule{ep.atom("q"), {}}); // rule 1
+        db.push_back(rule{ep.functor("p", {}), {}}); // rule 0
+        db.push_back(rule{ep.functor("q", {}), {}}); // rule 1
         goals goals;
-        goals.push_back(ep.atom("p")); // gl0
-        goals.push_back(ep.atom("q")); // gl1
+        goals.push_back(ep.functor("p", {})); // gl0
+        goals.push_back(ep.functor("q", {})); // gl1
         cdcl c;
 
         const goal_lineage* gl0 = lp.goal(nullptr, 0);
@@ -19109,9 +19109,9 @@ void test_ridge_sim_decide_one() {
         sequencer seq(t);
         lineage_pool lp;
         database db;
-        db.push_back(rule{ep.atom("p"), {}});
+        db.push_back(rule{ep.functor("p", {}), {}});
         goals goals;
-        goals.push_back(ep.atom("p"));
+        goals.push_back(ep.functor("p", {}));
         cdcl c;
 
         monte_carlo::tree_node<mcts_decider::choice> root;
@@ -19162,9 +19162,9 @@ void test_horizon_sim_reward() {
         sequencer seq(t);
         lineage_pool lp;
         database db;
-        db.push_back(rule{ep.atom("p"), {}});
+        db.push_back(rule{ep.functor("p", {}), {}});
         goals goals;
-        goals.push_back(ep.atom("p"));
+        goals.push_back(ep.functor("p", {}));
         cdcl c;
         monte_carlo::tree_node<mcts_decider::choice> root;
         std::mt19937 rng(42);
@@ -19183,11 +19183,11 @@ void test_horizon_sim_reward() {
         sequencer seq(t);
         lineage_pool lp;
         database db;
-        db.push_back(rule{ep.atom("p"), {}});
-        db.push_back(rule{ep.atom("q"), {}});
+        db.push_back(rule{ep.functor("p", {}), {}});
+        db.push_back(rule{ep.functor("q", {}), {}});
         goals goals;
-        goals.push_back(ep.atom("p"));
-        goals.push_back(ep.atom("q"));
+        goals.push_back(ep.functor("p", {}));
+        goals.push_back(ep.functor("q", {}));
         cdcl c;
         monte_carlo::tree_node<mcts_decider::choice> root;
         std::mt19937 rng(42);
@@ -19239,9 +19239,9 @@ void test_horizon_sim_on_resolve() {
         sequencer seq(t);
         lineage_pool lp;
         database db;
-        db.push_back(rule{ep.atom("p"), {}}); // p :-
+        db.push_back(rule{ep.functor("p", {}), {}}); // p :-
         goals goals;
-        goals.push_back(ep.atom("p")); // weight = 1/1 = 1.0
+        goals.push_back(ep.functor("p", {})); // weight = 1/1 = 1.0
         cdcl c;
         monte_carlo::tree_node<mcts_decider::choice> root;
         std::mt19937 rng(42);
@@ -19271,9 +19271,9 @@ void test_horizon_sim_on_resolve() {
         sequencer seq(t);
         lineage_pool lp;
         database db;
-        db.push_back(rule{ep.atom("p"), {ep.atom("q")}}); // p :- q.
+        db.push_back(rule{ep.functor("p", {}), {ep.functor("q", {})}}); // p :- q.
         goals goals;
-        goals.push_back(ep.atom("p")); // weight = 1.0
+        goals.push_back(ep.functor("p", {})); // weight = 1.0
         cdcl c;
         monte_carlo::tree_node<mcts_decider::choice> root;
         std::mt19937 rng(42);
@@ -19292,7 +19292,7 @@ void test_horizon_sim_on_resolve() {
         assert(near(sim.ws.members.at(sub_gl), 1.0));
         // base class: gs gained sub-goal q
         assert(sim.gs.size() == 1);
-        assert(sim.gs.at(sub_gl) == ep.atom("q"));
+        assert(sim.gs.at(sub_gl) == ep.functor("q", {}));
     }
 
     // Test 3: Two goals, resolve one with fact → reward() == 0.5 (half of total weight)
@@ -19304,11 +19304,11 @@ void test_horizon_sim_on_resolve() {
         sequencer seq(t);
         lineage_pool lp;
         database db;
-        db.push_back(rule{ep.atom("p"), {}});
-        db.push_back(rule{ep.atom("q"), {}});
+        db.push_back(rule{ep.functor("p", {}), {}});
+        db.push_back(rule{ep.functor("q", {}), {}});
         goals goals;
-        goals.push_back(ep.atom("p")); // weight = 0.5
-        goals.push_back(ep.atom("q")); // weight = 0.5
+        goals.push_back(ep.functor("p", {})); // weight = 0.5
+        goals.push_back(ep.functor("q", {})); // weight = 0.5
         cdcl c;
         monte_carlo::tree_node<mcts_decider::choice> root;
         std::mt19937 rng(42);
@@ -19334,11 +19334,11 @@ void test_horizon_sim_on_resolve() {
         sequencer seq(t);
         lineage_pool lp;
         database db;
-        db.push_back(rule{ep.atom("p"), {}});
-        db.push_back(rule{ep.atom("q"), {}});
+        db.push_back(rule{ep.functor("p", {}), {}});
+        db.push_back(rule{ep.functor("q", {}), {}});
         goals goals;
-        goals.push_back(ep.atom("p")); // weight = 0.5
-        goals.push_back(ep.atom("q")); // weight = 0.5
+        goals.push_back(ep.functor("p", {})); // weight = 0.5
+        goals.push_back(ep.functor("q", {})); // weight = 0.5
         cdcl c;
         monte_carlo::tree_node<mcts_decider::choice> root;
         std::mt19937 rng(42);
@@ -19365,9 +19365,9 @@ void test_horizon_sim_on_resolve() {
         sequencer seq(t);
         lineage_pool lp;
         database db;
-        db.push_back(rule{ep.atom("p"), {ep.atom("q"), ep.atom("r")}}); // p :- q, r.
+        db.push_back(rule{ep.functor("p", {}), {ep.functor("q", {}), ep.functor("r", {})}}); // p :- q, r.
         goals goals;
-        goals.push_back(ep.atom("p")); // weight = 1.0
+        goals.push_back(ep.functor("p", {})); // weight = 1.0
         cdcl c;
         monte_carlo::tree_node<mcts_decider::choice> root;
         std::mt19937 rng(42);
@@ -19399,10 +19399,10 @@ void test_horizon_sim_on_resolve() {
         sequencer seq(t);
         lineage_pool lp;
         database db;
-        db.push_back(rule{ep.atom("p"), {ep.atom("q")}}); // rule 0: p :- q.
-        db.push_back(rule{ep.atom("q"), {}});              // rule 1: q :-
+        db.push_back(rule{ep.functor("p", {}), {ep.functor("q", {})}}); // rule 0: p :- q.
+        db.push_back(rule{ep.functor("q", {}), {}});              // rule 1: q :-
         goals goals;
-        goals.push_back(ep.atom("p")); // weight = 1.0
+        goals.push_back(ep.functor("p", {})); // weight = 1.0
         cdcl c;
         monte_carlo::tree_node<mcts_decider::choice> root;
         std::mt19937 rng(42);
@@ -19435,10 +19435,10 @@ void test_horizon_sim_on_resolve() {
         sequencer seq(t);
         lineage_pool lp;
         database db;
-        db.push_back(rule{ep.atom("p"), {ep.atom("q"), ep.atom("r")}}); // rule 0: p :- q, r.
-        db.push_back(rule{ep.atom("q"), {}});                            // rule 1: q :-
+        db.push_back(rule{ep.functor("p", {}), {ep.functor("q", {}), ep.functor("r", {})}}); // rule 0: p :- q, r.
+        db.push_back(rule{ep.functor("q", {}), {}});                            // rule 1: q :-
         goals goals;
-        goals.push_back(ep.atom("p")); // weight = 1.0
+        goals.push_back(ep.functor("p", {})); // weight = 1.0
         cdcl c;
         monte_carlo::tree_node<mcts_decider::choice> root;
         std::mt19937 rng(42);
@@ -19475,11 +19475,11 @@ void test_horizon_sim_on_resolve() {
         sequencer seq(t);
         lineage_pool lp;
         database db;
-        db.push_back(rule{ep.atom("p"), {ep.atom("q")}}); // rule 0: p :- q.
-        db.push_back(rule{ep.atom("q"), {ep.atom("r")}}); // rule 1: q :- r.
-        db.push_back(rule{ep.atom("r"), {}});              // rule 2: r :-
+        db.push_back(rule{ep.functor("p", {}), {ep.functor("q", {})}}); // rule 0: p :- q.
+        db.push_back(rule{ep.functor("q", {}), {ep.functor("r", {})}}); // rule 1: q :- r.
+        db.push_back(rule{ep.functor("r", {}), {}});              // rule 2: r :-
         goals goals;
-        goals.push_back(ep.atom("p")); // weight = 1.0
+        goals.push_back(ep.functor("p", {})); // weight = 1.0
         cdcl c;
         monte_carlo::tree_node<mcts_decider::choice> root;
         std::mt19937 rng(42);
@@ -19517,12 +19517,12 @@ void test_horizon_sim_on_resolve() {
         sequencer seq(t);
         lineage_pool lp;
         database db;
-        db.push_back(rule{ep.atom("a"), {ep.atom("x"), ep.atom("y")}}); // rule 0: a :- x, y.
-        db.push_back(rule{ep.atom("x"), {}});                            // rule 1: x :-
+        db.push_back(rule{ep.functor("a", {}), {ep.functor("x", {}), ep.functor("y", {})}}); // rule 0: a :- x, y.
+        db.push_back(rule{ep.functor("x", {}), {}});                            // rule 1: x :-
         goals goals;
-        goals.push_back(ep.atom("a")); // weight = 1/3
-        goals.push_back(ep.atom("b")); // weight = 1/3
-        goals.push_back(ep.atom("c")); // weight = 1/3
+        goals.push_back(ep.functor("a", {})); // weight = 1/3
+        goals.push_back(ep.functor("b", {})); // weight = 1/3
+        goals.push_back(ep.functor("c", {})); // weight = 1/3
         cdcl c;
         monte_carlo::tree_node<mcts_decider::choice> root;
         std::mt19937 rng(42);
@@ -19555,12 +19555,12 @@ void test_horizon_sim_on_resolve() {
         sequencer seq(t);
         lineage_pool lp;
         database db;
-        db.push_back(rule{ep.atom("p"), {ep.atom("q"), ep.atom("r"), ep.atom("s")}}); // rule 0: p :- q, r, s.
-        db.push_back(rule{ep.atom("q"), {}}); // rule 1: q :-
-        db.push_back(rule{ep.atom("r"), {}}); // rule 2: r :-
-        db.push_back(rule{ep.atom("s"), {}}); // rule 3: s :-
+        db.push_back(rule{ep.functor("p", {}), {ep.functor("q", {}), ep.functor("r", {}), ep.functor("s", {})}}); // rule 0: p :- q, r, s.
+        db.push_back(rule{ep.functor("q", {}), {}}); // rule 1: q :-
+        db.push_back(rule{ep.functor("r", {}), {}}); // rule 2: r :-
+        db.push_back(rule{ep.functor("s", {}), {}}); // rule 3: s :-
         goals goals;
-        goals.push_back(ep.atom("p")); // weight = 1.0
+        goals.push_back(ep.functor("p", {})); // weight = 1.0
         cdcl c;
         monte_carlo::tree_node<mcts_decider::choice> root;
         std::mt19937 rng(42);
@@ -19599,14 +19599,14 @@ void test_horizon_sim_on_resolve() {
         sequencer seq(t);
         lineage_pool lp;
         database db;
-        db.push_back(rule{ep.atom("a"), {ep.atom("c")}});              // rule 0: a :- c.
-        db.push_back(rule{ep.atom("c"), {}});                           // rule 1: c :-
-        db.push_back(rule{ep.atom("b"), {ep.atom("d"), ep.atom("e")}}); // rule 2: b :- d, e.
-        db.push_back(rule{ep.atom("d"), {}});                           // rule 3: d :-
-        db.push_back(rule{ep.atom("e"), {}});                           // rule 4: e :-
+        db.push_back(rule{ep.functor("a", {}), {ep.functor("c", {})}});              // rule 0: a :- c.
+        db.push_back(rule{ep.functor("c", {}), {}});                           // rule 1: c :-
+        db.push_back(rule{ep.functor("b", {}), {ep.functor("d", {}), ep.functor("e", {})}}); // rule 2: b :- d, e.
+        db.push_back(rule{ep.functor("d", {}), {}});                           // rule 3: d :-
+        db.push_back(rule{ep.functor("e", {}), {}});                           // rule 4: e :-
         goals goals;
-        goals.push_back(ep.atom("a")); // gl0, weight = 0.5
-        goals.push_back(ep.atom("b")); // gl1, weight = 0.5
+        goals.push_back(ep.functor("a", {})); // gl0, weight = 0.5
+        goals.push_back(ep.functor("b", {})); // gl1, weight = 0.5
         cdcl c;
         monte_carlo::tree_node<mcts_decider::choice> root;
         std::mt19937 rng(42);
@@ -19655,11 +19655,11 @@ void test_horizon_sim_on_resolve() {
         sequencer seq(t);
         lineage_pool lp;
         database db;
-        db.push_back(rule{ep.atom("p"), {ep.atom("q"), ep.atom("r")}}); // rule 0: p :- q, r.
-        db.push_back(rule{ep.atom("q"), {ep.atom("s"), ep.atom("t")}}); // rule 1: q :- s, t.
-        db.push_back(rule{ep.atom("s"), {}});                            // rule 2: s :-
+        db.push_back(rule{ep.functor("p", {}), {ep.functor("q", {}), ep.functor("r", {})}}); // rule 0: p :- q, r.
+        db.push_back(rule{ep.functor("q", {}), {ep.functor("s", {}), ep.functor("t", {})}}); // rule 1: q :- s, t.
+        db.push_back(rule{ep.functor("s", {}), {}});                            // rule 2: s :-
         goals goals;
-        goals.push_back(ep.atom("p")); // weight = 1.0
+        goals.push_back(ep.functor("p", {})); // weight = 1.0
         cdcl c;
         monte_carlo::tree_node<mcts_decider::choice> root;
         std::mt19937 rng(42);
@@ -19704,10 +19704,10 @@ void test_horizon() {
         sequencer seq(t);
 
         database db;
-        db.push_back(rule{ep.atom("a"), {}});
+        db.push_back(rule{ep.functor("a", {}), {}});
 
         goals goals;
-        goals.push_back(ep.atom("a"));
+        goals.push_back(ep.functor("a", {}));
 
         std::mt19937 rng(42);
         horizon solver(solver_args{db, goals, t, seq, bm, 1000}, mcts_solver_args{1.414, rng});
@@ -19735,10 +19735,10 @@ void test_horizon() {
         sequencer seq(t);
 
         database db;
-        db.push_back(rule{ep.atom("a"), {}});  // idx 0: a.
+        db.push_back(rule{ep.functor("a", {}), {}});  // idx 0: a.
 
         goals goals;
-        goals.push_back(ep.atom("a"));
+        goals.push_back(ep.functor("a", {}));
 
         std::mt19937 rng(42);
         horizon solver(solver_args{db, goals, t, seq, bm, 1000}, mcts_solver_args{1.414, rng});
@@ -19777,11 +19777,11 @@ void test_horizon() {
         sequencer seq(t);
 
         database db;
-        db.push_back(rule{ep.cons(ep.atom("answer"), ep.atom("42")), {}});  // idx 0
+        db.push_back(rule{ep.functor("cons", {ep.functor("answer", {}), ep.functor("42", {})}), {}});  // idx 0
 
         const expr* X = ep.var(seq());
         goals goals;
-        goals.push_back(ep.cons(ep.atom("answer"), X));
+        goals.push_back(ep.functor("cons", {ep.functor("answer", {}), X}));
 
         std::mt19937 rng(42);
         horizon solver(solver_args{db, goals, t, seq, bm, 1000}, mcts_solver_args{1.414, rng});
@@ -19796,8 +19796,8 @@ void test_horizon() {
         // CRITICAL: normalizer follows bm chain and returns atom("42")
         normalizer norm(ep, bm);
         const expr* X_val = norm(X);
-        assert(std::holds_alternative<expr::atom>(X_val->content));
-        assert(std::get<expr::atom>(X_val->content).value == "42");
+        assert(std::holds_alternative<expr::functor>(X_val->content));
+        assert(std::get<expr::functor>(X_val->content).name == "42");
     }
 
     // Test 4: Immediate refutation — empty database, goal has no candidates.
@@ -19813,7 +19813,7 @@ void test_horizon() {
         database db;  // intentionally empty
 
         goals goals;
-        goals.push_back(ep.atom("a"));
+        goals.push_back(ep.functor("a", {}));
 
         std::mt19937 rng(42);
         horizon solver(solver_args{db, goals, t, seq, bm, 1000}, mcts_solver_args{1.414, rng});
@@ -19843,11 +19843,11 @@ void test_horizon() {
         sequencer seq(t);
 
         database db;
-        db.push_back(rule{ep.atom("a"), {ep.atom("b")}});  // idx 0: a :- b.
-        db.push_back(rule{ep.atom("a"), {ep.atom("c")}});  // idx 1: a :- c.
+        db.push_back(rule{ep.functor("a", {}), {ep.functor("b", {})}});  // idx 0: a :- b.
+        db.push_back(rule{ep.functor("a", {}), {ep.functor("c", {})}});  // idx 1: a :- c.
 
         goals goals;
-        goals.push_back(ep.atom("a"));
+        goals.push_back(ep.functor("a", {}));
 
         std::mt19937 rng(42);
         horizon solver(solver_args{db, goals, t, seq, bm, 1000}, mcts_solver_args{1.414, rng});
@@ -19884,15 +19884,15 @@ void test_horizon() {
         sequencer seq(t);
 
         database db;
-        db.push_back(rule{ep.cons(ep.atom("is_a"), ep.atom("1")), {}});  // idx 0
-        db.push_back(rule{ep.cons(ep.atom("is_a"), ep.atom("2")), {}});  // idx 1
-        db.push_back(rule{ep.cons(ep.atom("is_b"), ep.atom("2")), {}});  // idx 2
-        db.push_back(rule{ep.cons(ep.atom("is_b"), ep.atom("3")), {}});  // idx 3
+        db.push_back(rule{ep.functor("cons", {ep.functor("is_a", {}), ep.functor("1", {})}), {}});  // idx 0
+        db.push_back(rule{ep.functor("cons", {ep.functor("is_a", {}), ep.functor("2", {})}), {}});  // idx 1
+        db.push_back(rule{ep.functor("cons", {ep.functor("is_b", {}), ep.functor("2", {})}), {}});  // idx 2
+        db.push_back(rule{ep.functor("cons", {ep.functor("is_b", {}), ep.functor("3", {})}), {}});  // idx 3
 
         const expr* X = ep.var(seq());
         goals goals;
-        goals.push_back(ep.cons(ep.atom("is_a"), X));  // goal 0: is_a(X)
-        goals.push_back(ep.cons(ep.atom("is_b"), X));  // goal 1: is_b(X)
+        goals.push_back(ep.functor("cons", {ep.functor("is_a", {}), X}));  // goal 0: is_a(X)
+        goals.push_back(ep.functor("cons", {ep.functor("is_b", {}), X}));  // goal 1: is_b(X)
 
         std::mt19937 rng(42);
         horizon solver(solver_args{db, goals, t, seq, bm, 1000}, mcts_solver_args{1.414, rng});
@@ -19908,8 +19908,8 @@ void test_horizon() {
 
         // CRITICAL: bm binds X to "2"
         const expr* X_val = norm(X);
-        assert(std::holds_alternative<expr::atom>(X_val->content));
-        assert(std::get<expr::atom>(X_val->content).value == "2");
+        assert(std::holds_alternative<expr::functor>(X_val->content));
+        assert(std::get<expr::functor>(X_val->content).name == "2");
 
         // CRITICAL: soln contains exactly 2 resolutions (one per goal)
         assert(soln.value().size() == 2);
@@ -19943,13 +19943,13 @@ void test_horizon() {
         sequencer seq(t);
 
         database db;
-        db.push_back(rule{ep.cons(ep.cons(ep.atom("parent"), ep.atom("bob")),   ep.atom("alice")), {}});  // idx 0
-        db.push_back(rule{ep.cons(ep.cons(ep.atom("parent"), ep.atom("carol")), ep.atom("alice")), {}});  // idx 1
-        db.push_back(rule{ep.cons(ep.cons(ep.atom("parent"), ep.atom("dave")),  ep.atom("bob")),  {}});   // idx 2
+        db.push_back(rule{ep.functor("cons", {ep.functor("cons", {ep.functor("parent", {}), ep.functor("bob", {})}), ep.functor("alice", {})}), {}});  // idx 0
+        db.push_back(rule{ep.functor("cons", {ep.functor("cons", {ep.functor("parent", {}), ep.functor("carol", {})}), ep.functor("alice", {})}), {}});  // idx 1
+        db.push_back(rule{ep.functor("cons", {ep.functor("cons", {ep.functor("parent", {}), ep.functor("dave", {})}), ep.functor("bob", {})}),  {}});   // idx 2
 
         const expr* X = ep.var(seq());
         goals goals;
-        goals.push_back(ep.cons(ep.cons(ep.atom("parent"), X), ep.atom("alice")));
+        goals.push_back(ep.functor("cons", {ep.functor("cons", {ep.functor("parent", {}), X}), ep.functor("alice", {})}));
 
         std::mt19937 rng(42);
         horizon solver(solver_args{db, goals, t, seq, bm, 1000}, mcts_solver_args{1.414, rng});
@@ -19965,8 +19965,8 @@ void test_horizon() {
         assert(soln.value().size() == 1);
 
         const expr* X_val1 = norm(X);
-        assert(std::holds_alternative<expr::atom>(X_val1->content));
-        std::string parent1 = std::get<expr::atom>(X_val1->content).value;
+        assert(std::holds_alternative<expr::functor>(X_val1->content));
+        std::string parent1 = std::get<expr::functor>(X_val1->content).name;
         assert(parent1 == "bob" || parent1 == "carol");
 
         // Second parent of alice — CDCL blocks the first decision; other rule is unit-prop'd
@@ -19977,8 +19977,8 @@ void test_horizon() {
         assert(soln.value().size() == 1);
 
         const expr* X_val2 = norm(X);
-        assert(std::holds_alternative<expr::atom>(X_val2->content));
-        std::string parent2 = std::get<expr::atom>(X_val2->content).value;
+        assert(std::holds_alternative<expr::functor>(X_val2->content));
+        std::string parent2 = std::get<expr::functor>(X_val2->content).name;
         assert(parent2 == "bob" || parent2 == "carol");
 
         // CRITICAL: the two solutions bind X to different names
@@ -20007,21 +20007,21 @@ void test_horizon() {
         sequencer seq(t);
 
         database db;
-        db.push_back(rule{ep.cons(ep.atom("color"), ep.atom("red")),  {}});  // idx 0
-        db.push_back(rule{ep.cons(ep.atom("color"), ep.atom("blue")), {}});  // idx 1
-        db.push_back(rule{ep.cons(ep.cons(ep.atom("diff"), ep.atom("red")),  ep.atom("blue")), {}});  // idx 2
-        db.push_back(rule{ep.cons(ep.cons(ep.atom("diff"), ep.atom("blue")), ep.atom("red")),  {}});  // idx 3
+        db.push_back(rule{ep.functor("cons", {ep.functor("color", {}), ep.functor("red", {})}),  {}});  // idx 0
+        db.push_back(rule{ep.functor("cons", {ep.functor("color", {}), ep.functor("blue", {})}), {}});  // idx 1
+        db.push_back(rule{ep.functor("cons", {ep.functor("cons", {ep.functor("diff", {}), ep.functor("red", {})}), ep.functor("blue", {})}), {}});  // idx 2
+        db.push_back(rule{ep.functor("cons", {ep.functor("cons", {ep.functor("diff", {}), ep.functor("blue", {})}), ep.functor("red", {})}),  {}});  // idx 3
 
         const expr* A = ep.var(seq());
         const expr* B = ep.var(seq());
         const expr* C = ep.var(seq());
 
         goals goals;
-        goals.push_back(ep.cons(ep.atom("color"), A));             // goal 0: color(A)
-        goals.push_back(ep.cons(ep.atom("color"), B));             // goal 1: color(B)
-        goals.push_back(ep.cons(ep.atom("color"), C));             // goal 2: color(C)
-        goals.push_back(ep.cons(ep.cons(ep.atom("diff"), A), B));  // goal 3: diff(A, B)
-        goals.push_back(ep.cons(ep.cons(ep.atom("diff"), B), C));  // goal 4: diff(B, C)
+        goals.push_back(ep.functor("cons", {ep.functor("color", {}), A}));             // goal 0: color(A)
+        goals.push_back(ep.functor("cons", {ep.functor("color", {}), B}));             // goal 1: color(B)
+        goals.push_back(ep.functor("cons", {ep.functor("color", {}), C}));             // goal 2: color(C)
+        goals.push_back(ep.functor("cons", {ep.functor("cons", {ep.functor("diff", {}), A}), B}));  // goal 3: diff(A, B)
+        goals.push_back(ep.functor("cons", {ep.functor("cons", {ep.functor("diff", {}), B}), C}));  // goal 4: diff(B, C)
 
         std::mt19937 rng(42);
         horizon solver(solver_args{db, goals, t, seq, bm, 1000}, mcts_solver_args{1.414, rng});
@@ -20040,9 +20040,9 @@ void test_horizon() {
         assert(soln.has_value());
         assert(soln.value().size() == 5);
 
-        std::string A1 = std::get<expr::atom>(norm(A)->content).value;
-        std::string B1 = std::get<expr::atom>(norm(B)->content).value;
-        std::string C1 = std::get<expr::atom>(norm(C)->content).value;
+        std::string A1 = std::get<expr::functor>(norm(A)->content).name;
+        std::string B1 = std::get<expr::functor>(norm(B)->content).name;
+        std::string C1 = std::get<expr::functor>(norm(C)->content).name;
 
         assert(is_valid_color(A1) && is_valid_color(B1) && is_valid_color(C1));
         // CRITICAL: adjacent nodes have different colors
@@ -20058,9 +20058,9 @@ void test_horizon() {
         assert(soln.has_value());
         assert(soln.value().size() == 5);
 
-        std::string A2 = std::get<expr::atom>(norm(A)->content).value;
-        std::string B2 = std::get<expr::atom>(norm(B)->content).value;
-        std::string C2 = std::get<expr::atom>(norm(C)->content).value;
+        std::string A2 = std::get<expr::functor>(norm(A)->content).name;
+        std::string B2 = std::get<expr::functor>(norm(B)->content).name;
+        std::string C2 = std::get<expr::functor>(norm(C)->content).name;
 
         assert(is_valid_color(A2) && is_valid_color(B2) && is_valid_color(C2));
         assert(A2 != B2);
@@ -20102,9 +20102,9 @@ void test_horizon() {
 
         // Facts: parent(alice,carol), parent(bob,carol), parent(carol,dave)
         database db;
-        db.push_back(rule{ep.cons(ep.cons(ep.atom("parent"), ep.atom("alice")), ep.atom("carol")), {}});  // idx 0
-        db.push_back(rule{ep.cons(ep.cons(ep.atom("parent"), ep.atom("bob")),   ep.atom("carol")), {}});  // idx 1
-        db.push_back(rule{ep.cons(ep.cons(ep.atom("parent"), ep.atom("carol")), ep.atom("dave")),  {}});  // idx 2
+        db.push_back(rule{ep.functor("cons", {ep.functor("cons", {ep.functor("parent", {}), ep.functor("alice", {})}), ep.functor("carol", {})}), {}});  // idx 0
+        db.push_back(rule{ep.functor("cons", {ep.functor("cons", {ep.functor("parent", {}), ep.functor("bob", {})}), ep.functor("carol", {})}), {}});  // idx 1
+        db.push_back(rule{ep.functor("cons", {ep.functor("cons", {ep.functor("parent", {}), ep.functor("carol", {})}), ep.functor("dave", {})}),  {}});  // idx 2
 
         // grandparent(X, Z) :- parent(X, Y), parent(Y, Z).
         {
@@ -20112,15 +20112,15 @@ void test_horizon() {
             const expr* Y = ep.var(seq());
             const expr* Z = ep.var(seq());
             db.push_back(rule{
-                ep.cons(ep.cons(ep.atom("grandparent"), X), Z),
-                {ep.cons(ep.cons(ep.atom("parent"), X), Y),
-                 ep.cons(ep.cons(ep.atom("parent"), Y), Z)}
+                ep.functor("cons", {ep.functor("cons", {ep.functor("grandparent", {}), X}), Z}),
+                {ep.functor("cons", {ep.functor("cons", {ep.functor("parent", {}), X}), Y}),
+                 ep.functor("cons", {ep.functor("cons", {ep.functor("parent", {}), Y}), Z})}
             });  // idx 3
         }
 
         const expr* G = ep.var(seq());
         goals goals;
-        goals.push_back(ep.cons(ep.cons(ep.atom("grandparent"), G), ep.atom("dave")));
+        goals.push_back(ep.functor("cons", {ep.functor("cons", {ep.functor("grandparent", {}), G}), ep.functor("dave", {})}));
 
         std::mt19937 rng(42);
         horizon solver(solver_args{db, goals, t, seq, bm, 1000}, mcts_solver_args{1.414, rng});
@@ -20136,8 +20136,8 @@ void test_horizon() {
         assert(soln.value().size() == 3);
 
         const expr* G_val1 = norm(G);
-        assert(std::holds_alternative<expr::atom>(G_val1->content));
-        std::string gp1 = std::get<expr::atom>(G_val1->content).value;
+        assert(std::holds_alternative<expr::functor>(G_val1->content));
+        std::string gp1 = std::get<expr::functor>(G_val1->content).name;
         assert(gp1 == "alice" || gp1 == "bob");
 
         // Call 2: second grandparent of dave — must differ from the first
@@ -20148,8 +20148,8 @@ void test_horizon() {
         assert(soln.value().size() == 3);
 
         const expr* G_val2 = norm(G);
-        assert(std::holds_alternative<expr::atom>(G_val2->content));
-        std::string gp2 = std::get<expr::atom>(G_val2->content).value;
+        assert(std::holds_alternative<expr::functor>(G_val2->content));
+        std::string gp2 = std::get<expr::functor>(G_val2->content).name;
         assert(gp2 == "alice" || gp2 == "bob");
 
         // CRITICAL: the two solutions bind G to different names
@@ -20259,31 +20259,31 @@ void test_horizon() {
         sequencer seq(t);
 
         database db;
-        db.push_back(rule{ep.cons(ep.atom("color"), ep.atom("red")),   {}});  // idx 0
-        db.push_back(rule{ep.cons(ep.atom("color"), ep.atom("green")), {}});  // idx 1
-        db.push_back(rule{ep.cons(ep.atom("color"), ep.atom("blue")),  {}});  // idx 2
-        db.push_back(rule{ep.cons(ep.cons(ep.atom("diff"), ep.atom("red")),   ep.atom("green")), {}});  // idx 3
-        db.push_back(rule{ep.cons(ep.cons(ep.atom("diff"), ep.atom("red")),   ep.atom("blue")),  {}});  // idx 4
-        db.push_back(rule{ep.cons(ep.cons(ep.atom("diff"), ep.atom("green")), ep.atom("red")),   {}});  // idx 5
-        db.push_back(rule{ep.cons(ep.cons(ep.atom("diff"), ep.atom("green")), ep.atom("blue")),  {}});  // idx 6
-        db.push_back(rule{ep.cons(ep.cons(ep.atom("diff"), ep.atom("blue")),  ep.atom("red")),   {}});  // idx 7
-        db.push_back(rule{ep.cons(ep.cons(ep.atom("diff"), ep.atom("blue")),  ep.atom("green")), {}});  // idx 8
+        db.push_back(rule{ep.functor("cons", {ep.functor("color", {}), ep.functor("red", {})}),   {}});  // idx 0
+        db.push_back(rule{ep.functor("cons", {ep.functor("color", {}), ep.functor("green", {})}), {}});  // idx 1
+        db.push_back(rule{ep.functor("cons", {ep.functor("color", {}), ep.functor("blue", {})}),  {}});  // idx 2
+        db.push_back(rule{ep.functor("cons", {ep.functor("cons", {ep.functor("diff", {}), ep.functor("red", {})}), ep.functor("green", {})}), {}});  // idx 3
+        db.push_back(rule{ep.functor("cons", {ep.functor("cons", {ep.functor("diff", {}), ep.functor("red", {})}), ep.functor("blue", {})}),  {}});  // idx 4
+        db.push_back(rule{ep.functor("cons", {ep.functor("cons", {ep.functor("diff", {}), ep.functor("green", {})}), ep.functor("red", {})}),   {}});  // idx 5
+        db.push_back(rule{ep.functor("cons", {ep.functor("cons", {ep.functor("diff", {}), ep.functor("green", {})}), ep.functor("blue", {})}),  {}});  // idx 6
+        db.push_back(rule{ep.functor("cons", {ep.functor("cons", {ep.functor("diff", {}), ep.functor("blue", {})}), ep.functor("red", {})}),   {}});  // idx 7
+        db.push_back(rule{ep.functor("cons", {ep.functor("cons", {ep.functor("diff", {}), ep.functor("blue", {})}), ep.functor("green", {})}), {}});  // idx 8
 
         const expr* A = ep.var(seq());
         const expr* B = ep.var(seq());
         const expr* C = ep.var(seq());
 
         goals goals;
-        goals.push_back(ep.cons(ep.atom("color"), A));
-        goals.push_back(ep.cons(ep.atom("color"), B));
-        goals.push_back(ep.cons(ep.atom("color"), C));
-        goals.push_back(ep.cons(ep.cons(ep.atom("diff"), A), B));
-        goals.push_back(ep.cons(ep.cons(ep.atom("diff"), A), C));
-        goals.push_back(ep.cons(ep.cons(ep.atom("diff"), B), C));
+        goals.push_back(ep.functor("cons", {ep.functor("color", {}), A}));
+        goals.push_back(ep.functor("cons", {ep.functor("color", {}), B}));
+        goals.push_back(ep.functor("cons", {ep.functor("color", {}), C}));
+        goals.push_back(ep.functor("cons", {ep.functor("cons", {ep.functor("diff", {}), A}), B}));
+        goals.push_back(ep.functor("cons", {ep.functor("cons", {ep.functor("diff", {}), A}), C}));
+        goals.push_back(ep.functor("cons", {ep.functor("cons", {ep.functor("diff", {}), B}), C}));
 
-        const expr* red   = ep.atom("red");
-        const expr* green = ep.atom("green");
-        const expr* blue  = ep.atom("blue");
+        const expr* red   = ep.functor("red", {});
+        const expr* green = ep.functor("green", {});
+        const expr* blue  = ep.functor("blue", {});
 
         std::set<solution> expected = {
             {red,   green, blue },
@@ -20326,39 +20326,39 @@ void test_horizon() {
         sequencer seq(t);
 
         database db;
-        db.push_back(rule{ep.cons(ep.atom("bool"), ep.atom("true")),  {}});  // idx 0
-        db.push_back(rule{ep.cons(ep.atom("bool"), ep.atom("false")), {}});  // idx 1
+        db.push_back(rule{ep.functor("cons", {ep.functor("bool", {}), ep.functor("true", {})}),  {}});  // idx 0
+        db.push_back(rule{ep.functor("cons", {ep.functor("bool", {}), ep.functor("false", {})}), {}});  // idx 1
 
         // or(true, X, true) :- bool(X).
         {
             const expr* X = ep.var(seq());
             db.push_back(rule{
-                ep.cons(ep.cons(ep.cons(ep.atom("or"), ep.atom("true")), X), ep.atom("true")),
-                {ep.cons(ep.atom("bool"), X)}
+                ep.functor("cons", {ep.functor("cons", {ep.functor("cons", {ep.functor("or", {}), ep.functor("true", {})}), X}), ep.functor("true", {})}),
+                {ep.functor("cons", {ep.functor("bool", {}), X})}
             });  // idx 2
         }
         // or(false, X, X) :- bool(X).
         {
             const expr* X = ep.var(seq());
             db.push_back(rule{
-                ep.cons(ep.cons(ep.cons(ep.atom("or"), ep.atom("false")), X), X),
-                {ep.cons(ep.atom("bool"), X)}
+                ep.functor("cons", {ep.functor("cons", {ep.functor("cons", {ep.functor("or", {}), ep.functor("false", {})}), X}), X}),
+                {ep.functor("cons", {ep.functor("bool", {}), X})}
             });  // idx 3
         }
         // and(true, X, X) :- bool(X).
         {
             const expr* X = ep.var(seq());
             db.push_back(rule{
-                ep.cons(ep.cons(ep.cons(ep.atom("and"), ep.atom("true")), X), X),
-                {ep.cons(ep.atom("bool"), X)}
+                ep.functor("cons", {ep.functor("cons", {ep.functor("cons", {ep.functor("and", {}), ep.functor("true", {})}), X}), X}),
+                {ep.functor("cons", {ep.functor("bool", {}), X})}
             });  // idx 4
         }
         // and(false, X, false) :- bool(X).
         {
             const expr* X = ep.var(seq());
             db.push_back(rule{
-                ep.cons(ep.cons(ep.cons(ep.atom("and"), ep.atom("false")), X), ep.atom("false")),
-                {ep.cons(ep.atom("bool"), X)}
+                ep.functor("cons", {ep.functor("cons", {ep.functor("cons", {ep.functor("and", {}), ep.functor("false", {})}), X}), ep.functor("false", {})}),
+                {ep.functor("cons", {ep.functor("bool", {}), X})}
             });  // idx 5
         }
 
@@ -20368,14 +20368,14 @@ void test_horizon() {
         const expr* QR = ep.var(seq());
 
         goals goals;
-        goals.push_back(ep.cons(ep.atom("bool"), P));
-        goals.push_back(ep.cons(ep.atom("bool"), Q));
-        goals.push_back(ep.cons(ep.atom("bool"), R));
-        goals.push_back(ep.cons(ep.cons(ep.cons(ep.atom("or"),  Q), R),  QR));
-        goals.push_back(ep.cons(ep.cons(ep.cons(ep.atom("and"), P), QR), ep.atom("true")));
+        goals.push_back(ep.functor("cons", {ep.functor("bool", {}), P}));
+        goals.push_back(ep.functor("cons", {ep.functor("bool", {}), Q}));
+        goals.push_back(ep.functor("cons", {ep.functor("bool", {}), R}));
+        goals.push_back(ep.functor("cons", {ep.functor("cons", {ep.functor("cons", {ep.functor("or", {}), Q}), R}), QR}));
+        goals.push_back(ep.functor("cons", {ep.functor("cons", {ep.functor("cons", {ep.functor("and", {}), P}), QR}), ep.functor("true", {})}));
 
-        const expr* T_ = ep.atom("true");
-        const expr* F_ = ep.atom("false");
+        const expr* T_ = ep.functor("true", {});
+        const expr* F_ = ep.functor("false", {});
 
         std::set<solution> expected = {
             {T_, T_, T_},
@@ -20412,35 +20412,35 @@ void test_horizon() {
         sequencer seq(t);
 
         auto peano = [&](int n) -> const expr* {
-            const expr* r = ep.atom("zero");
+            const expr* r = ep.functor("zero", {});
             for (int i = 0; i < n; ++i)
-                r = ep.cons(ep.atom("suc"), r);
+                r = ep.functor("cons", {ep.functor("suc", {}), r});
             return r;
         };
 
         database db;
-        db.push_back(rule{ep.cons(ep.atom("nat"), ep.atom("zero")), {}});  // idx 0
+        db.push_back(rule{ep.functor("cons", {ep.functor("nat", {}), ep.functor("zero", {})}), {}});  // idx 0
 
         {
             const expr* X = ep.var(seq());
             db.push_back(rule{
-                ep.cons(ep.atom("nat"), ep.cons(ep.atom("suc"), X)),
-                {ep.cons(ep.atom("nat"), X)}
+                ep.functor("cons", {ep.functor("nat", {}), ep.functor("cons", {ep.functor("suc", {}), X})}),
+                {ep.functor("cons", {ep.functor("nat", {}), X})}
             });  // idx 1
         }
         {
             const expr* X = ep.var(seq());
             db.push_back(rule{
-                ep.cons(ep.cons(ep.atom("lt"), ep.atom("zero")), ep.cons(ep.atom("suc"), X)),
-                {ep.cons(ep.atom("nat"), X)}
+                ep.functor("cons", {ep.functor("cons", {ep.functor("lt", {}), ep.functor("zero", {})}), ep.functor("cons", {ep.functor("suc", {}), X})}),
+                {ep.functor("cons", {ep.functor("nat", {}), X})}
             });  // idx 2
         }
         {
             const expr* X = ep.var(seq());
             const expr* Y = ep.var(seq());
             db.push_back(rule{
-                ep.cons(ep.cons(ep.atom("lt"), ep.cons(ep.atom("suc"), X)), ep.cons(ep.atom("suc"), Y)),
-                {ep.cons(ep.cons(ep.atom("lt"), X), Y)}
+                ep.functor("cons", {ep.functor("cons", {ep.functor("lt", {}), ep.functor("cons", {ep.functor("suc", {}), X})}), ep.functor("cons", {ep.functor("suc", {}), Y})}),
+                {ep.functor("cons", {ep.functor("cons", {ep.functor("lt", {}), X}), Y})}
             });  // idx 3
         }
 
@@ -20448,7 +20448,7 @@ void test_horizon() {
         const expr* five = peano(5);
 
         goals goals;
-        goals.push_back(ep.cons(ep.cons(ep.atom("lt"), N), five));
+        goals.push_back(ep.functor("cons", {ep.functor("cons", {ep.functor("lt", {}), N}), five}));
 
         std::set<solution> expected = {
             {peano(0)}, {peano(1)}, {peano(2)}, {peano(3)}, {peano(4)},
@@ -20495,9 +20495,9 @@ void test_horizon() {
         sequencer seq(t);
 
         database db;
-        db.push_back(rule{ep.cons(ep.cons(ep.atom("parent"), ep.atom("tom")), ep.atom("alice")), {}});  // idx 0
-        db.push_back(rule{ep.cons(ep.cons(ep.atom("parent"), ep.atom("tom")), ep.atom("bob")),   {}});  // idx 1
-        db.push_back(rule{ep.cons(ep.cons(ep.atom("parent"), ep.atom("sue")), ep.atom("carol")), {}});  // idx 2
+        db.push_back(rule{ep.functor("cons", {ep.functor("cons", {ep.functor("parent", {}), ep.functor("tom", {})}), ep.functor("alice", {})}), {}});  // idx 0
+        db.push_back(rule{ep.functor("cons", {ep.functor("cons", {ep.functor("parent", {}), ep.functor("tom", {})}), ep.functor("bob", {})}),   {}});  // idx 1
+        db.push_back(rule{ep.functor("cons", {ep.functor("cons", {ep.functor("parent", {}), ep.functor("sue", {})}), ep.functor("carol", {})}), {}});  // idx 2
 
         // sibling(X, Y) :- parent(P, X), parent(P, Y).
         {
@@ -20505,18 +20505,18 @@ void test_horizon() {
             const expr* Y = ep.var(seq());
             const expr* Pv = ep.var(seq());
             db.push_back(rule{
-                ep.cons(ep.cons(ep.atom("sibling"), X), Y),
-                {ep.cons(ep.cons(ep.atom("parent"), Pv), X),
-                 ep.cons(ep.cons(ep.atom("parent"), Pv), Y)}
+                ep.functor("cons", {ep.functor("cons", {ep.functor("sibling", {}), X}), Y}),
+                {ep.functor("cons", {ep.functor("cons", {ep.functor("parent", {}), Pv}), X}),
+                 ep.functor("cons", {ep.functor("cons", {ep.functor("parent", {}), Pv}), Y})}
             });  // idx 3
         }
 
         const expr* X = ep.var(seq());
         goals goals;
-        goals.push_back(ep.cons(ep.cons(ep.atom("sibling"), X), ep.atom("alice")));
+        goals.push_back(ep.functor("cons", {ep.functor("cons", {ep.functor("sibling", {}), X}), ep.functor("alice", {})}));
 
-        const expr* alice = ep.atom("alice");
-        const expr* bob   = ep.atom("bob");
+        const expr* alice = ep.functor("alice", {});
+        const expr* bob   = ep.functor("bob", {});
 
         std::set<solution> expected = {
             {alice},
@@ -20551,15 +20551,15 @@ void test_horizon() {
         sequencer seq(t);
 
         database db;
-        db.push_back(rule{ep.cons(ep.atom("color"), ep.atom("red")),   {}});  // idx 0
-        db.push_back(rule{ep.cons(ep.atom("color"), ep.atom("green")), {}});  // idx 1
-        db.push_back(rule{ep.cons(ep.atom("color"), ep.atom("blue")),  {}});  // idx 2
-        db.push_back(rule{ep.cons(ep.cons(ep.atom("diff"), ep.atom("red")),   ep.atom("green")), {}});  // idx 3
-        db.push_back(rule{ep.cons(ep.cons(ep.atom("diff"), ep.atom("red")),   ep.atom("blue")),  {}});  // idx 4
-        db.push_back(rule{ep.cons(ep.cons(ep.atom("diff"), ep.atom("green")), ep.atom("red")),   {}});  // idx 5
-        db.push_back(rule{ep.cons(ep.cons(ep.atom("diff"), ep.atom("green")), ep.atom("blue")),  {}});  // idx 6
-        db.push_back(rule{ep.cons(ep.cons(ep.atom("diff"), ep.atom("blue")),  ep.atom("red")),   {}});  // idx 7
-        db.push_back(rule{ep.cons(ep.cons(ep.atom("diff"), ep.atom("blue")),  ep.atom("green")), {}});  // idx 8
+        db.push_back(rule{ep.functor("cons", {ep.functor("color", {}), ep.functor("red", {})}),   {}});  // idx 0
+        db.push_back(rule{ep.functor("cons", {ep.functor("color", {}), ep.functor("green", {})}), {}});  // idx 1
+        db.push_back(rule{ep.functor("cons", {ep.functor("color", {}), ep.functor("blue", {})}),  {}});  // idx 2
+        db.push_back(rule{ep.functor("cons", {ep.functor("cons", {ep.functor("diff", {}), ep.functor("red", {})}), ep.functor("green", {})}), {}});  // idx 3
+        db.push_back(rule{ep.functor("cons", {ep.functor("cons", {ep.functor("diff", {}), ep.functor("red", {})}), ep.functor("blue", {})}),  {}});  // idx 4
+        db.push_back(rule{ep.functor("cons", {ep.functor("cons", {ep.functor("diff", {}), ep.functor("green", {})}), ep.functor("red", {})}),   {}});  // idx 5
+        db.push_back(rule{ep.functor("cons", {ep.functor("cons", {ep.functor("diff", {}), ep.functor("green", {})}), ep.functor("blue", {})}),  {}});  // idx 6
+        db.push_back(rule{ep.functor("cons", {ep.functor("cons", {ep.functor("diff", {}), ep.functor("blue", {})}), ep.functor("red", {})}),   {}});  // idx 7
+        db.push_back(rule{ep.functor("cons", {ep.functor("cons", {ep.functor("diff", {}), ep.functor("blue", {})}), ep.functor("green", {})}), {}});  // idx 8
 
         const expr* A = ep.var(seq());
         const expr* B = ep.var(seq());
@@ -20567,18 +20567,18 @@ void test_horizon() {
         const expr* D = ep.var(seq());
 
         goals goals;
-        goals.push_back(ep.cons(ep.atom("color"), A));
-        goals.push_back(ep.cons(ep.atom("color"), B));
-        goals.push_back(ep.cons(ep.atom("color"), C));
-        goals.push_back(ep.cons(ep.atom("color"), D));
-        goals.push_back(ep.cons(ep.cons(ep.atom("diff"), A), B));
-        goals.push_back(ep.cons(ep.cons(ep.atom("diff"), A), C));
-        goals.push_back(ep.cons(ep.cons(ep.atom("diff"), B), C));
-        goals.push_back(ep.cons(ep.cons(ep.atom("diff"), A), D));
+        goals.push_back(ep.functor("cons", {ep.functor("color", {}), A}));
+        goals.push_back(ep.functor("cons", {ep.functor("color", {}), B}));
+        goals.push_back(ep.functor("cons", {ep.functor("color", {}), C}));
+        goals.push_back(ep.functor("cons", {ep.functor("color", {}), D}));
+        goals.push_back(ep.functor("cons", {ep.functor("cons", {ep.functor("diff", {}), A}), B}));
+        goals.push_back(ep.functor("cons", {ep.functor("cons", {ep.functor("diff", {}), A}), C}));
+        goals.push_back(ep.functor("cons", {ep.functor("cons", {ep.functor("diff", {}), B}), C}));
+        goals.push_back(ep.functor("cons", {ep.functor("cons", {ep.functor("diff", {}), A}), D}));
 
-        const expr* R_ = ep.atom("red");
-        const expr* G_ = ep.atom("green");
-        const expr* B_ = ep.atom("blue");
+        const expr* R_ = ep.functor("red", {});
+        const expr* G_ = ep.functor("green", {});
+        const expr* B_ = ep.functor("blue", {});
 
         std::set<solution> expected = {
             {R_, G_, B_, G_}, {R_, G_, B_, B_},
@@ -20620,37 +20620,37 @@ void test_horizon() {
         sequencer seq(t);
 
         database db;
-        db.push_back(rule{ep.cons(ep.atom("bool"), ep.atom("true")),  {}});  // idx 0
-        db.push_back(rule{ep.cons(ep.atom("bool"), ep.atom("false")), {}});  // idx 1
-        db.push_back(rule{ep.cons(ep.cons(ep.atom("not"), ep.atom("true")),  ep.atom("false")), {}});  // idx 2
-        db.push_back(rule{ep.cons(ep.cons(ep.atom("not"), ep.atom("false")), ep.atom("true")),  {}});  // idx 3
+        db.push_back(rule{ep.functor("cons", {ep.functor("bool", {}), ep.functor("true", {})}),  {}});  // idx 0
+        db.push_back(rule{ep.functor("cons", {ep.functor("bool", {}), ep.functor("false", {})}), {}});  // idx 1
+        db.push_back(rule{ep.functor("cons", {ep.functor("cons", {ep.functor("not", {}), ep.functor("true", {})}), ep.functor("false", {})}), {}});  // idx 2
+        db.push_back(rule{ep.functor("cons", {ep.functor("cons", {ep.functor("not", {}), ep.functor("false", {})}), ep.functor("true", {})}),  {}});  // idx 3
 
         {
             const expr* X = ep.var(seq());
             db.push_back(rule{
-                ep.cons(ep.cons(ep.cons(ep.atom("or"), ep.atom("true")), X), ep.atom("true")),
-                {ep.cons(ep.atom("bool"), X)}
+                ep.functor("cons", {ep.functor("cons", {ep.functor("cons", {ep.functor("or", {}), ep.functor("true", {})}), X}), ep.functor("true", {})}),
+                {ep.functor("cons", {ep.functor("bool", {}), X})}
             });  // idx 4
         }
         {
             const expr* X = ep.var(seq());
             db.push_back(rule{
-                ep.cons(ep.cons(ep.cons(ep.atom("or"), ep.atom("false")), X), X),
-                {ep.cons(ep.atom("bool"), X)}
+                ep.functor("cons", {ep.functor("cons", {ep.functor("cons", {ep.functor("or", {}), ep.functor("false", {})}), X}), X}),
+                {ep.functor("cons", {ep.functor("bool", {}), X})}
             });  // idx 5
         }
         {
             const expr* X = ep.var(seq());
             db.push_back(rule{
-                ep.cons(ep.cons(ep.cons(ep.atom("and"), ep.atom("true")), X), X),
-                {ep.cons(ep.atom("bool"), X)}
+                ep.functor("cons", {ep.functor("cons", {ep.functor("cons", {ep.functor("and", {}), ep.functor("true", {})}), X}), X}),
+                {ep.functor("cons", {ep.functor("bool", {}), X})}
             });  // idx 6
         }
         {
             const expr* X = ep.var(seq());
             db.push_back(rule{
-                ep.cons(ep.cons(ep.cons(ep.atom("and"), ep.atom("false")), X), ep.atom("false")),
-                {ep.cons(ep.atom("bool"), X)}
+                ep.functor("cons", {ep.functor("cons", {ep.functor("cons", {ep.functor("and", {}), ep.functor("false", {})}), X}), ep.functor("false", {})}),
+                {ep.functor("cons", {ep.functor("bool", {}), X})}
             });  // idx 7
         }
 
@@ -20666,20 +20666,20 @@ void test_horizon() {
         const expr* PQ_RS = ep.var(seq());
 
         goals goals;
-        goals.push_back(ep.cons(ep.atom("bool"), P));
-        goals.push_back(ep.cons(ep.atom("bool"), Q));
-        goals.push_back(ep.cons(ep.atom("bool"), R));
-        goals.push_back(ep.cons(ep.atom("bool"), S));
-        goals.push_back(ep.cons(ep.cons(ep.cons(ep.atom("or"),  P),  Q),  PQ));
-        goals.push_back(ep.cons(ep.cons(ep.cons(ep.atom("or"),  R),  S),  RS));
-        goals.push_back(ep.cons(ep.cons(ep.atom("not"), P), NP));
-        goals.push_back(ep.cons(ep.cons(ep.atom("not"), R), NR));
-        goals.push_back(ep.cons(ep.cons(ep.cons(ep.atom("or"),  NP), NR), NPR));
-        goals.push_back(ep.cons(ep.cons(ep.cons(ep.atom("and"), PQ), RS),  PQ_RS));
-        goals.push_back(ep.cons(ep.cons(ep.cons(ep.atom("and"), PQ_RS), NPR), ep.atom("true")));
+        goals.push_back(ep.functor("cons", {ep.functor("bool", {}), P}));
+        goals.push_back(ep.functor("cons", {ep.functor("bool", {}), Q}));
+        goals.push_back(ep.functor("cons", {ep.functor("bool", {}), R}));
+        goals.push_back(ep.functor("cons", {ep.functor("bool", {}), S}));
+        goals.push_back(ep.functor("cons", {ep.functor("cons", {ep.functor("cons", {ep.functor("or", {}), P}), Q}), PQ}));
+        goals.push_back(ep.functor("cons", {ep.functor("cons", {ep.functor("cons", {ep.functor("or", {}), R}), S}), RS}));
+        goals.push_back(ep.functor("cons", {ep.functor("cons", {ep.functor("not", {}), P}), NP}));
+        goals.push_back(ep.functor("cons", {ep.functor("cons", {ep.functor("not", {}), R}), NR}));
+        goals.push_back(ep.functor("cons", {ep.functor("cons", {ep.functor("cons", {ep.functor("or", {}), NP}), NR}), NPR}));
+        goals.push_back(ep.functor("cons", {ep.functor("cons", {ep.functor("cons", {ep.functor("and", {}), PQ}), RS}), PQ_RS}));
+        goals.push_back(ep.functor("cons", {ep.functor("cons", {ep.functor("cons", {ep.functor("and", {}), PQ_RS}), NPR}), ep.functor("true", {})}));
 
-        const expr* T_ = ep.atom("true");
-        const expr* F_ = ep.atom("false");
+        const expr* T_ = ep.functor("true", {});
+        const expr* F_ = ep.functor("false", {});
 
         std::set<solution> expected = {
             {T_, T_, F_, T_},
@@ -20722,20 +20722,20 @@ void test_horizon() {
         sequencer seq(t);
 
         database db;
-        db.push_back(rule{ep.cons(ep.atom("q"), ep.atom("a")), {}});  // idx 0: q(a).
+        db.push_back(rule{ep.functor("cons", {ep.functor("q", {}), ep.functor("a", {})}), {}});  // idx 0: q(a).
 
         // p(X) :- q(X), r(X).
         {
             const expr* X = ep.var(seq());
             db.push_back(rule{
-                ep.cons(ep.atom("p"), X),
-                {ep.cons(ep.atom("q"), X),
-                 ep.cons(ep.atom("r"), X)}
+                ep.functor("cons", {ep.functor("p", {}), X}),
+                {ep.functor("cons", {ep.functor("q", {}), X}),
+                 ep.functor("cons", {ep.functor("r", {}), X})}
             });  // idx 1
         }
 
         goals goals;
-        goals.push_back(ep.cons(ep.atom("p"), ep.atom("a")));
+        goals.push_back(ep.functor("cons", {ep.functor("p", {}), ep.functor("a", {})}));
 
         std::mt19937 rng(42);
         horizon solver(solver_args{db, goals, t, seq, bm, 1000}, mcts_solver_args{1.414, rng});
@@ -20761,19 +20761,19 @@ void test_horizon() {
         sequencer seq(t);
 
         database db;
-        db.push_back(rule{ep.cons(ep.atom("type"), ep.atom("a")), {}});  // idx 0
-        db.push_back(rule{ep.cons(ep.atom("type"), ep.atom("b")), {}});  // idx 1
-        db.push_back(rule{ep.cons(ep.atom("type"), ep.atom("c")), {}});  // idx 2
+        db.push_back(rule{ep.functor("cons", {ep.functor("type", {}), ep.functor("a", {})}), {}});  // idx 0
+        db.push_back(rule{ep.functor("cons", {ep.functor("type", {}), ep.functor("b", {})}), {}});  // idx 1
+        db.push_back(rule{ep.functor("cons", {ep.functor("type", {}), ep.functor("c", {})}), {}});  // idx 2
 
         const expr* X = ep.var(seq());
         const expr* Y = ep.var(seq());
         goals goals;
-        goals.push_back(ep.cons(ep.atom("type"), X));
-        goals.push_back(ep.cons(ep.atom("type"), Y));
+        goals.push_back(ep.functor("cons", {ep.functor("type", {}), X}));
+        goals.push_back(ep.functor("cons", {ep.functor("type", {}), Y}));
 
-        const expr* a = ep.atom("a");
-        const expr* b = ep.atom("b");
-        const expr* c = ep.atom("c");
+        const expr* a = ep.functor("a", {});
+        const expr* b = ep.functor("b", {});
+        const expr* c = ep.functor("c", {});
 
         std::set<solution> expected = {
             {a, a}, {a, b}, {a, c},
@@ -20815,19 +20815,19 @@ void test_horizon() {
         sequencer seq(t);
 
         database db;
-        db.push_back(rule{ep.cons(ep.atom("fruit"), ep.atom("apple")),  {}});  // idx 0
-        db.push_back(rule{ep.cons(ep.atom("fruit"), ep.atom("banana")), {}});  // idx 1
-        db.push_back(rule{ep.cons(ep.atom("fruit"), ep.atom("cherry")), {}});  // idx 2
-        db.push_back(rule{ep.cons(ep.atom("sweet"), ep.atom("banana")), {}});  // idx 3
-        db.push_back(rule{ep.cons(ep.atom("sweet"), ep.atom("cherry")), {}});  // idx 4
+        db.push_back(rule{ep.functor("cons", {ep.functor("fruit", {}), ep.functor("apple", {})}),  {}});  // idx 0
+        db.push_back(rule{ep.functor("cons", {ep.functor("fruit", {}), ep.functor("banana", {})}), {}});  // idx 1
+        db.push_back(rule{ep.functor("cons", {ep.functor("fruit", {}), ep.functor("cherry", {})}), {}});  // idx 2
+        db.push_back(rule{ep.functor("cons", {ep.functor("sweet", {}), ep.functor("banana", {})}), {}});  // idx 3
+        db.push_back(rule{ep.functor("cons", {ep.functor("sweet", {}), ep.functor("cherry", {})}), {}});  // idx 4
 
         const expr* X = ep.var(seq());
         goals goals;
-        goals.push_back(ep.cons(ep.atom("fruit"), X));
-        goals.push_back(ep.cons(ep.atom("sweet"), X));
+        goals.push_back(ep.functor("cons", {ep.functor("fruit", {}), X}));
+        goals.push_back(ep.functor("cons", {ep.functor("sweet", {}), X}));
 
-        const expr* banana = ep.atom("banana");
-        const expr* cherry = ep.atom("cherry");
+        const expr* banana = ep.functor("banana", {});
+        const expr* cherry = ep.functor("cherry", {});
 
         std::set<solution> expected = {
             {banana},
@@ -20865,27 +20865,27 @@ void test_horizon() {
         sequencer seq(t);
 
         auto peano = [&](int n) -> const expr* {
-            const expr* r = ep.atom("zero");
+            const expr* r = ep.functor("zero", {});
             for (int i = 0; i < n; ++i)
-                r = ep.cons(ep.atom("suc"), r);
+                r = ep.functor("cons", {ep.functor("suc", {}), r});
             return r;
         };
 
         database db;
-        db.push_back(rule{ep.cons(ep.atom("nat"), ep.atom("zero")), {}});  // idx 0
+        db.push_back(rule{ep.functor("cons", {ep.functor("nat", {}), ep.functor("zero", {})}), {}});  // idx 0
 
         {
             const expr* X = ep.var(seq());
             db.push_back(rule{
-                ep.cons(ep.atom("nat"), ep.cons(ep.atom("suc"), X)),
-                {ep.cons(ep.atom("nat"), X)}
+                ep.functor("cons", {ep.functor("nat", {}), ep.functor("cons", {ep.functor("suc", {}), X})}),
+                {ep.functor("cons", {ep.functor("nat", {}), X})}
             });  // idx 1
         }
         {
             const expr* Y = ep.var(seq());
             db.push_back(rule{
-                ep.cons(ep.cons(ep.cons(ep.atom("add"), ep.atom("zero")), Y), Y),
-                {ep.cons(ep.atom("nat"), Y)}
+                ep.functor("cons", {ep.functor("cons", {ep.functor("cons", {ep.functor("add", {}), ep.functor("zero", {})}), Y}), Y}),
+                {ep.functor("cons", {ep.functor("nat", {}), Y})}
             });  // idx 2
         }
         {
@@ -20893,8 +20893,8 @@ void test_horizon() {
             const expr* Y = ep.var(seq());
             const expr* Z = ep.var(seq());
             db.push_back(rule{
-                ep.cons(ep.cons(ep.cons(ep.atom("add"), ep.cons(ep.atom("suc"), X)), Y), ep.cons(ep.atom("suc"), Z)),
-                {ep.cons(ep.cons(ep.cons(ep.atom("add"), X), Y), Z)}
+                ep.functor("cons", {ep.functor("cons", {ep.functor("cons", {ep.functor("add", {}), ep.functor("cons", {ep.functor("suc", {}), X})}), Y}), ep.functor("cons", {ep.functor("suc", {}), Z})}),
+                {ep.functor("cons", {ep.functor("cons", {ep.functor("cons", {ep.functor("add", {}), X}), Y}), Z})}
             });  // idx 3
         }
 
@@ -20903,7 +20903,7 @@ void test_horizon() {
         const expr* five = peano(5);
 
         goals goals;
-        goals.push_back(ep.cons(ep.cons(ep.cons(ep.atom("add"), X), Y), five));
+        goals.push_back(ep.functor("cons", {ep.functor("cons", {ep.functor("cons", {ep.functor("add", {}), X}), Y}), five}));
 
         std::set<solution> expected;
         for (int x = 0; x <= 5; ++x)
@@ -20955,16 +20955,16 @@ void test_horizon() {
 
         database db;
         // Domain facts
-        db.push_back(rule{ep.cons(ep.atom("val"), ep.atom("v1")), {}});  // idx 0
-        db.push_back(rule{ep.cons(ep.atom("val"), ep.atom("v2")), {}});  // idx 1
-        db.push_back(rule{ep.cons(ep.atom("val"), ep.atom("v3")), {}});  // idx 2
+        db.push_back(rule{ep.functor("cons", {ep.functor("val", {}), ep.functor("v1", {})}), {}});  // idx 0
+        db.push_back(rule{ep.functor("cons", {ep.functor("val", {}), ep.functor("v2", {})}), {}});  // idx 1
+        db.push_back(rule{ep.functor("cons", {ep.functor("val", {}), ep.functor("v3", {})}), {}});  // idx 2
         // Distinctness facts — all 6 ordered pairs of distinct values
-        db.push_back(rule{ep.cons(ep.cons(ep.atom("diff"), ep.atom("v1")), ep.atom("v2")), {}});  // idx 3
-        db.push_back(rule{ep.cons(ep.cons(ep.atom("diff"), ep.atom("v2")), ep.atom("v1")), {}});  // idx 4
-        db.push_back(rule{ep.cons(ep.cons(ep.atom("diff"), ep.atom("v1")), ep.atom("v3")), {}});  // idx 5
-        db.push_back(rule{ep.cons(ep.cons(ep.atom("diff"), ep.atom("v3")), ep.atom("v1")), {}});  // idx 6
-        db.push_back(rule{ep.cons(ep.cons(ep.atom("diff"), ep.atom("v2")), ep.atom("v3")), {}});  // idx 7
-        db.push_back(rule{ep.cons(ep.cons(ep.atom("diff"), ep.atom("v3")), ep.atom("v2")), {}});  // idx 8
+        db.push_back(rule{ep.functor("cons", {ep.functor("cons", {ep.functor("diff", {}), ep.functor("v1", {})}), ep.functor("v2", {})}), {}});  // idx 3
+        db.push_back(rule{ep.functor("cons", {ep.functor("cons", {ep.functor("diff", {}), ep.functor("v2", {})}), ep.functor("v1", {})}), {}});  // idx 4
+        db.push_back(rule{ep.functor("cons", {ep.functor("cons", {ep.functor("diff", {}), ep.functor("v1", {})}), ep.functor("v3", {})}), {}});  // idx 5
+        db.push_back(rule{ep.functor("cons", {ep.functor("cons", {ep.functor("diff", {}), ep.functor("v3", {})}), ep.functor("v1", {})}), {}});  // idx 6
+        db.push_back(rule{ep.functor("cons", {ep.functor("cons", {ep.functor("diff", {}), ep.functor("v2", {})}), ep.functor("v3", {})}), {}});  // idx 7
+        db.push_back(rule{ep.functor("cons", {ep.functor("cons", {ep.functor("diff", {}), ep.functor("v3", {})}), ep.functor("v2", {})}), {}});  // idx 8
 
         // 9 logic variables — one per grid cell
         const expr* R11 = ep.var(seq());
@@ -20980,47 +20980,47 @@ void test_horizon() {
         goals goals;
 
         // 9 domain goals
-        goals.push_back(ep.cons(ep.atom("val"), R11));
-        goals.push_back(ep.cons(ep.atom("val"), R12));
-        goals.push_back(ep.cons(ep.atom("val"), R13));
-        goals.push_back(ep.cons(ep.atom("val"), R21));
-        goals.push_back(ep.cons(ep.atom("val"), R22));
-        goals.push_back(ep.cons(ep.atom("val"), R23));
-        goals.push_back(ep.cons(ep.atom("val"), R31));
-        goals.push_back(ep.cons(ep.atom("val"), R32));
-        goals.push_back(ep.cons(ep.atom("val"), R33));
+        goals.push_back(ep.functor("cons", {ep.functor("val", {}), R11}));
+        goals.push_back(ep.functor("cons", {ep.functor("val", {}), R12}));
+        goals.push_back(ep.functor("cons", {ep.functor("val", {}), R13}));
+        goals.push_back(ep.functor("cons", {ep.functor("val", {}), R21}));
+        goals.push_back(ep.functor("cons", {ep.functor("val", {}), R22}));
+        goals.push_back(ep.functor("cons", {ep.functor("val", {}), R23}));
+        goals.push_back(ep.functor("cons", {ep.functor("val", {}), R31}));
+        goals.push_back(ep.functor("cons", {ep.functor("val", {}), R32}));
+        goals.push_back(ep.functor("cons", {ep.functor("val", {}), R33}));
 
         // 9 row-distinctness goals (3 pairs per row)
-        goals.push_back(ep.cons(ep.cons(ep.atom("diff"), R11), R12));
-        goals.push_back(ep.cons(ep.cons(ep.atom("diff"), R11), R13));
-        goals.push_back(ep.cons(ep.cons(ep.atom("diff"), R12), R13));
+        goals.push_back(ep.functor("cons", {ep.functor("cons", {ep.functor("diff", {}), R11}), R12}));
+        goals.push_back(ep.functor("cons", {ep.functor("cons", {ep.functor("diff", {}), R11}), R13}));
+        goals.push_back(ep.functor("cons", {ep.functor("cons", {ep.functor("diff", {}), R12}), R13}));
 
-        goals.push_back(ep.cons(ep.cons(ep.atom("diff"), R21), R22));
-        goals.push_back(ep.cons(ep.cons(ep.atom("diff"), R21), R23));
-        goals.push_back(ep.cons(ep.cons(ep.atom("diff"), R22), R23));
+        goals.push_back(ep.functor("cons", {ep.functor("cons", {ep.functor("diff", {}), R21}), R22}));
+        goals.push_back(ep.functor("cons", {ep.functor("cons", {ep.functor("diff", {}), R21}), R23}));
+        goals.push_back(ep.functor("cons", {ep.functor("cons", {ep.functor("diff", {}), R22}), R23}));
 
-        goals.push_back(ep.cons(ep.cons(ep.atom("diff"), R31), R32));
-        goals.push_back(ep.cons(ep.cons(ep.atom("diff"), R31), R33));
-        goals.push_back(ep.cons(ep.cons(ep.atom("diff"), R32), R33));
+        goals.push_back(ep.functor("cons", {ep.functor("cons", {ep.functor("diff", {}), R31}), R32}));
+        goals.push_back(ep.functor("cons", {ep.functor("cons", {ep.functor("diff", {}), R31}), R33}));
+        goals.push_back(ep.functor("cons", {ep.functor("cons", {ep.functor("diff", {}), R32}), R33}));
 
         // 9 column-distinctness goals (3 pairs per column)
-        goals.push_back(ep.cons(ep.cons(ep.atom("diff"), R11), R21));
-        goals.push_back(ep.cons(ep.cons(ep.atom("diff"), R11), R31));
-        goals.push_back(ep.cons(ep.cons(ep.atom("diff"), R21), R31));
+        goals.push_back(ep.functor("cons", {ep.functor("cons", {ep.functor("diff", {}), R11}), R21}));
+        goals.push_back(ep.functor("cons", {ep.functor("cons", {ep.functor("diff", {}), R11}), R31}));
+        goals.push_back(ep.functor("cons", {ep.functor("cons", {ep.functor("diff", {}), R21}), R31}));
 
-        goals.push_back(ep.cons(ep.cons(ep.atom("diff"), R12), R22));
-        goals.push_back(ep.cons(ep.cons(ep.atom("diff"), R12), R32));
-        goals.push_back(ep.cons(ep.cons(ep.atom("diff"), R22), R32));
+        goals.push_back(ep.functor("cons", {ep.functor("cons", {ep.functor("diff", {}), R12}), R22}));
+        goals.push_back(ep.functor("cons", {ep.functor("cons", {ep.functor("diff", {}), R12}), R32}));
+        goals.push_back(ep.functor("cons", {ep.functor("cons", {ep.functor("diff", {}), R22}), R32}));
 
-        goals.push_back(ep.cons(ep.cons(ep.atom("diff"), R13), R23));
-        goals.push_back(ep.cons(ep.cons(ep.atom("diff"), R13), R33));
-        goals.push_back(ep.cons(ep.cons(ep.atom("diff"), R23), R33));
+        goals.push_back(ep.functor("cons", {ep.functor("cons", {ep.functor("diff", {}), R13}), R23}));
+        goals.push_back(ep.functor("cons", {ep.functor("cons", {ep.functor("diff", {}), R13}), R33}));
+        goals.push_back(ep.functor("cons", {ep.functor("cons", {ep.functor("diff", {}), R23}), R33}));
 
         // All 12 distinct 3×3 Latin squares over {v1, v2, v3}, listed row-major.
         // Each solution vector has 9 elements: {R11,R12,R13, R21,R22,R23, R31,R32,R33}.
-        const expr* v1 = ep.atom("v1");
-        const expr* v2 = ep.atom("v2");
-        const expr* v3 = ep.atom("v3");
+        const expr* v1 = ep.functor("v1", {});
+        const expr* v2 = ep.functor("v2", {});
+        const expr* v3 = ep.functor("v3", {});
 
         std::set<solution> expected = {
             {v1,v2,v3, v2,v3,v1, v3,v1,v2},
@@ -21101,44 +21101,44 @@ void test_horizon() {
         sequencer seq(t);
 
         // Peano length constants
-        const expr* zero  = ep.atom("zero");
-        const expr* one   = ep.cons(ep.atom("suc"), zero);
-        const expr* two   = ep.cons(ep.atom("suc"), one);
-        const expr* three = ep.cons(ep.atom("suc"), two);
+        const expr* zero  = ep.functor("zero", {});
+        const expr* one   = ep.functor("cons", {ep.functor("suc", {}), zero});
+        const expr* two   = ep.functor("cons", {ep.functor("suc", {}), one});
+        const expr* three = ep.functor("cons", {ep.functor("suc", {}), two});
 
         database db;
 
         // --- road facts (18) ---
-        db.push_back(rule{ep.cons(ep.cons(ep.atom("road"), ep.atom("s")), ep.atom("a")), {}});  // idx 0
-        db.push_back(rule{ep.cons(ep.cons(ep.atom("road"), ep.atom("s")), ep.atom("b")), {}});  // idx 1
-        db.push_back(rule{ep.cons(ep.cons(ep.atom("road"), ep.atom("a")), ep.atom("c")), {}});  // idx 2
-        db.push_back(rule{ep.cons(ep.cons(ep.atom("road"), ep.atom("a")), ep.atom("d")), {}});  // idx 3
-        db.push_back(rule{ep.cons(ep.cons(ep.atom("road"), ep.atom("b")), ep.atom("d")), {}});  // idx 4
-        db.push_back(rule{ep.cons(ep.cons(ep.atom("road"), ep.atom("b")), ep.atom("e")), {}});  // idx 5
-        db.push_back(rule{ep.cons(ep.cons(ep.atom("road"), ep.atom("c")), ep.atom("f")), {}});  // idx 6
-        db.push_back(rule{ep.cons(ep.cons(ep.atom("road"), ep.atom("c")), ep.atom("g")), {}});  // idx 7
-        db.push_back(rule{ep.cons(ep.cons(ep.atom("road"), ep.atom("d")), ep.atom("g")), {}});  // idx 8
-        db.push_back(rule{ep.cons(ep.cons(ep.atom("road"), ep.atom("d")), ep.atom("h")), {}});  // idx 9
-        db.push_back(rule{ep.cons(ep.cons(ep.atom("road"), ep.atom("e")), ep.atom("g")), {}});  // idx 10
-        db.push_back(rule{ep.cons(ep.cons(ep.atom("road"), ep.atom("e")), ep.atom("h")), {}});  // idx 11
-        db.push_back(rule{ep.cons(ep.cons(ep.atom("road"), ep.atom("f")), ep.atom("i")), {}});  // idx 12
-        db.push_back(rule{ep.cons(ep.cons(ep.atom("road"), ep.atom("g")), ep.atom("i")), {}});  // idx 13
-        db.push_back(rule{ep.cons(ep.cons(ep.atom("road"), ep.atom("g")), ep.atom("j")), {}});  // idx 14
-        db.push_back(rule{ep.cons(ep.cons(ep.atom("road"), ep.atom("h")), ep.atom("j")), {}});  // idx 15
-        db.push_back(rule{ep.cons(ep.cons(ep.atom("road"), ep.atom("i")), ep.atom("t")), {}});  // idx 16
-        db.push_back(rule{ep.cons(ep.cons(ep.atom("road"), ep.atom("j")), ep.atom("t")), {}});  // idx 17
+        db.push_back(rule{ep.functor("cons", {ep.functor("cons", {ep.functor("road", {}), ep.functor("s", {})}), ep.functor("a", {})}), {}});  // idx 0
+        db.push_back(rule{ep.functor("cons", {ep.functor("cons", {ep.functor("road", {}), ep.functor("s", {})}), ep.functor("b", {})}), {}});  // idx 1
+        db.push_back(rule{ep.functor("cons", {ep.functor("cons", {ep.functor("road", {}), ep.functor("a", {})}), ep.functor("c", {})}), {}});  // idx 2
+        db.push_back(rule{ep.functor("cons", {ep.functor("cons", {ep.functor("road", {}), ep.functor("a", {})}), ep.functor("d", {})}), {}});  // idx 3
+        db.push_back(rule{ep.functor("cons", {ep.functor("cons", {ep.functor("road", {}), ep.functor("b", {})}), ep.functor("d", {})}), {}});  // idx 4
+        db.push_back(rule{ep.functor("cons", {ep.functor("cons", {ep.functor("road", {}), ep.functor("b", {})}), ep.functor("e", {})}), {}});  // idx 5
+        db.push_back(rule{ep.functor("cons", {ep.functor("cons", {ep.functor("road", {}), ep.functor("c", {})}), ep.functor("f", {})}), {}});  // idx 6
+        db.push_back(rule{ep.functor("cons", {ep.functor("cons", {ep.functor("road", {}), ep.functor("c", {})}), ep.functor("g", {})}), {}});  // idx 7
+        db.push_back(rule{ep.functor("cons", {ep.functor("cons", {ep.functor("road", {}), ep.functor("d", {})}), ep.functor("g", {})}), {}});  // idx 8
+        db.push_back(rule{ep.functor("cons", {ep.functor("cons", {ep.functor("road", {}), ep.functor("d", {})}), ep.functor("h", {})}), {}});  // idx 9
+        db.push_back(rule{ep.functor("cons", {ep.functor("cons", {ep.functor("road", {}), ep.functor("e", {})}), ep.functor("g", {})}), {}});  // idx 10
+        db.push_back(rule{ep.functor("cons", {ep.functor("cons", {ep.functor("road", {}), ep.functor("e", {})}), ep.functor("h", {})}), {}});  // idx 11
+        db.push_back(rule{ep.functor("cons", {ep.functor("cons", {ep.functor("road", {}), ep.functor("f", {})}), ep.functor("i", {})}), {}});  // idx 12
+        db.push_back(rule{ep.functor("cons", {ep.functor("cons", {ep.functor("road", {}), ep.functor("g", {})}), ep.functor("i", {})}), {}});  // idx 13
+        db.push_back(rule{ep.functor("cons", {ep.functor("cons", {ep.functor("road", {}), ep.functor("g", {})}), ep.functor("j", {})}), {}});  // idx 14
+        db.push_back(rule{ep.functor("cons", {ep.functor("cons", {ep.functor("road", {}), ep.functor("h", {})}), ep.functor("j", {})}), {}});  // idx 15
+        db.push_back(rule{ep.functor("cons", {ep.functor("cons", {ep.functor("road", {}), ep.functor("i", {})}), ep.functor("t", {})}), {}});  // idx 16
+        db.push_back(rule{ep.functor("cons", {ep.functor("cons", {ep.functor("road", {}), ep.functor("j", {})}), ep.functor("t", {})}), {}});  // idx 17
 
         // --- safe_node facts (10) — all nodes except h ---
-        db.push_back(rule{ep.cons(ep.atom("safe_node"), ep.atom("a")), {}});  // idx 18
-        db.push_back(rule{ep.cons(ep.atom("safe_node"), ep.atom("b")), {}});  // idx 19
-        db.push_back(rule{ep.cons(ep.atom("safe_node"), ep.atom("c")), {}});  // idx 20
-        db.push_back(rule{ep.cons(ep.atom("safe_node"), ep.atom("d")), {}});  // idx 21
-        db.push_back(rule{ep.cons(ep.atom("safe_node"), ep.atom("e")), {}});  // idx 22
-        db.push_back(rule{ep.cons(ep.atom("safe_node"), ep.atom("f")), {}});  // idx 23
-        db.push_back(rule{ep.cons(ep.atom("safe_node"), ep.atom("g")), {}});  // idx 24
-        db.push_back(rule{ep.cons(ep.atom("safe_node"), ep.atom("i")), {}});  // idx 25
-        db.push_back(rule{ep.cons(ep.atom("safe_node"), ep.atom("j")), {}});  // idx 26
-        db.push_back(rule{ep.cons(ep.atom("safe_node"), ep.atom("t")), {}});  // idx 27
+        db.push_back(rule{ep.functor("cons", {ep.functor("safe_node", {}), ep.functor("a", {})}), {}});  // idx 18
+        db.push_back(rule{ep.functor("cons", {ep.functor("safe_node", {}), ep.functor("b", {})}), {}});  // idx 19
+        db.push_back(rule{ep.functor("cons", {ep.functor("safe_node", {}), ep.functor("c", {})}), {}});  // idx 20
+        db.push_back(rule{ep.functor("cons", {ep.functor("safe_node", {}), ep.functor("d", {})}), {}});  // idx 21
+        db.push_back(rule{ep.functor("cons", {ep.functor("safe_node", {}), ep.functor("e", {})}), {}});  // idx 22
+        db.push_back(rule{ep.functor("cons", {ep.functor("safe_node", {}), ep.functor("f", {})}), {}});  // idx 23
+        db.push_back(rule{ep.functor("cons", {ep.functor("safe_node", {}), ep.functor("g", {})}), {}});  // idx 24
+        db.push_back(rule{ep.functor("cons", {ep.functor("safe_node", {}), ep.functor("i", {})}), {}});  // idx 25
+        db.push_back(rule{ep.functor("cons", {ep.functor("safe_node", {}), ep.functor("j", {})}), {}});  // idx 26
+        db.push_back(rule{ep.functor("cons", {ep.functor("safe_node", {}), ep.functor("t", {})}), {}});  // idx 27
         // NOTE: safe_node(h) is deliberately absent — h is the unsafe node.
 
         // --- safe_edge(X, Y) :- road(X, Y), safe_node(Y). ---
@@ -21146,9 +21146,9 @@ void test_horizon() {
             const expr* X = ep.var(seq());
             const expr* Y = ep.var(seq());
             db.push_back(rule{                                                // idx 28
-                ep.cons(ep.cons(ep.atom("safe_edge"), X), Y),
-                {ep.cons(ep.cons(ep.atom("road"),      X), Y),
-                 ep.cons(ep.atom("safe_node"), Y)}
+                ep.functor("cons", {ep.functor("cons", {ep.functor("safe_edge", {}), X}), Y}),
+                {ep.functor("cons", {ep.functor("cons", {ep.functor("road", {}), X}), Y}),
+                 ep.functor("cons", {ep.functor("safe_node", {}), Y})}
             });
         }
 
@@ -21157,8 +21157,8 @@ void test_horizon() {
             const expr* X = ep.var(seq());
             const expr* Y = ep.var(seq());
             db.push_back(rule{                                                // idx 29
-                ep.cons(ep.cons(ep.cons(ep.atom("safe_path"), X), Y), one),
-                {ep.cons(ep.cons(ep.atom("safe_edge"), X), Y)}
+                ep.functor("cons", {ep.functor("cons", {ep.functor("cons", {ep.functor("safe_path", {}), X}), Y}), one}),
+                {ep.functor("cons", {ep.functor("cons", {ep.functor("safe_edge", {}), X}), Y})}
             });
         }
 
@@ -21170,11 +21170,11 @@ void test_horizon() {
             const expr* Z = ep.var(seq());
             const expr* N = ep.var(seq());
             db.push_back(rule{                                                // idx 30
-                ep.cons(ep.cons(ep.cons(ep.atom("safe_path"), X), Z),
-                        ep.cons(ep.atom("suc"), ep.cons(ep.atom("suc"), N))),
-                {ep.cons(ep.cons(ep.atom("safe_edge"), X), Y),
-                 ep.cons(ep.cons(ep.cons(ep.atom("safe_path"), Y), Z),
-                         ep.cons(ep.atom("suc"), N))}
+                ep.functor("cons", {ep.functor("cons", {ep.functor("cons", {ep.functor("safe_path", {}), X}), Z}), 
+                        ep.functor("cons", {ep.functor("suc", {}), ep.functor("cons", {ep.functor("suc", {}), N})})}),
+                {ep.functor("cons", {ep.functor("cons", {ep.functor("safe_edge", {}), X}), Y}),
+                 ep.functor("cons", {ep.functor("cons", {ep.functor("cons", {ep.functor("safe_path", {}), Y}), Z}), 
+                         ep.functor("cons", {ep.functor("suc", {}), N})})}
             });
         }
 
@@ -21184,15 +21184,15 @@ void test_horizon() {
         goals goals;
         // Goal 0: safe_path(s, M, two)   — M is 2 safe hops from s
         goals.push_back(
-            ep.cons(ep.cons(ep.cons(ep.atom("safe_path"), ep.atom("s")), M), two));
+            ep.functor("cons", {ep.functor("cons", {ep.functor("cons", {ep.functor("safe_path", {}), ep.functor("s", {})}), M}), two}));
         // Goal 1: safe_path(M, t, three) — t is 3 safe hops from M
         goals.push_back(
-            ep.cons(ep.cons(ep.cons(ep.atom("safe_path"), M), ep.atom("t")), three));
+            ep.functor("cons", {ep.functor("cons", {ep.functor("cons", {ep.functor("safe_path", {}), M}), ep.functor("t", {})}), three}));
 
         // Expected solutions: M ∈ {c, d, e}
-        const expr* c_node = ep.atom("c");
-        const expr* d_node = ep.atom("d");
-        const expr* e_node = ep.atom("e");
+        const expr* c_node = ep.functor("c", {});
+        const expr* d_node = ep.functor("d", {});
+        const expr* e_node = ep.functor("e", {});
 
         std::set<solution> expected = {
             {c_node},
@@ -21265,30 +21265,30 @@ void test_horizon() {
 
         database db;
 
-        const expr* d1 = ep.atom("d1");
-        const expr* d2 = ep.atom("d2");
-        const expr* d3 = ep.atom("d3");
-        const expr* d4 = ep.atom("d4");
+        const expr* d1 = ep.functor("d1", {});
+        const expr* d2 = ep.functor("d2", {});
+        const expr* d3 = ep.functor("d3", {});
+        const expr* d4 = ep.functor("d4", {});
 
         // digit/1 facts — the 4-element domain
-        db.push_back(rule{ep.cons(ep.atom("digit"), d1), {}});  // idx 0
-        db.push_back(rule{ep.cons(ep.atom("digit"), d2), {}});  // idx 1
-        db.push_back(rule{ep.cons(ep.atom("digit"), d3), {}});  // idx 2
-        db.push_back(rule{ep.cons(ep.atom("digit"), d4), {}});  // idx 3
+        db.push_back(rule{ep.functor("cons", {ep.functor("digit", {}), d1}), {}});  // idx 0
+        db.push_back(rule{ep.functor("cons", {ep.functor("digit", {}), d2}), {}});  // idx 1
+        db.push_back(rule{ep.functor("cons", {ep.functor("digit", {}), d3}), {}});  // idx 2
+        db.push_back(rule{ep.functor("cons", {ep.functor("digit", {}), d4}), {}});  // idx 3
 
         // diff/2 facts — all 12 ordered pairs of distinct values
-        db.push_back(rule{ep.cons(ep.cons(ep.atom("diff"), d1), d2), {}});  // idx 4
-        db.push_back(rule{ep.cons(ep.cons(ep.atom("diff"), d2), d1), {}});  // idx 5
-        db.push_back(rule{ep.cons(ep.cons(ep.atom("diff"), d1), d3), {}});  // idx 6
-        db.push_back(rule{ep.cons(ep.cons(ep.atom("diff"), d3), d1), {}});  // idx 7
-        db.push_back(rule{ep.cons(ep.cons(ep.atom("diff"), d1), d4), {}});  // idx 8
-        db.push_back(rule{ep.cons(ep.cons(ep.atom("diff"), d4), d1), {}});  // idx 9
-        db.push_back(rule{ep.cons(ep.cons(ep.atom("diff"), d2), d3), {}});  // idx 10
-        db.push_back(rule{ep.cons(ep.cons(ep.atom("diff"), d3), d2), {}});  // idx 11
-        db.push_back(rule{ep.cons(ep.cons(ep.atom("diff"), d2), d4), {}});  // idx 12
-        db.push_back(rule{ep.cons(ep.cons(ep.atom("diff"), d4), d2), {}});  // idx 13
-        db.push_back(rule{ep.cons(ep.cons(ep.atom("diff"), d3), d4), {}});  // idx 14
-        db.push_back(rule{ep.cons(ep.cons(ep.atom("diff"), d4), d3), {}});  // idx 15
+        db.push_back(rule{ep.functor("cons", {ep.functor("cons", {ep.functor("diff", {}), d1}), d2}), {}});  // idx 4
+        db.push_back(rule{ep.functor("cons", {ep.functor("cons", {ep.functor("diff", {}), d2}), d1}), {}});  // idx 5
+        db.push_back(rule{ep.functor("cons", {ep.functor("cons", {ep.functor("diff", {}), d1}), d3}), {}});  // idx 6
+        db.push_back(rule{ep.functor("cons", {ep.functor("cons", {ep.functor("diff", {}), d3}), d1}), {}});  // idx 7
+        db.push_back(rule{ep.functor("cons", {ep.functor("cons", {ep.functor("diff", {}), d1}), d4}), {}});  // idx 8
+        db.push_back(rule{ep.functor("cons", {ep.functor("cons", {ep.functor("diff", {}), d4}), d1}), {}});  // idx 9
+        db.push_back(rule{ep.functor("cons", {ep.functor("cons", {ep.functor("diff", {}), d2}), d3}), {}});  // idx 10
+        db.push_back(rule{ep.functor("cons", {ep.functor("cons", {ep.functor("diff", {}), d3}), d2}), {}});  // idx 11
+        db.push_back(rule{ep.functor("cons", {ep.functor("cons", {ep.functor("diff", {}), d2}), d4}), {}});  // idx 12
+        db.push_back(rule{ep.functor("cons", {ep.functor("cons", {ep.functor("diff", {}), d4}), d2}), {}});  // idx 13
+        db.push_back(rule{ep.functor("cons", {ep.functor("cons", {ep.functor("diff", {}), d3}), d4}), {}});  // idx 14
+        db.push_back(rule{ep.functor("cons", {ep.functor("cons", {ep.functor("diff", {}), d4}), d3}), {}});  // idx 15
 
         // Variable cells — 7 unknowns (row 1 col 2 pre-filled as d2 to force uniqueness)
         const expr* V13 = ep.var(seq());  // row 1, col 3
@@ -21311,14 +21311,14 @@ void test_horizon() {
 
         // Domain goals — only for variable cells
         for (auto* v : {V13, V21, V24, V31, V34, V42, V43}) {
-            goals.push_back(ep.cons(ep.atom("digit"), v));
+            goals.push_back(ep.functor("cons", {ep.functor("digit", {}), v}));
         }
 
         // Row distinctness constraints (i < j, one direction per pair)
         for (int r = 0; r < 4; r++) {
             for (int i = 0; i < 4; i++) {
                 for (int j = i + 1; j < 4; j++) {
-                    goals.push_back(ep.cons(ep.cons(ep.atom("diff"), cell[r][i]), cell[r][j]));
+                    goals.push_back(ep.functor("cons", {ep.functor("cons", {ep.functor("diff", {}), cell[r][i]}), cell[r][j]}));
                 }
             }
         }
@@ -21327,7 +21327,7 @@ void test_horizon() {
         for (int c = 0; c < 4; c++) {
             for (int i = 0; i < 4; i++) {
                 for (int j = i + 1; j < 4; j++) {
-                    goals.push_back(ep.cons(ep.cons(ep.atom("diff"), cell[i][c]), cell[j][c]));
+                    goals.push_back(ep.functor("cons", {ep.functor("cons", {ep.functor("diff", {}), cell[i][c]}), cell[j][c]}));
                 }
             }
         }
@@ -21343,7 +21343,7 @@ void test_horizon() {
                 };
                 for (int i = 0; i < 4; i++) {
                     for (int j = i + 1; j < 4; j++) {
-                        goals.push_back(ep.cons(ep.cons(ep.atom("diff"), box[i]), box[j]));
+                        goals.push_back(ep.functor("cons", {ep.functor("cons", {ep.functor("diff", {}), box[i]}), box[j]}));
                     }
                 }
             }
@@ -21384,10 +21384,10 @@ void test_ridge_sim() {
         lineage_pool lp;
         
         database db;
-        db.push_back(rule{ep.atom("a"), {}});  // Fact: a.
+        db.push_back(rule{ep.functor("a", {}), {}});  // Fact: a.
         
         goals goals;
-        goals.push_back(ep.atom("a"));  // Goal: :- a.
+        goals.push_back(ep.functor("a", {}));  // Goal: :- a.
         
         cdcl c;
         
@@ -21442,7 +21442,7 @@ void test_ridge_sim() {
         database db;  // Empty database
         
         goals goals;
-        goals.push_back(ep.atom("a"));
+        goals.push_back(ep.functor("a", {}));
         
         cdcl c;
         
@@ -21486,11 +21486,11 @@ void test_ridge_sim() {
         lineage_pool lp;
         
         database db;
-        db.push_back(rule{ep.atom("a"), {}});  // idx 0
-        db.push_back(rule{ep.atom("b"), {}});  // idx 1
+        db.push_back(rule{ep.functor("a", {}), {}});  // idx 0
+        db.push_back(rule{ep.functor("b", {}), {}});  // idx 1
         
         goals goals;
-        goals.push_back(ep.atom("a"));
+        goals.push_back(ep.functor("a", {}));
         
         cdcl c;
         
@@ -21537,13 +21537,13 @@ void test_ridge_sim() {
         lineage_pool lp;
         
         database db;
-        db.push_back(rule{ep.atom("a"), {ep.atom("b")}});  // idx 0
-        db.push_back(rule{ep.atom("a"), {ep.atom("c")}});  // idx 1
-        db.push_back(rule{ep.atom("b"), {}});  // idx 2
-        db.push_back(rule{ep.atom("c"), {}});  // idx 3
+        db.push_back(rule{ep.functor("a", {}), {ep.functor("b", {})}});  // idx 0
+        db.push_back(rule{ep.functor("a", {}), {ep.functor("c", {})}});  // idx 1
+        db.push_back(rule{ep.functor("b", {}), {}});  // idx 2
+        db.push_back(rule{ep.functor("c", {}), {}});  // idx 3
         
         goals goals;
-        goals.push_back(ep.atom("a"));
+        goals.push_back(ep.functor("a", {}));
         
         // Pre-populate avoidance: avoid (gl0, idx 0)
         const goal_lineage* gl0_avoid = lp.goal(nullptr, 0);
@@ -21602,12 +21602,12 @@ void test_ridge_sim() {
         lineage_pool lp;
         
         database db;
-        db.push_back(rule{ep.atom("a"), {ep.atom("b")}});  // idx 0
-        db.push_back(rule{ep.atom("b"), {ep.atom("c")}});  // idx 1
-        db.push_back(rule{ep.atom("c"), {}});  // idx 2
+        db.push_back(rule{ep.functor("a", {}), {ep.functor("b", {})}});  // idx 0
+        db.push_back(rule{ep.functor("b", {}), {ep.functor("c", {})}});  // idx 1
+        db.push_back(rule{ep.functor("c", {}), {}});  // idx 2
         
         goals goals;
-        goals.push_back(ep.atom("a"));
+        goals.push_back(ep.functor("a", {}));
         
         cdcl c;
         
@@ -21664,13 +21664,13 @@ void test_ridge_sim() {
         lineage_pool lp;
         
         database db;
-        db.push_back(rule{ep.atom("a"), {ep.atom("b")}});  // idx 0
-        db.push_back(rule{ep.atom("a"), {ep.atom("c")}});  // idx 1
-        db.push_back(rule{ep.atom("b"), {}});  // idx 2
-        db.push_back(rule{ep.atom("c"), {}});  // idx 3
+        db.push_back(rule{ep.functor("a", {}), {ep.functor("b", {})}});  // idx 0
+        db.push_back(rule{ep.functor("a", {}), {ep.functor("c", {})}});  // idx 1
+        db.push_back(rule{ep.functor("b", {}), {}});  // idx 2
+        db.push_back(rule{ep.functor("c", {}), {}});  // idx 3
         
         goals goals;
-        goals.push_back(ep.atom("a"));
+        goals.push_back(ep.functor("a", {}));
         
         cdcl c;
         
@@ -21741,11 +21741,11 @@ void test_ridge_sim() {
         lineage_pool lp;
         
         database db;
-        db.push_back(rule{ep.atom("a"), {ep.atom("b")}});  // idx 0
-        db.push_back(rule{ep.atom("b"), {}});  // idx 1
+        db.push_back(rule{ep.functor("a", {}), {ep.functor("b", {})}});  // idx 0
+        db.push_back(rule{ep.functor("b", {}), {}});  // idx 1
         
         goals goals;
-        goals.push_back(ep.atom("a"));
+        goals.push_back(ep.functor("a", {}));
         
         cdcl c;
         
@@ -21796,14 +21796,14 @@ void test_ridge_sim() {
         lineage_pool lp;
         
         database db;
-        db.push_back(rule{ep.atom("a"), {ep.atom("b")}});  // idx 0
-        db.push_back(rule{ep.atom("a"), {ep.atom("c")}});  // idx 1
-        db.push_back(rule{ep.atom("b"), {ep.atom("d")}});  // idx 2
-        db.push_back(rule{ep.atom("c"), {ep.atom("e")}});  // idx 3
+        db.push_back(rule{ep.functor("a", {}), {ep.functor("b", {})}});  // idx 0
+        db.push_back(rule{ep.functor("a", {}), {ep.functor("c", {})}});  // idx 1
+        db.push_back(rule{ep.functor("b", {}), {ep.functor("d", {})}});  // idx 2
+        db.push_back(rule{ep.functor("c", {}), {ep.functor("e", {})}});  // idx 3
         // No rules for d or e
         
         goals goals;
-        goals.push_back(ep.atom("a"));
+        goals.push_back(ep.functor("a", {}));
         
         cdcl c;
         
@@ -21870,16 +21870,16 @@ void test_ridge_sim() {
         lineage_pool lp;
         
         database db;
-        db.push_back(rule{ep.atom("a"), {ep.atom("b")}});
-        db.push_back(rule{ep.atom("b"), {ep.atom("c")}});
-        db.push_back(rule{ep.atom("c"), {ep.atom("d")}});
-        db.push_back(rule{ep.atom("d"), {ep.atom("e")}});
-        db.push_back(rule{ep.atom("e"), {ep.atom("f")}});
-        db.push_back(rule{ep.atom("f"), {ep.atom("g")}});
-        db.push_back(rule{ep.atom("g"), {}});
+        db.push_back(rule{ep.functor("a", {}), {ep.functor("b", {})}});
+        db.push_back(rule{ep.functor("b", {}), {ep.functor("c", {})}});
+        db.push_back(rule{ep.functor("c", {}), {ep.functor("d", {})}});
+        db.push_back(rule{ep.functor("d", {}), {ep.functor("e", {})}});
+        db.push_back(rule{ep.functor("e", {}), {ep.functor("f", {})}});
+        db.push_back(rule{ep.functor("f", {}), {ep.functor("g", {})}});
+        db.push_back(rule{ep.functor("g", {}), {}});
         
         goals goals;
-        goals.push_back(ep.atom("a"));
+        goals.push_back(ep.functor("a", {}));
         
         cdcl c;
         
@@ -21942,14 +21942,14 @@ void test_ridge_sim() {
         lineage_pool lp;
         
         database db;
-        db.push_back(rule{ep.atom("a"), {}});  // idx 0
-        db.push_back(rule{ep.atom("b"), {}});  // idx 1
-        db.push_back(rule{ep.atom("c"), {}});  // idx 2
-        db.push_back(rule{ep.atom("d"), {}});  // idx 3
-        db.push_back(rule{ep.atom("e"), {ep.atom("f")}});  // idx 4
+        db.push_back(rule{ep.functor("a", {}), {}});  // idx 0
+        db.push_back(rule{ep.functor("b", {}), {}});  // idx 1
+        db.push_back(rule{ep.functor("c", {}), {}});  // idx 2
+        db.push_back(rule{ep.functor("d", {}), {}});  // idx 3
+        db.push_back(rule{ep.functor("e", {}), {ep.functor("f", {})}});  // idx 4
         
         goals goals;
-        goals.push_back(ep.atom("e"));
+        goals.push_back(ep.functor("e", {}));
         
         cdcl c;
         
@@ -22003,11 +22003,11 @@ void test_ridge_sim() {
         lineage_pool lp;
         
         database db;
-        db.push_back(rule{ep.atom("a"), {ep.atom("b")}});  // idx 0
-        db.push_back(rule{ep.atom("b"), {}});  // idx 1
+        db.push_back(rule{ep.functor("a", {}), {ep.functor("b", {})}});  // idx 0
+        db.push_back(rule{ep.functor("b", {}), {}});  // idx 1
         
         goals goals;
-        goals.push_back(ep.atom("a"));
+        goals.push_back(ep.functor("a", {}));
         
         // Pre-populate avoidance with the future resolution plus a dummy
         const goal_lineage* gl0_pre = lp.goal(nullptr, 0);
@@ -22070,15 +22070,15 @@ void test_ridge_sim() {
         lineage_pool lp;
         
         database db;
-        db.push_back(rule{ep.atom("a"), {ep.atom("b")}});  // idx 0
-        db.push_back(rule{ep.atom("a"), {ep.atom("c")}});  // idx 1
-        db.push_back(rule{ep.atom("b"), {ep.atom("d")}});  // idx 2
-        db.push_back(rule{ep.atom("c"), {ep.atom("e")}});  // idx 3
-        db.push_back(rule{ep.atom("d"), {}});  // idx 4
-        db.push_back(rule{ep.atom("e"), {}});  // idx 5
+        db.push_back(rule{ep.functor("a", {}), {ep.functor("b", {})}});  // idx 0
+        db.push_back(rule{ep.functor("a", {}), {ep.functor("c", {})}});  // idx 1
+        db.push_back(rule{ep.functor("b", {}), {ep.functor("d", {})}});  // idx 2
+        db.push_back(rule{ep.functor("c", {}), {ep.functor("e", {})}});  // idx 3
+        db.push_back(rule{ep.functor("d", {}), {}});  // idx 4
+        db.push_back(rule{ep.functor("e", {}), {}});  // idx 5
         
         goals goals;
-        goals.push_back(ep.atom("a"));
+        goals.push_back(ep.functor("a", {}));
         
         cdcl c;
         
@@ -22190,12 +22190,12 @@ void test_ridge_sim() {
         lineage_pool lp;
         
         database db;
-        db.push_back(rule{ep.atom("a"), {ep.atom("b"), ep.atom("c")}});  // idx 0
-        db.push_back(rule{ep.atom("b"), {}});  // idx 1
-        db.push_back(rule{ep.atom("c"), {}});  // idx 2
+        db.push_back(rule{ep.functor("a", {}), {ep.functor("b", {}), ep.functor("c", {})}});  // idx 0
+        db.push_back(rule{ep.functor("b", {}), {}});  // idx 1
+        db.push_back(rule{ep.functor("c", {}), {}});  // idx 2
         
         goals goals;
-        goals.push_back(ep.atom("a"));
+        goals.push_back(ep.functor("a", {}));
         
         cdcl c;
         
@@ -22252,14 +22252,14 @@ void test_ridge_sim() {
         // p(X) :- q(X).
         const expr* X = ep.var(seq());
         db.push_back(rule{
-            ep.cons(ep.atom("p"), X),
-            {ep.cons(ep.atom("q"), X)}
+            ep.functor("cons", {ep.functor("p", {}), X}),
+            {ep.functor("cons", {ep.functor("q", {}), X})}
         });
         // q(a).
-        db.push_back(rule{ep.cons(ep.atom("q"), ep.atom("a")), {}});
+        db.push_back(rule{ep.functor("cons", {ep.functor("q", {}), ep.functor("a", {})}), {}});
         
         goals goals;
-        goals.push_back(ep.cons(ep.atom("p"), ep.atom("a")));  // :- p(a).
+        goals.push_back(ep.functor("cons", {ep.functor("p", {}), ep.functor("a", {})}));  // :- p(a).
         
         cdcl c;
         
@@ -22311,12 +22311,12 @@ void test_ridge_sim() {
         const expr* X = ep.var(seq());
         const expr* Y = ep.var(seq());
         
-        db.push_back(rule{ep.cons(ep.atom("p"), X), {ep.cons(ep.atom("q"), X)}});
-        db.push_back(rule{ep.cons(ep.atom("q"), Y), {ep.cons(ep.atom("r"), Y)}});
-        db.push_back(rule{ep.cons(ep.atom("r"), ep.atom("a")), {}});
+        db.push_back(rule{ep.functor("cons", {ep.functor("p", {}), X}), {ep.functor("cons", {ep.functor("q", {}), X})}});
+        db.push_back(rule{ep.functor("cons", {ep.functor("q", {}), Y}), {ep.functor("cons", {ep.functor("r", {}), Y})}});
+        db.push_back(rule{ep.functor("cons", {ep.functor("r", {}), ep.functor("a", {})}), {}});
         
         goals goals;
-        goals.push_back(ep.cons(ep.atom("p"), ep.atom("a")));
+        goals.push_back(ep.functor("cons", {ep.functor("p", {}), ep.functor("a", {})}));
         
         cdcl c;
         
@@ -22373,14 +22373,14 @@ void test_ridge_sim() {
         const expr* Y = ep.var(seq());
         
         db.push_back(rule{
-            ep.cons(ep.atom("p"), ep.cons(X, Y)),
-            {ep.cons(ep.atom("q"), X), ep.cons(ep.atom("r"), Y)}
+            ep.functor("cons", {ep.functor("p", {}), ep.functor("cons", {X, Y})}),
+            {ep.functor("cons", {ep.functor("q", {}), X}), ep.functor("cons", {ep.functor("r", {}), Y})}
         });
-        db.push_back(rule{ep.cons(ep.atom("q"), ep.atom("a")), {}});
-        db.push_back(rule{ep.cons(ep.atom("r"), ep.atom("b")), {}});
+        db.push_back(rule{ep.functor("cons", {ep.functor("q", {}), ep.functor("a", {})}), {}});
+        db.push_back(rule{ep.functor("cons", {ep.functor("r", {}), ep.functor("b", {})}), {}});
         
         goals goals;
-        goals.push_back(ep.cons(ep.atom("p"), ep.cons(ep.atom("a"), ep.atom("b"))));
+        goals.push_back(ep.functor("cons", {ep.functor("p", {}), ep.functor("cons", {ep.functor("a", {}), ep.functor("b", {})})}));
         
         cdcl c;
         
@@ -22436,13 +22436,13 @@ void test_ridge_sim() {
         const expr* X1 = ep.var(seq());
         const expr* X2 = ep.var(seq());
         
-        db.push_back(rule{ep.cons(ep.atom("p"), X1), {ep.cons(ep.atom("q"), X1)}});  // idx 0
-        db.push_back(rule{ep.cons(ep.atom("p"), X2), {ep.cons(ep.atom("r"), X2)}});  // idx 1
-        db.push_back(rule{ep.cons(ep.atom("q"), ep.atom("a")), {}});  // idx 2
-        db.push_back(rule{ep.cons(ep.atom("r"), ep.atom("b")), {}});  // idx 3
+        db.push_back(rule{ep.functor("cons", {ep.functor("p", {}), X1}), {ep.functor("cons", {ep.functor("q", {}), X1})}});  // idx 0
+        db.push_back(rule{ep.functor("cons", {ep.functor("p", {}), X2}), {ep.functor("cons", {ep.functor("r", {}), X2})}});  // idx 1
+        db.push_back(rule{ep.functor("cons", {ep.functor("q", {}), ep.functor("a", {})}), {}});  // idx 2
+        db.push_back(rule{ep.functor("cons", {ep.functor("r", {}), ep.functor("b", {})}), {}});  // idx 3
         
         goals goals;
-        goals.push_back(ep.cons(ep.atom("p"), ep.atom("a")));
+        goals.push_back(ep.functor("cons", {ep.functor("p", {}), ep.functor("a", {})}));
         
         cdcl c;
         
@@ -22503,13 +22503,13 @@ void test_ridge_sim() {
         
         // Add 19 non-matching rules
         for (int i = 0; i < 19; i++) {
-            db.push_back(rule{ep.atom("x" + std::to_string(i)), {}});
+            db.push_back(rule{ep.functor("x" + std::to_string(i), {}), {}});
         }
         // Add 1 matching rule
-        db.push_back(rule{ep.atom("target"), {}});  // idx 19
+        db.push_back(rule{ep.functor("target", {}), {}});  // idx 19
         
         goals goals;
-        goals.push_back(ep.atom("target"));
+        goals.push_back(ep.functor("target", {}));
         
         cdcl c;
         
@@ -22559,8 +22559,8 @@ void test_ridge_sim() {
         
         // Create 10 independent facts and goals
         for (int i = 0; i < 10; i++) {
-            db.push_back(rule{ep.atom("g" + std::to_string(i)), {}});
-            goals.push_back(ep.atom("g" + std::to_string(i)));
+            db.push_back(rule{ep.functor("g" + std::to_string(i), {}), {}});
+            goals.push_back(ep.functor("g" + std::to_string(i), {}));
         }
         
         cdcl c;
@@ -22610,14 +22610,14 @@ void test_ridge_sim() {
         lineage_pool lp;
         
         database db;
-        db.push_back(rule{ep.atom("a"), {ep.atom("b")}});  // idx 0
-        db.push_back(rule{ep.atom("a"), {ep.atom("c")}});  // idx 1
-        db.push_back(rule{ep.atom("b"), {ep.atom("d")}});  // idx 2
-        db.push_back(rule{ep.atom("c"), {}});  // idx 3
-        db.push_back(rule{ep.atom("d"), {}});  // idx 4
+        db.push_back(rule{ep.functor("a", {}), {ep.functor("b", {})}});  // idx 0
+        db.push_back(rule{ep.functor("a", {}), {ep.functor("c", {})}});  // idx 1
+        db.push_back(rule{ep.functor("b", {}), {ep.functor("d", {})}});  // idx 2
+        db.push_back(rule{ep.functor("c", {}), {}});  // idx 3
+        db.push_back(rule{ep.functor("d", {}), {}});  // idx 4
         
         goals goals;
-        goals.push_back(ep.atom("a"));
+        goals.push_back(ep.functor("a", {}));
         
         // Pre-populate avoidance
         const goal_lineage* gl0_pre = lp.goal(nullptr, 0);
@@ -22697,10 +22697,10 @@ void test_ridge_sim() {
         lineage_pool lp;
         
         database db;
-        db.push_back(rule{ep.cons(ep.atom("p"), ep.atom("a")), {ep.cons(ep.atom("q"), ep.atom("b"))}});
+        db.push_back(rule{ep.functor("cons", {ep.functor("p", {}), ep.functor("a", {})}), {ep.functor("cons", {ep.functor("q", {}), ep.functor("b", {})})}});
         
         goals goals;
-        goals.push_back(ep.cons(ep.atom("p"), ep.atom("a")));
+        goals.push_back(ep.functor("cons", {ep.functor("p", {}), ep.functor("a", {})}));
         
         cdcl c;
         
@@ -22747,16 +22747,16 @@ void test_ridge_sim() {
         lineage_pool lp;
         
         database db;
-        db.push_back(rule{ep.atom("a"), {ep.atom("b")}});  // idx 0
-        db.push_back(rule{ep.atom("a"), {ep.atom("c")}});  // idx 1
-        db.push_back(rule{ep.atom("b"), {ep.atom("d")}});  // idx 2
-        db.push_back(rule{ep.atom("b"), {ep.atom("e")}});  // idx 3
-        db.push_back(rule{ep.atom("c"), {}});  // idx 4
-        db.push_back(rule{ep.atom("d"), {}});  // idx 5
-        db.push_back(rule{ep.atom("e"), {}});  // idx 6
+        db.push_back(rule{ep.functor("a", {}), {ep.functor("b", {})}});  // idx 0
+        db.push_back(rule{ep.functor("a", {}), {ep.functor("c", {})}});  // idx 1
+        db.push_back(rule{ep.functor("b", {}), {ep.functor("d", {})}});  // idx 2
+        db.push_back(rule{ep.functor("b", {}), {ep.functor("e", {})}});  // idx 3
+        db.push_back(rule{ep.functor("c", {}), {}});  // idx 4
+        db.push_back(rule{ep.functor("d", {}), {}});  // idx 5
+        db.push_back(rule{ep.functor("e", {}), {}});  // idx 6
         
         goals goals;
-        goals.push_back(ep.atom("a"));
+        goals.push_back(ep.functor("a", {}));
         
         cdcl c;
         
@@ -22826,7 +22826,7 @@ void test_ridge_sim() {
         // append(nil, X, X).
         const expr* X1 = ep.var(seq());
         db.push_back(rule{
-            ep.cons(ep.atom("append"), ep.cons(ep.atom("nil"), ep.cons(X1, X1))),
+            ep.functor("cons", {ep.functor("append", {}), ep.functor("cons", {ep.functor("nil", {}), ep.functor("cons", {X1, X1})})}),
             {}
         });
         
@@ -22837,19 +22837,19 @@ void test_ridge_sim() {
         const expr* R = ep.var(seq());
         
         db.push_back(rule{
-            ep.cons(ep.atom("append"), ep.cons(
-                ep.cons(ep.atom("cons"), ep.cons(H, T)),
-                ep.cons(X2, ep.cons(ep.atom("cons"), ep.cons(H, R)))
-            )),
-            {ep.cons(ep.atom("append"), ep.cons(T, ep.cons(X2, R)))}
+            ep.functor("cons", {ep.functor("append", {}), ep.functor("cons", {
+                ep.functor("cons", {ep.functor("cons", {}), ep.functor("cons", {H, T})}), 
+                ep.functor("cons", {X2, ep.functor("cons", {ep.functor("cons", {}), ep.functor("cons", {H, R})})})
+            })}),
+            {ep.functor("cons", {ep.functor("append", {}), ep.functor("cons", {T, ep.functor("cons", {X2, R})})})}
         });
         
         goals goals;
-        goals.push_back(ep.cons(ep.atom("append"), ep.cons(
-            ep.cons(ep.atom("cons"), ep.cons(ep.atom("a"), ep.atom("nil"))),
-            ep.cons(ep.cons(ep.atom("cons"), ep.cons(ep.atom("b"), ep.atom("nil"))),
-                    ep.cons(ep.atom("cons"), ep.cons(ep.atom("a"), ep.cons(ep.atom("cons"), ep.cons(ep.atom("b"), ep.atom("nil"))))))
-        )));
+        goals.push_back(ep.functor("cons", {ep.functor("append", {}), ep.functor("cons", {
+            ep.functor("cons", {ep.functor("cons", {}), ep.functor("cons", {ep.functor("a", {}), ep.functor("nil", {})})}), 
+            ep.functor("cons", {ep.functor("cons", {ep.functor("cons", {}), ep.functor("cons", {ep.functor("b", {}), ep.functor("nil", {})})}), 
+                    ep.functor("cons", {ep.functor("cons", {}), ep.functor("cons", {ep.functor("a", {}), ep.functor("cons", {ep.functor("cons", {}), ep.functor("cons", {ep.functor("b", {}), ep.functor("nil", {})})})})})})
+        })}));
         
         cdcl c;
         
@@ -22899,21 +22899,21 @@ void test_ridge_sim() {
         // Create a complex dependency graph
         // 30 rules total
         for (int i = 0; i < 10; i++) {
-            db.push_back(rule{ep.atom("noise" + std::to_string(i)), {}});
+            db.push_back(rule{ep.functor("noise" + std::to_string(i), {}), {}});
         }
         
         // Main rules: p :- q, r., q., r.
-        db.push_back(rule{ep.atom("p"), {ep.atom("q"), ep.atom("r")}});
-        db.push_back(rule{ep.atom("q"), {}});
-        db.push_back(rule{ep.atom("r"), {}});
+        db.push_back(rule{ep.functor("p", {}), {ep.functor("q", {}), ep.functor("r", {})}});
+        db.push_back(rule{ep.functor("q", {}), {}});
+        db.push_back(rule{ep.functor("r", {}), {}});
         
         // More noise
         for (int i = 10; i < 27; i++) {
-            db.push_back(rule{ep.atom("noise" + std::to_string(i)), {}});
+            db.push_back(rule{ep.functor("noise" + std::to_string(i), {}), {}});
         }
         
         goals goals;
-        goals.push_back(ep.atom("p"));
+        goals.push_back(ep.functor("p", {}));
         
         cdcl c;
         
@@ -22972,12 +22972,12 @@ void test_ridge_sim() {
         lineage_pool lp;
         
         database db;
-        db.push_back(rule{ep.cons(ep.atom("p"), ep.atom("a")), {}});  // idx 0
-        db.push_back(rule{ep.cons(ep.atom("p"), ep.atom("b")), {}});  // idx 1
+        db.push_back(rule{ep.functor("cons", {ep.functor("p", {}), ep.functor("a", {})}), {}});  // idx 0
+        db.push_back(rule{ep.functor("cons", {ep.functor("p", {}), ep.functor("b", {})}), {}});  // idx 1
         
         goals goals;
         const expr* X = ep.var(seq());
-        goals.push_back(ep.cons(ep.atom("p"), X));
+        goals.push_back(ep.functor("cons", {ep.functor("p", {}), X}));
         
         cdcl c;
         
@@ -23015,7 +23015,7 @@ void test_ridge_sim() {
         // CRITICAL: Verify X binds to exactly 'a'
         normalizer norm(ep, bm);
         const expr* X_normalized = norm(X);
-        assert(X_normalized == ep.atom("a"));
+        assert(X_normalized == ep.functor("a", {}));
     }
     
     // Test 27: Variable binds to compound term
@@ -23032,12 +23032,12 @@ void test_ridge_sim() {
         lineage_pool lp;
         
         database db;
-        const expr* cons_a_nil = ep.cons(ep.atom("cons"), ep.cons(ep.atom("a"), ep.atom("nil")));
-        db.push_back(rule{ep.cons(ep.atom("q"), cons_a_nil), {}});  // idx 0
+        const expr* cons_a_nil = ep.functor("cons", {ep.functor("cons", {}), ep.functor("cons", {ep.functor("a", {}), ep.functor("nil", {})})});
+        db.push_back(rule{ep.functor("cons", {ep.functor("q", {}), cons_a_nil}), {}});  // idx 0
         
         goals goals;
         const expr* X = ep.var(seq());
-        goals.push_back(ep.cons(ep.atom("q"), X));
+        goals.push_back(ep.functor("cons", {ep.functor("q", {}), X}));
         
         cdcl c;
         
@@ -23074,13 +23074,13 @@ void test_ridge_sim() {
         lineage_pool lp;
         
         database db;
-        const expr* pair_a_b = ep.cons(ep.atom("pair"), ep.cons(ep.atom("a"), ep.atom("b")));
+        const expr* pair_a_b = ep.functor("cons", {ep.functor("pair", {}), ep.functor("cons", {ep.functor("a", {}), ep.functor("b", {})})});
         db.push_back(rule{pair_a_b, {}});  // idx 0
         
         goals goals;
         const expr* X = ep.var(seq());
         const expr* Y = ep.var(seq());
-        const expr* pair_X_Y = ep.cons(ep.atom("pair"), ep.cons(X, Y));
+        const expr* pair_X_Y = ep.functor("cons", {ep.functor("pair", {}), ep.functor("cons", {X, Y})});
         goals.push_back(pair_X_Y);
         
         cdcl c;
@@ -23102,8 +23102,8 @@ void test_ridge_sim() {
         normalizer norm(ep, bm);
         const expr* X_normalized = norm(X);
         const expr* Y_normalized = norm(Y);
-        assert(X_normalized == ep.atom("a"));
-        assert(Y_normalized == ep.atom("b"));
+        assert(X_normalized == ep.functor("a", {}));
+        assert(Y_normalized == ep.functor("b", {}));
     }
     
     // Test 29: Variable binds through rule chain
@@ -23121,12 +23121,12 @@ void test_ridge_sim() {
         
         database db;
         const expr* X_rule = ep.var(seq());
-        db.push_back(rule{ep.cons(ep.atom("p"), X_rule), {ep.cons(ep.atom("q"), X_rule)}});  // idx 0
-        db.push_back(rule{ep.cons(ep.atom("q"), ep.atom("hello")), {}});  // idx 1
+        db.push_back(rule{ep.functor("cons", {ep.functor("p", {}), X_rule}), {ep.functor("cons", {ep.functor("q", {}), X_rule})}});  // idx 0
+        db.push_back(rule{ep.functor("cons", {ep.functor("q", {}), ep.functor("hello", {})}), {}});  // idx 1
         
         goals goals;
         const expr* Y_goal = ep.var(seq());
-        goals.push_back(ep.cons(ep.atom("p"), Y_goal));
+        goals.push_back(ep.functor("cons", {ep.functor("p", {}), Y_goal}));
         
         cdcl c;
         
@@ -23146,7 +23146,7 @@ void test_ridge_sim() {
         // CRITICAL: Verify Y binds to hello through chain
         normalizer norm(ep, bm);
         const expr* Y_normalized = norm(Y_goal);
-        assert(Y_normalized == ep.atom("hello"));
+        assert(Y_normalized == ep.functor("hello", {}));
     }
     
     // Test 30: Two starting goals with variables
@@ -23163,14 +23163,14 @@ void test_ridge_sim() {
         lineage_pool lp;
         
         database db;
-        db.push_back(rule{ep.cons(ep.atom("p"), ep.atom("a")), {}});  // idx 0
-        db.push_back(rule{ep.cons(ep.atom("q"), ep.atom("b")), {}});  // idx 1
+        db.push_back(rule{ep.functor("cons", {ep.functor("p", {}), ep.functor("a", {})}), {}});  // idx 0
+        db.push_back(rule{ep.functor("cons", {ep.functor("q", {}), ep.functor("b", {})}), {}});  // idx 1
         
         goals goals;
         const expr* X = ep.var(seq());
         const expr* Y = ep.var(seq());
-        goals.push_back(ep.cons(ep.atom("p"), X));
-        goals.push_back(ep.cons(ep.atom("q"), Y));
+        goals.push_back(ep.functor("cons", {ep.functor("p", {}), X}));
+        goals.push_back(ep.functor("cons", {ep.functor("q", {}), Y}));
         
         cdcl c;
         
@@ -23204,8 +23204,8 @@ void test_ridge_sim() {
         normalizer norm(ep, bm);
         const expr* X_normalized = norm(X);
         const expr* Y_normalized = norm(Y);
-        assert(X_normalized == ep.atom("a"));
-        assert(Y_normalized == ep.atom("b"));
+        assert(X_normalized == ep.functor("a", {}));
+        assert(Y_normalized == ep.functor("b", {}));
     }
     
     // Test 31: Three starting goals with shared variable
@@ -23222,15 +23222,15 @@ void test_ridge_sim() {
         lineage_pool lp;
         
         database db;
-        db.push_back(rule{ep.cons(ep.atom("p"), ep.atom("a")), {}});  // idx 0
-        db.push_back(rule{ep.cons(ep.atom("q"), ep.atom("a")), {}});  // idx 1
-        db.push_back(rule{ep.cons(ep.atom("r"), ep.atom("a")), {}});  // idx 2
+        db.push_back(rule{ep.functor("cons", {ep.functor("p", {}), ep.functor("a", {})}), {}});  // idx 0
+        db.push_back(rule{ep.functor("cons", {ep.functor("q", {}), ep.functor("a", {})}), {}});  // idx 1
+        db.push_back(rule{ep.functor("cons", {ep.functor("r", {}), ep.functor("a", {})}), {}});  // idx 2
         
         goals goals;
         const expr* X = ep.var(seq());
-        goals.push_back(ep.cons(ep.atom("p"), X));
-        goals.push_back(ep.cons(ep.atom("q"), X));
-        goals.push_back(ep.cons(ep.atom("r"), X));
+        goals.push_back(ep.functor("cons", {ep.functor("p", {}), X}));
+        goals.push_back(ep.functor("cons", {ep.functor("q", {}), X}));
+        goals.push_back(ep.functor("cons", {ep.functor("r", {}), X}));
         
         cdcl c;
         
@@ -23270,7 +23270,7 @@ void test_ridge_sim() {
         // CRITICAL: X binds to a
         normalizer norm(ep, bm);
         const expr* X_normalized = norm(X);
-        assert(X_normalized == ep.atom("a"));
+        assert(X_normalized == ep.functor("a", {}));
     }
     
     // Test 32: Multiple goals with dependent variables
@@ -23287,8 +23287,8 @@ void test_ridge_sim() {
         lineage_pool lp;
         
         database db;
-        const expr* f_a_b = ep.cons(ep.atom("f"), ep.cons(ep.atom("a"), ep.atom("b")));
-        const expr* g_b_c = ep.cons(ep.atom("g"), ep.cons(ep.atom("b"), ep.atom("c")));
+        const expr* f_a_b = ep.functor("cons", {ep.functor("f", {}), ep.functor("cons", {ep.functor("a", {}), ep.functor("b", {})})});
+        const expr* g_b_c = ep.functor("cons", {ep.functor("g", {}), ep.functor("cons", {ep.functor("b", {}), ep.functor("c", {})})});
         db.push_back(rule{f_a_b, {}});  // idx 0
         db.push_back(rule{g_b_c, {}});  // idx 1
         
@@ -23296,8 +23296,8 @@ void test_ridge_sim() {
         const expr* X = ep.var(seq());
         const expr* Y = ep.var(seq());
         const expr* Z = ep.var(seq());
-        goals.push_back(ep.cons(ep.atom("f"), ep.cons(X, Y)));
-        goals.push_back(ep.cons(ep.atom("g"), ep.cons(Y, Z)));
+        goals.push_back(ep.functor("cons", {ep.functor("f", {}), ep.functor("cons", {X, Y})}));
+        goals.push_back(ep.functor("cons", {ep.functor("g", {}), ep.functor("cons", {Y, Z})}));
         
         cdcl c;
         
@@ -23335,9 +23335,9 @@ void test_ridge_sim() {
         const expr* X_normalized = norm(X);
         const expr* Y_normalized = norm(Y);
         const expr* Z_normalized = norm(Z);
-        assert(X_normalized == ep.atom("a"));
-        assert(Y_normalized == ep.atom("b"));
-        assert(Z_normalized == ep.atom("c"));
+        assert(X_normalized == ep.functor("a", {}));
+        assert(Y_normalized == ep.functor("b", {}));
+        assert(Z_normalized == ep.functor("c", {}));
     }
     
     // Test 33: Variable binds to complex nested structure
@@ -23354,15 +23354,15 @@ void test_ridge_sim() {
         lineage_pool lp;
         
         database db;
-        const expr* leaf1 = ep.cons(ep.atom("leaf"), ep.atom("1"));
-        const expr* leaf2 = ep.cons(ep.atom("leaf"), ep.atom("2"));
-        const expr* node = ep.cons(ep.atom("node"), ep.cons(leaf1, leaf2));
-        const expr* tree = ep.cons(ep.atom("tree"), node);
+        const expr* leaf1 = ep.functor("cons", {ep.functor("leaf", {}), ep.functor("1", {})});
+        const expr* leaf2 = ep.functor("cons", {ep.functor("leaf", {}), ep.functor("2", {})});
+        const expr* node = ep.functor("cons", {ep.functor("node", {}), ep.functor("cons", {leaf1, leaf2})});
+        const expr* tree = ep.functor("cons", {ep.functor("tree", {}), node});
         db.push_back(rule{tree, {}});  // idx 0
         
         goals goals;
         const expr* X = ep.var(seq());
-        goals.push_back(ep.cons(ep.atom("tree"), X));
+        goals.push_back(ep.functor("cons", {ep.functor("tree", {}), X}));
         
         cdcl c;
         
@@ -23401,15 +23401,15 @@ void test_ridge_sim() {
         database db;
         const expr* X = ep.var(seq());
         const expr* Y = ep.var(seq());
-        db.push_back(rule{ep.cons(ep.atom("p"), X), {ep.cons(ep.atom("q"), X)}});  // idx 0
-        db.push_back(rule{ep.cons(ep.atom("q"), Y), {ep.cons(ep.atom("r"), Y)}});  // idx 1
-        db.push_back(rule{ep.cons(ep.atom("r"), ep.atom("hello")), {}});  // idx 2
+        db.push_back(rule{ep.functor("cons", {ep.functor("p", {}), X}), {ep.functor("cons", {ep.functor("q", {}), X})}});  // idx 0
+        db.push_back(rule{ep.functor("cons", {ep.functor("q", {}), Y}), {ep.functor("cons", {ep.functor("r", {}), Y})}});  // idx 1
+        db.push_back(rule{ep.functor("cons", {ep.functor("r", {}), ep.functor("hello", {})}), {}});  // idx 2
         
         goals goals;
         const expr* A = ep.var(seq());
         const expr* B = ep.var(seq());
-        goals.push_back(ep.cons(ep.atom("p"), A));
-        goals.push_back(ep.cons(ep.atom("p"), B));
+        goals.push_back(ep.functor("cons", {ep.functor("p", {}), A}));
+        goals.push_back(ep.functor("cons", {ep.functor("p", {}), B}));
         
         cdcl c;
         
@@ -23463,8 +23463,8 @@ void test_ridge_sim() {
         normalizer norm(ep, bm);
         const expr* A_normalized = norm(A);
         const expr* B_normalized = norm(B);
-        assert(A_normalized == ep.atom("hello"));
-        assert(B_normalized == ep.atom("hello"));
+        assert(A_normalized == ep.functor("hello", {}));
+        assert(B_normalized == ep.functor("hello", {}));
     }
     
     // Test 35: Five starting goals with mixed variables
@@ -23481,11 +23481,11 @@ void test_ridge_sim() {
         lineage_pool lp;
         
         database db;
-        db.push_back(rule{ep.cons(ep.atom("a"), ep.atom("1")), {}});  // idx 0
-        db.push_back(rule{ep.cons(ep.atom("b"), ep.atom("2")), {}});  // idx 1
-        db.push_back(rule{ep.cons(ep.atom("c"), ep.atom("3")), {}});  // idx 2
-        db.push_back(rule{ep.cons(ep.atom("d"), ep.atom("4")), {}});  // idx 3
-        db.push_back(rule{ep.cons(ep.atom("e"), ep.atom("5")), {}});  // idx 4
+        db.push_back(rule{ep.functor("cons", {ep.functor("a", {}), ep.functor("1", {})}), {}});  // idx 0
+        db.push_back(rule{ep.functor("cons", {ep.functor("b", {}), ep.functor("2", {})}), {}});  // idx 1
+        db.push_back(rule{ep.functor("cons", {ep.functor("c", {}), ep.functor("3", {})}), {}});  // idx 2
+        db.push_back(rule{ep.functor("cons", {ep.functor("d", {}), ep.functor("4", {})}), {}});  // idx 3
+        db.push_back(rule{ep.functor("cons", {ep.functor("e", {}), ep.functor("5", {})}), {}});  // idx 4
         
         goals goals;
         const expr* V1 = ep.var(seq());
@@ -23493,11 +23493,11 @@ void test_ridge_sim() {
         const expr* V3 = ep.var(seq());
         const expr* V4 = ep.var(seq());
         const expr* V5 = ep.var(seq());
-        goals.push_back(ep.cons(ep.atom("a"), V1));
-        goals.push_back(ep.cons(ep.atom("b"), V2));
-        goals.push_back(ep.cons(ep.atom("c"), V3));
-        goals.push_back(ep.cons(ep.atom("d"), V4));
-        goals.push_back(ep.cons(ep.atom("e"), V5));
+        goals.push_back(ep.functor("cons", {ep.functor("a", {}), V1}));
+        goals.push_back(ep.functor("cons", {ep.functor("b", {}), V2}));
+        goals.push_back(ep.functor("cons", {ep.functor("c", {}), V3}));
+        goals.push_back(ep.functor("cons", {ep.functor("d", {}), V4}));
+        goals.push_back(ep.functor("cons", {ep.functor("e", {}), V5}));
         
         cdcl c;
         
@@ -23544,11 +23544,11 @@ void test_ridge_sim() {
         
         // CRITICAL: Verify all five variables
         normalizer norm(ep, bm);
-        assert(norm(V1) == ep.atom("1"));
-        assert(norm(V2) == ep.atom("2"));
-        assert(norm(V3) == ep.atom("3"));
-        assert(norm(V4) == ep.atom("4"));
-        assert(norm(V5) == ep.atom("5"));
+        assert(norm(V1) == ep.functor("1", {}));
+        assert(norm(V2) == ep.functor("2", {}));
+        assert(norm(V3) == ep.functor("3", {}));
+        assert(norm(V4) == ep.functor("4", {}));
+        assert(norm(V5) == ep.functor("5", {}));
     }
     
     // Test 36: Variable in goal with decision required
@@ -23567,14 +23567,14 @@ void test_ridge_sim() {
         database db;
         const expr* X1 = ep.var(seq());
         const expr* X2 = ep.var(seq());
-        db.push_back(rule{ep.cons(ep.atom("p"), X1), {ep.cons(ep.atom("q"), X1)}});  // idx 0
-        db.push_back(rule{ep.cons(ep.atom("p"), X2), {ep.cons(ep.atom("r"), X2)}});  // idx 1
-        db.push_back(rule{ep.cons(ep.atom("q"), ep.atom("apple")), {}});  // idx 2
-        db.push_back(rule{ep.cons(ep.atom("r"), ep.atom("banana")), {}});  // idx 3
+        db.push_back(rule{ep.functor("cons", {ep.functor("p", {}), X1}), {ep.functor("cons", {ep.functor("q", {}), X1})}});  // idx 0
+        db.push_back(rule{ep.functor("cons", {ep.functor("p", {}), X2}), {ep.functor("cons", {ep.functor("r", {}), X2})}});  // idx 1
+        db.push_back(rule{ep.functor("cons", {ep.functor("q", {}), ep.functor("apple", {})}), {}});  // idx 2
+        db.push_back(rule{ep.functor("cons", {ep.functor("r", {}), ep.functor("banana", {})}), {}});  // idx 3
         
         goals goals;
         const expr* Fruit = ep.var(seq());
-        goals.push_back(ep.cons(ep.atom("p"), Fruit));
+        goals.push_back(ep.functor("cons", {ep.functor("p", {}), Fruit}));
         
         cdcl c;
         
@@ -23603,7 +23603,7 @@ void test_ridge_sim() {
         // CRITICAL: Fruit binds to apple (based on forced decision)
         normalizer norm(ep, bm);
         const expr* Fruit_normalized = norm(Fruit);
-        assert(Fruit_normalized == ep.atom("apple"));
+        assert(Fruit_normalized == ep.functor("apple", {}));
     }
     
     // Test 37: Partial instantiation with variable (base case)
@@ -23620,28 +23620,28 @@ void test_ridge_sim() {
         lineage_pool lp;
         
         database db;
-        const expr* link_a_b = ep.cons(ep.atom("link"), ep.cons(ep.atom("a"), ep.atom("b")));
-        const expr* link_b_c = ep.cons(ep.atom("link"), ep.cons(ep.atom("b"), ep.atom("c")));
+        const expr* link_a_b = ep.functor("cons", {ep.functor("link", {}), ep.functor("cons", {ep.functor("a", {}), ep.functor("b", {})})});
+        const expr* link_b_c = ep.functor("cons", {ep.functor("link", {}), ep.functor("cons", {ep.functor("b", {}), ep.functor("c", {})})});
         db.push_back(rule{link_a_b, {}});  // idx 0
         db.push_back(rule{link_b_c, {}});  // idx 1
         
         const expr* X1 = ep.var(seq());
         const expr* Y1 = ep.var(seq());
-        const expr* path_base = ep.cons(ep.atom("path"), ep.cons(X1, Y1));
-        const expr* link_X1_Y1 = ep.cons(ep.atom("link"), ep.cons(X1, Y1));
+        const expr* path_base = ep.functor("cons", {ep.functor("path", {}), ep.functor("cons", {X1, Y1})});
+        const expr* link_X1_Y1 = ep.functor("cons", {ep.functor("link", {}), ep.functor("cons", {X1, Y1})});
         db.push_back(rule{path_base, {link_X1_Y1}});  // idx 2
         
         const expr* X2 = ep.var(seq());
         const expr* Y2 = ep.var(seq());
         const expr* Z2 = ep.var(seq());
-        const expr* path_rec = ep.cons(ep.atom("path"), ep.cons(X2, Z2));
-        const expr* link_X2_Y2 = ep.cons(ep.atom("link"), ep.cons(X2, Y2));
-        const expr* path_Y2_Z2 = ep.cons(ep.atom("path"), ep.cons(Y2, Z2));
+        const expr* path_rec = ep.functor("cons", {ep.functor("path", {}), ep.functor("cons", {X2, Z2})});
+        const expr* link_X2_Y2 = ep.functor("cons", {ep.functor("link", {}), ep.functor("cons", {X2, Y2})});
+        const expr* path_Y2_Z2 = ep.functor("cons", {ep.functor("path", {}), ep.functor("cons", {Y2, Z2})});
         db.push_back(rule{path_rec, {link_X2_Y2, path_Y2_Z2}});  // idx 3
         
         goals goals;
         const expr* Dest = ep.var(seq());
-        goals.push_back(ep.cons(ep.atom("path"), ep.cons(ep.atom("a"), Dest)));
+        goals.push_back(ep.functor("cons", {ep.functor("path", {}), ep.functor("cons", {ep.functor("a", {}), Dest})}));
         
         cdcl c;
         
@@ -23687,7 +23687,7 @@ void test_ridge_sim() {
         // CRITICAL: Dest binds to exactly 'b'
         normalizer norm(ep, bm);
         const expr* Dest_normalized = norm(Dest);
-        assert(Dest_normalized == ep.atom("b"));
+        assert(Dest_normalized == ep.functor("b", {}));
     }
     
     // Test 38: Multiple goals with complex variable sharing
@@ -23707,28 +23707,28 @@ void test_ridge_sim() {
         const expr* X = ep.var(seq());
         const expr* Y = ep.var(seq());
         const expr* Z = ep.var(seq());
-        const expr* add_rule = ep.cons(ep.atom("add"), ep.cons(X, ep.cons(Y, Z)));
-        const expr* plus_body = ep.cons(ep.atom("plus"), ep.cons(X, ep.cons(Y, Z)));
+        const expr* add_rule = ep.functor("cons", {ep.functor("add", {}), ep.functor("cons", {X, ep.functor("cons", {Y, Z})})});
+        const expr* plus_body = ep.functor("cons", {ep.functor("plus", {}), ep.functor("cons", {X, ep.functor("cons", {Y, Z})})});
         db.push_back(rule{add_rule, {plus_body}});  // idx 0
         
-        const expr* plus_fact = ep.cons(ep.atom("plus"), ep.cons(ep.atom("1"), ep.cons(ep.atom("2"), ep.atom("3"))));
+        const expr* plus_fact = ep.functor("cons", {ep.functor("plus", {}), ep.functor("cons", {ep.functor("1", {}), ep.functor("cons", {ep.functor("2", {}), ep.functor("3", {})})})});
         db.push_back(rule{plus_fact, {}});  // idx 1
         
         const expr* A = ep.var(seq());
         const expr* B = ep.var(seq());
         const expr* C = ep.var(seq());
-        const expr* mul_rule = ep.cons(ep.atom("mul"), ep.cons(A, ep.cons(B, C)));
-        const expr* times_body = ep.cons(ep.atom("times"), ep.cons(A, ep.cons(B, C)));
+        const expr* mul_rule = ep.functor("cons", {ep.functor("mul", {}), ep.functor("cons", {A, ep.functor("cons", {B, C})})});
+        const expr* times_body = ep.functor("cons", {ep.functor("times", {}), ep.functor("cons", {A, ep.functor("cons", {B, C})})});
         db.push_back(rule{mul_rule, {times_body}});  // idx 2
         
-        const expr* times_fact = ep.cons(ep.atom("times"), ep.cons(ep.atom("2"), ep.cons(ep.atom("3"), ep.atom("6"))));
+        const expr* times_fact = ep.functor("cons", {ep.functor("times", {}), ep.functor("cons", {ep.functor("2", {}), ep.functor("cons", {ep.functor("3", {}), ep.functor("6", {})})})});
         db.push_back(rule{times_fact, {}});  // idx 3
         
         goals goals;
         const expr* Sum = ep.var(seq());
         const expr* Prod = ep.var(seq());
-        goals.push_back(ep.cons(ep.atom("add"), ep.cons(ep.atom("1"), ep.cons(ep.atom("2"), Sum))));
-        goals.push_back(ep.cons(ep.atom("mul"), ep.cons(ep.atom("2"), ep.cons(ep.atom("3"), Prod))));
+        goals.push_back(ep.functor("cons", {ep.functor("add", {}), ep.functor("cons", {ep.functor("1", {}), ep.functor("cons", {ep.functor("2", {}), Sum})})}));
+        goals.push_back(ep.functor("cons", {ep.functor("mul", {}), ep.functor("cons", {ep.functor("2", {}), ep.functor("cons", {ep.functor("3", {}), Prod})})}));
         
         cdcl c;
         
@@ -23774,8 +23774,8 @@ void test_ridge_sim() {
         normalizer norm(ep, bm);
         const expr* Sum_normalized = norm(Sum);
         const expr* Prod_normalized = norm(Prod);
-        assert(Sum_normalized == ep.atom("3"));
-        assert(Prod_normalized == ep.atom("6"));
+        assert(Sum_normalized == ep.functor("3", {}));
+        assert(Prod_normalized == ep.functor("6", {}));
     }
     
     // ========== NEW TESTS: CONFLICT AND EDGE CASES ==========
@@ -23794,13 +23794,13 @@ void test_ridge_sim() {
         lineage_pool lp;
         
         database db;
-        db.push_back(rule{ep.cons(ep.atom("p"), ep.atom("a")), {}});  // idx 0
-        db.push_back(rule{ep.cons(ep.atom("q"), ep.atom("b")), {}});  // idx 1
+        db.push_back(rule{ep.functor("cons", {ep.functor("p", {}), ep.functor("a", {})}), {}});  // idx 0
+        db.push_back(rule{ep.functor("cons", {ep.functor("q", {}), ep.functor("b", {})}), {}});  // idx 1
         
         goals goals;
         const expr* X = ep.var(seq());
-        goals.push_back(ep.cons(ep.atom("p"), X));
-        goals.push_back(ep.cons(ep.atom("q"), X));
+        goals.push_back(ep.functor("cons", {ep.functor("p", {}), X}));
+        goals.push_back(ep.functor("cons", {ep.functor("q", {}), X}));
         
         cdcl c;
         
@@ -23843,13 +23843,13 @@ void test_ridge_sim() {
         lineage_pool lp;
         
         database db;
-        db.push_back(rule{ep.cons(ep.atom("pair"), ep.cons(ep.atom("a"), ep.atom("a"))), {}});  // idx 0
-        db.push_back(rule{ep.cons(ep.atom("pair"), ep.cons(ep.atom("a"), ep.atom("b"))), {}});  // idx 1
-        db.push_back(rule{ep.cons(ep.atom("pair"), ep.cons(ep.atom("b"), ep.atom("b"))), {}});  // idx 2
+        db.push_back(rule{ep.functor("cons", {ep.functor("pair", {}), ep.functor("cons", {ep.functor("a", {}), ep.functor("a", {})})}), {}});  // idx 0
+        db.push_back(rule{ep.functor("cons", {ep.functor("pair", {}), ep.functor("cons", {ep.functor("a", {}), ep.functor("b", {})})}), {}});  // idx 1
+        db.push_back(rule{ep.functor("cons", {ep.functor("pair", {}), ep.functor("cons", {ep.functor("b", {}), ep.functor("b", {})})}), {}});  // idx 2
         
         goals goals;
         const expr* X = ep.var(seq());
-        goals.push_back(ep.cons(ep.atom("pair"), ep.cons(X, X)));
+        goals.push_back(ep.functor("cons", {ep.functor("pair", {}), ep.functor("cons", {X, X})}));
         
         cdcl c;
         
@@ -23888,7 +23888,7 @@ void test_ridge_sim() {
         // CRITICAL: X binds to exactly 'b' (NOT 'a', because we used idx 2)
         normalizer norm(ep, bm);
         const expr* X_normalized = norm(X);
-        assert(X_normalized == ep.atom("b"));
+        assert(X_normalized == ep.functor("b", {}));
         
         // CRITICAL: MCTS called once
         assert(sim.length() == 2);
@@ -23908,11 +23908,11 @@ void test_ridge_sim() {
         lineage_pool lp;
         
         database db;
-        db.push_back(rule{ep.cons(ep.atom("q"), ep.atom("a")), {}});  // idx 0
+        db.push_back(rule{ep.functor("cons", {ep.functor("q", {}), ep.functor("a", {})}), {}});  // idx 0
         
         goals goals;
         const expr* X = ep.var(seq());
-        goals.push_back(ep.cons(ep.atom("p"), X));
+        goals.push_back(ep.functor("cons", {ep.functor("p", {}), X}));
         
         cdcl c;
         
@@ -23958,13 +23958,13 @@ void test_ridge_sim() {
         database db;
         const expr* X_rule = ep.var(seq());
         const expr* Y_rule = ep.var(seq());
-        db.push_back(rule{ep.cons(ep.atom("p"), X_rule), {ep.cons(ep.atom("q"), X_rule)}});  // idx 0
-        db.push_back(rule{ep.cons(ep.atom("q"), Y_rule), {ep.cons(ep.atom("r"), Y_rule)}});  // idx 1
+        db.push_back(rule{ep.functor("cons", {ep.functor("p", {}), X_rule}), {ep.functor("cons", {ep.functor("q", {}), X_rule})}});  // idx 0
+        db.push_back(rule{ep.functor("cons", {ep.functor("q", {}), Y_rule}), {ep.functor("cons", {ep.functor("r", {}), Y_rule})}});  // idx 1
         // No r facts
         
         goals goals;
         const expr* Z_goal = ep.var(seq());
-        goals.push_back(ep.cons(ep.atom("p"), Z_goal));
+        goals.push_back(ep.functor("cons", {ep.functor("p", {}), Z_goal}));
         
         cdcl c;
         
@@ -24017,13 +24017,13 @@ void test_ridge_sim() {
         lineage_pool lp;
         
         database db;
-        db.push_back(rule{ep.cons(ep.atom("p"), ep.atom("a")), {}});  // idx 0
-        db.push_back(rule{ep.cons(ep.atom("q"), ep.atom("b")), {}});  // idx 1
+        db.push_back(rule{ep.functor("cons", {ep.functor("p", {}), ep.functor("a", {})}), {}});  // idx 0
+        db.push_back(rule{ep.functor("cons", {ep.functor("q", {}), ep.functor("b", {})}), {}});  // idx 1
         
         goals goals;
-        goals.push_back(ep.cons(ep.atom("p"), ep.atom("a")));  // Instantiated
+        goals.push_back(ep.functor("cons", {ep.functor("p", {}), ep.functor("a", {})}));  // Instantiated
         const expr* X = ep.var(seq());
-        goals.push_back(ep.cons(ep.atom("q"), X));  // Variable
+        goals.push_back(ep.functor("cons", {ep.functor("q", {}), X}));  // Variable
         
         cdcl c;
         
@@ -24059,7 +24059,7 @@ void test_ridge_sim() {
         // CRITICAL: X binds to 'b'
         normalizer norm(ep, bm);
         const expr* X_normalized = norm(X);
-        assert(X_normalized == ep.atom("b"));
+        assert(X_normalized == ep.functor("b", {}));
     }
     
     // Test 44: Deep variable chain (6 levels)
@@ -24083,16 +24083,16 @@ void test_ridge_sim() {
         const expr* W = ep.var(seq());
         const expr* V = ep.var(seq());
         
-        db.push_back(rule{ep.cons(ep.atom("a"), X), {ep.cons(ep.atom("b"), X)}});  // idx 0
-        db.push_back(rule{ep.cons(ep.atom("b"), Y), {ep.cons(ep.atom("c"), Y)}});  // idx 1
-        db.push_back(rule{ep.cons(ep.atom("c"), Z), {ep.cons(ep.atom("d"), Z)}});  // idx 2
-        db.push_back(rule{ep.cons(ep.atom("d"), W), {ep.cons(ep.atom("e"), W)}});  // idx 3
-        db.push_back(rule{ep.cons(ep.atom("e"), V), {ep.cons(ep.atom("f"), V)}});  // idx 4
-        db.push_back(rule{ep.cons(ep.atom("f"), ep.atom("hello")), {}});  // idx 5
+        db.push_back(rule{ep.functor("cons", {ep.functor("a", {}), X}), {ep.functor("cons", {ep.functor("b", {}), X})}});  // idx 0
+        db.push_back(rule{ep.functor("cons", {ep.functor("b", {}), Y}), {ep.functor("cons", {ep.functor("c", {}), Y})}});  // idx 1
+        db.push_back(rule{ep.functor("cons", {ep.functor("c", {}), Z}), {ep.functor("cons", {ep.functor("d", {}), Z})}});  // idx 2
+        db.push_back(rule{ep.functor("cons", {ep.functor("d", {}), W}), {ep.functor("cons", {ep.functor("e", {}), W})}});  // idx 3
+        db.push_back(rule{ep.functor("cons", {ep.functor("e", {}), V}), {ep.functor("cons", {ep.functor("f", {}), V})}});  // idx 4
+        db.push_back(rule{ep.functor("cons", {ep.functor("f", {}), ep.functor("hello", {})}), {}});  // idx 5
         
         goals goals;
         const expr* Result = ep.var(seq());
-        goals.push_back(ep.cons(ep.atom("a"), Result));
+        goals.push_back(ep.functor("cons", {ep.functor("a", {}), Result}));
         
         cdcl c;
         
@@ -24144,7 +24144,7 @@ void test_ridge_sim() {
         // CRITICAL: Result binds to 'hello'
         normalizer norm(ep, bm);
         const expr* Result_normalized = norm(Result);
-        assert(Result_normalized == ep.atom("hello"));
+        assert(Result_normalized == ep.functor("hello", {}));
     }
     
     // Test 45: Variables in multiple body goals
@@ -24165,22 +24165,22 @@ void test_ridge_sim() {
         const expr* Y = ep.var(seq());
         const expr* Z = ep.var(seq());
         
-        const expr* foo_head = ep.cons(ep.atom("foo"), ep.cons(X, ep.cons(Y, Z)));
-        const expr* bar_body = ep.cons(ep.atom("bar"), ep.cons(X, Y));
-        const expr* baz_body = ep.cons(ep.atom("baz"), ep.cons(Y, Z));
+        const expr* foo_head = ep.functor("cons", {ep.functor("foo", {}), ep.functor("cons", {X, ep.functor("cons", {Y, Z})})});
+        const expr* bar_body = ep.functor("cons", {ep.functor("bar", {}), ep.functor("cons", {X, Y})});
+        const expr* baz_body = ep.functor("cons", {ep.functor("baz", {}), ep.functor("cons", {Y, Z})});
         db.push_back(rule{foo_head, {bar_body, baz_body}});  // idx 0
         
-        const expr* bar_fact = ep.cons(ep.atom("bar"), ep.cons(ep.atom("1"), ep.atom("2")));
+        const expr* bar_fact = ep.functor("cons", {ep.functor("bar", {}), ep.functor("cons", {ep.functor("1", {}), ep.functor("2", {})})});
         db.push_back(rule{bar_fact, {}});  // idx 1
         
-        const expr* baz_fact = ep.cons(ep.atom("baz"), ep.cons(ep.atom("2"), ep.atom("3")));
+        const expr* baz_fact = ep.functor("cons", {ep.functor("baz", {}), ep.functor("cons", {ep.functor("2", {}), ep.functor("3", {})})});
         db.push_back(rule{baz_fact, {}});  // idx 2
         
         goals goals;
         const expr* A = ep.var(seq());
         const expr* B = ep.var(seq());
         const expr* C = ep.var(seq());
-        goals.push_back(ep.cons(ep.atom("foo"), ep.cons(A, ep.cons(B, C))));
+        goals.push_back(ep.functor("cons", {ep.functor("foo", {}), ep.functor("cons", {A, ep.functor("cons", {B, C})})}));
         
         cdcl c;
         
@@ -24222,9 +24222,9 @@ void test_ridge_sim() {
         const expr* A_normalized = norm(A);
         const expr* B_normalized = norm(B);
         const expr* C_normalized = norm(C);
-        assert(A_normalized == ep.atom("1"));
-        assert(B_normalized == ep.atom("2"));
-        assert(C_normalized == ep.atom("3"));
+        assert(A_normalized == ep.functor("1", {}));
+        assert(B_normalized == ep.functor("2", {}));
+        assert(C_normalized == ep.functor("3", {}));
     }
     
     // Test 46: Head elimination with variables
@@ -24244,18 +24244,18 @@ void test_ridge_sim() {
         const expr* X = ep.var(seq());
         const expr* Y = ep.var(seq());
         
-        const expr* cons_a_X = ep.cons(ep.atom("cons"), ep.cons(ep.atom("a"), X));
-        db.push_back(rule{ep.cons(ep.atom("p"), cons_a_X), {}});  // idx 0
+        const expr* cons_a_X = ep.functor("cons", {ep.functor("cons", {}), ep.functor("cons", {ep.functor("a", {}), X})});
+        db.push_back(rule{ep.functor("cons", {ep.functor("p", {}), cons_a_X}), {}});  // idx 0
         
-        const expr* cons_b_Y = ep.cons(ep.atom("cons"), ep.cons(ep.atom("b"), Y));
-        db.push_back(rule{ep.cons(ep.atom("p"), cons_b_Y), {}});  // idx 1
+        const expr* cons_b_Y = ep.functor("cons", {ep.functor("cons", {}), ep.functor("cons", {ep.functor("b", {}), Y})});
+        db.push_back(rule{ep.functor("cons", {ep.functor("p", {}), cons_b_Y}), {}});  // idx 1
         
-        const expr* atom_z = ep.cons(ep.atom("atom"), ep.atom("z"));
-        db.push_back(rule{ep.cons(ep.atom("p"), atom_z), {}});  // idx 2
+        const expr* atom_z = ep.functor("cons", {ep.functor("atom", {}), ep.functor("z", {})});
+        db.push_back(rule{ep.functor("cons", {ep.functor("p", {}), atom_z}), {}});  // idx 2
         
         goals goals;
-        const expr* cons_a_nil = ep.cons(ep.atom("cons"), ep.cons(ep.atom("a"), ep.atom("nil")));
-        goals.push_back(ep.cons(ep.atom("p"), cons_a_nil));
+        const expr* cons_a_nil = ep.functor("cons", {ep.functor("cons", {}), ep.functor("cons", {ep.functor("a", {}), ep.functor("nil", {})})});
+        goals.push_back(ep.functor("cons", {ep.functor("p", {}), cons_a_nil}));
         
         cdcl c;
         
@@ -24299,13 +24299,13 @@ void test_ridge_sim() {
         lineage_pool lp;
         
         database db;
-        db.push_back(rule{ep.cons(ep.atom("person"), ep.atom("alice")), {}});    // idx 0
-        db.push_back(rule{ep.cons(ep.atom("person"), ep.atom("bob")), {}});      // idx 1
-        db.push_back(rule{ep.cons(ep.atom("person"), ep.atom("charlie")), {}});  // idx 2
+        db.push_back(rule{ep.functor("cons", {ep.functor("person", {}), ep.functor("alice", {})}), {}});    // idx 0
+        db.push_back(rule{ep.functor("cons", {ep.functor("person", {}), ep.functor("bob", {})}), {}});      // idx 1
+        db.push_back(rule{ep.functor("cons", {ep.functor("person", {}), ep.functor("charlie", {})}), {}});  // idx 2
         
         goals goals;
         const expr* Who = ep.var(seq());
-        goals.push_back(ep.cons(ep.atom("person"), Who));
+        goals.push_back(ep.functor("cons", {ep.functor("person", {}), Who}));
         
         cdcl c;
         
@@ -24345,7 +24345,7 @@ void test_ridge_sim() {
         // CRITICAL: Who binds to exactly 'bob'
         normalizer norm(ep, bm);
         const expr* Who_normalized = norm(Who);
-        assert(Who_normalized == ep.atom("bob"));
+        assert(Who_normalized == ep.functor("bob", {}));
     }
     
     // Test 48: Avoidance store with variable resolution
@@ -24366,14 +24366,14 @@ void test_ridge_sim() {
         const expr* X = ep.var(seq());
         const expr* Y = ep.var(seq());
         
-        db.push_back(rule{ep.cons(ep.atom("p"), X), {ep.cons(ep.atom("q"), X)}});  // idx 0
-        db.push_back(rule{ep.cons(ep.atom("p"), Y), {ep.cons(ep.atom("r"), Y)}});  // idx 1
-        db.push_back(rule{ep.cons(ep.atom("q"), ep.atom("a")), {}});  // idx 2
-        db.push_back(rule{ep.cons(ep.atom("r"), ep.atom("b")), {}});  // idx 3
+        db.push_back(rule{ep.functor("cons", {ep.functor("p", {}), X}), {ep.functor("cons", {ep.functor("q", {}), X})}});  // idx 0
+        db.push_back(rule{ep.functor("cons", {ep.functor("p", {}), Y}), {ep.functor("cons", {ep.functor("r", {}), Y})}});  // idx 1
+        db.push_back(rule{ep.functor("cons", {ep.functor("q", {}), ep.functor("a", {})}), {}});  // idx 2
+        db.push_back(rule{ep.functor("cons", {ep.functor("r", {}), ep.functor("b", {})}), {}});  // idx 3
         
         goals goals;
         const expr* Z = ep.var(seq());
-        goals.push_back(ep.cons(ep.atom("p"), Z));
+        goals.push_back(ep.functor("cons", {ep.functor("p", {}), Z}));
         
         // Pre-populate avoidance store to avoid idx 0
         const goal_lineage* gl_p = lp.goal(nullptr, 0);
@@ -24414,7 +24414,7 @@ void test_ridge_sim() {
         // CRITICAL: Z binds to 'b'
         normalizer norm(ep, bm);
         const expr* Z_normalized = norm(Z);
-        assert(Z_normalized == ep.atom("b"));
+        assert(Z_normalized == ep.functor("b", {}));
     }
     
     // Test 49: Existential variables (variables only in body)
@@ -24433,11 +24433,11 @@ void test_ridge_sim() {
         database db;
         const expr* X = ep.var(seq());
         const expr* Y = ep.var(seq());
-        db.push_back(rule{ep.cons(ep.atom("p"), X), {ep.cons(ep.atom("q"), Y)}});  // idx 0
-        db.push_back(rule{ep.cons(ep.atom("q"), ep.atom("a")), {}});  // idx 1
+        db.push_back(rule{ep.functor("cons", {ep.functor("p", {}), X}), {ep.functor("cons", {ep.functor("q", {}), Y})}});  // idx 0
+        db.push_back(rule{ep.functor("cons", {ep.functor("q", {}), ep.functor("a", {})}), {}});  // idx 1
         
         goals goals;
-        goals.push_back(ep.cons(ep.atom("p"), ep.atom("hello")));
+        goals.push_back(ep.functor("cons", {ep.functor("p", {}), ep.functor("hello", {})}));
         
         cdcl c;
         
@@ -24487,10 +24487,10 @@ void test_ridge_sim() {
         
         database db;
         const expr* X = ep.var(seq());
-        db.push_back(rule{ep.cons(ep.atom("p"), X), {ep.cons(ep.atom("p"), X)}});  // idx 0: p(X) :- p(X)
+        db.push_back(rule{ep.functor("cons", {ep.functor("p", {}), X}), {ep.functor("cons", {ep.functor("p", {}), X})}});  // idx 0: p(X) :- p(X)
         
         goals goals;
-        goals.push_back(ep.cons(ep.atom("p"), ep.atom("a")));
+        goals.push_back(ep.functor("cons", {ep.functor("p", {}), ep.functor("a", {})}));
         
         cdcl c;
         
@@ -24534,7 +24534,7 @@ void test_ridge_sim() {
         
         goals goals;
         const expr* X = ep.var(seq());
-        goals.push_back(ep.cons(ep.atom("p"), X));
+        goals.push_back(ep.functor("cons", {ep.functor("p", {}), X}));
         
         cdcl c;
         
@@ -24575,10 +24575,10 @@ void test_ridge_sim() {
         
         database db;
         const expr* X = ep.var(seq());
-        db.push_back(rule{ep.cons(ep.atom("p"), X), {}});  // idx 0: p(X). (fact with variable)
+        db.push_back(rule{ep.functor("cons", {ep.functor("p", {}), X}), {}});  // idx 0: p(X). (fact with variable)
         
         goals goals;
-        goals.push_back(ep.cons(ep.atom("p"), ep.atom("hello")));
+        goals.push_back(ep.functor("cons", {ep.functor("p", {}), ep.functor("hello", {})}));
         
         cdcl c;
         
@@ -24628,24 +24628,24 @@ void test_ridge_sim() {
         const expr* Y = ep.var(seq());
         const expr* Z = ep.var(seq());
         
-        const expr* big_head = ep.cons(ep.atom("big"), ep.cons(W, ep.cons(X, ep.cons(Y, Z))));
-        const expr* a_body = ep.cons(ep.atom("a"), W);
-        const expr* b_body = ep.cons(ep.atom("b"), X);
-        const expr* c_body = ep.cons(ep.atom("c"), Y);
-        const expr* d_body = ep.cons(ep.atom("d"), Z);
+        const expr* big_head = ep.functor("cons", {ep.functor("big", {}), ep.functor("cons", {W, ep.functor("cons", {X, ep.functor("cons", {Y, Z})})})});
+        const expr* a_body = ep.functor("cons", {ep.functor("a", {}), W});
+        const expr* b_body = ep.functor("cons", {ep.functor("b", {}), X});
+        const expr* c_body = ep.functor("cons", {ep.functor("c", {}), Y});
+        const expr* d_body = ep.functor("cons", {ep.functor("d", {}), Z});
         db.push_back(rule{big_head, {a_body, b_body, c_body, d_body}});  // idx 0
         
-        db.push_back(rule{ep.cons(ep.atom("a"), ep.atom("1")), {}});  // idx 1
-        db.push_back(rule{ep.cons(ep.atom("b"), ep.atom("2")), {}});  // idx 2
-        db.push_back(rule{ep.cons(ep.atom("c"), ep.atom("3")), {}});  // idx 3
-        db.push_back(rule{ep.cons(ep.atom("d"), ep.atom("4")), {}});  // idx 4
+        db.push_back(rule{ep.functor("cons", {ep.functor("a", {}), ep.functor("1", {})}), {}});  // idx 1
+        db.push_back(rule{ep.functor("cons", {ep.functor("b", {}), ep.functor("2", {})}), {}});  // idx 2
+        db.push_back(rule{ep.functor("cons", {ep.functor("c", {}), ep.functor("3", {})}), {}});  // idx 3
+        db.push_back(rule{ep.functor("cons", {ep.functor("d", {}), ep.functor("4", {})}), {}});  // idx 4
         
         goals goals;
         const expr* A = ep.var(seq());
         const expr* B = ep.var(seq());
         const expr* C = ep.var(seq());
         const expr* D = ep.var(seq());
-        goals.push_back(ep.cons(ep.atom("big"), ep.cons(A, ep.cons(B, ep.cons(C, D)))));
+        goals.push_back(ep.functor("cons", {ep.functor("big", {}), ep.functor("cons", {A, ep.functor("cons", {B, ep.functor("cons", {C, D})})})}));
         
         cdcl c;
         
@@ -24689,10 +24689,10 @@ void test_ridge_sim() {
         
         // CRITICAL: Verify all four variables
         normalizer norm(ep, bm);
-        assert(norm(A) == ep.atom("1"));
-        assert(norm(B) == ep.atom("2"));
-        assert(norm(C) == ep.atom("3"));
-        assert(norm(D) == ep.atom("4"));
+        assert(norm(A) == ep.functor("1", {}));
+        assert(norm(B) == ep.functor("2", {}));
+        assert(norm(C) == ep.functor("3", {}));
+        assert(norm(D) == ep.functor("4", {}));
     }
     
     // Test 54: Multiple avoidances in avoidance store
@@ -24713,14 +24713,14 @@ void test_ridge_sim() {
         const expr* X = ep.var(seq());
         const expr* Y = ep.var(seq());
         
-        db.push_back(rule{ep.cons(ep.atom("p"), X), {ep.cons(ep.atom("q"), X)}});  // idx 0
-        db.push_back(rule{ep.cons(ep.atom("p"), Y), {ep.cons(ep.atom("r"), Y)}});  // idx 1
-        db.push_back(rule{ep.cons(ep.atom("q"), ep.atom("a")), {}});  // idx 2
-        db.push_back(rule{ep.cons(ep.atom("r"), ep.atom("b")), {}});  // idx 3
+        db.push_back(rule{ep.functor("cons", {ep.functor("p", {}), X}), {ep.functor("cons", {ep.functor("q", {}), X})}});  // idx 0
+        db.push_back(rule{ep.functor("cons", {ep.functor("p", {}), Y}), {ep.functor("cons", {ep.functor("r", {}), Y})}});  // idx 1
+        db.push_back(rule{ep.functor("cons", {ep.functor("q", {}), ep.functor("a", {})}), {}});  // idx 2
+        db.push_back(rule{ep.functor("cons", {ep.functor("r", {}), ep.functor("b", {})}), {}});  // idx 3
         
         goals goals;
         const expr* Z = ep.var(seq());
-        goals.push_back(ep.cons(ep.atom("p"), Z));
+        goals.push_back(ep.functor("cons", {ep.functor("p", {}), Z}));
         
         // Pre-populate avoidance store with BOTH resolutions
         const goal_lineage* gl_p = lp.goal(nullptr, 0);
@@ -24775,15 +24775,15 @@ void test_ridge_sim() {
         const expr* X = ep.var(seq());
         const expr* Y = ep.var(seq());
         
-        const expr* cons_a_X = ep.cons(ep.atom("cons"), ep.cons(ep.atom("a"), X));
-        db.push_back(rule{ep.cons(ep.atom("p"), cons_a_X), {}});  // idx 0
+        const expr* cons_a_X = ep.functor("cons", {ep.functor("cons", {}), ep.functor("cons", {ep.functor("a", {}), X})});
+        db.push_back(rule{ep.functor("cons", {ep.functor("p", {}), cons_a_X}), {}});  // idx 0
         
-        const expr* cons_b_Y = ep.cons(ep.atom("cons"), ep.cons(ep.atom("b"), Y));
-        db.push_back(rule{ep.cons(ep.atom("p"), cons_b_Y), {}});  // idx 1
+        const expr* cons_b_Y = ep.functor("cons", {ep.functor("cons", {}), ep.functor("cons", {ep.functor("b", {}), Y})});
+        db.push_back(rule{ep.functor("cons", {ep.functor("p", {}), cons_b_Y}), {}});  // idx 1
         
         goals goals;
-        const expr* atom_z = ep.cons(ep.atom("atom"), ep.atom("z"));
-        goals.push_back(ep.cons(ep.atom("p"), atom_z));
+        const expr* atom_z = ep.functor("cons", {ep.functor("atom", {}), ep.functor("z", {})});
+        goals.push_back(ep.functor("cons", {ep.functor("p", {}), atom_z}));
         
         cdcl c;
         
@@ -24823,16 +24823,16 @@ void test_ridge_sim() {
         lineage_pool lp;
         
         database db;
-        const expr* level1 = ep.cons(ep.atom("cons"), ep.cons(ep.atom("a"), ep.atom("b")));
-        const expr* level2 = ep.cons(ep.atom("cons"), ep.cons(level1, ep.atom("c")));
-        const expr* level3 = ep.cons(ep.atom("cons"), ep.cons(level2, ep.atom("d")));
-        const expr* level4 = ep.cons(ep.atom("cons"), ep.cons(level3, ep.atom("e")));
-        const expr* level5 = ep.cons(ep.atom("cons"), ep.cons(level4, ep.atom("f")));
-        db.push_back(rule{ep.cons(ep.atom("deep"), level5), {}});  // idx 0
+        const expr* level1 = ep.functor("cons", {ep.functor("cons", {}), ep.functor("cons", {ep.functor("a", {}), ep.functor("b", {})})});
+        const expr* level2 = ep.functor("cons", {ep.functor("cons", {}), ep.functor("cons", {level1, ep.functor("c", {})})});
+        const expr* level3 = ep.functor("cons", {ep.functor("cons", {}), ep.functor("cons", {level2, ep.functor("d", {})})});
+        const expr* level4 = ep.functor("cons", {ep.functor("cons", {}), ep.functor("cons", {level3, ep.functor("e", {})})});
+        const expr* level5 = ep.functor("cons", {ep.functor("cons", {}), ep.functor("cons", {level4, ep.functor("f", {})})});
+        db.push_back(rule{ep.functor("cons", {ep.functor("deep", {}), level5}), {}});  // idx 0
         
         goals goals;
         const expr* X = ep.var(seq());
-        goals.push_back(ep.cons(ep.atom("deep"), X));
+        goals.push_back(ep.functor("cons", {ep.functor("deep", {}), X}));
         
         cdcl c;
         
@@ -24873,20 +24873,20 @@ void test_ridge_sim() {
         }
         
         // Build chain: a→b→c→d→e→f→g→h→i→j→end
-        db.push_back(rule{ep.cons(ep.atom("a"), vars[0]), {ep.cons(ep.atom("b"), vars[0])}});
-        db.push_back(rule{ep.cons(ep.atom("b"), vars[1]), {ep.cons(ep.atom("c"), vars[1])}});
-        db.push_back(rule{ep.cons(ep.atom("c"), vars[2]), {ep.cons(ep.atom("d"), vars[2])}});
-        db.push_back(rule{ep.cons(ep.atom("d"), vars[3]), {ep.cons(ep.atom("e"), vars[3])}});
-        db.push_back(rule{ep.cons(ep.atom("e"), vars[4]), {ep.cons(ep.atom("f"), vars[4])}});
-        db.push_back(rule{ep.cons(ep.atom("f"), vars[5]), {ep.cons(ep.atom("g"), vars[5])}});
-        db.push_back(rule{ep.cons(ep.atom("g"), vars[6]), {ep.cons(ep.atom("h"), vars[6])}});
-        db.push_back(rule{ep.cons(ep.atom("h"), vars[7]), {ep.cons(ep.atom("i"), vars[7])}});
-        db.push_back(rule{ep.cons(ep.atom("i"), vars[8]), {ep.cons(ep.atom("j"), vars[8])}});
-        db.push_back(rule{ep.cons(ep.atom("j"), ep.atom("end")), {}});
+        db.push_back(rule{ep.functor("cons", {ep.functor("a", {}), vars[0]}), {ep.functor("cons", {ep.functor("b", {}), vars[0]})}});
+        db.push_back(rule{ep.functor("cons", {ep.functor("b", {}), vars[1]}), {ep.functor("cons", {ep.functor("c", {}), vars[1]})}});
+        db.push_back(rule{ep.functor("cons", {ep.functor("c", {}), vars[2]}), {ep.functor("cons", {ep.functor("d", {}), vars[2]})}});
+        db.push_back(rule{ep.functor("cons", {ep.functor("d", {}), vars[3]}), {ep.functor("cons", {ep.functor("e", {}), vars[3]})}});
+        db.push_back(rule{ep.functor("cons", {ep.functor("e", {}), vars[4]}), {ep.functor("cons", {ep.functor("f", {}), vars[4]})}});
+        db.push_back(rule{ep.functor("cons", {ep.functor("f", {}), vars[5]}), {ep.functor("cons", {ep.functor("g", {}), vars[5]})}});
+        db.push_back(rule{ep.functor("cons", {ep.functor("g", {}), vars[6]}), {ep.functor("cons", {ep.functor("h", {}), vars[6]})}});
+        db.push_back(rule{ep.functor("cons", {ep.functor("h", {}), vars[7]}), {ep.functor("cons", {ep.functor("i", {}), vars[7]})}});
+        db.push_back(rule{ep.functor("cons", {ep.functor("i", {}), vars[8]}), {ep.functor("cons", {ep.functor("j", {}), vars[8]})}});
+        db.push_back(rule{ep.functor("cons", {ep.functor("j", {}), ep.functor("end", {})}), {}});
         
         goals goals;
         const expr* X = ep.var(seq());
-        goals.push_back(ep.cons(ep.atom("a"), X));
+        goals.push_back(ep.functor("cons", {ep.functor("a", {}), X}));
         
         cdcl c;
         
@@ -24924,11 +24924,11 @@ void test_ridge_sim() {
         lineage_pool lp;
         
         database db;
-        db.push_back(rule{ep.cons(ep.atom("p"), ep.atom("a")), {ep.cons(ep.atom("q"), ep.atom("b"))}});  // idx 0
-        db.push_back(rule{ep.cons(ep.atom("q"), ep.atom("c")), {}});  // idx 1: q(c) not q(b)!
+        db.push_back(rule{ep.functor("cons", {ep.functor("p", {}), ep.functor("a", {})}), {ep.functor("cons", {ep.functor("q", {}), ep.functor("b", {})})}});  // idx 0
+        db.push_back(rule{ep.functor("cons", {ep.functor("q", {}), ep.functor("c", {})}), {}});  // idx 1: q(c) not q(b)!
         
         goals goals;
-        goals.push_back(ep.cons(ep.atom("p"), ep.atom("a")));
+        goals.push_back(ep.functor("cons", {ep.functor("p", {}), ep.functor("a", {})}));
         
         cdcl c;
         
@@ -24971,13 +24971,13 @@ void test_ridge_sim() {
         lineage_pool lp;
         
         database db;
-        db.push_back(rule{ep.cons(ep.atom("edge"), ep.cons(ep.atom("a"), ep.atom("b"))), {}});  // idx 0
-        db.push_back(rule{ep.cons(ep.atom("edge"), ep.cons(ep.atom("a"), ep.atom("c"))), {}});  // idx 1
-        db.push_back(rule{ep.cons(ep.atom("edge"), ep.cons(ep.atom("a"), ep.atom("d"))), {}});  // idx 2
+        db.push_back(rule{ep.functor("cons", {ep.functor("edge", {}), ep.functor("cons", {ep.functor("a", {}), ep.functor("b", {})})}), {}});  // idx 0
+        db.push_back(rule{ep.functor("cons", {ep.functor("edge", {}), ep.functor("cons", {ep.functor("a", {}), ep.functor("c", {})})}), {}});  // idx 1
+        db.push_back(rule{ep.functor("cons", {ep.functor("edge", {}), ep.functor("cons", {ep.functor("a", {}), ep.functor("d", {})})}), {}});  // idx 2
         
         goals goals;
         const expr* X = ep.var(seq());
-        goals.push_back(ep.cons(ep.atom("edge"), ep.cons(ep.atom("a"), X)));
+        goals.push_back(ep.functor("cons", {ep.functor("edge", {}), ep.functor("cons", {ep.functor("a", {}), X})}));
         
         cdcl c;
         
@@ -25012,7 +25012,7 @@ void test_ridge_sim() {
         
         // CRITICAL: X binds to 'd'
         normalizer norm(ep, bm);
-        assert(norm(X) == ep.atom("d"));
+        assert(norm(X) == ep.functor("d", {}));
     }
     
     // Test 60: Unification failure due to nested structure mismatch
@@ -25029,18 +25029,18 @@ void test_ridge_sim() {
         lineage_pool lp;
         
         database db;
-        const expr* nested_db = ep.cons(ep.atom("cons"), 
-                                   ep.cons(ep.atom("a"), 
-                                      ep.cons(ep.atom("cons"), 
-                                         ep.cons(ep.atom("b"), ep.atom("nil")))));
-        db.push_back(rule{ep.cons(ep.atom("p"), nested_db), {}});  // idx 0
+        const expr* nested_db = ep.functor("cons", {ep.functor("cons", {}), 
+                                   ep.functor("cons", {ep.functor("a", {}), 
+                                      ep.functor("cons", {ep.functor("cons", {}), 
+                                         ep.functor("cons", {ep.functor("b", {}), ep.functor("nil", {})})})})});
+        db.push_back(rule{ep.functor("cons", {ep.functor("p", {}), nested_db}), {}});  // idx 0
         
         goals goals;
-        const expr* nested_goal = ep.cons(ep.atom("cons"), 
-                                     ep.cons(ep.atom("a"), 
-                                        ep.cons(ep.atom("cons"), 
-                                           ep.cons(ep.atom("c"), ep.atom("nil")))));
-        goals.push_back(ep.cons(ep.atom("p"), nested_goal));
+        const expr* nested_goal = ep.functor("cons", {ep.functor("cons", {}), 
+                                     ep.functor("cons", {ep.functor("a", {}), 
+                                        ep.functor("cons", {ep.functor("cons", {}), 
+                                           ep.functor("cons", {ep.functor("c", {}), ep.functor("nil", {})})})})});
+        goals.push_back(ep.functor("cons", {ep.functor("p", {}), nested_goal}));
         
         cdcl c;
         
@@ -25080,12 +25080,12 @@ void test_ridge_sim() {
         
         database db;
         const expr* X = ep.var(seq());
-        const expr* weird = ep.cons(ep.atom("weird"), ep.cons(X, ep.cons(X, X)));
+        const expr* weird = ep.functor("cons", {ep.functor("weird", {}), ep.functor("cons", {X, ep.functor("cons", {X, X})})});
         db.push_back(rule{weird, {}});  // idx 0: weird(X,X,X)
         
         goals goals;
         const expr* Y = ep.var(seq());
-        const expr* goal = ep.cons(ep.atom("weird"), ep.cons(ep.atom("a"), ep.cons(Y, ep.atom("a"))));
+        const expr* goal = ep.functor("cons", {ep.functor("weird", {}), ep.functor("cons", {ep.functor("a", {}), ep.functor("cons", {Y, ep.functor("a", {})})})});
         goals.push_back(goal);
         
         cdcl c;
@@ -25106,7 +25106,7 @@ void test_ridge_sim() {
         
         // CRITICAL: Y binds to 'a'
         normalizer norm(ep, bm);
-        assert(norm(Y) == ep.atom("a"));
+        assert(norm(Y) == ep.functor("a", {}));
     }
     
     // Test 62: CDCL elimination chain reaction
@@ -25125,16 +25125,16 @@ void test_ridge_sim() {
         const expr* X2 = ep.var(seq());
         const expr* X3 = ep.var(seq());
         
-        db.push_back(rule{ep.cons(ep.atom("p"), X1), {ep.cons(ep.atom("q"), X1)}});  // idx 0
-        db.push_back(rule{ep.cons(ep.atom("p"), X2), {ep.cons(ep.atom("r"), X2)}});  // idx 1
-        db.push_back(rule{ep.cons(ep.atom("p"), X3), {ep.cons(ep.atom("s"), X3)}});  // idx 2
-        db.push_back(rule{ep.cons(ep.atom("q"), ep.atom("a")), {}});  // idx 3
-        db.push_back(rule{ep.cons(ep.atom("r"), ep.atom("b")), {}});  // idx 4
-        db.push_back(rule{ep.cons(ep.atom("s"), ep.atom("c")), {}});  // idx 5
+        db.push_back(rule{ep.functor("cons", {ep.functor("p", {}), X1}), {ep.functor("cons", {ep.functor("q", {}), X1})}});  // idx 0
+        db.push_back(rule{ep.functor("cons", {ep.functor("p", {}), X2}), {ep.functor("cons", {ep.functor("r", {}), X2})}});  // idx 1
+        db.push_back(rule{ep.functor("cons", {ep.functor("p", {}), X3}), {ep.functor("cons", {ep.functor("s", {}), X3})}});  // idx 2
+        db.push_back(rule{ep.functor("cons", {ep.functor("q", {}), ep.functor("a", {})}), {}});  // idx 3
+        db.push_back(rule{ep.functor("cons", {ep.functor("r", {}), ep.functor("b", {})}), {}});  // idx 4
+        db.push_back(rule{ep.functor("cons", {ep.functor("s", {}), ep.functor("c", {})}), {}});  // idx 5
         
         goals goals;
         const expr* Z = ep.var(seq());
-        goals.push_back(ep.cons(ep.atom("p"), Z));
+        goals.push_back(ep.functor("cons", {ep.functor("p", {}), Z}));
         
         // Pre-populate avoidance to eliminate idx 0 and 1
         const goal_lineage* gl_p = lp.goal(nullptr, 0);
@@ -25168,7 +25168,7 @@ void test_ridge_sim() {
         
         // CRITICAL: Z binds to 'c'
         normalizer norm(ep, bm);
-        assert(norm(Z) == ep.atom("c"));
+        assert(norm(Z) == ep.functor("c", {}));
     }
     
     // Test 63: Unbound variables in normalizer
@@ -25183,10 +25183,10 @@ void test_ridge_sim() {
         lineage_pool lp;
         
         database db;
-        db.push_back(rule{ep.atom("p"), {}});  // idx 0: p. (no variables)
+        db.push_back(rule{ep.functor("p", {}), {}});  // idx 0: p. (no variables)
         
         goals goals;
-        goals.push_back(ep.atom("p"));
+        goals.push_back(ep.functor("p", {}));
         
         cdcl c;
         
@@ -25226,11 +25226,11 @@ void test_ridge_sim() {
         
         database db;
         const expr* X = ep.var(seq());
-        db.push_back(rule{X, {ep.cons(ep.atom("q"), ep.atom("a"))}});  // idx 0: X :- q(a).
-        db.push_back(rule{ep.cons(ep.atom("q"), ep.atom("a")), {}});  // idx 1: q(a).
+        db.push_back(rule{X, {ep.functor("cons", {ep.functor("q", {}), ep.functor("a", {})})}});  // idx 0: X :- q(a).
+        db.push_back(rule{ep.functor("cons", {ep.functor("q", {}), ep.functor("a", {})}), {}});  // idx 1: q(a).
         
         goals goals;
-        goals.push_back(ep.cons(ep.atom("p"), ep.atom("hello")));
+        goals.push_back(ep.functor("cons", {ep.functor("p", {}), ep.functor("hello", {})}));
         
         cdcl c;
         
@@ -25428,11 +25428,11 @@ void test_ridge_constructor_and_destructor() {
         sequencer seq(t);
 
         database db;
-        db.push_back(rule{ep.atom("p"), {}});
-        db.push_back(rule{ep.cons(ep.atom("q"), ep.var(seq())), {ep.atom("p")}});
+        db.push_back(rule{ep.functor("p", {}), {}});
+        db.push_back(rule{ep.functor("cons", {ep.functor("q", {}), ep.var(seq())}), {ep.functor("p", {})}});
 
         goals goals;
-        goals.push_back(ep.cons(ep.atom("q"), ep.atom("a")));
+        goals.push_back(ep.functor("cons", {ep.functor("q", {}), ep.functor("a", {})}));
 
         std::mt19937 rng(999);
 
@@ -25474,10 +25474,10 @@ void test_ridge() {
         sequencer seq(t);
 
         database db;
-        db.push_back(rule{ep.atom("a"), {}});
+        db.push_back(rule{ep.functor("a", {}), {}});
 
         goals goals;
-        goals.push_back(ep.atom("a"));
+        goals.push_back(ep.functor("a", {}));
 
         std::mt19937 rng(42);
         ridge solver(solver_args{db, goals, t, seq, bm, 1000}, mcts_solver_args{1.414, rng});
@@ -25504,10 +25504,10 @@ void test_ridge() {
         sequencer seq(t);
 
         database db;
-        db.push_back(rule{ep.atom("a"), {}});  // idx 0: a.
+        db.push_back(rule{ep.functor("a", {}), {}});  // idx 0: a.
 
         goals goals;
-        goals.push_back(ep.atom("a"));
+        goals.push_back(ep.functor("a", {}));
 
         std::mt19937 rng(42);
         ridge solver(solver_args{db, goals, t, seq, bm, 1000}, mcts_solver_args{1.414, rng});
@@ -25543,11 +25543,11 @@ void test_ridge() {
 
         database db;
         // idx 0: answer(42).
-        db.push_back(rule{ep.cons(ep.atom("answer"), ep.atom("42")), {}});
+        db.push_back(rule{ep.functor("cons", {ep.functor("answer", {}), ep.functor("42", {})}), {}});
 
         const expr* X = ep.var(seq());
         goals goals;
-        goals.push_back(ep.cons(ep.atom("answer"), X));
+        goals.push_back(ep.functor("cons", {ep.functor("answer", {}), X}));
 
         std::mt19937 rng(42);
         ridge solver(solver_args{db, goals, t, seq, bm, 1000}, mcts_solver_args{1.414, rng});
@@ -25565,8 +25565,8 @@ void test_ridge() {
         // CRITICAL: normalizer follows bm chain and returns atom("42")
         normalizer norm(ep, bm);
         const expr* X_val = norm(X);
-        assert(std::holds_alternative<expr::atom>(X_val->content));
-        assert(std::get<expr::atom>(X_val->content).value == "42");
+        assert(std::holds_alternative<expr::functor>(X_val->content));
+        assert(std::get<expr::functor>(X_val->content).name == "42");
     }
 
     // Test 4: Immediate refutation — empty database, goal has no candidates.
@@ -25582,7 +25582,7 @@ void test_ridge() {
         database db;  // intentionally empty
 
         goals goals;
-        goals.push_back(ep.atom("a"));
+        goals.push_back(ep.functor("a", {}));
 
         std::mt19937 rng(42);
         ridge solver(solver_args{db, goals, t, seq, bm, 1000}, mcts_solver_args{1.414, rng});
@@ -25613,11 +25613,11 @@ void test_ridge() {
         sequencer seq(t);
 
         database db;
-        db.push_back(rule{ep.atom("a"), {ep.atom("b")}});  // idx 0: a :- b.
-        db.push_back(rule{ep.atom("a"), {ep.atom("c")}});  // idx 1: a :- c.
+        db.push_back(rule{ep.functor("a", {}), {ep.functor("b", {})}});  // idx 0: a :- b.
+        db.push_back(rule{ep.functor("a", {}), {ep.functor("c", {})}});  // idx 1: a :- c.
 
         goals goals;
-        goals.push_back(ep.atom("a"));
+        goals.push_back(ep.functor("a", {}));
 
         std::mt19937 rng(42);
         ridge solver(solver_args{db, goals, t, seq, bm, 1000}, mcts_solver_args{1.414, rng});
@@ -25661,15 +25661,15 @@ void test_ridge() {
         sequencer seq(t);
 
         database db;
-        db.push_back(rule{ep.cons(ep.atom("is_a"), ep.atom("1")), {}});  // idx 0
-        db.push_back(rule{ep.cons(ep.atom("is_a"), ep.atom("2")), {}});  // idx 1
-        db.push_back(rule{ep.cons(ep.atom("is_b"), ep.atom("2")), {}});  // idx 2
-        db.push_back(rule{ep.cons(ep.atom("is_b"), ep.atom("3")), {}});  // idx 3
+        db.push_back(rule{ep.functor("cons", {ep.functor("is_a", {}), ep.functor("1", {})}), {}});  // idx 0
+        db.push_back(rule{ep.functor("cons", {ep.functor("is_a", {}), ep.functor("2", {})}), {}});  // idx 1
+        db.push_back(rule{ep.functor("cons", {ep.functor("is_b", {}), ep.functor("2", {})}), {}});  // idx 2
+        db.push_back(rule{ep.functor("cons", {ep.functor("is_b", {}), ep.functor("3", {})}), {}});  // idx 3
 
         const expr* X = ep.var(seq());
         goals goals;
-        goals.push_back(ep.cons(ep.atom("is_a"), X));  // goal 0: is_a(X)
-        goals.push_back(ep.cons(ep.atom("is_b"), X));  // goal 1: is_b(X)
+        goals.push_back(ep.functor("cons", {ep.functor("is_a", {}), X}));  // goal 0: is_a(X)
+        goals.push_back(ep.functor("cons", {ep.functor("is_b", {}), X}));  // goal 1: is_b(X)
 
         std::mt19937 rng(42);
         ridge solver(solver_args{db, goals, t, seq, bm, 1000}, mcts_solver_args{1.414, rng});
@@ -25685,8 +25685,8 @@ void test_ridge() {
 
         // CRITICAL: bm binds X to "2"
         const expr* X_val = norm(X);
-        assert(std::holds_alternative<expr::atom>(X_val->content));
-        assert(std::get<expr::atom>(X_val->content).value == "2");
+        assert(std::holds_alternative<expr::functor>(X_val->content));
+        assert(std::get<expr::functor>(X_val->content).name == "2");
 
         // CRITICAL: soln contains exactly the two resolutions for X=2 — one per goal.
         // Regardless of which goal MCTS decided first, both rl(gl_a,1) and rl(gl_b,2)
@@ -25727,13 +25727,13 @@ void test_ridge() {
 
         database db;
         // parent(A, B) encoded as cons(cons(atom("parent"), A), B)
-        db.push_back(rule{ep.cons(ep.cons(ep.atom("parent"), ep.atom("bob")),   ep.atom("alice")), {}});  // idx 0
-        db.push_back(rule{ep.cons(ep.cons(ep.atom("parent"), ep.atom("carol")), ep.atom("alice")), {}});  // idx 1
-        db.push_back(rule{ep.cons(ep.cons(ep.atom("parent"), ep.atom("dave")),  ep.atom("bob")),  {}});   // idx 2
+        db.push_back(rule{ep.functor("cons", {ep.functor("cons", {ep.functor("parent", {}), ep.functor("bob", {})}), ep.functor("alice", {})}), {}});  // idx 0
+        db.push_back(rule{ep.functor("cons", {ep.functor("cons", {ep.functor("parent", {}), ep.functor("carol", {})}), ep.functor("alice", {})}), {}});  // idx 1
+        db.push_back(rule{ep.functor("cons", {ep.functor("cons", {ep.functor("parent", {}), ep.functor("dave", {})}), ep.functor("bob", {})}),  {}});   // idx 2
 
         const expr* X = ep.var(seq());
         goals goals;
-        goals.push_back(ep.cons(ep.cons(ep.atom("parent"), X), ep.atom("alice")));
+        goals.push_back(ep.functor("cons", {ep.functor("cons", {ep.functor("parent", {}), X}), ep.functor("alice", {})}));
 
         std::mt19937 rng(42);
         ridge solver(solver_args{db, goals, t, seq, bm, 1000}, mcts_solver_args{1.414, rng});
@@ -25749,8 +25749,8 @@ void test_ridge() {
         assert(soln.value().size() == 1);
 
         const expr* X_val1 = norm(X);
-        assert(std::holds_alternative<expr::atom>(X_val1->content));
-        std::string parent1 = std::get<expr::atom>(X_val1->content).value;
+        assert(std::holds_alternative<expr::functor>(X_val1->content));
+        std::string parent1 = std::get<expr::functor>(X_val1->content).name;
         assert(parent1 == "bob" || parent1 == "carol");
 
         // Second parent of alice — sim_one rolls back bm then unit-props the other rule
@@ -25761,8 +25761,8 @@ void test_ridge() {
         assert(soln.value().size() == 1);
 
         const expr* X_val2 = norm(X);
-        assert(std::holds_alternative<expr::atom>(X_val2->content));
-        std::string parent2 = std::get<expr::atom>(X_val2->content).value;
+        assert(std::holds_alternative<expr::functor>(X_val2->content));
+        std::string parent2 = std::get<expr::functor>(X_val2->content).name;
         assert(parent2 == "bob" || parent2 == "carol");
 
         // CRITICAL: the two solutions bind X to different names
@@ -25806,14 +25806,14 @@ void test_ridge() {
         sequencer seq(t);
 
         database db;
-        db.push_back(rule{ep.cons(ep.atom("bool"), ep.atom("true")),  {}});  // idx 0
-        db.push_back(rule{ep.cons(ep.atom("bool"), ep.atom("false")), {}});  // idx 1
-        db.push_back(rule{ep.cons(ep.cons(ep.atom("not"), ep.atom("true")),  ep.atom("false")), {}});  // idx 2
-        db.push_back(rule{ep.cons(ep.cons(ep.atom("not"), ep.atom("false")), ep.atom("true")),  {}});  // idx 3
-        db.push_back(rule{ep.cons(ep.cons(ep.cons(ep.atom("or"), ep.atom("true")),  ep.atom("true")),  ep.atom("true")),  {}});  // idx 4
-        db.push_back(rule{ep.cons(ep.cons(ep.cons(ep.atom("or"), ep.atom("true")),  ep.atom("false")), ep.atom("true")),  {}});  // idx 5
-        db.push_back(rule{ep.cons(ep.cons(ep.cons(ep.atom("or"), ep.atom("false")), ep.atom("true")),  ep.atom("true")),  {}});  // idx 6
-        db.push_back(rule{ep.cons(ep.cons(ep.cons(ep.atom("or"), ep.atom("false")), ep.atom("false")), ep.atom("false")), {}});  // idx 7
+        db.push_back(rule{ep.functor("cons", {ep.functor("bool", {}), ep.functor("true", {})}),  {}});  // idx 0
+        db.push_back(rule{ep.functor("cons", {ep.functor("bool", {}), ep.functor("false", {})}), {}});  // idx 1
+        db.push_back(rule{ep.functor("cons", {ep.functor("cons", {ep.functor("not", {}), ep.functor("true", {})}), ep.functor("false", {})}), {}});  // idx 2
+        db.push_back(rule{ep.functor("cons", {ep.functor("cons", {ep.functor("not", {}), ep.functor("false", {})}), ep.functor("true", {})}),  {}});  // idx 3
+        db.push_back(rule{ep.functor("cons", {ep.functor("cons", {ep.functor("cons", {ep.functor("or", {}), ep.functor("true", {})}), ep.functor("true", {})}), ep.functor("true", {})}),  {}});  // idx 4
+        db.push_back(rule{ep.functor("cons", {ep.functor("cons", {ep.functor("cons", {ep.functor("or", {}), ep.functor("true", {})}), ep.functor("false", {})}), ep.functor("true", {})}),  {}});  // idx 5
+        db.push_back(rule{ep.functor("cons", {ep.functor("cons", {ep.functor("cons", {ep.functor("or", {}), ep.functor("false", {})}), ep.functor("true", {})}), ep.functor("true", {})}),  {}});  // idx 6
+        db.push_back(rule{ep.functor("cons", {ep.functor("cons", {ep.functor("cons", {ep.functor("or", {}), ep.functor("false", {})}), ep.functor("false", {})}), ep.functor("false", {})}), {}});  // idx 7
 
         const expr* P  = ep.var(seq());
         const expr* Q  = ep.var(seq());
@@ -25821,15 +25821,15 @@ void test_ridge() {
 
         goals goals;
         // goal 0: bool(P)
-        goals.push_back(ep.cons(ep.atom("bool"), P));
+        goals.push_back(ep.functor("cons", {ep.functor("bool", {}), P}));
         // goal 1: bool(Q)
-        goals.push_back(ep.cons(ep.atom("bool"), Q));
+        goals.push_back(ep.functor("cons", {ep.functor("bool", {}), Q}));
         // goal 2: or(P, Q, true) — P ∨ Q = true
-        goals.push_back(ep.cons(ep.cons(ep.cons(ep.atom("or"), P), Q), ep.atom("true")));
+        goals.push_back(ep.functor("cons", {ep.functor("cons", {ep.functor("cons", {ep.functor("or", {}), P}), Q}), ep.functor("true", {})}));
         // goal 3: not(P, NP) — compute ¬P
-        goals.push_back(ep.cons(ep.cons(ep.atom("not"), P), NP));
+        goals.push_back(ep.functor("cons", {ep.functor("cons", {ep.functor("not", {}), P}), NP}));
         // goal 4: or(NP, Q, true) — ¬P ∨ Q = true
-        goals.push_back(ep.cons(ep.cons(ep.cons(ep.atom("or"), NP), Q), ep.atom("true")));
+        goals.push_back(ep.functor("cons", {ep.functor("cons", {ep.functor("cons", {ep.functor("or", {}), NP}), Q}), ep.functor("true", {})}));
 
         std::mt19937 rng(42);
         ridge solver(solver_args{db, goals, t, seq, bm, 1000}, mcts_solver_args{1.414, rng});
@@ -25845,12 +25845,12 @@ void test_ridge() {
 
         const expr* Q_val1 = norm(Q);
         const expr* P_val1 = norm(P);
-        assert(std::holds_alternative<expr::atom>(Q_val1->content));
-        assert(std::holds_alternative<expr::atom>(P_val1->content));
+        assert(std::holds_alternative<expr::functor>(Q_val1->content));
+        assert(std::holds_alternative<expr::functor>(P_val1->content));
 
         // CRITICAL: Q = true in every solution of (P∨Q)∧(¬P∨Q)
-        assert(std::get<expr::atom>(Q_val1->content).value == "true");
-        std::string P_str1 = std::get<expr::atom>(P_val1->content).value;
+        assert(std::get<expr::functor>(Q_val1->content).name == "true");
+        std::string P_str1 = std::get<expr::functor>(P_val1->content).name;
         assert(P_str1 == "true" || P_str1 == "false");
 
         // Second solution: CDCL eliminates first P choice; the other propagates
@@ -25861,12 +25861,12 @@ void test_ridge() {
 
         const expr* Q_val2 = norm(Q);
         const expr* P_val2 = norm(P);
-        assert(std::holds_alternative<expr::atom>(Q_val2->content));
-        assert(std::holds_alternative<expr::atom>(P_val2->content));
+        assert(std::holds_alternative<expr::functor>(Q_val2->content));
+        assert(std::holds_alternative<expr::functor>(P_val2->content));
 
         // CRITICAL: Q still true after finding the second solution
-        assert(std::get<expr::atom>(Q_val2->content).value == "true");
-        std::string P_str2 = std::get<expr::atom>(P_val2->content).value;
+        assert(std::get<expr::functor>(Q_val2->content).name == "true");
+        std::string P_str2 = std::get<expr::functor>(P_val2->content).name;
 
         // CRITICAL: the two solutions assign opposite values to P
         assert(P_str2 != P_str1);
@@ -25905,22 +25905,22 @@ void test_ridge() {
         sequencer seq(t);
 
         database db;
-        db.push_back(rule{ep.cons(ep.atom("color"), ep.atom("red")),  {}});  // idx 0
-        db.push_back(rule{ep.cons(ep.atom("color"), ep.atom("blue")), {}});  // idx 1
+        db.push_back(rule{ep.functor("cons", {ep.functor("color", {}), ep.functor("red", {})}),  {}});  // idx 0
+        db.push_back(rule{ep.functor("cons", {ep.functor("color", {}), ep.functor("blue", {})}), {}});  // idx 1
         // diff(X, Y) encoded as cons(cons(atom("diff"), X), Y)
-        db.push_back(rule{ep.cons(ep.cons(ep.atom("diff"), ep.atom("red")),  ep.atom("blue")), {}});  // idx 2
-        db.push_back(rule{ep.cons(ep.cons(ep.atom("diff"), ep.atom("blue")), ep.atom("red")),  {}});  // idx 3
+        db.push_back(rule{ep.functor("cons", {ep.functor("cons", {ep.functor("diff", {}), ep.functor("red", {})}), ep.functor("blue", {})}), {}});  // idx 2
+        db.push_back(rule{ep.functor("cons", {ep.functor("cons", {ep.functor("diff", {}), ep.functor("blue", {})}), ep.functor("red", {})}),  {}});  // idx 3
 
         const expr* A = ep.var(seq());
         const expr* B = ep.var(seq());
         const expr* C = ep.var(seq());
 
         goals goals;
-        goals.push_back(ep.cons(ep.atom("color"), A));                 // goal 0: color(A)
-        goals.push_back(ep.cons(ep.atom("color"), B));                 // goal 1: color(B)
-        goals.push_back(ep.cons(ep.atom("color"), C));                 // goal 2: color(C)
-        goals.push_back(ep.cons(ep.cons(ep.atom("diff"), A), B));      // goal 3: diff(A, B)
-        goals.push_back(ep.cons(ep.cons(ep.atom("diff"), B), C));      // goal 4: diff(B, C)
+        goals.push_back(ep.functor("cons", {ep.functor("color", {}), A}));                 // goal 0: color(A)
+        goals.push_back(ep.functor("cons", {ep.functor("color", {}), B}));                 // goal 1: color(B)
+        goals.push_back(ep.functor("cons", {ep.functor("color", {}), C}));                 // goal 2: color(C)
+        goals.push_back(ep.functor("cons", {ep.functor("cons", {ep.functor("diff", {}), A}), B}));      // goal 3: diff(A, B)
+        goals.push_back(ep.functor("cons", {ep.functor("cons", {ep.functor("diff", {}), B}), C}));      // goal 4: diff(B, C)
 
         std::mt19937 rng(42);
         ridge solver(solver_args{db, goals, t, seq, bm, 1000}, mcts_solver_args{1.414, rng});
@@ -25941,9 +25941,9 @@ void test_ridge() {
         // All 5 goals are resolved in every solution
         assert(soln.value().size() == 5);
 
-        std::string A1 = std::get<expr::atom>(norm(A)->content).value;
-        std::string B1 = std::get<expr::atom>(norm(B)->content).value;
-        std::string C1 = std::get<expr::atom>(norm(C)->content).value;
+        std::string A1 = std::get<expr::functor>(norm(A)->content).name;
+        std::string B1 = std::get<expr::functor>(norm(B)->content).name;
+        std::string C1 = std::get<expr::functor>(norm(C)->content).name;
 
         assert(is_valid_color(A1) && is_valid_color(B1) && is_valid_color(C1));
         // CRITICAL: adjacent nodes have different colors
@@ -25959,9 +25959,9 @@ void test_ridge() {
         assert(soln.has_value());
         assert(soln.value().size() == 5);
 
-        std::string A2 = std::get<expr::atom>(norm(A)->content).value;
-        std::string B2 = std::get<expr::atom>(norm(B)->content).value;
-        std::string C2 = std::get<expr::atom>(norm(C)->content).value;
+        std::string A2 = std::get<expr::functor>(norm(A)->content).name;
+        std::string B2 = std::get<expr::functor>(norm(B)->content).name;
+        std::string C2 = std::get<expr::functor>(norm(C)->content).name;
 
         assert(is_valid_color(A2) && is_valid_color(B2) && is_valid_color(C2));
         assert(A2 != B2);
@@ -26048,33 +26048,33 @@ void test_ridge() {
         sequencer seq(t);
 
         database db;
-        db.push_back(rule{ep.cons(ep.atom("color"), ep.atom("red")),   {}});  // idx 0
-        db.push_back(rule{ep.cons(ep.atom("color"), ep.atom("green")), {}});  // idx 1
-        db.push_back(rule{ep.cons(ep.atom("color"), ep.atom("blue")),  {}});  // idx 2
+        db.push_back(rule{ep.functor("cons", {ep.functor("color", {}), ep.functor("red", {})}),   {}});  // idx 0
+        db.push_back(rule{ep.functor("cons", {ep.functor("color", {}), ep.functor("green", {})}), {}});  // idx 1
+        db.push_back(rule{ep.functor("cons", {ep.functor("color", {}), ep.functor("blue", {})}),  {}});  // idx 2
         // diff(X, Y) = cons(cons(atom("diff"), X), Y) — all 6 asymmetric pairs
-        db.push_back(rule{ep.cons(ep.cons(ep.atom("diff"), ep.atom("red")),   ep.atom("green")), {}});  // idx 3
-        db.push_back(rule{ep.cons(ep.cons(ep.atom("diff"), ep.atom("red")),   ep.atom("blue")),  {}});  // idx 4
-        db.push_back(rule{ep.cons(ep.cons(ep.atom("diff"), ep.atom("green")), ep.atom("red")),   {}});  // idx 5
-        db.push_back(rule{ep.cons(ep.cons(ep.atom("diff"), ep.atom("green")), ep.atom("blue")),  {}});  // idx 6
-        db.push_back(rule{ep.cons(ep.cons(ep.atom("diff"), ep.atom("blue")),  ep.atom("red")),   {}});  // idx 7
-        db.push_back(rule{ep.cons(ep.cons(ep.atom("diff"), ep.atom("blue")),  ep.atom("green")), {}});  // idx 8
+        db.push_back(rule{ep.functor("cons", {ep.functor("cons", {ep.functor("diff", {}), ep.functor("red", {})}), ep.functor("green", {})}), {}});  // idx 3
+        db.push_back(rule{ep.functor("cons", {ep.functor("cons", {ep.functor("diff", {}), ep.functor("red", {})}), ep.functor("blue", {})}),  {}});  // idx 4
+        db.push_back(rule{ep.functor("cons", {ep.functor("cons", {ep.functor("diff", {}), ep.functor("green", {})}), ep.functor("red", {})}),   {}});  // idx 5
+        db.push_back(rule{ep.functor("cons", {ep.functor("cons", {ep.functor("diff", {}), ep.functor("green", {})}), ep.functor("blue", {})}),  {}});  // idx 6
+        db.push_back(rule{ep.functor("cons", {ep.functor("cons", {ep.functor("diff", {}), ep.functor("blue", {})}), ep.functor("red", {})}),   {}});  // idx 7
+        db.push_back(rule{ep.functor("cons", {ep.functor("cons", {ep.functor("diff", {}), ep.functor("blue", {})}), ep.functor("green", {})}), {}});  // idx 8
 
         const expr* A = ep.var(seq());
         const expr* B = ep.var(seq());
         const expr* C = ep.var(seq());
 
         goals goals;
-        goals.push_back(ep.cons(ep.atom("color"), A));                 // goal 0: color(A)
-        goals.push_back(ep.cons(ep.atom("color"), B));                 // goal 1: color(B)
-        goals.push_back(ep.cons(ep.atom("color"), C));                 // goal 2: color(C)
-        goals.push_back(ep.cons(ep.cons(ep.atom("diff"), A), B));      // goal 3: diff(A,B)
-        goals.push_back(ep.cons(ep.cons(ep.atom("diff"), A), C));      // goal 4: diff(A,C)
-        goals.push_back(ep.cons(ep.cons(ep.atom("diff"), B), C));      // goal 5: diff(B,C)
+        goals.push_back(ep.functor("cons", {ep.functor("color", {}), A}));                 // goal 0: color(A)
+        goals.push_back(ep.functor("cons", {ep.functor("color", {}), B}));                 // goal 1: color(B)
+        goals.push_back(ep.functor("cons", {ep.functor("color", {}), C}));                 // goal 2: color(C)
+        goals.push_back(ep.functor("cons", {ep.functor("cons", {ep.functor("diff", {}), A}), B}));      // goal 3: diff(A,B)
+        goals.push_back(ep.functor("cons", {ep.functor("cons", {ep.functor("diff", {}), A}), C}));      // goal 4: diff(A,C)
+        goals.push_back(ep.functor("cons", {ep.functor("cons", {ep.functor("diff", {}), B}), C}));      // goal 5: diff(B,C)
 
         // Interned atoms from ep — same pointer as those embedded in the rules
-        const expr* red   = ep.atom("red");
-        const expr* green = ep.atom("green");
-        const expr* blue  = ep.atom("blue");
+        const expr* red   = ep.functor("red", {});
+        const expr* green = ep.functor("green", {});
+        const expr* blue  = ep.functor("blue", {});
 
         // Every permutation of {red, green, blue} assigned to {A, B, C}
         std::set<solution> expected = {
@@ -26128,39 +26128,39 @@ void test_ridge() {
         sequencer seq(t);
 
         database db;
-        db.push_back(rule{ep.cons(ep.atom("bool"), ep.atom("true")),  {}});  // idx 0: bool(true).
-        db.push_back(rule{ep.cons(ep.atom("bool"), ep.atom("false")), {}});  // idx 1: bool(false).
+        db.push_back(rule{ep.functor("cons", {ep.functor("bool", {}), ep.functor("true", {})}),  {}});  // idx 0: bool(true).
+        db.push_back(rule{ep.functor("cons", {ep.functor("bool", {}), ep.functor("false", {})}), {}});  // idx 1: bool(false).
 
         // or(true, X, true) :- bool(X).
         {
             const expr* X = ep.var(seq());
             db.push_back(rule{
-                ep.cons(ep.cons(ep.cons(ep.atom("or"), ep.atom("true")), X), ep.atom("true")),
-                {ep.cons(ep.atom("bool"), X)}
+                ep.functor("cons", {ep.functor("cons", {ep.functor("cons", {ep.functor("or", {}), ep.functor("true", {})}), X}), ep.functor("true", {})}),
+                {ep.functor("cons", {ep.functor("bool", {}), X})}
             });  // idx 2
         }
         // or(false, X, X) :- bool(X).
         {
             const expr* X = ep.var(seq());
             db.push_back(rule{
-                ep.cons(ep.cons(ep.cons(ep.atom("or"), ep.atom("false")), X), X),
-                {ep.cons(ep.atom("bool"), X)}
+                ep.functor("cons", {ep.functor("cons", {ep.functor("cons", {ep.functor("or", {}), ep.functor("false", {})}), X}), X}),
+                {ep.functor("cons", {ep.functor("bool", {}), X})}
             });  // idx 3
         }
         // and(true, X, X) :- bool(X).
         {
             const expr* X = ep.var(seq());
             db.push_back(rule{
-                ep.cons(ep.cons(ep.cons(ep.atom("and"), ep.atom("true")), X), X),
-                {ep.cons(ep.atom("bool"), X)}
+                ep.functor("cons", {ep.functor("cons", {ep.functor("cons", {ep.functor("and", {}), ep.functor("true", {})}), X}), X}),
+                {ep.functor("cons", {ep.functor("bool", {}), X})}
             });  // idx 4
         }
         // and(false, X, false) :- bool(X).
         {
             const expr* X = ep.var(seq());
             db.push_back(rule{
-                ep.cons(ep.cons(ep.cons(ep.atom("and"), ep.atom("false")), X), ep.atom("false")),
-                {ep.cons(ep.atom("bool"), X)}
+                ep.functor("cons", {ep.functor("cons", {ep.functor("cons", {ep.functor("and", {}), ep.functor("false", {})}), X}), ep.functor("false", {})}),
+                {ep.functor("cons", {ep.functor("bool", {}), X})}
             });  // idx 5
         }
 
@@ -26170,14 +26170,14 @@ void test_ridge() {
         const expr* QR = ep.var(seq());
 
         goals goals;
-        goals.push_back(ep.cons(ep.atom("bool"), P));                                           // goal 0: bool(P)
-        goals.push_back(ep.cons(ep.atom("bool"), Q));                                           // goal 1: bool(Q)
-        goals.push_back(ep.cons(ep.atom("bool"), R));                                           // goal 2: bool(R)
-        goals.push_back(ep.cons(ep.cons(ep.cons(ep.atom("or"),  Q), R),  QR));                 // goal 3: or(Q,R,QR)
-        goals.push_back(ep.cons(ep.cons(ep.cons(ep.atom("and"), P), QR), ep.atom("true")));    // goal 4: and(P,QR,true)
+        goals.push_back(ep.functor("cons", {ep.functor("bool", {}), P}));                                           // goal 0: bool(P)
+        goals.push_back(ep.functor("cons", {ep.functor("bool", {}), Q}));                                           // goal 1: bool(Q)
+        goals.push_back(ep.functor("cons", {ep.functor("bool", {}), R}));                                           // goal 2: bool(R)
+        goals.push_back(ep.functor("cons", {ep.functor("cons", {ep.functor("cons", {ep.functor("or", {}), Q}), R}), QR}));                 // goal 3: or(Q,R,QR)
+        goals.push_back(ep.functor("cons", {ep.functor("cons", {ep.functor("cons", {ep.functor("and", {}), P}), QR}), ep.functor("true", {})}));    // goal 4: and(P,QR,true)
 
-        const expr* T_ = ep.atom("true");
-        const expr* F_ = ep.atom("false");
+        const expr* T_ = ep.functor("true", {});
+        const expr* F_ = ep.functor("false", {});
 
         std::set<solution> expected = {
             {T_, T_, T_},   // P=T, Q=T, R=T
@@ -26216,16 +26216,16 @@ void test_ridge() {
         sequencer seq(t);
 
         database db;
-        db.push_back(rule{ep.cons(ep.atom("color"), ep.atom("red")),   {}});  // idx 0
-        db.push_back(rule{ep.cons(ep.atom("color"), ep.atom("green")), {}});  // idx 1
-        db.push_back(rule{ep.cons(ep.atom("color"), ep.atom("blue")),  {}});  // idx 2
+        db.push_back(rule{ep.functor("cons", {ep.functor("color", {}), ep.functor("red", {})}),   {}});  // idx 0
+        db.push_back(rule{ep.functor("cons", {ep.functor("color", {}), ep.functor("green", {})}), {}});  // idx 1
+        db.push_back(rule{ep.functor("cons", {ep.functor("color", {}), ep.functor("blue", {})}),  {}});  // idx 2
         // All 6 ordered diff pairs among {red, green, blue}
-        db.push_back(rule{ep.cons(ep.cons(ep.atom("diff"), ep.atom("red")),   ep.atom("green")), {}});  // idx 3
-        db.push_back(rule{ep.cons(ep.cons(ep.atom("diff"), ep.atom("red")),   ep.atom("blue")),  {}});  // idx 4
-        db.push_back(rule{ep.cons(ep.cons(ep.atom("diff"), ep.atom("green")), ep.atom("red")),   {}});  // idx 5
-        db.push_back(rule{ep.cons(ep.cons(ep.atom("diff"), ep.atom("green")), ep.atom("blue")),  {}});  // idx 6
-        db.push_back(rule{ep.cons(ep.cons(ep.atom("diff"), ep.atom("blue")),  ep.atom("red")),   {}});  // idx 7
-        db.push_back(rule{ep.cons(ep.cons(ep.atom("diff"), ep.atom("blue")),  ep.atom("green")), {}});  // idx 8
+        db.push_back(rule{ep.functor("cons", {ep.functor("cons", {ep.functor("diff", {}), ep.functor("red", {})}), ep.functor("green", {})}), {}});  // idx 3
+        db.push_back(rule{ep.functor("cons", {ep.functor("cons", {ep.functor("diff", {}), ep.functor("red", {})}), ep.functor("blue", {})}),  {}});  // idx 4
+        db.push_back(rule{ep.functor("cons", {ep.functor("cons", {ep.functor("diff", {}), ep.functor("green", {})}), ep.functor("red", {})}),   {}});  // idx 5
+        db.push_back(rule{ep.functor("cons", {ep.functor("cons", {ep.functor("diff", {}), ep.functor("green", {})}), ep.functor("blue", {})}),  {}});  // idx 6
+        db.push_back(rule{ep.functor("cons", {ep.functor("cons", {ep.functor("diff", {}), ep.functor("blue", {})}), ep.functor("red", {})}),   {}});  // idx 7
+        db.push_back(rule{ep.functor("cons", {ep.functor("cons", {ep.functor("diff", {}), ep.functor("blue", {})}), ep.functor("green", {})}), {}});  // idx 8
 
         const expr* A = ep.var(seq());
         const expr* B = ep.var(seq());
@@ -26233,18 +26233,18 @@ void test_ridge() {
         const expr* D = ep.var(seq());
 
         goals goals;
-        goals.push_back(ep.cons(ep.atom("color"), A));                 // goal 0: color(A)
-        goals.push_back(ep.cons(ep.atom("color"), B));                 // goal 1: color(B)
-        goals.push_back(ep.cons(ep.atom("color"), C));                 // goal 2: color(C)
-        goals.push_back(ep.cons(ep.atom("color"), D));                 // goal 3: color(D)
-        goals.push_back(ep.cons(ep.cons(ep.atom("diff"), A), B));      // goal 4: diff(A,B)
-        goals.push_back(ep.cons(ep.cons(ep.atom("diff"), A), C));      // goal 5: diff(A,C)
-        goals.push_back(ep.cons(ep.cons(ep.atom("diff"), B), C));      // goal 6: diff(B,C)
-        goals.push_back(ep.cons(ep.cons(ep.atom("diff"), A), D));      // goal 7: diff(A,D)
+        goals.push_back(ep.functor("cons", {ep.functor("color", {}), A}));                 // goal 0: color(A)
+        goals.push_back(ep.functor("cons", {ep.functor("color", {}), B}));                 // goal 1: color(B)
+        goals.push_back(ep.functor("cons", {ep.functor("color", {}), C}));                 // goal 2: color(C)
+        goals.push_back(ep.functor("cons", {ep.functor("color", {}), D}));                 // goal 3: color(D)
+        goals.push_back(ep.functor("cons", {ep.functor("cons", {ep.functor("diff", {}), A}), B}));      // goal 4: diff(A,B)
+        goals.push_back(ep.functor("cons", {ep.functor("cons", {ep.functor("diff", {}), A}), C}));      // goal 5: diff(A,C)
+        goals.push_back(ep.functor("cons", {ep.functor("cons", {ep.functor("diff", {}), B}), C}));      // goal 6: diff(B,C)
+        goals.push_back(ep.functor("cons", {ep.functor("cons", {ep.functor("diff", {}), A}), D}));      // goal 7: diff(A,D)
 
-        const expr* R_ = ep.atom("red");
-        const expr* G_ = ep.atom("green");
-        const expr* B_ = ep.atom("blue");
+        const expr* R_ = ep.functor("red", {});
+        const expr* G_ = ep.functor("green", {});
+        const expr* B_ = ep.functor("blue", {});
 
         // 6 K3 colourings of (A,B,C), each with 2 choices for D (any colour ≠ A)
         std::set<solution> expected = {
@@ -26295,40 +26295,40 @@ void test_ridge() {
         sequencer seq(t);
 
         database db;
-        db.push_back(rule{ep.cons(ep.atom("bool"), ep.atom("true")),  {}});  // idx 0
-        db.push_back(rule{ep.cons(ep.atom("bool"), ep.atom("false")), {}});  // idx 1
-        db.push_back(rule{ep.cons(ep.cons(ep.atom("not"), ep.atom("true")),  ep.atom("false")), {}});  // idx 2
-        db.push_back(rule{ep.cons(ep.cons(ep.atom("not"), ep.atom("false")), ep.atom("true")),  {}});  // idx 3
+        db.push_back(rule{ep.functor("cons", {ep.functor("bool", {}), ep.functor("true", {})}),  {}});  // idx 0
+        db.push_back(rule{ep.functor("cons", {ep.functor("bool", {}), ep.functor("false", {})}), {}});  // idx 1
+        db.push_back(rule{ep.functor("cons", {ep.functor("cons", {ep.functor("not", {}), ep.functor("true", {})}), ep.functor("false", {})}), {}});  // idx 2
+        db.push_back(rule{ep.functor("cons", {ep.functor("cons", {ep.functor("not", {}), ep.functor("false", {})}), ep.functor("true", {})}),  {}});  // idx 3
         // or(true, X, true) :- bool(X).
         {
             const expr* X = ep.var(seq());
             db.push_back(rule{
-                ep.cons(ep.cons(ep.cons(ep.atom("or"), ep.atom("true")), X), ep.atom("true")),
-                {ep.cons(ep.atom("bool"), X)}
+                ep.functor("cons", {ep.functor("cons", {ep.functor("cons", {ep.functor("or", {}), ep.functor("true", {})}), X}), ep.functor("true", {})}),
+                {ep.functor("cons", {ep.functor("bool", {}), X})}
             });  // idx 4
         }
         // or(false, X, X) :- bool(X).
         {
             const expr* X = ep.var(seq());
             db.push_back(rule{
-                ep.cons(ep.cons(ep.cons(ep.atom("or"), ep.atom("false")), X), X),
-                {ep.cons(ep.atom("bool"), X)}
+                ep.functor("cons", {ep.functor("cons", {ep.functor("cons", {ep.functor("or", {}), ep.functor("false", {})}), X}), X}),
+                {ep.functor("cons", {ep.functor("bool", {}), X})}
             });  // idx 5
         }
         // and(true, X, X) :- bool(X).
         {
             const expr* X = ep.var(seq());
             db.push_back(rule{
-                ep.cons(ep.cons(ep.cons(ep.atom("and"), ep.atom("true")), X), X),
-                {ep.cons(ep.atom("bool"), X)}
+                ep.functor("cons", {ep.functor("cons", {ep.functor("cons", {ep.functor("and", {}), ep.functor("true", {})}), X}), X}),
+                {ep.functor("cons", {ep.functor("bool", {}), X})}
             });  // idx 6
         }
         // and(false, X, false) :- bool(X).
         {
             const expr* X = ep.var(seq());
             db.push_back(rule{
-                ep.cons(ep.cons(ep.cons(ep.atom("and"), ep.atom("false")), X), ep.atom("false")),
-                {ep.cons(ep.atom("bool"), X)}
+                ep.functor("cons", {ep.functor("cons", {ep.functor("cons", {ep.functor("and", {}), ep.functor("false", {})}), X}), ep.functor("false", {})}),
+                {ep.functor("cons", {ep.functor("bool", {}), X})}
             });  // idx 7
         }
 
@@ -26346,20 +26346,20 @@ void test_ridge() {
         const expr* PQ_RS = ep.var(seq());   // (P∨Q) ∧ (R∨S)
 
         goals goals;
-        goals.push_back(ep.cons(ep.atom("bool"), P));                                               // goal  0: bool(P)
-        goals.push_back(ep.cons(ep.atom("bool"), Q));                                               // goal  1: bool(Q)
-        goals.push_back(ep.cons(ep.atom("bool"), R));                                               // goal  2: bool(R)
-        goals.push_back(ep.cons(ep.atom("bool"), S));                                               // goal  3: bool(S)
-        goals.push_back(ep.cons(ep.cons(ep.cons(ep.atom("or"),  P),  Q),  PQ));                    // goal  4: or(P,Q,PQ)
-        goals.push_back(ep.cons(ep.cons(ep.cons(ep.atom("or"),  R),  S),  RS));                    // goal  5: or(R,S,RS)
-        goals.push_back(ep.cons(ep.cons(ep.atom("not"), P), NP));                                   // goal  6: not(P,NP)
-        goals.push_back(ep.cons(ep.cons(ep.atom("not"), R), NR));                                   // goal  7: not(R,NR)
-        goals.push_back(ep.cons(ep.cons(ep.cons(ep.atom("or"),  NP), NR), NPR));                   // goal  8: or(NP,NR,NPR)
-        goals.push_back(ep.cons(ep.cons(ep.cons(ep.atom("and"), PQ), RS),  PQ_RS));                // goal  9: and(PQ,RS,PQ_RS)
-        goals.push_back(ep.cons(ep.cons(ep.cons(ep.atom("and"), PQ_RS), NPR), ep.atom("true")));   // goal 10: and(PQ_RS,NPR,true)
+        goals.push_back(ep.functor("cons", {ep.functor("bool", {}), P}));                                               // goal  0: bool(P)
+        goals.push_back(ep.functor("cons", {ep.functor("bool", {}), Q}));                                               // goal  1: bool(Q)
+        goals.push_back(ep.functor("cons", {ep.functor("bool", {}), R}));                                               // goal  2: bool(R)
+        goals.push_back(ep.functor("cons", {ep.functor("bool", {}), S}));                                               // goal  3: bool(S)
+        goals.push_back(ep.functor("cons", {ep.functor("cons", {ep.functor("cons", {ep.functor("or", {}), P}), Q}), PQ}));                    // goal  4: or(P,Q,PQ)
+        goals.push_back(ep.functor("cons", {ep.functor("cons", {ep.functor("cons", {ep.functor("or", {}), R}), S}), RS}));                    // goal  5: or(R,S,RS)
+        goals.push_back(ep.functor("cons", {ep.functor("cons", {ep.functor("not", {}), P}), NP}));                                   // goal  6: not(P,NP)
+        goals.push_back(ep.functor("cons", {ep.functor("cons", {ep.functor("not", {}), R}), NR}));                                   // goal  7: not(R,NR)
+        goals.push_back(ep.functor("cons", {ep.functor("cons", {ep.functor("cons", {ep.functor("or", {}), NP}), NR}), NPR}));                   // goal  8: or(NP,NR,NPR)
+        goals.push_back(ep.functor("cons", {ep.functor("cons", {ep.functor("cons", {ep.functor("and", {}), PQ}), RS}), PQ_RS}));                // goal  9: and(PQ,RS,PQ_RS)
+        goals.push_back(ep.functor("cons", {ep.functor("cons", {ep.functor("cons", {ep.functor("and", {}), PQ_RS}), NPR}), ep.functor("true", {})}));   // goal 10: and(PQ_RS,NPR,true)
 
-        const expr* T_ = ep.atom("true");
-        const expr* F_ = ep.atom("false");
+        const expr* T_ = ep.functor("true", {});
+        const expr* F_ = ep.functor("false", {});
 
         // All 5 satisfying assignments to (P, Q, R, S)
         std::set<solution> expected = {
@@ -26410,23 +26410,23 @@ void test_ridge() {
 
         // Build the Peano numeral for n: suc^n(zero)
         auto peano = [&](int n) -> const expr* {
-            const expr* result = ep.atom("zero");
+            const expr* result = ep.functor("zero", {});
             for (int i = 0; i < n; ++i)
-                result = ep.cons(ep.atom("suc"), result);
+                result = ep.functor("cons", {ep.functor("suc", {}), result});
             return result;
         };
 
         database db;
 
         // idx 0: nat(zero).
-        db.push_back(rule{ep.cons(ep.atom("nat"), ep.atom("zero")), {}});
+        db.push_back(rule{ep.functor("cons", {ep.functor("nat", {}), ep.functor("zero", {})}), {}});
 
         // idx 1: nat(suc(X)) :- nat(X).
         {
             const expr* X = ep.var(seq());
             db.push_back(rule{
-                ep.cons(ep.atom("nat"), ep.cons(ep.atom("suc"), X)),
-                {ep.cons(ep.atom("nat"), X)}
+                ep.functor("cons", {ep.functor("nat", {}), ep.functor("cons", {ep.functor("suc", {}), X})}),
+                {ep.functor("cons", {ep.functor("nat", {}), X})}
             });
         }
 
@@ -26434,8 +26434,8 @@ void test_ridge() {
         {
             const expr* X = ep.var(seq());
             db.push_back(rule{
-                ep.cons(ep.cons(ep.atom("lt"), ep.atom("zero")), ep.cons(ep.atom("suc"), X)),
-                {ep.cons(ep.atom("nat"), X)}
+                ep.functor("cons", {ep.functor("cons", {ep.functor("lt", {}), ep.functor("zero", {})}), ep.functor("cons", {ep.functor("suc", {}), X})}),
+                {ep.functor("cons", {ep.functor("nat", {}), X})}
             });
         }
 
@@ -26444,8 +26444,8 @@ void test_ridge() {
             const expr* X = ep.var(seq());
             const expr* Y = ep.var(seq());
             db.push_back(rule{
-                ep.cons(ep.cons(ep.atom("lt"), ep.cons(ep.atom("suc"), X)), ep.cons(ep.atom("suc"), Y)),
-                {ep.cons(ep.cons(ep.atom("lt"), X), Y)}
+                ep.functor("cons", {ep.functor("cons", {ep.functor("lt", {}), ep.functor("cons", {ep.functor("suc", {}), X})}), ep.functor("cons", {ep.functor("suc", {}), Y})}),
+                {ep.functor("cons", {ep.functor("cons", {ep.functor("lt", {}), X}), Y})}
             });
         }
 
@@ -26453,7 +26453,7 @@ void test_ridge() {
         const expr* seven = peano(7);
 
         goals goals;
-        goals.push_back(ep.cons(ep.cons(ep.atom("lt"), N), seven));  // goal 0: lt(N, seven)
+        goals.push_back(ep.functor("cons", {ep.functor("cons", {ep.functor("lt", {}), N}), seven}));  // goal 0: lt(N, seven)
 
         // All 7 Peano naturals strictly less than 7
         std::set<solution> expected = {
@@ -26498,23 +26498,23 @@ void test_ridge() {
         sequencer seq(t);
 
         auto peano = [&](int n) -> const expr* {
-            const expr* r = ep.atom("zero");
+            const expr* r = ep.functor("zero", {});
             for (int i = 0; i < n; ++i)
-                r = ep.cons(ep.atom("suc"), r);
+                r = ep.functor("cons", {ep.functor("suc", {}), r});
             return r;
         };
 
         database db;
 
         // idx 0: nat(zero).
-        db.push_back(rule{ep.cons(ep.atom("nat"), ep.atom("zero")), {}});
+        db.push_back(rule{ep.functor("cons", {ep.functor("nat", {}), ep.functor("zero", {})}), {}});
 
         // idx 1: nat(suc(X)) :- nat(X).
         {
             const expr* X = ep.var(seq());
             db.push_back(rule{
-                ep.cons(ep.atom("nat"), ep.cons(ep.atom("suc"), X)),
-                {ep.cons(ep.atom("nat"), X)}
+                ep.functor("cons", {ep.functor("nat", {}), ep.functor("cons", {ep.functor("suc", {}), X})}),
+                {ep.functor("cons", {ep.functor("nat", {}), X})}
             });
         }
 
@@ -26522,8 +26522,8 @@ void test_ridge() {
         {
             const expr* Y = ep.var(seq());
             db.push_back(rule{
-                ep.cons(ep.cons(ep.cons(ep.atom("add"), ep.atom("zero")), Y), Y),
-                {ep.cons(ep.atom("nat"), Y)}
+                ep.functor("cons", {ep.functor("cons", {ep.functor("cons", {ep.functor("add", {}), ep.functor("zero", {})}), Y}), Y}),
+                {ep.functor("cons", {ep.functor("nat", {}), Y})}
             });
         }
 
@@ -26533,8 +26533,8 @@ void test_ridge() {
             const expr* Y = ep.var(seq());
             const expr* Z = ep.var(seq());
             db.push_back(rule{
-                ep.cons(ep.cons(ep.cons(ep.atom("add"), ep.cons(ep.atom("suc"), X)), Y), ep.cons(ep.atom("suc"), Z)),
-                {ep.cons(ep.cons(ep.cons(ep.atom("add"), X), Y), Z)}
+                ep.functor("cons", {ep.functor("cons", {ep.functor("cons", {ep.functor("add", {}), ep.functor("cons", {ep.functor("suc", {}), X})}), Y}), ep.functor("cons", {ep.functor("suc", {}), Z})}),
+                {ep.functor("cons", {ep.functor("cons", {ep.functor("cons", {ep.functor("add", {}), X}), Y}), Z})}
             });
         }
 
@@ -26542,8 +26542,8 @@ void test_ridge() {
         {
             const expr* X = ep.var(seq());
             db.push_back(rule{
-                ep.cons(ep.cons(ep.atom("lt"), ep.atom("zero")), ep.cons(ep.atom("suc"), X)),
-                {ep.cons(ep.atom("nat"), X)}
+                ep.functor("cons", {ep.functor("cons", {ep.functor("lt", {}), ep.functor("zero", {})}), ep.functor("cons", {ep.functor("suc", {}), X})}),
+                {ep.functor("cons", {ep.functor("nat", {}), X})}
             });
         }
 
@@ -26552,8 +26552,8 @@ void test_ridge() {
             const expr* X = ep.var(seq());
             const expr* Y = ep.var(seq());
             db.push_back(rule{
-                ep.cons(ep.cons(ep.atom("lt"), ep.cons(ep.atom("suc"), X)), ep.cons(ep.atom("suc"), Y)),
-                {ep.cons(ep.cons(ep.atom("lt"), X), Y)}
+                ep.functor("cons", {ep.functor("cons", {ep.functor("lt", {}), ep.functor("cons", {ep.functor("suc", {}), X})}), ep.functor("cons", {ep.functor("suc", {}), Y})}),
+                {ep.functor("cons", {ep.functor("cons", {ep.functor("lt", {}), X}), Y})}
             });
         }
 
@@ -26563,8 +26563,8 @@ void test_ridge() {
         const expr* ten = peano(10);
 
         goals goals;
-        goals.push_back(ep.cons(ep.cons(ep.cons(ep.atom("add"), X), Y), S));  // goal 0: add(X, Y, S)
-        goals.push_back(ep.cons(ep.cons(ep.atom("lt"), S), ten));              // goal 1: lt(S, ten)
+        goals.push_back(ep.functor("cons", {ep.functor("cons", {ep.functor("cons", {ep.functor("add", {}), X}), Y}), S}));  // goal 0: add(X, Y, S)
+        goals.push_back(ep.functor("cons", {ep.functor("cons", {ep.functor("lt", {}), S}), ten}));              // goal 1: lt(S, ten)
 
         // All 55 pairs (x, y) with x + y < 10
         std::set<solution> expected;
@@ -26602,23 +26602,23 @@ void test_ridge() {
         sequencer seq(t);
 
         auto peano = [&](int n) -> const expr* {
-            const expr* r = ep.atom("zero");
+            const expr* r = ep.functor("zero", {});
             for (int i = 0; i < n; ++i)
-                r = ep.cons(ep.atom("suc"), r);
+                r = ep.functor("cons", {ep.functor("suc", {}), r});
             return r;
         };
 
         database db;
 
         // idx 0: nat(zero).
-        db.push_back(rule{ep.cons(ep.atom("nat"), ep.atom("zero")), {}});
+        db.push_back(rule{ep.functor("cons", {ep.functor("nat", {}), ep.functor("zero", {})}), {}});
 
         // idx 1: nat(suc(X)) :- nat(X).
         {
             const expr* X = ep.var(seq());
             db.push_back(rule{
-                ep.cons(ep.atom("nat"), ep.cons(ep.atom("suc"), X)),
-                {ep.cons(ep.atom("nat"), X)}
+                ep.functor("cons", {ep.functor("nat", {}), ep.functor("cons", {ep.functor("suc", {}), X})}),
+                {ep.functor("cons", {ep.functor("nat", {}), X})}
             });
         }
 
@@ -26626,8 +26626,8 @@ void test_ridge() {
         {
             const expr* Y = ep.var(seq());
             db.push_back(rule{
-                ep.cons(ep.cons(ep.cons(ep.atom("add"), ep.atom("zero")), Y), Y),
-                {ep.cons(ep.atom("nat"), Y)}
+                ep.functor("cons", {ep.functor("cons", {ep.functor("cons", {ep.functor("add", {}), ep.functor("zero", {})}), Y}), Y}),
+                {ep.functor("cons", {ep.functor("nat", {}), Y})}
             });
         }
 
@@ -26637,8 +26637,8 @@ void test_ridge() {
             const expr* Y = ep.var(seq());
             const expr* Z = ep.var(seq());
             db.push_back(rule{
-                ep.cons(ep.cons(ep.cons(ep.atom("add"), ep.cons(ep.atom("suc"), X)), Y), ep.cons(ep.atom("suc"), Z)),
-                {ep.cons(ep.cons(ep.cons(ep.atom("add"), X), Y), Z)}
+                ep.functor("cons", {ep.functor("cons", {ep.functor("cons", {ep.functor("add", {}), ep.functor("cons", {ep.functor("suc", {}), X})}), Y}), ep.functor("cons", {ep.functor("suc", {}), Z})}),
+                {ep.functor("cons", {ep.functor("cons", {ep.functor("cons", {ep.functor("add", {}), X}), Y}), Z})}
             });
         }
 
@@ -26647,7 +26647,7 @@ void test_ridge() {
         const expr* ten = peano(10);
 
         goals goals;
-        goals.push_back(ep.cons(ep.cons(ep.cons(ep.atom("add"), X), Y), ten));  // goal 0: add(X, Y, ten)
+        goals.push_back(ep.functor("cons", {ep.functor("cons", {ep.functor("cons", {ep.functor("add", {}), X}), Y}), ten}));  // goal 0: add(X, Y, ten)
 
         // All 11 pairs (x, y) with x + y = 10
         std::set<solution> expected;
@@ -26687,23 +26687,23 @@ void test_ridge() {
         sequencer seq(t);
 
         auto peano = [&](int n) -> const expr* {
-            const expr* r = ep.atom("zero");
+            const expr* r = ep.functor("zero", {});
             for (int i = 0; i < n; ++i)
-                r = ep.cons(ep.atom("suc"), r);
+                r = ep.functor("cons", {ep.functor("suc", {}), r});
             return r;
         };
 
         database db;
 
         // idx 0: nat(zero).
-        db.push_back(rule{ep.cons(ep.atom("nat"), ep.atom("zero")), {}});
+        db.push_back(rule{ep.functor("cons", {ep.functor("nat", {}), ep.functor("zero", {})}), {}});
 
         // idx 1: nat(suc(X)) :- nat(X).
         {
             const expr* X = ep.var(seq());
             db.push_back(rule{
-                ep.cons(ep.atom("nat"), ep.cons(ep.atom("suc"), X)),
-                {ep.cons(ep.atom("nat"), X)}
+                ep.functor("cons", {ep.functor("nat", {}), ep.functor("cons", {ep.functor("suc", {}), X})}),
+                {ep.functor("cons", {ep.functor("nat", {}), X})}
             });
         }
 
@@ -26711,8 +26711,8 @@ void test_ridge() {
         {
             const expr* Y = ep.var(seq());
             db.push_back(rule{
-                ep.cons(ep.cons(ep.cons(ep.atom("add"), ep.atom("zero")), Y), Y),
-                {ep.cons(ep.atom("nat"), Y)}
+                ep.functor("cons", {ep.functor("cons", {ep.functor("cons", {ep.functor("add", {}), ep.functor("zero", {})}), Y}), Y}),
+                {ep.functor("cons", {ep.functor("nat", {}), Y})}
             });
         }
 
@@ -26722,8 +26722,8 @@ void test_ridge() {
             const expr* Y = ep.var(seq());
             const expr* Z = ep.var(seq());
             db.push_back(rule{
-                ep.cons(ep.cons(ep.cons(ep.atom("add"), ep.cons(ep.atom("suc"), X)), Y), ep.cons(ep.atom("suc"), Z)),
-                {ep.cons(ep.cons(ep.cons(ep.atom("add"), X), Y), Z)}
+                ep.functor("cons", {ep.functor("cons", {ep.functor("cons", {ep.functor("add", {}), ep.functor("cons", {ep.functor("suc", {}), X})}), Y}), ep.functor("cons", {ep.functor("suc", {}), Z})}),
+                {ep.functor("cons", {ep.functor("cons", {ep.functor("cons", {ep.functor("add", {}), X}), Y}), Z})}
             });
         }
 
@@ -26731,8 +26731,8 @@ void test_ridge() {
         {
             const expr* Y = ep.var(seq());
             db.push_back(rule{
-                ep.cons(ep.cons(ep.cons(ep.atom("mul"), ep.atom("zero")), Y), ep.atom("zero")),
-                {ep.cons(ep.atom("nat"), Y)}
+                ep.functor("cons", {ep.functor("cons", {ep.functor("cons", {ep.functor("mul", {}), ep.functor("zero", {})}), Y}), ep.functor("zero", {})}),
+                {ep.functor("cons", {ep.functor("nat", {}), Y})}
             });
         }
 
@@ -26743,10 +26743,10 @@ void test_ridge() {
             const expr* Z = ep.var(seq());
             const expr* W = ep.var(seq());
             db.push_back(rule{
-                ep.cons(ep.cons(ep.cons(ep.atom("mul"), ep.cons(ep.atom("suc"), X)), Y), Z),
+                ep.functor("cons", {ep.functor("cons", {ep.functor("cons", {ep.functor("mul", {}), ep.functor("cons", {ep.functor("suc", {}), X})}), Y}), Z}),
                 {
-                    ep.cons(ep.cons(ep.cons(ep.atom("mul"), X), Y), W),
-                    ep.cons(ep.cons(ep.cons(ep.atom("add"), W), Y), Z)
+                    ep.functor("cons", {ep.functor("cons", {ep.functor("cons", {ep.functor("mul", {}), X}), Y}), W}),
+                    ep.functor("cons", {ep.functor("cons", {ep.functor("cons", {ep.functor("add", {}), W}), Y}), Z})
                 }
             });
         }
@@ -26756,7 +26756,7 @@ void test_ridge() {
         const expr* eight = peano(8);
 
         goals goals;
-        goals.push_back(ep.cons(ep.cons(ep.cons(ep.atom("mul"), X), Y), eight));  // goal 0: mul(X, Y, eight)
+        goals.push_back(ep.functor("cons", {ep.functor("cons", {ep.functor("cons", {ep.functor("mul", {}), X}), Y}), eight}));  // goal 0: mul(X, Y, eight)
 
         // All 4 factor pairs of 8
         std::set<solution> expected = {
@@ -26790,29 +26790,29 @@ void test_ridge() {
         sequencer seq(t);
 
         auto peano = [&](int n) -> const expr* {
-            const expr* r = ep.atom("zero");
+            const expr* r = ep.functor("zero", {});
             for (int i = 0; i < n; ++i)
-                r = ep.cons(ep.atom("suc"), r);
+                r = ep.functor("cons", {ep.functor("suc", {}), r});
             return r;
         };
 
         database db;
 
-        db.push_back(rule{ep.cons(ep.atom("nat"), ep.atom("zero")), {}});
+        db.push_back(rule{ep.functor("cons", {ep.functor("nat", {}), ep.functor("zero", {})}), {}});
 
         {
             const expr* X = ep.var(seq());
             db.push_back(rule{
-                ep.cons(ep.atom("nat"), ep.cons(ep.atom("suc"), X)),
-                {ep.cons(ep.atom("nat"), X)}
+                ep.functor("cons", {ep.functor("nat", {}), ep.functor("cons", {ep.functor("suc", {}), X})}),
+                {ep.functor("cons", {ep.functor("nat", {}), X})}
             });
         }
 
         {
             const expr* Y = ep.var(seq());
             db.push_back(rule{
-                ep.cons(ep.cons(ep.cons(ep.atom("add"), ep.atom("zero")), Y), Y),
-                {ep.cons(ep.atom("nat"), Y)}
+                ep.functor("cons", {ep.functor("cons", {ep.functor("cons", {ep.functor("add", {}), ep.functor("zero", {})}), Y}), Y}),
+                {ep.functor("cons", {ep.functor("nat", {}), Y})}
             });
         }
 
@@ -26821,16 +26821,16 @@ void test_ridge() {
             const expr* Y = ep.var(seq());
             const expr* Z = ep.var(seq());
             db.push_back(rule{
-                ep.cons(ep.cons(ep.cons(ep.atom("add"), ep.cons(ep.atom("suc"), X)), Y), ep.cons(ep.atom("suc"), Z)),
-                {ep.cons(ep.cons(ep.cons(ep.atom("add"), X), Y), Z)}
+                ep.functor("cons", {ep.functor("cons", {ep.functor("cons", {ep.functor("add", {}), ep.functor("cons", {ep.functor("suc", {}), X})}), Y}), ep.functor("cons", {ep.functor("suc", {}), Z})}),
+                {ep.functor("cons", {ep.functor("cons", {ep.functor("cons", {ep.functor("add", {}), X}), Y}), Z})}
             });
         }
 
         {
             const expr* X = ep.var(seq());
             db.push_back(rule{
-                ep.cons(ep.cons(ep.atom("lt"), ep.atom("zero")), ep.cons(ep.atom("suc"), X)),
-                {ep.cons(ep.atom("nat"), X)}
+                ep.functor("cons", {ep.functor("cons", {ep.functor("lt", {}), ep.functor("zero", {})}), ep.functor("cons", {ep.functor("suc", {}), X})}),
+                {ep.functor("cons", {ep.functor("nat", {}), X})}
             });
         }
 
@@ -26838,8 +26838,8 @@ void test_ridge() {
             const expr* X = ep.var(seq());
             const expr* Y = ep.var(seq());
             db.push_back(rule{
-                ep.cons(ep.cons(ep.atom("lt"), ep.cons(ep.atom("suc"), X)), ep.cons(ep.atom("suc"), Y)),
-                {ep.cons(ep.cons(ep.atom("lt"), X), Y)}
+                ep.functor("cons", {ep.functor("cons", {ep.functor("lt", {}), ep.functor("cons", {ep.functor("suc", {}), X})}), ep.functor("cons", {ep.functor("suc", {}), Y})}),
+                {ep.functor("cons", {ep.functor("cons", {ep.functor("lt", {}), X}), Y})}
             });
         }
 
@@ -26851,10 +26851,10 @@ void test_ridge() {
         const expr* B = peano(4);
 
         goals goals;
-        goals.push_back(ep.cons(ep.cons(ep.cons(ep.atom("add"), X), Y), S));
-        goals.push_back(ep.cons(ep.cons(ep.cons(ep.atom("add"), X), Z), T));
-        goals.push_back(ep.cons(ep.cons(ep.atom("lt"), S), B));
-        goals.push_back(ep.cons(ep.cons(ep.atom("lt"), T), B));
+        goals.push_back(ep.functor("cons", {ep.functor("cons", {ep.functor("cons", {ep.functor("add", {}), X}), Y}), S}));
+        goals.push_back(ep.functor("cons", {ep.functor("cons", {ep.functor("cons", {ep.functor("add", {}), X}), Z}), T}));
+        goals.push_back(ep.functor("cons", {ep.functor("cons", {ep.functor("lt", {}), S}), B}));
+        goals.push_back(ep.functor("cons", {ep.functor("cons", {ep.functor("lt", {}), T}), B}));
 
         std::set<solution> expected;
         for (int x = 0; x < 4; ++x)
@@ -26887,33 +26887,33 @@ void test_ridge() {
         sequencer seq(t);
 
         auto peano = [&](int n) -> const expr* {
-            const expr* r = ep.atom("zero");
+            const expr* r = ep.functor("zero", {});
             for (int i = 0; i < n; ++i)
-                r = ep.cons(ep.atom("suc"), r);
+                r = ep.functor("cons", {ep.functor("suc", {}), r});
             return r;
         };
 
         auto B = [&](const expr* L, const expr* R) -> const expr* {
-            return ep.cons(ep.cons(ep.atom("bin"), L), R);
+            return ep.functor("cons", {ep.functor("cons", {ep.functor("bin", {}), L}), R});
         };
 
         database db;
 
-        db.push_back(rule{ep.cons(ep.atom("nat"), ep.atom("zero")), {}});
+        db.push_back(rule{ep.functor("cons", {ep.functor("nat", {}), ep.functor("zero", {})}), {}});
 
         {
             const expr* X = ep.var(seq());
             db.push_back(rule{
-                ep.cons(ep.atom("nat"), ep.cons(ep.atom("suc"), X)),
-                {ep.cons(ep.atom("nat"), X)}
+                ep.functor("cons", {ep.functor("nat", {}), ep.functor("cons", {ep.functor("suc", {}), X})}),
+                {ep.functor("cons", {ep.functor("nat", {}), X})}
             });
         }
 
         {
             const expr* Y = ep.var(seq());
             db.push_back(rule{
-                ep.cons(ep.cons(ep.cons(ep.atom("add"), ep.atom("zero")), Y), Y),
-                {ep.cons(ep.atom("nat"), Y)}
+                ep.functor("cons", {ep.functor("cons", {ep.functor("cons", {ep.functor("add", {}), ep.functor("zero", {})}), Y}), Y}),
+                {ep.functor("cons", {ep.functor("nat", {}), Y})}
             });
         }
 
@@ -26922,27 +26922,27 @@ void test_ridge() {
             const expr* Y = ep.var(seq());
             const expr* Z = ep.var(seq());
             db.push_back(rule{
-                ep.cons(ep.cons(ep.cons(ep.atom("add"), ep.cons(ep.atom("suc"), X)), Y), ep.cons(ep.atom("suc"), Z)),
-                {ep.cons(ep.cons(ep.cons(ep.atom("add"), X), Y), Z)}
+                ep.functor("cons", {ep.functor("cons", {ep.functor("cons", {ep.functor("add", {}), ep.functor("cons", {ep.functor("suc", {}), X})}), Y}), ep.functor("cons", {ep.functor("suc", {}), Z})}),
+                {ep.functor("cons", {ep.functor("cons", {ep.functor("cons", {ep.functor("add", {}), X}), Y}), Z})}
             });
         }
 
-        db.push_back(rule{ep.cons(ep.atom("wf"), ep.atom("nil")), {}});
+        db.push_back(rule{ep.functor("cons", {ep.functor("wf", {}), ep.functor("nil", {})}), {}});
 
         {
             const expr* L = ep.var(seq());
             const expr* R = ep.var(seq());
             db.push_back(rule{
-                ep.cons(ep.atom("wf"), ep.cons(ep.cons(ep.atom("bin"), L), R)),
+                ep.functor("cons", {ep.functor("wf", {}), ep.functor("cons", {ep.functor("cons", {ep.functor("bin", {}), L}), R})}),
                 {
-                    ep.cons(ep.atom("wf"), L),
-                    ep.cons(ep.atom("wf"), R),
+                    ep.functor("cons", {ep.functor("wf", {}), L}),
+                    ep.functor("cons", {ep.functor("wf", {}), R}),
                 }
             });
         }
 
         db.push_back(rule{
-            ep.cons(ep.cons(ep.atom("nodes"), ep.atom("nil")), ep.atom("zero")),
+            ep.functor("cons", {ep.functor("cons", {ep.functor("nodes", {}), ep.functor("nil", {})}), ep.functor("zero", {})}),
             {},
         });
 
@@ -26955,17 +26955,17 @@ void test_ridge() {
             const expr* Tmp = ep.var(seq());
             const expr* one = peano(1);
             db.push_back(rule{
-                ep.cons(ep.cons(ep.atom("nodes"), ep.cons(ep.cons(ep.atom("bin"), L), R)), S),
+                ep.functor("cons", {ep.functor("cons", {ep.functor("nodes", {}), ep.functor("cons", {ep.functor("cons", {ep.functor("bin", {}), L}), R})}), S}),
                 {
-                    ep.cons(ep.cons(ep.atom("nodes"), L), NL),
-                    ep.cons(ep.cons(ep.atom("nodes"), R), NR),
-                    ep.cons(ep.cons(ep.cons(ep.atom("add"), NL), NR), Tmp),
-                    ep.cons(ep.cons(ep.cons(ep.atom("add"), one), Tmp), S),
+                    ep.functor("cons", {ep.functor("cons", {ep.functor("nodes", {}), L}), NL}),
+                    ep.functor("cons", {ep.functor("cons", {ep.functor("nodes", {}), R}), NR}),
+                    ep.functor("cons", {ep.functor("cons", {ep.functor("cons", {ep.functor("add", {}), NL}), NR}), Tmp}),
+                    ep.functor("cons", {ep.functor("cons", {ep.functor("cons", {ep.functor("add", {}), one}), Tmp}), S}),
                 }
             });
         }
 
-        const expr* N  = ep.atom("nil");
+        const expr* N  = ep.functor("nil", {});
         const expr* s1 = B(N, N);                 // 1 node
         const expr* s2_left_chain  = B(N, s1);    // 2 nodes (spine left)
         const expr* s2_right_chain = B(s1, N);    // 2 nodes (spine right)
@@ -26998,8 +26998,8 @@ void test_ridge() {
         const expr* five = peano(5);
 
         goals goals;
-        goals.push_back(ep.cons(ep.atom("wf"), T));
-        goals.push_back(ep.cons(ep.cons(ep.atom("nodes"), T), five));
+        goals.push_back(ep.functor("cons", {ep.functor("wf", {}), T}));
+        goals.push_back(ep.functor("cons", {ep.functor("cons", {ep.functor("nodes", {}), T}), five}));
 
         // Expected trees must be interned *before* ridge's ctor runs: ridge() calls t.push(),
         // and the first sim_one() does t.pop() for that frame, undoing all expr_pool inserts
@@ -27076,14 +27076,14 @@ void unit_test_main() {
     TEST(test_trail_constructor);
     TEST(test_trail_push_pop);
     TEST(test_trail_log);
-    TEST(test_atom_constructor);
+    TEST(test_functor_constructor);
     TEST(test_var_constructor);
-    TEST(test_cons_constructor);
+    TEST(test_functor_cons_constructor);
     TEST(test_expr_constructor);
-    TEST(test_expr_pool_constructor);
-    TEST(test_expr_pool_atom);
+    TEST(test_expr_pool_functor_constructor);
+    TEST(test_expr_pool_functor);
     TEST(test_expr_pool_var);
-    TEST(test_expr_pool_cons);
+    TEST(test_expr_pool_functor_cons);
     TEST(test_expr_pool_import);
     TEST(test_bind_map_bind);
     TEST(test_bind_map_whnf);
