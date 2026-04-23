@@ -4,12 +4,6 @@ rep_watch::rep_watch(bind_map& bm, expr_pool& ep) : bm(bm), ep(ep) {
 
 }
 
-std::function<void(uint32_t)> rep_watch::callback_slot() {
-    return [this](uint32_t rep) {
-        update_rep_watches(rep);
-    };
-}
-
 void rep_watch::extract_rep_vars(const expr* e, std::unordered_set<uint32_t>& reps) {
     const expr* e_rep = bm.whnf(e);
 
@@ -33,18 +27,36 @@ void rep_watch::watch(const std::unordered_set<uint32_t>& reps, const std::unord
 
 std::unordered_set<const goal_lineage*> rep_watch::unwatch(uint32_t rep) {
     auto it = rep_to_goals.find(rep);
-    for (const goal_lineage* gl : it->second)
-        goal_to_reps[gl].erase(rep);
+    for (const goal_lineage* gl : it->second) {
+        auto reps = goal_to_reps.at(gl);
+        reps.erase(rep);
+        if (reps.empty())
+            goal_to_reps.erase(gl);
+    }
     auto node = rep_to_goals.extract(it);
     return std::move(node.mapped());
 }
 
 std::unordered_set<uint32_t> rep_watch::unwatch(const goal_lineage* gl) {
     auto it = goal_to_reps.find(gl);
-    for (uint32_t rep : it->second)
-        rep_to_goals[rep].erase(gl);
+    for (uint32_t rep : it->second) {
+        auto goals = rep_to_goals.at(rep);
+        goals.erase(gl);
+        if (goals.empty())
+            rep_to_goals.erase(rep);
+    }
     auto node = goal_to_reps.extract(it);
     return std::move(node.mapped());
+}
+
+std::unordered_set<const goal_lineage*> rep_watch::pipe() {
+    std::unordered_set<const goal_lineage*> result;
+    std::unordered_set<uint32_t> changed_reps = bm.flush_changed_reps();
+    for (uint32_t rep : changed_reps) {
+        if (rep_to_goals.contains(rep))
+            update_rep_watches(rep);
+    }
+    return result;
 }
 
 void rep_watch::update_rep_watches(uint32_t rep) {

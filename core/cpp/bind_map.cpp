@@ -1,7 +1,7 @@
 #include "../hpp/bind_map.hpp"
 
 bind_map::bind_map(trail& trail_ref) :
-    trail_ref(trail_ref), representative_changed_callback([](uint32_t){}) {
+    trail_ref(trail_ref) {
 
 }
 
@@ -50,7 +50,7 @@ bool bind_map::unify(const expr* lhs, const expr* rhs) {
         if (occurs_check(lv->index, rhs))
             return false;
         bind(lv->index, rhs);
-        representative_changed_callback(lv->index);
+        changed_reps.insert(lv->index);
         return true;
     }
 
@@ -59,7 +59,7 @@ bool bind_map::unify(const expr* lhs, const expr* rhs) {
         if (occurs_check(rv->index, lhs))
             return false;
         bind(rv->index, lhs);
-        representative_changed_callback(rv->index);
+        changed_reps.insert(rv->index);
         return true;
     }
 
@@ -83,8 +83,10 @@ bool bind_map::unify(const expr* lhs, const expr* rhs) {
 
 }
 
-void bind_map::set_representative_changed_callback(std::function<void(uint32_t)> callback) {
-    representative_changed_callback = callback;
+std::unordered_set<uint32_t> bind_map::flush_changed_reps() {
+    std::unordered_set<uint32_t> result = std::move(changed_reps);
+    changed_reps.clear();
+    return std::move(result);
 }
 
 bool bind_map::occurs_check(uint32_t index, const expr* key) {
