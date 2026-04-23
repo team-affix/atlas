@@ -67,8 +67,13 @@ void cdcl::upsert(size_t id, const avoidance& av) {
     avoidances[id] = av;
 
     // 2. if the avoidance is singleton, we have eliminated something.
-    if (av.size() == 1)
-        eliminated_resolutions.insert(*av.begin());
+    if (av.size() == 1) {
+        auto [_, inserted] = eliminated_resolutions.insert(*av.begin());
+
+        // 3. if the elimination was new, call the callback
+        if (inserted)
+            resolution_eliminated_callback(*av.begin());
+    }
 }
 
 void cdcl::erase(size_t id) {
@@ -88,6 +93,6 @@ bool cdcl::refuted() const {
     return is_refuted;
 }
 
-bool cdcl::eliminated(const resolution_lineage* rl) const {
-    return eliminated_resolutions.contains(rl);
+void cdcl::set_resolution_eliminated_callback(std::function<void(const resolution_lineage*)> callback) {
+    resolution_eliminated_callback = callback;
 }

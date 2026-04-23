@@ -12,7 +12,7 @@ struct cdcl {
     void learn(const lemma&);
     void constrain(const resolution_lineage*);
     bool refuted() const;
-    bool eliminated(const resolution_lineage*) const;
+    void set_resolution_eliminated_callback(std::function<void(const resolution_lineage*)>);
     #ifndef DEBUG
     private:
     #endif
@@ -24,6 +24,7 @@ struct cdcl {
     bool is_refuted;
     std::set<const resolution_lineage*> eliminated_resolutions;
     size_t next_avoidance_id;
+    std::function<void(const resolution_lineage*)> resolution_eliminated_callback;
 };
 
 #endif
