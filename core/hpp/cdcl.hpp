@@ -3,6 +3,7 @@
 
 #include "lineage.hpp"
 #include "lemma.hpp"
+#include <queue>
 
 using avoidance = std::unordered_set<const resolution_lineage*>;
 
@@ -11,7 +12,7 @@ struct cdcl {
     void learn(const lemma&);
     void constrain(const resolution_lineage*);
     bool refuted() const;
-    void set_resolution_eliminated_callback(std::function<void(const resolution_lineage*)>);
+    std::queue<const resolution_lineage*> new_eliminated_resolutions;
     #ifndef DEBUG
     private:
     #endif
@@ -23,7 +24,6 @@ struct cdcl {
     bool is_refuted;
     std::set<const resolution_lineage*> eliminated_resolutions;
     size_t next_avoidance_id;
-    std::function<void(const resolution_lineage*)> resolution_eliminated_callback;
 };
 
 #endif
