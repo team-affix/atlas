@@ -50,7 +50,7 @@ bool bind_map::unify(const expr* lhs, const expr* rhs) {
         if (occurs_check(lv->index, rhs))
             return false;
         bind(lv->index, rhs);
-        changed_reps.insert(lv->index);
+        changed_reps.push(lv->index);
         return true;
     }
 
@@ -59,7 +59,7 @@ bool bind_map::unify(const expr* lhs, const expr* rhs) {
         if (occurs_check(rv->index, lhs))
             return false;
         bind(rv->index, lhs);
-        changed_reps.insert(rv->index);
+        changed_reps.push(rv->index);
         return true;
     }
 
@@ -81,12 +81,6 @@ bool bind_map::unify(const expr* lhs, const expr* rhs) {
 
     return false;
 
-}
-
-std::unordered_set<uint32_t> bind_map::flush_changed_reps() {
-    std::unordered_set<uint32_t> result = std::move(changed_reps);
-    changed_reps.clear();
-    return std::move(result);
 }
 
 bool bind_map::occurs_check(uint32_t index, const expr* key) {

@@ -49,14 +49,34 @@ std::unordered_set<uint32_t> rep_watch::unwatch(const goal_lineage* gl) {
     return std::move(node.mapped());
 }
 
-std::unordered_set<const goal_lineage*> rep_watch::pipe() {
-    std::unordered_set<const goal_lineage*> result;
-    std::unordered_set<uint32_t> changed_reps = bm.flush_changed_reps();
-    for (uint32_t rep : changed_reps) {
-        if (rep_to_goals.contains(rep))
-            update_rep_watches(rep);
+void rep_watch::pipe() {
+    std::unordered_set<const goal_lineage*> visited;
+
+    auto& changed_reps = bm.changed_reps;
+    
+    while (!changed_reps.empty()) {
+        // pop the changed rep
+        uint32_t rep = changed_reps.front();
+        changed_reps.pop();
+
+        // get the goals that are watching this representative
+        auto it = rep_to_goals.find(rep);
+
+        if (it == rep_to_goals.end())
+            continue;
+        
+        // basic deduplication per pipe() call
+        for (const goal_lineage* gl : it->second) {
+            if (visited.contains(gl))
+                continue;
+            visited.insert(gl);
+            touched_goals.push(gl);
+        }
+
+        // update the watches given the rep update
+        update_rep_watches(rep);
+        
     }
-    return result;
 }
 
 void rep_watch::update_rep_watches(uint32_t rep) {

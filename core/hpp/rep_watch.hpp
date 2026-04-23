@@ -14,7 +14,8 @@ struct rep_watch {
     void watch(const std::unordered_set<uint32_t>&, const std::unordered_set<const goal_lineage*>&);
     std::unordered_set<const goal_lineage*> unwatch(uint32_t);
     std::unordered_set<uint32_t> unwatch(const goal_lineage*);
-    std::unordered_set<const goal_lineage*> pipe();
+    void pipe();
+    std::queue<const goal_lineage*> touched_goals;
 #ifndef DEBUG
 private:
 #endif
