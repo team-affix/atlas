@@ -14,6 +14,8 @@ struct frontier {
     void insert(const goal_lineage*, const T&);
     void resolve(const resolution_lineage*);
     virtual std::vector<T> expand(const T&, const rule&) = 0;
+    virtual void on_insert(const goal_lineage*, const T&);
+    virtual void on_resolve(const resolution_lineage*);
 
     std::unordered_map<const goal_lineage*, T>::iterator begin();
     std::unordered_map<const goal_lineage*, T>::iterator end();
@@ -40,6 +42,7 @@ frontier<T>::frontier(
 template<typename T>
 void frontier<T>::insert(const goal_lineage* gl, const T& value) {
     members.insert({gl, value});
+    on_insert(gl, value);
 }
 
 template<typename T>
@@ -58,7 +61,18 @@ void frontier<T>::resolve(const resolution_lineage* r) {
     
     // add the children to the frontier
     for (int i = 0; i < child_values.size(); i++)
-        members.insert({lp.goal(r, i), child_values[i]});
+        insert(lp.goal(r, i), child_values[i]);
+
+    // notify the subclass
+    on_resolve(r);
+}
+
+template<typename T>
+void frontier<T>::on_insert(const goal_lineage* gl, const T& value) {
+}
+
+template<typename T>
+void frontier<T>::on_resolve(const resolution_lineage* r) {
 }
 
 template<typename T>
