@@ -5,24 +5,22 @@
 #include "frontier.hpp"
 #include "defs.hpp"
 
-struct candidate_store : frontier<std::vector<size_t>> {
+struct candidate_store : frontier<std::unordered_set<size_t>> {
     candidate_store(
         const database&,
         const goals&,
         lineage_pool&
     );
-    size_t eliminate(const std::function<bool(const goal_lineage*, size_t)>&);
-    bool unit(const goal_lineage*&, size_t&) const;
     bool conflicted() const;
 #ifndef DEBUG
 private:
 #endif
-    std::vector<std::vector<size_t>> expand(const std::vector<size_t>&, const rule&) override;
+    std::vector<std::unordered_set<size_t>> expand(const std::unordered_set<size_t>&, const rule&) override;
 
     const database& db;
     lineage_pool& lp;
 
-    std::vector<size_t> initial_candidates;
+    std::unordered_set<size_t> initial_candidates;
 };
 
 #endif

@@ -4,48 +4,16 @@ candidate_store::candidate_store(
     const database& db,
     const goals& goals,
     lineage_pool& lp) :
-    frontier<std::vector<size_t>>(db, lp),
+    frontier<std::unordered_set<size_t>>(db, lp),
     db(db),
     lp(lp)
 {
     // make the initial candidates
     for (int i = 0; i < db.size(); ++i)
-        initial_candidates.push_back(i);
+        initial_candidates.insert(i);
     // make the initial members
     for (int i = 0; i < goals.size(); ++i)
         insert(lp.goal(nullptr, i), initial_candidates);
-}
-
-size_t candidate_store::eliminate(const std::function<bool(const goal_lineage*, size_t)>& pred) {
-    size_t result = 0;
-    for (auto it = begin(); it != end(); ++it) {
-        const goal_lineage* gl = it->first;
-        std::vector<size_t>& candidates = it->second;
-        for (size_t i = 0; i < candidates.size();) {
-            if (pred(gl, candidates[i])) {
-                candidates[i] = candidates.back();
-                candidates.pop_back();
-                ++result;
-            }
-            else {
-                ++i;
-            }
-        }
-    }
-    return result;
-}
-
-bool candidate_store::unit(const goal_lineage*& gl, size_t& candidate) const {
-    for (auto it = begin(); it != end(); ++it) {
-        const goal_lineage* key = it->first;
-        const std::vector<size_t>& candidates = it->second;
-        if (candidates.size() == 1) {
-            gl = key;
-            candidate = candidates.front();
-            return true;
-        }
-    }
-    return false;
 }
 
 bool candidate_store::conflicted() const {
@@ -55,8 +23,8 @@ bool candidate_store::conflicted() const {
         [](const auto& e) { return e.second.size() == 0; });
 }
 
-std::vector<std::vector<size_t>> candidate_store::expand(const std::vector<size_t>& candidates, const rule& r) {
-    std::vector<std::vector<size_t>> result;
+std::vector<std::unordered_set<size_t>> candidate_store::expand(const std::unordered_set<size_t>& candidates, const rule& r) {
+    std::vector<std::unordered_set<size_t>> result;
     for (int i = 0; i < r.body.size(); ++i)
         result.push_back(initial_candidates);
     return result;
