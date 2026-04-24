@@ -59,9 +59,6 @@ std::unordered_set<uint32_t> head_eliminator::unwatch(const goal_lineage* gl) {
 }
 
 void head_eliminator::execute() {
-    // unlink the slot temporarily for temp bindings
-    bm.set_rep_changed_callback([](uint32_t){});
-    
     std::unordered_set<const goal_lineage*> touched_goals;
     
     while (!changed_reps.empty()) {
@@ -85,8 +82,9 @@ void head_eliminator::execute() {
     for (const goal_lineage* gl : touched_goals)
         visit_goal_lineage(gl);
 
-    // re-link the slot
-    bm.set_rep_changed_callback(slot());
+    // clear the queue since there will be invalid rep changes from
+    // the temporary frames
+    changed_reps = {};
 }
 
 std::function<void(uint32_t)> head_eliminator::slot() {
