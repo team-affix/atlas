@@ -4,8 +4,7 @@
 #include "sim_args.hpp"
 #include "goal_store.hpp"
 #include "candidate_store.hpp"
-#include "head_eliminator.hpp"
-#include "cdcl_eliminator.hpp"
+#include "event_aggregator.hpp"
 
 struct sim {
     sim(sim_args);
@@ -33,9 +32,7 @@ protected:
 
     cdcl c;
 
-    std::queue<const resolution_lineage*> unit_queue;
-    head_eliminator he;
-    cdcl_eliminator ce;
+    event_aggregator ea;
 
     resolutions rs;
     decisions ds;
