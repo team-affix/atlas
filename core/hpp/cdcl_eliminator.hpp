@@ -25,7 +25,8 @@ private:
     void route_elimination(const resolution_lineage*);
     void flush_backlog_for_goal(const goal_lineage*);
     void eliminate(const goal_lineage*, size_t);
-    void mark_unit(const goal_lineage*);
+    void check_unit(const goal_lineage*);
+    void check_conflict(const goal_lineage*);
     
     std::function<void(const resolution_lineage*)> new_eliminated_resolution_callback();
     std::function<void(const goal_lineage*)> goal_inserted_callback();
