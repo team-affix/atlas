@@ -7,12 +7,7 @@ frontier_watch::frontier_watch(
 
 void frontier_watch::initialize(const goals& goals) {
     for (int i = 0; i < goals.size(); ++i)
-        insert(lp.goal(nullptr, i));
-}
-
-void frontier_watch::insert(const goal_lineage* gl) {
-    current_goals.insert(gl);
-    insert_callback(gl);
+        insert_callback(lp.goal(nullptr, i));
 }
 
 void frontier_watch::resolve(const resolution_lineage* r) {
@@ -24,10 +19,7 @@ void frontier_watch::resolve(const resolution_lineage* r) {
 
     // add children
     for (int i = 0; i < db_rule.body.size(); ++i)
-        insert(lp.goal(r, i));
-
-    // remove the parent from the current goals
-    current_goals.erase(parent);
+        insert_callback(lp.goal(r, i));
 
     // notify the callback
     resolve_callback(r);
@@ -39,8 +31,4 @@ void frontier_watch::set_insert_callback(std::function<void(const goal_lineage*)
 
 void frontier_watch::set_resolve_callback(std::function<void(const resolution_lineage*)> callback) {
     resolve_callback = callback;
-}
-
-bool frontier_watch::contains(const goal_lineage* gl) const {
-    return current_goals.contains(gl);
 }
