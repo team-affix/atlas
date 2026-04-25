@@ -65,6 +65,10 @@ bool cdcl_eliminator::route_elimination(const resolution_lineage* rl) {
 bool cdcl_eliminator::flush_backlog_for_goal(const goal_lineage* gl) {
     auto node = elimination_backlog.extract(gl);
 
+    // if the goal is not in the elimination backlog, do nothing
+    if (node.empty())
+        return false;
+
     // for each index in the backlog, eliminate the candidate
     for (size_t idx : node.mapped()) {
         if (eliminate(gl, idx))
