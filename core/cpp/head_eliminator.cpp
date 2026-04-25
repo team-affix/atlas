@@ -24,6 +24,35 @@ head_eliminator::head_eliminator(
     fw.initialize(goals);
 }
 
+void head_eliminator::execute() {
+    std::unordered_set<const goal_lineage*> touched_goals;
+    
+    while (!changed_reps.empty()) {
+        // pop the changed rep
+        uint32_t rep = changed_reps.front();
+        changed_reps.pop();
+
+        // get the goals that are watching this representative
+        auto it = rep_to_goals.find(rep);
+
+        if (it == rep_to_goals.end())
+            continue;
+        
+        // basic deduplication
+        touched_goals.insert(it->second.begin(), it->second.end());
+
+        // update the watches given the rep update
+        update_rep_watches(rep);
+    }
+
+    for (const goal_lineage* gl : touched_goals)
+        visit_goal_lineage(gl);
+
+    // clear the queue since there will be invalid rep changes from
+    // the temporary frames
+    changed_reps = {};
+}
+
 void head_eliminator::extract_rep_vars(const expr* e, std::unordered_set<uint32_t>& reps) {
     const expr* e_rep = bm.whnf(e);
 
@@ -67,35 +96,6 @@ std::unordered_set<uint32_t> head_eliminator::unwatch(const goal_lineage* gl) {
     }
     auto node = goal_to_reps.extract(it);
     return std::move(node.mapped());
-}
-
-void head_eliminator::execute() {
-    std::unordered_set<const goal_lineage*> touched_goals;
-    
-    while (!changed_reps.empty()) {
-        // pop the changed rep
-        uint32_t rep = changed_reps.front();
-        changed_reps.pop();
-
-        // get the goals that are watching this representative
-        auto it = rep_to_goals.find(rep);
-
-        if (it == rep_to_goals.end())
-            continue;
-        
-        // basic deduplication
-        touched_goals.insert(it->second.begin(), it->second.end());
-
-        // update the watches given the rep update
-        update_rep_watches(rep);
-    }
-
-    for (const goal_lineage* gl : touched_goals)
-        visit_goal_lineage(gl);
-
-    // clear the queue since there will be invalid rep changes from
-    // the temporary frames
-    changed_reps = {};
 }
 
 std::function<void(uint32_t)> head_eliminator::rep_changed_callback() {

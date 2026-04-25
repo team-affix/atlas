@@ -23,14 +23,14 @@ struct head_eliminator {
         candidate_store&,
         lineage_pool&
     );
-    void extract_rep_vars(const expr*, std::unordered_set<uint32_t>&);
-    void watch(const std::unordered_set<uint32_t>&, const std::unordered_set<const goal_lineage*>&);
-    std::unordered_set<const goal_lineage*> unwatch(uint32_t);
-    std::unordered_set<uint32_t> unwatch(const goal_lineage*);
     void execute();
 #ifndef DEBUG
 private:
 #endif
+    void extract_rep_vars(const expr*, std::unordered_set<uint32_t>&);
+    void watch(const std::unordered_set<uint32_t>&, const std::unordered_set<const goal_lineage*>&);
+    std::unordered_set<const goal_lineage*> unwatch(uint32_t);
+    std::unordered_set<uint32_t> unwatch(const goal_lineage*);
     std::function<void(uint32_t)> rep_changed_callback();
     std::function<void(const goal_lineage*)> goal_inserted_callback();
     std::function<void(const resolution_lineage*)> goal_resolved_callback();
