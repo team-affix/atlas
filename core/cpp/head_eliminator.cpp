@@ -90,7 +90,7 @@ void head_eliminator::watch(const std::unordered_set<uint32_t>& reps, const std:
 std::unordered_set<const goal_lineage*> head_eliminator::unwatch(uint32_t rep) {
     auto it = rep_to_goals.find(rep);
     for (const goal_lineage* gl : it->second) {
-        auto reps = goal_to_reps.at(gl);
+        auto& reps = goal_to_reps.at(gl);
         reps.erase(rep);
         if (reps.empty())
             goal_to_reps.erase(gl);
@@ -102,7 +102,7 @@ std::unordered_set<const goal_lineage*> head_eliminator::unwatch(uint32_t rep) {
 std::unordered_set<uint32_t> head_eliminator::unwatch(const goal_lineage* gl) {
     auto it = goal_to_reps.find(gl);
     for (uint32_t rep : it->second) {
-        auto goals = rep_to_goals.at(rep);
+        auto& goals = rep_to_goals.at(rep);
         goals.erase(gl);
         if (goals.empty())
             rep_to_goals.erase(rep);
