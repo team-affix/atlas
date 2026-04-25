@@ -68,5 +68,7 @@ void sim::resolve(const resolution_lineage* rl) {
     gs.resolve(rl);
     cs.resolve(rl);
     c.constrain(rl);
+    he.resolve(rl);
+    ce.resolve(rl);
     on_resolve(rl);
 }
