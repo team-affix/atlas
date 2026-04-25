@@ -32,12 +32,12 @@ bool event_aggregator::operator()() {
     return conflict_register;
 }
 
-bool event_aggregator::pop_unit(const resolution_lineage*& rl) {
+const resolution_lineage* event_aggregator::pop_unit() {
     if (unit_queue.empty())
-        return false;
-    rl = unit_queue.front();
+        return nullptr;
+    const resolution_lineage* rl = unit_queue.front();
     unit_queue.pop();
-    return true;
+    return rl;
 }
 
 void event_aggregator::resolve(const resolution_lineage* rl) {

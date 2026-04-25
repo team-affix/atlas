@@ -21,7 +21,7 @@ struct event_aggregator {
         cdcl&
     );
     bool operator()();
-    bool pop_unit(const resolution_lineage*&);
+    const resolution_lineage* pop_unit();
     void resolve(const resolution_lineage*);
 #ifndef DEBUG
 private:
