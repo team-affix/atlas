@@ -23,6 +23,7 @@ private:
     void flush_backlog_for_goal(const goal_lineage*);
     void eliminate(const goal_lineage*, size_t);
     
+    std::function<void(const resolution_lineage*)> new_eliminated_resolution_callback();
     std::function<void(const goal_lineage*)> goal_inserted_callback();
     std::function<void(const resolution_lineage*)> goal_resolved_callback();
 

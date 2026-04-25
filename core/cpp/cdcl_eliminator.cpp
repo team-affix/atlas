@@ -8,6 +8,7 @@ cdcl_eliminator::cdcl_eliminator(
     lineage_pool& lp,
     cdcl& c
 ) : lp(lp), cs(cs), fw(db, lp) {
+    c.set_new_eliminated_resolution_callback(new_eliminated_resolution_callback());
     fw.set_insert_callback(goal_inserted_callback());
     fw.set_resolve_callback(goal_resolved_callback());
     fw.initialize(goals);
@@ -54,6 +55,12 @@ void cdcl_eliminator::flush_backlog_for_goal(const goal_lineage* gl) {
 
 void cdcl_eliminator::eliminate(const goal_lineage* gl, size_t idx) {
     cs.at(gl).erase(idx);
+}
+
+std::function<void(const resolution_lineage*)> cdcl_eliminator::new_eliminated_resolution_callback() {
+    return [this](const resolution_lineage* rl) {
+        new_eliminated_resolutions.push(rl);
+    };
 }
 
 std::function<void(const goal_lineage*)> cdcl_eliminator::goal_inserted_callback() {
