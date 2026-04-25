@@ -22,9 +22,10 @@ struct cdcl_eliminator {
 #ifndef DEBUG
 private:
 #endif
-    bool route_elimination(const resolution_lineage*);
-    bool flush_backlog_for_goal(const goal_lineage*);
-    bool eliminate(const goal_lineage*, size_t);
+    void route_elimination(const resolution_lineage*);
+    void flush_backlog_for_goal(const goal_lineage*);
+    void eliminate(const goal_lineage*, size_t);
+    void mark_unit(const goal_lineage*);
     
     std::function<void(const resolution_lineage*)> new_eliminated_resolution_callback();
     std::function<void(const goal_lineage*)> goal_inserted_callback();
@@ -39,7 +40,7 @@ private:
     std::unordered_set<const goal_lineage*> resolved_goals;
     std::queue<const resolution_lineage*> new_eliminated_resolutions;
     std::unordered_map<const goal_lineage*, std::unordered_set<size_t>> elimination_backlog;
-    bool flush_produced_conflict;
+    bool conflict_register;
 };
 
 #endif
