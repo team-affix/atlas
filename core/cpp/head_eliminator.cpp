@@ -11,13 +11,16 @@ head_eliminator::head_eliminator(
     expr_pool& ep,
     goal_store& gs,
     candidate_store& cs,
-    lineage_pool& lp) : 
+    lineage_pool& lp,
+    std::queue<const resolution_lineage*>& unit_queue) : 
     db(db),
     bm(bm),
     ep(ep),
     gs(gs),
     cs(cs),
-    fw(db, lp) {
+    lp(lp),
+    fw(db, lp),
+    unit_queue(unit_queue) {
     bm.set_rep_changed_callback(rep_changed_callback());
     fw.set_insert_callback(goal_inserted_callback());
     fw.set_resolve_callback(goal_resolved_callback());
@@ -141,10 +144,17 @@ bool head_eliminator::visit_goal_lineage(const goal_lineage* gl) {
     // get the expr for this goal
     const expr* e = gs.at(gl);
 
+    // get if the goal WAS unit
+    bool was_unit = candidates.size() == 1;
+
     std::erase_if(candidates, [this, e](size_t c) {
         const rule& r = db.at(c);
         return !gs.applicable(e, r);
     });
+
+    // if newly unit, push the resolution to the unit queue
+    if (!was_unit && candidates.size() == 1)
+        unit_queue.push(lp.resolution(gl, *candidates.begin()));
 
     return candidates.empty();
 }

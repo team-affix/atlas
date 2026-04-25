@@ -21,7 +21,8 @@ struct head_eliminator {
         expr_pool&,
         goal_store&,
         candidate_store&,
-        lineage_pool&
+        lineage_pool&,
+        std::queue<const resolution_lineage*>&
     );
     bool operator()();
 #ifndef DEBUG
@@ -42,6 +43,8 @@ private:
     expr_pool& ep;
     goal_store& gs;
     candidate_store& cs;
+    lineage_pool& lp;
+    std::queue<const resolution_lineage*>& unit_queue;
 
     frontier_watch fw;
     std::queue<uint32_t> changed_reps;
