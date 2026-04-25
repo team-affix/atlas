@@ -40,3 +40,7 @@ void frontier_watch::set_insert_callback(std::function<void(const goal_lineage*)
 void frontier_watch::set_resolve_callback(std::function<void(const resolution_lineage*)> callback) {
     resolve_callback = callback;
 }
+
+bool frontier_watch::contains(const goal_lineage* gl) const {
+    return current_goals.contains(gl);
+}

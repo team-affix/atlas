@@ -14,6 +14,7 @@ struct frontier_watch {
     void resolve(const resolution_lineage*);
     void set_insert_callback(std::function<void(const goal_lineage*)>);
     void set_resolve_callback(std::function<void(const resolution_lineage*)>);
+    bool contains(const goal_lineage*) const;
 #ifndef DEBUG
 private:
 #endif
