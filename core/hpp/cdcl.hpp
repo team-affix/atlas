@@ -3,7 +3,6 @@
 
 #include "lineage.hpp"
 #include "lemma.hpp"
-#include <queue>
 
 using avoidance = std::unordered_set<const resolution_lineage*>;
 
