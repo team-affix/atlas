@@ -7,14 +7,18 @@ cdcl_eliminator::cdcl_eliminator(
     candidate_store& cs,
     lineage_pool& lp,
     cdcl& c
-) : lp(lp), cs(cs), fw(db, lp) {
+) : lp(lp), cs(cs), fw(db, lp), flush_produced_conflict(false) {
     c.set_new_eliminated_resolution_callback(new_eliminated_resolution_callback());
     fw.set_insert_callback(goal_inserted_callback());
     fw.set_resolve_callback(goal_resolved_callback());
     fw.initialize(goals);
 }
 
-void cdcl_eliminator::execute() {
+bool cdcl_eliminator::operator()() {
+    // if a conflict was produced by the flush, return it
+    if (flush_produced_conflict)
+        return true;
+    
     // fill the elimination backlog with the new eliminated resolutions
     while (!new_eliminated_resolutions.empty()) {
         // get the next eliminated resolution
@@ -22,39 +26,54 @@ void cdcl_eliminator::execute() {
         new_eliminated_resolutions.pop();
         
         // route the elimination properly
-        route_elimination(rl);
+        if (route_elimination(rl))
+            return true;
     }
+
+    // no conflict found
+    return false;
 }
 
-void cdcl_eliminator::route_elimination(const resolution_lineage* rl) {
+bool cdcl_eliminator::route_elimination(const resolution_lineage* rl) {
     // get the parent goal
     const goal_lineage* gl = rl->parent;
 
     // if the goal is resolved, do nothing
     if (resolved_goals.contains(gl))
-        return;
+        return false;
     
     // if the goal not in the frontier, add to backlog and return
     if (!active_goals.contains(gl)) {
         elimination_backlog[gl].insert(rl->idx);
-        return;
+        return false;
     }
 
     // if the goal is in the frontier, eliminate right now in candidate_store
-    eliminate(gl, rl->idx);
-
+    return eliminate(gl, rl->idx);
 }
 
-void cdcl_eliminator::flush_backlog_for_goal(const goal_lineage* gl) {
+bool cdcl_eliminator::flush_backlog_for_goal(const goal_lineage* gl) {
     auto node = elimination_backlog.extract(gl);
 
     // for each index in the backlog, eliminate the candidate
-    for (size_t idx : node.mapped())
-        eliminate(gl, idx);
+    for (size_t idx : node.mapped()) {
+        if (eliminate(gl, idx))
+            return true;
+    }
+
+    // no conflict found
+    return false;
 }
 
-void cdcl_eliminator::eliminate(const goal_lineage* gl, size_t idx) {
-    cs.at(gl).erase(idx);
+bool cdcl_eliminator::eliminate(const goal_lineage* gl, size_t idx) {
+    // get the candidates for the goal
+    auto& candidates = cs.at(gl);
+
+    // eliminate the candidate
+    candidates.erase(idx);
+
+    // if the goal has no candidates, return conflict
+    return candidates.empty();
 }
 
 std::function<void(const resolution_lineage*)> cdcl_eliminator::new_eliminated_resolution_callback() {
@@ -66,7 +85,8 @@ std::function<void(const resolution_lineage*)> cdcl_eliminator::new_eliminated_r
 std::function<void(const goal_lineage*)> cdcl_eliminator::goal_inserted_callback() {
     return [this](const goal_lineage* gl) {
         active_goals.insert(gl);
-        flush_backlog_for_goal(gl);
+        if (flush_backlog_for_goal(gl))
+            flush_produced_conflict = true;
     };
 }
 

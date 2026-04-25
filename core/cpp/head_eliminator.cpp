@@ -24,7 +24,7 @@ head_eliminator::head_eliminator(
     fw.initialize(goals);
 }
 
-void head_eliminator::execute() {
+bool head_eliminator::operator()() {
     std::unordered_set<const goal_lineage*> touched_goals;
     
     while (!changed_reps.empty()) {
@@ -45,12 +45,18 @@ void head_eliminator::execute() {
         update_rep_watches(rep);
     }
 
-    for (const goal_lineage* gl : touched_goals)
-        visit_goal_lineage(gl);
+    // visit the goals that were touched, and if any has no candidates, return conflict.
+    for (const goal_lineage* gl : touched_goals) {
+        if (visit_goal_lineage(gl))
+            return true;
+    }
 
     // clear the queue since there will be invalid rep changes from
     // the temporary frames
     changed_reps = {};
+
+    // no conflict found
+    return false;
 }
 
 void head_eliminator::extract_rep_vars(const expr* e, std::unordered_set<uint32_t>& reps) {
@@ -128,7 +134,7 @@ void head_eliminator::update_rep_watches(uint32_t rep) {
     watch(new_reps, goals);
 }
 
-void head_eliminator::visit_goal_lineage(const goal_lineage* gl) {
+bool head_eliminator::visit_goal_lineage(const goal_lineage* gl) {
     // get the candidates for this goal
     std::unordered_set<size_t>& candidates = cs.at(gl);
 
@@ -139,4 +145,6 @@ void head_eliminator::visit_goal_lineage(const goal_lineage* gl) {
         const rule& r = db.at(c);
         return !gs.applicable(e, r);
     });
+
+    return candidates.empty();
 }

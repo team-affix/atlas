@@ -23,7 +23,7 @@ struct head_eliminator {
         candidate_store&,
         lineage_pool&
     );
-    void execute();
+    bool operator()();
 #ifndef DEBUG
 private:
 #endif
@@ -35,7 +35,7 @@ private:
     std::function<void(const goal_lineage*)> goal_inserted_callback();
     std::function<void(const resolution_lineage*)> goal_resolved_callback();
     void update_rep_watches(uint32_t);
-    void visit_goal_lineage(const goal_lineage*);
+    bool visit_goal_lineage(const goal_lineage*);
 
     const database& db;
     bind_map& bm;
