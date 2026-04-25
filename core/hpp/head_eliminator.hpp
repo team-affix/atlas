@@ -22,8 +22,7 @@ struct head_eliminator {
         goal_store&,
         candidate_store&,
         lineage_pool&,
-        std::queue<const resolution_lineage*>&,
-        frontier_watch&
+        std::queue<const resolution_lineage*>&
     );
     bool operator()();
 #ifndef DEBUG
@@ -46,8 +45,8 @@ private:
     candidate_store& cs;
     lineage_pool& lp;
     std::queue<const resolution_lineage*>& unit_queue;
-    frontier_watch& fw;
 
+    frontier_watch fw;
     std::queue<uint32_t> changed_reps;
     std::unordered_map<uint32_t, std::unordered_set<const goal_lineage*>> rep_to_goals;
     std::unordered_map<const goal_lineage*, std::unordered_set<uint32_t>> goal_to_reps;

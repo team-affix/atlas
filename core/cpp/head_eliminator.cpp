@@ -12,15 +12,14 @@ head_eliminator::head_eliminator(
     goal_store& gs,
     candidate_store& cs,
     lineage_pool& lp,
-    std::queue<const resolution_lineage*>& unit_queue,
-    frontier_watch& fw) : 
+    std::queue<const resolution_lineage*>& unit_queue) : 
     db(db),
     bm(bm),
     ep(ep),
     gs(gs),
     cs(cs),
     lp(lp),
-    fw(fw),
+    fw(db, lp),
     unit_queue(unit_queue) {
     bm.set_rep_changed_callback(rep_changed_callback());
     fw.set_insert_callback(goal_inserted_callback());
