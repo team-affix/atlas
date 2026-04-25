@@ -72,7 +72,7 @@ void cdcl::upsert(size_t id, const avoidance& av) {
 
         // 3. if the elimination was new, call the callback
         if (inserted)
-            new_eliminated_resolutions.push(*av.begin());
+            new_eliminated_resolution_callback(*av.begin());
     }
 }
 
@@ -91,4 +91,8 @@ void cdcl::erase(size_t id) {
 
 bool cdcl::refuted() const {
     return is_refuted;
+}
+
+void cdcl::set_new_eliminated_resolution_callback(std::function<void(const resolution_lineage*)> callback) {
+    new_eliminated_resolution_callback = callback;
 }
