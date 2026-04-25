@@ -16641,7 +16641,11 @@ void test_head_eliminator_update_rep_watches() {
 }
 
 void test_head_eliminator_visit_goal_lineage() {
-    // Test 1: All candidates applicable — no elimination, returns false
+    // Note: goal_inserted_callback now calls visit_goal_lineage() immediately on construction.
+    // These tests verify the end-state after construction, and also call visit_goal_lineage
+    // manually to confirm idempotent / re-invocation behavior.
+
+    // Test 1: All candidates applicable — no elimination on construction or manual call
     {
         trail t;
         expr_pool ep(t);
@@ -16659,14 +16663,16 @@ void test_head_eliminator_visit_goal_lineage() {
         std::queue<const resolution_lineage*> uq;
         head_eliminator he(db, gs_init, bm, ep, gs, cs, lp, uq);
         const goal_lineage* gl0 = lp.goal(nullptr, 0);
+        // Construction already called visit_goal_lineage; all applicable, size still 1
+        assert(cs.at(gl0).size() == 1);
+        // Manual call: was_unit=true (size 1), no change, returns false
         bool result = he.visit_goal_lineage(gl0);
         assert(result == false);
         assert(cs.at(gl0).size() == 1);
-        assert(uq.empty());
         t.pop();
     }
 
-    // Test 2: All candidates inapplicable — candidates set becomes empty, returns true (conflict)
+    // Test 2: All candidates inapplicable — construction already eliminates all
     {
         trail t;
         expr_pool ep(t);
@@ -16685,13 +16691,17 @@ void test_head_eliminator_visit_goal_lineage() {
         std::queue<const resolution_lineage*> uq;
         head_eliminator he(db, gs_init, bm, ep, gs, cs, lp, uq);
         const goal_lineage* gl0 = lp.goal(nullptr, 0);
+        // Construction already called visit_goal_lineage; rule 0 eliminated
+        assert(cs.at(gl0).empty());
+        // Manual call: already empty, returns true (conflict)
         bool result = he.visit_goal_lineage(gl0);
         assert(result == true);
         assert(cs.at(gl0).empty());
         t.pop();
     }
 
-    // Test 3: Some inapplicable, was >1 candidate, now exactly 1 — returns false, unit_queue has entry
+    // Test 3: Some inapplicable — construction reduces from {0,1} to {0} and pushes unit
+    // Verify by checking post-construction state directly.
     {
         trail t;
         expr_pool ep(t);
@@ -16711,15 +16721,50 @@ void test_head_eliminator_visit_goal_lineage() {
         std::queue<const resolution_lineage*> uq;
         head_eliminator he(db, gs_init, bm, ep, gs, cs, lp, uq);
         const goal_lineage* gl0 = lp.goal(nullptr, 0);
-        // Initially cs.at(gl0) = {0, 1}
-        assert(cs.at(gl0).size() == 2);
-        bool result = he.visit_goal_lineage(gl0);
-        assert(result == false);
+        // Construction called visit_goal_lineage: rule 1 eliminated, unit_queue populated
         assert(cs.at(gl0).size() == 1);
         assert(cs.at(gl0).count(0) == 1);
+        // unit_queue should have gl0 resolved with rule 0 (from cdcl_eliminator's check_unit)
         assert(!uq.empty());
         const resolution_lineage* expected = lp.resolution(gl0, 0);
         assert(uq.front() == expected);
+        t.pop();
+    }
+
+    // Test 4: Manual visit_goal_lineage call on goal with 3 rules (2 applicable, 1 not)
+    // uses a new goal inserted manually via cs.insert/gs.insert to bypass auto-call.
+    {
+        trail t;
+        expr_pool ep(t);
+        t.push();
+        sequencer seq(t);
+        bind_map bm(t);
+        lineage_pool lp;
+        database db;
+        const expr* p = ep.functor("p", {});
+        const expr* q = ep.functor("q", {});
+        const expr* r = ep.functor("r", {});
+        db.push_back({p, {}});  // rule 0: p :-
+        db.push_back({p, {}});  // rule 1: p :- (also matches p)
+        db.push_back({q, {}});  // rule 2: q :- (doesn't match p)
+        goals gs_init;  // no initial goals
+        candidate_store cs(db, gs_init, lp);
+        copier cp(seq, ep);
+        goal_store gs(db, gs_init, t, cp, bm, lp);
+        std::queue<const resolution_lineage*> uq;
+        head_eliminator he(db, gs_init, bm, ep, gs, cs, lp, uq);
+        // Manually insert a new goal p without triggering the callback
+        const goal_lineage* gl0 = lp.goal(nullptr, 0);
+        cs.insert(gl0, {0, 1, 2});
+        gs.insert(gl0, p);
+        // Manually call visit_goal_lineage: was {0,1,2}, removes rule 2 (q mismatch)
+        bool result = he.visit_goal_lineage(gl0);
+        // was_unit=false (3 candidates), now 2 → not unit, returns false
+        assert(result == false);
+        assert(cs.at(gl0).size() == 2);
+        assert(cs.at(gl0).count(0) == 1);
+        assert(cs.at(gl0).count(1) == 1);
+        assert(uq.empty());  // 3→2, not newly unit
         t.pop();
     }
 }
@@ -16862,7 +16907,7 @@ void test_cdcl_eliminator_constructor() {
         assert(ce.resolved_goals.empty());
         assert(ce.new_eliminated_resolutions.empty());
         assert(ce.elimination_backlog.empty());
-        assert(ce.flush_produced_conflict == false);
+        assert(ce.conflict_register == false);
         t.pop();
     }
 
@@ -16909,7 +16954,7 @@ void test_cdcl_eliminator_constructor() {
 }
 
 void test_cdcl_eliminator_eliminate() {
-    // Test 1: was_unit=false, post-erase size > 1 → returns false, unit_queue unchanged
+    // Test 1: post-erase size > 1 → no conflict, no unit push
     {
         trail t;
         expr_pool ep(t);
@@ -16926,14 +16971,14 @@ void test_cdcl_eliminator_eliminate() {
         cdcl_eliminator ce(db, gs_init, ep, cs, lp, c, uq);
         const goal_lineage* gl0 = lp.goal(nullptr, 0);
         assert(cs.at(gl0).size() == 3);
-        bool result = ce.eliminate(gl0, 0);
-        assert(result == false);
+        ce.eliminate(gl0, 0);
+        assert(!ce.conflict_register);
         assert(cs.at(gl0).size() == 2);
         assert(uq.empty());
         t.pop();
     }
 
-    // Test 2: was_unit=false, post-erase size == 1 → returns false, unit_queue has entry
+    // Test 2: was not unit, post-erase size == 1 → no conflict, unit_queue has entry
     {
         trail t;
         expr_pool ep(t);
@@ -16948,14 +16993,14 @@ void test_cdcl_eliminator_eliminate() {
         std::queue<const resolution_lineage*> uq;
         cdcl_eliminator ce(db, gs_init, ep, cs, lp, c, uq);
         const goal_lineage* gl0 = lp.goal(nullptr, 0);
-        bool result = ce.eliminate(gl0, 0);
-        assert(result == false);
+        ce.eliminate(gl0, 0);
+        assert(!ce.conflict_register);
         assert(cs.at(gl0).size() == 1);
         assert(!uq.empty());
         t.pop();
     }
 
-    // Test 3: was_unit=false, post-erase size == 0 → returns true (conflict)
+    // Test 3: post-erase size == 0 → conflict_register set
     {
         trail t;
         expr_pool ep(t);
@@ -16969,13 +17014,13 @@ void test_cdcl_eliminator_eliminate() {
         std::queue<const resolution_lineage*> uq;
         cdcl_eliminator ce(db, gs_init, ep, cs, lp, c, uq);
         const goal_lineage* gl0 = lp.goal(nullptr, 0);
-        bool result = ce.eliminate(gl0, 0);
-        assert(result == true);
+        ce.eliminate(gl0, 0);
+        assert(ce.conflict_register);
         assert(cs.at(gl0).empty());
         t.pop();
     }
 
-    // Test 4: was_unit=true (size 1), eliminate it → returns true (conflict)
+    // Test 4: was_unit=true (size 1), eliminate it → conflict_register set, no unit push
     {
         trail t;
         expr_pool ep(t);
@@ -16985,21 +17030,23 @@ void test_cdcl_eliminator_eliminate() {
         db.push_back({ep.functor("p", {}), {}});
         goals gs_init = {ep.functor("p", {})};
         candidate_store cs(db, gs_init, lp);
-        // Manually make cs.at(gl0) = {0} (already the case after construction)
         cdcl c;
         std::queue<const resolution_lineage*> uq;
         cdcl_eliminator ce(db, gs_init, ep, cs, lp, c, uq);
         const goal_lineage* gl0 = lp.goal(nullptr, 0);
+        // After head_eliminator's goal_inserted_callback, goal is already unit-detected.
+        // Drain uq first so we can check it stays empty after eliminate.
+        while (!uq.empty()) uq.pop();
         assert(cs.at(gl0).size() == 1);  // was_unit = true
-        bool result = ce.eliminate(gl0, 0);
-        assert(result == true);
-        assert(uq.empty());  // was_unit, no new push
+        ce.eliminate(gl0, 0);
+        assert(ce.conflict_register);
+        assert(uq.empty());  // was_unit, so check_unit skipped; no new unit push
         t.pop();
     }
 }
 
 void test_cdcl_eliminator_route_elimination() {
-    // Test 1: Goal in resolved_goals → returns false immediately
+    // Test 1: Goal in resolved_goals → does nothing (no conflict, backlog unchanged)
     {
         trail t;
         expr_pool ep(t);
@@ -17015,13 +17062,13 @@ void test_cdcl_eliminator_route_elimination() {
         const goal_lineage* gl0 = lp.goal(nullptr, 0);
         const resolution_lineage* rl0 = lp.resolution(gl0, 0);
         ce.resolved_goals.insert(gl0);
-        bool result = ce.route_elimination(rl0);
-        assert(result == false);
+        ce.route_elimination(rl0);
+        assert(!ce.conflict_register);
         assert(cs.at(gl0).size() == 1);  // unchanged
         t.pop();
     }
 
-    // Test 2: Goal not in active_goals → adds to backlog, returns false
+    // Test 2: Goal not in active_goals → adds to backlog, no conflict
     {
         trail t;
         expr_pool ep(t);
@@ -17035,14 +17082,14 @@ void test_cdcl_eliminator_route_elimination() {
         cdcl_eliminator ce(db, gs_init, ep, cs, lp, c, uq);
         const goal_lineage* gl0 = lp.goal(nullptr, 0);
         const resolution_lineage* rl0 = lp.resolution(gl0, 0);
-        bool result = ce.route_elimination(rl0);
-        assert(result == false);
+        ce.route_elimination(rl0);
+        assert(!ce.conflict_register);
         assert(ce.elimination_backlog.count(gl0) == 1);
         assert(ce.elimination_backlog.at(gl0).count(0) == 1);
         t.pop();
     }
 
-    // Test 3: Goal in active_goals → calls eliminate; verify cs updated
+    // Test 3: Goal in active_goals → calls eliminate; verify cs updated and conflict set
     {
         trail t;
         expr_pool ep(t);
@@ -17057,16 +17104,16 @@ void test_cdcl_eliminator_route_elimination() {
         cdcl_eliminator ce(db, gs_init, ep, cs, lp, c, uq);
         const goal_lineage* gl0 = lp.goal(nullptr, 0);
         const resolution_lineage* rl0 = lp.resolution(gl0, 0);
-        bool result = ce.route_elimination(rl0);
-        // Was 1 candidate, was_unit=true, erased → conflict
-        assert(result == true);
+        ce.route_elimination(rl0);
+        // Was 1 candidate, erased → conflict_register set
+        assert(ce.conflict_register);
         assert(cs.at(gl0).empty());
         t.pop();
     }
 }
 
 void test_cdcl_eliminator_flush_backlog_for_goal() {
-    // Test 1: No backlog for goal → returns false, no changes
+    // Test 1: No backlog for goal → no changes, conflict_register stays false
     {
         trail t;
         expr_pool ep(t);
@@ -17080,13 +17127,13 @@ void test_cdcl_eliminator_flush_backlog_for_goal() {
         std::queue<const resolution_lineage*> uq;
         cdcl_eliminator ce(db, gs_init, ep, cs, lp, c, uq);
         const goal_lineage* gl0 = lp.goal(nullptr, 0);
-        bool result = ce.flush_backlog_for_goal(gl0);
-        assert(result == false);
+        ce.flush_backlog_for_goal(gl0);
+        assert(!ce.conflict_register);
         assert(cs.at(gl0).size() == 1);
         t.pop();
     }
 
-    // Test 2: One backlogged idx, non-conflicting (> 1 candidate after remove) → returns false
+    // Test 2: One backlogged idx, non-conflicting (> 1 candidate after remove)
     {
         trail t;
         expr_pool ep(t);
@@ -17103,14 +17150,14 @@ void test_cdcl_eliminator_flush_backlog_for_goal() {
         cdcl_eliminator ce(db, gs_init, ep, cs, lp, c, uq);
         const goal_lineage* gl0 = lp.goal(nullptr, 0);
         ce.elimination_backlog[gl0].insert(0);
-        bool result = ce.flush_backlog_for_goal(gl0);
-        assert(result == false);
+        ce.flush_backlog_for_goal(gl0);
+        assert(!ce.conflict_register);
         assert(cs.at(gl0).size() == 2);
         assert(ce.elimination_backlog.count(gl0) == 0);
         t.pop();
     }
 
-    // Test 3: One backlogged idx that causes conflict → returns true
+    // Test 3: One backlogged idx that causes conflict → conflict_register set
     {
         trail t;
         expr_pool ep(t);
@@ -17125,8 +17172,8 @@ void test_cdcl_eliminator_flush_backlog_for_goal() {
         cdcl_eliminator ce(db, gs_init, ep, cs, lp, c, uq);
         const goal_lineage* gl0 = lp.goal(nullptr, 0);
         ce.elimination_backlog[gl0].insert(0);
-        bool result = ce.flush_backlog_for_goal(gl0);
-        assert(result == true);
+        ce.flush_backlog_for_goal(gl0);
+        assert(ce.conflict_register);
         assert(cs.at(gl0).empty());
         t.pop();
     }
@@ -17156,6 +17203,8 @@ void test_cdcl_eliminator_resolve() {
     }
 
     // Test 2: resolve(rl) with 2-body → parent in resolved_goals, two children in active_goals
+    // cs.resolve must be called first (as in sim::resolve) so children exist in cs
+    // before ce's goal_inserted_callback fires check_unit/check_conflict on them.
     {
         trail t;
         expr_pool ep(t);
@@ -17170,6 +17219,7 @@ void test_cdcl_eliminator_resolve() {
         cdcl_eliminator ce(db, gs_init, ep, cs, lp, c, uq);
         const goal_lineage* gl0 = lp.goal(nullptr, 0);
         const resolution_lineage* rl0 = lp.resolution(gl0, 0);
+        cs.resolve(rl0);  // must happen before ce.resolve so children exist in cs
         ce.resolve(rl0);
         assert(ce.resolved_goals.count(gl0) == 1);
         const goal_lineage* child0 = lp.goal(rl0, 0);
@@ -17247,7 +17297,7 @@ void test_cdcl_eliminator_operator() {
         t.pop();
     }
 
-    // Test 4: flush_produced_conflict == true → returns true immediately
+    // Test 4: conflict_register == true → operator() returns true immediately
     {
         trail t;
         expr_pool ep(t);
@@ -17259,7 +17309,7 @@ void test_cdcl_eliminator_operator() {
         cdcl c;
         std::queue<const resolution_lineage*> uq;
         cdcl_eliminator ce(db, gs_init, ep, cs, lp, c, uq);
-        ce.flush_produced_conflict = true;
+        ce.conflict_register = true;
         assert(ce() == true);
         t.pop();
     }
@@ -17631,6 +17681,8 @@ void test_sim_resolve() {
     }
 
     // Test 2: Resolve goal with non-empty body → old goal removed, sub-goal added
+    // Sub-goal q has rule p:-q in db; head_eliminator immediately filters it (p≠q),
+    // leaving sub-goal with 0 candidates and conflict detected.
     {
         trail t;
         t.push();
@@ -17663,10 +17715,11 @@ void test_sim_resolve() {
         const goal_lineage* sub_gl = lp.goal(rl, 0);
         assert(sim.gs.at(sub_gl) == ep.functor("q", {}));
 
-        // cs tracks the same sub-goal
+        // cs tracks the same sub-goal; head_eliminator immediately filters
+        // the only rule (p:-q has head p ≠ q) → sub-goal has 0 candidates → conflict
         assert(sim.cs.get().size() == 1);
-        // Old goal no longer in cs
-        assert(sim.cs.at(sub_gl).size() == 1); // db has 1 rule
+        assert(sim.cs.at(sub_gl).empty());
+        assert(sim.ce.conflict_register);
     }
 
     // Test 3: c.constrain effect - avoidance reduced from 2 to 1 → remaining rl eliminated
@@ -17806,8 +17859,8 @@ void test_sim() {
     }
 
     // Test 4: Single fact p:- → goal p has 1 candidate from the start.
-    // With event-driven design, initial single-candidate goals go through decide_one() (not unit queue).
-    // Unit queue only fills when elimination REDUCES a goal from >1 to exactly 1 candidate.
+    // cdcl_eliminator.check_unit fires at construction → unit_queue populated immediately.
+    // derive_one() path taken; decide_one() never called.
     {
         trail t; t.push();
         expr_pool ep(t); bind_map bm(t); sequencer seq(t); lineage_pool lp;
@@ -17817,16 +17870,14 @@ void test_sim() {
         gs.push_back(ep.functor("p", {}));
         cdcl c;
 
-        const goal_lineage* gl0 = lp.goal(nullptr, 0);
         sim_mock s(10, db, gs, t, seq, ep, bm, lp, c);
-        s.scripted.push_back(lp.resolution(gl0, 0));  // scripted: decide rule 0
 
         bool result = s();
         assert(result == true);
         assert(s.rs.size() == 1);
-        assert(s.ds.size() == 1);      // it was a decision (single candidate from start)
+        assert(s.ds.size() == 0);      // derived via unit_queue, not decided
         assert(s.on_resolve_cnt == 1);
-        assert(s.decision_idx == 1);
+        assert(s.decision_idx == 0);   // decide_one never called
     }
 
     // Test 5: Two candidates for goal → decide_one() invoked with scripted decision
@@ -17856,8 +17907,11 @@ void test_sim() {
         assert(s.ds.count(lp.resolution(gl0, 1)) == 1);
     }
 
-    // Test 6: Chain p :- q, q :- . → each goal has multiple candidates (all rules) from start.
-    // With event-driven design, no elimination fires automatically, so both go through decide_one().
+    // Test 6: Chain p :- q, q :- .
+    // head_eliminator filters: p gets {rule0} (p:-q matches p; q:- does not).
+    // cdcl_eliminator.check_unit fires: unit_queue populated for p immediately.
+    // After resolving p → q created; head_eliminator filters q to {rule1} (q:- matches q).
+    // Both resolved via derive_one(); no decisions.
     {
         trail t; t.push();
         expr_pool ep(t); bind_map bm(t); sequencer seq(t); lineage_pool lp;
@@ -17868,25 +17922,18 @@ void test_sim() {
         gs.push_back(ep.functor("p", {}));
         cdcl c;
 
-        const goal_lineage* gl0 = lp.goal(nullptr, 0);
         sim_mock s(10, db, gs, t, seq, ep, bm, lp, c);
-        // goal p: 2 candidates {0,1}, decide rule 0 (p :- q)
-        s.scripted.push_back(lp.resolution(gl0, 0));
-        // After resolving p with rule0, subgoal q is created.
-        // goal q: 2 candidates {0,1}, decide rule 1 (q :- .)
-        const resolution_lineage* rl0 = lp.resolution(gl0, 0);
-        s.scripted.push_back(lp.resolution(lp.goal(rl0, 0), 1));
 
         bool result = s();
         assert(result == true);
         assert(s.rs.size() == 2);
-        assert(s.ds.size() == 2);      // both were decisions (not derives)
+        assert(s.ds.size() == 0);      // all derived via unit_queue
         assert(s.on_resolve_cnt == 2);
-        assert(s.decision_idx == 2);
+        assert(s.decision_idx == 0);   // decide_one never called
     }
 
     // Test 7: max_resolutions cap mid-run: p :- q :- r :- . needs 3 steps but cap=2
-    // With event-driven design, each goal goes through decide_one().
+    // head_eliminator filters each goal to exactly 1 candidate; all resolved via derive_one().
     {
         trail t; t.push();
         expr_pool ep(t); bind_map bm(t); sequencer seq(t); lineage_pool lp;
@@ -17898,25 +17945,20 @@ void test_sim() {
         gs.push_back(ep.functor("p", {}));
         cdcl c;
 
-        const goal_lineage* gl0 = lp.goal(nullptr, 0);
         sim_mock s(2, db, gs, t, seq, ep, bm, lp, c);
-        // Script 2 decisions: goal p→rule0, then goal q→rule1
-        s.scripted.push_back(lp.resolution(gl0, 0));
-        const resolution_lineage* rl0 = lp.resolution(gl0, 0);
-        s.scripted.push_back(lp.resolution(lp.goal(rl0, 0), 1));
 
         bool result = s();
         // Resolves p→q then q→r (2 steps hits cap); r still pending → not solved
         assert(result == false);
         assert(s.rs.size() == 2);
-        assert(s.ds.size() == 2);
+        assert(s.ds.size() == 0);      // all derived
         assert(s.on_resolve_cnt == 2);
-        assert(s.decision_idx == 2);
+        assert(s.decision_idx == 0);
     }
 
-    // Test 8: Two decisions: p has 3 candidates (rules 0,1,2), scripted to choose rule1 (p:-q),
-    // then q has 3 candidates, scripted to choose rule2 (q:-) → solved.
-    // With event-driven design, each goal goes through decide_one() since no elimination fires.
+    // Test 8: p has 2 applicable candidates (rule0 p:-r, rule1 p:-q); rule2 (q:-) filtered by he.
+    // head_eliminator filters: p gets {0,1} (both p-headed rules applicable; q:- not).
+    // decide_one() picks rule1 (p:-q). After resolve, q gets {2} (q:- is applicable); derived.
     {
         trail t; t.push();
         expr_pool ep(t); bind_map bm(t); sequencer seq(t); lineage_pool lp;
@@ -17930,17 +17972,16 @@ void test_sim() {
 
         const goal_lineage* gl0 = lp.goal(nullptr, 0);
         sim_mock s(10, db, gs, t, seq, ep, bm, lp, c);
+        // p has {0,1} candidates (he filtered rule2); needs 1 decision
         s.scripted.push_back(lp.resolution(gl0, 1));  // decide: choose rule 1 (p :- q)
-        // After resolving p with rule1, subgoal q is created
-        const resolution_lineage* rl0 = lp.resolution(gl0, 1);
-        s.scripted.push_back(lp.resolution(lp.goal(rl0, 0), 2));  // decide: choose rule 2 (q :-)
+        // After resolving p with rule1, subgoal q filtered by he to {2}; derive_one handles it
 
         bool result = s();
         assert(result == true);
-        assert(s.rs.size() == 2);      // 2 decisions
-        assert(s.ds.size() == 2);      // both decisions
+        assert(s.rs.size() == 2);      // 1 decision + 1 derive
+        assert(s.ds.size() == 1);      // only p's resolution was a decision
         assert(s.on_resolve_cnt == 2);
-        assert(s.decision_idx == 2);
+        assert(s.decision_idx == 1);
 
         const resolution_lineage* decision_rl = lp.resolution(gl0, 1);
         assert(s.ds.count(decision_rl) == 1);
@@ -17948,7 +17989,7 @@ void test_sim() {
     }
 
     // Test 9: get_resolutions() and get_decisions() reflect operator() results
-    // Single fact p:-, 1 scripted decision needed
+    // Single fact p:- → unit_queue populated at construction → derive_one() used, no decision.
     {
         trail t; t.push();
         expr_pool ep(t); bind_map bm(t); sequencer seq(t); lineage_pool lp;
@@ -17957,16 +17998,14 @@ void test_sim() {
         goals gs;
         gs.push_back(ep.functor("p", {}));
         cdcl c;
-        const goal_lineage* gl0 = lp.goal(nullptr, 0);
         sim_mock s(10, db, gs, t, seq, ep, bm, lp, c);
-        s.scripted.push_back(lp.resolution(gl0, 0));  // scripted: decide rule 0
 
         s();
 
         const resolutions& r = s.get_resolutions();
         const decisions& d   = s.get_decisions();
         assert(r.size() == 1);
-        assert(d.size() == 1);  // the single-candidate case is a decision now
+        assert(d.size() == 0);  // derived, not decided
         assert(&r == &s.rs);
         assert(&d == &s.ds);
     }
