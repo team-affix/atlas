@@ -119,6 +119,7 @@ std::function<void(uint32_t)> head_eliminator::rep_changed_callback() {
 
 std::function<void(const goal_lineage*)> head_eliminator::goal_inserted_callback() {
     return [this](const goal_lineage* gl) {
+        visit_goal_lineage(gl);
         std::unordered_set<uint32_t> reps;
         extract_rep_vars(gs.at(gl), reps);
         watch(reps, {gl});
