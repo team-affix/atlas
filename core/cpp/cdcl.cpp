@@ -96,3 +96,7 @@ bool cdcl::refuted() const {
 void cdcl::set_new_eliminated_resolution_callback(std::function<void(const resolution_lineage*)> callback) {
     new_eliminated_resolution_callback = callback;
 }
+
+const std::set<const resolution_lineage*>& cdcl::get_eliminated_resolutions() const {
+    return eliminated_resolutions;
+}

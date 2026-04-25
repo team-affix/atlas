@@ -12,6 +12,7 @@ struct cdcl {
     void constrain(const resolution_lineage*);
     bool refuted() const;
     void set_new_eliminated_resolution_callback(std::function<void(const resolution_lineage*)>);
+    const std::set<const resolution_lineage*>& get_eliminated_resolutions() const;
     #ifndef DEBUG
     private:
     #endif
