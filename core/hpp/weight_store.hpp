@@ -3,15 +3,16 @@
 
 #include "frontier.hpp"
 #include "rule.hpp"
+#include "weight_expander.hpp"
 
-struct weight_store : frontier<double> {
+struct weight_store : frontier<double, weight_expander> {
     weight_store(
         const goals&,
         const database&,
         lineage_pool&
     );
     double total() const;
-    std::vector<double> expand(const double&, const rule&) override;
+    weight_expander make_expander(const double&, const rule&) override;
 #ifndef DEBUG
 private:
 #endif
