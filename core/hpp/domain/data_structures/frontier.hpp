@@ -2,13 +2,13 @@
 #define FRONTIER_HPP
 
 #include <unordered_map>
-#include "lineage.hpp"
+#include "lineage_pool.hpp"
 #include "../value_objects/defs.hpp"
 
 template<typename T, typename Expander>
 struct frontier {
     virtual ~frontier() = default;
-    frontier();
+    frontier(database&, lineage_pool&);
     void insert(const goal_lineage*, const T&);
     void resolve(const resolution_lineage*);
     
@@ -26,9 +26,9 @@ private:
 };
 
 template<typename T, typename Expander>
-frontier<T, Expander>::frontier() :
-    db(locator::locate<database>(locator_keys::inst_database)),
-    lp(locator::locate<lineage_pool>(locator_keys::inst_lineage_pool)) {
+frontier<T, Expander>::frontier(database& db, lineage_pool& lp) :
+    db(db),
+    lp(lp) {
 }
 
 template<typename T, typename Expander>
