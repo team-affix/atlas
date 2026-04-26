@@ -3,11 +3,11 @@
 
 cdcl::cdcl() :
     cdcl_eliminated_candidate_topic(locator::locate<event_topic<cdcl_eliminated_candidate_event>>()),
-    avoidances(),
-    watched_goals(),
     conflicted_topic(locator::locate<event_topic<conflicted_event>>()),
-    eliminated_resolutions(),
-    next_avoidance_id(0) {
+    avoidances(locator::locate<trail>()),
+    watched_goals(locator::locate<trail>()),
+    eliminated_resolutions(locator::locate<trail>()),
+    next_avoidance_id(locator::locate<trail>()) {
 }
 
 void cdcl::learn(const lemma& l) {
@@ -15,7 +15,7 @@ void cdcl::learn(const lemma& l) {
     avoidance av = l.get_resolutions();
 
     // 2. get a new id for the avoidance
-    size_t id = next_avoidance_id++;
+    size_t id = next_avoidance_id();
 
     // 3. if the avoidance is empty, we are refuted.
     //    we should never achieve refutation in upsert() since we should never make
