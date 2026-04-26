@@ -9,8 +9,8 @@ sim::sim(sim_args args) :
     cp(args.vars, args.ep),
     c(args.c),
     ea(db, args.gl, args.bm, args.ep, gs, cs, lp, c),
-    rs({}),
-    ds({}),
+    rs(),
+    ds(),
     max_resolutions(args.max_resolutions)
 {}
 
