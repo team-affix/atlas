@@ -1,22 +1,24 @@
 #include "../hpp/solver.hpp"
+#include "../hpp/locator.hpp"
 
-solver::solver(solver_args args) :
-    db(args.db),
-    gl(args.gl),
-    t(args.t),
-    vars(args.vars),
-    bm(args.bm),
-    ep(args.t),
+solver::solver() :
+    db(locator::locate<database>(locator_keys::inst_database)),
+    gl(locator::locate<goals>(locator_keys::inst_goals)),
+    t(locator::locate<trail>(locator_keys::inst_trail)),
+    vars(locator::locate<sequencer>(locator_keys::inst_var_sequencer)),
+    bm(locator::locate<bind_map>(locator_keys::inst_bind_map)),
+    ep(),
     lp(),
-    max_resolutions(args.max_resolutions),
+    max_resolutions(0),
     c(),
-    managed_sim(nullptr)
-{
+    managed_sim(nullptr) {
+    locator::push_frame();
     t.push();
 }
 
 solver::~solver() {
     t.pop();
+    locator::pop_frame();
 }
 
 bool solver::operator()(std::optional<resolutions>& soln) {
@@ -24,8 +26,10 @@ bool solver::operator()(std::optional<resolutions>& soln) {
 
     // tear down the previous frame and sim, then set up a fresh frame
     t.pop();
+    locator::pop_frame();
     managed_sim = nullptr;
     lp.trim();
+    locator::push_frame();
     t.push();
 
     if (c.refuted())

@@ -1,11 +1,10 @@
 #include "../hpp/mcts_decider.hpp"
+#include "../hpp/locator.hpp"
 
-mcts_decider::mcts_decider(
-    const candidate_store& cs,
-    monte_carlo::simulation<choice, std::mt19937>& sim
-)
-    : cs(cs), sim(sim)
-{}
+mcts_decider::mcts_decider() :
+    cs(locator::locate<candidate_store>(locator_keys::inst_candidate_store)),
+    sim(locator::locate<monte_carlo::simulation<choice, std::mt19937>>(locator_keys::inst_mcts_sim)) {
+}
 
 std::pair<const goal_lineage*, size_t> mcts_decider::operator()() {
     const goal_lineage* chosen_gl = choose_goal();

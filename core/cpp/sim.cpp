@@ -1,26 +1,27 @@
 #include "../hpp/sim.hpp"
+#include "../hpp/locator.hpp"
 
-sim::sim(sim_args args) :
-    db(args.db),
-    t(args.t),
-    lp(args.lp),
-    gs(args.db, args.gl, args.t, cp, args.bm, args.lp),
-    cs(args.db, args.gl, args.lp),
-    cp(args.vars, args.ep),
-    c(args.c),
+sim::sim() :
+    db(locator::locate<database>(locator_keys::inst_database)),
+    t(locator::locate<trail>(locator_keys::inst_trail)),
+    lp(locator::locate<lineage_pool>(locator_keys::inst_lineage_pool)),
+    gs(),
+    cs(),
+    cp(),
+    c(),
     goal_inserted_topic(),
     goal_resolved_topic(),
     new_eliminated_resolution_topic(),
     unit_topic(),
     unit_subscription(unit_topic),
-    icd(cs, lp, goal_inserted_topic, unit_topic),
-    ce(cs, lp, goal_inserted_topic, goal_resolved_topic, new_eliminated_resolution_topic, unit_topic),
-    he(db, args.gl, args.bm, args.ep, gs, cs, lp, args.rep_changed_topic, goal_inserted_topic, goal_resolved_topic, unit_topic),
-    fw(args.db, args.gl, args.lp, goal_inserted_topic, goal_resolved_topic),
+    icd(),
+    ce(),
+    he(),
+    fw(),
     rs(),
     ds(),
-    max_resolutions(args.max_resolutions)
-{}
+    max_resolutions(0) {
+}
 
 bool sim::operator()() {
 

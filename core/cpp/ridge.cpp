@@ -1,20 +1,20 @@
 #include "../hpp/ridge.hpp"
 #include "../hpp/ridge_sim.hpp"
+#include "../hpp/locator.hpp"
 
-ridge::ridge(solver_args sa, mcts_solver_args ma) :
-    solver(sa),
-    exploration_constant(ma.exploration_constant),
-    rng(ma.rng),
+ridge::ridge() :
+    solver(),
+    exploration_constant(locator::locate<double>(locator_keys::inst_mcts_exploration_constant)),
+    rng(locator::locate<std::mt19937>(locator_keys::inst_mcts_rng)),
     root(),
-    mc_sim(std::nullopt)
-{}
+    mc_sim(std::nullopt) {
+    max_resolutions = 1000;
+}
 
 std::unique_ptr<sim> ridge::construct_sim() {
     mc_sim.emplace(root, exploration_constant, rng);
-    return std::make_unique<ridge_sim>(
-        sim_args{max_resolutions, db, gl, t, vars, ep, bm, lp, c},
-        mcts_sim_args{*mc_sim}
-    );
+    locator::bind(locator_keys::inst_mcts_sim, *mc_sim);
+    return std::make_unique<ridge_sim>();
 }
 
 void ridge::terminate(sim& s) {

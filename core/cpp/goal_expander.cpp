@@ -1,13 +1,15 @@
 #include <stdexcept>
 #include "../hpp/goal_expander.hpp"
+#include "../hpp/locator.hpp"
 #include "../hpp/bind_map.hpp"
 #include "../hpp/copier.hpp"
 
 goal_expander::goal_expander(
     const expr* const& goal,
-    const rule& r,
-    copier& cp,
-    bind_map& bm) : cp(cp), subgoal_index(0) {
+    const rule& r) :
+    cp(locator::locate<copier>(locator_keys::inst_copier)), subgoal_index(0) {
+
+    bind_map& bm = locator::locate<bind_map>(locator_keys::inst_bind_map);
 
     // copy the head of the rule
     const expr* copied_head = cp(r.head, translation_map);

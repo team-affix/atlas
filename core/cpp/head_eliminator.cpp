@@ -1,28 +1,17 @@
 #include "../hpp/head_eliminator.hpp"
+#include "../hpp/locator.hpp"
 
-head_eliminator::head_eliminator(
-    const database& db,
-    const goals& goals,
-    bind_map& bm,
-    expr_pool& ep,
-    goal_store& gs,
-    candidate_store& cs,
-    lineage_pool& lp,
-    topic<uint32_t>& rep_changed_topic,
-    topic<const goal_lineage*>& goal_inserted_topic,
-    topic<const resolution_lineage*>& goal_resolved_topic,
-    topic<const resolution_lineage*>& unit_topic) : 
-    db(db),
-    bm(bm),
-    ep(ep),
-    gs(gs),
-    cs(cs),
-    lp(lp),
-    rep_changed_subscription(rep_changed_topic),
-    goal_inserted_subscription(goal_inserted_topic),
-    goal_resolved_subscription(goal_resolved_topic),
-    unit_topic(unit_topic) {
-
+head_eliminator::head_eliminator() :
+    db(locator::locate<database>(locator_keys::inst_database)),
+    bm(locator::locate<bind_map>(locator_keys::inst_bind_map)),
+    ep(locator::locate<expr_pool>(locator_keys::inst_expr_pool)),
+    gs(locator::locate<goal_store>(locator_keys::inst_goal_store)),
+    cs(locator::locate<candidate_store>(locator_keys::inst_candidate_store)),
+    lp(locator::locate<lineage_pool>(locator_keys::inst_lineage_pool)),
+    rep_changed_subscription(locator::locate<topic<uint32_t>>(locator_keys::inst_rep_changed_topic)),
+    goal_inserted_subscription(locator::locate<topic<const goal_lineage*>>(locator_keys::inst_goal_inserted_topic)),
+    goal_resolved_subscription(locator::locate<topic<const resolution_lineage*>>(locator_keys::inst_goal_resolved_topic)),
+    unit_topic(locator::locate<topic<const resolution_lineage*>>(locator_keys::inst_unit_topic)) {
 }
 
 bool head_eliminator::operator()() {

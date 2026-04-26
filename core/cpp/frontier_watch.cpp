@@ -1,17 +1,13 @@
 #include "../hpp/frontier_watch.hpp"
+#include "../hpp/locator.hpp"
 
-frontier_watch::frontier_watch(
-    const database& db,
-    const goals& goals,
-    lineage_pool& lp,
-    topic<const goal_lineage*>& goal_inserted_topic,
-    topic<const resolution_lineage*>& goal_resolved_topic)
-    :
-    db(db),
-    lp(lp),
-    goal_inserted_topic(goal_inserted_topic),
-    goal_resolved_topic(goal_resolved_topic) {
-    for (int i = 0; i < goals.size(); ++i)
+frontier_watch::frontier_watch() :
+    db(locator::locate<database>(locator_keys::inst_database)),
+    lp(locator::locate<lineage_pool>(locator_keys::inst_lineage_pool)),
+    goal_inserted_topic(locator::locate<topic<const goal_lineage*>>(locator_keys::inst_goal_inserted_topic)),
+    goal_resolved_topic(locator::locate<topic<const resolution_lineage*>>(locator_keys::inst_goal_resolved_topic)) {
+    const goals& gl = locator::locate<goals>(locator_keys::inst_goals);
+    for (int i = 0; i < gl.size(); ++i)
         goal_inserted_topic.produce(lp.goal(nullptr, i));
 }
 

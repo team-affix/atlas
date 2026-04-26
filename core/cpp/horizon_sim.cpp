@@ -1,10 +1,10 @@
 #include "../hpp/horizon_sim.hpp"
 
-horizon_sim::horizon_sim(sim_args sa, mcts_sim_args ma) :
-    sim(sa),
-    dec(cs, ma.mc_sim),
-    ws(sa.gl, sa.db, sa.lp)
-{}
+horizon_sim::horizon_sim() :
+    sim(),
+    dec(),
+    ws() {
+}
 
 double horizon_sim::reward() {
     return ws.total();

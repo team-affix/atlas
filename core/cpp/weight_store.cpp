@@ -1,15 +1,14 @@
 #include "../hpp/weight_store.hpp"
+#include "../hpp/locator.hpp"
 
-weight_store::weight_store(
-    const goals& goals,
-    const database& db,
-    lineage_pool& lp
-) : frontier<double, weight_expander>(db, lp), cgw(0.0) {
-    if (goals.size() == 0)
+weight_store::weight_store() : frontier<double, weight_expander>(), cgw(0.0) {
+    const goals& gl = locator::locate<goals>(locator_keys::inst_goals);
+    lineage_pool& lpool = locator::locate<lineage_pool>(locator_keys::inst_lineage_pool);
+    if (gl.size() == 0)
         return;
-    double weight_per_goal = 1.0 / (double)goals.size();
-    for (size_t i = 0; i < goals.size(); ++i)
-        insert(lp.goal(nullptr, i), weight_per_goal);
+    double weight_per_goal = 1.0 / (double)gl.size();
+    for (size_t i = 0; i < gl.size(); ++i)
+        insert(lpool.goal(nullptr, i), weight_per_goal);
 }
 
 double weight_store::total() const {

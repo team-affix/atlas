@@ -1,5 +1,6 @@
 #include "../hpp/candidate_store.hpp"
-    
+#include "../hpp/locator.hpp"
+
 candidate_store::candidate_store() :
     frontier<std::unordered_set<size_t>, candidate_expander>()
 {

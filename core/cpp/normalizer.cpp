@@ -1,9 +1,10 @@
 #include <stdexcept>
 #include "../hpp/normalizer.hpp"
+#include "../hpp/locator.hpp"
 
-normalizer::normalizer(expr_pool& expr_pool_ref, bind_map& bind_map_ref)
-    : expr_pool_ref(expr_pool_ref), bind_map_ref(bind_map_ref) {
-
+normalizer::normalizer() :
+    expr_pool_ref(locator::locate<expr_pool>(locator_keys::inst_expr_pool)),
+    bind_map_ref(locator::locate<bind_map>(locator_keys::inst_bind_map)) {
 }
 
 const expr* normalizer::operator()(const expr* e) {

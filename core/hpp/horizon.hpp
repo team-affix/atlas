@@ -5,11 +5,10 @@
 #include <random>
 #include "solver.hpp"
 #include "mcts_decider.hpp"
-#include "mcts_solver_args.hpp"
 #include "../../mcts/include/mcts.hpp"
 
 struct horizon : solver {
-    horizon(solver_args, mcts_solver_args);
+    horizon();
 #ifndef DEBUG
 protected:
 #endif

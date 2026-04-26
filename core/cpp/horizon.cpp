@@ -1,20 +1,22 @@
 #include "../hpp/horizon.hpp"
 #include "../hpp/horizon_sim.hpp"
+#include "../hpp/sim_args.hpp"
+#include "../hpp/topic.hpp"
+#include "../hpp/locator.hpp"
 
 horizon::horizon(solver_args sa, mcts_solver_args ma) :
-    solver(sa),
+    solver(),
     exploration_constant(ma.exploration_constant),
     rng(ma.rng),
     root(),
-    mc_sim(std::nullopt)
-{}
+    mc_sim(std::nullopt) {
+    max_resolutions = sa.max_resolutions;
+}
 
 std::unique_ptr<sim> horizon::construct_sim() {
     mc_sim.emplace(root, exploration_constant, rng);
-    return std::make_unique<horizon_sim>(
-        sim_args{max_resolutions, db, gl, t, vars, ep, bm, lp, c},
-        mcts_sim_args{*mc_sim}
-    );
+    locator::bind(locator_keys::inst_mcts_sim, *mc_sim);
+    return std::make_unique<horizon_sim>();
 }
 
 void horizon::terminate(sim& s) {

@@ -1,8 +1,8 @@
 #include <stdexcept>
 #include "../hpp/expr.hpp"
+#include "../hpp/locator.hpp"
 
-expr_pool::expr_pool(trail& t) : trail_ref(t) {
-
+expr_pool::expr_pool() : trail_ref(locator::locate<trail>(locator_keys::inst_trail)) {
 }
 
 const expr* expr_pool::functor(const std::string& name, std::vector<const expr*> args) {

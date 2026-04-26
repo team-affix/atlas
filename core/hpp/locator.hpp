@@ -34,6 +34,7 @@ enum class locator_keys {
     inst_mcts_sim,
     inst_mcts_exploration_constant,
     inst_mcts_rng,
+    inst_max_resolutions
 };
 
 struct locator {

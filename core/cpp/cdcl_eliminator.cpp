@@ -1,4 +1,5 @@
 #include "../hpp/cdcl_eliminator.hpp"
+#include "../hpp/locator.hpp"
 
 cdcl_eliminator::cdcl_eliminator() :
     lp(locator::locate<lineage_pool>(locator_keys::inst_lineage_pool)),
