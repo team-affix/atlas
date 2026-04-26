@@ -4,6 +4,8 @@
 #include "../../value_objects/lineage.hpp"
 #include "../candidate_store/candidate_store.hpp"
 #include "../../../infrastructure/event_topic.hpp"
+#include "../../events/unit_event.hpp"
+#include "../../events/conflicted_event.hpp"
 
 struct initial_condition_checker {
     initial_condition_checker();
@@ -13,9 +15,8 @@ private:
 #endif
     lineage_pool& lp;
     candidate_store& cs;
-    topic<const resolution_lineage*>& unit_topic;
-
-    topic<const goal_lineage*>::subscription goal_inserted_subscription;
+    event_topic<unit_event>& unit_topic;
+    event_topic<conflicted_event>& conflicted_topic;
 };
 
 #endif
