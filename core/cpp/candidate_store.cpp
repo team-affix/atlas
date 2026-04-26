@@ -1,16 +1,17 @@
 #include "../hpp/candidate_store.hpp"
     
-candidate_store::candidate_store(
-    const database& db,
-    const goals& goals,
-    lineage_pool& lp) :
-    frontier<std::unordered_set<size_t>, candidate_expander>(db, lp)
+candidate_store::candidate_store() :
+    frontier<std::unordered_set<size_t>, candidate_expander>()
 {
+    // get resources
+    const database& db = locator::locate<database>(locator_keys::inst_database);
+    const goals& gl = locator::locate<goals>(locator_keys::inst_goals);
+    lineage_pool& lp = locator::locate<lineage_pool>(locator_keys::inst_lineage_pool);
     // make the initial candidates
     for (int i = 0; i < db.size(); ++i)
         initial_candidates.insert(i);
     // make the initial members
-    for (int i = 0; i < goals.size(); ++i)
+    for (int i = 0; i < gl.size(); ++i)
         insert(lp.goal(nullptr, i), initial_candidates);
 }
 

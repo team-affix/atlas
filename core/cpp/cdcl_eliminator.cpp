@@ -1,19 +1,12 @@
 #include "../hpp/cdcl_eliminator.hpp"
 
-cdcl_eliminator::cdcl_eliminator(
-    candidate_store& cs,
-    lineage_pool& lp,
-    topic<const goal_lineage*>& goal_inserted_topic,
-    topic<const resolution_lineage*>& goal_resolved_topic,
-    topic<const resolution_lineage*>& new_eliminated_resolution_topic,
-    topic<const resolution_lineage*>& unit_topic
-) :
-    lp(lp),
-    cs(cs),
-    goal_inserted_subscription(goal_inserted_topic),
-    goal_resolved_subscription(goal_resolved_topic),
-    new_eliminated_resolution_subscription(new_eliminated_resolution_topic),
-    unit_topic(unit_topic) {
+cdcl_eliminator::cdcl_eliminator() :
+    lp(locator::locate<lineage_pool>(locator_keys::inst_lineage_pool)),
+    cs(locator::locate<candidate_store>(locator_keys::inst_candidate_store)),
+    goal_inserted_subscription(locator::locate<topic<const goal_lineage*>>(locator_keys::inst_goal_inserted_topic)),
+    goal_resolved_subscription(locator::locate<topic<const resolution_lineage*>>(locator_keys::inst_goal_resolved_topic)),
+    new_eliminated_resolution_subscription(locator::locate<topic<const resolution_lineage*>>(locator_keys::inst_new_eliminated_resolution_topic)),
+    unit_topic(locator::locate<topic<const resolution_lineage*>>(locator_keys::inst_unit_topic)) {
 }
 
 bool cdcl_eliminator::operator()() {

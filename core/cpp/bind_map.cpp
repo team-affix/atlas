@@ -1,9 +1,9 @@
 #include "../hpp/bind_map.hpp"
+#include "../hpp/locator.hpp"
 
-bind_map::bind_map(trail& trail_ref, topic<uint32_t>& rep_changed_topic) :
-    trail_ref(trail_ref),
-    rep_changed_topic(rep_changed_topic) {
-
+bind_map::bind_map() :
+    trail_ref(locator::locate<trail>(locator_keys::inst_trail)),
+    rep_changed_topic(locator::locate<topic<uint32_t>>(locator_keys::inst_rep_changed_topic)) {
 }
 
 const expr* bind_map::whnf(const expr* key) {

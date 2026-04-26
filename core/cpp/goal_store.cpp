@@ -1,22 +1,20 @@
 #include "../hpp/goal_store.hpp"
+#include "../hpp/locator.hpp"
+#include "../hpp/defs.hpp"
 
-goal_store::goal_store(
-    const database& db,
-    const goals& goals,
-    trail& t,
-    copier& cp,
-    bind_map& bm,
-    lineage_pool& lp)
+goal_store::goal_store()
     :
-    frontier<const expr*, goal_expander>(db, lp),
-    t(t),
-    cp(cp),
-    bm(bm),
-    lp(lp)
+    frontier<const expr*, goal_expander>(),
+    t(locator::locate<trail>(locator_keys::inst_trail)),
+    cp(locator::locate<copier>(locator_keys::inst_copier)),
+    bm(locator::locate<bind_map>(locator_keys::inst_bind_map)),
+    lp(locator::locate<lineage_pool>(locator_keys::inst_lineage_pool))
 {
+    // get resources
+    goals& gl = locator::locate<goals>(locator_keys::inst_goals);
     // add the goals to the frontier
-    for (int i = 0; i < goals.size(); ++i)
-        insert(lp.goal(nullptr, i), goals.at(i));
+    for (int i = 0; i < gl.size(); ++i)
+        insert(lp.goal(nullptr, i), gl.at(i));
 }
 
 bool goal_store::applicable(const expr* const& e, const rule& r) {
@@ -34,5 +32,5 @@ bool goal_store::applicable(const expr* const& e, const rule& r) {
 }
 
 goal_expander goal_store::make_expander(const expr* const& e, const rule& r) {
-    return goal_expander(e, r, cp, bm);
+    return goal_expander(e, r);
 }

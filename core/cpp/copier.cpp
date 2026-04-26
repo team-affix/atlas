@@ -1,8 +1,11 @@
 #include <stdexcept>
 #include "../hpp/copier.hpp"
+#include "../hpp/locator.hpp"
 
-copier::copier(sequencer& sequencer_ref, expr_pool& expr_pool_ref)
-    : sequencer_ref(sequencer_ref), expr_pool_ref(expr_pool_ref) {
+copier::copier()
+    :
+    sequencer_ref(locator::locate<sequencer>(locator_keys::inst_var_sequencer)),
+    expr_pool_ref(locator::locate<expr_pool>(locator_keys::inst_expr_pool)) {
 
 }
 

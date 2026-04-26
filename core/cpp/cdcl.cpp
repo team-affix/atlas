@@ -1,13 +1,13 @@
 #include "../hpp/cdcl.hpp"
+#include "../hpp/locator.hpp"
 
-cdcl::cdcl(topic<const resolution_lineage*>& new_eliminated_resolution_topic) :
-    new_eliminated_resolution_topic(new_eliminated_resolution_topic),
+cdcl::cdcl() :
+    new_eliminated_resolution_topic(locator::locate<topic<const resolution_lineage*>>(locator_keys::inst_new_eliminated_resolution_topic)),
     avoidances(),
     watched_goals(),
     is_refuted(false),
     eliminated_resolutions(),
     next_avoidance_id(0) {
-
 }
 
 void cdcl::learn(const lemma& l) {
