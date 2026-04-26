@@ -4,8 +4,10 @@
 #include "sim_args.hpp"
 #include "goal_store.hpp"
 #include "candidate_store.hpp"
-#include "head_eliminator.hpp"
+#include "initial_condition_detector.hpp"
 #include "cdcl_eliminator.hpp"
+#include "head_eliminator.hpp"
+#include "frontier_watch.hpp"
 
 struct sim {
     sim(sim_args);
@@ -18,8 +20,8 @@ protected:
     bool solved();
     bool conflicted();
     const resolution_lineage* derive_one();
-    void resolve(const resolution_lineage*);
     virtual const resolution_lineage* decide_one() = 0;
+    void resolve(const resolution_lineage*);
     virtual void on_resolve(const resolution_lineage*) = 0;
 
     const database& db;
@@ -28,15 +30,17 @@ protected:
 
     goal_store gs;
     candidate_store cs;
-
     copier cp;
-
     cdcl c;
-
-    std::queue<const resolution_lineage*> unit_queue;
-    head_eliminator he;
+    topic<const goal_lineage*> goal_inserted_topic;
+    topic<const resolution_lineage*> goal_resolved_topic;
+    topic<const resolution_lineage*> new_eliminated_resolution_topic;
+    topic<const resolution_lineage*> unit_topic;
+    topic<const resolution_lineage*>::subscription unit_subscription;
+    initial_condition_detector icd;
     cdcl_eliminator ce;
-
+    head_eliminator he;
+    frontier_watch fw; // fw needs to be constructed last for events to be signaled correctly to listeners
     resolutions rs;
     decisions ds;
     size_t max_resolutions;

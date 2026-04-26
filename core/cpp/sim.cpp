@@ -8,11 +8,17 @@ sim::sim(sim_args args) :
     cs(args.db, args.gl, args.lp),
     cp(args.vars, args.ep),
     c(args.c),
-    unit_queue(),
-    he(args.db, args.gl, args.bm, args.ep, gs, cs, lp, unit_queue),
-    ce(args.db, args.gl, args.ep, cs, lp, c, unit_queue),
-    rs({}),
-    ds({}),
+    goal_inserted_topic(),
+    goal_resolved_topic(),
+    new_eliminated_resolution_topic(),
+    unit_topic(),
+    unit_subscription(unit_topic),
+    icd(cs, lp, goal_inserted_topic, unit_topic),
+    ce(cs, lp, goal_inserted_topic, goal_resolved_topic, new_eliminated_resolution_topic, unit_topic),
+    he(db, args.gl, args.bm, args.ep, gs, cs, lp, args.rep_changed_topic, goal_inserted_topic, goal_resolved_topic, unit_topic),
+    fw(args.db, args.gl, args.lp, goal_inserted_topic, goal_resolved_topic),
+    rs(),
+    ds(),
     max_resolutions(args.max_resolutions)
 {}
 
@@ -50,25 +56,20 @@ bool sim::solved() {
 }
 
 bool sim::conflicted() {
-    return he() || ce();
+    return icd() || ce() || he();
 }
 
 const resolution_lineage* sim::derive_one() {
-    if (unit_queue.empty())
+    if (unit_subscription.empty())
         return nullptr;
-
-    // get the next unit resolution
-    auto result = unit_queue.front();
-    unit_queue.pop();
-    return result;
+    return unit_subscription.consume();
 }
 
 void sim::resolve(const resolution_lineage* rl) {
     rs.insert(rl);
+    fw.resolve(rl);
     gs.resolve(rl);
     cs.resolve(rl);
     c.constrain(rl);
-    he.resolve(rl);
-    ce.resolve(rl);
     on_resolve(rl);
 }

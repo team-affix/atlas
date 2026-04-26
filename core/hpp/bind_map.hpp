@@ -2,22 +2,23 @@
 #define BIND_MAP_HPP
 
 #include <map>
-#include <functional>
 #include "expr.hpp"
+#include "topic.hpp"
 
 struct bind_map {
-    bind_map(trail&);
+    bind_map(trail&, topic<uint32_t>&);
     const expr* whnf(const expr*);
     bool unify(const expr*, const expr*);
-    void set_rep_changed_callback(const std::function<void(uint32_t)>&);
 #ifndef DEBUG
 private:
 #endif
     bool occurs_check(uint32_t, const expr*);
     void bind(uint32_t, const expr*);
-    std::map<uint32_t, const expr*> bindings;
+    
     trail& trail_ref;
-    std::function<void(uint32_t)> changed_rep_callback;
+    topic<uint32_t>& rep_changed_topic;
+    
+    std::map<uint32_t, const expr*> bindings;
 };
 
 #endif

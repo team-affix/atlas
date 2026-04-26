@@ -3,24 +3,24 @@
 
 #include "defs.hpp"
 #include "lineage.hpp"
+#include "topic.hpp"
 
 struct frontier_watch {
     frontier_watch(
         const database&,
-        lineage_pool&
+        const goals&,
+        lineage_pool&,
+        topic<const goal_lineage*>&,
+        topic<const resolution_lineage*>&
     );
-    void initialize(const goals&);
     void resolve(const resolution_lineage*);
-    void set_insert_callback(std::function<void(const goal_lineage*)>);
-    void set_resolve_callback(std::function<void(const resolution_lineage*)>);
 #ifndef DEBUG
 private:
 #endif
     const database& db;
     lineage_pool& lp;
-
-    std::function<void(const goal_lineage*)> insert_callback;
-    std::function<void(const resolution_lineage*)> resolve_callback;
+    topic<const goal_lineage*>& goal_inserted_topic;
+    topic<const resolution_lineage*>& goal_resolved_topic;
 };
 
 #endif

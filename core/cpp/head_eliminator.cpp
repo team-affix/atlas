@@ -1,9 +1,5 @@
 #include "../hpp/head_eliminator.hpp"
 
-head_eliminator::~head_eliminator() {
-    bm.set_rep_changed_callback([](uint32_t){});
-}
-
 head_eliminator::head_eliminator(
     const database& db,
     const goals& goals,
@@ -12,58 +8,39 @@ head_eliminator::head_eliminator(
     goal_store& gs,
     candidate_store& cs,
     lineage_pool& lp,
-    std::queue<const resolution_lineage*>& unit_queue) : 
+    topic<uint32_t>& rep_changed_topic,
+    topic<const goal_lineage*>& goal_inserted_topic,
+    topic<const resolution_lineage*>& goal_resolved_topic,
+    topic<const resolution_lineage*>& unit_topic) : 
     db(db),
     bm(bm),
     ep(ep),
     gs(gs),
     cs(cs),
     lp(lp),
-    fw(db, lp),
-    unit_queue(unit_queue) {
-    bm.set_rep_changed_callback(rep_changed_callback());
-    fw.set_insert_callback(goal_inserted_callback());
-    fw.set_resolve_callback(goal_resolved_callback());
-    fw.initialize(goals);
+    rep_changed_subscription(rep_changed_topic),
+    goal_inserted_subscription(goal_inserted_topic),
+    goal_resolved_subscription(goal_resolved_topic),
+    unit_topic(unit_topic) {
+
 }
 
 bool head_eliminator::operator()() {
-    std::unordered_set<const goal_lineage*> touched_goals;
-    
-    while (!changed_reps.empty()) {
-        // pop the changed rep
-        uint32_t rep = changed_reps.front();
-        changed_reps.pop();
-
-        // get the goals that are watching this representative
-        auto it = rep_to_goals.find(rep);
-
-        if (it == rep_to_goals.end())
-            continue;
+    // flush goals resolved first since that will be an efficiency bost
+    // for the rep changed flush.
+    flush_goal_resolved();
         
-        // basic deduplication
-        touched_goals.insert(it->second.begin(), it->second.end());
-
-        // update the watches given the rep update
-        update_rep_watches(rep);
-    }
-
-    // visit the goals that were touched, and if any has no candidates, return conflict.
-    for (const goal_lineage* gl : touched_goals) {
-        if (visit_goal_lineage(gl))
-            return true;
-    }
+    if (flush_rep_changed())
+        return true;
+    
+    if (flush_goal_inserted())
+        return true;
 
     // clear the queue since there will be invalid rep changes from
     // the temporary frames
-    changed_reps = {};
+    rep_changed_subscription.purge();
 
-    // no conflict found
     return false;
-}
-
-void head_eliminator::resolve(const resolution_lineage* r) {
-    fw.resolve(r);
 }
 
 void head_eliminator::extract_rep_vars(const expr* e, std::unordered_set<uint32_t>& reps) {
@@ -90,7 +67,7 @@ void head_eliminator::watch(const std::unordered_set<uint32_t>& reps, const std:
 std::unordered_set<const goal_lineage*> head_eliminator::unwatch(uint32_t rep) {
     auto it = rep_to_goals.find(rep);
     for (const goal_lineage* gl : it->second) {
-        auto reps = goal_to_reps.at(gl);
+        auto& reps = goal_to_reps.at(gl);
         reps.erase(rep);
         if (reps.empty())
             goal_to_reps.erase(gl);
@@ -102,7 +79,7 @@ std::unordered_set<const goal_lineage*> head_eliminator::unwatch(uint32_t rep) {
 std::unordered_set<uint32_t> head_eliminator::unwatch(const goal_lineage* gl) {
     auto it = goal_to_reps.find(gl);
     for (uint32_t rep : it->second) {
-        auto goals = rep_to_goals.at(rep);
+        auto& goals = rep_to_goals.at(rep);
         goals.erase(gl);
         if (goals.empty())
             rep_to_goals.erase(rep);
@@ -111,25 +88,52 @@ std::unordered_set<uint32_t> head_eliminator::unwatch(const goal_lineage* gl) {
     return std::move(node.mapped());
 }
 
-std::function<void(uint32_t)> head_eliminator::rep_changed_callback() {
-    return [this](uint32_t rep) {
-        changed_reps.push(rep);
-    };
+bool head_eliminator::flush_rep_changed() {
+    std::unordered_set<const goal_lineage*> touched_goals;
+
+    while (!rep_changed_subscription.empty()) {
+        // pop the changed rep
+        uint32_t rep = rep_changed_subscription.consume();
+
+        // get the goals that are watching this representative
+        auto it = rep_to_goals.find(rep);
+
+        if (it == rep_to_goals.end())
+            continue;
+        
+        // basic deduplication
+        touched_goals.insert(it->second.begin(), it->second.end());
+
+        // update the watches given the rep update
+        update_rep_watches(rep);
+    }
+
+    // visit the goals that were touched, and if any has no candidates, return conflict.
+    for (const goal_lineage* gl : touched_goals) {
+        if (visit_goal_lineage(gl))
+            return true;
+    }
+    
+    return false;
 }
 
-std::function<void(const goal_lineage*)> head_eliminator::goal_inserted_callback() {
-    return [this](const goal_lineage* gl) {
-        visit_goal_lineage(gl);
+bool head_eliminator::flush_goal_inserted() {
+    while (!goal_inserted_subscription.empty()) {
+        auto gl = goal_inserted_subscription.consume();
+        if (visit_goal_lineage(gl))
+            return true;
         std::unordered_set<uint32_t> reps;
         extract_rep_vars(gs.at(gl), reps);
         watch(reps, {gl});
-    };
+    }
+    return false;
 }
 
-std::function<void(const resolution_lineage*)> head_eliminator::goal_resolved_callback() {
-    return [this](const resolution_lineage* r) {
-        unwatch(r->parent);
-    };
+void head_eliminator::flush_goal_resolved() {
+    while (!goal_resolved_subscription.empty()) {
+        auto rl = goal_resolved_subscription.consume();
+        unwatch(rl->parent);
+    }
 }
 
 void head_eliminator::update_rep_watches(uint32_t rep) {
@@ -159,7 +163,7 @@ bool head_eliminator::visit_goal_lineage(const goal_lineage* gl) {
 
     // if newly unit, push the resolution to the unit queue
     if (!was_unit && candidates.size() == 1)
-        unit_queue.push(lp.resolution(gl, *candidates.begin()));
+        unit_topic.produce(lp.resolution(gl, *candidates.begin()));
 
     return candidates.empty();
 }

@@ -1,8 +1,8 @@
 #include "../hpp/bind_map.hpp"
 
-bind_map::bind_map(trail& trail_ref) :
+bind_map::bind_map(trail& trail_ref, topic<uint32_t>& rep_changed_topic) :
     trail_ref(trail_ref),
-    changed_rep_callback([](uint32_t) {}) {
+    rep_changed_topic(rep_changed_topic) {
 
 }
 
@@ -51,7 +51,7 @@ bool bind_map::unify(const expr* lhs, const expr* rhs) {
         if (occurs_check(lv->index, rhs))
             return false;
         bind(lv->index, rhs);
-        changed_rep_callback(lv->index);
+        rep_changed_topic.produce(lv->index);
         return true;
     }
 
@@ -60,7 +60,7 @@ bool bind_map::unify(const expr* lhs, const expr* rhs) {
         if (occurs_check(rv->index, lhs))
             return false;
         bind(rv->index, lhs);
-        changed_rep_callback(rv->index);
+        rep_changed_topic.produce(rv->index);
         return true;
     }
 
@@ -82,10 +82,6 @@ bool bind_map::unify(const expr* lhs, const expr* rhs) {
 
     return false;
 
-}
-
-void bind_map::set_rep_changed_callback(const std::function<void(uint32_t)>& callback) {
-    changed_rep_callback = callback;
 }
 
 bool bind_map::occurs_check(uint32_t index, const expr* key) {

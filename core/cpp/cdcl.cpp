@@ -1,12 +1,12 @@
 #include "../hpp/cdcl.hpp"
 
-cdcl::cdcl() :
+cdcl::cdcl(topic<const resolution_lineage*>& new_eliminated_resolution_topic) :
+    new_eliminated_resolution_topic(new_eliminated_resolution_topic),
     avoidances(),
     watched_goals(),
     is_refuted(false),
     eliminated_resolutions(),
-    next_avoidance_id(0),
-    new_eliminated_resolution_callback([](const resolution_lineage*) {}) {
+    next_avoidance_id(0) {
 
 }
 
@@ -73,7 +73,7 @@ void cdcl::upsert(size_t id, const avoidance& av) {
 
         // 3. if the elimination was new, call the callback
         if (inserted)
-            new_eliminated_resolution_callback(*av.begin());
+            new_eliminated_resolution_topic.produce(*av.begin());
     }
 }
 
@@ -92,10 +92,6 @@ void cdcl::erase(size_t id) {
 
 bool cdcl::refuted() const {
     return is_refuted;
-}
-
-void cdcl::set_new_eliminated_resolution_callback(std::function<void(const resolution_lineage*)> callback) {
-    new_eliminated_resolution_callback = callback;
 }
 
 const std::set<const resolution_lineage*>& cdcl::get_eliminated_resolutions() const {
