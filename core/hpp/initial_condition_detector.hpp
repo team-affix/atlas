@@ -1,12 +1,12 @@
-#ifndef EARLY_CONDITION_DETECTOR_HPP
-#define EARLY_CONDITION_DETECTOR_HPP
+#ifndef INITIAL_CONDITION_DETECTOR_HPP
+#define INITIAL_CONDITION_DETECTOR_HPP
 
 #include "lineage.hpp"
 #include "candidate_store.hpp"
 #include "topic.hpp"
 
-struct early_condition_detector {
-    early_condition_detector(
+struct initial_condition_detector {
+    initial_condition_detector(
         candidate_store&,
         lineage_pool&,
         topic<const goal_lineage*>&,

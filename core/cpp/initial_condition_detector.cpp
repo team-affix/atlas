@@ -1,6 +1,6 @@
-#include "../hpp/early_condition_detector.hpp"
+#include "../hpp/initial_condition_detector.hpp"
 
-early_condition_detector::early_condition_detector(
+initial_condition_detector::initial_condition_detector(
     candidate_store& cs,
     lineage_pool& lp,
     topic<const goal_lineage*>& goal_inserted_topic,
@@ -13,7 +13,7 @@ early_condition_detector::early_condition_detector(
 
 }
 
-bool early_condition_detector::operator()() {
+bool initial_condition_detector::operator()() {
     while (!goal_inserted_subscription.empty()) {
         const goal_lineage* gl = goal_inserted_subscription.consume();
         const auto& candidates = cs.at(gl);
