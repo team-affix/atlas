@@ -3,12 +3,12 @@
 
 #include <map>
 #include "expr.hpp"
-#include "topic.hpp"
+#include <queue>
 
 struct bind_map {
-    bind_map();
+    bind_map(trail&);
     const expr* whnf(const expr*);
-    bool unify(const expr*, const expr*);
+    bool unify(const expr*, const expr*, std::queue<uint32_t>&);
 #ifndef DEBUG
 private:
 #endif
@@ -16,7 +16,6 @@ private:
     void bind(uint32_t, const expr*);
     
     trail& trail_ref;
-    topic<uint32_t>& rep_changed_topic;
     
     std::map<uint32_t, const expr*> bindings;
 };

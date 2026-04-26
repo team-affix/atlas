@@ -1,9 +1,7 @@
-#include "../hpp/bind_map.hpp"
-#include "../hpp/locator.hpp"
+#include "../hpp/data_structures/bind_map.hpp"
 
-bind_map::bind_map() :
-    trail_ref(locator::locate<trail>(locator_keys::inst_trail)),
-    rep_changed_topic(locator::locate<topic<uint32_t>>(locator_keys::inst_rep_changed_topic)) {
+bind_map::bind_map(trail& t) :
+    trail_ref(t) {
 }
 
 const expr* bind_map::whnf(const expr* key) {
@@ -33,7 +31,7 @@ const expr* bind_map::whnf(const expr* key) {
     return whnf_bound_value;
 }
 
-bool bind_map::unify(const expr* lhs, const expr* rhs) {
+bool bind_map::unify(const expr* lhs, const expr* rhs, std::queue<uint32_t>& rep_changed_queue) {
     // WHNF the lhs and rhs
     lhs = whnf(lhs);
     rhs = whnf(rhs);
@@ -51,7 +49,7 @@ bool bind_map::unify(const expr* lhs, const expr* rhs) {
         if (occurs_check(lv->index, rhs))
             return false;
         bind(lv->index, rhs);
-        rep_changed_topic.produce(lv->index);
+        rep_changed_queue.push(lv->index);
         return true;
     }
 
@@ -60,7 +58,7 @@ bool bind_map::unify(const expr* lhs, const expr* rhs) {
         if (occurs_check(rv->index, lhs))
             return false;
         bind(rv->index, lhs);
-        rep_changed_topic.produce(rv->index);
+        rep_changed_queue.push(rv->index);
         return true;
     }
 
@@ -75,7 +73,7 @@ bool bind_map::unify(const expr* lhs, const expr* rhs) {
         if (lf.name != rf.name || lf.args.size() != rf.args.size())
             return false;
         for (size_t i = 0; i < lf.args.size(); ++i)
-            if (!unify(lf.args[i], rf.args[i]))
+            if (!unify(lf.args[i], rf.args[i], rep_changed_queue))
                 return false;
         return true;
     }
