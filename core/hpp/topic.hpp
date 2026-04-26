@@ -11,6 +11,7 @@ struct topic {
         subscription(topic<T>&);
         bool empty() const;
         T consume();
+        void purge();
     #ifndef DEBUG
     private:
     #endif
@@ -42,6 +43,11 @@ T topic<T>::subscription::consume() {
     T result = mailbox.front();
     mailbox.pop();
     return result;
+}
+
+template <typename T>
+void topic<T>::subscription::purge() {
+    parent->mailboxes.at(id) = {};
 }
 
 template <typename T>
