@@ -15,9 +15,9 @@ struct cdcl {
     void constrain(const resolution_lineage*);
     bool refuted() const;
     const std::set<const resolution_lineage*>& get_eliminated_resolutions() const;
-    #ifndef DEBUG
-    private:
-    #endif
+#ifndef DEBUG
+private:
+#endif
     void upsert(size_t, const avoidance&);
     void erase(size_t);
 
