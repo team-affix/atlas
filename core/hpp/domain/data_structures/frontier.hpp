@@ -2,8 +2,8 @@
 #define FRONTIER_HPP
 
 #include <unordered_map>
-#include "defs.hpp"
-#include "locator.hpp"
+#include "lineage.hpp"
+#include "../value_objects/defs.hpp"
 
 template<typename T, typename Expander>
 struct frontier {

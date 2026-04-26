@@ -2,7 +2,8 @@
 #define BIND_MAP_HPP
 
 #include <map>
-#include "expr.hpp"
+#include "../value_objects/expr.hpp"
+#include "trail.hpp"
 #include <queue>
 
 struct bind_map {

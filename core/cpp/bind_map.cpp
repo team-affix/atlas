@@ -1,4 +1,4 @@
-#include "../hpp/data_structures/bind_map.hpp"
+#include "../hpp/domain/data_structures/bind_map.hpp"
 
 bind_map::bind_map(trail& t) :
     trail_ref(t) {
