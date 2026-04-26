@@ -1,11 +1,11 @@
 #ifndef NORMALIZER_HPP
 #define NORMALIZER_HPP
 
-#include "expr.hpp"
+#include "expr_pool.hpp"
 #include "bind_map.hpp"
 
 struct normalizer {
-    normalizer();
+    normalizer(expr_pool&, bind_map&);
     const expr* operator()(const expr*);
 #ifndef DEBUG
 private:
