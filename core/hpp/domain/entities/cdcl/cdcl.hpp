@@ -7,6 +7,7 @@
 #include "../../../infrastructure/event_topic.hpp"
 #include "../../events/cdcl_eliminated_candidate_event.hpp"
 #include "../../events/conflicted_event.hpp"
+#include "../../../infrastructure/tracked_set.hpp"
 
 using avoidance = std::unordered_set<const resolution_lineage*>;
 
@@ -27,7 +28,7 @@ private:
 
     std::map<size_t, avoidance> avoidances;
     std::map<const goal_lineage*, std::set<size_t>> watched_goals;
-    std::set<const resolution_lineage*> eliminated_resolutions;
+    tracked<std::set<const resolution_lineage*>> eliminated_resolutions;
     size_t next_avoidance_id;
 };
 
