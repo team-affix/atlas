@@ -1,45 +1,43 @@
 #ifndef CDCL_ELIMINATOR_HPP
 #define CDCL_ELIMINATOR_HPP
 
+#include <queue>
 #include "cdcl.hpp"
 #include "lineage.hpp"
 #include "candidate_store.hpp"
 #include "frontier_watch.hpp"
-#include <queue>
+#include "topic.hpp"
 
 struct cdcl_eliminator {
     cdcl_eliminator(
-        const database&,
-        const goals&,
-        expr_pool&,
         candidate_store&,
         lineage_pool&,
         cdcl&,
-        bool&,
-        std::queue<const resolution_lineage*>&
+        topic<const goal_lineage*>&,
+        topic<const resolution_lineage*>&,
+        topic<const resolution_lineage*>&,
+        topic<const resolution_lineage*>&
     );
-    void operator()();
-    void resolve(const resolution_lineage*);
+    bool operator()();
 #ifndef DEBUG
 private:
 #endif
-    void route_elimination(const resolution_lineage*);
-    void flush_backlog_for_goal(const goal_lineage*);
-    void eliminate(const goal_lineage*, size_t);
+    bool route_elimination(const resolution_lineage*);
+    bool flush_backlog_for_goal(const goal_lineage*);
+    bool eliminate(const goal_lineage*, size_t);
+    bool flush_new_eliminated_resolutions();
+    bool flush_goal_inserted();
+    void flush_goal_resolved();
     
-    std::function<void(const resolution_lineage*)> new_eliminated_resolution_callback();
-    std::function<void(const goal_lineage*)> goal_inserted_callback();
-    std::function<void(const resolution_lineage*)> goal_resolved_callback();
-
     lineage_pool& lp;
     candidate_store& cs;
-    bool& conflict_register;
-    std::queue<const resolution_lineage*>& unit_queue;
+    topic<const goal_lineage*>::subscription goal_inserted_subscription;
+    topic<const resolution_lineage*>::subscription goal_resolved_subscription;
+    topic<const resolution_lineage*>::subscription new_eliminated_resolution_subscription;
+    topic<const resolution_lineage*>& unit_topic;
 
-    frontier_watch fw;
     std::unordered_set<const goal_lineage*> active_goals;
     std::unordered_set<const goal_lineage*> resolved_goals;
-    std::queue<const resolution_lineage*> new_eliminated_resolutions;
     std::unordered_map<const goal_lineage*, std::unordered_set<size_t>> elimination_backlog;
 };
 
