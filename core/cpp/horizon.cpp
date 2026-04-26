@@ -4,13 +4,12 @@
 #include "../hpp/topic.hpp"
 #include "../hpp/locator.hpp"
 
-horizon::horizon(solver_args sa, mcts_solver_args ma) :
+horizon::horizon() :
     solver(),
-    exploration_constant(ma.exploration_constant),
-    rng(ma.rng),
+    exploration_constant(locator::locate<double>(locator_keys::inst_mcts_exploration_constant)),
+    rng(locator::locate<std::mt19937>(locator_keys::inst_mcts_rng)),
     root(),
     mc_sim(std::nullopt) {
-    max_resolutions = sa.max_resolutions;
 }
 
 std::unique_ptr<sim> horizon::construct_sim() {

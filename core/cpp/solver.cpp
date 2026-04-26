@@ -9,7 +9,7 @@ solver::solver() :
     bm(locator::locate<bind_map>(locator_keys::inst_bind_map)),
     ep(),
     lp(),
-    max_resolutions(0),
+    max_resolutions(locator::locate<uint32_t>(locator_keys::inst_max_resolutions)),
     c(),
     managed_sim(nullptr) {
     locator::push_frame();
