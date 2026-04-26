@@ -4,7 +4,6 @@
 #include <cstdint>
 #include <unordered_map>
 #include <unordered_set>
-#include <queue>
 #include "lineage.hpp"
 #include "expr.hpp"
 #include "bind_map.hpp"
