@@ -8,7 +8,7 @@
 template <typename Event>
 struct event_topic {
     void produce(const Event&);
-    void subscribe(event_handler<Event>& handler);
+    void subscribe(event_handler<Event>&);
 #ifndef DEBUG
 private:
 #endif
