@@ -1,8 +1,11 @@
 #ifndef MCTS_DECIDER_HPP
 #define MCTS_DECIDER_HPP
 
+#include <variant>
+#include <random>
+#include "../../value_objects/lineage.hpp"
 #include "../../mcts/include/mcts.hpp"
-#include "candidate_store.hpp"
+#include "../candidate_store/candidate_store.hpp"
 
 struct mcts_decider {
     using choice = std::variant<const goal_lineage*, size_t>;

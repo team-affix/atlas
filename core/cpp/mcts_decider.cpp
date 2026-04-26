@@ -1,9 +1,9 @@
-#include "../hpp/mcts_decider.hpp"
-#include "../hpp/locator.hpp"
+#include "../hpp/domain/entities/mcts_decider/mcts_decider.hpp"
+#include "../hpp/infrastructure/locator.hpp"
 
 mcts_decider::mcts_decider() :
-    cs(locator::locate<candidate_store>(locator_keys::inst_candidate_store)),
-    sim(locator::locate<monte_carlo::simulation<choice, std::mt19937>>(locator_keys::inst_mcts_sim)) {
+    cs(locator::locate<candidate_store>()),
+    sim(locator::locate<monte_carlo::simulation<choice, std::mt19937>>()) {
 }
 
 std::pair<const goal_lineage*, size_t> mcts_decider::operator()() {
