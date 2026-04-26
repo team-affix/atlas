@@ -2,7 +2,7 @@
 #define LINEAGE_HPP
 
 #include <cstddef>
-#include <map>
+#include <compare>
 
 struct resolution_lineage;
 
