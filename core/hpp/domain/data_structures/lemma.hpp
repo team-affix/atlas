@@ -2,7 +2,7 @@
 #define LEMMA_HPP
 
 #include <set>
-#include "defs.hpp"
+#include "../value_objects/defs.hpp"
 
 struct lemma {
     lemma(const resolutions&);

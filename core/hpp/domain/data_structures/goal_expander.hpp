@@ -2,14 +2,18 @@
 #define GOAL_EXPANDER_HPP
 
 #include <map>
-#include "expr.hpp"
-#include "rule.hpp"
+#include "../value_objects/expr.hpp"
+#include "../value_objects/rule.hpp"
+#include "bind_map.hpp"
 #include "copier.hpp"
 
 struct goal_expander {
     goal_expander(
         const expr* const& goal,
-        const rule& r);
+        const rule& r,
+        bind_map&,
+        copier&
+    );
     const expr* operator()();
 #ifndef DEBUG
 private:

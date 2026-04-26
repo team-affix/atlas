@@ -1,4 +1,4 @@
-#include "../hpp/lemma.hpp"
+#include "../hpp/domain/data_structures/lemma.hpp"
 
 lemma::lemma(const resolutions& input) :
     rs(input) {
