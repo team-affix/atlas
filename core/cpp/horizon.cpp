@@ -1,7 +1,5 @@
 #include "../hpp/horizon.hpp"
 #include "../hpp/horizon_sim.hpp"
-#include "../hpp/sim_args.hpp"
-#include "../hpp/topic.hpp"
 #include "../hpp/locator.hpp"
 
 horizon::horizon() :
