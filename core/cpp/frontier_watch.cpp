@@ -2,12 +2,19 @@
 
 frontier_watch::frontier_watch(
     const database& db,
-    lineage_pool& lp) : db(db), lp(lp) {
+    lineage_pool& lp,
+    topic<const goal_lineage*>& goal_inserted_topic,
+    topic<const resolution_lineage*>& goal_resolved_topic)
+    :
+    db(db),
+    lp(lp), 
+    goal_inserted_topic(goal_inserted_topic),
+    goal_resolved_topic(goal_resolved_topic) {
 }
 
 void frontier_watch::initialize(const goals& goals) {
     for (int i = 0; i < goals.size(); ++i)
-        insert_callback(lp.goal(nullptr, i));
+        goal_inserted_topic.produce(lp.goal(nullptr, i));
 }
 
 void frontier_watch::resolve(const resolution_lineage* r) {
@@ -19,16 +26,8 @@ void frontier_watch::resolve(const resolution_lineage* r) {
 
     // add children
     for (int i = 0; i < db_rule.body.size(); ++i)
-        insert_callback(lp.goal(r, i));
+        goal_inserted_topic.produce(lp.goal(r, i));
 
     // notify the callback
-    resolve_callback(r);
-}
-
-void frontier_watch::set_insert_callback(std::function<void(const goal_lineage*)> callback) {
-    insert_callback = callback;
-}
-
-void frontier_watch::set_resolve_callback(std::function<void(const resolution_lineage*)> callback) {
-    resolve_callback = callback;
+    goal_resolved_topic.produce(r);
 }
