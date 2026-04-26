@@ -5,7 +5,7 @@ cdcl::cdcl() :
     cdcl_eliminated_candidate_topic(locator::locate<event_topic<cdcl_eliminated_candidate_event>>()),
     avoidances(),
     watched_goals(),
-    is_refuted(false),
+    conflicted_topic(locator::locate<event_topic<conflicted_event>>()),
     eliminated_resolutions(),
     next_avoidance_id(0) {
 }
@@ -21,7 +21,7 @@ void cdcl::learn(const lemma& l) {
     //    we should never achieve refutation in upsert() since we should never make
     //    moves that are eliminated which would lead to refutation.
     if (av.empty())
-        is_refuted = true;
+        conflicted_topic.produce(conflicted_event{});
     
     // 4. add the avoidance to the store
     upsert(id, av);
@@ -63,6 +63,20 @@ void cdcl::constrain(const resolution_lineage* rl) {
     watched_goals.erase(gl);
 }
 
+void cdcl::emit_eliminated_candidates() {
+    for (const resolution_lineage* rl : eliminated_resolutions)
+        cdcl_eliminated_candidate_topic.produce(cdcl_eliminated_candidate_event{rl});
+}
+
+bool cdcl::check_for_conflict() {
+    bool result = avoidances.contains({});
+    
+    if (result)
+        conflicted_topic.produce(conflicted_event{});
+
+    return result;
+}
+
 void cdcl::upsert(size_t id, const avoidance& av) {
     // 1. update the avoidance in the store
     avoidances[id] = av;
@@ -88,12 +102,4 @@ void cdcl::erase(size_t id) {
     
     // 3. remove the avoidance from the store
     avoidances.erase(id);
-}
-
-bool cdcl::refuted() const {
-    return is_refuted;
-}
-
-const std::set<const resolution_lineage*>& cdcl::get_eliminated_resolutions() const {
-    return eliminated_resolutions;
 }
