@@ -2,9 +2,10 @@
 #include "../../../../hpp/infrastructure/locator.hpp"
 
 cdcl_sim_ended_event_handler::cdcl_sim_ended_event_handler() :
+    ds(locator::locate<decision_store>()),
     c(locator::locate<cdcl>()) {
 }
 
 void cdcl_sim_ended_event_handler::operator()(const sim_ended_event& e) {
-    c.learn();
+    c.learn(ds.get());
 }
