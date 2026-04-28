@@ -10,7 +10,7 @@ struct scheduler {
 #ifndef DEBUG
 private:
 #endif
-    std::queue<task*> tasks;
+    std::priority_queue<task*> tasks;
 };
 
 #endif
