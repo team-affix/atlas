@@ -9,7 +9,7 @@
 
 template<typename Command>
 struct command_topic : task {
-    command_topic();
+    command_topic(uint32_t);
     void produce(const Command&);
     void subscribe(command_handler<Command>&);
     void execute() override;
@@ -23,7 +23,7 @@ private:
 };
 
 template<typename Command>
-command_topic<Command>::command_topic() : s(resolver::resolve<scheduler>()) {
+command_topic<Command>::command_topic(uint32_t priority) : task(priority), s(resolver::resolve<scheduler>()) {
 }
 
 template<typename Command>

@@ -10,7 +10,7 @@
 
 template <typename Event>
 struct event_topic : task {
-    event_topic();
+    event_topic(uint32_t);
     void produce(const Event&);
     void subscribe(event_handler<Event>&);
     void execute() override;
@@ -24,7 +24,7 @@ private:
 };
 
 template<typename Event>
-event_topic<Event>::event_topic() : s(resolver::resolve<scheduler>()) {
+event_topic<Event>::event_topic(uint32_t priority) : task(priority), s(resolver::resolve<scheduler>()) {
 }
 
 template <typename Event>
