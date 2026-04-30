@@ -2,34 +2,30 @@
 #define AVOIDANCE_HPP
 
 #include <map>
-#include "../../value_objects/lineage.hpp"
-#include "../../data_structures/lemma.hpp"
-#include "../../../infrastructure/event_topic.hpp"
-#include "../../events/cdcl_eliminated_candidate_event.hpp"
-#include "../../events/conflicted_event.hpp"
-#include "../../../infrastructure/tracked_set.hpp"
-#include "../../../infrastructure/tracked_map.hpp"
-#include "../../../infrastructure/sequencer.hpp"
+#include <memory>
+#include "../interfaces/i_cdcl.hpp"
+#include "../interfaces/i_event_producer.hpp"
+#include "../interfaces/i_tracked.hpp"
+#include "../events/avoidance_is_unit_event.hpp"
+#include "../events/avoidance_is_empty_event.hpp"
 
-using avoidance = std::unordered_set<const resolution_lineage*>;
-
-struct cdcl {
+struct cdcl : i_cdcl {
     cdcl();
-    void learn(const lemma&);
-    void constrain(const resolution_lineage*);
-    void emit_eliminated_candidates();
-    bool check_for_conflict();
+    void learn(const lemma&) override;
+    void constrain(const resolution_lineage*) override;
+    avoidance get_avoidance(size_t) override;
+    void produce_events() override;
 #ifndef DEBUG
 private:
 #endif
     void upsert(size_t, const avoidance&);
     void erase(size_t);
 
-    event_topic<cdcl_eliminated_candidate_event>& cdcl_eliminated_candidate_topic;
-    event_topic<conflicted_event>& conflicted_topic;
+    i_event_producer<avoidance_is_unit_event>& avoidance_is_unit_producer;
+    i_event_producer<avoidance_is_empty_event>& avoidance_is_empty_producer;
 
     tracked_map<std::map<size_t, avoidance>> avoidances;
-    tracked_map<std::map<const goal_lineage*, std::set<size_t>>> watched_goals;
+    std::unique_ptr<i_tracked<std::map<const goal_lineage*, std::set<size_t>>>> watched_goals;
     tracked_set<std::set<const resolution_lineage*>> eliminated_resolutions;
     sequencer next_avoidance_id;
 };
