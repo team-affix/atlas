@@ -1,5 +1,5 @@
-#ifndef RESTORABLE_SET_HPP
-#define RESTORABLE_SET_HPP
+#ifndef RESTORABLE_SET_BASE_HPP
+#define RESTORABLE_SET_BASE_HPP
 
 #include "../domain/interfaces/i_restorable_set.hpp"
 
