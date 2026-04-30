@@ -64,16 +64,16 @@ void restorable_map_base<M, S>::insert(const M::key_type& key, const M::value_ty
 
 template<typename M, typename S>
 void restorable_map_base<M, S>::erase(const M::key_type& key) {
-    auto extraction = current.extract(key);
+    auto [_, erased] = current.extract(key);
 
-    if (extraction.empty()) { 
+    if (!erased) { 
         // erasure did nothing, no-op
         return;
     }
     
-    auto [_, added_key_erased] = added_keys.erase(key);
+    auto [_, addition_erased] = added_keys.erase(key);
     
-    if (added_key_erased) {
+    if (addition_erased) {
         // key was not in original
         return;
     }
