@@ -1,7 +1,7 @@
 #ifndef CDCL_ELIMINATOR_HPP
 #define CDCL_ELIMINATOR_HPP
 
-#include "../../value_objects/lineage.hpp"
+#include "../value_objects/lineage.hpp"
 #include "../candidate_store/candidate_store.hpp"
 #include "../../../infrastructure/event_topic.hpp"
 #include "../../events/unit_event.hpp"
@@ -10,8 +10,8 @@ struct cdcl_eliminator {
     cdcl_eliminator();
     bool operator()();
     void cdcl_eliminated_candidate(const resolution_lineage*);
-    void goal_inserted(const goal_lineage*);
-    void goal_resolved(const resolution_lineage*);
+    void goal_activated(const goal_lineage*);
+    void goal_deactivated(const goal_lineage*);
 #ifndef DEBUG
 private:
 #endif
