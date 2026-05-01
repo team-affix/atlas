@@ -3,31 +3,45 @@
 
 #include "../domain/interfaces/i_restorable_map.hpp"
 
+// NOTES
+// - when an entry gets added, we mark the key
+// - when an entry gets subtracted,
+//       we restore it on the spot and unmark as dirty.
+// - when an entry gets dirty, we mark the key
+
 template<typename M, typename S>
-struct restorable_map_base : i_restorable_map<M> {
+struct restorable_map_base : i_restorable_map<typename M::key_type, typename M::value_type> {
     void restore() override;
-    void insert(const M::key_type&, const M::value_type&) override;
-    void erase(const M::key_type&) override;
-    void assign(const M::key_type&, const M::value_type&) override;
-    const M& get() const override;
+    bool insert(const typename M::key_type&, const typename M::value_type&) override;
+    bool erase(const typename M::key_type&) override;
+    typename M::value_type& at(const typename M::key_type&) override;
+    const typename M::value_type& at(const typename M::key_type&) const override;
+    size_t size() const override;
+    bool empty() const override;
+    void clear() override;
 #ifndef DEBUG
 private:
 #endif
     M current;
     S added_keys;
-    S subtracted_keys;
     S dirty_keys;
-    M original_values;
+    M subtracted_map;
 };
 
 template<typename M, typename S>
 void restorable_map_base<M, S>::restore() {
+    // erase all added keys
     for (const auto& key : added_keys)
         current.erase(key);
-    for (const auto& key : subtracted_keys)
-        current.insert({key, original_values.at(key)});
+
+    // insert all subtracted entries
+    for (auto& entry : subtracted_map)
+        current.insert(entry);
+
+    // restore all dirty entries
     for (const auto& key : dirty_keys)
-        current[key] = original_values.at(key);
+        current.at(key).restore();
+
     added_keys.clear();
     subtracted_keys.clear();
     dirty_keys.clear();
