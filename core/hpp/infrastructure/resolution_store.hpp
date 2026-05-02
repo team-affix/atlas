@@ -2,16 +2,13 @@
 #define RESOLUTION_STORE_HPP
 
 #include <unordered_set>
-#include "../../value_objects/lineage.hpp"
+#include "../domain/interfaces/i_resolution_store.hpp"
 
-struct resolution_store {
-    resolution_store();
-    void insert(const resolution_lineage*);
-    const std::unordered_set<const resolution_lineage*>& get() const;
-    void clear();
-#ifndef DEBUG
+struct resolution_store : i_resolution_store {
+    void insert(const resolution_lineage*) override;
+    void clear() override;
+    lemma derive_lemma() override;
 private:
-#endif
     std::unordered_set<const resolution_lineage*> resolutions;
 };
 
