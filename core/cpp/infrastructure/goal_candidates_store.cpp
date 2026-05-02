@@ -16,10 +16,6 @@ void goal_candidates_store::clear() {
     goal_candidates.clear();
 }
 
-const candidate_set& goal_candidates_store::at(const goal_lineage* gl) {
+const candidate_set& goal_candidates_store::at(const goal_lineage* gl) const {
     return goal_candidates.at(gl);
-}
-
-size_t goal_candidates_store::size() {
-    return goal_candidates.size();
 }

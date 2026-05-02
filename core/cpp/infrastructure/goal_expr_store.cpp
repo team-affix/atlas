@@ -12,6 +12,6 @@ void goal_expr_store::clear() {
     goal_exprs.clear();
 }
 
-const expr* goal_expr_store::at(const goal_lineage* gl) {
+const expr* goal_expr_store::at(const goal_lineage* gl) const {
     return goal_exprs.at(gl);
 }

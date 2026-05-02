@@ -8,8 +8,7 @@ struct i_goal_weight_store {
     virtual void insert(const goal_lineage*, double) = 0;
     virtual void erase(const goal_lineage*) = 0;
     virtual void clear() = 0;
-    virtual double at(const goal_lineage*) = 0;
-    virtual size_t size() = 0;
+    virtual double at(const goal_lineage*) const = 0;
 };
 
 #endif
