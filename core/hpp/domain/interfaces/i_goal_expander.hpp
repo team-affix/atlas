@@ -5,7 +5,7 @@
 
 struct i_goal_expander {
     virtual ~i_goal_expander() = default;
-    virtual void start_expansion(const goal_lineage*) = 0;
+    virtual void start_expansion(const resolution_lineage*) = 0;
     virtual void expand_child(const goal_lineage*) = 0;
 };
 
