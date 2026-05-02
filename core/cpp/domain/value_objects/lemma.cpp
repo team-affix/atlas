@@ -1,20 +1,20 @@
-#include "../../../hpp/domain/data_structures/lemma.hpp"
+#include "../../../hpp/domain/value_objects/lemma.hpp"
 
-lemma::lemma(const resolutions& input) :
+lemma::lemma(const std::unordered_set<const resolution_lineage*>& input) :
     rs(input) {
 
-    std::set<const resolution_lineage*> visited;
+    std::unordered_set<const resolution_lineage*> visited;
 
     for (const resolution_lineage* rl : input)
         remove_ancestors(rl, visited);
 
 }
 
-const resolutions& lemma::get_resolutions() const {
+const std::unordered_set<const resolution_lineage*>& lemma::get_resolutions() const {
     return rs;
 }
 
-void lemma::remove_ancestors(const resolution_lineage* rl, std::set<const resolution_lineage*>& visited) {
+void lemma::remove_ancestors(const resolution_lineage* rl, std::unordered_set<const resolution_lineage*>& visited) {
     while (rl) {
         const resolution_lineage* grandparent = rl->parent->parent;
 

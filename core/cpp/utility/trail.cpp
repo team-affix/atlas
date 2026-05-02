@@ -1,4 +1,4 @@
-#include "../../hpp/infrastructure/trail.hpp"
+#include "../../hpp/utility/trail.hpp"
 
 void trail::push() {
     frame_boundary_stack.push(undo_stack.size());
@@ -12,14 +12,14 @@ void trail::pop() {
     // pop the undo stack up to the last frame boundary
     while (undo_stack.size() > checkpoint) {
         // execute the undo function
-        undo_stack.top()();
+        undo_stack.top()->backtrack();
         // pop the undo function
         undo_stack.pop();
     }
 }
 
-void trail::log(const std::function<void()>& a_function) {
-    undo_stack.push(a_function);
+void trail::log(std::unique_ptr<i_backtrackable> op) {
+    undo_stack.push(std::move(op));
 }
 
 size_t trail::depth() const {
