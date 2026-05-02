@@ -1,4 +1,4 @@
-#include "../../../hpp/domain/data_structures/lineage_pool.hpp"
+#include "../../hpp/infrastructure/lineage_pool.hpp"
 
 const goal_lineage* lineage_pool::goal(const resolution_lineage* parent, size_t idx) {
     return intern(goal_lineage{parent, idx});
