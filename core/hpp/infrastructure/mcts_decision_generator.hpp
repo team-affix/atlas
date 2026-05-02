@@ -1,7 +1,6 @@
 #ifndef MCTS_DECISION_GENERATOR_HPP
 #define MCTS_DECISION_GENERATOR_HPP
 
-#include <variant>
 #include <random>
 #include "../domain/interfaces/i_decision_generator.hpp"
 #include "../domain/interfaces/i_lineage_pool.hpp"
