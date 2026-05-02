@@ -3,27 +3,15 @@
 
 elimination_backlog::elimination_backlog()
     :
-    cs(resolver::resolve<i_candidate_store>()),
-    active_goal_store(resolver::resolve<i_active_goal_store>()),
-    inactive_goal_store(resolver::resolve<i_inactive_goal_store>()) {
+    backlogged_elimination_freed_producer(resolver::resolve<i_event_producer<backlogged_elimination_freed_event>>()) {
 }
 
 void elimination_backlog::insert(const resolution_lineage* rl) {
     // get the parent goal
     const goal_lineage* gl = rl->parent;
 
-    // if the goal is resolved, do nothing
-    if (inactive_goal_store.contains(gl))
-        return;
-    
-    // if the goal not in the frontier, add to backlog and return
-    if (!active_goal_store.contains(gl)) {
-        backlog[gl].candidates.insert(rl->idx);
-        return;
-    }
-
-    // if the goal is in the frontier, eliminate right now in candidate_store
-    cs.eliminate(gl, rl->idx);
+    // add the candidate to the backlog
+    backlog[gl].candidates.insert(rl->idx);
 }
 
 void elimination_backlog::goal_activated(const goal_lineage* gl) {
@@ -35,5 +23,9 @@ void elimination_backlog::goal_activated(const goal_lineage* gl) {
 
     // for each index in the backlog, eliminate the candidate
     for (size_t idx : node.mapped().candidates)
-        cs.eliminate(gl, idx);
+        backlogged_elimination_freed_producer.produce(backlogged_elimination_freed_event{gl, idx});
+}
+
+void elimination_backlog::clear() {
+    backlog.clear();
 }
