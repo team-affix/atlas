@@ -1,7 +1,10 @@
-#include "../../../hpp/domain/data_structures/bind_map.hpp"
+#include "../../hpp/infrastructure/bind_map.hpp"
+#include "../../hpp/bootstrap/resolver.hpp"
+#include "../../hpp/utility/backtrackable_map_insert.hpp"
+#include "../../hpp/utility/backtrackable_map_assign.hpp"
 
-bind_map::bind_map(trail& t) :
-    trail_ref(t) {
+bind_map::bind_map() :
+    bindings(resolver::resolve<i_trail>(), {}) {
 }
 
 const expr* bind_map::whnf(const expr* key) {
@@ -13,10 +16,10 @@ const expr* bind_map::whnf(const expr* key) {
     const expr::var& var = std::get<expr::var>(key->content);
 
     // Check if the variable is bound
-    auto it = bindings.find(var.index);
+    auto it = bindings.get().find(var.index);
     
     // If the variable is not bound, return the key
-    if (it == bindings.end())
+    if (it == bindings.get().end())
         return key;
 
     // Get the bound value
@@ -100,12 +103,14 @@ bool bind_map::occurs_check(uint32_t index, const expr* key) {
 
 void bind_map::bind(uint32_t index, const expr* value) {
     // look up the entry for the index
-    auto it = bindings.find(index);
+    auto it = bindings.get().find(index);
 
-    if (it == bindings.end()) {
+    if (it == bindings.get().end()) {
         // if the value is not found, insert it
-        trail_ref.log([this, index]{bindings.erase(index);});
-        it = bindings.insert({index, value}).first;
+        auto insert_mut = std::make_unique<
+            backtrackable_map_insert<
+            std::unordered_map<uint32_t, const expr*>>>(index, value);
+        bindings.mutate(std::move(insert_mut));
     }
     else {
         // Get the old value
@@ -116,10 +121,10 @@ void bind_map::bind(uint32_t index, const expr* value) {
             return;
 
         // If the new value is different from the old value, insert it
-        trail_ref.log([it, old_value]{it->second = old_value;});
-
-        // Update the value
-        it->second = value;
+        auto assign_mut = std::make_unique<
+            backtrackable_map_assign<
+            std::unordered_map<uint32_t, const expr*>>>(index, value);
+        bindings.mutate(std::move(assign_mut));
     }
     
     return;
