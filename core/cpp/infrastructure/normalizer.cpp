@@ -1,12 +1,13 @@
 #include <stdexcept>
-#include "../../../hpp/domain/data_structures/normalizer.hpp"
+#include "../../hpp/infrastructure/normalizer.hpp"
+#include "../../hpp/bootstrap/resolver.hpp"
 
-normalizer::normalizer(expr_pool& ep, bind_map& bm) :
-    expr_pool_ref(ep),
-    bind_map_ref(bm) {
+normalizer::normalizer() :
+    expr_pool_ref(resolver::resolve<i_expr_pool>()),
+    bind_map_ref(resolver::resolve<i_bind_map>()) {
 }
 
-const expr* normalizer::operator()(const expr* e) {
+const expr* normalizer::normalize(const expr* e) {
     // First, get the whnf
     e = bind_map_ref.whnf(e);
     
@@ -19,7 +20,7 @@ const expr* normalizer::operator()(const expr* e) {
         std::vector<const expr*> normalized_args;
         normalized_args.reserve(f->args.size());
         for (const expr* arg : f->args)
-            normalized_args.push_back(operator()(arg));
+            normalized_args.push_back(normalize(arg));
         return expr_pool_ref.functor(f->name, std::move(normalized_args));
     }
 
