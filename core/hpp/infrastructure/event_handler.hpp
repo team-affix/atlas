@@ -4,7 +4,7 @@
 template<typename Event>
 struct event_handler {
     virtual ~event_handler() = default;
-    virtual void operator()(const Event&) = 0;
+    virtual void handle(const Event&) = 0;
 };
 
 #endif

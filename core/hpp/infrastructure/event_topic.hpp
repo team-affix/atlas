@@ -43,7 +43,7 @@ template <typename Event>
 void event_topic<Event>::execute() {
     const Event& event = events.front();
     for (auto* handler : handlers)
-        handler->operator()(event);
+        handler->handle(event);
     events.pop();
 }
 
