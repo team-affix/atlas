@@ -5,7 +5,7 @@
 
 struct i_active_eliminator {
     virtual ~i_active_eliminator() = default;
-    virtual void eliminate(const goal_lineage*, size_t) = 0;
+    virtual void eliminate(const resolution_lineage*) = 0;
 };
 
 #endif

@@ -3,10 +3,10 @@
 
 active_eliminator::active_eliminator()
     : gcs(resolver::resolve<i_goal_candidates_store>()),
-    goal_candidates_changed_producer(resolver::resolve<i_event_producer<goal_candidates_changed_event>>()) {
+    candidate_eliminated_producer(resolver::resolve<i_event_producer<candidate_eliminated_event>>()) {
 }
 
-void active_eliminator::eliminate(const goal_lineage* gl, size_t idx) {
-    gcs.eliminate(gl, idx);
-    goal_candidates_changed_producer.produce(goal_candidates_changed_event{gl});
+void active_eliminator::eliminate(const resolution_lineage* rl) {
+    gcs.eliminate(rl);
+    candidate_eliminated_producer.produce(candidate_eliminated_event{rl});
 }
