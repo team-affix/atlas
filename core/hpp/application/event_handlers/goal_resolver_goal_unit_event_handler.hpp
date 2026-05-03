@@ -4,12 +4,16 @@
 #include "../../infrastructure/event_handler.hpp"
 #include "../../domain/events/goal_unit_event.hpp"
 #include "../../domain/interfaces/i_goal_resolver.hpp"
+#include "../../domain/interfaces/i_goal_candidates_store.hpp"
+#include "../../domain/interfaces/i_lineage_pool.hpp"
 
 struct goal_resolver_goal_unit_event_handler : event_handler<goal_unit_event> {
     goal_resolver_goal_unit_event_handler();
     void handle(const goal_unit_event&) override;
 private:
     i_goal_resolver& goal_resolver;
+    i_goal_candidates_store& goal_candidates_store;
+    i_lineage_pool& lp;
 };
 
 #endif
