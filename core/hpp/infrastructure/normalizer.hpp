@@ -8,9 +8,7 @@
 struct normalizer : i_normalizer {
     normalizer();
     const expr* normalize(const expr*) override;
-#ifndef DEBUG
 private:
-#endif
     i_expr_pool& expr_pool_ref;
     i_bind_map& bind_map_ref;
 };

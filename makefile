@@ -97,10 +97,8 @@ all: core core_debug core_debug_fast parser parser_debug parser_debug_fast \
 core: $(CORE_LIB)
 
 core_debug: $(CORE_DEBUG_LIB)
-	$(CXX) $(CXXFLAGS) -DDEBUG -g core/test/main.cpp -Lbuild -latlas_core_debug -o $(CORE_DEBUG_BIN)
 
 core_debug_fast: $(CORE_DEBUG_FAST_LIB)
-	$(CXX) $(CXXFLAGS) -DDEBUG -g -O3 core/test/main.cpp -Lbuild -latlas_core_debug_fast -o $(CORE_DEBUG_FAST_BIN)
 
 # Parser targets use recursive make: the dependency graph is resolved statically
 # at startup, before codegen has produced the .cpp files.  Phase 1 runs ANTLR4;

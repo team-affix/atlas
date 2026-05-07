@@ -11,9 +11,7 @@ struct cancellable_event_handler :
     virtual ~cancellable_event_handler() = default;
     cancellable_event_handler();
     virtual void execute(const Event&) = 0;
-#ifndef DEBUG
 private:
-#endif
     void operator()(const Event&) final override;
     void operator()(const CancellationEvent&) final override;
     void operator()(const ResetCancellationEvent&) final override;

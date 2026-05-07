@@ -14,9 +14,7 @@ struct sim {
     bool operator()();
     const resolutions& get_resolutions() const;
     const decisions& get_decisions() const;
-#ifndef DEBUG
 protected:
-#endif
     bool solved();
     bool conflicted();
     const resolution_lineage* derive_one();

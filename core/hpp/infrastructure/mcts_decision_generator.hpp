@@ -12,9 +12,7 @@
 struct mcts_decision_generator : i_decision_generator {
     mcts_decision_generator();
     const resolution_lineage* generate() override;
-#ifndef DEBUG
 private:
-#endif
     const goal_lineage* choose_goal();
     size_t choose_candidate(const goal_lineage*);
 

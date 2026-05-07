@@ -12,9 +12,7 @@
 struct goal_resolver : i_goal_resolver {
     goal_resolver();
     void resolve(const resolution_lineage*) override;
-#ifndef DEBUG
 private:
-#endif
     i_database& db;
     i_lineage_pool& lp;
     i_event_producer<goal_resolving_event>& goal_resolving_event_producer;

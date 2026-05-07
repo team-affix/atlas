@@ -12,9 +12,7 @@ struct lineage_pool : i_lineage_pool {
     void trim() override;
     const goal_lineage* import(const goal_lineage*) override;
     const resolution_lineage* import(const resolution_lineage*) override;
-#ifndef DEBUG
 private:
-#endif
     const goal_lineage* intern(goal_lineage&&);
     const resolution_lineage* intern(resolution_lineage&&);
     std::map<goal_lineage, bool> goal_lineages;

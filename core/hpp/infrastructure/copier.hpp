@@ -10,9 +10,7 @@
 struct copier : i_copier {
     copier();
     const expr* copy(const expr*, std::unordered_map<uint32_t, uint32_t>&) override;
-#ifndef DEBUG
 private:
-#endif
     i_var_sequencer& var_seq_ref;
     i_expr_pool& expr_pool_ref;
 };

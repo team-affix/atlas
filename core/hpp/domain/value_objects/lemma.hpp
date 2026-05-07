@@ -7,9 +7,7 @@
 struct lemma {
     lemma(const std::unordered_set<const resolution_lineage*>&);
     const std::unordered_set<const resolution_lineage*>& get_resolutions() const;
-#ifndef DEBUG
 private:
-#endif
     void remove_ancestors(const resolution_lineage*, std::unordered_set<const resolution_lineage*>&);
     std::unordered_set<const resolution_lineage*> rs;
 };

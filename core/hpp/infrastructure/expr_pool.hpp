@@ -11,9 +11,7 @@ struct expr_pool : i_expr_pool {
     const expr* functor(const std::string& name, std::vector<const expr*> args) override;
     const expr* var(uint32_t) override;
     const expr* import(const expr*) override;
-#ifndef DEBUG
 private:
-#endif
     const expr* intern(expr&&);
 
     tracked<std::set<expr>> exprs;

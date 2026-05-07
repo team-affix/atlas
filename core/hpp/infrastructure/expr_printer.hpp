@@ -8,9 +8,7 @@
 struct expr_printer : i_expr_printer {
     expr_printer(std::ostream&);
     void print(const expr*) const override;
-#ifndef DEBUG
 private:
-#endif
     std::ostream& os;
     const i_var_names& var_names;
 };

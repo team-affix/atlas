@@ -8,9 +8,7 @@ template<typename IndexType>
 struct sequencer {
     sequencer(i_trail& t);
     IndexType next();
-#ifndef DEBUG
 private:
-#endif
     tracked<IndexType> index;
 };
 

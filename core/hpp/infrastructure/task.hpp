@@ -8,9 +8,7 @@ struct task {
     task(uint32_t);
     uint32_t priority() const;
     virtual void execute() = 0;
-#ifndef DEBUG
 private:
-#endif
     const uint32_t scheduler_priority;
 };
 

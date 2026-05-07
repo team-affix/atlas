@@ -16,9 +16,7 @@ struct solver {
     solver();
     virtual ~solver();
     bool operator()(std::optional<resolutions>&);
-#ifndef DEBUG
 protected:
-#endif
     virtual std::unique_ptr<sim> construct_sim() = 0;
     virtual void terminate(sim&) = 0;
 

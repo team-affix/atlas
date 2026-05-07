@@ -15,9 +15,7 @@ struct event_topic : i_event_producer<Event>, task {
     void produce(const Event&) override;
     void subscribe(event_handler<Event>&);
     void execute() override;
-#ifndef DEBUG
 private:
-#endif
     scheduler& s;
 
     std::queue<Event> events;

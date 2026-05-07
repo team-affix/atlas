@@ -9,9 +9,7 @@ struct backtrackable_set_erase : i_backtrackable_mutation<S> {
     backtrackable_set_erase(const S::value_type& value);
     void invoke() override;
     void backtrack() override;
-#ifndef DEBUG
 private:
-#endif
     S::value_type value;
 };
 

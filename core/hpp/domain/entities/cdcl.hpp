@@ -15,9 +15,7 @@ struct cdcl : i_cdcl {
     void learn(const lemma&) override;
     void constrain(const resolution_lineage*) override;
     const avoidance& get_avoidance(size_t) override;
-#ifndef DEBUG
 private:
-#endif
     void updated(size_t);
     void link(const goal_lineage*, size_t);
     void erase(size_t);

@@ -9,9 +9,7 @@ struct backtrackable_map_assign : i_backtrackable_mutation<M> {
     backtrackable_map_assign(const M::key_type& key, const M::mapped_type& new_value);
     void invoke() override;
     void backtrack() override;
-#ifndef DEBUG
 private:
-#endif
     M::key_type key;
     M::mapped_type value;
 };

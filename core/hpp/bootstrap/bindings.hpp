@@ -10,9 +10,7 @@ struct bindings {
     void bind(T& value);
     template<typename T>
     T& resolve() const;
-#ifndef DEBUG
 private:
-#endif
     std::unordered_map<std::type_index, void*> entries;
 };
 

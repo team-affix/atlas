@@ -12,9 +12,7 @@ struct elimination_backlog : i_elimination_backlog {
     elimination_backlog();
     void insert(const resolution_lineage*) override;
     void goal_activated(const goal_lineage*) override;
-#ifndef DEBUG
 private:
-#endif
     i_event_producer<backlogged_elimination_freed_event>& backlogged_elimination_freed_producer;
 
     using backlog_type = std::unordered_map<const goal_lineage*, std::unordered_set<size_t>>;
