@@ -5,6 +5,6 @@ goal_deactivating_goal_deactivated_bridge_event_handler::goal_deactivating_goal_
     goal_deactivated_producer(resolver::resolve<i_event_producer<goal_deactivated_event>>()) {
 }
 
-void goal_deactivating_goal_deactivated_bridge_event_handler::execute(const goal_deactivating_event& event) {
+void goal_deactivating_goal_deactivated_bridge_event_handler::handle(const goal_deactivating_event& event) {
     goal_deactivated_producer.produce(goal_deactivated_event{event.gl});
 }
