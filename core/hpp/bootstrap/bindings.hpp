@@ -2,8 +2,8 @@
 #define BINDINGS_HPP
 
 #include <unordered_map>
-#include <cassert>
 #include <typeindex>
+#include "debug_assert.hpp"
 
 struct bindings {
     template<typename T>
@@ -18,7 +18,7 @@ template<typename T>
 void bindings::bind(T& value) {
     std::type_index type{typeid(T)};
     auto [_, success] = entries.insert({type, &value});
-    assert(success);
+    DEBUG_ASSERT(success);
 }
 
 template<typename T>
