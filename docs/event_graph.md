@@ -42,7 +42,6 @@ flowchart TD
   ent_sim_starter(sim_starter)
   ent_initial_goal_activator(initial_goal_activator)
   e_initial_goal_activating[initial_goal_activating_event x N]
-  h_initial_activating_activated[[initial_goal_activating_goal_activated_bridge_EH]]
   e_goal_activated[goal_activated_event  [!] no handler]
   e_goals_activated[initial_goals_activated_event]
   h_goals_activated_starter[[sim_starter_initial_goals_activated_EH]]
@@ -55,10 +54,9 @@ flowchart TD
   h_starting_starter -->|calls start()| ent_sim_starter
   ent_sim_starter -->|push trail| ent_sim_starter
   ent_sim_starter -->|activate_initial_goals()| ent_initial_goal_activator
-  ent_initial_goal_activator --> e_initial_goal_activating
+  ent_initial_goal_activator -->|emits together| e_initial_goal_activating
+  ent_initial_goal_activator -->|emits together| e_goal_activated
   ent_initial_goal_activator -->|lower priority| e_goals_activated
-  e_initial_goal_activating --> h_initial_activating_activated
-  h_initial_activating_activated --> e_goal_activated
   e_goals_activated --> h_goals_activated_starter
   h_goals_activated_starter -->|calls complete_start()| ent_sim_starter
   ent_sim_starter --> e_sim_started
@@ -122,9 +120,8 @@ flowchart TD
   h_repeater[[no_more_unit_goals_repeater_EH  (C)]]
   ent_decider(decider)
   e_deciding[deciding_event]
-  h_deciding_store[[decision_store_deciding_EH]]
-  h_deciding_decided[[deciding_decided_bridge_EH]]
   e_decided[decided_event]
+  h_deciding_store[[decision_store_deciding_EH]]
   h_resolver_decided[[goal_resolver_decided_EH  (C)]]
   ent_goal_resolver(goal_resolver)
 
@@ -132,10 +129,9 @@ flowchart TD
   e_no_more --> h_repeater
   h_repeater -->|lower priority| e_no_more
   h_decider -->|calls decide()| ent_decider
-  ent_decider --> e_deciding
+  ent_decider -->|emits together| e_deciding
+  ent_decider -->|emits together| e_decided
   e_deciding --> h_deciding_store
-  e_deciding --> h_deciding_decided
-  h_deciding_decided --> e_decided
   e_decided --> h_resolver_decided
   h_resolver_decided -->|calls resolve(rl)| ent_goal_resolver
   classDef entity fill:#a8d8ea,stroke:#4a90a4,color:#000,font-size:17px,padding:12px
@@ -170,16 +166,13 @@ flowchart TD
   ent_goal_resolver(goal_resolver)
 
   e_goal_resolving[goal_resolving_event]
-  h_resolving_resolved[[goal_resolving_goal_resolved_bridge_EH]]
   e_goal_resolved[goal_resolved_event]
   h_res_store_resolved[[resolution_store_goal_resolved_EH]]
 
   e_goal_activating[goal_activating_event]
-  h_activating_activated[[goal_activating_goal_activated_bridge_EH]]
   e_goal_activated[goal_activated_event  [!] no handler]
 
   e_goal_deactivating[goal_deactivating_event]
-  h_deactivating_deactivated[[goal_deactivating_goal_deactivated_bridge_EH]]
   e_goal_deactivated[goal_deactivated_event]
   h_deactivated_detector[[goal_deactivated_active_goals_empty_detector_EH]]
   ent_detector(active_goals_empty_detector)
@@ -189,19 +182,15 @@ flowchart TD
   h_solved_stopping[[solved_sim_stopping_bridge_EH]]
   e_sim_stopping[sim_stopping_event]
 
-  ent_goal_resolver --> e_goal_resolving
-  ent_goal_resolver --> e_goal_activating
-  ent_goal_resolver --> e_goal_deactivating
+  ent_goal_resolver -->|emits together| e_goal_resolving
+  ent_goal_resolver -->|emits together| e_goal_resolved
+  ent_goal_resolver -->|emits together| e_goal_activating
+  ent_goal_resolver -->|emits together| e_goal_activated
+  ent_goal_resolver -->|emits together| e_goal_deactivating
+  ent_goal_resolver -->|emits together| e_goal_deactivated
 
-  e_goal_resolving --> h_resolving_resolved
-  h_resolving_resolved --> e_goal_resolved
   e_goal_resolved --> h_res_store_resolved
 
-  e_goal_activating --> h_activating_activated
-  h_activating_activated --> e_goal_activated
-
-  e_goal_deactivating --> h_deactivating_deactivated
-  h_deactivating_deactivated --> e_goal_deactivated
   e_goal_deactivated --> h_deactivated_detector
   h_deactivated_detector -->|calls goal_deactivated()| ent_detector
   ent_detector --> e_active_goals_empty
@@ -263,13 +252,15 @@ flowchart TD
 
 ## 5. Store Clearing
 
-Seven stores are cleared in parallel when `goal_stores_clearing_event` fires.
+Seven stores are cleared in parallel when `goal_stores_clearing_event` fires. `sim_stopper.init_stop()` emits both `goal_stores_clearing_event` and `goal_stores_cleared_event` together — no bridge needed.
 
 ![Store Clearing](img/05_store_clearing.png)
 
 ```mermaid
 flowchart TD
+  ent_sim_stopper(sim_stopper)
   e_gscl[goal_stores_clearing_event]
+  e_gscleared[goal_stores_cleared_event]
   h1[[active_goal_store_clearing_EH]]
   h2[[decision_store_clearing_EH]]
   h3[[goal_candidates_store_clearing_EH]]
@@ -277,9 +268,10 @@ flowchart TD
   h5[[goal_weight_store_clearing_EH]]
   h6[[inactive_goal_store_clearing_EH]]
   h7[[resolution_store_clearing_EH]]
-  h8[[goal_stores_clearing_cleared_bridge_EH]]
-  e_gscleared[goal_stores_cleared_event]
+  h8[[goal_stores_cleared_sim_stopper_EH]]
 
+  ent_sim_stopper -->|emits together| e_gscl
+  ent_sim_stopper -->|emits together| e_gscleared
   e_gscl --> h1
   e_gscl --> h2
   e_gscl --> h3
@@ -287,8 +279,9 @@ flowchart TD
   e_gscl --> h5
   e_gscl --> h6
   e_gscl --> h7
-  e_gscl --> h8
-  h8 --> e_gscleared
+  e_gscleared --> h8
+  classDef entity fill:#a8d8ea,stroke:#4a90a4,color:#000,font-size:17px,padding:12px
+  class ent_sim_stopper entity
 ```
 
 ---

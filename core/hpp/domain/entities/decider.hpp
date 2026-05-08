@@ -5,6 +5,7 @@
 #include "../interfaces/i_decision_generator.hpp"
 #include "../interfaces/i_event_producer.hpp"
 #include "../events/deciding_event.hpp"
+#include "../events/decided_event.hpp"
 
 struct decider : i_decider {
     decider();
@@ -12,6 +13,7 @@ struct decider : i_decider {
 private:
     i_decision_generator& decision_generator;
     i_event_producer<deciding_event>& deciding_producer;
+    i_event_producer<decided_event>& decided_producer;
 };
 
 #endif

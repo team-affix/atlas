@@ -7,6 +7,7 @@
 #include "../interfaces/i_decision_store.hpp"
 #include "../interfaces/i_event_producer.hpp"
 #include "../events/goal_stores_clearing_event.hpp"
+#include "../events/goal_stores_cleared_event.hpp"
 #include "../events/sim_stopped_event.hpp"
 #include "../value_objects/lemma.hpp"
 #include "../../utility/i_trail.hpp"
@@ -20,6 +21,7 @@ private:
     i_decision_store& decision_store;
     i_cdcl& c;
     i_event_producer<goal_stores_clearing_event>& goal_stores_clearing_producer;
+    i_event_producer<goal_stores_cleared_event>& goal_stores_cleared_producer;
     i_event_producer<sim_stopped_event>& sim_stopped_producer;
 
     std::optional<lemma> pending_lemma;
