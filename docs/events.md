@@ -73,6 +73,31 @@ Checks if the affected goal now has zero candidates. If so, emits `conflicted_ev
 
 Both run at a priority below the resolution chain but above `goal_unit_event` and `no_more_unit_goals_event`.
 
+## Drain events
+
+A **drain event** is an event that is assigned an extremely low priority so that it fires only after the events that matter have been processed.
+
+The pattern involves a **leading event** and a **trailing (drain) event**:
+
+- The **leading event** fires and triggers a burst of activity — many handlers run, new events get queued, side effects accumulate.
+- The **drain event** sits at the back of the queue with the lowest priority. It fires only once everything triggered by the leading event has been fully processed.
+
+The key property is that the drain event's priority is set lower than everything it must follow, so by the time it fires, the relevant preceding work has completed.
+
+### Example: `sim_stopping_event` → `sim_stopped_event`
+
+`sim_stopping_event` is the leading event. Among other things, it bridges to `sim_cancelled_event`, which causes all cancellable event handlers to discard any pending work still in the queue.
+
+`sim_stopped_event` is the drain event. It is given a priority low enough that it processes only after all events triggered by `sim_stopping_event` — including the cancellation flush — have finished. By the time `sim_stopped_event` fires, the cancellation flush has completed.
+
+### Example: `goal_unit_event` → `no_more_unit_goals_event`
+
+`goal_unit_event` is the leading event — it fires whenever a goal becomes unit and immediately triggers a resolution. That resolution may produce new child goals, some of which may also be unit, queuing further `goal_unit_event`s.
+
+`no_more_unit_goals_event` is the drain event. Its lower priority means it sits behind all pending `goal_unit_event`s. It only fires once no unit goals remain in the queue — at which point it triggers a decision via MCTS.
+
+Note: the drain pattern does not require cancellation. Even if the events triggered by the leading event are actively processed (rather than discarded), the trailing drain event is still useful as a guaranteed "everything above me has run" signal — as long as its priority is set lower than everything it must follow.
+
 ## Cancellable event handlers
 
 Most application-layer event handlers derive from `cancellable_event_handler<Event, sim_cancelled_event, sim_cancellation_reset_event>`. This allows a handler's `execute()` to be halted if `sim_cancelled_event` is received, and re-enabled when `sim_cancellation_reset_event` fires.

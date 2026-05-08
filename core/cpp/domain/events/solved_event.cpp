@@ -1,5 +1,5 @@
 #include "../../../hpp/domain/events/solved_event.hpp"
 
-std::ostream& operator<<(std::ostream& os, const sim_solved_event&) {
-    return os << "sim_solved_event{}";
+std::ostream& operator<<(std::ostream& os, const solved_event&) {
+    return os << "solved_event{}";
 }
