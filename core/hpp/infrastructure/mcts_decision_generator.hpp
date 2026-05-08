@@ -6,7 +6,7 @@
 #include "../domain/interfaces/i_lineage_pool.hpp"
 #include "../domain/interfaces/i_active_goal_store.hpp"
 #include "../domain/interfaces/i_goal_candidates_store.hpp"
-#include "../../mcts/include/mcts.hpp"
+#include "../../../mcts/include/mcts.hpp"
 #include "mcts_choice.hpp"
 
 struct mcts_decision_generator : i_decision_generator {

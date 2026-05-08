@@ -1,4 +1,4 @@
-#include "../../../external/doctest/doctest/doctest.h"
+#include "../../../doctest/doctest/doctest.h"
 #include "../../../core/hpp/utility/tracked.hpp"
 #include "../../../core/hpp/utility/trail.hpp"
 #include "../../../core/hpp/utility/backtrackable_increment.hpp"

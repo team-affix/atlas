@@ -1,6 +1,7 @@
-#include "../../../external/doctest/doctest/doctest.h"
+#include "../../../doctest/doctest/doctest.h"
 #include "../../../core/hpp/utility/backtrackable_map_insert.hpp"
 #include <map>
+#include <stdexcept>
 
 TEST_CASE("backtrackable_map_insert") {
     std::map<int, int> mp;
@@ -16,5 +17,10 @@ TEST_CASE("backtrackable_map_insert") {
             m.backtrack();
             CHECK(mp.count(7) == 0);
         }
+    }
+
+    SUBCASE("invoke with duplicate key throws") {
+        mp.insert({7, 42});
+        CHECK_THROWS_AS(m.invoke(), std::logic_error);
     }
 }

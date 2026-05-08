@@ -3,7 +3,7 @@
 # ==============================================================================
 
 CXX      = g++
-CXXFLAGS = -std=c++20
+CXXFLAGS = -std=c++20 -I.
 AR       = ar
 ARFLAGS  = rcs
 
@@ -52,7 +52,7 @@ ATLAS_BIN = build/atlas
 # ==============================================================================
 
 # Core: discovered at parse time (source files are always present).
-CORE_SRC = $(wildcard core/cpp/*.cpp)
+CORE_SRC = $(shell find core/cpp -name "*.cpp")
 
 CORE_OBJ            = $(patsubst core/cpp/%.cpp, build/obj/core/%.o,            $(CORE_SRC))
 CORE_DEBUG_OBJ      = $(patsubst core/cpp/%.cpp, build/obj/core_debug/%.o,      $(CORE_SRC))
@@ -97,8 +97,16 @@ all: core core_debug core_debug_fast parser parser_debug parser_debug_fast \
 core: $(CORE_LIB)
 
 core_debug: $(CORE_DEBUG_LIB)
+	$(CXX) $(CXXFLAGS) -DDEBUG -g \
+	    $(shell find core/test -name "*.cpp") \
+	    -Lbuild -latlas_core_debug \
+	    -o $(CORE_DEBUG_BIN)
 
 core_debug_fast: $(CORE_DEBUG_FAST_LIB)
+	$(CXX) $(CXXFLAGS) -DDEBUG -g -O3 \
+	    $(shell find core/test -name "*.cpp") \
+	    -Lbuild -latlas_core_debug_fast \
+	    -o $(CORE_DEBUG_FAST_BIN)
 
 # Parser targets use recursive make: the dependency graph is resolved statically
 # at startup, before codegen has produced the .cpp files.  Phase 1 runs ANTLR4;
@@ -204,46 +212,59 @@ $(CLI_DEBUG_FAST_LIB): $(CLI_DEBUG_FAST_OBJ) | build
 # ==============================================================================
 
 build/obj/core/%.o: core/cpp/%.cpp | build/obj/core
+	mkdir -p $(dir $@)
 	$(CXX) $(CXXFLAGS) -O3 -c $< -o $@
 
 build/obj/core_debug/%.o: core/cpp/%.cpp | build/obj/core_debug
+	mkdir -p $(dir $@)
 	$(CXX) $(CXXFLAGS) -DDEBUG -g -c $< -o $@
 
 build/obj/core_debug_fast/%.o: core/cpp/%.cpp | build/obj/core_debug_fast
+	mkdir -p $(dir $@)
 	$(CXX) $(CXXFLAGS) -DDEBUG -g -O3 -c $< -o $@
 
 build/obj/parser/%.o: parser/generated/%.cpp | parser/generated build/obj/parser
+	mkdir -p $(dir $@)
 	$(CXX) $(CXXFLAGS) -I$(ANTLR4_INC) -O3 -c $< -o $@
 
 build/obj/parser_debug/%.o: parser/generated/%.cpp | parser/generated build/obj/parser_debug
+	mkdir -p $(dir $@)
 	$(CXX) $(CXXFLAGS) -I$(ANTLR4_INC) -DDEBUG -g -c $< -o $@
 
 build/obj/parser_debug_fast/%.o: parser/generated/%.cpp | parser/generated build/obj/parser_debug_fast
+	mkdir -p $(dir $@)
 	$(CXX) $(CXXFLAGS) -I$(ANTLR4_INC) -DDEBUG -g -O3 -c $< -o $@
 
 build/obj/parser/%.o: parser/cpp/%.cpp | build/obj/parser
+	mkdir -p $(dir $@)
 	$(CXX) $(CXXFLAGS) -I$(ANTLR4_INC) -O3 -c $< -o $@
 
 build/obj/parser_debug/%.o: parser/cpp/%.cpp | build/obj/parser_debug
+	mkdir -p $(dir $@)
 	$(CXX) $(CXXFLAGS) -I$(ANTLR4_INC) -DDEBUG -g -c $< -o $@
 
 build/obj/parser_debug_fast/%.o: parser/cpp/%.cpp | build/obj/parser_debug_fast
+	mkdir -p $(dir $@)
 	$(CXX) $(CXXFLAGS) -I$(ANTLR4_INC) -DDEBUG -g -O3 -c $< -o $@
 
 build/obj/cli/%.o: cli/cpp/%.cpp | build/obj/cli
+	mkdir -p $(dir $@)
 	$(CXX) $(CXXFLAGS) -O3 -c $< -o $@
 
 build/obj/cli_debug/%.o: cli/cpp/%.cpp | build/obj/cli_debug
+	mkdir -p $(dir $@)
 	$(CXX) $(CXXFLAGS) -DDEBUG -g -c $< -o $@
 
 build/obj/cli_debug_fast/%.o: cli/cpp/%.cpp | build/obj/cli_debug_fast
+	mkdir -p $(dir $@)
 	$(CXX) $(CXXFLAGS) -DDEBUG -g -O3 -c $< -o $@
 
 # ==============================================================================
 # Build directory creation
 # ==============================================================================
 
-build build/obj/core build/obj/core_debug build/obj/core_debug_fast \
+build \
+build/obj/core build/obj/core_debug build/obj/core_debug_fast \
 build/obj/parser build/obj/parser_debug build/obj/parser_debug_fast \
 build/obj/cli build/obj/cli_debug build/obj/cli_debug_fast:
 	mkdir -p $@

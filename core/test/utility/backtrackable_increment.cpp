@@ -1,4 +1,4 @@
-#include "../../../external/doctest/doctest/doctest.h"
+#include "../../../doctest/doctest/doctest.h"
 #include "../../../core/hpp/utility/backtrackable_increment.hpp"
 
 TEST_CASE("backtrackable_increment") {
@@ -14,5 +14,14 @@ TEST_CASE("backtrackable_increment") {
             m.backtrack();
             CHECK(x == 5);
         }
+    }
+
+    SUBCASE("repeated invocations each increment by 1") {
+        m.invoke();
+        CHECK(x == 6);
+        m.invoke();
+        CHECK(x == 7);
+        m.invoke();
+        CHECK(x == 8);
     }
 }

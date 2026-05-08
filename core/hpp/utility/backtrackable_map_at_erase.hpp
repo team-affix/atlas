@@ -1,7 +1,7 @@
 #ifndef BACKTRACKABLE_MAP_AT_ERASE_HPP
 #define BACKTRACKABLE_MAP_AT_ERASE_HPP
 
-#include <cassert>
+#include "debug_assert.hpp"
 #include "i_backtrackable_mutation.hpp"
 
 template<typename M>
@@ -23,7 +23,7 @@ backtrackable_map_at_erase<M>::backtrackable_map_at_erase(const M::key_type& key
 template<typename M>
 void backtrackable_map_at_erase<M>::invoke() {
     auto erased = this->ref().at(key).erase(value);
-    assert(erased == 1);
+    DEBUG_ASSERT(erased == 1);
 }
 
 template<typename M>

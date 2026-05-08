@@ -1,6 +1,7 @@
-#include "../../../external/doctest/doctest/doctest.h"
+#include "../../../doctest/doctest/doctest.h"
 #include "../../../core/hpp/utility/backtrackable_map_erase.hpp"
 #include <map>
+#include <stdexcept>
 
 TEST_CASE("backtrackable_map_erase") {
     std::map<int, int> mp{{3, 77}};
@@ -16,5 +17,11 @@ TEST_CASE("backtrackable_map_erase") {
             CHECK(mp.count(3) == 1);
             CHECK(mp.at(3) == 77);
         }
+    }
+
+    SUBCASE("invoke with missing key throws") {
+        backtrackable_map_erase<std::map<int, int>> bad(42);
+        bad.capture(mp);
+        CHECK_THROWS_AS(bad.invoke(), std::out_of_range);
     }
 }

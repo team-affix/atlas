@@ -1,4 +1,4 @@
-#include "../../../external/doctest/doctest/doctest.h"
+#include "../../../doctest/doctest/doctest.h"
 #include "../../../core/hpp/utility/trail.hpp"
 #include <vector>
 
@@ -49,13 +49,13 @@ TEST_CASE("trail") {
             t.pop();
             CHECK(order == std::vector<int>{2});
             CHECK(t.depth() == 1);
-        }
-        SUBCASE("second pop undoes frame-1 entry") {
-            t.pop();
-            order.clear();
-            t.pop();
-            CHECK(order == std::vector<int>{1});
-            CHECK(t.depth() == 0);
+
+            SUBCASE("second pop undoes frame-1 entry") {
+                order.clear();
+                t.pop();
+                CHECK(order == std::vector<int>{1});
+                CHECK(t.depth() == 0);
+            }
         }
     }
 }

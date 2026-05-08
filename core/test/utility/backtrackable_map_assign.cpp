@@ -1,6 +1,7 @@
-#include "../../../external/doctest/doctest/doctest.h"
+#include "../../../doctest/doctest/doctest.h"
 #include "../../../core/hpp/utility/backtrackable_map_assign.hpp"
 #include <map>
+#include <stdexcept>
 
 TEST_CASE("backtrackable_map_assign") {
     std::map<int, int> mp{{1, 10}};
@@ -15,5 +16,11 @@ TEST_CASE("backtrackable_map_assign") {
             m.backtrack();
             CHECK(mp.at(1) == 10);
         }
+    }
+
+    SUBCASE("invoke with missing key throws") {
+        backtrackable_map_assign<std::map<int, int>> bad(42, 0);
+        bad.capture(mp);
+        CHECK_THROWS_AS(bad.invoke(), std::out_of_range);
     }
 }
