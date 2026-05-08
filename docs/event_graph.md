@@ -10,6 +10,24 @@ This document maps every event, entity (as producer), and event handler in the c
 
 ---
 
+## Architectural Principles
+
+These rules govern the design of all events, handlers, and entities in this codebase.
+
+### 1. Prefer direct method calls over `-ing` trigger events
+
+When code needs to kick off a phase transition, call the entity method directly (`sim_stopper.init_stop()`, `sim_starter.complete_start()`) rather than emitting a `*_ing` event and relying on a handler to relay it. The `-ing` event pattern is only justified when the set of reactors is open-ended and user-extensible at runtime — the canonical example being goal activation, where an unknown number of stores each need to react independently. In that case, rename the event to sound like a **command** (`activate_goal_event`) rather than a notification, making the intent clear.
+
+### 2. Emit sibling events together — never chain `-ing` to `-ed` via a bridge
+
+Events that conceptually happen at the same moment (e.g. `goal_stores_clearing_event` and `goal_stores_cleared_event`) must be emitted together by the entity that owns the transition, not chained through a bridge handler. Bridges that exist solely to convert `*_ing` to `*_ed` add indirection without value and make the execution order harder to reason about. Priority ordering is the correct tool for sequencing reactions; bridges are not.
+
+### 3. Entities own large phase transitions — application layer does minimal work
+
+Domain entities (`sim_starter`, `sim_stopper`, `conflicted_detector`, `solved_detector`, ...) are responsible for all semantically meaningful decisions: declaring the sim started, declaring it solved, declaring a conflict. Application-layer event handlers should do one of two things only: call a single entity method, or emit a single event. Any handler that makes a conditional decision or encodes domain knowledge (e.g. "if sim_active then conflicted else refuted") is doing entity work and must be moved into an entity.
+
+---
+
 ## 1. Sim Lifecycle
 
 The lifecycle is a continuous loop. `sim_starting_event` is injected once externally to start the first run; thereafter it is re-emitted by the `sim_stopped → sim_starting` bridge to restart.
@@ -425,13 +443,50 @@ Handlers/bridges to delete:
 
 ---
 
-### 7.8  Replace `solved_sim_stopping_bridge` with a direct entity handler
+### 7.8  Terminal events call `sim_stopper.init_stop()` directly — `sim_activity_monitor` deleted
 
-Rather than a bridge, a handler for `solved_event` should call `sim_stopper.init_stop()` directly — the same entry point used by other stop triggers.
-
-Bridge to delete:
+Both `solved_event` and `conflicted_event` are terminal outcomes. Each gets a dedicated handler that calls `sim_stopper.init_stop()` directly — no bridges, no `sim_stopping_event` indirection.
 
 | Bridge (to delete) | Replacement |
 |--------------------|-------------|
-| `solved_sim_stopping_bridge_EH` | `sim_stopper_solved_EH` calls `sim_stopper.init_stop()` |
+| `solved_sim_stopping_bridge_EH` | `sim_stopper_solved_EH` → `sim_stopper.init_stop()` |
+| `conflicted_sim_stopping_bridge_EH` | `sim_stopper_conflicted_EH` → `sim_stopper.init_stop()` |
+
+The `sim_active` / `sim_inactive` boolean and the `sim_activity_monitor` entity that maintained it are **deleted entirely**. Nothing in the new design needs to ask "is the sim currently active?":
+
+- `avoidance_empty_event_handler` used `get_sim_active()` to choose between `conflicted_event` and `refuted_event` — both cases now unconditionally call `conflicted_detector.avoidance_empty()` (see 7.4/7.5).
+- No other handler consulted `sim_activity_monitor`.
+
+To delete:
+
+| To delete | Reason |
+|-----------|--------|
+| `sim_activity_monitor` entity | `sim_active` flag no longer needed anywhere |
+| `i_get_sim_active` interface | consumed only by `avoidance_empty_event_handler`, which is replaced |
+| `i_set_sim_active` interface | never called by any handler (already a gap) |
+
+---
+
+### 7.9  Setup events have higher priority than terminal events — `sim_stopper` is always safe to call
+
+There is a scenario where `solved_event` or `conflicted_event` is emitted during the sim setup phase (e.g. empty initial goals set, or a conflict triggered by initial goal insertion). Without priority ordering, a terminal handler could fire before `sim_started_event`, calling `sim_stopper.init_stop()` on an un-started sim.
+
+**Resolution: priority ordering guarantees the sim is always started before it can be stopped.**
+
+```
+higher priority
+  sim_starting_event
+  initial_goal_activating_event
+  initial_goals_activated_event
+  sim_started_event
+  ── (setup boundary) ──
+  conflicted_event          ← terminal, always fires after sim is fully started
+  solved_event              ← terminal, always fires after sim is fully started
+lower priority
+```
+
+Consequences:
+- Even if `conflicted_event` or `solved_event` is emitted during setup, their handlers are deferred until after `sim_started_event` has fully processed.
+- `sim_stopper.init_stop()` can be called **unconditionally** — no guard needed.
+- The entire concept of "sim active vs. inactive" as a runtime boolean is eliminated. Priority ordering replaces it as the sole sequencing mechanism.
 
