@@ -21,8 +21,9 @@ backtrackable_map_erase<M>::backtrackable_map_erase(const M::key_type& key) : ke
 
 template<typename M>
 void backtrackable_map_erase<M>::invoke() {
-    auto [_, erased] = this->ref().erase(key);
-    assert(erased);
+    value = std::move(this->ref().at(key));
+    auto erased = this->ref().erase(key);
+    assert(erased == 1);
 }
 
 template<typename M>

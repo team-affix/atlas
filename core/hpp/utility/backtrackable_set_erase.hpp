@@ -19,8 +19,8 @@ backtrackable_set_erase<S>::backtrackable_set_erase(const S::value_type& value) 
 
 template<typename S>
 void backtrackable_set_erase<S>::invoke() {
-    auto [_, erased] = this->ref().erase(value);
-    assert(erased);
+    auto erased = this->ref().erase(value);
+    assert(erased == 1);
 }
 
 template<typename S>

@@ -19,4 +19,9 @@ void i_backtrackable_mutation<T>::capture(T& t) {
     pointer = &t;
 }
 
+template<typename T>
+T& i_backtrackable_mutation<T>::ref() const {
+    return *pointer;
+}
+
 #endif

@@ -1,6 +1,7 @@
 #ifndef BACKTRACKABLE_MAP_AT_INSERT_HPP
 #define BACKTRACKABLE_MAP_AT_INSERT_HPP
 
+#include <cassert>
 #include "i_backtrackable_mutation.hpp"
 
 template<typename M>
