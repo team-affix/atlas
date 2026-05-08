@@ -18,10 +18,6 @@ Represents a decision to resolve a goal using a specific database rule:
 - `parent`: the `goal_lineage` being resolved.
 - `idx`: the **absolute index of the rule in the database**.
 
-## Layers
-
-Each layer in the derivation alternates node type: a `goal_lineage` is always resolved by a `resolution_lineage`, whose rule body produces further `goal_lineage` nodes, and so on.
-
 Roots are the **initial goals** (`goal_lineage` nodes with `parent = nullptr`). A **leaf** `resolution_lineage` is one that has no child `goal_lineage` nodes in the current lineage tree — it is the outermost resolution on that branch.
 
 ## `lineage_pool`

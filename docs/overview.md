@@ -37,7 +37,10 @@ Both use **CDCL**. See [cdcl.md](cdcl.md) and [solvers.md](solvers.md).
 
 ## Further reading
 
+See [continuous-documentation.md](continuous-documentation.md) for guidelines on how to update these docs correctly.
+
 - [solvers.md](solvers.md) — Horizon vs Ridge reward functions
+- [lifecycle.md](lifecycle.md) — sim_active / sim_inactive phases and transitions
 - [solving-loop.md](solving-loop.md) — The event-driven solving loop, unit/decided resolution, termination
 - [resolution.md](resolution.md) — Resolution mechanics, variable copying, goal weights
 - [cdcl.md](cdcl.md) — Trail, avoidances, lemmas

@@ -6,19 +6,7 @@ The solver maintains a set of **active goals** — goals currently being worked 
 
 The loop is entirely **event-driven and priority-based**. There is no explicit iteration construct — the scheduler processes queued events in priority order.
 
-## Lifecycle: sim_active and sim_inactive
-
-The solve process alternates between two phases:
-
-**`sim_active`:** The main search loop is running. Goals are being resolved, CDCL constraints applied, decisions made via MCTS. Ends when a solution or conflict is detected.
-
-**`sim_inactive`:** Cleanup and setup of the next sim — clearing stores, learning lemmas, resetting the trail frame, activating initial goals. Persistent state (MCTS tree, learned lemmas) survives into the next `sim_active` phase.
-
-Transitions are automatic and event-driven:
-- `sim_starting_event` → handler sets `sim_active = true` in `i_sim_activity_monitor`.
-- `sim_ending_event` → handler sets `sim_active = false`.
-
-> Note: the old `solver` and `sim` structs in the codebase are legacy. The current architecture folds their responsibilities into the domain directly, with the above two phases as the governing lifecycle.
+See [lifecycle.md](lifecycle.md) for the sim_active / sim_inactive phases and how transitions work.
 
 ## Unit resolution vs. decided resolution
 
@@ -50,8 +38,8 @@ The MCTS tree is **shared across all sims and restarts** — statistics accumula
 
 | Event | Phase | Meaning |
 |---|---|---|
-| `conflicted_event` | `sim_active` | Some active goal has zero candidates. Sim ends; CDCL learns a lemma; restart triggered. |
+| `conflicted_event` | `sim_active` | Some active goal has zero candidates. The sim has reached a dead end. |
 | `refuted_event` | `sim_inactive` | No branch of the remaining search space can yield a solution. Query is unsatisfiable. |
-| `solved_event` | `sim_active` | Active goal store is empty — all goals resolved to facts. A solution has been found. |
+| `solved_event` | `sim_active` | The active goal store is empty. A solution has been found. |
 
 `conflicted_event` and `refuted_event` both mean "no solution reachable from current state." The difference is purely temporal: `conflicted_event` is detected *during* a sim; `refuted_event` is detected *between* sims.

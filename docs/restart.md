@@ -1,6 +1,6 @@
 # Sim Restart Sequence
 
-When a conflict is detected, `sim_restarter::begin_restart()` is called. The restart is split across two methods, separated by an event-driven gap.
+The restart sequence takes place during the `sim_starting` phase. It is split across two methods on `sim_restarter`, separated by an event-driven gap.
 
 ## `begin_restart()`
 
@@ -28,4 +28,4 @@ A handler for `goal_stores_cleared_event` calls `sim_restarter::complete_restart
 6. **`trail.push()`** — opens a fresh sim frame on the trail.
 7. **`initial_goal_activator.activate_initial_goals()`** — re-activates the initial goals, emitting `initial_goal_activating_event` for each, which triggers the initializers to repopulate all stores with fresh candidates, expressions, and weights.
 
-At this point the system is fully set up for the next sim: stores populated, trail frame open, CDCL updated. The new sim is driven by `sim_started_event`. Since initial goals are activated during the `sim_starting` phase (before `sim_started_event` fires), `goal_unit_event`s for those goals may already be queued by the time the sim starts.
+At this point the system is fully set up for the next sim: stores populated, trail frame open, CDCL updated. Once all `sim_starting` handlers have completed, `sim_started_event` fires — driving the new sim. Since initial goals were activated during `sim_starting`, `goal_unit_event`s for those goals may already be queued by the time `sim_started_event` fires.
