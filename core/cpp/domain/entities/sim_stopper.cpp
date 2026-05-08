@@ -7,7 +7,8 @@ sim_stopper::sim_stopper() :
     c(resolver::resolve<i_cdcl>()),
     goal_stores_clearing_producer(resolver::resolve<i_event_producer<goal_stores_clearing_event>>()),
     goal_stores_cleared_producer(resolver::resolve<i_event_producer<goal_stores_cleared_event>>()),
-    sim_stopped_producer(resolver::resolve<i_event_producer<sim_stopped_event>>()) {}
+    sim_stopped_producer(resolver::resolve<i_event_producer<sim_stopped_event>>()) {
+}
 
 void sim_stopper::init_stop() {
     trail.pop();

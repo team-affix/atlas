@@ -3,14 +3,14 @@
 
 #include "../../infrastructure/cancellable_event_handler.hpp"
 #include "../../domain/events/avoidance_empty_event.hpp"
-#include "../../domain/events/sim_cancelled_event.hpp"
-#include "../../domain/events/sim_cancellation_reset_event.hpp"
+#include "../../domain/events/conflicted_event.hpp"
+#include "../../domain/events/sim_started_event.hpp"
 #include "../../domain/events/conflicted_event.hpp"
 #include "../../domain/events/refuted_event.hpp"
 #include "../../domain/interfaces/i_event_producer.hpp"
 #include "../../domain/interfaces/i_get_sim_active.hpp"
 
-struct avoidance_empty_event_handler : cancellable_event_handler<avoidance_empty_event, sim_cancelled_event, sim_cancellation_reset_event> {
+struct avoidance_empty_event_handler : cancellable_event_handler<avoidance_empty_event, conflicted_event, sim_started_event> {
     avoidance_empty_event_handler();
     void execute(const avoidance_empty_event&) override;
 private:

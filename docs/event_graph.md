@@ -71,36 +71,25 @@ flowchart TD
 ```mermaid
 flowchart TD
   e_sim_stopping[sim_stopping_event]
-  h_stopping_cancelled[[sim_stopping_sim_cancelled_bridge_EH]]
-  e_sim_cancelled[sim_cancelled_event]
   h_stopping_stopper[[sim_stopping_sim_stopper_EH]]
   ent_sim_stopper(sim_stopper)
   e_goal_stores_clearing[goal_stores_clearing_event]
-  h_clearing_bridge[[goal_stores_clearing_cleared_bridge_EH]]
   e_goal_stores_cleared[goal_stores_cleared_event]
   h_cleared_stopper[[goal_stores_cleared_sim_stopper_EH]]
   e_sim_stopped[sim_stopped_event]
   h_stopped_starting[[sim_stopped_sim_starting_bridge_EH]]
-  h_stopped_reset[[sim_stopped_sim_cancellation_reset_bridge_EH]]
   e_sim_starting[sim_starting_event]
-  e_sim_cancellation_reset[sim_cancellation_reset_event]
-
-  e_sim_stopping --> h_stopping_cancelled
   e_sim_stopping --> h_stopping_stopper
-  h_stopping_cancelled --> e_sim_cancelled
   h_stopping_stopper -->|calls init_stop()| ent_sim_stopper
   ent_sim_stopper -->|trail.pop() + derive_lemma()| ent_sim_stopper
-  ent_sim_stopper --> e_goal_stores_clearing
-  e_goal_stores_clearing --> h_clearing_bridge
-  h_clearing_bridge --> e_goal_stores_cleared
+  ent_sim_stopper -->|emits together| e_goal_stores_clearing
+  ent_sim_stopper -->|emits together| e_goal_stores_cleared
   e_goal_stores_cleared --> h_cleared_stopper
   h_cleared_stopper -->|calls finish_stop()| ent_sim_stopper
   ent_sim_stopper -->|cdcl.learn(lemma)| ent_sim_stopper
-  ent_sim_stopper --> e_sim_stopped
+  ent_sim_stopper -->|emits together| e_sim_stopped
   e_sim_stopped --> h_stopped_starting
-  e_sim_stopped --> h_stopped_reset
   h_stopped_starting --> e_sim_starting
-  h_stopped_reset --> e_sim_cancellation_reset
   classDef entity fill:#a8d8ea,stroke:#4a90a4,color:#000,font-size:17px,padding:12px
   class ent_sim_stopper entity
 ```
@@ -341,14 +330,14 @@ Bridges to delete and their replacements:
 ### 7.2  `sim_stopper` owns its full cancellation lifecycle
 
 `sim_stopper.init_stop()` should emit `sim_cancelled_event` directly — no bridge.
-`sim_stopper.finish_stop()` should emit `sim_stopped_event` + `sim_cancellation_reset_event` directly — no bridge.
+`sim_stopper.finish_stop()` should emit `sim_stopped_event` directly — no bridge. (`sim_cancellation_reset_event` has since been removed; `sim_started_event` serves as the reset signal instead.)
 
 Bridges to delete:
 
 | Bridge (to delete) | Replacement |
 |--------------------|-------------|
 | `sim_stopping_sim_cancelled_bridge_EH` | `sim_stopper.init_stop()` emits `sim_cancelled_event` |
-| `sim_stopped_sim_cancellation_reset_bridge_EH` | `sim_stopper.finish_stop()` emits `sim_cancellation_reset_event` |
+| `sim_stopped_sim_cancellation_reset_bridge_EH` | `sim_stopper.finish_stop()` emits `sim_stopped_event` (reset via `sim_started_event`) |
 
 ---
 
@@ -482,4 +471,17 @@ Consequences:
 - Even if `conflicted_event` or `solved_event` is emitted during setup, their handlers are deferred until after `sim_started_event` has fully processed.
 - `sim_stopper.init_stop()` can be called **unconditionally** — no guard needed.
 - The entire concept of "sim active vs. inactive" as a runtime boolean is eliminated. Priority ordering replaces it as the sole sequencing mechanism.
+
+---
+
+### 7.10  Remove `sim_cancelled_event` — use `conflicted_event` as the cancellation signal
+
+When the sim is **solved** there is nothing left to cancel — the solving loop has already found its answer and no in-progress handlers need to be interrupted. Emitting a cancellation event on the solve path is unnecessary noise.
+
+When the sim is **conflicted**, the solving loop does need to be interrupted (there may be pending `no_more_unit_goals_event` or `decided_event` handlers queued). `conflicted_event` itself is the natural signal for this — it is already emitted at the right moment and carries the same meaning.
+
+**Changes:**
+- All `cancellable_event_handler<T, sim_cancelled_event, sim_cancellation_reset_event>` become `cancellable_event_handler<T, conflicted_event, sim_started_event>`.
+- `sim_stopper.init_stop()` no longer emits `sim_cancelled_event`.
+- `sim_cancelled_event` struct, header, and `.cpp` are deleted.
 

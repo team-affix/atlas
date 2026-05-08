@@ -4,11 +4,11 @@
 #include "../../infrastructure/cancellable_event_handler.hpp"
 #include "../../domain/events/active_goals_empty_event.hpp"
 #include "../../domain/events/solved_event.hpp"
-#include "../../domain/events/sim_cancelled_event.hpp"
-#include "../../domain/events/sim_cancellation_reset_event.hpp"
+#include "../../domain/events/conflicted_event.hpp"
+#include "../../domain/events/sim_started_event.hpp"
 #include "../../domain/interfaces/i_event_producer.hpp"
 
-struct active_goals_empty_solved_bridge_event_handler : cancellable_event_handler<active_goals_empty_event, sim_cancelled_event, sim_cancellation_reset_event> {
+struct active_goals_empty_solved_bridge_event_handler : cancellable_event_handler<active_goals_empty_event, conflicted_event, sim_started_event> {
     active_goals_empty_solved_bridge_event_handler();
     void execute(const active_goals_empty_event&) override;
 private:
