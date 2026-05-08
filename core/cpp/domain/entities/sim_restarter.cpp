@@ -1,5 +1,5 @@
-#include "../../hpp/domain/entities/sim_restarter.hpp"
-#include "../../hpp/bootstrap/resolver.hpp"
+#include "../../../hpp/domain/entities/sim_restarter.hpp"
+#include "../../../hpp/bootstrap/resolver.hpp"
 
 sim_restarter::sim_restarter() :
     trail(resolver::resolve<i_trail>()),

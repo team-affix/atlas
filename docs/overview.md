@@ -29,41 +29,20 @@ Atlas exposes multiple solvers, each with different search strategies:
 
 | Solver | Description |
 |---|---|
-| `horizon` | Heuristic-guided search using **CGW (Cumulative Grounded Weight)** reward — a measure of how many goals have been resolved against facts. Prioritises paths that feel like they are making progress toward grounding. |
-| `ridge` | Certainty-based search. Has no notion of "closeness to a solution." Instead, it rules out what provably cannot work and then treats all remaining candidate paths fairly. Its heuristic focuses on finding and eliminating **shallow conflicts** first. |
-| `ridge-horizon` | *(planned)* Combines the strengths of both: certainty-based pruning from `ridge` with the progress-aware heuristic of `horizon`. |
+| `horizon` | Uses **CGW (Cumulative Grounded Weight)** as the MCTS reward. See [solvers.md](solvers.md). |
+| `ridge` | Certainty-based. Focuses on finding and eliminating shallow conflicts. See [solvers.md](solvers.md). |
+| `ridge-horizon` | *(planned)* Combines the strengths of both. |
 
-Both solvers use **CDCL (Conflict-Driven Clause Learning)** to avoid revisiting the same decision set twice.
+Both use **CDCL**. See [cdcl.md](cdcl.md) and [solvers.md](solvers.md).
 
-## Core Solving Loop
+## Further reading
 
-The solver maintains a set of **active goals** — goals that are currently being worked on. Each goal has a set of **candidates**: entries in the clause database that could potentially be used to resolve it.
-
-Each iteration of the loop proceeds as follows, in priority order:
-
-1. **Unit propagation:** If any active goal has exactly one remaining candidate, resolve it immediately — no decision needed.
-2. **Conflict detection:** If any active goal has *zero* remaining candidates, emit a conflict. CDCL kicks in to learn a lemma and backtrack.
-3. **Solved detection:** If the active goal store is empty, emit a solved event — a solution has been found.
-4. **Decision:** If no unit goals exist, use **MCTS (Monte Carlo Tree Search)** to decide:
-   - First, which active goal to resolve next.
-   - Then, which candidate (database clause) to resolve it against.
-
-   MCTS operates in two layers, one for goal selection and one for candidate selection.
-
-The solver is **complete with respect to CDCL**: it will never revisit the same combination of decisions twice, bounding the search space even for infinite clause databases.
-
-## Resolution
-
-When a goal is resolved against a candidate clause:
-
-1. **Unification:** The goal's expression is unified with the head of the candidate clause. Variables are bound accordingly.
-2. **Subgoal expansion:** A fresh copy of the candidate's rule body is produced (with variables renamed to avoid collisions). Each atom in the body becomes a new **child goal**, carrying the variable bindings inherited from the unification.
-3. **Goal store update:**
-   - The resolved goal is **deactivated**: removed from all goal stores and inserted into the `inactive_goal_store`.
-   - All child goals are **activated**: inserted into the active goal stores and immediately considered for the next iteration of the loop.
-
-If the candidate was a fact (empty body), no child goals are produced and the resolved goal simply moves to inactive. If the active goal store then becomes empty, a solution is emitted.
-
----
-
-*This document is a work in progress, built through guided documentation sessions.*
+- [solvers.md](solvers.md) — Horizon vs Ridge reward functions
+- [solving-loop.md](solving-loop.md) — The event-driven solving loop, unit/decided resolution, termination
+- [resolution.md](resolution.md) — Resolution mechanics, variable copying, goal weights
+- [cdcl.md](cdcl.md) — Trail, avoidances, lemmas
+- [lineage.md](lineage.md) — Lineage structure, lineage_pool, expr_pool
+- [events.md](events.md) — Event system, naming conventions, priority ordering
+- [elimination.md](elimination.md) — active_eliminator, elimination_backlog
+- [bootstrap.md](bootstrap.md) — Resolver, manifests, wiring
+- [restart.md](restart.md) — Sim restart sequence
