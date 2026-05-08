@@ -12,9 +12,9 @@ struct cancellable_event_handler :
     cancellable_event_handler();
     virtual void execute(const Event&) = 0;
 private:
-    void operator()(const Event&) final override;
-    void operator()(const CancellationEvent&) final override;
-    void operator()(const ResetCancellationEvent&) final override;
+    void handle(const Event&) final override;
+    void handle(const CancellationEvent&) final override;
+    void handle(const ResetCancellationEvent&) final override;
     bool cancelled;
 };
 
@@ -27,19 +27,19 @@ cancellable_event_handler<Event, CancellationEvent, ResetCancellationEvent>::can
 }
 
 template<typename Event, typename CancellationEvent, typename ResetCancellationEvent>
-void cancellable_event_handler<Event, CancellationEvent, ResetCancellationEvent>::operator()(const Event& event) {
+void cancellable_event_handler<Event, CancellationEvent, ResetCancellationEvent>::handle(const Event& event) {
     if (cancelled)
         return;
     execute(event);
 }
 
 template<typename Event, typename CancellationEvent, typename ResetCancellationEvent>
-void cancellable_event_handler<Event, CancellationEvent, ResetCancellationEvent>::operator()(const CancellationEvent& event) {
+void cancellable_event_handler<Event, CancellationEvent, ResetCancellationEvent>::handle(const CancellationEvent&) {
     cancelled = true;
 }
 
 template<typename Event, typename CancellationEvent, typename ResetCancellationEvent>
-void cancellable_event_handler<Event, CancellationEvent, ResetCancellationEvent>::operator()(const ResetCancellationEvent& event) {
+void cancellable_event_handler<Event, CancellationEvent, ResetCancellationEvent>::handle(const ResetCancellationEvent&) {
     cancelled = false;
 }
 

@@ -1,16 +1,18 @@
 #ifndef AVOIDANCE_EMPTY_EVENT_HANDLER_HPP
 #define AVOIDANCE_EMPTY_EVENT_HANDLER_HPP
 
-#include "../../infrastructure/event_handler.hpp"
+#include "../../infrastructure/cancellable_event_handler.hpp"
 #include "../../domain/events/avoidance_empty_event.hpp"
+#include "../../domain/events/sim_cancelled_event.hpp"
+#include "../../domain/events/sim_cancellation_reset_event.hpp"
 #include "../../domain/events/conflicted_event.hpp"
 #include "../../domain/events/refuted_event.hpp"
 #include "../../domain/interfaces/i_event_producer.hpp"
 #include "../../domain/interfaces/i_get_sim_active.hpp"
 
-struct avoidance_empty_event_handler : event_handler<avoidance_empty_event> {
+struct avoidance_empty_event_handler : cancellable_event_handler<avoidance_empty_event, sim_cancelled_event, sim_cancellation_reset_event> {
     avoidance_empty_event_handler();
-    void handle(const avoidance_empty_event&) override;
+    void execute(const avoidance_empty_event&) override;
 private:
     i_get_sim_active& get_sim_active;
     i_event_producer<conflicted_event>& conflicted_producer;

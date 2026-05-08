@@ -7,7 +7,7 @@ goal_resolver_goal_unit_event_handler::goal_resolver_goal_unit_event_handler() :
     lp(resolver::resolve<i_lineage_pool>()) {
 }
 
-void goal_resolver_goal_unit_event_handler::handle(const goal_unit_event& e) {
+void goal_resolver_goal_unit_event_handler::execute(const goal_unit_event& e) {
     // get candidates
     const auto& candidates = goal_candidates_store.at(e.gl);
 

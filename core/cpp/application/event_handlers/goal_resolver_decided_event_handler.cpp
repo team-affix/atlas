@@ -5,6 +5,6 @@ goal_resolver_decided_event_handler::goal_resolver_decided_event_handler() :
     goal_resolver(resolver::resolve<i_goal_resolver>()) {
 }
 
-void goal_resolver_decided_event_handler::handle(const decided_event& e) {
+void goal_resolver_decided_event_handler::execute(const decided_event& e) {
     goal_resolver.resolve(e.rl);
 }

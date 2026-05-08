@@ -1,15 +1,17 @@
 #ifndef GOAL_RESOLVER_GOAL_UNIT_EVENT_HANDLER_HPP
 #define GOAL_RESOLVER_GOAL_UNIT_EVENT_HANDLER_HPP
 
-#include "../../infrastructure/event_handler.hpp"
+#include "../../infrastructure/cancellable_event_handler.hpp"
 #include "../../domain/events/goal_unit_event.hpp"
+#include "../../domain/events/sim_cancelled_event.hpp"
+#include "../../domain/events/sim_cancellation_reset_event.hpp"
 #include "../../domain/interfaces/i_goal_resolver.hpp"
 #include "../../domain/interfaces/i_goal_candidates_store.hpp"
 #include "../../domain/interfaces/i_lineage_pool.hpp"
 
-struct goal_resolver_goal_unit_event_handler : event_handler<goal_unit_event> {
+struct goal_resolver_goal_unit_event_handler : cancellable_event_handler<goal_unit_event, sim_cancelled_event, sim_cancellation_reset_event> {
     goal_resolver_goal_unit_event_handler();
-    void handle(const goal_unit_event&) override;
+    void execute(const goal_unit_event&) override;
 private:
     i_goal_resolver& goal_resolver;
     i_goal_candidates_store& goal_candidates_store;

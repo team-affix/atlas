@@ -9,7 +9,7 @@ router_avoidance_unit_event_handler::router_avoidance_unit_event_handler() :
     active_eliminator(resolver::resolve<i_active_eliminator>()) {
 }
 
-void router_avoidance_unit_event_handler::handle(const avoidance_unit_event& e) {
+void router_avoidance_unit_event_handler::execute(const avoidance_unit_event& e) {
     // get the avoidance
     const avoidance& av = c.get_avoidance(e.avoidance_id);
     

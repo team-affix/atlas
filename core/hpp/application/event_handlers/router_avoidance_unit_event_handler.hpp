@@ -1,17 +1,19 @@
 #ifndef ROUTER_AVOIDANCE_UNIT_EVENT_HANDLER_HPP
 #define ROUTER_AVOIDANCE_UNIT_EVENT_HANDLER_HPP
 
-#include "../../infrastructure/event_handler.hpp"
+#include "../../infrastructure/cancellable_event_handler.hpp"
 #include "../../domain/events/avoidance_unit_event.hpp"
+#include "../../domain/events/sim_cancelled_event.hpp"
+#include "../../domain/events/sim_cancellation_reset_event.hpp"
 #include "../../domain/interfaces/i_cdcl.hpp"
 #include "../../domain/interfaces/i_active_goal_store.hpp"
 #include "../../domain/interfaces/i_inactive_goal_store.hpp"
 #include "../../domain/interfaces/i_elimination_backlog.hpp"
 #include "../../domain/interfaces/i_active_eliminator.hpp"
 
-struct router_avoidance_unit_event_handler : event_handler<avoidance_unit_event> {
+struct router_avoidance_unit_event_handler : cancellable_event_handler<avoidance_unit_event, sim_cancelled_event, sim_cancellation_reset_event> {
     router_avoidance_unit_event_handler();
-    void handle(const avoidance_unit_event&) override;
+    void execute(const avoidance_unit_event&) override;
 private:
     i_cdcl& c;
     i_active_goal_store& active_goal_store;

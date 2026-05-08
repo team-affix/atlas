@@ -7,7 +7,7 @@ avoidance_empty_event_handler::avoidance_empty_event_handler() :
     refuted_producer(resolver::resolve<i_event_producer<refuted_event>>()) {
 }
 
-void avoidance_empty_event_handler::handle(const avoidance_empty_event& event) {
+void avoidance_empty_event_handler::execute(const avoidance_empty_event& event) {
     if (get_sim_active.get_sim_active())
         conflicted_producer.produce(conflicted_event{});
     else
