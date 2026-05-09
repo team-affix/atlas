@@ -74,9 +74,7 @@ flowchart TD
   e_goal_stores_clearing[goal_stores_clearing_event]
   e_goal_stores_cleared[goal_stores_cleared_event]
   h_cleared_stopper[[goal_stores_cleared_sim_stopper_EH]]
-  e_sim_stopped[sim_stopped_event]
-  h_stopped_starting[[sim_stopped_sim_starting_bridge_EH]]
-  e_sim_starting[sim_starting_event]
+  e_sim_stopped[sim_stopped_event  [!] restart policy TBD]
   e_sim_stopping --> h_stopping_stopper
   h_stopping_stopper -->|calls init_stop()| ent_sim_stopper
   ent_sim_stopper -->|trail.pop() + derive_lemma()| ent_sim_stopper
@@ -85,9 +83,7 @@ flowchart TD
   e_goal_stores_cleared --> h_cleared_stopper
   h_cleared_stopper -->|calls finish_stop()| ent_sim_stopper
   ent_sim_stopper -->|cdcl.learn(lemma)| ent_sim_stopper
-  ent_sim_stopper -->|emits together| e_sim_stopped
-  e_sim_stopped --> h_stopped_starting
-  h_stopped_starting --> e_sim_starting
+  ent_sim_stopper --> e_sim_stopped
   classDef entity fill:#a8d8ea,stroke:#4a90a4,color:#000,font-size:17px,padding:12px
   class ent_sim_stopper entity
 ```
