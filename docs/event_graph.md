@@ -157,10 +157,8 @@ flowchart TD
 
   e_goal_deactivating[goal_deactivating_event]
   e_goal_deactivated[goal_deactivated_event]
-  h_deactivated_detector[[goal_deactivated_active_goals_empty_detector_EH]]
-  ent_detector(active_goals_empty_detector)
-  e_active_goals_empty[active_goals_empty_event]
-  h_empty_solved[[active_goals_empty_solved_bridge_EH  (C)]]
+  h_sdet_deactivated[[solved_detector_goal_deactivated_EH]]
+  ent_sdet(solved_detector)
   e_solved[solved_event]
   h_solved_stopping[[solved_sim_stopping_bridge_EH]]
   e_sim_stopping[sim_stopping_event]
@@ -174,15 +172,13 @@ flowchart TD
 
   e_goal_resolved --> h_res_store_resolved
 
-  e_goal_deactivated --> h_deactivated_detector
-  h_deactivated_detector -->|calls goal_deactivated()| ent_detector
-  ent_detector --> e_active_goals_empty
-  e_active_goals_empty --> h_empty_solved
-  h_empty_solved --> e_solved
+  e_goal_deactivated --> h_sdet_deactivated
+  h_sdet_deactivated -->|calls detect_solved()| ent_sdet
+  ent_sdet --> e_solved
   e_solved --> h_solved_stopping
   h_solved_stopping --> e_sim_stopping
   classDef entity fill:#a8d8ea,stroke:#4a90a4,color:#000,font-size:17px,padding:12px
-  class ent_goal_resolver,ent_detector entity
+  class ent_goal_resolver,ent_sdet entity
 ```
 
 Empty candidates end the run with a conflict:
