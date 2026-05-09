@@ -48,3 +48,5 @@ Events sharing a number are emitted together and have the same priority tier.
 | 101  | `sim_stopped_event`                  | AFTER `goal_stores_cleared_event`                                 |       |
 | --   | --                                   | --                                                                | END CLEANUP |
 | —    | `never_event`                        | never emitted                                                     |       |
+
+NOTE FOR FUTURE: we will need to somehow allow cdcl to have avoidance_unit_events route to the elimination_backlog despite being in cancelled state at end of sim. we may need a second event handler that has an inverted cancellation state and routes only to elim backlog?
