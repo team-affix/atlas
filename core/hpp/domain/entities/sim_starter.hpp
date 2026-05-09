@@ -5,7 +5,7 @@
 #include "../interfaces/i_initial_goal_activator.hpp"
 #include "../interfaces/i_event_producer.hpp"
 #include "../events/sim_started_event.hpp"
-#include "../events/no_more_unit_goals_event.hpp"
+#include "../events/fixpoint_reached_event.hpp"
 #include "../../utility/i_trail.hpp"
 
 struct sim_starter : i_sim_starter {
@@ -16,7 +16,7 @@ private:
     i_trail& trail;
     i_initial_goal_activator& initial_goal_activator;
     i_event_producer<sim_started_event>& sim_started_producer;
-    i_event_producer<no_more_unit_goals_event>& no_more_unit_goals_producer;
+    i_event_producer<fixpoint_reached_event>& fixpoint_reached_producer;
 };
 
 #endif

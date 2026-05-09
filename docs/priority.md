@@ -13,6 +13,7 @@ Events sharing a number are emitted together and have the same priority tier.
 | --   | --                                   | --                                                                | SIM ZONE |
 | 118  | `sim_started_event`                  | AFTER `initial_goals_activated_event`                             |       |
 | --   | --                                   | --                                                                | EARLY TERMINATION ZONE |
+| 117  | `sim_termination_condition_reached_event`   | AFTER `sim_started_event`, BEFORE all sim events                  |       |
 | 117  | `solved_event`                       | AFTER `sim_started_event`, BEFORE all sim events                  |       |
 | 117  | `conflicted_event`                   | AFTER `sim_started_event`, BEFORE all sim events                  |       |
 | --   | --                                   | --                                                                | END EARLY TERMINATION |
@@ -38,7 +39,7 @@ Events sharing a number are emitted together and have the same priority tier.
 | 106  | `goal_resolved_event`                | —                                                                 |       |
 | --   | --                                   | --                                                                | END RESOLUTION |
 | 105  | `goal_unit_event`                    | —                                                                 |       |
-| 104  | `no_more_unit_goals_event`           | AFTER `goal_unit_event`                                           |       |
+| 104  | `fixpoint_reached_event`             | AFTER `goal_unit_event`                                           |       |
 | --   | --                                   | --                                                                | END SIM |
 | 103  | `refuted_event`                      | AFTER `conflicted_event`                                          |       |
 | 102  | `goal_stores_clearing_event`         | AFTER `conflicted_event` / `solved_event`                         |       |
