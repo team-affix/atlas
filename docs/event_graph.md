@@ -196,15 +196,19 @@ Empty candidates end the run with a conflict:
 ```mermaid
 flowchart TD
   e_goal_candidates_empty[goal_candidates_empty_event]
-  h_empty_conflicted[[goal_candidates_empty_conflicted_bridge_EH]]
+  h_cdet_candidates[[conflicted_detector_goal_candidates_empty_EH]]
+  ent_cdet(conflicted_detector)
   e_conflicted[conflicted_event]
   h_conflicted_stopping[[conflicted_sim_stopping_bridge_EH]]
   e_sim_stopping[sim_stopping_event]
 
-  e_goal_candidates_empty --> h_empty_conflicted
-  h_empty_conflicted --> e_conflicted
+  e_goal_candidates_empty --> h_cdet_candidates
+  h_cdet_candidates -->|calls candidates_empty()| ent_cdet
+  ent_cdet --> e_conflicted
   e_conflicted --> h_conflicted_stopping
   h_conflicted_stopping --> e_sim_stopping
+  classDef entity fill:#a8d8ea,stroke:#4a90a4,color:#000,font-size:17px,padding:12px
+  class ent_cdet entity
 ```
 
 ---
@@ -221,18 +225,18 @@ flowchart TD
   e_avoidance_unit[avoidance_unit_event]
   e_avoidance_empty[avoidance_empty_event]
   h_router[[router_avoidance_unit_EH  (C)]]
-  h_avoidance_empty[[avoidance_empty_EH  (C)]]
+  h_cdet_avoidance[[conflicted_detector_avoidance_empty_EH  (C)]]
+  ent_cdet(conflicted_detector)
   e_conflicted[conflicted_event]
-  e_refuted[refuted_event  [!] no handler]
 
   ent_cdcl -.->|via updated() - unreachable| e_avoidance_unit
   ent_cdcl -.->|via updated() - unreachable| e_avoidance_empty
   e_avoidance_unit --> h_router
-  e_avoidance_empty --> h_avoidance_empty
-  h_avoidance_empty --> e_conflicted
-  h_avoidance_empty --> e_refuted
+  e_avoidance_empty --> h_cdet_avoidance
+  h_cdet_avoidance -->|calls avoidance_empty()| ent_cdet
+  ent_cdet --> e_conflicted
   classDef entity fill:#a8d8ea,stroke:#4a90a4,color:#000,font-size:17px,padding:12px
-  class ent_cdcl entity
+  class ent_cdcl,ent_cdet entity
 ```
 
 ---
