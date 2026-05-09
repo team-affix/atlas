@@ -26,8 +26,6 @@ Events sharing a number are emitted together and have the same priority tier.
 | --   | --                                   | --                                                                | END ELIMINATION PRODUCTION      |
 | 111  | `goal_expr_changed_event`            | —                                                                 |       |
 | 110  | `representative_changed_event`       | —                                                                 |       |
-| 110  | `deciding_event`                     | —                                                                 |       |
-| 110  | `decided_event`                      | —                                                                 |       |
 | 109  | `goal_unit_event`                    | —                                                                 |       |
 | 108  | `no_more_unit_goals_event`           | AFTER `goal_unit_event`                                           |       |
 | 107  | `goal_resolving_event`               | —                                                                 |       |

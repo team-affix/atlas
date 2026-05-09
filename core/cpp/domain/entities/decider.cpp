@@ -3,12 +3,11 @@
 
 decider::decider() :
     decision_generator(resolver::resolve<i_decision_generator>()),
-    deciding_producer(resolver::resolve<i_event_producer<deciding_event>>()),
-    decided_producer(resolver::resolve<i_event_producer<decided_event>>()) {
-}
+    decision_store(resolver::resolve<i_decision_store>()),
+    goal_resolver(resolver::resolve<i_goal_resolver>()) {}
 
 void decider::decide() const {
     auto rl = decision_generator.generate();
-    deciding_producer.produce(deciding_event{rl});
-    decided_producer.produce(decided_event{rl});
+    decision_store.insert(rl);
+    goal_resolver.resolve(rl);
 }
