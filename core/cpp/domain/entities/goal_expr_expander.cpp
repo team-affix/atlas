@@ -1,5 +1,6 @@
 #include "../../../hpp/domain/entities/goal_expr_expander.hpp"
 #include "../../../hpp/bootstrap/resolver.hpp"
+#include "debug_assert.hpp"
 
 goal_expr_expander::goal_expr_expander() :
     db(resolver::resolve<i_database>()),
@@ -25,7 +26,7 @@ void goal_expr_expander::start_expansion(const resolution_lineage* rl) {
     bool success = bm.unify(goal_expr, r.head, rep_changes);
     
     // should not fail
-    assert(success);
+    DEBUG_ASSERT(success);
 
     // emit events for the rep changes
     while (!rep_changes.empty()) {
