@@ -34,18 +34,18 @@ Events sharing a number are emitted together and have the same priority tier.
 | --   | --                                   | --                                                                | RESOLUTION ZONE |
 | 109  | `goal_resolving_event`               | —                                                                 |       |
 | 108  | `goal_activating_event`              | —                                                                 |       |
-| 108  | `goal_deactivating_event`            | —                                                                 |       |
-| 107  | `goal_activated_event`               | —                                                                 |       |
-| 107  | `goal_deactivated_event`             | —                                                                 |       |
-| 106  | `goal_resolved_event`                | —                                                                 |       |
+| 107  | `goal_deactivating_event`            | —                                                                 |       |
+| 106  | `goal_activated_event`               | —                                                                 |       |
+| 105  | `goal_deactivated_event`             | —                                                                 |       |
+| 104  | `goal_resolved_event`                | —                                                                 |       |
 | --   | --                                   | --                                                                | END RESOLUTION |
-| 105  | `goal_unit_event`                    | —                                                                 |       |
-| 104  | `fixpoint_reached_event`             | AFTER `goal_unit_event`                                           |       |
+| 103  | `goal_unit_event`                    | —                                                                 |       |
+| 102  | `fixpoint_reached_event`             | AFTER `goal_unit_event`                                           |       |
 | --   | --                                   | --                                                                | END SIM |
 | --   | --                                   | --                                                                | CLEANUP ZONE |
-| 102  | `goal_stores_clearing_event`         | AFTER `conflicted_event` / `solved_event`                         |       |
-| 102  | `goal_stores_cleared_event`          | AFTER `conflicted_event` / `solved_event`                         |       |
-| 101  | `sim_stopped_event`                  | AFTER `goal_stores_cleared_event`                                 |       |
+| 101  | `goal_stores_clearing_event`         | AFTER `conflicted_event` / `solved_event`                         |       |
+| 101  | `goal_stores_cleared_event`          | AFTER `conflicted_event` / `solved_event`                         |       |
+| 100  | `sim_stopped_event`                  | AFTER `goal_stores_cleared_event`                                 |       |
 | --   | --                                   | --                                                                | END CLEANUP |
 | —    | `never_event`                        | never emitted                                                     |       |
 
