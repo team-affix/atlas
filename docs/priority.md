@@ -12,6 +12,7 @@ Events sharing a number are emitted together and have the same priority tier.
 | --   | --                                   | --                                                                | END SIM SETUP |
 | --   | --                                   | --                                                                | SIM ZONE |
 | 118  | `sim_started_event`                  | AFTER `initial_goals_activated_event`                             |       |
+| 117  | `solved_event`                       | AFTER `sim_started_event`, BEFORE all sim events                  |       |
 | 117  | `conflicted_event`                   | AFTER `sim_started_event`, BEFORE all sim events                  |       |
 | --   | --                                   | --                                                                | CONFLICT PRODUCTION ZONE |
 | 116  | `avoidance_empty_event`              | —                                                                 |       |
@@ -26,15 +27,16 @@ Events sharing a number are emitted together and have the same priority tier.
 | --   | --                                   | --                                                                | END ELIMINATION PRODUCTION      |
 | 111  | `goal_expr_changed_event`            | —                                                                 |       |
 | 110  | `representative_changed_event`       | —                                                                 |       |
-| 109  | `goal_unit_event`                    | —                                                                 |       |
-| 108  | `no_more_unit_goals_event`           | AFTER `goal_unit_event`                                           |       |
-| 107  | `goal_resolving_event`               | —                                                                 |       |
-| 106  | `goal_activating_event`              | —                                                                 |       |
-| 106  | `goal_deactivating_event`            | —                                                                 |       |
-| 105  | `goal_activated_event`               | —                                                                 |       |
-| 105  | `goal_deactivated_event`             | —                                                                 |       |
-| 104  | `goal_resolved_event`                | —                                                                 |       |
-| 103  | `solved_event`                       | --                                                                |       |
+| --   | --                                   | --                                                                | RESOLUTION ZONE |
+| 109  | `goal_resolving_event`               | —                                                                 |       |
+| 108  | `goal_activating_event`              | —                                                                 |       |
+| 108  | `goal_deactivating_event`            | —                                                                 |       |
+| 107  | `goal_activated_event`               | —                                                                 |       |
+| 107  | `goal_deactivated_event`             | —                                                                 |       |
+| 106  | `goal_resolved_event`                | —                                                                 |       |
+| --   | --                                   | --                                                                | END RESOLUTION |
+| 105  | `goal_unit_event`                    | —                                                                 |       |
+| 104  | `no_more_unit_goals_event`           | AFTER `goal_unit_event`                                           |       |
 | 103  | `refuted_event`                      | AFTER `conflicted_event`                                          |       |
 | 102  | `goal_stores_clearing_event`         | AFTER `conflicted_event` / `solved_event`                         |       |
 | 102  | `goal_stores_cleared_event`          | AFTER `conflicted_event` / `solved_event`                         |       |
