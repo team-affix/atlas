@@ -160,8 +160,8 @@ flowchart TD
   h_sdet_deactivated[[solved_detector_goal_deactivated_EH]]
   ent_sdet(solved_detector)
   e_solved[solved_event]
-  h_solved_stopping[[solved_sim_stopping_bridge_EH]]
-  e_sim_stopping[sim_stopping_event]
+  h_solved_stopper[[sim_stopper_solved_EH]]
+  ent_stopper(sim_stopper)
 
   ent_goal_resolver -->|emits together| e_goal_resolving
   ent_goal_resolver -->|emits together| e_goal_resolved
@@ -175,10 +175,10 @@ flowchart TD
   e_goal_deactivated --> h_sdet_deactivated
   h_sdet_deactivated -->|calls detect_solved()| ent_sdet
   ent_sdet --> e_solved
-  e_solved --> h_solved_stopping
-  h_solved_stopping --> e_sim_stopping
+  e_solved --> h_solved_stopper
+  h_solved_stopper -->|calls init_stop()| ent_stopper
   classDef entity fill:#a8d8ea,stroke:#4a90a4,color:#000,font-size:17px,padding:12px
-  class ent_goal_resolver,ent_sdet entity
+  class ent_goal_resolver,ent_sdet,ent_stopper entity
 ```
 
 Empty candidates end the run with a conflict:
@@ -191,14 +191,14 @@ flowchart TD
   h_cdet_candidates[[conflicted_detector_goal_candidates_empty_EH]]
   ent_cdet(conflicted_detector)
   e_conflicted[conflicted_event]
-  h_conflicted_stopping[[conflicted_sim_stopping_bridge_EH]]
-  e_sim_stopping[sim_stopping_event]
+  h_conflicted_stopper[[sim_stopper_conflicted_EH]]
+  ent_stopper(sim_stopper)
 
   e_goal_candidates_empty --> h_cdet_candidates
   h_cdet_candidates -->|calls candidates_empty()| ent_cdet
   ent_cdet --> e_conflicted
-  e_conflicted --> h_conflicted_stopping
-  h_conflicted_stopping --> e_sim_stopping
+  e_conflicted --> h_conflicted_stopper
+  h_conflicted_stopper -->|calls init_stop()| ent_stopper
   classDef entity fill:#a8d8ea,stroke:#4a90a4,color:#000,font-size:17px,padding:12px
   class ent_cdet entity
 ```
