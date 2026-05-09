@@ -46,7 +46,6 @@ flowchart TD
   e_goals_activated[initial_goals_activated_event]
   h_goals_activated_starter[[sim_starter_initial_goals_activated_EH]]
   e_sim_started[sim_started_event]
-  h_sim_started_no_more[[sim_started_no_more_unit_goals_bridge_EH]]
   e_no_more_unit_goals[no_more_unit_goals_event]
 
   external --> e_sim_starting
@@ -59,9 +58,8 @@ flowchart TD
   ent_initial_goal_activator -->|lower priority| e_goals_activated
   e_goals_activated --> h_goals_activated_starter
   h_goals_activated_starter -->|calls complete_start()| ent_sim_starter
-  ent_sim_starter --> e_sim_started
-  e_sim_started --> h_sim_started_no_more
-  h_sim_started_no_more --> e_no_more_unit_goals
+  ent_sim_starter -->|emits together| e_sim_started
+  ent_sim_starter -->|emits together| e_no_more_unit_goals
   classDef entity fill:#a8d8ea,stroke:#4a90a4,color:#000,font-size:17px,padding:12px
   class external,ent_sim_starter,ent_initial_goal_activator entity
 ```
