@@ -7,15 +7,16 @@ Events sharing a number are emitted together and have the same priority tier.
 | #    | Event                                | Constraint                                                        | Extra |
 | ---  | ------------------------------------ | ----------------------------------------------------------------- | ----- |
 | --   | --                                   | --                                                                | SIM SETUP ZONE |
-| 120  | `initial_goal_activating_event`      | BEFORE `initial_goals_activated_event`                            |       |
-| 119  | `initial_goals_activated_event`      | AFTER `initial_goal_activating_event`, BEFORE `sim_started_event` |       |
+| 122  | `initial_goal_activating_event`      | BEFORE `initial_goals_activated_event`                            |       |
+| 121  | `initial_goals_activated_event`      | AFTER `initial_goal_activating_event`, BEFORE `sim_started_event` |       |
 | --   | --                                   | --                                                                | END SIM SETUP |
 | --   | --                                   | --                                                                | SIM ZONE |
-| 118  | `sim_started_event`                  | AFTER `initial_goals_activated_event`                             |       |
+| 120  | `sim_started_event`                  | AFTER `initial_goals_activated_event`                             |       |
 | --   | --                                   | --                                                                | EARLY TERMINATION ZONE |
-| 117  | `sim_termination_condition_reached_event`   | AFTER `sim_started_event`, BEFORE all sim events                  |       |
-| 117  | `solved_event`                       | AFTER `sim_started_event`, BEFORE all sim events                  |       |
+| 119  | `sim_termination_condition_reached_event`   | BEFORE `conflicted_event`                                  |       |
+| 118  | `refuted_event`                      | AFTER `conflicted_event`                                          |       |
 | 117  | `conflicted_event`                   | AFTER `sim_started_event`, BEFORE all sim events                  |       |
+| 117  | `solved_event`                       | AFTER `sim_started_event`, BEFORE all sim events                  |       |
 | --   | --                                   | --                                                                | END EARLY TERMINATION |
 | --   | --                                   | --                                                                | CONFLICT PRODUCTION ZONE |
 | 116  | `avoidance_empty_event`              | —                                                                 |       |
@@ -41,8 +42,9 @@ Events sharing a number are emitted together and have the same priority tier.
 | 105  | `goal_unit_event`                    | —                                                                 |       |
 | 104  | `fixpoint_reached_event`             | AFTER `goal_unit_event`                                           |       |
 | --   | --                                   | --                                                                | END SIM |
-| 103  | `refuted_event`                      | AFTER `conflicted_event`                                          |       |
+| --   | --                                   | --                                                                | CLEANUP ZONE |
 | 102  | `goal_stores_clearing_event`         | AFTER `conflicted_event` / `solved_event`                         |       |
 | 102  | `goal_stores_cleared_event`          | AFTER `conflicted_event` / `solved_event`                         |       |
 | 101  | `sim_stopped_event`                  | AFTER `goal_stores_cleared_event`                                 |       |
+| --   | --                                   | --                                                                | END CLEANUP |
 | —    | `never_event`                        | never emitted                                                     |       |
