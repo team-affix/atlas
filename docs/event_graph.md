@@ -193,14 +193,20 @@ flowchart TD
   e_conflicted[conflicted_event]
   h_conflicted_stopper[[sim_stopper_conflicted_EH]]
   ent_stopper(sim_stopper)
+  h_rdet[[refuted_detector_conflicted_EH]]
+  ent_rdet(refuted_detector)
+  e_refuted[refuted_event  [!] restart policy TBD]
 
   e_goal_candidates_empty --> h_cdet_candidates
   h_cdet_candidates -->|calls candidates_empty()| ent_cdet
   ent_cdet --> e_conflicted
   e_conflicted --> h_conflicted_stopper
   h_conflicted_stopper -->|calls init_stop()| ent_stopper
+  e_conflicted --> h_rdet
+  h_rdet -->|calls conflicted()| ent_rdet
+  ent_rdet -->|if decisions empty| e_refuted
   classDef entity fill:#a8d8ea,stroke:#4a90a4,color:#000,font-size:17px,padding:12px
-  class ent_cdet entity
+  class ent_cdet,ent_rdet entity
 ```
 
 ---
@@ -220,6 +226,9 @@ flowchart TD
   h_cdet_avoidance[[conflicted_detector_avoidance_empty_EH  (C)]]
   ent_cdet(conflicted_detector)
   e_conflicted[conflicted_event]
+  h_rdet[[refuted_detector_conflicted_EH]]
+  ent_rdet(refuted_detector)
+  e_refuted[refuted_event  [!] restart policy TBD]
 
   ent_cdcl -.->|via updated() - unreachable| e_avoidance_unit
   ent_cdcl -.->|via updated() - unreachable| e_avoidance_empty
@@ -227,8 +236,11 @@ flowchart TD
   e_avoidance_empty --> h_cdet_avoidance
   h_cdet_avoidance -->|calls avoidance_empty()| ent_cdet
   ent_cdet --> e_conflicted
+  e_conflicted --> h_rdet
+  h_rdet -->|calls conflicted()| ent_rdet
+  ent_rdet -->|if decisions empty| e_refuted
   classDef entity fill:#a8d8ea,stroke:#4a90a4,color:#000,font-size:17px,padding:12px
-  class ent_cdcl,ent_cdet entity
+  class ent_cdcl,ent_cdet,ent_rdet entity
 ```
 
 ---
@@ -478,4 +490,27 @@ When the sim is **conflicted**, the solving loop does need to be interrupted (th
 - All `cancellable_event_handler<T, sim_cancelled_event, sim_cancellation_reset_event>` become `cancellable_event_handler<T, conflicted_event, sim_started_event>`.
 - `sim_stopper.init_stop()` no longer emits `sim_cancelled_event`.
 - `sim_cancelled_event` struct, header, and `.cpp` are deleted.
+
+---
+
+### 7.11  Re-introduce `refuted_event` and `refuted_detector` with corrected semantics
+
+`refuted` is **not** mutually exclusive with `conflicted`. It is a strictly stronger condition:
+
+```
+refuted  ≡  conflicted  AND  decision_store.size() == 0
+```
+
+A conflict with no decisions on the stack means there is no search state left to backtrack to — the problem itself is unsatisfiable. This is when the solver must break out of the simulation cycle entirely (see 7.6 for the pending restart policy).
+
+**New entity: `refuted_detector`**
+- Single method `conflicted()`.
+- Checks `decision_store.size() == 0`.
+- If true, emits `refuted_event{}`.
+
+**New handler: `refuted_detector_conflicted_event_handler`**
+- Listens for `conflicted_event`.
+- Calls `refuted_detector.conflicted()`.
+
+`refuted_event` therefore fires on every conflict at the bottom of the search tree. It will be consumed by whatever restart/termination logic is designed under 7.6.
 
