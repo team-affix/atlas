@@ -30,15 +30,13 @@ Domain entities (`sim_starter`, `sim_stopper`, `conflicted_detector`, `solved_de
 
 ## 1. Sim Lifecycle
 
-The lifecycle is a continuous loop. `sim_starting_event` is injected once externally to start the first run; thereafter it is re-emitted by the `sim_stopped → sim_starting` bridge to restart.
+The lifecycle is a continuous loop. `sim_starter.start()` is called once externally to start the first run; thereafter it is called again by the restart handler when `sim_stopped_event` fires (unless cancelled by `refuted_event`).
 
 ![Sim Lifecycle - Start](img/01a_sim_lifecycle_start.png)
 
 ```mermaid
 flowchart TD
-  external([external (first start)])
-  e_sim_starting[sim_starting_event]
-  h_starting_starter[[sim_starter_sim_starting_EH]]
+  external([external calls sim_starter.start()])
   ent_sim_starter(sim_starter)
   ent_initial_goal_activator(initial_goal_activator)
   e_initial_goal_activating[initial_goal_activating_event x N]
@@ -48,9 +46,7 @@ flowchart TD
   e_sim_started[sim_started_event]
   e_no_more_unit_goals[no_more_unit_goals_event]
 
-  external --> e_sim_starting
-  e_sim_starting --> h_starting_starter
-  h_starting_starter -->|calls start()| ent_sim_starter
+  external -->|calls start()| ent_sim_starter
   ent_sim_starter -->|push trail| ent_sim_starter
   ent_sim_starter -->|activate_initial_goals()| ent_initial_goal_activator
   ent_initial_goal_activator -->|emits together| e_initial_goal_activating
@@ -463,7 +459,6 @@ There is a scenario where `solved_event` or `conflicted_event` is emitted during
 
 ```
 higher priority
-  sim_starting_event
   initial_goal_activating_event
   initial_goals_activated_event
   sim_started_event
