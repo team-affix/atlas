@@ -1,6 +1,5 @@
 #include "../../../hpp/domain/entities/unifier.hpp"
 #include "../../../hpp/bootstrap/resolver.hpp"
-#include "debug_assert.hpp"
 
 unifier::unifier(const resolution_lineage* rl) :
     rl(rl),
@@ -8,8 +7,7 @@ unifier::unifier(const resolution_lineage* rl) :
     unify_resuming_producer(resolver::resolve<i_event_producer<unify_resuming_event>>()),
     unify_yielded_producer(resolver::resolve<i_event_producer<unify_yielded_event>>()),
     unify_failed_producer(resolver::resolve<i_event_producer<unify_failed_event>>()),
-    unify_finished_producer(resolver::resolve<i_event_producer<unify_finished_event>>()) {
-}
+    unify_finished_producer(resolver::resolve<i_event_producer<unify_finished_event>>()) {}
 
 const expr* unifier::whnf(const expr* key) {
     if (!std::holds_alternative<expr::var>(key->content))
@@ -71,25 +69,32 @@ void unifier::process_pair(const expr* lhs, const expr* rhs) {
         return;
 
     if (lv) {
-        DEBUG_ASSERT(!occurs_check(lv->index, rhs));
+        if (occurs_check(lv->index, rhs)) {
+            unify_failed_producer.produce({rl});
+            return;
+        }
         bind(lv->index, rhs);
         rep_changed_producer.produce(representative_changed_event{lv->index});
         return;
     }
 
     if (rv) {
-        DEBUG_ASSERT(!occurs_check(rv->index, lhs));
+        if (occurs_check(rv->index, lhs)) {
+            unify_failed_producer.produce({rl});
+            return;
+        }
         bind(rv->index, lhs);
         rep_changed_producer.produce(representative_changed_event{rv->index});
         return;
     }
 
-    DEBUG_ASSERT(lhs->content.index() == rhs->content.index());
-
     if (std::holds_alternative<expr::functor>(lhs->content)) {
         const expr::functor& lf = std::get<expr::functor>(lhs->content);
         const expr::functor& rf = std::get<expr::functor>(rhs->content);
-        DEBUG_ASSERT(lf.name == rf.name && lf.args.size() == rf.args.size());
+        if (lf.name != rf.name || lf.args.size() != rf.args.size()) {
+            unify_failed_producer.produce({rl});
+            return;
+        }
         for (size_t i = 0; i < lf.args.size(); ++i)
             work_queue.push({lf.args[i], rf.args[i]});
     }
