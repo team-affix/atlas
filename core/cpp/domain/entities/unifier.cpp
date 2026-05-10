@@ -4,7 +4,6 @@
 unifier::unifier(const resolution_lineage* rl) :
     rl(rl),
     rep_changed_producer(resolver::resolve<i_event_producer<representative_changed_event>>()),
-    unify_resuming_producer(resolver::resolve<i_event_producer<unify_resuming_event>>()),
     unify_yielded_producer(resolver::resolve<i_event_producer<unify_yielded_event>>()),
     unify_failed_producer(resolver::resolve<i_event_producer<unify_failed_event>>()),
     unify_finished_producer(resolver::resolve<i_event_producer<unify_finished_event>>()) {}
