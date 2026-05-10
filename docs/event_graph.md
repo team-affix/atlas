@@ -100,7 +100,7 @@ flowchart TD
   ent_decider(decider)
   e_deciding[deciding_event]
   e_decided[decided_event]
-  h_deciding_store[[decision_store_deciding_EH]]
+  h_deciding_store[[decision_memory_deciding_EH]]
   h_resolver_decided[[goal_resolver_decided_EH  (C)]]
   ent_goal_resolver(goal_resolver)
 
@@ -253,7 +253,7 @@ flowchart TD
   e_gscl[goal_stores_clearing_event]
   e_gscleared[goal_stores_cleared_event]
   h1[[active_goal_store_clearing_EH]]
-  h2[[decision_store_clearing_EH]]
+  h2[[decision_memory_clearing_EH]]
   h3[[goal_candidates_store_clearing_EH]]
   h4[[goal_expr_store_clearing_EH]]
   h5[[goal_weight_store_clearing_EH]]
@@ -493,14 +493,14 @@ When the sim is **conflicted**, the solving loop does need to be interrupted (th
 `refuted` is **not** mutually exclusive with `conflicted`. It is a strictly stronger condition:
 
 ```
-refuted  ≡  conflicted  AND  decision_store.size() == 0
+refuted  ≡  conflicted  AND  decision_memory.size() == 0
 ```
 
 A conflict with no decisions on the stack means there is no search state left to backtrack to — the problem itself is unsatisfiable. This is when the solver must break out of the simulation cycle entirely (see 7.6 for the pending restart policy).
 
 **New entity: `refuted_detector`**
 - Single method `conflicted()`.
-- Checks `decision_store.size() == 0`.
+- Checks `decision_memory.size() == 0`.
 - If true, emits `refuted_event{}`.
 
 **New handler: `refuted_detector_conflicted_event_handler`**

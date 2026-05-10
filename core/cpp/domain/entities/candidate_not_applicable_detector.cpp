@@ -1,47 +1,114 @@
 #include "../../../hpp/domain/entities/candidate_not_applicable_detector.hpp"
 #include "../../../hpp/bootstrap/resolver.hpp"
+#include "../../../hpp/infrastructure/bind_map.hpp"
 
 candidate_not_applicable_detector::candidate_not_applicable_detector() :
-    candidate_not_applicable_producer(resolver::resolve<i_event_producer<candidate_not_applicable_event>>()),
-    bm(resolver::resolve<i_bind_map>()),
+    rbms(resolver::resolve<i_resolution_bind_map_store>()),
     ges(resolver::resolve<i_goal_expr_store>()),
-    gcs(resolver::resolve<i_goal_candidates_store>()),
     db(resolver::resolve<i_database>()),
-    lp(resolver::resolve<i_lineage_pool>()),
-    t(resolver::resolve<i_trail>()) {
+    cp(resolver::resolve<i_copier>()),
+    ep(resolver::resolve<i_expr_pool>()),
+    rtms(resolver::resolve<i_resolution_translation_map_store>()),
+    candidate_not_applicable_producer(resolver::resolve<i_event_producer<candidate_not_applicable_event>>()) {
+    rbms.insert(nullptr, std::make_unique<bind_map>(nullptr));
 }
 
-void candidate_not_applicable_detector::goal_expr_changed(const goal_lineage* gl) {
-    // get the candidates for this goal
-    const candidate_set& candidates = gcs.at(gl);
+static i_bind_map& primary(i_resolution_bind_map_store& rbms) {
+    return *rbms.get(nullptr);
+}
 
-    // for each candidate, check if it is applicable
-    for (size_t candidate_idx : candidates.candidates) {
-        if (!candidate_applicable(gl, candidate_idx)) {
-            candidate_not_applicable_producer.produce(
-                candidate_not_applicable_event{lp.resolution(gl, candidate_idx)});
+void candidate_not_applicable_detector::add_candidate(const resolution_lineage* rl) {
+    const goal_lineage* gl = rl->parent;
+
+    translation_map tm;
+    const expr* renamed_head = cp.copy(db.at(rl->idx).head, tm);
+    rtms.insert(rl, std::move(tm));
+
+    rbms.insert(rl, std::make_unique<bind_map>(rl));
+    seeding_rls.insert(rl);
+
+    (*rbms.get(rl)).push(ges.at(gl), renamed_head);
+    (*rbms.get(rl)).process_step();
+}
+
+void candidate_not_applicable_detector::unify_continue(const resolution_lineage* rl) {
+    (*rbms.get(rl)).process_step();
+}
+
+void candidate_not_applicable_detector::unify_finished(const resolution_lineage* rl) {
+    const goal_lineage* gl = rl->parent;
+
+    if (seeding_rls.count(rl)) {
+        seeding_rls.erase(rl);
+
+        std::unordered_set<uint32_t> goal_vars;
+        extract_vars(ges.at(gl), goal_vars);
+        for (uint32_t v : goal_vars) {
+            var_to_rls[v].insert(rl);
+            rl_to_vars[rl].insert(v);
         }
+
+        bool needs_reconciliation = false;
+        for (uint32_t v : goal_vars) {
+            const expr* var_expr = ep.var(v);
+            const expr* pw = primary(rbms).whnf(var_expr);
+            if (pw != var_expr) {
+                (*rbms.get(rl)).push(var_expr, pw);
+                needs_reconciliation = true;
+            }
+        }
+
+        if (needs_reconciliation) {
+            reconciling_rls.insert(rl);
+            (*rbms.get(rl)).process_step();
+        }
+        return;
+    }
+
+    if (reconciling_rls.count(rl)) {
+        reconciling_rls.erase(rl);
     }
 }
 
-bool candidate_not_applicable_detector::candidate_applicable(const goal_lineage* gl, size_t candidate_idx) {
-    // get the goal expression
-    const expr* goal = ges.at(gl);
+void candidate_not_applicable_detector::primary_rep_changed(uint32_t var_index) {
+    auto it = var_to_rls.find(var_index);
+    if (it == var_to_rls.end())
+        return;
 
-    // get the candidate rule
-    const rule& candidate = db.at(candidate_idx);
-    
-    // push the trail
-    t.push();
+    const expr* var_expr = ep.var(var_index);
+    const expr* pw = primary(rbms).whnf(var_expr);
 
-    // create temp rep_changed queue
-    std::queue<uint32_t> temp_rep_changed;
+    for (const resolution_lineage* rl : it->second) {
+        (*rbms.get(rl)).push(var_expr, pw);
+        (*rbms.get(rl)).process_step();
+    }
+}
 
-    // check if the unification succeeds
-    bool result = bm.unify(goal, candidate.head, temp_rep_changed);
+void candidate_not_applicable_detector::secondary_unify_failed(const resolution_lineage* rl) {
+    candidate_not_applicable_producer.produce({rl});
+}
 
-    // pop the trail
-    t.pop();
+void candidate_not_applicable_detector::remove_candidate(const resolution_lineage* rl) {
+    seeding_rls.erase(rl);
+    reconciling_rls.erase(rl);
 
-    return result;
+    auto vars_it = rl_to_vars.find(rl);
+    if (vars_it != rl_to_vars.end()) {
+        for (uint32_t v : vars_it->second)
+            var_to_rls[v].erase(rl);
+        rl_to_vars.erase(rl);
+    }
+
+    rbms.erase(rl);
+    rtms.erase(rl);
+}
+
+void candidate_not_applicable_detector::extract_vars(
+        const expr* e, std::unordered_set<uint32_t>& vars) const {
+    if (const expr::var* v = std::get_if<expr::var>(&e->content)) {
+        vars.insert(v->index);
+    } else if (const expr::functor* f = std::get_if<expr::functor>(&e->content)) {
+        for (const expr* arg : f->args)
+            extract_vars(arg, vars);
+    }
 }

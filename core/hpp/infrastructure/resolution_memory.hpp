@@ -1,10 +1,10 @@
-#ifndef RESOLUTION_STORE_HPP
-#define RESOLUTION_STORE_HPP
+#ifndef RESOLUTION_MEMORY_HPP
+#define RESOLUTION_MEMORY_HPP
 
 #include <unordered_set>
-#include "../domain/interfaces/i_resolution_store.hpp"
+#include "../domain/interfaces/i_resolution_memory.hpp"
 
-struct resolution_store : i_resolution_store {
+struct resolution_memory : i_resolution_memory {
     void insert(const resolution_lineage*) override;
     void clear() override;
     lemma derive_lemma() const override;

@@ -1,14 +1,13 @@
-#ifndef I_DECISION_STORE_HPP
-#define I_DECISION_STORE_HPP
+#ifndef I_RESOLUTION_MEMORY_HPP
+#define I_RESOLUTION_MEMORY_HPP
 
 #include "../value_objects/lineage.hpp"
 #include "../value_objects/lemma.hpp"
 
-struct i_decision_store {
-    virtual ~i_decision_store() = default;
+struct i_resolution_memory {
+    virtual ~i_resolution_memory() = default;
     virtual void insert(const resolution_lineage*) = 0;
     virtual void clear() = 0;
-    virtual size_t size() const = 0;
     virtual lemma derive_lemma() const = 0;
 };
 

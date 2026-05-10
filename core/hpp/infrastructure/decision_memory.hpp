@@ -1,10 +1,10 @@
-#ifndef DECISION_STORE_HPP
-#define DECISION_STORE_HPP
+#ifndef DECISION_MEMORY_HPP
+#define DECISION_MEMORY_HPP
 
 #include <unordered_set>
-#include "../domain/interfaces/i_decision_store.hpp"
+#include "../domain/interfaces/i_decision_memory.hpp"
 
-struct decision_store : i_decision_store {
+struct decision_memory : i_decision_memory {
     void insert(const resolution_lineage*) override;
     void clear() override;
     size_t size() const override;

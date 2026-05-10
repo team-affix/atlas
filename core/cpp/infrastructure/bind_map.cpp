@@ -1,131 +1,165 @@
 #include "../../hpp/infrastructure/bind_map.hpp"
 #include "../../hpp/bootstrap/resolver.hpp"
-#include "../../hpp/utility/backtrackable_map_insert.hpp"
-#include "../../hpp/utility/backtrackable_map_assign.hpp"
+#include "debug_assert.hpp"
 
-bind_map::bind_map() :
-    bindings(resolver::resolve<i_trail>(), {}) {
+bind_map::bind_map(const resolution_lineage* rl) :
+    rl(rl),
+    rep_changed_producer(resolver::resolve<i_event_producer<representative_changed_event>>()),
+    unify_resuming_producer(resolver::resolve<i_event_producer<unify_resuming_event>>()),
+    unify_functor_completed_producer(resolver::resolve<i_event_producer<unify_functor_completed_event>>()),
+    unify_failed_producer(resolver::resolve<i_event_producer<unify_failed_event>>()),
+    unify_finished_producer(resolver::resolve<i_event_producer<unify_finished_event>>()) {
 }
 
 const expr* bind_map::whnf(const expr* key) {
-    // If the key is not a variable, it is already in WHNF
     if (!std::holds_alternative<expr::var>(key->content))
         return key;
 
-    // Get the variable out of the key
     const expr::var& var = std::get<expr::var>(key->content);
-
-    // Check if the variable is bound
-    auto it = bindings.get().find(var.index);
-    
-    // If the variable is not bound, return the key
-    if (it == bindings.get().end())
+    auto it = bindings.find(var.index);
+    if (it == bindings.end())
         return key;
 
-    // Get the bound value
-    const expr* bound_value = it->second;
-        
-    // WHNF the bound value
-    const expr* whnf_bound_value = whnf(bound_value);
-
-    // Collapse the binding
-    bind(var.index, whnf_bound_value);
-
-    return whnf_bound_value;
+    const expr* whnf_bound = whnf(it->second);
+    bind(var.index, whnf_bound);
+    return whnf_bound;
 }
 
-bool bind_map::unify(const expr* lhs, const expr* rhs, std::queue<uint32_t>& rep_changed_queue) {
-    // WHNF the lhs and rhs
+void bind_map::push(const expr* lhs, const expr* rhs) {
+    work_queue.push({lhs, rhs});
+}
+
+void bind_map::process_step() {
+    if (rl == nullptr) {
+        // Primary: run entire queue to completion, emitting representative_changed_event per binding
+        while (!work_queue.empty()) {
+            auto [lhs, rhs] = work_queue.front();
+            work_queue.pop();
+            process_pair(lhs, rhs);
+        }
+    } else {
+        // Secondary: run exactly one meaningful step, then yield via event
+        while (!work_queue.empty()) {
+            auto [lhs, rhs] = work_queue.front();
+            work_queue.pop();
+
+            lhs = whnf(lhs);
+            rhs = whnf(rhs);
+
+            const expr::var* lv = std::get_if<expr::var>(&lhs->content);
+            const expr::var* rv = std::get_if<expr::var>(&rhs->content);
+
+            // Trivial: same var, no yield needed
+            if (lv && rv && lv->index == rv->index)
+                continue;
+
+            if (lv) {
+                if (occurs_check(lv->index, rhs)) {
+                    while (!work_queue.empty()) work_queue.pop();
+                    unify_failed_producer.produce({rl});
+                    return;
+                }
+                bind(lv->index, rhs);
+                unify_resuming_producer.produce({rl});
+                return;
+            }
+
+            if (rv) {
+                if (occurs_check(rv->index, lhs)) {
+                    while (!work_queue.empty()) work_queue.pop();
+                    unify_failed_producer.produce({rl});
+                    return;
+                }
+                bind(rv->index, lhs);
+                unify_resuming_producer.produce({rl});
+                return;
+            }
+
+            if (lhs->content.index() != rhs->content.index()) {
+                while (!work_queue.empty()) work_queue.pop();
+                unify_failed_producer.produce({rl});
+                return;
+            }
+
+            if (std::holds_alternative<expr::functor>(lhs->content)) {
+                const expr::functor& lf = std::get<expr::functor>(lhs->content);
+                const expr::functor& rf = std::get<expr::functor>(rhs->content);
+                if (lf.name != rf.name || lf.args.size() != rf.args.size()) {
+                    while (!work_queue.empty()) work_queue.pop();
+                    unify_failed_producer.produce({rl});
+                    return;
+                }
+                for (size_t i = 0; i < lf.args.size(); ++i)
+                    work_queue.push({lf.args[i], rf.args[i]});
+                unify_functor_completed_producer.produce({rl});
+                return;
+            }
+
+            while (!work_queue.empty()) work_queue.pop();
+            unify_failed_producer.produce({rl});
+            return;
+        }
+        // Queue empty — done
+        unify_finished_producer.produce({rl});
+    }
+}
+
+void bind_map::clear() {
+    bindings.clear();
+    while (!work_queue.empty())
+        work_queue.pop();
+}
+
+void bind_map::process_pair(const expr* lhs, const expr* rhs) {
     lhs = whnf(lhs);
     rhs = whnf(rhs);
 
-    // get the lhs and rhs var handles if they are variables
     const expr::var* lv = std::get_if<expr::var>(&lhs->content);
     const expr::var* rv = std::get_if<expr::var>(&rhs->content);
 
-    // if they are the same variable, unification succeeds trivially
     if (lv && rv && lv->index == rv->index)
-        return true;
-    
-    // If the lhs is a variable, add a binding to the whnf of the rhs
+        return;
+
     if (lv) {
-        if (occurs_check(lv->index, rhs))
-            return false;
+        DEBUG_ASSERT(!occurs_check(lv->index, rhs));
         bind(lv->index, rhs);
-        rep_changed_queue.push(lv->index);
-        return true;
+        rep_changed_producer.produce(representative_changed_event{lv->index});
+        return;
     }
 
-    // If the rhs is a variable, add a binding to the whnf of the lhs
     if (rv) {
-        if (occurs_check(rv->index, lhs))
-            return false;
+        DEBUG_ASSERT(!occurs_check(rv->index, lhs));
         bind(rv->index, lhs);
-        rep_changed_queue.push(rv->index);
-        return true;
+        rep_changed_producer.produce(representative_changed_event{rv->index});
+        return;
     }
 
-    // If they are not the same type, unification fails
-    if (lhs->content.index() != rhs->content.index())
-        return false;
+    DEBUG_ASSERT(lhs->content.index() == rhs->content.index());
 
-    // If they are both functors, unify name, arity, and all args
     if (std::holds_alternative<expr::functor>(lhs->content)) {
         const expr::functor& lf = std::get<expr::functor>(lhs->content);
         const expr::functor& rf = std::get<expr::functor>(rhs->content);
-        if (lf.name != rf.name || lf.args.size() != rf.args.size())
-            return false;
+        DEBUG_ASSERT(lf.name == rf.name && lf.args.size() == rf.args.size());
         for (size_t i = 0; i < lf.args.size(); ++i)
-            if (!unify(lf.args[i], rf.args[i], rep_changed_queue))
-                return false;
-        return true;
+            work_queue.push({lf.args[i], rf.args[i]});
     }
-
-    return false;
-
 }
 
 bool bind_map::occurs_check(uint32_t index, const expr* key) {
     key = whnf(key);
-
-    if (const expr::var* var = std::get_if<expr::var>(&key->content))
-        return var->index == index;
-
-    if (const expr::functor* f = std::get_if<expr::functor>(&key->content)) {
+    if (const expr::var* v = std::get_if<expr::var>(&key->content))
+        return v->index == index;
+    if (const expr::functor* f = std::get_if<expr::functor>(&key->content))
         for (const expr* arg : f->args)
             if (occurs_check(index, arg))
                 return true;
-        return false;
-    }
-
     return false;
 }
 
 void bind_map::bind(uint32_t index, const expr* value) {
-    // look up the entry for the index
-    auto it = bindings.get().find(index);
-
-    if (it == bindings.get().end()) {
-        // if the value is not found, insert it
-        auto insert_mut = std::make_unique<
-            backtrackable_map_insert<
-            std::unordered_map<uint32_t, const expr*>>>(index, value);
-        bindings.mutate(std::move(insert_mut));
-    }
-    else {
-        // Get the old value
-        const expr* old_value = it->second;
-        
-        // If the new value is the same as the old value, do nothing
-        if (old_value == value)
-            return;
-
-        // If the new value is different from the old value, insert it
-        auto assign_mut = std::make_unique<
-            backtrackable_map_assign<
-            std::unordered_map<uint32_t, const expr*>>>(index, value);
-        bindings.mutate(std::move(assign_mut));
-    }
-    
-    return;
+    auto it = bindings.find(index);
+    if (it == bindings.end())
+        bindings.insert({index, value});
+    else if (it->second != value)
+        it->second = value;
 }

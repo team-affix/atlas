@@ -2,20 +2,38 @@
 #define BIND_MAP_HPP
 
 #include <unordered_map>
-#include "../domain/interfaces/i_bind_map.hpp"
-#include "../domain/value_objects/expr.hpp"
-#include "../utility/tracked.hpp"
 #include <queue>
+#include <utility>
+#include "../domain/interfaces/i_bind_map.hpp"
+#include "../domain/interfaces/i_event_producer.hpp"
+#include "../domain/value_objects/expr.hpp"
+#include "../domain/value_objects/lineage.hpp"
+#include "../domain/events/representative_changed_event.hpp"
+#include "../domain/events/unify_resuming_event.hpp"
+#include "../domain/events/unify_functor_completed_event.hpp"
+#include "../domain/events/unify_failed_event.hpp"
+#include "../domain/events/unify_finished_event.hpp"
 
 struct bind_map : i_bind_map {
-    bind_map();
+    explicit bind_map(const resolution_lineage* rl);
     const expr* whnf(const expr*) override;
-    bool unify(const expr*, const expr*, std::queue<uint32_t>&) override;
+    void push(const expr*, const expr*) override;
+    void process_step() override;
+    void clear() override;
 private:
     bool occurs_check(uint32_t, const expr*);
     void bind(uint32_t, const expr*);
-    
-    tracked<std::unordered_map<uint32_t, const expr*>> bindings;
+    void process_pair(const expr*, const expr*);
+
+    const resolution_lineage* rl;
+    std::unordered_map<uint32_t, const expr*> bindings;
+    std::queue<std::pair<const expr*, const expr*>> work_queue;
+
+    i_event_producer<representative_changed_event>& rep_changed_producer;
+    i_event_producer<unify_resuming_event>& unify_resuming_producer;
+    i_event_producer<unify_functor_completed_event>& unify_functor_completed_producer;
+    i_event_producer<unify_failed_event>& unify_failed_producer;
+    i_event_producer<unify_finished_event>& unify_finished_producer;
 };
 
 #endif

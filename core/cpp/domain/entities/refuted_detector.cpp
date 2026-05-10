@@ -2,10 +2,10 @@
 #include "../../../hpp/bootstrap/resolver.hpp"
 
 refuted_detector::refuted_detector() :
-    decision_store(resolver::resolve<i_decision_store>()),
+    decision_memory(resolver::resolve<i_decision_memory>()),
     refuted_producer(resolver::resolve<i_event_producer<refuted_event>>()) {}
 
 void refuted_detector::conflicted() {
-    if (decision_store.size() == 0)
+    if (decision_memory.size() == 0)
         refuted_producer.produce(refuted_event{});
 }

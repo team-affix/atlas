@@ -4,7 +4,7 @@
 #include <optional>
 #include "../interfaces/i_sim_stopper.hpp"
 #include "../interfaces/i_cdcl.hpp"
-#include "../interfaces/i_decision_store.hpp"
+#include "../interfaces/i_decision_memory.hpp"
 #include "../interfaces/i_event_producer.hpp"
 #include "../events/goal_stores_clearing_event.hpp"
 #include "../events/goal_stores_cleared_event.hpp"
@@ -18,7 +18,7 @@ struct sim_stopper : i_sim_stopper {
     void finish_stop() override;
 private:
     i_trail& trail;
-    i_decision_store& decision_store;
+    i_decision_memory& decision_memory;
     i_cdcl& c;
     i_event_producer<goal_stores_clearing_event>& goal_stores_clearing_producer;
     i_event_producer<goal_stores_cleared_event>& goal_stores_cleared_producer;

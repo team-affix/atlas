@@ -8,8 +8,6 @@
 #include "../interfaces/i_goal_expr_store.hpp"
 #include "../interfaces/i_bind_map.hpp"
 #include "../interfaces/i_copier.hpp"
-#include "../interfaces/i_event_producer.hpp"
-#include "../events/representative_changed_event.hpp"
 
 struct goal_expr_expander : i_goal_expr_expander {
     goal_expr_expander();
@@ -20,7 +18,6 @@ private:
     i_goal_expr_store& ges;
     i_bind_map& bm;
     i_copier& cp;
-    i_event_producer<representative_changed_event>& representative_changed_producer;
 
     std::vector<const expr*> rule_body;
     std::unordered_map<uint32_t, uint32_t> translation_map;

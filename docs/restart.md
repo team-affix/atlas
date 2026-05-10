@@ -5,7 +5,7 @@ The restart sequence takes place during the `sim_starting` phase. It is split ac
 ## `begin_restart()`
 
 1. **`trail.pop()`** — pops the sim's trail frame, undoing all variable bindings, goal store entries, and `expr_pool` allocations from the finished sim.
-2. **`decision_store.derive_lemma()`** — derives a leaf-only decision lemma from the set of decisions made during the sim. Stored as `pending_lemma`.
+2. **`decision_memory.derive_lemma()`** — derives a leaf-only decision lemma from the set of decisions made during the sim. Stored as `pending_lemma`.
 3. **Emits `goal_stores_clearing_event`** — signals all 7 store-clearing handlers to call `clear()` on their respective stores:
    - `goal_expr_store`
    - `goal_candidates_store`
@@ -13,7 +13,7 @@ The restart sequence takes place during the `sim_starting` phase. It is split ac
    - `active_goal_store`
    - `inactive_goal_store`
    - `resolution_store`
-   - `decision_store`
+   - `decision_memory`
 
 The event chain fires: `goal_stores_clearing_event` → (all clearing handlers run) → `goal_stores_cleared_event`.
 

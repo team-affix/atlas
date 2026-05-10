@@ -3,7 +3,7 @@
 
 sim_stopper::sim_stopper() :
     trail(resolver::resolve<i_trail>()),
-    decision_store(resolver::resolve<i_decision_store>()),
+    decision_memory(resolver::resolve<i_decision_memory>()),
     c(resolver::resolve<i_cdcl>()),
     goal_stores_clearing_producer(resolver::resolve<i_event_producer<goal_stores_clearing_event>>()),
     goal_stores_cleared_producer(resolver::resolve<i_event_producer<goal_stores_cleared_event>>()),
@@ -12,7 +12,7 @@ sim_stopper::sim_stopper() :
 
 void sim_stopper::init_stop() {
     trail.pop();
-    pending_lemma = decision_store.derive_lemma();
+    pending_lemma = decision_memory.derive_lemma();
     goal_stores_clearing_producer.produce(goal_stores_clearing_event{});
     goal_stores_cleared_producer.produce(goal_stores_cleared_event{});
 }

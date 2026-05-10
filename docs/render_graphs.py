@@ -208,7 +208,7 @@ render(
         "h_repeater":      "[[no_more_unit_goals\nrepeater_EH]]\n★ cancellable",
         "ent_decider":     "(decider)",
         "e_deciding":      "[deciding_event]",
-        "h_dec_store":     "[[decision_store\ndeciding_EH]]",
+        "h_dec_store":     "[[decision_memory\ndeciding_EH]]",
         "h_dec_decided":   "[[deciding_decided\nbridge_EH]]",
         "e_decided":       "[decided_event]",
         "h_res_decided":   "[[goal_resolver\ndecided_EH]]\n★ cancellable",
@@ -352,7 +352,7 @@ render(
     {
         "e_gscl":   "[goal_stores\nclearing_event]",
         "h1":       "[[active_goal_store\nclearing_EH]]",
-        "h2":       "[[decision_store\nclearing_EH]]",
+        "h2":       "[[decision_memory\nclearing_EH]]",
         "h3":       "[[goal_candidates_store\nclearing_EH]]",
         "h4":       "[[goal_expr_store\nclearing_EH]]",
         "h5":       "[[goal_weight_store\nclearing_EH]]",
