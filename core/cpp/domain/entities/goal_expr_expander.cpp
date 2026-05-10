@@ -13,7 +13,7 @@ void goal_expr_expander::start_expansion(const resolution_lineage* rl) {
     rule r = db.at(rl->idx);
     rule_body = r.body;
 
-    const expr* goal_expr = ges.get(rl->parent);
+    const expr* goal_expr = ges.at(rl->parent);
     translation_map.clear();
 
     bm.push(goal_expr, r.head);

@@ -7,6 +7,6 @@ active_eliminator::active_eliminator()
 }
 
 void active_eliminator::eliminate(const resolution_lineage* rl) {
-    gcs.eliminate(rl);
+    gcs.at(rl->parent).candidates.erase(rl->idx);
     candidate_eliminated_producer.produce(candidate_eliminated_event{rl});
 }

@@ -6,7 +6,8 @@
 
 struct resolution_translation_map_store : i_resolution_translation_map_store {
     void insert(const resolution_lineage*, translation_map) override;
-    translation_map& get(const resolution_lineage*) override;
+    translation_map& at(const resolution_lineage*) override;
+    const translation_map& at(const resolution_lineage*) const override;
     void erase(const resolution_lineage*) override;
     void clear() override;
 private:

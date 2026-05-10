@@ -4,7 +4,11 @@ void resolution_bind_map_store::insert(const resolution_lineage* rl, std::unique
     maps.emplace(rl, std::move(bm));
 }
 
-std::unique_ptr<i_bind_map>& resolution_bind_map_store::get(const resolution_lineage* rl) {
+std::unique_ptr<i_bind_map>& resolution_bind_map_store::at(const resolution_lineage* rl) {
+    return maps.at(rl);
+}
+
+const std::unique_ptr<i_bind_map>& resolution_bind_map_store::at(const resolution_lineage* rl) const {
     return maps.at(rl);
 }
 

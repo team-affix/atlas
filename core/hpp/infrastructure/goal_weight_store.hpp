@@ -8,7 +8,8 @@ struct goal_weight_store : i_goal_weight_store {
     void insert(const goal_lineage*, double) override;
     void erase(const goal_lineage*) override;
     void clear() override;
-    double& get(const goal_lineage*) override;
+    double& at(const goal_lineage*) override;
+    const double& at(const goal_lineage*) const override;
 private:
     std::unordered_map<const goal_lineage*, double> goal_weights;
 };

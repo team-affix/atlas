@@ -7,7 +7,6 @@
 
 struct i_goal_candidates_store : i_map<const goal_lineage*, candidate_set> {
     virtual ~i_goal_candidates_store() = default;
-    virtual void eliminate(const resolution_lineage*) = 0;
 };
 
 #endif
