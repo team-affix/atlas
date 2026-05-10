@@ -1,8 +1,11 @@
 #ifndef GOAL_EXPR_EXPANDER_HPP
 #define GOAL_EXPR_EXPANDER_HPP
 
-#include <unordered_map>
+#include <memory>
+#include <vector>
 #include "../interfaces/i_goal_expr_expander.hpp"
+#include "../interfaces/i_factory.hpp"
+#include "../interfaces/i_translation_map.hpp"
 #include "../value_objects/expr.hpp"
 #include "../interfaces/i_database.hpp"
 #include "../interfaces/i_goal_expr_store.hpp"
@@ -18,9 +21,10 @@ private:
     i_goal_expr_store& ges;
     i_bind_map& bm;
     i_copier& cp;
+    i_factory<i_translation_map>& tm_factory;
 
     std::vector<const expr*> rule_body;
-    std::unordered_map<uint32_t, uint32_t> translation_map;
+    std::unique_ptr<i_translation_map> tm;
 };
 
 #endif

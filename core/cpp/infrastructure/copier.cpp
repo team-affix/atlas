@@ -7,21 +7,13 @@ copier::copier() :
     expr_pool_ref(resolver::resolve<i_expr_pool>()) {
 }
 
-const expr* copier::copy(const expr* e, std::unordered_map<uint32_t, uint32_t>& variable_map) {
-    // If the expression is a variable
+const expr* copier::copy(const expr* e, i_translation_map& variable_map) {
     if (const expr::var* v = std::get_if<expr::var>(&e->content)) {
-        // See if the variable has already been copied
-        auto it = variable_map.find(v->index);
-        
-        // If the variable does not have a mapping, create one
-        if (it == variable_map.end())
-            it = variable_map.insert({v->index, var_seq_ref.next()}).first;
-
-        // Return the mapped variable
-        return expr_pool_ref.var(it->second);
+        if (!variable_map.contains(v->index))
+            variable_map.insert(v->index, var_seq_ref.next());
+        return expr_pool_ref.var(variable_map.at(v->index));
     }
 
-    // If the expression is a functor, copy all args recursively
     if (const expr::functor* f = std::get_if<expr::functor>(&e->content)) {
         std::vector<const expr*> copied_args;
         copied_args.reserve(f->args.size());

@@ -1,12 +1,12 @@
 #ifndef I_COPIER_HPP
 #define I_COPIER_HPP
 
-#include <unordered_map>
 #include "../value_objects/expr.hpp"
+#include "i_translation_map.hpp"
 
 struct i_copier {
     virtual ~i_copier() = default;
-    virtual const expr* copy(const expr*, std::unordered_map<uint32_t, uint32_t>&) = 0;
+    virtual const expr* copy(const expr*, i_translation_map&) = 0;
 };
 
 #endif

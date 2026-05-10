@@ -8,6 +8,7 @@ struct goal_weight_store : i_goal_weight_store {
     void insert(const goal_lineage*, double) override;
     void erase(const goal_lineage*) override;
     void clear() override;
+    bool contains(const goal_lineage*) const override;
     double& at(const goal_lineage*) override;
     const double& at(const goal_lineage*) const override;
 private:
