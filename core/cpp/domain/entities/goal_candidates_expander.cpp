@@ -4,7 +4,7 @@
 
 goal_candidates_expander::goal_candidates_expander()
     :
-    gcs(resolver::resolve<i_goal_candidates_store>()),
+    gcs(resolver::resolve<i_candidates_frontier>()),
     goal_candidates_changed_producer(resolver::resolve<i_event_producer<goal_candidates_changed_event>>()) {
     i_database& db = resolver::resolve<i_database>();
     for (size_t i = 0; i < db.size(); ++i)

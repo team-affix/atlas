@@ -4,7 +4,7 @@
 
 goal_expr_expander::goal_expr_expander() :
     db(resolver::resolve<i_database>()),
-    ges(resolver::resolve<i_goal_expr_store>()),
+    ges(resolver::resolve<i_expr_frontier>()),
     bm(resolver::resolve<i_unifier>()),
     cp(resolver::resolve<i_copier>()),
     tm(resolver::resolve<i_factory<i_translation_map>>().make()) {

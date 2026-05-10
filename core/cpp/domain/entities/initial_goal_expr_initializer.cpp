@@ -2,7 +2,7 @@
 #include "../../../hpp/bootstrap/resolver.hpp"
 
 initial_goal_expr_initializer::initial_goal_expr_initializer(const std::vector<const expr*>& initial_exprs) :
-    ges(resolver::resolve<i_goal_expr_store>()),
+    ges(resolver::resolve<i_expr_frontier>()),
     initial_exprs(initial_exprs) {
 }
 

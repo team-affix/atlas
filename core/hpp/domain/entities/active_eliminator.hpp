@@ -2,7 +2,7 @@
 #define ACTIVE_ELIMINATOR_HPP
 
 #include "../interfaces/i_active_eliminator.hpp"
-#include "../interfaces/i_goal_candidates_store.hpp"
+#include "../interfaces/i_candidates_frontier.hpp"
 #include "../interfaces/i_event_producer.hpp"
 #include "../events/candidate_eliminated_event.hpp"
 
@@ -10,7 +10,7 @@ struct active_eliminator : i_active_eliminator {
     active_eliminator();
     void eliminate(const resolution_lineage*) override;
 private:
-    i_goal_candidates_store& gcs;
+    i_candidates_frontier& gcs;
     i_event_producer<candidate_eliminated_event>& candidate_eliminated_producer;
 };
 

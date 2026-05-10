@@ -1,11 +1,11 @@
-#ifndef RESOLUTION_TRANSLATION_MAP_STORE_HPP
-#define RESOLUTION_TRANSLATION_MAP_STORE_HPP
+#ifndef TRANSLATION_MAP_FRONTIER_HPP
+#define TRANSLATION_MAP_FRONTIER_HPP
 
 #include <unordered_map>
 #include <memory>
-#include "../domain/interfaces/i_resolution_translation_map_store.hpp"
+#include "../domain/interfaces/i_translation_map_frontier.hpp"
 
-struct resolution_translation_map_store : i_resolution_translation_map_store {
+struct translation_map_frontier : i_translation_map_frontier {
     void insert(const resolution_lineage*, std::unique_ptr<i_translation_map>) override;
     bool contains(const resolution_lineage*) const override;
     std::unique_ptr<i_translation_map>& at(const resolution_lineage*) override;

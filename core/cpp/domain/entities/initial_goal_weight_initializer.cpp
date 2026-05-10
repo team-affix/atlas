@@ -2,7 +2,7 @@
 #include "../../../hpp/bootstrap/resolver.hpp"
 
 initial_goal_weight_initializer::initial_goal_weight_initializer(size_t goal_count) :
-    gws(resolver::resolve<i_goal_weight_store>()),
+    gws(resolver::resolve<i_weight_frontier>()),
     initial_weight(1.0 / goal_count) {
 }
 

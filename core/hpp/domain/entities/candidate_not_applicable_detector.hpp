@@ -4,12 +4,12 @@
 #include <unordered_map>
 #include <unordered_set>
 #include "../interfaces/i_candidate_not_applicable_detector.hpp"
-#include "../interfaces/i_resolution_bind_map_store.hpp"
-#include "../interfaces/i_goal_expr_store.hpp"
+#include "../interfaces/i_unifier_frontier.hpp"
+#include "../interfaces/i_expr_frontier.hpp"
 #include "../interfaces/i_database.hpp"
 #include "../interfaces/i_copier.hpp"
 #include "../interfaces/i_expr_pool.hpp"
-#include "../interfaces/i_resolution_translation_map_store.hpp"
+#include "../interfaces/i_translation_map_frontier.hpp"
 #include "../interfaces/i_event_producer.hpp"
 #include "../events/candidate_not_applicable_event.hpp"
 #include "../value_objects/expr.hpp"
@@ -28,12 +28,12 @@ private:
     std::unordered_map<uint32_t, std::unordered_set<const resolution_lineage*>> var_to_rls;
     std::unordered_map<const resolution_lineage*, std::unordered_set<uint32_t>> rl_to_vars;
 
-    i_resolution_bind_map_store& rbms;
-    i_goal_expr_store& ges;
+    i_unifier_frontier& rbms;
+    i_expr_frontier& ges;
     const i_database& db;
     i_copier& cp;
     i_expr_pool& ep;
-    i_resolution_translation_map_store& rtms;
+    i_translation_map_frontier& rtms;
     i_event_producer<candidate_not_applicable_event>& candidate_not_applicable_producer;
 };
 

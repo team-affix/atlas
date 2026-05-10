@@ -1,11 +1,11 @@
-#ifndef RESOLUTION_BIND_MAP_STORE_HPP
-#define RESOLUTION_BIND_MAP_STORE_HPP
+#ifndef UNIFIER_FRONTIER_HPP
+#define UNIFIER_FRONTIER_HPP
 
 #include <unordered_map>
 #include <memory>
-#include "../domain/interfaces/i_resolution_bind_map_store.hpp"
+#include "../domain/interfaces/i_unifier_frontier.hpp"
 
-struct resolution_bind_map_store : i_resolution_bind_map_store {
+struct unifier_frontier : i_unifier_frontier {
     void insert(const resolution_lineage*, std::unique_ptr<i_unifier>) override;
     bool contains(const resolution_lineage*) const override;
     std::unique_ptr<i_unifier>& at(const resolution_lineage*) override;

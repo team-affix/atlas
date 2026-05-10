@@ -6,7 +6,7 @@ mcts_decision_generator::mcts_decision_generator()
     :
     lp(resolver::resolve<i_lineage_pool>()),
     ags(resolver::resolve<i_active_goal_store>()),
-    gcs(resolver::resolve<i_goal_candidates_store>()),
+    gcs(resolver::resolve<i_candidates_frontier>()),
     sim(resolver::resolve<monte_carlo::simulation<mcts_choice, std::mt19937>>()){
 }
 

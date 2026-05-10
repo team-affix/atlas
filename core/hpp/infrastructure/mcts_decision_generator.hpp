@@ -5,7 +5,7 @@
 #include "../domain/interfaces/i_decision_generator.hpp"
 #include "../domain/interfaces/i_lineage_pool.hpp"
 #include "../domain/interfaces/i_active_goal_store.hpp"
-#include "../domain/interfaces/i_goal_candidates_store.hpp"
+#include "../domain/interfaces/i_candidates_frontier.hpp"
 #include "../../../mcts/include/mcts.hpp"
 #include "mcts_choice.hpp"
 
@@ -18,7 +18,7 @@ private:
 
     i_lineage_pool& lp;
     const i_active_goal_store& ags;
-    const i_goal_candidates_store& gcs;
+    const i_candidates_frontier& gcs;
     monte_carlo::simulation<mcts_choice, std::mt19937>& sim;
 };
 

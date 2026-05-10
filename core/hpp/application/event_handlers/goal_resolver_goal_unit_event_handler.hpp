@@ -6,7 +6,7 @@
 #include "../../domain/events/sim_termination_condition_reached_event.hpp"
 #include "../../domain/events/sim_started_event.hpp"
 #include "../../domain/interfaces/i_goal_resolver.hpp"
-#include "../../domain/interfaces/i_goal_candidates_store.hpp"
+#include "../../domain/interfaces/i_candidates_frontier.hpp"
 #include "../../domain/interfaces/i_lineage_pool.hpp"
 
 struct goal_resolver_goal_unit_event_handler : cancellable_event_handler<goal_unit_event, sim_termination_condition_reached_event, sim_started_event> {
@@ -14,7 +14,7 @@ struct goal_resolver_goal_unit_event_handler : cancellable_event_handler<goal_un
     void execute(const goal_unit_event&) override;
 private:
     i_goal_resolver& goal_resolver;
-    i_goal_candidates_store& goal_candidates_store;
+    i_candidates_frontier& candidates_frontier;
     i_lineage_pool& lp;
 };
 

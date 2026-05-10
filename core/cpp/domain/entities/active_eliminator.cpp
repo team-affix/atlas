@@ -2,7 +2,7 @@
 #include "../../../hpp/bootstrap/resolver.hpp"
 
 active_eliminator::active_eliminator()
-    : gcs(resolver::resolve<i_goal_candidates_store>()),
+    : gcs(resolver::resolve<i_candidates_frontier>()),
     candidate_eliminated_producer(resolver::resolve<i_event_producer<candidate_eliminated_event>>()) {
 }
 

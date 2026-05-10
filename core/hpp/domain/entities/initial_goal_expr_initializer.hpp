@@ -3,14 +3,14 @@
 
 #include <vector>
 #include "../interfaces/i_initial_goal_expr_initializer.hpp"
-#include "../interfaces/i_goal_expr_store.hpp"
+#include "../interfaces/i_expr_frontier.hpp"
 #include "../value_objects/expr.hpp"
 
 struct initial_goal_expr_initializer : i_initial_goal_expr_initializer {
     initial_goal_expr_initializer(const std::vector<const expr*>&);
     void initialize(const goal_lineage*) override;
 private:
-    i_goal_expr_store& ges;
+    i_expr_frontier& ges;
     std::vector<const expr*> initial_exprs;
 };
 

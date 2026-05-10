@@ -3,7 +3,7 @@
 #include "../../../hpp/domain/interfaces/i_database.hpp"
 
 initial_goal_candidates_initializer::initial_goal_candidates_initializer() :
-    gcs(resolver::resolve<i_goal_candidates_store>()) {
+    gcs(resolver::resolve<i_candidates_frontier>()) {
     i_database& db = resolver::resolve<i_database>();
     for (size_t i = 0; i < db.size(); ++i)
         initial_candidates.candidates.insert(i);
