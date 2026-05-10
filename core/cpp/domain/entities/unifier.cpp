@@ -1,8 +1,8 @@
-#include "../../hpp/infrastructure/bind_map.hpp"
-#include "../../hpp/bootstrap/resolver.hpp"
+#include "../../../hpp/domain/entities/unifier.hpp"
+#include "../../../hpp/bootstrap/resolver.hpp"
 #include "debug_assert.hpp"
 
-bind_map::bind_map(const resolution_lineage* rl) :
+unifier::unifier(const resolution_lineage* rl) :
     rl(rl),
     rep_changed_producer(resolver::resolve<i_event_producer<representative_changed_event>>()),
     unify_resuming_producer(resolver::resolve<i_event_producer<unify_resuming_event>>()),
@@ -11,7 +11,7 @@ bind_map::bind_map(const resolution_lineage* rl) :
     unify_finished_producer(resolver::resolve<i_event_producer<unify_finished_event>>()) {
 }
 
-const expr* bind_map::whnf(const expr* key) {
+const expr* unifier::whnf(const expr* key) {
     if (!std::holds_alternative<expr::var>(key->content))
         return key;
 
@@ -25,11 +25,11 @@ const expr* bind_map::whnf(const expr* key) {
     return whnf_bound;
 }
 
-void bind_map::push(const expr* lhs, const expr* rhs) {
+void unifier::push(const expr* lhs, const expr* rhs) {
     work_queue.push({lhs, rhs});
 }
 
-void bind_map::process_step() {
+void unifier::process_step() {
     if (rl == nullptr) {
         // Primary: run entire queue to completion, emitting representative_changed_event per binding
         while (!work_queue.empty()) {
@@ -104,13 +104,13 @@ void bind_map::process_step() {
     }
 }
 
-void bind_map::clear() {
+void unifier::clear() {
     bindings.clear();
     while (!work_queue.empty())
         work_queue.pop();
 }
 
-void bind_map::process_pair(const expr* lhs, const expr* rhs) {
+void unifier::process_pair(const expr* lhs, const expr* rhs) {
     lhs = whnf(lhs);
     rhs = whnf(rhs);
 
@@ -145,7 +145,7 @@ void bind_map::process_pair(const expr* lhs, const expr* rhs) {
     }
 }
 
-bool bind_map::occurs_check(uint32_t index, const expr* key) {
+bool unifier::occurs_check(uint32_t index, const expr* key) {
     key = whnf(key);
     if (const expr::var* v = std::get_if<expr::var>(&key->content))
         return v->index == index;
@@ -156,7 +156,7 @@ bool bind_map::occurs_check(uint32_t index, const expr* key) {
     return false;
 }
 
-void bind_map::bind(uint32_t index, const expr* value) {
+void unifier::bind(uint32_t index, const expr* value) {
     auto it = bindings.find(index);
     if (it == bindings.end())
         bindings.insert({index, value});

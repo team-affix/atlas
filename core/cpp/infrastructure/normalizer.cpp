@@ -4,18 +4,15 @@
 
 normalizer::normalizer() :
     expr_pool_ref(resolver::resolve<i_expr_pool>()),
-    bind_map_ref(resolver::resolve<i_bind_map>()) {
+    unifier_ref(resolver::resolve<i_unifier>()) {
 }
 
 const expr* normalizer::normalize(const expr* e) {
-    // First, get the whnf
-    e = bind_map_ref.whnf(e);
-    
-    // If the expression is a variable, return it unchanged since it is already normalized
+    e = unifier_ref.whnf(e);
+
     if (std::holds_alternative<expr::var>(e->content))
         return e;
 
-    // If the expression is a functor, normalize all args recursively
     if (const expr::functor* f = std::get_if<expr::functor>(&e->content)) {
         std::vector<const expr*> normalized_args;
         normalized_args.reserve(f->args.size());
@@ -25,5 +22,4 @@ const expr* normalizer::normalize(const expr* e) {
     }
 
     throw std::runtime_error("Unsupported expression type");
-    
 }

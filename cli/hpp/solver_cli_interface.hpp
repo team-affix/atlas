@@ -6,7 +6,7 @@
 #include "../../core/hpp/trail.hpp"
 #include "../../core/hpp/expr.hpp"
 #include "../../core/hpp/sequencer.hpp"
-#include "../../core/hpp/bind_map.hpp"
+#include "../../core/hpp/domain/entities/unifier.hpp"
 #include "../../core/hpp/normalizer.hpp"
 #include "../../core/hpp/expr_printer.hpp"
 #include "../../core/hpp/defs.hpp"
@@ -22,7 +22,7 @@ protected:
     trail t;
     expr_pool pool;
     sequencer seq;
-    bind_map bm;
+    unifier bm;
     normalizer norm;
 
     database db;

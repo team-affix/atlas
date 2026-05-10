@@ -1,21 +1,21 @@
-#ifndef BIND_MAP_HPP
-#define BIND_MAP_HPP
+#ifndef UNIFIER_HPP
+#define UNIFIER_HPP
 
 #include <unordered_map>
 #include <queue>
 #include <utility>
-#include "../domain/interfaces/i_bind_map.hpp"
-#include "../domain/interfaces/i_event_producer.hpp"
-#include "../domain/value_objects/expr.hpp"
-#include "../domain/value_objects/lineage.hpp"
-#include "../domain/events/representative_changed_event.hpp"
-#include "../domain/events/unify_resuming_event.hpp"
-#include "../domain/events/unify_functor_completed_event.hpp"
-#include "../domain/events/unify_failed_event.hpp"
-#include "../domain/events/unify_finished_event.hpp"
+#include "../interfaces/i_unifier.hpp"
+#include "../interfaces/i_event_producer.hpp"
+#include "../value_objects/expr.hpp"
+#include "../value_objects/lineage.hpp"
+#include "../events/representative_changed_event.hpp"
+#include "../events/unify_resuming_event.hpp"
+#include "../events/unify_functor_completed_event.hpp"
+#include "../events/unify_failed_event.hpp"
+#include "../events/unify_finished_event.hpp"
 
-struct bind_map : i_bind_map {
-    explicit bind_map(const resolution_lineage* rl);
+struct unifier : i_unifier {
+    explicit unifier(const resolution_lineage* rl);
     const expr* whnf(const expr*) override;
     void push(const expr*, const expr*) override;
     void process_step() override;

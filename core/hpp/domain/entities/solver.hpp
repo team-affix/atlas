@@ -6,7 +6,7 @@
 #include "defs.hpp"
 #include "trail.hpp"
 #include "expr.hpp"
-#include "bind_map.hpp"
+#include "unifier.hpp"
 #include "lineage.hpp"
 #include "sequencer.hpp"
 #include "cdcl.hpp"
@@ -24,7 +24,7 @@ protected:
     const goals& gl;
     trail& t;
     sequencer& vars;
-    bind_map& bm;
+    unifier& bm;
 
     expr_pool ep;
     lineage_pool lp;

@@ -8,7 +8,7 @@
 #include "../value_objects/expr.hpp"
 #include "../interfaces/i_database.hpp"
 #include "../interfaces/i_goal_expr_store.hpp"
-#include "../interfaces/i_bind_map.hpp"
+#include "../interfaces/i_unifier.hpp"
 #include "../interfaces/i_copier.hpp"
 
 struct goal_expr_expander : i_goal_expr_expander {
@@ -18,7 +18,7 @@ struct goal_expr_expander : i_goal_expr_expander {
 private:
     i_database& db;
     i_goal_expr_store& ges;
-    i_bind_map& bm;
+    i_unifier& bm;
     i_copier& cp;
     std::vector<const expr*> rule_body;
     std::unique_ptr<i_translation_map> tm;

@@ -3,14 +3,14 @@
 
 #include "../domain/interfaces/i_normalizer.hpp"
 #include "../domain/interfaces/i_expr_pool.hpp"
-#include "../domain/interfaces/i_bind_map.hpp"
+#include "../domain/interfaces/i_unifier.hpp"
 
 struct normalizer : i_normalizer {
     normalizer();
     const expr* normalize(const expr*) override;
 private:
     i_expr_pool& expr_pool_ref;
-    i_bind_map& bind_map_ref;
+    i_unifier& unifier_ref;
 };
 
 #endif
