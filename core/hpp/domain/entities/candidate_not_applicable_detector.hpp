@@ -20,8 +20,6 @@ struct candidate_not_applicable_detector : i_candidate_not_applicable_detector {
     void add_candidate(const resolution_lineage*) override;
     void remove_candidate(const resolution_lineage*) override;
     void primary_rep_changed(uint32_t var_index) override;
-    void unify_continue(const resolution_lineage*) override;
-    void unify_finished(const resolution_lineage*) override;
     void secondary_unify_failed(const resolution_lineage*) override;
 
 private:
@@ -29,8 +27,6 @@ private:
 
     std::unordered_map<uint32_t, std::unordered_set<const resolution_lineage*>> var_to_rls;
     std::unordered_map<const resolution_lineage*, std::unordered_set<uint32_t>> rl_to_vars;
-    std::unordered_set<const resolution_lineage*> seeding_rls;
-    std::unordered_set<const resolution_lineage*> reconciling_rls;
 
     i_resolution_bind_map_store& rbms;
     i_goal_expr_store& ges;

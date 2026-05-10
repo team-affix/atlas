@@ -24,50 +24,29 @@ void candidate_not_applicable_detector::add_candidate(const resolution_lineage* 
     const expr* renamed_head = cp.copy(db.at(rl->idx).head, tm);
     rtms.insert(rl, std::move(tm));
 
+    // Register which goal vars this secondary watches
+    std::unordered_set<uint32_t> goal_vars;
+    extract_vars(ges.at(gl), goal_vars);
+    for (uint32_t v : goal_vars) {
+        var_to_rls[v].insert(rl);
+        rl_to_vars[rl].insert(v);
+    }
+
     rbms.insert(rl, std::make_unique<bind_map>(rl));
-    seeding_rls.insert(rl);
+    i_bind_map& secondary = *rbms.get(rl);
 
-    (*rbms.get(rl)).push(ges.at(gl), renamed_head);
-    (*rbms.get(rl)).process_step();
-}
+    // Seed initial unification pair
+    secondary.push(ges.at(gl), renamed_head);
 
-void candidate_not_applicable_detector::unify_continue(const resolution_lineage* rl) {
-    (*rbms.get(rl)).process_step();
-}
-
-void candidate_not_applicable_detector::unify_finished(const resolution_lineage* rl) {
-    const goal_lineage* gl = rl->parent;
-
-    if (seeding_rls.count(rl)) {
-        seeding_rls.erase(rl);
-
-        std::unordered_set<uint32_t> goal_vars;
-        extract_vars(ges.at(gl), goal_vars);
-        for (uint32_t v : goal_vars) {
-            var_to_rls[v].insert(rl);
-            rl_to_vars[rl].insert(v);
-        }
-
-        bool needs_reconciliation = false;
-        for (uint32_t v : goal_vars) {
-            const expr* var_expr = ep.var(v);
-            const expr* pw = primary(rbms).whnf(var_expr);
-            if (pw != var_expr) {
-                (*rbms.get(rl)).push(var_expr, pw);
-                needs_reconciliation = true;
-            }
-        }
-
-        if (needs_reconciliation) {
-            reconciling_rls.insert(rl);
-            (*rbms.get(rl)).process_step();
-        }
-        return;
+    // Reconcile immediately: fold in any bindings the primary already holds
+    for (uint32_t v : goal_vars) {
+        const expr* var_expr = ep.var(v);
+        const expr* pw = primary(rbms).whnf(var_expr);
+        if (pw != var_expr)
+            secondary.push(var_expr, pw);
     }
 
-    if (reconciling_rls.count(rl)) {
-        reconciling_rls.erase(rl);
-    }
+    secondary.process_step();
 }
 
 void candidate_not_applicable_detector::primary_rep_changed(uint32_t var_index) {
@@ -89,9 +68,6 @@ void candidate_not_applicable_detector::secondary_unify_failed(const resolution_
 }
 
 void candidate_not_applicable_detector::remove_candidate(const resolution_lineage* rl) {
-    seeding_rls.erase(rl);
-    reconciling_rls.erase(rl);
-
     auto vars_it = rl_to_vars.find(rl);
     if (vars_it != rl_to_vars.end()) {
         for (uint32_t v : vars_it->second)
