@@ -1,13 +1,13 @@
 #include "../../../hpp/domain/entities/goal_expr_expander.hpp"
 #include "../../../hpp/bootstrap/resolver.hpp"
+#include "../../../hpp/domain/interfaces/i_factory.hpp"
 
 goal_expr_expander::goal_expr_expander() :
     db(resolver::resolve<i_database>()),
     ges(resolver::resolve<i_goal_expr_store>()),
     bm(resolver::resolve<i_bind_map>()),
     cp(resolver::resolve<i_copier>()),
-    tm_factory(resolver::resolve<i_factory<i_translation_map>>()),
-    tm(tm_factory.make()) {
+    tm(resolver::resolve<i_factory<i_translation_map>>().make()) {
 }
 
 void goal_expr_expander::start_expansion(const resolution_lineage* rl) {
