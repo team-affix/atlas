@@ -10,7 +10,7 @@
 #include "../value_objects/lineage.hpp"
 #include "../events/representative_changed_event.hpp"
 #include "../events/unify_resuming_event.hpp"
-#include "../events/unify_functor_completed_event.hpp"
+#include "../events/unify_yielded_event.hpp"
 #include "../events/unify_failed_event.hpp"
 #include "../events/unify_finished_event.hpp"
 
@@ -31,7 +31,7 @@ private:
 
     i_event_producer<representative_changed_event>& rep_changed_producer;
     i_event_producer<unify_resuming_event>& unify_resuming_producer;
-    i_event_producer<unify_functor_completed_event>& unify_functor_completed_producer;
+    i_event_producer<unify_yielded_event>& unify_yielded_producer;
     i_event_producer<unify_failed_event>& unify_failed_producer;
     i_event_producer<unify_finished_event>& unify_finished_producer;
 };

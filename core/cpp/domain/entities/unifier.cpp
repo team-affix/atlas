@@ -6,7 +6,7 @@ unifier::unifier(const resolution_lineage* rl) :
     rl(rl),
     rep_changed_producer(resolver::resolve<i_event_producer<representative_changed_event>>()),
     unify_resuming_producer(resolver::resolve<i_event_producer<unify_resuming_event>>()),
-    unify_functor_completed_producer(resolver::resolve<i_event_producer<unify_functor_completed_event>>()),
+    unify_yielded_producer(resolver::resolve<i_event_producer<unify_yielded_event>>()),
     unify_failed_producer(resolver::resolve<i_event_producer<unify_failed_event>>()),
     unify_finished_producer(resolver::resolve<i_event_producer<unify_finished_event>>()) {
 }
@@ -27,87 +27,37 @@ const expr* unifier::whnf(const expr* key) {
 
 void unifier::push(const expr* lhs, const expr* rhs) {
     work_queue.push({lhs, rhs});
+    unify_yielded_producer.produce({rl});
 }
 
 void unifier::process_step() {
-    if (rl == nullptr) {
-        // Primary: run entire queue to completion, emitting representative_changed_event per binding
-        while (!work_queue.empty()) {
-            auto [lhs, rhs] = work_queue.front();
-            work_queue.pop();
-            process_pair(lhs, rhs);
-        }
-    } else {
-        // Secondary: run exactly one meaningful step, then yield via event
-        while (!work_queue.empty()) {
-            auto [lhs, rhs] = work_queue.front();
-            work_queue.pop();
-
-            lhs = whnf(lhs);
-            rhs = whnf(rhs);
-
-            const expr::var* lv = std::get_if<expr::var>(&lhs->content);
-            const expr::var* rv = std::get_if<expr::var>(&rhs->content);
-
-            // Trivial: same var, no yield needed
-            if (lv && rv && lv->index == rv->index)
-                continue;
-
-            if (lv) {
-                if (occurs_check(lv->index, rhs)) {
-                    while (!work_queue.empty()) work_queue.pop();
-                    unify_failed_producer.produce({rl});
-                    return;
-                }
-                bind(lv->index, rhs);
-                unify_resuming_producer.produce({rl});
-                return;
-            }
-
-            if (rv) {
-                if (occurs_check(rv->index, lhs)) {
-                    while (!work_queue.empty()) work_queue.pop();
-                    unify_failed_producer.produce({rl});
-                    return;
-                }
-                bind(rv->index, lhs);
-                unify_resuming_producer.produce({rl});
-                return;
-            }
-
-            if (lhs->content.index() != rhs->content.index()) {
-                while (!work_queue.empty()) work_queue.pop();
-                unify_failed_producer.produce({rl});
-                return;
-            }
-
-            if (std::holds_alternative<expr::functor>(lhs->content)) {
-                const expr::functor& lf = std::get<expr::functor>(lhs->content);
-                const expr::functor& rf = std::get<expr::functor>(rhs->content);
-                if (lf.name != rf.name || lf.args.size() != rf.args.size()) {
-                    while (!work_queue.empty()) work_queue.pop();
-                    unify_failed_producer.produce({rl});
-                    return;
-                }
-                for (size_t i = 0; i < lf.args.size(); ++i)
-                    work_queue.push({lf.args[i], rf.args[i]});
-                unify_functor_completed_producer.produce({rl});
-                return;
-            }
-
-            while (!work_queue.empty()) work_queue.pop();
-            unify_failed_producer.produce({rl});
-            return;
-        }
-        // Queue empty — done
-        unify_finished_producer.produce({rl});
-    }
+    auto [lhs, rhs] = work_queue.front();
+    work_queue.pop();
+    process_pair(lhs, rhs);
 }
 
 void unifier::clear() {
     bindings.clear();
-    while (!work_queue.empty())
-        work_queue.pop();
+    work_queue = {};
+}
+
+bool unifier::occurs_check(uint32_t index, const expr* key) {
+    key = whnf(key);
+    if (const expr::var* v = std::get_if<expr::var>(&key->content))
+        return v->index == index;
+    if (const expr::functor* f = std::get_if<expr::functor>(&key->content))
+        for (const expr* arg : f->args)
+            if (occurs_check(index, arg))
+                return true;
+    return false;
+}
+
+void unifier::bind(uint32_t index, const expr* value) {
+    auto it = bindings.find(index);
+    if (it == bindings.end())
+        bindings.insert({index, value});
+    else if (it->second != value)
+        it->second = value;
 }
 
 void unifier::process_pair(const expr* lhs, const expr* rhs) {
@@ -143,23 +93,4 @@ void unifier::process_pair(const expr* lhs, const expr* rhs) {
         for (size_t i = 0; i < lf.args.size(); ++i)
             work_queue.push({lf.args[i], rf.args[i]});
     }
-}
-
-bool unifier::occurs_check(uint32_t index, const expr* key) {
-    key = whnf(key);
-    if (const expr::var* v = std::get_if<expr::var>(&key->content))
-        return v->index == index;
-    if (const expr::functor* f = std::get_if<expr::functor>(&key->content))
-        for (const expr* arg : f->args)
-            if (occurs_check(index, arg))
-                return true;
-    return false;
-}
-
-void unifier::bind(uint32_t index, const expr* value) {
-    auto it = bindings.find(index);
-    if (it == bindings.end())
-        bindings.insert({index, value});
-    else if (it->second != value)
-        it->second = value;
 }
