@@ -22,7 +22,9 @@ struct unifier : i_unifier {
 private:
     bool occurs_check(uint32_t, const expr*);
     void bind(uint32_t, const expr*);
-    void process_pair(const expr*, const expr*);
+    bool process_pair(const expr*, const expr*);
+    void rep_changed(uint32_t);
+    void unify_yielded();
 
     const resolution_lineage* rl;
     std::unordered_map<uint32_t, const expr*> bindings;

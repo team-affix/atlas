@@ -20,6 +20,7 @@ void goal_expr_activator::start_resolution(const resolution_lineage* rl) {
     const rule& r = db.at(rl->idx);
     const expr* parent_expr = ef.at(rl->parent);
     const expr* copied_head = cp.copy(r.head, tm);
+    
     u.push(parent_expr, copied_head);
 
     translated_rule_body.clear();
