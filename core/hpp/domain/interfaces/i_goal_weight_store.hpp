@@ -1,9 +1,10 @@
 #ifndef I_GOAL_WEIGHT_STORE_HPP
 #define I_GOAL_WEIGHT_STORE_HPP
 
-#include "i_goal_store.hpp"
+#include "../value_objects/lineage.hpp"
+#include "i_map.hpp"
 
-struct i_goal_weight_store : i_goal_store<double> {
+struct i_goal_weight_store : i_map<const goal_lineage*, double> {
     virtual ~i_goal_weight_store() = default;
 };
 

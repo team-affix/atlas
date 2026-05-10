@@ -28,7 +28,7 @@ const goal_lineage* mcts_decision_generator::choose_goal() {
 
 size_t mcts_decision_generator::choose_candidate(const goal_lineage* goal) {
     // Get the candidates to choose from
-    const candidate_set& candidates = gcs.at(goal);
+    const candidate_set& candidates = gcs.get(goal);
     
     // Get the candidates to choose from
     std::vector<mcts_choice> candidate_choices;

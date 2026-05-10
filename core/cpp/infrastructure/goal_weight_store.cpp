@@ -12,6 +12,6 @@ void goal_weight_store::clear() {
     goal_weights.clear();
 }
 
-double goal_weight_store::at(const goal_lineage* gl) const {
+double& goal_weight_store::get(const goal_lineage* gl) {
     return goal_weights.at(gl);
 }
