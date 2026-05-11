@@ -3,8 +3,8 @@
 #include "../../hpp/bootstrap/locator.hpp"
 
 normalizer::normalizer() :
-    expr_pool_ref(locator::resolve<i_expr_pool>()),
-    unifier_ref(locator::resolve<i_unifier>()) {
+    expr_pool_ref(locator::locate<i_expr_pool>()),
+    unifier_ref(locator::locate<i_unifier>()) {
 }
 
 const expr* normalizer::normalize(const expr* e) {

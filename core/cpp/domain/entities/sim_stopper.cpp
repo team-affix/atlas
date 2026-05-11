@@ -2,12 +2,12 @@
 #include "../../../hpp/bootstrap/locator.hpp"
 
 sim_stopper::sim_stopper() :
-    trail(locator::resolve<i_trail>()),
-    decision_memory(locator::resolve<i_decision_memory>()),
-    c(locator::resolve<i_cdcl>()),
-    goal_stores_clearing_producer(locator::resolve<i_event_producer<goal_stores_clearing_event>>()),
-    goal_stores_cleared_producer(locator::resolve<i_event_producer<goal_stores_cleared_event>>()),
-    sim_stopped_producer(locator::resolve<i_event_producer<sim_stopped_event>>()) {
+    trail(locator::locate<i_trail>()),
+    decision_memory(locator::locate<i_decision_memory>()),
+    c(locator::locate<i_cdcl>()),
+    goal_stores_clearing_producer(locator::locate<i_event_producer<goal_stores_clearing_event>>()),
+    goal_stores_cleared_producer(locator::locate<i_event_producer<goal_stores_cleared_event>>()),
+    sim_stopped_producer(locator::locate<i_event_producer<sim_stopped_event>>()) {
 }
 
 void sim_stopper::init_stop() {

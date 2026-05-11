@@ -6,8 +6,8 @@
 
 elimination_backlog::elimination_backlog()
     :
-    backlogged_elimination_freed_producer(locator::resolve<i_event_producer<backlogged_elimination_freed_event>>()),
-    backlog(locator::resolve<i_trail>(), {}) {
+    backlogged_elimination_freed_producer(locator::locate<i_event_producer<backlogged_elimination_freed_event>>()),
+    backlog(locator::locate<i_trail>(), {}) {
 }
 
 void elimination_backlog::insert(const resolution_lineage* rl) {

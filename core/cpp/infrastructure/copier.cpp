@@ -3,8 +3,8 @@
 #include "../../hpp/bootstrap/locator.hpp"
 
 copier::copier() :
-    var_seq_ref(locator::resolve<i_var_sequencer>()),
-    expr_pool_ref(locator::resolve<i_expr_pool>()) {
+    var_seq_ref(locator::locate<i_var_sequencer>()),
+    expr_pool_ref(locator::locate<i_expr_pool>()) {
 }
 
 const expr* copier::copy(const expr* e, i_translation_map& variable_map) {

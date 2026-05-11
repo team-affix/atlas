@@ -2,11 +2,11 @@
 #include "../../../hpp/bootstrap/locator.hpp"
 
 router_avoidance_unit_event_handler::router_avoidance_unit_event_handler() :
-    c(locator::resolve<i_cdcl>()),
-    active_goal_store(locator::resolve<i_active_goal_store>()),
-    inactive_goal_store(locator::resolve<i_inactive_goal_store>()),
-    elimination_backlog(locator::resolve<i_elimination_backlog>()),
-    active_eliminator(locator::resolve<i_active_eliminator>()) {
+    c(locator::locate<i_cdcl>()),
+    active_goal_store(locator::locate<i_active_goal_store>()),
+    inactive_goal_store(locator::locate<i_inactive_goal_store>()),
+    elimination_backlog(locator::locate<i_elimination_backlog>()),
+    active_eliminator(locator::locate<i_active_eliminator>()) {
 }
 
 void router_avoidance_unit_event_handler::execute(const avoidance_unit_event& e) {

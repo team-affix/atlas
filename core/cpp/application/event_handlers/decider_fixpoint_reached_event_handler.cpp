@@ -2,7 +2,7 @@
 #include "../../../hpp/bootstrap/locator.hpp"
 
 decider_fixpoint_reached_event_handler::decider_fixpoint_reached_event_handler() :
-    decider(locator::resolve<i_decider>()) {}
+    decider(locator::locate<i_decider>()) {}
 
 void decider_fixpoint_reached_event_handler::execute(const fixpoint_reached_event&) {
     decider.decide();

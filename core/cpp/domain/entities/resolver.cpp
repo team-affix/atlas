@@ -2,15 +2,15 @@
 #include "../../../hpp/bootstrap/locator.hpp"
 
 resolver::resolver(size_t initial_goal_count) :
-    db(locator::resolve<i_database>()),
-    lp(locator::resolve<i_lineage_pool>()),
-    resolving_producer(locator::resolve<i_event_producer<resolving_event>>()),
-    resolved_producer(locator::resolve<i_event_producer<resolved_event>>()),
-    goal_activating_producer(locator::resolve<i_event_producer<goal_activating_event>>()),
-    goal_activated_producer(locator::resolve<i_event_producer<goal_activated_event>>()),
-    goal_deactivating_producer(locator::resolve<i_event_producer<goal_deactivating_event>>()),
-    goal_deactivated_producer(locator::resolve<i_event_producer<goal_deactivated_event>>()),
-    resolve_yielded_producer(locator::resolve<i_event_producer<resolve_yielded_event>>()),
+    db(locator::locate<i_database>()),
+    lp(locator::locate<i_lineage_pool>()),
+    resolving_producer(locator::locate<i_event_producer<resolving_event>>()),
+    resolved_producer(locator::locate<i_event_producer<resolved_event>>()),
+    goal_activating_producer(locator::locate<i_event_producer<goal_activating_event>>()),
+    goal_activated_producer(locator::locate<i_event_producer<goal_activated_event>>()),
+    goal_deactivating_producer(locator::locate<i_event_producer<goal_deactivating_event>>()),
+    goal_deactivated_producer(locator::locate<i_event_producer<goal_deactivated_event>>()),
+    resolve_yielded_producer(locator::locate<i_event_producer<resolve_yielded_event>>()),
     initial_goal_count(initial_goal_count) {}
 
 void resolver::init_resolve(const resolution_lineage* rl) {

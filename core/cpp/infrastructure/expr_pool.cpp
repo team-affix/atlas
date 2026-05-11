@@ -4,7 +4,7 @@
 #include "../../hpp/utility/backtrackable_set_insert.hpp"
 
 expr_pool::expr_pool() :
-    exprs(locator::resolve<i_trail>(), {}) {
+    exprs(locator::locate<i_trail>(), {}) {
 }
 
 const expr* expr_pool::functor(const std::string& name, std::vector<const expr*> args) {

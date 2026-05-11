@@ -5,7 +5,7 @@
 #include "../../hpp/bootstrap/locator.hpp"
 
 var_sequencer::var_sequencer() :
-    seq(locator::resolve<i_trail>()) {
+    seq(locator::locate<i_trail>()) {
 }
 
 uint32_t var_sequencer::next() {

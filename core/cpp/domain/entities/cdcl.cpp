@@ -7,11 +7,11 @@
 #include "../../../hpp/utility/backtrackable_map_at_erase.hpp"
 
 cdcl::cdcl() :
-    avoidance_unit_producer(locator::resolve<i_event_producer<avoidance_unit_event>>()),
-    avoidance_empty_producer(locator::resolve<i_event_producer<avoidance_empty_event>>()),
-    next_avoidance_id(locator::resolve<i_cdcl_sequencer>()),
-    avoidances(locator::resolve<i_trail>(), {}),
-    watched_goals(locator::resolve<i_trail>(), {}) {
+    avoidance_unit_producer(locator::locate<i_event_producer<avoidance_unit_event>>()),
+    avoidance_empty_producer(locator::locate<i_event_producer<avoidance_empty_event>>()),
+    next_avoidance_id(locator::locate<i_cdcl_sequencer>()),
+    avoidances(locator::locate<i_trail>(), {}),
+    watched_goals(locator::locate<i_trail>(), {}) {
 }
 
 void cdcl::learn(const lemma& l) {

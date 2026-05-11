@@ -27,8 +27,8 @@ private:
 template<typename Event>
 event_topic<Event>::event_topic(uint32_t priority) :
     task(priority),
-    s(locator::resolve<scheduler>()),
-    logger(locator::resolve<i_logger>()) {
+    s(locator::locate<scheduler>()),
+    logger(locator::locate<i_logger>()) {
 }
 
 template <typename Event>

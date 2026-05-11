@@ -6,13 +6,13 @@
 struct locator {
     static void register_bindings(const bindings* b);
     template<typename T>
-    static T& resolve();
+    static T& locate();
 private:
     static const bindings* b;
 };
 
 template<typename T>
-T& locator::resolve() {
+T& locator::locate() {
     return b->resolve<T>();
 }
 

@@ -2,9 +2,9 @@
 #include "../../../hpp/bootstrap/locator.hpp"
 
 decider::decider() :
-    decision_generator(locator::resolve<i_decision_generator>()),
-    decision_memory(locator::resolve<i_decision_memory>()),
-    res(locator::resolve<i_resolver>()) {}
+    decision_generator(locator::locate<i_decision_generator>()),
+    decision_memory(locator::locate<i_decision_memory>()),
+    res(locator::locate<i_resolver>()) {}
 
 void decider::decide() const {
     auto rl = decision_generator.generate();

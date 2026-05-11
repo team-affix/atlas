@@ -4,10 +4,10 @@
 
 mcts_decision_generator::mcts_decision_generator()
     :
-    lp(locator::resolve<i_lineage_pool>()),
-    ags(locator::resolve<i_active_goal_store>()),
-    gcs(locator::resolve<i_candidates_frontier>()),
-    sim(locator::resolve<monte_carlo::simulation<mcts_choice, std::mt19937>>()){
+    lp(locator::locate<i_lineage_pool>()),
+    ags(locator::locate<i_active_goal_store>()),
+    gcs(locator::locate<i_candidates_frontier>()),
+    sim(locator::locate<monte_carlo::simulation<mcts_choice, std::mt19937>>()){
 }
 
 const resolution_lineage* mcts_decision_generator::generate() {

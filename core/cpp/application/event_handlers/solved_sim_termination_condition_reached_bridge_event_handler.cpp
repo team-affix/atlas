@@ -2,7 +2,7 @@
 #include "../../../hpp/bootstrap/locator.hpp"
 
 solved_sim_termination_condition_reached_bridge_event_handler::solved_sim_termination_condition_reached_bridge_event_handler() :
-    producer(locator::resolve<i_event_producer<sim_termination_condition_reached_event>>()) {}
+    producer(locator::locate<i_event_producer<sim_termination_condition_reached_event>>()) {}
 
 void solved_sim_termination_condition_reached_bridge_event_handler::handle(const solved_event&) {
     producer.produce(sim_termination_condition_reached_event{});

@@ -2,11 +2,11 @@
 #include "../../../hpp/bootstrap/locator.hpp"
 
 goal_expr_activator::goal_expr_activator(const std::vector<const expr*>& initial_exprs) :
-    db(locator::resolve<i_database>()),
-    ef(locator::resolve<i_expr_frontier>()),
-    tmf(locator::resolve<i_translation_map_frontier>()),
-    u(locator::resolve<i_unifier>()),
-    cp(locator::resolve<i_copier>()),
+    db(locator::locate<i_database>()),
+    ef(locator::locate<i_expr_frontier>()),
+    tmf(locator::locate<i_translation_map_frontier>()),
+    u(locator::locate<i_unifier>()),
+    cp(locator::locate<i_copier>()),
     initial_exprs(initial_exprs) {}
 
 void goal_expr_activator::start_resolution(const resolution_lineage* rl) {

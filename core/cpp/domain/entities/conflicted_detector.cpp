@@ -2,7 +2,7 @@
 #include "../../../hpp/bootstrap/locator.hpp"
 
 conflicted_detector::conflicted_detector() :
-    conflicted_producer(locator::resolve<i_event_producer<conflicted_event>>()) {}
+    conflicted_producer(locator::locate<i_event_producer<conflicted_event>>()) {}
 
 void conflicted_detector::candidates_empty() {
     conflicted_producer.produce(conflicted_event{});
