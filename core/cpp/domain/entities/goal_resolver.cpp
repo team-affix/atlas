@@ -12,7 +12,8 @@ goal_resolver::goal_resolver() :
     goal_activating_producer(resolver::resolve<i_event_producer<goal_activating_event>>()),
     goal_activated_producer(resolver::resolve<i_event_producer<goal_activated_event>>()),
     goal_deactivating_producer(resolver::resolve<i_event_producer<goal_deactivating_event>>()),
-    goal_deactivated_producer(resolver::resolve<i_event_producer<goal_deactivated_event>>()) {
+    goal_deactivated_producer(resolver::resolve<i_event_producer<goal_deactivated_event>>()),
+    resolver_yielded_producer(resolver::resolve<i_event_producer<resolve_yielded_event>>()) {
 }
 
 void goal_resolver::resolve(const resolution_lineage* rl) {

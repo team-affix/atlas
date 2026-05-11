@@ -11,6 +11,7 @@
 #include "../events/goal_activated_event.hpp"
 #include "../events/goal_deactivating_event.hpp"
 #include "../events/goal_deactivated_event.hpp"
+#include "../events/resolve_yielded_event.hpp"
 
 struct goal_resolver : i_goal_resolver {
     goal_resolver();
@@ -24,6 +25,7 @@ private:
     i_event_producer<goal_activated_event>& goal_activated_producer;
     i_event_producer<goal_deactivating_event>& goal_deactivating_producer;
     i_event_producer<goal_deactivated_event>& goal_deactivated_producer;
+    i_event_producer<resolve_yielded_event>& resolver_yielded_producer;
 };
 
 #endif
