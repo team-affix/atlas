@@ -4,7 +4,8 @@
 
 goal_candidates_activator::goal_candidates_activator() :
     cf(locator::locate<i_candidates_frontier>()),
-    goal_candidates_changed_producer(locator::locate<i_event_producer<goal_candidates_changed_event>>()) {
+    lp(locator::locate<i_lineage_pool>()),
+    candidate_activated_producer(locator::locate<i_event_producer<candidate_activated_event>>()) {
     i_database& db = locator::locate<i_database>();
     for (size_t i = 0; i < db.size(); ++i)
         all_candidates.insert(i);
@@ -14,5 +15,6 @@ void goal_candidates_activator::start_resolution(const resolution_lineage*) {}
 
 void goal_candidates_activator::activate(const goal_lineage* gl) {
     cf.insert(gl, candidate_set{all_candidates});
-    goal_candidates_changed_producer.produce(goal_candidates_changed_event{gl});
+    for (size_t rule_idx : all_candidates)
+        candidate_activated_producer.produce(candidate_activated_event{lp.resolution(gl, rule_idx)});
 }

@@ -18,7 +18,6 @@ Events sharing a number are emitted together and have the same priority tier.
 | 116  | `avoidance_empty_event`              | —                                                                 |       |
 | 116  | `goal_candidates_empty_event`        | BEFORE `goal_unit_event`                                          |       |
 | --   | --                                   | --                                                                | END CONFLICT PRODUCTION |
-| 115  | `goal_candidates_changed_event`      | —                                                                 |       |
 | 114  | `candidate_eliminated_event`         | —                                                                 |       |
 | --   | --                                   | --                                                                | ELIMINATION PRODUCTION ZONE |
 | 113  | `backlogged_elimination_freed_event` | AFTER `candidate_eliminated_event`                                | Always produces active elim |

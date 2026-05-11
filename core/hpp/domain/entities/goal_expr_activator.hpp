@@ -3,11 +3,10 @@
 
 #include <vector>
 #include "../interfaces/i_goal_expr_activator.hpp"
-#include "../interfaces/i_translation_map_frontier.hpp"
+#include "../interfaces/i_applicant_frontier.hpp"
 #include "../value_objects/expr.hpp"
 #include "../interfaces/i_database.hpp"
 #include "../interfaces/i_expr_frontier.hpp"
-#include "../interfaces/i_unifier.hpp"
 #include "../interfaces/i_copier.hpp"
 
 struct goal_expr_activator : i_goal_expr_activator {
@@ -17,8 +16,7 @@ struct goal_expr_activator : i_goal_expr_activator {
 private:
     i_database& db;
     i_expr_frontier& ef;
-    i_translation_map_frontier& tmf;
-    i_unifier& u;
+    i_applicant_frontier& af;
     i_copier& cp;
     std::vector<const expr*> initial_exprs;
     std::vector<const expr*> translated_rule_body;
