@@ -4,7 +4,6 @@
 struct i_sim_starter {
     virtual ~i_sim_starter() = default;
     virtual void start() = 0;
-    virtual void complete_start() = 0;
 };
 
 #endif

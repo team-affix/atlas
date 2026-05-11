@@ -11,7 +11,6 @@
 struct sim_starter : i_sim_starter {
     sim_starter();
     void start() override;
-    void complete_start() override;
 private:
     i_trail& trail;
     i_goal_resolver& goal_resolver;

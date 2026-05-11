@@ -11,9 +11,6 @@ sim_starter::sim_starter() :
 void sim_starter::start() {
     trail.push();
     goal_resolver.init_resolve(nullptr);
-}
-
-void sim_starter::complete_start() {
-    sim_started_producer.produce(sim_started_event{});
-    fixpoint_reached_producer.produce(fixpoint_reached_event{});
+    sim_started_producer.produce({});
+    fixpoint_reached_producer.produce({});
 }
