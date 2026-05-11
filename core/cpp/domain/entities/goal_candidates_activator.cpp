@@ -5,16 +5,25 @@
 goal_candidates_activator::goal_candidates_activator() :
     cf(locator::locate<i_candidates_frontier>()),
     lp(locator::locate<i_lineage_pool>()),
-    candidate_activated_producer(locator::locate<i_event_producer<candidate_activated_event>>()) {
-    i_database& db = locator::locate<i_database>();
-    for (size_t i = 0; i < db.size(); ++i)
-        all_candidates.insert(i);
+    candidate_activating_producer(locator::locate<i_event_producer<candidate_activating_event>>()),
+    candidate_activated_producer(locator::locate<i_event_producer<candidate_activated_event>>()),
+    activate_yielded_producer(locator::locate<i_event_producer<goal_candidates_activate_yielded_event>>()),
+    db_size(locator::locate<i_database>().size()) {}
+
+void goal_candidates_activator::init_activate(const goal_lineage* gl) {
+    cf.insert(gl, candidate_set{});
+    current_gl = gl;
+    current_idx = 0;
+    prev_rl = nullptr;
+    activate_yielded_producer.produce({});
 }
 
-void goal_candidates_activator::start_resolution(const resolution_lineage*) {}
-
-void goal_candidates_activator::activate(const goal_lineage* gl) {
-    cf.insert(gl, candidate_set{all_candidates});
-    for (size_t rule_idx : all_candidates)
-        candidate_activated_producer.produce(candidate_activated_event{lp.resolution(gl, rule_idx)});
+void goal_candidates_activator::resume() {
+    if (prev_rl) candidate_activated_producer.produce({prev_rl});
+    if (current_idx >= db_size) return;
+    cf.at(current_gl).candidates.insert(current_idx);
+    prev_rl = lp.resolution(current_gl, current_idx);
+    candidate_activating_producer.produce({prev_rl});
+    ++current_idx;
+    activate_yielded_producer.produce({});
 }
