@@ -6,10 +6,6 @@ Events sharing a number are emitted together and have the same priority tier.
 
 | #    | Event                                | Constraint                                                        | Extra |
 | ---  | ------------------------------------ | ----------------------------------------------------------------- | ----- |
-| --   | --                                   | --                                                                | SIM SETUP ZONE |
-| 122  | `initial_goal_activating_event`      | BEFORE `initial_goals_activated_event`                            |       |
-| 121  | `initial_goals_activated_event`      | AFTER `initial_goal_activating_event`, BEFORE `sim_started_event` |       |
-| --   | --                                   | --                                                                | END SIM SETUP |
 | --   | --                                   | --                                                                | SIM ZONE |
 | 120  | `sim_started_event`                  | AFTER `initial_goals_activated_event`                             |       |
 | --   | --                                   | --                                                                | EARLY TERMINATION ZONE |
@@ -32,12 +28,13 @@ Events sharing a number are emitted together and have the same priority tier.
 | 111  | `goal_expr_changed_event`            | —                                                                 |       |
 | 110  | `representative_changed_event`       | —                                                                 |       |
 | --   | --                                   | --                                                                | RESOLUTION ZONE |
-| 109  | `resolving_event`               | —                                                                 |       |
-| 108  | `goal_activating_event`              | —                                                                 |       |
-| 107  | `goal_deactivating_event`            | —                                                                 |       |
-| 106  | `goal_activated_event`               | —                                                                 |       |
-| 105  | `goal_deactivated_event`             | —                                                                 |       |
-| 104  | `resolved_event`                | —                                                                 |       |
+| 109  | `resolving_event`                    | —                                                                 |       |
+| 109  | `resolved_event`                     | —                                                                 |       |
+| 109  | `goal_activating_event`              | —                                                                 |       |
+| 109  | `goal_activated_event`               | —                                                                 |       |
+| 109  | `goal_deactivating_event`            | —                                                                 |       |
+| 109  | `goal_deactivated_event`             | —                                                                 |       |
+| 108  | `resolve_yielded_event`              | —                                                                 |       |
 | --   | --                                   | --                                                                | END RESOLUTION |
 | 103  | `goal_unit_event`                    | —                                                                 |       |
 | 102  | `fixpoint_reached_event`             | AFTER `goal_unit_event`                                           |       |
