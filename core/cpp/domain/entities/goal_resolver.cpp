@@ -1,6 +1,3 @@
-#ifndef RESOLVER_CPP
-#define RESOLVER_CPP
-
 #include "../../../hpp/domain/entities/goal_resolver.hpp"
 #include "../../../hpp/bootstrap/resolver.hpp"
 
@@ -13,22 +10,33 @@ goal_resolver::goal_resolver() :
     goal_activated_producer(resolver::resolve<i_event_producer<goal_activated_event>>()),
     goal_deactivating_producer(resolver::resolve<i_event_producer<goal_deactivating_event>>()),
     goal_deactivated_producer(resolver::resolve<i_event_producer<goal_deactivated_event>>()),
-    resolver_yielded_producer(resolver::resolve<i_event_producer<resolve_yielded_event>>()) {
+    resolve_yielded_producer(resolver::resolve<i_event_producer<resolve_yielded_event>>()) {}
+
+void goal_resolver::init_resolve(const resolution_lineage* rl) {
+    current_rl = rl;
+    prev_gl = nullptr;
+    body_size = db.at(rl->idx).body.size();
+    current_idx = 0;
+    deactivating = false;
+    goal_resolving_producer.produce({rl});
+    resolve_yielded_producer.produce({});
 }
 
-void goal_resolver::resolve(const resolution_lineage* rl) {
-    const goal_lineage* gl = rl->parent;
-    goal_resolving_producer.produce(goal_resolving_event{rl});
-    goal_resolved_producer.produce(goal_resolved_event{rl});
-    goal_deactivating_producer.produce(goal_deactivating_event{gl});
-    goal_deactivated_producer.produce(goal_deactivated_event{gl});
+void goal_resolver::resume() {
+    if (prev_gl) goal_activated_producer.produce({prev_gl});
 
-    const rule& r = db.at(rl->idx);
-    for (size_t i = 0; i < r.body.size(); ++i) {
-        const goal_lineage* new_gl = lp.goal(rl, i);
-        goal_activating_producer.produce(goal_activating_event{new_gl});
-        goal_activated_producer.produce(goal_activated_event{new_gl});
+    if (deactivating) {
+        goal_deactivated_producer.produce({current_rl->parent});
+        goal_resolved_producer.produce({current_rl});
+        // no yield — terminal step
+    } else if (current_idx < body_size) {
+        prev_gl = lp.goal(current_rl, current_idx);
+        goal_activating_producer.produce({prev_gl});
+        ++current_idx;
+        resolve_yielded_producer.produce({});
+    } else {
+        goal_deactivating_producer.produce({current_rl->parent});
+        deactivating = true;
+        resolve_yielded_producer.produce({});
     }
 }
-
-#endif

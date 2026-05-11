@@ -15,7 +15,8 @@
 
 struct goal_resolver : i_goal_resolver {
     goal_resolver();
-    void resolve(const resolution_lineage*) override;
+    void init_resolve(const resolution_lineage*) override;
+    void resume() override;
 private:
     i_database& db;
     i_lineage_pool& lp;
@@ -25,7 +26,13 @@ private:
     i_event_producer<goal_activated_event>& goal_activated_producer;
     i_event_producer<goal_deactivating_event>& goal_deactivating_producer;
     i_event_producer<goal_deactivated_event>& goal_deactivated_producer;
-    i_event_producer<resolve_yielded_event>& resolver_yielded_producer;
+    i_event_producer<resolve_yielded_event>& resolve_yielded_producer;
+
+    const resolution_lineage* current_rl = nullptr;
+    const goal_lineage* prev_gl = nullptr;
+    size_t current_idx = 0;
+    size_t body_size = 0;
+    bool deactivating = false;
 };
 
 #endif

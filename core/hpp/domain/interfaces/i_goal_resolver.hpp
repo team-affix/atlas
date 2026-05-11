@@ -5,7 +5,8 @@
 
 struct i_goal_resolver {
     virtual ~i_goal_resolver() = default;
-    virtual void resolve(const resolution_lineage*) = 0;
+    virtual void init_resolve(const resolution_lineage*) = 0;
+    virtual void resume() = 0;
 };
 
 #endif
