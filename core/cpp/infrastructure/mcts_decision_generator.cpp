@@ -1,13 +1,13 @@
 #include "../../hpp/infrastructure/mcts_decision_generator.hpp"
-#include "../../hpp/bootstrap/resolver.hpp"
+#include "../../hpp/bootstrap/locator.hpp"
 #include "../../hpp/infrastructure/mcts_choice_generator_goal_visitor.hpp"
 
 mcts_decision_generator::mcts_decision_generator()
     :
-    lp(resolver::resolve<i_lineage_pool>()),
-    ags(resolver::resolve<i_active_goal_store>()),
-    gcs(resolver::resolve<i_candidates_frontier>()),
-    sim(resolver::resolve<monte_carlo::simulation<mcts_choice, std::mt19937>>()){
+    lp(locator::resolve<i_lineage_pool>()),
+    ags(locator::resolve<i_active_goal_store>()),
+    gcs(locator::resolve<i_candidates_frontier>()),
+    sim(locator::resolve<monte_carlo::simulation<mcts_choice, std::mt19937>>()){
 }
 
 const resolution_lineage* mcts_decision_generator::generate() {

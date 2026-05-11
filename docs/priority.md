@@ -32,12 +32,12 @@ Events sharing a number are emitted together and have the same priority tier.
 | 111  | `goal_expr_changed_event`            | —                                                                 |       |
 | 110  | `representative_changed_event`       | —                                                                 |       |
 | --   | --                                   | --                                                                | RESOLUTION ZONE |
-| 109  | `goal_resolving_event`               | —                                                                 |       |
+| 109  | `resolving_event`               | —                                                                 |       |
 | 108  | `goal_activating_event`              | —                                                                 |       |
 | 107  | `goal_deactivating_event`            | —                                                                 |       |
 | 106  | `goal_activated_event`               | —                                                                 |       |
 | 105  | `goal_deactivated_event`             | —                                                                 |       |
-| 104  | `goal_resolved_event`                | —                                                                 |       |
+| 104  | `resolved_event`                | —                                                                 |       |
 | --   | --                                   | --                                                                | END RESOLUTION |
 | 103  | `goal_unit_event`                    | —                                                                 |       |
 | 102  | `fixpoint_reached_event`             | AFTER `goal_unit_event`                                           |       |

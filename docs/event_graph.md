@@ -101,8 +101,8 @@ flowchart TD
   e_deciding[deciding_event]
   e_decided[decided_event]
   h_deciding_store[[decision_memory_deciding_EH]]
-  h_resolver_decided[[goal_resolver_decided_EH  (C)]]
-  ent_goal_resolver(goal_resolver)
+  h_resolver_decided[[resolver_decided_EH  (C)]]
+  ent_resolver(resolver)
 
   e_no_more --> h_decider
   e_no_more --> h_repeater
@@ -112,9 +112,9 @@ flowchart TD
   ent_decider -->|emits together| e_decided
   e_deciding --> h_deciding_store
   e_decided --> h_resolver_decided
-  h_resolver_decided -->|calls resolve(rl)| ent_goal_resolver
+  h_resolver_decided -->|calls resolve(rl)| ent_resolver
   classDef entity fill:#a8d8ea,stroke:#4a90a4,color:#000,font-size:17px,padding:12px
-  class ent_decider,ent_goal_resolver entity
+  class ent_decider,ent_resolver entity
 ```
 
 The unit-goal fast path bypasses the decider entirely:
@@ -124,29 +124,29 @@ The unit-goal fast path bypasses the decider entirely:
 ```mermaid
 flowchart TD
   e_goal_unit[goal_unit_event]
-  h_resolver_unit[[goal_resolver_goal_unit_EH  (C)]]
-  ent_goal_resolver(goal_resolver)
+  h_resolver_unit[[resolver_goal_unit_EH  (C)]]
+  ent_resolver(resolver)
   e_goal_unit --> h_resolver_unit
-  h_resolver_unit -->|calls resolve(rl)| ent_goal_resolver
+  h_resolver_unit -->|calls resolve(rl)| ent_resolver
   classDef entity fill:#a8d8ea,stroke:#4a90a4,color:#000,font-size:17px,padding:12px
-  class ent_goal_resolver entity
+  class ent_resolver entity
 ```
 
 ---
 
 ## 3. Goal Resolution
 
-`goal_resolver.resolve(rl)` deactivates the current goal and activates N subgoals for the body of the matched rule.
+`resolver.resolve(rl)` deactivates the current goal and activates N subgoals for the body of the matched rule.
 
 ![Goal Resolution](img/03a_goal_resolution.png)
 
 ```mermaid
 flowchart TD
-  ent_goal_resolver(goal_resolver)
+  ent_resolver(resolver)
 
-  e_goal_resolving[goal_resolving_event]
-  e_goal_resolved[goal_resolved_event]
-  h_res_store_resolved[[resolution_store_goal_resolved_EH]]
+  e_goal_resolving[resolving_event]
+  e_goal_resolved[resolved_event]
+  h_res_store_resolved[[resolution_memory_resolved_EH]]
 
   e_goal_activating[goal_activating_event]
   e_goal_activated[goal_activated_event  [!] no handler]
@@ -159,12 +159,12 @@ flowchart TD
   h_solved_stopper[[sim_stopper_solved_EH]]
   ent_stopper(sim_stopper)
 
-  ent_goal_resolver -->|emits together| e_goal_resolving
-  ent_goal_resolver -->|emits together| e_goal_resolved
-  ent_goal_resolver -->|emits together| e_goal_activating
-  ent_goal_resolver -->|emits together| e_goal_activated
-  ent_goal_resolver -->|emits together| e_goal_deactivating
-  ent_goal_resolver -->|emits together| e_goal_deactivated
+  ent_resolver -->|emits together| e_goal_resolving
+  ent_resolver -->|emits together| e_goal_resolved
+  ent_resolver -->|emits together| e_goal_activating
+  ent_resolver -->|emits together| e_goal_activated
+  ent_resolver -->|emits together| e_goal_deactivating
+  ent_resolver -->|emits together| e_goal_deactivated
 
   e_goal_resolved --> h_res_store_resolved
 
@@ -174,7 +174,7 @@ flowchart TD
   e_solved --> h_solved_stopper
   h_solved_stopper -->|calls init_stop()| ent_stopper
   classDef entity fill:#a8d8ea,stroke:#4a90a4,color:#000,font-size:17px,padding:12px
-  class ent_goal_resolver,ent_sdet,ent_stopper entity
+  class ent_resolver,ent_sdet,ent_stopper entity
 ```
 
 Empty candidates end the run with a conflict:

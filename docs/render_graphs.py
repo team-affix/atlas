@@ -211,8 +211,8 @@ render(
         "h_dec_store":     "[[decision_memory\ndeciding_EH]]",
         "h_dec_decided":   "[[deciding_decided\nbridge_EH]]",
         "e_decided":       "[decided_event]",
-        "h_res_decided":   "[[goal_resolver\ndecided_EH]]\n★ cancellable",
-        "ent_resolver":    "(goal_resolver)",
+        "h_res_decided":   "[[resolver\ndecided_EH]]\n★ cancellable",
+        "ent_resolver":    "(resolver)",
     },
     [
         ("e_nmug",        "h_decider",      ""),
@@ -237,8 +237,8 @@ render(
     "2b · Solving Loop — Unit Goal Fast Path",
     {
         "e_unit":     "[goal_unit_event]",
-        "h_unit":     "[[goal_resolver\ngoal_unit_EH]]\n★ cancellable",
-        "ent_res":    "(goal_resolver)",
+        "h_unit":     "[[resolver\ngoal_unit_EH]]\n★ cancellable",
+        "ent_res":    "(resolver)",
     },
     [
         ("e_unit", "h_unit",  ""),
@@ -254,11 +254,11 @@ render(
 render(
     "3a · Goal Resolution",
     {
-        "ent_res":       "(goal_resolver)",
-        "e_resolving":   "[goal_resolving\nevent]",
-        "h_res_bridge":  "[[goal_resolving\ngoal_resolved\nbridge_EH]]",
-        "e_resolved":    "[goal_resolved\nevent]",
-        "h_store_res":   "[[resolution_store\ngoal_resolved_EH]]",
+        "ent_res":       "(resolver)",
+        "e_resolving":   "[resolving\nevent]",
+        "h_res_bridge":  "[[resolving\nresolved\nbridge_EH]]",
+        "e_resolved":    "[resolved\nevent]",
+        "h_store_res":   "[[resolution_memory\nresolved_EH]]",
         "e_activating":  "[goal_activating\nevent]",
         "h_act_bridge":  "[[goal_activating\ngoal_activated\nbridge_EH]]",
         "e_activated":   "[goal_activated_event]\n⚠ no handler",

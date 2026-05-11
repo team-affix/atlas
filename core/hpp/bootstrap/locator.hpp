@@ -1,9 +1,9 @@
-#ifndef RESOLVER_HPP
-#define RESOLVER_HPP
+#ifndef LOCATOR_HPP
+#define LOCATOR_HPP
 
 #include "bindings.hpp"
 
-struct resolver {
+struct locator {
     static void register_bindings(const bindings* b);
     template<typename T>
     static T& resolve();
@@ -12,7 +12,7 @@ private:
 };
 
 template<typename T>
-T& resolver::resolve() {
+T& locator::resolve() {
     return b->resolve<T>();
 }
 

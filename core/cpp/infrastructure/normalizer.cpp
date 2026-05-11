@@ -1,10 +1,10 @@
 #include <stdexcept>
 #include "../../hpp/infrastructure/normalizer.hpp"
-#include "../../hpp/bootstrap/resolver.hpp"
+#include "../../hpp/bootstrap/locator.hpp"
 
 normalizer::normalizer() :
-    expr_pool_ref(resolver::resolve<i_expr_pool>()),
-    unifier_ref(resolver::resolve<i_unifier>()) {
+    expr_pool_ref(locator::resolve<i_expr_pool>()),
+    unifier_ref(locator::resolve<i_unifier>()) {
 }
 
 const expr* normalizer::normalize(const expr* e) {

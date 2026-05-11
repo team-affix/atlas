@@ -1,8 +1,8 @@
 #include "../../../hpp/application/event_handlers/solved_detector_goal_deactivated_event_handler.hpp"
-#include "../../../hpp/bootstrap/resolver.hpp"
+#include "../../../hpp/bootstrap/locator.hpp"
 
 solved_detector_goal_deactivated_event_handler::solved_detector_goal_deactivated_event_handler() :
-    solved_detector(resolver::resolve<i_solved_detector>()) {}
+    solved_detector(locator::resolve<i_solved_detector>()) {}
 
 void solved_detector_goal_deactivated_event_handler::handle(const goal_deactivated_event&) {
     solved_detector.detect_solved();

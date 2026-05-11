@@ -1,27 +1,27 @@
-#ifndef GOAL_RESOLVER_HPP
-#define GOAL_RESOLVER_HPP
+#ifndef RESOLVER_HPP
+#define RESOLVER_HPP
 
-#include "../interfaces/i_goal_resolver.hpp"
+#include "../interfaces/i_resolver.hpp"
 #include "../interfaces/i_lineage_pool.hpp"
 #include "../interfaces/i_database.hpp"
 #include "../interfaces/i_event_producer.hpp"
-#include "../events/goal_resolving_event.hpp"
-#include "../events/goal_resolved_event.hpp"
+#include "../events/resolving_event.hpp"
+#include "../events/resolved_event.hpp"
 #include "../events/goal_activating_event.hpp"
 #include "../events/goal_activated_event.hpp"
 #include "../events/goal_deactivating_event.hpp"
 #include "../events/goal_deactivated_event.hpp"
 #include "../events/resolve_yielded_event.hpp"
 
-struct goal_resolver : i_goal_resolver {
-    explicit goal_resolver(size_t initial_goal_count);
+struct resolver : i_resolver {
+    explicit resolver(size_t initial_goal_count);
     void init_resolve(const resolution_lineage*) override;
     void resume() override;
 private:
     i_database& db;
     i_lineage_pool& lp;
-    i_event_producer<goal_resolving_event>& goal_resolving_producer;
-    i_event_producer<goal_resolved_event>& goal_resolved_producer;
+    i_event_producer<resolving_event>& resolving_producer;
+    i_event_producer<resolved_event>& resolved_producer;
     i_event_producer<goal_activating_event>& goal_activating_producer;
     i_event_producer<goal_activated_event>& goal_activated_producer;
     i_event_producer<goal_deactivating_event>& goal_deactivating_producer;

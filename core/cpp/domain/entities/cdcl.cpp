@@ -1,17 +1,17 @@
 #include <memory>
 #include "../../../hpp/domain/entities/cdcl.hpp"
-#include "../../../hpp/bootstrap/resolver.hpp"
+#include "../../../hpp/bootstrap/locator.hpp"
 #include "../../../hpp/utility/backtrackable_map_insert.hpp"
 #include "../../../hpp/utility/backtrackable_map_erase.hpp"
 #include "../../../hpp/utility/backtrackable_map_at_insert.hpp"
 #include "../../../hpp/utility/backtrackable_map_at_erase.hpp"
 
 cdcl::cdcl() :
-    avoidance_unit_producer(resolver::resolve<i_event_producer<avoidance_unit_event>>()),
-    avoidance_empty_producer(resolver::resolve<i_event_producer<avoidance_empty_event>>()),
-    next_avoidance_id(resolver::resolve<i_cdcl_sequencer>()),
-    avoidances(resolver::resolve<i_trail>(), {}),
-    watched_goals(resolver::resolve<i_trail>(), {}) {
+    avoidance_unit_producer(locator::resolve<i_event_producer<avoidance_unit_event>>()),
+    avoidance_empty_producer(locator::resolve<i_event_producer<avoidance_empty_event>>()),
+    next_avoidance_id(locator::resolve<i_cdcl_sequencer>()),
+    avoidances(locator::resolve<i_trail>(), {}),
+    watched_goals(locator::resolve<i_trail>(), {}) {
 }
 
 void cdcl::learn(const lemma& l) {

@@ -1,13 +1,13 @@
 #include "../../../hpp/domain/entities/sim_stopper.hpp"
-#include "../../../hpp/bootstrap/resolver.hpp"
+#include "../../../hpp/bootstrap/locator.hpp"
 
 sim_stopper::sim_stopper() :
-    trail(resolver::resolve<i_trail>()),
-    decision_memory(resolver::resolve<i_decision_memory>()),
-    c(resolver::resolve<i_cdcl>()),
-    goal_stores_clearing_producer(resolver::resolve<i_event_producer<goal_stores_clearing_event>>()),
-    goal_stores_cleared_producer(resolver::resolve<i_event_producer<goal_stores_cleared_event>>()),
-    sim_stopped_producer(resolver::resolve<i_event_producer<sim_stopped_event>>()) {
+    trail(locator::resolve<i_trail>()),
+    decision_memory(locator::resolve<i_decision_memory>()),
+    c(locator::resolve<i_cdcl>()),
+    goal_stores_clearing_producer(locator::resolve<i_event_producer<goal_stores_clearing_event>>()),
+    goal_stores_cleared_producer(locator::resolve<i_event_producer<goal_stores_cleared_event>>()),
+    sim_stopped_producer(locator::resolve<i_event_producer<sim_stopped_event>>()) {
 }
 
 void sim_stopper::init_stop() {

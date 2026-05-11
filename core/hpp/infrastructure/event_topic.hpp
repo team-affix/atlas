@@ -6,7 +6,7 @@
 #include "event_handler.hpp"
 #include "task.hpp"
 #include "scheduler.hpp"
-#include "../bootstrap/resolver.hpp"
+#include "../bootstrap/locator.hpp"
 #include "../domain/interfaces/i_logger.hpp"
 #include "../domain/interfaces/i_event_producer.hpp"
 
@@ -27,8 +27,8 @@ private:
 template<typename Event>
 event_topic<Event>::event_topic(uint32_t priority) :
     task(priority),
-    s(resolver::resolve<scheduler>()),
-    logger(resolver::resolve<i_logger>()) {
+    s(locator::resolve<scheduler>()),
+    logger(locator::resolve<i_logger>()) {
 }
 
 template <typename Event>

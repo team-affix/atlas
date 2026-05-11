@@ -1,8 +1,8 @@
 #include "../../hpp/infrastructure/expr_printer.hpp"
-#include "../../hpp/bootstrap/resolver.hpp"
+#include "../../hpp/bootstrap/locator.hpp"
 
 expr_printer::expr_printer(std::ostream& os)
-    : os(os), var_names(resolver::resolve<i_var_names>())
+    : os(os), var_names(locator::resolve<i_var_names>())
 {}
 
 void expr_printer::print(const expr* e) const {

@@ -1,13 +1,13 @@
 #include "../../../hpp/domain/entities/elimination_backlog.hpp"
-#include "../../../hpp/bootstrap/resolver.hpp"
+#include "../../../hpp/bootstrap/locator.hpp"
 #include "../../../hpp/utility/backtrackable_map_insert.hpp"
 #include "../../../hpp/utility/backtrackable_map_at_insert.hpp"
 #include "../../../hpp/utility/backtrackable_map_erase.hpp"
 
 elimination_backlog::elimination_backlog()
     :
-    backlogged_elimination_freed_producer(resolver::resolve<i_event_producer<backlogged_elimination_freed_event>>()),
-    backlog(resolver::resolve<i_trail>(), {}) {
+    backlogged_elimination_freed_producer(locator::resolve<i_event_producer<backlogged_elimination_freed_event>>()),
+    backlog(locator::resolve<i_trail>(), {}) {
 }
 
 void elimination_backlog::insert(const resolution_lineage* rl) {
