@@ -14,7 +14,7 @@
 #include "../events/resolve_yielded_event.hpp"
 
 struct goal_resolver : i_goal_resolver {
-    goal_resolver();
+    explicit goal_resolver(size_t initial_goal_count);
     void init_resolve(const resolution_lineage*) override;
     void resume() override;
 private:
@@ -28,6 +28,7 @@ private:
     i_event_producer<goal_deactivated_event>& goal_deactivated_producer;
     i_event_producer<resolve_yielded_event>& resolve_yielded_producer;
 
+    size_t initial_goal_count;
     const resolution_lineage* current_rl = nullptr;
     const goal_lineage* prev_gl = nullptr;
     size_t current_idx = 0;

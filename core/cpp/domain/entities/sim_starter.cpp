@@ -4,13 +4,13 @@
 
 sim_starter::sim_starter() :
     trail(resolver::resolve<i_trail>()),
-    initial_goal_activator(resolver::resolve<i_initial_goal_activator>()),
+    goal_resolver(resolver::resolve<i_goal_resolver>()),
     sim_started_producer(resolver::resolve<i_event_producer<sim_started_event>>()),
     fixpoint_reached_producer(resolver::resolve<i_event_producer<fixpoint_reached_event>>()) {}
 
 void sim_starter::start() {
     trail.push();
-    initial_goal_activator.activate_initial_goals();
+    goal_resolver.init_resolve(nullptr);
 }
 
 void sim_starter::complete_start() {

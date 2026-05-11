@@ -1,7 +1,7 @@
 #include "../../../hpp/domain/entities/goal_resolver.hpp"
 #include "../../../hpp/bootstrap/resolver.hpp"
 
-goal_resolver::goal_resolver() :
+goal_resolver::goal_resolver(size_t initial_goal_count) :
     db(resolver::resolve<i_database>()),
     lp(resolver::resolve<i_lineage_pool>()),
     goal_resolving_producer(resolver::resolve<i_event_producer<goal_resolving_event>>()),
@@ -10,12 +10,13 @@ goal_resolver::goal_resolver() :
     goal_activated_producer(resolver::resolve<i_event_producer<goal_activated_event>>()),
     goal_deactivating_producer(resolver::resolve<i_event_producer<goal_deactivating_event>>()),
     goal_deactivated_producer(resolver::resolve<i_event_producer<goal_deactivated_event>>()),
-    resolve_yielded_producer(resolver::resolve<i_event_producer<resolve_yielded_event>>()) {}
+    resolve_yielded_producer(resolver::resolve<i_event_producer<resolve_yielded_event>>()),
+    initial_goal_count(initial_goal_count) {}
 
 void goal_resolver::init_resolve(const resolution_lineage* rl) {
     current_rl = rl;
     prev_gl = nullptr;
-    body_size = db.at(rl->idx).body.size();
+    body_size = rl ? db.at(rl->idx).body.size() : initial_goal_count;
     current_idx = 0;
     deactivating = false;
     goal_resolving_producer.produce({rl});
@@ -35,6 +36,7 @@ void goal_resolver::resume() {
         ++current_idx;
         resolve_yielded_producer.produce({});
     } else {
+        if (!current_rl) { goal_resolved_producer.produce({nullptr}); return; }
         goal_deactivating_producer.produce({current_rl->parent});
         deactivating = true;
         resolve_yielded_producer.produce({});

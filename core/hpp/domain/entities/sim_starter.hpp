@@ -2,7 +2,7 @@
 #define SIM_STARTER_HPP
 
 #include "../interfaces/i_sim_starter.hpp"
-#include "../interfaces/i_initial_goal_activator.hpp"
+#include "../interfaces/i_goal_resolver.hpp"
 #include "../interfaces/i_event_producer.hpp"
 #include "../events/sim_started_event.hpp"
 #include "../events/fixpoint_reached_event.hpp"
@@ -14,7 +14,7 @@ struct sim_starter : i_sim_starter {
     void complete_start() override;
 private:
     i_trail& trail;
-    i_initial_goal_activator& initial_goal_activator;
+    i_goal_resolver& goal_resolver;
     i_event_producer<sim_started_event>& sim_started_producer;
     i_event_producer<fixpoint_reached_event>& fixpoint_reached_producer;
 };
