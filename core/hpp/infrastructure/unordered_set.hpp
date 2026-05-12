@@ -6,12 +6,12 @@
 
 template<typename T>
 struct unordered_set : i_set<T> {
-    void insert(T v) override { s_.insert(v); }
-    bool contains(T v) const override { return s_.count(v) > 0; }
-    void erase(T v) override { s_.erase(v); }
-    void clear() override { s_.clear(); }
-    bool empty() const override { return s_.empty(); }
-    size_t size() const override { return s_.size(); }
+    void insert(T v) override;
+    bool contains(T v) const override;
+    void erase(T v) override;
+    void clear() override;
+    bool empty() const override;
+    size_t size() const override;
 private:
     std::unordered_set<T> s_;
 };
