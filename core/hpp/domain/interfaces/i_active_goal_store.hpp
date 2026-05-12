@@ -2,7 +2,7 @@
 #define I_ACTIVE_GOAL_STORE_HPP
 
 #include "../value_objects/lineage.hpp"
-#include "../interfaces/i_goal_visitor.hpp"
+#include "../interfaces/i_visitor.hpp"
 
 struct i_active_goal_store {
     virtual ~i_active_goal_store() = default;
@@ -11,7 +11,7 @@ struct i_active_goal_store {
     virtual void clear() = 0;
     virtual bool contains(const goal_lineage*) const = 0;
     virtual size_t size() const = 0;
-    virtual void accept(i_goal_visitor&) const = 0;
+    virtual void accept(i_visitor<const goal_lineage*>&) const = 0;
 };
 
 #endif
