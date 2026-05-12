@@ -20,8 +20,9 @@ Events sharing a number are emitted together and have the same priority tier.
 | --   | --                                   | --                                                                | END CONFLICT PRODUCTION |
 | 114  | `candidate_eliminated_event`         | —                                                                 |       |
 | --   | --                                   | --                                                                | ELIMINATION PRODUCTION ZONE |
+| 113  | `candidate_eliminating_event`        | BEFORE `candidate_eliminated_event`                               | Triggers synchronizer unregister |
+| 113  | `eliminate_candidate_yield_event`    | AFTER `candidate_eliminating_event`                               | Triggers active_eliminator.resume() |
 | 113  | `backlogged_elimination_freed_event` | AFTER `candidate_eliminated_event`                                | Always produces active elim |
-| 113  | `candidate_not_applicable_event`     | —                                                                 | Always produces active elim |
 | 112  | `avoidance_unit_event`               | —                                                                 | Can either produce active elim or backlogged elim |
 | --   | --                                   | --                                                                | END ELIMINATION PRODUCTION      |
 | 111  | `goal_expr_changed_event`            | —                                                                 |       |

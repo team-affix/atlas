@@ -293,8 +293,10 @@ These events are emitted into the topic but no handler is subscribed to them. Th
 | `goal_activated_event` | `goal_activating_*_bridge` handlers | Should trigger initializers (`goal_expr`, `goal_candidates`, `goal_weight`) and `goal_expr_changed_detector.goal_activated()`, `elimination_backlog.goal_activated()` |
 | `goal_candidates_changed_event` | `goal_candidates_expander` | Should trigger `goal_unit_detector.candidates_changed()` and `goal_candidates_empty_detector.candidates_changed()` |
 | `representative_changed_event` | `goal_expr_expander` | Should trigger `goal_expr_changed_detector.rep_updated()` |
-| `goal_expr_changed_event` | `goal_expr_changed_detector` | Should trigger `candidate_not_applicable_detector.goal_expr_changed()` |
-| `candidate_not_applicable_event` | `candidate_not_applicable_detector` | Should trigger `active_eliminator.eliminate(rl)` |
+| `goal_expr_changed_event` | `goal_expr_changed_detector` | Should trigger `unify_synchronizer` |
+| `unify_failed_event` (rl != nullptr) | secondary unifier | Triggers `active_eliminator.eliminate(rl)` via `active_eliminator_unify_failed_event_handler` |
+| `candidate_eliminating_event` | `active_eliminator` | Triggers `unify_synchronizer.unregister_candidate(rl)` |
+| `eliminate_candidate_yield_event` | `active_eliminator` | Triggers `active_eliminator.resume()` |
 | `backlogged_elimination_freed_event` | `elimination_backlog` | Should trigger `active_eliminator.eliminate(rl)` for previously backlogged candidates |
 | `candidate_eliminated_event` | `active_eliminator` | Possibly intentional observation; no downstream action defined |
 | `refuted_event` | `avoidance_empty_event_handler` | Terminal - no handler. Distinct from `conflicted`. Needs resolution. |
