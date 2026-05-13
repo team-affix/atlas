@@ -1,7 +1,9 @@
 #include <unordered_set>
 #include "../../hpp/infrastructure/goal_factory.hpp"
-#include "../../hpp/domain/entities/goal.hpp"
+#include "../../hpp/domain/value_objects/goal.hpp"
 #include "../../hpp/domain/entities/var_extractor.hpp"
+#include "../../hpp/infrastructure/unordered_set.hpp"
+#include "../../hpp/infrastructure/unordered_map.hpp"
 #include "../../hpp/bootstrap/locator.hpp"
 
 goal_factory::goal_factory()
@@ -11,20 +13,23 @@ goal_factory::goal_factory()
       normalizer_(locator::locate<i_normalizer>()),
       traverser_factory_(locator::locate<i_expr_traverser_factory>()) {}
 
-std::unique_ptr<i_goal> goal_factory::make(const goal_lineage* gl, const expr* e) {
+std::unique_ptr<goal> goal_factory::make(const goal_lineage* gl, const expr* e) {
     const expr* e_norm = normalizer_.normalize(e);
 
     std::unordered_set<const expr*> var_exprs;
     var_extractor ve(var_exprs);
     traverser_factory_.make(e_norm)->accept(ve);
 
-    auto g = std::make_unique<goal>(e);
+    auto g = std::make_unique<goal>();
+    g->e = e;
+    g->e_reps = std::make_unique<unordered_set<uint32_t>>();
+    g->candidates = std::make_unique<unordered_map<size_t, std::unique_ptr<candidate>>>();
 
     for (const expr* v : var_exprs)
-        g->e_reps().insert(std::get<expr::var>(v->content).index);
+        g->e_reps->insert(std::get<expr::var>(v->content).index);
 
     for (size_t i = 0; i < db_.size(); ++i)
-        g->candidates().insert(i, candidate_factory_.make(lp_.resolution(gl, i), e_norm));
+        g->candidates->insert(i, candidate_factory_.make(lp_.resolution(gl, i), e_norm));
 
     return g;
 }

@@ -6,14 +6,14 @@
 #include "../domain/interfaces/i_frontier.hpp"
 
 struct frontier : i_frontier {
-    void insert(const goal_lineage*, std::unique_ptr<i_goal>) override;
+    void insert(const goal_lineage*, std::unique_ptr<goal>) override;
     bool contains(const goal_lineage*) const override;
-    i_goal& at(const goal_lineage*) override;
-    const i_goal& at(const goal_lineage*) const override;
+    std::unique_ptr<goal>& at(const goal_lineage*) override;
+    const std::unique_ptr<goal>& at(const goal_lineage*) const override;
     void erase(const goal_lineage*) override;
     void clear() override;
 private:
-    std::unordered_map<const goal_lineage*, std::unique_ptr<i_goal>> goals_;
+    std::unordered_map<const goal_lineage*, std::unique_ptr<goal>> goals_;
 };
 
 #endif

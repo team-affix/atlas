@@ -8,12 +8,10 @@
 #include "../domain/interfaces/i_lineage_pool.hpp"
 #include "../domain/interfaces/i_database.hpp"
 #include "../domain/interfaces/i_normalizer.hpp"
-#include "../domain/value_objects/lineage.hpp"
-#include "../domain/value_objects/expr.hpp"
 
 struct goal_factory : i_goal_factory {
     goal_factory();
-    std::unique_ptr<i_goal> make(const goal_lineage*, const expr*) override;
+    std::unique_ptr<goal> make(const goal_lineage*, const expr*) override;
 private:
     i_candidate_factory& candidate_factory_;
     i_lineage_pool& lp_;

@@ -10,7 +10,7 @@
 
 struct candidate_factory : i_candidate_factory {
     candidate_factory();
-    std::unique_ptr<i_candidate> make(const resolution_lineage*, const expr*) override;
+    std::unique_ptr<candidate> make(const resolution_lineage*, const expr*) override;
 private:
     i_factory<i_unifier, const resolution_lineage*>& unifier_factory_;
     i_factory<i_translation_map>& tm_factory_;
