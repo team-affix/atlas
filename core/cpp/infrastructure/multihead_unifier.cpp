@@ -18,6 +18,10 @@ multihead_unifier::multihead_unifier() :
 void multihead_unifier::goal_activated(const goal_lineage* lineage) {
     // 1. get all candidates for this goal
     const auto& candidates = frontier_.at(lineage)->candidates;
+    // 2. for each candidate, add the head to the map
+    for (const auto& [idx, _] : candidates) {
+        add_head(candidate);
+    }
 }
 
 void multihead_unifier::goal_deactivated(const goal_lineage* lineage) {
@@ -49,7 +53,7 @@ void multihead_unifier::add_head(const resolution_lineage* lineage) {
     // 2. get the parent goal's expr
     const expr* parent_goal_expr = frontier_.at(lineage->parent)->e;
     // 3. get the copied rule head
-    auto copied_head = frontier_.at(lineage->parent)->candidates->at(lineage->idx)->copied_head;
+    auto copied_head = frontier_.at(lineage->parent)->candidates.at(lineage->idx)->copied_head;
     // 4. create the overlay bind map
     auto overlay_bind_map = overlay_bind_map_factory_.make(common_);
     // 5. create the unifier

@@ -1,14 +1,14 @@
 #ifndef VAR_EXTRACTOR_HPP
 #define VAR_EXTRACTOR_HPP
 
+#include <unordered_set>
 #include "../domain/interfaces/i_var_id_extractor.hpp"
-#include "../domain/interfaces/i_set.hpp"
 
 struct var_extractor : i_var_extractor {
-    explicit var_extractor(i_set<uint32_t>&);
+    explicit var_extractor(std::unordered_set<const expr*>&);
     void visit(const expr*) override;
 private:
-    i_set<uint32_t>& vars_;
+    std::unordered_set<const expr*>& vars_;
 };
 
 #endif

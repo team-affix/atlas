@@ -2,10 +2,15 @@
 #define I_TRANSLATION_MAP_HPP
 
 #include <cstdint>
-#include "i_map.hpp"
 
-struct i_translation_map : i_map<uint32_t, uint32_t> {
+struct i_translation_map {
     virtual ~i_translation_map() = default;
+    virtual void insert(uint32_t, uint32_t) = 0;
+    virtual bool contains(uint32_t) const = 0;
+    virtual uint32_t& at(uint32_t) = 0;
+    virtual const uint32_t& at(uint32_t) const = 0;
+    virtual void erase(uint32_t) = 0;
+    virtual void clear() = 0;
 };
 
 #endif
