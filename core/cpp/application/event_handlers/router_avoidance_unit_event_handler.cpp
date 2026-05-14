@@ -3,7 +3,7 @@
 
 router_avoidance_unit_event_handler::router_avoidance_unit_event_handler() :
     c(locator::locate<i_cdcl>()),
-    active_goal_store(locator::locate<i_active_goal_store>()),
+    frontier(locator::locate<i_frontier>()),
     inactive_goal_store(locator::locate<i_inactive_goal_store>()),
     elimination_backlog(locator::locate<i_elimination_backlog>()),
     active_eliminator(locator::locate<i_active_eliminator>()) {
@@ -24,7 +24,7 @@ void router_avoidance_unit_event_handler::execute(const avoidance_unit_event& e)
         return;
     
     // if the goal not in the frontier, add to backlog and return
-    if (!active_goal_store.contains(gl)) {
+    if (!frontier.contains(gl)) {
         elimination_backlog.insert(rl);
         return;
     }
