@@ -1,13 +1,12 @@
 #include "../../hpp/infrastructure/unifier.hpp"
 
-unifier::unifier(std::unique_ptr<i_bind_map> bind_map) :
-    bind_map_(std::move(bind_map)) {
-}
+unifier::unifier(std::unique_ptr<i_bind_map> bm)
+    : i_unifier(std::move(bm)) {}
 
 bool unifier::unify(const expr* lhs, const expr* rhs, i_rep_change_sink& snk) {
         // WHNF the lhs and rhs
-    lhs = bind_map_->whnf(lhs);
-    rhs = bind_map_->whnf(rhs);
+    lhs = bind_map->whnf(lhs);
+    rhs = bind_map->whnf(rhs);
 
     // get the lhs and rhs var handles if they are variables
     const expr::var* lv = std::get_if<expr::var>(&lhs->content);
@@ -22,7 +21,7 @@ bool unifier::unify(const expr* lhs, const expr* rhs, i_rep_change_sink& snk) {
             : std::pair{rv, lhs};
         if (occurs_check(young->index, target))
             return false;
-        bind_map_->bind(young->index, target);
+        bind_map->bind(young->index, target);
         snk.push(young->index);
         return true;
     }
@@ -34,7 +33,7 @@ bool unifier::unify(const expr* lhs, const expr* rhs, i_rep_change_sink& snk) {
     if (v) {
         if (occurs_check(v->index, other_e))
             return false;
-        bind_map_->bind(v->index, other_e);
+        bind_map->bind(v->index, other_e);
         snk.push(v->index);
         return true;
     }
@@ -51,7 +50,7 @@ bool unifier::unify(const expr* lhs, const expr* rhs, i_rep_change_sink& snk) {
 }
 
 bool unifier::occurs_check(uint32_t index, const expr* key) {
-    key = bind_map_->whnf(key);
+    key = bind_map->whnf(key);
 
     if (const expr::var* var = std::get_if<expr::var>(&key->content))
         return var->index == index;

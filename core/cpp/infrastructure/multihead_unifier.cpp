@@ -10,40 +10,78 @@ multihead_unifier::multihead_unifier() :
     frontier_(locator::locate<i_frontier>()),
     translation_map_factory_(locator::locate<i_factory<i_translation_map>>()),
     copier_(locator::locate<i_copier>()),
-    rep_change_sink_factory_(locator::locate<i_factory<i_rep_change_sink>>()) {
+    expr_pool_(locator::locate<i_expr_pool>()),
+    rep_change_sink_factory_(locator::locate<i_factory<i_rep_change_sink>>()),
+    candidate_not_applicable_producer_(locator::locate<i_event_producer<candidate_not_applicable_event>>()) {
 }
 
 void multihead_unifier::add_head(const resolution_lineage* lineage) {
     
     // 1. get the rule from the db
     auto rule = db_.at(lineage->idx);
-    // 2. create the translation map for copying
-    auto tm = translation_map_factory_.make();
-    // 3. copy the rule head
-    auto copied_head = copier_.copy(rule.head, *tm);
+    // 2. get the parent goal's expr
+    const expr* parent_goal_expr = frontier_.at(lineage->parent)->e;
+    // 3. get the copied rule head
+    auto copied_head = frontier_.at(lineage->parent)->candidates->at(lineage->idx)->copied_head;
     // 4. create the overlay bind map
     auto overlay_bind_map = overlay_bind_map_factory_.make(common_);
-    // 5. get the parent goal's expr
-    const expr* parent_goal_expr = frontier_.at(lineage->parent)->e;
-    // 6. create the unifier
+    // 5. create the unifier
     auto unifier = unifier_factory_.make(std::move(overlay_bind_map));
-    // 7. create rep_changes queue
+    // 6. create rep_changes queue
     auto rep_change_sink = rep_change_sink_factory_.make();
-    // 8. unify the parent goal's expr with the copied rule head
+    // 7. unify the parent goal's expr with the copied rule head
     unifier->unify(parent_goal_expr, copied_head, *rep_change_sink);
-    // 9. add the unifier to the map
-    unifiers_.insert({lineage, std::move(unifier)});
+    // 8. add the unifier to the map
+    heads_.insert({lineage, std::move(unifier)});
+    // 9. link the new rl to all reps
+    while (!rep_change_sink->empty())
+        link({rep_change_sink->pop()}, {lineage});
 }
 
 void multihead_unifier::remove_head(const resolution_lineage* lineage) {
     // 1. remove the unifier from the map
-    unifiers_.erase(lineage);
+    heads_.erase(lineage);
     // 2. unlink this lineage
     unlink(lineage);
 }
 
 void multihead_unifier::accept(const resolution_lineage* lineage) {
-    
+    // 1. get the unifier for this lineage
+    auto& unifier = heads_.at(lineage);
+    // 2. get the rep changes from the unifier
+    auto rep_changes = rl_to_reps_.at(lineage);
+    // 3. for each rep change, add the link to the map
+    for (auto rep : rep_changes) {
+        // 3.1 get new whnf
+        auto new_rep = unifier->bind_map->whnf(expr_pool_.var(rep));
+        common_.bind(rep, unifier->bind_map->whnf(expr_pool_.var(rep)));
+        // 3.2 propagate the rep changes to all heads that also changed those reps
+        revalidate_heads(rep, new_rep);
+        // 3.3 reroot the head based on new reps
+    }
+}
+
+void multihead_unifier::revalidate_heads(uint32_t rep, const expr* new_rep) {
+    // 1. look up all rls for this rep
+    auto invalidated_rls = rep_to_rls_.at(rep);
+    // 2. for each rl, propagate the rep change to all heads
+    for (auto rl : invalidated_rls) {
+        // 2.1 get the head
+        auto& head = heads_.at(rl);
+        // 2.2 construct the rep_change_sink
+        auto rep_change_sink = rep_change_sink_factory_.make();
+        // 2.3 unify the old rep with new rep
+        bool success = head->unify(expr_pool_.var(rep), new_rep, *rep_change_sink);
+        // 2.4 if failure, then this candidate is not applicable anymore
+        if (!success) {
+            remove_head(rl);
+            candidate_not_applicable_producer_.produce(candidate_not_applicable_event{rl});
+            continue;
+        }
+        // 2.5 if success, then link the lineage to all of the rep changes
+        while (!rep_change_sink->empty())
+            link({rep_change_sink->pop()}, {rl});
+    }
 }
 
 void multihead_unifier::reroot(uint32_t rep) {
@@ -52,7 +90,7 @@ void multihead_unifier::reroot(uint32_t rep) {
     
     // 2. get new reps for this o.g. rep
     std::unordered_set<uint32_t> new_reps;
-    extract_reps(rep, new_reps);
+    extract_reps(expr_pool_.var(rep), new_reps);
 
     // 3. unlink this rep from all heads
     auto unlinked_rls = unlink(rep);
@@ -73,41 +111,57 @@ void multihead_unifier::link(const std::unordered_set<uint32_t>& reps, const std
 }
 
 std::unordered_set<const resolution_lineage*> multihead_unifier::unlink(uint32_t rep) {
-    // 1. look up all heads for this rep
-    auto rls = rep_to_rls_.at(rep);
+    // 1. extract the entry, removing it from the map
+    auto node = rep_to_rls_.extract(rep);
 
-    // 2. remove link from heads
+    // 2. get the rls
+    auto& rls = node.mapped();
+
+    // 3. remove link from heads
     for (auto rl : rls) {
         auto& reps = rl_to_reps_.at(rl);
         reps.erase(rep);
-        // 2.1 if no more reps, remove the entry
+        // 3.1 if no more reps, remove the entry
         if (reps.empty())
             rl_to_reps_.erase(rl);
     }
-
-    // 3. remove the entry from rep_to_rls_
-    rep_to_rls_.erase(rep);
 
     // 4. return the removed rls
     return rls;
 }
 
 std::unordered_set<uint32_t> multihead_unifier::unlink(const resolution_lineage* rl) {
-    // 1. look up all reps for this head
-    auto reps = rl_to_reps_.at(rl);
+    // 1. extract the entry, removing it from the map
+    auto node = rl_to_reps_.extract(rl);
+
+    // 2. get the reps
+    auto& reps = node.mapped();
     
-    // 2. remove link from reps
+    // 3. remove link from reps
     for (auto rep : reps) {
         auto& heads = rep_to_rls_.at(rep);
         heads.erase(rl);
-        // 2.1 if no more rls, remove the entry
+        // 3.1 if no more rls, remove the entry
         if (heads.empty())
             rep_to_rls_.erase(rep);
     }
     
-    // 3. remove the entry from the head_to_reps_
-    rl_to_reps_.erase(rl);
-
     // 4. return the removed reps
     return reps;
+}
+
+void multihead_unifier::extract_reps(const expr* e, std::unordered_set<uint32_t>& new_reps) {
+    // 1. get whnf of the expr
+    auto whnf = common_.whnf(e);
+    // 2. if whnf is a variable, add it to the new reps
+    if (const expr::var* v = std::get_if<expr::var>(&whnf->content)) {
+        new_reps.insert(v->index);
+        return;
+    }
+    // 3. whnf is a functor
+    const expr::functor& f = std::get<expr::functor>(whnf->content);
+    // 4. for each argument, recur
+    for (auto& arg : f.args) {
+        extract_reps(arg, new_reps);
+    }
 }

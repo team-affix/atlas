@@ -2,7 +2,6 @@
 #define UNIFIER_HPP
 
 #include "../domain/interfaces/i_unifier.hpp"
-#include "../domain/interfaces/i_bind_map.hpp"
 #include <memory>
 
 struct unifier : i_unifier {
@@ -11,8 +10,6 @@ struct unifier : i_unifier {
     bool unify(const expr*, const expr*, i_rep_change_sink&) override;
 private:
     bool occurs_check(uint32_t, const expr*);
-
-    std::unique_ptr<i_bind_map> bind_map_;
 };
 
 #endif
