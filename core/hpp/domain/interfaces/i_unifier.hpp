@@ -5,10 +5,8 @@
 
 struct i_unifier {
     virtual ~i_unifier() = default;
+    virtual bool unify(const expr*, const expr*) = 0;
     virtual const expr* whnf(const expr*) = 0;
-    virtual void push(const expr*, const expr*) = 0;
-    virtual void process_step() = 0;
-    virtual void clear() = 0;
 };
 
 #endif
