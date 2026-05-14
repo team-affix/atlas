@@ -5,7 +5,7 @@
 #include "../../../hpp/domain/interfaces/i_database.hpp"
 #include "../../../hpp/domain/interfaces/i_factory.hpp"
 #include "../../../hpp/domain/interfaces/i_lineage_pool.hpp"
-#include "../../../hpp/domain/interfaces/i_initial_goals.hpp"
+#include "../../../hpp/domain/interfaces/i_initial_goal_exprs.hpp"
 
 goal::goal(const goal_lineage* lineage) :
     db_(locator::locate<i_database>()),
@@ -13,7 +13,7 @@ goal::goal(const goal_lineage* lineage) :
     chosen_rule_tm(nullptr) {
     auto rl = lineage->parent;
     if (rl == nullptr) {
-        const auto& ig = locator::locate<i_initial_goals>();
+        const auto& ig = locator::locate<i_initial_goal_exprs>();
         e = ig.at(lineage->idx);
     } else {
         const auto& f = locator::locate<i_frontier>();
