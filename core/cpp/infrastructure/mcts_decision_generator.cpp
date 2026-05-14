@@ -5,8 +5,7 @@
 mcts_decision_generator::mcts_decision_generator()
     :
     lp(locator::locate<i_lineage_pool>()),
-    ags(locator::locate<i_active_goal_store>()),
-    gcs(locator::locate<i_candidates_frontier>()),
+    f(locator::locate<i_frontier>()),
     sim(locator::locate<monte_carlo::simulation<mcts_choice, std::mt19937>>()){
 }
 
@@ -18,8 +17,8 @@ const resolution_lineage* mcts_decision_generator::generate() {
 
 const goal_lineage* mcts_decision_generator::choose_goal() {
     // Get the goals to choose from
-    mcts_choice_generator_goal_visitor visitor(ags.size());
-    ags.accept(visitor);
+    mcts_choice_generator_goal_visitor visitor(f.size());
+    f.accept(visitor);
 
     // Choose a goal to resolve
     const mcts_choice choice_a = sim.choose(visitor.choices());
@@ -28,14 +27,14 @@ const goal_lineage* mcts_decision_generator::choose_goal() {
 
 size_t mcts_decision_generator::choose_candidate(const goal_lineage* goal) {
     // Get the candidates to choose from
-    const candidate_set& candidates = gcs.at(goal);
+    const auto& candidates = f.at(goal)->candidates;
     
     // Get the candidates to choose from
     std::vector<mcts_choice> candidate_choices;
-    candidate_choices.reserve(candidates.candidates.size());
+    candidate_choices.reserve(candidates.size());
 
     // Convert the candidates to choices
-    for (size_t rule_id : candidates.candidates)
+    for (const auto& [rule_id, _] : candidates)
         candidate_choices.push_back(rule_id);
 
     // Choose a candidate for the goal

@@ -23,3 +23,12 @@ void frontier::erase(const goal_lineage* gl) {
 void frontier::clear() {
     goals_.clear();
 }
+
+size_t frontier::size() const {
+    return goals_.size();
+}
+
+void frontier::accept(i_visitor<const std::pair<const goal_lineage* const, std::unique_ptr<goal>>&>& v) const {
+    for (const auto& entry : goals_)
+        v.visit(entry);
+}
