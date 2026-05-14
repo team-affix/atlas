@@ -4,11 +4,11 @@
 
 normalizer::normalizer() :
     expr_pool_ref(locator::locate<i_expr_pool>()),
-    unifier_ref(locator::locate<i_unifier>()) {
+    bind_map_ref(locator::locate<i_bind_map>()) {
 }
 
 const expr* normalizer::normalize(const expr* e) {
-    e = unifier_ref.whnf(e);
+    e = bind_map_ref.whnf(e);
 
     if (std::holds_alternative<expr::var>(e->content))
         return e;

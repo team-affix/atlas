@@ -6,8 +6,8 @@ unifier::unifier(std::unique_ptr<i_bind_map> bind_map) :
 
 bool unifier::unify(const expr* lhs, const expr* rhs, i_queue<uint32_t>& var_set) {
         // WHNF the lhs and rhs
-    lhs = whnf(lhs);
-    rhs = whnf(rhs);
+    lhs = bind_map_->whnf(lhs);
+    rhs = bind_map_->whnf(rhs);
 
     // get the lhs and rhs var handles if they are variables
     const expr::var* lv = std::get_if<expr::var>(&lhs->content);
@@ -51,7 +51,7 @@ bool unifier::unify(const expr* lhs, const expr* rhs, i_queue<uint32_t>& var_set
 }
 
 bool unifier::occurs_check(uint32_t index, const expr* key) {
-    key = whnf(key);
+    key = bind_map_->whnf(key);
 
     if (const expr::var* var = std::get_if<expr::var>(&key->content))
         return var->index == index;
@@ -64,10 +64,4 @@ bool unifier::occurs_check(uint32_t index, const expr* key) {
     }
 
     return false;
-}
-
-const expr* unifier::whnf(const expr* e) {
-    if (std::holds_alternative<expr::functor>(e->content))
-        return e;
-    return bind_map_->whnf(e);
 }

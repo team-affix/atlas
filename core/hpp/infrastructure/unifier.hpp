@@ -9,7 +9,6 @@ struct unifier : i_unifier {
     virtual ~unifier() = default;
     unifier(std::unique_ptr<i_bind_map>);
     bool unify(const expr*, const expr*, i_queue<uint32_t>&) override;
-    const expr* whnf(const expr*) override;
 private:
     bool occurs_check(uint32_t, const expr*);
 
