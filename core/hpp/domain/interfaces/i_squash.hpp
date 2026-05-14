@@ -7,7 +7,7 @@
 struct i_squash {
     virtual ~i_squash() = default;
     virtual void bind(uint32_t, const expr*) = 0;
-    virtual const expr* rep(uint32_t) = 0;
+    virtual const expr* whnf(const expr*) = 0;
 };
 
 #endif
