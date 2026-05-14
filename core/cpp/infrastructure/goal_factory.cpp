@@ -7,7 +7,7 @@ goal_factory::goal_factory()
       lp_(locator::locate<i_lineage_pool>()),
       db_(locator::locate<i_database>()) {}
 
-std::unique_ptr<goal> goal_factory::make(const goal_lineage* gl, const expr* e) {
+std::unique_ptr<goal> goal_factory::make(const goal_lineage* gl, const expr* e) const {
     auto g = std::make_unique<goal>();
     g->e = e;
 

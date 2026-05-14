@@ -1,14 +1,16 @@
 #ifndef CANDIDATE_HPP
 #define CANDIDATE_HPP
 
-#include <memory>
+#include <cstdint>
+#include <unordered_map>
 #include "expr.hpp"
-#include "../interfaces/i_translation_map.hpp"
+#include "lineage.hpp"
 
 struct candidate {
     virtual ~candidate() = default;
+    candidate(const resolution_lineage*);
     const expr* copied_head;
-    std::unique_ptr<i_translation_map> tm;
+    std::unordered_map<uint32_t, uint32_t> tm;
 };
 
 #endif

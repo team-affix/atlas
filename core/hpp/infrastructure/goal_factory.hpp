@@ -11,7 +11,7 @@
 
 struct goal_factory : i_factory<goal, const goal_lineage*, const expr*> {
     goal_factory();
-    std::unique_ptr<goal> make(const goal_lineage*, const expr*) override;
+    std::unique_ptr<goal> make(const goal_lineage*, const expr*) const override;
 private:
     i_factory<candidate, size_t>& candidate_factory_;
     i_lineage_pool& lp_;
