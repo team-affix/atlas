@@ -11,7 +11,6 @@
 #include "../interfaces/i_factory.hpp"
 #include "../interfaces/i_bind_map.hpp"
 #include "../interfaces/i_overlay_bind_map.hpp"
-#include "../interfaces/i_translation_map.hpp"
 #include "../interfaces/i_copier.hpp"
 #include "../interfaces/i_expr_pool.hpp"
 #include "../events/head_unify_failed_event.hpp"
@@ -34,7 +33,6 @@ private:
     i_factory<i_unifier, std::unique_ptr<i_bind_map>>& unifier_factory_;
     i_factory<i_overlay_bind_map, i_bind_map&>& overlay_bind_map_factory_;
     i_bind_map& common_;
-    i_factory<i_translation_map>& translation_map_factory_;
     i_copier& copier_;
     i_expr_pool& expr_pool_;
     i_event_producer<head_unify_failed_event>& head_unify_failed_producer_;

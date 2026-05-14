@@ -8,7 +8,6 @@ multihead_unifier::multihead_unifier() :
     overlay_bind_map_factory_(locator::locate<i_factory<i_overlay_bind_map, i_bind_map&>>()),
     common_(locator::locate<i_bind_map>()),
     frontier_(locator::locate<i_frontier>()),
-    translation_map_factory_(locator::locate<i_factory<i_translation_map>>()),
     copier_(locator::locate<i_copier>()),
     expr_pool_(locator::locate<i_expr_pool>()),
     head_unify_failed_producer_(locator::locate<i_event_producer<head_unify_failed_event>>()) {

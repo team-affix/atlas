@@ -7,10 +7,10 @@ copier::copier() :
     expr_pool_ref(locator::locate<i_expr_pool>()) {
 }
 
-const expr* copier::copy(const expr* e, i_translation_map& variable_map) {
+const expr* copier::copy(const expr* e, std::unordered_map<uint32_t, uint32_t>& variable_map) const {
     if (const expr::var* v = std::get_if<expr::var>(&e->content)) {
         if (!variable_map.contains(v->index))
-            variable_map.insert(v->index, var_seq_ref.next());
+            variable_map.emplace(v->index, var_seq_ref.next());
         return expr_pool_ref.var(variable_map.at(v->index));
     }
 

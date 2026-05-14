@@ -3,12 +3,12 @@
 
 resolver_goal_unit_event_handler::resolver_goal_unit_event_handler() :
     res(locator::locate<i_resolver>()),
-    candidates_frontier(locator::locate<i_candidates_frontier>()),
+    frontier(locator::locate<i_frontier>()),
     lp(locator::locate<i_lineage_pool>()) {
 }
 
 void resolver_goal_unit_event_handler::execute(const goal_unit_event& e) {
-    const auto& candidates = candidates_frontier.at(e.gl);
-    const auto& candidate = *candidates.candidates.begin();
-    res.init_resolve(lp.resolution(e.gl, candidate));
+    const auto& candidates = frontier.at(e.gl)->candidates;
+    const auto& candidate = candidates.begin();
+    res.init_resolve(lp.resolution(e.gl, candidate->first));
 }

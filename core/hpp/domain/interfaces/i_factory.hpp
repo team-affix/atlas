@@ -6,7 +6,7 @@
 template<typename T, typename... Args>
 struct i_factory {
     virtual ~i_factory() = default;
-    virtual std::unique_ptr<T> make(Args...) = 0;
+    virtual std::unique_ptr<T> make(Args...) const = 0;
 };
 
 #endif
