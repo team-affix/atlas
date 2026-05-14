@@ -3,16 +3,11 @@
 
 #include <memory>
 #include "../domain/interfaces/i_factory.hpp"
-#include "../domain/interfaces/i_database.hpp"
-#include "../domain/interfaces/i_copier.hpp"
 #include "../domain/value_objects/candidate.hpp"
 
-struct candidate_factory : i_factory<candidate, size_t> {
+struct candidate_factory : i_factory<candidate, const resolution_lineage*> {
     candidate_factory();
-    std::unique_ptr<candidate> make(size_t) const override;
-private:
-    const i_database& db_;
-    i_copier& copier_;
+    std::unique_ptr<candidate> make(const resolution_lineage*) const override;
 };
 
 #endif
