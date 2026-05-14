@@ -1,21 +1,21 @@
 #ifndef MULTIHEAD_UNIFIER_HPP
 #define MULTIHEAD_UNIFIER_HPP
 
+#include <memory>
 #include <unordered_map>
 #include <unordered_set>
-#include "../domain/interfaces/i_multihead_unifier.hpp"
-#include "../domain/interfaces/i_database.hpp"
-#include "../domain/interfaces/i_frontier.hpp"
-#include "../domain/interfaces/i_unifier.hpp"
-#include "../domain/interfaces/i_factory.hpp"
-#include "../domain/interfaces/i_bind_map.hpp"
-#include "../domain/interfaces/i_overlay_bind_map.hpp"
-#include "../domain/interfaces/i_translation_map.hpp"
-#include "../domain/interfaces/i_copier.hpp"
-#include "../domain/interfaces/i_expr_pool.hpp"
-#include "../domain/events/head_unify_failed_event.hpp"
-#include "../domain/interfaces/i_event_producer.hpp"
-#include <memory>
+#include "../interfaces/i_multihead_unifier.hpp"
+#include "../interfaces/i_database.hpp"
+#include "../interfaces/i_frontier.hpp"
+#include "../interfaces/i_unifier.hpp"
+#include "../interfaces/i_factory.hpp"
+#include "../interfaces/i_bind_map.hpp"
+#include "../interfaces/i_overlay_bind_map.hpp"
+#include "../interfaces/i_translation_map.hpp"
+#include "../interfaces/i_copier.hpp"
+#include "../interfaces/i_expr_pool.hpp"
+#include "../events/head_unify_failed_event.hpp"
+#include "../interfaces/i_event_producer.hpp"
 
 struct multihead_unifier : i_multihead_unifier {
     virtual ~multihead_unifier() = default;

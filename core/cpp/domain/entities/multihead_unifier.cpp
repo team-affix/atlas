@@ -1,6 +1,6 @@
-#include "../../hpp/infrastructure/multihead_unifier.hpp"
-#include "../../hpp/domain/interfaces/i_factory.hpp"
-#include "../../hpp/bootstrap/locator.hpp"
+#include "../../../hpp/domain/entities/multihead_unifier.hpp"
+#include "../../../hpp/domain/interfaces/i_factory.hpp"
+#include "../../../hpp/bootstrap/locator.hpp"
 
 multihead_unifier::multihead_unifier() :
     db_(locator::locate<i_database>()),
