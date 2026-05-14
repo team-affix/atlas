@@ -2,11 +2,12 @@
 #define I_REP_CHANGE_SINK_HPP
 
 #include <cstdint>
-#include "i_acceptor.hpp"
 
-struct i_rep_change_sink : i_acceptor<uint32_t> {
+struct i_rep_change_sink {
     virtual ~i_rep_change_sink() = default;
     virtual void push(uint32_t) = 0;
+    virtual uint32_t pop() = 0;
+    virtual bool empty() const = 0;
 };
 
 #endif

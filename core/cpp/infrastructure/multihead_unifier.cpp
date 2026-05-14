@@ -29,9 +29,9 @@ void multihead_unifier::add_head(const resolution_lineage* lineage) {
     auto unifier = unifier_factory_.make(std::move(overlay_bind_map));
     // 7. create rep_changes queue
     auto rep_change_sink = rep_change_sink_factory_.make();
-    // 7. unify the parent goal's expr with the copied rule head
+    // 8. unify the parent goal's expr with the copied rule head
     unifier->unify(parent_goal_expr, copied_head, *rep_change_sink);
-    // 8. add the unifier to the map
+    // 9. add the unifier to the map
     unifiers_.insert({lineage, std::move(unifier)});
 }
 

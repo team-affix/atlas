@@ -4,9 +4,12 @@ void rep_change_sink::push(uint32_t v) {
     q_.push(v);
 }
 
-void rep_change_sink::accept(i_visitor<uint32_t>& visitor) {
-    while (!q_.empty()) {
-        visitor.visit(q_.front());
-        q_.pop();
-    }
+uint32_t rep_change_sink::pop() {
+    uint32_t v = q_.front();
+    q_.pop();
+    return v;
+}
+
+bool rep_change_sink::empty() const {
+    return q_.empty();
 }
