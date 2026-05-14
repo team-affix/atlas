@@ -74,14 +74,12 @@ const expr* unifier::whnf(const expr* e) {
     if (std::holds_alternative<expr::functor>(e->content))
         return e;
 
-    const expr::var& v = std::get<expr::var>(e->content);
-    
     // try local rep(), if it fails, try common rep()
-    if(const expr* local_rep = local_->rep(v.index))
+    if(const expr* local_rep = local_->whnf(e))
         return local_rep;
     
     // if common rep() fails, then just 
-    if(const expr* common_rep = common_.rep(v.index))
+    if(const expr* common_rep = common_.whnf(e))
         return common_rep;
 
     return e;
