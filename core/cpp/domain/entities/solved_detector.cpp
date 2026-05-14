@@ -2,10 +2,10 @@
 #include "../../../hpp/bootstrap/locator.hpp"
 
 solved_detector::solved_detector() :
-    active_goal_store(locator::locate<i_active_goal_store>()),
+    f(locator::locate<i_frontier>()),
     solved_producer(locator::locate<i_event_producer<solved_event>>()) {}
 
 void solved_detector::detect_solved() {
-    if (active_goal_store.size() == 0)
+    if (f.size() == 0)
         solved_producer.produce(solved_event{});
 }
