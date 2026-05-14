@@ -3,7 +3,7 @@
 unifier::unifier(std::unique_ptr<i_bind_map> bm)
     : i_unifier(std::move(bm)) {}
 
-bool unifier::unify(const expr* lhs, const expr* rhs, i_rep_change_sink& snk) {
+bool unifier::unify(const expr* lhs, const expr* rhs, std::unordered_set<uint32_t>& snk) {
         // WHNF the lhs and rhs
     lhs = bind_map->whnf(lhs);
     rhs = bind_map->whnf(rhs);
@@ -22,7 +22,7 @@ bool unifier::unify(const expr* lhs, const expr* rhs, i_rep_change_sink& snk) {
         if (occurs_check(young->index, target))
             return false;
         bind_map->bind(young->index, target);
-        snk.push(young->index);
+        snk.insert(young->index);
         return true;
     }
 
@@ -34,7 +34,7 @@ bool unifier::unify(const expr* lhs, const expr* rhs, i_rep_change_sink& snk) {
         if (occurs_check(v->index, other_e))
             return false;
         bind_map->bind(v->index, other_e);
-        snk.push(v->index);
+        snk.insert(v->index);
         return true;
     }
 

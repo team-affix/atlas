@@ -13,7 +13,6 @@
 #include "../domain/interfaces/i_translation_map.hpp"
 #include "../domain/interfaces/i_copier.hpp"
 #include "../domain/interfaces/i_expr_pool.hpp"
-#include "../domain/interfaces/i_rep_change_sink.hpp"
 #include "../domain/events/head_unify_failed_event.hpp"
 #include "../domain/interfaces/i_event_producer.hpp"
 #include <memory>
@@ -38,7 +37,6 @@ private:
     i_factory<i_translation_map>& translation_map_factory_;
     i_copier& copier_;
     i_expr_pool& expr_pool_;
-    i_factory<i_rep_change_sink>& rep_change_sink_factory_;
     i_event_producer<head_unify_failed_event>& head_unify_failed_producer_;
     std::unordered_map<const resolution_lineage*, std::unique_ptr<i_unifier>> heads_;
     std::unordered_map<uint32_t, std::unordered_set<const resolution_lineage*>> rep_to_rls_;

@@ -11,7 +11,6 @@ multihead_unifier::multihead_unifier() :
     translation_map_factory_(locator::locate<i_factory<i_translation_map>>()),
     copier_(locator::locate<i_copier>()),
     expr_pool_(locator::locate<i_expr_pool>()),
-    rep_change_sink_factory_(locator::locate<i_factory<i_rep_change_sink>>()),
     head_unify_failed_producer_(locator::locate<i_event_producer<head_unify_failed_event>>()) {
 }
 
@@ -26,15 +25,14 @@ void multihead_unifier::add_head(const resolution_lineage* lineage) {
     auto overlay_bind_map = overlay_bind_map_factory_.make(common_);
     // 5. create the unifier
     auto unifier = unifier_factory_.make(std::move(overlay_bind_map));
-    // 6. create rep_changes queue
-    auto rep_change_sink = rep_change_sink_factory_.make();
+    // 6. create rep_changes set
+    std::unordered_set<uint32_t> rep_changes;
     // 7. unify the parent goal's expr with the copied rule head
-    unifier->unify(parent_goal_expr, copied_head, *rep_change_sink);
+    unifier->unify(parent_goal_expr, copied_head, rep_changes);
     // 8. add the unifier to the map
     heads_.insert({lineage, std::move(unifier)});
     // 9. link the new rl to all reps
-    while (!rep_change_sink->empty())
-        link({rep_change_sink->pop()}, {lineage});
+    link(rep_changes, {lineage});
 }
 
 void multihead_unifier::remove_head(const resolution_lineage* lineage) {
@@ -68,10 +66,10 @@ void multihead_unifier::revalidate(uint32_t rep, const expr* new_rep) {
     for (auto rl : invalidated_rls) {
         // 2.1 get the head
         auto& head = heads_.at(rl);
-        // 2.2 construct the rep_change_sink
-        auto rep_change_sink = rep_change_sink_factory_.make();
+        // 2.2 construct the rep_changes set
+        std::unordered_set<uint32_t> rep_changes;
         // 2.3 unify the old rep with new rep
-        bool success = head->unify(expr_pool_.var(rep), new_rep, *rep_change_sink);
+        bool success = head->unify(expr_pool_.var(rep), new_rep, rep_changes);
         // 2.4 if failure, then this candidate is not applicable anymore
         if (!success) {
             remove_head(rl);
@@ -79,8 +77,7 @@ void multihead_unifier::revalidate(uint32_t rep, const expr* new_rep) {
             continue;
         }
         // 2.5 if success, then link the lineage to all of the rep changes
-        while (!rep_change_sink->empty())
-            link({rep_change_sink->pop()}, {rl});
+        link(rep_changes, {rl});
     }
 
     // 3. get new reps for this o.g. rep
