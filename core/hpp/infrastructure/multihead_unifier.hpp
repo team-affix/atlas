@@ -21,18 +21,15 @@
 struct multihead_unifier : i_multihead_unifier {
     virtual ~multihead_unifier() = default;
     multihead_unifier();
-    void goal_activated(const goal_lineage*) override;
-    void goal_deactivated(const goal_lineage*) override;
-    void accept(const resolution_lineage*) override;
+    void add_head(const resolution_lineage*) override;
+    void remove_head(const resolution_lineage*) override;
+    void accept_head(const resolution_lineage*) override;
 private:
-    void add_head(const resolution_lineage*);
-    void remove_head(const resolution_lineage*);
-    void revalidate_heads(uint32_t, const expr*);
-    void revalidate_roots(uint32_t);
+    void revalidate(uint32_t, const expr*);
     void link(const std::unordered_set<uint32_t>&, const std::unordered_set<const resolution_lineage*>&);
     std::unordered_set<const resolution_lineage*> unlink(uint32_t);
     std::unordered_set<uint32_t> unlink(const resolution_lineage*);
-    void extract_reps(const expr*, std::unordered_set<uint32_t>&);
+    void extract_child_reps(const expr*, std::unordered_set<uint32_t>&);
     const i_database& db_;
     const i_frontier& frontier_;
     i_factory<i_unifier, std::unique_ptr<i_bind_map>>& unifier_factory_;
