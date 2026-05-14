@@ -12,7 +12,7 @@
 #include "../domain/interfaces/i_overlay_bind_map.hpp"
 #include "../domain/interfaces/i_translation_map.hpp"
 #include "../domain/interfaces/i_copier.hpp"
-#include "../domain/interfaces/i_queue.hpp"
+#include "../domain/interfaces/i_rep_change_sink.hpp"
 #include "../domain/value_objects/unify_head.hpp"
 #include <memory>
 
@@ -35,7 +35,7 @@ private:
     i_bind_map& common_;
     i_factory<i_translation_map>& translation_map_factory_;
     i_copier& copier_;
-    i_factory<i_queue<uint32_t>>& rep_changes_queue_factory_;
+    i_factory<i_rep_change_sink>& rep_change_sink_factory_;
     std::unordered_map<const resolution_lineage*, unify_head> heads_;
     std::unordered_map<uint32_t, std::unordered_set<const resolution_lineage*>> rep_to_rls_;
     std::unordered_map<const resolution_lineage*, std::unordered_set<uint32_t>> rl_to_reps_;

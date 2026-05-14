@@ -7,8 +7,10 @@ multihead_unifier::multihead_unifier() :
     unifier_factory_(locator::locate<i_factory<i_unifier, std::unique_ptr<i_bind_map>>>()),
     overlay_bind_map_factory_(locator::locate<i_factory<i_overlay_bind_map, i_bind_map&>>()),
     common_(locator::locate<i_bind_map>()),
+    frontier_(locator::locate<i_frontier>()),
     translation_map_factory_(locator::locate<i_factory<i_translation_map>>()),
-    copier_(locator::locate<i_copier>()) {
+    copier_(locator::locate<i_copier>()),
+    rep_change_sink_factory_(locator::locate<i_factory<i_rep_change_sink>>()) {
 }
 
 void multihead_unifier::add_head(const resolution_lineage* lineage) {
@@ -25,8 +27,10 @@ void multihead_unifier::add_head(const resolution_lineage* lineage) {
     const expr* parent_goal_expr = frontier_.at(lineage->parent)->e;
     // 6. create the unifier
     auto unifier = unifier_factory_.make(std::move(overlay_bind_map));
+    // 7. create rep_changes queue
+    auto rep_change_sink = rep_change_sink_factory_.make();
     // 7. unify the parent goal's expr with the copied rule head
-    unifier->unify(parent_goal_expr, copied_head);
+    unifier->unify(parent_goal_expr, copied_head, *rep_change_sink);
     // 8. add the unifier to the map
     unifiers_.insert({lineage, std::move(unifier)});
 }

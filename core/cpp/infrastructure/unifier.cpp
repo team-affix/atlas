@@ -4,7 +4,7 @@ unifier::unifier(std::unique_ptr<i_bind_map> bind_map) :
     bind_map_(std::move(bind_map)) {
 }
 
-bool unifier::unify(const expr* lhs, const expr* rhs, i_queue<uint32_t>& var_set) {
+bool unifier::unify(const expr* lhs, const expr* rhs, i_rep_change_sink& snk) {
         // WHNF the lhs and rhs
     lhs = bind_map_->whnf(lhs);
     rhs = bind_map_->whnf(rhs);
@@ -23,7 +23,7 @@ bool unifier::unify(const expr* lhs, const expr* rhs, i_queue<uint32_t>& var_set
         if (occurs_check(young->index, target))
             return false;
         bind_map_->bind(young->index, target);
-        var_set.push(young->index);
+        snk.push(young->index);
         return true;
     }
 
@@ -35,7 +35,7 @@ bool unifier::unify(const expr* lhs, const expr* rhs, i_queue<uint32_t>& var_set
         if (occurs_check(v->index, other_e))
             return false;
         bind_map_->bind(v->index, other_e);
-        var_set.push(v->index);
+        snk.push(v->index);
         return true;
     }
 
@@ -45,7 +45,7 @@ bool unifier::unify(const expr* lhs, const expr* rhs, i_queue<uint32_t>& var_set
     if (lf.name != rf.name || lf.args.size() != rf.args.size())
         return false;
     for (size_t i = 0; i < lf.args.size(); ++i)
-        if (!unify(lf.args[i], rf.args[i], var_set))
+        if (!unify(lf.args[i], rf.args[i], snk))
             return false;
     return true;
 }
