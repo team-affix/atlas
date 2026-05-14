@@ -1,7 +1,11 @@
 #include "../../hpp/infrastructure/overlay_bind_map.hpp"
+#include "../../hpp/domain/interfaces/i_factory.hpp"
+#include "../../hpp/bootstrap/locator.hpp"
 
-overlay_bind_map::overlay_bind_map(std::unique_ptr<i_bind_map> local, i_bind_map& remote)
-    : local_(std::move(local)), remote_(remote) {}
+overlay_bind_map::overlay_bind_map(i_bind_map& remote) :
+    local_(locator::locate<i_factory<i_bind_map>>().make()),
+    remote_(remote) {
+}
 
 void overlay_bind_map::bind(uint32_t index, const expr* e) {
     local_->bind(index, e);

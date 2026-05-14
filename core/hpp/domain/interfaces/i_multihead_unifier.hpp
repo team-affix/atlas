@@ -9,7 +9,7 @@ struct i_multihead_unifier {
     virtual void add_head(const resolution_lineage*) = 0;
     virtual void remove_head(const resolution_lineage*) = 0;
     virtual void accept(const resolution_lineage*) = 0;
-    virtual void re_root(uint32_t) = 0;
+    virtual void reroot(uint32_t) = 0;
 };
 
 #endif

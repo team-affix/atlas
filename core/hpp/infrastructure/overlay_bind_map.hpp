@@ -6,7 +6,7 @@
 
 struct overlay_bind_map : i_overlay_bind_map {
     virtual ~overlay_bind_map() = default;
-    overlay_bind_map(std::unique_ptr<i_bind_map> local, i_bind_map& remote);
+    overlay_bind_map(i_bind_map& remote);
     void bind(uint32_t, const expr*) override;
     const expr* whnf(const expr*) override;
 private:
