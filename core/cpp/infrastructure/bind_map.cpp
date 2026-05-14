@@ -1,13 +1,13 @@
-#include "../../hpp/infrastructure/squash.hpp"
+#include "../../hpp/infrastructure/bind_map.hpp"
 
-squash::squash() {
+bind_map::bind_map() {
 }
 
-void squash::bind(uint32_t index, const expr* e) {
+void bind_map::bind(uint32_t index, const expr* e) {
     bindings[index] = e;
 }
 
-const expr* squash::whnf(const expr* key) {
+const expr* bind_map::whnf(const expr* key) {
     // If the key is not a variable, it is already in WHNF
     if (!std::holds_alternative<expr::var>(key->content))
         return key;

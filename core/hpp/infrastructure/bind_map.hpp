@@ -1,12 +1,12 @@
-#ifndef SQUASH_HPP
-#define SQUASH_HPP
+#ifndef BIND_MAP_HPP
+#define BIND_MAP_HPP
 
 #include <unordered_map>
-#include "../domain/interfaces/i_squash.hpp"
+#include "../domain/interfaces/i_bind_map.hpp"
 
-struct squash : i_squash {
-    virtual ~squash() = default;
-    squash();
+struct bind_map : i_bind_map {
+    virtual ~bind_map() = default;
+    bind_map();
     void bind(uint32_t, const expr*) override;
     const expr* whnf(const expr*) override;
 private:

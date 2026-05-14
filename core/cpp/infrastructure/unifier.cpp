@@ -1,10 +1,7 @@
 #include "../../hpp/infrastructure/unifier.hpp"
-#include "../../hpp/bootstrap/locator.hpp"
-#include "../../hpp/domain/interfaces/i_factory.hpp"
 
-unifier::unifier() :
-    local_(locator::locate<i_factory<i_squash>>().make()),
-    common_(locator::locate<i_squash>()) {
+unifier::unifier(std::unique_ptr<i_bind_map> bind_map) :
+    bind_map_(std::move(bind_map)) {
 }
 
 bool unifier::unify(const expr* lhs, const expr* rhs, i_queue<uint32_t>& var_set) {
@@ -25,7 +22,7 @@ bool unifier::unify(const expr* lhs, const expr* rhs, i_queue<uint32_t>& var_set
             : std::pair{rv, lhs};
         if (occurs_check(young->index, target))
             return false;
-        local_->bind(young->index, target);
+        bind_map_->bind(young->index, target);
         var_set.push(young->index);
         return true;
     }
@@ -37,7 +34,7 @@ bool unifier::unify(const expr* lhs, const expr* rhs, i_queue<uint32_t>& var_set
     if (v) {
         if (occurs_check(v->index, other_e))
             return false;
-        local_->bind(v->index, other_e);
+        bind_map_->bind(v->index, other_e);
         var_set.push(v->index);
         return true;
     }
@@ -70,17 +67,7 @@ bool unifier::occurs_check(uint32_t index, const expr* key) {
 }
 
 const expr* unifier::whnf(const expr* e) {
-    // if functor, then already in WHNF
     if (std::holds_alternative<expr::functor>(e->content))
         return e;
-
-    // try local rep(), if it fails, try common rep()
-    if(const expr* local_rep = local_->whnf(e))
-        return local_rep;
-    
-    // if common rep() fails, then just 
-    if(const expr* common_rep = common_.whnf(e))
-        return common_rep;
-
-    return e;
+    return bind_map_->whnf(e);
 }
