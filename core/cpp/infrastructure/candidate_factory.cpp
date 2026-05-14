@@ -14,6 +14,7 @@ std::unique_ptr<candidate> candidate_factory::make(const resolution_lineage* rl,
     auto u = unifier_factory_.make(rl);
     u->push(e, copied_head);
     auto c = std::make_unique<candidate>();
+    c->copied_head = copied_head;
     c->tm = std::move(tm);
     c->u = std::move(u);
     return c;
