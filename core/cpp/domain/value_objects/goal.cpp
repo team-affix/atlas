@@ -3,8 +3,6 @@
 #include "../../../hpp/domain/interfaces/i_copier.hpp"
 #include "../../../hpp/domain/interfaces/i_frontier.hpp"
 #include "../../../hpp/domain/interfaces/i_database.hpp"
-#include "../../../hpp/domain/interfaces/i_factory.hpp"
-#include "../../../hpp/domain/interfaces/i_lineage_pool.hpp"
 #include "../../../hpp/domain/interfaces/i_initial_goal_exprs.hpp"
 
 goal::goal(const goal_lineage* lineage) :
@@ -24,11 +22,6 @@ goal::goal(const goal_lineage* lineage) :
             parent_g->chosen_rule_body->at(lineage->idx),
             *parent_g->chosen_rule_tm);
     }
-        
-    auto& lp = locator::locate<i_lineage_pool>();
-    const auto& fac = locator::locate<i_factory<candidate, const resolution_lineage*>>();
-    for (size_t i = 0; i < db_.size(); ++i)
-        candidates.insert({i, fac.make(lp.resolution(lineage, i))});
 }
 
 void goal::choose(size_t idx) {

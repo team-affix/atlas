@@ -4,6 +4,9 @@
 resolver::resolver(size_t initial_goal_count) :
     db(locator::locate<i_database>()),
     lp(locator::locate<i_lineage_pool>()),
+    frontier(locator::locate<i_frontier>()),
+    goal_factory(locator::locate<i_factory<goal, const goal_lineage*>>()),
+    candidate_factory(locator::locate<i_factory<candidate, const resolution_lineage*>>()),
     resolving_producer(locator::locate<i_event_producer<resolving_event>>()),
     resolved_producer(locator::locate<i_event_producer<resolved_event>>()),
     goal_activating_producer(locator::locate<i_event_producer<goal_activating_event>>()),
@@ -15,97 +18,131 @@ resolver::resolver(size_t initial_goal_count) :
     candidate_activated_producer(locator::locate<i_event_producer<candidate_activated_event>>()),
     candidate_deactivating_producer(locator::locate<i_event_producer<candidate_deactivating_event>>()),
     candidate_deactivated_producer(locator::locate<i_event_producer<candidate_deactivated_event>>()),
-    initial_goal_count(initial_goal_count) {}
+    initial_goal_count(initial_goal_count),
+    resolve_state_machine(std::nullopt) {
+}
 
 void resolver::init_resolve(const resolution_lineage* rl) {
-    parent_rl = rl;
-    body_size = rl ? db.at(rl->idx).body.size() : initial_goal_count;
+    size_t body_size = rl ? db.at(rl->idx).body.size() : initial_goal_count;
     
-    resolving_producer.produce({rl});
+    // start the state machine
+    resolve_state_machine = resolve(rl, body_size);
+    
+    // yield to start the state machine
     resolve_yielded_producer.produce({});
 }
 
 void resolver::resume() {
-    if (finishing)
-        finish();
-    
-    if (activating_candidates)
-        resume_activating_candidates();
-    else if (activating_subgoals)
-        resume_activating_subgoals();
-    else if (deactivating_candidates)
-        resume_deactivating_candidates();
-    else if (deactivating_goal)
-        resume_deactivating_goal();
+    // resume the state machine
+    resolve_state_machine->resume();
 
-    // always yield unless finishing
-    resolve_yielded_producer.produce({});
+    // if the state machine is not done, yield
+    if (!resolve_state_machine->done())
+        resolve_yielded_producer.produce({});
 }
 
-void resolver::resume_activating_subgoals() {
-    if (current_gl) goal_activated_producer.produce({current_gl});
-
-    if (subgoal_idx >= body_size && parent_rl) {
-        start_deactivating_goal();
-        return;
-    }
-
-    if (subgoal_idx >= body_size && !parent_rl) {
-        start_finishing();
-        return;
+state_machine resolver::resolve(const resolution_lineage* rl, size_t body_size) {
+    // if the resolution is not nullptr, then
+    // signal expansion with this candidate
+    if (rl) {
+        const goal_lineage* parent_gl = rl->parent;
+        auto& parent_goal = frontier.at(parent_gl);
+        parent_goal->choose(rl->idx);
     }
     
-    current_gl = lp.goal(parent_rl, subgoal_idx);
-    goal_activating_producer.produce({current_gl});
-    ++subgoal_idx;
+    // emit resolving event
+    resolving_producer.produce({rl});
+    co_await std::suspend_always{};
 
-    start_activating_candidates();
-}
+    // activate goals
+    for (size_t i = 0; i < body_size; ++i) {
+        // get the goal lineage
+        const goal_lineage* gl = lp.goal(rl, i);
 
-void resolver::resume_activating_candidates() {
-    if (current_rl) candidate_activated_producer.produce({current_rl});
+        // make the goal
+        auto g = goal_factory.make(gl);
 
-    if (candidate_idx >= db.size()) {
+        // get the raw
+        auto raw_g = g.get();
 
+        // insert the goal into the frontier
+        frontier.insert(gl, std::move(g));
+        
+        // emit goal activating event
+        goal_activating_producer.produce({gl});
+        co_await std::suspend_always{};
+
+        // activate candidates
+        for (size_t j = 0; j < db.size(); ++j) {
+            // get the candidate lineage
+            const resolution_lineage* candidate_rl = lp.resolution(gl, j);
+
+            // make the candidate
+            auto c = candidate_factory.make(candidate_rl);
+
+            // insert the candidate into the frontier
+            g->candidates.insert({j, std::move(c)});
+            
+            // emit candidate activating event
+            candidate_activating_producer.produce({candidate_rl});
+            co_await std::suspend_always{};
+
+            // emit candidate activated event
+            candidate_activated_producer.produce({candidate_rl});
+            co_await std::suspend_always{};
+        }
+        
+        // emit goal activated event
+        goal_activated_producer.produce({gl});
+        co_await std::suspend_always{};
     }
-}
 
-void resolver::resume_deactivating_goal() {
-    if (deactivating_goal) {
-        goal_deactivated_producer.produce({parent_rl->parent});
-        finish();
-        return;
+    // if rl is nullptr, emit resolved event
+    if (!rl) {
+        resolved_producer.produce({rl});
+        co_return;
     }
+
+    // get parent goal
+    const goal_lineage* parent_gl = rl->parent;
+
+    // get parent goal
+    auto& parent_goal = frontier.at(parent_gl);
     
-    deactivating_goal = true;
-    goal_deactivating_producer.produce({parent_rl->parent});
-    resolve_yielded_producer.produce({});
-}
+    // emit goal_deactivating_event
+    goal_deactivating_producer.produce({parent_gl});
+    co_await std::suspend_always{};
 
-void resolver::finish() {
-    resolved_producer.produce({parent_rl});
-    // no yield — terminal step
-}
+    // deactivate parent candidates
+    for (auto it = parent_goal->candidates.begin(); it != parent_goal->candidates.end();) {
+        // get the index
+        size_t idx = it->first;
 
-void resolver::start_activating_subgoals() {
-    activating_subgoals = true;
-    current_gl = nullptr;
-    subgoal_idx = 0;
-}
+        // pre-advance the iterator before erasure
+        auto curr = it++;
 
-void resolver::start_activating_candidates() {
-    activating_candidates = true;
-    current_rl = nullptr;
-    candidate_idx = 0;
-}
+        // erase the candidate
+        parent_goal->candidates.erase(curr);
 
-void resolver::start_deactivating_goal() {
-    deactivating_goal = true;
-}
+        // get the candidate lineage
+        const resolution_lineage* candidate_rl = lp.resolution(parent_gl, idx);
 
-void resolver::start_deactivating_candidates() {
-}
+        // emit candidate deactivating event
+        candidate_deactivating_producer.produce({candidate_rl});
+        co_await std::suspend_always{};
 
-void resolver::start_finishing() {
-    finishing = true;
+        // emit candidate deactivated event
+        candidate_deactivated_producer.produce({candidate_rl});
+        co_await std::suspend_always{};
+    }
+
+    // erase the parent goal
+    frontier.erase(parent_gl);
+
+    // emit goal_deactivated_event
+    goal_deactivated_producer.produce({parent_gl});
+    co_await std::suspend_always{};
+
+    // emit resolved event
+    resolved_producer.produce({rl});
 }
