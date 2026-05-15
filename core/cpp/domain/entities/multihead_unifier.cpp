@@ -12,7 +12,7 @@ multihead_unifier::multihead_unifier() :
     copier_(locator::locate<i_copier>()),
     expr_pool_(locator::locate<i_expr_pool>()),
     head_unify_failed_producer_(locator::locate<i_event_producer<head_unify_failed_event>>()),
-    multihead_unify_accept_yield_producer_(locator::locate<i_event_producer<multihead_unify_accept_yield_event>>()) {
+    multihead_unify_accept_yielded_producer_(locator::locate<i_event_producer<multihead_unify_accept_yielded_event>>()) {
 }
 
 void multihead_unifier::add_head(const resolution_lineage* lineage) {
@@ -47,14 +47,14 @@ void multihead_unifier::remove_head(const resolution_lineage* lineage) {
 void multihead_unifier::init_accept_head(const resolution_lineage* lineage) {
     accept_head_state_machine = accept_head(lineage);
     // yield to start the state machine
-    multihead_unify_accept_yield_producer_.produce(multihead_unify_accept_yield_event{});
+    multihead_unify_accept_yielded_producer_.produce(multihead_unify_accept_yielded_event{});
 }
 
 void multihead_unifier::resume_accept_head() {
     accept_head_state_machine->resume();
     if (!accept_head_state_machine->done()) {
         // emit yield event
-        multihead_unify_accept_yield_producer_.produce(multihead_unify_accept_yield_event{});
+        multihead_unify_accept_yielded_producer_.produce(multihead_unify_accept_yielded_event{});
     }
 }
 

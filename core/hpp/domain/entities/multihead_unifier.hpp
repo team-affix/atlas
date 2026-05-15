@@ -14,7 +14,7 @@
 #include "../interfaces/i_copier.hpp"
 #include "../interfaces/i_expr_pool.hpp"
 #include "../events/head_unify_failed_event.hpp"
-#include "../events/multihead_unify_accept_yield_event.hpp"
+#include "../events/multihead_unify_accept_yielded_event.hpp"
 #include "../interfaces/i_event_producer.hpp"
 #include "../value_objects/unify_head.hpp"
 #include "../../utility/state_machine.hpp"
@@ -44,7 +44,7 @@ private:
     i_copier& copier_;
     i_expr_pool& expr_pool_;
     i_event_producer<head_unify_failed_event>& head_unify_failed_producer_;
-    i_event_producer<multihead_unify_accept_yield_event>& multihead_unify_accept_yield_producer_;
+    i_event_producer<multihead_unify_accept_yielded_event>& multihead_unify_accept_yielded_producer_;
     std::optional<state_machine> accept_head_state_machine;
     
     std::unordered_map<const resolution_lineage*, unify_head> heads_;

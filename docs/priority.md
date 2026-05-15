@@ -6,7 +6,6 @@ Events sharing a number are emitted together and have the same priority tier.
 
 | #    | Event                                | Constraint                                                        | Extra |
 | ---  | ------------------------------------ | ----------------------------------------------------------------- | ----- |
-| --   | `cdcl_constrain_yielded_event`           | —                                                             |       |
 | --   | `goal_candidates_activate_yielded_event` | —                                                             |       |
 | --   | `goal_candidates_deactivate_yielded_event` | —                                                           |       |
 | --   | `candidate_activating_event`         | —                                                                 |       |
@@ -32,7 +31,8 @@ Events sharing a number are emitted together and have the same priority tier.
 | --   | --                                   | --                                                                | END ELIMINATION PRODUCTION      |
 | 110  | `representative_changed_event`       | —                                                                 |       |
 | --   | --                                   | --                                                                | RESOLUTION ZONE |
-| 109  | `multihead_unify_accept_yield_event` | —                                                                 |       |
+| 109  | `cdcl_constrain_yielded_event`           | —                                                             |       |
+| 109  | `multihead_unify_accept_yielded_event` | —                                                                 |       |
 | 109  | `resolving_event`                    | —                                                                 |       |
 | 109  | `resolved_event`                     | —                                                                 |       |
 | 109  | `goal_activating_event`              | —                                                                 |       |
