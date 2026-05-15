@@ -1,46 +1,55 @@
-#include "../../../doctest/doctest/doctest.h"
+#include <gtest/gtest.h>
 #include "../../../core/hpp/utility/tracked.hpp"
 #include "../../../core/hpp/utility/trail.hpp"
 #include "../../../core/hpp/utility/backtrackable_increment.hpp"
 
-TEST_CASE("tracked<int>") {
+class TrackedIntTest : public ::testing::Test {
+protected:
     trail t;
-    tracked<int> v(t, 10);
+    tracked<int> v{t, 10};
+};
 
-    SUBCASE("get returns initial value") { CHECK(v.get() == 10); }
+TEST_F(TrackedIntTest, GetReturnsInitialValue) {
+    EXPECT_EQ(v.get(), 10);
+}
 
-    SUBCASE("mutate changes value") {
-        t.push();
-        v.mutate(std::make_unique<backtrackable_increment<int>>());
-        CHECK(v.get() == 11);
+TEST_F(TrackedIntTest, MutateChangesValue) {
+    t.push();
+    v.mutate(std::make_unique<backtrackable_increment<int>>());
+    EXPECT_EQ(v.get(), 11);
+}
 
-        SUBCASE("pop reverts to pre-push value") {
-            t.pop();
-            CHECK(v.get() == 10);
-        }
+TEST_F(TrackedIntTest, MutateAndPopRevertsToPrePushValue) {
+    t.push();
+    v.mutate(std::make_unique<backtrackable_increment<int>>());
+    t.pop();
+    EXPECT_EQ(v.get(), 10);
+}
 
-        SUBCASE("two mutations in one frame both revert") {
-            v.mutate(std::make_unique<backtrackable_increment<int>>());
-            CHECK(v.get() == 12);
-            t.pop();
-            CHECK(v.get() == 10);
-        }
-    }
+TEST_F(TrackedIntTest, TwoMutationsInOneFrameBothRevert) {
+    t.push();
+    v.mutate(std::make_unique<backtrackable_increment<int>>());
+    v.mutate(std::make_unique<backtrackable_increment<int>>());
+    EXPECT_EQ(v.get(), 12);
+    t.pop();
+    EXPECT_EQ(v.get(), 10);
+}
 
-    SUBCASE("two independent frames revert independently") {
-        t.push();
-        v.mutate(std::make_unique<backtrackable_increment<int>>());  // v = 11
-        t.push();
-        v.mutate(std::make_unique<backtrackable_increment<int>>());  // v = 12
+TEST_F(TrackedIntTest, TwoFramesInnerPopReverts) {
+    t.push();
+    v.mutate(std::make_unique<backtrackable_increment<int>>());
+    t.push();
+    v.mutate(std::make_unique<backtrackable_increment<int>>());
+    t.pop();
+    EXPECT_EQ(v.get(), 11);
+}
 
-        SUBCASE("inner pop reverts to 11") {
-            t.pop();
-            CHECK(v.get() == 11);
-        }
-        SUBCASE("both pops revert to 10") {
-            t.pop();
-            t.pop();
-            CHECK(v.get() == 10);
-        }
-    }
+TEST_F(TrackedIntTest, TwoFramesBothPopsRevert) {
+    t.push();
+    v.mutate(std::make_unique<backtrackable_increment<int>>());
+    t.push();
+    v.mutate(std::make_unique<backtrackable_increment<int>>());
+    t.pop();
+    t.pop();
+    EXPECT_EQ(v.get(), 10);
 }

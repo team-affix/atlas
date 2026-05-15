@@ -1,25 +1,27 @@
-#include "../../../doctest/doctest/doctest.h"
+#include <gtest/gtest.h>
 #include "../../../core/hpp/utility/backtrackable_set_insert.hpp"
 #include <set>
 #include <stdexcept>
 
-TEST_CASE("backtrackable_set_insert") {
+class BacktrackableSetInsertTest : public ::testing::Test {
+protected:
     std::set<int> s;
-    backtrackable_set_insert<std::set<int>> m(7);
-    m.capture(s);
+    backtrackable_set_insert<std::set<int>> m{7};
+    void SetUp() override { m.capture(s); }
+};
 
-    SUBCASE("invoke inserts value") {
-        m.invoke();
-        CHECK(s.count(7) == 1);
+TEST_F(BacktrackableSetInsertTest, InvokeInsertsValue) {
+    m.invoke();
+    EXPECT_EQ(s.count(7), 1u);
+}
 
-        SUBCASE("backtrack removes value") {
-            m.backtrack();
-            CHECK(s.count(7) == 0);
-        }
-    }
+TEST_F(BacktrackableSetInsertTest, InvokeAndBacktrackRemovesValue) {
+    m.invoke();
+    m.backtrack();
+    EXPECT_EQ(s.count(7), 0u);
+}
 
-    SUBCASE("invoke with duplicate value throws") {
-        s.insert(7);
-        CHECK_THROWS_AS(m.invoke(), std::logic_error);
-    }
+TEST_F(BacktrackableSetInsertTest, InvokeWithDuplicateValueThrows) {
+    s.insert(7);
+    EXPECT_THROW(m.invoke(), std::logic_error);
 }

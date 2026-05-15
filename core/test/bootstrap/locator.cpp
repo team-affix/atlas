@@ -1,25 +1,25 @@
-#include "../../../doctest/doctest/doctest.h"
+#include <gtest/gtest.h>
 #include "../../../core/hpp/bootstrap/locator.hpp"
 
-TEST_CASE("locator") {
+class LocatorTest : public ::testing::Test {
+protected:
     bindings b;
-    locator::register_bindings(&b);
+    void SetUp() override { locator::register_bindings(&b); }
+    void TearDown() override { locator::register_bindings(nullptr); }
+};
 
-    SUBCASE("locate returns correct object after register_bindings") {
-        int x = 7;
-        b.bind(x);
-        CHECK(&locator::locate<int>() == &x);
-        CHECK(locator::locate<int>() == 7);
-    }
+TEST_F(LocatorTest, LocateReturnsCorrectObjectAfterRegisterBindings) {
+    int x = 7;
+    b.bind(x);
+    EXPECT_EQ(&locator::locate<int>(), &x);
+    EXPECT_EQ(locator::locate<int>(), 7);
+}
 
-    SUBCASE("multiple types locate through locator") {
-        int x = 1;
-        double d = 2.5;
-        b.bind(x);
-        b.bind(d);
-        CHECK(&locator::locate<int>() == &x);
-        CHECK(&locator::locate<double>() == &d);
-    }
-
-    locator::register_bindings(nullptr);
+TEST_F(LocatorTest, MultipleTypesLocateThroughLocator) {
+    int x = 1;
+    double d = 2.5;
+    b.bind(x);
+    b.bind(d);
+    EXPECT_EQ(&locator::locate<int>(), &x);
+    EXPECT_EQ(&locator::locate<double>(), &d);
 }

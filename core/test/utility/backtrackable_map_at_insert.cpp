@@ -1,32 +1,34 @@
-#include "../../../doctest/doctest/doctest.h"
+#include <gtest/gtest.h>
 #include "../../../core/hpp/utility/backtrackable_map_at_insert.hpp"
 #include <map>
 #include <set>
 #include <stdexcept>
 
-TEST_CASE("backtrackable_map_at_insert") {
+class BacktrackableMapAtInsertTest : public ::testing::Test {
+protected:
     std::map<int, std::set<int>> mp{{1, {}}};
-    backtrackable_map_at_insert<std::map<int, std::set<int>>> m(1, 55);
-    m.capture(mp);
+    backtrackable_map_at_insert<std::map<int, std::set<int>>> m{1, 55};
+    void SetUp() override { m.capture(mp); }
+};
 
-    SUBCASE("invoke inserts into inner set") {
-        m.invoke();
-        CHECK(mp.at(1).count(55) == 1);
+TEST_F(BacktrackableMapAtInsertTest, InvokeInsertsIntoInnerSet) {
+    m.invoke();
+    EXPECT_EQ(mp.at(1).count(55), 1u);
+}
 
-        SUBCASE("backtrack removes from inner set") {
-            m.backtrack();
-            CHECK(mp.at(1).count(55) == 0);
-        }
-    }
+TEST_F(BacktrackableMapAtInsertTest, InvokeAndBacktrackRemovesFromInnerSet) {
+    m.invoke();
+    m.backtrack();
+    EXPECT_EQ(mp.at(1).count(55), 0u);
+}
 
-    SUBCASE("invoke with missing outer key throws") {
-        backtrackable_map_at_insert<std::map<int, std::set<int>>> bad(42, 55);
-        bad.capture(mp);
-        CHECK_THROWS_AS(bad.invoke(), std::out_of_range);
-    }
+TEST_F(BacktrackableMapAtInsertTest, InvokeWithMissingOuterKeyThrows) {
+    backtrackable_map_at_insert<std::map<int, std::set<int>>> bad(42, 55);
+    bad.capture(mp);
+    EXPECT_THROW(bad.invoke(), std::out_of_range);
+}
 
-    SUBCASE("invoke with duplicate inner value throws") {
-        mp.at(1).insert(55);
-        CHECK_THROWS_AS(m.invoke(), std::logic_error);
-    }
+TEST_F(BacktrackableMapAtInsertTest, InvokeWithDuplicateInnerValueThrows) {
+    mp.at(1).insert(55);
+    EXPECT_THROW(m.invoke(), std::logic_error);
 }

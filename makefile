@@ -16,6 +16,11 @@ ANTLR4_LIB = /usr/lib/x86_64-linux-gnu
 ANTLR4_JAR = tools/antlr4-4.10.1-complete.jar
 ANTLR4_URL = https://www.antlr.org/download/antlr-4.10.1-complete.jar
 
+GTEST_INC = googletest/googletest/include
+GMOCK_INC = googletest/googlemock/include
+GTEST_SRC = googletest/googletest/src/gtest-all.cc \
+            googletest/googlemock/src/gmock-all.cc
+
 CLI11_INC = CLI11/include
 
 GIT_TAG := $(shell git describe --tags --always --dirty)
@@ -98,14 +103,22 @@ core: $(CORE_LIB)
 
 core_debug: $(CORE_DEBUG_LIB)
 	$(CXX) $(CXXFLAGS) -DDEBUG -g \
+	    -I$(GTEST_INC) -I$(GMOCK_INC) \
+	    -Igoogletest/googletest -Igoogletest/googlemock \
 	    $(shell find core/test -name "*.cpp") \
+	    $(GTEST_SRC) \
 	    -Lbuild -latlas_core_debug \
+	    -lpthread \
 	    -o $(CORE_DEBUG_BIN)
 
 core_debug_fast: $(CORE_DEBUG_FAST_LIB)
 	$(CXX) $(CXXFLAGS) -DDEBUG -g -O3 \
+	    -I$(GTEST_INC) -I$(GMOCK_INC) \
+	    -Igoogletest/googletest -Igoogletest/googlemock \
 	    $(shell find core/test -name "*.cpp") \
+	    $(GTEST_SRC) \
 	    -Lbuild -latlas_core_debug_fast \
+	    -lpthread \
 	    -o $(CORE_DEBUG_FAST_BIN)
 
 # Parser targets use recursive make: the dependency graph is resolved statically

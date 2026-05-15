@@ -1,38 +1,47 @@
-#include "../../../doctest/doctest/doctest.h"
+#include <gtest/gtest.h>
 #include "../../../core/hpp/utility/backtrackable_increment.hpp"
 #include "../../../core/hpp/utility/trail.hpp"
 #include <memory>
 
-TEST_CASE("backtrackable_increment") {
+class BacktrackableIncrementTest : public ::testing::Test {
+protected:
     int x = 5;
     backtrackable_increment<int> m;
-    m.capture(x);
+    void SetUp() override { m.capture(x); }
+};
 
-    SUBCASE("invoke increments") {
-        m.invoke();
-        CHECK(x == 6);
+TEST_F(BacktrackableIncrementTest, InvokeIncrements) {
+    m.invoke();
+    EXPECT_EQ(x, 6);
+}
 
-        SUBCASE("backtrack decrements back") {
-            m.backtrack();
-            CHECK(x == 5);
-        }
+TEST_F(BacktrackableIncrementTest, InvokeAndBacktrackDecrementsBack) {
+    m.invoke();
+    m.backtrack();
+    EXPECT_EQ(x, 5);
+}
+
+TEST_F(BacktrackableIncrementTest, RepeatedInvocationsEachIncrementByOne) {
+    trail t;
+    t.push();
+    for (int expected = 6; expected <= 8; ++expected) {
+        auto mi = std::make_unique<backtrackable_increment<int>>();
+        mi->capture(x);
+        mi->invoke();
+        t.log(std::move(mi));
+        EXPECT_EQ(x, expected);
     }
+}
 
-    SUBCASE("repeated invocations each increment by 1") {
-        trail t;
-        t.push();
-
-        for (int expected = 6; expected <= 8; ++expected) {
-            auto mi = std::make_unique<backtrackable_increment<int>>();
-            mi->capture(x);
-            mi->invoke();
-            t.log(std::move(mi));
-            CHECK(x == expected);
-        }
-
-        SUBCASE("trail pop reverses all increments") {
-            t.pop();
-            CHECK(x == 5);
-        }
+TEST_F(BacktrackableIncrementTest, TrailPopReversesAllIncrements) {
+    trail t;
+    t.push();
+    for (int expected = 6; expected <= 8; ++expected) {
+        auto mi = std::make_unique<backtrackable_increment<int>>();
+        mi->capture(x);
+        mi->invoke();
+        t.log(std::move(mi));
     }
+    t.pop();
+    EXPECT_EQ(x, 5);
 }
