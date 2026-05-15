@@ -61,7 +61,7 @@ TEST_F(UnifierTest, UnifyIdenticalVarsBothSidesReturnsTrueNoBind) {
     EXPECT_TRUE(snk.empty());
 }
 
-TEST_F(UnifierTest, UnifyTwoDistinctVarsBindsHigherIndexToLower) {
+TEST_F(UnifierTest, UnifyVarLhsVarRhsBindsHigherIndexToLower) {
     InSequence seq;
     EXPECT_CALL(*bm, whnf(&var0)).WillOnce(Return(&var0));
     EXPECT_CALL(*bm, whnf(&var1)).WillOnce(Return(&var1));
@@ -72,7 +72,7 @@ TEST_F(UnifierTest, UnifyTwoDistinctVarsBindsHigherIndexToLower) {
     EXPECT_EQ(snk, (std::unordered_set<uint32_t>{1}));
 }
 
-TEST_F(UnifierTest, UnifyTwoDistinctVarsYoungerOnLhsStillBindsHigherIndexToLower) {
+TEST_F(UnifierTest, UnifyVarRhsVarLhsBindsHigherIndexToLower) {
     InSequence seq;
     EXPECT_CALL(*bm, whnf(&var1)).WillOnce(Return(&var1));
     EXPECT_CALL(*bm, whnf(&var0)).WillOnce(Return(&var0));
@@ -384,7 +384,7 @@ TEST_F(UnifierTest, UnifyDepth2FunctorsFailsOnInnerNameMismatch) {
 }
 
 // ---------------------------------------------------------------------------
-// whnf is called before branching — vars resolve to functors
+// whnf is called before branching — vars resolve through equivalence classes
 // ---------------------------------------------------------------------------
 
 TEST_F(UnifierTest, UnifyAfterWhnfBothResolveToSameFunctorReturnsTrue) {
@@ -404,4 +404,30 @@ TEST_F(UnifierTest, UnifyAfterWhnfBothResolveToDifferentFunctorsFails) {
     EXPECT_CALL(*bm, whnf(&var1)).WillOnce(Return(&func2));
 
     EXPECT_FALSE(u->unify(&var0, &var1, snk));
+}
+
+TEST_F(UnifierTest, UnifyAfterWhnfBothResolveToVarsBindsRepresentatives) {
+    // var0 is already in var2's eq class (whnf resolves it to var2)
+    // var1 is its own representative; bind(2, &var1) merges the classes
+    InSequence seq;
+    EXPECT_CALL(*bm, whnf(&var0)).WillOnce(Return(&var2));
+    EXPECT_CALL(*bm, whnf(&var1)).WillOnce(Return(&var1));
+    EXPECT_CALL(*bm, whnf(&var1)).WillOnce(Return(&var1));  // occurs_check
+    EXPECT_CALL(*bm, bind(2u, &var1));
+
+    EXPECT_TRUE(u->unify(&var0, &var1, snk));
+    EXPECT_EQ(snk, (std::unordered_set<uint32_t>{2}));
+}
+
+TEST_F(UnifierTest, UnifyAfterWhnfVarResolvesToVarFunctorBindsRepresentative) {
+    // var0 is already in var2's eq class; var1 resolves to a functor
+    // occurs_check and bind operate on var2 (the representative), not var0
+    InSequence seq;
+    EXPECT_CALL(*bm, whnf(&var0)).WillOnce(Return(&var2));
+    EXPECT_CALL(*bm, whnf(&var1)).WillOnce(Return(&func));
+    EXPECT_CALL(*bm, whnf(&func)).WillOnce(Return(&func));  // occurs_check
+    EXPECT_CALL(*bm, bind(2u, &func));
+
+    EXPECT_TRUE(u->unify(&var0, &var1, snk));
+    EXPECT_EQ(snk, (std::unordered_set<uint32_t>{2}));
 }
