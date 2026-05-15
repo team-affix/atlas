@@ -1,7 +1,6 @@
 #ifndef MULTIHEAD_UNIFIER_HPP
 #define MULTIHEAD_UNIFIER_HPP
 
-#include <memory>
 #include <unordered_map>
 #include <unordered_set>
 #include "../interfaces/i_multihead_unifier.hpp"
