@@ -6,6 +6,12 @@ Events sharing a number are emitted together and have the same priority tier.
 
 | #    | Event                                | Constraint                                                        | Extra |
 | ---  | ------------------------------------ | ----------------------------------------------------------------- | ----- |
+| --   | `goal_candidates_activate_yielded_event` | —                                                             |       |
+| --   | `goal_candidates_deactivate_yielded_event` | —                                                           |       |
+| --   | `candidate_activating_event`         | —                                                                 |       |
+| --   | `candidate_deactivating_event`       | —                                                                 |       |
+| --   | `candidate_activated_event`          | —                                                                 |       |
+| --   | `candidate_deactivated_event`        | —                                                                 |       |
 | --   | --                                   | --                                                                | SIM ZONE |
 | 120  | `sim_started_event`                  | AFTER `initial_goals_activated_event`                             |       |
 | --   | --                                   | --                                                                | EARLY TERMINATION ZONE |
@@ -18,16 +24,14 @@ Events sharing a number are emitted together and have the same priority tier.
 | 116  | `avoidance_empty_event`              | —                                                                 |       |
 | 116  | `goal_candidates_empty_event`        | BEFORE `goal_unit_event`                                          |       |
 | --   | --                                   | --                                                                | END CONFLICT PRODUCTION |
-| 114  | `candidate_eliminated_event`         | —                                                                 |       |
 | --   | --                                   | --                                                                | ELIMINATION PRODUCTION ZONE |
-| 113  | `candidate_eliminating_event`        | BEFORE `candidate_eliminated_event`                               | Triggers synchronizer unregister |
-| 113  | `eliminate_candidate_yield_event`    | AFTER `candidate_eliminating_event`                               | Triggers active_eliminator.resume() |
 | 113  | `backlogged_elimination_freed_event` | AFTER `candidate_eliminated_event`                                | Always produces active elim |
 | 112  | `avoidance_unit_event`               | —                                                                 | Can either produce active elim or backlogged elim |
+| 111   | `head_unify_failed_event`            | —                                                                |       |
 | --   | --                                   | --                                                                | END ELIMINATION PRODUCTION      |
-| 111  | `goal_expr_changed_event`            | —                                                                 |       |
 | 110  | `representative_changed_event`       | —                                                                 |       |
 | --   | --                                   | --                                                                | RESOLUTION ZONE |
+| 109  | `multihead_unify_accept_yield_event` | —                                                                 |       |
 | 109  | `resolving_event`                    | —                                                                 |       |
 | 109  | `resolved_event`                     | —                                                                 |       |
 | 109  | `goal_activating_event`              | —                                                                 |       |

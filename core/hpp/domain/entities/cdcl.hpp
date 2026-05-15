@@ -14,7 +14,7 @@ struct cdcl : i_cdcl {
     cdcl();
     void learn(const lemma&) override;
     void constrain(const resolution_lineage*) override;
-    const avoidance& get_avoidance(size_t) override;
+    const avoidance_type& get_avoidance(size_t) override;
 private:
     void updated(size_t);
     void link(const goal_lineage*, size_t);
@@ -24,7 +24,7 @@ private:
     i_event_producer<avoidance_empty_event>& avoidance_empty_producer;
     i_cdcl_sequencer& next_avoidance_id;
 
-    using avoidances_type = std::unordered_map<size_t, avoidance>;
+    using avoidances_type = std::unordered_map<size_t, avoidance_type>;
     using watched_goals_type = std::unordered_map<const goal_lineage*, std::unordered_set<size_t>>;
     
     tracked<avoidances_type> avoidances;
