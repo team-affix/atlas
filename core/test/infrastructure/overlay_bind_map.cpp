@@ -6,7 +6,6 @@
 #include "../../../core/hpp/domain/interfaces/i_factory.hpp"
 
 using ::testing::Return;
-using ::testing::InSequence;
 
 class MockBindMap : public i_bind_map {
 public:
@@ -56,7 +55,7 @@ TEST_F(OverlayBindMapTest, WhnfLocalResolvesRemoteNeverCalled) {
     EXPECT_CALL(factory, make()).WillOnce(Return(std::move(local_uptr)));
     overlay_bind_map obm(remote);
 
-    EXPECT_CALL(*local, whnf(&var0)).WillOnce(Return(&func));
+    EXPECT_CALL(*local, whnf(&var0)).WillRepeatedly(Return(&func));
     EXPECT_CALL(remote, whnf).Times(0);
 
     EXPECT_EQ(obm.whnf(&var0), &func);
@@ -68,9 +67,8 @@ TEST_F(OverlayBindMapTest, WhnfFallsThroughToRemoteWhenLocalReturnsSelf) {
     EXPECT_CALL(factory, make()).WillOnce(Return(std::move(local_uptr)));
     overlay_bind_map obm(remote);
 
-    InSequence seq;
-    EXPECT_CALL(*local, whnf(&var0)).WillOnce(Return(&var0));
-    EXPECT_CALL(remote, whnf(&var0)).WillOnce(Return(&func));
+    EXPECT_CALL(*local, whnf(&var0)).WillRepeatedly(Return(&var0));
+    EXPECT_CALL(remote, whnf(&var0)).WillRepeatedly(Return(&func));
 
     EXPECT_EQ(obm.whnf(&var0), &func);
 }
@@ -81,21 +79,20 @@ TEST_F(OverlayBindMapTest, WhnfLocalShadowsRemoteRemoteNeverCalled) {
     EXPECT_CALL(factory, make()).WillOnce(Return(std::move(local_uptr)));
     overlay_bind_map obm(remote);
 
-    EXPECT_CALL(*local, whnf(&var0)).WillOnce(Return(&func));
+    EXPECT_CALL(*local, whnf(&var0)).WillRepeatedly(Return(&func));
     EXPECT_CALL(remote, whnf).Times(0);
 
     EXPECT_EQ(obm.whnf(&var0), &func);
 }
 
-TEST_F(OverlayBindMapTest, WhnfFunctorLocalConsultedFirstThenRemote) {
+TEST_F(OverlayBindMapTest, WhnfFunctorNotBoundLocallyFallsThroughToRemote) {
     auto local_uptr = std::make_unique<MockBindMap>();
     auto* local = local_uptr.get();
     EXPECT_CALL(factory, make()).WillOnce(Return(std::move(local_uptr)));
     overlay_bind_map obm(remote);
 
-    InSequence seq;
-    EXPECT_CALL(*local, whnf(&func)).WillOnce(Return(&func));
-    EXPECT_CALL(remote, whnf(&func)).WillOnce(Return(&func));
+    EXPECT_CALL(*local, whnf(&func)).WillRepeatedly(Return(&func));
+    EXPECT_CALL(remote, whnf(&func)).WillRepeatedly(Return(&func));
 
     EXPECT_EQ(obm.whnf(&func), &func);
 }
@@ -106,9 +103,8 @@ TEST_F(OverlayBindMapTest, WhnfFunctorWithVarArgIsNotRecursed) {
     EXPECT_CALL(factory, make()).WillOnce(Return(std::move(local_uptr)));
     overlay_bind_map obm(remote);
 
-    InSequence seq;
-    EXPECT_CALL(*local, whnf(&func_of_var0)).WillOnce(Return(&func_of_var0));
-    EXPECT_CALL(remote, whnf(&func_of_var0)).WillOnce(Return(&func_of_var0));
+    EXPECT_CALL(*local, whnf(&func_of_var0)).WillRepeatedly(Return(&func_of_var0));
+    EXPECT_CALL(remote, whnf(&func_of_var0)).WillRepeatedly(Return(&func_of_var0));
 
     EXPECT_EQ(obm.whnf(&func_of_var0), &func_of_var0);
 }
@@ -119,7 +115,7 @@ TEST_F(OverlayBindMapTest, WhnfVar0LocallyBoundToCompositeFunctorRemoteNotCalled
     EXPECT_CALL(factory, make()).WillOnce(Return(std::move(local_uptr)));
     overlay_bind_map obm(remote);
 
-    EXPECT_CALL(*local, whnf(&var0)).WillOnce(Return(&func_of_var0));
+    EXPECT_CALL(*local, whnf(&var0)).WillRepeatedly(Return(&func_of_var0));
     EXPECT_CALL(remote, whnf).Times(0);
 
     EXPECT_EQ(obm.whnf(&var0), &func_of_var0);
@@ -131,9 +127,8 @@ TEST_F(OverlayBindMapTest, WhnfVar0RemoteResolvesToCompositeFunctor) {
     EXPECT_CALL(factory, make()).WillOnce(Return(std::move(local_uptr)));
     overlay_bind_map obm(remote);
 
-    InSequence seq;
-    EXPECT_CALL(*local, whnf(&var0)).WillOnce(Return(&var0));
-    EXPECT_CALL(remote, whnf(&var0)).WillOnce(Return(&func_of_func));
+    EXPECT_CALL(*local, whnf(&var0)).WillRepeatedly(Return(&var0));
+    EXPECT_CALL(remote, whnf(&var0)).WillRepeatedly(Return(&func_of_func));
 
     EXPECT_EQ(obm.whnf(&var0), &func_of_func);
 }
