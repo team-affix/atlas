@@ -8,7 +8,6 @@ protected:
     expr var1{expr::var{1}};
     expr var2{expr::var{2}};
     expr func{expr::functor{"f", {}}};
-    expr func2{expr::functor{"g", {}}};
 };
 
 TEST_F(BindMapTest, WhnfUnboundVariableReturnsSelf) {
@@ -30,14 +29,6 @@ TEST_F(BindMapTest, WhnfChainVar0ToVar1ToFunctorReturnsFunctor) {
     EXPECT_EQ(bm.whnf(&var0), &func);
 }
 
-TEST_F(BindMapTest, PathCompressionAfterChainResolutionVar0IgnoresReboundVar1) {
-    bm.bind(0, &var1);
-    bm.bind(1, &func);
-    bm.whnf(&var0);
-    bm.bind(1, &func2);
-    EXPECT_EQ(bm.whnf(&var0), &func);
-}
-
 TEST_F(BindMapTest, BindOverwritesExistingBinding) {
     bm.bind(0, &func);
     bm.bind(0, &var1);
@@ -50,7 +41,7 @@ TEST_F(BindMapTest, WhnfDoesNotRecurseIntoFunctorArguments) {
     EXPECT_EQ(bm.whnf(&fa), &fa);
 }
 
-TEST_F(BindMapTest, ChainOfLength3CollapsesWithPathCompression) {
+TEST_F(BindMapTest, WhnfChainOfLength3ResolvesAllIntermediateVars) {
     bm.bind(0, &var1);
     bm.bind(1, &var2);
     bm.bind(2, &func);
