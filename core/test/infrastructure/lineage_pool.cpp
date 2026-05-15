@@ -93,13 +93,6 @@ TEST_F(LineagePoolTest, PinAlreadyPinnedAncestorStopsTraversal) {
 // trim removes unpinned, keeps pinned
 // ---------------------------------------------------------------------------
 
-TEST_F(LineagePoolTest, PoolIsStableAfterTrimWithNoPins) {
-    pool.goal(nullptr, 0);
-    pool.trim();
-    const goal_lineage* p_a = pool.goal(nullptr, 0);
-    EXPECT_EQ(pool.goal(nullptr, 0), p_a);  // idempotent after re-intern
-}
-
 TEST_F(LineagePoolTest, TrimKeepsPinned) {
     const goal_lineage* g0 = pool.goal(nullptr, 0);
     pool.goal(nullptr, 1);

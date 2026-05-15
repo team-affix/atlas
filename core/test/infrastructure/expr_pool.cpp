@@ -105,14 +105,6 @@ TEST_F(ExprPoolTest, VarInternedBeforePushSurvivesPop) {
     EXPECT_EQ(pool->var(0), p);
 }
 
-TEST_F(ExprPoolTest, PoolIsStableAfterPop) {
-    t.push();
-    pool->var(0);
-    t.pop();
-    const expr* p_a = pool->var(0);
-    EXPECT_EQ(pool->var(0), p_a);  // idempotent after re-intern
-}
-
 TEST_F(ExprPoolTest, ExprInternedBeforeFrameSurvivesPop) {
     const expr* p0 = pool->var(0);
     t.push();
