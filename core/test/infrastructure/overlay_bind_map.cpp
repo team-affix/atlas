@@ -34,14 +34,14 @@ protected:
     expr var1{expr::var{1}};
     expr func{expr::functor{"f", {}}};
     expr func2{expr::functor{"g", {}}};
+    expr func_of_var0{expr::functor{"f", {&var0}}};
+    expr func_of_func{expr::functor{"f", {&func2}}};
 };
 
 TEST_F(OverlayBindMapTest, BindIsForwardedToLocalOnlyRemoteReceivesNoBindCall) {
     auto local_uptr = std::make_unique<MockBindMap>();
     auto* local = local_uptr.get();
-    EXPECT_CALL(factory, make()).WillOnce([ptr = std::move(local_uptr)]() mutable {
-        return std::move(ptr);
-    });
+    EXPECT_CALL(factory, make()).WillOnce(Return(std::move(local_uptr)));
     overlay_bind_map obm(remote);
 
     EXPECT_CALL(*local, bind(0u, &func));
@@ -53,9 +53,7 @@ TEST_F(OverlayBindMapTest, BindIsForwardedToLocalOnlyRemoteReceivesNoBindCall) {
 TEST_F(OverlayBindMapTest, WhnfLocalResolvesRemoteNeverCalled) {
     auto local_uptr = std::make_unique<MockBindMap>();
     auto* local = local_uptr.get();
-    EXPECT_CALL(factory, make()).WillOnce([ptr = std::move(local_uptr)]() mutable {
-        return std::move(ptr);
-    });
+    EXPECT_CALL(factory, make()).WillOnce(Return(std::move(local_uptr)));
     overlay_bind_map obm(remote);
 
     EXPECT_CALL(*local, whnf(&var0)).WillOnce(Return(&func));
@@ -67,9 +65,7 @@ TEST_F(OverlayBindMapTest, WhnfLocalResolvesRemoteNeverCalled) {
 TEST_F(OverlayBindMapTest, WhnfFallsThroughToRemoteWhenLocalReturnsSelf) {
     auto local_uptr = std::make_unique<MockBindMap>();
     auto* local = local_uptr.get();
-    EXPECT_CALL(factory, make()).WillOnce([ptr = std::move(local_uptr)]() mutable {
-        return std::move(ptr);
-    });
+    EXPECT_CALL(factory, make()).WillOnce(Return(std::move(local_uptr)));
     overlay_bind_map obm(remote);
 
     InSequence seq;
@@ -82,9 +78,7 @@ TEST_F(OverlayBindMapTest, WhnfFallsThroughToRemoteWhenLocalReturnsSelf) {
 TEST_F(OverlayBindMapTest, WhnfLocalShadowsRemoteRemoteNeverCalled) {
     auto local_uptr = std::make_unique<MockBindMap>();
     auto* local = local_uptr.get();
-    EXPECT_CALL(factory, make()).WillOnce([ptr = std::move(local_uptr)]() mutable {
-        return std::move(ptr);
-    });
+    EXPECT_CALL(factory, make()).WillOnce(Return(std::move(local_uptr)));
     overlay_bind_map obm(remote);
 
     EXPECT_CALL(*local, whnf(&var0)).WillOnce(Return(&func));
@@ -96,9 +90,7 @@ TEST_F(OverlayBindMapTest, WhnfLocalShadowsRemoteRemoteNeverCalled) {
 TEST_F(OverlayBindMapTest, WhnfFunctorLocalConsultedFirstThenRemote) {
     auto local_uptr = std::make_unique<MockBindMap>();
     auto* local = local_uptr.get();
-    EXPECT_CALL(factory, make()).WillOnce([ptr = std::move(local_uptr)]() mutable {
-        return std::move(ptr);
-    });
+    EXPECT_CALL(factory, make()).WillOnce(Return(std::move(local_uptr)));
     overlay_bind_map obm(remote);
 
     InSequence seq;
@@ -108,6 +100,44 @@ TEST_F(OverlayBindMapTest, WhnfFunctorLocalConsultedFirstThenRemote) {
     EXPECT_EQ(obm.whnf(&func), &func);
 }
 
+TEST_F(OverlayBindMapTest, WhnfFunctorWithVarArgIsNotRecursed) {
+    auto local_uptr = std::make_unique<MockBindMap>();
+    auto* local = local_uptr.get();
+    EXPECT_CALL(factory, make()).WillOnce(Return(std::move(local_uptr)));
+    overlay_bind_map obm(remote);
+
+    InSequence seq;
+    EXPECT_CALL(*local, whnf(&func_of_var0)).WillOnce(Return(&func_of_var0));
+    EXPECT_CALL(remote, whnf(&func_of_var0)).WillOnce(Return(&func_of_var0));
+
+    EXPECT_EQ(obm.whnf(&func_of_var0), &func_of_var0);
+}
+
+TEST_F(OverlayBindMapTest, WhnfVar0LocallyBoundToCompositeFunctorRemoteNotCalled) {
+    auto local_uptr = std::make_unique<MockBindMap>();
+    auto* local = local_uptr.get();
+    EXPECT_CALL(factory, make()).WillOnce(Return(std::move(local_uptr)));
+    overlay_bind_map obm(remote);
+
+    EXPECT_CALL(*local, whnf(&var0)).WillOnce(Return(&func_of_var0));
+    EXPECT_CALL(remote, whnf).Times(0);
+
+    EXPECT_EQ(obm.whnf(&var0), &func_of_var0);
+}
+
+TEST_F(OverlayBindMapTest, WhnfVar0RemoteResolvesToCompositeFunctor) {
+    auto local_uptr = std::make_unique<MockBindMap>();
+    auto* local = local_uptr.get();
+    EXPECT_CALL(factory, make()).WillOnce(Return(std::move(local_uptr)));
+    overlay_bind_map obm(remote);
+
+    InSequence seq;
+    EXPECT_CALL(*local, whnf(&var0)).WillOnce(Return(&var0));
+    EXPECT_CALL(remote, whnf(&var0)).WillOnce(Return(&func_of_func));
+
+    EXPECT_EQ(obm.whnf(&var0), &func_of_func);
+}
+
 TEST_F(OverlayBindMapTest, TwoOverlaysHaveIndependentLocalsBindGoesToOwnLocal) {
     auto local1_uptr = std::make_unique<MockBindMap>();
     auto local2_uptr = std::make_unique<MockBindMap>();
@@ -115,8 +145,8 @@ TEST_F(OverlayBindMapTest, TwoOverlaysHaveIndependentLocalsBindGoesToOwnLocal) {
     auto* local2 = local2_uptr.get();
 
     EXPECT_CALL(factory, make())
-        .WillOnce([ptr = std::move(local1_uptr)]() mutable { return std::move(ptr); })
-        .WillOnce([ptr = std::move(local2_uptr)]() mutable { return std::move(ptr); });
+        .WillOnce(Return(std::move(local1_uptr)))
+        .WillOnce(Return(std::move(local2_uptr)));
 
     overlay_bind_map obm(remote);
     overlay_bind_map obm2(remote);
