@@ -11,7 +11,8 @@ multihead_unifier::multihead_unifier() :
     frontier_(locator::locate<i_frontier>()),
     copier_(locator::locate<i_copier>()),
     expr_pool_(locator::locate<i_expr_pool>()),
-    head_unify_failed_producer_(locator::locate<i_event_producer<head_unify_failed_event>>()) {
+    head_unify_failed_producer_(locator::locate<i_event_producer<head_unify_failed_event>>()),
+    multihead_unify_accept_yield_producer_(locator::locate<i_event_producer<multihead_unify_accept_yield_event>>()) {
 }
 
 void multihead_unifier::add_head(const resolution_lineage* lineage) {
@@ -27,17 +28,13 @@ void multihead_unifier::add_head(const resolution_lineage* lineage) {
     auto overlay_bind_map = overlay_bind_map_factory_.make(*local_bind_map, common_);
     // 6. create the unifier
     auto unifier = unifier_factory_.make(*overlay_bind_map);
-    // 7. create rep_changes set
-    std::unordered_set<uint32_t> rep_changes;
-    // 8. unify the parent goal's expr with the copied rule head
-    unifier->unify(parent_goal_expr, copied_head, rep_changes);
-    // 9. add the unifier to the map
+    // 7. add the unifier to the map
     heads_.insert({lineage, unify_head{
         std::move(local_bind_map),
         std::move(overlay_bind_map),
         std::move(unifier)}});
-    // 10. link the new rl to all reps
-    link(rep_changes, {lineage});
+    // 8. unify and link the parent goal's expr with the copied rule head
+    unify_and_link(lineage, parent_goal_expr, copied_head);
 }
 
 void multihead_unifier::remove_head(const resolution_lineage* lineage) {
@@ -47,50 +44,34 @@ void multihead_unifier::remove_head(const resolution_lineage* lineage) {
     unlink(lineage);
 }
 
-void multihead_unifier::accept_head(const resolution_lineage* lineage) {
-    // 1. get the unifier for this lineage
-    auto& head = heads_.at(lineage);
-    // 2. get the rep changes from the unifier
-    auto rep_changes = rl_to_reps_.at(lineage);
-    // 3. for each rep change, add the link to new rep
-    for (auto rep : rep_changes) {
-        // 3.1 get new whnf
-        auto new_rep = head.local_bind_map->whnf(expr_pool_.var(rep));
-        // 3.2 bind the old rep to the new rep
-        common_.bind(rep, new_rep);
-        // 3.3 propagate the rep changes to all concerned heads
-        revalidate(rep, new_rep);
+void multihead_unifier::init_accept_head(const resolution_lineage* lineage) {
+    accept_head_state_machine = accept_head(lineage);
+    // yield to start the state machine
+    multihead_unify_accept_yield_producer_.produce(multihead_unify_accept_yield_event{});
+}
+
+void multihead_unifier::resume_accept_head() {
+    accept_head_state_machine->resume();
+    if (!accept_head_state_machine->done()) {
+        // emit yield event
+        multihead_unify_accept_yield_producer_.produce(multihead_unify_accept_yield_event{});
     }
 }
 
-void multihead_unifier::revalidate(uint32_t rep, const expr* new_rep) {
-    // 1. unlink this rep from all heads
-    auto invalidated_rls = unlink(rep);
-
-    // 2. for each rl, propagate the rep change to all heads
-    for (auto rl : invalidated_rls) {
-        // 2.1 get the head
-        auto& head = heads_.at(rl);
-        // 2.2 construct the rep_changes set
-        std::unordered_set<uint32_t> rep_changes;
-        // 2.3 unify the old rep with new rep
-        bool success = head.unifier->unify(expr_pool_.var(rep), new_rep, rep_changes);
-        // 2.4 if failure, then this candidate is not applicable anymore
-        if (!success) {
-            remove_head(rl);
-            head_unify_failed_producer_.produce(head_unify_failed_event{rl});
-            continue;
-        }
-        // 2.5 if success, then link the lineage to all of the rep changes
-        link(rep_changes, {rl});
+void multihead_unifier::unify_and_link(const resolution_lineage* lineage, const expr* lhs, const expr* rhs) {
+    // 1. get the head for this lineage
+    auto& head = heads_.at(lineage);
+    // 2. create rep_changes set
+    std::unordered_set<uint32_t> rep_changes;
+    // 3. unify the parent goal's expr with the copied rule head
+    bool success = head.unifier->unify(lhs, rhs, rep_changes);
+    // 4. if failure, remove the head
+    if (!success) {
+        remove_head(lineage);
+        head_unify_failed_producer_.produce(head_unify_failed_event{lineage});
     }
-
-    // 3. get new reps for this o.g. rep
-    std::unordered_set<uint32_t> child_reps;
-    extract_child_reps(expr_pool_.var(rep), child_reps);
-
-    // 4. link child reps to all heads
-    link(child_reps, invalidated_rls);
+    // 5. link the new rl to all reps
+    link(rep_changes, {lineage});
 }
 
 void multihead_unifier::link(const std::unordered_set<uint32_t>& reps, const std::unordered_set<const resolution_lineage*>& rls) {
@@ -158,4 +139,44 @@ void multihead_unifier::extract_child_reps(const expr* e, std::unordered_set<uin
     for (auto& arg : f.args) {
         extract_child_reps(arg, child_reps);
     }
+}
+
+state_machine multihead_unifier::accept_head(const resolution_lineage* lineage) {
+    // 1. get the unifier for this lineage
+    auto& head = heads_.at(lineage);
+    // 2. get the rep changes from the unifier
+    auto rep_changes = rl_to_reps_.at(lineage);
+    // 3. for each rep change, add the link to new rep
+    for (auto rep : rep_changes) {
+        // 3.1 get new whnf
+        auto new_rep = head.local_bind_map->whnf(expr_pool_.var(rep));
+        // 3.2 bind the old rep to the new rep
+        common_.bind(rep, new_rep);
+        // 3.3 propagate the rep changes to all concerned heads
+        auto sm0 = revalidate(rep, new_rep);
+        // 3.4 wait for the revalidation to complete
+        while (!sm0.done()) {
+            sm0.resume();
+            co_await std::suspend_always{};
+        }
+    }
+}
+
+state_machine multihead_unifier::revalidate(uint32_t rep, const expr* new_rep) {
+    // 1. unlink this rep from all heads
+    auto invalidated_rls = unlink(rep);
+
+    // 2. for each rl, propagate the rep change to all heads
+    for (auto rl : invalidated_rls) {
+        // 2.1 unify and link the parent goal's expr with the copied rule head
+        unify_and_link(rl, expr_pool_.var(rep), new_rep);
+        co_await std::suspend_always{};
+    }
+
+    // 3. get new reps for this o.g. rep
+    std::unordered_set<uint32_t> child_reps;
+    extract_child_reps(expr_pool_.var(rep), child_reps);
+
+    // 4. link child reps to all heads
+    link(child_reps, invalidated_rls);
 }
