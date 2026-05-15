@@ -7,6 +7,7 @@
 elimination_backlog::elimination_backlog()
     :
     backlogged_elimination_freed_producer(locator::locate<i_event_producer<backlogged_elimination_freed_event>>()),
+    elimination_backlog_free_yielded_producer(locator::locate<i_event_producer<elimination_backlog_free_yielded_event>>()),
     backlog(locator::locate<i_trail>(), {}) {
 }
 
@@ -33,21 +34,40 @@ void elimination_backlog::insert(const resolution_lineage* rl) {
     }
 }
 
-void elimination_backlog::goal_activated(const goal_lineage* gl) {
-    auto it = backlog.get().find(gl);
-    
-    // if the goal is not in the elimination backlog, do nothing
-    if (it == backlog.get().end())
-        return;
+void elimination_backlog::init_free(const goal_lineage* gl) {
+    elimination_backlog_free_state_machine = free(gl);
+    elimination_backlog_free_yielded_producer.produce({});
+}
 
-    // for each index in the backlog, eliminate the candidate
-    for (size_t idx : it->second)
-        backlogged_elimination_freed_producer.produce(backlogged_elimination_freed_event{gl, idx});
+void elimination_backlog::resume_free() {
+    elimination_backlog_free_state_machine->resume();
+    if (!elimination_backlog_free_state_machine->done())
+        elimination_backlog_free_yielded_producer.produce({});
+}
 
-    // remove the goal from the backlog
+void elimination_backlog::discard(const goal_lineage* gl) {
+    // construct the erase mutation
     auto erase_mut = std::make_unique<
         backtrackable_map_erase<
         backlog_type>>(
             gl);
+    // apply the mutation
     backlog.mutate(std::move(erase_mut));
+}
+
+state_machine elimination_backlog::free(const goal_lineage* gl) {
+    auto it = backlog.get().find(gl);
+    
+    // if the goal is not in the elimination backlog, do nothing
+    if (it == backlog.get().end())
+        co_return;
+
+    // for each index in the backlog, eliminate the candidate
+    for (size_t idx : it->second) {
+        backlogged_elimination_freed_producer.produce(backlogged_elimination_freed_event{gl, idx});
+        co_await std::suspend_always{};
+    }
+
+    // remove the goal from the backlog
+    discard(gl);
 }

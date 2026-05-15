@@ -6,6 +6,7 @@ Events sharing a number are emitted together and have the same priority tier.
 
 | #    | Event                                | Constraint                                                        | Extra |
 | ---  | ------------------------------------ | ----------------------------------------------------------------- | ----- |
+| --   | `elimination_backlog_free_yielded_event` | —                                                             |       |
 | --   | `candidate_activating_event`         | —                                                                 |       |
 | --   | `candidate_deactivating_event`       | —                                                                 |       |
 | --   | `candidate_activated_event`          | —                                                                 |       |

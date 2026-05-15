@@ -6,8 +6,9 @@
 struct i_elimination_backlog {
     virtual ~i_elimination_backlog() = default;
     virtual void insert(const resolution_lineage*) = 0;
-    virtual void goal_activated(const goal_lineage*) = 0;
-    virtual void goal_deactivated(const goal_lineage*) = 0;
+    virtual void init_free(const goal_lineage*) = 0;
+    virtual void resume_free() = 0;
+    virtual void discard(const goal_lineage*) = 0;
 };
 
 #endif
