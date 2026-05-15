@@ -29,6 +29,10 @@ struct resolver : i_resolver {
     void resume() override;
 private:
     state_machine resolve(const resolution_lineage*, size_t);
+    state_machine activate_goals(const resolution_lineage*, size_t);
+    state_machine activate_candidates(const goal_lineage*, goal&);
+    state_machine deactivate_goal(const goal_lineage*);
+    state_machine deactivate_candidates(const goal_lineage*, goal&);
 
     i_database& db;
     i_lineage_pool& lp;
