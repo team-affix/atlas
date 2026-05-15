@@ -17,8 +17,7 @@ private:
     const i_frontier& frontier_;
     const i_copier& copier_;
     
-    std::unordered_map<uint32_t, uint32_t>* tm_;
-    const std::vector<const expr*>* chosen_rule_body_;
+    std::vector<const expr*> child_goal_exprs_;
 };
 
 #endif
