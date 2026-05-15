@@ -1,12 +1,12 @@
 #include "../../hpp/infrastructure/unifier.hpp"
 
-unifier::unifier(std::unique_ptr<i_bind_map> bm)
-    : i_unifier(std::move(bm)) {}
+unifier::unifier(i_bind_map& bm)
+    : bind_map(bm) {}
 
 bool unifier::unify(const expr* lhs, const expr* rhs, std::unordered_set<uint32_t>& snk) {
         // WHNF the lhs and rhs
-    lhs = bind_map->whnf(lhs);
-    rhs = bind_map->whnf(rhs);
+    lhs = bind_map.whnf(lhs);
+    rhs = bind_map.whnf(rhs);
 
     // get the lhs and rhs var handles if they are variables
     const expr::var* lv = std::get_if<expr::var>(&lhs->content);
@@ -21,7 +21,7 @@ bool unifier::unify(const expr* lhs, const expr* rhs, std::unordered_set<uint32_
             : std::pair{rv, lhs};
         if (occurs_check(young->index, target))
             return false;
-        bind_map->bind(young->index, target);
+        bind_map.bind(young->index, target);
         snk.insert(young->index);
         return true;
     }
@@ -33,7 +33,7 @@ bool unifier::unify(const expr* lhs, const expr* rhs, std::unordered_set<uint32_
     if (v) {
         if (occurs_check(v->index, other_e))
             return false;
-        bind_map->bind(v->index, other_e);
+        bind_map.bind(v->index, other_e);
         snk.insert(v->index);
         return true;
     }
@@ -50,7 +50,7 @@ bool unifier::unify(const expr* lhs, const expr* rhs, std::unordered_set<uint32_
 }
 
 bool unifier::occurs_check(uint32_t index, const expr* key) {
-    key = bind_map->whnf(key);
+    key = bind_map.whnf(key);
 
     if (const expr::var* var = std::get_if<expr::var>(&key->content))
         return var->index == index;

@@ -4,8 +4,9 @@
 
 multihead_unifier::multihead_unifier() :
     db_(locator::locate<i_database>()),
-    unifier_factory_(locator::locate<i_factory<i_unifier, std::unique_ptr<i_bind_map>>>()),
-    overlay_bind_map_factory_(locator::locate<i_factory<i_overlay_bind_map, i_bind_map&>>()),
+    unifier_factory_(locator::locate<i_factory<i_unifier, i_bind_map&>>()),
+    bind_map_factory_(locator::locate<i_factory<i_bind_map>>()),
+    overlay_bind_map_factory_(locator::locate<i_factory<i_overlay_bind_map, i_bind_map&, i_bind_map&>>()),
     common_(locator::locate<i_bind_map>()),
     frontier_(locator::locate<i_frontier>()),
     copier_(locator::locate<i_copier>()),
@@ -20,17 +21,22 @@ void multihead_unifier::add_head(const resolution_lineage* lineage) {
     const expr* parent_goal_expr = frontier_.at(lineage->parent)->e;
     // 3. get the copied rule head
     auto copied_head = frontier_.at(lineage->parent)->candidates.at(lineage->idx)->copied_head;
-    // 4. create the overlay bind map
-    auto overlay_bind_map = overlay_bind_map_factory_.make(common_);
-    // 5. create the unifier
-    auto unifier = unifier_factory_.make(std::move(overlay_bind_map));
-    // 6. create rep_changes set
+    // 4. create the local bind map
+    auto local_bind_map = bind_map_factory_.make();
+    // 5. create the overlay bind map
+    auto overlay_bind_map = overlay_bind_map_factory_.make(*local_bind_map, common_);
+    // 6. create the unifier
+    auto unifier = unifier_factory_.make(*overlay_bind_map);
+    // 7. create rep_changes set
     std::unordered_set<uint32_t> rep_changes;
-    // 7. unify the parent goal's expr with the copied rule head
+    // 8. unify the parent goal's expr with the copied rule head
     unifier->unify(parent_goal_expr, copied_head, rep_changes);
-    // 8. add the unifier to the map
-    heads_.insert({lineage, std::move(unifier)});
-    // 9. link the new rl to all reps
+    // 9. add the unifier to the map
+    heads_.insert({lineage, unify_head{
+        std::move(local_bind_map),
+        std::move(overlay_bind_map),
+        std::move(unifier)}});
+    // 10. link the new rl to all reps
     link(rep_changes, {lineage});
 }
 
@@ -43,13 +49,13 @@ void multihead_unifier::remove_head(const resolution_lineage* lineage) {
 
 void multihead_unifier::accept_head(const resolution_lineage* lineage) {
     // 1. get the unifier for this lineage
-    auto& unifier = heads_.at(lineage);
+    auto& head = heads_.at(lineage);
     // 2. get the rep changes from the unifier
     auto rep_changes = rl_to_reps_.at(lineage);
     // 3. for each rep change, add the link to new rep
     for (auto rep : rep_changes) {
         // 3.1 get new whnf
-        auto new_rep = unifier->bind_map->whnf(expr_pool_.var(rep));
+        auto new_rep = head.local_bind_map->whnf(expr_pool_.var(rep));
         // 3.2 bind the old rep to the new rep
         common_.bind(rep, new_rep);
         // 3.3 propagate the rep changes to all concerned heads
@@ -68,7 +74,7 @@ void multihead_unifier::revalidate(uint32_t rep, const expr* new_rep) {
         // 2.2 construct the rep_changes set
         std::unordered_set<uint32_t> rep_changes;
         // 2.3 unify the old rep with new rep
-        bool success = head->unify(expr_pool_.var(rep), new_rep, rep_changes);
+        bool success = head.unifier->unify(expr_pool_.var(rep), new_rep, rep_changes);
         // 2.4 if failure, then this candidate is not applicable anymore
         if (!success) {
             remove_head(rl);
