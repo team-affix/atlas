@@ -7,6 +7,8 @@ resolver::resolver(size_t initial_goal_count) :
     frontier(locator::locate<i_frontier>()),
     goal_factory(locator::locate<i_factory<goal, const goal_lineage*>>()),
     candidate_factory(locator::locate<i_factory<candidate, const resolution_lineage*>>()),
+    goal_initializer(locator::locate<i_goal_initializer>()),
+    candidate_initializer(locator::locate<i_candidate_initializer>()),
     resolving_producer(locator::locate<i_event_producer<resolving_event>>()),
     resolved_producer(locator::locate<i_event_producer<resolved_event>>()),
     goal_activating_producer(locator::locate<i_event_producer<goal_activating_event>>()),
@@ -42,13 +44,8 @@ void resolver::resume() {
 }
 
 state_machine resolver::resolve(const resolution_lineage* rl, size_t body_size) {
-    // if the resolution is not nullptr, then
-    // signal expansion with this candidate
-    if (rl) {
-        const goal_lineage* parent_gl = rl->parent;
-        auto& parent_goal = frontier.at(parent_gl);
-        parent_goal->choose(rl->idx);
-    }
+    // set up the goal initializer
+    goal_initializer.seed_expansion(rl);
     
     // emit resolving event
     resolving_producer.produce({rl});
@@ -60,17 +57,23 @@ state_machine resolver::resolve(const resolution_lineage* rl, size_t body_size) 
         const goal_lineage* gl = lp.goal(rl, i);
 
         // make the goal
-        auto g = goal_factory.make(gl);
+        auto g = goal_factory.make();
 
         // get the raw
         auto raw_g = g.get();
 
         // insert the goal into the frontier
         frontier.insert(gl, std::move(g));
+
+        // initialize the goal
+        goal_initializer.initialize(gl);
         
         // emit goal activating event
         goal_activating_producer.produce({gl});
         co_await std::suspend_always{};
+
+        // set up the candidate initializer
+        candidate_initializer.seed_expansion(gl);
 
         // activate candidates
         for (size_t j = 0; j < db.size(); ++j) {
@@ -78,10 +81,13 @@ state_machine resolver::resolve(const resolution_lineage* rl, size_t body_size) 
             const resolution_lineage* candidate_rl = lp.resolution(gl, j);
 
             // make the candidate
-            auto c = candidate_factory.make(candidate_rl);
+            auto c = candidate_factory.make();
 
             // insert the candidate into the frontier
             g->candidates.insert({j, std::move(c)});
+
+            // initialize the candidate
+            candidate_initializer.initialize(candidate_rl);
             
             // emit candidate activating event
             candidate_activating_producer.produce({candidate_rl});

@@ -9,6 +9,8 @@
 #include "../interfaces/i_event_producer.hpp"
 #include "../interfaces/i_frontier.hpp"
 #include "../interfaces/i_factory.hpp"
+#include "../interfaces/i_goal_initializer.hpp"
+#include "../interfaces/i_candidate_initializer.hpp"
 #include "../events/resolving_event.hpp"
 #include "../events/resolved_event.hpp"
 #include "../events/goal_activating_event.hpp"
@@ -31,8 +33,10 @@ private:
     i_database& db;
     i_lineage_pool& lp;
     i_frontier& frontier;
-    i_factory<goal, const goal_lineage*>& goal_factory;
-    i_factory<candidate, const resolution_lineage*>& candidate_factory;
+    i_factory<goal>& goal_factory;
+    i_factory<candidate>& candidate_factory;
+    i_goal_initializer& goal_initializer;
+    i_candidate_initializer& candidate_initializer;
     i_event_producer<resolving_event>& resolving_producer;
     i_event_producer<resolved_event>& resolved_producer;
     i_event_producer<goal_activating_event>& goal_activating_producer;
