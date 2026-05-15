@@ -6,6 +6,7 @@ Events sharing a number are emitted together and have the same priority tier.
 
 | #    | Event                                | Constraint                                                        | Extra |
 | ---  | ------------------------------------ | ----------------------------------------------------------------- | ----- |
+| --   | `cdcl_constrain_yielded_event`           | —                                                             |       |
 | --   | `goal_candidates_activate_yielded_event` | —                                                             |       |
 | --   | `goal_candidates_deactivate_yielded_event` | —                                                           |       |
 | --   | `candidate_activating_event`         | —                                                                 |       |

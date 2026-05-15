@@ -8,7 +8,8 @@ struct i_cdcl {
     using avoidance_type = std::unordered_set<const resolution_lineage*>;
     virtual ~i_cdcl() = default;
     virtual void learn(const lemma&) = 0;
-    virtual void constrain(const resolution_lineage*) = 0;
+    virtual void init_constrain(const resolution_lineage*) = 0;
+    virtual void resume_constrain() = 0;
     virtual const avoidance_type& get_avoidance(size_t) = 0;
 };
 

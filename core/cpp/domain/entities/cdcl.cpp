@@ -7,6 +7,7 @@
 #include "../../../hpp/utility/backtrackable_map_at_erase.hpp"
 
 cdcl::cdcl() :
+    cdcl_constrain_yielded_producer(locator::locate<i_event_producer<cdcl_constrain_yielded_event>>()),
     avoidance_unit_producer(locator::locate<i_event_producer<avoidance_unit_event>>()),
     avoidance_empty_producer(locator::locate<i_event_producer<avoidance_empty_event>>()),
     next_avoidance_id(locator::locate<i_cdcl_sequencer>()),
@@ -37,41 +38,16 @@ void cdcl::learn(const lemma& l) {
     updated(id);
 }
 
-void cdcl::constrain(const resolution_lineage* rl) {
-    // 1. get the parent goal
-    const goal_lineage* gl = rl->parent;
-    
-    // 2. get the set of avoidances that concern this resolution
-    const std::unordered_set<size_t>& ids = watched_goals.get().at(gl);
+void cdcl::init_constrain(const resolution_lineage* rl) {
+    constrain_state_machine = constrain(rl);
+    // emit yielded event
+    cdcl_constrain_yielded_producer.produce({});
+}
 
-    // 3. for each avoidance, if the avoidance contains the resolution,
-    //    reduce the avoidance. Else, remove the avoidance from the store.
-    for (size_t id : ids) {
-
-        // 4. get the avoidance
-        const avoidance_type& av = avoidances.get().at(id);
-
-        // 5. if the avoidance contains the resolution, then it is consistent
-        if (av.contains(rl)) {
-            auto erase_mut = std::make_unique<
-                backtrackable_map_at_erase<
-                avoidances_type>>(
-                    id, rl);
-            avoidances.mutate(std::move(erase_mut));
-            updated(id);
-            return;
-        }
-
-        // 6. if the avoidance does not contain the resolution, then it is conflicting
-        erase(id);
-    }
-
-    // 7. Remove the parent goal from the watched goals
-    auto erase_mut = std::make_unique<
-        backtrackable_map_erase<
-        watched_goals_type>>(
-            gl);
-    watched_goals.mutate(std::move(erase_mut));
+void cdcl::resume_constrain() {
+    constrain_state_machine->resume();
+    if (!constrain_state_machine->done())
+        cdcl_constrain_yielded_producer.produce({});
 }
 
 const cdcl::avoidance_type& cdcl::get_avoidance(size_t id) {
@@ -132,4 +108,43 @@ void cdcl::erase(size_t id) {
         avoidances_type>>(
             id);
     avoidances.mutate(std::move(erase_mut));
+}
+
+state_machine cdcl::constrain(const resolution_lineage* rl) {
+    // 1. get the parent goal
+    const goal_lineage* gl = rl->parent;
+    
+    // 2. get the set of avoidances that concern this resolution
+    const std::unordered_set<size_t>& ids = watched_goals.get().at(gl);
+
+    // 3. for each avoidance, if the avoidance contains the resolution,
+    //    reduce the avoidance. Else, remove the avoidance from the store.
+    for (size_t id : ids) {
+
+        // 4. get the avoidance
+        const avoidance_type& av = avoidances.get().at(id);
+
+        // 5. if the avoidance contains the resolution, then it is consistent
+        if (av.contains(rl)) {
+            auto erase_mut = std::make_unique<
+                backtrackable_map_at_erase<
+                avoidances_type>>(
+                    id, rl);
+            avoidances.mutate(std::move(erase_mut));
+            updated(id);
+            co_await std::suspend_always{};
+            continue;
+        }
+
+        // 6. if the avoidance does not contain the resolution, then it is conflicting
+        erase(id);
+        co_await std::suspend_always{};
+    }
+
+    // 7. Remove the parent goal from the watched goals
+    auto erase_mut = std::make_unique<
+        backtrackable_map_erase<
+        watched_goals_type>>(
+            gl);
+    watched_goals.mutate(std::move(erase_mut));
 }
