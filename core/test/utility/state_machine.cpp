@@ -1,6 +1,5 @@
 #include <gtest/gtest.h>
 #include "../../../core/hpp/utility/state_machine.hpp"
-#include <stdexcept>
 
 namespace {
 
@@ -9,10 +8,10 @@ state_machine<void> make_void_stepper() {
     co_return;
 }
 
-state_machine<int> make_int_generator() {
+state_machine<int> make_int_two_yields() {
     co_yield 1;
     co_yield 2;
-    co_return;
+    co_await std::suspend_always{};
 }
 
 } // namespace
@@ -26,8 +25,8 @@ TEST(StateMachineVoid, SuspendThenCompletes) {
     EXPECT_TRUE(sm.done());
 }
 
-TEST(StateMachineInt, ResumeReturnsYieldsInOrder) {
-    auto sm = make_int_generator();
+TEST(StateMachineInt, ResumeReturnsEachCoYield) {
+    auto sm = make_int_two_yields();
     EXPECT_FALSE(sm.done());
 
     EXPECT_EQ(sm.resume(), 1);
@@ -35,16 +34,4 @@ TEST(StateMachineInt, ResumeReturnsYieldsInOrder) {
 
     EXPECT_EQ(sm.resume(), 2);
     EXPECT_FALSE(sm.done());
-
-    EXPECT_THROW({ (void)sm.resume(); }, std::logic_error);
-    EXPECT_TRUE(sm.done());
-}
-
-TEST(StateMachineInt, ResumeWhenDoneThrows) {
-    auto sm = make_int_generator();
-    (void)sm.resume();
-    (void)sm.resume();
-    EXPECT_THROW({ (void)sm.resume(); }, std::logic_error);
-    EXPECT_TRUE(sm.done());
-    EXPECT_THROW({ (void)sm.resume(); }, std::logic_error);
 }

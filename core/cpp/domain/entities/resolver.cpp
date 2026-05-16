@@ -5,8 +5,9 @@ resolver::resolver(size_t initial_goal_count) :
     db(locator::locate<i_database>()),
     lp(locator::locate<i_lineage_pool>()),
     frontier(locator::locate<i_frontier>()),
-    c(locator::locate<i_cdcl>()),
-    mhu(locator::locate<i_multihead_unifier>()),
+    eg(locator::locate<i_elimination_generator>()),
+    eb(locator::locate<i_elimination_backlog>()),
+    igs(locator::locate<i_inactive_goal_store>()),
     goal_factory(locator::locate<i_factory<goal>>()),
     candidate_factory(locator::locate<i_factory<candidate>>()),
     goal_initializer(locator::locate<i_goal_initializer>()),
@@ -53,12 +54,19 @@ state_machine<void> resolver::resolve(const resolution_lineage* rl, size_t body_
     resolving_producer.produce({rl});
     co_await std::suspend_always{};
 
-    // activate goals
-    auto sm0 = activate_goals(rl, body_size);
-
-    // wait for the goals to be activated
+    // process constrained eliminations
+    auto sm0 = process_constrained_eliminations(rl);
     while (!sm0.done()) {
         sm0.resume();
+        co_await std::suspend_always{};
+    }
+
+    // activate goals
+    auto sm1 = activate_goals(rl, body_size);
+
+    // wait for the goals to be activated
+    while (!sm1.done()) {
+        sm1.resume();
         co_await std::suspend_always{};
     }
 
@@ -69,16 +77,61 @@ state_machine<void> resolver::resolve(const resolution_lineage* rl, size_t body_
     }
 
     // deactivate parent goal
-    auto sm1 = deactivate_goal(rl->parent);
+    auto sm2 = deactivate_goal(rl->parent);
 
     // wait for the parent goal to be deactivated
-    while (!sm1.done()) {
-        sm1.resume();
+    while (!sm2.done()) {
+        sm2.resume();
         co_await std::suspend_always{};
     }
 
     // emit resolved event
     resolved_producer.produce({rl});
+}
+
+state_machine<void> resolver::process_constrained_eliminations(const resolution_lineage* rl) {
+    // constrain the resolution
+    auto new_eliminations = eg.constrain(rl);
+    
+    // route the eliminations properly
+    while (!new_eliminations.done()) {
+        // get the next elimination
+        auto elimination = new_eliminations.resume();
+        
+        if (!elimination.has_value())
+            continue;
+
+        // get the eliminated resolution lineage
+        const resolution_lineage* eliminated_rl = elimination.value();
+
+        // get parent goal lineage
+        const goal_lineage* parent_gl = eliminated_rl->parent;
+
+        // if the parent goal is deactivated, just skip
+        if (igs.contains(parent_gl))
+            continue;
+
+        // if frontier does not contain parent, add to backlog
+        if (!frontier.contains(parent_gl)) {
+            eb.push(eliminated_rl);
+            continue;
+        }
+
+        // get the parent goal
+        auto& parent_goal = frontier.at(parent_gl);
+        
+        // otherwise, active eliminate
+        parent_goal->candidates.erase(eliminated_rl->idx);
+
+        // if the parent goal has no candidates, emit goal candidates empty event
+        if (parent_goal->candidates.empty()) {
+            goal_candidates_empty_producer.produce({parent_gl});
+            co_await std::suspend_always{};
+        }
+        
+        // always suspend between eliminations
+        co_await std::suspend_always{};
+    }
 }
 
 state_machine<void> resolver::activate_goals(const resolution_lineage* rl, size_t body_size) {
@@ -128,7 +181,7 @@ state_machine<void> resolver::activate_candidates(const goal_lineage* gl, goal& 
         const resolution_lineage* candidate_rl = lp.resolution(gl, j);
 
         // check if the candidate is eliminated by cdcl
-        if (c.contains({candidate_rl}))
+        if (eb.contains(candidate_rl))
             continue;
 
         // make the candidate
@@ -146,6 +199,12 @@ state_machine<void> resolver::activate_candidates(const goal_lineage* gl, goal& 
 
         // emit candidate activated event
         candidate_activated_producer.produce({candidate_rl});
+        co_await std::suspend_always{};
+    }
+
+    // if the goal has no candidates, emit goal candidates empty event
+    if (g.candidates.empty()) {
+        goal_candidates_empty_producer.produce({gl});
         co_await std::suspend_always{};
     }
 }

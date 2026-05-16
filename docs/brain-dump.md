@@ -63,3 +63,12 @@ Oh in fact, a further improvement, what if resolver IS the thing that stores ALL
 Actually, I don't think we can have that since initial eliminations that come about during `cdcl.learn()` would have to exist in the resolver, meaning the resolver would need to be backtrackable using trail, which is ugly. Instead, let's have an actual `avoidance_store` object which says the things to avoid doing going forward, and it is backtrackable. Maybe, let it be a repository.
 
 Another thing: if we really wish to make `cdcl` and `multihead_unifier` not emit events (infrastructure), then they must return the eliminations thru the return value on `constrain(rl)`. And since `constrain` will be a coroutine, it means we will need to create a generator coroutine to handle it. This means we will effectively stream out eliminations one at a time, yielding. This is exactly the behavior we want, since we want to provide time for early conflicts to be detected before we eagerly eliminate all candidates that can be.
+
+---
+
+May 16 exactly midnight
+
+I am considering ditching domain-driven design for Atlas. It has caused me many more problems than it has solved with the explosion of control flow everywhere (even though a solver has a fairly describably control flow), the infrastructure involved in scheduling / managing event busses / cancellation / priorities / etc. is just too much to handle for a solver like this.
+
+My feeling when discovering that 
+

@@ -4,7 +4,6 @@
 #include <coroutine>
 #include <exception>
 #include <optional>
-#include <stdexcept>
 #include <utility>
 
 template<typename T>
@@ -17,11 +16,7 @@ struct state_machine {
         std::suspend_always final_suspend() noexcept { return {}; }
         void return_void() { last_yield_.reset(); }
         void unhandled_exception() { std::terminate(); }
-        std::suspend_always yield_value(const T& v) {
-            last_yield_ = v;
-            return {};
-        }
-        std::suspend_always yield_value(T&& v) {
+        std::suspend_always yield_value(T v) {
             last_yield_ = std::move(v);
             return {};
         }
@@ -52,9 +47,9 @@ struct state_machine {
         return *this;
     }
 
-    T resume() {
+    std::optional<T> resume() {
         handle_.resume();
-        return std::move(*handle_.promise().last_yield_);
+        return std::move(handle_.promise().last_yield_);
     }
 
     bool done() const { return handle_.done(); }

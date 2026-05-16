@@ -8,8 +8,9 @@
 #include "../interfaces/i_database.hpp"
 #include "../interfaces/i_event_producer.hpp"
 #include "../interfaces/i_frontier.hpp"
-#include "../interfaces/i_cdcl.hpp"
-#include "../interfaces/i_multihead_unifier.hpp"
+#include "../interfaces/i_elimination_generator.hpp"
+#include "../interfaces/i_elimination_backlog.hpp"
+#include "../interfaces/i_inactive_goal_store.hpp"
 #include "../interfaces/i_factory.hpp"
 #include "../interfaces/i_goal_initializer.hpp"
 #include "../interfaces/i_candidate_initializer.hpp"
@@ -24,6 +25,7 @@
 #include "../events/candidate_activated_event.hpp"
 #include "../events/candidate_deactivating_event.hpp"
 #include "../events/candidate_deactivated_event.hpp"
+#include "../events/goal_candidates_empty_event.hpp"
 
 struct resolver : i_resolver {
     explicit resolver(size_t initial_goal_count);
@@ -31,6 +33,7 @@ struct resolver : i_resolver {
     void resume() override;
 private:
     state_machine<void> resolve(const resolution_lineage*, size_t);
+    state_machine<void> process_constrained_eliminations(const resolution_lineage*);
     state_machine<void> activate_goals(const resolution_lineage*, size_t);
     state_machine<void> activate_candidates(const goal_lineage*, goal&);
     state_machine<void> deactivate_goal(const goal_lineage*);
@@ -39,8 +42,9 @@ private:
     i_database& db;
     i_lineage_pool& lp;
     i_frontier& frontier;
-    i_cdcl& c;
-    i_multihead_unifier& mhu;
+    i_elimination_generator& eg;
+    i_elimination_backlog& eb;
+    i_inactive_goal_store& igs;
     i_factory<goal>& goal_factory;
     i_factory<candidate>& candidate_factory;
     i_goal_initializer& goal_initializer;
@@ -56,7 +60,8 @@ private:
     i_event_producer<candidate_activated_event>& candidate_activated_producer;
     i_event_producer<candidate_deactivating_event>& candidate_deactivating_producer;
     i_event_producer<candidate_deactivated_event>& candidate_deactivated_producer;
-
+    i_event_producer<goal_candidates_empty_event>& goal_candidates_empty_producer;
+    
     size_t initial_goal_count;
     
     // const resolution_lineage* parent_rl;
