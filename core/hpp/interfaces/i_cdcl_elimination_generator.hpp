@@ -8,7 +8,7 @@
 
 struct i_cdcl_elimination_generator : i_elimination_generator {
     virtual ~i_cdcl_elimination_generator() = default;
-    virtual state_machine<const resolution_lineage*> learn(const lemma&) = 0;
+    virtual const resolution_lineage* learn(const lemma&) = 0;
 };
 
 #endif
