@@ -8,8 +8,6 @@
 
 cdcl::cdcl() :
     cdcl_constrain_yielded_producer(locator::locate<i_event_producer<cdcl_constrain_yielded_event>>()),
-    avoidance_unit_producer(locator::locate<i_event_producer<avoidance_unit_event>>()),
-    avoidance_empty_producer(locator::locate<i_event_producer<avoidance_empty_event>>()),
     next_avoidance_id(locator::locate<i_cdcl_sequencer>()),
     avoidances(locator::locate<i_trail>(), {}),
     watched_goals(locator::locate<i_trail>(), {}) {
@@ -50,8 +48,8 @@ void cdcl::resume_constrain() {
         cdcl_constrain_yielded_producer.produce({});
 }
 
-const cdcl::avoidance_type& cdcl::get_avoidance(size_t id) {
-    return avoidances.get().at(id);
+bool cdcl::contains(const avoidance_type& av) {
+    return avoidances.get().contains(av);
 }
 
 void cdcl::updated(size_t id) {
