@@ -69,6 +69,7 @@ void multihead_unifier::unify_and_link(const resolution_lineage* lineage, const 
     if (!success) {
         remove_head(lineage);
         head_unify_failed_producer_.produce(head_unify_failed_event{lineage});
+        return;
     }
     // 5. link the new rl to all reps
     link(rep_changes, {lineage});
@@ -88,6 +89,8 @@ void multihead_unifier::link(const std::unordered_set<uint32_t>& reps, const std
 std::unordered_set<const resolution_lineage*> multihead_unifier::unlink(uint32_t rep) {
     // 1. extract the entry, removing it from the map
     auto node = rep_to_rls_.extract(rep);
+    if (node.empty())
+        return {};
 
     // 2. get the rls
     auto& rls = node.mapped();
@@ -108,6 +111,8 @@ std::unordered_set<const resolution_lineage*> multihead_unifier::unlink(uint32_t
 std::unordered_set<uint32_t> multihead_unifier::unlink(const resolution_lineage* rl) {
     // 1. extract the entry, removing it from the map
     auto node = rl_to_reps_.extract(rl);
+    if (node.empty())
+        return {};
 
     // 2. get the reps
     auto& reps = node.mapped();
@@ -145,7 +150,7 @@ state_machine multihead_unifier::accept_head(const resolution_lineage* lineage) 
     // 1. get the unifier for this lineage
     auto& head = heads_.at(lineage);
     // 2. get the rep changes from the unifier
-    auto rep_changes = rl_to_reps_.at(lineage);
+    auto rep_changes = unlink(lineage);
     // 3. for each rep change, add the link to new rep
     for (auto rep : rep_changes) {
         // 3.1 get new whnf
@@ -160,6 +165,8 @@ state_machine multihead_unifier::accept_head(const resolution_lineage* lineage) 
             co_await std::suspend_always{};
         }
     }
+    // 4. remove the head from the map
+    heads_.erase(lineage);
 }
 
 state_machine multihead_unifier::revalidate(uint32_t rep, const expr* new_rep) {
