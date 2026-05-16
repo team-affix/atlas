@@ -89,51 +89,6 @@ state_machine<void> resolver::resolve(const resolution_lineage* rl, size_t body_
     resolved_producer.produce({rl});
 }
 
-state_machine<void> resolver::process_constrained_eliminations(const resolution_lineage* rl) {
-    // constrain the resolution
-    auto new_eliminations = eg.constrain(rl);
-    
-    // route the eliminations properly
-    while (!new_eliminations.done()) {
-        // get the next elimination
-        auto elimination = new_eliminations.resume();
-        
-        if (!elimination.has_value())
-            continue;
-
-        // get the eliminated resolution lineage
-        const resolution_lineage* eliminated_rl = elimination.value();
-
-        // get parent goal lineage
-        const goal_lineage* parent_gl = eliminated_rl->parent;
-
-        // if the parent goal is deactivated, just skip
-        if (igs.contains(parent_gl))
-            continue;
-
-        // if frontier does not contain parent, add to backlog
-        if (!frontier.contains(parent_gl)) {
-            eb.push(eliminated_rl);
-            continue;
-        }
-
-        // get the parent goal
-        auto& parent_goal = frontier.at(parent_gl);
-        
-        // otherwise, active eliminate
-        parent_goal->candidates.erase(eliminated_rl->idx);
-
-        // if the parent goal has no candidates, emit goal candidates empty event
-        if (parent_goal->candidates.empty()) {
-            goal_candidates_empty_producer.produce({parent_gl});
-            co_await std::suspend_always{};
-        }
-        
-        // always suspend between eliminations
-        co_await std::suspend_always{};
-    }
-}
-
 state_machine<void> resolver::activate_goals(const resolution_lineage* rl, size_t body_size) {
     // activate goals
     for (size_t i = 0; i < body_size; ++i) {
