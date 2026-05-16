@@ -10,4 +10,10 @@ Furthermore, we can promote the responsibility of elimination_backlog to be ALWA
 
 In fact, if the elimination backlog can be treated entirely like a preventative solution, (elimination backlog never has to free eliminations or actively eliminate active candidates), then I see effectively no reason for elimination_backlog to exist in the first place. Instead, just give this responsibility to cdcl. After all, it is the thing producing unit avoidances.
 
-And maybe that is the key, the word "Avoidance" has been telling us all along. Avoid making the candidates, it's not for eliminating them.
+And maybe that is the key, the word "Avoidance" has been telling us all along. Avoid making the candidates, it's not for eliminating them. In this case, the new flow is just `resolving_event{rl}` -> `cdcl.constrain(rl)` -> "cdcl tags the avoidance as unit" -> "resolver starts to make some goal candidates" -> `cdcl.unit(candidate_rl)` -> "if unit, skip candidate since we know it IS eliminated"
+
+Or how about this, even better: `resolving_event{rl}` -> `cdcl.constrain(rl)` -> "resolver starts to make some goal candidates" -> `cdcl.contains({candidate_rl})` -> "if contains an avoidance with just this RL, skip candidate since we know it IS eliminated".   This way, CDCL doesn't even have to keep track of the concept of a "unit avoidance". It is only known by resolver.
+
+This then begs the question of why CDCL should know of the concept of an "empty avoidance" or care about it. Maybe, it shouldn't. Avoidances should never become empty during the sim loop. This is because when unit avoidances exist, we avoid adding the candidate which belonged to that avoidance as an option to choose. Choosing that option would have been required to constrain cdcl onto that last candidate for the avoidance to become empty.
+
+We do however need to pay attention to when the cdcl has directly LEARNED an empty avoidance, and to consider the solution space refuted at that point. This however can happen at the solver level.
