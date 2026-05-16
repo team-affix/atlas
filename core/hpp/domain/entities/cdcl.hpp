@@ -18,7 +18,6 @@ struct cdcl : i_cdcl {
     void resume_constrain() override;
     bool contains(const avoidance_type&) override;
 private:
-    void updated(size_t);
     void link(const goal_lineage*, size_t);
     void erase(size_t);
     state_machine constrain(const resolution_lineage*);
@@ -26,13 +25,13 @@ private:
     i_event_producer<cdcl_constrain_yielded_event>& cdcl_constrain_yielded_producer;
     i_cdcl_sequencer& next_avoidance_id;
 
-    using avoidances_type = std::unordered_map<size_t, avoidance_type>;
+    using avoidances_map_type = std::unordered_map<size_t, avoidance_type>;
     
     using watched_goals_type = std::unordered_map<const goal_lineage*, std::unordered_set<size_t>>;
     
     std::optional<state_machine> constrain_state_machine;
     
-    tracked<avoidances_type> avoidances;
+    tracked<avoidances_map_type> avoidances_map;
     tracked<watched_goals_type> watched_goals;
 };
 

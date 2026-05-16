@@ -9,13 +9,16 @@
 cdcl::cdcl() :
     cdcl_constrain_yielded_producer(locator::locate<i_event_producer<cdcl_constrain_yielded_event>>()),
     next_avoidance_id(locator::locate<i_cdcl_sequencer>()),
-    avoidances(locator::locate<i_trail>(), {}),
+    avoidances_map(locator::locate<i_trail>(), {}),
     watched_goals(locator::locate<i_trail>(), {}) {
 }
 
 void cdcl::learn(const lemma& l) {
+    // 1. get the resolutions
+    const auto& resolutions = l.get_resolutions();
+    
     // 1. copy the already-trimmed resolutions into a local avoidance
-    avoidance_type av{l.get_resolutions()};
+    avoidance_type av{resolutions.begin(), resolutions.end()};
 
     // 2. get a new id for the avoidance
     size_t id = next_avoidance_id.next();
@@ -23,17 +26,14 @@ void cdcl::learn(const lemma& l) {
     // 3. add the avoidance to the store
     auto insert_mut = std::make_unique<
         backtrackable_map_insert<
-        avoidances_type>>(
+        avoidances_map_type>>(
             id, av);
-    avoidances.mutate(std::move(insert_mut));
+    avoidances_map.mutate(std::move(insert_mut));
 
     // 4. get all the goals that are watching this avoidance
     //    and link the avoidance to the goals
     for (const resolution_lineage* rl : av)
         link(rl->parent, id);
-
-    // 5. signal that the avoidance is new
-    updated(id);
 }
 
 void cdcl::init_constrain(const resolution_lineage* rl) {
@@ -49,21 +49,7 @@ void cdcl::resume_constrain() {
 }
 
 bool cdcl::contains(const avoidance_type& av) {
-    return avoidances.get().contains(av);
-}
-
-void cdcl::updated(size_t id) {
-    // 1. get the avoidance
-    const avoidance_type& av = avoidances.get().at(id);
-
-    // 2. if the avoidance is empty, add it to the empty avoidances
-    if (av.empty()) {
-        avoidance_empty_producer.produce(avoidance_empty_event{id});
-    }
-    // 3. if the avoidance is singleton, add it to the unit avoidances
-    else if (av.size() == 1) {
-        avoidance_unit_producer.produce(avoidance_unit_event{id});
-    }
+    // return avoidances_map.get().contains(av);
 }
 
 void cdcl::link(const goal_lineage* gl, size_t id) {
@@ -88,7 +74,7 @@ void cdcl::link(const goal_lineage* gl, size_t id) {
 
 void cdcl::erase(size_t id) {
     // 1. get the avoidance
-    const avoidance_type& av = avoidances.get().at(id);
+    const avoidance_type& av = avoidances_map.get().at(id);
 
     // 2. for each goal that is watching this avoidance,
     //    unlink the avoidance from the goal
@@ -103,9 +89,9 @@ void cdcl::erase(size_t id) {
     // 3. remove the avoidance from the store
     auto erase_mut = std::make_unique<
         backtrackable_map_erase<
-        avoidances_type>>(
+        avoidances_map_type>>(
             id);
-    avoidances.mutate(std::move(erase_mut));
+    avoidances_map.mutate(std::move(erase_mut));
 }
 
 state_machine cdcl::constrain(const resolution_lineage* rl) {
@@ -120,16 +106,15 @@ state_machine cdcl::constrain(const resolution_lineage* rl) {
     for (size_t id : ids) {
 
         // 4. get the avoidance
-        const avoidance_type& av = avoidances.get().at(id);
+        const avoidance_type& av = avoidances_map.get().at(id);
 
         // 5. if the avoidance contains the resolution, then it is consistent
         if (av.contains(rl)) {
             auto erase_mut = std::make_unique<
                 backtrackable_map_at_erase<
-                avoidances_type>>(
+                avoidances_map_type>>(
                     id, rl);
-            avoidances.mutate(std::move(erase_mut));
-            updated(id);
+            avoidances_map.mutate(std::move(erase_mut));
             co_await std::suspend_always{};
             continue;
         }
