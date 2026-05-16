@@ -2,7 +2,7 @@
 #define I_ELIMINATION_GENERATOR_HPP
 
 #include "../value_objects/lineage.hpp"
-#include "../../utility/state_machine.hpp"
+#include "../utility/state_machine.hpp"
 
 class i_elimination_generator {
 public:

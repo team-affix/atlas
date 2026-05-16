@@ -4,7 +4,7 @@
 #include <optional>
 #include <unordered_map>
 #include <unordered_set>
-#include "../interfaces/i_multihead_unifier.hpp"
+#include "../interfaces/i_mhu_elimination_generator.hpp"
 #include "../interfaces/i_database.hpp"
 #include "../interfaces/i_frontier.hpp"
 #include "../interfaces/i_unifier.hpp"
@@ -13,18 +13,15 @@
 #include "../interfaces/i_overlay_bind_map.hpp"
 #include "../interfaces/i_copier.hpp"
 #include "../interfaces/i_expr_pool.hpp"
-#include "../events/multihead_unify_accept_yielded_event.hpp"
-#include "../interfaces/i_event_producer.hpp"
 #include "../value_objects/unify_head.hpp"
-#include "../../utility/state_machine.hpp"
+#include "../utility/state_machine.hpp"
 
-struct multihead_unifier : i_multihead_unifier {
-    virtual ~multihead_unifier() = default;
-    multihead_unifier();
-    void add_head(const resolution_lineage*) override;
+struct mhu_elimination_generator : i_mhu_elimination_generator {
+    virtual ~mhu_elimination_generator() = default;
+    mhu_elimination_generator();
+    bool add_head(const resolution_lineage*) override;
     void remove_head(const resolution_lineage*) override;
-    void init_accept_head(const resolution_lineage*) override;
-    void resume_accept_head() override;
+    state_machine<const resolution_lineage*> constrain(const resolution_lineage*) override;
 private:
     void unify_and_link(const resolution_lineage*, const expr*, const expr*);
     void link(const std::unordered_set<uint32_t>&, const std::unordered_set<const resolution_lineage*>&);
@@ -42,7 +39,6 @@ private:
     i_bind_map& common_;
     i_copier& copier_;
     i_expr_pool& expr_pool_;
-    i_event_producer<multihead_unify_accept_yielded_event>& multihead_unify_accept_yielded_producer_;
     std::optional<state_machine<void>> accept_head_state_machine;
     
     std::unordered_map<const resolution_lineage*, unify_head> heads_;
