@@ -5,6 +5,8 @@ resolver::resolver(size_t initial_goal_count) :
     db(locator::locate<i_database>()),
     lp(locator::locate<i_lineage_pool>()),
     frontier(locator::locate<i_frontier>()),
+    c(locator::locate<i_cdcl>()),
+    mhu(locator::locate<i_multihead_unifier>()),
     goal_factory(locator::locate<i_factory<goal>>()),
     candidate_factory(locator::locate<i_factory<candidate>>()),
     goal_initializer(locator::locate<i_goal_initializer>()),
@@ -124,6 +126,10 @@ state_machine resolver::activate_candidates(const goal_lineage* gl, goal& g) {
     for (size_t j = 0; j < db.size(); ++j) {
         // get the candidate lineage
         const resolution_lineage* candidate_rl = lp.resolution(gl, j);
+
+        // check if the candidate is eliminated by cdcl
+        if (c.contains({candidate_rl}))
+            continue;
 
         // make the candidate
         auto c = candidate_factory.make();

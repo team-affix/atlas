@@ -1,6 +1,7 @@
 #include <memory>
 #include "../../../hpp/domain/entities/cdcl.hpp"
 #include "../../../hpp/bootstrap/locator.hpp"
+#include "../../../hpp/utility/backtrackable_set_insert.hpp"
 #include "../../../hpp/utility/backtrackable_map_insert.hpp"
 #include "../../../hpp/utility/backtrackable_map_erase.hpp"
 #include "../../../hpp/utility/backtrackable_map_at_insert.hpp"
@@ -8,8 +9,8 @@
 
 cdcl::cdcl() :
     cdcl_constrain_yielded_producer(locator::locate<i_event_producer<cdcl_constrain_yielded_event>>()),
-    next_avoidance_id(locator::locate<i_cdcl_sequencer>()),
-    avoidances_map(locator::locate<i_trail>(), {}),
+    avoidances(locator::locate<i_trail>(), {}),
+    contraction_map(locator::locate<i_trail>(), {}),
     watched_goals(locator::locate<i_trail>(), {}) {
 }
 
@@ -17,18 +18,23 @@ void cdcl::learn(const lemma& l) {
     // 1. get the resolutions
     const auto& resolutions = l.get_resolutions();
     
-    // 1. copy the already-trimmed resolutions into a local avoidance
+    // 2. copy the already-trimmed resolutions into a local avoidance
     avoidance_type av{resolutions.begin(), resolutions.end()};
 
-    // 2. get a new id for the avoidance
-    size_t id = next_avoidance_id.next();
-
-    // 3. add the avoidance to the store
+    // 3. check if the avoidance is already in the store
+    if (avoidances.get().contains(av)) {
+        return;
+    }
+    
+    // 4. add the avoidance to the store
     auto insert_mut = std::make_unique<
-        backtrackable_map_insert<
-        avoidances_map_type>>(
-            id, av);
-    avoidances_map.mutate(std::move(insert_mut));
+        backtrackable_set_insert<
+        avoidances_type>>(
+            av);
+    avoidances.mutate(std::move(insert_mut));
+
+    // 5. get the pointer to the avoidance
+    const avoidance_type* av_ptr = &*avoidances.get().find(av);
 
     // 4. get all the goals that are watching this avoidance
     //    and link the avoidance to the goals

@@ -20,6 +20,10 @@ void frontier::erase(const goal_lineage* gl) {
     goals_.erase(gl);
 }
 
+void frontier::eliminate(const resolution_lineage* rl) {
+    goals_.at(rl->parent)->candidates.erase(rl->idx);
+}
+
 void frontier::clear() {
     goals_.clear();
 }

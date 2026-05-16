@@ -11,7 +11,6 @@ multihead_unifier::multihead_unifier() :
     frontier_(locator::locate<i_frontier>()),
     copier_(locator::locate<i_copier>()),
     expr_pool_(locator::locate<i_expr_pool>()),
-    head_unify_failed_producer_(locator::locate<i_event_producer<head_unify_failed_event>>()),
     multihead_unify_accept_yielded_producer_(locator::locate<i_event_producer<multihead_unify_accept_yielded_event>>()) {
 }
 
@@ -68,7 +67,7 @@ void multihead_unifier::unify_and_link(const resolution_lineage* lineage, const 
     // 4. if failure, remove the head
     if (!success) {
         remove_head(lineage);
-        head_unify_failed_producer_.produce(head_unify_failed_event{lineage});
+        frontier_.eliminate(lineage);
         return;
     }
     // 5. link the new rl to all reps

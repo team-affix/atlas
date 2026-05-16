@@ -6,7 +6,6 @@
 #include <unordered_set>
 #include "../interfaces/i_cdcl.hpp"
 #include "../interfaces/i_event_producer.hpp"
-#include "../interfaces/i_cdcl_sequencer.hpp"
 #include "../events/cdcl_constrain_yielded_event.hpp"
 #include "../../utility/state_machine.hpp"
 #include "../../utility/tracked.hpp"
@@ -23,15 +22,15 @@ private:
     state_machine constrain(const resolution_lineage*);
 
     i_event_producer<cdcl_constrain_yielded_event>& cdcl_constrain_yielded_producer;
-    i_cdcl_sequencer& next_avoidance_id;
 
-    using avoidances_map_type = std::unordered_map<size_t, avoidance_type>;
-    
-    using watched_goals_type = std::unordered_map<const goal_lineage*, std::unordered_set<size_t>>;
+    using avoidances_type = std::set<avoidance_type>;
+    using contraction_map_type = std::unordered_map<const avoidance_type*, std::unordered_set<const goal_lineage*>>;
+    using watched_goals_type = std::unordered_map<const goal_lineage*, std::unordered_set<const avoidances_type*>>;
     
     std::optional<state_machine> constrain_state_machine;
     
-    tracked<avoidances_map_type> avoidances_map;
+    tracked<avoidances_type> avoidances;
+    tracked<contraction_map_type> contraction_map;
     tracked<watched_goals_type> watched_goals;
 };
 

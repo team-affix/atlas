@@ -11,6 +11,7 @@ struct frontier : i_frontier {
     std::unique_ptr<goal>& at(const goal_lineage*) override;
     const std::unique_ptr<goal>& at(const goal_lineage*) const override;
     void erase(const goal_lineage*) override;
+    void eliminate(const resolution_lineage*) override;
     void clear() override;
     size_t size() const override;
     void accept(i_visitor<const std::pair<const goal_lineage* const, std::unique_ptr<goal>>&>&) const override;

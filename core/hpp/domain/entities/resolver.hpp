@@ -8,6 +8,8 @@
 #include "../interfaces/i_database.hpp"
 #include "../interfaces/i_event_producer.hpp"
 #include "../interfaces/i_frontier.hpp"
+#include "../interfaces/i_cdcl.hpp"
+#include "../interfaces/i_multihead_unifier.hpp"
 #include "../interfaces/i_factory.hpp"
 #include "../interfaces/i_goal_initializer.hpp"
 #include "../interfaces/i_candidate_initializer.hpp"
@@ -37,6 +39,8 @@ private:
     i_database& db;
     i_lineage_pool& lp;
     i_frontier& frontier;
+    i_cdcl& c;
+    i_multihead_unifier& mhu;
     i_factory<goal>& goal_factory;
     i_factory<candidate>& candidate_factory;
     i_goal_initializer& goal_initializer;
