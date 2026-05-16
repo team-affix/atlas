@@ -100,7 +100,7 @@ void cdcl::erase(size_t id) {
     avoidances_map.mutate(std::move(erase_mut));
 }
 
-state_machine cdcl::constrain(const resolution_lineage* rl) {
+state_machine<void> cdcl::constrain(const resolution_lineage* rl) {
     // 1. get the parent goal
     const goal_lineage* gl = rl->parent;
     

@@ -31,8 +31,8 @@ private:
     std::unordered_set<const resolution_lineage*> unlink(uint32_t);
     std::unordered_set<uint32_t> unlink(const resolution_lineage*);
     void extract_child_reps(const expr*, std::unordered_set<uint32_t>&);
-    state_machine accept_head(const resolution_lineage*);
-    state_machine revalidate(uint32_t, const expr*);
+    state_machine<void> accept_head(const resolution_lineage*);
+    state_machine<void> revalidate(uint32_t, const expr*);
 
     const i_database& db_;
     i_frontier& frontier_;
@@ -43,7 +43,7 @@ private:
     i_copier& copier_;
     i_expr_pool& expr_pool_;
     i_event_producer<multihead_unify_accept_yielded_event>& multihead_unify_accept_yielded_producer_;
-    std::optional<state_machine> accept_head_state_machine;
+    std::optional<state_machine<void>> accept_head_state_machine;
     
     std::unordered_map<const resolution_lineage*, unify_head> heads_;
     std::unordered_map<uint32_t, std::unordered_set<const resolution_lineage*>> rep_to_rls_;

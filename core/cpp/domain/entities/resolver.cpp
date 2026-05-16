@@ -45,7 +45,7 @@ void resolver::resume() {
         resolve_yielded_producer.produce({});
 }
 
-state_machine resolver::resolve(const resolution_lineage* rl, size_t body_size) {
+state_machine<void> resolver::resolve(const resolution_lineage* rl, size_t body_size) {
     // set up the goal initializer
     goal_initializer.seed_expansion(rl);
     
@@ -81,7 +81,7 @@ state_machine resolver::resolve(const resolution_lineage* rl, size_t body_size) 
     resolved_producer.produce({rl});
 }
 
-state_machine resolver::activate_goals(const resolution_lineage* rl, size_t body_size) {
+state_machine<void> resolver::activate_goals(const resolution_lineage* rl, size_t body_size) {
     // activate goals
     for (size_t i = 0; i < body_size; ++i) {
         // get the goal lineage
@@ -121,7 +121,7 @@ state_machine resolver::activate_goals(const resolution_lineage* rl, size_t body
     }
 }
 
-state_machine resolver::activate_candidates(const goal_lineage* gl, goal& g) {
+state_machine<void> resolver::activate_candidates(const goal_lineage* gl, goal& g) {
     // activate candidates
     for (size_t j = 0; j < db.size(); ++j) {
         // get the candidate lineage
@@ -150,7 +150,7 @@ state_machine resolver::activate_candidates(const goal_lineage* gl, goal& g) {
     }
 }
 
-state_machine resolver::deactivate_goal(const goal_lineage* parent_gl) {
+state_machine<void> resolver::deactivate_goal(const goal_lineage* parent_gl) {
     // get parent goal
     auto& parent_goal = frontier.at(parent_gl);
     
@@ -175,7 +175,7 @@ state_machine resolver::deactivate_goal(const goal_lineage* parent_gl) {
     co_await std::suspend_always{};
 }
 
-state_machine resolver::deactivate_candidates(const goal_lineage* parent_gl, goal& parent_goal) {
+state_machine<void> resolver::deactivate_candidates(const goal_lineage* parent_gl, goal& parent_goal) {
     // deactivate parent candidates
     for (auto it = parent_goal.candidates.begin(); it != parent_goal.candidates.end();) {
         // get the index

@@ -145,7 +145,7 @@ void multihead_unifier::extract_child_reps(const expr* e, std::unordered_set<uin
     }
 }
 
-state_machine multihead_unifier::accept_head(const resolution_lineage* lineage) {
+state_machine<void> multihead_unifier::accept_head(const resolution_lineage* lineage) {
     // 1. get the unifier for this lineage
     auto& head = heads_.at(lineage);
     // 2. get the rep changes from the unifier
@@ -168,7 +168,7 @@ state_machine multihead_unifier::accept_head(const resolution_lineage* lineage) 
     heads_.erase(lineage);
 }
 
-state_machine multihead_unifier::revalidate(uint32_t rep, const expr* new_rep) {
+state_machine<void> multihead_unifier::revalidate(uint32_t rep, const expr* new_rep) {
     // 1. unlink this rep from all heads
     auto invalidated_rls = unlink(rep);
 
