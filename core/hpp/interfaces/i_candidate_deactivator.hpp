@@ -5,7 +5,7 @@
 
 struct i_candidate_deactivator {
     virtual ~i_candidate_deactivator() = default;
-    virtual void deactivate(const resolution_lineage*) = 0;
+    virtual bool deactivate(const resolution_lineage*) = 0;
 };
 
 #endif

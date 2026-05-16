@@ -5,7 +5,7 @@
 
 struct i_goal_deactivator {
     virtual ~i_goal_deactivator() = default;
-    virtual bool deactivate(const goal_lineage*) = 0;
+    virtual void deactivate(const goal_lineage*) = 0;
 };
 
 #endif
