@@ -77,4 +77,23 @@ My feeling when discovering that
 
 Okay so I think we should separate concerns between inserting into the frontier / other places and allocating/initializing the structures (goal/candidate)
 
+---
 
+May 17
+Oh my gosh, I just had the craziest set of revelations in the shower. With the most massive implications for this project:
+
+When contemplating how to properly handle the separation of concerns between constructing goals, constructing candidates, and instantiating their info, as well as adding unification heads, etc, I realized something:
+
+1. Due to the fact that we just use the goal expression exactly once (seeding the unify_head), we have no need to actually preserve it in the frontier, and since that was the only actual member of goal, this means we do not need to store goals in the frontier persistently.
+2. Candidates would still be present in the frontier, since their translation map is still needed until a candidate is chosen to resolve.
+
+This got me thinking: maybe, we only need to store candidates in the frontier and goals (which seem to still be needed to carry information) are just an intermediary thing. Which led me to think:
+
+1. This SOUNDS like resolution OF CANDIDATES. Hear me out, in order to do creation of subgoals, we ONLY need the candidate which is resolving, since all we need to do is copy the exprs of the rule body according to the translation map (stored in the parent candidate), and any derived values that the goals may have (e.g. weight, etc) can be propagated to the candidates for that goal, meaning that information can be made available in the parent candidate as well. Then, we have a bunch of child goals of the candidate, but those only contain an expr (and some extended info like goal weight), so we may just use those goals to construct candidates, and then let them fall off the stack. Then, the candidates need to be stored in the frontier. (the whole process goes from `candidate` -> `candidates`). WE ARE RESOLVING CANDIDATES NOT GOALS
+2. Maybe, if we reorganize things to be *candidate-centric*, the "initial null resolution lineage" which signals the start of the simulation, would actually become an "initial null goal lineage", and (this is very important) there is no more conditional logic needed for expanding initial goals vs. later goals. This is because we can store a root candidate as the only candidate in the frontier, before sim start, and then when the sim starts, it will have to choose that candidate. The `rl` of that candidate will be referencing the rule whose body IS THE INITIAL GOALS, and the translation_map in the candidate can be empty (since there was no head for this rule). Then, that rule body (as all rule bodies do) gets copied via the empty translation map to produce the initial goals. NOTICE: we never needed to check during expansion: "is this an initial goal or an intermediate goal?"
+
+Also, I thought:
+
+1. "What about goals? do we ever need goals or goal lineages to be stored anywhere?" and my mind was brought to the idea of the `deactivated_goal_memory` used for the elimination router. It checks to see "is this goal active? if so, eliminate in the frontier. If deactivated, ignore elim, and if not yet active, store in backlog." However, I thought about, what if we change it to `deactivated_candidate_memory`, and then look it up there? Check it out, this is awesome. If we say that `rl` is eliminated, we look it up first in `deactivated_candidate_memory`. If it is there, then we dont do anything. Else we see if it is in the frontier, and if so, we just eliminate THAT candidate. Notice that this kills two birds with one stone: the issue of deduplicating eliminations (dont eliminate a candidate twice) AND the issue of checking "is the goal active? / on the frontier".
+
+2. When choosing a candidate to resolve, we will need to know the parent goal lineage since we need to deactivate all candidates for that same goal. Maybe for this reason, we just have as our frontier: `map<const goal_lineage*, map<size_t, candidate>>`. Also, this will be relevant for tracking when conflicts happen, since we will need to know when a single entry in this map has no candidates.
