@@ -72,3 +72,9 @@ I am considering ditching domain-driven design for Atlas. It has caused me many 
 
 My feeling when discovering that 
 
+
+---
+
+Okay so I think we should separate concerns between inserting into the frontier / other places and allocating/initializing the structures (goal/candidate)
+
+
