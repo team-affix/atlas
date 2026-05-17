@@ -10,7 +10,6 @@
 #include "../interfaces/i_overlay_bind_map.hpp"
 #include "../interfaces/i_copier.hpp"
 #include "../interfaces/i_expr_pool.hpp"
-#include "../value_objects/unify_head.hpp"
 #include "../utility/state_machine.hpp"
 
 struct mhu_elimination_generator : i_mhu_elimination_generator {
@@ -40,6 +39,7 @@ private:
     i_copier& copier_;
     i_expr_pool& expr_pool_;
     
+    std::unordered_map<const resolution_lineage*, candidate*> candidates;
     std::unordered_map<uint32_t, std::unordered_set<const resolution_lineage*>> rep_to_rls_;
     std::unordered_map<const resolution_lineage*, std::unordered_set<uint32_t>> rl_to_reps_;
 };
