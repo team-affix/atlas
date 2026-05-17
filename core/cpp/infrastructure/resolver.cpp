@@ -92,40 +92,7 @@ state_machine<void> resolver::resolve(const resolution_lineage* rl, size_t body_
 state_machine<void> resolver::activate_goals(const resolution_lineage* rl, size_t body_size) {
     // activate goals
     for (size_t i = 0; i < body_size; ++i) {
-        // get the goal lineage
-        const goal_lineage* gl = lp.goal(rl, i);
-
-        // make the goal
-        auto g = goal_factory.make();
-
-        // get the raw
-        auto raw_g = g.get();
-
-        // insert the goal into the frontier
-        frontier.insert(gl, std::move(g));
-
-        // initialize the goal
-        goal_initializer.initialize(gl);
         
-        // emit goal activating event
-        goal_activating_producer.produce({gl});
-        co_await std::suspend_always{};
-
-        // set up the candidate initializer
-        candidate_initializer.seed_expansion(gl);
-
-        // activate candidates
-        auto sm0 = activate_candidates(gl, *g);
-
-        // wait for the candidates to be activated
-        while (!sm0.done()) {
-            sm0.resume();
-            co_await std::suspend_always{};
-        }
-        
-        // emit goal activated event
-        goal_activated_producer.produce({gl});
-        co_await std::suspend_always{};
     }
 }
 

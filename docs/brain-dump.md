@@ -84,6 +84,8 @@ Oh my gosh, I just had the craziest set of revelations in the shower. With the m
 
 When contemplating how to properly handle the separation of concerns between constructing goals, constructing candidates, and instantiating their info, as well as adding unification heads, etc, I realized something:
 
+maybe a candidate IS the expand_ctx...
+
 1. Due to the fact that we just use the goal expression exactly once (seeding the unify_head), we have no need to actually preserve it in the frontier, and since that was the only actual member of goal, this means we do not need to store goals in the frontier persistently.
 2. Candidates would still be present in the frontier, since their translation map is still needed until a candidate is chosen to resolve.
 
