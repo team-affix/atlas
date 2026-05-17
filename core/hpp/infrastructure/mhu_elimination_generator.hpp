@@ -40,7 +40,6 @@ private:
     i_copier& copier_;
     i_expr_pool& expr_pool_;
     
-    std::unordered_map<const resolution_lineage*, unify_head> heads_;
     std::unordered_map<uint32_t, std::unordered_set<const resolution_lineage*>> rep_to_rls_;
     std::unordered_map<const resolution_lineage*, std::unordered_set<uint32_t>> rl_to_reps_;
 };
