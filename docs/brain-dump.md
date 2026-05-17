@@ -99,3 +99,19 @@ Also, I thought:
 1. "What about goals? do we ever need goals or goal lineages to be stored anywhere?" and my mind was brought to the idea of the `deactivated_goal_memory` used for the elimination router. It checks to see "is this goal active? if so, eliminate in the frontier. If deactivated, ignore elim, and if not yet active, store in backlog." However, I thought about, what if we change it to `deactivated_candidate_memory`, and then look it up there? Check it out, this is awesome. If we say that `rl` is eliminated, we look it up first in `deactivated_candidate_memory`. If it is there, then we dont do anything. Else we see if it is in the frontier, and if so, we just eliminate THAT candidate. Notice that this kills two birds with one stone: the issue of deduplicating eliminations (dont eliminate a candidate twice) AND the issue of checking "is the goal active? / on the frontier".
 
 2. When choosing a candidate to resolve, we will need to know the parent goal lineage since we need to deactivate all candidates for that same goal. Maybe for this reason, we just have as our frontier: `map<const goal_lineage*, map<size_t, candidate>>`. Also, this will be relevant for tracking when conflicts happen, since we will need to know when a single entry in this map has no candidates.
+
+---
+
+Whole candidate-centric flow:
+
+1. Candidates hold all of the information from their parent goal that they need
+2. Candidates are the only things that we directly "store" anywhere persistently. They can be thought of as choices that we can make. Or options to choose from.
+3. 
+
+Open question: in the future, candidates will actually need data FROM their parent goals. Right now however, we can just construct the candidates based on the rule in the DB and having copied the head, producing a translation map. Therefore, how should we create candidates right now? Should we supply the goals.... Should we not even have goal objects? Right now, the goal object just stores const expr*, but that could easily be created in some other way, plus it gets treated in a special way, having side-effects (`mhu`). Maybe, we store the weight of each goal in its candidates as well, and then, we define what it means to go from candidate to candidate.
+
+`Candidate [o.g. rule body, tm, parent weight]` -> many `Candidate []`
+
+Maybe, each goal contains not only the `const expr*` but also a `size_t` meaning the subgoal index of the candidate. Then, maybe we could have a reason for supplying.
+
+
