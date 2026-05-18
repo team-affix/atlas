@@ -16,20 +16,11 @@ mhu_elimination_generator::mhu_elimination_generator(
     expr_pool_(expr_pool_) {
 }
 
-bool mhu_elimination_generator::add_head(const resolution_lineage* lineage, const expr* lhs, const expr* rhs) {
-    // 1. create the local bind map
-    auto local_bind_map = bind_map_factory_.make();
-    // 2. create the overlay bind map
-    auto overlay_bind_map = overlay_bind_map_factory_.make(*local_bind_map, common_);
-    // 3. create the unifier
-    auto unifier = unifier_factory_.make(*overlay_bind_map);
-    // 4. add the unifier to the map
-    heads_.insert({lineage, unify_head{
-        std::move(local_bind_map),
-        std::move(overlay_bind_map),
-        std::move(unifier)}});
-    // 5. unify and link the parent goal's expr with the copied rule head
-    return unify_and_link(lineage, lhs, rhs);
+void mhu_elimination_generator::add_head(const resolution_lineage* lineage, unify_head head, const std::unordered_set<uint32_t>& rep_changes) {
+    // 1. add the head to the map
+    heads_.insert({lineage, std::move(head)});
+    // 2. link the reps to the head
+    link(rep_changes, {lineage});
 }
 
 void mhu_elimination_generator::remove_head(const resolution_lineage* lineage) {
@@ -70,8 +61,11 @@ state_machine<const resolution_lineage*> mhu_elimination_generator::revalidate(u
     // 2. for each rl, propagate the rep change to all heads
     for (auto rl : invalidated_rls) {
         // 2.1 unify and link the parent goal's expr with the copied rule head
-        if (!unify_and_link(rl, expr_pool_.var(rep), new_rep))
+        if (!unify_and_link(rl, expr_pool_.var(rep), new_rep)) {
+            // prevent re-linking the conflicting head
+            invalidated_rls.erase(rl);
             co_yield rl;
+        }
     }
 
     // 3. get new reps for this o.g. rep

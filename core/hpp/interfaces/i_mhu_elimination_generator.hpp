@@ -7,7 +7,7 @@
 
 struct i_mhu_elimination_generator : i_elimination_generator {
     virtual ~i_mhu_elimination_generator() = default;
-    virtual void add_head(const resolution_lineage*, unify_head*) = 0;
+    virtual void add_head(const resolution_lineage*, unify_head, const std::unordered_set<uint32_t>&) = 0;
     virtual void remove_head(const resolution_lineage*) = 0;
 };
 

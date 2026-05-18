@@ -22,7 +22,7 @@ struct mhu_elimination_generator : i_mhu_elimination_generator {
         i_bind_map&,
         i_copier&,
         i_expr_pool&);
-    void add_head(const resolution_lineage*, unify_head*) override;
+    void add_head(const resolution_lineage*, unify_head, const std::unordered_set<uint32_t>&) override;
     void remove_head(const resolution_lineage*) override;
     state_machine<const resolution_lineage*> constrain(const resolution_lineage*) override;
 private:
@@ -40,7 +40,7 @@ private:
     i_copier& copier_;
     i_expr_pool& expr_pool_;
     
-    std::unordered_map<const resolution_lineage*, unify_head*> heads_;
+    std::unordered_map<const resolution_lineage*, unify_head> heads_;
     std::unordered_map<uint32_t, std::unordered_set<const resolution_lineage*>> rep_to_rls_;
     std::unordered_map<const resolution_lineage*, std::unordered_set<uint32_t>> rl_to_reps_;
 };
