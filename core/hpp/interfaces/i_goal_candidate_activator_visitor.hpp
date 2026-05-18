@@ -4,7 +4,7 @@
 #include "../interfaces/i_visitor.hpp"
 #include "../value_objects/rule.hpp"
 
-struct i_goal_candidate_activator_visitor : i_visitor<const rule&> {
+struct i_goal_candidate_activator_visitor : i_visitor<const rule*> {
     virtual ~i_goal_candidate_activator_visitor() = default;
 };
 

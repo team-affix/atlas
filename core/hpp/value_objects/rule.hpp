@@ -5,7 +5,6 @@
 #include "expr.hpp"
 
 struct rule {
-    size_t id;
     const expr* head;
     std::vector<const expr*> body;
     auto operator<=>(const rule&) const = default;

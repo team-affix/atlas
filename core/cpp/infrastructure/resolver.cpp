@@ -31,6 +31,9 @@ bool resolver::resolve(const resolution_lineage* rl) {
         goal_activator.activate(gl);
         // get the rules for the goal
         auto& rules = ggr.get(gl);
+        // create a visitor for the rules
+        i_goal_candidate_activator_visitor gca;
+        rules.accept(gca);
         for (int j = 0; j < db.size(); ++j)
             candidate_activator.try_activate(lp.resolution(gl, j));
         // check for conflicts

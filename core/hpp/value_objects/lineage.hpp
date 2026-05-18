@@ -3,18 +3,20 @@
 
 #include <cstddef>
 #include <compare>
+#include "expr.hpp"
+#include "rule.hpp"
 
 struct resolution_lineage;
 
 struct goal_lineage {
     const resolution_lineage* parent;
-    size_t idx;
+    const expr* idx;
     auto operator<=>(const goal_lineage&) const = default;
 };
 
 struct resolution_lineage {
     const goal_lineage* parent;
-    size_t idx;
+    const rule* idx;
     auto operator<=>(const resolution_lineage&) const = default;
 };
 
