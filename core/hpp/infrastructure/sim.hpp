@@ -1,7 +1,6 @@
 #ifndef SIM_HPP
 #define SIM_HPP
 
-#include <unordered_set>
 #include "../interfaces/i_sim.hpp"
 #include "../interfaces/i_solution_detector.hpp"
 #include "../interfaces/i_unit_goals.hpp"

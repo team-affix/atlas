@@ -2,6 +2,7 @@
 
 sim::sim(
     size_t max_resolutions,
+    i_solution_detector& sd,
     i_unit_goals& ug,
     i_decision_generator& dg,
     i_elimination_generator& eg,
@@ -11,6 +12,7 @@ sim::sim(
     i_goal_candidates_extractor_visitor_factory& gcevf)
     :
     max_resolutions(max_resolutions),
+    sd(sd),
     ug(ug),
     dg(dg),
     eg(eg),
