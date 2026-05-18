@@ -9,6 +9,9 @@
 #include "../interfaces/i_candidate_activator.hpp"
 #include "../interfaces/i_goal_candidates_acceptor.hpp"
 #include "../interfaces/i_goal_candidate_deactivator_visitor.hpp"
+#include "../interfaces/i_conflict_detector.hpp"
+#include "../interfaces/i_unit_goal_detector.hpp"
+#include "../interfaces/i_unit_goals.hpp"
 
 struct resolver : i_resolver {
     resolver(
@@ -18,8 +21,11 @@ struct resolver : i_resolver {
         i_goal_deactivator& goal_deactivator,
         i_candidate_activator& candidate_activator,
         i_goal_candidates_acceptor& gca,
-        i_goal_candidate_deactivator_visitor& gcdv);
-    void resolve(const resolution_lineage*) override;
+        i_goal_candidate_deactivator_visitor& gcdv,
+        i_conflict_detector& cd,
+        i_unit_goal_detector& ugd,
+        i_unit_goals& ug);
+    bool resolve(const resolution_lineage*) override;
 private:
     const i_database& db;
     i_lineage_pool& lp;
@@ -28,6 +34,9 @@ private:
     i_candidate_activator& candidate_activator;
     i_goal_candidates_acceptor& gca;
     i_goal_candidate_deactivator_visitor& gcdv;
+    i_conflict_detector& cd;
+    i_unit_goal_detector& ugd;
+    i_unit_goals& ug;
 };
 
 #endif

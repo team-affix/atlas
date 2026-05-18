@@ -5,7 +5,7 @@
 
 struct i_resolver {
     virtual ~i_resolver() = default;
-    virtual void resolve(const resolution_lineage*) = 0;
+    virtual bool resolve(const resolution_lineage*) = 0;
 };
 
 #endif
