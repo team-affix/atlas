@@ -2,7 +2,7 @@
 #define LINEAGE_POOL_HPP
 
 #include <map>
-#include "../domain/interfaces/i_lineage_pool.hpp"
+#include "../interfaces/i_lineage_pool.hpp"
 
 struct lineage_pool : i_lineage_pool {
     const goal_lineage* goal(const resolution_lineage*, size_t) override;

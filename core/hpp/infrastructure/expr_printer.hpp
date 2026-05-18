@@ -2,8 +2,8 @@
 #define EXPR_PRINTER_HPP
 
 #include <ostream>
-#include "../domain/interfaces/i_expr_printer.hpp"
-#include "../domain/interfaces/i_var_names.hpp"
+#include "../interfaces/i_expr_printer.hpp"
+#include "../interfaces/i_var_names.hpp"
 
 struct expr_printer : i_expr_printer {
     expr_printer(std::ostream&);

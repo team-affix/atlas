@@ -1,17 +1,14 @@
 #ifndef MCTS_CHOICE_GENERATOR_GOAL_VISITOR_HPP
 #define MCTS_CHOICE_GENERATOR_GOAL_VISITOR_HPP
 
-#include <memory>
-#include <utility>
 #include <vector>
-#include "../domain/interfaces/i_visitor.hpp"
-#include "../domain/value_objects/goal.hpp"
-#include "../domain/value_objects/lineage.hpp"
-#include "mcts_choice.hpp"
+#include "../interfaces/i_visitor.hpp"
+#include "../value_objects/lineage.hpp"
+#include "../value_objects/mcts_choice.hpp"
 
-struct mcts_choice_generator_goal_visitor : i_visitor<const std::pair<const goal_lineage* const, std::unique_ptr<goal>>&> {
+struct mcts_choice_generator_goal_visitor : i_visitor<const goal_lineage*> {
     mcts_choice_generator_goal_visitor(size_t);
-    void visit(const std::pair<const goal_lineage* const, std::unique_ptr<goal>>&) override;
+    void visit(const goal_lineage*) override;
     const std::vector<mcts_choice>& choices() const;
 private:
     std::vector<mcts_choice> internal_choices;

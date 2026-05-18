@@ -4,7 +4,7 @@
 #include "../interfaces/i_conflict_detector.hpp"
 
 struct conflict_detector : i_conflict_detector {
-    bool detect(const goal&) override;
+    bool detect(const goal_lineage*) override;
 };
 
 #endif

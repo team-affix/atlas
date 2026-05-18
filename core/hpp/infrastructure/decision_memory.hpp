@@ -2,7 +2,7 @@
 #define DECISION_MEMORY_HPP
 
 #include <unordered_set>
-#include "../domain/interfaces/i_decision_memory.hpp"
+#include "../interfaces/i_decision_memory.hpp"
 
 struct decision_memory : i_decision_memory {
     void insert(const resolution_lineage*) override;

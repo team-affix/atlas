@@ -2,7 +2,7 @@
 #define BIND_MAP_HPP
 
 #include <unordered_map>
-#include "../domain/interfaces/i_bind_map.hpp"
+#include "../interfaces/i_bind_map.hpp"
 
 struct bind_map : i_bind_map {
     virtual ~bind_map() = default;

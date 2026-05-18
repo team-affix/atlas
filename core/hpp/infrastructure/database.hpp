@@ -2,8 +2,8 @@
 #define DATABASE_HPP
 
 #include <vector>
-#include "../domain/interfaces/i_database.hpp"
-#include "../domain/value_objects/rule.hpp"
+#include "../interfaces/i_database.hpp"
+#include "../value_objects/rule.hpp"
 
 struct database : i_database {
     database(const std::vector<rule>&);

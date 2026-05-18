@@ -1,18 +1,12 @@
 #ifndef SOLVER_HPP
 #define SOLVER_HPP
 
-#include <memory>
-#include <optional>
-#include "defs.hpp"
-#include "trail.hpp"
-#include "expr.hpp"
-#include "unifier.hpp"
-#include "lineage.hpp"
-#include "sequencer.hpp"
-#include "cdcl.hpp"
-#include "sim.hpp"
+#include "../interfaces/i_solver.hpp"
+#include "../interfaces/i_sim_setup.hpp"
+#include "../interfaces/i_sim_teardown.hpp"
 
-struct solver {
+
+struct solver : i_solver {
     solver();
     virtual ~solver();
     bool operator()(std::optional<resolutions>&);

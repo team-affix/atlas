@@ -2,7 +2,7 @@
 #define RESOLUTION_MEMORY_HPP
 
 #include <unordered_set>
-#include "../domain/interfaces/i_resolution_memory.hpp"
+#include "../interfaces/i_resolution_memory.hpp"
 
 struct resolution_memory : i_resolution_memory {
     void insert(const resolution_lineage*) override;

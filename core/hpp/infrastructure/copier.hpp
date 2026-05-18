@@ -1,13 +1,16 @@
 #ifndef COPIER_HPP
 #define COPIER_HPP
 
-#include "../domain/interfaces/i_copier.hpp"
-#include "../domain/value_objects/expr.hpp"
-#include "../domain/interfaces/i_var_sequencer.hpp"
-#include "../domain/interfaces/i_expr_pool.hpp"
+#include "../interfaces/i_copier.hpp"
+#include "../value_objects/expr.hpp"
+#include "../interfaces/i_var_sequencer.hpp"
+#include "../interfaces/i_expr_pool.hpp"
 
 struct copier : i_copier {
-    copier();
+    copier(
+        i_var_sequencer&,
+        i_expr_pool&
+    );
     const expr* copy(const expr*, std::unordered_map<uint32_t, uint32_t>&) const override;
 private:
     i_var_sequencer& var_seq_ref;

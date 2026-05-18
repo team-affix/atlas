@@ -7,36 +7,28 @@
 #include "../interfaces/i_lineage_pool.hpp"
 #include "../interfaces/i_database.hpp"
 #include "../interfaces/i_elimination_generator.hpp"
-#include "../interfaces/i_elimination_backlog.hpp"
+#include "../interfaces/i_elimination_router.hpp"
 #include "../interfaces/i_goal_activator.hpp"
 #include "../interfaces/i_goal_deactivator.hpp"
 #include "../interfaces/i_candidate_activator.hpp"
 #include "../interfaces/i_candidate_deactivator.hpp"
-#include "../interfaces/i_goal_initializer.hpp"
-#include "../interfaces/i_candidate_initializer.hpp"
-#include "../interfaces/i_elimination_processor.hpp"
+#include "../interfaces/i_get_goal_candidates_size.hpp"
+#include "../interfaces/i_goal_candidates_acceptor.hpp"
 
 struct resolver : i_resolver {
     explicit resolver(size_t initial_goal_count);
-    void init_resolve(const resolution_lineage*) override;
-    void resume() override;
+    std::optional<sim_termination> resolve(const resolution_lineage*) override;
 private:
-    state_machine<void> resolve(const resolution_lineage*, size_t);
-    state_machine<void> activate_goals(const resolution_lineage*, size_t);
-    state_machine<void> activate_candidates(const goal_lineage*, goal&);
-    state_machine<void> deactivate_goal(const goal_lineage*);
-    state_machine<void> deactivate_candidates(const goal_lineage*, goal&);
-
     i_database& db;
     i_lineage_pool& lp;
     i_elimination_generator& eg;
-    i_elimination_backlog& eb;
+    i_elimination_router& er;
     i_goal_activator& goal_activator;
     i_goal_deactivator& goal_deactivator;
     i_candidate_activator& candidate_activator;
     i_candidate_deactivator& candidate_deactivator;
-    i_goal_initializer& goal_initializer;
-    i_candidate_initializer& candidate_initializer;
+    i_get_goal_candidates_size& gcs;
+    i_goal_candidates_acceptor& gca;
 
     size_t initial_goal_count;
     

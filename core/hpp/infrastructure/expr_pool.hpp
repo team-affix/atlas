@@ -2,8 +2,8 @@
 #define EXPR_POOL_HPP
 
 #include <set>
-#include "../domain/interfaces/i_expr_pool.hpp"
-#include "../domain/value_objects/expr.hpp"
+#include "../interfaces/i_expr_pool.hpp"
+#include "../value_objects/expr.hpp"
 #include "../utility/tracked.hpp"
 
 struct expr_pool : i_expr_pool {
