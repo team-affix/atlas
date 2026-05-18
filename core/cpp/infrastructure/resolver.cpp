@@ -46,7 +46,6 @@ bool resolver::resolve(const resolution_lineage* rl) {
     gca.accept(gl, gcdv);
     // 4. deactivate the parent goal
     goal_deactivator.deactivate(gl);
-
     // 5. return success
     return true;
 }
