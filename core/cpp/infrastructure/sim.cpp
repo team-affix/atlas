@@ -22,6 +22,9 @@ sim::sim(
 
 sim_termination sim::run() {
     for (size_t i = 0; i < max_resolutions; ++i) {
+        // 0. check if the sim is solved
+        if (sd.detect())
+            return sim_termination::solved;
         // 1. get the next resolution
         const resolution_lineage* rl = next_resolution();
         // 2. generate eliminations from this
@@ -38,6 +41,7 @@ sim_termination sim::run() {
         // 4. resolve given rl
         r.resolve(rl);
     }
+    return sim_termination::depth_exceeded;
 }
 
 const resolution_lineage* sim::next_resolution() {

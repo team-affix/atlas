@@ -3,7 +3,7 @@
 
 struct i_solution_detector {
     virtual ~i_solution_detector() = default;
-    virtual bool detect() = 0;
+    virtual bool detect() const = 0;
 };
 
 #endif
