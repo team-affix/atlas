@@ -3,6 +3,8 @@
 sim::sim(
     size_t max_resolutions,
     i_solution_detector& sd,
+    i_conflict_detector& cd,
+    i_unit_goal_detector& ugd,
     i_unit_goals& ug,
     i_decision_generator& dg,
     i_elimination_generator& eg,
@@ -13,6 +15,8 @@ sim::sim(
     :
     max_resolutions(max_resolutions),
     sd(sd),
+    cd(cd),
+    ugd(ugd),
     ug(ug),
     dg(dg),
     eg(eg),
@@ -33,12 +37,22 @@ sim_termination sim::run() {
         auto eliminations = eg.constrain(rl);
         // 3. route the eliminations
         while (!eliminations.done()) {
+            // get the next elimination
             auto res = eliminations.resume();
             if (!res.has_value())
                 continue;
-            auto elim_result = er.route(res.value());
-            if (handle_elimination_result(elim_result))
+            // get the resolution lineage
+            const resolution_lineage* rl = res.value();
+            // route the elimination
+            auto elim_result = er.route(rl);
+            // get the parent goal lineage
+            const goal_lineage* gl = rl->parent;
+            // check for conflicts
+            if (cd.detect(gl))
                 return sim_termination::conflicted;
+            // check for unit goals
+            if (ugd.detect(gl))
+                ug.push(gl);
         }
         // 4. resolve given rl
         r.resolve(rl);
@@ -59,12 +73,4 @@ const resolution_lineage* sim::next_resolution() {
     gca.accept(gl, *vis);
     // 3. return the first and only candidate
     return *extracted_candidates.begin();
-}
-
-bool sim::handle_elimination_result(const elimination_result& result) {
-    if (const auto* unit = std::get_if<goal_made_unit>(&result))
-        ug.push(unit->gl);
-    else if (std::holds_alternative<goal_candidates_empty>(result))
-        return true;
-    return false;
 }
