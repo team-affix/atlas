@@ -6,6 +6,4 @@ sim_setup::sim_setup(
 }
 
 void sim_setup::setup() {
-    // 1. setup the trail
-    trail.setup();
 }
