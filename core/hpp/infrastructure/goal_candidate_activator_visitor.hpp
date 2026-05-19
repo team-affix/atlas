@@ -8,7 +8,7 @@
 #include "../interfaces/i_overlay_bind_map_factory.hpp"
 #include "../interfaces/i_unifier_factory.hpp"
 #include "../interfaces/i_copier.hpp"
-#include "../interfaces/i_set_candidate_translation_map.hpp"
+#include "../interfaces/i_activate_candidate_translation_map.hpp"
 #include "../interfaces/i_mhu_elimination_generator.hpp"
 #include "../interfaces/i_candidate_activator.hpp"
 #include "../interfaces/i_elimination_backlog.hpp"
@@ -23,7 +23,7 @@ struct goal_candidate_activator_visitor : i_goal_candidate_activator_visitor {
         i_bind_map_factory& bind_map_factory,
         i_overlay_bind_map_factory& overlay_bind_map_factory,
         i_unifier_factory& unifier_factory,
-        i_set_candidate_translation_map& set_candidate_translation_map,
+        i_activate_candidate_translation_map& actm,
         i_mhu_elimination_generator& mhu_elimination_generator,
         i_candidate_activator& candidate_activator,
         i_elimination_backlog& elimination_backlog,
@@ -37,7 +37,7 @@ private:
     i_bind_map_factory& bind_map_factory;
     i_overlay_bind_map_factory& overlay_bind_map_factory;
     i_unifier_factory& unifier_factory;
-    i_set_candidate_translation_map& set_candidate_translation_map;
+    i_activate_candidate_translation_map& actm;
     i_mhu_elimination_generator& mhu_elimination_generator;
     i_candidate_activator& candidate_activator;
     i_elimination_backlog& elimination_backlog;

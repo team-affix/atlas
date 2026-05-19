@@ -7,7 +7,7 @@ goal_candidate_activator_visitor::goal_candidate_activator_visitor(
     i_bind_map_factory& bind_map_factory,
     i_overlay_bind_map_factory& overlay_bind_map_factory,
     i_unifier_factory& unifier_factory,
-    i_set_candidate_translation_map& set_candidate_translation_map,
+    i_activate_candidate_translation_map& actm,
     i_mhu_elimination_generator& mhu_elimination_generator,
     i_candidate_activator& candidate_activator,
     i_elimination_backlog& elimination_backlog,
@@ -20,7 +20,7 @@ goal_candidate_activator_visitor::goal_candidate_activator_visitor(
     bind_map_factory(bind_map_factory),
     overlay_bind_map_factory(overlay_bind_map_factory),
     unifier_factory(unifier_factory),
-    set_candidate_translation_map(set_candidate_translation_map),
+    actm(actm),
     mhu_elimination_generator(mhu_elimination_generator),
     candidate_activator(candidate_activator),
     elimination_backlog(elimination_backlog),
@@ -71,7 +71,7 @@ void goal_candidate_activator_visitor::visit(const rule* r) {
     mhu_elimination_generator.add_head(rl, std::move(head), rep_changed);
 
     // 3.3. add translation map
-    set_candidate_translation_map.set(rl, std::move(tm));
+    actm.activate(rl, std::move(tm));
     
     // 4. activate the candidate
     candidate_activator.activate(rl);
