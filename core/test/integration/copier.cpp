@@ -31,14 +31,14 @@ static uint32_t var_index(const expr* e) {
 // ---------------------------------------------------------------------------
 
 TEST_F(CopierTest, CopyVarAllocatesFreshIndex) {
-    std::unordered_map<uint32_t, uint32_t> map;
+    translation_map map;
     const expr* p = cp->copy(&var0, map);
     EXPECT_EQ(var_index(p), 0u);
     EXPECT_EQ(map.at(0), 0u);
 }
 
 TEST_F(CopierTest, CopySameVarTwiceReusesMappedIndex) {
-    std::unordered_map<uint32_t, uint32_t> map;
+    translation_map map;
     const expr* p1 = cp->copy(&var0, map);
     const expr* p2 = cp->copy(&var0, map);
     EXPECT_EQ(p1, p2);
@@ -46,7 +46,7 @@ TEST_F(CopierTest, CopySameVarTwiceReusesMappedIndex) {
 }
 
 TEST_F(CopierTest, CopyDistinctVarsGetDistinctIndices) {
-    std::unordered_map<uint32_t, uint32_t> map;
+    translation_map map;
     const expr* p0 = cp->copy(&var0, map);
     const expr* p1 = cp->copy(&var1, map);
     EXPECT_EQ(var_index(p0), 0u);
@@ -59,7 +59,7 @@ TEST_F(CopierTest, CopyDistinctVarsGetDistinctIndices) {
 
 TEST_F(CopierTest, CopyFunctorPreservesNameAndArity) {
     expr f{expr::functor{"f", {&var0, &var1}}};
-    std::unordered_map<uint32_t, uint32_t> map;
+    translation_map map;
     const expr* p = cp->copy(&f, map);
     const expr::functor& out = std::get<expr::functor>(p->content);
     EXPECT_EQ(out.name, "f");
@@ -69,7 +69,7 @@ TEST_F(CopierTest, CopyFunctorPreservesNameAndArity) {
 TEST_F(CopierTest, CopyNestedFunctorRemapsAllVars) {
     expr inner{expr::functor{"g", {&var0}}};
     expr outer{expr::functor{"f", {&inner, &var1}}};
-    std::unordered_map<uint32_t, uint32_t> map;
+    translation_map map;
     const expr* p = cp->copy(&outer, map);
     const expr::functor& f = std::get<expr::functor>(p->content);
     const expr::functor& g = std::get<expr::functor>(f.args[0]->content);
@@ -81,7 +81,7 @@ TEST_F(CopierTest, CopyNestedFunctorRemapsAllVars) {
 
 TEST_F(CopierTest, CopyTernaryFunctorRemapsAllVars) {
     expr f{expr::functor{"f", {&var0, &var1, &var2}}};
-    std::unordered_map<uint32_t, uint32_t> map;
+    translation_map map;
     const expr* p = cp->copy(&f, map);
     const expr::functor& out = std::get<expr::functor>(p->content);
     EXPECT_EQ(out.name, "f");
@@ -93,8 +93,8 @@ TEST_F(CopierTest, CopyTernaryFunctorRemapsAllVars) {
 }
 
 TEST_F(CopierTest, CopySeparateCallsAdvanceSequencer) {
-    std::unordered_map<uint32_t, uint32_t> map1;
-    std::unordered_map<uint32_t, uint32_t> map2;
+    translation_map map1;
+    translation_map map2;
     const expr* p1 = cp->copy(&var0, map1);
     const expr* p2 = cp->copy(&var0, map2);
     EXPECT_EQ(var_index(p1), 0u);

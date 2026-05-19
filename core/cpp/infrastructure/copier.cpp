@@ -6,7 +6,7 @@ copier::copier(i_var_sequencer& var_seq, i_expr_pool& expr_pool) :
     expr_pool_ref(expr_pool) {
 }
 
-const expr* copier::copy(const expr* e, std::unordered_map<uint32_t, uint32_t>& variable_map) const {
+const expr* copier::copy(const expr* e, translation_map& variable_map) const {
     if (const expr::var* v = std::get_if<expr::var>(&e->content)) {
         if (!variable_map.contains(v->index))
             variable_map.emplace(v->index, var_seq_ref.next());

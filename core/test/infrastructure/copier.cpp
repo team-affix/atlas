@@ -70,13 +70,13 @@ TEST_F(CopierUnitTest, FirstVarAllocatesFreshIndex) {
     next_index = 7;
     ON_CALL(seq, next()).WillByDefault(Return(7u));
 
-    std::unordered_map<uint32_t, uint32_t> map;
+    translation_map map;
     EXPECT_EQ(cp.copy(&var0, map), &pooled_v7);
     EXPECT_EQ(map.at(0), 7u);
 }
 
 TEST_F(CopierUnitTest, SecondOccurrenceOfSameVarReusesMapping) {
-    std::unordered_map<uint32_t, uint32_t> map;
+    translation_map map;
     const expr* p1 = cp.copy(&var0, map);
     const expr* p2 = cp.copy(&var0, map);
     EXPECT_EQ(p1, p2);
@@ -84,7 +84,7 @@ TEST_F(CopierUnitTest, SecondOccurrenceOfSameVarReusesMapping) {
 }
 
 TEST_F(CopierUnitTest, DistinctVarsGetDistinctIndices) {
-    std::unordered_map<uint32_t, uint32_t> map;
+    translation_map map;
     const expr* p0 = cp.copy(&var0, map);
     const expr* p1 = cp.copy(&var1, map);
     EXPECT_NE(p0, p1);
@@ -98,7 +98,7 @@ TEST_F(CopierUnitTest, DistinctVarsGetDistinctIndices) {
 
 TEST_F(CopierUnitTest, FunctorCopyReturnsPooledNodeWithCopiedArgs) {
     expr f{expr::functor{"f", {&var0, &var1}}};
-    std::unordered_map<uint32_t, uint32_t> map;
+    translation_map map;
     std::vector<const expr*> captured_args;
 
     ON_CALL(pool, functor("f", _))
@@ -115,7 +115,7 @@ TEST_F(CopierUnitTest, FunctorCopyReturnsPooledNodeWithCopiedArgs) {
 
 TEST_F(CopierUnitTest, TernaryFunctorCopyCapturesAllArgs) {
     expr f3{expr::functor{"f", {&var0, &var1, &var2}}};
-    std::unordered_map<uint32_t, uint32_t> map;
+    translation_map map;
     std::vector<const expr*> captured_args;
 
     ON_CALL(pool, functor("f", _))
@@ -135,7 +135,7 @@ TEST_F(CopierUnitTest, TernaryFunctorCopyCapturesAllArgs) {
 TEST_F(CopierUnitTest, NestedFunctorCopyUsesInnerPooledArg) {
     expr g{expr::functor{"g", {&var0}}};
     expr f{expr::functor{"f", {&g}}};
-    std::unordered_map<uint32_t, uint32_t> map;
+    translation_map map;
     std::vector<const expr*> captured_f_args;
 
     ON_CALL(pool, functor("f", _))
