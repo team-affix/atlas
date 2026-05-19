@@ -124,6 +124,10 @@ TEST(StateMachineInt, FinalSuspendThenReturnClearsLastYield) {
 
     auto after_suspend = sm.resume();
     EXPECT_FALSE(after_suspend.has_value());
+    ASSERT_FALSE(sm.done());
+
+    auto after_return = sm.resume();
+    EXPECT_FALSE(after_return.has_value());
     EXPECT_TRUE(sm.done());
 }
 
@@ -161,23 +165,23 @@ TEST(StateMachinePointer, DrainInnerFromCallerCollectsInOrder) {
     EXPECT_EQ(*values[1], 200);
 }
 
-// Destroying a nested state_machine inside a parent coroutine frame (as in
-// joint_elimination_generator / mhu_elimination_generator) currently crashes.
-TEST(StateMachinePointer, DISABLED_DrainsNestedMachineInOrder) {
+TEST(StateMachinePointer, DrainsNestedMachineInOrder) {
     auto sm = make_outer_drains_inner();
     auto values = collect_while_has_value(sm);
-    ASSERT_EQ(values.size(), 2u);
+    ASSERT_EQ(values.size(), 3u);
     EXPECT_EQ(*values[0], 100);
     EXPECT_EQ(*values[1], 200);
+    EXPECT_EQ(values[2], nullptr);
     EXPECT_TRUE(sm.done());
 }
 
-TEST(StateMachinePointer, DISABLED_NestedThreeLevelsFlattensToInnerYields) {
+TEST(StateMachinePointer, NestedThreeLevelsFlattensToInnerYields) {
     auto sm = make_nested_three_levels();
     auto values = collect_while_has_value(sm);
-    ASSERT_EQ(values.size(), 2u);
+    ASSERT_EQ(values.size(), 3u);
     EXPECT_EQ(*values[0], 100);
     EXPECT_EQ(*values[1], 200);
+    EXPECT_EQ(values[2], nullptr);
     EXPECT_TRUE(sm.done());
 }
 

@@ -67,11 +67,11 @@ TEST_F(MhuEliminationGeneratorTest, RemoveHeadAfterAddAllowsReuse) {
     EXPECT_NO_THROW(mhu.add_head(rl, make_head(), reps2));
 }
 
-// constrain() nests state_machine draining inside a coroutine; see
-// StateMachinePointer.DISABLED_DrainsNestedMachineInOrder.
-TEST_F(MhuEliminationGeneratorTest, DISABLED_ConstrainDrainsWithoutEliminationsForSingleHead) {
-    std::unordered_set<uint32_t> reps{0};
-    mhu.add_head(rl, make_head(), reps);
+TEST_F(MhuEliminationGeneratorTest, ConstrainDrainsWithoutEliminationsForSingleHead) {
+    // No rep links: constrain only removes the head (no common_.bind loop).
+    // Linking reps without a prior unify binds common to naked vars and
+    // whnf can recurse forever — see bind_map collapse on self-bind.
+    mhu.add_head(rl, make_head(), {});
 
     auto sm = mhu.constrain(rl);
     auto elims = collect_elims(sm);

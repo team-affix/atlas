@@ -48,7 +48,12 @@ struct state_machine {
     }
 
     std::optional<T> resume() {
+        if (handle_.done())
+            return std::nullopt;
+        handle_.promise().last_yield_.reset();
         handle_.resume();
+        if (handle_.done())
+            return std::nullopt;
         return std::move(handle_.promise().last_yield_);
     }
 
