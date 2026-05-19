@@ -1,10 +1,9 @@
 #include <stdexcept>
 #include "../../hpp/infrastructure/copier.hpp"
-#include "../../hpp/bootstrap/locator.hpp"
 
-copier::copier() :
-    var_seq_ref(locator::locate<i_var_sequencer>()),
-    expr_pool_ref(locator::locate<i_expr_pool>()) {
+copier::copier(i_var_sequencer& var_seq, i_expr_pool& expr_pool) :
+    var_seq_ref(var_seq),
+    expr_pool_ref(expr_pool) {
 }
 
 const expr* copier::copy(const expr* e, std::unordered_map<uint32_t, uint32_t>& variable_map) const {
