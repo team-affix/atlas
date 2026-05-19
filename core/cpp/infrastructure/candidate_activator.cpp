@@ -2,6 +2,4 @@
 
 candidate_activator::candidate_activator() {}
 
-void candidate_activator::activate(const resolution_lineage* rl) {
-    // TODO: Implement candidate activation
-}
+void candidate_activator::activate(const resolution_lineage*) {}
