@@ -4,6 +4,12 @@
 class LineagePoolTest : public ::testing::Test {
 protected:
     lineage_pool pool;
+    expr goal_expr0{expr::var{0}};
+    expr goal_expr1{expr::var{1}};
+    expr rule_head0{expr::var{10}};
+    expr rule_head1{expr::var{11}};
+    rule rule_idx0{&rule_head0, {}};
+    rule rule_idx1{&rule_head1, {}};
 };
 
 // ---------------------------------------------------------------------------
@@ -11,30 +17,30 @@ protected:
 // ---------------------------------------------------------------------------
 
 TEST_F(LineagePoolTest, GoalLineageInternedTwiceReturnsSamePointer) {
-    EXPECT_EQ(pool.goal(nullptr, 0), pool.goal(nullptr, 0));
+    EXPECT_EQ(pool.goal(nullptr, &goal_expr0), pool.goal(nullptr, &goal_expr0));
 }
 
 TEST_F(LineagePoolTest, DifferentGoalIndicesReturnDifferentPointers) {
-    EXPECT_NE(pool.goal(nullptr, 0), pool.goal(nullptr, 1));
+    EXPECT_NE(pool.goal(nullptr, &goal_expr0), pool.goal(nullptr, &goal_expr1));
 }
 
 TEST_F(LineagePoolTest, ResolutionLineageInternedTwiceReturnsSamePointer) {
-    EXPECT_EQ(pool.resolution(nullptr, 0), pool.resolution(nullptr, 0));
+    EXPECT_EQ(pool.resolution(nullptr, &rule_idx0), pool.resolution(nullptr, &rule_idx0));
 }
 
 TEST_F(LineagePoolTest, DifferentResolutionIndicesReturnDifferentPointers) {
-    EXPECT_NE(pool.resolution(nullptr, 0), pool.resolution(nullptr, 1));
+    EXPECT_NE(pool.resolution(nullptr, &rule_idx0), pool.resolution(nullptr, &rule_idx1));
 }
 
 TEST_F(LineagePoolTest, GoalWithParentInternedTwiceReturnsSamePointer) {
-    const resolution_lineage* res = pool.resolution(nullptr, 0);
-    EXPECT_EQ(pool.goal(res, 0), pool.goal(res, 0));
+    const resolution_lineage* res = pool.resolution(nullptr, &rule_idx0);
+    EXPECT_EQ(pool.goal(res, &goal_expr0), pool.goal(res, &goal_expr0));
 }
 
 TEST_F(LineagePoolTest, GoalWithDifferentParentsReturnDifferentPointers) {
-    const resolution_lineage* res0 = pool.resolution(nullptr, 0);
-    const resolution_lineage* res1 = pool.resolution(nullptr, 1);
-    EXPECT_NE(pool.goal(res0, 0), pool.goal(res1, 0));
+    const resolution_lineage* res0 = pool.resolution(nullptr, &rule_idx0);
+    const resolution_lineage* res1 = pool.resolution(nullptr, &rule_idx1);
+    EXPECT_NE(pool.goal(res0, &goal_expr0), pool.goal(res1, &goal_expr0));
 }
 
 // ---------------------------------------------------------------------------
@@ -42,51 +48,51 @@ TEST_F(LineagePoolTest, GoalWithDifferentParentsReturnDifferentPointers) {
 //
 // Chain used in all pin tests:
 //   res0 (nullptr parent)
-//     └── goal0 (parent = res0, idx 0)
-//           └── res1 (parent = goal0, idx 0)
-//                 └── goal1 (parent = res1, idx 0)
+//     └── goal0 (parent = res0, idx goal_expr0)
+//           └── res1 (parent = goal0, idx rule_idx0)
+//                 └── goal1 (parent = res1, idx goal_expr0)
 // ---------------------------------------------------------------------------
 
 TEST_F(LineagePoolTest, PinGoalPinsItsResolutionParent) {
-    const resolution_lineage* res0  = pool.resolution(nullptr, 0);
-    const goal_lineage*       goal0 = pool.goal(res0, 0);
+    const resolution_lineage* res0  = pool.resolution(nullptr, &rule_idx0);
+    const goal_lineage*       goal0 = pool.goal(res0, &goal_expr0);
 
     pool.pin(goal0);
     pool.trim();
 
-    EXPECT_EQ(pool.goal(res0, 0),        goal0); // goal0 survived
-    EXPECT_EQ(pool.resolution(nullptr, 0), res0); // res0 (ancestor) survived
+    EXPECT_EQ(pool.goal(res0, &goal_expr0),        goal0); // goal0 survived
+    EXPECT_EQ(pool.resolution(nullptr, &rule_idx0), res0); // res0 (ancestor) survived
 }
 
 TEST_F(LineagePoolTest, PinLeafGoalPinsEntireChainToRoot) {
-    const resolution_lineage* res0  = pool.resolution(nullptr, 0);
-    const goal_lineage*       goal0 = pool.goal(res0, 0);
-    const resolution_lineage* res1  = pool.resolution(goal0, 0);
-    const goal_lineage*       goal1 = pool.goal(res1, 0);
+    const resolution_lineage* res0  = pool.resolution(nullptr, &rule_idx0);
+    const goal_lineage*       goal0 = pool.goal(res0, &goal_expr0);
+    const resolution_lineage* res1  = pool.resolution(goal0, &rule_idx0);
+    const goal_lineage*       goal1 = pool.goal(res1, &goal_expr0);
 
     pool.pin(goal1);
     pool.trim();
 
-    EXPECT_EQ(pool.resolution(nullptr, 0), res0);
-    EXPECT_EQ(pool.goal(res0, 0),          goal0);
-    EXPECT_EQ(pool.resolution(goal0, 0),   res1);
-    EXPECT_EQ(pool.goal(res1, 0),          goal1);
+    EXPECT_EQ(pool.resolution(nullptr, &rule_idx0), res0);
+    EXPECT_EQ(pool.goal(res0, &goal_expr0),          goal0);
+    EXPECT_EQ(pool.resolution(goal0, &rule_idx0),   res1);
+    EXPECT_EQ(pool.goal(res1, &goal_expr0),          goal1);
 }
 
 TEST_F(LineagePoolTest, PinAlreadyPinnedAncestorStopsTraversal) {
-    const resolution_lineage* res0  = pool.resolution(nullptr, 0);
-    const goal_lineage*       goal0 = pool.goal(res0, 0);
-    const resolution_lineage* res1  = pool.resolution(goal0, 0);
-    const goal_lineage*       goal1 = pool.goal(res1, 0);
+    const resolution_lineage* res0  = pool.resolution(nullptr, &rule_idx0);
+    const goal_lineage*       goal0 = pool.goal(res0, &goal_expr0);
+    const resolution_lineage* res1  = pool.resolution(goal0, &rule_idx0);
+    const goal_lineage*       goal1 = pool.goal(res1, &goal_expr0);
 
     pool.pin(goal0);  // pins res0 + goal0
     pool.pin(goal1);  // pins res1 + goal1; short-circuits at res0 (already pinned)
     pool.trim();
 
-    EXPECT_EQ(pool.resolution(nullptr, 0), res0);
-    EXPECT_EQ(pool.goal(res0, 0),          goal0);
-    EXPECT_EQ(pool.resolution(goal0, 0),   res1);
-    EXPECT_EQ(pool.goal(res1, 0),          goal1);
+    EXPECT_EQ(pool.resolution(nullptr, &rule_idx0), res0);
+    EXPECT_EQ(pool.goal(res0, &goal_expr0),          goal0);
+    EXPECT_EQ(pool.resolution(goal0, &rule_idx0),   res1);
+    EXPECT_EQ(pool.goal(res1, &goal_expr0),          goal1);
 }
 
 // ---------------------------------------------------------------------------
@@ -94,21 +100,21 @@ TEST_F(LineagePoolTest, PinAlreadyPinnedAncestorStopsTraversal) {
 // ---------------------------------------------------------------------------
 
 TEST_F(LineagePoolTest, TrimKeepsPinned) {
-    const goal_lineage* g0 = pool.goal(nullptr, 0);
-    pool.goal(nullptr, 1);
+    const goal_lineage* g0 = pool.goal(nullptr, &goal_expr0);
+    pool.goal(nullptr, &goal_expr1);
 
     pool.pin(g0);
     pool.trim();
 
-    EXPECT_EQ(pool.goal(nullptr, 0), g0);  // pinned: same pointer
+    EXPECT_EQ(pool.goal(nullptr, &goal_expr0), g0);  // pinned: same pointer
 }
 
 TEST_F(LineagePoolTest, TrimIsIdempotentForPinnedItems) {
-    const goal_lineage* g = pool.goal(nullptr, 0);
+    const goal_lineage* g = pool.goal(nullptr, &goal_expr0);
     pool.pin(g);
     pool.trim();
     pool.trim();
-    EXPECT_EQ(pool.goal(nullptr, 0), g);
+    EXPECT_EQ(pool.goal(nullptr, &goal_expr0), g);
 }
 
 // ---------------------------------------------------------------------------
@@ -124,8 +130,8 @@ TEST_F(LineagePoolTest, ImportNullResolutionReturnsNull) {
 }
 
 TEST_F(LineagePoolTest, ImportGoalLineageFromExternalPointers) {
-    resolution_lineage raw_res{nullptr, 0};
-    goal_lineage       raw_goal{&raw_res, 0};
+    resolution_lineage raw_res{nullptr, &rule_idx0};
+    goal_lineage       raw_goal{&raw_res, &goal_expr0};
 
     const goal_lineage* p = pool.import(&raw_goal);
     EXPECT_NE(p, nullptr);
@@ -133,13 +139,13 @@ TEST_F(LineagePoolTest, ImportGoalLineageFromExternalPointers) {
 }
 
 TEST_F(LineagePoolTest, ImportResolutionRecursivelyImportsParent) {
-    goal_lineage       raw_parent{nullptr, 0};
-    resolution_lineage raw_leaf{&raw_parent, 0};
+    goal_lineage       raw_parent{nullptr, &goal_expr0};
+    resolution_lineage raw_leaf{&raw_parent, &rule_idx0};
 
     const resolution_lineage* leaf = pool.import(&raw_leaf);
     EXPECT_NE(leaf, nullptr);
 
-    const goal_lineage* parent = pool.goal(nullptr, 0);
+    const goal_lineage* parent = pool.goal(nullptr, &goal_expr0);
     EXPECT_EQ(leaf->parent, parent); // parent was also interned into the pool
     EXPECT_EQ(pool.import(&raw_parent), parent); // re-import of root returns same ptr
 }

@@ -1,20 +1,12 @@
 #include <gtest/gtest.h>
 #include <optional>
 #include "../../../core/hpp/infrastructure/expr_pool.hpp"
-#include "../../../core/hpp/bootstrap/bindings.hpp"
-#include "../../../core/hpp/bootstrap/locator.hpp"
 #include "../../../core/hpp/utility/trail.hpp"
 
 class ExprPoolTest : public ::testing::Test {
 protected:
-    void SetUp() override {
-        b.bind<i_trail>(t);
-        locator::register_bindings(&b);
-        pool.emplace();
-    }
-    void TearDown() override { locator::register_bindings(nullptr); }
+    void SetUp() override { pool.emplace(t); }
     trail t;
-    bindings b;
     std::optional<expr_pool> pool;
 };
 
