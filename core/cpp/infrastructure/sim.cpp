@@ -2,6 +2,7 @@
 
 sim::sim(
     size_t max_resolutions,
+    i_lineage_pool& lp,
     i_solution_detector& sd,
     i_conflict_detector& cd,
     i_unit_goal_detector& ugd,
@@ -10,10 +11,11 @@ sim::sim(
     i_elimination_generator& eg,
     i_elimination_router& er,
     i_resolver& r,
-    i_goal_candidates_acceptor& gca,
+    i_get_goal_candidate_rules& ggcr,
     i_goal_candidates_extractor_visitor_factory& gcevf)
     :
     max_resolutions(max_resolutions),
+    lp(lp),
     sd(sd),
     cd(cd),
     ugd(ugd),
@@ -22,7 +24,7 @@ sim::sim(
     eg(eg),
     er(er),
     r(r),
-    gca(gca),
+    ggcr(ggcr),
     gcevf(gcevf) {
 }
 
@@ -68,10 +70,14 @@ const resolution_lineage* sim::next_resolution() {
 
     // 1. get the next unit goal
     const goal_lineage* gl = ug.pop();
-    // 2. determine which candidate it still has
-    std::unordered_set<const resolution_lineage*> extracted_candidates;
+    // 2. get candidate rules for this goal
+    auto& candidate_rules = ggcr.get(gl);
+    // 3. create an extraction set
+    std::unordered_set<const rule*> extracted_candidates;
+    // 4. create a visitor for the candidate rules
     auto vis = gcevf.make(extracted_candidates);
-    gca.accept(gl, *vis);
-    // 3. return the first and only candidate
-    return *extracted_candidates.begin();
+    // 5. visit the candidate rules
+    candidate_rules.accept(*vis);
+    // 6. return the first and only candidate
+    return lp.resolution(gl, *extracted_candidates.begin());
 }

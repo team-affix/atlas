@@ -5,10 +5,10 @@
 #include "../interfaces/i_goal_candidates_extractor_visitor.hpp"
 
 struct goal_candidates_extractor_visitor : i_goal_candidates_extractor_visitor {
-    goal_candidates_extractor_visitor(std::unordered_set<const resolution_lineage*>&);
-    void visit(const resolution_lineage*) override;
+    goal_candidates_extractor_visitor(std::unordered_set<const rule*>&);
+    void visit(const rule*) override;
 private:
-    std::unordered_set<const resolution_lineage*>& extracted_candidates;
+    std::unordered_set<const rule*>& extracted_candidates;
 };
 
 #endif
