@@ -19,6 +19,7 @@ protected:
 
     expr var0{expr::var{0}};
     expr var1{expr::var{1}};
+    expr var2{expr::var{2}};
 };
 
 static uint32_t var_index(const expr* e) {
@@ -76,6 +77,19 @@ TEST_F(CopierTest, CopyNestedFunctorRemapsAllVars) {
     EXPECT_EQ(var_index(f.args[1]), 1u);
     EXPECT_EQ(map.at(0), 0u);
     EXPECT_EQ(map.at(1), 1u);
+}
+
+TEST_F(CopierTest, CopyTernaryFunctorRemapsAllVars) {
+    expr f{expr::functor{"f", {&var0, &var1, &var2}}};
+    std::unordered_map<uint32_t, uint32_t> map;
+    const expr* p = cp->copy(&f, map);
+    const expr::functor& out = std::get<expr::functor>(p->content);
+    EXPECT_EQ(out.name, "f");
+    ASSERT_EQ(out.args.size(), 3u);
+    EXPECT_EQ(var_index(out.args[0]), 0u);
+    EXPECT_EQ(var_index(out.args[1]), 1u);
+    EXPECT_EQ(var_index(out.args[2]), 2u);
+    EXPECT_EQ(map.size(), 3u);
 }
 
 TEST_F(CopierTest, CopySeparateCallsAdvanceSequencer) {

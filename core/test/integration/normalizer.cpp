@@ -18,6 +18,8 @@ protected:
     std::optional<normalizer> norm;
 
     expr var0{expr::var{0}};
+    expr var1{expr::var{1}};
+    expr var2{expr::var{2}};
 
     const expr* pool_f() { return pool->functor("f", {}); }
     const expr* pool_g() { return pool->functor("g", {}); }
@@ -74,6 +76,37 @@ TEST_F(NormalizerTest, NormalizeNestedFunctorRebuildsStructure) {
     EXPECT_EQ(inner.name, "g");
     EXPECT_EQ(inner.args[0], g);
     EXPECT_EQ(p, pool->functor("f", {pool->functor("g", {g})}));
+}
+
+TEST_F(NormalizerTest, NormalizeBinaryFunctorNormalizesBothArgs) {
+    const expr* a = pool->functor("a", {});
+    const expr* b = pool->functor("b", {});
+    expr raw{expr::functor{"f", {&var0, &var1}}};
+    bm.bind(0, a);
+    bm.bind(1, b);
+    const expr* p = norm->normalize(&raw);
+    const expr::functor& out = std::get<expr::functor>(p->content);
+    ASSERT_EQ(out.args.size(), 2u);
+    EXPECT_EQ(out.args[0], a);
+    EXPECT_EQ(out.args[1], b);
+    EXPECT_EQ(p, pool->functor("f", {a, b}));
+}
+
+TEST_F(NormalizerTest, NormalizeTernaryFunctorNormalizesAllArgs) {
+    const expr* a = pool->functor("a", {});
+    const expr* b = pool->functor("b", {});
+    const expr* c = pool->functor("c", {});
+    expr raw{expr::functor{"f", {&var0, &var1, &var2}}};
+    bm.bind(0, a);
+    bm.bind(1, b);
+    bm.bind(2, c);
+    const expr* p = norm->normalize(&raw);
+    const expr::functor& out = std::get<expr::functor>(p->content);
+    ASSERT_EQ(out.args.size(), 3u);
+    EXPECT_EQ(out.args[0], a);
+    EXPECT_EQ(out.args[1], b);
+    EXPECT_EQ(out.args[2], c);
+    EXPECT_EQ(p, pool->functor("f", {a, b, c}));
 }
 
 TEST_F(NormalizerTest, NormalizeIdempotentOnAlreadyNormalized) {
