@@ -9,7 +9,8 @@ struct i_active_goals {
     virtual void insert(const goal_lineage*) = 0;
     virtual void erase(const goal_lineage*) = 0;
     virtual bool contains(const goal_lineage*) const = 0;
-    virtual void accept(i_visitor<const goal_lineage*>&) = 0;
+    virtual void accept(i_visitor<const goal_lineage*>&) const = 0;
+    virtual size_t size() const = 0;
     virtual bool empty() const = 0;
 };
 

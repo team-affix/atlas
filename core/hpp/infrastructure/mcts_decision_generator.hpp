@@ -5,20 +5,30 @@
 #include "../interfaces/i_decision_generator.hpp"
 #include "../interfaces/i_lineage_pool.hpp"
 #include "../interfaces/i_active_goals.hpp"
-#include "../interfaces/i_goal_candidates_acceptor.hpp"
+#include "../interfaces/i_get_goal_candidate_rules.hpp"
+#include "../interfaces/i_mcts_choice_generator_goal_visitor_factory.hpp"
+#include "../interfaces/i_mcts_choice_generator_candidate_visitor_factory.hpp"
 #include "../../../mcts/include/mcts.hpp"
 #include "../value_objects/mcts_choice.hpp"
 
 struct mcts_decision_generator : i_decision_generator {
-    mcts_decision_generator();
+    mcts_decision_generator(
+        i_lineage_pool& lp,
+        const i_active_goals& ag,
+        i_get_goal_candidate_rules& ggcr,
+        i_mcts_choice_generator_goal_visitor_factory& gvf,
+        i_mcts_choice_generator_candidate_visitor_factory& cvf,
+        monte_carlo::simulation<mcts_choice, std::mt19937>& sim);
     const resolution_lineage* generate() override;
 private:
     const goal_lineage* choose_goal();
-    size_t choose_candidate(const goal_lineage*);
+    const rule* choose_candidate(const goal_lineage*);
 
     i_lineage_pool& lp;
     const i_active_goals& ag;
-    i_goal_candidates_acceptor& gca;
+    i_get_goal_candidate_rules& ggcr;
+    i_mcts_choice_generator_goal_visitor_factory& gvf;
+    i_mcts_choice_generator_candidate_visitor_factory& cvf;
     monte_carlo::simulation<mcts_choice, std::mt19937>& sim;
 };
 

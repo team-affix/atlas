@@ -3,7 +3,8 @@
 
 #include <variant>
 #include "lineage.hpp"
+#include "rule.hpp"
 
-using mcts_choice = std::variant<const goal_lineage*, size_t>;
+using mcts_choice = std::variant<const goal_lineage*, const rule*>;
 
 #endif
