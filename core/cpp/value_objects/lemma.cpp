@@ -16,6 +16,8 @@ const std::unordered_set<const resolution_lineage*>& lemma::get_resolutions() co
 
 void lemma::remove_ancestors(const resolution_lineage* rl, std::unordered_set<const resolution_lineage*>& visited) {
     while (rl) {
+        if (!rl->parent || !rl->parent->parent)
+            break;
         const resolution_lineage* grandparent = rl->parent->parent;
 
         if (visited.contains(grandparent))

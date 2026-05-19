@@ -1,6 +1,6 @@
 #include <gtest/gtest.h>
-#include "../../../../core/hpp/infrastructure/unifier.hpp"
-#include "../../../../core/hpp/infrastructure/bind_map.hpp"
+#include "../../../core/hpp/infrastructure/unifier.hpp"
+#include "../../../core/hpp/infrastructure/bind_map.hpp"
 
 class UnifierBindMapTest : public ::testing::Test {
 protected:
