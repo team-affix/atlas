@@ -1,10 +1,9 @@
 #include <stdexcept>
 #include "../../hpp/infrastructure/expr_pool.hpp"
-#include "../../hpp/bootstrap/locator.hpp"
 #include "../../hpp/utility/backtrackable_set_insert.hpp"
 
-expr_pool::expr_pool() :
-    exprs(locator::locate<i_trail>(), {}) {
+expr_pool::expr_pool(i_trail& t) :
+    exprs(t, {}) {
 }
 
 const expr* expr_pool::functor(const std::string& name, std::vector<const expr*> args) {

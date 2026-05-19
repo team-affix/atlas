@@ -5,9 +5,10 @@
 #include "../interfaces/i_expr_pool.hpp"
 #include "../value_objects/expr.hpp"
 #include "../utility/tracked.hpp"
+#include "../utility/i_trail.hpp"
 
 struct expr_pool : i_expr_pool {
-    expr_pool();
+    expr_pool(i_trail& t);
     const expr* functor(const std::string& name, std::vector<const expr*> args) override;
     const expr* var(uint32_t) override;
     const expr* import(const expr*) override;
