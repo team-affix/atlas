@@ -53,6 +53,8 @@ state_machine<const resolution_lineage*> mhu_elimination_generator::revalidate(u
     for (auto rl : invalidated_rls) {
         // 2.1 unify and link the parent goal's expr with the copied rule head
         if (!unify_and_link(rl, expr_pool_.var(rep), new_rep)) {
+            // remove the head from the map
+            heads_.erase(rl);
             // prevent re-linking the conflicting head
             invalidated_rls.erase(rl);
             co_yield rl;
