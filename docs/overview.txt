@@ -1,0 +1,485 @@
+First question
+What problem is core meant to solve, in your own terms?
+
+For example: is it a Prolog-style Horn-clause prover with tabling/CDCL/MHU-style nogood learning, something closer to ASP/SAT with a custom rule language, a planner, or something else entirely?
+
+And what is the intended output of a successful run — a substitution/bindings, a proof tree, a model, or “found vs refuted” only?
+
+A concrete answer here will anchor everything else (why sim vs solver, why lineage is split the way it is, what “elimination” means in your vocabulary).
+
+Scenario check (optional correction now or later):
+When sim has unit goals queued, it pops one, extracts a single candidate rule via goal_candidates_extractor_visitor, and calls lp.resolution(gl, *extracted_candidates.begin()) — so a unit goal is treated as “exactly one viable candidate rule,” and the sim never branches on that goal in that step. Is that intentional (deterministic unit propagation), or should there be cases with multiple unit candidates?
+
+core is supposed to implement a CHC solver (or really, via the strategy pattern and dependency injection, many potential solvers). Keep the questions short. Very few words if possible. Like 1 paragraph is fine
+
+Got it — CHC engine, pluggable strategies via DI.
+
+Next: Where do constraints live in your model — on rules, on goals, in bind_map, or somewhere else I haven’t found yet?
+
+Scenario: sim is the search loop; solver orchestrates setup/teardown + CDCL routing and yields solver_yield — is sim one CHC solving strategy among several, or is solver the outer “multi-strategy” shell and sim always inside it?
+
+Constraints, what do you mean by this?. You dont have to give scenarios each time. That was meant for if I answer question of yours and you want to clarify your understanding
+
+In CHC literature, “constraints” usually means the background-theory part of a clause (e.g. arithmetic facts in the antecedent), not the Horn body goals.
+
+I don’t see a separate constraint type in core — just rule / expr. So I was asking whether those theory constraints are encoded inside expr, delegated outside core, or not in scope yet.
+
+Revised question: How does your CHC instance map to rule / expr — pure Horn, or are theory constraints represented somehow I should look for?
+
+No theory constraints. It is just pure CHC horned clauses and goals. No residual goals either.
+
+Noted — pure Horn CHC, no theory layer, no residuals.
+
+Next: What is the split between i_solver / solver and i_sim / sim — different algorithms, or one wraps the other as fixed plumbing?
+
+I will answer your question in a similar way: the point of the interface/infrastructure split is to allow for better testability and decoupling. This goes for every interface.
+
+Understood — interfaces are seams for tests and swapping implementations, not just cosmetic abstraction.
+
+That still leaves sim vs solver: is one the actual CHC search algorithm and the other lifecycle/orchestration (setup, CDCL learn loop, teardown), or are they two interchangeable strategies at the same level?
+
+Oh yes, so the goal of sim is a SINGLE CHC RUN until we hit either conflict/solution/depth_exceeded. The CHC system does not feature backtracking. The reason for this is that it uses MCTS for search, to ensure completeness over satisfying models (make sure if a solution exists that it is eventually found). CHC systems that commit to certain subproblems fully may expend infinite resources trying to solve the subproblem and hence will never find solutions to the main problem (divergence) this is supposed to be a divergence-free solver.
+
+That clarifies a lot: sim is one forward CHC episode (no search backtracking), bounded by max_resolutions, and MCTS picks resolutions so you don’t get stuck proving one branch forever.
+
+Next: What is solver responsible for beyond calling sim — outer loop over multiple runs, lemma learning across runs, or something else?
+
+Okay so solver is responsible for doing the outer things which must be done when sim is not actively running. For example, learning what to avoid using CDCL. (Adding a new entry into the CDCL store). This must be done after a sim since the sim provides the set of decisions made that led to the actual conflict
+
+Makes sense — sim produces the conflict trace; solver applies CDCL learning when idle.
+
+Next: Does solver::solve() loop (run sim → learn → reset → run again) until solution_found / refutation_found, or is it a single sim plus one learn step per call?
+
+no, it just does a sim step plus learn call plus some teardown of previous sim and setup of new sim. Like its just lifecycle management. The reason we return after only one sim is to give the caller maximal control over how many sims it wants to do 
+
+Clear — solver is one tick: sim → learn → teardown/setup; the caller owns the outer loop.
+
+Next: What state does sim_teardown / sim_setup reset vs what persists across ticks (CDCL avoidances, MCTS tree, bind maps, active goals)?
+
+sim_teardown and sim_setup do some things which are important to mention:
+
+
+
+sim_teardown
+
+1. backtracks the trail (pops the frame used for the sim off of the trail)
+
+2. clears any stores which are not tracked via the trail and should be clear or have only a few elements at the start of the sim
+
+
+
+sim_setup
+
+1. pushes to the trail
+
+2. adds any initial content to any of the stores (like initial goal expressions)
+
+So the trail is per-sim transactional undo, not search backtracking — that fits.
+
+Next: Which stores are trail-backed (tracked / backtrackable maps) vs manually cleared in sim_teardown?
+
+so, CDCL is the most obvious answer and for good reason. Every time we do a simulation (whether we hit a conflict, solution, or depth_exceeded), we learn to avoid doing the exact same decision set twice. So it gets learned via CDCL. However, CHC solving is NP hard. This means that the CDCL store will grow to be NP in size, and we can not affort to clear it and manually add all entries back each sim, as that could soon become more work than the sims themselves. Therefore, we just backtrack, putting back the avoidances that got touched (much less expensive)
+
+Got it — CDCL avoidances stay in the long-lived store but sim only mutates a subset, undone via trail backtrack instead of rebuild.
+
+Next: Besides CDCL, what are the main manually-cleared stores in sim_teardown (e.g. MHU heads, active goals, bind map)?
+
+we also backtrack the elimination_backlog, and expr_pool, as well as all of the "sequencers" the MHU notably, is NOT backtracked right now (may 20) due to the way it works, we dont have to make it backtrackable since at the start of the sim, there are no variable bindings (clearing is okay) and also, we do things cleverly w.r.t. the unifications having a lookahead behavior (we dont have to commit the bindings to the common bind map just to see IF the unifications would work.
+
+
+
+For manually cleared stores, there are going to be many. As a rule of thumb, any stores that have const goal_lineage* as their key will be cleared. This is because, before sim start, there are no goals. Same thing goes for const resolution_lineage*
+
+
+
+Also notably, one structure operates completely differently which is lineage_pool. It is neither backtracked nor cleared. It has a pin+trim system. We pin lineages that are valuable to us for referencing in future sims, and we then clear the ones that are not pinned
+
+Useful split: trail for CDCL/backlog/expr_pool/sequencers; lineage-keyed stores wiped; lineage_pool pinned and trimmed; MHU cleared cheaply thanks to no committed bindings at sim start and unify lookahead.
+
+Next: When do you pin a lineage, and what does trim keep vs drop?
+
+I think better first question: WHAT is a lineage
+
+Fair — should’ve started there.
+
+What is a lineage? (In your terms: what does a goal_lineage vs resolution_lineage identify, and why parent pointers + expr* / rule* instead of storing the full path?)
+
+So a lineage is a derivation path. If you want to uniquely identify a goal or uniquely identify a SPECIFIC resolution taking place (like X goal resolved against Y rule), that is the system that handles that. The reason they are called lineages is because each lineage object (goal_lineage for example) stores enough information to be able to retrace how that goal was derived since the start of the sim. It is literally the lineage of the goal (which includes prior goals and prior resolutions). Each lineage object can be thought of as a linked list (is a linked list) with the terminating node being nullptr (the root of the tree).
+
+
+
+Each type of lineage has a predecessor which is of the opposite type of lineage. so it goes resolution -> goal ->resolution -> goal -> ...
+
+The reason for this is to accurately model the behavior of the CHC search as what it is: an AND-OR tree. For each set of goals, we want ALL of them to be resolved, and for each goal, we have several CHOICES (or) for how they can be resolved.
+
+
+
+To answer your earlier q: Lineages are referenced in decision lemmas which are learned by CDCL between sims. This is when we pin the lineages, since we are going to need those lineages to be accessible for future sims in the CDCL object.
+
+
+
+Also, lineage_pool is the current way of making lineages, since it is a highly memory-efficient way to represent many lineages. They have cons-hashing so two lineages that share a parent ACTUALLY share that same parent (in memory). Making it so we end up with effectively a tree of lineages in the lineage_pool.
+
+Clear picture: lineages are cons-hashed derivation paths in an AND-OR tree; pinned when embedded in CDCL lemmas across sims.
+
+Next: What exactly is a “decision” in the CDCL sense — a resolution_lineage*, an MCTS choice, or something else recorded during sim?
+
+There are two types of resolutions.
+
+
+
+A decision is a resolution made at the time of a fixpoint (when no forced resolutions exist, so a decision has to be made for what goal to resolve next and how). The other type of resolution is a unit resolution / unit propagation
+
+Two resolution kinds: forced unit propagation vs discretionary decisions at a fixpoint.
+
+Next: For CDCL avoidance, is the learned set only the decision resolutions from that sim, or does it include unit resolutions too?
+
+YES. ONLY the decision resolutions. This is because it is wasteful to record unit propagations. They flow naturally from decisions
+
+Makes sense — lemmas are over the decision subset only; units are implied.
+
+Next: What makes a goal “unit” in your engine — exactly one active candidate, one DB+candidate total, or something else?
+
+a goal is unit IFF there is exactly one active candidate
+
+One active candidate — matches unit_goal_detector / conflict = zero.
+
+Next: What is the distinction between DB rules and candidate rules, and when does a rule move from one set to the other?
+
+okay so a DB rule is a rule found in the database, stored in its original form. A candidate rule is sampled FROM the set of DB rules, and still is a rule, but it has had its head copied from the database (fresh vars) and other things for safe unification against. Also, note that the definition of candidate also requires that it belongs to the candidate set for that goal. Note that the candidate set for a goal may reduce in size as the sim progresses, since some candidates may be eliminated (either by CDCL or by MHU elimination (head unification fails))
+
+DB = canonical rules; candidates = per-goal copies in a shrinking active set, dropped by CDCL/MHU failures.
+
+Next: When does a DB rule enter a goal’s candidate set — upfront at sim_setup, lazily on goal activation, or on demand during search?
+
+a DB rule enters a goals candidate set on demand. There are lots of subgoals involved in CHC solving, so creating the candidate sets only at sim_setup wouldn't work. it has to be during the sim, as we go. Yeah, basically it is around the same time that we activate the goal that we activate its candidates (which we query from the DB). This is currently handled in the resolver
+
+On-demand with goal activation via resolver — not batch at setup.
+
+Next: What does MHU do during sim, in one sentence — propagate failed unifications, detect equalities, or something else?
+
+propagate failed unifications. So basically, there is this problem which is we have a bunch of "uncommitted" unifications of active goals to active candidate heads (copies of db rule heads)
+
+
+
+We need to then ACCEPT (commit to) one of these prospective unifications (which accepts the new bindings from that bind_map into the common bind_map). However, when doing this, the previously existing unify_heads (those which still exist and were not chosen to commit yet) need to have their local bind maps REBASED on the new common bind_map, WHICH MAY CAUSE THEM TO NOW BE CONFLICTING. (colliding unification). When this happens, it means that that candidate has been ruled out.
+
+So MHU maintains prospective unifications and eliminates candidates whose heads become incompatible after another commit rebases the common bindings.
+
+Next: What triggers committing one unify-head into common_bind_map — a resolver::resolve, a decision resolution, or something dedicated?
+
+I won't say any specific part of the code since that may change. But generally, it happens BEFORE the process of activating new candidates during the resolution step.
+
+
+
+so it goes:
+
+
+
+Eliminate old candidates -> Try to activate new candidates
+
+
+
+The reason for this order is: The elimination backlog. If we are able to determine that some candidates should be eliminated BEFORE they are created, we add the eliminations to the backlog, and then BEFORE creating (activating) those candidates, we just check if they are in the backlog and avoid making them altogether.
+
+Eliminate-then-activate ordering + backlog avoids creating candidates you already know are dead.
+
+Next: During sim, what does CDCL constrain do — only enforce learned decision-set avoidances, or also derive new eliminations mid-run?
+
+It derives new eliminations when any avoidance drops down to unit (only having one member). Because a multi-entry avoidance means "avoid doing these several things simultaneously". One thing means avoid doing this one thing at all costs. When this occurs, we return them as eliminations (really, we yield them via a coroutine yield). The reason we use a coroutine for yielding eliminations is, we want to detect conflicts in the sim early (when any goal has zero candidates). We may not need to know about all of the eliminations to be able to find our first conflict, and terminate the sim early.
+
+Unit avoidances become immediate eliminations; coroutine yields let sim stop at the first zero-candidate conflict without draining all propagations.
+
+Next: When is a new avoidance learned — only after sim ends in conflicted, or also on depth_exceeded / solved?
+
+ALWAYS, great question. All reasons for termination should produce a  learned cdcl avoidance. This is because, even when finding a solution, we do not have any reason to want to derive the solution twice. This avoiding of the solution after finding it actually provides the ability to enumerate solutions as well.
+
+Learning on every termination — including solutions — blocks repeating the same decision set and enables enumerating multiple solutions.
+
+Next: How does solution_detector decide the CHC problem is solved — all initial goals resolved, empty active goals, or something else?
+
+Empty active goals
+
+Empty active_goals — clean criterion.
+
+Next: Is a refutation (refutation_found) “CDCL exhausted all decision sets” / caller gives up, or is there an in-core detection for unsat?
+
+Oh, refutation just means that all paths have been explored. We get that sometimes after enumerating all solutions to a problem.
+
+Refutation = search space exhausted (e.g. all solutions enumerated), not necessarily a single in-sim conflict.
+
+Next: Who sets solver_yield::refutation_found — solver when CDCL+MCTS has nothing left, or the outer caller after N failed sims?
+
+well, this isnt coded yet (may 20) but basically, it should happen at the solver level. When somebody calls solve() it should be able to detect refutation BEFORE running the next sim
+
+Noted — pre-sim refutation check in solver, still TODO.
+
+Next: What do the “sequencers” (var_sequencer, cdcl_sequencer, etc.) assign — fresh variable indices, rule ordering, or something else?
+
+primarily it is used for variable ordering. And in fact, we don't have a need for cdcl_sequencer anymore so that shall be removed
+
+Variable ordering via sequencers; cdcl_sequencer on the way out.
+
+Next: Why overlay_bind_map on top of per-candidate bind_map + common_bind_map — what does overlay see that common alone cannot?
+
+overlay_bind_map also itself derives from i_bind_map. It just first looks up bindings in the local bind_map to that specific unify_head before falling back to lookups in the common bind_map if no binding exists. This is a shadowing effect.
+
+Shadowing: candidate-local bindings override common_bind_map for prospective unification without committing yet.
+
+Next: What is translation_map for — remapping copied rule variables back to DB indices, or something else?
+
+The copier uses / writes to the translation_map when copying. Basically, it is used to tell the body of the rule (when it eventually gets copied after accepting that candidate) how to copy the variables in the body exprs such that the copied vars line up correctly with the copied vars from copying the rule head. So we get accurate subgoals
+
+Translation map ties head-copy var allocation to body-copy so subgoals match the accepted candidate head.
+
+Next: goal_lineage stores expr* idx but there is also i_get_goal_expr — is idx the goal pattern and get_goal_expr the instantiated goal under current bindings?
+
+Okay so this may seem confusing, and was a recent decision, but instead of having size_t for the index of goal_lineage and resolution_lineage, we store some domain-specific information. For resolution_lineage, we store const rule* as the index (pointer to the ORIGINAL databse rule). And for goals, we use const expr* as its index. This is the specific expression stored in the chosen rule body BEFORE COPYING ALSO. So, the ORIGINAL expression in the original rule body in the database. It is just used for indexing that goal. However, to get the current expression at that goal, you use i_get_goal_expr. This will return to you the current cached COPIED goal expression at that goal.
+
+So lineage idx is a stable identity key (original rule / original body expr); get_goal_expr is the live copied expr used for unification.
+
+Next: When does the cached goal expression get updated — on each bind commit, on resolve, or only when that goal is activated?
+
+hmm. This is great. What do you mean "updated"
+
+By “updated” I meant: when is the cached copy in i_get_goal_expr first written, and does it ever change while that goal stays active (e.g. after MHU commits bindings into common_bind_map), or is it fixed at activation and only interpretation via whnf/overlay changes?
+
+Goal expressions are set up once (written once). However, the bindings for the variables which are used in that expression do update when resolving (external to that expression, so we never need to update the expr).
+
+Expr tree is immutable per activation; binding changes go through bind_map / whnf, not rewriting the cached goal.
+
+Next: What does normalizer / whnf do in your engine — full term normalization, or mainly follow variable bindings?
+
+whnf() is a function belonging to i_bind_map. And it serves the sole purpose of implementing a collapsing union-find in the map of var bindings. As weak head normal form states, it only looks up the union find in the top-level equivalence class. So if we reach a functor at the end of the equivalence class, but it has some variable children, we don't recur to the children. The functor is a base case for whnf. Really, functor is a base case for whnf just because any terminal entry in an equivalence class is the base case. And functors themselves, when belonging to an equivalence class ARE the terminal entity, tautologically.
+
+Union-find collapse at the top level only — functors are WHNF terminals, no recursive normalization under them.
+
+Next: What does decision_memory record during a sim, and when is it read for CDCL learning?
+
+Oh, I forgot to answer. normalizer actually constructs NEW expression trees with the FULLY NORMALIZED VARIABLES INSIDE IT. This could look like taking a functor `f(A,B)` and turning it into `f(abc,def)` if A=abc,B=def.
+
+
+
+decision_memory just gets written to each time there is a decision, and we store the resolution_lineage of the decision being made. Every resolution (the two types) has an associated resolution_lineage
+
+normalizer = deep rebuild with bindings applied; whnf = shallow union-find view — clear split.
+
+Clarify: Does decision_memory log only fixpoint decisions, or every resolution including unit propagation?
+
+only fixpoint resolutions (aka decisions). Not those which are unit propagated
+
+Matches CDCL — decisions only, not units.
+
+Next: What is an mcts_choice — (goal_lineage, rule*), (goal, candidate resolution_lineage*), or something else MCTS optimizes over?
+
+on that earlier note, resolution_memory is the counterpart, where we log every resolution made. Important for reporting back the proof of the solution.
+
+
+
+an mcts_choice generically is the choice type for monte carlo. monte carlo chooses first WHICH goal to resolve and secondly HOW to resolve it
+
+resolution_memory = full proof trace; decision_memory = CDCL subset. mcts_choice as variant<goal*, rule*> matches the two-step pick.
+
+Next: What does MCTS optimize for here — solution found, depth to empty active goals, or something else as reward/terminal?
+
+oh, okay WONDERFUL You are asking this.
+
+
+
+
+
+So, MCTS is general. We can make it optimize for whatever we want to during our search. However, one of the most practical answers which we use is optimizing for shallow conflicts (in terms of decision depth).
+
+
+
+So basically, we want to have good practices for heuristic search, so we always want to be ruling out the shallowest conflicts so it cuts off the most of the search space early. Note that this is our effective replacement for the implication graph which is used in typical CDCL implementations. We optimize for finding the smallest decision set that leads to the conflict.
+
+Shallow-conflict MCTS as your stand-in for an implication graph — learn small decision sets that fail fast.
+
+Next: How does a rollout estimate “decision depth at conflict” — run a truncated sim, count decision_memory size at conflicted, or something lighter?
+
+It doesn't estimate on rollout right now but in the future that may be implemented (value model)
+
+Noted — value model for shallow conflicts is future work.
+
+Next: What signal does MCTS use today to score/backpropagate — real sim outcomes only, random playout length, or something else?
+
+the negative of the decision set size.
+
+
+
+NOTE: NOT the negative of the decision *lemma* size. This is because lemmas do not reflect the actual number of decisions made, where this information is extremely important for whether it cuts off a large chunk of the state space.
+
+Reward = -decision_memory.size() — actual decisions, not lemma cardinality.
+
+Next: What is a fixpoint in sim — no unit goals queued and no CDCL/MHU eliminations pending, or something else?
+
+a fixpoint is when we have no unit goals available after doing all eliminations for a single resolution etc. simple as that.
+
+Fixpoint = eliminations done for this step and unit_goals empty → time for MCTS.
+
+Next: Does one sim loop iteration equal exactly one resolve (one resolution lineage), with eliminations bundled inside that step?
+
+yes.
+
+One iteration = one resolution + its elimination wave.
+
+Next: What does max_resolutions cap — decision count only, or all resolutions including unit propagation?
+
+all resolutions.
+
+All resolutions — so unit propagation eats the budget too.
+
+Next: When depth_exceeded triggers CDCL learn, is the avoided set the partial decision_memory so far, or something else?
+
+well, whenever doing CDCL.learn, we don't learn the whole decision memory. We first construct what we call a "decision lemma" aka an avoidance. This is a reduced version of the set of decisions by removing decisions whose information is already implied by the presence of other decisions in the set. (e.g. an ancestor decision and a child decision, the ancestor will be removed since the child already points indirectly to that ancestor)
+
+Lemma = minimal decision set via lineage redundancy pruning, not raw decision_memory.
+
+Next: Is redundancy purely “resolution_lineage A is ancestor of B in the lineage chain,” or are there other prune rules?
+
+close. a DECISION lemma is a minimal decision set.
+
+
+
+A RESOLUTION lemma is what we actually return in case of finding a solution, as the proof object.
+
+Decision lemma = CDCL avoidance (minimal decisions); resolution lemma = solution proof artifact.
+
+Next: Is a resolution lemma essentially the full resolution_memory trace, or is it also minimized?
+
+its also minimized. lemma is a struct in our codebase that we use in common for both
+
+Shared lemma type, both minimized — likely same ancestor-stripping as decisions but over full resolutions.
+
+Next: For resolution-lemma minimization, do you drop unit resolutions too, or only redundant ones implied by other resolutions in the trace?
+
+yes. same thing as for decision lemma
+
+Same ancestor-implied pruning for both lemma kinds.
+
+Next: What is expr_pool for — interning/dedup of copied exprs across the sim, or something else?
+
+expr_pool is for interning (memory efficiency) only.
+
+
+
+We try to make the rest of the program not have its behavior rely on this fact. So we don't check pointer equality to determine expr equality. Its just for efficiency reasons.
+
+Interning for memory only — semantics stay structural, not pointer-based.
+
+Next: What is the difference between candidate_activator putting a resolution in the active set vs goal_activator activating the parent goal?
+
+they both do roughly symmetrical things. goal_activator creates all information in all stores necessary for that goal's existence. For candidate_activator, it creates all information for the candidate rule only. They are not nested operations. They are called one after another
+
+Symmetric store setup: goal first, then each candidate — sequential, not nested.
+
+Next: When goal_deactivator runs on the parent after resolve, what does “deactivated” mean — removed from active_goals only, or also tearing down candidates/subgoals?
+
+it means tearing down of ONLY THAT goal. ALL subgoals REMAIN. It also does not affect the candidates of the deactivating goal.
+
+Parent goal torn down; body subgoals and that goal’s candidates stay.
+
+Next: What is deactivated_candidate_memory vs candidate_deactivator — same lifecycle stage, different stores?
+
+deactivated_candidate_memory is like resolution_memory in the sense that it stores things that happened for the whole duration of the sim. Any candidate that gets deactivated during the sim gets stored there.
+
+Sim-long tombstone set for eliminated candidates — like resolution_memory but for dead branches.
+
+Next: Does candidate_deactivator only flip “active” state, or also undo MHU unify-heads / translation maps for that resolution_lineage?
+
+really, I would rather not answer this since it may change. The whole deactivation PROCESS however is supposed to tear down EVERYTHING to do with that candidate's existence
+
+Understood — full candidate teardown is the intent; details may shift.
+
+Next: Where do initial CHC goals enter the system — sim_setup + initial_goal_exprs, or injected before the first solve() call?
+
+sim_setup is where they enter the picture. initial_goal_exprs just is like database in the sense that it just stores what the initial goal expressions are (across all sims, constant store). It gets read from when ACTIVATING the goals inside sim_setup 
+
+initial_goal_exprs = persistent query store; sim_setup activates from it each sim.
+
+Next: For root goals, is goal_lineage::parent always nullptr, or do roots hang under a sentinel resolution?
+
+yeah, the parent is nullptr for initial goals
+
+Roots use parent == nullptr.
+
+Next: How are DB rules indexed for a goal — match on goal expression functor/name, variant indexing, or scan all rules?
+
+oh, right now, there is no functor based lookup for efficiency, but that is planned. Right now, it just returns all rules
+
+Full rule scan for now; functor index is on the roadmap.
+
+Next: What is i_rule_set / the accept(visitor) pattern — lazy iteration over rules without materializing a container per goal?
+
+yeah, basically it is the replacement for iteration in our ecosystem for now. We can change it to state_machine with yields eventually but for now it eagerly visits all members wherever accept() is
+
+Visitor-based rule iteration today; coroutine state_machine iteration possible later.
+
+Next: When resolve picks one candidate, does goal_candidate_deactivator_visitor drop the other active candidates for that goal, or only non-chosen ones while keeping the winner?
+
+it deactivates all candidates which share the parent of the chosen resolution, including the chosen resolution. So basically all "alternative candidates"
+
+All siblings under that parent goal go away — including the winner — once the OR-choice is committed.
+
+Next: After a winning resolve, is the chosen resolution_lineage kept anywhere as “the proof step,” or only its children (body goals) survive in active state?
+
+I already answered this. it goes in resolution_memory
+
+Right — proof lives in resolution_memory, not the active candidate stores.
+
+Next: When does lineage_pool::trim run — after every solver tick, after learn, or on demand?
+
+after each solver::solve(), immediately after calling pin on everything we need to pin
+
+Pin after learn, trim right after each solve() — keeps the pool bounded while preserving lemma lineages.
+
+Next: What does lineage_pool::import do — revive a pinned lineage from a prior sim into the current sim’s store graph?
+
+it interns the remote lineages in the callee's pool, making them managed my the callee
+
+Import = re-intern pinned lineages into the current pool so CDCL can reference them locally.
+
+Next: Is the rule/goal database (i_get_goal_db_rules etc.) owned outside core and injected, or is there an in-core default implementation?
+
+next question: it WILL be implemeneted in core
+
+Will live in core eventually — good to know.
+
+Next: Is get_goal_candidate_rules a materialized per-goal set of active candidates, or a view rebuilt from “all DB rules + filter by active”?
+
+it is a persistent set stored somewhere (intentionally abstracted away from caller)
+
+Persistent per-goal candidate set — implementation hidden from callers.
+
+Next: What is the relationship between i_active_goals and the candidate set — does “active goal” mean “goal with ≥1 active candidate,” or something independent?
+
+no, a goal with zero active candidates can still be active.
+
+
+
+An active goal is a goal on the frontier of the search. It is a goal which has NOT YET BEEN resolved
+
+Active = unresolved frontier goal; zero candidates ⇒ conflict, not “inactive.”
+
+Next: Can a goal be active with zero candidates * transiently mid-elimination wave, or is that always immediate conflicted termination?
+
+umm so the instant that a goal reaches zero candidates, we detect the conflict right then and there. We have conflict detection logic where we do eliminations as well.
+
+Conflict is detected immediately when a goal hits zero candidates — including during the elimination loop.
+
+Next: elimination_router backlog when parent goal isn’t active yet — is that “elimination arrived before activation,” and it applies once the parent activates?
+
+it stays in the backlog, but when we go to try to activate that candidate, the caller first checks (for every candidate) if it exists in the backlog. If it does, don't even activate it.
+
+Backlog is a permanent “do not activate” flag until checked at activation time — not tied to parent activation timing.
+
+Next: Why does joint_elimination_generator run CDCL before MHU every step — ordering dependency, or just convention?
+
+It is technically the less expensive operation. For this reason, let CDCL cut down most of the search first and then leave the more expensive eliminator for later
+
+Cheap CDCL pruning first, expensive MHU second — performance ordering.
+
+Next: Where do fresh variables for copied rule heads come from — var_sequencer, expr pool counters, or per-candidate isolated maps?
+
+var_sequencer gives the index for the copied vars, always unique. But expr_pool is where the var expr is allocated.
