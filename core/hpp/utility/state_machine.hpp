@@ -14,13 +14,17 @@ struct state_machine {
         }
         std::suspend_always initial_suspend() { return {}; }
         std::suspend_always final_suspend() noexcept { return {}; }
-        void return_void() { last_yield_.reset(); }
-        void unhandled_exception() { std::terminate(); }
+        void return_void() {
+            last_yield_.reset();
+            exception_ = nullptr;
+        }
+        void unhandled_exception() { exception_ = std::current_exception(); }
         std::suspend_always yield_value(T v) {
             last_yield_ = std::move(v);
             return {};
         }
         std::optional<T> last_yield_{};
+        std::exception_ptr exception_{};
     };
 
     explicit state_machine(std::coroutine_handle<promise_type> h) : handle_(h) {}
@@ -48,10 +52,14 @@ struct state_machine {
     }
 
     std::optional<T> resume() {
+        if (handle_.promise().exception_)
+            std::rethrow_exception(handle_.promise().exception_);
         if (handle_.done())
             return std::nullopt;
         handle_.promise().last_yield_.reset();
         handle_.resume();
+        if (handle_.promise().exception_)
+            std::rethrow_exception(handle_.promise().exception_);
         if (handle_.done())
             return std::nullopt;
         return std::move(handle_.promise().last_yield_);
@@ -71,8 +79,9 @@ struct state_machine<void> {
         }
         std::suspend_always initial_suspend() { return {}; }
         std::suspend_always final_suspend() noexcept { return {}; }
-        void return_void() {}
-        void unhandled_exception() { std::terminate(); }
+        void return_void() { exception_ = nullptr; }
+        void unhandled_exception() { exception_ = std::current_exception(); }
+        std::exception_ptr exception_{};
     };
 
     explicit state_machine(std::coroutine_handle<promise_type> h) : handle_(h) {}
@@ -99,7 +108,13 @@ struct state_machine<void> {
         return *this;
     }
 
-    void resume() { handle_.resume(); }
+    void resume() {
+        if (handle_.promise().exception_)
+            std::rethrow_exception(handle_.promise().exception_);
+        handle_.resume();
+        if (handle_.promise().exception_)
+            std::rethrow_exception(handle_.promise().exception_);
+    }
 
     bool done() const { return handle_.done(); }
 

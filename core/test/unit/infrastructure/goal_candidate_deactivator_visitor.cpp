@@ -18,7 +18,7 @@ public:
 
     void add_head(const resolution_lineage*, unify_head,
         const std::unordered_set<uint32_t>&) override {}
-    void remove_head(const resolution_lineage* rl) override { removed.insert(rl); }
+    void try_remove_head(const resolution_lineage* rl) override { removed.insert(rl); }
     state_machine<const resolution_lineage*> constrain(const resolution_lineage*) override {
         return make_empty_constrain();
     }
@@ -69,7 +69,7 @@ TEST_F(GoalCandidateDeactivatorVisitorTest, VisitTearsDownMhuTranslationAndCandi
     visitor.visit(&r);
 
     const resolution_lineage* rl = lp.resolution(gl, &r);
-    EXPECT_TRUE(mhu.removed.contains(rl));
+    EXPECT_TRUE(mhu.removed.count(rl));
     EXPECT_TRUE(dctm.deactivated.contains(rl));
     EXPECT_TRUE(cd.deactivated.contains(rl));
 }

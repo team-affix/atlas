@@ -18,7 +18,7 @@ goal_candidate_deactivator_visitor::goal_candidate_deactivator_visitor(
 void goal_candidate_deactivator_visitor::visit(const rule* r) {
     const resolution_lineage* rl = lp.resolution(gl, r);
 
-    mhu_elimination_generator.remove_head(rl);
+    mhu_elimination_generator.try_remove_head(rl);
     dctm.deactivate(rl);
     candidate_deactivator.deactivate(rl);
 }

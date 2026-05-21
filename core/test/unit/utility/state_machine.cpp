@@ -1,4 +1,5 @@
 #include <gtest/gtest.h>
+#include <stdexcept>
 #include <vector>
 #include "../../../core/hpp/utility/state_machine.hpp"
 
@@ -90,6 +91,11 @@ state_machine<const int*> make_revalidation_style_nested() {
 
 state_machine<int> make_yield_then_immediate_return() {
     co_yield 42;
+}
+
+state_machine<int> make_int_throws_after_first_yield() {
+    co_yield 1;
+    throw std::runtime_error("boom");
 }
 
 } // namespace
@@ -222,6 +228,13 @@ TEST(StateMachineInt, DrainTwoYieldCoroutineCollectsBothValues) {
     auto values = collect_while_has_value(sm);
     EXPECT_EQ(values, (std::vector<int>{1, 2}));
     EXPECT_TRUE(sm.done());
+}
+
+TEST(StateMachineInt, ExceptionPropagatesOnResume) {
+    auto sm = make_int_throws_after_first_yield();
+    ASSERT_EQ(sm.resume(), 1);
+    EXPECT_THROW(sm.resume(), std::runtime_error);
+    EXPECT_THROW(sm.resume(), std::runtime_error);
 }
 
 TEST(StateMachinePointer, JointStyleLoopForwardsNullTerminator) {

@@ -14,10 +14,8 @@ void mhu_elimination_generator::add_head(const resolution_lineage* lineage, unif
     link(rep_changes, {lineage});
 }
 
-void mhu_elimination_generator::remove_head(const resolution_lineage* lineage) {
-    // 1. remove the unifier from the map
+void mhu_elimination_generator::try_remove_head(const resolution_lineage* lineage) {
     heads_.erase(lineage);
-    // 2. unlink this lineage
     unlink(lineage);
 }
 
@@ -47,26 +45,29 @@ state_machine<const resolution_lineage*> mhu_elimination_generator::constrain(co
 
 state_machine<const resolution_lineage*> mhu_elimination_generator::revalidate(uint32_t rep, const expr* new_rep) {
     // 1. unlink this rep from all heads
-    auto invalidated_rls = unlink(rep);
+    auto remaining_rls = unlink(rep);
+    std::unordered_set<const resolution_lineage*> eliminated_rls;
 
     // 2. for each rl, propagate the rep change to all heads
-    for (auto rl : invalidated_rls) {
+    for (auto rl : remaining_rls) {
         // 2.1 unify and link the parent goal's expr with the copied rule head
         if (!unify_and_link(rl, expr_pool_.var(rep), new_rep)) {
-            // remove the head from the map
             heads_.erase(rl);
-            // prevent re-linking the conflicting head
-            invalidated_rls.erase(rl);
+            unlink(rl);
+            eliminated_rls.insert(rl);
             co_yield rl;
         }
     }
+
+    for (auto rl : eliminated_rls)
+        remaining_rls.erase(rl);
 
     // 3. get new reps for this o.g. rep
     std::unordered_set<uint32_t> child_reps;
     extract_child_reps(expr_pool_.var(rep), child_reps);
 
     // 4. link child reps to all heads
-    link(child_reps, invalidated_rls);
+    link(child_reps, remaining_rls);
 }
 
 bool mhu_elimination_generator::unify_and_link(const resolution_lineage* lineage, const expr* lhs, const expr* rhs) {

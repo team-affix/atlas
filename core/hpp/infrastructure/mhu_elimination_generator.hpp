@@ -15,7 +15,7 @@ struct mhu_elimination_generator : i_mhu_elimination_generator {
         i_bind_map&,
         i_expr_pool&);
     void add_head(const resolution_lineage*, unify_head, const std::unordered_set<uint32_t>&) override;
-    void remove_head(const resolution_lineage*) override;
+    void try_remove_head(const resolution_lineage*) override;
     state_machine<const resolution_lineage*> constrain(const resolution_lineage*) override;
 private:
     state_machine<const resolution_lineage*> revalidate(uint32_t, const expr*);
