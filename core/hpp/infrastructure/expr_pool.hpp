@@ -12,6 +12,7 @@ struct expr_pool : i_expr_pool {
     const expr* functor(const std::string& name, std::vector<const expr*> args) override;
     const expr* var(uint32_t) override;
     const expr* import(const expr*) override;
+    size_t size() const override;
 private:
     const expr* intern(expr&&);
 

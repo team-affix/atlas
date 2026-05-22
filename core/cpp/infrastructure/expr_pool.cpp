@@ -47,3 +47,7 @@ const expr* expr_pool::intern(expr&& e) {
     auto it = exprs.get().find(e);
     return &*it;
 }
+
+size_t expr_pool::size() const {
+    return exprs.get().size();
+}
