@@ -61,13 +61,6 @@ state_machine<const resolution_lineage*> mhu_elimination_generator::revalidate(u
 
     for (auto rl : eliminated_rls)
         remaining_rls.erase(rl);
-
-    // 3. get new reps for this o.g. rep
-    std::unordered_set<uint32_t> child_reps;
-    extract_child_reps(expr_pool_.var(rep), child_reps);
-
-    // 4. link child reps to all heads
-    link(child_reps, remaining_rls);
 }
 
 bool mhu_elimination_generator::unify_and_link(const resolution_lineage* lineage, const expr* lhs, const expr* rhs) {
@@ -137,20 +130,4 @@ std::unordered_set<uint32_t> mhu_elimination_generator::unlink(const resolution_
     
     // 4. return the removed reps
     return std::move(reps);
-}
-
-void mhu_elimination_generator::extract_child_reps(const expr* e, std::unordered_set<uint32_t>& child_reps) {
-    // 1. get whnf of the expr
-    auto whnf = common_.whnf(e);
-    // 2. if whnf is a variable, add it to the new reps
-    if (const expr::var* v = std::get_if<expr::var>(&whnf->content)) {
-        child_reps.insert(v->index);
-        return;
-    }
-    // 3. whnf is a functor
-    const expr::functor& f = std::get<expr::functor>(whnf->content);
-    // 4. for each argument, recur
-    for (auto& arg : f.args) {
-        extract_child_reps(arg, child_reps);
-    }
 }

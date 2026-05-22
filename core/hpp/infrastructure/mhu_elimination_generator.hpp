@@ -23,7 +23,6 @@ private:
     void link(const std::unordered_set<uint32_t>&, const std::unordered_set<const resolution_lineage*>&);
     std::unordered_set<const resolution_lineage*> unlink(uint32_t);
     std::unordered_set<uint32_t> unlink(const resolution_lineage*);
-    void extract_child_reps(const expr*, std::unordered_set<uint32_t>&);
     
     i_bind_map& common_;
     i_expr_pool& expr_pool_;
