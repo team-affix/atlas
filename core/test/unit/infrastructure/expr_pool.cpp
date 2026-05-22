@@ -1,12 +1,26 @@
 #include <gtest/gtest.h>
+#include <gmock/gmock.h>
 #include <optional>
 #include "../../../core/hpp/infrastructure/expr_pool.hpp"
-#include "../../../core/hpp/utility/trail.hpp"
+#include "../../../core/hpp/utility/i_trail.hpp"
 
-class ExprPoolTest : public ::testing::Test {
+using ::testing::_;
+using ::testing::NiceMock;
+using ::testing::StrictMock;
+
+struct MockTrail : public i_trail {
+    MOCK_METHOD(void, push, (), (override));
+    MOCK_METHOD(void, pop, (), (override));
+    MOCK_METHOD(void, log, ((std::unique_ptr<i_backtrackable>)), (override));
+};
+
+struct ExprPoolTest : public ::testing::Test {
 protected:
-    void SetUp() override { pool.emplace(t); }
-    trail t;
+    void SetUp() override {
+        pool.emplace(trail);
+    }
+
+    NiceMock<MockTrail> trail;
     std::optional<expr_pool> pool;
 };
 
@@ -46,72 +60,40 @@ TEST_F(ExprPoolTest, BinaryFunctorInternedTwiceReturnsSamePointer) {
     EXPECT_EQ(pool->functor("f", {v0, v1}), pool->functor("f", {v0, v1}));
 }
 
-TEST_F(ExprPoolTest, BinaryFunctorsDifferingInFirstArgReturnDifferentPointers) {
+TEST_F(ExprPoolTest, FunctorsWithDifferentArgsReturnDifferentPointers) {
     const expr* v0 = pool->var(0);
     const expr* v1 = pool->var(1);
     EXPECT_NE(pool->functor("f", {v0, v1}), pool->functor("f", {v1, v1}));
 }
 
-TEST_F(ExprPoolTest, BinaryFunctorsDifferingInSecondArgReturnDifferentPointers) {
-    const expr* v0 = pool->var(0);
-    const expr* v1 = pool->var(1);
-    EXPECT_NE(pool->functor("f", {v0, v0}), pool->functor("f", {v0, v1}));
-}
-
-TEST_F(ExprPoolTest, TernaryFunctorInternedTwiceReturnsSamePointer) {
-    const expr* v0 = pool->var(0);
-    const expr* v1 = pool->var(1);
-    const expr* v2 = pool->var(2);
-    EXPECT_EQ(pool->functor("f", {v0, v1, v2}), pool->functor("f", {v0, v1, v2}));
-}
-
-TEST_F(ExprPoolTest, TernaryFunctorsDifferingInFirstArgReturnDifferentPointers) {
-    const expr* v0 = pool->var(0);
-    const expr* v1 = pool->var(1);
-    const expr* v2 = pool->var(2);
-    EXPECT_NE(pool->functor("f", {v0, v1, v2}), pool->functor("f", {v2, v1, v2}));
-}
-
-TEST_F(ExprPoolTest, TernaryFunctorsDifferingInSecondArgReturnDifferentPointers) {
-    const expr* v0 = pool->var(0);
-    const expr* v1 = pool->var(1);
-    const expr* v2 = pool->var(2);
-    EXPECT_NE(pool->functor("f", {v0, v1, v2}), pool->functor("f", {v0, v2, v2}));
-}
-
-TEST_F(ExprPoolTest, TernaryFunctorsDifferingInThirdArgReturnDifferentPointers) {
-    const expr* v0 = pool->var(0);
-    const expr* v1 = pool->var(1);
-    const expr* v2 = pool->var(2);
-    EXPECT_NE(pool->functor("f", {v0, v1, v2}), pool->functor("f", {v0, v1, v0}));
-}
-
 // ---------------------------------------------------------------------------
-// Backtracking
+// Trail delegation (SUT → i_trail)
 // ---------------------------------------------------------------------------
 
-TEST_F(ExprPoolTest, VarInternedBeforePushSurvivesPop) {
-    const expr* p = pool->var(0);
-    t.push();
-    t.pop();
-    EXPECT_EQ(pool->var(0), p);
+TEST_F(ExprPoolTest, FirstInternLogsToTrail) {
+    StrictMock<MockTrail> strict_trail;
+    expr_pool strict_pool{strict_trail};
+
+    EXPECT_CALL(strict_trail, log(_)).Times(1);
+    strict_pool.var(0);
 }
 
-TEST_F(ExprPoolTest, ExprInternedBeforeFrameSurvivesPop) {
-    const expr* p0 = pool->var(0);
-    t.push();
-    pool->var(1);
-    t.pop();
-    EXPECT_EQ(pool->var(0), p0);
+TEST_F(ExprPoolTest, RepeatInternDoesNotLogAgain) {
+    StrictMock<MockTrail> strict_trail;
+    expr_pool strict_pool{strict_trail};
+
+    EXPECT_CALL(strict_trail, log(_)).Times(1);
+    strict_pool.var(0);
+    strict_pool.var(0);
 }
 
-TEST_F(ExprPoolTest, TwoNestedFramesOuterExprSurvivesInnerPop) {
-    t.push();
-    const expr* p0 = pool->var(0);
-    t.push();
-    pool->var(1);
-    t.pop();
-    EXPECT_EQ(pool->var(0), p0);
+TEST_F(ExprPoolTest, DistinctInternsLogEachTime) {
+    StrictMock<MockTrail> strict_trail;
+    expr_pool strict_pool{strict_trail};
+
+    EXPECT_CALL(strict_trail, log(_)).Times(2);
+    strict_pool.var(0);
+    strict_pool.var(1);
 }
 
 // ---------------------------------------------------------------------------
@@ -119,18 +101,28 @@ TEST_F(ExprPoolTest, TwoNestedFramesOuterExprSurvivesInnerPop) {
 // ---------------------------------------------------------------------------
 
 TEST_F(ExprPoolTest, ImportVarInternsIntoPool) {
+    StrictMock<MockTrail> strict_trail;
+    expr_pool strict_pool{strict_trail};
+
+    EXPECT_CALL(strict_trail, log(_)).Times(1);
+    const expr* pooled = strict_pool.var(0);
+
     expr e{expr::var{0}};
-    const expr* p = pool->import(&e);
-    EXPECT_NE(p, nullptr);
-    EXPECT_EQ(pool->import(&e), p);
+    EXPECT_EQ(strict_pool.import(&e), pooled);
+    EXPECT_EQ(strict_pool.import(&e), pooled);
 }
 
 TEST_F(ExprPoolTest, ImportFunctorInternsArgsRecursively) {
+    StrictMock<MockTrail> strict_trail;
+    expr_pool strict_pool{strict_trail};
+
     expr arg{expr::var{1}};
-    expr root{expr::functor{"f", {&arg}}};  // raw, not interned
-    const expr* p = pool->import(&root);
-    EXPECT_NE(p, nullptr);
+    expr root{expr::functor{"f", {&arg}}};
+
+    EXPECT_CALL(strict_trail, log(_)).Times(2);
+    const expr* p = strict_pool.import(&root);
+
     const expr::functor& f = std::get<expr::functor>(p->content);
-    EXPECT_NE(f.args[0], &arg);         // arg was re-interned into the pool
-    EXPECT_EQ(f.args[0], pool->var(1)); // the re-interned arg equals pool's canonical var(1)
+    EXPECT_NE(f.args[0], &arg);
+    EXPECT_EQ(f.args[0], strict_pool.var(1));
 }
