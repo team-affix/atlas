@@ -40,40 +40,16 @@ void goal_candidate_activator_visitor::visit(const rule* r) {
     translation_map tm;
     const expr* copied_head = copier.copy(r->head, tm);
     
-    // 2.1. construct a bind map
-    auto bind_map = bind_map_factory.make();
-    
-    // 2.2. construct an overlay bind map
-    auto overlay_bind_map = overlay_bind_map_factory.make(*bind_map, common_bind_map);
-    
-    // 2.3. construct a unifier on the overlay bind map
-    auto unifier = unifier_factory.make(*overlay_bind_map);
-    
-    // 2.4. get the goal expression
+    // 2.2. get the goal expression
     const expr* goal_expr = gge.get(gl);
     
-    // 2.5. construct a rep_changed set
-    std::unordered_set<uint32_t> rep_changed;
-    
     // 2.4. perform unification
-    if (!unifier->unify(gge.get(gl), copied_head, rep_changed))
+    if (!mhu_elimination_generator.try_add_head(rl, goal_expr, copied_head))
         return;
     
-    // 3. construct a unify_head and add to mhu
-
-    // 3.1. construct a unify_head
-    unify_head head{
-        std::move(bind_map),
-        std::move(overlay_bind_map),
-        std::move(unifier)};
-
-    // 3.2. add to mhu
-    mhu_elimination_generator.add_head(rl, std::move(head), rep_changed);
-
-    // 3.3. add translation map
+    // 3. add translation map
     actm.activate(rl, std::move(tm));
     
     // 4. activate the candidate
     candidate_activator.activate(rl);
-    
 }

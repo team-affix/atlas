@@ -2,78 +2,116 @@
 
 mhu_elimination_generator::mhu_elimination_generator(
     i_bind_map& common_,
-    i_expr_pool& expr_pool_) :
+    i_lineage_pool& lp_,
+    i_expr_pool& expr_pool_,
+    i_bind_map_factory& bind_map_factory_,
+    i_overlay_bind_map_factory& overlay_bind_map_factory_,
+    i_unifier_factory& unifier_factory_,
+    const i_get_goal_candidate_rules& get_goal_candidates_) :
     common_(common_),
-    expr_pool_(expr_pool_) {
+    lp_(lp_),
+    expr_pool_(expr_pool_),
+    bind_map_factory_(bind_map_factory_),
+    overlay_bind_map_factory_(overlay_bind_map_factory_),
+    unifier_factory_(unifier_factory_),
+    get_goal_candidates_(get_goal_candidates_) {
 }
 
-void mhu_elimination_generator::add_head(const resolution_lineage* lineage, unify_head head, const std::unordered_set<uint32_t>& rep_changes) {
-    // 1. add the head to the map
+bool mhu_elimination_generator::try_add_head(const resolution_lineage* lineage, const expr* lhs, const expr* rhs) {
+    // 1. construct a bind map
+    auto bind_map = bind_map_factory_.make();
+        
+    // 2. construct an overlay bind map
+    auto overlay_bind_map = overlay_bind_map_factory_.make(*bind_map, common_);
+
+    // 3. construct a unifier on the overlay bind map
+    auto unifier = unifier_factory_.make(*overlay_bind_map);
+
+    // 4. unify and link
+    if (!unify_and_link(*unifier, lineage, lhs, rhs))
+        return false;
+
+    // 5. construct a unify_head
+    unify_head head{
+        std::move(bind_map),
+        std::move(overlay_bind_map),
+        std::move(unifier)};
+    
+    // 6. add the head to the map
     heads_.insert({lineage, std::move(head)});
-    // 2. link the reps to the head
-    link(rep_changes, {lineage});
-}
-
-void mhu_elimination_generator::try_remove_head(const resolution_lineage* lineage) {
-    heads_.erase(lineage);
-    unlink(lineage);
 }
 
 state_machine<const resolution_lineage*> mhu_elimination_generator::constrain(const resolution_lineage* lineage) {
-    // 1. get the unifier for this lineage
+    // 1. get the parent goal lineage
+    auto gl = lineage->parent;
+    
+    // 2. get all candidates in the family
+    auto& candidates = get_goal_candidates_.get(gl);
+    
+    // 3. remove all siblings
+    auto it_sm = candidates.iterate();
+    while (!it_sm.done()) {
+        auto candidate = it_sm.resume();
+        if (!candidate.has_value()) continue;
+        if (candidate.value() == lineage->idx) continue;
+        remove_head(lp_.resolution(gl, candidate.value()));
+    }
+    
+    // 4. get the head for this lineage
     auto& head = heads_.at(lineage);
-    // 2. get the rep changes from the unifier
+    
+    // 5. get the rep changes from the unifier
     auto rep_changes = unlink(lineage);
-    // 3. for each rep change, add the link to new rep
+    
+    // 6. for each rep change, add the link to new rep
     for (auto rep : rep_changes) {
-        // 3.1 get new whnf
+        // 6.1 get new whnf
         auto new_rep = head.local_bind_map->whnf(expr_pool_.var(rep));
-        // 3.2 bind the old rep to the new rep
+        // 6.2 bind the old rep to the new rep
         common_.bind(rep, new_rep);
-        // 3.3 propagate the rep changes to all concerned heads
-        auto sm0 = revalidate(rep, new_rep);
-        // 3.4 wait for the revalidation to complete
+        // 6.3 propagate the rep changes to all concerned heads
+        auto sm0 = rebase(rep, new_rep);
+        // 6.4 wait for the revalidation to complete
         while (!sm0.done()) {
             auto elim = sm0.resume();
             if (elim.has_value())
-                co_yield elim.value();
+            co_yield elim.value();
         }
     }
-    // 4. remove the head from the map
+
+    // 7. remove the head from the map
     heads_.erase(lineage);
 }
 
-state_machine<const resolution_lineage*> mhu_elimination_generator::revalidate(uint32_t rep, const expr* new_rep) {
+state_machine<const resolution_lineage*> mhu_elimination_generator::rebase(uint32_t rep, const expr* new_rep) {
     // 1. unlink this rep from all heads
     auto remaining_rls = unlink(rep);
-    std::unordered_set<const resolution_lineage*> eliminated_rls;
 
     // 2. for each rl, propagate the rep change to all heads
     for (auto rl : remaining_rls) {
+        // 2.1 get the unifier for this rl
+        auto& unifier = heads_.at(rl).unifier;
+        
         // 2.1 unify and link the parent goal's expr with the copied rule head
-        if (!unify_and_link(rl, expr_pool_.var(rep), new_rep)) {
-            heads_.erase(rl);
-            unlink(rl);
-            eliminated_rls.insert(rl);
+        if (!unify_and_link(*unifier, rl, expr_pool_.var(rep), new_rep)) {
+            remove_head(rl);
             co_yield rl;
         }
     }
 
-    for (auto rl : eliminated_rls)
-        remaining_rls.erase(rl);
+    // NOTE: we actually want to leave the previously changed rep unlinked
+    // from the heads since it is now up-to-date w.r.t. the common bind map
 }
 
-bool mhu_elimination_generator::unify_and_link(const resolution_lineage* lineage, const expr* lhs, const expr* rhs) {
-    // 1. get the head for this lineage
-    auto& head = heads_.at(lineage);
-    // 2. create rep_changes set
+bool mhu_elimination_generator::unify_and_link(i_unifier& unifier, const resolution_lineage* lineage, const expr* lhs, const expr* rhs) {
+    // 1. create rep_changes set
     std::unordered_set<uint32_t> rep_changes;
-    // 3. unify the parent goal's expr with the copied rule head
-    if (!head.unifier->unify(lhs, rhs, rep_changes))
+    // 2. unify the parent goal's expr with the copied rule head
+    if (!unifier.unify(lhs, rhs, rep_changes))
         return false;
-    // 4. link the new rl to all reps
+    // 3. link the new rl to all reps
     link(rep_changes, {lineage});
-    // 5. return true
+    // 4. return true
     return true;
 }
 
@@ -130,4 +168,9 @@ std::unordered_set<uint32_t> mhu_elimination_generator::unlink(const resolution_
     
     // 4. return the removed reps
     return std::move(reps);
+}
+
+void mhu_elimination_generator::remove_head(const resolution_lineage* rl) {
+    heads_.erase(rl);
+    unlink(rl);
 }
