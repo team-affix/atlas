@@ -5,6 +5,7 @@
 #include "../../../core/hpp/interfaces/i_expr_pool.hpp"
 
 using ::testing::_;
+using ::testing::ElementsAre;
 using ::testing::NiceMock;
 using ::testing::Return;
 
@@ -85,62 +86,35 @@ TEST_F(NormalizerUnitTest, BoundVarReturnsWhnfResult) {
 // ---------------------------------------------------------------------------
 
 TEST_F(NormalizerUnitTest, FunctorRebuildsViaPool) {
-    std::vector<const expr*> captured_args;
-
-    ON_CALL(pool, functor("f", _))
-        .WillByDefault([&](const std::string&, const std::vector<const expr*>& args) {
-            captured_args = args;
-            return &pooled_f;
-        });
+    EXPECT_CALL(pool, functor("f", ElementsAre(&arg_whnf0)))
+        .WillOnce(Return(&pooled_f));
 
     EXPECT_EQ(norm.normalize(&f_raw), &pooled_f);
-    ASSERT_EQ(captured_args.size(), 1u);
-    EXPECT_EQ(captured_args[0], &arg_whnf0);
 }
 
 TEST_F(NormalizerUnitTest, BinaryFunctorNormalizesBothArgs) {
     expr f2{expr::functor{"f", {&var0, &var1}}};
-    std::vector<const expr*> captured_args;
 
-    ON_CALL(pool, functor("f", _))
-        .WillByDefault([&](const std::string&, const std::vector<const expr*>& args) {
-            captured_args = args;
-            return &pooled_f;
-        });
+    EXPECT_CALL(pool, functor("f", ElementsAre(&arg_whnf0, &arg_whnf1)))
+        .WillOnce(Return(&pooled_f));
 
     EXPECT_EQ(norm.normalize(&f2), &pooled_f);
-    ASSERT_EQ(captured_args.size(), 2u);
-    EXPECT_EQ(captured_args[0], &arg_whnf0);
-    EXPECT_EQ(captured_args[1], &arg_whnf1);
 }
 
 TEST_F(NormalizerUnitTest, TernaryFunctorNormalizesAllArgs) {
     expr f3{expr::functor{"f", {&var0, &var1, &var2}}};
-    std::vector<const expr*> captured_args;
 
-    ON_CALL(pool, functor("f", _))
-        .WillByDefault([&](const std::string&, const std::vector<const expr*>& args) {
-            captured_args = args;
-            return &pooled_f;
-        });
+    EXPECT_CALL(pool, functor("f", ElementsAre(&arg_whnf0, &arg_whnf1, &arg_whnf2)))
+        .WillOnce(Return(&pooled_f));
 
     EXPECT_EQ(norm.normalize(&f3), &pooled_f);
-    ASSERT_EQ(captured_args.size(), 3u);
-    EXPECT_EQ(captured_args[0], &arg_whnf0);
-    EXPECT_EQ(captured_args[1], &arg_whnf1);
-    EXPECT_EQ(captured_args[2], &arg_whnf2);
 }
 
 TEST_F(NormalizerUnitTest, NestedFunctorRebuildsWithNormalizedInnerArg) {
-    std::vector<const expr*> captured_f_args;
-
-    ON_CALL(pool, functor("f", _))
-        .WillByDefault([&](const std::string&, const std::vector<const expr*>& args) {
-            captured_f_args = args;
-            return &pooled_f;
-        });
+    EXPECT_CALL(pool, functor("g", ElementsAre(&arg_whnf0)))
+        .WillOnce(Return(&pooled_g));
+    EXPECT_CALL(pool, functor("f", ElementsAre(&pooled_g)))
+        .WillOnce(Return(&pooled_f));
 
     EXPECT_EQ(norm.normalize(&f_g_var0), &pooled_f);
-    ASSERT_EQ(captured_f_args.size(), 1u);
-    EXPECT_EQ(captured_f_args[0], &pooled_g);
 }

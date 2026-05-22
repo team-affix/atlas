@@ -5,6 +5,7 @@
 #include "../../../core/hpp/interfaces/i_expr_pool.hpp"
 
 using ::testing::_;
+using ::testing::ElementsAre;
 using ::testing::NiceMock;
 using ::testing::Return;
 
@@ -97,36 +98,21 @@ TEST_F(CopierUnitTest, DistinctVarsGetDistinctIndices) {
 TEST_F(CopierUnitTest, FunctorCopyReturnsPooledNodeWithCopiedArgs) {
     expr f{expr::functor{"f", {&var0, &var1}}};
     translation_map map;
-    std::vector<const expr*> captured_args;
 
-    ON_CALL(pool, functor("f", _))
-        .WillByDefault([&](const std::string&, const std::vector<const expr*>& args) {
-            captured_args = args;
-            return &pooled_f;
-        });
+    EXPECT_CALL(pool, functor("f", ElementsAre(&pooled_v0, &pooled_v1)))
+        .WillOnce(Return(&pooled_f));
 
     EXPECT_EQ(cp.copy(&f, map), &pooled_f);
-    ASSERT_EQ(captured_args.size(), 2u);
-    EXPECT_EQ(captured_args[0], &pooled_v0);
-    EXPECT_EQ(captured_args[1], &pooled_v1);
 }
 
 TEST_F(CopierUnitTest, TernaryFunctorCopyCapturesAllArgs) {
     expr f3{expr::functor{"f", {&var0, &var1, &var2}}};
     translation_map map;
-    std::vector<const expr*> captured_args;
 
-    ON_CALL(pool, functor("f", _))
-        .WillByDefault([&](const std::string&, const std::vector<const expr*>& args) {
-            captured_args = args;
-            return &pooled_f;
-        });
+    EXPECT_CALL(pool, functor("f", ElementsAre(&pooled_v0, &pooled_v1, &pooled_v2)))
+        .WillOnce(Return(&pooled_f));
 
     EXPECT_EQ(cp.copy(&f3, map), &pooled_f);
-    ASSERT_EQ(captured_args.size(), 3u);
-    EXPECT_EQ(captured_args[0], &pooled_v0);
-    EXPECT_EQ(captured_args[1], &pooled_v1);
-    EXPECT_EQ(captured_args[2], &pooled_v2);
     EXPECT_EQ(map.size(), 3u);
 }
 
@@ -134,15 +120,11 @@ TEST_F(CopierUnitTest, NestedFunctorCopyUsesInnerPooledArg) {
     expr g{expr::functor{"g", {&var0}}};
     expr f{expr::functor{"f", {&g}}};
     translation_map map;
-    std::vector<const expr*> captured_f_args;
 
-    ON_CALL(pool, functor("f", _))
-        .WillByDefault([&](const std::string&, const std::vector<const expr*>& args) {
-            captured_f_args = args;
-            return &pooled_f;
-        });
+    EXPECT_CALL(pool, functor("g", ElementsAre(&pooled_v0)))
+        .WillOnce(Return(&pooled_g));
+    EXPECT_CALL(pool, functor("f", ElementsAre(&pooled_g)))
+        .WillOnce(Return(&pooled_f));
 
     EXPECT_EQ(cp.copy(&f, map), &pooled_f);
-    ASSERT_EQ(captured_f_args.size(), 1u);
-    EXPECT_EQ(captured_f_args[0], &pooled_g);
 }

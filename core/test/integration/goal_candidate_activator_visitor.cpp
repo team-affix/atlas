@@ -17,6 +17,7 @@
 #include "../../../core/hpp/interfaces/i_elimination_backlog.hpp"
 
 using ::testing::_;
+using ::testing::NiceMock;
 using ::testing::Return;
 
 struct MockGetGoalExpr : public i_get_goal_expr {
@@ -52,7 +53,7 @@ struct GoalCandidateActivatorVisitorIntegrationTest : public ::testing::Test {
     MockGetGoalExpr gge;
     MockActivateCandidateTranslationMap actm;
     MockCandidateActivator ca;
-    MockEliminationBacklog eb;
+    NiceMock<MockEliminationBacklog> eb;
 
     expr goal_var{expr::var{0}};
     expr head_var{expr::var{0}};
@@ -62,7 +63,6 @@ struct GoalCandidateActivatorVisitorIntegrationTest : public ::testing::Test {
 
     void SetUp() override {
         gl = const_cast<goal_lineage*>(lp.goal(nullptr, &goal_var));
-        ON_CALL(eb, contains(_)).WillByDefault(Return(false));
     }
 };
 

@@ -7,6 +7,7 @@
 #include "../../../core/hpp/interfaces/i_deactivate_candidate_translation_map.hpp"
 #include "../../../core/hpp/interfaces/i_lineage_pool.hpp"
 
+using ::testing::NiceMock;
 using ::testing::Return;
 
 struct MockMhuEliminationGenerator : public i_mhu_elimination_generator {
@@ -60,7 +61,7 @@ struct GoalCandidateDeactivatorVisitorTest : public ::testing::Test {
     MockMhuEliminationGenerator mhu;
     MockCandidateDeactivator cd;
     MockDeactivateCandidateTranslationMap dctm;
-    MockEliminationBacklog eb;
+    NiceMock<MockEliminationBacklog> eb;
     MockLineagePool lp;
 };
 
