@@ -18,6 +18,7 @@ struct MockExprPool : public i_expr_pool {
     MOCK_METHOD(const expr*, functor, (const std::string&, std::vector<const expr*>), (override));
     MOCK_METHOD(const expr*, var, (uint32_t), (override));
     MOCK_METHOD(const expr*, import, (const expr*), (override));
+    MOCK_METHOD(size_t, size, (), (const, override));
 };
 
 struct NormalizerUnitTest : public ::testing::Test {
