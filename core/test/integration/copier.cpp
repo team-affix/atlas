@@ -8,6 +8,8 @@
 struct CopierIntegrationTest : public ::testing::Test {
 protected:
     void SetUp() override {
+        vs.next();
+        vs.next();
         pool.emplace(t);
         cp.emplace(vs, *pool);
     }
@@ -33,11 +35,11 @@ TEST_F(CopierIntegrationTest, CopyNestedFunctorRemapsAllVarsInRealPool) {
     const expr* p = cp->copy(&outer, map);
     const expr::functor& f = std::get<expr::functor>(p->content);
     const expr::functor& g = std::get<expr::functor>(f.args[0]->content);
-    EXPECT_EQ(var_index(g.args[0]), 0u);
-    EXPECT_EQ(var_index(f.args[1]), 1u);
-    EXPECT_EQ(map.at(0), 0u);
-    EXPECT_EQ(map.at(1), 1u);
-    EXPECT_EQ(p, pool->functor("f", {pool->functor("g", {pool->var(0)}), pool->var(1)}));
+    EXPECT_EQ(var_index(g.args[0]), 2);
+    EXPECT_EQ(var_index(f.args[1]), 3);
+    EXPECT_EQ(map.at(0), 2);
+    EXPECT_EQ(map.at(1), 3);
+    EXPECT_EQ(p, pool->functor("f", {pool->functor("g", {pool->var(2)}), pool->var(3)}));
 }
 
 TEST_F(CopierIntegrationTest, CopySeparateCallsAdvanceSequencer) {
@@ -45,6 +47,6 @@ TEST_F(CopierIntegrationTest, CopySeparateCallsAdvanceSequencer) {
     translation_map map2;
     const expr* p1 = cp->copy(&var0, map1);
     const expr* p2 = cp->copy(&var0, map2);
-    EXPECT_EQ(var_index(p1), 0u);
-    EXPECT_EQ(var_index(p2), 1u);
+    EXPECT_EQ(var_index(p1), 2);
+    EXPECT_EQ(var_index(p2), 3);
 }
