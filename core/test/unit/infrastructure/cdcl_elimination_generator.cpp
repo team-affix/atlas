@@ -4,7 +4,9 @@
 #include "../../../core/hpp/utility/i_trail.hpp"
 
 using ::testing::_;
+using ::testing::AtLeast;
 using ::testing::NiceMock;
+using ::testing::StrictMock;
 
 struct MockTrail : public i_trail {
     MOCK_METHOD(void, push, (), (override));
@@ -35,4 +37,22 @@ TEST_F(CdclEliminationGeneratorUnitTest, LearnUnitAvoidanceReturnsEliminationWit
 TEST_F(CdclEliminationGeneratorUnitTest, LearnMultiAvoidanceReturnsNull) {
     lemma l{{&rl0, &rl1}};
     EXPECT_EQ(cdcl.learn(l), nullptr);
+}
+
+TEST_F(CdclEliminationGeneratorUnitTest, LearnUnitAvoidanceDoesNotLogToTrail) {
+    StrictMock<MockTrail> strict_trail;
+    cdcl_elimination_generator strict_cdcl{strict_trail};
+
+    lemma l{{&rl0}};
+    EXPECT_CALL(strict_trail, log(_)).Times(0);
+    EXPECT_EQ(strict_cdcl.learn(l), &rl0);
+}
+
+TEST_F(CdclEliminationGeneratorUnitTest, LearnMultiAvoidanceLogsToTrail) {
+    StrictMock<MockTrail> strict_trail;
+    cdcl_elimination_generator strict_cdcl{strict_trail};
+
+    lemma l{{&rl0, &rl1}};
+    EXPECT_CALL(strict_trail, log(_)).Times(AtLeast(1));
+    EXPECT_EQ(strict_cdcl.learn(l), nullptr);
 }

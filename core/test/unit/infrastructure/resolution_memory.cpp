@@ -24,6 +24,11 @@ TEST_F(ResolutionMemoryTest, DeriveLemmaEmptyAfterClear) {
     EXPECT_TRUE(l.get_resolutions().empty());
 }
 
+TEST_F(ResolutionMemoryTest, DeriveLemmaEmptyWithNoInsertions) {
+    lemma l = mem.derive_lemma();
+    EXPECT_TRUE(l.get_resolutions().empty());
+}
+
 TEST_F(ResolutionMemoryTest, DeriveLemmaContainsInsertedResolutions) {
     mem.insert(&rl0);
     mem.insert(&rl1);

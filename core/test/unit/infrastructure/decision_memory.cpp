@@ -15,6 +15,11 @@ protected:
     resolution_lineage rl1{nullptr, &rule1};
 };
 
+TEST_F(DecisionMemoryTest, DeriveLemmaEmptyWithNoInsertions) {
+    lemma l = mem.derive_lemma();
+    EXPECT_TRUE(l.get_resolutions().empty());
+}
+
 TEST_F(DecisionMemoryTest, InsertIncreasesSize) {
     mem.insert(&rl0);
     EXPECT_EQ(mem.size(), 1u);

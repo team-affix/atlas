@@ -13,13 +13,6 @@ struct MockVarNames : public i_var_names {
     MOCK_METHOD(void, set_name, (uint32_t, const std::string&), (override));
 };
 
-static std::string print_expr(i_var_names& names, const expr* e) {
-    std::ostringstream os;
-    expr_printer printer(os, names);
-    printer.print(e);
-    return os.str();
-}
-
 struct ExprPrinterTest : public ::testing::Test {
     MockVarNames names;
     std::string var_name_x{"X"};
@@ -28,43 +21,50 @@ struct ExprPrinterTest : public ::testing::Test {
     expr atom_a{expr::functor{"a", {}}};
     expr atom_b{expr::functor{"b", {}}};
     expr nil{expr::functor{"nil", {}}};
+
+    std::string print(const expr* e) {
+        std::ostringstream os;
+        expr_printer printer{os, names};
+        printer.print(e);
+        return os.str();
+    }
 };
 
 TEST_F(ExprPrinterTest, PrintUnnamedVar) {
     EXPECT_CALL(names, is_named(0)).WillOnce(Return(false));
 
-    EXPECT_EQ(print_expr(names, &var0), "?0");
+    EXPECT_EQ(print(&var0), "?0");
 }
 
 TEST_F(ExprPrinterTest, PrintNamedVar) {
     EXPECT_CALL(names, is_named(0)).WillOnce(Return(true));
     EXPECT_CALL(names, name(0)).WillOnce(ReturnRef(var_name_x));
 
-    EXPECT_EQ(print_expr(names, &var0), "X");
+    EXPECT_EQ(print(&var0), "X");
 }
 
 TEST_F(ExprPrinterTest, PrintAtom) {
-    EXPECT_EQ(print_expr(names, &atom_a), "a");
+    EXPECT_EQ(print(&atom_a), "a");
 }
 
 TEST_F(ExprPrinterTest, PrintNil) {
-    EXPECT_EQ(print_expr(names, &nil), "[]");
+    EXPECT_EQ(print(&nil), "[]");
 }
 
 TEST_F(ExprPrinterTest, PrintSingletonList) {
     expr list{expr::functor{"cons", {&atom_a, &nil}}};
-    EXPECT_EQ(print_expr(names, &list), "[a]");
+    EXPECT_EQ(print(&list), "[a]");
 }
 
 TEST_F(ExprPrinterTest, PrintListWithTail) {
     expr list{expr::functor{"cons", {&atom_a, &atom_b}}};
-    EXPECT_EQ(print_expr(names, &list), "[a|b]");
+    EXPECT_EQ(print(&list), "[a|b]");
 }
 
 TEST_F(ExprPrinterTest, PrintMultiElementList) {
     expr tail{expr::functor{"cons", {&atom_b, &nil}}};
     expr list{expr::functor{"cons", {&atom_a, &tail}}};
-    EXPECT_EQ(print_expr(names, &list), "[a, b]");
+    EXPECT_EQ(print(&list), "[a, b]");
 }
 
 TEST_F(ExprPrinterTest, PrintGeneralFunctor) {
@@ -73,5 +73,5 @@ TEST_F(ExprPrinterTest, PrintGeneralFunctor) {
     EXPECT_CALL(names, is_named(0)).WillOnce(Return(true));
     EXPECT_CALL(names, name(0)).WillOnce(ReturnRef(var_name_x));
 
-    EXPECT_EQ(print_expr(names, &f), "f(a, X)");
+    EXPECT_EQ(print(&f), "f(a, X)");
 }

@@ -19,10 +19,6 @@ std::vector<const resolution_lineage*> collect_elims(
     return out;
 }
 
-bool contains(const std::vector<const resolution_lineage*>& xs, const resolution_lineage* rl) {
-    return std::find(xs.begin(), xs.end(), rl) != xs.end();
-}
-
 } // namespace
 
 struct CdclEliminationGeneratorIntegrationTest : public ::testing::Test {
@@ -31,21 +27,25 @@ protected:
     lineage_pool lp;
     cdcl_elimination_generator cdcl{t};
 
-    expr goal_expr{expr::var{0}};
+    // Mutually consistent avoidances: each resolution has a distinct parent goal.
+    expr goal_expr0{expr::var{0}};
+    expr goal_expr1{expr::var{1}};
     expr head0{expr::var{10}};
     expr head1{expr::var{11}};
     rule rule0{&head0, {}};
     rule rule1{&head1, {}};
     rule rule2{&head1, {}};
 
-    const goal_lineage* gl = nullptr;
+    const goal_lineage* gl0 = nullptr;
+    const goal_lineage* gl1 = nullptr;
     const resolution_lineage* rl0 = nullptr;
     const resolution_lineage* rl1 = nullptr;
 
     void SetUp() override {
-        gl = lp.goal(nullptr, &goal_expr);
-        rl0 = lp.resolution(gl, &rule0);
-        rl1 = lp.resolution(gl, &rule1);
+        gl0 = lp.goal(nullptr, &goal_expr0);
+        gl1 = lp.goal(nullptr, &goal_expr1);
+        rl0 = lp.resolution(gl0, &rule0);
+        rl1 = lp.resolution(gl1, &rule1);
     }
 };
 
@@ -56,8 +56,7 @@ TEST_F(CdclEliminationGeneratorIntegrationTest, LearnStoresAvoidanceForConstrain
     auto sm = cdcl.constrain(rl0);
     auto elims = collect_elims(sm);
 
-    EXPECT_TRUE(contains(elims, rl1));
-    EXPECT_FALSE(contains(elims, rl0));
+    EXPECT_EQ(elims, (std::vector<const resolution_lineage*>{rl1}));
 }
 
 TEST_F(CdclEliminationGeneratorIntegrationTest, LearnDuplicateAvoidanceIsIdempotent) {
@@ -67,7 +66,7 @@ TEST_F(CdclEliminationGeneratorIntegrationTest, LearnDuplicateAvoidanceIsIdempot
 }
 
 TEST_F(CdclEliminationGeneratorIntegrationTest, ConstrainMutuallyExclusiveAvoidanceErasesWithoutYield) {
-    const resolution_lineage* rl2 = lp.resolution(gl, &rule2);
+    const resolution_lineage* rl2 = lp.resolution(gl0, &rule2);
 
     lemma l{{rl0, rl1}};
     cdcl.learn(l);
@@ -88,5 +87,5 @@ TEST_F(CdclEliminationGeneratorIntegrationTest, AvoidanceSurvivesTrailPopAcrossF
     auto sm = cdcl.constrain(rl0);
     auto elims = collect_elims(sm);
 
-    EXPECT_TRUE(contains(elims, rl1));
+    EXPECT_EQ(elims, (std::vector<const resolution_lineage*>{rl1}));
 }
