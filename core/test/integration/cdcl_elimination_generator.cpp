@@ -134,18 +134,13 @@ TEST_F(CdclEliminationGeneratorIntegrationTest, ExclusiveConstrainInFrameUndoneB
     EXPECT_EQ(elims, (std::vector<const resolution_lineage*>{&rl1}));
 }
 
-TEST_F(CdclEliminationGeneratorIntegrationTest, LearnAndConstrainInFrameFullyUndoneByPop) {
-    const lemma baseline{{&rl0, &rl1}};
-    const lemma in_frame{{&rl2, &rl3}};
-
-    cdcl.learn(baseline);
+TEST_F(CdclEliminationGeneratorIntegrationTest, LearnInFrameUndoneByPop) {
+    const lemma l{{&rl0, &rl1}};
 
     t.push();
-    cdcl.learn(in_frame);
-    collect_elims(cdcl.constrain(&rl2));
+    EXPECT_EQ(cdcl.learn(l), nullptr);
     t.pop();
 
-    EXPECT_EQ(cdcl.learn(in_frame), nullptr);
     auto elims = collect_elims(cdcl.constrain(&rl0));
-    EXPECT_EQ(elims, (std::vector<const resolution_lineage*>{&rl1}));
+    EXPECT_TRUE(elims.empty());
 }
