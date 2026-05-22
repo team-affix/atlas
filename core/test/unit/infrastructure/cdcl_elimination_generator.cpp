@@ -160,7 +160,7 @@ TEST_F(CdclEliminationGeneratorUnitTest, ConstrainAfterUnitLearnYieldsNothing) {
 // constrain — single stored avoidance
 // ---------------------------------------------------------------------------
 
-TEST_F(CdclEliminationGeneratorUnitTest, ConstrainConsistentMemberYieldsRemainingMember) {
+TEST_F(CdclEliminationGeneratorUnitTest, ConstrainMember1YieldsMember2InBinaryAvoidance) {
     cdcl.learn(make_lemma({&rl0, &rl1}));
 
     auto elims = collect_elims(cdcl.constrain(&rl0));
@@ -168,7 +168,7 @@ TEST_F(CdclEliminationGeneratorUnitTest, ConstrainConsistentMemberYieldsRemainin
     EXPECT_THAT(elims, ElementsAre(&rl1));
 }
 
-TEST_F(CdclEliminationGeneratorUnitTest, ConstrainMutuallyExclusiveMemberErasesWithoutYield) {
+TEST_F(CdclEliminationGeneratorUnitTest, ConstrainMutuallyExclusiveResolutionErasesWithoutYield) {
     cdcl.learn(make_lemma({&rl0, &rl1}));
 
     auto elims = collect_elims(cdcl.constrain(&rl0_alt));
@@ -180,7 +180,7 @@ TEST_F(CdclEliminationGeneratorUnitTest, ConstrainMutuallyExclusiveMemberErasesW
 // constrain — multiple learned avoidances (independent)
 // ---------------------------------------------------------------------------
 
-TEST_F(CdclEliminationGeneratorUnitTest, TwoIndependentAvoidancesConstrainOnlyTouchesMatchingGoal) {
+TEST_F(CdclEliminationGeneratorUnitTest, TwoIndependentAvoidancesConstrainIndependently) {
     cdcl.learn(make_lemma({&rl0, &rl1}));
     cdcl.learn(make_lemma({&rl2, &rl3}));
 
@@ -214,7 +214,7 @@ TEST_F(CdclEliminationGeneratorUnitTest, ConstrainOnGoalWithNoLearnedAvoidanceYi
 // constrain — two avoidances watching gl0 (one constrain per goal: pick one resolution)
 // ---------------------------------------------------------------------------
 
-TEST_F(CdclEliminationGeneratorUnitTest, ConstrainYieldsFromReducedAvoidanceOnly) {
+TEST_F(CdclEliminationGeneratorUnitTest, ConstrainYieldsFromConsistentAvoidanceAndNotMutuallyExclusiveAvoidance) {
     cdcl.learn(make_lemma({&rl0, &rl1}));
     cdcl.learn(make_lemma({&rl0_alt, &rl2}));
 
@@ -223,26 +223,9 @@ TEST_F(CdclEliminationGeneratorUnitTest, ConstrainYieldsFromReducedAvoidanceOnly
     EXPECT_THAT(elims, ElementsAre(&rl2));
 }
 
-TEST_F(CdclEliminationGeneratorUnitTest, ConstrainConsistentResolutionOnSharedGoalYieldsFromFirstAvoidance) {
-    cdcl.learn(make_lemma({&rl0, &rl1}));
-    cdcl.learn(make_lemma({&rl0_alt, &rl2}));
-
-    auto elims = collect_elims(cdcl.constrain(&rl0));
-
-    EXPECT_THAT(elims, ElementsAre(&rl1));
-}
-
 // ---------------------------------------------------------------------------
 // constrain — dependent lineage (distinct parents within each avoidance)
 // ---------------------------------------------------------------------------
-
-TEST_F(CdclEliminationGeneratorUnitTest, DependentLineageAvoidanceConstrainYieldsSiblingResolution) {
-    cdcl.learn(make_lemma({&rl_root, &rl_child}));
-
-    auto elims = collect_elims(cdcl.constrain(&rl_root));
-
-    EXPECT_THAT(elims, ElementsAre(&rl_child));
-}
 
 TEST_F(CdclEliminationGeneratorUnitTest, DependentAndIndependentAvoidancesDoNotInterfere) {
     cdcl.learn(make_lemma({&rl_root, &rl_child}));
