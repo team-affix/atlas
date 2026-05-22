@@ -9,6 +9,7 @@ using ::testing::_;
 using ::testing::AtLeast;
 using ::testing::ElementsAre;
 using ::testing::IsEmpty;
+using ::testing::UnorderedElementsAre;
 using ::testing::NiceMock;
 using ::testing::StrictMock;
 namespace {
@@ -275,4 +276,54 @@ TEST_F(CdclEliminationGeneratorUnitTest, LearnManyAvoidancesThenConstrainOneReso
     EXPECT_THAT(e_lin_4_0_0, ElementsAre(&lin_4_0_1_0));
     EXPECT_THAT(e_lin_0, ElementsAre(&lin_2_0));
     EXPECT_THAT(e_lin_2, ElementsAre(&lin_3_0));
+}
+
+// ---------------------------------------------------------------------------
+// constrain — four avoidances, each with a resolution on shared goal lin_0
+//   av0: {lin_0_0, lin_1_0}   av1: {lin_0_0, lin_2_0}   av2: {lin_0_0, lin_3_0}
+//   av3: {lin_0_1, lin_3_0}
+// ---------------------------------------------------------------------------
+
+TEST_F(CdclEliminationGeneratorUnitTest,
+    FourAvoidancesSharingLin0ConstrainMemberLin0_0YieldsFromConsistentAvoidances) {
+    cdcl.learn(make_lemma({&lin_0_0, &lin_1_0}));
+    cdcl.learn(make_lemma({&lin_0_0, &lin_2_0}));
+    cdcl.learn(make_lemma({&lin_0_0, &lin_3_0}));
+    cdcl.learn(make_lemma({&lin_0_1, &lin_3_0}));
+
+    auto elims = collect_elims(cdcl.constrain(&lin_0_0));
+
+    EXPECT_THAT(elims, UnorderedElementsAre(&lin_1_0, &lin_2_0, &lin_3_0));
+}
+
+TEST_F(CdclEliminationGeneratorUnitTest,
+    FourAvoidancesSharingLin0ConstrainMemberLin0_1YieldsFromConsistentAvoidance) {
+    cdcl.learn(make_lemma({&lin_0_0, &lin_1_0}));
+    cdcl.learn(make_lemma({&lin_0_0, &lin_2_0}));
+    cdcl.learn(make_lemma({&lin_0_0, &lin_3_0}));
+    cdcl.learn(make_lemma({&lin_0_1, &lin_3_0}));
+
+    auto elims = collect_elims(cdcl.constrain(&lin_0_1));
+
+    EXPECT_THAT(elims, ElementsAre(&lin_3_0));
+}
+
+TEST_F(CdclEliminationGeneratorUnitTest,
+    FourAvoidancesSharingLin0ConstrainExclusiveLin0_1ErasesOnlyLin0_0Avoidances) {
+    cdcl.learn(make_lemma({&lin_0_0, &lin_1_0}));
+    cdcl.learn(make_lemma({&lin_0_0, &lin_2_0}));
+    cdcl.learn(make_lemma({&lin_0_0, &lin_3_0}));
+
+    auto elims = collect_elims(cdcl.constrain(&lin_0_1));
+
+    EXPECT_THAT(elims, IsEmpty());
+}
+
+TEST_F(CdclEliminationGeneratorUnitTest,
+    FourAvoidancesSharingLin0ConstrainExclusiveLin0_0ErasesOnlyLin0_1Avoidance) {
+    cdcl.learn(make_lemma({&lin_0_1, &lin_3_0}));
+
+    auto elims = collect_elims(cdcl.constrain(&lin_0_0));
+
+    EXPECT_THAT(elims, IsEmpty());
 }
