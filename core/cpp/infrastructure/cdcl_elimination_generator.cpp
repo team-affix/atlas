@@ -1,4 +1,5 @@
 #include <memory>
+#include <algorithm>
 #include "../../hpp/infrastructure/cdcl_elimination_generator.hpp"
 #include "../../hpp/utility/backtrackable_set_insert.hpp"
 #include "../../hpp/utility/backtrackable_set_erase.hpp"
@@ -31,11 +32,14 @@ state_machine<const resolution_lineage*> cdcl_elimination_generator::constrain(c
     const goal_lineage* gl = rl->parent;
     
     // 2. get the set of avoidances that concern this resolution
-    const std::unordered_set<const avoidance_type*>& av_ptrs = watched_goals.get().at(gl);
+    auto it = watched_goals.get().find(gl);
+    
+    if (it == watched_goals.get().end())
+        co_return;
 
     // 3. for each avoidance, if the avoidance contains the resolution,
     //    reduce the avoidance. Else, remove the avoidance from the store.
-    for (const avoidance_type* av_ptr : av_ptrs) {
+    for (const avoidance_type* av_ptr : it->second) {
         // 4. if the avoidance does not contain the resolution,
         //    then it is mutually exclusive with the resolution
         if (!av_ptr->contains(rl)) {
