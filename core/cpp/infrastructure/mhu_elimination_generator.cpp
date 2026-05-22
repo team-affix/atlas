@@ -39,6 +39,8 @@ bool mhu_elimination_generator::try_add_head(const resolution_lineage* lineage, 
     
     // 6. add the head to the map
     heads_.insert({lineage, std::move(head)});
+
+    return true;
 }
 
 state_machine<const resolution_lineage*> mhu_elimination_generator::constrain(const resolution_lineage* lineage) {
