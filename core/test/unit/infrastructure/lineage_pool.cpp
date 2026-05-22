@@ -1,7 +1,7 @@
 #include <gtest/gtest.h>
 #include "../../../core/hpp/infrastructure/lineage_pool.hpp"
 
-class LineagePoolTest : public ::testing::Test {
+struct LineagePoolTest : public ::testing::Test {
 protected:
     lineage_pool pool;
     expr goal_expr0{expr::var{0}};

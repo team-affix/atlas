@@ -1,7 +1,7 @@
 #include <gtest/gtest.h>
 #include "../../../core/hpp/infrastructure/bind_map.hpp"
 
-class BindMapTest : public ::testing::Test {
+struct BindMapTest : public ::testing::Test {
 protected:
     bind_map bm;
     expr var0{expr::var{0}};

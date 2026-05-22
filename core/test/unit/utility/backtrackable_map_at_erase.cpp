@@ -4,7 +4,7 @@
 #include <set>
 #include <stdexcept>
 
-class BacktrackableMapAtEraseTest : public ::testing::Test {
+struct BacktrackableMapAtEraseTest : public ::testing::Test {
 protected:
     std::map<int, std::set<int>> mp{{1, {55}}};
     backtrackable_map_at_erase<std::map<int, std::set<int>>> m{1, 55};

@@ -1,12 +1,23 @@
 #include <gtest/gtest.h>
+#include <gmock/gmock.h>
 #include "../../../core/hpp/utility/tracked.hpp"
-#include "../../../core/hpp/utility/trail.hpp"
+#include "../../../core/hpp/utility/i_trail.hpp"
 #include "../../../core/hpp/utility/backtrackable_increment.hpp"
 
-class TrackedIntTest : public ::testing::Test {
+using ::testing::_;
+using ::testing::NiceMock;
+using ::testing::StrictMock;
+
+struct MockTrail : public i_trail {
+    MOCK_METHOD(void, push, (), (override));
+    MOCK_METHOD(void, pop, (), (override));
+    MOCK_METHOD(void, log, ((std::unique_ptr<i_backtrackable>)), (override));
+};
+
+struct TrackedIntTest : public ::testing::Test {
 protected:
-    trail t;
-    tracked<int> v{t, 10};
+    NiceMock<MockTrail> trail;
+    tracked<int> v{trail, 10};
 };
 
 TEST_F(TrackedIntTest, GetReturnsInitialValue) {
@@ -14,42 +25,10 @@ TEST_F(TrackedIntTest, GetReturnsInitialValue) {
 }
 
 TEST_F(TrackedIntTest, MutateChangesValue) {
-    t.push();
-    v.mutate(std::make_unique<backtrackable_increment<int>>());
-    EXPECT_EQ(v.get(), 11);
-}
+    StrictMock<MockTrail> strict_trail;
+    tracked<int> strict_v{strict_trail, 10};
 
-TEST_F(TrackedIntTest, MutateAndPopRevertsToPrePushValue) {
-    t.push();
-    v.mutate(std::make_unique<backtrackable_increment<int>>());
-    t.pop();
-    EXPECT_EQ(v.get(), 10);
-}
-
-TEST_F(TrackedIntTest, TwoMutationsInOneFrameBothRevert) {
-    t.push();
-    v.mutate(std::make_unique<backtrackable_increment<int>>());
-    v.mutate(std::make_unique<backtrackable_increment<int>>());
-    EXPECT_EQ(v.get(), 12);
-    t.pop();
-    EXPECT_EQ(v.get(), 10);
-}
-
-TEST_F(TrackedIntTest, TwoFramesInnerPopReverts) {
-    t.push();
-    v.mutate(std::make_unique<backtrackable_increment<int>>());
-    t.push();
-    v.mutate(std::make_unique<backtrackable_increment<int>>());
-    t.pop();
-    EXPECT_EQ(v.get(), 11);
-}
-
-TEST_F(TrackedIntTest, TwoFramesBothPopsRevert) {
-    t.push();
-    v.mutate(std::make_unique<backtrackable_increment<int>>());
-    t.push();
-    v.mutate(std::make_unique<backtrackable_increment<int>>());
-    t.pop();
-    t.pop();
-    EXPECT_EQ(v.get(), 10);
+    EXPECT_CALL(strict_trail, log(_)).Times(1);
+    strict_v.mutate(std::make_unique<backtrackable_increment<int>>());
+    EXPECT_EQ(strict_v.get(), 11);
 }

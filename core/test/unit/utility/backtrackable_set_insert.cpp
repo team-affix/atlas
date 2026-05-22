@@ -3,7 +3,7 @@
 #include <set>
 #include <stdexcept>
 
-class BacktrackableSetInsertTest : public ::testing::Test {
+struct BacktrackableSetInsertTest : public ::testing::Test {
 protected:
     std::set<int> s;
     backtrackable_set_insert<std::set<int>> m{7};

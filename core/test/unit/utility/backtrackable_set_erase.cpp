@@ -3,7 +3,7 @@
 #include <set>
 #include <stdexcept>
 
-class BacktrackableSetEraseTest : public ::testing::Test {
+struct BacktrackableSetEraseTest : public ::testing::Test {
 protected:
     std::set<int> s{42};
     backtrackable_set_erase<std::set<int>> m{42};

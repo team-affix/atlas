@@ -34,7 +34,7 @@ bool is_functor_named(const expr* e, const std::string& name) {
 
 } // namespace
 
-class MhuEliminationGeneratorTest : public ::testing::Test {
+struct MhuEliminationGeneratorIntegrationTest : public ::testing::Test {
 protected:
     trail t;
     expr_pool pool{t};
@@ -103,7 +103,7 @@ protected:
 // Lifecycle
 // ---------------------------------------------------------------------------
 
-TEST_F(MhuEliminationGeneratorTest, AddHeadThenConstrainRemovesHead) {
+TEST_F(MhuEliminationGeneratorIntegrationTest, AddHeadThenConstrainRemovesHead) {
     auto slot = make_slot(var0, f_empty);
     seed_and_add_head(slot.rl, &slot.goal, &slot.head);
 
@@ -113,19 +113,19 @@ TEST_F(MhuEliminationGeneratorTest, AddHeadThenConstrainRemovesHead) {
     EXPECT_NO_THROW(mhu.try_remove_head(slot.rl));
 }
 
-TEST_F(MhuEliminationGeneratorTest, TryRemoveHeadOnUnknownLineageIsNoOp) {
+TEST_F(MhuEliminationGeneratorIntegrationTest, TryRemoveHeadOnUnknownLineageIsNoOp) {
     auto slot = make_slot(var0, f_empty);
     EXPECT_NO_THROW(mhu.try_remove_head(slot.rl));
 }
 
-TEST_F(MhuEliminationGeneratorTest, TryRemoveHeadAfterAddAllowsReuse) {
+TEST_F(MhuEliminationGeneratorIntegrationTest, TryRemoveHeadAfterAddAllowsReuse) {
     auto slot = make_slot(var0, f_empty);
     seed_and_add_head(slot.rl, &slot.goal, &slot.head);
     mhu.try_remove_head(slot.rl);
     EXPECT_NO_THROW(seed_and_add_head(slot.rl, &slot.goal, &slot.head));
 }
 
-TEST_F(MhuEliminationGeneratorTest, ConstrainWithNoRepLinksCommitsNothingAndRemovesHead) {
+TEST_F(MhuEliminationGeneratorIntegrationTest, ConstrainWithNoRepLinksCommitsNothingAndRemovesHead) {
     auto slot = make_slot(var0, f_empty);
     mhu.add_head(slot.rl, make_head(), {});
 
@@ -138,7 +138,7 @@ TEST_F(MhuEliminationGeneratorTest, ConstrainWithNoRepLinksCommitsNothingAndRemo
 // Rebasing: constrain publishes local bindings into common
 // ---------------------------------------------------------------------------
 
-TEST_F(MhuEliminationGeneratorTest, ConstrainPublishesSeededBindingToCommon) {
+TEST_F(MhuEliminationGeneratorIntegrationTest, ConstrainPublishesSeededBindingToCommon) {
     auto slot = make_slot(var0, f_empty);
     seed_and_add_head(slot.rl, &slot.goal, &slot.head);
 
@@ -152,7 +152,7 @@ TEST_F(MhuEliminationGeneratorTest, ConstrainPublishesSeededBindingToCommon) {
 // Rebasing: colliding unifications → elimination
 // ---------------------------------------------------------------------------
 
-TEST_F(MhuEliminationGeneratorTest, ConstrainEliminatesHeadWithCollidingFunctorOnSameRep) {
+TEST_F(MhuEliminationGeneratorIntegrationTest, ConstrainEliminatesHeadWithCollidingFunctorOnSameRep) {
     auto a = make_slot(var0, f_empty);
     auto b = make_slot(var0, g_empty);
     seed_and_add_head(a.rl, &a.goal, &a.head);
@@ -165,7 +165,7 @@ TEST_F(MhuEliminationGeneratorTest, ConstrainEliminatesHeadWithCollidingFunctorO
     EXPECT_FALSE(contains(elims, a.rl));
 }
 
-TEST_F(MhuEliminationGeneratorTest, ConstrainDoesNotEliminateCompatibleHeadOnSameRep) {
+TEST_F(MhuEliminationGeneratorIntegrationTest, ConstrainDoesNotEliminateCompatibleHeadOnSameRep) {
     auto a = make_slot(var0, f_empty);
     auto b = make_slot(var0, f_empty);
     seed_and_add_head(a.rl, &a.goal, &a.head);
@@ -178,7 +178,7 @@ TEST_F(MhuEliminationGeneratorTest, ConstrainDoesNotEliminateCompatibleHeadOnSam
     EXPECT_FALSE(contains(elims, a.rl));
 }
 
-TEST_F(MhuEliminationGeneratorTest, ConstrainDoesNotEliminateHeadWatchingDisjointRep) {
+TEST_F(MhuEliminationGeneratorIntegrationTest, ConstrainDoesNotEliminateHeadWatchingDisjointRep) {
     expr var2{expr::var{2}};
     auto a = make_slot(var0, f_empty);
     auto b = make_slot(var2, g_empty);
@@ -195,7 +195,7 @@ TEST_F(MhuEliminationGeneratorTest, ConstrainDoesNotEliminateHeadWatchingDisjoin
 // Rebasing: try_remove_head after revalidate failure (head already erased)
 // ---------------------------------------------------------------------------
 
-TEST_F(MhuEliminationGeneratorTest, TryRemoveHeadAfterRevalidateEliminationIsNoOp) {
+TEST_F(MhuEliminationGeneratorIntegrationTest, TryRemoveHeadAfterRevalidateEliminationIsNoOp) {
     auto a = make_slot(var0, f_empty);
     auto b = make_slot(var0, g_empty);
     seed_and_add_head(a.rl, &a.goal, &a.head);

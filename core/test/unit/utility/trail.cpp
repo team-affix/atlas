@@ -1,17 +1,15 @@
 #include <gtest/gtest.h>
+#include <gmock/gmock.h>
 #include "../../../core/hpp/utility/trail.hpp"
-#include <vector>
+#include "../../../core/hpp/utility/i_backtrackable.hpp"
 
-namespace {
-    struct recorder : i_backtrackable {
-        std::vector<int>& order;
-        int id;
-        recorder(std::vector<int>& o, int id) : order(o), id(id) {}
-        void backtrack() override { order.push_back(id); }
-    };
-}
+using ::testing::StrictMock;
 
-class TrailTest : public ::testing::Test {
+struct MockBacktrackable : public i_backtrackable {
+    MOCK_METHOD(void, backtrack, (), (override));
+};
+
+struct TrailTest : public ::testing::Test {
 protected:
     trail t;
 };
@@ -38,42 +36,50 @@ TEST_F(TrailTest, PopDecrementsDepth) {
 }
 
 TEST_F(TrailTest, EmptyFramePopCallsNothing) {
-    std::vector<int> order;
     t.push();
     t.pop();
-    EXPECT_TRUE(order.empty());
     EXPECT_EQ(t.depth(), 0);
 }
 
 TEST_F(TrailTest, LIFOUndoOrderWithinOneFrame) {
-    std::vector<int> order;
+    auto m1 = std::make_unique<StrictMock<MockBacktrackable>>();
+    auto m2 = std::make_unique<StrictMock<MockBacktrackable>>();
+    ::testing::InSequence seq;
+    EXPECT_CALL(*m2, backtrack()).Times(1);
+    EXPECT_CALL(*m1, backtrack()).Times(1);
+
     t.push();
-    t.log(std::make_unique<recorder>(order, 1));
-    t.log(std::make_unique<recorder>(order, 2));
+    t.log(std::move(m1));
+    t.log(std::move(m2));
     t.pop();
-    EXPECT_EQ(order, (std::vector<int>{2, 1}));
 }
 
 TEST_F(TrailTest, TwoFramesFirstPopUndoesOnlyFrame2Entry) {
-    std::vector<int> order;
+    auto m1 = std::make_unique<StrictMock<MockBacktrackable>>();
+    auto m2 = std::make_unique<StrictMock<MockBacktrackable>>();
+    ::testing::InSequence seq;
+    EXPECT_CALL(*m2, backtrack()).Times(1);
+
     t.push();
-    t.log(std::make_unique<recorder>(order, 1));
+    t.log(std::move(m1));
     t.push();
-    t.log(std::make_unique<recorder>(order, 2));
+    t.log(std::move(m2));
     t.pop();
-    EXPECT_EQ(order, (std::vector<int>{2}));
     EXPECT_EQ(t.depth(), 1);
 }
 
 TEST_F(TrailTest, TwoFramesSecondPopUndoesFrame1Entry) {
-    std::vector<int> order;
+    auto m1 = std::make_unique<StrictMock<MockBacktrackable>>();
+    auto m2 = std::make_unique<StrictMock<MockBacktrackable>>();
+    ::testing::InSequence seq;
+    EXPECT_CALL(*m2, backtrack()).Times(1);
+    EXPECT_CALL(*m1, backtrack()).Times(1);
+
     t.push();
-    t.log(std::make_unique<recorder>(order, 1));
+    t.log(std::move(m1));
     t.push();
-    t.log(std::make_unique<recorder>(order, 2));
+    t.log(std::move(m2));
     t.pop();
-    order.clear();
     t.pop();
-    EXPECT_EQ(order, (std::vector<int>{1}));
     EXPECT_EQ(t.depth(), 0);
 }

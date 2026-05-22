@@ -1,67 +1,49 @@
 #include <gtest/gtest.h>
+#include <gmock/gmock.h>
 #include "../../../core/hpp/infrastructure/goal_activator.hpp"
-#include "../../../core/hpp/infrastructure/lineage_pool.hpp"
-#include "../../../core/hpp/infrastructure/copier.hpp"
-#include "../../../core/hpp/infrastructure/var_sequencer.hpp"
-#include "../../../core/hpp/infrastructure/expr_pool.hpp"
-#include "../../../core/hpp/utility/trail.hpp"
+#include "../../../core/hpp/interfaces/i_copier.hpp"
+#include "../../../core/hpp/interfaces/i_goal_activator.hpp"
+#include "../../../core/hpp/interfaces/i_activate_goal_expr.hpp"
+#include "../../../core/hpp/interfaces/i_get_candidate_translation_map.hpp"
 
-namespace {
+using ::testing::_;
+using ::testing::Return;
+using ::testing::ReturnRef;
 
-class recording_activate_goal_expr : public i_activate_goal_expr {
-public:
-    const goal_lineage* last_gl = nullptr;
-    const expr* last_expr = nullptr;
-
-    void activate(const goal_lineage* gl, const expr* e) override {
-        last_gl = gl;
-        last_expr = e;
-    }
+struct MockActivateGoalExpr : public i_activate_goal_expr {
+    MOCK_METHOD(void, activate, (const goal_lineage*, const expr*), (override));
 };
 
-class recording_translation_maps : public i_get_candidate_translation_map {
-public:
-    translation_map& get(const resolution_lineage* rl) override {
-        return maps[rl];
-    }
-
-    std::unordered_map<const resolution_lineage*, translation_map> maps;
+struct MockGetCandidateTranslationMap : public i_get_candidate_translation_map {
+    MOCK_METHOD(translation_map&, get, (const resolution_lineage*), (override));
 };
 
-} // namespace
+struct MockCopier : public i_copier {
+    MOCK_METHOD(const expr*, copy, (const expr*, translation_map&), (const, override));
+};
 
-class GoalActivatorTest : public ::testing::Test {
-protected:
-    trail t;
-    expr_pool pool{t};
-    var_sequencer vs{t};
-    copier cp{vs, pool};
-    lineage_pool lp;
-    recording_activate_goal_expr age;
-    recording_translation_maps gctm;
+struct GoalActivatorTest : public ::testing::Test {
+    MockActivateGoalExpr age;
+    MockGetCandidateTranslationMap gctm;
+    MockCopier cp;
 
     expr parent_goal{expr::var{0}};
     expr child_goal{expr::var{1}};
+    expr copied_goal{expr::var{99}};
     expr rule_head{expr::var{10}};
     rule parent_rule{&rule_head, {&child_goal}};
-    resolution_lineage* res = nullptr;
-    goal_lineage* parent_gl = nullptr;
-    goal_lineage* child_gl = nullptr;
 
-    void SetUp() override {
-        res = const_cast<resolution_lineage*>(lp.resolution(nullptr, &parent_rule));
-        parent_gl = const_cast<goal_lineage*>(lp.goal(res, &parent_goal));
-        child_gl = const_cast<goal_lineage*>(lp.goal(res, &child_goal));
-        gctm.maps[res] = translation_map{{1, 2}};
-    }
-
-    goal_activator activator{age, gctm, cp};
+    resolution_lineage res{nullptr, &parent_rule};
+    goal_lineage child_gl{&res, &child_goal};
+    translation_map tm{{1, 2}};
 };
 
 TEST_F(GoalActivatorTest, ActivatePassesCopiedGoalExprToGoalExprActivator) {
-    activator.activate(child_gl);
+    EXPECT_CALL(gctm, get(&res)).WillOnce(ReturnRef(tm));
+    EXPECT_CALL(cp, copy(child_gl.idx, _)).WillOnce(Return(&copied_goal));
+    EXPECT_CALL(age, activate(&child_gl, &copied_goal)).Times(1);
 
-    EXPECT_EQ(age.last_gl, child_gl);
-    ASSERT_NE(age.last_expr, nullptr);
-    EXPECT_NE(age.last_expr, child_gl->idx);
+    goal_activator activator{age, gctm, cp};
+    i_goal_activator& sut{activator};
+    sut.activate(&child_gl);
 }

@@ -3,7 +3,7 @@
 #include <map>
 #include <stdexcept>
 
-class BacktrackableMapAssignTest : public ::testing::Test {
+struct BacktrackableMapAssignTest : public ::testing::Test {
 protected:
     std::map<int, int> mp{{1, 10}};
     backtrackable_map_assign<std::map<int, int>> m{1, 99};

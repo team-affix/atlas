@@ -1,28 +1,37 @@
 #include <gtest/gtest.h>
 #include <unordered_set>
 #include "../../../core/hpp/value_objects/lemma.hpp"
-#include "../../../core/hpp/infrastructure/lineage_pool.hpp"
 
-class LemmaTest : public ::testing::Test {
+struct LemmaTest : public ::testing::Test {
 protected:
-    lineage_pool pool;
     expr goal_expr0{expr::var{0}};
     expr rule_head0{expr::var{10}};
     expr rule_head1{expr::var{11}};
     rule rule_idx0{&rule_head0, {}};
     rule rule_idx1{&rule_head1, {}};
 
-    // res0 (root) → goal0 → res1 → goal1 → res2
-    void build_chain(const resolution_lineage*& res0,
-                     const goal_lineage*& goal0,
-                     const resolution_lineage*& res1,
-                     const goal_lineage*& goal1,
-                     const resolution_lineage*& res2) {
-        res0  = pool.resolution(nullptr, &rule_idx0);
-        goal0 = pool.goal(res0, &goal_expr0);
-        res1  = pool.resolution(goal0, &rule_idx0);
-        goal1 = pool.goal(res1, &goal_expr0);
-        res2  = pool.resolution(goal1, &rule_idx0);
+    resolution_lineage res0_storage{nullptr, &rule_idx0};
+    goal_lineage goal0_storage{nullptr, &goal_expr0};
+    resolution_lineage res1_storage{nullptr, &rule_idx0};
+    goal_lineage goal1_storage{nullptr, &goal_expr0};
+    resolution_lineage res2_storage{nullptr, &rule_idx0};
+
+    void build_chain(resolution_lineage*& res0,
+                     goal_lineage*& goal0,
+                     resolution_lineage*& res1,
+                     goal_lineage*& goal1,
+                     resolution_lineage*& res2) {
+        res0_storage  = resolution_lineage{nullptr, &rule_idx0};
+        goal0_storage = goal_lineage{&res0_storage, &goal_expr0};
+        res1_storage  = resolution_lineage{&goal0_storage, &rule_idx0};
+        goal1_storage = goal_lineage{&res1_storage, &goal_expr0};
+        res2_storage  = resolution_lineage{&goal1_storage, &rule_idx0};
+
+        res0  = &res0_storage;
+        goal0 = &goal0_storage;
+        res1  = &res1_storage;
+        goal1 = &goal1_storage;
+        res2  = &res2_storage;
     }
 };
 
@@ -31,19 +40,15 @@ static std::unordered_set<const resolution_lineage*> as_set(
     return {xs.begin(), xs.end()};
 }
 
-// ---------------------------------------------------------------------------
-// Leaf-only pruning
-// ---------------------------------------------------------------------------
-
 TEST_F(LemmaTest, LemmaSingleResolutionUnchanged) {
-    const resolution_lineage* res0 = pool.resolution(nullptr, &rule_idx0);
-    lemma l{as_set({res0})};
-    EXPECT_EQ(l.get_resolutions(), as_set({res0}));
+    resolution_lineage res0{nullptr, &rule_idx0};
+    lemma l{as_set({&res0})};
+    EXPECT_EQ(l.get_resolutions(), as_set({&res0}));
 }
 
 TEST_F(LemmaTest, LemmaDropsAncestorWhenLeafIncluded) {
-    const resolution_lineage *res0, *res1, *res2;
-    const goal_lineage *goal0, *goal1;
+    resolution_lineage *res0, *res1, *res2;
+    goal_lineage *goal0, *goal1;
     build_chain(res0, goal0, res1, goal1, res2);
 
     lemma l{as_set({res0, res1, res2})};
@@ -51,8 +56,8 @@ TEST_F(LemmaTest, LemmaDropsAncestorWhenLeafIncluded) {
 }
 
 TEST_F(LemmaTest, LemmaDropsIntermediateAncestor) {
-    const resolution_lineage *res0, *res1, *res2;
-    const goal_lineage *goal0, *goal1;
+    resolution_lineage *res0, *res1, *res2;
+    goal_lineage *goal0, *goal1;
     build_chain(res0, goal0, res1, goal1, res2);
 
     lemma l{as_set({res1, res2})};
@@ -60,17 +65,17 @@ TEST_F(LemmaTest, LemmaDropsIntermediateAncestor) {
 }
 
 TEST_F(LemmaTest, LemmaIdempotentForLeafOnlyInput) {
-    const resolution_lineage *res0, *res1, *res2;
-    const goal_lineage *goal0, *goal1;
+    resolution_lineage *res0, *res1, *res2;
+    goal_lineage *goal0, *goal1;
     build_chain(res0, goal0, res1, goal1, res2);
 
     lemma l{as_set({res2})};
     EXPECT_EQ(l.get_resolutions(), as_set({res2}));
 }
 
-TEST_F(LemmaTest, LemmaVisitedStopsReWalking) {
-    const resolution_lineage *res0, *res1, *res2;
-    const goal_lineage *goal0, *goal1;
+TEST_F(LemmaTest, LemmaPrunesToDeepestResolutionsOnly) {
+    resolution_lineage *res0, *res1, *res2;
+    goal_lineage *goal0, *goal1;
     build_chain(res0, goal0, res1, goal1, res2);
 
     lemma l{as_set({res2, res1})};

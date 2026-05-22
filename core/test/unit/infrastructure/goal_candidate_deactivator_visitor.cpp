@@ -1,75 +1,75 @@
 #include <gtest/gtest.h>
+#include <gmock/gmock.h>
 #include "../../../core/hpp/infrastructure/goal_candidate_deactivator_visitor.hpp"
-#include "../../../core/hpp/infrastructure/lineage_pool.hpp"
 #include "../../../core/hpp/interfaces/i_mhu_elimination_generator.hpp"
 #include "../../../core/hpp/interfaces/i_candidate_deactivator.hpp"
 #include "../../../core/hpp/interfaces/i_elimination_backlog.hpp"
 #include "../../../core/hpp/interfaces/i_deactivate_candidate_translation_map.hpp"
+#include "../../../core/hpp/interfaces/i_lineage_pool.hpp"
 
-namespace {
+using ::testing::Return;
 
-state_machine<const resolution_lineage*> make_empty_constrain() {
-    co_return;
-}
+struct MockMhuEliminationGenerator : public i_mhu_elimination_generator {
+    MOCK_METHOD(void, add_head,
+        (const resolution_lineage*, unify_head, const std::unordered_set<uint32_t>&),
+        (override));
+    MOCK_METHOD(void, try_remove_head, (const resolution_lineage*), (override));
+    MOCK_METHOD(state_machine<const resolution_lineage*>, constrain,
+        (const resolution_lineage*), (override));
+};
 
-class recording_mhu : public i_mhu_elimination_generator {
-public:
-    std::unordered_set<const resolution_lineage*> removed;
+struct MockCandidateDeactivator : public i_candidate_deactivator {
+    MOCK_METHOD(void, deactivate, (const resolution_lineage*), (override));
+};
 
-    void add_head(const resolution_lineage*, unify_head,
-        const std::unordered_set<uint32_t>&) override {}
-    void try_remove_head(const resolution_lineage* rl) override { removed.insert(rl); }
-    state_machine<const resolution_lineage*> constrain(const resolution_lineage*) override {
-        return make_empty_constrain();
+struct MockDeactivateCandidateTranslationMap : public i_deactivate_candidate_translation_map {
+    MOCK_METHOD(void, deactivate, (const resolution_lineage*), (override));
+};
+
+struct MockEliminationBacklog : public i_elimination_backlog {
+    MOCK_METHOD(void, insert, (const resolution_lineage*), (override));
+    MOCK_METHOD(bool, contains, (const resolution_lineage*), (override));
+    MOCK_METHOD(void, constrain, (const resolution_lineage*), (override));
+};
+
+struct MockLineagePool : public i_lineage_pool {
+    MOCK_METHOD(const goal_lineage*, goal, (const resolution_lineage*, const expr*), (override));
+    MOCK_METHOD(const resolution_lineage*, resolution,
+        (const goal_lineage*, const rule*), (override));
+    MOCK_METHOD(void, pin_goal, (const goal_lineage*), ());
+    MOCK_METHOD(void, pin_resolution, (const resolution_lineage*), ());
+    MOCK_METHOD(void, trim, (), (override));
+    MOCK_METHOD(const goal_lineage*, import_goal, (const goal_lineage*), ());
+    MOCK_METHOD(const resolution_lineage*, import_resolution, (const resolution_lineage*), ());
+
+    void pin(const goal_lineage* gl) override { pin_goal(gl); }
+    void pin(const resolution_lineage* rl) override { pin_resolution(rl); }
+    const goal_lineage* import(const goal_lineage* gl) override { return import_goal(gl); }
+    const resolution_lineage* import(const resolution_lineage* rl) override {
+        return import_resolution(rl);
     }
 };
 
-class recording_candidate_deactivator : public i_candidate_deactivator {
-public:
-    std::unordered_set<const resolution_lineage*> deactivated;
-
-    void deactivate(const resolution_lineage* rl) override { deactivated.insert(rl); }
-};
-
-class recording_translation_deactivator : public i_deactivate_candidate_translation_map {
-public:
-    std::unordered_set<const resolution_lineage*> deactivated;
-
-    void deactivate(const resolution_lineage* rl) override { deactivated.insert(rl); }
-};
-
-class noop_backlog : public i_elimination_backlog {
-public:
-    void insert(const resolution_lineage*) override {}
-    bool contains(const resolution_lineage*) override { return false; }
-    void constrain(const resolution_lineage*) override {}
-};
-
-} // namespace
-
-class GoalCandidateDeactivatorVisitorTest : public ::testing::Test {
-protected:
-    lineage_pool lp;
+struct GoalCandidateDeactivatorVisitorTest : public ::testing::Test {
     expr goal_e{expr::var{0}};
     expr head{expr::var{10}};
     rule r{&head, {}};
-    goal_lineage* gl = nullptr;
-    recording_mhu mhu;
-    recording_candidate_deactivator cd;
-    recording_translation_deactivator dctm;
-    noop_backlog eb;
+    goal_lineage gl{nullptr, &goal_e};
+    resolution_lineage rl{&gl, &r};
 
-    void SetUp() override {
-        gl = const_cast<goal_lineage*>(lp.goal(nullptr, &goal_e));
-    }
+    MockMhuEliminationGenerator mhu;
+    MockCandidateDeactivator cd;
+    MockDeactivateCandidateTranslationMap dctm;
+    MockEliminationBacklog eb;
+    MockLineagePool lp;
 };
 
 TEST_F(GoalCandidateDeactivatorVisitorTest, VisitTearsDownMhuTranslationAndCandidate) {
-    goal_candidate_deactivator_visitor visitor{gl, mhu, cd, eb, lp, dctm};
-    visitor.visit(&r);
+    EXPECT_CALL(lp, resolution(&gl, &r)).WillOnce(Return(&rl));
+    EXPECT_CALL(mhu, try_remove_head(&rl)).Times(1);
+    EXPECT_CALL(dctm, deactivate(&rl)).Times(1);
+    EXPECT_CALL(cd, deactivate(&rl)).Times(1);
 
-    const resolution_lineage* rl = lp.resolution(gl, &r);
-    EXPECT_TRUE(mhu.removed.count(rl));
-    EXPECT_TRUE(dctm.deactivated.contains(rl));
-    EXPECT_TRUE(cd.deactivated.contains(rl));
+    goal_candidate_deactivator_visitor visitor{&gl, mhu, cd, eb, lp, dctm};
+    visitor.visit(&r);
 }

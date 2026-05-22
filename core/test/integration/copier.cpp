@@ -5,7 +5,7 @@
 #include "../../../core/hpp/infrastructure/var_sequencer.hpp"
 #include "../../../core/hpp/utility/trail.hpp"
 
-class CopierTest : public ::testing::Test {
+struct CopierIntegrationTest : public ::testing::Test {
 protected:
     void SetUp() override {
         pool.emplace(t);
@@ -26,47 +26,7 @@ static uint32_t var_index(const expr* e) {
     return std::get<expr::var>(e->content).index;
 }
 
-// ---------------------------------------------------------------------------
-// Variables
-// ---------------------------------------------------------------------------
-
-TEST_F(CopierTest, CopyVarAllocatesFreshIndex) {
-    translation_map map;
-    const expr* p = cp->copy(&var0, map);
-    EXPECT_EQ(var_index(p), 0u);
-    EXPECT_EQ(map.at(0), 0u);
-}
-
-TEST_F(CopierTest, CopySameVarTwiceReusesMappedIndex) {
-    translation_map map;
-    const expr* p1 = cp->copy(&var0, map);
-    const expr* p2 = cp->copy(&var0, map);
-    EXPECT_EQ(p1, p2);
-    EXPECT_EQ(map.size(), 1u);
-}
-
-TEST_F(CopierTest, CopyDistinctVarsGetDistinctIndices) {
-    translation_map map;
-    const expr* p0 = cp->copy(&var0, map);
-    const expr* p1 = cp->copy(&var1, map);
-    EXPECT_EQ(var_index(p0), 0u);
-    EXPECT_EQ(var_index(p1), 1u);
-}
-
-// ---------------------------------------------------------------------------
-// Functors
-// ---------------------------------------------------------------------------
-
-TEST_F(CopierTest, CopyFunctorPreservesNameAndArity) {
-    expr f{expr::functor{"f", {&var0, &var1}}};
-    translation_map map;
-    const expr* p = cp->copy(&f, map);
-    const expr::functor& out = std::get<expr::functor>(p->content);
-    EXPECT_EQ(out.name, "f");
-    EXPECT_EQ(out.args.size(), 2u);
-}
-
-TEST_F(CopierTest, CopyNestedFunctorRemapsAllVars) {
+TEST_F(CopierIntegrationTest, CopyNestedFunctorRemapsAllVarsInRealPool) {
     expr inner{expr::functor{"g", {&var0}}};
     expr outer{expr::functor{"f", {&inner, &var1}}};
     translation_map map;
@@ -77,22 +37,10 @@ TEST_F(CopierTest, CopyNestedFunctorRemapsAllVars) {
     EXPECT_EQ(var_index(f.args[1]), 1u);
     EXPECT_EQ(map.at(0), 0u);
     EXPECT_EQ(map.at(1), 1u);
+    EXPECT_EQ(p, pool->functor("f", {pool->functor("g", {pool->var(0)}), pool->var(1)}));
 }
 
-TEST_F(CopierTest, CopyTernaryFunctorRemapsAllVars) {
-    expr f{expr::functor{"f", {&var0, &var1, &var2}}};
-    translation_map map;
-    const expr* p = cp->copy(&f, map);
-    const expr::functor& out = std::get<expr::functor>(p->content);
-    EXPECT_EQ(out.name, "f");
-    ASSERT_EQ(out.args.size(), 3u);
-    EXPECT_EQ(var_index(out.args[0]), 0u);
-    EXPECT_EQ(var_index(out.args[1]), 1u);
-    EXPECT_EQ(var_index(out.args[2]), 2u);
-    EXPECT_EQ(map.size(), 3u);
-}
-
-TEST_F(CopierTest, CopySeparateCallsAdvanceSequencer) {
+TEST_F(CopierIntegrationTest, CopySeparateCallsAdvanceSequencer) {
     translation_map map1;
     translation_map map2;
     const expr* p1 = cp->copy(&var0, map1);

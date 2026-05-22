@@ -8,19 +8,17 @@ using ::testing::_;
 using ::testing::NiceMock;
 using ::testing::Return;
 
-class MockVarSequencer : public i_var_sequencer {
-public:
+struct MockVarSequencer : public i_var_sequencer {
     MOCK_METHOD(uint32_t, next, (), (override));
 };
 
-class MockExprPool : public i_expr_pool {
-public:
+struct MockExprPool : public i_expr_pool {
     MOCK_METHOD(const expr*, functor, (const std::string&, std::vector<const expr*>), (override));
     MOCK_METHOD(const expr*, var, (uint32_t), (override));
     MOCK_METHOD(const expr*, import, (const expr*), (override));
 };
 
-class CopierUnitTest : public ::testing::Test {
+struct CopierUnitTest : public ::testing::Test {
 protected:
     void SetUp() override {
         next_index = 0;

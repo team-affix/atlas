@@ -8,20 +8,18 @@ using ::testing::_;
 using ::testing::NiceMock;
 using ::testing::Return;
 
-class MockBindMap : public i_bind_map {
-public:
+struct MockBindMap : public i_bind_map {
     MOCK_METHOD(void,        bind, (uint32_t, const expr*), (override));
     MOCK_METHOD(const expr*, whnf, (const expr*),           (override));
 };
 
-class MockExprPool : public i_expr_pool {
-public:
+struct MockExprPool : public i_expr_pool {
     MOCK_METHOD(const expr*, functor, (const std::string&, std::vector<const expr*>), (override));
     MOCK_METHOD(const expr*, var, (uint32_t), (override));
     MOCK_METHOD(const expr*, import, (const expr*), (override));
 };
 
-class NormalizerUnitTest : public ::testing::Test {
+struct NormalizerUnitTest : public ::testing::Test {
 protected:
     void SetUp() override {
         ON_CALL(bm, whnf(_)).WillByDefault([this](const expr* e) -> const expr* {

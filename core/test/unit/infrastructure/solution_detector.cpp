@@ -1,34 +1,34 @@
 #include <gtest/gtest.h>
-#include <unordered_set>
+#include <gmock/gmock.h>
 #include "../../../core/hpp/infrastructure/solution_detector.hpp"
+#include "../../../core/hpp/interfaces/i_solution_detector.hpp"
 #include "../../../core/hpp/interfaces/i_active_goals.hpp"
 
-namespace {
+using ::testing::Return;
 
-class fake_active_goals : public i_active_goals {
-public:
-    void insert(const goal_lineage* gl) override { goals.insert(gl); }
-    void erase(const goal_lineage* gl) override { goals.erase(gl); }
-    bool contains(const goal_lineage* gl) const override { return goals.count(gl); }
-    void accept(i_visitor<const goal_lineage*>&) const override {}
-    size_t size() const override { return goals.size(); }
-    bool empty() const override { return goals.empty(); }
-
-    std::unordered_set<const goal_lineage*> goals;
+struct MockActiveGoals : public i_active_goals {
+    MOCK_METHOD(void, insert, (const goal_lineage*), (override));
+    MOCK_METHOD(void, erase, (const goal_lineage*), (override));
+    MOCK_METHOD(bool, contains, (const goal_lineage*), (const, override));
+    MOCK_METHOD(void, accept, (i_visitor<const goal_lineage*>&), (const, override));
+    MOCK_METHOD(size_t, size, (), (const, override));
+    MOCK_METHOD(bool, empty, (), (const, override));
 };
 
-} // namespace
-
 TEST(SolutionDetectorTest, EmptyActiveGoalsMeansSolution) {
-    fake_active_goals ag;
+    MockActiveGoals ag;
+    EXPECT_CALL(ag, empty()).WillOnce(Return(true));
+
     solution_detector detector{ag};
-    EXPECT_TRUE(detector.detect());
+    i_solution_detector& sut{detector};
+    EXPECT_TRUE(sut.detect());
 }
 
 TEST(SolutionDetectorTest, NonemptyActiveGoalsIsNotSolution) {
-    fake_active_goals ag;
-    goal_lineage gl{nullptr, nullptr};
-    ag.insert(&gl);
+    MockActiveGoals ag;
+    EXPECT_CALL(ag, empty()).WillOnce(Return(false));
+
     solution_detector detector{ag};
-    EXPECT_FALSE(detector.detect());
+    i_solution_detector& sut{detector};
+    EXPECT_FALSE(sut.detect());
 }

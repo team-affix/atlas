@@ -3,7 +3,7 @@
 #include <map>
 #include <stdexcept>
 
-class BacktrackableMapEraseTest : public ::testing::Test {
+struct BacktrackableMapEraseTest : public ::testing::Test {
 protected:
     std::map<int, int> mp{{3, 77}};
     backtrackable_map_erase<std::map<int, int>> m{3};

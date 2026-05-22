@@ -5,7 +5,7 @@
 #include "../../../core/hpp/infrastructure/bind_map.hpp"
 #include "../../../core/hpp/utility/trail.hpp"
 
-class NormalizerTest : public ::testing::Test {
+struct NormalizerIntegrationTest : public ::testing::Test {
 protected:
     void SetUp() override {
         pool.emplace(t);
@@ -29,13 +29,13 @@ protected:
 // Variables
 // ---------------------------------------------------------------------------
 
-TEST_F(NormalizerTest, NormalizeUnboundVarReturnsWhnfSelf) {
+TEST_F(NormalizerIntegrationTest, NormalizeUnboundVarReturnsWhnfSelf) {
     const expr* p = norm->normalize(&var0);
     EXPECT_EQ(p, &var0);
     EXPECT_EQ(std::get<expr::var>(p->content).index, 0u);
 }
 
-TEST_F(NormalizerTest, NormalizeBoundVarReturnsWhnfRepresentative) {
+TEST_F(NormalizerIntegrationTest, NormalizeBoundVarReturnsWhnfRepresentative) {
     const expr* f = pool_f();
     bm.bind(0, f);
     EXPECT_EQ(norm->normalize(&var0), f);
@@ -45,7 +45,7 @@ TEST_F(NormalizerTest, NormalizeBoundVarReturnsWhnfRepresentative) {
 // Functors
 // ---------------------------------------------------------------------------
 
-TEST_F(NormalizerTest, NormalizeNullaryFunctorInternsInPool) {
+TEST_F(NormalizerIntegrationTest, NormalizeNullaryFunctorInternsInPool) {
     expr raw{expr::functor{"f", {}}};
     const expr* p1 = norm->normalize(&raw);
     const expr* p2 = norm->normalize(&raw);
@@ -54,7 +54,7 @@ TEST_F(NormalizerTest, NormalizeNullaryFunctorInternsInPool) {
     EXPECT_EQ(p1, pool->functor("f", {}));
 }
 
-TEST_F(NormalizerTest, NormalizeFunctorNormalizesArgs) {
+TEST_F(NormalizerIntegrationTest, NormalizeFunctorNormalizesArgs) {
     const expr* f = pool_f();
     expr f_var0{expr::functor{"f", {&var0}}};
     bm.bind(0, f);
@@ -63,7 +63,7 @@ TEST_F(NormalizerTest, NormalizeFunctorNormalizesArgs) {
     EXPECT_EQ(out.args[0], f);
 }
 
-TEST_F(NormalizerTest, NormalizeNestedFunctorRebuildsStructure) {
+TEST_F(NormalizerIntegrationTest, NormalizeNestedFunctorRebuildsStructure) {
     const expr* f = pool_f();
     const expr* g = pool_g();
     expr g_var0{expr::functor{"g", {&var0}}};
@@ -78,7 +78,7 @@ TEST_F(NormalizerTest, NormalizeNestedFunctorRebuildsStructure) {
     EXPECT_EQ(p, pool->functor("f", {pool->functor("g", {g})}));
 }
 
-TEST_F(NormalizerTest, NormalizeBinaryFunctorNormalizesBothArgs) {
+TEST_F(NormalizerIntegrationTest, NormalizeBinaryFunctorNormalizesBothArgs) {
     const expr* a = pool->functor("a", {});
     const expr* b = pool->functor("b", {});
     expr raw{expr::functor{"f", {&var0, &var1}}};
@@ -92,7 +92,7 @@ TEST_F(NormalizerTest, NormalizeBinaryFunctorNormalizesBothArgs) {
     EXPECT_EQ(p, pool->functor("f", {a, b}));
 }
 
-TEST_F(NormalizerTest, NormalizeTernaryFunctorNormalizesAllArgs) {
+TEST_F(NormalizerIntegrationTest, NormalizeTernaryFunctorNormalizesAllArgs) {
     const expr* a = pool->functor("a", {});
     const expr* b = pool->functor("b", {});
     const expr* c = pool->functor("c", {});
@@ -109,7 +109,7 @@ TEST_F(NormalizerTest, NormalizeTernaryFunctorNormalizesAllArgs) {
     EXPECT_EQ(p, pool->functor("f", {a, b, c}));
 }
 
-TEST_F(NormalizerTest, NormalizeIdempotentOnAlreadyNormalized) {
+TEST_F(NormalizerIntegrationTest, NormalizeIdempotentOnAlreadyNormalized) {
     expr raw{expr::functor{"f", {}}};
     const expr* p1 = norm->normalize(&raw);
     EXPECT_EQ(norm->normalize(p1), p1);

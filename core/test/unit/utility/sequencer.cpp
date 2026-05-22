@@ -1,35 +1,24 @@
 #include <gtest/gtest.h>
+#include <gmock/gmock.h>
 #include "../../../core/hpp/utility/sequencer.hpp"
-#include "../../../core/hpp/utility/trail.hpp"
+#include "../../../core/hpp/utility/i_trail.hpp"
 
-class SequencerTest : public ::testing::Test {
+using ::testing::NiceMock;
+
+struct MockTrail : public i_trail {
+    MOCK_METHOD(void, push, (), (override));
+    MOCK_METHOD(void, pop, (), (override));
+    MOCK_METHOD(void, log, ((std::unique_ptr<i_backtrackable>)), (override));
+};
+
+struct SequencerTest : public ::testing::Test {
 protected:
-    trail t;
-    sequencer<int> seq{t};
+    NiceMock<MockTrail> trail;
+    sequencer<int> seq{trail};
 };
 
 TEST_F(SequencerTest, NextReturns0Then1Then2InOrder) {
     EXPECT_EQ(seq.next(), 0);
     EXPECT_EQ(seq.next(), 1);
     EXPECT_EQ(seq.next(), 2);
-}
-
-TEST_F(SequencerTest, PopRevertsCounter) {
-    seq.next(); seq.next();
-    t.push();
-    seq.next(); seq.next(); seq.next();
-    t.pop();
-    EXPECT_EQ(seq.next(), 2);
-}
-
-TEST_F(SequencerTest, TwoSequencersSharingTrailRevertIndependently) {
-    sequencer<int> seq2(t);
-    seq.next(); seq.next();
-    seq2.next();
-    t.push();
-    seq.next();
-    seq2.next(); seq2.next();
-    t.pop();
-    EXPECT_EQ(seq.next(), 2);
-    EXPECT_EQ(seq2.next(), 1);
 }

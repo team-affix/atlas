@@ -4,7 +4,7 @@
 #include <set>
 #include <stdexcept>
 
-class BacktrackableMapAtInsertTest : public ::testing::Test {
+struct BacktrackableMapAtInsertTest : public ::testing::Test {
 protected:
     std::map<int, std::set<int>> mp{{1, {}}};
     backtrackable_map_at_insert<std::map<int, std::set<int>>> m{1, 55};

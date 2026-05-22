@@ -4,13 +4,12 @@
 
 using ::testing::Return;
 
-class MockBindMap : public i_bind_map {
-public:
+struct MockBindMap : public i_bind_map {
     MOCK_METHOD(void,        bind, (uint32_t, const expr*), (override));
     MOCK_METHOD(const expr*, whnf, (const expr*),           (override));
 };
 
-class UnifierTest : public ::testing::Test {
+struct UnifierTest : public ::testing::Test {
 protected:
     void SetUp() override {
         u = std::make_unique<unifier>(bm);
