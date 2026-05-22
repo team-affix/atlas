@@ -109,6 +109,21 @@ TEST_F(LineagePoolTest, TrimKeepsPinned) {
     EXPECT_EQ(pool.goal(nullptr, &goal_expr0), g0);  // pinned: same pointer
 }
 
+TEST_F(LineagePoolTest, TrimRemovesUnpinnedResolutionUnderPinnedSiblingGoal) {
+    const goal_lineage* g0 = pool.goal(nullptr, &goal_expr0);
+    const goal_lineage* g1 = pool.goal(nullptr, &goal_expr1);
+    const resolution_lineage* r1 = pool.resolution(g1, &rule_idx1);
+
+    pool.pin(g0);
+    pool.trim();
+
+    const goal_lineage* g1_new = pool.goal(nullptr, &goal_expr1);
+    const resolution_lineage* r1_new = pool.resolution(g1_new, &rule_idx1);
+
+    EXPECT_EQ(pool.goal(nullptr, &goal_expr0), g0);
+    EXPECT_NE(r1_new, r1);
+}
+
 TEST_F(LineagePoolTest, TrimIsIdempotentForPinnedItems) {
     const goal_lineage* g = pool.goal(nullptr, &goal_expr0);
     pool.pin(g);

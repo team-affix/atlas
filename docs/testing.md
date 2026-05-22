@@ -33,21 +33,14 @@ struct MockBindMap : public i_bind_map {
 
 2. Use production **`struct`**, not `class`, for mocks and test fixtures (match repo style).
 
-3. Wire the SUT with the mock, and call through the interface when useful:
-
-```cpp
-NiceMock<MockBindMap> local;
-NiceMock<MockBindMap> remote;
-overlay_bind_map obm{local, remote};
-i_bind_map& sut{obm};
-```
+3. Wire the SUT with mocks in the **fixture** (see below), not anew in every `TEST_F`.
 
 4. Specify behavior with **`EXPECT_CALL`** (strict — unexpected calls fail) or **`ON_CALL`** (default stubs, optional calls):
 
 ```cpp
 EXPECT_CALL(local, bind(0u, &func));
 EXPECT_CALL(remote, bind).Times(0);
-EXPECT_EQ(sut.whnf(&var0), &func);
+EXPECT_EQ(obm.whnf(&var0), &func);
 ```
 
 5. Control returns with **`WillOnce`**, **`WillRepeatedly`**, **`Return`**, **`ReturnRef`**:
@@ -88,6 +81,39 @@ Use double parentheses in `MOCK_METHOD`:
 MOCK_METHOD(void, log, ((std::unique_ptr<i_backtrackable>)), (override));
 ```
 
+## Test fixtures (`TEST_F`)
+
+Use a `struct … : public ::testing::Test` fixture per component (or integration slice). **Factor shared resources into the fixture** — do not reconstruct the same objects in every test body.
+
+Put on the fixture:
+
+- The **SUT** (concrete type)
+- **Mocks** for collaborators
+- **Shared inputs** reused across cases (`expr`, `rule`, lineages, translation maps, etc.)
+
+GTest constructs a **fresh fixture instance per `TEST_F`**, so tests stay isolated without local re-declaration.
+
+```cpp
+struct SolutionDetectorTest : public ::testing::Test {
+    MockActiveGoals ag;
+    solution_detector detector{ag};
+};
+
+TEST_F(SolutionDetectorTest, EmptyActiveGoalsMeansSolution) {
+    EXPECT_CALL(ag, empty()).WillOnce(Return(true));
+    EXPECT_TRUE(detector.detect());
+}
+```
+
+When the SUT must vary per case (e.g. different `goal_lineage*` in an integration visitor test), keep stable deps on the fixture and add a small helper (e.g. `make_visitor(const goal_lineage*)`) instead of duplicating the full constructor list in each test.
+
+**Exceptions** (stay local to the test on purpose):
+
+- A **second SUT instance** when the test is about independence (e.g. two `overlay_bind_map` sharing one remote)
+- **`StrictMock`** + dedicated SUT when a test needs a tight call-count contract unlike sibling tests
+
+Prefer **`TEST_F`** over bare **`TEST`** when a fixture is natural.
+
 ## Unit tests
 
 A **unit test** verifies the behavior of **one** class or function — the **unit under test (SUT)**. Every collaborator is a **mock**; the SUT is the only real production type under test.
@@ -107,7 +133,17 @@ A **unit test** verifies the behavior of **one** class or function — the **uni
    - Good: return value, `EXPECT_CALL(age, activate(&child_gl, &copied_goal))`, `EXPECT_CALL(rules, size()).WillOnce(Return(0))`.
    - Avoid `Times(0)` on unrelated methods unless the test is explicitly about “must not call remote.”
 
-5. **Exercise the SUT through the same surface production uses** — often `i_*&` on the concrete type.
+5. **Call the concrete SUT on the fixture** — e.g. `detector.detect()`, not `i_solution_detector& sut`. The file name and fixture already identify the implementation; an interface alias on the SUT adds nothing.
+
+   Use an **`i_*&` only when the interface is what you are testing** — e.g. `overlay_bind_map` exercised as `i_bind_map` because production calls `whnf` / `bind` through that base API:
+
+   ```cpp
+   overlay_bind_map obm{local, remote};
+   i_bind_map& as_bind_map{obm};
+   EXPECT_EQ(as_bind_map.whnf(&var0), &func);
+   ```
+
+   **Mocks** are always wired via their `i_*` interface. That is separate from how you invoke the SUT.
 
 Stack-allocated **value types** (`expr`, `rule`, lineages) are inputs, not collaborators.
 
@@ -119,9 +155,15 @@ Stack-allocated **value types** (`expr`, `rule`, lineages) are inputs, not colla
 - **Mocks:** `MockBindMap` local, `MockBindMap` remote
 - **Not used:** real `bind_map`
 
+`core/test/unit/infrastructure/solution_detector.cpp`:
+
+- **SUT:** `solution_detector` on the fixture; calls `detector.detect()` directly
+- **Mocks:** `MockActiveGoals`
+- **Not used:** `i_solution_detector&` alias on the SUT
+
 `core/test/unit/infrastructure/goal_activator.cpp`:
 
-- **SUT:** `goal_activator`
+- **SUT:** `goal_activator` on the fixture
 - **Mocks:** `MockCopier`, `MockActivateGoalExpr`, `MockGetCandidateTranslationMap`
 - **Not used:** real `copier`, `expr_pool`, `lineage_pool`
 
@@ -190,9 +232,10 @@ When in doubt: **unit test with mocks first**; add integration when mocks would 
 
 1. Decide **unit vs integration** using the table above.
 2. List the SUT’s dependencies from its constructor or public API.
-3. For each dependency in a **unit** test: add a `struct Mock… : public i_…` with `MOCK_METHOD`, then `EXPECT_CALL` / `ON_CALL` in each test case.
-4. For **integration**: use real types for the slice; GMock everything outside the slice.
-5. Build and run the package debug test binary (e.g. `./build/core_debug`).
+3. Add a **`TEST_F` fixture**: SUT, mocks, and shared inputs as members — not repeated in every test.
+4. For each dependency in a **unit** test: add a `struct Mock… : public i_…` with `MOCK_METHOD`, then `EXPECT_CALL` / `ON_CALL` in each test case.
+5. For **integration**: use real types for the slice on the fixture; GMock everything outside the slice.
+6. Build and run the package debug test binary (e.g. `./build/core_debug`).
 
 ## Related code organization
 

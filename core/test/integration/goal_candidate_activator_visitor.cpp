@@ -64,6 +64,11 @@ struct GoalCandidateActivatorVisitorIntegrationTest : public ::testing::Test {
     void SetUp() override {
         gl = const_cast<goal_lineage*>(lp.goal(nullptr, &goal_var));
     }
+
+    goal_candidate_activator_visitor make_visitor(const goal_lineage* goal) {
+        return goal_candidate_activator_visitor{
+            goal, cp, common, bmf, obmf, uf, actm, mhu, ca, eb, lp, gge};
+    }
 };
 
 TEST_F(GoalCandidateActivatorVisitorIntegrationTest,
@@ -74,10 +79,7 @@ TEST_F(GoalCandidateActivatorVisitorIntegrationTest,
     EXPECT_CALL(ca, activate(rl)).Times(1);
     EXPECT_CALL(actm, activate(rl, _)).Times(1);
 
-    goal_candidate_activator_visitor visitor{
-        gl, cp, common, bmf, obmf, uf, actm, mhu, ca, eb, lp, gge};
-
-    visitor.visit(&matching);
+    make_visitor(gl).visit(&matching);
 }
 
 TEST_F(GoalCandidateActivatorVisitorIntegrationTest,
@@ -93,10 +95,7 @@ TEST_F(GoalCandidateActivatorVisitorIntegrationTest,
     EXPECT_CALL(ca, activate(rl)).Times(0);
     EXPECT_CALL(actm, activate).Times(0);
 
-    goal_candidate_activator_visitor visitor{
-        gl_f, cp, common, bmf, obmf, uf, actm, mhu, ca, eb, lp, gge};
-
-    visitor.visit(&non_matching);
+    make_visitor(gl_f).visit(&non_matching);
 }
 
 TEST_F(GoalCandidateActivatorVisitorIntegrationTest,
@@ -112,8 +111,5 @@ TEST_F(GoalCandidateActivatorVisitorIntegrationTest,
     EXPECT_CALL(ca, activate).Times(0);
     EXPECT_CALL(actm, activate).Times(0);
 
-    goal_candidate_activator_visitor visitor{
-        gl_f, cp, common, bmf, obmf, uf, actm, mhu, ca, eb, lp, gge};
-
-    visitor.visit(&rule_f);
+    make_visitor(gl_f).visit(&rule_f);
 }

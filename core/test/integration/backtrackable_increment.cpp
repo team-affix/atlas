@@ -5,11 +5,11 @@
 
 struct BacktrackableIncrementIntegrationTest : public ::testing::Test {
 protected:
+    trail t;
     int x = 5;
 };
 
 TEST_F(BacktrackableIncrementIntegrationTest, RepeatedInvocationsEachIncrementByOne) {
-    trail t;
     t.push();
     for (int expected = 6; expected <= 8; ++expected) {
         auto mi = std::make_unique<backtrackable_increment<int>>();
@@ -21,7 +21,6 @@ TEST_F(BacktrackableIncrementIntegrationTest, RepeatedInvocationsEachIncrementBy
 }
 
 TEST_F(BacktrackableIncrementIntegrationTest, TrailPopReversesAllIncrements) {
-    trail t;
     t.push();
     for (int expected = 6; expected <= 8; ++expected) {
         auto mi = std::make_unique<backtrackable_increment<int>>();

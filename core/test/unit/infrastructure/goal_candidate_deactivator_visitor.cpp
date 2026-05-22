@@ -58,11 +58,12 @@ struct GoalCandidateDeactivatorVisitorTest : public ::testing::Test {
     goal_lineage gl{nullptr, &goal_e};
     resolution_lineage rl{&gl, &r};
 
-    MockMhuEliminationGenerator mhu;
-    MockCandidateDeactivator cd;
-    MockDeactivateCandidateTranslationMap dctm;
+    NiceMock<MockMhuEliminationGenerator> mhu;
+    NiceMock<MockCandidateDeactivator> cd;
+    NiceMock<MockDeactivateCandidateTranslationMap> dctm;
     NiceMock<MockEliminationBacklog> eb;
-    MockLineagePool lp;
+    NiceMock<MockLineagePool> lp;
+    goal_candidate_deactivator_visitor visitor{&gl, mhu, cd, eb, lp, dctm};
 };
 
 TEST_F(GoalCandidateDeactivatorVisitorTest, VisitTearsDownMhuTranslationAndCandidate) {
@@ -71,6 +72,5 @@ TEST_F(GoalCandidateDeactivatorVisitorTest, VisitTearsDownMhuTranslationAndCandi
     EXPECT_CALL(dctm, deactivate(&rl)).Times(1);
     EXPECT_CALL(cd, deactivate(&rl)).Times(1);
 
-    goal_candidate_deactivator_visitor visitor{&gl, mhu, cd, eb, lp, dctm};
     visitor.visit(&r);
 }

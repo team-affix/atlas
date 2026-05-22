@@ -1,7 +1,6 @@
 #include <gtest/gtest.h>
 #include <gmock/gmock.h>
 #include "../../../core/hpp/infrastructure/solution_detector.hpp"
-#include "../../../core/hpp/interfaces/i_solution_detector.hpp"
 #include "../../../core/hpp/interfaces/i_active_goals.hpp"
 
 using ::testing::Return;
@@ -15,20 +14,17 @@ struct MockActiveGoals : public i_active_goals {
     MOCK_METHOD(bool, empty, (), (const, override));
 };
 
-TEST(SolutionDetectorTest, EmptyActiveGoalsMeansSolution) {
+struct SolutionDetectorTest : public ::testing::Test {
     MockActiveGoals ag;
-    EXPECT_CALL(ag, empty()).WillOnce(Return(true));
-
     solution_detector detector{ag};
-    i_solution_detector& sut{detector};
-    EXPECT_TRUE(sut.detect());
+};
+
+TEST_F(SolutionDetectorTest, EmptyActiveGoalsMeansSolution) {
+    EXPECT_CALL(ag, empty()).WillOnce(Return(true));
+    EXPECT_TRUE(detector.detect());
 }
 
-TEST(SolutionDetectorTest, NonemptyActiveGoalsIsNotSolution) {
-    MockActiveGoals ag;
+TEST_F(SolutionDetectorTest, NonemptyActiveGoalsIsNotSolution) {
     EXPECT_CALL(ag, empty()).WillOnce(Return(false));
-
-    solution_detector detector{ag};
-    i_solution_detector& sut{detector};
-    EXPECT_FALSE(sut.detect());
+    EXPECT_FALSE(detector.detect());
 }

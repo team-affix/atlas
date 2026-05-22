@@ -1,20 +1,22 @@
 #include <gtest/gtest.h>
 #include "../../../core/hpp/infrastructure/var_names.hpp"
 
-TEST(VarNamesTest, UnnamedIndexIsNotNamed) {
+struct VarNamesTest : public ::testing::Test {
+protected:
     var_names names;
+};
+
+TEST_F(VarNamesTest, UnnamedIndexIsNotNamed) {
     EXPECT_FALSE(names.is_named(0));
 }
 
-TEST(VarNamesTest, SetNameMakesIndexNamed) {
-    var_names names;
+TEST_F(VarNamesTest, SetNameMakesIndexNamed) {
     names.set_name(3, "X");
     EXPECT_TRUE(names.is_named(3));
     EXPECT_EQ(names.name(3), "X");
 }
 
-TEST(VarNamesTest, DifferentIndicesHaveIndependentNames) {
-    var_names names;
+TEST_F(VarNamesTest, DifferentIndicesHaveIndependentNames) {
     names.set_name(1, "a");
     names.set_name(2, "b");
     EXPECT_EQ(names.name(1), "a");

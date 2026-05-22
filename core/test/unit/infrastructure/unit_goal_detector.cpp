@@ -1,7 +1,6 @@
 #include <gtest/gtest.h>
 #include <gmock/gmock.h>
 #include "../../../core/hpp/infrastructure/unit_goal_detector.hpp"
-#include "../../../core/hpp/interfaces/i_unit_goal_detector.hpp"
 #include "../../../core/hpp/interfaces/i_get_goal_candidate_rules.hpp"
 #include "../../../core/hpp/interfaces/i_rule_set.hpp"
 
@@ -24,23 +23,22 @@ struct UnitGoalDetectorTest : public ::testing::Test {
     MockRuleSet rules;
     MockGetGoalCandidateRules ggcr;
     unit_goal_detector detector{ggcr};
-    i_unit_goal_detector& sut{detector};
 };
 
 TEST_F(UnitGoalDetectorTest, NoCandidatesIsNotUnit) {
     EXPECT_CALL(ggcr, get(&gl)).WillOnce(ReturnRef(rules));
     EXPECT_CALL(rules, size()).WillOnce(Return(0));
-    EXPECT_FALSE(sut.detect(&gl));
+    EXPECT_FALSE(detector.detect(&gl));
 }
 
 TEST_F(UnitGoalDetectorTest, ExactlyOneCandidateIsUnit) {
     EXPECT_CALL(ggcr, get(&gl)).WillOnce(ReturnRef(rules));
     EXPECT_CALL(rules, size()).WillOnce(Return(1));
-    EXPECT_TRUE(sut.detect(&gl));
+    EXPECT_TRUE(detector.detect(&gl));
 }
 
 TEST_F(UnitGoalDetectorTest, TwoCandidatesIsNotUnit) {
     EXPECT_CALL(ggcr, get(&gl)).WillOnce(ReturnRef(rules));
     EXPECT_CALL(rules, size()).WillOnce(Return(2));
-    EXPECT_FALSE(sut.detect(&gl));
+    EXPECT_FALSE(detector.detect(&gl));
 }

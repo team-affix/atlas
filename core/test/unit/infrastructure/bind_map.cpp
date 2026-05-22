@@ -3,7 +3,8 @@
 
 struct BindMapTest : public ::testing::Test {
 protected:
-    bind_map bm;
+    bind_map bm_impl;
+    i_bind_map& bm{bm_impl};
     expr var0{expr::var{0}};
     expr var1{expr::var{1}};
     expr var2{expr::var{2}};

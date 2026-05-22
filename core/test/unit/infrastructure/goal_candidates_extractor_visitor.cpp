@@ -2,15 +2,18 @@
 #include <unordered_set>
 #include "../../../core/hpp/infrastructure/goal_candidates_extractor_visitor.hpp"
 
-TEST(GoalCandidatesExtractorVisitorTest, VisitInsertsRuleIntoSet) {
+struct GoalCandidatesExtractorVisitorTest : public ::testing::Test {
+protected:
+    std::unordered_set<const rule*> extracted;
+    goal_candidates_extractor_visitor visitor{extracted};
+
     expr head0{expr::var{0}};
     expr head1{expr::var{1}};
     rule r0{&head0, {}};
     rule r1{&head1, {}};
+};
 
-    std::unordered_set<const rule*> extracted;
-    goal_candidates_extractor_visitor visitor{extracted};
-
+TEST_F(GoalCandidatesExtractorVisitorTest, VisitInsertsRuleIntoSet) {
     visitor.visit(&r0);
     visitor.visit(&r1);
     visitor.visit(&r0);

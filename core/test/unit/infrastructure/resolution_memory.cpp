@@ -1,10 +1,10 @@
 #include <gtest/gtest.h>
 #include <unordered_set>
-#include "../../../core/hpp/infrastructure/decision_memory.hpp"
+#include "../../../core/hpp/infrastructure/resolution_memory.hpp"
 
-struct DecisionMemoryTest : public ::testing::Test {
+struct ResolutionMemoryTest : public ::testing::Test {
 protected:
-    decision_memory mem;
+    resolution_memory mem;
 
     expr goal_expr0{expr::var{0}};
     expr head0{expr::var{10}};
@@ -15,19 +15,16 @@ protected:
     resolution_lineage rl1{nullptr, &rule1};
 };
 
-TEST_F(DecisionMemoryTest, InsertIncreasesSize) {
-    mem.insert(&rl0);
-    EXPECT_EQ(mem.size(), 1u);
-}
-
-TEST_F(DecisionMemoryTest, ClearRemovesAllDecisions) {
+TEST_F(ResolutionMemoryTest, DeriveLemmaEmptyAfterClear) {
     mem.insert(&rl0);
     mem.insert(&rl1);
     mem.clear();
-    EXPECT_EQ(mem.size(), 0u);
+
+    lemma l = mem.derive_lemma();
+    EXPECT_TRUE(l.get_resolutions().empty());
 }
 
-TEST_F(DecisionMemoryTest, DeriveLemmaContainsInsertedResolutions) {
+TEST_F(ResolutionMemoryTest, DeriveLemmaContainsInsertedResolutions) {
     mem.insert(&rl0);
     mem.insert(&rl1);
 
@@ -37,7 +34,7 @@ TEST_F(DecisionMemoryTest, DeriveLemmaContainsInsertedResolutions) {
     EXPECT_TRUE(l.get_resolutions().contains(&rl1));
 }
 
-TEST_F(DecisionMemoryTest, DeriveLemmaPrunesAncestorResolutions) {
+TEST_F(ResolutionMemoryTest, DeriveLemmaPrunesAncestorResolutions) {
     resolution_lineage res0{nullptr, &rule0};
     goal_lineage goal0{&res0, &goal_expr0};
     resolution_lineage res1{&goal0, &rule0};

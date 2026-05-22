@@ -2,7 +2,6 @@
 #include <gmock/gmock.h>
 #include "../../../core/hpp/infrastructure/goal_activator.hpp"
 #include "../../../core/hpp/interfaces/i_copier.hpp"
-#include "../../../core/hpp/interfaces/i_goal_activator.hpp"
 #include "../../../core/hpp/interfaces/i_activate_goal_expr.hpp"
 #include "../../../core/hpp/interfaces/i_get_candidate_translation_map.hpp"
 
@@ -26,6 +25,7 @@ struct GoalActivatorTest : public ::testing::Test {
     MockActivateGoalExpr age;
     MockGetCandidateTranslationMap gctm;
     MockCopier cp;
+    goal_activator activator{age, gctm, cp};
 
     expr parent_goal{expr::var{0}};
     expr child_goal{expr::var{1}};
@@ -43,7 +43,5 @@ TEST_F(GoalActivatorTest, ActivatePassesCopiedGoalExprToGoalExprActivator) {
     EXPECT_CALL(cp, copy(child_gl.idx, _)).WillOnce(Return(&copied_goal));
     EXPECT_CALL(age, activate(&child_gl, &copied_goal)).Times(1);
 
-    goal_activator activator{age, gctm, cp};
-    i_goal_activator& sut{activator};
-    sut.activate(&child_gl);
+    activator.activate(&child_gl);
 }
