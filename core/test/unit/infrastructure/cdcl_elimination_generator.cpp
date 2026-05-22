@@ -19,14 +19,16 @@ protected:
     NiceMock<MockTrail> trail;
     cdcl_elimination_generator cdcl{trail};
 
-    expr goal_expr{expr::var{0}};
+    expr goal_expr0{expr::var{0}};
+    expr goal_expr1{expr::var{1}};
     expr head0{expr::var{10}};
     expr head1{expr::var{11}};
     rule rule0{&head0, {}};
     rule rule1{&head1, {}};
-    goal_lineage gl{nullptr, &goal_expr};
-    resolution_lineage rl0{&gl, &rule0};
-    resolution_lineage rl1{&gl, &rule1};
+    goal_lineage gl0{nullptr, &goal_expr0};
+    goal_lineage gl1{nullptr, &goal_expr1};
+    resolution_lineage rl0{&gl0, &rule0};
+    resolution_lineage rl1{&gl1, &rule1};
 };
 
 TEST_F(CdclEliminationGeneratorUnitTest, LearnUnitAvoidanceReturnsEliminationWithoutStoring) {

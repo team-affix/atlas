@@ -1,5 +1,4 @@
 #include <memory>
-#include <algorithm>
 #include "../../hpp/infrastructure/cdcl_elimination_generator.hpp"
 #include "../../hpp/utility/backtrackable_set_insert.hpp"
 #include "../../hpp/utility/backtrackable_set_erase.hpp"
@@ -37,10 +36,13 @@ state_machine<const resolution_lineage*> cdcl_elimination_generator::constrain(c
     if (it == watched_goals.get().end())
         co_return;
 
-    // 3. for each avoidance, if the avoidance contains the resolution,
+    // 3. snapshot the set of avoidances
+    auto av_ptrs = it->second;
+
+    // 4. for each avoidance, if the avoidance contains the resolution,
     //    reduce the avoidance. Else, remove the avoidance from the store.
-    for (const avoidance_type* av_ptr : it->second) {
-        // 4. if the avoidance does not contain the resolution,
+    for (const avoidance_type* av_ptr : av_ptrs) {
+        // 5. if the avoidance does not contain the resolution,
         //    then it is mutually exclusive with the resolution
         if (!av_ptr->contains(rl)) {
             erase(av_ptr);
@@ -50,21 +52,21 @@ state_machine<const resolution_lineage*> cdcl_elimination_generator::constrain(c
         // if the avoidance contains the resolution,
         // then it is consistent with the resolution
 
-        // 5. make a copy of the avoidance
+        // 6. make a copy of the avoidance
         avoidance_type av = *av_ptr;
 
-        // 6. erase and unlink the old avoidance from the store
+        // 7. erase and unlink the old avoidance from the store
         erase(av_ptr);
 
-        // 7. reduce the avoidance
+        // 8. reduce the avoidance
         av.erase(rl);
 
-        // 8. insert the reduced avoidance into the store
+        // 9. insert the reduced avoidance into the store
         if (const resolution_lineage* rl = insert(av))
             co_yield rl;
     }
 
-    // 7. Remove the parent goal from the watched goals
+    // 10. Remove the parent goal from the watched goals
     auto erase_mut = std::make_unique<
         backtrackable_map_erase<
         watched_goals_type>>(
