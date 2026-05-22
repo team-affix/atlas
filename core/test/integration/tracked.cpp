@@ -12,6 +12,7 @@ protected:
 TEST_F(TrackedIntegrationTest, MutateAndPopRevertsToPrePushValue) {
     t.push();
     v.mutate(std::make_unique<backtrackable_increment<int>>());
+    EXPECT_EQ(v.get(), 11);
     t.pop();
     EXPECT_EQ(v.get(), 10);
 }
@@ -28,18 +29,12 @@ TEST_F(TrackedIntegrationTest, TwoMutationsInOneFrameBothRevert) {
 TEST_F(TrackedIntegrationTest, TwoFramesInnerPopReverts) {
     t.push();
     v.mutate(std::make_unique<backtrackable_increment<int>>());
+    EXPECT_EQ(v.get(), 11);
     t.push();
     v.mutate(std::make_unique<backtrackable_increment<int>>());
+    EXPECT_EQ(v.get(), 12);
     t.pop();
     EXPECT_EQ(v.get(), 11);
-}
-
-TEST_F(TrackedIntegrationTest, TwoFramesBothPopsRevert) {
-    t.push();
-    v.mutate(std::make_unique<backtrackable_increment<int>>());
-    t.push();
-    v.mutate(std::make_unique<backtrackable_increment<int>>());
-    t.pop();
     t.pop();
     EXPECT_EQ(v.get(), 10);
 }
