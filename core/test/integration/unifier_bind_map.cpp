@@ -1,3 +1,4 @@
+#include <array>
 #include <gtest/gtest.h>
 #include "../../../core/hpp/infrastructure/unifier.hpp"
 #include "../../../core/hpp/infrastructure/bind_map.hpp"
@@ -64,6 +65,24 @@ TEST_F(UnifierBindMapIntegrationTest, UnifyTwoVarChainsMergesToOldestRepr) {
     EXPECT_EQ(snk, (std::unordered_set<uint32_t>{3}));
     EXPECT_EQ(bm.whnf(&var2), &var0);
     EXPECT_EQ(bm.whnf(&var5), &var0);
+}
+
+TEST_F(UnifierBindMapIntegrationTest, ManyScrambledUnificationsAllWhnfToOldestVar) {
+    constexpr uint32_t n = 12;
+    std::array<expr, n> vars;
+    for (uint32_t i = 0; i < n; ++i)
+        vars[i] = expr{expr::var{i}};
+
+    constexpr std::array<std::pair<uint32_t, uint32_t>, 12> pairs = {{
+        {7, 3}, {11, 2}, {5, 9}, {1, 8}, {4, 6}, {10, 0},
+        {3, 11}, {6, 2}, {9, 1}, {8, 4}, {2, 5}, {10, 7},
+    }};
+
+    for (const auto& [a, b] : pairs)
+        EXPECT_TRUE(u->unify(&vars[a], &vars[b], snk));
+
+    for (const expr& v : vars)
+        EXPECT_EQ(bm.whnf(&v), &vars[0]);
 }
 
 TEST_F(UnifierBindMapIntegrationTest, UnifyVarToFunctorContainingSameVarFails) {
