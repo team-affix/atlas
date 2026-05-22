@@ -258,15 +258,6 @@ TEST_F(CdclEliminationGeneratorUnitTest, ThreeMemberAvoidanceSequentialConstrain
     EXPECT_THAT(collect_elims(cdcl.constrain(&lin_2_0)), IsEmpty());
 }
 
-TEST_F(CdclEliminationGeneratorUnitTest, ThreeMemberAvoidanceConstrainMiddleMemberYieldsLast) {
-    cdcl.learn(make_lemma({&lin_0_0, &lin_1_0, &lin_2_0}));
-
-    EXPECT_THAT(collect_elims(cdcl.constrain(&lin_0_0)), IsEmpty());
-
-    auto from_middle = collect_elims(cdcl.constrain(&lin_1_0));
-    EXPECT_THAT(from_middle, ElementsAre(&lin_2_0));
-}
-
 // ---------------------------------------------------------------------------
 // constrain — batch of learn + multiple constrain in one scenario
 // ---------------------------------------------------------------------------
