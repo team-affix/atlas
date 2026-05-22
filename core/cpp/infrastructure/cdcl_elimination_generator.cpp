@@ -1,6 +1,4 @@
 #include <memory>
-#include <unordered_set>
-#include <vector>
 #include "../../hpp/infrastructure/cdcl_elimination_generator.hpp"
 #include "../../hpp/utility/backtrackable_set_insert.hpp"
 #include "../../hpp/utility/backtrackable_set_erase.hpp"
@@ -32,15 +30,12 @@ state_machine<const resolution_lineage*> cdcl_elimination_generator::constrain(c
     // 1. get the parent goal
     const goal_lineage* gl = rl->parent;
     
-    // 2. snapshot avoidances (erase() mutates the store and invalidates set elements)
-    std::vector<const avoidance_type*> pending;
-    pending.reserve(watched_goals.get().at(gl).size());
-    for (const avoidance_type* av_ptr : watched_goals.get().at(gl))
-        pending.push_back(av_ptr);
+    // 2. get the set of avoidances that concern this resolution
+    const std::unordered_set<const avoidance_type*>& av_ptrs = watched_goals.get().at(gl);
 
     // 3. for each avoidance, if the avoidance contains the resolution,
     //    reduce the avoidance. Else, remove the avoidance from the store.
-    for (const avoidance_type* av_ptr : pending) {
+    for (const avoidance_type* av_ptr : av_ptrs) {
         // 4. if the avoidance does not contain the resolution,
         //    then it is mutually exclusive with the resolution
         if (!av_ptr->contains(rl)) {
@@ -124,15 +119,12 @@ void cdcl_elimination_generator::link(const goal_lineage* gl, const avoidance_ty
 
 void cdcl_elimination_generator::erase(const avoidance_type* av_ptr) {
     // 1. for each goal that is watching this avoidance,
-    //    unlink the avoidance from the goal (once per parent goal)
-    std::unordered_set<const goal_lineage*> parents;
-    for (const resolution_lineage* rl : *av_ptr)
-        parents.insert(rl->parent);
-    for (const goal_lineage* gl : parents) {
+    //    unlink the avoidance from the goal
+    for (const resolution_lineage* rl : *av_ptr) {
         auto erase_mut = std::make_unique<
             backtrackable_map_at_erase<
             watched_goals_type>>(
-                gl, av_ptr);
+                rl->parent, av_ptr);
         watched_goals.mutate(std::move(erase_mut));
     }
     
