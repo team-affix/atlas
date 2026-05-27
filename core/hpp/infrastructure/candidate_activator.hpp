@@ -7,6 +7,7 @@
 #include "../interfaces/i_mhu_elimination_generator.hpp"
 #include "../interfaces/i_is_backlogged_elimination.hpp"
 #include "../interfaces/i_get_goal_expr.hpp"
+#include "../interfaces/i_link_goal_candidate.hpp"
 
 struct candidate_activator : i_candidate_activator {
     candidate_activator(
@@ -14,7 +15,8 @@ struct candidate_activator : i_candidate_activator {
         i_set_candidate_translation_map& set_candidate_translation_map,
         i_mhu_elimination_generator& mhu_elimination_generator,
         i_is_backlogged_elimination& is_backlogged_elimination,
-        i_get_goal_expr& get_goal_expr);
+        i_get_goal_expr& get_goal_expr,
+        i_link_goal_candidate& link_goal_candidate);
     void activate(const resolution_lineage*) override;
 private:
     i_copier& copier;
@@ -22,6 +24,7 @@ private:
     i_mhu_elimination_generator& mhu_elimination_generator;
     i_is_backlogged_elimination& is_backlogged_elimination;
     i_get_goal_expr& get_goal_expr;
+    i_link_goal_candidate& link_goal_candidate;
 };
 
 #endif
