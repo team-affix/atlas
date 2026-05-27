@@ -1,3 +1,7 @@
+// cdcl_elimination_generator learns pairwise avoidance lemmas and yields eliminations
+// during constrain. Unit tests mock i_trail logging and assert learn/constrain outcomes
+// on independent and dependent lineage trees.
+
 #include <gtest/gtest.h>
 #include <gmock/gmock.h>
 #include <vector>

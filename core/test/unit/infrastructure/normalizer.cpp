@@ -1,3 +1,6 @@
+// normalizer rebuilds expressions in WHNF via i_expr_pool after resolving variables
+// through i_bind_map. Unit tests mock both interfaces and assert pool calls use WHNF args.
+
 #include <gtest/gtest.h>
 #include <gmock/gmock.h>
 #include "../../../core/hpp/infrastructure/normalizer.hpp"

@@ -1,3 +1,6 @@
+// backtrackable_map_at_insert inserts into an inner set at a map key. Unit tests assert
+// insert/backtrack and error cases for missing outer keys and duplicate inner values.
+
 #include <gtest/gtest.h>
 #include "../../../core/hpp/utility/backtrackable_map_at_insert.hpp"
 #include <map>

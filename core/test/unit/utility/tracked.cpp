@@ -1,3 +1,6 @@
+// tracked wraps a value with trail-logged mutations. Unit tests mock i_trail and assert
+// get() returns the initial value and mutate() logs a backtrackable_increment once.
+
 #include <gtest/gtest.h>
 #include <gmock/gmock.h>
 #include "../../../core/hpp/utility/tracked.hpp"

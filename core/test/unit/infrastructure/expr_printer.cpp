@@ -1,3 +1,6 @@
+// expr_printer renders expr trees to a stream, consulting i_var_names for variables.
+// Unit tests mock var_names and assert string output for atoms, lists, and functors.
+
 #include <gtest/gtest.h>
 #include <gmock/gmock.h>
 #include <sstream>
@@ -15,6 +18,8 @@ struct MockVarNames : public i_var_names {
 
 struct ExprPrinterTest : public ::testing::Test {
     MockVarNames names;
+    std::ostringstream os;
+    expr_printer printer{os, names};
     std::string var_name_x{"X"};
 
     expr var0{expr::var{0}};
@@ -23,8 +28,8 @@ struct ExprPrinterTest : public ::testing::Test {
     expr nil{expr::functor{"nil", {}}};
 
     std::string print(const expr* e) {
-        std::ostringstream os;
-        expr_printer printer{os, names};
+        os.str("");
+        os.clear();
         printer.print(e);
         return os.str();
     }

@@ -1,3 +1,6 @@
+// unit_goal_detector recognizes goals with exactly one candidate rule. Tests mock rule
+// set size lookup and assert detect() is true only when size equals one.
+
 #include <gtest/gtest.h>
 #include <gmock/gmock.h>
 #include "../../../core/hpp/infrastructure/unit_goal_detector.hpp"

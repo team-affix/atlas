@@ -1,3 +1,6 @@
+// trail manages lexically scoped undo stacks of i_backtrackable mutations. Unit tests
+// use MockBacktrackable to assert LIFO backtrack order across push/pop frames.
+
 #include <gtest/gtest.h>
 #include <gmock/gmock.h>
 #include "../../../core/hpp/utility/trail.hpp"

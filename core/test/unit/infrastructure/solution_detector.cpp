@@ -1,3 +1,6 @@
+// solution_detector reports SAT when no active goals remain. Unit tests mock
+// i_check_active_goals_empty and assert detect() mirrors the empty() predicate.
+
 #include <gtest/gtest.h>
 #include <gmock/gmock.h>
 #include "../../../core/hpp/infrastructure/solution_detector.hpp"

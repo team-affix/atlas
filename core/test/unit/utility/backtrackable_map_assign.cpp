@@ -1,3 +1,6 @@
+// backtrackable_map_assign restores a prior map value on backtrack. Unit tests cover
+// assign, undo, and missing-key errors.
+
 #include <gtest/gtest.h>
 #include "../../../core/hpp/utility/backtrackable_map_assign.hpp"
 #include <map>

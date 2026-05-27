@@ -1,3 +1,6 @@
+// backtrackable_increment undoes a single in-place increment. Unit tests capture an int,
+// invoke/backtrack, and assert the value round-trips.
+
 #include <gtest/gtest.h>
 #include "../../../core/hpp/utility/backtrackable_increment.hpp"
 

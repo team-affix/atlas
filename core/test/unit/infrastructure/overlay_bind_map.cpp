@@ -1,3 +1,7 @@
+// overlay_bind_map layers a local bind map over a remote one: binds stay local, WHNF
+// tries local first then remote. Unit tests mock both i_bind_map sides and assert
+// delegation and independence between overlay instances.
+
 #include <gtest/gtest.h>
 #include <gmock/gmock.h>
 #include "../../../core/hpp/infrastructure/overlay_bind_map.hpp"

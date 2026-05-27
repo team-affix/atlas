@@ -1,6 +1,9 @@
+// expr_pool canonicalizes expr nodes and logs first-seen internings to i_trail for
+// backtracking. Unit tests mock the trail and assert pointer identity, trail logging
+// counts, and import behavior without a real trail.
+
 #include <gtest/gtest.h>
 #include <gmock/gmock.h>
-#include <optional>
 #include "../../../core/hpp/infrastructure/expr_pool.hpp"
 #include "../../../core/hpp/utility/i_trail.hpp"
 
@@ -15,13 +18,8 @@ struct MockTrail : public i_trail {
 };
 
 struct ExprPoolTest : public ::testing::Test {
-protected:
-    void SetUp() override {
-        pool.emplace(trail);
-    }
-
     NiceMock<MockTrail> trail;
-    std::optional<expr_pool> pool;
+    expr_pool pool{trail};
 };
 
 // ---------------------------------------------------------------------------
@@ -29,41 +27,41 @@ protected:
 // ---------------------------------------------------------------------------
 
 TEST_F(ExprPoolTest, VarInternedTwiceReturnsSamePointer) {
-    EXPECT_EQ(pool->var(0), pool->var(0));
+    EXPECT_EQ(pool.var(0), pool.var(0));
 }
 
 TEST_F(ExprPoolTest, DifferentVarsReturnDifferentPointers) {
-    EXPECT_NE(pool->var(0), pool->var(1));
+    EXPECT_NE(pool.var(0), pool.var(1));
 }
 
 TEST_F(ExprPoolTest, NullaryFunctorInternedTwiceReturnsSamePointer) {
-    EXPECT_EQ(pool->functor("f", {}), pool->functor("f", {}));
+    EXPECT_EQ(pool.functor("f", {}), pool.functor("f", {}));
 }
 
 TEST_F(ExprPoolTest, DifferentFunctorsReturnDifferentPointers) {
-    EXPECT_NE(pool->functor("f", {}), pool->functor("g", {}));
+    EXPECT_NE(pool.functor("f", {}), pool.functor("g", {}));
 }
 
 TEST_F(ExprPoolTest, FunctorWithVarArgInternedTwiceReturnsSamePointer) {
-    const expr* v = pool->var(0);
-    EXPECT_EQ(pool->functor("f", {v}), pool->functor("f", {v}));
+    const expr* v = pool.var(0);
+    EXPECT_EQ(pool.functor("f", {v}), pool.functor("f", {v}));
 }
 
 TEST_F(ExprPoolTest, FunctorsSameNameDifferentArityReturnDifferentPointers) {
-    const expr* v = pool->var(0);
-    EXPECT_NE(pool->functor("f", {}), pool->functor("f", {v}));
+    const expr* v = pool.var(0);
+    EXPECT_NE(pool.functor("f", {}), pool.functor("f", {v}));
 }
 
 TEST_F(ExprPoolTest, BinaryFunctorInternedTwiceReturnsSamePointer) {
-    const expr* v0 = pool->var(0);
-    const expr* v1 = pool->var(1);
-    EXPECT_EQ(pool->functor("f", {v0, v1}), pool->functor("f", {v0, v1}));
+    const expr* v0 = pool.var(0);
+    const expr* v1 = pool.var(1);
+    EXPECT_EQ(pool.functor("f", {v0, v1}), pool.functor("f", {v0, v1}));
 }
 
 TEST_F(ExprPoolTest, FunctorsWithDifferentArgsReturnDifferentPointers) {
-    const expr* v0 = pool->var(0);
-    const expr* v1 = pool->var(1);
-    EXPECT_NE(pool->functor("f", {v0, v1}), pool->functor("f", {v1, v1}));
+    const expr* v0 = pool.var(0);
+    const expr* v1 = pool.var(1);
+    EXPECT_NE(pool.functor("f", {v0, v1}), pool.functor("f", {v1, v1}));
 }
 
 // ---------------------------------------------------------------------------

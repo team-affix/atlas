@@ -1,3 +1,6 @@
+// bind_map stores variable renamings and implements WHNF with path compression over
+// var chains. Unit tests exercise bind/whnf directly (no collaborators to mock).
+
 #include <gtest/gtest.h>
 #include "../../../core/hpp/infrastructure/bind_map.hpp"
 

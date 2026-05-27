@@ -1,9 +1,16 @@
+// resolution_memory stores resolutions used in a conflict and derives lemmas with the
+// same ancestor-pruning policy as decision_memory. Tests cover empty/clear states,
+// multi-insert derivation, and deepest-resolution-only pruning on nested lineages.
+
 #include <gtest/gtest.h>
+#include <gmock/gmock.h>
 #include <unordered_set>
 #include "../../../core/hpp/infrastructure/resolution_memory.hpp"
 
+using ::testing::IsEmpty;
+using ::testing::UnorderedElementsAre;
+
 struct ResolutionMemoryTest : public ::testing::Test {
-protected:
     resolution_memory mem;
 
     expr goal_expr0{expr::var{0}};
@@ -20,23 +27,19 @@ TEST_F(ResolutionMemoryTest, DeriveLemmaEmptyAfterClear) {
     mem.insert(&rl1);
     mem.clear();
 
-    lemma l = mem.derive_lemma();
-    EXPECT_TRUE(l.get_resolutions().empty());
+    EXPECT_THAT(mem.derive_lemma().get_resolutions(), IsEmpty());
 }
 
 TEST_F(ResolutionMemoryTest, DeriveLemmaEmptyWithNoInsertions) {
-    lemma l = mem.derive_lemma();
-    EXPECT_TRUE(l.get_resolutions().empty());
+    EXPECT_THAT(mem.derive_lemma().get_resolutions(), IsEmpty());
 }
 
 TEST_F(ResolutionMemoryTest, DeriveLemmaContainsInsertedResolutions) {
     mem.insert(&rl0);
     mem.insert(&rl1);
 
-    lemma l = mem.derive_lemma();
-    EXPECT_EQ(l.get_resolutions().size(), 2u);
-    EXPECT_TRUE(l.get_resolutions().contains(&rl0));
-    EXPECT_TRUE(l.get_resolutions().contains(&rl1));
+    EXPECT_THAT(mem.derive_lemma().get_resolutions(),
+        UnorderedElementsAre(&rl0, &rl1));
 }
 
 TEST_F(ResolutionMemoryTest, DeriveLemmaPrunesAncestorResolutions) {
@@ -50,6 +53,5 @@ TEST_F(ResolutionMemoryTest, DeriveLemmaPrunesAncestorResolutions) {
     mem.insert(&res1);
     mem.insert(&res2);
 
-    lemma l = mem.derive_lemma();
-    EXPECT_EQ(l.get_resolutions(), (std::unordered_set<const resolution_lineage*>{&res2}));
+    EXPECT_THAT(mem.derive_lemma().get_resolutions(), UnorderedElementsAre(&res2));
 }

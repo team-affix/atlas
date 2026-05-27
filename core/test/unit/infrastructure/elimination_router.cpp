@@ -1,3 +1,7 @@
+// elimination_router decides whether a candidate resolution is eliminated immediately,
+// deferred to the backlog, or rejected as already deactivated. Tests mock all four
+// collaborators and assert the elimination_result for each branch.
+
 #include <gtest/gtest.h>
 #include <gmock/gmock.h>
 #include "../../../core/hpp/infrastructure/elimination_router.hpp"

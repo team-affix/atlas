@@ -1,6 +1,13 @@
+// lemma normalizes a set of resolution lineages by dropping any resolution that is an
+// ancestor of another member. Tests build synthetic lineage chains and assert the stored
+// set is exactly the deepest resolutions (minimal hitting set for avoidance clauses).
+
 #include <gtest/gtest.h>
+#include <gmock/gmock.h>
 #include <unordered_set>
 #include "../../../core/hpp/value_objects/lemma.hpp"
+
+using ::testing::UnorderedElementsAre;
 
 struct LemmaTest : public ::testing::Test {
 protected:
@@ -43,7 +50,7 @@ static std::unordered_set<const resolution_lineage*> as_set(
 TEST_F(LemmaTest, LemmaSingleResolutionUnchanged) {
     resolution_lineage res0{nullptr, &rule_idx0};
     lemma l{as_set({&res0})};
-    EXPECT_EQ(l.get_resolutions(), as_set({&res0}));
+    EXPECT_THAT(l.get_resolutions(), UnorderedElementsAre(&res0));
 }
 
 TEST_F(LemmaTest, LemmaDropsAncestorWhenLeafIncluded) {
@@ -52,7 +59,7 @@ TEST_F(LemmaTest, LemmaDropsAncestorWhenLeafIncluded) {
     build_chain(res0, goal0, res1, goal1, res2);
 
     lemma l{as_set({res0, res1, res2})};
-    EXPECT_EQ(l.get_resolutions(), as_set({res2}));
+    EXPECT_THAT(l.get_resolutions(), UnorderedElementsAre(res2));
 }
 
 TEST_F(LemmaTest, LemmaDropsIntermediateAncestor) {
@@ -61,7 +68,7 @@ TEST_F(LemmaTest, LemmaDropsIntermediateAncestor) {
     build_chain(res0, goal0, res1, goal1, res2);
 
     lemma l{as_set({res1, res2})};
-    EXPECT_EQ(l.get_resolutions(), as_set({res2}));
+    EXPECT_THAT(l.get_resolutions(), UnorderedElementsAre(res2));
 }
 
 TEST_F(LemmaTest, LemmaIdempotentForLeafOnlyInput) {
@@ -70,7 +77,7 @@ TEST_F(LemmaTest, LemmaIdempotentForLeafOnlyInput) {
     build_chain(res0, goal0, res1, goal1, res2);
 
     lemma l{as_set({res2})};
-    EXPECT_EQ(l.get_resolutions(), as_set({res2}));
+    EXPECT_THAT(l.get_resolutions(), UnorderedElementsAre(res2));
 }
 
 TEST_F(LemmaTest, LemmaPrunesToDeepestResolutionsOnly) {
@@ -79,5 +86,5 @@ TEST_F(LemmaTest, LemmaPrunesToDeepestResolutionsOnly) {
     build_chain(res0, goal0, res1, goal1, res2);
 
     lemma l{as_set({res2, res1})};
-    EXPECT_EQ(l.get_resolutions(), as_set({res2}));
+    EXPECT_THAT(l.get_resolutions(), UnorderedElementsAre(res2));
 }

@@ -1,3 +1,6 @@
+// sequencer allocates monotonic indices with trail-backed undo. Unit tests mock i_trail
+// and assert next() returns 0,1,2 with one log call per allocation.
+
 #include <gtest/gtest.h>
 #include <gmock/gmock.h>
 #include "../../../core/hpp/utility/sequencer.hpp"

@@ -1,23 +1,17 @@
+// state_machine is the coroutine wrapper used by elimination generators and iterators.
+// These tests exercise suspend/resume, yield ordering, nested draining, move semantics,
+// and exception propagation using coroutine-local values (no shared mutable globals).
+
 #include <gtest/gtest.h>
+#include <gmock/gmock.h>
 #include <stdexcept>
 #include <vector>
 #include "../../../core/hpp/utility/state_machine.hpp"
 
+using ::testing::ElementsAre;
+
 namespace {
 
-int sm_a = 1;
-int sm_b = 2;
-int sm_c = 3;
-int sm_x = 100;
-int sm_y = 200;
-int sm_conflict = 999;
-
-// Collects values produced the same way as elimination generators in the codebase:
-//   while (!sm.done()) {
-//       auto v = sm.resume();
-//       if (v.has_value())
-//           ... use v.value() ...
-//   }
 template<typename T>
 std::vector<T> collect_while_has_value(state_machine<T>& sm) {
     std::vector<T> out;
@@ -41,23 +35,33 @@ state_machine<int> make_int_two_yields() {
 }
 
 state_machine<int> make_int_five_yields() {
-    co_yield 10;
-    co_yield 20;
-    co_yield 30;
-    co_yield 40;
-    co_yield 50;
+    constexpr int kFirst = 10;
+    constexpr int kSecond = 20;
+    constexpr int kThird = 30;
+    constexpr int kFourth = 40;
+    constexpr int kFifth = 50;
+    co_yield kFirst;
+    co_yield kSecond;
+    co_yield kThird;
+    co_yield kFourth;
+    co_yield kFifth;
 }
 
 state_machine<const int*> make_pointer_yields_with_terminal_null() {
-    co_yield &sm_a;
-    co_yield &sm_b;
-    co_yield &sm_c;
+    const int a = 1;
+    const int b = 2;
+    const int c = 3;
+    co_yield &a;
+    co_yield &b;
+    co_yield &c;
     co_yield nullptr;
 }
 
 state_machine<const int*> make_inner_two_yields() {
-    co_yield &sm_x;
-    co_yield &sm_y;
+    const int x = 100;
+    const int y = 200;
+    co_yield &x;
+    co_yield &y;
 }
 
 state_machine<const int*> make_outer_drains_inner() {
@@ -80,17 +84,19 @@ state_machine<const int*> make_nested_three_levels() {
 }
 
 state_machine<const int*> make_revalidation_style_nested() {
+    const int conflict = 999;
     auto inner = make_inner_two_yields();
     while (!inner.done()) {
         auto elim = inner.resume();
         if (elim.has_value())
             co_yield elim.value();
     }
-    co_yield &sm_conflict;
+    co_yield &conflict;
 }
 
 state_machine<int> make_yield_then_immediate_return() {
-    co_yield 42;
+    constexpr int kAnswer = 42;
+    co_yield kAnswer;
 }
 
 state_machine<int> make_int_throws_after_first_yield() {
@@ -100,7 +106,9 @@ state_machine<int> make_int_throws_after_first_yield() {
 
 } // namespace
 
-TEST(StateMachineVoid, SuspendThenCompletes) {
+struct StateMachineTest : public ::testing::Test {};
+
+TEST_F(StateMachineTest, SuspendThenCompletes) {
     auto sm = make_void_stepper();
     EXPECT_FALSE(sm.done());
     sm.resume();
@@ -109,7 +117,7 @@ TEST(StateMachineVoid, SuspendThenCompletes) {
     EXPECT_TRUE(sm.done());
 }
 
-TEST(StateMachineInt, ResumeReturnsEachCoYield) {
+TEST_F(StateMachineTest, ResumeReturnsEachCoYield) {
     auto sm = make_int_two_yields();
     EXPECT_FALSE(sm.done());
 
@@ -122,7 +130,7 @@ TEST(StateMachineInt, ResumeReturnsEachCoYield) {
 
 // After co_yield then co_await suspend_always, resume() still returns the last
 // co_yielded value and done() stays false until one more resume — stale last_yield_.
-TEST(StateMachineInt, FinalSuspendThenReturnClearsLastYield) {
+TEST_F(StateMachineTest, FinalSuspendThenReturnClearsLastYield) {
     auto sm = make_int_two_yields();
     ASSERT_EQ(sm.resume(), 1);
     ASSERT_EQ(sm.resume(), 2);
@@ -137,21 +145,19 @@ TEST(StateMachineInt, FinalSuspendThenReturnClearsLastYield) {
     EXPECT_TRUE(sm.done());
 }
 
-TEST(StateMachineInt, FiveYieldsCollectedInOrder) {
+TEST_F(StateMachineTest, FiveYieldsCollectedInOrder) {
     auto sm = make_int_five_yields();
-    EXPECT_EQ(collect_while_has_value(sm), (std::vector<int>{10, 20, 30, 40, 50}));
+    EXPECT_THAT(collect_while_has_value(sm), ElementsAre(10, 20, 30, 40, 50));
     EXPECT_TRUE(sm.done());
 }
 
-TEST(StateMachineInt, SingleYieldThenReturnProducesOneValue) {
+TEST_F(StateMachineTest, SingleYieldThenReturnProducesOneValue) {
     auto sm = make_yield_then_immediate_return();
-    auto values = collect_while_has_value(sm);
-    ASSERT_EQ(values.size(), 1u);
-    EXPECT_EQ(values[0], 42);
+    EXPECT_THAT(collect_while_has_value(sm), ElementsAre(42));
     EXPECT_TRUE(sm.done());
 }
 
-TEST(StateMachinePointer, CollectsYieldsIncludingTerminalNull) {
+TEST_F(StateMachineTest, CollectsYieldsIncludingTerminalNull) {
     auto sm = make_pointer_yields_with_terminal_null();
 
     auto values = collect_while_has_value(sm);
@@ -163,7 +169,7 @@ TEST(StateMachinePointer, CollectsYieldsIncludingTerminalNull) {
     EXPECT_TRUE(sm.done());
 }
 
-TEST(StateMachinePointer, DrainInnerFromCallerCollectsInOrder) {
+TEST_F(StateMachineTest, DrainInnerFromCallerCollectsInOrder) {
     auto inner = make_inner_two_yields();
     auto values = collect_while_has_value(inner);
     ASSERT_EQ(values.size(), 2u);
@@ -171,7 +177,7 @@ TEST(StateMachinePointer, DrainInnerFromCallerCollectsInOrder) {
     EXPECT_EQ(*values[1], 200);
 }
 
-TEST(StateMachinePointer, DrainsNestedMachineInOrder) {
+TEST_F(StateMachineTest, DrainsNestedMachineInOrder) {
     auto sm = make_outer_drains_inner();
     auto values = collect_while_has_value(sm);
     ASSERT_EQ(values.size(), 3u);
@@ -181,7 +187,7 @@ TEST(StateMachinePointer, DrainsNestedMachineInOrder) {
     EXPECT_TRUE(sm.done());
 }
 
-TEST(StateMachinePointer, NestedThreeLevelsFlattensToInnerYields) {
+TEST_F(StateMachineTest, NestedThreeLevelsFlattensToInnerYields) {
     auto sm = make_nested_three_levels();
     auto values = collect_while_has_value(sm);
     ASSERT_EQ(values.size(), 3u);
@@ -191,7 +197,7 @@ TEST(StateMachinePointer, NestedThreeLevelsFlattensToInnerYields) {
     EXPECT_TRUE(sm.done());
 }
 
-TEST(StateMachinePointer, RevalidationStyleNestedYieldsInnerThenOuter) {
+TEST_F(StateMachineTest, RevalidationStyleNestedYieldsInnerThenOuter) {
     auto sm = make_revalidation_style_nested();
     auto values = collect_while_has_value(sm);
     ASSERT_EQ(values.size(), 3u);
@@ -201,43 +207,40 @@ TEST(StateMachinePointer, RevalidationStyleNestedYieldsInnerThenOuter) {
     EXPECT_TRUE(sm.done());
 }
 
-TEST(StateMachineInt, MoveConstructCanDrainRemainingYields) {
+TEST_F(StateMachineTest, MoveConstructCanDrainRemainingYields) {
     auto sm1 = make_int_five_yields();
     ASSERT_EQ(sm1.resume(), 10);
 
     state_machine<int> sm2 = std::move(sm1);
-    auto rest = collect_while_has_value(sm2);
-    EXPECT_EQ(rest, (std::vector<int>{20, 30, 40, 50}));
+    EXPECT_THAT(collect_while_has_value(sm2), ElementsAre(20, 30, 40, 50));
     EXPECT_TRUE(sm2.done());
 }
 
-TEST(StateMachineInt, MoveAssignCanDrainRemainingYields) {
+TEST_F(StateMachineTest, MoveAssignCanDrainRemainingYields) {
     auto sm1 = make_int_five_yields();
     ASSERT_EQ(sm1.resume(), 10);
 
     state_machine<int> sm2 = make_int_two_yields();
     sm2 = std::move(sm1);
 
-    auto rest = collect_while_has_value(sm2);
-    EXPECT_EQ(rest, (std::vector<int>{20, 30, 40, 50}));
+    EXPECT_THAT(collect_while_has_value(sm2), ElementsAre(20, 30, 40, 50));
     EXPECT_TRUE(sm2.done());
 }
 
-TEST(StateMachineInt, DrainTwoYieldCoroutineCollectsBothValues) {
+TEST_F(StateMachineTest, DrainTwoYieldCoroutineCollectsBothValues) {
     auto sm = make_int_two_yields();
-    auto values = collect_while_has_value(sm);
-    EXPECT_EQ(values, (std::vector<int>{1, 2}));
+    EXPECT_THAT(collect_while_has_value(sm), ElementsAre(1, 2));
     EXPECT_TRUE(sm.done());
 }
 
-TEST(StateMachineInt, ExceptionPropagatesOnResume) {
+TEST_F(StateMachineTest, ExceptionPropagatesOnResume) {
     auto sm = make_int_throws_after_first_yield();
     ASSERT_EQ(sm.resume(), 1);
     EXPECT_THROW(sm.resume(), std::runtime_error);
     EXPECT_THROW(sm.resume(), std::runtime_error);
 }
 
-TEST(StateMachinePointer, JointStyleLoopForwardsNullTerminator) {
+TEST_F(StateMachineTest, JointStyleLoopForwardsNullTerminator) {
     auto sm = make_pointer_yields_with_terminal_null();
     std::vector<const int*> forwarded;
     while (!sm.done()) {
@@ -246,5 +249,8 @@ TEST(StateMachinePointer, JointStyleLoopForwardsNullTerminator) {
             forwarded.push_back(res.value());
     }
     ASSERT_EQ(forwarded.size(), 4u);
+    EXPECT_EQ(*forwarded[0], 1);
+    EXPECT_EQ(*forwarded[1], 2);
+    EXPECT_EQ(*forwarded[2], 3);
     EXPECT_EQ(forwarded.back(), nullptr);
 }

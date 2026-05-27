@@ -1,3 +1,6 @@
+// copier renames variables through i_var_sequencer and pools copied functors via
+// i_expr_pool while maintaining a translation_map. Tests mock sequencing and pooling.
+
 #include <gtest/gtest.h>
 #include <gmock/gmock.h>
 #include "../../../core/hpp/infrastructure/copier.hpp"

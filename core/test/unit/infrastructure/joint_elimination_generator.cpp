@@ -1,31 +1,30 @@
+// joint_elimination_generator composes CDCL and MHU elimination streams. These unit
+// tests mock elimination via i_elimination_generator (GMock-friendly) behind thin
+// i_cdcl / i_mhu facades, and assert constrain() ordering and null termination.
+
 #include <gtest/gtest.h>
 #include <gmock/gmock.h>
 #include <vector>
 #include "../../../core/hpp/infrastructure/joint_elimination_generator.hpp"
 #include "../../../core/hpp/interfaces/i_cdcl_elimination_generator.hpp"
 #include "../../../core/hpp/interfaces/i_mhu_elimination_generator.hpp"
+#include "../../../core/hpp/interfaces/i_elimination_generator.hpp"
 #include "../../../core/hpp/utility/state_machine.hpp"
 
-using ::testing::_;
-using ::testing::NiceMock;
+using ::testing::ByMove;
+using ::testing::ElementsAre;
+using ::testing::InSequence;
 using ::testing::Return;
 
 namespace {
 
-const resolution_lineage* sm_cdcl_elim = nullptr;
-const resolution_lineage* sm_mhu_elim = nullptr;
-
-state_machine<const resolution_lineage*> make_cdcl_sm() {
-    co_yield sm_cdcl_elim;
+state_machine<const resolution_lineage*> make_single_elim_sm(
+    const resolution_lineage* elim) {
+    co_yield elim;
     co_yield nullptr;
 }
 
-state_machine<const resolution_lineage*> make_mhu_sm() {
-    co_yield sm_mhu_elim;
-    co_yield nullptr;
-}
-
-std::vector<const resolution_lineage*> collect_elims(
+std::vector<const resolution_lineage*> collect_non_null_elims(
     state_machine<const resolution_lineage*>& sm) {
     std::vector<const resolution_lineage*> out;
     while (!sm.done()) {
@@ -38,58 +37,77 @@ std::vector<const resolution_lineage*> collect_elims(
 
 } // namespace
 
-struct MockCdclEliminationGenerator : public i_cdcl_elimination_generator {
-    MOCK_METHOD(const resolution_lineage*, learn, (const lemma&), (override));
+struct MockEliminationGenerator : public i_elimination_generator {
     MOCK_METHOD(state_machine<const resolution_lineage*>, constrain,
         (const resolution_lineage*), (override));
 };
 
-struct MockMhuEliminationGenerator : public i_mhu_elimination_generator {
+struct MockCdclFacade : public i_cdcl_elimination_generator {
+    explicit MockCdclFacade(MockEliminationGenerator& base) : base(base) {}
+
+    const resolution_lineage* learn(const lemma&) override { return nullptr; }
+
+    state_machine<const resolution_lineage*> constrain(
+        const resolution_lineage* rl) override {
+        return base.constrain(rl);
+    }
+
+    MockEliminationGenerator& base;
+};
+
+struct MockMhuFacade : public i_mhu_elimination_generator {
+    explicit MockMhuFacade(MockEliminationGenerator& base) : base(base) {}
+
     MOCK_METHOD(bool, try_add_head,
         (const resolution_lineage*, const expr*, const expr*), (override));
-    MOCK_METHOD(state_machine<const resolution_lineage*>, constrain,
-        (const resolution_lineage*), (override));
+
+    state_machine<const resolution_lineage*> constrain(
+        const resolution_lineage* rl) override {
+        return base.constrain(rl);
+    }
+
+    MockEliminationGenerator& base;
 };
 
 struct JointEliminationGeneratorUnitTest : public ::testing::Test {
-protected:
     expr head{expr::var{0}};
     rule r{&head, {}};
     resolution_lineage rl{nullptr, &r};
 
-    NiceMock<MockCdclEliminationGenerator> cdcl;
-    NiceMock<MockMhuEliminationGenerator> mhu;
+    MockEliminationGenerator cdcl_elims;
+    MockEliminationGenerator mhu_elims;
+    MockCdclFacade cdcl{cdcl_elims};
+    MockMhuFacade mhu{mhu_elims};
     joint_elimination_generator joint{cdcl, mhu};
 };
 
 TEST_F(JointEliminationGeneratorUnitTest, ConstrainYieldsCdclThenMhuThenNullTerminator) {
-    sm_cdcl_elim = &rl;
-    sm_mhu_elim = &rl;
-
-    EXPECT_CALL(cdcl, constrain(&rl)).WillOnce(Return(make_cdcl_sm()));
-    EXPECT_CALL(mhu, constrain(&rl)).WillOnce(Return(make_mhu_sm()));
+    EXPECT_CALL(cdcl_elims, constrain(&rl))
+        .WillOnce(Return(ByMove(make_single_elim_sm(&rl))));
+    EXPECT_CALL(mhu_elims, constrain(&rl))
+        .WillOnce(Return(ByMove(make_single_elim_sm(&rl))));
 
     auto sm = joint.constrain(&rl);
-    auto elims = collect_elims(sm);
-
-    ASSERT_EQ(elims.size(), 2u);
-    EXPECT_EQ(elims[0], &rl);
-    EXPECT_EQ(elims[1], &rl);
+    EXPECT_THAT(collect_non_null_elims(sm), ElementsAre(&rl, &rl));
 }
 
 TEST_F(JointEliminationGeneratorUnitTest, ConstrainRunsCdclBeforeMhu) {
-    testing::InSequence seq;
+    InSequence seq;
 
-    EXPECT_CALL(cdcl, constrain(&rl)).WillOnce(Return(make_cdcl_sm()));
-    EXPECT_CALL(mhu, constrain(&rl)).WillOnce(Return(make_mhu_sm()));
+    EXPECT_CALL(cdcl_elims, constrain(&rl))
+        .WillOnce(Return(ByMove(make_single_elim_sm(&rl))));
+    EXPECT_CALL(mhu_elims, constrain(&rl))
+        .WillOnce(Return(ByMove(make_single_elim_sm(&rl))));
 
     auto sm = joint.constrain(&rl);
-    collect_elims(sm);
+    collect_non_null_elims(sm);
 }
 
 TEST_F(JointEliminationGeneratorUnitTest, ConstrainEndsWithNullTerminatorYield) {
-    EXPECT_CALL(cdcl, constrain(&rl)).WillOnce(Return(make_cdcl_sm()));
-    EXPECT_CALL(mhu, constrain(&rl)).WillOnce(Return(make_mhu_sm()));
+    EXPECT_CALL(cdcl_elims, constrain(&rl))
+        .WillOnce(Return(ByMove(make_single_elim_sm(&rl))));
+    EXPECT_CALL(mhu_elims, constrain(&rl))
+        .WillOnce(Return(ByMove(make_single_elim_sm(&rl))));
 
     auto sm = joint.constrain(&rl);
     const resolution_lineage* last = nullptr;

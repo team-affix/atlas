@@ -1,3 +1,6 @@
+// backtrackable_set_insert adds a set element with undo removal. Unit tests assert
+// insert, backtrack, and duplicate-value failure.
+
 #include <gtest/gtest.h>
 #include "../../../core/hpp/utility/backtrackable_set_insert.hpp"
 #include <set>

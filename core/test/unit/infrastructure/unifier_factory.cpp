@@ -1,0 +1,30 @@
+// unifier_factory: constructs a unifier wired to the supplied bind map. Unification
+// must delegate WHNF lookups to that bind map collaborator.
+
+#include <gtest/gtest.h>
+#include <gmock/gmock.h>
+#include "../../../core/hpp/infrastructure/unifier_factory.hpp"
+#include "../../../core/hpp/interfaces/i_bind_map.hpp"
+
+using ::testing::Return;
+
+struct MockBindMap : public i_bind_map {
+    MOCK_METHOD(void, bind, (uint32_t, const expr*), (override));
+    MOCK_METHOD(const expr*, whnf, (const expr*), (override));
+};
+
+struct UnifierFactoryTest : public ::testing::Test {
+    unifier_factory factory;
+    MockBindMap bind_map;
+    expr var0{expr::var{0}};
+    expr var1{expr::var{1}};
+};
+
+TEST_F(UnifierFactoryTest, MakeProducesUnifierThatUnifiesViaBindMap) {
+    EXPECT_CALL(bind_map, whnf).WillRepeatedly([](const expr* e) { return e; });
+    EXPECT_CALL(bind_map, bind(1u, &var0)).Times(1);
+    std::unique_ptr<i_unifier> u = factory.make(bind_map);
+    ASSERT_NE(u, nullptr);
+    std::unordered_set<uint32_t> seen;
+    EXPECT_TRUE(u->unify(&var0, &var1, seen));
+}

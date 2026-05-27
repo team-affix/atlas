@@ -1,3 +1,7 @@
+// lineage_pool interns goal and resolution lineages, pins ancestry for retention, and
+// trims unpinned nodes. Unit tests cover intern identity, pin propagation, trim GC,
+// and import without external mocks (no i_* dependencies).
+
 #include <gtest/gtest.h>
 #include "../../../core/hpp/infrastructure/lineage_pool.hpp"
 

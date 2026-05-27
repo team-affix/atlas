@@ -7,39 +7,10 @@
 #include "../../../core/hpp/infrastructure/unifier_factory.hpp"
 #include "../../../core/hpp/infrastructure/expr_pool.hpp"
 #include "../../../core/hpp/infrastructure/lineage_pool.hpp"
-#include "../../../core/hpp/interfaces/i_get_goal_candidate_rules.hpp"
-#include "../../../core/hpp/interfaces/i_rule_set.hpp"
+#include "../../../core/hpp/infrastructure/goal_candidate_rules.hpp"
 #include "../../../core/hpp/utility/trail.hpp"
 
 namespace {
-
-struct test_rule_set : i_rule_set {
-    std::vector<const rule*> rules;
-
-    void insert(const rule* r) override {
-        if (std::find(rules.begin(), rules.end(), r) == rules.end())
-            rules.push_back(r);
-    }
-
-    void erase(const rule* r) override { std::erase(rules, r); }
-
-    state_machine<const rule*> iterate() const override {
-        for (auto* r : rules)
-            co_yield r;
-    }
-
-    size_t size() const override { return rules.size(); }
-};
-
-struct test_goal_candidate_rules : i_get_goal_candidate_rules {
-    std::map<const goal_lineage*, test_rule_set> by_goal;
-
-    void add(const goal_lineage* gl, const rule* r) { by_goal[gl].insert(r); }
-
-    i_rule_set& get(const goal_lineage* gl) override { return by_goal[gl]; }
-
-    const i_rule_set& get(const goal_lineage* gl) const override { return by_goal.at(gl); }
-};
 
 std::vector<const resolution_lineage*> collect_elims(
     state_machine<const resolution_lineage*>& sm) {
@@ -72,7 +43,7 @@ protected:
     bind_map_factory bmf;
     overlay_bind_map_factory obmf;
     unifier_factory uf;
-    test_goal_candidate_rules ggcr;
+    goal_candidate_rules ggcr;
     mhu_elimination_generator mhu{common, lp, pool, bmf, obmf, uf, ggcr};
 
     expr f_empty{expr::functor{"f", {}}};
@@ -96,7 +67,7 @@ protected:
             rule{&s.head, {&s.goal}}};
         s.gl = const_cast<goal_lineage*>(lp.goal(nullptr, &s.goal));
         s.rl = const_cast<resolution_lineage*>(lp.resolution(s.gl, &s.r));
-        ggcr.add(s.gl, &s.r);
+        ggcr.link_goal_candidate(s.gl, &s.r);
         return s;
     }
 

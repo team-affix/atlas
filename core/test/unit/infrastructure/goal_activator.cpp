@@ -1,3 +1,7 @@
+// goal_activator copies a subgoal expression through the candidate translation map and
+// registers it via i_set_goal_expr. Unit tests mock copier, map lookup, and set_goal_expr
+// and assert the activation pipeline wires parent resolution to the copied expr.
+
 #include <gtest/gtest.h>
 #include <gmock/gmock.h>
 #include "../../../core/hpp/infrastructure/goal_activator.hpp"

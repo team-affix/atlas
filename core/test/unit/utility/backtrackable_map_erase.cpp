@@ -1,3 +1,6 @@
+// backtrackable_map_erase removes a map entry with undo re-insertion. Unit tests assert
+// erase, backtrack restore, and missing-key errors.
+
 #include <gtest/gtest.h>
 #include "../../../core/hpp/utility/backtrackable_map_erase.hpp"
 #include <map>

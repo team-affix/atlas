@@ -1,3 +1,6 @@
+// backtrackable_map_at_erase removes from an inner set with undo. Unit tests assert
+// erase/backtrack and errors for missing outer or inner elements.
+
 #include <gtest/gtest.h>
 #include "../../../core/hpp/utility/backtrackable_map_at_erase.hpp"
 #include <map>

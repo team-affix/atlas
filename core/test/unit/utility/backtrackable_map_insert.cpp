@@ -1,28 +1,34 @@
+// backtrackable_map_insert records a map insert for trail undo. Unit tests assert insert,
+// backtrack removal, and duplicate-key failure.
+
 #include <gtest/gtest.h>
 #include "../../../core/hpp/utility/backtrackable_map_insert.hpp"
 #include <map>
 #include <stdexcept>
 
 struct BacktrackableMapInsertTest : public ::testing::Test {
-protected:
+    static constexpr int kKey = 7;
+    static constexpr int kValue = 42;
+
     std::map<int, int> mp;
-    backtrackable_map_insert<std::map<int, int>> m{7, 42};
+    backtrackable_map_insert<std::map<int, int>> m{kKey, kValue};
+
     void SetUp() override { m.capture(mp); }
 };
 
 TEST_F(BacktrackableMapInsertTest, InvokeInsertsEntry) {
     m.invoke();
-    EXPECT_EQ(mp.count(7), 1u);
-    EXPECT_EQ(mp.at(7), 42);
+    EXPECT_EQ(mp.count(kKey), 1u);
+    EXPECT_EQ(mp.at(kKey), kValue);
 }
 
 TEST_F(BacktrackableMapInsertTest, InvokeAndBacktrackRemovesEntry) {
     m.invoke();
     m.backtrack();
-    EXPECT_EQ(mp.count(7), 0u);
+    EXPECT_EQ(mp.count(kKey), 0u);
 }
 
 TEST_F(BacktrackableMapInsertTest, InvokeWithDuplicateKeyThrows) {
-    mp.insert({7, 42});
+    mp.insert({kKey, kValue});
     EXPECT_THROW(m.invoke(), std::logic_error);
 }

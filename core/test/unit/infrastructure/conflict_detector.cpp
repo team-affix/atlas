@@ -1,3 +1,6 @@
+// conflict_detector flags goals with zero applicable candidate rules. Tests mock
+// i_get_goal_candidate_rules and i_rule_set::size to assert conflict iff size is zero.
+
 #include <gtest/gtest.h>
 #include <gmock/gmock.h>
 #include "../../../core/hpp/infrastructure/conflict_detector.hpp"
