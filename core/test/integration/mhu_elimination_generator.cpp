@@ -7,10 +7,39 @@
 #include "../../../core/hpp/infrastructure/unifier_factory.hpp"
 #include "../../../core/hpp/infrastructure/expr_pool.hpp"
 #include "../../../core/hpp/infrastructure/lineage_pool.hpp"
+#include "../../../core/hpp/interfaces/i_get_goal_candidate_rules.hpp"
+#include "../../../core/hpp/interfaces/i_rule_set.hpp"
 #include "../../../core/hpp/utility/trail.hpp"
-#include "../../../core/hpp/value_objects/unify_head.hpp"
 
 namespace {
+
+struct test_rule_set : i_rule_set {
+    std::vector<const rule*> rules;
+
+    void insert(const rule* r) override {
+        if (std::find(rules.begin(), rules.end(), r) == rules.end())
+            rules.push_back(r);
+    }
+
+    void erase(const rule* r) override { std::erase(rules, r); }
+
+    state_machine<const rule*> iterate() const override {
+        for (auto* r : rules)
+            co_yield r;
+    }
+
+    size_t size() const override { return rules.size(); }
+};
+
+struct test_goal_candidate_rules : i_get_goal_candidate_rules {
+    std::map<const goal_lineage*, test_rule_set> by_goal;
+
+    void add(const goal_lineage* gl, const rule* r) { by_goal[gl].insert(r); }
+
+    i_rule_set& get(const goal_lineage* gl) override { return by_goal[gl]; }
+
+    const i_rule_set& get(const goal_lineage* gl) const override { return by_goal.at(gl); }
+};
 
 std::vector<const resolution_lineage*> collect_elims(
     state_machine<const resolution_lineage*>& sm) {
@@ -40,43 +69,15 @@ protected:
     expr_pool pool{t};
     bind_map common;
     lineage_pool lp;
-    mhu_elimination_generator mhu{common, pool};
-
     bind_map_factory bmf;
     overlay_bind_map_factory obmf;
     unifier_factory uf;
+    test_goal_candidate_rules ggcr;
+    mhu_elimination_generator mhu{common, lp, pool, bmf, obmf, uf, ggcr};
 
     expr f_empty{expr::functor{"f", {}}};
     expr g_empty{expr::functor{"g", {}}};
     expr var0{expr::var{0}};
-    expr var1{expr::var{1}};
-
-    unify_head make_head() {
-        auto local = bmf.make();
-        auto overlay = obmf.make(*local, common);
-        auto u = uf.make(*overlay);
-        return unify_head{
-            std::move(local),
-            std::move(overlay),
-            std::move(u)};
-    }
-
-    std::unordered_set<uint32_t> seed_and_add_head(
-        const resolution_lineage* rl,
-        const expr* goal,
-        const expr* head) {
-        auto local = bmf.make();
-        auto overlay = obmf.make(*local, common);
-        auto u = uf.make(*overlay);
-        std::unordered_set<uint32_t> rep_changed;
-        EXPECT_TRUE(u->unify(goal, head, rep_changed));
-        unify_head head_bundle{
-            std::move(local),
-            std::move(overlay),
-            std::move(u)};
-        mhu.add_head(rl, std::move(head_bundle), rep_changed);
-        return rep_changed;
-    }
 
     struct candidate_slot {
         goal_lineage* gl;
@@ -95,7 +96,15 @@ protected:
             rule{&s.head, {&s.goal}}};
         s.gl = const_cast<goal_lineage*>(lp.goal(nullptr, &s.goal));
         s.rl = const_cast<resolution_lineage*>(lp.resolution(s.gl, &s.r));
+        ggcr.add(s.gl, &s.r);
         return s;
+    }
+
+    bool seed_and_add_head(
+        const resolution_lineage* rl,
+        const expr* goal,
+        const expr* head) {
+        return mhu.try_add_head(rl, goal, head);
     }
 };
 
@@ -103,35 +112,27 @@ protected:
 // Lifecycle
 // ---------------------------------------------------------------------------
 
-TEST_F(MhuEliminationGeneratorIntegrationTest, AddHeadThenConstrainRemovesHead) {
+TEST_F(MhuEliminationGeneratorIntegrationTest, TryAddHeadThenConstrainAllowsReuse) {
     auto slot = make_slot(var0, f_empty);
-    seed_and_add_head(slot.rl, &slot.goal, &slot.head);
+    ASSERT_TRUE(seed_and_add_head(slot.rl, &slot.goal, &slot.head));
 
     auto sm = mhu.constrain(slot.rl);
     EXPECT_TRUE(collect_elims(sm).empty());
 
-    EXPECT_NO_THROW(mhu.try_remove_head(slot.rl));
+    EXPECT_TRUE(seed_and_add_head(slot.rl, &slot.goal, &slot.head));
 }
 
-TEST_F(MhuEliminationGeneratorIntegrationTest, TryRemoveHeadOnUnknownLineageIsNoOp) {
-    auto slot = make_slot(var0, f_empty);
-    EXPECT_NO_THROW(mhu.try_remove_head(slot.rl));
+TEST_F(MhuEliminationGeneratorIntegrationTest, TryAddHeadFailsWhenUnifyFails) {
+    auto slot = make_slot(f_empty, g_empty);
+    EXPECT_FALSE(mhu.try_add_head(slot.rl, &slot.goal, &slot.head));
 }
 
-TEST_F(MhuEliminationGeneratorIntegrationTest, TryRemoveHeadAfterAddAllowsReuse) {
+TEST_F(MhuEliminationGeneratorIntegrationTest, ConstrainOnSingleHeadYieldsNoElims) {
     auto slot = make_slot(var0, f_empty);
-    seed_and_add_head(slot.rl, &slot.goal, &slot.head);
-    mhu.try_remove_head(slot.rl);
-    EXPECT_NO_THROW(seed_and_add_head(slot.rl, &slot.goal, &slot.head));
-}
-
-TEST_F(MhuEliminationGeneratorIntegrationTest, ConstrainWithNoRepLinksCommitsNothingAndRemovesHead) {
-    auto slot = make_slot(var0, f_empty);
-    mhu.add_head(slot.rl, make_head(), {});
+    ASSERT_TRUE(mhu.try_add_head(slot.rl, &slot.goal, &slot.head));
 
     auto sm = mhu.constrain(slot.rl);
     EXPECT_TRUE(collect_elims(sm).empty());
-    EXPECT_NO_THROW(mhu.try_remove_head(slot.rl));
 }
 
 // ---------------------------------------------------------------------------
@@ -140,7 +141,7 @@ TEST_F(MhuEliminationGeneratorIntegrationTest, ConstrainWithNoRepLinksCommitsNot
 
 TEST_F(MhuEliminationGeneratorIntegrationTest, ConstrainPublishesSeededBindingToCommon) {
     auto slot = make_slot(var0, f_empty);
-    seed_and_add_head(slot.rl, &slot.goal, &slot.head);
+    ASSERT_TRUE(seed_and_add_head(slot.rl, &slot.goal, &slot.head));
 
     auto sm = mhu.constrain(slot.rl);
     collect_elims(sm);
@@ -155,8 +156,8 @@ TEST_F(MhuEliminationGeneratorIntegrationTest, ConstrainPublishesSeededBindingTo
 TEST_F(MhuEliminationGeneratorIntegrationTest, ConstrainEliminatesHeadWithCollidingFunctorOnSameRep) {
     auto a = make_slot(var0, f_empty);
     auto b = make_slot(var0, g_empty);
-    seed_and_add_head(a.rl, &a.goal, &a.head);
-    seed_and_add_head(b.rl, &b.goal, &b.head);
+    ASSERT_TRUE(seed_and_add_head(a.rl, &a.goal, &a.head));
+    ASSERT_TRUE(seed_and_add_head(b.rl, &b.goal, &b.head));
 
     auto sm = mhu.constrain(a.rl);
     auto elims = collect_elims(sm);
@@ -168,8 +169,8 @@ TEST_F(MhuEliminationGeneratorIntegrationTest, ConstrainEliminatesHeadWithCollid
 TEST_F(MhuEliminationGeneratorIntegrationTest, ConstrainDoesNotEliminateCompatibleHeadOnSameRep) {
     auto a = make_slot(var0, f_empty);
     auto b = make_slot(var0, f_empty);
-    seed_and_add_head(a.rl, &a.goal, &a.head);
-    seed_and_add_head(b.rl, &b.goal, &b.head);
+    ASSERT_TRUE(seed_and_add_head(a.rl, &a.goal, &a.head));
+    ASSERT_TRUE(seed_and_add_head(b.rl, &b.goal, &b.head));
 
     auto sm = mhu.constrain(a.rl);
     auto elims = collect_elims(sm);
@@ -182,28 +183,11 @@ TEST_F(MhuEliminationGeneratorIntegrationTest, ConstrainDoesNotEliminateHeadWatc
     expr var2{expr::var{2}};
     auto a = make_slot(var0, f_empty);
     auto b = make_slot(var2, g_empty);
-    seed_and_add_head(a.rl, &a.goal, &a.head);
-    seed_and_add_head(b.rl, &b.goal, &b.head);
+    ASSERT_TRUE(seed_and_add_head(a.rl, &a.goal, &a.head));
+    ASSERT_TRUE(seed_and_add_head(b.rl, &b.goal, &b.head));
 
     auto sm = mhu.constrain(a.rl);
     auto elims = collect_elims(sm);
 
     EXPECT_FALSE(contains(elims, b.rl));
 }
-
-// ---------------------------------------------------------------------------
-// Rebasing: try_remove_head after revalidate failure (head already erased)
-// ---------------------------------------------------------------------------
-
-TEST_F(MhuEliminationGeneratorIntegrationTest, TryRemoveHeadAfterRevalidateEliminationIsNoOp) {
-    auto a = make_slot(var0, f_empty);
-    auto b = make_slot(var0, g_empty);
-    seed_and_add_head(a.rl, &a.goal, &a.head);
-    seed_and_add_head(b.rl, &b.goal, &b.head);
-
-    auto sm = mhu.constrain(a.rl);
-    collect_elims(sm);
-
-    EXPECT_NO_THROW(mhu.try_remove_head(b.rl));
-}
-

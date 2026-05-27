@@ -17,6 +17,7 @@ struct MockRuleSet : public i_rule_set {
 
 struct MockGetGoalCandidateRules : public i_get_goal_candidate_rules {
     MOCK_METHOD(i_rule_set&, get, (const goal_lineage*), (override));
+    MOCK_METHOD(const i_rule_set&, get, (const goal_lineage*), (const, override));
 };
 
 struct ConflictDetectorTest : public ::testing::Test {
