@@ -15,8 +15,8 @@ struct solver : i_solver {
         i_run_sim& run_sim,
         i_cdcl_elimination_generator& cdcl_elimination_generator,
         i_elimination_router& elimination_router);
-    virtual ~solver();
-    state_machine<solver_yield> solve() override;
+    ~solver() override;
+    state_machine<sim_termination> solve() override;
 private:
     i_set_up_sim& set_up_sim;
     i_tear_down_sim& tear_down_sim;
