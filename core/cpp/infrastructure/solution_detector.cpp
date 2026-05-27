@@ -1,7 +1,8 @@
 #include "../../hpp/infrastructure/solution_detector.hpp"
 
-solution_detector::solution_detector(i_active_goals& ag) : ag(ag) {}
+solution_detector::solution_detector(i_check_active_goals_empty& check_active_goals_empty)
+    : check_active_goals_empty(check_active_goals_empty) {}
 
 bool solution_detector::detect() const {
-    return ag.empty();
+    return check_active_goals_empty.empty();
 }

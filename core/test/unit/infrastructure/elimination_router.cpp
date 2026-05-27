@@ -3,7 +3,7 @@
 #include "../../../core/hpp/infrastructure/elimination_router.hpp"
 #include "../../../core/hpp/value_objects/elimination_result.hpp"
 #include "../../../core/hpp/interfaces/i_deactivated_candidate_memory.hpp"
-#include "../../../core/hpp/interfaces/i_active_goals.hpp"
+#include "../../../core/hpp/interfaces/i_is_active_goal.hpp"
 #include "../../../core/hpp/interfaces/i_elimination_backlog.hpp"
 #include "../../../core/hpp/interfaces/i_candidate_deactivator.hpp"
 
@@ -15,13 +15,8 @@ struct MockDeactivatedCandidateMemory : public i_deactivated_candidate_memory {
     MOCK_METHOD(bool, contains, (const resolution_lineage*), (const, override));
 };
 
-struct MockActiveGoals : public i_active_goals {
-    MOCK_METHOD(void, insert, (const goal_lineage*), (override));
-    MOCK_METHOD(void, erase, (const goal_lineage*), (override));
-    MOCK_METHOD(bool, contains, (const goal_lineage*), (const, override));
-    state_machine<const goal_lineage*> iterate() const override { co_return; }
-    MOCK_METHOD(size_t, size, (), (const, override));
-    MOCK_METHOD(bool, empty, (), (const, override));
+struct MockIsActiveGoal : public i_is_active_goal {
+    MOCK_METHOD(bool, is_active_goal, (const goal_lineage*), (const, override));
 };
 
 struct MockEliminationBacklog : public i_elimination_backlog {
@@ -42,10 +37,10 @@ struct EliminationRouterTest : public ::testing::Test {
     resolution_lineage rl{&parent, &idx};
 
     MockDeactivatedCandidateMemory dcm;
-    MockActiveGoals ag;
+    MockIsActiveGoal is_active_goal;
     MockEliminationBacklog eb;
     MockCandidateDeactivator cd;
-    elimination_router router{dcm, ag, eb, cd};
+    elimination_router router{dcm, is_active_goal, eb, cd};
 };
 
 TEST_F(EliminationRouterTest, AlreadyDeactivatedReturnsAlreadyDeactivated) {
@@ -58,7 +53,7 @@ TEST_F(EliminationRouterTest, AlreadyDeactivatedReturnsAlreadyDeactivated) {
 
 TEST_F(EliminationRouterTest, InactiveParentAddsToBacklog) {
     EXPECT_CALL(dcm, contains(&rl)).WillOnce(Return(false));
-    EXPECT_CALL(ag, contains(&parent)).WillOnce(Return(false));
+    EXPECT_CALL(is_active_goal, is_active_goal(&parent)).WillOnce(Return(false));
     EXPECT_CALL(eb, insert(&rl)).Times(1);
     EXPECT_CALL(cd, deactivate).Times(0);
 
@@ -67,7 +62,7 @@ TEST_F(EliminationRouterTest, InactiveParentAddsToBacklog) {
 
 TEST_F(EliminationRouterTest, ActiveParentEliminatesCandidate) {
     EXPECT_CALL(dcm, contains(&rl)).WillOnce(Return(false));
-    EXPECT_CALL(ag, contains(&parent)).WillOnce(Return(true));
+    EXPECT_CALL(is_active_goal, is_active_goal(&parent)).WillOnce(Return(true));
     EXPECT_CALL(cd, deactivate(&rl)).Times(1);
     EXPECT_CALL(eb, insert).Times(0);
 
