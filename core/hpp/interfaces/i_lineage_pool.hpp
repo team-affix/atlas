@@ -5,8 +5,8 @@
 
 struct i_lineage_pool {
     virtual ~i_lineage_pool() = default;
-    virtual const goal_lineage* goal(const resolution_lineage* parent, const expr* idx) = 0;
-    virtual const resolution_lineage* resolution(const goal_lineage* parent, const rule* idx) = 0;
+    virtual const goal_lineage* goal(const resolution_lineage* parent, subgoal_id idx) = 0;
+    virtual const resolution_lineage* resolution(const goal_lineage* parent, rule_id idx) = 0;
     virtual void pin(const goal_lineage*) = 0;
     virtual void pin(const resolution_lineage*) = 0;
     virtual void trim() = 0;

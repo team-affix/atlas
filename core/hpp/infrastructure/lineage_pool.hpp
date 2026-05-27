@@ -5,8 +5,8 @@
 #include "../interfaces/i_lineage_pool.hpp"
 
 struct lineage_pool : i_lineage_pool {
-    const goal_lineage* goal(const resolution_lineage*, const expr* idx) override;
-    const resolution_lineage* resolution(const goal_lineage*, const rule* idx) override;
+    const goal_lineage* goal(const resolution_lineage*, subgoal_id idx) override;
+    const resolution_lineage* resolution(const goal_lineage*, rule_id idx) override;
     void pin(const goal_lineage*) override;
     void pin(const resolution_lineage*) override;
     void trim() override;

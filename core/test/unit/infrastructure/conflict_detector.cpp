@@ -11,7 +11,7 @@ using ::testing::ReturnRef;
 struct MockRuleSet : public i_rule_set {
     MOCK_METHOD(void, insert, (const rule*), (override));
     MOCK_METHOD(void, erase, (const rule*), (override));
-    MOCK_METHOD(void, accept, (i_visitor<const rule*>&), (const, override));
+    state_machine<const rule*> iterate() const override { co_return; }
     MOCK_METHOD(size_t, size, (), (const, override));
 };
 

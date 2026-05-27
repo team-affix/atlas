@@ -7,15 +7,18 @@
 
 struct resolution_lineage;
 
+using subgoal_id = const expr*;
+using rule_id = const rule*;
+
 struct goal_lineage {
     const resolution_lineage* parent;
-    const expr* idx;
+    subgoal_id idx;
     auto operator<=>(const goal_lineage&) const = default;
 };
 
 struct resolution_lineage {
     const goal_lineage* parent;
-    const rule* idx;
+    rule_id idx;
     auto operator<=>(const resolution_lineage&) const = default;
 };
 

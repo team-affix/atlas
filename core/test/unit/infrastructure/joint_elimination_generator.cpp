@@ -45,10 +45,8 @@ struct MockCdclEliminationGenerator : public i_cdcl_elimination_generator {
 };
 
 struct MockMhuEliminationGenerator : public i_mhu_elimination_generator {
-    MOCK_METHOD(void, add_head,
-        (const resolution_lineage*, unify_head, const std::unordered_set<uint32_t>&),
-        (override));
-    MOCK_METHOD(void, try_remove_head, (const resolution_lineage*), (override));
+    MOCK_METHOD(bool, try_add_head,
+        (const resolution_lineage*, const expr*, const expr*), (override));
     MOCK_METHOD(state_machine<const resolution_lineage*>, constrain,
         (const resolution_lineage*), (override));
 };
