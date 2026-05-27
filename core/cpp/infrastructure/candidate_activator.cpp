@@ -2,31 +2,31 @@
 
 candidate_activator::candidate_activator(
     i_copier& copier,
-    i_activate_candidate_translation_map& actm,
+    i_set_candidate_translation_map& set_candidate_translation_map,
     i_mhu_elimination_generator& mhu_elimination_generator,
-    i_elimination_backlog& elimination_backlog,
-    i_get_goal_expr& gge)
+    i_is_backlogged_elimination& is_backlogged_elimination,
+    i_get_goal_expr& get_goal_expr)
     :
     copier(copier),
-    actm(actm),
+    set_candidate_translation_map(set_candidate_translation_map),
     mhu_elimination_generator(mhu_elimination_generator),
-    elimination_backlog(elimination_backlog),
-    gge(gge) {}
+    is_backlogged_elimination(is_backlogged_elimination),
+    get_goal_expr(get_goal_expr) {}
 
 void candidate_activator::activate(const resolution_lineage* rl) {
     const goal_lineage* gl = rl->parent;
-    rule_id r = rl->idx;
+    const rule* r = rl->idx;
 
-    if (elimination_backlog.contains(rl))
+    if (is_backlogged_elimination.is_backlogged_elimination(rl))
         return;
 
     translation_map tm;
     const expr* copied_head = copier.copy(r->head, tm);
 
-    const expr* goal_expr = gge.get(gl);
+    const expr* goal_expr = get_goal_expr.get(gl);
 
     if (!mhu_elimination_generator.try_add_head(rl, goal_expr, copied_head))
         return;
 
-    actm.activate(rl, std::move(tm));
+    set_candidate_translation_map.set(rl, std::move(tm));
 }

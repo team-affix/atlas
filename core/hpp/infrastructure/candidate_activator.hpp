@@ -3,25 +3,25 @@
 
 #include "../interfaces/i_candidate_activator.hpp"
 #include "../interfaces/i_copier.hpp"
-#include "../interfaces/i_activate_candidate_translation_map.hpp"
+#include "../interfaces/i_set_candidate_translation_map.hpp"
 #include "../interfaces/i_mhu_elimination_generator.hpp"
-#include "../interfaces/i_elimination_backlog.hpp"
+#include "../interfaces/i_is_backlogged_elimination.hpp"
 #include "../interfaces/i_get_goal_expr.hpp"
 
 struct candidate_activator : i_candidate_activator {
     candidate_activator(
         i_copier& copier,
-        i_activate_candidate_translation_map& actm,
+        i_set_candidate_translation_map& set_candidate_translation_map,
         i_mhu_elimination_generator& mhu_elimination_generator,
-        i_elimination_backlog& elimination_backlog,
-        i_get_goal_expr& gge);
+        i_is_backlogged_elimination& is_backlogged_elimination,
+        i_get_goal_expr& get_goal_expr);
     void activate(const resolution_lineage*) override;
 private:
     i_copier& copier;
-    i_activate_candidate_translation_map& actm;
+    i_set_candidate_translation_map& set_candidate_translation_map;
     i_mhu_elimination_generator& mhu_elimination_generator;
-    i_elimination_backlog& elimination_backlog;
-    i_get_goal_expr& gge;
+    i_is_backlogged_elimination& is_backlogged_elimination;
+    i_get_goal_expr& get_goal_expr;
 };
 
 #endif
