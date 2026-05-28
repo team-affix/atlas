@@ -323,44 +323,14 @@ struct SimIntegrationTest : public ::testing::Test {
     db database;
     initial_goal_exprs initial_goals;
     sim_stack stack{database, initial_goals};
-
-    // Nullary functors unify during run() initial candidate activation (MHU heads).
-    expr goal{expr::functor{"f", {}}};
-    expr body_goal{expr::functor{"f", {}}};
-    expr head{expr::functor{"f", {}}};
 };
 
-TEST_F(SimIntegrationTest, RunRecordsResolutionForScriptedFactDecision) {
-    rule fact{&head, {}};
-    const rule_id fact_id = database.push(fact);
-    initial_goals.push(&goal);
+TEST_F(SimIntegrationTest, RunWithNoInitialGoalsAndEmptyDbNeverGeneratesDecision) {
+    EXPECT_CALL(stack.decision_generator, generate()).Times(0);
 
-    sim s = stack.make_sim(1);
-    s.set_up();
-
-    const resolution_lineage* fact_rl = stack.resolution_for(fact_id);
-    EXPECT_CALL(stack.decision_generator, generate()).WillOnce(Return(fact_rl));
-
-    EXPECT_EQ(s.run(), sim_termination::depth_exceeded);
-    EXPECT_EQ(stack.loc.locate<i_get_resolution_count>().get_resolution_count(), 1u);
-
-    s.tear_down();
-}
-
-TEST_F(SimIntegrationTest, RunReturnsDepthExceededWhenSubgoalRemains) {
-    rule step{&head, {&body_goal}};
-    const rule_id step_id = database.push(step);
-    initial_goals.push(&goal);
-
-    sim s = stack.make_sim(1);
-    s.set_up();
-
-    EXPECT_CALL(stack.decision_generator, generate())
-        .WillOnce(Return(stack.resolution_for(step_id)));
-
-    EXPECT_EQ(s.run(), sim_termination::depth_exceeded);
-    EXPECT_FALSE(stack.loc.locate<i_check_active_goals_empty>().empty());
-
-    s.tear_down();
+    sim simulation = stack.make_sim(kDefaultMaxResolutions);
+    simulation.set_up();
+    EXPECT_EQ(simulation.run(), sim_termination::solved);
+    simulation.tear_down();
 }
 

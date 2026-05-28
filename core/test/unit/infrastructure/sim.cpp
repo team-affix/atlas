@@ -313,7 +313,20 @@ TEST_F(SimTest, SetUpPushesTrailFrameOnly) {
     simulation.tear_down();
 }
 
+TEST_F(SimTest, RunReturnsConflictedWhenInitialGoalHasNoCandidates) {
+    EXPECT_CALL(get_initial_goal_count, count()).WillRepeatedly(Return(1));
+    EXPECT_CALL(activate_initial_goal, activate_initial_goal(0)).Times(1);
+    EXPECT_CALL(make_initial_goal_lineage, make(0)).WillOnce(Return(&gl));
+    EXPECT_CALL(get_goal_db_rule_ids, get(&gl)).WillOnce(ReturnRef(db_rules));
+    EXPECT_CALL(conflict_detector, detect(&gl)).WillOnce(Return(true));
+    EXPECT_CALL(solution_detector, detect()).Times(0);
+    EXPECT_CALL(decision_generator, generate()).Times(0);
+
+    EXPECT_EQ(simulation.run(), sim_termination::conflicted);
+}
+
 TEST_F(SimTest, RunActivatesEachInitialGoalBeforeResolutionLoop) {
+    EXPECT_CALL(conflict_detector, detect).WillRepeatedly(Return(false));
     EXPECT_CALL(get_initial_goal_count, count()).WillRepeatedly(Return(2));
     goal_lineage gl0{nullptr, 0};
     goal_lineage gl1{nullptr, 1};
@@ -323,6 +336,8 @@ TEST_F(SimTest, RunActivatesEachInitialGoalBeforeResolutionLoop) {
     EXPECT_CALL(make_initial_goal_lineage, make(1)).WillOnce(Return(&gl1));
     EXPECT_CALL(get_goal_db_rule_ids, get(&gl0)).WillOnce(ReturnRef(db_rules));
     EXPECT_CALL(get_goal_db_rule_ids, get(&gl1)).WillOnce(ReturnRef(db_rules));
+    EXPECT_CALL(conflict_detector, detect(&gl0)).WillOnce(Return(false));
+    EXPECT_CALL(conflict_detector, detect(&gl1)).WillOnce(Return(false));
     EXPECT_CALL(solution_detector, detect()).WillOnce(Return(true));
 
     EXPECT_EQ(simulation.run(), sim_termination::solved);
@@ -334,6 +349,7 @@ TEST_F(SimTest, RunActivatesDbRuleCandidates) {
     goal_lineage gl0{nullptr, 0};
     resolution_lineage db_rl{&gl0, kDbRule};
 
+    EXPECT_CALL(conflict_detector, detect(&gl0)).WillOnce(Return(false));
     EXPECT_CALL(get_initial_goal_count, count()).WillRepeatedly(Return(1));
     EXPECT_CALL(activate_initial_goal, activate_initial_goal(0)).Times(1);
     EXPECT_CALL(make_initial_goal_lineage, make(0)).WillOnce(Return(&gl0));
