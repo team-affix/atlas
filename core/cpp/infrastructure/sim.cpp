@@ -8,7 +8,7 @@ sim::sim(
     i_get_initial_goal_count& get_initial_goal_count,
     i_activate_initial_goal& activate_initial_goal,
     i_make_initial_goal_lineage& make_initial_goal_lineage,
-    i_get_goal_db_rules& get_goal_db_rules,
+    i_get_goal_db_rule_ids& get_goal_db_rule_ids,
     i_make_resolution_lineage& make_resolution_lineage,
     i_candidate_activator& candidate_activator,
     i_solution_detector& sd,
@@ -20,14 +20,14 @@ sim::sim(
     i_elimination_generator& eg,
     i_elimination_router& er,
     i_resolver& r,
-    i_get_goal_candidate_rules& ggcr)
+    i_get_goal_candidate_rule_ids& get_goal_candidate_rule_ids)
     :
     max_resolutions(max_resolutions),
     trail(trail),
     get_initial_goal_count(get_initial_goal_count),
     activate_initial_goal(activate_initial_goal),
     make_initial_goal_lineage(make_initial_goal_lineage),
-    get_goal_db_rules(get_goal_db_rules),
+    get_goal_db_rule_ids(get_goal_db_rule_ids),
     make_resolution_lineage(make_resolution_lineage),
     candidate_activator(candidate_activator),
     sd(sd),
@@ -39,7 +39,7 @@ sim::sim(
     eg(eg),
     er(er),
     r(r),
-    ggcr(ggcr) {
+    get_goal_candidate_rule_ids(get_goal_candidate_rule_ids) {
 }
 
 void sim::set_up() {
@@ -48,7 +48,7 @@ void sim::set_up() {
     for (size_t i = 0; i < get_initial_goal_count.count(); ++i) {
         activate_initial_goal.activate_initial_goal(i);
         const goal_lineage* gl = make_initial_goal_lineage.make(i);
-        auto& rules = get_goal_db_rules.get(gl);
+        auto& rules = get_goal_db_rule_ids.get(gl);
         auto it = rules.iterate();
         while (!it.done()) {
             auto rr = it.resume();
@@ -91,7 +91,7 @@ const resolution_lineage* sim::next_resolution() {
         return generate_decision.generate();
 
     const goal_lineage* gl = maybe_gl.value();
-    auto& candidate_rules = ggcr.get(gl);
+    auto& candidate_rules = get_goal_candidate_rule_ids.get(gl);
     std::unordered_set<rule_id> extracted_candidates;
     auto it = candidate_rules.iterate();
     while (!it.done()) {

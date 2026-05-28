@@ -1,5 +1,5 @@
-// Goal–candidate rule index: link/unlink per goal, constrain on resolution prunes parent
-// bucket, and get returns empty rule set for unknown goals.
+// Goal–candidate rule id index: link/unlink per goal, constrain on resolution prunes parent
+// bucket, and get returns empty rule id set for unknown goals.
 
 #include <gtest/gtest.h>
 #include <gmock/gmock.h>
@@ -10,7 +10,7 @@ using ::testing::UnorderedElementsAre;
 
 namespace {
 
-std::vector<rule_id> collect_rule_ids(i_rule_set& rs) {
+std::vector<rule_id> collect_rule_ids(i_rule_id_set& rs) {
     std::vector<rule_id> out;
     auto sm = rs.iterate();
     while (!sm.done()) {

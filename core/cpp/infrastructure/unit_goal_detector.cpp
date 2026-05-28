@@ -1,8 +1,8 @@
 #include "../../hpp/infrastructure/unit_goal_detector.hpp"
 
-unit_goal_detector::unit_goal_detector(i_get_goal_candidate_rules& ggcr) : ggcr(ggcr) {}
+unit_goal_detector::unit_goal_detector(i_get_goal_candidate_rule_ids& get_goal_candidate_rule_ids)
+    : get_goal_candidate_rule_ids(get_goal_candidate_rule_ids) {}
 
 bool unit_goal_detector::detect(const goal_lineage* gl) const {
-    const auto& candidate_rules = ggcr.get(gl);
-    return candidate_rules.size() == 1;
+    return get_goal_candidate_rule_ids.get(gl).size() == 1;
 }

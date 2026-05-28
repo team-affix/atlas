@@ -2,9 +2,17 @@
 
 db::db() = default;
 
-db::db(rule_set total_rules)
-    : total_rules_(std::move(total_rules)) {}
+rule_id db::push(rule r) {
+    rule_id id = rules_.size();
+    rules_.push_back(std::move(r));
+    total_rule_set_.insert(id);
+    return id;
+}
 
-i_rule_set& db::get(const goal_lineage* /*gl*/) {
-    return total_rules_;
+const rule* db::get(rule_id id) const {
+    return &rules_.at(id);
+}
+
+i_rule_id_set& db::get(const goal_lineage* /*gl*/) {
+    return total_rule_set_;
 }

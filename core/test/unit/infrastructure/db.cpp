@@ -1,5 +1,5 @@
-// Goal database rules: every goal lineage receives the same total rule set reference.
-// The store must not fork per-goal copies unless rules are added to total_rules.
+// Goal database: vector-backed rules indexed by rule_id, with total_rule_set holding
+// every id 0 .. rules.size() - 1. All goals share the same rule_id_set reference.
 
 #include <gtest/gtest.h>
 #include <gmock/gmock.h>
@@ -7,7 +7,8 @@
 #include "../../../core/hpp/value_objects/lineage.hpp"
 
 struct DbTest : public ::testing::Test {
-    static constexpr rule_id kRule0 = 0;
+    expr head{expr::var{0}};
+    rule r{&head, {}};
     goal_lineage gl0{nullptr, 0};
     goal_lineage gl1{nullptr, 1};
 };
@@ -17,15 +18,39 @@ TEST_F(DbTest, DefaultDbReturnsEmptyRuleSet) {
     EXPECT_EQ(database.get(&gl0).size(), 0u);
 }
 
+TEST_F(DbTest, PushAssignsIdAndExposesRule) {
+    db database;
+    const rule_id id = database.push(r);
+    EXPECT_EQ(id, 0u);
+    EXPECT_EQ(*database.get(id), r);
+    EXPECT_EQ(database.get(&gl0).size(), 1u);
+}
+
+TEST_F(DbTest, TotalRuleSetContainsAllIndices) {
+    db database;
+    database.push(r);
+    expr head1{expr::var{1}};
+    rule r1{&head1, {}};
+    database.push(r1);
+
+    std::vector<rule_id> ids;
+    auto it = database.get(&gl0).iterate();
+    while (!it.done()) {
+        if (auto id = it.resume())
+            ids.push_back(*id);
+    }
+    EXPECT_EQ(ids, (std::vector<rule_id>{0, 1}));
+}
+
 TEST_F(DbTest, SameTotalRulesForDifferentGoals) {
-    rule_set total;
-    total.insert(kRule0);
-    db database{std::move(total)};
+    db database;
+    database.push(r);
     EXPECT_EQ(&database.get(&gl0), &database.get(&gl1));
 }
 
 TEST_F(DbTest, MutationsThroughGetVisibleToAllGoals) {
     db database;
-    database.get(&gl0).insert(kRule0);
-    EXPECT_EQ(database.get(&gl1).size(), 1u);
+    database.push(r);
+    database.get(&gl0).erase(0);
+    EXPECT_EQ(database.get(&gl1).size(), 0u);
 }

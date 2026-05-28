@@ -10,7 +10,7 @@
 #include "../interfaces/i_bind_map_factory.hpp"
 #include "../interfaces/i_overlay_bind_map_factory.hpp"
 #include "../interfaces/i_unifier_factory.hpp"
-#include "../interfaces/i_get_goal_candidate_rules.hpp"
+#include "../interfaces/i_get_goal_candidate_rule_ids.hpp"
 #include "../interfaces/i_try_add_mhu_head.hpp"
 #include "../utility/state_machine.hpp"
 #include "../value_objects/unify_head.hpp"
@@ -26,7 +26,7 @@ struct mhu_elimination_generator
         i_bind_map_factory&,
         i_overlay_bind_map_factory&,
         i_unifier_factory&,
-        const i_get_goal_candidate_rules&);
+        const i_get_goal_candidate_rule_ids&);
     bool try_add_head(const resolution_lineage*, const expr*, const expr*) override;
     state_machine<const resolution_lineage*> constrain(const resolution_lineage*) override;
 private:
@@ -43,7 +43,7 @@ private:
     i_bind_map_factory& bind_map_factory_;
     i_overlay_bind_map_factory& overlay_bind_map_factory_;
     i_unifier_factory& unifier_factory_;
-    const i_get_goal_candidate_rules& get_goal_candidates_;
+    const i_get_goal_candidate_rule_ids& get_goal_candidate_rule_ids_;
     
     std::unordered_map<const resolution_lineage*, unify_head> heads_;
     std::unordered_map<uint32_t, std::unordered_set<const resolution_lineage*>> rep_to_rls_;

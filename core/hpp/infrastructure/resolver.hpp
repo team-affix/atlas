@@ -6,8 +6,9 @@
 #include "../interfaces/i_make_resolution_lineage.hpp"
 #include "../interfaces/i_goal_activator.hpp"
 #include "../interfaces/i_goal_deactivator.hpp"
-#include "../interfaces/i_get_goal_db_rules.hpp"
-#include "../interfaces/i_get_goal_candidate_rules.hpp"
+#include "../interfaces/i_get_rule.hpp"
+#include "../interfaces/i_get_goal_db_rule_ids.hpp"
+#include "../interfaces/i_get_goal_candidate_rule_ids.hpp"
 #include "../interfaces/i_candidate_activator.hpp"
 #include "../interfaces/i_candidate_deactivator.hpp"
 #include "../interfaces/i_conflict_detector.hpp"
@@ -20,8 +21,9 @@ struct resolver : i_resolver {
         i_make_resolution_lineage& make_resolution_lineage,
         i_goal_activator& goal_activator,
         i_goal_deactivator& goal_deactivator,
-        i_get_goal_db_rules& get_goal_db_rules,
-        i_get_goal_candidate_rules& get_goal_candidate_rules,
+        i_get_rule& get_rule,
+        i_get_goal_db_rule_ids& get_goal_db_rule_ids,
+        i_get_goal_candidate_rule_ids& get_goal_candidate_rule_ids,
         i_candidate_activator& candidate_activator,
         i_candidate_deactivator& candidate_deactivator,
         i_conflict_detector& conflict_detector,
@@ -33,8 +35,9 @@ private:
     i_make_resolution_lineage& make_resolution_lineage;
     i_goal_activator& goal_activator;
     i_goal_deactivator& goal_deactivator;
-    i_get_goal_db_rules& get_goal_db_rules;
-    i_get_goal_candidate_rules& get_goal_candidate_rules;
+    i_get_rule& get_rule;
+    i_get_goal_db_rule_ids& get_goal_db_rule_ids;
+    i_get_goal_candidate_rule_ids& get_goal_candidate_rule_ids;
     i_candidate_activator& candidate_activator;
     i_candidate_deactivator& candidate_deactivator;
     i_conflict_detector& conflict_detector;

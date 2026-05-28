@@ -7,14 +7,14 @@ mhu_elimination_generator::mhu_elimination_generator(
     i_bind_map_factory& bind_map_factory_,
     i_overlay_bind_map_factory& overlay_bind_map_factory_,
     i_unifier_factory& unifier_factory_,
-    const i_get_goal_candidate_rules& get_goal_candidates_) :
+    const i_get_goal_candidate_rule_ids& get_goal_candidate_rule_ids_) :
     common_(common_),
     make_resolution_lineage_(make_resolution_lineage_),
     make_var_(make_var_),
     bind_map_factory_(bind_map_factory_),
     overlay_bind_map_factory_(overlay_bind_map_factory_),
     unifier_factory_(unifier_factory_),
-    get_goal_candidates_(get_goal_candidates_) {
+    get_goal_candidate_rule_ids_(get_goal_candidate_rule_ids_) {
 }
 
 bool mhu_elimination_generator::try_add_head(const resolution_lineage* lineage, const expr* lhs, const expr* rhs) {
@@ -48,7 +48,7 @@ state_machine<const resolution_lineage*> mhu_elimination_generator::constrain(co
     auto gl = lineage->parent;
     
     // 2. get all candidates in the family
-    auto& candidates = get_goal_candidates_.get(gl);
+    auto& candidates = get_goal_candidate_rule_ids_.get(gl);
     
     // 3. remove all siblings
     auto it_sm = candidates.iterate();

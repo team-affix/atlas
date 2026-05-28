@@ -3,12 +3,12 @@
 random_decision_generator::random_decision_generator(
     i_make_resolution_lineage& make_resolution_lineage,
     i_iterate_active_goals& iterate_active_goals,
-    i_get_goal_candidate_rules& ggcr,
+    i_get_goal_candidate_rule_ids& get_goal_candidate_rule_ids,
     std::mt19937& rng)
     :
     make_resolution_lineage(make_resolution_lineage),
     iterate_active_goals(iterate_active_goals),
-    ggcr(ggcr),
+    get_goal_candidate_rule_ids(get_goal_candidate_rule_ids),
     rng(rng) {}
 
 const resolution_lineage* random_decision_generator::generate() {
@@ -33,7 +33,7 @@ const goal_lineage* random_decision_generator::choose_goal() {
 
 rule_id random_decision_generator::choose_candidate(const goal_lineage* gl) {
     std::vector<rule_id> candidates;
-    auto& rules = ggcr.get(gl);
+    auto& rules = get_goal_candidate_rule_ids.get(gl);
     auto it = rules.iterate();
     while (!it.done()) {
         auto r = it.resume();

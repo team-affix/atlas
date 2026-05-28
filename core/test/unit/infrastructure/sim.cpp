@@ -6,9 +6,9 @@
 #include <gtest/gtest.h>
 #include <gmock/gmock.h>
 #include "../../../core/hpp/infrastructure/sim.hpp"
-#include "../../../core/hpp/infrastructure/rule_set.hpp"
+#include "../../../core/hpp/infrastructure/rule_id_set.hpp"
 #include "../../../core/hpp/interfaces/i_make_resolution_lineage.hpp"
-#include "../../../core/hpp/interfaces/i_get_goal_db_rules.hpp"
+#include "../../../core/hpp/interfaces/i_get_goal_db_rule_ids.hpp"
 #include "../../../core/hpp/interfaces/i_candidate_activator.hpp"
 #include "../../../core/hpp/interfaces/i_solution_detector.hpp"
 #include "../../../core/hpp/interfaces/i_conflict_detector.hpp"
@@ -19,7 +19,7 @@
 #include "../../../core/hpp/interfaces/i_elimination_generator.hpp"
 #include "../../../core/hpp/interfaces/i_elimination_router.hpp"
 #include "../../../core/hpp/interfaces/i_resolver.hpp"
-#include "../../../core/hpp/interfaces/i_get_goal_candidate_rules.hpp"
+#include "../../../core/hpp/interfaces/i_get_goal_candidate_rule_ids.hpp"
 #include "../../../core/hpp/interfaces/i_activate_initial_goal.hpp"
 #include "../../../core/hpp/interfaces/i_get_initial_goal_count.hpp"
 #include "../../../core/hpp/interfaces/i_make_initial_goal_lineage.hpp"
@@ -41,8 +41,8 @@ struct MockMakeResolutionLineage : public i_make_resolution_lineage {
     MOCK_METHOD((const resolution_lineage*), make, (const goal_lineage*, rule_id), (override));
 };
 
-struct MockGetGoalDbRules : public i_get_goal_db_rules {
-    MOCK_METHOD(i_rule_set&, get, (const goal_lineage*), (override));
+struct MockGetGoalDbRuleIds : public i_get_goal_db_rule_ids {
+    MOCK_METHOD(i_rule_id_set&, get, (const goal_lineage*), (override));
 };
 
 struct MockCandidateActivator : public i_candidate_activator {
@@ -85,9 +85,9 @@ struct MockResolver : public i_resolver {
     MOCK_METHOD(bool, resolve, (const resolution_lineage*), (override));
 };
 
-struct MockGetGoalCandidateRules : public i_get_goal_candidate_rules {
-    MOCK_METHOD(i_rule_set&, get, (const goal_lineage*), (override));
-    MOCK_METHOD(const i_rule_set&, get, (const goal_lineage*), (const, override));
+struct MockGetGoalCandidateRuleIds : public i_get_goal_candidate_rule_ids {
+    MOCK_METHOD(i_rule_id_set&, get, (const goal_lineage*), (override));
+    MOCK_METHOD(const i_rule_id_set&, get, (const goal_lineage*), (const, override));
 };
 
 struct MockTrail : public i_trail {
@@ -115,7 +115,7 @@ struct SimTest : public ::testing::Test {
     MockGetInitialGoalCount get_initial_goal_count;
     MockActivateInitialGoal activate_initial_goal;
     MockMakeInitialGoalLineage make_initial_goal_lineage;
-    MockGetGoalDbRules get_goal_db_rules;
+    MockGetGoalDbRuleIds get_goal_db_rule_ids;
     MockMakeResolutionLineage lp;
     MockCandidateActivator candidate_activator;
     MockSolutionDetector solution_detector;
@@ -127,14 +127,14 @@ struct SimTest : public ::testing::Test {
     MockEliminationGenerator elimination_generator;
     MockEliminationRouter elimination_router;
     MockResolver resolver;
-    MockGetGoalCandidateRules ggcr;
+    MockGetGoalCandidateRuleIds get_goal_candidate_rule_ids;
     sim simulation{
         kMaxResolutions,
         trail,
         get_initial_goal_count,
         activate_initial_goal,
         make_initial_goal_lineage,
-        get_goal_db_rules,
+        get_goal_db_rule_ids,
         lp,
         candidate_activator,
         solution_detector,
@@ -146,14 +146,14 @@ struct SimTest : public ::testing::Test {
         elimination_generator,
         elimination_router,
         resolver,
-        ggcr};
+        get_goal_candidate_rule_ids};
 
     expr goal_e{expr::var{0}};
     expr head{expr::var{1}};
     rule r{&head, {}};
     goal_lineage gl{nullptr, 0};
     resolution_lineage rl{&gl, 0};
-    rule_set db_rules;
+    rule_id_set db_rules;
 };
 
 TEST_F(SimTest, RunReturnsSolvedWhenDetectorSaysSo) {

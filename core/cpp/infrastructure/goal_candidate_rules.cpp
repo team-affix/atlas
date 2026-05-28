@@ -1,10 +1,10 @@
 #include "../../hpp/infrastructure/goal_candidate_rules.hpp"
 
-i_rule_set& goal_candidate_rules::get(const goal_lineage* gl) {
+i_rule_id_set& goal_candidate_rules::get(const goal_lineage* gl) {
     return by_goal_[gl];
 }
 
-const i_rule_set& goal_candidate_rules::get(const goal_lineage* gl) const {
+const i_rule_id_set& goal_candidate_rules::get(const goal_lineage* gl) const {
     auto it = by_goal_.find(gl);
     if (it == by_goal_.end())
         return empty_;

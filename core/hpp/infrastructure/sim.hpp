@@ -14,8 +14,8 @@
 #include "../interfaces/i_elimination_generator.hpp"
 #include "../interfaces/i_elimination_router.hpp"
 #include "../interfaces/i_resolver.hpp"
-#include "../interfaces/i_get_goal_candidate_rules.hpp"
-#include "../interfaces/i_get_goal_db_rules.hpp"
+#include "../interfaces/i_get_goal_candidate_rule_ids.hpp"
+#include "../interfaces/i_get_goal_db_rule_ids.hpp"
 #include "../interfaces/i_candidate_activator.hpp"
 #include "../interfaces/i_activate_initial_goal.hpp"
 #include "../interfaces/i_get_initial_goal_count.hpp"
@@ -32,7 +32,7 @@ struct sim
         i_get_initial_goal_count& get_initial_goal_count,
         i_activate_initial_goal& activate_initial_goal,
         i_make_initial_goal_lineage& make_initial_goal_lineage,
-        i_get_goal_db_rules& get_goal_db_rules,
+        i_get_goal_db_rule_ids& get_goal_db_rule_ids,
         i_make_resolution_lineage& make_resolution_lineage,
         i_candidate_activator& candidate_activator,
         i_solution_detector& sd,
@@ -44,7 +44,7 @@ struct sim
         i_elimination_generator& eg,
         i_elimination_router& er,
         i_resolver& r,
-        i_get_goal_candidate_rules& ggcr);
+        i_get_goal_candidate_rule_ids& get_goal_candidate_rule_ids);
     void set_up() override;
     sim_termination run() override;
     void tear_down() override;
@@ -55,7 +55,7 @@ private:
     i_get_initial_goal_count& get_initial_goal_count;
     i_activate_initial_goal& activate_initial_goal;
     i_make_initial_goal_lineage& make_initial_goal_lineage;
-    i_get_goal_db_rules& get_goal_db_rules;
+    i_get_goal_db_rule_ids& get_goal_db_rule_ids;
     i_make_resolution_lineage& make_resolution_lineage;
     i_candidate_activator& candidate_activator;
     i_solution_detector& sd;
@@ -67,7 +67,7 @@ private:
     i_elimination_generator& eg;
     i_elimination_router& er;
     i_resolver& r;
-    i_get_goal_candidate_rules& ggcr;
+    i_get_goal_candidate_rule_ids& get_goal_candidate_rule_ids;
 };
 
 #endif

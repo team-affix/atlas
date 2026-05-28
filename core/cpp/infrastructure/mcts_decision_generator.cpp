@@ -4,13 +4,13 @@ mcts_decision_generator::mcts_decision_generator(
     i_make_resolution_lineage& make_resolution_lineage,
     i_iterate_active_goals& iterate_active_goals,
     i_active_goals_size& active_goals_size,
-    i_get_goal_candidate_rules& ggcr,
+    i_get_goal_candidate_rule_ids& get_goal_candidate_rule_ids,
     monte_carlo::simulation<mcts_choice, std::mt19937>& sim)
     :
     make_resolution_lineage(make_resolution_lineage),
     iterate_active_goals(iterate_active_goals),
     active_goals_size(active_goals_size),
-    ggcr(ggcr),
+    get_goal_candidate_rule_ids(get_goal_candidate_rule_ids),
     sim(sim) {
 }
 
@@ -37,7 +37,7 @@ const goal_lineage* mcts_decision_generator::choose_goal() {
 }
 
 rule_id mcts_decision_generator::choose_candidate(const goal_lineage* goal) {
-    const auto& candidates = ggcr.get(goal);
+    const auto& candidates = get_goal_candidate_rule_ids.get(goal);
 
     std::vector<mcts_choice> candidate_choices;
     candidate_choices.reserve(candidates.size());
