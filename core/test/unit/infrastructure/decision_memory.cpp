@@ -29,14 +29,14 @@ TEST_F(DecisionMemoryTest, DeriveLemmaEmptyWithNoInsertions) {
 
 TEST_F(DecisionMemoryTest, InsertIncreasesSize) {
     mem.record_decision(&rl0);
-    EXPECT_THAT(mem.get_decision_count(), Eq(1u));
+    EXPECT_THAT(mem.count(), Eq(1u));
 }
 
 TEST_F(DecisionMemoryTest, ClearRemovesAllDecisions) {
     mem.record_decision(&rl0);
     mem.record_decision(&rl1);
     mem.clear_decision_record();
-    EXPECT_THAT(mem.get_decision_count(), Eq(0u));
+    EXPECT_THAT(mem.count(), Eq(0u));
 }
 
 TEST_F(DecisionMemoryTest, DeriveLemmaContainsInsertedResolutions) {

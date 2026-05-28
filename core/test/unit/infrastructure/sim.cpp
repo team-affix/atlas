@@ -9,7 +9,7 @@
 #include "../../../core/hpp/interfaces/i_make_resolution_lineage.hpp"
 #include "../../../core/hpp/interfaces/i_solution_detector.hpp"
 #include "../../../core/hpp/interfaces/i_conflict_detector.hpp"
-#include "../../../core/hpp/interfaces/i_unit_goal_detector.hpp"
+#include "../../../core/hpp/interfaces/i_detect_unit_goal.hpp"
 #include "../../../core/hpp/interfaces/i_push_unit_goal.hpp"
 #include "../../../core/hpp/interfaces/i_pop_unit_goal.hpp"
 #include "../../../core/hpp/interfaces/i_decision_generator.hpp"
@@ -42,7 +42,7 @@ struct MockConflictDetector : public i_conflict_detector {
     MOCK_METHOD(bool, detect, (const goal_lineage*), (override));
 };
 
-struct MockUnitGoalDetector : public i_unit_goal_detector {
+struct MockUnitGoalDetector : public i_detect_unit_goal {
     MOCK_METHOD(bool, detect, (const goal_lineage*), (const, override));
 };
 

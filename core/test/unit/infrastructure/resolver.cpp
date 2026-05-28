@@ -16,7 +16,7 @@
 #include "../../../core/hpp/interfaces/i_candidate_activator.hpp"
 #include "../../../core/hpp/interfaces/i_candidate_deactivator.hpp"
 #include "../../../core/hpp/interfaces/i_conflict_detector.hpp"
-#include "../../../core/hpp/interfaces/i_unit_goal_detector.hpp"
+#include "../../../core/hpp/interfaces/i_detect_unit_goal.hpp"
 #include "../../../core/hpp/interfaces/i_push_unit_goal.hpp"
 
 using ::testing::Return;
@@ -58,7 +58,7 @@ struct MockConflictDetector : public i_conflict_detector {
     MOCK_METHOD(bool, detect, (const goal_lineage*), (override));
 };
 
-struct MockUnitGoalDetector : public i_unit_goal_detector {
+struct MockUnitGoalDetector : public i_detect_unit_goal {
     MOCK_METHOD(bool, detect_goal, (const goal_lineage*), (const));
     bool detect(const goal_lineage* gl) const override { return detect_goal(gl); }
 };

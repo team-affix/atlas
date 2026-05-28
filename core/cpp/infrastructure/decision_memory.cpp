@@ -8,7 +8,7 @@ void decision_memory::clear_decision_record() {
     decisions.clear();
 }
 
-size_t decision_memory::get_decision_count() const {
+size_t decision_memory::count() const {
     return decisions.size();
 }
 

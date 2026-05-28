@@ -10,7 +10,7 @@ resolver::resolver(
     i_candidate_activator& ca,
     i_candidate_deactivator& cd,
     i_conflict_detector& conflict_detector,
-    i_unit_goal_detector& ugd,
+    i_detect_unit_goal& ugd,
     i_push_unit_goal& push_unit_goal)
     :
     make_goal_lineage(make_goal_lineage),

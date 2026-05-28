@@ -12,7 +12,7 @@
 #include "../interfaces/i_candidate_deactivator.hpp"
 #include "../interfaces/i_rule_set.hpp"
 #include "../interfaces/i_conflict_detector.hpp"
-#include "../interfaces/i_unit_goal_detector.hpp"
+#include "../interfaces/i_detect_unit_goal.hpp"
 #include "../interfaces/i_push_unit_goal.hpp"
 
 struct resolver : i_resolver {
@@ -26,7 +26,7 @@ struct resolver : i_resolver {
         i_candidate_activator& ca,
         i_candidate_deactivator& cd,
         i_conflict_detector& conflict_detector,
-        i_unit_goal_detector& ugd,
+        i_detect_unit_goal& ugd,
         i_push_unit_goal& push_unit_goal);
     bool resolve(const resolution_lineage*) override;
 private:
@@ -41,7 +41,7 @@ private:
     i_candidate_activator& ca;
     i_candidate_deactivator& cd;
     i_conflict_detector& conflict_detector;
-    i_unit_goal_detector& ugd;
+    i_detect_unit_goal& ugd;
     i_push_unit_goal& push_unit_goal;
 };
 

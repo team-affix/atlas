@@ -7,7 +7,7 @@
 #include "../interfaces/i_make_resolution_lineage.hpp"
 #include "../interfaces/i_solution_detector.hpp"
 #include "../interfaces/i_conflict_detector.hpp"
-#include "../interfaces/i_unit_goal_detector.hpp"
+#include "../interfaces/i_detect_unit_goal.hpp"
 #include "../interfaces/i_push_unit_goal.hpp"
 #include "../interfaces/i_pop_unit_goal.hpp"
 #include "../interfaces/i_decision_generator.hpp"
@@ -25,7 +25,7 @@ struct sim
         i_make_resolution_lineage& make_resolution_lineage,
         i_solution_detector& sd,
         i_conflict_detector& cd,
-        i_unit_goal_detector& ugd,
+        i_detect_unit_goal& ugd,
         i_push_unit_goal& push_unit_goal,
         i_pop_unit_goal& pop_unit_goal,
         i_decision_generator& dg,
@@ -42,7 +42,7 @@ private:
     i_make_resolution_lineage& make_resolution_lineage;
     i_solution_detector& sd;
     i_conflict_detector& cd;
-    i_unit_goal_detector& ugd;
+    i_detect_unit_goal& ugd;
     i_push_unit_goal& push_unit_goal;
     i_pop_unit_goal& pop_unit_goal;
     i_decision_generator& dg;

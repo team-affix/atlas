@@ -5,7 +5,7 @@
 
 struct i_get_decision_count {
     virtual ~i_get_decision_count() = default;
-    virtual size_t get_decision_count() const = 0;
+    virtual size_t count() const = 0;
 };
 
 #endif
