@@ -1,16 +1,35 @@
+#include <memory>
 #include "infrastructure/elimination_backlog.hpp"
+#include "infrastructure/backtrackable_map_insert.hpp"
+#include "infrastructure/backtrackable_map_at_insert.hpp"
+
+elimination_backlog::elimination_backlog(i_log_to_current_trail_frame& trail) :
+    eliminated_candidates(trail, {}) {
+}
 
 void elimination_backlog::insert_backlogged_elimination(const resolution_lineage* rl) {
-    eliminated_candidates_[rl->parent].insert(rl->idx);
+    const goal_lineage* gl = rl->parent;
+
+    if (!eliminated_candidates.get().contains(gl)) {
+        auto insert_mut = std::make_unique<
+            backtrackable_map_insert<
+            eliminated_candidates_type>>(
+                gl, std::unordered_set<rule_id>{});
+        eliminated_candidates.mutate(std::move(insert_mut));
+    }
+
+    if (!eliminated_candidates.get().at(gl).contains(rl->idx)) {
+        auto insert_mut = std::make_unique<
+            backtrackable_map_at_insert<
+            eliminated_candidates_type>>(
+                gl, rl->idx);
+        eliminated_candidates.mutate(std::move(insert_mut));
+    }
 }
 
 bool elimination_backlog::is_backlogged_elimination(const resolution_lineage* rl) const {
-    auto it = eliminated_candidates_.find(rl->parent);
-    if (it == eliminated_candidates_.end())
+    auto it = eliminated_candidates.get().find(rl->parent);
+    if (it == eliminated_candidates.get().end())
         return false;
     return it->second.contains(rl->idx);
-}
-
-void elimination_backlog::constrain_elimination_backlog(const resolution_lineage* rl) {
-    eliminated_candidates_.erase(rl->parent);
 }

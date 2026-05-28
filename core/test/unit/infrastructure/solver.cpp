@@ -1,5 +1,5 @@
-// Solver coroutine: wraps sim set_up/run/tear_down and yields each termination. The
-// first resume must reflect run_sim output; set_up precedes run and tear_down follows.
+// Solver coroutine: set_up, run (yield), derive, pin lemma resolutions, tear_down, learn/route.
+// Post-yield work runs on the second resume(); learn runs after tear_down (trail pop).
 
 #include <gtest/gtest.h>
 #include <gmock/gmock.h>
@@ -11,6 +11,7 @@
 #include "interfaces/i_elimination_router.hpp"
 #include "interfaces/i_get_decision_count.hpp"
 #include "interfaces/i_derive_decision_lemma.hpp"
+#include "interfaces/i_pin_resolution_lineage.hpp"
 #include "value_objects/sim_termination.hpp"
 #include "value_objects/lemma.hpp"
 
@@ -45,12 +46,17 @@ struct MockDeriveDecisionLemma : public i_derive_decision_lemma {
     MOCK_METHOD(lemma, derive, (), (const, override));
 };
 
+struct MockPinResolutionLineage : public i_pin_resolution_lineage {
+    MOCK_METHOD(void, pin, (const resolution_lineage*), (override));
+};
+
 struct SolverTest : public ::testing::Test {
     MockSetUpSim set_up_sim;
     MockTearDownSim tear_down_sim;
     MockRunSim run_sim;
     MockGetDecisionCount get_decision_count;
     MockDeriveDecisionLemma derive_decision_lemma;
+    MockPinResolutionLineage pin_resolution_lineage;
     MockLearnAvoidance learn_avoidance;
     MockEliminationRouter router;
     solver s{
@@ -59,6 +65,7 @@ struct SolverTest : public ::testing::Test {
         run_sim,
         get_decision_count,
         derive_decision_lemma,
+        pin_resolution_lineage,
         learn_avoidance,
         router};
 };
@@ -80,8 +87,8 @@ TEST_F(SolverTest, TearDownRunsOnResumeAfterYield) {
     EXPECT_CALL(run_sim, run()).WillOnce(Return(sim_termination::conflicted));
     EXPECT_CALL(get_decision_count, count()).WillOnce(Return(0));
     EXPECT_CALL(derive_decision_lemma, derive()).WillOnce(Return(empty_lemma));
-    EXPECT_CALL(learn_avoidance, learn(testing::_)).WillOnce(Return(std::nullopt));
     EXPECT_CALL(tear_down_sim, tear_down()).Times(1);
+    EXPECT_CALL(learn_avoidance, learn(testing::_)).WillOnce(Return(std::nullopt));
     auto sm = s.solve();
     ASSERT_TRUE(sm.resume().has_value());
     sm.resume();
@@ -126,6 +133,27 @@ TEST_F(SolverTest, YieldPropagatesDepthExceededTermination) {
     EXPECT_EQ(*term, sim_termination::depth_exceeded);
 }
 
+TEST_F(SolverTest, PinsEachLemmaResolutionBeforeTearDown) {
+    goal_lineage gl{nullptr, 0};
+    resolution_lineage rl0{&gl, 0};
+    resolution_lineage rl1{&gl, 1};
+    const lemma decision_lemma{{&rl0, &rl1}};
+
+    testing::InSequence seq;
+    EXPECT_CALL(set_up_sim, set_up()).Times(1);
+    EXPECT_CALL(run_sim, run()).WillOnce(Return(sim_termination::conflicted));
+    EXPECT_CALL(get_decision_count, count()).WillOnce(Return(0));
+    EXPECT_CALL(derive_decision_lemma, derive()).WillOnce(Return(decision_lemma));
+    EXPECT_CALL(pin_resolution_lineage, pin(_)).Times(2);
+    EXPECT_CALL(tear_down_sim, tear_down()).Times(1);
+    EXPECT_CALL(learn_avoidance, learn(testing::_)).WillOnce(Return(std::nullopt));
+
+    auto sm = s.solve();
+    ASSERT_EQ(sm.resume(), sim_termination::conflicted);
+    sm.resume();
+    EXPECT_FALSE(sm.resume().has_value());
+}
+
 TEST_F(SolverTest, RoutesEliminationWhenLearnReturnsLineage) {
     goal_lineage gl{nullptr, 0};
     resolution_lineage elim{&gl, 1};
@@ -135,9 +163,9 @@ TEST_F(SolverTest, RoutesEliminationWhenLearnReturnsLineage) {
     EXPECT_CALL(run_sim, run()).WillOnce(Return(sim_termination::conflicted));
     EXPECT_CALL(get_decision_count, count()).WillOnce(Return(0));
     EXPECT_CALL(derive_decision_lemma, derive()).WillOnce(Return(empty_lemma));
+    EXPECT_CALL(tear_down_sim, tear_down()).Times(1);
     EXPECT_CALL(learn_avoidance, learn(testing::_)).WillOnce(Return(&elim));
     EXPECT_CALL(router, route(&elim)).Times(1);
-    EXPECT_CALL(tear_down_sim, tear_down()).Times(1);
 
     auto sm = s.solve();
     ASSERT_EQ(sm.resume(), sim_termination::conflicted);

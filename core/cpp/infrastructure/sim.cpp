@@ -1,7 +1,5 @@
 #include "infrastructure/sim.hpp"
 
-#include <unordered_set>
-
 sim::sim(
     size_t max_resolutions,
     i_push_trail_frame& push_trail_frame,
@@ -21,7 +19,9 @@ sim::sim(
     i_elimination_generator& eg,
     i_elimination_router& er,
     i_resolver& r,
-    i_get_goal_candidate_rule_ids& get_goal_candidate_rule_ids,
+    i_get_unit_resolution& get_unit_resolution,
+    i_record_decision& record_decision,
+    i_record_resolution& record_resolution,
     i_clear_unit_goals& clear_unit_goals,
     i_clear_recorded_decisions& clear_recorded_decisions,
     i_clear_recorded_resolutions& clear_recorded_resolutions,
@@ -30,7 +30,9 @@ sim::sim(
     i_clear_goal_exprs& clear_goal_exprs,
     i_clear_active_goals& clear_active_goals,
     i_clear_candidate_translation_maps& clear_candidate_translation_maps,
-    i_clear_mhu_heads& clear_mhu_heads)
+    i_clear_mhu_heads& clear_mhu_heads,
+    i_clear_bindings& clear_bindings,
+    i_trim_unpinned_lineages& trim_unpinned_lineages)
     :
     max_resolutions(max_resolutions),
     push_trail_frame(push_trail_frame),
@@ -50,7 +52,9 @@ sim::sim(
     eg(eg),
     er(er),
     r(r),
-    get_goal_candidate_rule_ids(get_goal_candidate_rule_ids),
+    get_unit_resolution(get_unit_resolution),
+    record_decision(record_decision),
+    record_resolution(record_resolution),
     clear_unit_goals(clear_unit_goals),
     clear_recorded_decisions(clear_recorded_decisions),
     clear_recorded_resolutions(clear_recorded_resolutions),
@@ -59,7 +63,9 @@ sim::sim(
     clear_goal_exprs(clear_goal_exprs),
     clear_active_goals(clear_active_goals),
     clear_candidate_translation_maps(clear_candidate_translation_maps),
-    clear_mhu_heads(clear_mhu_heads) {
+    clear_mhu_heads(clear_mhu_heads),
+    clear_bindings(clear_bindings),
+    trim_unpinned_lineages(trim_unpinned_lineages) {
 }
 
 void sim::set_up() {
@@ -114,22 +120,19 @@ void sim::tear_down() {
     clear_active_goals.clear_active_goals();
     clear_candidate_translation_maps.clear_candidate_translation_maps();
     clear_mhu_heads.clear_mhu_heads();
+    clear_bindings.clear_bindings();
+    trim_unpinned_lineages.trim();
 }
 
 const resolution_lineage* sim::next_resolution() {
+    const resolution_lineage* rl;
     auto maybe_gl = pop_unit_goal.pop();
-    if (!maybe_gl.has_value())
-        return generate_decision.generate();
-
-    const goal_lineage* gl = maybe_gl.value();
-    auto& candidate_rules = get_goal_candidate_rule_ids.get(gl);
-    std::unordered_set<rule_id> extracted_candidates;
-    auto it = candidate_rules.iterate();
-    while (!it.done()) {
-        auto rr = it.resume();
-        if (!rr.has_value())
-            continue;
-        extracted_candidates.insert(rr.value());
+    if (!maybe_gl.has_value()) {
+        rl = generate_decision.generate();
+        record_decision.record_decision(rl);
+    } else {
+        rl = get_unit_resolution.get_unit_resolution(maybe_gl.value());
     }
-    return make_resolution_lineage.make_resolution_lineage(gl, *extracted_candidates.begin());
+    record_resolution.record_resolution(rl);
+    return rl;
 }

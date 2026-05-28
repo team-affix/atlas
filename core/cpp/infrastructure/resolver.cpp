@@ -28,6 +28,18 @@ resolver::resolver(
     push_unit_goal(push_unit_goal) {
 }
 
+const resolution_lineage* resolver::get_unit_resolution(const goal_lineage* gl) {
+    auto& candidate_rules = get_goal_candidate_rule_ids.get(gl);
+    auto it = candidate_rules.iterate();
+    while (!it.done()) {
+        auto rr = it.resume();
+        if (!rr.has_value())
+            continue;
+        return make_resolution_lineage.make_resolution_lineage(gl, rr.value());
+    }
+    return nullptr;
+}
+
 bool resolver::resolve(const resolution_lineage* rl) {
     const rule* rule = get_rule.get(rl->idx);
     for (size_t body_idx = 0; body_idx < rule->body.size(); ++body_idx) {

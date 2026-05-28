@@ -69,3 +69,15 @@ TEST_F(BindMapTest, WhnfChainOfLength3ResolvesAllIntermediateVars) {
     EXPECT_EQ(bm.whnf(&var1), &func);
     EXPECT_EQ(bm.whnf(&var2), &func);
 }
+
+TEST_F(BindMapTest, ClearBindingsRemovesAllBindings) {
+    bm.clear_bindings();
+    bm.bind(0, &var1);
+    bm.bind(1, &func);
+    EXPECT_EQ(bm.whnf(&var0), &func);
+
+    bm.clear_bindings();
+
+    EXPECT_EQ(bm.whnf(&var0), &var0);
+    EXPECT_EQ(bm.whnf(&var1), &var1);
+}

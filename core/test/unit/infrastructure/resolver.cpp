@@ -115,6 +115,18 @@ struct ResolverTest : public ::testing::Test {
     rule_id_set parent_candidates;
 };
 
+TEST_F(ResolverTest, GetUnitResolutionReturnsFirstCandidate) {
+    static constexpr rule_id kCandidate = 5;
+    parent_candidates.insert(kCandidate);
+    resolution_lineage unit_rl{&parent_gl, kCandidate};
+
+    EXPECT_CALL(get_goal_candidate_rule_ids, get(&parent_gl)).WillOnce(ReturnRef(parent_candidates));
+    EXPECT_CALL(make_resolution_lineage, make_resolution_lineage(&parent_gl, kCandidate))
+        .WillOnce(Return(&unit_rl));
+
+    EXPECT_EQ(res.get_unit_resolution(&parent_gl), &unit_rl);
+}
+
 TEST_F(ResolverTest, EmptyBodyDeactivatesParentOnly) {
     resolution_lineage empty_rl{&parent_gl, kRule};
     EXPECT_CALL(get_rule, get(kRule)).WillOnce(Return(&empty_body_rule));

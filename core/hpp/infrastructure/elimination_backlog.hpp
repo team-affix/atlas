@@ -5,18 +5,20 @@
 #include <unordered_set>
 #include "interfaces/i_insert_backlogged_elimination.hpp"
 #include "interfaces/i_is_backlogged_elimination.hpp"
-#include "interfaces/i_constrain_elimination_backlog.hpp"
+#include "interfaces/i_log_to_current_trail_frame.hpp"
+#include "infrastructure/tracked.hpp"
 #include "value_objects/lineage.hpp"
 
 struct elimination_backlog
     : i_insert_backlogged_elimination
-    , i_is_backlogged_elimination
-    , i_constrain_elimination_backlog {
+    , i_is_backlogged_elimination {
+    elimination_backlog(i_log_to_current_trail_frame&);
     void insert_backlogged_elimination(const resolution_lineage*) override;
     bool is_backlogged_elimination(const resolution_lineage*) const override;
-    void constrain_elimination_backlog(const resolution_lineage*) override;
 private:
-    std::unordered_map<const goal_lineage*, std::unordered_set<rule_id>> eliminated_candidates_;
+    using eliminated_candidates_type =
+        std::unordered_map<const goal_lineage*, std::unordered_set<rule_id>>;
+    tracked<eliminated_candidates_type> eliminated_candidates;
 };
 
 #endif

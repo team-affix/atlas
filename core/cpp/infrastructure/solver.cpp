@@ -6,6 +6,7 @@ solver::solver(
     i_run_sim& run_sim,
     i_get_decision_count& get_decision_count,
     i_derive_decision_lemma& derive_decision_lemma,
+    i_pin_resolution_lineage& pin_resolution_lineage,
     i_learn_avoidance& learn_avoidance,
     i_elimination_router& elimination_router)
     :
@@ -14,6 +15,7 @@ solver::solver(
     run_sim(run_sim),
     get_decision_count(get_decision_count),
     derive_decision_lemma(derive_decision_lemma),
+    pin_resolution_lineage(pin_resolution_lineage),
     learn_avoidance(learn_avoidance),
     elimination_router(elimination_router) {}
 
@@ -28,15 +30,16 @@ state_machine<sim_termination> solver::solve() {
         // run sim
         co_yield run_sim.run();
 
-        // check if refuted
         refuted = get_decision_count.count() == 0;
 
-        // learn avoidance and route elimination
-        auto elim = learn_avoidance.learn(derive_decision_lemma.derive());
+        const lemma lemma = derive_decision_lemma.derive();
+        for (const resolution_lineage* rl : lemma.get_resolutions())
+            pin_resolution_lineage.pin(rl);
+
+        tear_down_sim.tear_down();
+
+        auto elim = learn_avoidance.learn(lemma);
         if (elim.has_value())
             elimination_router.route(elim.value());
-
-        // tear down sim
-        tear_down_sim.tear_down();
     }
 }

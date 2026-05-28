@@ -7,6 +7,10 @@ void bind_map::bind(uint32_t index, const expr* e) {
     bindings[index] = e;
 }
 
+void bind_map::clear_bindings() {
+    bindings.clear();
+}
+
 const expr* bind_map::whnf(const expr* key) {
     // If the key is not a variable, it is already in WHNF
     if (!std::holds_alternative<expr::var>(key->content))

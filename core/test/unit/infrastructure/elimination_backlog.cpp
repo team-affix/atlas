@@ -1,12 +1,14 @@
 // Elimination backlog: backlogged candidates keyed by parent goal and rule id.
-// is_backlogged must be false after constrain removes the parent bucket.
+// Inserts are trail-backtracked like cdcl avoidances.
 
 #include <gtest/gtest.h>
 #include "infrastructure/elimination_backlog.hpp"
+#include "infrastructure/trail.hpp"
 #include "value_objects/lineage.hpp"
 
 struct EliminationBacklogTest : public ::testing::Test {
-    elimination_backlog backlog;
+    trail t;
+    elimination_backlog backlog{t};
     expr goal_e{expr::var{0}};
     expr head0{expr::var{1}};
     expr head1{expr::var{2}};
@@ -33,8 +35,10 @@ TEST_F(EliminationBacklogTest, DifferentRuleSameParentTrackedSeparately) {
     EXPECT_TRUE(backlog.is_backlogged_elimination(&rl1));
 }
 
-TEST_F(EliminationBacklogTest, ConstrainClearsParentBucket) {
+TEST_F(EliminationBacklogTest, PopRevertsInsert) {
+    t.push();
     backlog.insert_backlogged_elimination(&rl0);
-    backlog.constrain_elimination_backlog(&rl0);
+    EXPECT_TRUE(backlog.is_backlogged_elimination(&rl0));
+    t.pop();
     EXPECT_FALSE(backlog.is_backlogged_elimination(&rl0));
 }

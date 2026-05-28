@@ -19,12 +19,15 @@
 #include "interfaces/i_elimination_generator.hpp"
 #include "interfaces/i_elimination_router.hpp"
 #include "interfaces/i_resolver.hpp"
-#include "interfaces/i_get_goal_candidate_rule_ids.hpp"
+#include "interfaces/i_get_unit_resolution.hpp"
+#include "interfaces/i_record_decision.hpp"
+#include "interfaces/i_record_resolution.hpp"
 #include "interfaces/i_activate_initial_goal.hpp"
 #include "interfaces/i_get_initial_goal_count.hpp"
 #include "interfaces/i_make_initial_goal_lineage.hpp"
 #include "interfaces/i_push_trail_frame.hpp"
 #include "interfaces/i_pop_trail_frame.hpp"
+#include "interfaces/i_clear_bindings.hpp"
 #include "value_objects/elimination_result.hpp"
 
 using ::testing::Return;
@@ -88,13 +91,11 @@ struct MockEliminationRouter : public i_elimination_router {
     MOCK_METHOD(elimination_result, route, (const resolution_lineage*), (override));
 };
 
-struct MockResolver : public i_resolver {
+struct MockResolver
+    : public i_resolver
+    , public i_get_unit_resolution {
     MOCK_METHOD(bool, resolve, (const resolution_lineage*), (override));
-};
-
-struct MockGetGoalCandidateRuleIds : public i_get_goal_candidate_rule_ids {
-    MOCK_METHOD(i_rule_id_set&, get, (const goal_lineage*), (override));
-    MOCK_METHOD(const i_rule_id_set&, get, (const goal_lineage*), (const, override));
+    MOCK_METHOD(const resolution_lineage*, get_unit_resolution, (const goal_lineage*), (override));
 };
 
 struct MockPushTrailFrame : public i_push_trail_frame {
@@ -115,6 +116,14 @@ struct MockMakeInitialGoalLineage : public i_make_initial_goal_lineage {
 
 struct MockActivateInitialGoal : public i_activate_initial_goal {
     MOCK_METHOD(void, activate_initial_goal, (subgoal_id), (override));
+};
+
+struct MockRecordDecision : public i_record_decision {
+    MOCK_METHOD(void, record_decision, (const resolution_lineage*), (override));
+};
+
+struct MockRecordResolution : public i_record_resolution {
+    MOCK_METHOD(void, record_resolution, (const resolution_lineage*), (override));
 };
 
 struct MockClearUnitGoals : public i_clear_unit_goals {
@@ -155,6 +164,14 @@ struct MockClearMhuHeads : public i_clear_mhu_heads {
     MOCK_METHOD(void, clear_mhu_heads, (), (override));
 };
 
+struct MockClearBindings : public i_clear_bindings {
+    MOCK_METHOD(void, clear_bindings, (), (override));
+};
+
+struct MockTrimUnpinnedLineages : public i_trim_unpinned_lineages {
+    MOCK_METHOD(void, trim, (), (override));
+};
+
 struct SimTest : public ::testing::Test {
     static constexpr size_t kMaxResolutions = 2;
 
@@ -175,7 +192,8 @@ struct SimTest : public ::testing::Test {
     MockEliminationGenerator elimination_generator;
     MockEliminationRouter elimination_router;
     MockResolver resolver;
-    MockGetGoalCandidateRuleIds get_goal_candidate_rule_ids;
+    testing::NiceMock<MockRecordDecision> record_decision;
+    testing::NiceMock<MockRecordResolution> record_resolution;
     testing::NiceMock<MockClearUnitGoals> clear_unit_goals;
     testing::NiceMock<MockClearRecordedDecisions> clear_recorded_decisions;
     testing::NiceMock<MockClearRecordedResolutions> clear_recorded_resolutions;
@@ -185,6 +203,8 @@ struct SimTest : public ::testing::Test {
     testing::NiceMock<MockClearActiveGoals> clear_active_goals;
     testing::NiceMock<MockClearCandidateTranslationMaps> clear_candidate_translation_maps;
     testing::NiceMock<MockClearMhuHeads> clear_mhu_heads;
+    testing::NiceMock<MockClearBindings> clear_bindings;
+    testing::NiceMock<MockTrimUnpinnedLineages> trim_unpinned_lineages;
 
     sim make_sim(size_t max_resolutions = kMaxResolutions) {
         return sim{
@@ -206,7 +226,9 @@ struct SimTest : public ::testing::Test {
             elimination_generator,
             elimination_router,
             resolver,
-            get_goal_candidate_rule_ids,
+            resolver,
+            record_decision,
+            record_resolution,
             clear_unit_goals,
             clear_recorded_decisions,
             clear_recorded_resolutions,
@@ -215,7 +237,9 @@ struct SimTest : public ::testing::Test {
             clear_goal_exprs,
             clear_active_goals,
             clear_candidate_translation_maps,
-            clear_mhu_heads};
+            clear_mhu_heads,
+            clear_bindings,
+            trim_unpinned_lineages};
     }
 
     sim simulation;
@@ -266,6 +290,8 @@ TEST_F(SimTest, TearDownPopsTrailAndClearsNonBacktrackedStores) {
     EXPECT_CALL(clear_active_goals, clear_active_goals()).Times(1);
     EXPECT_CALL(clear_candidate_translation_maps, clear_candidate_translation_maps()).Times(1);
     EXPECT_CALL(clear_mhu_heads, clear_mhu_heads()).Times(1);
+    EXPECT_CALL(clear_bindings, clear_bindings()).Times(1);
+    EXPECT_CALL(trim_unpinned_lineages, trim()).Times(1);
 
     simulation.tear_down();
 }
@@ -352,19 +378,30 @@ TEST_F(SimTest, RunPushesUnitGoalWhenEliminationParentIsUnit) {
     EXPECT_EQ(simulation.run(), sim_termination::depth_exceeded);
 }
 
+TEST_F(SimTest, RecordsDecisionWhenGeneratorChoosesResolution) {
+    EXPECT_CALL(solution_detector, detect()).WillRepeatedly(Return(false));
+    EXPECT_CALL(pop_unit_goal, pop()).WillRepeatedly(Return(std::nullopt));
+    EXPECT_CALL(decision_generator, generate()).WillRepeatedly(Return(&rl));
+    EXPECT_CALL(record_decision, record_decision(&rl)).Times(2);
+    EXPECT_CALL(record_resolution, record_resolution(&rl)).Times(2);
+    EXPECT_CALL(elimination_generator, constrain(&rl))
+        .WillRepeatedly([] { return empty_eliminations(); });
+    EXPECT_CALL(resolver, resolve(&rl)).WillRepeatedly(Return(true));
+
+    EXPECT_EQ(simulation.run(), sim_termination::depth_exceeded);
+}
+
 TEST_F(SimTest, RunUsesPoppedUnitGoalForNextResolution) {
-    static constexpr rule_id kCandidate = 5;
-    rule_id_set unit_candidates;
-    unit_candidates.insert(kCandidate);
-    resolution_lineage unit_rl{&gl, kCandidate};
+    resolution_lineage unit_rl{&gl, 5};
 
     sim one_resolution{make_sim(1)};
 
     EXPECT_CALL(solution_detector, detect()).WillOnce(Return(false));
     EXPECT_CALL(pop_unit_goal, pop()).WillOnce(Return(&gl));
-    EXPECT_CALL(get_goal_candidate_rule_ids, get(&gl)).WillOnce(ReturnRef(unit_candidates));
-    EXPECT_CALL(lp, make_resolution_lineage(&gl, kCandidate)).WillOnce(Return(&unit_rl));
+    EXPECT_CALL(resolver, get_unit_resolution(&gl)).WillOnce(Return(&unit_rl));
     EXPECT_CALL(decision_generator, generate()).Times(0);
+    EXPECT_CALL(record_decision, record_decision).Times(0);
+    EXPECT_CALL(record_resolution, record_resolution(&unit_rl)).Times(1);
     EXPECT_CALL(elimination_generator, constrain(&unit_rl))
         .WillOnce([] { return empty_eliminations(); });
     EXPECT_CALL(resolver, resolve(&unit_rl)).WillOnce(Return(true));

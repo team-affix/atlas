@@ -14,8 +14,11 @@
 #include "interfaces/i_conflict_detector.hpp"
 #include "interfaces/i_detect_unit_goal.hpp"
 #include "interfaces/i_push_unit_goal.hpp"
+#include "interfaces/i_get_unit_resolution.hpp"
 
-struct resolver : i_resolver {
+struct resolver
+    : i_resolver
+    , i_get_unit_resolution {
     resolver(
         i_make_goal_lineage& make_goal_lineage,
         i_make_resolution_lineage& make_resolution_lineage,
@@ -30,6 +33,7 @@ struct resolver : i_resolver {
         i_detect_unit_goal& ugd,
         i_push_unit_goal& push_unit_goal);
     bool resolve(const resolution_lineage*) override;
+    const resolution_lineage* get_unit_resolution(const goal_lineage*) override;
 private:
     i_make_goal_lineage& make_goal_lineage;
     i_make_resolution_lineage& make_resolution_lineage;
