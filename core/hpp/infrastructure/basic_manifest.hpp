@@ -52,7 +52,7 @@ struct basic_manifest {
         db& database,
         initial_goal_exprs& initial_goals,
         size_t max_resolutions,
-        uint32_t random_seed = 0);
+        uint32_t random_seed);
 
     i_solve& entry();
 
