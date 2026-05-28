@@ -1,7 +1,7 @@
 #include <gtest/gtest.h>
 #include <optional>
-#include "../../../core/hpp/infrastructure/expr_pool.hpp"
-#include "../../../core/hpp/utility/trail.hpp"
+#include "infrastructure/expr_pool.hpp"
+#include "infrastructure/trail.hpp"
 
 struct ExprPoolIntegrationTest : public ::testing::Test {
 protected:

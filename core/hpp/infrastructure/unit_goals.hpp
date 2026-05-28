@@ -3,9 +3,9 @@
 
 #include <optional>
 #include <vector>
-#include "../interfaces/i_push_unit_goal.hpp"
-#include "../interfaces/i_pop_unit_goal.hpp"
-#include "../interfaces/i_clear_unit_goals.hpp"
+#include "interfaces/i_push_unit_goal.hpp"
+#include "interfaces/i_pop_unit_goal.hpp"
+#include "interfaces/i_clear_unit_goals.hpp"
 
 struct unit_goals
     : i_push_unit_goal

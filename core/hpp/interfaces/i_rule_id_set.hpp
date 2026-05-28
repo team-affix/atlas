@@ -3,8 +3,8 @@
 
 #include <cstddef>
 #include <memory>
-#include "../value_objects/lineage.hpp"
-#include "../utility/state_machine.hpp"
+#include "value_objects/lineage.hpp"
+#include "infrastructure/state_machine.hpp"
 
 struct i_rule_id_set {
     virtual ~i_rule_id_set() = default;

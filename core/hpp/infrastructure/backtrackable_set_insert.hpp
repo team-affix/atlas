@@ -2,10 +2,10 @@
 #define BACKTRACKABLE_SET_INSERT_HPP
 
 #include "debug_assert.hpp"
-#include "i_backtrackable_mutation.hpp"
+#include "infrastructure/backtrackable_mutation.hpp"
 
 template<typename S>
-struct backtrackable_set_insert : i_backtrackable_mutation<S> {
+struct backtrackable_set_insert : backtrackable_mutation<S> {
     backtrackable_set_insert(const S::value_type& value);
     void invoke() override;
     void backtrack() override;

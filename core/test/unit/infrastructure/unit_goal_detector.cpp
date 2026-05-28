@@ -2,9 +2,9 @@
 
 #include <gtest/gtest.h>
 #include <gmock/gmock.h>
-#include "../../../core/hpp/infrastructure/unit_goal_detector.hpp"
-#include "../../../core/hpp/interfaces/i_get_goal_candidate_rule_ids.hpp"
-#include "../../../core/hpp/interfaces/i_rule_id_set.hpp"
+#include "infrastructure/unit_goal_detector.hpp"
+#include "interfaces/i_get_goal_candidate_rule_ids.hpp"
+#include "interfaces/i_rule_id_set.hpp"
 
 using ::testing::Return;
 using ::testing::ReturnRef;

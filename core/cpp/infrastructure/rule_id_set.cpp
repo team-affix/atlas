@@ -1,4 +1,4 @@
-#include "../../hpp/infrastructure/rule_id_set.hpp"
+#include "infrastructure/rule_id_set.hpp"
 
 #include <memory>
 

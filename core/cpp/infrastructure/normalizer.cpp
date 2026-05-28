@@ -1,5 +1,5 @@
 #include <stdexcept>
-#include "../../hpp/infrastructure/normalizer.hpp"
+#include "infrastructure/normalizer.hpp"
 
 normalizer::normalizer(i_make_functor& make_functor, i_bind_map& bind_map) :
     make_functor_ref(make_functor),

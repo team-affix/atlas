@@ -2,10 +2,10 @@
 #define DECISION_MEMORY_HPP
 
 #include <unordered_set>
-#include "../interfaces/i_clear_decision_record.hpp"
-#include "../interfaces/i_derive_decision_lemma.hpp"
-#include "../interfaces/i_get_decision_count.hpp"
-#include "../interfaces/i_record_decision.hpp"
+#include "interfaces/i_clear_decision_record.hpp"
+#include "interfaces/i_derive_decision_lemma.hpp"
+#include "interfaces/i_get_decision_count.hpp"
+#include "interfaces/i_record_decision.hpp"
 
 struct decision_memory
     : i_record_decision

@@ -1,4 +1,4 @@
-#include "../../hpp/infrastructure/candidate_activator.hpp"
+#include "infrastructure/candidate_activator.hpp"
 
 candidate_activator::candidate_activator(
     i_copier& copier,

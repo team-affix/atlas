@@ -3,11 +3,11 @@
 
 #include <gtest/gtest.h>
 #include <gmock/gmock.h>
-#include "../../../core/hpp/infrastructure/initial_goal_activator.hpp"
-#include "../../../core/hpp/interfaces/i_get_initial_goal_expr.hpp"
-#include "../../../core/hpp/interfaces/i_make_initial_goal_lineage.hpp"
-#include "../../../core/hpp/interfaces/i_set_goal_expr.hpp"
-#include "../../../core/hpp/interfaces/i_insert_active_goal.hpp"
+#include "infrastructure/initial_goal_activator.hpp"
+#include "interfaces/i_get_initial_goal_expr.hpp"
+#include "interfaces/i_make_initial_goal_lineage.hpp"
+#include "interfaces/i_set_goal_expr.hpp"
+#include "interfaces/i_insert_active_goal.hpp"
 
 using ::testing::Return;
 

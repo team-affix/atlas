@@ -1,9 +1,9 @@
 #include <gtest/gtest.h>
 #include <optional>
-#include "../../../core/hpp/infrastructure/copier.hpp"
-#include "../../../core/hpp/infrastructure/expr_pool.hpp"
-#include "../../../core/hpp/infrastructure/var_sequencer.hpp"
-#include "../../../core/hpp/utility/trail.hpp"
+#include "infrastructure/copier.hpp"
+#include "infrastructure/expr_pool.hpp"
+#include "infrastructure/var_sequencer.hpp"
+#include "infrastructure/trail.hpp"
 
 struct CopierIntegrationTest : public ::testing::Test {
 protected:

@@ -2,8 +2,8 @@
 // nullptr; set overwrites; unset removes without affecting other goals.
 
 #include <gtest/gtest.h>
-#include "../../../core/hpp/infrastructure/goal_exprs.hpp"
-#include "../../../core/hpp/value_objects/lineage.hpp"
+#include "infrastructure/goal_exprs.hpp"
+#include "value_objects/lineage.hpp"
 
 struct GoalExprsTest : public ::testing::Test {
     goal_exprs store;

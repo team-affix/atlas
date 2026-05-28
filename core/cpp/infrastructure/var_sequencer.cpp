@@ -1,7 +1,7 @@
 #ifndef VAR_SEQUENCER_CPP
 #define VAR_SEQUENCER_CPP
 
-#include "../../hpp/infrastructure/var_sequencer.hpp"
+#include "infrastructure/var_sequencer.hpp"
 
 var_sequencer::var_sequencer(i_trail& t) :
     seq(t) {

@@ -1,4 +1,4 @@
-#include "../../hpp/infrastructure/deactivated_candidate_memory.hpp"
+#include "infrastructure/deactivated_candidate_memory.hpp"
 
 deactivated_candidate_memory::deactivated_candidate_memory() {}
 

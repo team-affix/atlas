@@ -5,7 +5,7 @@
 #include <gtest/gtest.h>
 #include <gmock/gmock.h>
 #include <unordered_set>
-#include "../../../core/hpp/infrastructure/resolution_memory.hpp"
+#include "infrastructure/resolution_memory.hpp"
 
 using ::testing::IsEmpty;
 using ::testing::UnorderedElementsAre;

@@ -1,4 +1,4 @@
-#include "../../hpp/infrastructure/make_initial_goal_lineage.hpp"
+#include "infrastructure/make_initial_goal_lineage.hpp"
 
 make_initial_goal_lineage::make_initial_goal_lineage(i_make_goal_lineage& make_goal_lineage)
     : make_goal_lineage(make_goal_lineage) {}

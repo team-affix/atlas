@@ -3,8 +3,8 @@
 
 #include <gtest/gtest.h>
 #include <gmock/gmock.h>
-#include "../../../core/hpp/utility/trail.hpp"
-#include "../../../core/hpp/utility/i_backtrackable.hpp"
+#include "infrastructure/trail.hpp"
+#include "interfaces/i_backtrackable.hpp"
 
 using ::testing::StrictMock;
 

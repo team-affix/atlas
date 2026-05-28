@@ -1,4 +1,4 @@
-#include "../../hpp/infrastructure/unit_goals.hpp"
+#include "infrastructure/unit_goals.hpp"
 
 void unit_goals::push(const goal_lineage* gl) {
     queue_.push_back(gl);

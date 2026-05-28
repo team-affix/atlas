@@ -1,5 +1,5 @@
 #include <stdexcept>
-#include "../../hpp/infrastructure/copier.hpp"
+#include "infrastructure/copier.hpp"
 
 copier::copier(i_var_sequencer& var_seq, i_make_functor& make_functor, i_make_var& make_var) :
     var_seq_ref(var_seq),

@@ -1,8 +1,8 @@
 #ifndef SOLUTION_DETECTOR_HPP
 #define SOLUTION_DETECTOR_HPP
 
-#include "../interfaces/i_solution_detector.hpp"
-#include "../interfaces/i_check_active_goals_empty.hpp"
+#include "interfaces/i_solution_detector.hpp"
+#include "interfaces/i_check_active_goals_empty.hpp"
 
 struct solution_detector : i_solution_detector {
     solution_detector(i_check_active_goals_empty& check_active_goals_empty);

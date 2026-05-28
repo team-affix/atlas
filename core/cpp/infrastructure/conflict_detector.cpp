@@ -1,4 +1,4 @@
-#include "../../hpp/infrastructure/conflict_detector.hpp"
+#include "infrastructure/conflict_detector.hpp"
 
 conflict_detector::conflict_detector(i_get_goal_candidate_rule_ids& get_goal_candidate_rule_ids)
     : get_goal_candidate_rule_ids(get_goal_candidate_rule_ids) {}

@@ -1,4 +1,4 @@
-#include "../../hpp/infrastructure/initial_goal_exprs.hpp"
+#include "infrastructure/initial_goal_exprs.hpp"
 
 void initial_goal_exprs::push(const expr* e) {
     exprs_.push_back(e);

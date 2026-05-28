@@ -1,5 +1,5 @@
-#include "../../hpp/infrastructure/overlay_bind_map_factory.hpp"
-#include "../../hpp/infrastructure/overlay_bind_map.hpp"
+#include "infrastructure/overlay_bind_map_factory.hpp"
+#include "infrastructure/overlay_bind_map.hpp"
 
 std::unique_ptr<i_bind_map> overlay_bind_map_factory::make(
     i_bind_map& local,

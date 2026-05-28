@@ -1,4 +1,4 @@
-#include "../../hpp/infrastructure/resolution_memory.hpp"
+#include "infrastructure/resolution_memory.hpp"
 
 void resolution_memory::record_resolution(const resolution_lineage* rl) {
     resolutions.insert(rl);

@@ -2,7 +2,7 @@
 // backtrack removal, and duplicate-key failure.
 
 #include <gtest/gtest.h>
-#include "../../../core/hpp/utility/backtrackable_map_insert.hpp"
+#include "infrastructure/backtrackable_map_insert.hpp"
 #include <map>
 #include <stdexcept>
 

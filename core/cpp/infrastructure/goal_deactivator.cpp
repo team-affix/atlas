@@ -1,4 +1,4 @@
-#include "../../hpp/infrastructure/goal_deactivator.hpp"
+#include "infrastructure/goal_deactivator.hpp"
 
 goal_deactivator::goal_deactivator(
     i_unset_goal_expr& unset_goal_expr,

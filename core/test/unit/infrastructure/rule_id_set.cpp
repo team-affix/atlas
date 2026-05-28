@@ -2,8 +2,8 @@
 
 #include <gtest/gtest.h>
 #include <gmock/gmock.h>
-#include "../../../core/hpp/infrastructure/rule_id_set.hpp"
-#include "../../../core/hpp/interfaces/i_rule_id_set.hpp"
+#include "infrastructure/rule_id_set.hpp"
+#include "interfaces/i_rule_id_set.hpp"
 
 using ::testing::IsEmpty;
 using ::testing::UnorderedElementsAre;

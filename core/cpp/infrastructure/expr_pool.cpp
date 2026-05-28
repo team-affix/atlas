@@ -1,6 +1,6 @@
 #include <stdexcept>
-#include "../../hpp/infrastructure/expr_pool.hpp"
-#include "../../hpp/utility/backtrackable_set_insert.hpp"
+#include "infrastructure/expr_pool.hpp"
+#include "infrastructure/backtrackable_set_insert.hpp"
 
 expr_pool::expr_pool(i_trail& t) :
     exprs(t, {}) {

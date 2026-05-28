@@ -1,7 +1,7 @@
 #include <gtest/gtest.h>
-#include "../../../core/hpp/utility/tracked.hpp"
-#include "../../../core/hpp/utility/trail.hpp"
-#include "../../../core/hpp/utility/backtrackable_increment.hpp"
+#include "infrastructure/tracked.hpp"
+#include "infrastructure/trail.hpp"
+#include "infrastructure/backtrackable_increment.hpp"
 
 struct TrackedIntegrationTest : public ::testing::Test {
 protected:

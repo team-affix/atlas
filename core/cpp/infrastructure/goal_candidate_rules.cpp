@@ -1,4 +1,4 @@
-#include "../../hpp/infrastructure/goal_candidate_rules.hpp"
+#include "infrastructure/goal_candidate_rules.hpp"
 
 i_rule_id_set& goal_candidate_rules::get(const goal_lineage* gl) {
     return by_goal_[gl];

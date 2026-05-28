@@ -2,7 +2,7 @@
 // assert erase, backtrack, and missing-value failure.
 
 #include <gtest/gtest.h>
-#include "../../../core/hpp/utility/backtrackable_set_erase.hpp"
+#include "infrastructure/backtrackable_set_erase.hpp"
 #include <set>
 #include <stdexcept>
 

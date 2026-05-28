@@ -1,4 +1,4 @@
-#include "../../hpp/infrastructure/candidate_deactivator.hpp"
+#include "infrastructure/candidate_deactivator.hpp"
 
 candidate_deactivator::candidate_deactivator(
     i_unset_candidate_translation_map& unset_candidate_translation_map,

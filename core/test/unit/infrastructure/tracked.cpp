@@ -3,9 +3,9 @@
 
 #include <gtest/gtest.h>
 #include <gmock/gmock.h>
-#include "../../../core/hpp/utility/tracked.hpp"
-#include "../../../core/hpp/utility/i_trail.hpp"
-#include "../../../core/hpp/utility/backtrackable_increment.hpp"
+#include "infrastructure/tracked.hpp"
+#include "interfaces/i_trail.hpp"
+#include "infrastructure/backtrackable_increment.hpp"
 
 using ::testing::_;
 using ::testing::NiceMock;

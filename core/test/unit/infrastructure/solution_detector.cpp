@@ -3,8 +3,8 @@
 
 #include <gtest/gtest.h>
 #include <gmock/gmock.h>
-#include "../../../core/hpp/infrastructure/solution_detector.hpp"
-#include "../../../core/hpp/interfaces/i_check_active_goals_empty.hpp"
+#include "infrastructure/solution_detector.hpp"
+#include "interfaces/i_check_active_goals_empty.hpp"
 
 using ::testing::Return;
 

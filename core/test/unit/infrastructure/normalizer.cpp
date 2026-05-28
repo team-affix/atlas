@@ -3,10 +3,10 @@
 
 #include <gtest/gtest.h>
 #include <gmock/gmock.h>
-#include "../../../core/hpp/infrastructure/normalizer.hpp"
-#include "../../../core/hpp/interfaces/i_bind_map.hpp"
-#include "../../../core/hpp/interfaces/i_make_functor.hpp"
-#include "../../../core/hpp/interfaces/i_make_var.hpp"
+#include "infrastructure/normalizer.hpp"
+#include "interfaces/i_bind_map.hpp"
+#include "interfaces/i_make_functor.hpp"
+#include "interfaces/i_make_var.hpp"
 
 using ::testing::_;
 using ::testing::ElementsAre;

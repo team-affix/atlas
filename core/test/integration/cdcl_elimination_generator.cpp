@@ -1,8 +1,8 @@
 #include <gtest/gtest.h>
 #include <vector>
-#include "../../../core/hpp/infrastructure/cdcl_elimination_generator.hpp"
-#include "../../../core/hpp/utility/trail.hpp"
-#include "../../../core/hpp/utility/state_machine.hpp"
+#include "infrastructure/cdcl_elimination_generator.hpp"
+#include "infrastructure/trail.hpp"
+#include "infrastructure/state_machine.hpp"
 
 namespace {
 

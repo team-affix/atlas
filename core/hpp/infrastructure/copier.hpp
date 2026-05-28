@@ -1,11 +1,11 @@
 #ifndef COPIER_HPP
 #define COPIER_HPP
 
-#include "../interfaces/i_copier.hpp"
-#include "../value_objects/expr.hpp"
-#include "../interfaces/i_var_sequencer.hpp"
-#include "../interfaces/i_make_functor.hpp"
-#include "../interfaces/i_make_var.hpp"
+#include "interfaces/i_copier.hpp"
+#include "value_objects/expr.hpp"
+#include "interfaces/i_var_sequencer.hpp"
+#include "interfaces/i_make_functor.hpp"
+#include "interfaces/i_make_var.hpp"
 
 struct copier : i_copier {
     copier(

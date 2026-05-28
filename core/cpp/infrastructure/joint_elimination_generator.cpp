@@ -1,4 +1,4 @@
-#include "../../hpp/infrastructure/joint_elimination_generator.hpp"
+#include "infrastructure/joint_elimination_generator.hpp"
 
 joint_elimination_generator::joint_elimination_generator(
     i_elimination_generator& cdcl,

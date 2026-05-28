@@ -1,4 +1,4 @@
-#include "../../hpp/infrastructure/elimination_router.hpp"
+#include "infrastructure/elimination_router.hpp"
 
 elimination_router::elimination_router(
     i_deactivated_candidate_memory& deactivated_candidate_memory,

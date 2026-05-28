@@ -1,7 +1,7 @@
 #ifndef JOINT_ELIMINATION_GENERATOR_HPP
 #define JOINT_ELIMINATION_GENERATOR_HPP
 
-#include "../interfaces/i_elimination_generator.hpp"
+#include "interfaces/i_elimination_generator.hpp"
 
 struct joint_elimination_generator : i_elimination_generator {
     joint_elimination_generator(

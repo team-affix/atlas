@@ -1,4 +1,4 @@
-#include "../../hpp/infrastructure/var_names.hpp"
+#include "infrastructure/var_names.hpp"
 
 var_names::var_names() {
 }

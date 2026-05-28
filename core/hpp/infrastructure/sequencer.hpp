@@ -1,8 +1,8 @@
 #ifndef SEQUENCER_HPP
 #define SEQUENCER_HPP
 
-#include "../utility/tracked.hpp"
-#include "../utility/backtrackable_increment.hpp"
+#include "infrastructure/tracked.hpp"
+#include "infrastructure/backtrackable_increment.hpp"
 
 template<typename IndexType>
 struct sequencer {

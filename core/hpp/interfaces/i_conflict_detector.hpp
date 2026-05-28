@@ -1,7 +1,7 @@
 #ifndef I_CONFLICT_DETECTOR_HPP
 #define I_CONFLICT_DETECTOR_HPP
 
-#include "../value_objects/lineage.hpp"
+#include "value_objects/lineage.hpp"
 
 struct i_conflict_detector {
     virtual ~i_conflict_detector() = default;

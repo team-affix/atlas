@@ -1,4 +1,4 @@
-#include "../../hpp/infrastructure/unit_goal_detector.hpp"
+#include "infrastructure/unit_goal_detector.hpp"
 
 unit_goal_detector::unit_goal_detector(i_get_goal_candidate_rule_ids& get_goal_candidate_rule_ids)
     : get_goal_candidate_rule_ids(get_goal_candidate_rule_ids) {}

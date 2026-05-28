@@ -1,4 +1,4 @@
-#include "../../hpp/infrastructure/random_decision_generator.hpp"
+#include "infrastructure/random_decision_generator.hpp"
 
 random_decision_generator::random_decision_generator(
     i_make_resolution_lineage& make_resolution_lineage,

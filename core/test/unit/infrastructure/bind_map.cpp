@@ -2,7 +2,7 @@
 // var chains. Unit tests exercise bind/whnf directly (no collaborators to mock).
 
 #include <gtest/gtest.h>
-#include "../../../core/hpp/infrastructure/bind_map.hpp"
+#include "infrastructure/bind_map.hpp"
 
 struct BindMapTest : public ::testing::Test {
 protected:

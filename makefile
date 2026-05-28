@@ -3,7 +3,7 @@
 # ==============================================================================
 
 CXX      = g++
-CXXFLAGS = -std=c++20 -I.
+CXXFLAGS = -std=c++20 -I. -Icore/hpp -Imcts/include
 AR       = ar
 ARFLAGS  = rcs
 

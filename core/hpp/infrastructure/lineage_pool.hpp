@@ -2,13 +2,13 @@
 #define LINEAGE_POOL_HPP
 
 #include <map>
-#include "../interfaces/i_import_goal_lineage.hpp"
-#include "../interfaces/i_import_resolution_lineage.hpp"
-#include "../interfaces/i_make_goal_lineage.hpp"
-#include "../interfaces/i_make_resolution_lineage.hpp"
-#include "../interfaces/i_pin_goal_lineage.hpp"
-#include "../interfaces/i_pin_resolution_lineage.hpp"
-#include "../interfaces/i_trim_unpinned_lineages.hpp"
+#include "interfaces/i_import_goal_lineage.hpp"
+#include "interfaces/i_import_resolution_lineage.hpp"
+#include "interfaces/i_make_goal_lineage.hpp"
+#include "interfaces/i_make_resolution_lineage.hpp"
+#include "interfaces/i_pin_goal_lineage.hpp"
+#include "interfaces/i_pin_resolution_lineage.hpp"
+#include "interfaces/i_trim_unpinned_lineages.hpp"
 
 struct lineage_pool
     : i_make_goal_lineage

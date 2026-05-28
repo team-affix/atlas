@@ -1,6 +1,6 @@
 #include <gtest/gtest.h>
-#include "../../../core/hpp/infrastructure/overlay_bind_map.hpp"
-#include "../../../core/hpp/infrastructure/bind_map.hpp"
+#include "infrastructure/overlay_bind_map.hpp"
+#include "infrastructure/bind_map.hpp"
 
 struct OverlayBindMapIntegrationTest : public ::testing::Test {
 protected:

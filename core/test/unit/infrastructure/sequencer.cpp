@@ -3,8 +3,8 @@
 
 #include <gtest/gtest.h>
 #include <gmock/gmock.h>
-#include "../../../core/hpp/utility/sequencer.hpp"
-#include "../../../core/hpp/utility/i_trail.hpp"
+#include "infrastructure/sequencer.hpp"
+#include "interfaces/i_trail.hpp"
 
 using ::testing::_;
 using ::testing::NiceMock;

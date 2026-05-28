@@ -1,4 +1,4 @@
-#include "../../hpp/infrastructure/expr_printer.hpp"
+#include "infrastructure/expr_printer.hpp"
 
 expr_printer::expr_printer(std::ostream& os, const i_var_names& var_names)
     : os(os), var_names(var_names)

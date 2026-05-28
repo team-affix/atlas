@@ -3,10 +3,10 @@
 
 #include <gtest/gtest.h>
 #include <gmock/gmock.h>
-#include "../../../core/hpp/infrastructure/candidate_deactivator.hpp"
-#include "../../../core/hpp/interfaces/i_unset_candidate_translation_map.hpp"
-#include "../../../core/hpp/interfaces/i_deactivated_candidate_memory.hpp"
-#include "../../../core/hpp/interfaces/i_unlink_goal_candidate.hpp"
+#include "infrastructure/candidate_deactivator.hpp"
+#include "interfaces/i_unset_candidate_translation_map.hpp"
+#include "interfaces/i_deactivated_candidate_memory.hpp"
+#include "interfaces/i_unlink_goal_candidate.hpp"
 
 struct MockUnsetCandidateTranslationMap : public i_unset_candidate_translation_map {
     MOCK_METHOD(void, unset, (const resolution_lineage*), (override));

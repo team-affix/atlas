@@ -1,11 +1,11 @@
 #ifndef ELIMINATION_ROUTER_HPP
 #define ELIMINATION_ROUTER_HPP
 
-#include "../interfaces/i_elimination_router.hpp"
-#include "../interfaces/i_deactivated_candidate_memory.hpp"
-#include "../interfaces/i_is_active_goal.hpp"
-#include "../interfaces/i_insert_backlogged_elimination.hpp"
-#include "../interfaces/i_candidate_deactivator.hpp"
+#include "interfaces/i_elimination_router.hpp"
+#include "interfaces/i_deactivated_candidate_memory.hpp"
+#include "interfaces/i_is_active_goal.hpp"
+#include "interfaces/i_insert_backlogged_elimination.hpp"
+#include "interfaces/i_candidate_deactivator.hpp"
 
 struct elimination_router : i_elimination_router {
     elimination_router(

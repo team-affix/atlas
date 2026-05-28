@@ -1,4 +1,4 @@
-#include "../../hpp/infrastructure/sim.hpp"
+#include "infrastructure/sim.hpp"
 
 #include <unordered_set>
 

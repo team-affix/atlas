@@ -2,7 +2,7 @@
 #define RULE_ID_SET_HPP
 
 #include <unordered_set>
-#include "../interfaces/i_rule_id_set.hpp"
+#include "interfaces/i_rule_id_set.hpp"
 
 struct rule_id_set : i_rule_id_set {
     void insert(rule_id) override;

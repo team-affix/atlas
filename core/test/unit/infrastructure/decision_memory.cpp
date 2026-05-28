@@ -5,7 +5,7 @@
 #include <gtest/gtest.h>
 #include <gmock/gmock.h>
 #include <unordered_set>
-#include "../../../core/hpp/infrastructure/decision_memory.hpp"
+#include "infrastructure/decision_memory.hpp"
 
 using ::testing::Eq;
 using ::testing::IsEmpty;

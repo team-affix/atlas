@@ -2,7 +2,7 @@
 // invoke/backtrack, and assert the value round-trips.
 
 #include <gtest/gtest.h>
-#include "../../../core/hpp/utility/backtrackable_increment.hpp"
+#include "infrastructure/backtrackable_increment.hpp"
 
 struct BacktrackableIncrementTest : public ::testing::Test {
 protected:

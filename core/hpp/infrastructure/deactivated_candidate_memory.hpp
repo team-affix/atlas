@@ -2,7 +2,7 @@
 #define DEACTIVATED_CANDIDATE_MEMORY_HPP
 
 #include <unordered_set>
-#include "../interfaces/i_deactivated_candidate_memory.hpp"
+#include "interfaces/i_deactivated_candidate_memory.hpp"
 
 struct deactivated_candidate_memory : i_deactivated_candidate_memory {
     deactivated_candidate_memory();

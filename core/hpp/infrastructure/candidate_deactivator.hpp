@@ -1,10 +1,10 @@
 #ifndef CANDIDATE_DEACTIVATOR_HPP
 #define CANDIDATE_DEACTIVATOR_HPP
 
-#include "../interfaces/i_candidate_deactivator.hpp"
-#include "../interfaces/i_unset_candidate_translation_map.hpp"
-#include "../interfaces/i_deactivated_candidate_memory.hpp"
-#include "../interfaces/i_unlink_goal_candidate.hpp"
+#include "interfaces/i_candidate_deactivator.hpp"
+#include "interfaces/i_unset_candidate_translation_map.hpp"
+#include "interfaces/i_deactivated_candidate_memory.hpp"
+#include "interfaces/i_unlink_goal_candidate.hpp"
 
 struct candidate_deactivator : i_candidate_deactivator {
     candidate_deactivator(

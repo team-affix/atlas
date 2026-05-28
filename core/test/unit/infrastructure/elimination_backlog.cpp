@@ -2,8 +2,8 @@
 // is_backlogged must be false after constrain removes the parent bucket.
 
 #include <gtest/gtest.h>
-#include "../../../core/hpp/infrastructure/elimination_backlog.hpp"
-#include "../../../core/hpp/value_objects/lineage.hpp"
+#include "infrastructure/elimination_backlog.hpp"
+#include "value_objects/lineage.hpp"
 
 struct EliminationBacklogTest : public ::testing::Test {
     elimination_backlog backlog;

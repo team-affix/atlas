@@ -1,7 +1,7 @@
 #include <gtest/gtest.h>
 #include <gmock/gmock.h>
-#include "../../../core/hpp/infrastructure/get_resolution_rule.hpp"
-#include "../../../core/hpp/interfaces/i_get_rule.hpp"
+#include "infrastructure/get_resolution_rule.hpp"
+#include "interfaces/i_get_rule.hpp"
 
 using ::testing::Return;
 

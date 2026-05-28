@@ -1,9 +1,9 @@
 #include <gtest/gtest.h>
 #include <optional>
-#include "../../../core/hpp/infrastructure/normalizer.hpp"
-#include "../../../core/hpp/infrastructure/expr_pool.hpp"
-#include "../../../core/hpp/infrastructure/bind_map.hpp"
-#include "../../../core/hpp/utility/trail.hpp"
+#include "infrastructure/normalizer.hpp"
+#include "infrastructure/expr_pool.hpp"
+#include "infrastructure/bind_map.hpp"
+#include "infrastructure/trail.hpp"
 
 struct NormalizerIntegrationTest : public ::testing::Test {
 protected:

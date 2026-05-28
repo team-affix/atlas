@@ -1,7 +1,7 @@
 #ifndef I_DEACTIVATED_CANDIDATE_MEMORY_HPP
 #define I_DEACTIVATED_CANDIDATE_MEMORY_HPP
 
-#include "../value_objects/lineage.hpp"
+#include "value_objects/lineage.hpp"
 
 struct i_deactivated_candidate_memory {
     virtual ~i_deactivated_candidate_memory() = default;

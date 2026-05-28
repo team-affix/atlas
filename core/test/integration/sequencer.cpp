@@ -1,6 +1,6 @@
 #include <gtest/gtest.h>
-#include "../../../core/hpp/utility/sequencer.hpp"
-#include "../../../core/hpp/utility/trail.hpp"
+#include "infrastructure/sequencer.hpp"
+#include "infrastructure/trail.hpp"
 
 struct SequencerIntegrationTest : public ::testing::Test {
 protected:

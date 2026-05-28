@@ -2,8 +2,8 @@
 
 #include <gtest/gtest.h>
 #include <gmock/gmock.h>
-#include "../../../core/hpp/infrastructure/make_initial_goal_lineage.hpp"
-#include "../../../core/hpp/interfaces/i_make_goal_lineage.hpp"
+#include "infrastructure/make_initial_goal_lineage.hpp"
+#include "interfaces/i_make_goal_lineage.hpp"
 
 using ::testing::Return;
 

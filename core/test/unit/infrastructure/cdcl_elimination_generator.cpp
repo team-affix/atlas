@@ -5,9 +5,9 @@
 #include <gtest/gtest.h>
 #include <gmock/gmock.h>
 #include <vector>
-#include "../../../core/hpp/infrastructure/cdcl_elimination_generator.hpp"
-#include "../../../core/hpp/utility/i_trail.hpp"
-#include "../../../core/hpp/utility/state_machine.hpp"
+#include "infrastructure/cdcl_elimination_generator.hpp"
+#include "interfaces/i_trail.hpp"
+#include "infrastructure/state_machine.hpp"
 
 using ::testing::_;
 using ::testing::AtLeast;

@@ -1,4 +1,4 @@
-#include "../../hpp/infrastructure/solution_detector.hpp"
+#include "infrastructure/solution_detector.hpp"
 
 solution_detector::solution_detector(i_check_active_goals_empty& check_active_goals_empty)
     : check_active_goals_empty(check_active_goals_empty) {}

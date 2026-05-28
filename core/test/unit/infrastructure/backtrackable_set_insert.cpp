@@ -2,7 +2,7 @@
 // insert, backtrack, and duplicate-value failure.
 
 #include <gtest/gtest.h>
-#include "../../../core/hpp/utility/backtrackable_set_insert.hpp"
+#include "infrastructure/backtrackable_set_insert.hpp"
 #include <set>
 #include <stdexcept>
 

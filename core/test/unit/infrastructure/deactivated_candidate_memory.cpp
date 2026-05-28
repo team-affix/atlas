@@ -2,8 +2,8 @@
 // contains/insert/clear must stay consistent; clear must empty the set.
 
 #include <gtest/gtest.h>
-#include "../../../core/hpp/infrastructure/deactivated_candidate_memory.hpp"
-#include "../../../core/hpp/value_objects/lineage.hpp"
+#include "infrastructure/deactivated_candidate_memory.hpp"
+#include "value_objects/lineage.hpp"
 
 struct DeactivatedCandidateMemoryTest : public ::testing::Test {
     deactivated_candidate_memory memory;

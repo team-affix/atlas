@@ -2,10 +2,10 @@
 #define BACKTRACKABLE_MAP_AT_ERASE_HPP
 
 #include "debug_assert.hpp"
-#include "i_backtrackable_mutation.hpp"
+#include "infrastructure/backtrackable_mutation.hpp"
 
 template<typename M>
-struct backtrackable_map_at_erase : i_backtrackable_mutation<M> {
+struct backtrackable_map_at_erase : backtrackable_mutation<M> {
     backtrackable_map_at_erase(const M::key_type& key, const M::mapped_type::value_type& value);
     void invoke() override;
     void backtrack() override;

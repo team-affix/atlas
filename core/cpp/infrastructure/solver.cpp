@@ -1,4 +1,4 @@
-#include "../../hpp/infrastructure/solver.hpp"
+#include "infrastructure/solver.hpp"
 
 solver::solver(
     i_set_up_sim& set_up_sim,

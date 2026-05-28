@@ -4,10 +4,10 @@
 #include <set>
 #include <unordered_map>
 #include <unordered_set>
-#include "../interfaces/i_elimination_generator.hpp"
-#include "../interfaces/i_learn_avoidance.hpp"
-#include "../utility/state_machine.hpp"
-#include "../utility/tracked.hpp"
+#include "interfaces/i_elimination_generator.hpp"
+#include "interfaces/i_learn_avoidance.hpp"
+#include "infrastructure/state_machine.hpp"
+#include "infrastructure/tracked.hpp"
 
 struct cdcl_elimination_generator
     : i_elimination_generator

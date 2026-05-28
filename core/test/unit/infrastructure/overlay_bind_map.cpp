@@ -4,8 +4,8 @@
 
 #include <gtest/gtest.h>
 #include <gmock/gmock.h>
-#include "../../../core/hpp/infrastructure/overlay_bind_map.hpp"
-#include "../../../core/hpp/interfaces/i_bind_map.hpp"
+#include "infrastructure/overlay_bind_map.hpp"
+#include "interfaces/i_bind_map.hpp"
 
 using ::testing::Return;
 

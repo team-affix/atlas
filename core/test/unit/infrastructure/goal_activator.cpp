@@ -3,11 +3,11 @@
 
 #include <gtest/gtest.h>
 #include <gmock/gmock.h>
-#include "../../../core/hpp/infrastructure/goal_activator.hpp"
-#include "../../../core/hpp/interfaces/i_copier.hpp"
-#include "../../../core/hpp/interfaces/i_set_goal_expr.hpp"
-#include "../../../core/hpp/interfaces/i_get_candidate_translation_map.hpp"
-#include "../../../core/hpp/interfaces/i_get_resolution_rule.hpp"
+#include "infrastructure/goal_activator.hpp"
+#include "interfaces/i_copier.hpp"
+#include "interfaces/i_set_goal_expr.hpp"
+#include "interfaces/i_get_candidate_translation_map.hpp"
+#include "interfaces/i_get_resolution_rule.hpp"
 
 using ::testing::_;
 using ::testing::Return;

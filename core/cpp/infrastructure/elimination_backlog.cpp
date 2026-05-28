@@ -1,4 +1,4 @@
-#include "../../hpp/infrastructure/elimination_backlog.hpp"
+#include "infrastructure/elimination_backlog.hpp"
 
 void elimination_backlog::insert_backlogged_elimination(const resolution_lineage* rl) {
     eliminated_candidates_[rl->parent].insert(rl->idx);

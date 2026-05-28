@@ -2,9 +2,9 @@
 #define DB_HPP
 
 #include <vector>
-#include "../interfaces/i_get_goal_db_rule_ids.hpp"
-#include "../interfaces/i_get_rule.hpp"
-#include "../value_objects/rule.hpp"
+#include "interfaces/i_get_goal_db_rule_ids.hpp"
+#include "interfaces/i_get_rule.hpp"
+#include "value_objects/rule.hpp"
 #include "rule_id_set.hpp"
 
 struct db

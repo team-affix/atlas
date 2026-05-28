@@ -1,6 +1,6 @@
 #include <gtest/gtest.h>
-#include "../../../core/hpp/utility/backtrackable_increment.hpp"
-#include "../../../core/hpp/utility/trail.hpp"
+#include "infrastructure/backtrackable_increment.hpp"
+#include "infrastructure/trail.hpp"
 #include <memory>
 
 struct BacktrackableIncrementIntegrationTest : public ::testing::Test {

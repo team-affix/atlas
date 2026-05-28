@@ -1,4 +1,4 @@
-#include "../../hpp/infrastructure/goal_exprs.hpp"
+#include "infrastructure/goal_exprs.hpp"
 
 const expr* goal_exprs::get(const goal_lineage* gl) const {
     auto it = exprs_.find(gl);

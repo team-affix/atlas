@@ -1,4 +1,4 @@
-#include "../../hpp/infrastructure/overlay_bind_map.hpp"
+#include "infrastructure/overlay_bind_map.hpp"
 
 overlay_bind_map::overlay_bind_map(i_bind_map& local, i_bind_map& remote) :
     local_(local),

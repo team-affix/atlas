@@ -1,11 +1,11 @@
 #ifndef INITIAL_GOAL_ACTIVATOR_HPP
 #define INITIAL_GOAL_ACTIVATOR_HPP
 
-#include "../interfaces/i_activate_initial_goal.hpp"
-#include "../interfaces/i_get_initial_goal_expr.hpp"
-#include "../interfaces/i_make_initial_goal_lineage.hpp"
-#include "../interfaces/i_set_goal_expr.hpp"
-#include "../interfaces/i_insert_active_goal.hpp"
+#include "interfaces/i_activate_initial_goal.hpp"
+#include "interfaces/i_get_initial_goal_expr.hpp"
+#include "interfaces/i_make_initial_goal_lineage.hpp"
+#include "interfaces/i_set_goal_expr.hpp"
+#include "interfaces/i_insert_active_goal.hpp"
 
 struct initial_goal_activator : i_activate_initial_goal {
     initial_goal_activator(

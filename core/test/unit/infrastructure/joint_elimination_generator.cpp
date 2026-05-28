@@ -5,9 +5,9 @@
 #include <gtest/gtest.h>
 #include <gmock/gmock.h>
 #include <vector>
-#include "../../../core/hpp/infrastructure/joint_elimination_generator.hpp"
-#include "../../../core/hpp/interfaces/i_elimination_generator.hpp"
-#include "../../../core/hpp/utility/state_machine.hpp"
+#include "infrastructure/joint_elimination_generator.hpp"
+#include "interfaces/i_elimination_generator.hpp"
+#include "infrastructure/state_machine.hpp"
 
 using ::testing::ByMove;
 using ::testing::ElementsAre;

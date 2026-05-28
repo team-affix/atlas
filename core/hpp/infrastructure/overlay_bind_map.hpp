@@ -1,7 +1,7 @@
 #ifndef OVERLAY_BIND_MAP_HPP
 #define OVERLAY_BIND_MAP_HPP
 
-#include "../interfaces/i_bind_map.hpp"
+#include "interfaces/i_bind_map.hpp"
 
 struct overlay_bind_map : i_bind_map {
     overlay_bind_map(i_bind_map& local, i_bind_map& remote);

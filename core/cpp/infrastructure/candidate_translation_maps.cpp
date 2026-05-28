@@ -1,4 +1,4 @@
-#include "../../hpp/infrastructure/candidate_translation_maps.hpp"
+#include "infrastructure/candidate_translation_maps.hpp"
 
 translation_map& candidate_translation_maps::get(const resolution_lineage* rl) {
     return maps_[rl];

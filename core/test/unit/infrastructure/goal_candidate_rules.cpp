@@ -3,7 +3,7 @@
 
 #include <gtest/gtest.h>
 #include <gmock/gmock.h>
-#include "../../../core/hpp/infrastructure/goal_candidate_rules.hpp"
+#include "infrastructure/goal_candidate_rules.hpp"
 
 using ::testing::IsEmpty;
 using ::testing::UnorderedElementsAre;

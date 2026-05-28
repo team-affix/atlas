@@ -1,7 +1,7 @@
 #ifndef I_MAKE_INITIAL_GOAL_LINEAGE_HPP
 #define I_MAKE_INITIAL_GOAL_LINEAGE_HPP
 
-#include "../value_objects/lineage.hpp"
+#include "value_objects/lineage.hpp"
 
 struct i_make_initial_goal_lineage {
     virtual ~i_make_initial_goal_lineage() = default;

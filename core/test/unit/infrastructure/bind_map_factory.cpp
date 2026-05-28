@@ -2,7 +2,7 @@
 // only production type under test; returned maps must resolve variable bindings.
 
 #include <gtest/gtest.h>
-#include "../../../core/hpp/infrastructure/bind_map_factory.hpp"
+#include "infrastructure/bind_map_factory.hpp"
 
 struct BindMapFactoryTest : public ::testing::Test {
     bind_map_factory factory;

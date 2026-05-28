@@ -1,4 +1,4 @@
-#include "../../hpp/infrastructure/goal_activator.hpp"
+#include "infrastructure/goal_activator.hpp"
 
 goal_activator::goal_activator(
     i_set_goal_expr& set_goal_expr,

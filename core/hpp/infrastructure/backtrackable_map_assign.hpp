@@ -2,10 +2,10 @@
 #define BACKTRACKABLE_MAP_ASSIGN_HPP
 
 #include <utility>
-#include "i_backtrackable_mutation.hpp"
+#include "infrastructure/backtrackable_mutation.hpp"
 
 template<typename M>
-struct backtrackable_map_assign : i_backtrackable_mutation<M> {
+struct backtrackable_map_assign : backtrackable_mutation<M> {
     backtrackable_map_assign(const M::key_type& key, const M::mapped_type& new_value);
     void invoke() override;
     void backtrack() override;

@@ -1,4 +1,4 @@
-#include "../../hpp/infrastructure/cdcl_sequencer.hpp"
+#include "infrastructure/cdcl_sequencer.hpp"
 
 cdcl_sequencer::cdcl_sequencer(i_trail& t) :
     seq(t) {

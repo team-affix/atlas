@@ -1,5 +1,5 @@
 #include <gtest/gtest.h>
-#include "../../../core/hpp/infrastructure/var_names.hpp"
+#include "infrastructure/var_names.hpp"
 
 struct VarNamesTest : public ::testing::Test {
 protected:

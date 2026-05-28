@@ -3,20 +3,20 @@
 
 #include <gtest/gtest.h>
 #include <gmock/gmock.h>
-#include "../../../core/hpp/infrastructure/resolver.hpp"
-#include "../../../core/hpp/infrastructure/rule_id_set.hpp"
-#include "../../../core/hpp/interfaces/i_make_goal_lineage.hpp"
-#include "../../../core/hpp/interfaces/i_make_resolution_lineage.hpp"
-#include "../../../core/hpp/interfaces/i_goal_activator.hpp"
-#include "../../../core/hpp/interfaces/i_goal_deactivator.hpp"
-#include "../../../core/hpp/interfaces/i_get_rule.hpp"
-#include "../../../core/hpp/interfaces/i_get_goal_db_rule_ids.hpp"
-#include "../../../core/hpp/interfaces/i_get_goal_candidate_rule_ids.hpp"
-#include "../../../core/hpp/interfaces/i_candidate_activator.hpp"
-#include "../../../core/hpp/interfaces/i_candidate_deactivator.hpp"
-#include "../../../core/hpp/interfaces/i_conflict_detector.hpp"
-#include "../../../core/hpp/interfaces/i_detect_unit_goal.hpp"
-#include "../../../core/hpp/interfaces/i_push_unit_goal.hpp"
+#include "infrastructure/resolver.hpp"
+#include "infrastructure/rule_id_set.hpp"
+#include "interfaces/i_make_goal_lineage.hpp"
+#include "interfaces/i_make_resolution_lineage.hpp"
+#include "interfaces/i_goal_activator.hpp"
+#include "interfaces/i_goal_deactivator.hpp"
+#include "interfaces/i_get_rule.hpp"
+#include "interfaces/i_get_goal_db_rule_ids.hpp"
+#include "interfaces/i_get_goal_candidate_rule_ids.hpp"
+#include "interfaces/i_candidate_activator.hpp"
+#include "interfaces/i_candidate_deactivator.hpp"
+#include "interfaces/i_conflict_detector.hpp"
+#include "interfaces/i_detect_unit_goal.hpp"
+#include "interfaces/i_push_unit_goal.hpp"
 
 using ::testing::Return;
 using ::testing::ReturnRef;

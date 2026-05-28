@@ -2,8 +2,8 @@
 // otherwise yields the most recently pushed goal.
 
 #include <gtest/gtest.h>
-#include "../../../core/hpp/infrastructure/unit_goals.hpp"
-#include "../../../core/hpp/value_objects/lineage.hpp"
+#include "infrastructure/unit_goals.hpp"
+#include "value_objects/lineage.hpp"
 
 struct UnitGoalsTest : public ::testing::Test {
     unit_goals queue;

@@ -3,7 +3,7 @@
 // and import without external mocks (no i_* dependencies).
 
 #include <gtest/gtest.h>
-#include "../../../core/hpp/infrastructure/lineage_pool.hpp"
+#include "infrastructure/lineage_pool.hpp"
 struct LineagePoolTest : public ::testing::Test {
 protected:
     lineage_pool pool;

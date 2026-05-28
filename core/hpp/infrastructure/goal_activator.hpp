@@ -1,11 +1,11 @@
 #ifndef GOAL_ACTIVATOR_HPP
 #define GOAL_ACTIVATOR_HPP
 
-#include "../interfaces/i_goal_activator.hpp"
-#include "../interfaces/i_set_goal_expr.hpp"
-#include "../interfaces/i_get_candidate_translation_map.hpp"
-#include "../interfaces/i_get_resolution_rule.hpp"
-#include "../interfaces/i_copier.hpp"
+#include "interfaces/i_goal_activator.hpp"
+#include "interfaces/i_set_goal_expr.hpp"
+#include "interfaces/i_get_candidate_translation_map.hpp"
+#include "interfaces/i_get_resolution_rule.hpp"
+#include "interfaces/i_copier.hpp"
 
 struct goal_activator : i_goal_activator {
     goal_activator(

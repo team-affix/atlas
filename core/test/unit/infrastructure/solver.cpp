@@ -3,16 +3,16 @@
 
 #include <gtest/gtest.h>
 #include <gmock/gmock.h>
-#include "../../../core/hpp/infrastructure/solver.hpp"
-#include "../../../core/hpp/interfaces/i_set_up_sim.hpp"
-#include "../../../core/hpp/interfaces/i_tear_down_sim.hpp"
-#include "../../../core/hpp/interfaces/i_run_sim.hpp"
-#include "../../../core/hpp/interfaces/i_learn_avoidance.hpp"
-#include "../../../core/hpp/interfaces/i_elimination_router.hpp"
-#include "../../../core/hpp/interfaces/i_get_decision_count.hpp"
-#include "../../../core/hpp/interfaces/i_derive_decision_lemma.hpp"
-#include "../../../core/hpp/value_objects/sim_termination.hpp"
-#include "../../../core/hpp/value_objects/lemma.hpp"
+#include "infrastructure/solver.hpp"
+#include "interfaces/i_set_up_sim.hpp"
+#include "interfaces/i_tear_down_sim.hpp"
+#include "interfaces/i_run_sim.hpp"
+#include "interfaces/i_learn_avoidance.hpp"
+#include "interfaces/i_elimination_router.hpp"
+#include "interfaces/i_get_decision_count.hpp"
+#include "interfaces/i_derive_decision_lemma.hpp"
+#include "value_objects/sim_termination.hpp"
+#include "value_objects/lemma.hpp"
 
 using ::testing::Return;
 using ::testing::_;

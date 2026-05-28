@@ -2,10 +2,10 @@
 #define GOAL_CANDIDATE_RULES_HPP
 
 #include <unordered_map>
-#include "../interfaces/i_get_goal_candidate_rule_ids.hpp"
-#include "../interfaces/i_link_goal_candidate.hpp"
-#include "../interfaces/i_unlink_goal_candidate.hpp"
-#include "../interfaces/i_erase_goal_candidates.hpp"
+#include "interfaces/i_get_goal_candidate_rule_ids.hpp"
+#include "interfaces/i_link_goal_candidate.hpp"
+#include "interfaces/i_unlink_goal_candidate.hpp"
+#include "interfaces/i_erase_goal_candidates.hpp"
 #include "rule_id_set.hpp"
 
 struct goal_candidate_rules

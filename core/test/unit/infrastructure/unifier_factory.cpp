@@ -3,8 +3,8 @@
 
 #include <gtest/gtest.h>
 #include <gmock/gmock.h>
-#include "../../../core/hpp/infrastructure/unifier_factory.hpp"
-#include "../../../core/hpp/interfaces/i_bind_map.hpp"
+#include "infrastructure/unifier_factory.hpp"
+#include "interfaces/i_bind_map.hpp"
 
 using ::testing::Return;
 

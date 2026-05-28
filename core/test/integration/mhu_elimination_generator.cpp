@@ -1,14 +1,14 @@
 #include <gtest/gtest.h>
 #include <algorithm>
-#include "../../../core/hpp/infrastructure/mhu_elimination_generator.hpp"
-#include "../../../core/hpp/infrastructure/bind_map.hpp"
-#include "../../../core/hpp/infrastructure/bind_map_factory.hpp"
-#include "../../../core/hpp/infrastructure/overlay_bind_map_factory.hpp"
-#include "../../../core/hpp/infrastructure/unifier_factory.hpp"
-#include "../../../core/hpp/infrastructure/expr_pool.hpp"
-#include "../../../core/hpp/infrastructure/lineage_pool.hpp"
-#include "../../../core/hpp/infrastructure/goal_candidate_rules.hpp"
-#include "../../../core/hpp/utility/trail.hpp"
+#include "infrastructure/mhu_elimination_generator.hpp"
+#include "infrastructure/bind_map.hpp"
+#include "infrastructure/bind_map_factory.hpp"
+#include "infrastructure/overlay_bind_map_factory.hpp"
+#include "infrastructure/unifier_factory.hpp"
+#include "infrastructure/expr_pool.hpp"
+#include "infrastructure/lineage_pool.hpp"
+#include "infrastructure/goal_candidate_rules.hpp"
+#include "infrastructure/trail.hpp"
 
 namespace {
 

@@ -1,4 +1,4 @@
-#include "../../hpp/value_objects/lemma.hpp"
+#include "value_objects/lemma.hpp"
 
 lemma::lemma(const std::unordered_set<const resolution_lineage*>& input) :
     rs(input) {

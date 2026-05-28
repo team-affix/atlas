@@ -2,13 +2,13 @@
 #define EXPR_POOL_HPP
 
 #include <set>
-#include "../interfaces/i_get_expr_count.hpp"
-#include "../interfaces/i_import_expr.hpp"
-#include "../interfaces/i_make_functor.hpp"
-#include "../interfaces/i_make_var.hpp"
-#include "../value_objects/expr.hpp"
-#include "../utility/tracked.hpp"
-#include "../utility/i_trail.hpp"
+#include "interfaces/i_get_expr_count.hpp"
+#include "interfaces/i_import_expr.hpp"
+#include "interfaces/i_make_functor.hpp"
+#include "interfaces/i_make_var.hpp"
+#include "value_objects/expr.hpp"
+#include "infrastructure/tracked.hpp"
+#include "interfaces/i_trail.hpp"
 
 struct expr_pool
     : i_make_functor

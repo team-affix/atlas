@@ -2,8 +2,8 @@
 #define UNIFY_HEAD_HPP
 
 #include <memory>
-#include "../interfaces/i_bind_map.hpp"
-#include "../interfaces/i_unifier.hpp"
+#include "interfaces/i_bind_map.hpp"
+#include "interfaces/i_unifier.hpp"
 
 struct unify_head {
     std::unique_ptr<i_bind_map> local_bind_map;

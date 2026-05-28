@@ -1,4 +1,4 @@
-#include "../../hpp/infrastructure/lineage_pool.hpp"
+#include "infrastructure/lineage_pool.hpp"
 
 const goal_lineage* lineage_pool::make_goal_lineage(
     const resolution_lineage* parent, subgoal_id idx) {

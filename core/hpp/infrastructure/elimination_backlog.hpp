@@ -3,10 +3,10 @@
 
 #include <unordered_map>
 #include <unordered_set>
-#include "../interfaces/i_insert_backlogged_elimination.hpp"
-#include "../interfaces/i_is_backlogged_elimination.hpp"
-#include "../interfaces/i_constrain_elimination_backlog.hpp"
-#include "../value_objects/lineage.hpp"
+#include "interfaces/i_insert_backlogged_elimination.hpp"
+#include "interfaces/i_is_backlogged_elimination.hpp"
+#include "interfaces/i_constrain_elimination_backlog.hpp"
+#include "value_objects/lineage.hpp"
 
 struct elimination_backlog
     : i_insert_backlogged_elimination

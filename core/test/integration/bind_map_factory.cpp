@@ -1,7 +1,7 @@
 #include <gtest/gtest.h>
-#include "../../../core/hpp/infrastructure/bind_map.hpp"
-#include "../../../core/hpp/infrastructure/bind_map_factory.hpp"
-#include "../../../core/hpp/infrastructure/overlay_bind_map_factory.hpp"
+#include "infrastructure/bind_map.hpp"
+#include "infrastructure/bind_map_factory.hpp"
+#include "infrastructure/overlay_bind_map_factory.hpp"
 
 struct BindMapFactoryIntegrationTest : public ::testing::Test {
     bind_map_factory bmf;

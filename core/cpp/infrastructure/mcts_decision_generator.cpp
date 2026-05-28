@@ -1,4 +1,4 @@
-#include "../../hpp/infrastructure/mcts_decision_generator.hpp"
+#include "infrastructure/mcts_decision_generator.hpp"
 
 mcts_decision_generator::mcts_decision_generator(
     i_make_resolution_lineage& make_resolution_lineage,

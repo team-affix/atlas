@@ -1,4 +1,4 @@
-#include "../../hpp/infrastructure/active_goals.hpp"
+#include "infrastructure/active_goals.hpp"
 
 void active_goals::insert_active_goal(const goal_lineage* gl) {
     goals_.insert(gl);

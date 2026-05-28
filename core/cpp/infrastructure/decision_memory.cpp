@@ -1,4 +1,4 @@
-#include "../../hpp/infrastructure/decision_memory.hpp"
+#include "infrastructure/decision_memory.hpp"
 
 void decision_memory::record_decision(const resolution_lineage* rl) {
     decisions.insert(rl);

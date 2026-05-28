@@ -1,10 +1,10 @@
 #ifndef BACKTRACKABLE_INCREMENT_HPP
 #define BACKTRACKABLE_INCREMENT_HPP
 
-#include "i_backtrackable_mutation.hpp"
+#include "infrastructure/backtrackable_mutation.hpp"
 
 template<typename T>
-struct backtrackable_increment : i_backtrackable_mutation<T> {
+struct backtrackable_increment : backtrackable_mutation<T> {
     void invoke() override;
     void backtrack() override;
 };

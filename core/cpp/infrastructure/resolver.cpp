@@ -1,4 +1,4 @@
-#include "../../hpp/infrastructure/resolver.hpp"
+#include "infrastructure/resolver.hpp"
 
 resolver::resolver(
     i_make_goal_lineage& make_goal_lineage,

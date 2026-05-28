@@ -3,10 +3,10 @@
 
 #include <gtest/gtest.h>
 #include <gmock/gmock.h>
-#include "../../../core/hpp/infrastructure/copier.hpp"
-#include "../../../core/hpp/interfaces/i_var_sequencer.hpp"
-#include "../../../core/hpp/interfaces/i_make_functor.hpp"
-#include "../../../core/hpp/interfaces/i_make_var.hpp"
+#include "infrastructure/copier.hpp"
+#include "interfaces/i_var_sequencer.hpp"
+#include "interfaces/i_make_functor.hpp"
+#include "interfaces/i_make_var.hpp"
 
 using ::testing::_;
 using ::testing::ElementsAre;

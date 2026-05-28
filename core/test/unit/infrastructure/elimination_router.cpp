@@ -4,12 +4,12 @@
 
 #include <gtest/gtest.h>
 #include <gmock/gmock.h>
-#include "../../../core/hpp/infrastructure/elimination_router.hpp"
-#include "../../../core/hpp/value_objects/elimination_result.hpp"
-#include "../../../core/hpp/interfaces/i_deactivated_candidate_memory.hpp"
-#include "../../../core/hpp/interfaces/i_is_active_goal.hpp"
-#include "../../../core/hpp/interfaces/i_insert_backlogged_elimination.hpp"
-#include "../../../core/hpp/interfaces/i_candidate_deactivator.hpp"
+#include "infrastructure/elimination_router.hpp"
+#include "value_objects/elimination_result.hpp"
+#include "interfaces/i_deactivated_candidate_memory.hpp"
+#include "interfaces/i_is_active_goal.hpp"
+#include "interfaces/i_insert_backlogged_elimination.hpp"
+#include "interfaces/i_candidate_deactivator.hpp"
 
 using ::testing::Return;
 

@@ -3,10 +3,10 @@
 
 #include <utility>
 #include "debug_assert.hpp"
-#include "i_backtrackable_mutation.hpp"
+#include "infrastructure/backtrackable_mutation.hpp"
 
 template<typename M>
-struct backtrackable_map_insert : i_backtrackable_mutation<M> {
+struct backtrackable_map_insert : backtrackable_mutation<M> {
     backtrackable_map_insert(const M::key_type& key, const M::mapped_type& value);
     void invoke() override;
     void backtrack() override;

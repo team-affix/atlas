@@ -1,4 +1,4 @@
-#include "../../hpp/infrastructure/get_resolution_rule.hpp"
+#include "infrastructure/get_resolution_rule.hpp"
 
 get_resolution_rule::get_resolution_rule(const i_get_rule& get_rule)
     : get_rule_(get_rule) {}

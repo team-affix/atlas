@@ -1,4 +1,4 @@
-#include "../../hpp/infrastructure/mhu_elimination_generator.hpp"
+#include "infrastructure/mhu_elimination_generator.hpp"
 
 mhu_elimination_generator::mhu_elimination_generator(
     i_bind_map& common_,

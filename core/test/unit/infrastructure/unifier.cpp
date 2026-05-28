@@ -4,7 +4,7 @@
 
 #include <gtest/gtest.h>
 #include <gmock/gmock.h>
-#include "../../../core/hpp/infrastructure/unifier.hpp"
+#include "infrastructure/unifier.hpp"
 
 using ::testing::IsEmpty;
 using ::testing::Return;

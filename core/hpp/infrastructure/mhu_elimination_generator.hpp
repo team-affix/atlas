@@ -3,17 +3,17 @@
 
 #include <unordered_map>
 #include <unordered_set>
-#include "../interfaces/i_elimination_generator.hpp"
-#include "../interfaces/i_bind_map.hpp"
-#include "../interfaces/i_make_resolution_lineage.hpp"
-#include "../interfaces/i_make_var.hpp"
-#include "../interfaces/i_bind_map_factory.hpp"
-#include "../interfaces/i_overlay_bind_map_factory.hpp"
-#include "../interfaces/i_unifier_factory.hpp"
-#include "../interfaces/i_get_goal_candidate_rule_ids.hpp"
-#include "../interfaces/i_try_add_mhu_head.hpp"
-#include "../utility/state_machine.hpp"
-#include "../value_objects/unify_head.hpp"
+#include "interfaces/i_elimination_generator.hpp"
+#include "interfaces/i_bind_map.hpp"
+#include "interfaces/i_make_resolution_lineage.hpp"
+#include "interfaces/i_make_var.hpp"
+#include "interfaces/i_bind_map_factory.hpp"
+#include "interfaces/i_overlay_bind_map_factory.hpp"
+#include "interfaces/i_unifier_factory.hpp"
+#include "interfaces/i_get_goal_candidate_rule_ids.hpp"
+#include "interfaces/i_try_add_mhu_head.hpp"
+#include "infrastructure/state_machine.hpp"
+#include "value_objects/unify_head.hpp"
 
 struct mhu_elimination_generator
     : i_elimination_generator

@@ -2,7 +2,7 @@
 #define TRAIL_HPP
 
 #include <stack>
-#include "i_trail.hpp"
+#include "interfaces/i_trail.hpp"
 
 struct trail : i_trail {
     void push() override;

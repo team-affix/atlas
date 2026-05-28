@@ -3,7 +3,7 @@
 
 #include <gtest/gtest.h>
 #include <gmock/gmock.h>
-#include "../../../core/hpp/infrastructure/initial_goal_exprs.hpp"
+#include "infrastructure/initial_goal_exprs.hpp"
 
 using ::testing::ElementsAre;
 

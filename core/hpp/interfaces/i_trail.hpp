@@ -2,7 +2,7 @@
 #define I_TRAIL_HPP
 
 #include <memory>
-#include "i_backtrackable.hpp"
+#include "interfaces/i_backtrackable.hpp"
 
 struct i_trail {
     virtual ~i_trail() = default;

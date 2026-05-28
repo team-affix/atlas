@@ -4,8 +4,8 @@
 
 #include <gtest/gtest.h>
 #include <gmock/gmock.h>
-#include "../../../core/hpp/infrastructure/active_goals.hpp"
-#include "../../../core/hpp/value_objects/lineage.hpp"
+#include "infrastructure/active_goals.hpp"
+#include "value_objects/lineage.hpp"
 
 using ::testing::Contains;
 using ::testing::IsEmpty;

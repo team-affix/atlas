@@ -6,7 +6,7 @@
 #include <gmock/gmock.h>
 #include <stdexcept>
 #include <vector>
-#include "../../../core/hpp/utility/state_machine.hpp"
+#include "infrastructure/state_machine.hpp"
 
 using ::testing::ElementsAre;
 

@@ -2,9 +2,9 @@
 #define CANDIDATE_TRANSLATION_MAPS_HPP
 
 #include <unordered_map>
-#include "../interfaces/i_get_candidate_translation_map.hpp"
-#include "../interfaces/i_set_candidate_translation_map.hpp"
-#include "../interfaces/i_unset_candidate_translation_map.hpp"
+#include "interfaces/i_get_candidate_translation_map.hpp"
+#include "interfaces/i_set_candidate_translation_map.hpp"
+#include "interfaces/i_unset_candidate_translation_map.hpp"
 
 struct candidate_translation_maps
     : i_get_candidate_translation_map

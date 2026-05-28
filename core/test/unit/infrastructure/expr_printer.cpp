@@ -4,8 +4,8 @@
 #include <gtest/gtest.h>
 #include <gmock/gmock.h>
 #include <sstream>
-#include "../../../core/hpp/infrastructure/expr_printer.hpp"
-#include "../../../core/hpp/interfaces/i_var_names.hpp"
+#include "infrastructure/expr_printer.hpp"
+#include "interfaces/i_var_names.hpp"
 
 using ::testing::Return;
 using ::testing::ReturnRef;

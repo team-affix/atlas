@@ -1,19 +1,19 @@
 #ifndef RESOLVER_HPP
 #define RESOLVER_HPP
 
-#include "../interfaces/i_resolver.hpp"
-#include "../interfaces/i_make_goal_lineage.hpp"
-#include "../interfaces/i_make_resolution_lineage.hpp"
-#include "../interfaces/i_goal_activator.hpp"
-#include "../interfaces/i_goal_deactivator.hpp"
-#include "../interfaces/i_get_rule.hpp"
-#include "../interfaces/i_get_goal_db_rule_ids.hpp"
-#include "../interfaces/i_get_goal_candidate_rule_ids.hpp"
-#include "../interfaces/i_candidate_activator.hpp"
-#include "../interfaces/i_candidate_deactivator.hpp"
-#include "../interfaces/i_conflict_detector.hpp"
-#include "../interfaces/i_detect_unit_goal.hpp"
-#include "../interfaces/i_push_unit_goal.hpp"
+#include "interfaces/i_resolver.hpp"
+#include "interfaces/i_make_goal_lineage.hpp"
+#include "interfaces/i_make_resolution_lineage.hpp"
+#include "interfaces/i_goal_activator.hpp"
+#include "interfaces/i_goal_deactivator.hpp"
+#include "interfaces/i_get_rule.hpp"
+#include "interfaces/i_get_goal_db_rule_ids.hpp"
+#include "interfaces/i_get_goal_candidate_rule_ids.hpp"
+#include "interfaces/i_candidate_activator.hpp"
+#include "interfaces/i_candidate_deactivator.hpp"
+#include "interfaces/i_conflict_detector.hpp"
+#include "interfaces/i_detect_unit_goal.hpp"
+#include "interfaces/i_push_unit_goal.hpp"
 
 struct resolver : i_resolver {
     resolver(

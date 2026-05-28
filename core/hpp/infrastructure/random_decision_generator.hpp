@@ -2,10 +2,10 @@
 #define RANDOM_DECISION_GENERATOR_HPP
 
 #include <random>
-#include "../interfaces/i_generate_decision.hpp"
-#include "../interfaces/i_make_resolution_lineage.hpp"
-#include "../interfaces/i_iterate_active_goals.hpp"
-#include "../interfaces/i_get_goal_candidate_rule_ids.hpp"
+#include "interfaces/i_generate_decision.hpp"
+#include "interfaces/i_make_resolution_lineage.hpp"
+#include "interfaces/i_iterate_active_goals.hpp"
+#include "interfaces/i_get_goal_candidate_rule_ids.hpp"
 
 struct random_decision_generator : i_generate_decision {
     random_decision_generator(

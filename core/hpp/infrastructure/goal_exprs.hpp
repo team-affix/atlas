@@ -2,9 +2,9 @@
 #define GOAL_EXPRS_HPP
 
 #include <unordered_map>
-#include "../interfaces/i_get_goal_expr.hpp"
-#include "../interfaces/i_set_goal_expr.hpp"
-#include "../interfaces/i_unset_goal_expr.hpp"
+#include "interfaces/i_get_goal_expr.hpp"
+#include "interfaces/i_set_goal_expr.hpp"
+#include "interfaces/i_unset_goal_expr.hpp"
 
 struct goal_exprs
     : i_get_goal_expr

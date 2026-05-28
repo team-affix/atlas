@@ -5,13 +5,13 @@
 #include <gtest/gtest.h>
 #include <gmock/gmock.h>
 #include <random>
-#include "../../../core/hpp/infrastructure/mcts_decision_generator.hpp"
-#include "../../../core/hpp/infrastructure/rule_id_set.hpp"
-#include "../../../core/hpp/interfaces/i_make_resolution_lineage.hpp"
-#include "../../../core/hpp/interfaces/i_iterate_active_goals.hpp"
-#include "../../../core/hpp/interfaces/i_active_goals_size.hpp"
-#include "../../../core/hpp/interfaces/i_get_goal_candidate_rule_ids.hpp"
-#include "../../../mcts/include/mcts.hpp"
+#include "infrastructure/mcts_decision_generator.hpp"
+#include "infrastructure/rule_id_set.hpp"
+#include "interfaces/i_make_resolution_lineage.hpp"
+#include "interfaces/i_iterate_active_goals.hpp"
+#include "interfaces/i_active_goals_size.hpp"
+#include "interfaces/i_get_goal_candidate_rule_ids.hpp"
+#include "mcts.hpp"
 
 using ::testing::Return;
 using ::testing::ReturnRef;

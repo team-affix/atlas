@@ -1,11 +1,11 @@
 #include <memory>
-#include "../../hpp/infrastructure/cdcl_elimination_generator.hpp"
-#include "../../hpp/utility/backtrackable_set_insert.hpp"
-#include "../../hpp/utility/backtrackable_set_erase.hpp"
-#include "../../hpp/utility/backtrackable_map_insert.hpp"
-#include "../../hpp/utility/backtrackable_map_erase.hpp"
-#include "../../hpp/utility/backtrackable_map_at_insert.hpp"
-#include "../../hpp/utility/backtrackable_map_at_erase.hpp"
+#include "infrastructure/cdcl_elimination_generator.hpp"
+#include "infrastructure/backtrackable_set_insert.hpp"
+#include "infrastructure/backtrackable_set_erase.hpp"
+#include "infrastructure/backtrackable_map_insert.hpp"
+#include "infrastructure/backtrackable_map_erase.hpp"
+#include "infrastructure/backtrackable_map_at_insert.hpp"
+#include "infrastructure/backtrackable_map_at_erase.hpp"
 
 cdcl_elimination_generator::cdcl_elimination_generator(i_trail& trail) :
     avoidances(trail, {}),

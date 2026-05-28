@@ -2,10 +2,10 @@
 #define BACKTRACKABLE_SET_ERASE_HPP
 
 #include "debug_assert.hpp"
-#include "i_backtrackable_mutation.hpp"
+#include "infrastructure/backtrackable_mutation.hpp"
 
 template<typename S>
-struct backtrackable_set_erase : i_backtrackable_mutation<S> {
+struct backtrackable_set_erase : backtrackable_mutation<S> {
     backtrackable_set_erase(const S::value_type& value);
     void invoke() override;
     void backtrack() override;

@@ -3,8 +3,8 @@
 
 #include <gtest/gtest.h>
 #include <gmock/gmock.h>
-#include "../../../core/hpp/infrastructure/candidate_translation_maps.hpp"
-#include "../../../core/hpp/value_objects/lineage.hpp"
+#include "infrastructure/candidate_translation_maps.hpp"
+#include "value_objects/lineage.hpp"
 
 using ::testing::IsEmpty;
 using ::testing::Pair;

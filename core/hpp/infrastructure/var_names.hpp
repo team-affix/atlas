@@ -2,7 +2,7 @@
 #define VAR_NAMES_HPP
 
 #include <unordered_map>
-#include "../interfaces/i_var_names.hpp"
+#include "interfaces/i_var_names.hpp"
 
 struct var_names : i_var_names {
     var_names();

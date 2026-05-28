@@ -2,9 +2,9 @@
 
 #include <gtest/gtest.h>
 #include <gmock/gmock.h>
-#include "../../../core/hpp/infrastructure/goal_deactivator.hpp"
-#include "../../../core/hpp/interfaces/i_unset_goal_expr.hpp"
-#include "../../../core/hpp/interfaces/i_erase_goal_candidates.hpp"
+#include "infrastructure/goal_deactivator.hpp"
+#include "interfaces/i_unset_goal_expr.hpp"
+#include "interfaces/i_erase_goal_candidates.hpp"
 
 using ::testing::Sequence;
 

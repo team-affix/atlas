@@ -4,14 +4,14 @@
 
 #include <gtest/gtest.h>
 #include <gmock/gmock.h>
-#include "../../../core/hpp/infrastructure/candidate_activator.hpp"
-#include "../../../core/hpp/interfaces/i_copier.hpp"
-#include "../../../core/hpp/interfaces/i_set_candidate_translation_map.hpp"
-#include "../../../core/hpp/interfaces/i_try_add_mhu_head.hpp"
-#include "../../../core/hpp/interfaces/i_is_backlogged_elimination.hpp"
-#include "../../../core/hpp/interfaces/i_get_goal_expr.hpp"
-#include "../../../core/hpp/interfaces/i_get_rule.hpp"
-#include "../../../core/hpp/interfaces/i_link_goal_candidate.hpp"
+#include "infrastructure/candidate_activator.hpp"
+#include "interfaces/i_copier.hpp"
+#include "interfaces/i_set_candidate_translation_map.hpp"
+#include "interfaces/i_try_add_mhu_head.hpp"
+#include "interfaces/i_is_backlogged_elimination.hpp"
+#include "interfaces/i_get_goal_expr.hpp"
+#include "interfaces/i_get_rule.hpp"
+#include "interfaces/i_link_goal_candidate.hpp"
 
 using ::testing::_;
 using ::testing::Return;

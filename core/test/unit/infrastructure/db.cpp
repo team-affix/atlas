@@ -5,8 +5,8 @@
 #include <gmock/gmock.h>
 
 using ::testing::UnorderedElementsAre;
-#include "../../../core/hpp/infrastructure/db.hpp"
-#include "../../../core/hpp/value_objects/lineage.hpp"
+#include "infrastructure/db.hpp"
+#include "value_objects/lineage.hpp"
 
 struct DbTest : public ::testing::Test {
     expr head{expr::var{0}};

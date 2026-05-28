@@ -1,4 +1,4 @@
-#include "../../hpp/infrastructure/bind_map.hpp"
+#include "infrastructure/bind_map.hpp"
 
 bind_map::bind_map() {
 }

@@ -5,7 +5,7 @@
 #include <gtest/gtest.h>
 #include <gmock/gmock.h>
 #include <unordered_set>
-#include "../../../core/hpp/value_objects/lemma.hpp"
+#include "value_objects/lemma.hpp"
 
 using ::testing::UnorderedElementsAre;
 

@@ -1,4 +1,4 @@
-#include "../../hpp/utility/trail.hpp"
+#include "infrastructure/trail.hpp"
 
 void trail::push() {
     frame_boundary_stack.push(undo_stack.size());

@@ -1,9 +1,9 @@
 #include <gtest/gtest.h>
-#include "../../../core/hpp/infrastructure/bind_map_factory.hpp"
-#include "../../../core/hpp/infrastructure/overlay_bind_map_factory.hpp"
-#include "../../../core/hpp/infrastructure/unifier_factory.hpp"
-#include "../../../core/hpp/infrastructure/unifier.hpp"
-#include "../../../core/hpp/infrastructure/bind_map.hpp"
+#include "infrastructure/bind_map_factory.hpp"
+#include "infrastructure/overlay_bind_map_factory.hpp"
+#include "infrastructure/unifier_factory.hpp"
+#include "infrastructure/unifier.hpp"
+#include "infrastructure/bind_map.hpp"
 
 struct FactoriesIntegrationTest : public ::testing::Test {
 protected:

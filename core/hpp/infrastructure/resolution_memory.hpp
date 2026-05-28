@@ -2,10 +2,10 @@
 #define RESOLUTION_MEMORY_HPP
 
 #include <unordered_set>
-#include "../interfaces/i_clear_resolution_record.hpp"
-#include "../interfaces/i_derive_resolution_lemma.hpp"
-#include "../interfaces/i_get_resolution_count.hpp"
-#include "../interfaces/i_record_resolution.hpp"
+#include "interfaces/i_clear_resolution_record.hpp"
+#include "interfaces/i_derive_resolution_lemma.hpp"
+#include "interfaces/i_get_resolution_count.hpp"
+#include "interfaces/i_record_resolution.hpp"
 
 struct resolution_memory
     : i_record_resolution

@@ -1,7 +1,7 @@
 #include <array>
 #include <gtest/gtest.h>
-#include "../../../core/hpp/infrastructure/unifier.hpp"
-#include "../../../core/hpp/infrastructure/bind_map.hpp"
+#include "infrastructure/unifier.hpp"
+#include "infrastructure/bind_map.hpp"
 
 struct UnifierBindMapIntegrationTest : public ::testing::Test {
 protected:

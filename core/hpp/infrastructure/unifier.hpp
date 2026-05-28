@@ -1,8 +1,8 @@
 #ifndef UNIFIER_HPP
 #define UNIFIER_HPP
 
-#include "../interfaces/i_unifier.hpp"
-#include "../interfaces/i_bind_map.hpp"
+#include "interfaces/i_unifier.hpp"
+#include "interfaces/i_bind_map.hpp"
 
 struct unifier : i_unifier {
     virtual ~unifier() = default;

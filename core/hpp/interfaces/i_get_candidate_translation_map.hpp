@@ -1,8 +1,8 @@
 #ifndef I_GET_CANDIDATE_TRANSLATION_MAP_HPP
 #define I_GET_CANDIDATE_TRANSLATION_MAP_HPP
 
-#include "../value_objects/lineage.hpp"
-#include "../value_objects/translation_map.hpp"
+#include "value_objects/lineage.hpp"
+#include "value_objects/translation_map.hpp"
 
 struct i_get_candidate_translation_map {
     virtual ~i_get_candidate_translation_map() = default;

@@ -1,12 +1,12 @@
 #ifndef SOLVER_HPP
 #define SOLVER_HPP
 
-#include "../interfaces/i_solve.hpp"
-#include "../interfaces/i_set_up_sim.hpp"
-#include "../interfaces/i_tear_down_sim.hpp"
-#include "../interfaces/i_run_sim.hpp"
-#include "../interfaces/i_learn_avoidance.hpp"
-#include "../interfaces/i_elimination_router.hpp"
+#include "interfaces/i_solve.hpp"
+#include "interfaces/i_set_up_sim.hpp"
+#include "interfaces/i_tear_down_sim.hpp"
+#include "interfaces/i_run_sim.hpp"
+#include "interfaces/i_learn_avoidance.hpp"
+#include "interfaces/i_elimination_router.hpp"
 #include "core/hpp/interfaces/i_get_decision_count.hpp"
 #include "core/hpp/interfaces/i_derive_decision_lemma.hpp"
 
