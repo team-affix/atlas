@@ -24,26 +24,26 @@ struct DecisionMemoryTest : public ::testing::Test {
 };
 
 TEST_F(DecisionMemoryTest, DeriveLemmaEmptyWithNoInsertions) {
-    EXPECT_THAT(mem.derive_lemma().get_resolutions(), IsEmpty());
+    EXPECT_THAT(mem.derive_decision_lemma().get_resolutions(), IsEmpty());
 }
 
 TEST_F(DecisionMemoryTest, InsertIncreasesSize) {
-    mem.insert(&rl0);
-    EXPECT_THAT(mem.size(), Eq(1u));
+    mem.record_decision(&rl0);
+    EXPECT_THAT(mem.get_decision_count(), Eq(1u));
 }
 
 TEST_F(DecisionMemoryTest, ClearRemovesAllDecisions) {
-    mem.insert(&rl0);
-    mem.insert(&rl1);
-    mem.clear();
-    EXPECT_THAT(mem.size(), Eq(0u));
+    mem.record_decision(&rl0);
+    mem.record_decision(&rl1);
+    mem.clear_decision_record();
+    EXPECT_THAT(mem.get_decision_count(), Eq(0u));
 }
 
 TEST_F(DecisionMemoryTest, DeriveLemmaContainsInsertedResolutions) {
-    mem.insert(&rl0);
-    mem.insert(&rl1);
+    mem.record_decision(&rl0);
+    mem.record_decision(&rl1);
 
-    EXPECT_THAT(mem.derive_lemma().get_resolutions(),
+    EXPECT_THAT(mem.derive_decision_lemma().get_resolutions(),
         UnorderedElementsAre(&rl0, &rl1));
 }
 
@@ -54,9 +54,9 @@ TEST_F(DecisionMemoryTest, DeriveLemmaPrunesAncestorResolutions) {
     goal_lineage goal1{&res1, &goal_expr0};
     resolution_lineage res2{&goal1, &rule0};
 
-    mem.insert(&res0);
-    mem.insert(&res1);
-    mem.insert(&res2);
+    mem.record_decision(&res0);
+    mem.record_decision(&res1);
+    mem.record_decision(&res2);
 
-    EXPECT_THAT(mem.derive_lemma().get_resolutions(), UnorderedElementsAre(&res2));
+    EXPECT_THAT(mem.derive_decision_lemma().get_resolutions(), UnorderedElementsAre(&res2));
 }

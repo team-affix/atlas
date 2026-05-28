@@ -1,13 +1,17 @@
 #include "../../hpp/infrastructure/resolution_memory.hpp"
 
-void resolution_memory::insert(const resolution_lineage* rl) {
+void resolution_memory::record_resolution(const resolution_lineage* rl) {
     resolutions.insert(rl);
 }
 
-void resolution_memory::clear() {
+void resolution_memory::clear_resolution_record() {
     resolutions.clear();
 }
 
-lemma resolution_memory::derive_lemma() const {
+size_t resolution_memory::get_resolution_count() const {
+    return resolutions.size();
+}
+
+lemma resolution_memory::derive_resolution_lemma() const {
     return lemma{resolutions};
 }

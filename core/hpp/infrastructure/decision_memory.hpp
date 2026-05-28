@@ -5,10 +5,10 @@
 #include "../interfaces/i_decision_memory.hpp"
 
 struct decision_memory : i_decision_memory {
-    void insert(const resolution_lineage*) override;
-    void clear() override;
-    size_t size() const override;
-    lemma derive_lemma() const override;
+    void record_decision(const resolution_lineage*) override;
+    void clear_decision_record() override;
+    size_t get_decision_count() const override;
+    lemma derive_decision_lemma() const override;
 private:
     std::unordered_set<const resolution_lineage*> decisions;
 };

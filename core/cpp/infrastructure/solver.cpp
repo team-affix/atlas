@@ -19,8 +19,7 @@ state_machine<sim_termination> solver::solve() {
     bool refuted = false;
     while (!refuted) {
         set_up_sim.set_up();
-        auto r = run_sim.run();
-        co_yield r;
+        co_yield run_sim.run();
         tear_down_sim.tear_down();
     }
 }

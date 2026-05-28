@@ -23,22 +23,22 @@ struct ResolutionMemoryTest : public ::testing::Test {
 };
 
 TEST_F(ResolutionMemoryTest, DeriveLemmaEmptyAfterClear) {
-    mem.insert(&rl0);
-    mem.insert(&rl1);
-    mem.clear();
+    mem.record_resolution(&rl0);
+    mem.record_resolution(&rl1);
+    mem.clear_resolution_record();
 
-    EXPECT_THAT(mem.derive_lemma().get_resolutions(), IsEmpty());
+    EXPECT_THAT(mem.derive_resolution_lemma().get_resolutions(), IsEmpty());
 }
 
 TEST_F(ResolutionMemoryTest, DeriveLemmaEmptyWithNoInsertions) {
-    EXPECT_THAT(mem.derive_lemma().get_resolutions(), IsEmpty());
+    EXPECT_THAT(mem.derive_resolution_lemma().get_resolutions(), IsEmpty());
 }
 
 TEST_F(ResolutionMemoryTest, DeriveLemmaContainsInsertedResolutions) {
-    mem.insert(&rl0);
-    mem.insert(&rl1);
+    mem.record_resolution(&rl0);
+    mem.record_resolution(&rl1);
 
-    EXPECT_THAT(mem.derive_lemma().get_resolutions(),
+    EXPECT_THAT(mem.derive_resolution_lemma().get_resolutions(),
         UnorderedElementsAre(&rl0, &rl1));
 }
 
@@ -49,9 +49,9 @@ TEST_F(ResolutionMemoryTest, DeriveLemmaPrunesAncestorResolutions) {
     goal_lineage goal1{&res1, &goal_expr0};
     resolution_lineage res2{&goal1, &rule0};
 
-    mem.insert(&res0);
-    mem.insert(&res1);
-    mem.insert(&res2);
+    mem.record_resolution(&res0);
+    mem.record_resolution(&res1);
+    mem.record_resolution(&res2);
 
-    EXPECT_THAT(mem.derive_lemma().get_resolutions(), UnorderedElementsAre(&res2));
+    EXPECT_THAT(mem.derive_resolution_lemma().get_resolutions(), UnorderedElementsAre(&res2));
 }

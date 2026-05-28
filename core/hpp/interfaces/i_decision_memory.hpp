@@ -1,15 +1,17 @@
 #ifndef I_DECISION_MEMORY_HPP
 #define I_DECISION_MEMORY_HPP
 
-#include "../value_objects/lineage.hpp"
-#include "../value_objects/lemma.hpp"
+#include "i_derive_decision_lemma.hpp"
+#include "i_clear_decision_record.hpp"
+#include "i_get_decision_count.hpp"
+#include "i_record_decision.hpp"
 
-struct i_decision_memory {
+struct i_decision_memory
+    : i_record_decision
+    , i_clear_decision_record
+    , i_get_decision_count
+    , i_derive_decision_lemma {
     virtual ~i_decision_memory() = default;
-    virtual void insert(const resolution_lineage*) = 0;
-    virtual void clear() = 0;
-    virtual size_t size() const = 0;
-    virtual lemma derive_lemma() const = 0;
 };
 
 #endif
