@@ -22,6 +22,6 @@ void goal_candidate_rules::unlink_goal_candidate(const goal_lineage* gl, rule_id
     it->second.erase(r);
 }
 
-void goal_candidate_rules::constrain_goal_candidate_rules(const resolution_lineage* rl) {
-    by_goal_.erase(rl->parent);
+void goal_candidate_rules::erase(const goal_lineage* gl) {
+    by_goal_.erase(gl);
 }

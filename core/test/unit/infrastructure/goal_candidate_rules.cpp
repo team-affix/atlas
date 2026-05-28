@@ -1,5 +1,5 @@
-// Goal–candidate rule id index: link/unlink per goal, constrain on resolution prunes parent
-// bucket, and get returns empty rule id set for unknown goals.
+// Goal–candidate rule id index: link/unlink per goal, erase removes a goal bucket, and get
+// returns empty rule id set for unknown goals.
 
 #include <gtest/gtest.h>
 #include <gmock/gmock.h>
@@ -50,9 +50,9 @@ TEST_F(GoalCandidateRulesTest, UnlinkRemovesRule) {
     EXPECT_THAT(collect_rule_ids(index.get(&gl)), UnorderedElementsAre(kRule1));
 }
 
-TEST_F(GoalCandidateRulesTest, ConstrainRemovesParentGoalBucket) {
+TEST_F(GoalCandidateRulesTest, EraseRemovesGoalBucket) {
     index.link_goal_candidate(&gl, kRule0);
-    index.constrain_goal_candidate_rules(&rl);
+    index.erase(&gl);
     EXPECT_THAT(collect_rule_ids(index.get(&gl)), IsEmpty());
 }
 

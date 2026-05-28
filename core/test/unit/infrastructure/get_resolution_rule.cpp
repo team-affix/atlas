@@ -1,0 +1,26 @@
+#include <gtest/gtest.h>
+#include <gmock/gmock.h>
+#include "../../../core/hpp/infrastructure/get_resolution_rule.hpp"
+#include "../../../core/hpp/interfaces/i_get_rule.hpp"
+
+using ::testing::Return;
+
+struct MockGetRule : public i_get_rule {
+    MOCK_METHOD(const rule*, get, (rule_id), (const, override));
+};
+
+struct GetResolutionRuleTest : public ::testing::Test {
+    static constexpr rule_id kRule = 2;
+
+    MockGetRule get_rule;
+    get_resolution_rule lookup{get_rule};
+    goal_lineage parent_gl{nullptr, 0};
+    resolution_lineage rl{&parent_gl, kRule};
+    expr head{expr::var{0}};
+    rule r{&head, {}};
+};
+
+TEST_F(GetResolutionRuleTest, DelegatesToRuleLookupByResolutionIdx) {
+    EXPECT_CALL(get_rule, get(kRule)).WillOnce(Return(&r));
+    EXPECT_EQ(lookup.get(&rl), &r);
+}
