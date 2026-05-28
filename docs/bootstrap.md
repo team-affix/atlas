@@ -13,23 +13,67 @@ A **manifest** (or **session** / **context** type) is the single place that:
 
 Different manifests (or manifest factories) select variants — e.g. random vs MCTS decision generator, debug vs fast — without changing `sim` or `solver` implementations.
 
+## First manifest: `random` + `joint`
+
+The first full production manifest wires:
+
+| Registered for `sim` / `solver` | Concrete type | Notes |
+|----------------------------------|---------------|--------|
+| `i_generate_decision` | **`random_decision_generator`** | Needs `std::mt19937` owned by session |
+| `i_elimination_generator` (sim) | **`joint_elimination_generator`** | Facade only — must reference existing CDCL + MHU |
+| `i_learn_avoidance` (solver) | **`cdcl_elimination_generator`** | Same CDCL object as joint’s first arm, **not** the joint |
+| `i_try_add_mhu_head` / `i_clear_mhu_heads` | **`mhu_elimination_generator`** | Same MHU object as joint’s second arm |
+
+**`joint_elimination_generator` does not replace CDCL or MHU.** The manifest must construct and own all three; `joint` only holds references:
+
+```cpp
+auto cdcl = std::make_unique<cdcl_elimination_generator>(trail);
+auto mhu  = std::make_unique<mhu_elimination_generator>(
+    bind_map, lineage_pool, expr_pool, bind_map_factory,
+    overlay_bind_map_factory, unifier_factory, goal_candidate_rules);
+auto joint = std::make_unique<joint_elimination_generator>(*cdcl, *mhu);
+```
+
+Construction order for the elimination slice (after `trail`, `bind_map`, factories, `lineage_pool`, `goal_candidate_rules`, `expr_pool`):
+
+```mermaid
+flowchart LR
+  trail[trail]
+  cdcl[cdcl_elimination_generator]
+  mhu[mhu_elimination_generator]
+  joint[joint_elimination_generator]
+  sim[sim uses joint]
+  solver[solver uses cdcl for learn]
+  trail --> cdcl
+  bind_map --> mhu
+  cdcl --> joint
+  mhu --> joint
+  joint --> sim
+  cdcl --> solver
+  mhu --> candidate_activator
+```
+
+`random_decision_generator` is built **after** `active_goals`, `goal_candidate_rules`, and `lineage_pool` (it iterates goals and reads candidate rules).
+
+Factory entry point name (proposed):
+
+```cpp
+std::unique_ptr<i_solver_session> make_random_joint_session(solver_session_config cfg);
+```
+
+MCTS and other decision generators stay separate manifests later; they still reuse the same CDCL/MHU/joint triple if elimination policy unchanged.
+
 ## Suggested layout
 
 ```
-core/hpp/bootstrap/
-  solver_session.hpp      # owns storage + wires sim + solver; public API
-  solver_session_config.hpp  # max_resolutions, seed, decision_generator kind, db ref
-
-core/cpp/bootstrap/
-  solver_session.cpp      # build_* helpers or one Build() method
+core/hpp/infrastructure/basic_manifest.hpp   # first manifest: owns storage + wires sim + solver
+core/cpp/infrastructure/basic_manifest.cpp
 ```
 
 Optional later split if manifests diverge:
 
 ```
-core/hpp/bootstrap/manifests/
-  random_decision_manifest.hpp
-  mcts_decision_manifest.hpp
+core/hpp/infrastructure/mcts_manifest.hpp   # later, same pattern as basic_manifest
 ```
 
 Each manifest implements the same narrow interface:
@@ -129,11 +173,11 @@ Document this list in the manifest `.cpp` with comments — it is the main footg
 Use **subclasses or named factory functions**, not a global registry:
 
 ```cpp
-std::unique_ptr<i_solver_session> make_random_session(solver_session_config cfg);
-std::unique_ptr<i_solver_session> make_mcts_session(solver_session_config cfg);
+std::unique_ptr<i_solver_session> make_random_joint_session(solver_session_config cfg);
+std::unique_ptr<i_solver_session> make_mcts_joint_session(solver_session_config cfg);  // later
 ```
 
-Each factory returns the same `solver_session` type with different `unique_ptr<i_generate_decision>` installed in phase 1 step 7.
+Each factory returns the same `solver_session` type; the first manifest only swaps step 7 (`random_decision_generator` vs MCTS). CDCL/MHU/joint construction is shared.
 
 ## Testing strategy
 
