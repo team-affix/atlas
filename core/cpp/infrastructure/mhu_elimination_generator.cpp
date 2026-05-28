@@ -2,15 +2,15 @@
 
 mhu_elimination_generator::mhu_elimination_generator(
     i_bind_map& common_,
-    i_lineage_pool& lp_,
-    i_expr_pool& expr_pool_,
+    i_make_resolution_lineage& make_resolution_lineage_,
+    i_make_var& make_var_,
     i_bind_map_factory& bind_map_factory_,
     i_overlay_bind_map_factory& overlay_bind_map_factory_,
     i_unifier_factory& unifier_factory_,
     const i_get_goal_candidate_rules& get_goal_candidates_) :
     common_(common_),
-    lp_(lp_),
-    expr_pool_(expr_pool_),
+    make_resolution_lineage_(make_resolution_lineage_),
+    make_var_(make_var_),
     bind_map_factory_(bind_map_factory_),
     overlay_bind_map_factory_(overlay_bind_map_factory_),
     unifier_factory_(unifier_factory_),
@@ -56,7 +56,7 @@ state_machine<const resolution_lineage*> mhu_elimination_generator::constrain(co
         auto candidate = it_sm.resume();
         if (!candidate.has_value()) continue;
         if (candidate.value() == lineage->idx) continue;
-        remove_head(lp_.resolution(gl, candidate.value()));
+        remove_head(make_resolution_lineage_.make(gl, candidate.value()));
     }
     
     // 4. get the head for this lineage
@@ -68,7 +68,7 @@ state_machine<const resolution_lineage*> mhu_elimination_generator::constrain(co
     // 6. for each rep change, add the link to new rep
     for (auto rep : rep_changes) {
         // 6.1 get new whnf
-        auto new_rep = head.local_bind_map->whnf(expr_pool_.var(rep));
+        auto new_rep = head.local_bind_map->whnf(make_var_.make(rep));
         // 6.2 bind the old rep to the new rep
         common_.bind(rep, new_rep);
         // 6.3 propagate the rep changes to all concerned heads
@@ -95,7 +95,7 @@ state_machine<const resolution_lineage*> mhu_elimination_generator::rebase(uint3
         auto& unifier = heads_.at(rl).unifier;
         
         // 2.1 unify and link the parent goal's expr with the copied rule head
-        if (!unify_and_link(*unifier, rl, expr_pool_.var(rep), new_rep)) {
+        if (!unify_and_link(*unifier, rl, make_var_.make(rep), new_rep)) {
             remove_head(rl);
             co_yield rl;
         }

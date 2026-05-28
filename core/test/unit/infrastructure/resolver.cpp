@@ -4,9 +4,11 @@
 
 #include <gtest/gtest.h>
 #include <gmock/gmock.h>
+#include <type_traits>
 #include "../../../core/hpp/infrastructure/resolver.hpp"
 #include "../../../core/hpp/infrastructure/rule_set.hpp"
-#include "../../../core/hpp/interfaces/i_lineage_pool.hpp"
+#include "../../../core/hpp/interfaces/i_make_goal_lineage.hpp"
+#include "../../../core/hpp/interfaces/i_make_resolution_lineage.hpp"
 #include "../../../core/hpp/interfaces/i_goal_activator.hpp"
 #include "../../../core/hpp/interfaces/i_goal_deactivator.hpp"
 #include "../../../core/hpp/interfaces/i_get_goal_db_rules.hpp"
@@ -20,20 +22,11 @@
 using ::testing::Return;
 using ::testing::ReturnRef;
 
-struct MockLineagePool : public i_lineage_pool {
-    MOCK_METHOD((const goal_lineage*), goal, (const resolution_lineage*, subgoal_id), (override));
-    MOCK_METHOD((const resolution_lineage*), resolution, (const goal_lineage*, rule_id), (override));
-    MOCK_METHOD(void, pin_goal, (const goal_lineage*), ());
-    MOCK_METHOD(void, pin_resolution, (const resolution_lineage*), ());
-    MOCK_METHOD(void, trim, (), (override));
-    MOCK_METHOD((const goal_lineage*), import_goal, (const goal_lineage*), ());
-    MOCK_METHOD((const resolution_lineage*), import_resolution, (const resolution_lineage*), ());
-    void pin(const goal_lineage* gl) override { pin_goal(gl); }
-    void pin(const resolution_lineage* rl) override { pin_resolution(rl); }
-    const goal_lineage* import(const goal_lineage* gl) override { return import_goal(gl); }
-    const resolution_lineage* import(const resolution_lineage* rl) override {
-        return import_resolution(rl);
-    }
+struct MockLineagePool
+    : i_make_goal_lineage
+    , i_make_resolution_lineage {
+    MOCK_METHOD((const goal_lineage*), make, (const resolution_lineage*, subgoal_id), (override));
+    MOCK_METHOD((const resolution_lineage*), make, (const goal_lineage*, rule_id), (override));
 };
 
 struct MockGoalActivator : public i_goal_activator {
@@ -87,6 +80,7 @@ struct ResolverTest : public ::testing::Test {
     MockPushUnitGoal push_unit_goal;
     resolver res{
         lp,
+        lp,
         goal_activator,
         goal_deactivator,
         ggdr,
@@ -117,7 +111,7 @@ TEST_F(ResolverTest, EmptyBodyDeactivatesParentOnly) {
     resolution_lineage empty_res{&parent_gl, &empty_body_rule};
     parent_candidates.insert(&empty_body_rule);
     EXPECT_CALL(ggcr, get(&parent_gl)).WillOnce(ReturnRef(parent_candidates));
-    EXPECT_CALL(lp, resolution(&parent_gl, &empty_body_rule)).WillOnce(Return(&empty_res));
+    EXPECT_CALL(lp, make(&parent_gl, &empty_body_rule)).WillOnce(Return(&empty_res));
     EXPECT_CALL(candidate_deactivator, deactivate(&empty_res)).Times(1);
     EXPECT_CALL(goal_deactivator, deactivate(&parent_gl)).Times(1);
     EXPECT_TRUE(res.resolve(&empty_rl));
@@ -125,10 +119,10 @@ TEST_F(ResolverTest, EmptyBodyDeactivatesParentOnly) {
 
 TEST_F(ResolverTest, ConflictOnBodyGoalReturnsFalse) {
     db_rules.insert(&db_rule);
-    EXPECT_CALL(lp, goal(&rl, &body_goal)).WillOnce(Return(&body_gl));
+    EXPECT_CALL(lp, make(&rl, &body_goal)).WillOnce(Return(&body_gl));
     EXPECT_CALL(goal_activator, activate(&body_gl)).Times(1);
     EXPECT_CALL(ggdr, get(&body_gl)).WillOnce(ReturnRef(db_rules));
-    EXPECT_CALL(lp, resolution(&body_gl, &db_rule)).WillOnce(Return(&body_res));
+    EXPECT_CALL(lp, make(&body_gl, &db_rule)).WillOnce(Return(&body_res));
     EXPECT_CALL(candidate_activator, activate(&body_res)).Times(1);
     EXPECT_CALL(conflict_detector, detect(&body_gl)).WillOnce(Return(true));
     EXPECT_CALL(goal_deactivator, deactivate).Times(0);
@@ -137,10 +131,10 @@ TEST_F(ResolverTest, ConflictOnBodyGoalReturnsFalse) {
 
 TEST_F(ResolverTest, UnitBodyGoalIsPushed) {
     db_rules.insert(&db_rule);
-    EXPECT_CALL(lp, goal(&rl, &body_goal)).WillOnce(Return(&body_gl));
+    EXPECT_CALL(lp, make(&rl, &body_goal)).WillOnce(Return(&body_gl));
     EXPECT_CALL(goal_activator, activate(&body_gl)).Times(1);
     EXPECT_CALL(ggdr, get(&body_gl)).WillOnce(ReturnRef(db_rules));
-    EXPECT_CALL(lp, resolution(&body_gl, &db_rule)).WillOnce(Return(&body_res));
+    EXPECT_CALL(lp, make(&body_gl, &db_rule)).WillOnce(Return(&body_res));
     EXPECT_CALL(candidate_activator, activate(&body_res)).Times(1);
     EXPECT_CALL(conflict_detector, detect(&body_gl)).WillOnce(Return(false));
     EXPECT_CALL(unit_goal_detector, detect_goal(&body_gl)).WillOnce(Return(true));

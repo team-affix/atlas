@@ -12,7 +12,7 @@ cdcl_elimination_generator::cdcl_elimination_generator(i_trail& trail) :
     watched_goals(trail, {}) {
 }
 
-const resolution_lineage* cdcl_elimination_generator::learn(const lemma& l) {
+std::optional<const resolution_lineage*> cdcl_elimination_generator::learn(const lemma& l) {
     // 1. get the resolutions
     const auto& resolutions = l.get_resolutions();
     
@@ -23,7 +23,10 @@ const resolution_lineage* cdcl_elimination_generator::learn(const lemma& l) {
     //       because the avoidance should always be a new one.
     
     // 3. insert the avoidance into the store
-    return insert(av);
+    const resolution_lineage* elim = insert(av);
+    if (elim == nullptr)
+        return std::nullopt;
+    return elim;
 }
 
 state_machine<const resolution_lineage*> cdcl_elimination_generator::constrain(const resolution_lineage* rl) {

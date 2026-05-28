@@ -7,7 +7,7 @@
 #include <random>
 #include "../../../core/hpp/infrastructure/mcts_decision_generator.hpp"
 #include "../../../core/hpp/infrastructure/rule_set.hpp"
-#include "../../../core/hpp/interfaces/i_lineage_pool.hpp"
+#include "../../../core/hpp/interfaces/i_make_resolution_lineage.hpp"
 #include "../../../core/hpp/interfaces/i_iterate_active_goals.hpp"
 #include "../../../core/hpp/interfaces/i_active_goals_size.hpp"
 #include "../../../core/hpp/interfaces/i_get_goal_candidate_rules.hpp"
@@ -24,20 +24,8 @@ state_machine<const goal_lineage*> single_goal(const goal_lineage* gl) {
 
 }  // namespace
 
-struct MockLineagePool : public i_lineage_pool {
-    MOCK_METHOD((const goal_lineage*), goal, (const resolution_lineage*, subgoal_id), (override));
-    MOCK_METHOD((const resolution_lineage*), resolution, (const goal_lineage*, rule_id), (override));
-    MOCK_METHOD(void, pin_goal, (const goal_lineage*), ());
-    MOCK_METHOD(void, pin_resolution, (const resolution_lineage*), ());
-    MOCK_METHOD(void, trim, (), (override));
-    MOCK_METHOD((const goal_lineage*), import_goal, (const goal_lineage*), ());
-    MOCK_METHOD((const resolution_lineage*), import_resolution, (const resolution_lineage*), ());
-    void pin(const goal_lineage* gl) override { pin_goal(gl); }
-    void pin(const resolution_lineage* rl) override { pin_resolution(rl); }
-    const goal_lineage* import(const goal_lineage* gl) override { return import_goal(gl); }
-    const resolution_lineage* import(const resolution_lineage* rl) override {
-        return import_resolution(rl);
-    }
+struct MockMakeResolutionLineage : public i_make_resolution_lineage {
+    MOCK_METHOD((const resolution_lineage*), make, (const goal_lineage*, rule_id), (override));
 };
 
 struct MockIterateActiveGoals : public i_iterate_active_goals {
@@ -54,7 +42,7 @@ struct MockGetGoalCandidateRules : public i_get_goal_candidate_rules {
 };
 
 struct MctsDecisionGeneratorTest : public ::testing::Test {
-    MockLineagePool lp;
+    MockMakeResolutionLineage lp;
     MockIterateActiveGoals iterate_active_goals;
     MockActiveGoalsSize active_goals_size;
     MockGetGoalCandidateRules ggcr;
@@ -77,6 +65,6 @@ TEST_F(MctsDecisionGeneratorTest, GenerateResolvesChosenGoalAndRule) {
     EXPECT_CALL(iterate_active_goals, iterate_active_goals())
         .WillOnce([&] { return single_goal(&gl); });
     EXPECT_CALL(ggcr, get(&gl)).WillOnce(ReturnRef(candidates));
-    EXPECT_CALL(lp, resolution(&gl, &r)).WillOnce(Return(&expected_rl));
+    EXPECT_CALL(lp, make(&gl, &r)).WillOnce(Return(&expected_rl));
     EXPECT_EQ(generator.generate(), &expected_rl);
 }

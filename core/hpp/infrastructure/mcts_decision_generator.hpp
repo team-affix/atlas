@@ -3,7 +3,7 @@
 
 #include <random>
 #include "../interfaces/i_decision_generator.hpp"
-#include "../interfaces/i_lineage_pool.hpp"
+#include "../interfaces/i_make_resolution_lineage.hpp"
 #include "../interfaces/i_iterate_active_goals.hpp"
 #include "../interfaces/i_active_goals_size.hpp"
 #include "../interfaces/i_get_goal_candidate_rules.hpp"
@@ -12,7 +12,7 @@
 
 struct mcts_decision_generator : i_decision_generator {
     mcts_decision_generator(
-        i_lineage_pool& lp,
+        i_make_resolution_lineage& make_resolution_lineage,
         i_iterate_active_goals& iterate_active_goals,
         i_active_goals_size& active_goals_size,
         i_get_goal_candidate_rules& ggcr,
@@ -22,7 +22,7 @@ private:
     const goal_lineage* choose_goal();
     const rule* choose_candidate(const goal_lineage*);
 
-    i_lineage_pool& lp;
+    i_make_resolution_lineage& make_resolution_lineage;
     i_iterate_active_goals& iterate_active_goals;
     i_active_goals_size& active_goals_size;
     i_get_goal_candidate_rules& ggcr;

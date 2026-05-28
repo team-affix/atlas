@@ -1,8 +1,8 @@
 #include <stdexcept>
 #include "../../hpp/infrastructure/normalizer.hpp"
 
-normalizer::normalizer(i_expr_pool& expr_pool, i_bind_map& bind_map) :
-    expr_pool_ref(expr_pool),
+normalizer::normalizer(i_make_functor& make_functor, i_bind_map& bind_map) :
+    make_functor_ref(make_functor),
     bind_map_ref(bind_map) {
 }
 
@@ -17,7 +17,7 @@ const expr* normalizer::normalize(const expr* e) {
         normalized_args.reserve(f->args.size());
         for (const expr* arg : f->args)
             normalized_args.push_back(normalize(arg));
-        return expr_pool_ref.functor(f->name, std::move(normalized_args));
+        return make_functor_ref.make(f->name, normalized_args);
     }
 
     throw std::runtime_error("Unsupported expression type");

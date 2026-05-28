@@ -105,11 +105,11 @@ protected:
 // ---------------------------------------------------------------------------
 
 TEST_F(CdclEliminationGeneratorUnitTest, LearnUnitAvoidanceReturnsEliminationWithoutStoring) {
-    EXPECT_EQ(cdcl.learn(make_lemma({&lin_0_0})), &lin_0_0);
+    EXPECT_EQ(cdcl.learn(make_lemma({&lin_0_0})), std::optional{&lin_0_0});
 }
 
 TEST_F(CdclEliminationGeneratorUnitTest, LearnMultiMemberAvoidanceReturnsNull) {
-    EXPECT_EQ(cdcl.learn(make_lemma({&lin_0_0, &lin_1_0})), nullptr);
+    EXPECT_EQ(cdcl.learn(make_lemma({&lin_0_0, &lin_1_0})), std::nullopt);
 }
 
 TEST_F(CdclEliminationGeneratorUnitTest, LearnUnitAvoidanceDoesNotLogToTrail) {
@@ -117,7 +117,7 @@ TEST_F(CdclEliminationGeneratorUnitTest, LearnUnitAvoidanceDoesNotLogToTrail) {
     cdcl_elimination_generator strict_cdcl{strict_trail};
 
     EXPECT_CALL(strict_trail, log(_)).Times(0);
-    EXPECT_EQ(strict_cdcl.learn(make_lemma({&lin_0_0})), &lin_0_0);
+    EXPECT_EQ(strict_cdcl.learn(make_lemma({&lin_0_0})), std::optional{&lin_0_0});
 }
 
 TEST_F(CdclEliminationGeneratorUnitTest, LearnMultiMemberAvoidanceLogsToTrail) {
@@ -125,13 +125,13 @@ TEST_F(CdclEliminationGeneratorUnitTest, LearnMultiMemberAvoidanceLogsToTrail) {
     cdcl_elimination_generator strict_cdcl{strict_trail};
 
     EXPECT_CALL(strict_trail, log(_)).Times(AtLeast(1));
-    EXPECT_EQ(strict_cdcl.learn(make_lemma({&lin_0_0, &lin_1_0})), nullptr);
+    EXPECT_EQ(strict_cdcl.learn(make_lemma({&lin_0_0, &lin_1_0})), std::nullopt);
 }
 
 TEST_F(CdclEliminationGeneratorUnitTest, LearnDuplicateAvoidanceIsIdempotent) {
     const lemma l = make_lemma({&lin_0_0, &lin_1_0});
-    EXPECT_EQ(cdcl.learn(l), nullptr);
-    EXPECT_EQ(cdcl.learn(l), nullptr);
+    EXPECT_EQ(cdcl.learn(l), std::nullopt);
+    EXPECT_EQ(cdcl.learn(l), std::nullopt);
 }
 
 TEST_F(CdclEliminationGeneratorUnitTest, LearnDuplicateAvoidanceDoesNotLogToTrail) {
@@ -141,17 +141,17 @@ TEST_F(CdclEliminationGeneratorUnitTest, LearnDuplicateAvoidanceDoesNotLogToTrai
     const lemma l = make_lemma({&lin_0_0, &lin_1_0});
 
     EXPECT_CALL(strict_trail, log(_)).Times(AtLeast(1));
-    EXPECT_EQ(strict_cdcl.learn(l), nullptr);
+    EXPECT_EQ(strict_cdcl.learn(l), std::nullopt);
     testing::Mock::VerifyAndClearExpectations(&strict_trail);
 
     EXPECT_CALL(strict_trail, log(_)).Times(0);
-    EXPECT_EQ(strict_cdcl.learn(l), nullptr);
+    EXPECT_EQ(strict_cdcl.learn(l), std::nullopt);
 }
 
 TEST_F(CdclEliminationGeneratorUnitTest, LearnThreeIndependentPairAvoidances) {
-    EXPECT_EQ(cdcl.learn(make_lemma({&lin_0_0, &lin_1_0})), nullptr);
-    EXPECT_EQ(cdcl.learn(make_lemma({&lin_2_0, &lin_3_0})), nullptr);
-    EXPECT_EQ(cdcl.learn(make_lemma({&lin_4_0_0_0, &lin_4_0_1_0})), nullptr);
+    EXPECT_EQ(cdcl.learn(make_lemma({&lin_0_0, &lin_1_0})), std::nullopt);
+    EXPECT_EQ(cdcl.learn(make_lemma({&lin_2_0, &lin_3_0})), std::nullopt);
+    EXPECT_EQ(cdcl.learn(make_lemma({&lin_4_0_0_0, &lin_4_0_1_0})), std::nullopt);
 }
 
 // ---------------------------------------------------------------------------
@@ -164,7 +164,7 @@ TEST_F(CdclEliminationGeneratorUnitTest, ConstrainWithNoLearnedAvoidancesYieldsN
 }
 
 TEST_F(CdclEliminationGeneratorUnitTest, ConstrainAfterUnitLearnYieldsNothing) {
-    EXPECT_EQ(cdcl.learn(make_lemma({&lin_0_0})), &lin_0_0);
+    EXPECT_EQ(cdcl.learn(make_lemma({&lin_0_0})), std::optional{&lin_0_0});
     auto elims = collect_elims(cdcl.constrain(&lin_0_0));
     EXPECT_THAT(elims, IsEmpty());
 }

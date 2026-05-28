@@ -2,7 +2,8 @@
 #define RESOLVER_HPP
 
 #include "../interfaces/i_resolver.hpp"
-#include "../interfaces/i_lineage_pool.hpp"
+#include "../interfaces/i_make_goal_lineage.hpp"
+#include "../interfaces/i_make_resolution_lineage.hpp"
 #include "../interfaces/i_goal_activator.hpp"
 #include "../interfaces/i_goal_deactivator.hpp"
 #include "../interfaces/i_get_goal_db_rules.hpp"
@@ -16,7 +17,8 @@
 
 struct resolver : i_resolver {
     resolver(
-        i_lineage_pool& lp,
+        i_make_goal_lineage& make_goal_lineage,
+        i_make_resolution_lineage& make_resolution_lineage,
         i_goal_activator& goal_activator,
         i_goal_deactivator& goal_deactivator,
         i_get_goal_db_rules& ggdr,
@@ -30,7 +32,8 @@ struct resolver : i_resolver {
 private:
     void activate_candidates(const goal_lineage*, i_rule_set&);
     void deactivate_candidates(const goal_lineage*, i_rule_set&);
-    i_lineage_pool& lp;
+    i_make_goal_lineage& make_goal_lineage;
+    i_make_resolution_lineage& make_resolution_lineage;
     i_goal_activator& goal_activator;
     i_goal_deactivator& goal_deactivator;
     i_get_goal_db_rules& ggdr;

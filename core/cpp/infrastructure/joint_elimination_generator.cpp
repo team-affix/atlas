@@ -1,8 +1,8 @@
 #include "../../hpp/infrastructure/joint_elimination_generator.hpp"
 
 joint_elimination_generator::joint_elimination_generator(
-    i_cdcl_elimination_generator& cdcl,
-    i_mhu_elimination_generator& mhu)
+    i_elimination_generator& cdcl,
+    i_elimination_generator& mhu)
     : cdcl(cdcl), mhu(mhu) {
 }
 

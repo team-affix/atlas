@@ -1,13 +1,13 @@
 #include "../../hpp/infrastructure/mcts_decision_generator.hpp"
 
 mcts_decision_generator::mcts_decision_generator(
-    i_lineage_pool& lp,
+    i_make_resolution_lineage& make_resolution_lineage,
     i_iterate_active_goals& iterate_active_goals,
     i_active_goals_size& active_goals_size,
     i_get_goal_candidate_rules& ggcr,
     monte_carlo::simulation<mcts_choice, std::mt19937>& sim)
     :
-    lp(lp),
+    make_resolution_lineage(make_resolution_lineage),
     iterate_active_goals(iterate_active_goals),
     active_goals_size(active_goals_size),
     ggcr(ggcr),
@@ -17,7 +17,7 @@ mcts_decision_generator::mcts_decision_generator(
 const resolution_lineage* mcts_decision_generator::generate() {
     const goal_lineage* chosen_gl = choose_goal();
     const rule* chosen_r = choose_candidate(chosen_gl);
-    return lp.resolution(chosen_gl, chosen_r);
+    return make_resolution_lineage.make(chosen_gl, chosen_r);
 }
 
 const goal_lineage* mcts_decision_generator::choose_goal() {

@@ -4,13 +4,12 @@
 
 sim::sim(
     size_t max_resolutions,
-    i_lineage_pool& lp,
+    i_make_resolution_lineage& make_resolution_lineage,
     i_solution_detector& sd,
     i_conflict_detector& cd,
     i_unit_goal_detector& ugd,
     i_push_unit_goal& push_unit_goal,
     i_pop_unit_goal& pop_unit_goal,
-    i_check_unit_goals_empty& check_unit_goals_empty,
     i_decision_generator& dg,
     i_elimination_generator& eg,
     i_elimination_router& er,
@@ -18,13 +17,12 @@ sim::sim(
     i_get_goal_candidate_rules& ggcr)
     :
     max_resolutions(max_resolutions),
-    lp(lp),
+    make_resolution_lineage(make_resolution_lineage),
     sd(sd),
     cd(cd),
     ugd(ugd),
     push_unit_goal(push_unit_goal),
     pop_unit_goal(pop_unit_goal),
-    check_unit_goals_empty(check_unit_goals_empty),
     dg(dg),
     eg(eg),
     er(er),
@@ -61,10 +59,11 @@ sim_termination sim::run() {
 void sim::tear_down() {}
 
 const resolution_lineage* sim::next_resolution() {
-    if (check_unit_goals_empty.empty())
+    auto maybe_gl = pop_unit_goal.pop();
+    if (!maybe_gl.has_value())
         return dg.generate();
 
-    const goal_lineage* gl = pop_unit_goal.pop();
+    const goal_lineage* gl = maybe_gl.value();
     auto& candidate_rules = ggcr.get(gl);
     std::unordered_set<const rule*> extracted_candidates;
     auto it = candidate_rules.iterate();
@@ -74,5 +73,5 @@ const resolution_lineage* sim::next_resolution() {
             continue;
         extracted_candidates.insert(rr.value());
     }
-    return lp.resolution(gl, *extracted_candidates.begin());
+    return make_resolution_lineage.make(gl, *extracted_candidates.begin());
 }

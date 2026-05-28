@@ -27,41 +27,41 @@ struct ExprPoolTest : public ::testing::Test {
 // ---------------------------------------------------------------------------
 
 TEST_F(ExprPoolTest, VarInternedTwiceReturnsSamePointer) {
-    EXPECT_EQ(pool.var(0), pool.var(0));
+    EXPECT_EQ(pool.make(0), pool.make(0));
 }
 
 TEST_F(ExprPoolTest, DifferentVarsReturnDifferentPointers) {
-    EXPECT_NE(pool.var(0), pool.var(1));
+    EXPECT_NE(pool.make(0), pool.make(1));
 }
 
 TEST_F(ExprPoolTest, NullaryFunctorInternedTwiceReturnsSamePointer) {
-    EXPECT_EQ(pool.functor("f", {}), pool.functor("f", {}));
+    EXPECT_EQ(pool.make("f", {}), pool.make("f", {}));
 }
 
 TEST_F(ExprPoolTest, DifferentFunctorsReturnDifferentPointers) {
-    EXPECT_NE(pool.functor("f", {}), pool.functor("g", {}));
+    EXPECT_NE(pool.make("f", {}), pool.make("g", {}));
 }
 
 TEST_F(ExprPoolTest, FunctorWithVarArgInternedTwiceReturnsSamePointer) {
-    const expr* v = pool.var(0);
-    EXPECT_EQ(pool.functor("f", {v}), pool.functor("f", {v}));
+    const expr* v = pool.make(0);
+    EXPECT_EQ(pool.make("f", {v}), pool.make("f", {v}));
 }
 
 TEST_F(ExprPoolTest, FunctorsSameNameDifferentArityReturnDifferentPointers) {
-    const expr* v = pool.var(0);
-    EXPECT_NE(pool.functor("f", {}), pool.functor("f", {v}));
+    const expr* v = pool.make(0);
+    EXPECT_NE(pool.make("f", {}), pool.make("f", {v}));
 }
 
 TEST_F(ExprPoolTest, BinaryFunctorInternedTwiceReturnsSamePointer) {
-    const expr* v0 = pool.var(0);
-    const expr* v1 = pool.var(1);
-    EXPECT_EQ(pool.functor("f", {v0, v1}), pool.functor("f", {v0, v1}));
+    const expr* v0 = pool.make(0);
+    const expr* v1 = pool.make(1);
+    EXPECT_EQ(pool.make("f", {v0, v1}), pool.make("f", {v0, v1}));
 }
 
 TEST_F(ExprPoolTest, FunctorsWithDifferentArgsReturnDifferentPointers) {
-    const expr* v0 = pool.var(0);
-    const expr* v1 = pool.var(1);
-    EXPECT_NE(pool.functor("f", {v0, v1}), pool.functor("f", {v1, v1}));
+    const expr* v0 = pool.make(0);
+    const expr* v1 = pool.make(1);
+    EXPECT_NE(pool.make("f", {v0, v1}), pool.make("f", {v1, v1}));
 }
 
 // ---------------------------------------------------------------------------
@@ -73,7 +73,7 @@ TEST_F(ExprPoolTest, FirstInternLogsToTrail) {
     expr_pool strict_pool{strict_trail};
 
     EXPECT_CALL(strict_trail, log(_)).Times(1);
-    strict_pool.var(0);
+    strict_pool.make(0);
 }
 
 TEST_F(ExprPoolTest, RepeatInternDoesNotLogAgain) {
@@ -81,8 +81,8 @@ TEST_F(ExprPoolTest, RepeatInternDoesNotLogAgain) {
     expr_pool strict_pool{strict_trail};
 
     EXPECT_CALL(strict_trail, log(_)).Times(1);
-    strict_pool.var(0);
-    strict_pool.var(0);
+    strict_pool.make(0);
+    strict_pool.make(0);
 }
 
 TEST_F(ExprPoolTest, DistinctInternsLogEachTime) {
@@ -90,8 +90,8 @@ TEST_F(ExprPoolTest, DistinctInternsLogEachTime) {
     expr_pool strict_pool{strict_trail};
 
     EXPECT_CALL(strict_trail, log(_)).Times(2);
-    strict_pool.var(0);
-    strict_pool.var(1);
+    strict_pool.make(0);
+    strict_pool.make(1);
 }
 
 // ---------------------------------------------------------------------------
@@ -103,7 +103,7 @@ TEST_F(ExprPoolTest, ImportVarInternsIntoPool) {
     expr_pool strict_pool{strict_trail};
 
     EXPECT_CALL(strict_trail, log(_)).Times(1);
-    const expr* pooled = strict_pool.var(0);
+    const expr* pooled = strict_pool.make(0);
 
     expr e{expr::var{0}};
     EXPECT_EQ(strict_pool.import(&e), pooled);
@@ -122,5 +122,5 @@ TEST_F(ExprPoolTest, ImportFunctorInternsArgsRecursively) {
 
     const expr::functor& f = std::get<expr::functor>(p->content);
     EXPECT_NE(f.args[0], &arg);
-    EXPECT_EQ(f.args[0], strict_pool.var(1));
+    EXPECT_EQ(f.args[0], strict_pool.make(1));
 }

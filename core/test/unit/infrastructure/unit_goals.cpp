@@ -1,5 +1,5 @@
-// Unit goal queue: LIFO push/pop, empty check, and clear. pop must return the most
-// recently pushed goal; empty queue reports true from empty().
+// Unit goal queue: LIFO push/pop and clear. pop returns std::nullopt when empty and
+// otherwise yields the most recently pushed goal.
 
 #include <gtest/gtest.h>
 #include "../../../core/hpp/infrastructure/unit_goals.hpp"
@@ -14,19 +14,23 @@ struct UnitGoalsTest : public ::testing::Test {
 };
 
 TEST_F(UnitGoalsTest, EmptyInitially) {
-    EXPECT_TRUE(queue.empty());
+    EXPECT_FALSE(queue.pop().has_value());
 }
 
 TEST_F(UnitGoalsTest, PopReturnsLastPushed) {
     queue.push(&gl0);
     queue.push(&gl1);
-    EXPECT_EQ(queue.pop(), &gl1);
-    EXPECT_EQ(queue.pop(), &gl0);
-    EXPECT_TRUE(queue.empty());
+    auto p1 = queue.pop();
+    ASSERT_TRUE(p1.has_value());
+    EXPECT_EQ(*p1, &gl1);
+    auto p0 = queue.pop();
+    ASSERT_TRUE(p0.has_value());
+    EXPECT_EQ(*p0, &gl0);
+    EXPECT_FALSE(queue.pop().has_value());
 }
 
 TEST_F(UnitGoalsTest, ClearEmptiesQueue) {
     queue.push(&gl0);
     queue.clear();
-    EXPECT_TRUE(queue.empty());
+    EXPECT_FALSE(queue.pop().has_value());
 }

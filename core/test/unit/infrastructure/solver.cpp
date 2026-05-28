@@ -7,7 +7,7 @@
 #include "../../../core/hpp/interfaces/i_set_up_sim.hpp"
 #include "../../../core/hpp/interfaces/i_tear_down_sim.hpp"
 #include "../../../core/hpp/interfaces/i_run_sim.hpp"
-#include "../../../core/hpp/interfaces/i_cdcl_elimination_generator.hpp"
+#include "../../../core/hpp/interfaces/i_learn_avoidance.hpp"
 #include "../../../core/hpp/interfaces/i_elimination_router.hpp"
 #include "../../../core/hpp/value_objects/sim_termination.hpp"
 
@@ -25,9 +25,8 @@ struct MockRunSim : public i_run_sim {
     MOCK_METHOD(sim_termination, run, (), (override));
 };
 
-struct MockCdclEliminationGenerator : public i_cdcl_elimination_generator {
-    MOCK_METHOD(state_machine<const resolution_lineage*>, constrain, (const resolution_lineage*), (override));
-    MOCK_METHOD(const resolution_lineage*, learn, (const lemma&), (override));
+struct MockLearnAvoidance : public i_learn_avoidance {
+    MOCK_METHOD(std::optional<const resolution_lineage*>, learn, (const lemma&), (override));
 };
 
 struct MockEliminationRouter : public i_elimination_router {
@@ -38,9 +37,9 @@ struct SolverTest : public ::testing::Test {
     MockSetUpSim set_up_sim;
     MockTearDownSim tear_down_sim;
     MockRunSim run_sim;
-    MockCdclEliminationGenerator cdcl;
+    MockLearnAvoidance learn_avoidance;
     MockEliminationRouter router;
-    solver s{set_up_sim, tear_down_sim, run_sim, cdcl, router};
+    solver s{set_up_sim, tear_down_sim, run_sim, learn_avoidance, router};
 };
 
 TEST_F(SolverTest, FirstYieldRunsSetUpThenRunBeforeTearDown) {

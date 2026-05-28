@@ -11,7 +11,7 @@ protected:
         vs.next();
         vs.next();
         pool.emplace(t);
-        cp.emplace(vs, *pool);
+        cp.emplace(vs, *pool, *pool);
     }
 
     trail t;
@@ -39,7 +39,7 @@ TEST_F(CopierIntegrationTest, CopyNestedFunctorRemapsAllVarsInRealPool) {
     EXPECT_EQ(var_index(f.args[1]), 3);
     EXPECT_EQ(map.at(0), 2);
     EXPECT_EQ(map.at(1), 3);
-    EXPECT_EQ(p, pool->functor("f", {pool->functor("g", {pool->var(2)}), pool->var(3)}));
+    EXPECT_EQ(p, pool->make("f", {pool->make("g", {pool->make(2)}), pool->make(3)}));
 }
 
 TEST_F(CopierIntegrationTest, CopySeparateCallsAdvanceSequencer) {

@@ -6,13 +6,12 @@
 #include <gmock/gmock.h>
 #include "../../../core/hpp/infrastructure/sim.hpp"
 #include "../../../core/hpp/infrastructure/rule_set.hpp"
-#include "../../../core/hpp/interfaces/i_lineage_pool.hpp"
+#include "../../../core/hpp/interfaces/i_make_resolution_lineage.hpp"
 #include "../../../core/hpp/interfaces/i_solution_detector.hpp"
 #include "../../../core/hpp/interfaces/i_conflict_detector.hpp"
 #include "../../../core/hpp/interfaces/i_unit_goal_detector.hpp"
 #include "../../../core/hpp/interfaces/i_push_unit_goal.hpp"
 #include "../../../core/hpp/interfaces/i_pop_unit_goal.hpp"
-#include "../../../core/hpp/interfaces/i_check_unit_goals_empty.hpp"
 #include "../../../core/hpp/interfaces/i_decision_generator.hpp"
 #include "../../../core/hpp/interfaces/i_elimination_generator.hpp"
 #include "../../../core/hpp/interfaces/i_elimination_router.hpp"
@@ -31,20 +30,8 @@ state_machine<const resolution_lineage*> empty_eliminations() {
 
 }  // namespace
 
-struct MockLineagePool : public i_lineage_pool {
-    MOCK_METHOD((const goal_lineage*), goal, (const resolution_lineage*, subgoal_id), (override));
-    MOCK_METHOD((const resolution_lineage*), resolution, (const goal_lineage*, rule_id), (override));
-    MOCK_METHOD(void, pin_goal, (const goal_lineage*), ());
-    MOCK_METHOD(void, pin_resolution, (const resolution_lineage*), ());
-    MOCK_METHOD(void, trim, (), (override));
-    MOCK_METHOD((const goal_lineage*), import_goal, (const goal_lineage*), ());
-    MOCK_METHOD((const resolution_lineage*), import_resolution, (const resolution_lineage*), ());
-    void pin(const goal_lineage* gl) override { pin_goal(gl); }
-    void pin(const resolution_lineage* rl) override { pin_resolution(rl); }
-    const goal_lineage* import(const goal_lineage* gl) override { return import_goal(gl); }
-    const resolution_lineage* import(const resolution_lineage* rl) override {
-        return import_resolution(rl);
-    }
+struct MockMakeResolutionLineage : public i_make_resolution_lineage {
+    MOCK_METHOD((const resolution_lineage*), make, (const goal_lineage*, rule_id), (override));
 };
 
 struct MockSolutionDetector : public i_solution_detector {
@@ -64,11 +51,7 @@ struct MockPushUnitGoal : public i_push_unit_goal {
 };
 
 struct MockPopUnitGoal : public i_pop_unit_goal {
-    MOCK_METHOD(const goal_lineage*, pop, (), (override));
-};
-
-struct MockCheckUnitGoalsEmpty : public i_check_unit_goals_empty {
-    MOCK_METHOD(bool, empty, (), (const, override));
+    MOCK_METHOD(std::optional<const goal_lineage*>, pop, (), (override));
 };
 
 struct MockDecisionGenerator : public i_decision_generator {
@@ -95,13 +78,12 @@ struct MockGetGoalCandidateRules : public i_get_goal_candidate_rules {
 struct SimTest : public ::testing::Test {
     static constexpr size_t kMaxResolutions = 2;
 
-    MockLineagePool lp;
+    MockMakeResolutionLineage lp;
     MockSolutionDetector solution_detector;
     MockConflictDetector conflict_detector;
     MockUnitGoalDetector unit_goal_detector;
     MockPushUnitGoal push_unit_goal;
     MockPopUnitGoal pop_unit_goal;
-    MockCheckUnitGoalsEmpty check_unit_goals_empty;
     MockDecisionGenerator decision_generator;
     MockEliminationGenerator elimination_generator;
     MockEliminationRouter elimination_router;
@@ -115,7 +97,6 @@ struct SimTest : public ::testing::Test {
         unit_goal_detector,
         push_unit_goal,
         pop_unit_goal,
-        check_unit_goals_empty,
         decision_generator,
         elimination_generator,
         elimination_router,
@@ -137,7 +118,7 @@ TEST_F(SimTest, RunReturnsSolvedWhenDetectorSaysSo) {
 
 TEST_F(SimTest, RunReturnsDepthExceededWhenNoSolutionWithinLimit) {
     EXPECT_CALL(solution_detector, detect()).WillRepeatedly(Return(false));
-    EXPECT_CALL(check_unit_goals_empty, empty()).WillRepeatedly(Return(true));
+    EXPECT_CALL(pop_unit_goal, pop()).WillRepeatedly(Return(std::nullopt));
     EXPECT_CALL(decision_generator, generate()).WillRepeatedly(Return(&rl));
     EXPECT_CALL(elimination_generator, constrain(&rl))
         .WillRepeatedly([] { return empty_eliminations(); });
@@ -147,7 +128,7 @@ TEST_F(SimTest, RunReturnsDepthExceededWhenNoSolutionWithinLimit) {
 
 TEST_F(SimTest, RunReturnsConflictedWhenResolverFails) {
     EXPECT_CALL(solution_detector, detect()).WillOnce(Return(false));
-    EXPECT_CALL(check_unit_goals_empty, empty()).WillOnce(Return(true));
+    EXPECT_CALL(pop_unit_goal, pop()).WillOnce(Return(std::nullopt));
     EXPECT_CALL(decision_generator, generate()).WillOnce(Return(&rl));
     EXPECT_CALL(elimination_generator, constrain(&rl)).WillOnce([] { return empty_eliminations(); });
     EXPECT_CALL(resolver, resolve(&rl)).WillOnce(Return(false));

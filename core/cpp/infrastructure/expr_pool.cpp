@@ -6,11 +6,11 @@ expr_pool::expr_pool(i_trail& t) :
     exprs(t, {}) {
 }
 
-const expr* expr_pool::functor(const std::string& name, std::vector<const expr*> args) {
-    return intern(expr{expr::functor{name, std::move(args)}});
+const expr* expr_pool::make(const std::string& name, const std::vector<const expr*>& args) {
+    return intern(expr{expr::functor{name, args}});
 }
 
-const expr* expr_pool::var(uint32_t i) {
+const expr* expr_pool::make(uint32_t i) {
     return intern(expr{expr::var{i}});
 }
 
@@ -25,7 +25,7 @@ const expr* expr_pool::import(const expr* e) {
         imported_args.reserve(f->args.size());
         for (const expr* arg : f->args)
             imported_args.push_back(import(arg));
-        return functor(f->name, std::move(imported_args));
+        return make(f->name, imported_args);
     }
 
     throw std::runtime_error("Unsupported expression type");

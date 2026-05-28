@@ -6,8 +6,6 @@
 #include <gmock/gmock.h>
 #include <vector>
 #include "../../../core/hpp/infrastructure/joint_elimination_generator.hpp"
-#include "../../../core/hpp/interfaces/i_cdcl_elimination_generator.hpp"
-#include "../../../core/hpp/interfaces/i_mhu_elimination_generator.hpp"
 #include "../../../core/hpp/interfaces/i_elimination_generator.hpp"
 #include "../../../core/hpp/utility/state_machine.hpp"
 
@@ -42,33 +40,6 @@ struct MockEliminationGenerator : public i_elimination_generator {
         (const resolution_lineage*), (override));
 };
 
-struct MockCdclFacade : public i_cdcl_elimination_generator {
-    explicit MockCdclFacade(MockEliminationGenerator& base) : base(base) {}
-
-    const resolution_lineage* learn(const lemma&) override { return nullptr; }
-
-    state_machine<const resolution_lineage*> constrain(
-        const resolution_lineage* rl) override {
-        return base.constrain(rl);
-    }
-
-    MockEliminationGenerator& base;
-};
-
-struct MockMhuFacade : public i_mhu_elimination_generator {
-    explicit MockMhuFacade(MockEliminationGenerator& base) : base(base) {}
-
-    MOCK_METHOD(bool, try_add_head,
-        (const resolution_lineage*, const expr*, const expr*), (override));
-
-    state_machine<const resolution_lineage*> constrain(
-        const resolution_lineage* rl) override {
-        return base.constrain(rl);
-    }
-
-    MockEliminationGenerator& base;
-};
-
 struct JointEliminationGeneratorUnitTest : public ::testing::Test {
     expr head{expr::var{0}};
     rule r{&head, {}};
@@ -76,9 +47,7 @@ struct JointEliminationGeneratorUnitTest : public ::testing::Test {
 
     MockEliminationGenerator cdcl_elims;
     MockEliminationGenerator mhu_elims;
-    MockCdclFacade cdcl{cdcl_elims};
-    MockMhuFacade mhu{mhu_elims};
-    joint_elimination_generator joint{cdcl, mhu};
+    joint_elimination_generator joint{cdcl_elims, mhu_elims};
 };
 
 TEST_F(JointEliminationGeneratorUnitTest, ConstrainYieldsCdclThenMhuThenNullTerminator) {

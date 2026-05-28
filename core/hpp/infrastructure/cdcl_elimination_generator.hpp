@@ -4,15 +4,18 @@
 #include <set>
 #include <unordered_map>
 #include <unordered_set>
-#include "../interfaces/i_cdcl_elimination_generator.hpp"
+#include "../interfaces/i_elimination_generator.hpp"
+#include "../interfaces/i_learn_avoidance.hpp"
 #include "../utility/state_machine.hpp"
 #include "../utility/tracked.hpp"
 
-struct cdcl_elimination_generator : i_cdcl_elimination_generator {
+struct cdcl_elimination_generator
+    : i_elimination_generator
+    , i_learn_avoidance {
     cdcl_elimination_generator(
         i_trail&
     );
-    const resolution_lineage* learn(const lemma&) override;
+    std::optional<const resolution_lineage*> learn(const lemma&) override;
     state_machine<const resolution_lineage*> constrain(const resolution_lineage*) override;
 private:
     using avoidance_type = std::set<const resolution_lineage*>;

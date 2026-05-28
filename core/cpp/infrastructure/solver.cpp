@@ -4,13 +4,13 @@ solver::solver(
     i_set_up_sim& set_up_sim,
     i_tear_down_sim& tear_down_sim,
     i_run_sim& run_sim,
-    i_cdcl_elimination_generator& cdcl_elimination_generator,
+    i_learn_avoidance& learn_avoidance,
     i_elimination_router& elimination_router)
     :
     set_up_sim(set_up_sim),
     tear_down_sim(tear_down_sim),
     run_sim(run_sim),
-    cdcl_elimination_generator(cdcl_elimination_generator),
+    learn_avoidance(learn_avoidance),
     elimination_router(elimination_router) {}
 
 solver::~solver() = default;

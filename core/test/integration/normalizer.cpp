@@ -21,8 +21,8 @@ protected:
     expr var1{expr::var{1}};
     expr var2{expr::var{2}};
 
-    const expr* pool_f() { return pool->functor("f", {}); }
-    const expr* pool_g() { return pool->functor("g", {}); }
+    const expr* pool_f() { return pool->make("f", {}); }
+    const expr* pool_g() { return pool->make("g", {}); }
 };
 
 // ---------------------------------------------------------------------------
@@ -51,7 +51,7 @@ TEST_F(NormalizerIntegrationTest, NormalizeNullaryFunctorInternsInPool) {
     const expr* p2 = norm->normalize(&raw);
     EXPECT_EQ(p1, p2);
     EXPECT_NE(p1, &raw);
-    EXPECT_EQ(p1, pool->functor("f", {}));
+    EXPECT_EQ(p1, pool->make("f", {}));
 }
 
 TEST_F(NormalizerIntegrationTest, NormalizeFunctorNormalizesArgs) {
@@ -75,12 +75,12 @@ TEST_F(NormalizerIntegrationTest, NormalizeNestedFunctorRebuildsStructure) {
     EXPECT_EQ(outer.name, "f");
     EXPECT_EQ(inner.name, "g");
     EXPECT_EQ(inner.args[0], g);
-    EXPECT_EQ(p, pool->functor("f", {pool->functor("g", {g})}));
+    EXPECT_EQ(p, pool->make("f", {pool->make("g", {g})}));
 }
 
 TEST_F(NormalizerIntegrationTest, NormalizeBinaryFunctorNormalizesBothArgs) {
-    const expr* a = pool->functor("a", {});
-    const expr* b = pool->functor("b", {});
+    const expr* a = pool->make("a", {});
+    const expr* b = pool->make("b", {});
     expr raw{expr::functor{"f", {&var0, &var1}}};
     bm.bind(0, a);
     bm.bind(1, b);
@@ -89,13 +89,13 @@ TEST_F(NormalizerIntegrationTest, NormalizeBinaryFunctorNormalizesBothArgs) {
     ASSERT_EQ(out.args.size(), 2u);
     EXPECT_EQ(out.args[0], a);
     EXPECT_EQ(out.args[1], b);
-    EXPECT_EQ(p, pool->functor("f", {a, b}));
+    EXPECT_EQ(p, pool->make("f", {a, b}));
 }
 
 TEST_F(NormalizerIntegrationTest, NormalizeTernaryFunctorNormalizesAllArgs) {
-    const expr* a = pool->functor("a", {});
-    const expr* b = pool->functor("b", {});
-    const expr* c = pool->functor("c", {});
+    const expr* a = pool->make("a", {});
+    const expr* b = pool->make("b", {});
+    const expr* c = pool->make("c", {});
     expr raw{expr::functor{"f", {&var0, &var1, &var2}}};
     bm.bind(0, a);
     bm.bind(1, b);
@@ -106,7 +106,7 @@ TEST_F(NormalizerIntegrationTest, NormalizeTernaryFunctorNormalizesAllArgs) {
     EXPECT_EQ(out.args[0], a);
     EXPECT_EQ(out.args[1], b);
     EXPECT_EQ(out.args[2], c);
-    EXPECT_EQ(p, pool->functor("f", {a, b, c}));
+    EXPECT_EQ(p, pool->make("f", {a, b, c}));
 }
 
 TEST_F(NormalizerIntegrationTest, NormalizeIdempotentOnAlreadyNormalized) {

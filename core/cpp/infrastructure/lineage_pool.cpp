@@ -1,10 +1,10 @@
 #include "../../hpp/infrastructure/lineage_pool.hpp"
 
-const goal_lineage* lineage_pool::goal(const resolution_lineage* parent, subgoal_id idx) {
+const goal_lineage* lineage_pool::make(const resolution_lineage* parent, subgoal_id idx) {
     return intern(goal_lineage{parent, idx});
 }
 
-const resolution_lineage* lineage_pool::resolution(const goal_lineage* parent, rule_id idx) {
+const resolution_lineage* lineage_pool::make(const goal_lineage* parent, rule_id idx) {
     return intern(resolution_lineage{parent, idx});
 }
 
@@ -42,13 +42,13 @@ void lineage_pool::trim() {
 const goal_lineage* lineage_pool::import(const goal_lineage* l) {
     if (l == nullptr)
         return nullptr;
-    return goal(import(l->parent), l->idx);
+    return make(import(l->parent), l->idx);
 }
 
 const resolution_lineage* lineage_pool::import(const resolution_lineage* l) {
     if (l == nullptr)
         return nullptr;
-    return resolution(import(l->parent), l->idx);
+    return make(import(l->parent), l->idx);
 }
 
 const goal_lineage* lineage_pool::intern(goal_lineage&& l) {

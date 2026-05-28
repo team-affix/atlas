@@ -16,29 +16,29 @@ TEST_F(ExprPoolIntegrationTest, SizeStartsAtZero) {
 }
 
 TEST_F(ExprPoolIntegrationTest, DistinctInternsIncreaseSize) {
-    pool->var(0);
+    pool->make(0);
     EXPECT_EQ(pool->size(), 1u);
-    pool->var(1);
+    pool->make(1);
     EXPECT_EQ(pool->size(), 2u);
 }
 
 TEST_F(ExprPoolIntegrationTest, RepeatInternDoesNotIncreaseSize) {
-    pool->var(0);
-    pool->var(0);
+    pool->make(0);
+    pool->make(0);
     EXPECT_EQ(pool->size(), 1u);
 }
 
 TEST_F(ExprPoolIntegrationTest, VarInternedBeforePushSurvivesPop) {
-    const expr* p = pool->var(0);
+    const expr* p = pool->make(0);
     EXPECT_EQ(pool->size(), 1u);
     t.push();
     t.pop();
-    EXPECT_EQ(pool->var(0), p);
+    EXPECT_EQ(pool->make(0), p);
     EXPECT_EQ(pool->size(), 1u);
 }
 
 TEST_F(ExprPoolIntegrationTest, PushPopWithoutInternLeavesSizeUnchanged) {
-    pool->var(0);
+    pool->make(0);
     EXPECT_EQ(pool->size(), 1u);
     t.push();
     t.pop();
@@ -46,11 +46,11 @@ TEST_F(ExprPoolIntegrationTest, PushPopWithoutInternLeavesSizeUnchanged) {
 }
 
 TEST_F(ExprPoolIntegrationTest, SizeRevertsAfterInternInFrame) {
-    pool->var(0);
+    pool->make(0);
     EXPECT_EQ(pool->size(), 1u);
 
     t.push();
-    pool->var(1);
+    pool->make(1);
     EXPECT_EQ(pool->size(), 2u);
     t.pop();
 
@@ -58,48 +58,48 @@ TEST_F(ExprPoolIntegrationTest, SizeRevertsAfterInternInFrame) {
 }
 
 TEST_F(ExprPoolIntegrationTest, ExprInternedBeforeFrameSurvivesPop) {
-    const expr* p0 = pool->var(0);
+    const expr* p0 = pool->make(0);
     EXPECT_EQ(pool->size(), 1u);
 
     t.push();
-    pool->var(1);
+    pool->make(1);
     EXPECT_EQ(pool->size(), 2u);
     t.pop();
 
-    EXPECT_EQ(pool->var(0), p0);
+    EXPECT_EQ(pool->make(0), p0);
     EXPECT_EQ(pool->size(), 1u);
 }
 
 TEST_F(ExprPoolIntegrationTest, MultipleInternsInFrameAllRevertOnPop) {
     t.push();
-    pool->var(0);
-    pool->var(1);
-    pool->functor("f", {});
+    pool->make(0);
+    pool->make(1);
+    pool->make("f", {});
     EXPECT_EQ(pool->size(), 3u);
     t.pop();
     EXPECT_EQ(pool->size(), 0u);
 }
 
 TEST_F(ExprPoolIntegrationTest, FunctorInternedInFrameRevertsButArgsSurvive) {
-    const expr* v0 = pool->var(0);
+    const expr* v0 = pool->make(0);
     EXPECT_EQ(pool->size(), 1u);
 
     t.push();
-    pool->functor("f", {v0});
+    pool->make("f", {v0});
     EXPECT_EQ(pool->size(), 2u);
     t.pop();
 
     EXPECT_EQ(pool->size(), 1u);
-    EXPECT_EQ(pool->var(0), v0);
+    EXPECT_EQ(pool->make(0), v0);
 }
 
 TEST_F(ExprPoolIntegrationTest, TwoNestedFramesInnerPopRevertsOnlyInnerGrowth) {
     t.push();
-    pool->var(0);
+    pool->make(0);
     EXPECT_EQ(pool->size(), 1u);
 
     t.push();
-    pool->var(1);
+    pool->make(1);
     EXPECT_EQ(pool->size(), 2u);
     t.pop();
     EXPECT_EQ(pool->size(), 1u);
@@ -110,15 +110,15 @@ TEST_F(ExprPoolIntegrationTest, TwoNestedFramesInnerPopRevertsOnlyInnerGrowth) {
 
 TEST_F(ExprPoolIntegrationTest, TwoNestedFramesOuterExprSurvivesInnerPop) {
     t.push();
-    const expr* p0 = pool->var(0);
+    const expr* p0 = pool->make(0);
     EXPECT_EQ(pool->size(), 1u);
 
     t.push();
-    pool->var(1);
+    pool->make(1);
     EXPECT_EQ(pool->size(), 2u);
     t.pop();
 
-    EXPECT_EQ(pool->var(0), p0);
+    EXPECT_EQ(pool->make(0), p0);
     EXPECT_EQ(pool->size(), 1u);
 }
 

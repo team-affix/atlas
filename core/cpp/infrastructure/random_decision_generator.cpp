@@ -1,12 +1,12 @@
 #include "../../hpp/infrastructure/random_decision_generator.hpp"
 
 random_decision_generator::random_decision_generator(
-    i_lineage_pool& lp,
+    i_make_resolution_lineage& make_resolution_lineage,
     i_iterate_active_goals& iterate_active_goals,
     i_get_goal_candidate_rules& ggcr,
     std::mt19937& rng)
     :
-    lp(lp),
+    make_resolution_lineage(make_resolution_lineage),
     iterate_active_goals(iterate_active_goals),
     ggcr(ggcr),
     rng(rng) {}
@@ -14,7 +14,7 @@ random_decision_generator::random_decision_generator(
 const resolution_lineage* random_decision_generator::generate() {
     const goal_lineage* gl = choose_goal();
     const rule* r = choose_candidate(gl);
-    return lp.resolution(gl, r);
+    return make_resolution_lineage.make(gl, r);
 }
 
 const goal_lineage* random_decision_generator::choose_goal() {

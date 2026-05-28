@@ -1,11 +1,11 @@
-// normalizer rebuilds expressions in WHNF via i_expr_pool after resolving variables
+// normalizer rebuilds expressions in WHNF via i_make_functor after resolving variables
 // through i_bind_map. Unit tests mock both interfaces and assert pool calls use WHNF args.
 
 #include <gtest/gtest.h>
 #include <gmock/gmock.h>
 #include "../../../core/hpp/infrastructure/normalizer.hpp"
 #include "../../../core/hpp/interfaces/i_bind_map.hpp"
-#include "../../../core/hpp/interfaces/i_expr_pool.hpp"
+#include "../../../core/hpp/interfaces/i_make_functor.hpp"
 
 using ::testing::_;
 using ::testing::ElementsAre;
@@ -17,11 +17,8 @@ struct MockBindMap : public i_bind_map {
     MOCK_METHOD(const expr*, whnf, (const expr*),           (override));
 };
 
-struct MockExprPool : public i_expr_pool {
-    MOCK_METHOD(const expr*, functor, (const std::string&, std::vector<const expr*>), (override));
-    MOCK_METHOD(const expr*, var, (uint32_t), (override));
-    MOCK_METHOD(const expr*, import, (const expr*), (override));
-    MOCK_METHOD(size_t, size, (), (const, override));
+struct MockExprPool : public i_make_functor {
+    MOCK_METHOD(const expr*, make, (const std::string&, const std::vector<const expr*>&), (override));
 };
 
 struct NormalizerUnitTest : public ::testing::Test {
@@ -36,7 +33,7 @@ protected:
                 return &arg_whnf2;
             return e;
         });
-        ON_CALL(pool, functor(_, _)).WillByDefault([this](const std::string& name,
+        ON_CALL(pool, make(_, _)).WillByDefault([this](const std::string& name,
             const std::vector<const expr*>&) -> const expr* {
             if (name == "g")
                 return &pooled_g;
@@ -72,7 +69,7 @@ protected:
 TEST_F(NormalizerUnitTest, VarAfterWhnfReturnsWhnfAndDoesNotCallFunctor) {
     ON_CALL(bm, whnf(&var0)).WillByDefault(Return(&var0));
 
-    EXPECT_CALL(pool, functor).Times(0);
+    EXPECT_CALL(pool, make(_, _)).Times(0);
 
     EXPECT_EQ(norm.normalize(&var0), &var0);
 }
@@ -80,7 +77,7 @@ TEST_F(NormalizerUnitTest, VarAfterWhnfReturnsWhnfAndDoesNotCallFunctor) {
 TEST_F(NormalizerUnitTest, BoundVarReturnsWhnfResult) {
     ON_CALL(bm, whnf(&var0)).WillByDefault(Return(&var_repr));
 
-    EXPECT_CALL(pool, functor).Times(0);
+    EXPECT_CALL(pool, make(_, _)).Times(0);
 
     EXPECT_EQ(norm.normalize(&var0), &var_repr);
 }
@@ -90,7 +87,7 @@ TEST_F(NormalizerUnitTest, BoundVarReturnsWhnfResult) {
 // ---------------------------------------------------------------------------
 
 TEST_F(NormalizerUnitTest, FunctorRebuildsViaPool) {
-    EXPECT_CALL(pool, functor("f", ElementsAre(&arg_whnf0)))
+    EXPECT_CALL(pool, make("f", ElementsAre(&arg_whnf0)))
         .WillOnce(Return(&pooled_f));
 
     EXPECT_EQ(norm.normalize(&f_raw), &pooled_f);
@@ -99,7 +96,7 @@ TEST_F(NormalizerUnitTest, FunctorRebuildsViaPool) {
 TEST_F(NormalizerUnitTest, BinaryFunctorNormalizesBothArgs) {
     expr f2{expr::functor{"f", {&var0, &var1}}};
 
-    EXPECT_CALL(pool, functor("f", ElementsAre(&arg_whnf0, &arg_whnf1)))
+    EXPECT_CALL(pool, make("f", ElementsAre(&arg_whnf0, &arg_whnf1)))
         .WillOnce(Return(&pooled_f));
 
     EXPECT_EQ(norm.normalize(&f2), &pooled_f);
@@ -108,16 +105,16 @@ TEST_F(NormalizerUnitTest, BinaryFunctorNormalizesBothArgs) {
 TEST_F(NormalizerUnitTest, TernaryFunctorNormalizesAllArgs) {
     expr f3{expr::functor{"f", {&var0, &var1, &var2}}};
 
-    EXPECT_CALL(pool, functor("f", ElementsAre(&arg_whnf0, &arg_whnf1, &arg_whnf2)))
+    EXPECT_CALL(pool, make("f", ElementsAre(&arg_whnf0, &arg_whnf1, &arg_whnf2)))
         .WillOnce(Return(&pooled_f));
 
     EXPECT_EQ(norm.normalize(&f3), &pooled_f);
 }
 
 TEST_F(NormalizerUnitTest, NestedFunctorRebuildsWithNormalizedInnerArg) {
-    EXPECT_CALL(pool, functor("g", ElementsAre(&arg_whnf0)))
+    EXPECT_CALL(pool, make("g", ElementsAre(&arg_whnf0)))
         .WillOnce(Return(&pooled_g));
-    EXPECT_CALL(pool, functor("f", ElementsAre(&pooled_g)))
+    EXPECT_CALL(pool, make("f", ElementsAre(&pooled_g)))
         .WillOnce(Return(&pooled_f));
 
     EXPECT_EQ(norm.normalize(&f_g_var0), &pooled_f);

@@ -54,7 +54,7 @@ protected:
 
 TEST_F(CdclEliminationGeneratorIntegrationTest, LearnStoresAvoidanceForConstrain) {
     lemma l{{&rl0, &rl1}};
-    EXPECT_EQ(cdcl.learn(l), nullptr);
+    EXPECT_EQ(cdcl.learn(l), std::nullopt);
 
     auto elims = collect_elims(cdcl.constrain(&rl0));
 
@@ -63,8 +63,8 @@ TEST_F(CdclEliminationGeneratorIntegrationTest, LearnStoresAvoidanceForConstrain
 
 TEST_F(CdclEliminationGeneratorIntegrationTest, LearnDuplicateAvoidanceIsIdempotent) {
     lemma l{{&rl0, &rl1}};
-    EXPECT_EQ(cdcl.learn(l), nullptr);
-    EXPECT_EQ(cdcl.learn(l), nullptr);
+    EXPECT_EQ(cdcl.learn(l), std::nullopt);
+    EXPECT_EQ(cdcl.learn(l), std::nullopt);
 }
 
 TEST_F(CdclEliminationGeneratorIntegrationTest, ConstrainMutuallyExclusiveAvoidanceErasesWithoutYield) {
@@ -96,10 +96,10 @@ TEST_F(CdclEliminationGeneratorIntegrationTest, LearnBeforePushSurvivesPop) {
     const lemma outside{{&rl0, &rl1}};
     const lemma inside{{&rl2, &rl3}};
 
-    EXPECT_EQ(cdcl.learn(outside), nullptr);
+    EXPECT_EQ(cdcl.learn(outside), std::nullopt);
 
     t.push();
-    EXPECT_EQ(cdcl.learn(inside), nullptr);
+    EXPECT_EQ(cdcl.learn(inside), std::nullopt);
     t.pop();
 
     auto elims1 = collect_elims(cdcl.constrain(&rl0));
@@ -138,7 +138,7 @@ TEST_F(CdclEliminationGeneratorIntegrationTest, LearnInFrameUndoneByPop) {
     const lemma l{{&rl0, &rl1}};
 
     t.push();
-    EXPECT_EQ(cdcl.learn(l), nullptr);
+    EXPECT_EQ(cdcl.learn(l), std::nullopt);
     t.pop();
 
     auto elims = collect_elims(cdcl.constrain(&rl0));
