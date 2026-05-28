@@ -3,21 +3,21 @@
 
 #include <memory>
 #include "infrastructure/backtrackable_mutation.hpp"
-#include "interfaces/i_trail.hpp"
+#include "interfaces/i_log_to_current_trail_frame.hpp"
 
 template<typename T>
 struct tracked {
     virtual ~tracked() = default;
-    tracked(i_trail& t, const T& initial);
+    tracked(i_log_to_current_trail_frame& t, const T& initial);
     virtual void mutate(std::unique_ptr<backtrackable_mutation<T>>);
     virtual const T& get() const;
 private:
-    i_trail& t;
+    i_log_to_current_trail_frame& t;
     T value;
 };
 
 template<typename T>
-tracked<T>::tracked(i_trail& t, const T& initial) : t(t), value(initial) {
+tracked<T>::tracked(i_log_to_current_trail_frame& t, const T& initial) : t(t), value(initial) {
 }
 
 template<typename T>

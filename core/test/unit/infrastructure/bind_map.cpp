@@ -44,6 +44,23 @@ TEST_F(BindMapTest, WhnfDoesNotRecurseIntoFunctorArguments) {
     EXPECT_EQ(bm.whnf(&fa), &fa);
 }
 
+TEST_F(BindMapTest, WhnfBoundToBinaryFunctor) {
+    expr v0{expr::var{0}};
+    expr v1{expr::var{1}};
+    expr fab{expr::functor{"f", {&v0, &v1}}};
+    bm.bind(0, &fab);
+    EXPECT_EQ(bm.whnf(&v0), &fab);
+}
+
+TEST_F(BindMapTest, WhnfBoundToTernaryFunctor) {
+    expr v0{expr::var{0}};
+    expr v1{expr::var{1}};
+    expr v2{expr::var{2}};
+    expr habc{expr::functor{"h", {&v0, &v1, &v2}}};
+    bm.bind(0, &habc);
+    EXPECT_EQ(bm.whnf(&v0), &habc);
+}
+
 TEST_F(BindMapTest, WhnfChainOfLength3ResolvesAllIntermediateVars) {
     bm.bind(0, &var1);
     bm.bind(1, &var2);

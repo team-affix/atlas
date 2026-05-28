@@ -88,6 +88,25 @@ TEST_F(CandidateActivatorTest, RejectedHeadSkipsMapAndLink) {
     activator.activate(&rl);
 }
 
+TEST_F(CandidateActivatorTest, AcceptedTernaryHeadPassedToMhu) {
+    expr a{expr::var{1}};
+    expr b{expr::var{2}};
+    expr c{expr::var{3}};
+    expr ternary_head{expr::functor{"h", {&a, &b, &c}}};
+    expr copied_ternary{expr::functor{"h", {&a, &b, &c}}};
+    rule ternary_rule{&ternary_head, {&body_subgoal}};
+
+    EXPECT_CALL(is_backlogged, is_backlogged_elimination(&rl)).WillOnce(Return(false));
+    EXPECT_CALL(get_rule, get(kRule)).WillOnce(Return(&ternary_rule));
+    EXPECT_CALL(copier, copy(&ternary_head, _)).WillOnce(Return(&copied_ternary));
+    EXPECT_CALL(get_goal_expr, get(&parent)).WillOnce(Return(&goal_e));
+    EXPECT_CALL(mhu, try_add_head(&rl, &goal_e, &copied_ternary)).WillOnce(Return(true));
+    EXPECT_CALL(set_map, set(&rl, _)).Times(1);
+    EXPECT_CALL(link, link_goal_candidate(&parent, kRule)).Times(1);
+
+    activator.activate(&rl);
+}
+
 TEST_F(CandidateActivatorTest, AcceptedHeadSetsMapAndLinks) {
     EXPECT_CALL(is_backlogged, is_backlogged_elimination(&rl)).WillOnce(Return(false));
     EXPECT_CALL(get_rule, get(kRule)).WillOnce(Return(&idx));

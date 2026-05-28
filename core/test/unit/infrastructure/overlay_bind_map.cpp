@@ -27,6 +27,8 @@ protected:
     expr func2{expr::functor{"g", {}}};
     expr func_of_var0{expr::functor{"f", {&var0}}};
     expr func_of_func{expr::functor{"f", {&func2}}};
+    expr ternary{expr::functor{"h", {&var0, &var1, &func}}};
+    expr ternary_of_var0{expr::functor{"h", {&var0, &var1, &var0}}};
 };
 
 TEST_F(OverlayBindMapTest, BindIsForwardedToLocalOnlyRemoteReceivesNoBindCall) {
@@ -83,6 +85,20 @@ TEST_F(OverlayBindMapTest, WhnfVar0RemoteResolvesToCompositeFunctor) {
     EXPECT_CALL(remote, whnf(&var0)).WillRepeatedly(Return(&func_of_func));
 
     EXPECT_EQ(sut.whnf(&var0), &func_of_func);
+}
+
+TEST_F(OverlayBindMapTest, WhnfTernaryFunctorDelegatesToRemote) {
+    EXPECT_CALL(local, whnf(&ternary)).WillRepeatedly(Return(&ternary));
+    EXPECT_CALL(remote, whnf(&ternary)).WillRepeatedly(Return(&ternary));
+
+    EXPECT_EQ(sut.whnf(&ternary), &ternary);
+}
+
+TEST_F(OverlayBindMapTest, WhnfVarBoundToTernaryFunctorLocally) {
+    EXPECT_CALL(local, whnf(&var0)).WillRepeatedly(Return(&ternary_of_var0));
+    EXPECT_CALL(remote, whnf).Times(0);
+
+    EXPECT_EQ(sut.whnf(&var0), &ternary_of_var0);
 }
 
 TEST_F(OverlayBindMapTest, TwoOverlaysHaveIndependentLocalsBindGoesToOwnLocal) {

@@ -60,3 +60,12 @@ TEST_F(GoalCandidateRulesTest, ConstGetReturnsEmptyForUnknownGoal) {
     const goal_candidate_rules& cref = index;
     EXPECT_EQ(cref.get(&gl).size(), 0u);
 }
+
+TEST_F(GoalCandidateRulesTest, ClearGoalCandidateRuleIdsEmptiesAllGoals) {
+    goal_lineage gl_other{nullptr, 1};
+    index.link_goal_candidate(&gl, kRule0);
+    index.link_goal_candidate(&gl_other, kRule1);
+    index.clear_goal_candidate_rule_ids();
+    EXPECT_THAT(collect_rule_ids(index.get(&gl)), IsEmpty());
+    EXPECT_THAT(collect_rule_ids(index.get(&gl_other)), IsEmpty());
+}

@@ -20,7 +20,17 @@
 #include "interfaces/i_activate_initial_goal.hpp"
 #include "interfaces/i_get_initial_goal_count.hpp"
 #include "interfaces/i_make_initial_goal_lineage.hpp"
-#include "interfaces/i_trail.hpp"
+#include "interfaces/i_push_trail_frame.hpp"
+#include "interfaces/i_pop_trail_frame.hpp"
+#include "interfaces/i_clear_unit_goals.hpp"
+#include "interfaces/i_clear_recorded_decisions.hpp"
+#include "interfaces/i_clear_recorded_resolutions.hpp"
+#include "interfaces/i_deactivated_candidate_memory.hpp"
+#include "interfaces/i_clear_goal_candidate_rule_ids.hpp"
+#include "interfaces/i_clear_goal_exprs.hpp"
+#include "interfaces/i_clear_active_goals.hpp"
+#include "interfaces/i_clear_candidate_translation_maps.hpp"
+#include "interfaces/i_clear_mhu_heads.hpp"
 
 struct sim
     : i_run_sim
@@ -28,7 +38,8 @@ struct sim
     , i_tear_down_sim {
     sim(
         size_t max_resolutions,
-        i_trail& trail,
+        i_push_trail_frame& push_trail_frame,
+        i_pop_trail_frame& pop_trail_frame,
         i_get_initial_goal_count& get_initial_goal_count,
         i_activate_initial_goal& activate_initial_goal,
         i_make_initial_goal_lineage& make_initial_goal_lineage,
@@ -44,14 +55,24 @@ struct sim
         i_elimination_generator& eg,
         i_elimination_router& er,
         i_resolver& r,
-        i_get_goal_candidate_rule_ids& get_goal_candidate_rule_ids);
+        i_get_goal_candidate_rule_ids& get_goal_candidate_rule_ids,
+        i_clear_unit_goals& clear_unit_goals,
+        i_clear_recorded_decisions& clear_recorded_decisions,
+        i_clear_recorded_resolutions& clear_recorded_resolutions,
+        i_deactivated_candidate_memory& deactivated_candidate_memory,
+        i_clear_goal_candidate_rule_ids& clear_goal_candidate_rule_ids,
+        i_clear_goal_exprs& clear_goal_exprs,
+        i_clear_active_goals& clear_active_goals,
+        i_clear_candidate_translation_maps& clear_candidate_translation_maps,
+        i_clear_mhu_heads& clear_mhu_heads);
     void set_up() override;
     sim_termination run() override;
     void tear_down() override;
 private:
     const resolution_lineage* next_resolution();
     size_t max_resolutions;
-    i_trail& trail;
+    i_push_trail_frame& push_trail_frame;
+    i_pop_trail_frame& pop_trail_frame;
     i_get_initial_goal_count& get_initial_goal_count;
     i_activate_initial_goal& activate_initial_goal;
     i_make_initial_goal_lineage& make_initial_goal_lineage;
@@ -68,6 +89,15 @@ private:
     i_elimination_router& er;
     i_resolver& r;
     i_get_goal_candidate_rule_ids& get_goal_candidate_rule_ids;
+    i_clear_unit_goals& clear_unit_goals;
+    i_clear_recorded_decisions& clear_recorded_decisions;
+    i_clear_recorded_resolutions& clear_recorded_resolutions;
+    i_deactivated_candidate_memory& deactivated_candidate_memory;
+    i_clear_goal_candidate_rule_ids& clear_goal_candidate_rule_ids;
+    i_clear_goal_exprs& clear_goal_exprs;
+    i_clear_active_goals& clear_active_goals;
+    i_clear_candidate_translation_maps& clear_candidate_translation_maps;
+    i_clear_mhu_heads& clear_mhu_heads;
 };
 
 #endif

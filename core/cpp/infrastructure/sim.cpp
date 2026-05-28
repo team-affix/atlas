@@ -4,7 +4,8 @@
 
 sim::sim(
     size_t max_resolutions,
-    i_trail& trail,
+    i_push_trail_frame& push_trail_frame,
+    i_pop_trail_frame& pop_trail_frame,
     i_get_initial_goal_count& get_initial_goal_count,
     i_activate_initial_goal& activate_initial_goal,
     i_make_initial_goal_lineage& make_initial_goal_lineage,
@@ -20,10 +21,20 @@ sim::sim(
     i_elimination_generator& eg,
     i_elimination_router& er,
     i_resolver& r,
-    i_get_goal_candidate_rule_ids& get_goal_candidate_rule_ids)
+    i_get_goal_candidate_rule_ids& get_goal_candidate_rule_ids,
+    i_clear_unit_goals& clear_unit_goals,
+    i_clear_recorded_decisions& clear_recorded_decisions,
+    i_clear_recorded_resolutions& clear_recorded_resolutions,
+    i_deactivated_candidate_memory& deactivated_candidate_memory,
+    i_clear_goal_candidate_rule_ids& clear_goal_candidate_rule_ids,
+    i_clear_goal_exprs& clear_goal_exprs,
+    i_clear_active_goals& clear_active_goals,
+    i_clear_candidate_translation_maps& clear_candidate_translation_maps,
+    i_clear_mhu_heads& clear_mhu_heads)
     :
     max_resolutions(max_resolutions),
-    trail(trail),
+    push_trail_frame(push_trail_frame),
+    pop_trail_frame(pop_trail_frame),
     get_initial_goal_count(get_initial_goal_count),
     activate_initial_goal(activate_initial_goal),
     make_initial_goal_lineage(make_initial_goal_lineage),
@@ -39,11 +50,20 @@ sim::sim(
     eg(eg),
     er(er),
     r(r),
-    get_goal_candidate_rule_ids(get_goal_candidate_rule_ids) {
+    get_goal_candidate_rule_ids(get_goal_candidate_rule_ids),
+    clear_unit_goals(clear_unit_goals),
+    clear_recorded_decisions(clear_recorded_decisions),
+    clear_recorded_resolutions(clear_recorded_resolutions),
+    deactivated_candidate_memory(deactivated_candidate_memory),
+    clear_goal_candidate_rule_ids(clear_goal_candidate_rule_ids),
+    clear_goal_exprs(clear_goal_exprs),
+    clear_active_goals(clear_active_goals),
+    clear_candidate_translation_maps(clear_candidate_translation_maps),
+    clear_mhu_heads(clear_mhu_heads) {
 }
 
 void sim::set_up() {
-    trail.push();
+    push_trail_frame.push();
 
     for (size_t i = 0; i < get_initial_goal_count.count(); ++i) {
         activate_initial_goal.activate_initial_goal(i);
@@ -83,7 +103,18 @@ sim_termination sim::run() {
     return sim_termination::depth_exceeded;
 }
 
-void sim::tear_down() {}
+void sim::tear_down() {
+    pop_trail_frame.pop();
+    clear_unit_goals.clear();
+    clear_recorded_decisions.clear_recorded_decisions();
+    clear_recorded_resolutions.clear_recorded_resolutions();
+    deactivated_candidate_memory.clear();
+    clear_goal_candidate_rule_ids.clear_goal_candidate_rule_ids();
+    clear_goal_exprs.clear_goal_exprs();
+    clear_active_goals.clear_active_goals();
+    clear_candidate_translation_maps.clear_candidate_translation_maps();
+    clear_mhu_heads.clear_mhu_heads();
+}
 
 const resolution_lineage* sim::next_resolution() {
     auto maybe_gl = pop_unit_goal.pop();

@@ -35,7 +35,7 @@ TEST_F(DecisionMemoryTest, InsertIncreasesSize) {
 TEST_F(DecisionMemoryTest, ClearRemovesAllDecisions) {
     mem.record_decision(&rl0);
     mem.record_decision(&rl1);
-    mem.clear_decision_record();
+    mem.clear_recorded_decisions();
     EXPECT_THAT(mem.count(), Eq(0u));
 }
 

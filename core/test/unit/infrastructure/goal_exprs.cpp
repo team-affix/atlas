@@ -41,3 +41,11 @@ TEST_F(GoalExprsTest, UnsetDoesNotAffectOtherGoals) {
     store.unset(&gl0);
     EXPECT_EQ(store.get(&gl1), &e1);
 }
+
+TEST_F(GoalExprsTest, ClearGoalExprsRemovesAllBindings) {
+    store.set(&gl0, &e0);
+    store.set(&gl1, &e1);
+    store.clear_goal_exprs();
+    EXPECT_EQ(store.get(&gl0), nullptr);
+    EXPECT_EQ(store.get(&gl1), nullptr);
+}

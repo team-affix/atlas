@@ -24,6 +24,11 @@ TEST_F(InitialGoalExprsTest, PushIncreasesCount) {
     EXPECT_EQ(goals.count(), 2u);
 }
 
+TEST_F(InitialGoalExprsTest, GetOutOfRangeThrows) {
+    goals.push(&e0);
+    EXPECT_THROW(goals.get(1), std::out_of_range);
+}
+
 TEST_F(InitialGoalExprsTest, GetReturnsExprsInPushOrder) {
     goals.push(&e0);
     goals.push(&e1);

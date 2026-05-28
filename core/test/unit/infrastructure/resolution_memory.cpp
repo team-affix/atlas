@@ -25,13 +25,23 @@ struct ResolutionMemoryTest : public ::testing::Test {
 TEST_F(ResolutionMemoryTest, DeriveLemmaEmptyAfterClear) {
     mem.record_resolution(&rl0);
     mem.record_resolution(&rl1);
-    mem.clear_resolution_record();
+    mem.clear_recorded_resolutions();
 
     EXPECT_THAT(mem.derive_resolution_lemma().get_resolutions(), IsEmpty());
 }
 
 TEST_F(ResolutionMemoryTest, DeriveLemmaEmptyWithNoInsertions) {
     EXPECT_THAT(mem.derive_resolution_lemma().get_resolutions(), IsEmpty());
+}
+
+TEST_F(ResolutionMemoryTest, GetResolutionCountTracksInsertions) {
+    EXPECT_EQ(mem.get_resolution_count(), 0u);
+    mem.record_resolution(&rl0);
+    EXPECT_EQ(mem.get_resolution_count(), 1u);
+    mem.record_resolution(&rl1);
+    EXPECT_EQ(mem.get_resolution_count(), 2u);
+    mem.clear_recorded_resolutions();
+    EXPECT_EQ(mem.get_resolution_count(), 0u);
 }
 
 TEST_F(ResolutionMemoryTest, DeriveLemmaContainsInsertedResolutions) {

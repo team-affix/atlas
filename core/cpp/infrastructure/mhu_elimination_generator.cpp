@@ -176,3 +176,9 @@ void mhu_elimination_generator::remove_head(const resolution_lineage* rl) {
     heads_.erase(rl);
     unlink(rl);
 }
+
+void mhu_elimination_generator::clear_mhu_heads() {
+    heads_.clear();
+    rep_to_rls_.clear();
+    rl_to_reps_.clear();
+}

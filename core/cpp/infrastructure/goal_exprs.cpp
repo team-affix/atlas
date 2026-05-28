@@ -14,3 +14,7 @@ void goal_exprs::set(const goal_lineage* gl, const expr* e) {
 void goal_exprs::unset(const goal_lineage* gl) {
     exprs_.erase(gl);
 }
+
+void goal_exprs::clear_goal_exprs() {
+    exprs_.clear();
+}

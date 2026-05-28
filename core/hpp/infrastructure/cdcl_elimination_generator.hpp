@@ -13,7 +13,7 @@ struct cdcl_elimination_generator
     : i_elimination_generator
     , i_learn_avoidance {
     cdcl_elimination_generator(
-        i_trail&
+        i_log_to_current_trail_frame&
     );
     std::optional<const resolution_lineage*> learn(const lemma&) override;
     state_machine<const resolution_lineage*> constrain(const resolution_lineage*) override;

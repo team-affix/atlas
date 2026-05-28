@@ -4,13 +4,11 @@
 #include <gtest/gtest.h>
 #include <gmock/gmock.h>
 #include "infrastructure/cdcl_sequencer.hpp"
-#include "interfaces/i_trail.hpp"
+#include "interfaces/i_log_to_current_trail_frame.hpp"
 
 using ::testing::_;
 
-struct MockTrail : public i_trail {
-    MOCK_METHOD(void, push, (), (override));
-    MOCK_METHOD(void, pop, (), (override));
+struct MockTrail : public i_log_to_current_trail_frame {
     MOCK_METHOD(void, log, ((std::unique_ptr<i_backtrackable>)), (override));
 };
 

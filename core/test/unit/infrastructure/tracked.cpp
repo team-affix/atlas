@@ -1,19 +1,18 @@
-// tracked wraps a value with trail-logged mutations. Unit tests mock i_trail and assert
+// tracked wraps a value with trail-logged mutations. Unit tests mock
+// i_log_to_current_trail_frame and assert
 // get() returns the initial value and mutate() logs a backtrackable_increment once.
 
 #include <gtest/gtest.h>
 #include <gmock/gmock.h>
 #include "infrastructure/tracked.hpp"
-#include "interfaces/i_trail.hpp"
+#include "interfaces/i_log_to_current_trail_frame.hpp"
 #include "infrastructure/backtrackable_increment.hpp"
 
 using ::testing::_;
 using ::testing::NiceMock;
 using ::testing::StrictMock;
 
-struct MockTrail : public i_trail {
-    MOCK_METHOD(void, push, (), (override));
-    MOCK_METHOD(void, pop, (), (override));
+struct MockTrail : public i_log_to_current_trail_frame {
     MOCK_METHOD(void, log, ((std::unique_ptr<i_backtrackable>)), (override));
 };
 

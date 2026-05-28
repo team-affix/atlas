@@ -95,3 +95,51 @@ TEST_F(SolverTest, YieldPropagatesConflictTermination) {
     ASSERT_TRUE(term.has_value());
     EXPECT_EQ(*term, sim_termination::conflicted);
 }
+
+TEST_F(SolverTest, RunsSecondIterationWhileDecisionsRemain) {
+    const lemma empty_lemma{{}};
+    EXPECT_CALL(set_up_sim, set_up()).Times(2);
+    EXPECT_CALL(run_sim, run())
+        .WillOnce(Return(sim_termination::conflicted))
+        .WillOnce(Return(sim_termination::solved));
+    EXPECT_CALL(get_decision_count, count())
+        .WillOnce(Return(1))
+        .WillOnce(Return(0));
+    EXPECT_CALL(derive_decision_lemma, derive())
+        .WillRepeatedly(Return(empty_lemma));
+    EXPECT_CALL(learn_avoidance, learn(testing::_))
+        .WillRepeatedly(Return(std::nullopt));
+    EXPECT_CALL(tear_down_sim, tear_down()).Times(2);
+
+    auto sm = s.solve();
+    ASSERT_EQ(sm.resume(), sim_termination::conflicted);
+    ASSERT_EQ(sm.resume(), sim_termination::solved);
+    EXPECT_FALSE(sm.resume().has_value());
+}
+
+TEST_F(SolverTest, YieldPropagatesDepthExceededTermination) {
+    EXPECT_CALL(set_up_sim, set_up()).Times(1);
+    EXPECT_CALL(run_sim, run()).WillOnce(Return(sim_termination::depth_exceeded));
+    auto sm = s.solve();
+    auto term = sm.resume();
+    ASSERT_TRUE(term.has_value());
+    EXPECT_EQ(*term, sim_termination::depth_exceeded);
+}
+
+TEST_F(SolverTest, RoutesEliminationWhenLearnReturnsLineage) {
+    goal_lineage gl{nullptr, 0};
+    resolution_lineage elim{&gl, 1};
+    const lemma empty_lemma{{}};
+
+    EXPECT_CALL(set_up_sim, set_up()).Times(1);
+    EXPECT_CALL(run_sim, run()).WillOnce(Return(sim_termination::conflicted));
+    EXPECT_CALL(get_decision_count, count()).WillOnce(Return(0));
+    EXPECT_CALL(derive_decision_lemma, derive()).WillOnce(Return(empty_lemma));
+    EXPECT_CALL(learn_avoidance, learn(testing::_)).WillOnce(Return(&elim));
+    EXPECT_CALL(router, route(&elim)).Times(1);
+    EXPECT_CALL(tear_down_sim, tear_down()).Times(1);
+
+    auto sm = s.solve();
+    ASSERT_EQ(sm.resume(), sim_termination::conflicted);
+    EXPECT_FALSE(sm.resume().has_value());
+}

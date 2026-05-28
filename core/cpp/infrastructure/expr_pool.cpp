@@ -2,7 +2,7 @@
 #include "infrastructure/expr_pool.hpp"
 #include "infrastructure/backtrackable_set_insert.hpp"
 
-expr_pool::expr_pool(i_trail& t) :
+expr_pool::expr_pool(i_log_to_current_trail_frame& t) :
     exprs(t, {}) {
 }
 

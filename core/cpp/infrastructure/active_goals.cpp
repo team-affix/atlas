@@ -24,3 +24,7 @@ size_t active_goals::active_goals_size() const {
 bool active_goals::empty() const {
     return goals_.empty();
 }
+
+void active_goals::clear_active_goals() {
+    goals_.clear();
+}

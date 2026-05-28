@@ -50,6 +50,12 @@ TEST_F(DbTest, SameTotalRulesForDifferentGoals) {
     EXPECT_EQ(&database.get(&gl0), &database.get(&gl1));
 }
 
+TEST_F(DbTest, GetRuleIdOutOfRangeThrows) {
+    db database;
+    database.push(r);
+    EXPECT_THROW(database.get(1), std::out_of_range);
+}
+
 TEST_F(DbTest, MutationsThroughGetVisibleToAllGoals) {
     db database;
     database.push(r);

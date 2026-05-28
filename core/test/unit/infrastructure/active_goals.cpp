@@ -74,3 +74,11 @@ TEST_F(ActiveGoalsTest, EraseOneGoalLeavesOther) {
     EXPECT_FALSE(goals.is_active_goal(&gl0));
     EXPECT_TRUE(goals.is_active_goal(&gl1));
 }
+
+TEST_F(ActiveGoalsTest, ClearActiveGoalsEmptiesRegistry) {
+    goals.insert_active_goal(&gl0);
+    goals.insert_active_goal(&gl1);
+    goals.clear_active_goals();
+    EXPECT_TRUE(goals.empty());
+    EXPECT_THAT(collect_goals(goals), IsEmpty());
+}

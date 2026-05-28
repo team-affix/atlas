@@ -2,9 +2,14 @@
 #define TRAIL_HPP
 
 #include <stack>
-#include "interfaces/i_trail.hpp"
+#include "interfaces/i_push_trail_frame.hpp"
+#include "interfaces/i_pop_trail_frame.hpp"
+#include "interfaces/i_log_to_current_trail_frame.hpp"
 
-struct trail : i_trail {
+struct trail
+    : i_push_trail_frame
+    , i_pop_trail_frame
+    , i_log_to_current_trail_frame {
     void push() override;
     void pop() override;
     void log(std::unique_ptr<i_backtrackable>) override;

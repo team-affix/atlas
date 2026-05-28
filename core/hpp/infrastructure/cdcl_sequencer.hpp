@@ -2,11 +2,11 @@
 #define CDCL_SEQUENCER_HPP
 
 #include "interfaces/i_cdcl_sequencer.hpp"
-#include "interfaces/i_trail.hpp"
+#include "interfaces/i_log_to_current_trail_frame.hpp"
 #include "infrastructure/sequencer.hpp"
 
 struct cdcl_sequencer : i_cdcl_sequencer {
-    cdcl_sequencer(i_trail& t);
+    cdcl_sequencer(i_log_to_current_trail_frame& t);
     size_t next() override;
 private:
     sequencer<size_t> seq;

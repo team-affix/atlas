@@ -25,3 +25,7 @@ void goal_candidate_rules::unlink_goal_candidate(const goal_lineage* gl, rule_id
 void goal_candidate_rules::erase(const goal_lineage* gl) {
     by_goal_.erase(gl);
 }
+
+void goal_candidate_rules::clear_goal_candidate_rule_ids() {
+    by_goal_.clear();
+}

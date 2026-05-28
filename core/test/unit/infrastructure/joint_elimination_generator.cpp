@@ -22,6 +22,10 @@ state_machine<const resolution_lineage*> make_single_elim_sm(
     co_yield nullptr;
 }
 
+state_machine<const resolution_lineage*> empty_elim_sm() {
+    co_return;
+}
+
 std::vector<const resolution_lineage*> collect_non_null_elims(
     state_machine<const resolution_lineage*>& sm) {
     std::vector<const resolution_lineage*> out;
@@ -70,6 +74,16 @@ TEST_F(JointEliminationGeneratorUnitTest, ConstrainRunsCdclBeforeMhu) {
 
     auto sm = joint.constrain(&rl);
     collect_non_null_elims(sm);
+}
+
+TEST_F(JointEliminationGeneratorUnitTest, ConstrainYieldsOnlyMhuWhenCdclEmpty) {
+    EXPECT_CALL(cdcl_elims, constrain(&rl))
+        .WillOnce(Return(ByMove(empty_elim_sm())));
+    EXPECT_CALL(mhu_elims, constrain(&rl))
+        .WillOnce(Return(ByMove(make_single_elim_sm(&rl))));
+
+    auto sm = joint.constrain(&rl);
+    EXPECT_THAT(collect_non_null_elims(sm), ElementsAre(&rl));
 }
 
 TEST_F(JointEliminationGeneratorUnitTest, ConstrainEndsWithNullTerminatorYield) {

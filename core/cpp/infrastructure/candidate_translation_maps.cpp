@@ -11,3 +11,7 @@ void candidate_translation_maps::set(const resolution_lineage* rl, translation_m
 void candidate_translation_maps::unset(const resolution_lineage* rl) {
     maps_.erase(rl);
 }
+
+void candidate_translation_maps::clear_candidate_translation_maps() {
+    maps_.clear();
+}

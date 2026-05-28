@@ -1,7 +1,7 @@
 // Simulation loop: solution/conflict/depth termination, elimination routing, and
 // resolution stepping. set_up pushes a trail frame and activates initial goals;
-// tear_down is a no-op. run() must honor max_resolutions and short-circuit on
-// solution_detector.
+// tear_down pops the trail and clears non-backtracked stores. run() must honor
+// max_resolutions and short-circuit on solution_detector.
 
 #include <gtest/gtest.h>
 #include <gmock/gmock.h>
@@ -23,7 +23,8 @@
 #include "interfaces/i_activate_initial_goal.hpp"
 #include "interfaces/i_get_initial_goal_count.hpp"
 #include "interfaces/i_make_initial_goal_lineage.hpp"
-#include "interfaces/i_trail.hpp"
+#include "interfaces/i_push_trail_frame.hpp"
+#include "interfaces/i_pop_trail_frame.hpp"
 #include "value_objects/elimination_result.hpp"
 
 using ::testing::Return;
@@ -32,6 +33,11 @@ using ::testing::ReturnRef;
 namespace {
 
 state_machine<const resolution_lineage*> empty_eliminations() {
+    co_return;
+}
+
+state_machine<const resolution_lineage*> single_elimination(const resolution_lineage* elim) {
+    co_yield elim;
     co_return;
 }
 
@@ -91,10 +97,12 @@ struct MockGetGoalCandidateRuleIds : public i_get_goal_candidate_rule_ids {
     MOCK_METHOD(const i_rule_id_set&, get, (const goal_lineage*), (const, override));
 };
 
-struct MockTrail : public i_trail {
+struct MockPushTrailFrame : public i_push_trail_frame {
     MOCK_METHOD(void, push, (), (override));
+};
+
+struct MockPopTrailFrame : public i_pop_trail_frame {
     MOCK_METHOD(void, pop, (), (override));
-    MOCK_METHOD(void, log, (std::unique_ptr<i_backtrackable>), (override));
 };
 
 struct MockGetInitialGoalCount : public i_get_initial_goal_count {
@@ -109,10 +117,49 @@ struct MockActivateInitialGoal : public i_activate_initial_goal {
     MOCK_METHOD(void, activate_initial_goal, (subgoal_id), (override));
 };
 
+struct MockClearUnitGoals : public i_clear_unit_goals {
+    MOCK_METHOD(void, clear, (), (override));
+};
+
+struct MockClearRecordedDecisions : public i_clear_recorded_decisions {
+    MOCK_METHOD(void, clear_recorded_decisions, (), (override));
+};
+
+struct MockClearRecordedResolutions : public i_clear_recorded_resolutions {
+    MOCK_METHOD(void, clear_recorded_resolutions, (), (override));
+};
+
+struct MockDeactivatedCandidateMemory : public i_deactivated_candidate_memory {
+    MOCK_METHOD(void, insert, (const resolution_lineage*), (override));
+    MOCK_METHOD(void, clear, (), (override));
+    MOCK_METHOD(bool, contains, (const resolution_lineage*), (const, override));
+};
+
+struct MockClearGoalCandidateRuleIds : public i_clear_goal_candidate_rule_ids {
+    MOCK_METHOD(void, clear_goal_candidate_rule_ids, (), (override));
+};
+
+struct MockClearGoalExprs : public i_clear_goal_exprs {
+    MOCK_METHOD(void, clear_goal_exprs, (), (override));
+};
+
+struct MockClearActiveGoals : public i_clear_active_goals {
+    MOCK_METHOD(void, clear_active_goals, (), (override));
+};
+
+struct MockClearCandidateTranslationMaps : public i_clear_candidate_translation_maps {
+    MOCK_METHOD(void, clear_candidate_translation_maps, (), (override));
+};
+
+struct MockClearMhuHeads : public i_clear_mhu_heads {
+    MOCK_METHOD(void, clear_mhu_heads, (), (override));
+};
+
 struct SimTest : public ::testing::Test {
     static constexpr size_t kMaxResolutions = 2;
 
-    MockTrail trail;
+    MockPushTrailFrame push_trail_frame;
+    MockPopTrailFrame pop_trail_frame;
     MockGetInitialGoalCount get_initial_goal_count;
     MockActivateInitialGoal activate_initial_goal;
     MockMakeInitialGoalLineage make_initial_goal_lineage;
@@ -129,25 +176,51 @@ struct SimTest : public ::testing::Test {
     MockEliminationRouter elimination_router;
     MockResolver resolver;
     MockGetGoalCandidateRuleIds get_goal_candidate_rule_ids;
-    sim simulation{
-        kMaxResolutions,
-        trail,
-        get_initial_goal_count,
-        activate_initial_goal,
-        make_initial_goal_lineage,
-        get_goal_db_rule_ids,
-        lp,
-        candidate_activator,
-        solution_detector,
-        conflict_detector,
-        unit_goal_detector,
-        push_unit_goal,
-        pop_unit_goal,
-        decision_generator,
-        elimination_generator,
-        elimination_router,
-        resolver,
-        get_goal_candidate_rule_ids};
+    testing::NiceMock<MockClearUnitGoals> clear_unit_goals;
+    testing::NiceMock<MockClearRecordedDecisions> clear_recorded_decisions;
+    testing::NiceMock<MockClearRecordedResolutions> clear_recorded_resolutions;
+    testing::NiceMock<MockDeactivatedCandidateMemory> deactivated_candidate_memory;
+    testing::NiceMock<MockClearGoalCandidateRuleIds> clear_goal_candidate_rule_ids;
+    testing::NiceMock<MockClearGoalExprs> clear_goal_exprs;
+    testing::NiceMock<MockClearActiveGoals> clear_active_goals;
+    testing::NiceMock<MockClearCandidateTranslationMaps> clear_candidate_translation_maps;
+    testing::NiceMock<MockClearMhuHeads> clear_mhu_heads;
+
+    sim make_sim(size_t max_resolutions = kMaxResolutions) {
+        return sim{
+            max_resolutions,
+            push_trail_frame,
+            pop_trail_frame,
+            get_initial_goal_count,
+            activate_initial_goal,
+            make_initial_goal_lineage,
+            get_goal_db_rule_ids,
+            lp,
+            candidate_activator,
+            solution_detector,
+            conflict_detector,
+            unit_goal_detector,
+            push_unit_goal,
+            pop_unit_goal,
+            decision_generator,
+            elimination_generator,
+            elimination_router,
+            resolver,
+            get_goal_candidate_rule_ids,
+            clear_unit_goals,
+            clear_recorded_decisions,
+            clear_recorded_resolutions,
+            deactivated_candidate_memory,
+            clear_goal_candidate_rule_ids,
+            clear_goal_exprs,
+            clear_active_goals,
+            clear_candidate_translation_maps,
+            clear_mhu_heads};
+    }
+
+    sim simulation;
+
+    SimTest() : simulation(make_sim()) {}
 
     expr goal_e{expr::var{0}};
     expr head{expr::var{1}};
@@ -182,8 +255,23 @@ TEST_F(SimTest, RunReturnsConflictedWhenResolverFails) {
     EXPECT_EQ(simulation.run(), sim_termination::conflicted);
 }
 
+TEST_F(SimTest, TearDownPopsTrailAndClearsNonBacktrackedStores) {
+    EXPECT_CALL(pop_trail_frame, pop()).Times(1);
+    EXPECT_CALL(clear_unit_goals, clear()).Times(1);
+    EXPECT_CALL(clear_recorded_decisions, clear_recorded_decisions()).Times(1);
+    EXPECT_CALL(clear_recorded_resolutions, clear_recorded_resolutions()).Times(1);
+    EXPECT_CALL(deactivated_candidate_memory, clear()).Times(1);
+    EXPECT_CALL(clear_goal_candidate_rule_ids, clear_goal_candidate_rule_ids()).Times(1);
+    EXPECT_CALL(clear_goal_exprs, clear_goal_exprs()).Times(1);
+    EXPECT_CALL(clear_active_goals, clear_active_goals()).Times(1);
+    EXPECT_CALL(clear_candidate_translation_maps, clear_candidate_translation_maps()).Times(1);
+    EXPECT_CALL(clear_mhu_heads, clear_mhu_heads()).Times(1);
+
+    simulation.tear_down();
+}
+
 TEST_F(SimTest, SetUpPushesTrailAndActivatesEachInitialGoal) {
-    EXPECT_CALL(trail, push()).Times(1);
+    EXPECT_CALL(push_trail_frame, push()).Times(1);
     EXPECT_CALL(get_initial_goal_count, count()).WillRepeatedly(Return(2));
     goal_lineage gl0{nullptr, 0};
     goal_lineage gl1{nullptr, 1};
@@ -195,4 +283,91 @@ TEST_F(SimTest, SetUpPushesTrailAndActivatesEachInitialGoal) {
     EXPECT_CALL(get_goal_db_rule_ids, get(&gl1)).WillOnce(ReturnRef(db_rules));
     simulation.set_up();
     simulation.tear_down();
+}
+
+TEST_F(SimTest, SetUpActivatesDbRuleCandidates) {
+    static constexpr rule_id kDbRule = 3;
+    db_rules.insert(kDbRule);
+    goal_lineage gl0{nullptr, 0};
+    resolution_lineage db_rl{&gl0, kDbRule};
+
+    EXPECT_CALL(push_trail_frame, push()).Times(1);
+    EXPECT_CALL(get_initial_goal_count, count()).WillRepeatedly(Return(1));
+    EXPECT_CALL(activate_initial_goal, activate_initial_goal(0)).Times(1);
+    EXPECT_CALL(make_initial_goal_lineage, make(0)).WillOnce(Return(&gl0));
+    EXPECT_CALL(get_goal_db_rule_ids, get(&gl0)).WillOnce(ReturnRef(db_rules));
+    EXPECT_CALL(lp, make_resolution_lineage(&gl0, kDbRule)).WillOnce(Return(&db_rl));
+    EXPECT_CALL(candidate_activator, activate(&db_rl)).Times(1);
+
+    simulation.set_up();
+}
+
+TEST_F(SimTest, RunRoutesEliminationBeforeResolve) {
+    resolution_lineage elim_rl{&gl, 1};
+
+    EXPECT_CALL(solution_detector, detect()).WillRepeatedly(Return(false));
+    EXPECT_CALL(pop_unit_goal, pop()).WillRepeatedly(Return(std::nullopt));
+    EXPECT_CALL(decision_generator, generate()).WillRepeatedly(Return(&rl));
+    EXPECT_CALL(elimination_generator, constrain(&rl))
+        .WillOnce([&] { return single_elimination(&elim_rl); })
+        .WillRepeatedly([] { return empty_eliminations(); });
+    EXPECT_CALL(elimination_router, route(&elim_rl)).Times(1);
+    EXPECT_CALL(conflict_detector, detect(&gl)).WillOnce(Return(false));
+    EXPECT_CALL(unit_goal_detector, detect(&gl)).WillOnce(Return(false));
+    EXPECT_CALL(resolver, resolve(&rl)).WillRepeatedly(Return(true));
+
+    EXPECT_EQ(simulation.run(), sim_termination::depth_exceeded);
+}
+
+TEST_F(SimTest, RunReturnsConflictedWhenEliminationParentConflicts) {
+    resolution_lineage elim_rl{&gl, 1};
+
+    EXPECT_CALL(solution_detector, detect()).WillOnce(Return(false));
+    EXPECT_CALL(pop_unit_goal, pop()).WillOnce(Return(std::nullopt));
+    EXPECT_CALL(decision_generator, generate()).WillOnce(Return(&rl));
+    EXPECT_CALL(elimination_generator, constrain(&rl))
+        .WillOnce([&] { return single_elimination(&elim_rl); });
+    EXPECT_CALL(elimination_router, route(&elim_rl)).Times(1);
+    EXPECT_CALL(conflict_detector, detect(&gl)).WillOnce(Return(true));
+    EXPECT_CALL(resolver, resolve).Times(0);
+
+    EXPECT_EQ(simulation.run(), sim_termination::conflicted);
+}
+
+TEST_F(SimTest, RunPushesUnitGoalWhenEliminationParentIsUnit) {
+    resolution_lineage elim_rl{&gl, 1};
+
+    EXPECT_CALL(solution_detector, detect()).WillRepeatedly(Return(false));
+    EXPECT_CALL(pop_unit_goal, pop()).WillRepeatedly(Return(std::nullopt));
+    EXPECT_CALL(decision_generator, generate()).WillRepeatedly(Return(&rl));
+    EXPECT_CALL(elimination_generator, constrain(&rl))
+        .WillOnce([&] { return single_elimination(&elim_rl); })
+        .WillRepeatedly([] { return empty_eliminations(); });
+    EXPECT_CALL(elimination_router, route(&elim_rl)).Times(1);
+    EXPECT_CALL(conflict_detector, detect(&gl)).WillOnce(Return(false));
+    EXPECT_CALL(unit_goal_detector, detect(&gl)).WillOnce(Return(true));
+    EXPECT_CALL(push_unit_goal, push(&gl)).Times(1);
+    EXPECT_CALL(resolver, resolve(&rl)).WillRepeatedly(Return(true));
+
+    EXPECT_EQ(simulation.run(), sim_termination::depth_exceeded);
+}
+
+TEST_F(SimTest, RunUsesPoppedUnitGoalForNextResolution) {
+    static constexpr rule_id kCandidate = 5;
+    rule_id_set unit_candidates;
+    unit_candidates.insert(kCandidate);
+    resolution_lineage unit_rl{&gl, kCandidate};
+
+    sim one_resolution{make_sim(1)};
+
+    EXPECT_CALL(solution_detector, detect()).WillOnce(Return(false));
+    EXPECT_CALL(pop_unit_goal, pop()).WillOnce(Return(&gl));
+    EXPECT_CALL(get_goal_candidate_rule_ids, get(&gl)).WillOnce(ReturnRef(unit_candidates));
+    EXPECT_CALL(lp, make_resolution_lineage(&gl, kCandidate)).WillOnce(Return(&unit_rl));
+    EXPECT_CALL(decision_generator, generate()).Times(0);
+    EXPECT_CALL(elimination_generator, constrain(&unit_rl))
+        .WillOnce([] { return empty_eliminations(); });
+    EXPECT_CALL(resolver, resolve(&unit_rl)).WillOnce(Return(true));
+
+    EXPECT_EQ(one_resolution.run(), sim_termination::depth_exceeded);
 }

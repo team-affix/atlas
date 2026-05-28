@@ -54,6 +54,20 @@ struct GoalActivatorTest : public ::testing::Test {
     translation_map tm{{1, 2}};
 };
 
+TEST_F(GoalActivatorTest, ActivateUsesBodyIndexForSubgoalExpr) {
+    expr second_body{expr::var{2}};
+    expr copied_second{expr::var{88}};
+    rule two_body{&rule_head, {&child_goal, &second_body}};
+    goal_lineage second_gl{&res, 1};
+
+    EXPECT_CALL(get_resolution_rule, get(&res)).WillOnce(Return(&two_body));
+    EXPECT_CALL(get_candidate_translation_map, get(&res)).WillOnce(ReturnRef(tm));
+    EXPECT_CALL(copier, copy(&second_body, _)).WillOnce(Return(&copied_second));
+    EXPECT_CALL(set_goal_expr, set(&second_gl, &copied_second)).Times(1);
+
+    activator.activate(&second_gl);
+}
+
 TEST_F(GoalActivatorTest, ActivateCopiesBodySubgoalThroughTranslationMap) {
     EXPECT_CALL(get_resolution_rule, get(&res)).WillOnce(Return(&parent_rule));
     EXPECT_CALL(get_candidate_translation_map, get(&res)).WillOnce(ReturnRef(tm));

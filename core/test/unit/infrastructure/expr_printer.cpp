@@ -80,3 +80,32 @@ TEST_F(ExprPrinterTest, PrintGeneralFunctor) {
 
     EXPECT_EQ(print(&f), "f(a, X)");
 }
+
+TEST_F(ExprPrinterTest, PrintTernaryFunctor) {
+    expr f3{expr::functor{"h", {&atom_a, &atom_b, &var0}}};
+
+    EXPECT_CALL(names, is_named(0)).WillOnce(Return(true));
+    EXPECT_CALL(names, name(0)).WillOnce(ReturnRef(var_name_x));
+
+    EXPECT_EQ(print(&f3), "h(a, b, X)");
+}
+
+TEST_F(ExprPrinterTest, PrintFourElementList) {
+    expr atom_c{expr::functor{"c", {}}};
+    expr atom_d{expr::functor{"d", {}}};
+    expr tail{expr::functor{"cons", {&atom_d, &nil}}};
+    expr t2{expr::functor{"cons", {&atom_c, &tail}}};
+    expr t1{expr::functor{"cons", {&atom_b, &t2}}};
+    expr list{expr::functor{"cons", {&atom_a, &t1}}};
+    EXPECT_EQ(print(&list), "[a, b, c, d]");
+}
+
+TEST_F(ExprPrinterTest, PrintNestedFunctorArgs) {
+    expr inner{expr::functor{"g", {&atom_a, &atom_b}}};
+    expr outer{expr::functor{"f", {&inner, &var0}}};
+
+    EXPECT_CALL(names, is_named(0)).WillOnce(Return(true));
+    EXPECT_CALL(names, name(0)).WillOnce(ReturnRef(var_name_x));
+
+    EXPECT_EQ(print(&outer), "f(g(a, b), X)");
+}

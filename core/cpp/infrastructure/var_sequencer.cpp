@@ -3,7 +3,7 @@
 
 #include "infrastructure/var_sequencer.hpp"
 
-var_sequencer::var_sequencer(i_trail& t) :
+var_sequencer::var_sequencer(i_log_to_current_trail_frame& t) :
     seq(t) {
 }
 

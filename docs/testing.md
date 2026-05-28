@@ -60,7 +60,7 @@ EXPECT_CALL(ggcr, get(&gl)).WillOnce(ReturnRef(rules));
 
 ### What not to do
 
-- **No duplicate implementations** of `i_trail`, `i_bind_map`, etc. in test code “because the real one is simple.” If undo must actually run, that is an **integration** test with the real type; if you only care that the SUT called `log`, use `EXPECT_CALL` on `MockTrail`.
+- **No duplicate implementations** of `i_push_trail_frame`, `i_pop_trail_frame`, `i_log_to_current_trail_frame`, `i_bind_map`, etc. in test code “because the real one is simple.” If undo must actually run, that is an **integration** test with the real type; if you only care that the SUT called `log`, use `EXPECT_CALL` on `MockTrail` (or the push/pop mocks when testing frame boundaries).
 - **No mutable recording structs** (fields like `last_gl`, `std::set removed`) when `EXPECT_CALL` can assert the same contract.
 - **No real collaborators in unit tests** except the SUT — e.g. do not use real `trail` in `expr_pool` unit tests; use `MockTrail` and move push/pop survival cases to integration.
 

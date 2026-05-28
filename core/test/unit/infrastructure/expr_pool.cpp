@@ -1,19 +1,18 @@
-// expr_pool canonicalizes expr nodes and logs first-seen internings to i_trail for
+// expr_pool canonicalizes expr nodes and logs first-seen internings to
+// i_log_to_current_trail_frame for
 // backtracking. Unit tests mock the trail and assert pointer identity, trail logging
 // counts, and import behavior without a real trail.
 
 #include <gtest/gtest.h>
 #include <gmock/gmock.h>
 #include "infrastructure/expr_pool.hpp"
-#include "interfaces/i_trail.hpp"
+#include "interfaces/i_log_to_current_trail_frame.hpp"
 
 using ::testing::_;
 using ::testing::NiceMock;
 using ::testing::StrictMock;
 
-struct MockTrail : public i_trail {
-    MOCK_METHOD(void, push, (), (override));
-    MOCK_METHOD(void, pop, (), (override));
+struct MockTrail : public i_log_to_current_trail_frame {
     MOCK_METHOD(void, log, ((std::unique_ptr<i_backtrackable>)), (override));
 };
 
@@ -65,7 +64,7 @@ TEST_F(ExprPoolTest, FunctorsWithDifferentArgsReturnDifferentPointers) {
 }
 
 // ---------------------------------------------------------------------------
-// Trail delegation (SUT → i_trail)
+// Trail delegation (SUT → i_log_to_current_trail_frame)
 // ---------------------------------------------------------------------------
 
 TEST_F(ExprPoolTest, FirstInternLogsToTrail) {
@@ -110,6 +109,13 @@ TEST_F(ExprPoolTest, ImportVarInternsIntoPool) {
     EXPECT_EQ(strict_pool.import(&e), pooled);
 }
 
+TEST_F(ExprPoolTest, TernaryFunctorInternedTwiceReturnsSamePointer) {
+    const expr* v0 = pool.make(0);
+    const expr* v1 = pool.make(1);
+    const expr* v2 = pool.make(2);
+    EXPECT_EQ(pool.make("h", {v0, v1, v2}), pool.make("h", {v0, v1, v2}));
+}
+
 TEST_F(ExprPoolTest, ImportFunctorInternsArgsRecursively) {
     StrictMock<MockTrail> strict_trail;
     expr_pool strict_pool{strict_trail};
@@ -123,4 +129,23 @@ TEST_F(ExprPoolTest, ImportFunctorInternsArgsRecursively) {
     const expr::functor& f = std::get<expr::functor>(p->content);
     EXPECT_NE(f.args[0], &arg);
     EXPECT_EQ(f.args[0], strict_pool.make(1));
+}
+
+TEST_F(ExprPoolTest, ImportTernaryFunctorInternsEachArg) {
+    StrictMock<MockTrail> strict_trail;
+    expr_pool strict_pool{strict_trail};
+
+    expr a{expr::var{0}};
+    expr b{expr::var{1}};
+    expr c{expr::var{2}};
+    expr root{expr::functor{"h", {&a, &b, &c}}};
+
+    EXPECT_CALL(strict_trail, log(_)).Times(4);
+    const expr* p = strict_pool.import(&root);
+
+    const expr::functor& f = std::get<expr::functor>(p->content);
+    ASSERT_EQ(f.args.size(), 3u);
+    EXPECT_EQ(f.args[0], strict_pool.make(0));
+    EXPECT_EQ(f.args[1], strict_pool.make(1));
+    EXPECT_EQ(f.args[2], strict_pool.make(2));
 }

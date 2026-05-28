@@ -1,12 +1,12 @@
 // cdcl_elimination_generator learns pairwise avoidance lemmas and yields eliminations
-// during constrain. Unit tests mock i_trail logging and assert learn/constrain outcomes
+// during constrain. Unit tests mock i_log_to_current_trail_frame logging and assert learn/constrain outcomes
 // on independent and dependent lineage trees.
 
 #include <gtest/gtest.h>
 #include <gmock/gmock.h>
 #include <vector>
 #include "infrastructure/cdcl_elimination_generator.hpp"
-#include "interfaces/i_trail.hpp"
+#include "interfaces/i_log_to_current_trail_frame.hpp"
 #include "infrastructure/state_machine.hpp"
 
 using ::testing::_;
@@ -35,9 +35,7 @@ lemma make_lemma(std::initializer_list<const resolution_lineage*> rs) {
 
 } // namespace
 
-struct MockTrail : public i_trail {
-    MOCK_METHOD(void, push, (), (override));
-    MOCK_METHOD(void, pop, (), (override));
+struct MockTrail : public i_log_to_current_trail_frame {
     MOCK_METHOD(void, log, ((std::unique_ptr<i_backtrackable>)), (override));
 };
 

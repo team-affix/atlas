@@ -4,7 +4,7 @@ void resolution_memory::record_resolution(const resolution_lineage* rl) {
     resolutions.insert(rl);
 }
 
-void resolution_memory::clear_resolution_record() {
+void resolution_memory::clear_recorded_resolutions() {
     resolutions.clear();
 }
 

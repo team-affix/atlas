@@ -137,6 +137,51 @@ TEST_F(ResolverTest, ConflictOnBodyGoalReturnsFalse) {
     EXPECT_FALSE(res.resolve(&rl));
 }
 
+TEST_F(ResolverTest, ActivatesEveryBodySubgoal) {
+    expr body0{expr::var{1}};
+    expr body1{expr::var{2}};
+    rule two_body{&head, {&body0, &body1}};
+    resolution_lineage rl_two{&parent_gl, kRule};
+    goal_lineage body_gl0{&rl_two, 0};
+    goal_lineage body_gl1{&rl_two, 1};
+
+    EXPECT_CALL(get_rule, get(kRule)).WillOnce(Return(&two_body));
+    EXPECT_CALL(make_goal_lineage, make_goal_lineage(&rl_two, 0)).WillOnce(Return(&body_gl0));
+    EXPECT_CALL(make_goal_lineage, make_goal_lineage(&rl_two, 1)).WillOnce(Return(&body_gl1));
+    EXPECT_CALL(goal_activator, activate(&body_gl0)).Times(1);
+    EXPECT_CALL(goal_activator, activate(&body_gl1)).Times(1);
+    EXPECT_CALL(get_goal_db_rule_ids, get(&body_gl0)).WillOnce(ReturnRef(db_rules));
+    EXPECT_CALL(get_goal_db_rule_ids, get(&body_gl1)).WillOnce(ReturnRef(db_rules));
+    EXPECT_CALL(conflict_detector, detect(&body_gl0)).WillOnce(Return(false));
+    EXPECT_CALL(conflict_detector, detect(&body_gl1)).WillOnce(Return(false));
+    EXPECT_CALL(unit_goal_detector, detect).Times(2).WillRepeatedly(Return(false));
+    EXPECT_CALL(get_goal_candidate_rule_ids, get(&parent_gl)).WillOnce(ReturnRef(parent_candidates));
+    EXPECT_CALL(goal_deactivator, deactivate(&parent_gl)).Times(1);
+
+    EXPECT_TRUE(res.resolve(&rl_two));
+}
+
+TEST_F(ResolverTest, SuccessDeactivatesParentCandidatesWithoutUnitPush) {
+    static constexpr rule_id kParentCand = 7;
+    parent_candidates.insert(kParentCand);
+    resolution_lineage cand_rl{&parent_gl, kParentCand};
+
+    EXPECT_CALL(get_rule, get(kRule)).WillOnce(Return(&idx));
+    EXPECT_CALL(make_goal_lineage, make_goal_lineage(&rl, kBodyIdx)).WillOnce(Return(&body_gl));
+    EXPECT_CALL(goal_activator, activate(&body_gl)).Times(1);
+    EXPECT_CALL(get_goal_db_rule_ids, get(&body_gl)).WillOnce(ReturnRef(db_rules));
+    EXPECT_CALL(conflict_detector, detect(&body_gl)).WillOnce(Return(false));
+    EXPECT_CALL(unit_goal_detector, detect(&body_gl)).WillOnce(Return(false));
+    EXPECT_CALL(get_goal_candidate_rule_ids, get(&parent_gl)).WillOnce(ReturnRef(parent_candidates));
+    EXPECT_CALL(make_resolution_lineage, make_resolution_lineage(&parent_gl, kParentCand))
+        .WillOnce(Return(&cand_rl));
+    EXPECT_CALL(candidate_deactivator, deactivate(&cand_rl)).Times(1);
+    EXPECT_CALL(goal_deactivator, deactivate(&parent_gl)).Times(1);
+    EXPECT_CALL(push_unit_goal, push).Times(0);
+
+    EXPECT_TRUE(res.resolve(&rl));
+}
+
 TEST_F(ResolverTest, UnitBodyGoalIsPushed) {
     db_rules.insert(kRule);
     EXPECT_CALL(get_rule, get(kRule)).WillOnce(Return(&idx));

@@ -8,14 +8,14 @@
 #include "interfaces/i_make_var.hpp"
 #include "value_objects/expr.hpp"
 #include "infrastructure/tracked.hpp"
-#include "interfaces/i_trail.hpp"
+#include "interfaces/i_log_to_current_trail_frame.hpp"
 
 struct expr_pool
     : i_make_functor
     , i_make_var
     , i_import_expr
     , i_get_expr_count {
-    expr_pool(i_trail& t);
+    expr_pool(i_log_to_current_trail_frame& t);
     const expr* make(const std::string& name, const std::vector<const expr*>& args) override;
     const expr* make(uint32_t) override;
     const expr* import(const expr*) override;
