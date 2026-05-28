@@ -5,7 +5,7 @@
 
 struct i_get_unit_resolution {
     virtual ~i_get_unit_resolution() = default;
-    virtual const resolution_lineage* get_unit_resolution(const goal_lineage*) = 0;
+    virtual const resolution_lineage* get(const goal_lineage*) = 0;
 };
 
 #endif

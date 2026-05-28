@@ -131,7 +131,7 @@ const resolution_lineage* sim::next_resolution() {
         rl = generate_decision.generate();
         record_decision.record_decision(rl);
     } else {
-        rl = get_unit_resolution.get_unit_resolution(maybe_gl.value());
+        rl = get_unit_resolution.get(maybe_gl.value());
     }
     record_resolution.record_resolution(rl);
     return rl;

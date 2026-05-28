@@ -91,11 +91,12 @@ struct MockEliminationRouter : public i_elimination_router {
     MOCK_METHOD(elimination_result, route, (const resolution_lineage*), (override));
 };
 
-struct MockResolver
-    : public i_resolver
-    , public i_get_unit_resolution {
+struct MockResolver : public i_resolver {
     MOCK_METHOD(bool, resolve, (const resolution_lineage*), (override));
-    MOCK_METHOD(const resolution_lineage*, get_unit_resolution, (const goal_lineage*), (override));
+};
+
+struct MockGetUnitResolution : public i_get_unit_resolution {
+    MOCK_METHOD(const resolution_lineage*, get, (const goal_lineage*), (override));
 };
 
 struct MockPushTrailFrame : public i_push_trail_frame {
@@ -192,6 +193,7 @@ struct SimTest : public ::testing::Test {
     MockEliminationGenerator elimination_generator;
     MockEliminationRouter elimination_router;
     MockResolver resolver;
+    MockGetUnitResolution get_unit_resolution;
     testing::NiceMock<MockRecordDecision> record_decision;
     testing::NiceMock<MockRecordResolution> record_resolution;
     testing::NiceMock<MockClearUnitGoals> clear_unit_goals;
@@ -226,7 +228,7 @@ struct SimTest : public ::testing::Test {
             elimination_generator,
             elimination_router,
             resolver,
-            resolver,
+            get_unit_resolution,
             record_decision,
             record_resolution,
             clear_unit_goals,
@@ -395,7 +397,7 @@ TEST_F(SimTest, RunUsesPoppedUnitGoalForNextResolution) {
 
     EXPECT_CALL(solution_detector, detect()).WillOnce(Return(false));
     EXPECT_CALL(pop_unit_goal, pop()).WillOnce(Return(&gl));
-    EXPECT_CALL(resolver, get_unit_resolution(&gl)).WillOnce(Return(&unit_rl));
+    EXPECT_CALL(get_unit_resolution, get(&gl)).WillOnce(Return(&unit_rl));
     EXPECT_CALL(decision_generator, generate()).Times(0);
     EXPECT_CALL(record_decision, record_decision).Times(0);
     EXPECT_CALL(record_resolution, record_resolution(&unit_rl)).Times(1);
