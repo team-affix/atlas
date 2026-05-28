@@ -1,6 +1,7 @@
 // Simulation loop: solution/conflict/depth termination, elimination routing, and
-// resolution stepping. set_up pushes a trail frame and activates initial goals;
-// tear_down pops the trail and clears non-backtracked stores. run() must honor
+// resolution stepping. set_up pushes a trail frame; run() activates initial goals
+// then enters the resolution loop. tear_down pops the trail and clears stores.
+// run() must honor
 // max_resolutions and short-circuit on solution_detector.
 
 #include <gtest/gtest.h>
@@ -305,8 +306,14 @@ TEST_F(SimTest, TearDownPopsTrailAndClearsNonBacktrackedStores) {
     simulation.tear_down();
 }
 
-TEST_F(SimTest, SetUpPushesTrailAndActivatesEachInitialGoal) {
+TEST_F(SimTest, SetUpPushesTrailFrameOnly) {
     EXPECT_CALL(push_trail_frame, push()).Times(1);
+    EXPECT_CALL(get_initial_goal_count, count()).Times(0);
+    simulation.set_up();
+    simulation.tear_down();
+}
+
+TEST_F(SimTest, RunActivatesEachInitialGoalBeforeResolutionLoop) {
     EXPECT_CALL(get_initial_goal_count, count()).WillRepeatedly(Return(2));
     goal_lineage gl0{nullptr, 0};
     goal_lineage gl1{nullptr, 1};
@@ -316,25 +323,26 @@ TEST_F(SimTest, SetUpPushesTrailAndActivatesEachInitialGoal) {
     EXPECT_CALL(make_initial_goal_lineage, make(1)).WillOnce(Return(&gl1));
     EXPECT_CALL(get_goal_db_rule_ids, get(&gl0)).WillOnce(ReturnRef(db_rules));
     EXPECT_CALL(get_goal_db_rule_ids, get(&gl1)).WillOnce(ReturnRef(db_rules));
-    simulation.set_up();
-    simulation.tear_down();
+    EXPECT_CALL(solution_detector, detect()).WillOnce(Return(true));
+
+    EXPECT_EQ(simulation.run(), sim_termination::solved);
 }
 
-TEST_F(SimTest, SetUpActivatesDbRuleCandidates) {
+TEST_F(SimTest, RunActivatesDbRuleCandidates) {
     static constexpr rule_id kDbRule = 3;
     db_rules.insert(kDbRule);
     goal_lineage gl0{nullptr, 0};
     resolution_lineage db_rl{&gl0, kDbRule};
 
-    EXPECT_CALL(push_trail_frame, push()).Times(1);
     EXPECT_CALL(get_initial_goal_count, count()).WillRepeatedly(Return(1));
     EXPECT_CALL(activate_initial_goal, activate_initial_goal(0)).Times(1);
     EXPECT_CALL(make_initial_goal_lineage, make(0)).WillOnce(Return(&gl0));
     EXPECT_CALL(get_goal_db_rule_ids, get(&gl0)).WillOnce(ReturnRef(db_rules));
     EXPECT_CALL(lp, make_resolution_lineage(&gl0, kDbRule)).WillOnce(Return(&db_rl));
     EXPECT_CALL(candidate_activator, activate(&db_rl)).Times(1);
+    EXPECT_CALL(solution_detector, detect()).WillOnce(Return(true));
 
-    simulation.set_up();
+    EXPECT_EQ(simulation.run(), sim_termination::solved);
 }
 
 TEST_F(SimTest, RunRoutesEliminationBeforeResolve) {

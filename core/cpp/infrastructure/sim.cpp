@@ -38,7 +38,10 @@ sim::sim(locator& loc, size_t max_resolutions)
 
 void sim::set_up() {
     push_trail_frame.push();
+}
 
+sim_termination sim::run() {
+    // --- activate initial goals and db candidates ---
     for (size_t i = 0; i < get_initial_goal_count.count(); ++i) {
         activate_initial_goal.activate_initial_goal(i);
         const goal_lineage* gl = make_initial_goal_lineage.make(i);
@@ -50,10 +53,13 @@ void sim::set_up() {
                 continue;
             candidate_activator.activate(make_resolution_lineage.make_resolution_lineage(gl, rr.value()));
         }
+        if (cd.detect(gl))
+            return sim_termination::conflicted;
+        if (ugd.detect(gl))
+            push_unit_goal.push(gl);
     }
-}
-
-sim_termination sim::run() {
+    
+    // --- resolution loop ---
     for (size_t i = 0; i < max_resolutions; ++i) {
         if (sd.detect())
             return sim_termination::solved;

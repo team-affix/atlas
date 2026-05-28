@@ -104,6 +104,11 @@ state_machine<int> make_int_throws_after_first_yield() {
     throw std::runtime_error("boom");
 }
 
+state_machine<void> make_void_throws_on_resume() {
+    co_await std::suspend_always{};
+    throw std::runtime_error("void boom");
+}
+
 } // namespace
 
 struct StateMachineTest : public ::testing::Test {};
@@ -236,6 +241,13 @@ TEST_F(StateMachineTest, DrainTwoYieldCoroutineCollectsBothValues) {
 TEST_F(StateMachineTest, ExceptionPropagatesOnResume) {
     auto sm = make_int_throws_after_first_yield();
     ASSERT_EQ(sm.resume(), 1);
+    EXPECT_THROW(sm.resume(), std::runtime_error);
+    EXPECT_THROW(sm.resume(), std::runtime_error);
+}
+
+TEST_F(StateMachineTest, VoidMachineExceptionPropagatesOnResume) {
+    auto sm = make_void_throws_on_resume();
+    sm.resume();
     EXPECT_THROW(sm.resume(), std::runtime_error);
     EXPECT_THROW(sm.resume(), std::runtime_error);
 }

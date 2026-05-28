@@ -153,6 +153,18 @@ TEST_F(JointEliminationGeneratorUnitTest, ConstrainYieldsOnlyMhuWhenCdclEmpty) {
     EXPECT_THAT(collect_non_null_elims(sm), ElementsAre(&rl));
 }
 
+TEST_F(JointEliminationGeneratorUnitTest, ConstrainYieldsNothingWhenBothStreamsEmpty) {
+    EXPECT_CALL(cdcl_mock, constrain(&rl))
+        .WillOnce(Return(ByMove(empty_elim_sm())));
+    EXPECT_CALL(mhu_mock, constrain(&rl))
+        .WillOnce(Return(ByMove(empty_elim_sm())));
+
+    auto sm = joint->constrain(&rl);
+    EXPECT_THAT(collect_non_null_elims(sm), ElementsAre());
+    EXPECT_TRUE(sm.done());
+    EXPECT_FALSE(sm.resume().has_value());
+}
+
 TEST_F(JointEliminationGeneratorUnitTest, ConstrainEndsWithDoneNotNullPointerYield) {
     EXPECT_CALL(cdcl_mock, constrain(&rl))
         .WillOnce(Return(ByMove(make_single_elim_sm(&rl))));
