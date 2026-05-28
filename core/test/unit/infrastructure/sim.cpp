@@ -246,9 +246,6 @@ struct SimTest : public ::testing::Test {
 
     SimTest() : simulation(make_sim()) {}
 
-    expr goal_e{expr::var{0}};
-    expr head{expr::var{1}};
-    rule r{&head, {}};
     goal_lineage gl{nullptr, 0};
     resolution_lineage rl{&gl, 0};
     rule_id_set db_rules;

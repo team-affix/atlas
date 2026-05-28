@@ -13,11 +13,6 @@ using ::testing::UnorderedElementsAre;
 struct ResolutionMemoryTest : public ::testing::Test {
     resolution_memory mem;
 
-    expr goal_expr0{expr::var{0}};
-    expr head0{expr::var{10}};
-    expr head1{expr::var{11}};
-    rule rule0{&head0, {}};
-    rule rule1{&head1, {}};
     resolution_lineage rl0{nullptr, 0};
     resolution_lineage rl1{nullptr, 1};
 };

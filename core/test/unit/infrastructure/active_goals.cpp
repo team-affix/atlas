@@ -28,8 +28,6 @@ std::vector<const goal_lineage*> collect_goals(const active_goals& ag) {
 
 struct ActiveGoalsTest : public ::testing::Test {
     active_goals goals;
-    expr e0{expr::var{0}};
-    expr e1{expr::var{1}};
     goal_lineage gl0{nullptr, 0};
     goal_lineage gl1{nullptr, 1};
 };

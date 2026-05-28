@@ -31,9 +31,6 @@ struct CandidateDeactivatorTest : public ::testing::Test {
     MockUnlinkGoalCandidate unlink;
     candidate_deactivator deactivator{unset_maps, memory, unlink};
 
-    expr goal_e{expr::var{0}};
-    expr head{expr::var{1}};
-    rule idx{&head, {}};
     goal_lineage parent{nullptr, kGoal};
     resolution_lineage rl{&parent, kRule};
 };

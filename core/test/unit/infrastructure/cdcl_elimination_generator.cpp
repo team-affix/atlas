@@ -48,23 +48,6 @@ protected:
     cdcl_elimination_generator cdcl{trail};
 
     // Four independent root goals (no derivation parent).
-    expr goal_expr0{expr::var{0}};
-    expr goal_expr1{expr::var{1}};
-    expr goal_expr2{expr::var{2}};
-    expr goal_expr3{expr::var{3}};
-
-    expr head0{expr::var{10}};
-    expr head1{expr::var{11}};
-    expr head2{expr::var{12}};
-    expr head3{expr::var{13}};
-    expr head0_alt{expr::var{14}};
-
-    rule rule0{&head0, {}};
-    rule rule1{&head1, {}};
-    rule rule2{&head2, {}};
-    rule rule3{&head3, {}};
-    rule rule0_alt{&head0_alt, {}};
-
     goal_lineage lin_0{nullptr, 0};
     goal_lineage lin_1{nullptr, 1};
     goal_lineage lin_2{nullptr, 2};
@@ -79,17 +62,6 @@ protected:
     // Dependent tree (one resolution lin_4_0 at goal 4, then sibling subgoals):
     //   lin_4 --lin_4_0--> lin_4_0_0 --lin_4_0_0_0-->
     //                    \-> lin_4_0_1 --lin_4_0_1_0-->
-    expr goal_expr4{expr::var{20}};
-    expr goal_expr4_0_0{expr::var{21}};
-    expr goal_expr4_0_1{expr::var{22}};
-    expr head4_0{expr::var{30}};
-    expr head4_0_0_0{expr::var{31}};
-    expr head4_0_1_0{expr::var{33}};
-
-    rule rule4_0{&head4_0, {}};
-    rule rule4_0_0_0{&head4_0_0_0, {}};
-    rule rule4_0_1_0{&head4_0_1_0, {}};
-
     goal_lineage lin_4{nullptr, 4};
     resolution_lineage lin_4_0{&lin_4, 5};
     goal_lineage lin_4_0_0{&lin_4_0, 0};

@@ -9,11 +9,6 @@
 struct EliminationBacklogTest : public ::testing::Test {
     trail t;
     elimination_backlog backlog{t};
-    expr goal_e{expr::var{0}};
-    expr head0{expr::var{1}};
-    expr head1{expr::var{2}};
-    rule rule0{&head0, {}};
-    rule rule1{&head1, {}};
     goal_lineage parent{nullptr, 0};
     resolution_lineage rl0{&parent, 0};
     resolution_lineage rl1{&parent, 1};

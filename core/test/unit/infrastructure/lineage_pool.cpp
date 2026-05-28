@@ -15,12 +15,6 @@ protected:
     const resolution_lineage* make_root_resolution(rule_id idx) {
         return pool.make_resolution_lineage(nullptr, idx);
     }
-    expr goal_expr0{expr::var{0}};
-    expr goal_expr1{expr::var{1}};
-    expr rule_head0{expr::var{10}};
-    expr rule_head1{expr::var{11}};
-    rule rule_idx0{&rule_head0, {}};
-    rule rule_idx1{&rule_head1, {}};
 };
 
 // ---------------------------------------------------------------------------

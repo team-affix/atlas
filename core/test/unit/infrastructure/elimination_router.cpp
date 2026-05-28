@@ -32,9 +32,6 @@ struct MockCandidateDeactivator : public i_candidate_deactivator {
 };
 
 struct EliminationRouterTest : public ::testing::Test {
-    expr goal_e{expr::var{0}};
-    expr head{expr::var{1}};
-    rule idx{&head, {}};
     goal_lineage parent{nullptr, 0};
     resolution_lineage rl{&parent, 0};
 

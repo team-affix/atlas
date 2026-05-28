@@ -27,9 +27,6 @@ struct GoalCandidateRulesTest : public ::testing::Test {
     static constexpr rule_id kRule1 = 1;
 
     goal_candidate_rules index;
-    expr goal_e{expr::var{0}};
-    expr head0{expr::var{1}};
-    rule r0{&head0, {}};
     goal_lineage gl{nullptr, 0};
     resolution_lineage rl{&gl, kRule0};
 };

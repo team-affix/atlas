@@ -9,7 +9,6 @@ struct GoalExprsTest : public ::testing::Test {
     goal_exprs store;
     expr e0{expr::var{0}};
     expr e1{expr::var{1}};
-    expr e2{expr::var{2}};
     goal_lineage gl0{nullptr, 0};
     goal_lineage gl1{nullptr, 1};
 };

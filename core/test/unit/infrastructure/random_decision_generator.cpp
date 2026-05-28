@@ -53,9 +53,6 @@ struct RandomDecisionGeneratorTest : public ::testing::Test {
     std::mt19937 rng{0};
     random_decision_generator generator{lp, iterate_active_goals, get_goal_candidate_rule_ids, rng};
 
-    expr goal_e{expr::var{0}};
-    expr head{expr::var{1}};
-    rule r{&head, {}};
     goal_lineage gl{nullptr, 0};
     goal_lineage gl_alt{nullptr, 1};
     resolution_lineage expected_rl{&gl, 0};

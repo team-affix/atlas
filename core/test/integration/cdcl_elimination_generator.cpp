@@ -24,22 +24,6 @@ protected:
     trail t;
     cdcl_elimination_generator cdcl{t};
 
-    expr goal_expr0{expr::var{0}};
-    expr goal_expr1{expr::var{1}};
-    expr goal_expr2{expr::var{2}};
-    expr goal_expr3{expr::var{3}};
-    expr head0{expr::var{10}};
-    expr head1{expr::var{11}};
-    expr head2{expr::var{12}};
-    expr head3{expr::var{13}};
-    expr head0_alt{expr::var{14}};
-
-    rule rule0{&head0, {}};
-    rule rule1{&head1, {}};
-    rule rule2{&head2, {}};
-    rule rule3{&head3, {}};
-    rule rule0_alt{&head0_alt, {}};
-
     goal_lineage gl0{nullptr, 0};
     goal_lineage gl1{nullptr, 1};
     goal_lineage gl2{nullptr, 2};

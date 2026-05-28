@@ -11,12 +11,6 @@ using ::testing::UnorderedElementsAre;
 
 struct LemmaTest : public ::testing::Test {
 protected:
-    expr goal_expr0{expr::var{0}};
-    expr rule_head0{expr::var{10}};
-    expr rule_head1{expr::var{11}};
-    rule rule_idx0{&rule_head0, {}};
-    rule rule_idx1{&rule_head1, {}};
-
     resolution_lineage res0_storage{nullptr, 0};
     goal_lineage goal0_storage{nullptr, 0};
     resolution_lineage res1_storage{nullptr, 0};

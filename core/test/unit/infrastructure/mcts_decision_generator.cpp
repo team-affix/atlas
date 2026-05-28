@@ -53,9 +53,6 @@ struct MctsDecisionGeneratorTest : public ::testing::Test {
     mcts_decision_generator generator{
         lp, iterate_active_goals, active_goals_size, get_goal_candidate_rule_ids, sim};
 
-    expr goal_e{expr::var{0}};
-    expr head{expr::var{1}};
-    rule r{&head, {}};
     goal_lineage gl{nullptr, 0};
     resolution_lineage expected_rl{&gl, 0};
     rule_id_set candidates;

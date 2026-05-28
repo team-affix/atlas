@@ -7,9 +7,6 @@
 
 struct DeactivatedCandidateMemoryTest : public ::testing::Test {
     deactivated_candidate_memory memory;
-    expr goal_e{expr::var{0}};
-    expr head{expr::var{1}};
-    rule idx{&head, {}};
     goal_lineage parent{nullptr, 0};
     resolution_lineage rl{&parent, 0};
 };

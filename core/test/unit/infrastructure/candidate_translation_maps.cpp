@@ -12,11 +12,6 @@ using ::testing::UnorderedElementsAre;
 
 struct CandidateTranslationMapsTest : public ::testing::Test {
     candidate_translation_maps maps;
-    expr goal_e{expr::var{0}};
-    expr head{expr::var{1}};
-    expr head_other{expr::var{3}};
-    rule idx{&head, {}};
-    rule other_idx{&head_other, {}};
     static constexpr subgoal_id kGoal = 0;
     static constexpr rule_id kRule = 0;
     static constexpr rule_id kOtherRule = 1;
