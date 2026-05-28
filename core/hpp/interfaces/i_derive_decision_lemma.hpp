@@ -5,7 +5,7 @@
 
 struct i_derive_decision_lemma {
     virtual ~i_derive_decision_lemma() = default;
-    virtual lemma derive_decision_lemma() const = 0;
+    virtual lemma derive() const = 0;
 };
 
 #endif

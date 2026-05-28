@@ -8,6 +8,7 @@
 #include "../interfaces/i_learn_avoidance.hpp"
 #include "../interfaces/i_elimination_router.hpp"
 #include "core/hpp/interfaces/i_get_decision_count.hpp"
+#include "core/hpp/interfaces/i_derive_decision_lemma.hpp"
 
 struct solver : i_solve {
     solver(
@@ -15,6 +16,7 @@ struct solver : i_solve {
         i_tear_down_sim& tear_down_sim,
         i_run_sim& run_sim,
         i_get_decision_count& get_decision_count,
+        i_derive_decision_lemma& derive_decision_lemma,
         i_learn_avoidance& learn_avoidance,
         i_elimination_router& elimination_router);
     ~solver() override;
@@ -24,6 +26,7 @@ private:
     i_tear_down_sim& tear_down_sim;
     i_run_sim& run_sim;
     i_get_decision_count& get_decision_count;
+    i_derive_decision_lemma& derive_decision_lemma;
     i_learn_avoidance& learn_avoidance;
     i_elimination_router& elimination_router;
 };

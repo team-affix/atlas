@@ -12,6 +12,6 @@ size_t decision_memory::count() const {
     return decisions.size();
 }
 
-lemma decision_memory::derive_decision_lemma() const {
+lemma decision_memory::derive() const {
     return lemma{decisions};
 }
