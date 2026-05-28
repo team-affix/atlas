@@ -5,7 +5,8 @@
 MAKEFLAGS += -j$(shell nproc)
 
 CXX      = g++
-CXXFLAGS = -std=c++20 -I. -Icore/hpp -Imcts/include
+DEPFLAGS = -MMD -MP
+CXXFLAGS = -std=c++20 -I. -Icore/hpp -Imcts/include $(DEPFLAGS)
 AR       = ar
 ARFLAGS  = rcs
 
@@ -118,6 +119,21 @@ CLI_SRC = $(wildcard cli/cpp/*.cpp)
 CLI_OBJ            = $(patsubst cli/cpp/%.cpp, build/obj/cli/%.o,            $(CLI_SRC))
 CLI_DEBUG_OBJ      = $(patsubst cli/cpp/%.cpp, build/obj/cli_debug/%.o,      $(CLI_SRC))
 CLI_DEBUG_FAST_OBJ = $(patsubst cli/cpp/%.cpp, build/obj/cli_debug_fast/%.o, $(CLI_SRC))
+
+# Compiler-written header deps (one .d per .o); empty until the first compile.
+CORE_DEP            = $(CORE_OBJ:.o=.d)
+CORE_DEBUG_DEP      = $(CORE_DEBUG_OBJ:.o=.d)
+CORE_DEBUG_FAST_DEP = $(CORE_DEBUG_FAST_OBJ:.o=.d)
+CORE_DEBUG_TEST_DEP      = $(CORE_DEBUG_TEST_OBJ:.o=.d)
+CORE_DEBUG_FAST_TEST_DEP = $(CORE_DEBUG_FAST_TEST_OBJ:.o=.d)
+CORE_DEBUG_GTEST_DEP      = $(CORE_DEBUG_GTEST_OBJ:.o=.d)
+CORE_DEBUG_FAST_GTEST_DEP = $(CORE_DEBUG_FAST_GTEST_OBJ:.o=.d)
+PARSER_DEP            = $(PARSER_OBJ:.o=.d)
+PARSER_DEBUG_DEP      = $(PARSER_DEBUG_OBJ:.o=.d)
+PARSER_DEBUG_FAST_DEP = $(PARSER_DEBUG_FAST_OBJ:.o=.d)
+CLI_DEP            = $(CLI_OBJ:.o=.d)
+CLI_DEBUG_DEP      = $(CLI_DEBUG_OBJ:.o=.d)
+CLI_DEBUG_FAST_DEP = $(CLI_DEBUG_FAST_OBJ:.o=.d)
 
 # ==============================================================================
 # User-facing targets
@@ -331,6 +347,24 @@ build/obj/cli_debug/%.o: cli/cpp/%.cpp | build/obj/cli_debug
 build/obj/cli_debug_fast/%.o: cli/cpp/%.cpp | build/obj/cli_debug_fast
 	mkdir -p $(dir $@)
 	$(CXX) $(CXXFLAGS) $(DEBUG_FAST_CXXFLAGS) -c $< -o $@
+
+# ==============================================================================
+# Header dependencies (compiler-generated .d files)
+# ==============================================================================
+
+-include $(CORE_DEP)
+-include $(CORE_DEBUG_DEP)
+-include $(CORE_DEBUG_FAST_DEP)
+-include $(CORE_DEBUG_TEST_DEP)
+-include $(CORE_DEBUG_FAST_TEST_DEP)
+-include $(CORE_DEBUG_GTEST_DEP)
+-include $(CORE_DEBUG_FAST_GTEST_DEP)
+-include $(PARSER_DEP)
+-include $(PARSER_DEBUG_DEP)
+-include $(PARSER_DEBUG_FAST_DEP)
+-include $(CLI_DEP)
+-include $(CLI_DEBUG_DEP)
+-include $(CLI_DEBUG_FAST_DEP)
 
 # ==============================================================================
 # Build directory creation
