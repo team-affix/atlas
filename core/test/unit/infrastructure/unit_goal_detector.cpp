@@ -1,6 +1,7 @@
 // unit_goal_detector recognizes goals with exactly one candidate rule id.
 
 #include <gtest/gtest.h>
+#include "locator_fixture.hpp"
 #include <gmock/gmock.h>
 #include "infrastructure/unit_goal_detector.hpp"
 #include "interfaces/i_get_goal_candidate_rule_ids.hpp"
@@ -26,7 +27,12 @@ struct UnitGoalDetectorTest : public ::testing::Test {
     goal_lineage gl{nullptr, 0};
     MockRuleIdSet rules;
     MockGetGoalCandidateRuleIds get_goal_candidate_rule_ids;
-    unit_goal_detector detector{get_goal_candidate_rule_ids};
+    locator loc;
+    unit_goal_detector detector;
+
+    UnitGoalDetectorTest()
+        : detector(bind_and_make<unit_goal_detector, i_get_goal_candidate_rule_ids>(
+              loc, get_goal_candidate_rule_ids)) {}
 };
 
 TEST_F(UnitGoalDetectorTest, NoCandidatesIsNotUnit) {

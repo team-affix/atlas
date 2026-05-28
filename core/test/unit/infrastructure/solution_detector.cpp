@@ -2,6 +2,7 @@
 // i_check_active_goals_empty and assert detect() mirrors the empty() predicate.
 
 #include <gtest/gtest.h>
+#include "locator_fixture.hpp"
 #include <gmock/gmock.h>
 #include "infrastructure/solution_detector.hpp"
 #include "interfaces/i_check_active_goals_empty.hpp"
@@ -13,8 +14,13 @@ struct MockCheckActiveGoalsEmpty : public i_check_active_goals_empty {
 };
 
 struct SolutionDetectorTest : public ::testing::Test {
+    locator loc;
     MockCheckActiveGoalsEmpty check_active_goals_empty;
-    solution_detector detector{check_active_goals_empty};
+    solution_detector detector;
+
+    SolutionDetectorTest()
+        : detector(bind_and_make<solution_detector, i_check_active_goals_empty>(
+              loc, check_active_goals_empty)) {}
 };
 
 TEST_F(SolutionDetectorTest, EmptyActiveGoalsMeansSolution) {

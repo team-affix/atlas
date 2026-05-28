@@ -30,6 +30,7 @@
 #include "infrastructure/initial_goal_exprs.hpp"
 #include "infrastructure/joint_elimination_generator.hpp"
 #include "infrastructure/lineage_pool.hpp"
+#include "infrastructure/locator.hpp"
 #include "infrastructure/make_initial_goal_lineage.hpp"
 #include "infrastructure/mhu_elimination_generator.hpp"
 #include "infrastructure/overlay_bind_map_factory.hpp"
@@ -46,53 +47,136 @@
 #include "infrastructure/var_sequencer.hpp"
 
 struct basic_manifest {
+    struct early_wiring {
+        trail trail_;
+        bind_map bind_map_;
+        bind_map_factory bind_map_factory_;
+        overlay_bind_map_factory overlay_bind_map_factory_;
+        unifier_factory unifier_factory_;
+        lineage_pool lineage_pool_;
+        active_goals active_goals_;
+        goal_exprs goal_exprs_;
+        goal_candidate_rules goal_candidate_rules_;
+        unit_goals unit_goals_;
+        decision_memory decision_memory_;
+        resolution_memory resolution_memory_;
+        deactivated_candidate_memory deactivated_candidate_memory_;
+        candidate_translation_maps candidate_translation_maps_;
+
+        early_wiring(locator& loc, db& database, initial_goal_exprs& initial_goals);
+    };
+
+    struct pool_wiring {
+        expr_pool expr_pool_;
+        var_sequencer var_sequencer_;
+        elimination_backlog elimination_backlog_;
+
+        pool_wiring(locator& loc);
+    };
+
+    struct elim_wiring {
+        cdcl_elimination_generator cdcl_;
+        mhu_elimination_generator mhu_;
+        joint_elimination_generator joint_;
+
+        elim_wiring(locator& loc);
+    };
+
+    struct core_wiring {
+        get_resolution_rule get_resolution_rule_;
+        copier copier_;
+        conflict_detector conflict_detector_;
+        unit_goal_detector unit_goal_detector_;
+        solution_detector solution_detector_;
+
+        core_wiring(locator& loc);
+    };
+
+    struct activator_wiring {
+        goal_activator goal_activator_;
+        goal_deactivator goal_deactivator_;
+        candidate_activator candidate_activator_;
+        candidate_deactivator candidate_deactivator_;
+
+        activator_wiring(locator& loc);
+    };
+
+    struct router_wiring {
+        elimination_router elimination_router_;
+        get_unit_resolution get_unit_resolution_;
+        make_initial_goal_lineage make_initial_goal_lineage_;
+        initial_goal_activator initial_goal_activator_;
+
+        router_wiring(locator& loc);
+    };
+
+    struct orchestration_wiring {
+        std::mt19937 rng_;
+        random_decision_generator random_decision_generator_;
+        resolver resolver_;
+        sim sim_;
+        solver solver_;
+
+        orchestration_wiring(locator& loc, size_t max_resolutions, uint32_t random_seed);
+    };
+
     basic_manifest(
         db& database,
         initial_goal_exprs& initial_goals,
         size_t max_resolutions,
         uint32_t random_seed = 0);
 
+    locator loc_;
     db& database_;
     initial_goal_exprs& initial_goals_;
+    size_t max_resolutions_;
 
-    trail trail_;
-    bind_map bind_map_;
-    bind_map_factory bind_map_factory_;
-    overlay_bind_map_factory overlay_bind_map_factory_;
-    unifier_factory unifier_factory_;
-    expr_pool expr_pool_;
-    var_sequencer var_sequencer_;
-    lineage_pool lineage_pool_;
-    active_goals active_goals_;
-    goal_exprs goal_exprs_;
-    goal_candidate_rules goal_candidate_rules_;
-    unit_goals unit_goals_;
-    decision_memory decision_memory_;
-    resolution_memory resolution_memory_;
-    deactivated_candidate_memory deactivated_candidate_memory_;
-    elimination_backlog elimination_backlog_;
-    cdcl_elimination_generator cdcl_;
-    mhu_elimination_generator mhu_;
-    joint_elimination_generator joint_;
-    candidate_translation_maps candidate_translation_maps_;
-    get_resolution_rule get_resolution_rule_;
-    copier copier_;
-    conflict_detector conflict_detector_;
-    unit_goal_detector unit_goal_detector_;
-    solution_detector solution_detector_;
-    goal_activator goal_activator_;
-    goal_deactivator goal_deactivator_;
-    candidate_activator candidate_activator_;
-    candidate_deactivator candidate_deactivator_;
-    elimination_router elimination_router_;
-    get_unit_resolution get_unit_resolution_;
-    make_initial_goal_lineage make_initial_goal_lineage_;
-    initial_goal_activator initial_goal_activator_;
-    std::mt19937 rng_;
-    random_decision_generator random_decision_generator_;
-    resolver resolver_;
-    sim sim_;
-    solver solver_;
+    early_wiring early_;
+    pool_wiring pools_;
+    elim_wiring elims_;
+    core_wiring core_;
+    activator_wiring activators_;
+    router_wiring routers_;
+    orchestration_wiring orch_;
+
+    trail& trail_;
+    bind_map& bind_map_;
+    bind_map_factory& bind_map_factory_;
+    overlay_bind_map_factory& overlay_bind_map_factory_;
+    unifier_factory& unifier_factory_;
+    expr_pool& expr_pool_;
+    var_sequencer& var_sequencer_;
+    lineage_pool& lineage_pool_;
+    active_goals& active_goals_;
+    goal_exprs& goal_exprs_;
+    goal_candidate_rules& goal_candidate_rules_;
+    unit_goals& unit_goals_;
+    decision_memory& decision_memory_;
+    resolution_memory& resolution_memory_;
+    deactivated_candidate_memory& deactivated_candidate_memory_;
+    elimination_backlog& elimination_backlog_;
+    cdcl_elimination_generator& cdcl_;
+    mhu_elimination_generator& mhu_;
+    joint_elimination_generator& joint_;
+    candidate_translation_maps& candidate_translation_maps_;
+    get_resolution_rule& get_resolution_rule_;
+    copier& copier_;
+    conflict_detector& conflict_detector_;
+    unit_goal_detector& unit_goal_detector_;
+    solution_detector& solution_detector_;
+    goal_activator& goal_activator_;
+    goal_deactivator& goal_deactivator_;
+    candidate_activator& candidate_activator_;
+    candidate_deactivator& candidate_deactivator_;
+    elimination_router& elimination_router_;
+    get_unit_resolution& get_unit_resolution_;
+    make_initial_goal_lineage& make_initial_goal_lineage_;
+    initial_goal_activator& initial_goal_activator_;
+    std::mt19937& rng_;
+    random_decision_generator& random_decision_generator_;
+    resolver& resolver_;
+    sim& sim_;
+    solver& solver_;
 };
 
 #endif

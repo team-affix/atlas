@@ -3,6 +3,7 @@
 // single choice at each stage the outcome is fully determined.
 
 #include <gtest/gtest.h>
+#include "locator_fixture.hpp"
 #include <gmock/gmock.h>
 #include <random>
 #include "infrastructure/mcts_decision_generator.hpp"
@@ -43,15 +44,25 @@ struct MockGetGoalCandidateRuleIds : public i_get_goal_candidate_rule_ids {
 };
 
 struct MctsDecisionGeneratorTest : public ::testing::Test {
+    locator loc;
     MockMakeResolutionLineage lp;
     MockIterateActiveGoals iterate_active_goals;
     MockActiveGoalsSize active_goals_size;
     MockGetGoalCandidateRuleIds get_goal_candidate_rule_ids;
     monte_carlo::tree_node<mcts_choice> root;
     std::mt19937 rng{0};
-    monte_carlo::simulation<mcts_choice, std::mt19937> sim{root, 1.0, rng};
-    mcts_decision_generator generator{
-        lp, iterate_active_goals, active_goals_size, get_goal_candidate_rule_ids, sim};
+    monte_carlo::simulation<mcts_choice, std::mt19937> mcts_sim{root, 1.0, rng};
+    mcts_decision_generator generator;
+
+    MctsDecisionGeneratorTest() : generator(init_generator()) {}
+
+    mcts_decision_generator init_generator() {
+        loc.bind_as<i_make_resolution_lineage>(lp);
+        loc.bind_as<i_iterate_active_goals>(iterate_active_goals);
+        loc.bind_as<i_active_goals_size>(active_goals_size);
+        loc.bind_as<i_get_goal_candidate_rule_ids>(get_goal_candidate_rule_ids);
+        return mcts_decision_generator{loc, mcts_sim};
+    }
 
     goal_lineage gl{nullptr, 0};
     resolution_lineage expected_rl{&gl, 0};

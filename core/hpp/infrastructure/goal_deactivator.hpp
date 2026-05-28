@@ -1,4 +1,6 @@
 #ifndef GOAL_DEACTIVATOR_HPP
+#include "infrastructure/locator.hpp"
+
 #define GOAL_DEACTIVATOR_HPP
 
 #include "interfaces/i_goal_deactivator.hpp"
@@ -6,9 +8,7 @@
 #include "interfaces/i_erase_goal_candidates.hpp"
 
 struct goal_deactivator : i_goal_deactivator {
-    goal_deactivator(
-        i_unset_goal_expr& unset_goal_expr,
-        i_erase_goal_candidates& erase_goal_candidates);
+    goal_deactivator(locator& loc);
     void deactivate(const goal_lineage*) override;
 private:
     i_unset_goal_expr& unset_goal_expr;

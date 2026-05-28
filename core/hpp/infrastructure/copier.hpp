@@ -1,4 +1,6 @@
 #ifndef COPIER_HPP
+#include "infrastructure/locator.hpp"
+
 #define COPIER_HPP
 
 #include "interfaces/i_copier.hpp"
@@ -8,10 +10,7 @@
 #include "interfaces/i_make_var.hpp"
 
 struct copier : i_copier {
-    copier(
-        i_var_sequencer&,
-        i_make_functor&,
-        i_make_var&);
+    copier(locator& loc);
     const expr* copy(const expr*, translation_map&) const override;
 private:
     i_var_sequencer& var_seq_ref;

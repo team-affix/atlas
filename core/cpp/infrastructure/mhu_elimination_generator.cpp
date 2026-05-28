@@ -1,20 +1,13 @@
 #include "infrastructure/mhu_elimination_generator.hpp"
 
-mhu_elimination_generator::mhu_elimination_generator(
-    i_bind_map& common_,
-    i_make_resolution_lineage& make_resolution_lineage_,
-    i_make_var& make_var_,
-    i_bind_map_factory& bind_map_factory_,
-    i_overlay_bind_map_factory& overlay_bind_map_factory_,
-    i_unifier_factory& unifier_factory_,
-    const i_get_goal_candidate_rule_ids& get_goal_candidate_rule_ids_) :
-    common_(common_),
-    make_resolution_lineage_(make_resolution_lineage_),
-    make_var_(make_var_),
-    bind_map_factory_(bind_map_factory_),
-    overlay_bind_map_factory_(overlay_bind_map_factory_),
-    unifier_factory_(unifier_factory_),
-    get_goal_candidate_rule_ids_(get_goal_candidate_rule_ids_) {
+mhu_elimination_generator::mhu_elimination_generator(locator& loc) :
+    common_(loc.locate<i_bind_map>()),
+    make_resolution_lineage_(loc.locate<i_make_resolution_lineage>()),
+    make_var_(loc.locate<i_make_var>()),
+    bind_map_factory_(loc.locate<i_bind_map_factory>()),
+    overlay_bind_map_factory_(loc.locate<i_overlay_bind_map_factory>()),
+    unifier_factory_(loc.locate<i_unifier_factory>()),
+    get_goal_candidate_rule_ids_(loc.locate<i_get_goal_candidate_rule_ids>()) {
 }
 
 bool mhu_elimination_generator::try_add_head(const resolution_lineage* lineage, const expr* lhs, const expr* rhs) {

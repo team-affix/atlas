@@ -2,6 +2,7 @@
 // Post-yield work runs on the second resume(); learn runs after tear_down (trail pop).
 
 #include <gtest/gtest.h>
+#include "locator_fixture.hpp"
 #include <gmock/gmock.h>
 #include "infrastructure/solver.hpp"
 #include "interfaces/i_set_up_sim.hpp"
@@ -51,6 +52,7 @@ struct MockPinResolutionLineage : public i_pin_resolution_lineage {
 };
 
 struct SolverTest : public ::testing::Test {
+    locator loc;
     MockSetUpSim set_up_sim;
     MockTearDownSim tear_down_sim;
     MockRunSim run_sim;
@@ -59,15 +61,21 @@ struct SolverTest : public ::testing::Test {
     MockPinResolutionLineage pin_resolution_lineage;
     MockLearnAvoidance learn_avoidance;
     MockEliminationRouter router;
-    solver s{
-        set_up_sim,
-        tear_down_sim,
-        run_sim,
-        get_decision_count,
-        derive_decision_lemma,
-        pin_resolution_lineage,
-        learn_avoidance,
-        router};
+    solver s;
+
+    SolverTest() : s(init_solver()) {}
+
+    solver init_solver() {
+        loc.bind_as<i_set_up_sim>(set_up_sim);
+        loc.bind_as<i_tear_down_sim>(tear_down_sim);
+        loc.bind_as<i_run_sim>(run_sim);
+        loc.bind_as<i_get_decision_count>(get_decision_count);
+        loc.bind_as<i_derive_decision_lemma>(derive_decision_lemma);
+        loc.bind_as<i_pin_resolution_lineage>(pin_resolution_lineage);
+        loc.bind_as<i_learn_avoidance>(learn_avoidance);
+        loc.bind_as<i_elimination_router>(router);
+        return solver{loc};
+    }
 };
 
 TEST_F(SolverTest, FirstYieldRunsSetUpThenRunBeforeTearDown) {

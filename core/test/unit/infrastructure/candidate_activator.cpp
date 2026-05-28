@@ -3,6 +3,7 @@
 // side effects.
 
 #include <gtest/gtest.h>
+#include "locator_fixture.hpp"
 #include <gmock/gmock.h>
 #include "infrastructure/candidate_activator.hpp"
 #include "interfaces/i_copier.hpp"
@@ -50,6 +51,7 @@ struct CandidateActivatorTest : public ::testing::Test {
     static constexpr rule_id kRule = 0;
     static constexpr subgoal_id kGoal = 0;
 
+    locator loc;
     MockCopier copier;
     MockSetCandidateTranslationMap set_map;
     MockTryAddMhuHead mhu;
@@ -57,8 +59,20 @@ struct CandidateActivatorTest : public ::testing::Test {
     MockGetGoalExpr get_goal_expr;
     MockGetRule get_rule;
     MockLinkGoalCandidate link;
-    candidate_activator activator{
-        copier, set_map, mhu, is_backlogged, get_goal_expr, get_rule, link};
+    candidate_activator activator;
+
+    CandidateActivatorTest() : activator(init_activator()) {}
+
+    candidate_activator init_activator() {
+        loc.bind_as<i_copier>(copier);
+        loc.bind_as<i_set_candidate_translation_map>(set_map);
+        loc.bind_as<i_try_add_mhu_head>(mhu);
+        loc.bind_as<i_is_backlogged_elimination>(is_backlogged);
+        loc.bind_as<i_get_goal_expr>(get_goal_expr);
+        loc.bind_as<i_get_rule>(get_rule);
+        loc.bind_as<i_link_goal_candidate>(link);
+        return candidate_activator{loc};
+    }
 
     expr goal_e{expr::var{0}};
     expr head{expr::var{10}};

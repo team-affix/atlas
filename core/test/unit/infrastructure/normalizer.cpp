@@ -2,6 +2,7 @@
 // through i_bind_map. Unit tests mock both interfaces and assert pool calls use WHNF args.
 
 #include <gtest/gtest.h>
+#include "locator_fixture.hpp"
 #include <gmock/gmock.h>
 #include "infrastructure/normalizer.hpp"
 #include "interfaces/i_bind_map.hpp"
@@ -46,8 +47,13 @@ protected:
         });
     }
 
-    normalizer make_normalizer() { return normalizer{pool, bm}; }
+    normalizer make_normalizer() {
+        loc.bind_as<i_make_functor>(pool);
+        loc.bind_as<i_bind_map>(bm);
+        return normalizer{loc};
+    }
 
+    locator loc;
     NiceMock<MockBindMap> bm;
     NiceMock<MockExprPool> pool;
 

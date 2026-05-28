@@ -1,4 +1,5 @@
 #include <gtest/gtest.h>
+#include "locator_fixture.hpp"
 #include <vector>
 #include "infrastructure/cdcl_elimination_generator.hpp"
 #include "infrastructure/trail.hpp"
@@ -22,7 +23,11 @@ std::vector<const resolution_lineage*> collect_elims(
 struct CdclEliminationGeneratorIntegrationTest : public ::testing::Test {
 protected:
     trail t;
-    cdcl_elimination_generator cdcl{t};
+    locator loc;
+    cdcl_elimination_generator cdcl;
+
+    CdclEliminationGeneratorIntegrationTest()
+        : cdcl(bind_and_make<cdcl_elimination_generator, i_log_to_current_trail_frame>(loc, t)) {}
 
     goal_lineage gl0{nullptr, 0};
     goal_lineage gl1{nullptr, 1};

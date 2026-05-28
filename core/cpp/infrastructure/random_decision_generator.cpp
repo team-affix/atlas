@@ -1,14 +1,10 @@
 #include "infrastructure/random_decision_generator.hpp"
 
-random_decision_generator::random_decision_generator(
-    i_make_resolution_lineage& make_resolution_lineage,
-    i_iterate_active_goals& iterate_active_goals,
-    i_get_goal_candidate_rule_ids& get_goal_candidate_rule_ids,
-    std::mt19937& rng)
+random_decision_generator::random_decision_generator(locator& loc, std::mt19937& rng)
     :
-    make_resolution_lineage(make_resolution_lineage),
-    iterate_active_goals(iterate_active_goals),
-    get_goal_candidate_rule_ids(get_goal_candidate_rule_ids),
+    make_resolution_lineage(loc.locate<i_make_resolution_lineage>()),
+    iterate_active_goals(loc.locate<i_iterate_active_goals>()),
+    get_goal_candidate_rule_ids(loc.locate<i_get_goal_candidate_rule_ids>()),
     rng(rng) {}
 
 const resolution_lineage* random_decision_generator::generate() {

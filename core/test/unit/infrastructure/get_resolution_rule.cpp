@@ -1,4 +1,5 @@
 #include <gtest/gtest.h>
+#include "locator_fixture.hpp"
 #include <gmock/gmock.h>
 #include "infrastructure/get_resolution_rule.hpp"
 #include "interfaces/i_get_rule.hpp"
@@ -12,8 +13,12 @@ struct MockGetRule : public i_get_rule {
 struct GetResolutionRuleTest : public ::testing::Test {
     static constexpr rule_id kRule = 2;
 
+    locator loc;
     MockGetRule get_rule;
-    get_resolution_rule lookup{get_rule};
+    get_resolution_rule lookup;
+
+    GetResolutionRuleTest()
+        : lookup(bind_and_make<get_resolution_rule, i_get_rule>(loc, get_rule)) {}
     goal_lineage parent_gl{nullptr, 0};
     resolution_lineage rl{&parent_gl, kRule};
     expr head{expr::var{0}};

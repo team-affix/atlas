@@ -7,9 +7,9 @@
 #include "infrastructure/backtrackable_map_at_insert.hpp"
 #include "infrastructure/backtrackable_map_at_erase.hpp"
 
-cdcl_elimination_generator::cdcl_elimination_generator(i_log_to_current_trail_frame& trail) :
-    avoidances(trail, {}),
-    watched_goals(trail, {}) {
+cdcl_elimination_generator::cdcl_elimination_generator(locator& loc) :
+    avoidances(loc.locate<i_log_to_current_trail_frame>(), {}),
+    watched_goals(loc.locate<i_log_to_current_trail_frame>(), {}) {
 }
 
 std::optional<const resolution_lineage*> cdcl_elimination_generator::learn(const lemma& l) {

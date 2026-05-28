@@ -1,16 +1,13 @@
 #include "infrastructure/mcts_decision_generator.hpp"
 
 mcts_decision_generator::mcts_decision_generator(
-    i_make_resolution_lineage& make_resolution_lineage,
-    i_iterate_active_goals& iterate_active_goals,
-    i_active_goals_size& active_goals_size,
-    i_get_goal_candidate_rule_ids& get_goal_candidate_rule_ids,
+    locator& loc,
     monte_carlo::simulation<mcts_choice, std::mt19937>& sim)
     :
-    make_resolution_lineage(make_resolution_lineage),
-    iterate_active_goals(iterate_active_goals),
-    active_goals_size(active_goals_size),
-    get_goal_candidate_rule_ids(get_goal_candidate_rule_ids),
+    make_resolution_lineage(loc.locate<i_make_resolution_lineage>()),
+    iterate_active_goals(loc.locate<i_iterate_active_goals>()),
+    active_goals_size(loc.locate<i_active_goals_size>()),
+    get_goal_candidate_rule_ids(loc.locate<i_get_goal_candidate_rule_ids>()),
     sim(sim) {
 }
 

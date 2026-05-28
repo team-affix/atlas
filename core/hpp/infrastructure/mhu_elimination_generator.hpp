@@ -1,4 +1,6 @@
 #ifndef MHU_ELIMINATION_GENERATOR_HPP
+#include "infrastructure/locator.hpp"
+
 #define MHU_ELIMINATION_GENERATOR_HPP
 
 #include <unordered_map>
@@ -21,14 +23,7 @@ struct mhu_elimination_generator
     , i_try_add_mhu_head
     , i_clear_mhu_heads {
     virtual ~mhu_elimination_generator() = default;
-    mhu_elimination_generator(
-        i_bind_map&,
-        i_make_resolution_lineage&,
-        i_make_var&,
-        i_bind_map_factory&,
-        i_overlay_bind_map_factory&,
-        i_unifier_factory&,
-        const i_get_goal_candidate_rule_ids&);
+    mhu_elimination_generator(locator& loc);
     bool try_add_head(const resolution_lineage*, const expr*, const expr*) override;
     state_machine<const resolution_lineage*> constrain(const resolution_lineage*) override;
     void clear_mhu_heads() override;

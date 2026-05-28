@@ -1,4 +1,5 @@
 #include <gtest/gtest.h>
+#include "locator_fixture.hpp"
 #include <optional>
 #include "infrastructure/normalizer.hpp"
 #include "infrastructure/expr_pool.hpp"
@@ -8,10 +9,14 @@
 struct NormalizerIntegrationTest : public ::testing::Test {
 protected:
     void SetUp() override {
-        pool.emplace(t);
-        norm.emplace(*pool, bm);
+        loc.bind_as<i_log_to_current_trail_frame>(t);
+        pool.emplace(loc);
+        loc.bind_as<i_make_functor>(*pool);
+        loc.bind_as<i_bind_map>(bm);
+        norm.emplace(loc);
     }
 
+    locator loc;
     trail t;
     bind_map bm;
     std::optional<expr_pool> pool;

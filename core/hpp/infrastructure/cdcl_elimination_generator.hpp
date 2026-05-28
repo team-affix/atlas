@@ -1,4 +1,6 @@
 #ifndef CDCL_ELIMINATION_GENERATOR_HPP
+#include "infrastructure/locator.hpp"
+
 #define CDCL_ELIMINATION_GENERATOR_HPP
 
 #include <set>
@@ -12,9 +14,7 @@
 struct cdcl_elimination_generator
     : i_elimination_generator
     , i_learn_avoidance {
-    cdcl_elimination_generator(
-        i_log_to_current_trail_frame&
-    );
+    cdcl_elimination_generator(locator& loc);
     std::optional<const resolution_lineage*> learn(const lemma&) override;
     state_machine<const resolution_lineage*> constrain(const resolution_lineage*) override;
 private:

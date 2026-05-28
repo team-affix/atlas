@@ -3,6 +3,7 @@
 // collaborators and assert the elimination_result for each branch.
 
 #include <gtest/gtest.h>
+#include "locator_fixture.hpp"
 #include <gmock/gmock.h>
 #include "infrastructure/elimination_router.hpp"
 #include "value_objects/elimination_result.hpp"
@@ -35,11 +36,22 @@ struct EliminationRouterTest : public ::testing::Test {
     goal_lineage parent{nullptr, 0};
     resolution_lineage rl{&parent, 0};
 
+    locator loc;
     MockDeactivatedCandidateMemory dcm;
     MockIsActiveGoal is_active_goal;
     MockInsertBackloggedElimination insert_backlogged_elimination;
     MockCandidateDeactivator candidate_deactivator;
-    elimination_router router{dcm, is_active_goal, insert_backlogged_elimination, candidate_deactivator};
+    elimination_router router;
+
+    EliminationRouterTest() : router(init_router()) {}
+
+    elimination_router init_router() {
+        loc.bind_as<i_deactivated_candidate_memory>(dcm);
+        loc.bind_as<i_is_active_goal>(is_active_goal);
+        loc.bind_as<i_insert_backlogged_elimination>(insert_backlogged_elimination);
+        loc.bind_as<i_candidate_deactivator>(candidate_deactivator);
+        return elimination_router{loc};
+    }
 };
 
 TEST_F(EliminationRouterTest, AlreadyDeactivatedReturnsAlreadyDeactivated) {

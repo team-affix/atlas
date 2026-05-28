@@ -1,10 +1,10 @@
 #include <stdexcept>
 #include "infrastructure/copier.hpp"
 
-copier::copier(i_var_sequencer& var_seq, i_make_functor& make_functor, i_make_var& make_var) :
-    var_seq_ref(var_seq),
-    make_functor_ref(make_functor),
-    make_var_ref(make_var) {
+copier::copier(locator& loc) :
+    var_seq_ref(loc.locate<i_var_sequencer>()),
+    make_functor_ref(loc.locate<i_make_functor>()),
+    make_var_ref(loc.locate<i_make_var>()) {
 }
 
 const expr* copier::copy(const expr* e, translation_map& variable_map) const {

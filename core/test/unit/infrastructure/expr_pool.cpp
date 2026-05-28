@@ -4,6 +4,7 @@
 // counts, and import behavior without a real trail.
 
 #include <gtest/gtest.h>
+#include "locator_fixture.hpp"
 #include <gmock/gmock.h>
 #include "infrastructure/expr_pool.hpp"
 #include "interfaces/i_log_to_current_trail_frame.hpp"
@@ -18,7 +19,11 @@ struct MockTrail : public i_log_to_current_trail_frame {
 
 struct ExprPoolTest : public ::testing::Test {
     NiceMock<MockTrail> trail;
-    expr_pool pool{trail};
+    locator loc;
+    expr_pool pool;
+
+    ExprPoolTest()
+        : pool(bind_and_make<expr_pool, i_log_to_current_trail_frame>(loc, trail)) {}
 };
 
 // ---------------------------------------------------------------------------
@@ -69,7 +74,9 @@ TEST_F(ExprPoolTest, FunctorsWithDifferentArgsReturnDifferentPointers) {
 
 TEST_F(ExprPoolTest, FirstInternLogsToTrail) {
     StrictMock<MockTrail> strict_trail;
-    expr_pool strict_pool{strict_trail};
+    locator loc;
+    loc.bind_as<i_log_to_current_trail_frame>(strict_trail);
+    expr_pool strict_pool{loc};
 
     EXPECT_CALL(strict_trail, log(_)).Times(1);
     strict_pool.make(0);
@@ -77,7 +84,9 @@ TEST_F(ExprPoolTest, FirstInternLogsToTrail) {
 
 TEST_F(ExprPoolTest, RepeatInternDoesNotLogAgain) {
     StrictMock<MockTrail> strict_trail;
-    expr_pool strict_pool{strict_trail};
+    locator loc;
+    loc.bind_as<i_log_to_current_trail_frame>(strict_trail);
+    expr_pool strict_pool{loc};
 
     EXPECT_CALL(strict_trail, log(_)).Times(1);
     strict_pool.make(0);
@@ -86,7 +95,9 @@ TEST_F(ExprPoolTest, RepeatInternDoesNotLogAgain) {
 
 TEST_F(ExprPoolTest, DistinctInternsLogEachTime) {
     StrictMock<MockTrail> strict_trail;
-    expr_pool strict_pool{strict_trail};
+    locator loc;
+    loc.bind_as<i_log_to_current_trail_frame>(strict_trail);
+    expr_pool strict_pool{loc};
 
     EXPECT_CALL(strict_trail, log(_)).Times(2);
     strict_pool.make(0);
@@ -99,7 +110,9 @@ TEST_F(ExprPoolTest, DistinctInternsLogEachTime) {
 
 TEST_F(ExprPoolTest, ImportVarInternsIntoPool) {
     StrictMock<MockTrail> strict_trail;
-    expr_pool strict_pool{strict_trail};
+    locator loc;
+    loc.bind_as<i_log_to_current_trail_frame>(strict_trail);
+    expr_pool strict_pool{loc};
 
     EXPECT_CALL(strict_trail, log(_)).Times(1);
     const expr* pooled = strict_pool.make(0);
@@ -118,7 +131,9 @@ TEST_F(ExprPoolTest, TernaryFunctorInternedTwiceReturnsSamePointer) {
 
 TEST_F(ExprPoolTest, ImportFunctorInternsArgsRecursively) {
     StrictMock<MockTrail> strict_trail;
-    expr_pool strict_pool{strict_trail};
+    locator loc;
+    loc.bind_as<i_log_to_current_trail_frame>(strict_trail);
+    expr_pool strict_pool{loc};
 
     expr arg{expr::var{1}};
     expr root{expr::functor{"f", {&arg}}};
@@ -133,7 +148,9 @@ TEST_F(ExprPoolTest, ImportFunctorInternsArgsRecursively) {
 
 TEST_F(ExprPoolTest, ImportTernaryFunctorInternsEachArg) {
     StrictMock<MockTrail> strict_trail;
-    expr_pool strict_pool{strict_trail};
+    locator loc;
+    loc.bind_as<i_log_to_current_trail_frame>(strict_trail);
+    expr_pool strict_pool{loc};
 
     expr a{expr::var{0}};
     expr b{expr::var{1}};

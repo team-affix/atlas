@@ -1,6 +1,7 @@
 // Goal deactivator: erases goal candidate index bucket and unsets goal expression.
 
 #include <gtest/gtest.h>
+#include "locator_fixture.hpp"
 #include <gmock/gmock.h>
 #include "infrastructure/goal_deactivator.hpp"
 #include "interfaces/i_unset_goal_expr.hpp"
@@ -17,9 +18,18 @@ struct MockEraseGoalCandidates : public i_erase_goal_candidates {
 };
 
 struct GoalDeactivatorTest : public ::testing::Test {
+    locator loc;
     MockUnsetGoalExpr unset_goal_expr;
     MockEraseGoalCandidates erase_goal_candidates;
-    goal_deactivator deactivator{unset_goal_expr, erase_goal_candidates};
+    goal_deactivator deactivator;
+
+    GoalDeactivatorTest() : deactivator(init_deactivator()) {}
+
+    goal_deactivator init_deactivator() {
+        loc.bind_as<i_unset_goal_expr>(unset_goal_expr);
+        loc.bind_as<i_erase_goal_candidates>(erase_goal_candidates);
+        return goal_deactivator{loc};
+    }
     goal_lineage gl{nullptr, 0};
 };
 

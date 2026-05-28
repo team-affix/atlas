@@ -1,6 +1,7 @@
 // make_initial_goal_lineage: root goals use a null resolution parent.
 
 #include <gtest/gtest.h>
+#include "locator_fixture.hpp"
 #include <gmock/gmock.h>
 #include "infrastructure/make_initial_goal_lineage.hpp"
 #include "interfaces/i_make_goal_lineage.hpp"
@@ -15,8 +16,13 @@ struct MockMakeGoalLineage : public i_make_goal_lineage {
 struct MakeInitialGoalLineageTest : public ::testing::Test {
     static constexpr subgoal_id kIdx = 0;
 
+    locator loc;
     MockMakeGoalLineage make_goal_lineage;
-    make_initial_goal_lineage maker{make_goal_lineage};
+    make_initial_goal_lineage maker;
+
+    MakeInitialGoalLineageTest()
+        : maker(bind_and_make<make_initial_goal_lineage, i_make_goal_lineage>(
+              loc, make_goal_lineage)) {}
     goal_lineage gl0{nullptr, kIdx};
 };
 

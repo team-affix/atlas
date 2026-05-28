@@ -6,12 +6,10 @@
 #include "debug_assert.hpp"
 
 struct locator {
-    template<typename T>
-    void bind(T& instance) {
-        const std::type_index key{typeid(T)};
-        const auto [_, inserted] = entries_.insert(
-            {key, static_cast<void*>(std::addressof(instance))});
-        DEBUG_ASSERT(inserted);
+    template<typename... Ifaces, typename Concrete>
+    void bind_as(Concrete& concrete) {
+        insert(concrete);
+        (insert(static_cast<Ifaces&>(concrete)), ...);
     }
 
     template<typename T>
@@ -22,6 +20,14 @@ struct locator {
     }
 
 private:
+    template<typename T>
+    void insert(T& instance) {
+        const std::type_index key{typeid(T)};
+        const auto [_, inserted] = entries_.insert(
+            {key, static_cast<void*>(std::addressof(instance))});
+        DEBUG_ASSERT(inserted);
+    }
+
     std::unordered_map<std::type_index, void*> entries_;
 };
 

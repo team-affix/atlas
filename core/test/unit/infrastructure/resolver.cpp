@@ -2,6 +2,7 @@
 // goals, then deactivates parent candidates and goal expr.
 
 #include <gtest/gtest.h>
+#include "locator_fixture.hpp"
 #include <gmock/gmock.h>
 #include "infrastructure/resolver.hpp"
 #include "infrastructure/rule_id_set.hpp"
@@ -73,6 +74,7 @@ struct MockPushUnitGoal : public i_push_unit_goal {
 };
 
 struct ResolverTest : public ::testing::Test {
+    locator loc;
     MockMakeGoalLineage make_goal_lineage;
     MockMakeResolutionLineage make_resolution_lineage;
     MockGoalActivator goal_activator;
@@ -85,19 +87,25 @@ struct ResolverTest : public ::testing::Test {
     MockConflictDetector conflict_detector;
     MockUnitGoalDetector unit_goal_detector;
     MockPushUnitGoal push_unit_goal;
-    resolver res{
-        make_goal_lineage,
-        make_resolution_lineage,
-        goal_activator,
-        goal_deactivator,
-        get_rule,
-        get_goal_db_rule_ids,
-        get_goal_candidate_rule_ids,
-        candidate_activator,
-        candidate_deactivator,
-        conflict_detector,
-        unit_goal_detector,
-        push_unit_goal};
+    resolver res;
+
+    ResolverTest() : res(init_resolver()) {}
+
+    resolver init_resolver() {
+        loc.bind_as<i_make_goal_lineage>(make_goal_lineage);
+        loc.bind_as<i_make_resolution_lineage>(make_resolution_lineage);
+        loc.bind_as<i_goal_activator>(goal_activator);
+        loc.bind_as<i_goal_deactivator>(goal_deactivator);
+        loc.bind_as<i_get_rule>(get_rule);
+        loc.bind_as<i_get_goal_db_rule_ids>(get_goal_db_rule_ids);
+        loc.bind_as<i_get_goal_candidate_rule_ids>(get_goal_candidate_rule_ids);
+        loc.bind_as<i_candidate_activator>(candidate_activator);
+        loc.bind_as<i_candidate_deactivator>(candidate_deactivator);
+        loc.bind_as<i_conflict_detector>(conflict_detector);
+        loc.bind_as<i_detect_unit_goal>(unit_goal_detector);
+        loc.bind_as<i_push_unit_goal>(push_unit_goal);
+        return resolver{loc};
+    }
 
     static constexpr rule_id kRule = 0;
     static constexpr subgoal_id kBodyIdx = 0;

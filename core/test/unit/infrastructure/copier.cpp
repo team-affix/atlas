@@ -2,6 +2,7 @@
 // i_make_var + i_make_functor while maintaining a translation_map. Tests mock sequencing and pooling.
 
 #include <gtest/gtest.h>
+#include "locator_fixture.hpp"
 #include <gmock/gmock.h>
 #include "infrastructure/copier.hpp"
 #include "interfaces/i_var_sequencer.hpp"
@@ -25,6 +26,19 @@ struct MockExprPool
 };
 
 struct CopierUnitTest : public ::testing::Test {
+    locator loc;
+    NiceMock<MockVarSequencer> seq;
+    NiceMock<MockExprPool> pool;
+    copier cp;
+
+    CopierUnitTest() : cp(init_copier()) {}
+
+    copier init_copier() {
+        loc.bind_as<i_var_sequencer>(seq);
+        loc.bind_as<i_make_functor, i_make_var>(pool);
+        return copier{loc};
+    }
+
 protected:
     void SetUp() override {
         ON_CALL(seq, next()).WillByDefault([this]() { return next_index++; });
@@ -32,10 +46,6 @@ protected:
         ON_CALL(pool, make(1)).WillByDefault(Return(&pooled_v1));
         ON_CALL(pool, make(2)).WillByDefault(Return(&pooled_v2));
     }
-
-    NiceMock<MockVarSequencer> seq;
-    NiceMock<MockExprPool> pool;
-    copier cp{seq, pool, pool};
 
     uint32_t next_index = 0;
 

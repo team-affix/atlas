@@ -2,6 +2,7 @@
 // map and registers it via i_set_goal_expr.
 
 #include <gtest/gtest.h>
+#include "locator_fixture.hpp"
 #include <gmock/gmock.h>
 #include "infrastructure/goal_activator.hpp"
 #include "interfaces/i_copier.hpp"
@@ -33,15 +34,22 @@ struct GoalActivatorTest : public ::testing::Test {
     static constexpr rule_id kRule = 0;
     static constexpr subgoal_id kBodyIdx = 0;
 
+    locator loc;
     MockSetGoalExpr set_goal_expr;
     MockGetCandidateTranslationMap get_candidate_translation_map;
     MockGetResolutionRule get_resolution_rule;
     MockCopier copier;
-    goal_activator activator{
-        set_goal_expr,
-        get_candidate_translation_map,
-        get_resolution_rule,
-        copier};
+    goal_activator activator;
+
+    GoalActivatorTest() : activator(init_activator()) {}
+
+    goal_activator init_activator() {
+        loc.bind_as<i_set_goal_expr>(set_goal_expr);
+        loc.bind_as<i_get_candidate_translation_map>(get_candidate_translation_map);
+        loc.bind_as<i_get_resolution_rule>(get_resolution_rule);
+        loc.bind_as<i_copier>(copier);
+        return goal_activator{loc};
+    }
 
     expr child_goal{expr::var{1}};
     expr copied_goal{expr::var{99}};

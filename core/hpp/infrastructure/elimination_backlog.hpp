@@ -1,4 +1,6 @@
 #ifndef ELIMINATION_BACKLOG_HPP
+#include "infrastructure/locator.hpp"
+
 #define ELIMINATION_BACKLOG_HPP
 
 #include <unordered_map>
@@ -12,7 +14,7 @@
 struct elimination_backlog
     : i_insert_backlogged_elimination
     , i_is_backlogged_elimination {
-    elimination_backlog(i_log_to_current_trail_frame&);
+    elimination_backlog(locator& loc);
     void insert_backlogged_elimination(const resolution_lineage*) override;
     bool is_backlogged_elimination(const resolution_lineage*) const override;
 private:

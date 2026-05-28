@@ -3,6 +3,7 @@
 // is deterministic.
 
 #include <gtest/gtest.h>
+#include "locator_fixture.hpp"
 #include <gmock/gmock.h>
 #include <random>
 #include "infrastructure/random_decision_generator.hpp"
@@ -47,11 +48,21 @@ struct MockGetGoalCandidateRuleIds : public i_get_goal_candidate_rule_ids {
 };
 
 struct RandomDecisionGeneratorTest : public ::testing::Test {
+    locator loc;
     MockMakeResolutionLineage lp;
     MockIterateActiveGoals iterate_active_goals;
     MockGetGoalCandidateRuleIds get_goal_candidate_rule_ids;
     std::mt19937 rng{0};
-    random_decision_generator generator{lp, iterate_active_goals, get_goal_candidate_rule_ids, rng};
+    random_decision_generator generator;
+
+    RandomDecisionGeneratorTest() : generator(init_generator()) {}
+
+    random_decision_generator init_generator() {
+        loc.bind_as<i_make_resolution_lineage>(lp);
+        loc.bind_as<i_iterate_active_goals>(iterate_active_goals);
+        loc.bind_as<i_get_goal_candidate_rule_ids>(get_goal_candidate_rule_ids);
+        return random_decision_generator{loc, rng};
+    }
 
     goal_lineage gl{nullptr, 0};
     goal_lineage gl_alt{nullptr, 1};

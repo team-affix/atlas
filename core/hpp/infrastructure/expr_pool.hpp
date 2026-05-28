@@ -1,4 +1,6 @@
 #ifndef EXPR_POOL_HPP
+#include "infrastructure/locator.hpp"
+
 #define EXPR_POOL_HPP
 
 #include <set>
@@ -15,7 +17,7 @@ struct expr_pool
     , i_make_var
     , i_import_expr
     , i_get_expr_count {
-    expr_pool(i_log_to_current_trail_frame& t);
+    expr_pool(locator& loc);
     const expr* make(const std::string& name, const std::vector<const expr*>& args) override;
     const expr* make(uint32_t) override;
     const expr* import(const expr*) override;

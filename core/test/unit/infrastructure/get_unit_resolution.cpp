@@ -2,6 +2,7 @@
 // the corresponding resolution lineage.
 
 #include <gtest/gtest.h>
+#include "locator_fixture.hpp"
 #include <gmock/gmock.h>
 #include "infrastructure/get_unit_resolution.hpp"
 #include "infrastructure/rule_id_set.hpp"
@@ -24,7 +25,16 @@ struct MockGetGoalCandidateRuleIds : public i_get_goal_candidate_rule_ids {
 struct GetUnitResolutionTest : public ::testing::Test {
     MockMakeResolutionLineage make_resolution_lineage;
     MockGetGoalCandidateRuleIds get_goal_candidate_rule_ids;
-    get_unit_resolution sut{get_goal_candidate_rule_ids, make_resolution_lineage};
+    locator loc;
+    get_unit_resolution sut;
+
+    GetUnitResolutionTest() : sut(init_sut()) {}
+
+    get_unit_resolution init_sut() {
+        loc.bind_as<i_get_goal_candidate_rule_ids>(get_goal_candidate_rule_ids);
+        loc.bind_as<i_make_resolution_lineage>(make_resolution_lineage);
+        return get_unit_resolution{loc};
+    }
 
     goal_lineage gl{nullptr, 0};
     rule_id_set candidates;

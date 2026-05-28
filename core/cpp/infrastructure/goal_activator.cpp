@@ -1,15 +1,11 @@
 #include "infrastructure/goal_activator.hpp"
 
-goal_activator::goal_activator(
-    i_set_goal_expr& set_goal_expr,
-    i_get_candidate_translation_map& get_candidate_translation_map,
-    i_get_resolution_rule& get_resolution_rule,
-    i_copier& copier)
+goal_activator::goal_activator(locator& loc)
     :
-    set_goal_expr(set_goal_expr),
-    get_candidate_translation_map(get_candidate_translation_map),
-    get_resolution_rule(get_resolution_rule),
-    copier(copier) {}
+    set_goal_expr(loc.locate<i_set_goal_expr>()),
+    get_candidate_translation_map(loc.locate<i_get_candidate_translation_map>()),
+    get_resolution_rule(loc.locate<i_get_resolution_rule>()),
+    copier(loc.locate<i_copier>()) {}
 
 void goal_activator::activate(const goal_lineage* gl) {
     const resolution_lineage* rl = gl->parent;

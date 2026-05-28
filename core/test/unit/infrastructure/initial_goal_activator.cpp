@@ -2,6 +2,7 @@
 // root goal_lineage, registers the expr, and inserts into active goals.
 
 #include <gtest/gtest.h>
+#include "locator_fixture.hpp"
 #include <gmock/gmock.h>
 #include "infrastructure/initial_goal_activator.hpp"
 #include "interfaces/i_get_initial_goal_expr.hpp"
@@ -30,15 +31,22 @@ struct MockInsertActiveGoal : public i_insert_active_goal {
 struct InitialGoalActivatorTest : public ::testing::Test {
     static constexpr subgoal_id kIdx = 0;
 
+    locator loc;
     MockGetInitialGoalExpr get_initial_goal_expr;
     MockMakeInitialGoalLineage make_initial_goal_lineage;
     MockSetGoalExpr set_goal_expr;
     MockInsertActiveGoal insert_active_goal;
-    initial_goal_activator activator{
-        get_initial_goal_expr,
-        make_initial_goal_lineage,
-        set_goal_expr,
-        insert_active_goal};
+    initial_goal_activator activator;
+
+    InitialGoalActivatorTest() : activator(init_activator()) {}
+
+    initial_goal_activator init_activator() {
+        loc.bind_as<i_get_initial_goal_expr>(get_initial_goal_expr);
+        loc.bind_as<i_make_initial_goal_lineage>(make_initial_goal_lineage);
+        loc.bind_as<i_set_goal_expr>(set_goal_expr);
+        loc.bind_as<i_insert_active_goal>(insert_active_goal);
+        return initial_goal_activator{loc};
+    }
 
     expr e0{expr::var{0}};
     goal_lineage gl0{nullptr, kIdx};

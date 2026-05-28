@@ -1,9 +1,10 @@
 #include "infrastructure/joint_elimination_generator.hpp"
+#include "infrastructure/cdcl_elimination_generator.hpp"
+#include "infrastructure/mhu_elimination_generator.hpp"
 
-joint_elimination_generator::joint_elimination_generator(
-    i_elimination_generator& cdcl,
-    i_elimination_generator& mhu)
-    : cdcl(cdcl), mhu(mhu) {
+joint_elimination_generator::joint_elimination_generator(locator& loc)
+    : cdcl(static_cast<i_elimination_generator&>(loc.locate<cdcl_elimination_generator>())),
+      mhu(static_cast<i_elimination_generator&>(loc.locate<mhu_elimination_generator>())) {
 }
 
 state_machine<const resolution_lineage*> joint_elimination_generator::constrain(const resolution_lineage* rl) {

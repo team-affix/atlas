@@ -2,8 +2,8 @@
 #include "infrastructure/expr_pool.hpp"
 #include "infrastructure/backtrackable_set_insert.hpp"
 
-expr_pool::expr_pool(i_log_to_current_trail_frame& t) :
-    exprs(t, {}) {
+expr_pool::expr_pool(locator& loc) :
+    exprs(loc.locate<i_log_to_current_trail_frame>(), {}) {
 }
 
 const expr* expr_pool::make(const std::string& name, const std::vector<const expr*>& args) {

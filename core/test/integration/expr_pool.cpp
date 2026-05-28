@@ -1,11 +1,17 @@
 #include <gtest/gtest.h>
+#include "locator_fixture.hpp"
 #include <optional>
 #include "infrastructure/expr_pool.hpp"
 #include "infrastructure/trail.hpp"
 
 struct ExprPoolIntegrationTest : public ::testing::Test {
 protected:
-    void SetUp() override { pool.emplace(t); }
+    void SetUp() override {
+        loc.bind_as<i_log_to_current_trail_frame>(t);
+        pool.emplace(loc);
+    }
+
+    locator loc;
 
     trail t;
     std::optional<expr_pool> pool;

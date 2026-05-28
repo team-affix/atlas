@@ -1,4 +1,6 @@
 #ifndef MCTS_DECISION_GENERATOR_HPP
+#include "infrastructure/locator.hpp"
+
 #define MCTS_DECISION_GENERATOR_HPP
 
 #include <random>
@@ -11,12 +13,7 @@
 #include "value_objects/mcts_choice.hpp"
 
 struct mcts_decision_generator : i_generate_decision {
-    mcts_decision_generator(
-        i_make_resolution_lineage& make_resolution_lineage,
-        i_iterate_active_goals& iterate_active_goals,
-        i_active_goals_size& active_goals_size,
-        i_get_goal_candidate_rule_ids& get_goal_candidate_rule_ids,
-        monte_carlo::simulation<mcts_choice, std::mt19937>& sim);
+    mcts_decision_generator(locator& loc, monte_carlo::simulation<mcts_choice, std::mt19937>& sim);
     const resolution_lineage* generate() override;
 private:
     const goal_lineage* choose_goal();

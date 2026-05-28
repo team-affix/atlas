@@ -3,8 +3,8 @@
 #include "infrastructure/backtrackable_map_insert.hpp"
 #include "infrastructure/backtrackable_map_at_insert.hpp"
 
-elimination_backlog::elimination_backlog(i_log_to_current_trail_frame& trail) :
-    eliminated_candidates(trail, {}) {
+elimination_backlog::elimination_backlog(locator& loc) :
+    eliminated_candidates(loc.locate<i_log_to_current_trail_frame>(), {}) {
 }
 
 void elimination_backlog::insert_backlogged_elimination(const resolution_lineage* rl) {

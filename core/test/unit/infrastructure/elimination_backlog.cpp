@@ -2,13 +2,18 @@
 // Inserts are trail-backtracked like cdcl avoidances.
 
 #include <gtest/gtest.h>
+#include "locator_fixture.hpp"
 #include "infrastructure/elimination_backlog.hpp"
 #include "infrastructure/trail.hpp"
 #include "value_objects/lineage.hpp"
 
 struct EliminationBacklogTest : public ::testing::Test {
     trail t;
-    elimination_backlog backlog{t};
+    locator loc;
+    elimination_backlog backlog;
+
+    EliminationBacklogTest()
+        : backlog(bind_and_make<elimination_backlog, i_log_to_current_trail_frame>(loc, t)) {}
     goal_lineage parent{nullptr, 0};
     resolution_lineage rl0{&parent, 0};
     resolution_lineage rl1{&parent, 1};

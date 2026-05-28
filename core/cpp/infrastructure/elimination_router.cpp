@@ -1,15 +1,11 @@
 #include "infrastructure/elimination_router.hpp"
 
-elimination_router::elimination_router(
-    i_deactivated_candidate_memory& deactivated_candidate_memory,
-    i_is_active_goal& is_active_goal,
-    i_insert_backlogged_elimination& insert_backlogged_elimination,
-    i_candidate_deactivator& candidate_deactivator)
+elimination_router::elimination_router(locator& loc)
     :
-    deactivated_candidate_memory(deactivated_candidate_memory),
-    is_active_goal(is_active_goal),
-    insert_backlogged_elimination(insert_backlogged_elimination),
-    candidate_deactivator(candidate_deactivator) {}
+    deactivated_candidate_memory(loc.locate<i_deactivated_candidate_memory>()),
+    is_active_goal(loc.locate<i_is_active_goal>()),
+    insert_backlogged_elimination(loc.locate<i_insert_backlogged_elimination>()),
+    candidate_deactivator(loc.locate<i_candidate_deactivator>()) {}
 
 elimination_result elimination_router::route(const resolution_lineage* rl) {
     if (deactivated_candidate_memory.contains(rl))

@@ -3,6 +3,7 @@
 // on independent and dependent lineage trees.
 
 #include <gtest/gtest.h>
+#include "locator_fixture.hpp"
 #include <gmock/gmock.h>
 #include <vector>
 #include "infrastructure/cdcl_elimination_generator.hpp"
@@ -45,7 +46,12 @@ struct MockTrail : public i_log_to_current_trail_frame {
 struct CdclEliminationGeneratorUnitTest : public ::testing::Test {
 protected:
     NiceMock<MockTrail> trail;
-    cdcl_elimination_generator cdcl{trail};
+    locator loc;
+    cdcl_elimination_generator cdcl;
+
+    CdclEliminationGeneratorUnitTest()
+        : cdcl(bind_and_make<cdcl_elimination_generator, i_log_to_current_trail_frame>(
+              loc, trail)) {}
 
     // Four independent root goals (no derivation parent).
     goal_lineage lin_0{nullptr, 0};
@@ -84,7 +90,9 @@ TEST_F(CdclEliminationGeneratorUnitTest, LearnMultiMemberAvoidanceReturnsNull) {
 
 TEST_F(CdclEliminationGeneratorUnitTest, LearnUnitAvoidanceDoesNotLogToTrail) {
     StrictMock<MockTrail> strict_trail;
-    cdcl_elimination_generator strict_cdcl{strict_trail};
+    locator loc;
+    loc.bind_as<i_log_to_current_trail_frame>(strict_trail);
+    cdcl_elimination_generator strict_cdcl{loc};
 
     EXPECT_CALL(strict_trail, log(_)).Times(0);
     EXPECT_EQ(strict_cdcl.learn(make_lemma({&lin_0_0})), std::optional{&lin_0_0});
@@ -92,7 +100,9 @@ TEST_F(CdclEliminationGeneratorUnitTest, LearnUnitAvoidanceDoesNotLogToTrail) {
 
 TEST_F(CdclEliminationGeneratorUnitTest, LearnMultiMemberAvoidanceLogsToTrail) {
     StrictMock<MockTrail> strict_trail;
-    cdcl_elimination_generator strict_cdcl{strict_trail};
+    locator loc;
+    loc.bind_as<i_log_to_current_trail_frame>(strict_trail);
+    cdcl_elimination_generator strict_cdcl{loc};
 
     EXPECT_CALL(strict_trail, log(_)).Times(AtLeast(1));
     EXPECT_EQ(strict_cdcl.learn(make_lemma({&lin_0_0, &lin_1_0})), std::nullopt);
@@ -106,7 +116,9 @@ TEST_F(CdclEliminationGeneratorUnitTest, LearnDuplicateAvoidanceIsIdempotent) {
 
 TEST_F(CdclEliminationGeneratorUnitTest, LearnDuplicateAvoidanceDoesNotLogToTrail) {
     StrictMock<MockTrail> strict_trail;
-    cdcl_elimination_generator strict_cdcl{strict_trail};
+    locator loc;
+    loc.bind_as<i_log_to_current_trail_frame>(strict_trail);
+    cdcl_elimination_generator strict_cdcl{loc};
 
     const lemma l = make_lemma({&lin_0_0, &lin_1_0});
 

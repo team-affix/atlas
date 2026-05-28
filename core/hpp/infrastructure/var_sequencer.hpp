@@ -1,4 +1,6 @@
 #ifndef VAR_SEQUENCER_HPP
+#include "infrastructure/locator.hpp"
+
 #define VAR_SEQUENCER_HPP
 
 #include "interfaces/i_var_sequencer.hpp"
@@ -6,7 +8,7 @@
 #include "infrastructure/sequencer.hpp"
 
 struct var_sequencer : i_var_sequencer {
-    var_sequencer(i_log_to_current_trail_frame& t);
+    var_sequencer(locator& loc);
     uint32_t next() override;
 private:
     sequencer<uint32_t> seq;

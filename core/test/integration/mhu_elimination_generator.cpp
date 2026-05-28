@@ -1,4 +1,6 @@
 #include <gtest/gtest.h>
+#include "wire_locator.hpp"
+#include <optional>
 #include <algorithm>
 #include "infrastructure/mhu_elimination_generator.hpp"
 #include "infrastructure/bind_map.hpp"
@@ -36,15 +38,29 @@ bool is_functor_named(const expr* e, const std::string& name) {
 
 struct MhuEliminationGeneratorIntegrationTest : public ::testing::Test {
 protected:
+    locator loc;
     trail t;
-    expr_pool pool{t};
     bind_map common;
     lineage_pool lp;
     bind_map_factory bmf;
     overlay_bind_map_factory obmf;
     unifier_factory uf;
     goal_candidate_rules ggcr;
-    mhu_elimination_generator mhu{common, lp, pool, bmf, obmf, uf, ggcr};
+    std::optional<expr_pool> pool;
+    std::optional<mhu_elimination_generator> mhu;
+
+    MhuEliminationGeneratorIntegrationTest() {
+        loc.bind_as<i_log_to_current_trail_frame>(t);
+        loc.bind_as<i_bind_map>(common);
+        loc.bind_as<i_bind_map_factory>(bmf);
+        loc.bind_as<i_overlay_bind_map_factory>(obmf);
+        loc.bind_as<i_unifier_factory>(uf);
+        loc.bind_as<i_make_resolution_lineage>(lp);
+        loc.bind_as<i_get_goal_candidate_rule_ids>(ggcr);
+        pool.emplace(loc);
+        loc.bind_as<i_make_functor, i_make_var, i_import_expr, i_get_expr_count>(*pool);
+        mhu.emplace(loc);
+    }
 
     expr f_empty{expr::functor{"f", {}}};
     expr g_empty{expr::functor{"g", {}}};
@@ -76,7 +92,7 @@ protected:
         const resolution_lineage* rl,
         const expr* goal,
         const expr* head) {
-        return mhu.try_add_head(rl, goal, head);
+        return mhu->try_add_head(rl, goal, head);
     }
 };
 
@@ -88,7 +104,7 @@ TEST_F(MhuEliminationGeneratorIntegrationTest, TryAddHeadThenConstrainAllowsReus
     auto slot = make_slot(var0, f_empty, 0);
     ASSERT_TRUE(seed_and_add_head(slot.rl, &slot.goal, &slot.head));
 
-    auto sm = mhu.constrain(slot.rl);
+    auto sm = mhu->constrain(slot.rl);
     EXPECT_TRUE(collect_elims(sm).empty());
 
     EXPECT_TRUE(seed_and_add_head(slot.rl, &slot.goal, &slot.head));
@@ -96,14 +112,14 @@ TEST_F(MhuEliminationGeneratorIntegrationTest, TryAddHeadThenConstrainAllowsReus
 
 TEST_F(MhuEliminationGeneratorIntegrationTest, TryAddHeadFailsWhenUnifyFails) {
     auto slot = make_slot(f_empty, g_empty, 0);
-    EXPECT_FALSE(mhu.try_add_head(slot.rl, &slot.goal, &slot.head));
+    EXPECT_FALSE(mhu->try_add_head(slot.rl, &slot.goal, &slot.head));
 }
 
 TEST_F(MhuEliminationGeneratorIntegrationTest, ConstrainOnSingleHeadYieldsNoElims) {
     auto slot = make_slot(var0, f_empty, 0);
-    ASSERT_TRUE(mhu.try_add_head(slot.rl, &slot.goal, &slot.head));
+    ASSERT_TRUE(mhu->try_add_head(slot.rl, &slot.goal, &slot.head));
 
-    auto sm = mhu.constrain(slot.rl);
+    auto sm = mhu->constrain(slot.rl);
     EXPECT_TRUE(collect_elims(sm).empty());
 }
 
@@ -115,7 +131,7 @@ TEST_F(MhuEliminationGeneratorIntegrationTest, ConstrainPublishesSeededBindingTo
     auto slot = make_slot(var0, f_empty, 0);
     ASSERT_TRUE(seed_and_add_head(slot.rl, &slot.goal, &slot.head));
 
-    auto sm = mhu.constrain(slot.rl);
+    auto sm = mhu->constrain(slot.rl);
     collect_elims(sm);
 
     EXPECT_TRUE(is_functor_named(common.whnf(&var0), "f"));
@@ -131,7 +147,7 @@ TEST_F(MhuEliminationGeneratorIntegrationTest, ConstrainEliminatesHeadWithCollid
     ASSERT_TRUE(seed_and_add_head(a.rl, &a.goal, &a.head));
     ASSERT_TRUE(seed_and_add_head(b.rl, &b.goal, &b.head));
 
-    auto sm = mhu.constrain(a.rl);
+    auto sm = mhu->constrain(a.rl);
     auto elims = collect_elims(sm);
 
     EXPECT_TRUE(contains(elims, b.rl));
@@ -144,7 +160,7 @@ TEST_F(MhuEliminationGeneratorIntegrationTest, ConstrainDoesNotEliminateCompatib
     ASSERT_TRUE(seed_and_add_head(a.rl, &a.goal, &a.head));
     ASSERT_TRUE(seed_and_add_head(b.rl, &b.goal, &b.head));
 
-    auto sm = mhu.constrain(a.rl);
+    auto sm = mhu->constrain(a.rl);
     auto elims = collect_elims(sm);
 
     EXPECT_FALSE(contains(elims, b.rl));
@@ -158,7 +174,7 @@ TEST_F(MhuEliminationGeneratorIntegrationTest, ConstrainDoesNotEliminateHeadWatc
     ASSERT_TRUE(seed_and_add_head(a.rl, &a.goal, &a.head));
     ASSERT_TRUE(seed_and_add_head(b.rl, &b.goal, &b.head));
 
-    auto sm = mhu.constrain(a.rl);
+    auto sm = mhu->constrain(a.rl);
     auto elims = collect_elims(sm);
 
     EXPECT_FALSE(contains(elims, b.rl));

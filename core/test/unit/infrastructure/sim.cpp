@@ -4,6 +4,7 @@
 // max_resolutions and short-circuit on solution_detector.
 
 #include <gtest/gtest.h>
+#include "locator_fixture.hpp"
 #include <gmock/gmock.h>
 #include "infrastructure/sim.hpp"
 #include "infrastructure/rule_id_set.hpp"
@@ -208,45 +209,54 @@ struct SimTest : public ::testing::Test {
     testing::NiceMock<MockClearBindings> clear_bindings;
     testing::NiceMock<MockTrimUnpinnedLineages> trim_unpinned_lineages;
 
+    locator loc;
+
+    void bind_sim_deps() {
+        loc.bind_as<i_push_trail_frame>(push_trail_frame);
+        loc.bind_as<i_pop_trail_frame>(pop_trail_frame);
+        loc.bind_as<i_get_initial_goal_count>(get_initial_goal_count);
+        loc.bind_as<i_activate_initial_goal>(activate_initial_goal);
+        loc.bind_as<i_make_initial_goal_lineage>(make_initial_goal_lineage);
+        loc.bind_as<i_get_goal_db_rule_ids>(get_goal_db_rule_ids);
+        loc.bind_as<i_make_resolution_lineage>(lp);
+        loc.bind_as<i_candidate_activator>(candidate_activator);
+        loc.bind_as<i_solution_detector>(solution_detector);
+        loc.bind_as<i_conflict_detector>(conflict_detector);
+        loc.bind_as<i_detect_unit_goal>(unit_goal_detector);
+        loc.bind_as<i_push_unit_goal>(push_unit_goal);
+        loc.bind_as<i_pop_unit_goal>(pop_unit_goal);
+        loc.bind_as<i_generate_decision>(decision_generator);
+        loc.bind_as<i_elimination_generator>(elimination_generator);
+        loc.bind_as<i_elimination_router>(elimination_router);
+        loc.bind_as<i_resolver>(resolver);
+        loc.bind_as<i_get_unit_resolution>(get_unit_resolution);
+        loc.bind_as<i_record_decision>(record_decision);
+        loc.bind_as<i_record_resolution>(record_resolution);
+        loc.bind_as<i_clear_unit_goals>(clear_unit_goals);
+        loc.bind_as<i_clear_recorded_decisions>(clear_recorded_decisions);
+        loc.bind_as<i_clear_recorded_resolutions>(clear_recorded_resolutions);
+        loc.bind_as<i_deactivated_candidate_memory>(deactivated_candidate_memory);
+        loc.bind_as<i_clear_goal_candidate_rule_ids>(clear_goal_candidate_rule_ids);
+        loc.bind_as<i_clear_goal_exprs>(clear_goal_exprs);
+        loc.bind_as<i_clear_active_goals>(clear_active_goals);
+        loc.bind_as<i_clear_candidate_translation_maps>(clear_candidate_translation_maps);
+        loc.bind_as<i_clear_mhu_heads>(clear_mhu_heads);
+        loc.bind_as<i_clear_bindings>(clear_bindings);
+        loc.bind_as<i_trim_unpinned_lineages>(trim_unpinned_lineages);
+    }
+
     sim make_sim(size_t max_resolutions = kMaxResolutions) {
-        return sim{
-            max_resolutions,
-            push_trail_frame,
-            pop_trail_frame,
-            get_initial_goal_count,
-            activate_initial_goal,
-            make_initial_goal_lineage,
-            get_goal_db_rule_ids,
-            lp,
-            candidate_activator,
-            solution_detector,
-            conflict_detector,
-            unit_goal_detector,
-            push_unit_goal,
-            pop_unit_goal,
-            decision_generator,
-            elimination_generator,
-            elimination_router,
-            resolver,
-            get_unit_resolution,
-            record_decision,
-            record_resolution,
-            clear_unit_goals,
-            clear_recorded_decisions,
-            clear_recorded_resolutions,
-            deactivated_candidate_memory,
-            clear_goal_candidate_rule_ids,
-            clear_goal_exprs,
-            clear_active_goals,
-            clear_candidate_translation_maps,
-            clear_mhu_heads,
-            clear_bindings,
-            trim_unpinned_lineages};
+        return sim{loc, max_resolutions};
     }
 
     sim simulation;
 
-    SimTest() : simulation(make_sim()) {}
+    SimTest() : simulation(init_simulation()) {}
+
+    sim init_simulation() {
+        bind_sim_deps();
+        return sim{loc, kMaxResolutions};
+    }
 
     goal_lineage gl{nullptr, 0};
     resolution_lineage rl{&gl, 0};

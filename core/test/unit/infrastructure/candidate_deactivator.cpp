@@ -2,6 +2,7 @@
 // map, and records lineage in deactivated memory — in that dependency order.
 
 #include <gtest/gtest.h>
+#include "locator_fixture.hpp"
 #include <gmock/gmock.h>
 #include "infrastructure/candidate_deactivator.hpp"
 #include "interfaces/i_unset_candidate_translation_map.hpp"
@@ -26,10 +27,20 @@ struct CandidateDeactivatorTest : public ::testing::Test {
     static constexpr rule_id kRule = 0;
     static constexpr subgoal_id kGoal = 0;
 
+    locator loc;
     MockUnsetCandidateTranslationMap unset_maps;
     MockDeactivatedCandidateMemory memory;
     MockUnlinkGoalCandidate unlink;
-    candidate_deactivator deactivator{unset_maps, memory, unlink};
+    candidate_deactivator deactivator;
+
+    CandidateDeactivatorTest() : deactivator(init_deactivator()) {}
+
+    candidate_deactivator init_deactivator() {
+        loc.bind_as<i_unset_candidate_translation_map>(unset_maps);
+        loc.bind_as<i_deactivated_candidate_memory>(memory);
+        loc.bind_as<i_unlink_goal_candidate>(unlink);
+        return candidate_deactivator{loc};
+    }
 
     goal_lineage parent{nullptr, kGoal};
     resolution_lineage rl{&parent, kRule};

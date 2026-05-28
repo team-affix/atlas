@@ -2,6 +2,7 @@
 // Unit tests mock var_names and assert string output for atoms, lists, and functors.
 
 #include <gtest/gtest.h>
+#include "locator_fixture.hpp"
 #include <gmock/gmock.h>
 #include <sstream>
 #include "infrastructure/expr_printer.hpp"
@@ -17,9 +18,17 @@ struct MockVarNames : public i_var_names {
 };
 
 struct ExprPrinterTest : public ::testing::Test {
+    locator loc;
     MockVarNames names;
     std::ostringstream os;
-    expr_printer printer{os, names};
+    expr_printer printer;
+
+    ExprPrinterTest() : printer(init_printer()) {}
+
+    expr_printer init_printer() {
+        loc.bind_as<i_var_names>(names);
+        return expr_printer{os, loc};
+    }
     std::string var_name_x{"X"};
 
     expr var0{expr::var{0}};

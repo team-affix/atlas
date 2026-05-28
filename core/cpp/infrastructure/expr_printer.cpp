@@ -1,7 +1,7 @@
 #include "infrastructure/expr_printer.hpp"
 
-expr_printer::expr_printer(std::ostream& os, const i_var_names& var_names)
-    : os(os), var_names(var_names)
+expr_printer::expr_printer(std::ostream& os, locator& loc)
+    : os(os), var_names(loc.locate<i_var_names>())
 {}
 
 void expr_printer::print(const expr* e) const {

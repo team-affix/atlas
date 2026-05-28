@@ -1,21 +1,31 @@
 #include <gtest/gtest.h>
+#include "locator_fixture.hpp"
 #include <optional>
 #include "infrastructure/copier.hpp"
 #include "infrastructure/expr_pool.hpp"
 #include "infrastructure/var_sequencer.hpp"
 #include "infrastructure/trail.hpp"
+#include "interfaces/i_log_to_current_trail_frame.hpp"
+#include "interfaces/i_var_sequencer.hpp"
+#include "interfaces/i_make_functor.hpp"
+#include "interfaces/i_make_var.hpp"
 
 struct CopierIntegrationTest : public ::testing::Test {
 protected:
     void SetUp() override {
-        vs.next();
-        vs.next();
-        pool.emplace(t);
-        cp.emplace(vs, *pool, *pool);
+        loc.bind_as<i_log_to_current_trail_frame>(t);
+        vs.emplace(loc);
+        loc.bind_as<i_var_sequencer>(*vs);
+        vs->next();
+        vs->next();
+        pool.emplace(loc);
+        loc.bind_as<i_make_functor, i_make_var>(*pool);
+        cp.emplace(loc);
     }
 
+    locator loc;
     trail t;
-    var_sequencer vs{t};
+    std::optional<var_sequencer> vs;
     std::optional<expr_pool> pool;
     std::optional<copier> cp;
 

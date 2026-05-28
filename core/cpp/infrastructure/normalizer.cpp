@@ -1,9 +1,9 @@
 #include <stdexcept>
 #include "infrastructure/normalizer.hpp"
 
-normalizer::normalizer(i_make_functor& make_functor, i_bind_map& bind_map) :
-    make_functor_ref(make_functor),
-    bind_map_ref(bind_map) {
+normalizer::normalizer(locator& loc) :
+    make_functor_ref(loc.locate<i_make_functor>()),
+    bind_map_ref(loc.locate<i_bind_map>()) {
 }
 
 const expr* normalizer::normalize(const expr* e) {
