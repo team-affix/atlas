@@ -47,6 +47,13 @@
 #include "infrastructure/var_sequencer.hpp"
 
 struct basic_manifest {
+    basic_manifest(
+        db& database,
+        initial_goal_exprs& initial_goals,
+        size_t max_resolutions,
+        uint32_t random_seed = 0);
+
+private:
     struct early_wiring {
         trail trail_;
         bind_map bind_map_;
@@ -119,12 +126,6 @@ struct basic_manifest {
 
         orchestration_wiring(locator& loc, size_t max_resolutions, uint32_t random_seed);
     };
-
-    basic_manifest(
-        db& database,
-        initial_goal_exprs& initial_goals,
-        size_t max_resolutions,
-        uint32_t random_seed = 0);
 
     locator loc_;
     db& database_;
