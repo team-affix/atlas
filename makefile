@@ -2,10 +2,16 @@
 # Toolchain
 # ==============================================================================
 
+MAKEFLAGS += -j$(shell nproc)
+
 CXX      = g++
 CXXFLAGS = -std=c++20 -I. -Icore/hpp -Imcts/include
 AR       = ar
 ARFLAGS  = rcs
+
+DEBUG_CXXFLAGS      = -DDEBUG -g
+DEBUG_FAST_CXXFLAGS = -DDEBUG -g -O3
+RELEASE_CXXFLAGS    = -O3
 
 # ==============================================================================
 # Paths
@@ -16,10 +22,13 @@ ANTLR4_LIB = /usr/lib/x86_64-linux-gnu
 ANTLR4_JAR = tools/antlr4-4.10.1-complete.jar
 ANTLR4_URL = https://www.antlr.org/download/antlr-4.10.1-complete.jar
 
-GTEST_INC = googletest/googletest/include
-GMOCK_INC = googletest/googlemock/include
-GTEST_SRC = googletest/googletest/src/gtest-all.cc \
-            googletest/googlemock/src/gmock-all.cc
+GTEST_INC     = googletest/googletest/include
+GMOCK_INC     = googletest/googlemock/include
+GTEST_ALL_CC  = googletest/googletest/src/gtest-all.cc
+GMOCK_ALL_CC  = googletest/googlemock/src/gmock-all.cc
+GTEST_CPPFLAGS = \
+    -I$(GTEST_INC) -I$(GMOCK_INC) \
+    -Igoogletest/googletest -Igoogletest/googlemock
 
 CLI11_INC = CLI11/include
 
@@ -56,12 +65,33 @@ ATLAS_BIN = build/atlas
 # Object lists  (object files live in build/obj/<variant>/)
 # ==============================================================================
 
-# Core: discovered at parse time (source files are always present).
-CORE_SRC = $(shell find core/cpp -name "*.cpp")
+# Core production: discovered at parse time (sources are always present).
+CORE_SRC = $(shell find core/cpp -name '*.cpp' | sort)
 
 CORE_OBJ            = $(patsubst core/cpp/%.cpp, build/obj/core/%.o,            $(CORE_SRC))
 CORE_DEBUG_OBJ      = $(patsubst core/cpp/%.cpp, build/obj/core_debug/%.o,      $(CORE_SRC))
 CORE_DEBUG_FAST_OBJ = $(patsubst core/cpp/%.cpp, build/obj/core_debug_fast/%.o, $(CORE_SRC))
+
+# Core tests: same layout under build/obj/core_{debug,debug_fast}_test/.
+CORE_TEST_SRC = $(shell find core/test -name '*.cpp' | sort)
+
+CORE_DEBUG_TEST_OBJ = \
+    $(patsubst core/test/%.cpp, build/obj/core_debug_test/%.o, $(CORE_TEST_SRC))
+CORE_DEBUG_FAST_TEST_OBJ = \
+    $(patsubst core/test/%.cpp, build/obj/core_debug_fast_test/%.o, $(CORE_TEST_SRC))
+
+CORE_DEBUG_GTEST_OBJ = \
+    build/obj/core_debug_test/gtest-all.o \
+    build/obj/core_debug_test/gmock-all.o
+CORE_DEBUG_FAST_GTEST_OBJ = \
+    build/obj/core_debug_fast_test/gtest-all.o \
+    build/obj/core_debug_fast_test/gmock-all.o
+
+CORE_DEBUG_BIN_OBJ      = $(CORE_DEBUG_TEST_OBJ) $(CORE_DEBUG_GTEST_OBJ)
+CORE_DEBUG_FAST_BIN_OBJ = $(CORE_DEBUG_FAST_TEST_OBJ) $(CORE_DEBUG_FAST_GTEST_OBJ)
+
+CORE_DEBUG_TEST_CXXFLAGS      = $(DEBUG_CXXFLAGS) $(GTEST_CPPFLAGS)
+CORE_DEBUG_FAST_TEST_CXXFLAGS = $(DEBUG_FAST_CXXFLAGS) $(GTEST_CPPFLAGS)
 
 # Parser generated: hardcoded because parser/generated/ may not exist at parse
 # time, so $(wildcard ...) would expand to nothing.  ANTLR4 always emits
@@ -101,25 +131,9 @@ all: core core_debug core_debug_fast parser parser_debug parser_debug_fast \
 
 core: $(CORE_LIB)
 
-core_debug: $(CORE_DEBUG_LIB)
-	$(CXX) $(CXXFLAGS) -DDEBUG -g \
-	    -I$(GTEST_INC) -I$(GMOCK_INC) \
-	    -Igoogletest/googletest -Igoogletest/googlemock \
-	    $(shell find core/test -name "*.cpp") \
-	    $(GTEST_SRC) \
-	    -Lbuild -latlas_core_debug \
-	    -lpthread \
-	    -o $(CORE_DEBUG_BIN)
+core_debug: $(CORE_DEBUG_BIN)
 
-core_debug_fast: $(CORE_DEBUG_FAST_LIB)
-	$(CXX) $(CXXFLAGS) -DDEBUG -g -O3 \
-	    -I$(GTEST_INC) -I$(GMOCK_INC) \
-	    -Igoogletest/googletest -Igoogletest/googlemock \
-	    $(shell find core/test -name "*.cpp") \
-	    $(GTEST_SRC) \
-	    -Lbuild -latlas_core_debug_fast \
-	    -lpthread \
-	    -o $(CORE_DEBUG_FAST_BIN)
+core_debug_fast: $(CORE_DEBUG_FAST_BIN)
 
 # Parser targets use recursive make: the dependency graph is resolved statically
 # at startup, before codegen has produced the .cpp files.  Phase 1 runs ANTLR4;
@@ -131,7 +145,7 @@ parser:
 parser_debug: $(CORE_DEBUG_LIB)
 	$(MAKE) parser/generated
 	$(MAKE) $(PARSER_DEBUG_LIB)
-	$(CXX) $(CXXFLAGS) -DDEBUG -g \
+	$(CXX) $(CXXFLAGS) $(DEBUG_CXXFLAGS) \
 	    -I$(ANTLR4_INC) \
 	    parser/test/main.cpp \
 	    -Lbuild -latlas_parser_debug -latlas_core_debug \
@@ -141,7 +155,7 @@ parser_debug: $(CORE_DEBUG_LIB)
 parser_debug_fast: $(CORE_DEBUG_FAST_LIB)
 	$(MAKE) parser/generated
 	$(MAKE) $(PARSER_DEBUG_FAST_LIB)
-	$(CXX) $(CXXFLAGS) -DDEBUG -g -O3 \
+	$(CXX) $(CXXFLAGS) $(DEBUG_FAST_CXXFLAGS) \
 	    -I$(ANTLR4_INC) \
 	    parser/test/main.cpp \
 	    -Lbuild -latlas_parser_debug_fast -latlas_core_debug_fast \
@@ -155,7 +169,7 @@ cli_debug: $(CORE_DEBUG_LIB)
 	$(MAKE) parser/generated
 	$(MAKE) $(PARSER_DEBUG_LIB)
 	$(MAKE) $(CLI_DEBUG_LIB)
-	$(CXX) $(CXXFLAGS) -DDEBUG -g \
+	$(CXX) $(CXXFLAGS) $(DEBUG_CXXFLAGS) \
 	    cli/test/main.cpp \
 	    -Lbuild -latlas_cli_debug -latlas_parser_debug -latlas_core_debug \
 	    -L$(ANTLR4_LIB) -lantlr4-runtime \
@@ -165,7 +179,7 @@ cli_debug_fast: $(CORE_DEBUG_FAST_LIB)
 	$(MAKE) parser/generated
 	$(MAKE) $(PARSER_DEBUG_FAST_LIB)
 	$(MAKE) $(CLI_DEBUG_FAST_LIB)
-	$(CXX) $(CXXFLAGS) -DDEBUG -g -O3 \
+	$(CXX) $(CXXFLAGS) $(DEBUG_FAST_CXXFLAGS) \
 	    cli/test/main.cpp \
 	    -Lbuild -latlas_cli_debug_fast -latlas_parser_debug_fast -latlas_core_debug_fast \
 	    -L$(ANTLR4_LIB) -lantlr4-runtime \
@@ -177,7 +191,7 @@ atlas: $(CORE_LIB)
 	$(MAKE) parser/generated
 	$(MAKE) $(PARSER_LIB)
 	$(MAKE) $(CLI_LIB)
-	$(CXX) $(CXXFLAGS) -O3 \
+	$(CXX) $(CXXFLAGS) $(RELEASE_CXXFLAGS) \
 	    -I$(CLI11_INC) \
 	    -DATLAS_GIT_TAG=\"$(GIT_TAG)\" \
 	    cli/entry/main.cpp \
@@ -221,56 +235,102 @@ $(CLI_DEBUG_FAST_LIB): $(CLI_DEBUG_FAST_OBJ) | build
 	$(AR) $(ARFLAGS) $@ $^
 
 # ==============================================================================
+# Binary link rules
+# ==============================================================================
+
+$(CORE_DEBUG_BIN): $(CORE_DEBUG_LIB) $(CORE_DEBUG_BIN_OBJ) | build
+	$(CXX) $(CXXFLAGS) -o $@ \
+	    $(CORE_DEBUG_BIN_OBJ) \
+	    -Lbuild -latlas_core_debug -lpthread
+
+$(CORE_DEBUG_FAST_BIN): $(CORE_DEBUG_FAST_LIB) $(CORE_DEBUG_FAST_BIN_OBJ) | build
+	$(CXX) $(CXXFLAGS) -o $@ \
+	    $(CORE_DEBUG_FAST_BIN_OBJ) \
+	    -Lbuild -latlas_core_debug_fast -lpthread
+
+# ==============================================================================
 # Compilation pattern rules
 # ==============================================================================
 
+# --- core (release | debug | debug_fast) ---
+
 build/obj/core/%.o: core/cpp/%.cpp | build/obj/core
 	mkdir -p $(dir $@)
-	$(CXX) $(CXXFLAGS) -O3 -c $< -o $@
+	$(CXX) $(CXXFLAGS) $(RELEASE_CXXFLAGS) -c $< -o $@
 
 build/obj/core_debug/%.o: core/cpp/%.cpp | build/obj/core_debug
 	mkdir -p $(dir $@)
-	$(CXX) $(CXXFLAGS) -DDEBUG -g -c $< -o $@
+	$(CXX) $(CXXFLAGS) $(DEBUG_CXXFLAGS) -c $< -o $@
 
 build/obj/core_debug_fast/%.o: core/cpp/%.cpp | build/obj/core_debug_fast
 	mkdir -p $(dir $@)
-	$(CXX) $(CXXFLAGS) -DDEBUG -g -O3 -c $< -o $@
+	$(CXX) $(CXXFLAGS) $(DEBUG_FAST_CXXFLAGS) -c $< -o $@
+
+# --- core tests (debug | debug_fast) ---
+
+build/obj/core_debug_test/%.o: core/test/%.cpp | build/obj/core_debug_test
+	mkdir -p $(dir $@)
+	$(CXX) $(CXXFLAGS) $(CORE_DEBUG_TEST_CXXFLAGS) -c $< -o $@
+
+build/obj/core_debug_test/gtest-all.o: $(GTEST_ALL_CC) | build/obj/core_debug_test
+	mkdir -p $(dir $@)
+	$(CXX) $(CXXFLAGS) $(CORE_DEBUG_TEST_CXXFLAGS) -c $< -o $@
+
+build/obj/core_debug_test/gmock-all.o: $(GMOCK_ALL_CC) | build/obj/core_debug_test
+	mkdir -p $(dir $@)
+	$(CXX) $(CXXFLAGS) $(CORE_DEBUG_TEST_CXXFLAGS) -c $< -o $@
+
+build/obj/core_debug_fast_test/%.o: core/test/%.cpp | build/obj/core_debug_fast_test
+	mkdir -p $(dir $@)
+	$(CXX) $(CXXFLAGS) $(CORE_DEBUG_FAST_TEST_CXXFLAGS) -c $< -o $@
+
+build/obj/core_debug_fast_test/gtest-all.o: $(GTEST_ALL_CC) | build/obj/core_debug_fast_test
+	mkdir -p $(dir $@)
+	$(CXX) $(CXXFLAGS) $(CORE_DEBUG_FAST_TEST_CXXFLAGS) -c $< -o $@
+
+build/obj/core_debug_fast_test/gmock-all.o: $(GMOCK_ALL_CC) | build/obj/core_debug_fast_test
+	mkdir -p $(dir $@)
+	$(CXX) $(CXXFLAGS) $(CORE_DEBUG_FAST_TEST_CXXFLAGS) -c $< -o $@
+
+# --- parser (release | debug | debug_fast) ---
 
 build/obj/parser/%.o: parser/generated/%.cpp | parser/generated build/obj/parser
 	mkdir -p $(dir $@)
-	$(CXX) $(CXXFLAGS) -I$(ANTLR4_INC) -O3 -c $< -o $@
+	$(CXX) $(CXXFLAGS) -I$(ANTLR4_INC) $(RELEASE_CXXFLAGS) -c $< -o $@
 
 build/obj/parser_debug/%.o: parser/generated/%.cpp | parser/generated build/obj/parser_debug
 	mkdir -p $(dir $@)
-	$(CXX) $(CXXFLAGS) -I$(ANTLR4_INC) -DDEBUG -g -c $< -o $@
+	$(CXX) $(CXXFLAGS) -I$(ANTLR4_INC) $(DEBUG_CXXFLAGS) -c $< -o $@
 
 build/obj/parser_debug_fast/%.o: parser/generated/%.cpp | parser/generated build/obj/parser_debug_fast
 	mkdir -p $(dir $@)
-	$(CXX) $(CXXFLAGS) -I$(ANTLR4_INC) -DDEBUG -g -O3 -c $< -o $@
+	$(CXX) $(CXXFLAGS) -I$(ANTLR4_INC) $(DEBUG_FAST_CXXFLAGS) -c $< -o $@
 
 build/obj/parser/%.o: parser/cpp/%.cpp | build/obj/parser
 	mkdir -p $(dir $@)
-	$(CXX) $(CXXFLAGS) -I$(ANTLR4_INC) -O3 -c $< -o $@
+	$(CXX) $(CXXFLAGS) -I$(ANTLR4_INC) $(RELEASE_CXXFLAGS) -c $< -o $@
 
 build/obj/parser_debug/%.o: parser/cpp/%.cpp | build/obj/parser_debug
 	mkdir -p $(dir $@)
-	$(CXX) $(CXXFLAGS) -I$(ANTLR4_INC) -DDEBUG -g -c $< -o $@
+	$(CXX) $(CXXFLAGS) -I$(ANTLR4_INC) $(DEBUG_CXXFLAGS) -c $< -o $@
 
 build/obj/parser_debug_fast/%.o: parser/cpp/%.cpp | build/obj/parser_debug_fast
 	mkdir -p $(dir $@)
-	$(CXX) $(CXXFLAGS) -I$(ANTLR4_INC) -DDEBUG -g -O3 -c $< -o $@
+	$(CXX) $(CXXFLAGS) -I$(ANTLR4_INC) $(DEBUG_FAST_CXXFLAGS) -c $< -o $@
+
+# --- cli (release | debug | debug_fast) ---
 
 build/obj/cli/%.o: cli/cpp/%.cpp | build/obj/cli
 	mkdir -p $(dir $@)
-	$(CXX) $(CXXFLAGS) -O3 -c $< -o $@
+	$(CXX) $(CXXFLAGS) $(RELEASE_CXXFLAGS) -c $< -o $@
 
 build/obj/cli_debug/%.o: cli/cpp/%.cpp | build/obj/cli_debug
 	mkdir -p $(dir $@)
-	$(CXX) $(CXXFLAGS) -DDEBUG -g -c $< -o $@
+	$(CXX) $(CXXFLAGS) $(DEBUG_CXXFLAGS) -c $< -o $@
 
 build/obj/cli_debug_fast/%.o: cli/cpp/%.cpp | build/obj/cli_debug_fast
 	mkdir -p $(dir $@)
-	$(CXX) $(CXXFLAGS) -DDEBUG -g -O3 -c $< -o $@
+	$(CXX) $(CXXFLAGS) $(DEBUG_FAST_CXXFLAGS) -c $< -o $@
 
 # ==============================================================================
 # Build directory creation
@@ -278,6 +338,7 @@ build/obj/cli_debug_fast/%.o: cli/cpp/%.cpp | build/obj/cli_debug_fast
 
 build \
 build/obj/core build/obj/core_debug build/obj/core_debug_fast \
+build/obj/core_debug_test build/obj/core_debug_fast_test \
 build/obj/parser build/obj/parser_debug build/obj/parser_debug_fast \
 build/obj/cli build/obj/cli_debug build/obj/cli_debug_fast:
 	mkdir -p $@
