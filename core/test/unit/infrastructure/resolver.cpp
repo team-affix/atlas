@@ -59,12 +59,11 @@ struct MockCandidateDeactivator : public i_candidate_deactivator {
 };
 
 struct MockConflictDetector : public i_conflict_detector {
-    MOCK_METHOD(bool, detect, (const goal_lineage*), (override));
+    MOCK_METHOD(bool, detect, (const goal_lineage*), (const, override));
 };
 
 struct MockUnitGoalDetector : public i_detect_unit_goal {
-    MOCK_METHOD(bool, detect_goal, (const goal_lineage*), (const));
-    bool detect(const goal_lineage* gl) const override { return detect_goal(gl); }
+    MOCK_METHOD(bool, detect, (const goal_lineage*), (const, override));
 };
 
 struct MockPushUnitGoal : public i_push_unit_goal {
@@ -144,7 +143,7 @@ TEST_F(ResolverTest, UnitBodyGoalIsPushed) {
     EXPECT_CALL(make_resolution_lineage, make(&body_gl, kRule)).WillOnce(Return(&body_res));
     EXPECT_CALL(candidate_activator, activate(&body_res)).Times(1);
     EXPECT_CALL(conflict_detector, detect(&body_gl)).WillOnce(Return(false));
-    EXPECT_CALL(unit_goal_detector, detect_goal(&body_gl)).WillOnce(Return(true));
+    EXPECT_CALL(unit_goal_detector, detect(&body_gl)).WillOnce(Return(true));
     EXPECT_CALL(push_unit_goal, push(&body_gl)).Times(1);
     EXPECT_CALL(get_goal_candidate_rule_ids, get(&parent_gl)).WillOnce(ReturnRef(parent_candidates));
     EXPECT_CALL(goal_deactivator, deactivate(&parent_gl)).Times(1);

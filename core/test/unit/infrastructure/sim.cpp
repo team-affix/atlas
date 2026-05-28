@@ -54,7 +54,7 @@ struct MockSolutionDetector : public i_solution_detector {
 };
 
 struct MockConflictDetector : public i_conflict_detector {
-    MOCK_METHOD(bool, detect, (const goal_lineage*), (override));
+    MOCK_METHOD(bool, detect, (const goal_lineage*), (const, override));
 };
 
 struct MockUnitGoalDetector : public i_detect_unit_goal {

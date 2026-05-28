@@ -5,7 +5,7 @@
 
 struct i_conflict_detector {
     virtual ~i_conflict_detector() = default;
-    virtual bool detect(const goal_lineage*) = 0;
+    virtual bool detect(const goal_lineage*) const = 0;
 };
 
 #endif
