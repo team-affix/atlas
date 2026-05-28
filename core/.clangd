@@ -1,0 +1,8 @@
+CompileFlags:
+  Add:
+    - -std=c++20
+    - -I.
+    - -Ihpp
+    - -I../mcts/include
+    - -I../googletest/googletest/include
+    - -I../googletest/googlemock/include
