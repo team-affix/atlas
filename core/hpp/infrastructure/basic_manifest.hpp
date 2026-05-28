@@ -45,6 +45,7 @@
 #include "infrastructure/unit_goals.hpp"
 #include "infrastructure/unifier_factory.hpp"
 #include "infrastructure/var_sequencer.hpp"
+#include "interfaces/i_solve.hpp"
 
 struct basic_manifest {
     basic_manifest(
@@ -52,6 +53,8 @@ struct basic_manifest {
         initial_goal_exprs& initial_goals,
         size_t max_resolutions,
         uint32_t random_seed = 0);
+
+    i_solve& entry();
 
 private:
     struct early_wiring {

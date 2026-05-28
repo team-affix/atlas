@@ -173,6 +173,11 @@ basic_manifest::orchestration_wiring::orchestration_wiring(
     loc.bind_as<i_generate_decision>(random_decision_generator_);
     loc.bind_as<i_resolver>(resolver_);
     loc.bind_as<i_set_up_sim, i_tear_down_sim, i_run_sim>(sim_);
+    loc.bind_as<i_solve>(solver_);
+}
+
+i_solve& basic_manifest::entry() {
+    return solver_;
 }
 
 basic_manifest::basic_manifest(
