@@ -58,15 +58,16 @@ protected:
         rule r;
     };
 
-    candidate_slot make_slot(const expr& goal, const expr& head) {
+    candidate_slot make_slot(const expr& goal, const expr& head, subgoal_id goal_idx) {
         candidate_slot s{
             nullptr,
             nullptr,
             goal,
             head,
             rule{&s.head, {&s.goal}}};
-        s.gl = const_cast<goal_lineage*>(lp.make_goal_lineage(nullptr, subgoal_id{0}));
-        s.rl = const_cast<resolution_lineage*>(lp.make_resolution_lineage(s.gl, rule_id{0}));
+        s.gl = const_cast<goal_lineage*>(lp.make_goal_lineage(nullptr, goal_idx));
+        s.rl = const_cast<resolution_lineage*>(
+            lp.make_resolution_lineage(s.gl, rule_id{0}));
         ggcr.link_goal_candidate(s.gl, 0);
         return s;
     }
@@ -84,7 +85,7 @@ protected:
 // ---------------------------------------------------------------------------
 
 TEST_F(MhuEliminationGeneratorIntegrationTest, TryAddHeadThenConstrainAllowsReuse) {
-    auto slot = make_slot(var0, f_empty);
+    auto slot = make_slot(var0, f_empty, 0);
     ASSERT_TRUE(seed_and_add_head(slot.rl, &slot.goal, &slot.head));
 
     auto sm = mhu.constrain(slot.rl);
@@ -94,12 +95,12 @@ TEST_F(MhuEliminationGeneratorIntegrationTest, TryAddHeadThenConstrainAllowsReus
 }
 
 TEST_F(MhuEliminationGeneratorIntegrationTest, TryAddHeadFailsWhenUnifyFails) {
-    auto slot = make_slot(f_empty, g_empty);
+    auto slot = make_slot(f_empty, g_empty, 0);
     EXPECT_FALSE(mhu.try_add_head(slot.rl, &slot.goal, &slot.head));
 }
 
 TEST_F(MhuEliminationGeneratorIntegrationTest, ConstrainOnSingleHeadYieldsNoElims) {
-    auto slot = make_slot(var0, f_empty);
+    auto slot = make_slot(var0, f_empty, 0);
     ASSERT_TRUE(mhu.try_add_head(slot.rl, &slot.goal, &slot.head));
 
     auto sm = mhu.constrain(slot.rl);
@@ -111,7 +112,7 @@ TEST_F(MhuEliminationGeneratorIntegrationTest, ConstrainOnSingleHeadYieldsNoElim
 // ---------------------------------------------------------------------------
 
 TEST_F(MhuEliminationGeneratorIntegrationTest, ConstrainPublishesSeededBindingToCommon) {
-    auto slot = make_slot(var0, f_empty);
+    auto slot = make_slot(var0, f_empty, 0);
     ASSERT_TRUE(seed_and_add_head(slot.rl, &slot.goal, &slot.head));
 
     auto sm = mhu.constrain(slot.rl);
@@ -125,8 +126,8 @@ TEST_F(MhuEliminationGeneratorIntegrationTest, ConstrainPublishesSeededBindingTo
 // ---------------------------------------------------------------------------
 
 TEST_F(MhuEliminationGeneratorIntegrationTest, ConstrainEliminatesHeadWithCollidingFunctorOnSameRep) {
-    auto a = make_slot(var0, f_empty);
-    auto b = make_slot(var0, g_empty);
+    auto a = make_slot(var0, f_empty, 0);
+    auto b = make_slot(var0, g_empty, 1);
     ASSERT_TRUE(seed_and_add_head(a.rl, &a.goal, &a.head));
     ASSERT_TRUE(seed_and_add_head(b.rl, &b.goal, &b.head));
 
@@ -138,8 +139,8 @@ TEST_F(MhuEliminationGeneratorIntegrationTest, ConstrainEliminatesHeadWithCollid
 }
 
 TEST_F(MhuEliminationGeneratorIntegrationTest, ConstrainDoesNotEliminateCompatibleHeadOnSameRep) {
-    auto a = make_slot(var0, f_empty);
-    auto b = make_slot(var0, f_empty);
+    auto a = make_slot(var0, f_empty, 0);
+    auto b = make_slot(var0, f_empty, 1);
     ASSERT_TRUE(seed_and_add_head(a.rl, &a.goal, &a.head));
     ASSERT_TRUE(seed_and_add_head(b.rl, &b.goal, &b.head));
 
@@ -152,8 +153,8 @@ TEST_F(MhuEliminationGeneratorIntegrationTest, ConstrainDoesNotEliminateCompatib
 
 TEST_F(MhuEliminationGeneratorIntegrationTest, ConstrainDoesNotEliminateHeadWatchingDisjointRep) {
     expr var2{expr::var{2}};
-    auto a = make_slot(var0, f_empty);
-    auto b = make_slot(var2, g_empty);
+    auto a = make_slot(var0, f_empty, 0);
+    auto b = make_slot(var2, g_empty, 2);
     ASSERT_TRUE(seed_and_add_head(a.rl, &a.goal, &a.head));
     ASSERT_TRUE(seed_and_add_head(b.rl, &b.goal, &b.head));
 

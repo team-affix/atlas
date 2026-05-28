@@ -15,6 +15,7 @@
 #include "../../../core/hpp/value_objects/lemma.hpp"
 
 using ::testing::Return;
+using ::testing::_;
 
 struct MockSetUpSim : public i_set_up_sim {
     MOCK_METHOD(void, set_up, (), (override));
@@ -73,7 +74,13 @@ TEST_F(SolverTest, FirstYieldRunsSetUpThenRunBeforeTearDown) {
 }
 
 TEST_F(SolverTest, TearDownRunsOnResumeAfterYield) {
-    EXPECT_CALL(run_sim, run()).WillRepeatedly(Return(sim_termination::conflicted));
+    const lemma empty_lemma{{}};
+    testing::InSequence seq;
+    EXPECT_CALL(set_up_sim, set_up()).Times(1);
+    EXPECT_CALL(run_sim, run()).WillOnce(Return(sim_termination::conflicted));
+    EXPECT_CALL(get_decision_count, count()).WillOnce(Return(0));
+    EXPECT_CALL(derive_decision_lemma, derive()).WillOnce(Return(empty_lemma));
+    EXPECT_CALL(learn_avoidance, learn(testing::_)).WillOnce(Return(std::nullopt));
     EXPECT_CALL(tear_down_sim, tear_down()).Times(1);
     auto sm = s.solve();
     ASSERT_TRUE(sm.resume().has_value());

@@ -6,6 +6,7 @@
 #include "../../../core/hpp/infrastructure/normalizer.hpp"
 #include "../../../core/hpp/interfaces/i_bind_map.hpp"
 #include "../../../core/hpp/interfaces/i_make_functor.hpp"
+#include "../../../core/hpp/interfaces/i_make_var.hpp"
 
 using ::testing::_;
 using ::testing::ElementsAre;
@@ -17,8 +18,9 @@ struct MockBindMap : public i_bind_map {
     MOCK_METHOD(const expr*, whnf, (const expr*),           (override));
 };
 
-struct MockExprPool : public i_make_functor {
+struct MockExprPool : public i_make_functor, public i_make_var {
     MOCK_METHOD(const expr*, make, (const std::string&, const std::vector<const expr*>&), (override));
+    MOCK_METHOD(const expr*, make, (uint32_t), (override));
 };
 
 struct NormalizerUnitTest : public ::testing::Test {
@@ -33,6 +35,7 @@ protected:
                 return &arg_whnf2;
             return e;
         });
+        ON_CALL(pool, make(::testing::An<uint32_t>())).WillByDefault(Return(nullptr));
         ON_CALL(pool, make(_, _)).WillByDefault([this](const std::string& name,
             const std::vector<const expr*>&) -> const expr* {
             if (name == "g")
@@ -43,9 +46,10 @@ protected:
         });
     }
 
+    normalizer make_normalizer() { return normalizer{pool, bm}; }
+
     NiceMock<MockBindMap> bm;
     NiceMock<MockExprPool> pool;
-    normalizer norm{pool, bm};
 
     expr var0{expr::var{0}};
     expr var1{expr::var{1}};
@@ -68,17 +72,17 @@ protected:
 
 TEST_F(NormalizerUnitTest, VarAfterWhnfReturnsWhnfAndDoesNotCallFunctor) {
     ON_CALL(bm, whnf(&var0)).WillByDefault(Return(&var0));
-
     EXPECT_CALL(pool, make(_, _)).Times(0);
 
+    normalizer norm = make_normalizer();
     EXPECT_EQ(norm.normalize(&var0), &var0);
 }
 
 TEST_F(NormalizerUnitTest, BoundVarReturnsWhnfResult) {
     ON_CALL(bm, whnf(&var0)).WillByDefault(Return(&var_repr));
-
     EXPECT_CALL(pool, make(_, _)).Times(0);
 
+    normalizer norm = make_normalizer();
     EXPECT_EQ(norm.normalize(&var0), &var_repr);
 }
 
@@ -90,6 +94,7 @@ TEST_F(NormalizerUnitTest, FunctorRebuildsViaPool) {
     EXPECT_CALL(pool, make("f", ElementsAre(&arg_whnf0)))
         .WillOnce(Return(&pooled_f));
 
+    normalizer norm = make_normalizer();
     EXPECT_EQ(norm.normalize(&f_raw), &pooled_f);
 }
 
@@ -99,6 +104,7 @@ TEST_F(NormalizerUnitTest, BinaryFunctorNormalizesBothArgs) {
     EXPECT_CALL(pool, make("f", ElementsAre(&arg_whnf0, &arg_whnf1)))
         .WillOnce(Return(&pooled_f));
 
+    normalizer norm = make_normalizer();
     EXPECT_EQ(norm.normalize(&f2), &pooled_f);
 }
 
@@ -108,6 +114,7 @@ TEST_F(NormalizerUnitTest, TernaryFunctorNormalizesAllArgs) {
     EXPECT_CALL(pool, make("f", ElementsAre(&arg_whnf0, &arg_whnf1, &arg_whnf2)))
         .WillOnce(Return(&pooled_f));
 
+    normalizer norm = make_normalizer();
     EXPECT_EQ(norm.normalize(&f3), &pooled_f);
 }
 
@@ -117,5 +124,6 @@ TEST_F(NormalizerUnitTest, NestedFunctorRebuildsWithNormalizedInnerArg) {
     EXPECT_CALL(pool, make("f", ElementsAre(&pooled_g)))
         .WillOnce(Return(&pooled_f));
 
+    normalizer norm = make_normalizer();
     EXPECT_EQ(norm.normalize(&f_g_var0), &pooled_f);
 }

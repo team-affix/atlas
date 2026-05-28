@@ -3,6 +3,8 @@
 
 #include <gtest/gtest.h>
 #include <gmock/gmock.h>
+
+using ::testing::UnorderedElementsAre;
 #include "../../../core/hpp/infrastructure/db.hpp"
 #include "../../../core/hpp/value_objects/lineage.hpp"
 
@@ -39,7 +41,7 @@ TEST_F(DbTest, TotalRuleSetContainsAllIndices) {
         if (auto id = it.resume())
             ids.push_back(*id);
     }
-    EXPECT_EQ(ids, (std::vector<rule_id>{0, 1}));
+    EXPECT_THAT(ids, UnorderedElementsAre(0, 1));
 }
 
 TEST_F(DbTest, SameTotalRulesForDifferentGoals) {

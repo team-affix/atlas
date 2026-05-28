@@ -184,13 +184,15 @@ TEST_F(SimTest, RunReturnsConflictedWhenResolverFails) {
 
 TEST_F(SimTest, SetUpPushesTrailAndActivatesEachInitialGoal) {
     EXPECT_CALL(trail, push()).Times(1);
-    EXPECT_CALL(get_initial_goal_count, count()).WillOnce(Return(2));
+    EXPECT_CALL(get_initial_goal_count, count()).WillRepeatedly(Return(2));
     goal_lineage gl0{nullptr, 0};
     goal_lineage gl1{nullptr, 1};
     EXPECT_CALL(activate_initial_goal, activate_initial_goal(0)).Times(1);
     EXPECT_CALL(activate_initial_goal, activate_initial_goal(1)).Times(1);
     EXPECT_CALL(make_initial_goal_lineage, make(0)).WillOnce(Return(&gl0));
     EXPECT_CALL(make_initial_goal_lineage, make(1)).WillOnce(Return(&gl1));
+    EXPECT_CALL(get_goal_db_rule_ids, get(&gl0)).WillOnce(ReturnRef(db_rules));
+    EXPECT_CALL(get_goal_db_rule_ids, get(&gl1)).WillOnce(ReturnRef(db_rules));
     simulation.set_up();
     simulation.tear_down();
 }
