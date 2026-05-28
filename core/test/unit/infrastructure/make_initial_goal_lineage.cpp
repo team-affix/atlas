@@ -1,0 +1,25 @@
+// make_initial_goal_lineage: root goals use a null resolution parent.
+
+#include <gtest/gtest.h>
+#include <gmock/gmock.h>
+#include "../../../core/hpp/infrastructure/make_initial_goal_lineage.hpp"
+#include "../../../core/hpp/interfaces/i_make_goal_lineage.hpp"
+
+using ::testing::Return;
+
+struct MockMakeGoalLineage : public i_make_goal_lineage {
+    MOCK_METHOD(const goal_lineage*, make, (const resolution_lineage*, subgoal_id), (override));
+};
+
+struct MakeInitialGoalLineageTest : public ::testing::Test {
+    static constexpr subgoal_id kIdx = 0;
+
+    MockMakeGoalLineage make_goal_lineage;
+    make_initial_goal_lineage maker{make_goal_lineage};
+    goal_lineage gl0{nullptr, kIdx};
+};
+
+TEST_F(MakeInitialGoalLineageTest, MakeUsesNullParent) {
+    EXPECT_CALL(make_goal_lineage, make(nullptr, kIdx)).WillOnce(Return(&gl0));
+    EXPECT_EQ(maker.make(kIdx), &gl0);
+}

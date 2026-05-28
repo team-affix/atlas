@@ -12,9 +12,9 @@ using ::testing::Return;
 using ::testing::ReturnRef;
 
 struct MockRuleSet : public i_rule_set {
-    MOCK_METHOD(void, insert, (const rule*), (override));
-    MOCK_METHOD(void, erase, (const rule*), (override));
-    state_machine<const rule*> iterate() const override { co_return; }
+    MOCK_METHOD(void, insert, (rule_id), (override));
+    MOCK_METHOD(void, erase, (rule_id), (override));
+    state_machine<rule_id> iterate() const override { co_return; }
     MOCK_METHOD(size_t, size, (), (const, override));
 };
 

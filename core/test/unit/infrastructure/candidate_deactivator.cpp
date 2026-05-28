@@ -19,10 +19,13 @@ struct MockDeactivatedCandidateMemory : public i_deactivated_candidate_memory {
 };
 
 struct MockUnlinkGoalCandidate : public i_unlink_goal_candidate {
-    MOCK_METHOD(void, unlink_goal_candidate, (const goal_lineage*, const rule*), (override));
+    MOCK_METHOD(void, unlink_goal_candidate, (const goal_lineage*, rule_id), (override));
 };
 
 struct CandidateDeactivatorTest : public ::testing::Test {
+    static constexpr rule_id kRule = 0;
+    static constexpr subgoal_id kGoal = 0;
+
     MockUnsetCandidateTranslationMap unset_maps;
     MockDeactivatedCandidateMemory memory;
     MockUnlinkGoalCandidate unlink;
@@ -31,13 +34,13 @@ struct CandidateDeactivatorTest : public ::testing::Test {
     expr goal_e{expr::var{0}};
     expr head{expr::var{1}};
     rule idx{&head, {}};
-    goal_lineage parent{nullptr, &goal_e};
-    resolution_lineage rl{&parent, &idx};
+    goal_lineage parent{nullptr, kGoal};
+    resolution_lineage rl{&parent, kRule};
 };
 
 TEST_F(CandidateDeactivatorTest, DeactivateUnlinksUnsetsAndRecords) {
     testing::InSequence seq;
-    EXPECT_CALL(unlink, unlink_goal_candidate(&parent, &idx)).Times(1);
+    EXPECT_CALL(unlink, unlink_goal_candidate(&parent, kRule)).Times(1);
     EXPECT_CALL(unset_maps, unset(&rl)).Times(1);
     EXPECT_CALL(memory, insert(&rl)).Times(1);
     deactivator.deactivate(&rl);

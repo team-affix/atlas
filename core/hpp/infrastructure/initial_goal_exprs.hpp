@@ -2,12 +2,15 @@
 #define INITIAL_GOAL_EXPRS_HPP
 
 #include <vector>
-#include "../interfaces/i_initial_goal_exprs.hpp"
+#include "../interfaces/i_get_initial_goal_count.hpp"
+#include "../interfaces/i_get_initial_goal_expr.hpp"
 
-struct initial_goal_exprs : i_initial_goal_exprs {
+struct initial_goal_exprs
+    : i_get_initial_goal_count
+    , i_get_initial_goal_expr {
     void push(const expr*);
-    const expr* at(size_t i) const override;
-    size_t size() const override;
+    size_t count() const override;
+    const expr* get(size_t idx) const override;
 private:
     std::vector<const expr*> exprs_;
 };

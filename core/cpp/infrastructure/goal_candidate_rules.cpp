@@ -11,11 +11,11 @@ const i_rule_set& goal_candidate_rules::get(const goal_lineage* gl) const {
     return it->second;
 }
 
-void goal_candidate_rules::link_goal_candidate(const goal_lineage* gl, const rule* r) {
+void goal_candidate_rules::link_goal_candidate(const goal_lineage* gl, rule_id r) {
     by_goal_[gl].insert(r);
 }
 
-void goal_candidate_rules::unlink_goal_candidate(const goal_lineage* gl, const rule* r) {
+void goal_candidate_rules::unlink_goal_candidate(const goal_lineage* gl, rule_id r) {
     auto it = by_goal_.find(gl);
     if (it == by_goal_.end())
         return;

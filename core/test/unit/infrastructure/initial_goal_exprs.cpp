@@ -1,5 +1,5 @@
-// Initial goal expression list: ordered push, indexed at, and size. Indices must
-// match insertion order; at throws or returns per vector semantics for bounds.
+// Initial goal expression list: ordered push, indexed get, and count. Indices must
+// match insertion order; get throws or returns per vector semantics for bounds.
 
 #include <gtest/gtest.h>
 #include <gmock/gmock.h>
@@ -15,19 +15,19 @@ struct InitialGoalExprsTest : public ::testing::Test {
 };
 
 TEST_F(InitialGoalExprsTest, EmptyInitially) {
-    EXPECT_EQ(goals.size(), 0u);
+    EXPECT_EQ(goals.count(), 0u);
 }
 
-TEST_F(InitialGoalExprsTest, PushIncreasesSize) {
+TEST_F(InitialGoalExprsTest, PushIncreasesCount) {
     goals.push(&e0);
     goals.push(&e1);
-    EXPECT_EQ(goals.size(), 2u);
+    EXPECT_EQ(goals.count(), 2u);
 }
 
-TEST_F(InitialGoalExprsTest, AtReturnsExprsInPushOrder) {
+TEST_F(InitialGoalExprsTest, GetReturnsExprsInPushOrder) {
     goals.push(&e0);
     goals.push(&e1);
     goals.push(&e2);
-    const std::vector<const expr*> ordered{goals.at(0), goals.at(1), goals.at(2)};
+    const std::vector<const expr*> ordered{goals.get(0), goals.get(1), goals.get(2)};
     EXPECT_THAT(ordered, ElementsAre(&e0, &e1, &e2));
 }

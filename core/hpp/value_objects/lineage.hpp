@@ -2,13 +2,14 @@
 #define LINEAGE_HPP
 
 #include <compare>
+#include <cstddef>
 #include "expr.hpp"
 #include "rule.hpp"
 
 struct resolution_lineage;
 
-using subgoal_id = const expr*;
-using rule_id = const rule*;
+using subgoal_id = size_t;
+using rule_id = size_t;
 
 struct goal_lineage {
     const resolution_lineage* parent;

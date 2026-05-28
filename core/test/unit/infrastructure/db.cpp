@@ -6,13 +6,10 @@
 #include "../../../core/hpp/infrastructure/db.hpp"
 #include "../../../core/hpp/value_objects/lineage.hpp"
 
-using ::testing::SizeIs;
-
 struct DbTest : public ::testing::Test {
-    expr head{expr::var{0}};
-    rule r{&head, {}};
-    goal_lineage gl0{nullptr, nullptr};
-    goal_lineage gl1{nullptr, nullptr};
+    static constexpr rule_id kRule0 = 0;
+    goal_lineage gl0{nullptr, 0};
+    goal_lineage gl1{nullptr, 1};
 };
 
 TEST_F(DbTest, DefaultDbReturnsEmptyRuleSet) {
@@ -22,13 +19,13 @@ TEST_F(DbTest, DefaultDbReturnsEmptyRuleSet) {
 
 TEST_F(DbTest, SameTotalRulesForDifferentGoals) {
     rule_set total;
-    total.insert(&r);
+    total.insert(kRule0);
     db database{std::move(total)};
     EXPECT_EQ(&database.get(&gl0), &database.get(&gl1));
 }
 
 TEST_F(DbTest, MutationsThroughGetVisibleToAllGoals) {
     db database;
-    database.get(&gl0).insert(&r);
+    database.get(&gl0).insert(kRule0);
     EXPECT_EQ(database.get(&gl1).size(), 1u);
 }

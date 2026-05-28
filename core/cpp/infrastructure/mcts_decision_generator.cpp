@@ -16,7 +16,7 @@ mcts_decision_generator::mcts_decision_generator(
 
 const resolution_lineage* mcts_decision_generator::generate() {
     const goal_lineage* chosen_gl = choose_goal();
-    const rule* chosen_r = choose_candidate(chosen_gl);
+    rule_id chosen_r = choose_candidate(chosen_gl);
     return make_resolution_lineage.make(chosen_gl, chosen_r);
 }
 
@@ -36,7 +36,7 @@ const goal_lineage* mcts_decision_generator::choose_goal() {
     return std::get<const goal_lineage*>(choice_a);
 }
 
-const rule* mcts_decision_generator::choose_candidate(const goal_lineage* goal) {
+rule_id mcts_decision_generator::choose_candidate(const goal_lineage* goal) {
     const auto& candidates = ggcr.get(goal);
 
     std::vector<mcts_choice> candidate_choices;
@@ -51,5 +51,5 @@ const rule* mcts_decision_generator::choose_candidate(const goal_lineage* goal) 
     }
 
     const mcts_choice choice_b = sim.choose(candidate_choices);
-    return std::get<const rule*>(choice_b);
+    return std::get<rule_id>(choice_b);
 }

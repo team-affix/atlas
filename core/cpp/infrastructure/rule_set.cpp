@@ -1,15 +1,15 @@
 #include "../../hpp/infrastructure/rule_set.hpp"
 
-void rule_set::insert(const rule* r) {
+void rule_set::insert(rule_id r) {
     rules_.insert(r);
 }
 
-void rule_set::erase(const rule* r) {
+void rule_set::erase(rule_id r) {
     rules_.erase(r);
 }
 
-state_machine<const rule*> rule_set::iterate() const {
-    for (const rule* r : rules_)
+state_machine<rule_id> rule_set::iterate() const {
+    for (rule_id r : rules_)
         co_yield r;
 }
 

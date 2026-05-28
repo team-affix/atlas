@@ -2,7 +2,7 @@
 #define MCTS_DECISION_GENERATOR_HPP
 
 #include <random>
-#include "../interfaces/i_decision_generator.hpp"
+#include "../interfaces/i_generate_decision.hpp"
 #include "../interfaces/i_make_resolution_lineage.hpp"
 #include "../interfaces/i_iterate_active_goals.hpp"
 #include "../interfaces/i_active_goals_size.hpp"
@@ -10,7 +10,7 @@
 #include "../../../mcts/include/mcts.hpp"
 #include "../value_objects/mcts_choice.hpp"
 
-struct mcts_decision_generator : i_decision_generator {
+struct mcts_decision_generator : i_generate_decision {
     mcts_decision_generator(
         i_make_resolution_lineage& make_resolution_lineage,
         i_iterate_active_goals& iterate_active_goals,
@@ -20,7 +20,7 @@ struct mcts_decision_generator : i_decision_generator {
     const resolution_lineage* generate() override;
 private:
     const goal_lineage* choose_goal();
-    const rule* choose_candidate(const goal_lineage*);
+    rule_id choose_candidate(const goal_lineage*);
 
     i_make_resolution_lineage& make_resolution_lineage;
     i_iterate_active_goals& iterate_active_goals;

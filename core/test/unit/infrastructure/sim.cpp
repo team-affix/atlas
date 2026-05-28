@@ -1,22 +1,29 @@
 // Simulation loop: solution/conflict/depth termination, elimination routing, and
-// resolution stepping. set_up/tear_down are no-ops; run() must honor max_resolutions
-// and short-circuit on solution_detector.
+// resolution stepping. set_up pushes a trail frame and activates initial goals;
+// tear_down is a no-op. run() must honor max_resolutions and short-circuit on
+// solution_detector.
 
 #include <gtest/gtest.h>
 #include <gmock/gmock.h>
 #include "../../../core/hpp/infrastructure/sim.hpp"
 #include "../../../core/hpp/infrastructure/rule_set.hpp"
 #include "../../../core/hpp/interfaces/i_make_resolution_lineage.hpp"
+#include "../../../core/hpp/interfaces/i_get_goal_db_rules.hpp"
+#include "../../../core/hpp/interfaces/i_candidate_activator.hpp"
 #include "../../../core/hpp/interfaces/i_solution_detector.hpp"
 #include "../../../core/hpp/interfaces/i_conflict_detector.hpp"
 #include "../../../core/hpp/interfaces/i_detect_unit_goal.hpp"
 #include "../../../core/hpp/interfaces/i_push_unit_goal.hpp"
 #include "../../../core/hpp/interfaces/i_pop_unit_goal.hpp"
-#include "../../../core/hpp/interfaces/i_decision_generator.hpp"
+#include "../../../core/hpp/interfaces/i_generate_decision.hpp"
 #include "../../../core/hpp/interfaces/i_elimination_generator.hpp"
 #include "../../../core/hpp/interfaces/i_elimination_router.hpp"
 #include "../../../core/hpp/interfaces/i_resolver.hpp"
 #include "../../../core/hpp/interfaces/i_get_goal_candidate_rules.hpp"
+#include "../../../core/hpp/interfaces/i_activate_initial_goal.hpp"
+#include "../../../core/hpp/interfaces/i_get_initial_goal_count.hpp"
+#include "../../../core/hpp/interfaces/i_make_initial_goal_lineage.hpp"
+#include "../../../core/hpp/utility/i_trail.hpp"
 #include "../../../core/hpp/value_objects/elimination_result.hpp"
 
 using ::testing::Return;
@@ -32,6 +39,14 @@ state_machine<const resolution_lineage*> empty_eliminations() {
 
 struct MockMakeResolutionLineage : public i_make_resolution_lineage {
     MOCK_METHOD((const resolution_lineage*), make, (const goal_lineage*, rule_id), (override));
+};
+
+struct MockGetGoalDbRules : public i_get_goal_db_rules {
+    MOCK_METHOD(i_rule_set&, get, (const goal_lineage*), (override));
+};
+
+struct MockCandidateActivator : public i_candidate_activator {
+    MOCK_METHOD(void, activate, (const resolution_lineage*), (override));
 };
 
 struct MockSolutionDetector : public i_solution_detector {
@@ -54,7 +69,7 @@ struct MockPopUnitGoal : public i_pop_unit_goal {
     MOCK_METHOD(std::optional<const goal_lineage*>, pop, (), (override));
 };
 
-struct MockDecisionGenerator : public i_decision_generator {
+struct MockGenerateDecision : public i_generate_decision {
     MOCK_METHOD(const resolution_lineage*, generate, (), (override));
 };
 
@@ -75,23 +90,53 @@ struct MockGetGoalCandidateRules : public i_get_goal_candidate_rules {
     MOCK_METHOD(const i_rule_set&, get, (const goal_lineage*), (const, override));
 };
 
+struct MockTrail : public i_trail {
+    MOCK_METHOD(void, push, (), (override));
+    MOCK_METHOD(void, pop, (), (override));
+    MOCK_METHOD(void, log, (std::unique_ptr<i_backtrackable>), (override));
+};
+
+struct MockGetInitialGoalCount : public i_get_initial_goal_count {
+    MOCK_METHOD(size_t, count, (), (const, override));
+};
+
+struct MockMakeInitialGoalLineage : public i_make_initial_goal_lineage {
+    MOCK_METHOD(const goal_lineage*, make, (subgoal_id), (override));
+};
+
+struct MockActivateInitialGoal : public i_activate_initial_goal {
+    MOCK_METHOD(void, activate_initial_goal, (subgoal_id), (override));
+};
+
 struct SimTest : public ::testing::Test {
     static constexpr size_t kMaxResolutions = 2;
 
+    MockTrail trail;
+    MockGetInitialGoalCount get_initial_goal_count;
+    MockActivateInitialGoal activate_initial_goal;
+    MockMakeInitialGoalLineage make_initial_goal_lineage;
+    MockGetGoalDbRules get_goal_db_rules;
     MockMakeResolutionLineage lp;
+    MockCandidateActivator candidate_activator;
     MockSolutionDetector solution_detector;
     MockConflictDetector conflict_detector;
     MockUnitGoalDetector unit_goal_detector;
     MockPushUnitGoal push_unit_goal;
     MockPopUnitGoal pop_unit_goal;
-    MockDecisionGenerator decision_generator;
+    MockGenerateDecision decision_generator;
     MockEliminationGenerator elimination_generator;
     MockEliminationRouter elimination_router;
     MockResolver resolver;
     MockGetGoalCandidateRules ggcr;
     sim simulation{
         kMaxResolutions,
+        trail,
+        get_initial_goal_count,
+        activate_initial_goal,
+        make_initial_goal_lineage,
+        get_goal_db_rules,
         lp,
+        candidate_activator,
         solution_detector,
         conflict_detector,
         unit_goal_detector,
@@ -106,8 +151,9 @@ struct SimTest : public ::testing::Test {
     expr goal_e{expr::var{0}};
     expr head{expr::var{1}};
     rule r{&head, {}};
-    goal_lineage gl{nullptr, &goal_e};
-    resolution_lineage rl{&gl, &r};
+    goal_lineage gl{nullptr, 0};
+    resolution_lineage rl{&gl, 0};
+    rule_set db_rules;
 };
 
 TEST_F(SimTest, RunReturnsSolvedWhenDetectorSaysSo) {
@@ -135,7 +181,15 @@ TEST_F(SimTest, RunReturnsConflictedWhenResolverFails) {
     EXPECT_EQ(simulation.run(), sim_termination::conflicted);
 }
 
-TEST_F(SimTest, SetUpAndTearDownAreNoOps) {
+TEST_F(SimTest, SetUpPushesTrailAndActivatesEachInitialGoal) {
+    EXPECT_CALL(trail, push()).Times(1);
+    EXPECT_CALL(get_initial_goal_count, count()).WillOnce(Return(2));
+    goal_lineage gl0{nullptr, 0};
+    goal_lineage gl1{nullptr, 1};
+    EXPECT_CALL(activate_initial_goal, activate_initial_goal(0)).Times(1);
+    EXPECT_CALL(activate_initial_goal, activate_initial_goal(1)).Times(1);
+    EXPECT_CALL(make_initial_goal_lineage, make(0)).WillOnce(Return(&gl0));
+    EXPECT_CALL(make_initial_goal_lineage, make(1)).WillOnce(Return(&gl1));
     simulation.set_up();
     simulation.tear_down();
 }

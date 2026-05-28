@@ -15,8 +15,8 @@ struct goal_candidate_rules
     , i_constrain_goal_candidate_rules {
     i_rule_set& get(const goal_lineage*) override;
     const i_rule_set& get(const goal_lineage*) const override;
-    void link_goal_candidate(const goal_lineage*, const rule*) override;
-    void unlink_goal_candidate(const goal_lineage*, const rule*) override;
+    void link_goal_candidate(const goal_lineage*, rule_id) override;
+    void unlink_goal_candidate(const goal_lineage*, rule_id) override;
     void constrain_goal_candidate_rules(const resolution_lineage*) override;
 private:
     std::unordered_map<const goal_lineage*, rule_set> by_goal_;

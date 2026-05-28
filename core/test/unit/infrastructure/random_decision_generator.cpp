@@ -46,15 +46,16 @@ struct RandomDecisionGeneratorTest : public ::testing::Test {
     expr head{expr::var{1}};
     rule r{&head, {}};
     goal_lineage gl{nullptr, &goal_e};
-    resolution_lineage expected_rl{&gl, &r};
+    resolution_lineage expected_rl{&gl, 0};
     rule_set candidates;
 };
 
 TEST_F(RandomDecisionGeneratorTest, GenerateResolvesChosenGoalAndRule) {
-    candidates.insert(&r);
+    static constexpr rule_id kRule = 0;
+    candidates.insert(kRule);
     EXPECT_CALL(iterate_active_goals, iterate_active_goals())
         .WillOnce([&] { return single_goal(&gl); });
     EXPECT_CALL(ggcr, get(&gl)).WillOnce(ReturnRef(candidates));
-    EXPECT_CALL(lp, make(&gl, &r)).WillOnce(Return(&expected_rl));
+    EXPECT_CALL(lp, make(&gl, kRule)).WillOnce(Return(&expected_rl));
     EXPECT_EQ(generator.generate(), &expected_rl);
 }
