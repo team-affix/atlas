@@ -21,6 +21,5 @@ state_machine<const resolution_lineage*> joint_elimination_generator::constrain(
         if (res.has_value())
             co_yield res.value();
     }
-    // 3. done
-    co_yield nullptr;
+    co_return;
 }

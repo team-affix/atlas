@@ -1,6 +1,6 @@
 // joint_elimination_generator composes CDCL and MHU elimination streams. These unit
-// tests mock elimination via i_elimination_generator (GMock-friendly) behind thin
-// i_cdcl / i_mhu facades, and assert constrain() ordering and null termination.
+// tests mock elimination via i_elimination_generator and assert constrain() ordering;
+// the joint stream ends with co_return (resume() -> std::nullopt), not a null pointer yield.
 
 #include <gtest/gtest.h>
 #include <gmock/gmock.h>
@@ -52,7 +52,7 @@ struct JointEliminationGeneratorUnitTest : public ::testing::Test {
     joint_elimination_generator joint{cdcl_elims, mhu_elims};
 };
 
-TEST_F(JointEliminationGeneratorUnitTest, ConstrainYieldsCdclThenMhuThenNullTerminator) {
+TEST_F(JointEliminationGeneratorUnitTest, ConstrainYieldsCdclThenMhu) {
     EXPECT_CALL(cdcl_elims, constrain(&rl))
         .WillOnce(Return(ByMove(make_single_elim_sm(&rl))));
     EXPECT_CALL(mhu_elims, constrain(&rl))
@@ -84,18 +84,14 @@ TEST_F(JointEliminationGeneratorUnitTest, ConstrainYieldsOnlyMhuWhenCdclEmpty) {
     EXPECT_THAT(collect_non_null_elims(sm), ElementsAre(&rl));
 }
 
-TEST_F(JointEliminationGeneratorUnitTest, ConstrainEndsWithNullTerminatorYield) {
+TEST_F(JointEliminationGeneratorUnitTest, ConstrainEndsWithDoneNotNullPointerYield) {
     EXPECT_CALL(cdcl_elims, constrain(&rl))
         .WillOnce(Return(ByMove(make_single_elim_sm(&rl))));
     EXPECT_CALL(mhu_elims, constrain(&rl))
         .WillOnce(Return(ByMove(make_single_elim_sm(&rl))));
 
     auto sm = joint.constrain(&rl);
-    const resolution_lineage* last = nullptr;
-    while (!sm.done()) {
-        auto v = sm.resume();
-        if (v.has_value())
-            last = v.value();
-    }
-    EXPECT_EQ(last, nullptr);
+    EXPECT_THAT(collect_non_null_elims(sm), ElementsAre(&rl, &rl));
+    EXPECT_TRUE(sm.done());
+    EXPECT_FALSE(sm.resume().has_value());
 }
