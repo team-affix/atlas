@@ -9,6 +9,7 @@ struct rule_id_set : i_rule_id_set {
     void erase(rule_id) override;
     state_machine<rule_id> iterate() const override;
     size_t size() const override;
+    std::unique_ptr<i_rule_id_set> copy() const override;
 private:
     std::unordered_set<rule_id> rule_ids_;
 };

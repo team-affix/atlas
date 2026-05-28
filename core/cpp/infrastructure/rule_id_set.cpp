@@ -1,5 +1,7 @@
 #include "../../hpp/infrastructure/rule_id_set.hpp"
 
+#include <memory>
+
 void rule_id_set::insert(rule_id r) {
     rule_ids_.insert(r);
 }
@@ -15,4 +17,11 @@ state_machine<rule_id> rule_id_set::iterate() const {
 
 size_t rule_id_set::size() const {
     return rule_ids_.size();
+}
+
+std::unique_ptr<i_rule_id_set> rule_id_set::copy() const {
+    auto snapshot = std::make_unique<rule_id_set>();
+    for (rule_id r : rule_ids_)
+        snapshot->insert(r);
+    return snapshot;
 }

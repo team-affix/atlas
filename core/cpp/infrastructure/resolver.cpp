@@ -47,8 +47,8 @@ bool resolver::resolve(const resolution_lineage* rl) {
             push_unit_goal.push(gl);
     }
     const goal_lineage* gl = rl->parent;
-    auto& candidate_rules = get_goal_candidate_rule_ids.get(gl);
-    auto cand_it = candidate_rules.iterate();
+    auto candidate_rules = get_goal_candidate_rule_ids.get(gl).copy();
+    auto cand_it = candidate_rules->iterate();
     while (!cand_it.done()) {
         auto rr = cand_it.resume();
         if (!rr.has_value())
