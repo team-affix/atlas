@@ -65,8 +65,8 @@ protected:
             goal,
             head,
             rule{&s.head, {&s.goal}}};
-        s.gl = const_cast<goal_lineage*>(lp.make(nullptr, 0));
-        s.rl = const_cast<resolution_lineage*>(lp.make(s.gl, 0));
+        s.gl = const_cast<goal_lineage*>(lp.make_goal_lineage(nullptr, subgoal_id{0}));
+        s.rl = const_cast<resolution_lineage*>(lp.make_resolution_lineage(s.gl, rule_id{0}));
         ggcr.link_goal_candidate(s.gl, 0);
         return s;
     }

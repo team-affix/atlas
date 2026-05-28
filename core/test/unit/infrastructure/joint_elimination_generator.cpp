@@ -43,7 +43,7 @@ struct MockEliminationGenerator : public i_elimination_generator {
 struct JointEliminationGeneratorUnitTest : public ::testing::Test {
     expr head{expr::var{0}};
     rule r{&head, {}};
-    resolution_lineage rl{nullptr, &r};
+    resolution_lineage rl{nullptr, 0};
 
     MockEliminationGenerator cdcl_elims;
     MockEliminationGenerator mhu_elims;

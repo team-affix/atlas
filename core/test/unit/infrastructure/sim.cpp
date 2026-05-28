@@ -38,7 +38,8 @@ state_machine<const resolution_lineage*> empty_eliminations() {
 }  // namespace
 
 struct MockMakeResolutionLineage : public i_make_resolution_lineage {
-    MOCK_METHOD((const resolution_lineage*), make, (const goal_lineage*, rule_id), (override));
+    MOCK_METHOD((const resolution_lineage*), make_resolution_lineage,
+        (const goal_lineage*, rule_id), (override));
 };
 
 struct MockGetGoalDbRuleIds : public i_get_goal_db_rule_ids {

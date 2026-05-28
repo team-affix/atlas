@@ -54,7 +54,7 @@ void sim::set_up() {
             auto rr = it.resume();
             if (!rr.has_value())
                 continue;
-            candidate_activator.activate(make_resolution_lineage.make(gl, rr.value()));
+            candidate_activator.activate(make_resolution_lineage.make_resolution_lineage(gl, rr.value()));
         }
     }
 }
@@ -100,5 +100,5 @@ const resolution_lineage* sim::next_resolution() {
             continue;
         extracted_candidates.insert(rr.value());
     }
-    return make_resolution_lineage.make(gl, *extracted_candidates.begin());
+    return make_resolution_lineage.make_resolution_lineage(gl, *extracted_candidates.begin());
 }

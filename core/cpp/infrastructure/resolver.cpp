@@ -31,7 +31,7 @@ resolver::resolver(
 bool resolver::resolve(const resolution_lineage* rl) {
     const rule* rule = get_rule.get(rl->idx);
     for (size_t body_idx = 0; body_idx < rule->body.size(); ++body_idx) {
-        const goal_lineage* gl = make_goal_lineage.make(rl, body_idx);
+        const goal_lineage* gl = make_goal_lineage.make_goal_lineage(rl, body_idx);
         goal_activator.activate(gl);
         auto& db_rules = get_goal_db_rule_ids.get(gl);
         auto db_it = db_rules.iterate();
@@ -39,7 +39,7 @@ bool resolver::resolve(const resolution_lineage* rl) {
             auto rr = db_it.resume();
             if (!rr.has_value())
                 continue;
-            candidate_activator.activate(make_resolution_lineage.make(gl, rr.value()));
+            candidate_activator.activate(make_resolution_lineage.make_resolution_lineage(gl, rr.value()));
         }
         if (conflict_detector.detect(gl))
             return false;
@@ -53,7 +53,7 @@ bool resolver::resolve(const resolution_lineage* rl) {
         auto rr = cand_it.resume();
         if (!rr.has_value())
             continue;
-        candidate_deactivator.deactivate(make_resolution_lineage.make(gl, rr.value()));
+        candidate_deactivator.deactivate(make_resolution_lineage.make_resolution_lineage(gl, rr.value()));
     }
     goal_deactivator.deactivate(gl);
     return true;

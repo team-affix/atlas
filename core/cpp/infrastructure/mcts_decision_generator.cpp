@@ -17,7 +17,7 @@ mcts_decision_generator::mcts_decision_generator(
 const resolution_lineage* mcts_decision_generator::generate() {
     const goal_lineage* chosen_gl = choose_goal();
     rule_id chosen_r = choose_candidate(chosen_gl);
-    return make_resolution_lineage.make(chosen_gl, chosen_r);
+    return make_resolution_lineage.make_resolution_lineage(chosen_gl, chosen_r);
 }
 
 const goal_lineage* mcts_decision_generator::choose_goal() {

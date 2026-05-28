@@ -67,16 +67,16 @@ protected:
     rule rule3{&head3, {}};
     rule rule0_alt{&head0_alt, {}};
 
-    goal_lineage lin_0{nullptr, &goal_expr0};
-    goal_lineage lin_1{nullptr, &goal_expr1};
-    goal_lineage lin_2{nullptr, &goal_expr2};
-    goal_lineage lin_3{nullptr, &goal_expr3};
+    goal_lineage lin_0{nullptr, 0};
+    goal_lineage lin_1{nullptr, 1};
+    goal_lineage lin_2{nullptr, 2};
+    goal_lineage lin_3{nullptr, 3};
 
-    resolution_lineage lin_0_0{&lin_0, &rule0};
-    resolution_lineage lin_0_1{&lin_0, &rule0_alt};
-    resolution_lineage lin_1_0{&lin_1, &rule1};
-    resolution_lineage lin_2_0{&lin_2, &rule2};
-    resolution_lineage lin_3_0{&lin_3, &rule3};
+    resolution_lineage lin_0_0{&lin_0, 0};
+    resolution_lineage lin_0_1{&lin_0, 4};
+    resolution_lineage lin_1_0{&lin_1, 1};
+    resolution_lineage lin_2_0{&lin_2, 2};
+    resolution_lineage lin_3_0{&lin_3, 3};
 
     // Dependent tree (one resolution lin_4_0 at goal 4, then sibling subgoals):
     //   lin_4 --lin_4_0--> lin_4_0_0 --lin_4_0_0_0-->
@@ -92,12 +92,12 @@ protected:
     rule rule4_0_0_0{&head4_0_0_0, {}};
     rule rule4_0_1_0{&head4_0_1_0, {}};
 
-    goal_lineage lin_4{nullptr, &goal_expr4};
-    resolution_lineage lin_4_0{&lin_4, &rule4_0};
-    goal_lineage lin_4_0_0{&lin_4_0, &goal_expr4_0_0};
-    goal_lineage lin_4_0_1{&lin_4_0, &goal_expr4_0_1};
-    resolution_lineage lin_4_0_0_0{&lin_4_0_0, &rule4_0_0_0};
-    resolution_lineage lin_4_0_1_0{&lin_4_0_1, &rule4_0_1_0};
+    goal_lineage lin_4{nullptr, 4};
+    resolution_lineage lin_4_0{&lin_4, 5};
+    goal_lineage lin_4_0_0{&lin_4_0, 0};
+    goal_lineage lin_4_0_1{&lin_4_0, 1};
+    resolution_lineage lin_4_0_0_0{&lin_4_0_0, 6};
+    resolution_lineage lin_4_0_1_0{&lin_4_0_1, 7};
 };
 
 // ---------------------------------------------------------------------------

@@ -56,7 +56,7 @@ state_machine<const resolution_lineage*> mhu_elimination_generator::constrain(co
         auto candidate = it_sm.resume();
         if (!candidate.has_value()) continue;
         if (candidate.value() == lineage->idx) continue;
-        remove_head(make_resolution_lineage_.make(gl, candidate.value()));
+        remove_head(make_resolution_lineage_.make_resolution_lineage(gl, candidate.value()));
     }
     
     // 4. get the head for this lineage

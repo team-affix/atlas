@@ -40,16 +40,16 @@ protected:
     rule rule3{&head3, {}};
     rule rule0_alt{&head0_alt, {}};
 
-    goal_lineage gl0{nullptr, &goal_expr0};
-    goal_lineage gl1{nullptr, &goal_expr1};
-    goal_lineage gl2{nullptr, &goal_expr2};
-    goal_lineage gl3{nullptr, &goal_expr3};
+    goal_lineage gl0{nullptr, 0};
+    goal_lineage gl1{nullptr, 1};
+    goal_lineage gl2{nullptr, 2};
+    goal_lineage gl3{nullptr, 3};
 
-    resolution_lineage rl0{&gl0, &rule0};
-    resolution_lineage rl1{&gl1, &rule1};
-    resolution_lineage rl2{&gl2, &rule2};
-    resolution_lineage rl3{&gl3, &rule3};
-    resolution_lineage rl0_alt{&gl0, &rule0_alt};
+    resolution_lineage rl0{&gl0, 0};
+    resolution_lineage rl1{&gl1, 1};
+    resolution_lineage rl2{&gl2, 2};
+    resolution_lineage rl3{&gl3, 3};
+    resolution_lineage rl0_alt{&gl0, 4};
 };
 
 TEST_F(CdclEliminationGeneratorIntegrationTest, LearnStoresAvoidanceForConstrain) {

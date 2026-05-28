@@ -9,7 +9,10 @@
 #include "../../../core/hpp/interfaces/i_run_sim.hpp"
 #include "../../../core/hpp/interfaces/i_learn_avoidance.hpp"
 #include "../../../core/hpp/interfaces/i_elimination_router.hpp"
+#include "../../../core/hpp/interfaces/i_get_decision_count.hpp"
+#include "../../../core/hpp/interfaces/i_derive_decision_lemma.hpp"
 #include "../../../core/hpp/value_objects/sim_termination.hpp"
+#include "../../../core/hpp/value_objects/lemma.hpp"
 
 using ::testing::Return;
 
@@ -33,13 +36,30 @@ struct MockEliminationRouter : public i_elimination_router {
     MOCK_METHOD(elimination_result, route, (const resolution_lineage*), (override));
 };
 
+struct MockGetDecisionCount : public i_get_decision_count {
+    MOCK_METHOD(size_t, count, (), (const, override));
+};
+
+struct MockDeriveDecisionLemma : public i_derive_decision_lemma {
+    MOCK_METHOD(lemma, derive, (), (const, override));
+};
+
 struct SolverTest : public ::testing::Test {
     MockSetUpSim set_up_sim;
     MockTearDownSim tear_down_sim;
     MockRunSim run_sim;
+    MockGetDecisionCount get_decision_count;
+    MockDeriveDecisionLemma derive_decision_lemma;
     MockLearnAvoidance learn_avoidance;
     MockEliminationRouter router;
-    solver s{set_up_sim, tear_down_sim, run_sim, learn_avoidance, router};
+    solver s{
+        set_up_sim,
+        tear_down_sim,
+        run_sim,
+        get_decision_count,
+        derive_decision_lemma,
+        learn_avoidance,
+        router};
 };
 
 TEST_F(SolverTest, FirstYieldRunsSetUpThenRunBeforeTearDown) {

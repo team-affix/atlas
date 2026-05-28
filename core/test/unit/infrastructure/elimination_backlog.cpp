@@ -12,9 +12,9 @@ struct EliminationBacklogTest : public ::testing::Test {
     expr head1{expr::var{2}};
     rule rule0{&head0, {}};
     rule rule1{&head1, {}};
-    goal_lineage parent{nullptr, &goal_e};
-    resolution_lineage rl0{&parent, &rule0};
-    resolution_lineage rl1{&parent, &rule1};
+    goal_lineage parent{nullptr, 0};
+    resolution_lineage rl0{&parent, 0};
+    resolution_lineage rl1{&parent, 1};
 };
 
 TEST_F(EliminationBacklogTest, NotBackloggedInitially) {

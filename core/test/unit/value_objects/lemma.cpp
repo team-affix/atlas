@@ -17,22 +17,22 @@ protected:
     rule rule_idx0{&rule_head0, {}};
     rule rule_idx1{&rule_head1, {}};
 
-    resolution_lineage res0_storage{nullptr, &rule_idx0};
-    goal_lineage goal0_storage{nullptr, &goal_expr0};
-    resolution_lineage res1_storage{nullptr, &rule_idx0};
-    goal_lineage goal1_storage{nullptr, &goal_expr0};
-    resolution_lineage res2_storage{nullptr, &rule_idx0};
+    resolution_lineage res0_storage{nullptr, 0};
+    goal_lineage goal0_storage{nullptr, 0};
+    resolution_lineage res1_storage{nullptr, 0};
+    goal_lineage goal1_storage{nullptr, 0};
+    resolution_lineage res2_storage{nullptr, 0};
 
     void build_chain(resolution_lineage*& res0,
                      goal_lineage*& goal0,
                      resolution_lineage*& res1,
                      goal_lineage*& goal1,
                      resolution_lineage*& res2) {
-        res0_storage  = resolution_lineage{nullptr, &rule_idx0};
-        goal0_storage = goal_lineage{&res0_storage, &goal_expr0};
-        res1_storage  = resolution_lineage{&goal0_storage, &rule_idx0};
-        goal1_storage = goal_lineage{&res1_storage, &goal_expr0};
-        res2_storage  = resolution_lineage{&goal1_storage, &rule_idx0};
+        res0_storage  = resolution_lineage{nullptr, 0};
+        goal0_storage = goal_lineage{&res0_storage, 0};
+        res1_storage  = resolution_lineage{&goal0_storage, 0};
+        goal1_storage = goal_lineage{&res1_storage, 0};
+        res2_storage  = resolution_lineage{&goal1_storage, 0};
 
         res0  = &res0_storage;
         goal0 = &goal0_storage;
@@ -48,7 +48,7 @@ static std::unordered_set<const resolution_lineage*> as_set(
 }
 
 TEST_F(LemmaTest, LemmaSingleResolutionUnchanged) {
-    resolution_lineage res0{nullptr, &rule_idx0};
+    resolution_lineage res0{nullptr, 0};
     lemma l{as_set({&res0})};
     EXPECT_THAT(l.get_resolutions(), UnorderedElementsAre(&res0));
 }

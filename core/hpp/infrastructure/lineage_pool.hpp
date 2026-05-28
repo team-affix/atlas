@@ -18,8 +18,8 @@ struct lineage_pool
     , i_trim_unpinned_lineages
     , i_import_goal_lineage
     , i_import_resolution_lineage {
-    const goal_lineage* make(const resolution_lineage*, subgoal_id idx) override;
-    const resolution_lineage* make(const goal_lineage*, rule_id idx) override;
+    const goal_lineage* make_goal_lineage(const resolution_lineage*, subgoal_id idx) override;
+    const resolution_lineage* make_resolution_lineage(const goal_lineage*, rule_id idx) override;
     void pin(const goal_lineage*) override;
     void pin(const resolution_lineage*) override;
     void trim() override;

@@ -35,8 +35,8 @@ struct EliminationRouterTest : public ::testing::Test {
     expr goal_e{expr::var{0}};
     expr head{expr::var{1}};
     rule idx{&head, {}};
-    goal_lineage parent{nullptr, &goal_e};
-    resolution_lineage rl{&parent, &idx};
+    goal_lineage parent{nullptr, 0};
+    resolution_lineage rl{&parent, 0};
 
     MockDeactivatedCandidateMemory dcm;
     MockIsActiveGoal is_active_goal;

@@ -17,9 +17,12 @@ struct CandidateTranslationMapsTest : public ::testing::Test {
     expr head_other{expr::var{3}};
     rule idx{&head, {}};
     rule other_idx{&head_other, {}};
-    goal_lineage parent{nullptr, &goal_e};
-    resolution_lineage rl{&parent, &idx};
-    resolution_lineage other_rl{&parent, &other_idx};
+    static constexpr subgoal_id kGoal = 0;
+    static constexpr rule_id kRule = 0;
+    static constexpr rule_id kOtherRule = 1;
+    goal_lineage parent{nullptr, kGoal};
+    resolution_lineage rl{&parent, kRule};
+    resolution_lineage other_rl{&parent, kOtherRule};
     static constexpr uint32_t kSourceVar = 1;
     static constexpr uint32_t kTargetVar = 2;
 };

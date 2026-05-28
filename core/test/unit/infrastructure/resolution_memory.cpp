@@ -18,8 +18,8 @@ struct ResolutionMemoryTest : public ::testing::Test {
     expr head1{expr::var{11}};
     rule rule0{&head0, {}};
     rule rule1{&head1, {}};
-    resolution_lineage rl0{nullptr, &rule0};
-    resolution_lineage rl1{nullptr, &rule1};
+    resolution_lineage rl0{nullptr, 0};
+    resolution_lineage rl1{nullptr, 1};
 };
 
 TEST_F(ResolutionMemoryTest, DeriveLemmaEmptyAfterClear) {
@@ -43,11 +43,11 @@ TEST_F(ResolutionMemoryTest, DeriveLemmaContainsInsertedResolutions) {
 }
 
 TEST_F(ResolutionMemoryTest, DeriveLemmaPrunesAncestorResolutions) {
-    resolution_lineage res0{nullptr, &rule0};
-    goal_lineage goal0{&res0, &goal_expr0};
-    resolution_lineage res1{&goal0, &rule0};
-    goal_lineage goal1{&res1, &goal_expr0};
-    resolution_lineage res2{&goal1, &rule0};
+    resolution_lineage res0{nullptr, 0};
+    goal_lineage goal0{&res0, 0};
+    resolution_lineage res1{&goal0, 0};
+    goal_lineage goal1{&res1, 0};
+    resolution_lineage res2{&goal1, 0};
 
     mem.record_resolution(&res0);
     mem.record_resolution(&res1);

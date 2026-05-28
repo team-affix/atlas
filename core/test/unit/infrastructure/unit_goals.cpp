@@ -9,8 +9,8 @@ struct UnitGoalsTest : public ::testing::Test {
     unit_goals queue;
     expr e0{expr::var{0}};
     expr e1{expr::var{1}};
-    goal_lineage gl0{nullptr, &e0};
-    goal_lineage gl1{nullptr, &e1};
+    goal_lineage gl0{nullptr, 0};
+    goal_lineage gl1{nullptr, 1};
 };
 
 TEST_F(UnitGoalsTest, EmptyInitially) {

@@ -25,7 +25,8 @@ state_machine<const goal_lineage*> single_goal(const goal_lineage* gl) {
 }  // namespace
 
 struct MockMakeResolutionLineage : public i_make_resolution_lineage {
-    MOCK_METHOD((const resolution_lineage*), make, (const goal_lineage*, rule_id), (override));
+    MOCK_METHOD((const resolution_lineage*), make_resolution_lineage,
+        (const goal_lineage*, rule_id), (override));
 };
 
 struct MockIterateActiveGoals : public i_iterate_active_goals {
@@ -67,6 +68,6 @@ TEST_F(MctsDecisionGeneratorTest, GenerateResolvesChosenGoalAndRule) {
     EXPECT_CALL(iterate_active_goals, iterate_active_goals())
         .WillOnce([&] { return single_goal(&gl); });
     EXPECT_CALL(get_goal_candidate_rule_ids, get(&gl)).WillOnce(ReturnRef(candidates));
-    EXPECT_CALL(lp, make(&gl, kRule)).WillOnce(Return(&expected_rl));
+    EXPECT_CALL(lp, make_resolution_lineage(&gl, kRule)).WillOnce(Return(&expected_rl));
     EXPECT_EQ(generator.generate(), &expected_rl);
 }

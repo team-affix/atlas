@@ -8,7 +8,8 @@
 using ::testing::Return;
 
 struct MockMakeGoalLineage : public i_make_goal_lineage {
-    MOCK_METHOD(const goal_lineage*, make, (const resolution_lineage*, subgoal_id), (override));
+    MOCK_METHOD(const goal_lineage*, make_goal_lineage,
+        (const resolution_lineage*, subgoal_id), (override));
 };
 
 struct MakeInitialGoalLineageTest : public ::testing::Test {
@@ -20,6 +21,6 @@ struct MakeInitialGoalLineageTest : public ::testing::Test {
 };
 
 TEST_F(MakeInitialGoalLineageTest, MakeUsesNullParent) {
-    EXPECT_CALL(make_goal_lineage, make(nullptr, kIdx)).WillOnce(Return(&gl0));
+    EXPECT_CALL(make_goal_lineage, make_goal_lineage(nullptr, kIdx)).WillOnce(Return(&gl0));
     EXPECT_EQ(maker.make(kIdx), &gl0);
 }

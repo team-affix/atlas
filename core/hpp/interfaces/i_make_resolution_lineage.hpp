@@ -5,7 +5,8 @@
 
 struct i_make_resolution_lineage {
     virtual ~i_make_resolution_lineage() = default;
-    virtual const resolution_lineage* make(const goal_lineage* parent, rule_id idx) = 0;
+    virtual const resolution_lineage* make_resolution_lineage(
+        const goal_lineage* parent, rule_id idx) = 0;
 };
 
 #endif
