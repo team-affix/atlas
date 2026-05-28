@@ -21,11 +21,6 @@ struct locator {
         return *static_cast<T*>(it->second);
     }
 
-    template<typename T>
-    bool contains() const {
-        return entries_.contains(std::type_index{typeid(T)});
-    }
-
 private:
     std::unordered_map<std::type_index, void*> entries_;
 };
