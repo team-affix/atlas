@@ -21,7 +21,7 @@ struct active_goals
     void insert_active_goal(const goal_lineage*) override;
     void erase_active_goal(const goal_lineage*) override;
     bool is_active_goal(const goal_lineage*) const override;
-    state_machine<const goal_lineage*> iterate_active_goals() const override;
+    coroutine<const goal_lineage*, void> iterate_active_goals() const override;
     size_t active_goals_size() const override;
     bool empty() const override;
     void clear_active_goals() override;

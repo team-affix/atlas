@@ -8,7 +8,7 @@
 #include <unordered_set>
 #include "interfaces/i_elimination_generator.hpp"
 #include "interfaces/i_learn_avoidance.hpp"
-#include "infrastructure/state_machine.hpp"
+#include "infrastructure/coroutine.hpp"
 #include "infrastructure/tracked.hpp"
 
 struct cdcl_elimination_generator
@@ -16,7 +16,7 @@ struct cdcl_elimination_generator
     , i_learn_avoidance {
     cdcl_elimination_generator(locator& loc);
     std::optional<const resolution_lineage*> learn(const lemma&) override;
-    state_machine<const resolution_lineage*> constrain(const resolution_lineage*) override;
+    coroutine<const resolution_lineage*, void> constrain(const resolution_lineage*) override;
 private:
     using avoidance_type = std::set<const resolution_lineage*>;
     const resolution_lineage* insert(const avoidance_type&);

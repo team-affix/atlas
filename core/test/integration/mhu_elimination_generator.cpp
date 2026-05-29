@@ -16,7 +16,7 @@
 #include "infrastructure/lineage_pool.hpp"
 #include "infrastructure/goal_candidate_rules.hpp"
 #include "infrastructure/trail.hpp"
-#include "infrastructure/state_machine.hpp"
+#include "infrastructure/coroutine.hpp"
 
 using ::testing::ElementsAre;
 using ::testing::IsEmpty;
@@ -24,7 +24,7 @@ using ::testing::IsEmpty;
 namespace {
 
 std::vector<const resolution_lineage*> collect_elims(
-    state_machine<const resolution_lineage*> sm) {
+    coroutine<const resolution_lineage*, void> sm) {
     std::vector<const resolution_lineage*> out;
     while (!sm.done()) {
         auto v = sm.resume();

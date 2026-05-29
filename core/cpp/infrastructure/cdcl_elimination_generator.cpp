@@ -29,7 +29,7 @@ std::optional<const resolution_lineage*> cdcl_elimination_generator::learn(const
     return elim;
 }
 
-state_machine<const resolution_lineage*> cdcl_elimination_generator::constrain(const resolution_lineage* rl) {
+coroutine<const resolution_lineage*, void> cdcl_elimination_generator::constrain(const resolution_lineage* rl) {
     // 1. get the parent goal
     const goal_lineage* gl = rl->parent;
     

@@ -15,7 +15,7 @@
 struct solver : i_solve {
     solver(locator& loc);
     ~solver() override;
-    state_machine<sim_termination> solve() override;
+    coroutine<sim_termination, void> solve() override;
 private:
     i_set_up_sim& set_up_sim;
     i_tear_down_sim& tear_down_sim;

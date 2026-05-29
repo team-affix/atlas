@@ -25,11 +25,11 @@ constexpr size_t kLargeGoalCount = 50;
 constexpr size_t kLargeCandidateCount = 100;
 constexpr size_t kCoverageTrials = 500;
 
-state_machine<const goal_lineage*> single_goal(const goal_lineage* gl) {
+coroutine<const goal_lineage*, void> single_goal(const goal_lineage* gl) {
     co_yield gl;
 }
 
-state_machine<const goal_lineage*> many_goals(
+coroutine<const goal_lineage*, void> many_goals(
     const std::vector<const goal_lineage*>& goals) {
     for (const goal_lineage* gl : goals)
         co_yield gl;
@@ -71,7 +71,7 @@ struct MockMakeResolutionLineage : public i_make_resolution_lineage {
 };
 
 struct MockIterateActiveGoals : public i_iterate_active_goals {
-    MOCK_METHOD(state_machine<const goal_lineage*>, iterate_active_goals, (), (const, override));
+    MOCK_METHOD(coroutine<const goal_lineage*, void>, iterate_active_goals, (), (const, override));
 };
 
 struct MockGetGoalCandidateRuleIds : public i_get_goal_candidate_rule_ids {

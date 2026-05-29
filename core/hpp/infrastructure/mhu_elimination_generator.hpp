@@ -15,7 +15,7 @@
 #include "interfaces/i_get_goal_candidate_rule_ids.hpp"
 #include "interfaces/i_try_add_mhu_head.hpp"
 #include "interfaces/i_clear_mhu_heads.hpp"
-#include "infrastructure/state_machine.hpp"
+#include "infrastructure/coroutine.hpp"
 #include "value_objects/unify_head.hpp"
 
 struct mhu_elimination_generator
@@ -25,10 +25,10 @@ struct mhu_elimination_generator
     virtual ~mhu_elimination_generator() = default;
     mhu_elimination_generator(locator& loc);
     bool try_add_head(const resolution_lineage*, const expr*, const expr*) override;
-    state_machine<const resolution_lineage*> constrain(const resolution_lineage*) override;
+    coroutine<const resolution_lineage*, void> constrain(const resolution_lineage*) override;
     void clear_mhu_heads() override;
 private:
-    state_machine<const resolution_lineage*> rebase(uint32_t, const expr*);
+    coroutine<const resolution_lineage*, void> rebase(uint32_t, const expr*);
     bool unify_and_link(i_unifier&, const resolution_lineage*, const expr*, const expr*);
     void link(const std::unordered_set<uint32_t>&, const std::unordered_set<const resolution_lineage*>&);
     std::unordered_set<const resolution_lineage*> unlink(uint32_t);

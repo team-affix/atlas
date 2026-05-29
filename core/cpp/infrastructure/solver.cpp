@@ -13,7 +13,7 @@ solver::solver(locator& loc)
 
 solver::~solver() = default;
 
-state_machine<sim_termination> solver::solve() {
+coroutine<sim_termination, void> solver::solve() {
     bool refuted = false;
     while (!refuted) {
         // set up sim

@@ -7,7 +7,7 @@
 
 struct joint_elimination_generator : i_elimination_generator {
     joint_elimination_generator(locator& loc);
-    state_machine<const resolution_lineage*> constrain(const resolution_lineage*) override;
+    coroutine<const resolution_lineage*, void> constrain(const resolution_lineage*) override;
 private:
     i_elimination_generator& cdcl;
     i_elimination_generator& mhu;

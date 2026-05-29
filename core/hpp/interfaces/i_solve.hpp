@@ -2,11 +2,11 @@
 #define I_SOLVE_HPP
 
 #include "value_objects/sim_termination.hpp"
-#include "infrastructure/state_machine.hpp"
+#include "infrastructure/coroutine.hpp"
 
 struct i_solve {
     virtual ~i_solve() = default;
-    virtual state_machine<sim_termination> solve() = 0;
+    virtual coroutine<sim_termination, void> solve() = 0;
 };
 
 #endif

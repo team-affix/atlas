@@ -20,7 +20,7 @@
 #include "infrastructure/goal_candidate_rules.hpp"
 #include "infrastructure/expr_pool.hpp"
 #include "interfaces/i_elimination_generator.hpp"
-#include "infrastructure/state_machine.hpp"
+#include "infrastructure/coroutine.hpp"
 
 using ::testing::ByMove;
 using ::testing::ElementsAre;
@@ -29,18 +29,18 @@ using ::testing::Return;
 
 namespace {
 
-state_machine<const resolution_lineage*> make_single_elim_sm(
+coroutine<const resolution_lineage*, void> make_single_elim_sm(
     const resolution_lineage* elim) {
     co_yield elim;
     co_yield nullptr;
 }
 
-state_machine<const resolution_lineage*> empty_elim_sm() {
+coroutine<const resolution_lineage*, void> empty_elim_sm() {
     co_return;
 }
 
 std::vector<const resolution_lineage*> collect_non_null_elims(
-    state_machine<const resolution_lineage*>& sm) {
+    coroutine<const resolution_lineage*, void>& sm) {
     std::vector<const resolution_lineage*> out;
     while (!sm.done()) {
         auto v = sm.resume();
@@ -53,14 +53,14 @@ std::vector<const resolution_lineage*> collect_non_null_elims(
 } // namespace
 
 struct MockEliminationGenerator : public i_elimination_generator {
-    MOCK_METHOD(state_machine<const resolution_lineage*>, constrain,
+    MOCK_METHOD(coroutine<const resolution_lineage*, void>, constrain,
         (const resolution_lineage*), (override));
 };
 
 struct cdcl_shim : cdcl_elimination_generator {
     cdcl_shim(locator& loc, i_elimination_generator& impl)
         : cdcl_elimination_generator(loc), impl_(impl) {}
-    state_machine<const resolution_lineage*> constrain(
+    coroutine<const resolution_lineage*, void> constrain(
         const resolution_lineage* rl) override {
         return impl_.constrain(rl);
     }
@@ -71,7 +71,7 @@ private:
 struct mhu_shim : mhu_elimination_generator {
     mhu_shim(locator& loc, i_elimination_generator& impl)
         : mhu_elimination_generator(loc), impl_(impl) {}
-    state_machine<const resolution_lineage*> constrain(
+    coroutine<const resolution_lineage*, void> constrain(
         const resolution_lineage* rl) override {
         return impl_.constrain(rl);
     }

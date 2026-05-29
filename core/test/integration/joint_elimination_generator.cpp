@@ -18,7 +18,7 @@
 #include "interfaces/i_learn_avoidance.hpp"
 #include "interfaces/i_try_add_mhu_head.hpp"
 #include "interfaces/i_clear_mhu_heads.hpp"
-#include "infrastructure/state_machine.hpp"
+#include "infrastructure/coroutine.hpp"
 #include "value_objects/lemma.hpp"
 
 using ::testing::ElementsAre;
@@ -27,7 +27,7 @@ using ::testing::IsEmpty;
 namespace {
 
 std::vector<const resolution_lineage*> collect_elims(
-    state_machine<const resolution_lineage*> sm) {
+    coroutine<const resolution_lineage*, void> sm) {
     std::vector<const resolution_lineage*> out;
     while (!sm.done()) {
         auto v = sm.resume();

@@ -37,11 +37,11 @@ using ::testing::ReturnRef;
 
 namespace {
 
-state_machine<const resolution_lineage*> empty_eliminations() {
+coroutine<const resolution_lineage*, void> empty_eliminations() {
     co_return;
 }
 
-state_machine<const resolution_lineage*> single_elimination(const resolution_lineage* elim) {
+coroutine<const resolution_lineage*, void> single_elimination(const resolution_lineage* elim) {
     co_yield elim;
     co_return;
 }
@@ -86,7 +86,7 @@ struct MockGenerateDecision : public i_generate_decision {
 };
 
 struct MockEliminationGenerator : public i_elimination_generator {
-    MOCK_METHOD(state_machine<const resolution_lineage*>, constrain, (const resolution_lineage*), (override));
+    MOCK_METHOD(coroutine<const resolution_lineage*, void>, constrain, (const resolution_lineage*), (override));
 };
 
 struct MockEliminationRouter : public i_elimination_router {

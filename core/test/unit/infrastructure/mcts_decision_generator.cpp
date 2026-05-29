@@ -21,11 +21,11 @@ using ::testing::ReturnRef;
 
 namespace {
 
-state_machine<const goal_lineage*> single_goal(const goal_lineage* gl) {
+coroutine<const goal_lineage*, void> single_goal(const goal_lineage* gl) {
     co_yield gl;
 }
 
-state_machine<const goal_lineage*> two_goals(
+coroutine<const goal_lineage*, void> two_goals(
     const goal_lineage* g0, const goal_lineage* g1) {
     co_yield g0;
     co_yield g1;
@@ -39,7 +39,7 @@ struct MockMakeResolutionLineage : public i_make_resolution_lineage {
 };
 
 struct MockIterateActiveGoals : public i_iterate_active_goals {
-    MOCK_METHOD(state_machine<const goal_lineage*>, iterate_active_goals, (), (const, override));
+    MOCK_METHOD(coroutine<const goal_lineage*, void>, iterate_active_goals, (), (const, override));
 };
 
 struct MockActiveGoalsSize : public i_active_goals_size {

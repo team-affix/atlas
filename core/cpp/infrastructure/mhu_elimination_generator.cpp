@@ -37,7 +37,7 @@ bool mhu_elimination_generator::try_add_head(const resolution_lineage* lineage, 
     return true;
 }
 
-state_machine<const resolution_lineage*> mhu_elimination_generator::constrain(const resolution_lineage* lineage) {
+coroutine<const resolution_lineage*, void> mhu_elimination_generator::constrain(const resolution_lineage* lineage) {
     // 1. get the parent goal lineage
     auto gl = lineage->parent;
     
@@ -84,7 +84,7 @@ state_machine<const resolution_lineage*> mhu_elimination_generator::constrain(co
     heads_.erase(lineage);
 }
 
-state_machine<const resolution_lineage*> mhu_elimination_generator::rebase(uint32_t rep, const expr* new_rep) {
+coroutine<const resolution_lineage*, void> mhu_elimination_generator::rebase(uint32_t rep, const expr* new_rep) {
     // 1. unlink this rep from all heads
     auto remaining_rls = unlink(rep);
 

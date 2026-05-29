@@ -13,7 +13,7 @@ using ::testing::ReturnRef;
 struct MockRuleIdSet : public i_rule_id_set {
     MOCK_METHOD(void, insert, (rule_id), (override));
     MOCK_METHOD(void, erase, (rule_id), (override));
-    state_machine<rule_id> iterate() const override { co_return; }
+    coroutine<rule_id, void> iterate() const override { co_return; }
     MOCK_METHOD(size_t, size, (), (const, override));
     MOCK_METHOD(std::unique_ptr<i_rule_id_set>, copy, (), (const, override));
 };

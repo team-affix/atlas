@@ -1,5 +1,5 @@
-#ifndef STATE_MACHINE_HPP
-#define STATE_MACHINE_HPP
+#ifndef COROUTINE_HPP
+#define COROUTINE_HPP
 
 #include <coroutine>
 #include <exception>
@@ -7,31 +7,23 @@
 #include <type_traits>
 #include <utility>
 
-template<typename Yield, typename Return>
-struct state_machine {
-    static_assert(
-        !std::is_void_v<Yield> && !std::is_void_v<Return>,
-        "state_machine<Yield, Return> requires non-void Yield and Return; "
-        "use state_machine<Yield, void>, state_machine<void, Return>, or state_machine<void, void>");
-};
-
 template<typename Promise>
-struct state_machine_ops {
-    explicit state_machine_ops(std::coroutine_handle<Promise> h) : handle_(h) {}
+struct coroutine_ops {
+    explicit coroutine_ops(std::coroutine_handle<Promise> h) : handle_(h) {}
 
-    ~state_machine_ops() {
+    ~coroutine_ops() {
         if (handle_)
             handle_.destroy();
     }
 
-    state_machine_ops(const state_machine_ops&) = delete;
-    state_machine_ops& operator=(const state_machine_ops&) = delete;
+    coroutine_ops(const coroutine_ops&) = delete;
+    coroutine_ops& operator=(const coroutine_ops&) = delete;
 
-    state_machine_ops(state_machine_ops&& other) noexcept : handle_(other.handle_) {
+    coroutine_ops(coroutine_ops&& other) noexcept : handle_(other.handle_) {
         other.handle_ = nullptr;
     }
 
-    state_machine_ops& operator=(state_machine_ops&& other) noexcept {
+    coroutine_ops& operator=(coroutine_ops&& other) noexcept {
         if (this != &other) {
             if (handle_)
                 handle_.destroy();
@@ -64,14 +56,19 @@ private:
     std::coroutine_handle<Promise> handle_{};
 };
 
-// --- state_machine<Yield, Return> : value yields, value return ---
+// --- coroutine<Yield, Return> ---
+
+template<typename Yield, typename Return>
+struct coroutine;
+
+// coroutine<Yield, Return> — value yields, value return
 
 template<typename Yield, typename Return>
     requires(!std::is_void_v<Yield> && !std::is_void_v<Return>)
-struct state_machine<Yield, Return> {
+struct coroutine<Yield, Return> {
     struct promise_type {
-        state_machine get_return_object() {
-            return state_machine{
+        coroutine get_return_object() {
+            return coroutine{
                 std::coroutine_handle<promise_type>::from_promise(*this)};
         }
 
@@ -100,12 +97,12 @@ struct state_machine<Yield, Return> {
         std::exception_ptr exception_{};
     };
 
-    explicit state_machine(std::coroutine_handle<promise_type> h) : ops_(h) {}
+    explicit coroutine(std::coroutine_handle<promise_type> h) : ops_(h) {}
 
-    state_machine(state_machine&&) = default;
-    state_machine& operator=(state_machine&&) = default;
-    state_machine(const state_machine&) = delete;
-    state_machine& operator=(const state_machine&) = delete;
+    coroutine(coroutine&&) = default;
+    coroutine& operator=(coroutine&&) = default;
+    coroutine(const coroutine&) = delete;
+    coroutine& operator=(const coroutine&) = delete;
 
     void resume() { ops_.resume(); }
     bool done() const { return ops_.done(); }
@@ -113,7 +110,7 @@ struct state_machine<Yield, Return> {
 
     Yield consume_yield() {
         if (!has_yield())
-            throw std::logic_error("state_machine::consume_yield without yield");
+            throw std::logic_error("coroutine::consume_yield without yield");
         auto v = std::move(ops_.promise().yield_);
         ops_.promise().at_yield_ = false;
         return v;
@@ -121,22 +118,22 @@ struct state_machine<Yield, Return> {
 
     Return result() const {
         if (!done() || !ops_.promise().return_ready_)
-            throw std::logic_error("state_machine::result before completion");
+            throw std::logic_error("coroutine::result before completion");
         return ops_.promise().return_;
     }
 
 private:
-    state_machine_ops<promise_type> ops_;
+    coroutine_ops<promise_type> ops_;
 };
 
-// --- state_machine<Yield, void> : value yields, void return ---
+// coroutine<Yield, void> — value yields, void return
 
 template<typename Yield>
     requires(!std::is_void_v<Yield>)
-struct state_machine<Yield, void> {
+struct coroutine<Yield, void> {
     struct promise_type {
-        state_machine get_return_object() {
-            return state_machine{
+        coroutine get_return_object() {
+            return coroutine{
                 std::coroutine_handle<promise_type>::from_promise(*this)};
         }
 
@@ -161,12 +158,12 @@ struct state_machine<Yield, void> {
         std::exception_ptr exception_{};
     };
 
-    explicit state_machine(std::coroutine_handle<promise_type> h) : ops_(h) {}
+    explicit coroutine(std::coroutine_handle<promise_type> h) : ops_(h) {}
 
-    state_machine(state_machine&&) = default;
-    state_machine& operator=(state_machine&&) = default;
-    state_machine(const state_machine&) = delete;
-    state_machine& operator=(const state_machine&) = delete;
+    coroutine(coroutine&&) = default;
+    coroutine& operator=(coroutine&&) = default;
+    coroutine(const coroutine&) = delete;
+    coroutine& operator=(const coroutine&) = delete;
 
     void resume() { ops_.resume(); }
     bool done() const { return ops_.done(); }
@@ -174,24 +171,24 @@ struct state_machine<Yield, void> {
 
     Yield consume_yield() {
         if (!has_yield())
-            throw std::logic_error("state_machine::consume_yield without yield");
+            throw std::logic_error("coroutine::consume_yield without yield");
         auto v = std::move(ops_.promise().yield_);
         ops_.promise().at_yield_ = false;
         return v;
     }
 
 private:
-    state_machine_ops<promise_type> ops_;
+    coroutine_ops<promise_type> ops_;
 };
 
-// --- state_machine<void, Return> : no yields; suspend with co_await std::suspend_always{} ---
+// coroutine<void, Return> — suspend with co_await std::suspend_always{}
 
 template<typename Return>
     requires(!std::is_void_v<Return>)
-struct state_machine<void, Return> {
+struct coroutine<void, Return> {
     struct promise_type {
-        state_machine get_return_object() {
-            return state_machine{
+        coroutine get_return_object() {
+            return coroutine{
                 std::coroutine_handle<promise_type>::from_promise(*this)};
         }
 
@@ -212,33 +209,33 @@ struct state_machine<void, Return> {
         std::exception_ptr exception_{};
     };
 
-    explicit state_machine(std::coroutine_handle<promise_type> h) : ops_(h) {}
+    explicit coroutine(std::coroutine_handle<promise_type> h) : ops_(h) {}
 
-    state_machine(state_machine&&) = default;
-    state_machine& operator=(state_machine&&) = default;
-    state_machine(const state_machine&) = delete;
-    state_machine& operator=(const state_machine&) = delete;
+    coroutine(coroutine&&) = default;
+    coroutine& operator=(coroutine&&) = default;
+    coroutine(const coroutine&) = delete;
+    coroutine& operator=(const coroutine&) = delete;
 
     void resume() { ops_.resume(); }
     bool done() const { return ops_.done(); }
 
     Return result() const {
         if (!done() || !ops_.promise().return_ready_)
-            throw std::logic_error("state_machine::result before completion");
+            throw std::logic_error("coroutine::result before completion");
         return ops_.promise().return_;
     }
 
 private:
-    state_machine_ops<promise_type> ops_;
+    coroutine_ops<promise_type> ops_;
 };
 
-// --- state_machine<void, void> : no yields; suspend with co_await std::suspend_always{} ---
+// coroutine<void, void> — suspend with co_await std::suspend_always{}
 
 template<>
-struct state_machine<void, void> {
+struct coroutine<void, void> {
     struct promise_type {
-        state_machine get_return_object() {
-            return state_machine{
+        coroutine get_return_object() {
+            return coroutine{
                 std::coroutine_handle<promise_type>::from_promise(*this)};
         }
 
@@ -253,18 +250,18 @@ struct state_machine<void, void> {
         std::exception_ptr exception_{};
     };
 
-    explicit state_machine(std::coroutine_handle<promise_type> h) : ops_(h) {}
+    explicit coroutine(std::coroutine_handle<promise_type> h) : ops_(h) {}
 
-    state_machine(state_machine&&) = default;
-    state_machine& operator=(state_machine&&) = default;
-    state_machine(const state_machine&) = delete;
-    state_machine& operator=(const state_machine&) = delete;
+    coroutine(coroutine&&) = default;
+    coroutine& operator=(coroutine&&) = default;
+    coroutine(const coroutine&) = delete;
+    coroutine& operator=(const coroutine&) = delete;
 
     void resume() { ops_.resume(); }
     bool done() const { return ops_.done(); }
 
 private:
-    state_machine_ops<promise_type> ops_;
+    coroutine_ops<promise_type> ops_;
 };
 
 #endif

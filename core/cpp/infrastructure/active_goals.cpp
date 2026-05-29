@@ -12,7 +12,7 @@ bool active_goals::is_active_goal(const goal_lineage* gl) const {
     return goals_.contains(gl);
 }
 
-state_machine<const goal_lineage*> active_goals::iterate_active_goals() const {
+coroutine<const goal_lineage*, void> active_goals::iterate_active_goals() const {
     for (const goal_lineage* gl : goals_)
         co_yield gl;
 }

@@ -8,7 +8,7 @@
 #include <vector>
 #include "infrastructure/cdcl_elimination_generator.hpp"
 #include "interfaces/i_log_to_current_trail_frame.hpp"
-#include "infrastructure/state_machine.hpp"
+#include "infrastructure/coroutine.hpp"
 
 using ::testing::_;
 using ::testing::AtLeast;
@@ -20,7 +20,7 @@ using ::testing::StrictMock;
 namespace {
 
 std::vector<const resolution_lineage*> collect_elims(
-    state_machine<const resolution_lineage*> sm) {
+    coroutine<const resolution_lineage*, void> sm) {
     std::vector<const resolution_lineage*> out;
     while (!sm.done()) {
         auto v = sm.resume();

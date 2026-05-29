@@ -2,12 +2,12 @@
 #define I_ELIMINATION_GENERATOR_HPP
 
 #include "value_objects/lineage.hpp"
-#include "infrastructure/state_machine.hpp"
+#include "infrastructure/coroutine.hpp"
 
 class i_elimination_generator {
 public:
     virtual ~i_elimination_generator() = default;
-    virtual state_machine<const resolution_lineage*> constrain(const resolution_lineage*) = 0;
+    virtual coroutine<const resolution_lineage*, void> constrain(const resolution_lineage*) = 0;
 };
 
 #endif
