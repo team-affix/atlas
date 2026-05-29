@@ -1,4 +1,5 @@
 #include "infrastructure/mhu_elimination_generator.hpp"
+#include "debug_assert.hpp"
 
 mhu_elimination_generator::mhu_elimination_generator(locator& loc) :
     common_(loc.locate<i_bind_map>()),
@@ -30,8 +31,8 @@ bool mhu_elimination_generator::try_add_head(const resolution_lineage* lineage, 
         std::move(overlay_bind_map),
         std::move(unifier)};
     
-    // 6. add the head to the map
-    heads_.insert({lineage, std::move(head)});
+    const auto [_, inserted] = heads_.insert({lineage, std::move(head)});
+    DEBUG_ASSERT(inserted);
 
     return true;
 }

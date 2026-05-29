@@ -996,6 +996,63 @@ TEST_F(SimIntegrationTest, RunDeactivatesRuleOneWhenDecisionResolvesRuleZeroOnMh
     simulation.tear_down();
 }
 
+TEST_F(SimIntegrationTest, RunDeactivatesCrossGoalCandidateOnMhuIncompatibleHead) {
+    /*
+     * initial goals (two subgoals, shared var A):
+     *   f(A).
+     *   g(A).
+     * database:
+     *   0: f(abc).
+     *   1: f(xyz).
+     *   2: g(def).
+     *   3: g(abc).
+     * setup: both goals non-unit; decision picks goal 0 rule 0; MHU eliminates goal 1 rule 2
+     */
+    expr abc{expr::functor{"abc", {}}};
+    expr xyz{expr::functor{"xyz", {}}};
+    expr def{expr::functor{"def", {}}};
+    expr head_f0{expr::functor{"f", {&abc}}};
+    expr head_f1{expr::functor{"f", {&xyz}}};
+    expr head_g2{expr::functor{"g", {&def}}};
+    expr head_g3{expr::functor{"g", {&abc}}};
+    database.push(rule{&head_f0, {}});
+    database.push(rule{&head_f1, {}});
+    database.push(rule{&head_g2, {}});
+    database.push(rule{&head_g3, {}});
+
+    i_make_initial_goal_lineage& make_initial_goal_lineage =
+        stack.loc.locate<i_make_initial_goal_lineage>();
+    i_make_resolution_lineage& make_resolution_lineage =
+        stack.loc.locate<i_make_resolution_lineage>();
+    i_deactivated_candidate_memory& deactivated =
+        stack.loc.locate<i_deactivated_candidate_memory>();
+    i_bind_map& bind_map = stack.loc.locate<i_bind_map>();
+    i_var_sequencer& seq = stack.loc.locate<i_var_sequencer>();
+    i_make_var& make_var = stack.loc.locate<i_make_var>();
+    i_make_functor& make_functor = stack.loc.locate<i_make_functor>();
+
+    const goal_lineage* gl0 = make_initial_goal_lineage.make(0);
+    const goal_lineage* gl1 = make_initial_goal_lineage.make(1);
+    const resolution_lineage* rl_f0 =
+        make_resolution_lineage.make_resolution_lineage(gl0, rule_id{0});
+    const resolution_lineage* rl_g2 =
+        make_resolution_lineage.make_resolution_lineage(gl1, rule_id{2});
+
+    EXPECT_CALL(stack.decision_generator, generate()).WillOnce(Return(rl_f0));
+
+    sim simulation{stack.loc, kDefaultMaxResolutions};
+    simulation.set_up();
+    const expr* var_a = make_var.make(seq.next());
+    initial_goals.push(make_functor.make("f", {var_a}));
+    initial_goals.push(make_functor.make("g", {var_a}));
+
+    EXPECT_EQ(simulation.run(), sim_termination::solved);
+    EXPECT_TRUE(deactivated.contains(rl_g2));
+    const expr::functor& whnf_a = std::get<expr::functor>(bind_map.whnf(var_a)->content);
+    EXPECT_EQ(whnf_a.name, "abc");
+    simulation.tear_down();
+}
+
 TEST_F(SimIntegrationTest, RunReturnsSolvedBindingVarInNestedFunctorArgWithoutDecisions) {
     /*
      * initial goals:

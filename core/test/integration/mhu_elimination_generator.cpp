@@ -3,6 +3,7 @@
 #include <gtest/gtest.h>
 #include <gmock/gmock.h>
 #include <optional>
+#include <stdexcept>
 #include <vector>
 #include "infrastructure/mhu_elimination_generator.hpp"
 #include "infrastructure/bind_map.hpp"
@@ -274,4 +275,36 @@ TEST_F(MhuEliminationGeneratorIntegrationTest, ClearMhuHeadsAllowsFreshTryAdd) {
 
     mhu->clear_mhu_heads();
     EXPECT_TRUE(mhu->try_add_head(rl, &goal, &head));
+}
+
+TEST_F(MhuEliminationGeneratorIntegrationTest, TryAddHeadOnSameLineageTwiceThrowsInDebug) {
+    expr goal{expr::var{0}};
+    expr head_f{expr::functor{"f", {}}};
+    expr head_g{expr::functor{"g", {}}};
+    goal_lineage* gl = const_cast<goal_lineage*>(lp.make_goal_lineage(nullptr, 0));
+    resolution_lineage* rl =
+        const_cast<resolution_lineage*>(lp.make_resolution_lineage(gl, rule_id{0}));
+    ggcr.link_goal_candidate(gl, rule_id{0});
+
+    ASSERT_TRUE(mhu->try_add_head(rl, &goal, &head_f));
+    EXPECT_THROW(mhu->try_add_head(rl, &goal, &head_g), std::logic_error);
+}
+
+TEST_F(MhuEliminationGeneratorIntegrationTest, ConstrainPublishesTwoRepsToCommon) {
+    expr var0{expr::var{0}};
+    expr var1{expr::var{1}};
+    expr abc{expr::functor{"abc", {}}};
+    expr _123{expr::functor{"123", {}}};
+    expr goal{expr::functor{"f", {&var0, &var1}}};
+    expr head{expr::functor{"f", {&abc, &_123}}};
+    goal_lineage* gl = const_cast<goal_lineage*>(lp.make_goal_lineage(nullptr, 0));
+    resolution_lineage* rl =
+        const_cast<resolution_lineage*>(lp.make_resolution_lineage(gl, rule_id{0}));
+    ggcr.link_goal_candidate(gl, rule_id{0});
+
+    ASSERT_TRUE(mhu->try_add_head(rl, &goal, &head));
+    EXPECT_THAT(collect_elims(mhu->constrain(rl)), IsEmpty());
+
+    expect_whnf_functor(common, &var0, "abc", 0);
+    expect_whnf_functor(common, &var1, "123", 0);
 }
