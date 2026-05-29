@@ -5,6 +5,7 @@
 #include <gtest/gtest.h>
 #include <gmock/gmock.h>
 #include <stdexcept>
+#include <string>
 #include <vector>
 #include "infrastructure/state_machine.hpp"
 
@@ -12,29 +13,29 @@ using ::testing::ElementsAre;
 
 namespace {
 
-template<typename T>
-std::vector<T> collect_while_has_value(state_machine<T>& sm) {
-    std::vector<T> out;
+template<typename Yield>
+std::vector<Yield> collect_yields(state_machine<Yield, void>& sm) {
+    std::vector<Yield> out;
     while (!sm.done()) {
-        auto v = sm.resume();
-        if (v.has_value())
-            out.push_back(std::move(v.value()));
+        sm.resume();
+        if (sm.has_yield())
+            out.push_back(sm.consume_yield());
     }
     return out;
 }
 
-state_machine<void> make_void_stepper() {
+state_machine<void, void> make_void_stepper() {
     co_await std::suspend_always{};
     co_return;
 }
 
-state_machine<int> make_int_two_yields() {
+state_machine<int, void> make_int_two_yields() {
     co_yield 1;
     co_yield 2;
     co_await std::suspend_always{};
 }
 
-state_machine<int> make_int_five_yields() {
+state_machine<int, void> make_int_five_yields() {
     constexpr int kFirst = 10;
     constexpr int kSecond = 20;
     constexpr int kThird = 30;
@@ -47,7 +48,7 @@ state_machine<int> make_int_five_yields() {
     co_yield kFifth;
 }
 
-state_machine<const int*> make_pointer_yields_with_terminal_null() {
+state_machine<const int*, void> make_pointer_yields_with_terminal_null() {
     const int a = 1;
     const int b = 2;
     const int c = 3;
@@ -57,56 +58,73 @@ state_machine<const int*> make_pointer_yields_with_terminal_null() {
     co_yield nullptr;
 }
 
-state_machine<const int*> make_inner_two_yields() {
+state_machine<const int*, void> make_inner_two_yields() {
     const int x = 100;
     const int y = 200;
     co_yield &x;
     co_yield &y;
 }
 
-state_machine<const int*> make_outer_drains_inner() {
+state_machine<const int*, void> make_outer_drains_inner() {
     auto inner = make_inner_two_yields();
     while (!inner.done()) {
-        auto v = inner.resume();
-        if (v.has_value())
-            co_yield v.value();
+        inner.resume();
+        if (inner.has_yield())
+            co_yield inner.consume_yield();
     }
     co_yield nullptr;
 }
 
-state_machine<const int*> make_nested_three_levels() {
+state_machine<const int*, void> make_nested_three_levels() {
     auto mid = make_outer_drains_inner();
     while (!mid.done()) {
-        auto v = mid.resume();
-        if (v.has_value())
-            co_yield v.value();
+        mid.resume();
+        if (mid.has_yield())
+            co_yield mid.consume_yield();
     }
 }
 
-state_machine<const int*> make_revalidation_style_nested() {
+state_machine<const int*, void> make_revalidation_style_nested() {
     const int conflict = 999;
     auto inner = make_inner_two_yields();
     while (!inner.done()) {
-        auto elim = inner.resume();
-        if (elim.has_value())
-            co_yield elim.value();
+        inner.resume();
+        if (inner.has_yield())
+            co_yield inner.consume_yield();
     }
     co_yield &conflict;
 }
 
-state_machine<int> make_yield_then_immediate_return() {
+state_machine<int, void> make_yield_then_immediate_return() {
     constexpr int kAnswer = 42;
     co_yield kAnswer;
 }
 
-state_machine<int> make_int_throws_after_first_yield() {
+state_machine<int, void> make_int_throws_after_first_yield() {
     co_yield 1;
     throw std::runtime_error("boom");
 }
 
-state_machine<void> make_void_throws_on_resume() {
+state_machine<void, void> make_void_throws_on_resume() {
     co_await std::suspend_always{};
     throw std::runtime_error("void boom");
+}
+
+state_machine<void, void> make_void_suspend_twice() {
+    co_await std::suspend_always{};
+    co_await std::suspend_always{};
+    co_return;
+}
+
+state_machine<void, int> make_suspend_then_return_int() {
+    co_await std::suspend_always{};
+    co_return 99;
+}
+
+state_machine<int, std::string> make_int_yield_string_return() {
+    co_yield 1;
+    co_yield 2;
+    co_return std::string("done");
 }
 
 } // namespace
@@ -126,46 +144,52 @@ TEST_F(StateMachineTest, ResumeReturnsEachCoYield) {
     auto sm = make_int_two_yields();
     EXPECT_FALSE(sm.done());
 
-    EXPECT_EQ(sm.resume(), 1);
+    sm.resume();
+    ASSERT_TRUE(sm.has_yield());
+    EXPECT_EQ(sm.consume_yield(), 1);
     EXPECT_FALSE(sm.done());
 
-    EXPECT_EQ(sm.resume(), 2);
+    sm.resume();
+    ASSERT_TRUE(sm.has_yield());
+    EXPECT_EQ(sm.consume_yield(), 2);
     EXPECT_FALSE(sm.done());
 }
 
-// After co_yield then co_await suspend_always, resume() still returns the last
-// co_yielded value and done() stays false until one more resume — stale last_yield_.
-TEST_F(StateMachineTest, FinalSuspendThenReturnClearsLastYield) {
+TEST_F(StateMachineTest, NonYieldSuspendHasNoYield) {
     auto sm = make_int_two_yields();
-    ASSERT_EQ(sm.resume(), 1);
-    ASSERT_EQ(sm.resume(), 2);
+    sm.resume();
+    ASSERT_TRUE(sm.has_yield());
+    sm.consume_yield();
+    sm.resume();
+    ASSERT_TRUE(sm.has_yield());
+    sm.consume_yield();
     ASSERT_FALSE(sm.done());
 
-    auto after_suspend = sm.resume();
-    EXPECT_FALSE(after_suspend.has_value());
+    sm.resume();
+    EXPECT_FALSE(sm.has_yield());
     ASSERT_FALSE(sm.done());
 
-    auto after_return = sm.resume();
-    EXPECT_FALSE(after_return.has_value());
+    sm.resume();
+    EXPECT_FALSE(sm.has_yield());
     EXPECT_TRUE(sm.done());
 }
 
 TEST_F(StateMachineTest, FiveYieldsCollectedInOrder) {
     auto sm = make_int_five_yields();
-    EXPECT_THAT(collect_while_has_value(sm), ElementsAre(10, 20, 30, 40, 50));
+    EXPECT_THAT(collect_yields(sm), ElementsAre(10, 20, 30, 40, 50));
     EXPECT_TRUE(sm.done());
 }
 
 TEST_F(StateMachineTest, SingleYieldThenReturnProducesOneValue) {
     auto sm = make_yield_then_immediate_return();
-    EXPECT_THAT(collect_while_has_value(sm), ElementsAre(42));
+    EXPECT_THAT(collect_yields(sm), ElementsAre(42));
     EXPECT_TRUE(sm.done());
 }
 
 TEST_F(StateMachineTest, CollectsYieldsIncludingTerminalNull) {
     auto sm = make_pointer_yields_with_terminal_null();
 
-    auto values = collect_while_has_value(sm);
+    auto values = collect_yields(sm);
     ASSERT_EQ(values.size(), 4u);
     EXPECT_EQ(*values[0], 1);
     EXPECT_EQ(*values[1], 2);
@@ -176,7 +200,7 @@ TEST_F(StateMachineTest, CollectsYieldsIncludingTerminalNull) {
 
 TEST_F(StateMachineTest, DrainInnerFromCallerCollectsInOrder) {
     auto inner = make_inner_two_yields();
-    auto values = collect_while_has_value(inner);
+    auto values = collect_yields(inner);
     ASSERT_EQ(values.size(), 2u);
     EXPECT_EQ(*values[0], 100);
     EXPECT_EQ(*values[1], 200);
@@ -184,7 +208,7 @@ TEST_F(StateMachineTest, DrainInnerFromCallerCollectsInOrder) {
 
 TEST_F(StateMachineTest, DrainsNestedMachineInOrder) {
     auto sm = make_outer_drains_inner();
-    auto values = collect_while_has_value(sm);
+    auto values = collect_yields(sm);
     ASSERT_EQ(values.size(), 3u);
     EXPECT_EQ(*values[0], 100);
     EXPECT_EQ(*values[1], 200);
@@ -194,7 +218,7 @@ TEST_F(StateMachineTest, DrainsNestedMachineInOrder) {
 
 TEST_F(StateMachineTest, NestedThreeLevelsFlattensToInnerYields) {
     auto sm = make_nested_three_levels();
-    auto values = collect_while_has_value(sm);
+    auto values = collect_yields(sm);
     ASSERT_EQ(values.size(), 3u);
     EXPECT_EQ(*values[0], 100);
     EXPECT_EQ(*values[1], 200);
@@ -204,7 +228,7 @@ TEST_F(StateMachineTest, NestedThreeLevelsFlattensToInnerYields) {
 
 TEST_F(StateMachineTest, RevalidationStyleNestedYieldsInnerThenOuter) {
     auto sm = make_revalidation_style_nested();
-    auto values = collect_while_has_value(sm);
+    auto values = collect_yields(sm);
     ASSERT_EQ(values.size(), 3u);
     EXPECT_EQ(*values[0], 100);
     EXPECT_EQ(*values[1], 200);
@@ -214,33 +238,39 @@ TEST_F(StateMachineTest, RevalidationStyleNestedYieldsInnerThenOuter) {
 
 TEST_F(StateMachineTest, MoveConstructCanDrainRemainingYields) {
     auto sm1 = make_int_five_yields();
-    ASSERT_EQ(sm1.resume(), 10);
+    sm1.resume();
+    ASSERT_TRUE(sm1.has_yield());
+    EXPECT_EQ(sm1.consume_yield(), 10);
 
-    state_machine<int> sm2 = std::move(sm1);
-    EXPECT_THAT(collect_while_has_value(sm2), ElementsAre(20, 30, 40, 50));
+    state_machine<int, void> sm2 = std::move(sm1);
+    EXPECT_THAT(collect_yields(sm2), ElementsAre(20, 30, 40, 50));
     EXPECT_TRUE(sm2.done());
 }
 
 TEST_F(StateMachineTest, MoveAssignCanDrainRemainingYields) {
     auto sm1 = make_int_five_yields();
-    ASSERT_EQ(sm1.resume(), 10);
+    sm1.resume();
+    ASSERT_TRUE(sm1.has_yield());
+    EXPECT_EQ(sm1.consume_yield(), 10);
 
-    state_machine<int> sm2 = make_int_two_yields();
+    state_machine<int, void> sm2 = make_int_two_yields();
     sm2 = std::move(sm1);
 
-    EXPECT_THAT(collect_while_has_value(sm2), ElementsAre(20, 30, 40, 50));
+    EXPECT_THAT(collect_yields(sm2), ElementsAre(20, 30, 40, 50));
     EXPECT_TRUE(sm2.done());
 }
 
 TEST_F(StateMachineTest, DrainTwoYieldCoroutineCollectsBothValues) {
     auto sm = make_int_two_yields();
-    EXPECT_THAT(collect_while_has_value(sm), ElementsAre(1, 2));
+    EXPECT_THAT(collect_yields(sm), ElementsAre(1, 2));
     EXPECT_TRUE(sm.done());
 }
 
 TEST_F(StateMachineTest, ExceptionPropagatesOnResume) {
     auto sm = make_int_throws_after_first_yield();
-    ASSERT_EQ(sm.resume(), 1);
+    sm.resume();
+    ASSERT_TRUE(sm.has_yield());
+    EXPECT_EQ(sm.consume_yield(), 1);
     EXPECT_THROW(sm.resume(), std::runtime_error);
     EXPECT_THROW(sm.resume(), std::runtime_error);
 }
@@ -256,13 +286,56 @@ TEST_F(StateMachineTest, JointStyleLoopForwardsNullTerminator) {
     auto sm = make_pointer_yields_with_terminal_null();
     std::vector<const int*> forwarded;
     while (!sm.done()) {
-        auto res = sm.resume();
-        if (res.has_value())
-            forwarded.push_back(res.value());
+        sm.resume();
+        if (sm.has_yield())
+            forwarded.push_back(sm.consume_yield());
     }
     ASSERT_EQ(forwarded.size(), 4u);
     EXPECT_EQ(*forwarded[0], 1);
     EXPECT_EQ(*forwarded[1], 2);
     EXPECT_EQ(*forwarded[2], 3);
     EXPECT_EQ(forwarded.back(), nullptr);
+}
+
+TEST_F(StateMachineTest, VoidSuspendTwiceThenReturn) {
+    auto sm = make_void_suspend_twice();
+    EXPECT_FALSE(sm.done());
+    sm.resume();
+    EXPECT_FALSE(sm.done());
+    sm.resume();
+    EXPECT_FALSE(sm.done());
+    sm.resume();
+    EXPECT_TRUE(sm.done());
+}
+
+TEST_F(StateMachineTest, SuspendThenReturnsInt) {
+    auto sm = make_suspend_then_return_int();
+    sm.resume();
+    EXPECT_FALSE(sm.done());
+    sm.resume();
+    ASSERT_TRUE(sm.done());
+    EXPECT_EQ(sm.result(), 99);
+}
+
+TEST_F(StateMachineTest, ValueYieldDifferentReturnType) {
+    auto sm = make_int_yield_string_return();
+    std::vector<int> yields;
+    while (!sm.done()) {
+        sm.resume();
+        if (sm.has_yield())
+            yields.push_back(sm.consume_yield());
+    }
+    EXPECT_THAT(yields, ElementsAre(1, 2));
+    ASSERT_TRUE(sm.done());
+    EXPECT_EQ(sm.result(), "done");
+}
+
+TEST_F(StateMachineTest, ConsumeYieldWithoutYieldThrows) {
+    auto sm = make_int_two_yields();
+    EXPECT_THROW(sm.consume_yield(), std::logic_error);
+}
+
+TEST_F(StateMachineTest, ResultBeforeDoneThrows) {
+    auto sm = make_suspend_then_return_int();
+    EXPECT_THROW(sm.result(), std::logic_error);
 }
