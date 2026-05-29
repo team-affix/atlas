@@ -163,6 +163,13 @@ TEST_F(CdclEliminationGeneratorUnitTest, ConstrainMember1YieldsMember2InBinaryAv
     EXPECT_THAT(elims, ElementsAre(&lin_1_0));
 }
 
+TEST_F(CdclEliminationGeneratorUnitTest, SecondConstrainOnSameGoalYieldsNothing) {
+    cdcl.learn(make_lemma({&lin_0_0, &lin_1_0}));
+
+    EXPECT_THAT(collect_elims(cdcl.constrain(&lin_0_0)), ElementsAre(&lin_1_0));
+    EXPECT_THAT(collect_elims(cdcl.constrain(&lin_0_0)), IsEmpty());
+}
+
 TEST_F(CdclEliminationGeneratorUnitTest, ConstrainMutuallyExclusiveResolutionErasesWithoutYield) {
     cdcl.learn(make_lemma({&lin_0_0, &lin_1_0}));
 

@@ -1,6 +1,7 @@
 // joint_elimination_generator composes CDCL and MHU elimination streams. These unit
 // tests mock elimination via i_elimination_generator and assert constrain() ordering;
 // the joint stream ends with co_return (resume() -> std::nullopt), not a null pointer yield.
+// Duplicate yields for the same candidate are forwarded; elimination_router deduplicates.
 
 #include <gtest/gtest.h>
 #include "locator_fixture.hpp"

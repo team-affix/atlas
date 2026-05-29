@@ -138,6 +138,32 @@ TEST_F(JointEliminationGeneratorIntegrationTest, ConstrainYieldsCdclThenMhuElims
     EXPECT_THAT(collect_elims(joint->constrain(rl0)), ElementsAre(rl1, rl_other));
 }
 
+TEST_F(JointEliminationGeneratorIntegrationTest,
+    ConstrainMayYieldSameCandidateTwiceWhenCdclAndMhuAgree) {
+    /*
+     * CDCL avoidance {rl0, rl1} and MHU f/g heads on the same rep both eliminate rl1 when
+     * constraining rl0. Joint forwards both yields; elimination_router deduplicates on route.
+     */
+    expr goal{expr::var{0}};
+    expr head_f{expr::functor{"f", {}}};
+    expr head_g{expr::functor{"g", {}}};
+
+    goal_lineage* gl0 = const_cast<goal_lineage*>(lp.make_goal_lineage(nullptr, 0));
+    goal_lineage* gl1 = const_cast<goal_lineage*>(lp.make_goal_lineage(nullptr, 1));
+    resolution_lineage* rl0 =
+        const_cast<resolution_lineage*>(lp.make_resolution_lineage(gl0, rule_id{0}));
+    resolution_lineage* rl1 =
+        const_cast<resolution_lineage*>(lp.make_resolution_lineage(gl1, rule_id{0}));
+    ggcr.link_goal_candidate(gl0, rule_id{0});
+    ggcr.link_goal_candidate(gl1, rule_id{0});
+
+    ASSERT_EQ(cdcl->learn(lemma{{rl0, rl1}}), std::nullopt);
+    ASSERT_TRUE(mhu->try_add_head(rl0, &goal, &head_f));
+    ASSERT_TRUE(mhu->try_add_head(rl1, &goal, &head_g));
+
+    EXPECT_THAT(collect_elims(joint->constrain(rl0)), ElementsAre(rl1, rl1));
+}
+
 TEST_F(JointEliminationGeneratorIntegrationTest, ConstrainYieldsNothingWhenBothStreamsEmpty) {
     expr goal_a{expr::var{0}};
     expr goal_b{expr::var{0}};
