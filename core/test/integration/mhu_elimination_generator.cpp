@@ -1,4 +1,6 @@
-// mhu_elimination_generator integration — real unify/MHU slice (trail, bind_map, factories, …)
+// mhu_elimination_generator integration — real unify/MHU slice (trail, bind_map, factories, …).
+// Cross-goal cases check rebase-driven elimination when shared reps become inconsistent across
+// heads, and that partial rep constraints (e.g. g(B) only) do not spuriously eliminate other heads.
 
 #include <gtest/gtest.h>
 #include <gmock/gmock.h>
@@ -216,6 +218,165 @@ TEST_F(MhuEliminationGeneratorIntegrationTest,
 
     EXPECT_THAT(collect_elims(mhu->constrain(rl_rule0)), ElementsAre(rl_other));
     expect_whnf_functor(common, &goal, "f", 0);
+}
+
+TEST_F(MhuEliminationGeneratorIntegrationTest,
+    ConstrainFxXHeadEliminatesGroundGHeadOnSharedReps) {
+    constexpr uint32_t kIdxA = 0;
+    constexpr uint32_t kIdxB = 1;
+    constexpr uint32_t kIdxHeadX = 2;
+
+    expr var_a{expr::var{kIdxA}};
+    expr var_b{expr::var{kIdxB}};
+    expr goal_f{expr::functor{"f", {&var_a, &var_b}}};
+    expr head_x{expr::var{kIdxHeadX}};
+    expr head_fxx{expr::functor{"f", {&head_x, &head_x}}};
+
+    expr abc{expr::functor{"abc", {}}};
+    expr _123{expr::functor{"123", {}}};
+    expr goal_g{expr::functor{"g", {&var_a, &var_b}}};
+    expr head_g{expr::functor{"g", {&abc, &_123}}};
+
+    goal_lineage* gl_f = const_cast<goal_lineage*>(lp.make_goal_lineage(nullptr, 0));
+    goal_lineage* gl_g = const_cast<goal_lineage*>(lp.make_goal_lineage(nullptr, 1));
+    resolution_lineage* rl_f =
+        const_cast<resolution_lineage*>(lp.make_resolution_lineage(gl_f, rule_id{0}));
+    resolution_lineage* rl_g =
+        const_cast<resolution_lineage*>(lp.make_resolution_lineage(gl_g, rule_id{0}));
+    ggcr.link_goal_candidate(gl_f, rule_id{0});
+    ggcr.link_goal_candidate(gl_g, rule_id{0});
+
+    ASSERT_TRUE(mhu->try_add_head(rl_f, &goal_f, &head_fxx));
+    ASSERT_TRUE(mhu->try_add_head(rl_g, &goal_g, &head_g));
+    ASSERT_EQ(common.whnf(&var_a), &var_a);
+    ASSERT_EQ(common.whnf(&var_b), &var_b);
+
+    EXPECT_THAT(collect_elims(mhu->constrain(rl_f)), ElementsAre(rl_g));
+    EXPECT_EQ(common.whnf(&var_a), common.whnf(&var_b));
+}
+
+TEST_F(MhuEliminationGeneratorIntegrationTest,
+    ConstrainGroundGHeadEliminatesFxXHeadOnSharedReps) {
+    constexpr uint32_t kIdxA = 0;
+    constexpr uint32_t kIdxB = 1;
+    constexpr uint32_t kIdxHeadX = 2;
+    rule_id rule_f_id = rule_id{0};
+    rule_id rule_g_id = rule_id{1};
+
+    expr var_a{expr::var{kIdxA}};
+    expr var_b{expr::var{kIdxB}};
+    expr goal_f{expr::functor{"f", {&var_a, &var_b}}};
+    expr head_x{expr::var{kIdxHeadX}};
+    expr head_fxx{expr::functor{"f", {&head_x, &head_x}}};
+
+    expr abc{expr::functor{"abc", {}}};
+    expr _123{expr::functor{"123", {}}};
+    expr goal_g{expr::functor{"g", {&var_a, &var_b}}};
+    expr head_g{expr::functor{"g", {&abc, &_123}}};
+
+    goal_lineage* gl_f = const_cast<goal_lineage*>(lp.make_goal_lineage(nullptr, 0));
+    goal_lineage* gl_g = const_cast<goal_lineage*>(lp.make_goal_lineage(nullptr, 1));
+    resolution_lineage* rl_f =
+        const_cast<resolution_lineage*>(lp.make_resolution_lineage(gl_f, rule_f_id));
+    resolution_lineage* rl_g =
+        const_cast<resolution_lineage*>(lp.make_resolution_lineage(gl_g, rule_g_id));
+    ggcr.link_goal_candidate(gl_f, rule_f_id);
+    ggcr.link_goal_candidate(gl_g, rule_g_id);
+
+    ASSERT_TRUE(mhu->try_add_head(rl_f, &goal_f, &head_fxx));
+    ASSERT_TRUE(mhu->try_add_head(rl_g, &goal_g, &head_g));
+    ASSERT_EQ(common.whnf(&var_a), &var_a);
+    ASSERT_EQ(common.whnf(&var_b), &var_b);
+
+    EXPECT_THAT(collect_elims(mhu->constrain(rl_g)), ElementsAre(rl_f));
+    const auto& whnf_a = std::get<expr::functor>(common.whnf(&var_a)->content);
+    const auto& whnf_b = std::get<expr::functor>(common.whnf(&var_b)->content);
+    EXPECT_EQ(whnf_a.name, "abc");
+    EXPECT_TRUE(whnf_a.args.empty());
+    EXPECT_EQ(whnf_b.name, "123");
+    EXPECT_TRUE(whnf_b.args.empty());
+}
+
+TEST_F(MhuEliminationGeneratorIntegrationTest,
+    ConstrainGroundGHeadDoesNotEliminateFxXHead) {
+    constexpr uint32_t kIdxA = 0;
+    constexpr uint32_t kIdxB = 1;
+    constexpr uint32_t kIdxHeadX = 2;
+
+    expr var_a{expr::var{kIdxA}};
+    expr var_b{expr::var{kIdxB}};
+    expr goal_f{expr::functor{"f", {&var_a, &var_b}}};
+    expr head_x{expr::var{kIdxHeadX}};
+    expr head_fxx{expr::functor{"f", {&head_x, &head_x}}};
+
+    expr abc{expr::functor{"abc", {}}};
+    expr goal_g{expr::functor{"g", {&var_b}}};
+    expr head_g{expr::functor{"g", {&abc}}};
+
+    goal_lineage* gl_f = const_cast<goal_lineage*>(lp.make_goal_lineage(nullptr, 0));
+    goal_lineage* gl_g = const_cast<goal_lineage*>(lp.make_goal_lineage(nullptr, 1));
+    resolution_lineage* rl_f =
+        const_cast<resolution_lineage*>(lp.make_resolution_lineage(gl_f, rule_id{0}));
+    resolution_lineage* rl_g =
+        const_cast<resolution_lineage*>(lp.make_resolution_lineage(gl_g, rule_id{0}));
+    ggcr.link_goal_candidate(gl_f, rule_id{0});
+    ggcr.link_goal_candidate(gl_g, rule_id{0});
+
+    ASSERT_TRUE(mhu->try_add_head(rl_f, &goal_f, &head_fxx));
+    ASSERT_TRUE(mhu->try_add_head(rl_g, &goal_g, &head_g));
+    ASSERT_EQ(common.whnf(&var_a), &var_a);
+    ASSERT_EQ(common.whnf(&var_b), &var_b);
+
+    EXPECT_THAT(collect_elims(mhu->constrain(rl_g)), IsEmpty());
+    const auto& whnf_b = std::get<expr::functor>(common.whnf(&var_b)->content);
+    EXPECT_EQ(whnf_b.name, "abc");
+    EXPECT_TRUE(whnf_b.args.empty());
+    EXPECT_EQ(common.whnf(&var_a), &var_a);
+}
+
+TEST_F(MhuEliminationGeneratorIntegrationTest,
+    ConstrainFxXHeadAfterGroundGHeadBindsAWithoutEliminatingG) {
+    constexpr uint32_t kIdxA = 0;
+    constexpr uint32_t kIdxB = 1;
+    constexpr uint32_t kIdxHeadX = 2;
+
+    expr var_a{expr::var{kIdxA}};
+    expr var_b{expr::var{kIdxB}};
+    expr goal_f{expr::functor{"f", {&var_a, &var_b}}};
+    expr head_x{expr::var{kIdxHeadX}};
+    expr head_fxx{expr::functor{"f", {&head_x, &head_x}}};
+
+    expr abc{expr::functor{"abc", {}}};
+    expr goal_g{expr::functor{"g", {&var_b}}};
+    expr head_g{expr::functor{"g", {&abc}}};
+
+    goal_lineage* gl_f = const_cast<goal_lineage*>(lp.make_goal_lineage(nullptr, 0));
+    goal_lineage* gl_g = const_cast<goal_lineage*>(lp.make_goal_lineage(nullptr, 1));
+    resolution_lineage* rl_f =
+        const_cast<resolution_lineage*>(lp.make_resolution_lineage(gl_f, rule_id{0}));
+    resolution_lineage* rl_g =
+        const_cast<resolution_lineage*>(lp.make_resolution_lineage(gl_g, rule_id{0}));
+    ggcr.link_goal_candidate(gl_f, rule_id{0});
+    ggcr.link_goal_candidate(gl_g, rule_id{0});
+
+    ASSERT_TRUE(mhu->try_add_head(rl_f, &goal_f, &head_fxx));
+    ASSERT_TRUE(mhu->try_add_head(rl_g, &goal_g, &head_g));
+    ASSERT_EQ(common.whnf(&var_a), &var_a);
+    ASSERT_EQ(common.whnf(&var_b), &var_b);
+
+    EXPECT_THAT(collect_elims(mhu->constrain(rl_g)), IsEmpty());
+    const auto& whnf_b_after_g = std::get<expr::functor>(common.whnf(&var_b)->content);
+    EXPECT_EQ(whnf_b_after_g.name, "abc");
+    EXPECT_TRUE(whnf_b_after_g.args.empty());
+    EXPECT_EQ(common.whnf(&var_a), &var_a);
+
+    EXPECT_THAT(collect_elims(mhu->constrain(rl_f)), IsEmpty());
+    const auto& whnf_a = std::get<expr::functor>(common.whnf(&var_a)->content);
+    const auto& whnf_b = std::get<expr::functor>(common.whnf(&var_b)->content);
+    EXPECT_EQ(whnf_a.name, "abc");
+    EXPECT_TRUE(whnf_a.args.empty());
+    EXPECT_EQ(whnf_b.name, "abc");
+    EXPECT_TRUE(whnf_b.args.empty());
 }
 
 TEST_F(MhuEliminationGeneratorIntegrationTest,
