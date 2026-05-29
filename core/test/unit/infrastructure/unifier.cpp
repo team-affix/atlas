@@ -433,3 +433,123 @@ TEST_F(UnifierTest, UnifyBinaryFunctorsWhnfResolvesFirstArgSkipsItsBind) {
     EXPECT_TRUE(u.unify(&f2_var0_var1, &f2_func_func2, snk));
     EXPECT_THAT(snk, UnorderedElementsAre(1u));
 }
+
+TEST_F(UnifierTest, UnifyTernaryFunctorsSecondArgFailsThirdNeverAttempted) {
+    expr lhs{expr::functor{"f", {&func, &func, &var2}}};
+    expr rhs{expr::functor{"f", {&func, &func2, &var2}}};
+
+    EXPECT_CALL(bm, bind).Times(0);
+    EXPECT_CALL(bm, whnf(&lhs)).WillRepeatedly(Return(&lhs));
+    EXPECT_CALL(bm, whnf(&rhs)).WillRepeatedly(Return(&rhs));
+    EXPECT_CALL(bm, whnf(&func)).WillRepeatedly(Return(&func));
+    EXPECT_CALL(bm, whnf(&func2)).WillRepeatedly(Return(&func2));
+    EXPECT_CALL(bm, whnf(&var2)).WillRepeatedly(Return(&var2));
+
+    EXPECT_FALSE(u.unify(&lhs, &rhs, snk));
+    EXPECT_THAT(snk, IsEmpty());
+}
+
+TEST_F(UnifierTest, UnifyBinaryFunctorsWhnfResolvesBothArgsSkipsAllBinds) {
+    EXPECT_CALL(bm, bind).Times(0);
+    EXPECT_CALL(bm, whnf(&f2_var0_var1)).WillRepeatedly(Return(&f2_var0_var1));
+    EXPECT_CALL(bm, whnf(&f2_func_func2)).WillRepeatedly(Return(&f2_func_func2));
+    EXPECT_CALL(bm, whnf(&var0)).WillRepeatedly(Return(&func));
+    EXPECT_CALL(bm, whnf(&var1)).WillRepeatedly(Return(&func2));
+    EXPECT_CALL(bm, whnf(&func)).WillRepeatedly(Return(&func));
+    EXPECT_CALL(bm, whnf(&func2)).WillRepeatedly(Return(&func2));
+
+    EXPECT_TRUE(u.unify(&f2_var0_var1, &f2_func_func2, snk));
+    EXPECT_THAT(snk, IsEmpty());
+}
+
+// ---------------------------------------------------------------------------
+// Entry whnf changes branch shape; symmetric occurs and inner recursive unify
+// ---------------------------------------------------------------------------
+
+TEST_F(UnifierTest, UnifyAfterWhnfLhsFunctorRhsVarBindsYoungerVar) {
+    EXPECT_CALL(bm, whnf(&var0)).WillRepeatedly(Return(&func));
+    EXPECT_CALL(bm, whnf(&var1)).WillRepeatedly(Return(&var1));
+    EXPECT_CALL(bm, whnf(&func)).WillRepeatedly(Return(&func));
+    EXPECT_CALL(bm, bind(1u, &func));
+
+    EXPECT_TRUE(u.unify(&var0, &var1, snk));
+    EXPECT_THAT(snk, UnorderedElementsAre(1u));
+}
+
+TEST_F(UnifierTest, UnifyFunctorLhsVarRhsFailsWhenWhnfRevealsArgAliasesVar) {
+    EXPECT_CALL(bm, bind).Times(0);
+    EXPECT_CALL(bm, whnf(&f_var1)).WillRepeatedly(Return(&f_var1));
+    EXPECT_CALL(bm, whnf(&var0)).WillRepeatedly(Return(&var0));
+    EXPECT_CALL(bm, whnf(&var1)).WillRepeatedly(Return(&var0));
+
+    EXPECT_FALSE(u.unify(&f_var1, &var0, snk));
+    EXPECT_THAT(snk, IsEmpty());
+}
+
+TEST_F(UnifierTest, UnifyFunctorArgsWhnfBothResolveToSameVarNoBind) {
+    EXPECT_CALL(bm, bind).Times(0);
+    EXPECT_CALL(bm, whnf(&f_var0)).WillRepeatedly(Return(&f_var0));
+    EXPECT_CALL(bm, whnf(&f_var1)).WillRepeatedly(Return(&f_var1));
+    EXPECT_CALL(bm, whnf(&var0)).WillRepeatedly(Return(&var2));
+    EXPECT_CALL(bm, whnf(&var1)).WillRepeatedly(Return(&var2));
+
+    EXPECT_TRUE(u.unify(&f_var0, &f_var1, snk));
+    EXPECT_THAT(snk, IsEmpty());
+}
+
+TEST_F(UnifierTest, UnifyBinaryFunctorsWhnfResolvesSecondArgSkipsItsBind) {
+    EXPECT_CALL(bm, whnf(&f2_var0_var1)).WillRepeatedly(Return(&f2_var0_var1));
+    EXPECT_CALL(bm, whnf(&f2_func_func2)).WillRepeatedly(Return(&f2_func_func2));
+    EXPECT_CALL(bm, whnf(&var0)).WillRepeatedly(Return(&var0));
+    EXPECT_CALL(bm, whnf(&var1)).WillRepeatedly(Return(&func2));
+    EXPECT_CALL(bm, whnf(&func)).WillRepeatedly(Return(&func));
+    EXPECT_CALL(bm, whnf(&func2)).WillRepeatedly(Return(&func2));
+    EXPECT_CALL(bm, bind(0u, &func));
+
+    EXPECT_TRUE(u.unify(&f2_var0_var1, &f2_func_func2, snk));
+    EXPECT_THAT(snk, UnorderedElementsAre(0u));
+}
+
+// ---------------------------------------------------------------------------
+// Optional polish — partial ternary snk, occurs WHNF on whole other_e, depth-2 WHNF
+// ---------------------------------------------------------------------------
+
+TEST_F(UnifierTest, UnifyTernaryFunctorsSecondArgFailsAfterFirstBinds) {
+    expr lhs{expr::functor{"f", {&var0, &func, &var2}}};
+    expr rhs{expr::functor{"f", {&func, &func2, &var2}}};
+
+    EXPECT_CALL(bm, whnf(&lhs)).WillRepeatedly(Return(&lhs));
+    EXPECT_CALL(bm, whnf(&rhs)).WillRepeatedly(Return(&rhs));
+    EXPECT_CALL(bm, whnf(&var0)).WillRepeatedly(Return(&var0));
+    EXPECT_CALL(bm, whnf(&func)).WillRepeatedly(Return(&func));
+    EXPECT_CALL(bm, whnf(&func2)).WillRepeatedly(Return(&func2));
+    EXPECT_CALL(bm, whnf(&var2)).WillRepeatedly(Return(&var2));
+    EXPECT_CALL(bm, bind(0u, &func));
+
+    EXPECT_FALSE(u.unify(&lhs, &rhs, snk));
+    EXPECT_THAT(snk, UnorderedElementsAre(0u));
+}
+
+TEST_F(UnifierTest, UnifyVarToFunctorFailsWhenWhnfCollapsesOtherToSameVar) {
+    EXPECT_CALL(bm, bind).Times(0);
+    EXPECT_CALL(bm, whnf(&var0)).WillRepeatedly(Return(&var0));
+    EXPECT_CALL(bm, whnf(&f_var1))
+        .WillOnce(Return(&f_var1))
+        .WillRepeatedly(Return(&var0));
+
+    EXPECT_FALSE(u.unify(&var0, &f_var1, snk));
+    EXPECT_THAT(snk, IsEmpty());
+}
+
+TEST_F(UnifierTest, UnifyDepth2FunctorsInnerArgWhnfSkipsBind) {
+    EXPECT_CALL(bm, bind).Times(0);
+    EXPECT_CALL(bm, whnf(&f_f_var0)).WillRepeatedly(Return(&f_f_var0));
+    EXPECT_CALL(bm, whnf(&f_f_func)).WillRepeatedly(Return(&f_f_func));
+    EXPECT_CALL(bm, whnf(&f_var0)).WillRepeatedly(Return(&f_var0));
+    EXPECT_CALL(bm, whnf(&f_func)).WillRepeatedly(Return(&f_func));
+    EXPECT_CALL(bm, whnf(&var0)).WillRepeatedly(Return(&func));
+    EXPECT_CALL(bm, whnf(&func)).WillRepeatedly(Return(&func));
+
+    EXPECT_TRUE(u.unify(&f_f_var0, &f_f_func, snk));
+    EXPECT_THAT(snk, IsEmpty());
+}
