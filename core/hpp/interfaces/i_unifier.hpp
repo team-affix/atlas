@@ -7,6 +7,7 @@
 
 struct i_unifier {
     virtual ~i_unifier() = default;
+    // snk accumulates touched var indices (both sides of each unify step after WHNF)
     virtual bool unify(const expr*, const expr*, std::unordered_set<uint32_t>&) = 0;
 };
 

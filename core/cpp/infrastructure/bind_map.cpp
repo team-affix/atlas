@@ -5,7 +5,12 @@ bind_map::bind_map() {
 }
 
 void bind_map::bind(uint32_t index, const expr* e) {
+    // make sure we bind younger to older
+    DEBUG_ASSERT(
+        !std::holds_alternative<expr::var>(e->content)
+        || index > std::get<expr::var>(e->content).index);
     auto [_, inserted] = bindings.insert({index, e});
+    // make sure we actually bound
     DEBUG_ASSERT(inserted);
 }
 

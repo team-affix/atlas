@@ -61,13 +61,18 @@ state_machine<const resolution_lineage*> mhu_elimination_generator::constrain(co
     
     // 6. for each rep change, add the link to new rep
     for (auto rep : rep_changes) {
+        // 6.1 get the old rep
+        auto old_rep = make_var_.make(rep);
         // 6.1 get new whnf
-        auto new_rep = head.local_bind_map->whnf(make_var_.make(rep));
-        // 6.2 bind the old rep to the new rep
+        auto new_rep = head.local_bind_map->whnf(old_rep);
+        // 6.2 if the rep did not change, skip
+        if (*old_rep == *new_rep)
+            continue;
+        // 6.3 bind the old rep to the new rep
         common_.bind(rep, new_rep);
-        // 6.3 propagate the rep changes to all concerned heads
+        // 6.4 propagate the rep changes to all concerned heads
         auto sm0 = rebase(rep, new_rep);
-        // 6.4 wait for the revalidation to complete
+        // 6.5 wait for the revalidation to complete
         while (!sm0.done()) {
             auto elim = sm0.resume();
             if (elim.has_value())

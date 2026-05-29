@@ -30,14 +30,14 @@ TEST_F(UnifierBindMapIntegrationTest, UnifyVarAndFunctorBindsVarInRealBindMap) {
 
 TEST_F(UnifierBindMapIntegrationTest, YoungerRhsBindsToOlderLhs) {
     EXPECT_TRUE(u->unify(&var0, &var1, snk));
-    EXPECT_EQ(snk, (std::unordered_set<uint32_t>{1}));
+    EXPECT_EQ(snk, (std::unordered_set<uint32_t>{0, 1}));
     EXPECT_EQ(bm.whnf(&var1), &var0);
     EXPECT_EQ(bm.whnf(&var0), &var0);
 }
 
 TEST_F(UnifierBindMapIntegrationTest, YoungerLhsBindsToOlderRhs) {
     EXPECT_TRUE(u->unify(&var1, &var0, snk));
-    EXPECT_EQ(snk, (std::unordered_set<uint32_t>{1}));
+    EXPECT_EQ(snk, (std::unordered_set<uint32_t>{0, 1}));
     EXPECT_EQ(bm.whnf(&var1), &var0);
     EXPECT_EQ(bm.whnf(&var0), &var0);
 }
@@ -62,7 +62,7 @@ TEST_F(UnifierBindMapIntegrationTest, UnifyTwoVarChainsMergesToOldestRepr) {
     bm.bind(5, &var4);
 
     EXPECT_TRUE(u->unify(&var2, &var5, snk));
-    EXPECT_EQ(snk, (std::unordered_set<uint32_t>{3}));
+    EXPECT_EQ(snk, (std::unordered_set<uint32_t>{0, 3}));
     EXPECT_EQ(bm.whnf(&var2), &var0);
     EXPECT_EQ(bm.whnf(&var5), &var0);
 }
@@ -88,7 +88,7 @@ TEST_F(UnifierBindMapIntegrationTest, ManyScrambledUnificationsAllWhnfToOldestVa
 TEST_F(UnifierBindMapIntegrationTest, UnifyVarToFunctorContainingSameVarFails) {
     expr f_var0{expr::functor{"f", {&var0}}};
     EXPECT_FALSE(u->unify(&var0, &f_var0, snk));
-    EXPECT_TRUE(snk.empty());
+    EXPECT_EQ(snk, (std::unordered_set<uint32_t>{0}));
     EXPECT_EQ(bm.whnf(&var0), &var0);
 }
 

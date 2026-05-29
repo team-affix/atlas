@@ -37,6 +37,10 @@ TEST_F(BindMapTest, BindRejectsDuplicateBinding) {
     EXPECT_THROW(bm.bind(0, &var1), std::logic_error);
 }
 
+TEST_F(BindMapTest, BindRejectsOlderVarBoundToYoungerVar) {
+    EXPECT_THROW(bm.bind(0, &var1), std::logic_error);
+}
+
 TEST_F(BindMapTest, WhnfPathCompressionUpdatesChainWithoutPublicRebind) {
     bm.bind(0, &var1);
     bm.bind(1, &func);

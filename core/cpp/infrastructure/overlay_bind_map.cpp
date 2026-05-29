@@ -10,8 +10,5 @@ void overlay_bind_map::bind(uint32_t index, const expr* e) {
 }
 
 const expr* overlay_bind_map::whnf(const expr* e) {
-    const expr* result = local_.whnf(e);
-    if (result != e)
-        return result;
-    return remote_.whnf(e);
+    return remote_.whnf(local_.whnf(e));
 }

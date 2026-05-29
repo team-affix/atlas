@@ -12,6 +12,11 @@ bool unifier::unify(const expr* lhs, const expr* rhs, std::unordered_set<uint32_
     const expr::var* lv = std::get_if<expr::var>(&lhs->content);
     const expr::var* rv = std::get_if<expr::var>(&rhs->content);
 
+    if (lv)
+        snk.insert(lv->index);
+    if (rv)
+        snk.insert(rv->index);
+
     // If both sides are variables, bind the younger (higher index) to the older
     if (lv && rv) {
         if (lv->index == rv->index)
@@ -22,7 +27,6 @@ bool unifier::unify(const expr* lhs, const expr* rhs, std::unordered_set<uint32_
         if (occurs_check(young->index, target))
             return false;
         bind_map.bind(young->index, target);
-        snk.insert(young->index);
         return true;
     }
 
@@ -34,7 +38,6 @@ bool unifier::unify(const expr* lhs, const expr* rhs, std::unordered_set<uint32_
         if (occurs_check(v->index, other_e))
             return false;
         bind_map.bind(v->index, other_e);
-        snk.insert(v->index);
         return true;
     }
 
