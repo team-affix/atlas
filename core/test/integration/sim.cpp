@@ -301,18 +301,6 @@ struct sim_stack {
         loc.bind_as<i_generate_decision>(decision_generator);
         loc.bind_as<i_resolver>(resolver_);
     }
-
-    sim make_sim(size_t max_resolutions) const {
-        return sim{const_cast<locator&>(loc), max_resolutions};
-    }
-
-    const goal_lineage* root_goal() {
-        return loc.locate<i_make_initial_goal_lineage>().make(0);
-    }
-
-    const resolution_lineage* resolution_for(rule_id rid) {
-        return loc.locate<i_make_resolution_lineage>().make_resolution_lineage(root_goal(), rid);
-    }
 };
 
 }  // namespace
@@ -328,7 +316,7 @@ struct SimIntegrationTest : public ::testing::Test {
 TEST_F(SimIntegrationTest, RunWithNoInitialGoalsAndEmptyDbNeverGeneratesDecision) {
     EXPECT_CALL(stack.decision_generator, generate()).Times(0);
 
-    sim simulation = stack.make_sim(kDefaultMaxResolutions);
+    sim simulation{stack.loc, kDefaultMaxResolutions};
     simulation.set_up();
     EXPECT_EQ(simulation.run(), sim_termination::solved);
     simulation.tear_down();
@@ -340,7 +328,7 @@ TEST_F(SimIntegrationTest, RunReturnsConflictedWhenInitialGoalHasNoDbCandidates)
 
     EXPECT_CALL(stack.decision_generator, generate()).Times(0);
 
-    sim simulation = stack.make_sim(kDefaultMaxResolutions);
+    sim simulation{stack.loc, kDefaultMaxResolutions};
     simulation.set_up();
     EXPECT_EQ(simulation.run(), sim_termination::conflicted);
     simulation.tear_down();
@@ -354,7 +342,7 @@ TEST_F(SimIntegrationTest, RunReturnsSolvedWhenUnitFactAppliesToInitialGoal) {
 
     EXPECT_CALL(stack.decision_generator, generate()).Times(0);
 
-    sim simulation = stack.make_sim(kDefaultMaxResolutions);
+    sim simulation{stack.loc, kDefaultMaxResolutions};
     simulation.set_up();
     EXPECT_EQ(simulation.run(), sim_termination::solved);
     simulation.tear_down();
@@ -368,7 +356,7 @@ TEST_F(SimIntegrationTest, RunReturnsConflictedWhenDbRuleHeadFailsToUnifyWithGoa
 
     EXPECT_CALL(stack.decision_generator, generate()).Times(0);
 
-    sim simulation = stack.make_sim(kDefaultMaxResolutions);
+    sim simulation{stack.loc, kDefaultMaxResolutions};
     simulation.set_up();
     EXPECT_EQ(simulation.run(), sim_termination::conflicted);
     simulation.tear_down();
@@ -384,8 +372,28 @@ TEST_F(SimIntegrationTest, RunReturnsSolvedWhenOnlyOneOfTwoDbRulesUnifiesWithGoa
 
     EXPECT_CALL(stack.decision_generator, generate()).Times(0);
 
-    sim simulation = stack.make_sim(kDefaultMaxResolutions);
+    sim simulation{stack.loc, kDefaultMaxResolutions};
     simulation.set_up();
     EXPECT_EQ(simulation.run(), sim_termination::solved);
     simulation.tear_down();
 }
+
+TEST_F(SimIntegrationTest, RunReturnsSolvedAfterSingleDecisionWithTwoMatchingFacts) {
+    expr goal{expr::functor{"f", {}}};
+    expr head0{expr::functor{"f", {}}};
+    expr head1{expr::functor{"f", {}}};
+    initial_goals.push(&goal);
+    database.push(rule{&head0, {}});
+    database.push(rule{&head1, {}});
+
+    const goal_lineage* gl = stack.loc.locate<i_make_initial_goal_lineage>().make(0);
+    const resolution_lineage* chosen =
+        stack.loc.locate<i_make_resolution_lineage>().make_resolution_lineage(gl, rule_id{1});
+    EXPECT_CALL(stack.decision_generator, generate()).WillOnce(Return(chosen));
+
+    sim simulation{stack.loc, kDefaultMaxResolutions};
+    simulation.set_up();
+    EXPECT_EQ(simulation.run(), sim_termination::solved);
+    simulation.tear_down();
+}
+
