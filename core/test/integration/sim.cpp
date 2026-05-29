@@ -397,3 +397,20 @@ TEST_F(SimIntegrationTest, RunReturnsSolvedAfterSingleDecisionWithTwoMatchingFac
     simulation.tear_down();
 }
 
+TEST_F(SimIntegrationTest, RunReturnsSolvedViaClauseThenBodyFactWithoutDecisions) {
+    expr goal{expr::functor{"f", {}}};
+    expr f_head{expr::functor{"f", {}}};
+    expr g_body{expr::functor{"g", {}}};
+    expr g_head{expr::functor{"g", {}}};
+    initial_goals.push(&goal);
+    database.push(rule{&f_head, {&g_body}});
+    database.push(rule{&g_head, {}});
+
+    EXPECT_CALL(stack.decision_generator, generate()).Times(0);
+
+    sim simulation{stack.loc, kDefaultMaxResolutions};
+    simulation.set_up();
+    EXPECT_EQ(simulation.run(), sim_termination::solved);
+    simulation.tear_down();
+}
+
