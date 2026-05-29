@@ -334,3 +334,29 @@ TEST_F(SimIntegrationTest, RunWithNoInitialGoalsAndEmptyDbNeverGeneratesDecision
     simulation.tear_down();
 }
 
+TEST_F(SimIntegrationTest, RunReturnsConflictedWhenInitialGoalHasNoDbCandidates) {
+    expr goal{expr::functor{"f", {}}};
+    initial_goals.push(&goal);
+
+    EXPECT_CALL(stack.decision_generator, generate()).Times(0);
+
+    sim simulation = stack.make_sim(kDefaultMaxResolutions);
+    simulation.set_up();
+    EXPECT_EQ(simulation.run(), sim_termination::conflicted);
+    simulation.tear_down();
+}
+
+TEST_F(SimIntegrationTest, RunReturnsSolvedWhenUnitFactAppliesToInitialGoal) {
+    expr goal{expr::functor{"f", {}}};
+    expr head{expr::functor{"f", {}}};
+    initial_goals.push(&goal);
+    database.push(rule{&head, {}});
+
+    EXPECT_CALL(stack.decision_generator, generate()).Times(0);
+
+    sim simulation = stack.make_sim(kDefaultMaxResolutions);
+    simulation.set_up();
+    EXPECT_EQ(simulation.run(), sim_termination::solved);
+    simulation.tear_down();
+}
+
