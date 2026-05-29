@@ -640,3 +640,29 @@ TEST_F(SimIntegrationTest, RunReturnsSolvedAfterOneDecisionOnInitialGoalKWithTwo
     EXPECT_EQ(simulation.run(), sim_termination::solved);
     simulation.tear_down();
 }
+
+TEST_F(SimIntegrationTest, RunReturnsSolvedAndBindsVarsViaMhuWhenFactUnifiesGoal) {
+    expr var_a{expr::var{0}};
+    expr var_b{expr::var{1}};
+    expr goal{expr::functor{"f", {&var_a, &var_b}}};
+    expr abc{expr::functor{"abc", {}}};
+    expr one_two_three{expr::functor{"123", {}}};
+    expr head{expr::functor{"f", {&abc, &one_two_three}}};
+    initial_goals.push(&goal);
+    database.push(rule{&head, {}});
+
+    i_bind_map& bind_map = stack.loc.locate<i_bind_map>();
+
+    EXPECT_CALL(stack.decision_generator, generate()).Times(0);
+
+    sim simulation{stack.loc, kDefaultMaxResolutions};
+    simulation.set_up();
+    EXPECT_EQ(simulation.run(), sim_termination::solved);
+    const expr::functor& whnf_a = std::get<expr::functor>(bind_map.whnf(&var_a)->content);
+    const expr::functor& whnf_b = std::get<expr::functor>(bind_map.whnf(&var_b)->content);
+    EXPECT_EQ(whnf_a.name, "abc");
+    EXPECT_TRUE(whnf_a.args.empty());
+    EXPECT_EQ(whnf_b.name, "123");
+    EXPECT_TRUE(whnf_b.args.empty());
+    simulation.tear_down();
+}
