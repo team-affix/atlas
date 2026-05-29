@@ -643,8 +643,8 @@ TEST_F(SimIntegrationTest, RunReturnsSolvedAfterOneDecisionOnInitialGoalKWithTwo
 
 TEST_F(SimIntegrationTest, RunReturnsSolvedAndBindsVarsViaMhuWhenFactUnifiesGoal) {
     expr abc{expr::functor{"abc", {}}};
-    expr one_two_three{expr::functor{"123", {}}};
-    expr head{expr::functor{"f", {&abc, &one_two_three}}};
+    expr _123{expr::functor{"123", {}}};
+    expr head{expr::functor{"f", {&abc, &_123}}};
     database.push(rule{&head, {}});
 
     i_bind_map& bind_map = stack.loc.locate<i_bind_map>();
@@ -676,12 +676,12 @@ TEST_F(SimIntegrationTest, RunReturnsSolvedViaClauseBodyFactsBindingVarsWithoutD
     expr rule_var_a{expr::var{0}};
     expr rule_var_b{expr::var{1}};
     expr abc{expr::functor{"abc", {}}};
-    expr one_two_three{expr::functor{"123", {}}};
+    expr _123{expr::functor{"123", {}}};
     expr f_head{expr::functor{"f", {&rule_var_a, &rule_var_b}}};
     expr g_body{expr::functor{"g", {&rule_var_a}}};
     expr h_body{expr::functor{"h", {&rule_var_b}}};
     expr g_head{expr::functor{"g", {&abc}}};
-    expr h_head{expr::functor{"h", {&one_two_three}}};
+    expr h_head{expr::functor{"h", {&_123}}};
     database.push(rule{&f_head, {&g_body, &h_body}});
     database.push(rule{&g_head, {}});
     database.push(rule{&h_head, {}});
@@ -714,10 +714,10 @@ TEST_F(SimIntegrationTest, RunReturnsSolvedViaClauseBodyFactsBindingVarsWithoutD
 TEST_F(SimIntegrationTest, RunReturnsSolvedAfterDecisionBindingVarsFromChosenFact) {
     expr abc{expr::functor{"abc", {}}};
     expr xyz{expr::functor{"xyz", {}}};
-    expr one_two_three{expr::functor{"123", {}}};
-    expr four_five_six{expr::functor{"456", {}}};
-    expr head0{expr::functor{"f", {&abc, &one_two_three}}};
-    expr head1{expr::functor{"f", {&xyz, &four_five_six}}};
+    expr _123{expr::functor{"123", {}}};
+    expr _456{expr::functor{"456", {}}};
+    expr head0{expr::functor{"f", {&abc, &_123}}};
+    expr head1{expr::functor{"f", {&xyz, &_456}}};
     database.push(rule{&head0, {}});
     database.push(rule{&head1, {}});
 
@@ -752,9 +752,9 @@ TEST_F(SimIntegrationTest, RunReturnsSolvedAfterDecisionBindingVarsFromChosenFac
 
 TEST_F(SimIntegrationTest, RunReturnsSolvedWhenMhuRejectsInconsistentRuleWithoutDecision) {
     expr abc{expr::functor{"abc", {}}};
-    expr one_two_three{expr::functor{"123", {}}};
+    expr _123{expr::functor{"123", {}}};
     expr head0{expr::functor{"f", {&abc, &abc}}};
-    expr head1{expr::functor{"f", {&abc, &one_two_three}}};
+    expr head1{expr::functor{"f", {&abc, &_123}}};
     database.push(rule{&head0, {}});
     database.push(rule{&head1, {}});
 
@@ -807,8 +807,8 @@ TEST_F(SimIntegrationTest, RunReturnsSolvedBindingVarInNestedFunctorArgWithoutDe
 
 TEST_F(SimIntegrationTest, RunReturnsSolvedBindingRemainingVarWhenGoalIsPartiallyGround) {
     expr abc{expr::functor{"abc", {}}};
-    expr one_two_three{expr::functor{"123", {}}};
-    expr head{expr::functor{"f", {&abc, &one_two_three}}};
+    expr _123{expr::functor{"123", {}}};
+    expr head{expr::functor{"f", {&abc, &_123}}};
     database.push(rule{&head, {}});
 
     i_bind_map& bind_map = stack.loc.locate<i_bind_map>();
@@ -829,5 +829,152 @@ TEST_F(SimIntegrationTest, RunReturnsSolvedBindingRemainingVarWhenGoalIsPartiall
     const expr::functor& whnf_b = std::get<expr::functor>(bind_map.whnf(var_b)->content);
     EXPECT_EQ(whnf_b.name, "123");
     EXPECT_TRUE(whnf_b.args.empty());
+    simulation.tear_down();
+}
+
+TEST_F(SimIntegrationTest, RunReturnsConflictedWhenClauseBodyGoalHasNoUnifyingFact) {
+    expr rule_var_a{expr::var{0}};
+    expr rule_var_b{expr::var{1}};
+    expr abc{expr::functor{"abc", {}}};
+    expr f_head{expr::functor{"f", {&rule_var_a, &rule_var_b}}};
+    expr g_body{expr::functor{"g", {&rule_var_a}}};
+    expr h_body{expr::functor{"h", {&rule_var_b}}};
+    expr g_head{expr::functor{"g", {&abc}}};
+    database.push(rule{&f_head, {&g_body, &h_body}});
+    database.push(rule{&g_head, {}});
+
+    EXPECT_CALL(stack.decision_generator, generate()).Times(0);
+
+    i_var_sequencer& seq = stack.loc.locate<i_var_sequencer>();
+    i_make_var& make_var = stack.loc.locate<i_make_var>();
+    i_make_functor& make_functor = stack.loc.locate<i_make_functor>();
+
+    sim simulation{stack.loc, kDefaultMaxResolutions};
+    simulation.set_up();
+    const expr* var_a = make_var.make(seq.next());
+    const expr* var_b = make_var.make(seq.next());
+    initial_goals.push(make_functor.make("f", {var_a, var_b}));
+
+    EXPECT_EQ(simulation.run(), sim_termination::conflicted);
+    simulation.tear_down();
+}
+
+TEST_F(SimIntegrationTest, RunReturnsConflictedWhenClauseBodyFactMismatchesGroundGoal) {
+    expr rule_var_a{expr::var{0}};
+    expr rule_var_b{expr::var{1}};
+    expr abc{expr::functor{"abc", {}}};
+    expr two_three_four{expr::functor{"234", {}}};
+    expr f_head{expr::functor{"f", {&rule_var_a, &rule_var_b}}};
+    expr g_body{expr::functor{"g", {&rule_var_a}}};
+    expr h_body{expr::functor{"h", {&rule_var_b}}};
+    expr g_head{expr::functor{"g", {&abc}}};
+    expr h_head{expr::functor{"h", {&two_three_four}}};
+    database.push(rule{&f_head, {&g_body, &h_body}});
+    database.push(rule{&g_head, {}});
+    database.push(rule{&h_head, {}});
+
+    EXPECT_CALL(stack.decision_generator, generate()).Times(0);
+
+    i_make_functor& make_functor = stack.loc.locate<i_make_functor>();
+
+    sim simulation{stack.loc, kDefaultMaxResolutions};
+    simulation.set_up();
+    initial_goals.push(make_functor.make("f",
+        {make_functor.make("abc", {}), make_functor.make("123", {})}));
+
+    EXPECT_EQ(simulation.run(), sim_termination::conflicted);
+    simulation.tear_down();
+}
+
+TEST_F(SimIntegrationTest, RunReturnsSolvedAfterDecisionOnBodyGoalWithTwoFacts) {
+    expr rule_var_a{expr::var{0}};
+    expr rule_var_b{expr::var{1}};
+    expr abc{expr::functor{"abc", {}}};
+    expr xyz{expr::functor{"xyz", {}}};
+    expr _123{expr::functor{"123", {}}};
+    expr f_head{expr::functor{"f", {&rule_var_a, &rule_var_b}}};
+    expr g_body{expr::functor{"g", {&rule_var_a}}};
+    expr h_body{expr::functor{"h", {&rule_var_b}}};
+    expr g_head0{expr::functor{"g", {&abc}}};
+    expr g_head1{expr::functor{"g", {&xyz}}};
+    expr h_head{expr::functor{"h", {&_123}}};
+    database.push(rule{&f_head, {&g_body, &h_body}});
+    database.push(rule{&g_head0, {}});
+    database.push(rule{&g_head1, {}});
+    database.push(rule{&h_head, {}});
+
+    i_make_initial_goal_lineage& make_initial_goal_lineage =
+        stack.loc.locate<i_make_initial_goal_lineage>();
+    i_make_resolution_lineage& make_resolution_lineage =
+        stack.loc.locate<i_make_resolution_lineage>();
+    i_make_goal_lineage& make_goal_lineage = stack.loc.locate<i_make_goal_lineage>();
+    i_bind_map& bind_map = stack.loc.locate<i_bind_map>();
+    i_var_sequencer& seq = stack.loc.locate<i_var_sequencer>();
+    i_make_var& make_var = stack.loc.locate<i_make_var>();
+    i_make_functor& make_functor = stack.loc.locate<i_make_functor>();
+
+    const goal_lineage* gl_f = make_initial_goal_lineage.make(0);
+    const resolution_lineage* rl_f =
+        make_resolution_lineage.make_resolution_lineage(gl_f, rule_id{0});
+    const goal_lineage* gl_g = make_goal_lineage.make_goal_lineage(rl_f, subgoal_id{0});
+    const resolution_lineage* chosen_g =
+        make_resolution_lineage.make_resolution_lineage(gl_g, rule_id{2});
+
+    EXPECT_CALL(stack.decision_generator, generate()).WillOnce(Return(chosen_g));
+
+    sim simulation{stack.loc, kDefaultMaxResolutions};
+    simulation.set_up();
+    const expr* var_a = make_var.make(seq.next());
+    const expr* var_b = make_var.make(seq.next());
+    initial_goals.push(make_functor.make("f", {var_a, var_b}));
+
+    EXPECT_EQ(simulation.run(), sim_termination::solved);
+    const expr::functor& whnf_a = std::get<expr::functor>(bind_map.whnf(var_a)->content);
+    const expr::functor& whnf_b = std::get<expr::functor>(bind_map.whnf(var_b)->content);
+    EXPECT_EQ(whnf_a.name, "xyz");
+    EXPECT_TRUE(whnf_a.args.empty());
+    EXPECT_EQ(whnf_b.name, "123");
+    EXPECT_TRUE(whnf_b.args.empty());
+    simulation.tear_down();
+}
+
+TEST_F(SimIntegrationTest, RunReturnsSolvedWhenSharedVarLinksTwoGoalsWithoutDecisions) {
+    expr abc{expr::functor{"abc", {}}};
+    expr _123{expr::functor{"123", {}}};
+    expr _456{expr::functor{"456", {}}};
+    expr _789{expr::functor{"789", {}}};
+    expr xyz{expr::functor{"xyz", {}}};
+    expr f_head{expr::functor{"f", {&abc, &_123}}};
+    expr g_head0{expr::functor{"g", {&_456, &_789}}};
+    expr g_head1{expr::functor{"g", {&_123, &xyz}}};
+    database.push(rule{&f_head, {}});
+    database.push(rule{&g_head0, {}});
+    database.push(rule{&g_head1, {}});
+
+    i_bind_map& bind_map = stack.loc.locate<i_bind_map>();
+    i_var_sequencer& seq = stack.loc.locate<i_var_sequencer>();
+    i_make_var& make_var = stack.loc.locate<i_make_var>();
+    i_make_functor& make_functor = stack.loc.locate<i_make_functor>();
+
+    EXPECT_CALL(stack.decision_generator, generate()).Times(0);
+
+    sim simulation{stack.loc, kDefaultMaxResolutions};
+    simulation.set_up();
+    const expr* var_a = make_var.make(seq.next());
+    const expr* var_b = make_var.make(seq.next());
+    const expr* var_c = make_var.make(seq.next());
+    initial_goals.push(make_functor.make("f", {var_a, var_b}));
+    initial_goals.push(make_functor.make("g", {var_b, var_c}));
+
+    EXPECT_EQ(simulation.run(), sim_termination::solved);
+    const expr::functor& whnf_a = std::get<expr::functor>(bind_map.whnf(var_a)->content);
+    const expr::functor& whnf_b = std::get<expr::functor>(bind_map.whnf(var_b)->content);
+    const expr::functor& whnf_c = std::get<expr::functor>(bind_map.whnf(var_c)->content);
+    EXPECT_EQ(whnf_a.name, "abc");
+    EXPECT_TRUE(whnf_a.args.empty());
+    EXPECT_EQ(whnf_b.name, "123");
+    EXPECT_TRUE(whnf_b.args.empty());
+    EXPECT_EQ(whnf_c.name, "xyz");
+    EXPECT_TRUE(whnf_c.args.empty());
     simulation.tear_down();
 }
