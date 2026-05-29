@@ -570,3 +570,29 @@ TEST_F(SimIntegrationTest, RunReturnsSolvedAfterCdclAvoidanceForcesG1RuleThree) 
         UnorderedElementsAre(rl_g0_0, rl_g1_3));
     simulation.tear_down();
 }
+
+TEST_F(SimIntegrationTest, RunReturnsSolvedOnRecursiveClauseTreeWithoutDecisions) {
+    expr goal_f{expr::functor{"f", {}}};
+    expr f_head{expr::functor{"f", {}}};
+    expr g_body{expr::functor{"g", {}}};
+    expr h_body{expr::functor{"h", {}}};
+    expr g_head{expr::functor{"g", {}}};
+    expr h_head{expr::functor{"h", {}}};
+    expr i_body{expr::functor{"i", {}}};
+    expr j_body{expr::functor{"j", {}}};
+    expr i_head{expr::functor{"i", {}}};
+    expr j_head{expr::functor{"j", {}}};
+    initial_goals.push(&goal_f);
+    database.push(rule{&f_head, {&g_body, &h_body}});
+    database.push(rule{&g_head, {&i_body, &j_body}});
+    database.push(rule{&h_head, {&i_body, &j_body}});
+    database.push(rule{&i_head, {}});
+    database.push(rule{&j_head, {}});
+
+    EXPECT_CALL(stack.decision_generator, generate()).Times(0);
+
+    sim simulation{stack.loc, kDefaultMaxResolutions};
+    simulation.set_up();
+    EXPECT_EQ(simulation.run(), sim_termination::solved);
+    simulation.tear_down();
+}
