@@ -2,7 +2,6 @@
 // and removes the goal from the active set.
 
 #include <gtest/gtest.h>
-#include "locator_fixture.hpp"
 #include <gmock/gmock.h>
 #include "infrastructure/goal_deactivator.hpp"
 #include "interfaces/i_unset_goal_expr.hpp"
