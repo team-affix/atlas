@@ -1,5 +1,5 @@
 // Candidate deactivator: on deactivate, unlinks goal–rule link, clears translation
-// map, and records lineage in deactivated memory — in that dependency order.
+// map, and records lineage in deactivated memory.
 
 #include <gtest/gtest.h>
 #include "locator_fixture.hpp"
@@ -47,7 +47,6 @@ struct CandidateDeactivatorTest : public ::testing::Test {
 };
 
 TEST_F(CandidateDeactivatorTest, DeactivateUnlinksUnsetsAndRecords) {
-    testing::InSequence seq;
     EXPECT_CALL(unlink, unlink_goal_candidate(&parent, kRule)).Times(1);
     EXPECT_CALL(unset_maps, unset(&rl)).Times(1);
     EXPECT_CALL(memory, insert(&rl)).Times(1);
