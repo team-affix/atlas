@@ -913,6 +913,16 @@ TEST_F(SimIntegrationTest, RunReturnsSolvedWhenMhuRejectsInconsistentRuleWithout
     i_var_sequencer& seq = stack.loc.locate<i_var_sequencer>();
     i_make_var& make_var = stack.loc.locate<i_make_var>();
     i_make_functor& make_functor = stack.loc.locate<i_make_functor>();
+    i_make_initial_goal_lineage& make_initial_goal_lineage =
+        stack.loc.locate<i_make_initial_goal_lineage>();
+    i_make_resolution_lineage& make_resolution_lineage =
+        stack.loc.locate<i_make_resolution_lineage>();
+    i_derive_resolution_lemma& derive_resolution_lemma =
+        stack.loc.locate<i_derive_resolution_lemma>();
+
+    const goal_lineage* gl = make_initial_goal_lineage.make(0);
+    const resolution_lineage* rl0 =
+        make_resolution_lineage.make_resolution_lineage(gl, rule_id{0});
 
     EXPECT_CALL(stack.decision_generator, generate()).Times(0);
 
@@ -926,6 +936,101 @@ TEST_F(SimIntegrationTest, RunReturnsSolvedWhenMhuRejectsInconsistentRuleWithout
     const expr::functor& whnf_a = std::get<expr::functor>(bind_map.whnf(var_a)->content);
     EXPECT_EQ(whnf_a.name, "abc");
     EXPECT_TRUE(whnf_a.args.empty());
+    EXPECT_THAT(derive_resolution_lemma.derive_resolution_lemma().get_resolutions(),
+        UnorderedElementsAre(rl0));
+    simulation.tear_down();
+}
+
+TEST_F(SimIntegrationTest, RunDeactivatesRuleOneWhenDecisionResolvesRuleZeroOnMhuSharedGoal) {
+    /*
+     * initial goals:
+     *   f(A, B).
+     * database:
+     *   0: f(abc, 123).
+     *   1: f(def, 123).
+     * setup: decision picks rule 0; MHU constrain on rule 0 should purge rule 1 head
+     */
+    expr abc{expr::functor{"abc", {}}};
+    expr def{expr::functor{"def", {}}};
+    expr _123{expr::functor{"123", {}}};
+    expr head0{expr::functor{"f", {&abc, &_123}}};
+    expr head1{expr::functor{"f", {&def, &_123}}};
+    database.push(rule{&head0, {}});
+    database.push(rule{&head1, {}});
+
+    i_make_initial_goal_lineage& make_initial_goal_lineage =
+        stack.loc.locate<i_make_initial_goal_lineage>();
+    i_make_resolution_lineage& make_resolution_lineage =
+        stack.loc.locate<i_make_resolution_lineage>();
+    i_derive_resolution_lemma& derive_resolution_lemma =
+        stack.loc.locate<i_derive_resolution_lemma>();
+    i_deactivated_candidate_memory& deactivated =
+        stack.loc.locate<i_deactivated_candidate_memory>();
+    i_bind_map& bind_map = stack.loc.locate<i_bind_map>();
+    i_var_sequencer& seq = stack.loc.locate<i_var_sequencer>();
+    i_make_var& make_var = stack.loc.locate<i_make_var>();
+    i_make_functor& make_functor = stack.loc.locate<i_make_functor>();
+
+    const goal_lineage* gl = make_initial_goal_lineage.make(0);
+    const resolution_lineage* rl0 =
+        make_resolution_lineage.make_resolution_lineage(gl, rule_id{0});
+    const resolution_lineage* rl1 =
+        make_resolution_lineage.make_resolution_lineage(gl, rule_id{1});
+
+    EXPECT_CALL(stack.decision_generator, generate()).WillOnce(Return(rl0));
+
+    sim simulation{stack.loc, kDefaultMaxResolutions};
+    simulation.set_up();
+    const expr* var_a = make_var.make(seq.next());
+    const expr* var_b = make_var.make(seq.next());
+    initial_goals.push(make_functor.make("f", {var_a, var_b}));
+
+    EXPECT_EQ(simulation.run(), sim_termination::solved);
+    EXPECT_THAT(derive_resolution_lemma.derive_resolution_lemma().get_resolutions(),
+        UnorderedElementsAre(rl0));
+    EXPECT_TRUE(deactivated.contains(rl1));
+    const expr::functor& whnf_a = std::get<expr::functor>(bind_map.whnf(var_a)->content);
+    const expr::functor& whnf_b = std::get<expr::functor>(bind_map.whnf(var_b)->content);
+    EXPECT_EQ(whnf_a.name, "abc");
+    EXPECT_EQ(whnf_b.name, "123");
+    simulation.tear_down();
+}
+
+TEST_F(SimIntegrationTest, RunSolvedTwiceAcrossTearDownWithMhuFactBinding) {
+    /*
+     * initial goals:
+     *   f(A).
+     * database:
+     *   0: f(abc).
+     * setup: set_up, run, tear_down, set_up, run again on same goal — bindings/MHU cleared
+     */
+    expr abc{expr::functor{"abc", {}}};
+    expr head{expr::functor{"f", {&abc}}};
+    database.push(rule{&head, {}});
+
+    i_bind_map& bind_map = stack.loc.locate<i_bind_map>();
+    i_var_sequencer& seq = stack.loc.locate<i_var_sequencer>();
+    i_make_var& make_var = stack.loc.locate<i_make_var>();
+    i_make_functor& make_functor = stack.loc.locate<i_make_functor>();
+
+    EXPECT_CALL(stack.decision_generator, generate()).Times(0);
+
+    sim simulation{stack.loc, kDefaultMaxResolutions};
+    simulation.set_up();
+    const expr* var_a = make_var.make(seq.next());
+    initial_goals.push(make_functor.make("f", {var_a}));
+
+    EXPECT_EQ(simulation.run(), sim_termination::solved);
+    const expr::functor& whnf_first =
+        std::get<expr::functor>(bind_map.whnf(var_a)->content);
+    EXPECT_EQ(whnf_first.name, "abc");
+
+    simulation.tear_down();
+    simulation.set_up();
+    EXPECT_EQ(simulation.run(), sim_termination::solved);
+    const expr::functor& whnf_second =
+        std::get<expr::functor>(bind_map.whnf(var_a)->content);
+    EXPECT_EQ(whnf_second.name, "abc");
     simulation.tear_down();
 }
 

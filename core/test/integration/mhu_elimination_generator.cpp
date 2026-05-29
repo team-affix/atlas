@@ -1,7 +1,6 @@
 #include <gtest/gtest.h>
-#include "wire_locator.hpp"
 #include <optional>
-#include <algorithm>
+#include <vector>
 #include "infrastructure/mhu_elimination_generator.hpp"
 #include "infrastructure/bind_map.hpp"
 #include "infrastructure/bind_map_factory.hpp"
@@ -12,32 +11,7 @@
 #include "infrastructure/goal_candidate_rules.hpp"
 #include "infrastructure/trail.hpp"
 
-namespace {
-
-std::vector<const resolution_lineage*> collect_elims(
-    state_machine<const resolution_lineage*>& sm) {
-    std::vector<const resolution_lineage*> out;
-    while (!sm.done()) {
-        auto v = sm.resume();
-        if (v.has_value())
-            out.push_back(v.value());
-    }
-    return out;
-}
-
-bool contains(const std::vector<const resolution_lineage*>& xs, const resolution_lineage* rl) {
-    return std::find(xs.begin(), xs.end(), rl) != xs.end();
-}
-
-bool is_functor_named(const expr* e, const std::string& name) {
-    const expr::functor* f = std::get_if<expr::functor>(&e->content);
-    return f && f->name == name;
-}
-
-} // namespace
-
 struct MhuEliminationGeneratorIntegrationTest : public ::testing::Test {
-protected:
     locator loc;
     trail t;
     bind_map common;
@@ -61,121 +35,264 @@ protected:
         loc.bind_as<i_make_functor, i_make_var, i_import_expr, i_get_expr_count>(*pool);
         mhu.emplace(loc);
     }
-
-    expr f_empty{expr::functor{"f", {}}};
-    expr g_empty{expr::functor{"g", {}}};
-    expr var0{expr::var{0}};
-
-    struct candidate_slot {
-        goal_lineage* gl;
-        resolution_lineage* rl;
-        expr goal;
-        expr head;
-        rule r;
-    };
-
-    candidate_slot make_slot(const expr& goal, const expr& head, subgoal_id goal_idx) {
-        candidate_slot s{
-            nullptr,
-            nullptr,
-            goal,
-            head,
-            rule{&s.head, {&s.goal}}};
-        s.gl = const_cast<goal_lineage*>(lp.make_goal_lineage(nullptr, goal_idx));
-        s.rl = const_cast<resolution_lineage*>(
-            lp.make_resolution_lineage(s.gl, rule_id{0}));
-        ggcr.link_goal_candidate(s.gl, 0);
-        return s;
-    }
-
-    bool seed_and_add_head(
-        const resolution_lineage* rl,
-        const expr* goal,
-        const expr* head) {
-        return mhu->try_add_head(rl, goal, head);
-    }
 };
 
-// ---------------------------------------------------------------------------
-// Lifecycle
-// ---------------------------------------------------------------------------
-
 TEST_F(MhuEliminationGeneratorIntegrationTest, TryAddHeadThenConstrainAllowsReuse) {
-    auto slot = make_slot(var0, f_empty, 0);
-    ASSERT_TRUE(seed_and_add_head(slot.rl, &slot.goal, &slot.head));
+    expr goal{expr::var{0}};
+    expr head{expr::functor{"f", {}}};
+    goal_lineage* gl = const_cast<goal_lineage*>(lp.make_goal_lineage(nullptr, 0));
+    resolution_lineage* rl =
+        const_cast<resolution_lineage*>(lp.make_resolution_lineage(gl, rule_id{0}));
+    ggcr.link_goal_candidate(gl, rule_id{0});
 
-    auto sm = mhu->constrain(slot.rl);
-    EXPECT_TRUE(collect_elims(sm).empty());
+    ASSERT_TRUE(mhu->try_add_head(rl, &goal, &head));
 
-    EXPECT_TRUE(seed_and_add_head(slot.rl, &slot.goal, &slot.head));
+    auto sm = mhu->constrain(rl);
+    std::vector<const resolution_lineage*> elims;
+    while (!sm.done()) {
+        if (auto v = sm.resume())
+            elims.push_back(v.value());
+    }
+    EXPECT_TRUE(elims.empty());
+
+    EXPECT_TRUE(mhu->try_add_head(rl, &goal, &head));
 }
 
 TEST_F(MhuEliminationGeneratorIntegrationTest, TryAddHeadFailsWhenUnifyFails) {
-    auto slot = make_slot(f_empty, g_empty, 0);
-    EXPECT_FALSE(mhu->try_add_head(slot.rl, &slot.goal, &slot.head));
+    expr goal{expr::functor{"f", {}}};
+    expr head{expr::functor{"g", {}}};
+    goal_lineage* gl = const_cast<goal_lineage*>(lp.make_goal_lineage(nullptr, 0));
+    resolution_lineage* rl =
+        const_cast<resolution_lineage*>(lp.make_resolution_lineage(gl, rule_id{0}));
+    ggcr.link_goal_candidate(gl, rule_id{0});
+
+    EXPECT_FALSE(mhu->try_add_head(rl, &goal, &head));
 }
 
 TEST_F(MhuEliminationGeneratorIntegrationTest, ConstrainOnSingleHeadYieldsNoElims) {
-    auto slot = make_slot(var0, f_empty, 0);
-    ASSERT_TRUE(mhu->try_add_head(slot.rl, &slot.goal, &slot.head));
+    expr goal{expr::var{0}};
+    expr head{expr::functor{"f", {}}};
+    goal_lineage* gl = const_cast<goal_lineage*>(lp.make_goal_lineage(nullptr, 0));
+    resolution_lineage* rl =
+        const_cast<resolution_lineage*>(lp.make_resolution_lineage(gl, rule_id{0}));
+    ggcr.link_goal_candidate(gl, rule_id{0});
 
-    auto sm = mhu->constrain(slot.rl);
-    EXPECT_TRUE(collect_elims(sm).empty());
+    ASSERT_TRUE(mhu->try_add_head(rl, &goal, &head));
+
+    auto sm = mhu->constrain(rl);
+    std::vector<const resolution_lineage*> elims;
+    while (!sm.done()) {
+        if (auto v = sm.resume())
+            elims.push_back(v.value());
+    }
+    EXPECT_TRUE(elims.empty());
 }
-
-// ---------------------------------------------------------------------------
-// Rebasing: constrain publishes local bindings into common
-// ---------------------------------------------------------------------------
 
 TEST_F(MhuEliminationGeneratorIntegrationTest, ConstrainPublishesSeededBindingToCommon) {
-    auto slot = make_slot(var0, f_empty, 0);
-    ASSERT_TRUE(seed_and_add_head(slot.rl, &slot.goal, &slot.head));
+    expr goal{expr::var{0}};
+    expr head{expr::functor{"f", {}}};
+    goal_lineage* gl = const_cast<goal_lineage*>(lp.make_goal_lineage(nullptr, 0));
+    resolution_lineage* rl =
+        const_cast<resolution_lineage*>(lp.make_resolution_lineage(gl, rule_id{0}));
+    ggcr.link_goal_candidate(gl, rule_id{0});
 
-    auto sm = mhu->constrain(slot.rl);
-    collect_elims(sm);
+    ASSERT_TRUE(mhu->try_add_head(rl, &goal, &head));
 
-    EXPECT_TRUE(is_functor_named(common.whnf(&var0), "f"));
+    auto sm = mhu->constrain(rl);
+    while (!sm.done())
+        sm.resume();
+
+    const expr::functor& bound = std::get<expr::functor>(common.whnf(&goal)->content);
+    EXPECT_EQ(bound.name, "f");
+    EXPECT_TRUE(bound.args.empty());
 }
 
-// ---------------------------------------------------------------------------
-// Rebasing: colliding unifications → elimination
-// ---------------------------------------------------------------------------
-
 TEST_F(MhuEliminationGeneratorIntegrationTest, ConstrainEliminatesHeadWithCollidingFunctorOnSameRep) {
-    auto a = make_slot(var0, f_empty, 0);
-    auto b = make_slot(var0, g_empty, 1);
-    ASSERT_TRUE(seed_and_add_head(a.rl, &a.goal, &a.head));
-    ASSERT_TRUE(seed_and_add_head(b.rl, &b.goal, &b.head));
+    expr goal_a{expr::var{0}};
+    expr head_a{expr::functor{"f", {}}};
+    goal_lineage* gl_a = const_cast<goal_lineage*>(lp.make_goal_lineage(nullptr, 0));
+    resolution_lineage* rl_a =
+        const_cast<resolution_lineage*>(lp.make_resolution_lineage(gl_a, rule_id{0}));
+    ggcr.link_goal_candidate(gl_a, rule_id{0});
 
-    auto sm = mhu->constrain(a.rl);
-    auto elims = collect_elims(sm);
+    expr goal_b{expr::var{0}};
+    expr head_b{expr::functor{"g", {}}};
+    goal_lineage* gl_b = const_cast<goal_lineage*>(lp.make_goal_lineage(nullptr, 1));
+    resolution_lineage* rl_b =
+        const_cast<resolution_lineage*>(lp.make_resolution_lineage(gl_b, rule_id{0}));
+    ggcr.link_goal_candidate(gl_b, rule_id{0});
 
-    EXPECT_TRUE(contains(elims, b.rl));
-    EXPECT_FALSE(contains(elims, a.rl));
+    ASSERT_TRUE(mhu->try_add_head(rl_a, &goal_a, &head_a));
+    ASSERT_TRUE(mhu->try_add_head(rl_b, &goal_b, &head_b));
+
+    auto sm = mhu->constrain(rl_a);
+    std::vector<const resolution_lineage*> elims;
+    while (!sm.done()) {
+        if (auto v = sm.resume())
+            elims.push_back(v.value());
+    }
+
+    EXPECT_EQ(elims.size(), 1u);
+    EXPECT_EQ(elims[0], rl_b);
 }
 
 TEST_F(MhuEliminationGeneratorIntegrationTest, ConstrainDoesNotEliminateCompatibleHeadOnSameRep) {
-    auto a = make_slot(var0, f_empty, 0);
-    auto b = make_slot(var0, f_empty, 1);
-    ASSERT_TRUE(seed_and_add_head(a.rl, &a.goal, &a.head));
-    ASSERT_TRUE(seed_and_add_head(b.rl, &b.goal, &b.head));
+    expr goal_a{expr::var{0}};
+    expr head_a{expr::functor{"f", {}}};
+    goal_lineage* gl_a = const_cast<goal_lineage*>(lp.make_goal_lineage(nullptr, 0));
+    resolution_lineage* rl_a =
+        const_cast<resolution_lineage*>(lp.make_resolution_lineage(gl_a, rule_id{0}));
+    ggcr.link_goal_candidate(gl_a, rule_id{0});
 
-    auto sm = mhu->constrain(a.rl);
-    auto elims = collect_elims(sm);
+    expr goal_b{expr::var{0}};
+    expr head_b{expr::functor{"f", {}}};
+    goal_lineage* gl_b = const_cast<goal_lineage*>(lp.make_goal_lineage(nullptr, 1));
+    resolution_lineage* rl_b =
+        const_cast<resolution_lineage*>(lp.make_resolution_lineage(gl_b, rule_id{0}));
+    ggcr.link_goal_candidate(gl_b, rule_id{0});
 
-    EXPECT_FALSE(contains(elims, b.rl));
-    EXPECT_FALSE(contains(elims, a.rl));
+    ASSERT_TRUE(mhu->try_add_head(rl_a, &goal_a, &head_a));
+    ASSERT_TRUE(mhu->try_add_head(rl_b, &goal_b, &head_b));
+
+    auto sm = mhu->constrain(rl_a);
+    std::vector<const resolution_lineage*> elims;
+    while (!sm.done()) {
+        if (auto v = sm.resume())
+            elims.push_back(v.value());
+    }
+
+    EXPECT_TRUE(elims.empty());
 }
 
 TEST_F(MhuEliminationGeneratorIntegrationTest, ConstrainDoesNotEliminateHeadWatchingDisjointRep) {
+    expr goal_a{expr::var{0}};
+    expr head_a{expr::functor{"f", {}}};
+    goal_lineage* gl_a = const_cast<goal_lineage*>(lp.make_goal_lineage(nullptr, 0));
+    resolution_lineage* rl_a =
+        const_cast<resolution_lineage*>(lp.make_resolution_lineage(gl_a, rule_id{0}));
+    ggcr.link_goal_candidate(gl_a, rule_id{0});
+
     expr var2{expr::var{2}};
-    auto a = make_slot(var0, f_empty, 0);
-    auto b = make_slot(var2, g_empty, 2);
-    ASSERT_TRUE(seed_and_add_head(a.rl, &a.goal, &a.head));
-    ASSERT_TRUE(seed_and_add_head(b.rl, &b.goal, &b.head));
+    expr goal_b{var2};
+    expr head_b{expr::functor{"g", {}}};
+    goal_lineage* gl_b = const_cast<goal_lineage*>(lp.make_goal_lineage(nullptr, 2));
+    resolution_lineage* rl_b =
+        const_cast<resolution_lineage*>(lp.make_resolution_lineage(gl_b, rule_id{0}));
+    ggcr.link_goal_candidate(gl_b, rule_id{0});
 
-    auto sm = mhu->constrain(a.rl);
-    auto elims = collect_elims(sm);
+    ASSERT_TRUE(mhu->try_add_head(rl_a, &goal_a, &head_a));
+    ASSERT_TRUE(mhu->try_add_head(rl_b, &goal_b, &head_b));
 
-    EXPECT_FALSE(contains(elims, b.rl));
+    auto sm = mhu->constrain(rl_a);
+    std::vector<const resolution_lineage*> elims;
+    while (!sm.done()) {
+        if (auto v = sm.resume())
+            elims.push_back(v.value());
+    }
+
+    EXPECT_TRUE(elims.empty());
+}
+
+TEST_F(MhuEliminationGeneratorIntegrationTest,
+    ConstrainDoesNotElimSiblingButEliminatesCrossGoalIncompatibleHead) {
+    expr goal{expr::var{0}};
+    expr head_f{expr::functor{"f", {}}};
+    expr head_g{expr::functor{"g", {}}};
+
+    goal_lineage* gl = const_cast<goal_lineage*>(lp.make_goal_lineage(nullptr, 0));
+    resolution_lineage* rl_rule0 =
+        const_cast<resolution_lineage*>(lp.make_resolution_lineage(gl, rule_id{0}));
+    resolution_lineage* rl_rule1 =
+        const_cast<resolution_lineage*>(lp.make_resolution_lineage(gl, rule_id{1}));
+    ggcr.link_goal_candidate(gl, rule_id{0});
+    ggcr.link_goal_candidate(gl, rule_id{1});
+
+    goal_lineage* gl_other = const_cast<goal_lineage*>(lp.make_goal_lineage(nullptr, 1));
+    resolution_lineage* rl_other =
+        const_cast<resolution_lineage*>(lp.make_resolution_lineage(gl_other, rule_id{0}));
+    ggcr.link_goal_candidate(gl_other, rule_id{0});
+
+    ASSERT_TRUE(mhu->try_add_head(rl_rule0, &goal, &head_f));
+    ASSERT_TRUE(mhu->try_add_head(rl_rule1, &goal, &head_g));
+    ASSERT_TRUE(mhu->try_add_head(rl_other, &goal, &head_g));
+
+    auto sm = mhu->constrain(rl_rule0);
+    std::vector<const resolution_lineage*> elims;
+    while (!sm.done()) {
+        if (auto v = sm.resume())
+            elims.push_back(v.value());
+    }
+
+    EXPECT_EQ(elims.size(), 1u);
+    EXPECT_EQ(elims[0], rl_other);
+}
+
+TEST_F(MhuEliminationGeneratorIntegrationTest, ConstrainYieldsTwoElimsForThreeWayRepCollision) {
+    expr goal_a{expr::var{0}};
+    expr head_a{expr::functor{"f", {}}};
+    goal_lineage* gl_a = const_cast<goal_lineage*>(lp.make_goal_lineage(nullptr, 0));
+    resolution_lineage* rl_a =
+        const_cast<resolution_lineage*>(lp.make_resolution_lineage(gl_a, rule_id{0}));
+    ggcr.link_goal_candidate(gl_a, rule_id{0});
+
+    expr goal_b{expr::var{0}};
+    expr head_b{expr::functor{"g", {}}};
+    goal_lineage* gl_b = const_cast<goal_lineage*>(lp.make_goal_lineage(nullptr, 1));
+    resolution_lineage* rl_b =
+        const_cast<resolution_lineage*>(lp.make_resolution_lineage(gl_b, rule_id{0}));
+    ggcr.link_goal_candidate(gl_b, rule_id{0});
+
+    expr goal_c{expr::var{0}};
+    expr head_c{expr::functor{"h", {}}};
+    goal_lineage* gl_c = const_cast<goal_lineage*>(lp.make_goal_lineage(nullptr, 2));
+    resolution_lineage* rl_c =
+        const_cast<resolution_lineage*>(lp.make_resolution_lineage(gl_c, rule_id{0}));
+    ggcr.link_goal_candidate(gl_c, rule_id{0});
+
+    ASSERT_TRUE(mhu->try_add_head(rl_a, &goal_a, &head_a));
+    ASSERT_TRUE(mhu->try_add_head(rl_b, &goal_b, &head_b));
+    ASSERT_TRUE(mhu->try_add_head(rl_c, &goal_c, &head_c));
+
+    auto sm = mhu->constrain(rl_a);
+    std::vector<const resolution_lineage*> elims;
+    while (!sm.done()) {
+        if (auto v = sm.resume())
+            elims.push_back(v.value());
+    }
+
+    EXPECT_EQ(elims.size(), 2u);
+    bool saw_b = false;
+    bool saw_c = false;
+    for (const resolution_lineage* elim : elims) {
+        if (elim == rl_b)
+            saw_b = true;
+        if (elim == rl_c)
+            saw_c = true;
+    }
+    EXPECT_TRUE(saw_b);
+    EXPECT_TRUE(saw_c);
+}
+
+TEST_F(MhuEliminationGeneratorIntegrationTest, TryAddHeadFailsOnOccursCheck) {
+    expr goal{expr::var{0}};
+    expr head{expr::functor{"f", {&goal}}};
+    goal_lineage* gl = const_cast<goal_lineage*>(lp.make_goal_lineage(nullptr, 0));
+    resolution_lineage* rl =
+        const_cast<resolution_lineage*>(lp.make_resolution_lineage(gl, rule_id{0}));
+    ggcr.link_goal_candidate(gl, rule_id{0});
+
+    EXPECT_FALSE(mhu->try_add_head(rl, &goal, &head));
+}
+
+TEST_F(MhuEliminationGeneratorIntegrationTest, ClearMhuHeadsAllowsFreshTryAdd) {
+    expr goal{expr::var{0}};
+    expr head{expr::functor{"f", {}}};
+    goal_lineage* gl = const_cast<goal_lineage*>(lp.make_goal_lineage(nullptr, 0));
+    resolution_lineage* rl =
+        const_cast<resolution_lineage*>(lp.make_resolution_lineage(gl, rule_id{0}));
+    ggcr.link_goal_candidate(gl, rule_id{0});
+
+    ASSERT_TRUE(mhu->try_add_head(rl, &goal, &head));
+    mhu->clear_mhu_heads();
+    EXPECT_TRUE(mhu->try_add_head(rl, &goal, &head));
 }
