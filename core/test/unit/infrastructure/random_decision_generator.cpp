@@ -71,7 +71,7 @@ struct MockMakeResolutionLineage : public i_make_resolution_lineage {
 };
 
 struct MockIterateActiveGoals : public i_iterate_active_goals {
-    MOCK_METHOD(coroutine<const goal_lineage*, void>, iterate_active_goals, (), (const, override));
+    MOCK_METHOD((coroutine<const goal_lineage*, void>), iterate_active_goals, (), (const, override));
 };
 
 struct MockGetGoalCandidateRuleIds : public i_get_goal_candidate_rule_ids {

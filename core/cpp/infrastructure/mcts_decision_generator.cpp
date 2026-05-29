@@ -23,10 +23,10 @@ const goal_lineage* mcts_decision_generator::choose_goal() {
 
     auto goals = iterate_active_goals.iterate_active_goals();
     while (!goals.done()) {
-        auto gl = goals.resume();
-        if (!gl.has_value())
+        goals.resume();
+        if (!goals.has_yield())
             continue;
-        goal_choices.push_back(gl.value());
+        goal_choices.push_back(goals.consume_yield());
     }
 
     const mcts_choice choice_a = sim.choose(goal_choices);
@@ -41,10 +41,10 @@ rule_id mcts_decision_generator::choose_candidate(const goal_lineage* goal) {
 
     auto it = candidates.iterate();
     while (!it.done()) {
-        auto r = it.resume();
-        if (!r.has_value())
+        it.resume();
+        if (!it.has_yield())
             continue;
-        candidate_choices.push_back(r.value());
+        candidate_choices.push_back(it.consume_yield());
     }
 
     const mcts_choice choice_b = sim.choose(candidate_choices);

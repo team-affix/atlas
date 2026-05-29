@@ -11,16 +11,16 @@ coroutine<const resolution_lineage*, void> joint_elimination_generator::constrai
     // 1. constrain cdcl
     auto cdcl_sm = cdcl.constrain(rl);
     while (!cdcl_sm.done()) {
-        auto res = cdcl_sm.resume();
-        if (res.has_value())
-            co_yield res.value();
+        cdcl_sm.resume();
+        if (cdcl_sm.has_yield())
+            co_yield cdcl_sm.consume_yield();
     }
     // 2. constrain mhu
     auto mhu_sm = mhu.constrain(rl);
     while (!mhu_sm.done()) {
-        auto res = mhu_sm.resume();
-        if (res.has_value())
-            co_yield res.value();
+        mhu_sm.resume();
+        if (mhu_sm.has_yield())
+            co_yield mhu_sm.consume_yield();
     }
     co_return;
 }

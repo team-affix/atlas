@@ -1,6 +1,6 @@
 // joint_elimination_generator composes CDCL and MHU elimination streams. These unit
 // tests mock elimination via i_elimination_generator and assert constrain() ordering;
-// the joint stream ends with co_return (resume() -> std::nullopt), not a null pointer yield.
+// the joint stream ends with co_return, not a null pointer yield.
 // Duplicate yields for the same candidate are forwarded; elimination_router deduplicates.
 
 #include <gtest/gtest.h>
@@ -43,9 +43,12 @@ std::vector<const resolution_lineage*> collect_non_null_elims(
     coroutine<const resolution_lineage*, void>& sm) {
     std::vector<const resolution_lineage*> out;
     while (!sm.done()) {
-        auto v = sm.resume();
-        if (v.has_value() && v.value() != nullptr)
-            out.push_back(v.value());
+        sm.resume();
+        if (sm.has_yield()) {
+            const resolution_lineage* v = sm.consume_yield();
+            if (v != nullptr)
+                out.push_back(v);
+        }
     }
     return out;
 }
@@ -53,7 +56,7 @@ std::vector<const resolution_lineage*> collect_non_null_elims(
 } // namespace
 
 struct MockEliminationGenerator : public i_elimination_generator {
-    MOCK_METHOD(coroutine<const resolution_lineage*, void>, constrain,
+    MOCK_METHOD((coroutine<const resolution_lineage*, void>), constrain,
         (const resolution_lineage*), (override));
 };
 
@@ -163,7 +166,6 @@ TEST_F(JointEliminationGeneratorUnitTest, ConstrainYieldsNothingWhenBothStreamsE
     auto sm = joint->constrain(&rl);
     EXPECT_THAT(collect_non_null_elims(sm), ElementsAre());
     EXPECT_TRUE(sm.done());
-    EXPECT_FALSE(sm.resume().has_value());
 }
 
 TEST_F(JointEliminationGeneratorUnitTest, ConstrainEndsWithDoneNotNullPointerYield) {
@@ -175,5 +177,4 @@ TEST_F(JointEliminationGeneratorUnitTest, ConstrainEndsWithDoneNotNullPointerYie
     auto sm = joint->constrain(&rl);
     EXPECT_THAT(collect_non_null_elims(sm), ElementsAre(&rl, &rl));
     EXPECT_TRUE(sm.done());
-    EXPECT_FALSE(sm.resume().has_value());
 }

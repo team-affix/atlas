@@ -24,10 +24,11 @@ bool resolver::resolve(const resolution_lineage* rl) {
         auto& db_rules = get_goal_db_rule_ids.get(gl);
         auto db_it = db_rules.iterate();
         while (!db_it.done()) {
-            auto rr = db_it.resume();
-            if (!rr.has_value())
+            db_it.resume();
+            if (!db_it.has_yield())
                 continue;
-            candidate_activator.activate(make_resolution_lineage.make_resolution_lineage(gl, rr.value()));
+            candidate_activator.activate(
+                make_resolution_lineage.make_resolution_lineage(gl, db_it.consume_yield()));
         }
         if (conflict_detector.detect(gl))
             return false;
@@ -38,10 +39,11 @@ bool resolver::resolve(const resolution_lineage* rl) {
     auto candidate_rules = get_goal_candidate_rule_ids.get(gl).copy();
     auto cand_it = candidate_rules->iterate();
     while (!cand_it.done()) {
-        auto rr = cand_it.resume();
-        if (!rr.has_value())
+        cand_it.resume();
+        if (!cand_it.has_yield())
             continue;
-        candidate_deactivator.deactivate(make_resolution_lineage.make_resolution_lineage(gl, rr.value()));
+        candidate_deactivator.deactivate(
+            make_resolution_lineage.make_resolution_lineage(gl, cand_it.consume_yield()));
     }
     goal_deactivator.deactivate(gl);
     return true;

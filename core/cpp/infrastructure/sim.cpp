@@ -48,10 +48,11 @@ sim_termination sim::run() {
         auto& rules = get_goal_db_rule_ids.get(gl);
         auto it = rules.iterate();
         while (!it.done()) {
-            auto rr = it.resume();
-            if (!rr.has_value())
+            it.resume();
+            if (!it.has_yield())
                 continue;
-            candidate_activator.activate(make_resolution_lineage.make_resolution_lineage(gl, rr.value()));
+            candidate_activator.activate(
+                make_resolution_lineage.make_resolution_lineage(gl, it.consume_yield()));
         }
         if (cd.detect(gl))
             return sim_termination::conflicted;
@@ -66,10 +67,10 @@ sim_termination sim::run() {
         const resolution_lineage* rl = next_resolution();
         auto eliminations = eg.constrain(rl);
         while (!eliminations.done()) {
-            auto res = eliminations.resume();
-            if (!res.has_value())
+            eliminations.resume();
+            if (!eliminations.has_yield())
                 continue;
-            const resolution_lineage* elim_rl = res.value();
+            const resolution_lineage* elim_rl = eliminations.consume_yield();
             er.route(elim_rl);
             const goal_lineage* gl = elim_rl->parent;
             if (cd.detect(gl))

@@ -14,8 +14,9 @@ std::vector<rule_id> collect_rule_ids(i_rule_id_set& rs) {
     std::vector<rule_id> out;
     auto sm = rs.iterate();
     while (!sm.done()) {
-        if (auto r = sm.resume())
-            out.push_back(*r);
+        sm.resume();
+        if (sm.has_yield())
+            out.push_back(sm.consume_yield());
     }
     return out;
 }

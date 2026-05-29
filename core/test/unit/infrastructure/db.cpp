@@ -38,8 +38,9 @@ TEST_F(DbTest, TotalRuleSetContainsAllIndices) {
     std::vector<rule_id> ids;
     auto it = database.get(&gl0).iterate();
     while (!it.done()) {
-        if (auto id = it.resume())
-            ids.push_back(*id);
+        it.resume();
+        if (it.has_yield())
+            ids.push_back(it.consume_yield());
     }
     EXPECT_THAT(ids, UnorderedElementsAre(0, 1));
 }

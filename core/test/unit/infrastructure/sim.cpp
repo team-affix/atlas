@@ -86,7 +86,7 @@ struct MockGenerateDecision : public i_generate_decision {
 };
 
 struct MockEliminationGenerator : public i_elimination_generator {
-    MOCK_METHOD(coroutine<const resolution_lineage*, void>, constrain, (const resolution_lineage*), (override));
+    MOCK_METHOD((coroutine<const resolution_lineage*, void>), constrain, (const resolution_lineage*), (override));
 };
 
 struct MockEliminationRouter : public i_elimination_router {

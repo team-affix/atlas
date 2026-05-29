@@ -17,10 +17,10 @@ const goal_lineage* random_decision_generator::choose_goal() {
     std::vector<const goal_lineage*> goals;
     auto it = iterate_active_goals.iterate_active_goals();
     while (!it.done()) {
-        auto gl = it.resume();
-        if (!gl.has_value())
+        it.resume();
+        if (!it.has_yield())
             continue;
-        goals.push_back(gl.value());
+        goals.push_back(it.consume_yield());
     }
 
     std::uniform_int_distribution<size_t> dist(0, goals.size() - 1);
@@ -32,10 +32,10 @@ rule_id random_decision_generator::choose_candidate(const goal_lineage* gl) {
     auto& rules = get_goal_candidate_rule_ids.get(gl);
     auto it = rules.iterate();
     while (!it.done()) {
-        auto r = it.resume();
-        if (!r.has_value())
+        it.resume();
+        if (!it.has_yield())
             continue;
-        candidates.push_back(r.value());
+        candidates.push_back(it.consume_yield());
     }
 
     std::uniform_int_distribution<size_t> dist(0, candidates.size() - 1);

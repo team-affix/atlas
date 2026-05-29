@@ -18,8 +18,9 @@ std::vector<const goal_lineage*> collect_goals(const active_goals& ag) {
     std::vector<const goal_lineage*> out;
     auto sm = ag.iterate_active_goals();
     while (!sm.done()) {
-        if (auto gl = sm.resume())
-            out.push_back(*gl);
+        sm.resume();
+        if (sm.has_yield())
+            out.push_back(sm.consume_yield());
     }
     return out;
 }

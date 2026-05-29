@@ -19,9 +19,12 @@ std::vector<const resolution_lineage*> collect_elims(
     coroutine<const resolution_lineage*, void> sm) {
     std::vector<const resolution_lineage*> out;
     while (!sm.done()) {
-        auto v = sm.resume();
-        if (v.has_value() && v.value() != nullptr)
-            out.push_back(v.value());
+        sm.resume();
+        if (sm.has_yield()) {
+            const resolution_lineage* v = sm.consume_yield();
+            if (v != nullptr)
+                out.push_back(v);
+        }
     }
     return out;
 }

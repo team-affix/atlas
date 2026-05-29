@@ -9,10 +9,10 @@ const resolution_lineage* get_unit_resolution::get(const goal_lineage* gl) {
     auto& candidate_rules = get_goal_candidate_rule_ids.get(gl);
     auto it = candidate_rules.iterate();
     while (!it.done()) {
-        auto rr = it.resume();
-        if (!rr.has_value())
+        it.resume();
+        if (!it.has_yield())
             continue;
-        return make_resolution_lineage.make_resolution_lineage(gl, rr.value());
+        return make_resolution_lineage.make_resolution_lineage(gl, it.consume_yield());
     }
     return nullptr;
 }

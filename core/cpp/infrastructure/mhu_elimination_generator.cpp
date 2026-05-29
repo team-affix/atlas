@@ -47,10 +47,13 @@ coroutine<const resolution_lineage*, void> mhu_elimination_generator::constrain(
     // 3. remove all siblings
     auto it_sm = candidates.iterate();
     while (!it_sm.done()) {
-        auto candidate = it_sm.resume();
-        if (!candidate.has_value()) continue;
-        if (candidate.value() == lineage->idx) continue;
-        remove_head(make_resolution_lineage_.make_resolution_lineage(gl, candidate.value()));
+        it_sm.resume();
+        if (!it_sm.has_yield())
+            continue;
+        const rule_id candidate = it_sm.consume_yield();
+        if (candidate == lineage->idx)
+            continue;
+        remove_head(make_resolution_lineage_.make_resolution_lineage(gl, candidate));
     }
     
     // 4. get the head for this lineage
@@ -74,9 +77,9 @@ coroutine<const resolution_lineage*, void> mhu_elimination_generator::constrain(
         auto sm0 = rebase(rep, new_rep);
         // 6.5 wait for the revalidation to complete
         while (!sm0.done()) {
-            auto elim = sm0.resume();
-            if (elim.has_value())
-            co_yield elim.value();
+            sm0.resume();
+            if (sm0.has_yield())
+                co_yield sm0.consume_yield();
         }
     }
 

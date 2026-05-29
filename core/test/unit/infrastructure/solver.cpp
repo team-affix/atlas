@@ -83,9 +83,9 @@ TEST_F(SolverTest, FirstYieldRunsSetUpThenRunBeforeTearDown) {
     EXPECT_CALL(set_up_sim, set_up()).Times(1);
     EXPECT_CALL(run_sim, run()).WillOnce(Return(sim_termination::solved));
     auto sm = s.solve();
-    auto term = sm.resume();
-    ASSERT_TRUE(term.has_value());
-    EXPECT_EQ(*term, sim_termination::solved);
+    sm.resume();
+    ASSERT_TRUE(sm.has_yield());
+    EXPECT_EQ(sm.consume_yield(), sim_termination::solved);
 }
 
 TEST_F(SolverTest, TearDownRunsOnResumeAfterYield) {
@@ -98,7 +98,9 @@ TEST_F(SolverTest, TearDownRunsOnResumeAfterYield) {
     EXPECT_CALL(tear_down_sim, tear_down()).Times(1);
     EXPECT_CALL(learn_avoidance, learn(testing::_)).WillOnce(Return(std::nullopt));
     auto sm = s.solve();
-    ASSERT_TRUE(sm.resume().has_value());
+    sm.resume();
+    ASSERT_TRUE(sm.has_yield());
+    sm.consume_yield();
     sm.resume();
 }
 
@@ -106,9 +108,9 @@ TEST_F(SolverTest, YieldPropagatesConflictTermination) {
     EXPECT_CALL(set_up_sim, set_up()).Times(1);
     EXPECT_CALL(run_sim, run()).WillOnce(Return(sim_termination::conflicted));
     auto sm = s.solve();
-    auto term = sm.resume();
-    ASSERT_TRUE(term.has_value());
-    EXPECT_EQ(*term, sim_termination::conflicted);
+    sm.resume();
+    ASSERT_TRUE(sm.has_yield());
+    EXPECT_EQ(sm.consume_yield(), sim_termination::conflicted);
 }
 
 TEST_F(SolverTest, RunsSecondIterationWhileDecisionsRemain) {
@@ -127,18 +129,23 @@ TEST_F(SolverTest, RunsSecondIterationWhileDecisionsRemain) {
     EXPECT_CALL(tear_down_sim, tear_down()).Times(2);
 
     auto sm = s.solve();
-    ASSERT_EQ(sm.resume(), sim_termination::conflicted);
-    ASSERT_EQ(sm.resume(), sim_termination::solved);
-    EXPECT_FALSE(sm.resume().has_value());
+    sm.resume();
+    ASSERT_TRUE(sm.has_yield());
+    EXPECT_EQ(sm.consume_yield(), sim_termination::conflicted);
+    sm.resume();
+    ASSERT_TRUE(sm.has_yield());
+    EXPECT_EQ(sm.consume_yield(), sim_termination::solved);
+    sm.resume();
+    EXPECT_TRUE(sm.done());
 }
 
 TEST_F(SolverTest, YieldPropagatesDepthExceededTermination) {
     EXPECT_CALL(set_up_sim, set_up()).Times(1);
     EXPECT_CALL(run_sim, run()).WillOnce(Return(sim_termination::depth_exceeded));
     auto sm = s.solve();
-    auto term = sm.resume();
-    ASSERT_TRUE(term.has_value());
-    EXPECT_EQ(*term, sim_termination::depth_exceeded);
+    sm.resume();
+    ASSERT_TRUE(sm.has_yield());
+    EXPECT_EQ(sm.consume_yield(), sim_termination::depth_exceeded);
 }
 
 TEST_F(SolverTest, PinsEachLemmaResolutionBeforeTearDown) {
@@ -157,9 +164,11 @@ TEST_F(SolverTest, PinsEachLemmaResolutionBeforeTearDown) {
     EXPECT_CALL(learn_avoidance, learn(testing::_)).WillOnce(Return(std::nullopt));
 
     auto sm = s.solve();
-    ASSERT_EQ(sm.resume(), sim_termination::conflicted);
     sm.resume();
-    EXPECT_FALSE(sm.resume().has_value());
+    ASSERT_TRUE(sm.has_yield());
+    EXPECT_EQ(sm.consume_yield(), sim_termination::conflicted);
+    sm.resume();
+    EXPECT_TRUE(sm.done());
 }
 
 TEST_F(SolverTest, RoutesEliminationWhenLearnReturnsLineage) {
@@ -176,6 +185,9 @@ TEST_F(SolverTest, RoutesEliminationWhenLearnReturnsLineage) {
     EXPECT_CALL(router, route(&elim)).Times(1);
 
     auto sm = s.solve();
-    ASSERT_EQ(sm.resume(), sim_termination::conflicted);
-    EXPECT_FALSE(sm.resume().has_value());
+    sm.resume();
+    ASSERT_TRUE(sm.has_yield());
+    EXPECT_EQ(sm.consume_yield(), sim_termination::conflicted);
+    sm.resume();
+    EXPECT_TRUE(sm.done());
 }
