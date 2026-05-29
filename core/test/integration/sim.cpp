@@ -596,3 +596,47 @@ TEST_F(SimIntegrationTest, RunReturnsSolvedOnRecursiveClauseTreeWithoutDecisions
     EXPECT_EQ(simulation.run(), sim_termination::solved);
     simulation.tear_down();
 }
+
+TEST_F(SimIntegrationTest, RunReturnsSolvedAfterOneDecisionOnInitialGoalKWithTwoFacts) {
+    expr goal_f{expr::functor{"f", {}}};
+    expr goal_g{expr::functor{"g", {}}};
+    expr goal_k{expr::functor{"k", {}}};
+    expr f_head{expr::functor{"f", {}}};
+    expr g_body{expr::functor{"g", {}}};
+    expr h_body{expr::functor{"h", {}}};
+    expr g_head{expr::functor{"g", {}}};
+    expr h_head{expr::functor{"h", {}}};
+    expr i_body{expr::functor{"i", {}}};
+    expr j_body{expr::functor{"j", {}}};
+    expr k_head0{expr::functor{"k", {}}};
+    expr k_head1{expr::functor{"k", {}}};
+    expr i_head{expr::functor{"i", {}}};
+    expr j_head{expr::functor{"j", {}}};
+    initial_goals.push(&goal_f);
+    initial_goals.push(&goal_g);
+    initial_goals.push(&goal_k);
+    database.push(rule{&f_head, {&g_body, &h_body}});
+    database.push(rule{&g_head, {&i_body, &j_body}});
+    database.push(rule{&h_head, {&i_body, &j_body}});
+    database.push(rule{&i_head, {}});
+    database.push(rule{&j_head, {}});
+    database.push(rule{&k_head0, {}});
+    database.push(rule{&k_head1, {}});
+
+    i_make_initial_goal_lineage& make_initial_goal_lineage =
+        stack.loc.locate<i_make_initial_goal_lineage>();
+    i_make_resolution_lineage& make_resolution_lineage =
+        stack.loc.locate<i_make_resolution_lineage>();
+
+    const goal_lineage* gl_k = make_initial_goal_lineage.make(2);
+    const resolution_lineage* rl_k_first =
+        make_resolution_lineage.make_resolution_lineage(gl_k, rule_id{5});
+
+    EXPECT_CALL(stack.decision_generator, generate()).WillOnce(Return(rl_k_first));
+
+    static constexpr size_t kMaxResolutions = 32;
+    sim simulation{stack.loc, kMaxResolutions};
+    simulation.set_up();
+    EXPECT_EQ(simulation.run(), sim_termination::solved);
+    simulation.tear_down();
+}
