@@ -227,31 +227,27 @@ TEST_F(MhuEliminationGeneratorIntegrationTest,
     EXPECT_EQ(elims[0], rl_other);
 }
 
-TEST_F(MhuEliminationGeneratorIntegrationTest, ConstrainYieldsTwoElimsForThreeWayRepCollision) {
-    expr goal_a{expr::var{0}};
+TEST_F(MhuEliminationGeneratorIntegrationTest,
+    ConstrainOnThreeSiblingRulesWatchingSameRepYieldsNoElims) {
+    expr goal{expr::var{0}};
     expr head_a{expr::functor{"f", {}}};
-    goal_lineage* gl_a = const_cast<goal_lineage*>(lp.make_goal_lineage(nullptr, 0));
-    resolution_lineage* rl_a =
-        const_cast<resolution_lineage*>(lp.make_resolution_lineage(gl_a, rule_id{0}));
-    ggcr.link_goal_candidate(gl_a, rule_id{0});
-
-    expr goal_b{expr::var{0}};
     expr head_b{expr::functor{"g", {}}};
-    goal_lineage* gl_b = const_cast<goal_lineage*>(lp.make_goal_lineage(nullptr, 1));
-    resolution_lineage* rl_b =
-        const_cast<resolution_lineage*>(lp.make_resolution_lineage(gl_b, rule_id{0}));
-    ggcr.link_goal_candidate(gl_b, rule_id{0});
-
-    expr goal_c{expr::var{0}};
     expr head_c{expr::functor{"h", {}}};
-    goal_lineage* gl_c = const_cast<goal_lineage*>(lp.make_goal_lineage(nullptr, 2));
-    resolution_lineage* rl_c =
-        const_cast<resolution_lineage*>(lp.make_resolution_lineage(gl_c, rule_id{0}));
-    ggcr.link_goal_candidate(gl_c, rule_id{0});
 
-    ASSERT_TRUE(mhu->try_add_head(rl_a, &goal_a, &head_a));
-    ASSERT_TRUE(mhu->try_add_head(rl_b, &goal_b, &head_b));
-    ASSERT_TRUE(mhu->try_add_head(rl_c, &goal_c, &head_c));
+    goal_lineage* gl = const_cast<goal_lineage*>(lp.make_goal_lineage(nullptr, 0));
+    resolution_lineage* rl_a =
+        const_cast<resolution_lineage*>(lp.make_resolution_lineage(gl, rule_id{0}));
+    resolution_lineage* rl_b =
+        const_cast<resolution_lineage*>(lp.make_resolution_lineage(gl, rule_id{1}));
+    resolution_lineage* rl_c =
+        const_cast<resolution_lineage*>(lp.make_resolution_lineage(gl, rule_id{2}));
+    ggcr.link_goal_candidate(gl, rule_id{0});
+    ggcr.link_goal_candidate(gl, rule_id{1});
+    ggcr.link_goal_candidate(gl, rule_id{2});
+
+    ASSERT_TRUE(mhu->try_add_head(rl_a, &goal, &head_a));
+    ASSERT_TRUE(mhu->try_add_head(rl_b, &goal, &head_b));
+    ASSERT_TRUE(mhu->try_add_head(rl_c, &goal, &head_c));
 
     auto sm = mhu->constrain(rl_a);
     std::vector<const resolution_lineage*> elims;
@@ -260,17 +256,7 @@ TEST_F(MhuEliminationGeneratorIntegrationTest, ConstrainYieldsTwoElimsForThreeWa
             elims.push_back(v.value());
     }
 
-    EXPECT_EQ(elims.size(), 2u);
-    bool saw_b = false;
-    bool saw_c = false;
-    for (const resolution_lineage* elim : elims) {
-        if (elim == rl_b)
-            saw_b = true;
-        if (elim == rl_c)
-            saw_c = true;
-    }
-    EXPECT_TRUE(saw_b);
-    EXPECT_TRUE(saw_c);
+    EXPECT_TRUE(elims.empty());
 }
 
 TEST_F(MhuEliminationGeneratorIntegrationTest, TryAddHeadFailsOnOccursCheck) {

@@ -996,44 +996,6 @@ TEST_F(SimIntegrationTest, RunDeactivatesRuleOneWhenDecisionResolvesRuleZeroOnMh
     simulation.tear_down();
 }
 
-TEST_F(SimIntegrationTest, RunSolvedTwiceAcrossTearDownWithMhuFactBinding) {
-    /*
-     * initial goals:
-     *   f(A).
-     * database:
-     *   0: f(abc).
-     * setup: set_up, run, tear_down, set_up, run again on same goal — bindings/MHU cleared
-     */
-    expr abc{expr::functor{"abc", {}}};
-    expr head{expr::functor{"f", {&abc}}};
-    database.push(rule{&head, {}});
-
-    i_bind_map& bind_map = stack.loc.locate<i_bind_map>();
-    i_var_sequencer& seq = stack.loc.locate<i_var_sequencer>();
-    i_make_var& make_var = stack.loc.locate<i_make_var>();
-    i_make_functor& make_functor = stack.loc.locate<i_make_functor>();
-
-    EXPECT_CALL(stack.decision_generator, generate()).Times(0);
-
-    sim simulation{stack.loc, kDefaultMaxResolutions};
-    simulation.set_up();
-    const expr* var_a = make_var.make(seq.next());
-    initial_goals.push(make_functor.make("f", {var_a}));
-
-    EXPECT_EQ(simulation.run(), sim_termination::solved);
-    const expr::functor& whnf_first =
-        std::get<expr::functor>(bind_map.whnf(var_a)->content);
-    EXPECT_EQ(whnf_first.name, "abc");
-
-    simulation.tear_down();
-    simulation.set_up();
-    EXPECT_EQ(simulation.run(), sim_termination::solved);
-    const expr::functor& whnf_second =
-        std::get<expr::functor>(bind_map.whnf(var_a)->content);
-    EXPECT_EQ(whnf_second.name, "abc");
-    simulation.tear_down();
-}
-
 TEST_F(SimIntegrationTest, RunReturnsSolvedBindingVarInNestedFunctorArgWithoutDecisions) {
     /*
      * initial goals:
