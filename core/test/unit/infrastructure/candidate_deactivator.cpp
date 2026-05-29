@@ -47,8 +47,37 @@ struct CandidateDeactivatorTest : public ::testing::Test {
 };
 
 TEST_F(CandidateDeactivatorTest, DeactivateUnlinksUnsetsAndRecords) {
-    EXPECT_CALL(unlink, unlink_goal_candidate(&parent, kRule)).Times(1);
-    EXPECT_CALL(unset_maps, unset(&rl)).Times(1);
-    EXPECT_CALL(memory, insert(&rl)).Times(1);
+    bool unlinked = false;
+    bool unset = false;
+    bool recorded = false;
+    EXPECT_CALL(unlink, unlink_goal_candidate(&parent, kRule))
+        .WillOnce([&] { unlinked = true; });
+    EXPECT_CALL(unset_maps, unset(&rl))
+        .WillOnce([&] { unset = true; });
+    EXPECT_CALL(memory, insert(&rl))
+        .WillOnce([&] { recorded = true; });
     deactivator.deactivate(&rl);
+    EXPECT_TRUE(unlinked);
+    EXPECT_TRUE(unset);
+    EXPECT_TRUE(recorded);
+}
+
+TEST_F(CandidateDeactivatorTest, DeactivateUsesResolutionParentAndRuleIndex) {
+    static constexpr rule_id kAltRule = 4;
+    static constexpr subgoal_id kAltGoal = 7;
+    goal_lineage alt_parent{nullptr, kAltGoal};
+    resolution_lineage alt_rl{&alt_parent, kAltRule};
+    bool unlinked = false;
+    bool unset = false;
+    bool recorded = false;
+    EXPECT_CALL(unlink, unlink_goal_candidate(&alt_parent, kAltRule))
+        .WillOnce([&] { unlinked = true; });
+    EXPECT_CALL(unset_maps, unset(&alt_rl))
+        .WillOnce([&] { unset = true; });
+    EXPECT_CALL(memory, insert(&alt_rl))
+        .WillOnce([&] { recorded = true; });
+    deactivator.deactivate(&alt_rl);
+    EXPECT_TRUE(unlinked);
+    EXPECT_TRUE(unset);
+    EXPECT_TRUE(recorded);
 }

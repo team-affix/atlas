@@ -16,7 +16,6 @@
 
 using ::testing::_;
 using ::testing::Return;
-using ::testing::ReturnRef;
 
 struct MockCopier : public i_copier {
     MOCK_METHOD(const expr*, copy, (const expr*, translation_map&), (const, override));
@@ -83,22 +82,45 @@ struct CandidateActivatorTest : public ::testing::Test {
     resolution_lineage rl{&parent, kRule};
 };
 
-TEST_F(CandidateActivatorTest, BackloggedSkipsAllSideEffects) {
+TEST_F(CandidateActivatorTest, BackloggedSkipsCopyMhuMapAndLink) {
+    EXPECT_CALL(get_rule, get(kRule)).WillOnce(Return(&idx));
     EXPECT_CALL(is_backlogged, is_backlogged_elimination(&rl)).WillOnce(Return(true));
     EXPECT_CALL(copier, copy).Times(0);
+    EXPECT_CALL(get_goal_expr, get).Times(0);
+    EXPECT_CALL(mhu, try_add_head).Times(0);
     EXPECT_CALL(set_map, set).Times(0);
     EXPECT_CALL(link, link_goal_candidate).Times(0);
     activator.activate(&rl);
 }
 
 TEST_F(CandidateActivatorTest, RejectedHeadSkipsMapAndLink) {
-    EXPECT_CALL(is_backlogged, is_backlogged_elimination(&rl)).WillOnce(Return(false));
     EXPECT_CALL(get_rule, get(kRule)).WillOnce(Return(&idx));
+    EXPECT_CALL(is_backlogged, is_backlogged_elimination(&rl)).WillOnce(Return(false));
     EXPECT_CALL(copier, copy(&head, _)).WillOnce(Return(&copied_head));
     EXPECT_CALL(get_goal_expr, get(&parent)).WillOnce(Return(&goal_e));
     EXPECT_CALL(mhu, try_add_head(&rl, &goal_e, &copied_head)).WillOnce(Return(false));
     EXPECT_CALL(set_map, set).Times(0);
     EXPECT_CALL(link, link_goal_candidate).Times(0);
+    activator.activate(&rl);
+}
+
+TEST_F(CandidateActivatorTest, AcceptedHeadSetsMapAndLinks) {
+    const translation_map kMap{{3, 4}, {5, 6}};
+    EXPECT_CALL(get_rule, get(kRule)).WillOnce(Return(&idx));
+    EXPECT_CALL(is_backlogged, is_backlogged_elimination(&rl)).WillOnce(Return(false));
+    EXPECT_CALL(copier, copy(&head, _))
+        .WillOnce([&](const expr*, translation_map& tm) {
+            tm = kMap;
+            return &copied_head;
+        });
+    EXPECT_CALL(get_goal_expr, get(&parent)).WillOnce(Return(&goal_e));
+    EXPECT_CALL(mhu, try_add_head(&rl, &goal_e, &copied_head)).WillOnce(Return(true));
+    EXPECT_CALL(set_map, set(&rl, _))
+        .WillOnce([&](const resolution_lineage* resolution, translation_map tm) {
+            EXPECT_EQ(resolution, &rl);
+            EXPECT_EQ(tm, kMap);
+        });
+    EXPECT_CALL(link, link_goal_candidate(&parent, kRule)).Times(1);
     activator.activate(&rl);
 }
 
@@ -110,24 +132,29 @@ TEST_F(CandidateActivatorTest, AcceptedTernaryHeadPassedToMhu) {
     expr copied_ternary{expr::functor{"h", {&a, &b, &c}}};
     rule ternary_rule{&ternary_head, {&body_subgoal}};
 
-    EXPECT_CALL(is_backlogged, is_backlogged_elimination(&rl)).WillOnce(Return(false));
     EXPECT_CALL(get_rule, get(kRule)).WillOnce(Return(&ternary_rule));
+    EXPECT_CALL(is_backlogged, is_backlogged_elimination(&rl)).WillOnce(Return(false));
     EXPECT_CALL(copier, copy(&ternary_head, _)).WillOnce(Return(&copied_ternary));
     EXPECT_CALL(get_goal_expr, get(&parent)).WillOnce(Return(&goal_e));
     EXPECT_CALL(mhu, try_add_head(&rl, &goal_e, &copied_ternary)).WillOnce(Return(true));
     EXPECT_CALL(set_map, set(&rl, _)).Times(1);
     EXPECT_CALL(link, link_goal_candidate(&parent, kRule)).Times(1);
-
     activator.activate(&rl);
 }
 
-TEST_F(CandidateActivatorTest, AcceptedHeadSetsMapAndLinks) {
-    EXPECT_CALL(is_backlogged, is_backlogged_elimination(&rl)).WillOnce(Return(false));
-    EXPECT_CALL(get_rule, get(kRule)).WillOnce(Return(&idx));
+TEST_F(CandidateActivatorTest, AcceptedResolutionUsesItsRuleIndexAndParentGoal) {
+    static constexpr rule_id kAltRule = 2;
+    static constexpr subgoal_id kAltGoal = 3;
+    goal_lineage alt_parent{nullptr, kAltGoal};
+    resolution_lineage alt_rl{&alt_parent, kAltRule};
+    rule alt_rule{&head, {&body_subgoal}};
+
+    EXPECT_CALL(get_rule, get(kAltRule)).WillOnce(Return(&alt_rule));
+    EXPECT_CALL(is_backlogged, is_backlogged_elimination(&alt_rl)).WillOnce(Return(false));
     EXPECT_CALL(copier, copy(&head, _)).WillOnce(Return(&copied_head));
-    EXPECT_CALL(get_goal_expr, get(&parent)).WillOnce(Return(&goal_e));
-    EXPECT_CALL(mhu, try_add_head(&rl, &goal_e, &copied_head)).WillOnce(Return(true));
-    EXPECT_CALL(set_map, set(&rl, _)).Times(1);
-    EXPECT_CALL(link, link_goal_candidate(&parent, kRule)).Times(1);
-    activator.activate(&rl);
+    EXPECT_CALL(get_goal_expr, get(&alt_parent)).WillOnce(Return(&goal_e));
+    EXPECT_CALL(mhu, try_add_head(&alt_rl, &goal_e, &copied_head)).WillOnce(Return(true));
+    EXPECT_CALL(set_map, set(&alt_rl, _)).Times(1);
+    EXPECT_CALL(link, link_goal_candidate(&alt_parent, kAltRule)).Times(1);
+    activator.activate(&alt_rl);
 }
