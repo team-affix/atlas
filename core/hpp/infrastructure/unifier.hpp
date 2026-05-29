@@ -7,7 +7,7 @@
 struct unifier : i_unifier {
     virtual ~unifier() = default;
     unifier(i_bind_map&);
-    bool unify(const expr*, const expr*, std::unordered_set<uint32_t>&) override;
+    coroutine<uint32_t, bool> unify(const expr*, const expr*) override;
 private:
     bool occurs_check(uint32_t, const expr*);
     i_bind_map& bind_map;

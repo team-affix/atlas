@@ -3,7 +3,7 @@
 unifier::unifier(i_bind_map& bm)
     : bind_map(bm) {}
 
-bool unifier::unify(const expr* lhs, const expr* rhs, std::unordered_set<uint32_t>& snk) {
+coroutine<uint32_t, bool> unifier::unify(const expr* lhs, const expr* rhs) {
         // WHNF the lhs and rhs
     lhs = bind_map.whnf(lhs);
     rhs = bind_map.whnf(rhs);
@@ -13,21 +13,21 @@ bool unifier::unify(const expr* lhs, const expr* rhs, std::unordered_set<uint32_
     const expr::var* rv = std::get_if<expr::var>(&rhs->content);
 
     if (lv)
-        snk.insert(lv->index);
+        co_yield lv->index;
     if (rv)
-        snk.insert(rv->index);
+        co_yield rv->index;
 
     // If both sides are variables, bind the younger (higher index) to the older
     if (lv && rv) {
         if (lv->index == rv->index)
-            return true;
+            co_return true;
         const auto [young, target] = lv->index > rv->index
             ? std::pair{lv, rhs}
             : std::pair{rv, lhs};
         if (occurs_check(young->index, target))
-            return false;
+            co_return false;
         bind_map.bind(young->index, target);
-        return true;
+        co_return true;
     }
 
     // If one side is a variable, bind it to the other side
@@ -36,20 +36,34 @@ bool unifier::unify(const expr* lhs, const expr* rhs, std::unordered_set<uint32_
         : std::pair{rv, lhs};
     if (v) {
         if (occurs_check(v->index, other_e))
-            return false;
+            co_return false;
         bind_map.bind(v->index, other_e);
-        return true;
+        co_return true;
     }
 
     // At this point, they are both functors
     const expr::functor& lf = std::get<expr::functor>(lhs->content);
     const expr::functor& rf = std::get<expr::functor>(rhs->content);
     if (lf.name != rf.name || lf.args.size() != rf.args.size())
-        return false;
-    for (size_t i = 0; i < lf.args.size(); ++i)
-        if (!unify(lf.args[i], rf.args[i], snk))
-            return false;
-    return true;
+        co_return false;
+
+    // unify the children
+    for (size_t i = 0; i < lf.args.size(); ++i) {
+        auto unify_child_task = unify(lf.args[i], rf.args[i]);
+
+        // wait for the child unify to complete
+        while (!unify_child_task.done()) {
+            unify_child_task.resume();
+            if (unify_child_task.has_yield()) {
+                co_yield unify_child_task.consume_yield();
+            }
+        }
+
+        // if the child unify failed, return false
+        if (!unify_child_task.result())
+            co_return false;
+    }
+    co_return true;
 }
 
 bool unifier::occurs_check(uint32_t index, const expr* key) {

@@ -2,13 +2,12 @@
 #define I_UNIFIER_HPP
 
 #include <cstdint>
-#include <unordered_set>
 #include "value_objects/expr.hpp"
+#include "infrastructure/coroutine.hpp"
 
 struct i_unifier {
     virtual ~i_unifier() = default;
-    // snk accumulates touched var indices (both sides of each unify step after WHNF)
-    virtual bool unify(const expr*, const expr*, std::unordered_set<uint32_t>&) = 0;
+    virtual coroutine<uint32_t, bool> unify(const expr*, const expr*) = 0;
 };
 
 #endif
