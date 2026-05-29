@@ -360,3 +360,32 @@ TEST_F(SimIntegrationTest, RunReturnsSolvedWhenUnitFactAppliesToInitialGoal) {
     simulation.tear_down();
 }
 
+TEST_F(SimIntegrationTest, RunReturnsConflictedWhenDbRuleHeadFailsToUnifyWithGoal) {
+    expr goal{expr::functor{"f", {}}};
+    expr head{expr::functor{"g", {}}};
+    initial_goals.push(&goal);
+    database.push(rule{&head, {}});
+
+    EXPECT_CALL(stack.decision_generator, generate()).Times(0);
+
+    sim simulation = stack.make_sim(kDefaultMaxResolutions);
+    simulation.set_up();
+    EXPECT_EQ(simulation.run(), sim_termination::conflicted);
+    simulation.tear_down();
+}
+
+TEST_F(SimIntegrationTest, RunReturnsSolvedWhenOnlyOneOfTwoDbRulesUnifiesWithGoal) {
+    expr goal{expr::functor{"f", {}}};
+    expr matching_head{expr::functor{"f", {}}};
+    expr mismatching_head{expr::functor{"g", {}}};
+    initial_goals.push(&goal);
+    database.push(rule{&matching_head, {}});
+    database.push(rule{&mismatching_head, {}});
+
+    EXPECT_CALL(stack.decision_generator, generate()).Times(0);
+
+    sim simulation = stack.make_sim(kDefaultMaxResolutions);
+    simulation.set_up();
+    EXPECT_EQ(simulation.run(), sim_termination::solved);
+    simulation.tear_down();
+}
