@@ -7,6 +7,7 @@
 #include "infrastructure/goal_activator.hpp"
 #include "interfaces/i_copier.hpp"
 #include "interfaces/i_set_goal_expr.hpp"
+#include "interfaces/i_insert_active_goal.hpp"
 #include "interfaces/i_get_candidate_translation_map.hpp"
 #include "interfaces/i_get_resolution_rule.hpp"
 
@@ -16,6 +17,10 @@ using ::testing::ReturnRef;
 
 struct MockSetGoalExpr : public i_set_goal_expr {
     MOCK_METHOD(void, set, (const goal_lineage*, const expr*), (override));
+};
+
+struct MockInsertActiveGoal : public i_insert_active_goal {
+    MOCK_METHOD(void, insert_active_goal, (const goal_lineage*), (override));
 };
 
 struct MockGetCandidateTranslationMap : public i_get_candidate_translation_map {
@@ -36,6 +41,7 @@ struct GoalActivatorTest : public ::testing::Test {
 
     locator loc;
     MockSetGoalExpr set_goal_expr;
+    MockInsertActiveGoal insert_active_goal;
     MockGetCandidateTranslationMap get_candidate_translation_map;
     MockGetResolutionRule get_resolution_rule;
     MockCopier copier;
@@ -45,6 +51,7 @@ struct GoalActivatorTest : public ::testing::Test {
 
     goal_activator init_activator() {
         loc.bind_as<i_set_goal_expr>(set_goal_expr);
+        loc.bind_as<i_insert_active_goal>(insert_active_goal);
         loc.bind_as<i_get_candidate_translation_map>(get_candidate_translation_map);
         loc.bind_as<i_get_resolution_rule>(get_resolution_rule);
         loc.bind_as<i_copier>(copier);
@@ -72,6 +79,7 @@ TEST_F(GoalActivatorTest, ActivateUsesBodyIndexForSubgoalExpr) {
     EXPECT_CALL(get_candidate_translation_map, get(&res)).WillOnce(ReturnRef(tm));
     EXPECT_CALL(copier, copy(&second_body, _)).WillOnce(Return(&copied_second));
     EXPECT_CALL(set_goal_expr, set(&second_gl, &copied_second)).Times(1);
+    EXPECT_CALL(insert_active_goal, insert_active_goal(&second_gl)).Times(1);
 
     activator.activate(&second_gl);
 }
@@ -81,6 +89,7 @@ TEST_F(GoalActivatorTest, ActivateCopiesBodySubgoalThroughTranslationMap) {
     EXPECT_CALL(get_candidate_translation_map, get(&res)).WillOnce(ReturnRef(tm));
     EXPECT_CALL(copier, copy(&child_goal, _)).WillOnce(Return(&copied_goal));
     EXPECT_CALL(set_goal_expr, set(&child_gl, &copied_goal)).Times(1);
+    EXPECT_CALL(insert_active_goal, insert_active_goal(&child_gl)).Times(1);
 
     activator.activate(&child_gl);
 }
