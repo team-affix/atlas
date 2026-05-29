@@ -32,10 +32,14 @@ TEST_F(BindMapTest, WhnfChainVar0ToVar1ToFunctorReturnsFunctor) {
     EXPECT_EQ(bm.whnf(&var0), &func);
 }
 
-TEST_F(BindMapTest, BindOverwritesExistingBinding) {
+TEST_F(BindMapTest, BindRejectsDuplicateBinding) {
     bm.bind(0, &func);
+#ifdef DEBUG
+    EXPECT_THROW(bm.bind(0, &var1), std::logic_error);
+#else
     bm.bind(0, &var1);
-    EXPECT_EQ(bm.whnf(&var0), &var1);
+    EXPECT_EQ(bm.whnf(&var0), &func);
+#endif
 }
 
 TEST_F(BindMapTest, WhnfDoesNotRecurseIntoFunctorArguments) {

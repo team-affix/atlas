@@ -1,10 +1,12 @@
+#include "debug_assert.hpp"
 #include "infrastructure/bind_map.hpp"
 
 bind_map::bind_map() {
 }
 
 void bind_map::bind(uint32_t index, const expr* e) {
-    bindings[index] = e;
+    auto [_, inserted] = bindings.insert({index, e});
+    DEBUG_ASSERT(inserted);
 }
 
 void bind_map::clear_bindings() {
@@ -32,8 +34,8 @@ const expr* bind_map::whnf(const expr* key) {
     // WHNF the bound value
     const expr* whnf_bound_value = whnf(bound_value);
 
-    // Collapse the binding
-    bind(var.index, whnf_bound_value);
+    // Path compression — update existing entry only (not public bind)
+    bindings[var.index] = whnf_bound_value;
 
     return whnf_bound_value;
 }
