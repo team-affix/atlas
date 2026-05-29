@@ -4,6 +4,8 @@
 #include <gtest/gtest.h>
 #include <gmock/gmock.h>
 #include <optional>
+#include <string>
+#include <vector>
 #include "infrastructure/sim.hpp"
 #include "infrastructure/db.hpp"
 #include "infrastructure/initial_goal_exprs.hpp"
@@ -304,6 +306,39 @@ struct sim_stack {
         loc.bind_as<i_resolver>(resolver_);
     }
 };
+
+const expr* nest_suc(i_make_functor& make_functor, const expr* inner) {
+    return make_functor.make("suc", {inner});
+}
+
+const expr* nest_suc_depth(i_make_functor& make_functor, const expr* zero, int depth) {
+    const expr* cur = zero;
+    for (int i = 0; i < depth; ++i)
+        cur = nest_suc(make_functor, cur);
+    return cur;
+}
+
+bool is_nil_expr(i_bind_map& bind_map, const expr* e) {
+    const expr* whnf_e = bind_map.whnf(e);
+    const expr::functor* f = std::get_if<expr::functor>(&whnf_e->content);
+    return f && f->name == "nil" && f->args.empty();
+}
+
+std::vector<const expr*> cons_spine_heads(i_bind_map& bind_map, const expr* list) {
+    std::vector<const expr*> heads;
+    const expr* cur = bind_map.whnf(list);
+    for (;;) {
+        const expr::functor* f = std::get_if<expr::functor>(&cur->content);
+        if (!f)
+            return heads;
+        if (f->name == "nil" && f->args.empty())
+            return heads;
+        if (f->name != "cons" || f->args.size() != 2)
+            return heads;
+        heads.push_back(bind_map.whnf(f->args[0]));
+        cur = bind_map.whnf(f->args[1]);
+    }
+}
 
 }  // namespace
 
@@ -1238,5 +1273,75 @@ TEST_F(SimIntegrationTest, RunReturnsSolvedWhenCdclAndMhuReduceGoalGCandidatesWi
     const expr::functor& whnf_a = std::get<expr::functor>(bind_map.whnf(var_a)->content);
     EXPECT_EQ(whnf_a.name, "def");
     EXPECT_TRUE(whnf_a.args.empty());
+    simulation.tear_down();
+}
+
+TEST_F(SimIntegrationTest, RunReturnsSolvedBuildingListOfFiveAbcWithoutDecisions) {
+    /*
+     * initial goals:
+     *   make_list(suc(suc(suc(suc(suc(zero))))), abc, R).
+     * database:
+     *   0: make_list(zero, _, nil).
+     *   1: make_list(suc(L), A, cons(A, T)) :- make_list(L, A, T).
+     */
+    expr rule_ignored{expr::var{0}};
+    expr rule_l{expr::var{0}};
+    expr rule_a{expr::var{1}};
+    expr rule_t{expr::var{2}};
+    expr zero{expr::functor{"zero", {}}};
+    expr nil{expr::functor{"nil", {}}};
+    expr head0{expr::functor{"make_list", {&zero, &rule_ignored, &nil}}};
+    expr suc_l{expr::functor{"suc", {&rule_l}}};
+    expr cons_at{expr::functor{"cons", {&rule_a, &rule_t}}};
+    expr head1{expr::functor{"make_list", {&suc_l, &rule_a, &cons_at}}};
+    expr body1{expr::functor{"make_list", {&rule_l, &rule_a, &rule_t}}};
+    database.push(rule{&head0, {}});
+    database.push(rule{&head1, {&body1}});
+
+    i_bind_map& bind_map = stack.loc.locate<i_bind_map>();
+    i_var_sequencer& seq = stack.loc.locate<i_var_sequencer>();
+    i_make_var& make_var = stack.loc.locate<i_make_var>();
+    i_make_functor& make_functor = stack.loc.locate<i_make_functor>();
+
+    EXPECT_CALL(stack.decision_generator, generate()).Times(0);
+
+    static constexpr size_t kMaxResolutions = 32;
+    static constexpr int kListLength = 5;
+    sim simulation{stack.loc, kMaxResolutions};
+    simulation.set_up();
+    const expr* zero_pool = make_functor.make("zero", {});
+    const expr* len = nest_suc_depth(make_functor, zero_pool, kListLength);
+    const expr* abc = make_functor.make("abc", {});
+    const expr* var_r = make_var.make(seq.next());
+    initial_goals.push(make_functor.make("make_list", {len, abc, var_r}));
+
+    EXPECT_EQ(simulation.run(), sim_termination::solved);
+
+    const expr* whnf_r = bind_map.whnf(var_r);
+    ASSERT_FALSE(is_nil_expr(bind_map, whnf_r));
+    const expr::functor& list_root = std::get<expr::functor>(whnf_r->content);
+    EXPECT_EQ(list_root.name, "cons");
+
+    const std::vector<const expr*> elements = cons_spine_heads(bind_map, var_r);
+    ASSERT_EQ(elements.size(), static_cast<size_t>(kListLength));
+    for (const expr* elem : elements) {
+        const expr::functor& atom = std::get<expr::functor>(bind_map.whnf(elem)->content);
+        EXPECT_EQ(atom.name, "abc");
+        EXPECT_TRUE(atom.args.empty());
+    }
+
+    const expr* tail = bind_map.whnf(var_r);
+    for (int i = 0; i < kListLength; ++i) {
+        const expr::functor& cell = std::get<expr::functor>(tail->content);
+        ASSERT_EQ(cell.name, "cons");
+        ASSERT_EQ(cell.args.size(), 2u);
+        const expr::functor& head =
+            std::get<expr::functor>(bind_map.whnf(cell.args[0])->content);
+        EXPECT_EQ(head.name, "abc");
+        EXPECT_TRUE(head.args.empty());
+        tail = bind_map.whnf(cell.args[1]);
+    }
+    EXPECT_TRUE(is_nil_expr(bind_map, tail));
+
     simulation.tear_down();
 }
