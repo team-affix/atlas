@@ -16,8 +16,22 @@ TEST_F(BacktrackableIncrementTest, InvokeIncrements) {
     EXPECT_EQ(x, 6);
 }
 
+TEST_F(BacktrackableIncrementTest, InvokeTwiceIncrementsTwice) {
+    m.invoke();
+    m.invoke();
+    EXPECT_EQ(x, 7);
+}
+
 TEST_F(BacktrackableIncrementTest, InvokeAndBacktrackDecrementsBack) {
     m.invoke();
+    m.backtrack();
+    EXPECT_EQ(x, 5);
+}
+
+TEST_F(BacktrackableIncrementTest, InvokeTwiceBacktrackTwiceRestoresOriginal) {
+    m.invoke();
+    m.invoke();
+    m.backtrack();
     m.backtrack();
     EXPECT_EQ(x, 5);
 }
