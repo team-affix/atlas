@@ -72,17 +72,24 @@ TEST_F(TrailTest, TwoFramesFirstPopUndoesOnlyFrame2Entry) {
 }
 
 TEST_F(TrailTest, TwoFramesSecondPopUndoesFrame1Entry) {
-    auto m1 = std::make_unique<StrictMock<MockBacktrackable>>();
+    auto m1a = std::make_unique<StrictMock<MockBacktrackable>>();
+    auto m1b = std::make_unique<StrictMock<MockBacktrackable>>();
     auto m2 = std::make_unique<StrictMock<MockBacktrackable>>();
     ::testing::InSequence seq;
     EXPECT_CALL(*m2, backtrack()).Times(1);
-    EXPECT_CALL(*m1, backtrack()).Times(1);
+    EXPECT_CALL(*m1b, backtrack()).Times(1);
+    EXPECT_CALL(*m1a, backtrack()).Times(1);
 
     t.push();
-    t.log(std::move(m1));
+    t.log(std::move(m1a));
+    t.log(std::move(m1b));
     t.push();
     t.log(std::move(m2));
+    EXPECT_EQ(t.depth(), 2);
+
     t.pop();
+    EXPECT_EQ(t.depth(), 1);
+
     t.pop();
     EXPECT_EQ(t.depth(), 0);
 }
