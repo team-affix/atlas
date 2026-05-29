@@ -307,39 +307,6 @@ struct sim_stack {
     }
 };
 
-const expr* nest_suc(i_make_functor& make_functor, const expr* inner) {
-    return make_functor.make("suc", {inner});
-}
-
-const expr* nest_suc_depth(i_make_functor& make_functor, const expr* zero, int depth) {
-    const expr* cur = zero;
-    for (int i = 0; i < depth; ++i)
-        cur = nest_suc(make_functor, cur);
-    return cur;
-}
-
-bool is_nil_expr(i_bind_map& bind_map, const expr* e) {
-    const expr* whnf_e = bind_map.whnf(e);
-    const expr::functor* f = std::get_if<expr::functor>(&whnf_e->content);
-    return f && f->name == "nil" && f->args.empty();
-}
-
-std::vector<const expr*> cons_spine_heads(i_bind_map& bind_map, const expr* list) {
-    std::vector<const expr*> heads;
-    const expr* cur = bind_map.whnf(list);
-    for (;;) {
-        const expr::functor* f = std::get_if<expr::functor>(&cur->content);
-        if (!f)
-            return heads;
-        if (f->name == "nil" && f->args.empty())
-            return heads;
-        if (f->name != "cons" || f->args.size() != 2)
-            return heads;
-        heads.push_back(bind_map.whnf(f->args[0]));
-        cur = bind_map.whnf(f->args[1]);
-    }
-}
-
 }  // namespace
 
 struct SimIntegrationTest : public ::testing::Test {
@@ -1310,25 +1277,14 @@ TEST_F(SimIntegrationTest, RunReturnsSolvedBuildingListOfFiveAbcWithoutDecisions
     sim simulation{stack.loc, kMaxResolutions};
     simulation.set_up();
     const expr* zero_pool = make_functor.make("zero", {});
-    const expr* len = nest_suc_depth(make_functor, zero_pool, kListLength);
+    const expr* len = zero_pool;
+    for (int i = 0; i < kListLength; ++i)
+        len = make_functor.make("suc", {len});
     const expr* abc = make_functor.make("abc", {});
     const expr* var_r = make_var.make(seq.next());
     initial_goals.push(make_functor.make("make_list", {len, abc, var_r}));
 
     EXPECT_EQ(simulation.run(), sim_termination::solved);
-
-    const expr* whnf_r = bind_map.whnf(var_r);
-    ASSERT_FALSE(is_nil_expr(bind_map, whnf_r));
-    const expr::functor& list_root = std::get<expr::functor>(whnf_r->content);
-    EXPECT_EQ(list_root.name, "cons");
-
-    const std::vector<const expr*> elements = cons_spine_heads(bind_map, var_r);
-    ASSERT_EQ(elements.size(), static_cast<size_t>(kListLength));
-    for (const expr* elem : elements) {
-        const expr::functor& atom = std::get<expr::functor>(bind_map.whnf(elem)->content);
-        EXPECT_EQ(atom.name, "abc");
-        EXPECT_TRUE(atom.args.empty());
-    }
 
     const expr* tail = bind_map.whnf(var_r);
     for (int i = 0; i < kListLength; ++i) {
@@ -1341,7 +1297,9 @@ TEST_F(SimIntegrationTest, RunReturnsSolvedBuildingListOfFiveAbcWithoutDecisions
         EXPECT_TRUE(head.args.empty());
         tail = bind_map.whnf(cell.args[1]);
     }
-    EXPECT_TRUE(is_nil_expr(bind_map, tail));
+    const expr::functor& nil_tail = std::get<expr::functor>(bind_map.whnf(tail)->content);
+    EXPECT_EQ(nil_tail.name, "nil");
+    EXPECT_TRUE(nil_tail.args.empty());
 
     simulation.tear_down();
 }
