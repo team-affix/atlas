@@ -57,6 +57,18 @@ Two indexes connect **common representatives (c-reps)** to the heads that depend
 
 These are updated by `link` after successful sync and torn down by `unlink` / `remove_head`.
 
+### Link-map invariant
+
+For each active head `rl` in `heads_`, at all times **`rl_to_reps_[rl]`** (and the dual **`rep_to_rls_`**) satisfy:
+
+**Only c-reps in common.** Every rep in `rl_to_reps_[rl]` is a c-rep in the common bind map: `common.whnf(make_var(rep)) == make_var(rep)` (pointer equality).
+
+**All touched c-reps are watched.** Define the **touch closure** for `rl`: vars yielded by `unify(goal, head)` on that head’s local map, plus any vars pushed onto the synchronize work queue during nested `unify` calls in `synchronize`. For every rep in that closure that **still** is a c-rep in common at the current moment, `rep ∈ rl_to_reps_[rl]`. Indices that cease to be c-reps (because common published a binding for them) are **not** in the set.
+
+**Progressive update.** When common changes via `accept_bindings`, `unlink(rep)` removes `rep` from every head’s watched set; successful `sync_and_link` on rebased heads **adds** newly discovered c-reps via `link`. Published reps are intentionally **not** relinked — they are no longer c-reps. `link` inserts into the set (union); removal happens only through `unlink(rep)` or `remove_head(rl)`.
+
+In short: **`rl_to_reps_[rl]` is the set of touch-closure indices that are c-reps in common right now** — no more, no less.
+
 ---
 
 ## `try_add_head`
