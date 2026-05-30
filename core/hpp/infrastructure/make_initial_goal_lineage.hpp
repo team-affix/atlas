@@ -1,8 +1,7 @@
 #ifndef MAKE_INITIAL_GOAL_LINEAGE_HPP
-#include "infrastructure/locator.hpp"
-
 #define MAKE_INITIAL_GOAL_LINEAGE_HPP
 
+#include "infrastructure/locator.hpp"
 #include "interfaces/i_make_initial_goal_lineage.hpp"
 #include "interfaces/i_make_goal_lineage.hpp"
 

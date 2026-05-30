@@ -1,9 +1,8 @@
 #ifndef EXPR_POOL_HPP
-#include "infrastructure/locator.hpp"
-
 #define EXPR_POOL_HPP
 
 #include <set>
+#include "infrastructure/locator.hpp"
 #include "interfaces/i_get_expr_count.hpp"
 #include "interfaces/i_import_expr.hpp"
 #include "interfaces/i_make_functor.hpp"

@@ -1,91 +1,10 @@
 #include "infrastructure/basic_manifest.hpp"
-#include "interfaces/i_push_trail_frame.hpp"
-#include "interfaces/i_pop_trail_frame.hpp"
-#include "interfaces/i_log_to_current_trail_frame.hpp"
-#include "interfaces/i_bind_map.hpp"
-#include "interfaces/i_clear_bindings.hpp"
-#include "interfaces/i_bind_map_factory.hpp"
-#include "interfaces/i_overlay_bind_map_factory.hpp"
-#include "interfaces/i_unifier_factory.hpp"
-#include "interfaces/i_make_goal_lineage.hpp"
-#include "interfaces/i_make_resolution_lineage.hpp"
-#include "interfaces/i_pin_goal_lineage.hpp"
-#include "interfaces/i_pin_resolution_lineage.hpp"
-#include "interfaces/i_trim_unpinned_lineages.hpp"
-#include "interfaces/i_import_goal_lineage.hpp"
-#include "interfaces/i_import_resolution_lineage.hpp"
-#include "interfaces/i_insert_active_goal.hpp"
-#include "interfaces/i_erase_active_goal.hpp"
-#include "interfaces/i_is_active_goal.hpp"
-#include "interfaces/i_iterate_active_goals.hpp"
-#include "interfaces/i_active_goals_size.hpp"
-#include "interfaces/i_check_active_goals_empty.hpp"
-#include "interfaces/i_clear_active_goals.hpp"
-#include "interfaces/i_get_goal_expr.hpp"
-#include "interfaces/i_set_goal_expr.hpp"
-#include "interfaces/i_unset_goal_expr.hpp"
-#include "interfaces/i_clear_goal_exprs.hpp"
-#include "interfaces/i_get_goal_candidate_rule_ids.hpp"
-#include "interfaces/i_link_goal_candidate.hpp"
-#include "interfaces/i_unlink_goal_candidate.hpp"
-#include "interfaces/i_erase_goal_candidates.hpp"
-#include "interfaces/i_clear_goal_candidate_rule_ids.hpp"
-#include "interfaces/i_push_unit_goal.hpp"
-#include "interfaces/i_pop_unit_goal.hpp"
-#include "interfaces/i_clear_unit_goals.hpp"
-#include "interfaces/i_record_decision.hpp"
-#include "interfaces/i_clear_recorded_decisions.hpp"
-#include "interfaces/i_get_decision_count.hpp"
-#include "interfaces/i_derive_decision_lemma.hpp"
-#include "interfaces/i_record_resolution.hpp"
-#include "interfaces/i_clear_recorded_resolutions.hpp"
-#include "interfaces/i_get_resolution_count.hpp"
-#include "interfaces/i_derive_resolution_lemma.hpp"
-#include "interfaces/i_deactivated_candidate_memory.hpp"
-#include "interfaces/i_get_candidate_translation_map.hpp"
-#include "interfaces/i_set_candidate_translation_map.hpp"
-#include "interfaces/i_unset_candidate_translation_map.hpp"
-#include "interfaces/i_clear_candidate_translation_maps.hpp"
-#include "interfaces/i_get_rule.hpp"
-#include "interfaces/i_get_goal_db_rule_ids.hpp"
-#include "interfaces/i_get_initial_goal_count.hpp"
-#include "interfaces/i_get_initial_goal_expr.hpp"
-#include "interfaces/i_make_functor.hpp"
-#include "interfaces/i_make_var.hpp"
-#include "interfaces/i_import_expr.hpp"
-#include "interfaces/i_get_expr_count.hpp"
-#include "interfaces/i_var_sequencer.hpp"
-#include "interfaces/i_insert_backlogged_elimination.hpp"
-#include "interfaces/i_is_backlogged_elimination.hpp"
-#include "interfaces/i_learn_avoidance.hpp"
-#include "interfaces/i_try_add_mhu_head.hpp"
-#include "interfaces/i_clear_mhu_heads.hpp"
-#include "interfaces/i_elimination_generator.hpp"
-#include "interfaces/i_get_resolution_rule.hpp"
-#include "interfaces/i_copier.hpp"
-#include "interfaces/i_conflict_detector.hpp"
-#include "interfaces/i_detect_unit_goal.hpp"
-#include "interfaces/i_solution_detector.hpp"
-#include "interfaces/i_goal_activator.hpp"
-#include "interfaces/i_goal_deactivator.hpp"
-#include "interfaces/i_candidate_activator.hpp"
-#include "interfaces/i_candidate_deactivator.hpp"
-#include "interfaces/i_elimination_router.hpp"
-#include "interfaces/i_get_unit_resolution.hpp"
-#include "interfaces/i_make_initial_goal_lineage.hpp"
-#include "interfaces/i_activate_initial_goal.hpp"
-#include "interfaces/i_generate_decision.hpp"
-#include "interfaces/i_resolver.hpp"
-#include "interfaces/i_set_up_sim.hpp"
-#include "interfaces/i_tear_down_sim.hpp"
-#include "interfaces/i_run_sim.hpp"
 
 basic_manifest::early_wiring::early_wiring(
     locator& loc, db& database, initial_goal_exprs& initial_goals)
     : trail_(),
       bind_map_(),
       bind_map_factory_(),
-      overlay_bind_map_factory_(),
       unifier_factory_(),
       lineage_pool_(),
       active_goals_(),
@@ -99,7 +18,6 @@ basic_manifest::early_wiring::early_wiring(
     loc.bind_as<i_push_trail_frame, i_pop_trail_frame, i_log_to_current_trail_frame>(trail_);
     loc.bind_as<i_bind_map, i_clear_bindings>(bind_map_);
     loc.bind_as<i_bind_map_factory>(bind_map_factory_);
-    loc.bind_as<i_overlay_bind_map_factory>(overlay_bind_map_factory_);
     loc.bind_as<i_unifier_factory>(unifier_factory_);
     loc.bind_as<i_make_goal_lineage, i_make_resolution_lineage, i_pin_goal_lineage, i_pin_resolution_lineage, i_trim_unpinned_lineages, i_import_goal_lineage, i_import_resolution_lineage>(lineage_pool_);
     loc.bind_as<i_insert_active_goal, i_erase_active_goal, i_is_active_goal, i_iterate_active_goals, i_active_goals_size, i_check_active_goals_empty, i_clear_active_goals>(active_goals_);
@@ -199,7 +117,6 @@ basic_manifest::basic_manifest(
       trail_(early_.trail_),
       bind_map_(early_.bind_map_),
       bind_map_factory_(early_.bind_map_factory_),
-      overlay_bind_map_factory_(early_.overlay_bind_map_factory_),
       unifier_factory_(early_.unifier_factory_),
       expr_pool_(pools_.expr_pool_),
       var_sequencer_(pools_.var_sequencer_),

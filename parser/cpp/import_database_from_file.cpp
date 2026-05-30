@@ -1,9 +1,9 @@
+#include <fstream>
+#include <stdexcept>
 #include "../hpp/import_database_from_file.hpp"
 #include "../hpp/database_visitor.hpp"
 #include "../generated/CHCLexer.h"
 #include "../generated/CHCParser.h"
-#include <fstream>
-#include <stdexcept>
 
 database import_database_from_file(const std::string& path, expr_pool& pool, sequencer& seq) {
     std::ifstream file(path);

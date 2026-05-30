@@ -1,8 +1,7 @@
 #ifndef ELIMINATION_ROUTER_HPP
-#include "infrastructure/locator.hpp"
-
 #define ELIMINATION_ROUTER_HPP
 
+#include "infrastructure/locator.hpp"
 #include "interfaces/i_elimination_router.hpp"
 #include "interfaces/i_deactivated_candidate_memory.hpp"
 #include "interfaces/i_is_active_goal.hpp"

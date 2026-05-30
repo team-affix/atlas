@@ -2,9 +2,9 @@
 // erase, backtrack restore, and missing-key errors.
 
 #include <gtest/gtest.h>
-#include "infrastructure/backtrackable_map_erase.hpp"
 #include <map>
 #include <stdexcept>
+#include "infrastructure/backtrackable_map_erase.hpp"
 
 struct BacktrackableMapEraseTest : public ::testing::Test {
 protected:

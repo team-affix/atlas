@@ -4,12 +4,12 @@
 // pointers stay valid; assertions only check against the configured possibilities.
 
 #include <gtest/gtest.h>
-#include "locator_fixture.hpp"
 #include <gmock/gmock.h>
 #include <algorithm>
 #include <random>
 #include <set>
 #include <vector>
+#include "locator_fixture.hpp"
 #include "infrastructure/random_decision_generator.hpp"
 #include "infrastructure/rule_id_set.hpp"
 #include "interfaces/i_make_resolution_lineage.hpp"

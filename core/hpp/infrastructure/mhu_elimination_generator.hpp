@@ -1,16 +1,15 @@
 #ifndef MHU_ELIMINATION_GENERATOR_HPP
-#include "infrastructure/locator.hpp"
-
 #define MHU_ELIMINATION_GENERATOR_HPP
 
 #include <unordered_map>
 #include <unordered_set>
+#include <queue>
+#include "infrastructure/locator.hpp"
 #include "interfaces/i_elimination_generator.hpp"
 #include "interfaces/i_bind_map.hpp"
 #include "interfaces/i_make_resolution_lineage.hpp"
 #include "interfaces/i_make_var.hpp"
 #include "interfaces/i_bind_map_factory.hpp"
-#include "interfaces/i_overlay_bind_map_factory.hpp"
 #include "interfaces/i_unifier_factory.hpp"
 #include "interfaces/i_get_goal_candidate_rule_ids.hpp"
 #include "interfaces/i_try_add_mhu_head.hpp"
@@ -28,8 +27,10 @@ struct mhu_elimination_generator
     coroutine<const resolution_lineage*, void> constrain(const resolution_lineage*) override;
     void clear_mhu_heads() override;
 private:
-    coroutine<const resolution_lineage*, void> rebase(uint32_t, const expr*);
-    bool unify_and_link(i_unifier&, const resolution_lineage*, const expr*, const expr*);
+    coroutine<const resolution_lineage*, void> accept_bindings(i_bind_map&, const std::unordered_set<uint32_t>&);
+    coroutine<const resolution_lineage*, void> rebase_all(uint32_t);
+    bool sync_and_link(const resolution_lineage*, i_unifier&, std::queue<uint32_t>&);
+    coroutine<uint32_t, bool> synchronize(i_unifier&, std::queue<uint32_t>&);
     void link(const std::unordered_set<uint32_t>&, const std::unordered_set<const resolution_lineage*>&);
     std::unordered_set<const resolution_lineage*> unlink(uint32_t);
     std::unordered_set<uint32_t> unlink(const resolution_lineage*);
@@ -39,7 +40,6 @@ private:
     i_make_resolution_lineage& make_resolution_lineage_;
     i_make_var& make_var_;
     i_bind_map_factory& bind_map_factory_;
-    i_overlay_bind_map_factory& overlay_bind_map_factory_;
     i_unifier_factory& unifier_factory_;
     const i_get_goal_candidate_rule_ids& get_goal_candidate_rule_ids_;
     

@@ -2,10 +2,10 @@
 // insert/backtrack and error cases for missing outer keys and duplicate inner values.
 
 #include <gtest/gtest.h>
-#include "infrastructure/backtrackable_map_at_insert.hpp"
 #include <map>
 #include <set>
 #include <stdexcept>
+#include "infrastructure/backtrackable_map_at_insert.hpp"
 
 struct BacktrackableMapAtInsertTest : public ::testing::Test {
 protected:

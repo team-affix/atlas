@@ -1,9 +1,8 @@
 #ifndef MCTS_DECISION_GENERATOR_HPP
-#include "infrastructure/locator.hpp"
-
 #define MCTS_DECISION_GENERATOR_HPP
 
 #include <random>
+#include "infrastructure/locator.hpp"
 #include "interfaces/i_generate_decision.hpp"
 #include "interfaces/i_make_resolution_lineage.hpp"
 #include "interfaces/i_iterate_active_goals.hpp"

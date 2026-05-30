@@ -12,7 +12,6 @@
 #include "infrastructure/trail.hpp"
 #include "infrastructure/bind_map.hpp"
 #include "infrastructure/bind_map_factory.hpp"
-#include "infrastructure/overlay_bind_map_factory.hpp"
 #include "infrastructure/unifier_factory.hpp"
 #include "infrastructure/lineage_pool.hpp"
 #include "infrastructure/active_goals.hpp"
@@ -54,9 +53,7 @@
 #include "interfaces/i_bind_map.hpp"
 #include "interfaces/i_clear_bindings.hpp"
 #include "interfaces/i_bind_map_factory.hpp"
-#include "interfaces/i_overlay_bind_map_factory.hpp"
 #include "interfaces/i_unifier_factory.hpp"
-#include "interfaces/i_make_goal_lineage.hpp"
 #include "interfaces/i_pin_goal_lineage.hpp"
 #include "interfaces/i_pin_resolution_lineage.hpp"
 #include "interfaces/i_trim_unpinned_lineages.hpp"
@@ -121,7 +118,6 @@
 #include "interfaces/i_get_unit_resolution.hpp"
 #include "interfaces/i_activate_initial_goal.hpp"
 #include "interfaces/i_resolver.hpp"
-#include "interfaces/i_get_resolution_count.hpp"
 #include "value_objects/sim_termination.hpp"
 #include "value_objects/lemma.hpp"
 
@@ -138,7 +134,6 @@ struct sim_early_wiring {
     trail trail_;
     bind_map bind_map_;
     bind_map_factory bind_map_factory_;
-    overlay_bind_map_factory overlay_bind_map_factory_;
     unifier_factory unifier_factory_;
     lineage_pool lineage_pool_;
     active_goals active_goals_;
@@ -154,7 +149,6 @@ struct sim_early_wiring {
         : trail_(),
           bind_map_(),
           bind_map_factory_(),
-          overlay_bind_map_factory_(),
           unifier_factory_(),
           lineage_pool_(),
           active_goals_(),
@@ -168,7 +162,6 @@ struct sim_early_wiring {
         loc.bind_as<i_push_trail_frame, i_pop_trail_frame, i_log_to_current_trail_frame>(trail_);
         loc.bind_as<i_bind_map, i_clear_bindings>(bind_map_);
         loc.bind_as<i_bind_map_factory>(bind_map_factory_);
-        loc.bind_as<i_overlay_bind_map_factory>(overlay_bind_map_factory_);
         loc.bind_as<i_unifier_factory>(unifier_factory_);
         loc.bind_as<i_make_goal_lineage, i_make_resolution_lineage, i_pin_goal_lineage,
             i_pin_resolution_lineage, i_trim_unpinned_lineages, i_import_goal_lineage,

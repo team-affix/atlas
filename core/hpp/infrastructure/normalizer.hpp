@@ -1,8 +1,7 @@
 #ifndef NORMALIZER_HPP
-#include "infrastructure/locator.hpp"
-
 #define NORMALIZER_HPP
 
+#include "infrastructure/locator.hpp"
 #include "interfaces/i_normalizer.hpp"
 #include "interfaces/i_make_functor.hpp"
 #include "interfaces/i_bind_map.hpp"

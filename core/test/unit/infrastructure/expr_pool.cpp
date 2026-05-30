@@ -4,8 +4,8 @@
 // counts, and import behavior without a real trail.
 
 #include <gtest/gtest.h>
-#include "locator_fixture.hpp"
 #include <gmock/gmock.h>
+#include "locator_fixture.hpp"
 #include "infrastructure/expr_pool.hpp"
 #include "interfaces/i_log_to_current_trail_frame.hpp"
 

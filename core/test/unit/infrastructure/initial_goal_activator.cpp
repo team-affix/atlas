@@ -2,8 +2,8 @@
 // root goal_lineage, registers the expr, and inserts into active goals.
 
 #include <gtest/gtest.h>
-#include "locator_fixture.hpp"
 #include <gmock/gmock.h>
+#include "locator_fixture.hpp"
 #include "infrastructure/initial_goal_activator.hpp"
 #include "interfaces/i_get_initial_goal_expr.hpp"
 #include "interfaces/i_make_initial_goal_lineage.hpp"

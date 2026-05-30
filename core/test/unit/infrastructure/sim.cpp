@@ -5,8 +5,8 @@
 // max_resolutions and short-circuit on solution_detector.
 
 #include <gtest/gtest.h>
-#include "locator_fixture.hpp"
 #include <gmock/gmock.h>
+#include "locator_fixture.hpp"
 #include "infrastructure/sim.hpp"
 #include "infrastructure/rule_id_set.hpp"
 #include "interfaces/i_make_resolution_lineage.hpp"

@@ -1,8 +1,7 @@
 #ifndef RESOLVER_HPP
-#include "infrastructure/locator.hpp"
-
 #define RESOLVER_HPP
 
+#include "infrastructure/locator.hpp"
 #include "interfaces/i_resolver.hpp"
 #include "interfaces/i_make_goal_lineage.hpp"
 #include "interfaces/i_make_resolution_lineage.hpp"

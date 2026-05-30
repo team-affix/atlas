@@ -2,8 +2,8 @@
 // i_make_var + i_make_functor while maintaining a translation_map. Tests mock sequencing and pooling.
 
 #include <gtest/gtest.h>
-#include "locator_fixture.hpp"
 #include <gmock/gmock.h>
+#include "locator_fixture.hpp"
 #include "infrastructure/copier.hpp"
 #include "interfaces/i_var_sequencer.hpp"
 #include "interfaces/i_make_functor.hpp"

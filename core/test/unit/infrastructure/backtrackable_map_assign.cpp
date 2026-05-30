@@ -2,9 +2,9 @@
 // assign, undo, and missing-key errors.
 
 #include <gtest/gtest.h>
-#include "infrastructure/backtrackable_map_assign.hpp"
 #include <map>
 #include <stdexcept>
+#include "infrastructure/backtrackable_map_assign.hpp"
 
 struct BacktrackableMapAssignTest : public ::testing::Test {
 protected:

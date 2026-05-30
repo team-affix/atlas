@@ -2,9 +2,9 @@
 // Unit tests mock var_names and assert string output for atoms, lists, and functors.
 
 #include <gtest/gtest.h>
-#include "locator_fixture.hpp"
 #include <gmock/gmock.h>
 #include <sstream>
+#include "locator_fixture.hpp"
 #include "infrastructure/expr_printer.hpp"
 #include "interfaces/i_var_names.hpp"
 

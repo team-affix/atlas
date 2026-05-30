@@ -1,8 +1,7 @@
 #ifndef VAR_SEQUENCER_HPP
-#include "infrastructure/locator.hpp"
-
 #define VAR_SEQUENCER_HPP
 
+#include "infrastructure/locator.hpp"
 #include "interfaces/i_var_sequencer.hpp"
 #include "interfaces/i_log_to_current_trail_frame.hpp"
 #include "infrastructure/sequencer.hpp"

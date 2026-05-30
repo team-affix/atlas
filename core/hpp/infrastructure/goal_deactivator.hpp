@@ -1,8 +1,7 @@
 #ifndef GOAL_DEACTIVATOR_HPP
-#include "infrastructure/locator.hpp"
-
 #define GOAL_DEACTIVATOR_HPP
 
+#include "infrastructure/locator.hpp"
 #include "interfaces/i_goal_deactivator.hpp"
 #include "interfaces/i_unset_goal_expr.hpp"
 #include "interfaces/i_erase_goal_candidates.hpp"

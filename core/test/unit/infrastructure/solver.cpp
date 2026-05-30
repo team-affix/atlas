@@ -2,8 +2,8 @@
 // Post-yield work runs on the second resume(); learn runs after tear_down (trail pop).
 
 #include <gtest/gtest.h>
-#include "locator_fixture.hpp"
 #include <gmock/gmock.h>
+#include "locator_fixture.hpp"
 #include "infrastructure/solver.hpp"
 #include "interfaces/i_set_up_sim.hpp"
 #include "interfaces/i_tear_down_sim.hpp"

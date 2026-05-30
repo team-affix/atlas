@@ -1,8 +1,7 @@
 #ifndef CANDIDATE_DEACTIVATOR_HPP
-#include "infrastructure/locator.hpp"
-
 #define CANDIDATE_DEACTIVATOR_HPP
 
+#include "infrastructure/locator.hpp"
 #include "interfaces/i_candidate_deactivator.hpp"
 #include "interfaces/i_unset_candidate_translation_map.hpp"
 #include "interfaces/i_deactivated_candidate_memory.hpp"

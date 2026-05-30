@@ -1,7 +1,7 @@
 #include <gtest/gtest.h>
+#include <memory>
 #include "infrastructure/backtrackable_increment.hpp"
 #include "infrastructure/trail.hpp"
-#include <memory>
 
 struct BacktrackableIncrementIntegrationTest : public ::testing::Test {
 protected:

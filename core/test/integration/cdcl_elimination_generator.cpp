@@ -2,9 +2,9 @@
 // watched-goal indexes. Asserts post-pop observable eliminations; learn/constrain logic is covered in unit tests.
 
 #include <gtest/gtest.h>
-#include "locator_fixture.hpp"
 #include <gmock/gmock.h>
 #include <vector>
+#include "locator_fixture.hpp"
 #include "infrastructure/cdcl_elimination_generator.hpp"
 #include "infrastructure/trail.hpp"
 #include "infrastructure/coroutine.hpp"

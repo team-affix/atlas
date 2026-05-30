@@ -1,11 +1,10 @@
 #ifndef CDCL_ELIMINATION_GENERATOR_HPP
-#include "infrastructure/locator.hpp"
-
 #define CDCL_ELIMINATION_GENERATOR_HPP
 
 #include <set>
 #include <unordered_map>
 #include <unordered_set>
+#include "infrastructure/locator.hpp"
 #include "interfaces/i_elimination_generator.hpp"
 #include "interfaces/i_learn_avoidance.hpp"
 #include "infrastructure/coroutine.hpp"

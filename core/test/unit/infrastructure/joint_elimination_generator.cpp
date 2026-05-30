@@ -4,10 +4,10 @@
 // Duplicate yields for the same candidate are forwarded; elimination_router deduplicates.
 
 #include <gtest/gtest.h>
-#include "locator_fixture.hpp"
 #include <gmock/gmock.h>
 #include <optional>
 #include <vector>
+#include "locator_fixture.hpp"
 #include "infrastructure/joint_elimination_generator.hpp"
 #include "infrastructure/cdcl_elimination_generator.hpp"
 #include "infrastructure/mhu_elimination_generator.hpp"

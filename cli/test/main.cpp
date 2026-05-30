@@ -1,11 +1,11 @@
-#include "../../test_utils.hpp"
-#include "../hpp/solver_cli_interface.hpp"
-#include "../hpp/ridge_command_handler.hpp"
-#include "../hpp/horizon_command_handler.hpp"
 #include <sstream>
 #include <iostream>
 #include <cassert>
 #include <string>
+#include "../../test_utils.hpp"
+#include "../hpp/solver_cli_interface.hpp"
+#include "../hpp/ridge_command_handler.hpp"
+#include "../hpp/horizon_command_handler.hpp"
 
 // ============================================================
 // Minimal concrete subclass used to expose protected interface.

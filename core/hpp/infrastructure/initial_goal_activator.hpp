@@ -1,8 +1,7 @@
 #ifndef INITIAL_GOAL_ACTIVATOR_HPP
-#include "infrastructure/locator.hpp"
-
 #define INITIAL_GOAL_ACTIVATOR_HPP
 
+#include "infrastructure/locator.hpp"
 #include "interfaces/i_activate_initial_goal.hpp"
 #include "interfaces/i_get_initial_goal_expr.hpp"
 #include "interfaces/i_make_initial_goal_lineage.hpp"

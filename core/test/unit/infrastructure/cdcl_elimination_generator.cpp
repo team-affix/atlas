@@ -3,9 +3,9 @@
 // on independent and dependent lineage trees.
 
 #include <gtest/gtest.h>
-#include "locator_fixture.hpp"
 #include <gmock/gmock.h>
 #include <vector>
+#include "locator_fixture.hpp"
 #include "infrastructure/cdcl_elimination_generator.hpp"
 #include "interfaces/i_log_to_current_trail_frame.hpp"
 #include "infrastructure/coroutine.hpp"

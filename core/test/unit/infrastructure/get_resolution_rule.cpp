@@ -1,6 +1,6 @@
 #include <gtest/gtest.h>
-#include "locator_fixture.hpp"
 #include <gmock/gmock.h>
+#include "locator_fixture.hpp"
 #include "infrastructure/get_resolution_rule.hpp"
 #include "interfaces/i_get_rule.hpp"
 

@@ -1,8 +1,7 @@
 #ifndef UNIT_GOAL_DETECTOR_HPP
-#include "infrastructure/locator.hpp"
-
 #define UNIT_GOAL_DETECTOR_HPP
 
+#include "infrastructure/locator.hpp"
 #include "interfaces/i_detect_unit_goal.hpp"
 #include "interfaces/i_get_goal_candidate_rule_ids.hpp"
 

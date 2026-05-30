@@ -2,8 +2,8 @@
 // goals, then deactivates parent candidates and goal expr.
 
 #include <gtest/gtest.h>
-#include "locator_fixture.hpp"
 #include <gmock/gmock.h>
+#include "locator_fixture.hpp"
 #include "infrastructure/resolver.hpp"
 #include "infrastructure/rule_id_set.hpp"
 #include "interfaces/i_make_goal_lineage.hpp"

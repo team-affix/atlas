@@ -1,9 +1,8 @@
 #ifndef EXPR_PRINTER_HPP
-#include "infrastructure/locator.hpp"
-
 #define EXPR_PRINTER_HPP
 
 #include <ostream>
+#include "infrastructure/locator.hpp"
 #include "interfaces/i_expr_printer.hpp"
 #include "interfaces/i_var_names.hpp"
 

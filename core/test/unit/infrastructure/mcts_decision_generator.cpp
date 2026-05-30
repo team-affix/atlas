@@ -3,9 +3,9 @@
 // single choice at each stage the outcome is fully determined.
 
 #include <gtest/gtest.h>
-#include "locator_fixture.hpp"
 #include <gmock/gmock.h>
 #include <random>
+#include "locator_fixture.hpp"
 #include "infrastructure/mcts_decision_generator.hpp"
 #include "infrastructure/rule_id_set.hpp"
 #include "interfaces/i_make_resolution_lineage.hpp"

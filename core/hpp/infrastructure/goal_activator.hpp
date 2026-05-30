@@ -1,8 +1,7 @@
 #ifndef GOAL_ACTIVATOR_HPP
-#include "infrastructure/locator.hpp"
-
 #define GOAL_ACTIVATOR_HPP
 
+#include "infrastructure/locator.hpp"
 #include "interfaces/i_goal_activator.hpp"
 #include "interfaces/i_set_goal_expr.hpp"
 #include "interfaces/i_insert_active_goal.hpp"

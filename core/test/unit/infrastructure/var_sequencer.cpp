@@ -2,8 +2,8 @@
 // next() must return 0, 1, 2 in order and log each step on the trail.
 
 #include <gtest/gtest.h>
-#include "locator_fixture.hpp"
 #include <gmock/gmock.h>
+#include "locator_fixture.hpp"
 #include "infrastructure/var_sequencer.hpp"
 #include "interfaces/i_log_to_current_trail_frame.hpp"
 

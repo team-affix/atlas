@@ -1,6 +1,6 @@
 #include <gtest/gtest.h>
-#include "locator_fixture.hpp"
 #include <optional>
+#include "locator_fixture.hpp"
 #include "infrastructure/normalizer.hpp"
 #include "infrastructure/expr_pool.hpp"
 #include "infrastructure/bind_map.hpp"

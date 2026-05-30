@@ -3,8 +3,8 @@
 // side effects.
 
 #include <gtest/gtest.h>
-#include "locator_fixture.hpp"
 #include <gmock/gmock.h>
+#include "locator_fixture.hpp"
 #include "infrastructure/candidate_activator.hpp"
 #include "interfaces/i_copier.hpp"
 #include "interfaces/i_set_candidate_translation_map.hpp"

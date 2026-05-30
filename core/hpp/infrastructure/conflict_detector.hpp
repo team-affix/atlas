@@ -1,8 +1,7 @@
 #ifndef CONFLICT_DETECTOR_HPP
-#include "infrastructure/locator.hpp"
-
 #define CONFLICT_DETECTOR_HPP
 
+#include "infrastructure/locator.hpp"
 #include "interfaces/i_conflict_detector.hpp"
 #include "interfaces/i_get_goal_candidate_rule_ids.hpp"
 

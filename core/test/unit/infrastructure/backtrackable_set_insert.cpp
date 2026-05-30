@@ -2,9 +2,9 @@
 // insert, backtrack, and duplicate-value failure.
 
 #include <gtest/gtest.h>
-#include "infrastructure/backtrackable_set_insert.hpp"
 #include <set>
 #include <stdexcept>
+#include "infrastructure/backtrackable_set_insert.hpp"
 
 struct BacktrackableSetInsertTest : public ::testing::Test {
 protected:

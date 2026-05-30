@@ -7,7 +7,6 @@
 
 struct unify_head {
     std::unique_ptr<i_bind_map> local_bind_map;
-    std::unique_ptr<i_bind_map> overlay_bind_map;
     std::unique_ptr<i_unifier> unifier;
 };
 

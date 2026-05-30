@@ -1,10 +1,9 @@
 #ifndef ELIMINATION_BACKLOG_HPP
-#include "infrastructure/locator.hpp"
-
 #define ELIMINATION_BACKLOG_HPP
 
 #include <unordered_map>
 #include <unordered_set>
+#include "infrastructure/locator.hpp"
 #include "interfaces/i_insert_backlogged_elimination.hpp"
 #include "interfaces/i_is_backlogged_elimination.hpp"
 #include "interfaces/i_log_to_current_trail_frame.hpp"

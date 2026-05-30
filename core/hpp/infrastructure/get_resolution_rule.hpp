@@ -1,8 +1,7 @@
 #ifndef GET_RESOLUTION_RULE_HPP
-#include "infrastructure/locator.hpp"
-
 #define GET_RESOLUTION_RULE_HPP
 
+#include "infrastructure/locator.hpp"
 #include "interfaces/i_get_resolution_rule.hpp"
 #include "interfaces/i_get_rule.hpp"
 

@@ -9,7 +9,6 @@
 #include "infrastructure/mhu_elimination_generator.hpp"
 #include "infrastructure/bind_map.hpp"
 #include "infrastructure/bind_map_factory.hpp"
-#include "infrastructure/overlay_bind_map_factory.hpp"
 #include "infrastructure/unifier_factory.hpp"
 #include "infrastructure/expr_pool.hpp"
 #include "infrastructure/lineage_pool.hpp"
@@ -48,7 +47,6 @@ struct JointEliminationGeneratorIntegrationTest : public ::testing::Test {
     bind_map common;
     lineage_pool lp;
     bind_map_factory bmf;
-    overlay_bind_map_factory obmf;
     unifier_factory uf;
     goal_candidate_rules ggcr;
     std::optional<expr_pool> pool;
@@ -60,7 +58,6 @@ struct JointEliminationGeneratorIntegrationTest : public ::testing::Test {
         loc.bind_as<i_log_to_current_trail_frame>(t);
         loc.bind_as<i_bind_map>(common);
         loc.bind_as<i_bind_map_factory>(bmf);
-        loc.bind_as<i_overlay_bind_map_factory>(obmf);
         loc.bind_as<i_unifier_factory>(uf);
         loc.bind_as<i_make_resolution_lineage>(lp);
         loc.bind_as<i_get_goal_candidate_rule_ids>(ggcr);

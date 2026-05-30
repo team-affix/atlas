@@ -1,8 +1,8 @@
+#include <stdexcept>
 #include "../hpp/import_goals_from_string.hpp"
 #include "../hpp/body_visitor.hpp"
 #include "../generated/CHCLexer.h"
 #include "../generated/CHCParser.h"
-#include <stdexcept>
 
 parsed_goals import_goals_from_string(const std::string& body, expr_pool& pool, sequencer& seq) {
     antlr4::ANTLRInputStream stream(body);

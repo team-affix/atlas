@@ -1,4 +1,5 @@
 #include <array>
+#include <unordered_set>
 #include <gtest/gtest.h>
 #include "infrastructure/unifier.hpp"
 #include "infrastructure/bind_map.hpp"

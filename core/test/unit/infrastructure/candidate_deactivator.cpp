@@ -2,8 +2,8 @@
 // map, and records lineage in deactivated memory.
 
 #include <gtest/gtest.h>
-#include "locator_fixture.hpp"
 #include <gmock/gmock.h>
+#include "locator_fixture.hpp"
 #include "infrastructure/candidate_deactivator.hpp"
 #include "interfaces/i_unset_candidate_translation_map.hpp"
 #include "interfaces/i_deactivated_candidate_memory.hpp"

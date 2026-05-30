@@ -2,8 +2,8 @@
 // map and registers it via i_set_goal_expr.
 
 #include <gtest/gtest.h>
-#include "locator_fixture.hpp"
 #include <gmock/gmock.h>
+#include "locator_fixture.hpp"
 #include "infrastructure/goal_activator.hpp"
 #include "interfaces/i_copier.hpp"
 #include "interfaces/i_set_goal_expr.hpp"

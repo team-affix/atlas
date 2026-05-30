@@ -1,8 +1,8 @@
 // make_initial_goal_lineage: root goals use a null resolution parent.
 
 #include <gtest/gtest.h>
-#include "locator_fixture.hpp"
 #include <gmock/gmock.h>
+#include "locator_fixture.hpp"
 #include "infrastructure/make_initial_goal_lineage.hpp"
 #include "interfaces/i_make_goal_lineage.hpp"
 

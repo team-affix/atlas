@@ -1,6 +1,6 @@
 #include <gtest/gtest.h>
-#include "locator_fixture.hpp"
 #include <optional>
+#include "locator_fixture.hpp"
 #include "infrastructure/copier.hpp"
 #include "infrastructure/expr_pool.hpp"
 #include "infrastructure/var_sequencer.hpp"

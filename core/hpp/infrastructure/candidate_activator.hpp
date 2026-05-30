@@ -1,8 +1,7 @@
 #ifndef CANDIDATE_ACTIVATOR_HPP
-#include "infrastructure/locator.hpp"
-
 #define CANDIDATE_ACTIVATOR_HPP
 
+#include "infrastructure/locator.hpp"
 #include "interfaces/i_candidate_activator.hpp"
 #include "interfaces/i_copier.hpp"
 #include "interfaces/i_set_candidate_translation_map.hpp"

@@ -4,7 +4,6 @@
 #include <cstddef>
 #include <cstdint>
 #include <random>
-
 #include "infrastructure/active_goals.hpp"
 #include "infrastructure/bind_map.hpp"
 #include "infrastructure/bind_map_factory.hpp"
@@ -33,7 +32,6 @@
 #include "infrastructure/locator.hpp"
 #include "infrastructure/make_initial_goal_lineage.hpp"
 #include "infrastructure/mhu_elimination_generator.hpp"
-#include "infrastructure/overlay_bind_map_factory.hpp"
 #include "infrastructure/random_decision_generator.hpp"
 #include "infrastructure/resolution_memory.hpp"
 #include "infrastructure/resolver.hpp"
@@ -61,7 +59,6 @@ private:
         trail trail_;
         bind_map bind_map_;
         bind_map_factory bind_map_factory_;
-        overlay_bind_map_factory overlay_bind_map_factory_;
         unifier_factory unifier_factory_;
         lineage_pool lineage_pool_;
         active_goals active_goals_;
@@ -146,7 +143,6 @@ private:
     trail& trail_;
     bind_map& bind_map_;
     bind_map_factory& bind_map_factory_;
-    overlay_bind_map_factory& overlay_bind_map_factory_;
     unifier_factory& unifier_factory_;
     expr_pool& expr_pool_;
     var_sequencer& var_sequencer_;

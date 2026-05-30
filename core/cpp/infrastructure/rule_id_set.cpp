@@ -1,6 +1,5 @@
-#include "infrastructure/rule_id_set.hpp"
-
 #include <memory>
+#include "infrastructure/rule_id_set.hpp"
 
 void rule_id_set::insert(rule_id r) {
     rule_ids_.insert(r);

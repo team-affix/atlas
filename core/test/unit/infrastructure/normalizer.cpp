@@ -2,8 +2,8 @@
 // through i_bind_map. Unit tests mock both interfaces and assert pool calls use WHNF args.
 
 #include <gtest/gtest.h>
-#include "locator_fixture.hpp"
 #include <gmock/gmock.h>
+#include "locator_fixture.hpp"
 #include "infrastructure/normalizer.hpp"
 #include "interfaces/i_bind_map.hpp"
 #include "interfaces/i_make_functor.hpp"

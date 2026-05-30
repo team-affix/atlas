@@ -1,7 +1,7 @@
+#include <iostream>
 #include "../hpp/solver_cli_interface.hpp"
 #include "../../parser/hpp/import_database_from_file.hpp"
 #include "../../parser/hpp/import_goals_from_string.hpp"
-#include <iostream>
 
 solver_cli_interface::solver_cli_interface(
     const std::string& file,

@@ -1,8 +1,8 @@
 // conflict_detector flags goals with zero applicable candidate rule ids.
 
 #include <gtest/gtest.h>
-#include "locator_fixture.hpp"
 #include <gmock/gmock.h>
+#include "locator_fixture.hpp"
 #include "infrastructure/conflict_detector.hpp"
 #include "interfaces/i_get_goal_candidate_rule_ids.hpp"
 #include "interfaces/i_rule_id_set.hpp"

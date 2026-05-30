@@ -1,8 +1,7 @@
 #ifndef SOLUTION_DETECTOR_HPP
-#include "infrastructure/locator.hpp"
-
 #define SOLUTION_DETECTOR_HPP
 
+#include "infrastructure/locator.hpp"
 #include "interfaces/i_solution_detector.hpp"
 #include "interfaces/i_check_active_goals_empty.hpp"
 

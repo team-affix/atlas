@@ -1,8 +1,7 @@
 #ifndef GET_UNIT_RESOLUTION_HPP
-#include "infrastructure/locator.hpp"
-
 #define GET_UNIT_RESOLUTION_HPP
 
+#include "infrastructure/locator.hpp"
 #include "interfaces/i_get_unit_resolution.hpp"
 #include "interfaces/i_make_resolution_lineage.hpp"
 #include "interfaces/i_get_goal_candidate_rule_ids.hpp"

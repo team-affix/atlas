@@ -2,9 +2,9 @@
 // backtrack removal, and duplicate-key failure.
 
 #include <gtest/gtest.h>
-#include "infrastructure/backtrackable_map_insert.hpp"
 #include <map>
 #include <stdexcept>
+#include "infrastructure/backtrackable_map_insert.hpp"
 
 struct BacktrackableMapInsertTest : public ::testing::Test {
     static constexpr int kKey = 7;

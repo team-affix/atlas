@@ -3,8 +3,8 @@
 // collaborators and assert the elimination_result for each branch.
 
 #include <gtest/gtest.h>
-#include "locator_fixture.hpp"
 #include <gmock/gmock.h>
+#include "locator_fixture.hpp"
 #include "infrastructure/elimination_router.hpp"
 #include "value_objects/elimination_result.hpp"
 #include "interfaces/i_deactivated_candidate_memory.hpp"

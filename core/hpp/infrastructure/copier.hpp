@@ -1,8 +1,7 @@
 #ifndef COPIER_HPP
-#include "infrastructure/locator.hpp"
-
 #define COPIER_HPP
 
+#include "infrastructure/locator.hpp"
 #include "interfaces/i_copier.hpp"
 #include "value_objects/expr.hpp"
 #include "interfaces/i_var_sequencer.hpp"

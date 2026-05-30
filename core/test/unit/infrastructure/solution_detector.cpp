@@ -2,8 +2,8 @@
 // i_check_active_goals_empty and assert detect() mirrors the empty() predicate.
 
 #include <gtest/gtest.h>
-#include "locator_fixture.hpp"
 #include <gmock/gmock.h>
+#include "locator_fixture.hpp"
 #include "infrastructure/solution_detector.hpp"
 #include "interfaces/i_check_active_goals_empty.hpp"
 

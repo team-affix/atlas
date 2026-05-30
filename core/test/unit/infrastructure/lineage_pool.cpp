@@ -4,6 +4,7 @@
 
 #include <gtest/gtest.h>
 #include "infrastructure/lineage_pool.hpp"
+
 struct LineagePoolTest : public ::testing::Test {
 protected:
     lineage_pool pool;
