@@ -11,6 +11,7 @@ protected:
     expr var1{expr::var{1}};
     expr var2{expr::var{2}};
     expr func{expr::functor{"f", {}}};
+    expr func2{expr::functor{"g", {}}};
 };
 
 TEST_F(BindMapTest, WhnfUnboundVariableReturnsSelf) {
@@ -26,30 +27,36 @@ TEST_F(BindMapTest, WhnfBoundVarReturnsBoundExpr) {
     EXPECT_EQ(bm.whnf(&var0), &func);
 }
 
-TEST_F(BindMapTest, WhnfChainVar0ToVar1ToFunctorReturnsFunctor) {
-    bm.bind(0, &var1);
-    bm.bind(1, &func);
-    EXPECT_EQ(bm.whnf(&var0), &func);
-}
-
-TEST_F(BindMapTest, BindRejectsDuplicateBinding) {
-    bm.bind(0, &func);
-    EXPECT_THROW(bm.bind(0, &var1), std::logic_error);
+TEST_F(BindMapTest, BindAcceptsYoungerVarBoundToOlderVar) {
+    bm.bind(1, &var0);
+    EXPECT_EQ(bm.whnf(&var1), &var0);
 }
 
 TEST_F(BindMapTest, BindRejectsOlderVarBoundToYoungerVar) {
     EXPECT_THROW(bm.bind(0, &var1), std::logic_error);
 }
 
+TEST_F(BindMapTest, BindRejectsDuplicateBinding) {
+    bm.bind(0, &func);
+    EXPECT_THROW(bm.bind(0, &func2), std::logic_error);
+}
+
+TEST_F(BindMapTest, WhnfChainVar0ToVar1ToFunctorReturnsFunctor) {
+    bm.bind(1, &var0);
+    bm.bind(0, &func);
+    EXPECT_EQ(bm.whnf(&var0), &func);
+    EXPECT_EQ(bm.whnf(&var1), &func);
+}
+
 TEST_F(BindMapTest, WhnfPathCompressionUpdatesChainWithoutPublicRebind) {
-    bm.bind(0, &var1);
-    bm.bind(1, &func);
+    bm.bind(1, &var0);
+    bm.bind(0, &func);
 
     EXPECT_EQ(bm.whnf(&var0), &func);
     EXPECT_EQ(bm.whnf(&var1), &func);
 
-    EXPECT_THROW(bm.bind(0, &var2), std::logic_error);
-    EXPECT_THROW(bm.bind(1, &var2), std::logic_error);
+    EXPECT_THROW(bm.bind(0, &func2), std::logic_error);
+    EXPECT_THROW(bm.bind(1, &var0), std::logic_error);
 }
 
 TEST_F(BindMapTest, WhnfDoesNotRecurseIntoFunctorArguments) {
@@ -76,9 +83,9 @@ TEST_F(BindMapTest, WhnfBoundToTernaryFunctor) {
 }
 
 TEST_F(BindMapTest, WhnfChainOfLength3ResolvesAllIntermediateVars) {
-    bm.bind(0, &var1);
-    bm.bind(1, &var2);
-    bm.bind(2, &func);
+    bm.bind(1, &var0);
+    bm.bind(2, &var1);
+    bm.bind(0, &func);
     EXPECT_EQ(bm.whnf(&var0), &func);
     EXPECT_EQ(bm.whnf(&var1), &func);
     EXPECT_EQ(bm.whnf(&var2), &func);
@@ -86,8 +93,8 @@ TEST_F(BindMapTest, WhnfChainOfLength3ResolvesAllIntermediateVars) {
 
 TEST_F(BindMapTest, ClearBindingsRemovesAllBindings) {
     bm.clear_bindings();
-    bm.bind(0, &var1);
-    bm.bind(1, &func);
+    bm.bind(1, &var0);
+    bm.bind(0, &func);
     EXPECT_EQ(bm.whnf(&var0), &func);
 
     bm.clear_bindings();
