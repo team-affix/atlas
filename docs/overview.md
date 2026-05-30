@@ -44,6 +44,7 @@ See [continuous-documentation.md](continuous-documentation.md) for guidelines on
 - [solving-loop.md](solving-loop.md) — The event-driven solving loop, unit/decided resolution, termination
 - [resolution.md](resolution.md) — Resolution mechanics, variable copying, goal weights
 - [cdcl.md](cdcl.md) — Trail, avoidances, lemmas
+- [mhu.md](mhu.md) — Multi-head unification, common bind map, rebase and elimination
 - [lineage.md](lineage.md) — Lineage structure, lineage_pool, expr_pool
 - [events.md](events.md) — Event system, naming conventions, priority ordering
 - [elimination.md](elimination.md) — active_eliminator, elimination_backlog

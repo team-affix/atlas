@@ -24,6 +24,8 @@ The first full production manifest wires:
 | `i_learn_avoidance` (solver) | **`cdcl_elimination_generator`** | Same CDCL object as joint’s first arm, **not** the joint |
 | `i_try_add_mhu_head` / `i_clear_mhu_heads` | **`mhu_elimination_generator`** | Same MHU object as joint’s second arm |
 
+See [mhu.md](mhu.md) for semantics of unify heads, the common bind map, and rebase-driven elimination.
+
 **`joint_elimination_generator` does not replace CDCL or MHU.** The manifest must construct and own all three; `joint` only holds references:
 
 ```cpp
