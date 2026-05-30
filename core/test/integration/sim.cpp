@@ -1420,3 +1420,239 @@ TEST_F(SimIntegrationTest, RunReturnsSolvedBuildingListOfFiveAbcWithoutDecisions
 
     simulation.tear_down();
 }
+
+// ---------------------------------------------------------------------------
+// round 2 gaps — depth, multi-decision, CDCL mid-loop conflict, partial progress
+// ---------------------------------------------------------------------------
+
+TEST_F(SimIntegrationTest, RunReturnsConflictedWhenCdclEliminationExhaustsSiblingGoal) {
+    /*
+     * initial goals:
+     *   f.
+     *   g.
+     * database:
+     *   0: f.
+     *   1: f.
+     *   2: g.
+     *   3: g.
+     * setup: two avoidances sharing f/0 eliminate both g candidates on constrain(f/0);
+     *        conflict mirror of RunReturnsSolvedAfterCdclAvoidanceForcesG1RuleThree
+     */
+    expr goal_f{expr::functor{"f", {}}};
+    expr goal_g{expr::functor{"g", {}}};
+    expr f_head0{expr::functor{"f", {}}};
+    expr f_head1{expr::functor{"f", {}}};
+    expr g_head0{expr::functor{"g", {}}};
+    expr g_head1{expr::functor{"g", {}}};
+    initial_goals.push(&goal_f);
+    initial_goals.push(&goal_g);
+    database.push(rule{&f_head0, {}});
+    database.push(rule{&f_head1, {}});
+    database.push(rule{&g_head0, {}});
+    database.push(rule{&g_head1, {}});
+
+    i_make_initial_goal_lineage& make_initial_goal_lineage =
+        stack.loc.locate<i_make_initial_goal_lineage>();
+    i_make_resolution_lineage& make_resolution_lineage =
+        stack.loc.locate<i_make_resolution_lineage>();
+    i_learn_avoidance& learn_avoidance = stack.loc.locate<i_learn_avoidance>();
+    i_derive_resolution_lemma& derive_resolution_lemma =
+        stack.loc.locate<i_derive_resolution_lemma>();
+    i_get_resolution_count& get_resolution_count =
+        stack.loc.locate<i_get_resolution_count>();
+
+    const goal_lineage* gl_f = make_initial_goal_lineage.make(0);
+    const goal_lineage* gl_g = make_initial_goal_lineage.make(1);
+    const resolution_lineage* rl_f_0 =
+        make_resolution_lineage.make_resolution_lineage(gl_f, rule_id{0});
+    const resolution_lineage* rl_g_0 =
+        make_resolution_lineage.make_resolution_lineage(gl_g, rule_id{2});
+    const resolution_lineage* rl_g_1 =
+        make_resolution_lineage.make_resolution_lineage(gl_g, rule_id{3});
+
+    learn_avoidance.learn(lemma{{rl_f_0, rl_g_0}});
+    learn_avoidance.learn(lemma{{rl_f_0, rl_g_1}});
+
+    sim simulation{stack.loc, kDefaultMaxResolutions};
+    simulation.set_up();
+
+    EXPECT_CALL(stack.decision_generator, generate()).WillOnce(Return(rl_f_0));
+
+    EXPECT_EQ(simulation.run(), sim_termination::conflicted);
+    EXPECT_EQ(get_resolution_count.get_resolution_count(), 1u);
+    EXPECT_THAT(derive_resolution_lemma.derive_resolution_lemma().get_resolutions(),
+        UnorderedElementsAre(rl_f_0));
+    simulation.tear_down();
+}
+
+// Integration counterpart of unit RunReturnsDepthExceededWhenNoSolutionWithinLimit.
+TEST_F(SimIntegrationTest, RunReturnsDepthExceededOnSelfRecursiveClause) {
+    /*
+     * initial goals:
+     *   f.
+     * database:
+     *   0: f :- f.
+     */
+    expr goal{expr::functor{"f", {}}};
+    expr f_head{expr::functor{"f", {}}};
+    expr f_body{expr::functor{"f", {}}};
+    initial_goals.push(&goal);
+    database.push(rule{&f_head, {&f_body}});
+
+    static constexpr size_t kMaxResolutions = 4;
+    EXPECT_CALL(stack.decision_generator, generate()).Times(0);
+
+    sim simulation{stack.loc, kMaxResolutions};
+    simulation.set_up();
+    EXPECT_EQ(simulation.run(), sim_termination::depth_exceeded);
+    EXPECT_EQ(stack.loc.locate<i_get_resolution_count>().get_resolution_count(), kMaxResolutions);
+    simulation.tear_down();
+}
+
+TEST_F(SimIntegrationTest, RunReturnsSolvedAfterTwoSequentialDecisions) {
+    /*
+     * initial goals:
+     *   f.
+     *   g.
+     * database:
+     *   0: f.
+     *   1: f.
+     *   2: g.
+     *   3: g.
+     * setup: second decision on g after f branch committed
+     */
+    expr goal_f{expr::functor{"f", {}}};
+    expr goal_g{expr::functor{"g", {}}};
+    expr f_head0{expr::functor{"f", {}}};
+    expr f_head1{expr::functor{"f", {}}};
+    expr g_head0{expr::functor{"g", {}}};
+    expr g_head1{expr::functor{"g", {}}};
+    initial_goals.push(&goal_f);
+    initial_goals.push(&goal_g);
+    database.push(rule{&f_head0, {}});
+    database.push(rule{&f_head1, {}});
+    database.push(rule{&g_head0, {}});
+    database.push(rule{&g_head1, {}});
+
+    i_make_initial_goal_lineage& make_initial_goal_lineage =
+        stack.loc.locate<i_make_initial_goal_lineage>();
+    i_make_resolution_lineage& make_resolution_lineage =
+        stack.loc.locate<i_make_resolution_lineage>();
+    i_derive_resolution_lemma& derive_resolution_lemma =
+        stack.loc.locate<i_derive_resolution_lemma>();
+    i_get_decision_count& get_decision_count =
+        stack.loc.locate<i_get_decision_count>();
+
+    const goal_lineage* gl_f = make_initial_goal_lineage.make(0);
+    const goal_lineage* gl_g = make_initial_goal_lineage.make(1);
+    const resolution_lineage* rl_f_0 =
+        make_resolution_lineage.make_resolution_lineage(gl_f, rule_id{0});
+    const resolution_lineage* rl_g_1 =
+        make_resolution_lineage.make_resolution_lineage(gl_g, rule_id{3});
+
+    // Script decision choices only; behavioral contract is termination + recorded decisions/resolutions.
+    EXPECT_CALL(stack.decision_generator, generate())
+        .WillOnce(Return(rl_f_0))
+        .WillOnce(Return(rl_g_1));
+
+    sim simulation{stack.loc, kDefaultMaxResolutions};
+    simulation.set_up();
+    EXPECT_EQ(simulation.run(), sim_termination::solved);
+    EXPECT_EQ(get_decision_count.count(), 2u);
+    EXPECT_THAT(derive_resolution_lemma.derive_resolution_lemma().get_resolutions(),
+        UnorderedElementsAre(rl_f_0, rl_g_1));
+    simulation.tear_down();
+}
+
+TEST_F(SimIntegrationTest, RunReturnsSolvedWhenCdclUnitElimForcesRemainingCandidate) {
+    /*
+     * initial goals:
+     *   f.
+     *   g.
+     * database:
+     *   0: f.
+     *   1: f.
+     *   2: g.
+     *   3: g.
+     * setup: CDCL unit elim g/2 on constrain(f/0) leaves g unit on g/3; no second decision
+     */
+    expr goal_f{expr::functor{"f", {}}};
+    expr goal_g{expr::functor{"g", {}}};
+    expr f_head0{expr::functor{"f", {}}};
+    expr f_head1{expr::functor{"f", {}}};
+    expr g_head0{expr::functor{"g", {}}};
+    expr g_head1{expr::functor{"g", {}}};
+    initial_goals.push(&goal_f);
+    initial_goals.push(&goal_g);
+    database.push(rule{&f_head0, {}});
+    database.push(rule{&f_head1, {}});
+    database.push(rule{&g_head0, {}});
+    database.push(rule{&g_head1, {}});
+
+    i_make_initial_goal_lineage& make_initial_goal_lineage =
+        stack.loc.locate<i_make_initial_goal_lineage>();
+    i_make_resolution_lineage& make_resolution_lineage =
+        stack.loc.locate<i_make_resolution_lineage>();
+    i_learn_avoidance& learn_avoidance = stack.loc.locate<i_learn_avoidance>();
+    i_derive_resolution_lemma& derive_resolution_lemma =
+        stack.loc.locate<i_derive_resolution_lemma>();
+
+    const goal_lineage* gl_f = make_initial_goal_lineage.make(0);
+    const goal_lineage* gl_g = make_initial_goal_lineage.make(1);
+    const resolution_lineage* rl_f_0 =
+        make_resolution_lineage.make_resolution_lineage(gl_f, rule_id{0});
+    const resolution_lineage* rl_g_2 =
+        make_resolution_lineage.make_resolution_lineage(gl_g, rule_id{2});
+    const resolution_lineage* rl_g_3 =
+        make_resolution_lineage.make_resolution_lineage(gl_g, rule_id{3});
+
+    learn_avoidance.learn(lemma{{rl_f_0, rl_g_2}});
+
+    sim simulation{stack.loc, kDefaultMaxResolutions};
+    simulation.set_up();
+
+    EXPECT_CALL(stack.decision_generator, generate()).WillOnce(Return(rl_f_0));
+
+    EXPECT_EQ(simulation.run(), sim_termination::solved);
+    EXPECT_THAT(derive_resolution_lemma.derive_resolution_lemma().get_resolutions(),
+        UnorderedElementsAre(rl_f_0, rl_g_3));
+    simulation.tear_down();
+}
+
+TEST_F(SimIntegrationTest, RunReturnsConflictedAfterPartialProgressWhenDerivedGoalFails) {
+    /*
+     * initial goals:
+     *   f(A).
+     *   g(A).
+     * database:
+     *   0: f(A) :- h(A).
+     *   1: h(abc).
+     *   2: g(xyz).
+     * setup: shared A; f/h and g(xyz) cannot both succeed — conflict after unit resolution(s)
+     */
+    expr rule_var_a{expr::var{0}};
+    expr abc{expr::functor{"abc", {}}};
+    expr xyz{expr::functor{"xyz", {}}};
+    expr f_head{expr::functor{"f", {&rule_var_a}}};
+    expr h_body{expr::functor{"h", {&rule_var_a}}};
+    expr h_head{expr::functor{"h", {&abc}}};
+    expr g_head{expr::functor{"g", {&xyz}}};
+    database.push(rule{&f_head, {&h_body}});
+    database.push(rule{&h_head, {}});
+    database.push(rule{&g_head, {}});
+
+    i_var_sequencer& seq = stack.loc.locate<i_var_sequencer>();
+    i_make_var& make_var = stack.loc.locate<i_make_var>();
+    i_make_functor& make_functor = stack.loc.locate<i_make_functor>();
+
+    EXPECT_CALL(stack.decision_generator, generate()).Times(0);
+
+    sim simulation{stack.loc, kDefaultMaxResolutions};
+    simulation.set_up();
+    const expr* var_a = make_var.make(seq.next());
+    initial_goals.push(make_functor.make("f", {var_a}));
+    initial_goals.push(make_functor.make("g", {var_a}));
+
+    EXPECT_EQ(simulation.run(), sim_termination::conflicted);
+    simulation.tear_down();
+}
