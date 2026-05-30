@@ -6,6 +6,7 @@
 #include <vector>
 #include "locator_fixture.hpp"
 #include "infrastructure/cdcl_elimination_generator.hpp"
+#include "infrastructure/cdcl_sequencer.hpp"
 #include "infrastructure/trail.hpp"
 #include "infrastructure/coroutine.hpp"
 
@@ -40,10 +41,18 @@ struct CdclEliminationGeneratorIntegrationTest : public ::testing::Test {
 protected:
     trail t;
     locator loc;
+    cdcl_sequencer seq;
     cdcl_elimination_generator cdcl;
 
     CdclEliminationGeneratorIntegrationTest()
-        : cdcl(bind_and_make<cdcl_elimination_generator, i_log_to_current_trail_frame>(loc, t)) {}
+        : seq([&]() {
+              loc.bind_as<i_log_to_current_trail_frame>(t);
+              return cdcl_sequencer{loc};
+          }()),
+          cdcl([this]() {
+              loc.bind_as<i_cdcl_sequencer>(seq);
+              return cdcl_elimination_generator{loc};
+          }()) {}
 
     goal_lineage lin_0{nullptr, 0};
     goal_lineage lin_1{nullptr, 1};

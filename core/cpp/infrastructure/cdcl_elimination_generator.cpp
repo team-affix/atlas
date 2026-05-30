@@ -1,7 +1,5 @@
 #include <memory>
 #include "infrastructure/cdcl_elimination_generator.hpp"
-#include "infrastructure/backtrackable_set_insert.hpp"
-#include "infrastructure/backtrackable_set_erase.hpp"
 #include "infrastructure/backtrackable_map_insert.hpp"
 #include "infrastructure/backtrackable_map_erase.hpp"
 #include "infrastructure/backtrackable_map_at_insert.hpp"
@@ -9,67 +7,47 @@
 
 cdcl_elimination_generator::cdcl_elimination_generator(locator& loc) :
     avoidances(loc.locate<i_log_to_current_trail_frame>(), {}),
-    watched_goals(loc.locate<i_log_to_current_trail_frame>(), {}) {
+    watched_goals(loc.locate<i_log_to_current_trail_frame>(), {}),
+    cdcl_sequencer(loc.locate<i_cdcl_sequencer>()) {
 }
 
 std::optional<const resolution_lineage*> cdcl_elimination_generator::learn(const lemma& l) {
-    // 1. get the resolutions
     const auto& resolutions = l.get_resolutions();
-    
-    // 2. copy the already-trimmed resolutions into a local avoidance
+
     avoidance_type av{resolutions.begin(), resolutions.end()};
 
-    // NOTE: No need to check if the avoidance is already in the store,
-    //       because the avoidance should always be a new one.
-    
-    // 3. insert the avoidance into the store
-    const resolution_lineage* elim = insert(av);
-    if (elim == nullptr)
-        return std::nullopt;
-    return elim;
+    return insert(std::move(av));
 }
 
 coroutine<const resolution_lineage*, void> cdcl_elimination_generator::constrain(const resolution_lineage* rl) {
-    // 1. get the parent goal
     const goal_lineage* gl = rl->parent;
-    
-    // 2. get the set of avoidances that concern this resolution
+
     auto it = watched_goals.get().find(gl);
-    
+
     if (it == watched_goals.get().end())
         co_return;
 
-    // 3. snapshot the set of avoidances
-    auto av_ptrs = it->second;
+    auto av_ids = it->second;
 
-    // 4. for each avoidance, if the avoidance contains the resolution,
-    //    reduce the avoidance. Else, remove the avoidance from the store.
-    for (const avoidance_type* av_ptr : av_ptrs) {
-        // 5. if the avoidance does not contain the resolution,
-        //    then it is mutually exclusive with the resolution
-        if (!av_ptr->contains(rl)) {
-            erase(av_ptr);
+    for (avoidance_id id : av_ids) {
+        const avoidance_type& av = avoidances.get().at(id);
+        if (!av.contains(rl)) {
+            erase(id);
             continue;
         }
 
-        // if the avoidance contains the resolution,
-        // then it is consistent with the resolution
+        // reduce avoidance
+        avoidance_type reduced = av;
+        reduced.erase(rl);
 
-        // 6. make a copy of the avoidance
-        avoidance_type av = *av_ptr;
+        // erase old avoidance
+        erase(id);
 
-        // 7. erase and unlink the old avoidance from the store
-        erase(av_ptr);
-
-        // 8. reduce the avoidance
-        av.erase(rl);
-
-        // 9. insert the reduced avoidance into the store
-        if (const resolution_lineage* rl = insert(av))
-            co_yield rl;
+        // insert new avoidance
+        if (auto elim = insert(std::move(reduced)))
+            co_yield *elim;
     }
 
-    // 10. Remove the parent goal from the watched goals
     auto erase_mut = std::make_unique<
         backtrackable_map_erase<
         watched_goals_type>>(
@@ -77,70 +55,56 @@ coroutine<const resolution_lineage*, void> cdcl_elimination_generator::constrain
     watched_goals.mutate(std::move(erase_mut));
 }
 
-const resolution_lineage* cdcl_elimination_generator::insert(const avoidance_type& av) {
-    // 1. if avoidance unit, elimination
+std::optional<const resolution_lineage*> cdcl_elimination_generator::insert(avoidance_type av) {
     if (av.size() == 1)
         return *av.begin();
 
-    // 2. if avoidance already in store, dont overwrite,
-    //    just return since same goals would already be linked
-    //    to that avoidance as well (deduplication)
-    if (avoidances.get().contains(av))
-        return nullptr;
+    avoidance_id id = cdcl_sequencer.next();
 
-    // 3. add the new avoidance to the store
     auto insert_mut = std::make_unique<
-        backtrackable_set_insert<
-        std::set<avoidance_type>>>(
-            av);
+        backtrackable_map_insert<
+        avoidances_type>>(
+            id, av);
     avoidances.mutate(std::move(insert_mut));
 
-    // 4. get the pointer to the new avoidance
-    const avoidance_type* new_av_ptr = &*avoidances.get().find(av);
-
-    // 5. link the new avoidance to the goals
     for (const resolution_lineage* rl : av)
-        link(rl->parent, new_av_ptr);
+        link(rl->parent, id);
 
-    // 6. return null since no elimination
-    return nullptr;
+    return std::nullopt;
 }
 
-void cdcl_elimination_generator::link(const goal_lineage* gl, const avoidance_type* av_ptr) {
-    // insert key if it doesn't exist
+void cdcl_elimination_generator::link(const goal_lineage* gl, avoidance_id id) {
     if (!watched_goals.get().contains(gl)) {
         auto insert_mut = std::make_unique<
             backtrackable_map_insert<
             watched_goals_type>>(
-                gl, std::unordered_set<const avoidance_type*>{});
+                gl, std::unordered_set<avoidance_id>{});
         watched_goals.mutate(std::move(insert_mut));
     }
 
-    // insert value if it doesn't exist
-    if (!watched_goals.get().at(gl).contains(av_ptr)) {
+    if (!watched_goals.get().at(gl).contains(id)) {
         auto insert_mut = std::make_unique<
             backtrackable_map_at_insert<
             watched_goals_type>>(
-                gl, av_ptr);
+                gl, id);
         watched_goals.mutate(std::move(insert_mut));
     }
 }
 
-void cdcl_elimination_generator::erase(const avoidance_type* av_ptr) {
-    // 1. for each goal that is watching this avoidance,
-    //    unlink the avoidance from the goal
-    for (const resolution_lineage* rl : *av_ptr) {
+void cdcl_elimination_generator::erase(avoidance_id id) {
+    const avoidance_type& av = avoidances.get().at(id);
+
+    for (const resolution_lineage* rl : av) {
         auto erase_mut = std::make_unique<
             backtrackable_map_at_erase<
             watched_goals_type>>(
-                rl->parent, av_ptr);
+                rl->parent, id);
         watched_goals.mutate(std::move(erase_mut));
     }
-    
-    // 2. remove the avoidance from the store
+
     auto erase_mut = std::make_unique<
-        backtrackable_set_erase<
-        std::set<avoidance_type>>>(
-            *av_ptr);
+        backtrackable_map_erase<
+        avoidances_type>>(
+            id);
     avoidances.mutate(std::move(erase_mut));
 }

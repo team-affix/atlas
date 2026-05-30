@@ -23,6 +23,7 @@
 #include "infrastructure/deactivated_candidate_memory.hpp"
 #include "infrastructure/candidate_translation_maps.hpp"
 #include "infrastructure/expr_pool.hpp"
+#include "infrastructure/cdcl_sequencer.hpp"
 #include "infrastructure/var_sequencer.hpp"
 #include "infrastructure/elimination_backlog.hpp"
 #include "infrastructure/cdcl_elimination_generator.hpp"
@@ -191,12 +192,17 @@ struct sim_early_wiring {
 struct sim_pool_wiring {
     expr_pool expr_pool_;
     var_sequencer var_sequencer_;
+    cdcl_sequencer cdcl_sequencer_;
     elimination_backlog elimination_backlog_;
 
     sim_pool_wiring(locator& loc)
-        : expr_pool_(loc), var_sequencer_(loc), elimination_backlog_(loc) {
+        : expr_pool_(loc),
+          var_sequencer_(loc),
+          cdcl_sequencer_(loc),
+          elimination_backlog_(loc) {
         loc.bind_as<i_make_functor, i_make_var, i_import_expr, i_get_expr_count>(expr_pool_);
         loc.bind_as<i_var_sequencer>(var_sequencer_);
+        loc.bind_as<i_cdcl_sequencer>(cdcl_sequencer_);
         loc.bind_as<i_insert_backlogged_elimination, i_is_backlogged_elimination>(
             elimination_backlog_);
     }

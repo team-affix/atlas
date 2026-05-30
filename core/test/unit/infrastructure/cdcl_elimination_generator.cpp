@@ -7,6 +7,7 @@
 #include <vector>
 #include "locator_fixture.hpp"
 #include "infrastructure/cdcl_elimination_generator.hpp"
+#include "infrastructure/cdcl_sequencer.hpp"
 #include "interfaces/i_log_to_current_trail_frame.hpp"
 #include "infrastructure/coroutine.hpp"
 
@@ -50,11 +51,18 @@ struct CdclEliminationGeneratorUnitTest : public ::testing::Test {
 protected:
     NiceMock<MockTrail> trail;
     locator loc;
+    cdcl_sequencer seq;
     cdcl_elimination_generator cdcl;
 
     CdclEliminationGeneratorUnitTest()
-        : cdcl(bind_and_make<cdcl_elimination_generator, i_log_to_current_trail_frame>(
-              loc, trail)) {}
+        : seq([&]() {
+              loc.bind_as<i_log_to_current_trail_frame>(trail);
+              return cdcl_sequencer{loc};
+          }()),
+          cdcl([this]() {
+              loc.bind_as<i_cdcl_sequencer>(seq);
+              return cdcl_elimination_generator{loc};
+          }()) {}
 
     // Four independent root goals (no derivation parent).
     goal_lineage lin_0{nullptr, 0};
@@ -95,6 +103,8 @@ TEST_F(CdclEliminationGeneratorUnitTest, LearnUnitAvoidanceDoesNotLogToTrail) {
     StrictMock<MockTrail> strict_trail;
     locator loc;
     loc.bind_as<i_log_to_current_trail_frame>(strict_trail);
+    cdcl_sequencer seq{loc};
+    loc.bind_as<i_cdcl_sequencer>(seq);
     cdcl_elimination_generator strict_cdcl{loc};
 
     EXPECT_CALL(strict_trail, log(_)).Times(0);
@@ -105,6 +115,8 @@ TEST_F(CdclEliminationGeneratorUnitTest, LearnMultiMemberAvoidanceLogsToTrail) {
     StrictMock<MockTrail> strict_trail;
     locator loc;
     loc.bind_as<i_log_to_current_trail_frame>(strict_trail);
+    cdcl_sequencer seq{loc};
+    loc.bind_as<i_cdcl_sequencer>(seq);
     cdcl_elimination_generator strict_cdcl{loc};
 
     EXPECT_CALL(strict_trail, log(_)).Times(AtLeast(1));
@@ -117,10 +129,12 @@ TEST_F(CdclEliminationGeneratorUnitTest, LearnDuplicateAvoidanceIsIdempotent) {
     EXPECT_EQ(cdcl.learn(l), std::nullopt);
 }
 
-TEST_F(CdclEliminationGeneratorUnitTest, LearnDuplicateAvoidanceDoesNotLogToTrail) {
+TEST_F(CdclEliminationGeneratorUnitTest, LearnDuplicateAvoidanceLogsToTrailEachTime) {
     StrictMock<MockTrail> strict_trail;
     locator loc;
     loc.bind_as<i_log_to_current_trail_frame>(strict_trail);
+    cdcl_sequencer seq{loc};
+    loc.bind_as<i_cdcl_sequencer>(seq);
     cdcl_elimination_generator strict_cdcl{loc};
 
     const lemma l = make_lemma({&lin_0_0, &lin_1_0});
@@ -129,7 +143,7 @@ TEST_F(CdclEliminationGeneratorUnitTest, LearnDuplicateAvoidanceDoesNotLogToTrai
     EXPECT_EQ(strict_cdcl.learn(l), std::nullopt);
     testing::Mock::VerifyAndClearExpectations(&strict_trail);
 
-    EXPECT_CALL(strict_trail, log(_)).Times(0);
+    EXPECT_CALL(strict_trail, log(_)).Times(AtLeast(1));
     EXPECT_EQ(strict_cdcl.learn(l), std::nullopt);
 }
 
@@ -344,15 +358,15 @@ TEST_F(CdclEliminationGeneratorUnitTest, SecondSiblingOnSameGoalNoOpWhenReducedA
 }
 
 // ---------------------------------------------------------------------------
-// constrain — reduce-to-duplicate (insert dedup path)
+// constrain — reduce-to-duplicate avoidance (no insert dedup; duplicate copies both yield)
 // ---------------------------------------------------------------------------
 
-TEST_F(CdclEliminationGeneratorUnitTest, ReduceToDuplicateAvoidanceDoesNotCorruptExistingPair) {
+TEST_F(CdclEliminationGeneratorUnitTest, ReduceToDuplicateAvoidanceYieldsFromEachCopy) {
     cdcl.learn(make_lemma({&lin_0_0, &lin_1_0, &lin_2_0}));
     cdcl.learn(make_lemma({&lin_1_0, &lin_2_0}));
 
     EXPECT_THAT(collect_elims(cdcl.constrain(&lin_0_0)), IsEmpty());
-    EXPECT_THAT(collect_elims(cdcl.constrain(&lin_1_0)), ElementsAre(&lin_2_0));
+    EXPECT_THAT(collect_elims(cdcl.constrain(&lin_1_0)), ElementsAre(&lin_2_0, &lin_2_0));
 }
 
 // ---------------------------------------------------------------------------

@@ -33,9 +33,13 @@ basic_manifest::early_wiring::early_wiring(
 }
 
 basic_manifest::pool_wiring::pool_wiring(locator& loc)
-    : expr_pool_(loc), var_sequencer_(loc), elimination_backlog_(loc) {
+    : expr_pool_(loc),
+      var_sequencer_(loc),
+      cdcl_sequencer_(loc),
+      elimination_backlog_(loc) {
     loc.bind_as<i_make_functor, i_make_var, i_import_expr, i_get_expr_count>(expr_pool_);
     loc.bind_as<i_var_sequencer>(var_sequencer_);
+    loc.bind_as<i_cdcl_sequencer>(cdcl_sequencer_);
     loc.bind_as<i_insert_backlogged_elimination, i_is_backlogged_elimination>(elimination_backlog_);
 }
 
@@ -117,6 +121,7 @@ basic_manifest::basic_manifest(
       unifier_factory_(early_.unifier_factory_),
       expr_pool_(pools_.expr_pool_),
       var_sequencer_(pools_.var_sequencer_),
+      cdcl_sequencer_(pools_.cdcl_sequencer_),
       lineage_pool_(early_.lineage_pool_),
       active_goals_(early_.active_goals_),
       goal_exprs_(early_.goal_exprs_),

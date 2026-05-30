@@ -6,6 +6,7 @@
 #include <vector>
 #include "infrastructure/joint_elimination_generator.hpp"
 #include "infrastructure/cdcl_elimination_generator.hpp"
+#include "infrastructure/cdcl_sequencer.hpp"
 #include "infrastructure/mhu_elimination_generator.hpp"
 #include "infrastructure/bind_map.hpp"
 #include "infrastructure/bind_map_factory.hpp"
@@ -50,12 +51,17 @@ struct JointEliminationGeneratorIntegrationTest : public ::testing::Test {
     unifier_factory uf;
     goal_candidate_rules ggcr;
     std::optional<expr_pool> pool;
+    cdcl_sequencer cdcl_seq;
     std::optional<cdcl_elimination_generator> cdcl;
     std::optional<mhu_elimination_generator> mhu;
     std::optional<joint_elimination_generator> joint;
 
-    JointEliminationGeneratorIntegrationTest() {
-        loc.bind_as<i_log_to_current_trail_frame>(t);
+    JointEliminationGeneratorIntegrationTest()
+        : cdcl_seq([&]() {
+              loc.bind_as<i_log_to_current_trail_frame>(t);
+              return cdcl_sequencer{loc};
+          }()) {
+        loc.bind_as<i_cdcl_sequencer>(cdcl_seq);
         loc.bind_as<i_bind_map>(common);
         loc.bind_as<i_bind_map_factory>(bmf);
         loc.bind_as<i_unifier_factory>(uf);

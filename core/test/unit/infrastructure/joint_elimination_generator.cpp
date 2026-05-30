@@ -10,6 +10,7 @@
 #include "locator_fixture.hpp"
 #include "infrastructure/joint_elimination_generator.hpp"
 #include "infrastructure/cdcl_elimination_generator.hpp"
+#include "infrastructure/cdcl_sequencer.hpp"
 #include "infrastructure/mhu_elimination_generator.hpp"
 #include "infrastructure/trail.hpp"
 #include "infrastructure/bind_map.hpp"
@@ -94,6 +95,7 @@ struct JointEliminationGeneratorUnitTest : public ::testing::Test {
     MockEliminationGenerator cdcl_mock;
     MockEliminationGenerator mhu_mock;
     std::optional<expr_pool> expr_pool_;
+    std::optional<cdcl_sequencer> cdcl_seq_;
     std::optional<cdcl_shim> cdcl_elims;
     std::optional<mhu_shim> mhu_elims;
     std::optional<joint_elimination_generator> joint;
@@ -113,6 +115,8 @@ struct JointEliminationGeneratorUnitTest : public ::testing::Test {
         loc.bind_as<i_get_goal_candidate_rule_ids>(goal_candidate_rules_);
         expr_pool_.emplace(loc);
         loc.bind_as<i_make_functor, i_make_var, i_import_expr, i_get_expr_count>(*expr_pool_);
+        cdcl_seq_.emplace(loc);
+        loc.bind_as<i_cdcl_sequencer>(*cdcl_seq_);
         cdcl_elims.emplace(loc, cdcl_mock);
         mhu_elims.emplace(loc, mhu_mock);
         loc.bind_as<cdcl_elimination_generator>(*cdcl_elims);

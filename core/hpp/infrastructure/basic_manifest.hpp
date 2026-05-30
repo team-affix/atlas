@@ -43,6 +43,7 @@
 #include "infrastructure/unit_goal_detector.hpp"
 #include "infrastructure/unit_goals.hpp"
 #include "infrastructure/unifier_factory.hpp"
+#include "infrastructure/cdcl_sequencer.hpp"
 #include "infrastructure/var_sequencer.hpp"
 
 struct basic_manifest {
@@ -63,6 +64,7 @@ struct basic_manifest {
     unifier_factory& unifier_factory_;
     expr_pool& expr_pool_;
     var_sequencer& var_sequencer_;
+    cdcl_sequencer& cdcl_sequencer_;
     lineage_pool& lineage_pool_;
     active_goals& active_goals_;
     goal_exprs& goal_exprs_;
@@ -117,6 +119,7 @@ private:
     struct pool_wiring {
         expr_pool expr_pool_;
         var_sequencer var_sequencer_;
+        cdcl_sequencer cdcl_sequencer_;
         elimination_backlog elimination_backlog_;
 
         pool_wiring(locator& loc);
