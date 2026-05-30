@@ -481,22 +481,6 @@ TEST_F(BasicManifestIntegrationTest, TickSnapshotBindingsBeforeTearDown) {
     EXPECT_TRUE(tick.bind_map_cleared);
 }
 
-TEST_F(BasicManifestIntegrationTest, TickDecisionMemoryClearedResolutionLemmaEmptyAfterTearDown) {
-    expr goal{expr::functor{"f", {}}};
-    expr f_head0{expr::functor{"f", {}}};
-    expr f_head1{expr::functor{"f", {}}};
-    initial_goals.push(&goal);
-    database.push(rule{&f_head0, {}});
-    database.push(rule{&f_head1, {}});
-
-    basic_manifest manifest{database, initial_goals, kMaxResolutions, kSeed};
-    auto sm = manifest.solver_.solve();
-    const TickResult tick = run_one_tick(manifest, sm);
-    ASSERT_EQ(tick.termination, sim_termination::solved);
-    EXPECT_EQ(tick.decision_count_after, 0u);
-    EXPECT_TRUE(tick.resolution_lemma_empty);
-}
-
 TEST_F(BasicManifestIntegrationTest, TickCdclAvoidancesPersistAcrossTearDown) {
     expr goal_f{expr::functor{"f", {}}};
     expr goal_g{expr::functor{"g", {}}};

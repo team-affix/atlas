@@ -33,6 +33,8 @@ sim::sim(locator& loc, size_t max_resolutions)
     clear_candidate_translation_maps(loc.locate<i_clear_candidate_translation_maps>()),
     clear_mhu_heads(loc.locate<i_clear_mhu_heads>()),
     clear_bindings(loc.locate<i_clear_bindings>()),
+    derive_resolution_lemma(loc.locate<i_derive_resolution_lemma>()),
+    pin_resolution_lineage(loc.locate<i_pin_resolution_lineage>()),
     trim_unpinned_lineages(loc.locate<i_trim_unpinned_lineages>()) {
 }
 
@@ -85,6 +87,13 @@ sim_termination sim::run() {
 }
 
 void sim::tear_down() {
+    // get the resolution lemma
+    auto rlemma = derive_resolution_lemma.derive_resolution_lemma();
+
+    // pin all resolutions in the lemma
+    for (const resolution_lineage* rl : rlemma.get_resolutions())
+        pin_resolution_lineage.pin(rl);
+    
     pop_trail_frame.pop();
     clear_unit_goals.clear();
     clear_recorded_decisions.clear_recorded_decisions();

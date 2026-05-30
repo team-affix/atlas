@@ -35,7 +35,9 @@
 #include "interfaces/i_clear_candidate_translation_maps.hpp"
 #include "interfaces/i_clear_mhu_heads.hpp"
 #include "interfaces/i_clear_bindings.hpp"
+#include "interfaces/i_derive_resolution_lemma.hpp"
 #include "interfaces/i_trim_unpinned_lineages.hpp"
+#include "interfaces/i_pin_resolution_lineage.hpp"
 
 struct sim
     : i_run_sim
@@ -78,6 +80,8 @@ private:
     i_clear_candidate_translation_maps& clear_candidate_translation_maps;
     i_clear_mhu_heads& clear_mhu_heads;
     i_clear_bindings& clear_bindings;
+    i_derive_resolution_lemma& derive_resolution_lemma;
+    i_pin_resolution_lineage& pin_resolution_lineage;
     i_trim_unpinned_lineages& trim_unpinned_lineages;
 };
 
