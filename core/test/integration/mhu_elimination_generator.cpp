@@ -1357,3 +1357,215 @@ TEST_F(MhuEliminationGeneratorIntegrationTest, RebaseFollowsCommonWhnfThroughFun
     const auto& f0 = std::get<expr::functor>(common.whnf(&var0)->content);
     expect_whnf_functor(common, f0.args[0], "abc", 0);
 }
+
+// ---------------------------------------------------------------------------
+// O–Q. Round 3 — serial chain stress, late-ground watchers, rebase fan-out
+// ---------------------------------------------------------------------------
+
+namespace {
+
+void expect_all_whnf_abc(bind_map& common, std::initializer_list<expr*> vars) {
+    for (expr* v : vars)
+        expect_whnf_functor(common, v, "abc", 0);
+}
+
+void expect_equated_to_canonical(bind_map& common, std::initializer_list<expr*> vars,
+    const expr* canonical) {
+    for (expr* v : vars)
+        EXPECT_EQ(common.whnf(v), canonical);
+}
+
+void expect_free_reps(bind_map& common, std::initializer_list<expr*> vars) {
+    for (expr* v : vars)
+        EXPECT_EQ(common.whnf(v), v);
+}
+
+} // namespace
+
+TEST_F(MhuEliminationGeneratorIntegrationTest,
+    SequentialFourHeadChainConstrainsPropagateGroundToAllReps) {
+    expr var0{expr::var{0}};
+    expr var1{expr::var{1}};
+    expr var2{expr::var{2}};
+    expr var3{expr::var{3}};
+    expr abc{expr::functor{"abc", {}}};
+
+    resolution_lineage* rl0 = link_rl(0, rule_id{0});
+    resolution_lineage* rl1 = link_rl(1, rule_id{0});
+    resolution_lineage* rl2 = link_rl(2, rule_id{0});
+    resolution_lineage* rl3 = link_rl(3, rule_id{0});
+
+    ASSERT_TRUE(mhu->try_add_head(rl0, &var0, &var1));
+    ASSERT_TRUE(mhu->try_add_head(rl1, &var1, &var2));
+    ASSERT_TRUE(mhu->try_add_head(rl2, &var2, &var3));
+    ASSERT_TRUE(mhu->try_add_head(rl3, &var3, &abc));
+
+    // ① constrain rl0
+    EXPECT_THAT(collect_elims(mhu->constrain(rl0)), IsEmpty());
+    expect_equated_to_canonical(common, {&var0, &var1}, &var0);
+    expect_free_reps(common, {&var2, &var3});
+
+    // ② constrain rl1
+    EXPECT_THAT(collect_elims(mhu->constrain(rl1)), IsEmpty());
+    expect_equated_to_canonical(common, {&var0, &var1, &var2}, &var0);
+    expect_free_reps(common, {&var3});
+
+    // ③ constrain rl2
+    EXPECT_THAT(collect_elims(mhu->constrain(rl2)), IsEmpty());
+    expect_equated_to_canonical(common, {&var0, &var1, &var2, &var3}, &var0);
+
+    // ④ constrain rl3 — ground propagates to all reps
+    EXPECT_THAT(collect_elims(mhu->constrain(rl3)), IsEmpty());
+    expect_all_whnf_abc(common, {&var0, &var1, &var2, &var3});
+}
+
+TEST_F(MhuEliminationGeneratorIntegrationTest,
+    ReverseFourHeadChainConstrainsPropagateGroundToAllReps) {
+    expr var0{expr::var{0}};
+    expr var1{expr::var{1}};
+    expr var2{expr::var{2}};
+    expr var3{expr::var{3}};
+    expr abc{expr::functor{"abc", {}}};
+
+    resolution_lineage* rl0 = link_rl(0, rule_id{0});
+    resolution_lineage* rl1 = link_rl(1, rule_id{0});
+    resolution_lineage* rl2 = link_rl(2, rule_id{0});
+    resolution_lineage* rl3 = link_rl(3, rule_id{0});
+
+    ASSERT_TRUE(mhu->try_add_head(rl0, &var0, &var1));
+    ASSERT_TRUE(mhu->try_add_head(rl1, &var1, &var2));
+    ASSERT_TRUE(mhu->try_add_head(rl2, &var2, &var3));
+    ASSERT_TRUE(mhu->try_add_head(rl3, &var3, &abc));
+
+    // ① constrain rl3 — ground rep 3 only
+    EXPECT_THAT(collect_elims(mhu->constrain(rl3)), IsEmpty());
+    expect_whnf_functor(common, &var3, "abc", 0);
+    expect_free_reps(common, {&var0, &var1, &var2});
+
+    // ② constrain rl2 — ground enters equate class
+    EXPECT_THAT(collect_elims(mhu->constrain(rl2)), IsEmpty());
+    expect_whnf_functor(common, &var2, "abc", 0);
+
+    // ③ constrain rl1
+    EXPECT_THAT(collect_elims(mhu->constrain(rl1)), IsEmpty());
+
+    // ④ constrain rl0 — all reps grounded
+    EXPECT_THAT(collect_elims(mhu->constrain(rl0)), IsEmpty());
+    expect_all_whnf_abc(common, {&var0, &var1, &var2, &var3});
+}
+
+TEST_F(MhuEliminationGeneratorIntegrationTest, SixHeadChainConstrainsPropagateGroundToAllReps) {
+    std::array<expr, 6> vars{
+        expr{expr::var{0}}, expr{expr::var{1}}, expr{expr::var{2}},
+        expr{expr::var{3}}, expr{expr::var{4}}, expr{expr::var{5}}};
+    expr abc{expr::functor{"abc", {}}};
+
+    std::array<resolution_lineage*, 6> rls;
+    for (size_t i = 0; i < 6; ++i)
+        rls[i] = link_rl(i, rule_id{0});
+
+    for (size_t i = 0; i < 5; ++i)
+        ASSERT_TRUE(mhu->try_add_head(rls[i], &vars[i], &vars[i + 1]));
+    ASSERT_TRUE(mhu->try_add_head(rls[5], &vars[5], &abc));
+
+    for (size_t i = 0; i < 6; ++i)
+        EXPECT_THAT(collect_elims(mhu->constrain(rls[i])), IsEmpty());
+
+    expect_all_whnf_abc(common, {&vars[0], &vars[1], &vars[2], &vars[3], &vars[4], &vars[5]});
+}
+
+TEST_F(MhuEliminationGeneratorIntegrationTest, SerialChainLateGroundWithCompatibleWatcherSurvives) {
+    expr var0{expr::var{0}};
+    expr var1{expr::var{1}};
+    expr var2{expr::var{2}};
+    expr var3{expr::var{3}};
+    expr abc{expr::functor{"abc", {}}};
+    expr goal_w{expr::functor{"g", {&var3}}};
+    expr head_w{expr::functor{"g", {&abc}}};
+
+    resolution_lineage* rl0 = link_rl(0, rule_id{0});
+    resolution_lineage* rl1 = link_rl(1, rule_id{0});
+    resolution_lineage* rl2 = link_rl(2, rule_id{0});
+    resolution_lineage* rl3 = link_rl(3, rule_id{0});
+    resolution_lineage* rl_w = link_rl(4, rule_id{0});
+
+    ASSERT_TRUE(mhu->try_add_head(rl0, &var0, &var1));
+    ASSERT_TRUE(mhu->try_add_head(rl1, &var1, &var2));
+    ASSERT_TRUE(mhu->try_add_head(rl2, &var2, &var3));
+    ASSERT_TRUE(mhu->try_add_head(rl3, &var3, &abc));
+    ASSERT_TRUE(mhu->try_add_head(rl_w, &goal_w, &head_w));
+
+    EXPECT_THAT(collect_elims(mhu->constrain(rl0)), IsEmpty());
+    EXPECT_THAT(collect_elims(mhu->constrain(rl1)), IsEmpty());
+    EXPECT_THAT(collect_elims(mhu->constrain(rl2)), IsEmpty());
+    EXPECT_THAT(collect_elims(mhu->constrain(rl3)), IsEmpty());
+    expect_all_whnf_abc(common, {&var0, &var1, &var2, &var3});
+
+    EXPECT_THAT(collect_elims(mhu->constrain(rl_w)), IsEmpty());
+    expect_all_whnf_abc(common, {&var0, &var1, &var2, &var3});
+}
+
+TEST_F(MhuEliminationGeneratorIntegrationTest, SerialChainLateGroundEliminatesIncompatibleWatcher) {
+    expr var0{expr::var{0}};
+    expr var1{expr::var{1}};
+    expr var2{expr::var{2}};
+    expr var3{expr::var{3}};
+    expr abc{expr::functor{"abc", {}}};
+    expr def{expr::functor{"def", {}}};
+    expr goal_w{expr::functor{"g", {&var3}}};
+    expr head_w{expr::functor{"g", {&def}}};
+
+    resolution_lineage* rl0 = link_rl(0, rule_id{0});
+    resolution_lineage* rl1 = link_rl(1, rule_id{0});
+    resolution_lineage* rl2 = link_rl(2, rule_id{0});
+    resolution_lineage* rl3 = link_rl(3, rule_id{0});
+    resolution_lineage* rl_w = link_rl(4, rule_id{0});
+
+    ASSERT_TRUE(mhu->try_add_head(rl0, &var0, &var1));
+    ASSERT_TRUE(mhu->try_add_head(rl1, &var1, &var2));
+    ASSERT_TRUE(mhu->try_add_head(rl2, &var2, &var3));
+    ASSERT_TRUE(mhu->try_add_head(rl3, &var3, &abc));
+    ASSERT_TRUE(mhu->try_add_head(rl_w, &goal_w, &head_w));
+
+    EXPECT_THAT(collect_elims(mhu->constrain(rl0)), IsEmpty());
+    EXPECT_THAT(collect_elims(mhu->constrain(rl1)), IsEmpty());
+    EXPECT_THAT(collect_elims(mhu->constrain(rl2)), IsEmpty());
+    EXPECT_THAT(collect_elims(mhu->constrain(rl3)), ElementsAre(rl_w));
+    expect_all_whnf_abc(common, {&var0, &var1, &var2, &var3});
+}
+
+TEST_F(MhuEliminationGeneratorIntegrationTest, ManyHeadsOnVar2SurviveSerialChainConstrains) {
+    expr var0{expr::var{0}};
+    expr var1{expr::var{1}};
+    expr var2{expr::var{2}};
+    expr var3{expr::var{3}};
+    expr abc{expr::functor{"abc", {}}};
+    expr goal_w{expr::functor{"g", {&var2}}};
+    expr head_w{expr::functor{"g", {&abc}}};
+
+    resolution_lineage* rl0 = link_rl(0, rule_id{0});
+    resolution_lineage* rl1 = link_rl(1, rule_id{0});
+    resolution_lineage* rl2 = link_rl(2, rule_id{0});
+    resolution_lineage* rl3 = link_rl(3, rule_id{0});
+
+    constexpr size_t kWatcherCount = 8;
+    std::array<resolution_lineage*, kWatcherCount> watchers;
+    for (size_t i = 0; i < kWatcherCount; ++i)
+        watchers[i] = link_rl(4 + i, rule_id{0});
+
+    ASSERT_TRUE(mhu->try_add_head(rl0, &var0, &var1));
+    ASSERT_TRUE(mhu->try_add_head(rl1, &var1, &var2));
+    ASSERT_TRUE(mhu->try_add_head(rl2, &var2, &var3));
+    ASSERT_TRUE(mhu->try_add_head(rl3, &var3, &abc));
+    for (resolution_lineage* rl_w : watchers)
+        ASSERT_TRUE(mhu->try_add_head(rl_w, &goal_w, &head_w));
+
+    EXPECT_THAT(collect_elims(mhu->constrain(rl0)), IsEmpty());
+    EXPECT_THAT(collect_elims(mhu->constrain(rl1)), IsEmpty());
+    EXPECT_THAT(collect_elims(mhu->constrain(rl2)), IsEmpty());
+    EXPECT_THAT(collect_elims(mhu->constrain(rl3)), IsEmpty());
+    expect_all_whnf_abc(common, {&var0, &var1, &var2, &var3});
+
+    EXPECT_THAT(collect_elims(mhu->constrain(watchers[0])), IsEmpty());
+    expect_all_whnf_abc(common, {&var0, &var1, &var2, &var3});
+}
