@@ -3,9 +3,6 @@
 //
 // Bug policy (docs/testing.md): failing tests indicate suspected production bugs
 // unless setup/lifetime/key definitions are wrong. Do not delete or weaken tests.
-// Known production issue: basic_manifest elim_wiring constructs joint_ before
-// cdcl_/mhu_ are bound to loc_ (sim.cpp emplaces joint after bind); construction
-// may throw until that init order is fixed.
 
 #include <gtest/gtest.h>
 #include <gmock/gmock.h>

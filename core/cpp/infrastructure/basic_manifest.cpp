@@ -40,10 +40,11 @@ basic_manifest::pool_wiring::pool_wiring(locator& loc)
 }
 
 basic_manifest::elim_wiring::elim_wiring(locator& loc)
-    : cdcl_(loc), mhu_(loc), joint_(loc) {
+    : cdcl_(loc), mhu_(loc) {
     loc.bind_as<i_learn_avoidance>(cdcl_);
     loc.bind_as<i_try_add_mhu_head, i_clear_mhu_heads>(mhu_);
-    loc.bind_as<i_elimination_generator>(joint_);
+    joint_.emplace(loc);
+    loc.bind_as<i_elimination_generator>(*joint_);
 }
 
 basic_manifest::core_wiring::core_wiring(locator& loc)
@@ -73,25 +74,25 @@ basic_manifest::activator_wiring::activator_wiring(locator& loc)
 basic_manifest::router_wiring::router_wiring(locator& loc)
     : elimination_router_(loc),
       get_unit_resolution_(loc),
-      make_initial_goal_lineage_(loc),
-      initial_goal_activator_(loc) {
+      make_initial_goal_lineage_(loc) {
     loc.bind_as<i_elimination_router>(elimination_router_);
     loc.bind_as<i_get_unit_resolution>(get_unit_resolution_);
     loc.bind_as<i_make_initial_goal_lineage>(make_initial_goal_lineage_);
-    loc.bind_as<i_activate_initial_goal>(initial_goal_activator_);
+    initial_goal_activator_.emplace(loc);
+    loc.bind_as<i_activate_initial_goal>(*initial_goal_activator_);
 }
 
 basic_manifest::orchestration_wiring::orchestration_wiring(
     locator& loc, size_t max_resolutions, uint32_t random_seed)
     : rng_(random_seed),
       random_decision_generator_(loc, rng_),
-      resolver_(loc),
-      sim_(loc, max_resolutions),
-      solver_(loc) {
+      resolver_(loc) {
     loc.bind_as<i_generate_decision>(random_decision_generator_);
     loc.bind_as<i_resolver>(resolver_);
-    loc.bind_as<i_set_up_sim, i_tear_down_sim, i_run_sim>(sim_);
-    loc.bind_as<i_solve>(solver_);
+    sim_.emplace(loc, max_resolutions);
+    loc.bind_as<i_set_up_sim, i_tear_down_sim, i_run_sim>(*sim_);
+    solver_.emplace(loc);
+    loc.bind_as<i_solve>(*solver_);
 }
 
 basic_manifest::basic_manifest(
@@ -127,7 +128,7 @@ basic_manifest::basic_manifest(
       elimination_backlog_(pools_.elimination_backlog_),
       cdcl_(elims_.cdcl_),
       mhu_(elims_.mhu_),
-      joint_(elims_.joint_),
+      joint_(*elims_.joint_),
       candidate_translation_maps_(early_.candidate_translation_maps_),
       get_resolution_rule_(core_.get_resolution_rule_),
       copier_(core_.copier_),
@@ -141,9 +142,9 @@ basic_manifest::basic_manifest(
       elimination_router_(routers_.elimination_router_),
       get_unit_resolution_(routers_.get_unit_resolution_),
       make_initial_goal_lineage_(routers_.make_initial_goal_lineage_),
-      initial_goal_activator_(routers_.initial_goal_activator_),
+      initial_goal_activator_(*routers_.initial_goal_activator_),
       rng_(orch_.rng_),
       random_decision_generator_(orch_.random_decision_generator_),
       resolver_(orch_.resolver_),
-      sim_(orch_.sim_),
-      solver_(orch_.solver_) {}
+      sim_(*orch_.sim_),
+      solver_(*orch_.solver_) {}

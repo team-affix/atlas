@@ -3,6 +3,7 @@
 
 #include <cstddef>
 #include <cstdint>
+#include <optional>
 #include <random>
 #include "infrastructure/active_goals.hpp"
 #include "infrastructure/bind_map.hpp"
@@ -124,7 +125,7 @@ private:
     struct elim_wiring {
         cdcl_elimination_generator cdcl_;
         mhu_elimination_generator mhu_;
-        joint_elimination_generator joint_;
+        std::optional<joint_elimination_generator> joint_;
 
         elim_wiring(locator& loc);
     };
@@ -152,7 +153,7 @@ private:
         elimination_router elimination_router_;
         get_unit_resolution get_unit_resolution_;
         make_initial_goal_lineage make_initial_goal_lineage_;
-        initial_goal_activator initial_goal_activator_;
+        std::optional<initial_goal_activator> initial_goal_activator_;
 
         router_wiring(locator& loc);
     };
@@ -161,8 +162,8 @@ private:
         std::mt19937 rng_;
         random_decision_generator random_decision_generator_;
         resolver resolver_;
-        sim sim_;
-        solver solver_;
+        std::optional<sim> sim_;
+        std::optional<solver> solver_;
 
         orchestration_wiring(locator& loc, size_t max_resolutions, uint32_t random_seed);
     };
