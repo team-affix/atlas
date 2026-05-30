@@ -94,10 +94,6 @@ basic_manifest::orchestration_wiring::orchestration_wiring(
     loc.bind_as<i_solve>(solver_);
 }
 
-i_solve& basic_manifest::entry() {
-    return solver_;
-}
-
 basic_manifest::basic_manifest(
     db& database,
     initial_goal_exprs& initial_goals,
