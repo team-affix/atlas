@@ -30,21 +30,25 @@ bool mhu_elimination_generator::try_add_head(const resolution_lineage* lineage, 
         if (task.has_yield())
             touched_vars.push(task.consume_yield());
     }
+
+    // 6. if the unification failed, return false
+    if (!task.result())
+        return false;
     
-    // 6. sync and link
+    // 7. sync and link
     if (!sync_and_link(lineage, *unifier, touched_vars))
         return false;
 
-    // 7. construct a unify_head
+    // 8. construct a unify_head
     unify_head head{
         std::move(bind_map),
         std::move(unifier)};
     
-    // 8. insert the head into the map
+    // 9. insert the head into the map
     const auto [_, inserted] = heads_.insert({lineage, std::move(head)});
     DEBUG_ASSERT(inserted);
 
-    // 9. return true indicating the head was added
+    // 10. return true indicating the head was added
     return true;
 }
 

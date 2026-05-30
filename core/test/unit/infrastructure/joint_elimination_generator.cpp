@@ -14,7 +14,6 @@
 #include "infrastructure/trail.hpp"
 #include "infrastructure/bind_map.hpp"
 #include "infrastructure/bind_map_factory.hpp"
-#include "infrastructure/overlay_bind_map_factory.hpp"
 #include "infrastructure/unifier_factory.hpp"
 #include "infrastructure/lineage_pool.hpp"
 #include "infrastructure/goal_candidate_rules.hpp"
@@ -88,7 +87,6 @@ struct JointEliminationGeneratorUnitTest : public ::testing::Test {
     trail trail_;
     bind_map bind_map_;
     bind_map_factory bind_map_factory_;
-    overlay_bind_map_factory overlay_bind_map_factory_;
     unifier_factory unifier_factory_;
     lineage_pool lineage_pool_;
     goal_candidate_rules goal_candidate_rules_;
@@ -104,14 +102,12 @@ struct JointEliminationGeneratorUnitTest : public ::testing::Test {
         : trail_(),
           bind_map_(),
           bind_map_factory_(),
-          overlay_bind_map_factory_(),
           unifier_factory_(),
           lineage_pool_(),
           goal_candidate_rules_() {
         loc.bind_as<i_log_to_current_trail_frame>(trail_);
         loc.bind_as<i_bind_map>(bind_map_);
         loc.bind_as<i_bind_map_factory>(bind_map_factory_);
-        loc.bind_as<i_overlay_bind_map_factory>(overlay_bind_map_factory_);
         loc.bind_as<i_unifier_factory>(unifier_factory_);
         loc.bind_as<i_make_resolution_lineage>(lineage_pool_);
         loc.bind_as<i_get_goal_candidate_rule_ids>(goal_candidate_rules_);
