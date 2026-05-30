@@ -80,8 +80,6 @@ private:
     i_clear_candidate_translation_maps& clear_candidate_translation_maps;
     i_clear_mhu_heads& clear_mhu_heads;
     i_clear_bindings& clear_bindings;
-    i_derive_resolution_lemma& derive_resolution_lemma;
-    i_pin_resolution_lineage& pin_resolution_lineage;
     i_trim_unpinned_lineages& trim_unpinned_lineages;
 };
 
