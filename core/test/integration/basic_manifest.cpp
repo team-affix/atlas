@@ -48,16 +48,35 @@ using ::testing::UnorderedElementsAre;
 
 namespace {
 
-template<typename Iface, typename Concrete>
-void expect_same_instance(Concrete& concrete, locator& loc) {
-    EXPECT_EQ(static_cast<Iface*>(&concrete), &loc.locate<Iface>());
-}
+// ---------------------------------------------------------------------------
+// Harness structs
+// ---------------------------------------------------------------------------
 
 struct TickSnapshot {
     std::set<rule_id> decision_rule_ids;
     std::set<rule_id> resolution_rule_ids;
     std::map<uint32_t, const expr*> var_bindings;
 };
+
+struct SimTerminationResult {
+    sim_termination termination{};
+    TickSnapshot snapshot;
+};
+
+struct SolverRun {
+    std::vector<sim_termination> terminations;
+    std::vector<TickSnapshot> solutions;
+    bool completed{};
+};
+
+// ---------------------------------------------------------------------------
+// Harness helpers
+// ---------------------------------------------------------------------------
+
+template<typename Iface, typename Concrete>
+void expect_same_instance(Concrete& concrete, locator& loc) {
+    EXPECT_EQ(static_cast<Iface*>(&concrete), &loc.locate<Iface>());
+}
 
 TickSnapshot snapshot_at_yield(
     basic_manifest& manifest,
@@ -85,11 +104,6 @@ TickSnapshot snapshot_at_yield(
     return snap;
 }
 
-struct SimTerminationResult {
-    sim_termination termination{};
-    TickSnapshot snapshot;
-};
-
 std::optional<SimTerminationResult> run_one_tick(
     basic_manifest& manifest,
     i_normalizer& normalizer,
@@ -111,12 +125,6 @@ bool var_unbound(basic_manifest& m, uint32_t idx) {
     const expr* whnf = m.bind_map_.whnf(m.expr_pool_.make(idx));
     return std::holds_alternative<expr::var>(whnf->content);
 }
-
-struct SolverRun {
-    std::vector<sim_termination> terminations;
-    std::vector<TickSnapshot> solutions;
-    bool completed{};
-};
 
 SolverRun run_solver(
     basic_manifest& manifest,
@@ -198,6 +206,10 @@ TickSnapshot var_key(
 
 }  // namespace
 
+// ---------------------------------------------------------------------------
+// Test fixture
+// ---------------------------------------------------------------------------
+
 struct BasicManifestIntegrationTest : public ::testing::Test {
     static constexpr size_t kMaxResolutions = 32;
     static constexpr uint32_t kSeed = 42;
@@ -226,8 +238,10 @@ struct BasicManifestIntegrationTest : public ::testing::Test {
 };
 
 // ---------------------------------------------------------------------------
-// Tier W — wiring / shared-instance identity (no sim run)
+// Tests
 // ---------------------------------------------------------------------------
+
+// Tier W — wiring / shared-instance identity (no sim run)
 
 TEST_F(BasicManifestIntegrationTest, WiringCdclIsLearnAvoidanceNotJoint) {
     basic_manifest manifest{database, initial_goals, kMaxResolutions, kSeed};
@@ -288,9 +302,7 @@ TEST_F(BasicManifestIntegrationTest, WiringConstructsWithEmptyDbAndNoGoals) {
         (basic_manifest{database, initial_goals, kMaxResolutions, kSeed}));
 }
 
-// ---------------------------------------------------------------------------
 // Tier L — sim lifecycle + subsystems via manifest.sim_
-// ---------------------------------------------------------------------------
 
 TEST_F(BasicManifestIntegrationTest, SimLifecycleTrailDepthRestoresAfterEmptyRun) {
     basic_manifest manifest{database, initial_goals, kMaxResolutions, kSeed};
@@ -493,9 +505,7 @@ TEST_F(BasicManifestIntegrationTest, SimRandomDecisionGeneratorPicksBranchWithFi
     manifest.sim_.tear_down();
 }
 
-// ---------------------------------------------------------------------------
 // Tier X — single solver tick (cross-component interop)
-// ---------------------------------------------------------------------------
 
 TEST_F(BasicManifestIntegrationTest, TickSnapshotBindingsBeforeTearDown) {
     expr abc{expr::functor{"abc", {}}};
@@ -660,9 +670,7 @@ TEST_F(BasicManifestIntegrationTest, TickSecondBranchDiffersOnDuplicateRuleProbl
     EXPECT_NE(first, second);
 }
 
-// ---------------------------------------------------------------------------
 // Tier S — multi-cycle solver (enumeration)
-// ---------------------------------------------------------------------------
 
 TEST_F(BasicManifestIntegrationTest, SolverVacuousSolvedOnEmptyProblem) {
     basic_manifest manifest{database, initial_goals, kMaxResolutions, kSeed};
