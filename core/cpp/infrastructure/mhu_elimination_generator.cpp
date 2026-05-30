@@ -89,6 +89,12 @@ coroutine<const resolution_lineage*, void> mhu_elimination_generator::constrain(
     heads_.erase(lineage);
 }
 
+void mhu_elimination_generator::clear_mhu_heads() {
+    heads_.clear();
+    rep_to_rls_.clear();
+    rl_to_reps_.clear();
+}
+
 coroutine<const resolution_lineage*, void> mhu_elimination_generator::accept_bindings(i_bind_map& local_bind_map, const std::unordered_set<uint32_t>& c_reps) {
     for (auto c_rep : c_reps) {
         // 6.1. get the rep expr
@@ -256,10 +262,4 @@ std::unordered_set<uint32_t> mhu_elimination_generator::unlink(const resolution_
 void mhu_elimination_generator::remove_head(const resolution_lineage* rl) {
     heads_.erase(rl);
     unlink(rl);
-}
-
-void mhu_elimination_generator::clear_mhu_heads() {
-    heads_.clear();
-    rep_to_rls_.clear();
-    rl_to_reps_.clear();
 }
