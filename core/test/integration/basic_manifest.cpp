@@ -72,7 +72,8 @@ TickSnapshot snapshot_at_yield(
         snap.resolution_rule_ids.insert(rl->idx);
     }
 
-    for (const resolution_lineage* rl : manifest.decision_memory_.derive().get_resolutions())
+    const lemma decision_lemma = manifest.decision_memory_.derive();
+    for (const resolution_lineage* rl : decision_lemma.get_resolutions())
         snap.decision_rule_ids.insert(rl->idx);
 
     for (uint32_t idx : tracked_vars) {
@@ -185,11 +186,11 @@ TickSnapshot ground_key(
 }
 
 TickSnapshot var_key(
-    rule_id decision_id,
+    std::initializer_list<rule_id> decision_ids,
     std::map<uint32_t, const expr*> bindings,
     std::initializer_list<rule_id> resolution_ids = {}) {
     TickSnapshot s;
-    s.decision_rule_ids = {decision_id};
+    s.decision_rule_ids = std::set<rule_id>(decision_ids);
     s.var_bindings = std::move(bindings);
     s.resolution_rule_ids = std::set<rule_id>(resolution_ids);
     return s;
@@ -653,8 +654,9 @@ TEST_F(BasicManifestIntegrationTest, TickSecondBranchDiffersOnDuplicateRuleProbl
         run_one_tick(manifest, *normalizer_, *saved_expr_pool_, sm);
     ASSERT_TRUE(tick2);
     ASSERT_EQ(tick2->termination, sim_termination::solved);
-    ASSERT_EQ(tick2->snapshot.decision_rule_ids.size(), 1u);
-    const rule_id second = *tick2->snapshot.decision_rule_ids.begin();
+    ASSERT_TRUE(tick2->snapshot.decision_rule_ids.empty());
+    ASSERT_EQ(tick2->snapshot.resolution_rule_ids.size(), 1u);
+    const rule_id second = *tick2->snapshot.resolution_rule_ids.begin();
     EXPECT_NE(first, second);
 }
 
@@ -711,7 +713,7 @@ TEST_F(BasicManifestIntegrationTest, SolverEnumeratesTwoGroundChoiceSolutions) {
     basic_manifest manifest{database, initial_goals, kMaxResolutions, kSeed};
     bind_normalizer(manifest);
     const SolverRun run = run_solver(manifest, *normalizer_, *saved_expr_pool_);
-    expect_solutions(run.solutions, {ground_key({0}), ground_key({1})});
+    expect_solutions(run.solutions, {ground_key({1}, {1}), ground_key({}, {0})});
 }
 
 TEST_F(BasicManifestIntegrationTest, SolverRefutesAfterEnumeratingAllGroundBranches) {
@@ -725,7 +727,7 @@ TEST_F(BasicManifestIntegrationTest, SolverRefutesAfterEnumeratingAllGroundBranc
     basic_manifest manifest{database, initial_goals, kMaxResolutions, kSeed};
     bind_normalizer(manifest);
     const SolverRun run = run_solver(manifest, *normalizer_, *saved_expr_pool_);
-    expect_solutions(run.solutions, {ground_key({0}), ground_key({1})});
+    expect_solutions(run.solutions, {ground_key({1}, {1}), ground_key({}, {0})});
     const auto solved_count = std::ranges::count(run.terminations, sim_termination::solved);
     EXPECT_EQ(solved_count, 2);
     EXPECT_TRUE(run.completed);
@@ -734,7 +736,8 @@ TEST_F(BasicManifestIntegrationTest, SolverRefutesAfterEnumeratingAllGroundBranc
 TEST_F(BasicManifestIntegrationTest, SolverFindsClauseDerivedUnitSolution) {
     expr goal{expr::functor{"f", {}}};
     expr rule_var{expr::var{0}};
-    expr g_fact{expr::functor{"g", {}}};
+    expr g_ground{expr::functor{"c", {}}};
+    expr g_fact{expr::functor{"g", {&g_ground}}};
     expr f_head{expr::functor{"f", {}}};
     expr g_body{expr::functor{"g", {&rule_var}}};
     initial_goals.push(&goal);
@@ -751,8 +754,10 @@ TEST_F(BasicManifestIntegrationTest, SolverFindsClauseDerivedUnitSolution) {
 TEST_F(BasicManifestIntegrationTest, SolverEnumeratesTwoChoiceClauseSolutions) {
     expr goal{expr::functor{"f", {}}};
     expr rule_var{expr::var{0}};
-    expr g_fact0{expr::functor{"g", {}}};
-    expr g_fact1{expr::functor{"g", {}}};
+    expr abc{expr::functor{"abc", {}}};
+    expr xyz{expr::functor{"xyz", {}}};
+    expr g_fact0{expr::functor{"g", {&abc}}};
+    expr g_fact1{expr::functor{"g", {&xyz}}};
     expr f_head{expr::functor{"f", {}}};
     expr g_body{expr::functor{"g", {&rule_var}}};
     initial_goals.push(&goal);
@@ -763,7 +768,7 @@ TEST_F(BasicManifestIntegrationTest, SolverEnumeratesTwoChoiceClauseSolutions) {
     basic_manifest manifest{database, initial_goals, kMaxResolutions, kSeed};
     bind_normalizer(manifest);
     const SolverRun run = run_solver(manifest, *normalizer_, *saved_expr_pool_);
-    expect_solutions(run.solutions, {ground_key({1}), ground_key({2})});
+    expect_solutions(run.solutions, {ground_key({2}, {2}), ground_key({}, {1})});
 }
 
 TEST_F(BasicManifestIntegrationTest, SolverFindsSolutionWithCorrectBindings) {
@@ -840,8 +845,8 @@ TEST_F(BasicManifestIntegrationTest, SolverEnumeratesTwoVarChoiceSolutions) {
     const SolverRun run =
         run_solver(manifest, *normalizer_, *saved_expr_pool_, {idx_a});
     expect_solutions(run.solutions, {
-        var_key(0, {{idx_a, abc_saved}}),
-        var_key(1, {{idx_a, xyz_saved}}),
+        var_key({1}, {{idx_a, xyz_saved}}, {1}),
+        var_key({}, {{idx_a, abc_saved}}, {0}),
     });
 }
 
@@ -864,8 +869,8 @@ TEST_F(BasicManifestIntegrationTest, SolverRefutesAfterEnumeratingAllVarBranches
     const SolverRun run =
         run_solver(manifest, *normalizer_, *saved_expr_pool_, {idx_a});
     expect_solutions(run.solutions, {
-        var_key(0, {{idx_a, abc_saved}}),
-        var_key(1, {{idx_a, xyz_saved}}),
+        var_key({1}, {{idx_a, xyz_saved}}, {1}),
+        var_key({}, {{idx_a, abc_saved}}, {0}),
     });
     const auto solved_count = std::ranges::count(run.terminations, sim_termination::solved);
     EXPECT_EQ(solved_count, 2);
@@ -896,7 +901,7 @@ TEST_F(BasicManifestIntegrationTest, SolverEnumeratesTwoGoalSharedVarSolutions) 
     const SolverRun run =
         run_solver(manifest, *normalizer_, *saved_expr_pool_, {idx_a});
     expect_solutions(run.solutions, {
-        var_key(0, {{idx_a, abc_saved}}),
-        var_key(1, {{idx_a, xyz_saved}}),
+        var_key({3}, {{idx_a, xyz_saved}}, {1, 3}),
+        var_key({}, {{idx_a, abc_saved}}, {0, 2}),
     });
 }
