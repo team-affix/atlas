@@ -323,3 +323,58 @@ TEST_F(CdclEliminationGeneratorUnitTest,
 
     EXPECT_THAT(elims, IsEmpty());
 }
+
+// ---------------------------------------------------------------------------
+// constrain — one-shot-per-goal semantics (second sibling resolution)
+// ---------------------------------------------------------------------------
+
+TEST_F(CdclEliminationGeneratorUnitTest, SecondSiblingResolutionOnSameGoalYieldsNothingAfterUnwatch) {
+    cdcl.learn(make_lemma({&lin_0_0, &lin_1_0}));
+
+    EXPECT_THAT(collect_elims(cdcl.constrain(&lin_0_0)), ElementsAre(&lin_1_0));
+    EXPECT_THAT(collect_elims(cdcl.constrain(&lin_0_1)), IsEmpty());
+}
+
+TEST_F(CdclEliminationGeneratorUnitTest, SecondSiblingOnSameGoalNoOpWhenReducedAvoidanceRemains) {
+    cdcl.learn(make_lemma({&lin_0_0, &lin_1_0, &lin_2_0}));
+
+    EXPECT_THAT(collect_elims(cdcl.constrain(&lin_0_0)), IsEmpty());
+    EXPECT_THAT(collect_elims(cdcl.constrain(&lin_0_1)), IsEmpty());
+    EXPECT_THAT(collect_elims(cdcl.constrain(&lin_1_0)), ElementsAre(&lin_2_0));
+}
+
+// ---------------------------------------------------------------------------
+// constrain — reduce-to-duplicate (insert dedup path)
+// ---------------------------------------------------------------------------
+
+TEST_F(CdclEliminationGeneratorUnitTest, ReduceToDuplicateAvoidanceDoesNotCorruptExistingPair) {
+    cdcl.learn(make_lemma({&lin_0_0, &lin_1_0, &lin_2_0}));
+    cdcl.learn(make_lemma({&lin_1_0, &lin_2_0}));
+
+    EXPECT_THAT(collect_elims(cdcl.constrain(&lin_0_0)), IsEmpty());
+    EXPECT_THAT(collect_elims(cdcl.constrain(&lin_1_0)), ElementsAre(&lin_2_0));
+}
+
+// ---------------------------------------------------------------------------
+// constrain — four-member sequential reduction
+// ---------------------------------------------------------------------------
+
+TEST_F(CdclEliminationGeneratorUnitTest, FourMemberAvoidanceSequentialConstrainEventuallyYieldsLast) {
+    cdcl.learn(make_lemma({&lin_0_0, &lin_1_0, &lin_2_0, &lin_3_0}));
+
+    EXPECT_THAT(collect_elims(cdcl.constrain(&lin_0_0)), IsEmpty());
+    EXPECT_THAT(collect_elims(cdcl.constrain(&lin_1_0)), IsEmpty());
+    EXPECT_THAT(collect_elims(cdcl.constrain(&lin_2_0)), ElementsAre(&lin_3_0));
+}
+
+// ---------------------------------------------------------------------------
+// constrain — cross-goal exclusive isolation
+// ---------------------------------------------------------------------------
+
+TEST_F(CdclEliminationGeneratorUnitTest, ExclusiveConstrainOnOneGoalLeavesOtherGoalAvoidanceIntact) {
+    cdcl.learn(make_lemma({&lin_0_0, &lin_1_0}));
+    cdcl.learn(make_lemma({&lin_2_0, &lin_3_0}));
+
+    EXPECT_THAT(collect_elims(cdcl.constrain(&lin_0_1)), IsEmpty());
+    EXPECT_THAT(collect_elims(cdcl.constrain(&lin_2_0)), ElementsAre(&lin_3_0));
+}

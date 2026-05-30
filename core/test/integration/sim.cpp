@@ -340,25 +340,25 @@ struct SimIntegrationTest : public ::testing::Test {
 //     simulation.tear_down();
 // }
 
-// TEST_F(SimIntegrationTest, RunReturnsSolvedWhenUnitFactAppliesToInitialGoal) {
-//     /*
-//      * initial goals:
-//      *   f.
-//      * database:
-//      *   0: f.
-//      */
-//     expr goal{expr::functor{"f", {}}};
-//     expr head{expr::functor{"f", {}}};
-//     initial_goals.push(&goal);
-//     database.push(rule{&head, {}});
+TEST_F(SimIntegrationTest, RunReturnsSolvedWhenUnitFactAppliesToInitialGoal) {
+    /*
+     * initial goals:
+     *   f.
+     * database:
+     *   0: f.
+     */
+    expr goal{expr::functor{"f", {}}};
+    expr head{expr::functor{"f", {}}};
+    initial_goals.push(&goal);
+    database.push(rule{&head, {}});
 
-//     EXPECT_CALL(stack.decision_generator, generate()).Times(0);
+    EXPECT_CALL(stack.decision_generator, generate()).Times(0);
 
-//     sim simulation{stack.loc, kDefaultMaxResolutions};
-//     simulation.set_up();
-//     EXPECT_EQ(simulation.run(), sim_termination::solved);
-//     simulation.tear_down();
-// }
+    sim simulation{stack.loc, kDefaultMaxResolutions};
+    simulation.set_up();
+    EXPECT_EQ(simulation.run(), sim_termination::solved);
+    simulation.tear_down();
+}
 
 // TEST_F(SimIntegrationTest, RunReturnsConflictedWhenDbRuleHeadFailsToUnifyWithGoal) {
 //     /*
@@ -606,60 +606,60 @@ struct SimIntegrationTest : public ::testing::Test {
 //     simulation.tear_down();
 // }
 
-// TEST_F(SimIntegrationTest, RunReturnsSolvedAfterCdclAvoidanceForcesG1RuleThree) {
-//     /*
-//      * initial goals:
-//      *   f.
-//      *   g.
-//      * database:
-//      *   0: f.
-//      *   1: f.
-//      *   2: g.
-//      *   3: g.
-//      * setup: CDCL avoidance {{goal f, rule 0}, {goal g, rule 2}}; decision picks f rule 0
-//      */
-//     expr goal_f{expr::functor{"f", {}}};
-//     expr goal_g{expr::functor{"g", {}}};
-//     expr f_head0{expr::functor{"f", {}}};
-//     expr f_head1{expr::functor{"f", {}}};
-//     expr g_head2{expr::functor{"g", {}}};
-//     expr g_head3{expr::functor{"g", {}}};
-//     initial_goals.push(&goal_f);
-//     initial_goals.push(&goal_g);
-//     database.push(rule{&f_head0, {}});
-//     database.push(rule{&f_head1, {}});
-//     database.push(rule{&g_head2, {}});
-//     database.push(rule{&g_head3, {}});
+TEST_F(SimIntegrationTest, RunReturnsSolvedAfterCdclAvoidanceForcesG1RuleThree) {
+    /*
+     * initial goals:
+     *   f.
+     *   g.
+     * database:
+     *   0: f.
+     *   1: f.
+     *   2: g.
+     *   3: g.
+     * setup: CDCL avoidance {{goal f, rule 0}, {goal g, rule 2}}; decision picks f rule 0
+     */
+    expr goal_f{expr::functor{"f", {}}};
+    expr goal_g{expr::functor{"g", {}}};
+    expr f_head0{expr::functor{"f", {}}};
+    expr f_head1{expr::functor{"f", {}}};
+    expr g_head2{expr::functor{"g", {}}};
+    expr g_head3{expr::functor{"g", {}}};
+    initial_goals.push(&goal_f);
+    initial_goals.push(&goal_g);
+    database.push(rule{&f_head0, {}});
+    database.push(rule{&f_head1, {}});
+    database.push(rule{&g_head2, {}});
+    database.push(rule{&g_head3, {}});
 
-//     i_make_initial_goal_lineage& make_initial_goal_lineage =
-//         stack.loc.locate<i_make_initial_goal_lineage>();
-//     i_make_resolution_lineage& make_resolution_lineage =
-//         stack.loc.locate<i_make_resolution_lineage>();
-//     i_learn_avoidance& learn_avoidance = stack.loc.locate<i_learn_avoidance>();
-//     i_derive_resolution_lemma& derive_resolution_lemma =
-//         stack.loc.locate<i_derive_resolution_lemma>();
+    i_make_initial_goal_lineage& make_initial_goal_lineage =
+        stack.loc.locate<i_make_initial_goal_lineage>();
+    i_make_resolution_lineage& make_resolution_lineage =
+        stack.loc.locate<i_make_resolution_lineage>();
+    i_learn_avoidance& learn_avoidance = stack.loc.locate<i_learn_avoidance>();
+    i_derive_resolution_lemma& derive_resolution_lemma =
+        stack.loc.locate<i_derive_resolution_lemma>();
 
-//     const goal_lineage* gl0 = make_initial_goal_lineage.make(0);
-//     const goal_lineage* gl1 = make_initial_goal_lineage.make(1);
-//     const resolution_lineage* rl_g0_0 =
-//         make_resolution_lineage.make_resolution_lineage(gl0, rule_id{0});
-//     const resolution_lineage* rl_g1_2 =
-//         make_resolution_lineage.make_resolution_lineage(gl1, rule_id{2});
-//     const resolution_lineage* rl_g1_3 =
-//         make_resolution_lineage.make_resolution_lineage(gl1, rule_id{3});
+    const goal_lineage* gl0 = make_initial_goal_lineage.make(0);
+    const goal_lineage* gl1 = make_initial_goal_lineage.make(1);
+    const resolution_lineage* rl_g0_0 =
+        make_resolution_lineage.make_resolution_lineage(gl0, rule_id{0});
+    const resolution_lineage* rl_g1_2 =
+        make_resolution_lineage.make_resolution_lineage(gl1, rule_id{2});
+    const resolution_lineage* rl_g1_3 =
+        make_resolution_lineage.make_resolution_lineage(gl1, rule_id{3});
 
-//     learn_avoidance.learn(lemma{{rl_g0_0, rl_g1_2}});
+    learn_avoidance.learn(lemma{{rl_g0_0, rl_g1_2}});
 
-//     sim simulation{stack.loc, kDefaultMaxResolutions};
-//     simulation.set_up();
+    sim simulation{stack.loc, kDefaultMaxResolutions};
+    simulation.set_up();
 
-//     EXPECT_CALL(stack.decision_generator, generate()).WillOnce(Return(rl_g0_0));
+    EXPECT_CALL(stack.decision_generator, generate()).WillOnce(Return(rl_g0_0));
 
-//     EXPECT_EQ(simulation.run(), sim_termination::solved);
-//     EXPECT_THAT(derive_resolution_lemma.derive_resolution_lemma().get_resolutions(),
-//         UnorderedElementsAre(rl_g0_0, rl_g1_3));
-//     simulation.tear_down();
-// }
+    EXPECT_EQ(simulation.run(), sim_termination::solved);
+    EXPECT_THAT(derive_resolution_lemma.derive_resolution_lemma().get_resolutions(),
+        UnorderedElementsAre(rl_g0_0, rl_g1_3));
+    simulation.tear_down();
+}
 
 // TEST_F(SimIntegrationTest, RunReturnsSolvedOnRecursiveClauseTreeWithoutDecisions) {
 //     /*
@@ -1293,72 +1293,72 @@ struct SimIntegrationTest : public ::testing::Test {
 //     simulation.tear_down();
 // }
 
-// TEST_F(SimIntegrationTest, RunReturnsSolvedWhenCdclAndMhuReduceGoalGCandidatesWithoutDecisions) {
-//     /*
-//      * initial goals:
-//      *   f.
-//      *   g(A, xyz).
-//      * database:
-//      *   0: f.
-//      *   1: g(abc, xyz).
-//      *   2: g(def, xyz).
-//      *   3: g(ghi, jkl).
-//      * setup: CDCL avoidance {{goal f, rule 0}, {goal g, rule 1}}
-//      */
-//     expr abc{expr::functor{"abc", {}}};
-//     expr def{expr::functor{"def", {}}};
-//     expr ghi{expr::functor{"ghi", {}}};
-//     expr _xyz{expr::functor{"xyz", {}}};
-//     expr _jkl{expr::functor{"jkl", {}}};
-//     expr f_head{expr::functor{"f", {}}};
-//     expr g_head1{expr::functor{"g", {&abc, &_xyz}}};
-//     expr g_head2{expr::functor{"g", {&def, &_xyz}}};
-//     expr g_head3{expr::functor{"g", {&ghi, &_jkl}}};
-//     database.push(rule{&f_head, {}});
-//     database.push(rule{&g_head1, {}});
-//     database.push(rule{&g_head2, {}});
-//     database.push(rule{&g_head3, {}});
+TEST_F(SimIntegrationTest, RunReturnsSolvedWhenCdclAndMhuReduceGoalGCandidatesWithoutDecisions) {
+    /*
+     * initial goals:
+     *   f.
+     *   g(A, xyz).
+     * database:
+     *   0: f.
+     *   1: g(abc, xyz).
+     *   2: g(def, xyz).
+     *   3: g(ghi, jkl).
+     * setup: CDCL avoidance {{goal f, rule 0}, {goal g, rule 1}}
+     */
+    expr abc{expr::functor{"abc", {}}};
+    expr def{expr::functor{"def", {}}};
+    expr ghi{expr::functor{"ghi", {}}};
+    expr _xyz{expr::functor{"xyz", {}}};
+    expr _jkl{expr::functor{"jkl", {}}};
+    expr f_head{expr::functor{"f", {}}};
+    expr g_head1{expr::functor{"g", {&abc, &_xyz}}};
+    expr g_head2{expr::functor{"g", {&def, &_xyz}}};
+    expr g_head3{expr::functor{"g", {&ghi, &_jkl}}};
+    database.push(rule{&f_head, {}});
+    database.push(rule{&g_head1, {}});
+    database.push(rule{&g_head2, {}});
+    database.push(rule{&g_head3, {}});
 
-//     i_make_initial_goal_lineage& make_initial_goal_lineage =
-//         stack.loc.locate<i_make_initial_goal_lineage>();
-//     i_make_resolution_lineage& make_resolution_lineage =
-//         stack.loc.locate<i_make_resolution_lineage>();
-//     i_learn_avoidance& learn_avoidance = stack.loc.locate<i_learn_avoidance>();
-//     i_derive_resolution_lemma& derive_resolution_lemma =
-//         stack.loc.locate<i_derive_resolution_lemma>();
-//     i_bind_map& bind_map = stack.loc.locate<i_bind_map>();
-//     i_var_sequencer& seq = stack.loc.locate<i_var_sequencer>();
-//     i_make_var& make_var = stack.loc.locate<i_make_var>();
-//     i_make_functor& make_functor = stack.loc.locate<i_make_functor>();
+    i_make_initial_goal_lineage& make_initial_goal_lineage =
+        stack.loc.locate<i_make_initial_goal_lineage>();
+    i_make_resolution_lineage& make_resolution_lineage =
+        stack.loc.locate<i_make_resolution_lineage>();
+    i_learn_avoidance& learn_avoidance = stack.loc.locate<i_learn_avoidance>();
+    i_derive_resolution_lemma& derive_resolution_lemma =
+        stack.loc.locate<i_derive_resolution_lemma>();
+    i_bind_map& bind_map = stack.loc.locate<i_bind_map>();
+    i_var_sequencer& seq = stack.loc.locate<i_var_sequencer>();
+    i_make_var& make_var = stack.loc.locate<i_make_var>();
+    i_make_functor& make_functor = stack.loc.locate<i_make_functor>();
 
-//     const goal_lineage* gl_f = make_initial_goal_lineage.make(0);
-//     const goal_lineage* gl_g = make_initial_goal_lineage.make(1);
-//     const resolution_lineage* rl_f_0 =
-//         make_resolution_lineage.make_resolution_lineage(gl_f, rule_id{0});
-//     const resolution_lineage* rl_g_1 =
-//         make_resolution_lineage.make_resolution_lineage(gl_g, rule_id{1});
-//     const resolution_lineage* rl_g_2 =
-//         make_resolution_lineage.make_resolution_lineage(gl_g, rule_id{2});
+    const goal_lineage* gl_f = make_initial_goal_lineage.make(0);
+    const goal_lineage* gl_g = make_initial_goal_lineage.make(1);
+    const resolution_lineage* rl_f_0 =
+        make_resolution_lineage.make_resolution_lineage(gl_f, rule_id{0});
+    const resolution_lineage* rl_g_1 =
+        make_resolution_lineage.make_resolution_lineage(gl_g, rule_id{1});
+    const resolution_lineage* rl_g_2 =
+        make_resolution_lineage.make_resolution_lineage(gl_g, rule_id{2});
 
-//     learn_avoidance.learn(lemma{{rl_f_0, rl_g_1}});
+    learn_avoidance.learn(lemma{{rl_f_0, rl_g_1}});
 
-//     EXPECT_CALL(stack.decision_generator, generate()).Times(0);
+    EXPECT_CALL(stack.decision_generator, generate()).Times(0);
 
-//     sim simulation{stack.loc, kDefaultMaxResolutions};
-//     simulation.set_up();
-//     const expr* var_a = make_var.make(seq.next());
-//     const expr* xyz = make_functor.make("xyz", {});
-//     initial_goals.push(make_functor.make("f", {}));
-//     initial_goals.push(make_functor.make("g", {var_a, xyz}));
+    sim simulation{stack.loc, kDefaultMaxResolutions};
+    simulation.set_up();
+    const expr* var_a = make_var.make(seq.next());
+    const expr* xyz = make_functor.make("xyz", {});
+    initial_goals.push(make_functor.make("f", {}));
+    initial_goals.push(make_functor.make("g", {var_a, xyz}));
 
-//     EXPECT_EQ(simulation.run(), sim_termination::solved);
-//     EXPECT_THAT(derive_resolution_lemma.derive_resolution_lemma().get_resolutions(),
-//         UnorderedElementsAre(rl_f_0, rl_g_2));
-//     const expr::functor& whnf_a = std::get<expr::functor>(bind_map.whnf(var_a)->content);
-//     EXPECT_EQ(whnf_a.name, "def");
-//     EXPECT_TRUE(whnf_a.args.empty());
-//     simulation.tear_down();
-// }
+    EXPECT_EQ(simulation.run(), sim_termination::solved);
+    EXPECT_THAT(derive_resolution_lemma.derive_resolution_lemma().get_resolutions(),
+        UnorderedElementsAre(rl_f_0, rl_g_2));
+    const expr::functor& whnf_a = std::get<expr::functor>(bind_map.whnf(var_a)->content);
+    EXPECT_EQ(whnf_a.name, "def");
+    EXPECT_TRUE(whnf_a.args.empty());
+    simulation.tear_down();
+}
 
 // TEST_F(SimIntegrationTest, RunReturnsSolvedBuildingListOfFiveAbcWithoutDecisions) {
 //     /*

@@ -182,3 +182,23 @@ TEST_F(JointEliminationGeneratorIntegrationTest, ConstrainYieldsNothingWhenBothS
 
     EXPECT_THAT(collect_elims(joint->constrain(rl_a)), IsEmpty());
 }
+
+TEST_F(JointEliminationGeneratorIntegrationTest, PopRestoresCdclThroughJointConstrain) {
+    goal_lineage gl0{nullptr, 0};
+    goal_lineage gl1{nullptr, 1};
+    resolution_lineage rl0{&gl0, 0};
+    resolution_lineage rl1{&gl1, 1};
+
+    expr goal{expr::functor{"f", {}}};
+    expr head{expr::functor{"f", {}}};
+
+    ASSERT_EQ(cdcl->learn(lemma{{&rl0, &rl1}}), std::nullopt);
+    ASSERT_TRUE(mhu->try_add_head(&rl0, &goal, &head));
+
+    t.push();
+    EXPECT_THAT(collect_elims(joint->constrain(&rl0)), ElementsAre(&rl1));
+    t.pop();
+
+    ASSERT_TRUE(mhu->try_add_head(&rl0, &goal, &head));
+    EXPECT_THAT(collect_elims(joint->constrain(&rl0)), ElementsAre(&rl1));
+}

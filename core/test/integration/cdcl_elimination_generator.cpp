@@ -61,6 +61,7 @@ protected:
     goal_lineage lin_4_0_0{&lin_4_0, 0};
     goal_lineage lin_4_0_1{&lin_4_0, 1};
     resolution_lineage lin_4_0_0_0{&lin_4_0_0, 6};
+    resolution_lineage lin_4_0_0_1{&lin_4_0_0, 8};
     resolution_lineage lin_4_0_1_0{&lin_4_0_1, 7};
 };
 
@@ -237,4 +238,45 @@ TEST_F(CdclEliminationGeneratorIntegrationTest, TwoNestedFramesInnerConstrainUnd
     t.pop();
 
     EXPECT_THAT(collect_elims(cdcl.constrain(&lin_0_0)), ElementsAre(&lin_1_0));
+}
+
+// ---------------------------------------------------------------------------
+// partial reduction / dependent tree / learn-after-constrain (round 2 gaps)
+// ---------------------------------------------------------------------------
+
+TEST_F(CdclEliminationGeneratorIntegrationTest, FourMemberAvoidancePartialConstrainInFrameUndoneByPop) {
+    cdcl.learn(make_lemma({&lin_0_0, &lin_1_0, &lin_2_0, &lin_3_0}));
+
+    t.push();
+    EXPECT_THAT(collect_elims(cdcl.constrain(&lin_0_0)), IsEmpty());
+    EXPECT_THAT(collect_elims(cdcl.constrain(&lin_1_0)), IsEmpty());
+    t.pop();
+
+    EXPECT_THAT(collect_elims(cdcl.constrain(&lin_0_0)), IsEmpty());
+    EXPECT_THAT(collect_elims(cdcl.constrain(&lin_1_0)), IsEmpty());
+    EXPECT_THAT(collect_elims(cdcl.constrain(&lin_2_0)), ElementsAre(&lin_3_0));
+}
+
+TEST_F(CdclEliminationGeneratorIntegrationTest, DependentTreeExclusiveConstrainInFrameUndoneByPop) {
+    cdcl.learn(make_lemma({&lin_4_0_0_0, &lin_4_0_1_0}));
+
+    t.push();
+    EXPECT_THAT(collect_elims(cdcl.constrain(&lin_4_0_0_1)), IsEmpty());
+    t.pop();
+
+    EXPECT_THAT(collect_elims(cdcl.constrain(&lin_4_0_0_0)), ElementsAre(&lin_4_0_1_0));
+}
+
+// Inverse of LearnAndConstrainInSameFrameBothUndoneByPop: outer learn survives inner frame.
+TEST_F(CdclEliminationGeneratorIntegrationTest, LearnAfterConstrainInFrameOuterSurvivesInnerUndoneByPop) {
+    cdcl.learn(make_lemma({&lin_0_0, &lin_1_0}));
+
+    t.push();
+    EXPECT_THAT(collect_elims(cdcl.constrain(&lin_0_0)), ElementsAre(&lin_1_0));
+    cdcl.learn(make_lemma({&lin_2_0, &lin_3_0}));
+    EXPECT_THAT(collect_elims(cdcl.constrain(&lin_2_0)), ElementsAre(&lin_3_0));
+    t.pop();
+
+    EXPECT_THAT(collect_elims(cdcl.constrain(&lin_0_0)), ElementsAre(&lin_1_0));
+    EXPECT_THAT(collect_elims(cdcl.constrain(&lin_2_0)), IsEmpty());
 }
