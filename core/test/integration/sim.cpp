@@ -121,6 +121,7 @@
 #include "value_objects/sim_termination.hpp"
 #include "value_objects/lemma.hpp"
 
+using ::testing::IsEmpty;
 using ::testing::Return;
 using ::testing::UnorderedElementsAre;
 
@@ -299,6 +300,31 @@ struct sim_stack {
         loc.bind_as<i_resolver>(resolver_);
     }
 };
+
+const expr* make_suc_n(i_make_functor& make_functor, const expr* zero, int n) {
+    const expr* cur = zero;
+    for (int i = 0; i < n; ++i)
+        cur = make_functor.make("suc", {cur});
+    return cur;
+}
+
+// chain_i(X) :- chain_{i+1}(X) for i in [0, depth-2]; chain_{depth-1}(ground_atom) fact.
+void chain_clause_db(db& database, std::vector<expr>& storage, const char* prefix, size_t depth,
+    const expr* ground_atom) {
+    storage.reserve(depth * 3);
+    for (size_t i = 0; i + 1 < depth; ++i) {
+        storage.emplace_back(expr::var{0});
+        const size_t x_idx = storage.size() - 1;
+        storage.emplace_back(
+            expr::functor{std::string(prefix) + std::to_string(i), {&storage[x_idx]}});
+        storage.emplace_back(
+            expr::functor{std::string(prefix) + std::to_string(i + 1), {&storage[x_idx]}});
+        database.push(rule{&storage[storage.size() - 2], {&storage[storage.size() - 1]}});
+    }
+    storage.emplace_back(
+        expr::functor{std::string(prefix) + std::to_string(depth - 1), {ground_atom}});
+    database.push(rule{&storage.back(), {}});
+}
 
 }  // namespace
 
@@ -1655,4 +1681,687 @@ TEST_F(SimIntegrationTest, RunReturnsConflictedAfterPartialProgressWhenDerivedGo
 
     EXPECT_EQ(simulation.run(), sim_termination::conflicted);
     simulation.tear_down();
+}
+
+// ---------------------------------------------------------------------------
+// sim lifecycle (trail + store observables)
+// ---------------------------------------------------------------------------
+
+TEST_F(SimIntegrationTest, SetUpLifecyclePushesOneTrailFrameWithoutRunning) {
+  // Capture baseline immediately before set_up(); wiring must not intern or push frames.
+  const size_t depth_before = stack.early.trail_.depth();
+  const size_t expr_before = stack.loc.locate<i_get_expr_count>().size();
+
+  sim simulation{stack.loc, kDefaultMaxResolutions};
+  simulation.set_up();
+
+  EXPECT_EQ(stack.early.trail_.depth(), depth_before + 1);
+  EXPECT_EQ(stack.loc.locate<i_get_expr_count>().size(), expr_before);
+  EXPECT_TRUE(stack.loc.locate<i_check_active_goals_empty>().empty());
+  simulation.tear_down();
+}
+
+TEST_F(SimIntegrationTest, TearDownLifecycleRestoresTrailDepthAfterEmptyRun) {
+  const size_t depth_before = stack.early.trail_.depth();
+
+  sim simulation{stack.loc, kDefaultMaxResolutions};
+  simulation.set_up();
+  EXPECT_EQ(simulation.run(), sim_termination::solved);
+  simulation.tear_down();
+
+  EXPECT_EQ(stack.early.trail_.depth(), depth_before);
+}
+
+TEST_F(SimIntegrationTest, TearDownLifecycleRestoresTrailDepthAfterConflictedRun) {
+  expr goal{expr::functor{"f", {}}};
+  initial_goals.push(&goal);
+
+  const size_t depth_before = stack.early.trail_.depth();
+
+  EXPECT_CALL(stack.decision_generator, generate()).Times(0);
+
+  sim simulation{stack.loc, kDefaultMaxResolutions};
+  simulation.set_up();
+  EXPECT_EQ(simulation.run(), sim_termination::conflicted);
+  simulation.tear_down();
+
+  EXPECT_EQ(stack.early.trail_.depth(), depth_before);
+}
+
+TEST_F(SimIntegrationTest, TearDownLifecycleRestoresTrailDepthAfterDepthExceededRun) {
+  expr goal{expr::functor{"f", {}}};
+  expr f_head{expr::functor{"f", {}}};
+  expr f_body{expr::functor{"f", {}}};
+  initial_goals.push(&goal);
+  database.push(rule{&f_head, {&f_body}});
+
+  static constexpr size_t kMaxResolutions = 4;
+  const size_t depth_before = stack.early.trail_.depth();
+
+  EXPECT_CALL(stack.decision_generator, generate()).Times(0);
+
+  sim simulation{stack.loc, kMaxResolutions};
+  simulation.set_up();
+  EXPECT_EQ(simulation.run(), sim_termination::depth_exceeded);
+  simulation.tear_down();
+
+  EXPECT_EQ(stack.early.trail_.depth(), depth_before);
+}
+
+TEST_F(SimIntegrationTest, TearDownLifecycleClearsEphemeralStoresAfterSolvedRun) {
+  expr abc{expr::functor{"abc", {}}};
+  expr _123{expr::functor{"123", {}}};
+  expr head{expr::functor{"f", {&abc, &_123}}};
+  database.push(rule{&head, {}});
+
+  i_bind_map& bind_map = stack.loc.locate<i_bind_map>();
+  i_var_sequencer& seq = stack.loc.locate<i_var_sequencer>();
+  i_make_var& make_var = stack.loc.locate<i_make_var>();
+  i_make_functor& make_functor = stack.loc.locate<i_make_functor>();
+
+  const uint32_t idx_test = seq.next();
+  const expr* test_var = make_var.make(idx_test);
+  initial_goals.push(make_functor.make("f", {test_var, make_var.make(seq.next())}));
+
+  EXPECT_CALL(stack.decision_generator, generate()).Times(0);
+
+  sim simulation{stack.loc, kDefaultMaxResolutions};
+  simulation.set_up();
+  EXPECT_EQ(simulation.run(), sim_termination::solved);
+  simulation.tear_down();
+
+  EXPECT_TRUE(stack.loc.locate<i_check_active_goals_empty>().empty());
+  EXPECT_EQ(stack.loc.locate<i_get_decision_count>().count(), 0u);
+  EXPECT_EQ(stack.loc.locate<i_get_resolution_count>().get_resolution_count(), 0u);
+  EXPECT_THAT(stack.loc.locate<i_derive_resolution_lemma>().derive_resolution_lemma().get_resolutions(),
+      IsEmpty());
+  const expr* whnf = bind_map.whnf(test_var);
+  ASSERT_TRUE(std::holds_alternative<expr::var>(whnf->content));
+  EXPECT_EQ(std::get<expr::var>(whnf->content).index, idx_test);
+}
+
+TEST_F(SimIntegrationTest, TearDownLifecyclePopUndoesInFrameExprPoolGrowth) {
+  expr rule_ignored{expr::var{0}};
+  expr rule_l{expr::var{0}};
+  expr rule_a{expr::var{1}};
+  expr rule_t{expr::var{2}};
+  expr zero{expr::functor{"zero", {}}};
+  expr nil{expr::functor{"nil", {}}};
+  expr head0{expr::functor{"make_list", {&zero, &rule_ignored, &nil}}};
+  expr suc_l{expr::functor{"suc", {&rule_l}}};
+  expr cons_at{expr::functor{"cons", {&rule_a, &rule_t}}};
+  expr head1{expr::functor{"make_list", {&suc_l, &rule_a, &cons_at}}};
+  expr body1{expr::functor{"make_list", {&rule_l, &rule_a, &rule_t}}};
+  database.push(rule{&head0, {}});
+  database.push(rule{&head1, {&body1}});
+
+  i_var_sequencer& seq = stack.loc.locate<i_var_sequencer>();
+  i_make_var& make_var = stack.loc.locate<i_make_var>();
+  i_make_functor& make_functor = stack.loc.locate<i_make_functor>();
+
+  const size_t expr_before = stack.loc.locate<i_get_expr_count>().size();
+
+  static constexpr size_t kMaxResolutions = 32;
+  static constexpr int kListLength = 5;
+  EXPECT_CALL(stack.decision_generator, generate()).Times(0);
+
+  sim simulation{stack.loc, kMaxResolutions};
+  simulation.set_up();
+  const expr* zero_pool = make_functor.make("zero", {});
+  const expr* len = zero_pool;
+  for (int i = 0; i < kListLength; ++i)
+    len = make_functor.make("suc", {len});
+  const expr* abc = make_functor.make("abc", {});
+  const expr* var_r = make_var.make(seq.next());
+  initial_goals.push(make_functor.make("make_list", {len, abc, var_r}));
+
+  EXPECT_EQ(simulation.run(), sim_termination::solved);
+  EXPECT_GT(stack.loc.locate<i_get_expr_count>().size(), expr_before);
+
+  simulation.tear_down();
+  EXPECT_EQ(stack.loc.locate<i_get_expr_count>().size(), expr_before);
+}
+
+TEST_F(SimIntegrationTest, TearDownLifecycleResetsVarSequencerWhenIncrementedInFrame) {
+  expr rule_var{expr::var{0}};
+  expr abc{expr::functor{"abc", {}}};
+  expr f_head{expr::functor{"f", {&rule_var}}};
+  expr g_body{expr::functor{"g", {&rule_var}}};
+  expr g_head{expr::functor{"g", {&abc}}};
+  database.push(rule{&f_head, {&g_body}});
+  database.push(rule{&g_head, {}});
+
+  i_var_sequencer& seq = stack.loc.locate<i_var_sequencer>();
+  i_make_var& make_var = stack.loc.locate<i_make_var>();
+  i_make_functor& make_functor = stack.loc.locate<i_make_functor>();
+
+  (void)seq.next();
+  (void)seq.next();
+  static constexpr uint32_t kExpectedAfterTeardown = 2;
+
+  EXPECT_CALL(stack.decision_generator, generate()).Times(0);
+
+  sim simulation{stack.loc, kDefaultMaxResolutions};
+  simulation.set_up();
+  const expr* var_in_frame = make_var.make(seq.next());
+  initial_goals.push(make_functor.make("f", {var_in_frame}));
+
+  EXPECT_EQ(simulation.run(), sim_termination::solved);
+  simulation.tear_down();
+
+  EXPECT_EQ(seq.next(), kExpectedAfterTeardown);
+}
+
+TEST_F(SimIntegrationTest, BaseFrameCdclLearnSurvivesLifecycleTearDown) {
+  expr goal_f{expr::functor{"f", {}}};
+  expr goal_g{expr::functor{"g", {}}};
+  expr f_head0{expr::functor{"f", {}}};
+  expr f_head1{expr::functor{"f", {}}};
+  expr g_head2{expr::functor{"g", {}}};
+  expr g_head3{expr::functor{"g", {}}};
+  initial_goals.push(&goal_f);
+  initial_goals.push(&goal_g);
+  database.push(rule{&f_head0, {}});
+  database.push(rule{&f_head1, {}});
+  database.push(rule{&g_head2, {}});
+  database.push(rule{&g_head3, {}});
+
+  i_make_initial_goal_lineage& make_initial_goal_lineage =
+      stack.loc.locate<i_make_initial_goal_lineage>();
+  i_make_resolution_lineage& make_resolution_lineage =
+      stack.loc.locate<i_make_resolution_lineage>();
+  i_learn_avoidance& learn_avoidance = stack.loc.locate<i_learn_avoidance>();
+  i_pin_resolution_lineage& pin_resolution_lineage =
+      stack.loc.locate<i_pin_resolution_lineage>();
+  i_derive_resolution_lemma& derive_resolution_lemma =
+      stack.loc.locate<i_derive_resolution_lemma>();
+
+  const goal_lineage* gl0 = make_initial_goal_lineage.make(0);
+  const goal_lineage* gl1 = make_initial_goal_lineage.make(1);
+  const resolution_lineage* rl_g0_0 =
+      make_resolution_lineage.make_resolution_lineage(gl0, rule_id{0});
+  const resolution_lineage* rl_g1_2 =
+      make_resolution_lineage.make_resolution_lineage(gl1, rule_id{2});
+  const resolution_lineage* rl_g1_3 =
+      make_resolution_lineage.make_resolution_lineage(gl1, rule_id{3});
+
+  learn_avoidance.learn(lemma{{rl_g0_0, rl_g1_2}});
+  pin_resolution_lineage.pin(rl_g0_0);
+  pin_resolution_lineage.pin(rl_g1_2);
+  pin_resolution_lineage.pin(rl_g1_3);
+
+  sim simulation{stack.loc, kDefaultMaxResolutions};
+  simulation.set_up();
+
+  EXPECT_CALL(stack.decision_generator, generate()).WillOnce(Return(rl_g0_0));
+  EXPECT_EQ(simulation.run(), sim_termination::solved);
+  EXPECT_THAT(derive_resolution_lemma.derive_resolution_lemma().get_resolutions(),
+      UnorderedElementsAre(rl_g0_0, rl_g1_3));
+  simulation.tear_down();
+
+  simulation.set_up();
+  EXPECT_CALL(stack.decision_generator, generate()).WillOnce(Return(rl_g0_0));
+  EXPECT_EQ(simulation.run(), sim_termination::solved);
+  EXPECT_THAT(derive_resolution_lemma.derive_resolution_lemma().get_resolutions(),
+      UnorderedElementsAre(rl_g0_0, rl_g1_3));
+  simulation.tear_down();
+}
+
+TEST_F(SimIntegrationTest, IdenticalSimCycleLifecycleRunsCleanAfterTearDown) {
+  expr abc{expr::functor{"abc", {}}};
+  expr _123{expr::functor{"123", {}}};
+  expr head{expr::functor{"f", {&abc, &_123}}};
+  database.push(rule{&head, {}});
+
+  i_bind_map& bind_map = stack.loc.locate<i_bind_map>();
+  i_var_sequencer& seq = stack.loc.locate<i_var_sequencer>();
+  i_make_var& make_var = stack.loc.locate<i_make_var>();
+  i_make_functor& make_functor = stack.loc.locate<i_make_functor>();
+  i_get_resolution_count& get_resolution_count =
+      stack.loc.locate<i_get_resolution_count>();
+  i_get_decision_count& get_decision_count = stack.loc.locate<i_get_decision_count>();
+
+  const uint32_t idx_a = seq.next();
+  const uint32_t idx_b = seq.next();
+  const expr* var_a = make_var.make(idx_a);
+  const expr* var_b = make_var.make(idx_b);
+  const expr* goal = make_functor.make("f", {var_a, var_b});
+  initial_goals.push(goal);
+
+  EXPECT_CALL(stack.decision_generator, generate()).Times(0);
+
+  sim simulation{stack.loc, kDefaultMaxResolutions};
+
+  simulation.set_up();
+  EXPECT_EQ(simulation.run(), sim_termination::solved);
+  const size_t res_count_1 = get_resolution_count.get_resolution_count();
+  const size_t dec_count_1 = get_decision_count.count();
+  const std::string whnf_a_1 =
+      std::get<expr::functor>(bind_map.whnf(var_a)->content).name;
+  const std::string whnf_b_1 =
+      std::get<expr::functor>(bind_map.whnf(var_b)->content).name;
+  simulation.tear_down();
+
+  simulation.set_up();
+  EXPECT_EQ(simulation.run(), sim_termination::solved);
+  EXPECT_EQ(get_resolution_count.get_resolution_count(), res_count_1);
+  EXPECT_EQ(get_decision_count.count(), dec_count_1);
+  const std::string whnf_a_2 =
+      std::get<expr::functor>(bind_map.whnf(var_a)->content).name;
+  const std::string whnf_b_2 =
+      std::get<expr::functor>(bind_map.whnf(var_b)->content).name;
+  EXPECT_EQ(whnf_a_2, whnf_a_1);
+  EXPECT_EQ(whnf_b_2, whnf_b_1);
+  simulation.tear_down();
+}
+
+// ---------------------------------------------------------------------------
+// sim stress
+// ---------------------------------------------------------------------------
+
+TEST_F(SimIntegrationTest, RunReturnsSolvedStressListOfTwentyAbcWithoutDecisions) {
+  expr rule_ignored{expr::var{0}};
+  expr rule_l{expr::var{0}};
+  expr rule_a{expr::var{1}};
+  expr rule_t{expr::var{2}};
+  expr zero{expr::functor{"zero", {}}};
+  expr nil{expr::functor{"nil", {}}};
+  expr head0{expr::functor{"make_list", {&zero, &rule_ignored, &nil}}};
+  expr suc_l{expr::functor{"suc", {&rule_l}}};
+  expr cons_at{expr::functor{"cons", {&rule_a, &rule_t}}};
+  expr head1{expr::functor{"make_list", {&suc_l, &rule_a, &cons_at}}};
+  expr body1{expr::functor{"make_list", {&rule_l, &rule_a, &rule_t}}};
+  database.push(rule{&head0, {}});
+  database.push(rule{&head1, {&body1}});
+
+  i_bind_map& bind_map = stack.loc.locate<i_bind_map>();
+  i_var_sequencer& seq = stack.loc.locate<i_var_sequencer>();
+  i_make_var& make_var = stack.loc.locate<i_make_var>();
+  i_make_functor& make_functor = stack.loc.locate<i_make_functor>();
+
+  static constexpr size_t kMaxResolutions = 64;
+  static constexpr int kListLength = 20;
+  EXPECT_CALL(stack.decision_generator, generate()).Times(0);
+
+  sim simulation{stack.loc, kMaxResolutions};
+  simulation.set_up();
+  const expr* zero_pool = make_functor.make("zero", {});
+  const expr* len = make_suc_n(make_functor, zero_pool, kListLength);
+  const expr* abc = make_functor.make("abc", {});
+  const expr* var_r = make_var.make(seq.next());
+  initial_goals.push(make_functor.make("make_list", {len, abc, var_r}));
+
+  EXPECT_EQ(simulation.run(), sim_termination::solved);
+
+  const expr* tail = bind_map.whnf(var_r);
+  for (int i = 0; i < kListLength; ++i) {
+    const expr::functor& cell = std::get<expr::functor>(tail->content);
+    ASSERT_EQ(cell.name, "cons");
+    ASSERT_EQ(cell.args.size(), 2u);
+    const expr::functor& head_cell =
+        std::get<expr::functor>(bind_map.whnf(cell.args[0])->content);
+    EXPECT_EQ(head_cell.name, "abc");
+    EXPECT_TRUE(head_cell.args.empty());
+    tail = bind_map.whnf(cell.args[1]);
+  }
+  const expr::functor& nil_tail = std::get<expr::functor>(bind_map.whnf(tail)->content);
+  EXPECT_EQ(nil_tail.name, "nil");
+  EXPECT_TRUE(nil_tail.args.empty());
+  simulation.tear_down();
+}
+
+TEST_F(SimIntegrationTest, RunReturnsSolvedStressLinearChainClauseDepthTwenty) {
+  static constexpr size_t kChainDepth = 20;
+  static constexpr size_t kMaxResolutions = 64;
+
+  expr ground{expr::functor{"abc", {}}};
+  std::vector<expr> storage;
+  chain_clause_db(database, storage, "chain", kChainDepth, &ground);
+
+  i_get_resolution_count& get_resolution_count =
+      stack.loc.locate<i_get_resolution_count>();
+
+  EXPECT_CALL(stack.decision_generator, generate()).Times(0);
+
+  expr goal{expr::functor{"chain0", {&ground}}};
+  initial_goals.push(&goal);
+
+  sim simulation{stack.loc, kMaxResolutions};
+  simulation.set_up();
+  EXPECT_EQ(simulation.run(), sim_termination::solved);
+  EXPECT_GE(get_resolution_count.get_resolution_count(), kChainDepth);
+  EXPECT_LE(get_resolution_count.get_resolution_count(), kMaxResolutions);
+  simulation.tear_down();
+}
+
+TEST_F(SimIntegrationTest, RunReturnsSolvedStressEvenOddPeanoGoal) {
+  expr rule_x{expr::var{0}};
+  expr zero{expr::functor{"zero", {}}};
+  expr suc_x{expr::functor{"suc", {&rule_x}}};
+  expr even_head0{expr::functor{"even", {&zero}}};
+  expr odd_head{expr::functor{"odd", {&suc_x}}};
+  expr even_head1{expr::functor{"even", {&suc_x}}};
+  expr odd_body{expr::functor{"odd", {&rule_x}}};
+  expr even_body{expr::functor{"even", {&rule_x}}};
+  database.push(rule{&even_head0, {}});
+  database.push(rule{&odd_head, {&even_body}});
+  database.push(rule{&even_head1, {&odd_body}});
+
+  i_make_functor& make_functor = stack.loc.locate<i_make_functor>();
+
+  static constexpr size_t kMaxResolutions = 128;
+  static constexpr int kSucDepth = 12;
+  EXPECT_CALL(stack.decision_generator, generate()).Times(0);
+
+  sim simulation{stack.loc, kMaxResolutions};
+  simulation.set_up();
+  const expr* zero_pool = make_functor.make("zero", {});
+  const expr* goal_even = make_functor.make("even", {make_suc_n(make_functor, zero_pool, kSucDepth)});
+  initial_goals.push(goal_even);
+
+  EXPECT_EQ(simulation.run(), sim_termination::solved);
+  simulation.tear_down();
+}
+
+TEST_F(SimIntegrationTest, RunReturnsSolvedStressDeepNestedFunctorTower) {
+  static constexpr int kTowerDepth = 8;
+  static constexpr size_t kMaxResolutions = 64;
+  expr zero{expr::functor{"zero", {}}};
+  expr rule_x{expr::var{0}};
+  expr suc_wrap{expr::functor{"wrap", {&rule_x}}};
+  expr unwrap_head{expr::functor{"unwrap", {&suc_wrap}}};
+  expr unwrap_body{expr::functor{"unwrap", {&rule_x}}};
+  expr unwrap_zero{expr::functor{"unwrap", {&zero}}};
+  database.push(rule{&unwrap_head, {&unwrap_body}});
+  database.push(rule{&unwrap_zero, {}});
+
+  i_make_functor& make_functor = stack.loc.locate<i_make_functor>();
+  i_get_resolution_count& get_resolution_count =
+      stack.loc.locate<i_get_resolution_count>();
+
+  EXPECT_CALL(stack.decision_generator, generate()).Times(0);
+
+  sim simulation{stack.loc, kMaxResolutions};
+  simulation.set_up();
+  const expr* inner = &zero;
+  for (int i = 0; i < kTowerDepth; ++i)
+    inner = make_functor.make("wrap", {inner});
+  const expr* goal_expr = make_functor.make("unwrap", {inner});
+  initial_goals.push(goal_expr);
+
+  EXPECT_EQ(simulation.run(), sim_termination::solved);
+  EXPECT_GE(get_resolution_count.get_resolution_count(), static_cast<size_t>(kTowerDepth));
+  simulation.tear_down();
+}
+
+TEST_F(SimIntegrationTest, RunReturnsSolvedStressLongSharedVarChainWithoutDecisions) {
+  static constexpr int kChainGoals = 6;
+  expr t0{expr::functor{"t0", {}}};
+  expr t1{expr::functor{"t1", {}}};
+  expr t2{expr::functor{"t2", {}}};
+  expr t3{expr::functor{"t3", {}}};
+  expr t4{expr::functor{"t4", {}}};
+  expr t5{expr::functor{"t5", {}}};
+  expr t6{expr::functor{"t6", {}}};
+  expr g0_head{expr::functor{"g0", {&t0, &t1}}};
+  expr g1_head{expr::functor{"g1", {&t1, &t2}}};
+  expr g2_head{expr::functor{"g2", {&t2, &t3}}};
+  expr g3_head{expr::functor{"g3", {&t3, &t4}}};
+  expr g4_head{expr::functor{"g4", {&t4, &t5}}};
+  expr g5_head{expr::functor{"g5", {&t5, &t6}}};
+  database.push(rule{&g0_head, {}});
+  database.push(rule{&g1_head, {}});
+  database.push(rule{&g2_head, {}});
+  database.push(rule{&g3_head, {}});
+  database.push(rule{&g4_head, {}});
+  database.push(rule{&g5_head, {}});
+
+  i_bind_map& bind_map = stack.loc.locate<i_bind_map>();
+  i_var_sequencer& seq = stack.loc.locate<i_var_sequencer>();
+  i_make_var& make_var = stack.loc.locate<i_make_var>();
+  i_make_functor& make_functor = stack.loc.locate<i_make_functor>();
+
+  EXPECT_CALL(stack.decision_generator, generate()).Times(0);
+
+  sim simulation{stack.loc, kDefaultMaxResolutions};
+  simulation.set_up();
+  std::vector<const expr*> vars;
+  for (int i = 0; i <= kChainGoals; ++i)
+    vars.push_back(make_var.make(seq.next()));
+  for (int i = 0; i < kChainGoals; ++i)
+    initial_goals.push(make_functor.make(
+        ("g" + std::to_string(i)).c_str(), {vars[i], vars[i + 1]}));
+
+  EXPECT_EQ(simulation.run(), sim_termination::solved);
+  const expr::functor& whnf_end =
+      std::get<expr::functor>(bind_map.whnf(vars[kChainGoals])->content);
+  EXPECT_EQ(whnf_end.name, "t6");
+  EXPECT_TRUE(whnf_end.args.empty());
+  simulation.tear_down();
+}
+
+TEST_F(SimIntegrationTest, RunReturnsSolvedStressDiamondSharedVarWithoutDecisions) {
+  expr abc{expr::functor{"abc", {}}};
+  expr _123{expr::functor{"123", {}}};
+  expr xyz{expr::functor{"xyz", {}}};
+  expr f_head{expr::functor{"f", {&abc, &xyz}}};
+  expr g_head{expr::functor{"g", {&abc, &_123}}};
+  expr h_head{expr::functor{"h", {&_123, &xyz}}};
+  database.push(rule{&f_head, {}});
+  database.push(rule{&g_head, {}});
+  database.push(rule{&h_head, {}});
+
+  i_bind_map& bind_map = stack.loc.locate<i_bind_map>();
+  i_var_sequencer& seq = stack.loc.locate<i_var_sequencer>();
+  i_make_var& make_var = stack.loc.locate<i_make_var>();
+  i_make_functor& make_functor = stack.loc.locate<i_make_functor>();
+
+  EXPECT_CALL(stack.decision_generator, generate()).Times(0);
+
+  sim simulation{stack.loc, kDefaultMaxResolutions};
+  simulation.set_up();
+  const expr* var_a = make_var.make(seq.next());
+  const expr* var_b = make_var.make(seq.next());
+  const expr* var_c = make_var.make(seq.next());
+  initial_goals.push(make_functor.make("f", {var_a, var_c}));
+  initial_goals.push(make_functor.make("g", {var_a, var_b}));
+  initial_goals.push(make_functor.make("h", {var_b, var_c}));
+
+  EXPECT_EQ(simulation.run(), sim_termination::solved);
+  const expr::functor& whnf_a = std::get<expr::functor>(bind_map.whnf(var_a)->content);
+  const expr::functor& whnf_c = std::get<expr::functor>(bind_map.whnf(var_c)->content);
+  EXPECT_EQ(whnf_a.name, "abc");
+  EXPECT_EQ(whnf_c.name, "xyz");
+  simulation.tear_down();
+}
+
+TEST_F(SimIntegrationTest, RunReturnsSolvedStressWideClauseTreeWithoutDecisions) {
+  // Base tree: f:-g,h; g:-i,j; h:-i,j; facts i,j. Wide: extra clause k:-i,j,l; l. fact.
+  static constexpr size_t kMinResolutions = 7;
+
+  expr goal_f{expr::functor{"f", {}}};
+  expr f_head{expr::functor{"f", {}}};
+  expr g_body{expr::functor{"g", {}}};
+  expr h_body{expr::functor{"h", {}}};
+  expr g_head{expr::functor{"g", {}}};
+  expr h_head{expr::functor{"h", {}}};
+  expr k_head{expr::functor{"k", {}}};
+  expr l_body{expr::functor{"l", {}}};
+  expr i_body{expr::functor{"i", {}}};
+  expr j_body{expr::functor{"j", {}}};
+  expr i_head{expr::functor{"i", {}}};
+  expr j_head{expr::functor{"j", {}}};
+  expr l_head{expr::functor{"l", {}}};
+  initial_goals.push(&goal_f);
+  database.push(rule{&f_head, {&g_body, &h_body}});
+  database.push(rule{&g_head, {&i_body, &j_body}});
+  database.push(rule{&h_head, {&i_body, &j_body}});
+  database.push(rule{&k_head, {&i_body, &j_body, &l_body}});
+  database.push(rule{&i_head, {}});
+  database.push(rule{&j_head, {}});
+  database.push(rule{&l_head, {}});
+
+  i_get_resolution_count& get_resolution_count =
+      stack.loc.locate<i_get_resolution_count>();
+
+  EXPECT_CALL(stack.decision_generator, generate()).Times(0);
+
+  sim simulation{stack.loc, kDefaultMaxResolutions};
+  simulation.set_up();
+  EXPECT_EQ(simulation.run(), sim_termination::solved);
+  EXPECT_GE(get_resolution_count.get_resolution_count(), kMinResolutions);
+  simulation.tear_down();
+}
+
+TEST_F(SimIntegrationTest, RunReturnsSolvedStressMultipleAvoidancesSeveralDecisions) {
+  // Four duplicate-rule goals; four scripted decisions. Outcome contract only — not call order.
+  expr goal_f{expr::functor{"f", {}}};
+  expr goal_g{expr::functor{"g", {}}};
+  expr goal_h{expr::functor{"h", {}}};
+  expr goal_k{expr::functor{"k", {}}};
+  expr f0{expr::functor{"f", {}}};
+  expr f1{expr::functor{"f", {}}};
+  expr g0{expr::functor{"g", {}}};
+  expr g1{expr::functor{"g", {}}};
+  expr h0{expr::functor{"h", {}}};
+  expr h1{expr::functor{"h", {}}};
+  expr k0{expr::functor{"k", {}}};
+  expr k1{expr::functor{"k", {}}};
+  initial_goals.push(&goal_f);
+  initial_goals.push(&goal_g);
+  initial_goals.push(&goal_h);
+  initial_goals.push(&goal_k);
+  database.push(rule{&f0, {}});
+  database.push(rule{&f1, {}});
+  database.push(rule{&g0, {}});
+  database.push(rule{&g1, {}});
+  database.push(rule{&h0, {}});
+  database.push(rule{&h1, {}});
+  database.push(rule{&k0, {}});
+  database.push(rule{&k1, {}});
+
+  i_make_initial_goal_lineage& make_initial_goal_lineage =
+      stack.loc.locate<i_make_initial_goal_lineage>();
+  i_make_resolution_lineage& make_resolution_lineage =
+      stack.loc.locate<i_make_resolution_lineage>();
+  i_get_decision_count& get_decision_count = stack.loc.locate<i_get_decision_count>();
+
+  const goal_lineage* gl_f = make_initial_goal_lineage.make(0);
+  const goal_lineage* gl_g = make_initial_goal_lineage.make(1);
+  const goal_lineage* gl_h = make_initial_goal_lineage.make(2);
+  const goal_lineage* gl_k = make_initial_goal_lineage.make(3);
+  const resolution_lineage* rl_f_0 =
+      make_resolution_lineage.make_resolution_lineage(gl_f, rule_id{0});
+  const resolution_lineage* rl_g_1 =
+      make_resolution_lineage.make_resolution_lineage(gl_g, rule_id{3});
+  const resolution_lineage* rl_h_0 =
+      make_resolution_lineage.make_resolution_lineage(gl_h, rule_id{4});
+  const resolution_lineage* rl_k_1 =
+      make_resolution_lineage.make_resolution_lineage(gl_k, rule_id{7});
+
+  static constexpr size_t kMaxResolutions = 32;
+  static constexpr size_t kExpectedDecisions = 4;
+
+  EXPECT_CALL(stack.decision_generator, generate())
+      .WillOnce(Return(rl_f_0))
+      .WillOnce(Return(rl_g_1))
+      .WillOnce(Return(rl_h_0))
+      .WillOnce(Return(rl_k_1));
+
+  sim simulation{stack.loc, kMaxResolutions};
+  simulation.set_up();
+  EXPECT_EQ(simulation.run(), sim_termination::solved);
+  EXPECT_EQ(get_decision_count.count(), kExpectedDecisions);
+  simulation.tear_down();
+}
+
+TEST_F(SimIntegrationTest, RunReturnsSolvedStressCdclMhuManyGroundHeadsOnSharedVar) {
+  expr abc{expr::functor{"abc", {}}};
+  expr def{expr::functor{"def", {}}};
+  expr ghi{expr::functor{"ghi", {}}};
+  expr jkl{expr::functor{"jkl", {}}};
+  expr mno{expr::functor{"mno", {}}};
+  expr pqr{expr::functor{"pqr", {}}};
+  expr stu{expr::functor{"stu", {}}};
+  expr _xyz{expr::functor{"xyz", {}}};
+  expr f_head0{expr::functor{"f", {}}};
+  expr f_head1{expr::functor{"f", {}}};
+  expr g1{expr::functor{"g", {&abc, &_xyz, &pqr}}};
+  expr g2{expr::functor{"g", {&def, &_xyz, &pqr}}};
+  expr g3{expr::functor{"g", {&ghi, &_xyz, &pqr}}};
+  expr g4{expr::functor{"g", {&jkl, &_xyz, &pqr}}};
+  expr g5{expr::functor{"g", {&mno, &_xyz, &pqr}}};
+  expr g_bad{expr::functor{"g", {&ghi, &jkl, &stu}}};
+  database.push(rule{&f_head0, {}});
+  database.push(rule{&f_head1, {}});
+  database.push(rule{&g1, {}});
+  database.push(rule{&g2, {}});
+  database.push(rule{&g3, {}});
+  database.push(rule{&g4, {}});
+  database.push(rule{&g5, {}});
+  database.push(rule{&g_bad, {}});
+
+  i_make_initial_goal_lineage& make_initial_goal_lineage =
+      stack.loc.locate<i_make_initial_goal_lineage>();
+  i_make_resolution_lineage& make_resolution_lineage =
+      stack.loc.locate<i_make_resolution_lineage>();
+  i_learn_avoidance& learn_avoidance = stack.loc.locate<i_learn_avoidance>();
+  i_bind_map& bind_map = stack.loc.locate<i_bind_map>();
+  i_var_sequencer& seq = stack.loc.locate<i_var_sequencer>();
+  i_make_var& make_var = stack.loc.locate<i_make_var>();
+  i_make_functor& make_functor = stack.loc.locate<i_make_functor>();
+
+  const goal_lineage* gl_f = make_initial_goal_lineage.make(0);
+  const goal_lineage* gl_g = make_initial_goal_lineage.make(1);
+  const resolution_lineage* rl_f_0 =
+      make_resolution_lineage.make_resolution_lineage(gl_f, rule_id{0});
+  const resolution_lineage* rl_g_abc =
+      make_resolution_lineage.make_resolution_lineage(gl_g, rule_id{2});
+  const resolution_lineage* rl_g_def =
+      make_resolution_lineage.make_resolution_lineage(gl_g, rule_id{3});
+
+  learn_avoidance.learn(lemma{{rl_f_0, rl_g_abc}});
+
+  EXPECT_CALL(stack.decision_generator, generate())
+      .WillOnce(Return(rl_f_0))
+      .WillOnce(Return(rl_g_def));
+
+  sim simulation{stack.loc, kDefaultMaxResolutions};
+  simulation.set_up();
+  const expr* var_a = make_var.make(seq.next());
+  const expr* var_b = make_var.make(seq.next());
+  const expr* var_c = make_var.make(seq.next());
+  const expr* xyz = make_functor.make("xyz", {});
+  initial_goals.push(make_functor.make("f", {}));
+  initial_goals.push(make_functor.make("g", {var_a, var_b, var_c}));
+
+  EXPECT_EQ(simulation.run(), sim_termination::solved);
+  const expr::functor& whnf_a = std::get<expr::functor>(bind_map.whnf(var_a)->content);
+  const expr::functor& whnf_b = std::get<expr::functor>(bind_map.whnf(var_b)->content);
+  const expr::functor& whnf_c = std::get<expr::functor>(bind_map.whnf(var_c)->content);
+  EXPECT_EQ(whnf_b.name, "xyz");
+  EXPECT_EQ(whnf_c.name, "pqr");
+  EXPECT_EQ(whnf_a.name, "def");
+  (void)xyz;
+  simulation.tear_down();
+}
+
+TEST_F(SimIntegrationTest, RunReturnsDepthExceededStressOnDeepLinearChainWithinBudget) {
+  static constexpr size_t kMaxResolutions = 8;
+  static constexpr size_t kChainDepth = 20;
+
+  expr ground{expr::functor{"abc", {}}};
+  std::vector<expr> storage;
+  chain_clause_db(database, storage, "chain", kChainDepth, &ground);
+
+  expr goal{expr::functor{"chain0", {&ground}}};
+  initial_goals.push(&goal);
+
+  EXPECT_CALL(stack.decision_generator, generate()).Times(0);
+
+  sim simulation{stack.loc, kMaxResolutions};
+  simulation.set_up();
+  EXPECT_EQ(simulation.run(), sim_termination::depth_exceeded);
+  EXPECT_EQ(stack.loc.locate<i_get_resolution_count>().get_resolution_count(), kMaxResolutions);
+  simulation.tear_down();
 }
