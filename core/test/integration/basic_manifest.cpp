@@ -70,15 +70,20 @@ struct SolutionSnapshot {
 SolutionSnapshot snapshot_at_yield(
     basic_manifest& manifest,
     const std::vector<std::pair<const expr*, uint32_t>>& tracked_vars = {}) {
+        
     SolutionSnapshot snap;
+    
     const lemma dl = manifest.decision_memory_.derive();
+    
     for (const resolution_lineage* rl : dl.get_resolutions())
         snap.decision_rule_ids.insert(rl->idx);
+        
     for (const auto& [var, idx] : tracked_vars) {
         const expr* whnf = manifest.bind_map_.whnf(var);
         if (std::holds_alternative<expr::functor>(whnf->content))
             snap.var_bindings[idx] = std::get<expr::functor>(whnf->content).name;
     }
+    
     return snap;
 }
 
@@ -95,24 +100,35 @@ TickResult run_one_tick(
     basic_manifest& manifest,
     coroutine<sim_termination, void>& sm,
     const std::vector<std::pair<const expr*, uint32_t>>& tracked_vars = {}) {
+        
     TickResult result;
+    
     sm.resume();
+    
     if (!sm.has_yield())
         return result;
+        
     result.termination = sm.consume_yield();
+    
     if (result.termination == sim_termination::solved)
         result.snapshot = snapshot_at_yield(manifest, tracked_vars);
+        
     result.resolution_lemma_at_yield =
         manifest.resolution_memory_.derive_resolution_lemma().get_resolutions();
+        
     sm.resume();
+    
     result.decision_count_after = manifest.decision_memory_.count();
+    
     result.resolution_lemma_empty =
         manifest.resolution_memory_.derive_resolution_lemma().get_resolutions().empty();
+        
     if (!tracked_vars.empty()) {
         const expr* whnf = manifest.bind_map_.whnf(tracked_vars.front().first);
         result.bind_map_cleared =
             std::holds_alternative<expr::var>(whnf->content);
     }
+
     return result;
 }
 
