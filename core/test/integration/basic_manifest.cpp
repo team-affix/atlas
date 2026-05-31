@@ -1850,3 +1850,1192 @@ TEST_F(BasicManifestIntegrationTest, SolverEnumeratesManySharedVarGroundHeads) {
         EXPECT_EQ(saw_mno, 2u);
     }
 }
+
+// Tier R — ridge CHC ports (old-main-test.cpp test_ridge() tests 5–19)
+
+TEST_F(BasicManifestIntegrationTest, RidgeRefutesAfterCdclOnUnsatClauseBranches) {
+    /*
+     * Intent: multi-tick runtime CDCL refutation on unsatisfiable a :- b / a :- c (NOT empty-DB refutation).
+     * initial goals: a.
+     * rules:
+     *   0: a :- b.   1: a :- c.
+     */
+    expr b{expr::functor{"b", {}}};
+    expr c{expr::functor{"c", {}}};
+    expr a_head0{expr::functor{"a", {}}};
+    expr a_head1{expr::functor{"a", {}}};
+    database.push(rule{&a_head0, {&b}});
+    database.push(rule{&a_head1, {&c}});
+
+    expr goal{expr::functor{"a", {}}};
+    initial_goals.push(&goal);
+
+    basic_manifest manifest{database, initial_goals, kMaxResolutions, kSeed};
+    auto sm = manifest.solver_.solve();
+    size_t yields = 0;
+    bool saw_conflicted = false;
+    while (true) {
+        sm.resume();
+        if (!sm.has_yield())
+            break;
+        const auto term = sm.consume_yield();
+        ++yields;
+        if (term == sim_termination::solved)
+            FAIL() << "unexpected solved termination";
+        if (term == sim_termination::conflicted)
+            saw_conflicted = true;
+    }
+    ASSERT_GE(yields, 2u);
+    EXPECT_TRUE(saw_conflicted);
+}
+
+TEST_F(BasicManifestIntegrationTest, RidgeFindsUniqueSharedVarConjunctionThenRefutes) {
+    /*
+     * Intent: is_a(X) ∧ is_b(X) has unique binding X=2, then refutes.
+     * initial goals: is_a(X).  is_b(X).
+     * rules:
+     *   0: is_a(1).   1: is_a(2).   2: is_b(2).   3: is_b(3).
+     */
+    expr one{expr::functor{"1", {}}};
+    expr two{expr::functor{"2", {}}};
+    expr three{expr::functor{"3", {}}};
+    expr is_a1{expr::functor{"is_a", {&one}}};
+    expr is_a2{expr::functor{"is_a", {&two}}};
+    expr is_b2{expr::functor{"is_b", {&two}}};
+    expr is_b3{expr::functor{"is_b", {&three}}};
+    database.push(rule{&is_a1, {}});
+    database.push(rule{&is_a2, {}});
+    database.push(rule{&is_b2, {}});
+    database.push(rule{&is_b3, {}});
+
+    basic_manifest manifest{database, initial_goals, kMaxResolutions, kSeed};
+    normalizer normalizer{manifest.loc_};
+    const uint32_t idx_x = manifest.var_sequencer_.next();
+    const expr* var_x = manifest.expr_pool_.make(idx_x);
+    initial_goals.push(manifest.expr_pool_.make("is_a", {var_x}));
+    initial_goals.push(manifest.expr_pool_.make("is_b", {var_x}));
+
+    const expr* two_saved = saved_expr_pool_.import(&two);
+    next_until_refuted(
+        manifest.solver_,
+        {{two_saved}},
+        [&]() -> solution {
+            return {saved_expr_pool_.import(
+                normalizer.normalize(manifest.expr_pool_.make(idx_x)))};
+        });
+}
+
+TEST_F(BasicManifestIntegrationTest, RidgeEnumeratesTwoParentBindingsForAlice) {
+    /*
+     * Intent: parent(X, alice) enumerates bob and carol; parent(dave,bob) is head-elim junk.
+     * initial goals: parent(X, alice).
+     * rules:
+     *   0: parent(bob, alice).   1: parent(carol, alice).   2: parent(dave, bob).
+     */
+    expr bob{expr::functor{"bob", {}}};
+    expr carol{expr::functor{"carol", {}}};
+    expr alice{expr::functor{"alice", {}}};
+    expr dave{expr::functor{"dave", {}}};
+    expr parent_bob_alice{expr::functor{"parent", {&bob, &alice}}};
+    expr parent_carol_alice{expr::functor{"parent", {&carol, &alice}}};
+    expr parent_dave_bob{expr::functor{"parent", {&dave, &bob}}};
+    database.push(rule{&parent_bob_alice, {}});
+    database.push(rule{&parent_carol_alice, {}});
+    database.push(rule{&parent_dave_bob, {}});
+
+    basic_manifest manifest{database, initial_goals, kMaxResolutions, kSeed};
+    normalizer normalizer{manifest.loc_};
+    const uint32_t idx_x = manifest.var_sequencer_.next();
+    const expr* var_x = manifest.expr_pool_.make(idx_x);
+    const expr* alice_goal = manifest.expr_pool_.make("alice", {});
+    initial_goals.push(manifest.expr_pool_.make("parent", {var_x, alice_goal}));
+
+    const expr* bob_saved = saved_expr_pool_.import(&bob);
+    const expr* carol_saved = saved_expr_pool_.import(&carol);
+    next_until_refuted(
+        manifest.solver_,
+        {{bob_saved}, {carol_saved}},
+        [&]() -> solution {
+            return {saved_expr_pool_.import(
+                normalizer.normalize(manifest.expr_pool_.make(idx_x)))};
+        });
+}
+
+TEST_F(BasicManifestIntegrationTest, RidgeEnumeratesPeanoLessThanSeven) {
+    /*
+     * Intent: lt(N, suc^7(zero)) — seven Peano solutions N ∈ {0..6}.
+     * Ported from old-main-test.cpp test_ridge() test 14.
+     * initial goals: lt(N, seven).
+     * rules:
+     *   0: nat(zero).   1: nat(suc(X)) :- nat(X).
+     *   2: lt(zero, suc(X)) :- nat(X).   3: lt(suc(X), suc(Y)) :- lt(X, Y).
+     */
+    static constexpr size_t kPeanoBudget = 128;
+
+    expr zero{expr::functor{"zero", {}}};
+    expr nat_zero_h{expr::functor{"nat", {&zero}}};
+    database.push(rule{&nat_zero_h, {}});
+
+    expr rv1{expr::var{0}};
+    expr suc_rv1{expr::functor{"suc", {&rv1}}};
+    expr nat_suc_rv1{expr::functor{"nat", {&suc_rv1}}};
+    expr nat_rv1{expr::functor{"nat", {&rv1}}};
+    database.push(rule{&nat_suc_rv1, {&nat_rv1}});
+
+    expr rv2{expr::var{0}};
+    expr suc_rv2{expr::functor{"suc", {&rv2}}};
+    expr lt_zero_suc{expr::functor{"lt", {&zero, &suc_rv2}}};
+    expr nat_rv2{expr::functor{"nat", {&rv2}}};
+    database.push(rule{&lt_zero_suc, {&nat_rv2}});
+
+    expr rv3{expr::var{0}};
+    expr rv4{expr::var{1}};
+    expr suc_rv3{expr::functor{"suc", {&rv3}}};
+    expr suc_rv4{expr::functor{"suc", {&rv4}}};
+    expr lt_suc_suc{expr::functor{"lt", {&suc_rv3, &suc_rv4}}};
+    expr lt_rv3_rv4{expr::functor{"lt", {&rv3, &rv4}}};
+    database.push(rule{&lt_suc_suc, {&lt_rv3_rv4}});
+
+    std::set<solution> expected;
+    for (int n = 0; n < 7; ++n) {
+        const expr* p = saved_expr_pool_.make("zero", {});
+        for (int i = 0; i < n; ++i)
+            p = saved_expr_pool_.make("suc", {p});
+        expected.insert({p});
+    }
+
+    basic_manifest manifest{database, initial_goals, kPeanoBudget, kSeed};
+    normalizer normalizer{manifest.loc_};
+    const uint32_t idx_n = manifest.var_sequencer_.next();
+    const expr* var_n = manifest.expr_pool_.make(idx_n);
+    const expr* seven = manifest.expr_pool_.make("zero", {});
+    for (int i = 0; i < 7; ++i)
+        seven = manifest.expr_pool_.make("suc", {seven});
+    initial_goals.push(manifest.expr_pool_.make("lt", {var_n, seven}));
+
+    auto sm = manifest.solver_.solve();
+    std::set<solution> remaining = expected;
+    std::set<solution> visited;
+    while (!remaining.empty()) {
+        sm.resume();
+        ASSERT_TRUE(sm.has_yield()) << "solver stopped before all expected solutions found";
+        const auto term = sm.consume_yield();
+        ASSERT_NE(term, sim_termination::depth_exceeded) << "raise kPeanoBudget";
+        if (term != sim_termination::solved)
+            continue;
+        const solution s = {
+            saved_expr_pool_.import(normalizer.normalize(manifest.expr_pool_.make(idx_n)))};
+        if (visited.count(s))
+            continue;
+        visited.insert(s);
+        auto it = remaining.find(s);
+        ASSERT_NE(it, remaining.end()) << "unexpected solution";
+        remaining.erase(it);
+    }
+}
+
+TEST_F(BasicManifestIntegrationTest, RidgeEnumeratesSatPAndQOrR) {
+    /*
+     * Intent: P ∧ (Q ∨ R) — three bool assignments (calibration probe for multi-var relational CHC).
+     * Ported from old-main-test.cpp test_ridge() test 11.
+     * initial goals: bool(P). bool(Q). bool(R). or(Q,R,QR). and(P,QR,true).
+     * rules: bool(true/false); relational or/and with bool(X) bodies.
+     */
+    expr true_atom{expr::functor{"true", {}}};
+    expr false_atom{expr::functor{"false", {}}};
+    expr bool_true{expr::functor{"bool", {&true_atom}}};
+    expr bool_false{expr::functor{"bool", {&false_atom}}};
+    database.push(rule{&bool_true, {}});
+    database.push(rule{&bool_false, {}});
+
+    expr or_rv{expr::var{0}};
+    expr or_true_x_true{expr::functor{"or", {&true_atom, &or_rv, &true_atom}}};
+    expr or_bool_body{expr::functor{"bool", {&or_rv}}};
+    database.push(rule{&or_true_x_true, {&or_bool_body}});
+
+    expr or_rv2{expr::var{0}};
+    expr or_false_x_x{expr::functor{"or", {&false_atom, &or_rv2, &or_rv2}}};
+    expr or_bool_body2{expr::functor{"bool", {&or_rv2}}};
+    database.push(rule{&or_false_x_x, {&or_bool_body2}});
+
+    expr and_rv{expr::var{0}};
+    expr and_true_x_x{expr::functor{"and", {&true_atom, &and_rv, &and_rv}}};
+    expr and_bool_body{expr::functor{"bool", {&and_rv}}};
+    database.push(rule{&and_true_x_x, {&and_bool_body}});
+
+    expr and_rv2{expr::var{0}};
+    expr and_false_x_false{expr::functor{"and", {&false_atom, &and_rv2, &false_atom}}};
+    expr and_bool_body2{expr::functor{"bool", {&and_rv2}}};
+    database.push(rule{&and_false_x_false, {&and_bool_body2}});
+
+    basic_manifest manifest{database, initial_goals, kMaxResolutions, kSeed};
+    normalizer normalizer{manifest.loc_};
+    const uint32_t idx_p = manifest.var_sequencer_.next();
+    const uint32_t idx_q = manifest.var_sequencer_.next();
+    const uint32_t idx_r = manifest.var_sequencer_.next();
+    const uint32_t idx_qr = manifest.var_sequencer_.next();
+    const expr* var_p = manifest.expr_pool_.make(idx_p);
+    const expr* var_q = manifest.expr_pool_.make(idx_q);
+    const expr* var_r = manifest.expr_pool_.make(idx_r);
+    const expr* var_qr = manifest.expr_pool_.make(idx_qr);
+    const expr* true_goal = manifest.expr_pool_.make("true", {});
+    initial_goals.push(manifest.expr_pool_.make("bool", {var_p}));
+    initial_goals.push(manifest.expr_pool_.make("bool", {var_q}));
+    initial_goals.push(manifest.expr_pool_.make("bool", {var_r}));
+    initial_goals.push(manifest.expr_pool_.make("or", {var_q, var_r, var_qr}));
+    initial_goals.push(manifest.expr_pool_.make("and", {var_p, var_qr, true_goal}));
+
+    const expr* t_saved = saved_expr_pool_.import(&true_atom);
+    const expr* f_saved = saved_expr_pool_.import(&false_atom);
+    // Raw solved ticks may exceed 3 when resolution paths duplicate bindings.
+    next_until_refuted(
+        manifest.solver_,
+        {{t_saved, t_saved, t_saved}, {t_saved, t_saved, f_saved}, {t_saved, f_saved, t_saved}},
+        [&]() -> solution {
+            return {
+                saved_expr_pool_.import(normalizer.normalize(manifest.expr_pool_.make(idx_p))),
+                saved_expr_pool_.import(normalizer.normalize(manifest.expr_pool_.make(idx_q))),
+                saved_expr_pool_.import(normalizer.normalize(manifest.expr_pool_.make(idx_r))),
+            };
+        });
+}
+
+TEST_F(BasicManifestIntegrationTest, RidgeEnumeratesTwoSatAssignmentsForImpliesQ) {
+    /*
+     * Intent: (P∨Q)∧(¬P∨Q) — both solutions have Q=true; P differs.
+     * Ported from old-main-test.cpp test_ridge() test 8.
+     * initial goals: bool(P). bool(Q). or(P,Q,true). not(P,NP). or(NP,Q,true).
+     * rules: 8 bool/or/not ground facts.
+     */
+    expr true_atom{expr::functor{"true", {}}};
+    expr false_atom{expr::functor{"false", {}}};
+    expr bool_true{expr::functor{"bool", {&true_atom}}};
+    expr bool_false{expr::functor{"bool", {&false_atom}}};
+    expr not_true_false{expr::functor{"not", {&true_atom, &false_atom}}};
+    expr not_false_true{expr::functor{"not", {&false_atom, &true_atom}}};
+    expr or_t_t_t{expr::functor{"or", {&true_atom, &true_atom, &true_atom}}};
+    expr or_t_f_t{expr::functor{"or", {&true_atom, &false_atom, &true_atom}}};
+    expr or_f_t_t{expr::functor{"or", {&false_atom, &true_atom, &true_atom}}};
+    expr or_f_f_f{expr::functor{"or", {&false_atom, &false_atom, &false_atom}}};
+    database.push(rule{&bool_true, {}});
+    database.push(rule{&bool_false, {}});
+    database.push(rule{&not_true_false, {}});
+    database.push(rule{&not_false_true, {}});
+    database.push(rule{&or_t_t_t, {}});
+    database.push(rule{&or_t_f_t, {}});
+    database.push(rule{&or_f_t_t, {}});
+    database.push(rule{&or_f_f_f, {}});
+
+    basic_manifest manifest{database, initial_goals, kMaxResolutions, kSeed};
+    normalizer normalizer{manifest.loc_};
+    const uint32_t idx_p = manifest.var_sequencer_.next();
+    const uint32_t idx_q = manifest.var_sequencer_.next();
+    const uint32_t idx_np = manifest.var_sequencer_.next();
+    const expr* var_p = manifest.expr_pool_.make(idx_p);
+    const expr* var_q = manifest.expr_pool_.make(idx_q);
+    const expr* var_np = manifest.expr_pool_.make(idx_np);
+    const expr* true_goal = manifest.expr_pool_.make("true", {});
+    initial_goals.push(manifest.expr_pool_.make("bool", {var_p}));
+    initial_goals.push(manifest.expr_pool_.make("bool", {var_q}));
+    initial_goals.push(manifest.expr_pool_.make("or", {var_p, var_q, true_goal}));
+    initial_goals.push(manifest.expr_pool_.make("not", {var_p, var_np}));
+    initial_goals.push(manifest.expr_pool_.make("or", {var_np, var_q, true_goal}));
+
+    auto sm = manifest.solver_.solve();
+    std::set<std::string> p_values;
+    size_t solution_count = 0;
+    while (solution_count < 2u) {
+        sm.resume();
+        ASSERT_TRUE(sm.has_yield());
+        if (sm.consume_yield() != sim_termination::solved)
+            continue;
+        ++solution_count;
+        const expr* q_val = normalizer.normalize(manifest.expr_pool_.make(idx_q));
+        const expr* p_val = normalizer.normalize(manifest.expr_pool_.make(idx_p));
+        ASSERT_TRUE(std::holds_alternative<expr::functor>(q_val->content));
+        ASSERT_TRUE(std::holds_alternative<expr::functor>(p_val->content));
+        EXPECT_EQ(std::get<expr::functor>(q_val->content).name, "true");
+        p_values.insert(std::get<expr::functor>(p_val->content).name);
+    }
+    EXPECT_EQ(p_values.size(), 2u);
+    while (true) {
+        sm.resume();
+        if (!sm.has_yield())
+            break;
+        if (sm.consume_yield() == sim_termination::solved)
+            FAIL() << "unexpected extra solution after exhausting search space";
+    }
+}
+
+TEST_F(BasicManifestIntegrationTest, RidgeEnumeratesTwoPathTwoColorings) {
+    /*
+     * Intent: 2-color a 3-node path A-B-C — property checks, not set enumeration.
+     * Ported from old-main-test.cpp test_ridge() test 9.
+     * initial goals: color(A). color(B). color(C). diff(A,B). diff(B,C).
+     * rules: color(red/blue). diff(red,blue). diff(blue,red).
+     */
+    expr red{expr::functor{"red", {}}};
+    expr blue{expr::functor{"blue", {}}};
+    expr color_red{expr::functor{"color", {&red}}};
+    expr color_blue{expr::functor{"color", {&blue}}};
+    expr diff_red_blue{expr::functor{"diff", {&red, &blue}}};
+    expr diff_blue_red{expr::functor{"diff", {&blue, &red}}};
+    database.push(rule{&color_red, {}});
+    database.push(rule{&color_blue, {}});
+    database.push(rule{&diff_red_blue, {}});
+    database.push(rule{&diff_blue_red, {}});
+
+    basic_manifest manifest{database, initial_goals, kMaxResolutions, kSeed};
+    normalizer normalizer{manifest.loc_};
+    const uint32_t idx_a = manifest.var_sequencer_.next();
+    const uint32_t idx_b = manifest.var_sequencer_.next();
+    const uint32_t idx_c = manifest.var_sequencer_.next();
+    const expr* var_a = manifest.expr_pool_.make(idx_a);
+    const expr* var_b = manifest.expr_pool_.make(idx_b);
+    const expr* var_c = manifest.expr_pool_.make(idx_c);
+    initial_goals.push(manifest.expr_pool_.make("color", {var_a}));
+    initial_goals.push(manifest.expr_pool_.make("color", {var_b}));
+    initial_goals.push(manifest.expr_pool_.make("color", {var_c}));
+    initial_goals.push(manifest.expr_pool_.make("diff", {var_a, var_b}));
+    initial_goals.push(manifest.expr_pool_.make("diff", {var_b, var_c}));
+
+    auto is_valid_color = [](const std::string& s) {
+        return s == "red" || s == "blue";
+    };
+
+    auto sm = manifest.solver_.solve();
+    std::string a1;
+    size_t found = 0;
+    while (found < 2u) {
+        sm.resume();
+        ASSERT_TRUE(sm.has_yield());
+        if (sm.consume_yield() != sim_termination::solved)
+            continue;
+        const std::string a_str =
+            std::get<expr::functor>(normalizer.normalize(manifest.expr_pool_.make(idx_a))->content).name;
+        const std::string b_str =
+            std::get<expr::functor>(normalizer.normalize(manifest.expr_pool_.make(idx_b))->content).name;
+        const std::string c_str =
+            std::get<expr::functor>(normalizer.normalize(manifest.expr_pool_.make(idx_c))->content).name;
+        ASSERT_TRUE(is_valid_color(a_str));
+        ASSERT_TRUE(is_valid_color(b_str));
+        ASSERT_TRUE(is_valid_color(c_str));
+        ASSERT_NE(a_str, b_str);
+        ASSERT_NE(b_str, c_str);
+        ASSERT_EQ(a_str, c_str);
+        if (found == 0)
+            a1 = a_str;
+        else
+            ASSERT_NE(a_str, a1);
+        ++found;
+    }
+    while (true) {
+        sm.resume();
+        if (!sm.has_yield())
+            break;
+        if (sm.consume_yield() == sim_termination::solved)
+            FAIL() << "unexpected extra solution";
+    }
+}
+
+TEST_F(BasicManifestIntegrationTest, RidgeEnumeratesK3ThreeColorings) {
+    /*
+     * Intent: enumerate all 3! proper colorings of K3 over colors {red, green, blue}.
+     * Ported from old-main-test.cpp test_ridge() test 10.
+     * initial goals: color(A). color(B). color(C). diff(A,B). diff(A,C). diff(B,C).
+     * rules: color(red/green/blue). diff(x,y) for all ordered x != y pairs.
+     */
+    static constexpr std::array<uint32_t, 10> kSeeds = {
+        0, 1, 7, 13, 42, 99, 123, 256, 1000, 9999};
+
+    for (uint32_t seed : kSeeds) {
+        SCOPED_TRACE(testing::Message() << "seed=" << seed);
+
+        db seed_db;
+        initial_goal_exprs seed_goals;
+        trail seed_trail;
+        locator seed_loc;
+        seed_loc.bind_as<i_log_to_current_trail_frame>(seed_trail);
+        expr_pool seed_pool{seed_loc};
+
+        expr red{expr::functor{"red", {}}};
+        expr green{expr::functor{"green", {}}};
+        expr blue{expr::functor{"blue", {}}};
+        expr color_red{expr::functor{"color", {&red}}};
+        expr color_green{expr::functor{"color", {&green}}};
+        expr color_blue{expr::functor{"color", {&blue}}};
+        seed_db.push(rule{&color_red, {}});
+        seed_db.push(rule{&color_green, {}});
+        seed_db.push(rule{&color_blue, {}});
+
+        expr diff_red_green{expr::functor{"diff", {&red, &green}}};
+        expr diff_red_blue{expr::functor{"diff", {&red, &blue}}};
+        expr diff_green_red{expr::functor{"diff", {&green, &red}}};
+        expr diff_green_blue{expr::functor{"diff", {&green, &blue}}};
+        expr diff_blue_red{expr::functor{"diff", {&blue, &red}}};
+        expr diff_blue_green{expr::functor{"diff", {&blue, &green}}};
+        seed_db.push(rule{&diff_red_green, {}});
+        seed_db.push(rule{&diff_red_blue, {}});
+        seed_db.push(rule{&diff_green_red, {}});
+        seed_db.push(rule{&diff_green_blue, {}});
+        seed_db.push(rule{&diff_blue_red, {}});
+        seed_db.push(rule{&diff_blue_green, {}});
+
+        basic_manifest manifest{seed_db, seed_goals, 128, seed};
+        normalizer seed_normalizer{manifest.loc_};
+        const uint32_t idx_a = manifest.var_sequencer_.next();
+        const uint32_t idx_b = manifest.var_sequencer_.next();
+        const uint32_t idx_c = manifest.var_sequencer_.next();
+        const expr* var_a = manifest.expr_pool_.make(idx_a);
+        const expr* var_b = manifest.expr_pool_.make(idx_b);
+        const expr* var_c = manifest.expr_pool_.make(idx_c);
+        seed_goals.push(manifest.expr_pool_.make("color", {var_a}));
+        seed_goals.push(manifest.expr_pool_.make("color", {var_b}));
+        seed_goals.push(manifest.expr_pool_.make("color", {var_c}));
+        seed_goals.push(manifest.expr_pool_.make("diff", {var_a, var_b}));
+        seed_goals.push(manifest.expr_pool_.make("diff", {var_a, var_c}));
+        seed_goals.push(manifest.expr_pool_.make("diff", {var_b, var_c}));
+
+        const expr* r = seed_pool.import(&red);
+        const expr* g = seed_pool.import(&green);
+        const expr* b = seed_pool.import(&blue);
+        std::set<solution> expected = {
+            {r, g, b}, {r, b, g}, {g, r, b}, {g, b, r}, {b, r, g}, {b, g, r},
+        };
+
+        next_until_refuted(
+            manifest.solver_,
+            expected,
+            [&]() -> solution {
+                return {
+                    seed_pool.import(seed_normalizer.normalize(manifest.expr_pool_.make(idx_a))),
+                    seed_pool.import(seed_normalizer.normalize(manifest.expr_pool_.make(idx_b))),
+                    seed_pool.import(seed_normalizer.normalize(manifest.expr_pool_.make(idx_c))),
+                };
+            });
+    }
+}
+
+TEST_F(BasicManifestIntegrationTest, RidgeEnumeratesK3TailFourNodeColorings) {
+    /*
+     * Intent: 12 colorings — K3 on (A,B,C) plus tail D with diff(A,D).
+     * Ported from old-main-test.cpp test_ridge() test 12.
+     */
+    static constexpr std::array<uint32_t, 10> kSeeds = {
+        0, 1, 7, 13, 42, 99, 123, 256, 1000, 9999};
+    for (uint32_t seed : kSeeds) {
+        SCOPED_TRACE(testing::Message() << "seed=" << seed);
+        db seed_db;
+        initial_goal_exprs seed_goals;
+        trail seed_trail;
+        locator seed_loc;
+        seed_loc.bind_as<i_log_to_current_trail_frame>(seed_trail);
+        expr_pool seed_pool{seed_loc};
+        expr red{expr::functor{"red", {}}};
+        expr green{expr::functor{"green", {}}};
+        expr blue{expr::functor{"blue", {}}};
+        expr color_red{expr::functor{"color", {&red}}};
+        expr color_green{expr::functor{"color", {&green}}};
+        expr color_blue{expr::functor{"color", {&blue}}};
+        seed_db.push(rule{&color_red, {}});
+        seed_db.push(rule{&color_green, {}});
+        seed_db.push(rule{&color_blue, {}});
+        expr diff_rg{expr::functor{"diff", {&red, &green}}};
+        expr diff_rb{expr::functor{"diff", {&red, &blue}}};
+        expr diff_gr{expr::functor{"diff", {&green, &red}}};
+        expr diff_gb{expr::functor{"diff", {&green, &blue}}};
+        expr diff_br{expr::functor{"diff", {&blue, &red}}};
+        expr diff_bg{expr::functor{"diff", {&blue, &green}}};
+        seed_db.push(rule{&diff_rg, {}});
+        seed_db.push(rule{&diff_rb, {}});
+        seed_db.push(rule{&diff_gr, {}});
+        seed_db.push(rule{&diff_gb, {}});
+        seed_db.push(rule{&diff_br, {}});
+        seed_db.push(rule{&diff_bg, {}});
+        basic_manifest manifest{seed_db, seed_goals, 128, seed};
+        normalizer seed_normalizer{manifest.loc_};
+        const uint32_t idx_a = manifest.var_sequencer_.next();
+        const uint32_t idx_b = manifest.var_sequencer_.next();
+        const uint32_t idx_c = manifest.var_sequencer_.next();
+        const uint32_t idx_d = manifest.var_sequencer_.next();
+        const expr* var_a = manifest.expr_pool_.make(idx_a);
+        const expr* var_b = manifest.expr_pool_.make(idx_b);
+        const expr* var_c = manifest.expr_pool_.make(idx_c);
+        const expr* var_d = manifest.expr_pool_.make(idx_d);
+        seed_goals.push(manifest.expr_pool_.make("color", {var_a}));
+        seed_goals.push(manifest.expr_pool_.make("color", {var_b}));
+        seed_goals.push(manifest.expr_pool_.make("color", {var_c}));
+        seed_goals.push(manifest.expr_pool_.make("color", {var_d}));
+        seed_goals.push(manifest.expr_pool_.make("diff", {var_a, var_b}));
+        seed_goals.push(manifest.expr_pool_.make("diff", {var_a, var_c}));
+        seed_goals.push(manifest.expr_pool_.make("diff", {var_b, var_c}));
+        seed_goals.push(manifest.expr_pool_.make("diff", {var_a, var_d}));
+        const expr* r = seed_pool.import(&red);
+        const expr* g = seed_pool.import(&green);
+        const expr* b = seed_pool.import(&blue);
+        std::set<solution> expected = {
+            {r, g, b, g}, {r, g, b, b}, {r, b, g, g}, {r, b, g, b},
+            {g, r, b, r}, {g, r, b, b}, {g, b, r, r}, {g, b, r, b},
+            {b, r, g, r}, {b, r, g, g}, {b, g, r, r}, {b, g, r, g},
+        };
+        next_until_refuted(manifest.solver_, expected, [&]() -> solution {
+            return {
+                seed_pool.import(seed_normalizer.normalize(manifest.expr_pool_.make(idx_a))),
+                seed_pool.import(seed_normalizer.normalize(manifest.expr_pool_.make(idx_b))),
+                seed_pool.import(seed_normalizer.normalize(manifest.expr_pool_.make(idx_c))),
+                seed_pool.import(seed_normalizer.normalize(manifest.expr_pool_.make(idx_d))),
+            };
+        });
+    }
+}
+
+TEST_F(BasicManifestIntegrationTest, RidgeEnumeratesFourVarSatThreeClauses) {
+    /*
+     * Intent: satisfy (P ∨ Q) ∧ (R ∨ S) ∧ (¬P ∨ ¬R).
+     * Ported from old-main-test.cpp test_ridge() test 13.
+     */
+    static constexpr std::array<uint32_t, 10> kSeeds = {
+        0, 1, 7, 13, 42, 99, 123, 256, 1000, 9999};
+    static constexpr size_t kSatBudget = 256;
+
+    for (uint32_t seed : kSeeds) {
+        SCOPED_TRACE(testing::Message() << "seed=" << seed);
+
+        db seed_db;
+        initial_goal_exprs seed_goals;
+        trail seed_trail;
+        locator seed_loc;
+        seed_loc.bind_as<i_log_to_current_trail_frame>(seed_trail);
+        expr_pool seed_pool{seed_loc};
+
+        expr true_atom{expr::functor{"true", {}}};
+        expr false_atom{expr::functor{"false", {}}};
+        expr bool_true{expr::functor{"bool", {&true_atom}}};
+        expr bool_false{expr::functor{"bool", {&false_atom}}};
+        expr not_true_false{expr::functor{"not", {&true_atom, &false_atom}}};
+        expr not_false_true{expr::functor{"not", {&false_atom, &true_atom}}};
+        seed_db.push(rule{&bool_true, {}});
+        seed_db.push(rule{&bool_false, {}});
+        seed_db.push(rule{&not_true_false, {}});
+        seed_db.push(rule{&not_false_true, {}});
+
+        expr or_t_t_t{expr::functor{"or", {&true_atom, &true_atom, &true_atom}}};
+        expr or_t_f_t{expr::functor{"or", {&true_atom, &false_atom, &true_atom}}};
+        expr or_f_t_t{expr::functor{"or", {&false_atom, &true_atom, &true_atom}}};
+        expr or_f_f_f{expr::functor{"or", {&false_atom, &false_atom, &false_atom}}};
+        seed_db.push(rule{&or_t_t_t, {}});
+        seed_db.push(rule{&or_t_f_t, {}});
+        seed_db.push(rule{&or_f_t_t, {}});
+        seed_db.push(rule{&or_f_f_f, {}});
+
+        expr and_t_t_t{expr::functor{"and", {&true_atom, &true_atom, &true_atom}}};
+        expr and_t_f_f{expr::functor{"and", {&true_atom, &false_atom, &false_atom}}};
+        expr and_f_t_f{expr::functor{"and", {&false_atom, &true_atom, &false_atom}}};
+        expr and_f_f_f{expr::functor{"and", {&false_atom, &false_atom, &false_atom}}};
+        seed_db.push(rule{&and_t_t_t, {}});
+        seed_db.push(rule{&and_t_f_f, {}});
+        seed_db.push(rule{&and_f_t_f, {}});
+        seed_db.push(rule{&and_f_f_f, {}});
+
+        basic_manifest manifest{seed_db, seed_goals, kSatBudget, seed};
+        normalizer seed_normalizer{manifest.loc_};
+        const uint32_t idx_p = manifest.var_sequencer_.next();
+        const uint32_t idx_q = manifest.var_sequencer_.next();
+        const uint32_t idx_r = manifest.var_sequencer_.next();
+        const uint32_t idx_s = manifest.var_sequencer_.next();
+        const uint32_t idx_pq = manifest.var_sequencer_.next();
+        const uint32_t idx_rs = manifest.var_sequencer_.next();
+        const uint32_t idx_np = manifest.var_sequencer_.next();
+        const uint32_t idx_nr = manifest.var_sequencer_.next();
+        const uint32_t idx_npr = manifest.var_sequencer_.next();
+        const uint32_t idx_pq_rs = manifest.var_sequencer_.next();
+        const expr* var_p = manifest.expr_pool_.make(idx_p);
+        const expr* var_q = manifest.expr_pool_.make(idx_q);
+        const expr* var_r = manifest.expr_pool_.make(idx_r);
+        const expr* var_s = manifest.expr_pool_.make(idx_s);
+        const expr* var_pq = manifest.expr_pool_.make(idx_pq);
+        const expr* var_rs = manifest.expr_pool_.make(idx_rs);
+        const expr* var_np = manifest.expr_pool_.make(idx_np);
+        const expr* var_nr = manifest.expr_pool_.make(idx_nr);
+        const expr* var_npr = manifest.expr_pool_.make(idx_npr);
+        const expr* var_pq_rs = manifest.expr_pool_.make(idx_pq_rs);
+        const expr* true_goal = manifest.expr_pool_.make("true", {});
+        seed_goals.push(manifest.expr_pool_.make("bool", {var_p}));
+        seed_goals.push(manifest.expr_pool_.make("bool", {var_q}));
+        seed_goals.push(manifest.expr_pool_.make("bool", {var_r}));
+        seed_goals.push(manifest.expr_pool_.make("bool", {var_s}));
+        seed_goals.push(manifest.expr_pool_.make("or", {var_p, var_q, var_pq}));
+        seed_goals.push(manifest.expr_pool_.make("or", {var_r, var_s, var_rs}));
+        seed_goals.push(manifest.expr_pool_.make("not", {var_p, var_np}));
+        seed_goals.push(manifest.expr_pool_.make("not", {var_r, var_nr}));
+        seed_goals.push(manifest.expr_pool_.make("or", {var_np, var_nr, var_npr}));
+        seed_goals.push(manifest.expr_pool_.make("and", {var_pq, var_rs, var_pq_rs}));
+        seed_goals.push(manifest.expr_pool_.make("and", {var_pq_rs, var_npr, true_goal}));
+
+        const expr* t_saved = seed_pool.import(&true_atom);
+        const expr* f_saved = seed_pool.import(&false_atom);
+        std::set<solution> expected = {
+            {t_saved, t_saved, f_saved, t_saved},
+            {t_saved, f_saved, f_saved, t_saved},
+            {f_saved, t_saved, t_saved, t_saved},
+            {f_saved, t_saved, t_saved, f_saved},
+            {f_saved, t_saved, f_saved, t_saved},
+        };
+
+        next_until_refuted(
+            manifest.solver_,
+            expected,
+            [&]() -> solution {
+                return {
+                    seed_pool.import(seed_normalizer.normalize(manifest.expr_pool_.make(idx_p))),
+                    seed_pool.import(seed_normalizer.normalize(manifest.expr_pool_.make(idx_q))),
+                    seed_pool.import(seed_normalizer.normalize(manifest.expr_pool_.make(idx_r))),
+                    seed_pool.import(seed_normalizer.normalize(manifest.expr_pool_.make(idx_s))),
+                };
+            });
+    }
+}
+
+TEST_F(BasicManifestIntegrationTest, RidgeEnumeratesAddPairsSummingLessThanTen) {
+    /*
+     * Intent: enumerate all (X,Y) where add(X,Y,S) and lt(S,10) (55 pairs).
+     * Ported from old-main-test.cpp test_ridge() test 15.
+     */
+    static constexpr size_t kPeanoBudget = 128;
+
+    auto peano_saved = [&](int n) -> const expr* {
+        const expr* p = saved_expr_pool_.make("zero", {});
+        for (int i = 0; i < n; ++i)
+            p = saved_expr_pool_.make("suc", {p});
+        return p;
+    };
+
+    expr zero{expr::functor{"zero", {}}};
+    expr nat_zero{expr::functor{"nat", {&zero}}};
+    database.push(rule{&nat_zero, {}});
+
+    expr rv1{expr::var{0}};
+    expr suc_rv1{expr::functor{"suc", {&rv1}}};
+    expr nat_suc{expr::functor{"nat", {&suc_rv1}}};
+    expr nat_rv1{expr::functor{"nat", {&rv1}}};
+    database.push(rule{&nat_suc, {&nat_rv1}});
+
+    expr rv2{expr::var{0}};
+    expr add_zero_y_y{expr::functor{"add", {&zero, &rv2, &rv2}}};
+    expr nat_rv2{expr::functor{"nat", {&rv2}}};
+    database.push(rule{&add_zero_y_y, {&nat_rv2}});
+
+    expr rv3{expr::var{0}};
+    expr rv4{expr::var{1}};
+    expr rv5{expr::var{2}};
+    expr suc_rv3{expr::functor{"suc", {&rv3}}};
+    expr suc_rv5{expr::functor{"suc", {&rv5}}};
+    expr add_suc{expr::functor{"add", {&suc_rv3, &rv4, &suc_rv5}}};
+    expr add_body{expr::functor{"add", {&rv3, &rv4, &rv5}}};
+    database.push(rule{&add_suc, {&add_body}});
+
+    expr rv6{expr::var{0}};
+    expr suc_rv6{expr::functor{"suc", {&rv6}}};
+    expr lt_zero_suc{expr::functor{"lt", {&zero, &suc_rv6}}};
+    expr nat_rv6{expr::functor{"nat", {&rv6}}};
+    database.push(rule{&lt_zero_suc, {&nat_rv6}});
+
+    expr rv7{expr::var{0}};
+    expr rv8{expr::var{1}};
+    expr suc_rv7{expr::functor{"suc", {&rv7}}};
+    expr suc_rv8{expr::functor{"suc", {&rv8}}};
+    expr lt_suc_suc{expr::functor{"lt", {&suc_rv7, &suc_rv8}}};
+    expr lt_body{expr::functor{"lt", {&rv7, &rv8}}};
+    database.push(rule{&lt_suc_suc, {&lt_body}});
+
+    std::set<solution> expected;
+    for (int x = 0; x < 10; ++x) {
+        for (int y = 0; y < 10 - x; ++y)
+            expected.insert({peano_saved(x), peano_saved(y)});
+    }
+    ASSERT_EQ(expected.size(), 55u);
+
+    db probe_db;
+    initial_goal_exprs probe_goals;
+    probe_db.push(rule{&nat_zero, {}});
+    probe_db.push(rule{&nat_suc, {&nat_rv1}});
+    probe_db.push(rule{&add_zero_y_y, {&nat_rv2}});
+    probe_db.push(rule{&add_suc, {&add_body}});
+    probe_db.push(rule{&lt_zero_suc, {&nat_rv6}});
+    probe_db.push(rule{&lt_suc_suc, {&lt_body}});
+
+    basic_manifest probe_manifest{probe_db, probe_goals, kPeanoBudget, kSeed};
+    normalizer probe_normalizer{probe_manifest.loc_};
+    const uint32_t idx_x_probe = probe_manifest.var_sequencer_.next();
+    const uint32_t idx_y_probe = probe_manifest.var_sequencer_.next();
+    const uint32_t idx_s_probe = probe_manifest.var_sequencer_.next();
+    const expr* var_x_probe = probe_manifest.expr_pool_.make(idx_x_probe);
+    const expr* var_y_probe = probe_manifest.expr_pool_.make(idx_y_probe);
+    const expr* var_s_probe = probe_manifest.expr_pool_.make(idx_s_probe);
+    const expr* ten_probe = probe_manifest.expr_pool_.make("zero", {});
+    for (int i = 0; i < 10; ++i)
+        ten_probe = probe_manifest.expr_pool_.make("suc", {ten_probe});
+    probe_goals.push(probe_manifest.expr_pool_.make("add", {var_x_probe, var_y_probe, var_s_probe}));
+    probe_goals.push(probe_manifest.expr_pool_.make("lt", {var_s_probe, ten_probe}));
+
+    auto probe_sm = probe_manifest.solver_.solve();
+    std::set<solution> probe_remaining = expected;
+    std::set<solution> probe_visited;
+    while (!probe_remaining.empty()) {
+        probe_sm.resume();
+        ASSERT_TRUE(probe_sm.has_yield()) << "solver stopped before all expected solutions found";
+        const auto term = probe_sm.consume_yield();
+        ASSERT_NE(term, sim_termination::depth_exceeded) << "raise kPeanoBudget";
+        if (term != sim_termination::solved)
+            continue;
+        const solution s = {
+            saved_expr_pool_.import(probe_normalizer.normalize(probe_manifest.expr_pool_.make(idx_x_probe))),
+            saved_expr_pool_.import(probe_normalizer.normalize(probe_manifest.expr_pool_.make(idx_y_probe))),
+        };
+        if (probe_visited.count(s))
+            continue;
+        probe_visited.insert(s);
+        auto it = probe_remaining.find(s);
+        ASSERT_NE(it, probe_remaining.end()) << "unexpected solution";
+        probe_remaining.erase(it);
+    }
+
+    db solve_db;
+    initial_goal_exprs solve_goals;
+    solve_db.push(rule{&nat_zero, {}});
+    solve_db.push(rule{&nat_suc, {&nat_rv1}});
+    solve_db.push(rule{&add_zero_y_y, {&nat_rv2}});
+    solve_db.push(rule{&add_suc, {&add_body}});
+    solve_db.push(rule{&lt_zero_suc, {&nat_rv6}});
+    solve_db.push(rule{&lt_suc_suc, {&lt_body}});
+
+    basic_manifest manifest{solve_db, solve_goals, kPeanoBudget, kSeed};
+    normalizer normalizer{manifest.loc_};
+    const uint32_t idx_x = manifest.var_sequencer_.next();
+    const uint32_t idx_y = manifest.var_sequencer_.next();
+    const uint32_t idx_s = manifest.var_sequencer_.next();
+    const expr* var_x = manifest.expr_pool_.make(idx_x);
+    const expr* var_y = manifest.expr_pool_.make(idx_y);
+    const expr* var_s = manifest.expr_pool_.make(idx_s);
+    const expr* ten = manifest.expr_pool_.make("zero", {});
+    for (int i = 0; i < 10; ++i)
+        ten = manifest.expr_pool_.make("suc", {ten});
+    solve_goals.push(manifest.expr_pool_.make("add", {var_x, var_y, var_s}));
+    solve_goals.push(manifest.expr_pool_.make("lt", {var_s, ten}));
+
+    next_until_refuted(
+        manifest.solver_,
+        expected,
+        [&]() -> solution {
+            return {
+                saved_expr_pool_.import(normalizer.normalize(manifest.expr_pool_.make(idx_x))),
+                saved_expr_pool_.import(normalizer.normalize(manifest.expr_pool_.make(idx_y))),
+            };
+        });
+}
+
+TEST_F(BasicManifestIntegrationTest, RidgeEnumeratesAddPairsSummingExactlyTen) {
+    /*
+     * Intent: enumerate all (X,Y) where add(X,Y,10) (11 pairs).
+     * Ported from old-main-test.cpp test_ridge() test 16.
+     */
+    static constexpr size_t kPeanoBudget = 128;
+
+    auto peano_saved = [&](int n) -> const expr* {
+        const expr* p = saved_expr_pool_.make("zero", {});
+        for (int i = 0; i < n; ++i)
+            p = saved_expr_pool_.make("suc", {p});
+        return p;
+    };
+
+    expr zero{expr::functor{"zero", {}}};
+    expr nat_zero{expr::functor{"nat", {&zero}}};
+    database.push(rule{&nat_zero, {}});
+
+    expr rv1{expr::var{0}};
+    expr suc_rv1{expr::functor{"suc", {&rv1}}};
+    expr nat_suc{expr::functor{"nat", {&suc_rv1}}};
+    expr nat_rv1{expr::functor{"nat", {&rv1}}};
+    database.push(rule{&nat_suc, {&nat_rv1}});
+
+    expr rv2{expr::var{0}};
+    expr add_zero_y_y{expr::functor{"add", {&zero, &rv2, &rv2}}};
+    expr nat_rv2{expr::functor{"nat", {&rv2}}};
+    database.push(rule{&add_zero_y_y, {&nat_rv2}});
+
+    expr rv3{expr::var{0}};
+    expr rv4{expr::var{1}};
+    expr rv5{expr::var{2}};
+    expr suc_rv3{expr::functor{"suc", {&rv3}}};
+    expr suc_rv5{expr::functor{"suc", {&rv5}}};
+    expr add_suc{expr::functor{"add", {&suc_rv3, &rv4, &suc_rv5}}};
+    expr add_body{expr::functor{"add", {&rv3, &rv4, &rv5}}};
+    database.push(rule{&add_suc, {&add_body}});
+
+    std::set<solution> expected;
+    for (int x = 0; x <= 10; ++x)
+        expected.insert({peano_saved(x), peano_saved(10 - x)});
+    ASSERT_EQ(expected.size(), 11u);
+
+    basic_manifest manifest{database, initial_goals, kPeanoBudget, kSeed};
+    normalizer normalizer{manifest.loc_};
+    const uint32_t idx_x = manifest.var_sequencer_.next();
+    const uint32_t idx_y = manifest.var_sequencer_.next();
+    const expr* var_x = manifest.expr_pool_.make(idx_x);
+    const expr* var_y = manifest.expr_pool_.make(idx_y);
+    const expr* ten = manifest.expr_pool_.make("zero", {});
+    for (int i = 0; i < 10; ++i)
+        ten = manifest.expr_pool_.make("suc", {ten});
+    initial_goals.push(manifest.expr_pool_.make("add", {var_x, var_y, ten}));
+
+    next_until_refuted(
+        manifest.solver_,
+        expected,
+        [&]() -> solution {
+            return {
+                saved_expr_pool_.import(normalizer.normalize(manifest.expr_pool_.make(idx_x))),
+                saved_expr_pool_.import(normalizer.normalize(manifest.expr_pool_.make(idx_y))),
+            };
+        });
+}
+
+TEST_F(BasicManifestIntegrationTest, RidgeEnumeratesMulPairsProductEight) {
+    /*
+     * Intent: enumerate all factor pairs (X,Y) where mul(X,Y,8) (4 pairs).
+     * Ported from old-main-test.cpp test_ridge() test 17.
+     */
+    static constexpr size_t kPeanoBudget = 256;
+
+    auto peano_saved = [&](int n) -> const expr* {
+        const expr* p = saved_expr_pool_.make("zero", {});
+        for (int i = 0; i < n; ++i)
+            p = saved_expr_pool_.make("suc", {p});
+        return p;
+    };
+
+    expr zero{expr::functor{"zero", {}}};
+    expr nat_zero{expr::functor{"nat", {&zero}}};
+    database.push(rule{&nat_zero, {}});
+
+    expr rv1{expr::var{0}};
+    expr suc_rv1{expr::functor{"suc", {&rv1}}};
+    expr nat_suc{expr::functor{"nat", {&suc_rv1}}};
+    expr nat_rv1{expr::functor{"nat", {&rv1}}};
+    database.push(rule{&nat_suc, {&nat_rv1}});
+
+    expr rv2{expr::var{0}};
+    expr add_zero_y_y{expr::functor{"add", {&zero, &rv2, &rv2}}};
+    expr nat_rv2{expr::functor{"nat", {&rv2}}};
+    database.push(rule{&add_zero_y_y, {&nat_rv2}});
+
+    expr rv3{expr::var{0}};
+    expr rv4{expr::var{1}};
+    expr rv5{expr::var{2}};
+    expr suc_rv3{expr::functor{"suc", {&rv3}}};
+    expr suc_rv5{expr::functor{"suc", {&rv5}}};
+    expr add_suc{expr::functor{"add", {&suc_rv3, &rv4, &suc_rv5}}};
+    expr add_body{expr::functor{"add", {&rv3, &rv4, &rv5}}};
+    database.push(rule{&add_suc, {&add_body}});
+
+    expr rv6{expr::var{0}};
+    expr mul_zero_y_zero{expr::functor{"mul", {&zero, &rv6, &zero}}};
+    expr nat_rv6{expr::functor{"nat", {&rv6}}};
+    database.push(rule{&mul_zero_y_zero, {&nat_rv6}});
+
+    expr rv7{expr::var{0}};
+    expr rv8{expr::var{1}};
+    expr rv9{expr::var{2}};
+    expr rv10{expr::var{3}};
+    expr suc_rv7{expr::functor{"suc", {&rv7}}};
+    expr mul_suc{expr::functor{"mul", {&suc_rv7, &rv8, &rv9}}};
+    expr mul_body{expr::functor{"mul", {&rv7, &rv8, &rv10}}};
+    expr add_body2{expr::functor{"add", {&rv10, &rv8, &rv9}}};
+    database.push(rule{&mul_suc, {&mul_body, &add_body2}});
+
+    std::set<solution> expected = {
+        {peano_saved(1), peano_saved(8)},
+        {peano_saved(2), peano_saved(4)},
+        {peano_saved(4), peano_saved(2)},
+        {peano_saved(8), peano_saved(1)},
+    };
+
+    basic_manifest manifest{database, initial_goals, kPeanoBudget, kSeed};
+    normalizer normalizer{manifest.loc_};
+    const uint32_t idx_x = manifest.var_sequencer_.next();
+    const uint32_t idx_y = manifest.var_sequencer_.next();
+    const expr* var_x = manifest.expr_pool_.make(idx_x);
+    const expr* var_y = manifest.expr_pool_.make(idx_y);
+    const expr* eight = manifest.expr_pool_.make("zero", {});
+    for (int i = 0; i < 8; ++i)
+        eight = manifest.expr_pool_.make("suc", {eight});
+    initial_goals.push(manifest.expr_pool_.make("mul", {var_x, var_y, eight}));
+
+    next_until_refuted(
+        manifest.solver_,
+        expected,
+        [&]() -> solution {
+            return {
+                saved_expr_pool_.import(normalizer.normalize(manifest.expr_pool_.make(idx_x))),
+                saved_expr_pool_.import(normalizer.normalize(manifest.expr_pool_.make(idx_y))),
+            };
+        });
+}
+
+TEST_F(BasicManifestIntegrationTest, RidgeEnumeratesDualBoundedSharedXSums) {
+    /*
+     * Intent: enumerate all triples (X,Y,Z) with add(X,Y,S), add(X,Z,T), lt(S,4), lt(T,4).
+     * Ported from old-main-test.cpp test_ridge() test 18.
+     */
+    static constexpr size_t kPeanoBudget = 128;
+
+    auto peano_saved = [&](int n) -> const expr* {
+        const expr* p = saved_expr_pool_.make("zero", {});
+        for (int i = 0; i < n; ++i)
+            p = saved_expr_pool_.make("suc", {p});
+        return p;
+    };
+
+    expr zero{expr::functor{"zero", {}}};
+    expr nat_zero{expr::functor{"nat", {&zero}}};
+    database.push(rule{&nat_zero, {}});
+
+    expr rv1{expr::var{0}};
+    expr suc_rv1{expr::functor{"suc", {&rv1}}};
+    expr nat_suc{expr::functor{"nat", {&suc_rv1}}};
+    expr nat_rv1{expr::functor{"nat", {&rv1}}};
+    database.push(rule{&nat_suc, {&nat_rv1}});
+
+    expr rv2{expr::var{0}};
+    expr add_zero_y_y{expr::functor{"add", {&zero, &rv2, &rv2}}};
+    expr nat_rv2{expr::functor{"nat", {&rv2}}};
+    database.push(rule{&add_zero_y_y, {&nat_rv2}});
+
+    expr rv3{expr::var{0}};
+    expr rv4{expr::var{1}};
+    expr rv5{expr::var{2}};
+    expr suc_rv3{expr::functor{"suc", {&rv3}}};
+    expr suc_rv5{expr::functor{"suc", {&rv5}}};
+    expr add_suc{expr::functor{"add", {&suc_rv3, &rv4, &suc_rv5}}};
+    expr add_body{expr::functor{"add", {&rv3, &rv4, &rv5}}};
+    database.push(rule{&add_suc, {&add_body}});
+
+    expr rv6{expr::var{0}};
+    expr suc_rv6{expr::functor{"suc", {&rv6}}};
+    expr lt_zero_suc{expr::functor{"lt", {&zero, &suc_rv6}}};
+    expr nat_rv6{expr::functor{"nat", {&rv6}}};
+    database.push(rule{&lt_zero_suc, {&nat_rv6}});
+
+    expr rv7{expr::var{0}};
+    expr rv8{expr::var{1}};
+    expr suc_rv7{expr::functor{"suc", {&rv7}}};
+    expr suc_rv8{expr::functor{"suc", {&rv8}}};
+    expr lt_suc_suc{expr::functor{"lt", {&suc_rv7, &suc_rv8}}};
+    expr lt_body{expr::functor{"lt", {&rv7, &rv8}}};
+    database.push(rule{&lt_suc_suc, {&lt_body}});
+
+    std::set<solution> expected;
+    for (int x = 0; x < 4; ++x) {
+        for (int y = 0; y < 4 - x; ++y) {
+            for (int z = 0; z < 4 - x; ++z)
+                expected.insert({peano_saved(x), peano_saved(y), peano_saved(z)});
+        }
+    }
+    ASSERT_EQ(expected.size(), 30u);
+
+    basic_manifest manifest{database, initial_goals, kPeanoBudget, kSeed};
+    normalizer normalizer{manifest.loc_};
+    const uint32_t idx_x = manifest.var_sequencer_.next();
+    const uint32_t idx_y = manifest.var_sequencer_.next();
+    const uint32_t idx_z = manifest.var_sequencer_.next();
+    const uint32_t idx_s = manifest.var_sequencer_.next();
+    const uint32_t idx_t = manifest.var_sequencer_.next();
+    const expr* var_x = manifest.expr_pool_.make(idx_x);
+    const expr* var_y = manifest.expr_pool_.make(idx_y);
+    const expr* var_z = manifest.expr_pool_.make(idx_z);
+    const expr* var_s = manifest.expr_pool_.make(idx_s);
+    const expr* var_t = manifest.expr_pool_.make(idx_t);
+    const expr* bound = manifest.expr_pool_.make("zero", {});
+    for (int i = 0; i < 4; ++i)
+        bound = manifest.expr_pool_.make("suc", {bound});
+    initial_goals.push(manifest.expr_pool_.make("add", {var_x, var_y, var_s}));
+    initial_goals.push(manifest.expr_pool_.make("add", {var_x, var_z, var_t}));
+    initial_goals.push(manifest.expr_pool_.make("lt", {var_s, bound}));
+    initial_goals.push(manifest.expr_pool_.make("lt", {var_t, bound}));
+
+    next_until_refuted(
+        manifest.solver_,
+        expected,
+        [&]() -> solution {
+            return {
+                saved_expr_pool_.import(normalizer.normalize(manifest.expr_pool_.make(idx_x))),
+                saved_expr_pool_.import(normalizer.normalize(manifest.expr_pool_.make(idx_y))),
+                saved_expr_pool_.import(normalizer.normalize(manifest.expr_pool_.make(idx_z))),
+            };
+        });
+}
+
+TEST_F(BasicManifestIntegrationTest, RidgeEnumeratesCatalanTreesWithFiveNodes) {
+    /*
+     * Intent: enumerate all wf(T) trees with exactly five nodes (Catalan C5 = 42).
+     * Ported from old-main-test.cpp test_ridge() test 19.
+     */
+    static constexpr size_t kCatalanBudget = 70;
+
+    auto peano_saved = [&](int n) -> const expr* {
+        const expr* p = saved_expr_pool_.make("zero", {});
+        for (int i = 0; i < n; ++i)
+            p = saved_expr_pool_.make("suc", {p});
+        return p;
+    };
+    auto bin_saved = [&](const expr* lhs, const expr* rhs) -> const expr* {
+        return saved_expr_pool_.make("bin", {lhs, rhs});
+    };
+
+    const expr* nil_saved = saved_expr_pool_.make("nil", {});
+    const expr* s1 = bin_saved(nil_saved, nil_saved);
+    const expr* s2_left_chain = bin_saved(nil_saved, s1);
+    const expr* s2_right_chain = bin_saved(s1, nil_saved);
+
+    const expr* s3_0 = bin_saved(nil_saved, s2_left_chain);
+    const expr* s3_1 = bin_saved(nil_saved, s2_right_chain);
+    const expr* s3_2 = bin_saved(s1, s1);
+    const expr* s3_3 = bin_saved(s2_left_chain, nil_saved);
+    const expr* s3_4 = bin_saved(s2_right_chain, nil_saved);
+
+    const expr* s4_0 = bin_saved(nil_saved, s3_0);
+    const expr* s4_1 = bin_saved(nil_saved, s3_1);
+    const expr* s4_2 = bin_saved(nil_saved, s3_2);
+    const expr* s4_3 = bin_saved(nil_saved, s3_3);
+    const expr* s4_4 = bin_saved(nil_saved, s3_4);
+    const expr* s4_5 = bin_saved(s1, s2_left_chain);
+    const expr* s4_6 = bin_saved(s1, s2_right_chain);
+    const expr* s4_7 = bin_saved(s2_left_chain, s1);
+    const expr* s4_8 = bin_saved(s2_right_chain, s1);
+    const expr* s4_9 = bin_saved(s3_0, nil_saved);
+    const expr* s4_10 = bin_saved(s3_1, nil_saved);
+    const expr* s4_11 = bin_saved(s3_2, nil_saved);
+    const expr* s4_12 = bin_saved(s3_3, nil_saved);
+    const expr* s4_13 = bin_saved(s3_4, nil_saved);
+
+    std::set<solution> expected;
+    expected.insert({bin_saved(nil_saved, s4_0)});
+    expected.insert({bin_saved(nil_saved, s4_1)});
+    expected.insert({bin_saved(nil_saved, s4_2)});
+    expected.insert({bin_saved(nil_saved, s4_3)});
+    expected.insert({bin_saved(nil_saved, s4_4)});
+    expected.insert({bin_saved(nil_saved, s4_5)});
+    expected.insert({bin_saved(nil_saved, s4_6)});
+    expected.insert({bin_saved(nil_saved, s4_7)});
+    expected.insert({bin_saved(nil_saved, s4_8)});
+    expected.insert({bin_saved(nil_saved, s4_9)});
+    expected.insert({bin_saved(nil_saved, s4_10)});
+    expected.insert({bin_saved(nil_saved, s4_11)});
+    expected.insert({bin_saved(nil_saved, s4_12)});
+    expected.insert({bin_saved(nil_saved, s4_13)});
+
+    expected.insert({bin_saved(s1, s3_0)});
+    expected.insert({bin_saved(s1, s3_1)});
+    expected.insert({bin_saved(s1, s3_2)});
+    expected.insert({bin_saved(s1, s3_3)});
+    expected.insert({bin_saved(s1, s3_4)});
+
+    expected.insert({bin_saved(s2_left_chain, s2_left_chain)});
+    expected.insert({bin_saved(s2_left_chain, s2_right_chain)});
+    expected.insert({bin_saved(s2_right_chain, s2_left_chain)});
+    expected.insert({bin_saved(s2_right_chain, s2_right_chain)});
+
+    expected.insert({bin_saved(s3_0, s1)});
+    expected.insert({bin_saved(s3_1, s1)});
+    expected.insert({bin_saved(s3_2, s1)});
+    expected.insert({bin_saved(s3_3, s1)});
+    expected.insert({bin_saved(s3_4, s1)});
+
+    expected.insert({bin_saved(s4_0, nil_saved)});
+    expected.insert({bin_saved(s4_1, nil_saved)});
+    expected.insert({bin_saved(s4_2, nil_saved)});
+    expected.insert({bin_saved(s4_3, nil_saved)});
+    expected.insert({bin_saved(s4_4, nil_saved)});
+    expected.insert({bin_saved(s4_5, nil_saved)});
+    expected.insert({bin_saved(s4_6, nil_saved)});
+    expected.insert({bin_saved(s4_7, nil_saved)});
+    expected.insert({bin_saved(s4_8, nil_saved)});
+    expected.insert({bin_saved(s4_9, nil_saved)});
+    expected.insert({bin_saved(s4_10, nil_saved)});
+    expected.insert({bin_saved(s4_11, nil_saved)});
+    expected.insert({bin_saved(s4_12, nil_saved)});
+    expected.insert({bin_saved(s4_13, nil_saved)});
+    ASSERT_EQ(expected.size(), 42u);
+
+    expr zero{expr::functor{"zero", {}}};
+    expr nat_zero{expr::functor{"nat", {&zero}}};
+    database.push(rule{&nat_zero, {}});
+
+    expr rv1{expr::var{0}};
+    expr suc_rv1{expr::functor{"suc", {&rv1}}};
+    expr nat_suc{expr::functor{"nat", {&suc_rv1}}};
+    expr nat_rv1{expr::functor{"nat", {&rv1}}};
+    database.push(rule{&nat_suc, {&nat_rv1}});
+
+    expr rv2{expr::var{0}};
+    expr add_zero_y_y{expr::functor{"add", {&zero, &rv2, &rv2}}};
+    expr nat_rv2{expr::functor{"nat", {&rv2}}};
+    database.push(rule{&add_zero_y_y, {&nat_rv2}});
+
+    expr rv3{expr::var{0}};
+    expr rv4{expr::var{1}};
+    expr rv5{expr::var{2}};
+    expr suc_rv3{expr::functor{"suc", {&rv3}}};
+    expr suc_rv5{expr::functor{"suc", {&rv5}}};
+    expr add_suc{expr::functor{"add", {&suc_rv3, &rv4, &suc_rv5}}};
+    expr add_body{expr::functor{"add", {&rv3, &rv4, &rv5}}};
+    database.push(rule{&add_suc, {&add_body}});
+
+    expr nil{expr::functor{"nil", {}}};
+    expr wf_nil{expr::functor{"wf", {&nil}}};
+    database.push(rule{&wf_nil, {}});
+
+    expr rv6{expr::var{0}};
+    expr rv7{expr::var{1}};
+    expr bin_rv6_rv7{expr::functor{"bin", {&rv6, &rv7}}};
+    expr wf_bin{expr::functor{"wf", {&bin_rv6_rv7}}};
+    expr wf_left{expr::functor{"wf", {&rv6}}};
+    expr wf_right{expr::functor{"wf", {&rv7}}};
+    database.push(rule{&wf_bin, {&wf_left, &wf_right}});
+
+    expr nodes_nil_zero{expr::functor{"nodes", {&nil, &zero}}};
+    database.push(rule{&nodes_nil_zero, {}});
+
+    expr one{expr::functor{"suc", {&zero}}};
+    expr rv8{expr::var{0}};
+    expr rv9{expr::var{1}};
+    expr rv10{expr::var{2}};
+    expr rv11{expr::var{3}};
+    expr rv12{expr::var{4}};
+    expr rv13{expr::var{5}};
+    expr bin_rv8_rv9{expr::functor{"bin", {&rv8, &rv9}}};
+    expr nodes_head{expr::functor{"nodes", {&bin_rv8_rv9, &rv10}}};
+    expr nodes_left{expr::functor{"nodes", {&rv8, &rv11}}};
+    expr nodes_right{expr::functor{"nodes", {&rv9, &rv12}}};
+    expr add_sizes{expr::functor{"add", {&rv11, &rv12, &rv13}}};
+    expr add_one{expr::functor{"add", {&one, &rv13, &rv10}}};
+    database.push(rule{&nodes_head, {&nodes_left, &nodes_right, &add_sizes, &add_one}});
+
+    basic_manifest manifest{database, initial_goals, kCatalanBudget, kSeed};
+    normalizer normalizer{manifest.loc_};
+    const uint32_t idx_t = manifest.var_sequencer_.next();
+    const expr* var_t = manifest.expr_pool_.make(idx_t);
+    const expr* five = manifest.expr_pool_.make("zero", {});
+    for (int i = 0; i < 5; ++i)
+        five = manifest.expr_pool_.make("suc", {five});
+    initial_goals.push(manifest.expr_pool_.make("wf", {var_t}));
+    initial_goals.push(manifest.expr_pool_.make("nodes", {var_t, five}));
+
+    next_until_refuted(
+        manifest.solver_,
+        expected,
+        [&]() -> solution {
+            return {
+                saved_expr_pool_.import(normalizer.normalize(manifest.expr_pool_.make(idx_t))),
+            };
+        });
+}
