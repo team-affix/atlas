@@ -19,7 +19,7 @@ struct DecisionMemoryTest : public ::testing::Test {
 };
 
 TEST_F(DecisionMemoryTest, DeriveLemmaEmptyWithNoInsertions) {
-    EXPECT_THAT(mem.derive().get_resolutions(), IsEmpty());
+    EXPECT_THAT(mem.derive_decision_lemma().get_resolutions(), IsEmpty());
 }
 
 TEST_F(DecisionMemoryTest, InsertIncreasesSize) {
@@ -38,7 +38,7 @@ TEST_F(DecisionMemoryTest, DeriveLemmaContainsInsertedResolutions) {
     mem.record_decision(&rl0);
     mem.record_decision(&rl1);
 
-    EXPECT_THAT(mem.derive().get_resolutions(),
+    EXPECT_THAT(mem.derive_decision_lemma().get_resolutions(),
         UnorderedElementsAre(&rl0, &rl1));
 }
 
@@ -53,5 +53,5 @@ TEST_F(DecisionMemoryTest, DeriveLemmaPrunesAncestorResolutions) {
     mem.record_decision(&res1);
     mem.record_decision(&res2);
 
-    EXPECT_THAT(mem.derive().get_resolutions(), UnorderedElementsAre(&res2));
+    EXPECT_THAT(mem.derive_decision_lemma().get_resolutions(), UnorderedElementsAre(&res2));
 }

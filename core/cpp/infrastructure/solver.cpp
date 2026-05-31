@@ -24,7 +24,7 @@ coroutine<sim_termination, void> solver::solve() {
 
         refuted = get_decision_count.count() == 0;
 
-        const lemma lemma = derive_decision_lemma.derive();
+        const lemma lemma = derive_decision_lemma.derive_decision_lemma();
         for (const resolution_lineage* rl : lemma.get_resolutions())
             pin_resolution_lineage.pin(rl);
 

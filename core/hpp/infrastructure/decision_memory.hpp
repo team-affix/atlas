@@ -15,7 +15,7 @@ struct decision_memory
     void record_decision(const resolution_lineage*) override;
     void clear_recorded_decisions() override;
     size_t count() const override;
-    lemma derive() const override;
+    lemma derive_decision_lemma() const override;
 private:
     std::unordered_set<const resolution_lineage*> decisions;
 };

@@ -44,7 +44,7 @@ struct MockGetDecisionCount : public i_get_decision_count {
 };
 
 struct MockDeriveDecisionLemma : public i_derive_decision_lemma {
-    MOCK_METHOD(lemma, derive, (), (const, override));
+    MOCK_METHOD(lemma, derive_decision_lemma, (), (const, override));
 };
 
 struct MockPinResolutionLineage : public i_pin_resolution_lineage {
@@ -94,7 +94,7 @@ TEST_F(SolverTest, TearDownRunsOnResumeAfterYield) {
     EXPECT_CALL(set_up_sim, set_up()).Times(1);
     EXPECT_CALL(run_sim, run()).WillOnce(Return(sim_termination::conflicted));
     EXPECT_CALL(get_decision_count, count()).WillOnce(Return(0));
-    EXPECT_CALL(derive_decision_lemma, derive()).WillOnce(Return(empty_lemma));
+    EXPECT_CALL(derive_decision_lemma, derive_decision_lemma()).WillOnce(Return(empty_lemma));
     EXPECT_CALL(tear_down_sim, tear_down()).Times(1);
     EXPECT_CALL(learn_avoidance, learn(testing::_)).WillOnce(Return(std::nullopt));
     auto sm = s.solve();
@@ -122,7 +122,7 @@ TEST_F(SolverTest, RunsSecondIterationWhileDecisionsRemain) {
     EXPECT_CALL(get_decision_count, count())
         .WillOnce(Return(1))
         .WillOnce(Return(0));
-    EXPECT_CALL(derive_decision_lemma, derive())
+    EXPECT_CALL(derive_decision_lemma, derive_decision_lemma())
         .WillRepeatedly(Return(empty_lemma));
     EXPECT_CALL(learn_avoidance, learn(testing::_))
         .WillRepeatedly(Return(std::nullopt));
@@ -158,7 +158,7 @@ TEST_F(SolverTest, PinsEachLemmaResolutionBeforeTearDown) {
     EXPECT_CALL(set_up_sim, set_up()).Times(1);
     EXPECT_CALL(run_sim, run()).WillOnce(Return(sim_termination::conflicted));
     EXPECT_CALL(get_decision_count, count()).WillOnce(Return(0));
-    EXPECT_CALL(derive_decision_lemma, derive()).WillOnce(Return(decision_lemma));
+    EXPECT_CALL(derive_decision_lemma, derive_decision_lemma()).WillOnce(Return(decision_lemma));
     EXPECT_CALL(pin_resolution_lineage, pin(_)).Times(2);
     EXPECT_CALL(tear_down_sim, tear_down()).Times(1);
     EXPECT_CALL(learn_avoidance, learn(testing::_)).WillOnce(Return(std::nullopt));
@@ -179,7 +179,7 @@ TEST_F(SolverTest, RoutesEliminationWhenLearnReturnsLineage) {
     EXPECT_CALL(set_up_sim, set_up()).Times(1);
     EXPECT_CALL(run_sim, run()).WillOnce(Return(sim_termination::conflicted));
     EXPECT_CALL(get_decision_count, count()).WillOnce(Return(0));
-    EXPECT_CALL(derive_decision_lemma, derive()).WillOnce(Return(empty_lemma));
+    EXPECT_CALL(derive_decision_lemma, derive_decision_lemma()).WillOnce(Return(empty_lemma));
     EXPECT_CALL(tear_down_sim, tear_down()).Times(1);
     EXPECT_CALL(learn_avoidance, learn(testing::_)).WillOnce(Return(&elim));
     EXPECT_CALL(router, route(&elim)).Times(1);

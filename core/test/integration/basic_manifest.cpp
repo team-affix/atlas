@@ -666,7 +666,7 @@ TEST_F(BasicManifestIntegrationTest, SimMhuDeactivationRemovesSiblingFromFrontie
 
     EXPECT_EQ(manifest.sim_.run(), sim_termination::solved);
     EXPECT_EQ(manifest.decision_memory_.count(), 1u);
-    const lemma dl = manifest.decision_memory_.derive();
+    const lemma dl = manifest.decision_memory_.derive_decision_lemma();
     ASSERT_EQ(dl.get_resolutions().size(), 1u);
     const resolution_lineage* chosen = *dl.get_resolutions().begin();
     const rule_id sibling_id = (chosen->idx == 0) ? rule_id{1} : rule_id{0};
@@ -695,7 +695,7 @@ TEST_F(BasicManifestIntegrationTest, SimRandomDecisionGeneratorPicksBranchWithFi
     manifest.sim_.set_up();
     EXPECT_EQ(manifest.sim_.run(), sim_termination::solved);
     EXPECT_EQ(manifest.decision_memory_.count(), 1u);
-    const lemma dl = manifest.decision_memory_.derive();
+    const lemma dl = manifest.decision_memory_.derive_decision_lemma();
     ASSERT_EQ(dl.get_resolutions().size(), 1u);
     const rule_id chosen = (*dl.get_resolutions().begin())->idx;
     EXPECT_TRUE(chosen == 0 || chosen == 1);
@@ -932,7 +932,7 @@ TEST_F(BasicManifestIntegrationTest, TickSecondBranchDiffersOnDuplicateRuleProbl
     lemma resolution_lemma1 = manifest.resolution_memory_.derive_resolution_lemma();
     for (const resolution_lineage* rl : resolution_lemma1.get_resolutions())
         manifest.lineage_pool_.pin(rl);
-    lemma decision_lemma1 = manifest.decision_memory_.derive();
+    lemma decision_lemma1 = manifest.decision_memory_.derive_decision_lemma();
     std::set<rule_id> first_branches;
     for (const resolution_lineage* rl : decision_lemma1.get_resolutions())
         if (kBranches.count(rl->idx))
@@ -949,7 +949,7 @@ TEST_F(BasicManifestIntegrationTest, TickSecondBranchDiffersOnDuplicateRuleProbl
     lemma resolution_lemma2 = manifest.resolution_memory_.derive_resolution_lemma();
     for (const resolution_lineage* rl : resolution_lemma2.get_resolutions())
         manifest.lineage_pool_.pin(rl);
-    lemma decision_lemma2 = manifest.decision_memory_.derive();
+    lemma decision_lemma2 = manifest.decision_memory_.derive_decision_lemma();
     EXPECT_TRUE(decision_lemma2.get_resolutions().empty());
     std::set<rule_id> second_branches;
     for (const resolution_lineage* rl : decision_lemma2.get_resolutions())
@@ -977,7 +977,7 @@ TEST_F(BasicManifestIntegrationTest, SolverVacuousSolvedOnEmptyProblem) {
     sm.resume();
     ASSERT_TRUE(sm.has_yield());
     EXPECT_EQ(sm.consume_yield(), sim_termination::solved);
-    EXPECT_TRUE(manifest.decision_memory_.derive().get_resolutions().empty());
+    EXPECT_TRUE(manifest.decision_memory_.derive_decision_lemma().get_resolutions().empty());
     sm.resume();
     EXPECT_FALSE(sm.has_yield());
 }
@@ -999,7 +999,7 @@ TEST_F(BasicManifestIntegrationTest, SolverFindsSingleUnitSolution) {
     sm.resume();
     ASSERT_TRUE(sm.has_yield());
     EXPECT_EQ(sm.consume_yield(), sim_termination::solved);
-    EXPECT_TRUE(manifest.decision_memory_.derive().get_resolutions().empty());
+    EXPECT_TRUE(manifest.decision_memory_.derive_decision_lemma().get_resolutions().empty());
     sm.resume();
     EXPECT_FALSE(sm.has_yield());
 }
@@ -1093,7 +1093,7 @@ TEST_F(BasicManifestIntegrationTest, SolverFindsClauseDerivedUnitSolution) {
     sm.resume();
     ASSERT_TRUE(sm.has_yield());
     EXPECT_EQ(sm.consume_yield(), sim_termination::solved);
-    EXPECT_TRUE(manifest.decision_memory_.derive().get_resolutions().empty());
+    EXPECT_TRUE(manifest.decision_memory_.derive_decision_lemma().get_resolutions().empty());
     sm.resume();
     EXPECT_FALSE(sm.has_yield());
 }
@@ -1153,7 +1153,7 @@ TEST_F(BasicManifestIntegrationTest, SolverFindsSolutionWithCorrectBindings) {
     sm.resume();
     ASSERT_TRUE(sm.has_yield());
     EXPECT_EQ(sm.consume_yield(), sim_termination::solved);
-    EXPECT_TRUE(manifest.decision_memory_.derive().get_resolutions().empty());
+    EXPECT_TRUE(manifest.decision_memory_.derive_decision_lemma().get_resolutions().empty());
     EXPECT_EQ(*saved_expr_pool_.import(normalizer.normalize(manifest.expr_pool_.make(idx_a))),
         *abc);
     EXPECT_EQ(*saved_expr_pool_.import(normalizer.normalize(manifest.expr_pool_.make(idx_b))),
