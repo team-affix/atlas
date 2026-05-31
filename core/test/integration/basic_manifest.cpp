@@ -126,7 +126,6 @@ struct BasicManifestIntegrationTest : public ::testing::Test {
 
     db database;
     initial_goal_exprs initial_goals;
-    std::vector<expr> expr_storage;
 
     trail saved_trail_;
     locator saved_loc_;
@@ -339,8 +338,8 @@ TEST_F(BasicManifestIntegrationTest, SimLifecycleTrailDepthRestoresAfterConflict
      * initial goals: f.
      * rules: (none)
      */
-    expr goal{expr::functor{"f", {}}};
-    initial_goals.push(&goal);
+    const expr* goal = saved_expr_pool_.make("f", {});
+    initial_goals.push(goal);
     basic_manifest manifest{database, initial_goals, kMaxResolutions, kSeed};
     const size_t depth_before = manifest.trail_.depth();
     manifest.sim_.set_up();
@@ -356,11 +355,11 @@ TEST_F(BasicManifestIntegrationTest, SimLifecycleTrailDepthRestoresAfterDepthExc
      * rules:
      *   0: f :- f.
      */
-    expr goal{expr::functor{"f", {}}};
-    expr f_head{expr::functor{"f", {}}};
-    expr f_body{expr::functor{"f", {}}};
-    initial_goals.push(&goal);
-    database.push(rule{&f_head, {&f_body}});
+    const expr* goal = saved_expr_pool_.make("f", {});
+    const expr* f_head = saved_expr_pool_.make("f", {});
+    const expr* f_body = saved_expr_pool_.make("f", {});
+    initial_goals.push(goal);
+    database.push(rule{f_head, {f_body}});
     static constexpr size_t kLowBudget = 4;
     basic_manifest manifest{database, initial_goals, kLowBudget, kSeed};
     const size_t depth_before = manifest.trail_.depth();
@@ -377,10 +376,10 @@ TEST_F(BasicManifestIntegrationTest, SimLifecycleClearsEphemeralStoresAfterSolve
      * rules:
      *   0: f(abc, 123).
      */
-    expr abc{expr::functor{"abc", {}}};
-    expr _123{expr::functor{"123", {}}};
-    expr head{expr::functor{"f", {&abc, &_123}}};
-    database.push(rule{&head, {}});
+    const expr* abc = saved_expr_pool_.make("abc", {});
+    const expr* _123 = saved_expr_pool_.make("123", {});
+    const expr* head = saved_expr_pool_.make("f", {abc, _123});
+    database.push(rule{head, {}});
 
     basic_manifest manifest{database, initial_goals, kMaxResolutions, kSeed};
     const uint32_t idx_test = manifest.var_sequencer_.next();
@@ -409,10 +408,10 @@ TEST_F(BasicManifestIntegrationTest, SimLifecycleBaseFrameVarsSurviveTearDown) {
      * rules:
      *   0: f(abc, 123).
      */
-    expr abc{expr::functor{"abc", {}}};
-    expr _123{expr::functor{"123", {}}};
-    expr head{expr::functor{"f", {&abc, &_123}}};
-    database.push(rule{&head, {}});
+    const expr* abc = saved_expr_pool_.make("abc", {});
+    const expr* _123 = saved_expr_pool_.make("123", {});
+    const expr* head = saved_expr_pool_.make("f", {abc, _123});
+    database.push(rule{head, {}});
 
     basic_manifest manifest{database, initial_goals, kMaxResolutions, kSeed};
     const uint32_t idx_a = manifest.var_sequencer_.next();
@@ -448,19 +447,19 @@ TEST_F(BasicManifestIntegrationTest, SimLifecycleExprPoolInFrameGrowthRevertsOnT
      *   0: make_list(zero, _, nil).
      *   1: make_list(suc(L), A, cons(A, T)) :- make_list(L, A, T).
      */
-    expr rule_ignored{expr::var{0}};
-    expr rule_l{expr::var{0}};
-    expr rule_a{expr::var{1}};
-    expr rule_t{expr::var{2}};
-    expr zero{expr::functor{"zero", {}}};
-    expr nil{expr::functor{"nil", {}}};
-    expr head0{expr::functor{"make_list", {&zero, &rule_ignored, &nil}}};
-    expr suc_l{expr::functor{"suc", {&rule_l}}};
-    expr cons_at{expr::functor{"cons", {&rule_a, &rule_t}}};
-    expr head1{expr::functor{"make_list", {&suc_l, &rule_a, &cons_at}}};
-    expr body1{expr::functor{"make_list", {&rule_l, &rule_a, &rule_t}}};
-    database.push(rule{&head0, {}});
-    database.push(rule{&head1, {&body1}});
+    const expr* rule_ignored = saved_expr_pool_.make(0);
+    const expr* rule_l = saved_expr_pool_.make(0);
+    const expr* rule_a = saved_expr_pool_.make(1);
+    const expr* rule_t = saved_expr_pool_.make(2);
+    const expr* zero = saved_expr_pool_.make("zero", {});
+    const expr* nil = saved_expr_pool_.make("nil", {});
+    const expr* head0 = saved_expr_pool_.make("make_list", {zero, rule_ignored, nil});
+    const expr* suc_l = saved_expr_pool_.make("suc", {rule_l});
+    const expr* cons_at = saved_expr_pool_.make("cons", {rule_a, rule_t});
+    const expr* head1 = saved_expr_pool_.make("make_list", {suc_l, rule_a, cons_at});
+    const expr* body1 = saved_expr_pool_.make("make_list", {rule_l, rule_a, rule_t});
+    database.push(rule{head0, {}});
+    database.push(rule{head1, {body1}});
 
     basic_manifest manifest{database, initial_goals, kMaxResolutions, kSeed};
     const size_t expr_before = manifest.expr_pool_.size();
@@ -487,10 +486,10 @@ TEST_F(BasicManifestIntegrationTest, SimMhuBindsThroughManifest) {
      * rules:
      *   0: f(abc, 123).
      */
-    expr abc{expr::functor{"abc", {}}};
-    expr _123{expr::functor{"123", {}}};
-    expr head{expr::functor{"f", {&abc, &_123}}};
-    database.push(rule{&head, {}});
+    const expr* abc = saved_expr_pool_.make("abc", {});
+    const expr* _123 = saved_expr_pool_.make("123", {});
+    const expr* head = saved_expr_pool_.make("f", {abc, _123});
+    database.push(rule{head, {}});
 
     basic_manifest manifest{database, initial_goals, kMaxResolutions, kSeed};
     const uint32_t idx_a = manifest.var_sequencer_.next();
@@ -518,13 +517,13 @@ TEST_F(BasicManifestIntegrationTest, SimMhuDeactivationRecordedInMemory) {
      *   0: f(abc, 123).
      *   1: f(def, 123).
      */
-    expr abc{expr::functor{"abc", {}}};
-    expr def{expr::functor{"def", {}}};
-    expr _123{expr::functor{"123", {}}};
-    expr head0{expr::functor{"f", {&abc, &_123}}};
-    expr head1{expr::functor{"f", {&def, &_123}}};
-    database.push(rule{&head0, {}});
-    database.push(rule{&head1, {}});
+    const expr* abc = saved_expr_pool_.make("abc", {});
+    const expr* def = saved_expr_pool_.make("def", {});
+    const expr* _123 = saved_expr_pool_.make("123", {});
+    const expr* head0 = saved_expr_pool_.make("f", {abc, _123});
+    const expr* head1 = saved_expr_pool_.make("f", {def, _123});
+    database.push(rule{head0, {}});
+    database.push(rule{head1, {}});
 
     basic_manifest manifest{database, initial_goals, kMaxResolutions, kSeed};
     const goal_lineage* gl = manifest.make_initial_goal_lineage_.make(0);
@@ -557,12 +556,12 @@ TEST_F(BasicManifestIntegrationTest, SimRandomDecisionGeneratorPicksBranchWithFi
      *   0: f.
      *   1: f.
      */
-    expr goal{expr::functor{"f", {}}};
-    expr f_head0{expr::functor{"f", {}}};
-    expr f_head1{expr::functor{"f", {}}};
-    initial_goals.push(&goal);
-    database.push(rule{&f_head0, {}});
-    database.push(rule{&f_head1, {}});
+    const expr* goal = saved_expr_pool_.make("f", {});
+    const expr* f_head0 = saved_expr_pool_.make("f", {});
+    const expr* f_head1 = saved_expr_pool_.make("f", {});
+    initial_goals.push(goal);
+    database.push(rule{f_head0, {}});
+    database.push(rule{f_head1, {}});
 
     basic_manifest manifest{database, initial_goals, kMaxResolutions, kSeed};
     manifest.sim_.set_up();
@@ -584,10 +583,10 @@ TEST_F(BasicManifestIntegrationTest, BindingsBeforeTearDown) {
      * rules:
      *   0: f(abc, 123).
      */
-    expr abc{expr::functor{"abc", {}}};
-    expr _123{expr::functor{"123", {}}};
-    expr head{expr::functor{"f", {&abc, &_123}}};
-    database.push(rule{&head, {}});
+    const expr* abc = saved_expr_pool_.make("abc", {});
+    const expr* _123 = saved_expr_pool_.make("123", {});
+    const expr* head = saved_expr_pool_.make("f", {abc, _123});
+    database.push(rule{head, {}});
 
     basic_manifest manifest{database, initial_goals, kMaxResolutions, kSeed};
     normalizer normalizer{manifest.loc_};
@@ -597,17 +596,15 @@ TEST_F(BasicManifestIntegrationTest, BindingsBeforeTearDown) {
     const expr* var_b = manifest.expr_pool_.make(idx_b);
     initial_goals.push(manifest.expr_pool_.make("f", {var_a, var_b}));
 
-    const expr* abc_saved = saved_expr_pool_.import(&abc);
-    const expr* _123_saved = saved_expr_pool_.import(&_123);
 
     auto sm = manifest.solver_.solve();
     sm.resume();
     ASSERT_TRUE(sm.has_yield());
     ASSERT_EQ(sm.consume_yield(), sim_termination::solved);
     EXPECT_EQ(*saved_expr_pool_.import(normalizer.normalize(manifest.expr_pool_.make(idx_a))),
-        *abc_saved);
+        *abc);
     EXPECT_EQ(*saved_expr_pool_.import(normalizer.normalize(manifest.expr_pool_.make(idx_b))),
-        *_123_saved);
+        *_123);
 
     sm.resume();
     EXPECT_TRUE(std::holds_alternative<expr::var>(
@@ -625,18 +622,18 @@ TEST_F(BasicManifestIntegrationTest, TickCdclAvoidancesPersistAcrossTearDown) {
      *   2: g.   3: g.
      * setup: learn {f/0, g/2}; pin lineages for f/0, g/2, g/3.
      */
-    expr goal_f{expr::functor{"f", {}}};
-    expr goal_g{expr::functor{"g", {}}};
-    expr f_head0{expr::functor{"f", {}}};
-    expr f_head1{expr::functor{"f", {}}};
-    expr g_head2{expr::functor{"g", {}}};
-    expr g_head3{expr::functor{"g", {}}};
-    initial_goals.push(&goal_f);
-    initial_goals.push(&goal_g);
-    database.push(rule{&f_head0, {}});
-    database.push(rule{&f_head1, {}});
-    database.push(rule{&g_head2, {}});
-    database.push(rule{&g_head3, {}});
+    const expr* goal_f = saved_expr_pool_.make("f", {});
+    const expr* goal_g = saved_expr_pool_.make("g", {});
+    const expr* f_head0 = saved_expr_pool_.make("f", {});
+    const expr* f_head1 = saved_expr_pool_.make("f", {});
+    const expr* g_head2 = saved_expr_pool_.make("g", {});
+    const expr* g_head3 = saved_expr_pool_.make("g", {});
+    initial_goals.push(goal_f);
+    initial_goals.push(goal_g);
+    database.push(rule{f_head0, {}});
+    database.push(rule{f_head1, {}});
+    database.push(rule{g_head2, {}});
+    database.push(rule{g_head3, {}});
 
     basic_manifest manifest{database, initial_goals, kMaxResolutions, kSeed};
     const goal_lineage* gl0 = manifest.make_initial_goal_lineage_.make(0);
@@ -671,12 +668,12 @@ TEST_F(BasicManifestIntegrationTest, TickBacklogsEliminationForInactiveGoal) {
      *   0: f.   1: f.
      * setup: backlog elimination for f/0 before the tick.
      */
-    expr goal{expr::functor{"f", {}}};
-    expr f_head0{expr::functor{"f", {}}};
-    expr f_head1{expr::functor{"f", {}}};
-    initial_goals.push(&goal);
-    database.push(rule{&f_head0, {}});
-    database.push(rule{&f_head1, {}});
+    const expr* goal = saved_expr_pool_.make("f", {});
+    const expr* f_head0 = saved_expr_pool_.make("f", {});
+    const expr* f_head1 = saved_expr_pool_.make("f", {});
+    initial_goals.push(goal);
+    database.push(rule{f_head0, {}});
+    database.push(rule{f_head1, {}});
 
     basic_manifest manifest{database, initial_goals, kMaxResolutions, kSeed};
     const goal_lineage* gl = manifest.make_initial_goal_lineage_.make(0);
@@ -706,18 +703,18 @@ TEST_F(BasicManifestIntegrationTest, TickDecisionLemmaLineagesPinnedBeforeTrim) 
      *   2: g.   3: g.
      * setup: learn {f/0, g/2}; pin f/0, g/2, g/3; expect resolution rules {0, 3}.
      */
-    expr goal_f{expr::functor{"f", {}}};
-    expr goal_g{expr::functor{"g", {}}};
-    expr f_head0{expr::functor{"f", {}}};
-    expr f_head1{expr::functor{"f", {}}};
-    expr g_head2{expr::functor{"g", {}}};
-    expr g_head3{expr::functor{"g", {}}};
-    initial_goals.push(&goal_f);
-    initial_goals.push(&goal_g);
-    database.push(rule{&f_head0, {}});
-    database.push(rule{&f_head1, {}});
-    database.push(rule{&g_head2, {}});
-    database.push(rule{&g_head3, {}});
+    const expr* goal_f = saved_expr_pool_.make("f", {});
+    const expr* goal_g = saved_expr_pool_.make("g", {});
+    const expr* f_head0 = saved_expr_pool_.make("f", {});
+    const expr* f_head1 = saved_expr_pool_.make("f", {});
+    const expr* g_head2 = saved_expr_pool_.make("g", {});
+    const expr* g_head3 = saved_expr_pool_.make("g", {});
+    initial_goals.push(goal_f);
+    initial_goals.push(goal_g);
+    database.push(rule{f_head0, {}});
+    database.push(rule{f_head1, {}});
+    database.push(rule{g_head2, {}});
+    database.push(rule{g_head3, {}});
 
     basic_manifest manifest{database, initial_goals, kMaxResolutions, kSeed};
     const goal_lineage* gl0 = manifest.make_initial_goal_lineage_.make(0);
@@ -752,12 +749,12 @@ TEST_F(BasicManifestIntegrationTest, TickSecondBranchDiffersOnDuplicateRuleProbl
      * rules:
      *   0: f.   1: f.
      */
-    expr goal{expr::functor{"f", {}}};
-    expr f_head0{expr::functor{"f", {}}};
-    expr f_head1{expr::functor{"f", {}}};
-    initial_goals.push(&goal);
-    database.push(rule{&f_head0, {}});
-    database.push(rule{&f_head1, {}});
+    const expr* goal = saved_expr_pool_.make("f", {});
+    const expr* f_head0 = saved_expr_pool_.make("f", {});
+    const expr* f_head1 = saved_expr_pool_.make("f", {});
+    initial_goals.push(goal);
+    database.push(rule{f_head0, {}});
+    database.push(rule{f_head1, {}});
 
     static const std::set<rule_id> kBranches{rule_id{0}, rule_id{1}};
 
@@ -826,10 +823,10 @@ TEST_F(BasicManifestIntegrationTest, SolverFindsSingleUnitSolution) {
      * rules:
      *   0: f.
      */
-    expr goal{expr::functor{"f", {}}};
-    expr head{expr::functor{"f", {}}};
-    initial_goals.push(&goal);
-    database.push(rule{&head, {}});
+    const expr* goal = saved_expr_pool_.make("f", {});
+    const expr* head = saved_expr_pool_.make("f", {});
+    initial_goals.push(goal);
+    database.push(rule{head, {}});
 
     basic_manifest manifest{database, initial_goals, kMaxResolutions, kSeed};
     auto sm = manifest.solver_.solve();
@@ -847,8 +844,8 @@ TEST_F(BasicManifestIntegrationTest, SolverRefutesWhenNoCandidates) {
      * initial goals: f.
      * rules: (none)
      */
-    expr goal{expr::functor{"f", {}}};
-    initial_goals.push(&goal);
+    const expr* goal = saved_expr_pool_.make("f", {});
+    initial_goals.push(goal);
 
     basic_manifest manifest{database, initial_goals, kMaxResolutions, kSeed};
     auto sm = manifest.solver_.solve();
@@ -866,12 +863,12 @@ TEST_F(BasicManifestIntegrationTest, SolverEnumeratesTwoGroundChoiceSolutions) {
      * rules:
      *   0: f.   1: f.
      */
-    expr goal{expr::functor{"f", {}}};
-    expr f_head0{expr::functor{"f", {}}};
-    expr f_head1{expr::functor{"f", {}}};
-    initial_goals.push(&goal);
-    database.push(rule{&f_head0, {}});
-    database.push(rule{&f_head1, {}});
+    const expr* goal = saved_expr_pool_.make("f", {});
+    const expr* f_head0 = saved_expr_pool_.make("f", {});
+    const expr* f_head1 = saved_expr_pool_.make("f", {});
+    initial_goals.push(goal);
+    database.push(rule{f_head0, {}});
+    database.push(rule{f_head1, {}});
 
     basic_manifest manifest{database, initial_goals, kMaxResolutions, kSeed};
     auto sm = manifest.solver_.solve();
@@ -907,12 +904,12 @@ TEST_F(BasicManifestIntegrationTest, SolverRefutesAfterEnumeratingAllGroundBranc
      * rules:
      *   0: f.   1: f.
      */
-    expr goal{expr::functor{"f", {}}};
-    expr f_head0{expr::functor{"f", {}}};
-    expr f_head1{expr::functor{"f", {}}};
-    initial_goals.push(&goal);
-    database.push(rule{&f_head0, {}});
-    database.push(rule{&f_head1, {}});
+    const expr* goal = saved_expr_pool_.make("f", {});
+    const expr* f_head0 = saved_expr_pool_.make("f", {});
+    const expr* f_head1 = saved_expr_pool_.make("f", {});
+    initial_goals.push(goal);
+    database.push(rule{f_head0, {}});
+    database.push(rule{f_head1, {}});
 
     basic_manifest manifest{database, initial_goals, kMaxResolutions, kSeed};
     auto sm = manifest.solver_.solve();
@@ -958,15 +955,15 @@ TEST_F(BasicManifestIntegrationTest, SolverFindsClauseDerivedUnitSolution) {
      *   0: f :- g(X).
      *   1: g(c).
      */
-    expr goal{expr::functor{"f", {}}};
-    expr rule_var{expr::var{0}};
-    expr g_ground{expr::functor{"c", {}}};
-    expr g_fact{expr::functor{"g", {&g_ground}}};
-    expr f_head{expr::functor{"f", {}}};
-    expr g_body{expr::functor{"g", {&rule_var}}};
-    initial_goals.push(&goal);
-    database.push(rule{&f_head, {&g_body}});
-    database.push(rule{&g_fact, {}});
+    const expr* goal = saved_expr_pool_.make("f", {});
+    const expr* rule_var = saved_expr_pool_.make(0);
+    const expr* g_ground = saved_expr_pool_.make("c", {});
+    const expr* g_fact = saved_expr_pool_.make("g", {g_ground});
+    const expr* f_head = saved_expr_pool_.make("f", {});
+    const expr* g_body = saved_expr_pool_.make("g", {rule_var});
+    initial_goals.push(goal);
+    database.push(rule{f_head, {g_body}});
+    database.push(rule{g_fact, {}});
 
     basic_manifest manifest{database, initial_goals, kMaxResolutions, kSeed};
     auto sm = manifest.solver_.solve();
@@ -986,18 +983,18 @@ TEST_F(BasicManifestIntegrationTest, SolverEnumeratesTwoChoiceClauseSolutions) {
      *   0: f :- g(X).
      *   1: g(abc).   2: g(xyz).
      */
-    expr goal{expr::functor{"f", {}}};
-    expr rule_var{expr::var{0}};
-    expr abc{expr::functor{"abc", {}}};
-    expr xyz{expr::functor{"xyz", {}}};
-    expr g_fact0{expr::functor{"g", {&abc}}};
-    expr g_fact1{expr::functor{"g", {&xyz}}};
-    expr f_head{expr::functor{"f", {}}};
-    expr g_body{expr::functor{"g", {&rule_var}}};
-    initial_goals.push(&goal);
-    database.push(rule{&f_head, {&g_body}});
-    database.push(rule{&g_fact0, {}});
-    database.push(rule{&g_fact1, {}});
+    const expr* goal = saved_expr_pool_.make("f", {});
+    const expr* rule_var = saved_expr_pool_.make(0);
+    const expr* abc = saved_expr_pool_.make("abc", {});
+    const expr* xyz = saved_expr_pool_.make("xyz", {});
+    const expr* g_fact0 = saved_expr_pool_.make("g", {abc});
+    const expr* g_fact1 = saved_expr_pool_.make("g", {xyz});
+    const expr* f_head = saved_expr_pool_.make("f", {});
+    const expr* g_body = saved_expr_pool_.make("g", {rule_var});
+    initial_goals.push(goal);
+    database.push(rule{f_head, {g_body}});
+    database.push(rule{g_fact0, {}});
+    database.push(rule{g_fact1, {}});
 
     basic_manifest manifest{database, initial_goals, kMaxResolutions, kSeed};
     auto sm = manifest.solver_.solve();
@@ -1033,10 +1030,10 @@ TEST_F(BasicManifestIntegrationTest, SolverFindsSolutionWithCorrectBindings) {
      * rules:
      *   0: f(abc, 123).
      */
-    expr abc{expr::functor{"abc", {}}};
-    expr _123{expr::functor{"123", {}}};
-    expr head{expr::functor{"f", {&abc, &_123}}};
-    database.push(rule{&head, {}});
+    const expr* abc = saved_expr_pool_.make("abc", {});
+    const expr* _123 = saved_expr_pool_.make("123", {});
+    const expr* head = saved_expr_pool_.make("f", {abc, _123});
+    database.push(rule{head, {}});
 
     basic_manifest manifest{database, initial_goals, kMaxResolutions, kSeed};
     normalizer normalizer{manifest.loc_};
@@ -1046,17 +1043,15 @@ TEST_F(BasicManifestIntegrationTest, SolverFindsSolutionWithCorrectBindings) {
     const expr* var_b = manifest.expr_pool_.make(idx_b);
     initial_goals.push(manifest.expr_pool_.make("f", {var_a, var_b}));
 
-    const expr* abc_saved = saved_expr_pool_.import(&abc);
-    const expr* _123_saved = saved_expr_pool_.import(&_123);
     auto sm = manifest.solver_.solve();
     sm.resume();
     ASSERT_TRUE(sm.has_yield());
     EXPECT_EQ(sm.consume_yield(), sim_termination::solved);
     EXPECT_TRUE(manifest.decision_memory_.derive().get_resolutions().empty());
     EXPECT_EQ(*saved_expr_pool_.import(normalizer.normalize(manifest.expr_pool_.make(idx_a))),
-        *abc_saved);
+        *abc);
     EXPECT_EQ(*saved_expr_pool_.import(normalizer.normalize(manifest.expr_pool_.make(idx_b))),
-        *_123_saved);
+        *_123);
     sm.resume();
     EXPECT_FALSE(sm.has_yield());
 }
@@ -1070,18 +1065,18 @@ TEST_F(BasicManifestIntegrationTest, SolverFindsClauseBodyBindingSolution) {
      *   1: g(abc).
      *   2: h(123).
      */
-    expr rule_var_a{expr::var{0}};
-    expr rule_var_b{expr::var{1}};
-    expr abc{expr::functor{"abc", {}}};
-    expr _123{expr::functor{"123", {}}};
-    expr f_head{expr::functor{"f", {&rule_var_a, &rule_var_b}}};
-    expr g_body{expr::functor{"g", {&rule_var_a}}};
-    expr h_body{expr::functor{"h", {&rule_var_b}}};
-    expr g_head{expr::functor{"g", {&abc}}};
-    expr h_head{expr::functor{"h", {&_123}}};
-    database.push(rule{&f_head, {&g_body, &h_body}});
-    database.push(rule{&g_head, {}});
-    database.push(rule{&h_head, {}});
+    const expr* rule_var_a = saved_expr_pool_.make(0);
+    const expr* rule_var_b = saved_expr_pool_.make(1);
+    const expr* abc = saved_expr_pool_.make("abc", {});
+    const expr* _123 = saved_expr_pool_.make("123", {});
+    const expr* f_head = saved_expr_pool_.make("f", {rule_var_a, rule_var_b});
+    const expr* g_body = saved_expr_pool_.make("g", {rule_var_a});
+    const expr* h_body = saved_expr_pool_.make("h", {rule_var_b});
+    const expr* g_head = saved_expr_pool_.make("g", {abc});
+    const expr* h_head = saved_expr_pool_.make("h", {_123});
+    database.push(rule{f_head, {g_body, h_body}});
+    database.push(rule{g_head, {}});
+    database.push(rule{h_head, {}});
 
     basic_manifest manifest{database, initial_goals, kMaxResolutions, kSeed};
     normalizer normalizer{manifest.loc_};
@@ -1091,16 +1086,14 @@ TEST_F(BasicManifestIntegrationTest, SolverFindsClauseBodyBindingSolution) {
     const expr* var_b = manifest.expr_pool_.make(idx_b);
     initial_goals.push(manifest.expr_pool_.make("f", {var_a, var_b}));
 
-    const expr* abc_saved = saved_expr_pool_.import(&abc);
-    const expr* _123_saved = saved_expr_pool_.import(&_123);
     auto sm = manifest.solver_.solve();
     sm.resume();
     ASSERT_TRUE(sm.has_yield());
     EXPECT_EQ(sm.consume_yield(), sim_termination::solved);
     EXPECT_EQ(*saved_expr_pool_.import(normalizer.normalize(manifest.expr_pool_.make(idx_a))),
-        *abc_saved);
+        *abc);
     EXPECT_EQ(*saved_expr_pool_.import(normalizer.normalize(manifest.expr_pool_.make(idx_b))),
-        *_123_saved);
+        *_123);
     sm.resume();
     EXPECT_FALSE(sm.has_yield());
 }
@@ -1112,12 +1105,12 @@ TEST_F(BasicManifestIntegrationTest, SolverEnumeratesTwoVarChoiceSolutions) {
      * rules:
      *   0: f(abc).   1: f(xyz).
      */
-    expr abc{expr::functor{"abc", {}}};
-    expr xyz{expr::functor{"xyz", {}}};
-    expr head0{expr::functor{"f", {&abc}}};
-    expr head1{expr::functor{"f", {&xyz}}};
-    database.push(rule{&head0, {}});
-    database.push(rule{&head1, {}});
+    const expr* abc = saved_expr_pool_.make("abc", {});
+    const expr* xyz = saved_expr_pool_.make("xyz", {});
+    const expr* head0 = saved_expr_pool_.make("f", {abc});
+    const expr* head1 = saved_expr_pool_.make("f", {xyz});
+    database.push(rule{head0, {}});
+    database.push(rule{head1, {}});
 
     basic_manifest manifest{database, initial_goals, kMaxResolutions, kSeed};
     normalizer normalizer{manifest.loc_};
@@ -1125,11 +1118,9 @@ TEST_F(BasicManifestIntegrationTest, SolverEnumeratesTwoVarChoiceSolutions) {
     const expr* var_a = manifest.expr_pool_.make(idx_a);
     initial_goals.push(manifest.expr_pool_.make("f", {var_a}));
 
-    const expr* abc_saved = saved_expr_pool_.import(&abc);
-    const expr* xyz_saved = saved_expr_pool_.import(&xyz);
     enumerate_all_solutions(
         manifest.solver_,
-        {{abc_saved}, {xyz_saved}},
+        {{abc}, {xyz}},
         [&]() -> solution {
             return {saved_expr_pool_.import(
                 normalizer.normalize(manifest.expr_pool_.make(idx_a)))};
@@ -1143,12 +1134,12 @@ TEST_F(BasicManifestIntegrationTest, SolverRefutesAfterEnumeratingAllVarBranches
      * rules:
      *   0: f(abc).   1: f(xyz).
      */
-    expr abc{expr::functor{"abc", {}}};
-    expr xyz{expr::functor{"xyz", {}}};
-    expr head0{expr::functor{"f", {&abc}}};
-    expr head1{expr::functor{"f", {&xyz}}};
-    database.push(rule{&head0, {}});
-    database.push(rule{&head1, {}});
+    const expr* abc = saved_expr_pool_.make("abc", {});
+    const expr* xyz = saved_expr_pool_.make("xyz", {});
+    const expr* head0 = saved_expr_pool_.make("f", {abc});
+    const expr* head1 = saved_expr_pool_.make("f", {xyz});
+    database.push(rule{head0, {}});
+    database.push(rule{head1, {}});
 
     basic_manifest manifest{database, initial_goals, kMaxResolutions, kSeed};
     normalizer normalizer{manifest.loc_};
@@ -1156,11 +1147,9 @@ TEST_F(BasicManifestIntegrationTest, SolverRefutesAfterEnumeratingAllVarBranches
     const expr* var_a = manifest.expr_pool_.make(idx_a);
     initial_goals.push(manifest.expr_pool_.make("f", {var_a}));
 
-    const expr* abc_saved = saved_expr_pool_.import(&abc);
-    const expr* xyz_saved = saved_expr_pool_.import(&xyz);
     next_until_refuted(
         manifest.solver_,
-        {{abc_saved}, {xyz_saved}},
+        {{abc}, {xyz}},
         [&]() -> solution {
             return {saved_expr_pool_.import(
                 normalizer.normalize(manifest.expr_pool_.make(idx_a)))};
@@ -1175,16 +1164,16 @@ TEST_F(BasicManifestIntegrationTest, SolverEnumeratesTwoGoalSharedVarSolutions) 
      *   0: f(abc).   1: f(xyz).
      *   2: g(abc).   3: g(xyz).
      */
-    expr abc{expr::functor{"abc", {}}};
-    expr xyz{expr::functor{"xyz", {}}};
-    expr f_head0{expr::functor{"f", {&abc}}};
-    expr f_head1{expr::functor{"f", {&xyz}}};
-    expr g_head0{expr::functor{"g", {&abc}}};
-    expr g_head1{expr::functor{"g", {&xyz}}};
-    database.push(rule{&f_head0, {}});
-    database.push(rule{&f_head1, {}});
-    database.push(rule{&g_head0, {}});
-    database.push(rule{&g_head1, {}});
+    const expr* abc = saved_expr_pool_.make("abc", {});
+    const expr* xyz = saved_expr_pool_.make("xyz", {});
+    const expr* f_head0 = saved_expr_pool_.make("f", {abc});
+    const expr* f_head1 = saved_expr_pool_.make("f", {xyz});
+    const expr* g_head0 = saved_expr_pool_.make("g", {abc});
+    const expr* g_head1 = saved_expr_pool_.make("g", {xyz});
+    database.push(rule{f_head0, {}});
+    database.push(rule{f_head1, {}});
+    database.push(rule{g_head0, {}});
+    database.push(rule{g_head1, {}});
 
     basic_manifest manifest{database, initial_goals, kMaxResolutions, kSeed};
     normalizer normalizer{manifest.loc_};
@@ -1193,11 +1182,9 @@ TEST_F(BasicManifestIntegrationTest, SolverEnumeratesTwoGoalSharedVarSolutions) 
     initial_goals.push(manifest.expr_pool_.make("f", {var_a}));
     initial_goals.push(manifest.expr_pool_.make("g", {var_a}));
 
-    const expr* abc_saved = saved_expr_pool_.import(&abc);
-    const expr* xyz_saved = saved_expr_pool_.import(&xyz);
     enumerate_all_solutions(
         manifest.solver_,
-        {{abc_saved}, {xyz_saved}},
+        {{abc}, {xyz}},
         [&]() -> solution {
             return {saved_expr_pool_.import(
                 normalizer.normalize(manifest.expr_pool_.make(idx_a)))};
@@ -1213,14 +1200,14 @@ TEST_F(BasicManifestIntegrationTest, TickThreeGroundBranchesEnumerateDistinct) {
      * rules:
      *   0: f.   1: f.   2: f.
      */
-    expr goal{expr::functor{"f", {}}};
-    expr f_head0{expr::functor{"f", {}}};
-    expr f_head1{expr::functor{"f", {}}};
-    expr f_head2{expr::functor{"f", {}}};
-    initial_goals.push(&goal);
-    database.push(rule{&f_head0, {}});
-    database.push(rule{&f_head1, {}});
-    database.push(rule{&f_head2, {}});
+    const expr* goal = saved_expr_pool_.make("f", {});
+    const expr* f_head0 = saved_expr_pool_.make("f", {});
+    const expr* f_head1 = saved_expr_pool_.make("f", {});
+    const expr* f_head2 = saved_expr_pool_.make("f", {});
+    initial_goals.push(goal);
+    database.push(rule{f_head0, {}});
+    database.push(rule{f_head1, {}});
+    database.push(rule{f_head2, {}});
 
     basic_manifest manifest{database, initial_goals, kMaxResolutions, kSeed};
     auto sm = manifest.solver_.solve();
@@ -1266,18 +1253,18 @@ TEST_F(BasicManifestIntegrationTest, SimLifecycleTwoSequentialDecisionsOnTwoGoal
      *   0: f.   1: f.
      *   2: g.   3: g.
      */
-    expr goal_f{expr::functor{"f", {}}};
-    expr goal_g{expr::functor{"g", {}}};
-    expr f_head0{expr::functor{"f", {}}};
-    expr f_head1{expr::functor{"f", {}}};
-    expr g_head2{expr::functor{"g", {}}};
-    expr g_head3{expr::functor{"g", {}}};
-    initial_goals.push(&goal_f);
-    initial_goals.push(&goal_g);
-    database.push(rule{&f_head0, {}});
-    database.push(rule{&f_head1, {}});
-    database.push(rule{&g_head2, {}});
-    database.push(rule{&g_head3, {}});
+    const expr* goal_f = saved_expr_pool_.make("f", {});
+    const expr* goal_g = saved_expr_pool_.make("g", {});
+    const expr* f_head0 = saved_expr_pool_.make("f", {});
+    const expr* f_head1 = saved_expr_pool_.make("f", {});
+    const expr* g_head2 = saved_expr_pool_.make("g", {});
+    const expr* g_head3 = saved_expr_pool_.make("g", {});
+    initial_goals.push(goal_f);
+    initial_goals.push(goal_g);
+    database.push(rule{f_head0, {}});
+    database.push(rule{f_head1, {}});
+    database.push(rule{g_head2, {}});
+    database.push(rule{g_head3, {}});
 
     basic_manifest manifest{database, initial_goals, kMaxResolutions, kSeed};
     manifest.sim_.set_up();
@@ -1311,22 +1298,22 @@ TEST_F(BasicManifestIntegrationTest, SimLifecycleRecursiveClauseTreeSolvedWithou
      *   3: i.
      *   4: j.
      */
-    expr goal_f{expr::functor{"f", {}}};
-    expr f_head{expr::functor{"f", {}}};
-    expr g_body{expr::functor{"g", {}}};
-    expr h_body{expr::functor{"h", {}}};
-    expr g_head{expr::functor{"g", {}}};
-    expr h_head{expr::functor{"h", {}}};
-    expr i_body{expr::functor{"i", {}}};
-    expr j_body{expr::functor{"j", {}}};
-    expr i_head{expr::functor{"i", {}}};
-    expr j_head{expr::functor{"j", {}}};
-    initial_goals.push(&goal_f);
-    database.push(rule{&f_head, {&g_body, &h_body}});
-    database.push(rule{&g_head, {&i_body, &j_body}});
-    database.push(rule{&h_head, {&i_body, &j_body}});
-    database.push(rule{&i_head, {}});
-    database.push(rule{&j_head, {}});
+    const expr* goal_f = saved_expr_pool_.make("f", {});
+    const expr* f_head = saved_expr_pool_.make("f", {});
+    const expr* g_body = saved_expr_pool_.make("g", {});
+    const expr* h_body = saved_expr_pool_.make("h", {});
+    const expr* g_head = saved_expr_pool_.make("g", {});
+    const expr* h_head = saved_expr_pool_.make("h", {});
+    const expr* i_body = saved_expr_pool_.make("i", {});
+    const expr* j_body = saved_expr_pool_.make("j", {});
+    const expr* i_head = saved_expr_pool_.make("i", {});
+    const expr* j_head = saved_expr_pool_.make("j", {});
+    initial_goals.push(goal_f);
+    database.push(rule{f_head, {g_body, h_body}});
+    database.push(rule{g_head, {i_body, j_body}});
+    database.push(rule{h_head, {i_body, j_body}});
+    database.push(rule{i_head, {}});
+    database.push(rule{j_head, {}});
 
     basic_manifest manifest{database, initial_goals, kMaxResolutions, kSeed};
     manifest.sim_.set_up();
@@ -1344,18 +1331,18 @@ TEST_F(BasicManifestIntegrationTest, SimLifecycleCdclUnitElimForcesRemainingCand
      *   2: g.   3: g.
      * setup: learn {f/0, g/2} and {f/1, g/2}.
      */
-    expr goal_f{expr::functor{"f", {}}};
-    expr goal_g{expr::functor{"g", {}}};
-    expr f_head0{expr::functor{"f", {}}};
-    expr f_head1{expr::functor{"f", {}}};
-    expr g_head0{expr::functor{"g", {}}};
-    expr g_head1{expr::functor{"g", {}}};
-    initial_goals.push(&goal_f);
-    initial_goals.push(&goal_g);
-    database.push(rule{&f_head0, {}});
-    database.push(rule{&f_head1, {}});
-    database.push(rule{&g_head0, {}});
-    database.push(rule{&g_head1, {}});
+    const expr* goal_f = saved_expr_pool_.make("f", {});
+    const expr* goal_g = saved_expr_pool_.make("g", {});
+    const expr* f_head0 = saved_expr_pool_.make("f", {});
+    const expr* f_head1 = saved_expr_pool_.make("f", {});
+    const expr* g_head0 = saved_expr_pool_.make("g", {});
+    const expr* g_head1 = saved_expr_pool_.make("g", {});
+    initial_goals.push(goal_f);
+    initial_goals.push(goal_g);
+    database.push(rule{f_head0, {}});
+    database.push(rule{f_head1, {}});
+    database.push(rule{g_head0, {}});
+    database.push(rule{g_head1, {}});
 
     basic_manifest manifest{database, initial_goals, kMaxResolutions, kSeed};
     const goal_lineage* gl_f = manifest.make_initial_goal_lineage_.make(0);
@@ -1402,18 +1389,18 @@ TEST_F(BasicManifestIntegrationTest, SimLifecycleDecisionMemoryClearsEachTearDow
      *   2: g.   3: g.
      * setup: learn {f/0, g/2}; pin f/0, g/2, g/3.
      */
-    expr goal_f{expr::functor{"f", {}}};
-    expr goal_g{expr::functor{"g", {}}};
-    expr f_head0{expr::functor{"f", {}}};
-    expr f_head1{expr::functor{"f", {}}};
-    expr g_head2{expr::functor{"g", {}}};
-    expr g_head3{expr::functor{"g", {}}};
-    initial_goals.push(&goal_f);
-    initial_goals.push(&goal_g);
-    database.push(rule{&f_head0, {}});
-    database.push(rule{&f_head1, {}});
-    database.push(rule{&g_head2, {}});
-    database.push(rule{&g_head3, {}});
+    const expr* goal_f = saved_expr_pool_.make("f", {});
+    const expr* goal_g = saved_expr_pool_.make("g", {});
+    const expr* f_head0 = saved_expr_pool_.make("f", {});
+    const expr* f_head1 = saved_expr_pool_.make("f", {});
+    const expr* g_head2 = saved_expr_pool_.make("g", {});
+    const expr* g_head3 = saved_expr_pool_.make("g", {});
+    initial_goals.push(goal_f);
+    initial_goals.push(goal_g);
+    database.push(rule{f_head0, {}});
+    database.push(rule{f_head1, {}});
+    database.push(rule{g_head2, {}});
+    database.push(rule{g_head3, {}});
 
     basic_manifest manifest{database, initial_goals, kMaxResolutions, kSeed};
     const goal_lineage* gl0 = manifest.make_initial_goal_lineage_.make(0);
@@ -1449,18 +1436,18 @@ TEST_F(BasicManifestIntegrationTest, SolverEnumeratesFourTwoGoalGroundCombinatio
      *   0: f.   1: f.
      *   2: g.   3: g.
      */
-    expr goal_f{expr::functor{"f", {}}};
-    expr goal_g{expr::functor{"g", {}}};
-    expr f_head0{expr::functor{"f", {}}};
-    expr f_head1{expr::functor{"f", {}}};
-    expr g_head2{expr::functor{"g", {}}};
-    expr g_head3{expr::functor{"g", {}}};
-    initial_goals.push(&goal_f);
-    initial_goals.push(&goal_g);
-    database.push(rule{&f_head0, {}});
-    database.push(rule{&f_head1, {}});
-    database.push(rule{&g_head2, {}});
-    database.push(rule{&g_head3, {}});
+    const expr* goal_f = saved_expr_pool_.make("f", {});
+    const expr* goal_g = saved_expr_pool_.make("g", {});
+    const expr* f_head0 = saved_expr_pool_.make("f", {});
+    const expr* f_head1 = saved_expr_pool_.make("f", {});
+    const expr* g_head2 = saved_expr_pool_.make("g", {});
+    const expr* g_head3 = saved_expr_pool_.make("g", {});
+    initial_goals.push(goal_f);
+    initial_goals.push(goal_g);
+    database.push(rule{f_head0, {}});
+    database.push(rule{f_head1, {}});
+    database.push(rule{g_head2, {}});
+    database.push(rule{g_head3, {}});
 
     basic_manifest manifest{database, initial_goals, kMaxResolutions, kSeed};
     auto sm = manifest.solver_.solve();
@@ -1526,32 +1513,27 @@ TEST_F(BasicManifestIntegrationTest, SolverEnumeratesEightThreeGoalGroundCombina
 
         db seed_db;
         initial_goal_exprs seed_goals;
-        expr goal_f{expr::functor{"f", {}}};
-        expr goal_g{expr::functor{"g", {}}};
-        expr goal_h{expr::functor{"h", {}}};
-        expr f0{expr::functor{"f", {}}};
-        expr f1{expr::functor{"f", {}}};
-        expr g0{expr::functor{"g", {}}};
-        expr g1{expr::functor{"g", {}}};
-        expr h0{expr::functor{"h", {}}};
-        expr h1{expr::functor{"h", {}}};
-        seed_goals.push(&goal_f);
-        seed_goals.push(&goal_g);
-        seed_goals.push(&goal_h);
-        seed_db.push(rule{&f0, {}});
-        seed_db.push(rule{&f1, {}});
-        seed_db.push(rule{&g0, {}});
-        seed_db.push(rule{&g1, {}});
-        seed_db.push(rule{&h0, {}});
-        seed_db.push(rule{&h1, {}});
+        const expr* goal_f = saved_expr_pool_.make("f", {});
+        const expr* goal_g = saved_expr_pool_.make("g", {});
+        const expr* goal_h = saved_expr_pool_.make("h", {});
+        const expr* f0 = saved_expr_pool_.make("f", {});
+        const expr* f1 = saved_expr_pool_.make("f", {});
+        const expr* g0 = saved_expr_pool_.make("g", {});
+        const expr* g1 = saved_expr_pool_.make("g", {});
+        const expr* h0 = saved_expr_pool_.make("h", {});
+        const expr* h1 = saved_expr_pool_.make("h", {});
+        seed_goals.push(goal_f);
+        seed_goals.push(goal_g);
+        seed_goals.push(goal_h);
+        seed_db.push(rule{f0, {}});
+        seed_db.push(rule{f1, {}});
+        seed_db.push(rule{g0, {}});
+        seed_db.push(rule{g1, {}});
+        seed_db.push(rule{h0, {}});
+        seed_db.push(rule{h1, {}});
 
-        trail seed_trail;
-        locator seed_loc;
-        seed_loc.bind_as<i_log_to_current_trail_frame>(seed_trail);
-        expr_pool seed_pool{seed_loc};
         basic_manifest manifest{seed_db, seed_goals, kMaxResolutions, seed};
         normalizer seed_normalizer{manifest.loc_};
-
         auto sm = manifest.solver_.solve();
         std::set<std::tuple<rule_id, rule_id, rule_id>> seen;
         size_t solved_count = 0;
@@ -1610,18 +1592,18 @@ TEST_F(BasicManifestIntegrationTest, SolverEnumeratesFourVarBindingSolutions) {
      * rules:
      *   0: f(abc).   1: f(xyz).   2: f(def).   3: f(ghi).
      */
-    expr abc{expr::functor{"abc", {}}};
-    expr xyz{expr::functor{"xyz", {}}};
-    expr def{expr::functor{"def", {}}};
-    expr ghi{expr::functor{"ghi", {}}};
-    expr head0{expr::functor{"f", {&abc}}};
-    expr head1{expr::functor{"f", {&xyz}}};
-    expr head2{expr::functor{"f", {&def}}};
-    expr head3{expr::functor{"f", {&ghi}}};
-    database.push(rule{&head0, {}});
-    database.push(rule{&head1, {}});
-    database.push(rule{&head2, {}});
-    database.push(rule{&head3, {}});
+    const expr* abc = saved_expr_pool_.make("abc", {});
+    const expr* xyz = saved_expr_pool_.make("xyz", {});
+    const expr* def = saved_expr_pool_.make("def", {});
+    const expr* ghi = saved_expr_pool_.make("ghi", {});
+    const expr* head0 = saved_expr_pool_.make("f", {abc});
+    const expr* head1 = saved_expr_pool_.make("f", {xyz});
+    const expr* head2 = saved_expr_pool_.make("f", {def});
+    const expr* head3 = saved_expr_pool_.make("f", {ghi});
+    database.push(rule{head0, {}});
+    database.push(rule{head1, {}});
+    database.push(rule{head2, {}});
+    database.push(rule{head3, {}});
 
     basic_manifest manifest{database, initial_goals, kMaxResolutions, kSeed};
     normalizer normalizer{manifest.loc_};
@@ -1629,13 +1611,9 @@ TEST_F(BasicManifestIntegrationTest, SolverEnumeratesFourVarBindingSolutions) {
     const expr* var_a = manifest.expr_pool_.make(idx_a);
     initial_goals.push(manifest.expr_pool_.make("f", {var_a}));
 
-    const expr* abc_saved = saved_expr_pool_.import(&abc);
-    const expr* xyz_saved = saved_expr_pool_.import(&xyz);
-    const expr* def_saved = saved_expr_pool_.import(&def);
-    const expr* ghi_saved = saved_expr_pool_.import(&ghi);
     next_until_refuted(
         manifest.solver_,
-        {{abc_saved}, {xyz_saved}, {def_saved}, {ghi_saved}},
+        {{abc}, {xyz}, {def}, {ghi}},
         [&]() -> solution {
             return {saved_expr_pool_.import(
                 normalizer.normalize(manifest.expr_pool_.make(idx_a)))};
@@ -1650,24 +1628,24 @@ TEST_F(BasicManifestIntegrationTest, SolverEnumeratesFourClauseBodyFactChoices) 
      *   0: f :- g(X).
      *   1: g(a).   2: g(b).   3: g(c).   4: g(d).
      */
-    expr goal{expr::functor{"f", {}}};
-    expr rule_var{expr::var{0}};
-    expr a{expr::functor{"a", {}}};
-    expr b{expr::functor{"b", {}}};
-    expr c{expr::functor{"c", {}}};
-    expr d{expr::functor{"d", {}}};
-    expr g_fact1{expr::functor{"g", {&a}}};
-    expr g_fact2{expr::functor{"g", {&b}}};
-    expr g_fact3{expr::functor{"g", {&c}}};
-    expr g_fact4{expr::functor{"g", {&d}}};
-    expr f_head{expr::functor{"f", {}}};
-    expr g_body{expr::functor{"g", {&rule_var}}};
-    initial_goals.push(&goal);
-    database.push(rule{&f_head, {&g_body}});
-    database.push(rule{&g_fact1, {}});
-    database.push(rule{&g_fact2, {}});
-    database.push(rule{&g_fact3, {}});
-    database.push(rule{&g_fact4, {}});
+    const expr* goal = saved_expr_pool_.make("f", {});
+    const expr* rule_var = saved_expr_pool_.make(0);
+    const expr* a = saved_expr_pool_.make("a", {});
+    const expr* b = saved_expr_pool_.make("b", {});
+    const expr* c = saved_expr_pool_.make("c", {});
+    const expr* d = saved_expr_pool_.make("d", {});
+    const expr* g_fact1 = saved_expr_pool_.make("g", {a});
+    const expr* g_fact2 = saved_expr_pool_.make("g", {b});
+    const expr* g_fact3 = saved_expr_pool_.make("g", {c});
+    const expr* g_fact4 = saved_expr_pool_.make("g", {d});
+    const expr* f_head = saved_expr_pool_.make("f", {});
+    const expr* g_body = saved_expr_pool_.make("g", {rule_var});
+    initial_goals.push(goal);
+    database.push(rule{f_head, {g_body}});
+    database.push(rule{g_fact1, {}});
+    database.push(rule{g_fact2, {}});
+    database.push(rule{g_fact3, {}});
+    database.push(rule{g_fact4, {}});
 
     basic_manifest manifest{database, initial_goals, kMaxResolutions, kSeed};
     auto sm = manifest.solver_.solve();
@@ -1727,35 +1705,30 @@ TEST_F(BasicManifestIntegrationTest, SolverEnumeratesManySharedVarGroundHeads) {
 
         db seed_db;
         initial_goal_exprs seed_goals;
-        expr abc{expr::functor{"abc", {}}};
-        expr def{expr::functor{"def", {}}};
-        expr ghi{expr::functor{"ghi", {}}};
-        expr jkl{expr::functor{"jkl", {}}};
-        expr mno{expr::functor{"mno", {}}};
-        expr pqr{expr::functor{"pqr", {}}};
-        expr xyz{expr::functor{"xyz", {}}};
-        expr f_head0{expr::functor{"f", {}}};
-        expr f_head1{expr::functor{"f", {}}};
-        expr g_abc{expr::functor{"g", {&abc, &xyz, &pqr}}};
-        expr g_def{expr::functor{"g", {&def, &xyz, &pqr}}};
-        expr g_ghi{expr::functor{"g", {&ghi, &xyz, &pqr}}};
-        expr g_jkl{expr::functor{"g", {&jkl, &xyz, &pqr}}};
-        expr g_mno{expr::functor{"g", {&mno, &xyz, &pqr}}};
-        seed_db.push(rule{&f_head0, {}});
-        seed_db.push(rule{&f_head1, {}});
-        seed_db.push(rule{&g_abc, {}});
-        seed_db.push(rule{&g_def, {}});
-        seed_db.push(rule{&g_ghi, {}});
-        seed_db.push(rule{&g_jkl, {}});
-        seed_db.push(rule{&g_mno, {}});
+        const expr* abc = saved_expr_pool_.make("abc", {});
+        const expr* def = saved_expr_pool_.make("def", {});
+        const expr* ghi = saved_expr_pool_.make("ghi", {});
+        const expr* jkl = saved_expr_pool_.make("jkl", {});
+        const expr* mno = saved_expr_pool_.make("mno", {});
+        const expr* pqr = saved_expr_pool_.make("pqr", {});
+        const expr* xyz = saved_expr_pool_.make("xyz", {});
+        const expr* f_head0 = saved_expr_pool_.make("f", {});
+        const expr* f_head1 = saved_expr_pool_.make("f", {});
+        const expr* g_abc = saved_expr_pool_.make("g", {abc, xyz, pqr});
+        const expr* g_def = saved_expr_pool_.make("g", {def, xyz, pqr});
+        const expr* g_ghi = saved_expr_pool_.make("g", {ghi, xyz, pqr});
+        const expr* g_jkl = saved_expr_pool_.make("g", {jkl, xyz, pqr});
+        const expr* g_mno = saved_expr_pool_.make("g", {mno, xyz, pqr});
+        seed_db.push(rule{f_head0, {}});
+        seed_db.push(rule{f_head1, {}});
+        seed_db.push(rule{g_abc, {}});
+        seed_db.push(rule{g_def, {}});
+        seed_db.push(rule{g_ghi, {}});
+        seed_db.push(rule{g_jkl, {}});
+        seed_db.push(rule{g_mno, {}});
 
-        trail seed_trail;
-        locator seed_loc;
-        seed_loc.bind_as<i_log_to_current_trail_frame>(seed_trail);
-        expr_pool seed_pool{seed_loc};
         basic_manifest manifest{seed_db, seed_goals, kMaxResolutions, seed};
         normalizer seed_normalizer{manifest.loc_};
-
         const uint32_t idx_a = manifest.var_sequencer_.next();
         const uint32_t idx_b = manifest.var_sequencer_.next();
         const uint32_t idx_c = manifest.var_sequencer_.next();
@@ -1775,9 +1748,9 @@ TEST_F(BasicManifestIntegrationTest, SolverEnumeratesManySharedVarGroundHeads) {
             if (sm.consume_yield() != sim_termination::solved)
                 continue;
             binding_solutions.push_back({
-                seed_pool.import(seed_normalizer.normalize(var_a)),
-                seed_pool.import(seed_normalizer.normalize(var_b)),
-                seed_pool.import(seed_normalizer.normalize(var_c)),
+                saved_expr_pool_.import(seed_normalizer.normalize(var_a)),
+                saved_expr_pool_.import(seed_normalizer.normalize(var_b)),
+                saved_expr_pool_.import(seed_normalizer.normalize(var_c)),
             });
             const lemma decision_lemma = manifest.decision_memory_.derive();
             const lemma resolution_lemma = manifest.resolution_memory_.derive_resolution_lemma();
@@ -1813,13 +1786,6 @@ TEST_F(BasicManifestIntegrationTest, SolverEnumeratesManySharedVarGroundHeads) {
         EXPECT_TRUE(seen.contains({rule_id{1}, rule_id{5}}));
         EXPECT_TRUE(seen.contains({rule_id{1}, rule_id{6}}));
         EXPECT_EQ(seen.size(), kRawSolutions);
-        const expr* abc_saved = seed_pool.import(&abc);
-        const expr* def_saved = seed_pool.import(&def);
-        const expr* ghi_saved = seed_pool.import(&ghi);
-        const expr* jkl_saved = seed_pool.import(&jkl);
-        const expr* mno_saved = seed_pool.import(&mno);
-        const expr* xyz_saved = seed_pool.import(&xyz);
-        const expr* pqr_saved = seed_pool.import(&pqr);
         size_t saw_abc = 0;
         size_t saw_def = 0;
         size_t saw_ghi = 0;
@@ -1828,20 +1794,20 @@ TEST_F(BasicManifestIntegrationTest, SolverEnumeratesManySharedVarGroundHeads) {
         for (const solution& s : binding_solutions) {
             ASSERT_EQ(s.size(), 3u);
             const expr& a_bound = *s[0];
-            if (a_bound == *abc_saved)
+            if (a_bound == *abc)
                 ++saw_abc;
-            else if (a_bound == *def_saved)
+            else if (a_bound == *def)
                 ++saw_def;
-            else if (a_bound == *ghi_saved)
+            else if (a_bound == *ghi)
                 ++saw_ghi;
-            else if (a_bound == *jkl_saved)
+            else if (a_bound == *jkl)
                 ++saw_jkl;
-            else if (a_bound == *mno_saved)
+            else if (a_bound == *mno)
                 ++saw_mno;
             else
                 FAIL() << "unexpected binding for idx_a";
-            EXPECT_EQ(*s[1], *xyz_saved);
-            EXPECT_EQ(*s[2], *pqr_saved);
+            EXPECT_EQ(*s[1], *xyz);
+            EXPECT_EQ(*s[2], *pqr);
         }
         EXPECT_EQ(saw_abc, 2u);
         EXPECT_EQ(saw_def, 2u);
@@ -1860,15 +1826,15 @@ TEST_F(BasicManifestIntegrationTest, RefutesAfterCdclOnUnsatClauseBranches) {
      * rules:
      *   0: a :- b.   1: a :- c.
      */
-    expr b{expr::functor{"b", {}}};
-    expr c{expr::functor{"c", {}}};
-    expr a_head0{expr::functor{"a", {}}};
-    expr a_head1{expr::functor{"a", {}}};
-    database.push(rule{&a_head0, {&b}});
-    database.push(rule{&a_head1, {&c}});
+    const expr* b = saved_expr_pool_.make("b", {});
+    const expr* c = saved_expr_pool_.make("c", {});
+    const expr* a_head0 = saved_expr_pool_.make("a", {});
+    const expr* a_head1 = saved_expr_pool_.make("a", {});
+    database.push(rule{a_head0, {b}});
+    database.push(rule{a_head1, {c}});
 
-    expr goal{expr::functor{"a", {}}};
-    initial_goals.push(&goal);
+    const expr* goal = saved_expr_pool_.make("a", {});
+    initial_goals.push(goal);
 
     basic_manifest manifest{database, initial_goals, kMaxResolutions, kSeed};
     auto sm = manifest.solver_.solve();
@@ -1896,17 +1862,17 @@ TEST_F(BasicManifestIntegrationTest, FindsUniqueSharedVarConjunctionThenRefutes)
      * rules:
      *   0: is_a(1).   1: is_a(2).   2: is_b(2).   3: is_b(3).
      */
-    expr one{expr::functor{"1", {}}};
-    expr two{expr::functor{"2", {}}};
-    expr three{expr::functor{"3", {}}};
-    expr is_a1{expr::functor{"is_a", {&one}}};
-    expr is_a2{expr::functor{"is_a", {&two}}};
-    expr is_b2{expr::functor{"is_b", {&two}}};
-    expr is_b3{expr::functor{"is_b", {&three}}};
-    database.push(rule{&is_a1, {}});
-    database.push(rule{&is_a2, {}});
-    database.push(rule{&is_b2, {}});
-    database.push(rule{&is_b3, {}});
+    const expr* one = saved_expr_pool_.make("1", {});
+    const expr* two = saved_expr_pool_.make("2", {});
+    const expr* three = saved_expr_pool_.make("3", {});
+    const expr* is_a1 = saved_expr_pool_.make("is_a", {one});
+    const expr* is_a2 = saved_expr_pool_.make("is_a", {two});
+    const expr* is_b2 = saved_expr_pool_.make("is_b", {two});
+    const expr* is_b3 = saved_expr_pool_.make("is_b", {three});
+    database.push(rule{is_a1, {}});
+    database.push(rule{is_a2, {}});
+    database.push(rule{is_b2, {}});
+    database.push(rule{is_b3, {}});
 
     basic_manifest manifest{database, initial_goals, kMaxResolutions, kSeed};
     normalizer normalizer{manifest.loc_};
@@ -1915,10 +1881,9 @@ TEST_F(BasicManifestIntegrationTest, FindsUniqueSharedVarConjunctionThenRefutes)
     initial_goals.push(manifest.expr_pool_.make("is_a", {var_x}));
     initial_goals.push(manifest.expr_pool_.make("is_b", {var_x}));
 
-    const expr* two_saved = saved_expr_pool_.import(&two);
     next_until_refuted(
         manifest.solver_,
-        {{two_saved}},
+        {{two}},
         [&]() -> solution {
             return {saved_expr_pool_.import(
                 normalizer.normalize(manifest.expr_pool_.make(idx_x)))};
@@ -1932,16 +1897,16 @@ TEST_F(BasicManifestIntegrationTest, EnumeratesTwoParentBindingsForAlice) {
      * rules:
      *   0: parent(bob, alice).   1: parent(carol, alice).   2: parent(dave, bob).
      */
-    expr bob{expr::functor{"bob", {}}};
-    expr carol{expr::functor{"carol", {}}};
-    expr alice{expr::functor{"alice", {}}};
-    expr dave{expr::functor{"dave", {}}};
-    expr parent_bob_alice{expr::functor{"parent", {&bob, &alice}}};
-    expr parent_carol_alice{expr::functor{"parent", {&carol, &alice}}};
-    expr parent_dave_bob{expr::functor{"parent", {&dave, &bob}}};
-    database.push(rule{&parent_bob_alice, {}});
-    database.push(rule{&parent_carol_alice, {}});
-    database.push(rule{&parent_dave_bob, {}});
+    const expr* bob = saved_expr_pool_.make("bob", {});
+    const expr* carol = saved_expr_pool_.make("carol", {});
+    const expr* alice = saved_expr_pool_.make("alice", {});
+    const expr* dave = saved_expr_pool_.make("dave", {});
+    const expr* parent_bob_alice = saved_expr_pool_.make("parent", {bob, alice});
+    const expr* parent_carol_alice = saved_expr_pool_.make("parent", {carol, alice});
+    const expr* parent_dave_bob = saved_expr_pool_.make("parent", {dave, bob});
+    database.push(rule{parent_bob_alice, {}});
+    database.push(rule{parent_carol_alice, {}});
+    database.push(rule{parent_dave_bob, {}});
 
     basic_manifest manifest{database, initial_goals, kMaxResolutions, kSeed};
     normalizer normalizer{manifest.loc_};
@@ -1950,11 +1915,9 @@ TEST_F(BasicManifestIntegrationTest, EnumeratesTwoParentBindingsForAlice) {
     const expr* alice_goal = manifest.expr_pool_.make("alice", {});
     initial_goals.push(manifest.expr_pool_.make("parent", {var_x, alice_goal}));
 
-    const expr* bob_saved = saved_expr_pool_.import(&bob);
-    const expr* carol_saved = saved_expr_pool_.import(&carol);
     next_until_refuted(
         manifest.solver_,
-        {{bob_saved}, {carol_saved}},
+        {{bob}, {carol}},
         [&]() -> solution {
             return {saved_expr_pool_.import(
                 normalizer.normalize(manifest.expr_pool_.make(idx_x)))};
@@ -1972,29 +1935,29 @@ TEST_F(BasicManifestIntegrationTest, EnumeratesPeanoLessThanSeven) {
      */
     static constexpr size_t kPeanoBudget = 128;
 
-    expr zero{expr::functor{"zero", {}}};
-    expr nat_zero_h{expr::functor{"nat", {&zero}}};
-    database.push(rule{&nat_zero_h, {}});
+    const expr* zero = saved_expr_pool_.make("zero", {});
+    const expr* nat_zero_h = saved_expr_pool_.make("nat", {zero});
+    database.push(rule{nat_zero_h, {}});
 
-    expr rv1{expr::var{0}};
-    expr suc_rv1{expr::functor{"suc", {&rv1}}};
-    expr nat_suc_rv1{expr::functor{"nat", {&suc_rv1}}};
-    expr nat_rv1{expr::functor{"nat", {&rv1}}};
-    database.push(rule{&nat_suc_rv1, {&nat_rv1}});
+    const expr* rv1 = saved_expr_pool_.make(0);
+    const expr* suc_rv1 = saved_expr_pool_.make("suc", {rv1});
+    const expr* nat_suc_rv1 = saved_expr_pool_.make("nat", {suc_rv1});
+    const expr* nat_rv1 = saved_expr_pool_.make("nat", {rv1});
+    database.push(rule{nat_suc_rv1, {nat_rv1}});
 
-    expr rv2{expr::var{0}};
-    expr suc_rv2{expr::functor{"suc", {&rv2}}};
-    expr lt_zero_suc{expr::functor{"lt", {&zero, &suc_rv2}}};
-    expr nat_rv2{expr::functor{"nat", {&rv2}}};
-    database.push(rule{&lt_zero_suc, {&nat_rv2}});
+    const expr* rv2 = saved_expr_pool_.make(0);
+    const expr* suc_rv2 = saved_expr_pool_.make("suc", {rv2});
+    const expr* lt_zero_suc = saved_expr_pool_.make("lt", {zero, suc_rv2});
+    const expr* nat_rv2 = saved_expr_pool_.make("nat", {rv2});
+    database.push(rule{lt_zero_suc, {nat_rv2}});
 
-    expr rv3{expr::var{0}};
-    expr rv4{expr::var{1}};
-    expr suc_rv3{expr::functor{"suc", {&rv3}}};
-    expr suc_rv4{expr::functor{"suc", {&rv4}}};
-    expr lt_suc_suc{expr::functor{"lt", {&suc_rv3, &suc_rv4}}};
-    expr lt_rv3_rv4{expr::functor{"lt", {&rv3, &rv4}}};
-    database.push(rule{&lt_suc_suc, {&lt_rv3_rv4}});
+    const expr* rv3 = saved_expr_pool_.make(0);
+    const expr* rv4 = saved_expr_pool_.make(1);
+    const expr* suc_rv3 = saved_expr_pool_.make("suc", {rv3});
+    const expr* suc_rv4 = saved_expr_pool_.make("suc", {rv4});
+    const expr* lt_suc_suc = saved_expr_pool_.make("lt", {suc_rv3, suc_rv4});
+    const expr* lt_rv3_rv4 = saved_expr_pool_.make("lt", {rv3, rv4});
+    database.push(rule{lt_suc_suc, {lt_rv3_rv4}});
 
     std::set<solution> expected;
     for (int n = 0; n < 7; ++n) {
@@ -2041,32 +2004,32 @@ TEST_F(BasicManifestIntegrationTest, EnumeratesSatPAndQOrR) {
      * initial goals: bool(P). bool(Q). bool(R). or(Q,R,QR). and(P,QR,true).
      * rules: bool(true/false); relational or/and with bool(X) bodies.
      */
-    expr true_atom{expr::functor{"true", {}}};
-    expr false_atom{expr::functor{"false", {}}};
-    expr bool_true{expr::functor{"bool", {&true_atom}}};
-    expr bool_false{expr::functor{"bool", {&false_atom}}};
-    database.push(rule{&bool_true, {}});
-    database.push(rule{&bool_false, {}});
+    const expr* true_atom = saved_expr_pool_.make("true", {});
+    const expr* false_atom = saved_expr_pool_.make("false", {});
+    const expr* bool_true = saved_expr_pool_.make("bool", {true_atom});
+    const expr* bool_false = saved_expr_pool_.make("bool", {false_atom});
+    database.push(rule{bool_true, {}});
+    database.push(rule{bool_false, {}});
 
-    expr or_rv{expr::var{0}};
-    expr or_true_x_true{expr::functor{"or", {&true_atom, &or_rv, &true_atom}}};
-    expr or_bool_body{expr::functor{"bool", {&or_rv}}};
-    database.push(rule{&or_true_x_true, {&or_bool_body}});
+    const expr* or_rv = saved_expr_pool_.make(0);
+    const expr* or_true_x_true = saved_expr_pool_.make("or", {true_atom, or_rv, true_atom});
+    const expr* or_bool_body = saved_expr_pool_.make("bool", {or_rv});
+    database.push(rule{or_true_x_true, {or_bool_body}});
 
-    expr or_rv2{expr::var{0}};
-    expr or_false_x_x{expr::functor{"or", {&false_atom, &or_rv2, &or_rv2}}};
-    expr or_bool_body2{expr::functor{"bool", {&or_rv2}}};
-    database.push(rule{&or_false_x_x, {&or_bool_body2}});
+    const expr* or_rv2 = saved_expr_pool_.make(0);
+    const expr* or_false_x_x = saved_expr_pool_.make("or", {false_atom, or_rv2, or_rv2});
+    const expr* or_bool_body2 = saved_expr_pool_.make("bool", {or_rv2});
+    database.push(rule{or_false_x_x, {or_bool_body2}});
 
-    expr and_rv{expr::var{0}};
-    expr and_true_x_x{expr::functor{"and", {&true_atom, &and_rv, &and_rv}}};
-    expr and_bool_body{expr::functor{"bool", {&and_rv}}};
-    database.push(rule{&and_true_x_x, {&and_bool_body}});
+    const expr* and_rv = saved_expr_pool_.make(0);
+    const expr* and_true_x_x = saved_expr_pool_.make("and", {true_atom, and_rv, and_rv});
+    const expr* and_bool_body = saved_expr_pool_.make("bool", {and_rv});
+    database.push(rule{and_true_x_x, {and_bool_body}});
 
-    expr and_rv2{expr::var{0}};
-    expr and_false_x_false{expr::functor{"and", {&false_atom, &and_rv2, &false_atom}}};
-    expr and_bool_body2{expr::functor{"bool", {&and_rv2}}};
-    database.push(rule{&and_false_x_false, {&and_bool_body2}});
+    const expr* and_rv2 = saved_expr_pool_.make(0);
+    const expr* and_false_x_false = saved_expr_pool_.make("and", {false_atom, and_rv2, false_atom});
+    const expr* and_bool_body2 = saved_expr_pool_.make("bool", {and_rv2});
+    database.push(rule{and_false_x_false, {and_bool_body2}});
 
     basic_manifest manifest{database, initial_goals, kMaxResolutions, kSeed};
     normalizer normalizer{manifest.loc_};
@@ -2085,12 +2048,10 @@ TEST_F(BasicManifestIntegrationTest, EnumeratesSatPAndQOrR) {
     initial_goals.push(manifest.expr_pool_.make("or", {var_q, var_r, var_qr}));
     initial_goals.push(manifest.expr_pool_.make("and", {var_p, var_qr, true_goal}));
 
-    const expr* t_saved = saved_expr_pool_.import(&true_atom);
-    const expr* f_saved = saved_expr_pool_.import(&false_atom);
     // Raw solved ticks may exceed 3 when resolution paths duplicate bindings.
     next_until_refuted(
         manifest.solver_,
-        {{t_saved, t_saved, t_saved}, {t_saved, t_saved, f_saved}, {t_saved, f_saved, t_saved}},
+        {{true_atom, true_atom, true_atom}, {true_atom, true_atom, false_atom}, {true_atom, false_atom, true_atom}},
         [&]() -> solution {
             return {
                 saved_expr_pool_.import(normalizer.normalize(manifest.expr_pool_.make(idx_p))),
@@ -2107,24 +2068,24 @@ TEST_F(BasicManifestIntegrationTest, EnumeratesTwoSatAssignmentsForImpliesQ) {
      * initial goals: bool(P). bool(Q). or(P,Q,true). not(P,NP). or(NP,Q,true).
      * rules: 8 bool/or/not ground facts.
      */
-    expr true_atom{expr::functor{"true", {}}};
-    expr false_atom{expr::functor{"false", {}}};
-    expr bool_true{expr::functor{"bool", {&true_atom}}};
-    expr bool_false{expr::functor{"bool", {&false_atom}}};
-    expr not_true_false{expr::functor{"not", {&true_atom, &false_atom}}};
-    expr not_false_true{expr::functor{"not", {&false_atom, &true_atom}}};
-    expr or_t_t_t{expr::functor{"or", {&true_atom, &true_atom, &true_atom}}};
-    expr or_t_f_t{expr::functor{"or", {&true_atom, &false_atom, &true_atom}}};
-    expr or_f_t_t{expr::functor{"or", {&false_atom, &true_atom, &true_atom}}};
-    expr or_f_f_f{expr::functor{"or", {&false_atom, &false_atom, &false_atom}}};
-    database.push(rule{&bool_true, {}});
-    database.push(rule{&bool_false, {}});
-    database.push(rule{&not_true_false, {}});
-    database.push(rule{&not_false_true, {}});
-    database.push(rule{&or_t_t_t, {}});
-    database.push(rule{&or_t_f_t, {}});
-    database.push(rule{&or_f_t_t, {}});
-    database.push(rule{&or_f_f_f, {}});
+    const expr* true_atom = saved_expr_pool_.make("true", {});
+    const expr* false_atom = saved_expr_pool_.make("false", {});
+    const expr* bool_true = saved_expr_pool_.make("bool", {true_atom});
+    const expr* bool_false = saved_expr_pool_.make("bool", {false_atom});
+    const expr* not_true_false = saved_expr_pool_.make("not", {true_atom, false_atom});
+    const expr* not_false_true = saved_expr_pool_.make("not", {false_atom, true_atom});
+    const expr* or_t_t_t = saved_expr_pool_.make("or", {true_atom, true_atom, true_atom});
+    const expr* or_t_f_t = saved_expr_pool_.make("or", {true_atom, false_atom, true_atom});
+    const expr* or_f_t_t = saved_expr_pool_.make("or", {false_atom, true_atom, true_atom});
+    const expr* or_f_f_f = saved_expr_pool_.make("or", {false_atom, false_atom, false_atom});
+    database.push(rule{bool_true, {}});
+    database.push(rule{bool_false, {}});
+    database.push(rule{not_true_false, {}});
+    database.push(rule{not_false_true, {}});
+    database.push(rule{or_t_t_t, {}});
+    database.push(rule{or_t_f_t, {}});
+    database.push(rule{or_f_t_t, {}});
+    database.push(rule{or_f_f_f, {}});
 
     basic_manifest manifest{database, initial_goals, kMaxResolutions, kSeed};
     normalizer normalizer{manifest.loc_};
@@ -2174,16 +2135,16 @@ TEST_F(BasicManifestIntegrationTest, EnumeratesTwoPathTwoColorings) {
      * initial goals: color(A). color(B). color(C). diff(A,B). diff(B,C).
      * rules: color(red/blue). diff(red,blue). diff(blue,red).
      */
-    expr red{expr::functor{"red", {}}};
-    expr blue{expr::functor{"blue", {}}};
-    expr color_red{expr::functor{"color", {&red}}};
-    expr color_blue{expr::functor{"color", {&blue}}};
-    expr diff_red_blue{expr::functor{"diff", {&red, &blue}}};
-    expr diff_blue_red{expr::functor{"diff", {&blue, &red}}};
-    database.push(rule{&color_red, {}});
-    database.push(rule{&color_blue, {}});
-    database.push(rule{&diff_red_blue, {}});
-    database.push(rule{&diff_blue_red, {}});
+    const expr* red = saved_expr_pool_.make("red", {});
+    const expr* blue = saved_expr_pool_.make("blue", {});
+    const expr* color_red = saved_expr_pool_.make("color", {red});
+    const expr* color_blue = saved_expr_pool_.make("color", {blue});
+    const expr* diff_red_blue = saved_expr_pool_.make("diff", {red, blue});
+    const expr* diff_blue_red = saved_expr_pool_.make("diff", {blue, red});
+    database.push(rule{color_red, {}});
+    database.push(rule{color_blue, {}});
+    database.push(rule{diff_red_blue, {}});
+    database.push(rule{diff_blue_red, {}});
 
     basic_manifest manifest{database, initial_goals, kMaxResolutions, kSeed};
     normalizer normalizer{manifest.loc_};
@@ -2253,33 +2214,28 @@ TEST_F(BasicManifestIntegrationTest, EnumeratesK3ThreeColorings) {
 
         db seed_db;
         initial_goal_exprs seed_goals;
-        trail seed_trail;
-        locator seed_loc;
-        seed_loc.bind_as<i_log_to_current_trail_frame>(seed_trail);
-        expr_pool seed_pool{seed_loc};
+        const expr* red = saved_expr_pool_.make("red", {});
+        const expr* green = saved_expr_pool_.make("green", {});
+        const expr* blue = saved_expr_pool_.make("blue", {});
+        const expr* color_red = saved_expr_pool_.make("color", {red});
+        const expr* color_green = saved_expr_pool_.make("color", {green});
+        const expr* color_blue = saved_expr_pool_.make("color", {blue});
+        seed_db.push(rule{color_red, {}});
+        seed_db.push(rule{color_green, {}});
+        seed_db.push(rule{color_blue, {}});
 
-        expr red{expr::functor{"red", {}}};
-        expr green{expr::functor{"green", {}}};
-        expr blue{expr::functor{"blue", {}}};
-        expr color_red{expr::functor{"color", {&red}}};
-        expr color_green{expr::functor{"color", {&green}}};
-        expr color_blue{expr::functor{"color", {&blue}}};
-        seed_db.push(rule{&color_red, {}});
-        seed_db.push(rule{&color_green, {}});
-        seed_db.push(rule{&color_blue, {}});
-
-        expr diff_red_green{expr::functor{"diff", {&red, &green}}};
-        expr diff_red_blue{expr::functor{"diff", {&red, &blue}}};
-        expr diff_green_red{expr::functor{"diff", {&green, &red}}};
-        expr diff_green_blue{expr::functor{"diff", {&green, &blue}}};
-        expr diff_blue_red{expr::functor{"diff", {&blue, &red}}};
-        expr diff_blue_green{expr::functor{"diff", {&blue, &green}}};
-        seed_db.push(rule{&diff_red_green, {}});
-        seed_db.push(rule{&diff_red_blue, {}});
-        seed_db.push(rule{&diff_green_red, {}});
-        seed_db.push(rule{&diff_green_blue, {}});
-        seed_db.push(rule{&diff_blue_red, {}});
-        seed_db.push(rule{&diff_blue_green, {}});
+        const expr* diff_red_green = saved_expr_pool_.make("diff", {red, green});
+        const expr* diff_red_blue = saved_expr_pool_.make("diff", {red, blue});
+        const expr* diff_green_red = saved_expr_pool_.make("diff", {green, red});
+        const expr* diff_green_blue = saved_expr_pool_.make("diff", {green, blue});
+        const expr* diff_blue_red = saved_expr_pool_.make("diff", {blue, red});
+        const expr* diff_blue_green = saved_expr_pool_.make("diff", {blue, green});
+        seed_db.push(rule{diff_red_green, {}});
+        seed_db.push(rule{diff_red_blue, {}});
+        seed_db.push(rule{diff_green_red, {}});
+        seed_db.push(rule{diff_green_blue, {}});
+        seed_db.push(rule{diff_blue_red, {}});
+        seed_db.push(rule{diff_blue_green, {}});
 
         basic_manifest manifest{seed_db, seed_goals, 128, seed};
         normalizer seed_normalizer{manifest.loc_};
@@ -2296,11 +2252,8 @@ TEST_F(BasicManifestIntegrationTest, EnumeratesK3ThreeColorings) {
         seed_goals.push(manifest.expr_pool_.make("diff", {var_a, var_c}));
         seed_goals.push(manifest.expr_pool_.make("diff", {var_b, var_c}));
 
-        const expr* r = seed_pool.import(&red);
-        const expr* g = seed_pool.import(&green);
-        const expr* b = seed_pool.import(&blue);
         std::set<solution> expected = {
-            {r, g, b}, {r, b, g}, {g, r, b}, {g, b, r}, {b, r, g}, {b, g, r},
+            {red, green, blue}, {red, blue, green}, {green, red, blue}, {green, blue, red}, {blue, red, green}, {blue, green, red},
         };
 
         next_until_refuted(
@@ -2308,9 +2261,9 @@ TEST_F(BasicManifestIntegrationTest, EnumeratesK3ThreeColorings) {
             expected,
             [&]() -> solution {
                 return {
-                    seed_pool.import(seed_normalizer.normalize(manifest.expr_pool_.make(idx_a))),
-                    seed_pool.import(seed_normalizer.normalize(manifest.expr_pool_.make(idx_b))),
-                    seed_pool.import(seed_normalizer.normalize(manifest.expr_pool_.make(idx_c))),
+                    saved_expr_pool_.import(seed_normalizer.normalize(manifest.expr_pool_.make(idx_a))),
+                    saved_expr_pool_.import(seed_normalizer.normalize(manifest.expr_pool_.make(idx_b))),
+                    saved_expr_pool_.import(seed_normalizer.normalize(manifest.expr_pool_.make(idx_c))),
                 };
             });
     }
@@ -2327,31 +2280,27 @@ TEST_F(BasicManifestIntegrationTest, EnumeratesK3TailFourNodeColorings) {
         SCOPED_TRACE(testing::Message() << "seed=" << seed);
         db seed_db;
         initial_goal_exprs seed_goals;
-        trail seed_trail;
-        locator seed_loc;
-        seed_loc.bind_as<i_log_to_current_trail_frame>(seed_trail);
-        expr_pool seed_pool{seed_loc};
-        expr red{expr::functor{"red", {}}};
-        expr green{expr::functor{"green", {}}};
-        expr blue{expr::functor{"blue", {}}};
-        expr color_red{expr::functor{"color", {&red}}};
-        expr color_green{expr::functor{"color", {&green}}};
-        expr color_blue{expr::functor{"color", {&blue}}};
-        seed_db.push(rule{&color_red, {}});
-        seed_db.push(rule{&color_green, {}});
-        seed_db.push(rule{&color_blue, {}});
-        expr diff_rg{expr::functor{"diff", {&red, &green}}};
-        expr diff_rb{expr::functor{"diff", {&red, &blue}}};
-        expr diff_gr{expr::functor{"diff", {&green, &red}}};
-        expr diff_gb{expr::functor{"diff", {&green, &blue}}};
-        expr diff_br{expr::functor{"diff", {&blue, &red}}};
-        expr diff_bg{expr::functor{"diff", {&blue, &green}}};
-        seed_db.push(rule{&diff_rg, {}});
-        seed_db.push(rule{&diff_rb, {}});
-        seed_db.push(rule{&diff_gr, {}});
-        seed_db.push(rule{&diff_gb, {}});
-        seed_db.push(rule{&diff_br, {}});
-        seed_db.push(rule{&diff_bg, {}});
+        const expr* red = saved_expr_pool_.make("red", {});
+        const expr* green = saved_expr_pool_.make("green", {});
+        const expr* blue = saved_expr_pool_.make("blue", {});
+        const expr* color_red = saved_expr_pool_.make("color", {red});
+        const expr* color_green = saved_expr_pool_.make("color", {green});
+        const expr* color_blue = saved_expr_pool_.make("color", {blue});
+        seed_db.push(rule{color_red, {}});
+        seed_db.push(rule{color_green, {}});
+        seed_db.push(rule{color_blue, {}});
+        const expr* diff_rg = saved_expr_pool_.make("diff", {red, green});
+        const expr* diff_rb = saved_expr_pool_.make("diff", {red, blue});
+        const expr* diff_gr = saved_expr_pool_.make("diff", {green, red});
+        const expr* diff_gb = saved_expr_pool_.make("diff", {green, blue});
+        const expr* diff_br = saved_expr_pool_.make("diff", {blue, red});
+        const expr* diff_bg = saved_expr_pool_.make("diff", {blue, green});
+        seed_db.push(rule{diff_rg, {}});
+        seed_db.push(rule{diff_rb, {}});
+        seed_db.push(rule{diff_gr, {}});
+        seed_db.push(rule{diff_gb, {}});
+        seed_db.push(rule{diff_br, {}});
+        seed_db.push(rule{diff_bg, {}});
         basic_manifest manifest{seed_db, seed_goals, 128, seed};
         normalizer seed_normalizer{manifest.loc_};
         const uint32_t idx_a = manifest.var_sequencer_.next();
@@ -2370,25 +2319,21 @@ TEST_F(BasicManifestIntegrationTest, EnumeratesK3TailFourNodeColorings) {
         seed_goals.push(manifest.expr_pool_.make("diff", {var_a, var_c}));
         seed_goals.push(manifest.expr_pool_.make("diff", {var_b, var_c}));
         seed_goals.push(manifest.expr_pool_.make("diff", {var_a, var_d}));
-        const expr* r = seed_pool.import(&red);
-        const expr* g = seed_pool.import(&green);
-        const expr* b = seed_pool.import(&blue);
         std::set<solution> expected = {
-            {r, g, b, g}, {r, g, b, b}, {r, b, g, g}, {r, b, g, b},
-            {g, r, b, r}, {g, r, b, b}, {g, b, r, r}, {g, b, r, b},
-            {b, r, g, r}, {b, r, g, g}, {b, g, r, r}, {b, g, r, g},
+            {red, green, blue, green}, {red, green, blue, blue}, {red, blue, green, green}, {red, blue, green, blue},
+            {green, red, blue, red}, {green, red, blue, blue}, {green, blue, red, red}, {green, blue, red, blue},
+            {blue, red, green, red}, {blue, red, green, green}, {blue, green, red, red}, {blue, green, red, green},
         };
         next_until_refuted(manifest.solver_, expected, [&]() -> solution {
             return {
-                seed_pool.import(seed_normalizer.normalize(manifest.expr_pool_.make(idx_a))),
-                seed_pool.import(seed_normalizer.normalize(manifest.expr_pool_.make(idx_b))),
-                seed_pool.import(seed_normalizer.normalize(manifest.expr_pool_.make(idx_c))),
-                seed_pool.import(seed_normalizer.normalize(manifest.expr_pool_.make(idx_d))),
+                saved_expr_pool_.import(seed_normalizer.normalize(manifest.expr_pool_.make(idx_a))),
+                saved_expr_pool_.import(seed_normalizer.normalize(manifest.expr_pool_.make(idx_b))),
+                saved_expr_pool_.import(seed_normalizer.normalize(manifest.expr_pool_.make(idx_c))),
+                saved_expr_pool_.import(seed_normalizer.normalize(manifest.expr_pool_.make(idx_d))),
             };
         });
     }
 }
-
 TEST_F(BasicManifestIntegrationTest, EnumeratesFourVarSatThreeClauses) {
     /*
      * Intent: satisfy (P ∨ Q) ∧ (R ∨ S) ∧ (¬P ∨ ¬R).
@@ -2403,39 +2348,34 @@ TEST_F(BasicManifestIntegrationTest, EnumeratesFourVarSatThreeClauses) {
 
         db seed_db;
         initial_goal_exprs seed_goals;
-        trail seed_trail;
-        locator seed_loc;
-        seed_loc.bind_as<i_log_to_current_trail_frame>(seed_trail);
-        expr_pool seed_pool{seed_loc};
+        const expr* true_atom = saved_expr_pool_.make("true", {});
+        const expr* false_atom = saved_expr_pool_.make("false", {});
+        const expr* bool_true = saved_expr_pool_.make("bool", {true_atom});
+        const expr* bool_false = saved_expr_pool_.make("bool", {false_atom});
+        const expr* not_true_false = saved_expr_pool_.make("not", {true_atom, false_atom});
+        const expr* not_false_true = saved_expr_pool_.make("not", {false_atom, true_atom});
+        seed_db.push(rule{bool_true, {}});
+        seed_db.push(rule{bool_false, {}});
+        seed_db.push(rule{not_true_false, {}});
+        seed_db.push(rule{not_false_true, {}});
 
-        expr true_atom{expr::functor{"true", {}}};
-        expr false_atom{expr::functor{"false", {}}};
-        expr bool_true{expr::functor{"bool", {&true_atom}}};
-        expr bool_false{expr::functor{"bool", {&false_atom}}};
-        expr not_true_false{expr::functor{"not", {&true_atom, &false_atom}}};
-        expr not_false_true{expr::functor{"not", {&false_atom, &true_atom}}};
-        seed_db.push(rule{&bool_true, {}});
-        seed_db.push(rule{&bool_false, {}});
-        seed_db.push(rule{&not_true_false, {}});
-        seed_db.push(rule{&not_false_true, {}});
+        const expr* or_t_t_t = saved_expr_pool_.make("or", {true_atom, true_atom, true_atom});
+        const expr* or_t_f_t = saved_expr_pool_.make("or", {true_atom, false_atom, true_atom});
+        const expr* or_f_t_t = saved_expr_pool_.make("or", {false_atom, true_atom, true_atom});
+        const expr* or_f_f_f = saved_expr_pool_.make("or", {false_atom, false_atom, false_atom});
+        seed_db.push(rule{or_t_t_t, {}});
+        seed_db.push(rule{or_t_f_t, {}});
+        seed_db.push(rule{or_f_t_t, {}});
+        seed_db.push(rule{or_f_f_f, {}});
 
-        expr or_t_t_t{expr::functor{"or", {&true_atom, &true_atom, &true_atom}}};
-        expr or_t_f_t{expr::functor{"or", {&true_atom, &false_atom, &true_atom}}};
-        expr or_f_t_t{expr::functor{"or", {&false_atom, &true_atom, &true_atom}}};
-        expr or_f_f_f{expr::functor{"or", {&false_atom, &false_atom, &false_atom}}};
-        seed_db.push(rule{&or_t_t_t, {}});
-        seed_db.push(rule{&or_t_f_t, {}});
-        seed_db.push(rule{&or_f_t_t, {}});
-        seed_db.push(rule{&or_f_f_f, {}});
-
-        expr and_t_t_t{expr::functor{"and", {&true_atom, &true_atom, &true_atom}}};
-        expr and_t_f_f{expr::functor{"and", {&true_atom, &false_atom, &false_atom}}};
-        expr and_f_t_f{expr::functor{"and", {&false_atom, &true_atom, &false_atom}}};
-        expr and_f_f_f{expr::functor{"and", {&false_atom, &false_atom, &false_atom}}};
-        seed_db.push(rule{&and_t_t_t, {}});
-        seed_db.push(rule{&and_t_f_f, {}});
-        seed_db.push(rule{&and_f_t_f, {}});
-        seed_db.push(rule{&and_f_f_f, {}});
+        const expr* and_t_t_t = saved_expr_pool_.make("and", {true_atom, true_atom, true_atom});
+        const expr* and_t_f_f = saved_expr_pool_.make("and", {true_atom, false_atom, false_atom});
+        const expr* and_f_t_f = saved_expr_pool_.make("and", {false_atom, true_atom, false_atom});
+        const expr* and_f_f_f = saved_expr_pool_.make("and", {false_atom, false_atom, false_atom});
+        seed_db.push(rule{and_t_t_t, {}});
+        seed_db.push(rule{and_t_f_f, {}});
+        seed_db.push(rule{and_f_t_f, {}});
+        seed_db.push(rule{and_f_f_f, {}});
 
         basic_manifest manifest{seed_db, seed_goals, kSatBudget, seed};
         normalizer seed_normalizer{manifest.loc_};
@@ -2472,14 +2412,12 @@ TEST_F(BasicManifestIntegrationTest, EnumeratesFourVarSatThreeClauses) {
         seed_goals.push(manifest.expr_pool_.make("and", {var_pq, var_rs, var_pq_rs}));
         seed_goals.push(manifest.expr_pool_.make("and", {var_pq_rs, var_npr, true_goal}));
 
-        const expr* t_saved = seed_pool.import(&true_atom);
-        const expr* f_saved = seed_pool.import(&false_atom);
         std::set<solution> expected = {
-            {t_saved, t_saved, f_saved, t_saved},
-            {t_saved, f_saved, f_saved, t_saved},
-            {f_saved, t_saved, t_saved, t_saved},
-            {f_saved, t_saved, t_saved, f_saved},
-            {f_saved, t_saved, f_saved, t_saved},
+            {true_atom, true_atom, false_atom, true_atom},
+            {true_atom, false_atom, false_atom, true_atom},
+            {false_atom, true_atom, true_atom, true_atom},
+            {false_atom, true_atom, true_atom, false_atom},
+            {false_atom, true_atom, false_atom, true_atom},
         };
 
         next_until_refuted(
@@ -2487,10 +2425,10 @@ TEST_F(BasicManifestIntegrationTest, EnumeratesFourVarSatThreeClauses) {
             expected,
             [&]() -> solution {
                 return {
-                    seed_pool.import(seed_normalizer.normalize(manifest.expr_pool_.make(idx_p))),
-                    seed_pool.import(seed_normalizer.normalize(manifest.expr_pool_.make(idx_q))),
-                    seed_pool.import(seed_normalizer.normalize(manifest.expr_pool_.make(idx_r))),
-                    seed_pool.import(seed_normalizer.normalize(manifest.expr_pool_.make(idx_s))),
+                    saved_expr_pool_.import(seed_normalizer.normalize(manifest.expr_pool_.make(idx_p))),
+                    saved_expr_pool_.import(seed_normalizer.normalize(manifest.expr_pool_.make(idx_q))),
+                    saved_expr_pool_.import(seed_normalizer.normalize(manifest.expr_pool_.make(idx_r))),
+                    saved_expr_pool_.import(seed_normalizer.normalize(manifest.expr_pool_.make(idx_s))),
                 };
             });
     }
@@ -2510,43 +2448,43 @@ TEST_F(BasicManifestIntegrationTest, EnumeratesAddPairsSummingLessThanTen) {
         return p;
     };
 
-    expr zero{expr::functor{"zero", {}}};
-    expr nat_zero{expr::functor{"nat", {&zero}}};
-    database.push(rule{&nat_zero, {}});
+    const expr* zero = saved_expr_pool_.make("zero", {});
+    const expr* nat_zero = saved_expr_pool_.make("nat", {zero});
+    database.push(rule{nat_zero, {}});
 
-    expr rv1{expr::var{0}};
-    expr suc_rv1{expr::functor{"suc", {&rv1}}};
-    expr nat_suc{expr::functor{"nat", {&suc_rv1}}};
-    expr nat_rv1{expr::functor{"nat", {&rv1}}};
-    database.push(rule{&nat_suc, {&nat_rv1}});
+    const expr* rv1 = saved_expr_pool_.make(0);
+    const expr* suc_rv1 = saved_expr_pool_.make("suc", {rv1});
+    const expr* nat_suc = saved_expr_pool_.make("nat", {suc_rv1});
+    const expr* nat_rv1 = saved_expr_pool_.make("nat", {rv1});
+    database.push(rule{nat_suc, {nat_rv1}});
 
-    expr rv2{expr::var{0}};
-    expr add_zero_y_y{expr::functor{"add", {&zero, &rv2, &rv2}}};
-    expr nat_rv2{expr::functor{"nat", {&rv2}}};
-    database.push(rule{&add_zero_y_y, {&nat_rv2}});
+    const expr* rv2 = saved_expr_pool_.make(0);
+    const expr* add_zero_y_y = saved_expr_pool_.make("add", {zero, rv2, rv2});
+    const expr* nat_rv2 = saved_expr_pool_.make("nat", {rv2});
+    database.push(rule{add_zero_y_y, {nat_rv2}});
 
-    expr rv3{expr::var{0}};
-    expr rv4{expr::var{1}};
-    expr rv5{expr::var{2}};
-    expr suc_rv3{expr::functor{"suc", {&rv3}}};
-    expr suc_rv5{expr::functor{"suc", {&rv5}}};
-    expr add_suc{expr::functor{"add", {&suc_rv3, &rv4, &suc_rv5}}};
-    expr add_body{expr::functor{"add", {&rv3, &rv4, &rv5}}};
-    database.push(rule{&add_suc, {&add_body}});
+    const expr* rv3 = saved_expr_pool_.make(0);
+    const expr* rv4 = saved_expr_pool_.make(1);
+    const expr* rv5 = saved_expr_pool_.make(2);
+    const expr* suc_rv3 = saved_expr_pool_.make("suc", {rv3});
+    const expr* suc_rv5 = saved_expr_pool_.make("suc", {rv5});
+    const expr* add_suc = saved_expr_pool_.make("add", {suc_rv3, rv4, suc_rv5});
+    const expr* add_body = saved_expr_pool_.make("add", {rv3, rv4, rv5});
+    database.push(rule{add_suc, {add_body}});
 
-    expr rv6{expr::var{0}};
-    expr suc_rv6{expr::functor{"suc", {&rv6}}};
-    expr lt_zero_suc{expr::functor{"lt", {&zero, &suc_rv6}}};
-    expr nat_rv6{expr::functor{"nat", {&rv6}}};
-    database.push(rule{&lt_zero_suc, {&nat_rv6}});
+    const expr* rv6 = saved_expr_pool_.make(0);
+    const expr* suc_rv6 = saved_expr_pool_.make("suc", {rv6});
+    const expr* lt_zero_suc = saved_expr_pool_.make("lt", {zero, suc_rv6});
+    const expr* nat_rv6 = saved_expr_pool_.make("nat", {rv6});
+    database.push(rule{lt_zero_suc, {nat_rv6}});
 
-    expr rv7{expr::var{0}};
-    expr rv8{expr::var{1}};
-    expr suc_rv7{expr::functor{"suc", {&rv7}}};
-    expr suc_rv8{expr::functor{"suc", {&rv8}}};
-    expr lt_suc_suc{expr::functor{"lt", {&suc_rv7, &suc_rv8}}};
-    expr lt_body{expr::functor{"lt", {&rv7, &rv8}}};
-    database.push(rule{&lt_suc_suc, {&lt_body}});
+    const expr* rv7 = saved_expr_pool_.make(0);
+    const expr* rv8 = saved_expr_pool_.make(1);
+    const expr* suc_rv7 = saved_expr_pool_.make("suc", {rv7});
+    const expr* suc_rv8 = saved_expr_pool_.make("suc", {rv8});
+    const expr* lt_suc_suc = saved_expr_pool_.make("lt", {suc_rv7, suc_rv8});
+    const expr* lt_body = saved_expr_pool_.make("lt", {rv7, rv8});
+    database.push(rule{lt_suc_suc, {lt_body}});
 
     std::set<solution> expected;
     for (int x = 0; x < 10; ++x) {
@@ -2557,12 +2495,12 @@ TEST_F(BasicManifestIntegrationTest, EnumeratesAddPairsSummingLessThanTen) {
 
     db probe_db;
     initial_goal_exprs probe_goals;
-    probe_db.push(rule{&nat_zero, {}});
-    probe_db.push(rule{&nat_suc, {&nat_rv1}});
-    probe_db.push(rule{&add_zero_y_y, {&nat_rv2}});
-    probe_db.push(rule{&add_suc, {&add_body}});
-    probe_db.push(rule{&lt_zero_suc, {&nat_rv6}});
-    probe_db.push(rule{&lt_suc_suc, {&lt_body}});
+    probe_db.push(rule{nat_zero, {}});
+    probe_db.push(rule{nat_suc, {nat_rv1}});
+    probe_db.push(rule{add_zero_y_y, {nat_rv2}});
+    probe_db.push(rule{add_suc, {add_body}});
+    probe_db.push(rule{lt_zero_suc, {nat_rv6}});
+    probe_db.push(rule{lt_suc_suc, {lt_body}});
 
     basic_manifest probe_manifest{probe_db, probe_goals, kPeanoBudget, kSeed};
     normalizer probe_normalizer{probe_manifest.loc_};
@@ -2602,12 +2540,12 @@ TEST_F(BasicManifestIntegrationTest, EnumeratesAddPairsSummingLessThanTen) {
 
     db solve_db;
     initial_goal_exprs solve_goals;
-    solve_db.push(rule{&nat_zero, {}});
-    solve_db.push(rule{&nat_suc, {&nat_rv1}});
-    solve_db.push(rule{&add_zero_y_y, {&nat_rv2}});
-    solve_db.push(rule{&add_suc, {&add_body}});
-    solve_db.push(rule{&lt_zero_suc, {&nat_rv6}});
-    solve_db.push(rule{&lt_suc_suc, {&lt_body}});
+    solve_db.push(rule{nat_zero, {}});
+    solve_db.push(rule{nat_suc, {nat_rv1}});
+    solve_db.push(rule{add_zero_y_y, {nat_rv2}});
+    solve_db.push(rule{add_suc, {add_body}});
+    solve_db.push(rule{lt_zero_suc, {nat_rv6}});
+    solve_db.push(rule{lt_suc_suc, {lt_body}});
 
     basic_manifest manifest{solve_db, solve_goals, kPeanoBudget, kSeed};
     normalizer normalizer{manifest.loc_};
@@ -2648,29 +2586,29 @@ TEST_F(BasicManifestIntegrationTest, EnumeratesAddPairsSummingExactlyTen) {
         return p;
     };
 
-    expr zero{expr::functor{"zero", {}}};
-    expr nat_zero{expr::functor{"nat", {&zero}}};
-    database.push(rule{&nat_zero, {}});
+    const expr* zero = saved_expr_pool_.make("zero", {});
+    const expr* nat_zero = saved_expr_pool_.make("nat", {zero});
+    database.push(rule{nat_zero, {}});
 
-    expr rv1{expr::var{0}};
-    expr suc_rv1{expr::functor{"suc", {&rv1}}};
-    expr nat_suc{expr::functor{"nat", {&suc_rv1}}};
-    expr nat_rv1{expr::functor{"nat", {&rv1}}};
-    database.push(rule{&nat_suc, {&nat_rv1}});
+    const expr* rv1 = saved_expr_pool_.make(0);
+    const expr* suc_rv1 = saved_expr_pool_.make("suc", {rv1});
+    const expr* nat_suc = saved_expr_pool_.make("nat", {suc_rv1});
+    const expr* nat_rv1 = saved_expr_pool_.make("nat", {rv1});
+    database.push(rule{nat_suc, {nat_rv1}});
 
-    expr rv2{expr::var{0}};
-    expr add_zero_y_y{expr::functor{"add", {&zero, &rv2, &rv2}}};
-    expr nat_rv2{expr::functor{"nat", {&rv2}}};
-    database.push(rule{&add_zero_y_y, {&nat_rv2}});
+    const expr* rv2 = saved_expr_pool_.make(0);
+    const expr* add_zero_y_y = saved_expr_pool_.make("add", {zero, rv2, rv2});
+    const expr* nat_rv2 = saved_expr_pool_.make("nat", {rv2});
+    database.push(rule{add_zero_y_y, {nat_rv2}});
 
-    expr rv3{expr::var{0}};
-    expr rv4{expr::var{1}};
-    expr rv5{expr::var{2}};
-    expr suc_rv3{expr::functor{"suc", {&rv3}}};
-    expr suc_rv5{expr::functor{"suc", {&rv5}}};
-    expr add_suc{expr::functor{"add", {&suc_rv3, &rv4, &suc_rv5}}};
-    expr add_body{expr::functor{"add", {&rv3, &rv4, &rv5}}};
-    database.push(rule{&add_suc, {&add_body}});
+    const expr* rv3 = saved_expr_pool_.make(0);
+    const expr* rv4 = saved_expr_pool_.make(1);
+    const expr* rv5 = saved_expr_pool_.make(2);
+    const expr* suc_rv3 = saved_expr_pool_.make("suc", {rv3});
+    const expr* suc_rv5 = saved_expr_pool_.make("suc", {rv5});
+    const expr* add_suc = saved_expr_pool_.make("add", {suc_rv3, rv4, suc_rv5});
+    const expr* add_body = saved_expr_pool_.make("add", {rv3, rv4, rv5});
+    database.push(rule{add_suc, {add_body}});
 
     std::set<solution> expected;
     for (int x = 0; x <= 10; ++x)
@@ -2713,44 +2651,44 @@ TEST_F(BasicManifestIntegrationTest, EnumeratesMulPairsProductEight) {
         return p;
     };
 
-    expr zero{expr::functor{"zero", {}}};
-    expr nat_zero{expr::functor{"nat", {&zero}}};
-    database.push(rule{&nat_zero, {}});
+    const expr* zero = saved_expr_pool_.make("zero", {});
+    const expr* nat_zero = saved_expr_pool_.make("nat", {zero});
+    database.push(rule{nat_zero, {}});
 
-    expr rv1{expr::var{0}};
-    expr suc_rv1{expr::functor{"suc", {&rv1}}};
-    expr nat_suc{expr::functor{"nat", {&suc_rv1}}};
-    expr nat_rv1{expr::functor{"nat", {&rv1}}};
-    database.push(rule{&nat_suc, {&nat_rv1}});
+    const expr* rv1 = saved_expr_pool_.make(0);
+    const expr* suc_rv1 = saved_expr_pool_.make("suc", {rv1});
+    const expr* nat_suc = saved_expr_pool_.make("nat", {suc_rv1});
+    const expr* nat_rv1 = saved_expr_pool_.make("nat", {rv1});
+    database.push(rule{nat_suc, {nat_rv1}});
 
-    expr rv2{expr::var{0}};
-    expr add_zero_y_y{expr::functor{"add", {&zero, &rv2, &rv2}}};
-    expr nat_rv2{expr::functor{"nat", {&rv2}}};
-    database.push(rule{&add_zero_y_y, {&nat_rv2}});
+    const expr* rv2 = saved_expr_pool_.make(0);
+    const expr* add_zero_y_y = saved_expr_pool_.make("add", {zero, rv2, rv2});
+    const expr* nat_rv2 = saved_expr_pool_.make("nat", {rv2});
+    database.push(rule{add_zero_y_y, {nat_rv2}});
 
-    expr rv3{expr::var{0}};
-    expr rv4{expr::var{1}};
-    expr rv5{expr::var{2}};
-    expr suc_rv3{expr::functor{"suc", {&rv3}}};
-    expr suc_rv5{expr::functor{"suc", {&rv5}}};
-    expr add_suc{expr::functor{"add", {&suc_rv3, &rv4, &suc_rv5}}};
-    expr add_body{expr::functor{"add", {&rv3, &rv4, &rv5}}};
-    database.push(rule{&add_suc, {&add_body}});
+    const expr* rv3 = saved_expr_pool_.make(0);
+    const expr* rv4 = saved_expr_pool_.make(1);
+    const expr* rv5 = saved_expr_pool_.make(2);
+    const expr* suc_rv3 = saved_expr_pool_.make("suc", {rv3});
+    const expr* suc_rv5 = saved_expr_pool_.make("suc", {rv5});
+    const expr* add_suc = saved_expr_pool_.make("add", {suc_rv3, rv4, suc_rv5});
+    const expr* add_body = saved_expr_pool_.make("add", {rv3, rv4, rv5});
+    database.push(rule{add_suc, {add_body}});
 
-    expr rv6{expr::var{0}};
-    expr mul_zero_y_zero{expr::functor{"mul", {&zero, &rv6, &zero}}};
-    expr nat_rv6{expr::functor{"nat", {&rv6}}};
-    database.push(rule{&mul_zero_y_zero, {&nat_rv6}});
+    const expr* rv6 = saved_expr_pool_.make(0);
+    const expr* mul_zero_y_zero = saved_expr_pool_.make("mul", {zero, rv6, zero});
+    const expr* nat_rv6 = saved_expr_pool_.make("nat", {rv6});
+    database.push(rule{mul_zero_y_zero, {nat_rv6}});
 
-    expr rv7{expr::var{0}};
-    expr rv8{expr::var{1}};
-    expr rv9{expr::var{2}};
-    expr rv10{expr::var{3}};
-    expr suc_rv7{expr::functor{"suc", {&rv7}}};
-    expr mul_suc{expr::functor{"mul", {&suc_rv7, &rv8, &rv9}}};
-    expr mul_body{expr::functor{"mul", {&rv7, &rv8, &rv10}}};
-    expr add_body2{expr::functor{"add", {&rv10, &rv8, &rv9}}};
-    database.push(rule{&mul_suc, {&mul_body, &add_body2}});
+    const expr* rv7 = saved_expr_pool_.make(0);
+    const expr* rv8 = saved_expr_pool_.make(1);
+    const expr* rv9 = saved_expr_pool_.make(2);
+    const expr* rv10 = saved_expr_pool_.make(3);
+    const expr* suc_rv7 = saved_expr_pool_.make("suc", {rv7});
+    const expr* mul_suc = saved_expr_pool_.make("mul", {suc_rv7, rv8, rv9});
+    const expr* mul_body = saved_expr_pool_.make("mul", {rv7, rv8, rv10});
+    const expr* add_body2 = saved_expr_pool_.make("add", {rv10, rv8, rv9});
+    database.push(rule{mul_suc, {mul_body, add_body2}});
 
     std::set<solution> expected = {
         {peano_saved(1), peano_saved(8)},
@@ -2795,43 +2733,43 @@ TEST_F(BasicManifestIntegrationTest, EnumeratesDualBoundedSharedXSums) {
         return p;
     };
 
-    expr zero{expr::functor{"zero", {}}};
-    expr nat_zero{expr::functor{"nat", {&zero}}};
-    database.push(rule{&nat_zero, {}});
+    const expr* zero = saved_expr_pool_.make("zero", {});
+    const expr* nat_zero = saved_expr_pool_.make("nat", {zero});
+    database.push(rule{nat_zero, {}});
 
-    expr rv1{expr::var{0}};
-    expr suc_rv1{expr::functor{"suc", {&rv1}}};
-    expr nat_suc{expr::functor{"nat", {&suc_rv1}}};
-    expr nat_rv1{expr::functor{"nat", {&rv1}}};
-    database.push(rule{&nat_suc, {&nat_rv1}});
+    const expr* rv1 = saved_expr_pool_.make(0);
+    const expr* suc_rv1 = saved_expr_pool_.make("suc", {rv1});
+    const expr* nat_suc = saved_expr_pool_.make("nat", {suc_rv1});
+    const expr* nat_rv1 = saved_expr_pool_.make("nat", {rv1});
+    database.push(rule{nat_suc, {nat_rv1}});
 
-    expr rv2{expr::var{0}};
-    expr add_zero_y_y{expr::functor{"add", {&zero, &rv2, &rv2}}};
-    expr nat_rv2{expr::functor{"nat", {&rv2}}};
-    database.push(rule{&add_zero_y_y, {&nat_rv2}});
+    const expr* rv2 = saved_expr_pool_.make(0);
+    const expr* add_zero_y_y = saved_expr_pool_.make("add", {zero, rv2, rv2});
+    const expr* nat_rv2 = saved_expr_pool_.make("nat", {rv2});
+    database.push(rule{add_zero_y_y, {nat_rv2}});
 
-    expr rv3{expr::var{0}};
-    expr rv4{expr::var{1}};
-    expr rv5{expr::var{2}};
-    expr suc_rv3{expr::functor{"suc", {&rv3}}};
-    expr suc_rv5{expr::functor{"suc", {&rv5}}};
-    expr add_suc{expr::functor{"add", {&suc_rv3, &rv4, &suc_rv5}}};
-    expr add_body{expr::functor{"add", {&rv3, &rv4, &rv5}}};
-    database.push(rule{&add_suc, {&add_body}});
+    const expr* rv3 = saved_expr_pool_.make(0);
+    const expr* rv4 = saved_expr_pool_.make(1);
+    const expr* rv5 = saved_expr_pool_.make(2);
+    const expr* suc_rv3 = saved_expr_pool_.make("suc", {rv3});
+    const expr* suc_rv5 = saved_expr_pool_.make("suc", {rv5});
+    const expr* add_suc = saved_expr_pool_.make("add", {suc_rv3, rv4, suc_rv5});
+    const expr* add_body = saved_expr_pool_.make("add", {rv3, rv4, rv5});
+    database.push(rule{add_suc, {add_body}});
 
-    expr rv6{expr::var{0}};
-    expr suc_rv6{expr::functor{"suc", {&rv6}}};
-    expr lt_zero_suc{expr::functor{"lt", {&zero, &suc_rv6}}};
-    expr nat_rv6{expr::functor{"nat", {&rv6}}};
-    database.push(rule{&lt_zero_suc, {&nat_rv6}});
+    const expr* rv6 = saved_expr_pool_.make(0);
+    const expr* suc_rv6 = saved_expr_pool_.make("suc", {rv6});
+    const expr* lt_zero_suc = saved_expr_pool_.make("lt", {zero, suc_rv6});
+    const expr* nat_rv6 = saved_expr_pool_.make("nat", {rv6});
+    database.push(rule{lt_zero_suc, {nat_rv6}});
 
-    expr rv7{expr::var{0}};
-    expr rv8{expr::var{1}};
-    expr suc_rv7{expr::functor{"suc", {&rv7}}};
-    expr suc_rv8{expr::functor{"suc", {&rv8}}};
-    expr lt_suc_suc{expr::functor{"lt", {&suc_rv7, &suc_rv8}}};
-    expr lt_body{expr::functor{"lt", {&rv7, &rv8}}};
-    database.push(rule{&lt_suc_suc, {&lt_body}});
+    const expr* rv7 = saved_expr_pool_.make(0);
+    const expr* rv8 = saved_expr_pool_.make(1);
+    const expr* suc_rv7 = saved_expr_pool_.make("suc", {rv7});
+    const expr* suc_rv8 = saved_expr_pool_.make("suc", {rv8});
+    const expr* lt_suc_suc = saved_expr_pool_.make("lt", {suc_rv7, suc_rv8});
+    const expr* lt_body = saved_expr_pool_.make("lt", {rv7, rv8});
+    database.push(rule{lt_suc_suc, {lt_body}});
 
     std::set<solution> expected;
     for (int x = 0; x < 4; ++x) {
@@ -2966,59 +2904,59 @@ TEST_F(BasicManifestIntegrationTest, EnumeratesCatalanTreesWithFiveNodes) {
     expected.insert({bin_saved(s4_13, nil_saved)});
     ASSERT_EQ(expected.size(), 42u);
 
-    expr zero{expr::functor{"zero", {}}};
-    expr nat_zero{expr::functor{"nat", {&zero}}};
-    database.push(rule{&nat_zero, {}});
+    const expr* zero = saved_expr_pool_.make("zero", {});
+    const expr* nat_zero = saved_expr_pool_.make("nat", {zero});
+    database.push(rule{nat_zero, {}});
 
-    expr rv1{expr::var{0}};
-    expr suc_rv1{expr::functor{"suc", {&rv1}}};
-    expr nat_suc{expr::functor{"nat", {&suc_rv1}}};
-    expr nat_rv1{expr::functor{"nat", {&rv1}}};
-    database.push(rule{&nat_suc, {&nat_rv1}});
+    const expr* rv1 = saved_expr_pool_.make(0);
+    const expr* suc_rv1 = saved_expr_pool_.make("suc", {rv1});
+    const expr* nat_suc = saved_expr_pool_.make("nat", {suc_rv1});
+    const expr* nat_rv1 = saved_expr_pool_.make("nat", {rv1});
+    database.push(rule{nat_suc, {nat_rv1}});
 
-    expr rv2{expr::var{0}};
-    expr add_zero_y_y{expr::functor{"add", {&zero, &rv2, &rv2}}};
-    expr nat_rv2{expr::functor{"nat", {&rv2}}};
-    database.push(rule{&add_zero_y_y, {&nat_rv2}});
+    const expr* rv2 = saved_expr_pool_.make(0);
+    const expr* add_zero_y_y = saved_expr_pool_.make("add", {zero, rv2, rv2});
+    const expr* nat_rv2 = saved_expr_pool_.make("nat", {rv2});
+    database.push(rule{add_zero_y_y, {nat_rv2}});
 
-    expr rv3{expr::var{0}};
-    expr rv4{expr::var{1}};
-    expr rv5{expr::var{2}};
-    expr suc_rv3{expr::functor{"suc", {&rv3}}};
-    expr suc_rv5{expr::functor{"suc", {&rv5}}};
-    expr add_suc{expr::functor{"add", {&suc_rv3, &rv4, &suc_rv5}}};
-    expr add_body{expr::functor{"add", {&rv3, &rv4, &rv5}}};
-    database.push(rule{&add_suc, {&add_body}});
+    const expr* rv3 = saved_expr_pool_.make(0);
+    const expr* rv4 = saved_expr_pool_.make(1);
+    const expr* rv5 = saved_expr_pool_.make(2);
+    const expr* suc_rv3 = saved_expr_pool_.make("suc", {rv3});
+    const expr* suc_rv5 = saved_expr_pool_.make("suc", {rv5});
+    const expr* add_suc = saved_expr_pool_.make("add", {suc_rv3, rv4, suc_rv5});
+    const expr* add_body = saved_expr_pool_.make("add", {rv3, rv4, rv5});
+    database.push(rule{add_suc, {add_body}});
 
-    expr nil{expr::functor{"nil", {}}};
-    expr wf_nil{expr::functor{"wf", {&nil}}};
-    database.push(rule{&wf_nil, {}});
+    const expr* nil = saved_expr_pool_.make("nil", {});
+    const expr* wf_nil = saved_expr_pool_.make("wf", {nil});
+    database.push(rule{wf_nil, {}});
 
-    expr rv6{expr::var{0}};
-    expr rv7{expr::var{1}};
-    expr bin_rv6_rv7{expr::functor{"bin", {&rv6, &rv7}}};
-    expr wf_bin{expr::functor{"wf", {&bin_rv6_rv7}}};
-    expr wf_left{expr::functor{"wf", {&rv6}}};
-    expr wf_right{expr::functor{"wf", {&rv7}}};
-    database.push(rule{&wf_bin, {&wf_left, &wf_right}});
+    const expr* rv6 = saved_expr_pool_.make(0);
+    const expr* rv7 = saved_expr_pool_.make(1);
+    const expr* bin_rv6_rv7 = saved_expr_pool_.make("bin", {rv6, rv7});
+    const expr* wf_bin = saved_expr_pool_.make("wf", {bin_rv6_rv7});
+    const expr* wf_left = saved_expr_pool_.make("wf", {rv6});
+    const expr* wf_right = saved_expr_pool_.make("wf", {rv7});
+    database.push(rule{wf_bin, {wf_left, wf_right}});
 
-    expr nodes_nil_zero{expr::functor{"nodes", {&nil, &zero}}};
-    database.push(rule{&nodes_nil_zero, {}});
+    const expr* nodes_nil_zero = saved_expr_pool_.make("nodes", {nil, zero});
+    database.push(rule{nodes_nil_zero, {}});
 
-    expr one{expr::functor{"suc", {&zero}}};
-    expr rv8{expr::var{0}};
-    expr rv9{expr::var{1}};
-    expr rv10{expr::var{2}};
-    expr rv11{expr::var{3}};
-    expr rv12{expr::var{4}};
-    expr rv13{expr::var{5}};
-    expr bin_rv8_rv9{expr::functor{"bin", {&rv8, &rv9}}};
-    expr nodes_head{expr::functor{"nodes", {&bin_rv8_rv9, &rv10}}};
-    expr nodes_left{expr::functor{"nodes", {&rv8, &rv11}}};
-    expr nodes_right{expr::functor{"nodes", {&rv9, &rv12}}};
-    expr add_sizes{expr::functor{"add", {&rv11, &rv12, &rv13}}};
-    expr add_one{expr::functor{"add", {&one, &rv13, &rv10}}};
-    database.push(rule{&nodes_head, {&nodes_left, &nodes_right, &add_sizes, &add_one}});
+    const expr* one = saved_expr_pool_.make("suc", {zero});
+    const expr* rv8 = saved_expr_pool_.make(0);
+    const expr* rv9 = saved_expr_pool_.make(1);
+    const expr* rv10 = saved_expr_pool_.make(2);
+    const expr* rv11 = saved_expr_pool_.make(3);
+    const expr* rv12 = saved_expr_pool_.make(4);
+    const expr* rv13 = saved_expr_pool_.make(5);
+    const expr* bin_rv8_rv9 = saved_expr_pool_.make("bin", {rv8, rv9});
+    const expr* nodes_head = saved_expr_pool_.make("nodes", {bin_rv8_rv9, rv10});
+    const expr* nodes_left = saved_expr_pool_.make("nodes", {rv8, rv11});
+    const expr* nodes_right = saved_expr_pool_.make("nodes", {rv9, rv12});
+    const expr* add_sizes = saved_expr_pool_.make("add", {rv11, rv12, rv13});
+    const expr* add_one = saved_expr_pool_.make("add", {one, rv13, rv10});
+    database.push(rule{nodes_head, {nodes_left, nodes_right, add_sizes, add_one}});
 
     basic_manifest manifest{database, initial_goals, kCatalanBudget, kSeed};
     normalizer normalizer{manifest.loc_};
