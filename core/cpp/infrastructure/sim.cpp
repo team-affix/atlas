@@ -71,7 +71,8 @@ sim_termination sim::run() {
             if (!eliminations.has_yield())
                 continue;
             const resolution_lineage* elim_rl = eliminations.consume_yield();
-            er.route(elim_rl);
+            if (er.route(elim_rl) != elimination_result::eliminated)
+                continue; // very critical we do this to prevent double-registering unit goals
             const goal_lineage* gl = elim_rl->parent;
             if (cd.detect(gl))
                 return sim_termination::conflicted;

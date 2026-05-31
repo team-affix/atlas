@@ -1,18 +1,18 @@
 #include "infrastructure/goal_exprs.hpp"
+#include "debug_assert.hpp"
 
 const expr* goal_exprs::get(const goal_lineage* gl) const {
-    auto it = exprs_.find(gl);
-    if (it == exprs_.end())
-        return nullptr;
-    return it->second;
+    return exprs_.at(gl);
 }
 
 void goal_exprs::set(const goal_lineage* gl, const expr* e) {
-    exprs_[gl] = e;
+    auto [_, inserted] = exprs_.insert({gl, e});
+    DEBUG_ASSERT(inserted);
 }
 
 void goal_exprs::unset(const goal_lineage* gl) {
-    exprs_.erase(gl);
+    auto erased = exprs_.erase(gl);
+    DEBUG_ASSERT(erased == 1);
 }
 
 void goal_exprs::clear_goal_exprs() {
