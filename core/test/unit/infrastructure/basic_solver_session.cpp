@@ -1,8 +1,9 @@
 // Integration-style tests for basic_solver_session — real wiring, no mocks.
 //
 // solved() is only valid immediately after next() returned true.
-// Typical usage: while (session.next()) { if (session.solved()) { ... } }
+// Harness: enumerate_all_solutions, next_until_refuted — binding enumeration.
 
+#include <functional>
 #include <optional>
 #include <set>
 #include <string>
@@ -34,6 +35,48 @@ struct BasicSolverSessionTest : public ::testing::Test {
     expr_pool saved_expr_pool_{
         (saved_loc_.bind_as<i_log_to_current_trail_frame>(saved_trail_), saved_loc_)};
 };
+
+namespace {
+
+void enumerate_all_solutions(
+    basic_solver_session& session,
+    std::set<solution> expected,
+    const std::function<solution()>& get_solution) {
+    std::set<solution> visited;
+    while (!expected.empty()) {
+        ASSERT_TRUE(session.next()) << "solver stopped before all expected solutions found";
+        if (!session.solved())
+            continue;
+        const solution s = get_solution();
+        if (visited.count(s))
+            continue;
+        auto it = expected.find(s);
+        ASSERT_NE(it, expected.end()) << "unexpected solution";
+        expected.erase(it);
+        visited.insert(s);
+    }
+}
+
+void next_until_refuted(
+    basic_solver_session& session,
+    std::set<solution> expected,
+    const std::function<solution()>& get_solution) {
+    std::set<solution> visited;
+    while (session.next()) {
+        if (!session.solved())
+            continue;
+        const solution s = get_solution();
+        if (visited.count(s))
+            continue;
+        visited.insert(s);
+        auto it = expected.find(s);
+        ASSERT_NE(it, expected.end()) << "unexpected solution";
+        expected.erase(it);
+    }
+    ASSERT_TRUE(expected.empty()) << "solver refuted before all expected solutions found";
+}
+
+}  // namespace
 
 // Tier A — session API smoke
 
@@ -296,20 +339,12 @@ TEST_F(BasicSolverSessionTest, EnumeratesTwoVarChoiceSolutions) {
 
     basic_solver_session session(database, initial_goals, kMaxResolutions, kSeed);
     std::set<solution> expected{{abc}, {xyz}};
-    std::set<solution> visited;
-    while (session.next()) {
-        if (!session.solved())
-            continue;
-        const solution s = {
-            saved_expr_pool_.import(session.normalize(saved_expr_pool_.make(idx_a)))};
-        if (visited.count(s))
-            continue;
-        visited.insert(s);
-        auto it = expected.find(s);
-        ASSERT_NE(it, expected.end()) << "unexpected solution";
-        expected.erase(it);
-    }
-    ASSERT_TRUE(expected.empty()) << "solver refuted before all expected solutions found";
+    enumerate_all_solutions(
+        session,
+        expected,
+        [&]() -> solution {
+            return {saved_expr_pool_.import(session.normalize(saved_expr_pool_.make(idx_a)))};
+        });
 }
 
 TEST_F(BasicSolverSessionTest, RefutesAfterEnumeratingAllVarBranches) {
@@ -323,20 +358,12 @@ TEST_F(BasicSolverSessionTest, RefutesAfterEnumeratingAllVarBranches) {
 
     basic_solver_session session(database, initial_goals, kMaxResolutions, kSeed);
     std::set<solution> expected{{abc}, {xyz}};
-    std::set<solution> visited;
-    while (session.next()) {
-        if (!session.solved())
-            continue;
-        const solution s = {
-            saved_expr_pool_.import(session.normalize(saved_expr_pool_.make(idx_a)))};
-        if (visited.count(s))
-            continue;
-        visited.insert(s);
-        auto it = expected.find(s);
-        ASSERT_NE(it, expected.end()) << "unexpected solution";
-        expected.erase(it);
-    }
-    ASSERT_TRUE(expected.empty()) << "solver refuted before all expected solutions found";
+    next_until_refuted(
+        session,
+        expected,
+        [&]() -> solution {
+            return {saved_expr_pool_.import(session.normalize(saved_expr_pool_.make(idx_a)))};
+        });
 }
 
 TEST_F(BasicSolverSessionTest, EnumeratesTwoGoalSharedVarSolutions) {
@@ -354,20 +381,12 @@ TEST_F(BasicSolverSessionTest, EnumeratesTwoGoalSharedVarSolutions) {
 
     basic_solver_session session(database, initial_goals, kMaxResolutions, kSeed);
     std::set<solution> expected{{abc}, {xyz}};
-    std::set<solution> visited;
-    while (session.next()) {
-        if (!session.solved())
-            continue;
-        const solution s = {
-            saved_expr_pool_.import(session.normalize(saved_expr_pool_.make(idx_a)))};
-        if (visited.count(s))
-            continue;
-        visited.insert(s);
-        auto it = expected.find(s);
-        ASSERT_NE(it, expected.end()) << "unexpected solution";
-        expected.erase(it);
-    }
-    ASSERT_TRUE(expected.empty()) << "solver refuted before all expected solutions found";
+    enumerate_all_solutions(
+        session,
+        expected,
+        [&]() -> solution {
+            return {saved_expr_pool_.import(session.normalize(saved_expr_pool_.make(idx_a)))};
+        });
 }
 
 TEST_F(BasicSolverSessionTest, EnumeratesFourVarBindingSolutions) {
@@ -385,20 +404,12 @@ TEST_F(BasicSolverSessionTest, EnumeratesFourVarBindingSolutions) {
 
     basic_solver_session session(database, initial_goals, kMaxResolutions, kSeed);
     std::set<solution> expected{{a}, {b}, {c}, {d}};
-    std::set<solution> visited;
-    while (session.next()) {
-        if (!session.solved())
-            continue;
-        const solution s = {
-            saved_expr_pool_.import(session.normalize(saved_expr_pool_.make(idx)))};
-        if (visited.count(s))
-            continue;
-        visited.insert(s);
-        auto it = expected.find(s);
-        ASSERT_NE(it, expected.end()) << "unexpected solution";
-        expected.erase(it);
-    }
-    ASSERT_TRUE(expected.empty()) << "solver refuted before all expected solutions found";
+    enumerate_all_solutions(
+        session,
+        expected,
+        [&]() -> solution {
+            return {saved_expr_pool_.import(session.normalize(saved_expr_pool_.make(idx)))};
+        });
 }
 
 TEST_F(BasicSolverSessionTest, EnumeratesFourClauseBodyFactChoices) {
@@ -443,20 +454,12 @@ TEST_F(BasicSolverSessionTest, FindsUniqueSharedVarConjunctionThenRefutes) {
 
     basic_solver_session session(database, initial_goals, kMaxResolutions, kSeed);
     std::set<solution> expected{{two}};
-    std::set<solution> visited;
-    while (session.next()) {
-        if (!session.solved())
-            continue;
-        const solution s = {
-            saved_expr_pool_.import(session.normalize(saved_expr_pool_.make(idx_x)))};
-        if (visited.count(s))
-            continue;
-        visited.insert(s);
-        auto it = expected.find(s);
-        ASSERT_NE(it, expected.end()) << "unexpected solution";
-        expected.erase(it);
-    }
-    ASSERT_TRUE(expected.empty()) << "solver refuted before all expected solutions found";
+    next_until_refuted(
+        session,
+        expected,
+        [&]() -> solution {
+            return {saved_expr_pool_.import(session.normalize(saved_expr_pool_.make(idx_x)))};
+        });
 }
 
 // Tier F
@@ -498,20 +501,12 @@ TEST_F(BasicSolverSessionTest, EnumeratesTwoParentBindingsForAlice) {
 
     basic_solver_session session(database, initial_goals, kMaxResolutions, kSeed);
     std::set<solution> expected{{bob}, {carol}};
-    std::set<solution> visited;
-    while (session.next()) {
-        if (!session.solved())
-            continue;
-        const solution s = {
-            saved_expr_pool_.import(session.normalize(saved_expr_pool_.make(idx_x)))};
-        if (visited.count(s))
-            continue;
-        visited.insert(s);
-        auto it = expected.find(s);
-        ASSERT_NE(it, expected.end()) << "unexpected solution";
-        expected.erase(it);
-    }
-    ASSERT_TRUE(expected.empty()) << "solver stopped before all expected solutions found";
+    enumerate_all_solutions(
+        session,
+        expected,
+        [&]() -> solution {
+            return {saved_expr_pool_.import(session.normalize(saved_expr_pool_.make(idx_x)))};
+        });
 }
 
 TEST_F(BasicSolverSessionTest, EnumeratesPeanoLessThanSeven) {
@@ -557,20 +552,12 @@ TEST_F(BasicSolverSessionTest, EnumeratesPeanoLessThanSeven) {
     }));
 
     basic_solver_session session(database, initial_goals, kPeanoBudget, kSeed);
-    std::set<solution> visited;
-    while (session.next()) {
-        if (!session.solved())
-            continue;
-        const solution s = {
-            saved_expr_pool_.import(session.normalize(saved_expr_pool_.make(idx_n)))};
-        if (visited.count(s))
-            continue;
-        visited.insert(s);
-        auto it = expected.find(s);
-        ASSERT_NE(it, expected.end()) << "unexpected solution";
-        expected.erase(it);
-    }
-    ASSERT_TRUE(expected.empty()) << "solver stopped before all expected solutions found";
+    enumerate_all_solutions(
+        session,
+        expected,
+        [&]() -> solution {
+            return {saved_expr_pool_.import(session.normalize(saved_expr_pool_.make(idx_n)))};
+        });
 }
 
 TEST_F(BasicSolverSessionTest, EnumeratesSatPAndQOrR) {
@@ -622,23 +609,12 @@ TEST_F(BasicSolverSessionTest, EnumeratesSatPAndQOrR) {
         {true_atom, true_atom, false_atom},
         {true_atom, false_atom, true_atom},
     };
-    std::set<solution> visited;
-    while (session.next()) {
-        if (!session.solved())
-            continue;
-        const solution s = {
-            saved_expr_pool_.import(session.normalize(saved_expr_pool_.make(idx_p))),
-            saved_expr_pool_.import(session.normalize(saved_expr_pool_.make(idx_q))),
-            saved_expr_pool_.import(session.normalize(saved_expr_pool_.make(idx_r))),
-        };
-        if (visited.count(s))
-            continue;
-        visited.insert(s);
-        auto it = expected.find(s);
-        ASSERT_NE(it, expected.end()) << "unexpected solution";
-        expected.erase(it);
-    }
-    ASSERT_TRUE(expected.empty()) << "solver stopped before all expected solutions found";
+    enumerate_all_solutions(
+        session,
+        expected,
+        [&]() -> solution {
+            return {saved_expr_pool_.import(session.normalize(saved_expr_pool_.make(idx_p))), saved_expr_pool_.import(session.normalize(saved_expr_pool_.make(idx_q))), saved_expr_pool_.import(session.normalize(saved_expr_pool_.make(idx_r)))};
+        });
 }
 
 TEST_F(BasicSolverSessionTest, EnumeratesTwoSatAssignmentsForImpliesQ) {
@@ -785,23 +761,12 @@ TEST_F(BasicSolverSessionTest, EnumeratesK3ThreeColorings) {
         {red, green, blue}, {red, blue, green}, {green, red, blue},
         {green, blue, red}, {blue, red, green}, {blue, green, red},
     };
-    std::set<solution> visited;
-    while (session.next()) {
-        if (!session.solved())
-            continue;
-        const solution s = {
-            saved_expr_pool_.import(session.normalize(saved_expr_pool_.make(idx_a))),
-            saved_expr_pool_.import(session.normalize(saved_expr_pool_.make(idx_b))),
-            saved_expr_pool_.import(session.normalize(saved_expr_pool_.make(idx_c))),
-        };
-        if (visited.count(s))
-            continue;
-        visited.insert(s);
-        auto it = expected.find(s);
-        ASSERT_NE(it, expected.end()) << "unexpected solution";
-        expected.erase(it);
-    }
-    ASSERT_TRUE(expected.empty()) << "solver stopped before all expected solutions found";
+    enumerate_all_solutions(
+        session,
+        expected,
+        [&]() -> solution {
+            return {saved_expr_pool_.import(session.normalize(saved_expr_pool_.make(idx_a))), saved_expr_pool_.import(session.normalize(saved_expr_pool_.make(idx_b))), saved_expr_pool_.import(session.normalize(saved_expr_pool_.make(idx_c)))};
+        });
 }
 
 TEST_F(BasicSolverSessionTest, EnumeratesK3TailFourNodeColorings) {
@@ -851,24 +816,12 @@ TEST_F(BasicSolverSessionTest, EnumeratesK3TailFourNodeColorings) {
         {green, blue, red, red}, {green, blue, red, blue}, {blue, red, green, red},
         {blue, red, green, green}, {blue, green, red, red}, {blue, green, red, green},
     };
-    std::set<solution> visited;
-    while (session.next()) {
-        if (!session.solved())
-            continue;
-        const solution s = {
-            saved_expr_pool_.import(session.normalize(saved_expr_pool_.make(idx_a))),
-            saved_expr_pool_.import(session.normalize(saved_expr_pool_.make(idx_b))),
-            saved_expr_pool_.import(session.normalize(saved_expr_pool_.make(idx_c))),
-            saved_expr_pool_.import(session.normalize(saved_expr_pool_.make(idx_d))),
-        };
-        if (visited.count(s))
-            continue;
-        visited.insert(s);
-        auto it = expected.find(s);
-        ASSERT_NE(it, expected.end()) << "unexpected solution";
-        expected.erase(it);
-    }
-    ASSERT_TRUE(expected.empty()) << "solver stopped before all expected solutions found";
+    enumerate_all_solutions(
+        session,
+        expected,
+        [&]() -> solution {
+            return {saved_expr_pool_.import(session.normalize(saved_expr_pool_.make(idx_a))), saved_expr_pool_.import(session.normalize(saved_expr_pool_.make(idx_b))), saved_expr_pool_.import(session.normalize(saved_expr_pool_.make(idx_c))), saved_expr_pool_.import(session.normalize(saved_expr_pool_.make(idx_d)))};
+        });
 }
 
 TEST_F(BasicSolverSessionTest, EnumeratesFourVarSatThreeClauses) {
@@ -944,24 +897,12 @@ TEST_F(BasicSolverSessionTest, EnumeratesFourVarSatThreeClauses) {
         {false_atom, true_atom, true_atom, false_atom},
         {false_atom, true_atom, false_atom, true_atom},
     };
-    std::set<solution> visited;
-    while (session.next()) {
-        if (!session.solved())
-            continue;
-        const solution s = {
-            saved_expr_pool_.import(session.normalize(saved_expr_pool_.make(idx_p))),
-            saved_expr_pool_.import(session.normalize(saved_expr_pool_.make(idx_q))),
-            saved_expr_pool_.import(session.normalize(saved_expr_pool_.make(idx_r))),
-            saved_expr_pool_.import(session.normalize(saved_expr_pool_.make(idx_s))),
-        };
-        if (visited.count(s))
-            continue;
-        visited.insert(s);
-        auto it = expected.find(s);
-        ASSERT_NE(it, expected.end()) << "unexpected solution";
-        expected.erase(it);
-    }
-    ASSERT_TRUE(expected.empty()) << "solver stopped before all expected solutions found";
+    enumerate_all_solutions(
+        session,
+        expected,
+        [&]() -> solution {
+            return {saved_expr_pool_.import(session.normalize(saved_expr_pool_.make(idx_p))), saved_expr_pool_.import(session.normalize(saved_expr_pool_.make(idx_q))), saved_expr_pool_.import(session.normalize(saved_expr_pool_.make(idx_r))), saved_expr_pool_.import(session.normalize(saved_expr_pool_.make(idx_s)))};
+        });
 }
 
 TEST_F(BasicSolverSessionTest, EnumeratesAddPairsSummingLessThanTen) {
@@ -1028,22 +969,12 @@ TEST_F(BasicSolverSessionTest, EnumeratesAddPairsSummingLessThanTen) {
     }));
 
     basic_solver_session session(database, initial_goals, kPeanoBudget, kSeed);
-    std::set<solution> visited;
-    while (session.next()) {
-        if (!session.solved())
-            continue;
-        const solution s = {
-            saved_expr_pool_.import(session.normalize(saved_expr_pool_.make(idx_x))),
-            saved_expr_pool_.import(session.normalize(saved_expr_pool_.make(idx_y))),
-        };
-        if (visited.count(s))
-            continue;
-        visited.insert(s);
-        auto it = expected.find(s);
-        ASSERT_NE(it, expected.end()) << "unexpected solution";
-        expected.erase(it);
-    }
-    ASSERT_TRUE(expected.empty()) << "solver stopped before all expected solutions found";
+    enumerate_all_solutions(
+        session,
+        expected,
+        [&]() -> solution {
+            return {saved_expr_pool_.import(session.normalize(saved_expr_pool_.make(idx_x))), saved_expr_pool_.import(session.normalize(saved_expr_pool_.make(idx_y)))};
+        });
 }
 
 TEST_F(BasicSolverSessionTest, EnumeratesAddPairsSummingExactlyTen) {
@@ -1094,22 +1025,12 @@ TEST_F(BasicSolverSessionTest, EnumeratesAddPairsSummingExactlyTen) {
     }));
 
     basic_solver_session session(database, initial_goals, kPeanoBudget, kSeed);
-    std::set<solution> visited;
-    while (session.next()) {
-        if (!session.solved())
-            continue;
-        const solution s = {
-            saved_expr_pool_.import(session.normalize(saved_expr_pool_.make(idx_x))),
-            saved_expr_pool_.import(session.normalize(saved_expr_pool_.make(idx_y))),
-        };
-        if (visited.count(s))
-            continue;
-        visited.insert(s);
-        auto it = expected.find(s);
-        ASSERT_NE(it, expected.end()) << "unexpected solution";
-        expected.erase(it);
-    }
-    ASSERT_TRUE(expected.empty()) << "solver stopped before all expected solutions found";
+    enumerate_all_solutions(
+        session,
+        expected,
+        [&]() -> solution {
+            return {saved_expr_pool_.import(session.normalize(saved_expr_pool_.make(idx_x))), saved_expr_pool_.import(session.normalize(saved_expr_pool_.make(idx_y)))};
+        });
 }
 
 TEST_F(BasicSolverSessionTest, EnumeratesMulPairsProductEight) {
@@ -1176,22 +1097,12 @@ TEST_F(BasicSolverSessionTest, EnumeratesMulPairsProductEight) {
     }));
 
     basic_solver_session session(database, initial_goals, kPeanoBudget, kSeed);
-    std::set<solution> visited;
-    while (session.next()) {
-        if (!session.solved())
-            continue;
-        const solution s = {
-            saved_expr_pool_.import(session.normalize(saved_expr_pool_.make(idx_x))),
-            saved_expr_pool_.import(session.normalize(saved_expr_pool_.make(idx_y))),
-        };
-        if (visited.count(s))
-            continue;
-        visited.insert(s);
-        auto it = expected.find(s);
-        ASSERT_NE(it, expected.end()) << "unexpected solution";
-        expected.erase(it);
-    }
-    ASSERT_TRUE(expected.empty()) << "solver stopped before all expected solutions found";
+    enumerate_all_solutions(
+        session,
+        expected,
+        [&]() -> solution {
+            return {saved_expr_pool_.import(session.normalize(saved_expr_pool_.make(idx_x))), saved_expr_pool_.import(session.normalize(saved_expr_pool_.make(idx_y)))};
+        });
 }
 TEST_F(BasicSolverSessionTest, EnumeratesDualBoundedSharedXSums) {
     static constexpr size_t kPeanoBudget = 128;
@@ -1273,23 +1184,12 @@ TEST_F(BasicSolverSessionTest, EnumeratesDualBoundedSharedXSums) {
     }));
 
     basic_solver_session session(database, initial_goals, kPeanoBudget, kSeed);
-    std::set<solution> visited;
-    while (session.next()) {
-        if (!session.solved())
-            continue;
-        const solution s = {
-            saved_expr_pool_.import(session.normalize(saved_expr_pool_.make(idx_x))),
-            saved_expr_pool_.import(session.normalize(saved_expr_pool_.make(idx_y))),
-            saved_expr_pool_.import(session.normalize(saved_expr_pool_.make(idx_z))),
-        };
-        if (visited.count(s))
-            continue;
-        visited.insert(s);
-        auto it = expected.find(s);
-        ASSERT_NE(it, expected.end()) << "unexpected solution";
-        expected.erase(it);
-    }
-    ASSERT_TRUE(expected.empty()) << "solver stopped before all expected solutions found";
+    enumerate_all_solutions(
+        session,
+        expected,
+        [&]() -> solution {
+            return {saved_expr_pool_.import(session.normalize(saved_expr_pool_.make(idx_x))), saved_expr_pool_.import(session.normalize(saved_expr_pool_.make(idx_y))), saved_expr_pool_.import(session.normalize(saved_expr_pool_.make(idx_z)))};
+        });
 }
 
 TEST_F(BasicSolverSessionTest, EnumeratesCatalanTreesWithFiveNodes) {
@@ -1497,20 +1397,12 @@ TEST_F(BasicSolverSessionTest, EnumeratesTransitiveReachFromA) {
 
     basic_solver_session session(database, initial_goals, kMaxResolutions, kSeed);
     std::set<solution> expected{{b}, {c}, {d}};
-    std::set<solution> visited;
-    while (session.next()) {
-        if (!session.solved())
-            continue;
-        const solution s = {
-            saved_expr_pool_.import(session.normalize(saved_expr_pool_.make(idx_y)))};
-        if (visited.count(s))
-            continue;
-        visited.insert(s);
-        auto it = expected.find(s);
-        ASSERT_NE(it, expected.end()) << "unexpected solution";
-        expected.erase(it);
-    }
-    ASSERT_TRUE(expected.empty()) << "solver stopped before all expected solutions found";
+    enumerate_all_solutions(
+        session,
+        expected,
+        [&]() -> solution {
+            return {saved_expr_pool_.import(session.normalize(saved_expr_pool_.make(idx_y)))};
+        });
 }
 
 TEST_F(BasicSolverSessionTest, EnumeratesEvenPeanoLessThanEight) {
@@ -1566,20 +1458,12 @@ TEST_F(BasicSolverSessionTest, EnumeratesEvenPeanoLessThanEight) {
     }));
 
     basic_solver_session session(database, initial_goals, kPeanoBudget, kSeed);
-    std::set<solution> visited;
-    while (session.next()) {
-        if (!session.solved())
-            continue;
-        const solution s = {
-            saved_expr_pool_.import(session.normalize(saved_expr_pool_.make(idx_n)))};
-        if (visited.count(s))
-            continue;
-        visited.insert(s);
-        auto it = expected.find(s);
-        ASSERT_NE(it, expected.end()) << "unexpected solution";
-        expected.erase(it);
-    }
-    ASSERT_TRUE(expected.empty()) << "solver stopped before all expected solutions found";
+    enumerate_all_solutions(
+        session,
+        expected,
+        [&]() -> solution {
+            return {saved_expr_pool_.import(session.normalize(saved_expr_pool_.make(idx_n)))};
+        });
 }
 
 TEST_F(BasicSolverSessionTest, EnumeratesListSplitsForThreeElementList) {
@@ -1603,22 +1487,12 @@ TEST_F(BasicSolverSessionTest, EnumeratesListSplitsForThreeElementList) {
 
     basic_solver_session session(database, initial_goals, kMaxResolutions, kSeed);
     std::set<solution> expected{{nil, list_ab}, {list_a, list_b}};
-    std::set<solution> visited;
-    while (session.next()) {
-        if (!session.solved())
-            continue;
-        const solution s = {
-            saved_expr_pool_.import(session.normalize(saved_expr_pool_.make(idx_l1))),
-            saved_expr_pool_.import(session.normalize(saved_expr_pool_.make(idx_l2))),
-        };
-        if (visited.count(s))
-            continue;
-        visited.insert(s);
-        auto it = expected.find(s);
-        ASSERT_NE(it, expected.end()) << "unexpected solution";
-        expected.erase(it);
-    }
-    ASSERT_TRUE(expected.empty()) << "solver stopped before all expected solutions found";
+    enumerate_all_solutions(
+        session,
+        expected,
+        [&]() -> solution {
+            return {saved_expr_pool_.import(session.normalize(saved_expr_pool_.make(idx_l1))), saved_expr_pool_.import(session.normalize(saved_expr_pool_.make(idx_l2)))};
+        });
 }
 
 TEST_F(BasicSolverSessionTest, EnumeratesTwoChoiceClauseSolutions) {
