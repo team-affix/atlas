@@ -1,6 +1,10 @@
 // Integration: basic_manifest — wiring, sim lifecycle, cross-tick solver interop.
 //
-// Harness: enumerate_all_solutions, next_until_refuted. Solver ticks: sm.resume / has_yield / consume_yield.
+// Harness:
+//   enumerate_all_solutions, next_until_refuted — binding enumeration
+//   next_branch_until_refuted — resolution-branch enumeration until refutation;
+//     asserts no duplicate branch visitation (stricter than next_until_refuted)
+// Solver ticks: sm.resume / has_yield / consume_yield.
 //
 // Bug policy (docs/testing.md): failing tests indicate suspected production bugs
 // unless setup/lifetime/key definitions are wrong. Do not delete or weaken tests.
@@ -64,7 +68,7 @@ using ::testing::UnorderedElementsAre;
 namespace {
 
 // ---------------------------------------------------------------------------
-// Solver enumeration harness
+// Binding enumeration harness
 // ---------------------------------------------------------------------------
 
 using solution = std::vector<const expr*>;
@@ -112,6 +116,49 @@ void next_until_refuted(
         expected.erase(it);
     }
     ASSERT_TRUE(expected.empty()) << "solver refuted before all expected solutions found";
+}
+
+// ---------------------------------------------------------------------------
+// Resolution branch enumeration harness
+// ---------------------------------------------------------------------------
+
+using BranchGroups = std::vector<std::set<rule_id>>;
+using BranchTuple = std::vector<rule_id>;
+
+void next_branch_until_refuted(
+    i_solve& solver,
+    i_derive_resolution_lemma& resolution_memory,
+    const BranchGroups& groups,
+    std::set<BranchTuple> expected) {
+    auto sm = solver.solve();
+    std::set<BranchTuple> visited;
+    while (true) {
+        sm.resume();
+        if (!sm.has_yield())
+            break;
+        if (sm.consume_yield() != sim_termination::solved)
+            continue;
+
+        const lemma resolution_lemma = resolution_memory.derive_resolution_lemma();
+        BranchTuple tuple;
+        tuple.reserve(groups.size());
+        for (const std::set<rule_id>& group : groups) {
+            std::set<rule_id> found;
+            for (const resolution_lineage* rl : resolution_lemma.get_resolutions())
+                if (group.count(rl->idx))
+                    found.insert(rl->idx);
+            ASSERT_EQ(found.size(), 1u);
+            tuple.push_back(*found.begin());
+        }
+
+        ASSERT_FALSE(visited.count(tuple)) << "resolution branch enumerated twice";
+        visited.insert(tuple);
+
+        auto it = expected.find(tuple);
+        ASSERT_NE(it, expected.end()) << "unexpected resolution branch";
+        expected.erase(it);
+    }
+    ASSERT_TRUE(expected.empty()) << "solver refuted before all expected resolution branches found";
 }
 
 }  // namespace
@@ -910,30 +957,13 @@ TEST_F(BasicManifestIntegrationTest, SolverEnumeratesTwoGroundChoiceSolutions) {
     database.push(rule{f_head1, {}});
 
     basic_manifest manifest{database, initial_goals, kMaxResolutions, kSeed};
-    auto sm = manifest.solver_.solve();
-    std::set<rule_id> seen;
-    size_t solved_count = 0;
-    while (true) {
-        sm.resume();
-        if (!sm.has_yield())
-            break;
-        if (sm.consume_yield() != sim_termination::solved)
-            continue;
-        ++solved_count;
-        const lemma decision_lemma = manifest.decision_memory_.derive();
-        const lemma resolution_lemma = manifest.resolution_memory_.derive_resolution_lemma();
-        std::set<rule_id> branches;
-        for (const resolution_lineage* rl : decision_lemma.get_resolutions())
-            if (rl->idx == rule_id{0} || rl->idx == rule_id{1})
-                branches.insert(rl->idx);
-        for (const resolution_lineage* rl : resolution_lemma.get_resolutions())
-            if (rl->idx == rule_id{0} || rl->idx == rule_id{1})
-                branches.insert(rl->idx);
-        ASSERT_EQ(branches.size(), 1u);
-        seen.insert(*branches.begin());
-    }
-    ASSERT_EQ(solved_count, 2u);
-    EXPECT_THAT(seen, UnorderedElementsAre(rule_id{0}, rule_id{1}));
+
+    static const BranchGroups kGroups{{rule_id{0}, rule_id{1}}};
+    next_branch_until_refuted(
+        manifest.solver_,
+        manifest.resolution_memory_,
+        kGroups,
+        {{rule_id{0}}, {rule_id{1}}});
 }
 
 TEST_F(BasicManifestIntegrationTest, SolverRefutesAfterEnumeratingAllGroundBranches) {
@@ -951,39 +981,13 @@ TEST_F(BasicManifestIntegrationTest, SolverRefutesAfterEnumeratingAllGroundBranc
     database.push(rule{f_head1, {}});
 
     basic_manifest manifest{database, initial_goals, kMaxResolutions, kSeed};
-    auto sm = manifest.solver_.solve();
-    std::set<rule_id> seen;
-    std::set<rule_id> visited;
-    while (seen.size() < 2u) {
-        rule_id branch;
-        do {
-            sm.resume();
-            ASSERT_TRUE(sm.has_yield());
-            if (sm.consume_yield() != sim_termination::solved)
-                continue;
-            const lemma decision_lemma = manifest.decision_memory_.derive();
-            const lemma resolution_lemma = manifest.resolution_memory_.derive_resolution_lemma();
-            std::set<rule_id> branches;
-            for (const resolution_lineage* rl : decision_lemma.get_resolutions())
-                if (rl->idx == rule_id{0} || rl->idx == rule_id{1})
-                    branches.insert(rl->idx);
-            for (const resolution_lineage* rl : resolution_lemma.get_resolutions())
-                if (rl->idx == rule_id{0} || rl->idx == rule_id{1})
-                    branches.insert(rl->idx);
-            ASSERT_EQ(branches.size(), 1u);
-            branch = *branches.begin();
-        } while (visited.count(branch));
-        visited.insert(branch);
-        seen.insert(branch);
-    }
-    EXPECT_THAT(seen, UnorderedElementsAre(rule_id{0}, rule_id{1}));
-    while (true) {
-        sm.resume();
-        if (!sm.has_yield())
-            break;
-        if (sm.consume_yield() == sim_termination::solved)
-            FAIL() << "unexpected extra solution after exhausting search space";
-    }
+
+    static const BranchGroups kGroups{{rule_id{0}, rule_id{1}}};
+    next_branch_until_refuted(
+        manifest.solver_,
+        manifest.resolution_memory_,
+        kGroups,
+        {{rule_id{0}}, {rule_id{1}}});
 }
 
 TEST_F(BasicManifestIntegrationTest, SolverFindsClauseDerivedUnitSolution) {
@@ -1036,30 +1040,13 @@ TEST_F(BasicManifestIntegrationTest, SolverEnumeratesTwoChoiceClauseSolutions) {
     database.push(rule{g_fact1, {}});
 
     basic_manifest manifest{database, initial_goals, kMaxResolutions, kSeed};
-    auto sm = manifest.solver_.solve();
-    std::set<rule_id> seen;
-    size_t solved_count = 0;
-    while (true) {
-        sm.resume();
-        if (!sm.has_yield())
-            break;
-        if (sm.consume_yield() != sim_termination::solved)
-            continue;
-        ++solved_count;
-        const lemma decision_lemma = manifest.decision_memory_.derive();
-        const lemma resolution_lemma = manifest.resolution_memory_.derive_resolution_lemma();
-        std::set<rule_id> branches;
-        for (const resolution_lineage* rl : decision_lemma.get_resolutions())
-            if (rl->idx == rule_id{1} || rl->idx == rule_id{2})
-                branches.insert(rl->idx);
-        for (const resolution_lineage* rl : resolution_lemma.get_resolutions())
-            if (rl->idx == rule_id{1} || rl->idx == rule_id{2})
-                branches.insert(rl->idx);
-        ASSERT_EQ(branches.size(), 1u);
-        seen.insert(*branches.begin());
-    }
-    ASSERT_EQ(solved_count, 2u);
-    EXPECT_THAT(seen, UnorderedElementsAre(rule_id{1}, rule_id{2}));
+
+    static const BranchGroups kGroups{{rule_id{1}, rule_id{2}}};
+    next_branch_until_refuted(
+        manifest.solver_,
+        manifest.resolution_memory_,
+        kGroups,
+        {{rule_id{1}}, {rule_id{2}}});
 }
 
 TEST_F(BasicManifestIntegrationTest, SolverFindsSolutionWithCorrectBindings) {
@@ -1153,8 +1140,10 @@ TEST_F(BasicManifestIntegrationTest, SolverEnumeratesTwoVarChoiceSolutions) {
 
     basic_manifest manifest{database, initial_goals, kMaxResolutions, kSeed};
     normalizer normalizer{manifest.loc_};
+
     const uint32_t idx_a = manifest.var_sequencer_.next();
     const expr* var_a = manifest.expr_pool_.make(idx_a);
+
     initial_goals.push(manifest.expr_pool_.make("f", {var_a}));
 
     enumerate_all_solutions(
@@ -1182,8 +1171,10 @@ TEST_F(BasicManifestIntegrationTest, SolverRefutesAfterEnumeratingAllVarBranches
 
     basic_manifest manifest{database, initial_goals, kMaxResolutions, kSeed};
     normalizer normalizer{manifest.loc_};
+
     const uint32_t idx_a = manifest.var_sequencer_.next();
     const expr* var_a = manifest.expr_pool_.make(idx_a);
+
     initial_goals.push(manifest.expr_pool_.make("f", {var_a}));
 
     next_until_refuted(
@@ -1216,8 +1207,10 @@ TEST_F(BasicManifestIntegrationTest, SolverEnumeratesTwoGoalSharedVarSolutions) 
 
     basic_manifest manifest{database, initial_goals, kMaxResolutions, kSeed};
     normalizer normalizer{manifest.loc_};
+
     const uint32_t idx_a = manifest.var_sequencer_.next();
     const expr* var_a = manifest.expr_pool_.make(idx_a);
+
     initial_goals.push(manifest.expr_pool_.make("f", {var_a}));
     initial_goals.push(manifest.expr_pool_.make("g", {var_a}));
 
@@ -1249,39 +1242,13 @@ TEST_F(BasicManifestIntegrationTest, TickThreeGroundBranchesEnumerateDistinct) {
     database.push(rule{f_head2, {}});
 
     basic_manifest manifest{database, initial_goals, kMaxResolutions, kSeed};
-    auto sm = manifest.solver_.solve();
-    std::set<rule_id> seen;
-    std::set<rule_id> visited;
-    while (seen.size() < 3u) {
-        rule_id branch;
-        do {
-            sm.resume();
-            ASSERT_TRUE(sm.has_yield());
-            if (sm.consume_yield() != sim_termination::solved)
-                continue;
-            const lemma decision_lemma = manifest.decision_memory_.derive();
-            const lemma resolution_lemma = manifest.resolution_memory_.derive_resolution_lemma();
-            std::set<rule_id> branches;
-            for (const resolution_lineage* rl : decision_lemma.get_resolutions())
-                if (rl->idx == rule_id{0} || rl->idx == rule_id{1} || rl->idx == rule_id{2})
-                    branches.insert(rl->idx);
-            for (const resolution_lineage* rl : resolution_lemma.get_resolutions())
-                if (rl->idx == rule_id{0} || rl->idx == rule_id{1} || rl->idx == rule_id{2})
-                    branches.insert(rl->idx);
-            ASSERT_EQ(branches.size(), 1u);
-            branch = *branches.begin();
-        } while (visited.count(branch));
-        visited.insert(branch);
-        seen.insert(branch);
-    }
-    EXPECT_THAT(seen, UnorderedElementsAre(rule_id{0}, rule_id{1}, rule_id{2}));
-    while (true) {
-        sm.resume();
-        if (!sm.has_yield())
-            break;
-        if (sm.consume_yield() == sim_termination::solved)
-            FAIL() << "unexpected extra solution after exhausting search space";
-    }
+
+    static const BranchGroups kGroups{{rule_id{0}, rule_id{1}, rule_id{2}}};
+    next_branch_until_refuted(
+        manifest.solver_,
+        manifest.resolution_memory_,
+        kGroups,
+        {{rule_id{0}}, {rule_id{1}}, {rule_id{2}}});
 }
 
 TEST_F(BasicManifestIntegrationTest, SimLifecycleTwoSequentialDecisionsOnTwoGoals) {
@@ -1313,14 +1280,19 @@ TEST_F(BasicManifestIntegrationTest, SimLifecycleTwoSequentialDecisionsOnTwoGoal
     const lemma resolution_lemma = manifest.resolution_memory_.derive_resolution_lemma();
     ASSERT_EQ(resolution_lemma.get_resolutions().size(), 2u);
 
+    static const std::set<rule_id> kFBranch{rule_id{0}, rule_id{1}};
+    static const std::set<rule_id> kGBranch{rule_id{2}, rule_id{3}};
+
     std::set<rule_id> f_branches;
     for (const resolution_lineage* rl : resolution_lemma.get_resolutions())
-        if (rl->idx == rule_id{0} || rl->idx == rule_id{1})
+        if (kFBranch.count(rl->idx))
             f_branches.insert(rl->idx);
+
     std::set<rule_id> g_branches;
     for (const resolution_lineage* rl : resolution_lemma.get_resolutions())
-        if (rl->idx == rule_id{2} || rl->idx == rule_id{3})
+        if (kGBranch.count(rl->idx))
             g_branches.insert(rl->idx);
+
     ASSERT_EQ(f_branches.size(), 1u);
     ASSERT_EQ(g_branches.size(), 1u);
     manifest.sim_.tear_down();
@@ -1402,20 +1374,27 @@ TEST_F(BasicManifestIntegrationTest, SimLifecycleCdclUnitElimForcesRemainingCand
     const lemma resolution_lemma = manifest.resolution_memory_.derive_resolution_lemma();
     ASSERT_EQ(resolution_lemma.get_resolutions().size(), 2u);
 
+    static const std::set<rule_id> kFBranch{rule_id{0}, rule_id{1}};
+    static const std::set<rule_id> kGBranch{rule_id{2}, rule_id{3}};
+
     std::set<rule_id> f_branches;
     for (const resolution_lineage* rl : resolution_lemma.get_resolutions())
-        if (rl->idx == rule_id{0} || rl->idx == rule_id{1})
+        if (kFBranch.count(rl->idx))
             f_branches.insert(rl->idx);
+
     std::set<rule_id> g_branches;
     for (const resolution_lineage* rl : resolution_lemma.get_resolutions())
-        if (rl->idx == rule_id{2} || rl->idx == rule_id{3})
+        if (kGBranch.count(rl->idx))
             g_branches.insert(rl->idx);
+
     ASSERT_EQ(f_branches.size(), 1u);
     ASSERT_EQ(g_branches.size(), 1u);
+
     // CDCL forbids g/2 once f is committed; when RNG picks f before g (one decision),
     // g/3 is unit-forced. Two decisions occur if g is chosen first — still valid.
     if (manifest.decision_memory_.count() == 1u)
         EXPECT_FALSE(g_branches.contains(rule_id{2}));
+
     manifest.sim_.tear_down();
 }
 
@@ -1489,50 +1468,18 @@ TEST_F(BasicManifestIntegrationTest, SolverEnumeratesFourTwoGoalGroundCombinatio
     database.push(rule{g_head3, {}});
 
     basic_manifest manifest{database, initial_goals, kMaxResolutions, kSeed};
-    auto sm = manifest.solver_.solve();
-    std::set<std::pair<rule_id, rule_id>> seen;
-    std::set<std::pair<rule_id, rule_id>> visited;
-    while (seen.size() < 4u) {
-        std::pair<rule_id, rule_id> pair;
-        do {
-            sm.resume();
-            ASSERT_TRUE(sm.has_yield());
-            if (sm.consume_yield() != sim_termination::solved)
-                continue;
-            const lemma decision_lemma = manifest.decision_memory_.derive();
-            const lemma resolution_lemma = manifest.resolution_memory_.derive_resolution_lemma();
-            std::set<rule_id> f_branch;
-            for (const resolution_lineage* rl : decision_lemma.get_resolutions())
-                if (rl->idx == rule_id{0} || rl->idx == rule_id{1})
-                    f_branch.insert(rl->idx);
-            for (const resolution_lineage* rl : resolution_lemma.get_resolutions())
-                if (rl->idx == rule_id{0} || rl->idx == rule_id{1})
-                    f_branch.insert(rl->idx);
-            std::set<rule_id> g_branch;
-            for (const resolution_lineage* rl : decision_lemma.get_resolutions())
-                if (rl->idx == rule_id{2} || rl->idx == rule_id{3})
-                    g_branch.insert(rl->idx);
-            for (const resolution_lineage* rl : resolution_lemma.get_resolutions())
-                if (rl->idx == rule_id{2} || rl->idx == rule_id{3})
-                    g_branch.insert(rl->idx);
-            ASSERT_EQ(f_branch.size(), 1u);
-            ASSERT_EQ(g_branch.size(), 1u);
-            pair = {*f_branch.begin(), *g_branch.begin()};
-        } while (visited.count(pair));
-        visited.insert(pair);
-        seen.insert(pair);
-    }
-    EXPECT_TRUE(seen.contains({rule_id{0}, rule_id{2}}));
-    EXPECT_TRUE(seen.contains({rule_id{0}, rule_id{3}}));
-    EXPECT_TRUE(seen.contains({rule_id{1}, rule_id{2}}));
-    EXPECT_TRUE(seen.contains({rule_id{1}, rule_id{3}}));
-    while (true) {
-        sm.resume();
-        if (!sm.has_yield())
-            break;
-        if (sm.consume_yield() == sim_termination::solved)
-            FAIL() << "unexpected extra solution after exhausting search space";
-    }
+
+    static const BranchGroups kGroups{{rule_id{0}, rule_id{1}}, {rule_id{2}, rule_id{3}}};
+    next_branch_until_refuted(
+        manifest.solver_,
+        manifest.resolution_memory_,
+        kGroups,
+        {
+            {rule_id{0}, rule_id{2}},
+            {rule_id{0}, rule_id{3}},
+            {rule_id{1}, rule_id{2}},
+            {rule_id{1}, rule_id{3}},
+        });
 }
 
 TEST_F(BasicManifestIntegrationTest, SolverEnumeratesEightThreeGoalGroundCombinations) {
@@ -1572,55 +1519,23 @@ TEST_F(BasicManifestIntegrationTest, SolverEnumeratesEightThreeGoalGroundCombina
         seed_db.push(rule{h1, {}});
 
         basic_manifest manifest{seed_db, seed_goals, kMaxResolutions, seed};
-        normalizer seed_normalizer{manifest.loc_};
-        auto sm = manifest.solver_.solve();
-        std::set<std::tuple<rule_id, rule_id, rule_id>> seen;
-        size_t solved_count = 0;
-        while (true) {
-            sm.resume();
-            if (!sm.has_yield())
-                break;
-            if (sm.consume_yield() != sim_termination::solved)
-                continue;
-            ++solved_count;
-            const lemma decision_lemma = manifest.decision_memory_.derive();
-            const lemma resolution_lemma = manifest.resolution_memory_.derive_resolution_lemma();
-            std::set<rule_id> f_branch;
-            for (const resolution_lineage* rl : decision_lemma.get_resolutions())
-                if (rl->idx == rule_id{0} || rl->idx == rule_id{1})
-                    f_branch.insert(rl->idx);
-            for (const resolution_lineage* rl : resolution_lemma.get_resolutions())
-                if (rl->idx == rule_id{0} || rl->idx == rule_id{1})
-                    f_branch.insert(rl->idx);
-            std::set<rule_id> g_branch;
-            for (const resolution_lineage* rl : decision_lemma.get_resolutions())
-                if (rl->idx == rule_id{2} || rl->idx == rule_id{3})
-                    g_branch.insert(rl->idx);
-            for (const resolution_lineage* rl : resolution_lemma.get_resolutions())
-                if (rl->idx == rule_id{2} || rl->idx == rule_id{3})
-                    g_branch.insert(rl->idx);
-            std::set<rule_id> h_branch;
-            for (const resolution_lineage* rl : decision_lemma.get_resolutions())
-                if (rl->idx == rule_id{4} || rl->idx == rule_id{5})
-                    h_branch.insert(rl->idx);
-            for (const resolution_lineage* rl : resolution_lemma.get_resolutions())
-                if (rl->idx == rule_id{4} || rl->idx == rule_id{5})
-                    h_branch.insert(rl->idx);
-            ASSERT_EQ(f_branch.size(), 1u);
-            ASSERT_EQ(g_branch.size(), 1u);
-            ASSERT_EQ(h_branch.size(), 1u);
-            seen.insert({*f_branch.begin(), *g_branch.begin(), *h_branch.begin()});
-        }
-        ASSERT_EQ(solved_count, 8u);
-        EXPECT_TRUE(seen.contains({rule_id{0}, rule_id{2}, rule_id{4}}));
-        EXPECT_TRUE(seen.contains({rule_id{0}, rule_id{2}, rule_id{5}}));
-        EXPECT_TRUE(seen.contains({rule_id{0}, rule_id{3}, rule_id{4}}));
-        EXPECT_TRUE(seen.contains({rule_id{0}, rule_id{3}, rule_id{5}}));
-        EXPECT_TRUE(seen.contains({rule_id{1}, rule_id{2}, rule_id{4}}));
-        EXPECT_TRUE(seen.contains({rule_id{1}, rule_id{2}, rule_id{5}}));
-        EXPECT_TRUE(seen.contains({rule_id{1}, rule_id{3}, rule_id{4}}));
-        EXPECT_TRUE(seen.contains({rule_id{1}, rule_id{3}, rule_id{5}}));
-        EXPECT_EQ(seen.size(), 8u);
+
+        static const BranchGroups kGroups{
+            {rule_id{0}, rule_id{1}}, {rule_id{2}, rule_id{3}}, {rule_id{4}, rule_id{5}}};
+        next_branch_until_refuted(
+            manifest.solver_,
+            manifest.resolution_memory_,
+            kGroups,
+            {
+                {rule_id{0}, rule_id{2}, rule_id{4}},
+                {rule_id{0}, rule_id{2}, rule_id{5}},
+                {rule_id{0}, rule_id{3}, rule_id{4}},
+                {rule_id{0}, rule_id{3}, rule_id{5}},
+                {rule_id{1}, rule_id{2}, rule_id{4}},
+                {rule_id{1}, rule_id{2}, rule_id{5}},
+                {rule_id{1}, rule_id{3}, rule_id{4}},
+                {rule_id{1}, rule_id{3}, rule_id{5}},
+            });
     }
 }
 
@@ -1646,8 +1561,10 @@ TEST_F(BasicManifestIntegrationTest, SolverEnumeratesFourVarBindingSolutions) {
 
     basic_manifest manifest{database, initial_goals, kMaxResolutions, kSeed};
     normalizer normalizer{manifest.loc_};
+
     const uint32_t idx_a = manifest.var_sequencer_.next();
     const expr* var_a = manifest.expr_pool_.make(idx_a);
+
     initial_goals.push(manifest.expr_pool_.make("f", {var_a}));
 
     next_until_refuted(
@@ -1687,41 +1604,13 @@ TEST_F(BasicManifestIntegrationTest, SolverEnumeratesFourClauseBodyFactChoices) 
     database.push(rule{g_fact4, {}});
 
     basic_manifest manifest{database, initial_goals, kMaxResolutions, kSeed};
-    auto sm = manifest.solver_.solve();
-    std::set<rule_id> seen;
-    std::set<rule_id> visited;
-    while (seen.size() < 4u) {
-        rule_id fact;
-        do {
-            sm.resume();
-            ASSERT_TRUE(sm.has_yield());
-            if (sm.consume_yield() != sim_termination::solved)
-                continue;
-            const lemma decision_lemma = manifest.decision_memory_.derive();
-            const lemma resolution_lemma = manifest.resolution_memory_.derive_resolution_lemma();
-            std::set<rule_id> g_fact;
-            for (const resolution_lineage* rl : decision_lemma.get_resolutions())
-                if (rl->idx == rule_id{1} || rl->idx == rule_id{2} || rl->idx == rule_id{3}
-                    || rl->idx == rule_id{4})
-                    g_fact.insert(rl->idx);
-            for (const resolution_lineage* rl : resolution_lemma.get_resolutions())
-                if (rl->idx == rule_id{1} || rl->idx == rule_id{2} || rl->idx == rule_id{3}
-                    || rl->idx == rule_id{4})
-                    g_fact.insert(rl->idx);
-            ASSERT_EQ(g_fact.size(), 1u);
-            fact = *g_fact.begin();
-        } while (visited.count(fact));
-        visited.insert(fact);
-        seen.insert(fact);
-    }
-    EXPECT_THAT(seen, UnorderedElementsAre(rule_id{1}, rule_id{2}, rule_id{3}, rule_id{4}));
-    while (true) {
-        sm.resume();
-        if (!sm.has_yield())
-            break;
-        if (sm.consume_yield() == sim_termination::solved)
-            FAIL() << "unexpected extra solution after exhausting search space";
-    }
+
+    static const BranchGroups kGroups{{rule_id{1}, rule_id{2}, rule_id{3}, rule_id{4}}};
+    next_branch_until_refuted(
+        manifest.solver_,
+        manifest.resolution_memory_,
+        kGroups,
+        {{rule_id{1}}, {rule_id{2}}, {rule_id{3}}, {rule_id{4}}});
 }
 
 TEST_F(BasicManifestIntegrationTest, SolverEnumeratesManySharedVarGroundHeads) {
@@ -1767,7 +1656,6 @@ TEST_F(BasicManifestIntegrationTest, SolverEnumeratesManySharedVarGroundHeads) {
         seed_db.push(rule{g_mno, {}});
 
         basic_manifest manifest{seed_db, seed_goals, kMaxResolutions, seed};
-        normalizer seed_normalizer{manifest.loc_};
         const uint32_t idx_a = manifest.var_sequencer_.next();
         const uint32_t idx_b = manifest.var_sequencer_.next();
         const uint32_t idx_c = manifest.var_sequencer_.next();
@@ -1777,54 +1665,55 @@ TEST_F(BasicManifestIntegrationTest, SolverEnumeratesManySharedVarGroundHeads) {
         seed_goals.push(manifest.expr_pool_.make("f", {}));
         seed_goals.push(manifest.expr_pool_.make("g", {var_a, var_b, var_c}));
 
-        auto sm = manifest.solver_.solve();
+        static const BranchGroups kBranchGroups{
+            {rule_id{0}, rule_id{1}}, {rule_id{2}, rule_id{3}, rule_id{4}, rule_id{5}, rule_id{6}}};
+        next_branch_until_refuted(
+            manifest.solver_,
+            manifest.resolution_memory_,
+            kBranchGroups,
+            {
+                {rule_id{0}, rule_id{2}}, {rule_id{0}, rule_id{3}}, {rule_id{0}, rule_id{4}},
+                {rule_id{0}, rule_id{5}}, {rule_id{0}, rule_id{6}}, {rule_id{1}, rule_id{2}},
+                {rule_id{1}, rule_id{3}}, {rule_id{1}, rule_id{4}}, {rule_id{1}, rule_id{5}},
+                {rule_id{1}, rule_id{6}},
+            });
+
+        db binding_db;
+        initial_goal_exprs binding_goals;
+        binding_db.push(rule{f_head0, {}});
+        binding_db.push(rule{f_head1, {}});
+        binding_db.push(rule{g_abc, {}});
+        binding_db.push(rule{g_def, {}});
+        binding_db.push(rule{g_ghi, {}});
+        binding_db.push(rule{g_jkl, {}});
+        binding_db.push(rule{g_mno, {}});
+
+        basic_manifest binding_manifest{binding_db, binding_goals, kMaxResolutions, seed};
+        normalizer binding_normalizer{binding_manifest.loc_};
+        const uint32_t idx_a_bind = binding_manifest.var_sequencer_.next();
+        const uint32_t idx_b_bind = binding_manifest.var_sequencer_.next();
+        const uint32_t idx_c_bind = binding_manifest.var_sequencer_.next();
+        const expr* var_a_bind = binding_manifest.expr_pool_.make(idx_a_bind);
+        const expr* var_b_bind = binding_manifest.expr_pool_.make(idx_b_bind);
+        const expr* var_c_bind = binding_manifest.expr_pool_.make(idx_c_bind);
+        binding_goals.push(binding_manifest.expr_pool_.make("f", {}));
+        binding_goals.push(binding_manifest.expr_pool_.make("g", {var_a_bind, var_b_bind, var_c_bind}));
+
         std::vector<solution> binding_solutions;
-        std::set<std::pair<rule_id, rule_id>> seen;
+        auto binding_sm = binding_manifest.solver_.solve();
         while (true) {
-            sm.resume();
-            if (!sm.has_yield())
+            binding_sm.resume();
+            if (!binding_sm.has_yield())
                 break;
-            if (sm.consume_yield() != sim_termination::solved)
+            if (binding_sm.consume_yield() != sim_termination::solved)
                 continue;
             binding_solutions.push_back({
-                saved_expr_pool_.import(seed_normalizer.normalize(var_a)),
-                saved_expr_pool_.import(seed_normalizer.normalize(var_b)),
-                saved_expr_pool_.import(seed_normalizer.normalize(var_c)),
+                saved_expr_pool_.import(binding_normalizer.normalize(var_a_bind)),
+                saved_expr_pool_.import(binding_normalizer.normalize(var_b_bind)),
+                saved_expr_pool_.import(binding_normalizer.normalize(var_c_bind)),
             });
-            const lemma decision_lemma = manifest.decision_memory_.derive();
-            const lemma resolution_lemma = manifest.resolution_memory_.derive_resolution_lemma();
-            std::set<rule_id> f_branch;
-            for (const resolution_lineage* rl : decision_lemma.get_resolutions())
-                if (rl->idx == rule_id{0} || rl->idx == rule_id{1})
-                    f_branch.insert(rl->idx);
-            for (const resolution_lineage* rl : resolution_lemma.get_resolutions())
-                if (rl->idx == rule_id{0} || rl->idx == rule_id{1})
-                    f_branch.insert(rl->idx);
-            std::set<rule_id> g_branch;
-            for (const resolution_lineage* rl : decision_lemma.get_resolutions())
-                if (rl->idx == rule_id{2} || rl->idx == rule_id{3} || rl->idx == rule_id{4}
-                    || rl->idx == rule_id{5} || rl->idx == rule_id{6})
-                    g_branch.insert(rl->idx);
-            for (const resolution_lineage* rl : resolution_lemma.get_resolutions())
-                if (rl->idx == rule_id{2} || rl->idx == rule_id{3} || rl->idx == rule_id{4}
-                    || rl->idx == rule_id{5} || rl->idx == rule_id{6})
-                    g_branch.insert(rl->idx);
-            ASSERT_EQ(f_branch.size(), 1u);
-            ASSERT_EQ(g_branch.size(), 1u);
-            seen.insert({*f_branch.begin(), *g_branch.begin()});
         }
         ASSERT_EQ(binding_solutions.size(), kRawSolutions);
-        EXPECT_TRUE(seen.contains({rule_id{0}, rule_id{2}}));
-        EXPECT_TRUE(seen.contains({rule_id{0}, rule_id{3}}));
-        EXPECT_TRUE(seen.contains({rule_id{0}, rule_id{4}}));
-        EXPECT_TRUE(seen.contains({rule_id{0}, rule_id{5}}));
-        EXPECT_TRUE(seen.contains({rule_id{0}, rule_id{6}}));
-        EXPECT_TRUE(seen.contains({rule_id{1}, rule_id{2}}));
-        EXPECT_TRUE(seen.contains({rule_id{1}, rule_id{3}}));
-        EXPECT_TRUE(seen.contains({rule_id{1}, rule_id{4}}));
-        EXPECT_TRUE(seen.contains({rule_id{1}, rule_id{5}}));
-        EXPECT_TRUE(seen.contains({rule_id{1}, rule_id{6}}));
-        EXPECT_EQ(seen.size(), kRawSolutions);
         size_t saw_abc = 0;
         size_t saw_def = 0;
         size_t saw_ghi = 0;
@@ -1974,66 +1863,58 @@ TEST_F(BasicManifestIntegrationTest, EnumeratesPeanoLessThanSeven) {
      */
     static constexpr size_t kPeanoBudget = 128;
 
-    const expr* zero = saved_expr_pool_.make("zero", {});
-    const expr* nat_zero_h = saved_expr_pool_.make("nat", {zero});
-    database.push(rule{nat_zero_h, {}});
-
-    const expr* rv1 = saved_expr_pool_.make(0);
-    const expr* suc_rv1 = saved_expr_pool_.make("suc", {rv1});
-    const expr* nat_suc_rv1 = saved_expr_pool_.make("nat", {suc_rv1});
-    const expr* nat_rv1 = saved_expr_pool_.make("nat", {rv1});
-    database.push(rule{nat_suc_rv1, {nat_rv1}});
-
-    const expr* rv2 = saved_expr_pool_.make(0);
-    const expr* suc_rv2 = saved_expr_pool_.make("suc", {rv2});
-    const expr* lt_zero_suc = saved_expr_pool_.make("lt", {zero, suc_rv2});
-    const expr* nat_rv2 = saved_expr_pool_.make("nat", {rv2});
-    database.push(rule{lt_zero_suc, {nat_rv2}});
-
-    const expr* rv3 = saved_expr_pool_.make(0);
-    const expr* rv4 = saved_expr_pool_.make(1);
-    const expr* suc_rv3 = saved_expr_pool_.make("suc", {rv3});
-    const expr* suc_rv4 = saved_expr_pool_.make("suc", {rv4});
-    const expr* lt_suc_suc = saved_expr_pool_.make("lt", {suc_rv3, suc_rv4});
-    const expr* lt_rv3_rv4 = saved_expr_pool_.make("lt", {rv3, rv4});
-    database.push(rule{lt_suc_suc, {lt_rv3_rv4}});
-
-    std::set<solution> expected;
-    for (int n = 0; n < 7; ++n) {
+    auto peano_saved = [&](int n) -> const expr* {
         const expr* p = saved_expr_pool_.make("zero", {});
         for (int i = 0; i < n; ++i)
             p = saved_expr_pool_.make("suc", {p});
-        expected.insert({p});
-    }
+        return p;
+    };
+
+    auto push_peano_lt_rules = [&]() {
+        const expr* zero = saved_expr_pool_.make("zero", {});
+        database.push(rule{saved_expr_pool_.make("nat", {zero}), {}});
+
+        const expr* rv1 = saved_expr_pool_.make(0);
+        const expr* suc_rv1 = saved_expr_pool_.make("suc", {rv1});
+        database.push(rule{saved_expr_pool_.make("nat", {suc_rv1}), {saved_expr_pool_.make("nat", {rv1})}});
+
+        const expr* rv2 = saved_expr_pool_.make(0);
+        const expr* suc_rv2 = saved_expr_pool_.make("suc", {rv2});
+        database.push(rule{
+            saved_expr_pool_.make("lt", {zero, suc_rv2}), {saved_expr_pool_.make("nat", {rv2})}});
+
+        const expr* rv3 = saved_expr_pool_.make(0);
+        const expr* rv4 = saved_expr_pool_.make(1);
+        const expr* suc_rv3 = saved_expr_pool_.make("suc", {rv3});
+        const expr* suc_rv4 = saved_expr_pool_.make("suc", {rv4});
+        database.push(rule{
+            saved_expr_pool_.make("lt", {suc_rv3, suc_rv4}),
+            {saved_expr_pool_.make("lt", {rv3, rv4})}});
+    };
+    push_peano_lt_rules();
+
+    std::set<solution> expected;
+    for (int n = 0; n < 7; ++n)
+        expected.insert({peano_saved(n)});
 
     basic_manifest manifest{database, initial_goals, kPeanoBudget, kSeed};
     normalizer normalizer{manifest.loc_};
+
     const uint32_t idx_n = manifest.var_sequencer_.next();
     const expr* var_n = manifest.expr_pool_.make(idx_n);
+
     const expr* seven = manifest.expr_pool_.make("zero", {});
     for (int i = 0; i < 7; ++i)
         seven = manifest.expr_pool_.make("suc", {seven});
     initial_goals.push(manifest.expr_pool_.make("lt", {var_n, seven}));
 
-    auto sm = manifest.solver_.solve();
-    std::set<solution> remaining = expected;
-    std::set<solution> visited;
-    while (!remaining.empty()) {
-        sm.resume();
-        ASSERT_TRUE(sm.has_yield()) << "solver stopped before all expected solutions found";
-        const auto term = sm.consume_yield();
-        ASSERT_NE(term, sim_termination::depth_exceeded) << "raise kPeanoBudget";
-        if (term != sim_termination::solved)
-            continue;
-        const solution s = {
-            saved_expr_pool_.import(normalizer.normalize(manifest.expr_pool_.make(idx_n)))};
-        if (visited.count(s))
-            continue;
-        visited.insert(s);
-        auto it = remaining.find(s);
-        ASSERT_NE(it, remaining.end()) << "unexpected solution";
-        remaining.erase(it);
-    }
+    next_until_refuted(
+        manifest.solver_,
+        expected,
+        [&]() -> solution {
+            return {saved_expr_pool_.import(
+                normalizer.normalize(manifest.expr_pool_.make(idx_n)))};
+        });
 }
 
 TEST_F(BasicManifestIntegrationTest, EnumeratesSatPAndQOrR) {
@@ -2487,43 +2368,46 @@ TEST_F(BasicManifestIntegrationTest, EnumeratesAddPairsSummingLessThanTen) {
         return p;
     };
 
-    const expr* zero = saved_expr_pool_.make("zero", {});
-    const expr* nat_zero = saved_expr_pool_.make("nat", {zero});
-    database.push(rule{nat_zero, {}});
+    auto push_peano_add_lt_rules = [&]() {
+        const expr* zero = saved_expr_pool_.make("zero", {});
+        const expr* nat_zero = saved_expr_pool_.make("nat", {zero});
+        database.push(rule{nat_zero, {}});
 
-    const expr* rv1 = saved_expr_pool_.make(0);
-    const expr* suc_rv1 = saved_expr_pool_.make("suc", {rv1});
-    const expr* nat_suc = saved_expr_pool_.make("nat", {suc_rv1});
-    const expr* nat_rv1 = saved_expr_pool_.make("nat", {rv1});
-    database.push(rule{nat_suc, {nat_rv1}});
+        const expr* rv1 = saved_expr_pool_.make(0);
+        const expr* suc_rv1 = saved_expr_pool_.make("suc", {rv1});
+        const expr* nat_suc = saved_expr_pool_.make("nat", {suc_rv1});
+        const expr* nat_rv1 = saved_expr_pool_.make("nat", {rv1});
+        database.push(rule{nat_suc, {nat_rv1}});
 
-    const expr* rv2 = saved_expr_pool_.make(0);
-    const expr* add_zero_y_y = saved_expr_pool_.make("add", {zero, rv2, rv2});
-    const expr* nat_rv2 = saved_expr_pool_.make("nat", {rv2});
-    database.push(rule{add_zero_y_y, {nat_rv2}});
+        const expr* rv2 = saved_expr_pool_.make(0);
+        const expr* add_zero_y_y = saved_expr_pool_.make("add", {zero, rv2, rv2});
+        const expr* nat_rv2 = saved_expr_pool_.make("nat", {rv2});
+        database.push(rule{add_zero_y_y, {nat_rv2}});
 
-    const expr* rv3 = saved_expr_pool_.make(0);
-    const expr* rv4 = saved_expr_pool_.make(1);
-    const expr* rv5 = saved_expr_pool_.make(2);
-    const expr* suc_rv3 = saved_expr_pool_.make("suc", {rv3});
-    const expr* suc_rv5 = saved_expr_pool_.make("suc", {rv5});
-    const expr* add_suc = saved_expr_pool_.make("add", {suc_rv3, rv4, suc_rv5});
-    const expr* add_body = saved_expr_pool_.make("add", {rv3, rv4, rv5});
-    database.push(rule{add_suc, {add_body}});
+        const expr* rv3 = saved_expr_pool_.make(0);
+        const expr* rv4 = saved_expr_pool_.make(1);
+        const expr* rv5 = saved_expr_pool_.make(2);
+        const expr* suc_rv3 = saved_expr_pool_.make("suc", {rv3});
+        const expr* suc_rv5 = saved_expr_pool_.make("suc", {rv5});
+        const expr* add_suc = saved_expr_pool_.make("add", {suc_rv3, rv4, suc_rv5});
+        const expr* add_body = saved_expr_pool_.make("add", {rv3, rv4, rv5});
+        database.push(rule{add_suc, {add_body}});
 
-    const expr* rv6 = saved_expr_pool_.make(0);
-    const expr* suc_rv6 = saved_expr_pool_.make("suc", {rv6});
-    const expr* lt_zero_suc = saved_expr_pool_.make("lt", {zero, suc_rv6});
-    const expr* nat_rv6 = saved_expr_pool_.make("nat", {rv6});
-    database.push(rule{lt_zero_suc, {nat_rv6}});
+        const expr* rv6 = saved_expr_pool_.make(0);
+        const expr* suc_rv6 = saved_expr_pool_.make("suc", {rv6});
+        const expr* lt_zero_suc = saved_expr_pool_.make("lt", {zero, suc_rv6});
+        const expr* nat_rv6 = saved_expr_pool_.make("nat", {rv6});
+        database.push(rule{lt_zero_suc, {nat_rv6}});
 
-    const expr* rv7 = saved_expr_pool_.make(0);
-    const expr* rv8 = saved_expr_pool_.make(1);
-    const expr* suc_rv7 = saved_expr_pool_.make("suc", {rv7});
-    const expr* suc_rv8 = saved_expr_pool_.make("suc", {rv8});
-    const expr* lt_suc_suc = saved_expr_pool_.make("lt", {suc_rv7, suc_rv8});
-    const expr* lt_body = saved_expr_pool_.make("lt", {rv7, rv8});
-    database.push(rule{lt_suc_suc, {lt_body}});
+        const expr* rv7 = saved_expr_pool_.make(0);
+        const expr* rv8 = saved_expr_pool_.make(1);
+        const expr* suc_rv7 = saved_expr_pool_.make("suc", {rv7});
+        const expr* suc_rv8 = saved_expr_pool_.make("suc", {rv8});
+        const expr* lt_suc_suc = saved_expr_pool_.make("lt", {suc_rv7, suc_rv8});
+        const expr* lt_body = saved_expr_pool_.make("lt", {rv7, rv8});
+        database.push(rule{lt_suc_suc, {lt_body}});
+    };
+    push_peano_add_lt_rules();
 
     std::set<solution> expected;
     for (int x = 0; x < 10; ++x) {
@@ -2532,68 +2416,46 @@ TEST_F(BasicManifestIntegrationTest, EnumeratesAddPairsSummingLessThanTen) {
     }
     ASSERT_EQ(expected.size(), 55u);
 
-    db probe_db;
     initial_goal_exprs probe_goals;
-    probe_db.push(rule{nat_zero, {}});
-    probe_db.push(rule{nat_suc, {nat_rv1}});
-    probe_db.push(rule{add_zero_y_y, {nat_rv2}});
-    probe_db.push(rule{add_suc, {add_body}});
-    probe_db.push(rule{lt_zero_suc, {nat_rv6}});
-    probe_db.push(rule{lt_suc_suc, {lt_body}});
-
-    basic_manifest probe_manifest{probe_db, probe_goals, kPeanoBudget, kSeed};
+    basic_manifest probe_manifest{database, probe_goals, kPeanoBudget, kSeed};
     normalizer probe_normalizer{probe_manifest.loc_};
+
     const uint32_t idx_x_probe = probe_manifest.var_sequencer_.next();
     const uint32_t idx_y_probe = probe_manifest.var_sequencer_.next();
     const uint32_t idx_s_probe = probe_manifest.var_sequencer_.next();
     const expr* var_x_probe = probe_manifest.expr_pool_.make(idx_x_probe);
     const expr* var_y_probe = probe_manifest.expr_pool_.make(idx_y_probe);
     const expr* var_s_probe = probe_manifest.expr_pool_.make(idx_s_probe);
+
     const expr* ten_probe = probe_manifest.expr_pool_.make("zero", {});
     for (int i = 0; i < 10; ++i)
         ten_probe = probe_manifest.expr_pool_.make("suc", {ten_probe});
     probe_goals.push(probe_manifest.expr_pool_.make("add", {var_x_probe, var_y_probe, var_s_probe}));
     probe_goals.push(probe_manifest.expr_pool_.make("lt", {var_s_probe, ten_probe}));
 
-    auto probe_sm = probe_manifest.solver_.solve();
-    std::set<solution> probe_remaining = expected;
-    std::set<solution> probe_visited;
-    while (!probe_remaining.empty()) {
-        probe_sm.resume();
-        ASSERT_TRUE(probe_sm.has_yield()) << "solver stopped before all expected solutions found";
-        const auto term = probe_sm.consume_yield();
-        ASSERT_NE(term, sim_termination::depth_exceeded) << "raise kPeanoBudget";
-        if (term != sim_termination::solved)
-            continue;
-        const solution s = {
-            saved_expr_pool_.import(probe_normalizer.normalize(probe_manifest.expr_pool_.make(idx_x_probe))),
-            saved_expr_pool_.import(probe_normalizer.normalize(probe_manifest.expr_pool_.make(idx_y_probe))),
-        };
-        if (probe_visited.count(s))
-            continue;
-        probe_visited.insert(s);
-        auto it = probe_remaining.find(s);
-        ASSERT_NE(it, probe_remaining.end()) << "unexpected solution";
-        probe_remaining.erase(it);
-    }
+    next_until_refuted(
+        probe_manifest.solver_,
+        expected,
+        [&]() -> solution {
+            return {
+                saved_expr_pool_.import(
+                    probe_normalizer.normalize(probe_manifest.expr_pool_.make(idx_x_probe))),
+                saved_expr_pool_.import(
+                    probe_normalizer.normalize(probe_manifest.expr_pool_.make(idx_y_probe))),
+            };
+        });
 
-    db solve_db;
     initial_goal_exprs solve_goals;
-    solve_db.push(rule{nat_zero, {}});
-    solve_db.push(rule{nat_suc, {nat_rv1}});
-    solve_db.push(rule{add_zero_y_y, {nat_rv2}});
-    solve_db.push(rule{add_suc, {add_body}});
-    solve_db.push(rule{lt_zero_suc, {nat_rv6}});
-    solve_db.push(rule{lt_suc_suc, {lt_body}});
-
-    basic_manifest manifest{solve_db, solve_goals, kPeanoBudget, kSeed};
+    basic_manifest manifest{database, solve_goals, kPeanoBudget, kSeed};
     normalizer normalizer{manifest.loc_};
+
     const uint32_t idx_x = manifest.var_sequencer_.next();
     const uint32_t idx_y = manifest.var_sequencer_.next();
     const uint32_t idx_s = manifest.var_sequencer_.next();
     const expr* var_x = manifest.expr_pool_.make(idx_x);
     const expr* var_y = manifest.expr_pool_.make(idx_y);
     const expr* var_s = manifest.expr_pool_.make(idx_s);
+
     const expr* ten = manifest.expr_pool_.make("zero", {});
     for (int i = 0; i < 10; ++i)
         ten = manifest.expr_pool_.make("suc", {ten});
@@ -2625,29 +2487,29 @@ TEST_F(BasicManifestIntegrationTest, EnumeratesAddPairsSummingExactlyTen) {
         return p;
     };
 
-    const expr* zero = saved_expr_pool_.make("zero", {});
-    const expr* nat_zero = saved_expr_pool_.make("nat", {zero});
-    database.push(rule{nat_zero, {}});
+    auto push_peano_add_rules = [&]() {
+        const expr* zero = saved_expr_pool_.make("zero", {});
+        database.push(rule{saved_expr_pool_.make("nat", {zero}), {}});
 
-    const expr* rv1 = saved_expr_pool_.make(0);
-    const expr* suc_rv1 = saved_expr_pool_.make("suc", {rv1});
-    const expr* nat_suc = saved_expr_pool_.make("nat", {suc_rv1});
-    const expr* nat_rv1 = saved_expr_pool_.make("nat", {rv1});
-    database.push(rule{nat_suc, {nat_rv1}});
+        const expr* rv1 = saved_expr_pool_.make(0);
+        const expr* suc_rv1 = saved_expr_pool_.make("suc", {rv1});
+        database.push(rule{
+            saved_expr_pool_.make("nat", {suc_rv1}), {saved_expr_pool_.make("nat", {rv1})}});
 
-    const expr* rv2 = saved_expr_pool_.make(0);
-    const expr* add_zero_y_y = saved_expr_pool_.make("add", {zero, rv2, rv2});
-    const expr* nat_rv2 = saved_expr_pool_.make("nat", {rv2});
-    database.push(rule{add_zero_y_y, {nat_rv2}});
+        const expr* rv2 = saved_expr_pool_.make(0);
+        const expr* add_zero_y_y = saved_expr_pool_.make("add", {zero, rv2, rv2});
+        database.push(rule{add_zero_y_y, {saved_expr_pool_.make("nat", {rv2})}});
 
-    const expr* rv3 = saved_expr_pool_.make(0);
-    const expr* rv4 = saved_expr_pool_.make(1);
-    const expr* rv5 = saved_expr_pool_.make(2);
-    const expr* suc_rv3 = saved_expr_pool_.make("suc", {rv3});
-    const expr* suc_rv5 = saved_expr_pool_.make("suc", {rv5});
-    const expr* add_suc = saved_expr_pool_.make("add", {suc_rv3, rv4, suc_rv5});
-    const expr* add_body = saved_expr_pool_.make("add", {rv3, rv4, rv5});
-    database.push(rule{add_suc, {add_body}});
+        const expr* rv3 = saved_expr_pool_.make(0);
+        const expr* rv4 = saved_expr_pool_.make(1);
+        const expr* rv5 = saved_expr_pool_.make(2);
+        const expr* suc_rv3 = saved_expr_pool_.make("suc", {rv3});
+        const expr* suc_rv5 = saved_expr_pool_.make("suc", {rv5});
+        database.push(rule{
+            saved_expr_pool_.make("add", {suc_rv3, rv4, suc_rv5}),
+            {saved_expr_pool_.make("add", {rv3, rv4, rv5})}});
+    };
+    push_peano_add_rules();
 
     std::set<solution> expected;
     for (int x = 0; x <= 10; ++x)
@@ -2656,10 +2518,12 @@ TEST_F(BasicManifestIntegrationTest, EnumeratesAddPairsSummingExactlyTen) {
 
     basic_manifest manifest{database, initial_goals, kPeanoBudget, kSeed};
     normalizer normalizer{manifest.loc_};
+
     const uint32_t idx_x = manifest.var_sequencer_.next();
     const uint32_t idx_y = manifest.var_sequencer_.next();
     const expr* var_x = manifest.expr_pool_.make(idx_x);
     const expr* var_y = manifest.expr_pool_.make(idx_y);
+
     const expr* ten = manifest.expr_pool_.make("zero", {});
     for (int i = 0; i < 10; ++i)
         ten = manifest.expr_pool_.make("suc", {ten});
