@@ -1,6 +1,12 @@
 // Integration: basic_manifest as a whole session object — wiring, sim lifecycle,
 // cross-tick solver interop, and multi-cycle search semantics.
 //
+// Harness API (general N-way; no cardinality-named helpers):
+//   Run: run_solver, run_one_tick, snapshot_at_yield
+//   Branch: expect_branch_enumeration, expect_solver_branch_enumeration (enum + exhaustion)
+//   Binding: expect_binding_enumeration (enum-only size + match), expect_all_solutions_by_bindings
+//   Exhaustion: expect_enumeration_complete — pair separately for enum-only tier-S tests
+//
 // Bug policy (docs/testing.md): failing tests indicate suspected production bugs
 // unless setup/lifetime/key definitions are wrong. Do not delete or weaken tests.
 
@@ -83,13 +89,48 @@ struct SolverRun {
 };
 
 // ---------------------------------------------------------------------------
-// Harness helpers
+// Primitives
 // ---------------------------------------------------------------------------
 
-template<typename Iface, typename Concrete>
-void expect_same_instance(Concrete& concrete, locator& loc) {
-    EXPECT_EQ(static_cast<Iface*>(&concrete), &loc.locate<Iface>());
+using BindingKey = std::map<uint32_t, const expr*>;
+
+bool binding_equal(const BindingKey& a, const BindingKey& b) {
+    if (a.size() != b.size())
+        return false;
+    for (const auto& [idx, ea] : a) {
+        auto it = b.find(idx);
+        if (it == b.end() || *ea != *it->second)
+            return false;
+    }
+    return true;
 }
+
+bool snapshot_equal(const TickSnapshot& a, const TickSnapshot& b) {
+    if (a.decision_rule_ids != b.decision_rule_ids)
+        return false;
+    if (a.resolution_rule_ids != b.resolution_rule_ids)
+        return false;
+    return binding_equal(a.var_bindings, b.var_bindings);
+}
+
+std::set<rule_id> branch_ids(
+    const TickSnapshot& snap,
+    const std::set<rule_id>& candidate_rules) {
+    std::set<rule_id> ids;
+    for (rule_id id : snap.decision_rule_ids) {
+        if (candidate_rules.count(id))
+            ids.insert(id);
+    }
+    for (rule_id id : snap.resolution_rule_ids) {
+        if (candidate_rules.count(id))
+            ids.insert(id);
+    }
+    return ids;
+}
+
+// ---------------------------------------------------------------------------
+// Solver run harness
+// ---------------------------------------------------------------------------
 
 TickSnapshot snapshot_at_yield(
     basic_manifest& manifest,
@@ -134,11 +175,6 @@ std::optional<SimTerminationResult> run_one_tick(
     return result;
 }
 
-bool var_unbound(basic_manifest& m, uint32_t idx) {
-    const expr* whnf = m.bind_map_.whnf(m.expr_pool_.make(idx));
-    return std::holds_alternative<expr::var>(whnf->content);
-}
-
 SolverRun run_solver(
     basic_manifest& manifest,
     i_normalizer& normalizer,
@@ -159,43 +195,9 @@ SolverRun run_solver(
     return run;
 }
 
-using BindingKey = std::map<uint32_t, const expr*>;
-
-bool binding_equal(const BindingKey& a, const BindingKey& b) {
-    if (a.size() != b.size())
-        return false;
-    for (const auto& [idx, ea] : a) {
-        auto it = b.find(idx);
-        if (it == b.end() || *ea != *it->second)
-            return false;
-    }
-    return true;
-}
-
-bool snapshot_equal(const TickSnapshot& a, const TickSnapshot& b) {
-    if (a.decision_rule_ids != b.decision_rule_ids)
-        return false;
-    if (a.resolution_rule_ids != b.resolution_rule_ids)
-        return false;
-    return binding_equal(a.var_bindings, b.var_bindings);
-}
-
-std::set<rule_id> branch_ids(
-    const TickSnapshot& snap,
-    const std::set<rule_id>& candidate_rules) {
-    std::set<rule_id> ids;
-    for (rule_id id : snap.decision_rule_ids) {
-        if (candidate_rules.count(id))
-            ids.insert(id);
-    }
-    for (rule_id id : snap.resolution_rule_ids) {
-        if (candidate_rules.count(id))
-            ids.insert(id);
-    }
-    return ids;
-}
-
 using BranchGroups = std::vector<std::set<rule_id>>;
+
+namespace branch_enum_detail {
 
 size_t branch_group_product(const BranchGroups& groups) {
     size_t count = 1;
@@ -240,18 +242,25 @@ std::vector<rule_id> branch_tuple_for_snapshot(
     return tuple;
 }
 
-void expect_full_branch_enumeration(
+}  // namespace branch_enum_detail
+
+// ---------------------------------------------------------------------------
+// Branch enumeration
+// ---------------------------------------------------------------------------
+
+void expect_branch_enumeration(
     const std::vector<TickSnapshot>& solutions,
     const BranchGroups& groups) {
     // groups must be disjoint — overlapping rule ids can yield >1 branch per group
-    const size_t expected_count = branch_group_product(groups);
+    const size_t expected_count = branch_enum_detail::branch_group_product(groups);
     ASSERT_EQ(solutions.size(), expected_count);
 
     const std::vector<std::vector<rule_id>> expected_tuples =
-        branch_cartesian_product(groups);
+        branch_enum_detail::branch_cartesian_product(groups);
     std::vector<std::vector<rule_id>> seen;
     for (const TickSnapshot& snap : solutions) {
-        const std::vector<rule_id> tuple = branch_tuple_for_snapshot(snap, groups);
+        const std::vector<rule_id> tuple =
+            branch_enum_detail::branch_tuple_for_snapshot(snap, groups);
         ASSERT_EQ(tuple.size(), groups.size()) << "each solution should identify one branch per group";
         seen.push_back(tuple);
     }
@@ -267,11 +276,9 @@ void expect_full_branch_enumeration(
     }
 }
 
-void expect_enumeration_complete(const SolverRun& run, size_t expected_solutions) {
-    ASSERT_EQ(run.solutions.size(), expected_solutions);
-    EXPECT_EQ(std::ranges::count(run.terminations, sim_termination::solved), expected_solutions);
-    EXPECT_TRUE(run.completed);
-}
+// ---------------------------------------------------------------------------
+// Binding enumeration and exhaustion
+// ---------------------------------------------------------------------------
 
 void expect_all_solutions_by_bindings(
     const std::vector<TickSnapshot>& solutions,
@@ -295,35 +302,38 @@ void expect_all_solutions_by_bindings(
     EXPECT_TRUE(expected.empty()) << "unmatched expected binding keys remain";
 }
 
-void expect_all_snapshots_distinct(const std::vector<TickSnapshot>& solutions) {
-    for (size_t i = 0; i < solutions.size(); ++i) {
-        for (size_t j = i + 1; j < solutions.size(); ++j)
-            EXPECT_FALSE(snapshot_equal(solutions[i], solutions[j])) << "duplicate solution";
-    }
+void expect_enumeration_complete(const SolverRun& run, size_t expected_solutions) {
+    ASSERT_EQ(run.solutions.size(), expected_solutions);
+    EXPECT_EQ(std::ranges::count(run.terminations, sim_termination::solved), expected_solutions);
+    EXPECT_TRUE(run.completed);
 }
 
-void expect_two_branch_solutions(
+// ---------------------------------------------------------------------------
+// Composable solver checks
+// ---------------------------------------------------------------------------
+
+void expect_binding_enumeration(
     const std::vector<TickSnapshot>& solutions,
-    const std::set<rule_id>& candidate_rules) {
-    expect_full_branch_enumeration(solutions, {candidate_rules});
+    const std::vector<BindingKey>& expected) {
+    // enumeration-only: raw size + collapsed binding match (not full snapshot distinctness)
+    ASSERT_EQ(solutions.size(), expected.size());
+    expect_all_solutions_by_bindings(solutions, expected);
 }
 
-void expect_two_var_binding_solutions(
-    const std::vector<TickSnapshot>& solutions,
-    uint32_t var_idx,
-    const expr* binding_a,
-    const expr* binding_b) {
-    ASSERT_EQ(solutions.size(), 2u);
-    expect_all_snapshots_distinct(solutions);
+void expect_one_branch_per_group(const TickSnapshot& snap, const BranchGroups& groups) {
+    // groups must be disjoint — same invariant as expect_branch_enumeration
+    for (const std::set<rule_id>& group : groups)
+        ASSERT_EQ(branch_ids(snap, group).size(), 1u);
+}
 
-    std::set<const expr*> seen;
-    for (const TickSnapshot& snap : solutions) {
-        ASSERT_EQ(snap.var_bindings.count(var_idx), 1u);
-        seen.insert(snap.var_bindings.at(var_idx));
-    }
-    EXPECT_EQ(seen.size(), 2u);
-    EXPECT_TRUE(seen.contains(binding_a));
-    EXPECT_TRUE(seen.contains(binding_b));
+void expect_solver_branch_enumeration(const SolverRun& run, const BranchGroups& groups) {
+    expect_branch_enumeration(run.solutions, groups);
+    expect_enumeration_complete(run, branch_enum_detail::branch_group_product(groups));
+}
+
+template<typename Iface, typename Concrete>
+void expect_same_instance(Concrete& concrete, locator& loc) {
+    EXPECT_EQ(static_cast<Iface*>(&concrete), &loc.locate<Iface>());
 }
 
 }  // namespace
@@ -360,6 +370,10 @@ struct BasicManifestIntegrationTest : public ::testing::Test {
 
     const expr* import_saved(const expr& e) {
         return saved_expr_pool_->import(&e);
+    }
+
+    BindingKey binding_key(uint32_t idx, const expr& e) {
+        return {{idx, import_saved(e)}};
     }
 };
 
@@ -833,8 +847,10 @@ TEST_F(BasicManifestIntegrationTest, TickSnapshotBindingsBeforeTearDown) {
     EXPECT_EQ(*tick->snapshot.var_bindings.at(idx_b), *_123_saved);
 
     sm.resume();
-    EXPECT_TRUE(var_unbound(manifest, idx_a));
-    EXPECT_TRUE(var_unbound(manifest, idx_b));
+    EXPECT_TRUE(std::holds_alternative<expr::var>(
+        manifest.bind_map_.whnf(manifest.expr_pool_.make(idx_a))->content));
+    EXPECT_TRUE(std::holds_alternative<expr::var>(
+        manifest.bind_map_.whnf(manifest.expr_pool_.make(idx_b))->content));
 }
 
 TEST_F(BasicManifestIntegrationTest, TickCdclAvoidancesPersistAcrossTearDown) {
@@ -1063,7 +1079,7 @@ TEST_F(BasicManifestIntegrationTest, SolverRefutesWhenNoCandidates) {
 
 TEST_F(BasicManifestIntegrationTest, SolverEnumeratesTwoGroundChoiceSolutions) {
     /*
-     * Intent: solver enumerates both duplicate ground heads for f, then exhausts.
+     * Intent: solver enumerates both duplicate ground heads for f (enumeration only).
      * initial goals: f.
      * rules:
      *   0: f.   1: f.
@@ -1078,7 +1094,7 @@ TEST_F(BasicManifestIntegrationTest, SolverEnumeratesTwoGroundChoiceSolutions) {
     basic_manifest manifest{database, initial_goals, kMaxResolutions, kSeed};
     bind_normalizer(manifest);
     const SolverRun run = run_solver(manifest, *normalizer_, *saved_expr_pool_);
-    expect_two_branch_solutions(run.solutions, {rule_id{0}, rule_id{1}});
+    expect_branch_enumeration(run.solutions, {{rule_id{0}, rule_id{1}}});
 }
 
 TEST_F(BasicManifestIntegrationTest, SolverRefutesAfterEnumeratingAllGroundBranches) {
@@ -1098,10 +1114,7 @@ TEST_F(BasicManifestIntegrationTest, SolverRefutesAfterEnumeratingAllGroundBranc
     basic_manifest manifest{database, initial_goals, kMaxResolutions, kSeed};
     bind_normalizer(manifest);
     const SolverRun run = run_solver(manifest, *normalizer_, *saved_expr_pool_);
-    expect_two_branch_solutions(run.solutions, {rule_id{0}, rule_id{1}});
-    const auto solved_count = std::ranges::count(run.terminations, sim_termination::solved);
-    EXPECT_EQ(solved_count, 2);
-    EXPECT_TRUE(run.completed);
+    expect_solver_branch_enumeration(run, {{rule_id{0}, rule_id{1}}});
 }
 
 TEST_F(BasicManifestIntegrationTest, SolverFindsClauseDerivedUnitSolution) {
@@ -1153,7 +1166,7 @@ TEST_F(BasicManifestIntegrationTest, SolverEnumeratesTwoChoiceClauseSolutions) {
     basic_manifest manifest{database, initial_goals, kMaxResolutions, kSeed};
     bind_normalizer(manifest);
     const SolverRun run = run_solver(manifest, *normalizer_, *saved_expr_pool_);
-    expect_two_branch_solutions(run.solutions, {rule_id{1}, rule_id{2}});
+    expect_branch_enumeration(run.solutions, {{rule_id{1}, rule_id{2}}});
 }
 
 TEST_F(BasicManifestIntegrationTest, SolverFindsSolutionWithCorrectBindings) {
@@ -1245,11 +1258,12 @@ TEST_F(BasicManifestIntegrationTest, SolverEnumeratesTwoVarChoiceSolutions) {
     const expr* var_a = manifest.expr_pool_.make(idx_a);
     initial_goals.push(manifest.expr_pool_.make("f", {var_a}));
 
-    const expr* abc_saved = saved_expr_pool_->import(&abc);
-    const expr* xyz_saved = saved_expr_pool_->import(&xyz);
     const SolverRun run =
         run_solver(manifest, *normalizer_, *saved_expr_pool_, {idx_a});
-    expect_two_var_binding_solutions(run.solutions, idx_a, abc_saved, xyz_saved);
+    expect_binding_enumeration(run.solutions, {
+        binding_key(idx_a, abc),
+        binding_key(idx_a, xyz),
+    });
 }
 
 TEST_F(BasicManifestIntegrationTest, SolverRefutesAfterEnumeratingAllVarBranches) {
@@ -1272,14 +1286,13 @@ TEST_F(BasicManifestIntegrationTest, SolverRefutesAfterEnumeratingAllVarBranches
     const expr* var_a = manifest.expr_pool_.make(idx_a);
     initial_goals.push(manifest.expr_pool_.make("f", {var_a}));
 
-    const expr* abc_saved = saved_expr_pool_->import(&abc);
-    const expr* xyz_saved = saved_expr_pool_->import(&xyz);
     const SolverRun run =
         run_solver(manifest, *normalizer_, *saved_expr_pool_, {idx_a});
-    expect_two_var_binding_solutions(run.solutions, idx_a, abc_saved, xyz_saved);
-    const auto solved_count = std::ranges::count(run.terminations, sim_termination::solved);
-    EXPECT_EQ(solved_count, 2);
-    EXPECT_TRUE(run.completed);
+    expect_all_solutions_by_bindings(run.solutions, {
+        binding_key(idx_a, abc),
+        binding_key(idx_a, xyz),
+    });
+    expect_enumeration_complete(run, 2);
 }
 
 TEST_F(BasicManifestIntegrationTest, SolverEnumeratesTwoGoalSharedVarSolutions) {
@@ -1308,11 +1321,12 @@ TEST_F(BasicManifestIntegrationTest, SolverEnumeratesTwoGoalSharedVarSolutions) 
     initial_goals.push(manifest.expr_pool_.make("f", {var_a}));
     initial_goals.push(manifest.expr_pool_.make("g", {var_a}));
 
-    const expr* abc_saved = saved_expr_pool_->import(&abc);
-    const expr* xyz_saved = saved_expr_pool_->import(&xyz);
     const SolverRun run =
         run_solver(manifest, *normalizer_, *saved_expr_pool_, {idx_a});
-    expect_two_var_binding_solutions(run.solutions, idx_a, abc_saved, xyz_saved);
+    expect_binding_enumeration(run.solutions, {
+        binding_key(idx_a, abc),
+        binding_key(idx_a, xyz),
+    });
 }
 
 // Cross-tick enumeration end-to-end (uses same helpers as S-tier).
@@ -1336,8 +1350,7 @@ TEST_F(BasicManifestIntegrationTest, TickThreeGroundBranchesEnumerateDistinct) {
     basic_manifest manifest{database, initial_goals, kMaxResolutions, kSeed};
     bind_normalizer(manifest);
     const SolverRun run = run_solver(manifest, *normalizer_, *saved_expr_pool_);
-    expect_full_branch_enumeration(run.solutions, {{rule_id{0}, rule_id{1}, rule_id{2}}});
-    expect_enumeration_complete(run, 3);
+    expect_solver_branch_enumeration(run, {{rule_id{0}, rule_id{1}, rule_id{2}}});
 }
 
 TEST_F(BasicManifestIntegrationTest, SimLifecycleTwoSequentialDecisionsOnTwoGoals) {
@@ -1369,16 +1382,10 @@ TEST_F(BasicManifestIntegrationTest, SimLifecycleTwoSequentialDecisionsOnTwoGoal
     const lemma resolution_lemma = manifest.resolution_memory_.derive_resolution_lemma();
     ASSERT_EQ(resolution_lemma.get_resolutions().size(), 2u);
 
-    std::set<rule_id> f_rules;
-    std::set<rule_id> g_rules;
-    for (const resolution_lineage* rl : resolution_lemma.get_resolutions()) {
-        if (rl->idx == rule_id{0} || rl->idx == rule_id{1})
-            f_rules.insert(rl->idx);
-        if (rl->idx == rule_id{2} || rl->idx == rule_id{3})
-            g_rules.insert(rl->idx);
-    }
-    EXPECT_EQ(f_rules.size(), 1u);
-    EXPECT_EQ(g_rules.size(), 1u);
+    TickSnapshot snap;
+    for (const resolution_lineage* rl : resolution_lemma.get_resolutions())
+        snap.resolution_rule_ids.insert(rl->idx);
+    expect_one_branch_per_group(snap, {{rule_id{0}, rule_id{1}}, {rule_id{2}, rule_id{3}}});
     manifest.sim_.tear_down();
 }
 
@@ -1458,20 +1465,14 @@ TEST_F(BasicManifestIntegrationTest, SimLifecycleCdclUnitElimForcesRemainingCand
     const lemma resolution_lemma = manifest.resolution_memory_.derive_resolution_lemma();
     ASSERT_EQ(resolution_lemma.get_resolutions().size(), 2u);
 
-    std::set<rule_id> f_rules;
-    std::set<rule_id> g_rules;
-    for (const resolution_lineage* rl : resolution_lemma.get_resolutions()) {
-        if (rl->idx == rule_id{0} || rl->idx == rule_id{1})
-            f_rules.insert(rl->idx);
-        if (rl->idx == rule_id{2} || rl->idx == rule_id{3})
-            g_rules.insert(rl->idx);
-    }
-    EXPECT_EQ(f_rules.size(), 1u);
-    EXPECT_EQ(g_rules.size(), 1u);
+    TickSnapshot snap;
+    for (const resolution_lineage* rl : resolution_lemma.get_resolutions())
+        snap.resolution_rule_ids.insert(rl->idx);
+    expect_one_branch_per_group(snap, {{rule_id{0}, rule_id{1}}, {rule_id{2}, rule_id{3}}});
     // CDCL forbids g/2 once f is committed; when RNG picks f before g (one decision),
     // g/3 is unit-forced. Two decisions occur if g is chosen first — still valid.
     if (manifest.decision_memory_.count() == 1u)
-        EXPECT_FALSE(g_rules.contains(rule_id{2}));
+        EXPECT_FALSE(branch_ids(snap, {rule_id{2}, rule_id{3}}).contains(rule_id{2}));
     manifest.sim_.tear_down();
 }
 
@@ -1547,8 +1548,7 @@ TEST_F(BasicManifestIntegrationTest, SolverEnumeratesFourTwoGoalGroundCombinatio
     basic_manifest manifest{database, initial_goals, kMaxResolutions, kSeed};
     bind_normalizer(manifest);
     const SolverRun run = run_solver(manifest, *normalizer_, *saved_expr_pool_);
-    expect_full_branch_enumeration(run.solutions, {{rule_id{0}, rule_id{1}}, {rule_id{2}, rule_id{3}}});
-    expect_enumeration_complete(run, 4);
+    expect_solver_branch_enumeration(run, {{rule_id{0}, rule_id{1}}, {rule_id{2}, rule_id{3}}});
 }
 
 TEST_F(BasicManifestIntegrationTest, SolverEnumeratesEightThreeGoalGroundCombinations) {
@@ -1595,9 +1595,8 @@ TEST_F(BasicManifestIntegrationTest, SolverEnumeratesEightThreeGoalGroundCombina
         normalizer seed_normalizer{manifest.loc_};
 
         const SolverRun run = run_solver(manifest, seed_normalizer, seed_pool);
-        expect_full_branch_enumeration(run.solutions,
+        expect_solver_branch_enumeration(run,
             {{rule_id{0}, rule_id{1}}, {rule_id{2}, rule_id{3}}, {rule_id{4}, rule_id{5}}});
-        expect_enumeration_complete(run, 8);
     }
 }
 
@@ -1630,10 +1629,10 @@ TEST_F(BasicManifestIntegrationTest, SolverEnumeratesFourVarBindingSolutions) {
     const SolverRun run =
         run_solver(manifest, *normalizer_, *saved_expr_pool_, {idx_a});
     expect_all_solutions_by_bindings(run.solutions, {
-        BindingKey{{idx_a, import_saved(abc)}},
-        BindingKey{{idx_a, import_saved(xyz)}},
-        BindingKey{{idx_a, import_saved(def)}},
-        BindingKey{{idx_a, import_saved(ghi)}},
+        binding_key(idx_a, abc),
+        binding_key(idx_a, xyz),
+        binding_key(idx_a, def),
+        binding_key(idx_a, ghi),
     });
     expect_enumeration_complete(run, 4);
 }
@@ -1668,8 +1667,7 @@ TEST_F(BasicManifestIntegrationTest, SolverEnumeratesFourClauseBodyFactChoices) 
     basic_manifest manifest{database, initial_goals, kMaxResolutions, kSeed};
     bind_normalizer(manifest);
     const SolverRun run = run_solver(manifest, *normalizer_, *saved_expr_pool_);
-    expect_full_branch_enumeration(run.solutions, {{rule_id{1}, rule_id{2}, rule_id{3}, rule_id{4}}});
-    expect_enumeration_complete(run, 4);
+    expect_solver_branch_enumeration(run, {{rule_id{1}, rule_id{2}, rule_id{3}, rule_id{4}}});
 }
 
 TEST_F(BasicManifestIntegrationTest, SolverEnumeratesManySharedVarGroundHeads) {
@@ -1732,7 +1730,7 @@ TEST_F(BasicManifestIntegrationTest, SolverEnumeratesManySharedVarGroundHeads) {
 
         const SolverRun run =
             run_solver(manifest, seed_normalizer, seed_pool, {idx_a, idx_b, idx_c});
-        expect_full_branch_enumeration(run.solutions,
+        expect_branch_enumeration(run.solutions,
             {{rule_id{0}, rule_id{1}}, {rule_id{2}, rule_id{3}, rule_id{4}, rule_id{5}, rule_id{6}}});
         expect_all_solutions_by_bindings(run.solutions, {
             BindingKey{{idx_a, seed_pool.import(&abc)}, {idx_b, seed_pool.import(&xyz)}, {idx_c, seed_pool.import(&pqr)}},
