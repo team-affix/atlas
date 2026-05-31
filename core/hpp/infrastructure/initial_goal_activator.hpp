@@ -6,6 +6,7 @@
 #include "interfaces/i_get_initial_goal_expr.hpp"
 #include "interfaces/i_make_initial_goal_lineage.hpp"
 #include "interfaces/i_set_goal_expr.hpp"
+#include "interfaces/i_insert_goal_candidates.hpp"
 #include "interfaces/i_insert_active_goal.hpp"
 
 struct initial_goal_activator : i_activate_initial_goal {
@@ -15,6 +16,7 @@ private:
     i_get_initial_goal_expr& get_initial_goal_expr;
     i_make_initial_goal_lineage& make_initial_goal_lineage;
     i_set_goal_expr& set_goal_expr;
+    i_insert_goal_candidates& insert_goal_candidates;
     i_insert_active_goal& insert_active_goal;
 };
 

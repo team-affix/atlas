@@ -1,5 +1,7 @@
-// Rule id set container: insert/erase idempotency, size, and iteration coverage.
+// Rule id set container: insert/erase with strict invariants; duplicate insert and
+// erase miss throw logic_error in debug builds.
 
+#include <stdexcept>
 #include <gtest/gtest.h>
 #include <gmock/gmock.h>
 #include "infrastructure/rule_id_set.hpp"
@@ -38,16 +40,25 @@ TEST_F(RuleIdSetTest, InsertIncreasesSize) {
     EXPECT_EQ(rules.size(), 2u);
 }
 
-TEST_F(RuleIdSetTest, DuplicateInsertIsIdempotent) {
+TEST_F(RuleIdSetTest, DuplicateInsertThrows) {
     rules.insert(0);
-    rules.insert(0);
-    EXPECT_EQ(rules.size(), 1u);
+    EXPECT_THROW(rules.insert(0), std::logic_error);
 }
 
 TEST_F(RuleIdSetTest, EraseRemovesRuleId) {
     rules.insert(0);
     rules.erase(0);
     EXPECT_EQ(rules.size(), 0u);
+}
+
+TEST_F(RuleIdSetTest, EraseOnMissingThrows) {
+    EXPECT_THROW(rules.erase(0), std::logic_error);
+}
+
+TEST_F(RuleIdSetTest, EraseTwiceThrows) {
+    rules.insert(0);
+    rules.erase(0);
+    EXPECT_THROW(rules.erase(0), std::logic_error);
 }
 
 TEST_F(RuleIdSetTest, IterateYieldsAllRuleIds) {

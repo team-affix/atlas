@@ -8,6 +8,7 @@
 #include "interfaces/i_get_initial_goal_expr.hpp"
 #include "interfaces/i_make_initial_goal_lineage.hpp"
 #include "interfaces/i_set_goal_expr.hpp"
+#include "interfaces/i_insert_goal_candidates.hpp"
 #include "interfaces/i_insert_active_goal.hpp"
 
 using ::testing::Return;
@@ -24,6 +25,10 @@ struct MockSetGoalExpr : public i_set_goal_expr {
     MOCK_METHOD(void, set, (const goal_lineage*, const expr*), (override));
 };
 
+struct MockInsertGoalCandidates : public i_insert_goal_candidates {
+    MOCK_METHOD(void, insert, (const goal_lineage*), (override));
+};
+
 struct MockInsertActiveGoal : public i_insert_active_goal {
     MOCK_METHOD(void, insert_active_goal, (const goal_lineage*), (override));
 };
@@ -35,6 +40,7 @@ struct InitialGoalActivatorTest : public ::testing::Test {
     MockGetInitialGoalExpr get_initial_goal_expr;
     MockMakeInitialGoalLineage make_initial_goal_lineage;
     MockSetGoalExpr set_goal_expr;
+    MockInsertGoalCandidates insert_goal_candidates;
     MockInsertActiveGoal insert_active_goal;
     initial_goal_activator activator;
 
@@ -44,6 +50,7 @@ struct InitialGoalActivatorTest : public ::testing::Test {
         loc.bind_as<i_get_initial_goal_expr>(get_initial_goal_expr);
         loc.bind_as<i_make_initial_goal_lineage>(make_initial_goal_lineage);
         loc.bind_as<i_set_goal_expr>(set_goal_expr);
+        loc.bind_as<i_insert_goal_candidates>(insert_goal_candidates);
         loc.bind_as<i_insert_active_goal>(insert_active_goal);
         return initial_goal_activator{loc};
     }
@@ -56,6 +63,7 @@ TEST_F(InitialGoalActivatorTest, ActivatesOneInitialGoal) {
     EXPECT_CALL(get_initial_goal_expr, get(kIdx)).WillOnce(Return(&e0));
     EXPECT_CALL(make_initial_goal_lineage, make(kIdx)).WillOnce(Return(&gl0));
     EXPECT_CALL(set_goal_expr, set(&gl0, &e0)).Times(1);
+    EXPECT_CALL(insert_goal_candidates, insert(&gl0)).Times(1);
     EXPECT_CALL(insert_active_goal, insert_active_goal(&gl0)).Times(1);
 
     activator.activate_initial_goal(kIdx);
@@ -69,6 +77,7 @@ TEST_F(InitialGoalActivatorTest, ActivatesDifferentSubgoalIndex) {
     EXPECT_CALL(get_initial_goal_expr, get(kAltIdx)).WillOnce(Return(&e3));
     EXPECT_CALL(make_initial_goal_lineage, make(kAltIdx)).WillOnce(Return(&gl3));
     EXPECT_CALL(set_goal_expr, set(&gl3, &e3)).Times(1);
+    EXPECT_CALL(insert_goal_candidates, insert(&gl3)).Times(1);
     EXPECT_CALL(insert_active_goal, insert_active_goal(&gl3)).Times(1);
 
     activator.activate_initial_goal(kAltIdx);

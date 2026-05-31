@@ -173,8 +173,9 @@ struct sim_early_wiring {
             i_clear_active_goals>(active_goals_);
         loc.bind_as<i_get_goal_expr, i_set_goal_expr, i_unset_goal_expr, i_clear_goal_exprs>(
             goal_exprs_);
-        loc.bind_as<i_get_goal_candidate_rule_ids, i_link_goal_candidate, i_unlink_goal_candidate,
-            i_erase_goal_candidates, i_clear_goal_candidate_rule_ids>(goal_candidate_rules_);
+        loc.bind_as<i_get_goal_candidate_rule_ids, i_insert_goal_candidates, i_link_goal_candidate,
+            i_unlink_goal_candidate, i_erase_goal_candidates, i_clear_goal_candidate_rule_ids>(
+            goal_candidate_rules_);
         loc.bind_as<i_push_unit_goal, i_pop_unit_goal, i_clear_unit_goals>(unit_goals_);
         loc.bind_as<i_record_decision, i_clear_recorded_decisions, i_get_decision_count,
             i_derive_decision_lemma>(decision_memory_);

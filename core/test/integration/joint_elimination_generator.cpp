@@ -66,7 +66,7 @@ struct JointEliminationGeneratorIntegrationTest : public ::testing::Test {
         loc.bind_as<i_bind_map_factory>(bmf);
         loc.bind_as<i_unifier_factory>(uf);
         loc.bind_as<i_make_resolution_lineage>(lp);
-        loc.bind_as<i_get_goal_candidate_rule_ids>(ggcr);
+        loc.bind_as<i_get_goal_candidate_rule_ids, i_insert_goal_candidates>(ggcr);
         pool.emplace(loc);
         loc.bind_as<i_make_functor, i_make_var, i_import_expr, i_get_expr_count>(*pool);
         cdcl.emplace(loc);
@@ -85,6 +85,9 @@ TEST_F(JointEliminationGeneratorIntegrationTest, ConstrainRunsCdclBeforeMhu) {
 
     expr goal{expr::var{0}};
     expr head{expr::functor{"f", {}}};
+
+    ggcr.insert(&gl0);
+    ggcr.link_goal_candidate(&gl0, rule_id{0});
 
     ASSERT_EQ(cdcl->learn(lemma{{&rl0, &rl1}}), std::nullopt);
     ASSERT_TRUE(mhu->try_add_head(&rl0, &goal, &head));
@@ -106,6 +109,8 @@ TEST_F(JointEliminationGeneratorIntegrationTest, ConstrainYieldsMhuElimAfterCdcl
         const_cast<resolution_lineage*>(lp.make_resolution_lineage(gl_a, rule_id{0}));
     resolution_lineage* rl_b =
         const_cast<resolution_lineage*>(lp.make_resolution_lineage(gl_b, rule_id{0}));
+    ggcr.insert(gl_a);
+    ggcr.insert(gl_b);
     ggcr.link_goal_candidate(gl_a, rule_id{0});
     ggcr.link_goal_candidate(gl_b, rule_id{0});
 
@@ -132,6 +137,8 @@ TEST_F(JointEliminationGeneratorIntegrationTest, ConstrainYieldsCdclThenMhuElims
     goal_lineage* gl_other = const_cast<goal_lineage*>(lp.make_goal_lineage(nullptr, 2));
     resolution_lineage* rl_other =
         const_cast<resolution_lineage*>(lp.make_resolution_lineage(gl_other, rule_id{1}));
+    ggcr.insert(gl0);
+    ggcr.insert(gl_other);
     ggcr.link_goal_candidate(gl0, rule_id{0});
     ggcr.link_goal_candidate(gl0, rule_id{1});
     ggcr.link_goal_candidate(gl_other, rule_id{1});
@@ -160,6 +167,8 @@ TEST_F(JointEliminationGeneratorIntegrationTest,
         const_cast<resolution_lineage*>(lp.make_resolution_lineage(gl0, rule_id{0}));
     resolution_lineage* rl1 =
         const_cast<resolution_lineage*>(lp.make_resolution_lineage(gl1, rule_id{0}));
+    ggcr.insert(gl0);
+    ggcr.insert(gl1);
     ggcr.link_goal_candidate(gl0, rule_id{0});
     ggcr.link_goal_candidate(gl1, rule_id{0});
 
@@ -180,6 +189,7 @@ TEST_F(JointEliminationGeneratorIntegrationTest, ConstrainYieldsNothingWhenBothS
         const_cast<resolution_lineage*>(lp.make_resolution_lineage(gl, rule_id{0}));
     resolution_lineage* rl_b =
         const_cast<resolution_lineage*>(lp.make_resolution_lineage(gl, rule_id{1}));
+    ggcr.insert(gl);
     ggcr.link_goal_candidate(gl, rule_id{0});
     ggcr.link_goal_candidate(gl, rule_id{1});
 
@@ -197,6 +207,9 @@ TEST_F(JointEliminationGeneratorIntegrationTest, PopRestoresCdclThroughJointCons
 
     expr goal{expr::functor{"f", {}}};
     expr head{expr::functor{"f", {}}};
+
+    ggcr.insert(&gl0);
+    ggcr.link_goal_candidate(&gl0, rule_id{0});
 
     ASSERT_EQ(cdcl->learn(lemma{{&rl0, &rl1}}), std::nullopt);
     ASSERT_TRUE(mhu->try_add_head(&rl0, &goal, &head));

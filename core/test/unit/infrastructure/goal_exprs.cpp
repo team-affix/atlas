@@ -1,6 +1,7 @@
-// Goal expression store: get/set/unset per goal lineage. Missing keys must map to
-// nullptr; set overwrites; unset removes without affecting other goals.
+// Goal expression store: get/set/unset per goal lineage. Missing or erased keys throw
+// out_of_range on get; duplicate set and invalid unset throw logic_error in debug builds.
 
+#include <stdexcept>
 #include <gtest/gtest.h>
 #include "infrastructure/goal_exprs.hpp"
 #include "value_objects/lineage.hpp"
@@ -13,8 +14,8 @@ struct GoalExprsTest : public ::testing::Test {
     goal_lineage gl1{nullptr, 1};
 };
 
-TEST_F(GoalExprsTest, GetMissingReturnsNullptr) {
-    ASSERT_EQ(store.get(&gl0), nullptr);
+TEST_F(GoalExprsTest, GetOnUnknownGoalThrows) {
+    EXPECT_THROW(store.get(&gl0), std::out_of_range);
 }
 
 TEST_F(GoalExprsTest, SetThenGetReturnsExpr) {
@@ -22,16 +23,25 @@ TEST_F(GoalExprsTest, SetThenGetReturnsExpr) {
     EXPECT_EQ(store.get(&gl0), &e0);
 }
 
-TEST_F(GoalExprsTest, SetOverwritesPreviousExpr) {
+TEST_F(GoalExprsTest, SecondSetThrows) {
     store.set(&gl0, &e0);
-    store.set(&gl0, &e1);
-    EXPECT_EQ(store.get(&gl0), &e1);
+    EXPECT_THROW(store.set(&gl0, &e1), std::logic_error);
 }
 
 TEST_F(GoalExprsTest, UnsetRemovesEntry) {
     store.set(&gl0, &e0);
     store.unset(&gl0);
-    EXPECT_EQ(store.get(&gl0), nullptr);
+    EXPECT_THROW(store.get(&gl0), std::out_of_range);
+}
+
+TEST_F(GoalExprsTest, UnsetOnUnknownGoalThrows) {
+    EXPECT_THROW(store.unset(&gl0), std::logic_error);
+}
+
+TEST_F(GoalExprsTest, UnsetTwiceThrows) {
+    store.set(&gl0, &e0);
+    store.unset(&gl0);
+    EXPECT_THROW(store.unset(&gl0), std::logic_error);
 }
 
 TEST_F(GoalExprsTest, UnsetDoesNotAffectOtherGoals) {
@@ -45,6 +55,6 @@ TEST_F(GoalExprsTest, ClearGoalExprsRemovesAllBindings) {
     store.set(&gl0, &e0);
     store.set(&gl1, &e1);
     store.clear_goal_exprs();
-    EXPECT_EQ(store.get(&gl0), nullptr);
-    EXPECT_EQ(store.get(&gl1), nullptr);
+    EXPECT_THROW(store.get(&gl0), std::out_of_range);
+    EXPECT_THROW(store.get(&gl1), std::out_of_range);
 }

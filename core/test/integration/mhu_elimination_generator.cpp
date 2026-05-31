@@ -3,6 +3,7 @@
 // heads, and that partial rep constraints (e.g. g(B) only) do not spuriously eliminate other heads.
 
 #include <array>
+#include <unordered_set>
 #include <gtest/gtest.h>
 #include <gmock/gmock.h>
 #include <optional>
@@ -73,7 +74,7 @@ struct MhuEliminationGeneratorIntegrationTest : public ::testing::Test {
         loc.bind_as<i_bind_map_factory>(bmf);
         loc.bind_as<i_unifier_factory>(uf);
         loc.bind_as<i_make_resolution_lineage>(lp);
-        loc.bind_as<i_get_goal_candidate_rule_ids>(ggcr);
+        loc.bind_as<i_get_goal_candidate_rule_ids, i_insert_goal_candidates>(ggcr);
         pool.emplace(loc);
         loc.bind_as<i_make_functor, i_make_var, i_import_expr, i_get_expr_count>(*pool);
         mhu.emplace(loc);
@@ -81,13 +82,26 @@ struct MhuEliminationGeneratorIntegrationTest : public ::testing::Test {
 
     size_t rules_for(const goal_lineage* gl) const { return ggcr.get(gl).size(); }
 
+    void ensure_goal_candidates(const goal_lineage* gl) {
+        if (registered_goals_.insert(gl).second)
+            ggcr.insert(gl);
+    }
+
+    void link_candidate(const goal_lineage* gl, rule_id rid) {
+        ensure_goal_candidates(gl);
+        ggcr.link_goal_candidate(gl, rid);
+    }
+
     resolution_lineage* link_rl(size_t goal_idx, rule_id rid) {
         goal_lineage* gl = const_cast<goal_lineage*>(lp.make_goal_lineage(nullptr, goal_idx));
         resolution_lineage* rl =
             const_cast<resolution_lineage*>(lp.make_resolution_lineage(gl, rid));
-        ggcr.link_goal_candidate(gl, rid);
+        link_candidate(gl, rid);
         return rl;
     }
+
+private:
+    std::unordered_set<const goal_lineage*> registered_goals_;
 };
 
 TEST_F(MhuEliminationGeneratorIntegrationTest, TryAddHeadThenConstrainAllowsReuse) {
@@ -96,7 +110,7 @@ TEST_F(MhuEliminationGeneratorIntegrationTest, TryAddHeadThenConstrainAllowsReus
     goal_lineage* gl = const_cast<goal_lineage*>(lp.make_goal_lineage(nullptr, 0));
     resolution_lineage* rl =
         const_cast<resolution_lineage*>(lp.make_resolution_lineage(gl, rule_id{0}));
-    ggcr.link_goal_candidate(gl, rule_id{0});
+    link_candidate(gl, rule_id{0});
 
     ASSERT_TRUE(mhu->try_add_head(rl, &goal, &head));
     EXPECT_EQ(common.whnf(&goal), &goal);
@@ -113,7 +127,7 @@ TEST_F(MhuEliminationGeneratorIntegrationTest, TryAddHeadFailsWhenUnifyFails) {
     goal_lineage* gl = const_cast<goal_lineage*>(lp.make_goal_lineage(nullptr, 0));
     resolution_lineage* rl =
         const_cast<resolution_lineage*>(lp.make_resolution_lineage(gl, rule_id{0}));
-    ggcr.link_goal_candidate(gl, rule_id{0});
+    link_candidate(gl, rule_id{0});
 
     EXPECT_FALSE(mhu->try_add_head(rl, &goal, &head));
     EXPECT_EQ(common.whnf(&goal), &goal);
@@ -125,7 +139,7 @@ TEST_F(MhuEliminationGeneratorIntegrationTest, ConstrainPublishesSeededBindingTo
     goal_lineage* gl = const_cast<goal_lineage*>(lp.make_goal_lineage(nullptr, 0));
     resolution_lineage* rl =
         const_cast<resolution_lineage*>(lp.make_resolution_lineage(gl, rule_id{0}));
-    ggcr.link_goal_candidate(gl, rule_id{0});
+    link_candidate(gl, rule_id{0});
 
     ASSERT_TRUE(mhu->try_add_head(rl, &goal, &head));
     EXPECT_EQ(common.whnf(&goal), &goal);
@@ -140,14 +154,14 @@ TEST_F(MhuEliminationGeneratorIntegrationTest, ConstrainEliminatesHeadWithCollid
     goal_lineage* gl_a = const_cast<goal_lineage*>(lp.make_goal_lineage(nullptr, 0));
     resolution_lineage* rl_a =
         const_cast<resolution_lineage*>(lp.make_resolution_lineage(gl_a, rule_id{0}));
-    ggcr.link_goal_candidate(gl_a, rule_id{0});
+    link_candidate(gl_a, rule_id{0});
 
     expr goal_b{expr::var{0}};
     expr head_b{expr::functor{"g", {}}};
     goal_lineage* gl_b = const_cast<goal_lineage*>(lp.make_goal_lineage(nullptr, 1));
     resolution_lineage* rl_b =
         const_cast<resolution_lineage*>(lp.make_resolution_lineage(gl_b, rule_id{0}));
-    ggcr.link_goal_candidate(gl_b, rule_id{0});
+    link_candidate(gl_b, rule_id{0});
 
     ASSERT_TRUE(mhu->try_add_head(rl_a, &goal_a, &head_a));
     ASSERT_TRUE(mhu->try_add_head(rl_b, &goal_b, &head_b));
@@ -165,14 +179,14 @@ TEST_F(MhuEliminationGeneratorIntegrationTest, ConstrainDoesNotEliminateCompatib
     goal_lineage* gl_a = const_cast<goal_lineage*>(lp.make_goal_lineage(nullptr, 0));
     resolution_lineage* rl_a =
         const_cast<resolution_lineage*>(lp.make_resolution_lineage(gl_a, rule_id{0}));
-    ggcr.link_goal_candidate(gl_a, rule_id{0});
+    link_candidate(gl_a, rule_id{0});
 
     expr goal_b{expr::var{0}};
     expr head_b{expr::functor{"f", {}}};
     goal_lineage* gl_b = const_cast<goal_lineage*>(lp.make_goal_lineage(nullptr, 1));
     resolution_lineage* rl_b =
         const_cast<resolution_lineage*>(lp.make_resolution_lineage(gl_b, rule_id{0}));
-    ggcr.link_goal_candidate(gl_b, rule_id{0});
+    link_candidate(gl_b, rule_id{0});
 
     ASSERT_TRUE(mhu->try_add_head(rl_a, &goal_a, &head_a));
     ASSERT_TRUE(mhu->try_add_head(rl_b, &goal_b, &head_b));
@@ -191,7 +205,7 @@ TEST_F(MhuEliminationGeneratorIntegrationTest, ConstrainDoesNotEliminateHeadWatc
     goal_lineage* gl_a = const_cast<goal_lineage*>(lp.make_goal_lineage(nullptr, 0));
     resolution_lineage* rl_a =
         const_cast<resolution_lineage*>(lp.make_resolution_lineage(gl_a, rule_id{0}));
-    ggcr.link_goal_candidate(gl_a, rule_id{0});
+    link_candidate(gl_a, rule_id{0});
 
     expr var2{expr::var{2}};
     expr goal_b{var2};
@@ -199,7 +213,7 @@ TEST_F(MhuEliminationGeneratorIntegrationTest, ConstrainDoesNotEliminateHeadWatc
     goal_lineage* gl_b = const_cast<goal_lineage*>(lp.make_goal_lineage(nullptr, 2));
     resolution_lineage* rl_b =
         const_cast<resolution_lineage*>(lp.make_resolution_lineage(gl_b, rule_id{0}));
-    ggcr.link_goal_candidate(gl_b, rule_id{0});
+    link_candidate(gl_b, rule_id{0});
 
     ASSERT_TRUE(mhu->try_add_head(rl_a, &goal_a, &head_a));
     ASSERT_TRUE(mhu->try_add_head(rl_b, &goal_b, &head_b));
@@ -221,14 +235,14 @@ TEST_F(MhuEliminationGeneratorIntegrationTest,
         const_cast<resolution_lineage*>(lp.make_resolution_lineage(gl, rule_id{0}));
     resolution_lineage* rl_rule1 =
         const_cast<resolution_lineage*>(lp.make_resolution_lineage(gl, rule_id{1}));
-    ggcr.link_goal_candidate(gl, rule_id{0});
-    ggcr.link_goal_candidate(gl, rule_id{1});
+    link_candidate(gl, rule_id{0});
+    link_candidate(gl, rule_id{1});
     EXPECT_EQ(rules_for(gl), 2u);
 
     goal_lineage* gl_other = const_cast<goal_lineage*>(lp.make_goal_lineage(nullptr, 1));
     resolution_lineage* rl_other =
         const_cast<resolution_lineage*>(lp.make_resolution_lineage(gl_other, rule_id{1}));
-    ggcr.link_goal_candidate(gl_other, rule_id{1});
+    link_candidate(gl_other, rule_id{1});
     EXPECT_EQ(rules_for(gl_other), 1u);
 
     ASSERT_TRUE(mhu->try_add_head(rl_rule0, &goal, &head_f));
@@ -263,8 +277,8 @@ TEST_F(MhuEliminationGeneratorIntegrationTest,
         const_cast<resolution_lineage*>(lp.make_resolution_lineage(gl_f, rule_id{0}));
     resolution_lineage* rl_g =
         const_cast<resolution_lineage*>(lp.make_resolution_lineage(gl_g, rule_id{0}));
-    ggcr.link_goal_candidate(gl_f, rule_id{0});
-    ggcr.link_goal_candidate(gl_g, rule_id{0});
+    link_candidate(gl_f, rule_id{0});
+    link_candidate(gl_g, rule_id{0});
 
     ASSERT_TRUE(mhu->try_add_head(rl_f, &goal_f, &head_fxx));
     ASSERT_TRUE(mhu->try_add_head(rl_g, &goal_g, &head_g));
@@ -300,8 +314,8 @@ TEST_F(MhuEliminationGeneratorIntegrationTest,
         const_cast<resolution_lineage*>(lp.make_resolution_lineage(gl_f, rule_f_id));
     resolution_lineage* rl_g =
         const_cast<resolution_lineage*>(lp.make_resolution_lineage(gl_g, rule_g_id));
-    ggcr.link_goal_candidate(gl_f, rule_f_id);
-    ggcr.link_goal_candidate(gl_g, rule_g_id);
+    link_candidate(gl_f, rule_f_id);
+    link_candidate(gl_g, rule_g_id);
 
     ASSERT_TRUE(mhu->try_add_head(rl_f, &goal_f, &head_fxx));
     ASSERT_TRUE(mhu->try_add_head(rl_g, &goal_g, &head_g));
@@ -339,8 +353,8 @@ TEST_F(MhuEliminationGeneratorIntegrationTest,
         const_cast<resolution_lineage*>(lp.make_resolution_lineage(gl_f, rule_id{0}));
     resolution_lineage* rl_g =
         const_cast<resolution_lineage*>(lp.make_resolution_lineage(gl_g, rule_id{0}));
-    ggcr.link_goal_candidate(gl_f, rule_id{0});
-    ggcr.link_goal_candidate(gl_g, rule_id{0});
+    link_candidate(gl_f, rule_id{0});
+    link_candidate(gl_g, rule_id{0});
 
     ASSERT_TRUE(mhu->try_add_head(rl_f, &goal_f, &head_fxx));
     ASSERT_TRUE(mhu->try_add_head(rl_g, &goal_g, &head_g));
@@ -376,8 +390,8 @@ TEST_F(MhuEliminationGeneratorIntegrationTest,
         const_cast<resolution_lineage*>(lp.make_resolution_lineage(gl_f, rule_id{0}));
     resolution_lineage* rl_g =
         const_cast<resolution_lineage*>(lp.make_resolution_lineage(gl_g, rule_id{0}));
-    ggcr.link_goal_candidate(gl_f, rule_id{0});
-    ggcr.link_goal_candidate(gl_g, rule_id{0});
+    link_candidate(gl_f, rule_id{0});
+    link_candidate(gl_g, rule_id{0});
 
     ASSERT_TRUE(mhu->try_add_head(rl_f, &goal_f, &head_fxx));
     ASSERT_TRUE(mhu->try_add_head(rl_g, &goal_g, &head_g));
@@ -413,9 +427,9 @@ TEST_F(MhuEliminationGeneratorIntegrationTest,
         const_cast<resolution_lineage*>(lp.make_resolution_lineage(gl, rule_id{1}));
     resolution_lineage* rl_c =
         const_cast<resolution_lineage*>(lp.make_resolution_lineage(gl, rule_id{2}));
-    ggcr.link_goal_candidate(gl, rule_id{0});
-    ggcr.link_goal_candidate(gl, rule_id{1});
-    ggcr.link_goal_candidate(gl, rule_id{2});
+    link_candidate(gl, rule_id{0});
+    link_candidate(gl, rule_id{1});
+    link_candidate(gl, rule_id{2});
     EXPECT_EQ(rules_for(gl), 3u);
 
     ASSERT_TRUE(mhu->try_add_head(rl_a, &goal, &head_a));
@@ -433,7 +447,7 @@ TEST_F(MhuEliminationGeneratorIntegrationTest, TryAddHeadFailsOnOccursCheck) {
     goal_lineage* gl = const_cast<goal_lineage*>(lp.make_goal_lineage(nullptr, 0));
     resolution_lineage* rl =
         const_cast<resolution_lineage*>(lp.make_resolution_lineage(gl, rule_id{0}));
-    ggcr.link_goal_candidate(gl, rule_id{0});
+    link_candidate(gl, rule_id{0});
 
     EXPECT_FALSE(mhu->try_add_head(rl, &goal, &head));
     EXPECT_EQ(common.whnf(&goal), &goal);
@@ -445,7 +459,7 @@ TEST_F(MhuEliminationGeneratorIntegrationTest, ClearMhuHeadsAllowsFreshTryAdd) {
     goal_lineage* gl = const_cast<goal_lineage*>(lp.make_goal_lineage(nullptr, 0));
     resolution_lineage* rl =
         const_cast<resolution_lineage*>(lp.make_resolution_lineage(gl, rule_id{0}));
-    ggcr.link_goal_candidate(gl, rule_id{0});
+    link_candidate(gl, rule_id{0});
 
     ASSERT_TRUE(mhu->try_add_head(rl, &goal, &head));
     mhu->clear_mhu_heads();
@@ -465,7 +479,7 @@ TEST_F(MhuEliminationGeneratorIntegrationTest, TryAddHeadOnSameLineageTwiceThrow
     goal_lineage* gl = const_cast<goal_lineage*>(lp.make_goal_lineage(nullptr, 0));
     resolution_lineage* rl =
         const_cast<resolution_lineage*>(lp.make_resolution_lineage(gl, rule_id{0}));
-    ggcr.link_goal_candidate(gl, rule_id{0});
+    link_candidate(gl, rule_id{0});
 
     ASSERT_TRUE(mhu->try_add_head(rl, &goal, &head_f));
     EXPECT_THROW(mhu->try_add_head(rl, &goal, &head_g), std::logic_error);
@@ -475,7 +489,7 @@ TEST_F(MhuEliminationGeneratorIntegrationTest, ConstrainWithoutRegisteredHeadThr
     goal_lineage* gl = const_cast<goal_lineage*>(lp.make_goal_lineage(nullptr, 0));
     resolution_lineage* rl =
         const_cast<resolution_lineage*>(lp.make_resolution_lineage(gl, rule_id{0}));
-    ggcr.link_goal_candidate(gl, rule_id{0});
+    link_candidate(gl, rule_id{0});
 
     EXPECT_THROW(
         (void)collect_elims(mhu->constrain(rl)),
@@ -492,7 +506,7 @@ TEST_F(MhuEliminationGeneratorIntegrationTest, ConstrainPublishesTwoRepsToCommon
     goal_lineage* gl = const_cast<goal_lineage*>(lp.make_goal_lineage(nullptr, 0));
     resolution_lineage* rl =
         const_cast<resolution_lineage*>(lp.make_resolution_lineage(gl, rule_id{0}));
-    ggcr.link_goal_candidate(gl, rule_id{0});
+    link_candidate(gl, rule_id{0});
 
     ASSERT_TRUE(mhu->try_add_head(rl, &goal, &head));
     EXPECT_THAT(collect_elims(mhu->constrain(rl)), IsEmpty());
@@ -842,9 +856,9 @@ TEST_F(MhuEliminationGeneratorIntegrationTest, ConstrainDoesNotYieldSiblingsAsEl
         const_cast<resolution_lineage*>(lp.make_resolution_lineage(gl, rule_id{1}));
     resolution_lineage* rl_c =
         const_cast<resolution_lineage*>(lp.make_resolution_lineage(gl, rule_id{2}));
-    ggcr.link_goal_candidate(gl, rule_id{0});
-    ggcr.link_goal_candidate(gl, rule_id{1});
-    ggcr.link_goal_candidate(gl, rule_id{2});
+    link_candidate(gl, rule_id{0});
+    link_candidate(gl, rule_id{1});
+    link_candidate(gl, rule_id{2});
 
     resolution_lineage* rl_cross = link_rl(1, rule_id{0});
 

@@ -1,6 +1,7 @@
-// Goal–candidate rule id index: link/unlink per goal, erase removes a goal bucket, and get
-// returns empty rule id set for unknown goals.
+// Goal–candidate rule id index: insert registers an empty bucket per goal; get/link/unlink
+// require a registered goal (.at → out_of_range); duplicate insert/erase assert (logic_error).
 
+#include <stdexcept>
 #include <gtest/gtest.h>
 #include <gmock/gmock.h>
 #include "infrastructure/goal_candidate_rules.hpp"
@@ -32,38 +33,83 @@ struct GoalCandidateRulesTest : public ::testing::Test {
     resolution_lineage rl{&gl, kRule0};
 };
 
-TEST_F(GoalCandidateRulesTest, UnknownGoalReturnsEmptySet) {
+TEST_F(GoalCandidateRulesTest, GetOnUnknownGoalThrows) {
+    EXPECT_THROW(index.get(&gl), std::out_of_range);
+}
+
+TEST_F(GoalCandidateRulesTest, ConstGetOnUnknownGoalThrows) {
+    const goal_candidate_rules& cref = index;
+    EXPECT_THROW(cref.get(&gl), std::out_of_range);
+}
+
+TEST_F(GoalCandidateRulesTest, InsertInitializesEmptySet) {
+    index.insert(&gl);
     EXPECT_THAT(collect_rule_ids(index.get(&gl)), IsEmpty());
 }
 
+TEST_F(GoalCandidateRulesTest, DuplicateInsertThrows) {
+    index.insert(&gl);
+    EXPECT_THROW(index.insert(&gl), std::logic_error);
+}
+
 TEST_F(GoalCandidateRulesTest, LinkAddsRuleToGoal) {
+    index.insert(&gl);
     index.link_goal_candidate(&gl, kRule0);
     EXPECT_THAT(collect_rule_ids(index.get(&gl)), UnorderedElementsAre(kRule0));
 }
 
+TEST_F(GoalCandidateRulesTest, LinkOnUnknownGoalThrows) {
+    EXPECT_THROW(index.link_goal_candidate(&gl, kRule0), std::out_of_range);
+}
+
+TEST_F(GoalCandidateRulesTest, LinkDuplicateRuleThrows) {
+    index.insert(&gl);
+    index.link_goal_candidate(&gl, kRule0);
+    EXPECT_THROW(index.link_goal_candidate(&gl, kRule0), std::logic_error);
+}
+
 TEST_F(GoalCandidateRulesTest, UnlinkRemovesRule) {
+    index.insert(&gl);
     index.link_goal_candidate(&gl, kRule0);
     index.link_goal_candidate(&gl, kRule1);
     index.unlink_goal_candidate(&gl, kRule0);
     EXPECT_THAT(collect_rule_ids(index.get(&gl)), UnorderedElementsAre(kRule1));
 }
 
-TEST_F(GoalCandidateRulesTest, EraseRemovesGoalBucket) {
-    index.link_goal_candidate(&gl, kRule0);
-    index.erase(&gl);
-    EXPECT_THAT(collect_rule_ids(index.get(&gl)), IsEmpty());
+TEST_F(GoalCandidateRulesTest, UnlinkOnUnknownGoalThrows) {
+    EXPECT_THROW(index.unlink_goal_candidate(&gl, kRule0), std::out_of_range);
 }
 
-TEST_F(GoalCandidateRulesTest, ConstGetReturnsEmptyForUnknownGoal) {
-    const goal_candidate_rules& cref = index;
-    EXPECT_EQ(cref.get(&gl).size(), 0u);
+TEST_F(GoalCandidateRulesTest, UnlinkMissingRuleThrows) {
+    index.insert(&gl);
+    index.link_goal_candidate(&gl, kRule0);
+    EXPECT_THROW(index.unlink_goal_candidate(&gl, kRule1), std::logic_error);
+}
+
+TEST_F(GoalCandidateRulesTest, EraseRemovesGoalBucket) {
+    index.insert(&gl);
+    index.link_goal_candidate(&gl, kRule0);
+    index.erase(&gl);
+    EXPECT_THROW(index.get(&gl), std::out_of_range);
+}
+
+TEST_F(GoalCandidateRulesTest, EraseOnUnknownGoalThrows) {
+    EXPECT_THROW(index.erase(&gl), std::logic_error);
+}
+
+TEST_F(GoalCandidateRulesTest, EraseTwiceThrows) {
+    index.insert(&gl);
+    index.erase(&gl);
+    EXPECT_THROW(index.erase(&gl), std::logic_error);
 }
 
 TEST_F(GoalCandidateRulesTest, ClearGoalCandidateRuleIdsEmptiesAllGoals) {
     goal_lineage gl_other{nullptr, 1};
+    index.insert(&gl);
+    index.insert(&gl_other);
     index.link_goal_candidate(&gl, kRule0);
     index.link_goal_candidate(&gl_other, kRule1);
     index.clear_goal_candidate_rule_ids();
-    EXPECT_THAT(collect_rule_ids(index.get(&gl)), IsEmpty());
-    EXPECT_THAT(collect_rule_ids(index.get(&gl_other)), IsEmpty());
+    EXPECT_THROW(index.get(&gl), std::out_of_range);
+    EXPECT_THROW(index.get(&gl_other), std::out_of_range);
 }

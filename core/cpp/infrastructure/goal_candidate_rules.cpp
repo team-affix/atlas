@@ -9,6 +9,11 @@ const i_rule_id_set& goal_candidate_rules::get(const goal_lineage* gl) const {
     return by_goal_.at(gl);
 }
 
+void goal_candidate_rules::insert(const goal_lineage* gl) {
+    auto [_, inserted] = by_goal_.emplace(gl, rule_id_set{});
+    DEBUG_ASSERT(inserted);
+}
+
 void goal_candidate_rules::link_goal_candidate(const goal_lineage* gl, rule_id r) {
     by_goal_.at(gl).insert(r);
 }
