@@ -141,12 +141,6 @@ struct MockClearRecordedResolutions : public i_clear_recorded_resolutions {
     MOCK_METHOD(void, clear_recorded_resolutions, (), (override));
 };
 
-struct MockDeactivatedCandidateMemory : public i_deactivated_candidate_memory {
-    MOCK_METHOD(void, insert, (const resolution_lineage*), (override));
-    MOCK_METHOD(void, clear, (), (override));
-    MOCK_METHOD(bool, contains, (const resolution_lineage*), (const, override));
-};
-
 struct MockClearGoalCandidateRuleIds : public i_clear_goal_candidate_rule_ids {
     MOCK_METHOD(void, clear_goal_candidate_rule_ids, (), (override));
 };
@@ -201,7 +195,6 @@ struct SimTest : public ::testing::Test {
     testing::NiceMock<MockClearUnitGoals> clear_unit_goals;
     testing::NiceMock<MockClearRecordedDecisions> clear_recorded_decisions;
     testing::NiceMock<MockClearRecordedResolutions> clear_recorded_resolutions;
-    testing::NiceMock<MockDeactivatedCandidateMemory> deactivated_candidate_memory;
     testing::NiceMock<MockClearGoalCandidateRuleIds> clear_goal_candidate_rule_ids;
     testing::NiceMock<MockClearGoalExprs> clear_goal_exprs;
     testing::NiceMock<MockClearActiveGoals> clear_active_goals;
@@ -236,7 +229,6 @@ struct SimTest : public ::testing::Test {
         loc.bind_as<i_clear_unit_goals>(clear_unit_goals);
         loc.bind_as<i_clear_recorded_decisions>(clear_recorded_decisions);
         loc.bind_as<i_clear_recorded_resolutions>(clear_recorded_resolutions);
-        loc.bind_as<i_deactivated_candidate_memory>(deactivated_candidate_memory);
         loc.bind_as<i_clear_goal_candidate_rule_ids>(clear_goal_candidate_rule_ids);
         loc.bind_as<i_clear_goal_exprs>(clear_goal_exprs);
         loc.bind_as<i_clear_active_goals>(clear_active_goals);
@@ -294,7 +286,6 @@ TEST_F(SimTest, TearDownPopsTrailAndClearsNonBacktrackedStores) {
     EXPECT_CALL(clear_unit_goals, clear()).Times(1);
     EXPECT_CALL(clear_recorded_decisions, clear_recorded_decisions()).Times(1);
     EXPECT_CALL(clear_recorded_resolutions, clear_recorded_resolutions()).Times(1);
-    EXPECT_CALL(deactivated_candidate_memory, clear()).Times(1);
     EXPECT_CALL(clear_goal_candidate_rule_ids, clear_goal_candidate_rule_ids()).Times(1);
     EXPECT_CALL(clear_goal_exprs, clear_goal_exprs()).Times(1);
     EXPECT_CALL(clear_active_goals, clear_active_goals()).Times(1);

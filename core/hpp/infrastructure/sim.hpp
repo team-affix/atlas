@@ -28,7 +28,6 @@
 #include "interfaces/i_record_resolution.hpp"
 #include "interfaces/i_clear_recorded_decisions.hpp"
 #include "interfaces/i_clear_recorded_resolutions.hpp"
-#include "interfaces/i_deactivated_candidate_memory.hpp"
 #include "interfaces/i_clear_goal_candidate_rule_ids.hpp"
 #include "interfaces/i_clear_goal_exprs.hpp"
 #include "interfaces/i_clear_active_goals.hpp"
@@ -73,7 +72,6 @@ private:
     i_clear_unit_goals& clear_unit_goals;
     i_clear_recorded_decisions& clear_recorded_decisions;
     i_clear_recorded_resolutions& clear_recorded_resolutions;
-    i_deactivated_candidate_memory& deactivated_candidate_memory;
     i_clear_goal_candidate_rule_ids& clear_goal_candidate_rule_ids;
     i_clear_goal_exprs& clear_goal_exprs;
     i_clear_active_goals& clear_active_goals;

@@ -509,9 +509,9 @@ TEST_F(BasicManifestIntegrationTest, SimMhuBindsThroughManifest) {
     manifest.sim_.tear_down();
 }
 
-TEST_F(BasicManifestIntegrationTest, SimMhuDeactivationRecordedInMemory) {
+TEST_F(BasicManifestIntegrationTest, SimMhuDeactivationRemovesSiblingFromFrontier) {
     /*
-     * Intent: choosing one of two incompatible ground heads deactivates the other in memory.
+     * Intent: choosing one of two incompatible ground heads removes the other from the frontier.
      * initial goals: f(A, B).  (added after set_up in test body)
      * rules:
      *   0: f(abc, 123).
@@ -542,9 +542,10 @@ TEST_F(BasicManifestIntegrationTest, SimMhuDeactivationRecordedInMemory) {
     const lemma dl = manifest.decision_memory_.derive();
     ASSERT_EQ(dl.get_resolutions().size(), 1u);
     const resolution_lineage* chosen = *dl.get_resolutions().begin();
-    const resolution_lineage* deactivated =
-        (chosen->idx == 0) ? rl1 : rl0;
-    EXPECT_TRUE(manifest.deactivated_candidate_memory_.contains(deactivated));
+    const rule_id sibling_id = (chosen->idx == 0) ? rule_id{1} : rule_id{0};
+    const lemma resolution_lemma = manifest.resolution_memory_.derive_resolution_lemma();
+    for (const resolution_lineage* rl : resolution_lemma.get_resolutions())
+        EXPECT_NE(rl->idx, sibling_id);
     manifest.sim_.tear_down();
 }
 
@@ -692,6 +693,40 @@ TEST_F(BasicManifestIntegrationTest, TickBacklogsEliminationForInactiveGoal) {
     for (const resolution_lineage* rl : resolution_lemma.get_resolutions())
         resolution_ids.push_back(rl->idx);
     EXPECT_THAT(resolution_ids, UnorderedElementsAre(rule_id{1}));
+}
+
+TEST_F(BasicManifestIntegrationTest, BackloggedCandidateAlreadyDeactivatedOnReelimination) {
+    /*
+     * Intent: candidate backlogged before sim (never linked); later elimination of same candidate
+     * must return already_deactivated, not throw on unlink.
+     * initial goals: f.
+     * rules:
+     *   0: f.   1: f.
+     * setup: backlog rule 1 before solve (active goal, rule 1 not in frontier).
+     */
+    const expr* goal = saved_expr_pool_.make("f", {});
+    const expr* f0 = saved_expr_pool_.make("f", {});
+    const expr* f1 = saved_expr_pool_.make("f", {});
+    initial_goals.push(goal);
+    database.push(rule{f0, {}});
+    database.push(rule{f1, {}});
+
+    basic_manifest manifest{database, initial_goals, kMaxResolutions, kSeed};
+    const goal_lineage* gl = manifest.make_initial_goal_lineage_.make(0);
+    const resolution_lineage* rl1 =
+        manifest.lineage_pool_.make_resolution_lineage(gl, rule_id{1});
+    manifest.elimination_backlog_.insert_backlogged_elimination(rl1);
+
+    auto sm = manifest.solver_.solve();
+    bool saw_solved = false;
+    while (true) {
+        sm.resume();
+        if (!sm.has_yield())
+            break;
+        if (sm.consume_yield() == sim_termination::solved)
+            saw_solved = true;
+    }
+    EXPECT_TRUE(saw_solved);
 }
 
 TEST_F(BasicManifestIntegrationTest, TickDecisionLemmaLineagesPinnedBeforeTrim) {

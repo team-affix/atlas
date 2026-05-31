@@ -16,7 +16,6 @@
 #include "infrastructure/copier.hpp"
 #include "infrastructure/db.hpp"
 #include "infrastructure/decision_memory.hpp"
-#include "infrastructure/deactivated_candidate_memory.hpp"
 #include "infrastructure/elimination_backlog.hpp"
 #include "infrastructure/elimination_router.hpp"
 #include "infrastructure/expr_pool.hpp"
@@ -72,7 +71,6 @@ struct basic_manifest {
     unit_goals& unit_goals_;
     decision_memory& decision_memory_;
     resolution_memory& resolution_memory_;
-    deactivated_candidate_memory& deactivated_candidate_memory_;
     elimination_backlog& elimination_backlog_;
     cdcl_elimination_generator& cdcl_;
     mhu_elimination_generator& mhu_;
@@ -110,7 +108,6 @@ private:
         unit_goals unit_goals_;
         decision_memory decision_memory_;
         resolution_memory resolution_memory_;
-        deactivated_candidate_memory deactivated_candidate_memory_;
         candidate_translation_maps candidate_translation_maps_;
 
         early_wiring(locator& loc, db& database, initial_goal_exprs& initial_goals);

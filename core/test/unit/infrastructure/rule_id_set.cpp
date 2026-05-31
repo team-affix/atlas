@@ -40,6 +40,24 @@ TEST_F(RuleIdSetTest, InsertIncreasesSize) {
     EXPECT_EQ(rules.size(), 2u);
 }
 
+TEST_F(RuleIdSetTest, ContainsReturnsFalseWhenEmpty) {
+    EXPECT_FALSE(rules.contains(0));
+}
+
+TEST_F(RuleIdSetTest, ContainsReturnsTrueAfterInsert) {
+    rules.insert(0);
+    rules.insert(1);
+    EXPECT_TRUE(rules.contains(0));
+    EXPECT_TRUE(rules.contains(1));
+    EXPECT_FALSE(rules.contains(2));
+}
+
+TEST_F(RuleIdSetTest, ContainsReturnsFalseAfterErase) {
+    rules.insert(0);
+    rules.erase(0);
+    EXPECT_FALSE(rules.contains(0));
+}
+
 TEST_F(RuleIdSetTest, DuplicateInsertThrows) {
     rules.insert(0);
     EXPECT_THROW(rules.insert(0), std::logic_error);

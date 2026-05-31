@@ -13,7 +13,6 @@ basic_manifest::early_wiring::early_wiring(
       unit_goals_(),
       decision_memory_(),
       resolution_memory_(),
-      deactivated_candidate_memory_(),
       candidate_translation_maps_() {
     loc.bind_as<i_push_trail_frame, i_pop_trail_frame, i_log_to_current_trail_frame>(trail_);
     loc.bind_as<i_bind_map, i_clear_bindings>(bind_map_);
@@ -26,7 +25,6 @@ basic_manifest::early_wiring::early_wiring(
     loc.bind_as<i_push_unit_goal, i_pop_unit_goal, i_clear_unit_goals>(unit_goals_);
     loc.bind_as<i_record_decision, i_clear_recorded_decisions, i_get_decision_count, i_derive_decision_lemma>(decision_memory_);
     loc.bind_as<i_record_resolution, i_clear_recorded_resolutions, i_get_resolution_count, i_derive_resolution_lemma>(resolution_memory_);
-    loc.bind_as<i_deactivated_candidate_memory>(deactivated_candidate_memory_);
     loc.bind_as<i_get_candidate_translation_map, i_set_candidate_translation_map, i_unset_candidate_translation_map, i_clear_candidate_translation_maps>(candidate_translation_maps_);
     loc.bind_as<i_get_rule, i_get_goal_db_rule_ids>(database);
     loc.bind_as<i_get_initial_goal_count, i_get_initial_goal_expr>(initial_goals);
@@ -129,7 +127,6 @@ basic_manifest::basic_manifest(
       unit_goals_(early_.unit_goals_),
       decision_memory_(early_.decision_memory_),
       resolution_memory_(early_.resolution_memory_),
-      deactivated_candidate_memory_(early_.deactivated_candidate_memory_),
       elimination_backlog_(pools_.elimination_backlog_),
       cdcl_(elims_.cdcl_),
       mhu_(elims_.mhu_),

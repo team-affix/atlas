@@ -20,7 +20,6 @@
 #include "infrastructure/unit_goals.hpp"
 #include "infrastructure/decision_memory.hpp"
 #include "infrastructure/resolution_memory.hpp"
-#include "infrastructure/deactivated_candidate_memory.hpp"
 #include "infrastructure/candidate_translation_maps.hpp"
 #include "infrastructure/expr_pool.hpp"
 #include "infrastructure/cdcl_sequencer.hpp"
@@ -86,7 +85,6 @@
 #include "interfaces/i_clear_recorded_resolutions.hpp"
 #include "interfaces/i_get_resolution_count.hpp"
 #include "interfaces/i_derive_resolution_lemma.hpp"
-#include "interfaces/i_deactivated_candidate_memory.hpp"
 #include "interfaces/i_get_candidate_translation_map.hpp"
 #include "interfaces/i_set_candidate_translation_map.hpp"
 #include "interfaces/i_unset_candidate_translation_map.hpp"
@@ -144,7 +142,6 @@ struct sim_early_wiring {
     unit_goals unit_goals_;
     decision_memory decision_memory_;
     resolution_memory resolution_memory_;
-    deactivated_candidate_memory deactivated_candidate_memory_;
     candidate_translation_maps candidate_translation_maps_;
 
     sim_early_wiring(locator& loc, db& database, initial_goal_exprs& initial_goals)
@@ -159,7 +156,6 @@ struct sim_early_wiring {
           unit_goals_(),
           decision_memory_(),
           resolution_memory_(),
-          deactivated_candidate_memory_(),
           candidate_translation_maps_() {
         loc.bind_as<i_push_trail_frame, i_pop_trail_frame, i_log_to_current_trail_frame>(trail_);
         loc.bind_as<i_bind_map, i_clear_bindings>(bind_map_);
@@ -181,7 +177,6 @@ struct sim_early_wiring {
             i_derive_decision_lemma>(decision_memory_);
         loc.bind_as<i_record_resolution, i_clear_recorded_resolutions, i_get_resolution_count,
             i_derive_resolution_lemma>(resolution_memory_);
-        loc.bind_as<i_deactivated_candidate_memory>(deactivated_candidate_memory_);
         loc.bind_as<i_get_candidate_translation_map, i_set_candidate_translation_map,
             i_unset_candidate_translation_map, i_clear_candidate_translation_maps>(
             candidate_translation_maps_);
@@ -990,8 +985,6 @@ TEST_F(SimIntegrationTest, RunDeactivatesRuleOneWhenDecisionResolvesRuleZeroOnMh
         stack.loc.locate<i_make_resolution_lineage>();
     i_derive_resolution_lemma& derive_resolution_lemma =
         stack.loc.locate<i_derive_resolution_lemma>();
-    i_deactivated_candidate_memory& deactivated =
-        stack.loc.locate<i_deactivated_candidate_memory>();
     i_bind_map& bind_map = stack.loc.locate<i_bind_map>();
     i_var_sequencer& seq = stack.loc.locate<i_var_sequencer>();
     i_make_var& make_var = stack.loc.locate<i_make_var>();
@@ -1014,7 +1007,6 @@ TEST_F(SimIntegrationTest, RunDeactivatesRuleOneWhenDecisionResolvesRuleZeroOnMh
     EXPECT_EQ(simulation.run(), sim_termination::solved);
     EXPECT_THAT(derive_resolution_lemma.derive_resolution_lemma().get_resolutions(),
         UnorderedElementsAre(rl0));
-    EXPECT_TRUE(deactivated.contains(rl1));
     const expr::functor& whnf_a = std::get<expr::functor>(bind_map.whnf(var_a)->content);
     const expr::functor& whnf_b = std::get<expr::functor>(bind_map.whnf(var_b)->content);
     EXPECT_EQ(whnf_a.name, "abc");
@@ -1050,19 +1042,14 @@ TEST_F(SimIntegrationTest, RunDeactivatesCrossGoalCandidateOnMhuIncompatibleHead
         stack.loc.locate<i_make_initial_goal_lineage>();
     i_make_resolution_lineage& make_resolution_lineage =
         stack.loc.locate<i_make_resolution_lineage>();
-    i_deactivated_candidate_memory& deactivated =
-        stack.loc.locate<i_deactivated_candidate_memory>();
     i_bind_map& bind_map = stack.loc.locate<i_bind_map>();
     i_var_sequencer& seq = stack.loc.locate<i_var_sequencer>();
     i_make_var& make_var = stack.loc.locate<i_make_var>();
     i_make_functor& make_functor = stack.loc.locate<i_make_functor>();
 
     const goal_lineage* gl0 = make_initial_goal_lineage.make(0);
-    const goal_lineage* gl1 = make_initial_goal_lineage.make(1);
     const resolution_lineage* rl_f0 =
         make_resolution_lineage.make_resolution_lineage(gl0, rule_id{0});
-    const resolution_lineage* rl_g2 =
-        make_resolution_lineage.make_resolution_lineage(gl1, rule_id{2});
 
     EXPECT_CALL(stack.decision_generator, generate()).WillOnce(Return(rl_f0));
 
@@ -1073,7 +1060,6 @@ TEST_F(SimIntegrationTest, RunDeactivatesCrossGoalCandidateOnMhuIncompatibleHead
     initial_goals.push(make_functor.make("g", {var_a}));
 
     EXPECT_EQ(simulation.run(), sim_termination::solved);
-    EXPECT_TRUE(deactivated.contains(rl_g2));
     const expr::functor& whnf_a = std::get<expr::functor>(bind_map.whnf(var_a)->content);
     EXPECT_EQ(whnf_a.name, "abc");
     simulation.tear_down();

@@ -12,6 +12,10 @@ void rule_id_set::erase(rule_id r) {
     DEBUG_ASSERT(erased == 1);
 }
 
+bool rule_id_set::contains(rule_id r) const {
+    return rule_ids_.contains(r);
+}
+
 coroutine<rule_id, void> rule_id_set::iterate() const {
     for (rule_id r : rule_ids_)
         co_yield r;

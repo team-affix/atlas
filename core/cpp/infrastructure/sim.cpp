@@ -26,7 +26,6 @@ sim::sim(locator& loc, size_t max_resolutions)
     clear_unit_goals(loc.locate<i_clear_unit_goals>()),
     clear_recorded_decisions(loc.locate<i_clear_recorded_decisions>()),
     clear_recorded_resolutions(loc.locate<i_clear_recorded_resolutions>()),
-    deactivated_candidate_memory(loc.locate<i_deactivated_candidate_memory>()),
     clear_goal_candidate_rule_ids(loc.locate<i_clear_goal_candidate_rule_ids>()),
     clear_goal_exprs(loc.locate<i_clear_goal_exprs>()),
     clear_active_goals(loc.locate<i_clear_active_goals>()),
@@ -90,7 +89,6 @@ void sim::tear_down() {
     clear_unit_goals.clear();
     clear_recorded_decisions.clear_recorded_decisions();
     clear_recorded_resolutions.clear_recorded_resolutions();
-    deactivated_candidate_memory.clear();
     clear_goal_candidate_rule_ids.clear_goal_candidate_rule_ids();
     clear_goal_exprs.clear_goal_exprs();
     clear_active_goals.clear_active_goals();

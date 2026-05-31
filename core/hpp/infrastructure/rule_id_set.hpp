@@ -7,6 +7,7 @@
 struct rule_id_set : i_rule_id_set {
     void insert(rule_id) override;
     void erase(rule_id) override;
+    bool contains(rule_id) const override;
     coroutine<rule_id, void> iterate() const override;
     size_t size() const override;
     std::unique_ptr<i_rule_id_set> copy() const override;

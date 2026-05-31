@@ -10,6 +10,7 @@ struct i_rule_id_set {
     virtual ~i_rule_id_set() = default;
     virtual void insert(rule_id) = 0;
     virtual void erase(rule_id) = 0;
+    virtual bool contains(rule_id) const = 0;
     virtual coroutine<rule_id, void> iterate() const = 0;
     virtual size_t size() const = 0;
     virtual std::unique_ptr<i_rule_id_set> copy() const = 0;
