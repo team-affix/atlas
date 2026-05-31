@@ -1,6 +1,6 @@
 // Integration: basic_manifest — wiring, sim lifecycle, cross-tick solver interop.
 //
-// Harness: snapshot_at_yield, run_one_tick, enumerate_all_solutions, next_until_refuted.
+// Harness: enumerate_all_solutions, next_until_refuted. Solver ticks: sm.resume / has_yield / consume_yield.
 //
 // Bug policy (docs/testing.md): failing tests indicate suspected production bugs
 // unless setup/lifetime/key definitions are wrong. Do not delete or weaken tests.
@@ -10,8 +10,6 @@
 #include <gmock/gmock.h>
 #include <algorithm>
 #include <array>
-#include <map>
-#include <optional>
 #include <set>
 #include <string>
 #include <tuple>
@@ -66,81 +64,25 @@ using ::testing::UnorderedElementsAre;
 namespace {
 
 // ---------------------------------------------------------------------------
-// Harness structs
+// Solver enumeration harness
 // ---------------------------------------------------------------------------
-
-struct TickSnapshot {
-    lemma resolution_lemma;
-    lemma decision_lemma;
-    std::map<uint32_t, const expr*> var_bindings;
-};
-
-struct SimTerminationResult {
-    sim_termination termination;
-    TickSnapshot snapshot;
-};
-
-// ---------------------------------------------------------------------------
-// Solver run harness
-// ---------------------------------------------------------------------------
-
-TickSnapshot snapshot_at_yield(
-    basic_manifest& manifest,
-    i_normalizer& normalizer,
-    expr_pool& saved_expr_pool,
-    const std::set<uint32_t>& tracked_vars = {}) {
-    lemma resolution_lemma = manifest.resolution_memory_.derive_resolution_lemma();
-    for (const resolution_lineage* rl : resolution_lemma.get_resolutions())
-        manifest.lineage_pool_.pin(rl);
-    lemma decision_lemma = manifest.decision_memory_.derive();
-
-    TickSnapshot snap{std::move(resolution_lemma), std::move(decision_lemma), {}};
-
-    for (uint32_t idx : tracked_vars) {
-        const expr* var = manifest.expr_pool_.make(idx);
-        const expr* normalized = normalizer.normalize(var);
-        snap.var_bindings[idx] = saved_expr_pool.import(normalized);
-    }
-
-    return snap;
-}
-
-std::optional<SimTerminationResult> run_one_tick(
-    basic_manifest& manifest,
-    i_normalizer& normalizer,
-    expr_pool& saved_expr_pool,
-    coroutine<sim_termination, void>& sm,
-    const std::set<uint32_t>& tracked_vars = {}) {
-    sm.resume();
-
-    if (!sm.has_yield())
-        return std::nullopt;
-
-    SimTerminationResult result{sm.consume_yield(),
-        snapshot_at_yield(manifest, normalizer, saved_expr_pool, tracked_vars)};
-    return result;
-}
 
 using solution = std::vector<const expr*>;
 
 void enumerate_all_solutions(
-    basic_manifest& manifest,
-    i_normalizer& normalizer,
-    expr_pool& saved_expr_pool,
+    i_solve& solver,
     std::set<solution> expected,
-    const std::function<solution(const TickSnapshot&)>& get_solution,
-    const std::set<uint32_t>& tracked_vars = {}) {
-    auto sm = manifest.solver_.solve();
+    const std::function<solution()>& get_solution) {
+    auto sm = solver.solve();
     std::set<solution> visited;
     while (!expected.empty()) {
         solution s;
         do {
-            std::optional<SimTerminationResult> tick =
-                run_one_tick(manifest, normalizer, saved_expr_pool, sm, tracked_vars);
-            ASSERT_TRUE(tick.has_value()) << "solver stopped before all expected solutions found";
-            if (tick->termination != sim_termination::solved)
+            sm.resume();
+            ASSERT_TRUE(sm.has_yield()) << "solver stopped before all expected solutions found";
+            if (sm.consume_yield() != sim_termination::solved)
                 continue;
-            s = get_solution(tick->snapshot);
+            s = get_solution();
         } while (visited.count(s));
         auto it = expected.find(s);
         ASSERT_NE(it, expected.end()) << "unexpected solution";
@@ -150,24 +92,18 @@ void enumerate_all_solutions(
 }
 
 void next_until_refuted(
-    basic_manifest& manifest,
-    i_normalizer& normalizer,
-    expr_pool& saved_expr_pool,
+    i_solve& solver,
     std::set<solution> expected,
-    const std::function<solution(const TickSnapshot&)>& get_solution,
-    const std::set<uint32_t>& tracked_vars = {}) {
-
-    
-    auto sm = manifest.solver_.solve();
+    const std::function<solution()>& get_solution) {
+    auto sm = solver.solve();
     std::set<solution> visited;
     while (true) {
-        std::optional<SimTerminationResult> tick =
-            run_one_tick(manifest, normalizer, saved_expr_pool, sm, tracked_vars);
-        if (!tick)
+        sm.resume();
+        if (!sm.has_yield())
             break;
-        if (tick->termination != sim_termination::solved)
+        if (sm.consume_yield() != sim_termination::solved)
             continue;
-        const solution s = get_solution(tick->snapshot);
+        const solution s = get_solution();
         if (visited.count(s))
             continue;
         visited.insert(s);
@@ -176,8 +112,6 @@ void next_until_refuted(
         expected.erase(it);
     }
     ASSERT_TRUE(expected.empty()) << "solver refuted before all expected solutions found";
-    
-    
 }
 
 }  // namespace
@@ -196,24 +130,12 @@ struct BasicManifestIntegrationTest : public ::testing::Test {
 
     trail saved_trail_;
     locator saved_loc_;
-    std::optional<expr_pool> saved_expr_pool_;
-    std::optional<normalizer> normalizer_;
+    expr_pool saved_expr_pool_{bind_saved_loc(saved_trail_, saved_loc_)};
 
-    void SetUp() override {
-        bind_saved_expr_pool();
-    }
-
-    void bind_saved_expr_pool() {
-        saved_loc_.bind_as<i_log_to_current_trail_frame>(saved_trail_);
-        saved_expr_pool_.emplace(saved_loc_);
-    }
-
-    void bind_normalizer(basic_manifest& manifest) {
-        normalizer_.emplace(manifest.loc_);
-    }
-
-    const expr* import_saved(const expr& e) {
-        return saved_expr_pool_->import(&e);
+private:
+    static locator& bind_saved_loc(trail& t, locator& l) {
+        l.bind_as<i_log_to_current_trail_frame>(t);
+        return l;
     }
 };
 
@@ -655,9 +577,9 @@ TEST_F(BasicManifestIntegrationTest, SimRandomDecisionGeneratorPicksBranchWithFi
 
 // Tier X — single solver tick (cross-component interop)
 
-TEST_F(BasicManifestIntegrationTest, TickSnapshotBindingsBeforeTearDown) {
+TEST_F(BasicManifestIntegrationTest, BindingsBeforeTearDown) {
     /*
-     * Intent: tick snapshot captures bindings before tear_down; bindings revert on resume.
+     * Intent: normalized bindings are readable before tear_down; bindings revert on resume.
      * initial goals: f(A, B).
      * rules:
      *   0: f(abc, 123).
@@ -668,23 +590,24 @@ TEST_F(BasicManifestIntegrationTest, TickSnapshotBindingsBeforeTearDown) {
     database.push(rule{&head, {}});
 
     basic_manifest manifest{database, initial_goals, kMaxResolutions, kSeed};
-    bind_normalizer(manifest);
+    normalizer normalizer{manifest.loc_};
     const uint32_t idx_a = manifest.var_sequencer_.next();
     const uint32_t idx_b = manifest.var_sequencer_.next();
     const expr* var_a = manifest.expr_pool_.make(idx_a);
     const expr* var_b = manifest.expr_pool_.make(idx_b);
     initial_goals.push(manifest.expr_pool_.make("f", {var_a, var_b}));
 
-    const expr* abc_saved = saved_expr_pool_->import(&abc);
-    const expr* _123_saved = saved_expr_pool_->import(&_123);
+    const expr* abc_saved = saved_expr_pool_.import(&abc);
+    const expr* _123_saved = saved_expr_pool_.import(&_123);
 
     auto sm = manifest.solver_.solve();
-    const std::optional<SimTerminationResult> tick =
-        run_one_tick(manifest, *normalizer_, *saved_expr_pool_, sm, {idx_a, idx_b});
-    ASSERT_TRUE(tick);
-    ASSERT_EQ(tick->termination, sim_termination::solved);
-    EXPECT_EQ(*tick->snapshot.var_bindings.at(idx_a), *abc_saved);
-    EXPECT_EQ(*tick->snapshot.var_bindings.at(idx_b), *_123_saved);
+    sm.resume();
+    ASSERT_TRUE(sm.has_yield());
+    ASSERT_EQ(sm.consume_yield(), sim_termination::solved);
+    EXPECT_EQ(*saved_expr_pool_.import(normalizer.normalize(manifest.expr_pool_.make(idx_a))),
+        *abc_saved);
+    EXPECT_EQ(*saved_expr_pool_.import(normalizer.normalize(manifest.expr_pool_.make(idx_b))),
+        *_123_saved);
 
     sm.resume();
     EXPECT_TRUE(std::holds_alternative<expr::var>(
@@ -716,7 +639,6 @@ TEST_F(BasicManifestIntegrationTest, TickCdclAvoidancesPersistAcrossTearDown) {
     database.push(rule{&g_head3, {}});
 
     basic_manifest manifest{database, initial_goals, kMaxResolutions, kSeed};
-    bind_normalizer(manifest);
     const goal_lineage* gl0 = manifest.make_initial_goal_lineage_.make(0);
     const goal_lineage* gl1 = manifest.make_initial_goal_lineage_.make(1);
     const resolution_lineage* rl_g0_0 =
@@ -732,15 +654,13 @@ TEST_F(BasicManifestIntegrationTest, TickCdclAvoidancesPersistAcrossTearDown) {
     manifest.lineage_pool_.pin(rl_g1_3);
 
     auto sm = manifest.solver_.solve();
-    const std::optional<SimTerminationResult> tick1 =
-        run_one_tick(manifest, *normalizer_, *saved_expr_pool_, sm);
-    ASSERT_TRUE(tick1);
-    ASSERT_EQ(tick1->termination, sim_termination::solved);
+    sm.resume();
+    ASSERT_TRUE(sm.has_yield());
+    ASSERT_EQ(sm.consume_yield(), sim_termination::solved);
 
-    const std::optional<SimTerminationResult> tick2 =
-        run_one_tick(manifest, *normalizer_, *saved_expr_pool_, sm);
-    ASSERT_TRUE(tick2);
-    ASSERT_EQ(tick2->termination, sim_termination::solved);
+    sm.resume();
+    ASSERT_TRUE(sm.has_yield());
+    ASSERT_EQ(sm.consume_yield(), sim_termination::solved);
 }
 
 TEST_F(BasicManifestIntegrationTest, TickBacklogsEliminationForInactiveGoal) {
@@ -759,7 +679,6 @@ TEST_F(BasicManifestIntegrationTest, TickBacklogsEliminationForInactiveGoal) {
     database.push(rule{&f_head1, {}});
 
     basic_manifest manifest{database, initial_goals, kMaxResolutions, kSeed};
-    bind_normalizer(manifest);
     const goal_lineage* gl = manifest.make_initial_goal_lineage_.make(0);
     const resolution_lineage* rl0 =
         manifest.lineage_pool_.make_resolution_lineage(gl, rule_id{0});
@@ -768,12 +687,12 @@ TEST_F(BasicManifestIntegrationTest, TickBacklogsEliminationForInactiveGoal) {
     manifest.elimination_backlog_.insert_backlogged_elimination(rl0);
 
     auto sm = manifest.solver_.solve();
-    const std::optional<SimTerminationResult> tick =
-        run_one_tick(manifest, *normalizer_, *saved_expr_pool_, sm);
-    ASSERT_TRUE(tick);
-    ASSERT_EQ(tick->termination, sim_termination::solved);
+    sm.resume();
+    ASSERT_TRUE(sm.has_yield());
+    ASSERT_EQ(sm.consume_yield(), sim_termination::solved);
+    const lemma resolution_lemma = manifest.resolution_memory_.derive_resolution_lemma();
     std::vector<rule_id> resolution_ids;
-    for (const resolution_lineage* rl : tick->snapshot.resolution_lemma.get_resolutions())
+    for (const resolution_lineage* rl : resolution_lemma.get_resolutions())
         resolution_ids.push_back(rl->idx);
     EXPECT_THAT(resolution_ids, UnorderedElementsAre(rule_id{1}));
 }
@@ -801,7 +720,6 @@ TEST_F(BasicManifestIntegrationTest, TickDecisionLemmaLineagesPinnedBeforeTrim) 
     database.push(rule{&g_head3, {}});
 
     basic_manifest manifest{database, initial_goals, kMaxResolutions, kSeed};
-    bind_normalizer(manifest);
     const goal_lineage* gl0 = manifest.make_initial_goal_lineage_.make(0);
     const goal_lineage* gl1 = manifest.make_initial_goal_lineage_.make(1);
     const resolution_lineage* rl_g0_0 =
@@ -817,11 +735,12 @@ TEST_F(BasicManifestIntegrationTest, TickDecisionLemmaLineagesPinnedBeforeTrim) 
     manifest.lineage_pool_.pin(rl_g1_3);
 
     auto sm = manifest.solver_.solve();
-    const std::optional<SimTerminationResult> tick =
-        run_one_tick(manifest, *normalizer_, *saved_expr_pool_, sm);
-    ASSERT_TRUE(tick);
+    sm.resume();
+    ASSERT_TRUE(sm.has_yield());
+    ASSERT_EQ(sm.consume_yield(), sim_termination::solved);
+    const lemma resolution_lemma = manifest.resolution_memory_.derive_resolution_lemma();
     std::vector<rule_id> resolution_ids;
-    for (const resolution_lineage* rl : tick->snapshot.resolution_lemma.get_resolutions())
+    for (const resolution_lineage* rl : resolution_lemma.get_resolutions())
         resolution_ids.push_back(rl->idx);
     EXPECT_THAT(resolution_ids, UnorderedElementsAre(rule_id{0}, rule_id{3}));
 }
@@ -843,41 +762,43 @@ TEST_F(BasicManifestIntegrationTest, TickSecondBranchDiffersOnDuplicateRuleProbl
     static const std::set<rule_id> kBranches{rule_id{0}, rule_id{1}};
 
     basic_manifest manifest{database, initial_goals, kMaxResolutions, kSeed};
-    bind_normalizer(manifest);
     auto sm = manifest.solver_.solve();
-    const std::optional<SimTerminationResult> tick1 =
-        run_one_tick(manifest, *normalizer_, *saved_expr_pool_, sm);
-    ASSERT_TRUE(tick1);
-    ASSERT_EQ(tick1->termination, sim_termination::solved);
+    sm.resume();
+    ASSERT_TRUE(sm.has_yield());
+    ASSERT_EQ(sm.consume_yield(), sim_termination::solved);
+    lemma resolution_lemma1 = manifest.resolution_memory_.derive_resolution_lemma();
+    for (const resolution_lineage* rl : resolution_lemma1.get_resolutions())
+        manifest.lineage_pool_.pin(rl);
+    lemma decision_lemma1 = manifest.decision_memory_.derive();
     std::set<rule_id> first_branches;
-    for (const resolution_lineage* rl : tick1->snapshot.decision_lemma.get_resolutions())
+    for (const resolution_lineage* rl : decision_lemma1.get_resolutions())
         if (kBranches.count(rl->idx))
             first_branches.insert(rl->idx);
-    for (const resolution_lineage* rl : tick1->snapshot.resolution_lemma.get_resolutions())
+    for (const resolution_lineage* rl : resolution_lemma1.get_resolutions())
         if (kBranches.count(rl->idx))
             first_branches.insert(rl->idx);
     ASSERT_EQ(first_branches.size(), 1u);
-    EXPECT_EQ(tick1->snapshot.decision_lemma.get_resolutions().size(), 1u);
+    EXPECT_EQ(decision_lemma1.get_resolutions().size(), 1u);
 
-    const std::optional<SimTerminationResult> tick2 =
-        run_one_tick(manifest, *normalizer_, *saved_expr_pool_, sm);
-    ASSERT_TRUE(tick2);
-    ASSERT_EQ(tick2->termination, sim_termination::solved);
-    EXPECT_TRUE(tick2->snapshot.decision_lemma.get_resolutions().empty());
+    sm.resume();
+    ASSERT_TRUE(sm.has_yield());
+    ASSERT_EQ(sm.consume_yield(), sim_termination::solved);
+    lemma resolution_lemma2 = manifest.resolution_memory_.derive_resolution_lemma();
+    for (const resolution_lineage* rl : resolution_lemma2.get_resolutions())
+        manifest.lineage_pool_.pin(rl);
+    lemma decision_lemma2 = manifest.decision_memory_.derive();
+    EXPECT_TRUE(decision_lemma2.get_resolutions().empty());
     std::set<rule_id> second_branches;
-    for (const resolution_lineage* rl : tick2->snapshot.decision_lemma.get_resolutions())
+    for (const resolution_lineage* rl : decision_lemma2.get_resolutions())
         if (kBranches.count(rl->idx))
             second_branches.insert(rl->idx);
-    for (const resolution_lineage* rl : tick2->snapshot.resolution_lemma.get_resolutions())
+    for (const resolution_lineage* rl : resolution_lemma2.get_resolutions())
         if (kBranches.count(rl->idx))
             second_branches.insert(rl->idx);
     ASSERT_EQ(second_branches.size(), 1u);
     EXPECT_NE(*first_branches.begin(), *second_branches.begin());
-    EXPECT_FALSE(tick1->snapshot.decision_lemma.get_resolutions()
-            == tick2->snapshot.decision_lemma.get_resolutions()
-        && tick1->snapshot.resolution_lemma.get_resolutions()
-            == tick2->snapshot.resolution_lemma.get_resolutions()
-        && tick1->snapshot.var_bindings == tick2->snapshot.var_bindings);
+    EXPECT_FALSE(decision_lemma1.get_resolutions() == decision_lemma2.get_resolutions()
+        && resolution_lemma1.get_resolutions() == resolution_lemma2.get_resolutions());
 }
 
 // Tier S — multi-cycle solver (enumeration)
@@ -889,13 +810,13 @@ TEST_F(BasicManifestIntegrationTest, SolverVacuousSolvedOnEmptyProblem) {
      * rules: (none)
      */
     basic_manifest manifest{database, initial_goals, kMaxResolutions, kSeed};
-    bind_normalizer(manifest);
     auto sm = manifest.solver_.solve();
-    auto tick = run_one_tick(manifest, *normalizer_, *saved_expr_pool_, sm);
-    ASSERT_TRUE(tick.has_value());
-    EXPECT_EQ(tick->termination, sim_termination::solved);
-    EXPECT_TRUE(tick->snapshot.decision_lemma.get_resolutions().empty());
-    EXPECT_FALSE(run_one_tick(manifest, *normalizer_, *saved_expr_pool_, sm));
+    sm.resume();
+    ASSERT_TRUE(sm.has_yield());
+    EXPECT_EQ(sm.consume_yield(), sim_termination::solved);
+    EXPECT_TRUE(manifest.decision_memory_.derive().get_resolutions().empty());
+    sm.resume();
+    EXPECT_FALSE(sm.has_yield());
 }
 
 TEST_F(BasicManifestIntegrationTest, SolverFindsSingleUnitSolution) {
@@ -911,13 +832,13 @@ TEST_F(BasicManifestIntegrationTest, SolverFindsSingleUnitSolution) {
     database.push(rule{&head, {}});
 
     basic_manifest manifest{database, initial_goals, kMaxResolutions, kSeed};
-    bind_normalizer(manifest);
     auto sm = manifest.solver_.solve();
-    auto tick = run_one_tick(manifest, *normalizer_, *saved_expr_pool_, sm);
-    ASSERT_TRUE(tick.has_value());
-    EXPECT_EQ(tick->termination, sim_termination::solved);
-    EXPECT_TRUE(tick->snapshot.decision_lemma.get_resolutions().empty());
-    EXPECT_FALSE(run_one_tick(manifest, *normalizer_, *saved_expr_pool_, sm));
+    sm.resume();
+    ASSERT_TRUE(sm.has_yield());
+    EXPECT_EQ(sm.consume_yield(), sim_termination::solved);
+    EXPECT_TRUE(manifest.decision_memory_.derive().get_resolutions().empty());
+    sm.resume();
+    EXPECT_FALSE(sm.has_yield());
 }
 
 TEST_F(BasicManifestIntegrationTest, SolverRefutesWhenNoCandidates) {
@@ -930,12 +851,12 @@ TEST_F(BasicManifestIntegrationTest, SolverRefutesWhenNoCandidates) {
     initial_goals.push(&goal);
 
     basic_manifest manifest{database, initial_goals, kMaxResolutions, kSeed};
-    bind_normalizer(manifest);
     auto sm = manifest.solver_.solve();
-    auto tick = run_one_tick(manifest, *normalizer_, *saved_expr_pool_, sm);
-    ASSERT_TRUE(tick.has_value());
-    EXPECT_EQ(tick->termination, sim_termination::conflicted);
-    EXPECT_FALSE(run_one_tick(manifest, *normalizer_, *saved_expr_pool_, sm));
+    sm.resume();
+    ASSERT_TRUE(sm.has_yield());
+    EXPECT_EQ(sm.consume_yield(), sim_termination::conflicted);
+    sm.resume();
+    EXPECT_FALSE(sm.has_yield());
 }
 
 TEST_F(BasicManifestIntegrationTest, SolverEnumeratesTwoGroundChoiceSolutions) {
@@ -953,30 +874,29 @@ TEST_F(BasicManifestIntegrationTest, SolverEnumeratesTwoGroundChoiceSolutions) {
     database.push(rule{&f_head1, {}});
 
     basic_manifest manifest{database, initial_goals, kMaxResolutions, kSeed};
-    bind_normalizer(manifest);
     auto sm = manifest.solver_.solve();
-    std::vector<TickSnapshot> solutions;
-    while (true) {
-        std::optional<SimTerminationResult> tick =
-            run_one_tick(manifest, *normalizer_, *saved_expr_pool_, sm);
-        if (!tick)
-            break;
-        if (tick->termination == sim_termination::solved)
-            solutions.push_back(std::move(tick->snapshot));
-    }
-    ASSERT_EQ(solutions.size(), 2u);
     std::set<rule_id> seen;
-    for (const TickSnapshot& snap : solutions) {
+    size_t solved_count = 0;
+    while (true) {
+        sm.resume();
+        if (!sm.has_yield())
+            break;
+        if (sm.consume_yield() != sim_termination::solved)
+            continue;
+        ++solved_count;
+        const lemma decision_lemma = manifest.decision_memory_.derive();
+        const lemma resolution_lemma = manifest.resolution_memory_.derive_resolution_lemma();
         std::set<rule_id> branches;
-        for (const resolution_lineage* rl : snap.decision_lemma.get_resolutions())
+        for (const resolution_lineage* rl : decision_lemma.get_resolutions())
             if (rl->idx == rule_id{0} || rl->idx == rule_id{1})
                 branches.insert(rl->idx);
-        for (const resolution_lineage* rl : snap.resolution_lemma.get_resolutions())
+        for (const resolution_lineage* rl : resolution_lemma.get_resolutions())
             if (rl->idx == rule_id{0} || rl->idx == rule_id{1})
                 branches.insert(rl->idx);
         ASSERT_EQ(branches.size(), 1u);
         seen.insert(*branches.begin());
     }
+    ASSERT_EQ(solved_count, 2u);
     EXPECT_THAT(seen, UnorderedElementsAre(rule_id{0}, rule_id{1}));
 }
 
@@ -995,23 +915,23 @@ TEST_F(BasicManifestIntegrationTest, SolverRefutesAfterEnumeratingAllGroundBranc
     database.push(rule{&f_head1, {}});
 
     basic_manifest manifest{database, initial_goals, kMaxResolutions, kSeed};
-    bind_normalizer(manifest);
     auto sm = manifest.solver_.solve();
     std::set<rule_id> seen;
     std::set<rule_id> visited;
     while (seen.size() < 2u) {
         rule_id branch;
         do {
-            std::optional<SimTerminationResult> tick =
-                run_one_tick(manifest, *normalizer_, *saved_expr_pool_, sm);
-            ASSERT_TRUE(tick.has_value());
-            if (tick->termination != sim_termination::solved)
+            sm.resume();
+            ASSERT_TRUE(sm.has_yield());
+            if (sm.consume_yield() != sim_termination::solved)
                 continue;
+            const lemma decision_lemma = manifest.decision_memory_.derive();
+            const lemma resolution_lemma = manifest.resolution_memory_.derive_resolution_lemma();
             std::set<rule_id> branches;
-            for (const resolution_lineage* rl : tick->snapshot.decision_lemma.get_resolutions())
+            for (const resolution_lineage* rl : decision_lemma.get_resolutions())
                 if (rl->idx == rule_id{0} || rl->idx == rule_id{1})
                     branches.insert(rl->idx);
-            for (const resolution_lineage* rl : tick->snapshot.resolution_lemma.get_resolutions())
+            for (const resolution_lineage* rl : resolution_lemma.get_resolutions())
                 if (rl->idx == rule_id{0} || rl->idx == rule_id{1})
                     branches.insert(rl->idx);
             ASSERT_EQ(branches.size(), 1u);
@@ -1021,12 +941,13 @@ TEST_F(BasicManifestIntegrationTest, SolverRefutesAfterEnumeratingAllGroundBranc
         seen.insert(branch);
     }
     EXPECT_THAT(seen, UnorderedElementsAre(rule_id{0}, rule_id{1}));
-    std::optional<SimTerminationResult> tick;
-    do {
-        tick = run_one_tick(manifest, *normalizer_, *saved_expr_pool_, sm);
-        if (tick && tick->termination == sim_termination::solved)
+    while (true) {
+        sm.resume();
+        if (!sm.has_yield())
+            break;
+        if (sm.consume_yield() == sim_termination::solved)
             FAIL() << "unexpected extra solution after exhausting search space";
-    } while (tick.has_value());
+    }
 }
 
 TEST_F(BasicManifestIntegrationTest, SolverFindsClauseDerivedUnitSolution) {
@@ -1048,13 +969,13 @@ TEST_F(BasicManifestIntegrationTest, SolverFindsClauseDerivedUnitSolution) {
     database.push(rule{&g_fact, {}});
 
     basic_manifest manifest{database, initial_goals, kMaxResolutions, kSeed};
-    bind_normalizer(manifest);
     auto sm = manifest.solver_.solve();
-    auto tick = run_one_tick(manifest, *normalizer_, *saved_expr_pool_, sm);
-    ASSERT_TRUE(tick.has_value());
-    EXPECT_EQ(tick->termination, sim_termination::solved);
-    EXPECT_TRUE(tick->snapshot.decision_lemma.get_resolutions().empty());
-    EXPECT_FALSE(run_one_tick(manifest, *normalizer_, *saved_expr_pool_, sm));
+    sm.resume();
+    ASSERT_TRUE(sm.has_yield());
+    EXPECT_EQ(sm.consume_yield(), sim_termination::solved);
+    EXPECT_TRUE(manifest.decision_memory_.derive().get_resolutions().empty());
+    sm.resume();
+    EXPECT_FALSE(sm.has_yield());
 }
 
 TEST_F(BasicManifestIntegrationTest, SolverEnumeratesTwoChoiceClauseSolutions) {
@@ -1079,30 +1000,29 @@ TEST_F(BasicManifestIntegrationTest, SolverEnumeratesTwoChoiceClauseSolutions) {
     database.push(rule{&g_fact1, {}});
 
     basic_manifest manifest{database, initial_goals, kMaxResolutions, kSeed};
-    bind_normalizer(manifest);
     auto sm = manifest.solver_.solve();
-    std::vector<TickSnapshot> solutions;
-    while (true) {
-        std::optional<SimTerminationResult> tick =
-            run_one_tick(manifest, *normalizer_, *saved_expr_pool_, sm);
-        if (!tick)
-            break;
-        if (tick->termination == sim_termination::solved)
-            solutions.push_back(std::move(tick->snapshot));
-    }
-    ASSERT_EQ(solutions.size(), 2u);
     std::set<rule_id> seen;
-    for (const TickSnapshot& snap : solutions) {
+    size_t solved_count = 0;
+    while (true) {
+        sm.resume();
+        if (!sm.has_yield())
+            break;
+        if (sm.consume_yield() != sim_termination::solved)
+            continue;
+        ++solved_count;
+        const lemma decision_lemma = manifest.decision_memory_.derive();
+        const lemma resolution_lemma = manifest.resolution_memory_.derive_resolution_lemma();
         std::set<rule_id> branches;
-        for (const resolution_lineage* rl : snap.decision_lemma.get_resolutions())
+        for (const resolution_lineage* rl : decision_lemma.get_resolutions())
             if (rl->idx == rule_id{1} || rl->idx == rule_id{2})
                 branches.insert(rl->idx);
-        for (const resolution_lineage* rl : snap.resolution_lemma.get_resolutions())
+        for (const resolution_lineage* rl : resolution_lemma.get_resolutions())
             if (rl->idx == rule_id{1} || rl->idx == rule_id{2})
                 branches.insert(rl->idx);
         ASSERT_EQ(branches.size(), 1u);
         seen.insert(*branches.begin());
     }
+    ASSERT_EQ(solved_count, 2u);
     EXPECT_THAT(seen, UnorderedElementsAre(rule_id{1}, rule_id{2}));
 }
 
@@ -1119,23 +1039,26 @@ TEST_F(BasicManifestIntegrationTest, SolverFindsSolutionWithCorrectBindings) {
     database.push(rule{&head, {}});
 
     basic_manifest manifest{database, initial_goals, kMaxResolutions, kSeed};
-    bind_normalizer(manifest);
+    normalizer normalizer{manifest.loc_};
     const uint32_t idx_a = manifest.var_sequencer_.next();
     const uint32_t idx_b = manifest.var_sequencer_.next();
     const expr* var_a = manifest.expr_pool_.make(idx_a);
     const expr* var_b = manifest.expr_pool_.make(idx_b);
     initial_goals.push(manifest.expr_pool_.make("f", {var_a, var_b}));
 
-    const expr* abc_saved = saved_expr_pool_->import(&abc);
-    const expr* _123_saved = saved_expr_pool_->import(&_123);
+    const expr* abc_saved = saved_expr_pool_.import(&abc);
+    const expr* _123_saved = saved_expr_pool_.import(&_123);
     auto sm = manifest.solver_.solve();
-    auto tick = run_one_tick(manifest, *normalizer_, *saved_expr_pool_, sm, {idx_a, idx_b});
-    ASSERT_TRUE(tick.has_value());
-    EXPECT_EQ(tick->termination, sim_termination::solved);
-    EXPECT_TRUE(tick->snapshot.decision_lemma.get_resolutions().empty());
-    EXPECT_EQ(*tick->snapshot.var_bindings.at(idx_a), *abc_saved);
-    EXPECT_EQ(*tick->snapshot.var_bindings.at(idx_b), *_123_saved);
-    EXPECT_FALSE(run_one_tick(manifest, *normalizer_, *saved_expr_pool_, sm, {idx_a, idx_b}));
+    sm.resume();
+    ASSERT_TRUE(sm.has_yield());
+    EXPECT_EQ(sm.consume_yield(), sim_termination::solved);
+    EXPECT_TRUE(manifest.decision_memory_.derive().get_resolutions().empty());
+    EXPECT_EQ(*saved_expr_pool_.import(normalizer.normalize(manifest.expr_pool_.make(idx_a))),
+        *abc_saved);
+    EXPECT_EQ(*saved_expr_pool_.import(normalizer.normalize(manifest.expr_pool_.make(idx_b))),
+        *_123_saved);
+    sm.resume();
+    EXPECT_FALSE(sm.has_yield());
 }
 
 TEST_F(BasicManifestIntegrationTest, SolverFindsClauseBodyBindingSolution) {
@@ -1161,22 +1084,25 @@ TEST_F(BasicManifestIntegrationTest, SolverFindsClauseBodyBindingSolution) {
     database.push(rule{&h_head, {}});
 
     basic_manifest manifest{database, initial_goals, kMaxResolutions, kSeed};
-    bind_normalizer(manifest);
+    normalizer normalizer{manifest.loc_};
     const uint32_t idx_a = manifest.var_sequencer_.next();
     const uint32_t idx_b = manifest.var_sequencer_.next();
     const expr* var_a = manifest.expr_pool_.make(idx_a);
     const expr* var_b = manifest.expr_pool_.make(idx_b);
     initial_goals.push(manifest.expr_pool_.make("f", {var_a, var_b}));
 
-    const expr* abc_saved = saved_expr_pool_->import(&abc);
-    const expr* _123_saved = saved_expr_pool_->import(&_123);
+    const expr* abc_saved = saved_expr_pool_.import(&abc);
+    const expr* _123_saved = saved_expr_pool_.import(&_123);
     auto sm = manifest.solver_.solve();
-    auto tick = run_one_tick(manifest, *normalizer_, *saved_expr_pool_, sm, {idx_a, idx_b});
-    ASSERT_TRUE(tick.has_value());
-    EXPECT_EQ(tick->termination, sim_termination::solved);
-    EXPECT_EQ(*tick->snapshot.var_bindings.at(idx_a), *abc_saved);
-    EXPECT_EQ(*tick->snapshot.var_bindings.at(idx_b), *_123_saved);
-    EXPECT_FALSE(run_one_tick(manifest, *normalizer_, *saved_expr_pool_, sm, {idx_a, idx_b}));
+    sm.resume();
+    ASSERT_TRUE(sm.has_yield());
+    EXPECT_EQ(sm.consume_yield(), sim_termination::solved);
+    EXPECT_EQ(*saved_expr_pool_.import(normalizer.normalize(manifest.expr_pool_.make(idx_a))),
+        *abc_saved);
+    EXPECT_EQ(*saved_expr_pool_.import(normalizer.normalize(manifest.expr_pool_.make(idx_b))),
+        *_123_saved);
+    sm.resume();
+    EXPECT_FALSE(sm.has_yield());
 }
 
 TEST_F(BasicManifestIntegrationTest, SolverEnumeratesTwoVarChoiceSolutions) {
@@ -1194,20 +1120,20 @@ TEST_F(BasicManifestIntegrationTest, SolverEnumeratesTwoVarChoiceSolutions) {
     database.push(rule{&head1, {}});
 
     basic_manifest manifest{database, initial_goals, kMaxResolutions, kSeed};
-    bind_normalizer(manifest);
+    normalizer normalizer{manifest.loc_};
     const uint32_t idx_a = manifest.var_sequencer_.next();
     const expr* var_a = manifest.expr_pool_.make(idx_a);
     initial_goals.push(manifest.expr_pool_.make("f", {var_a}));
 
-    const expr* abc_saved = import_saved(abc);
-    const expr* xyz_saved = import_saved(xyz);
+    const expr* abc_saved = saved_expr_pool_.import(&abc);
+    const expr* xyz_saved = saved_expr_pool_.import(&xyz);
     enumerate_all_solutions(
-        manifest, *normalizer_, *saved_expr_pool_,
+        manifest.solver_,
         {{abc_saved}, {xyz_saved}},
-        [idx_a](const TickSnapshot& snap) -> solution {
-            return {snap.var_bindings.at(idx_a)};
-        },
-        {idx_a});
+        [&]() -> solution {
+            return {saved_expr_pool_.import(
+                normalizer.normalize(manifest.expr_pool_.make(idx_a)))};
+        });
 }
 
 TEST_F(BasicManifestIntegrationTest, SolverRefutesAfterEnumeratingAllVarBranches) {
@@ -1225,20 +1151,20 @@ TEST_F(BasicManifestIntegrationTest, SolverRefutesAfterEnumeratingAllVarBranches
     database.push(rule{&head1, {}});
 
     basic_manifest manifest{database, initial_goals, kMaxResolutions, kSeed};
-    bind_normalizer(manifest);
+    normalizer normalizer{manifest.loc_};
     const uint32_t idx_a = manifest.var_sequencer_.next();
     const expr* var_a = manifest.expr_pool_.make(idx_a);
     initial_goals.push(manifest.expr_pool_.make("f", {var_a}));
 
-    const expr* abc_saved = import_saved(abc);
-    const expr* xyz_saved = import_saved(xyz);
+    const expr* abc_saved = saved_expr_pool_.import(&abc);
+    const expr* xyz_saved = saved_expr_pool_.import(&xyz);
     next_until_refuted(
-        manifest, *normalizer_, *saved_expr_pool_,
+        manifest.solver_,
         {{abc_saved}, {xyz_saved}},
-        [idx_a](const TickSnapshot& snap) -> solution {
-            return {snap.var_bindings.at(idx_a)};
-        },
-        {idx_a});
+        [&]() -> solution {
+            return {saved_expr_pool_.import(
+                normalizer.normalize(manifest.expr_pool_.make(idx_a)))};
+        });
 }
 
 TEST_F(BasicManifestIntegrationTest, SolverEnumeratesTwoGoalSharedVarSolutions) {
@@ -1261,21 +1187,21 @@ TEST_F(BasicManifestIntegrationTest, SolverEnumeratesTwoGoalSharedVarSolutions) 
     database.push(rule{&g_head1, {}});
 
     basic_manifest manifest{database, initial_goals, kMaxResolutions, kSeed};
-    bind_normalizer(manifest);
+    normalizer normalizer{manifest.loc_};
     const uint32_t idx_a = manifest.var_sequencer_.next();
     const expr* var_a = manifest.expr_pool_.make(idx_a);
     initial_goals.push(manifest.expr_pool_.make("f", {var_a}));
     initial_goals.push(manifest.expr_pool_.make("g", {var_a}));
 
-    const expr* abc_saved = import_saved(abc);
-    const expr* xyz_saved = import_saved(xyz);
+    const expr* abc_saved = saved_expr_pool_.import(&abc);
+    const expr* xyz_saved = saved_expr_pool_.import(&xyz);
     enumerate_all_solutions(
-        manifest, *normalizer_, *saved_expr_pool_,
+        manifest.solver_,
         {{abc_saved}, {xyz_saved}},
-        [idx_a](const TickSnapshot& snap) -> solution {
-            return {snap.var_bindings.at(idx_a)};
-        },
-        {idx_a});
+        [&]() -> solution {
+            return {saved_expr_pool_.import(
+                normalizer.normalize(manifest.expr_pool_.make(idx_a)))};
+        });
 }
 
 // Cross-tick enumeration end-to-end.
@@ -1297,23 +1223,23 @@ TEST_F(BasicManifestIntegrationTest, TickThreeGroundBranchesEnumerateDistinct) {
     database.push(rule{&f_head2, {}});
 
     basic_manifest manifest{database, initial_goals, kMaxResolutions, kSeed};
-    bind_normalizer(manifest);
     auto sm = manifest.solver_.solve();
     std::set<rule_id> seen;
     std::set<rule_id> visited;
     while (seen.size() < 3u) {
         rule_id branch;
         do {
-            std::optional<SimTerminationResult> tick =
-                run_one_tick(manifest, *normalizer_, *saved_expr_pool_, sm);
-            ASSERT_TRUE(tick.has_value());
-            if (tick->termination != sim_termination::solved)
+            sm.resume();
+            ASSERT_TRUE(sm.has_yield());
+            if (sm.consume_yield() != sim_termination::solved)
                 continue;
+            const lemma decision_lemma = manifest.decision_memory_.derive();
+            const lemma resolution_lemma = manifest.resolution_memory_.derive_resolution_lemma();
             std::set<rule_id> branches;
-            for (const resolution_lineage* rl : tick->snapshot.decision_lemma.get_resolutions())
+            for (const resolution_lineage* rl : decision_lemma.get_resolutions())
                 if (rl->idx == rule_id{0} || rl->idx == rule_id{1} || rl->idx == rule_id{2})
                     branches.insert(rl->idx);
-            for (const resolution_lineage* rl : tick->snapshot.resolution_lemma.get_resolutions())
+            for (const resolution_lineage* rl : resolution_lemma.get_resolutions())
                 if (rl->idx == rule_id{0} || rl->idx == rule_id{1} || rl->idx == rule_id{2})
                     branches.insert(rl->idx);
             ASSERT_EQ(branches.size(), 1u);
@@ -1323,12 +1249,13 @@ TEST_F(BasicManifestIntegrationTest, TickThreeGroundBranchesEnumerateDistinct) {
         seen.insert(branch);
     }
     EXPECT_THAT(seen, UnorderedElementsAre(rule_id{0}, rule_id{1}, rule_id{2}));
-    std::optional<SimTerminationResult> tick;
-    do {
-        tick = run_one_tick(manifest, *normalizer_, *saved_expr_pool_, sm);
-        if (tick && tick->termination == sim_termination::solved)
+    while (true) {
+        sm.resume();
+        if (!sm.has_yield())
+            break;
+        if (sm.consume_yield() == sim_termination::solved)
             FAIL() << "unexpected extra solution after exhausting search space";
-    } while (tick.has_value());
+    }
 }
 
 TEST_F(BasicManifestIntegrationTest, SimLifecycleTwoSequentialDecisionsOnTwoGoals) {
@@ -1536,30 +1463,30 @@ TEST_F(BasicManifestIntegrationTest, SolverEnumeratesFourTwoGoalGroundCombinatio
     database.push(rule{&g_head3, {}});
 
     basic_manifest manifest{database, initial_goals, kMaxResolutions, kSeed};
-    bind_normalizer(manifest);
     auto sm = manifest.solver_.solve();
     std::set<std::pair<rule_id, rule_id>> seen;
     std::set<std::pair<rule_id, rule_id>> visited;
     while (seen.size() < 4u) {
         std::pair<rule_id, rule_id> pair;
         do {
-            std::optional<SimTerminationResult> tick =
-                run_one_tick(manifest, *normalizer_, *saved_expr_pool_, sm);
-            ASSERT_TRUE(tick.has_value());
-            if (tick->termination != sim_termination::solved)
+            sm.resume();
+            ASSERT_TRUE(sm.has_yield());
+            if (sm.consume_yield() != sim_termination::solved)
                 continue;
+            const lemma decision_lemma = manifest.decision_memory_.derive();
+            const lemma resolution_lemma = manifest.resolution_memory_.derive_resolution_lemma();
             std::set<rule_id> f_branch;
-            for (const resolution_lineage* rl : tick->snapshot.decision_lemma.get_resolutions())
+            for (const resolution_lineage* rl : decision_lemma.get_resolutions())
                 if (rl->idx == rule_id{0} || rl->idx == rule_id{1})
                     f_branch.insert(rl->idx);
-            for (const resolution_lineage* rl : tick->snapshot.resolution_lemma.get_resolutions())
+            for (const resolution_lineage* rl : resolution_lemma.get_resolutions())
                 if (rl->idx == rule_id{0} || rl->idx == rule_id{1})
                     f_branch.insert(rl->idx);
             std::set<rule_id> g_branch;
-            for (const resolution_lineage* rl : tick->snapshot.decision_lemma.get_resolutions())
+            for (const resolution_lineage* rl : decision_lemma.get_resolutions())
                 if (rl->idx == rule_id{2} || rl->idx == rule_id{3})
                     g_branch.insert(rl->idx);
-            for (const resolution_lineage* rl : tick->snapshot.resolution_lemma.get_resolutions())
+            for (const resolution_lineage* rl : resolution_lemma.get_resolutions())
                 if (rl->idx == rule_id{2} || rl->idx == rule_id{3})
                     g_branch.insert(rl->idx);
             ASSERT_EQ(f_branch.size(), 1u);
@@ -1573,12 +1500,13 @@ TEST_F(BasicManifestIntegrationTest, SolverEnumeratesFourTwoGoalGroundCombinatio
     EXPECT_TRUE(seen.contains({rule_id{0}, rule_id{3}}));
     EXPECT_TRUE(seen.contains({rule_id{1}, rule_id{2}}));
     EXPECT_TRUE(seen.contains({rule_id{1}, rule_id{3}}));
-    std::optional<SimTerminationResult> tick;
-    do {
-        tick = run_one_tick(manifest, *normalizer_, *saved_expr_pool_, sm);
-        if (tick && tick->termination == sim_termination::solved)
+    while (true) {
+        sm.resume();
+        if (!sm.has_yield())
+            break;
+        if (sm.consume_yield() == sim_termination::solved)
             FAIL() << "unexpected extra solution after exhausting search space";
-    } while (tick.has_value());
+    }
 }
 
 TEST_F(BasicManifestIntegrationTest, SolverEnumeratesEightThreeGoalGroundCombinations) {
@@ -1625,37 +1553,36 @@ TEST_F(BasicManifestIntegrationTest, SolverEnumeratesEightThreeGoalGroundCombina
         normalizer seed_normalizer{manifest.loc_};
 
         auto sm = manifest.solver_.solve();
-        std::vector<TickSnapshot> solutions;
-        while (true) {
-            std::optional<SimTerminationResult> tick =
-                run_one_tick(manifest, seed_normalizer, seed_pool, sm);
-            if (!tick)
-                break;
-            if (tick->termination == sim_termination::solved)
-                solutions.push_back(std::move(tick->snapshot));
-        }
-        ASSERT_EQ(solutions.size(), 8u);
         std::set<std::tuple<rule_id, rule_id, rule_id>> seen;
-        for (const TickSnapshot& snap : solutions) {
+        size_t solved_count = 0;
+        while (true) {
+            sm.resume();
+            if (!sm.has_yield())
+                break;
+            if (sm.consume_yield() != sim_termination::solved)
+                continue;
+            ++solved_count;
+            const lemma decision_lemma = manifest.decision_memory_.derive();
+            const lemma resolution_lemma = manifest.resolution_memory_.derive_resolution_lemma();
             std::set<rule_id> f_branch;
-            for (const resolution_lineage* rl : snap.decision_lemma.get_resolutions())
+            for (const resolution_lineage* rl : decision_lemma.get_resolutions())
                 if (rl->idx == rule_id{0} || rl->idx == rule_id{1})
                     f_branch.insert(rl->idx);
-            for (const resolution_lineage* rl : snap.resolution_lemma.get_resolutions())
+            for (const resolution_lineage* rl : resolution_lemma.get_resolutions())
                 if (rl->idx == rule_id{0} || rl->idx == rule_id{1})
                     f_branch.insert(rl->idx);
             std::set<rule_id> g_branch;
-            for (const resolution_lineage* rl : snap.decision_lemma.get_resolutions())
+            for (const resolution_lineage* rl : decision_lemma.get_resolutions())
                 if (rl->idx == rule_id{2} || rl->idx == rule_id{3})
                     g_branch.insert(rl->idx);
-            for (const resolution_lineage* rl : snap.resolution_lemma.get_resolutions())
+            for (const resolution_lineage* rl : resolution_lemma.get_resolutions())
                 if (rl->idx == rule_id{2} || rl->idx == rule_id{3})
                     g_branch.insert(rl->idx);
             std::set<rule_id> h_branch;
-            for (const resolution_lineage* rl : snap.decision_lemma.get_resolutions())
+            for (const resolution_lineage* rl : decision_lemma.get_resolutions())
                 if (rl->idx == rule_id{4} || rl->idx == rule_id{5})
                     h_branch.insert(rl->idx);
-            for (const resolution_lineage* rl : snap.resolution_lemma.get_resolutions())
+            for (const resolution_lineage* rl : resolution_lemma.get_resolutions())
                 if (rl->idx == rule_id{4} || rl->idx == rule_id{5})
                     h_branch.insert(rl->idx);
             ASSERT_EQ(f_branch.size(), 1u);
@@ -1663,6 +1590,7 @@ TEST_F(BasicManifestIntegrationTest, SolverEnumeratesEightThreeGoalGroundCombina
             ASSERT_EQ(h_branch.size(), 1u);
             seen.insert({*f_branch.begin(), *g_branch.begin(), *h_branch.begin()});
         }
+        ASSERT_EQ(solved_count, 8u);
         EXPECT_TRUE(seen.contains({rule_id{0}, rule_id{2}, rule_id{4}}));
         EXPECT_TRUE(seen.contains({rule_id{0}, rule_id{2}, rule_id{5}}));
         EXPECT_TRUE(seen.contains({rule_id{0}, rule_id{3}, rule_id{4}}));
@@ -1696,22 +1624,22 @@ TEST_F(BasicManifestIntegrationTest, SolverEnumeratesFourVarBindingSolutions) {
     database.push(rule{&head3, {}});
 
     basic_manifest manifest{database, initial_goals, kMaxResolutions, kSeed};
-    bind_normalizer(manifest);
+    normalizer normalizer{manifest.loc_};
     const uint32_t idx_a = manifest.var_sequencer_.next();
     const expr* var_a = manifest.expr_pool_.make(idx_a);
     initial_goals.push(manifest.expr_pool_.make("f", {var_a}));
 
-    const expr* abc_saved = import_saved(abc);
-    const expr* xyz_saved = import_saved(xyz);
-    const expr* def_saved = import_saved(def);
-    const expr* ghi_saved = import_saved(ghi);
+    const expr* abc_saved = saved_expr_pool_.import(&abc);
+    const expr* xyz_saved = saved_expr_pool_.import(&xyz);
+    const expr* def_saved = saved_expr_pool_.import(&def);
+    const expr* ghi_saved = saved_expr_pool_.import(&ghi);
     next_until_refuted(
-        manifest, *normalizer_, *saved_expr_pool_,
+        manifest.solver_,
         {{abc_saved}, {xyz_saved}, {def_saved}, {ghi_saved}},
-        [idx_a](const TickSnapshot& snap) -> solution {
-            return {snap.var_bindings.at(idx_a)};
-        },
-        {idx_a});
+        [&]() -> solution {
+            return {saved_expr_pool_.import(
+                normalizer.normalize(manifest.expr_pool_.make(idx_a)))};
+        });
 }
 
 TEST_F(BasicManifestIntegrationTest, SolverEnumeratesFourClauseBodyFactChoices) {
@@ -1742,24 +1670,24 @@ TEST_F(BasicManifestIntegrationTest, SolverEnumeratesFourClauseBodyFactChoices) 
     database.push(rule{&g_fact4, {}});
 
     basic_manifest manifest{database, initial_goals, kMaxResolutions, kSeed};
-    bind_normalizer(manifest);
     auto sm = manifest.solver_.solve();
     std::set<rule_id> seen;
     std::set<rule_id> visited;
     while (seen.size() < 4u) {
         rule_id fact;
         do {
-            std::optional<SimTerminationResult> tick =
-                run_one_tick(manifest, *normalizer_, *saved_expr_pool_, sm);
-            ASSERT_TRUE(tick.has_value());
-            if (tick->termination != sim_termination::solved)
+            sm.resume();
+            ASSERT_TRUE(sm.has_yield());
+            if (sm.consume_yield() != sim_termination::solved)
                 continue;
+            const lemma decision_lemma = manifest.decision_memory_.derive();
+            const lemma resolution_lemma = manifest.resolution_memory_.derive_resolution_lemma();
             std::set<rule_id> g_fact;
-            for (const resolution_lineage* rl : tick->snapshot.decision_lemma.get_resolutions())
+            for (const resolution_lineage* rl : decision_lemma.get_resolutions())
                 if (rl->idx == rule_id{1} || rl->idx == rule_id{2} || rl->idx == rule_id{3}
                     || rl->idx == rule_id{4})
                     g_fact.insert(rl->idx);
-            for (const resolution_lineage* rl : tick->snapshot.resolution_lemma.get_resolutions())
+            for (const resolution_lineage* rl : resolution_lemma.get_resolutions())
                 if (rl->idx == rule_id{1} || rl->idx == rule_id{2} || rl->idx == rule_id{3}
                     || rl->idx == rule_id{4})
                     g_fact.insert(rl->idx);
@@ -1770,12 +1698,13 @@ TEST_F(BasicManifestIntegrationTest, SolverEnumeratesFourClauseBodyFactChoices) 
         seen.insert(fact);
     }
     EXPECT_THAT(seen, UnorderedElementsAre(rule_id{1}, rule_id{2}, rule_id{3}, rule_id{4}));
-    std::optional<SimTerminationResult> tick;
-    do {
-        tick = run_one_tick(manifest, *normalizer_, *saved_expr_pool_, sm);
-        if (tick && tick->termination == sim_termination::solved)
+    while (true) {
+        sm.resume();
+        if (!sm.has_yield())
+            break;
+        if (sm.consume_yield() == sim_termination::solved)
             FAIL() << "unexpected extra solution after exhausting search space";
-    } while (tick.has_value());
+    }
 }
 
 TEST_F(BasicManifestIntegrationTest, SolverEnumeratesManySharedVarGroundHeads) {
@@ -1836,33 +1765,35 @@ TEST_F(BasicManifestIntegrationTest, SolverEnumeratesManySharedVarGroundHeads) {
         seed_goals.push(manifest.expr_pool_.make("f", {}));
         seed_goals.push(manifest.expr_pool_.make("g", {var_a, var_b, var_c}));
 
-        const std::set<uint32_t> tracked{idx_a, idx_b, idx_c};
         auto sm = manifest.solver_.solve();
-        std::vector<TickSnapshot> solutions;
-        while (true) {
-            std::optional<SimTerminationResult> tick =
-                run_one_tick(manifest, seed_normalizer, seed_pool, sm, tracked);
-            if (!tick)
-                break;
-            if (tick->termination == sim_termination::solved)
-                solutions.push_back(std::move(tick->snapshot));
-        }
-        ASSERT_EQ(solutions.size(), kRawSolutions);
+        std::vector<solution> binding_solutions;
         std::set<std::pair<rule_id, rule_id>> seen;
-        for (const TickSnapshot& snap : solutions) {
+        while (true) {
+            sm.resume();
+            if (!sm.has_yield())
+                break;
+            if (sm.consume_yield() != sim_termination::solved)
+                continue;
+            binding_solutions.push_back({
+                seed_pool.import(seed_normalizer.normalize(var_a)),
+                seed_pool.import(seed_normalizer.normalize(var_b)),
+                seed_pool.import(seed_normalizer.normalize(var_c)),
+            });
+            const lemma decision_lemma = manifest.decision_memory_.derive();
+            const lemma resolution_lemma = manifest.resolution_memory_.derive_resolution_lemma();
             std::set<rule_id> f_branch;
-            for (const resolution_lineage* rl : snap.decision_lemma.get_resolutions())
+            for (const resolution_lineage* rl : decision_lemma.get_resolutions())
                 if (rl->idx == rule_id{0} || rl->idx == rule_id{1})
                     f_branch.insert(rl->idx);
-            for (const resolution_lineage* rl : snap.resolution_lemma.get_resolutions())
+            for (const resolution_lineage* rl : resolution_lemma.get_resolutions())
                 if (rl->idx == rule_id{0} || rl->idx == rule_id{1})
                     f_branch.insert(rl->idx);
             std::set<rule_id> g_branch;
-            for (const resolution_lineage* rl : snap.decision_lemma.get_resolutions())
+            for (const resolution_lineage* rl : decision_lemma.get_resolutions())
                 if (rl->idx == rule_id{2} || rl->idx == rule_id{3} || rl->idx == rule_id{4}
                     || rl->idx == rule_id{5} || rl->idx == rule_id{6})
                     g_branch.insert(rl->idx);
-            for (const resolution_lineage* rl : snap.resolution_lemma.get_resolutions())
+            for (const resolution_lineage* rl : resolution_lemma.get_resolutions())
                 if (rl->idx == rule_id{2} || rl->idx == rule_id{3} || rl->idx == rule_id{4}
                     || rl->idx == rule_id{5} || rl->idx == rule_id{6})
                     g_branch.insert(rl->idx);
@@ -1870,6 +1801,7 @@ TEST_F(BasicManifestIntegrationTest, SolverEnumeratesManySharedVarGroundHeads) {
             ASSERT_EQ(g_branch.size(), 1u);
             seen.insert({*f_branch.begin(), *g_branch.begin()});
         }
+        ASSERT_EQ(binding_solutions.size(), kRawSolutions);
         EXPECT_TRUE(seen.contains({rule_id{0}, rule_id{2}}));
         EXPECT_TRUE(seen.contains({rule_id{0}, rule_id{3}}));
         EXPECT_TRUE(seen.contains({rule_id{0}, rule_id{4}}));
@@ -1893,9 +1825,9 @@ TEST_F(BasicManifestIntegrationTest, SolverEnumeratesManySharedVarGroundHeads) {
         size_t saw_ghi = 0;
         size_t saw_jkl = 0;
         size_t saw_mno = 0;
-        for (const TickSnapshot& snap : solutions) {
-            ASSERT_EQ(snap.var_bindings.size(), 3u);
-            const expr& a_bound = *snap.var_bindings.at(idx_a);
+        for (const solution& s : binding_solutions) {
+            ASSERT_EQ(s.size(), 3u);
+            const expr& a_bound = *s[0];
             if (a_bound == *abc_saved)
                 ++saw_abc;
             else if (a_bound == *def_saved)
@@ -1908,8 +1840,8 @@ TEST_F(BasicManifestIntegrationTest, SolverEnumeratesManySharedVarGroundHeads) {
                 ++saw_mno;
             else
                 FAIL() << "unexpected binding for idx_a";
-            EXPECT_EQ(*snap.var_bindings.at(idx_b), *xyz_saved);
-            EXPECT_EQ(*snap.var_bindings.at(idx_c), *pqr_saved);
+            EXPECT_EQ(*s[1], *xyz_saved);
+            EXPECT_EQ(*s[2], *pqr_saved);
         }
         EXPECT_EQ(saw_abc, 2u);
         EXPECT_EQ(saw_def, 2u);
