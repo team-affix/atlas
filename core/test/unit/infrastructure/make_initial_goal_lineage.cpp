@@ -30,3 +30,10 @@ TEST_F(MakeInitialGoalLineageTest, MakeUsesNullParent) {
     EXPECT_CALL(make_goal_lineage, make_goal_lineage(nullptr, kIdx)).WillOnce(Return(&gl0));
     EXPECT_EQ(maker.make(kIdx), &gl0);
 }
+
+TEST_F(MakeInitialGoalLineageTest, MakeForSecondSubgoalForwardsIndex) {
+    static constexpr subgoal_id kAltIdx = 2;
+    goal_lineage gl2{nullptr, kAltIdx};
+    EXPECT_CALL(make_goal_lineage, make_goal_lineage(nullptr, kAltIdx)).WillOnce(Return(&gl2));
+    EXPECT_EQ(maker.make(kAltIdx), &gl2);
+}

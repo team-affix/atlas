@@ -25,3 +25,19 @@ TEST_F(DeactivatedCandidateMemoryTest, ClearRemovesAll) {
     memory.clear();
     EXPECT_FALSE(memory.contains(&rl));
 }
+
+TEST_F(DeactivatedCandidateMemoryTest, DuplicateInsertIsIdempotent) {
+    memory.insert(&rl);
+    memory.insert(&rl);
+    EXPECT_TRUE(memory.contains(&rl));
+}
+
+TEST_F(DeactivatedCandidateMemoryTest, DistinctLineagesTrackedIndependently) {
+    goal_lineage parent2{nullptr, 1};
+    resolution_lineage rl2{&parent2, 0};
+    memory.insert(&rl);
+    EXPECT_FALSE(memory.contains(&rl2));
+    memory.insert(&rl2);
+    EXPECT_TRUE(memory.contains(&rl));
+    EXPECT_TRUE(memory.contains(&rl2));
+}

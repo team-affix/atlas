@@ -16,3 +16,19 @@ TEST_F(BindMapFactoryTest, MakeReturnsBindMapThatResolvesBindings) {
     bm->bind(0, &func);
     EXPECT_EQ(bm->whnf(&var0), &func);
 }
+
+TEST_F(BindMapFactoryTest, MakeReturnsIndependentInstances) {
+    std::unique_ptr<i_bind_map> bm0 = factory.make();
+    std::unique_ptr<i_bind_map> bm1 = factory.make();
+    ASSERT_NE(bm0, nullptr);
+    ASSERT_NE(bm1, nullptr);
+    bm0->bind(0, &func);
+    EXPECT_EQ(bm0->whnf(&var0), &func);
+    EXPECT_EQ(bm1->whnf(&var0), &var0);
+}
+
+TEST_F(BindMapFactoryTest, FreshMapHasEmptyBindings) {
+    std::unique_ptr<i_bind_map> bm = factory.make();
+    ASSERT_NE(bm, nullptr);
+    EXPECT_EQ(bm->whnf(&var0), &var0);
+}

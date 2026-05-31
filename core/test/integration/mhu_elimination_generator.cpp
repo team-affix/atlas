@@ -471,6 +471,17 @@ TEST_F(MhuEliminationGeneratorIntegrationTest, TryAddHeadOnSameLineageTwiceThrow
     EXPECT_THROW(mhu->try_add_head(rl, &goal, &head_g), std::logic_error);
 }
 
+TEST_F(MhuEliminationGeneratorIntegrationTest, ConstrainWithoutRegisteredHeadThrowsOutOfRange) {
+    goal_lineage* gl = const_cast<goal_lineage*>(lp.make_goal_lineage(nullptr, 0));
+    resolution_lineage* rl =
+        const_cast<resolution_lineage*>(lp.make_resolution_lineage(gl, rule_id{0}));
+    ggcr.link_goal_candidate(gl, rule_id{0});
+
+    EXPECT_THROW(
+        (void)collect_elims(mhu->constrain(rl)),
+        std::out_of_range);
+}
+
 TEST_F(MhuEliminationGeneratorIntegrationTest, ConstrainPublishesTwoRepsToCommon) {
     expr var0{expr::var{0}};
     expr var1{expr::var{1}};

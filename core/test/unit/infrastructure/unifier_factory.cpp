@@ -8,6 +8,7 @@
 #include "interfaces/i_bind_map.hpp"
 
 using ::testing::Return;
+using ::testing::_;
 
 namespace {
 
@@ -34,6 +35,8 @@ struct UnifierFactoryTest : public ::testing::Test {
     MockBindMap bind_map;
     expr var0{expr::var{0}};
     expr var1{expr::var{1}};
+    expr func_f{expr::functor{"f", {}}};
+    expr func_g{expr::functor{"g", {}}};
 };
 
 TEST_F(UnifierFactoryTest, MakeProducesUnifierThatUnifiesViaBindMap) {
@@ -43,4 +46,13 @@ TEST_F(UnifierFactoryTest, MakeProducesUnifierThatUnifiesViaBindMap) {
     ASSERT_NE(u, nullptr);
     std::unordered_set<uint32_t> vars_touched;
     EXPECT_TRUE(run_unify(*u, &var0, &var1, vars_touched));
+}
+
+TEST_F(UnifierFactoryTest, MakeProducesUnifierThatReportsUnifyFailure) {
+    EXPECT_CALL(bind_map, whnf).WillRepeatedly([](const expr* e) { return e; });
+    EXPECT_CALL(bind_map, bind(_, _)).Times(0);
+    std::unique_ptr<i_unifier> u = factory.make(bind_map);
+    ASSERT_NE(u, nullptr);
+    std::unordered_set<uint32_t> vars_touched;
+    EXPECT_FALSE(run_unify(*u, &func_f, &func_g, vars_touched));
 }

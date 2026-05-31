@@ -23,3 +23,13 @@ TEST_F(VarNamesTest, DifferentIndicesHaveIndependentNames) {
     EXPECT_EQ(names.name(2), "b");
     EXPECT_FALSE(names.is_named(0));
 }
+
+TEST_F(VarNamesTest, NameOnUnnamedIndexThrows) {
+    EXPECT_THROW(names.name(0), std::out_of_range);
+}
+
+TEST_F(VarNamesTest, SetNameDoesNotOverwriteExisting) {
+    names.set_name(1, "first");
+    names.set_name(1, "second");
+    EXPECT_EQ(names.name(1), "first");
+}

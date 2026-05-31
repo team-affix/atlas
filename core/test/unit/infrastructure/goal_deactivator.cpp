@@ -73,3 +73,11 @@ TEST_F(GoalDeactivatorTest, DeactivateUsesGivenGoalLineage) {
     EXPECT_TRUE(unset_expr);
     EXPECT_TRUE(erased_active);
 }
+
+TEST_F(GoalDeactivatorTest, SecondDeactivateStillInvokesAllCollaborators) {
+    EXPECT_CALL(erase_goal_candidates, erase(&gl)).Times(2);
+    EXPECT_CALL(unset_goal_expr, unset(&gl)).Times(2);
+    EXPECT_CALL(erase_active_goal, erase_active_goal(&gl)).Times(2);
+    deactivator.deactivate(&gl);
+    deactivator.deactivate(&gl);
+}

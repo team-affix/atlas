@@ -34,3 +34,19 @@ TEST_F(TrackedIntTest, MutateChangesValue) {
     strict_v.mutate(std::make_unique<backtrackable_increment<int>>());
     EXPECT_EQ(strict_v.get(), 11);
 }
+
+TEST_F(TrackedIntTest, MutateLogsBacktrackableThatRevertsOnBacktrack) {
+    StrictMock<MockTrail> strict_trail;
+    tracked<int> strict_v{strict_trail, 10};
+    std::unique_ptr<i_backtrackable> logged;
+
+    EXPECT_CALL(strict_trail, log(_))
+        .WillOnce([&logged](std::unique_ptr<i_backtrackable> m) {
+            logged = std::move(m);
+        });
+    strict_v.mutate(std::make_unique<backtrackable_increment<int>>());
+    ASSERT_EQ(strict_v.get(), 11);
+    ASSERT_NE(logged, nullptr);
+    logged->backtrack();
+    EXPECT_EQ(strict_v.get(), 10);
+}

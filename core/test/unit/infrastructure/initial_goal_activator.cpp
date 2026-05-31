@@ -60,3 +60,16 @@ TEST_F(InitialGoalActivatorTest, ActivatesOneInitialGoal) {
 
     activator.activate_initial_goal(kIdx);
 }
+
+TEST_F(InitialGoalActivatorTest, ActivatesDifferentSubgoalIndex) {
+    static constexpr subgoal_id kAltIdx = 3;
+    expr e3{expr::var{3}};
+    goal_lineage gl3{nullptr, kAltIdx};
+
+    EXPECT_CALL(get_initial_goal_expr, get(kAltIdx)).WillOnce(Return(&e3));
+    EXPECT_CALL(make_initial_goal_lineage, make(kAltIdx)).WillOnce(Return(&gl3));
+    EXPECT_CALL(set_goal_expr, set(&gl3, &e3)).Times(1);
+    EXPECT_CALL(insert_active_goal, insert_active_goal(&gl3)).Times(1);
+
+    activator.activate_initial_goal(kAltIdx);
+}

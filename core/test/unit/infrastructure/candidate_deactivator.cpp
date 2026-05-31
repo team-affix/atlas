@@ -81,3 +81,11 @@ TEST_F(CandidateDeactivatorTest, DeactivateUsesResolutionParentAndRuleIndex) {
     EXPECT_TRUE(unset);
     EXPECT_TRUE(recorded);
 }
+
+TEST_F(CandidateDeactivatorTest, SecondDeactivateStillInvokesAllCollaborators) {
+    EXPECT_CALL(unlink, unlink_goal_candidate(&parent, kRule)).Times(2);
+    EXPECT_CALL(unset_maps, unset(&rl)).Times(2);
+    EXPECT_CALL(memory, insert(&rl)).Times(2);
+    deactivator.deactivate(&rl);
+    deactivator.deactivate(&rl);
+}
