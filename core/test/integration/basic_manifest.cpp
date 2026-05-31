@@ -78,13 +78,14 @@ namespace {
 
 using solution = std::vector<const expr*>;
 
-void print_solved_binding(
+void print_solution(
+    size_t solution_index,
     i_expr_printer& printer,
     size_t iterations_since_last,
     i_get_decision_count& decision_count,
     i_get_resolution_count& resolution_count,
     const solution& s) {
-    std::cout << iterations_since_last << " iterations, "
+    std::cout << "solution " << solution_index << ", " << iterations_since_last << " iterations, "
               << resolution_count.get_resolution_count() << " resolutions, "
               << decision_count.count() << " decisions\n";
 
@@ -105,6 +106,7 @@ void enumerate_all_solutions(
     auto sm = solver.solve();
     std::set<solution> visited;
     size_t iterations_since_last = 0;
+    size_t solution_index = 0;
     while (!expected.empty()) {
         solution s;
         do {
@@ -114,8 +116,13 @@ void enumerate_all_solutions(
             if (sm.consume_yield() != sim_termination::solved)
                 continue;
             s = get_solution();
-            print_solved_binding(
-                printer, iterations_since_last, decision_count, resolution_count, s);
+            print_solution(
+                solution_index++,
+                printer,
+                iterations_since_last,
+                decision_count,
+                resolution_count,
+                s);
             iterations_since_last = 0;
         } while (visited.count(s));
         auto it = expected.find(s);
@@ -135,6 +142,7 @@ void next_until_refuted(
     auto sm = solver.solve();
     std::set<solution> visited;
     size_t iterations_since_last = 0;
+    size_t solution_index = 0;
     while (true) {
         sm.resume();
         ++iterations_since_last;
@@ -143,8 +151,13 @@ void next_until_refuted(
         if (sm.consume_yield() != sim_termination::solved)
             continue;
         const solution s = get_solution();
-        print_solved_binding(
-            printer, iterations_since_last, decision_count, resolution_count, s);
+        print_solution(
+            solution_index++,
+            printer,
+            iterations_since_last,
+            decision_count,
+            resolution_count,
+            s);
         iterations_since_last = 0;
         if (visited.count(s))
             continue;
