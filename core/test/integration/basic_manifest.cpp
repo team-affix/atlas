@@ -697,36 +697,40 @@ TEST_F(BasicManifestIntegrationTest, TickBacklogsEliminationForInactiveGoal) {
 
 TEST_F(BasicManifestIntegrationTest, BackloggedCandidateAlreadyDeactivatedOnReelimination) {
     /*
-     * Intent: candidate backlogged before sim (never linked); later elimination of same candidate
+     * Intent: g/1 backlogged before sim (never linked); CDCL elimination of g/1 after f/0 resolves
      * must return already_deactivated, not throw on unlink.
-     * initial goals: f.
+     * initial goals: f.  g.
      * rules:
-     *   0: f.   1: f.
-     * setup: backlog rule 1 before solve (active goal, rule 1 not in frontier).
+     *   0: f.   1: g.   2: g.
+     * setup: backlog (f, rule_id{1}); learn {f/0, g/1} (f unit; g keeps rule 2).
      */
-    const expr* goal = saved_expr_pool_.make("f", {});
-    const expr* f0 = saved_expr_pool_.make("f", {});
-    const expr* f1 = saved_expr_pool_.make("f", {});
-    initial_goals.push(goal);
-    database.push(rule{f0, {}});
-    database.push(rule{f1, {}});
+    const expr* goal_f = saved_expr_pool_.make("f", {});
+    const expr* goal_g = saved_expr_pool_.make("g", {});
+    const expr* f_head0 = saved_expr_pool_.make("f", {});
+    const expr* g_head1 = saved_expr_pool_.make("g", {});
+    const expr* g_head2 = saved_expr_pool_.make("g", {});
+    initial_goals.push(goal_f);
+    initial_goals.push(goal_g);
+    database.push(rule{f_head0, {}});
+    database.push(rule{g_head1, {}});
+    database.push(rule{g_head2, {}});
 
     basic_manifest manifest{database, initial_goals, kMaxResolutions, kSeed};
-    const goal_lineage* gl = manifest.make_initial_goal_lineage_.make(0);
-    const resolution_lineage* rl1 =
-        manifest.lineage_pool_.make_resolution_lineage(gl, rule_id{1});
-    manifest.elimination_backlog_.insert_backlogged_elimination(rl1);
+    const goal_lineage* gl_f = manifest.make_initial_goal_lineage_.make(0);
+    const goal_lineage* gl_g = manifest.make_initial_goal_lineage_.make(1);
+    const resolution_lineage* rl_f_0 =
+        manifest.lineage_pool_.make_resolution_lineage(gl_f, rule_id{0});
+    const resolution_lineage* rl_f_1 =
+        manifest.lineage_pool_.make_resolution_lineage(gl_f, rule_id{1});
+    const resolution_lineage* rl_g_1 =
+        manifest.lineage_pool_.make_resolution_lineage(gl_g, rule_id{1});
+    manifest.elimination_backlog_.insert_backlogged_elimination(rl_f_1);
+    manifest.cdcl_.learn(lemma{{rl_f_0, rl_g_1}});
 
     auto sm = manifest.solver_.solve();
-    bool saw_solved = false;
-    while (true) {
-        sm.resume();
-        if (!sm.has_yield())
-            break;
-        if (sm.consume_yield() == sim_termination::solved)
-            saw_solved = true;
-    }
-    EXPECT_TRUE(saw_solved);
+    sm.resume();
+    ASSERT_TRUE(sm.has_yield());
+    ASSERT_EQ(sm.consume_yield(), sim_termination::solved);
 }
 
 TEST_F(BasicManifestIntegrationTest, TickDecisionLemmaLineagesPinnedBeforeTrim) {
