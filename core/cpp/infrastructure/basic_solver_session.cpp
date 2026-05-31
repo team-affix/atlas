@@ -7,8 +7,7 @@ basic_solver_session::basic_solver_session(
     uint32_t random_seed)
     : manifest_(database, goals, max_resolutions, random_seed),
       normalizer_(manifest_.loc_),
-      search_(manifest_.solver_.solve()),
-      solved_(false) {}
+      search_(manifest_.solver_.solve()) {}
 
 bool basic_solver_session::next() {
     if (search_.done())

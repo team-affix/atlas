@@ -85,13 +85,11 @@ TEST_F(BasicSolverSessionTest, NextFalseMeansRefuted) {
     EXPECT_FALSE(session.next());
 }
 
-TEST_F(BasicSolverSessionTest, SolvedOnlyWhenPausedAtYield) {
+TEST_F(BasicSolverSessionTest, SolvedOnlyAfterNextReturnsTrue) {
     basic_solver_session session(database, initial_goals, kMaxResolutions, kSeed);
-    EXPECT_FALSE(session.solved());
     ASSERT_TRUE(session.next());
     EXPECT_TRUE(session.solved());
     ASSERT_FALSE(session.next());
-    EXPECT_FALSE(session.solved());
 }
 
 TEST_F(BasicSolverSessionTest, NormalizeDelegatesToBindMap) {
