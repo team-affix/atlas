@@ -1,6 +1,6 @@
 // Integration: basic_manifest — wiring, sim lifecycle, cross-tick solver interop.
 //
-// Harness: run_solver / snapshot_at_yield, expect_enumeration_complete.
+// Harness: run_solver / snapshot_at_yield.
 // Enumeration and binding expectations are written explicitly in each test.
 //
 // Bug policy (docs/testing.md): failing tests indicate suspected production bugs
@@ -147,17 +147,6 @@ SolverRun run_solver(
     return run;
 }
 
-void expect_enumeration_complete(const SolverRun& run, size_t expected_solutions) {
-    ASSERT_EQ(run.solutions.size(), expected_solutions);
-    EXPECT_EQ(std::ranges::count(run.terminations, sim_termination::solved), expected_solutions);
-    EXPECT_TRUE(run.completed);
-}
-
-template<typename Iface, typename Concrete>
-void expect_same_instance(Concrete& concrete, locator& loc) {
-    EXPECT_EQ(static_cast<Iface*>(&concrete), &loc.locate<Iface>());
-}
-
 }  // namespace
 
 // ---------------------------------------------------------------------------
@@ -208,7 +197,7 @@ TEST_F(BasicManifestIntegrationTest, WiringCdclIsLearnAvoidanceNotJoint) {
      * rules: (none)
      */
     basic_manifest manifest{database, initial_goals, kMaxResolutions, kSeed};
-    expect_same_instance<i_learn_avoidance>(manifest.cdcl_, manifest.loc_);
+    EXPECT_EQ(static_cast<i_learn_avoidance *>(&manifest.cdcl_), &manifest.loc_.locate<i_learn_avoidance>());
     EXPECT_NE(static_cast<void*>(&manifest.loc_.locate<i_learn_avoidance>()),
         static_cast<void*>(&manifest.loc_.locate<i_elimination_generator>()));
 }
@@ -220,7 +209,7 @@ TEST_F(BasicManifestIntegrationTest, WiringJointIsEliminationGeneratorNotCdcl) {
      * rules: (none)
      */
     basic_manifest manifest{database, initial_goals, kMaxResolutions, kSeed};
-    expect_same_instance<i_elimination_generator>(manifest.joint_, manifest.loc_);
+    EXPECT_EQ(static_cast<i_elimination_generator *>(&manifest.joint_), &manifest.loc_.locate<i_elimination_generator>());
 }
 
 TEST_F(BasicManifestIntegrationTest, WiringTrailSharedForPushPopLog) {
@@ -230,9 +219,9 @@ TEST_F(BasicManifestIntegrationTest, WiringTrailSharedForPushPopLog) {
      * rules: (none)
      */
     basic_manifest manifest{database, initial_goals, kMaxResolutions, kSeed};
-    expect_same_instance<i_push_trail_frame>(manifest.trail_, manifest.loc_);
-    expect_same_instance<i_pop_trail_frame>(manifest.trail_, manifest.loc_);
-    expect_same_instance<i_log_to_current_trail_frame>(manifest.trail_, manifest.loc_);
+    EXPECT_EQ(static_cast<i_push_trail_frame *>(&manifest.trail_), &manifest.loc_.locate<i_push_trail_frame>());
+    EXPECT_EQ(static_cast<i_pop_trail_frame *>(&manifest.trail_), &manifest.loc_.locate<i_pop_trail_frame>());
+    EXPECT_EQ(static_cast<i_log_to_current_trail_frame *>(&manifest.trail_), &manifest.loc_.locate<i_log_to_current_trail_frame>());
 }
 
 TEST_F(BasicManifestIntegrationTest, WiringDecisionMemorySharedForRecordCountDerive) {
@@ -242,10 +231,10 @@ TEST_F(BasicManifestIntegrationTest, WiringDecisionMemorySharedForRecordCountDer
      * rules: (none)
      */
     basic_manifest manifest{database, initial_goals, kMaxResolutions, kSeed};
-    expect_same_instance<i_record_decision>(manifest.decision_memory_, manifest.loc_);
-    expect_same_instance<i_clear_recorded_decisions>(manifest.decision_memory_, manifest.loc_);
-    expect_same_instance<i_get_decision_count>(manifest.decision_memory_, manifest.loc_);
-    expect_same_instance<i_derive_decision_lemma>(manifest.decision_memory_, manifest.loc_);
+    EXPECT_EQ(static_cast<i_record_decision *>(&manifest.decision_memory_), &manifest.loc_.locate<i_record_decision>());
+    EXPECT_EQ(static_cast<i_clear_recorded_decisions *>(&manifest.decision_memory_), &manifest.loc_.locate<i_clear_recorded_decisions>());
+    EXPECT_EQ(static_cast<i_get_decision_count *>(&manifest.decision_memory_), &manifest.loc_.locate<i_get_decision_count>());
+    EXPECT_EQ(static_cast<i_derive_decision_lemma *>(&manifest.decision_memory_), &manifest.loc_.locate<i_derive_decision_lemma>());
 }
 
 TEST_F(BasicManifestIntegrationTest, WiringSimSharedForSetUpRunTearDown) {
@@ -255,9 +244,9 @@ TEST_F(BasicManifestIntegrationTest, WiringSimSharedForSetUpRunTearDown) {
      * rules: (none)
      */
     basic_manifest manifest{database, initial_goals, kMaxResolutions, kSeed};
-    expect_same_instance<i_set_up_sim>(manifest.sim_, manifest.loc_);
-    expect_same_instance<i_tear_down_sim>(manifest.sim_, manifest.loc_);
-    expect_same_instance<i_run_sim>(manifest.sim_, manifest.loc_);
+    EXPECT_EQ(static_cast<i_set_up_sim *>(&manifest.sim_), &manifest.loc_.locate<i_set_up_sim>());
+    EXPECT_EQ(static_cast<i_tear_down_sim *>(&manifest.sim_), &manifest.loc_.locate<i_tear_down_sim>());
+    EXPECT_EQ(static_cast<i_run_sim *>(&manifest.sim_), &manifest.loc_.locate<i_run_sim>());
 }
 
 TEST_F(BasicManifestIntegrationTest, WiringMhuSharedForHeadOps) {
@@ -267,8 +256,8 @@ TEST_F(BasicManifestIntegrationTest, WiringMhuSharedForHeadOps) {
      * rules: (none)
      */
     basic_manifest manifest{database, initial_goals, kMaxResolutions, kSeed};
-    expect_same_instance<i_try_add_mhu_head>(manifest.mhu_, manifest.loc_);
-    expect_same_instance<i_clear_mhu_heads>(manifest.mhu_, manifest.loc_);
+    EXPECT_EQ(static_cast<i_try_add_mhu_head *>(&manifest.mhu_), &manifest.loc_.locate<i_try_add_mhu_head>());
+    EXPECT_EQ(static_cast<i_clear_mhu_heads *>(&manifest.mhu_), &manifest.loc_.locate<i_clear_mhu_heads>());
 }
 
 TEST_F(BasicManifestIntegrationTest, WiringLineagePoolSharedForMakePinTrim) {
@@ -278,11 +267,11 @@ TEST_F(BasicManifestIntegrationTest, WiringLineagePoolSharedForMakePinTrim) {
      * rules: (none)
      */
     basic_manifest manifest{database, initial_goals, kMaxResolutions, kSeed};
-    expect_same_instance<i_make_goal_lineage>(manifest.lineage_pool_, manifest.loc_);
-    expect_same_instance<i_make_resolution_lineage>(manifest.lineage_pool_, manifest.loc_);
-    expect_same_instance<i_pin_goal_lineage>(manifest.lineage_pool_, manifest.loc_);
-    expect_same_instance<i_pin_resolution_lineage>(manifest.lineage_pool_, manifest.loc_);
-    expect_same_instance<i_trim_unpinned_lineages>(manifest.lineage_pool_, manifest.loc_);
+    EXPECT_EQ(static_cast<i_make_goal_lineage *>(&manifest.lineage_pool_), &manifest.loc_.locate<i_make_goal_lineage>());
+    EXPECT_EQ(static_cast<i_make_resolution_lineage *>(&manifest.lineage_pool_), &manifest.loc_.locate<i_make_resolution_lineage>());
+    EXPECT_EQ(static_cast<i_pin_goal_lineage *>(&manifest.lineage_pool_), &manifest.loc_.locate<i_pin_goal_lineage>());
+    EXPECT_EQ(static_cast<i_pin_resolution_lineage *>(&manifest.lineage_pool_), &manifest.loc_.locate<i_pin_resolution_lineage>());
+    EXPECT_EQ(static_cast<i_trim_unpinned_lineages *>(&manifest.lineage_pool_), &manifest.loc_.locate<i_trim_unpinned_lineages>());
 }
 
 TEST_F(BasicManifestIntegrationTest, WiringSolverIsISolve) {
@@ -292,7 +281,7 @@ TEST_F(BasicManifestIntegrationTest, WiringSolverIsISolve) {
      * rules: (none)
      */
     basic_manifest manifest{database, initial_goals, kMaxResolutions, kSeed};
-    expect_same_instance<i_solve>(manifest.solver_, manifest.loc_);
+    EXPECT_EQ(static_cast<i_solve *>(&manifest.solver_), &manifest.loc_.locate<i_solve>());
 }
 
 TEST_F(BasicManifestIntegrationTest, WiringConstructsWithEmptyDbAndNoGoals) {
@@ -312,10 +301,10 @@ TEST_F(BasicManifestIntegrationTest, WiringResolutionMemorySharedForRecordDerive
      * rules: (none)
      */
     basic_manifest manifest{database, initial_goals, kMaxResolutions, kSeed};
-    expect_same_instance<i_record_resolution>(manifest.resolution_memory_, manifest.loc_);
-    expect_same_instance<i_clear_recorded_resolutions>(manifest.resolution_memory_, manifest.loc_);
-    expect_same_instance<i_derive_resolution_lemma>(manifest.resolution_memory_, manifest.loc_);
-    expect_same_instance<i_get_resolution_count>(manifest.resolution_memory_, manifest.loc_);
+    EXPECT_EQ(static_cast<i_record_resolution *>(&manifest.resolution_memory_), &manifest.loc_.locate<i_record_resolution>());
+    EXPECT_EQ(static_cast<i_clear_recorded_resolutions *>(&manifest.resolution_memory_), &manifest.loc_.locate<i_clear_recorded_resolutions>());
+    EXPECT_EQ(static_cast<i_derive_resolution_lemma *>(&manifest.resolution_memory_), &manifest.loc_.locate<i_derive_resolution_lemma>());
+    EXPECT_EQ(static_cast<i_get_resolution_count *>(&manifest.resolution_memory_), &manifest.loc_.locate<i_get_resolution_count>());
 }
 
 TEST_F(BasicManifestIntegrationTest, WiringBindMapSharedForWhnfAndClear) {
@@ -325,8 +314,8 @@ TEST_F(BasicManifestIntegrationTest, WiringBindMapSharedForWhnfAndClear) {
      * rules: (none)
      */
     basic_manifest manifest{database, initial_goals, kMaxResolutions, kSeed};
-    expect_same_instance<i_bind_map>(manifest.bind_map_, manifest.loc_);
-    expect_same_instance<i_clear_bindings>(manifest.bind_map_, manifest.loc_);
+    EXPECT_EQ(static_cast<i_bind_map *>(&manifest.bind_map_), &manifest.loc_.locate<i_bind_map>());
+    EXPECT_EQ(static_cast<i_clear_bindings *>(&manifest.bind_map_), &manifest.loc_.locate<i_clear_bindings>());
 }
 
 TEST_F(BasicManifestIntegrationTest, WiringResolverAndRouterBound) {
@@ -336,8 +325,8 @@ TEST_F(BasicManifestIntegrationTest, WiringResolverAndRouterBound) {
      * rules: (none)
      */
     basic_manifest manifest{database, initial_goals, kMaxResolutions, kSeed};
-    expect_same_instance<i_resolver>(manifest.resolver_, manifest.loc_);
-    expect_same_instance<i_elimination_router>(manifest.elimination_router_, manifest.loc_);
+    EXPECT_EQ(static_cast<i_resolver *>(&manifest.resolver_), &manifest.loc_.locate<i_resolver>());
+    EXPECT_EQ(static_cast<i_elimination_router *>(&manifest.elimination_router_), &manifest.loc_.locate<i_elimination_router>());
 }
 
 TEST_F(BasicManifestIntegrationTest, WiringRandomDecisionGeneratorIsGenerateDecision) {
@@ -347,7 +336,7 @@ TEST_F(BasicManifestIntegrationTest, WiringRandomDecisionGeneratorIsGenerateDeci
      * rules: (none)
      */
     basic_manifest manifest{database, initial_goals, kMaxResolutions, kSeed};
-    expect_same_instance<i_generate_decision>(manifest.random_decision_generator_, manifest.loc_);
+    EXPECT_EQ(static_cast<i_generate_decision *>(&manifest.random_decision_generator_), &manifest.loc_.locate<i_generate_decision>());
 }
 
 TEST_F(BasicManifestIntegrationTest, WiringMaxResolutionsStored) {
@@ -367,10 +356,10 @@ TEST_F(BasicManifestIntegrationTest, WiringBindMapAndExprPoolSharedViaLocator) {
      * rules: (none)
      */
     basic_manifest manifest{database, initial_goals, kMaxResolutions, kSeed};
-    expect_same_instance<i_bind_map>(manifest.bind_map_, manifest.loc_);
-    expect_same_instance<i_bind_map_factory>(manifest.bind_map_factory_, manifest.loc_);
-    expect_same_instance<i_make_functor>(manifest.expr_pool_, manifest.loc_);
-    expect_same_instance<i_import_expr>(manifest.expr_pool_, manifest.loc_);
+    EXPECT_EQ(static_cast<i_bind_map *>(&manifest.bind_map_), &manifest.loc_.locate<i_bind_map>());
+    EXPECT_EQ(static_cast<i_bind_map_factory *>(&manifest.bind_map_factory_), &manifest.loc_.locate<i_bind_map_factory>());
+    EXPECT_EQ(static_cast<i_make_functor *>(&manifest.expr_pool_), &manifest.loc_.locate<i_make_functor>());
+    EXPECT_EQ(static_cast<i_import_expr *>(&manifest.expr_pool_), &manifest.loc_.locate<i_import_expr>());
 }
 
 // Tier L — sim lifecycle + subsystems via manifest.sim_
@@ -978,7 +967,8 @@ TEST_F(BasicManifestIntegrationTest, SolverRefutesAfterEnumeratingAllGroundBranc
         seen.insert(*branches.begin());
     }
     EXPECT_THAT(seen, UnorderedElementsAre(rule_id{0}, rule_id{1}));
-    expect_enumeration_complete(run, 2);
+    EXPECT_EQ(std::ranges::count(run.terminations, sim_termination::solved), 2);
+    EXPECT_TRUE(run.completed);
 }
 
 TEST_F(BasicManifestIntegrationTest, SolverFindsClauseDerivedUnitSolution) {
@@ -1194,7 +1184,9 @@ TEST_F(BasicManifestIntegrationTest, SolverRefutesAfterEnumeratingAllVarBranches
     }
     EXPECT_TRUE(saw_abc);
     EXPECT_TRUE(saw_xyz);
-    expect_enumeration_complete(run, 2);
+    ASSERT_EQ(run.solutions.size(), 2u);
+    EXPECT_EQ(std::ranges::count(run.terminations, sim_termination::solved), 2);
+    EXPECT_TRUE(run.completed);
 }
 
 TEST_F(BasicManifestIntegrationTest, SolverEnumeratesTwoGoalSharedVarSolutions) {
@@ -1279,7 +1271,8 @@ TEST_F(BasicManifestIntegrationTest, TickThreeGroundBranchesEnumerateDistinct) {
         seen.insert(*branches.begin());
     }
     EXPECT_THAT(seen, UnorderedElementsAre(rule_id{0}, rule_id{1}, rule_id{2}));
-    expect_enumeration_complete(run, 3);
+    EXPECT_EQ(std::ranges::count(run.terminations, sim_termination::solved), 3);
+    EXPECT_TRUE(run.completed);
 }
 
 TEST_F(BasicManifestIntegrationTest, SimLifecycleTwoSequentialDecisionsOnTwoGoals) {
@@ -1515,7 +1508,8 @@ TEST_F(BasicManifestIntegrationTest, SolverEnumeratesFourTwoGoalGroundCombinatio
     EXPECT_TRUE(seen.contains({rule_id{1}, rule_id{2}}));
     EXPECT_TRUE(seen.contains({rule_id{1}, rule_id{3}}));
     EXPECT_EQ(seen.size(), 4u);
-    expect_enumeration_complete(run, 4);
+    EXPECT_EQ(std::ranges::count(run.terminations, sim_termination::solved), 4);
+    EXPECT_TRUE(run.completed);
 }
 
 TEST_F(BasicManifestIntegrationTest, SolverEnumeratesEightThreeGoalGroundCombinations) {
@@ -1600,7 +1594,8 @@ TEST_F(BasicManifestIntegrationTest, SolverEnumeratesEightThreeGoalGroundCombina
         EXPECT_TRUE(seen.contains({rule_id{1}, rule_id{3}, rule_id{4}}));
         EXPECT_TRUE(seen.contains({rule_id{1}, rule_id{3}, rule_id{5}}));
         EXPECT_EQ(seen.size(), 8u);
-        expect_enumeration_complete(run, 8);
+        EXPECT_EQ(std::ranges::count(run.terminations, sim_termination::solved), 8);
+        EXPECT_TRUE(run.completed);
     }
 }
 
@@ -1658,7 +1653,9 @@ TEST_F(BasicManifestIntegrationTest, SolverEnumeratesFourVarBindingSolutions) {
     EXPECT_TRUE(saw_xyz);
     EXPECT_TRUE(saw_def);
     EXPECT_TRUE(saw_ghi);
-    expect_enumeration_complete(run, 4);
+    ASSERT_EQ(run.solutions.size(), 4u);
+    EXPECT_EQ(std::ranges::count(run.terminations, sim_termination::solved), 4);
+    EXPECT_TRUE(run.completed);
 }
 
 TEST_F(BasicManifestIntegrationTest, SolverEnumeratesFourClauseBodyFactChoices) {
@@ -1707,7 +1704,8 @@ TEST_F(BasicManifestIntegrationTest, SolverEnumeratesFourClauseBodyFactChoices) 
         seen.insert(*g_fact.begin());
     }
     EXPECT_THAT(seen, UnorderedElementsAre(rule_id{1}, rule_id{2}, rule_id{3}, rule_id{4}));
-    expect_enumeration_complete(run, 4);
+    EXPECT_EQ(std::ranges::count(run.terminations, sim_termination::solved), 4);
+    EXPECT_TRUE(run.completed);
 }
 
 TEST_F(BasicManifestIntegrationTest, SolverEnumeratesManySharedVarGroundHeads) {
@@ -1839,6 +1837,7 @@ TEST_F(BasicManifestIntegrationTest, SolverEnumeratesManySharedVarGroundHeads) {
         EXPECT_EQ(saw_ghi, 2u);
         EXPECT_EQ(saw_jkl, 2u);
         EXPECT_EQ(saw_mno, 2u);
-        expect_enumeration_complete(run, kRawSolutions);
+        EXPECT_EQ(std::ranges::count(run.terminations, sim_termination::solved), kRawSolutions);
+        EXPECT_TRUE(run.completed);
     }
 }
