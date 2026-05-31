@@ -21,6 +21,11 @@ coroutine<rule_id, void> rule_id_set::iterate() const {
         co_yield r;
 }
 
+rule_id rule_id_set::front() const {
+    DEBUG_ASSERT(!rule_ids_.empty());
+    return *rule_ids_.begin();
+}
+
 size_t rule_id_set::size() const {
     return rule_ids_.size();
 }

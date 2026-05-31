@@ -106,7 +106,8 @@ struct JointEliminationGeneratorUnitTest : public ::testing::Test {
           bind_map_factory_(),
           unifier_factory_(),
           lineage_pool_(),
-          goal_candidate_rules_() {
+          goal_candidate_rules_(),
+          loc() {
         loc.bind_as<i_log_to_current_trail_frame>(trail_);
         loc.bind_as<i_bind_map>(bind_map_);
         loc.bind_as<i_bind_map_factory>(bind_map_factory_);

@@ -100,3 +100,12 @@ TEST_F(RuleIdSetTest, CopyIsIndependentOfSubsequentMutations) {
     EXPECT_THAT(collect_rule_ids(*snapshot), UnorderedElementsAre(0));
     EXPECT_THAT(collect_rule_ids(rules), UnorderedElementsAre(1));
 }
+
+TEST_F(RuleIdSetTest, FrontReturnsOnlyElement) {
+    rules.insert(7);
+    EXPECT_EQ(rules.front(), 7);
+}
+
+TEST_F(RuleIdSetTest, FrontOnEmptyThrows) {
+    EXPECT_THROW(rules.front(), std::logic_error);
+}

@@ -12,6 +12,7 @@ struct i_rule_id_set {
     virtual void erase(rule_id) = 0;
     virtual bool contains(rule_id) const = 0;
     virtual coroutine<rule_id, void> iterate() const = 0;
+    virtual rule_id front() const = 0;
     virtual size_t size() const = 0;
     virtual std::unique_ptr<i_rule_id_set> copy() const = 0;
 };

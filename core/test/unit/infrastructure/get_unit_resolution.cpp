@@ -1,6 +1,7 @@
-// get_unit_resolution picks the sole candidate rule for a unit goal and interns
+// get_unit_resolution picks the front candidate rule for a unit goal and interns
 // the corresponding resolution lineage.
 
+#include <stdexcept>
 #include <gtest/gtest.h>
 #include <gmock/gmock.h>
 #include "locator_fixture.hpp"
@@ -8,10 +9,10 @@
 #include "infrastructure/rule_id_set.hpp"
 #include "interfaces/i_make_resolution_lineage.hpp"
 #include "interfaces/i_get_goal_candidate_rule_ids.hpp"
-#include "interfaces/i_rule_id_set.hpp"
 
 using ::testing::Return;
 using ::testing::ReturnRef;
+using ::testing::Throw;
 
 struct MockMakeResolutionLineage : public i_make_resolution_lineage {
     MOCK_METHOD((const resolution_lineage*), make_resolution_lineage,
@@ -59,11 +60,8 @@ TEST_F(GetUnitResolutionTest, ZeroCandidatesThrows) {
     EXPECT_THROW(sut.get(&gl), std::logic_error);
 }
 
-TEST_F(GetUnitResolutionTest, MultipleCandidatesThrows) {
-    static constexpr rule_id kFirst = 5;
-    static constexpr rule_id kSecond = 7;
-    candidates.insert(kFirst);
-    candidates.insert(kSecond);
-    EXPECT_CALL(get_goal_candidate_rule_ids, get(&gl)).WillOnce(ReturnRef(candidates));
-    EXPECT_THROW(sut.get(&gl), std::logic_error);
+TEST_F(GetUnitResolutionTest, UnknownGoalThrows) {
+    EXPECT_CALL(get_goal_candidate_rule_ids, get(&gl))
+        .WillOnce(Throw(std::out_of_range{"unknown goal"}));
+    EXPECT_THROW(sut.get(&gl), std::out_of_range);
 }

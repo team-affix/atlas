@@ -20,6 +20,7 @@ struct MockRuleIdSet : public i_rule_id_set {
     MOCK_METHOD(void, erase, (rule_id), (override));
     MOCK_METHOD(bool, contains, (rule_id), (const, override));
     MOCK_METHOD((coroutine<rule_id, void>), iterate, (), (const, override));
+    MOCK_METHOD(rule_id, front, (), (const, override));
     MOCK_METHOD(size_t, size, (), (const, override));
     MOCK_METHOD(std::unique_ptr<i_rule_id_set>, copy, (), (const, override));
 };
