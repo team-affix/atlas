@@ -1,3 +1,4 @@
+#include "debug_assert.hpp"
 #include "infrastructure/get_unit_resolution.hpp"
 
 get_unit_resolution::get_unit_resolution(locator& loc)
@@ -7,12 +8,16 @@ get_unit_resolution::get_unit_resolution(locator& loc)
 
 const resolution_lineage* get_unit_resolution::get(const goal_lineage* gl) {
     auto& candidate_rules = get_goal_candidate_rule_ids.get(gl);
+    DEBUG_ASSERT(candidate_rules.size() == 1);
+
+    rule_id candidate{};
     auto it = candidate_rules.iterate();
     while (!it.done()) {
         it.resume();
         if (!it.has_yield())
             continue;
-        return make_resolution_lineage.make_resolution_lineage(gl, it.consume_yield());
+        candidate = it.consume_yield();
+        break;
     }
-    return nullptr;
+    return make_resolution_lineage.make_resolution_lineage(gl, candidate);
 }

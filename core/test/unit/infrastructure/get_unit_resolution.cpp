@@ -41,7 +41,7 @@ struct GetUnitResolutionTest : public ::testing::Test {
     rule_id_set candidates;
 };
 
-TEST_F(GetUnitResolutionTest, ReturnsFirstCandidateResolution) {
+TEST_F(GetUnitResolutionTest, SingleCandidateReturnsResolution) {
     static constexpr rule_id kCandidate = 5;
     candidates.insert(kCandidate);
     resolution_lineage unit_rl{&gl, kCandidate};
@@ -53,39 +53,17 @@ TEST_F(GetUnitResolutionTest, ReturnsFirstCandidateResolution) {
     EXPECT_EQ(sut.get(&gl), &unit_rl);
 }
 
-TEST_F(GetUnitResolutionTest, EmptyCandidatesReturnsNullptr) {
+TEST_F(GetUnitResolutionTest, ZeroCandidatesThrows) {
     rule_id_set empty_candidates;
     EXPECT_CALL(get_goal_candidate_rule_ids, get(&gl)).WillOnce(ReturnRef(empty_candidates));
-    EXPECT_EQ(sut.get(&gl), nullptr);
+    EXPECT_THROW(sut.get(&gl), std::logic_error);
 }
 
-namespace {
-
-struct mock_rule_id_set : i_rule_id_set {
-    coroutine<rule_id, void> iterate() const override {
-        static constexpr rule_id kFirst = 5;
-        static constexpr rule_id kSecond = 7;
-        co_yield kFirst;
-        co_yield kSecond;
-    }
-    void insert(rule_id) override {}
-    void erase(rule_id) override {}
-    size_t size() const override { return 2; }
-    std::unique_ptr<i_rule_id_set> copy() const override {
-        return std::make_unique<mock_rule_id_set>();
-    }
-};
-
-} // namespace
-
-TEST_F(GetUnitResolutionTest, MultipleCandidatesReturnsFirstOnly) {
+TEST_F(GetUnitResolutionTest, MultipleCandidatesThrows) {
     static constexpr rule_id kFirst = 5;
-    mock_rule_id_set ordered_candidates;
-    resolution_lineage unit_rl{&gl, kFirst};
-
-    EXPECT_CALL(get_goal_candidate_rule_ids, get(&gl)).WillOnce(ReturnRef(ordered_candidates));
-    EXPECT_CALL(make_resolution_lineage, make_resolution_lineage(&gl, kFirst))
-        .WillOnce(Return(&unit_rl));
-
-    EXPECT_EQ(sut.get(&gl), &unit_rl);
+    static constexpr rule_id kSecond = 7;
+    candidates.insert(kFirst);
+    candidates.insert(kSecond);
+    EXPECT_CALL(get_goal_candidate_rule_ids, get(&gl)).WillOnce(ReturnRef(candidates));
+    EXPECT_THROW(sut.get(&gl), std::logic_error);
 }
