@@ -1851,9 +1851,9 @@ TEST_F(BasicManifestIntegrationTest, SolverEnumeratesManySharedVarGroundHeads) {
     }
 }
 
-// Tier R — ridge CHC ports (old-main-test.cpp test_ridge() tests 5–19)
+// Tier S — CHC enumeration scenarios (legacy integration tests 5–19)
 
-TEST_F(BasicManifestIntegrationTest, RidgeRefutesAfterCdclOnUnsatClauseBranches) {
+TEST_F(BasicManifestIntegrationTest, RefutesAfterCdclOnUnsatClauseBranches) {
     /*
      * Intent: multi-tick runtime CDCL refutation on unsatisfiable a :- b / a :- c (NOT empty-DB refutation).
      * initial goals: a.
@@ -1889,7 +1889,7 @@ TEST_F(BasicManifestIntegrationTest, RidgeRefutesAfterCdclOnUnsatClauseBranches)
     EXPECT_TRUE(saw_conflicted);
 }
 
-TEST_F(BasicManifestIntegrationTest, RidgeFindsUniqueSharedVarConjunctionThenRefutes) {
+TEST_F(BasicManifestIntegrationTest, FindsUniqueSharedVarConjunctionThenRefutes) {
     /*
      * Intent: is_a(X) ∧ is_b(X) has unique binding X=2, then refutes.
      * initial goals: is_a(X).  is_b(X).
@@ -1925,7 +1925,7 @@ TEST_F(BasicManifestIntegrationTest, RidgeFindsUniqueSharedVarConjunctionThenRef
         });
 }
 
-TEST_F(BasicManifestIntegrationTest, RidgeEnumeratesTwoParentBindingsForAlice) {
+TEST_F(BasicManifestIntegrationTest, EnumeratesTwoParentBindingsForAlice) {
     /*
      * Intent: parent(X, alice) enumerates bob and carol; parent(dave,bob) is head-elim junk.
      * initial goals: parent(X, alice).
@@ -1961,10 +1961,10 @@ TEST_F(BasicManifestIntegrationTest, RidgeEnumeratesTwoParentBindingsForAlice) {
         });
 }
 
-TEST_F(BasicManifestIntegrationTest, RidgeEnumeratesPeanoLessThanSeven) {
+TEST_F(BasicManifestIntegrationTest, EnumeratesPeanoLessThanSeven) {
     /*
      * Intent: lt(N, suc^7(zero)) — seven Peano solutions N ∈ {0..6}.
-     * Ported from old-main-test.cpp test_ridge() test 14.
+     * Ported from legacy integration test 14.
      * initial goals: lt(N, seven).
      * rules:
      *   0: nat(zero).   1: nat(suc(X)) :- nat(X).
@@ -2034,10 +2034,10 @@ TEST_F(BasicManifestIntegrationTest, RidgeEnumeratesPeanoLessThanSeven) {
     }
 }
 
-TEST_F(BasicManifestIntegrationTest, RidgeEnumeratesSatPAndQOrR) {
+TEST_F(BasicManifestIntegrationTest, EnumeratesSatPAndQOrR) {
     /*
      * Intent: P ∧ (Q ∨ R) — three bool assignments (calibration probe for multi-var relational CHC).
-     * Ported from old-main-test.cpp test_ridge() test 11.
+     * Ported from legacy integration test 11.
      * initial goals: bool(P). bool(Q). bool(R). or(Q,R,QR). and(P,QR,true).
      * rules: bool(true/false); relational or/and with bool(X) bodies.
      */
@@ -2100,10 +2100,10 @@ TEST_F(BasicManifestIntegrationTest, RidgeEnumeratesSatPAndQOrR) {
         });
 }
 
-TEST_F(BasicManifestIntegrationTest, RidgeEnumeratesTwoSatAssignmentsForImpliesQ) {
+TEST_F(BasicManifestIntegrationTest, EnumeratesTwoSatAssignmentsForImpliesQ) {
     /*
      * Intent: (P∨Q)∧(¬P∨Q) — both solutions have Q=true; P differs.
-     * Ported from old-main-test.cpp test_ridge() test 8.
+     * Ported from legacy integration test 8.
      * initial goals: bool(P). bool(Q). or(P,Q,true). not(P,NP). or(NP,Q,true).
      * rules: 8 bool/or/not ground facts.
      */
@@ -2167,10 +2167,10 @@ TEST_F(BasicManifestIntegrationTest, RidgeEnumeratesTwoSatAssignmentsForImpliesQ
     }
 }
 
-TEST_F(BasicManifestIntegrationTest, RidgeEnumeratesTwoPathTwoColorings) {
+TEST_F(BasicManifestIntegrationTest, EnumeratesTwoPathTwoColorings) {
     /*
      * Intent: 2-color a 3-node path A-B-C — property checks, not set enumeration.
-     * Ported from old-main-test.cpp test_ridge() test 9.
+     * Ported from legacy integration test 9.
      * initial goals: color(A). color(B). color(C). diff(A,B). diff(B,C).
      * rules: color(red/blue). diff(red,blue). diff(blue,red).
      */
@@ -2238,10 +2238,10 @@ TEST_F(BasicManifestIntegrationTest, RidgeEnumeratesTwoPathTwoColorings) {
     }
 }
 
-TEST_F(BasicManifestIntegrationTest, RidgeEnumeratesK3ThreeColorings) {
+TEST_F(BasicManifestIntegrationTest, EnumeratesK3ThreeColorings) {
     /*
      * Intent: enumerate all 3! proper colorings of K3 over colors {red, green, blue}.
-     * Ported from old-main-test.cpp test_ridge() test 10.
+     * Ported from legacy integration test 10.
      * initial goals: color(A). color(B). color(C). diff(A,B). diff(A,C). diff(B,C).
      * rules: color(red/green/blue). diff(x,y) for all ordered x != y pairs.
      */
@@ -2316,10 +2316,10 @@ TEST_F(BasicManifestIntegrationTest, RidgeEnumeratesK3ThreeColorings) {
     }
 }
 
-TEST_F(BasicManifestIntegrationTest, RidgeEnumeratesK3TailFourNodeColorings) {
+TEST_F(BasicManifestIntegrationTest, EnumeratesK3TailFourNodeColorings) {
     /*
      * Intent: 12 colorings — K3 on (A,B,C) plus tail D with diff(A,D).
-     * Ported from old-main-test.cpp test_ridge() test 12.
+     * Ported from legacy integration test 12.
      */
     static constexpr std::array<uint32_t, 10> kSeeds = {
         0, 1, 7, 13, 42, 99, 123, 256, 1000, 9999};
@@ -2389,10 +2389,10 @@ TEST_F(BasicManifestIntegrationTest, RidgeEnumeratesK3TailFourNodeColorings) {
     }
 }
 
-TEST_F(BasicManifestIntegrationTest, RidgeEnumeratesFourVarSatThreeClauses) {
+TEST_F(BasicManifestIntegrationTest, EnumeratesFourVarSatThreeClauses) {
     /*
      * Intent: satisfy (P ∨ Q) ∧ (R ∨ S) ∧ (¬P ∨ ¬R).
-     * Ported from old-main-test.cpp test_ridge() test 13.
+     * Ported from legacy integration test 13.
      */
     static constexpr std::array<uint32_t, 10> kSeeds = {
         0, 1, 7, 13, 42, 99, 123, 256, 1000, 9999};
@@ -2496,10 +2496,10 @@ TEST_F(BasicManifestIntegrationTest, RidgeEnumeratesFourVarSatThreeClauses) {
     }
 }
 
-TEST_F(BasicManifestIntegrationTest, RidgeEnumeratesAddPairsSummingLessThanTen) {
+TEST_F(BasicManifestIntegrationTest, EnumeratesAddPairsSummingLessThanTen) {
     /*
      * Intent: enumerate all (X,Y) where add(X,Y,S) and lt(S,10) (55 pairs).
-     * Ported from old-main-test.cpp test_ridge() test 15.
+     * Ported from legacy integration test 15.
      */
     static constexpr size_t kPeanoBudget = 128;
 
@@ -2634,10 +2634,10 @@ TEST_F(BasicManifestIntegrationTest, RidgeEnumeratesAddPairsSummingLessThanTen) 
         });
 }
 
-TEST_F(BasicManifestIntegrationTest, RidgeEnumeratesAddPairsSummingExactlyTen) {
+TEST_F(BasicManifestIntegrationTest, EnumeratesAddPairsSummingExactlyTen) {
     /*
      * Intent: enumerate all (X,Y) where add(X,Y,10) (11 pairs).
-     * Ported from old-main-test.cpp test_ridge() test 16.
+     * Ported from legacy integration test 16.
      */
     static constexpr size_t kPeanoBudget = 128;
 
@@ -2699,10 +2699,10 @@ TEST_F(BasicManifestIntegrationTest, RidgeEnumeratesAddPairsSummingExactlyTen) {
         });
 }
 
-TEST_F(BasicManifestIntegrationTest, RidgeEnumeratesMulPairsProductEight) {
+TEST_F(BasicManifestIntegrationTest, EnumeratesMulPairsProductEight) {
     /*
      * Intent: enumerate all factor pairs (X,Y) where mul(X,Y,8) (4 pairs).
-     * Ported from old-main-test.cpp test_ridge() test 17.
+     * Ported from legacy integration test 17.
      */
     static constexpr size_t kPeanoBudget = 256;
 
@@ -2781,10 +2781,10 @@ TEST_F(BasicManifestIntegrationTest, RidgeEnumeratesMulPairsProductEight) {
         });
 }
 
-TEST_F(BasicManifestIntegrationTest, RidgeEnumeratesDualBoundedSharedXSums) {
+TEST_F(BasicManifestIntegrationTest, EnumeratesDualBoundedSharedXSums) {
     /*
      * Intent: enumerate all triples (X,Y,Z) with add(X,Y,S), add(X,Z,T), lt(S,4), lt(T,4).
-     * Ported from old-main-test.cpp test_ridge() test 18.
+     * Ported from legacy integration test 18.
      */
     static constexpr size_t kPeanoBudget = 128;
 
@@ -2874,10 +2874,10 @@ TEST_F(BasicManifestIntegrationTest, RidgeEnumeratesDualBoundedSharedXSums) {
         });
 }
 
-TEST_F(BasicManifestIntegrationTest, RidgeEnumeratesCatalanTreesWithFiveNodes) {
+TEST_F(BasicManifestIntegrationTest, EnumeratesCatalanTreesWithFiveNodes) {
     /*
      * Intent: enumerate all wf(T) trees with exactly five nodes (Catalan C5 = 42).
-     * Ported from old-main-test.cpp test_ridge() test 19.
+     * Ported from legacy integration test 19.
      */
     static constexpr size_t kCatalanBudget = 70;
 
