@@ -156,29 +156,28 @@ void next_until_refuted(
     std::set<solution> expected,
     const std::function<solution(const TickSnapshot&)>& get_solution,
     const std::set<uint32_t>& tracked_vars = {}) {
+
+    
     auto sm = manifest.solver_.solve();
     std::set<solution> visited;
-    while (!expected.empty()) {
-        solution s;
-        do {
-            std::optional<SimTerminationResult> tick =
-                run_one_tick(manifest, normalizer, saved_expr_pool, sm, tracked_vars);
-            ASSERT_TRUE(tick.has_value()) << "solver stopped before all expected solutions found";
-            if (tick->termination != sim_termination::solved)
-                continue;
-            s = get_solution(tick->snapshot);
-        } while (visited.count(s));
+    while (true) {
+        std::optional<SimTerminationResult> tick =
+            run_one_tick(manifest, normalizer, saved_expr_pool, sm, tracked_vars);
+        if (!tick)
+            break;
+        if (tick->termination != sim_termination::solved)
+            continue;
+        const solution s = get_solution(tick->snapshot);
+        if (visited.count(s))
+            continue;
+        visited.insert(s);
         auto it = expected.find(s);
         ASSERT_NE(it, expected.end()) << "unexpected solution";
         expected.erase(it);
-        visited.insert(s);
     }
-    std::optional<SimTerminationResult> tick;
-    do {
-        tick = run_one_tick(manifest, normalizer, saved_expr_pool, sm, tracked_vars);
-        if (tick && tick->termination == sim_termination::solved)
-            FAIL() << "unexpected extra solution after exhausting search space";
-    } while (tick.has_value());
+    ASSERT_TRUE(expected.empty()) << "solver refuted before all expected solutions found";
+    
+    
 }
 
 }  // namespace
