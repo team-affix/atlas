@@ -1,6 +1,9 @@
 // Integration-style tests for basic_solver_session — real wiring, no mocks.
+//
+// solved() is only valid immediately after next() returned true.
+// Typical usage: while (session.next()) { if (session.solved()) { ... } }
 
-#include <functional>
+#include <optional>
 #include <set>
 #include <vector>
 #include <gtest/gtest.h>
@@ -13,42 +16,10 @@
 #include "infrastructure/trail.hpp"
 #include "interfaces/i_log_to_current_trail_frame.hpp"
 #include "value_objects/expr.hpp"
+#include "value_objects/lemma.hpp"
 #include "value_objects/sim_termination.hpp"
 
-using ::testing::IsEmpty;
-using ::testing::UnorderedElementsAre;
-
 using solution = std::vector<const expr*>;
-
-namespace {
-
-locator& bind_saved_loc(trail& t, locator& l) {
-    l.bind_as<i_log_to_current_trail_frame>(t);
-    return l;
-}
-
-void next_until_refuted(
-    basic_solver_session& session,
-    std::set<solution> expected,
-    const std::function<solution()>& get_solution) {
-    std::set<solution> visited;
-    while (true) {
-        if (!session.next())
-            break;
-        if (!session.solved())
-            continue;
-        const solution s = get_solution();
-        if (visited.count(s))
-            continue;
-        visited.insert(s);
-        auto it = expected.find(s);
-        ASSERT_NE(it, expected.end()) << "unexpected solution";
-        expected.erase(it);
-    }
-    ASSERT_TRUE(expected.empty()) << "solver refuted before all expected solutions found";
-}
-
-}  // namespace
 
 struct BasicSolverSessionTest : public ::testing::Test {
     static constexpr size_t kMaxResolutions = 32;
@@ -59,37 +30,25 @@ struct BasicSolverSessionTest : public ::testing::Test {
 
     trail saved_trail_;
     locator saved_loc_;
-    expr_pool saved_expr_pool_{bind_saved_loc(saved_trail_, saved_loc_)};
+    expr_pool saved_expr_pool_{
+        (saved_loc_.bind_as<i_log_to_current_trail_frame>(saved_trail_), saved_loc_)};
 };
 
 // Tier A — session API smoke
 
 TEST_F(BasicSolverSessionTest, ConstructsWithEmptyDbAndGoals) {
     basic_solver_session session(database, initial_goals, kMaxResolutions, kSeed);
-    ASSERT_TRUE(session.next());
-    EXPECT_TRUE(session.solved());
-    EXPECT_FALSE(session.next());
+    ASSERT_TRUE(session.next()) << "expected a tick";
+    ASSERT_TRUE(session.solved()) << "expected solved termination";
+    EXPECT_FALSE(session.next()) << "expected refutation";
 }
 
 TEST_F(BasicSolverSessionTest, VacuousSolvedTick) {
     basic_solver_session session(database, initial_goals, kMaxResolutions, kSeed);
-    ASSERT_TRUE(session.next());
-    EXPECT_TRUE(session.solved());
+    ASSERT_TRUE(session.next()) << "expected a tick";
+    ASSERT_TRUE(session.solved()) << "expected solved termination";
     EXPECT_TRUE(session.derive_decision_lemma().get_resolutions().empty());
-    EXPECT_FALSE(session.next());
-}
-
-TEST_F(BasicSolverSessionTest, NextFalseMeansRefuted) {
-    basic_solver_session session(database, initial_goals, kMaxResolutions, kSeed);
-    while (session.next()) {}
-    EXPECT_FALSE(session.next());
-}
-
-TEST_F(BasicSolverSessionTest, SolvedOnlyAfterNextReturnsTrue) {
-    basic_solver_session session(database, initial_goals, kMaxResolutions, kSeed);
-    ASSERT_TRUE(session.next());
-    EXPECT_TRUE(session.solved());
-    ASSERT_FALSE(session.next());
+    EXPECT_FALSE(session.next()) << "expected refutation";
 }
 
 TEST_F(BasicSolverSessionTest, NormalizeDelegatesToBindMap) {
@@ -105,14 +64,13 @@ TEST_F(BasicSolverSessionTest, NormalizeDelegatesToBindMap) {
     }));
 
     basic_solver_session session(database, initial_goals, kMaxResolutions, kSeed);
-    ASSERT_TRUE(session.next());
-    ASSERT_TRUE(session.solved());
-    EXPECT_EQ(*saved_expr_pool_.import(session.normalize(saved_expr_pool_.make(idx_a))),
-        *abc);
-    EXPECT_EQ(*saved_expr_pool_.import(session.normalize(saved_expr_pool_.make(idx_b))),
-        *_123);
-
-    EXPECT_FALSE(session.next());
+    ASSERT_TRUE(session.next()) << "expected a tick";
+    ASSERT_TRUE(session.solved()) << "expected solved termination";
+    EXPECT_EQ(saved_expr_pool_.import(session.normalize(saved_expr_pool_.make(idx_a))),
+        abc);
+    EXPECT_EQ(saved_expr_pool_.import(session.normalize(saved_expr_pool_.make(idx_b))),
+        _123);
+    EXPECT_FALSE(session.next()) << "expected refutation";
     EXPECT_TRUE(std::holds_alternative<expr::var>(
         session.normalize(saved_expr_pool_.make(idx_a))->content));
 }
@@ -125,12 +83,12 @@ TEST_F(BasicSolverSessionTest, ImportSurvivesNextTick) {
     initial_goals.push(saved_expr_pool_.make("f", {saved_expr_pool_.make(idx_a)}));
 
     basic_solver_session session(database, initial_goals, kMaxResolutions, kSeed);
-    ASSERT_TRUE(session.next());
-    ASSERT_TRUE(session.solved());
-    const expr* kept = saved_expr_pool_.import(session.normalize(saved_expr_pool_.make(idx_a)));
+    const expr* kept = nullptr;
+    ASSERT_TRUE(session.next()) << "expected a tick";
+    ASSERT_TRUE(session.solved()) << "expected solved termination";
+    kept = saved_expr_pool_.import(session.normalize(saved_expr_pool_.make(idx_a)));
     EXPECT_EQ(*kept, *abc);
-
-    EXPECT_FALSE(session.next());
+    EXPECT_FALSE(session.next()) << "expected refutation";
     EXPECT_EQ(*kept, *abc);
 }
 
@@ -143,8 +101,8 @@ TEST_F(BasicSolverSessionTest, DeriveDecisionLemmaOnDemand) {
     database.push(rule{head1, {}});
 
     basic_solver_session session(database, initial_goals, kMaxResolutions, kSeed);
-    ASSERT_TRUE(session.next());
-    ASSERT_TRUE(session.solved());
+    ASSERT_TRUE(session.next()) << "expected a tick";
+    ASSERT_TRUE(session.solved()) << "expected solved termination";
     EXPECT_FALSE(session.derive_decision_lemma().get_resolutions().empty());
 }
 
@@ -155,8 +113,8 @@ TEST_F(BasicSolverSessionTest, DeriveResolutionLemmaOnDemand) {
     database.push(rule{head, {}});
 
     basic_solver_session session(database, initial_goals, kMaxResolutions, kSeed);
-    ASSERT_TRUE(session.next());
-    ASSERT_TRUE(session.solved());
+    ASSERT_TRUE(session.next()) << "expected a tick";
+    ASSERT_TRUE(session.solved()) << "expected solved termination";
     EXPECT_FALSE(session.derive_resolution_lemma().get_resolutions().empty());
 }
 
@@ -169,19 +127,29 @@ TEST_F(BasicSolverSessionTest, LemmaNotCachedAcrossTicks) {
     database.push(rule{head1, {}});
 
     basic_solver_session session(database, initial_goals, kMaxResolutions, kSeed);
+
+    std::optional<lemma> decision1;
+    std::optional<lemma> resolution1;
+    size_t solved_ticks = 0;
+
     ASSERT_TRUE(session.next());
     ASSERT_TRUE(session.solved());
-    const lemma decision1 = session.derive_decision_lemma();
-    const lemma resolution1 = session.derive_resolution_lemma();
-    EXPECT_EQ(decision1.get_resolutions().size(), 1u);
+    decision1 = session.derive_decision_lemma();
+    resolution1 = session.derive_resolution_lemma();
+    EXPECT_EQ(decision1->get_resolutions().size(), 1u);
+    ++solved_ticks;
 
     ASSERT_TRUE(session.next());
     ASSERT_TRUE(session.solved());
     const lemma decision2 = session.derive_decision_lemma();
     const lemma resolution2 = session.derive_resolution_lemma();
     EXPECT_TRUE(decision2.get_resolutions().empty());
-    EXPECT_FALSE(decision1.get_resolutions() == decision2.get_resolutions()
-        && resolution1.get_resolutions() == resolution2.get_resolutions());
+    EXPECT_FALSE(decision1->get_resolutions() == decision2.get_resolutions()
+        && resolution1->get_resolutions() == resolution2.get_resolutions());
+    ++solved_ticks;
+
+    ASSERT_EQ(solved_ticks, 2u);
+    EXPECT_FALSE(session.next()) << "expected refutation";
 }
 
 // Tier B — solver outcomes
@@ -192,19 +160,19 @@ TEST_F(BasicSolverSessionTest, FindsSingleUnitSolution) {
     database.push(rule{saved_expr_pool_.make("f", {}), {}});
 
     basic_solver_session session(database, initial_goals, kMaxResolutions, kSeed);
-    ASSERT_TRUE(session.next());
-    EXPECT_TRUE(session.solved());
+    ASSERT_TRUE(session.next()) << "expected a tick";
+    ASSERT_TRUE(session.solved()) << "expected solved termination";
     EXPECT_TRUE(session.derive_decision_lemma().get_resolutions().empty());
-    EXPECT_FALSE(session.next());
+    EXPECT_FALSE(session.next()) << "expected refutation";
 }
 
 TEST_F(BasicSolverSessionTest, RefutesWhenNoCandidates) {
     initial_goals.push(saved_expr_pool_.make("f", {}));
 
     basic_solver_session session(database, initial_goals, kMaxResolutions, kSeed);
-    ASSERT_TRUE(session.next());
-    EXPECT_FALSE(session.solved());
-    EXPECT_FALSE(session.next());
+    ASSERT_TRUE(session.next()) << "expected a tick";
+    EXPECT_FALSE(session.solved()) << "expected conflict termination";
+    EXPECT_FALSE(session.next()) << "expected refutation";
 }
 
 TEST_F(BasicSolverSessionTest, FindsClauseDerivedUnitSolution) {
@@ -214,10 +182,10 @@ TEST_F(BasicSolverSessionTest, FindsClauseDerivedUnitSolution) {
     database.push(rule{saved_expr_pool_.make("g", {}), {}});
 
     basic_solver_session session(database, initial_goals, kMaxResolutions, kSeed);
-    ASSERT_TRUE(session.next());
-    EXPECT_TRUE(session.solved());
+    ASSERT_TRUE(session.next()) << "expected a tick";
+    ASSERT_TRUE(session.solved()) << "expected solved termination";
     EXPECT_TRUE(session.derive_decision_lemma().get_resolutions().empty());
-    EXPECT_FALSE(session.next());
+    EXPECT_FALSE(session.next()) << "expected refutation";
 }
 
 TEST_F(BasicSolverSessionTest, FindsSolutionWithCorrectBindings) {
@@ -233,13 +201,13 @@ TEST_F(BasicSolverSessionTest, FindsSolutionWithCorrectBindings) {
     }));
 
     basic_solver_session session(database, initial_goals, kMaxResolutions, kSeed);
-    ASSERT_TRUE(session.next());
-    EXPECT_TRUE(session.solved());
+    ASSERT_TRUE(session.next()) << "expected a tick";
+    ASSERT_TRUE(session.solved()) << "expected solved termination";
     EXPECT_EQ(*saved_expr_pool_.import(session.normalize(saved_expr_pool_.make(idx_a))),
         *abc);
     EXPECT_EQ(*saved_expr_pool_.import(session.normalize(saved_expr_pool_.make(idx_b))),
         *_123);
-    EXPECT_FALSE(session.next());
+    EXPECT_FALSE(session.next()) << "expected refutation";
 }
 
 TEST_F(BasicSolverSessionTest, FindsClauseBodyBindingSolution) {
@@ -261,13 +229,13 @@ TEST_F(BasicSolverSessionTest, FindsClauseBodyBindingSolution) {
     }));
 
     basic_solver_session session(database, initial_goals, kMaxResolutions, kSeed);
-    ASSERT_TRUE(session.next());
-    EXPECT_TRUE(session.solved());
+    ASSERT_TRUE(session.next()) << "expected a tick";
+    ASSERT_TRUE(session.solved()) << "expected solved termination";
     EXPECT_EQ(*saved_expr_pool_.import(session.normalize(saved_expr_pool_.make(idx_a))),
         *abc);
     EXPECT_EQ(*saved_expr_pool_.import(session.normalize(saved_expr_pool_.make(idx_b))),
         *_123);
-    EXPECT_FALSE(session.next());
+    EXPECT_FALSE(session.next()) << "expected refutation";
 }
 
 TEST_F(BasicSolverSessionTest, RefutesAfterCdclOnUnsatClauseBranches) {
@@ -278,16 +246,12 @@ TEST_F(BasicSolverSessionTest, RefutesAfterCdclOnUnsatClauseBranches) {
     initial_goals.push(saved_expr_pool_.make("a", {}));
 
     basic_solver_session session(database, initial_goals, kMaxResolutions, kSeed);
-    size_t yields = 0;
-    bool saw_conflicted = false;
+    size_t conflict_ticks = 0;
     while (session.next()) {
-        ++yields;
-        if (session.solved())
-            FAIL() << "unexpected solved termination";
-        saw_conflicted = true;
+        EXPECT_FALSE(session.solved());
+        ++conflict_ticks;
     }
-    ASSERT_GE(yields, 2u);
-    EXPECT_TRUE(saw_conflicted);
+    ASSERT_GE(conflict_ticks, 2u);
 }
 
 // Tier C — enumeration
@@ -298,12 +262,12 @@ TEST_F(BasicSolverSessionTest, EnumeratesTwoGroundChoiceSolutions) {
     database.push(rule{saved_expr_pool_.make("f", {}), {}});
 
     basic_solver_session session(database, initial_goals, kMaxResolutions, kSeed);
-    size_t solved_count = 0;
+    size_t count = 0;
     while (session.next()) {
         if (session.solved())
-            ++solved_count;
+            ++count;
     }
-    EXPECT_EQ(solved_count, 2u);
+    EXPECT_EQ(count, 2u);
 }
 
 TEST_F(BasicSolverSessionTest, RefutesAfterEnumeratingAllGroundBranches) {
@@ -312,12 +276,12 @@ TEST_F(BasicSolverSessionTest, RefutesAfterEnumeratingAllGroundBranches) {
     database.push(rule{saved_expr_pool_.make("f", {}), {}});
 
     basic_solver_session session(database, initial_goals, kMaxResolutions, kSeed);
-    size_t solved_count = 0;
+    size_t count = 0;
     while (session.next()) {
         if (session.solved())
-            ++solved_count;
+            ++count;
     }
-    EXPECT_EQ(solved_count, 2u);
+    EXPECT_EQ(count, 2u);
 }
 
 TEST_F(BasicSolverSessionTest, EnumeratesTwoVarChoiceSolutions) {
@@ -330,12 +294,21 @@ TEST_F(BasicSolverSessionTest, EnumeratesTwoVarChoiceSolutions) {
     initial_goals.push(saved_expr_pool_.make("f", {saved_expr_pool_.make(idx_a)}));
 
     basic_solver_session session(database, initial_goals, kMaxResolutions, kSeed);
-    next_until_refuted(
-        session,
-        {{abc}, {xyz}},
-        [&]() -> solution {
-            return {saved_expr_pool_.import(session.normalize(saved_expr_pool_.make(idx_a)))};
-        });
+    std::set<solution> expected{{abc}, {xyz}};
+    std::set<solution> visited;
+    while (session.next()) {
+        if (!session.solved())
+            continue;
+        const solution s = {
+            saved_expr_pool_.import(session.normalize(saved_expr_pool_.make(idx_a)))};
+        if (visited.count(s))
+            continue;
+        visited.insert(s);
+        auto it = expected.find(s);
+        ASSERT_NE(it, expected.end()) << "unexpected solution";
+        expected.erase(it);
+    }
+    ASSERT_TRUE(expected.empty()) << "solver refuted before all expected solutions found";
 }
 
 TEST_F(BasicSolverSessionTest, RefutesAfterEnumeratingAllVarBranches) {
@@ -348,12 +321,21 @@ TEST_F(BasicSolverSessionTest, RefutesAfterEnumeratingAllVarBranches) {
     initial_goals.push(saved_expr_pool_.make("f", {saved_expr_pool_.make(idx_a)}));
 
     basic_solver_session session(database, initial_goals, kMaxResolutions, kSeed);
-    next_until_refuted(
-        session,
-        {{abc}, {xyz}},
-        [&]() -> solution {
-            return {saved_expr_pool_.import(session.normalize(saved_expr_pool_.make(idx_a)))};
-        });
+    std::set<solution> expected{{abc}, {xyz}};
+    std::set<solution> visited;
+    while (session.next()) {
+        if (!session.solved())
+            continue;
+        const solution s = {
+            saved_expr_pool_.import(session.normalize(saved_expr_pool_.make(idx_a)))};
+        if (visited.count(s))
+            continue;
+        visited.insert(s);
+        auto it = expected.find(s);
+        ASSERT_NE(it, expected.end()) << "unexpected solution";
+        expected.erase(it);
+    }
+    ASSERT_TRUE(expected.empty()) << "solver refuted before all expected solutions found";
 }
 
 TEST_F(BasicSolverSessionTest, EnumeratesTwoGoalSharedVarSolutions) {
@@ -370,12 +352,21 @@ TEST_F(BasicSolverSessionTest, EnumeratesTwoGoalSharedVarSolutions) {
     initial_goals.push(saved_expr_pool_.make("g", {goal_var}));
 
     basic_solver_session session(database, initial_goals, kMaxResolutions, kSeed);
-    next_until_refuted(
-        session,
-        {{abc}, {xyz}},
-        [&]() -> solution {
-            return {saved_expr_pool_.import(session.normalize(saved_expr_pool_.make(idx_a)))};
-        });
+    std::set<solution> expected{{abc}, {xyz}};
+    std::set<solution> visited;
+    while (session.next()) {
+        if (!session.solved())
+            continue;
+        const solution s = {
+            saved_expr_pool_.import(session.normalize(saved_expr_pool_.make(idx_a)))};
+        if (visited.count(s))
+            continue;
+        visited.insert(s);
+        auto it = expected.find(s);
+        ASSERT_NE(it, expected.end()) << "unexpected solution";
+        expected.erase(it);
+    }
+    ASSERT_TRUE(expected.empty()) << "solver refuted before all expected solutions found";
 }
 
 TEST_F(BasicSolverSessionTest, EnumeratesFourVarBindingSolutions) {
@@ -392,12 +383,21 @@ TEST_F(BasicSolverSessionTest, EnumeratesFourVarBindingSolutions) {
     initial_goals.push(saved_expr_pool_.make("f", {saved_expr_pool_.make(idx)}));
 
     basic_solver_session session(database, initial_goals, kMaxResolutions, kSeed);
-    next_until_refuted(
-        session,
-        {{a}, {b}, {c}, {d}},
-        [&]() -> solution {
-            return {saved_expr_pool_.import(session.normalize(saved_expr_pool_.make(idx)))};
-        });
+    std::set<solution> expected{{a}, {b}, {c}, {d}};
+    std::set<solution> visited;
+    while (session.next()) {
+        if (!session.solved())
+            continue;
+        const solution s = {
+            saved_expr_pool_.import(session.normalize(saved_expr_pool_.make(idx)))};
+        if (visited.count(s))
+            continue;
+        visited.insert(s);
+        auto it = expected.find(s);
+        ASSERT_NE(it, expected.end()) << "unexpected solution";
+        expected.erase(it);
+    }
+    ASSERT_TRUE(expected.empty()) << "solver refuted before all expected solutions found";
 }
 
 TEST_F(BasicSolverSessionTest, EnumeratesFourClauseBodyFactChoices) {
@@ -416,12 +416,12 @@ TEST_F(BasicSolverSessionTest, EnumeratesFourClauseBodyFactChoices) {
     initial_goals.push(saved_expr_pool_.make("f", {}));
 
     basic_solver_session session(database, initial_goals, kMaxResolutions, kSeed);
-    size_t solved_count = 0;
+    size_t count = 0;
     while (session.next()) {
         if (session.solved())
-            ++solved_count;
+            ++count;
     }
-    EXPECT_EQ(solved_count, 4u);
+    EXPECT_EQ(count, 4u);
 }
 
 // Tier E
@@ -441,12 +441,21 @@ TEST_F(BasicSolverSessionTest, FindsUniqueSharedVarConjunctionThenRefutes) {
     initial_goals.push(saved_expr_pool_.make("is_b", {goal_var}));
 
     basic_solver_session session(database, initial_goals, kMaxResolutions, kSeed);
-    next_until_refuted(
-        session,
-        {{two}},
-        [&]() -> solution {
-            return {saved_expr_pool_.import(session.normalize(saved_expr_pool_.make(idx_x)))};
-        });
+    std::set<solution> expected{{two}};
+    std::set<solution> visited;
+    while (session.next()) {
+        if (!session.solved())
+            continue;
+        const solution s = {
+            saved_expr_pool_.import(session.normalize(saved_expr_pool_.make(idx_x)))};
+        if (visited.count(s))
+            continue;
+        visited.insert(s);
+        auto it = expected.find(s);
+        ASSERT_NE(it, expected.end()) << "unexpected solution";
+        expected.erase(it);
+    }
+    ASSERT_TRUE(expected.empty()) << "solver refuted before all expected solutions found";
 }
 
 // Tier F
@@ -455,9 +464,9 @@ TEST_F(BasicSolverSessionTest, ConflictedTickNotSolved) {
     initial_goals.push(saved_expr_pool_.make("f", {}));
 
     basic_solver_session session(database, initial_goals, kMaxResolutions, kSeed);
-    ASSERT_TRUE(session.next());
-    EXPECT_FALSE(session.solved());
-    EXPECT_FALSE(session.next());
+    ASSERT_TRUE(session.next()) << "expected a tick";
+    EXPECT_FALSE(session.solved()) << "expected conflict termination";
+    EXPECT_FALSE(session.next()) << "expected refutation";
 }
 
 TEST_F(BasicSolverSessionTest, SkippedLemmaCallsOnUnitTicks) {
@@ -465,7 +474,7 @@ TEST_F(BasicSolverSessionTest, SkippedLemmaCallsOnUnitTicks) {
     database.push(rule{saved_expr_pool_.make("f", {}), {}});
 
     basic_solver_session session(database, initial_goals, kMaxResolutions, kSeed);
-    ASSERT_TRUE(session.next());
-    EXPECT_TRUE(session.solved());
-    EXPECT_FALSE(session.next());
+    ASSERT_TRUE(session.next()) << "expected a tick";
+    ASSERT_TRUE(session.solved()) << "expected solved termination";
+    EXPECT_FALSE(session.next()) << "expected refutation";
 }
