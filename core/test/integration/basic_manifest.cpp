@@ -14,6 +14,7 @@
 #include <gmock/gmock.h>
 #include <algorithm>
 #include <array>
+#include <iostream>
 #include <set>
 #include <string>
 #include <tuple>
@@ -22,12 +23,16 @@
 #include "infrastructure/basic_manifest.hpp"
 #include "infrastructure/db.hpp"
 #include "infrastructure/expr_pool.hpp"
+#include "infrastructure/expr_printer.hpp"
 #include "infrastructure/initial_goal_exprs.hpp"
 #include "infrastructure/locator.hpp"
 #include "infrastructure/normalizer.hpp"
 #include "infrastructure/trail.hpp"
-#include "interfaces/i_push_trail_frame.hpp"
+#include "infrastructure/var_names.hpp"
+#include "interfaces/i_expr_printer.hpp"
+#include "interfaces/i_var_names.hpp"
 #include "interfaces/i_pop_trail_frame.hpp"
+#include "interfaces/i_push_trail_frame.hpp"
 #include "interfaces/i_log_to_current_trail_frame.hpp"
 #include "interfaces/i_record_decision.hpp"
 #include "interfaces/i_clear_recorded_decisions.hpp"
@@ -73,20 +78,45 @@ namespace {
 
 using solution = std::vector<const expr*>;
 
+void print_solved_binding(
+    i_expr_printer& printer,
+    size_t iterations_since_last,
+    i_get_decision_count& decision_count,
+    i_get_resolution_count& resolution_count,
+    const solution& s) {
+    std::cout << iterations_since_last << " iterations, "
+              << resolution_count.get_resolution_count() << " resolutions, "
+              << decision_count.count() << " decisions\n";
+
+    for (const expr* e : s) {
+        std::cout << "  ";
+        printer.print(e);
+        std::cout << '\n';
+    }
+}
+
 void enumerate_all_solutions(
     i_solve& solver,
+    i_expr_printer& printer,
+    i_get_decision_count& decision_count,
+    i_get_resolution_count& resolution_count,
     std::set<solution> expected,
     const std::function<solution()>& get_solution) {
     auto sm = solver.solve();
     std::set<solution> visited;
+    size_t iterations_since_last = 0;
     while (!expected.empty()) {
         solution s;
         do {
             sm.resume();
+            ++iterations_since_last;
             ASSERT_TRUE(sm.has_yield()) << "solver stopped before all expected solutions found";
             if (sm.consume_yield() != sim_termination::solved)
                 continue;
             s = get_solution();
+            print_solved_binding(
+                printer, iterations_since_last, decision_count, resolution_count, s);
+            iterations_since_last = 0;
         } while (visited.count(s));
         auto it = expected.find(s);
         ASSERT_NE(it, expected.end()) << "unexpected solution";
@@ -97,17 +127,25 @@ void enumerate_all_solutions(
 
 void next_until_refuted(
     i_solve& solver,
+    i_expr_printer& printer,
+    i_get_decision_count& decision_count,
+    i_get_resolution_count& resolution_count,
     std::set<solution> expected,
     const std::function<solution()>& get_solution) {
     auto sm = solver.solve();
     std::set<solution> visited;
+    size_t iterations_since_last = 0;
     while (true) {
         sm.resume();
+        ++iterations_since_last;
         if (!sm.has_yield())
             break;
         if (sm.consume_yield() != sim_termination::solved)
             continue;
         const solution s = get_solution();
+        print_solved_binding(
+            printer, iterations_since_last, decision_count, resolution_count, s);
+        iterations_since_last = 0;
         if (visited.count(s))
             continue;
         visited.insert(s);
@@ -167,6 +205,33 @@ void next_branch_until_refuted(
 // Test fixture
 // ---------------------------------------------------------------------------
 
+struct expr_printer_context {
+    struct var_names_adapter : i_var_names {
+        var_names& inner;
+
+        explicit var_names_adapter(var_names& inner) : inner(inner) {}
+
+        bool is_named(uint32_t index) const override { return inner.is_named(index); }
+        const std::string& name(uint32_t index) const override { return inner.name(index); }
+        void set_name(uint32_t index, const std::string& name) override { inner.set_name(index, name); }
+    };
+
+    var_names_adapter adapter;
+    locator loc;
+    expr_printer printer;
+
+    explicit expr_printer_context(var_names& var_names)
+        : adapter(var_names),
+          loc(),
+          printer(std::cout, bind_loc(loc, adapter)) {}
+
+private:
+    static locator& bind_loc(locator& loc, var_names_adapter& adapter) {
+        loc.bind_as<i_var_names>(adapter);
+        return loc;
+    }
+};
+
 struct BasicManifestIntegrationTest : public ::testing::Test {
     static constexpr size_t kMaxResolutions = 32;
     static constexpr uint32_t kSeed = 42;
@@ -177,6 +242,8 @@ struct BasicManifestIntegrationTest : public ::testing::Test {
     trail saved_trail_;
     locator saved_loc_;
     expr_pool saved_expr_pool_{bind_saved_loc(saved_trail_, saved_loc_)};
+    var_names var_names_;
+    expr_printer_context expr_printer_{var_names_};
 
 private:
     static locator& bind_saved_loc(trail& t, locator& l) {
@@ -1148,6 +1215,9 @@ TEST_F(BasicManifestIntegrationTest, SolverEnumeratesTwoVarChoiceSolutions) {
 
     enumerate_all_solutions(
         manifest.solver_,
+        expr_printer_.printer,
+        manifest.decision_memory_,
+        manifest.resolution_memory_,
         {{abc}, {xyz}},
         [&]() -> solution {
             return {saved_expr_pool_.import(
@@ -1179,6 +1249,9 @@ TEST_F(BasicManifestIntegrationTest, SolverRefutesAfterEnumeratingAllVarBranches
 
     next_until_refuted(
         manifest.solver_,
+        expr_printer_.printer,
+        manifest.decision_memory_,
+        manifest.resolution_memory_,
         {{abc}, {xyz}},
         [&]() -> solution {
             return {saved_expr_pool_.import(
@@ -1216,6 +1289,9 @@ TEST_F(BasicManifestIntegrationTest, SolverEnumeratesTwoGoalSharedVarSolutions) 
 
     enumerate_all_solutions(
         manifest.solver_,
+        expr_printer_.printer,
+        manifest.decision_memory_,
+        manifest.resolution_memory_,
         {{abc}, {xyz}},
         [&]() -> solution {
             return {saved_expr_pool_.import(
@@ -1569,6 +1645,9 @@ TEST_F(BasicManifestIntegrationTest, SolverEnumeratesFourVarBindingSolutions) {
 
     next_until_refuted(
         manifest.solver_,
+        expr_printer_.printer,
+        manifest.decision_memory_,
+        manifest.resolution_memory_,
         {{abc}, {xyz}, {def}, {ghi}},
         [&]() -> solution {
             return {saved_expr_pool_.import(
@@ -1811,6 +1890,9 @@ TEST_F(BasicManifestIntegrationTest, FindsUniqueSharedVarConjunctionThenRefutes)
 
     next_until_refuted(
         manifest.solver_,
+        expr_printer_.printer,
+        manifest.decision_memory_,
+        manifest.resolution_memory_,
         {{two}},
         [&]() -> solution {
             return {saved_expr_pool_.import(
@@ -1845,6 +1927,9 @@ TEST_F(BasicManifestIntegrationTest, EnumeratesTwoParentBindingsForAlice) {
 
     next_until_refuted(
         manifest.solver_,
+        expr_printer_.printer,
+        manifest.decision_memory_,
+        manifest.resolution_memory_,
         {{bob}, {carol}},
         [&]() -> solution {
             return {saved_expr_pool_.import(
@@ -1910,6 +1995,9 @@ TEST_F(BasicManifestIntegrationTest, EnumeratesPeanoLessThanSeven) {
 
     next_until_refuted(
         manifest.solver_,
+        expr_printer_.printer,
+        manifest.decision_memory_,
+        manifest.resolution_memory_,
         expected,
         [&]() -> solution {
             return {saved_expr_pool_.import(
@@ -1971,6 +2059,9 @@ TEST_F(BasicManifestIntegrationTest, EnumeratesSatPAndQOrR) {
     // Raw solved ticks may exceed 3 when resolution paths duplicate bindings.
     next_until_refuted(
         manifest.solver_,
+        expr_printer_.printer,
+        manifest.decision_memory_,
+        manifest.resolution_memory_,
         {{true_atom, true_atom, true_atom}, {true_atom, true_atom, false_atom}, {true_atom, false_atom, true_atom}},
         [&]() -> solution {
             return {
@@ -2178,6 +2269,9 @@ TEST_F(BasicManifestIntegrationTest, EnumeratesK3ThreeColorings) {
 
         next_until_refuted(
             manifest.solver_,
+            expr_printer_.printer,
+            manifest.decision_memory_,
+            manifest.resolution_memory_,
             expected,
             [&]() -> solution {
                 return {
@@ -2244,7 +2338,7 @@ TEST_F(BasicManifestIntegrationTest, EnumeratesK3TailFourNodeColorings) {
             {green, red, blue, red}, {green, red, blue, blue}, {green, blue, red, red}, {green, blue, red, blue},
             {blue, red, green, red}, {blue, red, green, green}, {blue, green, red, red}, {blue, green, red, green},
         };
-        next_until_refuted(manifest.solver_, expected, [&]() -> solution {
+        next_until_refuted(manifest.solver_, expr_printer_.printer, manifest.decision_memory_, manifest.resolution_memory_, expected, [&]() -> solution {
             return {
                 saved_expr_pool_.import(seed_normalizer.normalize(manifest.expr_pool_.make(idx_a))),
                 saved_expr_pool_.import(seed_normalizer.normalize(manifest.expr_pool_.make(idx_b))),
@@ -2342,6 +2436,9 @@ TEST_F(BasicManifestIntegrationTest, EnumeratesFourVarSatThreeClauses) {
 
         next_until_refuted(
             manifest.solver_,
+            expr_printer_.printer,
+            manifest.decision_memory_,
+            manifest.resolution_memory_,
             expected,
             [&]() -> solution {
                 return {
@@ -2435,6 +2532,9 @@ TEST_F(BasicManifestIntegrationTest, EnumeratesAddPairsSummingLessThanTen) {
 
     next_until_refuted(
         probe_manifest.solver_,
+        expr_printer_.printer,
+        probe_manifest.decision_memory_,
+        probe_manifest.resolution_memory_,
         expected,
         [&]() -> solution {
             return {
@@ -2464,6 +2564,9 @@ TEST_F(BasicManifestIntegrationTest, EnumeratesAddPairsSummingLessThanTen) {
 
     next_until_refuted(
         manifest.solver_,
+        expr_printer_.printer,
+        manifest.decision_memory_,
+        manifest.resolution_memory_,
         expected,
         [&]() -> solution {
             return {
@@ -2531,6 +2634,9 @@ TEST_F(BasicManifestIntegrationTest, EnumeratesAddPairsSummingExactlyTen) {
 
     next_until_refuted(
         manifest.solver_,
+        expr_printer_.printer,
+        manifest.decision_memory_,
+        manifest.resolution_memory_,
         expected,
         [&]() -> solution {
             return {
@@ -2613,6 +2719,9 @@ TEST_F(BasicManifestIntegrationTest, EnumeratesMulPairsProductEight) {
 
     next_until_refuted(
         manifest.solver_,
+        expr_printer_.printer,
+        manifest.decision_memory_,
+        manifest.resolution_memory_,
         expected,
         [&]() -> solution {
             return {
@@ -2705,6 +2814,9 @@ TEST_F(BasicManifestIntegrationTest, EnumeratesDualBoundedSharedXSums) {
 
     next_until_refuted(
         manifest.solver_,
+        expr_printer_.printer,
+        manifest.decision_memory_,
+        manifest.resolution_memory_,
         expected,
         [&]() -> solution {
             return {
@@ -2873,6 +2985,9 @@ TEST_F(BasicManifestIntegrationTest, EnumeratesCatalanTreesWithFiveNodes) {
 
     next_until_refuted(
         manifest.solver_,
+        expr_printer_.printer,
+        manifest.decision_memory_,
+        manifest.resolution_memory_,
         expected,
         [&]() -> solution {
             return {
