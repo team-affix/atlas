@@ -30,7 +30,6 @@ using solution = std::vector<const expr*>;
 
 struct BasicSolverSessionTest : public ::testing::Test {
     static constexpr size_t kMaxResolutions = 32;
-    static constexpr size_t kInitialVarCount = 0;
     static constexpr uint32_t kSeed = 42;
 
     db database;
@@ -2684,6 +2683,7 @@ TEST_F(BasicSolverSessionTest, EnumeratesStaircasePathsOneOrTwoSummingToTen) {
     static constexpr size_t kTierIBudget = 1024;
     static constexpr int kStaircaseHeight = 10;
     static constexpr size_t kExpectedPaths = 89u;
+    static constexpr size_t kStaircaseInitialVarCount = 1;
 
     auto peano_saved = [&](int n) -> const expr* {
         const expr* p = saved_expr_pool_.make("zero", {});
@@ -2748,7 +2748,7 @@ TEST_F(BasicSolverSessionTest, EnumeratesStaircasePathsOneOrTwoSummingToTen) {
     build_paths(build_paths, kStaircaseHeight, nil);
     ASSERT_EQ(expected.size(), kExpectedPaths);
 
-    basic_solver_session session(database, initial_goals, kInitialVarCount, kTierIBudget, kSeed);
+    basic_solver_session session(database, initial_goals, kStaircaseInitialVarCount, kTierIBudget, kSeed);
     enumerate_all_solutions(
         session,
         saved_printer_,
