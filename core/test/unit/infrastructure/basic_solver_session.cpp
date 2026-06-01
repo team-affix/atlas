@@ -124,6 +124,7 @@ void next_until_refuted(
 // Tier A — session API smoke
 
 TEST_F(BasicSolverSessionTest, ConstructsWithEmptyDbAndGoals) {
+    static constexpr size_t kInitialVarCount = 0;
     basic_solver_session session(database, initial_goals, kInitialVarCount, kMaxResolutions, kSeed);
     ASSERT_TRUE(session.next()) << "expected a tick";
     ASSERT_TRUE(session.solved()) << "expected solved termination";
@@ -131,6 +132,7 @@ TEST_F(BasicSolverSessionTest, ConstructsWithEmptyDbAndGoals) {
 }
 
 TEST_F(BasicSolverSessionTest, VacuousSolvedTick) {
+    static constexpr size_t kInitialVarCount = 0;
     basic_solver_session session(database, initial_goals, kInitialVarCount, kMaxResolutions, kSeed);
     ASSERT_TRUE(session.next()) << "expected a tick";
     ASSERT_TRUE(session.solved()) << "expected solved termination";
@@ -139,6 +141,7 @@ TEST_F(BasicSolverSessionTest, VacuousSolvedTick) {
 }
 
 TEST_F(BasicSolverSessionTest, NormalizeDelegatesToBindMap) {
+    static constexpr size_t kInitialVarCount = 2;
     const expr* abc = saved_expr_pool_.make("abc", {});
     const expr* _123 = saved_expr_pool_.make("123", {});
     database.push(rule{saved_expr_pool_.make("f", {abc, _123}), {}});
@@ -163,6 +166,7 @@ TEST_F(BasicSolverSessionTest, NormalizeDelegatesToBindMap) {
 }
 
 TEST_F(BasicSolverSessionTest, ImportSurvivesNextTick) {
+    static constexpr size_t kInitialVarCount = 1;
     const expr* abc = saved_expr_pool_.make("abc", {});
     database.push(rule{saved_expr_pool_.make("f", {abc}), {}});
 
@@ -180,6 +184,7 @@ TEST_F(BasicSolverSessionTest, ImportSurvivesNextTick) {
 }
 
 TEST_F(BasicSolverSessionTest, DeriveDecisionLemmaOnDemand) {
+    static constexpr size_t kInitialVarCount = 0;
     const expr* goal = saved_expr_pool_.make("f", {});
     const expr* head0 = saved_expr_pool_.make("f", {});
     const expr* head1 = saved_expr_pool_.make("f", {});
@@ -194,6 +199,7 @@ TEST_F(BasicSolverSessionTest, DeriveDecisionLemmaOnDemand) {
 }
 
 TEST_F(BasicSolverSessionTest, DeriveResolutionLemmaOnDemand) {
+    static constexpr size_t kInitialVarCount = 0;
     const expr* goal = saved_expr_pool_.make("f", {});
     const expr* head = saved_expr_pool_.make("f", {});
     initial_goals.push(goal);
@@ -206,6 +212,7 @@ TEST_F(BasicSolverSessionTest, DeriveResolutionLemmaOnDemand) {
 }
 
 TEST_F(BasicSolverSessionTest, LemmaNotCachedAcrossTicks) {
+    static constexpr size_t kInitialVarCount = 0;
     const expr* goal = saved_expr_pool_.make("f", {});
     const expr* head0 = saved_expr_pool_.make("f", {});
     const expr* head1 = saved_expr_pool_.make("f", {});
@@ -242,6 +249,7 @@ TEST_F(BasicSolverSessionTest, LemmaNotCachedAcrossTicks) {
 // Tier B — solver outcomes
 
 TEST_F(BasicSolverSessionTest, FindsSingleUnitSolution) {
+    static constexpr size_t kInitialVarCount = 0;
     const expr* goal = saved_expr_pool_.make("f", {});
     initial_goals.push(goal);
     database.push(rule{saved_expr_pool_.make("f", {}), {}});
@@ -254,6 +262,7 @@ TEST_F(BasicSolverSessionTest, FindsSingleUnitSolution) {
 }
 
 TEST_F(BasicSolverSessionTest, RefutesWhenNoCandidates) {
+    static constexpr size_t kInitialVarCount = 0;
     initial_goals.push(saved_expr_pool_.make("f", {}));
 
     basic_solver_session session(database, initial_goals, kInitialVarCount, kMaxResolutions, kSeed);
@@ -263,6 +272,7 @@ TEST_F(BasicSolverSessionTest, RefutesWhenNoCandidates) {
 }
 
 TEST_F(BasicSolverSessionTest, FindsClauseDerivedUnitSolution) {
+    static constexpr size_t kInitialVarCount = 0;
     const expr* g_body = saved_expr_pool_.make("g", {});
     initial_goals.push(saved_expr_pool_.make("f", {}));
     database.push(rule{saved_expr_pool_.make("f", {}), {g_body}});
@@ -276,6 +286,7 @@ TEST_F(BasicSolverSessionTest, FindsClauseDerivedUnitSolution) {
 }
 
 TEST_F(BasicSolverSessionTest, FindsSolutionWithCorrectBindings) {
+    static constexpr size_t kInitialVarCount = 2;
     const expr* abc = saved_expr_pool_.make("abc", {});
     const expr* _123 = saved_expr_pool_.make("123", {});
     database.push(rule{saved_expr_pool_.make("f", {abc, _123}), {}});
@@ -298,6 +309,7 @@ TEST_F(BasicSolverSessionTest, FindsSolutionWithCorrectBindings) {
 }
 
 TEST_F(BasicSolverSessionTest, FindsClauseBodyBindingSolution) {
+    static constexpr size_t kInitialVarCount = 2;
     const expr* rule_var_a = saved_expr_pool_.make(0);
     const expr* rule_var_b = saved_expr_pool_.make(1);
     const expr* abc = saved_expr_pool_.make("abc", {});
@@ -326,6 +338,7 @@ TEST_F(BasicSolverSessionTest, FindsClauseBodyBindingSolution) {
 }
 
 TEST_F(BasicSolverSessionTest, RefutesAfterCdclOnUnsatClauseBranches) {
+    static constexpr size_t kInitialVarCount = 0;
     const expr* b = saved_expr_pool_.make("b", {});
     const expr* c = saved_expr_pool_.make("c", {});
     database.push(rule{saved_expr_pool_.make("a", {}), {b}});
@@ -344,6 +357,7 @@ TEST_F(BasicSolverSessionTest, RefutesAfterCdclOnUnsatClauseBranches) {
 // Tier C — enumeration
 
 TEST_F(BasicSolverSessionTest, EnumeratesTwoGroundChoiceSolutions) {
+    static constexpr size_t kInitialVarCount = 0;
     initial_goals.push(saved_expr_pool_.make("f", {}));
     database.push(rule{saved_expr_pool_.make("f", {}), {}});
     database.push(rule{saved_expr_pool_.make("f", {}), {}});
@@ -358,6 +372,7 @@ TEST_F(BasicSolverSessionTest, EnumeratesTwoGroundChoiceSolutions) {
 }
 
 TEST_F(BasicSolverSessionTest, RefutesAfterEnumeratingAllGroundBranches) {
+    static constexpr size_t kInitialVarCount = 0;
     initial_goals.push(saved_expr_pool_.make("f", {}));
     database.push(rule{saved_expr_pool_.make("f", {}), {}});
     database.push(rule{saved_expr_pool_.make("f", {}), {}});
@@ -372,6 +387,7 @@ TEST_F(BasicSolverSessionTest, RefutesAfterEnumeratingAllGroundBranches) {
 }
 
 TEST_F(BasicSolverSessionTest, EnumeratesTwoVarChoiceSolutions) {
+    static constexpr size_t kInitialVarCount = 1;
     const expr* abc = saved_expr_pool_.make("abc", {});
     const expr* xyz = saved_expr_pool_.make("xyz", {});
     database.push(rule{saved_expr_pool_.make("f", {abc}), {}});
@@ -392,6 +408,7 @@ TEST_F(BasicSolverSessionTest, EnumeratesTwoVarChoiceSolutions) {
 }
 
 TEST_F(BasicSolverSessionTest, RefutesAfterEnumeratingAllVarBranches) {
+    static constexpr size_t kInitialVarCount = 1;
     const expr* abc = saved_expr_pool_.make("abc", {});
     const expr* xyz = saved_expr_pool_.make("xyz", {});
     database.push(rule{saved_expr_pool_.make("f", {abc}), {}});
@@ -412,6 +429,7 @@ TEST_F(BasicSolverSessionTest, RefutesAfterEnumeratingAllVarBranches) {
 }
 
 TEST_F(BasicSolverSessionTest, EnumeratesTwoGoalSharedVarSolutions) {
+    static constexpr size_t kInitialVarCount = 1;
     const expr* abc = saved_expr_pool_.make("abc", {});
     const expr* xyz = saved_expr_pool_.make("xyz", {});
     database.push(rule{saved_expr_pool_.make("f", {abc}), {}});
@@ -436,6 +454,7 @@ TEST_F(BasicSolverSessionTest, EnumeratesTwoGoalSharedVarSolutions) {
 }
 
 TEST_F(BasicSolverSessionTest, EnumeratesFourVarBindingSolutions) {
+    static constexpr size_t kInitialVarCount = 1;
     const expr* a = saved_expr_pool_.make("a", {});
     const expr* b = saved_expr_pool_.make("b", {});
     const expr* c = saved_expr_pool_.make("c", {});
@@ -460,6 +479,7 @@ TEST_F(BasicSolverSessionTest, EnumeratesFourVarBindingSolutions) {
 }
 
 TEST_F(BasicSolverSessionTest, EnumeratesFourClauseBodyFactChoices) {
+    static constexpr size_t kInitialVarCount = 0;
     const expr* rule_var = saved_expr_pool_.make(0);
     const expr* a = saved_expr_pool_.make("a", {});
     const expr* b = saved_expr_pool_.make("b", {});
@@ -486,6 +506,7 @@ TEST_F(BasicSolverSessionTest, EnumeratesFourClauseBodyFactChoices) {
 // Tier E
 
 TEST_F(BasicSolverSessionTest, FindsUniqueSharedVarConjunctionThenRefutes) {
+    static constexpr size_t kInitialVarCount = 1;
     const expr* one = saved_expr_pool_.make("1", {});
     const expr* two = saved_expr_pool_.make("2", {});
     const expr* three = saved_expr_pool_.make("3", {});
@@ -513,6 +534,7 @@ TEST_F(BasicSolverSessionTest, FindsUniqueSharedVarConjunctionThenRefutes) {
 // Tier F
 
 TEST_F(BasicSolverSessionTest, ConflictedTickNotSolved) {
+    static constexpr size_t kInitialVarCount = 0;
     initial_goals.push(saved_expr_pool_.make("f", {}));
 
     basic_solver_session session(database, initial_goals, kInitialVarCount, kMaxResolutions, kSeed);
@@ -522,6 +544,7 @@ TEST_F(BasicSolverSessionTest, ConflictedTickNotSolved) {
 }
 
 TEST_F(BasicSolverSessionTest, SkippedLemmaCallsOnUnitTicks) {
+    static constexpr size_t kInitialVarCount = 0;
     initial_goals.push(saved_expr_pool_.make("f", {}));
     database.push(rule{saved_expr_pool_.make("f", {}), {}});
 
@@ -534,6 +557,7 @@ TEST_F(BasicSolverSessionTest, SkippedLemmaCallsOnUnitTicks) {
 // Tier G — CHC enumeration via basic_solver_session
 
 TEST_F(BasicSolverSessionTest, EnumeratesTwoParentBindingsForAlice) {
+    static constexpr size_t kInitialVarCount = 1;
     const expr* bob = saved_expr_pool_.make("bob", {});
     const expr* carol = saved_expr_pool_.make("carol", {});
     const expr* alice = saved_expr_pool_.make("alice", {});
@@ -559,6 +583,7 @@ TEST_F(BasicSolverSessionTest, EnumeratesTwoParentBindingsForAlice) {
 }
 
 TEST_F(BasicSolverSessionTest, EnumeratesPeanoLessThanSeven) {
+    static constexpr size_t kInitialVarCount = 1;
     static constexpr size_t kPeanoBudget = 128;
 
     auto peano_saved = [&](int n) -> const expr* {
@@ -611,6 +636,7 @@ TEST_F(BasicSolverSessionTest, EnumeratesPeanoLessThanSeven) {
 }
 
 TEST_F(BasicSolverSessionTest, EnumeratesSatPAndQOrR) {
+    static constexpr size_t kInitialVarCount = 4;
     const expr* true_atom = saved_expr_pool_.make("true", {});
     const expr* false_atom = saved_expr_pool_.make("false", {});
     database.push(rule{saved_expr_pool_.make("bool", {true_atom}), {}});
@@ -669,6 +695,7 @@ TEST_F(BasicSolverSessionTest, EnumeratesSatPAndQOrR) {
 }
 
 TEST_F(BasicSolverSessionTest, EnumeratesTwoSatAssignmentsForImpliesQ) {
+    static constexpr size_t kInitialVarCount = 3;
     const expr* true_atom = saved_expr_pool_.make("true", {});
     const expr* false_atom = saved_expr_pool_.make("false", {});
     database.push(rule{saved_expr_pool_.make("bool", {true_atom}), {}});
@@ -720,6 +747,7 @@ TEST_F(BasicSolverSessionTest, EnumeratesTwoSatAssignmentsForImpliesQ) {
 }
 
 TEST_F(BasicSolverSessionTest, EnumeratesTwoPathTwoColorings) {
+    static constexpr size_t kInitialVarCount = 3;
     const expr* red = saved_expr_pool_.make("red", {});
     const expr* blue = saved_expr_pool_.make("blue", {});
     database.push(rule{saved_expr_pool_.make("color", {red}), {}});
@@ -774,6 +802,7 @@ TEST_F(BasicSolverSessionTest, EnumeratesTwoPathTwoColorings) {
     EXPECT_EQ(found, 2u);
 }
 TEST_F(BasicSolverSessionTest, EnumeratesK3ThreeColorings) {
+    static constexpr size_t kInitialVarCount = 3;
     static constexpr size_t kColorBudget = 128;
 
     const expr* red = saved_expr_pool_.make("red", {});
@@ -822,6 +851,7 @@ TEST_F(BasicSolverSessionTest, EnumeratesK3ThreeColorings) {
 }
 
 TEST_F(BasicSolverSessionTest, EnumeratesK3TailFourNodeColorings) {
+    static constexpr size_t kInitialVarCount = 4;
     static constexpr size_t kColorBudget = 128;
 
     const expr* red = saved_expr_pool_.make("red", {});
@@ -878,6 +908,7 @@ TEST_F(BasicSolverSessionTest, EnumeratesK3TailFourNodeColorings) {
 }
 
 TEST_F(BasicSolverSessionTest, EnumeratesFourVarSatThreeClauses) {
+    static constexpr size_t kInitialVarCount = 10;
     static constexpr size_t kSatBudget = 256;
 
     const expr* true_atom = saved_expr_pool_.make("true", {});
@@ -960,6 +991,7 @@ TEST_F(BasicSolverSessionTest, EnumeratesFourVarSatThreeClauses) {
 }
 
 TEST_F(BasicSolverSessionTest, EnumeratesAddPairsSummingLessThanTen) {
+    static constexpr size_t kInitialVarCount = 3;
     static constexpr size_t kPeanoBudget = 128;
 
     auto peano_saved = [&](int n) -> const expr* {
@@ -1033,6 +1065,7 @@ TEST_F(BasicSolverSessionTest, EnumeratesAddPairsSummingLessThanTen) {
 }
 
 TEST_F(BasicSolverSessionTest, EnumeratesAddPairsSummingExactlyTen) {
+    static constexpr size_t kInitialVarCount = 2;
     static constexpr size_t kPeanoBudget = 128;
 
     auto peano_saved = [&](int n) -> const expr* {
@@ -1090,6 +1123,7 @@ TEST_F(BasicSolverSessionTest, EnumeratesAddPairsSummingExactlyTen) {
 }
 
 TEST_F(BasicSolverSessionTest, EnumeratesMulPairsProductEight) {
+    static constexpr size_t kInitialVarCount = 2;
     static constexpr size_t kPeanoBudget = 256;
 
     auto peano_saved = [&](int n) -> const expr* {
@@ -1162,6 +1196,7 @@ TEST_F(BasicSolverSessionTest, EnumeratesMulPairsProductEight) {
         });
 }
 TEST_F(BasicSolverSessionTest, EnumeratesDualBoundedSharedXSums) {
+    static constexpr size_t kInitialVarCount = 5;
     static constexpr size_t kPeanoBudget = 128;
 
     auto peano_saved = [&](int n) -> const expr* {
@@ -1251,6 +1286,7 @@ TEST_F(BasicSolverSessionTest, EnumeratesDualBoundedSharedXSums) {
 }
 
 TEST_F(BasicSolverSessionTest, EnumeratesCatalanTreesWithFiveNodes) {
+    static constexpr size_t kInitialVarCount = 1;
     static constexpr size_t kCatalanBudget = 70;
 
     const expr* zero = saved_expr_pool_.make("zero", {});
@@ -1320,6 +1356,7 @@ TEST_F(BasicSolverSessionTest, EnumeratesCatalanTreesWithFiveNodes) {
 }
 
 TEST_F(BasicSolverSessionTest, EnumeratesFourTwoGoalGroundCombinations) {
+    static constexpr size_t kInitialVarCount = 0;
     initial_goals.push(saved_expr_pool_.make("f", {}));
     initial_goals.push(saved_expr_pool_.make("g", {}));
     database.push(rule{saved_expr_pool_.make("f", {}), {}});
@@ -1337,6 +1374,7 @@ TEST_F(BasicSolverSessionTest, EnumeratesFourTwoGoalGroundCombinations) {
 }
 
 TEST_F(BasicSolverSessionTest, EnumeratesEightThreeGoalGroundCombinations) {
+    static constexpr size_t kInitialVarCount = 0;
     initial_goals.push(saved_expr_pool_.make("f", {}));
     initial_goals.push(saved_expr_pool_.make("g", {}));
     initial_goals.push(saved_expr_pool_.make("h", {}));
@@ -1357,6 +1395,7 @@ TEST_F(BasicSolverSessionTest, EnumeratesEightThreeGoalGroundCombinations) {
 }
 
 TEST_F(BasicSolverSessionTest, EnumeratesManySharedVarGroundHeads) {
+    static constexpr size_t kInitialVarCount = 3;
     const expr* abc = saved_expr_pool_.make("abc", {});
     const expr* def = saved_expr_pool_.make("def", {});
     const expr* ghi = saved_expr_pool_.make("ghi", {});
@@ -1401,6 +1440,7 @@ TEST_F(BasicSolverSessionTest, EnumeratesManySharedVarGroundHeads) {
 }
 
 TEST_F(BasicSolverSessionTest, EnumeratesThreeGroundBranches) {
+    static constexpr size_t kInitialVarCount = 0;
     initial_goals.push(saved_expr_pool_.make("f", {}));
     database.push(rule{saved_expr_pool_.make("f", {}), {}});
     database.push(rule{saved_expr_pool_.make("f", {}), {}});
@@ -1416,6 +1456,7 @@ TEST_F(BasicSolverSessionTest, EnumeratesThreeGroundBranches) {
 }
 
 TEST_F(BasicSolverSessionTest, SolvesRecursiveClauseTreeWithoutBranching) {
+    static constexpr size_t kInitialVarCount = 0;
     initial_goals.push(saved_expr_pool_.make("f", {}));
     database.push(rule{saved_expr_pool_.make("f", {}), {
         saved_expr_pool_.make("g", {}),
@@ -1442,6 +1483,7 @@ TEST_F(BasicSolverSessionTest, SolvesRecursiveClauseTreeWithoutBranching) {
 }
 
 TEST_F(BasicSolverSessionTest, EnumeratesTransitiveReachFromA) {
+    static constexpr size_t kInitialVarCount = 1;
     const expr* a = saved_expr_pool_.make("a", {});
     const expr* b = saved_expr_pool_.make("b", {});
     const expr* c = saved_expr_pool_.make("c", {});
@@ -1465,6 +1507,7 @@ TEST_F(BasicSolverSessionTest, EnumeratesTransitiveReachFromA) {
 }
 
 TEST_F(BasicSolverSessionTest, EnumeratesEvenPeanoLessThanEight) {
+    static constexpr size_t kInitialVarCount = 1;
     static constexpr size_t kPeanoBudget = 128;
 
     auto peano_saved = [&](int n) -> const expr* {
@@ -1527,6 +1570,7 @@ TEST_F(BasicSolverSessionTest, EnumeratesEvenPeanoLessThanEight) {
 }
 
 TEST_F(BasicSolverSessionTest, EnumeratesListSplitsForThreeElementList) {
+    static constexpr size_t kInitialVarCount = 2;
     const expr* nil = saved_expr_pool_.make("nil", {});
     const expr* a = saved_expr_pool_.make("a", {});
     const expr* b = saved_expr_pool_.make("b", {});
@@ -1557,6 +1601,7 @@ TEST_F(BasicSolverSessionTest, EnumeratesListSplitsForThreeElementList) {
 }
 
 TEST_F(BasicSolverSessionTest, EnumeratesTwoChoiceClauseSolutions) {
+    static constexpr size_t kInitialVarCount = 0;
     const expr* abc = saved_expr_pool_.make("abc", {});
     const expr* xyz = saved_expr_pool_.make("xyz", {});
     const expr* rule_var = saved_expr_pool_.make(0);
@@ -1579,6 +1624,7 @@ TEST_F(BasicSolverSessionTest, EnumeratesTwoChoiceClauseSolutions) {
 // Tier H — novel CHC synthesis
 
 TEST_F(BasicSolverSessionTest, EnumeratesCollatzOneStepPreimagesOfTen) {
+    static constexpr size_t kInitialVarCount = 1;
     /*
      * Intent: inverse branching on the Collatz step relation.
      * step(N, M) — if even(N) then M = N/2; if odd(N) then M = 3N+1.
@@ -1672,6 +1718,7 @@ TEST_F(BasicSolverSessionTest, EnumeratesCollatzOneStepPreimagesOfTen) {
 }
 
 TEST_F(BasicSolverSessionTest, EnumeratesFibIndicesWithValueBelowFive) {
+    static constexpr size_t kInitialVarCount = 2;
     /*
      * Intent: recursive fib index synthesis bounded by output value.
      * fib(0)=0, fib(1)=1, fib(n+2)=fib(n)+fib(n+1).
@@ -1760,6 +1807,7 @@ TEST_F(BasicSolverSessionTest, EnumeratesFibIndicesWithValueBelowFive) {
 }
 
 TEST_F(BasicSolverSessionTest, EnumeratesFactorPairsOfSix) {
+    static constexpr size_t kInitialVarCount = 2;
     /*
      * Intent: commutative mul synthesis — (X,Y) and (Y,X) are distinct models.
      * Goal: mul(X, Y, six). Expected 4 factor pairs: (1,6), (6,1), (2,3), (3,2).
@@ -1836,6 +1884,7 @@ TEST_F(BasicSolverSessionTest, EnumeratesFactorPairsOfSix) {
 }
 
 TEST_F(BasicSolverSessionTest, EnumeratesDistinctTwoPartPartitionsOfFive) {
+    static constexpr size_t kInitialVarCount = 2;
     /*
      * Intent: partition 5 into two distinct positive parts with A < B.
      * Goal: part(five, A, B). Expected: (1,4) and (2,3).
@@ -1909,6 +1958,7 @@ TEST_F(BasicSolverSessionTest, EnumeratesDistinctTwoPartPartitionsOfFive) {
 }
 
 TEST_F(BasicSolverSessionTest, EnumeratesArithmeticProgressionsEndingAtFive) {
+    static constexpr size_t kInitialVarCount = 3;
     /*
      * Intent: synthesize start A and step D for a 3-term AP ending at 5.
      * Goals: add(A,D,S2), add(S2,D,five). Expected: (1,2) and (3,1).
@@ -1978,6 +2028,7 @@ TEST_F(BasicSolverSessionTest, EnumeratesArithmeticProgressionsEndingAtFive) {
 }
 
 TEST_F(BasicSolverSessionTest, FindsGcdOfSixAndFourViaSubtraction) {
+    static constexpr size_t kInitialVarCount = 1;
     /*
      * Intent: Euclidean GCD via repeated subtraction on Peano numerals.
      * sub(A,zero,A). sub(suc(A),suc(B),R):-sub(A,B,R). gcd via repeated subtraction.
@@ -2081,6 +2132,7 @@ TEST_F(BasicSolverSessionTest, FindsGcdOfSixAndFourViaSubtraction) {
 }
 
 TEST_F(BasicSolverSessionTest, EnumeratesTwoSubsetsOfFourElements) {
+    static constexpr size_t kInitialVarCount = 2;
     /*
      * Intent: choose 2 distinct elements from {a,b,c,d} with lex ordering X before Y.
      * Goal: pair(X, Y). Expected: all 6 two-subsets.
@@ -2129,6 +2181,7 @@ TEST_F(BasicSolverSessionTest, EnumeratesTwoSubsetsOfFourElements) {
 }
 
 TEST_F(BasicSolverSessionTest, EnumeratesBalancedGrammarStringOfLengthFour) {
+    static constexpr size_t kInitialVarCount = 1;
     /*
      * Intent: grammar S -> aSb | nil; synthesize derivation of length 4 (aabb).
      * Goal: der(T), length(T, four).
@@ -2195,6 +2248,7 @@ TEST_F(BasicSolverSessionTest, EnumeratesBalancedGrammarStringOfLengthFour) {
 }
 
 TEST_F(BasicSolverSessionTest, EnumeratesDepthTwoTermsOverTwoConstants) {
+    static constexpr size_t kInitialVarCount = 1;
     /*
      * Intent: free algebra term(F,X) with depth exactly 2 over constants {a,b}.
      * term(app(F,X)):-term(F),term(X), depth(F,zero), depth(X,zero).
@@ -2257,6 +2311,7 @@ TEST_F(BasicSolverSessionTest, EnumeratesDepthTwoTermsOverTwoConstants) {
 }
 
 TEST_F(BasicSolverSessionTest, FindsEvenParityListOfLengthFour) {
+    static constexpr size_t kInitialVarCount = 1;
     /*
      * Intent: mutual-recursion parity lists — evenlist(nil), oddlist(cons(T)):-evenlist(T),
      * evenlist(cons(T)):-oddlist(T). Goal: evenlist(L), len(L, four).
@@ -2328,6 +2383,7 @@ TEST_F(BasicSolverSessionTest, FindsEvenParityListOfLengthFour) {
 // Tier I — recursive + large-search CHC synthesis
 
 TEST_F(BasicSolverSessionTest, EnumeratesPeanoTriplesInsideTetrahedron) {
+    static constexpr size_t kInitialVarCount = 5;
     /*
      * Intent: 3D sum simplex — all (x,y,z) with x+y+z < 9.
      * Goals: add(X,Y,S), add(S,Z,T), lt(T,nine). Expected C(11,3) = 165 triples.
@@ -2419,6 +2475,7 @@ TEST_F(BasicSolverSessionTest, EnumeratesPeanoTriplesInsideTetrahedron) {
 }
 
 TEST_F(BasicSolverSessionTest, EnumeratesLatticePathsFourByFour) {
+    static constexpr size_t kInitialVarCount = 0;
     /*
      * Intent: monotonic lattice paths (0,0) to (4,4) via right/up — C(8,4) = 70 paths.
      * at(zero,zero). at(suc(X),Y):-at(X,Y). at(X,suc(Y)):-at(X,Y). Goal: at(four,four).
@@ -2759,6 +2816,7 @@ TEST_F(BasicSolverSessionTest, EnumeratesStaircasePathsOneOrTwoSummingToTen) {
 }
 
 TEST_F(BasicSolverSessionTest, EnumeratesFibIndexPairsWithSumBelowThirty) {
+    static constexpr size_t kInitialVarCount = 5;
     /*
      * Intent: ordered (I,J) with fib(I)+fib(J) < 30 — 2D recursive fib + add coupling.
      * Goals: nat(I),nat(J),fib(I,VI),fib(J,VJ),add(VI,VJ,S),lt(S,thirty). Expected: 78 pairs.
