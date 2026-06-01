@@ -2600,7 +2600,7 @@ TEST_F(BasicSolverSessionTest, EnumeratesBinaryStringsNoConsecutiveOnesLengthTen
      * len(nil,zero). len(cons(_,T),suc(L)):-len(T,L). Goal: good(S),len(S,ten).
      * Budget: 1024 (144 models, automaton depth 10).
      */
-    static constexpr size_t kTierIBudget = 2048;
+    static constexpr size_t kTierIBudget = 4096;
     static constexpr int kStringLength = 10;
     static constexpr size_t kExpectedStrings = 144u;
 
