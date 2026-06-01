@@ -19,6 +19,7 @@ struct basic_solver_session
     basic_solver_session(
         db& database,
         initial_goal_exprs& goals,
+        size_t initial_var_count,
         size_t max_resolutions,
         uint32_t random_seed = 0);
 

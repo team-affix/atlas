@@ -7,7 +7,7 @@
 #include "infrastructure/sequencer.hpp"
 
 struct var_sequencer : i_var_sequencer {
-    var_sequencer(locator& loc);
+    var_sequencer(locator& loc, uint32_t initial);
     uint32_t next() override;
 private:
     sequencer<uint32_t> seq;

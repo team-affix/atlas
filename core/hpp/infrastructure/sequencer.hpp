@@ -6,15 +6,15 @@
 
 template<typename IndexType>
 struct sequencer {
-    sequencer(i_log_to_current_trail_frame& t);
+    sequencer(i_log_to_current_trail_frame& t, IndexType initial);
     IndexType next();
 private:
     tracked<IndexType> index;
 };
 
 template<typename IndexType>
-sequencer<IndexType>::sequencer(i_log_to_current_trail_frame& t) :
-    index(t, 0) {
+sequencer<IndexType>::sequencer(i_log_to_current_trail_frame& t, IndexType initial) :
+    index(t, initial) {
 }
 
 template<typename IndexType>

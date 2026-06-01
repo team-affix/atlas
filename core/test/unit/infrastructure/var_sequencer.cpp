@@ -1,9 +1,10 @@
 // Variable sequencer: monotonic uint32_t ids with trail-backed undo via sequencer.
 // next() must return 0, 1, 2 in order and log each step on the trail.
 
+#include <optional>
 #include <gtest/gtest.h>
 #include <gmock/gmock.h>
-#include "locator_fixture.hpp"
+#include "infrastructure/locator.hpp"
 #include "infrastructure/var_sequencer.hpp"
 #include "interfaces/i_log_to_current_trail_frame.hpp"
 
@@ -16,15 +17,17 @@ struct MockTrail : public i_log_to_current_trail_frame {
 struct VarSequencerTest : public ::testing::Test {
     locator loc;
     MockTrail trail;
-    var_sequencer seq;
+    std::optional<var_sequencer> seq;
 
-    VarSequencerTest()
-        : seq(bind_and_make<var_sequencer, i_log_to_current_trail_frame>(loc, trail)) {}
+    void SetUp() override {
+        loc.bind_as<i_log_to_current_trail_frame>(trail);
+        seq.emplace(loc, 0);
+    }
 };
 
 TEST_F(VarSequencerTest, NextReturnsIncreasingIds) {
     EXPECT_CALL(trail, log(_)).Times(3);
-    EXPECT_EQ(seq.next(), 0u);
-    EXPECT_EQ(seq.next(), 1u);
-    EXPECT_EQ(seq.next(), 2u);
+    EXPECT_EQ(seq->next(), 0u);
+    EXPECT_EQ(seq->next(), 1u);
+    EXPECT_EQ(seq->next(), 2u);
 }

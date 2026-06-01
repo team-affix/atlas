@@ -14,7 +14,7 @@ struct CopierIntegrationTest : public ::testing::Test {
 protected:
     void SetUp() override {
         loc.bind_as<i_log_to_current_trail_frame>(t);
-        vs.emplace(loc);
+        vs.emplace(loc, 0);
         loc.bind_as<i_var_sequencer>(*vs);
         vs->next();
         vs->next();

@@ -16,7 +16,7 @@ struct MockTrail : public i_log_to_current_trail_frame {
 struct SequencerTest : public ::testing::Test {
 protected:
     NiceMock<MockTrail> trail;
-    sequencer<int> seq{trail};
+    sequencer<int> seq{trail, 0};
 };
 
 TEST_F(SequencerTest, NextReturns0Then1Then2InOrder) {
@@ -25,4 +25,13 @@ TEST_F(SequencerTest, NextReturns0Then1Then2InOrder) {
     EXPECT_EQ(seq.next(), 0);
     EXPECT_EQ(seq.next(), 1);
     EXPECT_EQ(seq.next(), 2);
+}
+
+TEST_F(SequencerTest, NextStartsFromExplicitInitial) {
+    sequencer<int> seq_from_five{trail, 5};
+    EXPECT_CALL(trail, log(_)).Times(3);
+
+    EXPECT_EQ(seq_from_five.next(), 5);
+    EXPECT_EQ(seq_from_five.next(), 6);
+    EXPECT_EQ(seq_from_five.next(), 7);
 }

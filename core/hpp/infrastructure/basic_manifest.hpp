@@ -49,6 +49,7 @@ struct basic_manifest {
     basic_manifest(
         db& database,
         initial_goal_exprs& initial_goals,
+        size_t initial_var_count,
         size_t max_resolutions,
         uint32_t random_seed);
 
@@ -119,7 +120,7 @@ private:
         cdcl_sequencer cdcl_sequencer_;
         elimination_backlog elimination_backlog_;
 
-        pool_wiring(locator& loc);
+        pool_wiring(locator& loc, size_t initial_var_count);
     };
 
     struct elim_wiring {

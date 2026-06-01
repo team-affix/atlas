@@ -5,7 +5,7 @@
 struct SequencerIntegrationTest : public ::testing::Test {
 protected:
     trail t;
-    sequencer<int> seq{t};
+    sequencer<int> seq{t, 0};
 };
 
 TEST_F(SequencerIntegrationTest, PopRevertsCounter) {
@@ -20,7 +20,7 @@ TEST_F(SequencerIntegrationTest, PopRevertsCounter) {
 }
 
 TEST_F(SequencerIntegrationTest, TwoSequencersSharingTrailRevertIndependently) {
-    sequencer<int> seq2{t};
+    sequencer<int> seq2{t, 0};
     EXPECT_EQ(seq.next(), 0);
     EXPECT_EQ(seq.next(), 1);
     EXPECT_EQ(seq2.next(), 0);

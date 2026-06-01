@@ -193,7 +193,7 @@ struct sim_pool_wiring {
 
     sim_pool_wiring(locator& loc)
         : expr_pool_(loc),
-          var_sequencer_(loc),
+          var_sequencer_(loc, 0),
           cdcl_sequencer_(loc),
           elimination_backlog_(loc) {
         loc.bind_as<i_make_functor, i_make_var, i_import_expr, i_get_expr_count>(expr_pool_);

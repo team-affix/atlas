@@ -30,9 +30,9 @@ basic_manifest::early_wiring::early_wiring(
     loc.bind_as<i_get_initial_goal_count, i_get_initial_goal_expr>(initial_goals);
 }
 
-basic_manifest::pool_wiring::pool_wiring(locator& loc)
+basic_manifest::pool_wiring::pool_wiring(locator& loc, size_t initial_var_count)
     : expr_pool_(loc),
-      var_sequencer_(loc),
+      var_sequencer_(loc, static_cast<uint32_t>(initial_var_count)),
       cdcl_sequencer_(loc),
       elimination_backlog_(loc) {
     loc.bind_as<i_make_functor, i_make_var, i_import_expr, i_get_expr_count>(expr_pool_);
@@ -100,6 +100,7 @@ basic_manifest::orchestration_wiring::orchestration_wiring(
 basic_manifest::basic_manifest(
     db& database,
     initial_goal_exprs& initial_goals,
+    size_t initial_var_count,
     size_t max_resolutions,
     uint32_t random_seed)
     : loc_(),
@@ -107,7 +108,7 @@ basic_manifest::basic_manifest(
       initial_goals_(initial_goals),
       max_resolutions_(max_resolutions),
       early_(loc_, database_, initial_goals_),
-      pools_(loc_),
+      pools_(loc_, initial_var_count),
       elims_(loc_),
       core_(loc_),
       activators_(loc_),
