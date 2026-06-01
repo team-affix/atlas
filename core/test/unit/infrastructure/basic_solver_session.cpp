@@ -2596,11 +2596,15 @@ TEST_F(BasicSolverSessionTest, EnumeratesOrderedCompositionsOfEight) {
 TEST_F(BasicSolverSessionTest, EnumeratesBinaryStringsNoConsecutiveOnesLengthTen) {
     /*
      * Intent: binary strings length 10 with no adjacent 1s — Fibonacci F(12) = 144.
-     * good(nil). good(cons(b0,T)):-good(T). good(cons(b1,cons(b0,T))):-good(T).
+     * good(nil).
+     * good(cons(b0,T)):-good(T).
+     * good(cons(b1,nil)).
+     * good(cons(b1,cons(b0,T))):-good(T).
+     * MSB-first cons: three good heads (0 anywhere; 1 only at end or before 0).
      * len(nil,zero). len(cons(_,T),suc(L)):-len(T,L). Goal: good(S),len(S,ten).
      * Budget: 1024 (144 models, automaton depth 10).
      */
-    static constexpr size_t kTierIBudget = 4096;
+    static constexpr size_t kTierIBudget = 1024;
     static constexpr int kStringLength = 10;
     static constexpr size_t kExpectedStrings = 144u;
 
@@ -2627,6 +2631,7 @@ TEST_F(BasicSolverSessionTest, EnumeratesBinaryStringsNoConsecutiveOnesLengthTen
     database.push(rule{
         saved_expr_pool_.make("good", {saved_expr_pool_.make("cons", {b1, saved_expr_pool_.make("cons", {b0, rv2})})}),
         {saved_expr_pool_.make("good", {rv2})}});
+    database.push(rule{saved_expr_pool_.make("good", {saved_expr_pool_.make("cons", {b1, nil})}), {}});
 
     const expr* rv4 = saved_expr_pool_.make(0);
     const expr* rv5 = saved_expr_pool_.make(1);
