@@ -1514,3 +1514,887 @@ TEST_F(BasicSolverSessionTest, EnumeratesTwoChoiceClauseSolutions) {
     }
     EXPECT_EQ(count, 2u);
 }
+
+// Tier H — novel CHC synthesis
+
+TEST_F(BasicSolverSessionTest, EnumeratesCollatzOneStepPreimagesOfTen) {
+    /*
+     * Intent: inverse branching on the Collatz step relation.
+     * step(N, M) — if even(N) then M = N/2; if odd(N) then M = 3N+1.
+     * Goal: step(N, ten). One-step preimages of 10 are N=3 (3*3+1) and N=20 (20/2).
+     */
+    static constexpr size_t kCollatzBudget = 128;
+
+    auto peano_saved = [&](int n) -> const expr* {
+        const expr* p = saved_expr_pool_.make("zero", {});
+        for (int i = 0; i < n; ++i)
+            p = saved_expr_pool_.make("suc", {p});
+        return p;
+    };
+
+    const expr* zero = saved_expr_pool_.make("zero", {});
+    const expr* one = saved_expr_pool_.make("suc", {zero});
+    const expr* two = saved_expr_pool_.make("suc", {one});
+    const expr* three = saved_expr_pool_.make("suc", {two});
+    database.push(rule{saved_expr_pool_.make("nat", {zero}), {}});
+    database.push(rule{saved_expr_pool_.make("even", {zero}), {}});
+    database.push(rule{saved_expr_pool_.make("odd", {one}), {}});
+
+    const expr* rv1 = saved_expr_pool_.make(0);
+    database.push(rule{
+        saved_expr_pool_.make("nat", {saved_expr_pool_.make("suc", {rv1})}),
+        {saved_expr_pool_.make("nat", {rv1})}});
+    const expr* rv2 = saved_expr_pool_.make(0);
+    const expr* suc_suc_rv2 = saved_expr_pool_.make("suc", {saved_expr_pool_.make("suc", {rv2})});
+    database.push(rule{
+        saved_expr_pool_.make("even", {suc_suc_rv2}),
+        {saved_expr_pool_.make("even", {rv2})}});
+    const expr* rv3 = saved_expr_pool_.make(0);
+    database.push(rule{
+        saved_expr_pool_.make("odd", {saved_expr_pool_.make("suc", {rv3})}),
+        {saved_expr_pool_.make("even", {rv3})}});
+
+    const expr* rv4 = saved_expr_pool_.make(0);
+    database.push(rule{
+        saved_expr_pool_.make("add", {zero, rv4, rv4}),
+        {saved_expr_pool_.make("nat", {rv4})}});
+    const expr* rv5 = saved_expr_pool_.make(0);
+    const expr* rv6 = saved_expr_pool_.make(1);
+    const expr* rv7 = saved_expr_pool_.make(2);
+    database.push(rule{
+        saved_expr_pool_.make("add", {saved_expr_pool_.make("suc", {rv5}), rv6, saved_expr_pool_.make("suc", {rv7})}),
+        {saved_expr_pool_.make("add", {rv5, rv6, rv7})}});
+
+    const expr* rv8 = saved_expr_pool_.make(0);
+    database.push(rule{
+        saved_expr_pool_.make("mul", {zero, rv8, zero}),
+        {saved_expr_pool_.make("nat", {rv8})}});
+    const expr* rv9 = saved_expr_pool_.make(0);
+    const expr* rv10 = saved_expr_pool_.make(1);
+    const expr* rv11 = saved_expr_pool_.make(2);
+    const expr* rv11b = saved_expr_pool_.make(3);
+    database.push(rule{
+        saved_expr_pool_.make("mul", {saved_expr_pool_.make("suc", {rv9}), rv10, rv11}),
+        {saved_expr_pool_.make("mul", {rv9, rv10, rv11b}),
+            saved_expr_pool_.make("add", {rv11b, rv10, rv11})}});
+
+    const expr* rv12 = saved_expr_pool_.make(0);
+    const expr* rv13 = saved_expr_pool_.make(1);
+    database.push(rule{
+        saved_expr_pool_.make("step", {rv12, rv13}),
+        {saved_expr_pool_.make("even", {rv12}), saved_expr_pool_.make("add", {rv13, rv13, rv12})}});
+    const expr* rv14 = saved_expr_pool_.make(0);
+    const expr* rv15 = saved_expr_pool_.make(1);
+    const expr* rv16 = saved_expr_pool_.make(2);
+    database.push(rule{
+        saved_expr_pool_.make("step", {rv14, rv16}),
+        {saved_expr_pool_.make("odd", {rv14}),
+            saved_expr_pool_.make("mul", {three, rv14, rv15}),
+            saved_expr_pool_.make("add", {rv15, one, rv16})}});
+
+    const expr* ten = peano_saved(10);
+    constexpr uint32_t idx_n = 0;
+    initial_goals.push(saved_expr_pool_.make("nat", {saved_expr_pool_.make(idx_n)}));
+    initial_goals.push(saved_expr_pool_.make("step", {
+        saved_expr_pool_.make(idx_n),
+        ten,
+    }));
+
+    basic_solver_session session(database, initial_goals, kCollatzBudget, kSeed);
+    enumerate_all_solutions(
+        session,
+        {{peano_saved(3)}, {peano_saved(20)}},
+        [&]() -> solution {
+            return {saved_expr_pool_.import(session.normalize(saved_expr_pool_.make(idx_n)))};
+        });
+}
+
+TEST_F(BasicSolverSessionTest, EnumeratesFibIndicesWithValueBelowFive) {
+    /*
+     * Intent: recursive fib index synthesis bounded by output value.
+     * fib(0)=0, fib(1)=1, fib(n+2)=fib(n)+fib(n+1).
+     * Goal: fib(N, V), lt(V, five) — all indices with fib value below 5.
+     */
+    static constexpr size_t kPeanoBudget = 128;
+
+    auto peano_saved = [&](int n) -> const expr* {
+        const expr* p = saved_expr_pool_.make("zero", {});
+        for (int i = 0; i < n; ++i)
+            p = saved_expr_pool_.make("suc", {p});
+        return p;
+    };
+
+    const expr* zero = saved_expr_pool_.make("zero", {});
+    const expr* one = saved_expr_pool_.make("suc", {zero});
+    database.push(rule{saved_expr_pool_.make("nat", {zero}), {}});
+    database.push(rule{saved_expr_pool_.make("fib", {zero, zero}), {}});
+    database.push(rule{saved_expr_pool_.make("fib", {one, one}), {}});
+
+    const expr* rv1 = saved_expr_pool_.make(0);
+    database.push(rule{
+        saved_expr_pool_.make("nat", {saved_expr_pool_.make("suc", {rv1})}),
+        {saved_expr_pool_.make("nat", {rv1})}});
+
+    const expr* rv2 = saved_expr_pool_.make(0);
+    database.push(rule{
+        saved_expr_pool_.make("add", {zero, rv2, rv2}),
+        {saved_expr_pool_.make("nat", {rv2})}});
+    const expr* rv3 = saved_expr_pool_.make(0);
+    const expr* rv4 = saved_expr_pool_.make(1);
+    const expr* rv5 = saved_expr_pool_.make(2);
+    database.push(rule{
+        saved_expr_pool_.make("add", {saved_expr_pool_.make("suc", {rv3}), rv4, saved_expr_pool_.make("suc", {rv5})}),
+        {saved_expr_pool_.make("add", {rv3, rv4, rv5})}});
+
+    const expr* rv6 = saved_expr_pool_.make(0);
+    const expr* rv7 = saved_expr_pool_.make(1);
+    const expr* rv8 = saved_expr_pool_.make(2);
+    const expr* rv9 = saved_expr_pool_.make(3);
+    const expr* suc_rv6 = saved_expr_pool_.make("suc", {rv6});
+    database.push(rule{
+        saved_expr_pool_.make("fib", {saved_expr_pool_.make("suc", {suc_rv6}), rv9}),
+        {saved_expr_pool_.make("fib", {rv6, rv7}),
+            saved_expr_pool_.make("fib", {suc_rv6, rv8}),
+            saved_expr_pool_.make("add", {rv7, rv8, rv9})}});
+
+    const expr* rv10 = saved_expr_pool_.make(0);
+    database.push(rule{
+        saved_expr_pool_.make("lt", {zero, saved_expr_pool_.make("suc", {rv10})}),
+        {saved_expr_pool_.make("nat", {rv10})}});
+    const expr* rv11 = saved_expr_pool_.make(0);
+    const expr* rv12 = saved_expr_pool_.make(1);
+    database.push(rule{
+        saved_expr_pool_.make("lt", {saved_expr_pool_.make("suc", {rv11}), saved_expr_pool_.make("suc", {rv12})}),
+        {saved_expr_pool_.make("lt", {rv11, rv12})}});
+
+    std::set<solution> expected{
+        {peano_saved(0)},
+        {peano_saved(1)},
+        {peano_saved(2)},
+        {peano_saved(3)},
+        {peano_saved(4)},
+    };
+    constexpr uint32_t idx_n = 0;
+    constexpr uint32_t idx_v = 1;
+    const expr* five = peano_saved(5);
+    initial_goals.push(saved_expr_pool_.make("nat", {saved_expr_pool_.make(idx_n)}));
+    initial_goals.push(saved_expr_pool_.make("fib", {
+        saved_expr_pool_.make(idx_n),
+        saved_expr_pool_.make(idx_v),
+    }));
+    initial_goals.push(saved_expr_pool_.make("lt", {
+        saved_expr_pool_.make(idx_v),
+        five,
+    }));
+
+    basic_solver_session session(database, initial_goals, kPeanoBudget, kSeed);
+    enumerate_all_solutions(
+        session,
+        expected,
+        [&]() -> solution {
+            return {saved_expr_pool_.import(session.normalize(saved_expr_pool_.make(idx_n)))};
+        });
+}
+
+TEST_F(BasicSolverSessionTest, EnumeratesFactorPairsOfSix) {
+    /*
+     * Intent: commutative mul synthesis — (X,Y) and (Y,X) are distinct models.
+     * Goal: mul(X, Y, six). Expected 4 factor pairs: (1,6), (6,1), (2,3), (3,2).
+     */
+    static constexpr size_t kPeanoBudget = 128;
+
+    auto peano_saved = [&](int n) -> const expr* {
+        const expr* p = saved_expr_pool_.make("zero", {});
+        for (int i = 0; i < n; ++i)
+            p = saved_expr_pool_.make("suc", {p});
+        return p;
+    };
+
+    const expr* zero = saved_expr_pool_.make("zero", {});
+    database.push(rule{saved_expr_pool_.make("nat", {zero}), {}});
+
+    const expr* rv1 = saved_expr_pool_.make(0);
+    database.push(rule{
+        saved_expr_pool_.make("nat", {saved_expr_pool_.make("suc", {rv1})}),
+        {saved_expr_pool_.make("nat", {rv1})}});
+
+    const expr* rv2 = saved_expr_pool_.make(0);
+    database.push(rule{
+        saved_expr_pool_.make("add", {zero, rv2, rv2}),
+        {saved_expr_pool_.make("nat", {rv2})}});
+    const expr* rv3 = saved_expr_pool_.make(0);
+    const expr* rv4 = saved_expr_pool_.make(1);
+    const expr* rv5 = saved_expr_pool_.make(2);
+    database.push(rule{
+        saved_expr_pool_.make("add", {saved_expr_pool_.make("suc", {rv3}), rv4, saved_expr_pool_.make("suc", {rv5})}),
+        {saved_expr_pool_.make("add", {rv3, rv4, rv5})}});
+
+    const expr* rv6 = saved_expr_pool_.make(0);
+    database.push(rule{
+        saved_expr_pool_.make("mul", {zero, rv6, zero}),
+        {saved_expr_pool_.make("nat", {rv6})}});
+    const expr* rv7 = saved_expr_pool_.make(0);
+    const expr* rv8 = saved_expr_pool_.make(1);
+    const expr* rv9 = saved_expr_pool_.make(2);
+    const expr* rv10 = saved_expr_pool_.make(3);
+    database.push(rule{
+        saved_expr_pool_.make("mul", {saved_expr_pool_.make("suc", {rv7}), rv8, rv9}),
+        {saved_expr_pool_.make("mul", {rv7, rv8, rv10}),
+            saved_expr_pool_.make("add", {rv10, rv8, rv9})}});
+
+    std::set<solution> expected{
+        {peano_saved(1), peano_saved(6)},
+        {peano_saved(6), peano_saved(1)},
+        {peano_saved(2), peano_saved(3)},
+        {peano_saved(3), peano_saved(2)},
+    };
+    constexpr uint32_t idx_x = 0;
+    constexpr uint32_t idx_y = 1;
+    const expr* six = peano_saved(6);
+    initial_goals.push(saved_expr_pool_.make("nat", {saved_expr_pool_.make(idx_x)}));
+    initial_goals.push(saved_expr_pool_.make("nat", {saved_expr_pool_.make(idx_y)}));
+    initial_goals.push(saved_expr_pool_.make("mul", {
+        saved_expr_pool_.make(idx_x),
+        saved_expr_pool_.make(idx_y),
+        six,
+    }));
+
+    basic_solver_session session(database, initial_goals, kPeanoBudget, kSeed);
+    enumerate_all_solutions(
+        session,
+        expected,
+        [&]() -> solution {
+            return {
+                saved_expr_pool_.import(session.normalize(saved_expr_pool_.make(idx_x))),
+                saved_expr_pool_.import(session.normalize(saved_expr_pool_.make(idx_y))),
+            };
+        });
+}
+
+TEST_F(BasicSolverSessionTest, EnumeratesDistinctTwoPartPartitionsOfFive) {
+    /*
+     * Intent: partition 5 into two distinct positive parts with A < B.
+     * Goal: part(five, A, B). Expected: (1,4) and (2,3).
+     */
+    static constexpr size_t kPeanoBudget = 128;
+
+    auto peano_saved = [&](int n) -> const expr* {
+        const expr* p = saved_expr_pool_.make("zero", {});
+        for (int i = 0; i < n; ++i)
+            p = saved_expr_pool_.make("suc", {p});
+        return p;
+    };
+
+    const expr* zero = saved_expr_pool_.make("zero", {});
+    database.push(rule{saved_expr_pool_.make("nat", {zero}), {}});
+
+    const expr* rv1 = saved_expr_pool_.make(0);
+    database.push(rule{
+        saved_expr_pool_.make("nat", {saved_expr_pool_.make("suc", {rv1})}),
+        {saved_expr_pool_.make("nat", {rv1})}});
+
+    const expr* rv2 = saved_expr_pool_.make(0);
+    database.push(rule{
+        saved_expr_pool_.make("add", {zero, rv2, rv2}),
+        {saved_expr_pool_.make("nat", {rv2})}});
+    const expr* rv3 = saved_expr_pool_.make(0);
+    const expr* rv4 = saved_expr_pool_.make(1);
+    const expr* rv5 = saved_expr_pool_.make(2);
+    database.push(rule{
+        saved_expr_pool_.make("add", {saved_expr_pool_.make("suc", {rv3}), rv4, saved_expr_pool_.make("suc", {rv5})}),
+        {saved_expr_pool_.make("add", {rv3, rv4, rv5})}});
+
+    const expr* rv6 = saved_expr_pool_.make(0);
+    database.push(rule{
+        saved_expr_pool_.make("lt", {zero, saved_expr_pool_.make("suc", {rv6})}),
+        {saved_expr_pool_.make("nat", {rv6})}});
+    const expr* rv7 = saved_expr_pool_.make(0);
+    const expr* rv8 = saved_expr_pool_.make(1);
+    database.push(rule{
+        saved_expr_pool_.make("lt", {saved_expr_pool_.make("suc", {rv7}), saved_expr_pool_.make("suc", {rv8})}),
+        {saved_expr_pool_.make("lt", {rv7, rv8})}});
+
+    const expr* rv9 = saved_expr_pool_.make(0);
+    const expr* rv10 = saved_expr_pool_.make(1);
+    const expr* five = peano_saved(5);
+    database.push(rule{
+        saved_expr_pool_.make("part", {five, rv9, rv10}),
+        {saved_expr_pool_.make("add", {rv9, rv10, five}),
+            saved_expr_pool_.make("lt", {zero, rv9}),
+            saved_expr_pool_.make("lt", {rv9, rv10})}});
+
+    constexpr uint32_t idx_a = 0;
+    constexpr uint32_t idx_b = 1;
+    initial_goals.push(saved_expr_pool_.make("part", {
+        five,
+        saved_expr_pool_.make(idx_a),
+        saved_expr_pool_.make(idx_b),
+    }));
+
+    basic_solver_session session(database, initial_goals, kPeanoBudget, kSeed);
+    enumerate_all_solutions(
+        session,
+        {{peano_saved(1), peano_saved(4)}, {peano_saved(2), peano_saved(3)}},
+        [&]() -> solution {
+            return {
+                saved_expr_pool_.import(session.normalize(saved_expr_pool_.make(idx_a))),
+                saved_expr_pool_.import(session.normalize(saved_expr_pool_.make(idx_b))),
+            };
+        });
+}
+
+TEST_F(BasicSolverSessionTest, EnumeratesArithmeticProgressionsEndingAtFive) {
+    /*
+     * Intent: synthesize start A and step D for a 3-term AP ending at 5.
+     * Goals: add(A,D,S2), add(S2,D,five). Expected: (1,2) and (3,1).
+     */
+    static constexpr size_t kPeanoBudget = 128;
+
+    auto peano_saved = [&](int n) -> const expr* {
+        const expr* p = saved_expr_pool_.make("zero", {});
+        for (int i = 0; i < n; ++i)
+            p = saved_expr_pool_.make("suc", {p});
+        return p;
+    };
+
+    const expr* zero = saved_expr_pool_.make("zero", {});
+    database.push(rule{saved_expr_pool_.make("nat", {zero}), {}});
+
+    const expr* rv1 = saved_expr_pool_.make(0);
+    database.push(rule{
+        saved_expr_pool_.make("nat", {saved_expr_pool_.make("suc", {rv1})}),
+        {saved_expr_pool_.make("nat", {rv1})}});
+
+    const expr* rv2 = saved_expr_pool_.make(0);
+    database.push(rule{
+        saved_expr_pool_.make("add", {zero, rv2, rv2}),
+        {saved_expr_pool_.make("nat", {rv2})}});
+    const expr* rv3 = saved_expr_pool_.make(0);
+    const expr* rv4 = saved_expr_pool_.make(1);
+    const expr* rv5 = saved_expr_pool_.make(2);
+    database.push(rule{
+        saved_expr_pool_.make("add", {saved_expr_pool_.make("suc", {rv3}), rv4, saved_expr_pool_.make("suc", {rv5})}),
+        {saved_expr_pool_.make("add", {rv3, rv4, rv5})}});
+
+    const expr* rv6 = saved_expr_pool_.make(0);
+    database.push(rule{
+        saved_expr_pool_.make("lt", {zero, saved_expr_pool_.make("suc", {rv6})}),
+        {saved_expr_pool_.make("nat", {rv6})}});
+
+    const expr* five = peano_saved(5);
+    constexpr uint32_t idx_a = 0;
+    constexpr uint32_t idx_d = 1;
+    constexpr uint32_t idx_s2 = 2;
+    initial_goals.push(saved_expr_pool_.make("nat", {saved_expr_pool_.make(idx_a)}));
+    initial_goals.push(saved_expr_pool_.make("nat", {saved_expr_pool_.make(idx_d)}));
+    initial_goals.push(saved_expr_pool_.make("lt", {zero, saved_expr_pool_.make(idx_d)}));
+    initial_goals.push(saved_expr_pool_.make("add", {
+        saved_expr_pool_.make(idx_a),
+        saved_expr_pool_.make(idx_d),
+        saved_expr_pool_.make(idx_s2),
+    }));
+    initial_goals.push(saved_expr_pool_.make("add", {
+        saved_expr_pool_.make(idx_s2),
+        saved_expr_pool_.make(idx_d),
+        five,
+    }));
+
+    basic_solver_session session(database, initial_goals, kPeanoBudget, kSeed);
+    enumerate_all_solutions(
+        session,
+        {{peano_saved(1), peano_saved(2)}, {peano_saved(3), peano_saved(1)}},
+        [&]() -> solution {
+            return {
+                saved_expr_pool_.import(session.normalize(saved_expr_pool_.make(idx_a))),
+                saved_expr_pool_.import(session.normalize(saved_expr_pool_.make(idx_d))),
+            };
+        });
+}
+
+TEST_F(BasicSolverSessionTest, FindsGcdOfSixAndFourViaSubtraction) {
+    /*
+     * Intent: Euclidean GCD via repeated subtraction on Peano numerals.
+     * sub(A,zero,A). sub(suc(A),suc(B),R):-sub(A,B,R). gcd via repeated subtraction.
+     * Goal: gcd(six, four, G). Expected: G = two.
+     */
+    static constexpr size_t kPeanoBudget = 512;
+
+    auto peano_saved = [&](int n) -> const expr* {
+        const expr* p = saved_expr_pool_.make("zero", {});
+        for (int i = 0; i < n; ++i)
+            p = saved_expr_pool_.make("suc", {p});
+        return p;
+    };
+
+    const expr* zero = saved_expr_pool_.make("zero", {});
+    database.push(rule{saved_expr_pool_.make("nat", {zero}), {}});
+
+    const expr* rv1 = saved_expr_pool_.make(0);
+    database.push(rule{
+        saved_expr_pool_.make("nat", {saved_expr_pool_.make("suc", {rv1})}),
+        {saved_expr_pool_.make("nat", {rv1})}});
+
+    const expr* rv2 = saved_expr_pool_.make(0);
+    database.push(rule{
+        saved_expr_pool_.make("add", {zero, rv2, rv2}),
+        {saved_expr_pool_.make("nat", {rv2})}});
+    const expr* rv3 = saved_expr_pool_.make(0);
+    const expr* rv4 = saved_expr_pool_.make(1);
+    const expr* rv5 = saved_expr_pool_.make(2);
+    database.push(rule{
+        saved_expr_pool_.make("add", {saved_expr_pool_.make("suc", {rv3}), rv4, saved_expr_pool_.make("suc", {rv5})}),
+        {saved_expr_pool_.make("add", {rv3, rv4, rv5})}});
+
+    const expr* rv6 = saved_expr_pool_.make(0);
+    database.push(rule{
+        saved_expr_pool_.make("lt", {zero, saved_expr_pool_.make("suc", {rv6})}),
+        {saved_expr_pool_.make("nat", {rv6})}});
+    const expr* rv7 = saved_expr_pool_.make(0);
+    const expr* rv8 = saved_expr_pool_.make(1);
+    database.push(rule{
+        saved_expr_pool_.make("lt", {saved_expr_pool_.make("suc", {rv7}), saved_expr_pool_.make("suc", {rv8})}),
+        {saved_expr_pool_.make("lt", {rv7, rv8})}});
+
+    const expr* rv9 = saved_expr_pool_.make(0);
+    database.push(rule{
+        saved_expr_pool_.make("sub", {rv9, zero, rv9}),
+        {saved_expr_pool_.make("nat", {rv9})}});
+    const expr* rv10 = saved_expr_pool_.make(0);
+    const expr* rv11 = saved_expr_pool_.make(1);
+    const expr* rv12 = saved_expr_pool_.make(2);
+    database.push(rule{
+        saved_expr_pool_.make("sub", {saved_expr_pool_.make("suc", {rv10}), saved_expr_pool_.make("suc", {rv11}), rv12}),
+        {saved_expr_pool_.make("sub", {rv10, rv11, rv12})}});
+
+    const expr* rv13 = saved_expr_pool_.make(0);
+    database.push(rule{
+        saved_expr_pool_.make("gcd", {rv13, zero, rv13}),
+        {saved_expr_pool_.make("nat", {rv13})}});
+    const expr* rv14 = saved_expr_pool_.make(0);
+    database.push(rule{
+        saved_expr_pool_.make("gcd", {rv14, rv14, rv14}),
+        {saved_expr_pool_.make("nat", {rv14})}});
+    const expr* rv15 = saved_expr_pool_.make(0);
+    const expr* rv16 = saved_expr_pool_.make(1);
+    const expr* rv17 = saved_expr_pool_.make(2);
+    const expr* rv18 = saved_expr_pool_.make(3);
+    database.push(rule{
+        saved_expr_pool_.make("gcd", {rv15, rv16, rv18}),
+        {saved_expr_pool_.make("lt", {rv16, rv15}),
+            saved_expr_pool_.make("sub", {rv15, rv16, rv17}),
+            saved_expr_pool_.make("gcd", {rv17, rv16, rv18})}});
+    const expr* rv19 = saved_expr_pool_.make(0);
+    const expr* rv20 = saved_expr_pool_.make(1);
+    const expr* rv21 = saved_expr_pool_.make(2);
+    const expr* rv22 = saved_expr_pool_.make(3);
+    database.push(rule{
+        saved_expr_pool_.make("gcd", {rv19, rv20, rv22}),
+        {saved_expr_pool_.make("lt", {rv19, rv20}),
+            saved_expr_pool_.make("sub", {rv20, rv19, rv21}),
+            saved_expr_pool_.make("gcd", {rv19, rv21, rv22})}});
+
+    const expr* six = peano_saved(6);
+    const expr* four = peano_saved(4);
+    constexpr uint32_t idx_g = 0;
+    initial_goals.push(saved_expr_pool_.make("nat", {four}));
+    initial_goals.push(saved_expr_pool_.make("nat", {six}));
+    initial_goals.push(saved_expr_pool_.make("gcd", {
+        six,
+        four,
+        saved_expr_pool_.make(idx_g),
+    }));
+
+    basic_solver_session session(database, initial_goals, kPeanoBudget, kSeed);
+    enumerate_all_solutions(
+        session,
+        {{peano_saved(2)}},
+        [&]() -> solution {
+            return {saved_expr_pool_.import(session.normalize(saved_expr_pool_.make(idx_g)))};
+        });
+}
+
+TEST_F(BasicSolverSessionTest, EnumeratesTwoSubsetsOfFourElements) {
+    /*
+     * Intent: choose 2 distinct elements from {a,b,c,d} with lex ordering X before Y.
+     * Goal: pair(X, Y). Expected: all 6 two-subsets.
+     */
+    const expr* a = saved_expr_pool_.make("a", {});
+    const expr* b = saved_expr_pool_.make("b", {});
+    const expr* c = saved_expr_pool_.make("c", {});
+    const expr* d = saved_expr_pool_.make("d", {});
+    database.push(rule{saved_expr_pool_.make("member", {a}), {}});
+    database.push(rule{saved_expr_pool_.make("member", {b}), {}});
+    database.push(rule{saved_expr_pool_.make("member", {c}), {}});
+    database.push(rule{saved_expr_pool_.make("member", {d}), {}});
+    database.push(rule{saved_expr_pool_.make("before", {a, b}), {}});
+    database.push(rule{saved_expr_pool_.make("before", {a, c}), {}});
+    database.push(rule{saved_expr_pool_.make("before", {a, d}), {}});
+    database.push(rule{saved_expr_pool_.make("before", {b, c}), {}});
+    database.push(rule{saved_expr_pool_.make("before", {b, d}), {}});
+    database.push(rule{saved_expr_pool_.make("before", {c, d}), {}});
+
+    const expr* rv1 = saved_expr_pool_.make(0);
+    const expr* rv2 = saved_expr_pool_.make(1);
+    database.push(rule{
+        saved_expr_pool_.make("pair", {rv1, rv2}),
+        {saved_expr_pool_.make("member", {rv1}),
+            saved_expr_pool_.make("member", {rv2}),
+            saved_expr_pool_.make("before", {rv1, rv2})}});
+
+    constexpr uint32_t idx_x = 0;
+    constexpr uint32_t idx_y = 1;
+    initial_goals.push(saved_expr_pool_.make("pair", {
+        saved_expr_pool_.make(idx_x),
+        saved_expr_pool_.make(idx_y),
+    }));
+
+    basic_solver_session session(database, initial_goals, kMaxResolutions, kSeed);
+    enumerate_all_solutions(
+        session,
+        {{a, b}, {a, c}, {a, d}, {b, c}, {b, d}, {c, d}},
+        [&]() -> solution {
+            return {
+                saved_expr_pool_.import(session.normalize(saved_expr_pool_.make(idx_x))),
+                saved_expr_pool_.import(session.normalize(saved_expr_pool_.make(idx_y))),
+            };
+        });
+}
+
+TEST_F(BasicSolverSessionTest, EnumeratesBalancedGrammarStringOfLengthFour) {
+    /*
+     * Intent: grammar S -> aSb | nil; synthesize derivation of length 4 (aabb).
+     * Goal: der(T), length(T, four).
+     */
+    static constexpr size_t kPeanoBudget = 128;
+
+    auto peano_saved = [&](int n) -> const expr* {
+        const expr* p = saved_expr_pool_.make("zero", {});
+        for (int i = 0; i < n; ++i)
+            p = saved_expr_pool_.make("suc", {p});
+        return p;
+    };
+
+    const expr* zero = saved_expr_pool_.make("zero", {});
+    const expr* a = saved_expr_pool_.make("a", {});
+    const expr* b = saved_expr_pool_.make("b", {});
+    const expr* nil = saved_expr_pool_.make("nil", {});
+    database.push(rule{saved_expr_pool_.make("der", {nil}), {}});
+    database.push(rule{saved_expr_pool_.make("len", {nil, zero}), {}});
+
+    const expr* rv1 = saved_expr_pool_.make(0);
+    const expr* rv2 = saved_expr_pool_.make(1);
+    const expr* rv3 = saved_expr_pool_.make(2);
+    const expr* wrapped = saved_expr_pool_.make("cons", {a, saved_expr_pool_.make("cons", {b, rv1})});
+    const expr* one = saved_expr_pool_.make("suc", {zero});
+    const expr* two = saved_expr_pool_.make("suc", {one});
+    database.push(rule{
+        saved_expr_pool_.make("der", {wrapped}),
+        {saved_expr_pool_.make("der", {rv1})}});
+    database.push(rule{
+        saved_expr_pool_.make("len", {wrapped, rv3}),
+        {saved_expr_pool_.make("len", {rv1, rv2}),
+            saved_expr_pool_.make("add", {rv2, two, rv3})}});
+
+    const expr* rv4 = saved_expr_pool_.make(0);
+    database.push(rule{
+        saved_expr_pool_.make("add", {zero, rv4, rv4}),
+        {}});
+    const expr* rv5 = saved_expr_pool_.make(0);
+    const expr* rv6 = saved_expr_pool_.make(1);
+    const expr* rv7 = saved_expr_pool_.make(2);
+    database.push(rule{
+        saved_expr_pool_.make("add", {saved_expr_pool_.make("suc", {rv5}), rv6, saved_expr_pool_.make("suc", {rv7})}),
+        {saved_expr_pool_.make("add", {rv5, rv6, rv7})}});
+
+    const expr* aabb = saved_expr_pool_.make("cons", {
+        a, saved_expr_pool_.make("cons", {b, saved_expr_pool_.make("cons", {a, saved_expr_pool_.make("cons", {b, nil})})})});
+    constexpr uint32_t idx_t = 0;
+    const expr* four = peano_saved(4);
+    initial_goals.push(saved_expr_pool_.make("der", {saved_expr_pool_.make(idx_t)}));
+    initial_goals.push(saved_expr_pool_.make("len", {
+        saved_expr_pool_.make(idx_t),
+        four,
+    }));
+
+    basic_solver_session session(database, initial_goals, kPeanoBudget, kSeed);
+    enumerate_all_solutions(
+        session,
+        {{aabb}},
+        [&]() -> solution {
+            return {saved_expr_pool_.import(session.normalize(saved_expr_pool_.make(idx_t)))};
+        });
+}
+
+TEST_F(BasicSolverSessionTest, EnumeratesDepthTwoTermsOverTwoConstants) {
+    /*
+     * Intent: free algebra term(F,X) with depth exactly 2 over constants {a,b}.
+     * term(app(F,X)):-term(F),term(X), depth(F,zero), depth(X,zero).
+     * Goal: term(T), depth(T, two). Expected 4 terms app(F,X).
+     */
+    static constexpr size_t kPeanoBudget = 128;
+
+    auto peano_saved = [&](int n) -> const expr* {
+        const expr* p = saved_expr_pool_.make("zero", {});
+        for (int i = 0; i < n; ++i)
+            p = saved_expr_pool_.make("suc", {p});
+        return p;
+    };
+
+    const expr* zero = saved_expr_pool_.make("zero", {});
+    const expr* a = saved_expr_pool_.make("a", {});
+    const expr* b = saved_expr_pool_.make("b", {});
+    const expr* one = saved_expr_pool_.make("suc", {zero});
+    const expr* two = peano_saved(2);
+    database.push(rule{saved_expr_pool_.make("term", {a}), {}});
+    database.push(rule{saved_expr_pool_.make("term", {b}), {}});
+    database.push(rule{saved_expr_pool_.make("depth", {a, zero}), {}});
+    database.push(rule{saved_expr_pool_.make("depth", {b, zero}), {}});
+
+    const expr* rv1 = saved_expr_pool_.make(0);
+    const expr* rv2 = saved_expr_pool_.make(1);
+    const expr* rv3 = saved_expr_pool_.make(2);
+    const expr* apped = saved_expr_pool_.make("app", {rv1, rv2});
+    database.push(rule{
+        saved_expr_pool_.make("term", {apped}),
+        {saved_expr_pool_.make("term", {rv1}),
+            saved_expr_pool_.make("term", {rv2}),
+            saved_expr_pool_.make("depth", {rv1, zero}),
+            saved_expr_pool_.make("depth", {rv2, zero})}});
+    database.push(rule{
+        saved_expr_pool_.make("depth", {apped, two}),
+        {saved_expr_pool_.make("depth", {rv1, zero}),
+            saved_expr_pool_.make("depth", {rv2, zero})}});
+
+    constexpr uint32_t idx_t = 0;
+    initial_goals.push(saved_expr_pool_.make("term", {saved_expr_pool_.make(idx_t)}));
+    initial_goals.push(saved_expr_pool_.make("depth", {
+        saved_expr_pool_.make(idx_t),
+        two,
+    }));
+
+    basic_solver_session session(database, initial_goals, kPeanoBudget, kSeed);
+    enumerate_all_solutions(
+        session,
+        {
+            {saved_expr_pool_.make("app", {a, a})},
+            {saved_expr_pool_.make("app", {a, b})},
+            {saved_expr_pool_.make("app", {b, a})},
+            {saved_expr_pool_.make("app", {b, b})},
+        },
+        [&]() -> solution {
+            return {saved_expr_pool_.import(session.normalize(saved_expr_pool_.make(idx_t)))};
+        });
+}
+
+TEST_F(BasicSolverSessionTest, FindsEvenParityListOfLengthFour) {
+    /*
+     * Intent: mutual-recursion parity lists — evenlist(nil), oddlist(cons(T)):-evenlist(T),
+     * evenlist(cons(T)):-oddlist(T). Goal: evenlist(L), len(L, four).
+     */
+    static constexpr size_t kPeanoBudget = 128;
+
+    auto peano_saved = [&](int n) -> const expr* {
+        const expr* p = saved_expr_pool_.make("zero", {});
+        for (int i = 0; i < n; ++i)
+            p = saved_expr_pool_.make("suc", {p});
+        return p;
+    };
+
+    const expr* zero = saved_expr_pool_.make("zero", {});
+    const expr* a = saved_expr_pool_.make("a", {});
+    const expr* nil = saved_expr_pool_.make("nil", {});
+    const expr* one = saved_expr_pool_.make("suc", {zero});
+    database.push(rule{saved_expr_pool_.make("evenlist", {nil}), {}});
+    database.push(rule{saved_expr_pool_.make("len", {nil, zero}), {}});
+
+    const expr* rv1 = saved_expr_pool_.make(0);
+    const expr* rv2 = saved_expr_pool_.make(1);
+    const expr* rv3 = saved_expr_pool_.make(2);
+    const expr* consed = saved_expr_pool_.make("cons", {a, rv1});
+    database.push(rule{
+        saved_expr_pool_.make("oddlist", {consed}),
+        {saved_expr_pool_.make("evenlist", {rv1})}});
+    database.push(rule{
+        saved_expr_pool_.make("evenlist", {consed}),
+        {saved_expr_pool_.make("oddlist", {rv1})}});
+    database.push(rule{
+        saved_expr_pool_.make("len", {consed, rv3}),
+        {saved_expr_pool_.make("len", {rv1, rv2}),
+            saved_expr_pool_.make("add", {rv2, one, rv3})}});
+
+    const expr* rv4 = saved_expr_pool_.make(0);
+    database.push(rule{
+        saved_expr_pool_.make("add", {zero, rv4, rv4}),
+        {}});
+    const expr* rv5 = saved_expr_pool_.make(0);
+    const expr* rv6 = saved_expr_pool_.make(1);
+    const expr* rv7 = saved_expr_pool_.make(2);
+    database.push(rule{
+        saved_expr_pool_.make("add", {saved_expr_pool_.make("suc", {rv5}), rv6, saved_expr_pool_.make("suc", {rv7})}),
+        {saved_expr_pool_.make("add", {rv5, rv6, rv7})}});
+
+    const expr* list4 = saved_expr_pool_.make("cons", {
+        a, saved_expr_pool_.make("cons", {
+            a, saved_expr_pool_.make("cons", {
+                a, saved_expr_pool_.make("cons", {a, nil})})})});
+    constexpr uint32_t idx_l = 0;
+    const expr* four = peano_saved(4);
+    initial_goals.push(saved_expr_pool_.make("evenlist", {saved_expr_pool_.make(idx_l)}));
+    initial_goals.push(saved_expr_pool_.make("len", {
+        saved_expr_pool_.make(idx_l),
+        four,
+    }));
+
+    basic_solver_session session(database, initial_goals, kPeanoBudget, kSeed);
+    enumerate_all_solutions(
+        session,
+        {{list4}},
+        [&]() -> solution {
+            return {saved_expr_pool_.import(session.normalize(saved_expr_pool_.make(idx_l)))};
+        });
+}
+
+// Tier I — recursive + large-search CHC synthesis
+
+TEST_F(BasicSolverSessionTest, EnumeratesPeanoTriplesInsideTetrahedron) {
+    /*
+     * Intent: 3D sum simplex — all (x,y,z) with x+y+z < 9.
+     * Goals: add(X,Y,S), add(S,Z,T), lt(T,nine). Expected C(11,3) = 165 triples.
+     * Budget: 512 (165 models, triple add chain).
+     */
+    static constexpr size_t kTierIBudget = 512;
+
+    auto peano_saved = [&](int n) -> const expr* {
+        const expr* p = saved_expr_pool_.make("zero", {});
+        for (int i = 0; i < n; ++i)
+            p = saved_expr_pool_.make("suc", {p});
+        return p;
+    };
+
+    const expr* zero = saved_expr_pool_.make("zero", {});
+    database.push(rule{saved_expr_pool_.make("nat", {zero}), {}});
+
+    const expr* rv1 = saved_expr_pool_.make(0);
+    database.push(rule{
+        saved_expr_pool_.make("nat", {saved_expr_pool_.make("suc", {rv1})}),
+        {saved_expr_pool_.make("nat", {rv1})}});
+
+    const expr* rv2 = saved_expr_pool_.make(0);
+    database.push(rule{
+        saved_expr_pool_.make("add", {zero, rv2, rv2}),
+        {saved_expr_pool_.make("nat", {rv2})}});
+    const expr* rv3 = saved_expr_pool_.make(0);
+    const expr* rv4 = saved_expr_pool_.make(1);
+    const expr* rv5 = saved_expr_pool_.make(2);
+    database.push(rule{
+        saved_expr_pool_.make("add", {saved_expr_pool_.make("suc", {rv3}), rv4, saved_expr_pool_.make("suc", {rv5})}),
+        {saved_expr_pool_.make("add", {rv3, rv4, rv5})}});
+
+    const expr* rv6 = saved_expr_pool_.make(0);
+    database.push(rule{
+        saved_expr_pool_.make("lt", {zero, saved_expr_pool_.make("suc", {rv6})}),
+        {saved_expr_pool_.make("nat", {rv6})}});
+    const expr* rv7 = saved_expr_pool_.make(0);
+    const expr* rv8 = saved_expr_pool_.make(1);
+    database.push(rule{
+        saved_expr_pool_.make("lt", {saved_expr_pool_.make("suc", {rv7}), saved_expr_pool_.make("suc", {rv8})}),
+        {saved_expr_pool_.make("lt", {rv7, rv8})}});
+
+    std::set<solution> expected;
+    for (int x = 0; x < 9; ++x) {
+        for (int y = 0; y < 9 - x; ++y) {
+            for (int z = 0; z < 9 - x - y; ++z)
+                expected.insert({peano_saved(x), peano_saved(y), peano_saved(z)});
+        }
+    }
+    ASSERT_EQ(expected.size(), 165u);
+
+    constexpr uint32_t idx_x = 0;
+    constexpr uint32_t idx_y = 1;
+    constexpr uint32_t idx_z = 2;
+    constexpr uint32_t idx_s = 3;
+    constexpr uint32_t idx_t = 4;
+    const expr* nine = peano_saved(9);
+    initial_goals.push(saved_expr_pool_.make("nat", {saved_expr_pool_.make(idx_x)}));
+    initial_goals.push(saved_expr_pool_.make("nat", {saved_expr_pool_.make(idx_y)}));
+    initial_goals.push(saved_expr_pool_.make("nat", {saved_expr_pool_.make(idx_z)}));
+    initial_goals.push(saved_expr_pool_.make("add", {
+        saved_expr_pool_.make(idx_x),
+        saved_expr_pool_.make(idx_y),
+        saved_expr_pool_.make(idx_s),
+    }));
+    initial_goals.push(saved_expr_pool_.make("add", {
+        saved_expr_pool_.make(idx_s),
+        saved_expr_pool_.make(idx_z),
+        saved_expr_pool_.make(idx_t),
+    }));
+    initial_goals.push(saved_expr_pool_.make("lt", {
+        saved_expr_pool_.make(idx_t),
+        nine,
+    }));
+
+    basic_solver_session session(database, initial_goals, kTierIBudget, kSeed);
+    enumerate_all_solutions(
+        session,
+        expected,
+        [&]() -> solution {
+            return {
+                saved_expr_pool_.import(session.normalize(saved_expr_pool_.make(idx_x))),
+                saved_expr_pool_.import(session.normalize(saved_expr_pool_.make(idx_y))),
+                saved_expr_pool_.import(session.normalize(saved_expr_pool_.make(idx_z))),
+            };
+        });
+}
+
+TEST_F(BasicSolverSessionTest, EnumeratesLatticePathsFourByFour) {
+    /*
+     * Intent: monotonic lattice paths (0,0) to (4,4) via right/up — C(8,4) = 70 paths.
+     * at(X,Y,P) accumulates move list P. Goal: at(four,four,Path).
+     * Budget: 256.
+     */
+    static constexpr size_t kTierIBudget = 256;
+
+    auto peano_saved = [&](int n) -> const expr* {
+        const expr* p = saved_expr_pool_.make("zero", {});
+        for (int i = 0; i < n; ++i)
+            p = saved_expr_pool_.make("suc", {p});
+        return p;
+    };
+
+    const expr* zero = saved_expr_pool_.make("zero", {});
+    const expr* nil = saved_expr_pool_.make("nil", {});
+    const expr* r = saved_expr_pool_.make("r", {});
+    const expr* u = saved_expr_pool_.make("u", {});
+    database.push(rule{saved_expr_pool_.make("at", {zero, zero, nil}), {}});
+
+    const expr* rv1 = saved_expr_pool_.make(0);
+    const expr* rv2 = saved_expr_pool_.make(1);
+    const expr* rv3 = saved_expr_pool_.make(2);
+    database.push(rule{
+        saved_expr_pool_.make("at", {saved_expr_pool_.make("suc", {rv1}), rv2, saved_expr_pool_.make("cons", {r, rv3})}),
+        {saved_expr_pool_.make("at", {rv1, rv2, rv3})}});
+    const expr* rv4 = saved_expr_pool_.make(0);
+    const expr* rv5 = saved_expr_pool_.make(1);
+    const expr* rv6 = saved_expr_pool_.make(2);
+    database.push(rule{
+        saved_expr_pool_.make("at", {rv4, saved_expr_pool_.make("suc", {rv5}), saved_expr_pool_.make("cons", {u, rv6})}),
+        {saved_expr_pool_.make("at", {rv4, rv5, rv6})}});
+
+    const expr* four = peano_saved(4);
+    constexpr uint32_t idx_path = 0;
+    initial_goals.push(saved_expr_pool_.make("at", {four, four, saved_expr_pool_.make(idx_path)}));
+
+    basic_solver_session session(database, initial_goals, kTierIBudget, kSeed);
+    std::set<solution> visited;
+    while (session.next()) {
+        if (!session.solved())
+            continue;
+        const solution s = {
+            saved_expr_pool_.import(session.normalize(saved_expr_pool_.make(idx_path)))};
+        if (visited.count(s))
+            continue;
+        visited.insert(s);
+    }
+    EXPECT_EQ(visited.size(), 70u);
+}
+
