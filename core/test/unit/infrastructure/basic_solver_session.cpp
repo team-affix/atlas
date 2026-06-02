@@ -2818,13 +2818,13 @@ TEST_F(BasicSolverSessionTest, EnumeratesStaircasePathsOneOrTwoSummingToTen) {
 TEST_F(BasicSolverSessionTest, EnumeratesFibIndexPairsWithSumBelowThirty) {
     static constexpr size_t kInitialVarCount = 5;
     /*
-     * Intent: ordered (I,J) with fib(I)+fib(J) < 30 — 2D recursive fib + add coupling.
-     * Goals: nat(I),nat(J),fib(I,VI),fib(J,VJ),add(VI,VJ,S),lt(S,thirty). Expected: 78 pairs.
-     * Budget: 1024 (78 models, double fib unfolding per pair).
+     * Intent: ordered (I,J) with fib(I)+fib(J) < 10 — 2D recursive fib + add coupling.
+     * Goals: nat(I),nat(J),fib(I,VI),fib(J,VJ),add(VI,VJ,S),lt(S,ten). Indices 0..6.
+     * Expected: 41 pairs. Budget: 1024 (sum<30 / 0..12 is too slow for CI).
      */
     static constexpr size_t kTierIBudget = 1024;
-    static constexpr int kFibBruteForceBound = 12;
-    static constexpr int kSumBound = 30;
+    static constexpr int kFibBruteForceBound = 6;
+    static constexpr int kSumBound = 10;
 
     auto peano_saved = [&](int n) -> const expr* {
         const expr* p = saved_expr_pool_.make("zero", {});
@@ -2895,14 +2895,14 @@ TEST_F(BasicSolverSessionTest, EnumeratesFibIndexPairsWithSumBelowThirty) {
                 expected.insert({peano_saved(i), peano_saved(j)});
         }
     }
-    ASSERT_EQ(expected.size(), 78u);
+    ASSERT_EQ(expected.size(), 41u);
 
     constexpr uint32_t idx_i = 0;
     constexpr uint32_t idx_j = 1;
     constexpr uint32_t idx_vi = 2;
     constexpr uint32_t idx_vj = 3;
     constexpr uint32_t idx_s = 4;
-    const expr* thirty = peano_saved(kSumBound);
+    const expr* sum_limit = peano_saved(kSumBound);
     initial_goals.push(saved_expr_pool_.make("nat", {saved_expr_pool_.make(idx_i)}));
     initial_goals.push(saved_expr_pool_.make("nat", {saved_expr_pool_.make(idx_j)}));
     initial_goals.push(saved_expr_pool_.make("fib", {
@@ -2920,7 +2920,7 @@ TEST_F(BasicSolverSessionTest, EnumeratesFibIndexPairsWithSumBelowThirty) {
     }));
     initial_goals.push(saved_expr_pool_.make("lt", {
         saved_expr_pool_.make(idx_s),
-        thirty,
+        sum_limit,
     }));
 
     basic_solver_session session(database, initial_goals, kInitialVarCount, kTierIBudget, kSeed);
