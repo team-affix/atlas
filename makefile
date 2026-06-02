@@ -94,6 +94,27 @@ CORE_DEBUG_FAST_BIN_OBJ = $(CORE_DEBUG_FAST_TEST_OBJ) $(CORE_DEBUG_FAST_GTEST_OB
 CORE_DEBUG_TEST_CXXFLAGS      = $(DEBUG_CXXFLAGS) $(GTEST_CPPFLAGS) -Icore/test
 CORE_DEBUG_FAST_TEST_CXXFLAGS = $(DEBUG_FAST_CXXFLAGS) $(GTEST_CPPFLAGS) -Icore/test
 
+# Parser tests
+PARSER_TEST_SRC = $(shell find parser/test -name '*.cpp' | sort)
+
+PARSER_DEBUG_TEST_OBJ = \
+    $(patsubst parser/test/%.cpp, build/obj/parser_debug_test/%.o, $(PARSER_TEST_SRC))
+PARSER_DEBUG_FAST_TEST_OBJ = \
+    $(patsubst parser/test/%.cpp, build/obj/parser_debug_fast_test/%.o, $(PARSER_TEST_SRC))
+
+PARSER_DEBUG_GTEST_OBJ = \
+    build/obj/parser_debug_test/gtest-all.o \
+    build/obj/parser_debug_test/gmock-all.o
+PARSER_DEBUG_FAST_GTEST_OBJ = \
+    build/obj/parser_debug_fast_test/gtest-all.o \
+    build/obj/parser_debug_fast_test/gmock-all.o
+
+PARSER_DEBUG_BIN_OBJ      = $(PARSER_DEBUG_TEST_OBJ) $(PARSER_DEBUG_GTEST_OBJ)
+PARSER_DEBUG_FAST_BIN_OBJ = $(PARSER_DEBUG_FAST_TEST_OBJ) $(PARSER_DEBUG_FAST_GTEST_OBJ)
+
+PARSER_DEBUG_TEST_CXXFLAGS      = $(DEBUG_CXXFLAGS) $(GTEST_CPPFLAGS) -Iparser/test -I$(ANTLR4_INC)
+PARSER_DEBUG_FAST_TEST_CXXFLAGS = $(DEBUG_FAST_CXXFLAGS) $(GTEST_CPPFLAGS) -Iparser/test -I$(ANTLR4_INC)
+
 # Parser generated: hardcoded because parser/generated/ may not exist at parse
 # time, so $(wildcard ...) would expand to nothing.  ANTLR4 always emits
 # exactly these four files from CHC.g4.
@@ -128,6 +149,10 @@ CORE_DEBUG_TEST_DEP      = $(CORE_DEBUG_TEST_OBJ:.o=.d)
 CORE_DEBUG_FAST_TEST_DEP = $(CORE_DEBUG_FAST_TEST_OBJ:.o=.d)
 CORE_DEBUG_GTEST_DEP      = $(CORE_DEBUG_GTEST_OBJ:.o=.d)
 CORE_DEBUG_FAST_GTEST_DEP = $(CORE_DEBUG_FAST_GTEST_OBJ:.o=.d)
+PARSER_DEBUG_TEST_DEP      = $(PARSER_DEBUG_TEST_OBJ:.o=.d)
+PARSER_DEBUG_FAST_TEST_DEP = $(PARSER_DEBUG_FAST_TEST_OBJ:.o=.d)
+PARSER_DEBUG_GTEST_DEP      = $(PARSER_DEBUG_GTEST_OBJ:.o=.d)
+PARSER_DEBUG_FAST_GTEST_DEP = $(PARSER_DEBUG_FAST_GTEST_OBJ:.o=.d)
 PARSER_DEP            = $(PARSER_OBJ:.o=.d)
 PARSER_DEBUG_DEP      = $(PARSER_DEBUG_OBJ:.o=.d)
 PARSER_DEBUG_FAST_DEP = $(PARSER_DEBUG_FAST_OBJ:.o=.d)
@@ -161,22 +186,12 @@ parser:
 parser_debug: $(CORE_DEBUG_LIB)
 	$(MAKE) parser/generated
 	$(MAKE) $(PARSER_DEBUG_LIB)
-	$(CXX) $(CXXFLAGS) $(DEBUG_CXXFLAGS) \
-	    -I$(ANTLR4_INC) \
-	    parser/test/main.cpp \
-	    -Lbuild -latlas_parser_debug -latlas_core_debug \
-	    -L$(ANTLR4_LIB) -lantlr4-runtime \
-	    -o $(PARSER_DEBUG_BIN)
+	$(MAKE) $(PARSER_DEBUG_BIN)
 
 parser_debug_fast: $(CORE_DEBUG_FAST_LIB)
 	$(MAKE) parser/generated
 	$(MAKE) $(PARSER_DEBUG_FAST_LIB)
-	$(CXX) $(CXXFLAGS) $(DEBUG_FAST_CXXFLAGS) \
-	    -I$(ANTLR4_INC) \
-	    parser/test/main.cpp \
-	    -Lbuild -latlas_parser_debug_fast -latlas_core_debug_fast \
-	    -L$(ANTLR4_LIB) -lantlr4-runtime \
-	    -o $(PARSER_DEBUG_FAST_BIN)
+	$(MAKE) $(PARSER_DEBUG_FAST_BIN)
 
 # CLI lib: sources never require codegen, so no recursive make needed.
 cli: $(CLI_LIB)
@@ -264,6 +279,18 @@ $(CORE_DEBUG_FAST_BIN): $(CORE_DEBUG_FAST_LIB) $(CORE_DEBUG_FAST_BIN_OBJ) | buil
 	    $(CORE_DEBUG_FAST_BIN_OBJ) \
 	    -Lbuild -latlas_core_debug_fast -lpthread
 
+$(PARSER_DEBUG_BIN): $(PARSER_DEBUG_LIB) $(CORE_DEBUG_LIB) $(PARSER_DEBUG_BIN_OBJ) | build
+	$(CXX) $(CXXFLAGS) -o $@ \
+	    $(PARSER_DEBUG_BIN_OBJ) \
+	    -Lbuild -latlas_parser_debug -latlas_core_debug \
+	    -L$(ANTLR4_LIB) -lantlr4-runtime -lpthread
+
+$(PARSER_DEBUG_FAST_BIN): $(PARSER_DEBUG_FAST_LIB) $(CORE_DEBUG_FAST_LIB) $(PARSER_DEBUG_FAST_BIN_OBJ) | build
+	$(CXX) $(CXXFLAGS) -o $@ \
+	    $(PARSER_DEBUG_FAST_BIN_OBJ) \
+	    -Lbuild -latlas_parser_debug_fast -latlas_core_debug_fast \
+	    -L$(ANTLR4_LIB) -lantlr4-runtime -lpthread
+
 # ==============================================================================
 # Compilation pattern rules
 # ==============================================================================
@@ -307,6 +334,32 @@ build/obj/core_debug_fast_test/gtest-all.o: $(GTEST_ALL_CC) | build/obj/core_deb
 build/obj/core_debug_fast_test/gmock-all.o: $(GMOCK_ALL_CC) | build/obj/core_debug_fast_test
 	mkdir -p $(dir $@)
 	$(CXX) $(CXXFLAGS) $(CORE_DEBUG_FAST_TEST_CXXFLAGS) -c $< -o $@
+
+# --- parser tests (debug | debug_fast) ---
+
+build/obj/parser_debug_test/%.o: parser/test/%.cpp | build/obj/parser_debug_test
+	mkdir -p $(dir $@)
+	$(CXX) $(CXXFLAGS) $(PARSER_DEBUG_TEST_CXXFLAGS) -c $< -o $@
+
+build/obj/parser_debug_test/gtest-all.o: $(GTEST_ALL_CC) | build/obj/parser_debug_test
+	mkdir -p $(dir $@)
+	$(CXX) $(CXXFLAGS) $(PARSER_DEBUG_TEST_CXXFLAGS) -c $< -o $@
+
+build/obj/parser_debug_test/gmock-all.o: $(GMOCK_ALL_CC) | build/obj/parser_debug_test
+	mkdir -p $(dir $@)
+	$(CXX) $(CXXFLAGS) $(PARSER_DEBUG_TEST_CXXFLAGS) -c $< -o $@
+
+build/obj/parser_debug_fast_test/%.o: parser/test/%.cpp | build/obj/parser_debug_fast_test
+	mkdir -p $(dir $@)
+	$(CXX) $(CXXFLAGS) $(PARSER_DEBUG_FAST_TEST_CXXFLAGS) -c $< -o $@
+
+build/obj/parser_debug_fast_test/gtest-all.o: $(GTEST_ALL_CC) | build/obj/parser_debug_fast_test
+	mkdir -p $(dir $@)
+	$(CXX) $(CXXFLAGS) $(PARSER_DEBUG_FAST_TEST_CXXFLAGS) -c $< -o $@
+
+build/obj/parser_debug_fast_test/gmock-all.o: $(GMOCK_ALL_CC) | build/obj/parser_debug_fast_test
+	mkdir -p $(dir $@)
+	$(CXX) $(CXXFLAGS) $(PARSER_DEBUG_FAST_TEST_CXXFLAGS) -c $< -o $@
 
 # --- parser (release | debug | debug_fast) ---
 
@@ -359,6 +412,10 @@ build/obj/cli_debug_fast/%.o: cli/cpp/%.cpp | build/obj/cli_debug_fast
 -include $(CORE_DEBUG_FAST_TEST_DEP)
 -include $(CORE_DEBUG_GTEST_DEP)
 -include $(CORE_DEBUG_FAST_GTEST_DEP)
+-include $(PARSER_DEBUG_TEST_DEP)
+-include $(PARSER_DEBUG_FAST_TEST_DEP)
+-include $(PARSER_DEBUG_GTEST_DEP)
+-include $(PARSER_DEBUG_FAST_GTEST_DEP)
 -include $(PARSER_DEP)
 -include $(PARSER_DEBUG_DEP)
 -include $(PARSER_DEBUG_FAST_DEP)
@@ -373,6 +430,7 @@ build/obj/cli_debug_fast/%.o: cli/cpp/%.cpp | build/obj/cli_debug_fast
 build \
 build/obj/core build/obj/core_debug build/obj/core_debug_fast \
 build/obj/core_debug_test build/obj/core_debug_fast_test \
+build/obj/parser_debug_test build/obj/parser_debug_fast_test \
 build/obj/parser build/obj/parser_debug build/obj/parser_debug_fast \
 build/obj/cli build/obj/cli_debug build/obj/cli_debug_fast:
 	mkdir -p $@
