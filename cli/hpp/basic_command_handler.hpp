@@ -3,7 +3,6 @@
 
 #include <cstddef>
 #include <cstdint>
-#include <iostream>
 #include <map>
 #include <optional>
 #include <string>
@@ -26,17 +25,7 @@ struct basic_command_handler {
 
     void operator()();
 
-#ifdef DEBUG
-    const db& test_database() const { return database_; }
-    const initial_goal_exprs& test_initial_goals() const { return initial_goals_; }
-    const std::map<std::string, uint32_t>& test_var_name_to_idx() const { return var_name_to_idx_; }
-    uint32_t test_parse_var_peek() const { return parse_var_seq_.peek(); }
-    void test_print_bindings() { print_bindings(); }
-#endif
-
-#ifndef DEBUG
 private:
-#endif
     void print_bindings();
 
     locator parse_loc_;

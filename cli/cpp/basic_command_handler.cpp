@@ -1,4 +1,5 @@
 #include "../hpp/basic_command_handler.hpp"
+#include <iostream>
 #include "../../parser/hpp/import_database_from_file.hpp"
 #include "../../parser/hpp/import_goals_from_string.hpp"
 #include "interfaces/i_log_to_current_trail_frame.hpp"
