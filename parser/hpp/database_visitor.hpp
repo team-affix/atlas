@@ -10,9 +10,8 @@
 struct database_visitor : public CHCBaseVisitor {
     database_visitor(i_make_functor&, i_make_var&, i_var_sequencer&, i_push_db_rule&);
     antlrcpp::Any visitDatabase(CHCParser::DatabaseContext*) override;
-#ifndef DEBUG
+
 private:
-#endif
     i_make_functor& make_functor;
     i_make_var& make_var;
     i_var_sequencer& var_seq;

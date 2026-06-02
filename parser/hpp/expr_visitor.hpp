@@ -12,9 +12,8 @@
 struct expr_visitor : public CHCBaseVisitor {
     expr_visitor(i_make_functor&, i_make_var&, i_var_sequencer&, std::map<std::string, uint32_t>&);
     std::any visitExpr(CHCParser::ExprContext*) override;
-#ifndef DEBUG
+
 private:
-#endif
     const expr* visitVar(antlr4::tree::TerminalNode*);
     std::any visitFunctor(CHCParser::FunctorContext*) override;
     std::any visitList(CHCParser::ListContext*) override;

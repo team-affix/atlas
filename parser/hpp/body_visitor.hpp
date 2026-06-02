@@ -13,9 +13,8 @@
 struct body_visitor : public CHCBaseVisitor {
     body_visitor(i_make_functor&, i_make_var&, i_var_sequencer&, std::map<std::string, uint32_t>&);
     antlrcpp::Any visitBody(CHCParser::BodyContext*) override;
-#ifndef DEBUG
+
 private:
-#endif
     i_make_functor& make_functor;
     i_make_var& make_var;
     i_var_sequencer& var_seq;

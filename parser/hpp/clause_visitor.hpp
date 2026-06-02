@@ -14,9 +14,8 @@
 struct clause_visitor : public CHCBaseVisitor {
     clause_visitor(i_make_functor&, i_make_var&, i_var_sequencer&);
     antlrcpp::Any visitClause(CHCParser::ClauseContext*) override;
-#ifndef DEBUG
+
 private:
-#endif
     i_make_functor& make_functor;
     i_make_var& make_var;
     i_var_sequencer& var_seq;
