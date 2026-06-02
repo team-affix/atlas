@@ -1,8 +1,9 @@
 #include <any>
 #include "../hpp/expr_visitor.hpp"
 
-expr_visitor::expr_visitor(expr_pool& pool, sequencer& seq, std::map<std::string, uint32_t>& var_map)
-    : pool(pool), seq(seq), var_map(var_map) {}
+expr_visitor::expr_visitor(i_make_functor& make_functor, i_make_var& make_var, i_var_sequencer& var_seq,
+                           std::map<std::string, uint32_t>& var_map)
+    : make_functor(make_functor), make_var(make_var), var_seq(var_seq), var_map(var_map) {}
 
 std::any expr_visitor::visitExpr(CHCParser::ExprContext* ctx) {
     if (auto* var = ctx->VARIABLE())
@@ -14,34 +15,31 @@ std::any expr_visitor::visitExpr(CHCParser::ExprContext* ctx) {
 const expr* expr_visitor::visitVar(antlr4::tree::TerminalNode* node) {
     const std::string& name = node->getText();
     if (name == "_")
-        return pool.var(seq());
+        return make_var.make(var_seq.next());
     auto [it, inserted] = var_map.emplace(name, 0u);
-    if (inserted) it->second = seq();
-    return pool.var(it->second);
+    if (inserted) it->second = var_seq.next();
+    return make_var.make(it->second);
 }
 
 std::any expr_visitor::visitFunctor(CHCParser::FunctorContext* ctx) {
     if (ctx->list())
         return visitList(ctx->list());
 
-    // ATOM with optional parenthesised arg list
     auto* atom_token = ctx->ATOM();
     assert(atom_token != nullptr);
     std::string name = atom_token->getText();
     std::vector<const expr*> args;
     for (auto* sub_expr : ctx->expr())
         args.push_back(std::any_cast<const expr*>(visit(sub_expr)));
-    return (const expr*)pool.functor(name, std::move(args));
+    return (const expr*)make_functor.make(name, std::move(args));
 }
 
 std::any expr_visitor::visitList(CHCParser::ListContext* ctx) {
     auto exprs = ctx->expr();
 
-    // '[]' → nil
     if (exprs.empty())
-        return (const expr*)pool.functor("nil", {});
+        return (const expr*)make_functor.make("nil", {});
 
-    // Check whether there is a '|' token among the children
     bool has_pipe = false;
     for (auto* child : ctx->children) {
         if (child->getText() == "|") {
@@ -50,23 +48,19 @@ std::any expr_visitor::visitList(CHCParser::ListContext* ctx) {
         }
     }
 
-    // Collect head elements (all exprs except last if pipe present)
     size_t head_count = has_pipe ? exprs.size() - 1 : exprs.size();
 
-    // Evaluate head elements
     std::vector<const expr*> heads;
     heads.reserve(head_count);
     for (size_t i = 0; i < head_count; ++i)
         heads.push_back(std::any_cast<const expr*>(visit(exprs[i])));
 
-    // Tail: explicit if pipe present, else nil
     const expr* tail = has_pipe
         ? std::any_cast<const expr*>(visit(exprs.back()))
-        : pool.functor("nil", {});
+        : make_functor.make("nil", {});
 
-    // Right-fold: cons(h1, cons(h2, ..., tail))
     const expr* result = tail;
     for (int i = static_cast<int>(head_count) - 1; i >= 0; --i)
-        result = pool.functor("cons", {heads[i], result});
+        result = make_functor.make("cons", {heads[i], result});
     return (const expr*)result;
 }

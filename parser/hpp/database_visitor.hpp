@@ -2,17 +2,21 @@
 #define DATABASE_VISITOR_HPP
 
 #include "../generated/CHCBaseVisitor.h"
-#include "../../core/hpp/expr.hpp"
-#include "../../core/hpp/sequencer.hpp"
+#include "interfaces/i_make_functor.hpp"
+#include "interfaces/i_make_var.hpp"
+#include "interfaces/i_var_sequencer.hpp"
+#include "interfaces/i_push_db_rule.hpp"
 
 struct database_visitor : public CHCBaseVisitor {
-    database_visitor(expr_pool&, sequencer&);
+    database_visitor(i_make_functor&, i_make_var&, i_var_sequencer&, i_push_db_rule&);
     antlrcpp::Any visitDatabase(CHCParser::DatabaseContext*) override;
 #ifndef DEBUG
 private:
 #endif
-    expr_pool& pool;
-    sequencer& seq;
+    i_make_functor& make_functor;
+    i_make_var& make_var;
+    i_var_sequencer& var_seq;
+    i_push_db_rule& out;
 };
 
 #endif

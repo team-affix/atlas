@@ -5,11 +5,12 @@
 #include <map>
 #include <string>
 #include "../generated/CHCBaseVisitor.h"
-#include "../../core/hpp/expr.hpp"
-#include "../../core/hpp/sequencer.hpp"
+#include "interfaces/i_make_functor.hpp"
+#include "interfaces/i_make_var.hpp"
+#include "interfaces/i_var_sequencer.hpp"
 
 struct expr_visitor : public CHCBaseVisitor {
-    expr_visitor(expr_pool&, sequencer&, std::map<std::string, uint32_t>&);
+    expr_visitor(i_make_functor&, i_make_var&, i_var_sequencer&, std::map<std::string, uint32_t>&);
     std::any visitExpr(CHCParser::ExprContext*) override;
 #ifndef DEBUG
 private:
@@ -18,8 +19,9 @@ private:
     std::any visitFunctor(CHCParser::FunctorContext*) override;
     std::any visitList(CHCParser::ListContext*) override;
 
-    expr_pool& pool;
-    sequencer& seq;
+    i_make_functor& make_functor;
+    i_make_var& make_var;
+    i_var_sequencer& var_seq;
     std::map<std::string, uint32_t>& var_map;
 };
 

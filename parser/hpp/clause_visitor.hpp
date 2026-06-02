@@ -6,17 +6,20 @@
 #include "../generated/CHCBaseVisitor.h"
 #include "../hpp/expr_visitor.hpp"
 #include "../hpp/body_visitor.hpp"
-#include "../../core/hpp/rule.hpp"
-#include "../../core/hpp/sequencer.hpp"
+#include "value_objects/rule.hpp"
+#include "interfaces/i_make_functor.hpp"
+#include "interfaces/i_make_var.hpp"
+#include "interfaces/i_var_sequencer.hpp"
 
 struct clause_visitor : public CHCBaseVisitor {
-    clause_visitor(expr_pool&, sequencer&);
+    clause_visitor(i_make_functor&, i_make_var&, i_var_sequencer&);
     antlrcpp::Any visitClause(CHCParser::ClauseContext*) override;
 #ifndef DEBUG
 private:
 #endif
-    expr_pool& pool;
-    sequencer& seq;
+    i_make_functor& make_functor;
+    i_make_var& make_var;
+    i_var_sequencer& var_seq;
 };
 
 #endif

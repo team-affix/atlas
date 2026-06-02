@@ -6,17 +6,19 @@
 #include <vector>
 #include "../generated/CHCBaseVisitor.h"
 #include "../hpp/expr_visitor.hpp"
-#include "../../core/hpp/expr.hpp"
-#include "../../core/hpp/sequencer.hpp"
+#include "interfaces/i_make_functor.hpp"
+#include "interfaces/i_make_var.hpp"
+#include "interfaces/i_var_sequencer.hpp"
 
 struct body_visitor : public CHCBaseVisitor {
-    body_visitor(expr_pool&, sequencer&, std::map<std::string, uint32_t>&);
+    body_visitor(i_make_functor&, i_make_var&, i_var_sequencer&, std::map<std::string, uint32_t>&);
     antlrcpp::Any visitBody(CHCParser::BodyContext*) override;
 #ifndef DEBUG
 private:
 #endif
-    expr_pool& pool;
-    sequencer& seq;
+    i_make_functor& make_functor;
+    i_make_var& make_var;
+    i_var_sequencer& var_seq;
     std::map<std::string, uint32_t>& var_map;
 };
 

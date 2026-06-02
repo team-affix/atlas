@@ -1,18 +1,19 @@
 #ifndef IMPORT_GOALS_FROM_STRING_HPP
 #define IMPORT_GOALS_FROM_STRING_HPP
 
+#include <cstdint>
 #include <map>
 #include <string>
-#include <cstdint>
-#include "../../core/hpp/defs.hpp"
-#include "../../core/hpp/expr.hpp"
-#include "../../core/hpp/sequencer.hpp"
+#include "interfaces/i_make_functor.hpp"
+#include "interfaces/i_make_var.hpp"
+#include "interfaces/i_var_sequencer.hpp"
+#include "interfaces/i_push_initial_goal_expr.hpp"
 
-struct parsed_goals {
-    goals gl;
-    std::map<std::string, uint32_t> var_name_to_idx;
-};
-
-parsed_goals import_goals_from_string(const std::string& body, expr_pool&, sequencer&);
+std::map<std::string, uint32_t> import_goals_from_string(
+    const std::string& body,
+    i_make_functor&,
+    i_make_var&,
+    i_var_sequencer&,
+    i_push_initial_goal_expr&);
 
 #endif
