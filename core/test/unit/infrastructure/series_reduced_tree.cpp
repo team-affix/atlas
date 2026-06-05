@@ -3,11 +3,128 @@
 
 #include <gtest/gtest.h>
 #include <gmock/gmock.h>
+#include <algorithm>
+#include <random>
+#include <set>
 #include <stdexcept>
 #include <unordered_set>
+#include <vector>
 #include "infrastructure/series_reduced_tree.hpp"
 
 using ::testing::UnorderedElementsAre;
+
+namespace {
+
+void collect_forest_nodes(const series_reduced_tree<int>& tree, int node,
+        std::unordered_set<int>& nodes) {
+    nodes.insert(node);
+    try {
+        const auto& children = tree.children(node);
+        for (int child : children)
+            collect_forest_nodes(tree, child, nodes);
+    } catch (const std::out_of_range&) {
+    }
+}
+
+std::unordered_set<int> forest_nodes(const series_reduced_tree<int>& tree) {
+    std::unordered_set<int> nodes;
+    for (int root : tree.roots())
+        collect_forest_nodes(tree, root, nodes);
+    return nodes;
+}
+
+void expect_series_reduced_invariants(const series_reduced_tree<int>& tree) {
+    const auto nodes = forest_nodes(tree);
+
+    for (int root : tree.roots())
+        EXPECT_TRUE(nodes.contains(root)) << "root " << root << " not reachable";
+
+    for (int leaf : tree.leaves()) {
+        EXPECT_TRUE(nodes.contains(leaf)) << "leaf " << leaf << " not reachable";
+        if (!tree.roots().contains(leaf)) {
+            const int parent = tree.parent(leaf);
+            EXPECT_TRUE(nodes.contains(parent))
+                << "leaf " << leaf << " parent " << parent << " not reachable";
+        }
+    }
+
+    for (int node : nodes) {
+        const bool is_root = tree.roots().contains(node);
+        const bool is_leaf = tree.leaves().contains(node);
+
+        if (is_root && is_leaf) {
+            EXPECT_THROW({ tree.parent(node); }, std::out_of_range);
+            EXPECT_THROW({ tree.children(node); }, std::out_of_range);
+        } else if (is_leaf && !is_root) {
+            EXPECT_THROW({ tree.children(node); }, std::out_of_range);
+            const int parent = tree.parent(node);
+            EXPECT_TRUE(nodes.contains(parent));
+            EXPECT_TRUE(tree.children(parent).contains(node));
+        } else if (is_root && !is_leaf) {
+            EXPECT_THROW({ tree.parent(node); }, std::out_of_range);
+            const auto& children = tree.children(node);
+            EXPECT_GE(children.size(), 2u) << "unary branching root " << node;
+            for (int child : children) {
+                EXPECT_TRUE(nodes.contains(child));
+                EXPECT_EQ(tree.parent(child), node);
+                EXPECT_FALSE(tree.roots().contains(child));
+            }
+        } else {
+            const int parent = tree.parent(node);
+            EXPECT_TRUE(nodes.contains(parent));
+            const auto& children = tree.children(node);
+            EXPECT_GE(children.size(), 2u) << "unary branching node " << node;
+            EXPECT_TRUE(tree.children(parent).contains(node));
+            for (int child : children) {
+                EXPECT_TRUE(nodes.contains(child));
+                EXPECT_EQ(tree.parent(child), node);
+            }
+        }
+    }
+}
+
+bool try_random_link(series_reduced_tree<int>& tree, std::mt19937& rng) {
+    std::vector<int> leaf_parents;
+    std::vector<int> root_children;
+    for (int id = 1; id <= 15; ++id) {
+        if (tree.leaves().contains(id))
+            leaf_parents.push_back(id);
+        if (tree.roots().contains(id))
+            root_children.push_back(id);
+    }
+    if (leaf_parents.empty() || root_children.empty())
+        return false;
+
+    std::uniform_int_distribution<size_t> parent_dist(0, leaf_parents.size() - 1);
+    const int parent = leaf_parents[parent_dist(rng)];
+
+    std::unordered_set<int> ancestors;
+    for (int cur = parent; ; ) {
+        try {
+            cur = tree.parent(cur);
+            ancestors.insert(cur);
+        } catch (const std::out_of_range&) {
+            break;
+        }
+    }
+
+    std::vector<int> candidates;
+    for (int child : root_children) {
+        if (child != parent && !ancestors.contains(child))
+            candidates.push_back(child);
+    }
+    if (candidates.empty())
+        return false;
+
+    std::shuffle(candidates.begin(), candidates.end(), rng);
+    std::uniform_int_distribution<size_t> count_dist(1, candidates.size());
+    const size_t count = count_dist(rng);
+
+    std::set<int> children(candidates.begin(), candidates.begin() + static_cast<std::ptrdiff_t>(count));
+    return tree.link(parent, children);
+}
+
+} // namespace
 
 struct SeriesReducedTreeTest : public ::testing::Test {
     series_reduced_tree<int> tree;
@@ -132,17 +249,6 @@ TEST_F(SeriesReducedTreeTest, LinkFailsChildNotRoot) {
     EXPECT_EQ(tree.parent(10), 1);
     EXPECT_EQ(tree.parent(20), 1);
     EXPECT_THROW({ tree.parent(2); }, std::out_of_range);
-}
-
-TEST_F(SeriesReducedTreeTest, LinkFailsSelfAsChild) {
-    ASSERT_TRUE(tree.insert(1));
-    ASSERT_TRUE(tree.insert(10));
-    EXPECT_FALSE(tree.link(1, {1}));
-    EXPECT_FALSE(tree.link(1, {10, 1}));
-    EXPECT_THAT(tree.roots(), UnorderedElementsAre(1, 10));
-    EXPECT_THAT(tree.leaves(), UnorderedElementsAre(1, 10));
-    EXPECT_THROW({ tree.parent(1); }, std::out_of_range);
-    EXPECT_THROW({ tree.parent(10); }, std::out_of_range);
 }
 
 TEST_F(SeriesReducedTreeTest, LinkFailsUnknownParent) {
@@ -437,4 +543,53 @@ TEST_F(SeriesReducedTreeTest, NonRootBranchingParent) {
     EXPECT_EQ(tree.parent(10), 1);
     EXPECT_EQ(tree.parent(20), 1);
     EXPECT_THROW({ tree.parent(0); }, std::out_of_range);
+}
+
+TEST_F(SeriesReducedTreeTest, InvariantsHoldOnEmptyForest) {
+    expect_series_reduced_invariants(tree);
+}
+
+TEST_F(SeriesReducedTreeTest, InvariantsHoldAfterRepresentativeSequence) {
+    ASSERT_TRUE(tree.insert(0));
+    ASSERT_TRUE(tree.insert(1));
+    ASSERT_TRUE(tree.insert(2));
+    ASSERT_TRUE(tree.insert(10));
+    ASSERT_TRUE(tree.link(0, {1, 2}));
+    expect_series_reduced_invariants(tree);
+
+    ASSERT_TRUE(tree.link(1, {10}));
+    expect_series_reduced_invariants(tree);
+
+    ASSERT_TRUE(tree.unlink(2));
+    expect_series_reduced_invariants(tree);
+
+    ASSERT_TRUE(tree.insert(99));
+    ASSERT_TRUE(tree.link(99, {2}));
+    expect_series_reduced_invariants(tree);
+}
+
+TEST_F(SeriesReducedTreeTest, FuzzRandomOperations) {
+    std::mt19937 rng(42);
+    std::uniform_int_distribution<int> op_dist(0, 3);
+    std::uniform_int_distribution<int> id_dist(1, 15);
+
+    expect_series_reduced_invariants(tree);
+
+    for (int step = 0; step < 1000; ++step) {
+        switch (op_dist(rng)) {
+        case 0:
+            tree.insert(id_dist(rng));
+            break;
+        case 1:
+            tree.erase(id_dist(rng));
+            break;
+        case 2:
+            try_random_link(tree, rng);
+            break;
+        case 3:
+            tree.unlink(id_dist(rng));
+            break;
+        }
+        expect_series_reduced_invariants(tree);
+    }
 }

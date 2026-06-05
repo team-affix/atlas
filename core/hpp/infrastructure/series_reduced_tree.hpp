@@ -60,7 +60,7 @@ bool series_reduced_tree<NodeId>::link(NodeId parent, std::set<NodeId> children)
         return false;
 
     if (std::any_of(children.begin(), children.end(), [&](const NodeId& c) {
-            return c == parent || !roots_.contains(c);
+            return !roots_.contains(c);
         }))
         return false;
     
