@@ -12,8 +12,10 @@ struct series_reduced_tree {
     bool erase(NodeId node);
     bool link(NodeId parent, std::set<NodeId> children);
     bool unlink(NodeId child);
+    void clear();
 
     const std::unordered_set<NodeId>& roots() const;
+    const std::unordered_set<NodeId>& leaves() const;
     const std::set<NodeId>& children(NodeId parent) const;
 
 private:
@@ -101,8 +103,21 @@ bool series_reduced_tree<NodeId>::unlink(NodeId child) {
 }
 
 template<typename NodeId>
+void series_reduced_tree<NodeId>::clear() {
+    roots_.clear();
+    leaves_.clear();
+    children_.clear();
+    parents_.clear();
+}
+
+template<typename NodeId>
 const std::unordered_set<NodeId>& series_reduced_tree<NodeId>::roots() const {
     return roots_;
+}
+
+template<typename NodeId>
+const std::unordered_set<NodeId>& series_reduced_tree<NodeId>::leaves() const {
+    return leaves_;
 }
 
 template<typename NodeId>
@@ -127,7 +142,6 @@ void series_reduced_tree<NodeId>::try_reduce(NodeId parent) {
     const NodeId child = *children.begin();
     
     // unlink the child from the parent
-    parents_.erase(child);
     children_.erase(children_it); // erase whole children entry
     
     // get the parent (might not exist if root)
@@ -135,16 +149,22 @@ void series_reduced_tree<NodeId>::try_reduce(NodeId parent) {
     
     if (grandparent_it == parents_.end()) {
         // the child is now a root
+        parents_.erase(child);
         roots_.erase(parent);
         roots_.insert(child);
-        parents_.erase(child);
     } else {
-        // erase the parent entry
-        parents_.erase(grandparent_it);
-        // link the child to the grandparent
         const auto grandparent = grandparent_it->second;
+        
+        // get children of the grandparent
+        auto& grandparent_children = children_.at(grandparent);
+        
+        // link the child to the grandparent
         parents_.at(child) = grandparent;
-        children_.at(grandparent).insert(child);
+        grandparent_children.erase(parent);
+        grandparent_children.insert(child);
+        
+        // erase the grandparent entry
+        parents_.erase(grandparent_it);
     }
 }
 
