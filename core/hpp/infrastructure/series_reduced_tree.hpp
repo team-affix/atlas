@@ -1,6 +1,7 @@
 #ifndef SERIES_REDUCED_TREE_HPP
 #define SERIES_REDUCED_TREE_HPP
 
+#include "debug_assert.hpp"
 #include <algorithm>
 #include <unordered_map>
 #include <unordered_set>
@@ -42,7 +43,7 @@ template<typename NodeId>
 bool series_reduced_tree<NodeId>::erase(NodeId node) {
     // Only isolated nodes: in roots_ and leaves_ (no parent, no children row).
     // Linked leaves are in leaves_ but not roots_; branching nodes fail here.
-    // To remove a linked leaf, unlink first; to drop a parent, unlink then erase(parent).
+    // To remove a linked leaf, unlink first. Former branching parents are absorbed by try_reduce.
     if (!roots_.contains(node) || !leaves_.contains(node))
         return false;
     roots_.erase(node);
@@ -128,8 +129,8 @@ const std::set<NodeId>& series_reduced_tree<NodeId>::children(NodeId parent) con
 template<typename NodeId>
 void series_reduced_tree<NodeId>::try_reduce(NodeId parent) {
     auto children_it = children_.find(parent);
+    DEBUG_ASSERT(children_it != children_.end());
 
-    // get the children
     const auto& children = children_it->second;
 
     // if non-unary, cannot reduce
@@ -144,7 +145,6 @@ void series_reduced_tree<NodeId>::try_reduce(NodeId parent) {
     // unlink the child from the parent
     children_.erase(children_it); // erase whole children entry
     
-    // get the parent (might not exist if root)
     auto grandparent_it = parents_.find(parent);
     
     if (grandparent_it == parents_.end()) {
@@ -163,7 +163,7 @@ void series_reduced_tree<NodeId>::try_reduce(NodeId parent) {
         grandparent_children.erase(parent);
         grandparent_children.insert(child);
         
-        // erase the grandparent entry
+        // remove the absorbed parent from parents_
         parents_.erase(grandparent_it);
     }
 }
