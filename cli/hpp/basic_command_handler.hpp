@@ -6,7 +6,7 @@
 #include <map>
 #include <optional>
 #include <string>
-#include "infrastructure/basic_solver_session.hpp"
+#include "infrastructure/basic_runtime.hpp"
 #include "infrastructure/db.hpp"
 #include "infrastructure/expr_pool.hpp"
 #include "infrastructure/expr_printer.hpp"
@@ -37,7 +37,7 @@ private:
     db database_;
     initial_goal_exprs initial_goals_;
     std::map<std::string, uint32_t> var_name_to_idx_;
-    std::optional<basic_solver_session> session_;
+    std::optional<basic_runtime> runtime_;
 };
 
 #endif

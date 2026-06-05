@@ -22,12 +22,12 @@ basic_command_handler::basic_command_handler(
         var_names_.set_name(idx, name);
 
     const size_t initial_var_count = parse_var_seq_.peek();
-    session_.emplace(database_, initial_goals_, initial_var_count, max_resolutions, seed);
+    runtime_.emplace(database_, initial_goals_, initial_var_count, max_resolutions, seed);
 }
 
 void basic_command_handler::operator()() {
-    while (session_->next()) {
-        if (!session_->solved())
+    while (runtime_->next()) {
+        if (!runtime_->solved())
             continue;
         std::cout << "SOLVED\n";
         print_bindings();
@@ -40,7 +40,7 @@ void basic_command_handler::operator()() {
 void basic_command_handler::print_bindings() {
     for (const auto& [name, idx] : var_name_to_idx_) {
         std::cout << "  " << name << " = ";
-        printer_->print(session_->normalize(parse_pool_->make(idx)));
+        printer_->print(runtime_->normalize(parse_pool_->make(idx)));
         std::cout << "\n";
     }
 }
