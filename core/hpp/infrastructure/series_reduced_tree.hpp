@@ -18,6 +18,7 @@ struct series_reduced_tree {
     const std::unordered_set<NodeId>& roots() const;
     const std::unordered_set<NodeId>& leaves() const;
     const std::set<NodeId>& children(NodeId parent) const;
+    NodeId parent(NodeId child) const;
 
 private:
     void try_reduce(NodeId node);
@@ -124,6 +125,11 @@ const std::unordered_set<NodeId>& series_reduced_tree<NodeId>::leaves() const {
 template<typename NodeId>
 const std::set<NodeId>& series_reduced_tree<NodeId>::children(NodeId parent) const {
     return children_.at(parent);
+}
+
+template<typename NodeId>
+NodeId series_reduced_tree<NodeId>::parent(NodeId child) const {
+    return parents_.at(child);
 }
 
 template<typename NodeId>
