@@ -22,8 +22,10 @@
 #include "infrastructure/get_resolution_rule.hpp"
 #include "infrastructure/get_unit_resolution.hpp"
 #include "infrastructure/goal_activator.hpp"
+#include "infrastructure/goal_candidates_activator.hpp"
 #include "infrastructure/goal_candidate_rules.hpp"
 #include "infrastructure/goal_deactivator.hpp"
+#include "infrastructure/initial_goals_activator.hpp"
 #include "infrastructure/goal_exprs.hpp"
 #include "infrastructure/initial_goal_activator.hpp"
 #include "infrastructure/initial_goal_exprs.hpp"
@@ -35,6 +37,7 @@
 #include "infrastructure/random_decision_generator.hpp"
 #include "infrastructure/resolution_memory.hpp"
 #include "infrastructure/resolver.hpp"
+#include "infrastructure/subgoals_activator.hpp"
 #include "infrastructure/sim.hpp"
 #include "infrastructure/solution_detector.hpp"
 #include "infrastructure/solver.hpp"
@@ -160,9 +163,12 @@ private:
     };
 
     struct orchestration_wiring {
+        goal_candidates_activator goal_candidates_activator_;
+        std::optional<subgoals_activator> subgoals_activator_;
+        std::optional<initial_goals_activator> initial_goals_activator_;
         std::mt19937 rng_;
         random_decision_generator random_decision_generator_;
-        resolver resolver_;
+        std::optional<resolver> resolver_;
         std::optional<sim> sim_;
         std::optional<solver> solver_;
 

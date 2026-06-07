@@ -86,11 +86,17 @@ basic_manifest::router_wiring::router_wiring(locator& loc)
 
 basic_manifest::orchestration_wiring::orchestration_wiring(
     locator& loc, size_t max_resolutions, uint32_t random_seed)
-    : rng_(random_seed),
-      random_decision_generator_(loc, rng_),
-      resolver_(loc) {
+    : goal_candidates_activator_(loc),
+      rng_(random_seed),
+      random_decision_generator_(loc, rng_) {
+    loc.bind_as<i_activate_goal_candidates>(goal_candidates_activator_);
+    subgoals_activator_.emplace(loc);
+    loc.bind_as<i_activate_subgoals>(*subgoals_activator_);
+    initial_goals_activator_.emplace(loc);
+    loc.bind_as<i_activate_initial_goals>(*initial_goals_activator_);
     loc.bind_as<i_generate_decision>(random_decision_generator_);
-    loc.bind_as<i_resolver>(resolver_);
+    resolver_.emplace(loc);
+    loc.bind_as<i_resolver>(*resolver_);
     sim_.emplace(loc, max_resolutions);
     loc.bind_as<i_set_up_sim, i_tear_down_sim, i_run_sim>(*sim_);
     solver_.emplace(loc);
@@ -148,6 +154,6 @@ basic_manifest::basic_manifest(
       initial_goal_activator_(*routers_.initial_goal_activator_),
       rng_(orch_.rng_),
       random_decision_generator_(orch_.random_decision_generator_),
-      resolver_(orch_.resolver_),
+      resolver_(*orch_.resolver_),
       sim_(*orch_.sim_),
       solver_(*orch_.solver_) {}

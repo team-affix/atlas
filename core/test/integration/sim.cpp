@@ -41,7 +41,13 @@
 #include "infrastructure/get_unit_resolution.hpp"
 #include "infrastructure/make_initial_goal_lineage.hpp"
 #include "infrastructure/initial_goal_activator.hpp"
+#include "infrastructure/goal_candidates_activator.hpp"
+#include "infrastructure/subgoals_activator.hpp"
+#include "infrastructure/initial_goals_activator.hpp"
 #include "infrastructure/resolver.hpp"
+#include "interfaces/i_activate_goal_candidates.hpp"
+#include "interfaces/i_activate_subgoals.hpp"
+#include "interfaces/i_activate_initial_goals.hpp"
 #include "interfaces/i_generate_decision.hpp"
 #include "interfaces/i_make_initial_goal_lineage.hpp"
 #include "interfaces/i_make_resolution_lineage.hpp"
@@ -274,6 +280,23 @@ struct sim_router_wiring {
     }
 };
 
+struct sim_orch_wiring {
+    goal_candidates_activator goal_candidates_activator_;
+    std::optional<subgoals_activator> subgoals_activator_;
+    std::optional<initial_goals_activator> initial_goals_activator_;
+    std::optional<resolver> resolver_;
+
+    sim_orch_wiring(locator& loc) : goal_candidates_activator_(loc) {
+        loc.bind_as<i_activate_goal_candidates>(goal_candidates_activator_);
+        subgoals_activator_.emplace(loc);
+        loc.bind_as<i_activate_subgoals>(*subgoals_activator_);
+        initial_goals_activator_.emplace(loc);
+        loc.bind_as<i_activate_initial_goals>(*initial_goals_activator_);
+        resolver_.emplace(loc);
+        loc.bind_as<i_resolver>(*resolver_);
+    }
+};
+
 struct sim_stack {
     locator loc;
     db& database;
@@ -284,7 +307,7 @@ struct sim_stack {
     sim_core_wiring core;
     sim_activator_wiring activators;
     sim_router_wiring routers;
-    resolver resolver_;
+    sim_orch_wiring orch;
     testing::NiceMock<MockGenerateDecision> decision_generator;
 
     sim_stack(db& database_in, initial_goal_exprs& initial_goals_in)
@@ -297,9 +320,8 @@ struct sim_stack {
           core(loc),
           activators(loc),
           routers(loc),
-          resolver_(loc) {
+          orch(loc) {
         loc.bind_as<i_generate_decision>(decision_generator);
-        loc.bind_as<i_resolver>(resolver_);
     }
 };
 

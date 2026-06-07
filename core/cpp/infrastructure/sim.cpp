@@ -5,12 +5,7 @@ sim::sim(locator& loc, size_t max_resolutions)
     max_resolutions(max_resolutions),
     push_trail_frame(loc.locate<i_push_trail_frame>()),
     pop_trail_frame(loc.locate<i_pop_trail_frame>()),
-    get_initial_goal_count(loc.locate<i_get_initial_goal_count>()),
-    activate_initial_goal(loc.locate<i_activate_initial_goal>()),
-    make_initial_goal_lineage(loc.locate<i_make_initial_goal_lineage>()),
-    get_goal_db_rule_ids(loc.locate<i_get_goal_db_rule_ids>()),
-    make_resolution_lineage(loc.locate<i_make_resolution_lineage>()),
-    candidate_activator(loc.locate<i_candidate_activator>()),
+    activate_initial_goals(loc.locate<i_activate_initial_goals>()),
     sd(loc.locate<i_solution_detector>()),
     cd(loc.locate<i_conflict_detector>()),
     ugd(loc.locate<i_detect_unit_goal>()),
@@ -32,34 +27,16 @@ sim::sim(locator& loc, size_t max_resolutions)
     clear_candidate_translation_maps(loc.locate<i_clear_candidate_translation_maps>()),
     clear_mhu_heads(loc.locate<i_clear_mhu_heads>()),
     clear_bindings(loc.locate<i_clear_bindings>()),
-    trim_unpinned_lineages(loc.locate<i_trim_unpinned_lineages>()) {
-}
+    trim_unpinned_lineages(loc.locate<i_trim_unpinned_lineages>()) {}
 
 void sim::set_up() {
     push_trail_frame.push();
 }
 
 sim_termination sim::run() {
-    // --- activate initial goals and db candidates ---
-    for (size_t i = 0; i < get_initial_goal_count.count(); ++i) {
-        activate_initial_goal.activate_initial_goal(i);
-        const goal_lineage* gl = make_initial_goal_lineage.make(i);
-        auto& rules = get_goal_db_rule_ids.get(gl);
-        auto it = rules.iterate();
-        while (!it.done()) {
-            it.resume();
-            if (!it.has_yield())
-                continue;
-            candidate_activator.activate(
-                make_resolution_lineage.make_resolution_lineage(gl, it.consume_yield()));
-        }
-        if (cd.detect(gl))
-            return sim_termination::conflicted;
-        if (ugd.detect(gl))
-            push_unit_goal.push(gl);
-    }
-    
-    // --- resolution loop ---
+    if (!activate_initial_goals.activate_initial_goals())
+        return sim_termination::conflicted;
+
     for (size_t i = 0; i < max_resolutions; ++i) {
         if (sd.detect())
             return sim_termination::solved;
@@ -71,7 +48,7 @@ sim_termination sim::run() {
                 continue;
             const resolution_lineage* elim_rl = eliminations.consume_yield();
             if (er.route(elim_rl) != elimination_result::eliminated)
-                continue; // very critical we do this to prevent double-registering unit goals
+                continue;
             const goal_lineage* gl = elim_rl->parent;
             if (cd.detect(gl))
                 return sim_termination::conflicted;
