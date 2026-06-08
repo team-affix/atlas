@@ -1,4 +1,4 @@
-// Integration-style tests for basic_solver_session — real wiring, no mocks.
+// Integration-style tests for basic_runtime — real wiring, no mocks.
 //
 // solved() is only valid immediately after next() returned true.
 // Harness: enumerate_all_solutions, next_until_refuted — binding enumeration.
@@ -11,7 +11,7 @@
 #include <iostream>
 #include <gtest/gtest.h>
 #include <gmock/gmock.h>
-#include "infrastructure/basic_solver_session.hpp"
+#include "infrastructure/basic_runtime.hpp"
 #include "infrastructure/db.hpp"
 #include "infrastructure/expr_pool.hpp"
 #include "infrastructure/expr_printer.hpp"
@@ -56,7 +56,7 @@ void print_solution(size_t solution_index, i_expr_printer& printer, const soluti
 }
 
 void enumerate_all_solutions(
-    basic_solver_session& session,
+    basic_runtime& session,
     i_expr_printer& printer,
     std::set<solution> expected,
     const std::function<solution()>& get_solution) {
@@ -88,7 +88,7 @@ void enumerate_all_solutions(
 }
 
 void next_until_refuted(
-    basic_solver_session& session,
+    basic_runtime& session,
     i_expr_printer& printer,
     std::set<solution> expected,
     const std::function<solution()>& get_solution) {
@@ -125,7 +125,7 @@ void next_until_refuted(
 
 TEST_F(BasicRuntimeTest, ConstructsWithEmptyDbAndGoals) {
     static constexpr size_t kInitialVarCount = 0;
-    basic_solver_session session(database, initial_goals, kInitialVarCount, kMaxResolutions, kSeed);
+    basic_runtime session(database, initial_goals, kInitialVarCount, kMaxResolutions, kSeed);
     ASSERT_TRUE(session.next()) << "expected a tick";
     ASSERT_TRUE(session.solved()) << "expected solved termination";
     EXPECT_FALSE(session.next()) << "expected refutation";
@@ -133,7 +133,7 @@ TEST_F(BasicRuntimeTest, ConstructsWithEmptyDbAndGoals) {
 
 TEST_F(BasicRuntimeTest, VacuousSolvedTick) {
     static constexpr size_t kInitialVarCount = 0;
-    basic_solver_session session(database, initial_goals, kInitialVarCount, kMaxResolutions, kSeed);
+    basic_runtime session(database, initial_goals, kInitialVarCount, kMaxResolutions, kSeed);
     ASSERT_TRUE(session.next()) << "expected a tick";
     ASSERT_TRUE(session.solved()) << "expected solved termination";
     EXPECT_TRUE(session.derive_decision_lemma().get_resolutions().empty());
@@ -153,7 +153,7 @@ TEST_F(BasicRuntimeTest, NormalizeDelegatesToBindMap) {
         saved_expr_pool_.make(idx_b),
     }));
 
-    basic_solver_session session(database, initial_goals, kInitialVarCount, kMaxResolutions, kSeed);
+    basic_runtime session(database, initial_goals, kInitialVarCount, kMaxResolutions, kSeed);
     ASSERT_TRUE(session.next()) << "expected a tick";
     ASSERT_TRUE(session.solved()) << "expected solved termination";
     EXPECT_EQ(saved_expr_pool_.import(session.normalize(saved_expr_pool_.make(idx_a))),
@@ -173,7 +173,7 @@ TEST_F(BasicRuntimeTest, ImportSurvivesNextTick) {
     constexpr uint32_t idx_a = 0;
     initial_goals.push(saved_expr_pool_.make("f", {saved_expr_pool_.make(idx_a)}));
 
-    basic_solver_session session(database, initial_goals, kInitialVarCount, kMaxResolutions, kSeed);
+    basic_runtime session(database, initial_goals, kInitialVarCount, kMaxResolutions, kSeed);
     const expr* kept = nullptr;
     ASSERT_TRUE(session.next()) << "expected a tick";
     ASSERT_TRUE(session.solved()) << "expected solved termination";
@@ -192,7 +192,7 @@ TEST_F(BasicRuntimeTest, DeriveDecisionLemmaOnDemand) {
     database.push(rule{head0, {}});
     database.push(rule{head1, {}});
 
-    basic_solver_session session(database, initial_goals, kInitialVarCount, kMaxResolutions, kSeed);
+    basic_runtime session(database, initial_goals, kInitialVarCount, kMaxResolutions, kSeed);
     ASSERT_TRUE(session.next()) << "expected a tick";
     ASSERT_TRUE(session.solved()) << "expected solved termination";
     EXPECT_FALSE(session.derive_decision_lemma().get_resolutions().empty());
@@ -205,7 +205,7 @@ TEST_F(BasicRuntimeTest, DeriveResolutionLemmaOnDemand) {
     initial_goals.push(goal);
     database.push(rule{head, {}});
 
-    basic_solver_session session(database, initial_goals, kInitialVarCount, kMaxResolutions, kSeed);
+    basic_runtime session(database, initial_goals, kInitialVarCount, kMaxResolutions, kSeed);
     ASSERT_TRUE(session.next()) << "expected a tick";
     ASSERT_TRUE(session.solved()) << "expected solved termination";
     EXPECT_FALSE(session.derive_resolution_lemma().get_resolutions().empty());
@@ -220,7 +220,7 @@ TEST_F(BasicRuntimeTest, LemmaNotCachedAcrossTicks) {
     database.push(rule{head0, {}});
     database.push(rule{head1, {}});
 
-    basic_solver_session session(database, initial_goals, kInitialVarCount, kMaxResolutions, kSeed);
+    basic_runtime session(database, initial_goals, kInitialVarCount, kMaxResolutions, kSeed);
 
     std::optional<lemma> decision1;
     std::optional<lemma> resolution1;
@@ -254,7 +254,7 @@ TEST_F(BasicRuntimeTest, FindsSingleUnitSolution) {
     initial_goals.push(goal);
     database.push(rule{saved_expr_pool_.make("f", {}), {}});
 
-    basic_solver_session session(database, initial_goals, kInitialVarCount, kMaxResolutions, kSeed);
+    basic_runtime session(database, initial_goals, kInitialVarCount, kMaxResolutions, kSeed);
     ASSERT_TRUE(session.next()) << "expected a tick";
     ASSERT_TRUE(session.solved()) << "expected solved termination";
     EXPECT_TRUE(session.derive_decision_lemma().get_resolutions().empty());
@@ -265,7 +265,7 @@ TEST_F(BasicRuntimeTest, RefutesWhenNoCandidates) {
     static constexpr size_t kInitialVarCount = 0;
     initial_goals.push(saved_expr_pool_.make("f", {}));
 
-    basic_solver_session session(database, initial_goals, kInitialVarCount, kMaxResolutions, kSeed);
+    basic_runtime session(database, initial_goals, kInitialVarCount, kMaxResolutions, kSeed);
     ASSERT_TRUE(session.next()) << "expected a tick";
     EXPECT_FALSE(session.solved()) << "expected conflict termination";
     EXPECT_FALSE(session.next()) << "expected refutation";
@@ -278,7 +278,7 @@ TEST_F(BasicRuntimeTest, FindsClauseDerivedUnitSolution) {
     database.push(rule{saved_expr_pool_.make("f", {}), {g_body}});
     database.push(rule{saved_expr_pool_.make("g", {}), {}});
 
-    basic_solver_session session(database, initial_goals, kInitialVarCount, kMaxResolutions, kSeed);
+    basic_runtime session(database, initial_goals, kInitialVarCount, kMaxResolutions, kSeed);
     ASSERT_TRUE(session.next()) << "expected a tick";
     ASSERT_TRUE(session.solved()) << "expected solved termination";
     EXPECT_TRUE(session.derive_decision_lemma().get_resolutions().empty());
@@ -298,7 +298,7 @@ TEST_F(BasicRuntimeTest, FindsSolutionWithCorrectBindings) {
         saved_expr_pool_.make(idx_b),
     }));
 
-    basic_solver_session session(database, initial_goals, kInitialVarCount, kMaxResolutions, kSeed);
+    basic_runtime session(database, initial_goals, kInitialVarCount, kMaxResolutions, kSeed);
     ASSERT_TRUE(session.next()) << "expected a tick";
     ASSERT_TRUE(session.solved()) << "expected solved termination";
     EXPECT_EQ(*saved_expr_pool_.import(session.normalize(saved_expr_pool_.make(idx_a))),
@@ -327,7 +327,7 @@ TEST_F(BasicRuntimeTest, FindsClauseBodyBindingSolution) {
         saved_expr_pool_.make(idx_b),
     }));
 
-    basic_solver_session session(database, initial_goals, kInitialVarCount, kMaxResolutions, kSeed);
+    basic_runtime session(database, initial_goals, kInitialVarCount, kMaxResolutions, kSeed);
     ASSERT_TRUE(session.next()) << "expected a tick";
     ASSERT_TRUE(session.solved()) << "expected solved termination";
     EXPECT_EQ(*saved_expr_pool_.import(session.normalize(saved_expr_pool_.make(idx_a))),
@@ -345,7 +345,7 @@ TEST_F(BasicRuntimeTest, RefutesAfterCdclOnUnsatClauseBranches) {
     database.push(rule{saved_expr_pool_.make("a", {}), {c}});
     initial_goals.push(saved_expr_pool_.make("a", {}));
 
-    basic_solver_session session(database, initial_goals, kInitialVarCount, kMaxResolutions, kSeed);
+    basic_runtime session(database, initial_goals, kInitialVarCount, kMaxResolutions, kSeed);
     size_t conflict_ticks = 0;
     while (session.next()) {
         EXPECT_FALSE(session.solved());
@@ -362,7 +362,7 @@ TEST_F(BasicRuntimeTest, EnumeratesTwoGroundChoiceSolutions) {
     database.push(rule{saved_expr_pool_.make("f", {}), {}});
     database.push(rule{saved_expr_pool_.make("f", {}), {}});
 
-    basic_solver_session session(database, initial_goals, kInitialVarCount, kMaxResolutions, kSeed);
+    basic_runtime session(database, initial_goals, kInitialVarCount, kMaxResolutions, kSeed);
     size_t count = 0;
     while (session.next()) {
         if (session.solved())
@@ -377,7 +377,7 @@ TEST_F(BasicRuntimeTest, RefutesAfterEnumeratingAllGroundBranches) {
     database.push(rule{saved_expr_pool_.make("f", {}), {}});
     database.push(rule{saved_expr_pool_.make("f", {}), {}});
 
-    basic_solver_session session(database, initial_goals, kInitialVarCount, kMaxResolutions, kSeed);
+    basic_runtime session(database, initial_goals, kInitialVarCount, kMaxResolutions, kSeed);
     size_t count = 0;
     while (session.next()) {
         if (session.solved())
@@ -396,7 +396,7 @@ TEST_F(BasicRuntimeTest, EnumeratesTwoVarChoiceSolutions) {
     constexpr uint32_t idx_a = 0;
     initial_goals.push(saved_expr_pool_.make("f", {saved_expr_pool_.make(idx_a)}));
 
-    basic_solver_session session(database, initial_goals, kInitialVarCount, kMaxResolutions, kSeed);
+    basic_runtime session(database, initial_goals, kInitialVarCount, kMaxResolutions, kSeed);
     std::set<solution> expected{{abc}, {xyz}};
     enumerate_all_solutions(
         session,
@@ -417,7 +417,7 @@ TEST_F(BasicRuntimeTest, RefutesAfterEnumeratingAllVarBranches) {
     constexpr uint32_t idx_a = 0;
     initial_goals.push(saved_expr_pool_.make("f", {saved_expr_pool_.make(idx_a)}));
 
-    basic_solver_session session(database, initial_goals, kInitialVarCount, kMaxResolutions, kSeed);
+    basic_runtime session(database, initial_goals, kInitialVarCount, kMaxResolutions, kSeed);
     std::set<solution> expected{{abc}, {xyz}};
     next_until_refuted(
         session,
@@ -442,7 +442,7 @@ TEST_F(BasicRuntimeTest, EnumeratesTwoGoalSharedVarSolutions) {
     initial_goals.push(saved_expr_pool_.make("f", {goal_var}));
     initial_goals.push(saved_expr_pool_.make("g", {goal_var}));
 
-    basic_solver_session session(database, initial_goals, kInitialVarCount, kMaxResolutions, kSeed);
+    basic_runtime session(database, initial_goals, kInitialVarCount, kMaxResolutions, kSeed);
     std::set<solution> expected{{abc}, {xyz}};
     enumerate_all_solutions(
         session,
@@ -467,7 +467,7 @@ TEST_F(BasicRuntimeTest, EnumeratesFourVarBindingSolutions) {
     constexpr uint32_t idx = 0;
     initial_goals.push(saved_expr_pool_.make("f", {saved_expr_pool_.make(idx)}));
 
-    basic_solver_session session(database, initial_goals, kInitialVarCount, kMaxResolutions, kSeed);
+    basic_runtime session(database, initial_goals, kInitialVarCount, kMaxResolutions, kSeed);
     std::set<solution> expected{{a}, {b}, {c}, {d}};
     enumerate_all_solutions(
         session,
@@ -494,7 +494,7 @@ TEST_F(BasicRuntimeTest, EnumeratesFourClauseBodyFactChoices) {
     database.push(rule{saved_expr_pool_.make("g", {d}), {}});
     initial_goals.push(saved_expr_pool_.make("f", {}));
 
-    basic_solver_session session(database, initial_goals, kInitialVarCount, kMaxResolutions, kSeed);
+    basic_runtime session(database, initial_goals, kInitialVarCount, kMaxResolutions, kSeed);
     size_t count = 0;
     while (session.next()) {
         if (session.solved())
@@ -520,7 +520,7 @@ TEST_F(BasicRuntimeTest, FindsUniqueSharedVarConjunctionThenRefutes) {
     initial_goals.push(saved_expr_pool_.make("is_a", {goal_var}));
     initial_goals.push(saved_expr_pool_.make("is_b", {goal_var}));
 
-    basic_solver_session session(database, initial_goals, kInitialVarCount, kMaxResolutions, kSeed);
+    basic_runtime session(database, initial_goals, kInitialVarCount, kMaxResolutions, kSeed);
     std::set<solution> expected{{two}};
     next_until_refuted(
         session,
@@ -537,7 +537,7 @@ TEST_F(BasicRuntimeTest, ConflictedTickNotSolved) {
     static constexpr size_t kInitialVarCount = 0;
     initial_goals.push(saved_expr_pool_.make("f", {}));
 
-    basic_solver_session session(database, initial_goals, kInitialVarCount, kMaxResolutions, kSeed);
+    basic_runtime session(database, initial_goals, kInitialVarCount, kMaxResolutions, kSeed);
     ASSERT_TRUE(session.next()) << "expected a tick";
     EXPECT_FALSE(session.solved()) << "expected conflict termination";
     EXPECT_FALSE(session.next()) << "expected refutation";
@@ -548,13 +548,13 @@ TEST_F(BasicRuntimeTest, SkippedLemmaCallsOnUnitTicks) {
     initial_goals.push(saved_expr_pool_.make("f", {}));
     database.push(rule{saved_expr_pool_.make("f", {}), {}});
 
-    basic_solver_session session(database, initial_goals, kInitialVarCount, kMaxResolutions, kSeed);
+    basic_runtime session(database, initial_goals, kInitialVarCount, kMaxResolutions, kSeed);
     ASSERT_TRUE(session.next()) << "expected a tick";
     ASSERT_TRUE(session.solved()) << "expected solved termination";
     EXPECT_FALSE(session.next()) << "expected refutation";
 }
 
-// Tier G — CHC enumeration via basic_solver_session
+// Tier G — CHC enumeration via basic_runtime
 
 TEST_F(BasicRuntimeTest, EnumeratesTwoParentBindingsForAlice) {
     static constexpr size_t kInitialVarCount = 1;
@@ -571,7 +571,7 @@ TEST_F(BasicRuntimeTest, EnumeratesTwoParentBindingsForAlice) {
         alice,
     }));
 
-    basic_solver_session session(database, initial_goals, kInitialVarCount, kMaxResolutions, kSeed);
+    basic_runtime session(database, initial_goals, kInitialVarCount, kMaxResolutions, kSeed);
     std::set<solution> expected{{bob}, {carol}};
     enumerate_all_solutions(
         session,
@@ -625,7 +625,7 @@ TEST_F(BasicRuntimeTest, EnumeratesPeanoLessThanSeven) {
         seven,
     }));
 
-    basic_solver_session session(database, initial_goals, kInitialVarCount, kPeanoBudget, kSeed);
+    basic_runtime session(database, initial_goals, kInitialVarCount, kPeanoBudget, kSeed);
     enumerate_all_solutions(
         session,
         saved_printer_,
@@ -679,7 +679,7 @@ TEST_F(BasicRuntimeTest, EnumeratesSatPAndQOrR) {
         saved_expr_pool_.make("true", {}),
     }));
 
-    basic_solver_session session(database, initial_goals, kInitialVarCount, kMaxResolutions, kSeed);
+    basic_runtime session(database, initial_goals, kInitialVarCount, kMaxResolutions, kSeed);
     std::set<solution> expected{
         {true_atom, true_atom, true_atom},
         {true_atom, true_atom, false_atom},
@@ -726,7 +726,7 @@ TEST_F(BasicRuntimeTest, EnumeratesTwoSatAssignmentsForImpliesQ) {
         saved_expr_pool_.make("true", {}),
     }));
 
-    basic_solver_session session(database, initial_goals, kInitialVarCount, kMaxResolutions, kSeed);
+    basic_runtime session(database, initial_goals, kInitialVarCount, kMaxResolutions, kSeed);
     std::set<std::string> p_values;
     size_t solution_count = 0;
     while (session.next()) {
@@ -769,7 +769,7 @@ TEST_F(BasicRuntimeTest, EnumeratesTwoPathTwoColorings) {
         saved_expr_pool_.make(idx_c),
     }));
 
-    basic_solver_session session(database, initial_goals, kInitialVarCount, kMaxResolutions, kSeed);
+    basic_runtime session(database, initial_goals, kInitialVarCount, kMaxResolutions, kSeed);
     auto is_valid_color = [](const std::string& s) {
         return s == "red" || s == "blue";
     };
@@ -836,7 +836,7 @@ TEST_F(BasicRuntimeTest, EnumeratesK3ThreeColorings) {
         saved_expr_pool_.make(idx_c),
     }));
 
-    basic_solver_session session(database, initial_goals, kInitialVarCount, kColorBudget, kSeed);
+    basic_runtime session(database, initial_goals, kInitialVarCount, kColorBudget, kSeed);
     std::set<solution> expected = {
         {red, green, blue}, {red, blue, green}, {green, red, blue},
         {green, blue, red}, {blue, red, green}, {blue, green, red},
@@ -891,7 +891,7 @@ TEST_F(BasicRuntimeTest, EnumeratesK3TailFourNodeColorings) {
         saved_expr_pool_.make(idx_d),
     }));
 
-    basic_solver_session session(database, initial_goals, kInitialVarCount, kColorBudget, kSeed);
+    basic_runtime session(database, initial_goals, kInitialVarCount, kColorBudget, kSeed);
     std::set<solution> expected = {
         {red, green, blue, green}, {red, green, blue, blue}, {red, blue, green, green},
         {red, blue, green, blue}, {green, red, blue, red}, {green, red, blue, blue},
@@ -973,7 +973,7 @@ TEST_F(BasicRuntimeTest, EnumeratesFourVarSatThreeClauses) {
         saved_expr_pool_.make("true", {}),
     }));
 
-    basic_solver_session session(database, initial_goals, kInitialVarCount, kSatBudget, kSeed);
+    basic_runtime session(database, initial_goals, kInitialVarCount, kSatBudget, kSeed);
     std::set<solution> expected = {
         {true_atom, true_atom, false_atom, true_atom},
         {true_atom, false_atom, false_atom, true_atom},
@@ -1054,7 +1054,7 @@ TEST_F(BasicRuntimeTest, EnumeratesAddPairsSummingLessThanTen) {
         ten,
     }));
 
-    basic_solver_session session(database, initial_goals, kInitialVarCount, kPeanoBudget, kSeed);
+    basic_runtime session(database, initial_goals, kInitialVarCount, kPeanoBudget, kSeed);
     enumerate_all_solutions(
         session,
         saved_printer_,
@@ -1112,7 +1112,7 @@ TEST_F(BasicRuntimeTest, EnumeratesAddPairsSummingExactlyTen) {
         ten,
     }));
 
-    basic_solver_session session(database, initial_goals, kInitialVarCount, kPeanoBudget, kSeed);
+    basic_runtime session(database, initial_goals, kInitialVarCount, kPeanoBudget, kSeed);
     enumerate_all_solutions(
         session,
         saved_printer_,
@@ -1186,7 +1186,7 @@ TEST_F(BasicRuntimeTest, EnumeratesMulPairsProductEight) {
         eight,
     }));
 
-    basic_solver_session session(database, initial_goals, kInitialVarCount, kPeanoBudget, kSeed);
+    basic_runtime session(database, initial_goals, kInitialVarCount, kPeanoBudget, kSeed);
     enumerate_all_solutions(
         session,
         saved_printer_,
@@ -1275,7 +1275,7 @@ TEST_F(BasicRuntimeTest, EnumeratesDualBoundedSharedXSums) {
         bound,
     }));
 
-    basic_solver_session session(database, initial_goals, kInitialVarCount, kPeanoBudget, kSeed);
+    basic_runtime session(database, initial_goals, kInitialVarCount, kPeanoBudget, kSeed);
     enumerate_all_solutions(
         session,
         saved_printer_,
@@ -1341,7 +1341,7 @@ TEST_F(BasicRuntimeTest, EnumeratesCatalanTreesWithFiveNodes) {
     initial_goals.push(saved_expr_pool_.make("wf", {saved_expr_pool_.make(idx_t)}));
     initial_goals.push(saved_expr_pool_.make("nodes", {saved_expr_pool_.make(idx_t), five}));
 
-    basic_solver_session session(database, initial_goals, kInitialVarCount, kCatalanBudget, kSeed);
+    basic_runtime session(database, initial_goals, kInitialVarCount, kCatalanBudget, kSeed);
     std::set<solution> visited;
     while (session.next()) {
         if (!session.solved())
@@ -1364,7 +1364,7 @@ TEST_F(BasicRuntimeTest, EnumeratesFourTwoGoalGroundCombinations) {
     database.push(rule{saved_expr_pool_.make("g", {}), {}});
     database.push(rule{saved_expr_pool_.make("g", {}), {}});
 
-    basic_solver_session session(database, initial_goals, kInitialVarCount, kMaxResolutions, kSeed);
+    basic_runtime session(database, initial_goals, kInitialVarCount, kMaxResolutions, kSeed);
     size_t count = 0;
     while (session.next()) {
         if (session.solved())
@@ -1385,7 +1385,7 @@ TEST_F(BasicRuntimeTest, EnumeratesEightThreeGoalGroundCombinations) {
     database.push(rule{saved_expr_pool_.make("h", {}), {}});
     database.push(rule{saved_expr_pool_.make("h", {}), {}});
 
-    basic_solver_session session(database, initial_goals, kInitialVarCount, kMaxResolutions, kSeed);
+    basic_runtime session(database, initial_goals, kInitialVarCount, kMaxResolutions, kSeed);
     size_t count = 0;
     while (session.next()) {
         if (session.solved())
@@ -1420,7 +1420,7 @@ TEST_F(BasicRuntimeTest, EnumeratesManySharedVarGroundHeads) {
         saved_expr_pool_.make(idx_c),
     }));
 
-    basic_solver_session session(database, initial_goals, kInitialVarCount, kMaxResolutions, kSeed);
+    basic_runtime session(database, initial_goals, kInitialVarCount, kMaxResolutions, kSeed);
     std::set<solution> visited;
     while (session.next()) {
         if (!session.solved())
@@ -1446,7 +1446,7 @@ TEST_F(BasicRuntimeTest, EnumeratesThreeGroundBranches) {
     database.push(rule{saved_expr_pool_.make("f", {}), {}});
     database.push(rule{saved_expr_pool_.make("f", {}), {}});
 
-    basic_solver_session session(database, initial_goals, kInitialVarCount, kMaxResolutions, kSeed);
+    basic_runtime session(database, initial_goals, kInitialVarCount, kMaxResolutions, kSeed);
     size_t count = 0;
     while (session.next()) {
         if (session.solved())
@@ -1473,7 +1473,7 @@ TEST_F(BasicRuntimeTest, SolvesRecursiveClauseTreeWithoutBranching) {
     database.push(rule{saved_expr_pool_.make("i", {}), {}});
     database.push(rule{saved_expr_pool_.make("j", {}), {}});
 
-    basic_solver_session session(database, initial_goals, kInitialVarCount, kMaxResolutions, kSeed);
+    basic_runtime session(database, initial_goals, kInitialVarCount, kMaxResolutions, kSeed);
     size_t count = 0;
     while (session.next()) {
         if (session.solved())
@@ -1495,7 +1495,7 @@ TEST_F(BasicRuntimeTest, EnumeratesTransitiveReachFromA) {
     constexpr uint32_t idx_y = 0;
     initial_goals.push(saved_expr_pool_.make("reach", {a, saved_expr_pool_.make(idx_y)}));
 
-    basic_solver_session session(database, initial_goals, kInitialVarCount, kMaxResolutions, kSeed);
+    basic_runtime session(database, initial_goals, kInitialVarCount, kMaxResolutions, kSeed);
     std::set<solution> expected{{b}, {c}, {d}};
     enumerate_all_solutions(
         session,
@@ -1559,7 +1559,7 @@ TEST_F(BasicRuntimeTest, EnumeratesEvenPeanoLessThanEight) {
         eight,
     }));
 
-    basic_solver_session session(database, initial_goals, kInitialVarCount, kPeanoBudget, kSeed);
+    basic_runtime session(database, initial_goals, kInitialVarCount, kPeanoBudget, kSeed);
     enumerate_all_solutions(
         session,
         saved_printer_,
@@ -1589,7 +1589,7 @@ TEST_F(BasicRuntimeTest, EnumeratesListSplitsForThreeElementList) {
         list_ab,
     }));
 
-    basic_solver_session session(database, initial_goals, kInitialVarCount, kMaxResolutions, kSeed);
+    basic_runtime session(database, initial_goals, kInitialVarCount, kMaxResolutions, kSeed);
     std::set<solution> expected{{nil, list_ab}, {list_a, list_b}};
     enumerate_all_solutions(
         session,
@@ -1612,7 +1612,7 @@ TEST_F(BasicRuntimeTest, EnumeratesTwoChoiceClauseSolutions) {
     database.push(rule{saved_expr_pool_.make("g", {abc}), {}});
     database.push(rule{saved_expr_pool_.make("g", {xyz}), {}});
 
-    basic_solver_session session(database, initial_goals, kInitialVarCount, kMaxResolutions, kSeed);
+    basic_runtime session(database, initial_goals, kInitialVarCount, kMaxResolutions, kSeed);
     size_t count = 0;
     while (session.next()) {
         if (session.solved())
@@ -1707,7 +1707,7 @@ TEST_F(BasicRuntimeTest, EnumeratesCollatzOneStepPreimagesOfTen) {
         ten,
     }));
 
-    basic_solver_session session(database, initial_goals, kInitialVarCount, kCollatzBudget, kSeed);
+    basic_runtime session(database, initial_goals, kInitialVarCount, kCollatzBudget, kSeed);
     enumerate_all_solutions(
         session,
         saved_printer_,
@@ -1796,7 +1796,7 @@ TEST_F(BasicRuntimeTest, EnumeratesFibIndicesWithValueBelowFive) {
         five,
     }));
 
-    basic_solver_session session(database, initial_goals, kInitialVarCount, kPeanoBudget, kSeed);
+    basic_runtime session(database, initial_goals, kInitialVarCount, kPeanoBudget, kSeed);
     enumerate_all_solutions(
         session,
         saved_printer_,
@@ -1870,7 +1870,7 @@ TEST_F(BasicRuntimeTest, EnumeratesFactorPairsOfSix) {
         six,
     }));
 
-    basic_solver_session session(database, initial_goals, kInitialVarCount, kPeanoBudget, kSeed);
+    basic_runtime session(database, initial_goals, kInitialVarCount, kPeanoBudget, kSeed);
     enumerate_all_solutions(
         session,
         saved_printer_,
@@ -1944,7 +1944,7 @@ TEST_F(BasicRuntimeTest, EnumeratesDistinctTwoPartPartitionsOfFive) {
         saved_expr_pool_.make(idx_b),
     }));
 
-    basic_solver_session session(database, initial_goals, kInitialVarCount, kPeanoBudget, kSeed);
+    basic_runtime session(database, initial_goals, kInitialVarCount, kPeanoBudget, kSeed);
     enumerate_all_solutions(
         session,
         saved_printer_,
@@ -2014,7 +2014,7 @@ TEST_F(BasicRuntimeTest, EnumeratesArithmeticProgressionsEndingAtFive) {
         five,
     }));
 
-    basic_solver_session session(database, initial_goals, kInitialVarCount, kPeanoBudget, kSeed);
+    basic_runtime session(database, initial_goals, kInitialVarCount, kPeanoBudget, kSeed);
     enumerate_all_solutions(
         session,
         saved_printer_,
@@ -2121,7 +2121,7 @@ TEST_F(BasicRuntimeTest, FindsGcdOfSixAndFourViaSubtraction) {
         saved_expr_pool_.make(idx_g),
     }));
 
-    basic_solver_session session(database, initial_goals, kInitialVarCount, kPeanoBudget, kSeed);
+    basic_runtime session(database, initial_goals, kInitialVarCount, kPeanoBudget, kSeed);
     enumerate_all_solutions(
         session,
         saved_printer_,
@@ -2167,7 +2167,7 @@ TEST_F(BasicRuntimeTest, EnumeratesTwoSubsetsOfFourElements) {
         saved_expr_pool_.make(idx_y),
     }));
 
-    basic_solver_session session(database, initial_goals, kInitialVarCount, kMaxResolutions, kSeed);
+    basic_runtime session(database, initial_goals, kInitialVarCount, kMaxResolutions, kSeed);
     enumerate_all_solutions(
         session,
         saved_printer_,
@@ -2237,7 +2237,7 @@ TEST_F(BasicRuntimeTest, EnumeratesBalancedGrammarStringOfLengthFour) {
         four,
     }));
 
-    basic_solver_session session(database, initial_goals, kInitialVarCount, kPeanoBudget, kSeed);
+    basic_runtime session(database, initial_goals, kInitialVarCount, kPeanoBudget, kSeed);
     enumerate_all_solutions(
         session,
         saved_printer_,
@@ -2295,7 +2295,7 @@ TEST_F(BasicRuntimeTest, EnumeratesDepthTwoTermsOverTwoConstants) {
         two,
     }));
 
-    basic_solver_session session(database, initial_goals, kInitialVarCount, kPeanoBudget, kSeed);
+    basic_runtime session(database, initial_goals, kInitialVarCount, kPeanoBudget, kSeed);
     enumerate_all_solutions(
         session,
         saved_printer_,
@@ -2370,7 +2370,7 @@ TEST_F(BasicRuntimeTest, FindsEvenParityListOfLengthFour) {
         four,
     }));
 
-    basic_solver_session session(database, initial_goals, kInitialVarCount, kPeanoBudget, kSeed);
+    basic_runtime session(database, initial_goals, kInitialVarCount, kPeanoBudget, kSeed);
     enumerate_all_solutions(
         session,
         saved_printer_,
@@ -2460,7 +2460,7 @@ TEST_F(BasicRuntimeTest, EnumeratesPeanoTriplesInsideTetrahedron) {
         nine,
     }));
 
-    basic_solver_session session(database, initial_goals, kInitialVarCount, kTierIBudget, kSeed);
+    basic_runtime session(database, initial_goals, kInitialVarCount, kTierIBudget, kSeed);
     enumerate_all_solutions(
         session,
         saved_printer_,
@@ -2509,7 +2509,7 @@ TEST_F(BasicRuntimeTest, EnumeratesLatticePathsFourByFour) {
     const expr* four = peano_saved(4);
     initial_goals.push(saved_expr_pool_.make("at", {four, four}));
 
-    basic_solver_session session(database, initial_goals, kInitialVarCount, kTierIBudget, kSeed);
+    basic_runtime session(database, initial_goals, kInitialVarCount, kTierIBudget, kSeed);
     size_t count = 0;
     while (session.next()) {
         if (session.solved())
@@ -2638,7 +2638,7 @@ TEST_F(BasicRuntimeTest, EnumeratesOrderedCompositionsOfEight) {
     constexpr uint32_t idx_l = 0;
     initial_goals.push(saved_expr_pool_.make("compose", {eight, saved_expr_pool_.make(idx_l)}));
 
-    basic_solver_session session(
+    basic_runtime session(
         database, initial_goals, kCompositionInitialVarCount, kTierIBudget, kSeed);
     enumerate_all_solutions(
         session,
@@ -2720,7 +2720,7 @@ TEST_F(BasicRuntimeTest, EnumeratesBinaryStringsNoConsecutiveOnesLengthTen) {
 
     constexpr size_t kBinaryStringsInitialVarCount = 1;
     
-    basic_solver_session session(database, initial_goals, kBinaryStringsInitialVarCount, kTierIBudget, kSeed);
+    basic_runtime session(database, initial_goals, kBinaryStringsInitialVarCount, kTierIBudget, kSeed);
     enumerate_all_solutions(
         session,
         saved_printer_,
@@ -2805,7 +2805,7 @@ TEST_F(BasicRuntimeTest, EnumeratesStaircasePathsOneOrTwoSummingToTen) {
     build_paths(build_paths, kStaircaseHeight, nil);
     ASSERT_EQ(expected.size(), kExpectedPaths);
 
-    basic_solver_session session(database, initial_goals, kStaircaseInitialVarCount, kTierIBudget, kSeed);
+    basic_runtime session(database, initial_goals, kStaircaseInitialVarCount, kTierIBudget, kSeed);
     enumerate_all_solutions(
         session,
         saved_printer_,
@@ -2923,7 +2923,7 @@ TEST_F(BasicRuntimeTest, EnumeratesFibIndexPairsWithSumBelowThirty) {
         sum_limit,
     }));
 
-    basic_solver_session session(database, initial_goals, kInitialVarCount, kTierIBudget, kSeed);
+    basic_runtime session(database, initial_goals, kInitialVarCount, kTierIBudget, kSeed);
     enumerate_all_solutions(
         session,
         saved_printer_,
