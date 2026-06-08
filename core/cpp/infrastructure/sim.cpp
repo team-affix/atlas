@@ -5,7 +5,7 @@ sim::sim(locator& loc, size_t max_resolutions)
     max_resolutions(max_resolutions),
     push_trail_frame(loc.locate<i_push_trail_frame>()),
     pop_trail_frame(loc.locate<i_pop_trail_frame>()),
-    activate_initial_goals(loc.locate<i_activate_initial_goals>()),
+    activate_initial_goals_and_candidates(loc.locate<i_activate_initial_goals_and_candidates>()),
     sd(loc.locate<i_solution_detector>()),
     cd(loc.locate<i_conflict_detector>()),
     ugd(loc.locate<i_detect_unit_goal>()),
@@ -34,7 +34,7 @@ void sim::set_up() {
 }
 
 sim_termination sim::run() {
-    if (!activate_initial_goals.activate_initial_goals())
+    if (!activate_initial_goals_and_candidates.activate_initial_goals_and_candidates())
         return sim_termination::conflicted;
 
     for (size_t i = 0; i < max_resolutions; ++i) {

@@ -93,9 +93,9 @@ basic_manifest::orchestration_wiring::orchestration_wiring(
     loc.bind_as<i_activate_goal_candidates>(goal_candidates_activator_);
     loc.bind_as<i_deactivate_goal_candidates>(goal_candidates_deactivator_);
     subgoals_activator_.emplace(loc);
-    loc.bind_as<i_activate_subgoals>(*subgoals_activator_);
+    loc.bind_as<i_activate_subgoals_and_candidates>(*subgoals_activator_);
     initial_goals_activator_.emplace(loc);
-    loc.bind_as<i_activate_initial_goals>(*initial_goals_activator_);
+    loc.bind_as<i_activate_initial_goals_and_candidates>(*initial_goals_activator_);
     loc.bind_as<i_generate_decision>(random_decision_generator_);
     resolver_.emplace(loc);
     loc.bind_as<i_resolver>(*resolver_);

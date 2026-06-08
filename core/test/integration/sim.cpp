@@ -48,8 +48,8 @@
 #include "infrastructure/resolver.hpp"
 #include "interfaces/i_activate_goal_candidates.hpp"
 #include "interfaces/i_deactivate_goal_candidates.hpp"
-#include "interfaces/i_activate_subgoals.hpp"
-#include "interfaces/i_activate_initial_goals.hpp"
+#include "interfaces/i_activate_subgoals_and_candidates.hpp"
+#include "interfaces/i_activate_initial_goals_and_candidates.hpp"
 #include "interfaces/i_generate_decision.hpp"
 #include "interfaces/i_make_initial_goal_lineage.hpp"
 #include "interfaces/i_make_resolution_lineage.hpp"
@@ -295,9 +295,9 @@ struct sim_orch_wiring {
         loc.bind_as<i_activate_goal_candidates>(goal_candidates_activator_);
         loc.bind_as<i_deactivate_goal_candidates>(goal_candidates_deactivator_);
         subgoals_activator_.emplace(loc);
-        loc.bind_as<i_activate_subgoals>(*subgoals_activator_);
+        loc.bind_as<i_activate_subgoals_and_candidates>(*subgoals_activator_);
         initial_goals_activator_.emplace(loc);
-        loc.bind_as<i_activate_initial_goals>(*initial_goals_activator_);
+        loc.bind_as<i_activate_initial_goals_and_candidates>(*initial_goals_activator_);
         resolver_.emplace(loc);
         loc.bind_as<i_resolver>(*resolver_);
     }

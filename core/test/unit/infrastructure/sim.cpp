@@ -20,7 +20,7 @@
 #include "interfaces/i_get_unit_resolution.hpp"
 #include "interfaces/i_record_decision.hpp"
 #include "interfaces/i_record_resolution.hpp"
-#include "interfaces/i_activate_initial_goals.hpp"
+#include "interfaces/i_activate_initial_goals_and_candidates.hpp"
 #include "interfaces/i_push_trail_frame.hpp"
 #include "interfaces/i_pop_trail_frame.hpp"
 #include "interfaces/i_clear_bindings.hpp"
@@ -89,8 +89,8 @@ struct MockPopTrailFrame : public i_pop_trail_frame {
     MOCK_METHOD(void, pop, (), (override));
 };
 
-struct MockActivateInitialGoals : public i_activate_initial_goals {
-    MOCK_METHOD(bool, activate_initial_goals, (), (override));
+struct MockActivateInitialGoalsAndCandidates : public i_activate_initial_goals_and_candidates {
+    MOCK_METHOD(bool, activate_initial_goals_and_candidates, (), (override));
 };
 
 struct MockRecordDecision : public i_record_decision {
@@ -146,7 +146,7 @@ struct SimTest : public ::testing::Test {
 
     MockPushTrailFrame push_trail_frame;
     MockPopTrailFrame pop_trail_frame;
-    MockActivateInitialGoals activate_initial_goals;
+    MockActivateInitialGoalsAndCandidates activate_initial_goals_and_candidates;
     MockSolutionDetector solution_detector;
     MockConflictDetector conflict_detector;
     MockUnitGoalDetector unit_goal_detector;
@@ -175,7 +175,7 @@ struct SimTest : public ::testing::Test {
     void bind_sim_deps() {
         loc.bind_as<i_push_trail_frame>(push_trail_frame);
         loc.bind_as<i_pop_trail_frame>(pop_trail_frame);
-        loc.bind_as<i_activate_initial_goals>(activate_initial_goals);
+        loc.bind_as<i_activate_initial_goals_and_candidates>(activate_initial_goals_and_candidates);
         loc.bind_as<i_solution_detector>(solution_detector);
         loc.bind_as<i_conflict_detector>(conflict_detector);
         loc.bind_as<i_detect_unit_goal>(unit_goal_detector);
@@ -210,7 +210,7 @@ struct SimTest : public ::testing::Test {
 
     sim init_simulation() {
         bind_sim_deps();
-        ON_CALL(activate_initial_goals, activate_initial_goals()).WillByDefault(Return(true));
+        ON_CALL(activate_initial_goals_and_candidates, activate_initial_goals_and_candidates()).WillByDefault(Return(true));
         return sim{loc, kMaxResolutions};
     }
 
@@ -219,14 +219,14 @@ struct SimTest : public ::testing::Test {
 };
 
 TEST_F(SimTest, RunReturnsSolvedWhenDetectorSaysSo) {
-    EXPECT_CALL(activate_initial_goals, activate_initial_goals()).WillOnce(Return(true));
+    EXPECT_CALL(activate_initial_goals_and_candidates, activate_initial_goals_and_candidates()).WillOnce(Return(true));
     EXPECT_CALL(solution_detector, detect()).WillOnce(Return(true));
     EXPECT_CALL(decision_generator, generate()).Times(0);
     EXPECT_EQ(simulation.run(), sim_termination::solved);
 }
 
 TEST_F(SimTest, RunReturnsDepthExceededWhenNoSolutionWithinLimit) {
-    EXPECT_CALL(activate_initial_goals, activate_initial_goals()).WillOnce(Return(true));
+    EXPECT_CALL(activate_initial_goals_and_candidates, activate_initial_goals_and_candidates()).WillOnce(Return(true));
     EXPECT_CALL(solution_detector, detect()).WillRepeatedly(Return(false));
     EXPECT_CALL(pop_unit_goal, pop()).WillRepeatedly(Return(std::nullopt));
     EXPECT_CALL(decision_generator, generate()).WillRepeatedly(Return(&rl));
@@ -237,7 +237,7 @@ TEST_F(SimTest, RunReturnsDepthExceededWhenNoSolutionWithinLimit) {
 }
 
 TEST_F(SimTest, RunReturnsConflictedWhenResolverFails) {
-    EXPECT_CALL(activate_initial_goals, activate_initial_goals()).WillOnce(Return(true));
+    EXPECT_CALL(activate_initial_goals_and_candidates, activate_initial_goals_and_candidates()).WillOnce(Return(true));
     EXPECT_CALL(solution_detector, detect()).WillOnce(Return(false));
     EXPECT_CALL(pop_unit_goal, pop()).WillOnce(Return(std::nullopt));
     EXPECT_CALL(decision_generator, generate()).WillOnce(Return(&rl));
@@ -247,7 +247,7 @@ TEST_F(SimTest, RunReturnsConflictedWhenResolverFails) {
 }
 
 TEST_F(SimTest, RunReturnsConflictedWhenInitialGoalsFail) {
-    EXPECT_CALL(activate_initial_goals, activate_initial_goals()).WillOnce(Return(false));
+    EXPECT_CALL(activate_initial_goals_and_candidates, activate_initial_goals_and_candidates()).WillOnce(Return(false));
     EXPECT_CALL(solution_detector, detect()).Times(0);
     EXPECT_CALL(decision_generator, generate()).Times(0);
     EXPECT_EQ(simulation.run(), sim_termination::conflicted);
@@ -271,7 +271,7 @@ TEST_F(SimTest, TearDownPopsTrailAndClearsNonBacktrackedStores) {
 
 TEST_F(SimTest, SetUpPushesTrailFrameOnly) {
     EXPECT_CALL(push_trail_frame, push()).Times(1);
-    EXPECT_CALL(activate_initial_goals, activate_initial_goals()).Times(0);
+    EXPECT_CALL(activate_initial_goals_and_candidates, activate_initial_goals_and_candidates()).Times(0);
     simulation.set_up();
     simulation.tear_down();
 }
@@ -279,7 +279,7 @@ TEST_F(SimTest, SetUpPushesTrailFrameOnly) {
 TEST_F(SimTest, RunRoutesEliminationBeforeResolve) {
     resolution_lineage elim_rl{&gl, 1};
 
-    EXPECT_CALL(activate_initial_goals, activate_initial_goals()).WillOnce(Return(true));
+    EXPECT_CALL(activate_initial_goals_and_candidates, activate_initial_goals_and_candidates()).WillOnce(Return(true));
     EXPECT_CALL(solution_detector, detect()).WillRepeatedly(Return(false));
     EXPECT_CALL(pop_unit_goal, pop()).WillRepeatedly(Return(std::nullopt));
     EXPECT_CALL(decision_generator, generate()).WillRepeatedly(Return(&rl));
@@ -297,7 +297,7 @@ TEST_F(SimTest, RunRoutesEliminationBeforeResolve) {
 TEST_F(SimTest, RunReturnsConflictedWhenEliminationParentConflicts) {
     resolution_lineage elim_rl{&gl, 1};
 
-    EXPECT_CALL(activate_initial_goals, activate_initial_goals()).WillOnce(Return(true));
+    EXPECT_CALL(activate_initial_goals_and_candidates, activate_initial_goals_and_candidates()).WillOnce(Return(true));
     EXPECT_CALL(solution_detector, detect()).WillOnce(Return(false));
     EXPECT_CALL(pop_unit_goal, pop()).WillOnce(Return(std::nullopt));
     EXPECT_CALL(decision_generator, generate()).WillOnce(Return(&rl));
@@ -313,7 +313,7 @@ TEST_F(SimTest, RunReturnsConflictedWhenEliminationParentConflicts) {
 TEST_F(SimTest, RunPushesUnitGoalWhenEliminationParentIsUnit) {
     resolution_lineage elim_rl{&gl, 1};
 
-    EXPECT_CALL(activate_initial_goals, activate_initial_goals()).WillOnce(Return(true));
+    EXPECT_CALL(activate_initial_goals_and_candidates, activate_initial_goals_and_candidates()).WillOnce(Return(true));
     EXPECT_CALL(solution_detector, detect()).WillRepeatedly(Return(false));
     EXPECT_CALL(pop_unit_goal, pop()).WillRepeatedly(Return(std::nullopt));
     EXPECT_CALL(decision_generator, generate()).WillRepeatedly(Return(&rl));
@@ -330,7 +330,7 @@ TEST_F(SimTest, RunPushesUnitGoalWhenEliminationParentIsUnit) {
 }
 
 TEST_F(SimTest, RecordsDecisionWhenGeneratorChoosesResolution) {
-    EXPECT_CALL(activate_initial_goals, activate_initial_goals()).WillOnce(Return(true));
+    EXPECT_CALL(activate_initial_goals_and_candidates, activate_initial_goals_and_candidates()).WillOnce(Return(true));
     EXPECT_CALL(solution_detector, detect()).WillRepeatedly(Return(false));
     EXPECT_CALL(pop_unit_goal, pop()).WillRepeatedly(Return(std::nullopt));
     EXPECT_CALL(decision_generator, generate()).WillRepeatedly(Return(&rl));
@@ -348,7 +348,7 @@ TEST_F(SimTest, RunUsesPoppedUnitGoalForNextResolution) {
 
     sim one_resolution{make_sim(1)};
 
-    EXPECT_CALL(activate_initial_goals, activate_initial_goals()).WillOnce(Return(true));
+    EXPECT_CALL(activate_initial_goals_and_candidates, activate_initial_goals_and_candidates()).WillOnce(Return(true));
     EXPECT_CALL(solution_detector, detect()).WillOnce(Return(false));
     EXPECT_CALL(pop_unit_goal, pop()).WillOnce(Return(&gl));
     EXPECT_CALL(get_unit_resolution, get(&gl)).WillOnce(Return(&unit_rl));

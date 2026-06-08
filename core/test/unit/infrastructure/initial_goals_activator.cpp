@@ -53,7 +53,7 @@ TEST_F(InitialGoalsActivatorTest, ReturnsFalseWhenGoalHasNoCandidates) {
     EXPECT_CALL(activate_initial_goal, activate_initial_goal(0)).Times(1);
     EXPECT_CALL(make_initial_goal_lineage, make(0)).WillOnce(Return(&gl));
     EXPECT_CALL(activate_goal_candidates, activate_goal_candidates(&gl)).WillOnce(Return(false));
-    EXPECT_FALSE(activator.activate_initial_goals());
+    EXPECT_FALSE(activator.activate_initial_goals_and_candidates());
 }
 
 TEST_F(InitialGoalsActivatorTest, ActivatesEachInitialGoal) {
@@ -66,5 +66,5 @@ TEST_F(InitialGoalsActivatorTest, ActivatesEachInitialGoal) {
     EXPECT_CALL(make_initial_goal_lineage, make(1)).WillOnce(Return(&gl1));
     EXPECT_CALL(activate_goal_candidates, activate_goal_candidates(&gl0)).WillOnce(Return(true));
     EXPECT_CALL(activate_goal_candidates, activate_goal_candidates(&gl1)).WillOnce(Return(true));
-    EXPECT_TRUE(activator.activate_initial_goals());
+    EXPECT_TRUE(activator.activate_initial_goals_and_candidates());
 }

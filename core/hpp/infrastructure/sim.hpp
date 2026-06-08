@@ -15,7 +15,7 @@
 #include "interfaces/i_elimination_router.hpp"
 #include "interfaces/i_resolver.hpp"
 #include "interfaces/i_get_unit_resolution.hpp"
-#include "interfaces/i_activate_initial_goals.hpp"
+#include "interfaces/i_activate_initial_goals_and_candidates.hpp"
 #include "interfaces/i_push_trail_frame.hpp"
 #include "interfaces/i_pop_trail_frame.hpp"
 #include "interfaces/i_clear_unit_goals.hpp"
@@ -44,7 +44,7 @@ private:
     size_t max_resolutions;
     i_push_trail_frame& push_trail_frame;
     i_pop_trail_frame& pop_trail_frame;
-    i_activate_initial_goals& activate_initial_goals;
+    i_activate_initial_goals_and_candidates& activate_initial_goals_and_candidates;
     i_solution_detector& sd;
     i_conflict_detector& cd;
     i_detect_unit_goal& ugd;

@@ -63,7 +63,7 @@ struct SubgoalsActivatorTest : public ::testing::Test {
 TEST_F(SubgoalsActivatorTest, EmptyBodyReturnsTrue) {
     resolution_lineage empty_rl{&parent_gl, kRule};
     EXPECT_CALL(get_rule, get(kRule)).WillOnce(Return(&empty_body_rule));
-    EXPECT_TRUE(activator.activate_subgoals(&empty_rl));
+    EXPECT_TRUE(activator.activate_subgoals_and_candidates(&empty_rl));
 }
 
 TEST_F(SubgoalsActivatorTest, ConflictOnBodyGoalReturnsFalse) {
@@ -71,7 +71,7 @@ TEST_F(SubgoalsActivatorTest, ConflictOnBodyGoalReturnsFalse) {
     EXPECT_CALL(make_goal_lineage, make_goal_lineage(&rl, kBodyIdx)).WillOnce(Return(&body_gl));
     EXPECT_CALL(goal_activator, activate(&body_gl)).Times(1);
     EXPECT_CALL(activate_goal_candidates, activate_goal_candidates(&body_gl)).WillOnce(Return(false));
-    EXPECT_FALSE(activator.activate_subgoals(&rl));
+    EXPECT_FALSE(activator.activate_subgoals_and_candidates(&rl));
 }
 
 TEST_F(SubgoalsActivatorTest, ActivatesEveryBodySubgoal) {
@@ -89,5 +89,5 @@ TEST_F(SubgoalsActivatorTest, ActivatesEveryBodySubgoal) {
     EXPECT_CALL(goal_activator, activate(&body_gl1)).Times(1);
     EXPECT_CALL(activate_goal_candidates, activate_goal_candidates(&body_gl0)).WillOnce(Return(true));
     EXPECT_CALL(activate_goal_candidates, activate_goal_candidates(&body_gl1)).WillOnce(Return(true));
-    EXPECT_TRUE(activator.activate_subgoals(&rl_two));
+    EXPECT_TRUE(activator.activate_subgoals_and_candidates(&rl_two));
 }
