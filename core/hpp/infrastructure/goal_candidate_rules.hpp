@@ -1,6 +1,7 @@
 #ifndef GOAL_CANDIDATE_RULES_HPP
 #define GOAL_CANDIDATE_RULES_HPP
 
+#include <memory>
 #include <unordered_map>
 #include "interfaces/i_get_goal_candidate_rule_ids.hpp"
 #include "interfaces/i_insert_goal_candidates.hpp"
@@ -8,7 +9,7 @@
 #include "interfaces/i_unlink_goal_candidate.hpp"
 #include "interfaces/i_erase_goal_candidates.hpp"
 #include "interfaces/i_clear_goal_candidate_rule_ids.hpp"
-#include "rule_id_set.hpp"
+#include "interfaces/i_candidate_rule_set_factory.hpp"
 
 struct goal_candidate_rules
     : i_get_goal_candidate_rule_ids
@@ -17,6 +18,7 @@ struct goal_candidate_rules
     , i_unlink_goal_candidate
     , i_erase_goal_candidates
     , i_clear_goal_candidate_rule_ids {
+    goal_candidate_rules(i_candidate_rule_set_factory&);
     i_rule_id_set& get(const goal_lineage*) override;
     const i_rule_id_set& get(const goal_lineage*) const override;
     void insert(const goal_lineage*) override;
@@ -25,7 +27,8 @@ struct goal_candidate_rules
     void erase(const goal_lineage*) override;
     void clear_goal_candidate_rule_ids() override;
 private:
-    std::unordered_map<const goal_lineage*, rule_id_set> by_goal_;
+    i_candidate_rule_set_factory& candidate_rule_set_factory;
+    std::unordered_map<const goal_lineage*, std::unique_ptr<i_rule_id_set>> by_goal_;
 };
 
 #endif

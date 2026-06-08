@@ -11,9 +11,11 @@
 #include <vector>
 #include "locator_fixture.hpp"
 #include "infrastructure/random_decision_generator.hpp"
-#include "infrastructure/rule_id_set.hpp"
+#include "infrastructure/ra_active_goals.hpp"
+#include "infrastructure/ra_rule_id_set.hpp"
 #include "interfaces/i_make_resolution_lineage.hpp"
-#include "interfaces/i_iterate_active_goals.hpp"
+#include "interfaces/i_random_access.hpp"
+#include "interfaces/i_active_goals_size.hpp"
 #include "interfaces/i_get_goal_candidate_rule_ids.hpp"
 
 using ::testing::_;
@@ -24,16 +26,6 @@ namespace {
 constexpr size_t kLargeGoalCount = 50;
 constexpr size_t kLargeCandidateCount = 100;
 constexpr size_t kCoverageTrials = 500;
-
-coroutine<const goal_lineage*, void> single_goal(const goal_lineage* gl) {
-    co_yield gl;
-}
-
-coroutine<const goal_lineage*, void> many_goals(
-    const std::vector<const goal_lineage*>& goals) {
-    for (const goal_lineage* gl : goals)
-        co_yield gl;
-}
 
 std::vector<goal_lineage> make_goals(size_t count) {
     std::vector<goal_lineage> goals;
@@ -51,7 +43,7 @@ std::vector<const goal_lineage*> goal_ptrs(const std::vector<goal_lineage>& goal
     return ptrs;
 }
 
-void fill_candidates(rule_id_set& candidates, size_t count) {
+void fill_candidates(ra_rule_id_set& candidates, size_t count) {
     for (rule_id r = 0; r < count; ++r)
         candidates.insert(r);
 }
@@ -70,10 +62,6 @@ struct MockMakeResolutionLineage : public i_make_resolution_lineage {
         (const goal_lineage*, rule_id), (override));
 };
 
-struct MockIterateActiveGoals : public i_iterate_active_goals {
-    MOCK_METHOD((coroutine<const goal_lineage*, void>), iterate_active_goals, (), (const, override));
-};
-
 struct MockGetGoalCandidateRuleIds : public i_get_goal_candidate_rule_ids {
     MOCK_METHOD(i_rule_id_set&, get_mutable, (const goal_lineage*), ());
     MOCK_METHOD(const i_rule_id_set&, get_const, (const goal_lineage*), (const));
@@ -84,7 +72,7 @@ struct MockGetGoalCandidateRuleIds : public i_get_goal_candidate_rule_ids {
 struct RandomDecisionGeneratorTest : public ::testing::Test {
     locator loc;
     MockMakeResolutionLineage lp;
-    MockIterateActiveGoals iterate_active_goals;
+    ra_active_goals active_goals;
     MockGetGoalCandidateRuleIds get_goal_candidate_rule_ids;
     std::mt19937 rng{0};
     random_decision_generator generator;
@@ -93,21 +81,20 @@ struct RandomDecisionGeneratorTest : public ::testing::Test {
 
     random_decision_generator init_generator() {
         loc.bind_as<i_make_resolution_lineage>(lp);
-        loc.bind_as<i_iterate_active_goals>(iterate_active_goals);
+        loc.bind_as<i_random_access<const goal_lineage*>, i_active_goals_size>(active_goals);
         loc.bind_as<i_get_goal_candidate_rule_ids>(get_goal_candidate_rule_ids);
         return random_decision_generator{loc, rng};
     }
 
     std::set<resolution_lineage> resolutions;
     goal_lineage gl{nullptr, 0};
-    rule_id_set candidates;
+    ra_rule_id_set candidates;
 };
 
 TEST_F(RandomDecisionGeneratorTest, GenerateResolvesChosenGoalAndRule) {
     static constexpr rule_id kRule = 0;
+    active_goals.insert_active_goal(&gl);
     candidates.insert(kRule);
-    EXPECT_CALL(iterate_active_goals, iterate_active_goals())
-        .WillOnce([&] { return single_goal(&gl); });
     EXPECT_CALL(get_goal_candidate_rule_ids, get_mutable(&gl)).WillOnce(ReturnRef(candidates));
     EXPECT_CALL(lp, make_resolution_lineage(&gl, kRule))
         .WillOnce(stub_make_resolution_lineage(resolutions));
@@ -116,11 +103,9 @@ TEST_F(RandomDecisionGeneratorTest, GenerateResolvesChosenGoalAndRule) {
 }
 
 TEST_F(RandomDecisionGeneratorTest, GeneratePicksAmongManyCandidates) {
+    active_goals.insert_active_goal(&gl);
     fill_candidates(candidates, kLargeCandidateCount);
     std::set<rule_id> chosen;
-    EXPECT_CALL(iterate_active_goals, iterate_active_goals())
-        .Times(kCoverageTrials)
-        .WillRepeatedly([&] { return single_goal(&gl); });
     EXPECT_CALL(get_goal_candidate_rule_ids, get_mutable(&gl))
         .Times(kCoverageTrials)
         .WillRepeatedly(ReturnRef(candidates));
@@ -140,11 +125,10 @@ TEST_F(RandomDecisionGeneratorTest, GeneratePicksAmongManyCandidates) {
 TEST_F(RandomDecisionGeneratorTest, GeneratePicksAmongManyActiveGoals) {
     auto goals = make_goals(kLargeGoalCount);
     auto ptrs = goal_ptrs(goals);
+    for (const goal_lineage* gl_ptr : ptrs)
+        active_goals.insert_active_goal(gl_ptr);
     candidates.insert(0);
     std::set<const goal_lineage*> chosen;
-    EXPECT_CALL(iterate_active_goals, iterate_active_goals())
-        .Times(kCoverageTrials)
-        .WillRepeatedly([&] { return many_goals(ptrs); });
     EXPECT_CALL(get_goal_candidate_rule_ids, get_mutable)
         .Times(kCoverageTrials)
         .WillRepeatedly(ReturnRef(candidates));
@@ -164,12 +148,11 @@ TEST_F(RandomDecisionGeneratorTest, GeneratePicksAmongManyActiveGoals) {
 TEST_F(RandomDecisionGeneratorTest, GeneratePicksAmongManyGoalsAndCandidates) {
     auto goals = make_goals(kLargeGoalCount);
     auto ptrs = goal_ptrs(goals);
+    for (const goal_lineage* gl_ptr : ptrs)
+        active_goals.insert_active_goal(gl_ptr);
     fill_candidates(candidates, kLargeCandidateCount);
     std::set<const goal_lineage*> chosen_goals;
     std::set<rule_id> chosen_rules;
-    EXPECT_CALL(iterate_active_goals, iterate_active_goals())
-        .Times(kCoverageTrials)
-        .WillRepeatedly([&] { return many_goals(ptrs); });
     EXPECT_CALL(get_goal_candidate_rule_ids, get_mutable)
         .Times(kCoverageTrials)
         .WillRepeatedly(ReturnRef(candidates));

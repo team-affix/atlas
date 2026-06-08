@@ -7,9 +7,11 @@ basic_manifest::early_wiring::early_wiring(
       bind_map_factory_(),
       unifier_factory_(),
       lineage_pool_(),
-      active_goals_(),
+      db_rule_set_factory_(),
+      candidate_rule_set_factory_(),
+      ra_active_goals_(),
       goal_exprs_(),
-      goal_candidate_rules_(),
+      goal_candidate_rules_(candidate_rule_set_factory_),
       unit_goals_(),
       decision_memory_(),
       resolution_memory_(),
@@ -19,7 +21,11 @@ basic_manifest::early_wiring::early_wiring(
     loc.bind_as<i_bind_map_factory>(bind_map_factory_);
     loc.bind_as<i_unifier_factory>(unifier_factory_);
     loc.bind_as<i_make_goal_lineage, i_make_resolution_lineage, i_pin_goal_lineage, i_pin_resolution_lineage, i_trim_unpinned_lineages, i_import_goal_lineage, i_import_resolution_lineage>(lineage_pool_);
-    loc.bind_as<i_insert_active_goal, i_erase_active_goal, i_is_active_goal, i_iterate_active_goals, i_active_goals_size, i_check_active_goals_empty, i_clear_active_goals>(active_goals_);
+    loc.bind_as<i_db_rule_set_factory>(db_rule_set_factory_);
+    loc.bind_as<i_candidate_rule_set_factory>(candidate_rule_set_factory_);
+    loc.bind_as<i_insert_active_goal, i_erase_active_goal, i_is_active_goal, i_active_goals_size,
+        i_check_active_goals_empty, i_clear_active_goals, i_random_access<const goal_lineage*>>(
+        ra_active_goals_);
     loc.bind_as<i_get_goal_expr, i_set_goal_expr, i_unset_goal_expr, i_clear_goal_exprs>(goal_exprs_);
     loc.bind_as<i_get_goal_candidate_rule_ids, i_insert_goal_candidates, i_link_goal_candidate, i_unlink_goal_candidate, i_erase_goal_candidates, i_clear_goal_candidate_rule_ids>(goal_candidate_rules_);
     loc.bind_as<i_push_unit_goal, i_pop_unit_goal, i_clear_unit_goals>(unit_goals_);
@@ -130,7 +136,7 @@ basic_manifest::basic_manifest(
       var_sequencer_(pools_.var_sequencer_),
       cdcl_sequencer_(pools_.cdcl_sequencer_),
       lineage_pool_(early_.lineage_pool_),
-      active_goals_(early_.active_goals_),
+      ra_active_goals_(early_.ra_active_goals_),
       goal_exprs_(early_.goal_exprs_),
       goal_candidate_rules_(early_.goal_candidate_rules_),
       unit_goals_(early_.unit_goals_),

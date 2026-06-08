@@ -5,7 +5,9 @@
 #include <cstdint>
 #include <optional>
 #include <random>
-#include "infrastructure/active_goals.hpp"
+#include "infrastructure/ra_active_goals.hpp"
+#include "infrastructure/candidate_rule_set_factory.hpp"
+#include "infrastructure/db_rule_set_factory.hpp"
 #include "infrastructure/bind_map.hpp"
 #include "infrastructure/bind_map_factory.hpp"
 #include "infrastructure/candidate_activator.hpp"
@@ -70,7 +72,7 @@ struct basic_manifest {
     var_sequencer& var_sequencer_;
     cdcl_sequencer& cdcl_sequencer_;
     lineage_pool& lineage_pool_;
-    active_goals& active_goals_;
+    ra_active_goals& ra_active_goals_;
     goal_exprs& goal_exprs_;
     goal_candidate_rules& goal_candidate_rules_;
     unit_goals& unit_goals_;
@@ -107,7 +109,9 @@ private:
         bind_map_factory bind_map_factory_;
         unifier_factory unifier_factory_;
         lineage_pool lineage_pool_;
-        active_goals active_goals_;
+        db_rule_set_factory db_rule_set_factory_;
+        candidate_rule_set_factory candidate_rule_set_factory_;
+        ra_active_goals ra_active_goals_;
         goal_exprs goal_exprs_;
         goal_candidate_rules goal_candidate_rules_;
         unit_goals unit_goals_;

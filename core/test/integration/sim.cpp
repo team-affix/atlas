@@ -14,7 +14,8 @@
 #include "infrastructure/bind_map_factory.hpp"
 #include "infrastructure/unifier_factory.hpp"
 #include "infrastructure/lineage_pool.hpp"
-#include "infrastructure/active_goals.hpp"
+#include "infrastructure/ra_active_goals.hpp"
+#include "infrastructure/candidate_rule_set_factory.hpp"
 #include "infrastructure/goal_exprs.hpp"
 #include "infrastructure/goal_candidate_rules.hpp"
 #include "infrastructure/unit_goals.hpp"
@@ -70,7 +71,7 @@
 #include "interfaces/i_insert_active_goal.hpp"
 #include "interfaces/i_erase_active_goal.hpp"
 #include "interfaces/i_is_active_goal.hpp"
-#include "interfaces/i_iterate_active_goals.hpp"
+#include "interfaces/i_random_access.hpp"
 #include "interfaces/i_active_goals_size.hpp"
 #include "interfaces/i_clear_active_goals.hpp"
 #include "interfaces/i_get_goal_expr.hpp"
@@ -144,7 +145,8 @@ struct sim_early_wiring {
     bind_map_factory bind_map_factory_;
     unifier_factory unifier_factory_;
     lineage_pool lineage_pool_;
-    active_goals active_goals_;
+    candidate_rule_set_factory candidate_rule_set_factory_;
+    ra_active_goals ra_active_goals_;
     goal_exprs goal_exprs_;
     goal_candidate_rules goal_candidate_rules_;
     unit_goals unit_goals_;
@@ -158,9 +160,10 @@ struct sim_early_wiring {
           bind_map_factory_(),
           unifier_factory_(),
           lineage_pool_(),
-          active_goals_(),
+          candidate_rule_set_factory_(),
+          ra_active_goals_(),
           goal_exprs_(),
-          goal_candidate_rules_(),
+          goal_candidate_rules_(candidate_rule_set_factory_),
           unit_goals_(),
           decision_memory_(),
           resolution_memory_(),
@@ -173,8 +176,8 @@ struct sim_early_wiring {
             i_pin_resolution_lineage, i_trim_unpinned_lineages, i_import_goal_lineage,
             i_import_resolution_lineage>(lineage_pool_);
         loc.bind_as<i_insert_active_goal, i_erase_active_goal, i_is_active_goal,
-            i_iterate_active_goals, i_active_goals_size, i_check_active_goals_empty,
-            i_clear_active_goals>(active_goals_);
+            i_active_goals_size, i_check_active_goals_empty, i_clear_active_goals,
+            i_random_access<const goal_lineage*>>(ra_active_goals_);
         loc.bind_as<i_get_goal_expr, i_set_goal_expr, i_unset_goal_expr, i_clear_goal_exprs>(
             goal_exprs_);
         loc.bind_as<i_get_goal_candidate_rule_ids, i_insert_goal_candidates, i_link_goal_candidate,

@@ -18,6 +18,7 @@
 #include "infrastructure/unifier_factory.hpp"
 #include "infrastructure/lineage_pool.hpp"
 #include "infrastructure/goal_candidate_rules.hpp"
+#include "infrastructure/candidate_rule_set_factory.hpp"
 #include "infrastructure/expr_pool.hpp"
 #include "interfaces/i_elimination_generator.hpp"
 #include "infrastructure/coroutine.hpp"
@@ -90,6 +91,7 @@ struct JointEliminationGeneratorUnitTest : public ::testing::Test {
     bind_map_factory bind_map_factory_;
     unifier_factory unifier_factory_;
     lineage_pool lineage_pool_;
+    candidate_rule_set_factory candidate_rule_set_factory_;
     goal_candidate_rules goal_candidate_rules_;
     locator loc;
     MockEliminationGenerator cdcl_mock;
@@ -106,7 +108,8 @@ struct JointEliminationGeneratorUnitTest : public ::testing::Test {
           bind_map_factory_(),
           unifier_factory_(),
           lineage_pool_(),
-          goal_candidate_rules_(),
+          candidate_rule_set_factory_(),
+          goal_candidate_rules_(candidate_rule_set_factory_),
           loc() {
         loc.bind_as<i_log_to_current_trail_frame>(trail_);
         loc.bind_as<i_bind_map>(bind_map_);
