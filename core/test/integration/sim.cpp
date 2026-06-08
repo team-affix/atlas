@@ -42,10 +42,12 @@
 #include "infrastructure/make_initial_goal_lineage.hpp"
 #include "infrastructure/initial_goal_activator.hpp"
 #include "infrastructure/goal_candidates_activator.hpp"
+#include "infrastructure/goal_candidates_deactivator.hpp"
 #include "infrastructure/subgoals_activator.hpp"
 #include "infrastructure/initial_goals_activator.hpp"
 #include "infrastructure/resolver.hpp"
 #include "interfaces/i_activate_goal_candidates.hpp"
+#include "interfaces/i_deactivate_goal_candidates.hpp"
 #include "interfaces/i_activate_subgoals.hpp"
 #include "interfaces/i_activate_initial_goals.hpp"
 #include "interfaces/i_generate_decision.hpp"
@@ -282,12 +284,16 @@ struct sim_router_wiring {
 
 struct sim_orch_wiring {
     goal_candidates_activator goal_candidates_activator_;
+    goal_candidates_deactivator goal_candidates_deactivator_;
     std::optional<subgoals_activator> subgoals_activator_;
     std::optional<initial_goals_activator> initial_goals_activator_;
     std::optional<resolver> resolver_;
 
-    sim_orch_wiring(locator& loc) : goal_candidates_activator_(loc) {
+    sim_orch_wiring(locator& loc)
+        : goal_candidates_activator_(loc),
+          goal_candidates_deactivator_(loc) {
         loc.bind_as<i_activate_goal_candidates>(goal_candidates_activator_);
+        loc.bind_as<i_deactivate_goal_candidates>(goal_candidates_deactivator_);
         subgoals_activator_.emplace(loc);
         loc.bind_as<i_activate_subgoals>(*subgoals_activator_);
         initial_goals_activator_.emplace(loc);

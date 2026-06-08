@@ -23,6 +23,7 @@
 #include "infrastructure/get_unit_resolution.hpp"
 #include "infrastructure/goal_activator.hpp"
 #include "infrastructure/goal_candidates_activator.hpp"
+#include "infrastructure/goal_candidates_deactivator.hpp"
 #include "infrastructure/goal_candidate_rules.hpp"
 #include "infrastructure/goal_deactivator.hpp"
 #include "infrastructure/initial_goals_activator.hpp"
@@ -164,6 +165,7 @@ private:
 
     struct orchestration_wiring {
         goal_candidates_activator goal_candidates_activator_;
+        goal_candidates_deactivator goal_candidates_deactivator_;
         std::optional<subgoals_activator> subgoals_activator_;
         std::optional<initial_goals_activator> initial_goals_activator_;
         std::mt19937 rng_;

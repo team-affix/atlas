@@ -2,25 +2,15 @@
 
 resolver::resolver(locator& loc)
     :
-    make_resolution_lineage(loc.locate<i_make_resolution_lineage>()),
     goal_deactivator(loc.locate<i_goal_deactivator>()),
-    get_goal_candidate_rule_ids(loc.locate<i_get_goal_candidate_rule_ids>()),
-    candidate_deactivator(loc.locate<i_candidate_deactivator>()),
-    activate_subgoals(loc.locate<i_activate_subgoals>()) {}
+    activate_subgoals(loc.locate<i_activate_subgoals>()),
+    deactivate_goal_candidates(loc.locate<i_deactivate_goal_candidates>()) {}
 
 bool resolver::resolve(const resolution_lineage* rl) {
     if (!activate_subgoals.activate_subgoals(rl))
         return false;
     const goal_lineage* gl = rl->parent;
-    auto candidate_rules = get_goal_candidate_rule_ids.get(gl).copy();
-    auto cand_it = candidate_rules->iterate();
-    while (!cand_it.done()) {
-        cand_it.resume();
-        if (!cand_it.has_yield())
-            continue;
-        candidate_deactivator.deactivate(
-            make_resolution_lineage.make_resolution_lineage(gl, cand_it.consume_yield()));
-    }
+    deactivate_goal_candidates.deactivate_goal_candidates(gl);
     goal_deactivator.deactivate(gl);
     return true;
 }

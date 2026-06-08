@@ -87,9 +87,11 @@ basic_manifest::router_wiring::router_wiring(locator& loc)
 basic_manifest::orchestration_wiring::orchestration_wiring(
     locator& loc, size_t max_resolutions, uint32_t random_seed)
     : goal_candidates_activator_(loc),
+      goal_candidates_deactivator_(loc),
       rng_(random_seed),
       random_decision_generator_(loc, rng_) {
     loc.bind_as<i_activate_goal_candidates>(goal_candidates_activator_);
+    loc.bind_as<i_deactivate_goal_candidates>(goal_candidates_deactivator_);
     subgoals_activator_.emplace(loc);
     loc.bind_as<i_activate_subgoals>(*subgoals_activator_);
     initial_goals_activator_.emplace(loc);
