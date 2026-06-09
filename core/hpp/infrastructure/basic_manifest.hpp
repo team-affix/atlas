@@ -41,7 +41,10 @@
 #include "infrastructure/resolution_memory.hpp"
 #include "infrastructure/resolver.hpp"
 #include "infrastructure/subgoals_activator.hpp"
-#include "infrastructure/sim.hpp"
+#include "infrastructure/initial_goals_activator.hpp"
+#include "infrastructure/set_up_sim.hpp"
+#include "infrastructure/tear_down_sim.hpp"
+#include "infrastructure/run_sim.hpp"
 #include "infrastructure/solution_detector.hpp"
 #include "infrastructure/solver.hpp"
 #include "infrastructure/trail.hpp"
@@ -99,7 +102,9 @@ struct basic_manifest {
     std::mt19937& rng_;
     random_decision_generator& random_decision_generator_;
     resolver& resolver_;
-    sim& sim_;
+    set_up_sim& set_up_sim_;
+    tear_down_sim& tear_down_sim_;
+    run_sim& run_sim_;
     solver& solver_;
 
 private:
@@ -175,7 +180,9 @@ private:
         std::mt19937 rng_;
         random_decision_generator random_decision_generator_;
         std::optional<resolver> resolver_;
-        std::optional<sim> sim_;
+        std::optional<set_up_sim> set_up_sim_;
+        std::optional<tear_down_sim> tear_down_sim_;
+        std::optional<run_sim> run_sim_;
         std::optional<solver> solver_;
 
         orchestration_wiring(locator& loc, size_t max_resolutions, uint32_t random_seed);

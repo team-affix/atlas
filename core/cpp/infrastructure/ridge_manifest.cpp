@@ -98,18 +98,22 @@ ridge_manifest::orchestration_wiring::orchestration_wiring(
       rng_(random_seed) {
     loc.bind_as<i_activate_goal_candidates>(goal_candidates_activator_);
     loc.bind_as<i_deactivate_goal_candidates>(goal_candidates_deactivator_);
-    srt_subgoals_activator_.emplace(loc);
+    subgoals_activator_.emplace(loc);
+    initial_goals_activator_.emplace(loc);
+    srt_subgoals_activator_.emplace(loc, *subgoals_activator_);
     loc.bind_as<i_activate_subgoals_and_candidates>(*srt_subgoals_activator_);
-    srt_initial_goals_activator_.emplace(loc);
+    srt_initial_goals_activator_.emplace(loc, *initial_goals_activator_);
     loc.bind_as<i_activate_initial_goals_and_candidates>(*srt_initial_goals_activator_);
+    set_up_sim_.emplace(loc);
+    tear_down_sim_.emplace(loc);
     resolver_.emplace(loc);
     loc.bind_as<i_resolver>(*resolver_);
-    sim_.emplace(loc, max_resolutions);
-    loc.bind_as<i_run_sim>(*sim_);
-    mcts_sim_.emplace(loc, rng_, exploration_constant);
+    mcts_sim_.emplace(loc, *set_up_sim_, *tear_down_sim_, rng_, exploration_constant);
     loc.bind_as<i_set_up_sim, i_tear_down_sim, i_mcts_choose>(*mcts_sim_);
     mcts_decision_generator_.emplace(loc);
     loc.bind_as<i_generate_decision>(*mcts_decision_generator_);
+    run_sim_.emplace(loc, max_resolutions);
+    loc.bind_as<i_run_sim>(*run_sim_);
     solver_.emplace(loc);
     loc.bind_as<i_solve>(*solver_);
 }
@@ -167,6 +171,8 @@ ridge_manifest::ridge_manifest(
       rng_(orch_.rng_),
       mcts_decision_generator_(*orch_.mcts_decision_generator_),
       resolver_(*orch_.resolver_),
-      sim_(*orch_.sim_),
+      set_up_sim_(*orch_.set_up_sim_),
+      tear_down_sim_(*orch_.tear_down_sim_),
+      run_sim_(*orch_.run_sim_),
       mcts_sim_(*orch_.mcts_sim_),
       solver_(*orch_.solver_) {}

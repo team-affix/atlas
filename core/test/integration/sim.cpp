@@ -6,7 +6,9 @@
 #include <optional>
 #include <string>
 #include <vector>
-#include "infrastructure/sim.hpp"
+#include "infrastructure/set_up_sim.hpp"
+#include "infrastructure/tear_down_sim.hpp"
+#include "infrastructure/run_sim.hpp"
 #include "infrastructure/db.hpp"
 #include "infrastructure/initial_goal_exprs.hpp"
 #include "infrastructure/trail.hpp"
@@ -361,6 +363,19 @@ void chain_clause_db(db& database, std::vector<expr>& storage, const char* prefi
 
 }  // namespace
 
+struct simulation {
+    set_up_sim set_up_sim_;
+    run_sim run_sim_;
+    tear_down_sim tear_down_sim_;
+
+    simulation(locator& loc, size_t max_resolutions)
+        : set_up_sim_(loc), run_sim_(loc, max_resolutions), tear_down_sim_(loc) {}
+
+    void set_up() { set_up_sim_.set_up(); }
+    sim_termination run() { return run_sim_.run(); }
+    void tear_down() { tear_down_sim_.tear_down(); }
+};
+
 struct SimIntegrationTest : public ::testing::Test {
     static constexpr size_t kDefaultMaxResolutions = 8;
 
@@ -376,7 +391,7 @@ TEST_F(SimIntegrationTest, RunWithNoInitialGoalsAndEmptyDbNeverGeneratesDecision
      */
     EXPECT_CALL(stack.decision_generator, generate()).Times(0);
 
-    sim simulation{stack.loc, kDefaultMaxResolutions};
+    simulation simulation{stack.loc, kDefaultMaxResolutions};
     simulation.set_up();
     EXPECT_EQ(simulation.run(), sim_termination::solved);
     simulation.tear_down();
@@ -393,7 +408,7 @@ TEST_F(SimIntegrationTest, RunReturnsConflictedWhenInitialGoalHasNoDbCandidates)
 
     EXPECT_CALL(stack.decision_generator, generate()).Times(0);
 
-    sim simulation{stack.loc, kDefaultMaxResolutions};
+    simulation simulation{stack.loc, kDefaultMaxResolutions};
     simulation.set_up();
     EXPECT_EQ(simulation.run(), sim_termination::conflicted);
     simulation.tear_down();
@@ -413,7 +428,7 @@ TEST_F(SimIntegrationTest, RunReturnsSolvedWhenUnitFactAppliesToInitialGoal) {
 
     EXPECT_CALL(stack.decision_generator, generate()).Times(0);
 
-    sim simulation{stack.loc, kDefaultMaxResolutions};
+    simulation simulation{stack.loc, kDefaultMaxResolutions};
     simulation.set_up();
     EXPECT_EQ(simulation.run(), sim_termination::solved);
     simulation.tear_down();
@@ -433,7 +448,7 @@ TEST_F(SimIntegrationTest, RunReturnsConflictedWhenDbRuleHeadFailsToUnifyWithGoa
 
     EXPECT_CALL(stack.decision_generator, generate()).Times(0);
 
-    sim simulation{stack.loc, kDefaultMaxResolutions};
+    simulation simulation{stack.loc, kDefaultMaxResolutions};
     simulation.set_up();
     EXPECT_EQ(simulation.run(), sim_termination::conflicted);
     simulation.tear_down();
@@ -456,7 +471,7 @@ TEST_F(SimIntegrationTest, RunReturnsSolvedWhenOnlyOneOfTwoDbRulesUnifiesWithGoa
 
     EXPECT_CALL(stack.decision_generator, generate()).Times(0);
 
-    sim simulation{stack.loc, kDefaultMaxResolutions};
+    simulation simulation{stack.loc, kDefaultMaxResolutions};
     simulation.set_up();
     EXPECT_EQ(simulation.run(), sim_termination::solved);
     simulation.tear_down();
@@ -483,7 +498,7 @@ TEST_F(SimIntegrationTest, RunReturnsSolvedAfterSingleDecisionWithTwoMatchingFac
         stack.loc.locate<i_make_resolution_lineage>().make_resolution_lineage(gl, rule_id{1});
     EXPECT_CALL(stack.decision_generator, generate()).WillOnce(Return(chosen));
 
-    sim simulation{stack.loc, kDefaultMaxResolutions};
+    simulation simulation{stack.loc, kDefaultMaxResolutions};
     simulation.set_up();
     EXPECT_EQ(simulation.run(), sim_termination::solved);
     simulation.tear_down();
@@ -507,7 +522,7 @@ TEST_F(SimIntegrationTest, RunReturnsSolvedViaClauseThenBodyFactWithoutDecisions
 
     EXPECT_CALL(stack.decision_generator, generate()).Times(0);
 
-    sim simulation{stack.loc, kDefaultMaxResolutions};
+    simulation simulation{stack.loc, kDefaultMaxResolutions};
     simulation.set_up();
     EXPECT_EQ(simulation.run(), sim_termination::solved);
     simulation.tear_down();
@@ -530,7 +545,7 @@ TEST_F(SimIntegrationTest, RunReturnsConflictedWhenSecondInitialGoalHasNoCandida
 
     EXPECT_CALL(stack.decision_generator, generate()).Times(0);
 
-    sim simulation{stack.loc, kDefaultMaxResolutions};
+    simulation simulation{stack.loc, kDefaultMaxResolutions};
     simulation.set_up();
     EXPECT_EQ(simulation.run(), sim_termination::conflicted);
     simulation.tear_down();
@@ -556,7 +571,7 @@ TEST_F(SimIntegrationTest, RunReturnsSolvedWhenTwoInitialGoalsEachHaveMatchingFa
 
     EXPECT_CALL(stack.decision_generator, generate()).Times(0);
 
-    sim simulation{stack.loc, kDefaultMaxResolutions};
+    simulation simulation{stack.loc, kDefaultMaxResolutions};
     simulation.set_up();
     EXPECT_EQ(simulation.run(), sim_termination::solved);
     simulation.tear_down();
@@ -589,7 +604,7 @@ TEST_F(SimIntegrationTest, RunReturnsSolvedAfterOneDecisionWhenInitialGoalFHasTw
         stack.loc.locate<i_make_resolution_lineage>().make_resolution_lineage(gl_f, rule_id{0});
     EXPECT_CALL(stack.decision_generator, generate()).WillOnce(Return(chosen));
 
-    sim simulation{stack.loc, kDefaultMaxResolutions};
+    simulation simulation{stack.loc, kDefaultMaxResolutions};
     simulation.set_up();
     EXPECT_EQ(simulation.run(), sim_termination::solved);
     simulation.tear_down();
@@ -615,7 +630,7 @@ TEST_F(SimIntegrationTest, RunReturnsConflictedWhenSecondInitialGoalLacksCandida
 
     EXPECT_CALL(stack.decision_generator, generate()).Times(0);
 
-    sim simulation{stack.loc, kDefaultMaxResolutions};
+    simulation simulation{stack.loc, kDefaultMaxResolutions};
     simulation.set_up();
     EXPECT_EQ(simulation.run(), sim_termination::conflicted);
     simulation.tear_down();
@@ -654,7 +669,7 @@ TEST_F(SimIntegrationTest, RunReturnsSolvedWhenRuleZeroIsBackloggedBeforeRun) {
 
     insert_backlogged_elimination.insert_backlogged_elimination(rl0);
 
-    sim simulation{stack.loc, kDefaultMaxResolutions};
+    simulation simulation{stack.loc, kDefaultMaxResolutions};
     simulation.set_up();
 
     EXPECT_CALL(stack.decision_generator, generate()).Times(0);
@@ -709,7 +724,7 @@ TEST_F(SimIntegrationTest, RunReturnsSolvedAfterCdclAvoidanceForcesG1RuleThree) 
 
     learn_avoidance.learn(lemma{{rl_g0_0, rl_g1_2}});
 
-    sim simulation{stack.loc, kDefaultMaxResolutions};
+    simulation simulation{stack.loc, kDefaultMaxResolutions};
     simulation.set_up();
 
     EXPECT_CALL(stack.decision_generator, generate()).WillOnce(Return(rl_g0_0));
@@ -750,7 +765,7 @@ TEST_F(SimIntegrationTest, RunReturnsSolvedOnRecursiveClauseTreeWithoutDecisions
 
     EXPECT_CALL(stack.decision_generator, generate()).Times(0);
 
-    sim simulation{stack.loc, kDefaultMaxResolutions};
+    simulation simulation{stack.loc, kDefaultMaxResolutions};
     simulation.set_up();
     EXPECT_EQ(simulation.run(), sim_termination::solved);
     simulation.tear_down();
@@ -809,7 +824,7 @@ TEST_F(SimIntegrationTest, RunReturnsSolvedAfterOneDecisionOnInitialGoalKWithTwo
     EXPECT_CALL(stack.decision_generator, generate()).WillOnce(Return(rl_k_first));
 
     static constexpr size_t kMaxResolutions = 32;
-    sim simulation{stack.loc, kMaxResolutions};
+    simulation simulation{stack.loc, kMaxResolutions};
     simulation.set_up();
     EXPECT_EQ(simulation.run(), sim_termination::solved);
     simulation.tear_down();
@@ -834,7 +849,7 @@ TEST_F(SimIntegrationTest, RunReturnsSolvedAndBindsVarsViaMhuWhenFactUnifiesGoal
 
     EXPECT_CALL(stack.decision_generator, generate()).Times(0);
 
-    sim simulation{stack.loc, kDefaultMaxResolutions};
+    simulation simulation{stack.loc, kDefaultMaxResolutions};
     simulation.set_up();
     const uint32_t idx_a = seq.next();
     const uint32_t idx_b = seq.next();
@@ -881,7 +896,7 @@ TEST_F(SimIntegrationTest, RunReturnsSolvedViaClauseBodyFactsBindingVarsWithoutD
 
     EXPECT_CALL(stack.decision_generator, generate()).Times(0);
 
-    sim simulation{stack.loc, kDefaultMaxResolutions};
+    simulation simulation{stack.loc, kDefaultMaxResolutions};
     simulation.set_up();
     const uint32_t idx_a = seq.next();
     const uint32_t idx_b = seq.next();
@@ -928,7 +943,7 @@ TEST_F(SimIntegrationTest, RunReturnsSolvedAfterDecisionBindingVarsFromChosenFac
 
     EXPECT_CALL(stack.decision_generator, generate()).WillOnce(Return(chosen));
 
-    sim simulation{stack.loc, kDefaultMaxResolutions};
+    simulation simulation{stack.loc, kDefaultMaxResolutions};
     simulation.set_up();
     const uint32_t idx_a = seq.next();
     const uint32_t idx_b = seq.next();
@@ -978,7 +993,7 @@ TEST_F(SimIntegrationTest, RunReturnsSolvedWhenMhuRejectsInconsistentRuleWithout
 
     EXPECT_CALL(stack.decision_generator, generate()).Times(0);
 
-    sim simulation{stack.loc, kDefaultMaxResolutions};
+    simulation simulation{stack.loc, kDefaultMaxResolutions};
     simulation.set_up();
     const uint32_t idx_a = seq.next();
     const expr* var_a = make_var.make(idx_a);
@@ -1029,7 +1044,7 @@ TEST_F(SimIntegrationTest, RunDeactivatesRuleOneWhenDecisionResolvesRuleZeroOnMh
 
     EXPECT_CALL(stack.decision_generator, generate()).WillOnce(Return(rl0));
 
-    sim simulation{stack.loc, kDefaultMaxResolutions};
+    simulation simulation{stack.loc, kDefaultMaxResolutions};
     simulation.set_up();
     const expr* var_a = make_var.make(seq.next());
     const expr* var_b = make_var.make(seq.next());
@@ -1084,7 +1099,7 @@ TEST_F(SimIntegrationTest, RunDeactivatesCrossGoalCandidateOnMhuIncompatibleHead
 
     EXPECT_CALL(stack.decision_generator, generate()).WillOnce(Return(rl_f0));
 
-    sim simulation{stack.loc, kDefaultMaxResolutions};
+    simulation simulation{stack.loc, kDefaultMaxResolutions};
     simulation.set_up();
     const expr* var_a = make_var.make(seq.next());
     initial_goals.push(make_functor.make("f", {var_a}));
@@ -1115,7 +1130,7 @@ TEST_F(SimIntegrationTest, RunReturnsSolvedBindingVarInNestedFunctorArgWithoutDe
 
     EXPECT_CALL(stack.decision_generator, generate()).Times(0);
 
-    sim simulation{stack.loc, kDefaultMaxResolutions};
+    simulation simulation{stack.loc, kDefaultMaxResolutions};
     simulation.set_up();
     const uint32_t idx_a = seq.next();
     const expr* var_a = make_var.make(idx_a);
@@ -1148,7 +1163,7 @@ TEST_F(SimIntegrationTest, RunReturnsSolvedBindingRemainingVarWhenGoalIsPartiall
 
     EXPECT_CALL(stack.decision_generator, generate()).Times(0);
 
-    sim simulation{stack.loc, kDefaultMaxResolutions};
+    simulation simulation{stack.loc, kDefaultMaxResolutions};
     simulation.set_up();
     const expr* abc_pool = make_functor.make("abc", {});
     const uint32_t idx_b = seq.next();
@@ -1186,7 +1201,7 @@ TEST_F(SimIntegrationTest, RunReturnsConflictedWhenClauseBodyGoalHasNoUnifyingFa
     i_make_var& make_var = stack.loc.locate<i_make_var>();
     i_make_functor& make_functor = stack.loc.locate<i_make_functor>();
 
-    sim simulation{stack.loc, kDefaultMaxResolutions};
+    simulation simulation{stack.loc, kDefaultMaxResolutions};
     simulation.set_up();
     const expr* var_a = make_var.make(seq.next());
     const expr* var_b = make_var.make(seq.next());
@@ -1222,7 +1237,7 @@ TEST_F(SimIntegrationTest, RunReturnsConflictedWhenClauseBodyFactMismatchesGroun
 
     i_make_functor& make_functor = stack.loc.locate<i_make_functor>();
 
-    sim simulation{stack.loc, kDefaultMaxResolutions};
+    simulation simulation{stack.loc, kDefaultMaxResolutions};
     simulation.set_up();
     initial_goals.push(make_functor.make("f",
         {make_functor.make("abc", {}), make_functor.make("123", {})}));
@@ -1277,7 +1292,7 @@ TEST_F(SimIntegrationTest, RunReturnsSolvedAfterDecisionOnBodyGoalWithTwoFacts) 
 
     EXPECT_CALL(stack.decision_generator, generate()).WillOnce(Return(chosen_g));
 
-    sim simulation{stack.loc, kDefaultMaxResolutions};
+    simulation simulation{stack.loc, kDefaultMaxResolutions};
     simulation.set_up();
     const expr* var_a = make_var.make(seq.next());
     const expr* var_b = make_var.make(seq.next());
@@ -1322,7 +1337,7 @@ TEST_F(SimIntegrationTest, RunReturnsSolvedWhenSharedVarLinksTwoGoalsWithoutDeci
 
     EXPECT_CALL(stack.decision_generator, generate()).Times(0);
 
-    sim simulation{stack.loc, kDefaultMaxResolutions};
+    simulation simulation{stack.loc, kDefaultMaxResolutions};
     simulation.set_up();
     const expr* var_a = make_var.make(seq.next());
     const expr* var_b = make_var.make(seq.next());
@@ -1394,7 +1409,7 @@ TEST_F(SimIntegrationTest, RunReturnsSolvedWhenCdclAndMhuReduceGoalGCandidatesWi
 
     EXPECT_CALL(stack.decision_generator, generate()).Times(0);
 
-    sim simulation{stack.loc, kDefaultMaxResolutions};
+    simulation simulation{stack.loc, kDefaultMaxResolutions};
     simulation.set_up();
     const expr* var_a = make_var.make(seq.next());
     const expr* xyz = make_functor.make("xyz", {});
@@ -1441,7 +1456,7 @@ TEST_F(SimIntegrationTest, RunReturnsSolvedBuildingListOfFiveAbcWithoutDecisions
 
     static constexpr size_t kMaxResolutions = 32;
     static constexpr int kListLength = 5;
-    sim simulation{stack.loc, kMaxResolutions};
+    simulation simulation{stack.loc, kMaxResolutions};
     simulation.set_up();
     const expr* zero_pool = make_functor.make("zero", {});
     const expr* len = zero_pool;
@@ -1523,7 +1538,7 @@ TEST_F(SimIntegrationTest, RunReturnsConflictedWhenCdclEliminationExhaustsSiblin
     learn_avoidance.learn(lemma{{rl_f_0, rl_g_0}});
     learn_avoidance.learn(lemma{{rl_f_0, rl_g_1}});
 
-    sim simulation{stack.loc, kDefaultMaxResolutions};
+    simulation simulation{stack.loc, kDefaultMaxResolutions};
     simulation.set_up();
 
     EXPECT_CALL(stack.decision_generator, generate()).WillOnce(Return(rl_f_0));
@@ -1552,7 +1567,7 @@ TEST_F(SimIntegrationTest, RunReturnsDepthExceededOnSelfRecursiveClause) {
     static constexpr size_t kMaxResolutions = 4;
     EXPECT_CALL(stack.decision_generator, generate()).Times(0);
 
-    sim simulation{stack.loc, kMaxResolutions};
+    simulation simulation{stack.loc, kMaxResolutions};
     simulation.set_up();
     EXPECT_EQ(simulation.run(), sim_termination::depth_exceeded);
     EXPECT_EQ(stack.loc.locate<i_get_resolution_count>().get_resolution_count(), kMaxResolutions);
@@ -1605,7 +1620,7 @@ TEST_F(SimIntegrationTest, RunReturnsSolvedAfterTwoSequentialDecisions) {
         .WillOnce(Return(rl_f_0))
         .WillOnce(Return(rl_g_1));
 
-    sim simulation{stack.loc, kDefaultMaxResolutions};
+    simulation simulation{stack.loc, kDefaultMaxResolutions};
     simulation.set_up();
     EXPECT_EQ(simulation.run(), sim_termination::solved);
     EXPECT_EQ(get_decision_count.count(), 2u);
@@ -1658,7 +1673,7 @@ TEST_F(SimIntegrationTest, RunReturnsSolvedWhenCdclUnitElimForcesRemainingCandid
 
     learn_avoidance.learn(lemma{{rl_f_0, rl_g_2}});
 
-    sim simulation{stack.loc, kDefaultMaxResolutions};
+    simulation simulation{stack.loc, kDefaultMaxResolutions};
     simulation.set_up();
 
     EXPECT_CALL(stack.decision_generator, generate()).WillOnce(Return(rl_f_0));
@@ -1697,7 +1712,7 @@ TEST_F(SimIntegrationTest, RunReturnsConflictedAfterPartialProgressWhenDerivedGo
 
     EXPECT_CALL(stack.decision_generator, generate()).Times(0);
 
-    sim simulation{stack.loc, kDefaultMaxResolutions};
+    simulation simulation{stack.loc, kDefaultMaxResolutions};
     simulation.set_up();
     const expr* var_a = make_var.make(seq.next());
     initial_goals.push(make_functor.make("f", {var_a}));
@@ -1716,7 +1731,7 @@ TEST_F(SimIntegrationTest, SetUpLifecyclePushesOneTrailFrameWithoutRunning) {
   const size_t depth_before = stack.early.trail_.depth();
   const size_t expr_before = stack.loc.locate<i_get_expr_count>().size();
 
-  sim simulation{stack.loc, kDefaultMaxResolutions};
+  simulation simulation{stack.loc, kDefaultMaxResolutions};
   simulation.set_up();
 
   EXPECT_EQ(stack.early.trail_.depth(), depth_before + 1);
@@ -1728,7 +1743,7 @@ TEST_F(SimIntegrationTest, SetUpLifecyclePushesOneTrailFrameWithoutRunning) {
 TEST_F(SimIntegrationTest, TearDownLifecycleRestoresTrailDepthAfterEmptyRun) {
   const size_t depth_before = stack.early.trail_.depth();
 
-  sim simulation{stack.loc, kDefaultMaxResolutions};
+  simulation simulation{stack.loc, kDefaultMaxResolutions};
   simulation.set_up();
   EXPECT_EQ(simulation.run(), sim_termination::solved);
   simulation.tear_down();
@@ -1744,7 +1759,7 @@ TEST_F(SimIntegrationTest, TearDownLifecycleRestoresTrailDepthAfterConflictedRun
 
   EXPECT_CALL(stack.decision_generator, generate()).Times(0);
 
-  sim simulation{stack.loc, kDefaultMaxResolutions};
+  simulation simulation{stack.loc, kDefaultMaxResolutions};
   simulation.set_up();
   EXPECT_EQ(simulation.run(), sim_termination::conflicted);
   simulation.tear_down();
@@ -1764,7 +1779,7 @@ TEST_F(SimIntegrationTest, TearDownLifecycleRestoresTrailDepthAfterDepthExceeded
 
   EXPECT_CALL(stack.decision_generator, generate()).Times(0);
 
-  sim simulation{stack.loc, kMaxResolutions};
+  simulation simulation{stack.loc, kMaxResolutions};
   simulation.set_up();
   EXPECT_EQ(simulation.run(), sim_termination::depth_exceeded);
   simulation.tear_down();
@@ -1789,7 +1804,7 @@ TEST_F(SimIntegrationTest, TearDownLifecycleClearsEphemeralStoresAfterSolvedRun)
 
   EXPECT_CALL(stack.decision_generator, generate()).Times(0);
 
-  sim simulation{stack.loc, kDefaultMaxResolutions};
+  simulation simulation{stack.loc, kDefaultMaxResolutions};
   simulation.set_up();
   EXPECT_EQ(simulation.run(), sim_termination::solved);
   simulation.tear_down();
@@ -1829,7 +1844,7 @@ TEST_F(SimIntegrationTest, TearDownLifecyclePopUndoesInFrameExprPoolGrowth) {
   static constexpr int kListLength = 5;
   EXPECT_CALL(stack.decision_generator, generate()).Times(0);
 
-  sim simulation{stack.loc, kMaxResolutions};
+  simulation simulation{stack.loc, kMaxResolutions};
   simulation.set_up();
   const expr* zero_pool = make_functor.make("zero", {});
   const expr* len = zero_pool;
@@ -1865,7 +1880,7 @@ TEST_F(SimIntegrationTest, TearDownLifecycleResetsVarSequencerWhenIncrementedInF
 
   EXPECT_CALL(stack.decision_generator, generate()).Times(0);
 
-  sim simulation{stack.loc, kDefaultMaxResolutions};
+  simulation simulation{stack.loc, kDefaultMaxResolutions};
   simulation.set_up();
   const expr* var_in_frame = make_var.make(seq.next());
   initial_goals.push(make_functor.make("f", {var_in_frame}));
@@ -1914,7 +1929,7 @@ TEST_F(SimIntegrationTest, BaseFrameCdclLearnSurvivesLifecycleTearDown) {
   pin_resolution_lineage.pin(rl_g1_2);
   pin_resolution_lineage.pin(rl_g1_3);
 
-  sim simulation{stack.loc, kDefaultMaxResolutions};
+  simulation simulation{stack.loc, kDefaultMaxResolutions};
   simulation.set_up();
 
   EXPECT_CALL(stack.decision_generator, generate()).WillOnce(Return(rl_g0_0));
@@ -1954,7 +1969,7 @@ TEST_F(SimIntegrationTest, IdenticalSimCycleLifecycleRunsCleanAfterTearDown) {
 
   EXPECT_CALL(stack.decision_generator, generate()).Times(0);
 
-  sim simulation{stack.loc, kDefaultMaxResolutions};
+  simulation simulation{stack.loc, kDefaultMaxResolutions};
 
   simulation.set_up();
   EXPECT_EQ(simulation.run(), sim_termination::solved);
@@ -2007,7 +2022,7 @@ TEST_F(SimIntegrationTest, RunReturnsSolvedStressListOfTwentyAbcWithoutDecisions
   static constexpr int kListLength = 20;
   EXPECT_CALL(stack.decision_generator, generate()).Times(0);
 
-  sim simulation{stack.loc, kMaxResolutions};
+  simulation simulation{stack.loc, kMaxResolutions};
   simulation.set_up();
   const expr* zero_pool = make_functor.make("zero", {});
   const expr* len = make_suc_n(make_functor, zero_pool, kListLength);
@@ -2050,7 +2065,7 @@ TEST_F(SimIntegrationTest, RunReturnsSolvedStressLinearChainClauseDepthTwenty) {
   expr goal{expr::functor{"chain0", {&ground}}};
   initial_goals.push(&goal);
 
-  sim simulation{stack.loc, kMaxResolutions};
+  simulation simulation{stack.loc, kMaxResolutions};
   simulation.set_up();
   EXPECT_EQ(simulation.run(), sim_termination::solved);
   EXPECT_GE(get_resolution_count.get_resolution_count(), kChainDepth);
@@ -2077,7 +2092,7 @@ TEST_F(SimIntegrationTest, RunReturnsSolvedStressEvenOddPeanoGoal) {
   static constexpr int kSucDepth = 12;
   EXPECT_CALL(stack.decision_generator, generate()).Times(0);
 
-  sim simulation{stack.loc, kMaxResolutions};
+  simulation simulation{stack.loc, kMaxResolutions};
   simulation.set_up();
   const expr* zero_pool = make_functor.make("zero", {});
   const expr* goal_even = make_functor.make("even", {make_suc_n(make_functor, zero_pool, kSucDepth)});
@@ -2105,7 +2120,7 @@ TEST_F(SimIntegrationTest, RunReturnsSolvedStressDeepNestedFunctorTower) {
 
   EXPECT_CALL(stack.decision_generator, generate()).Times(0);
 
-  sim simulation{stack.loc, kMaxResolutions};
+  simulation simulation{stack.loc, kMaxResolutions};
   simulation.set_up();
   const expr* inner = &zero;
   for (int i = 0; i < kTowerDepth; ++i)
@@ -2147,7 +2162,7 @@ TEST_F(SimIntegrationTest, RunReturnsSolvedStressLongSharedVarChainWithoutDecisi
 
   EXPECT_CALL(stack.decision_generator, generate()).Times(0);
 
-  sim simulation{stack.loc, kDefaultMaxResolutions};
+  simulation simulation{stack.loc, kDefaultMaxResolutions};
   simulation.set_up();
   std::vector<const expr*> vars;
   for (int i = 0; i <= kChainGoals; ++i)
@@ -2182,7 +2197,7 @@ TEST_F(SimIntegrationTest, RunReturnsSolvedStressDiamondSharedVarWithoutDecision
 
   EXPECT_CALL(stack.decision_generator, generate()).Times(0);
 
-  sim simulation{stack.loc, kDefaultMaxResolutions};
+  simulation simulation{stack.loc, kDefaultMaxResolutions};
   simulation.set_up();
   const expr* var_a = make_var.make(seq.next());
   const expr* var_b = make_var.make(seq.next());
@@ -2230,7 +2245,7 @@ TEST_F(SimIntegrationTest, RunReturnsSolvedStressWideClauseTreeWithoutDecisions)
 
   EXPECT_CALL(stack.decision_generator, generate()).Times(0);
 
-  sim simulation{stack.loc, kDefaultMaxResolutions};
+  simulation simulation{stack.loc, kDefaultMaxResolutions};
   simulation.set_up();
   EXPECT_EQ(simulation.run(), sim_termination::solved);
   EXPECT_GE(get_resolution_count.get_resolution_count(), kMinResolutions);
@@ -2292,7 +2307,7 @@ TEST_F(SimIntegrationTest, RunReturnsSolvedStressMultipleAvoidancesSeveralDecisi
       .WillOnce(Return(rl_h_0))
       .WillOnce(Return(rl_k_1));
 
-  sim simulation{stack.loc, kMaxResolutions};
+  simulation simulation{stack.loc, kMaxResolutions};
   simulation.set_up();
   EXPECT_EQ(simulation.run(), sim_termination::solved);
   EXPECT_EQ(get_decision_count.count(), kExpectedDecisions);
@@ -2350,7 +2365,7 @@ TEST_F(SimIntegrationTest, RunReturnsSolvedStressCdclMhuManyGroundHeadsOnSharedV
       .WillOnce(Return(rl_f_0))
       .WillOnce(Return(rl_g_def));
 
-  sim simulation{stack.loc, kDefaultMaxResolutions};
+  simulation simulation{stack.loc, kDefaultMaxResolutions};
   simulation.set_up();
   const expr* var_a = make_var.make(seq.next());
   const expr* var_b = make_var.make(seq.next());
@@ -2383,7 +2398,7 @@ TEST_F(SimIntegrationTest, RunReturnsDepthExceededStressOnDeepLinearChainWithinB
 
   EXPECT_CALL(stack.decision_generator, generate()).Times(0);
 
-  sim simulation{stack.loc, kMaxResolutions};
+  simulation simulation{stack.loc, kMaxResolutions};
   simulation.set_up();
   EXPECT_EQ(simulation.run(), sim_termination::depth_exceeded);
   EXPECT_EQ(stack.loc.locate<i_get_resolution_count>().get_resolution_count(), kMaxResolutions);

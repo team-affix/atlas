@@ -105,8 +105,12 @@ basic_manifest::orchestration_wiring::orchestration_wiring(
     loc.bind_as<i_generate_decision>(random_decision_generator_);
     resolver_.emplace(loc);
     loc.bind_as<i_resolver>(*resolver_);
-    sim_.emplace(loc, max_resolutions);
-    loc.bind_as<i_set_up_sim, i_tear_down_sim, i_run_sim>(*sim_);
+    set_up_sim_.emplace(loc);
+    loc.bind_as<i_set_up_sim>(*set_up_sim_);
+    tear_down_sim_.emplace(loc);
+    loc.bind_as<i_tear_down_sim>(*tear_down_sim_);
+    run_sim_.emplace(loc, max_resolutions);
+    loc.bind_as<i_run_sim>(*run_sim_);
     solver_.emplace(loc);
     loc.bind_as<i_solve>(*solver_);
 }
@@ -163,5 +167,7 @@ basic_manifest::basic_manifest(
       rng_(orch_.rng_),
       random_decision_generator_(orch_.random_decision_generator_),
       resolver_(*orch_.resolver_),
-      sim_(*orch_.sim_),
+      set_up_sim_(*orch_.set_up_sim_),
+      tear_down_sim_(*orch_.tear_down_sim_),
+      run_sim_(*orch_.run_sim_),
       solver_(*orch_.solver_) {}

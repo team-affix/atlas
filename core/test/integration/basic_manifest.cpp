@@ -321,14 +321,14 @@ TEST_F(BasicManifestIntegrationTest, WiringDecisionMemorySharedForRecordCountDer
 
 TEST_F(BasicManifestIntegrationTest, WiringSimSharedForSetUpRunTearDown) {
     /*
-     * Intent: sim_ backs i_set_up_sim, i_run_sim, and i_tear_down_sim.
+     * Intent: set_up_sim_, tear_down_sim_, and run_sim_ back the locator's sim interfaces.
      * initial goals: (none)
      * rules: (none)
      */
     basic_manifest manifest{database, initial_goals, kInitialVarCount, kMaxResolutions, kSeed};
-    EXPECT_EQ(static_cast<i_set_up_sim *>(&manifest.sim_), &manifest.loc_.locate<i_set_up_sim>());
-    EXPECT_EQ(static_cast<i_tear_down_sim *>(&manifest.sim_), &manifest.loc_.locate<i_tear_down_sim>());
-    EXPECT_EQ(static_cast<i_run_sim *>(&manifest.sim_), &manifest.loc_.locate<i_run_sim>());
+    EXPECT_EQ(static_cast<i_set_up_sim *>(&manifest.set_up_sim_), &manifest.loc_.locate<i_set_up_sim>());
+    EXPECT_EQ(static_cast<i_tear_down_sim *>(&manifest.tear_down_sim_), &manifest.loc_.locate<i_tear_down_sim>());
+    EXPECT_EQ(static_cast<i_run_sim *>(&manifest.run_sim_), &manifest.loc_.locate<i_run_sim>());
 }
 
 TEST_F(BasicManifestIntegrationTest, WiringMhuSharedForHeadOps) {
@@ -444,7 +444,7 @@ TEST_F(BasicManifestIntegrationTest, WiringBindMapAndExprPoolSharedViaLocator) {
     EXPECT_EQ(static_cast<i_import_expr *>(&manifest.expr_pool_), &manifest.loc_.locate<i_import_expr>());
 }
 
-// Tier L — sim lifecycle + subsystems via manifest.sim_
+// Tier L — sim lifecycle + subsystems via manifest run_sim_
 
 TEST_F(BasicManifestIntegrationTest, SimLifecycleTrailDepthRestoresAfterEmptyRun) {
     /*
@@ -454,9 +454,9 @@ TEST_F(BasicManifestIntegrationTest, SimLifecycleTrailDepthRestoresAfterEmptyRun
      */
     basic_manifest manifest{database, initial_goals, kInitialVarCount, kMaxResolutions, kSeed};
     const size_t depth_before = manifest.trail_.depth();
-    manifest.sim_.set_up();
-    EXPECT_EQ(manifest.sim_.run(), sim_termination::solved);
-    manifest.sim_.tear_down();
+    manifest.set_up_sim_.set_up();
+    EXPECT_EQ(manifest.run_sim_.run(), sim_termination::solved);
+    manifest.tear_down_sim_.tear_down();
     EXPECT_EQ(manifest.trail_.depth(), depth_before);
 }
 
@@ -470,9 +470,9 @@ TEST_F(BasicManifestIntegrationTest, SimLifecycleTrailDepthRestoresAfterConflict
     initial_goals.push(goal);
     basic_manifest manifest{database, initial_goals, kInitialVarCount, kMaxResolutions, kSeed};
     const size_t depth_before = manifest.trail_.depth();
-    manifest.sim_.set_up();
-    EXPECT_EQ(manifest.sim_.run(), sim_termination::conflicted);
-    manifest.sim_.tear_down();
+    manifest.set_up_sim_.set_up();
+    EXPECT_EQ(manifest.run_sim_.run(), sim_termination::conflicted);
+    manifest.tear_down_sim_.tear_down();
     EXPECT_EQ(manifest.trail_.depth(), depth_before);
 }
 
@@ -491,9 +491,9 @@ TEST_F(BasicManifestIntegrationTest, SimLifecycleTrailDepthRestoresAfterDepthExc
     static constexpr size_t kLowBudget = 4;
     basic_manifest manifest{database, initial_goals, kInitialVarCount, kLowBudget, kSeed};
     const size_t depth_before = manifest.trail_.depth();
-    manifest.sim_.set_up();
-    EXPECT_EQ(manifest.sim_.run(), sim_termination::depth_exceeded);
-    manifest.sim_.tear_down();
+    manifest.set_up_sim_.set_up();
+    EXPECT_EQ(manifest.run_sim_.run(), sim_termination::depth_exceeded);
+    manifest.tear_down_sim_.tear_down();
     EXPECT_EQ(manifest.trail_.depth(), depth_before);
 }
 
@@ -515,9 +515,9 @@ TEST_F(BasicManifestIntegrationTest, SimLifecycleClearsEphemeralStoresAfterSolve
     initial_goals.push(manifest.expr_pool_.make("f", {test_var,
         manifest.expr_pool_.make(manifest.var_sequencer_.next())}));
 
-    manifest.sim_.set_up();
-    EXPECT_EQ(manifest.sim_.run(), sim_termination::solved);
-    manifest.sim_.tear_down();
+    manifest.set_up_sim_.set_up();
+    EXPECT_EQ(manifest.run_sim_.run(), sim_termination::solved);
+    manifest.tear_down_sim_.tear_down();
 
     EXPECT_TRUE(manifest.loc_.locate<i_check_active_goals_empty>().empty());
     EXPECT_EQ(manifest.decision_memory_.count(), 0u);
@@ -548,23 +548,23 @@ TEST_F(BasicManifestIntegrationTest, SimLifecycleBaseFrameVarsSurviveTearDown) {
     const expr* var_b = manifest.expr_pool_.make(idx_b);
     initial_goals.push(manifest.expr_pool_.make("f", {var_a, var_b}));
 
-    manifest.sim_.set_up();
-    EXPECT_EQ(manifest.sim_.run(), sim_termination::solved);
+    manifest.set_up_sim_.set_up();
+    EXPECT_EQ(manifest.run_sim_.run(), sim_termination::solved);
     const std::string whnf_a_1 =
         std::get<expr::functor>(manifest.bind_map_.whnf(var_a)->content).name;
     const std::string whnf_b_1 =
         std::get<expr::functor>(manifest.bind_map_.whnf(var_b)->content).name;
-    manifest.sim_.tear_down();
+    manifest.tear_down_sim_.tear_down();
 
-    manifest.sim_.set_up();
-    EXPECT_EQ(manifest.sim_.run(), sim_termination::solved);
+    manifest.set_up_sim_.set_up();
+    EXPECT_EQ(manifest.run_sim_.run(), sim_termination::solved);
     const std::string whnf_a_2 =
         std::get<expr::functor>(manifest.bind_map_.whnf(var_a)->content).name;
     const std::string whnf_b_2 =
         std::get<expr::functor>(manifest.bind_map_.whnf(var_b)->content).name;
     EXPECT_EQ(whnf_a_2, whnf_a_1);
     EXPECT_EQ(whnf_b_2, whnf_b_1);
-    manifest.sim_.tear_down();
+    manifest.tear_down_sim_.tear_down();
 }
 
 TEST_F(BasicManifestIntegrationTest, SimLifecycleExprPoolInFrameGrowthRevertsOnTearDown) {
@@ -592,7 +592,7 @@ TEST_F(BasicManifestIntegrationTest, SimLifecycleExprPoolInFrameGrowthRevertsOnT
     basic_manifest manifest{database, initial_goals, kInitialVarCount, kMaxResolutions, kSeed};
     const size_t expr_before = manifest.expr_pool_.size();
 
-    manifest.sim_.set_up();
+    manifest.set_up_sim_.set_up();
     const expr* zero_pool = manifest.expr_pool_.make("zero", {});
     const expr* len = zero_pool;
     for (int i = 0; i < 5; ++i)
@@ -601,9 +601,9 @@ TEST_F(BasicManifestIntegrationTest, SimLifecycleExprPoolInFrameGrowthRevertsOnT
     const expr* var_r = manifest.expr_pool_.make(manifest.var_sequencer_.next());
     initial_goals.push(manifest.expr_pool_.make("make_list", {len, abc, var_r}));
 
-    EXPECT_EQ(manifest.sim_.run(), sim_termination::solved);
+    EXPECT_EQ(manifest.run_sim_.run(), sim_termination::solved);
     EXPECT_GT(manifest.expr_pool_.size(), expr_before);
-    manifest.sim_.tear_down();
+    manifest.tear_down_sim_.tear_down();
     EXPECT_EQ(manifest.expr_pool_.size(), expr_before);
 }
 
@@ -626,15 +626,15 @@ TEST_F(BasicManifestIntegrationTest, SimMhuBindsThroughManifest) {
     const expr* var_b = manifest.expr_pool_.make(idx_b);
     initial_goals.push(manifest.expr_pool_.make("f", {var_a, var_b}));
 
-    manifest.sim_.set_up();
-    EXPECT_EQ(manifest.sim_.run(), sim_termination::solved);
+    manifest.set_up_sim_.set_up();
+    EXPECT_EQ(manifest.run_sim_.run(), sim_termination::solved);
     const expr::functor& whnf_a =
         std::get<expr::functor>(manifest.bind_map_.whnf(var_a)->content);
     const expr::functor& whnf_b =
         std::get<expr::functor>(manifest.bind_map_.whnf(var_b)->content);
     EXPECT_EQ(whnf_a.name, "abc");
     EXPECT_EQ(whnf_b.name, "123");
-    manifest.sim_.tear_down();
+    manifest.tear_down_sim_.tear_down();
 }
 
 TEST_F(BasicManifestIntegrationTest, SimMhuDeactivationRemovesSiblingFromFrontier) {
@@ -660,12 +660,12 @@ TEST_F(BasicManifestIntegrationTest, SimMhuDeactivationRemovesSiblingFromFrontie
     const resolution_lineage* rl1 =
         manifest.lineage_pool_.make_resolution_lineage(gl, rule_id{1});
 
-    manifest.sim_.set_up();
+    manifest.set_up_sim_.set_up();
     const expr* var_a = manifest.expr_pool_.make(manifest.var_sequencer_.next());
     const expr* var_b = manifest.expr_pool_.make(manifest.var_sequencer_.next());
     initial_goals.push(manifest.expr_pool_.make("f", {var_a, var_b}));
 
-    EXPECT_EQ(manifest.sim_.run(), sim_termination::solved);
+    EXPECT_EQ(manifest.run_sim_.run(), sim_termination::solved);
     EXPECT_EQ(manifest.decision_memory_.count(), 1u);
     const lemma dl = manifest.decision_memory_.derive_decision_lemma();
     ASSERT_EQ(dl.get_resolutions().size(), 1u);
@@ -674,7 +674,7 @@ TEST_F(BasicManifestIntegrationTest, SimMhuDeactivationRemovesSiblingFromFrontie
     const lemma resolution_lemma = manifest.resolution_memory_.derive_resolution_lemma();
     for (const resolution_lineage* rl : resolution_lemma.get_resolutions())
         EXPECT_NE(rl->idx, sibling_id);
-    manifest.sim_.tear_down();
+    manifest.tear_down_sim_.tear_down();
 }
 
 TEST_F(BasicManifestIntegrationTest, SimRandomDecisionGeneratorPicksBranchWithFixedSeed) {
@@ -693,14 +693,14 @@ TEST_F(BasicManifestIntegrationTest, SimRandomDecisionGeneratorPicksBranchWithFi
     database.push(rule{f_head1, {}});
 
     basic_manifest manifest{database, initial_goals, kInitialVarCount, kMaxResolutions, kSeed};
-    manifest.sim_.set_up();
-    EXPECT_EQ(manifest.sim_.run(), sim_termination::solved);
+    manifest.set_up_sim_.set_up();
+    EXPECT_EQ(manifest.run_sim_.run(), sim_termination::solved);
     EXPECT_EQ(manifest.decision_memory_.count(), 1u);
     const lemma dl = manifest.decision_memory_.derive_decision_lemma();
     ASSERT_EQ(dl.get_resolutions().size(), 1u);
     const rule_id chosen = (*dl.get_resolutions().begin())->idx;
     EXPECT_TRUE(chosen == 0 || chosen == 1);
-    manifest.sim_.tear_down();
+    manifest.tear_down_sim_.tear_down();
 }
 
 // Tier X — single solver tick (cross-component interop)
@@ -1363,8 +1363,8 @@ TEST_F(BasicManifestIntegrationTest, SimLifecycleTwoSequentialDecisionsOnTwoGoal
     database.push(rule{g_head3, {}});
 
     basic_manifest manifest{database, initial_goals, kInitialVarCount, kMaxResolutions, kSeed};
-    manifest.sim_.set_up();
-    EXPECT_EQ(manifest.sim_.run(), sim_termination::solved);
+    manifest.set_up_sim_.set_up();
+    EXPECT_EQ(manifest.run_sim_.run(), sim_termination::solved);
     EXPECT_EQ(manifest.decision_memory_.count(), 2u);
 
     const lemma resolution_lemma = manifest.resolution_memory_.derive_resolution_lemma();
@@ -1385,7 +1385,7 @@ TEST_F(BasicManifestIntegrationTest, SimLifecycleTwoSequentialDecisionsOnTwoGoal
 
     ASSERT_EQ(f_branches.size(), 1u);
     ASSERT_EQ(g_branches.size(), 1u);
-    manifest.sim_.tear_down();
+    manifest.tear_down_sim_.tear_down();
 }
 
 TEST_F(BasicManifestIntegrationTest, SimLifecycleRecursiveClauseTreeSolvedWithoutDecisions) {
@@ -1417,10 +1417,10 @@ TEST_F(BasicManifestIntegrationTest, SimLifecycleRecursiveClauseTreeSolvedWithou
     database.push(rule{j_head, {}});
 
     basic_manifest manifest{database, initial_goals, kInitialVarCount, kMaxResolutions, kSeed};
-    manifest.sim_.set_up();
-    EXPECT_EQ(manifest.sim_.run(), sim_termination::solved);
+    manifest.set_up_sim_.set_up();
+    EXPECT_EQ(manifest.run_sim_.run(), sim_termination::solved);
     EXPECT_EQ(manifest.decision_memory_.count(), 0u);
-    manifest.sim_.tear_down();
+    manifest.tear_down_sim_.tear_down();
 }
 
 TEST_F(BasicManifestIntegrationTest, SimLifecycleCdclUnitElimForcesRemainingCandidate) {
@@ -1458,8 +1458,8 @@ TEST_F(BasicManifestIntegrationTest, SimLifecycleCdclUnitElimForcesRemainingCand
     manifest.cdcl_.learn(lemma{{rl_f_0, rl_g_2}});
     manifest.cdcl_.learn(lemma{{rl_f_1, rl_g_2}});
 
-    manifest.sim_.set_up();
-    EXPECT_EQ(manifest.sim_.run(), sim_termination::solved);
+    manifest.set_up_sim_.set_up();
+    EXPECT_EQ(manifest.run_sim_.run(), sim_termination::solved);
 
     const lemma resolution_lemma = manifest.resolution_memory_.derive_resolution_lemma();
     ASSERT_EQ(resolution_lemma.get_resolutions().size(), 2u);
@@ -1485,7 +1485,7 @@ TEST_F(BasicManifestIntegrationTest, SimLifecycleCdclUnitElimForcesRemainingCand
     if (manifest.decision_memory_.count() == 1u)
         EXPECT_FALSE(g_branches.contains(rule_id{2}));
 
-    manifest.sim_.tear_down();
+    manifest.tear_down_sim_.tear_down();
 }
 
 TEST_F(BasicManifestIntegrationTest, SimLifecycleDecisionMemoryClearsEachTearDown) {
@@ -1525,14 +1525,14 @@ TEST_F(BasicManifestIntegrationTest, SimLifecycleDecisionMemoryClearsEachTearDow
     manifest.lineage_pool_.pin(rl_g1_2);
     manifest.lineage_pool_.pin(rl_g1_3);
 
-    manifest.sim_.set_up();
-    EXPECT_EQ(manifest.sim_.run(), sim_termination::solved);
-    manifest.sim_.tear_down();
+    manifest.set_up_sim_.set_up();
+    EXPECT_EQ(manifest.run_sim_.run(), sim_termination::solved);
+    manifest.tear_down_sim_.tear_down();
     EXPECT_EQ(manifest.decision_memory_.count(), 0u);
 
-    manifest.sim_.set_up();
-    EXPECT_EQ(manifest.sim_.run(), sim_termination::solved);
-    manifest.sim_.tear_down();
+    manifest.set_up_sim_.set_up();
+    EXPECT_EQ(manifest.run_sim_.run(), sim_termination::solved);
+    manifest.tear_down_sim_.tear_down();
     EXPECT_EQ(manifest.decision_memory_.count(), 0u);
 }
 

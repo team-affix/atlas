@@ -7,7 +7,9 @@
 #include <gtest/gtest.h>
 #include <gmock/gmock.h>
 #include "locator_fixture.hpp"
-#include "infrastructure/sim.hpp"
+#include "infrastructure/set_up_sim.hpp"
+#include "infrastructure/tear_down_sim.hpp"
+#include "infrastructure/run_sim.hpp"
 #include "interfaces/i_solution_detector.hpp"
 #include "interfaces/i_conflict_detector.hpp"
 #include "interfaces/i_detect_unit_goal.hpp"
@@ -141,6 +143,19 @@ struct MockTrimUnpinnedLineages : public i_trim_unpinned_lineages {
     MOCK_METHOD(void, trim, (), (override));
 };
 
+struct simulation {
+    set_up_sim set_up_sim_;
+    run_sim run_sim_;
+    tear_down_sim tear_down_sim_;
+
+    simulation(locator& loc, size_t max_resolutions)
+        : set_up_sim_(loc), run_sim_(loc, max_resolutions), tear_down_sim_(loc) {}
+
+    void set_up() { set_up_sim_.set_up(); }
+    sim_termination run() { return run_sim_.run(); }
+    void tear_down() { tear_down_sim_.tear_down(); }
+};
+
 struct SimTest : public ::testing::Test {
     static constexpr size_t kMaxResolutions = 2;
 
@@ -200,18 +215,18 @@ struct SimTest : public ::testing::Test {
         loc.bind_as<i_trim_unpinned_lineages>(trim_unpinned_lineages);
     }
 
-    sim make_sim(size_t max_resolutions = kMaxResolutions) {
-        return sim{loc, max_resolutions};
+    simulation make_simulation(size_t max_resolutions = kMaxResolutions) {
+        return simulation{loc, max_resolutions};
     }
 
-    sim simulation;
+    simulation simulation_;
 
-    SimTest() : simulation(init_simulation()) {}
+    SimTest() : simulation_(init_simulation()) {}
 
-    sim init_simulation() {
+    simulation init_simulation() {
         bind_sim_deps();
         ON_CALL(activate_initial_goals_and_candidates, activate_initial_goals_and_candidates()).WillByDefault(Return(true));
-        return sim{loc, kMaxResolutions};
+        return simulation{loc, kMaxResolutions};
     }
 
     goal_lineage gl{nullptr, 0};
@@ -222,7 +237,7 @@ TEST_F(SimTest, RunReturnsSolvedWhenDetectorSaysSo) {
     EXPECT_CALL(activate_initial_goals_and_candidates, activate_initial_goals_and_candidates()).WillOnce(Return(true));
     EXPECT_CALL(solution_detector, detect()).WillOnce(Return(true));
     EXPECT_CALL(decision_generator, generate()).Times(0);
-    EXPECT_EQ(simulation.run(), sim_termination::solved);
+    EXPECT_EQ(simulation_.run(), sim_termination::solved);
 }
 
 TEST_F(SimTest, RunReturnsDepthExceededWhenNoSolutionWithinLimit) {
@@ -233,7 +248,7 @@ TEST_F(SimTest, RunReturnsDepthExceededWhenNoSolutionWithinLimit) {
     EXPECT_CALL(elimination_generator, constrain(&rl))
         .WillRepeatedly([] { return empty_eliminations(); });
     EXPECT_CALL(resolver, resolve(&rl)).WillRepeatedly(Return(true));
-    EXPECT_EQ(simulation.run(), sim_termination::depth_exceeded);
+    EXPECT_EQ(simulation_.run(), sim_termination::depth_exceeded);
 }
 
 TEST_F(SimTest, RunReturnsConflictedWhenResolverFails) {
@@ -243,14 +258,14 @@ TEST_F(SimTest, RunReturnsConflictedWhenResolverFails) {
     EXPECT_CALL(decision_generator, generate()).WillOnce(Return(&rl));
     EXPECT_CALL(elimination_generator, constrain(&rl)).WillOnce([] { return empty_eliminations(); });
     EXPECT_CALL(resolver, resolve(&rl)).WillOnce(Return(false));
-    EXPECT_EQ(simulation.run(), sim_termination::conflicted);
+    EXPECT_EQ(simulation_.run(), sim_termination::conflicted);
 }
 
 TEST_F(SimTest, RunReturnsConflictedWhenInitialGoalsFail) {
     EXPECT_CALL(activate_initial_goals_and_candidates, activate_initial_goals_and_candidates()).WillOnce(Return(false));
     EXPECT_CALL(solution_detector, detect()).Times(0);
     EXPECT_CALL(decision_generator, generate()).Times(0);
-    EXPECT_EQ(simulation.run(), sim_termination::conflicted);
+    EXPECT_EQ(simulation_.run(), sim_termination::conflicted);
 }
 
 TEST_F(SimTest, TearDownPopsTrailAndClearsNonBacktrackedStores) {
@@ -266,14 +281,14 @@ TEST_F(SimTest, TearDownPopsTrailAndClearsNonBacktrackedStores) {
     EXPECT_CALL(clear_bindings, clear_bindings()).Times(1);
     EXPECT_CALL(trim_unpinned_lineages, trim()).Times(1);
 
-    simulation.tear_down();
+    simulation_.tear_down();
 }
 
 TEST_F(SimTest, SetUpPushesTrailFrameOnly) {
     EXPECT_CALL(push_trail_frame, push()).Times(1);
     EXPECT_CALL(activate_initial_goals_and_candidates, activate_initial_goals_and_candidates()).Times(0);
-    simulation.set_up();
-    simulation.tear_down();
+    simulation_.set_up();
+    simulation_.tear_down();
 }
 
 TEST_F(SimTest, RunRoutesEliminationBeforeResolve) {
@@ -291,7 +306,7 @@ TEST_F(SimTest, RunRoutesEliminationBeforeResolve) {
     EXPECT_CALL(unit_goal_detector, detect(&gl)).WillOnce(Return(false));
     EXPECT_CALL(resolver, resolve(&rl)).WillRepeatedly(Return(true));
 
-    EXPECT_EQ(simulation.run(), sim_termination::depth_exceeded);
+    EXPECT_EQ(simulation_.run(), sim_termination::depth_exceeded);
 }
 
 TEST_F(SimTest, RunReturnsConflictedWhenEliminationParentConflicts) {
@@ -307,7 +322,7 @@ TEST_F(SimTest, RunReturnsConflictedWhenEliminationParentConflicts) {
     EXPECT_CALL(conflict_detector, detect(&gl)).WillOnce(Return(true));
     EXPECT_CALL(resolver, resolve).Times(0);
 
-    EXPECT_EQ(simulation.run(), sim_termination::conflicted);
+    EXPECT_EQ(simulation_.run(), sim_termination::conflicted);
 }
 
 TEST_F(SimTest, RunPushesUnitGoalWhenEliminationParentIsUnit) {
@@ -326,7 +341,7 @@ TEST_F(SimTest, RunPushesUnitGoalWhenEliminationParentIsUnit) {
     EXPECT_CALL(push_unit_goal, push(&gl)).Times(1);
     EXPECT_CALL(resolver, resolve(&rl)).WillRepeatedly(Return(true));
 
-    EXPECT_EQ(simulation.run(), sim_termination::depth_exceeded);
+    EXPECT_EQ(simulation_.run(), sim_termination::depth_exceeded);
 }
 
 TEST_F(SimTest, RecordsDecisionWhenGeneratorChoosesResolution) {
@@ -340,13 +355,13 @@ TEST_F(SimTest, RecordsDecisionWhenGeneratorChoosesResolution) {
         .WillRepeatedly([] { return empty_eliminations(); });
     EXPECT_CALL(resolver, resolve(&rl)).WillRepeatedly(Return(true));
 
-    EXPECT_EQ(simulation.run(), sim_termination::depth_exceeded);
+    EXPECT_EQ(simulation_.run(), sim_termination::depth_exceeded);
 }
 
 TEST_F(SimTest, RunUsesPoppedUnitGoalForNextResolution) {
     resolution_lineage unit_rl{&gl, 5};
 
-    sim one_resolution{make_sim(1)};
+    simulation one_resolution = make_simulation(1);
 
     EXPECT_CALL(activate_initial_goals_and_candidates, activate_initial_goals_and_candidates()).WillOnce(Return(true));
     EXPECT_CALL(solution_detector, detect()).WillOnce(Return(false));
