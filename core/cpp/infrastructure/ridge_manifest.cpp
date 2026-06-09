@@ -99,10 +99,12 @@ ridge_manifest::orchestration_wiring::orchestration_wiring(
     loc.bind_as<i_activate_goal_candidates>(goal_candidates_activator_);
     loc.bind_as<i_deactivate_goal_candidates>(goal_candidates_deactivator_);
     subgoals_activator_.emplace(loc);
-    initial_goals_activator_.emplace(loc);
-    srt_subgoals_activator_.emplace(loc, *subgoals_activator_);
+    loc.bind_as<>(*subgoals_activator_);
+    srt_subgoals_activator_.emplace(loc);
     loc.bind_as<i_activate_subgoals_and_candidates>(*srt_subgoals_activator_);
-    srt_initial_goals_activator_.emplace(loc, *initial_goals_activator_);
+    initial_goals_activator_.emplace(loc);
+    loc.bind_as<>(*initial_goals_activator_);
+    srt_initial_goals_activator_.emplace(loc);
     loc.bind_as<i_activate_initial_goals_and_candidates>(*srt_initial_goals_activator_);
     set_up_sim_.emplace(loc);
     tear_down_sim_.emplace(loc);
