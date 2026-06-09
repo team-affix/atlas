@@ -14,7 +14,7 @@
 #include "infrastructure/expr_pool.hpp"
 #include "infrastructure/lineage_pool.hpp"
 #include "infrastructure/goal_candidate_rules.hpp"
-#include "infrastructure/candidate_rule_set_factory.hpp"
+#include "infrastructure/ra_rule_id_set_factory.hpp"
 #include "infrastructure/trail.hpp"
 #include "interfaces/i_learn_avoidance.hpp"
 #include "interfaces/i_try_add_mhu_head.hpp"
@@ -50,8 +50,8 @@ struct JointEliminationGeneratorIntegrationTest : public ::testing::Test {
     lineage_pool lp;
     bind_map_factory bmf;
     unifier_factory uf;
-    candidate_rule_set_factory candidate_rule_set_factory_;
-    goal_candidate_rules ggcr{candidate_rule_set_factory_};
+    ra_rule_id_set_factory ra_rule_id_set_factory_;
+    goal_candidate_rules ggcr{ra_rule_id_set_factory_};
     std::optional<expr_pool> pool;
     cdcl_sequencer cdcl_seq;
     std::optional<cdcl_elimination_generator> cdcl;

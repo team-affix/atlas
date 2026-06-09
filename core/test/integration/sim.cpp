@@ -15,7 +15,7 @@
 #include "infrastructure/unifier_factory.hpp"
 #include "infrastructure/lineage_pool.hpp"
 #include "infrastructure/ra_active_goals.hpp"
-#include "infrastructure/candidate_rule_set_factory.hpp"
+#include "infrastructure/ra_rule_id_set_factory.hpp"
 #include "infrastructure/goal_exprs.hpp"
 #include "infrastructure/goal_candidate_rules.hpp"
 #include "infrastructure/unit_goals.hpp"
@@ -145,7 +145,7 @@ struct sim_early_wiring {
     bind_map_factory bind_map_factory_;
     unifier_factory unifier_factory_;
     lineage_pool lineage_pool_;
-    candidate_rule_set_factory candidate_rule_set_factory_;
+    ra_rule_id_set_factory ra_rule_id_set_factory_;
     ra_active_goals ra_active_goals_;
     goal_exprs goal_exprs_;
     goal_candidate_rules goal_candidate_rules_;
@@ -160,10 +160,10 @@ struct sim_early_wiring {
           bind_map_factory_(),
           unifier_factory_(),
           lineage_pool_(),
-          candidate_rule_set_factory_(),
+          ra_rule_id_set_factory_(),
           ra_active_goals_(),
           goal_exprs_(),
-          goal_candidate_rules_(candidate_rule_set_factory_),
+          goal_candidate_rules_(ra_rule_id_set_factory_),
           unit_goals_(),
           decision_memory_(),
           resolution_memory_(),

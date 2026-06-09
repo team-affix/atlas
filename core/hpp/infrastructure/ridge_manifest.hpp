@@ -6,8 +6,8 @@
 #include <optional>
 #include <random>
 #include "infrastructure/srt_active_goals.hpp"
-#include "infrastructure/candidate_rule_set_factory.hpp"
-#include "infrastructure/db_rule_set_factory.hpp"
+#include "infrastructure/ra_rule_id_set_factory.hpp"
+#include "infrastructure/rule_id_set_factory.hpp"
 #include "infrastructure/bind_map.hpp"
 #include "infrastructure/bind_map_factory.hpp"
 #include "infrastructure/candidate_activator.hpp"
@@ -112,8 +112,8 @@ private:
         bind_map_factory bind_map_factory_;
         unifier_factory unifier_factory_;
         lineage_pool lineage_pool_;
-        db_rule_set_factory db_rule_set_factory_;
-        candidate_rule_set_factory candidate_rule_set_factory_;
+        rule_id_set_factory rule_id_set_factory_;
+        ra_rule_id_set_factory ra_rule_id_set_factory_;
         srt_active_goals srt_active_goals_;
         goal_exprs goal_exprs_;
         goal_candidate_rules goal_candidate_rules_;

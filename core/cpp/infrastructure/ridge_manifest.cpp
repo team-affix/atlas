@@ -7,11 +7,11 @@ ridge_manifest::early_wiring::early_wiring(
       bind_map_factory_(),
       unifier_factory_(),
       lineage_pool_(),
-      db_rule_set_factory_(),
-      candidate_rule_set_factory_(),
+      rule_id_set_factory_(),
+      ra_rule_id_set_factory_(),
       srt_active_goals_(),
       goal_exprs_(),
-      goal_candidate_rules_(candidate_rule_set_factory_),
+      goal_candidate_rules_(ra_rule_id_set_factory_),
       unit_goals_(),
       decision_memory_(),
       resolution_memory_(),
@@ -21,8 +21,8 @@ ridge_manifest::early_wiring::early_wiring(
     loc.bind_as<i_bind_map_factory>(bind_map_factory_);
     loc.bind_as<i_unifier_factory>(unifier_factory_);
     loc.bind_as<i_make_goal_lineage, i_make_resolution_lineage, i_pin_goal_lineage, i_pin_resolution_lineage, i_trim_unpinned_lineages, i_import_goal_lineage, i_import_resolution_lineage>(lineage_pool_);
-    loc.bind_as<i_db_rule_set_factory>(db_rule_set_factory_);
-    loc.bind_as<i_candidate_rule_set_factory>(candidate_rule_set_factory_);
+    loc.bind_as<i_db_rule_set_factory>(rule_id_set_factory_);
+    loc.bind_as<i_candidate_rule_set_factory>(ra_rule_id_set_factory_);
     loc.bind_as<i_insert_active_goal, i_erase_active_goal, i_is_active_goal,
         i_iterate_root_goals, i_iterate_child_goals,
         i_active_goals_size, i_check_active_goals_empty, i_clear_active_goals,
