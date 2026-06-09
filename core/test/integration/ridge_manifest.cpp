@@ -2,10 +2,14 @@
 
 #include <gtest/gtest.h>
 #include "infrastructure/db.hpp"
+#include "infrastructure/expr_pool.hpp"
 #include "infrastructure/initial_goal_exprs.hpp"
+#include "infrastructure/locator.hpp"
 #include "infrastructure/ridge_manifest.hpp"
 #include "infrastructure/subgoals_activator.hpp"
 #include "infrastructure/initial_goals_activator.hpp"
+#include "infrastructure/trail.hpp"
+#include "interfaces/i_log_to_current_trail_frame.hpp"
 #include "interfaces/i_set_up_sim.hpp"
 #include "interfaces/i_tear_down_sim.hpp"
 #include "interfaces/i_run_sim.hpp"
@@ -24,10 +28,12 @@
 #include "interfaces/i_srt_flush_goal_batch.hpp"
 #include "interfaces/i_push_trail_frame.hpp"
 #include "interfaces/i_pop_trail_frame.hpp"
-#include "interfaces/i_log_to_current_trail_frame.hpp"
 #include "interfaces/i_get_decision_count.hpp"
 #include "interfaces/i_record_decision.hpp"
 #include "interfaces/i_clear_recorded_decisions.hpp"
+#include "interfaces/i_derive_decision_lemma.hpp"
+#include "value_objects/expr.hpp"
+#include "value_objects/lemma.hpp"
 #include "value_objects/sim_termination.hpp"
 
 namespace {
@@ -42,14 +48,24 @@ protected:
     db database;
     initial_goal_exprs initial_goals;
 
-    ridge_manifest make_manifest() {
+    trail saved_trail_;
+    locator saved_loc_;
+    expr_pool saved_expr_pool_{bind_saved_loc(saved_trail_, saved_loc_)};
+
+    ridge_manifest make_manifest(size_t max_resolutions = kMaxResolutions) {
         return ridge_manifest{
             database,
             initial_goals,
             kInitialVarCount,
-            kMaxResolutions,
+            max_resolutions,
             kSeed,
             kExplorationConstant};
+    }
+
+private:
+    static locator& bind_saved_loc(trail& t, locator& l) {
+        l.bind_as<i_log_to_current_trail_frame>(t);
+        return l;
     }
 };
 
@@ -243,6 +259,88 @@ TEST_F(RidgeManifestIntegrationTest, SimLifecycleMctsSimAliasMatchesLocatorSetUp
     EXPECT_EQ(manifest.run_sim_.run(), sim_termination::solved);
     manifest.mcts_sim_.tear_down();
     EXPECT_TRUE(manifest.srt_active_goals_.empty());
+}
+
+TEST_F(RidgeManifestIntegrationTest, SimLifecycleTrailDepthRestoresAfterConflictedRun) {
+    /*
+     * Intent: trail depth restores after a conflicted sim run with no matching rules.
+     * initial goals: f.
+     * rules: (none)
+     */
+    const expr* goal = saved_expr_pool_.make("f", {});
+    initial_goals.push(goal);
+    ridge_manifest manifest = make_manifest();
+    const size_t depth_before = manifest.trail_.depth();
+    manifest.loc_.locate<i_set_up_sim>().set_up();
+    EXPECT_EQ(manifest.run_sim_.run(), sim_termination::conflicted);
+    manifest.loc_.locate<i_tear_down_sim>().tear_down();
+    EXPECT_EQ(manifest.trail_.depth(), depth_before);
+}
+
+TEST_F(RidgeManifestIntegrationTest, SimMctsDecisionGeneratorRecordsDecisionWithFixedSeed) {
+    /*
+     * Intent: MCTS decision generator records exactly one f-branch decision at seed 42.
+     * initial goals: f.
+     * rules:
+     *   0: f.
+     *   1: f.
+     */
+    const expr* goal = saved_expr_pool_.make("f", {});
+    const expr* f_head0 = saved_expr_pool_.make("f", {});
+    const expr* f_head1 = saved_expr_pool_.make("f", {});
+    initial_goals.push(goal);
+    database.push(rule{f_head0, {}});
+    database.push(rule{f_head1, {}});
+
+    ridge_manifest manifest = make_manifest();
+    manifest.loc_.locate<i_set_up_sim>().set_up();
+    EXPECT_EQ(manifest.run_sim_.run(), sim_termination::solved);
+    EXPECT_EQ(manifest.decision_memory_.count(), 1u);
+    const lemma dl = manifest.decision_memory_.derive_decision_lemma();
+    ASSERT_EQ(dl.get_resolutions().size(), 1u);
+    const rule_id chosen = (*dl.get_resolutions().begin())->idx;
+    EXPECT_TRUE(chosen == 0 || chosen == 1);
+    manifest.loc_.locate<i_tear_down_sim>().tear_down();
+}
+
+// Tier X — single solver tick
+
+TEST_F(RidgeManifestIntegrationTest, SolverVacuousSolvedOnEmptyProblem) {
+    /*
+     * Intent: solver yields one vacuous solved tick on an empty problem and completes.
+     * initial goals: (none)
+     * rules: (none)
+     */
+    ridge_manifest manifest = make_manifest();
+    auto sm = manifest.solver_.solve();
+    sm.resume();
+    ASSERT_TRUE(sm.has_yield());
+    EXPECT_EQ(sm.consume_yield(), sim_termination::solved);
+    EXPECT_TRUE(manifest.decision_memory_.derive_decision_lemma().get_resolutions().empty());
+    sm.resume();
+    EXPECT_FALSE(sm.has_yield());
+}
+
+TEST_F(RidgeManifestIntegrationTest, SolverFindsSingleUnitSolution) {
+    /*
+     * Intent: a single ground rule solves f without any decision.
+     * initial goals: f.
+     * rules:
+     *   0: f.
+     */
+    const expr* goal = saved_expr_pool_.make("f", {});
+    const expr* head = saved_expr_pool_.make("f", {});
+    initial_goals.push(goal);
+    database.push(rule{head, {}});
+
+    ridge_manifest manifest = make_manifest();
+    auto sm = manifest.solver_.solve();
+    sm.resume();
+    ASSERT_TRUE(sm.has_yield());
+    EXPECT_EQ(sm.consume_yield(), sim_termination::solved);
+    EXPECT_TRUE(manifest.decision_memory_.derive_decision_lemma().get_resolutions().empty());
+    sm.resume();
+    EXPECT_FALSE(sm.has_yield());
 }
 
 }  // namespace
