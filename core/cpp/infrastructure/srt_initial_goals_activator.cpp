@@ -7,7 +7,8 @@ srt_initial_goals_activator::srt_initial_goals_activator(locator& loc)
     {}
 
 bool srt_initial_goals_activator::activate_initial_goals_and_candidates() {
-    initial_goals_activator_.activate_initial_goals_and_candidates();
+    if (!initial_goals_activator_.activate_initial_goals_and_candidates())
+        return false;
     flush_srt_goal_batch_.flush_srt_goal_batch();
     return true;
 }
