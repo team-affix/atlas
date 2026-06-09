@@ -1,7 +1,7 @@
 #include "infrastructure/goal_candidate_rules.hpp"
 #include "debug_assert.hpp"
 
-goal_candidate_rules::goal_candidate_rules(i_candidate_rule_set_factory& factory)
+goal_candidate_rules::goal_candidate_rules(i_candidate_rule_id_set_factory& factory)
     : candidate_rule_set_factory(factory) {}
 
 i_rule_id_set& goal_candidate_rules::get(const goal_lineage* gl) {

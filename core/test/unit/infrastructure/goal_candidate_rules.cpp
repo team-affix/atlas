@@ -8,7 +8,7 @@
 #include <gmock/gmock.h>
 #include "infrastructure/goal_candidate_rules.hpp"
 #include "infrastructure/rule_id_set.hpp"
-#include "interfaces/i_candidate_rule_set_factory.hpp"
+#include "interfaces/i_candidate_rule_id_set_factory.hpp"
 
 using ::testing::ByMove;
 using ::testing::IsEmpty;
@@ -30,7 +30,7 @@ std::vector<rule_id> collect_rule_ids(i_rule_id_set& rs) {
 
 }  // namespace
 
-struct MockCandidateRuleSetFactory : public i_candidate_rule_set_factory {
+struct MockCandidateRuleSetFactory : public i_candidate_rule_id_set_factory {
     MOCK_METHOD(std::unique_ptr<i_rule_id_set>, make, (), (const, override));
 };
 
