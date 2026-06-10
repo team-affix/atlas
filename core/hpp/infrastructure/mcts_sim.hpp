@@ -9,7 +9,7 @@
 #include "interfaces/i_set_up_sim.hpp"
 #include "interfaces/i_tear_down_sim.hpp"
 #include "interfaces/i_mcts_choose.hpp"
-#include "interfaces/i_get_decision_count.hpp"
+#include "interfaces/i_compute_mcts_reward.hpp"
 #include "value_objects/mcts_choice.hpp"
 #include "mcts.hpp"
 
@@ -31,7 +31,7 @@ struct mcts_sim
 private:
     set_up_sim& set_up_;
     tear_down_sim& tear_down_;
-    i_get_decision_count& decision_count_;
+    i_compute_mcts_reward& compute_mcts_reward_;
 
     std::mt19937& rng_;
     double exploration_constant_;

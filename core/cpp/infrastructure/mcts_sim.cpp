@@ -10,7 +10,7 @@ mcts_sim::mcts_sim(
       tear_down_(tear_down),
       rng_(rng),
       exploration_constant_(exploration_constant),
-      decision_count_(loc.locate<i_get_decision_count>()),
+      compute_mcts_reward_(loc.locate<i_compute_mcts_reward>()),
       mcts_root_() {}
 
 void mcts_sim::set_up() {
@@ -19,7 +19,7 @@ void mcts_sim::set_up() {
 }
 
 void mcts_sim::tear_down() {
-    mcts_sim_->terminate(-static_cast<double>(decision_count_.count()));
+    mcts_sim_->terminate(compute_mcts_reward_.compute_mcts_reward());
     tear_down_.tear_down();
 }
 

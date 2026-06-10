@@ -1,4 +1,4 @@
-// mcts_sim: wraps set_up_sim/tear_down_sim; owns MCTS tree; terminate score uses decision count.
+// mcts_sim: wraps set_up_sim/tear_down_sim; owns MCTS tree; terminate score from i_compute_mcts_reward.
 
 #include <gtest/gtest.h>
 #include <gmock/gmock.h>
@@ -20,7 +20,7 @@
 #include "interfaces/i_clear_mhu_heads.hpp"
 #include "interfaces/i_clear_bindings.hpp"
 #include "interfaces/i_trim_unpinned_lineages.hpp"
-#include "interfaces/i_get_decision_count.hpp"
+#include "interfaces/i_compute_mcts_reward.hpp"
 #include "value_objects/mcts_choice.hpp"
 
 using ::testing::Return;
@@ -73,8 +73,8 @@ struct MockTrimUnpinnedLineages : public i_trim_unpinned_lineages {
     MOCK_METHOD(void, trim, (), (override));
 };
 
-struct MockGetDecisionCount : public i_get_decision_count {
-    MOCK_METHOD(size_t, count, (), (const, override));
+struct MockComputeMctsReward : public i_compute_mcts_reward {
+    MOCK_METHOD(double, compute_mcts_reward, (), (const, override));
 };
 
 struct MctsSimTest : public ::testing::Test {
@@ -93,7 +93,7 @@ struct MctsSimTest : public ::testing::Test {
     testing::NiceMock<MockClearMhuHeads> clear_mhu_heads;
     testing::NiceMock<MockClearBindings> clear_bindings;
     testing::NiceMock<MockTrimUnpinnedLineages> trim_unpinned_lineages;
-    MockGetDecisionCount decision_count;
+    MockComputeMctsReward compute_mcts_reward;
     std::mt19937 rng{42};
     set_up_sim inner_set_up;
     tear_down_sim inner_tear_down;
@@ -103,7 +103,7 @@ struct MctsSimTest : public ::testing::Test {
     goal_lineage gl1{nullptr, 1};
 
     MctsSimTest() : inner_set_up(init_inner_set_up()), inner_tear_down(init_inner_tear_down()), sim(init_sim()) {
-        ON_CALL(decision_count, count()).WillByDefault(Return(0));
+        ON_CALL(compute_mcts_reward, compute_mcts_reward()).WillByDefault(Return(0.0));
     }
 
     void bind_tear_down_deps() {
@@ -131,7 +131,7 @@ struct MctsSimTest : public ::testing::Test {
     }
 
     mcts_sim init_sim() {
-        loc.bind_as<i_get_decision_count>(decision_count);
+        loc.bind_as<i_compute_mcts_reward>(compute_mcts_reward);
         return mcts_sim{loc, inner_set_up, inner_tear_down, rng, kExplorationConstant};
     }
 };
@@ -139,17 +139,17 @@ struct MctsSimTest : public ::testing::Test {
 TEST_F(MctsSimTest, SetUpDelegatesToInnerSetUpSim) {
     testing::InSequence seq;
     EXPECT_CALL(push_trail_frame, push()).Times(1);
-    EXPECT_CALL(decision_count, count()).Times(1);
+    EXPECT_CALL(compute_mcts_reward, compute_mcts_reward()).Times(1);
     EXPECT_CALL(pop_trail_frame, pop()).Times(1);
     sim.set_up();
     sim.tear_down();
 }
 
-TEST_F(MctsSimTest, TearDownQueriesDecisionCountBeforeInnerTearDown) {
+TEST_F(MctsSimTest, TearDownQueriesMctsRewardBeforeInnerTearDown) {
     testing::InSequence seq;
     EXPECT_CALL(push_trail_frame, push()).Times(1);
     sim.set_up();
-    EXPECT_CALL(decision_count, count()).WillOnce(Return(5));
+    EXPECT_CALL(compute_mcts_reward, compute_mcts_reward()).WillOnce(Return(-5.0));
     EXPECT_CALL(pop_trail_frame, pop()).Times(1);
     sim.tear_down();
 }
@@ -157,7 +157,7 @@ TEST_F(MctsSimTest, TearDownQueriesDecisionCountBeforeInnerTearDown) {
 TEST_F(MctsSimTest, TearDownDelegatesFullClearSequenceToInnerTearDown) {
     EXPECT_CALL(push_trail_frame, push()).Times(1);
     sim.set_up();
-    EXPECT_CALL(decision_count, count()).WillOnce(Return(0));
+    EXPECT_CALL(compute_mcts_reward, compute_mcts_reward()).WillOnce(Return(0.0));
     EXPECT_CALL(pop_trail_frame, pop()).Times(1);
     EXPECT_CALL(clear_unit_goals, clear()).Times(1);
     EXPECT_CALL(clear_recorded_decisions, clear_recorded_decisions()).Times(1);
@@ -180,7 +180,7 @@ TEST_F(MctsSimTest, ChooseAfterSetUpReturnsOneOfSuppliedGoalChoices) {
     const auto* picked_gl = std::get_if<const goal_lineage*>(&picked);
     ASSERT_NE(picked_gl, nullptr);
     EXPECT_TRUE(*picked_gl == &gl0 || *picked_gl == &gl1);
-    EXPECT_CALL(decision_count, count()).Times(1);
+    EXPECT_CALL(compute_mcts_reward, compute_mcts_reward()).Times(1);
     EXPECT_CALL(pop_trail_frame, pop()).Times(1);
     sim.tear_down();
 }
@@ -193,7 +193,7 @@ TEST_F(MctsSimTest, ChooseAfterSetUpReturnsOneOfSuppliedRuleChoices) {
     const auto* picked_rule = std::get_if<rule_id>(&picked);
     ASSERT_NE(picked_rule, nullptr);
     EXPECT_TRUE(*picked_rule == 0 || *picked_rule == 1);
-    EXPECT_CALL(decision_count, count()).Times(1);
+    EXPECT_CALL(compute_mcts_reward, compute_mcts_reward()).Times(1);
     EXPECT_CALL(pop_trail_frame, pop()).Times(1);
     sim.tear_down();
 }
@@ -208,7 +208,7 @@ TEST_F(MctsSimTest, MultipleRolloutChoosesStayWithinChoiceSet) {
         ASSERT_NE(picked_gl, nullptr);
         EXPECT_TRUE(*picked_gl == &gl0 || *picked_gl == &gl1);
     }
-    EXPECT_CALL(decision_count, count()).Times(1);
+    EXPECT_CALL(compute_mcts_reward, compute_mcts_reward()).Times(1);
     EXPECT_CALL(pop_trail_frame, pop()).Times(1);
     sim.tear_down();
 }
@@ -221,7 +221,7 @@ TEST_F(MctsSimTest, FullLifecycleSetUpChooseTearDownTwice) {
         sim.set_up();
         mcts_choice picked = sim.choose(choices);
         EXPECT_TRUE(std::holds_alternative<rule_id>(picked));
-        EXPECT_CALL(decision_count, count()).WillOnce(Return(static_cast<size_t>(cycle)));
+        EXPECT_CALL(compute_mcts_reward, compute_mcts_reward()).WillOnce(Return(-static_cast<double>(cycle)));
         EXPECT_CALL(pop_trail_frame, pop()).Times(1);
         sim.tear_down();
     }

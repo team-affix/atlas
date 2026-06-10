@@ -40,6 +40,7 @@
 #include "infrastructure/mhu_elimination_generator.hpp"
 #include "infrastructure/mcts_decision_generator.hpp"
 #include "infrastructure/mcts_sim.hpp"
+#include "infrastructure/ridge_reward.hpp"
 #include "infrastructure/resolution_memory.hpp"
 #include "infrastructure/resolver.hpp"
 #include "infrastructure/subgoals_activator.hpp"
@@ -108,6 +109,7 @@ struct ridge_manifest {
     set_up_sim& set_up_sim_;
     tear_down_sim& tear_down_sim_;
     run_sim& run_sim_;
+    ridge_reward& ridge_reward_;
     mcts_sim& mcts_sim_;
     solver& solver_;
 
@@ -187,6 +189,7 @@ private:
         std::optional<set_up_sim> set_up_sim_;
         std::optional<tear_down_sim> tear_down_sim_;
         std::optional<resolver> resolver_;
+        ridge_reward ridge_reward_;
         std::optional<mcts_sim> mcts_sim_;
         std::optional<mcts_decision_generator> mcts_decision_generator_;
         std::optional<run_sim> run_sim_;

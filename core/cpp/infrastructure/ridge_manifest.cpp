@@ -95,7 +95,8 @@ ridge_manifest::orchestration_wiring::orchestration_wiring(
     locator& loc, size_t max_resolutions, uint32_t random_seed, double exploration_constant)
     : goal_candidates_activator_(loc),
       goal_candidates_deactivator_(loc),
-      rng_(random_seed) {
+      rng_(random_seed),
+      ridge_reward_(loc) {
     loc.bind_as<i_activate_goal_candidates>(goal_candidates_activator_);
     loc.bind_as<i_deactivate_goal_candidates>(goal_candidates_deactivator_);
     subgoals_activator_.emplace(loc);
@@ -110,6 +111,7 @@ ridge_manifest::orchestration_wiring::orchestration_wiring(
     tear_down_sim_.emplace(loc);
     resolver_.emplace(loc);
     loc.bind_as<i_resolver>(*resolver_);
+    loc.bind_as<i_compute_mcts_reward>(ridge_reward_);
     mcts_sim_.emplace(loc, *set_up_sim_, *tear_down_sim_, rng_, exploration_constant);
     loc.bind_as<i_set_up_sim, i_tear_down_sim, i_mcts_choose>(*mcts_sim_);
     mcts_decision_generator_.emplace(loc);
@@ -176,5 +178,6 @@ ridge_manifest::ridge_manifest(
       set_up_sim_(*orch_.set_up_sim_),
       tear_down_sim_(*orch_.tear_down_sim_),
       run_sim_(*orch_.run_sim_),
+      ridge_reward_(orch_.ridge_reward_),
       mcts_sim_(*orch_.mcts_sim_),
       solver_(*orch_.solver_) {}

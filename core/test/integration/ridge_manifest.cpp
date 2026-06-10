@@ -28,6 +28,7 @@
 #include "interfaces/i_srt_flush_goal_batch.hpp"
 #include "interfaces/i_push_trail_frame.hpp"
 #include "interfaces/i_pop_trail_frame.hpp"
+#include "interfaces/i_compute_mcts_reward.hpp"
 #include "interfaces/i_get_decision_count.hpp"
 #include "interfaces/i_record_decision.hpp"
 #include "interfaces/i_clear_recorded_decisions.hpp"
@@ -201,7 +202,7 @@ TEST_F(RidgeManifestIntegrationTest, WiringTrailSharedForPushPopLog) {
 
 TEST_F(RidgeManifestIntegrationTest, WiringDecisionMemorySharedForRecordCountDerive) {
     /*
-     * Intent: decision_memory_ backs record/clear/count decision interfaces (MCTS tear_down score).
+     * Intent: decision_memory_ backs record/clear/count decision interfaces.
      * initial goals: (none)
      * rules: (none)
      */
@@ -215,6 +216,19 @@ TEST_F(RidgeManifestIntegrationTest, WiringDecisionMemorySharedForRecordCountDer
     EXPECT_EQ(
         static_cast<i_get_decision_count*>(&manifest.decision_memory_),
         &manifest.loc_.locate<i_get_decision_count>());
+}
+
+TEST_F(RidgeManifestIntegrationTest, WiringRidgeRewardIsComputeMctsReward) {
+    /*
+     * Intent: ridge_reward_ backs i_compute_mcts_reward for MCTS tear_down scoring.
+     * initial goals: (none)
+     * rules: (none)
+     */
+    ridge_manifest manifest = make_manifest();
+    EXPECT_EQ(
+        static_cast<i_compute_mcts_reward*>(&manifest.ridge_reward_),
+        &manifest.loc_.locate<i_compute_mcts_reward>());
+    EXPECT_DOUBLE_EQ(manifest.ridge_reward_.compute_mcts_reward(), 0.0);
 }
 
 // Tier L — sim lifecycle via MCTS-wrapped set_up/tear_down
