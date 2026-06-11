@@ -295,6 +295,58 @@ TEST_F(SeriesReducedTreeTest, LinkEmptyChildrenRemovesNonRootLeaf) {
     EXPECT_THROW({ tree.children(1); }, std::out_of_range);
 }
 
+TEST_F(SeriesReducedTreeTest, LinkEmptyChildrenLeavesBranchingGrandparentIntact) {
+    ASSERT_TRUE(tree.insert(0));
+    ASSERT_TRUE(tree.insert(1));
+    ASSERT_TRUE(tree.insert(2));
+    ASSERT_TRUE(tree.insert(3));
+    ASSERT_TRUE(tree.link(0, {1, 2, 3}));
+    EXPECT_TRUE(tree.link(1, {}));
+    EXPECT_THAT(tree.roots(), UnorderedElementsAre(0));
+    EXPECT_THAT(tree.children(0), UnorderedElementsAre(2, 3));
+    EXPECT_THAT(tree.leaves(), UnorderedElementsAre(2, 3));
+    EXPECT_EQ(tree.parent(2), 0);
+    EXPECT_EQ(tree.parent(3), 0);
+    expect_series_reduced_invariants(tree);
+}
+
+TEST_F(SeriesReducedTreeTest, LinkEmptyChildrenNullaryUnaryCascadeThroughGrandparent) {
+    ASSERT_TRUE(tree.insert(5));
+    ASSERT_TRUE(tree.insert(0));
+    ASSERT_TRUE(tree.insert(1));
+    ASSERT_TRUE(tree.insert(10));
+    ASSERT_TRUE(tree.insert(20));
+    ASSERT_TRUE(tree.link(5, {0, 1}));
+    ASSERT_TRUE(tree.link(0, {10, 20}));
+    EXPECT_TRUE(tree.link(10, {}));
+    EXPECT_THAT(tree.roots(), UnorderedElementsAre(5));
+    EXPECT_THAT(tree.children(5), UnorderedElementsAre(1, 20));
+    EXPECT_THAT(tree.leaves(), UnorderedElementsAre(1, 20));
+    EXPECT_EQ(tree.parent(20), 5);
+    EXPECT_THROW({ tree.parent(0); }, std::out_of_range);
+    EXPECT_THROW({ tree.parent(10); }, std::out_of_range);
+    EXPECT_THROW({ tree.children(0); }, std::out_of_range);
+    expect_series_reduced_invariants(tree);
+}
+
+TEST_F(SeriesReducedTreeTest, LinkEmptyChildrenSequentialNullaryCascadeEmptiesForest) {
+    // Each empty-link nullary-removes a leaf and may recursively try_reduce
+    // ancestors (unary collapse when one sibling remains).
+    ASSERT_TRUE(tree.insert(5));
+    ASSERT_TRUE(tree.insert(0));
+    ASSERT_TRUE(tree.insert(1));
+    ASSERT_TRUE(tree.insert(2));
+    ASSERT_TRUE(tree.link(5, {0, 1, 2}));
+    ASSERT_TRUE(tree.link(1, {}));
+    EXPECT_THAT(tree.children(5), UnorderedElementsAre(0, 2));
+    ASSERT_TRUE(tree.link(2, {}));
+    EXPECT_THAT(tree.roots(), UnorderedElementsAre(0));
+    EXPECT_TRUE(tree.link(0, {}));
+    EXPECT_TRUE(tree.roots().empty());
+    EXPECT_TRUE(tree.leaves().empty());
+    expect_series_reduced_invariants(tree);
+}
+
 TEST_F(SeriesReducedTreeTest, UnlinkRestoresChildAsRootWhenParentStillBranches) {
     ASSERT_TRUE(tree.insert(1));
     ASSERT_TRUE(tree.insert(10));

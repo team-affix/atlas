@@ -27,7 +27,7 @@
 #include "infrastructure/goal_candidates_activator.hpp"
 #include "infrastructure/goal_candidates_deactivator.hpp"
 #include "infrastructure/goal_candidate_rules.hpp"
-#include "infrastructure/goal_deactivator.hpp"
+#include "infrastructure/srt_goal_deactivator.hpp"
 #include "infrastructure/initial_goals_activator.hpp"
 #include "infrastructure/srt_initial_goals_activator.hpp"
 #include "infrastructure/goal_exprs.hpp"
@@ -96,7 +96,7 @@ struct ridge_manifest {
     unit_goal_detector& unit_goal_detector_;
     solution_detector& solution_detector_;
     goal_activator& goal_activator_;
-    goal_deactivator& goal_deactivator_;
+    srt_goal_deactivator& srt_goal_deactivator_;
     candidate_activator& candidate_activator_;
     candidate_deactivator& candidate_deactivator_;
     elimination_router& elimination_router_;
@@ -162,7 +162,7 @@ private:
 
     struct activator_wiring {
         goal_activator goal_activator_;
-        goal_deactivator goal_deactivator_;
+        srt_goal_deactivator srt_goal_deactivator_;
         candidate_activator candidate_activator_;
         candidate_deactivator candidate_deactivator_;
 

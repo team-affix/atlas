@@ -151,7 +151,6 @@ void series_reduced_tree<NodeId>::try_reduce(NodeId node) {
 template<typename NodeId>
 void series_reduced_tree<NodeId>::reduce_nullary(NodeId node, children_it it) {
     children_.erase(it);
-    leaves_.erase(node);
 
     auto grandparent_it = parents_.find(node);
     if (grandparent_it == parents_.end()) {

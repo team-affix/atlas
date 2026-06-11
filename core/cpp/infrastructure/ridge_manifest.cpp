@@ -23,7 +23,7 @@ ridge_manifest::early_wiring::early_wiring(
     loc.bind_as<i_make_goal_lineage, i_make_resolution_lineage, i_pin_goal_lineage, i_pin_resolution_lineage, i_trim_unpinned_lineages, i_import_goal_lineage, i_import_resolution_lineage>(lineage_pool_);
     loc.bind_as<i_db_rule_id_set_factory>(rule_id_set_factory_);
     loc.bind_as<i_candidate_rule_id_set_factory>(ra_rule_id_set_factory_);
-    loc.bind_as<i_insert_active_goal, i_erase_active_goal, i_is_active_goal,
+    loc.bind_as<i_insert_active_goal, i_is_active_goal,
         i_iterate_root_goals, i_iterate_child_goals,
         i_active_goals_size, i_check_active_goals_empty, i_clear_active_goals,
         i_srt_link_goal_batch_parent, i_srt_flush_goal_batch>(srt_active_goals_);
@@ -71,11 +71,11 @@ ridge_manifest::core_wiring::core_wiring(locator& loc)
 
 ridge_manifest::activator_wiring::activator_wiring(locator& loc)
     : goal_activator_(loc),
-      goal_deactivator_(loc),
+      srt_goal_deactivator_(loc),
       candidate_activator_(loc),
       candidate_deactivator_(loc) {
     loc.bind_as<i_goal_activator>(goal_activator_);
-    loc.bind_as<i_goal_deactivator>(goal_deactivator_);
+    loc.bind_as<i_goal_deactivator>(srt_goal_deactivator_);
     loc.bind_as<i_candidate_activator>(candidate_activator_);
     loc.bind_as<i_candidate_deactivator>(candidate_deactivator_);
 }
@@ -165,7 +165,7 @@ ridge_manifest::ridge_manifest(
       unit_goal_detector_(core_.unit_goal_detector_),
       solution_detector_(core_.solution_detector_),
       goal_activator_(activators_.goal_activator_),
-      goal_deactivator_(activators_.goal_deactivator_),
+      srt_goal_deactivator_(activators_.srt_goal_deactivator_),
       candidate_activator_(activators_.candidate_activator_),
       candidate_deactivator_(activators_.candidate_deactivator_),
       elimination_router_(routers_.elimination_router_),

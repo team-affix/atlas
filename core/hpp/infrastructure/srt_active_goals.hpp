@@ -4,7 +4,6 @@
 #include <set>
 #include "infrastructure/series_reduced_tree.hpp"
 #include "interfaces/i_insert_active_goal.hpp"
-#include "interfaces/i_erase_active_goal.hpp"
 #include "interfaces/i_is_active_goal.hpp"
 #include "interfaces/i_iterate_child_goals.hpp"
 #include "interfaces/i_iterate_root_goals.hpp"
@@ -16,7 +15,6 @@
 
 struct srt_active_goals
     : i_insert_active_goal
-    , i_erase_active_goal
     , i_is_active_goal
     , i_iterate_root_goals
     , i_iterate_child_goals
@@ -26,7 +24,6 @@ struct srt_active_goals
     , i_srt_link_goal_batch_parent
     , i_srt_flush_goal_batch {
     void insert_active_goal(const goal_lineage*) override;
-    void erase_active_goal(const goal_lineage*) override;
     bool is_active_goal(const goal_lineage*) const override;
     size_t active_goals_size() const override;
     bool empty() const override;

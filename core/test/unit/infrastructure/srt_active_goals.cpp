@@ -1,4 +1,4 @@
-// srt_active_goals: batch insert/link/flush, leaf-only membership, iteration, erase, clear.
+// srt_active_goals: batch insert/link/flush, leaf-only membership, iteration, clear.
 
 #include <gtest/gtest.h>
 #include <gmock/gmock.h>
@@ -121,47 +121,6 @@ TEST_F(SrtActiveGoalsTest, SecondBatchAfterFlushCanLinkNewGoals) {
     EXPECT_EQ(goals.active_goals_size(), 4u);
 }
 
-TEST_F(SrtActiveGoalsTest, EraseRemovesIsolatedGoal) {
-    goals.insert_active_goal(&child0);
-    goals.flush_srt_goal_batch();
-    goals.erase_active_goal(&child0);
-    EXPECT_FALSE(goals.is_active_goal(&child0));
-    EXPECT_TRUE(goals.empty());
-}
-
-TEST_F(SrtActiveGoalsTest, EraseOneLinkedLeafLeavesSibling) {
-    goals.insert_active_goal(&parent);
-    goals.flush_srt_goal_batch();
-    goals.insert_active_goal(&child0);
-    goals.insert_active_goal(&child1);
-    goals.link_srt_goal_batch_parent(&parent);
-    goals.flush_srt_goal_batch();
-    goals.erase_active_goal(&child0);
-    EXPECT_FALSE(goals.is_active_goal(&child0));
-    EXPECT_TRUE(goals.is_active_goal(&child1));
-    EXPECT_EQ(goals.active_goals_size(), 1u);
-}
-
-TEST_F(SrtActiveGoalsTest, EraseOneOfTwoChildrenPromotesSiblingToRootViaTryReduce) {
-    goals.insert_active_goal(&parent);
-    goals.flush_srt_goal_batch();
-    goals.insert_active_goal(&child0);
-    goals.insert_active_goal(&child1);
-    goals.link_srt_goal_batch_parent(&parent);
-    goals.flush_srt_goal_batch();
-    goals.erase_active_goal(&child0);
-    EXPECT_FALSE(goals.is_active_goal(&child0));
-    EXPECT_TRUE(goals.is_active_goal(&child1));
-    EXPECT_FALSE(goals.is_active_goal(&parent));
-    EXPECT_EQ(goals.active_goals_size(), 1u);
-    auto root_sm = goals.iterate_root_goals();
-    EXPECT_THAT(collect_yields(root_sm), UnorderedElementsAre(&child1));
-    auto sibling_sm = goals.iterate_child_goals(&child1);
-    EXPECT_THROW(collect_yields(sibling_sm), std::out_of_range);
-    auto absorbed_parent_sm = goals.iterate_child_goals(&parent);
-    EXPECT_THROW(collect_yields(absorbed_parent_sm), std::out_of_range);
-}
-
 TEST_F(SrtActiveGoalsTest, DeepThreeLevelTreeLinksAndIteratesHierarchy) {
     goals.insert_active_goal(&parent);
     goals.flush_srt_goal_batch();
@@ -185,29 +144,6 @@ TEST_F(SrtActiveGoalsTest, DeepThreeLevelTreeLinksAndIteratesHierarchy) {
     EXPECT_THAT(collect_yields(top_children_sm), UnorderedElementsAre(&parent2, &child2));
     auto mid_children_sm = goals.iterate_child_goals(&parent2);
     EXPECT_THAT(collect_yields(mid_children_sm), UnorderedElementsAre(&child0, &child1));
-}
-
-TEST_F(SrtActiveGoalsTest, DeepTreeEraseLeafPromotesSiblingUnderGrandparent) {
-    goals.insert_active_goal(&parent);
-    goals.flush_srt_goal_batch();
-    goals.insert_active_goal(&parent2);
-    goals.insert_active_goal(&child2);
-    goals.link_srt_goal_batch_parent(&parent);
-    goals.flush_srt_goal_batch();
-    goals.insert_active_goal(&child0);
-    goals.insert_active_goal(&child1);
-    goals.link_srt_goal_batch_parent(&parent2);
-    goals.flush_srt_goal_batch();
-    goals.erase_active_goal(&child0);
-    EXPECT_FALSE(goals.is_active_goal(&child0));
-    EXPECT_TRUE(goals.is_active_goal(&child1));
-    EXPECT_TRUE(goals.is_active_goal(&child2));
-    EXPECT_FALSE(goals.is_active_goal(&parent2));
-    EXPECT_EQ(goals.active_goals_size(), 2u);
-    auto top_children_sm = goals.iterate_child_goals(&parent);
-    EXPECT_THAT(collect_yields(top_children_sm), UnorderedElementsAre(&child1, &child2));
-    auto absorbed_mid_sm = goals.iterate_child_goals(&parent2);
-    EXPECT_THROW(collect_yields(absorbed_mid_sm), std::out_of_range);
 }
 
 TEST_F(SrtActiveGoalsTest, IterateRootGoalsYieldsCurrentRoots) {
@@ -244,6 +180,26 @@ TEST_F(SrtActiveGoalsTest, LinkWithEmptyInFlightRemovesParent) {
     EXPECT_THAT(collect_yields(root_sm), IsEmpty());
 }
 
+TEST_F(SrtActiveGoalsTest, LinkWithEmptyInFlightLeavesSiblingActiveUnderGrandparent) {
+    goals.insert_active_goal(&parent);
+    goals.flush_srt_goal_batch();
+    goals.insert_active_goal(&parent2);
+    goals.insert_active_goal(&child2);
+    goals.insert_active_goal(&child3);
+    goals.link_srt_goal_batch_parent(&parent);
+    goals.flush_srt_goal_batch();
+    EXPECT_NO_THROW(goals.link_srt_goal_batch_parent(&parent2));
+    EXPECT_FALSE(goals.is_active_goal(&parent2));
+    EXPECT_TRUE(goals.is_active_goal(&child2));
+    EXPECT_TRUE(goals.is_active_goal(&child3));
+    EXPECT_FALSE(goals.is_active_goal(&parent));
+    EXPECT_EQ(goals.active_goals_size(), 2u);
+    auto root_sm = goals.iterate_root_goals();
+    EXPECT_THAT(collect_yields(root_sm), UnorderedElementsAre(&parent));
+    auto child_sm = goals.iterate_child_goals(&parent);
+    EXPECT_THAT(collect_yields(child_sm), UnorderedElementsAre(&child2, &child3));
+}
+
 TEST_F(SrtActiveGoalsTest, LinkWithEmptyInFlightRemovesNonRootParent) {
     goals.insert_active_goal(&parent);
     goals.flush_srt_goal_batch();
@@ -264,10 +220,11 @@ TEST_F(SrtActiveGoalsTest, IsActiveGoalFalseForNeverInserted) {
     EXPECT_FALSE(goals.is_active_goal(&child0));
 }
 
-TEST_F(SrtActiveGoalsTest, DuplicateInsertAfterEraseSucceeds) {
+TEST_F(SrtActiveGoalsTest, DuplicateInsertAfterGroundingRemovalSucceeds) {
     goals.insert_active_goal(&child0);
     goals.flush_srt_goal_batch();
-    goals.erase_active_goal(&child0);
+    goals.link_srt_goal_batch_parent(&child0);
+    goals.flush_srt_goal_batch();
     EXPECT_NO_THROW(goals.insert_active_goal(&child0));
     goals.flush_srt_goal_batch();
     EXPECT_TRUE(goals.is_active_goal(&child0));
@@ -306,30 +263,6 @@ TEST_F(SrtActiveGoalsTest, SingleChildBatchLinkLeavesOnlyChildActive) {
     EXPECT_EQ(goals.active_goals_size(), 1u);
     auto root_sm = goals.iterate_root_goals();
     EXPECT_THAT(collect_yields(root_sm), UnorderedElementsAre(&child0));
-}
-
-TEST_F(SrtActiveGoalsTest, EraseBothLinkedChildrenEmptiesRegistry) {
-    goals.insert_active_goal(&parent);
-    goals.flush_srt_goal_batch();
-    goals.insert_active_goal(&child0);
-    goals.insert_active_goal(&child1);
-    goals.link_srt_goal_batch_parent(&parent);
-    goals.flush_srt_goal_batch();
-    goals.erase_active_goal(&child0);
-    goals.erase_active_goal(&child1);
-    EXPECT_TRUE(goals.empty());
-}
-
-TEST_F(SrtActiveGoalsTest, SingleChildLinkThenEraseEmptiesRegistry) {
-    goals.insert_active_goal(&parent);
-    goals.flush_srt_goal_batch();
-    goals.insert_active_goal(&child0);
-    goals.link_srt_goal_batch_parent(&parent);
-    goals.flush_srt_goal_batch();
-    goals.erase_active_goal(&child0);
-    EXPECT_TRUE(goals.empty());
-    EXPECT_FALSE(goals.is_active_goal(&parent));
-    EXPECT_FALSE(goals.is_active_goal(&child0));
 }
 
 TEST_F(SrtActiveGoalsTest, IterateChildGoalsThrowsForIsolatedRoot) {

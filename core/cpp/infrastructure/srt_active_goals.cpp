@@ -15,12 +15,6 @@ void srt_active_goals::flush_srt_goal_batch() {
     in_flight_.clear();
 }
 
-void srt_active_goals::erase_active_goal(const goal_lineage* gl) {
-    if (!tree_.roots().contains(gl))
-        DEBUG_ASSERT(tree_.unlink(gl));
-    DEBUG_ASSERT(tree_.erase(gl));
-}
-
 bool srt_active_goals::is_active_goal(const goal_lineage* gl) const {
     return tree_.leaves().contains(gl);
 }
