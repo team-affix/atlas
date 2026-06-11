@@ -6,19 +6,182 @@
 // solved() is only valid immediately after next() returned true.
 // Harness: enumerate_all_solutions, next_until_refuted — binding enumeration.
 
+#include <cstddef>
+#include <cstdint>
 #include <functional>
+#include <iostream>
+#include <optional>
 #include <set>
+#include <stdexcept>
 #include <string>
 #include <vector>
 #include <gtest/gtest.h>
 #include <gmock/gmock.h>
-#include "runtime/runtime_test_config.hpp"
-#include "runtime/runtime_test_fixture.hpp"
-#include "runtime/runtime_test_harness.hpp"
+#include "infrastructure/basic_runtime.hpp"
+#include "infrastructure/db.hpp"
+#include "infrastructure/expr_pool.hpp"
+#include "infrastructure/expr_printer.hpp"
+#include "infrastructure/initial_goal_exprs.hpp"
+#include "infrastructure/locator.hpp"
+#include "infrastructure/ridge_runtime.hpp"
+#include "infrastructure/trail.hpp"
+#include "infrastructure/var_names.hpp"
+#include "interfaces/i_expr_printer.hpp"
+#include "interfaces/i_log_to_current_trail_frame.hpp"
+#include "interfaces/i_runtime.hpp"
+#include "interfaces/i_var_names.hpp"
 #include "value_objects/expr.hpp"
 #include "value_objects/lemma.hpp"
 #include "value_objects/sim_termination.hpp"
 
+inline constexpr size_t kMaxResolutions = 32;
+inline constexpr uint32_t kSeed = 41;
+inline constexpr double kRidgeExplorationConstant = 1.414;
+
+enum class runtime_kind { basic, ridge };
+
+struct runtime_session_holder {
+    std::optional<basic_runtime> basic;
+    std::optional<ridge_runtime> ridge;
+};
+
+i_runtime& make_runtime_session(
+    runtime_session_holder& holder,
+    runtime_kind kind,
+    db& database,
+    initial_goal_exprs& goals,
+    size_t initial_var_count,
+    size_t max_resolutions,
+    uint32_t seed) {
+    switch (kind) {
+        case runtime_kind::basic:
+            holder.basic.emplace(
+                database, goals, initial_var_count, max_resolutions, seed);
+            return *holder.basic;
+        case runtime_kind::ridge:
+            holder.ridge.emplace(
+                database,
+                goals,
+                initial_var_count,
+                max_resolutions,
+                seed,
+                kRidgeExplorationConstant);
+            return *holder.ridge;
+    }
+    throw std::logic_error("unknown runtime_kind");
+}
+
+namespace {
+
+using solution = std::vector<const expr*>;
+
+void print_solution(
+    size_t solution_index, i_expr_printer& printer, const solution& s) {
+    std::cout << "solution " << solution_index << '\n';
+    for (const expr* e : s) {
+        std::cout << "  ";
+        printer.print(e);
+        std::cout << '\n';
+    }
+}
+
+void enumerate_all_solutions(
+    i_runtime& session,
+    i_expr_printer& printer,
+    std::set<solution> expected,
+    const std::function<solution()>& get_solution) {
+    std::set<solution> visited;
+    size_t solution_index = 0;
+    while (!expected.empty()) {
+        if (!session.next()) {
+            std::cout << "solver stopped early; expected_remaining=" << expected.size()
+                      << "visited=" << visited.size() << '\n';
+            for (const solution& s : expected)
+                print_solution(solution_index++, printer, s);
+            FAIL() << "solver stopped before all expected solutions found";
+        }
+        if (!session.solved())
+            continue;
+        const solution s = get_solution();
+        if (visited.count(s))
+            continue;
+        print_solution(solution_index, printer, s);
+        auto it = expected.find(s);
+        if (it == expected.end()) {
+            std::cout << "unexpected solution (not in expected set)\n";
+            FAIL() << "unexpected solution";
+        }
+        expected.erase(it);
+        visited.insert(s);
+        ++solution_index;
+    }
+}
+
+void next_until_refuted(
+    i_runtime& session,
+    i_expr_printer& printer,
+    std::set<solution> expected,
+    const std::function<solution()>& get_solution) {
+    std::set<solution> visited;
+    size_t solution_index = 0;
+    while (session.next()) {
+        if (!session.solved())
+            continue;
+        const solution s = get_solution();
+        if (visited.count(s))
+            continue;
+        visited.insert(s);
+        auto it = expected.find(s);
+        if (it == expected.end()) {
+            std::cout << "unexpected solution (not in expected set)\n";
+            print_solution(solution_index, printer, s);
+            FAIL() << "unexpected solution";
+        }
+        expected.erase(it);
+        ++solution_index;
+    }
+    if (!expected.empty()) {
+        std::cout << "solver refuted early; expected_remaining=" << expected.size()
+                  << " visited=" << visited.size() << '\n';
+        for (const solution& s : visited)
+            print_solution(solution_index++, printer, s);
+        FAIL() << "solver refuted before all expected solutions found";
+    }
+}
+
+}  // namespace
+
+struct RuntimeTestBase {
+    db database;
+    initial_goal_exprs initial_goals;
+
+    trail saved_trail_;
+    locator saved_loc_;
+    var_names saved_var_names_;
+    expr_printer saved_printer_{std::cout,
+        (saved_loc_.bind_as<i_var_names>(saved_var_names_), saved_loc_)};
+    expr_pool saved_expr_pool_{
+        (saved_loc_.bind_as<i_log_to_current_trail_frame>(saved_trail_), saved_loc_)};
+};
+
+struct RuntimeParamTest
+    : RuntimeTestBase
+    , ::testing::TestWithParam<runtime_kind> {
+    runtime_session_holder holder_;
+
+    i_runtime& make_session(
+        size_t initial_var_count,
+        size_t max_resolutions = kMaxResolutions) {
+        return make_runtime_session(
+            holder_,
+            GetParam(),
+            database,
+            initial_goals,
+            initial_var_count,
+            max_resolutions,
+            kSeed);
+    }
+};
 
 // Tier A — session API smoke
 
