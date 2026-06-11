@@ -1,0 +1,43 @@
+#ifndef BASIC_COMMAND_HANDLER_HPP
+#define BASIC_COMMAND_HANDLER_HPP
+
+#include <cstddef>
+#include <cstdint>
+#include <map>
+#include <optional>
+#include <string>
+#include "infrastructure/basic_runtime.hpp"
+#include "infrastructure/db.hpp"
+#include "infrastructure/expr_pool.hpp"
+#include "infrastructure/expr_printer.hpp"
+#include "infrastructure/initial_goal_exprs.hpp"
+#include "infrastructure/locator.hpp"
+#include "infrastructure/non_backtracking_var_sequencer.hpp"
+#include "infrastructure/solve_loop.hpp"
+#include "infrastructure/trail.hpp"
+#include "infrastructure/var_names.hpp"
+
+struct basic_command_handler {
+    basic_command_handler(
+        const std::string& file,
+        const std::string& goals_str,
+        size_t max_resolutions,
+        uint32_t seed);
+
+    void operator()();
+
+private:
+    locator parse_loc_;
+    trail parse_trail_;
+    var_names var_names_;
+    non_backtracking_var_sequencer parse_var_seq_;
+    std::optional<expr_pool> parse_pool_;
+    std::optional<expr_printer> printer_;
+    db database_;
+    initial_goal_exprs initial_goals_;
+    std::map<std::string, uint32_t> var_name_to_idx_;
+    std::optional<basic_runtime> runtime_;
+    solve_loop solve_loop_;
+};
+
+#endif

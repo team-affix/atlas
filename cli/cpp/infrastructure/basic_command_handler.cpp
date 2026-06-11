@@ -1,9 +1,9 @@
-#include "../hpp/basic_command_handler.hpp"
-#include <iostream>
-#include "../../parser/hpp/import_database_from_file.hpp"
-#include "../../parser/hpp/import_goals_from_string.hpp"
+#include "infrastructure/basic_command_handler.hpp"
+#include "parser/hpp/import_database_from_file.hpp"
+#include "parser/hpp/import_goals_from_string.hpp"
 #include "interfaces/i_log_to_current_trail_frame.hpp"
 #include "interfaces/i_var_names.hpp"
+#include <iostream>
 
 basic_command_handler::basic_command_handler(
     const std::string& file,
@@ -26,21 +26,5 @@ basic_command_handler::basic_command_handler(
 }
 
 void basic_command_handler::operator()() {
-    while (runtime_->next()) {
-        if (!runtime_->solved())
-            continue;
-        std::cout << "SOLVED\n";
-        print_bindings();
-        std::cout << "[press Enter for next solution]";
-        std::cin.get();
-    }
-    std::cout << "REFUTED\n";
-}
-
-void basic_command_handler::print_bindings() {
-    for (const auto& [name, idx] : var_name_to_idx_) {
-        std::cout << "  " << name << " = ";
-        printer_->print(runtime_->normalize(parse_pool_->make(idx)));
-        std::cout << "\n";
-    }
+    solve_loop_.run(*runtime_, *printer_, *parse_pool_, var_name_to_idx_);
 }

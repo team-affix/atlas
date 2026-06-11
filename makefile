@@ -6,7 +6,7 @@ MAKEFLAGS += -j$(shell nproc)
 
 CXX      = g++
 DEPFLAGS = -MMD -MP
-CXXFLAGS = -std=c++20 -I. -Icore/hpp -Imcts/include $(DEPFLAGS)
+CXXFLAGS = -std=c++20 -I. -Icore/hpp -Icli/hpp -Imcts/include $(DEPFLAGS)
 AR       = ar
 ARFLAGS  = rcs
 
@@ -156,7 +156,7 @@ CLI_DEBUG_FAST_TEST_CXXFLAGS = $(DEBUG_FAST_CXXFLAGS) $(GTEST_CPPFLAGS) -Icli/te
 
 # CLI: source files are always present; no codegen needed for compilation.
 # cli/cpp/ contains the library sources; cli/entry/ contains the entrypoint.
-CLI_SRC = $(wildcard cli/cpp/*.cpp)
+CLI_SRC = $(shell find cli/cpp -name '*.cpp' | sort)
 
 CLI_OBJ            = $(patsubst cli/cpp/%.cpp, build/obj/cli/%.o,            $(CLI_SRC))
 CLI_DEBUG_OBJ      = $(patsubst cli/cpp/%.cpp, build/obj/cli_debug/%.o,      $(CLI_SRC))
