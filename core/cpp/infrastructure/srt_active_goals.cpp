@@ -4,7 +4,8 @@
 void srt_active_goals::insert_active_goal(const goal_lineage* gl) {
     auto [_, inserted] = in_flight_.emplace(gl);
     DEBUG_ASSERT(inserted);
-    DEBUG_ASSERT(tree_.insert(gl));
+    const bool tree_inserted = tree_.insert(gl);
+    DEBUG_ASSERT(tree_inserted);
 }
 
 void srt_active_goals::link_srt_goal_batch_parent(const goal_lineage* parent) {
