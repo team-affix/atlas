@@ -1,7 +1,6 @@
 #ifndef SERIES_REDUCED_TREE_HPP
 #define SERIES_REDUCED_TREE_HPP
 
-#include "debug_assert.hpp"
 #include <algorithm>
 #include <unordered_map>
 #include <unordered_set>
@@ -21,7 +20,11 @@ struct series_reduced_tree {
     NodeId parent(NodeId child) const;
 
 private:
+    using children_it = typename std::unordered_map<NodeId, std::set<NodeId>>::iterator;
+
     void try_reduce(NodeId node);
+    void reduce_nullary(NodeId node, children_it it);
+    void reduce_unary(NodeId node, children_it it);
 
     std::unordered_set<NodeId> roots_;
     std::unordered_set<NodeId> leaves_;
@@ -54,7 +57,7 @@ bool series_reduced_tree<NodeId>::erase(NodeId node) {
 
 template<typename NodeId>
 bool series_reduced_tree<NodeId>::link(NodeId parent, std::set<NodeId> children) {
-    // Attach at least one child to a leaf parent. Empty children is meaningless.
+    // Attach children to a leaf parent. Empty children removes the parent via try_reduce.
     // Parent must be leaf; each child must be an unlinked root.
     if (!leaves_.contains(parent))
         return false;
@@ -133,23 +136,41 @@ NodeId series_reduced_tree<NodeId>::parent(NodeId child) const {
 }
 
 template<typename NodeId>
-void series_reduced_tree<NodeId>::try_reduce(NodeId parent) {
-    auto children_it = children_.find(parent);
-    DEBUG_ASSERT(children_it != children_.end());
-
-    const auto& children = children_it->second;
-
-    // if non-unary, cannot reduce
-    if (children.size() != 1)
+void series_reduced_tree<NodeId>::try_reduce(NodeId node) {
+    auto children_it = children_.find(node);
+    if (children_it == children_.end())
         return;
-    
+
+    const size_t child_count = children_it->second.size();
+    if (child_count == 0)
+        reduce_nullary(node, children_it);
+    else if (child_count == 1)
+        reduce_unary(node, children_it);
+}
+
+template<typename NodeId>
+void series_reduced_tree<NodeId>::reduce_nullary(NodeId node, children_it it) {
+    children_.erase(it);
+    leaves_.erase(node);
+
+    auto grandparent_it = parents_.find(node);
+    if (grandparent_it == parents_.end()) {
+        roots_.erase(node);
+    } else {
+        const NodeId grandparent = grandparent_it->second;
+        children_.at(grandparent).erase(node);
+        parents_.erase(grandparent_it);
+        try_reduce(grandparent);
+    }
+}
+
+template<typename NodeId>
+void series_reduced_tree<NodeId>::reduce_unary(NodeId parent, children_it it) {
     // replace the node with the child
-    
-    // get the single child
-    const NodeId child = *children.begin();
+    const NodeId child = *it->second.begin();
     
     // unlink the child from the parent
-    children_.erase(children_it); // erase whole children entry
+    children_.erase(it); // erase whole children entry
     
     auto grandparent_it = parents_.find(parent);
     

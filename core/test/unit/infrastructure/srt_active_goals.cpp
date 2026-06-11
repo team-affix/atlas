@@ -234,16 +234,30 @@ TEST_F(SrtActiveGoalsTest, IterateChildGoalsYieldsLinkedChildrenOnly) {
     EXPECT_THAT(collect_yields(root_sm), UnorderedElementsAre(&parent, &child2));
 }
 
-TEST_F(SrtActiveGoalsTest, LinkWithEmptyInFlightLeavesParentUnchanged) {
+TEST_F(SrtActiveGoalsTest, LinkWithEmptyInFlightRemovesParent) {
     goals.insert_active_goal(&parent);
     goals.flush_srt_goal_batch();
     EXPECT_NO_THROW(goals.link_srt_goal_batch_parent(&parent));
-    EXPECT_TRUE(goals.is_active_goal(&parent));
+    EXPECT_FALSE(goals.is_active_goal(&parent));
+    EXPECT_TRUE(goals.empty());
+    auto root_sm = goals.iterate_root_goals();
+    EXPECT_THAT(collect_yields(root_sm), IsEmpty());
+}
+
+TEST_F(SrtActiveGoalsTest, LinkWithEmptyInFlightRemovesNonRootParent) {
+    goals.insert_active_goal(&parent);
+    goals.flush_srt_goal_batch();
+    goals.insert_active_goal(&parent2);
+    goals.insert_active_goal(&child2);
+    goals.link_srt_goal_batch_parent(&parent);
+    goals.flush_srt_goal_batch();
+    EXPECT_NO_THROW(goals.link_srt_goal_batch_parent(&parent2));
+    EXPECT_FALSE(goals.is_active_goal(&parent2));
+    EXPECT_FALSE(goals.is_active_goal(&parent));
+    EXPECT_TRUE(goals.is_active_goal(&child2));
     EXPECT_EQ(goals.active_goals_size(), 1u);
     auto root_sm = goals.iterate_root_goals();
-    EXPECT_THAT(collect_yields(root_sm), UnorderedElementsAre(&parent));
-    auto child_sm = goals.iterate_child_goals(&parent);
-    EXPECT_THROW(collect_yields(child_sm), std::out_of_range);
+    EXPECT_THAT(collect_yields(root_sm), UnorderedElementsAre(&child2));
 }
 
 TEST_F(SrtActiveGoalsTest, IsActiveGoalFalseForNeverInserted) {

@@ -272,12 +272,27 @@ TEST_F(SeriesReducedTreeTest, InsertFailsWhenAlreadyInForest) {
     EXPECT_EQ(tree.parent(20), 1);
 }
 
-TEST_F(SeriesReducedTreeTest, LinkFailsEmptyChildren) {
+TEST_F(SeriesReducedTreeTest, LinkEmptyChildrenRemovesIsolatedParent) {
     ASSERT_TRUE(tree.insert(1));
-    EXPECT_FALSE(tree.link(1, {}));
-    EXPECT_THAT(tree.roots(), UnorderedElementsAre(1));
-    EXPECT_THAT(tree.leaves(), UnorderedElementsAre(1));
+    EXPECT_TRUE(tree.link(1, {}));
+    EXPECT_TRUE(tree.roots().empty());
+    EXPECT_TRUE(tree.leaves().empty());
     EXPECT_THROW({ tree.parent(1); }, std::out_of_range);
+    EXPECT_THROW({ tree.children(1); }, std::out_of_range);
+}
+
+TEST_F(SeriesReducedTreeTest, LinkEmptyChildrenRemovesNonRootLeaf) {
+    ASSERT_TRUE(tree.insert(0));
+    ASSERT_TRUE(tree.insert(1));
+    ASSERT_TRUE(tree.insert(10));
+    ASSERT_TRUE(tree.link(0, {1, 10}));
+    EXPECT_TRUE(tree.link(1, {}));
+    EXPECT_THAT(tree.roots(), UnorderedElementsAre(10));
+    EXPECT_THAT(tree.leaves(), UnorderedElementsAre(10));
+    EXPECT_THROW({ tree.parent(10); }, std::out_of_range);
+    EXPECT_THROW({ tree.parent(1); }, std::out_of_range);
+    EXPECT_THROW({ tree.children(0); }, std::out_of_range);
+    EXPECT_THROW({ tree.children(1); }, std::out_of_range);
 }
 
 TEST_F(SeriesReducedTreeTest, UnlinkRestoresChildAsRootWhenParentStillBranches) {
