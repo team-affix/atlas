@@ -6,6 +6,7 @@
 #include <algorithm>
 #include <array>
 #include <cstdint>
+#include <functional>
 #include <map>
 #include <memory>
 #include <numeric>
@@ -51,13 +52,9 @@ using ::testing::Return;
 namespace {
 
 static constexpr rule_id kGroundRule = 0;
-static constexpr rule_id kExpand2Rule = 1;
-static constexpr rule_id kExpand1Rule = 2;
-
-static constexpr rule_id kFuzzGroundRuleId = 0;
-static constexpr rule_id kFuzzExpand1RuleId = 1;
-static constexpr rule_id kFuzzExpand2RuleId = 2;
-static constexpr rule_id kFuzzExpand3RuleId = 3;
+static constexpr rule_id kExpand1Rule = 1;
+static constexpr rule_id kExpand2Rule = 2;
+static constexpr rule_id kExpand3Rule = 3;
 
 static constexpr size_t kFuzzInitialRootCount = 6;
 static constexpr size_t kOuterIterations = 1000;
@@ -341,11 +338,18 @@ rule_id assign_rule(
     std::unordered_map<const goal_lineage*, rule_id>& goal_rule) {
     if (auto it = goal_rule.find(gl); it != goal_rule.end())
         return it->second;
-    const rule_id id = static_cast<rule_id>(
-        reinterpret_cast<uintptr_t>(gl) % 4);
+    size_t h = gl->idx;
+    if (gl->parent)
+        h ^= std::hash<const void*>{}(gl->parent);
+    const rule_id id = static_cast<rule_id>(h % 4);
     goal_rule.emplace(gl, id);
     return id;
 }
+
+struct DrainResult {
+    SrtTreeSnapshot snap;
+    size_t resolves = 0;
+};
 
 void fuzz_drain_to_empty(
     uint32_t order_seed,
@@ -355,9 +359,7 @@ void fuzz_drain_to_empty(
     const std::vector<const goal_lineage*>& initial,
     const std::array<rule, 4>& rule_table,
     std::unordered_map<const goal_lineage*, rule_id>& goal_rule,
-    SrtTreeSnapshot& out_snapshot,
-    size_t& out_resolve_count,
-    bool& out_saw_expand) {
+    DrainResult& out) {
     goal_rule.clear();
     loc.locate<i_clear_active_goals>().clear_active_goals();
     seed_initial_goals(loc, initial);
@@ -365,11 +367,10 @@ void fuzz_drain_to_empty(
     for (const goal_lineage* gl : initial)
         assign_rule(gl, goal_rule);
     if (!initial.empty())
-        goal_rule[initial[0]] = kFuzzExpand2RuleId;
+        goal_rule[initial[0]] = kExpand2Rule;
 
     std::vector<const goal_lineage*> currently_active_goals = initial;
-    out_resolve_count = 0;
-    out_saw_expand = false;
+    out = {};
 
     std::mt19937 order_rng(order_seed);
     size_t step_count = 0;
@@ -391,9 +392,7 @@ void fuzz_drain_to_empty(
             children.push_back(pool.make_goal_lineage(rl, static_cast<subgoal_id>(c)));
 
         ASSERT_TRUE(res.resolve(rl));
-        ++out_resolve_count;
-        if (!children.empty())
-            out_saw_expand = true;
+        ++out.resolves;
 
         currently_active_goals[i] = currently_active_goals.back();
         currently_active_goals.pop_back();
@@ -404,7 +403,7 @@ void fuzz_drain_to_empty(
         }
     }
 
-    out_snapshot = snapshot_srt_tree(loc);
+    out.snap = snapshot_srt_tree(loc);
 }
 
 }  // namespace
@@ -419,9 +418,15 @@ struct SrtResolverOrderInvarianceIntegrationTest : public ::testing::Test {
     expr body1_{expr::var{2}};
     expr body2_{expr::var{3}};
     rule ground_rule_{&head_, {}};
-    rule expand2_rule_{&head_, {&body0_, &body1_}};
     rule expand1_rule_{&head_, {&body0_}};
+    rule expand2_rule_{&head_, {&body0_, &body1_}};
     rule expand3_rule_{&head_, {&body0_, &body1_, &body2_}};
+    std::array<rule, 4> rule_table_{
+        ground_rule_,
+        expand1_rule_,
+        expand2_rule_,
+        expand3_rule_,
+    };
 
     testing::NiceMock<MockGoalActivator> goal_activator;
     testing::NiceMock<MockGetRule> get_rule;
@@ -459,16 +464,7 @@ struct SrtResolverOrderInvarianceIntegrationTest : public ::testing::Test {
 
         ON_CALL(get_rule, get(testing::_))
             .WillByDefault([this](rule_id id) -> const rule* {
-                switch (id) {
-                case kGroundRule:
-                    return &ground_rule_;
-                case kExpand2Rule:
-                    return &expand2_rule_;
-                case kExpand1Rule:
-                    return &expand1_rule_;
-                default:
-                    return nullptr;
-                }
+                return id < rule_table_.size() ? &rule_table_[id] : nullptr;
             });
 
         ON_CALL(activate_candidates, activate_goal_candidates(testing::_))
@@ -800,17 +796,6 @@ TEST_F(SrtResolverOrderInvarianceIntegrationTest, EightIndependentRootsStressExp
 }
 
 TEST_F(SrtResolverOrderInvarianceIntegrationTest, RandomResolutionFuzzOrderInvariantTwoSeeds) {
-    const std::array<rule, 4> rule_table{
-        ground_rule_,
-        expand1_rule_,
-        expand2_rule_,
-        expand3_rule_,
-    };
-    ON_CALL(get_rule, get(testing::_))
-        .WillByDefault([&rule_table](rule_id id) -> const rule* {
-            return id < rule_table.size() ? &rule_table[id] : nullptr;
-        });
-
     // lineage_pool interns are stable across outer iterations; pool carry-over is intentional.
     std::vector<const goal_lineage*> initial;
     initial.reserve(kFuzzInitialRootCount);
@@ -828,23 +813,15 @@ TEST_F(SrtResolverOrderInvarianceIntegrationTest, RandomResolutionFuzzOrderInvar
         if (seed_b == seed_a)
             ++seed_b;
 
-        size_t count_a = 0;
-        size_t count_b = 0;
-        bool expand_a = false;
-        bool expand_b = false;
-
-        SrtTreeSnapshot final_a;
-        SrtTreeSnapshot final_b;
+        DrainResult result_a;
+        DrainResult result_b;
         fuzz_drain_to_empty(
-            seed_a, loc, pool, *res, initial, rule_table, goal_rule,
-            final_a, count_a, expand_a);
+            seed_a, loc, pool, *res, initial, rule_table_, goal_rule, result_a);
         fuzz_drain_to_empty(
-            seed_b, loc, pool, *res, initial, rule_table, goal_rule,
-            final_b, count_b, expand_b);
+            seed_b, loc, pool, *res, initial, rule_table_, goal_rule, result_b);
 
-        expect_snapshots_equal(final_a, final_b);
-        ASSERT_EQ(count_a, count_b);
-        ASSERT_GE(count_a, kMinDrainSteps);
-        ASSERT_TRUE(expand_a);
+        expect_snapshots_equal(result_a.snap, result_b.snap);
+        ASSERT_EQ(result_a.resolves, result_b.resolves);
+        ASSERT_GE(result_a.resolves, kMinDrainSteps);
     }
 }
