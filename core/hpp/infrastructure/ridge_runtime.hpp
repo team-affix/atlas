@@ -7,14 +7,9 @@
 #include "infrastructure/solver_driver.hpp"
 #include "infrastructure/initial_goal_exprs.hpp"
 #include "infrastructure/normalizer.hpp"
-#include "interfaces/i_derive_decision_lemma.hpp"
-#include "interfaces/i_derive_resolution_lemma.hpp"
-#include "interfaces/i_normalizer.hpp"
+#include "interfaces/i_runtime.hpp"
 
-struct ridge_runtime
-    : i_normalizer
-    , i_derive_decision_lemma
-    , i_derive_resolution_lemma {
+struct ridge_runtime : i_runtime {
     ridge_runtime(
         db& database,
         initial_goal_exprs& goals,
@@ -23,8 +18,8 @@ struct ridge_runtime
         uint32_t random_seed,
         double exploration_constant);
 
-    bool next();
-    bool solved() const;
+    bool next() override;
+    bool solved() const override;
 
     const expr* normalize(const expr*) override;
     lemma derive_decision_lemma() const override;

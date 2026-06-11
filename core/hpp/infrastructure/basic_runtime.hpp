@@ -7,14 +7,9 @@
 #include "infrastructure/solver_driver.hpp"
 #include "infrastructure/initial_goal_exprs.hpp"
 #include "infrastructure/normalizer.hpp"
-#include "interfaces/i_derive_decision_lemma.hpp"
-#include "interfaces/i_derive_resolution_lemma.hpp"
-#include "interfaces/i_normalizer.hpp"
+#include "interfaces/i_runtime.hpp"
 
-struct basic_runtime
-    : i_normalizer
-    , i_derive_decision_lemma
-    , i_derive_resolution_lemma {
+struct basic_runtime : i_runtime {
     basic_runtime(
         db& database,
         initial_goal_exprs& goals,
@@ -22,8 +17,8 @@ struct basic_runtime
         size_t max_resolutions,
         uint32_t random_seed = 0);
 
-    bool next();
-    bool solved() const;
+    bool next() override;
+    bool solved() const override;
 
     const expr* normalize(const expr*) override;
     lemma derive_decision_lemma() const override;
