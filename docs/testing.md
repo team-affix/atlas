@@ -241,6 +241,8 @@ When in doubt: **unit test with mocks first**; add integration when mocks would 
 
 In `core`, **`i_*` interfaces** (`core/hpp/interfaces/`) are separated from **infrastructure** implementations (`core/hpp/infrastructure/`) so tests can mock collaborators without linking the whole solver. See [bootstrap.md](bootstrap.md) for runtime wiring; tests construct the SUT and mocks directly.
 
+See [debug_assert.md](debug_assert.md) for how to use `DEBUG_ASSERT` without eliding required side effects in release builds.
+
 ## Additional rules
 
 Never change any non-test source files if the user prompts you to just test (create/modify/revise/remove tests).
