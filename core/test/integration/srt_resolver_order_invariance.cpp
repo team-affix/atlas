@@ -4,7 +4,7 @@
 // i_iterate_child_goals). resolver steps 2–3 (candidate/goal deactivators) do not touch the tree.
 
 #include <algorithm>
-#include <cassert>
+#include <array>
 #include <cstdint>
 #include <map>
 #include <memory>
@@ -12,6 +12,7 @@
 #include <optional>
 #include <random>
 #include <sstream>
+#include <unordered_map>
 #include <vector>
 
 #include <gtest/gtest.h>
@@ -53,13 +54,15 @@ static constexpr rule_id kGroundRule = 0;
 static constexpr rule_id kExpand2Rule = 1;
 static constexpr rule_id kExpand1Rule = 2;
 
+static constexpr rule_id kFuzzGroundRuleId = 0;
+static constexpr rule_id kFuzzExpand1RuleId = 1;
+static constexpr rule_id kFuzzExpand2RuleId = 2;
+static constexpr rule_id kFuzzExpand3RuleId = 3;
+
 static constexpr size_t kFuzzInitialRootCount = 6;
-static constexpr size_t kFuzzReinjectRootCount = 4;
-static constexpr size_t kFuzzGroundOneIn = 4;
-static constexpr size_t kFuzzMinExpandChildren = 1;
-static constexpr size_t kFuzzMaxExpandChildren = 3;
-static constexpr subgoal_id kFuzzEphemeralRootBase = 10000;
-static constexpr subgoal_id kFuzzEphemeralRootStride = 10;
+static constexpr size_t kOuterIterations = 1000;
+static constexpr size_t kMaxDrainSteps = 10'000;
+static constexpr size_t kMinDrainSteps = 3;
 
 struct MockGoalActivator : public i_goal_activator {
     MOCK_METHOD(void, activate, (const goal_lineage*), (override));
@@ -333,53 +336,75 @@ std::vector<std::vector<size_t>> permute_ground_steps(
     return orders;
 }
 
-std::vector<SrtTreeSnapshot> fuzz_resolution_walk(
-    uint32_t seed,
-    size_t iterations,
+rule_id assign_rule(
+    const goal_lineage* gl,
+    std::unordered_map<const goal_lineage*, rule_id>& goal_rule) {
+    if (auto it = goal_rule.find(gl); it != goal_rule.end())
+        return it->second;
+    const rule_id id = static_cast<rule_id>(
+        reinterpret_cast<uintptr_t>(gl) % 4);
+    goal_rule.emplace(gl, id);
+    return id;
+}
+
+void fuzz_drain_to_empty(
+    uint32_t order_seed,
     locator& loc,
     lineage_pool& pool,
     resolver& res,
-    std::vector<rule>& rules,
-    const std::vector<const goal_lineage*>& initial) {
-    rules.assign(1, rule{nullptr, {}});
-    std::mt19937 rng(seed);
-
+    const std::vector<const goal_lineage*>& initial,
+    const std::array<rule, 4>& rule_table,
+    std::unordered_map<const goal_lineage*, rule_id>& goal_rule,
+    SrtTreeSnapshot& out_snapshot,
+    size_t& out_resolve_count,
+    bool& out_saw_expand) {
+    goal_rule.clear();
     loc.locate<i_clear_active_goals>().clear_active_goals();
     seed_initial_goals(loc, initial);
 
-    std::vector<const goal_lineage*> active = initial;
-    std::vector<SrtTreeSnapshot> snapshots;
-    snapshots.reserve(iterations);
+    for (const goal_lineage* gl : initial)
+        assign_rule(gl, goal_rule);
+    if (!initial.empty())
+        goal_rule[initial[0]] = kFuzzExpand2RuleId;
 
-    for (size_t step = 0; step < iterations; ++step) {
-        if (active.empty()) {
-            const subgoal_id base = kFuzzEphemeralRootBase
-                + static_cast<subgoal_id>(step * kFuzzEphemeralRootStride);
-            for (size_t k = 0; k < kFuzzReinjectRootCount; ++k)
-                active.push_back(pool.make_goal_lineage(nullptr, base + static_cast<subgoal_id>(k)));
-        }
+    std::vector<const goal_lineage*> currently_active_goals = initial;
+    out_resolve_count = 0;
+    out_saw_expand = false;
 
-        const goal_lineage* goal = active[rng() % active.size()];
+    std::mt19937 order_rng(order_seed);
+    size_t step_count = 0;
 
-        rule_id picked_rule = kGroundRule;
-        if (rng() % kFuzzGroundOneIn != 0) {
-            picked_rule = rules.size();
-            const size_t child_count = kFuzzMinExpandChildren
-                + rng() % (kFuzzMaxExpandChildren - kFuzzMinExpandChildren + 1);
-            rules.push_back({nullptr, std::vector<const expr*>(child_count, nullptr)});
-        }
+    while (!currently_active_goals.empty()) {
+        SCOPED_TRACE(step_count);
+        ASSERT_LT(step_count, kMaxDrainSteps) << "drain did not terminate";
+        ++step_count;
 
-        const rule* picked = &rules[picked_rule];
+        const size_t i = order_rng() % currently_active_goals.size();
+        const goal_lineage* goal = currently_active_goals[i];
+        const rule_id picked_rule = goal_rule.at(goal);
+        const rule& picked = rule_table[picked_rule];
+
         const resolution_lineage* rl = pool.make_resolution_lineage(goal, picked_rule);
-        for (size_t i = 0; i < picked->body.size(); ++i)
-            pool.make_goal_lineage(rl, i);
-        assert(res.resolve(rl));
+        std::vector<const goal_lineage*> children;
+        children.reserve(picked.body.size());
+        for (size_t c = 0; c < picked.body.size(); ++c)
+            children.push_back(pool.make_goal_lineage(rl, static_cast<subgoal_id>(c)));
 
-        snapshots.push_back(snapshot_srt_tree(loc));
-        active = snapshots.back().sorted_leaves;
+        ASSERT_TRUE(res.resolve(rl));
+        ++out_resolve_count;
+        if (!children.empty())
+            out_saw_expand = true;
+
+        currently_active_goals[i] = currently_active_goals.back();
+        currently_active_goals.pop_back();
+
+        for (const goal_lineage* child : children) {
+            assign_rule(child, goal_rule);
+            currently_active_goals.push_back(child);
+        }
     }
 
-    return snapshots;
+    out_snapshot = snapshot_srt_tree(loc);
 }
 
 }  // namespace
@@ -392,9 +417,11 @@ struct SrtResolverOrderInvarianceIntegrationTest : public ::testing::Test {
     expr head_{expr::var{0}};
     expr body0_{expr::var{1}};
     expr body1_{expr::var{2}};
+    expr body2_{expr::var{3}};
     rule ground_rule_{&head_, {}};
     rule expand2_rule_{&head_, {&body0_, &body1_}};
     rule expand1_rule_{&head_, {&body0_}};
+    rule expand3_rule_{&head_, {&body0_, &body1_, &body2_}};
 
     testing::NiceMock<MockGoalActivator> goal_activator;
     testing::NiceMock<MockGetRule> get_rule;
@@ -772,29 +799,52 @@ TEST_F(SrtResolverOrderInvarianceIntegrationTest, EightIndependentRootsStressExp
     EXPECT_EQ(loc.locate<i_active_goals_size>().active_goals_size(), 16u);
 }
 
-TEST_F(SrtResolverOrderInvarianceIntegrationTest, RandomResolutionFuzzTwoSeedsIdenticalSnapshots) {
-    static constexpr size_t kIterations = 1000;
-
-    std::vector<rule> rules{{nullptr, {}}};
+TEST_F(SrtResolverOrderInvarianceIntegrationTest, RandomResolutionFuzzOrderInvariantTwoSeeds) {
+    const std::array<rule, 4> rule_table{
+        ground_rule_,
+        expand1_rule_,
+        expand2_rule_,
+        expand3_rule_,
+    };
     ON_CALL(get_rule, get(testing::_))
-        .WillByDefault([&rules](rule_id id) -> const rule* {
-            return id < rules.size() ? &rules[id] : nullptr;
+        .WillByDefault([&rule_table](rule_id id) -> const rule* {
+            return id < rule_table.size() ? &rule_table[id] : nullptr;
         });
 
+    // lineage_pool interns are stable across outer iterations; pool carry-over is intentional.
     std::vector<const goal_lineage*> initial;
+    initial.reserve(kFuzzInitialRootCount);
     for (size_t i = 0; i < kFuzzInitialRootCount; ++i)
         initial.push_back(pool.make_goal_lineage(nullptr, static_cast<subgoal_id>(i)));
 
-    for (uint32_t seed : {0xA5A5A5A5u, 0x5A5A5A5Au}) {
-        const std::vector<SrtTreeSnapshot> first =
-            fuzz_resolution_walk(seed, kIterations, loc, pool, *res, rules, initial);
-        const std::vector<SrtTreeSnapshot> second =
-            fuzz_resolution_walk(seed, kIterations, loc, pool, *res, rules, initial);
-        ASSERT_EQ(first.size(), kIterations);
-        ASSERT_EQ(second.size(), kIterations);
-        for (size_t i = 0; i < kIterations; ++i) {
-            SCOPED_TRACE(i);
-            expect_snapshots_equal(first[i], second[i]);
-        }
+    std::mt19937 outer_rng(0xC0FFEE);
+    std::unordered_map<const goal_lineage*, rule_id> goal_rule;
+
+    for (size_t outer = 0; outer < kOuterIterations; ++outer) {
+        SCOPED_TRACE(outer);
+
+        uint32_t seed_a = outer_rng();
+        uint32_t seed_b = outer_rng();
+        if (seed_b == seed_a)
+            ++seed_b;
+
+        size_t count_a = 0;
+        size_t count_b = 0;
+        bool expand_a = false;
+        bool expand_b = false;
+
+        SrtTreeSnapshot final_a;
+        SrtTreeSnapshot final_b;
+        fuzz_drain_to_empty(
+            seed_a, loc, pool, *res, initial, rule_table, goal_rule,
+            final_a, count_a, expand_a);
+        fuzz_drain_to_empty(
+            seed_b, loc, pool, *res, initial, rule_table, goal_rule,
+            final_b, count_b, expand_b);
+
+        expect_snapshots_equal(final_a, final_b);
+        ASSERT_EQ(count_a, count_b);
+        ASSERT_GE(count_a, kMinDrainSteps);
+        ASSERT_TRUE(expand_a);
     }
 }
