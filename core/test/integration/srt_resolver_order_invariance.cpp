@@ -4,9 +4,13 @@
 // i_iterate_child_goals). resolver steps 2–3 (candidate/goal deactivators) do not touch the tree.
 
 #include <algorithm>
+#include <cassert>
+#include <cstdint>
 #include <map>
 #include <memory>
 #include <numeric>
+#include <optional>
+#include <random>
 #include <sstream>
 #include <vector>
 
@@ -48,6 +52,14 @@ namespace {
 static constexpr rule_id kGroundRule = 0;
 static constexpr rule_id kExpand2Rule = 1;
 static constexpr rule_id kExpand1Rule = 2;
+
+static constexpr size_t kFuzzInitialRootCount = 6;
+static constexpr size_t kFuzzReinjectRootCount = 4;
+static constexpr size_t kFuzzGroundOneIn = 4;
+static constexpr size_t kFuzzMinExpandChildren = 1;
+static constexpr size_t kFuzzMaxExpandChildren = 3;
+static constexpr subgoal_id kFuzzEphemeralRootBase = 10000;
+static constexpr subgoal_id kFuzzEphemeralRootStride = 10;
 
 struct MockGoalActivator : public i_goal_activator {
     MOCK_METHOD(void, activate, (const goal_lineage*), (override));
@@ -181,8 +193,12 @@ void seed_initial_goals(locator& loc, const std::vector<const goal_lineage*>& in
 void expect_snapshots_equal(
     const SrtTreeSnapshot& expected,
     const SrtTreeSnapshot& actual) {
-    EXPECT_EQ(expected.sorted_roots, actual.sorted_roots);
-    EXPECT_EQ(expected.sorted_leaves, actual.sorted_leaves);
+    EXPECT_EQ(expected.sorted_roots, actual.sorted_roots)
+        << "expected " << format_snapshot(expected)
+        << " actual " << format_snapshot(actual);
+    EXPECT_EQ(expected.sorted_leaves, actual.sorted_leaves)
+        << "expected " << format_snapshot(expected)
+        << " actual " << format_snapshot(actual);
     EXPECT_EQ(expected.sorted_edges, actual.sorted_edges)
         << "expected " << format_snapshot(expected)
         << " actual " << format_snapshot(actual);
@@ -203,20 +219,99 @@ void expect_identical_trees_for_orders(
     const std::vector<const resolution_lineage*>& steps,
     const std::vector<std::vector<size_t>>& orders) {
     ASSERT_FALSE(orders.empty());
-    std::vector<SrtTreeSnapshot> snapshots;
-    snapshots.reserve(orders.size());
 
     auto& clear = loc.locate<i_clear_active_goals>();
+    std::optional<SrtTreeSnapshot> reference;
     for (const std::vector<size_t>& order : orders) {
         clear.clear_active_goals();
         seed_initial_goals(loc, initial_goals);
         for (size_t step_idx : order)
             ASSERT_TRUE(res.resolve(steps[step_idx]));
-        snapshots.push_back(snapshot_srt_tree(loc));
+        SrtTreeSnapshot snap = snapshot_srt_tree(loc);
+        if (!reference)
+            reference = snap;
+        else
+            expect_snapshots_equal(*reference, snap);
+    }
+}
+
+struct ResolutionScript {
+    std::vector<const goal_lineage*> initial;
+    std::vector<const resolution_lineage*> expands;
+    std::vector<const resolution_lineage*> grounds;
+
+    std::vector<const resolution_lineage*> all_steps() const {
+        std::vector<const resolution_lineage*> steps;
+        steps.reserve(expands.size() + grounds.size());
+        steps.insert(steps.end(), expands.begin(), expands.end());
+        steps.insert(steps.end(), grounds.begin(), grounds.end());
+        return steps;
+    }
+};
+
+ResolutionScript make_independent_subtrees_script(lineage_pool& pool, size_t subtree_count) {
+    ResolutionScript script;
+    script.initial.reserve(subtree_count);
+    script.expands.reserve(subtree_count);
+    script.grounds.reserve(subtree_count * 2);
+
+    for (size_t i = 0; i < subtree_count; ++i) {
+        const goal_lineage* root = pool.make_goal_lineage(nullptr, static_cast<subgoal_id>(i));
+        script.initial.push_back(root);
+        const resolution_lineage* rl_expand = pool.make_resolution_lineage(root, kExpand2Rule);
+        script.expands.push_back(rl_expand);
+        for (subgoal_id child_idx : {subgoal_id{0}, subgoal_id{1}}) {
+            const goal_lineage* child = pool.make_goal_lineage(rl_expand, child_idx);
+            script.grounds.push_back(pool.make_resolution_lineage(child, kGroundRule));
+        }
+    }
+    return script;
+}
+
+ResolutionScript make_balanced_binary_tree_script(lineage_pool& pool, size_t expand_levels) {
+    const goal_lineage* root = pool.make_goal_lineage(nullptr, 0);
+    ResolutionScript script{
+        .initial = {root},
+    };
+
+    std::vector<const goal_lineage*> frontier{root};
+    for (size_t level = 0; level < expand_levels; ++level) {
+        std::vector<const goal_lineage*> next;
+        next.reserve(frontier.size() * 2);
+        for (const goal_lineage* node : frontier) {
+            const resolution_lineage* rl_expand = pool.make_resolution_lineage(node, kExpand2Rule);
+            script.expands.push_back(rl_expand);
+            for (subgoal_id child_idx : {subgoal_id{0}, subgoal_id{1}}) {
+                const goal_lineage* child = pool.make_goal_lineage(rl_expand, child_idx);
+                next.push_back(child);
+            }
+        }
+        frontier = std::move(next);
     }
 
-    for (size_t i = 1; i < snapshots.size(); ++i)
-        expect_snapshots_equal(snapshots[0], snapshots[i]);
+    script.grounds.reserve(frontier.size());
+    for (const goal_lineage* leaf : frontier)
+        script.grounds.push_back(pool.make_resolution_lineage(leaf, kGroundRule));
+    return script;
+}
+
+std::vector<std::vector<size_t>> permute_all_steps(size_t step_count) {
+    std::vector<size_t> indices(step_count);
+    std::iota(indices.begin(), indices.end(), 0);
+
+    std::vector<std::vector<size_t>> orders;
+    do
+        orders.push_back(indices);
+    while (std::next_permutation(indices.begin(), indices.end()));
+
+    return orders;
+}
+
+std::vector<const goal_lineage*> sorted_lineages(
+    std::initializer_list<const goal_lineage*> ptrs) {
+    std::vector<const goal_lineage*> out(ptrs.begin(), ptrs.end());
+    std::sort(out.begin(), out.end());
+    return out;
 }
 
 std::vector<std::vector<size_t>> permute_ground_steps(
@@ -238,10 +333,58 @@ std::vector<std::vector<size_t>> permute_ground_steps(
     return orders;
 }
 
+std::vector<SrtTreeSnapshot> fuzz_resolution_walk(
+    uint32_t seed,
+    size_t iterations,
+    locator& loc,
+    lineage_pool& pool,
+    resolver& res,
+    std::vector<rule>& rules,
+    const std::vector<const goal_lineage*>& initial) {
+    rules.assign(1, rule{nullptr, {}});
+    std::mt19937 rng(seed);
+
+    loc.locate<i_clear_active_goals>().clear_active_goals();
+    seed_initial_goals(loc, initial);
+
+    std::vector<const goal_lineage*> active = initial;
+    std::vector<SrtTreeSnapshot> snapshots;
+    snapshots.reserve(iterations);
+
+    for (size_t step = 0; step < iterations; ++step) {
+        if (active.empty()) {
+            const subgoal_id base = kFuzzEphemeralRootBase
+                + static_cast<subgoal_id>(step * kFuzzEphemeralRootStride);
+            for (size_t k = 0; k < kFuzzReinjectRootCount; ++k)
+                active.push_back(pool.make_goal_lineage(nullptr, base + static_cast<subgoal_id>(k)));
+        }
+
+        const goal_lineage* goal = active[rng() % active.size()];
+
+        rule_id picked_rule = kGroundRule;
+        if (rng() % kFuzzGroundOneIn != 0) {
+            picked_rule = rules.size();
+            const size_t child_count = kFuzzMinExpandChildren
+                + rng() % (kFuzzMaxExpandChildren - kFuzzMinExpandChildren + 1);
+            rules.push_back({nullptr, std::vector<const expr*>(child_count, nullptr)});
+        }
+
+        const rule* picked = &rules[picked_rule];
+        const resolution_lineage* rl = pool.make_resolution_lineage(goal, picked_rule);
+        for (size_t i = 0; i < picked->body.size(); ++i)
+            pool.make_goal_lineage(rl, i);
+        assert(res.resolve(rl));
+
+        snapshots.push_back(snapshot_srt_tree(loc));
+        active = snapshots.back().sorted_leaves;
+    }
+
+    return snapshots;
+}
+
 }  // namespace
 
-class SrtResolverOrderInvarianceIntegrationTest : public ::testing::Test {
-protected:
+struct SrtResolverOrderInvarianceIntegrationTest : public ::testing::Test {
     locator loc;
     lineage_pool pool;
     srt_active_goals active_goals;
@@ -392,10 +535,10 @@ TEST_F(SrtResolverOrderInvarianceIntegrationTest, TwoIndependentSubtreesExpandOr
     const goal_lineage* root_b = pool.make_goal_lineage(nullptr, 1);
     const resolution_lineage* rl_expand_a = pool.make_resolution_lineage(root_a, kExpand2Rule);
     const resolution_lineage* rl_expand_b = pool.make_resolution_lineage(root_b, kExpand2Rule);
-    pool.make_goal_lineage(rl_expand_a, 0);
-    pool.make_goal_lineage(rl_expand_a, 1);
-    pool.make_goal_lineage(rl_expand_b, 0);
-    pool.make_goal_lineage(rl_expand_b, 1);
+    const goal_lineage* a0 = pool.make_goal_lineage(rl_expand_a, 0);
+    const goal_lineage* a1 = pool.make_goal_lineage(rl_expand_a, 1);
+    const goal_lineage* b0 = pool.make_goal_lineage(rl_expand_b, 0);
+    const goal_lineage* b1 = pool.make_goal_lineage(rl_expand_b, 1);
 
     const std::vector<const goal_lineage*> initial{root_a, root_b};
     const std::vector<const resolution_lineage*> steps{rl_expand_a, rl_expand_b};
@@ -403,6 +546,20 @@ TEST_F(SrtResolverOrderInvarianceIntegrationTest, TwoIndependentSubtreesExpandOr
 
     expect_identical_trees_for_orders(loc, *res, initial, steps, orders);
     EXPECT_EQ(loc.locate<i_active_goals_size>().active_goals_size(), 4u);
+
+    loc.locate<i_clear_active_goals>().clear_active_goals();
+    seed_initial_goals(loc, initial);
+    ASSERT_TRUE(res->resolve(rl_expand_a));
+    ASSERT_TRUE(res->resolve(rl_expand_b));
+    SrtTreeSnapshot expected{
+        .sorted_roots = sorted_lineages({root_a, root_b}),
+        .sorted_edges = {
+            {root_a, sorted_lineages({a0, a1})},
+            {root_b, sorted_lineages({b0, b1})},
+        },
+        .sorted_leaves = sorted_lineages({a0, a1, b0, b1}),
+    };
+    expect_snapshots_equal(expected, snapshot_srt_tree(loc));
 }
 
 TEST_F(SrtResolverOrderInvarianceIntegrationTest, TwoIndependentSubtreesCommutingGroundOrder) {
@@ -432,11 +589,8 @@ TEST_F(SrtResolverOrderInvarianceIntegrationTest, TwoIndependentSubtreesCommutin
         rl_ground_b0,
         rl_ground_b1,
     };
-    const std::vector<std::vector<size_t>> orders{
-        {0, 1, 2, 3, 4, 5},
-        {0, 1, 2, 4, 3, 5},
-        {0, 1, 4, 5, 2, 3},
-    };
+    const std::vector<std::vector<size_t>> orders = permute_ground_steps(2, 4);
+    ASSERT_EQ(orders.size(), 24u);
 
     expect_identical_trees_for_orders(loc, *res, initial, steps, orders);
     EXPECT_TRUE(loc.locate<i_check_active_goals_empty>().empty());
@@ -469,11 +623,72 @@ TEST_F(SrtResolverOrderInvarianceIntegrationTest, SingleChildExpandUnaryCollapse
     EXPECT_TRUE(loc.locate<i_check_active_goals_empty>().empty());
 }
 
+TEST_F(SrtResolverOrderInvarianceIntegrationTest, PartialSiblingGroundingDiffers) {
+    /*
+     * Intent: after expand, {expand, ground_a} vs {expand, ground_b} differ — one sibling remains.
+     * Validity: partial multisets differ; order matters mid-run (complement to invariance tests).
+     */
+    const goal_lineage* parent = pool.make_goal_lineage(nullptr, 0);
+    const resolution_lineage* rl_expand = pool.make_resolution_lineage(parent, kExpand2Rule);
+    const goal_lineage* child_a = pool.make_goal_lineage(rl_expand, 0);
+    const goal_lineage* child_b = pool.make_goal_lineage(rl_expand, 1);
+    const resolution_lineage* rl_ground_a = pool.make_resolution_lineage(child_a, kGroundRule);
+    const resolution_lineage* rl_ground_b = pool.make_resolution_lineage(child_b, kGroundRule);
+
+    const std::vector<const goal_lineage*> initial{parent};
+
+    loc.locate<i_clear_active_goals>().clear_active_goals();
+    seed_initial_goals(loc, initial);
+    ASSERT_TRUE(res->resolve(rl_expand));
+    ASSERT_TRUE(res->resolve(rl_ground_a));
+    const SrtTreeSnapshot ground_a_first = snapshot_srt_tree(loc);
+
+    loc.locate<i_clear_active_goals>().clear_active_goals();
+    seed_initial_goals(loc, initial);
+    ASSERT_TRUE(res->resolve(rl_expand));
+    ASSERT_TRUE(res->resolve(rl_ground_b));
+    const SrtTreeSnapshot ground_b_first = snapshot_srt_tree(loc);
+
+    expect_snapshots_not_equal(ground_a_first, ground_b_first);
+    EXPECT_EQ(ground_a_first.sorted_leaves, std::vector<const goal_lineage*>{child_b});
+    EXPECT_EQ(ground_b_first.sorted_leaves, std::vector<const goal_lineage*>{child_a});
+}
+
+TEST_F(SrtResolverOrderInvarianceIntegrationTest, NestedPartialExpandCheckpoint) {
+    /*
+     * Intent: after {expand_h, expand_f} only — branching root h, internal f, leaves g,f0,f1.
+     * Validity: guards expand-order wiring before ground permutations in nested test.
+     */
+    const goal_lineage* h = pool.make_goal_lineage(nullptr, 0);
+    const resolution_lineage* rl_expand_h = pool.make_resolution_lineage(h, kExpand2Rule);
+    const goal_lineage* f = pool.make_goal_lineage(rl_expand_h, 0);
+    const goal_lineage* g = pool.make_goal_lineage(rl_expand_h, 1);
+    const resolution_lineage* rl_expand_f = pool.make_resolution_lineage(f, kExpand2Rule);
+    const goal_lineage* f0 = pool.make_goal_lineage(rl_expand_f, 0);
+    const goal_lineage* f1 = pool.make_goal_lineage(rl_expand_f, 1);
+
+    loc.locate<i_clear_active_goals>().clear_active_goals();
+    seed_initial_goals(loc, {h});
+    ASSERT_TRUE(res->resolve(rl_expand_h));
+    ASSERT_TRUE(res->resolve(rl_expand_f));
+
+    SrtTreeSnapshot expected{
+        .sorted_roots = {h},
+        .sorted_edges = {
+            {h, sorted_lineages({f, g})},
+            {f, sorted_lineages({f0, f1})},
+        },
+        .sorted_leaves = sorted_lineages({f0, f1, g}),
+    };
+    expect_snapshots_equal(expected, snapshot_srt_tree(loc));
+    EXPECT_EQ(loc.locate<i_active_goals_size>().active_goals_size(), 3u);
+}
+
 TEST_F(SrtResolverOrderInvarianceIntegrationTest, InvalidOrderNegativeControl) {
     /*
-     * Intent: ground parent before expand — parent removed, expand batch link fails silently,
+     * Intent: plan's child-before-expand is vacuous here (inactive child ground is a no-op);
+     * we use parent-before-expand instead — parent removed, expand batch link fails silently,
      * resolve() still true, children remain orphan roots. Differs from valid expand checkpoint.
-     * (Grounding inactive child_a before expand is a no-op in this harness.)
      */
     const goal_lineage* parent = pool.make_goal_lineage(nullptr, 0);
     const resolution_lineage* rl_expand = pool.make_resolution_lineage(parent, kExpand2Rule);
@@ -484,6 +699,12 @@ TEST_F(SrtResolverOrderInvarianceIntegrationTest, InvalidOrderNegativeControl) {
     const resolution_lineage* rl_ground_b = pool.make_resolution_lineage(child_b, kGroundRule);
 
     const std::vector<const goal_lineage*> initial{parent};
+
+    loc.locate<i_clear_active_goals>().clear_active_goals();
+    seed_initial_goals(loc, initial);
+    const SrtTreeSnapshot seeded = snapshot_srt_tree(loc);
+    EXPECT_TRUE(res->resolve(rl_ground_a));
+    expect_snapshots_equal(seeded, snapshot_srt_tree(loc));
 
     loc.locate<i_clear_active_goals>().clear_active_goals();
     seed_initial_goals(loc, initial);
@@ -503,4 +724,77 @@ TEST_F(SrtResolverOrderInvarianceIntegrationTest, InvalidOrderNegativeControl) {
     for (const resolution_lineage* step : {rl_expand, rl_ground_a, rl_ground_b})
         ASSERT_TRUE(res->resolve(step));
     EXPECT_TRUE(loc.locate<i_check_active_goals_empty>().empty());
+}
+
+TEST_F(SrtResolverOrderInvarianceIntegrationTest, FourIndependentSubtreesStressFullGroundPermutations) {
+    /*
+     * Stress: 4 disjoint expand2 subtrees → 8 leaf grounds in all 8! = 40320 valid orders.
+     * ~500k resolves; catches cross-subtree ground commuting at scale.
+     */
+    const ResolutionScript script = make_independent_subtrees_script(pool, 4);
+    const std::vector<const resolution_lineage*> steps = script.all_steps();
+    const std::vector<std::vector<size_t>> orders = permute_ground_steps(
+        script.expands.size(), script.grounds.size());
+    ASSERT_EQ(orders.size(), 40320u);
+
+    expect_identical_trees_for_orders(loc, *res, script.initial, steps, orders);
+    EXPECT_TRUE(loc.locate<i_check_active_goals_empty>().empty());
+}
+
+TEST_F(SrtResolverOrderInvarianceIntegrationTest, BalancedBinaryTreeStressFullGroundPermutations) {
+    /*
+     * Stress: 3 expand levels (7 expands, 8 leaves) then all 8! = 40320 ground orders.
+     * Exercises deep unary/nullary reduction chains under heavy permutation load.
+     */
+    const ResolutionScript script = make_balanced_binary_tree_script(pool, 3);
+    ASSERT_EQ(script.expands.size(), 7u);
+    ASSERT_EQ(script.grounds.size(), 8u);
+
+    const std::vector<const resolution_lineage*> steps = script.all_steps();
+    const std::vector<std::vector<size_t>> orders = permute_ground_steps(
+        script.expands.size(), script.grounds.size());
+    ASSERT_EQ(orders.size(), 40320u);
+
+    expect_identical_trees_for_orders(loc, *res, script.initial, steps, orders);
+    EXPECT_TRUE(loc.locate<i_check_active_goals_empty>().empty());
+}
+
+TEST_F(SrtResolverOrderInvarianceIntegrationTest, EightIndependentRootsStressExpandOrderInvariant) {
+    /*
+     * Stress: 8 isolated roots expanded in all 8! = 40320 orders (zero grounds).
+     * ~320k resolves on a 16-leaf partial forest; expand-only commuting at scale.
+     */
+    const ResolutionScript script = make_independent_subtrees_script(pool, 8);
+    const std::vector<std::vector<size_t>> orders = permute_all_steps(script.expands.size());
+    ASSERT_EQ(orders.size(), 40320u);
+
+    expect_identical_trees_for_orders(loc, *res, script.initial, script.expands, orders);
+    EXPECT_EQ(loc.locate<i_active_goals_size>().active_goals_size(), 16u);
+}
+
+TEST_F(SrtResolverOrderInvarianceIntegrationTest, RandomResolutionFuzzTwoSeedsIdenticalSnapshots) {
+    static constexpr size_t kIterations = 1000;
+
+    std::vector<rule> rules{{nullptr, {}}};
+    ON_CALL(get_rule, get(testing::_))
+        .WillByDefault([&rules](rule_id id) -> const rule* {
+            return id < rules.size() ? &rules[id] : nullptr;
+        });
+
+    std::vector<const goal_lineage*> initial;
+    for (size_t i = 0; i < kFuzzInitialRootCount; ++i)
+        initial.push_back(pool.make_goal_lineage(nullptr, static_cast<subgoal_id>(i)));
+
+    for (uint32_t seed : {0xA5A5A5A5u, 0x5A5A5A5Au}) {
+        const std::vector<SrtTreeSnapshot> first =
+            fuzz_resolution_walk(seed, kIterations, loc, pool, *res, rules, initial);
+        const std::vector<SrtTreeSnapshot> second =
+            fuzz_resolution_walk(seed, kIterations, loc, pool, *res, rules, initial);
+        ASSERT_EQ(first.size(), kIterations);
+        ASSERT_EQ(second.size(), kIterations);
+        for (size_t i = 0; i < kIterations; ++i) {
+            SCOPED_TRACE(i);
+            expect_snapshots_equal(first[i], second[i]);
+        }
+    }
 }
