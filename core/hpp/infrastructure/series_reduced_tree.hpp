@@ -56,7 +56,7 @@ template<typename NodeId>
 bool series_reduced_tree<NodeId>::link(NodeId parent, std::set<NodeId> children) {
     // Attach at least one child to a leaf parent. Empty children is meaningless.
     // Parent must be leaf; each child must be an unlinked root.
-    if (!leaves_.contains(parent) || children.empty())
+    if (!leaves_.contains(parent))
         return false;
 
     if (std::any_of(children.begin(), children.end(), [&](const NodeId& c) {
