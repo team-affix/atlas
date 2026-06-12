@@ -14,6 +14,7 @@
 #include "infrastructure/locator.hpp"
 #include "infrastructure/non_backtracking_var_sequencer.hpp"
 #include "infrastructure/print_bindings.hpp"
+#include "infrastructure/print_progress.hpp"
 #include "infrastructure/solve_loop.hpp"
 #include "infrastructure/trail.hpp"
 #include "infrastructure/var_names.hpp"
@@ -24,7 +25,8 @@ struct horizon_command_handler {
         const std::string& goals_str,
         size_t max_resolutions,
         uint32_t seed,
-        double exploration_constant = 1.414);
+        double exploration_constant = 1.414,
+        size_t sim_progress_interval = 1000);
 
     void operator()();
 
@@ -40,6 +42,7 @@ private:
     std::map<std::string, uint32_t> var_name_to_idx_;
     std::optional<horizon_runtime> runtime_;
     print_bindings print_bindings_;
+    print_progress print_progress_;
     solve_loop solve_loop_;
 };
 
