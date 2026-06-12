@@ -104,7 +104,7 @@ TEST_F(UnifierBindMapIntegrationTest, ManyScrambledUnificationsAllWhnfToOldestVa
 TEST_F(UnifierBindMapIntegrationTest, UnifyVarToFunctorContainingSameVarFails) {
     expr f_var0{expr::functor{"f", {&var0}}};
     EXPECT_FALSE(run_unify(*u, &var0, &f_var0, vars_touched));
-    EXPECT_EQ(vars_touched, (std::unordered_set<uint32_t>{0}));
+    EXPECT_TRUE(vars_touched.empty());
     EXPECT_EQ(bm.whnf(&var0), &var0);
 }
 

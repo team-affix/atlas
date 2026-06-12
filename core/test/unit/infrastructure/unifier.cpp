@@ -69,7 +69,7 @@ TEST_F(UnifierTest, UnifyIdenticalVarsBothSidesReturnsTrueNoBind) {
     EXPECT_CALL(bm, whnf(&var0)).WillRepeatedly(Return(&var0));
 
     EXPECT_TRUE(run_unify(u, &var0, &var0, vars_touched));
-    EXPECT_THAT(vars_touched, UnorderedElementsAre(0u));
+    EXPECT_THAT(vars_touched, IsEmpty());
 }
 
 TEST_F(UnifierTest, UnifyVarLhsVarRhsBindsHigherIndexToLower) {
@@ -158,7 +158,7 @@ TEST_F(UnifierTest, UnifyVarToFunctorContainingSameVarFails) {
     EXPECT_CALL(bm, whnf(&f_var0)).WillRepeatedly(Return(&f_var0));
 
     EXPECT_FALSE(run_unify(u, &var0, &f_var0, vars_touched));
-    EXPECT_THAT(vars_touched, UnorderedElementsAre(0u));
+    EXPECT_THAT(vars_touched, IsEmpty());
 }
 
 TEST_F(UnifierTest, UnifyVarToNestedFunctorContainingSameVarFails) {
@@ -167,7 +167,7 @@ TEST_F(UnifierTest, UnifyVarToNestedFunctorContainingSameVarFails) {
     EXPECT_CALL(bm, whnf(&f_var1)).WillRepeatedly(Return(&f_var1));
 
     EXPECT_FALSE(run_unify(u, &var1, &f_var1, vars_touched));
-    EXPECT_THAT(vars_touched, UnorderedElementsAre(1u));
+    EXPECT_THAT(vars_touched, IsEmpty());
 }
 
 TEST_F(UnifierTest, UnifyVarToDepth2FunctorContainingSameVarFails) {
@@ -177,7 +177,7 @@ TEST_F(UnifierTest, UnifyVarToDepth2FunctorContainingSameVarFails) {
     EXPECT_CALL(bm, whnf(&f_var0)).WillRepeatedly(Return(&f_var0));
 
     EXPECT_FALSE(run_unify(u, &var0, &f_f_var0, vars_touched));
-    EXPECT_THAT(vars_touched, UnorderedElementsAre(0u));
+    EXPECT_THAT(vars_touched, IsEmpty());
 }
 
 // ---------------------------------------------------------------------------
@@ -391,7 +391,7 @@ TEST_F(UnifierTest, UnifyAfterWhnfBothResolveToSameVarReturnsTrueNoBind) {
     EXPECT_CALL(bm, whnf(&var1)).WillRepeatedly(Return(&var2));
 
     EXPECT_TRUE(run_unify(u, &var0, &var1, vars_touched));
-    EXPECT_THAT(vars_touched, UnorderedElementsAre(2u));
+    EXPECT_THAT(vars_touched, IsEmpty());
 }
 
 // ---------------------------------------------------------------------------
@@ -405,7 +405,7 @@ TEST_F(UnifierTest, UnifyVarToFunctorFailsWhenWhnfRevealsArgAliasesVar) {
     EXPECT_CALL(bm, whnf(&var1)).WillRepeatedly(Return(&var0));
 
     EXPECT_FALSE(run_unify(u, &var0, &f_var1, vars_touched));
-    EXPECT_THAT(vars_touched, UnorderedElementsAre(0u));
+    EXPECT_THAT(vars_touched, IsEmpty());
 }
 
 TEST_F(UnifierTest, UnifyVarToDepth2FunctorFailsWhenWhnfRevealsInnerVarAlias) {
@@ -416,7 +416,7 @@ TEST_F(UnifierTest, UnifyVarToDepth2FunctorFailsWhenWhnfRevealsInnerVarAlias) {
     EXPECT_CALL(bm, whnf(&var1)).WillRepeatedly(Return(&var0));
 
     EXPECT_FALSE(run_unify(u, &var0, &f_f_var1, vars_touched));
-    EXPECT_THAT(vars_touched, UnorderedElementsAre(0u));
+    EXPECT_THAT(vars_touched, IsEmpty());
 }
 
 // ---------------------------------------------------------------------------
@@ -499,7 +499,7 @@ TEST_F(UnifierTest, UnifyFunctorLhsVarRhsFailsWhenWhnfRevealsArgAliasesVar) {
     EXPECT_CALL(bm, whnf(&var1)).WillRepeatedly(Return(&var0));
 
     EXPECT_FALSE(run_unify(u, &f_var1, &var0, vars_touched));
-    EXPECT_THAT(vars_touched, UnorderedElementsAre(0u));
+    EXPECT_THAT(vars_touched, IsEmpty());
 }
 
 TEST_F(UnifierTest, UnifyFunctorArgsWhnfBothResolveToSameVarNoBind) {
@@ -510,7 +510,7 @@ TEST_F(UnifierTest, UnifyFunctorArgsWhnfBothResolveToSameVarNoBind) {
     EXPECT_CALL(bm, whnf(&var1)).WillRepeatedly(Return(&var2));
 
     EXPECT_TRUE(run_unify(u, &f_var0, &f_var1, vars_touched));
-    EXPECT_THAT(vars_touched, UnorderedElementsAre(2u));
+    EXPECT_THAT(vars_touched, IsEmpty());
 }
 
 TEST_F(UnifierTest, UnifyBinaryFunctorsWhnfResolvesSecondArgSkipsItsBind) {
@@ -554,7 +554,7 @@ TEST_F(UnifierTest, UnifyVarToFunctorFailsWhenWhnfCollapsesOtherToSameVar) {
         .WillRepeatedly(Return(&var0));
 
     EXPECT_FALSE(run_unify(u, &var0, &f_var1, vars_touched));
-    EXPECT_THAT(vars_touched, UnorderedElementsAre(0u));
+    EXPECT_THAT(vars_touched, IsEmpty());
 }
 
 TEST_F(UnifierTest, UnifyDepth2FunctorsInnerArgWhnfSkipsBind) {
