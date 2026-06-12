@@ -3,6 +3,7 @@
 
 #include <sstream>
 #include <string>
+#include <unistd.h>
 #include <gtest/gtest.h>
 #include <gmock/gmock.h>
 #include "infrastructure/print_progress.hpp"
@@ -13,13 +14,34 @@ using ::testing::IsEmpty;
 struct PrintProgressTest : public ::testing::Test {
     std::ostringstream captured;
     std::streambuf* old_out = nullptr;
+    int saved_stdout_fd = -1;
+    int pipe_fds[2] = {-1, -1};
 
     void SetUp() override {
+        // print_progress uses isatty(fileno(stdout)), not cout's streambuf.
+        // Redirect fd 1 to a pipe so non-TTY behavior is exercised reliably.
+        saved_stdout_fd = dup(STDOUT_FILENO);
+        ASSERT_NE(saved_stdout_fd, -1);
+        ASSERT_EQ(pipe(pipe_fds), 0);
+        ASSERT_NE(dup2(pipe_fds[1], STDOUT_FILENO), -1);
         old_out = std::cout.rdbuf(captured.rdbuf());
     }
 
     void TearDown() override {
         std::cout.rdbuf(old_out);
+        if (saved_stdout_fd != -1) {
+            dup2(saved_stdout_fd, STDOUT_FILENO);
+            close(saved_stdout_fd);
+            saved_stdout_fd = -1;
+        }
+        if (pipe_fds[0] != -1) {
+            close(pipe_fds[0]);
+            pipe_fds[0] = -1;
+        }
+        if (pipe_fds[1] != -1) {
+            close(pipe_fds[1]);
+            pipe_fds[1] = -1;
+        }
     }
 };
 
