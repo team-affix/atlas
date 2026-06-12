@@ -12,20 +12,18 @@ coroutine<uint32_t, bool> unifier::unify(const expr* lhs, const expr* rhs) {
     const expr::var* lv = std::get_if<expr::var>(&lhs->content);
     const expr::var* rv = std::get_if<expr::var>(&rhs->content);
 
-    if (lv)
-        co_yield lv->index;
-    if (rv)
-        co_yield rv->index;
+    if (lv && rv && lv->index == rv->index)
+        co_return true;
 
     // If both sides are variables, bind the younger (higher index) to the older
     if (lv && rv) {
-        if (lv->index == rv->index)
-            co_return true;
         const auto [young, target] = lv->index > rv->index
             ? std::pair{lv, rhs}
             : std::pair{rv, lhs};
         if (occurs_check(young->index, target))
             co_return false;
+        co_yield lv->index;
+        co_yield rv->index;
         bind_map.bind(young->index, target);
         co_return true;
     }
@@ -37,6 +35,7 @@ coroutine<uint32_t, bool> unifier::unify(const expr* lhs, const expr* rhs) {
     if (v) {
         if (occurs_check(v->index, other_e))
             co_return false;
+        co_yield v->index;
         bind_map.bind(v->index, other_e);
         co_return true;
     }
