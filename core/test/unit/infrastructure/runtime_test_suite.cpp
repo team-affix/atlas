@@ -24,6 +24,7 @@
 #include "infrastructure/initial_goal_exprs.hpp"
 #include "infrastructure/locator.hpp"
 #include "infrastructure/ridge_runtime.hpp"
+#include "infrastructure/horizon_runtime.hpp"
 #include "infrastructure/trail.hpp"
 #include "infrastructure/var_names.hpp"
 #include "interfaces/i_expr_printer.hpp"
@@ -38,11 +39,12 @@ inline constexpr size_t kMaxResolutions = 32;
 inline constexpr uint32_t kSeed = 41;
 inline constexpr double kRidgeExplorationConstant = 1.414;
 
-enum class runtime_kind { basic, ridge };
+enum class runtime_kind { basic, ridge, horizon };
 
 struct runtime_session_holder {
     std::optional<basic_runtime> basic;
     std::optional<ridge_runtime> ridge;
+    std::optional<horizon_runtime> horizon;
 };
 
 i_runtime& make_runtime_session(
@@ -67,6 +69,15 @@ i_runtime& make_runtime_session(
                 seed,
                 kRidgeExplorationConstant);
             return *holder.ridge;
+        case runtime_kind::horizon:
+            holder.horizon.emplace(
+                database,
+                goals,
+                initial_var_count,
+                max_resolutions,
+                seed,
+                kRidgeExplorationConstant);
+            return *holder.horizon;
     }
     throw std::logic_error("unknown runtime_kind");
 }
@@ -2999,7 +3010,12 @@ TEST_P(RuntimeParamTest, EnumeratesFibIndexPairsWithSumBelowThirty) {
 INSTANTIATE_TEST_SUITE_P(
     AllRuntimes,
     RuntimeParamTest,
-    ::testing::Values(runtime_kind::basic, runtime_kind::ridge),
+    ::testing::Values(runtime_kind::basic, runtime_kind::ridge, runtime_kind::horizon),
     [](const ::testing::TestParamInfo<runtime_kind>& info) {
-        return info.param == runtime_kind::basic ? "basic" : "ridge";
+        switch (info.param) {
+            case runtime_kind::basic: return "basic";
+            case runtime_kind::ridge: return "ridge";
+            case runtime_kind::horizon: return "horizon";
+        }
+        return "unknown";
     });
