@@ -41,8 +41,8 @@ struct MockDeactivateGoalCandidates : public i_deactivate_goal_candidates {
     MOCK_METHOD(void, deactivate_goal_candidates, (const goal_lineage*), (override));
 };
 
-struct MockResolver : public resolver {
-    explicit MockResolver(locator& loc) : resolver(loc) {}
+struct MockDelegateResolver : public resolver {
+    explicit MockDelegateResolver(locator& loc) : resolver(loc) {}
     MOCK_METHOD(bool, resolve, (const resolution_lineage*), (override));
 };
 
@@ -54,7 +54,7 @@ struct HorizonResolverTest : public ::testing::Test {
     MockGoalDeactivator goal_deactivator;
     MockActivateSubgoalsAndCandidates activate_subgoals;
     MockDeactivateGoalCandidates deactivate_candidates;
-    std::unique_ptr<MockResolver> mock_resolver;
+    std::unique_ptr<MockDelegateResolver> mock_delegate_resolver;
     std::unique_ptr<horizon_resolver> resolver_sut;
 
     goal_lineage parent_gl{nullptr, 0};
@@ -73,8 +73,8 @@ struct HorizonResolverTest : public ::testing::Test {
         loc.bind_as<i_goal_deactivator>(goal_deactivator);
         loc.bind_as<i_activate_subgoals_and_candidates>(activate_subgoals);
         loc.bind_as<i_deactivate_goal_candidates>(deactivate_candidates);
-        mock_resolver = std::make_unique<MockResolver>(loc);
-        loc.bind_as<resolver>(*mock_resolver);
+        mock_delegate_resolver = std::make_unique<MockDelegateResolver>(loc);
+        loc.bind_as<resolver>(*mock_delegate_resolver);
         resolver_sut = std::make_unique<horizon_resolver>(loc);
     }
 };
@@ -84,19 +84,19 @@ TEST_F(HorizonResolverTest, FactResolutionAccumulatesWeightThenDelegates) {
     EXPECT_CALL(get_rule, get(rl.idx)).WillOnce(Return(&fact_rule));
     EXPECT_CALL(get_goal_weight, get(&parent_gl)).WillOnce(Return(kGoalWeight));
     EXPECT_CALL(accumulate_grounded_weight, accumulate(kGoalWeight)).Times(1);
-    EXPECT_CALL(*mock_resolver, resolve(&rl)).WillOnce(Return(true));
+    EXPECT_CALL(*mock_delegate_resolver, resolve(&rl)).WillOnce(Return(true));
     EXPECT_TRUE(resolver_sut->resolve(&rl));
 }
 
 TEST_F(HorizonResolverTest, NonFactResolutionDelegatesWithoutAccumulating) {
     EXPECT_CALL(get_rule, get(rl.idx)).WillOnce(Return(&clause_rule));
     EXPECT_CALL(accumulate_grounded_weight, accumulate).Times(0);
-    EXPECT_CALL(*mock_resolver, resolve(&rl)).WillOnce(Return(true));
+    EXPECT_CALL(*mock_delegate_resolver, resolve(&rl)).WillOnce(Return(true));
     EXPECT_TRUE(resolver_sut->resolve(&rl));
 }
 
 TEST_F(HorizonResolverTest, PropagatesInnerFalse) {
     EXPECT_CALL(get_rule, get(rl.idx)).WillOnce(Return(&clause_rule));
-    EXPECT_CALL(*mock_resolver, resolve(&rl)).WillOnce(Return(false));
+    EXPECT_CALL(*mock_delegate_resolver, resolve(&rl)).WillOnce(Return(false));
     EXPECT_FALSE(resolver_sut->resolve(&rl));
 }

@@ -59,8 +59,8 @@ struct MockGetRule : public i_get_rule {
     MOCK_METHOD(const rule*, get, (rule_id), (const, override));
 };
 
-struct MockGoalActivator : public goal_activator {
-    explicit MockGoalActivator(locator& loc) : goal_activator(loc) {}
+struct MockDelegateGoalActivator : public goal_activator {
+    explicit MockDelegateGoalActivator(locator& loc) : goal_activator(loc) {}
     MOCK_METHOD(void, activate, (const goal_lineage*), (override));
 };
 
@@ -75,7 +75,7 @@ struct HorizonGoalActivatorTest : public ::testing::Test {
     MockSetGoalWeight set_goal_weight;
     MockGetGoalWeight get_goal_weight;
     MockGetRule get_rule;
-    std::unique_ptr<MockGoalActivator> mock_goal_activator;
+    std::unique_ptr<MockDelegateGoalActivator> mock_goal_activator;
     std::unique_ptr<horizon_goal_activator> activator;
 
     goal_lineage parent_gl{nullptr, 0};
@@ -102,7 +102,7 @@ struct HorizonGoalActivatorTest : public ::testing::Test {
         loc.bind_as<i_set_goal_weight>(set_goal_weight);
         loc.bind_as<i_get_goal_weight>(get_goal_weight);
         loc.bind_as<i_get_rule>(get_rule);
-        mock_goal_activator = std::make_unique<MockGoalActivator>(loc);
+        mock_goal_activator = std::make_unique<MockDelegateGoalActivator>(loc);
         loc.bind_as<goal_activator>(*mock_goal_activator);
         activator = std::make_unique<horizon_goal_activator>(loc);
     }
