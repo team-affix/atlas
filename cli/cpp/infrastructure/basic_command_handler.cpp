@@ -10,7 +10,8 @@ basic_command_handler::basic_command_handler(
     const std::string& goals_str,
     size_t max_resolutions,
     uint32_t seed)
-    : parse_var_seq_(0) {
+    : parse_var_seq_(0),
+      solve_loop_(print_bindings_) {
     parse_loc_.bind_as<i_log_to_current_trail_frame>(parse_trail_);
     parse_loc_.bind_as<i_var_names>(var_names_);
     parse_pool_.emplace(parse_loc_);

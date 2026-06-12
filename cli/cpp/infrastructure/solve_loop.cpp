@@ -1,6 +1,9 @@
 #include "infrastructure/solve_loop.hpp"
 #include <iostream>
 
+solve_loop::solve_loop(i_print_bindings& print_bindings)
+    : print_bindings_(print_bindings) {}
+
 void solve_loop::run(
     i_runtime& runtime,
     i_expr_printer& printer,

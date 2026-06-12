@@ -1,5 +1,6 @@
 #include <CLI/CLI.hpp>
 #include "infrastructure/basic_command_handler.hpp"
+#include "infrastructure/horizon_command_handler.hpp"
 #include "infrastructure/ridge_command_handler.hpp"
 
 #ifndef ATLAS_GIT_TAG
@@ -48,6 +49,27 @@ int main(int argc, char** argv) {
         ridge_command_handler h(ridge_opts.file, ridge_opts.goals_str,
                                 ridge_opts.max_resolutions, ridge_opts.seed,
                                 ridge_opts.exploration_constant);
+        h();
+    });
+
+    struct {
+        std::string file;
+        std::string goals_str;
+        size_t max_resolutions       = 1000;
+        uint32_t seed                = 0;
+        double exploration_constant  = 1.414;
+    } horizon_opts;
+
+    auto* horizon_sub = app.add_subcommand("horizon", "Run the horizon solver (MCTS + goal weights + joint elimination)");
+    horizon_sub->add_option("file", horizon_opts.file, "CHC input file")->required();
+    horizon_sub->add_option("-g,--goal", horizon_opts.goals_str, "Goal body string, e.g. \"p(X), q(X)\"")->required();
+    horizon_sub->add_option("--max-resolutions", horizon_opts.max_resolutions, "Max resolutions");
+    horizon_sub->add_option("--seed", horizon_opts.seed, "RNG seed");
+    horizon_sub->add_option("--exploration-constant", horizon_opts.exploration_constant, "MCTS exploration constant");
+    horizon_sub->callback([&]() {
+        horizon_command_handler h(horizon_opts.file, horizon_opts.goals_str,
+                                  horizon_opts.max_resolutions, horizon_opts.seed,
+                                  horizon_opts.exploration_constant);
         h();
     });
 

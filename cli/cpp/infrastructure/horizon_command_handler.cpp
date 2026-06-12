@@ -1,11 +1,11 @@
-#include "infrastructure/ridge_command_handler.hpp"
+#include "infrastructure/horizon_command_handler.hpp"
 #include "parser/hpp/import_database_from_file.hpp"
 #include "parser/hpp/import_goals_from_string.hpp"
 #include "interfaces/i_log_to_current_trail_frame.hpp"
 #include "interfaces/i_var_names.hpp"
 #include <iostream>
 
-ridge_command_handler::ridge_command_handler(
+horizon_command_handler::horizon_command_handler(
     const std::string& file,
     const std::string& goals_str,
     size_t max_resolutions,
@@ -28,6 +28,6 @@ ridge_command_handler::ridge_command_handler(
         database_, initial_goals_, initial_var_count, max_resolutions, seed, exploration_constant);
 }
 
-void ridge_command_handler::operator()() {
+void horizon_command_handler::operator()() {
     solve_loop_.run(*runtime_, *printer_, *parse_pool_, var_name_to_idx_);
 }

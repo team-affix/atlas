@@ -13,6 +13,7 @@
 #include "infrastructure/locator.hpp"
 #include "infrastructure/non_backtracking_var_sequencer.hpp"
 #include "infrastructure/ridge_runtime.hpp"
+#include "infrastructure/print_bindings.hpp"
 #include "infrastructure/solve_loop.hpp"
 #include "infrastructure/trail.hpp"
 #include "infrastructure/var_names.hpp"
@@ -38,6 +39,7 @@ private:
     initial_goal_exprs initial_goals_;
     std::map<std::string, uint32_t> var_name_to_idx_;
     std::optional<ridge_runtime> runtime_;
+    print_bindings print_bindings_;
     solve_loop solve_loop_;
 };
 
