@@ -12,6 +12,7 @@ ARFLAGS  = rcs
 
 DEBUG_CXXFLAGS      = -DDEBUG -g
 DEBUG_FAST_CXXFLAGS = -DDEBUG -g -O3
+PROFILE_CXXFLAGS    = -DDEBUG -g -O3 -pg
 RELEASE_CXXFLAGS    = -O3
 
 # ==============================================================================
@@ -42,14 +43,17 @@ GIT_TAG := $(shell git describe --tags --always --dirty)
 CORE_LIB            = build/libatlas_core.a
 CORE_DEBUG_LIB      = build/libatlas_core_debug.a
 CORE_DEBUG_FAST_LIB = build/libatlas_core_debug_fast.a
+CORE_PROFILE_LIB    = build/libatlas_core_profile.a
 
 PARSER_LIB            = build/libatlas_parser.a
 PARSER_DEBUG_LIB      = build/libatlas_parser_debug.a
 PARSER_DEBUG_FAST_LIB = build/libatlas_parser_debug_fast.a
+PARSER_PROFILE_LIB    = build/libatlas_parser_profile.a
 
 CLI_LIB            = build/libatlas_cli.a
 CLI_DEBUG_LIB      = build/libatlas_cli_debug.a
 CLI_DEBUG_FAST_LIB = build/libatlas_cli_debug_fast.a
+CLI_PROFILE_LIB    = build/libatlas_cli_profile.a
 
 CORE_DEBUG_BIN      = build/core_debug
 CORE_DEBUG_FAST_BIN = build/core_debug_fast
@@ -60,7 +64,8 @@ PARSER_DEBUG_FAST_BIN = build/parser_debug_fast
 CLI_DEBUG_BIN      = build/cli_debug
 CLI_DEBUG_FAST_BIN = build/cli_debug_fast
 
-ATLAS_BIN = build/atlas
+ATLAS_BIN         = build/atlas
+ATLAS_PROFILE_BIN = build/atlas_profile
 
 # ==============================================================================
 # Object lists  (object files live in build/obj/<variant>/)
@@ -72,6 +77,7 @@ CORE_SRC = $(shell find core/cpp -name '*.cpp' | sort)
 CORE_OBJ            = $(patsubst core/cpp/%.cpp, build/obj/core/%.o,            $(CORE_SRC))
 CORE_DEBUG_OBJ      = $(patsubst core/cpp/%.cpp, build/obj/core_debug/%.o,      $(CORE_SRC))
 CORE_DEBUG_FAST_OBJ = $(patsubst core/cpp/%.cpp, build/obj/core_debug_fast/%.o, $(CORE_SRC))
+CORE_PROFILE_OBJ    = $(patsubst core/cpp/%.cpp, build/obj/core_profile/%.o, $(CORE_SRC))
 
 # Core tests: same layout under build/obj/core_{debug,debug_fast}_test/.
 CORE_TEST_SRC = $(shell find core/test -name '*.cpp' | sort)
@@ -132,6 +138,9 @@ PARSER_DEBUG_OBJ = \
 PARSER_DEBUG_FAST_OBJ = \
     $(patsubst %,                build/obj/parser_debug_fast/%.o, $(PARSER_GENERATED_STEMS)) \
     $(patsubst parser/cpp/%.cpp, build/obj/parser_debug_fast/%.o, $(PARSER_SRC))
+PARSER_PROFILE_OBJ = \
+    $(patsubst %,                build/obj/parser_profile/%.o, $(PARSER_GENERATED_STEMS)) \
+    $(patsubst parser/cpp/%.cpp, build/obj/parser_profile/%.o, $(PARSER_SRC))
 
 # CLI tests
 CLI_TEST_SRC = $(shell find cli/test -name '*.cpp' | sort)
@@ -161,6 +170,7 @@ CLI_SRC = $(shell find cli/cpp -name '*.cpp' | sort)
 CLI_OBJ            = $(patsubst cli/cpp/%.cpp, build/obj/cli/%.o,            $(CLI_SRC))
 CLI_DEBUG_OBJ      = $(patsubst cli/cpp/%.cpp, build/obj/cli_debug/%.o,      $(CLI_SRC))
 CLI_DEBUG_FAST_OBJ = $(patsubst cli/cpp/%.cpp, build/obj/cli_debug_fast/%.o, $(CLI_SRC))
+CLI_PROFILE_OBJ    = $(patsubst cli/cpp/%.cpp, build/obj/cli_profile/%.o, $(CLI_SRC))
 
 # Compiler-written header deps (one .d per .o); empty until the first compile.
 CORE_DEP            = $(CORE_OBJ:.o=.d)
@@ -190,7 +200,7 @@ CLI_DEBUG_FAST_DEP = $(CLI_DEBUG_FAST_OBJ:.o=.d)
 # ==============================================================================
 
 .PHONY: all core core_debug core_debug_fast parser parser_debug parser_debug_fast \
-        cli cli_debug cli_debug_fast atlas clean
+        cli cli_debug cli_debug_fast atlas atlas_profile clean
 
 all: core core_debug core_debug_fast parser parser_debug parser_debug_fast \
      cli cli_debug cli_debug_fast atlas
@@ -247,6 +257,19 @@ atlas: $(CORE_LIB)
 	    -L$(ANTLR4_LIB) -lantlr4-runtime \
 	    -o $(ATLAS_BIN)
 
+# Profile entrypoint: -O3 -g -pg for gprof hot-path analysis (no perf/gdb attach needed).
+atlas_profile: $(CORE_PROFILE_LIB)
+	$(MAKE) parser/generated
+	$(MAKE) $(PARSER_PROFILE_LIB)
+	$(MAKE) $(CLI_PROFILE_LIB)
+	$(CXX) $(CXXFLAGS) $(PROFILE_CXXFLAGS) \
+	    -I$(CLI11_INC) \
+	    -DATLAS_GIT_TAG=\"$(GIT_TAG)\" \
+	    cli/entry/main.cpp \
+	    -Lbuild -latlas_cli_profile -latlas_parser_profile -latlas_core_profile \
+	    -L$(ANTLR4_LIB) -lantlr4-runtime \
+	    -o $(ATLAS_PROFILE_BIN)
+
 clean:
 	rm -rf build
 	rm -rf parser/generated
@@ -264,6 +287,9 @@ $(CORE_DEBUG_LIB): $(CORE_DEBUG_OBJ) | build
 $(CORE_DEBUG_FAST_LIB): $(CORE_DEBUG_FAST_OBJ) | build
 	$(AR) $(ARFLAGS) $@ $^
 
+$(CORE_PROFILE_LIB): $(CORE_PROFILE_OBJ) | build
+	$(AR) $(ARFLAGS) $@ $^
+
 $(PARSER_LIB): $(PARSER_OBJ) | build
 	$(AR) $(ARFLAGS) $@ $^
 
@@ -273,6 +299,9 @@ $(PARSER_DEBUG_LIB): $(PARSER_DEBUG_OBJ) | build
 $(PARSER_DEBUG_FAST_LIB): $(PARSER_DEBUG_FAST_OBJ) | build
 	$(AR) $(ARFLAGS) $@ $^
 
+$(PARSER_PROFILE_LIB): $(PARSER_PROFILE_OBJ) | build
+	$(AR) $(ARFLAGS) $@ $^
+
 $(CLI_LIB): $(CLI_OBJ) | build
 	$(AR) $(ARFLAGS) $@ $^
 
@@ -280,6 +309,9 @@ $(CLI_DEBUG_LIB): $(CLI_DEBUG_OBJ) | build
 	$(AR) $(ARFLAGS) $@ $^
 
 $(CLI_DEBUG_FAST_LIB): $(CLI_DEBUG_FAST_OBJ) | build
+	$(AR) $(ARFLAGS) $@ $^
+
+$(CLI_PROFILE_LIB): $(CLI_PROFILE_OBJ) | build
 	$(AR) $(ARFLAGS) $@ $^
 
 # ==============================================================================
@@ -337,6 +369,10 @@ build/obj/core_debug/%.o: core/cpp/%.cpp | build/obj/core_debug
 build/obj/core_debug_fast/%.o: core/cpp/%.cpp | build/obj/core_debug_fast
 	mkdir -p $(dir $@)
 	$(CXX) $(CXXFLAGS) $(DEBUG_FAST_CXXFLAGS) -c $< -o $@
+
+build/obj/core_profile/%.o: core/cpp/%.cpp | build/obj/core_profile
+	mkdir -p $(dir $@)
+	$(CXX) $(CXXFLAGS) $(PROFILE_CXXFLAGS) -c $< -o $@
 
 # --- core tests (debug | debug_fast) ---
 
@@ -430,6 +466,10 @@ build/obj/parser_debug_fast/%.o: parser/generated/%.cpp | parser/generated build
 	mkdir -p $(dir $@)
 	$(CXX) $(CXXFLAGS) -I$(ANTLR4_INC) $(DEBUG_FAST_CXXFLAGS) -c $< -o $@
 
+build/obj/parser_profile/%.o: parser/generated/%.cpp | parser/generated build/obj/parser_profile
+	mkdir -p $(dir $@)
+	$(CXX) $(CXXFLAGS) -I$(ANTLR4_INC) $(PROFILE_CXXFLAGS) -c $< -o $@
+
 build/obj/parser/%.o: parser/cpp/%.cpp | build/obj/parser
 	mkdir -p $(dir $@)
 	$(CXX) $(CXXFLAGS) -I$(ANTLR4_INC) $(RELEASE_CXXFLAGS) -c $< -o $@
@@ -441,6 +481,10 @@ build/obj/parser_debug/%.o: parser/cpp/%.cpp | build/obj/parser_debug
 build/obj/parser_debug_fast/%.o: parser/cpp/%.cpp | build/obj/parser_debug_fast
 	mkdir -p $(dir $@)
 	$(CXX) $(CXXFLAGS) -I$(ANTLR4_INC) $(DEBUG_FAST_CXXFLAGS) -c $< -o $@
+
+build/obj/parser_profile/%.o: parser/cpp/%.cpp | build/obj/parser_profile
+	mkdir -p $(dir $@)
+	$(CXX) $(CXXFLAGS) -I$(ANTLR4_INC) $(PROFILE_CXXFLAGS) -c $< -o $@
 
 # --- cli (release | debug | debug_fast) ---
 
@@ -455,6 +499,10 @@ build/obj/cli_debug/%.o: cli/cpp/%.cpp | build/obj/cli_debug
 build/obj/cli_debug_fast/%.o: cli/cpp/%.cpp | build/obj/cli_debug_fast
 	mkdir -p $(dir $@)
 	$(CXX) $(CXXFLAGS) $(DEBUG_FAST_CXXFLAGS) -c $< -o $@
+
+build/obj/cli_profile/%.o: cli/cpp/%.cpp | build/obj/cli_profile
+	mkdir -p $(dir $@)
+	$(CXX) $(CXXFLAGS) $(PROFILE_CXXFLAGS) -c $< -o $@
 
 # ==============================================================================
 # Header dependencies (compiler-generated .d files)
@@ -487,12 +535,12 @@ build/obj/cli_debug_fast/%.o: cli/cpp/%.cpp | build/obj/cli_debug_fast
 # ==============================================================================
 
 build \
-build/obj/core build/obj/core_debug build/obj/core_debug_fast \
+build/obj/core build/obj/core_debug build/obj/core_debug_fast build/obj/core_profile \
 build/obj/core_debug_test build/obj/core_debug_fast_test \
 build/obj/parser_debug_test build/obj/parser_debug_fast_test \
 build/obj/cli_debug_test build/obj/cli_debug_fast_test \
-build/obj/parser build/obj/parser_debug build/obj/parser_debug_fast \
-build/obj/cli build/obj/cli_debug build/obj/cli_debug_fast:
+build/obj/parser build/obj/parser_debug build/obj/parser_debug_fast build/obj/parser_profile \
+build/obj/cli build/obj/cli_debug build/obj/cli_debug_fast build/obj/cli_profile:
 	mkdir -p $@
 
 # ==============================================================================
