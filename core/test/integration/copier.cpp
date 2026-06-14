@@ -18,7 +18,7 @@ protected:
         loc.bind_as<i_var_sequencer>(*vs);
         vs->next();
         vs->next();
-        pool.emplace(loc);
+        pool.emplace();
         loc.bind_as<i_make_functor, i_make_var>(*pool);
         cp.emplace(loc);
     }

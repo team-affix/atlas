@@ -117,7 +117,7 @@ struct JointEliminationGeneratorUnitTest : public ::testing::Test {
         loc.bind_as<i_unifier_factory>(unifier_factory_);
         loc.bind_as<i_make_resolution_lineage>(lineage_pool_);
         loc.bind_as<i_get_goal_candidate_rule_ids>(goal_candidate_rules_);
-        expr_pool_.emplace(loc);
+        expr_pool_.emplace();
         loc.bind_as<i_make_functor, i_make_var, i_import_expr, i_get_expr_count>(*expr_pool_);
         cdcl_seq_.emplace(loc);
         loc.bind_as<i_cdcl_sequencer>(*cdcl_seq_);

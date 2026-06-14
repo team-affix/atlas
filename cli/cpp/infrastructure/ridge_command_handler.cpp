@@ -16,7 +16,7 @@ ridge_command_handler::ridge_command_handler(
       solve_loop_(print_bindings_, print_progress_, sim_progress_interval) {
     parse_loc_.bind_as<i_log_to_current_trail_frame>(parse_trail_);
     parse_loc_.bind_as<i_var_names>(var_names_);
-    parse_pool_.emplace(parse_loc_);
+    parse_pool_.emplace();
     printer_.emplace(std::cout, parse_loc_);
 
     import_database_from_file(file, *parse_pool_, *parse_pool_, parse_var_seq_, database_);

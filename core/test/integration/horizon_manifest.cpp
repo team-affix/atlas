@@ -64,9 +64,8 @@ protected:
     db database;
     initial_goal_exprs initial_goals;
 
-    trail saved_trail_;
     locator saved_loc_;
-    expr_pool saved_expr_pool_{bind_saved_loc(saved_trail_, saved_loc_)};
+    expr_pool saved_expr_pool_;
 
     horizon_manifest make_manifest(size_t max_resolutions = kMaxResolutions) {
         return horizon_manifest{
@@ -76,12 +75,6 @@ protected:
             max_resolutions,
             kSeed,
             kExplorationConstant};
-    }
-
-private:
-    static locator& bind_saved_loc(trail& t, locator& l) {
-        l.bind_as<i_log_to_current_trail_frame>(t);
-        return l;
     }
 };
 

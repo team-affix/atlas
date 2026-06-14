@@ -61,8 +61,7 @@ struct SolveLoopTest : public ::testing::Test {
     std::map<std::string, uint32_t> var_name_to_idx;
 
     SolveLoopTest() {
-        loc.bind_as<i_log_to_current_trail_frame>(trail_);
-        pool.emplace(loc);
+        pool.emplace();
     }
 
     void run_loop(size_t interval) {

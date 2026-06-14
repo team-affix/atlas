@@ -205,7 +205,7 @@ struct sim_pool_wiring {
     elimination_backlog elimination_backlog_;
 
     sim_pool_wiring(locator& loc)
-        : expr_pool_(loc),
+        : expr_pool_(),
           var_sequencer_(loc, 0),
           cdcl_sequencer_(loc),
           elimination_backlog_(loc) {
@@ -381,6 +381,7 @@ struct SimIntegrationTest : public ::testing::Test {
 
     db database;
     initial_goal_exprs initial_goals;
+    expr_pool saved_expr_pool_;
     sim_stack stack{database, initial_goals};
 };
 
@@ -853,9 +854,9 @@ TEST_F(SimIntegrationTest, RunReturnsSolvedAndBindsVarsViaMhuWhenFactUnifiesGoal
     simulation.set_up();
     const uint32_t idx_a = seq.next();
     const uint32_t idx_b = seq.next();
-    const expr* var_a = make_var.make(idx_a);
-    const expr* var_b = make_var.make(idx_b);
-    initial_goals.push(make_functor.make("f", {var_a, var_b}));
+    const expr* var_a = saved_expr_pool_.make(idx_a);
+    const expr* var_b = saved_expr_pool_.make(idx_b);
+    initial_goals.push(saved_expr_pool_.make("f", {var_a, var_b}));
 
     EXPECT_EQ(simulation.run(), sim_termination::solved);
     const expr::functor& whnf_a = std::get<expr::functor>(bind_map.whnf(var_a)->content);
@@ -900,9 +901,9 @@ TEST_F(SimIntegrationTest, RunReturnsSolvedViaClauseBodyFactsBindingVarsWithoutD
     simulation.set_up();
     const uint32_t idx_a = seq.next();
     const uint32_t idx_b = seq.next();
-    const expr* var_a = make_var.make(idx_a);
-    const expr* var_b = make_var.make(idx_b);
-    initial_goals.push(make_functor.make("f", {var_a, var_b}));
+    const expr* var_a = saved_expr_pool_.make(idx_a);
+    const expr* var_b = saved_expr_pool_.make(idx_b);
+    initial_goals.push(saved_expr_pool_.make("f", {var_a, var_b}));
 
     EXPECT_EQ(simulation.run(), sim_termination::solved);
     const expr::functor& whnf_a = std::get<expr::functor>(bind_map.whnf(var_a)->content);
@@ -947,9 +948,9 @@ TEST_F(SimIntegrationTest, RunReturnsSolvedAfterDecisionBindingVarsFromChosenFac
     simulation.set_up();
     const uint32_t idx_a = seq.next();
     const uint32_t idx_b = seq.next();
-    const expr* var_a = make_var.make(idx_a);
-    const expr* var_b = make_var.make(idx_b);
-    initial_goals.push(make_functor.make("f", {var_a, var_b}));
+    const expr* var_a = saved_expr_pool_.make(idx_a);
+    const expr* var_b = saved_expr_pool_.make(idx_b);
+    initial_goals.push(saved_expr_pool_.make("f", {var_a, var_b}));
 
     EXPECT_EQ(simulation.run(), sim_termination::solved);
     const expr::functor& whnf_a = std::get<expr::functor>(bind_map.whnf(var_a)->content);
@@ -996,8 +997,8 @@ TEST_F(SimIntegrationTest, RunReturnsSolvedWhenMhuRejectsInconsistentRuleWithout
     simulation simulation{stack.loc, kDefaultMaxResolutions};
     simulation.set_up();
     const uint32_t idx_a = seq.next();
-    const expr* var_a = make_var.make(idx_a);
-    initial_goals.push(make_functor.make("f", {var_a, var_a}));
+    const expr* var_a = saved_expr_pool_.make(idx_a);
+    initial_goals.push(saved_expr_pool_.make("f", {var_a, var_a}));
 
     EXPECT_EQ(simulation.run(), sim_termination::solved);
     const expr::functor& whnf_a = std::get<expr::functor>(bind_map.whnf(var_a)->content);
@@ -1046,9 +1047,9 @@ TEST_F(SimIntegrationTest, RunDeactivatesRuleOneWhenDecisionResolvesRuleZeroOnMh
 
     simulation simulation{stack.loc, kDefaultMaxResolutions};
     simulation.set_up();
-    const expr* var_a = make_var.make(seq.next());
-    const expr* var_b = make_var.make(seq.next());
-    initial_goals.push(make_functor.make("f", {var_a, var_b}));
+    const expr* var_a = saved_expr_pool_.make(seq.next());
+    const expr* var_b = saved_expr_pool_.make(seq.next());
+    initial_goals.push(saved_expr_pool_.make("f", {var_a, var_b}));
 
     EXPECT_EQ(simulation.run(), sim_termination::solved);
     EXPECT_THAT(derive_resolution_lemma.derive_resolution_lemma().get_resolutions(),
@@ -1101,9 +1102,9 @@ TEST_F(SimIntegrationTest, RunDeactivatesCrossGoalCandidateOnMhuIncompatibleHead
 
     simulation simulation{stack.loc, kDefaultMaxResolutions};
     simulation.set_up();
-    const expr* var_a = make_var.make(seq.next());
-    initial_goals.push(make_functor.make("f", {var_a}));
-    initial_goals.push(make_functor.make("g", {var_a}));
+    const expr* var_a = saved_expr_pool_.make(seq.next());
+    initial_goals.push(saved_expr_pool_.make("f", {var_a}));
+    initial_goals.push(saved_expr_pool_.make("g", {var_a}));
 
     EXPECT_EQ(simulation.run(), sim_termination::solved);
     const expr::functor& whnf_a = std::get<expr::functor>(bind_map.whnf(var_a)->content);
@@ -1133,9 +1134,9 @@ TEST_F(SimIntegrationTest, RunReturnsSolvedBindingVarInNestedFunctorArgWithoutDe
     simulation simulation{stack.loc, kDefaultMaxResolutions};
     simulation.set_up();
     const uint32_t idx_a = seq.next();
-    const expr* var_a = make_var.make(idx_a);
-    const expr* g_a = make_functor.make("g", {var_a});
-    initial_goals.push(make_functor.make("f", {g_a}));
+    const expr* var_a = saved_expr_pool_.make(idx_a);
+    const expr* g_a = saved_expr_pool_.make("g", {var_a});
+    initial_goals.push(saved_expr_pool_.make("f", {g_a}));
 
     EXPECT_EQ(simulation.run(), sim_termination::solved);
     const expr::functor& whnf_a = std::get<expr::functor>(bind_map.whnf(var_a)->content);
@@ -1165,10 +1166,10 @@ TEST_F(SimIntegrationTest, RunReturnsSolvedBindingRemainingVarWhenGoalIsPartiall
 
     simulation simulation{stack.loc, kDefaultMaxResolutions};
     simulation.set_up();
-    const expr* abc_pool = make_functor.make("abc", {});
+    const expr* abc_pool = saved_expr_pool_.make("abc", {});
     const uint32_t idx_b = seq.next();
-    const expr* var_b = make_var.make(idx_b);
-    initial_goals.push(make_functor.make("f", {abc_pool, var_b}));
+    const expr* var_b = saved_expr_pool_.make(idx_b);
+    initial_goals.push(saved_expr_pool_.make("f", {abc_pool, var_b}));
 
     EXPECT_EQ(simulation.run(), sim_termination::solved);
     const expr::functor& whnf_b = std::get<expr::functor>(bind_map.whnf(var_b)->content);
@@ -1203,9 +1204,9 @@ TEST_F(SimIntegrationTest, RunReturnsConflictedWhenClauseBodyGoalHasNoUnifyingFa
 
     simulation simulation{stack.loc, kDefaultMaxResolutions};
     simulation.set_up();
-    const expr* var_a = make_var.make(seq.next());
-    const expr* var_b = make_var.make(seq.next());
-    initial_goals.push(make_functor.make("f", {var_a, var_b}));
+    const expr* var_a = saved_expr_pool_.make(seq.next());
+    const expr* var_b = saved_expr_pool_.make(seq.next());
+    initial_goals.push(saved_expr_pool_.make("f", {var_a, var_b}));
 
     EXPECT_EQ(simulation.run(), sim_termination::conflicted);
     simulation.tear_down();
@@ -1239,8 +1240,8 @@ TEST_F(SimIntegrationTest, RunReturnsConflictedWhenClauseBodyFactMismatchesGroun
 
     simulation simulation{stack.loc, kDefaultMaxResolutions};
     simulation.set_up();
-    initial_goals.push(make_functor.make("f",
-        {make_functor.make("abc", {}), make_functor.make("123", {})}));
+    initial_goals.push(saved_expr_pool_.make("f",
+        {saved_expr_pool_.make("abc", {}), saved_expr_pool_.make("123", {})}));
 
     EXPECT_EQ(simulation.run(), sim_termination::conflicted);
     simulation.tear_down();
@@ -1294,9 +1295,9 @@ TEST_F(SimIntegrationTest, RunReturnsSolvedAfterDecisionOnBodyGoalWithTwoFacts) 
 
     simulation simulation{stack.loc, kDefaultMaxResolutions};
     simulation.set_up();
-    const expr* var_a = make_var.make(seq.next());
-    const expr* var_b = make_var.make(seq.next());
-    initial_goals.push(make_functor.make("f", {var_a, var_b}));
+    const expr* var_a = saved_expr_pool_.make(seq.next());
+    const expr* var_b = saved_expr_pool_.make(seq.next());
+    initial_goals.push(saved_expr_pool_.make("f", {var_a, var_b}));
 
     EXPECT_EQ(simulation.run(), sim_termination::solved);
     const expr::functor& whnf_a = std::get<expr::functor>(bind_map.whnf(var_a)->content);
@@ -1339,11 +1340,11 @@ TEST_F(SimIntegrationTest, RunReturnsSolvedWhenSharedVarLinksTwoGoalsWithoutDeci
 
     simulation simulation{stack.loc, kDefaultMaxResolutions};
     simulation.set_up();
-    const expr* var_a = make_var.make(seq.next());
-    const expr* var_b = make_var.make(seq.next());
-    const expr* var_c = make_var.make(seq.next());
-    initial_goals.push(make_functor.make("f", {var_a, var_b}));
-    initial_goals.push(make_functor.make("g", {var_b, var_c}));
+    const expr* var_a = saved_expr_pool_.make(seq.next());
+    const expr* var_b = saved_expr_pool_.make(seq.next());
+    const expr* var_c = saved_expr_pool_.make(seq.next());
+    initial_goals.push(saved_expr_pool_.make("f", {var_a, var_b}));
+    initial_goals.push(saved_expr_pool_.make("g", {var_b, var_c}));
 
     EXPECT_EQ(simulation.run(), sim_termination::solved);
     const expr::functor& whnf_a = std::get<expr::functor>(bind_map.whnf(var_a)->content);
@@ -1411,10 +1412,10 @@ TEST_F(SimIntegrationTest, RunReturnsSolvedWhenCdclAndMhuReduceGoalGCandidatesWi
 
     simulation simulation{stack.loc, kDefaultMaxResolutions};
     simulation.set_up();
-    const expr* var_a = make_var.make(seq.next());
-    const expr* xyz = make_functor.make("xyz", {});
-    initial_goals.push(make_functor.make("f", {}));
-    initial_goals.push(make_functor.make("g", {var_a, xyz}));
+    const expr* var_a = saved_expr_pool_.make(seq.next());
+    const expr* xyz = saved_expr_pool_.make("xyz", {});
+    initial_goals.push(saved_expr_pool_.make("f", {}));
+    initial_goals.push(saved_expr_pool_.make("g", {var_a, xyz}));
 
     EXPECT_EQ(simulation.run(), sim_termination::solved);
     EXPECT_THAT(derive_resolution_lemma.derive_resolution_lemma().get_resolutions(),
@@ -1458,13 +1459,13 @@ TEST_F(SimIntegrationTest, RunReturnsSolvedBuildingListOfFiveAbcWithoutDecisions
     static constexpr int kListLength = 5;
     simulation simulation{stack.loc, kMaxResolutions};
     simulation.set_up();
-    const expr* zero_pool = make_functor.make("zero", {});
+    const expr* zero_pool = saved_expr_pool_.make("zero", {});
     const expr* len = zero_pool;
     for (int i = 0; i < kListLength; ++i)
-        len = make_functor.make("suc", {len});
-    const expr* abc = make_functor.make("abc", {});
-    const expr* var_r = make_var.make(seq.next());
-    initial_goals.push(make_functor.make("make_list", {len, abc, var_r}));
+        len = saved_expr_pool_.make("suc", {len});
+    const expr* abc = saved_expr_pool_.make("abc", {});
+    const expr* var_r = saved_expr_pool_.make(seq.next());
+    initial_goals.push(saved_expr_pool_.make("make_list", {len, abc, var_r}));
 
     EXPECT_EQ(simulation.run(), sim_termination::solved);
 
@@ -1714,9 +1715,9 @@ TEST_F(SimIntegrationTest, RunReturnsConflictedAfterPartialProgressWhenDerivedGo
 
     simulation simulation{stack.loc, kDefaultMaxResolutions};
     simulation.set_up();
-    const expr* var_a = make_var.make(seq.next());
-    initial_goals.push(make_functor.make("f", {var_a}));
-    initial_goals.push(make_functor.make("g", {var_a}));
+    const expr* var_a = saved_expr_pool_.make(seq.next());
+    initial_goals.push(saved_expr_pool_.make("f", {var_a}));
+    initial_goals.push(saved_expr_pool_.make("g", {var_a}));
 
     EXPECT_EQ(simulation.run(), sim_termination::conflicted);
     simulation.tear_down();
@@ -1799,8 +1800,8 @@ TEST_F(SimIntegrationTest, TearDownLifecycleClearsEphemeralStoresAfterSolvedRun)
   i_make_functor& make_functor = stack.loc.locate<i_make_functor>();
 
   const uint32_t idx_test = seq.next();
-  const expr* test_var = make_var.make(idx_test);
-  initial_goals.push(make_functor.make("f", {test_var, make_var.make(seq.next())}));
+  const expr* test_var = saved_expr_pool_.make(idx_test);
+  initial_goals.push(saved_expr_pool_.make("f", {test_var, saved_expr_pool_.make(seq.next())}));
 
   EXPECT_CALL(stack.decision_generator, generate()).Times(0);
 
@@ -1819,7 +1820,7 @@ TEST_F(SimIntegrationTest, TearDownLifecycleClearsEphemeralStoresAfterSolvedRun)
   EXPECT_EQ(std::get<expr::var>(whnf->content).index, idx_test);
 }
 
-TEST_F(SimIntegrationTest, TearDownLifecyclePopUndoesInFrameExprPoolGrowth) {
+TEST_F(SimIntegrationTest, TearDownLifecycleRetainsInFrameExprPoolGrowth) {
   expr rule_ignored{expr::var{0}};
   expr rule_l{expr::var{0}};
   expr rule_a{expr::var{1}};
@@ -1846,19 +1847,19 @@ TEST_F(SimIntegrationTest, TearDownLifecyclePopUndoesInFrameExprPoolGrowth) {
 
   simulation simulation{stack.loc, kMaxResolutions};
   simulation.set_up();
-  const expr* zero_pool = make_functor.make("zero", {});
+  const expr* zero_pool = saved_expr_pool_.make("zero", {});
   const expr* len = zero_pool;
   for (int i = 0; i < kListLength; ++i)
-    len = make_functor.make("suc", {len});
-  const expr* abc = make_functor.make("abc", {});
-  const expr* var_r = make_var.make(seq.next());
-  initial_goals.push(make_functor.make("make_list", {len, abc, var_r}));
+    len = saved_expr_pool_.make("suc", {len});
+  const expr* abc = saved_expr_pool_.make("abc", {});
+  const expr* var_r = saved_expr_pool_.make(seq.next());
+  initial_goals.push(saved_expr_pool_.make("make_list", {len, abc, var_r}));
 
   EXPECT_EQ(simulation.run(), sim_termination::solved);
   EXPECT_GT(stack.loc.locate<i_get_expr_count>().size(), expr_before);
 
   simulation.tear_down();
-  EXPECT_EQ(stack.loc.locate<i_get_expr_count>().size(), expr_before);
+  EXPECT_GT(stack.loc.locate<i_get_expr_count>().size(), expr_before);
 }
 
 TEST_F(SimIntegrationTest, TearDownLifecycleResetsVarSequencerWhenIncrementedInFrame) {
@@ -1882,8 +1883,8 @@ TEST_F(SimIntegrationTest, TearDownLifecycleResetsVarSequencerWhenIncrementedInF
 
   simulation simulation{stack.loc, kDefaultMaxResolutions};
   simulation.set_up();
-  const expr* var_in_frame = make_var.make(seq.next());
-  initial_goals.push(make_functor.make("f", {var_in_frame}));
+  const expr* var_in_frame = saved_expr_pool_.make(seq.next());
+  initial_goals.push(saved_expr_pool_.make("f", {var_in_frame}));
 
   EXPECT_EQ(simulation.run(), sim_termination::solved);
   simulation.tear_down();
@@ -1962,9 +1963,9 @@ TEST_F(SimIntegrationTest, IdenticalSimCycleLifecycleRunsCleanAfterTearDown) {
 
   const uint32_t idx_a = seq.next();
   const uint32_t idx_b = seq.next();
-  const expr* var_a = make_var.make(idx_a);
-  const expr* var_b = make_var.make(idx_b);
-  const expr* goal = make_functor.make("f", {var_a, var_b});
+  const expr* var_a = saved_expr_pool_.make(idx_a);
+  const expr* var_b = saved_expr_pool_.make(idx_b);
+  const expr* goal = saved_expr_pool_.make("f", {var_a, var_b});
   initial_goals.push(goal);
 
   EXPECT_CALL(stack.decision_generator, generate()).Times(0);
@@ -2024,11 +2025,11 @@ TEST_F(SimIntegrationTest, RunReturnsSolvedStressListOfTwentyAbcWithoutDecisions
 
   simulation simulation{stack.loc, kMaxResolutions};
   simulation.set_up();
-  const expr* zero_pool = make_functor.make("zero", {});
-  const expr* len = make_suc_n(make_functor, zero_pool, kListLength);
-  const expr* abc = make_functor.make("abc", {});
-  const expr* var_r = make_var.make(seq.next());
-  initial_goals.push(make_functor.make("make_list", {len, abc, var_r}));
+  const expr* zero_pool = saved_expr_pool_.make("zero", {});
+  const expr* len = make_suc_n(saved_expr_pool_, zero_pool, kListLength);
+  const expr* abc = saved_expr_pool_.make("abc", {});
+  const expr* var_r = saved_expr_pool_.make(seq.next());
+  initial_goals.push(saved_expr_pool_.make("make_list", {len, abc, var_r}));
 
   EXPECT_EQ(simulation.run(), sim_termination::solved);
 
@@ -2094,8 +2095,8 @@ TEST_F(SimIntegrationTest, RunReturnsSolvedStressEvenOddPeanoGoal) {
 
   simulation simulation{stack.loc, kMaxResolutions};
   simulation.set_up();
-  const expr* zero_pool = make_functor.make("zero", {});
-  const expr* goal_even = make_functor.make("even", {make_suc_n(make_functor, zero_pool, kSucDepth)});
+  const expr* zero_pool = saved_expr_pool_.make("zero", {});
+  const expr* goal_even = saved_expr_pool_.make("even", {make_suc_n(saved_expr_pool_, zero_pool, kSucDepth)});
   initial_goals.push(goal_even);
 
   EXPECT_EQ(simulation.run(), sim_termination::solved);
@@ -2124,8 +2125,8 @@ TEST_F(SimIntegrationTest, RunReturnsSolvedStressDeepNestedFunctorTower) {
   simulation.set_up();
   const expr* inner = &zero;
   for (int i = 0; i < kTowerDepth; ++i)
-    inner = make_functor.make("wrap", {inner});
-  const expr* goal_expr = make_functor.make("unwrap", {inner});
+    inner = saved_expr_pool_.make("wrap", {inner});
+  const expr* goal_expr = saved_expr_pool_.make("unwrap", {inner});
   initial_goals.push(goal_expr);
 
   EXPECT_EQ(simulation.run(), sim_termination::solved);
@@ -2166,9 +2167,9 @@ TEST_F(SimIntegrationTest, RunReturnsSolvedStressLongSharedVarChainWithoutDecisi
   simulation.set_up();
   std::vector<const expr*> vars;
   for (int i = 0; i <= kChainGoals; ++i)
-    vars.push_back(make_var.make(seq.next()));
+    vars.push_back(saved_expr_pool_.make(seq.next()));
   for (int i = 0; i < kChainGoals; ++i)
-    initial_goals.push(make_functor.make(
+    initial_goals.push(saved_expr_pool_.make(
         ("g" + std::to_string(i)).c_str(), {vars[i], vars[i + 1]}));
 
   EXPECT_EQ(simulation.run(), sim_termination::solved);
@@ -2199,12 +2200,12 @@ TEST_F(SimIntegrationTest, RunReturnsSolvedStressDiamondSharedVarWithoutDecision
 
   simulation simulation{stack.loc, kDefaultMaxResolutions};
   simulation.set_up();
-  const expr* var_a = make_var.make(seq.next());
-  const expr* var_b = make_var.make(seq.next());
-  const expr* var_c = make_var.make(seq.next());
-  initial_goals.push(make_functor.make("f", {var_a, var_c}));
-  initial_goals.push(make_functor.make("g", {var_a, var_b}));
-  initial_goals.push(make_functor.make("h", {var_b, var_c}));
+  const expr* var_a = saved_expr_pool_.make(seq.next());
+  const expr* var_b = saved_expr_pool_.make(seq.next());
+  const expr* var_c = saved_expr_pool_.make(seq.next());
+  initial_goals.push(saved_expr_pool_.make("f", {var_a, var_c}));
+  initial_goals.push(saved_expr_pool_.make("g", {var_a, var_b}));
+  initial_goals.push(saved_expr_pool_.make("h", {var_b, var_c}));
 
   EXPECT_EQ(simulation.run(), sim_termination::solved);
   const expr::functor& whnf_a = std::get<expr::functor>(bind_map.whnf(var_a)->content);
@@ -2367,12 +2368,12 @@ TEST_F(SimIntegrationTest, RunReturnsSolvedStressCdclMhuManyGroundHeadsOnSharedV
 
   simulation simulation{stack.loc, kDefaultMaxResolutions};
   simulation.set_up();
-  const expr* var_a = make_var.make(seq.next());
-  const expr* var_b = make_var.make(seq.next());
-  const expr* var_c = make_var.make(seq.next());
-  const expr* xyz = make_functor.make("xyz", {});
-  initial_goals.push(make_functor.make("f", {}));
-  initial_goals.push(make_functor.make("g", {var_a, var_b, var_c}));
+  const expr* var_a = saved_expr_pool_.make(seq.next());
+  const expr* var_b = saved_expr_pool_.make(seq.next());
+  const expr* var_c = saved_expr_pool_.make(seq.next());
+  const expr* xyz = saved_expr_pool_.make("xyz", {});
+  initial_goals.push(saved_expr_pool_.make("f", {}));
+  initial_goals.push(saved_expr_pool_.make("g", {var_a, var_b, var_c}));
 
   EXPECT_EQ(simulation.run(), sim_termination::solved);
   const expr::functor& whnf_a = std::get<expr::functor>(bind_map.whnf(var_a)->content);

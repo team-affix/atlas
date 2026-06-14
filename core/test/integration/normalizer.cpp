@@ -10,7 +10,7 @@ struct NormalizerIntegrationTest : public ::testing::Test {
 protected:
     void SetUp() override {
         loc.bind_as<i_log_to_current_trail_frame>(t);
-        pool.emplace(loc);
+        pool.emplace();
         loc.bind_as<i_make_functor>(*pool);
         loc.bind_as<i_bind_map>(bm);
         norm.emplace(loc);

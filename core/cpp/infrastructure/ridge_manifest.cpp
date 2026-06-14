@@ -38,7 +38,7 @@ ridge_manifest::early_wiring::early_wiring(
 }
 
 ridge_manifest::pool_wiring::pool_wiring(locator& loc, size_t initial_var_count)
-    : expr_pool_(loc),
+    : expr_pool_(),
       var_sequencer_(loc, static_cast<uint32_t>(initial_var_count)),
       cdcl_sequencer_(loc),
       elimination_backlog_(loc) {

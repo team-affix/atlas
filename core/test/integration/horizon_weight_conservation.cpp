@@ -175,7 +175,7 @@ protected:
         loc.bind_as<i_bind_map_factory>(bind_map_factory_);
         loc.bind_as<i_unifier_factory>(unifier_factory_);
         loc.bind_as<i_make_goal_lineage, i_make_resolution_lineage>(lineage_pool_);
-        expr_pool_ = std::make_unique<expr_pool>(loc);
+        expr_pool_ = std::make_unique<expr_pool>();
         loc.bind_as<i_make_functor, i_make_var, i_import_expr, i_get_expr_count>(*expr_pool_);
         var_sequencer_ = std::make_unique<var_sequencer>(loc, 0u);
         loc.bind_as<i_var_sequencer>(*var_sequencer_);

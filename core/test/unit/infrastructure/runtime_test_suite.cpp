@@ -166,13 +166,11 @@ struct RuntimeTestBase {
     db database;
     initial_goal_exprs initial_goals;
 
-    trail saved_trail_;
     locator saved_loc_;
     var_names saved_var_names_;
     expr_printer saved_printer_{std::cout,
         (saved_loc_.bind_as<i_var_names>(saved_var_names_), saved_loc_)};
-    expr_pool saved_expr_pool_{
-        (saved_loc_.bind_as<i_log_to_current_trail_frame>(saved_trail_), saved_loc_)};
+    expr_pool saved_expr_pool_;
 };
 
 struct RuntimeParamTest

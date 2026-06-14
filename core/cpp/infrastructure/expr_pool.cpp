@@ -1,10 +1,5 @@
 #include <stdexcept>
 #include "infrastructure/expr_pool.hpp"
-#include "infrastructure/backtrackable_set_insert.hpp"
-
-expr_pool::expr_pool(locator& loc) :
-    exprs(loc.locate<i_log_to_current_trail_frame>(), {}) {
-}
 
 const expr* expr_pool::make(const std::string& name, const std::vector<const expr*>& args) {
     return intern(expr{expr::functor{name, args}});
@@ -15,11 +10,9 @@ const expr* expr_pool::make(uint32_t i) {
 }
 
 const expr* expr_pool::import(const expr* e) {
-    // if the expression is a var, just intern it
     if (std::holds_alternative<expr::var>(e->content))
         return intern(expr{e->content});
 
-    // if the expression is a functor, recursively import all args then rebuild
     if (const expr::functor* f = std::get_if<expr::functor>(&e->content)) {
         std::vector<const expr*> imported_args;
         imported_args.reserve(f->args.size());
@@ -32,22 +25,9 @@ const expr* expr_pool::import(const expr* e) {
 }
 
 const expr* expr_pool::intern(expr&& e) {
-    // check if the expression is already in the pool
-    auto original_it = exprs.get().find(e);
-    if (original_it != exprs.get().end())
-        return &*original_it;
-
-    // if the expression is not in the pool, insert it
-    auto insert_mut = std::make_unique<
-        backtrackable_set_insert<
-        std::set<expr>>>(std::move(e));
-    exprs.mutate(std::move(insert_mut));
-    
-    // return the new expression
-    auto it = exprs.get().find(e);
-    return &*it;
+    return &*exprs.emplace(std::move(e)).first;
 }
 
 size_t expr_pool::size() const {
-    return exprs.get().size();
+    return exprs.size();
 }

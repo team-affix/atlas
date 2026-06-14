@@ -77,7 +77,7 @@ struct MhuEliminationGeneratorIntegrationTest : public ::testing::Test {
         loc.bind_as<i_unifier_factory>(uf);
         loc.bind_as<i_make_resolution_lineage>(lp);
         loc.bind_as<i_get_goal_candidate_rule_ids, i_insert_goal_candidates>(ggcr);
-        pool.emplace(loc);
+        pool.emplace();
         loc.bind_as<i_make_functor, i_make_var, i_import_expr, i_get_expr_count>(*pool);
         mhu.emplace(loc);
     }

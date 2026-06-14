@@ -12,7 +12,7 @@
 struct ParserCoreFixture : public ::testing::Test {
     void SetUp() override {
         loc.bind_as<i_log_to_current_trail_frame>(t);
-        pool.emplace(loc);
+        pool.emplace();
         var_seq.emplace(loc, 0u);
     }
 
