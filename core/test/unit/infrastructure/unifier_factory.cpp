@@ -6,7 +6,7 @@
 #include <gmock/gmock.h>
 #include "infrastructure/unifier_factory.hpp"
 #include "interfaces/i_bind_map.hpp"
-#include "atom_fixture.hpp"
+#include "functor_fixture.hpp"
 
 using ::testing::Return;
 using ::testing::_;
@@ -33,12 +33,12 @@ struct MockBindMap : public i_bind_map {
 
 struct UnifierFactoryTest : public ::testing::Test {
     
-    test_atoms atoms;unifier_factory factory;
+    test_functors functors;unifier_factory factory;
     MockBindMap bind_map;
     expr var0{expr::var{0}};
     expr var1{expr::var{1}};
-    expr func_f{expr::functor{atoms.id("f"), {}}};
-    expr func_g{expr::functor{atoms.id("g"), {}}};
+    expr func_f{expr::functor{functors.id("f"), {}}};
+    expr func_g{expr::functor{functors.id("g"), {}}};
 };
 
 TEST_F(UnifierFactoryTest, MakeProducesUnifierThatUnifiesViaBindMap) {

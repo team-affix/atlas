@@ -3,13 +3,13 @@
 
 #include <gtest/gtest.h>
 #include "infrastructure/bind_map_factory.hpp"
-#include "atom_fixture.hpp"
+#include "functor_fixture.hpp"
 
 struct BindMapFactoryTest : public ::testing::Test {
     
-    test_atoms atoms;bind_map_factory factory;
+    test_functors functors;bind_map_factory factory;
     expr var0{expr::var{0}};
-    expr func{expr::functor{atoms.id("f"), {}}};
+    expr func{expr::functor{functors.id("f"), {}}};
 };
 
 TEST_F(BindMapFactoryTest, MakeReturnsBindMapThatResolvesBindings) {

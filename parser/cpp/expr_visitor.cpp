@@ -1,16 +1,16 @@
 #include <any>
 #include "../hpp/expr_visitor.hpp"
-#include "infrastructure/atom_names.hpp"
+#include "infrastructure/functor_names.hpp"
 
 expr_visitor::expr_visitor(i_make_functor& make_functor, i_make_var& make_var, i_var_sequencer& var_seq,
                            std::map<std::string, uint32_t>& var_map,
-                           std::map<std::string, uint32_t>& atom_map, uint32_t& next_atom_id)
+                           std::map<std::string, uint32_t>& functor_map, uint32_t& next_functor_id)
     : make_functor(make_functor),
       make_var(make_var),
       var_seq(var_seq),
       var_map(var_map),
-      atom_map(atom_map),
-      next_atom_id(next_atom_id) {}
+      functor_map(functor_map),
+      next_functor_id(next_functor_id) {}
 
 std::any expr_visitor::visitExpr(CHCParser::ExprContext* ctx) {
     if (auto* var = ctx->VARIABLE())
@@ -28,9 +28,9 @@ const expr* expr_visitor::visitVar(antlr4::tree::TerminalNode* node) {
     return make_var.make_var(it->second);
 }
 
-uint32_t expr_visitor::atom_id(const std::string& name) {
-    auto [it, inserted] = atom_map.emplace(name, 0u);
-    if (inserted) it->second = next_atom_id++;
+uint32_t expr_visitor::functor_id(const std::string& name) {
+    auto [it, inserted] = functor_map.emplace(name, 0u);
+    if (inserted) it->second = next_functor_id++;
     return it->second;
 }
 
@@ -44,14 +44,14 @@ std::any expr_visitor::visitFunctor(CHCParser::FunctorContext* ctx) {
     std::vector<const expr*> args;
     for (auto* sub_expr : ctx->expr())
         args.push_back(std::any_cast<const expr*>(visit(sub_expr)));
-    return (const expr*)make_functor.make_functor(atom_id(name), std::move(args));
+    return (const expr*)make_functor.make_functor(functor_id(name), std::move(args));
 }
 
 std::any expr_visitor::visitList(CHCParser::ListContext* ctx) {
     auto exprs = ctx->expr();
 
     if (exprs.empty())
-        return (const expr*)make_functor.make_functor(k_nil_atom_id, {});
+        return (const expr*)make_functor.make_functor(k_nil_functor_id, {});
 
     bool has_pipe = false;
     for (auto* child : ctx->children) {
@@ -70,10 +70,10 @@ std::any expr_visitor::visitList(CHCParser::ListContext* ctx) {
 
     const expr* tail = has_pipe
         ? std::any_cast<const expr*>(visit(exprs.back()))
-        : make_functor.make_functor(k_nil_atom_id, {});
+        : make_functor.make_functor(k_nil_functor_id, {});
 
     const expr* result = tail;
     for (int i = static_cast<int>(head_count) - 1; i >= 0; --i)
-        result = make_functor.make_functor(k_cons_atom_id, {heads[i], result});
+        result = make_functor.make_functor(k_cons_functor_id, {heads[i], result});
     return (const expr*)result;
 }

@@ -15,7 +15,7 @@
 #include "interfaces/i_make_var.hpp"
 #include "interfaces/i_get_goal_candidate_rule_ids.hpp"
 #include "infrastructure/rule_id_set.hpp"
-#include "atom_fixture.hpp"
+#include "functor_fixture.hpp"
 
 using ::testing::Return;
 using ::testing::ReturnRef;
@@ -85,7 +85,7 @@ struct MockGetGoalCandidateRuleIds : public i_get_goal_candidate_rule_ids {
 
 struct MhuEliminationGeneratorUnitTest : public ::testing::Test {
     
-    test_atoms atoms;
+    test_functors functors;
     locator loc;
     identity_bind_map common;
     test_make_var make_var;
@@ -105,8 +105,8 @@ struct MhuEliminationGeneratorUnitTest : public ::testing::Test {
     }
 
     expr goal{expr::var{0}};
-    expr head_f{expr::functor{atoms.id("f"), {}}};
-    expr head_g{expr::functor{atoms.id("g"), {}}};
+    expr head_f{expr::functor{functors.id("f"), {}}};
+    expr head_g{expr::functor{functors.id("g"), {}}};
 };
 
 TEST_F(MhuEliminationGeneratorUnitTest, TryAddHeadReturnsFalseWhenUnifyFails) {

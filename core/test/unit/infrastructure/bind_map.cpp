@@ -3,17 +3,17 @@
 
 #include <gtest/gtest.h>
 #include "infrastructure/bind_map.hpp"
-#include "atom_fixture.hpp"
+#include "functor_fixture.hpp"
 
 struct BindMapTest : public ::testing::Test {
 protected:
-    test_atoms atoms;
+    test_functors functors;
     bind_map bm;
     expr var0{expr::var{0}};
     expr var1{expr::var{1}};
     expr var2{expr::var{2}};
-    expr func{expr::functor{atoms.id("f"), {}}};
-    expr func2{expr::functor{atoms.id("g"), {}}};
+    expr func{expr::functor{functors.id("f"), {}}};
+    expr func2{expr::functor{functors.id("g"), {}}};
 };
 
 TEST_F(BindMapTest, WhnfUnboundVariableReturnsSelf) {
@@ -62,7 +62,7 @@ TEST_F(BindMapTest, WhnfPathCompressionUpdatesChainWithoutPublicRebind) {
 }
 
 TEST_F(BindMapTest, WhnfDoesNotRecurseIntoFunctorArguments) {
-    expr fa{expr::functor{atoms.id("f"), {&var0}}};
+    expr fa{expr::functor{functors.id("f"), {&var0}}};
     bm.bind(0, &func);
     EXPECT_EQ(bm.whnf(&fa), &fa);
 }
@@ -70,7 +70,7 @@ TEST_F(BindMapTest, WhnfDoesNotRecurseIntoFunctorArguments) {
 TEST_F(BindMapTest, WhnfBoundToBinaryFunctor) {
     expr v0{expr::var{0}};
     expr v1{expr::var{1}};
-    expr fab{expr::functor{atoms.id("f"), {&v0, &v1}}};
+    expr fab{expr::functor{functors.id("f"), {&v0, &v1}}};
     bm.bind(0, &fab);
     EXPECT_EQ(bm.whnf(&v0), &fab);
 }
@@ -79,7 +79,7 @@ TEST_F(BindMapTest, WhnfBoundToTernaryFunctor) {
     expr v0{expr::var{0}};
     expr v1{expr::var{1}};
     expr v2{expr::var{2}};
-    expr habc{expr::functor{atoms.id("h"), {&v0, &v1, &v2}}};
+    expr habc{expr::functor{functors.id("h"), {&v0, &v1, &v2}}};
     bm.bind(0, &habc);
     EXPECT_EQ(bm.whnf(&v0), &habc);
 }

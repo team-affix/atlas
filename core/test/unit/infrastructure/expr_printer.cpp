@@ -1,13 +1,13 @@
 // expr_printer renders expr trees to a stream, consulting i_var_names for variables
-// and i_atom_names for functor symbols. Unit tests mock both and assert string output.
+// and i_functor_names for functor symbols. Unit tests mock both and assert string output.
 
 #include <gtest/gtest.h>
 #include <gmock/gmock.h>
 #include <sstream>
 #include "locator_fixture.hpp"
-#include "infrastructure/atom_names.hpp"
+#include "infrastructure/functor_names.hpp"
 #include "infrastructure/expr_printer.hpp"
-#include "interfaces/i_atom_names.hpp"
+#include "interfaces/i_functor_names.hpp"
 #include "interfaces/i_var_names.hpp"
 
 using ::testing::Return;
@@ -19,7 +19,7 @@ struct MockVarNames : public i_var_names {
     MOCK_METHOD(void, set_name, (uint32_t, const std::string&), (override));
 };
 
-struct MockAtomNames : public i_atom_names {
+struct MockFunctorNames : public i_functor_names {
     MOCK_METHOD(bool, is_named, (uint32_t), (const, override));
     MOCK_METHOD(const std::string&, name, (uint32_t), (const, override));
     MOCK_METHOD(void, set_name, (uint32_t, const std::string&), (override));
@@ -28,7 +28,7 @@ struct MockAtomNames : public i_atom_names {
 struct ExprPrinterTest : public ::testing::Test {
     locator loc;
     MockVarNames var_names;
-    MockAtomNames atom_names;
+    MockFunctorNames functor_names;
     std::ostringstream os;
     expr_printer printer;
 
@@ -36,13 +36,13 @@ struct ExprPrinterTest : public ::testing::Test {
 
     expr_printer init_printer() {
         loc.bind_as<i_var_names>(var_names);
-        loc.bind_as<i_atom_names>(atom_names);
+        loc.bind_as<i_functor_names>(functor_names);
         return expr_printer{os, loc};
     }
 
     void expect_atom_named(uint32_t id, const std::string& s) {
-        EXPECT_CALL(atom_names, is_named(id)).WillRepeatedly(Return(true));
-        EXPECT_CALL(atom_names, name(id)).WillRepeatedly(ReturnRef(s));
+        EXPECT_CALL(functor_names, is_named(id)).WillRepeatedly(Return(true));
+        EXPECT_CALL(functor_names, name(id)).WillRepeatedly(ReturnRef(s));
     }
 
     std::string var_name_x{"X"};
@@ -52,7 +52,7 @@ struct ExprPrinterTest : public ::testing::Test {
     expr var0{expr::var{0}};
     expr atom_a{expr::functor{2, {}}};
     expr atom_b{expr::functor{3, {}}};
-    expr nil{expr::functor{k_nil_atom_id, {}}};
+    expr nil{expr::functor{k_nil_functor_id, {}}};
 
     std::string print(const expr* e) {
         os.str("");
@@ -66,6 +66,19 @@ TEST_F(ExprPrinterTest, PrintUnnamedVar) {
     EXPECT_CALL(var_names, is_named(0)).WillOnce(Return(false));
 
     EXPECT_EQ(print(&var0), "?0");
+}
+
+TEST_F(ExprPrinterTest, PrintUnnamedAtom) {
+    EXPECT_CALL(functor_names, is_named(2)).WillOnce(Return(false));
+
+    EXPECT_EQ(print(&atom_a), "!2");
+}
+
+TEST_F(ExprPrinterTest, PrintUnnamedFunctor) {
+    EXPECT_CALL(functor_names, is_named(6)).WillOnce(Return(false));
+
+    expr f{expr::functor{6, {&var0}}};
+    EXPECT_EQ(print(&f), "!6(?0)");
 }
 
 TEST_F(ExprPrinterTest, PrintNamedVar) {
@@ -86,22 +99,22 @@ TEST_F(ExprPrinterTest, PrintNil) {
 
 TEST_F(ExprPrinterTest, PrintSingletonList) {
     expect_atom_named(2, atom_a_name);
-    expr list{expr::functor{k_cons_atom_id, {&atom_a, &nil}}};
+    expr list{expr::functor{k_cons_functor_id, {&atom_a, &nil}}};
     EXPECT_EQ(print(&list), "[a]");
 }
 
 TEST_F(ExprPrinterTest, PrintListWithTail) {
     expect_atom_named(2, atom_a_name);
     expect_atom_named(3, atom_b_name);
-    expr list{expr::functor{k_cons_atom_id, {&atom_a, &atom_b}}};
+    expr list{expr::functor{k_cons_functor_id, {&atom_a, &atom_b}}};
     EXPECT_EQ(print(&list), "[a|b]");
 }
 
 TEST_F(ExprPrinterTest, PrintMultiElementList) {
     expect_atom_named(2, atom_a_name);
     expect_atom_named(3, atom_b_name);
-    expr tail{expr::functor{k_cons_atom_id, {&atom_b, &nil}}};
-    expr list{expr::functor{k_cons_atom_id, {&atom_a, &tail}}};
+    expr tail{expr::functor{k_cons_functor_id, {&atom_b, &nil}}};
+    expr list{expr::functor{k_cons_functor_id, {&atom_a, &tail}}};
     EXPECT_EQ(print(&list), "[a, b]");
 }
 
@@ -114,10 +127,10 @@ TEST_F(ExprPrinterTest, PrintFourElementList) {
     expr d{expr::functor{5, {}}};
     expect_atom_named(4, c_name);
     expect_atom_named(5, d_name);
-    expr t3{expr::functor{k_cons_atom_id, {&d, &nil}}};
-    expr t2{expr::functor{k_cons_atom_id, {&c, &t3}}};
-    expr t1{expr::functor{k_cons_atom_id, {&atom_b, &t2}}};
-    expr list{expr::functor{k_cons_atom_id, {&atom_a, &t1}}};
+    expr t3{expr::functor{k_cons_functor_id, {&d, &nil}}};
+    expr t2{expr::functor{k_cons_functor_id, {&c, &t3}}};
+    expr t1{expr::functor{k_cons_functor_id, {&atom_b, &t2}}};
+    expr list{expr::functor{k_cons_functor_id, {&atom_a, &t1}}};
     EXPECT_EQ(print(&list), "[a, b, c, d]");
 }
 
@@ -161,7 +174,7 @@ TEST_F(ExprPrinterTest, PrintNestedFunctorArgs) {
     EXPECT_EQ(print(&f), "f(g(a))");
 }
 
-TEST_F(ExprPrinterTest, PrintAtomViaAtomNames) {
+TEST_F(ExprPrinterTest, PrintAtomViaFunctorNames) {
     std::string abc_name{"abc"};
     expr atom{expr::functor{10, {}}};
     expect_atom_named(10, abc_name);
@@ -170,6 +183,6 @@ TEST_F(ExprPrinterTest, PrintAtomViaAtomNames) {
 
 TEST_F(ExprPrinterTest, PrintListViaConsIds) {
     expect_atom_named(2, atom_a_name);
-    expr list{expr::functor{k_cons_atom_id, {&atom_a, &nil}}};
+    expr list{expr::functor{k_cons_functor_id, {&atom_a, &nil}}};
     EXPECT_EQ(print(&list), "[a]");
 }

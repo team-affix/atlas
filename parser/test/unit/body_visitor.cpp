@@ -7,7 +7,7 @@
 #include <string>
 #include <vector>
 #include "parser_fixture.hpp"
-#include "infrastructure/atom_names.hpp"
+#include "infrastructure/functor_names.hpp"
 #include "parser/generated/CHCLexer.h"
 #include "parser/generated/CHCParser.h"
 #include "parser/hpp/body_visitor.hpp"
@@ -30,7 +30,7 @@ struct BodyVisitorTest : ParserCoreFixture {};
 
 TEST_F(BodyVisitorTest, SingleAtom) {
     std::map<std::string, uint32_t> var_map;
-    body_visitor bv{*pool, *pool, *var_seq, var_map, atom_map, next_atom_id};
+    body_visitor bv{*pool, *pool, *var_seq, var_map, functor_map, next_functor_id};
 
     std::string input = "foo";
     antlr4::ANTLRInputStream stream(input);
@@ -40,12 +40,12 @@ TEST_F(BodyVisitorTest, SingleAtom) {
 
     auto body = std::any_cast<std::vector<const expr*>>(bv.visitBody(parse_body(stream, tokens, lexer, parser)));
     EXPECT_THAT(body, SizeIs(1));
-    EXPECT_EQ(body[0], pool->make_functor(atom_map.at("foo"), {}));
+    EXPECT_EQ(body[0], pool->make_functor(functor_map.at("foo"), {}));
 }
 
 TEST_F(BodyVisitorTest, MultipleAtomsShareVar) {
     std::map<std::string, uint32_t> var_map;
-    body_visitor bv{*pool, *pool, *var_seq, var_map, atom_map, next_atom_id};
+    body_visitor bv{*pool, *pool, *var_seq, var_map, functor_map, next_functor_id};
 
     std::string input = "p(X), q(X)";
     antlr4::ANTLRInputStream stream(input);
@@ -57,13 +57,13 @@ TEST_F(BodyVisitorTest, MultipleAtomsShareVar) {
     EXPECT_THAT(body, SizeIs(2));
 
     const expr* x = pool->make_var(0);
-    EXPECT_EQ(body[0], pool->make_functor(atom_map.at("p"), {x}));
-    EXPECT_EQ(body[1], pool->make_functor(atom_map.at("q"), {x}));
+    EXPECT_EQ(body[0], pool->make_functor(functor_map.at("p"), {x}));
+    EXPECT_EQ(body[1], pool->make_functor(functor_map.at("q"), {x}));
 }
 
 TEST_F(BodyVisitorTest, VarSharingAcrossAtoms) {
     std::map<std::string, uint32_t> var_map;
-    body_visitor bv{*pool, *pool, *var_seq, var_map, atom_map, next_atom_id};
+    body_visitor bv{*pool, *pool, *var_seq, var_map, functor_map, next_functor_id};
 
     std::string input = "f(X, Y), g(Y, Z)";
     antlr4::ANTLRInputStream stream(input);
@@ -76,8 +76,8 @@ TEST_F(BodyVisitorTest, VarSharingAcrossAtoms) {
 
     const expr* x = pool->make_var(0);
     const expr* y = pool->make_var(1);
-    EXPECT_EQ(body[0], pool->make_functor(atom_map.at("f"), {x, y}));
+    EXPECT_EQ(body[0], pool->make_functor(functor_map.at("f"), {x, y}));
 
     const expr* z = pool->make_var(2);
-    EXPECT_EQ(body[1], pool->make_functor(atom_map.at("g"), {y, z}));
+    EXPECT_EQ(body[1], pool->make_functor(functor_map.at("g"), {y, z}));
 }

@@ -5,7 +5,7 @@
 #include <gmock/gmock.h>
 #include <string>
 #include "parser_fixture.hpp"
-#include "infrastructure/atom_names.hpp"
+#include "infrastructure/functor_names.hpp"
 #include "parser/generated/CHCLexer.h"
 #include "parser/generated/CHCParser.h"
 #include "parser/hpp/database_visitor.hpp"
@@ -24,7 +24,7 @@ struct DatabaseVisitorTest : ParserCoreFixture {};
 
 TEST_F(DatabaseVisitorTest, VisitDatabase) {
     db database;
-    database_visitor dv{*pool, *pool, *var_seq, database, atom_map, next_atom_id};
+    database_visitor dv{*pool, *pool, *var_seq, database, functor_map, next_functor_id};
 
     std::string input = "base(X). step(X) :- base(X).";
     antlr4::ANTLRInputStream stream(input);
@@ -36,14 +36,14 @@ TEST_F(DatabaseVisitorTest, VisitDatabase) {
 
     const expr* x0 = pool->make_var(0);
     const rule* r0 = rule_at(database, rule_id{0});
-    EXPECT_EQ(r0->head, pool->make_functor(atom_map.at("base"), {x0}));
+    EXPECT_EQ(r0->head, pool->make_functor(functor_map.at("base"), {x0}));
     EXPECT_THAT(r0->body, IsEmpty());
 
     const expr* x1 = pool->make_var(1);
     const rule* r1 = rule_at(database, rule_id{1});
-    EXPECT_EQ(r1->head, pool->make_functor(atom_map.at("step"), {x1}));
+    EXPECT_EQ(r1->head, pool->make_functor(functor_map.at("step"), {x1}));
     EXPECT_THAT(r1->body, SizeIs(1));
-    EXPECT_EQ(r1->body[0], pool->make_functor(atom_map.at("base"), {x1}));
+    EXPECT_EQ(r1->body[0], pool->make_functor(functor_map.at("base"), {x1}));
 
     EXPECT_THROW({ rule_at(database, rule_id{2}); }, std::out_of_range);
 }

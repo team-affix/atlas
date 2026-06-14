@@ -20,8 +20,8 @@ private:
     i_make_var& make_var;
     i_var_sequencer& var_seq;
     i_push_db_rule& out;
-    std::map<std::string, uint32_t>& atom_map;
-    uint32_t& next_atom_id;
+    std::map<std::string, uint32_t>& functor_map;
+    uint32_t& next_functor_id;
 };
 
 #endif

@@ -15,7 +15,7 @@ std::map<std::string, uint32_t> import_goals_from_string(
     i_make_var&,
     i_var_sequencer&,
     i_push_initial_goal_expr&,
-    std::map<std::string, uint32_t>& atom_map,
-    uint32_t& next_atom_id);
+    std::map<std::string, uint32_t>& functor_map,
+    uint32_t& next_functor_id);
 
 #endif

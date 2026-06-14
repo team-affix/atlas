@@ -21,7 +21,7 @@
 #include "interfaces/i_clear_mhu_heads.hpp"
 #include "infrastructure/coroutine.hpp"
 #include "value_objects/lemma.hpp"
-#include "atom_fixture.hpp"
+#include "functor_fixture.hpp"
 
 using ::testing::ElementsAre;
 using ::testing::IsEmpty;
@@ -46,7 +46,7 @@ std::vector<const resolution_lineage*> collect_elims(
 
 struct JointEliminationGeneratorIntegrationTest : public ::testing::Test {
     
-    test_atoms atoms;
+    test_functors functors;
     locator loc;
     trail t;
     bind_map common;
@@ -89,7 +89,7 @@ TEST_F(JointEliminationGeneratorIntegrationTest, ConstrainRunsCdclBeforeMhu) {
     resolution_lineage rl1{&gl1, 1};
 
     expr goal{expr::var{0}};
-    expr head{expr::functor{atoms.id("f"), {}}};
+    expr head{expr::functor{functors.id("f"), {}}};
 
     ggcr.insert(&gl0);
     ggcr.link_goal_candidate(&gl0, rule_id{0});
@@ -105,8 +105,8 @@ TEST_F(JointEliminationGeneratorIntegrationTest, ConstrainRunsCdclBeforeMhu) {
 TEST_F(JointEliminationGeneratorIntegrationTest, ConstrainYieldsMhuElimAfterCdclStreamEmpty) {
     expr goal_a{expr::var{0}};
     expr goal_b{expr::var{0}};
-    expr head_a{expr::functor{atoms.id("f"), {}}};
-    expr head_b{expr::functor{atoms.id("g"), {}}};
+    expr head_a{expr::functor{functors.id("f"), {}}};
+    expr head_b{expr::functor{functors.id("g"), {}}};
 
     goal_lineage* gl_a = const_cast<goal_lineage*>(lp.make_goal_lineage(nullptr, 0));
     goal_lineage* gl_b = const_cast<goal_lineage*>(lp.make_goal_lineage(nullptr, 1));
@@ -127,8 +127,8 @@ TEST_F(JointEliminationGeneratorIntegrationTest, ConstrainYieldsMhuElimAfterCdcl
 
 TEST_F(JointEliminationGeneratorIntegrationTest, ConstrainYieldsCdclThenMhuElims) {
     expr goal{expr::var{0}};
-    expr head_f{expr::functor{atoms.id("f"), {}}};
-    expr head_g{expr::functor{atoms.id("g"), {}}};
+    expr head_f{expr::functor{functors.id("f"), {}}};
+    expr head_g{expr::functor{functors.id("g"), {}}};
 
     goal_lineage* gl0 = const_cast<goal_lineage*>(lp.make_goal_lineage(nullptr, 0));
     goal_lineage* gl1 = const_cast<goal_lineage*>(lp.make_goal_lineage(nullptr, 1));
@@ -163,8 +163,8 @@ TEST_F(JointEliminationGeneratorIntegrationTest,
      * constraining rl0. Joint forwards both yields; elimination_router deduplicates on route.
      */
     expr goal{expr::var{0}};
-    expr head_f{expr::functor{atoms.id("f"), {}}};
-    expr head_g{expr::functor{atoms.id("g"), {}}};
+    expr head_f{expr::functor{functors.id("f"), {}}};
+    expr head_g{expr::functor{functors.id("g"), {}}};
 
     goal_lineage* gl0 = const_cast<goal_lineage*>(lp.make_goal_lineage(nullptr, 0));
     goal_lineage* gl1 = const_cast<goal_lineage*>(lp.make_goal_lineage(nullptr, 1));
@@ -187,7 +187,7 @@ TEST_F(JointEliminationGeneratorIntegrationTest,
 TEST_F(JointEliminationGeneratorIntegrationTest, ConstrainYieldsNothingWhenBothStreamsEmpty) {
     expr goal_a{expr::var{0}};
     expr goal_b{expr::var{0}};
-    expr head{expr::functor{atoms.id("f"), {}}};
+    expr head{expr::functor{functors.id("f"), {}}};
 
     goal_lineage* gl = const_cast<goal_lineage*>(lp.make_goal_lineage(nullptr, 0));
     resolution_lineage* rl_a =
@@ -210,8 +210,8 @@ TEST_F(JointEliminationGeneratorIntegrationTest, PopRestoresCdclThroughJointCons
     resolution_lineage rl0{&gl0, 0};
     resolution_lineage rl1{&gl1, 1};
 
-    expr goal{expr::functor{atoms.id("f"), {}}};
-    expr head{expr::functor{atoms.id("f"), {}}};
+    expr goal{expr::functor{functors.id("f"), {}}};
+    expr head{expr::functor{functors.id("f"), {}}};
 
     ggcr.insert(&gl0);
     ggcr.link_goal_candidate(&gl0, rule_id{0});

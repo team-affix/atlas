@@ -130,7 +130,7 @@
 #include "interfaces/i_resolver.hpp"
 #include "value_objects/sim_termination.hpp"
 #include "value_objects/lemma.hpp"
-#include "atom_fixture.hpp"
+#include "functor_fixture.hpp"
 
 using ::testing::IsEmpty;
 using ::testing::Return;
@@ -337,27 +337,27 @@ struct sim_stack {
     }
 };
 
-const expr* make_suc_n(test_atoms& atoms, i_make_functor& make_functor, const expr* zero, int n) {
+const expr* make_suc_n(test_functors& functors, i_make_functor& make_functor, const expr* zero, int n) {
     const expr* cur = zero;
     for (int i = 0; i < n; ++i)
-        cur = make_functor.make_functor(atoms.id("suc"), {cur});
+        cur = make_functor.make_functor(functors.id("suc"), {cur});
     return cur;
 }
 
-void chain_clause_db(test_atoms& atoms, db& database, std::vector<expr>& storage, const char* prefix,
+void chain_clause_db(test_functors& functors, db& database, std::vector<expr>& storage, const char* prefix,
     size_t depth, const expr* ground_atom) {
     storage.reserve(depth * 3);
     for (size_t i = 0; i + 1 < depth; ++i) {
         storage.emplace_back(expr::var{0});
         const size_t x_idx = storage.size() - 1;
         storage.emplace_back(
-            expr::functor{atoms.id(std::string(prefix) + std::to_string(i)), {&storage[x_idx]}});
+            expr::functor{functors.id(std::string(prefix) + std::to_string(i)), {&storage[x_idx]}});
         storage.emplace_back(
-            expr::functor{atoms.id(std::string(prefix) + std::to_string(i + 1)), {&storage[x_idx]}});
+            expr::functor{functors.id(std::string(prefix) + std::to_string(i + 1)), {&storage[x_idx]}});
         database.push(rule{&storage[storage.size() - 2], {&storage[storage.size() - 1]}});
     }
     storage.emplace_back(
-        expr::functor{atoms.id(std::string(prefix) + std::to_string(depth - 1)), {ground_atom}});
+        expr::functor{functors.id(std::string(prefix) + std::to_string(depth - 1)), {ground_atom}});
     database.push(rule{&storage.back(), {}});
 }
 
@@ -378,7 +378,7 @@ struct simulation {
 
 struct SimIntegrationTest : public ::testing::Test {
     
-    test_atoms atoms;static constexpr size_t kDefaultMaxResolutions = 8;
+    test_functors functors;static constexpr size_t kDefaultMaxResolutions = 8;
 
     db database;
     initial_goal_exprs initial_goals;
@@ -405,7 +405,7 @@ TEST_F(SimIntegrationTest, RunReturnsConflictedWhenInitialGoalHasNoDbCandidates)
      *   f.
      * database: (empty)
      */
-    expr goal{expr::functor{atoms.id("f"), {}}};
+    expr goal{expr::functor{functors.id("f"), {}}};
     initial_goals.push(&goal);
 
     EXPECT_CALL(stack.decision_generator, generate()).Times(0);
@@ -423,8 +423,8 @@ TEST_F(SimIntegrationTest, RunReturnsSolvedWhenUnitFactAppliesToInitialGoal) {
      * database:
      *   0: f.
      */
-    expr goal{expr::functor{atoms.id("f"), {}}};
-    expr head{expr::functor{atoms.id("f"), {}}};
+    expr goal{expr::functor{functors.id("f"), {}}};
+    expr head{expr::functor{functors.id("f"), {}}};
     initial_goals.push(&goal);
     database.push(rule{&head, {}});
 
@@ -443,8 +443,8 @@ TEST_F(SimIntegrationTest, RunReturnsConflictedWhenDbRuleHeadFailsToUnifyWithGoa
      * database:
      *   0: g.
      */
-    expr goal{expr::functor{atoms.id("f"), {}}};
-    expr head{expr::functor{atoms.id("g"), {}}};
+    expr goal{expr::functor{functors.id("f"), {}}};
+    expr head{expr::functor{functors.id("g"), {}}};
     initial_goals.push(&goal);
     database.push(rule{&head, {}});
 
@@ -464,9 +464,9 @@ TEST_F(SimIntegrationTest, RunReturnsSolvedWhenOnlyOneOfTwoDbRulesUnifiesWithGoa
      *   0: f.
      *   1: g.
      */
-    expr goal{expr::functor{atoms.id("f"), {}}};
-    expr matching_head{expr::functor{atoms.id("f"), {}}};
-    expr mismatching_head{expr::functor{atoms.id("g"), {}}};
+    expr goal{expr::functor{functors.id("f"), {}}};
+    expr matching_head{expr::functor{functors.id("f"), {}}};
+    expr mismatching_head{expr::functor{functors.id("g"), {}}};
     initial_goals.push(&goal);
     database.push(rule{&matching_head, {}});
     database.push(rule{&mismatching_head, {}});
@@ -488,9 +488,9 @@ TEST_F(SimIntegrationTest, RunReturnsSolvedAfterSingleDecisionWithTwoMatchingFac
      *   1: f.
      * setup: decision picks rule 1
      */
-    expr goal{expr::functor{atoms.id("f"), {}}};
-    expr head0{expr::functor{atoms.id("f"), {}}};
-    expr head1{expr::functor{atoms.id("f"), {}}};
+    expr goal{expr::functor{functors.id("f"), {}}};
+    expr head0{expr::functor{functors.id("f"), {}}};
+    expr head1{expr::functor{functors.id("f"), {}}};
     initial_goals.push(&goal);
     database.push(rule{&head0, {}});
     database.push(rule{&head1, {}});
@@ -514,10 +514,10 @@ TEST_F(SimIntegrationTest, RunReturnsSolvedViaClauseThenBodyFactWithoutDecisions
      *   0: f :- g.
      *   1: g.
      */
-    expr goal{expr::functor{atoms.id("f"), {}}};
-    expr f_head{expr::functor{atoms.id("f"), {}}};
-    expr g_body{expr::functor{atoms.id("g"), {}}};
-    expr g_head{expr::functor{atoms.id("g"), {}}};
+    expr goal{expr::functor{functors.id("f"), {}}};
+    expr f_head{expr::functor{functors.id("f"), {}}};
+    expr g_body{expr::functor{functors.id("g"), {}}};
+    expr g_head{expr::functor{functors.id("g"), {}}};
     initial_goals.push(&goal);
     database.push(rule{&f_head, {&g_body}});
     database.push(rule{&g_head, {}});
@@ -538,9 +538,9 @@ TEST_F(SimIntegrationTest, RunReturnsConflictedWhenSecondInitialGoalHasNoCandida
      * database:
      *   0: f.
      */
-    expr goal_f{expr::functor{atoms.id("f"), {}}};
-    expr goal_g{expr::functor{atoms.id("g"), {}}};
-    expr f_head{expr::functor{atoms.id("f"), {}}};
+    expr goal_f{expr::functor{functors.id("f"), {}}};
+    expr goal_g{expr::functor{functors.id("g"), {}}};
+    expr f_head{expr::functor{functors.id("f"), {}}};
     initial_goals.push(&goal_f);
     initial_goals.push(&goal_g);
     database.push(rule{&f_head, {}});
@@ -562,10 +562,10 @@ TEST_F(SimIntegrationTest, RunReturnsSolvedWhenTwoInitialGoalsEachHaveMatchingFa
      *   0: f.
      *   1: g.
      */
-    expr goal_f{expr::functor{atoms.id("f"), {}}};
-    expr goal_g{expr::functor{atoms.id("g"), {}}};
-    expr f_head{expr::functor{atoms.id("f"), {}}};
-    expr g_head{expr::functor{atoms.id("g"), {}}};
+    expr goal_f{expr::functor{functors.id("f"), {}}};
+    expr goal_g{expr::functor{functors.id("g"), {}}};
+    expr f_head{expr::functor{functors.id("f"), {}}};
+    expr g_head{expr::functor{functors.id("g"), {}}};
     initial_goals.push(&goal_f);
     initial_goals.push(&goal_g);
     database.push(rule{&f_head, {}});
@@ -590,11 +590,11 @@ TEST_F(SimIntegrationTest, RunReturnsSolvedAfterOneDecisionWhenInitialGoalFHasTw
      *   2: g.
      * setup: decision picks rule 0 for goal f
      */
-    expr goal_f{expr::functor{atoms.id("f"), {}}};
-    expr goal_g{expr::functor{atoms.id("g"), {}}};
-    expr f_head0{expr::functor{atoms.id("f"), {}}};
-    expr f_head1{expr::functor{atoms.id("f"), {}}};
-    expr g_head{expr::functor{atoms.id("g"), {}}};
+    expr goal_f{expr::functor{functors.id("f"), {}}};
+    expr goal_g{expr::functor{functors.id("g"), {}}};
+    expr f_head0{expr::functor{functors.id("f"), {}}};
+    expr f_head1{expr::functor{functors.id("f"), {}}};
+    expr g_head{expr::functor{functors.id("g"), {}}};
     initial_goals.push(&goal_f);
     initial_goals.push(&goal_g);
     database.push(rule{&f_head0, {}});
@@ -621,10 +621,10 @@ TEST_F(SimIntegrationTest, RunReturnsConflictedWhenSecondInitialGoalLacksCandida
      *   0: f.
      *   1: f.
      */
-    expr goal_f{expr::functor{atoms.id("f"), {}}};
-    expr goal_g{expr::functor{atoms.id("g"), {}}};
-    expr f_head0{expr::functor{atoms.id("f"), {}}};
-    expr f_head1{expr::functor{atoms.id("f"), {}}};
+    expr goal_f{expr::functor{functors.id("f"), {}}};
+    expr goal_g{expr::functor{functors.id("g"), {}}};
+    expr f_head0{expr::functor{functors.id("f"), {}}};
+    expr f_head1{expr::functor{functors.id("f"), {}}};
     initial_goals.push(&goal_f);
     initial_goals.push(&goal_g);
     database.push(rule{&f_head0, {}});
@@ -647,9 +647,9 @@ TEST_F(SimIntegrationTest, RunReturnsSolvedWhenRuleZeroIsBackloggedBeforeRun) {
      *   1: f.
      * setup: rule 0 backlogged before run; expects resolution via rule 1 only
      */
-    expr goal{expr::functor{atoms.id("f"), {}}};
-    expr f_head0{expr::functor{atoms.id("f"), {}}};
-    expr f_head1{expr::functor{atoms.id("f"), {}}};
+    expr goal{expr::functor{functors.id("f"), {}}};
+    expr f_head0{expr::functor{functors.id("f"), {}}};
+    expr f_head1{expr::functor{functors.id("f"), {}}};
     initial_goals.push(&goal);
     database.push(rule{&f_head0, {}});
     database.push(rule{&f_head1, {}});
@@ -694,12 +694,12 @@ TEST_F(SimIntegrationTest, RunReturnsSolvedAfterCdclAvoidanceForcesG1RuleThree) 
      *   3: g.
      * setup: CDCL avoidance {{goal f, rule 0}, {goal g, rule 2}}; decision picks f rule 0
      */
-    expr goal_f{expr::functor{atoms.id("f"), {}}};
-    expr goal_g{expr::functor{atoms.id("g"), {}}};
-    expr f_head0{expr::functor{atoms.id("f"), {}}};
-    expr f_head1{expr::functor{atoms.id("f"), {}}};
-    expr g_head2{expr::functor{atoms.id("g"), {}}};
-    expr g_head3{expr::functor{atoms.id("g"), {}}};
+    expr goal_f{expr::functor{functors.id("f"), {}}};
+    expr goal_g{expr::functor{functors.id("g"), {}}};
+    expr f_head0{expr::functor{functors.id("f"), {}}};
+    expr f_head1{expr::functor{functors.id("f"), {}}};
+    expr g_head2{expr::functor{functors.id("g"), {}}};
+    expr g_head3{expr::functor{functors.id("g"), {}}};
     initial_goals.push(&goal_f);
     initial_goals.push(&goal_g);
     database.push(rule{&f_head0, {}});
@@ -748,16 +748,16 @@ TEST_F(SimIntegrationTest, RunReturnsSolvedOnRecursiveClauseTreeWithoutDecisions
      *   3: i.
      *   4: j.
      */
-    expr goal_f{expr::functor{atoms.id("f"), {}}};
-    expr f_head{expr::functor{atoms.id("f"), {}}};
-    expr g_body{expr::functor{atoms.id("g"), {}}};
-    expr h_body{expr::functor{atoms.id("h"), {}}};
-    expr g_head{expr::functor{atoms.id("g"), {}}};
-    expr h_head{expr::functor{atoms.id("h"), {}}};
-    expr i_body{expr::functor{atoms.id("i"), {}}};
-    expr j_body{expr::functor{atoms.id("j"), {}}};
-    expr i_head{expr::functor{atoms.id("i"), {}}};
-    expr j_head{expr::functor{atoms.id("j"), {}}};
+    expr goal_f{expr::functor{functors.id("f"), {}}};
+    expr f_head{expr::functor{functors.id("f"), {}}};
+    expr g_body{expr::functor{functors.id("g"), {}}};
+    expr h_body{expr::functor{functors.id("h"), {}}};
+    expr g_head{expr::functor{functors.id("g"), {}}};
+    expr h_head{expr::functor{functors.id("h"), {}}};
+    expr i_body{expr::functor{functors.id("i"), {}}};
+    expr j_body{expr::functor{functors.id("j"), {}}};
+    expr i_head{expr::functor{functors.id("i"), {}}};
+    expr j_head{expr::functor{functors.id("j"), {}}};
     initial_goals.push(&goal_f);
     database.push(rule{&f_head, {&g_body, &h_body}});
     database.push(rule{&g_head, {&i_body, &j_body}});
@@ -789,20 +789,20 @@ TEST_F(SimIntegrationTest, RunReturnsSolvedAfterOneDecisionOnInitialGoalKWithTwo
      *   6: k.
      * setup: decision picks rule 5 for goal k
      */
-    expr goal_f{expr::functor{atoms.id("f"), {}}};
-    expr goal_g{expr::functor{atoms.id("g"), {}}};
-    expr goal_k{expr::functor{atoms.id("k"), {}}};
-    expr f_head{expr::functor{atoms.id("f"), {}}};
-    expr g_body{expr::functor{atoms.id("g"), {}}};
-    expr h_body{expr::functor{atoms.id("h"), {}}};
-    expr g_head{expr::functor{atoms.id("g"), {}}};
-    expr h_head{expr::functor{atoms.id("h"), {}}};
-    expr i_body{expr::functor{atoms.id("i"), {}}};
-    expr j_body{expr::functor{atoms.id("j"), {}}};
-    expr k_head0{expr::functor{atoms.id("k"), {}}};
-    expr k_head1{expr::functor{atoms.id("k"), {}}};
-    expr i_head{expr::functor{atoms.id("i"), {}}};
-    expr j_head{expr::functor{atoms.id("j"), {}}};
+    expr goal_f{expr::functor{functors.id("f"), {}}};
+    expr goal_g{expr::functor{functors.id("g"), {}}};
+    expr goal_k{expr::functor{functors.id("k"), {}}};
+    expr f_head{expr::functor{functors.id("f"), {}}};
+    expr g_body{expr::functor{functors.id("g"), {}}};
+    expr h_body{expr::functor{functors.id("h"), {}}};
+    expr g_head{expr::functor{functors.id("g"), {}}};
+    expr h_head{expr::functor{functors.id("h"), {}}};
+    expr i_body{expr::functor{functors.id("i"), {}}};
+    expr j_body{expr::functor{functors.id("j"), {}}};
+    expr k_head0{expr::functor{functors.id("k"), {}}};
+    expr k_head1{expr::functor{functors.id("k"), {}}};
+    expr i_head{expr::functor{functors.id("i"), {}}};
+    expr j_head{expr::functor{functors.id("j"), {}}};
     initial_goals.push(&goal_f);
     initial_goals.push(&goal_g);
     initial_goals.push(&goal_k);
@@ -839,9 +839,9 @@ TEST_F(SimIntegrationTest, RunReturnsSolvedAndBindsVarsViaMhuWhenFactUnifiesGoal
      * database:
      *   0: f(abc, 123).
      */
-    expr abc{expr::functor{atoms.id("abc"), {}}};
-    expr _123{expr::functor{atoms.id("123"), {}}};
-    expr head{expr::functor{atoms.id("f"), {&abc, &_123}}};
+    expr abc{expr::functor{functors.id("abc"), {}}};
+    expr _123{expr::functor{functors.id("123"), {}}};
+    expr head{expr::functor{functors.id("f"), {&abc, &_123}}};
     database.push(rule{&head, {}});
 
     i_bind_map& bind_map = stack.loc.locate<i_bind_map>();
@@ -857,14 +857,14 @@ TEST_F(SimIntegrationTest, RunReturnsSolvedAndBindsVarsViaMhuWhenFactUnifiesGoal
     const uint32_t idx_b = seq.next();
     const expr* var_a = saved_expr_pool_.make_var(idx_a);
     const expr* var_b = saved_expr_pool_.make_var(idx_b);
-    initial_goals.push(saved_expr_pool_.make_functor(atoms.id("f"), {var_a, var_b}));
+    initial_goals.push(saved_expr_pool_.make_functor(functors.id("f"), {var_a, var_b}));
 
     EXPECT_EQ(simulation.run(), sim_termination::solved);
     const expr::functor& whnf_a = std::get<expr::functor>(bind_map.whnf(var_a)->content);
     const expr::functor& whnf_b = std::get<expr::functor>(bind_map.whnf(var_b)->content);
-    EXPECT_EQ(whnf_a.id, atoms.id("abc"));
+    EXPECT_EQ(whnf_a.id, functors.id("abc"));
     EXPECT_TRUE(whnf_a.args.empty());
-    EXPECT_EQ(whnf_b.id, atoms.id("123"));
+    EXPECT_EQ(whnf_b.id, functors.id("123"));
     EXPECT_TRUE(whnf_b.args.empty());
     simulation.tear_down();
 }
@@ -880,13 +880,13 @@ TEST_F(SimIntegrationTest, RunReturnsSolvedViaClauseBodyFactsBindingVarsWithoutD
      */
     expr rule_var_a{expr::var{0}};
     expr rule_var_b{expr::var{1}};
-    expr abc{expr::functor{atoms.id("abc"), {}}};
-    expr _123{expr::functor{atoms.id("123"), {}}};
-    expr f_head{expr::functor{atoms.id("f"), {&rule_var_a, &rule_var_b}}};
-    expr g_body{expr::functor{atoms.id("g"), {&rule_var_a}}};
-    expr h_body{expr::functor{atoms.id("h"), {&rule_var_b}}};
-    expr g_head{expr::functor{atoms.id("g"), {&abc}}};
-    expr h_head{expr::functor{atoms.id("h"), {&_123}}};
+    expr abc{expr::functor{functors.id("abc"), {}}};
+    expr _123{expr::functor{functors.id("123"), {}}};
+    expr f_head{expr::functor{functors.id("f"), {&rule_var_a, &rule_var_b}}};
+    expr g_body{expr::functor{functors.id("g"), {&rule_var_a}}};
+    expr h_body{expr::functor{functors.id("h"), {&rule_var_b}}};
+    expr g_head{expr::functor{functors.id("g"), {&abc}}};
+    expr h_head{expr::functor{functors.id("h"), {&_123}}};
     database.push(rule{&f_head, {&g_body, &h_body}});
     database.push(rule{&g_head, {}});
     database.push(rule{&h_head, {}});
@@ -904,14 +904,14 @@ TEST_F(SimIntegrationTest, RunReturnsSolvedViaClauseBodyFactsBindingVarsWithoutD
     const uint32_t idx_b = seq.next();
     const expr* var_a = saved_expr_pool_.make_var(idx_a);
     const expr* var_b = saved_expr_pool_.make_var(idx_b);
-    initial_goals.push(saved_expr_pool_.make_functor(atoms.id("f"), {var_a, var_b}));
+    initial_goals.push(saved_expr_pool_.make_functor(functors.id("f"), {var_a, var_b}));
 
     EXPECT_EQ(simulation.run(), sim_termination::solved);
     const expr::functor& whnf_a = std::get<expr::functor>(bind_map.whnf(var_a)->content);
     const expr::functor& whnf_b = std::get<expr::functor>(bind_map.whnf(var_b)->content);
-    EXPECT_EQ(whnf_a.id, atoms.id("abc"));
+    EXPECT_EQ(whnf_a.id, functors.id("abc"));
     EXPECT_TRUE(whnf_a.args.empty());
-    EXPECT_EQ(whnf_b.id, atoms.id("123"));
+    EXPECT_EQ(whnf_b.id, functors.id("123"));
     EXPECT_TRUE(whnf_b.args.empty());
     simulation.tear_down();
 }
@@ -925,12 +925,12 @@ TEST_F(SimIntegrationTest, RunReturnsSolvedAfterDecisionBindingVarsFromChosenFac
      *   1: f(xyz, 456).
      * setup: decision picks rule 1
      */
-    expr abc{expr::functor{atoms.id("abc"), {}}};
-    expr xyz{expr::functor{atoms.id("xyz"), {}}};
-    expr _123{expr::functor{atoms.id("123"), {}}};
-    expr _456{expr::functor{atoms.id("456"), {}}};
-    expr head0{expr::functor{atoms.id("f"), {&abc, &_123}}};
-    expr head1{expr::functor{atoms.id("f"), {&xyz, &_456}}};
+    expr abc{expr::functor{functors.id("abc"), {}}};
+    expr xyz{expr::functor{functors.id("xyz"), {}}};
+    expr _123{expr::functor{functors.id("123"), {}}};
+    expr _456{expr::functor{functors.id("456"), {}}};
+    expr head0{expr::functor{functors.id("f"), {&abc, &_123}}};
+    expr head1{expr::functor{functors.id("f"), {&xyz, &_456}}};
     database.push(rule{&head0, {}});
     database.push(rule{&head1, {}});
 
@@ -951,14 +951,14 @@ TEST_F(SimIntegrationTest, RunReturnsSolvedAfterDecisionBindingVarsFromChosenFac
     const uint32_t idx_b = seq.next();
     const expr* var_a = saved_expr_pool_.make_var(idx_a);
     const expr* var_b = saved_expr_pool_.make_var(idx_b);
-    initial_goals.push(saved_expr_pool_.make_functor(atoms.id("f"), {var_a, var_b}));
+    initial_goals.push(saved_expr_pool_.make_functor(functors.id("f"), {var_a, var_b}));
 
     EXPECT_EQ(simulation.run(), sim_termination::solved);
     const expr::functor& whnf_a = std::get<expr::functor>(bind_map.whnf(var_a)->content);
     const expr::functor& whnf_b = std::get<expr::functor>(bind_map.whnf(var_b)->content);
-    EXPECT_EQ(whnf_a.id, atoms.id("xyz"));
+    EXPECT_EQ(whnf_a.id, functors.id("xyz"));
     EXPECT_TRUE(whnf_a.args.empty());
-    EXPECT_EQ(whnf_b.id, atoms.id("456"));
+    EXPECT_EQ(whnf_b.id, functors.id("456"));
     EXPECT_TRUE(whnf_b.args.empty());
     simulation.tear_down();
 }
@@ -971,10 +971,10 @@ TEST_F(SimIntegrationTest, RunReturnsSolvedWhenMhuRejectsInconsistentRuleWithout
      *   0: f(abc, abc).
      *   1: f(abc, 123).
      */
-    expr abc{expr::functor{atoms.id("abc"), {}}};
-    expr _123{expr::functor{atoms.id("123"), {}}};
-    expr head0{expr::functor{atoms.id("f"), {&abc, &abc}}};
-    expr head1{expr::functor{atoms.id("f"), {&abc, &_123}}};
+    expr abc{expr::functor{functors.id("abc"), {}}};
+    expr _123{expr::functor{functors.id("123"), {}}};
+    expr head0{expr::functor{functors.id("f"), {&abc, &abc}}};
+    expr head1{expr::functor{functors.id("f"), {&abc, &_123}}};
     database.push(rule{&head0, {}});
     database.push(rule{&head1, {}});
 
@@ -999,11 +999,11 @@ TEST_F(SimIntegrationTest, RunReturnsSolvedWhenMhuRejectsInconsistentRuleWithout
     simulation.set_up();
     const uint32_t idx_a = seq.next();
     const expr* var_a = saved_expr_pool_.make_var(idx_a);
-    initial_goals.push(saved_expr_pool_.make_functor(atoms.id("f"), {var_a, var_a}));
+    initial_goals.push(saved_expr_pool_.make_functor(functors.id("f"), {var_a, var_a}));
 
     EXPECT_EQ(simulation.run(), sim_termination::solved);
     const expr::functor& whnf_a = std::get<expr::functor>(bind_map.whnf(var_a)->content);
-    EXPECT_EQ(whnf_a.id, atoms.id("abc"));
+    EXPECT_EQ(whnf_a.id, functors.id("abc"));
     EXPECT_TRUE(whnf_a.args.empty());
     EXPECT_THAT(derive_resolution_lemma.derive_resolution_lemma().get_resolutions(),
         UnorderedElementsAre(rl0));
@@ -1019,11 +1019,11 @@ TEST_F(SimIntegrationTest, RunDeactivatesRuleOneWhenDecisionResolvesRuleZeroOnMh
      *   1: f(def, 123).
      * setup: decision picks rule 0; MHU constrain on rule 0 should purge rule 1 head
      */
-    expr abc{expr::functor{atoms.id("abc"), {}}};
-    expr def{expr::functor{atoms.id("def"), {}}};
-    expr _123{expr::functor{atoms.id("123"), {}}};
-    expr head0{expr::functor{atoms.id("f"), {&abc, &_123}}};
-    expr head1{expr::functor{atoms.id("f"), {&def, &_123}}};
+    expr abc{expr::functor{functors.id("abc"), {}}};
+    expr def{expr::functor{functors.id("def"), {}}};
+    expr _123{expr::functor{functors.id("123"), {}}};
+    expr head0{expr::functor{functors.id("f"), {&abc, &_123}}};
+    expr head1{expr::functor{functors.id("f"), {&def, &_123}}};
     database.push(rule{&head0, {}});
     database.push(rule{&head1, {}});
 
@@ -1050,15 +1050,15 @@ TEST_F(SimIntegrationTest, RunDeactivatesRuleOneWhenDecisionResolvesRuleZeroOnMh
     simulation.set_up();
     const expr* var_a = saved_expr_pool_.make_var(seq.next());
     const expr* var_b = saved_expr_pool_.make_var(seq.next());
-    initial_goals.push(saved_expr_pool_.make_functor(atoms.id("f"), {var_a, var_b}));
+    initial_goals.push(saved_expr_pool_.make_functor(functors.id("f"), {var_a, var_b}));
 
     EXPECT_EQ(simulation.run(), sim_termination::solved);
     EXPECT_THAT(derive_resolution_lemma.derive_resolution_lemma().get_resolutions(),
         UnorderedElementsAre(rl0));
     const expr::functor& whnf_a = std::get<expr::functor>(bind_map.whnf(var_a)->content);
     const expr::functor& whnf_b = std::get<expr::functor>(bind_map.whnf(var_b)->content);
-    EXPECT_EQ(whnf_a.id, atoms.id("abc"));
-    EXPECT_EQ(whnf_b.id, atoms.id("123"));
+    EXPECT_EQ(whnf_a.id, functors.id("abc"));
+    EXPECT_EQ(whnf_b.id, functors.id("123"));
     simulation.tear_down();
 }
 
@@ -1074,13 +1074,13 @@ TEST_F(SimIntegrationTest, RunDeactivatesCrossGoalCandidateOnMhuIncompatibleHead
      *   3: g(abc).
      * setup: both goals non-unit; decision picks goal 0 rule 0; MHU eliminates goal 1 rule 2
      */
-    expr abc{expr::functor{atoms.id("abc"), {}}};
-    expr xyz{expr::functor{atoms.id("xyz"), {}}};
-    expr def{expr::functor{atoms.id("def"), {}}};
-    expr head_f0{expr::functor{atoms.id("f"), {&abc}}};
-    expr head_f1{expr::functor{atoms.id("f"), {&xyz}}};
-    expr head_g2{expr::functor{atoms.id("g"), {&def}}};
-    expr head_g3{expr::functor{atoms.id("g"), {&abc}}};
+    expr abc{expr::functor{functors.id("abc"), {}}};
+    expr xyz{expr::functor{functors.id("xyz"), {}}};
+    expr def{expr::functor{functors.id("def"), {}}};
+    expr head_f0{expr::functor{functors.id("f"), {&abc}}};
+    expr head_f1{expr::functor{functors.id("f"), {&xyz}}};
+    expr head_g2{expr::functor{functors.id("g"), {&def}}};
+    expr head_g3{expr::functor{functors.id("g"), {&abc}}};
     database.push(rule{&head_f0, {}});
     database.push(rule{&head_f1, {}});
     database.push(rule{&head_g2, {}});
@@ -1104,12 +1104,12 @@ TEST_F(SimIntegrationTest, RunDeactivatesCrossGoalCandidateOnMhuIncompatibleHead
     simulation simulation{stack.loc, kDefaultMaxResolutions};
     simulation.set_up();
     const expr* var_a = saved_expr_pool_.make_var(seq.next());
-    initial_goals.push(saved_expr_pool_.make_functor(atoms.id("f"), {var_a}));
-    initial_goals.push(saved_expr_pool_.make_functor(atoms.id("g"), {var_a}));
+    initial_goals.push(saved_expr_pool_.make_functor(functors.id("f"), {var_a}));
+    initial_goals.push(saved_expr_pool_.make_functor(functors.id("g"), {var_a}));
 
     EXPECT_EQ(simulation.run(), sim_termination::solved);
     const expr::functor& whnf_a = std::get<expr::functor>(bind_map.whnf(var_a)->content);
-    EXPECT_EQ(whnf_a.id, atoms.id("abc"));
+    EXPECT_EQ(whnf_a.id, functors.id("abc"));
     simulation.tear_down();
 }
 
@@ -1120,9 +1120,9 @@ TEST_F(SimIntegrationTest, RunReturnsSolvedBindingVarInNestedFunctorArgWithoutDe
      * database:
      *   0: f(g(abc)).
      */
-    expr abc{expr::functor{atoms.id("abc"), {}}};
-    expr g_abc{expr::functor{atoms.id("g"), {&abc}}};
-    expr head{expr::functor{atoms.id("f"), {&g_abc}}};
+    expr abc{expr::functor{functors.id("abc"), {}}};
+    expr g_abc{expr::functor{functors.id("g"), {&abc}}};
+    expr head{expr::functor{functors.id("f"), {&g_abc}}};
     database.push(rule{&head, {}});
 
     i_bind_map& bind_map = stack.loc.locate<i_bind_map>();
@@ -1136,12 +1136,12 @@ TEST_F(SimIntegrationTest, RunReturnsSolvedBindingVarInNestedFunctorArgWithoutDe
     simulation.set_up();
     const uint32_t idx_a = seq.next();
     const expr* var_a = saved_expr_pool_.make_var(idx_a);
-    const expr* g_a = saved_expr_pool_.make_functor(atoms.id("g"), {var_a});
-    initial_goals.push(saved_expr_pool_.make_functor(atoms.id("f"), {g_a}));
+    const expr* g_a = saved_expr_pool_.make_functor(functors.id("g"), {var_a});
+    initial_goals.push(saved_expr_pool_.make_functor(functors.id("f"), {g_a}));
 
     EXPECT_EQ(simulation.run(), sim_termination::solved);
     const expr::functor& whnf_a = std::get<expr::functor>(bind_map.whnf(var_a)->content);
-    EXPECT_EQ(whnf_a.id, atoms.id("abc"));
+    EXPECT_EQ(whnf_a.id, functors.id("abc"));
     EXPECT_TRUE(whnf_a.args.empty());
     simulation.tear_down();
 }
@@ -1153,9 +1153,9 @@ TEST_F(SimIntegrationTest, RunReturnsSolvedBindingRemainingVarWhenGoalIsPartiall
      * database:
      *   0: f(abc, 123).
      */
-    expr abc{expr::functor{atoms.id("abc"), {}}};
-    expr _123{expr::functor{atoms.id("123"), {}}};
-    expr head{expr::functor{atoms.id("f"), {&abc, &_123}}};
+    expr abc{expr::functor{functors.id("abc"), {}}};
+    expr _123{expr::functor{functors.id("123"), {}}};
+    expr head{expr::functor{functors.id("f"), {&abc, &_123}}};
     database.push(rule{&head, {}});
 
     i_bind_map& bind_map = stack.loc.locate<i_bind_map>();
@@ -1167,14 +1167,14 @@ TEST_F(SimIntegrationTest, RunReturnsSolvedBindingRemainingVarWhenGoalIsPartiall
 
     simulation simulation{stack.loc, kDefaultMaxResolutions};
     simulation.set_up();
-    const expr* abc_pool = saved_expr_pool_.make_functor(atoms.id("abc"), {});
+    const expr* abc_pool = saved_expr_pool_.make_functor(functors.id("abc"), {});
     const uint32_t idx_b = seq.next();
     const expr* var_b = saved_expr_pool_.make_var(idx_b);
-    initial_goals.push(saved_expr_pool_.make_functor(atoms.id("f"), {abc_pool, var_b}));
+    initial_goals.push(saved_expr_pool_.make_functor(functors.id("f"), {abc_pool, var_b}));
 
     EXPECT_EQ(simulation.run(), sim_termination::solved);
     const expr::functor& whnf_b = std::get<expr::functor>(bind_map.whnf(var_b)->content);
-    EXPECT_EQ(whnf_b.id, atoms.id("123"));
+    EXPECT_EQ(whnf_b.id, functors.id("123"));
     EXPECT_TRUE(whnf_b.args.empty());
     simulation.tear_down();
 }
@@ -1189,11 +1189,11 @@ TEST_F(SimIntegrationTest, RunReturnsConflictedWhenClauseBodyGoalHasNoUnifyingFa
      */
     expr rule_var_a{expr::var{0}};
     expr rule_var_b{expr::var{1}};
-    expr abc{expr::functor{atoms.id("abc"), {}}};
-    expr f_head{expr::functor{atoms.id("f"), {&rule_var_a, &rule_var_b}}};
-    expr g_body{expr::functor{atoms.id("g"), {&rule_var_a}}};
-    expr h_body{expr::functor{atoms.id("h"), {&rule_var_b}}};
-    expr g_head{expr::functor{atoms.id("g"), {&abc}}};
+    expr abc{expr::functor{functors.id("abc"), {}}};
+    expr f_head{expr::functor{functors.id("f"), {&rule_var_a, &rule_var_b}}};
+    expr g_body{expr::functor{functors.id("g"), {&rule_var_a}}};
+    expr h_body{expr::functor{functors.id("h"), {&rule_var_b}}};
+    expr g_head{expr::functor{functors.id("g"), {&abc}}};
     database.push(rule{&f_head, {&g_body, &h_body}});
     database.push(rule{&g_head, {}});
 
@@ -1207,7 +1207,7 @@ TEST_F(SimIntegrationTest, RunReturnsConflictedWhenClauseBodyGoalHasNoUnifyingFa
     simulation.set_up();
     const expr* var_a = saved_expr_pool_.make_var(seq.next());
     const expr* var_b = saved_expr_pool_.make_var(seq.next());
-    initial_goals.push(saved_expr_pool_.make_functor(atoms.id("f"), {var_a, var_b}));
+    initial_goals.push(saved_expr_pool_.make_functor(functors.id("f"), {var_a, var_b}));
 
     EXPECT_EQ(simulation.run(), sim_termination::conflicted);
     simulation.tear_down();
@@ -1224,13 +1224,13 @@ TEST_F(SimIntegrationTest, RunReturnsConflictedWhenClauseBodyFactMismatchesGroun
      */
     expr rule_var_a{expr::var{0}};
     expr rule_var_b{expr::var{1}};
-    expr abc{expr::functor{atoms.id("abc"), {}}};
-    expr two_three_four{expr::functor{atoms.id("234"), {}}};
-    expr f_head{expr::functor{atoms.id("f"), {&rule_var_a, &rule_var_b}}};
-    expr g_body{expr::functor{atoms.id("g"), {&rule_var_a}}};
-    expr h_body{expr::functor{atoms.id("h"), {&rule_var_b}}};
-    expr g_head{expr::functor{atoms.id("g"), {&abc}}};
-    expr h_head{expr::functor{atoms.id("h"), {&two_three_four}}};
+    expr abc{expr::functor{functors.id("abc"), {}}};
+    expr two_three_four{expr::functor{functors.id("234"), {}}};
+    expr f_head{expr::functor{functors.id("f"), {&rule_var_a, &rule_var_b}}};
+    expr g_body{expr::functor{functors.id("g"), {&rule_var_a}}};
+    expr h_body{expr::functor{functors.id("h"), {&rule_var_b}}};
+    expr g_head{expr::functor{functors.id("g"), {&abc}}};
+    expr h_head{expr::functor{functors.id("h"), {&two_three_four}}};
     database.push(rule{&f_head, {&g_body, &h_body}});
     database.push(rule{&g_head, {}});
     database.push(rule{&h_head, {}});
@@ -1241,8 +1241,8 @@ TEST_F(SimIntegrationTest, RunReturnsConflictedWhenClauseBodyFactMismatchesGroun
 
     simulation simulation{stack.loc, kDefaultMaxResolutions};
     simulation.set_up();
-    initial_goals.push(saved_expr_pool_.make_functor(atoms.id("f"),
-        {saved_expr_pool_.make_functor(atoms.id("abc"), {}), saved_expr_pool_.make_functor(atoms.id("123"), {})}));
+    initial_goals.push(saved_expr_pool_.make_functor(functors.id("f"),
+        {saved_expr_pool_.make_functor(functors.id("abc"), {}), saved_expr_pool_.make_functor(functors.id("123"), {})}));
 
     EXPECT_EQ(simulation.run(), sim_termination::conflicted);
     simulation.tear_down();
@@ -1261,15 +1261,15 @@ TEST_F(SimIntegrationTest, RunReturnsSolvedAfterDecisionOnBodyGoalWithTwoFacts) 
      */
     expr rule_var_a{expr::var{0}};
     expr rule_var_b{expr::var{1}};
-    expr abc{expr::functor{atoms.id("abc"), {}}};
-    expr xyz{expr::functor{atoms.id("xyz"), {}}};
-    expr _123{expr::functor{atoms.id("123"), {}}};
-    expr f_head{expr::functor{atoms.id("f"), {&rule_var_a, &rule_var_b}}};
-    expr g_body{expr::functor{atoms.id("g"), {&rule_var_a}}};
-    expr h_body{expr::functor{atoms.id("h"), {&rule_var_b}}};
-    expr g_head0{expr::functor{atoms.id("g"), {&abc}}};
-    expr g_head1{expr::functor{atoms.id("g"), {&xyz}}};
-    expr h_head{expr::functor{atoms.id("h"), {&_123}}};
+    expr abc{expr::functor{functors.id("abc"), {}}};
+    expr xyz{expr::functor{functors.id("xyz"), {}}};
+    expr _123{expr::functor{functors.id("123"), {}}};
+    expr f_head{expr::functor{functors.id("f"), {&rule_var_a, &rule_var_b}}};
+    expr g_body{expr::functor{functors.id("g"), {&rule_var_a}}};
+    expr h_body{expr::functor{functors.id("h"), {&rule_var_b}}};
+    expr g_head0{expr::functor{functors.id("g"), {&abc}}};
+    expr g_head1{expr::functor{functors.id("g"), {&xyz}}};
+    expr h_head{expr::functor{functors.id("h"), {&_123}}};
     database.push(rule{&f_head, {&g_body, &h_body}});
     database.push(rule{&g_head0, {}});
     database.push(rule{&g_head1, {}});
@@ -1298,14 +1298,14 @@ TEST_F(SimIntegrationTest, RunReturnsSolvedAfterDecisionOnBodyGoalWithTwoFacts) 
     simulation.set_up();
     const expr* var_a = saved_expr_pool_.make_var(seq.next());
     const expr* var_b = saved_expr_pool_.make_var(seq.next());
-    initial_goals.push(saved_expr_pool_.make_functor(atoms.id("f"), {var_a, var_b}));
+    initial_goals.push(saved_expr_pool_.make_functor(functors.id("f"), {var_a, var_b}));
 
     EXPECT_EQ(simulation.run(), sim_termination::solved);
     const expr::functor& whnf_a = std::get<expr::functor>(bind_map.whnf(var_a)->content);
     const expr::functor& whnf_b = std::get<expr::functor>(bind_map.whnf(var_b)->content);
-    EXPECT_EQ(whnf_a.id, atoms.id("xyz"));
+    EXPECT_EQ(whnf_a.id, functors.id("xyz"));
     EXPECT_TRUE(whnf_a.args.empty());
-    EXPECT_EQ(whnf_b.id, atoms.id("123"));
+    EXPECT_EQ(whnf_b.id, functors.id("123"));
     EXPECT_TRUE(whnf_b.args.empty());
     simulation.tear_down();
 }
@@ -1320,14 +1320,14 @@ TEST_F(SimIntegrationTest, RunReturnsSolvedWhenSharedVarLinksTwoGoalsWithoutDeci
      *   1: g(456, 789).
      *   2: g(123, xyz).
      */
-    expr abc{expr::functor{atoms.id("abc"), {}}};
-    expr _123{expr::functor{atoms.id("123"), {}}};
-    expr _456{expr::functor{atoms.id("456"), {}}};
-    expr _789{expr::functor{atoms.id("789"), {}}};
-    expr xyz{expr::functor{atoms.id("xyz"), {}}};
-    expr f_head{expr::functor{atoms.id("f"), {&abc, &_123}}};
-    expr g_head0{expr::functor{atoms.id("g"), {&_456, &_789}}};
-    expr g_head1{expr::functor{atoms.id("g"), {&_123, &xyz}}};
+    expr abc{expr::functor{functors.id("abc"), {}}};
+    expr _123{expr::functor{functors.id("123"), {}}};
+    expr _456{expr::functor{functors.id("456"), {}}};
+    expr _789{expr::functor{functors.id("789"), {}}};
+    expr xyz{expr::functor{functors.id("xyz"), {}}};
+    expr f_head{expr::functor{functors.id("f"), {&abc, &_123}}};
+    expr g_head0{expr::functor{functors.id("g"), {&_456, &_789}}};
+    expr g_head1{expr::functor{functors.id("g"), {&_123, &xyz}}};
     database.push(rule{&f_head, {}});
     database.push(rule{&g_head0, {}});
     database.push(rule{&g_head1, {}});
@@ -1344,18 +1344,18 @@ TEST_F(SimIntegrationTest, RunReturnsSolvedWhenSharedVarLinksTwoGoalsWithoutDeci
     const expr* var_a = saved_expr_pool_.make_var(seq.next());
     const expr* var_b = saved_expr_pool_.make_var(seq.next());
     const expr* var_c = saved_expr_pool_.make_var(seq.next());
-    initial_goals.push(saved_expr_pool_.make_functor(atoms.id("f"), {var_a, var_b}));
-    initial_goals.push(saved_expr_pool_.make_functor(atoms.id("g"), {var_b, var_c}));
+    initial_goals.push(saved_expr_pool_.make_functor(functors.id("f"), {var_a, var_b}));
+    initial_goals.push(saved_expr_pool_.make_functor(functors.id("g"), {var_b, var_c}));
 
     EXPECT_EQ(simulation.run(), sim_termination::solved);
     const expr::functor& whnf_a = std::get<expr::functor>(bind_map.whnf(var_a)->content);
     const expr::functor& whnf_b = std::get<expr::functor>(bind_map.whnf(var_b)->content);
     const expr::functor& whnf_c = std::get<expr::functor>(bind_map.whnf(var_c)->content);
-    EXPECT_EQ(whnf_a.id, atoms.id("abc"));
+    EXPECT_EQ(whnf_a.id, functors.id("abc"));
     EXPECT_TRUE(whnf_a.args.empty());
-    EXPECT_EQ(whnf_b.id, atoms.id("123"));
+    EXPECT_EQ(whnf_b.id, functors.id("123"));
     EXPECT_TRUE(whnf_b.args.empty());
-    EXPECT_EQ(whnf_c.id, atoms.id("xyz"));
+    EXPECT_EQ(whnf_c.id, functors.id("xyz"));
     EXPECT_TRUE(whnf_c.args.empty());
     simulation.tear_down();
 }
@@ -1372,15 +1372,15 @@ TEST_F(SimIntegrationTest, RunReturnsSolvedWhenCdclAndMhuReduceGoalGCandidatesWi
      *   3: g(ghi, jkl).
      * setup: CDCL avoidance {{goal f, rule 0}, {goal g, rule 1}}
      */
-    expr abc{expr::functor{atoms.id("abc"), {}}};
-    expr def{expr::functor{atoms.id("def"), {}}};
-    expr ghi{expr::functor{atoms.id("ghi"), {}}};
-    expr _xyz{expr::functor{atoms.id("xyz"), {}}};
-    expr _jkl{expr::functor{atoms.id("jkl"), {}}};
-    expr f_head{expr::functor{atoms.id("f"), {}}};
-    expr g_head1{expr::functor{atoms.id("g"), {&abc, &_xyz}}};
-    expr g_head2{expr::functor{atoms.id("g"), {&def, &_xyz}}};
-    expr g_head3{expr::functor{atoms.id("g"), {&ghi, &_jkl}}};
+    expr abc{expr::functor{functors.id("abc"), {}}};
+    expr def{expr::functor{functors.id("def"), {}}};
+    expr ghi{expr::functor{functors.id("ghi"), {}}};
+    expr _xyz{expr::functor{functors.id("xyz"), {}}};
+    expr _jkl{expr::functor{functors.id("jkl"), {}}};
+    expr f_head{expr::functor{functors.id("f"), {}}};
+    expr g_head1{expr::functor{functors.id("g"), {&abc, &_xyz}}};
+    expr g_head2{expr::functor{functors.id("g"), {&def, &_xyz}}};
+    expr g_head3{expr::functor{functors.id("g"), {&ghi, &_jkl}}};
     database.push(rule{&f_head, {}});
     database.push(rule{&g_head1, {}});
     database.push(rule{&g_head2, {}});
@@ -1414,15 +1414,15 @@ TEST_F(SimIntegrationTest, RunReturnsSolvedWhenCdclAndMhuReduceGoalGCandidatesWi
     simulation simulation{stack.loc, kDefaultMaxResolutions};
     simulation.set_up();
     const expr* var_a = saved_expr_pool_.make_var(seq.next());
-    const expr* xyz = saved_expr_pool_.make_functor(atoms.id("xyz"), {});
-    initial_goals.push(saved_expr_pool_.make_functor(atoms.id("f"), {}));
-    initial_goals.push(saved_expr_pool_.make_functor(atoms.id("g"), {var_a, xyz}));
+    const expr* xyz = saved_expr_pool_.make_functor(functors.id("xyz"), {});
+    initial_goals.push(saved_expr_pool_.make_functor(functors.id("f"), {}));
+    initial_goals.push(saved_expr_pool_.make_functor(functors.id("g"), {var_a, xyz}));
 
     EXPECT_EQ(simulation.run(), sim_termination::solved);
     EXPECT_THAT(derive_resolution_lemma.derive_resolution_lemma().get_resolutions(),
         UnorderedElementsAre(rl_f_0, rl_g_2));
     const expr::functor& whnf_a = std::get<expr::functor>(bind_map.whnf(var_a)->content);
-    EXPECT_EQ(whnf_a.id, atoms.id("def"));
+    EXPECT_EQ(whnf_a.id, functors.id("def"));
     EXPECT_TRUE(whnf_a.args.empty());
     simulation.tear_down();
 }
@@ -1439,13 +1439,13 @@ TEST_F(SimIntegrationTest, RunReturnsSolvedBuildingListOfFiveAbcWithoutDecisions
     expr rule_l{expr::var{0}};
     expr rule_a{expr::var{1}};
     expr rule_t{expr::var{2}};
-    expr zero{expr::functor{atoms.id("zero"), {}}};
-    expr nil{expr::functor{atoms.id("nil"), {}}};
-    expr head0{expr::functor{atoms.id("make_list"), {&zero, &rule_ignored, &nil}}};
-    expr suc_l{expr::functor{atoms.id("suc"), {&rule_l}}};
-    expr cons_at{expr::functor{atoms.id("cons"), {&rule_a, &rule_t}}};
-    expr head1{expr::functor{atoms.id("make_list"), {&suc_l, &rule_a, &cons_at}}};
-    expr body1{expr::functor{atoms.id("make_list"), {&rule_l, &rule_a, &rule_t}}};
+    expr zero{expr::functor{functors.id("zero"), {}}};
+    expr nil{expr::functor{functors.id("nil"), {}}};
+    expr head0{expr::functor{functors.id("make_list"), {&zero, &rule_ignored, &nil}}};
+    expr suc_l{expr::functor{functors.id("suc"), {&rule_l}}};
+    expr cons_at{expr::functor{functors.id("cons"), {&rule_a, &rule_t}}};
+    expr head1{expr::functor{functors.id("make_list"), {&suc_l, &rule_a, &cons_at}}};
+    expr body1{expr::functor{functors.id("make_list"), {&rule_l, &rule_a, &rule_t}}};
     database.push(rule{&head0, {}});
     database.push(rule{&head1, {&body1}});
 
@@ -1460,29 +1460,29 @@ TEST_F(SimIntegrationTest, RunReturnsSolvedBuildingListOfFiveAbcWithoutDecisions
     static constexpr int kListLength = 5;
     simulation simulation{stack.loc, kMaxResolutions};
     simulation.set_up();
-    const expr* zero_pool = saved_expr_pool_.make_functor(atoms.id("zero"), {});
+    const expr* zero_pool = saved_expr_pool_.make_functor(functors.id("zero"), {});
     const expr* len = zero_pool;
     for (int i = 0; i < kListLength; ++i)
-        len = saved_expr_pool_.make_functor(atoms.id("suc"), {len});
-    const expr* abc = saved_expr_pool_.make_functor(atoms.id("abc"), {});
+        len = saved_expr_pool_.make_functor(functors.id("suc"), {len});
+    const expr* abc = saved_expr_pool_.make_functor(functors.id("abc"), {});
     const expr* var_r = saved_expr_pool_.make_var(seq.next());
-    initial_goals.push(saved_expr_pool_.make_functor(atoms.id("make_list"), {len, abc, var_r}));
+    initial_goals.push(saved_expr_pool_.make_functor(functors.id("make_list"), {len, abc, var_r}));
 
     EXPECT_EQ(simulation.run(), sim_termination::solved);
 
     const expr* tail = bind_map.whnf(var_r);
     for (int i = 0; i < kListLength; ++i) {
         const expr::functor& cell = std::get<expr::functor>(tail->content);
-        ASSERT_EQ(cell.id, atoms.id("cons"));
+        ASSERT_EQ(cell.id, functors.id("cons"));
         ASSERT_EQ(cell.args.size(), 2u);
         const expr::functor& head =
             std::get<expr::functor>(bind_map.whnf(cell.args[0])->content);
-        EXPECT_EQ(head.id, atoms.id("abc"));
+        EXPECT_EQ(head.id, functors.id("abc"));
         EXPECT_TRUE(head.args.empty());
         tail = bind_map.whnf(cell.args[1]);
     }
     const expr::functor& nil_tail = std::get<expr::functor>(bind_map.whnf(tail)->content);
-    EXPECT_EQ(nil_tail.id, atoms.id("nil"));
+    EXPECT_EQ(nil_tail.id, functors.id("nil"));
     EXPECT_TRUE(nil_tail.args.empty());
 
     simulation.tear_down();
@@ -1505,12 +1505,12 @@ TEST_F(SimIntegrationTest, RunReturnsConflictedWhenCdclEliminationExhaustsSiblin
      * setup: two avoidances sharing f/0 eliminate both g candidates on constrain(f/0);
      *        conflict mirror of RunReturnsSolvedAfterCdclAvoidanceForcesG1RuleThree
      */
-    expr goal_f{expr::functor{atoms.id("f"), {}}};
-    expr goal_g{expr::functor{atoms.id("g"), {}}};
-    expr f_head0{expr::functor{atoms.id("f"), {}}};
-    expr f_head1{expr::functor{atoms.id("f"), {}}};
-    expr g_head0{expr::functor{atoms.id("g"), {}}};
-    expr g_head1{expr::functor{atoms.id("g"), {}}};
+    expr goal_f{expr::functor{functors.id("f"), {}}};
+    expr goal_g{expr::functor{functors.id("g"), {}}};
+    expr f_head0{expr::functor{functors.id("f"), {}}};
+    expr f_head1{expr::functor{functors.id("f"), {}}};
+    expr g_head0{expr::functor{functors.id("g"), {}}};
+    expr g_head1{expr::functor{functors.id("g"), {}}};
     initial_goals.push(&goal_f);
     initial_goals.push(&goal_g);
     database.push(rule{&f_head0, {}});
@@ -1560,9 +1560,9 @@ TEST_F(SimIntegrationTest, RunReturnsDepthExceededOnSelfRecursiveClause) {
      * database:
      *   0: f :- f.
      */
-    expr goal{expr::functor{atoms.id("f"), {}}};
-    expr f_head{expr::functor{atoms.id("f"), {}}};
-    expr f_body{expr::functor{atoms.id("f"), {}}};
+    expr goal{expr::functor{functors.id("f"), {}}};
+    expr f_head{expr::functor{functors.id("f"), {}}};
+    expr f_body{expr::functor{functors.id("f"), {}}};
     initial_goals.push(&goal);
     database.push(rule{&f_head, {&f_body}});
 
@@ -1588,12 +1588,12 @@ TEST_F(SimIntegrationTest, RunReturnsSolvedAfterTwoSequentialDecisions) {
      *   3: g.
      * setup: second decision on g after f branch committed
      */
-    expr goal_f{expr::functor{atoms.id("f"), {}}};
-    expr goal_g{expr::functor{atoms.id("g"), {}}};
-    expr f_head0{expr::functor{atoms.id("f"), {}}};
-    expr f_head1{expr::functor{atoms.id("f"), {}}};
-    expr g_head0{expr::functor{atoms.id("g"), {}}};
-    expr g_head1{expr::functor{atoms.id("g"), {}}};
+    expr goal_f{expr::functor{functors.id("f"), {}}};
+    expr goal_g{expr::functor{functors.id("g"), {}}};
+    expr f_head0{expr::functor{functors.id("f"), {}}};
+    expr f_head1{expr::functor{functors.id("f"), {}}};
+    expr g_head0{expr::functor{functors.id("g"), {}}};
+    expr g_head1{expr::functor{functors.id("g"), {}}};
     initial_goals.push(&goal_f);
     initial_goals.push(&goal_g);
     database.push(rule{&f_head0, {}});
@@ -1643,12 +1643,12 @@ TEST_F(SimIntegrationTest, RunReturnsSolvedWhenCdclUnitElimForcesRemainingCandid
      *   3: g.
      * setup: CDCL unit elim g/2 on constrain(f/0) leaves g unit on g/3; no second decision
      */
-    expr goal_f{expr::functor{atoms.id("f"), {}}};
-    expr goal_g{expr::functor{atoms.id("g"), {}}};
-    expr f_head0{expr::functor{atoms.id("f"), {}}};
-    expr f_head1{expr::functor{atoms.id("f"), {}}};
-    expr g_head0{expr::functor{atoms.id("g"), {}}};
-    expr g_head1{expr::functor{atoms.id("g"), {}}};
+    expr goal_f{expr::functor{functors.id("f"), {}}};
+    expr goal_g{expr::functor{functors.id("g"), {}}};
+    expr f_head0{expr::functor{functors.id("f"), {}}};
+    expr f_head1{expr::functor{functors.id("f"), {}}};
+    expr g_head0{expr::functor{functors.id("g"), {}}};
+    expr g_head1{expr::functor{functors.id("g"), {}}};
     initial_goals.push(&goal_f);
     initial_goals.push(&goal_g);
     database.push(rule{&f_head0, {}});
@@ -1698,12 +1698,12 @@ TEST_F(SimIntegrationTest, RunReturnsConflictedAfterPartialProgressWhenDerivedGo
      * setup: shared A; f/h and g(xyz) cannot both succeed — conflict after unit resolution(s)
      */
     expr rule_var_a{expr::var{0}};
-    expr abc{expr::functor{atoms.id("abc"), {}}};
-    expr xyz{expr::functor{atoms.id("xyz"), {}}};
-    expr f_head{expr::functor{atoms.id("f"), {&rule_var_a}}};
-    expr h_body{expr::functor{atoms.id("h"), {&rule_var_a}}};
-    expr h_head{expr::functor{atoms.id("h"), {&abc}}};
-    expr g_head{expr::functor{atoms.id("g"), {&xyz}}};
+    expr abc{expr::functor{functors.id("abc"), {}}};
+    expr xyz{expr::functor{functors.id("xyz"), {}}};
+    expr f_head{expr::functor{functors.id("f"), {&rule_var_a}}};
+    expr h_body{expr::functor{functors.id("h"), {&rule_var_a}}};
+    expr h_head{expr::functor{functors.id("h"), {&abc}}};
+    expr g_head{expr::functor{functors.id("g"), {&xyz}}};
     database.push(rule{&f_head, {&h_body}});
     database.push(rule{&h_head, {}});
     database.push(rule{&g_head, {}});
@@ -1717,8 +1717,8 @@ TEST_F(SimIntegrationTest, RunReturnsConflictedAfterPartialProgressWhenDerivedGo
     simulation simulation{stack.loc, kDefaultMaxResolutions};
     simulation.set_up();
     const expr* var_a = saved_expr_pool_.make_var(seq.next());
-    initial_goals.push(saved_expr_pool_.make_functor(atoms.id("f"), {var_a}));
-    initial_goals.push(saved_expr_pool_.make_functor(atoms.id("g"), {var_a}));
+    initial_goals.push(saved_expr_pool_.make_functor(functors.id("f"), {var_a}));
+    initial_goals.push(saved_expr_pool_.make_functor(functors.id("g"), {var_a}));
 
     EXPECT_EQ(simulation.run(), sim_termination::conflicted);
     simulation.tear_down();
@@ -1754,7 +1754,7 @@ TEST_F(SimIntegrationTest, TearDownLifecycleRestoresTrailDepthAfterEmptyRun) {
 }
 
 TEST_F(SimIntegrationTest, TearDownLifecycleRestoresTrailDepthAfterConflictedRun) {
-  expr goal{expr::functor{atoms.id("f"), {}}};
+  expr goal{expr::functor{functors.id("f"), {}}};
   initial_goals.push(&goal);
 
   const size_t depth_before = stack.early.trail_.depth();
@@ -1770,9 +1770,9 @@ TEST_F(SimIntegrationTest, TearDownLifecycleRestoresTrailDepthAfterConflictedRun
 }
 
 TEST_F(SimIntegrationTest, TearDownLifecycleRestoresTrailDepthAfterDepthExceededRun) {
-  expr goal{expr::functor{atoms.id("f"), {}}};
-  expr f_head{expr::functor{atoms.id("f"), {}}};
-  expr f_body{expr::functor{atoms.id("f"), {}}};
+  expr goal{expr::functor{functors.id("f"), {}}};
+  expr f_head{expr::functor{functors.id("f"), {}}};
+  expr f_body{expr::functor{functors.id("f"), {}}};
   initial_goals.push(&goal);
   database.push(rule{&f_head, {&f_body}});
 
@@ -1790,9 +1790,9 @@ TEST_F(SimIntegrationTest, TearDownLifecycleRestoresTrailDepthAfterDepthExceeded
 }
 
 TEST_F(SimIntegrationTest, TearDownLifecycleClearsEphemeralStoresAfterSolvedRun) {
-  expr abc{expr::functor{atoms.id("abc"), {}}};
-  expr _123{expr::functor{atoms.id("123"), {}}};
-  expr head{expr::functor{atoms.id("f"), {&abc, &_123}}};
+  expr abc{expr::functor{functors.id("abc"), {}}};
+  expr _123{expr::functor{functors.id("123"), {}}};
+  expr head{expr::functor{functors.id("f"), {&abc, &_123}}};
   database.push(rule{&head, {}});
 
   i_bind_map& bind_map = stack.loc.locate<i_bind_map>();
@@ -1802,7 +1802,7 @@ TEST_F(SimIntegrationTest, TearDownLifecycleClearsEphemeralStoresAfterSolvedRun)
 
   const uint32_t idx_test = seq.next();
   const expr* test_var = saved_expr_pool_.make_var(idx_test);
-  initial_goals.push(saved_expr_pool_.make_functor(atoms.id("f"), {test_var, saved_expr_pool_.make_var(seq.next())}));
+  initial_goals.push(saved_expr_pool_.make_functor(functors.id("f"), {test_var, saved_expr_pool_.make_var(seq.next())}));
 
   EXPECT_CALL(stack.decision_generator, generate()).Times(0);
 
@@ -1826,13 +1826,13 @@ TEST_F(SimIntegrationTest, TearDownLifecycleRetainsInFrameExprPoolGrowth) {
   expr rule_l{expr::var{0}};
   expr rule_a{expr::var{1}};
   expr rule_t{expr::var{2}};
-  expr zero{expr::functor{atoms.id("zero"), {}}};
-  expr nil{expr::functor{atoms.id("nil"), {}}};
-  expr head0{expr::functor{atoms.id("make_list"), {&zero, &rule_ignored, &nil}}};
-  expr suc_l{expr::functor{atoms.id("suc"), {&rule_l}}};
-  expr cons_at{expr::functor{atoms.id("cons"), {&rule_a, &rule_t}}};
-  expr head1{expr::functor{atoms.id("make_list"), {&suc_l, &rule_a, &cons_at}}};
-  expr body1{expr::functor{atoms.id("make_list"), {&rule_l, &rule_a, &rule_t}}};
+  expr zero{expr::functor{functors.id("zero"), {}}};
+  expr nil{expr::functor{functors.id("nil"), {}}};
+  expr head0{expr::functor{functors.id("make_list"), {&zero, &rule_ignored, &nil}}};
+  expr suc_l{expr::functor{functors.id("suc"), {&rule_l}}};
+  expr cons_at{expr::functor{functors.id("cons"), {&rule_a, &rule_t}}};
+  expr head1{expr::functor{functors.id("make_list"), {&suc_l, &rule_a, &cons_at}}};
+  expr body1{expr::functor{functors.id("make_list"), {&rule_l, &rule_a, &rule_t}}};
   database.push(rule{&head0, {}});
   database.push(rule{&head1, {&body1}});
 
@@ -1848,13 +1848,13 @@ TEST_F(SimIntegrationTest, TearDownLifecycleRetainsInFrameExprPoolGrowth) {
 
   simulation simulation{stack.loc, kMaxResolutions};
   simulation.set_up();
-  const expr* zero_pool = saved_expr_pool_.make_functor(atoms.id("zero"), {});
+  const expr* zero_pool = saved_expr_pool_.make_functor(functors.id("zero"), {});
   const expr* len = zero_pool;
   for (int i = 0; i < kListLength; ++i)
-    len = saved_expr_pool_.make_functor(atoms.id("suc"), {len});
-  const expr* abc = saved_expr_pool_.make_functor(atoms.id("abc"), {});
+    len = saved_expr_pool_.make_functor(functors.id("suc"), {len});
+  const expr* abc = saved_expr_pool_.make_functor(functors.id("abc"), {});
   const expr* var_r = saved_expr_pool_.make_var(seq.next());
-  initial_goals.push(saved_expr_pool_.make_functor(atoms.id("make_list"), {len, abc, var_r}));
+  initial_goals.push(saved_expr_pool_.make_functor(functors.id("make_list"), {len, abc, var_r}));
 
   EXPECT_EQ(simulation.run(), sim_termination::solved);
   EXPECT_GT(stack.loc.locate<i_get_expr_count>().size(), expr_before);
@@ -1865,10 +1865,10 @@ TEST_F(SimIntegrationTest, TearDownLifecycleRetainsInFrameExprPoolGrowth) {
 
 TEST_F(SimIntegrationTest, TearDownLifecycleResetsVarSequencerWhenIncrementedInFrame) {
   expr rule_var{expr::var{0}};
-  expr abc{expr::functor{atoms.id("abc"), {}}};
-  expr f_head{expr::functor{atoms.id("f"), {&rule_var}}};
-  expr g_body{expr::functor{atoms.id("g"), {&rule_var}}};
-  expr g_head{expr::functor{atoms.id("g"), {&abc}}};
+  expr abc{expr::functor{functors.id("abc"), {}}};
+  expr f_head{expr::functor{functors.id("f"), {&rule_var}}};
+  expr g_body{expr::functor{functors.id("g"), {&rule_var}}};
+  expr g_head{expr::functor{functors.id("g"), {&abc}}};
   database.push(rule{&f_head, {&g_body}});
   database.push(rule{&g_head, {}});
 
@@ -1885,7 +1885,7 @@ TEST_F(SimIntegrationTest, TearDownLifecycleResetsVarSequencerWhenIncrementedInF
   simulation simulation{stack.loc, kDefaultMaxResolutions};
   simulation.set_up();
   const expr* var_in_frame = saved_expr_pool_.make_var(seq.next());
-  initial_goals.push(saved_expr_pool_.make_functor(atoms.id("f"), {var_in_frame}));
+  initial_goals.push(saved_expr_pool_.make_functor(functors.id("f"), {var_in_frame}));
 
   EXPECT_EQ(simulation.run(), sim_termination::solved);
   simulation.tear_down();
@@ -1894,12 +1894,12 @@ TEST_F(SimIntegrationTest, TearDownLifecycleResetsVarSequencerWhenIncrementedInF
 }
 
 TEST_F(SimIntegrationTest, BaseFrameCdclLearnSurvivesLifecycleTearDown) {
-  expr goal_f{expr::functor{atoms.id("f"), {}}};
-  expr goal_g{expr::functor{atoms.id("g"), {}}};
-  expr f_head0{expr::functor{atoms.id("f"), {}}};
-  expr f_head1{expr::functor{atoms.id("f"), {}}};
-  expr g_head2{expr::functor{atoms.id("g"), {}}};
-  expr g_head3{expr::functor{atoms.id("g"), {}}};
+  expr goal_f{expr::functor{functors.id("f"), {}}};
+  expr goal_g{expr::functor{functors.id("g"), {}}};
+  expr f_head0{expr::functor{functors.id("f"), {}}};
+  expr f_head1{expr::functor{functors.id("f"), {}}};
+  expr g_head2{expr::functor{functors.id("g"), {}}};
+  expr g_head3{expr::functor{functors.id("g"), {}}};
   initial_goals.push(&goal_f);
   initial_goals.push(&goal_g);
   database.push(rule{&f_head0, {}});
@@ -1949,9 +1949,9 @@ TEST_F(SimIntegrationTest, BaseFrameCdclLearnSurvivesLifecycleTearDown) {
 }
 
 TEST_F(SimIntegrationTest, IdenticalSimCycleLifecycleRunsCleanAfterTearDown) {
-  expr abc{expr::functor{atoms.id("abc"), {}}};
-  expr _123{expr::functor{atoms.id("123"), {}}};
-  expr head{expr::functor{atoms.id("f"), {&abc, &_123}}};
+  expr abc{expr::functor{functors.id("abc"), {}}};
+  expr _123{expr::functor{functors.id("123"), {}}};
+  expr head{expr::functor{functors.id("f"), {&abc, &_123}}};
   database.push(rule{&head, {}});
 
   i_bind_map& bind_map = stack.loc.locate<i_bind_map>();
@@ -1966,7 +1966,7 @@ TEST_F(SimIntegrationTest, IdenticalSimCycleLifecycleRunsCleanAfterTearDown) {
   const uint32_t idx_b = seq.next();
   const expr* var_a = saved_expr_pool_.make_var(idx_a);
   const expr* var_b = saved_expr_pool_.make_var(idx_b);
-  const expr* goal = saved_expr_pool_.make_functor(atoms.id("f"), {var_a, var_b});
+  const expr* goal = saved_expr_pool_.make_functor(functors.id("f"), {var_a, var_b});
   initial_goals.push(goal);
 
   EXPECT_CALL(stack.decision_generator, generate()).Times(0);
@@ -2005,13 +2005,13 @@ TEST_F(SimIntegrationTest, RunReturnsSolvedStressListOfTwentyAbcWithoutDecisions
   expr rule_l{expr::var{0}};
   expr rule_a{expr::var{1}};
   expr rule_t{expr::var{2}};
-  expr zero{expr::functor{atoms.id("zero"), {}}};
-  expr nil{expr::functor{atoms.id("nil"), {}}};
-  expr head0{expr::functor{atoms.id("make_list"), {&zero, &rule_ignored, &nil}}};
-  expr suc_l{expr::functor{atoms.id("suc"), {&rule_l}}};
-  expr cons_at{expr::functor{atoms.id("cons"), {&rule_a, &rule_t}}};
-  expr head1{expr::functor{atoms.id("make_list"), {&suc_l, &rule_a, &cons_at}}};
-  expr body1{expr::functor{atoms.id("make_list"), {&rule_l, &rule_a, &rule_t}}};
+  expr zero{expr::functor{functors.id("zero"), {}}};
+  expr nil{expr::functor{functors.id("nil"), {}}};
+  expr head0{expr::functor{functors.id("make_list"), {&zero, &rule_ignored, &nil}}};
+  expr suc_l{expr::functor{functors.id("suc"), {&rule_l}}};
+  expr cons_at{expr::functor{functors.id("cons"), {&rule_a, &rule_t}}};
+  expr head1{expr::functor{functors.id("make_list"), {&suc_l, &rule_a, &cons_at}}};
+  expr body1{expr::functor{functors.id("make_list"), {&rule_l, &rule_a, &rule_t}}};
   database.push(rule{&head0, {}});
   database.push(rule{&head1, {&body1}});
 
@@ -2026,27 +2026,27 @@ TEST_F(SimIntegrationTest, RunReturnsSolvedStressListOfTwentyAbcWithoutDecisions
 
   simulation simulation{stack.loc, kMaxResolutions};
   simulation.set_up();
-  const expr* zero_pool = saved_expr_pool_.make_functor(atoms.id("zero"), {});
-  const expr* len = make_suc_n(atoms, make_functor, zero_pool, kListLength);
-  const expr* abc = saved_expr_pool_.make_functor(atoms.id("abc"), {});
+  const expr* zero_pool = saved_expr_pool_.make_functor(functors.id("zero"), {});
+  const expr* len = make_suc_n(functors, make_functor, zero_pool, kListLength);
+  const expr* abc = saved_expr_pool_.make_functor(functors.id("abc"), {});
   const expr* var_r = saved_expr_pool_.make_var(seq.next());
-  initial_goals.push(saved_expr_pool_.make_functor(atoms.id("make_list"), {len, abc, var_r}));
+  initial_goals.push(saved_expr_pool_.make_functor(functors.id("make_list"), {len, abc, var_r}));
 
   EXPECT_EQ(simulation.run(), sim_termination::solved);
 
   const expr* tail = bind_map.whnf(var_r);
   for (int i = 0; i < kListLength; ++i) {
     const expr::functor& cell = std::get<expr::functor>(tail->content);
-    ASSERT_EQ(cell.id, k_cons_atom_id);
+    ASSERT_EQ(cell.id, k_cons_functor_id);
     ASSERT_EQ(cell.args.size(), 2u);
     const expr::functor& head_cell =
         std::get<expr::functor>(bind_map.whnf(cell.args[0])->content);
-    EXPECT_EQ(head_cell.id, atoms.id("abc"));
+    EXPECT_EQ(head_cell.id, functors.id("abc"));
     EXPECT_TRUE(head_cell.args.empty());
     tail = bind_map.whnf(cell.args[1]);
   }
   const expr::functor& nil_tail = std::get<expr::functor>(bind_map.whnf(tail)->content);
-  EXPECT_EQ(nil_tail.id, atoms.id("nil"));
+  EXPECT_EQ(nil_tail.id, functors.id("nil"));
   EXPECT_TRUE(nil_tail.args.empty());
   simulation.tear_down();
 }
@@ -2055,16 +2055,16 @@ TEST_F(SimIntegrationTest, RunReturnsSolvedStressLinearChainClauseDepthTwenty) {
   static constexpr size_t kChainDepth = 20;
   static constexpr size_t kMaxResolutions = 64;
 
-  expr ground{expr::functor{atoms.id("abc"), {}}};
+  expr ground{expr::functor{functors.id("abc"), {}}};
   std::vector<expr> storage;
-  chain_clause_db(atoms, database, storage, "chain", kChainDepth, &ground);
+  chain_clause_db(functors, database, storage, "chain", kChainDepth, &ground);
 
   i_get_resolution_count& get_resolution_count =
       stack.loc.locate<i_get_resolution_count>();
 
   EXPECT_CALL(stack.decision_generator, generate()).Times(0);
 
-  expr goal{expr::functor{atoms.id("chain0"), {&ground}}};
+  expr goal{expr::functor{functors.id("chain0"), {&ground}}};
   initial_goals.push(&goal);
 
   simulation simulation{stack.loc, kMaxResolutions};
@@ -2077,13 +2077,13 @@ TEST_F(SimIntegrationTest, RunReturnsSolvedStressLinearChainClauseDepthTwenty) {
 
 TEST_F(SimIntegrationTest, RunReturnsSolvedStressEvenOddPeanoGoal) {
   expr rule_x{expr::var{0}};
-  expr zero{expr::functor{atoms.id("zero"), {}}};
-  expr suc_x{expr::functor{atoms.id("suc"), {&rule_x}}};
-  expr even_head0{expr::functor{atoms.id("even"), {&zero}}};
-  expr odd_head{expr::functor{atoms.id("odd"), {&suc_x}}};
-  expr even_head1{expr::functor{atoms.id("even"), {&suc_x}}};
-  expr odd_body{expr::functor{atoms.id("odd"), {&rule_x}}};
-  expr even_body{expr::functor{atoms.id("even"), {&rule_x}}};
+  expr zero{expr::functor{functors.id("zero"), {}}};
+  expr suc_x{expr::functor{functors.id("suc"), {&rule_x}}};
+  expr even_head0{expr::functor{functors.id("even"), {&zero}}};
+  expr odd_head{expr::functor{functors.id("odd"), {&suc_x}}};
+  expr even_head1{expr::functor{functors.id("even"), {&suc_x}}};
+  expr odd_body{expr::functor{functors.id("odd"), {&rule_x}}};
+  expr even_body{expr::functor{functors.id("even"), {&rule_x}}};
   database.push(rule{&even_head0, {}});
   database.push(rule{&odd_head, {&even_body}});
   database.push(rule{&even_head1, {&odd_body}});
@@ -2096,8 +2096,8 @@ TEST_F(SimIntegrationTest, RunReturnsSolvedStressEvenOddPeanoGoal) {
 
   simulation simulation{stack.loc, kMaxResolutions};
   simulation.set_up();
-  const expr* zero_pool = saved_expr_pool_.make_functor(atoms.id("zero"), {});
-  const expr* goal_even = saved_expr_pool_.make_functor(atoms.id("even"), {make_suc_n(atoms, make_functor, zero_pool, kSucDepth)});
+  const expr* zero_pool = saved_expr_pool_.make_functor(functors.id("zero"), {});
+  const expr* goal_even = saved_expr_pool_.make_functor(functors.id("even"), {make_suc_n(functors, make_functor, zero_pool, kSucDepth)});
   initial_goals.push(goal_even);
 
   EXPECT_EQ(simulation.run(), sim_termination::solved);
@@ -2107,12 +2107,12 @@ TEST_F(SimIntegrationTest, RunReturnsSolvedStressEvenOddPeanoGoal) {
 TEST_F(SimIntegrationTest, RunReturnsSolvedStressDeepNestedFunctorTower) {
   static constexpr int kTowerDepth = 8;
   static constexpr size_t kMaxResolutions = 64;
-  expr zero{expr::functor{atoms.id("zero"), {}}};
+  expr zero{expr::functor{functors.id("zero"), {}}};
   expr rule_x{expr::var{0}};
-  expr suc_wrap{expr::functor{atoms.id("wrap"), {&rule_x}}};
-  expr unwrap_head{expr::functor{atoms.id("unwrap"), {&suc_wrap}}};
-  expr unwrap_body{expr::functor{atoms.id("unwrap"), {&rule_x}}};
-  expr unwrap_zero{expr::functor{atoms.id("unwrap"), {&zero}}};
+  expr suc_wrap{expr::functor{functors.id("wrap"), {&rule_x}}};
+  expr unwrap_head{expr::functor{functors.id("unwrap"), {&suc_wrap}}};
+  expr unwrap_body{expr::functor{functors.id("unwrap"), {&rule_x}}};
+  expr unwrap_zero{expr::functor{functors.id("unwrap"), {&zero}}};
   database.push(rule{&unwrap_head, {&unwrap_body}});
   database.push(rule{&unwrap_zero, {}});
 
@@ -2126,8 +2126,8 @@ TEST_F(SimIntegrationTest, RunReturnsSolvedStressDeepNestedFunctorTower) {
   simulation.set_up();
   const expr* inner = &zero;
   for (int i = 0; i < kTowerDepth; ++i)
-    inner = saved_expr_pool_.make_functor(atoms.id("wrap"), {inner});
-  const expr* goal_expr = saved_expr_pool_.make_functor(atoms.id("unwrap"), {inner});
+    inner = saved_expr_pool_.make_functor(functors.id("wrap"), {inner});
+  const expr* goal_expr = saved_expr_pool_.make_functor(functors.id("unwrap"), {inner});
   initial_goals.push(goal_expr);
 
   EXPECT_EQ(simulation.run(), sim_termination::solved);
@@ -2137,19 +2137,19 @@ TEST_F(SimIntegrationTest, RunReturnsSolvedStressDeepNestedFunctorTower) {
 
 TEST_F(SimIntegrationTest, RunReturnsSolvedStressLongSharedVarChainWithoutDecisions) {
   static constexpr int kChainGoals = 6;
-  expr t0{expr::functor{atoms.id("t0"), {}}};
-  expr t1{expr::functor{atoms.id("t1"), {}}};
-  expr t2{expr::functor{atoms.id("t2"), {}}};
-  expr t3{expr::functor{atoms.id("t3"), {}}};
-  expr t4{expr::functor{atoms.id("t4"), {}}};
-  expr t5{expr::functor{atoms.id("t5"), {}}};
-  expr t6{expr::functor{atoms.id("t6"), {}}};
-  expr g0_head{expr::functor{atoms.id("g0"), {&t0, &t1}}};
-  expr g1_head{expr::functor{atoms.id("g1"), {&t1, &t2}}};
-  expr g2_head{expr::functor{atoms.id("g2"), {&t2, &t3}}};
-  expr g3_head{expr::functor{atoms.id("g3"), {&t3, &t4}}};
-  expr g4_head{expr::functor{atoms.id("g4"), {&t4, &t5}}};
-  expr g5_head{expr::functor{atoms.id("g5"), {&t5, &t6}}};
+  expr t0{expr::functor{functors.id("t0"), {}}};
+  expr t1{expr::functor{functors.id("t1"), {}}};
+  expr t2{expr::functor{functors.id("t2"), {}}};
+  expr t3{expr::functor{functors.id("t3"), {}}};
+  expr t4{expr::functor{functors.id("t4"), {}}};
+  expr t5{expr::functor{functors.id("t5"), {}}};
+  expr t6{expr::functor{functors.id("t6"), {}}};
+  expr g0_head{expr::functor{functors.id("g0"), {&t0, &t1}}};
+  expr g1_head{expr::functor{functors.id("g1"), {&t1, &t2}}};
+  expr g2_head{expr::functor{functors.id("g2"), {&t2, &t3}}};
+  expr g3_head{expr::functor{functors.id("g3"), {&t3, &t4}}};
+  expr g4_head{expr::functor{functors.id("g4"), {&t4, &t5}}};
+  expr g5_head{expr::functor{functors.id("g5"), {&t5, &t6}}};
   database.push(rule{&g0_head, {}});
   database.push(rule{&g1_head, {}});
   database.push(rule{&g2_head, {}});
@@ -2171,23 +2171,23 @@ TEST_F(SimIntegrationTest, RunReturnsSolvedStressLongSharedVarChainWithoutDecisi
     vars.push_back(saved_expr_pool_.make_var(seq.next()));
   for (int i = 0; i < kChainGoals; ++i)
     initial_goals.push(saved_expr_pool_.make_functor(
-        atoms.id(("g" + std::to_string(i)).c_str()), {vars[i], vars[i + 1]}));
+        functors.id(("g" + std::to_string(i)).c_str()), {vars[i], vars[i + 1]}));
 
   EXPECT_EQ(simulation.run(), sim_termination::solved);
   const expr::functor& whnf_end =
       std::get<expr::functor>(bind_map.whnf(vars[kChainGoals])->content);
-  EXPECT_EQ(whnf_end.id, atoms.id("t6"));
+  EXPECT_EQ(whnf_end.id, functors.id("t6"));
   EXPECT_TRUE(whnf_end.args.empty());
   simulation.tear_down();
 }
 
 TEST_F(SimIntegrationTest, RunReturnsSolvedStressDiamondSharedVarWithoutDecisions) {
-  expr abc{expr::functor{atoms.id("abc"), {}}};
-  expr _123{expr::functor{atoms.id("123"), {}}};
-  expr xyz{expr::functor{atoms.id("xyz"), {}}};
-  expr f_head{expr::functor{atoms.id("f"), {&abc, &xyz}}};
-  expr g_head{expr::functor{atoms.id("g"), {&abc, &_123}}};
-  expr h_head{expr::functor{atoms.id("h"), {&_123, &xyz}}};
+  expr abc{expr::functor{functors.id("abc"), {}}};
+  expr _123{expr::functor{functors.id("123"), {}}};
+  expr xyz{expr::functor{functors.id("xyz"), {}}};
+  expr f_head{expr::functor{functors.id("f"), {&abc, &xyz}}};
+  expr g_head{expr::functor{functors.id("g"), {&abc, &_123}}};
+  expr h_head{expr::functor{functors.id("h"), {&_123, &xyz}}};
   database.push(rule{&f_head, {}});
   database.push(rule{&g_head, {}});
   database.push(rule{&h_head, {}});
@@ -2204,15 +2204,15 @@ TEST_F(SimIntegrationTest, RunReturnsSolvedStressDiamondSharedVarWithoutDecision
   const expr* var_a = saved_expr_pool_.make_var(seq.next());
   const expr* var_b = saved_expr_pool_.make_var(seq.next());
   const expr* var_c = saved_expr_pool_.make_var(seq.next());
-  initial_goals.push(saved_expr_pool_.make_functor(atoms.id("f"), {var_a, var_c}));
-  initial_goals.push(saved_expr_pool_.make_functor(atoms.id("g"), {var_a, var_b}));
-  initial_goals.push(saved_expr_pool_.make_functor(atoms.id("h"), {var_b, var_c}));
+  initial_goals.push(saved_expr_pool_.make_functor(functors.id("f"), {var_a, var_c}));
+  initial_goals.push(saved_expr_pool_.make_functor(functors.id("g"), {var_a, var_b}));
+  initial_goals.push(saved_expr_pool_.make_functor(functors.id("h"), {var_b, var_c}));
 
   EXPECT_EQ(simulation.run(), sim_termination::solved);
   const expr::functor& whnf_a = std::get<expr::functor>(bind_map.whnf(var_a)->content);
   const expr::functor& whnf_c = std::get<expr::functor>(bind_map.whnf(var_c)->content);
-  EXPECT_EQ(whnf_a.id, atoms.id("abc"));
-  EXPECT_EQ(whnf_c.id, atoms.id("xyz"));
+  EXPECT_EQ(whnf_a.id, functors.id("abc"));
+  EXPECT_EQ(whnf_c.id, functors.id("xyz"));
   simulation.tear_down();
 }
 
@@ -2220,19 +2220,19 @@ TEST_F(SimIntegrationTest, RunReturnsSolvedStressWideClauseTreeWithoutDecisions)
   // Base tree: f:-g,h; g:-i,j; h:-i,j; facts i,j. Wide: extra clause k:-i,j,l; l. fact.
   static constexpr size_t kMinResolutions = 7;
 
-  expr goal_f{expr::functor{atoms.id("f"), {}}};
-  expr f_head{expr::functor{atoms.id("f"), {}}};
-  expr g_body{expr::functor{atoms.id("g"), {}}};
-  expr h_body{expr::functor{atoms.id("h"), {}}};
-  expr g_head{expr::functor{atoms.id("g"), {}}};
-  expr h_head{expr::functor{atoms.id("h"), {}}};
-  expr k_head{expr::functor{atoms.id("k"), {}}};
-  expr l_body{expr::functor{atoms.id("l"), {}}};
-  expr i_body{expr::functor{atoms.id("i"), {}}};
-  expr j_body{expr::functor{atoms.id("j"), {}}};
-  expr i_head{expr::functor{atoms.id("i"), {}}};
-  expr j_head{expr::functor{atoms.id("j"), {}}};
-  expr l_head{expr::functor{atoms.id("l"), {}}};
+  expr goal_f{expr::functor{functors.id("f"), {}}};
+  expr f_head{expr::functor{functors.id("f"), {}}};
+  expr g_body{expr::functor{functors.id("g"), {}}};
+  expr h_body{expr::functor{functors.id("h"), {}}};
+  expr g_head{expr::functor{functors.id("g"), {}}};
+  expr h_head{expr::functor{functors.id("h"), {}}};
+  expr k_head{expr::functor{functors.id("k"), {}}};
+  expr l_body{expr::functor{functors.id("l"), {}}};
+  expr i_body{expr::functor{functors.id("i"), {}}};
+  expr j_body{expr::functor{functors.id("j"), {}}};
+  expr i_head{expr::functor{functors.id("i"), {}}};
+  expr j_head{expr::functor{functors.id("j"), {}}};
+  expr l_head{expr::functor{functors.id("l"), {}}};
   initial_goals.push(&goal_f);
   database.push(rule{&f_head, {&g_body, &h_body}});
   database.push(rule{&g_head, {&i_body, &j_body}});
@@ -2256,18 +2256,18 @@ TEST_F(SimIntegrationTest, RunReturnsSolvedStressWideClauseTreeWithoutDecisions)
 
 TEST_F(SimIntegrationTest, RunReturnsSolvedStressMultipleAvoidancesSeveralDecisions) {
   // Four duplicate-rule goals; four scripted decisions. Outcome contract only — not call order.
-  expr goal_f{expr::functor{atoms.id("f"), {}}};
-  expr goal_g{expr::functor{atoms.id("g"), {}}};
-  expr goal_h{expr::functor{atoms.id("h"), {}}};
-  expr goal_k{expr::functor{atoms.id("k"), {}}};
-  expr f0{expr::functor{atoms.id("f"), {}}};
-  expr f1{expr::functor{atoms.id("f"), {}}};
-  expr g0{expr::functor{atoms.id("g"), {}}};
-  expr g1{expr::functor{atoms.id("g"), {}}};
-  expr h0{expr::functor{atoms.id("h"), {}}};
-  expr h1{expr::functor{atoms.id("h"), {}}};
-  expr k0{expr::functor{atoms.id("k"), {}}};
-  expr k1{expr::functor{atoms.id("k"), {}}};
+  expr goal_f{expr::functor{functors.id("f"), {}}};
+  expr goal_g{expr::functor{functors.id("g"), {}}};
+  expr goal_h{expr::functor{functors.id("h"), {}}};
+  expr goal_k{expr::functor{functors.id("k"), {}}};
+  expr f0{expr::functor{functors.id("f"), {}}};
+  expr f1{expr::functor{functors.id("f"), {}}};
+  expr g0{expr::functor{functors.id("g"), {}}};
+  expr g1{expr::functor{functors.id("g"), {}}};
+  expr h0{expr::functor{functors.id("h"), {}}};
+  expr h1{expr::functor{functors.id("h"), {}}};
+  expr k0{expr::functor{functors.id("k"), {}}};
+  expr k1{expr::functor{functors.id("k"), {}}};
   initial_goals.push(&goal_f);
   initial_goals.push(&goal_g);
   initial_goals.push(&goal_h);
@@ -2317,22 +2317,22 @@ TEST_F(SimIntegrationTest, RunReturnsSolvedStressMultipleAvoidancesSeveralDecisi
 }
 
 TEST_F(SimIntegrationTest, RunReturnsSolvedStressCdclMhuManyGroundHeadsOnSharedVar) {
-  expr abc{expr::functor{atoms.id("abc"), {}}};
-  expr def{expr::functor{atoms.id("def"), {}}};
-  expr ghi{expr::functor{atoms.id("ghi"), {}}};
-  expr jkl{expr::functor{atoms.id("jkl"), {}}};
-  expr mno{expr::functor{atoms.id("mno"), {}}};
-  expr pqr{expr::functor{atoms.id("pqr"), {}}};
-  expr stu{expr::functor{atoms.id("stu"), {}}};
-  expr _xyz{expr::functor{atoms.id("xyz"), {}}};
-  expr f_head0{expr::functor{atoms.id("f"), {}}};
-  expr f_head1{expr::functor{atoms.id("f"), {}}};
-  expr g1{expr::functor{atoms.id("g"), {&abc, &_xyz, &pqr}}};
-  expr g2{expr::functor{atoms.id("g"), {&def, &_xyz, &pqr}}};
-  expr g3{expr::functor{atoms.id("g"), {&ghi, &_xyz, &pqr}}};
-  expr g4{expr::functor{atoms.id("g"), {&jkl, &_xyz, &pqr}}};
-  expr g5{expr::functor{atoms.id("g"), {&mno, &_xyz, &pqr}}};
-  expr g_bad{expr::functor{atoms.id("g"), {&ghi, &jkl, &stu}}};
+  expr abc{expr::functor{functors.id("abc"), {}}};
+  expr def{expr::functor{functors.id("def"), {}}};
+  expr ghi{expr::functor{functors.id("ghi"), {}}};
+  expr jkl{expr::functor{functors.id("jkl"), {}}};
+  expr mno{expr::functor{functors.id("mno"), {}}};
+  expr pqr{expr::functor{functors.id("pqr"), {}}};
+  expr stu{expr::functor{functors.id("stu"), {}}};
+  expr _xyz{expr::functor{functors.id("xyz"), {}}};
+  expr f_head0{expr::functor{functors.id("f"), {}}};
+  expr f_head1{expr::functor{functors.id("f"), {}}};
+  expr g1{expr::functor{functors.id("g"), {&abc, &_xyz, &pqr}}};
+  expr g2{expr::functor{functors.id("g"), {&def, &_xyz, &pqr}}};
+  expr g3{expr::functor{functors.id("g"), {&ghi, &_xyz, &pqr}}};
+  expr g4{expr::functor{functors.id("g"), {&jkl, &_xyz, &pqr}}};
+  expr g5{expr::functor{functors.id("g"), {&mno, &_xyz, &pqr}}};
+  expr g_bad{expr::functor{functors.id("g"), {&ghi, &jkl, &stu}}};
   database.push(rule{&f_head0, {}});
   database.push(rule{&f_head1, {}});
   database.push(rule{&g1, {}});
@@ -2372,17 +2372,17 @@ TEST_F(SimIntegrationTest, RunReturnsSolvedStressCdclMhuManyGroundHeadsOnSharedV
   const expr* var_a = saved_expr_pool_.make_var(seq.next());
   const expr* var_b = saved_expr_pool_.make_var(seq.next());
   const expr* var_c = saved_expr_pool_.make_var(seq.next());
-  const expr* xyz = saved_expr_pool_.make_functor(atoms.id("xyz"), {});
-  initial_goals.push(saved_expr_pool_.make_functor(atoms.id("f"), {}));
-  initial_goals.push(saved_expr_pool_.make_functor(atoms.id("g"), {var_a, var_b, var_c}));
+  const expr* xyz = saved_expr_pool_.make_functor(functors.id("xyz"), {});
+  initial_goals.push(saved_expr_pool_.make_functor(functors.id("f"), {}));
+  initial_goals.push(saved_expr_pool_.make_functor(functors.id("g"), {var_a, var_b, var_c}));
 
   EXPECT_EQ(simulation.run(), sim_termination::solved);
   const expr::functor& whnf_a = std::get<expr::functor>(bind_map.whnf(var_a)->content);
   const expr::functor& whnf_b = std::get<expr::functor>(bind_map.whnf(var_b)->content);
   const expr::functor& whnf_c = std::get<expr::functor>(bind_map.whnf(var_c)->content);
-  EXPECT_EQ(whnf_b.id, atoms.id("xyz"));
-  EXPECT_EQ(whnf_c.id, atoms.id("pqr"));
-  EXPECT_EQ(whnf_a.id, atoms.id("def"));
+  EXPECT_EQ(whnf_b.id, functors.id("xyz"));
+  EXPECT_EQ(whnf_c.id, functors.id("pqr"));
+  EXPECT_EQ(whnf_a.id, functors.id("def"));
   (void)xyz;
   simulation.tear_down();
 }
@@ -2391,11 +2391,11 @@ TEST_F(SimIntegrationTest, RunReturnsDepthExceededStressOnDeepLinearChainWithinB
   static constexpr size_t kMaxResolutions = 8;
   static constexpr size_t kChainDepth = 20;
 
-  expr ground{expr::functor{atoms.id("abc"), {}}};
+  expr ground{expr::functor{functors.id("abc"), {}}};
   std::vector<expr> storage;
-  chain_clause_db(atoms, database, storage, "chain", kChainDepth, &ground);
+  chain_clause_db(functors, database, storage, "chain", kChainDepth, &ground);
 
-  expr goal{expr::functor{atoms.id("chain0"), {&ground}}};
+  expr goal{expr::functor{functors.id("chain0"), {&ground}}};
   initial_goals.push(&goal);
 
   EXPECT_CALL(stack.decision_generator, generate()).Times(0);

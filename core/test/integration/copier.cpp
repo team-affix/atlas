@@ -9,11 +9,11 @@
 #include "interfaces/i_var_sequencer.hpp"
 #include "interfaces/i_make_functor.hpp"
 #include "interfaces/i_make_var.hpp"
-#include "atom_fixture.hpp"
+#include "functor_fixture.hpp"
 
 struct CopierIntegrationTest : public ::testing::Test {
 protected:
-    test_atoms atoms;
+    test_functors functors;
     void SetUp() override {
         loc.bind_as<i_log_to_current_trail_frame>(t);
         vs.emplace(loc, 0);
@@ -41,8 +41,8 @@ static uint32_t var_index(const expr* e) {
 }
 
 TEST_F(CopierIntegrationTest, CopyNestedFunctorRemapsAllVarsInRealPool) {
-    expr inner{expr::functor{atoms.id("g"), {&var0}}};
-    expr outer{expr::functor{atoms.id("f"), {&inner, &var1}}};
+    expr inner{expr::functor{functors.id("g"), {&var0}}};
+    expr outer{expr::functor{functors.id("f"), {&inner, &var1}}};
     translation_map map;
     const expr* p = cp->copy(&outer, map);
     const expr::functor& f = std::get<expr::functor>(p->content);
@@ -51,7 +51,7 @@ TEST_F(CopierIntegrationTest, CopyNestedFunctorRemapsAllVarsInRealPool) {
     EXPECT_EQ(var_index(f.args[1]), 3);
     EXPECT_EQ(map.at(0), 2);
     EXPECT_EQ(map.at(1), 3);
-    EXPECT_EQ(p, pool->make_functor(atoms.id("f"), {pool->make_functor(atoms.id("g"), {pool->make_var(2)}), pool->make_var(3)}));
+    EXPECT_EQ(p, pool->make_functor(functors.id("f"), {pool->make_functor(functors.id("g"), {pool->make_var(2)}), pool->make_var(3)}));
 }
 
 TEST_F(CopierIntegrationTest, CopySeparateCallsAdvanceSequencer) {

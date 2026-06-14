@@ -3,7 +3,7 @@
 #include <gtest/gtest.h>
 #include "infrastructure/unifier.hpp"
 #include "infrastructure/bind_map.hpp"
-#include "atom_fixture.hpp"
+#include "functor_fixture.hpp"
 
 namespace {
 
@@ -22,7 +22,7 @@ bool run_unify(unifier& u, const expr* lhs, const expr* rhs,
 
 struct UnifierBindMapIntegrationTest : public ::testing::Test {
 protected:
-    test_atoms atoms;
+    test_functors functors;
     void SetUp() override {
         u = std::make_unique<unifier>(bm);
     }
@@ -36,8 +36,8 @@ protected:
     expr var3{expr::var{3}};
     expr var4{expr::var{4}};
     expr var5{expr::var{5}};
-    expr func{expr::functor{atoms.id("f"), {}}};
-    expr func2{expr::functor{atoms.id("g"), {}}};
+    expr func{expr::functor{functors.id("f"), {}}};
+    expr func2{expr::functor{functors.id("g"), {}}};
 };
 
 TEST_F(UnifierBindMapIntegrationTest, UnifyVarAndFunctorBindsVarInRealBindMap) {
@@ -104,15 +104,15 @@ TEST_F(UnifierBindMapIntegrationTest, ManyScrambledUnificationsAllWhnfToOldestVa
 }
 
 TEST_F(UnifierBindMapIntegrationTest, UnifyVarToFunctorContainingSameVarFails) {
-    expr f_var0{expr::functor{atoms.id("f"), {&var0}}};
+    expr f_var0{expr::functor{functors.id("f"), {&var0}}};
     EXPECT_FALSE(run_unify(*u, &var0, &f_var0, vars_touched));
     EXPECT_TRUE(vars_touched.empty());
     EXPECT_EQ(bm.whnf(&var0), &var0);
 }
 
 TEST_F(UnifierBindMapIntegrationTest, UnifyBinaryFunctorsWithVarArgsBindsBoth) {
-    expr lhs{expr::functor{atoms.id("f"), {&var0, &var1}}};
-    expr rhs{expr::functor{atoms.id("f"), {&func, &func2}}};
+    expr lhs{expr::functor{functors.id("f"), {&var0, &var1}}};
+    expr rhs{expr::functor{functors.id("f"), {&func, &func2}}};
     EXPECT_TRUE(run_unify(*u, &lhs, &rhs, vars_touched));
     EXPECT_EQ(vars_touched, (std::unordered_set<uint32_t>{0, 1}));
     EXPECT_EQ(bm.whnf(&var0), &func);
@@ -120,8 +120,8 @@ TEST_F(UnifierBindMapIntegrationTest, UnifyBinaryFunctorsWithVarArgsBindsBoth) {
 }
 
 TEST_F(UnifierBindMapIntegrationTest, UnifyTernaryFunctorsWithVarArgsBindsAll) {
-    expr lhs{expr::functor{atoms.id("f"), {&var0, &var1, &var2}}};
-    expr rhs{expr::functor{atoms.id("f"), {&func, &func2, &func}}};
+    expr lhs{expr::functor{functors.id("f"), {&var0, &var1, &var2}}};
+    expr rhs{expr::functor{functors.id("f"), {&func, &func2, &func}}};
     EXPECT_TRUE(run_unify(*u, &lhs, &rhs, vars_touched));
     EXPECT_EQ(vars_touched, (std::unordered_set<uint32_t>{0, 1, 2}));
     EXPECT_EQ(bm.whnf(&var0), &func);
@@ -130,10 +130,10 @@ TEST_F(UnifierBindMapIntegrationTest, UnifyTernaryFunctorsWithVarArgsBindsAll) {
 }
 
 TEST_F(UnifierBindMapIntegrationTest, UnifyDepth2FunctorsBindsInnerVar) {
-    expr f_var0{expr::functor{atoms.id("f"), {&var0}}};
-    expr f_func{expr::functor{atoms.id("f"), {&func}}};
-    expr lhs{expr::functor{atoms.id("f"), {&f_var0}}};
-    expr rhs{expr::functor{atoms.id("f"), {&f_func}}};
+    expr f_var0{expr::functor{functors.id("f"), {&var0}}};
+    expr f_func{expr::functor{functors.id("f"), {&func}}};
+    expr lhs{expr::functor{functors.id("f"), {&f_var0}}};
+    expr rhs{expr::functor{functors.id("f"), {&f_func}}};
     EXPECT_TRUE(run_unify(*u, &lhs, &rhs, vars_touched));
     EXPECT_EQ(vars_touched, (std::unordered_set<uint32_t>{0}));
     EXPECT_EQ(bm.whnf(&var0), &func);

@@ -8,7 +8,7 @@
 #include "interfaces/i_var_sequencer.hpp"
 #include "interfaces/i_make_functor.hpp"
 #include "interfaces/i_make_var.hpp"
-#include "atom_fixture.hpp"
+#include "functor_fixture.hpp"
 
 using ::testing::_;
 using ::testing::ElementsAre;
@@ -27,7 +27,7 @@ struct MockExprPool
 };
 
 struct CopierUnitTest : public ::testing::Test {
-    test_atoms atoms;
+    test_functors functors;
     locator loc;
     NiceMock<MockVarSequencer> seq;
     NiceMock<MockExprPool> pool;
@@ -92,20 +92,20 @@ TEST_F(CopierUnitTest, DistinctVarsGetDistinctIndices) {
 }
 
 TEST_F(CopierUnitTest, FunctorCopyReturnsPooledNodeWithCopiedArgs) {
-    expr f{expr::functor{atoms.id("f"), {&var0, &var1}}};
+    expr f{expr::functor{functors.id("f"), {&var0, &var1}}};
     translation_map map;
 
-    EXPECT_CALL(pool, make_functor(atoms.id("f"), ElementsAre(&pooled_v0, &pooled_v1)))
+    EXPECT_CALL(pool, make_functor(functors.id("f"), ElementsAre(&pooled_v0, &pooled_v1)))
         .WillOnce(Return(&pooled_f));
 
     EXPECT_EQ(cp.copy(&f, map), &pooled_f);
 }
 
 TEST_F(CopierUnitTest, TernaryFunctorCopyCapturesAllArgs) {
-    expr f3{expr::functor{atoms.id("f"), {&var0, &var1, &var2}}};
+    expr f3{expr::functor{functors.id("f"), {&var0, &var1, &var2}}};
     translation_map map;
 
-    EXPECT_CALL(pool, make_functor(atoms.id("f"), ElementsAre(&pooled_v0, &pooled_v1, &pooled_v2)))
+    EXPECT_CALL(pool, make_functor(functors.id("f"), ElementsAre(&pooled_v0, &pooled_v1, &pooled_v2)))
         .WillOnce(Return(&pooled_f));
 
     EXPECT_EQ(cp.copy(&f3, map), &pooled_f);
@@ -113,13 +113,13 @@ TEST_F(CopierUnitTest, TernaryFunctorCopyCapturesAllArgs) {
 }
 
 TEST_F(CopierUnitTest, NestedFunctorCopyUsesInnerPooledArg) {
-    expr g{expr::functor{atoms.id("g"), {&var0}}};
-    expr f{expr::functor{atoms.id("f"), {&g}}};
+    expr g{expr::functor{functors.id("g"), {&var0}}};
+    expr f{expr::functor{functors.id("f"), {&g}}};
     translation_map map;
 
-    EXPECT_CALL(pool, make_functor(atoms.id("g"), ElementsAre(&pooled_v0)))
+    EXPECT_CALL(pool, make_functor(functors.id("g"), ElementsAre(&pooled_v0)))
         .WillOnce(Return(&pooled_g));
-    EXPECT_CALL(pool, make_functor(atoms.id("f"), ElementsAre(&pooled_g)))
+    EXPECT_CALL(pool, make_functor(functors.id("f"), ElementsAre(&pooled_g)))
         .WillOnce(Return(&pooled_f));
 
     EXPECT_EQ(cp.copy(&f, map), &pooled_f);

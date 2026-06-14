@@ -2,11 +2,11 @@
 #include <optional>
 #include "infrastructure/expr_pool.hpp"
 #include "infrastructure/trail.hpp"
-#include "atom_fixture.hpp"
+#include "functor_fixture.hpp"
 
 struct ExprPoolIntegrationTest : public ::testing::Test {
 protected:
-    test_atoms atoms;
+    test_functors functors;
     void SetUp() override {
         pool.emplace();
     }
@@ -78,7 +78,7 @@ TEST_F(ExprPoolIntegrationTest, MultipleInternsInFramePersistAfterPop) {
     t.push();
     pool->make_var(0);
     pool->make_var(1);
-    pool->make_functor(atoms.id("f"), {});
+    pool->make_functor(functors.id("f"), {});
     EXPECT_EQ(pool->size(), 3u);
     t.pop();
     EXPECT_EQ(pool->size(), 3u);
@@ -89,7 +89,7 @@ TEST_F(ExprPoolIntegrationTest, FunctorInternedInFramePersistsAfterPop) {
     EXPECT_EQ(pool->size(), 1u);
 
     t.push();
-    pool->make_functor(atoms.id("f"), {v0});
+    pool->make_functor(functors.id("f"), {v0});
     EXPECT_EQ(pool->size(), 2u);
     t.pop();
 
@@ -140,7 +140,7 @@ TEST_F(ExprPoolIntegrationTest, ImportInFramePersistsAfterPop) {
 
 TEST_F(ExprPoolIntegrationTest, ImportFunctorInFramePersistsAfterPop) {
     expr arg{expr::var{1}};
-    expr root{expr::functor{atoms.id("f"), {&arg}}};
+    expr root{expr::functor{functors.id("f"), {&arg}}};
     EXPECT_EQ(pool->size(), 0u);
 
     t.push();
