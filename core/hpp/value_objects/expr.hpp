@@ -8,7 +8,7 @@
 
 struct expr {
     struct functor {
-        std::string name;
+        uint32_t id;
         std::vector<const expr*> args;
         auto operator<=>(const functor&) const = default;
     };

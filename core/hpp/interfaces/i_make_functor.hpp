@@ -7,7 +7,7 @@
 
 struct i_make_functor {
     virtual ~i_make_functor() = default;
-    virtual const expr* make(const std::string& name, const std::vector<const expr*>& args) = 0;
+    virtual const expr* make_functor(uint32_t id, const std::vector<const expr*>& args) = 0;
 };
 
 #endif

@@ -1,12 +1,14 @@
 #include <gtest/gtest.h>
 #include "infrastructure/bind_map.hpp"
 #include "infrastructure/bind_map_factory.hpp"
+#include "atom_fixture.hpp"
 
 struct BindMapFactoryIntegrationTest : public ::testing::Test {
-    bind_map_factory bmf;
+    
+    test_atoms atoms;bind_map_factory bmf;
 
     expr var0{expr::var{0}};
-    expr func{expr::functor{"f", {}}};
+    expr func{expr::functor{atoms.id("f"), {}}};
 };
 
 TEST_F(BindMapFactoryIntegrationTest, FactoryBindMapWhnfBindsAndResolves) {

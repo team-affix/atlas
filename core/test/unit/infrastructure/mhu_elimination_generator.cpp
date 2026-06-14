@@ -15,6 +15,7 @@
 #include "interfaces/i_make_var.hpp"
 #include "interfaces/i_get_goal_candidate_rule_ids.hpp"
 #include "infrastructure/rule_id_set.hpp"
+#include "atom_fixture.hpp"
 
 using ::testing::Return;
 using ::testing::ReturnRef;
@@ -58,7 +59,7 @@ struct toggling_unifier_factory : i_unifier_factory {
 
 struct test_make_var : i_make_var {
     std::vector<expr> vars;
-    const expr* make(uint32_t idx) override {
+    const expr* make_var(uint32_t idx) override {
         while (vars.size() <= idx)
             vars.emplace_back(expr::var{static_cast<uint32_t>(vars.size())});
         return &vars[idx];
@@ -83,6 +84,8 @@ struct MockGetGoalCandidateRuleIds : public i_get_goal_candidate_rule_ids {
 };
 
 struct MhuEliminationGeneratorUnitTest : public ::testing::Test {
+    
+    test_atoms atoms;
     locator loc;
     identity_bind_map common;
     test_make_var make_var;
@@ -102,8 +105,8 @@ struct MhuEliminationGeneratorUnitTest : public ::testing::Test {
     }
 
     expr goal{expr::var{0}};
-    expr head_f{expr::functor{"f", {}}};
-    expr head_g{expr::functor{"g", {}}};
+    expr head_f{expr::functor{atoms.id("f"), {}}};
+    expr head_g{expr::functor{atoms.id("g"), {}}};
 };
 
 TEST_F(MhuEliminationGeneratorUnitTest, TryAddHeadReturnsFalseWhenUnifyFails) {

@@ -17,6 +17,7 @@
 #include "infrastructure/print_progress.hpp"
 #include "infrastructure/solve_loop.hpp"
 #include "infrastructure/trail.hpp"
+#include "infrastructure/atom_names.hpp"
 #include "infrastructure/var_names.hpp"
 
 struct ridge_command_handler {
@@ -34,7 +35,10 @@ private:
     locator parse_loc_;
     trail parse_trail_;
     var_names var_names_;
+    atom_names atom_names_;
     non_backtracking_var_sequencer parse_var_seq_;
+    std::map<std::string, uint32_t> atom_map_;
+    uint32_t next_atom_id_ = k_first_user_atom_id;
     std::optional<expr_pool> parse_pool_;
     std::optional<expr_printer> printer_;
     db database_;

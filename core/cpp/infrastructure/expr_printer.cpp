@@ -1,7 +1,10 @@
 #include "infrastructure/expr_printer.hpp"
+#include "infrastructure/atom_names.hpp"
 
 expr_printer::expr_printer(std::ostream& os, locator& loc)
-    : os(os), var_names(loc.locate<i_var_names>())
+    : os(os),
+      var_names(loc.locate<i_var_names>()),
+      atom_names(loc.locate<i_atom_names>())
 {}
 
 void expr_printer::print(const expr* e) const {
@@ -16,25 +19,27 @@ void expr_printer::print(const expr* e) const {
     if (const expr::functor* f = std::get_if<expr::functor>(&e->content)) {
         // Nullary functor (atom-like)
         if (f->args.empty()) {
-            if (f->name == "nil")
+            if (f->id == k_nil_atom_id)
                 os << "[]";
+            else if (atom_names.is_named(f->id))
+                os << atom_names.name(f->id);
             else
-                os << f->name;
+                os << "?" << f->id;
             return;
         }
 
         // List spine: cons(head, tail)
-        if (f->name == "cons" && f->args.size() == 2) {
+        if (f->id == k_cons_atom_id && f->args.size() == 2) {
             os << "[";
             print(f->args[0]);
             const expr* tail = f->args[1];
             while (true) {
                 const expr::functor* tf = std::get_if<expr::functor>(&tail->content);
-                if (tf && tf->name == "nil" && tf->args.empty()) {
+                if (tf && tf->id == k_nil_atom_id && tf->args.empty()) {
                     os << "]";
                     break;
                 }
-                if (tf && tf->name == "cons" && tf->args.size() == 2) {
+                if (tf && tf->id == k_cons_atom_id && tf->args.size() == 2) {
                     os << ", ";
                     print(tf->args[0]);
                     tail = tf->args[1];
@@ -49,7 +54,11 @@ void expr_printer::print(const expr* e) const {
         }
 
         // General functor: name(arg1, arg2, ...)
-        os << f->name << "(";
+        if (atom_names.is_named(f->id))
+            os << atom_names.name(f->id);
+        else
+            os << "?" << f->id;
+        os << "(";
         for (size_t i = 0; i < f->args.size(); ++i) {
             if (i > 0) os << ", ";
             print(f->args[i]);

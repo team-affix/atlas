@@ -13,6 +13,7 @@
 #include "interfaces/i_get_goal_expr.hpp"
 #include "interfaces/i_get_rule.hpp"
 #include "interfaces/i_link_goal_candidate.hpp"
+#include "atom_fixture.hpp"
 
 using ::testing::_;
 using ::testing::Return;
@@ -47,7 +48,8 @@ struct MockLinkGoalCandidate : public i_link_goal_candidate {
 };
 
 struct CandidateActivatorTest : public ::testing::Test {
-    static constexpr rule_id kRule = 0;
+    
+    test_atoms atoms;static constexpr rule_id kRule = 0;
     static constexpr subgoal_id kGoal = 0;
 
     locator loc;
@@ -128,8 +130,8 @@ TEST_F(CandidateActivatorTest, AcceptedTernaryHeadPassedToMhu) {
     expr a{expr::var{1}};
     expr b{expr::var{2}};
     expr c{expr::var{3}};
-    expr ternary_head{expr::functor{"h", {&a, &b, &c}}};
-    expr copied_ternary{expr::functor{"h", {&a, &b, &c}}};
+    expr ternary_head{expr::functor{atoms.id("h"), {&a, &b, &c}}};
+    expr copied_ternary{expr::functor{atoms.id("h"), {&a, &b, &c}}};
     rule ternary_rule{&ternary_head, {&body_subgoal}};
 
     EXPECT_CALL(get_rule, get(kRule)).WillOnce(Return(&ternary_rule));

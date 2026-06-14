@@ -6,6 +6,7 @@
 #include <gtest/gtest.h>
 #include <gmock/gmock.h>
 #include "infrastructure/unifier.hpp"
+#include "atom_fixture.hpp"
 
 using ::testing::IsEmpty;
 using ::testing::Return;
@@ -32,32 +33,33 @@ struct MockBindMap : public i_bind_map {
 };
 
 struct UnifierTest : public ::testing::Test {
-    MockBindMap bm;
+    
+    test_atoms atoms;MockBindMap bm;
     unifier u{bm};
     std::unordered_set<uint32_t> vars_touched;
 
     expr var0{expr::var{0}};
     expr var1{expr::var{1}};
     expr var2{expr::var{2}};
-    expr func{expr::functor{"f", {}}};
-    expr func2{expr::functor{"g", {}}};
+    expr func{expr::functor{atoms.id("f"), {}}};
+    expr func2{expr::functor{atoms.id("g"), {}}};
 
-    expr f_var0{expr::functor{"f", {&var0}}};
-    expr f_var1{expr::functor{"f", {&var1}}};
-    expr g_var0{expr::functor{"g", {&var0}}};
-    expr f_func{expr::functor{"f", {&func}}};
+    expr f_var0{expr::functor{atoms.id("f"), {&var0}}};
+    expr f_var1{expr::functor{atoms.id("f"), {&var1}}};
+    expr g_var0{expr::functor{atoms.id("g"), {&var0}}};
+    expr f_func{expr::functor{atoms.id("f"), {&func}}};
 
-    expr f_f_var0{expr::functor{"f", {&f_var0}}};
-    expr f_f_var1{expr::functor{"f", {&f_var1}}};
-    expr f_f_func{expr::functor{"f", {&f_func}}};
-    expr g_f_var0{expr::functor{"g", {&f_var0}}};
+    expr f_f_var0{expr::functor{atoms.id("f"), {&f_var0}}};
+    expr f_f_var1{expr::functor{atoms.id("f"), {&f_var1}}};
+    expr f_f_func{expr::functor{atoms.id("f"), {&f_func}}};
+    expr g_f_var0{expr::functor{atoms.id("g"), {&f_var0}}};
 
-    expr f2_var0_var1{expr::functor{"f", {&var0, &var1}}};
-    expr f2_func_func2{expr::functor{"f", {&func, &func2}}};
-    expr f2_func_var1{expr::functor{"f", {&func, &var1}}};
+    expr f2_var0_var1{expr::functor{atoms.id("f"), {&var0, &var1}}};
+    expr f2_func_func2{expr::functor{atoms.id("f"), {&func, &func2}}};
+    expr f2_func_var1{expr::functor{atoms.id("f"), {&func, &var1}}};
 
-    expr f3_var0_var1_var2{expr::functor{"f", {&var0, &var1, &var2}}};
-    expr f3_func_func2_func{expr::functor{"f", {&func, &func2, &func}}};
+    expr f3_var0_var1_var2{expr::functor{atoms.id("f"), {&var0, &var1, &var2}}};
+    expr f3_func_func2_func{expr::functor{atoms.id("f"), {&func, &func2, &func}}};
 };
 
 // ---------------------------------------------------------------------------
@@ -220,7 +222,7 @@ TEST_F(UnifierTest, UnifyFunctorsWithOneVarArgRecursivelyBindsArg) {
 }
 
 TEST_F(UnifierTest, UnifyFunctorsWithOneArgFailsIfArgsDiffer) {
-    expr f_of_func2{expr::functor{"f", {&func2}}};
+    expr f_of_func2{expr::functor{atoms.id("f"), {&func2}}};
 
     EXPECT_CALL(bm, bind).Times(0);
     EXPECT_CALL(bm, whnf(&f_func)).WillRepeatedly(Return(&f_func));
@@ -258,7 +260,7 @@ TEST_F(UnifierTest, UnifyBinaryFunctorsWithMixedArgsOnlyBindsVarArg) {
 }
 
 TEST_F(UnifierTest, UnifyBinaryFunctorsFirstArgFailsSecondNeverAttempted) {
-    expr rhs{expr::functor{"f", {&func2, &func2}}};
+    expr rhs{expr::functor{atoms.id("f"), {&func2, &func2}}};
 
     EXPECT_CALL(bm, bind).Times(0);
     EXPECT_CALL(bm, whnf(&f2_func_var1)).WillRepeatedly(Return(&f2_func_var1));
@@ -271,7 +273,7 @@ TEST_F(UnifierTest, UnifyBinaryFunctorsFirstArgFailsSecondNeverAttempted) {
 }
 
 TEST_F(UnifierTest, UnifyBinaryFunctorsSecondArgFailsAfterFirstBinds) {
-    expr lhs{expr::functor{"f", {&var0, &func}}};
+    expr lhs{expr::functor{atoms.id("f"), {&var0, &func}}};
 
     EXPECT_CALL(bm, whnf(&lhs)).WillRepeatedly(Return(&lhs));
     EXPECT_CALL(bm, whnf(&f2_func_func2)).WillRepeatedly(Return(&f2_func_func2));
@@ -301,7 +303,7 @@ TEST_F(UnifierTest, UnifyTernaryFunctorsWithThreeVarArgsBindsAllThree) {
 }
 
 TEST_F(UnifierTest, UnifyTernaryFunctorsThirdArgFailsAfterFirstTwoBind) {
-    expr lhs{expr::functor{"f", {&var0, &var1, &func2}}};
+    expr lhs{expr::functor{atoms.id("f"), {&var0, &var1, &func2}}};
 
     EXPECT_CALL(bm, whnf(&lhs)).WillRepeatedly(Return(&lhs));
     EXPECT_CALL(bm, whnf(&f3_func_func2_func)).WillRepeatedly(Return(&f3_func_func2_func));
@@ -330,7 +332,7 @@ TEST_F(UnifierTest, UnifyDepth2FunctorsRecursivelyBindsInnerVar) {
 }
 
 TEST_F(UnifierTest, UnifyDepth2FunctorsFailsOnInnerNameMismatch) {
-    expr rhs{expr::functor{"f", {&g_var0}}};
+    expr rhs{expr::functor{atoms.id("f"), {&g_var0}}};
 
     EXPECT_CALL(bm, bind).Times(0);
     EXPECT_CALL(bm, whnf(&f_f_var0)).WillRepeatedly(Return(&f_f_var0));
@@ -424,8 +426,8 @@ TEST_F(UnifierTest, UnifyVarToDepth2FunctorFailsWhenWhnfRevealsInnerVarAlias) {
 // ---------------------------------------------------------------------------
 
 TEST_F(UnifierTest, UnifyTernaryFunctorsFirstArgFailsSecondThirdNeverAttempted) {
-    expr lhs{expr::functor{"f", {&func, &var1, &var2}}};
-    expr rhs{expr::functor{"f", {&func2, &func, &func}}};
+    expr lhs{expr::functor{atoms.id("f"), {&func, &var1, &var2}}};
+    expr rhs{expr::functor{atoms.id("f"), {&func2, &func, &func}}};
 
     EXPECT_CALL(bm, bind).Times(0);
     EXPECT_CALL(bm, whnf(&lhs)).WillRepeatedly(Return(&lhs));
@@ -451,8 +453,8 @@ TEST_F(UnifierTest, UnifyBinaryFunctorsWhnfResolvesFirstArgSkipsItsBind) {
 }
 
 TEST_F(UnifierTest, UnifyTernaryFunctorsSecondArgFailsThirdNeverAttempted) {
-    expr lhs{expr::functor{"f", {&func, &func, &var2}}};
-    expr rhs{expr::functor{"f", {&func, &func2, &var2}}};
+    expr lhs{expr::functor{atoms.id("f"), {&func, &func, &var2}}};
+    expr rhs{expr::functor{atoms.id("f"), {&func, &func2, &var2}}};
 
     EXPECT_CALL(bm, bind).Times(0);
     EXPECT_CALL(bm, whnf(&lhs)).WillRepeatedly(Return(&lhs));
@@ -531,8 +533,8 @@ TEST_F(UnifierTest, UnifyBinaryFunctorsWhnfResolvesSecondArgSkipsItsBind) {
 // ---------------------------------------------------------------------------
 
 TEST_F(UnifierTest, UnifyTernaryFunctorsSecondArgFailsAfterFirstBinds) {
-    expr lhs{expr::functor{"f", {&var0, &func, &var2}}};
-    expr rhs{expr::functor{"f", {&func, &func2, &var2}}};
+    expr lhs{expr::functor{atoms.id("f"), {&var0, &func, &var2}}};
+    expr rhs{expr::functor{atoms.id("f"), {&func, &func2, &var2}}};
 
     EXPECT_CALL(bm, whnf(&lhs)).WillRepeatedly(Return(&lhs));
     EXPECT_CALL(bm, whnf(&rhs)).WillRepeatedly(Return(&rhs));

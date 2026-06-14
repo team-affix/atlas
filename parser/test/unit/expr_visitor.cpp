@@ -6,6 +6,7 @@
 #include <map>
 #include <string>
 #include "parser_fixture.hpp"
+#include "infrastructure/atom_names.hpp"
 #include "parser/generated/CHCLexer.h"
 #include "parser/generated/CHCParser.h"
 #include "parser/hpp/expr_visitor.hpp"
@@ -30,7 +31,7 @@ struct ExprVisitorTest : ParserCoreFixture {};
 
 TEST_F(ExprVisitorTest, VisitAtom) {
     std::map<std::string, uint32_t> var_map;
-    expr_visitor ev{*pool, *pool, *var_seq, var_map};
+    expr_visitor ev{*pool, *pool, *var_seq, var_map, atom_map, next_atom_id};
 
     std::string input = "foo";
     antlr4::ANTLRInputStream stream(input);
@@ -40,13 +41,13 @@ TEST_F(ExprVisitorTest, VisitAtom) {
     auto* ctx = first_expr(stream, tokens, lexer, parser);
 
     const expr* result = std::any_cast<const expr*>(ev.visitExpr(ctx));
-    EXPECT_EQ(result, pool->make("foo", {}));
+    EXPECT_EQ(result, pool->make_functor(atom_map.at("foo"), {}));
     EXPECT_TRUE(var_map.empty());
 }
 
 TEST_F(ExprVisitorTest, VisitVar) {
     std::map<std::string, uint32_t> var_map;
-    expr_visitor ev{*pool, *pool, *var_seq, var_map};
+    expr_visitor ev{*pool, *pool, *var_seq, var_map, atom_map, next_atom_id};
 
     const expr* result = nullptr;
     {
@@ -56,7 +57,7 @@ TEST_F(ExprVisitorTest, VisitVar) {
         antlr4::CommonTokenStream tokens(&lexer);
         CHCParser parser(&tokens);
         result = std::any_cast<const expr*>(ev.visitExpr(first_expr(stream, tokens, lexer, parser)));
-        EXPECT_EQ(result, pool->make(var_map.at("X")));
+        EXPECT_EQ(result, pool->make_var(var_map.at("X")));
     }
     {
         std::string input = "X";
@@ -74,7 +75,7 @@ TEST_F(ExprVisitorTest, VisitVar) {
 
 TEST_F(ExprVisitorTest, VisitFunctorNullary) {
     std::map<std::string, uint32_t> var_map;
-    expr_visitor ev{*pool, *pool, *var_seq, var_map};
+    expr_visitor ev{*pool, *pool, *var_seq, var_map, atom_map, next_atom_id};
 
     std::string input = "foo";
     antlr4::ANTLRInputStream stream(input);
@@ -84,12 +85,12 @@ TEST_F(ExprVisitorTest, VisitFunctorNullary) {
     auto* ctx = first_expr(stream, tokens, lexer, parser);
 
     const expr* result = std::any_cast<const expr*>(ev.visitExpr(ctx));
-    EXPECT_EQ(result, pool->make("foo", {}));
+    EXPECT_EQ(result, pool->make_functor(atom_map.at("foo"), {}));
 }
 
 TEST_F(ExprVisitorTest, VisitFunctorUnary) {
     std::map<std::string, uint32_t> var_map;
-    expr_visitor ev{*pool, *pool, *var_seq, var_map};
+    expr_visitor ev{*pool, *pool, *var_seq, var_map, atom_map, next_atom_id};
 
     std::string input = "suc(X)";
     antlr4::ANTLRInputStream stream(input);
@@ -99,12 +100,12 @@ TEST_F(ExprVisitorTest, VisitFunctorUnary) {
     auto* ctx = first_expr(stream, tokens, lexer, parser);
 
     const expr* result = std::any_cast<const expr*>(ev.visitExpr(ctx));
-    EXPECT_EQ(result, pool->make("suc", {pool->make(var_map.at("X"))}));
+    EXPECT_EQ(result, pool->make_functor(atom_map.at("suc"), {pool->make_var(var_map.at("X"))}));
 }
 
 TEST_F(ExprVisitorTest, VisitFunctorBinary) {
     std::map<std::string, uint32_t> var_map;
-    expr_visitor ev{*pool, *pool, *var_seq, var_map};
+    expr_visitor ev{*pool, *pool, *var_seq, var_map, atom_map, next_atom_id};
 
     std::string input = "add(X, Y)";
     antlr4::ANTLRInputStream stream(input);
@@ -116,7 +117,7 @@ TEST_F(ExprVisitorTest, VisitFunctorBinary) {
     const expr* result = std::any_cast<const expr*>(ev.visitExpr(ctx));
     EXPECT_TRUE(var_map.count("X") && var_map.count("Y"));
     EXPECT_NE(var_map.at("X"), var_map.at("Y"));
-    EXPECT_EQ(result, pool->make("add", {pool->make(var_map.at("X")), pool->make(var_map.at("Y"))}));
+    EXPECT_EQ(result, pool->make_functor(atom_map.at("add"), {pool->make_var(var_map.at("X")), pool->make_var(var_map.at("Y"))}));
 }
 
 // ---------------------------------------------------------------------------
@@ -125,7 +126,7 @@ TEST_F(ExprVisitorTest, VisitFunctorBinary) {
 
 TEST_F(ExprVisitorTest, VisitListEmpty) {
     std::map<std::string, uint32_t> var_map;
-    expr_visitor ev{*pool, *pool, *var_seq, var_map};
+    expr_visitor ev{*pool, *pool, *var_seq, var_map, atom_map, next_atom_id};
 
     std::string input = "[]";
     antlr4::ANTLRInputStream stream(input);
@@ -134,12 +135,12 @@ TEST_F(ExprVisitorTest, VisitListEmpty) {
     CHCParser parser(&tokens);
     auto* ctx = first_expr(stream, tokens, lexer, parser);
 
-    EXPECT_EQ(std::any_cast<const expr*>(ev.visitExpr(ctx)), pool->make("nil", {}));
+    EXPECT_EQ(std::any_cast<const expr*>(ev.visitExpr(ctx)), pool->make_functor(k_nil_atom_id, {}));
 }
 
 TEST_F(ExprVisitorTest, VisitList) {
     std::map<std::string, uint32_t> var_map;
-    expr_visitor ev{*pool, *pool, *var_seq, var_map};
+    expr_visitor ev{*pool, *pool, *var_seq, var_map, atom_map, next_atom_id};
 
     std::string input = "[f, x, y]";
     antlr4::ANTLRInputStream stream(input);
@@ -149,14 +150,14 @@ TEST_F(ExprVisitorTest, VisitList) {
     auto* ctx = first_expr(stream, tokens, lexer, parser);
 
     const expr* result = std::any_cast<const expr*>(ev.visitExpr(ctx));
-    EXPECT_EQ(result, pool->make("cons", {pool->make("f", {}),
-                    pool->make("cons", {pool->make("x", {}),
-                    pool->make("cons", {pool->make("y", {}), pool->make("nil", {})})})}));
+    EXPECT_EQ(result, pool->make_functor(k_cons_atom_id, {pool->make_functor(atom_map.at("f"), {}),
+                    pool->make_functor(k_cons_atom_id, {pool->make_functor(atom_map.at("x"), {}),
+                    pool->make_functor(k_cons_atom_id, {pool->make_functor(atom_map.at("y"), {}), pool->make_functor(k_nil_atom_id, {})})})}));
 }
 
 TEST_F(ExprVisitorTest, VisitListPipe) {
     std::map<std::string, uint32_t> var_map;
-    expr_visitor ev{*pool, *pool, *var_seq, var_map};
+    expr_visitor ev{*pool, *pool, *var_seq, var_map, atom_map, next_atom_id};
 
     std::string input = "[a, b|c]";
     antlr4::ANTLRInputStream stream(input);
@@ -166,13 +167,13 @@ TEST_F(ExprVisitorTest, VisitListPipe) {
     auto* ctx = first_expr(stream, tokens, lexer, parser);
 
     const expr* result = std::any_cast<const expr*>(ev.visitExpr(ctx));
-    EXPECT_EQ(result, pool->make("cons", {pool->make("a", {}),
-                    pool->make("cons", {pool->make("b", {}), pool->make("c", {})})}));
+    EXPECT_EQ(result, pool->make_functor(k_cons_atom_id, {pool->make_functor(atom_map.at("a"), {}),
+                    pool->make_functor(k_cons_atom_id, {pool->make_functor(atom_map.at("b"), {}), pool->make_functor(atom_map.at("c"), {})})}));
 }
 
 TEST_F(ExprVisitorTest, VisitListWithVars) {
     std::map<std::string, uint32_t> var_map;
-    expr_visitor ev{*pool, *pool, *var_seq, var_map};
+    expr_visitor ev{*pool, *pool, *var_seq, var_map, atom_map, next_atom_id};
 
     std::string input = "[f, X, Y]";
     antlr4::ANTLRInputStream stream(input);
@@ -184,14 +185,14 @@ TEST_F(ExprVisitorTest, VisitListWithVars) {
     const expr* result = std::any_cast<const expr*>(ev.visitExpr(ctx));
     EXPECT_TRUE(var_map.count("X") && var_map.count("Y"));
     EXPECT_NE(var_map.at("X"), var_map.at("Y"));
-    EXPECT_EQ(result, pool->make("cons", {pool->make("f", {}),
-                    pool->make("cons", {pool->make(var_map.at("X")),
-                    pool->make("cons", {pool->make(var_map.at("Y")), pool->make("nil", {})})})}));
+    EXPECT_EQ(result, pool->make_functor(k_cons_atom_id, {pool->make_functor(atom_map.at("f"), {}),
+                    pool->make_functor(k_cons_atom_id, {pool->make_var(var_map.at("X")),
+                    pool->make_functor(k_cons_atom_id, {pool->make_var(var_map.at("Y")), pool->make_functor(k_nil_atom_id, {})})})}));
 }
 
 TEST_F(ExprVisitorTest, VisitListNestedList) {
     std::map<std::string, uint32_t> var_map;
-    expr_visitor ev{*pool, *pool, *var_seq, var_map};
+    expr_visitor ev{*pool, *pool, *var_seq, var_map, atom_map, next_atom_id};
 
     std::string input = "[f, [g, a], b]";
     antlr4::ANTLRInputStream stream(input);
@@ -200,16 +201,16 @@ TEST_F(ExprVisitorTest, VisitListNestedList) {
     CHCParser parser(&tokens);
     auto* ctx = first_expr(stream, tokens, lexer, parser);
 
-    const expr* ga = pool->make("cons", {pool->make("g", {}), pool->make("cons", {pool->make("a", {}), pool->make("nil", {})})});
     const expr* result = std::any_cast<const expr*>(ev.visitExpr(ctx));
-    EXPECT_EQ(result, pool->make("cons", {pool->make("f", {}),
-                    pool->make("cons", {ga,
-                    pool->make("cons", {pool->make("b", {}), pool->make("nil", {})})})}));
+    const expr* ga = pool->make_functor(k_cons_atom_id, {pool->make_functor(atom_map.at("g"), {}), pool->make_functor(k_cons_atom_id, {pool->make_functor(atom_map.at("a"), {}), pool->make_functor(k_nil_atom_id, {})})});
+    EXPECT_EQ(result, pool->make_functor(k_cons_atom_id, {pool->make_functor(atom_map.at("f"), {}),
+                    pool->make_functor(k_cons_atom_id, {ga,
+                    pool->make_functor(k_cons_atom_id, {pool->make_functor(atom_map.at("b"), {}), pool->make_functor(k_nil_atom_id, {})})})}));
 }
 
 TEST_F(ExprVisitorTest, VisitVarSharing) {
     std::map<std::string, uint32_t> var_map;
-    expr_visitor ev{*pool, *pool, *var_seq, var_map};
+    expr_visitor ev{*pool, *pool, *var_seq, var_map, atom_map, next_atom_id};
 
     std::string input = "[f, X, X]";
     antlr4::ANTLRInputStream stream(input);
@@ -219,15 +220,15 @@ TEST_F(ExprVisitorTest, VisitVarSharing) {
     auto* ctx = first_expr(stream, tokens, lexer, parser);
 
     const expr* result = std::any_cast<const expr*>(ev.visitExpr(ctx));
-    const expr* x = pool->make(var_map.at("X"));
-    EXPECT_EQ(result, pool->make("cons", {pool->make("f", {}),
-                    pool->make("cons", {x,
-                    pool->make("cons", {x, pool->make("nil", {})})})}));
+    const expr* x = pool->make_var(var_map.at("X"));
+    EXPECT_EQ(result, pool->make_functor(k_cons_atom_id, {pool->make_functor(atom_map.at("f"), {}),
+                    pool->make_functor(k_cons_atom_id, {x,
+                    pool->make_functor(k_cons_atom_id, {x, pool->make_functor(k_nil_atom_id, {})})})}));
 }
 
 TEST_F(ExprVisitorTest, VisitVarDiscard) {
     std::map<std::string, uint32_t> var_map;
-    expr_visitor ev{*pool, *pool, *var_seq, var_map};
+    expr_visitor ev{*pool, *pool, *var_seq, var_map, atom_map, next_atom_id};
 
     std::string input = "[_|_]";
     antlr4::ANTLRInputStream stream(input);
@@ -245,7 +246,7 @@ TEST_F(ExprVisitorTest, VisitVarDiscard) {
 
 TEST_F(ExprVisitorTest, VisitVarDiscardInList) {
     std::map<std::string, uint32_t> var_map;
-    expr_visitor ev{*pool, *pool, *var_seq, var_map};
+    expr_visitor ev{*pool, *pool, *var_seq, var_map, atom_map, next_atom_id};
 
     std::string input = "[f, _, _]";
     antlr4::ANTLRInputStream stream(input);
@@ -256,7 +257,7 @@ TEST_F(ExprVisitorTest, VisitVarDiscardInList) {
 
     const expr* result = std::any_cast<const expr*>(ev.visitExpr(ctx));
     auto& outer = std::get<expr::functor>(result->content);
-    EXPECT_EQ(outer.args[0], pool->make("f", {}));
+    EXPECT_EQ(outer.args[0], pool->make_functor(atom_map.at("f"), {}));
     auto& mid   = std::get<expr::functor>(outer.args[1]->content);
     auto& inner = std::get<expr::functor>(mid.args[1]->content);
     EXPECT_NE(mid.args[0], inner.args[0]);

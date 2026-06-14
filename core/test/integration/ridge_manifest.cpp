@@ -36,11 +36,15 @@
 #include "value_objects/expr.hpp"
 #include "value_objects/lemma.hpp"
 #include "value_objects/sim_termination.hpp"
+#include "atom_fixture.hpp"
 
 namespace {
 
+#include "atom_fixture.hpp"
+
 class RidgeManifestIntegrationTest : public ::testing::Test {
 protected:
+    test_atoms atoms;
     static constexpr size_t kInitialVarCount = 0;
     static constexpr size_t kMaxResolutions = 64;
     static constexpr uint32_t kSeed = 42;
@@ -274,7 +278,7 @@ TEST_F(RidgeManifestIntegrationTest, SimLifecycleTrailDepthRestoresAfterConflict
      * initial goals: f.
      * rules: (none)
      */
-    const expr* goal = saved_expr_pool_.make("f", {});
+    const expr* goal = saved_expr_pool_.make_functor(atoms.id("f"), {});
     initial_goals.push(goal);
     ridge_manifest manifest = make_manifest();
     const size_t depth_before = manifest.trail_.depth();
@@ -292,9 +296,9 @@ TEST_F(RidgeManifestIntegrationTest, SimMctsDecisionGeneratorRecordsDecisionWith
      *   0: f.
      *   1: f.
      */
-    const expr* goal = saved_expr_pool_.make("f", {});
-    const expr* f_head0 = saved_expr_pool_.make("f", {});
-    const expr* f_head1 = saved_expr_pool_.make("f", {});
+    const expr* goal = saved_expr_pool_.make_functor(atoms.id("f"), {});
+    const expr* f_head0 = saved_expr_pool_.make_functor(atoms.id("f"), {});
+    const expr* f_head1 = saved_expr_pool_.make_functor(atoms.id("f"), {});
     initial_goals.push(goal);
     database.push(rule{f_head0, {}});
     database.push(rule{f_head1, {}});
@@ -335,8 +339,8 @@ TEST_F(RidgeManifestIntegrationTest, SolverFindsSingleUnitSolution) {
      * rules:
      *   0: f.
      */
-    const expr* goal = saved_expr_pool_.make("f", {});
-    const expr* head = saved_expr_pool_.make("f", {});
+    const expr* goal = saved_expr_pool_.make_functor(atoms.id("f"), {});
+    const expr* head = saved_expr_pool_.make_functor(atoms.id("f"), {});
     initial_goals.push(goal);
     database.push(rule{head, {}});
 

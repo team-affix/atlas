@@ -11,7 +11,8 @@
 #include "interfaces/i_var_sequencer.hpp"
 
 struct body_visitor : public CHCBaseVisitor {
-    body_visitor(i_make_functor&, i_make_var&, i_var_sequencer&, std::map<std::string, uint32_t>&);
+    body_visitor(i_make_functor&, i_make_var&, i_var_sequencer&,
+                 std::map<std::string, uint32_t>&, std::map<std::string, uint32_t>&, uint32_t&);
     antlrcpp::Any visitBody(CHCParser::BodyContext*) override;
 
 private:
@@ -19,6 +20,8 @@ private:
     i_make_var& make_var;
     i_var_sequencer& var_seq;
     std::map<std::string, uint32_t>& var_map;
+    std::map<std::string, uint32_t>& atom_map;
+    uint32_t& next_atom_id;
 };
 
 #endif

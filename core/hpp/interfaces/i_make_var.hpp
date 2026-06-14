@@ -6,7 +6,7 @@
 
 struct i_make_var {
     virtual ~i_make_var() = default;
-    virtual const expr* make(uint32_t) = 0;
+    virtual const expr* make_var(uint32_t) = 0;
 };
 
 #endif

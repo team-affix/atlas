@@ -1,11 +1,11 @@
 #include <stdexcept>
 #include "infrastructure/expr_pool.hpp"
 
-const expr* expr_pool::make(const std::string& name, const std::vector<const expr*>& args) {
-    return intern(expr{expr::functor{name, args}});
+const expr* expr_pool::make_functor(uint32_t id, const std::vector<const expr*>& args) {
+    return intern(expr{expr::functor{id, args}});
 }
 
-const expr* expr_pool::make(uint32_t i) {
+const expr* expr_pool::make_var(uint32_t i) {
     return intern(expr{expr::var{i}});
 }
 
@@ -18,7 +18,7 @@ const expr* expr_pool::import(const expr* e) {
         imported_args.reserve(f->args.size());
         for (const expr* arg : f->args)
             imported_args.push_back(import(arg));
-        return make(f->name, imported_args);
+        return make_functor(f->id, imported_args);
     }
 
     throw std::runtime_error("Unsupported expression type");

@@ -5,6 +5,7 @@
 #include <gmock/gmock.h>
 #include <string>
 #include "parser_fixture.hpp"
+#include "infrastructure/atom_names.hpp"
 #include "parser/hpp/import_database_from_file.hpp"
 #include "infrastructure/db.hpp"
 #include "value_objects/lineage.hpp"
@@ -21,35 +22,35 @@ struct ImportDatabaseFromFileTest : ParserCoreFixture {};
 
 TEST_F(ImportDatabaseFromFileTest, FactsFixture) {
     db database;
-    import_database_from_file("parser/fixtures/facts.chc", *pool, *pool, *var_seq, database);
+    import_database_from_file("parser/fixtures/facts.chc", *pool, *pool, *var_seq, database, atom_map, next_atom_id);
 
     for (rule_id id = 0; id < 3; ++id) {
         EXPECT_THAT(rule_at(database, id)->body, IsEmpty());
     }
-    EXPECT_EQ(rule_at(database, rule_id{0})->head, pool->make("base", {pool->make("0", {})}));
-    EXPECT_EQ(rule_at(database, rule_id{1})->head, pool->make("base", {pool->make("1", {})}));
-    EXPECT_EQ(rule_at(database, rule_id{2})->head, pool->make("base", {pool->make("2", {})}));
+    EXPECT_EQ(rule_at(database, rule_id{0})->head, pool->make_functor(atom_map.at("base"), {pool->make_functor(atom_map.at("0"), {})}));
+    EXPECT_EQ(rule_at(database, rule_id{1})->head, pool->make_functor(atom_map.at("base"), {pool->make_functor(atom_map.at("1"), {})}));
+    EXPECT_EQ(rule_at(database, rule_id{2})->head, pool->make_functor(atom_map.at("base"), {pool->make_functor(atom_map.at("2"), {})}));
     EXPECT_THROW({ rule_at(database, rule_id{3}); }, std::out_of_range);
 }
 
 TEST_F(ImportDatabaseFromFileTest, RulesFixture) {
     db database;
-    import_database_from_file("parser/fixtures/rules.chc", *pool, *pool, *var_seq, database);
+    import_database_from_file("parser/fixtures/rules.chc", *pool, *pool, *var_seq, database, atom_map, next_atom_id);
 
     EXPECT_THAT(rule_at(database, rule_id{0})->body, SizeIs(2));
     EXPECT_THAT(rule_at(database, rule_id{1})->body, SizeIs(2));
 
-    const expr* x0 = pool->make(0);
-    const expr* y0 = pool->make(1);
-    EXPECT_EQ(rule_at(database, rule_id{0})->head, pool->make("step", {x0, y0}));
-    EXPECT_EQ(rule_at(database, rule_id{0})->body[0], pool->make("base", {x0}));
-    EXPECT_EQ(rule_at(database, rule_id{0})->body[1], pool->make("next", {x0, y0}));
+    const expr* x0 = pool->make_var(0);
+    const expr* y0 = pool->make_var(1);
+    EXPECT_EQ(rule_at(database, rule_id{0})->head, pool->make_functor(atom_map.at("step"), {x0, y0}));
+    EXPECT_EQ(rule_at(database, rule_id{0})->body[0], pool->make_functor(atom_map.at("base"), {x0}));
+    EXPECT_EQ(rule_at(database, rule_id{0})->body[1], pool->make_functor(atom_map.at("next"), {x0, y0}));
     EXPECT_THROW({ rule_at(database, rule_id{2}); }, std::out_of_range);
 }
 
 TEST_F(ImportDatabaseFromFileTest, MixedFixture) {
     db database;
-    import_database_from_file("parser/fixtures/mixed.chc", *pool, *pool, *var_seq, database);
+    import_database_from_file("parser/fixtures/mixed.chc", *pool, *pool, *var_seq, database, atom_map, next_atom_id);
 
     EXPECT_THAT(rule_at(database, rule_id{0})->body, IsEmpty());
     EXPECT_THAT(rule_at(database, rule_id{1})->body, IsEmpty());
@@ -61,6 +62,6 @@ TEST_F(ImportDatabaseFromFileTest, MixedFixture) {
 
 TEST_F(ImportDatabaseFromFileTest, BadPathThrows) {
     db database;
-    EXPECT_THROW(import_database_from_file("parser/fixtures/nonexistent.chc", *pool, *pool, *var_seq, database),
+    EXPECT_THROW(import_database_from_file("parser/fixtures/nonexistent.chc", *pool, *pool, *var_seq, database, atom_map, next_atom_id),
                  std::runtime_error);
 }

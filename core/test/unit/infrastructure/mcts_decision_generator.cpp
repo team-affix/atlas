@@ -14,6 +14,7 @@
 #include "interfaces/i_make_resolution_lineage.hpp"
 #include "interfaces/i_get_goal_candidate_rule_ids.hpp"
 
+using ::testing::Invoke;
 using ::testing::ReturnRef;
 using ::testing::UnorderedElementsAre;
 
@@ -312,4 +313,28 @@ TEST_F(MctsDecisionGeneratorTest, GenerateSecondCallRepeatsRootIteration) {
     generator.generate();
     EXPECT_EQ(mcts_choose.goal_rounds.size(), 2u);
     EXPECT_EQ(mcts_choose.candidate_rounds.size(), 2u);
+}
+
+TEST_F(MctsDecisionGeneratorTest, GeneratePicksAmongMultipleGoalsAndCandidates) {
+    link_two_children(active_goals, &parent, &child0, &child1);
+    candidates.insert(0);
+    candidates.insert(1);
+    mcts_choose.responses = {mcts_choice{&child1}, mcts_choice{rule_id{1}}};
+
+    EXPECT_CALL(get_goal_candidate_rule_ids, get_mutable(&child1))
+        .WillRepeatedly(ReturnRef(candidates));
+    EXPECT_CALL(make_resolution, make_resolution_lineage(testing::_, testing::_))
+        .WillOnce(Invoke([&](const goal_lineage* gl, rule_id rid) {
+            EXPECT_TRUE(gl == &child0 || gl == &child1);
+            EXPECT_TRUE(rid == 0 || rid == 1);
+            return stub_make_resolution_lineage(resolutions)(gl, rid);
+        }));
+
+    const resolution_lineage* result = generator.generate();
+    EXPECT_EQ(result->parent, &child1);
+    EXPECT_EQ(result->idx, 1);
+    ASSERT_GE(mcts_choose.goal_rounds.size(), 1u);
+    EXPECT_THAT(goal_pointers(mcts_choose.goal_rounds[0]), UnorderedElementsAre(&child0, &child1));
+    ASSERT_GE(mcts_choose.candidate_rounds.size(), 1u);
+    EXPECT_THAT(rule_pointers(mcts_choose.candidate_rounds[0]), UnorderedElementsAre(0, 1));
 }

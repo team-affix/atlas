@@ -13,8 +13,8 @@ struct expr_pool
     , i_make_var
     , i_import_expr
     , i_get_expr_count {
-    const expr* make(const std::string& name, const std::vector<const expr*>& args) override;
-    const expr* make(uint32_t) override;
+    const expr* make_functor(uint32_t id, const std::vector<const expr*>& args) override;
+    const expr* make_var(uint32_t) override;
     const expr* import(const expr*) override;
     size_t size() const override;
 private:

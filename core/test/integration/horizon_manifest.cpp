@@ -48,14 +48,18 @@
 #include "value_objects/expr.hpp"
 #include "value_objects/lemma.hpp"
 #include "value_objects/sim_termination.hpp"
+#include "atom_fixture.hpp"
 
 namespace {
 
 constexpr double kWeightEpsilon = 1e-9;
 constexpr double kTotalWeight = 1.0;
 
+#include "atom_fixture.hpp"
+
 class HorizonManifestIntegrationTest : public ::testing::Test {
 protected:
+    test_atoms atoms;
     static constexpr size_t kInitialVarCount = 0;
     static constexpr size_t kMaxResolutions = 64;
     static constexpr uint32_t kSeed = 42;
@@ -98,8 +102,8 @@ TEST_F(HorizonManifestIntegrationTest, WiringGoalWeightsAndCgwSharedForInterface
 }
 
 TEST_F(HorizonManifestIntegrationTest, WiringInitialGoalWeightMatchesOneOverK) {
-    const expr* goal0 = saved_expr_pool_.make("f", {});
-    const expr* goal1 = saved_expr_pool_.make("g", {});
+    const expr* goal0 = saved_expr_pool_.make_functor(atoms.id("f"), {});
+    const expr* goal1 = saved_expr_pool_.make_functor(atoms.id("g"), {});
     initial_goals.push(goal0);
     initial_goals.push(goal1);
     horizon_manifest manifest = make_manifest();
@@ -160,8 +164,8 @@ TEST_F(HorizonManifestIntegrationTest, SimLifecycleClearsCgwAfterEmptyRun) {
 }
 
 TEST_F(HorizonManifestIntegrationTest, SolverFindsSingleUnitSolutionWithFullCgw) {
-    const expr* goal = saved_expr_pool_.make("f", {});
-    const expr* head = saved_expr_pool_.make("f", {});
+    const expr* goal = saved_expr_pool_.make_functor(atoms.id("f"), {});
+    const expr* head = saved_expr_pool_.make_functor(atoms.id("f"), {});
     initial_goals.push(goal);
     database.push(rule{head, {}});
 

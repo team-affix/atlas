@@ -2,9 +2,11 @@
 #include <optional>
 #include "infrastructure/expr_pool.hpp"
 #include "infrastructure/trail.hpp"
+#include "atom_fixture.hpp"
 
 struct ExprPoolIntegrationTest : public ::testing::Test {
 protected:
+    test_atoms atoms;
     void SetUp() override {
         pool.emplace();
     }
@@ -18,29 +20,29 @@ TEST_F(ExprPoolIntegrationTest, SizeStartsAtZero) {
 }
 
 TEST_F(ExprPoolIntegrationTest, DistinctInternsIncreaseSize) {
-    pool->make(0);
+    pool->make_var(0);
     EXPECT_EQ(pool->size(), 1u);
-    pool->make(1);
+    pool->make_var(1);
     EXPECT_EQ(pool->size(), 2u);
 }
 
 TEST_F(ExprPoolIntegrationTest, RepeatInternDoesNotIncreaseSize) {
-    pool->make(0);
-    pool->make(0);
+    pool->make_var(0);
+    pool->make_var(0);
     EXPECT_EQ(pool->size(), 1u);
 }
 
 TEST_F(ExprPoolIntegrationTest, VarInternedBeforePushSurvivesPop) {
-    const expr* p = pool->make(0);
+    const expr* p = pool->make_var(0);
     EXPECT_EQ(pool->size(), 1u);
     t.push();
     t.pop();
-    EXPECT_EQ(pool->make(0), p);
+    EXPECT_EQ(pool->make_var(0), p);
     EXPECT_EQ(pool->size(), 1u);
 }
 
 TEST_F(ExprPoolIntegrationTest, PushPopWithoutInternLeavesSizeUnchanged) {
-    pool->make(0);
+    pool->make_var(0);
     EXPECT_EQ(pool->size(), 1u);
     t.push();
     t.pop();
@@ -48,11 +50,11 @@ TEST_F(ExprPoolIntegrationTest, PushPopWithoutInternLeavesSizeUnchanged) {
 }
 
 TEST_F(ExprPoolIntegrationTest, SizePersistsAfterInternInFrame) {
-    pool->make(0);
+    pool->make_var(0);
     EXPECT_EQ(pool->size(), 1u);
 
     t.push();
-    pool->make(1);
+    pool->make_var(1);
     EXPECT_EQ(pool->size(), 2u);
     t.pop();
 
@@ -60,48 +62,48 @@ TEST_F(ExprPoolIntegrationTest, SizePersistsAfterInternInFrame) {
 }
 
 TEST_F(ExprPoolIntegrationTest, ExprInternedBeforeFrameSurvivesPop) {
-    const expr* p0 = pool->make(0);
+    const expr* p0 = pool->make_var(0);
     EXPECT_EQ(pool->size(), 1u);
 
     t.push();
-    pool->make(1);
+    pool->make_var(1);
     EXPECT_EQ(pool->size(), 2u);
     t.pop();
 
-    EXPECT_EQ(pool->make(0), p0);
+    EXPECT_EQ(pool->make_var(0), p0);
     EXPECT_EQ(pool->size(), 2u);
 }
 
 TEST_F(ExprPoolIntegrationTest, MultipleInternsInFramePersistAfterPop) {
     t.push();
-    pool->make(0);
-    pool->make(1);
-    pool->make("f", {});
+    pool->make_var(0);
+    pool->make_var(1);
+    pool->make_functor(atoms.id("f"), {});
     EXPECT_EQ(pool->size(), 3u);
     t.pop();
     EXPECT_EQ(pool->size(), 3u);
 }
 
 TEST_F(ExprPoolIntegrationTest, FunctorInternedInFramePersistsAfterPop) {
-    const expr* v0 = pool->make(0);
+    const expr* v0 = pool->make_var(0);
     EXPECT_EQ(pool->size(), 1u);
 
     t.push();
-    pool->make("f", {v0});
+    pool->make_functor(atoms.id("f"), {v0});
     EXPECT_EQ(pool->size(), 2u);
     t.pop();
 
     EXPECT_EQ(pool->size(), 2u);
-    EXPECT_EQ(pool->make(0), v0);
+    EXPECT_EQ(pool->make_var(0), v0);
 }
 
 TEST_F(ExprPoolIntegrationTest, TwoNestedFramesInnerPopRetainsAllInterns) {
     t.push();
-    pool->make(0);
+    pool->make_var(0);
     EXPECT_EQ(pool->size(), 1u);
 
     t.push();
-    pool->make(1);
+    pool->make_var(1);
     EXPECT_EQ(pool->size(), 2u);
     t.pop();
     EXPECT_EQ(pool->size(), 2u);
@@ -112,15 +114,15 @@ TEST_F(ExprPoolIntegrationTest, TwoNestedFramesInnerPopRetainsAllInterns) {
 
 TEST_F(ExprPoolIntegrationTest, TwoNestedFramesOuterExprSurvivesInnerPop) {
     t.push();
-    const expr* p0 = pool->make(0);
+    const expr* p0 = pool->make_var(0);
     EXPECT_EQ(pool->size(), 1u);
 
     t.push();
-    pool->make(1);
+    pool->make_var(1);
     EXPECT_EQ(pool->size(), 2u);
     t.pop();
 
-    EXPECT_EQ(pool->make(0), p0);
+    EXPECT_EQ(pool->make_var(0), p0);
     EXPECT_EQ(pool->size(), 2u);
 }
 
@@ -138,7 +140,7 @@ TEST_F(ExprPoolIntegrationTest, ImportInFramePersistsAfterPop) {
 
 TEST_F(ExprPoolIntegrationTest, ImportFunctorInFramePersistsAfterPop) {
     expr arg{expr::var{1}};
-    expr root{expr::functor{"f", {&arg}}};
+    expr root{expr::functor{atoms.id("f"), {&arg}}};
     EXPECT_EQ(pool->size(), 0u);
 
     t.push();

@@ -43,7 +43,7 @@ coroutine<uint32_t, bool> unifier::unify(const expr* lhs, const expr* rhs) {
     // At this point, they are both functors
     const expr::functor& lf = std::get<expr::functor>(lhs->content);
     const expr::functor& rf = std::get<expr::functor>(rhs->content);
-    if (lf.name != rf.name || lf.args.size() != rf.args.size())
+    if (lf.id != rf.id || lf.args.size() != rf.args.size())
         co_return false;
 
     // unify the children

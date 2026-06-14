@@ -8,6 +8,7 @@
 #include "interfaces/i_bind_map.hpp"
 #include "interfaces/i_make_functor.hpp"
 #include "interfaces/i_make_var.hpp"
+#include "atom_fixture.hpp"
 
 using ::testing::_;
 using ::testing::ElementsAre;
@@ -20,12 +21,13 @@ struct MockBindMap : public i_bind_map {
 };
 
 struct MockExprPool : public i_make_functor, public i_make_var {
-    MOCK_METHOD(const expr*, make, (const std::string&, const std::vector<const expr*>&), (override));
-    MOCK_METHOD(const expr*, make, (uint32_t), (override));
+    MOCK_METHOD(const expr*, make_functor, (uint32_t, const std::vector<const expr*>&), (override));
+    MOCK_METHOD(const expr*, make_var, (uint32_t), (override));
 };
 
 struct NormalizerUnitTest : public ::testing::Test {
 protected:
+    test_atoms atoms;
     void SetUp() override {
         ON_CALL(bm, whnf(_)).WillByDefault([this](const expr* e) -> const expr* {
             if (e == &var0)
@@ -36,12 +38,12 @@ protected:
                 return &arg_whnf2;
             return e;
         });
-        ON_CALL(pool, make(::testing::An<uint32_t>())).WillByDefault(Return(nullptr));
-        ON_CALL(pool, make(_, _)).WillByDefault([this](const std::string& name,
+        ON_CALL(pool, make_var(::testing::An<uint32_t>())).WillByDefault(Return(nullptr));
+        ON_CALL(pool, make_functor(_, _)).WillByDefault([this](uint32_t id,
             const std::vector<const expr*>&) -> const expr* {
-            if (name == "g")
+            if (id == atoms.id("g"))
                 return &pooled_g;
-            if (name == "f")
+            if (id == atoms.id("f"))
                 return &pooled_f;
             return nullptr;
         });
@@ -61,12 +63,12 @@ protected:
     expr var1{expr::var{1}};
     expr var2{expr::var{2}};
     expr var_repr{expr::var{5}};
-    expr f_raw{expr::functor{"f", {&var0}}};
-    expr g_var0{expr::functor{"g", {&var0}}};
-    expr f_g_var0{expr::functor{"f", {&g_var0}}};
+    expr f_raw{expr::functor{atoms.id("f"), {&var0}}};
+    expr g_var0{expr::functor{atoms.id("g"), {&var0}}};
+    expr f_g_var0{expr::functor{atoms.id("f"), {&g_var0}}};
 
-    expr pooled_f{expr::functor{"f", {}}};
-    expr pooled_g{expr::functor{"g", {}}};
+    expr pooled_f{expr::functor{atoms.id("f"), {}}};
+    expr pooled_g{expr::functor{atoms.id("g"), {}}};
     expr arg_whnf0{expr::var{90}};
     expr arg_whnf1{expr::var{91}};
     expr arg_whnf2{expr::var{92}};
@@ -78,7 +80,7 @@ protected:
 
 TEST_F(NormalizerUnitTest, VarAfterWhnfReturnsWhnfAndDoesNotCallFunctor) {
     ON_CALL(bm, whnf(&var0)).WillByDefault(Return(&var0));
-    EXPECT_CALL(pool, make(_, _)).Times(0);
+    EXPECT_CALL(pool, make_functor(_, _)).Times(0);
 
     normalizer norm = make_normalizer();
     EXPECT_EQ(norm.normalize(&var0), &var0);
@@ -86,7 +88,7 @@ TEST_F(NormalizerUnitTest, VarAfterWhnfReturnsWhnfAndDoesNotCallFunctor) {
 
 TEST_F(NormalizerUnitTest, BoundVarReturnsWhnfResult) {
     ON_CALL(bm, whnf(&var0)).WillByDefault(Return(&var_repr));
-    EXPECT_CALL(pool, make(_, _)).Times(0);
+    EXPECT_CALL(pool, make_functor(_, _)).Times(0);
 
     normalizer norm = make_normalizer();
     EXPECT_EQ(norm.normalize(&var0), &var_repr);
@@ -97,7 +99,7 @@ TEST_F(NormalizerUnitTest, BoundVarReturnsWhnfResult) {
 // ---------------------------------------------------------------------------
 
 TEST_F(NormalizerUnitTest, FunctorRebuildsViaPool) {
-    EXPECT_CALL(pool, make("f", ElementsAre(&arg_whnf0)))
+    EXPECT_CALL(pool, make_functor(atoms.id("f"), ElementsAre(&arg_whnf0)))
         .WillOnce(Return(&pooled_f));
 
     normalizer norm = make_normalizer();
@@ -105,9 +107,9 @@ TEST_F(NormalizerUnitTest, FunctorRebuildsViaPool) {
 }
 
 TEST_F(NormalizerUnitTest, BinaryFunctorNormalizesBothArgs) {
-    expr f2{expr::functor{"f", {&var0, &var1}}};
+    expr f2{expr::functor{atoms.id("f"), {&var0, &var1}}};
 
-    EXPECT_CALL(pool, make("f", ElementsAre(&arg_whnf0, &arg_whnf1)))
+    EXPECT_CALL(pool, make_functor(atoms.id("f"), ElementsAre(&arg_whnf0, &arg_whnf1)))
         .WillOnce(Return(&pooled_f));
 
     normalizer norm = make_normalizer();
@@ -115,9 +117,9 @@ TEST_F(NormalizerUnitTest, BinaryFunctorNormalizesBothArgs) {
 }
 
 TEST_F(NormalizerUnitTest, TernaryFunctorNormalizesAllArgs) {
-    expr f3{expr::functor{"f", {&var0, &var1, &var2}}};
+    expr f3{expr::functor{atoms.id("f"), {&var0, &var1, &var2}}};
 
-    EXPECT_CALL(pool, make("f", ElementsAre(&arg_whnf0, &arg_whnf1, &arg_whnf2)))
+    EXPECT_CALL(pool, make_functor(atoms.id("f"), ElementsAre(&arg_whnf0, &arg_whnf1, &arg_whnf2)))
         .WillOnce(Return(&pooled_f));
 
     normalizer norm = make_normalizer();
@@ -125,9 +127,9 @@ TEST_F(NormalizerUnitTest, TernaryFunctorNormalizesAllArgs) {
 }
 
 TEST_F(NormalizerUnitTest, NestedFunctorRebuildsWithNormalizedInnerArg) {
-    EXPECT_CALL(pool, make("g", ElementsAre(&arg_whnf0)))
+    EXPECT_CALL(pool, make_functor(atoms.id("g"), ElementsAre(&arg_whnf0)))
         .WillOnce(Return(&pooled_g));
-    EXPECT_CALL(pool, make("f", ElementsAre(&pooled_g)))
+    EXPECT_CALL(pool, make_functor(atoms.id("f"), ElementsAre(&pooled_g)))
         .WillOnce(Return(&pooled_f));
 
     normalizer norm = make_normalizer();

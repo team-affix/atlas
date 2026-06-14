@@ -98,7 +98,7 @@ void mhu_elimination_generator::clear_mhu_heads() {
 coroutine<const resolution_lineage*, void> mhu_elimination_generator::accept_bindings(i_bind_map& local_bind_map, const std::unordered_set<uint32_t>& c_reps) {
     for (auto c_rep : c_reps) {
         // 6.1. get the rep expr
-        auto rep_expr = make_var_.make(c_rep);
+        auto rep_expr = make_var_.make_var(c_rep);
         
         // 6.2. get new whnf
         auto whnf = local_bind_map.whnf(rep_expr);
@@ -174,7 +174,7 @@ coroutine<uint32_t, bool> mhu_elimination_generator::synchronize(i_unifier& unif
         touched_vars.pop();
 
         // 1.2. get the rep expr
-        auto var_expr = make_var_.make(var);
+        auto var_expr = make_var_.make_var(var);
 
         // 1.3. get the whnf of the rep
         auto whnf = common_.whnf(var_expr);

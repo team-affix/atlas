@@ -21,6 +21,7 @@
 #include "infrastructure/ra_rule_id_set_factory.hpp"
 #include "infrastructure/trail.hpp"
 #include "infrastructure/coroutine.hpp"
+#include "atom_fixture.hpp"
 
 using ::testing::ElementsAre;
 using ::testing::IsEmpty;
@@ -42,23 +43,25 @@ std::vector<const resolution_lineage*> collect_elims(
     return out;
 }
 
-void expect_whnf_functor(bind_map& bm, const expr* e, const char* name, size_t argc) {
+void expect_whnf_functor(test_atoms& atoms, bind_map& bm, const expr* e, const char* name, size_t argc) {
     const auto& f = std::get<expr::functor>(bm.whnf(e)->content);
-    EXPECT_EQ(f.name, name);
+    EXPECT_EQ(f.id, atoms.id(name));
     EXPECT_EQ(f.args.size(), argc);
 }
 
-expr make_functor_expr(const char* name, std::span<expr> args) {
+expr make_functor_expr(test_atoms& atoms, const char* name, std::span<expr> args) {
     std::vector<const expr*> ptrs;
     ptrs.reserve(args.size());
     for (expr& arg : args)
         ptrs.push_back(&arg);
-    return expr{expr::functor{name, std::move(ptrs)}};
+    return expr{expr::functor{atoms.id(name), std::move(ptrs)}};
 }
 
 } // namespace
 
 struct MhuEliminationGeneratorIntegrationTest : public ::testing::Test {
+    
+    test_atoms atoms;
     locator loc;
     trail t;
     bind_map common;
@@ -108,7 +111,7 @@ private:
 
 TEST_F(MhuEliminationGeneratorIntegrationTest, TryAddHeadThenConstrainAllowsReuse) {
     expr goal{expr::var{0}};
-    expr head{expr::functor{"f", {}}};
+    expr head{expr::functor{atoms.id("f"), {}}};
     goal_lineage* gl = const_cast<goal_lineage*>(lp.make_goal_lineage(nullptr, 0));
     resolution_lineage* rl =
         const_cast<resolution_lineage*>(lp.make_resolution_lineage(gl, rule_id{0}));
@@ -118,14 +121,14 @@ TEST_F(MhuEliminationGeneratorIntegrationTest, TryAddHeadThenConstrainAllowsReus
     EXPECT_EQ(common.whnf(&goal), &goal);
 
     EXPECT_THAT(collect_elims(mhu->constrain(rl)), IsEmpty());
-    expect_whnf_functor(common, &goal, "f", 0);
+    expect_whnf_functor(atoms, common, &goal, "f", 0);
 
     EXPECT_TRUE(mhu->try_add_head(rl, &goal, &head));
 }
 
 TEST_F(MhuEliminationGeneratorIntegrationTest, TryAddHeadFailsWhenUnifyFails) {
-    expr goal{expr::functor{"f", {}}};
-    expr head{expr::functor{"g", {}}};
+    expr goal{expr::functor{atoms.id("f"), {}}};
+    expr head{expr::functor{atoms.id("g"), {}}};
     goal_lineage* gl = const_cast<goal_lineage*>(lp.make_goal_lineage(nullptr, 0));
     resolution_lineage* rl =
         const_cast<resolution_lineage*>(lp.make_resolution_lineage(gl, rule_id{0}));
@@ -137,7 +140,7 @@ TEST_F(MhuEliminationGeneratorIntegrationTest, TryAddHeadFailsWhenUnifyFails) {
 
 TEST_F(MhuEliminationGeneratorIntegrationTest, ConstrainPublishesSeededBindingToCommon) {
     expr goal{expr::var{0}};
-    expr head{expr::functor{"f", {}}};
+    expr head{expr::functor{atoms.id("f"), {}}};
     goal_lineage* gl = const_cast<goal_lineage*>(lp.make_goal_lineage(nullptr, 0));
     resolution_lineage* rl =
         const_cast<resolution_lineage*>(lp.make_resolution_lineage(gl, rule_id{0}));
@@ -147,19 +150,19 @@ TEST_F(MhuEliminationGeneratorIntegrationTest, ConstrainPublishesSeededBindingTo
     EXPECT_EQ(common.whnf(&goal), &goal);
 
     EXPECT_THAT(collect_elims(mhu->constrain(rl)), IsEmpty());
-    expect_whnf_functor(common, &goal, "f", 0);
+    expect_whnf_functor(atoms, common, &goal, "f", 0);
 }
 
 TEST_F(MhuEliminationGeneratorIntegrationTest, ConstrainEliminatesHeadWithCollidingFunctorOnSameRep) {
     expr goal_a{expr::var{0}};
-    expr head_a{expr::functor{"f", {}}};
+    expr head_a{expr::functor{atoms.id("f"), {}}};
     goal_lineage* gl_a = const_cast<goal_lineage*>(lp.make_goal_lineage(nullptr, 0));
     resolution_lineage* rl_a =
         const_cast<resolution_lineage*>(lp.make_resolution_lineage(gl_a, rule_id{0}));
     link_candidate(gl_a, rule_id{0});
 
     expr goal_b{expr::var{0}};
-    expr head_b{expr::functor{"g", {}}};
+    expr head_b{expr::functor{atoms.id("g"), {}}};
     goal_lineage* gl_b = const_cast<goal_lineage*>(lp.make_goal_lineage(nullptr, 1));
     resolution_lineage* rl_b =
         const_cast<resolution_lineage*>(lp.make_resolution_lineage(gl_b, rule_id{0}));
@@ -171,20 +174,20 @@ TEST_F(MhuEliminationGeneratorIntegrationTest, ConstrainEliminatesHeadWithCollid
     EXPECT_EQ(common.whnf(&goal_b), &goal_b);
 
     EXPECT_THAT(collect_elims(mhu->constrain(rl_a)), ElementsAre(rl_b));
-    expect_whnf_functor(common, &goal_a, "f", 0);
-    expect_whnf_functor(common, &goal_b, "f", 0);
+    expect_whnf_functor(atoms, common, &goal_a, "f", 0);
+    expect_whnf_functor(atoms, common, &goal_b, "f", 0);
 }
 
 TEST_F(MhuEliminationGeneratorIntegrationTest, ConstrainDoesNotEliminateCompatibleHeadOnSameRep) {
     expr goal_a{expr::var{0}};
-    expr head_a{expr::functor{"f", {}}};
+    expr head_a{expr::functor{atoms.id("f"), {}}};
     goal_lineage* gl_a = const_cast<goal_lineage*>(lp.make_goal_lineage(nullptr, 0));
     resolution_lineage* rl_a =
         const_cast<resolution_lineage*>(lp.make_resolution_lineage(gl_a, rule_id{0}));
     link_candidate(gl_a, rule_id{0});
 
     expr goal_b{expr::var{0}};
-    expr head_b{expr::functor{"f", {}}};
+    expr head_b{expr::functor{atoms.id("f"), {}}};
     goal_lineage* gl_b = const_cast<goal_lineage*>(lp.make_goal_lineage(nullptr, 1));
     resolution_lineage* rl_b =
         const_cast<resolution_lineage*>(lp.make_resolution_lineage(gl_b, rule_id{0}));
@@ -195,15 +198,15 @@ TEST_F(MhuEliminationGeneratorIntegrationTest, ConstrainDoesNotEliminateCompatib
     EXPECT_EQ(common.whnf(&goal_a), &goal_a);
 
     EXPECT_THAT(collect_elims(mhu->constrain(rl_a)), IsEmpty());
-    expect_whnf_functor(common, &goal_a, "f", 0);
-    expect_whnf_functor(common, &goal_b, "f", 0);
+    expect_whnf_functor(atoms, common, &goal_a, "f", 0);
+    expect_whnf_functor(atoms, common, &goal_b, "f", 0);
 
     EXPECT_THAT(collect_elims(mhu->constrain(rl_b)), IsEmpty());
 }
 
 TEST_F(MhuEliminationGeneratorIntegrationTest, ConstrainDoesNotEliminateHeadWatchingDisjointRep) {
     expr goal_a{expr::var{0}};
-    expr head_a{expr::functor{"f", {}}};
+    expr head_a{expr::functor{atoms.id("f"), {}}};
     goal_lineage* gl_a = const_cast<goal_lineage*>(lp.make_goal_lineage(nullptr, 0));
     resolution_lineage* rl_a =
         const_cast<resolution_lineage*>(lp.make_resolution_lineage(gl_a, rule_id{0}));
@@ -211,7 +214,7 @@ TEST_F(MhuEliminationGeneratorIntegrationTest, ConstrainDoesNotEliminateHeadWatc
 
     expr var2{expr::var{2}};
     expr goal_b{var2};
-    expr head_b{expr::functor{"g", {}}};
+    expr head_b{expr::functor{atoms.id("g"), {}}};
     goal_lineage* gl_b = const_cast<goal_lineage*>(lp.make_goal_lineage(nullptr, 2));
     resolution_lineage* rl_b =
         const_cast<resolution_lineage*>(lp.make_resolution_lineage(gl_b, rule_id{0}));
@@ -222,15 +225,15 @@ TEST_F(MhuEliminationGeneratorIntegrationTest, ConstrainDoesNotEliminateHeadWatc
     EXPECT_EQ(common.whnf(&goal_a), &goal_a);
 
     EXPECT_THAT(collect_elims(mhu->constrain(rl_a)), IsEmpty());
-    expect_whnf_functor(common, &goal_a, "f", 0);
+    expect_whnf_functor(atoms, common, &goal_a, "f", 0);
     EXPECT_EQ(common.whnf(&var2), &var2);
 }
 
 TEST_F(MhuEliminationGeneratorIntegrationTest,
     ConstrainDoesNotElimSiblingButEliminatesCrossGoalIncompatibleHead) {
     expr goal{expr::var{0}};
-    expr head_f{expr::functor{"f", {}}};
-    expr head_g{expr::functor{"g", {}}};
+    expr head_f{expr::functor{atoms.id("f"), {}}};
+    expr head_g{expr::functor{atoms.id("g"), {}}};
 
     goal_lineage* gl = const_cast<goal_lineage*>(lp.make_goal_lineage(nullptr, 0));
     resolution_lineage* rl_rule0 =
@@ -253,7 +256,7 @@ TEST_F(MhuEliminationGeneratorIntegrationTest,
     EXPECT_EQ(common.whnf(&goal), &goal);
 
     EXPECT_THAT(collect_elims(mhu->constrain(rl_rule0)), ElementsAre(rl_other));
-    expect_whnf_functor(common, &goal, "f", 0);
+    expect_whnf_functor(atoms, common, &goal, "f", 0);
 }
 
 TEST_F(MhuEliminationGeneratorIntegrationTest,
@@ -264,14 +267,14 @@ TEST_F(MhuEliminationGeneratorIntegrationTest,
 
     expr var_a{expr::var{kIdxA}};
     expr var_b{expr::var{kIdxB}};
-    expr goal_f{expr::functor{"f", {&var_a, &var_b}}};
+    expr goal_f{expr::functor{atoms.id("f"), {&var_a, &var_b}}};
     expr head_x{expr::var{kIdxHeadX}};
-    expr head_fxx{expr::functor{"f", {&head_x, &head_x}}};
+    expr head_fxx{expr::functor{atoms.id("f"), {&head_x, &head_x}}};
 
-    expr abc{expr::functor{"abc", {}}};
-    expr _123{expr::functor{"123", {}}};
-    expr goal_g{expr::functor{"g", {&var_a, &var_b}}};
-    expr head_g{expr::functor{"g", {&abc, &_123}}};
+    expr abc{expr::functor{atoms.id("abc"), {}}};
+    expr _123{expr::functor{atoms.id("123"), {}}};
+    expr goal_g{expr::functor{atoms.id("g"), {&var_a, &var_b}}};
+    expr head_g{expr::functor{atoms.id("g"), {&abc, &_123}}};
 
     goal_lineage* gl_f = const_cast<goal_lineage*>(lp.make_goal_lineage(nullptr, 0));
     goal_lineage* gl_g = const_cast<goal_lineage*>(lp.make_goal_lineage(nullptr, 1));
@@ -301,14 +304,14 @@ TEST_F(MhuEliminationGeneratorIntegrationTest,
 
     expr var_a{expr::var{kIdxA}};
     expr var_b{expr::var{kIdxB}};
-    expr goal_f{expr::functor{"f", {&var_a, &var_b}}};
+    expr goal_f{expr::functor{atoms.id("f"), {&var_a, &var_b}}};
     expr head_x{expr::var{kIdxHeadX}};
-    expr head_fxx{expr::functor{"f", {&head_x, &head_x}}};
+    expr head_fxx{expr::functor{atoms.id("f"), {&head_x, &head_x}}};
 
-    expr abc{expr::functor{"abc", {}}};
-    expr _123{expr::functor{"123", {}}};
-    expr goal_g{expr::functor{"g", {&var_a, &var_b}}};
-    expr head_g{expr::functor{"g", {&abc, &_123}}};
+    expr abc{expr::functor{atoms.id("abc"), {}}};
+    expr _123{expr::functor{atoms.id("123"), {}}};
+    expr goal_g{expr::functor{atoms.id("g"), {&var_a, &var_b}}};
+    expr head_g{expr::functor{atoms.id("g"), {&abc, &_123}}};
 
     goal_lineage* gl_f = const_cast<goal_lineage*>(lp.make_goal_lineage(nullptr, 0));
     goal_lineage* gl_g = const_cast<goal_lineage*>(lp.make_goal_lineage(nullptr, 1));
@@ -327,9 +330,9 @@ TEST_F(MhuEliminationGeneratorIntegrationTest,
     EXPECT_THAT(collect_elims(mhu->constrain(rl_g)), ElementsAre(rl_f));
     const auto& whnf_a = std::get<expr::functor>(common.whnf(&var_a)->content);
     const auto& whnf_b = std::get<expr::functor>(common.whnf(&var_b)->content);
-    EXPECT_EQ(whnf_a.name, "abc");
+    EXPECT_EQ(whnf_a.id, atoms.id("abc"));
     EXPECT_TRUE(whnf_a.args.empty());
-    EXPECT_EQ(whnf_b.name, "123");
+    EXPECT_EQ(whnf_b.id, atoms.id("123"));
     EXPECT_TRUE(whnf_b.args.empty());
 }
 
@@ -341,13 +344,13 @@ TEST_F(MhuEliminationGeneratorIntegrationTest,
 
     expr var_a{expr::var{kIdxA}};
     expr var_b{expr::var{kIdxB}};
-    expr goal_f{expr::functor{"f", {&var_a, &var_b}}};
+    expr goal_f{expr::functor{atoms.id("f"), {&var_a, &var_b}}};
     expr head_x{expr::var{kIdxHeadX}};
-    expr head_fxx{expr::functor{"f", {&head_x, &head_x}}};
+    expr head_fxx{expr::functor{atoms.id("f"), {&head_x, &head_x}}};
 
-    expr abc{expr::functor{"abc", {}}};
-    expr goal_g{expr::functor{"g", {&var_b}}};
-    expr head_g{expr::functor{"g", {&abc}}};
+    expr abc{expr::functor{atoms.id("abc"), {}}};
+    expr goal_g{expr::functor{atoms.id("g"), {&var_b}}};
+    expr head_g{expr::functor{atoms.id("g"), {&abc}}};
 
     goal_lineage* gl_f = const_cast<goal_lineage*>(lp.make_goal_lineage(nullptr, 0));
     goal_lineage* gl_g = const_cast<goal_lineage*>(lp.make_goal_lineage(nullptr, 1));
@@ -365,7 +368,7 @@ TEST_F(MhuEliminationGeneratorIntegrationTest,
 
     EXPECT_THAT(collect_elims(mhu->constrain(rl_g)), IsEmpty());
     const auto& whnf_b = std::get<expr::functor>(common.whnf(&var_b)->content);
-    EXPECT_EQ(whnf_b.name, "abc");
+    EXPECT_EQ(whnf_b.id, atoms.id("abc"));
     EXPECT_TRUE(whnf_b.args.empty());
     EXPECT_EQ(common.whnf(&var_a), &var_a);
 }
@@ -378,13 +381,13 @@ TEST_F(MhuEliminationGeneratorIntegrationTest,
 
     expr var_a{expr::var{kIdxA}};
     expr var_b{expr::var{kIdxB}};
-    expr goal_f{expr::functor{"f", {&var_a, &var_b}}};
+    expr goal_f{expr::functor{atoms.id("f"), {&var_a, &var_b}}};
     expr head_x{expr::var{kIdxHeadX}};
-    expr head_fxx{expr::functor{"f", {&head_x, &head_x}}};
+    expr head_fxx{expr::functor{atoms.id("f"), {&head_x, &head_x}}};
 
-    expr abc{expr::functor{"abc", {}}};
-    expr goal_g{expr::functor{"g", {&var_b}}};
-    expr head_g{expr::functor{"g", {&abc}}};
+    expr abc{expr::functor{atoms.id("abc"), {}}};
+    expr goal_g{expr::functor{atoms.id("g"), {&var_b}}};
+    expr head_g{expr::functor{atoms.id("g"), {&abc}}};
 
     goal_lineage* gl_f = const_cast<goal_lineage*>(lp.make_goal_lineage(nullptr, 0));
     goal_lineage* gl_g = const_cast<goal_lineage*>(lp.make_goal_lineage(nullptr, 1));
@@ -402,25 +405,25 @@ TEST_F(MhuEliminationGeneratorIntegrationTest,
 
     EXPECT_THAT(collect_elims(mhu->constrain(rl_g)), IsEmpty());
     const auto& whnf_b_after_g = std::get<expr::functor>(common.whnf(&var_b)->content);
-    EXPECT_EQ(whnf_b_after_g.name, "abc");
+    EXPECT_EQ(whnf_b_after_g.id, atoms.id("abc"));
     EXPECT_TRUE(whnf_b_after_g.args.empty());
     EXPECT_EQ(common.whnf(&var_a), &var_a);
 
     EXPECT_THAT(collect_elims(mhu->constrain(rl_f)), IsEmpty());
     const auto& whnf_a = std::get<expr::functor>(common.whnf(&var_a)->content);
     const auto& whnf_b = std::get<expr::functor>(common.whnf(&var_b)->content);
-    EXPECT_EQ(whnf_a.name, "abc");
+    EXPECT_EQ(whnf_a.id, atoms.id("abc"));
     EXPECT_TRUE(whnf_a.args.empty());
-    EXPECT_EQ(whnf_b.name, "abc");
+    EXPECT_EQ(whnf_b.id, atoms.id("abc"));
     EXPECT_TRUE(whnf_b.args.empty());
 }
 
 TEST_F(MhuEliminationGeneratorIntegrationTest,
     ConstrainOnThreeSiblingRulesWatchingSameRepYieldsNoElims) {
     expr goal{expr::var{0}};
-    expr head_a{expr::functor{"f", {}}};
-    expr head_b{expr::functor{"g", {}}};
-    expr head_c{expr::functor{"h", {}}};
+    expr head_a{expr::functor{atoms.id("f"), {}}};
+    expr head_b{expr::functor{atoms.id("g"), {}}};
+    expr head_c{expr::functor{atoms.id("h"), {}}};
 
     goal_lineage* gl = const_cast<goal_lineage*>(lp.make_goal_lineage(nullptr, 0));
     resolution_lineage* rl_a =
@@ -440,12 +443,12 @@ TEST_F(MhuEliminationGeneratorIntegrationTest,
     EXPECT_EQ(common.whnf(&goal), &goal);
 
     EXPECT_THAT(collect_elims(mhu->constrain(rl_a)), IsEmpty());
-    expect_whnf_functor(common, &goal, "f", 0);
+    expect_whnf_functor(atoms, common, &goal, "f", 0);
 }
 
 TEST_F(MhuEliminationGeneratorIntegrationTest, TryAddHeadFailsOnOccursCheck) {
     expr goal{expr::var{0}};
-    expr head{expr::functor{"f", {&goal}}};
+    expr head{expr::functor{atoms.id("f"), {&goal}}};
     goal_lineage* gl = const_cast<goal_lineage*>(lp.make_goal_lineage(nullptr, 0));
     resolution_lineage* rl =
         const_cast<resolution_lineage*>(lp.make_resolution_lineage(gl, rule_id{0}));
@@ -457,7 +460,7 @@ TEST_F(MhuEliminationGeneratorIntegrationTest, TryAddHeadFailsOnOccursCheck) {
 
 TEST_F(MhuEliminationGeneratorIntegrationTest, ClearMhuHeadsAllowsFreshTryAdd) {
     expr goal{expr::var{0}};
-    expr head{expr::functor{"f", {}}};
+    expr head{expr::functor{atoms.id("f"), {}}};
     goal_lineage* gl = const_cast<goal_lineage*>(lp.make_goal_lineage(nullptr, 0));
     resolution_lineage* rl =
         const_cast<resolution_lineage*>(lp.make_resolution_lineage(gl, rule_id{0}));
@@ -468,7 +471,7 @@ TEST_F(MhuEliminationGeneratorIntegrationTest, ClearMhuHeadsAllowsFreshTryAdd) {
     EXPECT_TRUE(mhu->try_add_head(rl, &goal, &head));
 
     EXPECT_THAT(collect_elims(mhu->constrain(rl)), IsEmpty());
-    expect_whnf_functor(common, &goal, "f", 0);
+    expect_whnf_functor(atoms, common, &goal, "f", 0);
 
     mhu->clear_mhu_heads();
     EXPECT_TRUE(mhu->try_add_head(rl, &goal, &head));
@@ -476,8 +479,8 @@ TEST_F(MhuEliminationGeneratorIntegrationTest, ClearMhuHeadsAllowsFreshTryAdd) {
 
 TEST_F(MhuEliminationGeneratorIntegrationTest, TryAddHeadOnSameLineageTwiceThrowsInDebug) {
     expr goal{expr::var{0}};
-    expr head_f{expr::functor{"f", {}}};
-    expr head_g{expr::functor{"g", {}}};
+    expr head_f{expr::functor{atoms.id("f"), {}}};
+    expr head_g{expr::functor{atoms.id("g"), {}}};
     goal_lineage* gl = const_cast<goal_lineage*>(lp.make_goal_lineage(nullptr, 0));
     resolution_lineage* rl =
         const_cast<resolution_lineage*>(lp.make_resolution_lineage(gl, rule_id{0}));
@@ -501,10 +504,10 @@ TEST_F(MhuEliminationGeneratorIntegrationTest, ConstrainWithoutRegisteredHeadThr
 TEST_F(MhuEliminationGeneratorIntegrationTest, ConstrainPublishesTwoRepsToCommon) {
     expr var0{expr::var{0}};
     expr var1{expr::var{1}};
-    expr abc{expr::functor{"abc", {}}};
-    expr _123{expr::functor{"123", {}}};
-    expr goal{expr::functor{"f", {&var0, &var1}}};
-    expr head{expr::functor{"f", {&abc, &_123}}};
+    expr abc{expr::functor{atoms.id("abc"), {}}};
+    expr _123{expr::functor{atoms.id("123"), {}}};
+    expr goal{expr::functor{atoms.id("f"), {&var0, &var1}}};
+    expr head{expr::functor{atoms.id("f"), {&abc, &_123}}};
     goal_lineage* gl = const_cast<goal_lineage*>(lp.make_goal_lineage(nullptr, 0));
     resolution_lineage* rl =
         const_cast<resolution_lineage*>(lp.make_resolution_lineage(gl, rule_id{0}));
@@ -513,8 +516,8 @@ TEST_F(MhuEliminationGeneratorIntegrationTest, ConstrainPublishesTwoRepsToCommon
     ASSERT_TRUE(mhu->try_add_head(rl, &goal, &head));
     EXPECT_THAT(collect_elims(mhu->constrain(rl)), IsEmpty());
 
-    expect_whnf_functor(common, &var0, "abc", 0);
-    expect_whnf_functor(common, &var1, "123", 0);
+    expect_whnf_functor(atoms, common, &var0, "abc", 0);
+    expect_whnf_functor(atoms, common, &var1, "123", 0);
 }
 
 // ---------------------------------------------------------------------------
@@ -523,33 +526,33 @@ TEST_F(MhuEliminationGeneratorIntegrationTest, ConstrainPublishesTwoRepsToCommon
 
 TEST_F(MhuEliminationGeneratorIntegrationTest, TryAddHeadFailsWhenCommonRepAlreadyBoundIncompatibly) {
     expr var0{expr::var{0}};
-    expr head_f{expr::functor{"f", {}}};
-    expr head_g{expr::functor{"g", {}}};
+    expr head_f{expr::functor{atoms.id("f"), {}}};
+    expr head_g{expr::functor{atoms.id("g"), {}}};
     resolution_lineage* rl = link_rl(0, rule_id{0});
 
     common.bind(0, &head_f);
     EXPECT_FALSE(mhu->try_add_head(rl, &var0, &head_g));
-    expect_whnf_functor(common, &var0, "f", 0);
+    expect_whnf_functor(atoms, common, &var0, "f", 0);
 }
 
 TEST_F(MhuEliminationGeneratorIntegrationTest, TryAddHeadSucceedsWhenCommonRepAlreadyBoundCompatibly) {
     expr var0{expr::var{0}};
-    expr head_f{expr::functor{"f", {}}};
+    expr head_f{expr::functor{atoms.id("f"), {}}};
     resolution_lineage* rl = link_rl(0, rule_id{0});
 
     common.bind(0, &head_f);
     ASSERT_TRUE(mhu->try_add_head(rl, &var0, &head_f));
     EXPECT_THAT(collect_elims(mhu->constrain(rl)), IsEmpty());
-    expect_whnf_functor(common, &var0, "f", 0);
+    expect_whnf_functor(atoms, common, &var0, "f", 0);
 }
 
 TEST_F(MhuEliminationGeneratorIntegrationTest, TryAddHeadFailsWhenCommonEquatesRepsHeadWouldDistinguish) {
     expr var0{expr::var{0}};
     expr var1{expr::var{1}};
-    expr abc{expr::functor{"abc", {}}};
-    expr def{expr::functor{"def", {}}};
-    expr goal{expr::functor{"f", {&var0, &var1}}};
-    expr head{expr::functor{"f", {&abc, &def}}};
+    expr abc{expr::functor{atoms.id("abc"), {}}};
+    expr def{expr::functor{atoms.id("def"), {}}};
+    expr goal{expr::functor{atoms.id("f"), {&var0, &var1}}};
+    expr head{expr::functor{atoms.id("f"), {&abc, &def}}};
     resolution_lineage* rl = link_rl(0, rule_id{0});
 
     common.bind(1, &var0);
@@ -561,33 +564,33 @@ TEST_F(MhuEliminationGeneratorIntegrationTest, TryAddHeadFailsWhenCommonEquatesR
 TEST_F(MhuEliminationGeneratorIntegrationTest, TryAddHeadFailsWhenCommonDistinguishesRepsHeadWouldEquate) {
     expr var0{expr::var{0}};
     expr var1{expr::var{1}};
-    expr abc{expr::functor{"abc", {}}};
-    expr def{expr::functor{"def", {}}};
+    expr abc{expr::functor{atoms.id("abc"), {}}};
+    expr def{expr::functor{atoms.id("def"), {}}};
     resolution_lineage* rl = link_rl(0, rule_id{0});
 
     common.bind(0, &abc);
     common.bind(1, &def);
     EXPECT_FALSE(mhu->try_add_head(rl, &var0, &var1));
-    expect_whnf_functor(common, &var0, "abc", 0);
-    expect_whnf_functor(common, &var1, "def", 0);
+    expect_whnf_functor(atoms, common, &var0, "abc", 0);
+    expect_whnf_functor(atoms, common, &var1, "def", 0);
 }
 
 TEST_F(MhuEliminationGeneratorIntegrationTest, TryAddHeadReSyncsNestedGoalAgainstCommon) {
     expr var0{expr::var{0}};
     expr var1{expr::var{1}};
-    expr a{expr::functor{"a", {}}};
-    expr b{expr::functor{"b", {}}};
-    expr fab{expr::functor{"f", {&a, &b}}};
-    expr c{expr::functor{"c", {}}};
-    expr goal{expr::functor{"g", {&var0, &var1}}};
-    expr head{expr::functor{"g", {&fab, &c}}};
+    expr a{expr::functor{atoms.id("a"), {}}};
+    expr b{expr::functor{atoms.id("b"), {}}};
+    expr fab{expr::functor{atoms.id("f"), {&a, &b}}};
+    expr c{expr::functor{atoms.id("c"), {}}};
+    expr goal{expr::functor{atoms.id("g"), {&var0, &var1}}};
+    expr head{expr::functor{atoms.id("g"), {&fab, &c}}};
     resolution_lineage* rl = link_rl(0, rule_id{0});
 
     common.bind(0, &fab);
     ASSERT_TRUE(mhu->try_add_head(rl, &goal, &head));
     EXPECT_THAT(collect_elims(mhu->constrain(rl)), IsEmpty());
-    expect_whnf_functor(common, &var0, "f", 2);
-    expect_whnf_functor(common, &var1, "c", 0);
+    expect_whnf_functor(atoms, common, &var0, "f", 2);
+    expect_whnf_functor(atoms, common, &var1, "c", 0);
 }
 
 // ---------------------------------------------------------------------------
@@ -596,11 +599,11 @@ TEST_F(MhuEliminationGeneratorIntegrationTest, TryAddHeadReSyncsNestedGoalAgains
 
 TEST_F(MhuEliminationGeneratorIntegrationTest, ConstrainEliminatesAllIncompatibleHeadsOnSharedRep) {
     expr goal{expr::var{0}};
-    expr head_f{expr::functor{"f", {}}};
-    expr head_g{expr::functor{"g", {}}};
-    expr head_h{expr::functor{"h", {}}};
-    expr head_i{expr::functor{"i", {}}};
-    expr head_j{expr::functor{"j", {}}};
+    expr head_f{expr::functor{atoms.id("f"), {}}};
+    expr head_g{expr::functor{atoms.id("g"), {}}};
+    expr head_h{expr::functor{atoms.id("h"), {}}};
+    expr head_i{expr::functor{atoms.id("i"), {}}};
+    expr head_j{expr::functor{atoms.id("j"), {}}};
 
     resolution_lineage* rl_f = link_rl(0, rule_id{0});
     resolution_lineage* rl_g = link_rl(1, rule_id{0});
@@ -616,22 +619,22 @@ TEST_F(MhuEliminationGeneratorIntegrationTest, ConstrainEliminatesAllIncompatibl
 
     EXPECT_THAT(collect_elims(mhu->constrain(rl_f)),
                 UnorderedElementsAre(rl_g, rl_h, rl_i, rl_j));
-    expect_whnf_functor(common, &goal, "f", 0);
+    expect_whnf_functor(atoms, common, &goal, "f", 0);
 }
 
 TEST_F(MhuEliminationGeneratorIntegrationTest, ConstrainPublishesTwoRepsEliminatesTwoWatchers) {
     expr var0{expr::var{0}};
     expr var1{expr::var{1}};
-    expr a{expr::functor{"a", {}}};
-    expr b{expr::functor{"b", {}}};
-    expr c{expr::functor{"c", {}}};
-    expr d{expr::functor{"d", {}}};
-    expr goal_hub{expr::functor{"f", {&var0, &var1}}};
-    expr head_hub{expr::functor{"f", {&a, &b}}};
-    expr goal_sat0{expr::functor{"g", {&var0}}};
-    expr head_sat0{expr::functor{"g", {&c}}};
-    expr goal_sat1{expr::functor{"h", {&var1}}};
-    expr head_sat1{expr::functor{"h", {&d}}};
+    expr a{expr::functor{atoms.id("a"), {}}};
+    expr b{expr::functor{atoms.id("b"), {}}};
+    expr c{expr::functor{atoms.id("c"), {}}};
+    expr d{expr::functor{atoms.id("d"), {}}};
+    expr goal_hub{expr::functor{atoms.id("f"), {&var0, &var1}}};
+    expr head_hub{expr::functor{atoms.id("f"), {&a, &b}}};
+    expr goal_sat0{expr::functor{atoms.id("g"), {&var0}}};
+    expr head_sat0{expr::functor{atoms.id("g"), {&c}}};
+    expr goal_sat1{expr::functor{atoms.id("h"), {&var1}}};
+    expr head_sat1{expr::functor{atoms.id("h"), {&d}}};
 
     resolution_lineage* rl_hub = link_rl(0, rule_id{0});
     resolution_lineage* rl_sat0 = link_rl(1, rule_id{0});
@@ -643,8 +646,8 @@ TEST_F(MhuEliminationGeneratorIntegrationTest, ConstrainPublishesTwoRepsEliminat
 
     EXPECT_THAT(collect_elims(mhu->constrain(rl_hub)),
                 UnorderedElementsAre(rl_sat0, rl_sat1));
-    expect_whnf_functor(common, &var0, "a", 0);
-    expect_whnf_functor(common, &var1, "b", 0);
+    expect_whnf_functor(atoms, common, &var0, "a", 0);
+    expect_whnf_functor(atoms, common, &var1, "b", 0);
 }
 
 TEST_F(MhuEliminationGeneratorIntegrationTest, ConstrainEqualityHeadDoesNotEliminateSingleRepSatellites) {
@@ -652,14 +655,14 @@ TEST_F(MhuEliminationGeneratorIntegrationTest, ConstrainEqualityHeadDoesNotElimi
     expr var0{expr::var{0}};
     expr var1{expr::var{1}};
     expr head_x{expr::var{kIdxHeadX}};
-    expr goal_f{expr::functor{"f", {&var0, &var1}}};
-    expr head_fxx{expr::functor{"f", {&head_x, &head_x}}};
-    expr abc{expr::functor{"abc", {}}};
-    expr def{expr::functor{"def", {}}};
-    expr goal_b{expr::functor{"g", {&var0}}};
-    expr head_b{expr::functor{"g", {&abc}}};
-    expr goal_c{expr::functor{"g", {&var1}}};
-    expr head_c{expr::functor{"g", {&def}}};
+    expr goal_f{expr::functor{atoms.id("f"), {&var0, &var1}}};
+    expr head_fxx{expr::functor{atoms.id("f"), {&head_x, &head_x}}};
+    expr abc{expr::functor{atoms.id("abc"), {}}};
+    expr def{expr::functor{atoms.id("def"), {}}};
+    expr goal_b{expr::functor{atoms.id("g"), {&var0}}};
+    expr head_b{expr::functor{atoms.id("g"), {&abc}}};
+    expr goal_c{expr::functor{atoms.id("g"), {&var1}}};
+    expr head_c{expr::functor{atoms.id("g"), {&def}}};
 
     resolution_lineage* rl_a = link_rl(0, rule_id{0});
     resolution_lineage* rl_b = link_rl(1, rule_id{0});
@@ -681,13 +684,13 @@ TEST_F(MhuEliminationGeneratorIntegrationTest, ConstrainPartialOverlapThreeHeadC
     expr var0{expr::var{0}};
     expr var1{expr::var{1}};
     expr var2{expr::var{2}};
-    expr a{expr::functor{"a", {}}};
-    expr b{expr::functor{"b", {}}};
-    expr c{expr::functor{"c", {}}};
-    expr goal_a{expr::functor{"p", {&var0, &var1, &var2}}};
-    expr head_a{expr::functor{"p", {&a, &b, &c}}};
-    expr goal_b{expr::functor{"q", {&var1, &var2}}};
-    expr head_b{expr::functor{"q", {&b, &c}}};
+    expr a{expr::functor{atoms.id("a"), {}}};
+    expr b{expr::functor{atoms.id("b"), {}}};
+    expr c{expr::functor{atoms.id("c"), {}}};
+    expr goal_a{expr::functor{atoms.id("p"), {&var0, &var1, &var2}}};
+    expr head_a{expr::functor{atoms.id("p"), {&a, &b, &c}}};
+    expr goal_b{expr::functor{atoms.id("q"), {&var1, &var2}}};
+    expr head_b{expr::functor{atoms.id("q"), {&b, &c}}};
 
     resolution_lineage* rl_a = link_rl(0, rule_id{0});
     resolution_lineage* rl_b = link_rl(1, rule_id{0});
@@ -696,9 +699,9 @@ TEST_F(MhuEliminationGeneratorIntegrationTest, ConstrainPartialOverlapThreeHeadC
     ASSERT_TRUE(mhu->try_add_head(rl_b, &goal_b, &head_b));
 
     EXPECT_THAT(collect_elims(mhu->constrain(rl_a)), IsEmpty());
-    expect_whnf_functor(common, &var0, "a", 0);
-    expect_whnf_functor(common, &var1, "b", 0);
-    expect_whnf_functor(common, &var2, "c", 0);
+    expect_whnf_functor(atoms, common, &var0, "a", 0);
+    expect_whnf_functor(atoms, common, &var1, "b", 0);
+    expect_whnf_functor(atoms, common, &var2, "c", 0);
 }
 
 TEST_F(MhuEliminationGeneratorIntegrationTest,
@@ -706,16 +709,16 @@ TEST_F(MhuEliminationGeneratorIntegrationTest,
     expr var0{expr::var{0}};
     expr var1{expr::var{1}};
     expr var2{expr::var{2}};
-    expr a{expr::functor{"a", {}}};
-    expr b{expr::functor{"b", {}}};
-    expr c{expr::functor{"c", {}}};
-    expr d{expr::functor{"d", {}}};
-    expr goal_a{expr::functor{"p", {&var0, &var1, &var2}}};
-    expr head_a{expr::functor{"p", {&a, &b, &c}}};
-    expr goal_b{expr::functor{"q", {&var1, &var2}}};
-    expr head_b{expr::functor{"q", {&b, &c}}};
-    expr goal_c{expr::functor{"r", {&var0, &var2}}};
-    expr head_c{expr::functor{"r", {&a, &d}}};
+    expr a{expr::functor{atoms.id("a"), {}}};
+    expr b{expr::functor{atoms.id("b"), {}}};
+    expr c{expr::functor{atoms.id("c"), {}}};
+    expr d{expr::functor{atoms.id("d"), {}}};
+    expr goal_a{expr::functor{atoms.id("p"), {&var0, &var1, &var2}}};
+    expr head_a{expr::functor{atoms.id("p"), {&a, &b, &c}}};
+    expr goal_b{expr::functor{atoms.id("q"), {&var1, &var2}}};
+    expr head_b{expr::functor{atoms.id("q"), {&b, &c}}};
+    expr goal_c{expr::functor{atoms.id("r"), {&var0, &var2}}};
+    expr head_c{expr::functor{atoms.id("r"), {&a, &d}}};
 
     resolution_lineage* rl_a = link_rl(0, rule_id{0});
     resolution_lineage* rl_b = link_rl(1, rule_id{0});
@@ -726,7 +729,7 @@ TEST_F(MhuEliminationGeneratorIntegrationTest,
     ASSERT_TRUE(mhu->try_add_head(rl_c, &goal_c, &head_c));
 
     EXPECT_THAT(collect_elims(mhu->constrain(rl_a)), ElementsAre(rl_c));
-    expect_whnf_functor(common, &var2, "c", 0);
+    expect_whnf_functor(atoms, common, &var2, "c", 0);
 }
 
 TEST_F(MhuEliminationGeneratorIntegrationTest, ConstrainDisjointRepHeadSurvivesWhenSiblingRepBound) {
@@ -739,14 +742,14 @@ TEST_F(MhuEliminationGeneratorIntegrationTest, ConstrainDisjointRepHeadSurvivesW
     expr var_b{expr::var{kIdxB}};
     expr var_c{expr::var{kIdxC}};
     expr head_x{expr::var{kIdxHeadX}};
-    expr goal_f{expr::functor{"f", {&var_a, &var_b}}};
-    expr head_fxx{expr::functor{"f", {&head_x, &head_x}}};
-    expr abc{expr::functor{"abc", {}}};
-    expr goal_g{expr::functor{"g", {&var_b}}};
-    expr head_g{expr::functor{"g", {&abc}}};
-    expr e{expr::functor{"e", {}}};
-    expr goal_h{expr::functor{"h", {&var_c}}};
-    expr head_h{expr::functor{"h", {&e}}};
+    expr goal_f{expr::functor{atoms.id("f"), {&var_a, &var_b}}};
+    expr head_fxx{expr::functor{atoms.id("f"), {&head_x, &head_x}}};
+    expr abc{expr::functor{atoms.id("abc"), {}}};
+    expr goal_g{expr::functor{atoms.id("g"), {&var_b}}};
+    expr head_g{expr::functor{atoms.id("g"), {&abc}}};
+    expr e{expr::functor{atoms.id("e"), {}}};
+    expr goal_h{expr::functor{atoms.id("h"), {&var_c}}};
+    expr head_h{expr::functor{atoms.id("h"), {&e}}};
 
     resolution_lineage* rl_f = link_rl(0, rule_id{0});
     resolution_lineage* rl_g = link_rl(1, rule_id{0});
@@ -757,7 +760,7 @@ TEST_F(MhuEliminationGeneratorIntegrationTest, ConstrainDisjointRepHeadSurvivesW
     ASSERT_TRUE(mhu->try_add_head(rl_h, &goal_h, &head_h));
 
     EXPECT_THAT(collect_elims(mhu->constrain(rl_g)), IsEmpty());
-    expect_whnf_functor(common, &var_b, "abc", 0);
+    expect_whnf_functor(atoms, common, &var_b, "abc", 0);
     EXPECT_EQ(common.whnf(&var_a), &var_a);
     EXPECT_EQ(common.whnf(&var_c), &var_c);
 }
@@ -766,16 +769,16 @@ TEST_F(MhuEliminationGeneratorIntegrationTest, ConstrainDiamondOverlapEliminates
     expr var0{expr::var{0}};
     expr var1{expr::var{1}};
     expr var2{expr::var{2}};
-    expr a{expr::functor{"a", {}}};
-    expr b{expr::functor{"b", {}}};
-    expr c{expr::functor{"c", {}}};
-    expr def{expr::functor{"def", {}}};
-    expr goal_ab{expr::functor{"f", {&var0, &var1}}};
-    expr head_ab{expr::functor{"f", {&a, &b}}};
-    expr goal_bc{expr::functor{"g", {&var1, &var2}}};
-    expr head_bc{expr::functor{"g", {&b, &c}}};
-    expr goal_ac{expr::functor{"h", {&var0, &var2}}};
-    expr head_ac{expr::functor{"h", {&a, &def}}};
+    expr a{expr::functor{atoms.id("a"), {}}};
+    expr b{expr::functor{atoms.id("b"), {}}};
+    expr c{expr::functor{atoms.id("c"), {}}};
+    expr def{expr::functor{atoms.id("def"), {}}};
+    expr goal_ab{expr::functor{atoms.id("f"), {&var0, &var1}}};
+    expr head_ab{expr::functor{atoms.id("f"), {&a, &b}}};
+    expr goal_bc{expr::functor{atoms.id("g"), {&var1, &var2}}};
+    expr head_bc{expr::functor{atoms.id("g"), {&b, &c}}};
+    expr goal_ac{expr::functor{atoms.id("h"), {&var0, &var2}}};
+    expr head_ac{expr::functor{atoms.id("h"), {&a, &def}}};
 
     resolution_lineage* rl_ab = link_rl(0, rule_id{0});
     resolution_lineage* rl_bc = link_rl(1, rule_id{0});
@@ -786,23 +789,23 @@ TEST_F(MhuEliminationGeneratorIntegrationTest, ConstrainDiamondOverlapEliminates
     ASSERT_TRUE(mhu->try_add_head(rl_ac, &goal_ac, &head_ac));
 
     EXPECT_THAT(collect_elims(mhu->constrain(rl_bc)), ElementsAre(rl_ac));
-    expect_whnf_functor(common, &var1, "b", 0);
-    expect_whnf_functor(common, &var2, "c", 0);
+    expect_whnf_functor(atoms, common, &var1, "b", 0);
+    expect_whnf_functor(atoms, common, &var2, "c", 0);
 }
 
 TEST_F(MhuEliminationGeneratorIntegrationTest, ConstrainDiamondOverlapSurvivesWhenCornerAgrees) {
     expr var0{expr::var{0}};
     expr var1{expr::var{1}};
     expr var2{expr::var{2}};
-    expr a{expr::functor{"a", {}}};
-    expr b{expr::functor{"b", {}}};
-    expr c{expr::functor{"c", {}}};
-    expr goal_ab{expr::functor{"f", {&var0, &var1}}};
-    expr head_ab{expr::functor{"f", {&a, &b}}};
-    expr goal_bc{expr::functor{"g", {&var1, &var2}}};
-    expr head_bc{expr::functor{"g", {&b, &c}}};
-    expr goal_ac{expr::functor{"h", {&var0, &var2}}};
-    expr head_ac{expr::functor{"h", {&a, &c}}};
+    expr a{expr::functor{atoms.id("a"), {}}};
+    expr b{expr::functor{atoms.id("b"), {}}};
+    expr c{expr::functor{atoms.id("c"), {}}};
+    expr goal_ab{expr::functor{atoms.id("f"), {&var0, &var1}}};
+    expr head_ab{expr::functor{atoms.id("f"), {&a, &b}}};
+    expr goal_bc{expr::functor{atoms.id("g"), {&var1, &var2}}};
+    expr head_bc{expr::functor{atoms.id("g"), {&b, &c}}};
+    expr goal_ac{expr::functor{atoms.id("h"), {&var0, &var2}}};
+    expr head_ac{expr::functor{atoms.id("h"), {&a, &c}}};
 
     resolution_lineage* rl_ab = link_rl(0, rule_id{0});
     resolution_lineage* rl_bc = link_rl(1, rule_id{0});
@@ -813,7 +816,7 @@ TEST_F(MhuEliminationGeneratorIntegrationTest, ConstrainDiamondOverlapSurvivesWh
     ASSERT_TRUE(mhu->try_add_head(rl_ac, &goal_ac, &head_ac));
 
     EXPECT_THAT(collect_elims(mhu->constrain(rl_bc)), IsEmpty());
-    expect_whnf_functor(common, &var2, "c", 0);
+    expect_whnf_functor(atoms, common, &var2, "c", 0);
 }
 
 // ---------------------------------------------------------------------------
@@ -822,8 +825,8 @@ TEST_F(MhuEliminationGeneratorIntegrationTest, ConstrainDiamondOverlapSurvivesWh
 
 TEST_F(MhuEliminationGeneratorIntegrationTest, SecondConstrainAfterFirstCommitRebasesRemainingHeads) {
     expr var0{expr::var{0}};
-    expr head_f{expr::functor{"f", {}}};
-    expr head_g{expr::functor{"g", {}}};
+    expr head_f{expr::functor{atoms.id("f"), {}}};
+    expr head_g{expr::functor{atoms.id("g"), {}}};
 
     resolution_lineage* rl_a = link_rl(0, rule_id{0});
     resolution_lineage* rl_b = link_rl(1, rule_id{0});
@@ -834,7 +837,7 @@ TEST_F(MhuEliminationGeneratorIntegrationTest, SecondConstrainAfterFirstCommitRe
 
     // ② constrain first
     EXPECT_THAT(collect_elims(mhu->constrain(rl_a)), ElementsAre(rl_b));
-    expect_whnf_functor(common, &var0, "f", 0);
+    expect_whnf_functor(atoms, common, &var0, "f", 0);
 
     // ③ add after commit
     resolution_lineage* rl_c = link_rl(2, rule_id{0});
@@ -842,14 +845,14 @@ TEST_F(MhuEliminationGeneratorIntegrationTest, SecondConstrainAfterFirstCommitRe
 
     // ④ constrain again
     EXPECT_THAT(collect_elims(mhu->constrain(rl_c)), IsEmpty());
-    expect_whnf_functor(common, &var0, "f", 0);
+    expect_whnf_functor(atoms, common, &var0, "f", 0);
 }
 
 TEST_F(MhuEliminationGeneratorIntegrationTest, ConstrainDoesNotYieldSiblingsAsEliminations) {
     expr goal{expr::var{0}};
-    expr head_f{expr::functor{"f", {}}};
-    expr head_g{expr::functor{"g", {}}};
-    expr head_h{expr::functor{"h", {}}};
+    expr head_f{expr::functor{atoms.id("f"), {}}};
+    expr head_g{expr::functor{atoms.id("g"), {}}};
+    expr head_h{expr::functor{atoms.id("h"), {}}};
 
     goal_lineage* gl = const_cast<goal_lineage*>(lp.make_goal_lineage(nullptr, 0));
     resolution_lineage* rl_a =
@@ -870,15 +873,15 @@ TEST_F(MhuEliminationGeneratorIntegrationTest, ConstrainDoesNotYieldSiblingsAsEl
     ASSERT_TRUE(mhu->try_add_head(rl_cross, &goal, &head_g));
 
     EXPECT_THAT(collect_elims(mhu->constrain(rl_a)), ElementsAre(rl_cross));
-    expect_whnf_functor(common, &goal, "f", 0);
+    expect_whnf_functor(atoms, common, &goal, "f", 0);
 }
 
 TEST_F(MhuEliminationGeneratorIntegrationTest, InterleavedDisjointConstrainThenSharedEliminatesLateAdds) {
     expr var0{expr::var{0}};
     expr var1{expr::var{1}};
-    expr head_f{expr::functor{"f", {}}};
-    expr head_g{expr::functor{"g", {}}};
-    expr head_h{expr::functor{"h", {}}};
+    expr head_f{expr::functor{atoms.id("f"), {}}};
+    expr head_g{expr::functor{atoms.id("g"), {}}};
+    expr head_h{expr::functor{atoms.id("h"), {}}};
 
     resolution_lineage* rl_a = link_rl(0, rule_id{0});
     resolution_lineage* rl_b = link_rl(1, rule_id{0});
@@ -893,7 +896,7 @@ TEST_F(MhuEliminationGeneratorIntegrationTest, InterleavedDisjointConstrainThenS
 
     // ③ constrain disjoint first
     EXPECT_THAT(collect_elims(mhu->constrain(rl_c)), IsEmpty());
-    expect_whnf_functor(common, &var1, "h", 0);
+    expect_whnf_functor(atoms, common, &var1, "h", 0);
 
     // ④ add late g on var0
     resolution_lineage* rl_d = link_rl(3, rule_id{0});
@@ -901,7 +904,7 @@ TEST_F(MhuEliminationGeneratorIntegrationTest, InterleavedDisjointConstrainThenS
 
     // ⑤ constrain shared f
     EXPECT_THAT(collect_elims(mhu->constrain(rl_a)), UnorderedElementsAre(rl_b, rl_d));
-    expect_whnf_functor(common, &var0, "f", 0);
+    expect_whnf_functor(atoms, common, &var0, "f", 0);
 }
 
 TEST_F(MhuEliminationGeneratorIntegrationTest, InterleavedGroundPartialThenEqualityConstrain) {
@@ -909,14 +912,14 @@ TEST_F(MhuEliminationGeneratorIntegrationTest, InterleavedGroundPartialThenEqual
     expr var0{expr::var{0}};
     expr var1{expr::var{1}};
     expr head_x{expr::var{kIdxHeadX}};
-    expr goal_f{expr::functor{"f", {&var0, &var1}}};
-    expr head_fxx{expr::functor{"f", {&head_x, &head_x}}};
-    expr abc{expr::functor{"abc", {}}};
-    expr def{expr::functor{"def", {}}};
-    expr goal_g{expr::functor{"g", {&var1}}};
-    expr head_g{expr::functor{"g", {&abc}}};
-    expr goal_h{expr::functor{"h", {&var0}}};
-    expr head_h{expr::functor{"h", {&def}}};
+    expr goal_f{expr::functor{atoms.id("f"), {&var0, &var1}}};
+    expr head_fxx{expr::functor{atoms.id("f"), {&head_x, &head_x}}};
+    expr abc{expr::functor{atoms.id("abc"), {}}};
+    expr def{expr::functor{atoms.id("def"), {}}};
+    expr goal_g{expr::functor{atoms.id("g"), {&var1}}};
+    expr head_g{expr::functor{atoms.id("g"), {&abc}}};
+    expr goal_h{expr::functor{atoms.id("h"), {&var0}}};
+    expr head_h{expr::functor{atoms.id("h"), {&def}}};
 
     resolution_lineage* rl_f = link_rl(0, rule_id{0});
     resolution_lineage* rl_g = link_rl(1, rule_id{0});
@@ -927,7 +930,7 @@ TEST_F(MhuEliminationGeneratorIntegrationTest, InterleavedGroundPartialThenEqual
 
     // ③ constrain partial ground first
     EXPECT_THAT(collect_elims(mhu->constrain(rl_g)), IsEmpty());
-    expect_whnf_functor(common, &var1, "abc", 0);
+    expect_whnf_functor(atoms, common, &var1, "abc", 0);
 
     // ④ add incompatible ground on var0
     resolution_lineage* rl_h = link_rl(2, rule_id{0});
@@ -935,14 +938,14 @@ TEST_F(MhuEliminationGeneratorIntegrationTest, InterleavedGroundPartialThenEqual
 
     // ⑤ constrain equality head
     EXPECT_THAT(collect_elims(mhu->constrain(rl_f)), ElementsAre(rl_h));
-    expect_whnf_functor(common, &var0, "abc", 0);
-    expect_whnf_functor(common, &var1, "abc", 0);
+    expect_whnf_functor(atoms, common, &var0, "abc", 0);
+    expect_whnf_functor(atoms, common, &var1, "abc", 0);
 }
 
 TEST_F(MhuEliminationGeneratorIntegrationTest, InterleavedFirstConstrainBlocksIncompatibleLateAdd) {
     expr var0{expr::var{0}};
-    expr head_f{expr::functor{"f", {}}};
-    expr head_g{expr::functor{"g", {}}};
+    expr head_f{expr::functor{atoms.id("f"), {}}};
+    expr head_g{expr::functor{atoms.id("g"), {}}};
 
     resolution_lineage* rl_a = link_rl(0, rule_id{0});
     resolution_lineage* rl_b = link_rl(1, rule_id{0});
@@ -953,7 +956,7 @@ TEST_F(MhuEliminationGeneratorIntegrationTest, InterleavedFirstConstrainBlocksIn
 
     // ② constrain first
     EXPECT_THAT(collect_elims(mhu->constrain(rl_a)), IsEmpty());
-    expect_whnf_functor(common, &var0, "f", 0);
+    expect_whnf_functor(atoms, common, &var0, "f", 0);
 
     // ③ incompatible late add fails
     resolution_lineage* rl_c = link_rl(2, rule_id{0});
@@ -965,14 +968,14 @@ TEST_F(MhuEliminationGeneratorIntegrationTest, InterleavedFirstConstrainBlocksIn
 
     // ⑤ constrain again
     EXPECT_THAT(collect_elims(mhu->constrain(rl_d)), IsEmpty());
-    expect_whnf_functor(common, &var0, "f", 0);
+    expect_whnf_functor(atoms, common, &var0, "f", 0);
 }
 
 TEST_F(MhuEliminationGeneratorIntegrationTest, InterleavedThreeWaySharedRepConstrainMiddle) {
     expr var0{expr::var{0}};
-    expr head_f{expr::functor{"f", {}}};
-    expr head_g{expr::functor{"g", {}}};
-    expr head_h{expr::functor{"h", {}}};
+    expr head_f{expr::functor{atoms.id("f"), {}}};
+    expr head_g{expr::functor{atoms.id("g"), {}}};
+    expr head_h{expr::functor{atoms.id("h"), {}}};
 
     resolution_lineage* rl_a = link_rl(0, rule_id{0});
     resolution_lineage* rl_b = link_rl(1, rule_id{0});
@@ -985,7 +988,7 @@ TEST_F(MhuEliminationGeneratorIntegrationTest, InterleavedThreeWaySharedRepConst
 
     // ② constrain middle g
     EXPECT_THAT(collect_elims(mhu->constrain(rl_b)), UnorderedElementsAre(rl_a, rl_c));
-    expect_whnf_functor(common, &var0, "g", 0);
+    expect_whnf_functor(atoms, common, &var0, "g", 0);
 
     // ③ compatible late add succeeds (common is g())
     resolution_lineage* rl_d = link_rl(3, rule_id{0});
@@ -997,23 +1000,23 @@ TEST_F(MhuEliminationGeneratorIntegrationTest, InterleavedThreeWaySharedRepConst
 
     // ⑤ constrain compatible g
     EXPECT_THAT(collect_elims(mhu->constrain(rl_d)), IsEmpty());
-    expect_whnf_functor(common, &var0, "g", 0);
+    expect_whnf_functor(atoms, common, &var0, "g", 0);
 }
 
 TEST_F(MhuEliminationGeneratorIntegrationTest, InterleavedMultiRepHubConstrainAfterSatellites) {
     expr var0{expr::var{0}};
     expr var1{expr::var{1}};
-    expr a{expr::functor{"a", {}}};
-    expr b{expr::functor{"b", {}}};
-    expr c{expr::functor{"c", {}}};
-    expr d{expr::functor{"d", {}}};
-    expr e{expr::functor{"e", {}}};
-    expr goal_hub{expr::functor{"f", {&var0, &var1}}};
-    expr head_hub{expr::functor{"f", {&a, &b}}};
-    expr goal_sat0{expr::functor{"g", {&var0}}};
-    expr head_sat0{expr::functor{"g", {&c}}};
-    expr goal_sat1{expr::functor{"h", {&var1}}};
-    expr head_sat1{expr::functor{"h", {&d}}};
+    expr a{expr::functor{atoms.id("a"), {}}};
+    expr b{expr::functor{atoms.id("b"), {}}};
+    expr c{expr::functor{atoms.id("c"), {}}};
+    expr d{expr::functor{atoms.id("d"), {}}};
+    expr e{expr::functor{atoms.id("e"), {}}};
+    expr goal_hub{expr::functor{atoms.id("f"), {&var0, &var1}}};
+    expr head_hub{expr::functor{atoms.id("f"), {&a, &b}}};
+    expr goal_sat0{expr::functor{atoms.id("g"), {&var0}}};
+    expr head_sat0{expr::functor{atoms.id("g"), {&c}}};
+    expr goal_sat1{expr::functor{atoms.id("h"), {&var1}}};
+    expr head_sat1{expr::functor{atoms.id("h"), {&d}}};
 
     resolution_lineage* rl_hub = link_rl(0, rule_id{0});
     resolution_lineage* rl_sat0 = link_rl(1, rule_id{0});
@@ -1037,8 +1040,8 @@ TEST_F(MhuEliminationGeneratorIntegrationTest, InterleavedMultiRepHubConstrainAf
     resolution_lineage* rl_hub2 = link_rl(4, rule_id{0});
     ASSERT_TRUE(mhu->try_add_head(rl_hub2, &goal_hub, &head_hub));
     EXPECT_THAT(collect_elims(mhu->constrain(rl_hub2)), IsEmpty());
-    expect_whnf_functor(common, &var0, "a", 0);
-    expect_whnf_functor(common, &var1, "b", 0);
+    expect_whnf_functor(atoms, common, &var0, "a", 0);
+    expect_whnf_functor(atoms, common, &var1, "b", 0);
 }
 
 // ---------------------------------------------------------------------------
@@ -1051,14 +1054,14 @@ TEST_F(MhuEliminationGeneratorIntegrationTest, ConstrainPublishesManyRepsFromNar
         expr{expr::var{4}}, expr{expr::var{5}}, expr{expr::var{6}}, expr{expr::var{7}},
         expr{expr::var{8}}, expr{expr::var{9}}};
     std::array<expr, 10> grounds{
-        expr{expr::functor{"g0", {}}}, expr{expr::functor{"g1", {}}},
-        expr{expr::functor{"g2", {}}}, expr{expr::functor{"g3", {}}},
-        expr{expr::functor{"g4", {}}}, expr{expr::functor{"g5", {}}},
-        expr{expr::functor{"g6", {}}}, expr{expr::functor{"g7", {}}},
-        expr{expr::functor{"g8", {}}}, expr{expr::functor{"g9", {}}}};
+        expr{expr::functor{atoms.id("g0"), {}}}, expr{expr::functor{atoms.id("g1"), {}}},
+        expr{expr::functor{atoms.id("g2"), {}}}, expr{expr::functor{atoms.id("g3"), {}}},
+        expr{expr::functor{atoms.id("g4"), {}}}, expr{expr::functor{atoms.id("g5"), {}}},
+        expr{expr::functor{atoms.id("g6"), {}}}, expr{expr::functor{atoms.id("g7"), {}}},
+        expr{expr::functor{atoms.id("g8"), {}}}, expr{expr::functor{atoms.id("g9"), {}}}};
 
-    expr goal = make_functor_expr("f", vars);
-    expr head = make_functor_expr("f", grounds);
+    expr goal = make_functor_expr(atoms, "f", vars);
+    expr head = make_functor_expr(atoms, "f", grounds);
     resolution_lineage* rl = link_rl(0, rule_id{0});
 
     ASSERT_TRUE(mhu->try_add_head(rl, &goal, &head));
@@ -1066,7 +1069,7 @@ TEST_F(MhuEliminationGeneratorIntegrationTest, ConstrainPublishesManyRepsFromNar
 
     for (size_t i = 0; i < 10; ++i) {
         std::string name = "g" + std::to_string(i);
-        expect_whnf_functor(common, &vars[i], name.c_str(), 0);
+        expect_whnf_functor(atoms, common, &vars[i], name.c_str(), 0);
     }
 }
 
@@ -1077,16 +1080,16 @@ TEST_F(MhuEliminationGeneratorIntegrationTest, DeepNestedGoalTouchesManyVarsOnAd
     expr var3{expr::var{3}};
     expr hx{expr::var{10}};
     expr fx{expr::var{12}};
-    expr h_inner{expr::functor{"h", {&var0, &var1}}};
-    expr g_mid{expr::functor{"g", {&h_inner, &var2}}};
-    expr goal{expr::functor{"f", {&g_mid, &var3}}};
-    expr head_h{expr::functor{"h", {&hx, &hx}}};
-    expr def{expr::functor{"def", {}}};
-    expr head_g{expr::functor{"g", {&head_h, &def}}};
-    expr head_f{expr::functor{"f", {&head_g, &fx}}};
-    expr abc{expr::functor{"abc", {}}};
-    expr goal_sat{expr::functor{"s", {&var2}}};
-    expr head_sat{expr::functor{"s", {&abc}}};
+    expr h_inner{expr::functor{atoms.id("h"), {&var0, &var1}}};
+    expr g_mid{expr::functor{atoms.id("g"), {&h_inner, &var2}}};
+    expr goal{expr::functor{atoms.id("f"), {&g_mid, &var3}}};
+    expr head_h{expr::functor{atoms.id("h"), {&hx, &hx}}};
+    expr def{expr::functor{atoms.id("def"), {}}};
+    expr head_g{expr::functor{atoms.id("g"), {&head_h, &def}}};
+    expr head_f{expr::functor{atoms.id("f"), {&head_g, &fx}}};
+    expr abc{expr::functor{atoms.id("abc"), {}}};
+    expr goal_sat{expr::functor{atoms.id("s"), {&var2}}};
+    expr head_sat{expr::functor{atoms.id("s"), {&abc}}};
 
     resolution_lineage* rl_nested = link_rl(0, rule_id{0});
     resolution_lineage* rl_sat = link_rl(1, rule_id{0});
@@ -1102,9 +1105,9 @@ TEST_F(MhuEliminationGeneratorIntegrationTest, ManyHeadsDisjointRepsNoCrossElimi
         expr{expr::var{0}}, expr{expr::var{1}}, expr{expr::var{2}},
         expr{expr::var{3}}, expr{expr::var{4}}, expr{expr::var{5}}};
     std::array<expr, 6> heads{
-        expr{expr::functor{"g0", {}}}, expr{expr::functor{"g1", {}}},
-        expr{expr::functor{"g2", {}}}, expr{expr::functor{"g3", {}}},
-        expr{expr::functor{"g4", {}}}, expr{expr::functor{"g5", {}}}};
+        expr{expr::functor{atoms.id("g0"), {}}}, expr{expr::functor{atoms.id("g1"), {}}},
+        expr{expr::functor{atoms.id("g2"), {}}}, expr{expr::functor{atoms.id("g3"), {}}},
+        expr{expr::functor{atoms.id("g4"), {}}}, expr{expr::functor{atoms.id("g5"), {}}}};
     std::array<resolution_lineage*, 6> rls;
 
     for (size_t i = 0; i < 6; ++i)
@@ -1114,7 +1117,7 @@ TEST_F(MhuEliminationGeneratorIntegrationTest, ManyHeadsDisjointRepsNoCrossElimi
         ASSERT_TRUE(mhu->try_add_head(rls[i], &vars[i], &heads[i]));
 
     EXPECT_THAT(collect_elims(mhu->constrain(rls[2])), IsEmpty());
-    expect_whnf_functor(common, &vars[2], "g2", 0);
+    expect_whnf_functor(atoms, common, &vars[2], "g2", 0);
     for (size_t i : {0u, 1u, 3u, 4u, 5u})
         EXPECT_EQ(common.whnf(&vars[i]), &vars[i]);
 }
@@ -1143,15 +1146,15 @@ TEST_F(MhuEliminationGeneratorIntegrationTest,
     expr var0{expr::var{0}};
     expr var1{expr::var{1}};
     expr var2{expr::var{2}};
-    expr a{expr::functor{"a", {}}};
-    expr b{expr::functor{"b", {}}};
-    expr c{expr::functor{"c", {}}};
-    expr goal_a{expr::functor{"p", {&var0, &var1, &var2}}};
-    expr head_a{expr::functor{"p", {&a, &b, &c}}};
-    expr goal_b{expr::functor{"q", {&var1, &var2}}};
-    expr head_b{expr::functor{"q", {&b, &c}}};
-    expr goal_c{expr::functor{"r", {&var0, &var2}}};
-    expr head_c{expr::functor{"r", {&a, &c}}};
+    expr a{expr::functor{atoms.id("a"), {}}};
+    expr b{expr::functor{atoms.id("b"), {}}};
+    expr c{expr::functor{atoms.id("c"), {}}};
+    expr goal_a{expr::functor{atoms.id("p"), {&var0, &var1, &var2}}};
+    expr head_a{expr::functor{atoms.id("p"), {&a, &b, &c}}};
+    expr goal_b{expr::functor{atoms.id("q"), {&var1, &var2}}};
+    expr head_b{expr::functor{atoms.id("q"), {&b, &c}}};
+    expr goal_c{expr::functor{atoms.id("r"), {&var0, &var2}}};
+    expr head_c{expr::functor{atoms.id("r"), {&a, &c}}};
 
     resolution_lineage* rl_a = link_rl(0, rule_id{0});
     resolution_lineage* rl_b = link_rl(1, rule_id{0});
@@ -1162,9 +1165,9 @@ TEST_F(MhuEliminationGeneratorIntegrationTest,
     ASSERT_TRUE(mhu->try_add_head(rl_c, &goal_c, &head_c));
 
     EXPECT_THAT(collect_elims(mhu->constrain(rl_a)), IsEmpty());
-    expect_whnf_functor(common, &var0, "a", 0);
-    expect_whnf_functor(common, &var1, "b", 0);
-    expect_whnf_functor(common, &var2, "c", 0);
+    expect_whnf_functor(atoms, common, &var0, "a", 0);
+    expect_whnf_functor(atoms, common, &var1, "b", 0);
+    expect_whnf_functor(atoms, common, &var2, "c", 0);
 }
 
 TEST_F(MhuEliminationGeneratorIntegrationTest, ConstrainDualRepGroundHeadSurvivesWhenGroundsAgree) {
@@ -1175,12 +1178,12 @@ TEST_F(MhuEliminationGeneratorIntegrationTest, ConstrainDualRepGroundHeadSurvive
     expr var_a{expr::var{kIdxA}};
     expr var_b{expr::var{kIdxB}};
     expr head_x{expr::var{kIdxHeadX}};
-    expr goal_f{expr::functor{"f", {&var_a, &var_b}}};
-    expr head_fxx{expr::functor{"f", {&head_x, &head_x}}};
+    expr goal_f{expr::functor{atoms.id("f"), {&var_a, &var_b}}};
+    expr head_fxx{expr::functor{atoms.id("f"), {&head_x, &head_x}}};
 
-    expr abc{expr::functor{"abc", {}}};
-    expr goal_g{expr::functor{"g", {&var_a, &var_b}}};
-    expr head_g{expr::functor{"g", {&abc, &abc}}};
+    expr abc{expr::functor{atoms.id("abc"), {}}};
+    expr goal_g{expr::functor{atoms.id("g"), {&var_a, &var_b}}};
+    expr head_g{expr::functor{atoms.id("g"), {&abc, &abc}}};
 
     resolution_lineage* rl_f = link_rl(0, rule_id{0});
     resolution_lineage* rl_g = link_rl(1, rule_id{0});
@@ -1192,21 +1195,21 @@ TEST_F(MhuEliminationGeneratorIntegrationTest, ConstrainDualRepGroundHeadSurvive
     EXPECT_EQ(common.whnf(&var_a), common.whnf(&var_b));
 
     EXPECT_THAT(collect_elims(mhu->constrain(rl_g)), IsEmpty());
-    expect_whnf_functor(common, &var_a, "abc", 0);
-    expect_whnf_functor(common, &var_b, "abc", 0);
+    expect_whnf_functor(atoms, common, &var_a, "abc", 0);
+    expect_whnf_functor(atoms, common, &var_b, "abc", 0);
 }
 
 TEST_F(MhuEliminationGeneratorIntegrationTest, ConstrainSkipsRepAlreadyBoundInLocalToSameTarget) {
     expr var0{expr::var{0}};
     expr var1{expr::var{1}};
-    expr abc{expr::functor{"abc", {}}};
-    expr goal{expr::functor{"f", {&var0, &var1}}};
-    expr head{expr::functor{"f", {&abc, &var1}}};
+    expr abc{expr::functor{atoms.id("abc"), {}}};
+    expr goal{expr::functor{atoms.id("f"), {&var0, &var1}}};
+    expr head{expr::functor{atoms.id("f"), {&abc, &var1}}};
     resolution_lineage* rl = link_rl(0, rule_id{0});
 
     ASSERT_TRUE(mhu->try_add_head(rl, &goal, &head));
     EXPECT_THAT(collect_elims(mhu->constrain(rl)), IsEmpty());
-    expect_whnf_functor(common, &var0, "abc", 0);
+    expect_whnf_functor(atoms, common, &var0, "abc", 0);
     EXPECT_EQ(common.whnf(&var1), &var1);
 }
 
@@ -1219,11 +1222,11 @@ TEST_F(MhuEliminationGeneratorIntegrationTest, SecondConstrainOnDisjointRepDoesN
     expr var1{expr::var{1}};
     expr var2{expr::var{2}};
     expr head_x{expr::var{kIdxHeadX}};
-    expr abc{expr::functor{"abc", {}}};
-    expr goal_a{expr::functor{"f", {&var0, &var1}}};
-    expr head_a{expr::functor{"f", {&head_x, &head_x}}};
-    expr goal_b{expr::functor{"g", {&var2}}};
-    expr head_b{expr::functor{"g", {&abc}}};
+    expr abc{expr::functor{atoms.id("abc"), {}}};
+    expr goal_a{expr::functor{atoms.id("f"), {&var0, &var1}}};
+    expr head_a{expr::functor{atoms.id("f"), {&head_x, &head_x}}};
+    expr goal_b{expr::functor{atoms.id("g"), {&var2}}};
+    expr head_b{expr::functor{atoms.id("g"), {&abc}}};
 
     resolution_lineage* rl_a = link_rl(0, rule_id{0});
     resolution_lineage* rl_b = link_rl(1, rule_id{0});
@@ -1233,26 +1236,26 @@ TEST_F(MhuEliminationGeneratorIntegrationTest, SecondConstrainOnDisjointRepDoesN
 
     // ① constrain disjoint rep
     EXPECT_THAT(collect_elims(mhu->constrain(rl_b)), IsEmpty());
-    expect_whnf_functor(common, &var2, "abc", 0);
+    expect_whnf_functor(atoms, common, &var2, "abc", 0);
     EXPECT_EQ(common.whnf(&var0), &var0);
     EXPECT_EQ(common.whnf(&var1), &var1);
 
     // ② constrain equality head on {var0, var1} — no elims; disjoint binding unchanged
     EXPECT_THAT(collect_elims(mhu->constrain(rl_a)), IsEmpty());
     EXPECT_EQ(common.whnf(&var0), common.whnf(&var1));
-    expect_whnf_functor(common, &var2, "abc", 0);
+    expect_whnf_functor(atoms, common, &var2, "abc", 0);
 }
 
 TEST_F(MhuEliminationGeneratorIntegrationTest, ConstrainHubEliminatesOtherHubOnSharedRep) {
     expr var0{expr::var{0}};
     expr var1{expr::var{1}};
-    expr a{expr::functor{"a", {}}};
-    expr b{expr::functor{"b", {}}};
-    expr c{expr::functor{"c", {}}};
-    expr goal_hub1{expr::functor{"f", {&var0, &var1}}};
-    expr head_hub1{expr::functor{"f", {&a, &b}}};
-    expr goal_hub2{expr::functor{"g", {&var0, &var1}}};
-    expr head_hub2{expr::functor{"g", {&a, &c}}};
+    expr a{expr::functor{atoms.id("a"), {}}};
+    expr b{expr::functor{atoms.id("b"), {}}};
+    expr c{expr::functor{atoms.id("c"), {}}};
+    expr goal_hub1{expr::functor{atoms.id("f"), {&var0, &var1}}};
+    expr head_hub1{expr::functor{atoms.id("f"), {&a, &b}}};
+    expr goal_hub2{expr::functor{atoms.id("g"), {&var0, &var1}}};
+    expr head_hub2{expr::functor{atoms.id("g"), {&a, &c}}};
 
     resolution_lineage* rl_hub1 = link_rl(0, rule_id{0});
     resolution_lineage* rl_hub2 = link_rl(1, rule_id{0});
@@ -1261,8 +1264,8 @@ TEST_F(MhuEliminationGeneratorIntegrationTest, ConstrainHubEliminatesOtherHubOnS
     ASSERT_TRUE(mhu->try_add_head(rl_hub2, &goal_hub2, &head_hub2));
 
     EXPECT_THAT(collect_elims(mhu->constrain(rl_hub1)), ElementsAre(rl_hub2));
-    expect_whnf_functor(common, &var0, "a", 0);
-    expect_whnf_functor(common, &var1, "b", 0);
+    expect_whnf_functor(atoms, common, &var0, "a", 0);
+    expect_whnf_functor(atoms, common, &var1, "b", 0);
 }
 
 TEST_F(MhuEliminationGeneratorIntegrationTest,
@@ -1270,13 +1273,13 @@ TEST_F(MhuEliminationGeneratorIntegrationTest,
     expr var0{expr::var{0}};
     expr var1{expr::var{1}};
     expr var2{expr::var{2}};
-    expr a{expr::functor{"a", {}}};
-    expr b{expr::functor{"b", {}}};
-    expr c{expr::functor{"c", {}}};
-    expr goal_hub1{expr::functor{"f", {&var0, &var1}}};
-    expr head_hub1{expr::functor{"f", {&a, &b}}};
-    expr goal_hub2{expr::functor{"f", {&var1, &var2}}};
-    expr head_hub2{expr::functor{"f", {&b, &c}}};
+    expr a{expr::functor{atoms.id("a"), {}}};
+    expr b{expr::functor{atoms.id("b"), {}}};
+    expr c{expr::functor{atoms.id("c"), {}}};
+    expr goal_hub1{expr::functor{atoms.id("f"), {&var0, &var1}}};
+    expr head_hub1{expr::functor{atoms.id("f"), {&a, &b}}};
+    expr goal_hub2{expr::functor{atoms.id("f"), {&var1, &var2}}};
+    expr head_hub2{expr::functor{atoms.id("f"), {&b, &c}}};
 
     resolution_lineage* rl_hub1 = link_rl(0, rule_id{0});
     resolution_lineage* rl_hub2 = link_rl(1, rule_id{0});
@@ -1286,18 +1289,18 @@ TEST_F(MhuEliminationGeneratorIntegrationTest,
 
     // ① constrain hub1 — hub2 survives
     EXPECT_THAT(collect_elims(mhu->constrain(rl_hub1)), IsEmpty());
-    expect_whnf_functor(common, &var0, "a", 0);
-    expect_whnf_functor(common, &var1, "b", 0);
+    expect_whnf_functor(atoms, common, &var0, "a", 0);
+    expect_whnf_functor(atoms, common, &var1, "b", 0);
 
     // ② constrain hub2 — still valid after hub1 publish/rebase
     EXPECT_THAT(collect_elims(mhu->constrain(rl_hub2)), IsEmpty());
-    expect_whnf_functor(common, &var2, "c", 0);
+    expect_whnf_functor(atoms, common, &var2, "c", 0);
 }
 
 TEST_F(MhuEliminationGeneratorIntegrationTest, ClearMhuHeadsWithoutConstrainAllowsBothHeadsReAdd) {
     expr var0{expr::var{0}};
-    expr head_f{expr::functor{"f", {}}};
-    expr head_g{expr::functor{"g", {}}};
+    expr head_f{expr::functor{atoms.id("f"), {}}};
+    expr head_g{expr::functor{atoms.id("g"), {}}};
 
     resolution_lineage* rl_a = link_rl(0, rule_id{0});
     resolution_lineage* rl_b = link_rl(1, rule_id{0});
@@ -1317,40 +1320,40 @@ TEST_F(MhuEliminationGeneratorIntegrationTest, ClearMhuHeadsWithoutConstrainAllo
 TEST_F(MhuEliminationGeneratorIntegrationTest, ClearMhuHeadsAfterPartialConstrainAllowsReAddOnDisjointRep) {
     expr var0{expr::var{0}};
     expr var1{expr::var{1}};
-    expr abc{expr::functor{"abc", {}}};
-    expr head_f{expr::functor{"f", {}}};
-    expr goal_h{expr::functor{"h", {&var1}}};
-    expr head_h{expr::functor{"h", {&abc}}};
+    expr abc{expr::functor{atoms.id("abc"), {}}};
+    expr head_f{expr::functor{atoms.id("f"), {}}};
+    expr goal_h{expr::functor{atoms.id("h"), {&var1}}};
+    expr head_h{expr::functor{atoms.id("h"), {&abc}}};
 
     resolution_lineage* rl_h = link_rl(0, rule_id{0});
 
     ASSERT_TRUE(mhu->try_add_head(rl_h, &goal_h, &head_h));
     EXPECT_THAT(collect_elims(mhu->constrain(rl_h)), IsEmpty());
-    expect_whnf_functor(common, &var1, "abc", 0);
+    expect_whnf_functor(atoms, common, &var1, "abc", 0);
 
     mhu->clear_mhu_heads();
 
     resolution_lineage* rl_f = link_rl(1, rule_id{0});
     EXPECT_TRUE(mhu->try_add_head(rl_f, &var0, &head_f));
     EXPECT_EQ(common.whnf(&var0), &var0);
-    expect_whnf_functor(common, &var1, "abc", 0);
+    expect_whnf_functor(atoms, common, &var1, "abc", 0);
 }
 
 TEST_F(MhuEliminationGeneratorIntegrationTest, ClearMhuHeadsAfterPartialConstrainDoesNotResetCommon) {
     expr var0{expr::var{0}};
-    expr head_f{expr::functor{"f", {}}};
-    expr head_g{expr::functor{"g", {}}};
+    expr head_f{expr::functor{atoms.id("f"), {}}};
+    expr head_g{expr::functor{atoms.id("g"), {}}};
     resolution_lineage* rl = link_rl(0, rule_id{0});
 
     ASSERT_TRUE(mhu->try_add_head(rl, &var0, &head_f));
     EXPECT_THAT(collect_elims(mhu->constrain(rl)), IsEmpty());
-    expect_whnf_functor(common, &var0, "f", 0);
+    expect_whnf_functor(atoms, common, &var0, "f", 0);
 
     mhu->clear_mhu_heads();
 
     resolution_lineage* rl_g = link_rl(1, rule_id{0});
     EXPECT_FALSE(mhu->try_add_head(rl_g, &var0, &head_g));
-    expect_whnf_functor(common, &var0, "f", 0);
+    expect_whnf_functor(atoms, common, &var0, "f", 0);
 }
 
 // Priority 3 — I: functor common WHNF during rebase (satellite must link rep 1)
@@ -1358,14 +1361,14 @@ TEST_F(MhuEliminationGeneratorIntegrationTest, ClearMhuHeadsAfterPartialConstrai
 TEST_F(MhuEliminationGeneratorIntegrationTest, RebaseFollowsCommonWhnfThroughFunctorArg) {
     expr var0{expr::var{0}};
     expr var1{expr::var{1}};
-    expr abc{expr::functor{"abc", {}}};
-    expr def{expr::functor{"def", {}}};
-    expr f_var1{expr::functor{"f", {&var1}}};
-    expr f_abc{expr::functor{"f", {&abc}}};
+    expr abc{expr::functor{atoms.id("abc"), {}}};
+    expr def{expr::functor{atoms.id("def"), {}}};
+    expr f_var1{expr::functor{atoms.id("f"), {&var1}}};
+    expr f_abc{expr::functor{atoms.id("f"), {&abc}}};
     expr goal_sat = var0;
     expr head_sat = f_abc;
-    expr goal_hub{expr::functor{"h", {&var1}}};
-    expr head_hub{expr::functor{"h", {&def}}};
+    expr goal_hub{expr::functor{atoms.id("h"), {&var1}}};
+    expr head_hub{expr::functor{atoms.id("h"), {&def}}};
 
     // Pre-bind: rep 0 bound to functor containing rep 1
     common.bind(0, &f_var1);
@@ -1379,10 +1382,10 @@ TEST_F(MhuEliminationGeneratorIntegrationTest, RebaseFollowsCommonWhnfThroughFun
 
     // constrain(satellite) publishes var0→f(abc), var1→abc; rebase_all(1) eliminates hub
     EXPECT_THAT(collect_elims(mhu->constrain(rl_sat)), ElementsAre(rl_hub));
-    expect_whnf_functor(common, &var0, "f", 1);
-    expect_whnf_functor(common, &var1, "abc", 0);
+    expect_whnf_functor(atoms, common, &var0, "f", 1);
+    expect_whnf_functor(atoms, common, &var1, "abc", 0);
     const auto& f0 = std::get<expr::functor>(common.whnf(&var0)->content);
-    expect_whnf_functor(common, f0.args[0], "abc", 0);
+    expect_whnf_functor(atoms, common, f0.args[0], "abc", 0);
 }
 
 // ---------------------------------------------------------------------------
@@ -1391,9 +1394,9 @@ TEST_F(MhuEliminationGeneratorIntegrationTest, RebaseFollowsCommonWhnfThroughFun
 
 namespace {
 
-void expect_all_whnf_abc(bind_map& common, std::initializer_list<expr*> vars) {
+void expect_all_whnf_abc(test_atoms& atoms, bind_map& common, std::initializer_list<expr*> vars) {
     for (expr* v : vars)
-        expect_whnf_functor(common, v, "abc", 0);
+        expect_whnf_functor(atoms, common, v, "abc", 0);
 }
 
 void expect_equated_to_canonical(bind_map& common, std::initializer_list<expr*> vars,
@@ -1415,7 +1418,7 @@ TEST_F(MhuEliminationGeneratorIntegrationTest,
     expr var1{expr::var{1}};
     expr var2{expr::var{2}};
     expr var3{expr::var{3}};
-    expr abc{expr::functor{"abc", {}}};
+    expr abc{expr::functor{atoms.id("abc"), {}}};
 
     resolution_lineage* rl0 = link_rl(0, rule_id{0});
     resolution_lineage* rl1 = link_rl(1, rule_id{0});
@@ -1443,7 +1446,7 @@ TEST_F(MhuEliminationGeneratorIntegrationTest,
 
     // ④ constrain rl3 — ground propagates to all reps
     EXPECT_THAT(collect_elims(mhu->constrain(rl3)), IsEmpty());
-    expect_all_whnf_abc(common, {&var0, &var1, &var2, &var3});
+    expect_all_whnf_abc(atoms, common, {&var0, &var1, &var2, &var3});
 }
 
 TEST_F(MhuEliminationGeneratorIntegrationTest,
@@ -1452,7 +1455,7 @@ TEST_F(MhuEliminationGeneratorIntegrationTest,
     expr var1{expr::var{1}};
     expr var2{expr::var{2}};
     expr var3{expr::var{3}};
-    expr abc{expr::functor{"abc", {}}};
+    expr abc{expr::functor{atoms.id("abc"), {}}};
 
     resolution_lineage* rl0 = link_rl(0, rule_id{0});
     resolution_lineage* rl1 = link_rl(1, rule_id{0});
@@ -1466,26 +1469,26 @@ TEST_F(MhuEliminationGeneratorIntegrationTest,
 
     // ① constrain rl3 — ground rep 3 only
     EXPECT_THAT(collect_elims(mhu->constrain(rl3)), IsEmpty());
-    expect_whnf_functor(common, &var3, "abc", 0);
+    expect_whnf_functor(atoms, common, &var3, "abc", 0);
     expect_free_reps(common, {&var0, &var1, &var2});
 
     // ② constrain rl2 — ground enters equate class
     EXPECT_THAT(collect_elims(mhu->constrain(rl2)), IsEmpty());
-    expect_whnf_functor(common, &var2, "abc", 0);
+    expect_whnf_functor(atoms, common, &var2, "abc", 0);
 
     // ③ constrain rl1
     EXPECT_THAT(collect_elims(mhu->constrain(rl1)), IsEmpty());
 
     // ④ constrain rl0 — all reps grounded
     EXPECT_THAT(collect_elims(mhu->constrain(rl0)), IsEmpty());
-    expect_all_whnf_abc(common, {&var0, &var1, &var2, &var3});
+    expect_all_whnf_abc(atoms, common, {&var0, &var1, &var2, &var3});
 }
 
 TEST_F(MhuEliminationGeneratorIntegrationTest, SixHeadChainConstrainsPropagateGroundToAllReps) {
     std::array<expr, 6> vars{
         expr{expr::var{0}}, expr{expr::var{1}}, expr{expr::var{2}},
         expr{expr::var{3}}, expr{expr::var{4}}, expr{expr::var{5}}};
-    expr abc{expr::functor{"abc", {}}};
+    expr abc{expr::functor{atoms.id("abc"), {}}};
 
     std::array<resolution_lineage*, 6> rls;
     for (size_t i = 0; i < 6; ++i)
@@ -1498,7 +1501,7 @@ TEST_F(MhuEliminationGeneratorIntegrationTest, SixHeadChainConstrainsPropagateGr
     for (size_t i = 0; i < 6; ++i)
         EXPECT_THAT(collect_elims(mhu->constrain(rls[i])), IsEmpty());
 
-    expect_all_whnf_abc(common, {&vars[0], &vars[1], &vars[2], &vars[3], &vars[4], &vars[5]});
+    expect_all_whnf_abc(atoms, common, {&vars[0], &vars[1], &vars[2], &vars[3], &vars[4], &vars[5]});
 }
 
 TEST_F(MhuEliminationGeneratorIntegrationTest, SerialChainLateGroundWithCompatibleWatcherSurvives) {
@@ -1506,9 +1509,9 @@ TEST_F(MhuEliminationGeneratorIntegrationTest, SerialChainLateGroundWithCompatib
     expr var1{expr::var{1}};
     expr var2{expr::var{2}};
     expr var3{expr::var{3}};
-    expr abc{expr::functor{"abc", {}}};
-    expr goal_w{expr::functor{"g", {&var3}}};
-    expr head_w{expr::functor{"g", {&abc}}};
+    expr abc{expr::functor{atoms.id("abc"), {}}};
+    expr goal_w{expr::functor{atoms.id("g"), {&var3}}};
+    expr head_w{expr::functor{atoms.id("g"), {&abc}}};
 
     resolution_lineage* rl0 = link_rl(0, rule_id{0});
     resolution_lineage* rl1 = link_rl(1, rule_id{0});
@@ -1526,10 +1529,10 @@ TEST_F(MhuEliminationGeneratorIntegrationTest, SerialChainLateGroundWithCompatib
     EXPECT_THAT(collect_elims(mhu->constrain(rl1)), IsEmpty());
     EXPECT_THAT(collect_elims(mhu->constrain(rl2)), IsEmpty());
     EXPECT_THAT(collect_elims(mhu->constrain(rl3)), IsEmpty());
-    expect_all_whnf_abc(common, {&var0, &var1, &var2, &var3});
+    expect_all_whnf_abc(atoms, common, {&var0, &var1, &var2, &var3});
 
     EXPECT_THAT(collect_elims(mhu->constrain(rl_w)), IsEmpty());
-    expect_all_whnf_abc(common, {&var0, &var1, &var2, &var3});
+    expect_all_whnf_abc(atoms, common, {&var0, &var1, &var2, &var3});
 }
 
 TEST_F(MhuEliminationGeneratorIntegrationTest, SerialChainLateGroundEliminatesIncompatibleWatcher) {
@@ -1537,10 +1540,10 @@ TEST_F(MhuEliminationGeneratorIntegrationTest, SerialChainLateGroundEliminatesIn
     expr var1{expr::var{1}};
     expr var2{expr::var{2}};
     expr var3{expr::var{3}};
-    expr abc{expr::functor{"abc", {}}};
-    expr def{expr::functor{"def", {}}};
-    expr goal_w{expr::functor{"g", {&var3}}};
-    expr head_w{expr::functor{"g", {&def}}};
+    expr abc{expr::functor{atoms.id("abc"), {}}};
+    expr def{expr::functor{atoms.id("def"), {}}};
+    expr goal_w{expr::functor{atoms.id("g"), {&var3}}};
+    expr head_w{expr::functor{atoms.id("g"), {&def}}};
 
     resolution_lineage* rl0 = link_rl(0, rule_id{0});
     resolution_lineage* rl1 = link_rl(1, rule_id{0});
@@ -1558,7 +1561,7 @@ TEST_F(MhuEliminationGeneratorIntegrationTest, SerialChainLateGroundEliminatesIn
     EXPECT_THAT(collect_elims(mhu->constrain(rl1)), IsEmpty());
     EXPECT_THAT(collect_elims(mhu->constrain(rl2)), IsEmpty());
     EXPECT_THAT(collect_elims(mhu->constrain(rl3)), ElementsAre(rl_w));
-    expect_all_whnf_abc(common, {&var0, &var1, &var2, &var3});
+    expect_all_whnf_abc(atoms, common, {&var0, &var1, &var2, &var3});
 }
 
 TEST_F(MhuEliminationGeneratorIntegrationTest, ManyHeadsOnVar2SurviveSerialChainConstrains) {
@@ -1566,9 +1569,9 @@ TEST_F(MhuEliminationGeneratorIntegrationTest, ManyHeadsOnVar2SurviveSerialChain
     expr var1{expr::var{1}};
     expr var2{expr::var{2}};
     expr var3{expr::var{3}};
-    expr abc{expr::functor{"abc", {}}};
-    expr goal_w{expr::functor{"g", {&var2}}};
-    expr head_w{expr::functor{"g", {&abc}}};
+    expr abc{expr::functor{atoms.id("abc"), {}}};
+    expr goal_w{expr::functor{atoms.id("g"), {&var2}}};
+    expr head_w{expr::functor{atoms.id("g"), {&abc}}};
 
     resolution_lineage* rl0 = link_rl(0, rule_id{0});
     resolution_lineage* rl1 = link_rl(1, rule_id{0});
@@ -1591,8 +1594,8 @@ TEST_F(MhuEliminationGeneratorIntegrationTest, ManyHeadsOnVar2SurviveSerialChain
     EXPECT_THAT(collect_elims(mhu->constrain(rl1)), IsEmpty());
     EXPECT_THAT(collect_elims(mhu->constrain(rl2)), IsEmpty());
     EXPECT_THAT(collect_elims(mhu->constrain(rl3)), IsEmpty());
-    expect_all_whnf_abc(common, {&var0, &var1, &var2, &var3});
+    expect_all_whnf_abc(atoms, common, {&var0, &var1, &var2, &var3});
 
     EXPECT_THAT(collect_elims(mhu->constrain(watchers[0])), IsEmpty());
-    expect_all_whnf_abc(common, {&var0, &var1, &var2, &var3});
+    expect_all_whnf_abc(atoms, common, {&var0, &var1, &var2, &var3});
 }

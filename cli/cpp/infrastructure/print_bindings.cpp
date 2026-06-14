@@ -8,7 +8,7 @@ void print_bindings::print(
     const std::map<std::string, uint32_t>& var_name_to_idx) {
     for (const auto& [name, idx] : var_name_to_idx) {
         std::cout << "  " << name << " = ";
-        printer.print(runtime.normalize(pool.make(idx)));
+        printer.print(runtime.normalize(pool.make_var(idx)));
         std::cout << "\n";
     }
 }

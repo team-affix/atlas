@@ -17,7 +17,7 @@ const expr* normalizer::normalize(const expr* e) {
         normalized_args.reserve(f->args.size());
         for (const expr* arg : f->args)
             normalized_args.push_back(normalize(arg));
-        return make_functor_ref.make(f->name, normalized_args);
+        return make_functor_ref.make_functor(f->id, normalized_args);
     }
 
     throw std::runtime_error("Unsupported expression type");
