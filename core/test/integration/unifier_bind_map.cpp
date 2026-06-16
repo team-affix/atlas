@@ -1,6 +1,8 @@
 #include <array>
 #include <unordered_set>
 #include <gtest/gtest.h>
+#include "infrastructure/globalizer.hpp"
+#include "infrastructure/locator.hpp"
 #include "infrastructure/unifier.hpp"
 #include "infrastructure/bind_map.hpp"
 #include "functor_fixture.hpp"
@@ -27,10 +29,13 @@ struct UnifierBindMapIntegrationTest : public ::testing::Test {
 protected:
     test_functors functors;
     void SetUp() override {
-        u = std::make_unique<unifier>(bm);
+        loc.bind_as<i_globalizer>(g);
+        u = std::make_unique<unifier>(loc, bm);
     }
 
-    bind_map bm;
+    globalizer g;
+    locator loc;
+    bind_map bm{g};
     std::unique_ptr<unifier> u;
     std::unordered_set<uint32_t> vars_touched;
     expr var0{expr::var{0}};

@@ -19,8 +19,8 @@ bool ridge_runtime::solved() const {
     return driver_.solved();
 }
 
-const expr* ridge_runtime::normalize(const expr* e) {
-    return normalizer_.normalize(e);
+const expr* ridge_runtime::normalize(framed_expr fe) {
+    return normalizer_.normalize(fe);
 }
 
 lemma ridge_runtime::derive_decision_lemma() const {

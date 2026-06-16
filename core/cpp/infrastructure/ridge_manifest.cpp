@@ -2,10 +2,11 @@
 
 ridge_manifest::early_wiring::early_wiring(
     locator& loc, db& database, initial_goal_exprs& initial_goals)
-    : trail_(),
-      bind_map_(),
-      bind_map_factory_(),
-      unifier_factory_(),
+    : globalizer_(),
+      trail_(),
+      bind_map_(globalizer_),
+      bind_map_factory_(globalizer_),
+      unifier_factory_(loc),
       lineage_pool_(),
       rule_id_set_factory_(),
       ra_rule_id_set_factory_(),
@@ -16,6 +17,7 @@ ridge_manifest::early_wiring::early_wiring(
       decision_memory_(),
       resolution_memory_(),
       candidate_frame_offsets_() {
+    loc.bind_as<i_globalizer>(globalizer_);
     loc.bind_as<i_push_trail_frame, i_pop_trail_frame, i_log_to_current_trail_frame>(trail_);
     loc.bind_as<i_bind_map, i_clear_bindings>(bind_map_);
     loc.bind_as<i_bind_map_factory>(bind_map_factory_);
@@ -44,8 +46,6 @@ ridge_manifest::pool_wiring::pool_wiring(locator& loc, uint32_t initial_frame_of
       elimination_backlog_(loc) {
     loc.bind_as<i_make_functor, i_make_var, i_import_expr, i_get_expr_count>(expr_pool_);
     loc.bind_as<i_frame_allocator>(frame_allocator_);
-    globalizer_.emplace(loc);
-    loc.bind_as<i_globalizer>(*globalizer_);
     loc.bind_as<i_cdcl_sequencer>(cdcl_sequencer_);
     loc.bind_as<i_insert_backlogged_elimination, i_is_backlogged_elimination>(elimination_backlog_);
 }

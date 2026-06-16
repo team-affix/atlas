@@ -21,7 +21,7 @@ struct ridge_runtime : i_runtime {
     bool next() override;
     bool solved() const override;
 
-    const expr* normalize(const expr*) override;
+    const expr* normalize(framed_expr) override;
     lemma derive_decision_lemma() const override;
     lemma derive_resolution_lemma() const override;
 

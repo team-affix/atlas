@@ -18,8 +18,8 @@ bool basic_runtime::solved() const {
     return driver_.solved();
 }
 
-const expr* basic_runtime::normalize(const expr* e) {
-    return normalizer_.normalize(e);
+const expr* basic_runtime::normalize(framed_expr fe) {
+    return normalizer_.normalize(fe);
 }
 
 lemma basic_runtime::derive_decision_lemma() const {

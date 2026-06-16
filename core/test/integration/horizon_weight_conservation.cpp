@@ -30,6 +30,7 @@
 #include "infrastructure/get_resolution_rule.hpp"
 #include "infrastructure/bind_map.hpp"
 #include "infrastructure/bind_map_factory.hpp"
+#include "infrastructure/globalizer.hpp"
 #include "infrastructure/unifier_factory.hpp"
 #include "infrastructure/rule_id_set_factory.hpp"
 #include "infrastructure/trail.hpp"
@@ -126,9 +127,10 @@ class HorizonWeightConservationIntegrationTest : public ::testing::Test {
 protected:
     locator loc;
     trail trail_;
-    bind_map bind_map_;
-    bind_map_factory bind_map_factory_;
-    unifier_factory unifier_factory_;
+    globalizer globalizer_;
+    bind_map bind_map_{globalizer_};
+    bind_map_factory bind_map_factory_{globalizer_};
+    unifier_factory unifier_factory_{loc};
     lineage_pool lineage_pool_;
     std::unique_ptr<expr_pool> expr_pool_;
     std::unique_ptr<frame_bump_allocator> frame_allocator_;
@@ -168,6 +170,7 @@ protected:
     rule ground_h{&h_head, {}, 3};
 
     void SetUp() override {
+        loc.bind_as<i_globalizer>(globalizer_);
         loc.bind_as<i_log_to_current_trail_frame>(trail_);
         loc.bind_as<i_bind_map>(bind_map_);
         loc.bind_as<i_bind_map_factory>(bind_map_factory_);

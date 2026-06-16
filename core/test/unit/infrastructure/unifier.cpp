@@ -5,6 +5,8 @@
 #include <unordered_set>
 #include <gtest/gtest.h>
 #include <gmock/gmock.h>
+#include "infrastructure/globalizer.hpp"
+#include "infrastructure/locator.hpp"
 #include "infrastructure/unifier.hpp"
 #include "functor_fixture.hpp"
 
@@ -33,9 +35,11 @@ struct MockBindMap : public i_bind_map {
 };
 
 struct UnifierTest : public ::testing::Test {
-    
-    test_functors functors;MockBindMap bm;
-    unifier u{bm};
+    test_functors functors;
+    MockBindMap bm;
+    globalizer g;
+    locator loc;
+    unifier u{[&]() -> locator& { loc.bind_as<i_globalizer>(g); return loc; }(), bm};
     std::unordered_set<uint32_t> vars_touched;
 
     expr var0{expr::var{0}};

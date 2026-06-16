@@ -4,6 +4,8 @@
 #include <unordered_set>
 #include <gtest/gtest.h>
 #include <gmock/gmock.h>
+#include "infrastructure/globalizer.hpp"
+#include "infrastructure/locator.hpp"
 #include "infrastructure/unifier_factory.hpp"
 #include "interfaces/i_bind_map.hpp"
 #include "functor_fixture.hpp"
@@ -32,8 +34,10 @@ struct MockBindMap : public i_bind_map {
 };
 
 struct UnifierFactoryTest : public ::testing::Test {
-    
-    test_functors functors;unifier_factory factory;
+    test_functors functors;
+    globalizer g;
+    locator loc;
+    unifier_factory factory{[&]() -> locator& { loc.bind_as<i_globalizer>(g); return loc; }()};
     MockBindMap bind_map;
     expr var0{expr::var{0}};
     expr var1{expr::var{1}};

@@ -1,6 +1,8 @@
-#include "infrastructure/unifier_factory.hpp"
 #include "infrastructure/unifier.hpp"
+#include "infrastructure/unifier_factory.hpp"
 
-std::unique_ptr<i_unifier> unifier_factory::make(i_bind_map& bind_map) const {
-    return std::make_unique<unifier>(bind_map);
+unifier_factory::unifier_factory(locator& loc) : loc_(loc) {}
+
+std::unique_ptr<i_unifier> unifier_factory::make(i_bind_map& bm) const {
+    return std::make_unique<unifier>(loc_, bm);
 }

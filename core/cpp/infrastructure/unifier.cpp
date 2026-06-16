@@ -1,7 +1,8 @@
+#include "infrastructure/locator.hpp"
 #include "infrastructure/unifier.hpp"
 
-unifier::unifier(i_bind_map& bm)
-    : bind_map(bm) {}
+unifier::unifier(locator& loc, i_bind_map& bm)
+    : bind_map(bm), globalizer_(loc.locate<i_globalizer>()) {}
 
 coroutine<uint32_t, bool> unifier::unify(framed_expr lhs, framed_expr rhs) {
     lhs = bind_map.whnf(lhs);
@@ -10,8 +11,8 @@ coroutine<uint32_t, bool> unifier::unify(framed_expr lhs, framed_expr rhs) {
     const expr::var* lv = std::get_if<expr::var>(&lhs.skeleton->content);
     const expr::var* rv = std::get_if<expr::var>(&rhs.skeleton->content);
 
-    const uint32_t lv_global = lv ? lhs.frame_offset + lv->index : 0;
-    const uint32_t rv_global = rv ? rhs.frame_offset + rv->index : 0;
+    const uint32_t lv_global = lv ? globalizer_.globalize(lhs.frame_offset, lv->index) : 0;
+    const uint32_t rv_global = rv ? globalizer_.globalize(rhs.frame_offset, rv->index) : 0;
 
     if (lv && rv && lv_global == rv_global)
         co_return true;
@@ -63,7 +64,7 @@ bool unifier::occurs_check(uint32_t global_key, framed_expr fe) {
     fe = bind_map.whnf(fe);
 
     if (const expr::var* v = std::get_if<expr::var>(&fe.skeleton->content))
-        return (fe.frame_offset + v->index) == global_key;
+        return globalizer_.globalize(fe.frame_offset, v->index) == global_key;
 
     if (const expr::functor* f = std::get_if<expr::functor>(&fe.skeleton->content)) {
         for (const expr* arg : f->args)

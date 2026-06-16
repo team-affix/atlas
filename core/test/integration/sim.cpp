@@ -143,6 +143,7 @@ struct MockGenerateDecision : public i_generate_decision {
 namespace {
 
 struct sim_early_wiring {
+    globalizer globalizer_;
     trail trail_;
     bind_map bind_map_;
     bind_map_factory bind_map_factory_;
@@ -158,10 +159,11 @@ struct sim_early_wiring {
     candidate_frame_offsets candidate_frame_offsets_;
 
     sim_early_wiring(locator& loc, db& database, initial_goal_exprs& initial_goals)
-        : trail_(),
-          bind_map_(),
-          bind_map_factory_(),
-          unifier_factory_(),
+        : globalizer_(),
+          trail_(),
+          bind_map_(globalizer_),
+          bind_map_factory_(globalizer_),
+          unifier_factory_(loc),
           lineage_pool_(),
           ra_rule_id_set_factory_(),
           ra_active_goals_(),
@@ -171,6 +173,7 @@ struct sim_early_wiring {
           decision_memory_(),
           resolution_memory_(),
           candidate_frame_offsets_() {
+        loc.bind_as<i_globalizer>(globalizer_);
         loc.bind_as<i_push_trail_frame, i_pop_trail_frame, i_log_to_current_trail_frame>(trail_);
         loc.bind_as<i_bind_map, i_clear_bindings>(bind_map_);
         loc.bind_as<i_bind_map_factory>(bind_map_factory_);
@@ -202,7 +205,6 @@ struct sim_early_wiring {
 struct sim_pool_wiring {
     expr_pool expr_pool_;
     frame_bump_allocator frame_allocator_;
-    std::optional<globalizer> globalizer_;
     cdcl_sequencer cdcl_sequencer_;
     elimination_backlog elimination_backlog_;
 
@@ -213,8 +215,6 @@ struct sim_pool_wiring {
           elimination_backlog_(loc) {
         loc.bind_as<i_make_functor, i_make_var, i_import_expr, i_get_expr_count>(expr_pool_);
         loc.bind_as<i_frame_allocator>(frame_allocator_);
-        globalizer_.emplace(loc);
-        loc.bind_as<i_globalizer>(*globalizer_);
         loc.bind_as<i_cdcl_sequencer>(cdcl_sequencer_);
         loc.bind_as<i_insert_backlogged_elimination, i_is_backlogged_elimination>(
             elimination_backlog_);
@@ -1471,18 +1471,18 @@ TEST_F(SimIntegrationTest, RunReturnsSolvedBuildingListOfFiveAbcWithoutDecisions
     EXPECT_EQ(simulation.run(), sim_termination::solved);
 
     normalizer norm{stack.loc};
-    const expr* tail = norm.normalize(var_r);
+    const expr* tail = norm.normalize({var_r, 0});
     for (int i = 0; i < kListLength; ++i) {
         const expr::functor& cell = std::get<expr::functor>(tail->content);
         ASSERT_EQ(cell.id, functors.id("cons"));
         ASSERT_EQ(cell.args.size(), 2u);
         const expr::functor& head =
-            std::get<expr::functor>(norm.normalize(cell.args[0])->content);
+            std::get<expr::functor>(norm.normalize({cell.args[0], 0})->content);
         EXPECT_EQ(head.id, functors.id("abc"));
         EXPECT_TRUE(head.args.empty());
-        tail = norm.normalize(cell.args[1]);
+        tail = norm.normalize({cell.args[1], 0});
     }
-    const expr::functor& nil_tail = std::get<expr::functor>(norm.normalize(tail)->content);
+    const expr::functor& nil_tail = std::get<expr::functor>(norm.normalize({tail, 0})->content);
     EXPECT_EQ(nil_tail.id, functors.id("nil"));
     EXPECT_TRUE(nil_tail.args.empty());
 
@@ -2036,18 +2036,18 @@ TEST_F(SimIntegrationTest, RunReturnsSolvedStressListOfTwentyAbcWithoutDecisions
   EXPECT_EQ(simulation.run(), sim_termination::solved);
 
   normalizer norm{stack.loc};
-  const expr* tail = norm.normalize(var_r);
+  const expr* tail = norm.normalize({var_r, 0});
   for (int i = 0; i < kListLength; ++i) {
     const expr::functor& cell = std::get<expr::functor>(tail->content);
     ASSERT_EQ(cell.id, k_cons_functor_id);
     ASSERT_EQ(cell.args.size(), 2u);
     const expr::functor& head_cell =
-        std::get<expr::functor>(norm.normalize(cell.args[0])->content);
+        std::get<expr::functor>(norm.normalize({cell.args[0], 0})->content);
     EXPECT_EQ(head_cell.id, functors.id("abc"));
     EXPECT_TRUE(head_cell.args.empty());
-    tail = norm.normalize(cell.args[1]);
+    tail = norm.normalize({cell.args[1], 0});
   }
-  const expr::functor& nil_tail = std::get<expr::functor>(norm.normalize(tail)->content);
+  const expr::functor& nil_tail = std::get<expr::functor>(norm.normalize({tail, 0})->content);
   EXPECT_EQ(nil_tail.id, functors.id("nil"));
   EXPECT_TRUE(nil_tail.args.empty());
   simulation.tear_down();

@@ -108,6 +108,7 @@ struct basic_manifest {
 
 private:
     struct early_wiring {
+        globalizer globalizer_;
         trail trail_;
         bind_map bind_map_;
         bind_map_factory bind_map_factory_;
@@ -129,7 +130,6 @@ private:
     struct pool_wiring {
         expr_pool expr_pool_;
         frame_bump_allocator frame_allocator_;
-        std::optional<globalizer> globalizer_;
         cdcl_sequencer cdcl_sequencer_;
         elimination_backlog elimination_backlog_;
 

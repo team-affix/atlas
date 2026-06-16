@@ -3,11 +3,13 @@
 
 #include <gtest/gtest.h>
 #include "infrastructure/bind_map_factory.hpp"
+#include "infrastructure/globalizer.hpp"
 #include "functor_fixture.hpp"
 
 struct BindMapFactoryTest : public ::testing::Test {
     test_functors functors;
-    bind_map_factory factory;
+    globalizer g;
+    bind_map_factory factory{g};
     expr var0{expr::var{0}};
     expr func{expr::functor{functors.id("f"), {}}};
 };

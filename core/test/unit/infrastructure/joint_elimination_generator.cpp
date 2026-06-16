@@ -15,6 +15,7 @@
 #include "infrastructure/trail.hpp"
 #include "infrastructure/bind_map.hpp"
 #include "infrastructure/bind_map_factory.hpp"
+#include "infrastructure/globalizer.hpp"
 #include "infrastructure/unifier_factory.hpp"
 #include "infrastructure/lineage_pool.hpp"
 #include "infrastructure/goal_candidate_rules.hpp"
@@ -87,9 +88,10 @@ struct JointEliminationGeneratorUnitTest : public ::testing::Test {
     resolution_lineage rl{nullptr, 0};
 
     trail trail_;
-    bind_map bind_map_;
-    bind_map_factory bind_map_factory_;
-    unifier_factory unifier_factory_;
+    globalizer globalizer_;
+    bind_map bind_map_{globalizer_};
+    bind_map_factory bind_map_factory_{globalizer_};
+    unifier_factory unifier_factory_{loc};
     lineage_pool lineage_pool_;
     ra_rule_id_set_factory ra_rule_id_set_factory_;
     goal_candidate_rules goal_candidate_rules_;
@@ -104,13 +106,15 @@ struct JointEliminationGeneratorUnitTest : public ::testing::Test {
 
     JointEliminationGeneratorUnitTest()
         : trail_(),
-          bind_map_(),
-          bind_map_factory_(),
-          unifier_factory_(),
+          globalizer_(),
+          bind_map_(globalizer_),
+          bind_map_factory_(globalizer_),
+          unifier_factory_(loc),
           lineage_pool_(),
           ra_rule_id_set_factory_(),
           goal_candidate_rules_(ra_rule_id_set_factory_),
           loc() {
+        loc.bind_as<i_globalizer>(globalizer_);
         loc.bind_as<i_log_to_current_trail_frame>(trail_);
         loc.bind_as<i_bind_map>(bind_map_);
         loc.bind_as<i_bind_map_factory>(bind_map_factory_);

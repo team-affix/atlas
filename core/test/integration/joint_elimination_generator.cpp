@@ -10,6 +10,7 @@
 #include "infrastructure/mhu_elimination_generator.hpp"
 #include "infrastructure/bind_map.hpp"
 #include "infrastructure/bind_map_factory.hpp"
+#include "infrastructure/globalizer.hpp"
 #include "infrastructure/unifier_factory.hpp"
 #include "infrastructure/expr_pool.hpp"
 #include "infrastructure/lineage_pool.hpp"
@@ -49,10 +50,11 @@ struct JointEliminationGeneratorIntegrationTest : public ::testing::Test {
     test_functors functors;
     locator loc;
     trail t;
-    bind_map common;
+    globalizer g_;
+    bind_map common{g_};
     lineage_pool lp;
-    bind_map_factory bmf;
-    unifier_factory uf;
+    bind_map_factory bmf{g_};
+    unifier_factory uf{loc};
     ra_rule_id_set_factory ra_rule_id_set_factory_;
     goal_candidate_rules ggcr{ra_rule_id_set_factory_};
     std::optional<expr_pool> pool;
@@ -66,6 +68,7 @@ struct JointEliminationGeneratorIntegrationTest : public ::testing::Test {
               loc.bind_as<i_log_to_current_trail_frame>(t);
               return cdcl_sequencer{loc};
           }()) {
+        loc.bind_as<i_globalizer>(g_);
         loc.bind_as<i_cdcl_sequencer>(cdcl_seq);
         loc.bind_as<i_bind_map>(common);
         loc.bind_as<i_bind_map_factory>(bmf);

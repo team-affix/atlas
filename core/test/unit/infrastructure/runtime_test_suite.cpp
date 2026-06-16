@@ -234,13 +234,13 @@ TEST_P(RuntimeParamTest, NormalizeDelegatesToBindMap) {
     i_runtime& session = make_session(kInitialVarCount);
     ASSERT_TRUE(session.next()) << "expected a tick";
     ASSERT_TRUE(session.solved()) << "expected solved termination";
-    EXPECT_EQ(saved_expr_pool_.import(session.normalize(saved_expr_pool_.make_var(idx_a))),
+    EXPECT_EQ(saved_expr_pool_.import(session.normalize({saved_expr_pool_.make_var(idx_a), 0})),
         abc);
-    EXPECT_EQ(saved_expr_pool_.import(session.normalize(saved_expr_pool_.make_var(idx_b))),
+    EXPECT_EQ(saved_expr_pool_.import(session.normalize({saved_expr_pool_.make_var(idx_b), 0})),
         _123);
     EXPECT_FALSE(session.next()) << "expected refutation";
     EXPECT_TRUE(std::holds_alternative<expr::var>(
-        session.normalize(saved_expr_pool_.make_var(idx_a))->content));
+        session.normalize({saved_expr_pool_.make_var(idx_a), 0})->content));
 }
 
 TEST_P(RuntimeParamTest, ImportSurvivesNextTick) {
@@ -255,7 +255,7 @@ TEST_P(RuntimeParamTest, ImportSurvivesNextTick) {
     const expr* kept = nullptr;
     ASSERT_TRUE(session.next()) << "expected a tick";
     ASSERT_TRUE(session.solved()) << "expected solved termination";
-    kept = saved_expr_pool_.import(session.normalize(saved_expr_pool_.make_var(idx_a)));
+    kept = saved_expr_pool_.import(session.normalize({saved_expr_pool_.make_var(idx_a), 0}));
     EXPECT_EQ(*kept, *abc);
     EXPECT_FALSE(session.next()) << "expected refutation";
     EXPECT_EQ(*kept, *abc);
@@ -379,9 +379,9 @@ TEST_P(RuntimeParamTest, FindsSolutionWithCorrectBindings) {
     i_runtime& session = make_session(kInitialVarCount);
     ASSERT_TRUE(session.next()) << "expected a tick";
     ASSERT_TRUE(session.solved()) << "expected solved termination";
-    EXPECT_EQ(*saved_expr_pool_.import(session.normalize(saved_expr_pool_.make_var(idx_a))),
+    EXPECT_EQ(*saved_expr_pool_.import(session.normalize({saved_expr_pool_.make_var(idx_a), 0})),
         *abc);
-    EXPECT_EQ(*saved_expr_pool_.import(session.normalize(saved_expr_pool_.make_var(idx_b))),
+    EXPECT_EQ(*saved_expr_pool_.import(session.normalize({saved_expr_pool_.make_var(idx_b), 0})),
         *_123);
     EXPECT_FALSE(session.next()) << "expected refutation";
 }
@@ -408,9 +408,9 @@ TEST_P(RuntimeParamTest, FindsClauseBodyBindingSolution) {
     i_runtime& session = make_session(kInitialVarCount);
     ASSERT_TRUE(session.next()) << "expected a tick";
     ASSERT_TRUE(session.solved()) << "expected solved termination";
-    EXPECT_EQ(*saved_expr_pool_.import(session.normalize(saved_expr_pool_.make_var(idx_a))),
+    EXPECT_EQ(*saved_expr_pool_.import(session.normalize({saved_expr_pool_.make_var(idx_a), 0})),
         *abc);
-    EXPECT_EQ(*saved_expr_pool_.import(session.normalize(saved_expr_pool_.make_var(idx_b))),
+    EXPECT_EQ(*saved_expr_pool_.import(session.normalize({saved_expr_pool_.make_var(idx_b), 0})),
         *_123);
     EXPECT_FALSE(session.next()) << "expected refutation";
 }
@@ -481,7 +481,7 @@ TEST_P(RuntimeParamTest, EnumeratesTwoVarChoiceSolutions) {
         saved_printer_,
         expected,
         [&]() -> solution {
-            return {saved_expr_pool_.import(session.normalize(saved_expr_pool_.make_var(idx_a)))};
+            return {saved_expr_pool_.import(session.normalize({saved_expr_pool_.make_var(idx_a), 0}))};
         });
 }
 
@@ -502,7 +502,7 @@ TEST_P(RuntimeParamTest, RefutesAfterEnumeratingAllVarBranches) {
         saved_printer_,
         expected,
         [&]() -> solution {
-            return {saved_expr_pool_.import(session.normalize(saved_expr_pool_.make_var(idx_a)))};
+            return {saved_expr_pool_.import(session.normalize({saved_expr_pool_.make_var(idx_a), 0}))};
         });
 }
 
@@ -527,7 +527,7 @@ TEST_P(RuntimeParamTest, EnumeratesTwoGoalSharedVarSolutions) {
         saved_printer_,
         expected,
         [&]() -> solution {
-            return {saved_expr_pool_.import(session.normalize(saved_expr_pool_.make_var(idx_a)))};
+            return {saved_expr_pool_.import(session.normalize({saved_expr_pool_.make_var(idx_a), 0}))};
         });
 }
 
@@ -552,7 +552,7 @@ TEST_P(RuntimeParamTest, EnumeratesFourVarBindingSolutions) {
         saved_printer_,
         expected,
         [&]() -> solution {
-            return {saved_expr_pool_.import(session.normalize(saved_expr_pool_.make_var(idx)))};
+            return {saved_expr_pool_.import(session.normalize({saved_expr_pool_.make_var(idx), 0}))};
         });
 }
 
@@ -605,7 +605,7 @@ TEST_P(RuntimeParamTest, FindsUniqueSharedVarConjunctionThenRefutes) {
         saved_printer_,
         expected,
         [&]() -> solution {
-            return {saved_expr_pool_.import(session.normalize(saved_expr_pool_.make_var(idx_x)))};
+            return {saved_expr_pool_.import(session.normalize({saved_expr_pool_.make_var(idx_x), 0}))};
         });
 }
 
@@ -656,7 +656,7 @@ TEST_P(RuntimeParamTest, EnumeratesTwoParentBindingsForAlice) {
         saved_printer_,
         expected,
         [&]() -> solution {
-            return {saved_expr_pool_.import(session.normalize(saved_expr_pool_.make_var(idx_x)))};
+            return {saved_expr_pool_.import(session.normalize({saved_expr_pool_.make_var(idx_x), 0}))};
         });
 }
 
@@ -709,7 +709,7 @@ TEST_P(RuntimeParamTest, EnumeratesPeanoLessThanSeven) {
         saved_printer_,
         expected,
         [&]() -> solution {
-            return {saved_expr_pool_.import(session.normalize(saved_expr_pool_.make_var(idx_n)))};
+            return {saved_expr_pool_.import(session.normalize({saved_expr_pool_.make_var(idx_n), 0}))};
         });
 }
 
@@ -768,7 +768,7 @@ TEST_P(RuntimeParamTest, EnumeratesSatPAndQOrR) {
         saved_printer_,
         expected,
         [&]() -> solution {
-            return {saved_expr_pool_.import(session.normalize(saved_expr_pool_.make_var(idx_p))), saved_expr_pool_.import(session.normalize(saved_expr_pool_.make_var(idx_q))), saved_expr_pool_.import(session.normalize(saved_expr_pool_.make_var(idx_r)))};
+            return {saved_expr_pool_.import(session.normalize({saved_expr_pool_.make_var(idx_p), 0})), saved_expr_pool_.import(session.normalize({saved_expr_pool_.make_var(idx_q), 0})), saved_expr_pool_.import(session.normalize({saved_expr_pool_.make_var(idx_r), 0}))};
         });
 }
 
@@ -811,8 +811,8 @@ TEST_P(RuntimeParamTest, EnumeratesTwoSatAssignmentsForImpliesQ) {
         if (!session.solved())
             continue;
         ++solution_count;
-        const expr* q_val = session.normalize(saved_expr_pool_.make_var(idx_q));
-        const expr* p_val = session.normalize(saved_expr_pool_.make_var(idx_p));
+        const expr* q_val = session.normalize({saved_expr_pool_.make_var(idx_q), 0});
+        const expr* p_val = session.normalize({saved_expr_pool_.make_var(idx_p), 0});
         ASSERT_TRUE(std::holds_alternative<expr::functor>(q_val->content));
         ASSERT_TRUE(std::holds_alternative<expr::functor>(p_val->content));
         EXPECT_EQ(std::get<expr::functor>(q_val->content).id, holder_.functors.id("true"));
@@ -858,11 +858,11 @@ TEST_P(RuntimeParamTest, EnumeratesTwoPathTwoColorings) {
         if (!session.solved())
             continue;
         const std::string a_str =
-            holder_.functors.names.name(std::get<expr::functor>(session.normalize(saved_expr_pool_.make_var(idx_a))->content).id);
+            holder_.functors.names.name(std::get<expr::functor>(session.normalize({saved_expr_pool_.make_var(idx_a), 0})->content).id);
         const std::string b_str =
-            holder_.functors.names.name(std::get<expr::functor>(session.normalize(saved_expr_pool_.make_var(idx_b))->content).id);
+            holder_.functors.names.name(std::get<expr::functor>(session.normalize({saved_expr_pool_.make_var(idx_b), 0})->content).id);
         const std::string c_str =
-            holder_.functors.names.name(std::get<expr::functor>(session.normalize(saved_expr_pool_.make_var(idx_c))->content).id);
+            holder_.functors.names.name(std::get<expr::functor>(session.normalize({saved_expr_pool_.make_var(idx_c), 0})->content).id);
         ASSERT_TRUE(is_valid_color(a_str));
         ASSERT_TRUE(is_valid_color(b_str));
         ASSERT_TRUE(is_valid_color(c_str));
@@ -924,7 +924,7 @@ TEST_P(RuntimeParamTest, EnumeratesK3ThreeColorings) {
         saved_printer_,
         expected,
         [&]() -> solution {
-            return {saved_expr_pool_.import(session.normalize(saved_expr_pool_.make_var(idx_a))), saved_expr_pool_.import(session.normalize(saved_expr_pool_.make_var(idx_b))), saved_expr_pool_.import(session.normalize(saved_expr_pool_.make_var(idx_c)))};
+            return {saved_expr_pool_.import(session.normalize({saved_expr_pool_.make_var(idx_a), 0})), saved_expr_pool_.import(session.normalize({saved_expr_pool_.make_var(idx_b), 0})), saved_expr_pool_.import(session.normalize({saved_expr_pool_.make_var(idx_c), 0}))};
         });
 }
 
@@ -981,7 +981,7 @@ TEST_P(RuntimeParamTest, EnumeratesK3TailFourNodeColorings) {
         saved_printer_,
         expected,
         [&]() -> solution {
-            return {saved_expr_pool_.import(session.normalize(saved_expr_pool_.make_var(idx_a))), saved_expr_pool_.import(session.normalize(saved_expr_pool_.make_var(idx_b))), saved_expr_pool_.import(session.normalize(saved_expr_pool_.make_var(idx_c))), saved_expr_pool_.import(session.normalize(saved_expr_pool_.make_var(idx_d)))};
+            return {saved_expr_pool_.import(session.normalize({saved_expr_pool_.make_var(idx_a), 0})), saved_expr_pool_.import(session.normalize({saved_expr_pool_.make_var(idx_b), 0})), saved_expr_pool_.import(session.normalize({saved_expr_pool_.make_var(idx_c), 0})), saved_expr_pool_.import(session.normalize({saved_expr_pool_.make_var(idx_d), 0}))};
         });
 }
 
@@ -1064,7 +1064,7 @@ TEST_P(RuntimeParamTest, EnumeratesFourVarSatThreeClauses) {
         saved_printer_,
         expected,
         [&]() -> solution {
-            return {saved_expr_pool_.import(session.normalize(saved_expr_pool_.make_var(idx_p))), saved_expr_pool_.import(session.normalize(saved_expr_pool_.make_var(idx_q))), saved_expr_pool_.import(session.normalize(saved_expr_pool_.make_var(idx_r))), saved_expr_pool_.import(session.normalize(saved_expr_pool_.make_var(idx_s)))};
+            return {saved_expr_pool_.import(session.normalize({saved_expr_pool_.make_var(idx_p), 0})), saved_expr_pool_.import(session.normalize({saved_expr_pool_.make_var(idx_q), 0})), saved_expr_pool_.import(session.normalize({saved_expr_pool_.make_var(idx_r), 0})), saved_expr_pool_.import(session.normalize({saved_expr_pool_.make_var(idx_s), 0}))};
         });
 }
 
@@ -1138,7 +1138,7 @@ TEST_P(RuntimeParamTest, EnumeratesAddPairsSummingLessThanTen) {
         saved_printer_,
         expected,
         [&]() -> solution {
-            return {saved_expr_pool_.import(session.normalize(saved_expr_pool_.make_var(idx_x))), saved_expr_pool_.import(session.normalize(saved_expr_pool_.make_var(idx_y)))};
+            return {saved_expr_pool_.import(session.normalize({saved_expr_pool_.make_var(idx_x), 0})), saved_expr_pool_.import(session.normalize({saved_expr_pool_.make_var(idx_y), 0}))};
         });
 }
 
@@ -1196,7 +1196,7 @@ TEST_P(RuntimeParamTest, EnumeratesAddPairsSummingExactlyTen) {
         saved_printer_,
         expected,
         [&]() -> solution {
-            return {saved_expr_pool_.import(session.normalize(saved_expr_pool_.make_var(idx_x))), saved_expr_pool_.import(session.normalize(saved_expr_pool_.make_var(idx_y)))};
+            return {saved_expr_pool_.import(session.normalize({saved_expr_pool_.make_var(idx_x), 0})), saved_expr_pool_.import(session.normalize({saved_expr_pool_.make_var(idx_y), 0}))};
         });
 }
 
@@ -1270,7 +1270,7 @@ TEST_P(RuntimeParamTest, EnumeratesMulPairsProductEight) {
         saved_printer_,
         expected,
         [&]() -> solution {
-            return {saved_expr_pool_.import(session.normalize(saved_expr_pool_.make_var(idx_x))), saved_expr_pool_.import(session.normalize(saved_expr_pool_.make_var(idx_y)))};
+            return {saved_expr_pool_.import(session.normalize({saved_expr_pool_.make_var(idx_x), 0})), saved_expr_pool_.import(session.normalize({saved_expr_pool_.make_var(idx_y), 0}))};
         });
 }
 TEST_P(RuntimeParamTest, EnumeratesDualBoundedSharedXSums) {
@@ -1359,7 +1359,7 @@ TEST_P(RuntimeParamTest, EnumeratesDualBoundedSharedXSums) {
         saved_printer_,
         expected,
         [&]() -> solution {
-            return {saved_expr_pool_.import(session.normalize(saved_expr_pool_.make_var(idx_x))), saved_expr_pool_.import(session.normalize(saved_expr_pool_.make_var(idx_y))), saved_expr_pool_.import(session.normalize(saved_expr_pool_.make_var(idx_z)))};
+            return {saved_expr_pool_.import(session.normalize({saved_expr_pool_.make_var(idx_x), 0})), saved_expr_pool_.import(session.normalize({saved_expr_pool_.make_var(idx_y), 0})), saved_expr_pool_.import(session.normalize({saved_expr_pool_.make_var(idx_z), 0}))};
         });
 }
 
@@ -1425,7 +1425,7 @@ TEST_P(RuntimeParamTest, EnumeratesCatalanTreesWithFiveNodes) {
         if (!session.solved())
             continue;
         const solution s = {
-            saved_expr_pool_.import(session.normalize(saved_expr_pool_.make_var(idx_t)))};
+            saved_expr_pool_.import(session.normalize({saved_expr_pool_.make_var(idx_t), 0}))};
         if (visited.count(s))
             continue;
         visited.insert(s);
@@ -1504,9 +1504,9 @@ TEST_P(RuntimeParamTest, EnumeratesManySharedVarGroundHeads) {
         if (!session.solved())
             continue;
         const solution s = {
-            saved_expr_pool_.import(session.normalize(saved_expr_pool_.make_var(idx_a))),
-            saved_expr_pool_.import(session.normalize(saved_expr_pool_.make_var(idx_b))),
-            saved_expr_pool_.import(session.normalize(saved_expr_pool_.make_var(idx_c))),
+            saved_expr_pool_.import(session.normalize({saved_expr_pool_.make_var(idx_a), 0})),
+            saved_expr_pool_.import(session.normalize({saved_expr_pool_.make_var(idx_b), 0})),
+            saved_expr_pool_.import(session.normalize({saved_expr_pool_.make_var(idx_c), 0})),
         };
         if (visited.count(s))
             continue;
@@ -1580,7 +1580,7 @@ TEST_P(RuntimeParamTest, EnumeratesTransitiveReachFromA) {
         saved_printer_,
         expected,
         [&]() -> solution {
-            return {saved_expr_pool_.import(session.normalize(saved_expr_pool_.make_var(idx_y)))};
+            return {saved_expr_pool_.import(session.normalize({saved_expr_pool_.make_var(idx_y), 0}))};
         });
 }
 
@@ -1643,7 +1643,7 @@ TEST_P(RuntimeParamTest, EnumeratesEvenPeanoLessThanEight) {
         saved_printer_,
         expected,
         [&]() -> solution {
-            return {saved_expr_pool_.import(session.normalize(saved_expr_pool_.make_var(idx_n)))};
+            return {saved_expr_pool_.import(session.normalize({saved_expr_pool_.make_var(idx_n), 0}))};
         });
 }
 
@@ -1674,7 +1674,7 @@ TEST_P(RuntimeParamTest, EnumeratesListSplitsForThreeElementList) {
         saved_printer_,
         expected,
         [&]() -> solution {
-            return {saved_expr_pool_.import(session.normalize(saved_expr_pool_.make_var(idx_l1))), saved_expr_pool_.import(session.normalize(saved_expr_pool_.make_var(idx_l2)))};
+            return {saved_expr_pool_.import(session.normalize({saved_expr_pool_.make_var(idx_l1), 0})), saved_expr_pool_.import(session.normalize({saved_expr_pool_.make_var(idx_l2), 0}))};
         });
 }
 
@@ -1791,7 +1791,7 @@ TEST_P(RuntimeParamTest, EnumeratesCollatzOneStepPreimagesOfTen) {
         saved_printer_,
         {{peano_saved(3)}, {peano_saved(20)}},
         [&]() -> solution {
-            return {saved_expr_pool_.import(session.normalize(saved_expr_pool_.make_var(idx_n)))};
+            return {saved_expr_pool_.import(session.normalize({saved_expr_pool_.make_var(idx_n), 0}))};
         });
 }
 
@@ -1880,7 +1880,7 @@ TEST_P(RuntimeParamTest, EnumeratesFibIndicesWithValueBelowFive) {
         saved_printer_,
         expected,
         [&]() -> solution {
-            return {saved_expr_pool_.import(session.normalize(saved_expr_pool_.make_var(idx_n)))};
+            return {saved_expr_pool_.import(session.normalize({saved_expr_pool_.make_var(idx_n), 0}))};
         });
 }
 
@@ -1955,8 +1955,8 @@ TEST_P(RuntimeParamTest, EnumeratesFactorPairsOfSix) {
         expected,
         [&]() -> solution {
             return {
-                saved_expr_pool_.import(session.normalize(saved_expr_pool_.make_var(idx_x))),
-                saved_expr_pool_.import(session.normalize(saved_expr_pool_.make_var(idx_y))),
+                saved_expr_pool_.import(session.normalize({saved_expr_pool_.make_var(idx_x), 0})),
+                saved_expr_pool_.import(session.normalize({saved_expr_pool_.make_var(idx_y), 0})),
             };
         });
 }
@@ -2029,8 +2029,8 @@ TEST_P(RuntimeParamTest, EnumeratesDistinctTwoPartPartitionsOfFive) {
         {{peano_saved(1), peano_saved(4)}, {peano_saved(2), peano_saved(3)}},
         [&]() -> solution {
             return {
-                saved_expr_pool_.import(session.normalize(saved_expr_pool_.make_var(idx_a))),
-                saved_expr_pool_.import(session.normalize(saved_expr_pool_.make_var(idx_b))),
+                saved_expr_pool_.import(session.normalize({saved_expr_pool_.make_var(idx_a), 0})),
+                saved_expr_pool_.import(session.normalize({saved_expr_pool_.make_var(idx_b), 0})),
             };
         });
 }
@@ -2099,8 +2099,8 @@ TEST_P(RuntimeParamTest, EnumeratesArithmeticProgressionsEndingAtFive) {
         {{peano_saved(1), peano_saved(2)}, {peano_saved(3), peano_saved(1)}},
         [&]() -> solution {
             return {
-                saved_expr_pool_.import(session.normalize(saved_expr_pool_.make_var(idx_a))),
-                saved_expr_pool_.import(session.normalize(saved_expr_pool_.make_var(idx_d))),
+                saved_expr_pool_.import(session.normalize({saved_expr_pool_.make_var(idx_a), 0})),
+                saved_expr_pool_.import(session.normalize({saved_expr_pool_.make_var(idx_d), 0})),
             };
         });
 }
@@ -2205,7 +2205,7 @@ TEST_P(RuntimeParamTest, FindsGcdOfSixAndFourViaSubtraction) {
         saved_printer_,
         {{peano_saved(2)}},
         [&]() -> solution {
-            return {saved_expr_pool_.import(session.normalize(saved_expr_pool_.make_var(idx_g)))};
+            return {saved_expr_pool_.import(session.normalize({saved_expr_pool_.make_var(idx_g), 0}))};
         });
 }
 
@@ -2252,8 +2252,8 @@ TEST_P(RuntimeParamTest, EnumeratesTwoSubsetsOfFourElements) {
         {{a, b}, {a, c}, {a, d}, {b, c}, {b, d}, {c, d}},
         [&]() -> solution {
             return {
-                saved_expr_pool_.import(session.normalize(saved_expr_pool_.make_var(idx_x))),
-                saved_expr_pool_.import(session.normalize(saved_expr_pool_.make_var(idx_y))),
+                saved_expr_pool_.import(session.normalize({saved_expr_pool_.make_var(idx_x), 0})),
+                saved_expr_pool_.import(session.normalize({saved_expr_pool_.make_var(idx_y), 0})),
             };
         });
 }
@@ -2321,7 +2321,7 @@ TEST_P(RuntimeParamTest, EnumeratesBalancedGrammarStringOfLengthFour) {
         saved_printer_,
         {{aabb}},
         [&]() -> solution {
-            return {saved_expr_pool_.import(session.normalize(saved_expr_pool_.make_var(idx_t)))};
+            return {saved_expr_pool_.import(session.normalize({saved_expr_pool_.make_var(idx_t), 0}))};
         });
 }
 
@@ -2384,7 +2384,7 @@ TEST_P(RuntimeParamTest, EnumeratesDepthTwoTermsOverTwoConstants) {
             {saved_expr_pool_.make_functor(holder_.functors.id("app"), {b, b})},
         },
         [&]() -> solution {
-            return {saved_expr_pool_.import(session.normalize(saved_expr_pool_.make_var(idx_t)))};
+            return {saved_expr_pool_.import(session.normalize({saved_expr_pool_.make_var(idx_t), 0}))};
         });
 }
 
@@ -2454,7 +2454,7 @@ TEST_P(RuntimeParamTest, FindsEvenParityListOfLengthFour) {
         saved_printer_,
         {{list4}},
         [&]() -> solution {
-            return {saved_expr_pool_.import(session.normalize(saved_expr_pool_.make_var(idx_l)))};
+            return {saved_expr_pool_.import(session.normalize({saved_expr_pool_.make_var(idx_l), 0}))};
         });
 }
 
@@ -2545,9 +2545,9 @@ TEST_P(RuntimeParamTest, EnumeratesPeanoTriplesInsideTetrahedron) {
         expected,
         [&]() -> solution {
             return {
-                saved_expr_pool_.import(session.normalize(saved_expr_pool_.make_var(idx_x))),
-                saved_expr_pool_.import(session.normalize(saved_expr_pool_.make_var(idx_y))),
-                saved_expr_pool_.import(session.normalize(saved_expr_pool_.make_var(idx_z))),
+                saved_expr_pool_.import(session.normalize({saved_expr_pool_.make_var(idx_x), 0})),
+                saved_expr_pool_.import(session.normalize({saved_expr_pool_.make_var(idx_y), 0})),
+                saved_expr_pool_.import(session.normalize({saved_expr_pool_.make_var(idx_z), 0})),
             };
         });
 }
@@ -2722,7 +2722,7 @@ TEST_P(RuntimeParamTest, EnumeratesOrderedCompositionsOfEight) {
         saved_printer_,
         expected,
         [&]() -> solution {
-            return {saved_expr_pool_.import(session.normalize(saved_expr_pool_.make_var(idx_l)))};
+            return {saved_expr_pool_.import(session.normalize({saved_expr_pool_.make_var(idx_l), 0}))};
         });
 }
 
@@ -2803,7 +2803,7 @@ TEST_P(RuntimeParamTest, EnumeratesBinaryStringsNoConsecutiveOnesLengthTen) {
         saved_printer_,
         expected,
         [&]() -> solution {
-            return {saved_expr_pool_.import(session.normalize(saved_expr_pool_.make_var(idx_s)))};
+            return {saved_expr_pool_.import(session.normalize({saved_expr_pool_.make_var(idx_s), 0}))};
         });
 }
 
@@ -2888,7 +2888,7 @@ TEST_P(RuntimeParamTest, EnumeratesStaircasePathsOneOrTwoSummingToTen) {
         saved_printer_,
         expected,
         [&]() -> solution {
-            return {saved_expr_pool_.import(session.normalize(saved_expr_pool_.make_var(idx_p)))};
+            return {saved_expr_pool_.import(session.normalize({saved_expr_pool_.make_var(idx_p), 0}))};
         });
 }
 
@@ -3007,8 +3007,8 @@ TEST_P(RuntimeParamTest, EnumeratesFibIndexPairsWithSumBelowThirty) {
         expected,
         [&]() -> solution {
             return {
-                saved_expr_pool_.import(session.normalize(saved_expr_pool_.make_var(idx_i))),
-                saved_expr_pool_.import(session.normalize(saved_expr_pool_.make_var(idx_j))),
+                saved_expr_pool_.import(session.normalize({saved_expr_pool_.make_var(idx_i), 0})),
+                saved_expr_pool_.import(session.normalize({saved_expr_pool_.make_var(idx_j), 0})),
             };
         });
 }

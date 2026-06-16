@@ -1,12 +1,11 @@
 #ifndef I_GLOBALIZER_HPP
 #define I_GLOBALIZER_HPP
 
-#include "value_objects/expr.hpp"
-#include "value_objects/framed_expr.hpp"
+#include <cstdint>
 
 struct i_globalizer {
     virtual ~i_globalizer() = default;
-    virtual const expr* globalize(framed_expr) = 0;
+    virtual uint32_t globalize(uint32_t frame_offset, uint32_t local_index) = 0;
 };
 
 #endif

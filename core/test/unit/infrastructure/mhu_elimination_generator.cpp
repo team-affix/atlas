@@ -7,6 +7,9 @@
 #include "locator_fixture.hpp"
 #include "infrastructure/mhu_elimination_generator.hpp"
 #include "infrastructure/bind_map.hpp"
+#include "infrastructure/bind_map_factory.hpp"
+#include "infrastructure/globalizer.hpp"
+#include "infrastructure/locator.hpp"
 #include "infrastructure/unifier_factory.hpp"
 #include "interfaces/i_bind_map.hpp"
 #include "interfaces/i_bind_map_factory.hpp"
@@ -35,6 +38,7 @@ struct failing_unifier_factory : i_unifier_factory {
 };
 
 struct real_unifier_factory : i_unifier_factory {
+    explicit real_unifier_factory(locator& loc) : inner(loc) {}
     mutable unifier_factory inner;
     std::unique_ptr<i_unifier> make(i_bind_map& bm) const override {
         return inner.make(bm);
@@ -42,12 +46,15 @@ struct real_unifier_factory : i_unifier_factory {
 };
 
 struct test_bind_map_factory : i_bind_map_factory {
+    explicit test_bind_map_factory(i_globalizer& g) : g_(g) {}
     std::unique_ptr<i_bind_map> make() const override {
-        return std::make_unique<bind_map>();
+        return std::make_unique<bind_map>(g_);
     }
+    i_globalizer& g_;
 };
 
 struct toggling_unifier_factory : i_unifier_factory {
+    explicit toggling_unifier_factory(locator& loc) : success_factory(loc) {}
     mutable int calls = 0;
     real_unifier_factory success_factory;
     std::unique_ptr<i_unifier> make(i_bind_map& bm) const override {
@@ -84,12 +91,12 @@ struct MockGetGoalCandidateRuleIds : public i_get_goal_candidate_rule_ids {
 };
 
 struct MhuEliminationGeneratorUnitTest : public ::testing::Test {
-    
     test_functors functors;
     locator loc;
+    globalizer g_;
     identity_bind_map common;
     test_make_var make_var;
-    test_bind_map_factory bind_map_factory;
+    test_bind_map_factory bind_map_factory{g_};
     MockMakeResolutionLineage make_resolution_lineage;
     MockGetGoalCandidateRuleIds get_goal_candidate_rule_ids;
     rule_id_set candidates;
@@ -97,6 +104,7 @@ struct MhuEliminationGeneratorUnitTest : public ::testing::Test {
     resolution_lineage rl{&gl, 0};
 
     void bind_base_deps() {
+        loc.bind_as<i_globalizer>(g_);
         loc.bind_as<i_bind_map>(common);
         loc.bind_as<i_make_var>(make_var);
         loc.bind_as<i_bind_map_factory>(bind_map_factory);
@@ -119,7 +127,7 @@ TEST_F(MhuEliminationGeneratorUnitTest, TryAddHeadReturnsFalseWhenUnifyFails) {
 }
 
 TEST_F(MhuEliminationGeneratorUnitTest, TryAddHeadFalseThenSuccessOnRetry) {
-    toggling_unifier_factory unifier_factory;
+    toggling_unifier_factory unifier_factory{loc};
     bind_base_deps();
     loc.bind_as<i_unifier_factory>(unifier_factory);
     mhu_elimination_generator mhu{loc};
@@ -129,7 +137,7 @@ TEST_F(MhuEliminationGeneratorUnitTest, TryAddHeadFalseThenSuccessOnRetry) {
 }
 
 TEST_F(MhuEliminationGeneratorUnitTest, ClearMhuHeadsAllowsFreshTryAdd) {
-    real_unifier_factory unifier_factory;
+    real_unifier_factory unifier_factory{loc};
     bind_base_deps();
     loc.bind_as<i_unifier_factory>(unifier_factory);
     mhu_elimination_generator mhu{loc};
@@ -140,7 +148,7 @@ TEST_F(MhuEliminationGeneratorUnitTest, ClearMhuHeadsAllowsFreshTryAdd) {
 }
 
 TEST_F(MhuEliminationGeneratorUnitTest, DuplicateTryAddHeadThrowsInDebug) {
-    real_unifier_factory unifier_factory;
+    real_unifier_factory unifier_factory{loc};
     bind_base_deps();
     loc.bind_as<i_unifier_factory>(unifier_factory);
     mhu_elimination_generator mhu{loc};

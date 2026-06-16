@@ -738,9 +738,9 @@ TEST_F(BasicManifestIntegrationTest, BindingsBeforeTearDown) {
     sm.resume();
     ASSERT_TRUE(sm.has_yield());
     ASSERT_EQ(sm.consume_yield(), sim_termination::solved);
-    EXPECT_EQ(*saved_expr_pool_.import(normalizer.normalize(saved_expr_pool_.make_var(idx_a))),
+    EXPECT_EQ(*saved_expr_pool_.import(normalizer.normalize({saved_expr_pool_.make_var(idx_a), 0})),
         *abc);
-    EXPECT_EQ(*saved_expr_pool_.import(normalizer.normalize(saved_expr_pool_.make_var(idx_b))),
+    EXPECT_EQ(*saved_expr_pool_.import(normalizer.normalize({saved_expr_pool_.make_var(idx_b), 0})),
         *_123);
 
     sm.resume();
@@ -1163,9 +1163,9 @@ TEST_F(BasicManifestIntegrationTest, SolverFindsSolutionWithCorrectBindings) {
     ASSERT_TRUE(sm.has_yield());
     EXPECT_EQ(sm.consume_yield(), sim_termination::solved);
     EXPECT_TRUE(manifest.decision_memory_.derive_decision_lemma().get_resolutions().empty());
-    EXPECT_EQ(*saved_expr_pool_.import(normalizer.normalize(saved_expr_pool_.make_var(idx_a))),
+    EXPECT_EQ(*saved_expr_pool_.import(normalizer.normalize({saved_expr_pool_.make_var(idx_a), 0})),
         *abc);
-    EXPECT_EQ(*saved_expr_pool_.import(normalizer.normalize(saved_expr_pool_.make_var(idx_b))),
+    EXPECT_EQ(*saved_expr_pool_.import(normalizer.normalize({saved_expr_pool_.make_var(idx_b), 0})),
         *_123);
     sm.resume();
     EXPECT_FALSE(sm.has_yield());
@@ -1205,9 +1205,9 @@ TEST_F(BasicManifestIntegrationTest, SolverFindsClauseBodyBindingSolution) {
     sm.resume();
     ASSERT_TRUE(sm.has_yield());
     EXPECT_EQ(sm.consume_yield(), sim_termination::solved);
-    EXPECT_EQ(*saved_expr_pool_.import(normalizer.normalize(saved_expr_pool_.make_var(idx_a))),
+    EXPECT_EQ(*saved_expr_pool_.import(normalizer.normalize({saved_expr_pool_.make_var(idx_a), 0})),
         *abc);
-    EXPECT_EQ(*saved_expr_pool_.import(normalizer.normalize(saved_expr_pool_.make_var(idx_b))),
+    EXPECT_EQ(*saved_expr_pool_.import(normalizer.normalize({saved_expr_pool_.make_var(idx_b), 0})),
         *_123);
     sm.resume();
     EXPECT_FALSE(sm.has_yield());
@@ -1243,7 +1243,7 @@ TEST_F(BasicManifestIntegrationTest, SolverEnumeratesTwoVarChoiceSolutions) {
         {{abc}, {xyz}},
         [&]() -> solution {
             return {saved_expr_pool_.import(
-                normalizer.normalize(saved_expr_pool_.make_var(idx_a)))};
+                normalizer.normalize({saved_expr_pool_.make_var(idx_a), 0}))};
         });
 }
 
@@ -1277,7 +1277,7 @@ TEST_F(BasicManifestIntegrationTest, SolverRefutesAfterEnumeratingAllVarBranches
         {{abc}, {xyz}},
         [&]() -> solution {
             return {saved_expr_pool_.import(
-                normalizer.normalize(saved_expr_pool_.make_var(idx_a)))};
+                normalizer.normalize({saved_expr_pool_.make_var(idx_a), 0}))};
         });
 }
 
@@ -1317,7 +1317,7 @@ TEST_F(BasicManifestIntegrationTest, SolverEnumeratesTwoGoalSharedVarSolutions) 
         {{abc}, {xyz}},
         [&]() -> solution {
             return {saved_expr_pool_.import(
-                normalizer.normalize(saved_expr_pool_.make_var(idx_a)))};
+                normalizer.normalize({saved_expr_pool_.make_var(idx_a), 0}))};
         });
 }
 
@@ -1673,7 +1673,7 @@ TEST_F(BasicManifestIntegrationTest, SolverEnumeratesFourVarBindingSolutions) {
         {{abc}, {xyz}, {def}, {ghi}},
         [&]() -> solution {
             return {saved_expr_pool_.import(
-                normalizer.normalize(saved_expr_pool_.make_var(idx_a)))};
+                normalizer.normalize({saved_expr_pool_.make_var(idx_a), 0}))};
         });
 }
 
@@ -1809,9 +1809,9 @@ TEST_F(BasicManifestIntegrationTest, SolverEnumeratesManySharedVarGroundHeads) {
             if (binding_sm.consume_yield() != sim_termination::solved)
                 continue;
             binding_solutions.push_back({
-                saved_expr_pool_.import(binding_normalizer.normalize(var_a_bind)),
-                saved_expr_pool_.import(binding_normalizer.normalize(var_b_bind)),
-                saved_expr_pool_.import(binding_normalizer.normalize(var_c_bind)),
+                saved_expr_pool_.import(binding_normalizer.normalize({var_a_bind, 0})),
+                saved_expr_pool_.import(binding_normalizer.normalize({var_b_bind, 0})),
+                saved_expr_pool_.import(binding_normalizer.normalize({var_c_bind, 0})),
             });
         }
         ASSERT_EQ(binding_solutions.size(), kRawSolutions);
@@ -1918,7 +1918,7 @@ TEST_F(BasicManifestIntegrationTest, FindsUniqueSharedVarConjunctionThenRefutes)
         {{two}},
         [&]() -> solution {
             return {saved_expr_pool_.import(
-                normalizer.normalize(saved_expr_pool_.make_var(idx_x)))};
+                normalizer.normalize({saved_expr_pool_.make_var(idx_x), 0}))};
         });
 }
 
@@ -1955,7 +1955,7 @@ TEST_F(BasicManifestIntegrationTest, EnumeratesTwoParentBindingsForAlice) {
         {{bob}, {carol}},
         [&]() -> solution {
             return {saved_expr_pool_.import(
-                normalizer.normalize(saved_expr_pool_.make_var(idx_x)))};
+                normalizer.normalize({saved_expr_pool_.make_var(idx_x), 0}))};
         });
 }
 
@@ -2023,7 +2023,7 @@ TEST_F(BasicManifestIntegrationTest, EnumeratesPeanoLessThanSeven) {
         expected,
         [&]() -> solution {
             return {saved_expr_pool_.import(
-                normalizer.normalize(saved_expr_pool_.make_var(idx_n)))};
+                normalizer.normalize({saved_expr_pool_.make_var(idx_n), 0}))};
         });
 }
 
@@ -2087,9 +2087,9 @@ TEST_F(BasicManifestIntegrationTest, EnumeratesSatPAndQOrR) {
         {{true_atom, true_atom, true_atom}, {true_atom, true_atom, false_atom}, {true_atom, false_atom, true_atom}},
         [&]() -> solution {
             return {
-                saved_expr_pool_.import(normalizer.normalize(saved_expr_pool_.make_var(idx_p))),
-                saved_expr_pool_.import(normalizer.normalize(saved_expr_pool_.make_var(idx_q))),
-                saved_expr_pool_.import(normalizer.normalize(saved_expr_pool_.make_var(idx_r))),
+                saved_expr_pool_.import(normalizer.normalize({saved_expr_pool_.make_var(idx_p), 0})),
+                saved_expr_pool_.import(normalizer.normalize({saved_expr_pool_.make_var(idx_q), 0})),
+                saved_expr_pool_.import(normalizer.normalize({saved_expr_pool_.make_var(idx_r), 0})),
             };
         });
 }
@@ -2144,8 +2144,8 @@ TEST_F(BasicManifestIntegrationTest, EnumeratesTwoSatAssignmentsForImpliesQ) {
         if (sm.consume_yield() != sim_termination::solved)
             continue;
         ++solution_count;
-        const expr* q_val = normalizer.normalize(saved_expr_pool_.make_var(idx_q));
-        const expr* p_val = normalizer.normalize(saved_expr_pool_.make_var(idx_p));
+        const expr* q_val = normalizer.normalize({saved_expr_pool_.make_var(idx_q), 0});
+        const expr* p_val = normalizer.normalize({saved_expr_pool_.make_var(idx_p), 0});
         ASSERT_TRUE(std::holds_alternative<expr::functor>(q_val->content));
         ASSERT_TRUE(std::holds_alternative<expr::functor>(p_val->content));
         EXPECT_EQ(std::get<expr::functor>(q_val->content).id, functors.id("true"));
@@ -2206,11 +2206,11 @@ TEST_F(BasicManifestIntegrationTest, EnumeratesTwoPathTwoColorings) {
         if (sm.consume_yield() != sim_termination::solved)
             continue;
         const std::string a_str =
-            functors.names.name(std::get<expr::functor>(normalizer.normalize(saved_expr_pool_.make_var(idx_a))->content).id);
+            functors.names.name(std::get<expr::functor>(normalizer.normalize({saved_expr_pool_.make_var(idx_a), 0})->content).id);
         const std::string b_str =
-            functors.names.name(std::get<expr::functor>(normalizer.normalize(saved_expr_pool_.make_var(idx_b))->content).id);
+            functors.names.name(std::get<expr::functor>(normalizer.normalize({saved_expr_pool_.make_var(idx_b), 0})->content).id);
         const std::string c_str =
-            functors.names.name(std::get<expr::functor>(normalizer.normalize(saved_expr_pool_.make_var(idx_c))->content).id);
+            functors.names.name(std::get<expr::functor>(normalizer.normalize({saved_expr_pool_.make_var(idx_c), 0})->content).id);
         ASSERT_TRUE(is_valid_color(a_str));
         ASSERT_TRUE(is_valid_color(b_str));
         ASSERT_TRUE(is_valid_color(c_str));
@@ -2297,9 +2297,9 @@ TEST_F(BasicManifestIntegrationTest, EnumeratesK3ThreeColorings) {
             expected,
             [&]() -> solution {
                 return {
-                    saved_expr_pool_.import(seed_normalizer.normalize(saved_expr_pool_.make_var(idx_a))),
-                    saved_expr_pool_.import(seed_normalizer.normalize(saved_expr_pool_.make_var(idx_b))),
-                    saved_expr_pool_.import(seed_normalizer.normalize(saved_expr_pool_.make_var(idx_c))),
+                    saved_expr_pool_.import(seed_normalizer.normalize({saved_expr_pool_.make_var(idx_a), 0})),
+                    saved_expr_pool_.import(seed_normalizer.normalize({saved_expr_pool_.make_var(idx_b), 0})),
+                    saved_expr_pool_.import(seed_normalizer.normalize({saved_expr_pool_.make_var(idx_c), 0})),
                 };
             });
     }
@@ -2362,10 +2362,10 @@ TEST_F(BasicManifestIntegrationTest, EnumeratesK3TailFourNodeColorings) {
         };
         next_until_refuted(manifest.solver_, expr_printer_.printer, manifest.decision_memory_, manifest.resolution_memory_, expected, [&]() -> solution {
             return {
-                saved_expr_pool_.import(seed_normalizer.normalize(saved_expr_pool_.make_var(idx_a))),
-                saved_expr_pool_.import(seed_normalizer.normalize(saved_expr_pool_.make_var(idx_b))),
-                saved_expr_pool_.import(seed_normalizer.normalize(saved_expr_pool_.make_var(idx_c))),
-                saved_expr_pool_.import(seed_normalizer.normalize(saved_expr_pool_.make_var(idx_d))),
+                saved_expr_pool_.import(seed_normalizer.normalize({saved_expr_pool_.make_var(idx_a), 0})),
+                saved_expr_pool_.import(seed_normalizer.normalize({saved_expr_pool_.make_var(idx_b), 0})),
+                saved_expr_pool_.import(seed_normalizer.normalize({saved_expr_pool_.make_var(idx_c), 0})),
+                saved_expr_pool_.import(seed_normalizer.normalize({saved_expr_pool_.make_var(idx_d), 0})),
             };
         });
     }
@@ -2464,10 +2464,10 @@ TEST_F(BasicManifestIntegrationTest, EnumeratesFourVarSatThreeClauses) {
             expected,
             [&]() -> solution {
                 return {
-                    saved_expr_pool_.import(seed_normalizer.normalize(saved_expr_pool_.make_var(idx_p))),
-                    saved_expr_pool_.import(seed_normalizer.normalize(saved_expr_pool_.make_var(idx_q))),
-                    saved_expr_pool_.import(seed_normalizer.normalize(saved_expr_pool_.make_var(idx_r))),
-                    saved_expr_pool_.import(seed_normalizer.normalize(saved_expr_pool_.make_var(idx_s))),
+                    saved_expr_pool_.import(seed_normalizer.normalize({saved_expr_pool_.make_var(idx_p), 0})),
+                    saved_expr_pool_.import(seed_normalizer.normalize({saved_expr_pool_.make_var(idx_q), 0})),
+                    saved_expr_pool_.import(seed_normalizer.normalize({saved_expr_pool_.make_var(idx_r), 0})),
+                    saved_expr_pool_.import(seed_normalizer.normalize({saved_expr_pool_.make_var(idx_s), 0})),
                 };
             });
     }
@@ -2561,9 +2561,9 @@ TEST_F(BasicManifestIntegrationTest, EnumeratesAddPairsSummingLessThanTen) {
         [&]() -> solution {
             return {
                 saved_expr_pool_.import(
-                    probe_normalizer.normalize(saved_expr_pool_.make_var(idx_x_probe))),
+                    probe_normalizer.normalize({saved_expr_pool_.make_var(idx_x_probe), 0})),
                 saved_expr_pool_.import(
-                    probe_normalizer.normalize(saved_expr_pool_.make_var(idx_y_probe))),
+                    probe_normalizer.normalize({saved_expr_pool_.make_var(idx_y_probe), 0})),
             };
         });
 
@@ -2592,8 +2592,8 @@ TEST_F(BasicManifestIntegrationTest, EnumeratesAddPairsSummingLessThanTen) {
         expected,
         [&]() -> solution {
             return {
-                saved_expr_pool_.import(normalizer.normalize(saved_expr_pool_.make_var(idx_x))),
-                saved_expr_pool_.import(normalizer.normalize(saved_expr_pool_.make_var(idx_y))),
+                saved_expr_pool_.import(normalizer.normalize({saved_expr_pool_.make_var(idx_x), 0})),
+                saved_expr_pool_.import(normalizer.normalize({saved_expr_pool_.make_var(idx_y), 0})),
             };
         });
 }
@@ -2662,8 +2662,8 @@ TEST_F(BasicManifestIntegrationTest, EnumeratesAddPairsSummingExactlyTen) {
         expected,
         [&]() -> solution {
             return {
-                saved_expr_pool_.import(normalizer.normalize(saved_expr_pool_.make_var(idx_x))),
-                saved_expr_pool_.import(normalizer.normalize(saved_expr_pool_.make_var(idx_y))),
+                saved_expr_pool_.import(normalizer.normalize({saved_expr_pool_.make_var(idx_x), 0})),
+                saved_expr_pool_.import(normalizer.normalize({saved_expr_pool_.make_var(idx_y), 0})),
             };
         });
 }
@@ -2747,8 +2747,8 @@ TEST_F(BasicManifestIntegrationTest, EnumeratesMulPairsProductEight) {
         expected,
         [&]() -> solution {
             return {
-                saved_expr_pool_.import(normalizer.normalize(saved_expr_pool_.make_var(idx_x))),
-                saved_expr_pool_.import(normalizer.normalize(saved_expr_pool_.make_var(idx_y))),
+                saved_expr_pool_.import(normalizer.normalize({saved_expr_pool_.make_var(idx_x), 0})),
+                saved_expr_pool_.import(normalizer.normalize({saved_expr_pool_.make_var(idx_y), 0})),
             };
         });
 }
@@ -2842,9 +2842,9 @@ TEST_F(BasicManifestIntegrationTest, EnumeratesDualBoundedSharedXSums) {
         expected,
         [&]() -> solution {
             return {
-                saved_expr_pool_.import(normalizer.normalize(saved_expr_pool_.make_var(idx_x))),
-                saved_expr_pool_.import(normalizer.normalize(saved_expr_pool_.make_var(idx_y))),
-                saved_expr_pool_.import(normalizer.normalize(saved_expr_pool_.make_var(idx_z))),
+                saved_expr_pool_.import(normalizer.normalize({saved_expr_pool_.make_var(idx_x), 0})),
+                saved_expr_pool_.import(normalizer.normalize({saved_expr_pool_.make_var(idx_y), 0})),
+                saved_expr_pool_.import(normalizer.normalize({saved_expr_pool_.make_var(idx_z), 0})),
             };
         });
 }
@@ -3013,7 +3013,7 @@ TEST_F(BasicManifestIntegrationTest, EnumeratesCatalanTreesWithFiveNodes) {
         expected,
         [&]() -> solution {
             return {
-                saved_expr_pool_.import(normalizer.normalize(saved_expr_pool_.make_var(idx_t))),
+                saved_expr_pool_.import(normalizer.normalize({saved_expr_pool_.make_var(idx_t), 0})),
             };
         });
 }
