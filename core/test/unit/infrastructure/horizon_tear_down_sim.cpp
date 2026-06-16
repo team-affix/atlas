@@ -14,10 +14,11 @@
 #include "interfaces/i_clear_goal_candidate_rule_ids.hpp"
 #include "interfaces/i_clear_goal_exprs.hpp"
 #include "interfaces/i_clear_active_goals.hpp"
-#include "interfaces/i_clear_candidate_translation_maps.hpp"
+#include "interfaces/i_clear_candidate_frame_offsets.hpp"
 #include "interfaces/i_clear_mhu_heads.hpp"
 #include "interfaces/i_clear_bindings.hpp"
 #include "interfaces/i_trim_unpinned_lineages.hpp"
+#include "interfaces/i_frame_allocator.hpp"
 
 using ::testing::NiceMock;
 
@@ -57,8 +58,8 @@ struct MockClearActiveGoals : public i_clear_active_goals {
     MOCK_METHOD(void, clear_active_goals, (), (override));
 };
 
-struct MockClearCandidateTranslationMaps : public i_clear_candidate_translation_maps {
-    MOCK_METHOD(void, clear_candidate_translation_maps, (), (override));
+struct MockClearCandidateFrameOffsets : public i_clear_candidate_frame_offsets {
+    MOCK_METHOD(void, clear_candidate_frame_offsets, (), (override));
 };
 
 struct MockClearMhuHeads : public i_clear_mhu_heads {
@@ -73,6 +74,12 @@ struct MockTrimUnpinnedLineages : public i_trim_unpinned_lineages {
     MOCK_METHOD(void, trim, (), (override));
 };
 
+struct MockFrameAllocator : public i_frame_allocator {
+    MOCK_METHOD(uint32_t, bump, (uint32_t), (override));
+    MOCK_METHOD(uint32_t, peek, (), (const, override));
+    MOCK_METHOD(void, reset, (), (override));
+};
+
 struct HorizonTearDownSimTest : public ::testing::Test {
     locator loc;
     MockClearGoalWeights clear_goal_weights;
@@ -84,10 +91,11 @@ struct HorizonTearDownSimTest : public ::testing::Test {
     NiceMock<MockClearGoalCandidateRuleIds> clear_candidates;
     NiceMock<MockClearGoalExprs> clear_exprs;
     NiceMock<MockClearActiveGoals> clear_active;
-    NiceMock<MockClearCandidateTranslationMaps> clear_maps;
+    NiceMock<MockClearCandidateFrameOffsets> clear_frame_offsets;
     NiceMock<MockClearMhuHeads> clear_mhu;
     NiceMock<MockClearBindings> clear_bindings;
     NiceMock<MockTrimUnpinnedLineages> trim_lineages;
+    NiceMock<MockFrameAllocator> frame_allocator;
     std::unique_ptr<horizon_tear_down_sim> tear_down;
 
     void SetUp() override {
@@ -100,10 +108,11 @@ struct HorizonTearDownSimTest : public ::testing::Test {
         loc.bind_as<i_clear_goal_candidate_rule_ids>(clear_candidates);
         loc.bind_as<i_clear_goal_exprs>(clear_exprs);
         loc.bind_as<i_clear_active_goals>(clear_active);
-        loc.bind_as<i_clear_candidate_translation_maps>(clear_maps);
+        loc.bind_as<i_clear_candidate_frame_offsets>(clear_frame_offsets);
         loc.bind_as<i_clear_mhu_heads>(clear_mhu);
         loc.bind_as<i_clear_bindings>(clear_bindings);
         loc.bind_as<i_trim_unpinned_lineages>(trim_lineages);
+        loc.bind_as<i_frame_allocator>(frame_allocator);
         tear_down = std::make_unique<horizon_tear_down_sim>(loc);
     }
 };

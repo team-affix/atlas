@@ -19,17 +19,17 @@ TEST_F(GoalExprsTest, GetOnUnknownGoalThrows) {
 }
 
 TEST_F(GoalExprsTest, SetThenGetReturnsExpr) {
-    store.set(&gl0, &e0);
-    EXPECT_EQ(store.get(&gl0), &e0);
+    store.set(&gl0, {&e0, 0});
+    EXPECT_EQ(store.get(&gl0).skeleton, &e0);
 }
 
 TEST_F(GoalExprsTest, SecondSetThrows) {
-    store.set(&gl0, &e0);
-    EXPECT_THROW(store.set(&gl0, &e1), std::logic_error);
+    store.set(&gl0, {&e0, 0});
+    EXPECT_THROW(store.set(&gl0, {&e1, 0}), std::logic_error);
 }
 
 TEST_F(GoalExprsTest, UnsetRemovesEntry) {
-    store.set(&gl0, &e0);
+    store.set(&gl0, {&e0, 0});
     store.unset(&gl0);
     EXPECT_THROW(store.get(&gl0), std::out_of_range);
 }
@@ -39,21 +39,21 @@ TEST_F(GoalExprsTest, UnsetOnUnknownGoalThrows) {
 }
 
 TEST_F(GoalExprsTest, UnsetTwiceThrows) {
-    store.set(&gl0, &e0);
+    store.set(&gl0, {&e0, 0});
     store.unset(&gl0);
     EXPECT_THROW(store.unset(&gl0), std::logic_error);
 }
 
 TEST_F(GoalExprsTest, UnsetDoesNotAffectOtherGoals) {
-    store.set(&gl0, &e0);
-    store.set(&gl1, &e1);
+    store.set(&gl0, {&e0, 0});
+    store.set(&gl1, {&e1, 0});
     store.unset(&gl0);
-    EXPECT_EQ(store.get(&gl1), &e1);
+    EXPECT_EQ(store.get(&gl1).skeleton, &e1);
 }
 
 TEST_F(GoalExprsTest, ClearGoalExprsRemovesAllBindings) {
-    store.set(&gl0, &e0);
-    store.set(&gl1, &e1);
+    store.set(&gl0, {&e0, 0});
+    store.set(&gl1, {&e1, 0});
     store.clear_goal_exprs();
     EXPECT_THROW(store.get(&gl0), std::out_of_range);
     EXPECT_THROW(store.get(&gl1), std::out_of_range);

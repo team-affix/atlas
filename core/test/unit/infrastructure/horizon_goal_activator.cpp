@@ -14,17 +14,14 @@
 #include "interfaces/i_set_goal_expr.hpp"
 #include "interfaces/i_insert_goal_candidates.hpp"
 #include "interfaces/i_insert_active_goal.hpp"
-#include "interfaces/i_get_candidate_translation_map.hpp"
+#include "interfaces/i_get_candidate_frame_offset.hpp"
 #include "interfaces/i_get_resolution_rule.hpp"
-#include "interfaces/i_copier.hpp"
-#include "value_objects/translation_map.hpp"
 
 using ::testing::NiceMock;
 using ::testing::Return;
-using ::testing::ReturnRef;
 
 struct MockSetGoalExpr : public i_set_goal_expr {
-    MOCK_METHOD(void, set, (const goal_lineage*, const expr*), (override));
+    MOCK_METHOD(void, set, (const goal_lineage*, framed_expr), (override));
 };
 
 struct MockInsertGoalCandidates : public i_insert_goal_candidates {
@@ -35,16 +32,12 @@ struct MockInsertActiveGoal : public i_insert_active_goal {
     MOCK_METHOD(void, insert_active_goal, (const goal_lineage*), (override));
 };
 
-struct MockGetCandidateTranslationMap : public i_get_candidate_translation_map {
-    MOCK_METHOD(translation_map&, get, (const resolution_lineage*), (override));
+struct MockGetCandidateFrameOffset : public i_get_candidate_frame_offset {
+    MOCK_METHOD(uint32_t, get, (const resolution_lineage*), (const, override));
 };
 
 struct MockGetResolutionRule : public i_get_resolution_rule {
     MOCK_METHOD(const rule*, get, (const resolution_lineage*), (const, override));
-};
-
-struct MockCopier : public i_copier {
-    MOCK_METHOD(const expr*, copy, (const expr*, translation_map&), (const, override));
 };
 
 struct MockSetGoalWeight : public i_set_goal_weight {
@@ -69,9 +62,8 @@ struct HorizonGoalActivatorTest : public ::testing::Test {
     NiceMock<MockSetGoalExpr> set_goal_expr;
     NiceMock<MockInsertGoalCandidates> insert_goal_candidates;
     NiceMock<MockInsertActiveGoal> insert_active_goal;
-    NiceMock<MockGetCandidateTranslationMap> get_candidate_translation_map;
+    NiceMock<MockGetCandidateFrameOffset> get_candidate_frame_offset;
     NiceMock<MockGetResolutionRule> get_resolution_rule;
-    NiceMock<MockCopier> copier;
     MockSetGoalWeight set_goal_weight;
     MockGetGoalWeight get_goal_weight;
     MockGetRule get_rule;
@@ -81,24 +73,21 @@ struct HorizonGoalActivatorTest : public ::testing::Test {
     goal_lineage parent_gl{nullptr, 0};
     resolution_lineage rl{&parent_gl, 1};
     goal_lineage child_gl{&rl, 0};
-    translation_map tm;
 
     expr head{expr::var{0}};
     expr body0{expr::var{1}};
     expr body1{expr::var{2}};
-    rule two_body_rule{&head, {&body0, &body1}};
+    rule two_body_rule{&head, {&body0, &body1}, 3};
 
     static constexpr double kParentWeight = 1.0;
     static constexpr double kExpectedChildWeight = 0.5;
 
     void SetUp() override {
-        ON_CALL(get_candidate_translation_map, get(&rl)).WillByDefault(ReturnRef(tm));
         loc.bind_as<i_set_goal_expr>(set_goal_expr);
         loc.bind_as<i_insert_goal_candidates>(insert_goal_candidates);
         loc.bind_as<i_insert_active_goal>(insert_active_goal);
-        loc.bind_as<i_get_candidate_translation_map>(get_candidate_translation_map);
+        loc.bind_as<i_get_candidate_frame_offset>(get_candidate_frame_offset);
         loc.bind_as<i_get_resolution_rule>(get_resolution_rule);
-        loc.bind_as<i_copier>(copier);
         loc.bind_as<i_set_goal_weight>(set_goal_weight);
         loc.bind_as<i_get_goal_weight>(get_goal_weight);
         loc.bind_as<i_get_rule>(get_rule);

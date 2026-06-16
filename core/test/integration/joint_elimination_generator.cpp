@@ -95,7 +95,7 @@ TEST_F(JointEliminationGeneratorIntegrationTest, ConstrainRunsCdclBeforeMhu) {
     ggcr.link_goal_candidate(&gl0, rule_id{0});
 
     ASSERT_EQ(cdcl->learn(lemma{{&rl0, &rl1}}), std::nullopt);
-    ASSERT_TRUE(mhu->try_add_head(&rl0, &goal, &head));
+    ASSERT_TRUE(mhu->try_add_head(&rl0, {&goal, 0}, {&head, 0}));
 
     auto elims = collect_elims(joint->constrain(&rl0));
     ASSERT_EQ(elims.size(), 1u);
@@ -119,8 +119,8 @@ TEST_F(JointEliminationGeneratorIntegrationTest, ConstrainYieldsMhuElimAfterCdcl
     ggcr.link_goal_candidate(gl_a, rule_id{0});
     ggcr.link_goal_candidate(gl_b, rule_id{0});
 
-    ASSERT_TRUE(mhu->try_add_head(rl_a, &goal_a, &head_a));
-    ASSERT_TRUE(mhu->try_add_head(rl_b, &goal_b, &head_b));
+    ASSERT_TRUE(mhu->try_add_head(rl_a, {&goal_a, 0}, {&head_a, 0}));
+    ASSERT_TRUE(mhu->try_add_head(rl_b, {&goal_b, 0}, {&head_b, 0}));
 
     EXPECT_THAT(collect_elims(joint->constrain(rl_a)), ElementsAre(rl_b));
 }
@@ -149,9 +149,9 @@ TEST_F(JointEliminationGeneratorIntegrationTest, ConstrainYieldsCdclThenMhuElims
     ggcr.link_goal_candidate(gl_other, rule_id{1});
 
     ASSERT_EQ(cdcl->learn(lemma{{rl0, rl1}}), std::nullopt);
-    ASSERT_TRUE(mhu->try_add_head(rl0, &goal, &head_f));
-    ASSERT_TRUE(mhu->try_add_head(rl_g_sibling, &goal, &head_g));
-    ASSERT_TRUE(mhu->try_add_head(rl_other, &goal, &head_g));
+    ASSERT_TRUE(mhu->try_add_head(rl0, {&goal, 0}, {&head_f, 0}));
+    ASSERT_TRUE(mhu->try_add_head(rl_g_sibling, {&goal, 0}, {&head_g, 0}));
+    ASSERT_TRUE(mhu->try_add_head(rl_other, {&goal, 0}, {&head_g, 0}));
 
     EXPECT_THAT(collect_elims(joint->constrain(rl0)), ElementsAre(rl1, rl_other));
 }
@@ -178,8 +178,8 @@ TEST_F(JointEliminationGeneratorIntegrationTest,
     ggcr.link_goal_candidate(gl1, rule_id{0});
 
     ASSERT_EQ(cdcl->learn(lemma{{rl0, rl1}}), std::nullopt);
-    ASSERT_TRUE(mhu->try_add_head(rl0, &goal, &head_f));
-    ASSERT_TRUE(mhu->try_add_head(rl1, &goal, &head_g));
+    ASSERT_TRUE(mhu->try_add_head(rl0, {&goal, 0}, {&head_f, 0}));
+    ASSERT_TRUE(mhu->try_add_head(rl1, {&goal, 0}, {&head_g, 0}));
 
     EXPECT_THAT(collect_elims(joint->constrain(rl0)), ElementsAre(rl1, rl1));
 }
@@ -198,8 +198,8 @@ TEST_F(JointEliminationGeneratorIntegrationTest, ConstrainYieldsNothingWhenBothS
     ggcr.link_goal_candidate(gl, rule_id{0});
     ggcr.link_goal_candidate(gl, rule_id{1});
 
-    ASSERT_TRUE(mhu->try_add_head(rl_a, &goal_a, &head));
-    ASSERT_TRUE(mhu->try_add_head(rl_b, &goal_b, &head));
+    ASSERT_TRUE(mhu->try_add_head(rl_a, {&goal_a, 0}, {&head, 0}));
+    ASSERT_TRUE(mhu->try_add_head(rl_b, {&goal_b, 0}, {&head, 0}));
 
     EXPECT_THAT(collect_elims(joint->constrain(rl_a)), IsEmpty());
 }
@@ -217,12 +217,12 @@ TEST_F(JointEliminationGeneratorIntegrationTest, PopRestoresCdclThroughJointCons
     ggcr.link_goal_candidate(&gl0, rule_id{0});
 
     ASSERT_EQ(cdcl->learn(lemma{{&rl0, &rl1}}), std::nullopt);
-    ASSERT_TRUE(mhu->try_add_head(&rl0, &goal, &head));
+    ASSERT_TRUE(mhu->try_add_head(&rl0, {&goal, 0}, {&head, 0}));
 
     t.push();
     EXPECT_THAT(collect_elims(joint->constrain(&rl0)), ElementsAre(&rl1));
     t.pop();
 
-    ASSERT_TRUE(mhu->try_add_head(&rl0, &goal, &head));
+    ASSERT_TRUE(mhu->try_add_head(&rl0, {&goal, 0}, {&head, 0}));
     EXPECT_THAT(collect_elims(joint->constrain(&rl0)), ElementsAre(&rl1));
 }

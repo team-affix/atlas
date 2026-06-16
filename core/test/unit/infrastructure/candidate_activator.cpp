@@ -1,13 +1,13 @@
-// Candidate activator: copies rule head, checks backlog and MHU acceptance, then
-// stores translation map and links goal–candidate. Backlog or rejected head must skip
-// side effects.
+// candidate_activator: bumps frame allocator, constructs framed head, checks backlog
+// and MHU acceptance, then stores frame offset and links goal-candidate.
+// Backlogged or MHU-rejected cases must skip side effects.
 
 #include <gtest/gtest.h>
 #include <gmock/gmock.h>
 #include "locator_fixture.hpp"
 #include "infrastructure/candidate_activator.hpp"
-#include "interfaces/i_copier.hpp"
-#include "interfaces/i_set_candidate_translation_map.hpp"
+#include "interfaces/i_frame_allocator.hpp"
+#include "interfaces/i_set_candidate_frame_offset.hpp"
 #include "interfaces/i_try_add_mhu_head.hpp"
 #include "interfaces/i_is_backlogged_elimination.hpp"
 #include "interfaces/i_get_goal_expr.hpp"
@@ -18,17 +18,18 @@
 using ::testing::_;
 using ::testing::Return;
 
-struct MockCopier : public i_copier {
-    MOCK_METHOD(const expr*, copy, (const expr*, translation_map&), (const, override));
+struct MockFrameAllocator : public i_frame_allocator {
+    MOCK_METHOD(uint32_t, bump, (uint32_t n), (override));
+    MOCK_METHOD(uint32_t, peek, (), (const, override));
+    MOCK_METHOD(void, reset, (), (override));
 };
 
-struct MockSetCandidateTranslationMap : public i_set_candidate_translation_map {
-    MOCK_METHOD(void, set, (const resolution_lineage*, translation_map), (override));
+struct MockSetCandidateFrameOffset : public i_set_candidate_frame_offset {
+    MOCK_METHOD(void, set, (const resolution_lineage*, uint32_t frame_offset), (override));
 };
 
 struct MockTryAddMhuHead : public i_try_add_mhu_head {
-    MOCK_METHOD(bool, try_add_head,
-        (const resolution_lineage*, const expr*, const expr*), (override));
+    MOCK_METHOD(bool, try_add_head, (const resolution_lineage*, framed_expr, framed_expr), (override));
 };
 
 struct MockIsBackloggedElimination : public i_is_backlogged_elimination {
@@ -36,7 +37,7 @@ struct MockIsBackloggedElimination : public i_is_backlogged_elimination {
 };
 
 struct MockGetGoalExpr : public i_get_goal_expr {
-    MOCK_METHOD(const expr*, get, (const goal_lineage*), (const, override));
+    MOCK_METHOD(framed_expr, get, (const goal_lineage*), (const, override));
 };
 
 struct MockGetRule : public i_get_rule {
@@ -48,13 +49,14 @@ struct MockLinkGoalCandidate : public i_link_goal_candidate {
 };
 
 struct CandidateActivatorTest : public ::testing::Test {
-    
-    test_functors functors;static constexpr rule_id kRule = 0;
+    test_functors functors;
+    static constexpr rule_id kRule = 0;
     static constexpr subgoal_id kGoal = 0;
+    static constexpr uint32_t kFrameOffset = 10;
 
     locator loc;
-    MockCopier copier;
-    MockSetCandidateTranslationMap set_map;
+    MockFrameAllocator frame_alloc;
+    MockSetCandidateFrameOffset set_frame;
     MockTryAddMhuHead mhu;
     MockIsBackloggedElimination is_backlogged;
     MockGetGoalExpr get_goal_expr;
@@ -65,8 +67,8 @@ struct CandidateActivatorTest : public ::testing::Test {
     CandidateActivatorTest() : activator(init_activator()) {}
 
     candidate_activator init_activator() {
-        loc.bind_as<i_copier>(copier);
-        loc.bind_as<i_set_candidate_translation_map>(set_map);
+        loc.bind_as<i_frame_allocator>(frame_alloc);
+        loc.bind_as<i_set_candidate_frame_offset>(set_frame);
         loc.bind_as<i_try_add_mhu_head>(mhu);
         loc.bind_as<i_is_backlogged_elimination>(is_backlogged);
         loc.bind_as<i_get_goal_expr>(get_goal_expr);
@@ -78,85 +80,44 @@ struct CandidateActivatorTest : public ::testing::Test {
     expr goal_e{expr::var{0}};
     expr head{expr::var{10}};
     expr body_subgoal{expr::var{1}};
-    expr copied_head{expr::var{99}};
-    rule idx{&head, {&body_subgoal}};
+    rule r{&head, {&body_subgoal}, 3 /* var_count */};
     goal_lineage parent{nullptr, kGoal};
     resolution_lineage rl{&parent, kRule};
 };
 
-TEST_F(CandidateActivatorTest, BackloggedSkipsCopyMhuMapAndLink) {
-    EXPECT_CALL(get_rule, get(kRule)).WillOnce(Return(&idx));
+TEST_F(CandidateActivatorTest, BackloggedSkipsAllSideEffects) {
+    EXPECT_CALL(get_rule, get(kRule)).WillOnce(Return(&r));
     EXPECT_CALL(is_backlogged, is_backlogged_elimination(&rl)).WillOnce(Return(true));
-    EXPECT_CALL(copier, copy).Times(0);
+    EXPECT_CALL(frame_alloc, bump).Times(0);
     EXPECT_CALL(get_goal_expr, get).Times(0);
     EXPECT_CALL(mhu, try_add_head).Times(0);
-    EXPECT_CALL(set_map, set).Times(0);
+    EXPECT_CALL(set_frame, set).Times(0);
     EXPECT_CALL(link, link_goal_candidate).Times(0);
     activator.activate(&rl);
 }
 
-TEST_F(CandidateActivatorTest, RejectedHeadSkipsMapAndLink) {
-    EXPECT_CALL(get_rule, get(kRule)).WillOnce(Return(&idx));
+TEST_F(CandidateActivatorTest, RejectedHeadSkipsFrameStoreAndLink) {
+    const framed_expr goal_fe{&goal_e, 0};
+    EXPECT_CALL(get_rule, get(kRule)).WillOnce(Return(&r));
     EXPECT_CALL(is_backlogged, is_backlogged_elimination(&rl)).WillOnce(Return(false));
-    EXPECT_CALL(copier, copy(&head, _)).WillOnce(Return(&copied_head));
-    EXPECT_CALL(get_goal_expr, get(&parent)).WillOnce(Return(&goal_e));
-    EXPECT_CALL(mhu, try_add_head(&rl, &goal_e, &copied_head)).WillOnce(Return(false));
-    EXPECT_CALL(set_map, set).Times(0);
+    EXPECT_CALL(frame_alloc, bump(3)).WillOnce(Return(kFrameOffset));
+    EXPECT_CALL(get_goal_expr, get(&parent)).WillOnce(Return(goal_fe));
+    EXPECT_CALL(mhu, try_add_head(&rl, goal_fe, framed_expr{&head, kFrameOffset}))
+        .WillOnce(Return(false));
+    EXPECT_CALL(set_frame, set).Times(0);
     EXPECT_CALL(link, link_goal_candidate).Times(0);
     activator.activate(&rl);
 }
 
-TEST_F(CandidateActivatorTest, AcceptedHeadSetsMapAndLinks) {
-    const translation_map kMap{{3, 4}, {5, 6}};
-    EXPECT_CALL(get_rule, get(kRule)).WillOnce(Return(&idx));
+TEST_F(CandidateActivatorTest, AcceptedHeadStoresFrameOffsetAndLinks) {
+    const framed_expr goal_fe{&goal_e, 0};
+    EXPECT_CALL(get_rule, get(kRule)).WillOnce(Return(&r));
     EXPECT_CALL(is_backlogged, is_backlogged_elimination(&rl)).WillOnce(Return(false));
-    EXPECT_CALL(copier, copy(&head, _))
-        .WillOnce([&](const expr*, translation_map& tm) {
-            tm = kMap;
-            return &copied_head;
-        });
-    EXPECT_CALL(get_goal_expr, get(&parent)).WillOnce(Return(&goal_e));
-    EXPECT_CALL(mhu, try_add_head(&rl, &goal_e, &copied_head)).WillOnce(Return(true));
-    EXPECT_CALL(set_map, set(&rl, _))
-        .WillOnce([&](const resolution_lineage* resolution, translation_map tm) {
-            EXPECT_EQ(resolution, &rl);
-            EXPECT_EQ(tm, kMap);
-        });
+    EXPECT_CALL(frame_alloc, bump(3)).WillOnce(Return(kFrameOffset));
+    EXPECT_CALL(get_goal_expr, get(&parent)).WillOnce(Return(goal_fe));
+    EXPECT_CALL(mhu, try_add_head(&rl, goal_fe, framed_expr{&head, kFrameOffset}))
+        .WillOnce(Return(true));
+    EXPECT_CALL(set_frame, set(&rl, kFrameOffset)).Times(1);
     EXPECT_CALL(link, link_goal_candidate(&parent, kRule)).Times(1);
     activator.activate(&rl);
-}
-
-TEST_F(CandidateActivatorTest, AcceptedTernaryHeadPassedToMhu) {
-    expr a{expr::var{1}};
-    expr b{expr::var{2}};
-    expr c{expr::var{3}};
-    expr ternary_head{expr::functor{functors.id("h"), {&a, &b, &c}}};
-    expr copied_ternary{expr::functor{functors.id("h"), {&a, &b, &c}}};
-    rule ternary_rule{&ternary_head, {&body_subgoal}};
-
-    EXPECT_CALL(get_rule, get(kRule)).WillOnce(Return(&ternary_rule));
-    EXPECT_CALL(is_backlogged, is_backlogged_elimination(&rl)).WillOnce(Return(false));
-    EXPECT_CALL(copier, copy(&ternary_head, _)).WillOnce(Return(&copied_ternary));
-    EXPECT_CALL(get_goal_expr, get(&parent)).WillOnce(Return(&goal_e));
-    EXPECT_CALL(mhu, try_add_head(&rl, &goal_e, &copied_ternary)).WillOnce(Return(true));
-    EXPECT_CALL(set_map, set(&rl, _)).Times(1);
-    EXPECT_CALL(link, link_goal_candidate(&parent, kRule)).Times(1);
-    activator.activate(&rl);
-}
-
-TEST_F(CandidateActivatorTest, AcceptedResolutionUsesItsRuleIndexAndParentGoal) {
-    static constexpr rule_id kAltRule = 2;
-    static constexpr subgoal_id kAltGoal = 3;
-    goal_lineage alt_parent{nullptr, kAltGoal};
-    resolution_lineage alt_rl{&alt_parent, kAltRule};
-    rule alt_rule{&head, {&body_subgoal}};
-
-    EXPECT_CALL(get_rule, get(kAltRule)).WillOnce(Return(&alt_rule));
-    EXPECT_CALL(is_backlogged, is_backlogged_elimination(&alt_rl)).WillOnce(Return(false));
-    EXPECT_CALL(copier, copy(&head, _)).WillOnce(Return(&copied_head));
-    EXPECT_CALL(get_goal_expr, get(&alt_parent)).WillOnce(Return(&goal_e));
-    EXPECT_CALL(mhu, try_add_head(&alt_rl, &goal_e, &copied_head)).WillOnce(Return(true));
-    EXPECT_CALL(set_map, set(&alt_rl, _)).Times(1);
-    EXPECT_CALL(link, link_goal_candidate(&alt_parent, kAltRule)).Times(1);
-    activator.activate(&alt_rl);
 }

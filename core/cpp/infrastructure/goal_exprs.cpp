@@ -1,12 +1,12 @@
-#include "infrastructure/goal_exprs.hpp"
 #include "debug_assert.hpp"
+#include "infrastructure/goal_exprs.hpp"
 
-const expr* goal_exprs::get(const goal_lineage* gl) const {
+framed_expr goal_exprs::get(const goal_lineage* gl) const {
     return exprs_.at(gl);
 }
 
-void goal_exprs::set(const goal_lineage* gl, const expr* e) {
-    auto [_, inserted] = exprs_.insert({gl, e});
+void goal_exprs::set(const goal_lineage* gl, framed_expr fe) {
+    auto [_, inserted] = exprs_.insert({gl, fe});
     DEBUG_ASSERT(inserted);
 }
 

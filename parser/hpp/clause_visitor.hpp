@@ -10,17 +10,15 @@
 #include "value_objects/rule.hpp"
 #include "interfaces/i_make_functor.hpp"
 #include "interfaces/i_make_var.hpp"
-#include "interfaces/i_var_sequencer.hpp"
 
 struct clause_visitor : public CHCBaseVisitor {
-    clause_visitor(i_make_functor&, i_make_var&, i_var_sequencer&,
+    clause_visitor(i_make_functor&, i_make_var&,
                    std::map<std::string, uint32_t>&, uint32_t&);
     antlrcpp::Any visitClause(CHCParser::ClauseContext*) override;
 
 private:
     i_make_functor& make_functor;
     i_make_var& make_var;
-    i_var_sequencer& var_seq;
     std::map<std::string, uint32_t>& functor_map;
     uint32_t& next_functor_id;
 };

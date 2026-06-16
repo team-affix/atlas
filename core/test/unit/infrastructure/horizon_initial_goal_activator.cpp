@@ -24,7 +24,7 @@ struct MockGetInitialGoalExpr : public i_get_initial_goal_expr {
 };
 
 struct MockSetGoalExpr : public i_set_goal_expr {
-    MOCK_METHOD(void, set, (const goal_lineage*, const expr*), (override));
+    MOCK_METHOD(void, set, (const goal_lineage*, framed_expr), (override));
 };
 
 struct MockInsertGoalCandidates : public i_insert_goal_candidates {

@@ -15,7 +15,7 @@ namespace {
 
 bool run_unify(i_unifier& u, const expr* lhs, const expr* rhs,
                std::unordered_set<uint32_t>& vars_touched) {
-    auto task = u.unify(lhs, rhs);
+    auto task = u.unify({lhs, 0}, {rhs, 0});
     while (!task.done()) {
         task.resume();
         if (task.has_yield())
@@ -27,8 +27,8 @@ bool run_unify(i_unifier& u, const expr* lhs, const expr* rhs,
 } // namespace
 
 struct MockBindMap : public i_bind_map {
-    MOCK_METHOD(void, bind, (uint32_t, const expr*), (override));
-    MOCK_METHOD(const expr*, whnf, (const expr*), (override));
+    MOCK_METHOD(void, bind, (uint32_t, framed_expr), (override));
+    MOCK_METHOD(framed_expr, whnf, (framed_expr), (override));
 };
 
 struct UnifierFactoryTest : public ::testing::Test {
@@ -42,8 +42,8 @@ struct UnifierFactoryTest : public ::testing::Test {
 };
 
 TEST_F(UnifierFactoryTest, MakeProducesUnifierThatUnifiesViaBindMap) {
-    EXPECT_CALL(bind_map, whnf).WillRepeatedly([](const expr* e) { return e; });
-    EXPECT_CALL(bind_map, bind(1u, &var0)).Times(1);
+    EXPECT_CALL(bind_map, whnf).WillRepeatedly([](framed_expr fe) { return fe; });
+    EXPECT_CALL(bind_map, bind(1u, framed_expr{&var0, 0})).Times(1);
     std::unique_ptr<i_unifier> u = factory.make(bind_map);
     ASSERT_NE(u, nullptr);
     std::unordered_set<uint32_t> vars_touched;
@@ -51,7 +51,7 @@ TEST_F(UnifierFactoryTest, MakeProducesUnifierThatUnifiesViaBindMap) {
 }
 
 TEST_F(UnifierFactoryTest, MakeProducesUnifierThatReportsUnifyFailure) {
-    EXPECT_CALL(bind_map, whnf).WillRepeatedly([](const expr* e) { return e; });
+    EXPECT_CALL(bind_map, whnf).WillRepeatedly([](framed_expr fe) { return fe; });
     EXPECT_CALL(bind_map, bind(_, _)).Times(0);
     std::unique_ptr<i_unifier> u = factory.make(bind_map);
     ASSERT_NE(u, nullptr);

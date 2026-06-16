@@ -4,8 +4,8 @@
 #include "functor_fixture.hpp"
 
 struct BindMapFactoryIntegrationTest : public ::testing::Test {
-    
-    test_functors functors;bind_map_factory bmf;
+    test_functors functors;
+    bind_map_factory bmf;
 
     expr var0{expr::var{0}};
     expr func{expr::functor{functors.id("f"), {}}};
@@ -13,6 +13,6 @@ struct BindMapFactoryIntegrationTest : public ::testing::Test {
 
 TEST_F(BindMapFactoryIntegrationTest, FactoryBindMapWhnfBindsAndResolves) {
     auto bm = bmf.make();
-    bm->bind(0, &func);
-    EXPECT_EQ(bm->whnf(&var0), &func);
+    bm->bind(0, {&func, 0});
+    EXPECT_EQ(bm->whnf({&var0, 0}).skeleton, &func);
 }

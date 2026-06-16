@@ -3,8 +3,8 @@
 
 #include "infrastructure/locator.hpp"
 #include "interfaces/i_candidate_activator.hpp"
-#include "interfaces/i_copier.hpp"
-#include "interfaces/i_set_candidate_translation_map.hpp"
+#include "interfaces/i_frame_allocator.hpp"
+#include "interfaces/i_set_candidate_frame_offset.hpp"
 #include "interfaces/i_try_add_mhu_head.hpp"
 #include "interfaces/i_is_backlogged_elimination.hpp"
 #include "interfaces/i_get_goal_expr.hpp"
@@ -15,8 +15,8 @@ struct candidate_activator : i_candidate_activator {
     candidate_activator(locator& loc);
     void activate(const resolution_lineage*) override;
 private:
-    i_copier& copier;
-    i_set_candidate_translation_map& set_candidate_translation_map;
+    i_frame_allocator& frame_allocator;
+    i_set_candidate_frame_offset& set_candidate_frame_offset;
     i_try_add_mhu_head& try_add_mhu_head;
     i_is_backlogged_elimination& is_backlogged_elimination;
     i_get_goal_expr& get_goal_expr;

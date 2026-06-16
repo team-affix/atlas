@@ -2,12 +2,12 @@
 #define I_BIND_MAP_HPP
 
 #include <cstdint>
-#include "value_objects/expr.hpp"
+#include "value_objects/framed_expr.hpp"
 
 struct i_bind_map {
     virtual ~i_bind_map() = default;
-    virtual void bind(uint32_t, const expr*) = 0;
-    virtual const expr* whnf(const expr*) = 0;
+    virtual void bind(uint32_t global_key, framed_expr value) = 0;
+    virtual framed_expr whnf(framed_expr) = 0;
 };
 
 #endif

@@ -3,77 +3,71 @@
 unifier::unifier(i_bind_map& bm)
     : bind_map(bm) {}
 
-coroutine<uint32_t, bool> unifier::unify(const expr* lhs, const expr* rhs) {
-        // WHNF the lhs and rhs
+coroutine<uint32_t, bool> unifier::unify(framed_expr lhs, framed_expr rhs) {
     lhs = bind_map.whnf(lhs);
     rhs = bind_map.whnf(rhs);
 
-    // get the lhs and rhs var handles if they are variables
-    const expr::var* lv = std::get_if<expr::var>(&lhs->content);
-    const expr::var* rv = std::get_if<expr::var>(&rhs->content);
+    const expr::var* lv = std::get_if<expr::var>(&lhs.skeleton->content);
+    const expr::var* rv = std::get_if<expr::var>(&rhs.skeleton->content);
 
-    if (lv && rv && lv->index == rv->index)
+    const uint32_t lv_global = lv ? lhs.frame_offset + lv->index : 0;
+    const uint32_t rv_global = rv ? rhs.frame_offset + rv->index : 0;
+
+    if (lv && rv && lv_global == rv_global)
         co_return true;
 
-    // If both sides are variables, bind the younger (higher index) to the older
+    // Bind the younger (higher global key) to the older.
     if (lv && rv) {
-        const auto [young, target] = lv->index > rv->index
-            ? std::pair{lv, rhs}
-            : std::pair{rv, lhs};
-        if (occurs_check(young->index, target))
+        const auto [young_global, target] = lv_global > rv_global
+            ? std::pair{lv_global, rhs}
+            : std::pair{rv_global, lhs};
+        if (occurs_check(young_global, target))
             co_return false;
-        co_yield lv->index;
-        co_yield rv->index;
-        bind_map.bind(young->index, target);
+        co_yield lv_global;
+        co_yield rv_global;
+        bind_map.bind(young_global, target);
         co_return true;
     }
 
-    // If one side is a variable, bind it to the other side
-    const auto [v, other_e] = lv
-        ? std::pair{lv, rhs}
-        : std::pair{rv, lhs};
-    if (v) {
-        if (occurs_check(v->index, other_e))
+    // One side is a variable.
+    if (lv || rv) {
+        const uint32_t var_global = lv ? lv_global : rv_global;
+        const framed_expr other = lv ? rhs : lhs;
+        if (occurs_check(var_global, other))
             co_return false;
-        co_yield v->index;
-        bind_map.bind(v->index, other_e);
+        co_yield var_global;
+        bind_map.bind(var_global, other);
         co_return true;
     }
 
-    // At this point, they are both functors
-    const expr::functor& lf = std::get<expr::functor>(lhs->content);
-    const expr::functor& rf = std::get<expr::functor>(rhs->content);
+    // Both are functors.
+    const expr::functor& lf = std::get<expr::functor>(lhs.skeleton->content);
+    const expr::functor& rf = std::get<expr::functor>(rhs.skeleton->content);
     if (lf.id != rf.id || lf.args.size() != rf.args.size())
         co_return false;
 
-    // unify the children
     for (size_t i = 0; i < lf.args.size(); ++i) {
-        auto unify_child_task = unify(lf.args[i], rf.args[i]);
-
-        // wait for the child unify to complete
-        while (!unify_child_task.done()) {
-            unify_child_task.resume();
-            if (unify_child_task.has_yield()) {
-                co_yield unify_child_task.consume_yield();
-            }
+        auto child_task = unify({lf.args[i], lhs.frame_offset}, {rf.args[i], rhs.frame_offset});
+        while (!child_task.done()) {
+            child_task.resume();
+            if (child_task.has_yield())
+                co_yield child_task.consume_yield();
         }
-
-        // if the child unify failed, return false
-        if (!unify_child_task.result())
+        if (!child_task.result())
             co_return false;
     }
     co_return true;
 }
 
-bool unifier::occurs_check(uint32_t index, const expr* key) {
-    key = bind_map.whnf(key);
+bool unifier::occurs_check(uint32_t global_key, framed_expr fe) {
+    fe = bind_map.whnf(fe);
 
-    if (const expr::var* var = std::get_if<expr::var>(&key->content))
-        return var->index == index;
+    if (const expr::var* v = std::get_if<expr::var>(&fe.skeleton->content))
+        return (fe.frame_offset + v->index) == global_key;
 
-    if (const expr::functor* f = std::get_if<expr::functor>(&key->content)) {
+    if (const expr::functor* f = std::get_if<expr::functor>(&fe.skeleton->content)) {
         for (const expr* arg : f->args)
-            if (occurs_check(index, arg))
+            if (occurs_check(global_key, {arg, fe.frame_offset}))
                 return true;
         return false;
     }

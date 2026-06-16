@@ -10,10 +10,11 @@
 #include "interfaces/i_clear_goal_candidate_rule_ids.hpp"
 #include "interfaces/i_clear_goal_exprs.hpp"
 #include "interfaces/i_clear_active_goals.hpp"
-#include "interfaces/i_clear_candidate_translation_maps.hpp"
+#include "interfaces/i_clear_candidate_frame_offsets.hpp"
 #include "interfaces/i_clear_mhu_heads.hpp"
 #include "interfaces/i_clear_bindings.hpp"
 #include "interfaces/i_trim_unpinned_lineages.hpp"
+#include "interfaces/i_frame_allocator.hpp"
 
 struct tear_down_sim : i_tear_down_sim {
     tear_down_sim(locator& loc);
@@ -26,10 +27,11 @@ private:
     i_clear_goal_candidate_rule_ids& clear_goal_candidate_rule_ids_;
     i_clear_goal_exprs& clear_goal_exprs_;
     i_clear_active_goals& clear_active_goals_;
-    i_clear_candidate_translation_maps& clear_candidate_translation_maps_;
+    i_clear_candidate_frame_offsets& clear_candidate_frame_offsets_;
     i_clear_mhu_heads& clear_mhu_heads_;
     i_clear_bindings& clear_bindings_;
     i_trim_unpinned_lineages& trim_unpinned_lineages_;
+    i_frame_allocator& frame_allocator_;
 };
 
 #endif

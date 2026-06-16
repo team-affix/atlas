@@ -10,7 +10,7 @@ using ::testing::UnorderedElementsAre;
 
 struct DbTest : public ::testing::Test {
     expr head{expr::var{0}};
-    rule r{&head, {}};
+    rule r{&head, {}, 1};
     goal_lineage gl0{nullptr, 0};
     goal_lineage gl1{nullptr, 1};
 };

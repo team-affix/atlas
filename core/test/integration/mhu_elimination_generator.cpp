@@ -44,7 +44,7 @@ std::vector<const resolution_lineage*> collect_elims(
 }
 
 void expect_whnf_functor(test_functors& functors, bind_map& bm, const expr* e, const char* name, size_t argc) {
-    const auto& f = std::get<expr::functor>(bm.whnf(e)->content);
+    const auto& f = std::get<expr::functor>(bm.whnf({e, 0}).skeleton->content);
     EXPECT_EQ(f.id, functors.id(name));
     EXPECT_EQ(f.args.size(), argc);
 }
@@ -117,13 +117,13 @@ TEST_F(MhuEliminationGeneratorIntegrationTest, TryAddHeadThenConstrainAllowsReus
         const_cast<resolution_lineage*>(lp.make_resolution_lineage(gl, rule_id{0}));
     link_candidate(gl, rule_id{0});
 
-    ASSERT_TRUE(mhu->try_add_head(rl, &goal, &head));
-    EXPECT_EQ(common.whnf(&goal), &goal);
+    ASSERT_TRUE(mhu->try_add_head(rl, {&goal, 0}, {&head, 0}));
+    EXPECT_EQ(common.whnf({&goal, 0}).skeleton, &goal);
 
     EXPECT_THAT(collect_elims(mhu->constrain(rl)), IsEmpty());
     expect_whnf_functor(functors, common, &goal, "f", 0);
 
-    EXPECT_TRUE(mhu->try_add_head(rl, &goal, &head));
+    EXPECT_TRUE(mhu->try_add_head(rl, {&goal, 0}, {&head, 0}));
 }
 
 TEST_F(MhuEliminationGeneratorIntegrationTest, TryAddHeadFailsWhenUnifyFails) {
@@ -134,8 +134,8 @@ TEST_F(MhuEliminationGeneratorIntegrationTest, TryAddHeadFailsWhenUnifyFails) {
         const_cast<resolution_lineage*>(lp.make_resolution_lineage(gl, rule_id{0}));
     link_candidate(gl, rule_id{0});
 
-    EXPECT_FALSE(mhu->try_add_head(rl, &goal, &head));
-    EXPECT_EQ(common.whnf(&goal), &goal);
+    EXPECT_FALSE(mhu->try_add_head(rl, {&goal, 0}, {&head, 0}));
+    EXPECT_EQ(common.whnf({&goal, 0}).skeleton, &goal);
 }
 
 TEST_F(MhuEliminationGeneratorIntegrationTest, ConstrainPublishesSeededBindingToCommon) {
@@ -146,8 +146,8 @@ TEST_F(MhuEliminationGeneratorIntegrationTest, ConstrainPublishesSeededBindingTo
         const_cast<resolution_lineage*>(lp.make_resolution_lineage(gl, rule_id{0}));
     link_candidate(gl, rule_id{0});
 
-    ASSERT_TRUE(mhu->try_add_head(rl, &goal, &head));
-    EXPECT_EQ(common.whnf(&goal), &goal);
+    ASSERT_TRUE(mhu->try_add_head(rl, {&goal, 0}, {&head, 0}));
+    EXPECT_EQ(common.whnf({&goal, 0}).skeleton, &goal);
 
     EXPECT_THAT(collect_elims(mhu->constrain(rl)), IsEmpty());
     expect_whnf_functor(functors, common, &goal, "f", 0);
@@ -168,10 +168,10 @@ TEST_F(MhuEliminationGeneratorIntegrationTest, ConstrainEliminatesHeadWithCollid
         const_cast<resolution_lineage*>(lp.make_resolution_lineage(gl_b, rule_id{0}));
     link_candidate(gl_b, rule_id{0});
 
-    ASSERT_TRUE(mhu->try_add_head(rl_a, &goal_a, &head_a));
-    ASSERT_TRUE(mhu->try_add_head(rl_b, &goal_b, &head_b));
-    EXPECT_EQ(common.whnf(&goal_a), &goal_a);
-    EXPECT_EQ(common.whnf(&goal_b), &goal_b);
+    ASSERT_TRUE(mhu->try_add_head(rl_a, {&goal_a, 0}, {&head_a, 0}));
+    ASSERT_TRUE(mhu->try_add_head(rl_b, {&goal_b, 0}, {&head_b, 0}));
+    EXPECT_EQ(common.whnf({&goal_a, 0}).skeleton, &goal_a);
+    EXPECT_EQ(common.whnf({&goal_b, 0}).skeleton, &goal_b);
 
     EXPECT_THAT(collect_elims(mhu->constrain(rl_a)), ElementsAre(rl_b));
     expect_whnf_functor(functors, common, &goal_a, "f", 0);
@@ -193,9 +193,9 @@ TEST_F(MhuEliminationGeneratorIntegrationTest, ConstrainDoesNotEliminateCompatib
         const_cast<resolution_lineage*>(lp.make_resolution_lineage(gl_b, rule_id{0}));
     link_candidate(gl_b, rule_id{0});
 
-    ASSERT_TRUE(mhu->try_add_head(rl_a, &goal_a, &head_a));
-    ASSERT_TRUE(mhu->try_add_head(rl_b, &goal_b, &head_b));
-    EXPECT_EQ(common.whnf(&goal_a), &goal_a);
+    ASSERT_TRUE(mhu->try_add_head(rl_a, {&goal_a, 0}, {&head_a, 0}));
+    ASSERT_TRUE(mhu->try_add_head(rl_b, {&goal_b, 0}, {&head_b, 0}));
+    EXPECT_EQ(common.whnf({&goal_a, 0}).skeleton, &goal_a);
 
     EXPECT_THAT(collect_elims(mhu->constrain(rl_a)), IsEmpty());
     expect_whnf_functor(functors, common, &goal_a, "f", 0);
@@ -220,13 +220,13 @@ TEST_F(MhuEliminationGeneratorIntegrationTest, ConstrainDoesNotEliminateHeadWatc
         const_cast<resolution_lineage*>(lp.make_resolution_lineage(gl_b, rule_id{0}));
     link_candidate(gl_b, rule_id{0});
 
-    ASSERT_TRUE(mhu->try_add_head(rl_a, &goal_a, &head_a));
-    ASSERT_TRUE(mhu->try_add_head(rl_b, &goal_b, &head_b));
-    EXPECT_EQ(common.whnf(&goal_a), &goal_a);
+    ASSERT_TRUE(mhu->try_add_head(rl_a, {&goal_a, 0}, {&head_a, 0}));
+    ASSERT_TRUE(mhu->try_add_head(rl_b, {&goal_b, 0}, {&head_b, 0}));
+    EXPECT_EQ(common.whnf({&goal_a, 0}).skeleton, &goal_a);
 
     EXPECT_THAT(collect_elims(mhu->constrain(rl_a)), IsEmpty());
     expect_whnf_functor(functors, common, &goal_a, "f", 0);
-    EXPECT_EQ(common.whnf(&var2), &var2);
+    EXPECT_EQ(common.whnf({&var2, 0}).skeleton, &var2);
 }
 
 TEST_F(MhuEliminationGeneratorIntegrationTest,
@@ -250,10 +250,10 @@ TEST_F(MhuEliminationGeneratorIntegrationTest,
     link_candidate(gl_other, rule_id{1});
     EXPECT_EQ(rules_for(gl_other), 1u);
 
-    ASSERT_TRUE(mhu->try_add_head(rl_rule0, &goal, &head_f));
-    ASSERT_TRUE(mhu->try_add_head(rl_rule1, &goal, &head_g));
-    ASSERT_TRUE(mhu->try_add_head(rl_other, &goal, &head_g));
-    EXPECT_EQ(common.whnf(&goal), &goal);
+    ASSERT_TRUE(mhu->try_add_head(rl_rule0, {&goal, 0}, {&head_f, 0}));
+    ASSERT_TRUE(mhu->try_add_head(rl_rule1, {&goal, 0}, {&head_g, 0}));
+    ASSERT_TRUE(mhu->try_add_head(rl_other, {&goal, 0}, {&head_g, 0}));
+    EXPECT_EQ(common.whnf({&goal, 0}).skeleton, &goal);
 
     EXPECT_THAT(collect_elims(mhu->constrain(rl_rule0)), ElementsAre(rl_other));
     expect_whnf_functor(functors, common, &goal, "f", 0);
@@ -285,13 +285,13 @@ TEST_F(MhuEliminationGeneratorIntegrationTest,
     link_candidate(gl_f, rule_id{0});
     link_candidate(gl_g, rule_id{0});
 
-    ASSERT_TRUE(mhu->try_add_head(rl_f, &goal_f, &head_fxx));
-    ASSERT_TRUE(mhu->try_add_head(rl_g, &goal_g, &head_g));
-    ASSERT_EQ(common.whnf(&var_a), &var_a);
-    ASSERT_EQ(common.whnf(&var_b), &var_b);
+    ASSERT_TRUE(mhu->try_add_head(rl_f, {&goal_f, 0}, {&head_fxx, 0}));
+    ASSERT_TRUE(mhu->try_add_head(rl_g, {&goal_g, 0}, {&head_g, 0}));
+    ASSERT_EQ(common.whnf({&var_a, 0}).skeleton, &var_a);
+    ASSERT_EQ(common.whnf({&var_b, 0}).skeleton, &var_b);
 
     EXPECT_THAT(collect_elims(mhu->constrain(rl_f)), ElementsAre(rl_g));
-    EXPECT_EQ(common.whnf(&var_a), common.whnf(&var_b));
+    EXPECT_EQ(common.whnf({&var_a, 0}).skeleton, common.whnf({&var_b, 0}).skeleton);
 }
 
 TEST_F(MhuEliminationGeneratorIntegrationTest,
@@ -322,14 +322,14 @@ TEST_F(MhuEliminationGeneratorIntegrationTest,
     link_candidate(gl_f, rule_f_id);
     link_candidate(gl_g, rule_g_id);
 
-    ASSERT_TRUE(mhu->try_add_head(rl_f, &goal_f, &head_fxx));
-    ASSERT_TRUE(mhu->try_add_head(rl_g, &goal_g, &head_g));
-    ASSERT_EQ(common.whnf(&var_a), &var_a);
-    ASSERT_EQ(common.whnf(&var_b), &var_b);
+    ASSERT_TRUE(mhu->try_add_head(rl_f, {&goal_f, 0}, {&head_fxx, 0}));
+    ASSERT_TRUE(mhu->try_add_head(rl_g, {&goal_g, 0}, {&head_g, 0}));
+    ASSERT_EQ(common.whnf({&var_a, 0}).skeleton, &var_a);
+    ASSERT_EQ(common.whnf({&var_b, 0}).skeleton, &var_b);
 
     EXPECT_THAT(collect_elims(mhu->constrain(rl_g)), ElementsAre(rl_f));
-    const auto& whnf_a = std::get<expr::functor>(common.whnf(&var_a)->content);
-    const auto& whnf_b = std::get<expr::functor>(common.whnf(&var_b)->content);
+    const auto& whnf_a = std::get<expr::functor>(common.whnf({&var_a, 0}).skeleton->content);
+    const auto& whnf_b = std::get<expr::functor>(common.whnf({&var_b, 0}).skeleton->content);
     EXPECT_EQ(whnf_a.id, functors.id("abc"));
     EXPECT_TRUE(whnf_a.args.empty());
     EXPECT_EQ(whnf_b.id, functors.id("123"));
@@ -361,16 +361,16 @@ TEST_F(MhuEliminationGeneratorIntegrationTest,
     link_candidate(gl_f, rule_id{0});
     link_candidate(gl_g, rule_id{0});
 
-    ASSERT_TRUE(mhu->try_add_head(rl_f, &goal_f, &head_fxx));
-    ASSERT_TRUE(mhu->try_add_head(rl_g, &goal_g, &head_g));
-    ASSERT_EQ(common.whnf(&var_a), &var_a);
-    ASSERT_EQ(common.whnf(&var_b), &var_b);
+    ASSERT_TRUE(mhu->try_add_head(rl_f, {&goal_f, 0}, {&head_fxx, 0}));
+    ASSERT_TRUE(mhu->try_add_head(rl_g, {&goal_g, 0}, {&head_g, 0}));
+    ASSERT_EQ(common.whnf({&var_a, 0}).skeleton, &var_a);
+    ASSERT_EQ(common.whnf({&var_b, 0}).skeleton, &var_b);
 
     EXPECT_THAT(collect_elims(mhu->constrain(rl_g)), IsEmpty());
-    const auto& whnf_b = std::get<expr::functor>(common.whnf(&var_b)->content);
+    const auto& whnf_b = std::get<expr::functor>(common.whnf({&var_b, 0}).skeleton->content);
     EXPECT_EQ(whnf_b.id, functors.id("abc"));
     EXPECT_TRUE(whnf_b.args.empty());
-    EXPECT_EQ(common.whnf(&var_a), &var_a);
+    EXPECT_EQ(common.whnf({&var_a, 0}).skeleton, &var_a);
 }
 
 TEST_F(MhuEliminationGeneratorIntegrationTest,
@@ -398,20 +398,20 @@ TEST_F(MhuEliminationGeneratorIntegrationTest,
     link_candidate(gl_f, rule_id{0});
     link_candidate(gl_g, rule_id{0});
 
-    ASSERT_TRUE(mhu->try_add_head(rl_f, &goal_f, &head_fxx));
-    ASSERT_TRUE(mhu->try_add_head(rl_g, &goal_g, &head_g));
-    ASSERT_EQ(common.whnf(&var_a), &var_a);
-    ASSERT_EQ(common.whnf(&var_b), &var_b);
+    ASSERT_TRUE(mhu->try_add_head(rl_f, {&goal_f, 0}, {&head_fxx, 0}));
+    ASSERT_TRUE(mhu->try_add_head(rl_g, {&goal_g, 0}, {&head_g, 0}));
+    ASSERT_EQ(common.whnf({&var_a, 0}).skeleton, &var_a);
+    ASSERT_EQ(common.whnf({&var_b, 0}).skeleton, &var_b);
 
     EXPECT_THAT(collect_elims(mhu->constrain(rl_g)), IsEmpty());
-    const auto& whnf_b_after_g = std::get<expr::functor>(common.whnf(&var_b)->content);
+    const auto& whnf_b_after_g = std::get<expr::functor>(common.whnf({&var_b, 0}).skeleton->content);
     EXPECT_EQ(whnf_b_after_g.id, functors.id("abc"));
     EXPECT_TRUE(whnf_b_after_g.args.empty());
-    EXPECT_EQ(common.whnf(&var_a), &var_a);
+    EXPECT_EQ(common.whnf({&var_a, 0}).skeleton, &var_a);
 
     EXPECT_THAT(collect_elims(mhu->constrain(rl_f)), IsEmpty());
-    const auto& whnf_a = std::get<expr::functor>(common.whnf(&var_a)->content);
-    const auto& whnf_b = std::get<expr::functor>(common.whnf(&var_b)->content);
+    const auto& whnf_a = std::get<expr::functor>(common.whnf({&var_a, 0}).skeleton->content);
+    const auto& whnf_b = std::get<expr::functor>(common.whnf({&var_b, 0}).skeleton->content);
     EXPECT_EQ(whnf_a.id, functors.id("abc"));
     EXPECT_TRUE(whnf_a.args.empty());
     EXPECT_EQ(whnf_b.id, functors.id("abc"));
@@ -437,10 +437,10 @@ TEST_F(MhuEliminationGeneratorIntegrationTest,
     link_candidate(gl, rule_id{2});
     EXPECT_EQ(rules_for(gl), 3u);
 
-    ASSERT_TRUE(mhu->try_add_head(rl_a, &goal, &head_a));
-    ASSERT_TRUE(mhu->try_add_head(rl_b, &goal, &head_b));
-    ASSERT_TRUE(mhu->try_add_head(rl_c, &goal, &head_c));
-    EXPECT_EQ(common.whnf(&goal), &goal);
+    ASSERT_TRUE(mhu->try_add_head(rl_a, {&goal, 0}, {&head_a, 0}));
+    ASSERT_TRUE(mhu->try_add_head(rl_b, {&goal, 0}, {&head_b, 0}));
+    ASSERT_TRUE(mhu->try_add_head(rl_c, {&goal, 0}, {&head_c, 0}));
+    EXPECT_EQ(common.whnf({&goal, 0}).skeleton, &goal);
 
     EXPECT_THAT(collect_elims(mhu->constrain(rl_a)), IsEmpty());
     expect_whnf_functor(functors, common, &goal, "f", 0);
@@ -454,8 +454,8 @@ TEST_F(MhuEliminationGeneratorIntegrationTest, TryAddHeadFailsOnOccursCheck) {
         const_cast<resolution_lineage*>(lp.make_resolution_lineage(gl, rule_id{0}));
     link_candidate(gl, rule_id{0});
 
-    EXPECT_FALSE(mhu->try_add_head(rl, &goal, &head));
-    EXPECT_EQ(common.whnf(&goal), &goal);
+    EXPECT_FALSE(mhu->try_add_head(rl, {&goal, 0}, {&head, 0}));
+    EXPECT_EQ(common.whnf({&goal, 0}).skeleton, &goal);
 }
 
 TEST_F(MhuEliminationGeneratorIntegrationTest, ClearMhuHeadsAllowsFreshTryAdd) {
@@ -466,15 +466,15 @@ TEST_F(MhuEliminationGeneratorIntegrationTest, ClearMhuHeadsAllowsFreshTryAdd) {
         const_cast<resolution_lineage*>(lp.make_resolution_lineage(gl, rule_id{0}));
     link_candidate(gl, rule_id{0});
 
-    ASSERT_TRUE(mhu->try_add_head(rl, &goal, &head));
+    ASSERT_TRUE(mhu->try_add_head(rl, {&goal, 0}, {&head, 0}));
     mhu->clear_mhu_heads();
-    EXPECT_TRUE(mhu->try_add_head(rl, &goal, &head));
+    EXPECT_TRUE(mhu->try_add_head(rl, {&goal, 0}, {&head, 0}));
 
     EXPECT_THAT(collect_elims(mhu->constrain(rl)), IsEmpty());
     expect_whnf_functor(functors, common, &goal, "f", 0);
 
     mhu->clear_mhu_heads();
-    EXPECT_TRUE(mhu->try_add_head(rl, &goal, &head));
+    EXPECT_TRUE(mhu->try_add_head(rl, {&goal, 0}, {&head, 0}));
 }
 
 TEST_F(MhuEliminationGeneratorIntegrationTest, TryAddHeadOnSameLineageTwiceThrowsInDebug) {
@@ -486,8 +486,8 @@ TEST_F(MhuEliminationGeneratorIntegrationTest, TryAddHeadOnSameLineageTwiceThrow
         const_cast<resolution_lineage*>(lp.make_resolution_lineage(gl, rule_id{0}));
     link_candidate(gl, rule_id{0});
 
-    ASSERT_TRUE(mhu->try_add_head(rl, &goal, &head_f));
-    EXPECT_THROW(mhu->try_add_head(rl, &goal, &head_g), std::logic_error);
+    ASSERT_TRUE(mhu->try_add_head(rl, {&goal, 0}, {&head_f, 0}));
+    EXPECT_THROW(mhu->try_add_head(rl, {&goal, 0}, {&head_g, 0}), std::logic_error);
 }
 
 TEST_F(MhuEliminationGeneratorIntegrationTest, ConstrainWithoutRegisteredHeadThrowsOutOfRange) {
@@ -513,7 +513,7 @@ TEST_F(MhuEliminationGeneratorIntegrationTest, ConstrainPublishesTwoRepsToCommon
         const_cast<resolution_lineage*>(lp.make_resolution_lineage(gl, rule_id{0}));
     link_candidate(gl, rule_id{0});
 
-    ASSERT_TRUE(mhu->try_add_head(rl, &goal, &head));
+    ASSERT_TRUE(mhu->try_add_head(rl, {&goal, 0}, {&head, 0}));
     EXPECT_THAT(collect_elims(mhu->constrain(rl)), IsEmpty());
 
     expect_whnf_functor(functors, common, &var0, "abc", 0);
@@ -530,8 +530,8 @@ TEST_F(MhuEliminationGeneratorIntegrationTest, TryAddHeadFailsWhenCommonRepAlrea
     expr head_g{expr::functor{functors.id("g"), {}}};
     resolution_lineage* rl = link_rl(0, rule_id{0});
 
-    common.bind(0, &head_f);
-    EXPECT_FALSE(mhu->try_add_head(rl, &var0, &head_g));
+    common.bind(0, {&head_f, 0});
+    EXPECT_FALSE(mhu->try_add_head(rl, {&var0, 0}, {&head_g, 0}));
     expect_whnf_functor(functors, common, &var0, "f", 0);
 }
 
@@ -540,8 +540,8 @@ TEST_F(MhuEliminationGeneratorIntegrationTest, TryAddHeadSucceedsWhenCommonRepAl
     expr head_f{expr::functor{functors.id("f"), {}}};
     resolution_lineage* rl = link_rl(0, rule_id{0});
 
-    common.bind(0, &head_f);
-    ASSERT_TRUE(mhu->try_add_head(rl, &var0, &head_f));
+    common.bind(0, {&head_f, 0});
+    ASSERT_TRUE(mhu->try_add_head(rl, {&var0, 0}, {&head_f, 0}));
     EXPECT_THAT(collect_elims(mhu->constrain(rl)), IsEmpty());
     expect_whnf_functor(functors, common, &var0, "f", 0);
 }
@@ -555,10 +555,10 @@ TEST_F(MhuEliminationGeneratorIntegrationTest, TryAddHeadFailsWhenCommonEquatesR
     expr head{expr::functor{functors.id("f"), {&abc, &def}}};
     resolution_lineage* rl = link_rl(0, rule_id{0});
 
-    common.bind(1, &var0);
-    EXPECT_FALSE(mhu->try_add_head(rl, &goal, &head));
-    EXPECT_EQ(common.whnf(&var0), &var0);
-    EXPECT_EQ(common.whnf(&var1), &var0);
+    common.bind(1, {&var0, 0});
+    EXPECT_FALSE(mhu->try_add_head(rl, {&goal, 0}, {&head, 0}));
+    EXPECT_EQ(common.whnf({&var0, 0}).skeleton, &var0);
+    EXPECT_EQ(common.whnf({&var1, 0}).skeleton, &var0);
 }
 
 TEST_F(MhuEliminationGeneratorIntegrationTest, TryAddHeadFailsWhenCommonDistinguishesRepsHeadWouldEquate) {
@@ -568,9 +568,9 @@ TEST_F(MhuEliminationGeneratorIntegrationTest, TryAddHeadFailsWhenCommonDistingu
     expr def{expr::functor{functors.id("def"), {}}};
     resolution_lineage* rl = link_rl(0, rule_id{0});
 
-    common.bind(0, &abc);
-    common.bind(1, &def);
-    EXPECT_FALSE(mhu->try_add_head(rl, &var0, &var1));
+    common.bind(0, {&abc, 0});
+    common.bind(1, {&def, 0});
+    EXPECT_FALSE(mhu->try_add_head(rl, {&var0, 0}, {&var1, 0}));
     expect_whnf_functor(functors, common, &var0, "abc", 0);
     expect_whnf_functor(functors, common, &var1, "def", 0);
 }
@@ -586,8 +586,8 @@ TEST_F(MhuEliminationGeneratorIntegrationTest, TryAddHeadReSyncsNestedGoalAgains
     expr head{expr::functor{functors.id("g"), {&fab, &c}}};
     resolution_lineage* rl = link_rl(0, rule_id{0});
 
-    common.bind(0, &fab);
-    ASSERT_TRUE(mhu->try_add_head(rl, &goal, &head));
+    common.bind(0, {&fab, 0});
+    ASSERT_TRUE(mhu->try_add_head(rl, {&goal, 0}, {&head, 0}));
     EXPECT_THAT(collect_elims(mhu->constrain(rl)), IsEmpty());
     expect_whnf_functor(functors, common, &var0, "f", 2);
     expect_whnf_functor(functors, common, &var1, "c", 0);
@@ -611,11 +611,11 @@ TEST_F(MhuEliminationGeneratorIntegrationTest, ConstrainEliminatesAllIncompatibl
     resolution_lineage* rl_i = link_rl(3, rule_id{0});
     resolution_lineage* rl_j = link_rl(4, rule_id{0});
 
-    ASSERT_TRUE(mhu->try_add_head(rl_f, &goal, &head_f));
-    ASSERT_TRUE(mhu->try_add_head(rl_g, &goal, &head_g));
-    ASSERT_TRUE(mhu->try_add_head(rl_h, &goal, &head_h));
-    ASSERT_TRUE(mhu->try_add_head(rl_i, &goal, &head_i));
-    ASSERT_TRUE(mhu->try_add_head(rl_j, &goal, &head_j));
+    ASSERT_TRUE(mhu->try_add_head(rl_f, {&goal, 0}, {&head_f, 0}));
+    ASSERT_TRUE(mhu->try_add_head(rl_g, {&goal, 0}, {&head_g, 0}));
+    ASSERT_TRUE(mhu->try_add_head(rl_h, {&goal, 0}, {&head_h, 0}));
+    ASSERT_TRUE(mhu->try_add_head(rl_i, {&goal, 0}, {&head_i, 0}));
+    ASSERT_TRUE(mhu->try_add_head(rl_j, {&goal, 0}, {&head_j, 0}));
 
     EXPECT_THAT(collect_elims(mhu->constrain(rl_f)),
                 UnorderedElementsAre(rl_g, rl_h, rl_i, rl_j));
@@ -640,9 +640,9 @@ TEST_F(MhuEliminationGeneratorIntegrationTest, ConstrainPublishesTwoRepsEliminat
     resolution_lineage* rl_sat0 = link_rl(1, rule_id{0});
     resolution_lineage* rl_sat1 = link_rl(2, rule_id{0});
 
-    ASSERT_TRUE(mhu->try_add_head(rl_hub, &goal_hub, &head_hub));
-    ASSERT_TRUE(mhu->try_add_head(rl_sat0, &goal_sat0, &head_sat0));
-    ASSERT_TRUE(mhu->try_add_head(rl_sat1, &goal_sat1, &head_sat1));
+    ASSERT_TRUE(mhu->try_add_head(rl_hub, {&goal_hub, 0}, {&head_hub, 0}));
+    ASSERT_TRUE(mhu->try_add_head(rl_sat0, {&goal_sat0, 0}, {&head_sat0, 0}));
+    ASSERT_TRUE(mhu->try_add_head(rl_sat1, {&goal_sat1, 0}, {&head_sat1, 0}));
 
     EXPECT_THAT(collect_elims(mhu->constrain(rl_hub)),
                 UnorderedElementsAre(rl_sat0, rl_sat1));
@@ -668,12 +668,12 @@ TEST_F(MhuEliminationGeneratorIntegrationTest, ConstrainEqualityHeadDoesNotElimi
     resolution_lineage* rl_b = link_rl(1, rule_id{0});
     resolution_lineage* rl_c = link_rl(2, rule_id{0});
 
-    ASSERT_TRUE(mhu->try_add_head(rl_a, &goal_f, &head_fxx));
-    ASSERT_TRUE(mhu->try_add_head(rl_b, &goal_b, &head_b));
-    ASSERT_TRUE(mhu->try_add_head(rl_c, &goal_c, &head_c));
+    ASSERT_TRUE(mhu->try_add_head(rl_a, {&goal_f, 0}, {&head_fxx, 0}));
+    ASSERT_TRUE(mhu->try_add_head(rl_b, {&goal_b, 0}, {&head_b, 0}));
+    ASSERT_TRUE(mhu->try_add_head(rl_c, {&goal_c, 0}, {&head_c, 0}));
 
     EXPECT_THAT(collect_elims(mhu->constrain(rl_a)), IsEmpty());
-    EXPECT_EQ(common.whnf(&var0), common.whnf(&var1));
+    EXPECT_EQ(common.whnf({&var0, 0}).skeleton, common.whnf({&var1, 0}).skeleton);
 }
 
 // ---------------------------------------------------------------------------
@@ -695,8 +695,8 @@ TEST_F(MhuEliminationGeneratorIntegrationTest, ConstrainPartialOverlapThreeHeadC
     resolution_lineage* rl_a = link_rl(0, rule_id{0});
     resolution_lineage* rl_b = link_rl(1, rule_id{0});
 
-    ASSERT_TRUE(mhu->try_add_head(rl_a, &goal_a, &head_a));
-    ASSERT_TRUE(mhu->try_add_head(rl_b, &goal_b, &head_b));
+    ASSERT_TRUE(mhu->try_add_head(rl_a, {&goal_a, 0}, {&head_a, 0}));
+    ASSERT_TRUE(mhu->try_add_head(rl_b, {&goal_b, 0}, {&head_b, 0}));
 
     EXPECT_THAT(collect_elims(mhu->constrain(rl_a)), IsEmpty());
     expect_whnf_functor(functors, common, &var0, "a", 0);
@@ -724,9 +724,9 @@ TEST_F(MhuEliminationGeneratorIntegrationTest,
     resolution_lineage* rl_b = link_rl(1, rule_id{0});
     resolution_lineage* rl_c = link_rl(2, rule_id{0});
 
-    ASSERT_TRUE(mhu->try_add_head(rl_a, &goal_a, &head_a));
-    ASSERT_TRUE(mhu->try_add_head(rl_b, &goal_b, &head_b));
-    ASSERT_TRUE(mhu->try_add_head(rl_c, &goal_c, &head_c));
+    ASSERT_TRUE(mhu->try_add_head(rl_a, {&goal_a, 0}, {&head_a, 0}));
+    ASSERT_TRUE(mhu->try_add_head(rl_b, {&goal_b, 0}, {&head_b, 0}));
+    ASSERT_TRUE(mhu->try_add_head(rl_c, {&goal_c, 0}, {&head_c, 0}));
 
     EXPECT_THAT(collect_elims(mhu->constrain(rl_a)), ElementsAre(rl_c));
     expect_whnf_functor(functors, common, &var2, "c", 0);
@@ -755,14 +755,14 @@ TEST_F(MhuEliminationGeneratorIntegrationTest, ConstrainDisjointRepHeadSurvivesW
     resolution_lineage* rl_g = link_rl(1, rule_id{0});
     resolution_lineage* rl_h = link_rl(2, rule_id{0});
 
-    ASSERT_TRUE(mhu->try_add_head(rl_f, &goal_f, &head_fxx));
-    ASSERT_TRUE(mhu->try_add_head(rl_g, &goal_g, &head_g));
-    ASSERT_TRUE(mhu->try_add_head(rl_h, &goal_h, &head_h));
+    ASSERT_TRUE(mhu->try_add_head(rl_f, {&goal_f, 0}, {&head_fxx, 0}));
+    ASSERT_TRUE(mhu->try_add_head(rl_g, {&goal_g, 0}, {&head_g, 0}));
+    ASSERT_TRUE(mhu->try_add_head(rl_h, {&goal_h, 0}, {&head_h, 0}));
 
     EXPECT_THAT(collect_elims(mhu->constrain(rl_g)), IsEmpty());
     expect_whnf_functor(functors, common, &var_b, "abc", 0);
-    EXPECT_EQ(common.whnf(&var_a), &var_a);
-    EXPECT_EQ(common.whnf(&var_c), &var_c);
+    EXPECT_EQ(common.whnf({&var_a, 0}).skeleton, &var_a);
+    EXPECT_EQ(common.whnf({&var_c, 0}).skeleton, &var_c);
 }
 
 TEST_F(MhuEliminationGeneratorIntegrationTest, ConstrainDiamondOverlapEliminatesOnlyIncompatibleCorner) {
@@ -784,9 +784,9 @@ TEST_F(MhuEliminationGeneratorIntegrationTest, ConstrainDiamondOverlapEliminates
     resolution_lineage* rl_bc = link_rl(1, rule_id{0});
     resolution_lineage* rl_ac = link_rl(2, rule_id{0});
 
-    ASSERT_TRUE(mhu->try_add_head(rl_ab, &goal_ab, &head_ab));
-    ASSERT_TRUE(mhu->try_add_head(rl_bc, &goal_bc, &head_bc));
-    ASSERT_TRUE(mhu->try_add_head(rl_ac, &goal_ac, &head_ac));
+    ASSERT_TRUE(mhu->try_add_head(rl_ab, {&goal_ab, 0}, {&head_ab, 0}));
+    ASSERT_TRUE(mhu->try_add_head(rl_bc, {&goal_bc, 0}, {&head_bc, 0}));
+    ASSERT_TRUE(mhu->try_add_head(rl_ac, {&goal_ac, 0}, {&head_ac, 0}));
 
     EXPECT_THAT(collect_elims(mhu->constrain(rl_bc)), ElementsAre(rl_ac));
     expect_whnf_functor(functors, common, &var1, "b", 0);
@@ -811,9 +811,9 @@ TEST_F(MhuEliminationGeneratorIntegrationTest, ConstrainDiamondOverlapSurvivesWh
     resolution_lineage* rl_bc = link_rl(1, rule_id{0});
     resolution_lineage* rl_ac = link_rl(2, rule_id{0});
 
-    ASSERT_TRUE(mhu->try_add_head(rl_ab, &goal_ab, &head_ab));
-    ASSERT_TRUE(mhu->try_add_head(rl_bc, &goal_bc, &head_bc));
-    ASSERT_TRUE(mhu->try_add_head(rl_ac, &goal_ac, &head_ac));
+    ASSERT_TRUE(mhu->try_add_head(rl_ab, {&goal_ab, 0}, {&head_ab, 0}));
+    ASSERT_TRUE(mhu->try_add_head(rl_bc, {&goal_bc, 0}, {&head_bc, 0}));
+    ASSERT_TRUE(mhu->try_add_head(rl_ac, {&goal_ac, 0}, {&head_ac, 0}));
 
     EXPECT_THAT(collect_elims(mhu->constrain(rl_bc)), IsEmpty());
     expect_whnf_functor(functors, common, &var2, "c", 0);
@@ -832,8 +832,8 @@ TEST_F(MhuEliminationGeneratorIntegrationTest, SecondConstrainAfterFirstCommitRe
     resolution_lineage* rl_b = link_rl(1, rule_id{0});
 
     // ① add
-    ASSERT_TRUE(mhu->try_add_head(rl_a, &var0, &head_f));
-    ASSERT_TRUE(mhu->try_add_head(rl_b, &var0, &head_g));
+    ASSERT_TRUE(mhu->try_add_head(rl_a, {&var0, 0}, {&head_f, 0}));
+    ASSERT_TRUE(mhu->try_add_head(rl_b, {&var0, 0}, {&head_g, 0}));
 
     // ② constrain first
     EXPECT_THAT(collect_elims(mhu->constrain(rl_a)), ElementsAre(rl_b));
@@ -841,7 +841,7 @@ TEST_F(MhuEliminationGeneratorIntegrationTest, SecondConstrainAfterFirstCommitRe
 
     // ③ add after commit
     resolution_lineage* rl_c = link_rl(2, rule_id{0});
-    ASSERT_TRUE(mhu->try_add_head(rl_c, &var0, &head_f));
+    ASSERT_TRUE(mhu->try_add_head(rl_c, {&var0, 0}, {&head_f, 0}));
 
     // ④ constrain again
     EXPECT_THAT(collect_elims(mhu->constrain(rl_c)), IsEmpty());
@@ -867,10 +867,10 @@ TEST_F(MhuEliminationGeneratorIntegrationTest, ConstrainDoesNotYieldSiblingsAsEl
 
     resolution_lineage* rl_cross = link_rl(1, rule_id{0});
 
-    ASSERT_TRUE(mhu->try_add_head(rl_a, &goal, &head_f));
-    ASSERT_TRUE(mhu->try_add_head(rl_b, &goal, &head_g));
-    ASSERT_TRUE(mhu->try_add_head(rl_c, &goal, &head_h));
-    ASSERT_TRUE(mhu->try_add_head(rl_cross, &goal, &head_g));
+    ASSERT_TRUE(mhu->try_add_head(rl_a, {&goal, 0}, {&head_f, 0}));
+    ASSERT_TRUE(mhu->try_add_head(rl_b, {&goal, 0}, {&head_g, 0}));
+    ASSERT_TRUE(mhu->try_add_head(rl_c, {&goal, 0}, {&head_h, 0}));
+    ASSERT_TRUE(mhu->try_add_head(rl_cross, {&goal, 0}, {&head_g, 0}));
 
     EXPECT_THAT(collect_elims(mhu->constrain(rl_a)), ElementsAre(rl_cross));
     expect_whnf_functor(functors, common, &goal, "f", 0);
@@ -887,12 +887,12 @@ TEST_F(MhuEliminationGeneratorIntegrationTest, InterleavedDisjointConstrainThenS
     resolution_lineage* rl_b = link_rl(1, rule_id{0});
 
     // ① add shared f/g on var0
-    ASSERT_TRUE(mhu->try_add_head(rl_a, &var0, &head_f));
-    ASSERT_TRUE(mhu->try_add_head(rl_b, &var0, &head_g));
+    ASSERT_TRUE(mhu->try_add_head(rl_a, {&var0, 0}, {&head_f, 0}));
+    ASSERT_TRUE(mhu->try_add_head(rl_b, {&var0, 0}, {&head_g, 0}));
 
     // ② add disjoint h on var1
     resolution_lineage* rl_c = link_rl(2, rule_id{0});
-    ASSERT_TRUE(mhu->try_add_head(rl_c, &var1, &head_h));
+    ASSERT_TRUE(mhu->try_add_head(rl_c, {&var1, 0}, {&head_h, 0}));
 
     // ③ constrain disjoint first
     EXPECT_THAT(collect_elims(mhu->constrain(rl_c)), IsEmpty());
@@ -900,7 +900,7 @@ TEST_F(MhuEliminationGeneratorIntegrationTest, InterleavedDisjointConstrainThenS
 
     // ④ add late g on var0
     resolution_lineage* rl_d = link_rl(3, rule_id{0});
-    ASSERT_TRUE(mhu->try_add_head(rl_d, &var0, &head_g));
+    ASSERT_TRUE(mhu->try_add_head(rl_d, {&var0, 0}, {&head_g, 0}));
 
     // ⑤ constrain shared f
     EXPECT_THAT(collect_elims(mhu->constrain(rl_a)), UnorderedElementsAre(rl_b, rl_d));
@@ -925,8 +925,8 @@ TEST_F(MhuEliminationGeneratorIntegrationTest, InterleavedGroundPartialThenEqual
     resolution_lineage* rl_g = link_rl(1, rule_id{0});
 
     // ① add equality + partial ground heads
-    ASSERT_TRUE(mhu->try_add_head(rl_f, &goal_f, &head_fxx));
-    ASSERT_TRUE(mhu->try_add_head(rl_g, &goal_g, &head_g));
+    ASSERT_TRUE(mhu->try_add_head(rl_f, {&goal_f, 0}, {&head_fxx, 0}));
+    ASSERT_TRUE(mhu->try_add_head(rl_g, {&goal_g, 0}, {&head_g, 0}));
 
     // ③ constrain partial ground first
     EXPECT_THAT(collect_elims(mhu->constrain(rl_g)), IsEmpty());
@@ -934,7 +934,7 @@ TEST_F(MhuEliminationGeneratorIntegrationTest, InterleavedGroundPartialThenEqual
 
     // ④ add incompatible ground on var0
     resolution_lineage* rl_h = link_rl(2, rule_id{0});
-    ASSERT_TRUE(mhu->try_add_head(rl_h, &goal_h, &head_h));
+    ASSERT_TRUE(mhu->try_add_head(rl_h, {&goal_h, 0}, {&head_h, 0}));
 
     // ⑤ constrain equality head
     EXPECT_THAT(collect_elims(mhu->constrain(rl_f)), ElementsAre(rl_h));
@@ -951,8 +951,8 @@ TEST_F(MhuEliminationGeneratorIntegrationTest, InterleavedFirstConstrainBlocksIn
     resolution_lineage* rl_b = link_rl(1, rule_id{0});
 
     // ① add compatible cross-goal f heads
-    ASSERT_TRUE(mhu->try_add_head(rl_a, &var0, &head_f));
-    ASSERT_TRUE(mhu->try_add_head(rl_b, &var0, &head_f));
+    ASSERT_TRUE(mhu->try_add_head(rl_a, {&var0, 0}, {&head_f, 0}));
+    ASSERT_TRUE(mhu->try_add_head(rl_b, {&var0, 0}, {&head_f, 0}));
 
     // ② constrain first
     EXPECT_THAT(collect_elims(mhu->constrain(rl_a)), IsEmpty());
@@ -960,11 +960,11 @@ TEST_F(MhuEliminationGeneratorIntegrationTest, InterleavedFirstConstrainBlocksIn
 
     // ③ incompatible late add fails
     resolution_lineage* rl_c = link_rl(2, rule_id{0});
-    EXPECT_FALSE(mhu->try_add_head(rl_c, &var0, &head_g));
+    EXPECT_FALSE(mhu->try_add_head(rl_c, {&var0, 0}, {&head_g, 0}));
 
     // ④ compatible late add succeeds
     resolution_lineage* rl_d = link_rl(3, rule_id{0});
-    ASSERT_TRUE(mhu->try_add_head(rl_d, &var0, &head_f));
+    ASSERT_TRUE(mhu->try_add_head(rl_d, {&var0, 0}, {&head_f, 0}));
 
     // ⑤ constrain again
     EXPECT_THAT(collect_elims(mhu->constrain(rl_d)), IsEmpty());
@@ -982,9 +982,9 @@ TEST_F(MhuEliminationGeneratorIntegrationTest, InterleavedThreeWaySharedRepConst
     resolution_lineage* rl_c = link_rl(2, rule_id{0});
 
     // ① add three-way shared rep heads
-    ASSERT_TRUE(mhu->try_add_head(rl_a, &var0, &head_f));
-    ASSERT_TRUE(mhu->try_add_head(rl_b, &var0, &head_g));
-    ASSERT_TRUE(mhu->try_add_head(rl_c, &var0, &head_h));
+    ASSERT_TRUE(mhu->try_add_head(rl_a, {&var0, 0}, {&head_f, 0}));
+    ASSERT_TRUE(mhu->try_add_head(rl_b, {&var0, 0}, {&head_g, 0}));
+    ASSERT_TRUE(mhu->try_add_head(rl_c, {&var0, 0}, {&head_h, 0}));
 
     // ② constrain middle g
     EXPECT_THAT(collect_elims(mhu->constrain(rl_b)), UnorderedElementsAre(rl_a, rl_c));
@@ -992,11 +992,11 @@ TEST_F(MhuEliminationGeneratorIntegrationTest, InterleavedThreeWaySharedRepConst
 
     // ③ compatible late add succeeds (common is g())
     resolution_lineage* rl_d = link_rl(3, rule_id{0});
-    ASSERT_TRUE(mhu->try_add_head(rl_d, &var0, &head_g));
+    ASSERT_TRUE(mhu->try_add_head(rl_d, {&var0, 0}, {&head_g, 0}));
 
     // ④ incompatible late add fails
     resolution_lineage* rl_e = link_rl(4, rule_id{0});
-    EXPECT_FALSE(mhu->try_add_head(rl_e, &var0, &head_f));
+    EXPECT_FALSE(mhu->try_add_head(rl_e, {&var0, 0}, {&head_f, 0}));
 
     // ⑤ constrain compatible g
     EXPECT_THAT(collect_elims(mhu->constrain(rl_d)), IsEmpty());
@@ -1023,10 +1023,10 @@ TEST_F(MhuEliminationGeneratorIntegrationTest, InterleavedMultiRepHubConstrainAf
     resolution_lineage* rl_sat1 = link_rl(2, rule_id{0});
 
     // ① add hub
-    ASSERT_TRUE(mhu->try_add_head(rl_hub, &goal_hub, &head_hub));
+    ASSERT_TRUE(mhu->try_add_head(rl_hub, {&goal_hub, 0}, {&head_hub, 0}));
     // ② add satellites
-    ASSERT_TRUE(mhu->try_add_head(rl_sat0, &goal_sat0, &head_sat0));
-    ASSERT_TRUE(mhu->try_add_head(rl_sat1, &goal_sat1, &head_sat1));
+    ASSERT_TRUE(mhu->try_add_head(rl_sat0, {&goal_sat0, 0}, {&head_sat0, 0}));
+    ASSERT_TRUE(mhu->try_add_head(rl_sat1, {&goal_sat1, 0}, {&head_sat1, 0}));
 
     // ④ constrain hub
     EXPECT_THAT(collect_elims(mhu->constrain(rl_hub)),
@@ -1034,11 +1034,11 @@ TEST_F(MhuEliminationGeneratorIntegrationTest, InterleavedMultiRepHubConstrainAf
 
     // ⑤ late incompatible add fails
     resolution_lineage* rl_late = link_rl(3, rule_id{0});
-    EXPECT_FALSE(mhu->try_add_head(rl_late, &goal_sat0, &e));
+    EXPECT_FALSE(mhu->try_add_head(rl_late, {&goal_sat0, 0}, {&e, 0}));
 
     // ⑥ constrain fresh compatible hub
     resolution_lineage* rl_hub2 = link_rl(4, rule_id{0});
-    ASSERT_TRUE(mhu->try_add_head(rl_hub2, &goal_hub, &head_hub));
+    ASSERT_TRUE(mhu->try_add_head(rl_hub2, {&goal_hub, 0}, {&head_hub, 0}));
     EXPECT_THAT(collect_elims(mhu->constrain(rl_hub2)), IsEmpty());
     expect_whnf_functor(functors, common, &var0, "a", 0);
     expect_whnf_functor(functors, common, &var1, "b", 0);
@@ -1064,7 +1064,7 @@ TEST_F(MhuEliminationGeneratorIntegrationTest, ConstrainPublishesManyRepsFromNar
     expr head = make_functor_expr(functors, "f", grounds);
     resolution_lineage* rl = link_rl(0, rule_id{0});
 
-    ASSERT_TRUE(mhu->try_add_head(rl, &goal, &head));
+    ASSERT_TRUE(mhu->try_add_head(rl, {&goal, 0}, {&head, 0}));
     EXPECT_THAT(collect_elims(mhu->constrain(rl)), IsEmpty());
 
     for (size_t i = 0; i < 10; ++i) {
@@ -1094,8 +1094,8 @@ TEST_F(MhuEliminationGeneratorIntegrationTest, DeepNestedGoalTouchesManyVarsOnAd
     resolution_lineage* rl_nested = link_rl(0, rule_id{0});
     resolution_lineage* rl_sat = link_rl(1, rule_id{0});
 
-    ASSERT_TRUE(mhu->try_add_head(rl_nested, &goal, &head_f));
-    ASSERT_TRUE(mhu->try_add_head(rl_sat, &goal_sat, &head_sat));
+    ASSERT_TRUE(mhu->try_add_head(rl_nested, {&goal, 0}, {&head_f, 0}));
+    ASSERT_TRUE(mhu->try_add_head(rl_sat, {&goal_sat, 0}, {&head_sat, 0}));
 
     EXPECT_THAT(collect_elims(mhu->constrain(rl_nested)), ElementsAre(rl_sat));
 }
@@ -1114,12 +1114,12 @@ TEST_F(MhuEliminationGeneratorIntegrationTest, ManyHeadsDisjointRepsNoCrossElimi
         rls[i] = link_rl(i, rule_id{0});
 
     for (size_t i = 0; i < 6; ++i)
-        ASSERT_TRUE(mhu->try_add_head(rls[i], &vars[i], &heads[i]));
+        ASSERT_TRUE(mhu->try_add_head(rls[i], {&vars[i], 0}, {&heads[i], 0}));
 
     EXPECT_THAT(collect_elims(mhu->constrain(rls[2])), IsEmpty());
     expect_whnf_functor(functors, common, &vars[2], "g2", 0);
     for (size_t i : {0u, 1u, 3u, 4u, 5u})
-        EXPECT_EQ(common.whnf(&vars[i]), &vars[i]);
+        EXPECT_EQ(common.whnf({&vars[i], 0}).skeleton, &vars[i]);
 }
 
 // ---------------------------------------------------------------------------
@@ -1130,9 +1130,9 @@ TEST_F(MhuEliminationGeneratorIntegrationTest, ConstrainSkipsUnchangedLinkedRep)
     expr var0{expr::var{0}};
     resolution_lineage* rl = link_rl(0, rule_id{0});
 
-    ASSERT_TRUE(mhu->try_add_head(rl, &var0, &var0));
+    ASSERT_TRUE(mhu->try_add_head(rl, {&var0, 0}, {&var0, 0}));
     EXPECT_THAT(collect_elims(mhu->constrain(rl)), IsEmpty());
-    EXPECT_EQ(common.whnf(&var0), &var0);
+    EXPECT_EQ(common.whnf({&var0, 0}).skeleton, &var0);
 }
 
 // ---------------------------------------------------------------------------
@@ -1160,9 +1160,9 @@ TEST_F(MhuEliminationGeneratorIntegrationTest,
     resolution_lineage* rl_b = link_rl(1, rule_id{0});
     resolution_lineage* rl_c = link_rl(2, rule_id{0});
 
-    ASSERT_TRUE(mhu->try_add_head(rl_a, &goal_a, &head_a));
-    ASSERT_TRUE(mhu->try_add_head(rl_b, &goal_b, &head_b));
-    ASSERT_TRUE(mhu->try_add_head(rl_c, &goal_c, &head_c));
+    ASSERT_TRUE(mhu->try_add_head(rl_a, {&goal_a, 0}, {&head_a, 0}));
+    ASSERT_TRUE(mhu->try_add_head(rl_b, {&goal_b, 0}, {&head_b, 0}));
+    ASSERT_TRUE(mhu->try_add_head(rl_c, {&goal_c, 0}, {&head_c, 0}));
 
     EXPECT_THAT(collect_elims(mhu->constrain(rl_a)), IsEmpty());
     expect_whnf_functor(functors, common, &var0, "a", 0);
@@ -1188,11 +1188,11 @@ TEST_F(MhuEliminationGeneratorIntegrationTest, ConstrainDualRepGroundHeadSurvive
     resolution_lineage* rl_f = link_rl(0, rule_id{0});
     resolution_lineage* rl_g = link_rl(1, rule_id{0});
 
-    ASSERT_TRUE(mhu->try_add_head(rl_f, &goal_f, &head_fxx));
-    ASSERT_TRUE(mhu->try_add_head(rl_g, &goal_g, &head_g));
+    ASSERT_TRUE(mhu->try_add_head(rl_f, {&goal_f, 0}, {&head_fxx, 0}));
+    ASSERT_TRUE(mhu->try_add_head(rl_g, {&goal_g, 0}, {&head_g, 0}));
 
     EXPECT_THAT(collect_elims(mhu->constrain(rl_f)), IsEmpty());
-    EXPECT_EQ(common.whnf(&var_a), common.whnf(&var_b));
+    EXPECT_EQ(common.whnf({&var_a, 0}).skeleton, common.whnf({&var_b, 0}).skeleton);
 
     EXPECT_THAT(collect_elims(mhu->constrain(rl_g)), IsEmpty());
     expect_whnf_functor(functors, common, &var_a, "abc", 0);
@@ -1207,10 +1207,10 @@ TEST_F(MhuEliminationGeneratorIntegrationTest, ConstrainSkipsRepAlreadyBoundInLo
     expr head{expr::functor{functors.id("f"), {&abc, &var1}}};
     resolution_lineage* rl = link_rl(0, rule_id{0});
 
-    ASSERT_TRUE(mhu->try_add_head(rl, &goal, &head));
+    ASSERT_TRUE(mhu->try_add_head(rl, {&goal, 0}, {&head, 0}));
     EXPECT_THAT(collect_elims(mhu->constrain(rl)), IsEmpty());
     expect_whnf_functor(functors, common, &var0, "abc", 0);
-    EXPECT_EQ(common.whnf(&var1), &var1);
+    EXPECT_EQ(common.whnf({&var1, 0}).skeleton, &var1);
 }
 
 // Priority 2 — G, L, M
@@ -1231,18 +1231,18 @@ TEST_F(MhuEliminationGeneratorIntegrationTest, SecondConstrainOnDisjointRepDoesN
     resolution_lineage* rl_a = link_rl(0, rule_id{0});
     resolution_lineage* rl_b = link_rl(1, rule_id{0});
 
-    ASSERT_TRUE(mhu->try_add_head(rl_a, &goal_a, &head_a));
-    ASSERT_TRUE(mhu->try_add_head(rl_b, &goal_b, &head_b));
+    ASSERT_TRUE(mhu->try_add_head(rl_a, {&goal_a, 0}, {&head_a, 0}));
+    ASSERT_TRUE(mhu->try_add_head(rl_b, {&goal_b, 0}, {&head_b, 0}));
 
     // ① constrain disjoint rep
     EXPECT_THAT(collect_elims(mhu->constrain(rl_b)), IsEmpty());
     expect_whnf_functor(functors, common, &var2, "abc", 0);
-    EXPECT_EQ(common.whnf(&var0), &var0);
-    EXPECT_EQ(common.whnf(&var1), &var1);
+    EXPECT_EQ(common.whnf({&var0, 0}).skeleton, &var0);
+    EXPECT_EQ(common.whnf({&var1, 0}).skeleton, &var1);
 
     // ② constrain equality head on {var0, var1} — no elims; disjoint binding unchanged
     EXPECT_THAT(collect_elims(mhu->constrain(rl_a)), IsEmpty());
-    EXPECT_EQ(common.whnf(&var0), common.whnf(&var1));
+    EXPECT_EQ(common.whnf({&var0, 0}).skeleton, common.whnf({&var1, 0}).skeleton);
     expect_whnf_functor(functors, common, &var2, "abc", 0);
 }
 
@@ -1260,8 +1260,8 @@ TEST_F(MhuEliminationGeneratorIntegrationTest, ConstrainHubEliminatesOtherHubOnS
     resolution_lineage* rl_hub1 = link_rl(0, rule_id{0});
     resolution_lineage* rl_hub2 = link_rl(1, rule_id{0});
 
-    ASSERT_TRUE(mhu->try_add_head(rl_hub1, &goal_hub1, &head_hub1));
-    ASSERT_TRUE(mhu->try_add_head(rl_hub2, &goal_hub2, &head_hub2));
+    ASSERT_TRUE(mhu->try_add_head(rl_hub1, {&goal_hub1, 0}, {&head_hub1, 0}));
+    ASSERT_TRUE(mhu->try_add_head(rl_hub2, {&goal_hub2, 0}, {&head_hub2, 0}));
 
     EXPECT_THAT(collect_elims(mhu->constrain(rl_hub1)), ElementsAre(rl_hub2));
     expect_whnf_functor(functors, common, &var0, "a", 0);
@@ -1284,8 +1284,8 @@ TEST_F(MhuEliminationGeneratorIntegrationTest,
     resolution_lineage* rl_hub1 = link_rl(0, rule_id{0});
     resolution_lineage* rl_hub2 = link_rl(1, rule_id{0});
 
-    ASSERT_TRUE(mhu->try_add_head(rl_hub1, &goal_hub1, &head_hub1));
-    ASSERT_TRUE(mhu->try_add_head(rl_hub2, &goal_hub2, &head_hub2));
+    ASSERT_TRUE(mhu->try_add_head(rl_hub1, {&goal_hub1, 0}, {&head_hub1, 0}));
+    ASSERT_TRUE(mhu->try_add_head(rl_hub2, {&goal_hub2, 0}, {&head_hub2, 0}));
 
     // ① constrain hub1 — hub2 survives
     EXPECT_THAT(collect_elims(mhu->constrain(rl_hub1)), IsEmpty());
@@ -1306,15 +1306,15 @@ TEST_F(MhuEliminationGeneratorIntegrationTest, ClearMhuHeadsWithoutConstrainAllo
     resolution_lineage* rl_b = link_rl(1, rule_id{0});
 
     // ① add both heads
-    ASSERT_TRUE(mhu->try_add_head(rl_a, &var0, &head_f));
-    ASSERT_TRUE(mhu->try_add_head(rl_b, &var0, &head_g));
+    ASSERT_TRUE(mhu->try_add_head(rl_a, {&var0, 0}, {&head_f, 0}));
+    ASSERT_TRUE(mhu->try_add_head(rl_b, {&var0, 0}, {&head_g, 0}));
 
     // ② clear without constrain
     mhu->clear_mhu_heads();
 
     // ③ both re-add succeed
-    EXPECT_TRUE(mhu->try_add_head(rl_a, &var0, &head_f));
-    EXPECT_TRUE(mhu->try_add_head(rl_b, &var0, &head_g));
+    EXPECT_TRUE(mhu->try_add_head(rl_a, {&var0, 0}, {&head_f, 0}));
+    EXPECT_TRUE(mhu->try_add_head(rl_b, {&var0, 0}, {&head_g, 0}));
 }
 
 TEST_F(MhuEliminationGeneratorIntegrationTest, ClearMhuHeadsAfterPartialConstrainAllowsReAddOnDisjointRep) {
@@ -1327,15 +1327,15 @@ TEST_F(MhuEliminationGeneratorIntegrationTest, ClearMhuHeadsAfterPartialConstrai
 
     resolution_lineage* rl_h = link_rl(0, rule_id{0});
 
-    ASSERT_TRUE(mhu->try_add_head(rl_h, &goal_h, &head_h));
+    ASSERT_TRUE(mhu->try_add_head(rl_h, {&goal_h, 0}, {&head_h, 0}));
     EXPECT_THAT(collect_elims(mhu->constrain(rl_h)), IsEmpty());
     expect_whnf_functor(functors, common, &var1, "abc", 0);
 
     mhu->clear_mhu_heads();
 
     resolution_lineage* rl_f = link_rl(1, rule_id{0});
-    EXPECT_TRUE(mhu->try_add_head(rl_f, &var0, &head_f));
-    EXPECT_EQ(common.whnf(&var0), &var0);
+    EXPECT_TRUE(mhu->try_add_head(rl_f, {&var0, 0}, {&head_f, 0}));
+    EXPECT_EQ(common.whnf({&var0, 0}).skeleton, &var0);
     expect_whnf_functor(functors, common, &var1, "abc", 0);
 }
 
@@ -1345,14 +1345,14 @@ TEST_F(MhuEliminationGeneratorIntegrationTest, ClearMhuHeadsAfterPartialConstrai
     expr head_g{expr::functor{functors.id("g"), {}}};
     resolution_lineage* rl = link_rl(0, rule_id{0});
 
-    ASSERT_TRUE(mhu->try_add_head(rl, &var0, &head_f));
+    ASSERT_TRUE(mhu->try_add_head(rl, {&var0, 0}, {&head_f, 0}));
     EXPECT_THAT(collect_elims(mhu->constrain(rl)), IsEmpty());
     expect_whnf_functor(functors, common, &var0, "f", 0);
 
     mhu->clear_mhu_heads();
 
     resolution_lineage* rl_g = link_rl(1, rule_id{0});
-    EXPECT_FALSE(mhu->try_add_head(rl_g, &var0, &head_g));
+    EXPECT_FALSE(mhu->try_add_head(rl_g, {&var0, 0}, {&head_g, 0}));
     expect_whnf_functor(functors, common, &var0, "f", 0);
 }
 
@@ -1371,20 +1371,20 @@ TEST_F(MhuEliminationGeneratorIntegrationTest, RebaseFollowsCommonWhnfThroughFun
     expr head_hub{expr::functor{functors.id("h"), {&def}}};
 
     // Pre-bind: rep 0 bound to functor containing rep 1
-    common.bind(0, &f_var1);
+    common.bind(0, {&f_var1, 0});
 
     resolution_lineage* rl_sat = link_rl(0, rule_id{0});
     resolution_lineage* rl_hub = link_rl(1, rule_id{0});
 
     // Satellite try_add links reps {0,1} by unifying var0 with f(var1) in common
-    ASSERT_TRUE(mhu->try_add_head(rl_sat, &goal_sat, &head_sat));
-    ASSERT_TRUE(mhu->try_add_head(rl_hub, &goal_hub, &head_hub));
+    ASSERT_TRUE(mhu->try_add_head(rl_sat, {&goal_sat, 0}, {&head_sat, 0}));
+    ASSERT_TRUE(mhu->try_add_head(rl_hub, {&goal_hub, 0}, {&head_hub, 0}));
 
     // constrain(satellite) publishes var0→f(abc), var1→abc; rebase_all(1) eliminates hub
     EXPECT_THAT(collect_elims(mhu->constrain(rl_sat)), ElementsAre(rl_hub));
     expect_whnf_functor(functors, common, &var0, "f", 1);
     expect_whnf_functor(functors, common, &var1, "abc", 0);
-    const auto& f0 = std::get<expr::functor>(common.whnf(&var0)->content);
+    const auto& f0 = std::get<expr::functor>(common.whnf({&var0, 0}).skeleton->content);
     expect_whnf_functor(functors, common, f0.args[0], "abc", 0);
 }
 
@@ -1402,12 +1402,12 @@ void expect_all_whnf_abc(test_functors& functors, bind_map& common, std::initial
 void expect_equated_to_canonical(bind_map& common, std::initializer_list<expr*> vars,
     const expr* canonical) {
     for (expr* v : vars)
-        EXPECT_EQ(common.whnf(v), canonical);
+        EXPECT_EQ(common.whnf({v, 0}).skeleton, canonical);
 }
 
 void expect_free_reps(bind_map& common, std::initializer_list<expr*> vars) {
     for (expr* v : vars)
-        EXPECT_EQ(common.whnf(v), v);
+        EXPECT_EQ(common.whnf({v, 0}).skeleton, v);
 }
 
 } // namespace
@@ -1425,10 +1425,10 @@ TEST_F(MhuEliminationGeneratorIntegrationTest,
     resolution_lineage* rl2 = link_rl(2, rule_id{0});
     resolution_lineage* rl3 = link_rl(3, rule_id{0});
 
-    ASSERT_TRUE(mhu->try_add_head(rl0, &var0, &var1));
-    ASSERT_TRUE(mhu->try_add_head(rl1, &var1, &var2));
-    ASSERT_TRUE(mhu->try_add_head(rl2, &var2, &var3));
-    ASSERT_TRUE(mhu->try_add_head(rl3, &var3, &abc));
+    ASSERT_TRUE(mhu->try_add_head(rl0, {&var0, 0}, {&var1, 0}));
+    ASSERT_TRUE(mhu->try_add_head(rl1, {&var1, 0}, {&var2, 0}));
+    ASSERT_TRUE(mhu->try_add_head(rl2, {&var2, 0}, {&var3, 0}));
+    ASSERT_TRUE(mhu->try_add_head(rl3, {&var3, 0}, {&abc, 0}));
 
     // ① constrain rl0
     EXPECT_THAT(collect_elims(mhu->constrain(rl0)), IsEmpty());
@@ -1462,10 +1462,10 @@ TEST_F(MhuEliminationGeneratorIntegrationTest,
     resolution_lineage* rl2 = link_rl(2, rule_id{0});
     resolution_lineage* rl3 = link_rl(3, rule_id{0});
 
-    ASSERT_TRUE(mhu->try_add_head(rl0, &var0, &var1));
-    ASSERT_TRUE(mhu->try_add_head(rl1, &var1, &var2));
-    ASSERT_TRUE(mhu->try_add_head(rl2, &var2, &var3));
-    ASSERT_TRUE(mhu->try_add_head(rl3, &var3, &abc));
+    ASSERT_TRUE(mhu->try_add_head(rl0, {&var0, 0}, {&var1, 0}));
+    ASSERT_TRUE(mhu->try_add_head(rl1, {&var1, 0}, {&var2, 0}));
+    ASSERT_TRUE(mhu->try_add_head(rl2, {&var2, 0}, {&var3, 0}));
+    ASSERT_TRUE(mhu->try_add_head(rl3, {&var3, 0}, {&abc, 0}));
 
     // ① constrain rl3 — ground rep 3 only
     EXPECT_THAT(collect_elims(mhu->constrain(rl3)), IsEmpty());
@@ -1495,8 +1495,8 @@ TEST_F(MhuEliminationGeneratorIntegrationTest, SixHeadChainConstrainsPropagateGr
         rls[i] = link_rl(i, rule_id{0});
 
     for (size_t i = 0; i < 5; ++i)
-        ASSERT_TRUE(mhu->try_add_head(rls[i], &vars[i], &vars[i + 1]));
-    ASSERT_TRUE(mhu->try_add_head(rls[5], &vars[5], &abc));
+        ASSERT_TRUE(mhu->try_add_head(rls[i], {&vars[i], 0}, {&vars[i + 1], 0}));
+    ASSERT_TRUE(mhu->try_add_head(rls[5], {&vars[5], 0}, {&abc, 0}));
 
     for (size_t i = 0; i < 6; ++i)
         EXPECT_THAT(collect_elims(mhu->constrain(rls[i])), IsEmpty());
@@ -1519,11 +1519,11 @@ TEST_F(MhuEliminationGeneratorIntegrationTest, SerialChainLateGroundWithCompatib
     resolution_lineage* rl3 = link_rl(3, rule_id{0});
     resolution_lineage* rl_w = link_rl(4, rule_id{0});
 
-    ASSERT_TRUE(mhu->try_add_head(rl0, &var0, &var1));
-    ASSERT_TRUE(mhu->try_add_head(rl1, &var1, &var2));
-    ASSERT_TRUE(mhu->try_add_head(rl2, &var2, &var3));
-    ASSERT_TRUE(mhu->try_add_head(rl3, &var3, &abc));
-    ASSERT_TRUE(mhu->try_add_head(rl_w, &goal_w, &head_w));
+    ASSERT_TRUE(mhu->try_add_head(rl0, {&var0, 0}, {&var1, 0}));
+    ASSERT_TRUE(mhu->try_add_head(rl1, {&var1, 0}, {&var2, 0}));
+    ASSERT_TRUE(mhu->try_add_head(rl2, {&var2, 0}, {&var3, 0}));
+    ASSERT_TRUE(mhu->try_add_head(rl3, {&var3, 0}, {&abc, 0}));
+    ASSERT_TRUE(mhu->try_add_head(rl_w, {&goal_w, 0}, {&head_w, 0}));
 
     EXPECT_THAT(collect_elims(mhu->constrain(rl0)), IsEmpty());
     EXPECT_THAT(collect_elims(mhu->constrain(rl1)), IsEmpty());
@@ -1551,11 +1551,11 @@ TEST_F(MhuEliminationGeneratorIntegrationTest, SerialChainLateGroundEliminatesIn
     resolution_lineage* rl3 = link_rl(3, rule_id{0});
     resolution_lineage* rl_w = link_rl(4, rule_id{0});
 
-    ASSERT_TRUE(mhu->try_add_head(rl0, &var0, &var1));
-    ASSERT_TRUE(mhu->try_add_head(rl1, &var1, &var2));
-    ASSERT_TRUE(mhu->try_add_head(rl2, &var2, &var3));
-    ASSERT_TRUE(mhu->try_add_head(rl3, &var3, &abc));
-    ASSERT_TRUE(mhu->try_add_head(rl_w, &goal_w, &head_w));
+    ASSERT_TRUE(mhu->try_add_head(rl0, {&var0, 0}, {&var1, 0}));
+    ASSERT_TRUE(mhu->try_add_head(rl1, {&var1, 0}, {&var2, 0}));
+    ASSERT_TRUE(mhu->try_add_head(rl2, {&var2, 0}, {&var3, 0}));
+    ASSERT_TRUE(mhu->try_add_head(rl3, {&var3, 0}, {&abc, 0}));
+    ASSERT_TRUE(mhu->try_add_head(rl_w, {&goal_w, 0}, {&head_w, 0}));
 
     EXPECT_THAT(collect_elims(mhu->constrain(rl0)), IsEmpty());
     EXPECT_THAT(collect_elims(mhu->constrain(rl1)), IsEmpty());
@@ -1583,12 +1583,12 @@ TEST_F(MhuEliminationGeneratorIntegrationTest, ManyHeadsOnVar2SurviveSerialChain
     for (size_t i = 0; i < kWatcherCount; ++i)
         watchers[i] = link_rl(4 + i, rule_id{0});
 
-    ASSERT_TRUE(mhu->try_add_head(rl0, &var0, &var1));
-    ASSERT_TRUE(mhu->try_add_head(rl1, &var1, &var2));
-    ASSERT_TRUE(mhu->try_add_head(rl2, &var2, &var3));
-    ASSERT_TRUE(mhu->try_add_head(rl3, &var3, &abc));
+    ASSERT_TRUE(mhu->try_add_head(rl0, {&var0, 0}, {&var1, 0}));
+    ASSERT_TRUE(mhu->try_add_head(rl1, {&var1, 0}, {&var2, 0}));
+    ASSERT_TRUE(mhu->try_add_head(rl2, {&var2, 0}, {&var3, 0}));
+    ASSERT_TRUE(mhu->try_add_head(rl3, {&var3, 0}, {&abc, 0}));
     for (resolution_lineage* rl_w : watchers)
-        ASSERT_TRUE(mhu->try_add_head(rl_w, &goal_w, &head_w));
+        ASSERT_TRUE(mhu->try_add_head(rl_w, {&goal_w, 0}, {&head_w, 0}));
 
     EXPECT_THAT(collect_elims(mhu->constrain(rl0)), IsEmpty());
     EXPECT_THAT(collect_elims(mhu->constrain(rl1)), IsEmpty());

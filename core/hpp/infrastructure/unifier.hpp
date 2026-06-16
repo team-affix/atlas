@@ -7,9 +7,9 @@
 struct unifier : i_unifier {
     virtual ~unifier() = default;
     unifier(i_bind_map&);
-    coroutine<uint32_t, bool> unify(const expr*, const expr*) override;
+    coroutine<uint32_t, bool> unify(framed_expr lhs, framed_expr rhs) override;
 private:
-    bool occurs_check(uint32_t, const expr*);
+    bool occurs_check(uint32_t global_key, framed_expr);
     i_bind_map& bind_map;
 };
 

@@ -11,7 +11,7 @@ mhu_elimination_generator::mhu_elimination_generator(locator& loc) :
     get_goal_candidate_rule_ids_(loc.locate<i_get_goal_candidate_rule_ids>()) {
 }
 
-bool mhu_elimination_generator::try_add_head(const resolution_lineage* lineage, const expr* lhs, const expr* rhs) {
+bool mhu_elimination_generator::try_add_head(const resolution_lineage* lineage, framed_expr lhs, framed_expr rhs) {
     // 1. construct a bind map
     auto bind_map = bind_map_factory_.make();
 
@@ -97,14 +97,14 @@ void mhu_elimination_generator::clear_mhu_heads() {
 
 coroutine<const resolution_lineage*, void> mhu_elimination_generator::accept_bindings(i_bind_map& local_bind_map, const std::unordered_set<uint32_t>& c_reps) {
     for (auto c_rep : c_reps) {
-        // 6.1. get the rep expr
+        // 6.1. get the rep expr (global var ID, so frame_offset = 0)
         auto rep_expr = make_var_.make_var(c_rep);
-        
+
         // 6.2. get new whnf
-        auto whnf = local_bind_map.whnf(rep_expr);
+        framed_expr whnf = local_bind_map.whnf({rep_expr, 0});
 
         // 6.3. if the whnf is the same, then its still a c-rep, so skip
-        if (rep_expr == whnf)
+        if (rep_expr == whnf.skeleton && whnf.frame_offset == 0)
             continue;
 
         // 6.3 bind the old rep to the new rep
@@ -173,20 +173,20 @@ coroutine<uint32_t, bool> mhu_elimination_generator::synchronize(i_unifier& unif
         auto var = touched_vars.front();
         touched_vars.pop();
 
-        // 1.2. get the rep expr
+        // 1.2. get the rep expr (global var ID, so frame_offset = 0)
         auto var_expr = make_var_.make_var(var);
 
         // 1.3. get the whnf of the rep
-        auto whnf = common_.whnf(var_expr);
+        framed_expr whnf = common_.whnf({var_expr, 0});
 
         // 1.4. if the rep is a c-rep (common rep), yield it
-        if (var_expr == whnf) {
+        if (var_expr == whnf.skeleton && whnf.frame_offset == 0) {
             co_yield var;
             continue;
         }
 
         // 1.5. if the rep is NOT a c-rep, unify
-        auto task = unifier.unify(var_expr, whnf);
+        auto task = unifier.unify({var_expr, 0}, whnf);
 
         // 1.6. wait for the unification to complete
         while (!task.done()) {

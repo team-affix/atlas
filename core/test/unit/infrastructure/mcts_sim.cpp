@@ -16,10 +16,11 @@
 #include "interfaces/i_clear_goal_candidate_rule_ids.hpp"
 #include "interfaces/i_clear_goal_exprs.hpp"
 #include "interfaces/i_clear_active_goals.hpp"
-#include "interfaces/i_clear_candidate_translation_maps.hpp"
+#include "interfaces/i_clear_candidate_frame_offsets.hpp"
 #include "interfaces/i_clear_mhu_heads.hpp"
 #include "interfaces/i_clear_bindings.hpp"
 #include "interfaces/i_trim_unpinned_lineages.hpp"
+#include "interfaces/i_frame_allocator.hpp"
 #include "interfaces/i_compute_mcts_reward.hpp"
 #include "value_objects/mcts_choice.hpp"
 
@@ -57,8 +58,8 @@ struct MockClearActiveGoals : public i_clear_active_goals {
     MOCK_METHOD(void, clear_active_goals, (), (override));
 };
 
-struct MockClearCandidateTranslationMaps : public i_clear_candidate_translation_maps {
-    MOCK_METHOD(void, clear_candidate_translation_maps, (), (override));
+struct MockClearCandidateFrameOffsets : public i_clear_candidate_frame_offsets {
+    MOCK_METHOD(void, clear_candidate_frame_offsets, (), (override));
 };
 
 struct MockClearMhuHeads : public i_clear_mhu_heads {
@@ -77,6 +78,12 @@ struct MockComputeMctsReward : public i_compute_mcts_reward {
     MOCK_METHOD(double, compute_mcts_reward, (), (const, override));
 };
 
+struct MockFrameAllocator : public i_frame_allocator {
+    MOCK_METHOD(uint32_t, bump, (uint32_t), (override));
+    MOCK_METHOD(uint32_t, peek, (), (const, override));
+    MOCK_METHOD(void, reset, (), (override));
+};
+
 struct MctsSimTest : public ::testing::Test {
     static constexpr double kExplorationConstant = 1.414;
 
@@ -89,10 +96,11 @@ struct MctsSimTest : public ::testing::Test {
     testing::NiceMock<MockClearGoalCandidateRuleIds> clear_goal_candidate_rule_ids;
     testing::NiceMock<MockClearGoalExprs> clear_goal_exprs;
     testing::NiceMock<MockClearActiveGoals> clear_active_goals;
-    testing::NiceMock<MockClearCandidateTranslationMaps> clear_candidate_translation_maps;
+    testing::NiceMock<MockClearCandidateFrameOffsets> clear_candidate_frame_offsets;
     testing::NiceMock<MockClearMhuHeads> clear_mhu_heads;
     testing::NiceMock<MockClearBindings> clear_bindings;
     testing::NiceMock<MockTrimUnpinnedLineages> trim_unpinned_lineages;
+    testing::NiceMock<MockFrameAllocator> frame_allocator;
     MockComputeMctsReward compute_mcts_reward;
     std::mt19937 rng{42};
     set_up_sim inner_set_up;
@@ -114,10 +122,11 @@ struct MctsSimTest : public ::testing::Test {
         loc.bind_as<i_clear_goal_candidate_rule_ids>(clear_goal_candidate_rule_ids);
         loc.bind_as<i_clear_goal_exprs>(clear_goal_exprs);
         loc.bind_as<i_clear_active_goals>(clear_active_goals);
-        loc.bind_as<i_clear_candidate_translation_maps>(clear_candidate_translation_maps);
+        loc.bind_as<i_clear_candidate_frame_offsets>(clear_candidate_frame_offsets);
         loc.bind_as<i_clear_mhu_heads>(clear_mhu_heads);
         loc.bind_as<i_clear_bindings>(clear_bindings);
         loc.bind_as<i_trim_unpinned_lineages>(trim_unpinned_lineages);
+        loc.bind_as<i_frame_allocator>(frame_allocator);
     }
 
     set_up_sim init_inner_set_up() {
@@ -165,7 +174,7 @@ TEST_F(MctsSimTest, TearDownDelegatesFullClearSequenceToInnerTearDown) {
     EXPECT_CALL(clear_goal_candidate_rule_ids, clear_goal_candidate_rule_ids()).Times(1);
     EXPECT_CALL(clear_goal_exprs, clear_goal_exprs()).Times(1);
     EXPECT_CALL(clear_active_goals, clear_active_goals()).Times(1);
-    EXPECT_CALL(clear_candidate_translation_maps, clear_candidate_translation_maps()).Times(1);
+    EXPECT_CALL(clear_candidate_frame_offsets, clear_candidate_frame_offsets()).Times(1);
     EXPECT_CALL(clear_mhu_heads, clear_mhu_heads()).Times(1);
     EXPECT_CALL(clear_bindings, clear_bindings()).Times(1);
     EXPECT_CALL(trim_unpinned_lineages, trim()).Times(1);

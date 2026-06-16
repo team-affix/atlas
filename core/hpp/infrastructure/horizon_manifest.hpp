@@ -12,16 +12,17 @@
 #include "infrastructure/bind_map_factory.hpp"
 #include "infrastructure/candidate_activator.hpp"
 #include "infrastructure/candidate_deactivator.hpp"
-#include "infrastructure/candidate_translation_maps.hpp"
+#include "infrastructure/candidate_frame_offsets.hpp"
 #include "infrastructure/cdcl_elimination_generator.hpp"
 #include "infrastructure/conflict_detector.hpp"
-#include "infrastructure/copier.hpp"
 #include "infrastructure/cumulative_grounded_weight.hpp"
 #include "infrastructure/db.hpp"
 #include "infrastructure/decision_memory.hpp"
 #include "infrastructure/elimination_backlog.hpp"
 #include "infrastructure/elimination_router.hpp"
 #include "infrastructure/expr_pool.hpp"
+#include "infrastructure/globalizer.hpp"
+#include "infrastructure/frame_bump_allocator.hpp"
 #include "infrastructure/get_resolution_rule.hpp"
 #include "infrastructure/get_unit_resolution.hpp"
 #include "infrastructure/goal_activator.hpp"
@@ -62,13 +63,12 @@
 #include "infrastructure/unit_goals.hpp"
 #include "infrastructure/unifier_factory.hpp"
 #include "infrastructure/cdcl_sequencer.hpp"
-#include "infrastructure/var_sequencer.hpp"
 
 struct horizon_manifest {
     horizon_manifest(
         db& database,
         initial_goal_exprs& initial_goals,
-        size_t initial_var_count,
+        uint32_t initial_frame_offset,
         size_t max_resolutions,
         uint32_t random_seed,
         double exploration_constant);
@@ -83,7 +83,7 @@ struct horizon_manifest {
     bind_map_factory& bind_map_factory_;
     unifier_factory& unifier_factory_;
     expr_pool& expr_pool_;
-    var_sequencer& var_sequencer_;
+    frame_bump_allocator& frame_allocator_;
     cdcl_sequencer& cdcl_sequencer_;
     lineage_pool& lineage_pool_;
     srt_active_goals& srt_active_goals_;
@@ -99,9 +99,8 @@ struct horizon_manifest {
     cdcl_elimination_generator& cdcl_;
     mhu_elimination_generator& mhu_;
     joint_elimination_generator& joint_;
-    candidate_translation_maps& candidate_translation_maps_;
+    candidate_frame_offsets& candidate_frame_offsets_;
     get_resolution_rule& get_resolution_rule_;
-    copier& copier_;
     conflict_detector& conflict_detector_;
     unit_goal_detector& unit_goal_detector_;
     solution_detector& solution_detector_;
@@ -145,18 +144,19 @@ private:
         unit_goals unit_goals_;
         decision_memory decision_memory_;
         resolution_memory resolution_memory_;
-        candidate_translation_maps candidate_translation_maps_;
+        candidate_frame_offsets candidate_frame_offsets_;
 
         early_wiring(locator& loc, db& database, initial_goal_exprs& initial_goals);
     };
 
     struct pool_wiring {
         expr_pool expr_pool_;
-        var_sequencer var_sequencer_;
+        frame_bump_allocator frame_allocator_;
+        std::optional<globalizer> globalizer_;
         cdcl_sequencer cdcl_sequencer_;
         elimination_backlog elimination_backlog_;
 
-        pool_wiring(locator& loc, size_t initial_var_count);
+        pool_wiring(locator& loc, uint32_t initial_frame_offset);
     };
 
     struct elim_wiring {
@@ -169,7 +169,6 @@ private:
 
     struct core_wiring {
         get_resolution_rule get_resolution_rule_;
-        copier copier_;
         conflict_detector conflict_detector_;
         unit_goal_detector unit_goal_detector_;
         solution_detector solution_detector_;

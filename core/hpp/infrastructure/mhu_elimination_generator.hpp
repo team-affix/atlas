@@ -13,6 +13,7 @@
 #include "interfaces/i_unifier_factory.hpp"
 #include "interfaces/i_get_goal_candidate_rule_ids.hpp"
 #include "interfaces/i_try_add_mhu_head.hpp"
+#include "value_objects/framed_expr.hpp"
 #include "interfaces/i_clear_mhu_heads.hpp"
 #include "infrastructure/coroutine.hpp"
 #include "value_objects/unify_head.hpp"
@@ -23,7 +24,7 @@ struct mhu_elimination_generator
     , i_clear_mhu_heads {
     virtual ~mhu_elimination_generator() = default;
     mhu_elimination_generator(locator& loc);
-    bool try_add_head(const resolution_lineage*, const expr*, const expr*) override;
+    bool try_add_head(const resolution_lineage*, framed_expr goal, framed_expr head) override;
     coroutine<const resolution_lineage*, void> constrain(const resolution_lineage*) override;
     void clear_mhu_heads() override;
 private:

@@ -22,17 +22,17 @@ horizon_command_handler::horizon_command_handler(
     printer_.emplace(std::cout, parse_loc_);
 
     import_database_from_file(
-        file, *parse_pool_, *parse_pool_, parse_var_seq_, database_, functor_map_, next_functor_id_);
+        file, *parse_pool_, *parse_pool_, database_, functor_map_, next_functor_id_);
     var_name_to_idx_ = import_goals_from_string(
         goals_str, *parse_pool_, *parse_pool_, parse_var_seq_, initial_goals_, functor_map_, next_functor_id_);
+    const uint32_t initial_frame_offset = parse_var_seq_.peek();
     for (const auto& [name, idx] : var_name_to_idx_)
         var_names_.set_name(idx, name);
     for (const auto& [name, id] : functor_map_)
         functor_names_.set_name(id, name);
 
-    const size_t initial_var_count = parse_var_seq_.peek();
     runtime_.emplace(
-        database_, initial_goals_, initial_var_count, max_resolutions, seed, exploration_constant);
+        database_, initial_goals_, initial_frame_offset, max_resolutions, seed, exploration_constant);
 }
 
 void horizon_command_handler::operator()() {

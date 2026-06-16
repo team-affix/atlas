@@ -30,7 +30,7 @@ horizon_manifest::early_wiring::early_wiring(
       unit_goals_(),
       decision_memory_(),
       resolution_memory_(),
-      candidate_translation_maps_() {
+      candidate_frame_offsets_() {
     loc.bind_as<i_push_trail_frame, i_pop_trail_frame, i_log_to_current_trail_frame>(trail_);
     loc.bind_as<i_bind_map, i_clear_bindings>(bind_map_);
     loc.bind_as<i_bind_map_factory>(bind_map_factory_);
@@ -50,18 +50,20 @@ horizon_manifest::early_wiring::early_wiring(
     loc.bind_as<i_push_unit_goal, i_pop_unit_goal, i_clear_unit_goals>(unit_goals_);
     loc.bind_as<i_record_decision, i_clear_recorded_decisions, i_get_decision_count, i_derive_decision_lemma>(decision_memory_);
     loc.bind_as<i_record_resolution, i_clear_recorded_resolutions, i_get_resolution_count, i_derive_resolution_lemma>(resolution_memory_);
-    loc.bind_as<i_get_candidate_translation_map, i_set_candidate_translation_map, i_unset_candidate_translation_map, i_clear_candidate_translation_maps>(candidate_translation_maps_);
+    loc.bind_as<i_get_candidate_frame_offset, i_set_candidate_frame_offset, i_unset_candidate_frame_offset, i_clear_candidate_frame_offsets>(candidate_frame_offsets_);
     loc.bind_as<i_get_rule, i_get_goal_db_rule_ids>(database);
     loc.bind_as<i_get_initial_goal_count, i_get_initial_goal_expr>(initial_goals);
 }
 
-horizon_manifest::pool_wiring::pool_wiring(locator& loc, size_t initial_var_count)
+horizon_manifest::pool_wiring::pool_wiring(locator& loc, uint32_t initial_frame_offset)
     : expr_pool_(),
-      var_sequencer_(loc, static_cast<uint32_t>(initial_var_count)),
+      frame_allocator_(initial_frame_offset),
       cdcl_sequencer_(loc),
       elimination_backlog_(loc) {
     loc.bind_as<i_make_functor, i_make_var, i_import_expr, i_get_expr_count>(expr_pool_);
-    loc.bind_as<i_var_sequencer>(var_sequencer_);
+    loc.bind_as<i_frame_allocator>(frame_allocator_);
+    globalizer_.emplace(loc);
+    loc.bind_as<i_globalizer>(*globalizer_);
     loc.bind_as<i_cdcl_sequencer>(cdcl_sequencer_);
     loc.bind_as<i_insert_backlogged_elimination, i_is_backlogged_elimination>(elimination_backlog_);
 }
@@ -76,12 +78,10 @@ horizon_manifest::elim_wiring::elim_wiring(locator& loc)
 
 horizon_manifest::core_wiring::core_wiring(locator& loc)
     : get_resolution_rule_(loc),
-      copier_(loc),
       conflict_detector_(loc),
       unit_goal_detector_(loc),
       solution_detector_(loc) {
     loc.bind_as<i_get_resolution_rule>(get_resolution_rule_);
-    loc.bind_as<i_copier>(copier_);
     loc.bind_as<i_conflict_detector>(conflict_detector_);
     loc.bind_as<i_detect_unit_goal>(unit_goal_detector_);
     loc.bind_as<i_solution_detector>(solution_detector_);
@@ -152,7 +152,7 @@ horizon_manifest::orchestration_wiring::orchestration_wiring(
 horizon_manifest::horizon_manifest(
     db& database,
     initial_goal_exprs& initial_goals,
-    size_t initial_var_count,
+    uint32_t initial_frame_offset,
     size_t max_resolutions,
     uint32_t random_seed,
     double exploration_constant)
@@ -161,7 +161,7 @@ horizon_manifest::horizon_manifest(
       initial_goals_(initial_goals),
       max_resolutions_(max_resolutions),
       early_(loc_, database_, initial_goals_),
-      pools_(loc_, initial_var_count),
+      pools_(loc_, initial_frame_offset),
       elims_(loc_),
       core_(loc_),
       activators_(loc_),
@@ -172,7 +172,7 @@ horizon_manifest::horizon_manifest(
       bind_map_factory_(early_.bind_map_factory_),
       unifier_factory_(early_.unifier_factory_),
       expr_pool_(pools_.expr_pool_),
-      var_sequencer_(pools_.var_sequencer_),
+      frame_allocator_(pools_.frame_allocator_),
       cdcl_sequencer_(pools_.cdcl_sequencer_),
       lineage_pool_(early_.lineage_pool_),
       srt_active_goals_(early_.srt_active_goals_),
@@ -188,9 +188,8 @@ horizon_manifest::horizon_manifest(
       cdcl_(elims_.cdcl_),
       mhu_(elims_.mhu_),
       joint_(*elims_.joint_),
-      candidate_translation_maps_(early_.candidate_translation_maps_),
+      candidate_frame_offsets_(early_.candidate_frame_offsets_),
       get_resolution_rule_(core_.get_resolution_rule_),
-      copier_(core_.copier_),
       conflict_detector_(core_.conflict_detector_),
       unit_goal_detector_(core_.unit_goal_detector_),
       solution_detector_(core_.solution_detector_),

@@ -23,7 +23,7 @@ using ::testing::ReturnRef;
 namespace {
 
 struct failing_unifier : i_unifier {
-    coroutine<uint32_t, bool> unify(const expr*, const expr*) override {
+    coroutine<uint32_t, bool> unify(framed_expr, framed_expr) override {
         co_return false;
     }
 };
@@ -67,8 +67,8 @@ struct test_make_var : i_make_var {
 };
 
 struct identity_bind_map : i_bind_map {
-    void bind(uint32_t, const expr*) override {}
-    const expr* whnf(const expr* e) override { return e; }
+    void bind(uint32_t, framed_expr) override {}
+    framed_expr whnf(framed_expr fe) override { return fe; }
 };
 
 } // namespace
@@ -115,7 +115,7 @@ TEST_F(MhuEliminationGeneratorUnitTest, TryAddHeadReturnsFalseWhenUnifyFails) {
     loc.bind_as<i_unifier_factory>(unifier_factory);
     mhu_elimination_generator mhu{loc};
 
-    EXPECT_FALSE(mhu.try_add_head(&rl, &goal, &head_f));
+    EXPECT_FALSE(mhu.try_add_head(&rl, {&goal, 0}, {&head_f, 0}));
 }
 
 TEST_F(MhuEliminationGeneratorUnitTest, TryAddHeadFalseThenSuccessOnRetry) {
@@ -124,8 +124,8 @@ TEST_F(MhuEliminationGeneratorUnitTest, TryAddHeadFalseThenSuccessOnRetry) {
     loc.bind_as<i_unifier_factory>(unifier_factory);
     mhu_elimination_generator mhu{loc};
 
-    EXPECT_FALSE(mhu.try_add_head(&rl, &goal, &head_f));
-    EXPECT_TRUE(mhu.try_add_head(&rl, &goal, &head_f));
+    EXPECT_FALSE(mhu.try_add_head(&rl, {&goal, 0}, {&head_f, 0}));
+    EXPECT_TRUE(mhu.try_add_head(&rl, {&goal, 0}, {&head_f, 0}));
 }
 
 TEST_F(MhuEliminationGeneratorUnitTest, ClearMhuHeadsAllowsFreshTryAdd) {
@@ -134,9 +134,9 @@ TEST_F(MhuEliminationGeneratorUnitTest, ClearMhuHeadsAllowsFreshTryAdd) {
     loc.bind_as<i_unifier_factory>(unifier_factory);
     mhu_elimination_generator mhu{loc};
 
-    ASSERT_TRUE(mhu.try_add_head(&rl, &goal, &head_f));
+    ASSERT_TRUE(mhu.try_add_head(&rl, {&goal, 0}, {&head_f, 0}));
     mhu.clear_mhu_heads();
-    EXPECT_TRUE(mhu.try_add_head(&rl, &goal, &head_f));
+    EXPECT_TRUE(mhu.try_add_head(&rl, {&goal, 0}, {&head_f, 0}));
 }
 
 TEST_F(MhuEliminationGeneratorUnitTest, DuplicateTryAddHeadThrowsInDebug) {
@@ -145,6 +145,6 @@ TEST_F(MhuEliminationGeneratorUnitTest, DuplicateTryAddHeadThrowsInDebug) {
     loc.bind_as<i_unifier_factory>(unifier_factory);
     mhu_elimination_generator mhu{loc};
 
-    ASSERT_TRUE(mhu.try_add_head(&rl, &goal, &head_f));
-    EXPECT_THROW(mhu.try_add_head(&rl, &goal, &head_g), std::logic_error);
+    ASSERT_TRUE(mhu.try_add_head(&rl, {&goal, 0}, {&head_f, 0}));
+    EXPECT_THROW(mhu.try_add_head(&rl, {&goal, 0}, {&head_g, 0}), std::logic_error);
 }

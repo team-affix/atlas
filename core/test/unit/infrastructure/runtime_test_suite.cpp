@@ -56,19 +56,19 @@ i_runtime& make_runtime_session(
     runtime_kind kind,
     db& database,
     initial_goal_exprs& goals,
-    size_t initial_var_count,
+    uint32_t initial_frame_offset,
     size_t max_resolutions,
     uint32_t seed) {
     switch (kind) {
         case runtime_kind::basic:
             holder.basic.emplace(
-                database, goals, initial_var_count, max_resolutions, seed);
+                database, goals, initial_frame_offset, max_resolutions, seed);
             return *holder.basic;
         case runtime_kind::ridge:
             holder.ridge.emplace(
                 database,
                 goals,
-                initial_var_count,
+                initial_frame_offset,
                 max_resolutions,
                 seed,
                 kRidgeExplorationConstant);
@@ -77,7 +77,7 @@ i_runtime& make_runtime_session(
             holder.horizon.emplace(
                 database,
                 goals,
-                initial_var_count,
+                initial_frame_offset,
                 max_resolutions,
                 seed,
                 kRidgeExplorationConstant);
@@ -186,14 +186,14 @@ struct RuntimeParamTest
     runtime_session_holder holder_;
 
     i_runtime& make_session(
-        size_t initial_var_count,
+        uint32_t initial_frame_offset,
         size_t max_resolutions = kMaxResolutions) {
         return make_runtime_session(
             holder_,
             GetParam(),
             database,
             initial_goals,
-            initial_var_count,
+            initial_frame_offset,
             max_resolutions,
             kSeed);
     }

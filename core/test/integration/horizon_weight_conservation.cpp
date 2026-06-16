@@ -25,8 +25,8 @@
 #include "infrastructure/initial_goal_activator.hpp"
 #include "infrastructure/make_initial_goal_lineage.hpp"
 #include "infrastructure/ra_rule_id_set_factory.hpp"
-#include "infrastructure/candidate_translation_maps.hpp"
-#include "infrastructure/copier.hpp"
+#include "infrastructure/candidate_frame_offsets.hpp"
+#include "infrastructure/frame_bump_allocator.hpp"
 #include "infrastructure/get_resolution_rule.hpp"
 #include "infrastructure/bind_map.hpp"
 #include "infrastructure/bind_map_factory.hpp"
@@ -34,13 +34,12 @@
 #include "infrastructure/rule_id_set_factory.hpp"
 #include "infrastructure/trail.hpp"
 #include "infrastructure/expr_pool.hpp"
-#include "infrastructure/var_sequencer.hpp"
+#include "interfaces/i_frame_allocator.hpp"
 #include "interfaces/i_log_to_current_trail_frame.hpp"
 #include "interfaces/i_make_functor.hpp"
 #include "interfaces/i_make_var.hpp"
 #include "interfaces/i_import_expr.hpp"
 #include "interfaces/i_get_expr_count.hpp"
-#include "interfaces/i_var_sequencer.hpp"
 #include "interfaces/i_activate_goal_candidates.hpp"
 #include "interfaces/i_deactivate_goal_candidates.hpp"
 #include "interfaces/i_get_initial_goal_count.hpp"
@@ -132,7 +131,7 @@ protected:
     unifier_factory unifier_factory_;
     lineage_pool lineage_pool_;
     std::unique_ptr<expr_pool> expr_pool_;
-    std::unique_ptr<var_sequencer> var_sequencer_;
+    std::unique_ptr<frame_bump_allocator> frame_allocator_;
     rule_id_set_factory rule_id_set_factory_;
     ra_rule_id_set_factory ra_rule_id_set_factory_;
     srt_active_goals srt_active_goals_;
@@ -141,7 +140,7 @@ protected:
     cumulative_grounded_weight cumulative_grounded_weight_;
     initial_goal_weight initial_goal_weight_{kTotalWeight};
     goal_candidate_rules goal_candidate_rules_{ra_rule_id_set_factory_};
-    candidate_translation_maps candidate_translation_maps_;
+    candidate_frame_offsets candidate_frame_offsets_;
     NiceMock<MockActivateGoalCandidates> activate_goal_candidates;
     NiceMock<MockDeactivateGoalCandidates> deactivate_goal_candidates;
     NiceMock<MockGetInitialGoalCount> get_initial_goal_count;
@@ -150,7 +149,6 @@ protected:
 
     std::unique_ptr<make_initial_goal_lineage> make_initial_goal_lineage_;
     std::unique_ptr<get_resolution_rule> get_resolution_rule_;
-    std::unique_ptr<copier> copier_;
     std::unique_ptr<goal_activator> goal_activator_;
     std::unique_ptr<horizon_goal_activator> horizon_goal_activator_;
     std::unique_ptr<srt_goal_deactivator> srt_goal_deactivator_;
@@ -165,9 +163,9 @@ protected:
     expr f_head{expr::var{0}};
     expr g_head{expr::var{1}};
     expr h_head{expr::var{2}};
-    rule expand_rule{&f_head, {&g_head, &h_head}};
-    rule ground_g{&g_head, {}};
-    rule ground_h{&h_head, {}};
+    rule expand_rule{&f_head, {&g_head, &h_head}, 3};
+    rule ground_g{&g_head, {}, 2};
+    rule ground_h{&h_head, {}, 3};
 
     void SetUp() override {
         loc.bind_as<i_log_to_current_trail_frame>(trail_);
@@ -177,8 +175,8 @@ protected:
         loc.bind_as<i_make_goal_lineage, i_make_resolution_lineage>(lineage_pool_);
         expr_pool_ = std::make_unique<expr_pool>();
         loc.bind_as<i_make_functor, i_make_var, i_import_expr, i_get_expr_count>(*expr_pool_);
-        var_sequencer_ = std::make_unique<var_sequencer>(loc, 0u);
-        loc.bind_as<i_var_sequencer>(*var_sequencer_);
+        frame_allocator_ = std::make_unique<frame_bump_allocator>(0u);
+        loc.bind_as<i_frame_allocator>(*frame_allocator_);
         loc.bind_as<i_db_rule_id_set_factory>(rule_id_set_factory_);
         loc.bind_as<i_candidate_rule_id_set_factory>(ra_rule_id_set_factory_);
         loc.bind_as<i_insert_active_goal, i_is_active_goal,
@@ -191,7 +189,7 @@ protected:
         loc.bind_as<i_get_initial_goal_weight>(initial_goal_weight_);
         loc.bind_as<i_get_goal_candidate_rule_ids, i_insert_goal_candidates,
             i_erase_goal_candidates>(goal_candidate_rules_);
-        loc.bind_as<i_get_candidate_translation_map, i_set_candidate_translation_map>(candidate_translation_maps_);
+        loc.bind_as<i_get_candidate_frame_offset, i_set_candidate_frame_offset>(candidate_frame_offsets_);
         loc.bind_as<i_get_initial_goal_count>(get_initial_goal_count);
         loc.bind_as<i_get_initial_goal_expr>(get_initial_goal_expr);
         loc.bind_as<i_get_rule>(get_rule);
@@ -213,8 +211,6 @@ protected:
 
         get_resolution_rule_ = std::make_unique<get_resolution_rule>(loc);
         loc.bind_as<i_get_resolution_rule>(*get_resolution_rule_);
-        copier_ = std::make_unique<copier>(loc);
-        loc.bind_as<i_copier>(*copier_);
         make_initial_goal_lineage_ = std::make_unique<make_initial_goal_lineage>(loc);
         loc.bind_as<i_make_initial_goal_lineage>(*make_initial_goal_lineage_);
 
@@ -268,6 +264,8 @@ TEST_F(HorizonWeightConservationIntegrationTest, ExpandThenGroundChildrenConserv
     srt_active_goals_.flush_srt_goal_batch();
     const goal_lineage* root = make_initial_goal_lineage_->make(0);
     const resolution_lineage* expand_rl = lineage_pool_.make_resolution_lineage(root, 0);
+    // Register frame offsets for manually-created candidates (bypass candidate_activator).
+    candidate_frame_offsets_.set(expand_rl, 0u);
     ASSERT_TRUE(srt_subgoals_activator_->activate_subgoals_and_candidates(expand_rl));
     horizon_goal_deactivator_->deactivate(root);
     expect_conserved();
@@ -276,10 +274,12 @@ TEST_F(HorizonWeightConservationIntegrationTest, ExpandThenGroundChildrenConserv
         lineage_pool_.make_goal_lineage(expand_rl, 0), 1);
     const resolution_lineage* h_rl = lineage_pool_.make_resolution_lineage(
         lineage_pool_.make_goal_lineage(expand_rl, 1), 2);
+    candidate_frame_offsets_.set(g_rl, 0u);
     ASSERT_TRUE(horizon_resolver_->resolve(g_rl));
     expect_conserved();
     EXPECT_NEAR(cumulative_grounded_weight_.get(), kTotalWeight / 2.0, kWeightEpsilon);
 
+    candidate_frame_offsets_.set(h_rl, 0u);
     ASSERT_TRUE(horizon_resolver_->resolve(h_rl));
     expect_conserved();
     EXPECT_NEAR(cumulative_grounded_weight_.get(), kTotalWeight, kWeightEpsilon);

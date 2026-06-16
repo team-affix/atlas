@@ -23,16 +23,15 @@
 #include "infrastructure/unit_goals.hpp"
 #include "infrastructure/decision_memory.hpp"
 #include "infrastructure/resolution_memory.hpp"
-#include "infrastructure/candidate_translation_maps.hpp"
+#include "infrastructure/candidate_frame_offsets.hpp"
 #include "infrastructure/expr_pool.hpp"
 #include "infrastructure/cdcl_sequencer.hpp"
-#include "infrastructure/var_sequencer.hpp"
+#include "infrastructure/frame_bump_allocator.hpp"
 #include "infrastructure/elimination_backlog.hpp"
 #include "infrastructure/cdcl_elimination_generator.hpp"
 #include "infrastructure/mhu_elimination_generator.hpp"
 #include "infrastructure/joint_elimination_generator.hpp"
 #include "infrastructure/get_resolution_rule.hpp"
-#include "infrastructure/copier.hpp"
 #include "infrastructure/conflict_detector.hpp"
 #include "infrastructure/unit_goal_detector.hpp"
 #include "infrastructure/solution_detector.hpp"
@@ -96,10 +95,10 @@
 #include "interfaces/i_clear_recorded_resolutions.hpp"
 #include "interfaces/i_get_resolution_count.hpp"
 #include "interfaces/i_derive_resolution_lemma.hpp"
-#include "interfaces/i_get_candidate_translation_map.hpp"
-#include "interfaces/i_set_candidate_translation_map.hpp"
-#include "interfaces/i_unset_candidate_translation_map.hpp"
-#include "interfaces/i_clear_candidate_translation_maps.hpp"
+#include "interfaces/i_get_candidate_frame_offset.hpp"
+#include "interfaces/i_set_candidate_frame_offset.hpp"
+#include "interfaces/i_unset_candidate_frame_offset.hpp"
+#include "interfaces/i_clear_candidate_frame_offsets.hpp"
 #include "interfaces/i_get_rule.hpp"
 #include "interfaces/i_get_goal_db_rule_ids.hpp"
 #include "interfaces/i_get_initial_goal_count.hpp"
@@ -108,7 +107,7 @@
 #include "interfaces/i_make_var.hpp"
 #include "interfaces/i_import_expr.hpp"
 #include "interfaces/i_get_expr_count.hpp"
-#include "interfaces/i_var_sequencer.hpp"
+#include "interfaces/i_frame_allocator.hpp"
 #include "interfaces/i_insert_backlogged_elimination.hpp"
 #include "interfaces/i_is_backlogged_elimination.hpp"
 #include "interfaces/i_learn_avoidance.hpp"
@@ -116,7 +115,6 @@
 #include "interfaces/i_clear_mhu_heads.hpp"
 #include "interfaces/i_elimination_generator.hpp"
 #include "interfaces/i_get_resolution_rule.hpp"
-#include "interfaces/i_copier.hpp"
 #include "interfaces/i_conflict_detector.hpp"
 #include "interfaces/i_detect_unit_goal.hpp"
 #include "interfaces/i_solution_detector.hpp"
@@ -130,6 +128,8 @@
 #include "interfaces/i_resolver.hpp"
 #include "value_objects/sim_termination.hpp"
 #include "value_objects/lemma.hpp"
+#include "infrastructure/globalizer.hpp"
+#include "infrastructure/normalizer.hpp"
 #include "functor_fixture.hpp"
 
 using ::testing::IsEmpty;
@@ -155,7 +155,7 @@ struct sim_early_wiring {
     unit_goals unit_goals_;
     decision_memory decision_memory_;
     resolution_memory resolution_memory_;
-    candidate_translation_maps candidate_translation_maps_;
+    candidate_frame_offsets candidate_frame_offsets_;
 
     sim_early_wiring(locator& loc, db& database, initial_goal_exprs& initial_goals)
         : trail_(),
@@ -170,7 +170,7 @@ struct sim_early_wiring {
           unit_goals_(),
           decision_memory_(),
           resolution_memory_(),
-          candidate_translation_maps_() {
+          candidate_frame_offsets_() {
         loc.bind_as<i_push_trail_frame, i_pop_trail_frame, i_log_to_current_trail_frame>(trail_);
         loc.bind_as<i_bind_map, i_clear_bindings>(bind_map_);
         loc.bind_as<i_bind_map_factory>(bind_map_factory_);
@@ -191,9 +191,9 @@ struct sim_early_wiring {
             i_derive_decision_lemma>(decision_memory_);
         loc.bind_as<i_record_resolution, i_clear_recorded_resolutions, i_get_resolution_count,
             i_derive_resolution_lemma>(resolution_memory_);
-        loc.bind_as<i_get_candidate_translation_map, i_set_candidate_translation_map,
-            i_unset_candidate_translation_map, i_clear_candidate_translation_maps>(
-            candidate_translation_maps_);
+        loc.bind_as<i_get_candidate_frame_offset, i_set_candidate_frame_offset,
+            i_unset_candidate_frame_offset, i_clear_candidate_frame_offsets>(
+            candidate_frame_offsets_);
         loc.bind_as<i_get_rule, i_get_goal_db_rule_ids>(database);
         loc.bind_as<i_get_initial_goal_count, i_get_initial_goal_expr>(initial_goals);
     }
@@ -201,17 +201,20 @@ struct sim_early_wiring {
 
 struct sim_pool_wiring {
     expr_pool expr_pool_;
-    var_sequencer var_sequencer_;
+    frame_bump_allocator frame_allocator_;
+    std::optional<globalizer> globalizer_;
     cdcl_sequencer cdcl_sequencer_;
     elimination_backlog elimination_backlog_;
 
     sim_pool_wiring(locator& loc)
         : expr_pool_(),
-          var_sequencer_(loc, 0),
+          frame_allocator_(0),
           cdcl_sequencer_(loc),
           elimination_backlog_(loc) {
         loc.bind_as<i_make_functor, i_make_var, i_import_expr, i_get_expr_count>(expr_pool_);
-        loc.bind_as<i_var_sequencer>(var_sequencer_);
+        loc.bind_as<i_frame_allocator>(frame_allocator_);
+        globalizer_.emplace(loc);
+        loc.bind_as<i_globalizer>(*globalizer_);
         loc.bind_as<i_cdcl_sequencer>(cdcl_sequencer_);
         loc.bind_as<i_insert_backlogged_elimination, i_is_backlogged_elimination>(
             elimination_backlog_);
@@ -233,19 +236,16 @@ struct sim_elim_wiring {
 
 struct sim_core_wiring {
     get_resolution_rule get_resolution_rule_;
-    copier copier_;
     conflict_detector conflict_detector_;
     unit_goal_detector unit_goal_detector_;
     solution_detector solution_detector_;
 
     sim_core_wiring(locator& loc)
         : get_resolution_rule_(loc),
-          copier_(loc),
           conflict_detector_(loc),
           unit_goal_detector_(loc),
           solution_detector_(loc) {
         loc.bind_as<i_get_resolution_rule>(get_resolution_rule_);
-        loc.bind_as<i_copier>(copier_);
         loc.bind_as<i_conflict_detector>(conflict_detector_);
         loc.bind_as<i_detect_unit_goal>(unit_goal_detector_);
         loc.bind_as<i_solution_detector>(solution_detector_);
@@ -845,7 +845,7 @@ TEST_F(SimIntegrationTest, RunReturnsSolvedAndBindsVarsViaMhuWhenFactUnifiesGoal
     database.push(rule{&head, {}});
 
     i_bind_map& bind_map = stack.loc.locate<i_bind_map>();
-    i_var_sequencer& seq = stack.loc.locate<i_var_sequencer>();
+    i_frame_allocator& frame_alloc = stack.loc.locate<i_frame_allocator>();
     i_make_var& make_var = stack.loc.locate<i_make_var>();
     i_make_functor& make_functor = stack.loc.locate<i_make_functor>();
 
@@ -853,15 +853,15 @@ TEST_F(SimIntegrationTest, RunReturnsSolvedAndBindsVarsViaMhuWhenFactUnifiesGoal
 
     simulation simulation{stack.loc, kDefaultMaxResolutions};
     simulation.set_up();
-    const uint32_t idx_a = seq.next();
-    const uint32_t idx_b = seq.next();
+    const uint32_t idx_a = frame_alloc.bump(1);
+    const uint32_t idx_b = frame_alloc.bump(1);
     const expr* var_a = saved_expr_pool_.make_var(idx_a);
     const expr* var_b = saved_expr_pool_.make_var(idx_b);
     initial_goals.push(saved_expr_pool_.make_functor(functors.id("f"), {var_a, var_b}));
 
     EXPECT_EQ(simulation.run(), sim_termination::solved);
-    const expr::functor& whnf_a = std::get<expr::functor>(bind_map.whnf(var_a)->content);
-    const expr::functor& whnf_b = std::get<expr::functor>(bind_map.whnf(var_b)->content);
+    const expr::functor& whnf_a = std::get<expr::functor>(bind_map.whnf({var_a, 0}).skeleton->content);
+    const expr::functor& whnf_b = std::get<expr::functor>(bind_map.whnf({var_b, 0}).skeleton->content);
     EXPECT_EQ(whnf_a.id, functors.id("abc"));
     EXPECT_TRUE(whnf_a.args.empty());
     EXPECT_EQ(whnf_b.id, functors.id("123"));
@@ -892,7 +892,7 @@ TEST_F(SimIntegrationTest, RunReturnsSolvedViaClauseBodyFactsBindingVarsWithoutD
     database.push(rule{&h_head, {}});
 
     i_bind_map& bind_map = stack.loc.locate<i_bind_map>();
-    i_var_sequencer& seq = stack.loc.locate<i_var_sequencer>();
+    i_frame_allocator& frame_alloc = stack.loc.locate<i_frame_allocator>();
     i_make_var& make_var = stack.loc.locate<i_make_var>();
     i_make_functor& make_functor = stack.loc.locate<i_make_functor>();
 
@@ -900,15 +900,15 @@ TEST_F(SimIntegrationTest, RunReturnsSolvedViaClauseBodyFactsBindingVarsWithoutD
 
     simulation simulation{stack.loc, kDefaultMaxResolutions};
     simulation.set_up();
-    const uint32_t idx_a = seq.next();
-    const uint32_t idx_b = seq.next();
+    const uint32_t idx_a = frame_alloc.bump(1);
+    const uint32_t idx_b = frame_alloc.bump(1);
     const expr* var_a = saved_expr_pool_.make_var(idx_a);
     const expr* var_b = saved_expr_pool_.make_var(idx_b);
     initial_goals.push(saved_expr_pool_.make_functor(functors.id("f"), {var_a, var_b}));
 
     EXPECT_EQ(simulation.run(), sim_termination::solved);
-    const expr::functor& whnf_a = std::get<expr::functor>(bind_map.whnf(var_a)->content);
-    const expr::functor& whnf_b = std::get<expr::functor>(bind_map.whnf(var_b)->content);
+    const expr::functor& whnf_a = std::get<expr::functor>(bind_map.whnf({var_a, 0}).skeleton->content);
+    const expr::functor& whnf_b = std::get<expr::functor>(bind_map.whnf({var_b, 0}).skeleton->content);
     EXPECT_EQ(whnf_a.id, functors.id("abc"));
     EXPECT_TRUE(whnf_a.args.empty());
     EXPECT_EQ(whnf_b.id, functors.id("123"));
@@ -939,7 +939,7 @@ TEST_F(SimIntegrationTest, RunReturnsSolvedAfterDecisionBindingVarsFromChosenFac
         stack.loc.locate<i_make_resolution_lineage>().make_resolution_lineage(gl, rule_id{1});
 
     i_bind_map& bind_map = stack.loc.locate<i_bind_map>();
-    i_var_sequencer& seq = stack.loc.locate<i_var_sequencer>();
+    i_frame_allocator& frame_alloc = stack.loc.locate<i_frame_allocator>();
     i_make_var& make_var = stack.loc.locate<i_make_var>();
     i_make_functor& make_functor = stack.loc.locate<i_make_functor>();
 
@@ -947,15 +947,15 @@ TEST_F(SimIntegrationTest, RunReturnsSolvedAfterDecisionBindingVarsFromChosenFac
 
     simulation simulation{stack.loc, kDefaultMaxResolutions};
     simulation.set_up();
-    const uint32_t idx_a = seq.next();
-    const uint32_t idx_b = seq.next();
+    const uint32_t idx_a = frame_alloc.bump(1);
+    const uint32_t idx_b = frame_alloc.bump(1);
     const expr* var_a = saved_expr_pool_.make_var(idx_a);
     const expr* var_b = saved_expr_pool_.make_var(idx_b);
     initial_goals.push(saved_expr_pool_.make_functor(functors.id("f"), {var_a, var_b}));
 
     EXPECT_EQ(simulation.run(), sim_termination::solved);
-    const expr::functor& whnf_a = std::get<expr::functor>(bind_map.whnf(var_a)->content);
-    const expr::functor& whnf_b = std::get<expr::functor>(bind_map.whnf(var_b)->content);
+    const expr::functor& whnf_a = std::get<expr::functor>(bind_map.whnf({var_a, 0}).skeleton->content);
+    const expr::functor& whnf_b = std::get<expr::functor>(bind_map.whnf({var_b, 0}).skeleton->content);
     EXPECT_EQ(whnf_a.id, functors.id("xyz"));
     EXPECT_TRUE(whnf_a.args.empty());
     EXPECT_EQ(whnf_b.id, functors.id("456"));
@@ -979,7 +979,7 @@ TEST_F(SimIntegrationTest, RunReturnsSolvedWhenMhuRejectsInconsistentRuleWithout
     database.push(rule{&head1, {}});
 
     i_bind_map& bind_map = stack.loc.locate<i_bind_map>();
-    i_var_sequencer& seq = stack.loc.locate<i_var_sequencer>();
+    i_frame_allocator& frame_alloc = stack.loc.locate<i_frame_allocator>();
     i_make_var& make_var = stack.loc.locate<i_make_var>();
     i_make_functor& make_functor = stack.loc.locate<i_make_functor>();
     i_make_initial_goal_lineage& make_initial_goal_lineage =
@@ -997,12 +997,12 @@ TEST_F(SimIntegrationTest, RunReturnsSolvedWhenMhuRejectsInconsistentRuleWithout
 
     simulation simulation{stack.loc, kDefaultMaxResolutions};
     simulation.set_up();
-    const uint32_t idx_a = seq.next();
+    const uint32_t idx_a = frame_alloc.bump(1);
     const expr* var_a = saved_expr_pool_.make_var(idx_a);
     initial_goals.push(saved_expr_pool_.make_functor(functors.id("f"), {var_a, var_a}));
 
     EXPECT_EQ(simulation.run(), sim_termination::solved);
-    const expr::functor& whnf_a = std::get<expr::functor>(bind_map.whnf(var_a)->content);
+    const expr::functor& whnf_a = std::get<expr::functor>(bind_map.whnf({var_a, 0}).skeleton->content);
     EXPECT_EQ(whnf_a.id, functors.id("abc"));
     EXPECT_TRUE(whnf_a.args.empty());
     EXPECT_THAT(derive_resolution_lemma.derive_resolution_lemma().get_resolutions(),
@@ -1034,7 +1034,7 @@ TEST_F(SimIntegrationTest, RunDeactivatesRuleOneWhenDecisionResolvesRuleZeroOnMh
     i_derive_resolution_lemma& derive_resolution_lemma =
         stack.loc.locate<i_derive_resolution_lemma>();
     i_bind_map& bind_map = stack.loc.locate<i_bind_map>();
-    i_var_sequencer& seq = stack.loc.locate<i_var_sequencer>();
+    i_frame_allocator& frame_alloc = stack.loc.locate<i_frame_allocator>();
     i_make_var& make_var = stack.loc.locate<i_make_var>();
     i_make_functor& make_functor = stack.loc.locate<i_make_functor>();
 
@@ -1048,15 +1048,15 @@ TEST_F(SimIntegrationTest, RunDeactivatesRuleOneWhenDecisionResolvesRuleZeroOnMh
 
     simulation simulation{stack.loc, kDefaultMaxResolutions};
     simulation.set_up();
-    const expr* var_a = saved_expr_pool_.make_var(seq.next());
-    const expr* var_b = saved_expr_pool_.make_var(seq.next());
+    const expr* var_a = saved_expr_pool_.make_var(frame_alloc.bump(1));
+    const expr* var_b = saved_expr_pool_.make_var(frame_alloc.bump(1));
     initial_goals.push(saved_expr_pool_.make_functor(functors.id("f"), {var_a, var_b}));
 
     EXPECT_EQ(simulation.run(), sim_termination::solved);
     EXPECT_THAT(derive_resolution_lemma.derive_resolution_lemma().get_resolutions(),
         UnorderedElementsAre(rl0));
-    const expr::functor& whnf_a = std::get<expr::functor>(bind_map.whnf(var_a)->content);
-    const expr::functor& whnf_b = std::get<expr::functor>(bind_map.whnf(var_b)->content);
+    const expr::functor& whnf_a = std::get<expr::functor>(bind_map.whnf({var_a, 0}).skeleton->content);
+    const expr::functor& whnf_b = std::get<expr::functor>(bind_map.whnf({var_b, 0}).skeleton->content);
     EXPECT_EQ(whnf_a.id, functors.id("abc"));
     EXPECT_EQ(whnf_b.id, functors.id("123"));
     simulation.tear_down();
@@ -1091,7 +1091,7 @@ TEST_F(SimIntegrationTest, RunDeactivatesCrossGoalCandidateOnMhuIncompatibleHead
     i_make_resolution_lineage& make_resolution_lineage =
         stack.loc.locate<i_make_resolution_lineage>();
     i_bind_map& bind_map = stack.loc.locate<i_bind_map>();
-    i_var_sequencer& seq = stack.loc.locate<i_var_sequencer>();
+    i_frame_allocator& frame_alloc = stack.loc.locate<i_frame_allocator>();
     i_make_var& make_var = stack.loc.locate<i_make_var>();
     i_make_functor& make_functor = stack.loc.locate<i_make_functor>();
 
@@ -1103,12 +1103,12 @@ TEST_F(SimIntegrationTest, RunDeactivatesCrossGoalCandidateOnMhuIncompatibleHead
 
     simulation simulation{stack.loc, kDefaultMaxResolutions};
     simulation.set_up();
-    const expr* var_a = saved_expr_pool_.make_var(seq.next());
+    const expr* var_a = saved_expr_pool_.make_var(frame_alloc.bump(1));
     initial_goals.push(saved_expr_pool_.make_functor(functors.id("f"), {var_a}));
     initial_goals.push(saved_expr_pool_.make_functor(functors.id("g"), {var_a}));
 
     EXPECT_EQ(simulation.run(), sim_termination::solved);
-    const expr::functor& whnf_a = std::get<expr::functor>(bind_map.whnf(var_a)->content);
+    const expr::functor& whnf_a = std::get<expr::functor>(bind_map.whnf({var_a, 0}).skeleton->content);
     EXPECT_EQ(whnf_a.id, functors.id("abc"));
     simulation.tear_down();
 }
@@ -1126,7 +1126,7 @@ TEST_F(SimIntegrationTest, RunReturnsSolvedBindingVarInNestedFunctorArgWithoutDe
     database.push(rule{&head, {}});
 
     i_bind_map& bind_map = stack.loc.locate<i_bind_map>();
-    i_var_sequencer& seq = stack.loc.locate<i_var_sequencer>();
+    i_frame_allocator& frame_alloc = stack.loc.locate<i_frame_allocator>();
     i_make_var& make_var = stack.loc.locate<i_make_var>();
     i_make_functor& make_functor = stack.loc.locate<i_make_functor>();
 
@@ -1134,13 +1134,13 @@ TEST_F(SimIntegrationTest, RunReturnsSolvedBindingVarInNestedFunctorArgWithoutDe
 
     simulation simulation{stack.loc, kDefaultMaxResolutions};
     simulation.set_up();
-    const uint32_t idx_a = seq.next();
+    const uint32_t idx_a = frame_alloc.bump(1);
     const expr* var_a = saved_expr_pool_.make_var(idx_a);
     const expr* g_a = saved_expr_pool_.make_functor(functors.id("g"), {var_a});
     initial_goals.push(saved_expr_pool_.make_functor(functors.id("f"), {g_a}));
 
     EXPECT_EQ(simulation.run(), sim_termination::solved);
-    const expr::functor& whnf_a = std::get<expr::functor>(bind_map.whnf(var_a)->content);
+    const expr::functor& whnf_a = std::get<expr::functor>(bind_map.whnf({var_a, 0}).skeleton->content);
     EXPECT_EQ(whnf_a.id, functors.id("abc"));
     EXPECT_TRUE(whnf_a.args.empty());
     simulation.tear_down();
@@ -1159,7 +1159,7 @@ TEST_F(SimIntegrationTest, RunReturnsSolvedBindingRemainingVarWhenGoalIsPartiall
     database.push(rule{&head, {}});
 
     i_bind_map& bind_map = stack.loc.locate<i_bind_map>();
-    i_var_sequencer& seq = stack.loc.locate<i_var_sequencer>();
+    i_frame_allocator& frame_alloc = stack.loc.locate<i_frame_allocator>();
     i_make_var& make_var = stack.loc.locate<i_make_var>();
     i_make_functor& make_functor = stack.loc.locate<i_make_functor>();
 
@@ -1168,12 +1168,12 @@ TEST_F(SimIntegrationTest, RunReturnsSolvedBindingRemainingVarWhenGoalIsPartiall
     simulation simulation{stack.loc, kDefaultMaxResolutions};
     simulation.set_up();
     const expr* abc_pool = saved_expr_pool_.make_functor(functors.id("abc"), {});
-    const uint32_t idx_b = seq.next();
+    const uint32_t idx_b = frame_alloc.bump(1);
     const expr* var_b = saved_expr_pool_.make_var(idx_b);
     initial_goals.push(saved_expr_pool_.make_functor(functors.id("f"), {abc_pool, var_b}));
 
     EXPECT_EQ(simulation.run(), sim_termination::solved);
-    const expr::functor& whnf_b = std::get<expr::functor>(bind_map.whnf(var_b)->content);
+    const expr::functor& whnf_b = std::get<expr::functor>(bind_map.whnf({var_b, 0}).skeleton->content);
     EXPECT_EQ(whnf_b.id, functors.id("123"));
     EXPECT_TRUE(whnf_b.args.empty());
     simulation.tear_down();
@@ -1199,14 +1199,14 @@ TEST_F(SimIntegrationTest, RunReturnsConflictedWhenClauseBodyGoalHasNoUnifyingFa
 
     EXPECT_CALL(stack.decision_generator, generate()).Times(0);
 
-    i_var_sequencer& seq = stack.loc.locate<i_var_sequencer>();
+    i_frame_allocator& frame_alloc = stack.loc.locate<i_frame_allocator>();
     i_make_var& make_var = stack.loc.locate<i_make_var>();
     i_make_functor& make_functor = stack.loc.locate<i_make_functor>();
 
     simulation simulation{stack.loc, kDefaultMaxResolutions};
     simulation.set_up();
-    const expr* var_a = saved_expr_pool_.make_var(seq.next());
-    const expr* var_b = saved_expr_pool_.make_var(seq.next());
+    const expr* var_a = saved_expr_pool_.make_var(frame_alloc.bump(1));
+    const expr* var_b = saved_expr_pool_.make_var(frame_alloc.bump(1));
     initial_goals.push(saved_expr_pool_.make_functor(functors.id("f"), {var_a, var_b}));
 
     EXPECT_EQ(simulation.run(), sim_termination::conflicted);
@@ -1281,7 +1281,7 @@ TEST_F(SimIntegrationTest, RunReturnsSolvedAfterDecisionOnBodyGoalWithTwoFacts) 
         stack.loc.locate<i_make_resolution_lineage>();
     i_make_goal_lineage& make_goal_lineage = stack.loc.locate<i_make_goal_lineage>();
     i_bind_map& bind_map = stack.loc.locate<i_bind_map>();
-    i_var_sequencer& seq = stack.loc.locate<i_var_sequencer>();
+    i_frame_allocator& frame_alloc = stack.loc.locate<i_frame_allocator>();
     i_make_var& make_var = stack.loc.locate<i_make_var>();
     i_make_functor& make_functor = stack.loc.locate<i_make_functor>();
 
@@ -1296,13 +1296,13 @@ TEST_F(SimIntegrationTest, RunReturnsSolvedAfterDecisionOnBodyGoalWithTwoFacts) 
 
     simulation simulation{stack.loc, kDefaultMaxResolutions};
     simulation.set_up();
-    const expr* var_a = saved_expr_pool_.make_var(seq.next());
-    const expr* var_b = saved_expr_pool_.make_var(seq.next());
+    const expr* var_a = saved_expr_pool_.make_var(frame_alloc.bump(1));
+    const expr* var_b = saved_expr_pool_.make_var(frame_alloc.bump(1));
     initial_goals.push(saved_expr_pool_.make_functor(functors.id("f"), {var_a, var_b}));
 
     EXPECT_EQ(simulation.run(), sim_termination::solved);
-    const expr::functor& whnf_a = std::get<expr::functor>(bind_map.whnf(var_a)->content);
-    const expr::functor& whnf_b = std::get<expr::functor>(bind_map.whnf(var_b)->content);
+    const expr::functor& whnf_a = std::get<expr::functor>(bind_map.whnf({var_a, 0}).skeleton->content);
+    const expr::functor& whnf_b = std::get<expr::functor>(bind_map.whnf({var_b, 0}).skeleton->content);
     EXPECT_EQ(whnf_a.id, functors.id("xyz"));
     EXPECT_TRUE(whnf_a.args.empty());
     EXPECT_EQ(whnf_b.id, functors.id("123"));
@@ -1333,7 +1333,7 @@ TEST_F(SimIntegrationTest, RunReturnsSolvedWhenSharedVarLinksTwoGoalsWithoutDeci
     database.push(rule{&g_head1, {}});
 
     i_bind_map& bind_map = stack.loc.locate<i_bind_map>();
-    i_var_sequencer& seq = stack.loc.locate<i_var_sequencer>();
+    i_frame_allocator& frame_alloc = stack.loc.locate<i_frame_allocator>();
     i_make_var& make_var = stack.loc.locate<i_make_var>();
     i_make_functor& make_functor = stack.loc.locate<i_make_functor>();
 
@@ -1341,16 +1341,16 @@ TEST_F(SimIntegrationTest, RunReturnsSolvedWhenSharedVarLinksTwoGoalsWithoutDeci
 
     simulation simulation{stack.loc, kDefaultMaxResolutions};
     simulation.set_up();
-    const expr* var_a = saved_expr_pool_.make_var(seq.next());
-    const expr* var_b = saved_expr_pool_.make_var(seq.next());
-    const expr* var_c = saved_expr_pool_.make_var(seq.next());
+    const expr* var_a = saved_expr_pool_.make_var(frame_alloc.bump(1));
+    const expr* var_b = saved_expr_pool_.make_var(frame_alloc.bump(1));
+    const expr* var_c = saved_expr_pool_.make_var(frame_alloc.bump(1));
     initial_goals.push(saved_expr_pool_.make_functor(functors.id("f"), {var_a, var_b}));
     initial_goals.push(saved_expr_pool_.make_functor(functors.id("g"), {var_b, var_c}));
 
     EXPECT_EQ(simulation.run(), sim_termination::solved);
-    const expr::functor& whnf_a = std::get<expr::functor>(bind_map.whnf(var_a)->content);
-    const expr::functor& whnf_b = std::get<expr::functor>(bind_map.whnf(var_b)->content);
-    const expr::functor& whnf_c = std::get<expr::functor>(bind_map.whnf(var_c)->content);
+    const expr::functor& whnf_a = std::get<expr::functor>(bind_map.whnf({var_a, 0}).skeleton->content);
+    const expr::functor& whnf_b = std::get<expr::functor>(bind_map.whnf({var_b, 0}).skeleton->content);
+    const expr::functor& whnf_c = std::get<expr::functor>(bind_map.whnf({var_c, 0}).skeleton->content);
     EXPECT_EQ(whnf_a.id, functors.id("abc"));
     EXPECT_TRUE(whnf_a.args.empty());
     EXPECT_EQ(whnf_b.id, functors.id("123"));
@@ -1394,7 +1394,7 @@ TEST_F(SimIntegrationTest, RunReturnsSolvedWhenCdclAndMhuReduceGoalGCandidatesWi
     i_derive_resolution_lemma& derive_resolution_lemma =
         stack.loc.locate<i_derive_resolution_lemma>();
     i_bind_map& bind_map = stack.loc.locate<i_bind_map>();
-    i_var_sequencer& seq = stack.loc.locate<i_var_sequencer>();
+    i_frame_allocator& frame_alloc = stack.loc.locate<i_frame_allocator>();
     i_make_var& make_var = stack.loc.locate<i_make_var>();
     i_make_functor& make_functor = stack.loc.locate<i_make_functor>();
 
@@ -1413,7 +1413,7 @@ TEST_F(SimIntegrationTest, RunReturnsSolvedWhenCdclAndMhuReduceGoalGCandidatesWi
 
     simulation simulation{stack.loc, kDefaultMaxResolutions};
     simulation.set_up();
-    const expr* var_a = saved_expr_pool_.make_var(seq.next());
+    const expr* var_a = saved_expr_pool_.make_var(frame_alloc.bump(1));
     const expr* xyz = saved_expr_pool_.make_functor(functors.id("xyz"), {});
     initial_goals.push(saved_expr_pool_.make_functor(functors.id("f"), {}));
     initial_goals.push(saved_expr_pool_.make_functor(functors.id("g"), {var_a, xyz}));
@@ -1421,7 +1421,7 @@ TEST_F(SimIntegrationTest, RunReturnsSolvedWhenCdclAndMhuReduceGoalGCandidatesWi
     EXPECT_EQ(simulation.run(), sim_termination::solved);
     EXPECT_THAT(derive_resolution_lemma.derive_resolution_lemma().get_resolutions(),
         UnorderedElementsAre(rl_f_0, rl_g_2));
-    const expr::functor& whnf_a = std::get<expr::functor>(bind_map.whnf(var_a)->content);
+    const expr::functor& whnf_a = std::get<expr::functor>(bind_map.whnf({var_a, 0}).skeleton->content);
     EXPECT_EQ(whnf_a.id, functors.id("def"));
     EXPECT_TRUE(whnf_a.args.empty());
     simulation.tear_down();
@@ -1450,7 +1450,7 @@ TEST_F(SimIntegrationTest, RunReturnsSolvedBuildingListOfFiveAbcWithoutDecisions
     database.push(rule{&head1, {&body1}});
 
     i_bind_map& bind_map = stack.loc.locate<i_bind_map>();
-    i_var_sequencer& seq = stack.loc.locate<i_var_sequencer>();
+    i_frame_allocator& frame_alloc = stack.loc.locate<i_frame_allocator>();
     i_make_var& make_var = stack.loc.locate<i_make_var>();
     i_make_functor& make_functor = stack.loc.locate<i_make_functor>();
 
@@ -1465,23 +1465,24 @@ TEST_F(SimIntegrationTest, RunReturnsSolvedBuildingListOfFiveAbcWithoutDecisions
     for (int i = 0; i < kListLength; ++i)
         len = saved_expr_pool_.make_functor(functors.id("suc"), {len});
     const expr* abc = saved_expr_pool_.make_functor(functors.id("abc"), {});
-    const expr* var_r = saved_expr_pool_.make_var(seq.next());
+    const expr* var_r = saved_expr_pool_.make_var(frame_alloc.bump(1));
     initial_goals.push(saved_expr_pool_.make_functor(functors.id("make_list"), {len, abc, var_r}));
 
     EXPECT_EQ(simulation.run(), sim_termination::solved);
 
-    const expr* tail = bind_map.whnf(var_r);
+    normalizer norm{stack.loc};
+    const expr* tail = norm.normalize(var_r);
     for (int i = 0; i < kListLength; ++i) {
         const expr::functor& cell = std::get<expr::functor>(tail->content);
         ASSERT_EQ(cell.id, functors.id("cons"));
         ASSERT_EQ(cell.args.size(), 2u);
         const expr::functor& head =
-            std::get<expr::functor>(bind_map.whnf(cell.args[0])->content);
+            std::get<expr::functor>(norm.normalize(cell.args[0])->content);
         EXPECT_EQ(head.id, functors.id("abc"));
         EXPECT_TRUE(head.args.empty());
-        tail = bind_map.whnf(cell.args[1]);
+        tail = norm.normalize(cell.args[1]);
     }
-    const expr::functor& nil_tail = std::get<expr::functor>(bind_map.whnf(tail)->content);
+    const expr::functor& nil_tail = std::get<expr::functor>(norm.normalize(tail)->content);
     EXPECT_EQ(nil_tail.id, functors.id("nil"));
     EXPECT_TRUE(nil_tail.args.empty());
 
@@ -1708,7 +1709,7 @@ TEST_F(SimIntegrationTest, RunReturnsConflictedAfterPartialProgressWhenDerivedGo
     database.push(rule{&h_head, {}});
     database.push(rule{&g_head, {}});
 
-    i_var_sequencer& seq = stack.loc.locate<i_var_sequencer>();
+    i_frame_allocator& frame_alloc = stack.loc.locate<i_frame_allocator>();
     i_make_var& make_var = stack.loc.locate<i_make_var>();
     i_make_functor& make_functor = stack.loc.locate<i_make_functor>();
 
@@ -1716,7 +1717,7 @@ TEST_F(SimIntegrationTest, RunReturnsConflictedAfterPartialProgressWhenDerivedGo
 
     simulation simulation{stack.loc, kDefaultMaxResolutions};
     simulation.set_up();
-    const expr* var_a = saved_expr_pool_.make_var(seq.next());
+    const expr* var_a = saved_expr_pool_.make_var(frame_alloc.bump(1));
     initial_goals.push(saved_expr_pool_.make_functor(functors.id("f"), {var_a}));
     initial_goals.push(saved_expr_pool_.make_functor(functors.id("g"), {var_a}));
 
@@ -1796,13 +1797,13 @@ TEST_F(SimIntegrationTest, TearDownLifecycleClearsEphemeralStoresAfterSolvedRun)
   database.push(rule{&head, {}});
 
   i_bind_map& bind_map = stack.loc.locate<i_bind_map>();
-  i_var_sequencer& seq = stack.loc.locate<i_var_sequencer>();
+  i_frame_allocator& frame_alloc = stack.loc.locate<i_frame_allocator>();
   i_make_var& make_var = stack.loc.locate<i_make_var>();
   i_make_functor& make_functor = stack.loc.locate<i_make_functor>();
 
-  const uint32_t idx_test = seq.next();
+  const uint32_t idx_test = frame_alloc.bump(1);
   const expr* test_var = saved_expr_pool_.make_var(idx_test);
-  initial_goals.push(saved_expr_pool_.make_functor(functors.id("f"), {test_var, saved_expr_pool_.make_var(seq.next())}));
+  initial_goals.push(saved_expr_pool_.make_functor(functors.id("f"), {test_var, saved_expr_pool_.make_var(frame_alloc.bump(1))}));
 
   EXPECT_CALL(stack.decision_generator, generate()).Times(0);
 
@@ -1816,7 +1817,7 @@ TEST_F(SimIntegrationTest, TearDownLifecycleClearsEphemeralStoresAfterSolvedRun)
   EXPECT_EQ(stack.loc.locate<i_get_resolution_count>().get_resolution_count(), 0u);
   EXPECT_THAT(stack.loc.locate<i_derive_resolution_lemma>().derive_resolution_lemma().get_resolutions(),
       IsEmpty());
-  const expr* whnf = bind_map.whnf(test_var);
+  const expr* whnf = bind_map.whnf({test_var, 0}).skeleton;
   ASSERT_TRUE(std::holds_alternative<expr::var>(whnf->content));
   EXPECT_EQ(std::get<expr::var>(whnf->content).index, idx_test);
 }
@@ -1836,7 +1837,7 @@ TEST_F(SimIntegrationTest, TearDownLifecycleRetainsInFrameExprPoolGrowth) {
   database.push(rule{&head0, {}});
   database.push(rule{&head1, {&body1}});
 
-  i_var_sequencer& seq = stack.loc.locate<i_var_sequencer>();
+  i_frame_allocator& frame_alloc = stack.loc.locate<i_frame_allocator>();
   i_make_var& make_var = stack.loc.locate<i_make_var>();
   i_make_functor& make_functor = stack.loc.locate<i_make_functor>();
 
@@ -1853,7 +1854,7 @@ TEST_F(SimIntegrationTest, TearDownLifecycleRetainsInFrameExprPoolGrowth) {
   for (int i = 0; i < kListLength; ++i)
     len = saved_expr_pool_.make_functor(functors.id("suc"), {len});
   const expr* abc = saved_expr_pool_.make_functor(functors.id("abc"), {});
-  const expr* var_r = saved_expr_pool_.make_var(seq.next());
+  const expr* var_r = saved_expr_pool_.make_var(frame_alloc.bump(1));
   initial_goals.push(saved_expr_pool_.make_functor(functors.id("make_list"), {len, abc, var_r}));
 
   EXPECT_EQ(simulation.run(), sim_termination::solved);
@@ -1872,25 +1873,25 @@ TEST_F(SimIntegrationTest, TearDownLifecycleResetsVarSequencerWhenIncrementedInF
   database.push(rule{&f_head, {&g_body}});
   database.push(rule{&g_head, {}});
 
-  i_var_sequencer& seq = stack.loc.locate<i_var_sequencer>();
+  i_frame_allocator& frame_alloc = stack.loc.locate<i_frame_allocator>();
   i_make_var& make_var = stack.loc.locate<i_make_var>();
   i_make_functor& make_functor = stack.loc.locate<i_make_functor>();
 
-  (void)seq.next();
-  (void)seq.next();
-  static constexpr uint32_t kExpectedAfterTeardown = 2;
+  // In the real system, initial_frame_offset is baked into the frame_bump_allocator at
+  // construction; here the wiring starts at 0. We verify that sim-frame bumps are undone.
+  static constexpr uint32_t kExpectedAfterTeardown = 0;
 
   EXPECT_CALL(stack.decision_generator, generate()).Times(0);
 
   simulation simulation{stack.loc, kDefaultMaxResolutions};
   simulation.set_up();
-  const expr* var_in_frame = saved_expr_pool_.make_var(seq.next());
+  const expr* var_in_frame = saved_expr_pool_.make_var(frame_alloc.bump(1));
   initial_goals.push(saved_expr_pool_.make_functor(functors.id("f"), {var_in_frame}));
 
   EXPECT_EQ(simulation.run(), sim_termination::solved);
   simulation.tear_down();
 
-  EXPECT_EQ(seq.next(), kExpectedAfterTeardown);
+  EXPECT_EQ(frame_alloc.bump(1), kExpectedAfterTeardown);
 }
 
 TEST_F(SimIntegrationTest, BaseFrameCdclLearnSurvivesLifecycleTearDown) {
@@ -1955,15 +1956,15 @@ TEST_F(SimIntegrationTest, IdenticalSimCycleLifecycleRunsCleanAfterTearDown) {
   database.push(rule{&head, {}});
 
   i_bind_map& bind_map = stack.loc.locate<i_bind_map>();
-  i_var_sequencer& seq = stack.loc.locate<i_var_sequencer>();
+  i_frame_allocator& frame_alloc = stack.loc.locate<i_frame_allocator>();
   i_make_var& make_var = stack.loc.locate<i_make_var>();
   i_make_functor& make_functor = stack.loc.locate<i_make_functor>();
   i_get_resolution_count& get_resolution_count =
       stack.loc.locate<i_get_resolution_count>();
   i_get_decision_count& get_decision_count = stack.loc.locate<i_get_decision_count>();
 
-  const uint32_t idx_a = seq.next();
-  const uint32_t idx_b = seq.next();
+  const uint32_t idx_a = frame_alloc.bump(1);
+  const uint32_t idx_b = frame_alloc.bump(1);
   const expr* var_a = saved_expr_pool_.make_var(idx_a);
   const expr* var_b = saved_expr_pool_.make_var(idx_b);
   const expr* goal = saved_expr_pool_.make_functor(functors.id("f"), {var_a, var_b});
@@ -1978,9 +1979,9 @@ TEST_F(SimIntegrationTest, IdenticalSimCycleLifecycleRunsCleanAfterTearDown) {
   const size_t res_count_1 = get_resolution_count.get_resolution_count();
   const size_t dec_count_1 = get_decision_count.count();
   const uint32_t whnf_a_1 =
-      std::get<expr::functor>(bind_map.whnf(var_a)->content).id;
+      std::get<expr::functor>(bind_map.whnf({var_a, 0}).skeleton->content).id;
   const uint32_t whnf_b_1 =
-      std::get<expr::functor>(bind_map.whnf(var_b)->content).id;
+      std::get<expr::functor>(bind_map.whnf({var_b, 0}).skeleton->content).id;
   simulation.tear_down();
 
   simulation.set_up();
@@ -1988,9 +1989,9 @@ TEST_F(SimIntegrationTest, IdenticalSimCycleLifecycleRunsCleanAfterTearDown) {
   EXPECT_EQ(get_resolution_count.get_resolution_count(), res_count_1);
   EXPECT_EQ(get_decision_count.count(), dec_count_1);
   const uint32_t whnf_a_2 =
-      std::get<expr::functor>(bind_map.whnf(var_a)->content).id;
+      std::get<expr::functor>(bind_map.whnf({var_a, 0}).skeleton->content).id;
   const uint32_t whnf_b_2 =
-      std::get<expr::functor>(bind_map.whnf(var_b)->content).id;
+      std::get<expr::functor>(bind_map.whnf({var_b, 0}).skeleton->content).id;
   EXPECT_EQ(whnf_a_2, whnf_a_1);
   EXPECT_EQ(whnf_b_2, whnf_b_1);
   simulation.tear_down();
@@ -2016,7 +2017,7 @@ TEST_F(SimIntegrationTest, RunReturnsSolvedStressListOfTwentyAbcWithoutDecisions
   database.push(rule{&head1, {&body1}});
 
   i_bind_map& bind_map = stack.loc.locate<i_bind_map>();
-  i_var_sequencer& seq = stack.loc.locate<i_var_sequencer>();
+  i_frame_allocator& frame_alloc = stack.loc.locate<i_frame_allocator>();
   i_make_var& make_var = stack.loc.locate<i_make_var>();
   i_make_functor& make_functor = stack.loc.locate<i_make_functor>();
 
@@ -2029,23 +2030,24 @@ TEST_F(SimIntegrationTest, RunReturnsSolvedStressListOfTwentyAbcWithoutDecisions
   const expr* zero_pool = saved_expr_pool_.make_functor(functors.id("zero"), {});
   const expr* len = make_suc_n(functors, make_functor, zero_pool, kListLength);
   const expr* abc = saved_expr_pool_.make_functor(functors.id("abc"), {});
-  const expr* var_r = saved_expr_pool_.make_var(seq.next());
+  const expr* var_r = saved_expr_pool_.make_var(frame_alloc.bump(1));
   initial_goals.push(saved_expr_pool_.make_functor(functors.id("make_list"), {len, abc, var_r}));
 
   EXPECT_EQ(simulation.run(), sim_termination::solved);
 
-  const expr* tail = bind_map.whnf(var_r);
+  normalizer norm{stack.loc};
+  const expr* tail = norm.normalize(var_r);
   for (int i = 0; i < kListLength; ++i) {
     const expr::functor& cell = std::get<expr::functor>(tail->content);
     ASSERT_EQ(cell.id, k_cons_functor_id);
     ASSERT_EQ(cell.args.size(), 2u);
     const expr::functor& head_cell =
-        std::get<expr::functor>(bind_map.whnf(cell.args[0])->content);
+        std::get<expr::functor>(norm.normalize(cell.args[0])->content);
     EXPECT_EQ(head_cell.id, functors.id("abc"));
     EXPECT_TRUE(head_cell.args.empty());
-    tail = bind_map.whnf(cell.args[1]);
+    tail = norm.normalize(cell.args[1]);
   }
-  const expr::functor& nil_tail = std::get<expr::functor>(bind_map.whnf(tail)->content);
+  const expr::functor& nil_tail = std::get<expr::functor>(norm.normalize(tail)->content);
   EXPECT_EQ(nil_tail.id, functors.id("nil"));
   EXPECT_TRUE(nil_tail.args.empty());
   simulation.tear_down();
@@ -2158,7 +2160,7 @@ TEST_F(SimIntegrationTest, RunReturnsSolvedStressLongSharedVarChainWithoutDecisi
   database.push(rule{&g5_head, {}});
 
   i_bind_map& bind_map = stack.loc.locate<i_bind_map>();
-  i_var_sequencer& seq = stack.loc.locate<i_var_sequencer>();
+  i_frame_allocator& frame_alloc = stack.loc.locate<i_frame_allocator>();
   i_make_var& make_var = stack.loc.locate<i_make_var>();
   i_make_functor& make_functor = stack.loc.locate<i_make_functor>();
 
@@ -2168,14 +2170,14 @@ TEST_F(SimIntegrationTest, RunReturnsSolvedStressLongSharedVarChainWithoutDecisi
   simulation.set_up();
   std::vector<const expr*> vars;
   for (int i = 0; i <= kChainGoals; ++i)
-    vars.push_back(saved_expr_pool_.make_var(seq.next()));
+    vars.push_back(saved_expr_pool_.make_var(frame_alloc.bump(1)));
   for (int i = 0; i < kChainGoals; ++i)
     initial_goals.push(saved_expr_pool_.make_functor(
         functors.id(("g" + std::to_string(i)).c_str()), {vars[i], vars[i + 1]}));
 
   EXPECT_EQ(simulation.run(), sim_termination::solved);
   const expr::functor& whnf_end =
-      std::get<expr::functor>(bind_map.whnf(vars[kChainGoals])->content);
+      std::get<expr::functor>(bind_map.whnf({vars[kChainGoals], 0}).skeleton->content);
   EXPECT_EQ(whnf_end.id, functors.id("t6"));
   EXPECT_TRUE(whnf_end.args.empty());
   simulation.tear_down();
@@ -2193,7 +2195,7 @@ TEST_F(SimIntegrationTest, RunReturnsSolvedStressDiamondSharedVarWithoutDecision
   database.push(rule{&h_head, {}});
 
   i_bind_map& bind_map = stack.loc.locate<i_bind_map>();
-  i_var_sequencer& seq = stack.loc.locate<i_var_sequencer>();
+  i_frame_allocator& frame_alloc = stack.loc.locate<i_frame_allocator>();
   i_make_var& make_var = stack.loc.locate<i_make_var>();
   i_make_functor& make_functor = stack.loc.locate<i_make_functor>();
 
@@ -2201,16 +2203,16 @@ TEST_F(SimIntegrationTest, RunReturnsSolvedStressDiamondSharedVarWithoutDecision
 
   simulation simulation{stack.loc, kDefaultMaxResolutions};
   simulation.set_up();
-  const expr* var_a = saved_expr_pool_.make_var(seq.next());
-  const expr* var_b = saved_expr_pool_.make_var(seq.next());
-  const expr* var_c = saved_expr_pool_.make_var(seq.next());
+  const expr* var_a = saved_expr_pool_.make_var(frame_alloc.bump(1));
+  const expr* var_b = saved_expr_pool_.make_var(frame_alloc.bump(1));
+  const expr* var_c = saved_expr_pool_.make_var(frame_alloc.bump(1));
   initial_goals.push(saved_expr_pool_.make_functor(functors.id("f"), {var_a, var_c}));
   initial_goals.push(saved_expr_pool_.make_functor(functors.id("g"), {var_a, var_b}));
   initial_goals.push(saved_expr_pool_.make_functor(functors.id("h"), {var_b, var_c}));
 
   EXPECT_EQ(simulation.run(), sim_termination::solved);
-  const expr::functor& whnf_a = std::get<expr::functor>(bind_map.whnf(var_a)->content);
-  const expr::functor& whnf_c = std::get<expr::functor>(bind_map.whnf(var_c)->content);
+  const expr::functor& whnf_a = std::get<expr::functor>(bind_map.whnf({var_a, 0}).skeleton->content);
+  const expr::functor& whnf_c = std::get<expr::functor>(bind_map.whnf({var_c, 0}).skeleton->content);
   EXPECT_EQ(whnf_a.id, functors.id("abc"));
   EXPECT_EQ(whnf_c.id, functors.id("xyz"));
   simulation.tear_down();
@@ -2348,7 +2350,7 @@ TEST_F(SimIntegrationTest, RunReturnsSolvedStressCdclMhuManyGroundHeadsOnSharedV
       stack.loc.locate<i_make_resolution_lineage>();
   i_learn_avoidance& learn_avoidance = stack.loc.locate<i_learn_avoidance>();
   i_bind_map& bind_map = stack.loc.locate<i_bind_map>();
-  i_var_sequencer& seq = stack.loc.locate<i_var_sequencer>();
+  i_frame_allocator& frame_alloc = stack.loc.locate<i_frame_allocator>();
   i_make_var& make_var = stack.loc.locate<i_make_var>();
   i_make_functor& make_functor = stack.loc.locate<i_make_functor>();
 
@@ -2369,17 +2371,17 @@ TEST_F(SimIntegrationTest, RunReturnsSolvedStressCdclMhuManyGroundHeadsOnSharedV
 
   simulation simulation{stack.loc, kDefaultMaxResolutions};
   simulation.set_up();
-  const expr* var_a = saved_expr_pool_.make_var(seq.next());
-  const expr* var_b = saved_expr_pool_.make_var(seq.next());
-  const expr* var_c = saved_expr_pool_.make_var(seq.next());
+  const expr* var_a = saved_expr_pool_.make_var(frame_alloc.bump(1));
+  const expr* var_b = saved_expr_pool_.make_var(frame_alloc.bump(1));
+  const expr* var_c = saved_expr_pool_.make_var(frame_alloc.bump(1));
   const expr* xyz = saved_expr_pool_.make_functor(functors.id("xyz"), {});
   initial_goals.push(saved_expr_pool_.make_functor(functors.id("f"), {}));
   initial_goals.push(saved_expr_pool_.make_functor(functors.id("g"), {var_a, var_b, var_c}));
 
   EXPECT_EQ(simulation.run(), sim_termination::solved);
-  const expr::functor& whnf_a = std::get<expr::functor>(bind_map.whnf(var_a)->content);
-  const expr::functor& whnf_b = std::get<expr::functor>(bind_map.whnf(var_b)->content);
-  const expr::functor& whnf_c = std::get<expr::functor>(bind_map.whnf(var_c)->content);
+  const expr::functor& whnf_a = std::get<expr::functor>(bind_map.whnf({var_a, 0}).skeleton->content);
+  const expr::functor& whnf_b = std::get<expr::functor>(bind_map.whnf({var_b, 0}).skeleton->content);
+  const expr::functor& whnf_c = std::get<expr::functor>(bind_map.whnf({var_c, 0}).skeleton->content);
   EXPECT_EQ(whnf_b.id, functors.id("xyz"));
   EXPECT_EQ(whnf_c.id, functors.id("pqr"));
   EXPECT_EQ(whnf_a.id, functors.id("def"));

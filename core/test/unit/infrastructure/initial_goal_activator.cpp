@@ -22,7 +22,7 @@ struct MockMakeInitialGoalLineage : public i_make_initial_goal_lineage {
 };
 
 struct MockSetGoalExpr : public i_set_goal_expr {
-    MOCK_METHOD(void, set, (const goal_lineage*, const expr*), (override));
+    MOCK_METHOD(void, set, (const goal_lineage*, framed_expr), (override));
 };
 
 struct MockInsertGoalCandidates : public i_insert_goal_candidates {
@@ -62,7 +62,7 @@ struct InitialGoalActivatorTest : public ::testing::Test {
 TEST_F(InitialGoalActivatorTest, ActivatesOneInitialGoal) {
     EXPECT_CALL(get_initial_goal_expr, get(kIdx)).WillOnce(Return(&e0));
     EXPECT_CALL(make_initial_goal_lineage, make(kIdx)).WillOnce(Return(&gl0));
-    EXPECT_CALL(set_goal_expr, set(&gl0, &e0)).Times(1);
+    EXPECT_CALL(set_goal_expr, set(&gl0, framed_expr{&e0, 0})).Times(1);
     EXPECT_CALL(insert_goal_candidates, insert(&gl0)).Times(1);
     EXPECT_CALL(insert_active_goal, insert_active_goal(&gl0)).Times(1);
 
@@ -76,7 +76,7 @@ TEST_F(InitialGoalActivatorTest, ActivatesDifferentSubgoalIndex) {
 
     EXPECT_CALL(get_initial_goal_expr, get(kAltIdx)).WillOnce(Return(&e3));
     EXPECT_CALL(make_initial_goal_lineage, make(kAltIdx)).WillOnce(Return(&gl3));
-    EXPECT_CALL(set_goal_expr, set(&gl3, &e3)).Times(1);
+    EXPECT_CALL(set_goal_expr, set(&gl3, framed_expr{&e3, 0})).Times(1);
     EXPECT_CALL(insert_goal_candidates, insert(&gl3)).Times(1);
     EXPECT_CALL(insert_active_goal, insert_active_goal(&gl3)).Times(1);
 

@@ -13,7 +13,7 @@ struct ridge_runtime : i_runtime {
     ridge_runtime(
         db& database,
         initial_goal_exprs& goals,
-        size_t initial_var_count,
+        uint32_t initial_frame_offset,
         size_t max_resolutions,
         uint32_t random_seed,
         double exploration_constant);

@@ -26,6 +26,8 @@
 #include "interfaces/i_push_trail_frame.hpp"
 #include "interfaces/i_pop_trail_frame.hpp"
 #include "interfaces/i_clear_bindings.hpp"
+#include "interfaces/i_clear_candidate_frame_offsets.hpp"
+#include "interfaces/i_frame_allocator.hpp"
 #include "value_objects/elimination_result.hpp"
 
 using ::testing::Return;
@@ -127,8 +129,8 @@ struct MockClearActiveGoals : public i_clear_active_goals {
     MOCK_METHOD(void, clear_active_goals, (), (override));
 };
 
-struct MockClearCandidateTranslationMaps : public i_clear_candidate_translation_maps {
-    MOCK_METHOD(void, clear_candidate_translation_maps, (), (override));
+struct MockClearCandidateFrameOffsets : public i_clear_candidate_frame_offsets {
+    MOCK_METHOD(void, clear_candidate_frame_offsets, (), (override));
 };
 
 struct MockClearMhuHeads : public i_clear_mhu_heads {
@@ -141,6 +143,12 @@ struct MockClearBindings : public i_clear_bindings {
 
 struct MockTrimUnpinnedLineages : public i_trim_unpinned_lineages {
     MOCK_METHOD(void, trim, (), (override));
+};
+
+struct MockFrameAllocator : public i_frame_allocator {
+    MOCK_METHOD(uint32_t, bump, (uint32_t), (override));
+    MOCK_METHOD(uint32_t, peek, (), (const, override));
+    MOCK_METHOD(void, reset, (), (override));
 };
 
 struct simulation {
@@ -180,10 +188,11 @@ struct SimTest : public ::testing::Test {
     testing::NiceMock<MockClearGoalCandidateRuleIds> clear_goal_candidate_rule_ids;
     testing::NiceMock<MockClearGoalExprs> clear_goal_exprs;
     testing::NiceMock<MockClearActiveGoals> clear_active_goals;
-    testing::NiceMock<MockClearCandidateTranslationMaps> clear_candidate_translation_maps;
+    testing::NiceMock<MockClearCandidateFrameOffsets> clear_candidate_frame_offsets;
     testing::NiceMock<MockClearMhuHeads> clear_mhu_heads;
     testing::NiceMock<MockClearBindings> clear_bindings;
     testing::NiceMock<MockTrimUnpinnedLineages> trim_unpinned_lineages;
+    testing::NiceMock<MockFrameAllocator> frame_allocator;
 
     locator loc;
 
@@ -209,10 +218,11 @@ struct SimTest : public ::testing::Test {
         loc.bind_as<i_clear_goal_candidate_rule_ids>(clear_goal_candidate_rule_ids);
         loc.bind_as<i_clear_goal_exprs>(clear_goal_exprs);
         loc.bind_as<i_clear_active_goals>(clear_active_goals);
-        loc.bind_as<i_clear_candidate_translation_maps>(clear_candidate_translation_maps);
+        loc.bind_as<i_clear_candidate_frame_offsets>(clear_candidate_frame_offsets);
         loc.bind_as<i_clear_mhu_heads>(clear_mhu_heads);
         loc.bind_as<i_clear_bindings>(clear_bindings);
         loc.bind_as<i_trim_unpinned_lineages>(trim_unpinned_lineages);
+        loc.bind_as<i_frame_allocator>(frame_allocator);
     }
 
     simulation make_simulation(size_t max_resolutions = kMaxResolutions) {
@@ -276,7 +286,7 @@ TEST_F(SimTest, TearDownPopsTrailAndClearsNonBacktrackedStores) {
     EXPECT_CALL(clear_goal_candidate_rule_ids, clear_goal_candidate_rule_ids()).Times(1);
     EXPECT_CALL(clear_goal_exprs, clear_goal_exprs()).Times(1);
     EXPECT_CALL(clear_active_goals, clear_active_goals()).Times(1);
-    EXPECT_CALL(clear_candidate_translation_maps, clear_candidate_translation_maps()).Times(1);
+    EXPECT_CALL(clear_candidate_frame_offsets, clear_candidate_frame_offsets()).Times(1);
     EXPECT_CALL(clear_mhu_heads, clear_mhu_heads()).Times(1);
     EXPECT_CALL(clear_bindings, clear_bindings()).Times(1);
     EXPECT_CALL(trim_unpinned_lineages, trim()).Times(1);

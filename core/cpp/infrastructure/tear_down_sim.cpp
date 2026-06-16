@@ -8,10 +8,11 @@ tear_down_sim::tear_down_sim(locator& loc)
       clear_goal_candidate_rule_ids_(loc.locate<i_clear_goal_candidate_rule_ids>()),
       clear_goal_exprs_(loc.locate<i_clear_goal_exprs>()),
       clear_active_goals_(loc.locate<i_clear_active_goals>()),
-      clear_candidate_translation_maps_(loc.locate<i_clear_candidate_translation_maps>()),
+      clear_candidate_frame_offsets_(loc.locate<i_clear_candidate_frame_offsets>()),
       clear_mhu_heads_(loc.locate<i_clear_mhu_heads>()),
       clear_bindings_(loc.locate<i_clear_bindings>()),
-      trim_unpinned_lineages_(loc.locate<i_trim_unpinned_lineages>()) {}
+      trim_unpinned_lineages_(loc.locate<i_trim_unpinned_lineages>()),
+      frame_allocator_(loc.locate<i_frame_allocator>()) {}
 
 void tear_down_sim::tear_down() {
     pop_trail_frame_.pop();
@@ -21,8 +22,9 @@ void tear_down_sim::tear_down() {
     clear_goal_candidate_rule_ids_.clear_goal_candidate_rule_ids();
     clear_goal_exprs_.clear_goal_exprs();
     clear_active_goals_.clear_active_goals();
-    clear_candidate_translation_maps_.clear_candidate_translation_maps();
+    clear_candidate_frame_offsets_.clear_candidate_frame_offsets();
     clear_mhu_heads_.clear_mhu_heads();
     clear_bindings_.clear_bindings();
+    frame_allocator_.reset();
     trim_unpinned_lineages_.trim();
 }

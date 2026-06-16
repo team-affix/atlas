@@ -262,7 +262,7 @@ private:
 struct BasicManifestIntegrationTest : public ::testing::Test {
     test_functors functors;
     static constexpr size_t kMaxResolutions = 32;
-    static constexpr size_t kInitialVarCount = 0;
+    static constexpr uint32_t kInitialFrameOffset = 0;
     static constexpr uint32_t kSeed = 42;
 
     db database;
@@ -286,7 +286,7 @@ TEST_F(BasicManifestIntegrationTest, WiringCdclIsLearnAvoidanceNotJoint) {
      * initial goals: (none)
      * rules: (none)
      */
-    basic_manifest manifest{database, initial_goals, kInitialVarCount, kMaxResolutions, kSeed};
+    basic_manifest manifest{database, initial_goals, kInitialFrameOffset, kMaxResolutions, kSeed};
     EXPECT_EQ(static_cast<i_learn_avoidance *>(&manifest.cdcl_), &manifest.loc_.locate<i_learn_avoidance>());
     EXPECT_NE(static_cast<void*>(&manifest.loc_.locate<i_learn_avoidance>()),
         static_cast<void*>(&manifest.loc_.locate<i_elimination_generator>()));
@@ -298,7 +298,7 @@ TEST_F(BasicManifestIntegrationTest, WiringJointIsEliminationGeneratorNotCdcl) {
      * initial goals: (none)
      * rules: (none)
      */
-    basic_manifest manifest{database, initial_goals, kInitialVarCount, kMaxResolutions, kSeed};
+    basic_manifest manifest{database, initial_goals, kInitialFrameOffset, kMaxResolutions, kSeed};
     EXPECT_EQ(static_cast<i_elimination_generator *>(&manifest.joint_), &manifest.loc_.locate<i_elimination_generator>());
 }
 
@@ -308,7 +308,7 @@ TEST_F(BasicManifestIntegrationTest, WiringTrailSharedForPushPopLog) {
      * initial goals: (none)
      * rules: (none)
      */
-    basic_manifest manifest{database, initial_goals, kInitialVarCount, kMaxResolutions, kSeed};
+    basic_manifest manifest{database, initial_goals, kInitialFrameOffset, kMaxResolutions, kSeed};
     EXPECT_EQ(static_cast<i_push_trail_frame *>(&manifest.trail_), &manifest.loc_.locate<i_push_trail_frame>());
     EXPECT_EQ(static_cast<i_pop_trail_frame *>(&manifest.trail_), &manifest.loc_.locate<i_pop_trail_frame>());
     EXPECT_EQ(static_cast<i_log_to_current_trail_frame *>(&manifest.trail_), &manifest.loc_.locate<i_log_to_current_trail_frame>());
@@ -320,7 +320,7 @@ TEST_F(BasicManifestIntegrationTest, WiringDecisionMemorySharedForRecordCountDer
      * initial goals: (none)
      * rules: (none)
      */
-    basic_manifest manifest{database, initial_goals, kInitialVarCount, kMaxResolutions, kSeed};
+    basic_manifest manifest{database, initial_goals, kInitialFrameOffset, kMaxResolutions, kSeed};
     EXPECT_EQ(static_cast<i_record_decision *>(&manifest.decision_memory_), &manifest.loc_.locate<i_record_decision>());
     EXPECT_EQ(static_cast<i_clear_recorded_decisions *>(&manifest.decision_memory_), &manifest.loc_.locate<i_clear_recorded_decisions>());
     EXPECT_EQ(static_cast<i_get_decision_count *>(&manifest.decision_memory_), &manifest.loc_.locate<i_get_decision_count>());
@@ -333,7 +333,7 @@ TEST_F(BasicManifestIntegrationTest, WiringSimSharedForSetUpRunTearDown) {
      * initial goals: (none)
      * rules: (none)
      */
-    basic_manifest manifest{database, initial_goals, kInitialVarCount, kMaxResolutions, kSeed};
+    basic_manifest manifest{database, initial_goals, kInitialFrameOffset, kMaxResolutions, kSeed};
     EXPECT_EQ(static_cast<i_set_up_sim *>(&manifest.set_up_sim_), &manifest.loc_.locate<i_set_up_sim>());
     EXPECT_EQ(static_cast<i_tear_down_sim *>(&manifest.tear_down_sim_), &manifest.loc_.locate<i_tear_down_sim>());
     EXPECT_EQ(static_cast<i_run_sim *>(&manifest.run_sim_), &manifest.loc_.locate<i_run_sim>());
@@ -345,7 +345,7 @@ TEST_F(BasicManifestIntegrationTest, WiringMhuSharedForHeadOps) {
      * initial goals: (none)
      * rules: (none)
      */
-    basic_manifest manifest{database, initial_goals, kInitialVarCount, kMaxResolutions, kSeed};
+    basic_manifest manifest{database, initial_goals, kInitialFrameOffset, kMaxResolutions, kSeed};
     EXPECT_EQ(static_cast<i_try_add_mhu_head *>(&manifest.mhu_), &manifest.loc_.locate<i_try_add_mhu_head>());
     EXPECT_EQ(static_cast<i_clear_mhu_heads *>(&manifest.mhu_), &manifest.loc_.locate<i_clear_mhu_heads>());
 }
@@ -356,7 +356,7 @@ TEST_F(BasicManifestIntegrationTest, WiringLineagePoolSharedForMakePinTrim) {
      * initial goals: (none)
      * rules: (none)
      */
-    basic_manifest manifest{database, initial_goals, kInitialVarCount, kMaxResolutions, kSeed};
+    basic_manifest manifest{database, initial_goals, kInitialFrameOffset, kMaxResolutions, kSeed};
     EXPECT_EQ(static_cast<i_make_goal_lineage *>(&manifest.lineage_pool_), &manifest.loc_.locate<i_make_goal_lineage>());
     EXPECT_EQ(static_cast<i_make_resolution_lineage *>(&manifest.lineage_pool_), &manifest.loc_.locate<i_make_resolution_lineage>());
     EXPECT_EQ(static_cast<i_pin_goal_lineage *>(&manifest.lineage_pool_), &manifest.loc_.locate<i_pin_goal_lineage>());
@@ -370,7 +370,7 @@ TEST_F(BasicManifestIntegrationTest, WiringSolverIsISolve) {
      * initial goals: (none)
      * rules: (none)
      */
-    basic_manifest manifest{database, initial_goals, kInitialVarCount, kMaxResolutions, kSeed};
+    basic_manifest manifest{database, initial_goals, kInitialFrameOffset, kMaxResolutions, kSeed};
     EXPECT_EQ(static_cast<i_solve *>(&manifest.solver_), &manifest.loc_.locate<i_solve>());
 }
 
@@ -381,7 +381,7 @@ TEST_F(BasicManifestIntegrationTest, WiringConstructsWithEmptyDbAndNoGoals) {
      * rules: (none)
      */
     EXPECT_NO_THROW(
-        (basic_manifest{database, initial_goals, kInitialVarCount, kMaxResolutions, kSeed}));
+        (basic_manifest{database, initial_goals, kInitialFrameOffset, kMaxResolutions, kSeed}));
 }
 
 TEST_F(BasicManifestIntegrationTest, WiringResolutionMemorySharedForRecordDerive) {
@@ -390,7 +390,7 @@ TEST_F(BasicManifestIntegrationTest, WiringResolutionMemorySharedForRecordDerive
      * initial goals: (none)
      * rules: (none)
      */
-    basic_manifest manifest{database, initial_goals, kInitialVarCount, kMaxResolutions, kSeed};
+    basic_manifest manifest{database, initial_goals, kInitialFrameOffset, kMaxResolutions, kSeed};
     EXPECT_EQ(static_cast<i_record_resolution *>(&manifest.resolution_memory_), &manifest.loc_.locate<i_record_resolution>());
     EXPECT_EQ(static_cast<i_clear_recorded_resolutions *>(&manifest.resolution_memory_), &manifest.loc_.locate<i_clear_recorded_resolutions>());
     EXPECT_EQ(static_cast<i_derive_resolution_lemma *>(&manifest.resolution_memory_), &manifest.loc_.locate<i_derive_resolution_lemma>());
@@ -403,7 +403,7 @@ TEST_F(BasicManifestIntegrationTest, WiringBindMapSharedForWhnfAndClear) {
      * initial goals: (none)
      * rules: (none)
      */
-    basic_manifest manifest{database, initial_goals, kInitialVarCount, kMaxResolutions, kSeed};
+    basic_manifest manifest{database, initial_goals, kInitialFrameOffset, kMaxResolutions, kSeed};
     EXPECT_EQ(static_cast<i_bind_map *>(&manifest.bind_map_), &manifest.loc_.locate<i_bind_map>());
     EXPECT_EQ(static_cast<i_clear_bindings *>(&manifest.bind_map_), &manifest.loc_.locate<i_clear_bindings>());
 }
@@ -414,7 +414,7 @@ TEST_F(BasicManifestIntegrationTest, WiringResolverAndRouterBound) {
      * initial goals: (none)
      * rules: (none)
      */
-    basic_manifest manifest{database, initial_goals, kInitialVarCount, kMaxResolutions, kSeed};
+    basic_manifest manifest{database, initial_goals, kInitialFrameOffset, kMaxResolutions, kSeed};
     EXPECT_EQ(static_cast<i_resolver *>(&manifest.resolver_), &manifest.loc_.locate<i_resolver>());
     EXPECT_EQ(static_cast<i_elimination_router *>(&manifest.elimination_router_), &manifest.loc_.locate<i_elimination_router>());
 }
@@ -425,7 +425,7 @@ TEST_F(BasicManifestIntegrationTest, WiringRandomDecisionGeneratorIsGenerateDeci
      * initial goals: (none)
      * rules: (none)
      */
-    basic_manifest manifest{database, initial_goals, kInitialVarCount, kMaxResolutions, kSeed};
+    basic_manifest manifest{database, initial_goals, kInitialFrameOffset, kMaxResolutions, kSeed};
     EXPECT_EQ(static_cast<i_generate_decision *>(&manifest.random_decision_generator_), &manifest.loc_.locate<i_generate_decision>());
 }
 
@@ -435,7 +435,7 @@ TEST_F(BasicManifestIntegrationTest, WiringMaxResolutionsStored) {
      * initial goals: (none)
      * rules: (none)
      */
-    basic_manifest manifest{database, initial_goals, kInitialVarCount, kMaxResolutions, kSeed};
+    basic_manifest manifest{database, initial_goals, kInitialFrameOffset, kMaxResolutions, kSeed};
     EXPECT_EQ(manifest.max_resolutions_, kMaxResolutions);
 }
 
@@ -445,7 +445,7 @@ TEST_F(BasicManifestIntegrationTest, WiringBindMapAndExprPoolSharedViaLocator) {
      * initial goals: (none)
      * rules: (none)
      */
-    basic_manifest manifest{database, initial_goals, kInitialVarCount, kMaxResolutions, kSeed};
+    basic_manifest manifest{database, initial_goals, kInitialFrameOffset, kMaxResolutions, kSeed};
     EXPECT_EQ(static_cast<i_bind_map *>(&manifest.bind_map_), &manifest.loc_.locate<i_bind_map>());
     EXPECT_EQ(static_cast<i_bind_map_factory *>(&manifest.bind_map_factory_), &manifest.loc_.locate<i_bind_map_factory>());
     EXPECT_EQ(static_cast<i_make_functor *>(&manifest.expr_pool_), &manifest.loc_.locate<i_make_functor>());
@@ -460,7 +460,7 @@ TEST_F(BasicManifestIntegrationTest, SimLifecycleTrailDepthRestoresAfterEmptyRun
      * initial goals: (none)
      * rules: (none)
      */
-    basic_manifest manifest{database, initial_goals, kInitialVarCount, kMaxResolutions, kSeed};
+    basic_manifest manifest{database, initial_goals, kInitialFrameOffset, kMaxResolutions, kSeed};
     const size_t depth_before = manifest.trail_.depth();
     manifest.set_up_sim_.set_up();
     EXPECT_EQ(manifest.run_sim_.run(), sim_termination::solved);
@@ -476,7 +476,7 @@ TEST_F(BasicManifestIntegrationTest, SimLifecycleTrailDepthRestoresAfterConflict
      */
     const expr* goal = saved_expr_pool_.make_functor(functors.id("f"), {});
     initial_goals.push(goal);
-    basic_manifest manifest{database, initial_goals, kInitialVarCount, kMaxResolutions, kSeed};
+    basic_manifest manifest{database, initial_goals, kInitialFrameOffset, kMaxResolutions, kSeed};
     const size_t depth_before = manifest.trail_.depth();
     manifest.set_up_sim_.set_up();
     EXPECT_EQ(manifest.run_sim_.run(), sim_termination::conflicted);
@@ -497,7 +497,7 @@ TEST_F(BasicManifestIntegrationTest, SimLifecycleTrailDepthRestoresAfterDepthExc
     initial_goals.push(goal);
     database.push(rule{f_head, {f_body}});
     static constexpr size_t kLowBudget = 4;
-    basic_manifest manifest{database, initial_goals, kInitialVarCount, kLowBudget, kSeed};
+    basic_manifest manifest{database, initial_goals, kInitialFrameOffset, kLowBudget, kSeed};
     const size_t depth_before = manifest.trail_.depth();
     manifest.set_up_sim_.set_up();
     EXPECT_EQ(manifest.run_sim_.run(), sim_termination::depth_exceeded);
@@ -517,11 +517,11 @@ TEST_F(BasicManifestIntegrationTest, SimLifecycleClearsEphemeralStoresAfterSolve
     const expr* head = saved_expr_pool_.make_functor(functors.id("f"), {abc, _123});
     database.push(rule{head, {}});
 
-    basic_manifest manifest{database, initial_goals, kInitialVarCount, kMaxResolutions, kSeed};
-    const uint32_t idx_test = manifest.var_sequencer_.next();
+    basic_manifest manifest{database, initial_goals, kInitialFrameOffset, kMaxResolutions, kSeed};
+    const uint32_t idx_test = manifest.frame_allocator_.bump(1);
     const expr* test_var = saved_expr_pool_.make_var(idx_test);
     initial_goals.push(saved_expr_pool_.make_functor(functors.id("f"), {test_var,
-        saved_expr_pool_.make_var(manifest.var_sequencer_.next())}));
+        saved_expr_pool_.make_var(manifest.frame_allocator_.bump(1))}));
 
     manifest.set_up_sim_.set_up();
     EXPECT_EQ(manifest.run_sim_.run(), sim_termination::solved);
@@ -532,7 +532,7 @@ TEST_F(BasicManifestIntegrationTest, SimLifecycleClearsEphemeralStoresAfterSolve
     EXPECT_EQ(manifest.resolution_memory_.get_resolution_count(), 0u);
     EXPECT_THAT(
         manifest.resolution_memory_.derive_resolution_lemma().get_resolutions(), IsEmpty());
-    const expr* whnf = manifest.bind_map_.whnf(test_var);
+    const expr* whnf = manifest.bind_map_.whnf({test_var, 0}).skeleton;
     ASSERT_TRUE(std::holds_alternative<expr::var>(whnf->content));
     EXPECT_EQ(std::get<expr::var>(whnf->content).index, idx_test);
 }
@@ -549,9 +549,9 @@ TEST_F(BasicManifestIntegrationTest, SimLifecycleBaseFrameVarsSurviveTearDown) {
     const expr* head = saved_expr_pool_.make_functor(functors.id("f"), {abc, _123});
     database.push(rule{head, {}});
 
-    basic_manifest manifest{database, initial_goals, kInitialVarCount, kMaxResolutions, kSeed};
-    const uint32_t idx_a = manifest.var_sequencer_.next();
-    const uint32_t idx_b = manifest.var_sequencer_.next();
+    basic_manifest manifest{database, initial_goals, kInitialFrameOffset, kMaxResolutions, kSeed};
+    const uint32_t idx_a = manifest.frame_allocator_.bump(1);
+    const uint32_t idx_b = manifest.frame_allocator_.bump(1);
     const expr* var_a = saved_expr_pool_.make_var(idx_a);
     const expr* var_b = saved_expr_pool_.make_var(idx_b);
     initial_goals.push(saved_expr_pool_.make_functor(functors.id("f"), {var_a, var_b}));
@@ -559,17 +559,17 @@ TEST_F(BasicManifestIntegrationTest, SimLifecycleBaseFrameVarsSurviveTearDown) {
     manifest.set_up_sim_.set_up();
     EXPECT_EQ(manifest.run_sim_.run(), sim_termination::solved);
     const uint32_t whnf_a_1 =
-        std::get<expr::functor>(manifest.bind_map_.whnf(var_a)->content).id;
+        std::get<expr::functor>(manifest.bind_map_.whnf({var_a, 0}).skeleton->content).id;
     const uint32_t whnf_b_1 =
-        std::get<expr::functor>(manifest.bind_map_.whnf(var_b)->content).id;
+        std::get<expr::functor>(manifest.bind_map_.whnf({var_b, 0}).skeleton->content).id;
     manifest.tear_down_sim_.tear_down();
 
     manifest.set_up_sim_.set_up();
     EXPECT_EQ(manifest.run_sim_.run(), sim_termination::solved);
     const uint32_t whnf_a_2 =
-        std::get<expr::functor>(manifest.bind_map_.whnf(var_a)->content).id;
+        std::get<expr::functor>(manifest.bind_map_.whnf({var_a, 0}).skeleton->content).id;
     const uint32_t whnf_b_2 =
-        std::get<expr::functor>(manifest.bind_map_.whnf(var_b)->content).id;
+        std::get<expr::functor>(manifest.bind_map_.whnf({var_b, 0}).skeleton->content).id;
     EXPECT_EQ(whnf_a_2, whnf_a_1);
     EXPECT_EQ(whnf_b_2, whnf_b_1);
     manifest.tear_down_sim_.tear_down();
@@ -597,7 +597,7 @@ TEST_F(BasicManifestIntegrationTest, SimLifecycleExprPoolGrowthPersistsAfterTear
     database.push(rule{head0, {}});
     database.push(rule{head1, {body1}});
 
-    basic_manifest manifest{database, initial_goals, kInitialVarCount, kMaxResolutions, kSeed};
+    basic_manifest manifest{database, initial_goals, kInitialFrameOffset, kMaxResolutions, kSeed};
     const size_t expr_before = manifest.expr_pool_.size();
 
     manifest.set_up_sim_.set_up();
@@ -606,7 +606,7 @@ TEST_F(BasicManifestIntegrationTest, SimLifecycleExprPoolGrowthPersistsAfterTear
     for (int i = 0; i < 5; ++i)
         len = saved_expr_pool_.make_functor(functors.id("suc"), {len});
     const expr* abc = saved_expr_pool_.make_functor(functors.id("abc"), {});
-    const expr* var_r = saved_expr_pool_.make_var(manifest.var_sequencer_.next());
+    const expr* var_r = saved_expr_pool_.make_var(manifest.frame_allocator_.bump(1));
     initial_goals.push(saved_expr_pool_.make_functor(functors.id("make_list"), {len, abc, var_r}));
 
     EXPECT_EQ(manifest.run_sim_.run(), sim_termination::solved);
@@ -627,9 +627,9 @@ TEST_F(BasicManifestIntegrationTest, SimMhuBindsThroughManifest) {
     const expr* head = saved_expr_pool_.make_functor(functors.id("f"), {abc, _123});
     database.push(rule{head, {}});
 
-    basic_manifest manifest{database, initial_goals, kInitialVarCount, kMaxResolutions, kSeed};
-    const uint32_t idx_a = manifest.var_sequencer_.next();
-    const uint32_t idx_b = manifest.var_sequencer_.next();
+    basic_manifest manifest{database, initial_goals, kInitialFrameOffset, kMaxResolutions, kSeed};
+    const uint32_t idx_a = manifest.frame_allocator_.bump(1);
+    const uint32_t idx_b = manifest.frame_allocator_.bump(1);
     const expr* var_a = saved_expr_pool_.make_var(idx_a);
     const expr* var_b = saved_expr_pool_.make_var(idx_b);
     initial_goals.push(saved_expr_pool_.make_functor(functors.id("f"), {var_a, var_b}));
@@ -637,9 +637,9 @@ TEST_F(BasicManifestIntegrationTest, SimMhuBindsThroughManifest) {
     manifest.set_up_sim_.set_up();
     EXPECT_EQ(manifest.run_sim_.run(), sim_termination::solved);
     const expr::functor& whnf_a =
-        std::get<expr::functor>(manifest.bind_map_.whnf(var_a)->content);
+        std::get<expr::functor>(manifest.bind_map_.whnf({var_a, 0}).skeleton->content);
     const expr::functor& whnf_b =
-        std::get<expr::functor>(manifest.bind_map_.whnf(var_b)->content);
+        std::get<expr::functor>(manifest.bind_map_.whnf({var_b, 0}).skeleton->content);
     EXPECT_EQ(whnf_a.id, functors.id("abc"));
     EXPECT_EQ(whnf_b.id, functors.id("123"));
     manifest.tear_down_sim_.tear_down();
@@ -661,7 +661,7 @@ TEST_F(BasicManifestIntegrationTest, SimMhuDeactivationRemovesSiblingFromFrontie
     database.push(rule{head0, {}});
     database.push(rule{head1, {}});
 
-    basic_manifest manifest{database, initial_goals, kInitialVarCount, kMaxResolutions, kSeed};
+    basic_manifest manifest{database, initial_goals, kInitialFrameOffset, kMaxResolutions, kSeed};
     const goal_lineage* gl = manifest.make_initial_goal_lineage_.make(0);
     const resolution_lineage* rl0 =
         manifest.lineage_pool_.make_resolution_lineage(gl, rule_id{0});
@@ -669,8 +669,8 @@ TEST_F(BasicManifestIntegrationTest, SimMhuDeactivationRemovesSiblingFromFrontie
         manifest.lineage_pool_.make_resolution_lineage(gl, rule_id{1});
 
     manifest.set_up_sim_.set_up();
-    const expr* var_a = saved_expr_pool_.make_var(manifest.var_sequencer_.next());
-    const expr* var_b = saved_expr_pool_.make_var(manifest.var_sequencer_.next());
+    const expr* var_a = saved_expr_pool_.make_var(manifest.frame_allocator_.bump(1));
+    const expr* var_b = saved_expr_pool_.make_var(manifest.frame_allocator_.bump(1));
     initial_goals.push(saved_expr_pool_.make_functor(functors.id("f"), {var_a, var_b}));
 
     EXPECT_EQ(manifest.run_sim_.run(), sim_termination::solved);
@@ -700,7 +700,7 @@ TEST_F(BasicManifestIntegrationTest, SimRandomDecisionGeneratorPicksBranchWithFi
     database.push(rule{f_head0, {}});
     database.push(rule{f_head1, {}});
 
-    basic_manifest manifest{database, initial_goals, kInitialVarCount, kMaxResolutions, kSeed};
+    basic_manifest manifest{database, initial_goals, kInitialFrameOffset, kMaxResolutions, kSeed};
     manifest.set_up_sim_.set_up();
     EXPECT_EQ(manifest.run_sim_.run(), sim_termination::solved);
     EXPECT_EQ(manifest.decision_memory_.count(), 1u);
@@ -725,10 +725,10 @@ TEST_F(BasicManifestIntegrationTest, BindingsBeforeTearDown) {
     const expr* head = saved_expr_pool_.make_functor(functors.id("f"), {abc, _123});
     database.push(rule{head, {}});
 
-    basic_manifest manifest{database, initial_goals, kInitialVarCount, kMaxResolutions, kSeed};
+    basic_manifest manifest{database, initial_goals, kInitialFrameOffset, kMaxResolutions, kSeed};
     normalizer normalizer{manifest.loc_};
-    const uint32_t idx_a = manifest.var_sequencer_.next();
-    const uint32_t idx_b = manifest.var_sequencer_.next();
+    const uint32_t idx_a = manifest.frame_allocator_.bump(1);
+    const uint32_t idx_b = manifest.frame_allocator_.bump(1);
     const expr* var_a = saved_expr_pool_.make_var(idx_a);
     const expr* var_b = saved_expr_pool_.make_var(idx_b);
     initial_goals.push(saved_expr_pool_.make_functor(functors.id("f"), {var_a, var_b}));
@@ -745,9 +745,9 @@ TEST_F(BasicManifestIntegrationTest, BindingsBeforeTearDown) {
 
     sm.resume();
     EXPECT_TRUE(std::holds_alternative<expr::var>(
-        manifest.bind_map_.whnf(saved_expr_pool_.make_var(idx_a))->content));
+        manifest.bind_map_.whnf({saved_expr_pool_.make_var(idx_a), 0}).skeleton->content));
     EXPECT_TRUE(std::holds_alternative<expr::var>(
-        manifest.bind_map_.whnf(saved_expr_pool_.make_var(idx_b))->content));
+        manifest.bind_map_.whnf({saved_expr_pool_.make_var(idx_b), 0}).skeleton->content));
 }
 
 TEST_F(BasicManifestIntegrationTest, TickCdclAvoidancesPersistAcrossTearDown) {
@@ -772,7 +772,7 @@ TEST_F(BasicManifestIntegrationTest, TickCdclAvoidancesPersistAcrossTearDown) {
     database.push(rule{g_head2, {}});
     database.push(rule{g_head3, {}});
 
-    basic_manifest manifest{database, initial_goals, kInitialVarCount, kMaxResolutions, kSeed};
+    basic_manifest manifest{database, initial_goals, kInitialFrameOffset, kMaxResolutions, kSeed};
     const goal_lineage* gl0 = manifest.make_initial_goal_lineage_.make(0);
     const goal_lineage* gl1 = manifest.make_initial_goal_lineage_.make(1);
     const resolution_lineage* rl_g0_0 =
@@ -812,7 +812,7 @@ TEST_F(BasicManifestIntegrationTest, TickBacklogsEliminationForInactiveGoal) {
     database.push(rule{f_head0, {}});
     database.push(rule{f_head1, {}});
 
-    basic_manifest manifest{database, initial_goals, kInitialVarCount, kMaxResolutions, kSeed};
+    basic_manifest manifest{database, initial_goals, kInitialFrameOffset, kMaxResolutions, kSeed};
     const goal_lineage* gl = manifest.make_initial_goal_lineage_.make(0);
     const resolution_lineage* rl0 =
         manifest.lineage_pool_.make_resolution_lineage(gl, rule_id{0});
@@ -851,7 +851,7 @@ TEST_F(BasicManifestIntegrationTest, BackloggedCandidateAlreadyDeactivatedOnReel
     database.push(rule{g_head1, {}});
     database.push(rule{g_head2, {}});
 
-    basic_manifest manifest{database, initial_goals, kInitialVarCount, kMaxResolutions, kSeed};
+    basic_manifest manifest{database, initial_goals, kInitialFrameOffset, kMaxResolutions, kSeed};
     const goal_lineage* gl_f = manifest.make_initial_goal_lineage_.make(0);
     const goal_lineage* gl_g = manifest.make_initial_goal_lineage_.make(1);
     const resolution_lineage* rl_f_0 =
@@ -891,7 +891,7 @@ TEST_F(BasicManifestIntegrationTest, TickDecisionLemmaLineagesPinnedBeforeTrim) 
     database.push(rule{g_head2, {}});
     database.push(rule{g_head3, {}});
 
-    basic_manifest manifest{database, initial_goals, kInitialVarCount, kMaxResolutions, kSeed};
+    basic_manifest manifest{database, initial_goals, kInitialFrameOffset, kMaxResolutions, kSeed};
     const goal_lineage* gl0 = manifest.make_initial_goal_lineage_.make(0);
     const goal_lineage* gl1 = manifest.make_initial_goal_lineage_.make(1);
     const resolution_lineage* rl_g0_0 =
@@ -933,7 +933,7 @@ TEST_F(BasicManifestIntegrationTest, TickSecondBranchDiffersOnDuplicateRuleProbl
 
     static const std::set<rule_id> kBranches{rule_id{0}, rule_id{1}};
 
-    basic_manifest manifest{database, initial_goals, kInitialVarCount, kMaxResolutions, kSeed};
+    basic_manifest manifest{database, initial_goals, kInitialFrameOffset, kMaxResolutions, kSeed};
     auto sm = manifest.solver_.solve();
     sm.resume();
     ASSERT_TRUE(sm.has_yield());
@@ -981,7 +981,7 @@ TEST_F(BasicManifestIntegrationTest, SolverVacuousSolvedOnEmptyProblem) {
      * initial goals: (none)
      * rules: (none)
      */
-    basic_manifest manifest{database, initial_goals, kInitialVarCount, kMaxResolutions, kSeed};
+    basic_manifest manifest{database, initial_goals, kInitialFrameOffset, kMaxResolutions, kSeed};
     auto sm = manifest.solver_.solve();
     sm.resume();
     ASSERT_TRUE(sm.has_yield());
@@ -1003,7 +1003,7 @@ TEST_F(BasicManifestIntegrationTest, SolverFindsSingleUnitSolution) {
     initial_goals.push(goal);
     database.push(rule{head, {}});
 
-    basic_manifest manifest{database, initial_goals, kInitialVarCount, kMaxResolutions, kSeed};
+    basic_manifest manifest{database, initial_goals, kInitialFrameOffset, kMaxResolutions, kSeed};
     auto sm = manifest.solver_.solve();
     sm.resume();
     ASSERT_TRUE(sm.has_yield());
@@ -1022,7 +1022,7 @@ TEST_F(BasicManifestIntegrationTest, SolverRefutesWhenNoCandidates) {
     const expr* goal = saved_expr_pool_.make_functor(functors.id("f"), {});
     initial_goals.push(goal);
 
-    basic_manifest manifest{database, initial_goals, kInitialVarCount, kMaxResolutions, kSeed};
+    basic_manifest manifest{database, initial_goals, kInitialFrameOffset, kMaxResolutions, kSeed};
     auto sm = manifest.solver_.solve();
     sm.resume();
     ASSERT_TRUE(sm.has_yield());
@@ -1045,7 +1045,7 @@ TEST_F(BasicManifestIntegrationTest, SolverEnumeratesTwoGroundChoiceSolutions) {
     database.push(rule{f_head0, {}});
     database.push(rule{f_head1, {}});
 
-    basic_manifest manifest{database, initial_goals, kInitialVarCount, kMaxResolutions, kSeed};
+    basic_manifest manifest{database, initial_goals, kInitialFrameOffset, kMaxResolutions, kSeed};
 
     static const BranchGroups kGroups{{rule_id{0}, rule_id{1}}};
     next_branch_until_refuted(
@@ -1069,7 +1069,7 @@ TEST_F(BasicManifestIntegrationTest, SolverRefutesAfterEnumeratingAllGroundBranc
     database.push(rule{f_head0, {}});
     database.push(rule{f_head1, {}});
 
-    basic_manifest manifest{database, initial_goals, kInitialVarCount, kMaxResolutions, kSeed};
+    basic_manifest manifest{database, initial_goals, kInitialFrameOffset, kMaxResolutions, kSeed};
 
     static const BranchGroups kGroups{{rule_id{0}, rule_id{1}}};
     next_branch_until_refuted(
@@ -1097,7 +1097,7 @@ TEST_F(BasicManifestIntegrationTest, SolverFindsClauseDerivedUnitSolution) {
     database.push(rule{f_head, {g_body}});
     database.push(rule{g_fact, {}});
 
-    basic_manifest manifest{database, initial_goals, kInitialVarCount, kMaxResolutions, kSeed};
+    basic_manifest manifest{database, initial_goals, kInitialFrameOffset, kMaxResolutions, kSeed};
     auto sm = manifest.solver_.solve();
     sm.resume();
     ASSERT_TRUE(sm.has_yield());
@@ -1128,7 +1128,7 @@ TEST_F(BasicManifestIntegrationTest, SolverEnumeratesTwoChoiceClauseSolutions) {
     database.push(rule{g_fact0, {}});
     database.push(rule{g_fact1, {}});
 
-    basic_manifest manifest{database, initial_goals, kInitialVarCount, kMaxResolutions, kSeed};
+    basic_manifest manifest{database, initial_goals, kInitialFrameOffset, kMaxResolutions, kSeed};
 
     static const BranchGroups kGroups{{rule_id{1}, rule_id{2}}};
     next_branch_until_refuted(
@@ -1150,10 +1150,10 @@ TEST_F(BasicManifestIntegrationTest, SolverFindsSolutionWithCorrectBindings) {
     const expr* head = saved_expr_pool_.make_functor(functors.id("f"), {abc, _123});
     database.push(rule{head, {}});
 
-    basic_manifest manifest{database, initial_goals, kInitialVarCount, kMaxResolutions, kSeed};
+    basic_manifest manifest{database, initial_goals, kInitialFrameOffset, kMaxResolutions, kSeed};
     normalizer normalizer{manifest.loc_};
-    const uint32_t idx_a = manifest.var_sequencer_.next();
-    const uint32_t idx_b = manifest.var_sequencer_.next();
+    const uint32_t idx_a = manifest.frame_allocator_.bump(1);
+    const uint32_t idx_b = manifest.frame_allocator_.bump(1);
     const expr* var_a = saved_expr_pool_.make_var(idx_a);
     const expr* var_b = saved_expr_pool_.make_var(idx_b);
     initial_goals.push(saved_expr_pool_.make_functor(functors.id("f"), {var_a, var_b}));
@@ -1193,10 +1193,10 @@ TEST_F(BasicManifestIntegrationTest, SolverFindsClauseBodyBindingSolution) {
     database.push(rule{g_head, {}});
     database.push(rule{h_head, {}});
 
-    basic_manifest manifest{database, initial_goals, kInitialVarCount, kMaxResolutions, kSeed};
+    basic_manifest manifest{database, initial_goals, kInitialFrameOffset, kMaxResolutions, kSeed};
     normalizer normalizer{manifest.loc_};
-    const uint32_t idx_a = manifest.var_sequencer_.next();
-    const uint32_t idx_b = manifest.var_sequencer_.next();
+    const uint32_t idx_a = manifest.frame_allocator_.bump(1);
+    const uint32_t idx_b = manifest.frame_allocator_.bump(1);
     const expr* var_a = saved_expr_pool_.make_var(idx_a);
     const expr* var_b = saved_expr_pool_.make_var(idx_b);
     initial_goals.push(saved_expr_pool_.make_functor(functors.id("f"), {var_a, var_b}));
@@ -1227,10 +1227,10 @@ TEST_F(BasicManifestIntegrationTest, SolverEnumeratesTwoVarChoiceSolutions) {
     database.push(rule{head0, {}});
     database.push(rule{head1, {}});
 
-    basic_manifest manifest{database, initial_goals, kInitialVarCount, kMaxResolutions, kSeed};
+    basic_manifest manifest{database, initial_goals, kInitialFrameOffset, kMaxResolutions, kSeed};
     normalizer normalizer{manifest.loc_};
 
-    const uint32_t idx_a = manifest.var_sequencer_.next();
+    const uint32_t idx_a = manifest.frame_allocator_.bump(1);
     const expr* var_a = saved_expr_pool_.make_var(idx_a);
 
     initial_goals.push(saved_expr_pool_.make_functor(functors.id("f"), {var_a}));
@@ -1261,10 +1261,10 @@ TEST_F(BasicManifestIntegrationTest, SolverRefutesAfterEnumeratingAllVarBranches
     database.push(rule{head0, {}});
     database.push(rule{head1, {}});
 
-    basic_manifest manifest{database, initial_goals, kInitialVarCount, kMaxResolutions, kSeed};
+    basic_manifest manifest{database, initial_goals, kInitialFrameOffset, kMaxResolutions, kSeed};
     normalizer normalizer{manifest.loc_};
 
-    const uint32_t idx_a = manifest.var_sequencer_.next();
+    const uint32_t idx_a = manifest.frame_allocator_.bump(1);
     const expr* var_a = saved_expr_pool_.make_var(idx_a);
 
     initial_goals.push(saved_expr_pool_.make_functor(functors.id("f"), {var_a}));
@@ -1300,10 +1300,10 @@ TEST_F(BasicManifestIntegrationTest, SolverEnumeratesTwoGoalSharedVarSolutions) 
     database.push(rule{g_head0, {}});
     database.push(rule{g_head1, {}});
 
-    basic_manifest manifest{database, initial_goals, kInitialVarCount, kMaxResolutions, kSeed};
+    basic_manifest manifest{database, initial_goals, kInitialFrameOffset, kMaxResolutions, kSeed};
     normalizer normalizer{manifest.loc_};
 
-    const uint32_t idx_a = manifest.var_sequencer_.next();
+    const uint32_t idx_a = manifest.frame_allocator_.bump(1);
     const expr* var_a = saved_expr_pool_.make_var(idx_a);
 
     initial_goals.push(saved_expr_pool_.make_functor(functors.id("f"), {var_a}));
@@ -1339,7 +1339,7 @@ TEST_F(BasicManifestIntegrationTest, TickThreeGroundBranchesEnumerateDistinct) {
     database.push(rule{f_head1, {}});
     database.push(rule{f_head2, {}});
 
-    basic_manifest manifest{database, initial_goals, kInitialVarCount, kMaxResolutions, kSeed};
+    basic_manifest manifest{database, initial_goals, kInitialFrameOffset, kMaxResolutions, kSeed};
 
     static const BranchGroups kGroups{{rule_id{0}, rule_id{1}, rule_id{2}}};
     next_branch_until_refuted(
@@ -1370,7 +1370,7 @@ TEST_F(BasicManifestIntegrationTest, SimLifecycleTwoSequentialDecisionsOnTwoGoal
     database.push(rule{g_head2, {}});
     database.push(rule{g_head3, {}});
 
-    basic_manifest manifest{database, initial_goals, kInitialVarCount, kMaxResolutions, kSeed};
+    basic_manifest manifest{database, initial_goals, kInitialFrameOffset, kMaxResolutions, kSeed};
     manifest.set_up_sim_.set_up();
     EXPECT_EQ(manifest.run_sim_.run(), sim_termination::solved);
     EXPECT_EQ(manifest.decision_memory_.count(), 2u);
@@ -1424,7 +1424,7 @@ TEST_F(BasicManifestIntegrationTest, SimLifecycleRecursiveClauseTreeSolvedWithou
     database.push(rule{i_head, {}});
     database.push(rule{j_head, {}});
 
-    basic_manifest manifest{database, initial_goals, kInitialVarCount, kMaxResolutions, kSeed};
+    basic_manifest manifest{database, initial_goals, kInitialFrameOffset, kMaxResolutions, kSeed};
     manifest.set_up_sim_.set_up();
     EXPECT_EQ(manifest.run_sim_.run(), sim_termination::solved);
     EXPECT_EQ(manifest.decision_memory_.count(), 0u);
@@ -1453,7 +1453,7 @@ TEST_F(BasicManifestIntegrationTest, SimLifecycleCdclUnitElimForcesRemainingCand
     database.push(rule{g_head0, {}});
     database.push(rule{g_head1, {}});
 
-    basic_manifest manifest{database, initial_goals, kInitialVarCount, kMaxResolutions, kSeed};
+    basic_manifest manifest{database, initial_goals, kInitialFrameOffset, kMaxResolutions, kSeed};
     const goal_lineage* gl_f = manifest.make_initial_goal_lineage_.make(0);
     const goal_lineage* gl_g = manifest.make_initial_goal_lineage_.make(1);
     const resolution_lineage* rl_f_0 =
@@ -1518,7 +1518,7 @@ TEST_F(BasicManifestIntegrationTest, SimLifecycleDecisionMemoryClearsEachTearDow
     database.push(rule{g_head2, {}});
     database.push(rule{g_head3, {}});
 
-    basic_manifest manifest{database, initial_goals, kInitialVarCount, kMaxResolutions, kSeed};
+    basic_manifest manifest{database, initial_goals, kInitialFrameOffset, kMaxResolutions, kSeed};
     const goal_lineage* gl0 = manifest.make_initial_goal_lineage_.make(0);
     const goal_lineage* gl1 = manifest.make_initial_goal_lineage_.make(1);
     const resolution_lineage* rl_g0_0 =
@@ -1565,7 +1565,7 @@ TEST_F(BasicManifestIntegrationTest, SolverEnumeratesFourTwoGoalGroundCombinatio
     database.push(rule{g_head2, {}});
     database.push(rule{g_head3, {}});
 
-    basic_manifest manifest{database, initial_goals, kInitialVarCount, kMaxResolutions, kSeed};
+    basic_manifest manifest{database, initial_goals, kInitialFrameOffset, kMaxResolutions, kSeed};
 
     static const BranchGroups kGroups{{rule_id{0}, rule_id{1}}, {rule_id{2}, rule_id{3}}};
     next_branch_until_refuted(
@@ -1616,7 +1616,7 @@ TEST_F(BasicManifestIntegrationTest, SolverEnumeratesEightThreeGoalGroundCombina
         seed_db.push(rule{h0, {}});
         seed_db.push(rule{h1, {}});
 
-        basic_manifest manifest{seed_db, seed_goals, kInitialVarCount, kMaxResolutions, seed};
+        basic_manifest manifest{seed_db, seed_goals, kInitialFrameOffset, kMaxResolutions, seed};
 
         static const BranchGroups kGroups{
             {rule_id{0}, rule_id{1}}, {rule_id{2}, rule_id{3}}, {rule_id{4}, rule_id{5}}};
@@ -1657,10 +1657,10 @@ TEST_F(BasicManifestIntegrationTest, SolverEnumeratesFourVarBindingSolutions) {
     database.push(rule{head2, {}});
     database.push(rule{head3, {}});
 
-    basic_manifest manifest{database, initial_goals, kInitialVarCount, kMaxResolutions, kSeed};
+    basic_manifest manifest{database, initial_goals, kInitialFrameOffset, kMaxResolutions, kSeed};
     normalizer normalizer{manifest.loc_};
 
-    const uint32_t idx_a = manifest.var_sequencer_.next();
+    const uint32_t idx_a = manifest.frame_allocator_.bump(1);
     const expr* var_a = saved_expr_pool_.make_var(idx_a);
 
     initial_goals.push(saved_expr_pool_.make_functor(functors.id("f"), {var_a}));
@@ -1704,7 +1704,7 @@ TEST_F(BasicManifestIntegrationTest, SolverEnumeratesFourClauseBodyFactChoices) 
     database.push(rule{g_fact3, {}});
     database.push(rule{g_fact4, {}});
 
-    basic_manifest manifest{database, initial_goals, kInitialVarCount, kMaxResolutions, kSeed};
+    basic_manifest manifest{database, initial_goals, kInitialFrameOffset, kMaxResolutions, kSeed};
 
     static const BranchGroups kGroups{{rule_id{1}, rule_id{2}, rule_id{3}, rule_id{4}}};
     next_branch_until_refuted(
@@ -1756,10 +1756,10 @@ TEST_F(BasicManifestIntegrationTest, SolverEnumeratesManySharedVarGroundHeads) {
         seed_db.push(rule{g_jkl, {}});
         seed_db.push(rule{g_mno, {}});
 
-        basic_manifest manifest{seed_db, seed_goals, kInitialVarCount, kMaxResolutions, seed};
-        const uint32_t idx_a = manifest.var_sequencer_.next();
-        const uint32_t idx_b = manifest.var_sequencer_.next();
-        const uint32_t idx_c = manifest.var_sequencer_.next();
+        basic_manifest manifest{seed_db, seed_goals, kInitialFrameOffset, kMaxResolutions, seed};
+        const uint32_t idx_a = manifest.frame_allocator_.bump(1);
+        const uint32_t idx_b = manifest.frame_allocator_.bump(1);
+        const uint32_t idx_c = manifest.frame_allocator_.bump(1);
         const expr* var_a = saved_expr_pool_.make_var(idx_a);
         const expr* var_b = saved_expr_pool_.make_var(idx_b);
         const expr* var_c = saved_expr_pool_.make_var(idx_c);
@@ -1789,11 +1789,11 @@ TEST_F(BasicManifestIntegrationTest, SolverEnumeratesManySharedVarGroundHeads) {
         binding_db.push(rule{g_jkl, {}});
         binding_db.push(rule{g_mno, {}});
 
-        basic_manifest binding_manifest{binding_db, binding_goals, kInitialVarCount, kMaxResolutions, seed};
+        basic_manifest binding_manifest{binding_db, binding_goals, kInitialFrameOffset, kMaxResolutions, seed};
         normalizer binding_normalizer{binding_manifest.loc_};
-        const uint32_t idx_a_bind = binding_manifest.var_sequencer_.next();
-        const uint32_t idx_b_bind = binding_manifest.var_sequencer_.next();
-        const uint32_t idx_c_bind = binding_manifest.var_sequencer_.next();
+        const uint32_t idx_a_bind = binding_manifest.frame_allocator_.bump(1);
+        const uint32_t idx_b_bind = binding_manifest.frame_allocator_.bump(1);
+        const uint32_t idx_c_bind = binding_manifest.frame_allocator_.bump(1);
         const expr* var_a_bind = saved_expr_pool_.make_var(idx_a_bind);
         const expr* var_b_bind = saved_expr_pool_.make_var(idx_b_bind);
         const expr* var_c_bind = saved_expr_pool_.make_var(idx_c_bind);
@@ -1865,7 +1865,7 @@ TEST_F(BasicManifestIntegrationTest, RefutesAfterCdclOnUnsatClauseBranches) {
     const expr* goal = saved_expr_pool_.make_functor(functors.id("a"), {});
     initial_goals.push(goal);
 
-    basic_manifest manifest{database, initial_goals, kInitialVarCount, kMaxResolutions, kSeed};
+    basic_manifest manifest{database, initial_goals, kInitialFrameOffset, kMaxResolutions, kSeed};
     auto sm = manifest.solver_.solve();
     size_t yields = 0;
     bool saw_conflicted = false;
@@ -1903,9 +1903,9 @@ TEST_F(BasicManifestIntegrationTest, FindsUniqueSharedVarConjunctionThenRefutes)
     database.push(rule{is_b2, {}});
     database.push(rule{is_b3, {}});
 
-    basic_manifest manifest{database, initial_goals, kInitialVarCount, kMaxResolutions, kSeed};
+    basic_manifest manifest{database, initial_goals, kInitialFrameOffset, kMaxResolutions, kSeed};
     normalizer normalizer{manifest.loc_};
-    const uint32_t idx_x = manifest.var_sequencer_.next();
+    const uint32_t idx_x = manifest.frame_allocator_.bump(1);
     const expr* var_x = saved_expr_pool_.make_var(idx_x);
     initial_goals.push(saved_expr_pool_.make_functor(functors.id("is_a"), {var_x}));
     initial_goals.push(saved_expr_pool_.make_functor(functors.id("is_b"), {var_x}));
@@ -1940,9 +1940,9 @@ TEST_F(BasicManifestIntegrationTest, EnumeratesTwoParentBindingsForAlice) {
     database.push(rule{parent_carol_alice, {}});
     database.push(rule{parent_dave_bob, {}});
 
-    basic_manifest manifest{database, initial_goals, kInitialVarCount, kMaxResolutions, kSeed};
+    basic_manifest manifest{database, initial_goals, kInitialFrameOffset, kMaxResolutions, kSeed};
     normalizer normalizer{manifest.loc_};
-    const uint32_t idx_x = manifest.var_sequencer_.next();
+    const uint32_t idx_x = manifest.frame_allocator_.bump(1);
     const expr* var_x = saved_expr_pool_.make_var(idx_x);
     const expr* alice_goal = saved_expr_pool_.make_functor(functors.id("alice"), {});
     initial_goals.push(saved_expr_pool_.make_functor(functors.id("parent"), {var_x, alice_goal}));
@@ -2004,10 +2004,10 @@ TEST_F(BasicManifestIntegrationTest, EnumeratesPeanoLessThanSeven) {
     for (int n = 0; n < 7; ++n)
         expected.insert({peano_saved(n)});
 
-    basic_manifest manifest{database, initial_goals, kInitialVarCount, kPeanoBudget, kSeed};
+    basic_manifest manifest{database, initial_goals, 1u, kPeanoBudget, kSeed};
     normalizer normalizer{manifest.loc_};
 
-    const uint32_t idx_n = manifest.var_sequencer_.next();
+    const uint32_t idx_n = 0;
     const expr* var_n = saved_expr_pool_.make_var(idx_n);
 
     const expr* seven = saved_expr_pool_.make_functor(functors.id("zero"), {});
@@ -2061,12 +2061,12 @@ TEST_F(BasicManifestIntegrationTest, EnumeratesSatPAndQOrR) {
     const expr* and_bool_body2 = saved_expr_pool_.make_functor(functors.id("bool"), {and_rv2});
     database.push(rule{and_false_x_false, {and_bool_body2}});
 
-    basic_manifest manifest{database, initial_goals, kInitialVarCount, kMaxResolutions, kSeed};
+    basic_manifest manifest{database, initial_goals, kInitialFrameOffset, kMaxResolutions, kSeed};
     normalizer normalizer{manifest.loc_};
-    const uint32_t idx_p = manifest.var_sequencer_.next();
-    const uint32_t idx_q = manifest.var_sequencer_.next();
-    const uint32_t idx_r = manifest.var_sequencer_.next();
-    const uint32_t idx_qr = manifest.var_sequencer_.next();
+    const uint32_t idx_p = manifest.frame_allocator_.bump(1);
+    const uint32_t idx_q = manifest.frame_allocator_.bump(1);
+    const uint32_t idx_r = manifest.frame_allocator_.bump(1);
+    const uint32_t idx_qr = manifest.frame_allocator_.bump(1);
     const expr* var_p = saved_expr_pool_.make_var(idx_p);
     const expr* var_q = saved_expr_pool_.make_var(idx_q);
     const expr* var_r = saved_expr_pool_.make_var(idx_r);
@@ -2120,11 +2120,11 @@ TEST_F(BasicManifestIntegrationTest, EnumeratesTwoSatAssignmentsForImpliesQ) {
     database.push(rule{or_f_t_t, {}});
     database.push(rule{or_f_f_f, {}});
 
-    basic_manifest manifest{database, initial_goals, kInitialVarCount, kMaxResolutions, kSeed};
+    basic_manifest manifest{database, initial_goals, kInitialFrameOffset, kMaxResolutions, kSeed};
     normalizer normalizer{manifest.loc_};
-    const uint32_t idx_p = manifest.var_sequencer_.next();
-    const uint32_t idx_q = manifest.var_sequencer_.next();
-    const uint32_t idx_np = manifest.var_sequencer_.next();
+    const uint32_t idx_p = manifest.frame_allocator_.bump(1);
+    const uint32_t idx_q = manifest.frame_allocator_.bump(1);
+    const uint32_t idx_np = manifest.frame_allocator_.bump(1);
     const expr* var_p = saved_expr_pool_.make_var(idx_p);
     const expr* var_q = saved_expr_pool_.make_var(idx_q);
     const expr* var_np = saved_expr_pool_.make_var(idx_np);
@@ -2179,11 +2179,11 @@ TEST_F(BasicManifestIntegrationTest, EnumeratesTwoPathTwoColorings) {
     database.push(rule{diff_red_blue, {}});
     database.push(rule{diff_blue_red, {}});
 
-    basic_manifest manifest{database, initial_goals, kInitialVarCount, kMaxResolutions, kSeed};
+    basic_manifest manifest{database, initial_goals, kInitialFrameOffset, kMaxResolutions, kSeed};
     normalizer normalizer{manifest.loc_};
-    const uint32_t idx_a = manifest.var_sequencer_.next();
-    const uint32_t idx_b = manifest.var_sequencer_.next();
-    const uint32_t idx_c = manifest.var_sequencer_.next();
+    const uint32_t idx_a = manifest.frame_allocator_.bump(1);
+    const uint32_t idx_b = manifest.frame_allocator_.bump(1);
+    const uint32_t idx_c = manifest.frame_allocator_.bump(1);
     const expr* var_a = saved_expr_pool_.make_var(idx_a);
     const expr* var_b = saved_expr_pool_.make_var(idx_b);
     const expr* var_c = saved_expr_pool_.make_var(idx_c);
@@ -2270,11 +2270,11 @@ TEST_F(BasicManifestIntegrationTest, EnumeratesK3ThreeColorings) {
         seed_db.push(rule{diff_blue_red, {}});
         seed_db.push(rule{diff_blue_green, {}});
 
-        basic_manifest manifest{seed_db, seed_goals, kInitialVarCount, 128, seed};
+        basic_manifest manifest{seed_db, seed_goals, kInitialFrameOffset, 128, seed};
         normalizer seed_normalizer{manifest.loc_};
-        const uint32_t idx_a = manifest.var_sequencer_.next();
-        const uint32_t idx_b = manifest.var_sequencer_.next();
-        const uint32_t idx_c = manifest.var_sequencer_.next();
+        const uint32_t idx_a = manifest.frame_allocator_.bump(1);
+        const uint32_t idx_b = manifest.frame_allocator_.bump(1);
+        const uint32_t idx_c = manifest.frame_allocator_.bump(1);
         const expr* var_a = saved_expr_pool_.make_var(idx_a);
         const expr* var_b = saved_expr_pool_.make_var(idx_b);
         const expr* var_c = saved_expr_pool_.make_var(idx_c);
@@ -2337,12 +2337,12 @@ TEST_F(BasicManifestIntegrationTest, EnumeratesK3TailFourNodeColorings) {
         seed_db.push(rule{diff_gb, {}});
         seed_db.push(rule{diff_br, {}});
         seed_db.push(rule{diff_bg, {}});
-        basic_manifest manifest{seed_db, seed_goals, kInitialVarCount, 128, seed};
+        basic_manifest manifest{seed_db, seed_goals, kInitialFrameOffset, 128, seed};
         normalizer seed_normalizer{manifest.loc_};
-        const uint32_t idx_a = manifest.var_sequencer_.next();
-        const uint32_t idx_b = manifest.var_sequencer_.next();
-        const uint32_t idx_c = manifest.var_sequencer_.next();
-        const uint32_t idx_d = manifest.var_sequencer_.next();
+        const uint32_t idx_a = manifest.frame_allocator_.bump(1);
+        const uint32_t idx_b = manifest.frame_allocator_.bump(1);
+        const uint32_t idx_c = manifest.frame_allocator_.bump(1);
+        const uint32_t idx_d = manifest.frame_allocator_.bump(1);
         const expr* var_a = saved_expr_pool_.make_var(idx_a);
         const expr* var_b = saved_expr_pool_.make_var(idx_b);
         const expr* var_c = saved_expr_pool_.make_var(idx_c);
@@ -2413,18 +2413,18 @@ TEST_F(BasicManifestIntegrationTest, EnumeratesFourVarSatThreeClauses) {
         seed_db.push(rule{and_f_t_f, {}});
         seed_db.push(rule{and_f_f_f, {}});
 
-        basic_manifest manifest{seed_db, seed_goals, kInitialVarCount, kSatBudget, seed};
+        basic_manifest manifest{seed_db, seed_goals, kInitialFrameOffset, kSatBudget, seed};
         normalizer seed_normalizer{manifest.loc_};
-        const uint32_t idx_p = manifest.var_sequencer_.next();
-        const uint32_t idx_q = manifest.var_sequencer_.next();
-        const uint32_t idx_r = manifest.var_sequencer_.next();
-        const uint32_t idx_s = manifest.var_sequencer_.next();
-        const uint32_t idx_pq = manifest.var_sequencer_.next();
-        const uint32_t idx_rs = manifest.var_sequencer_.next();
-        const uint32_t idx_np = manifest.var_sequencer_.next();
-        const uint32_t idx_nr = manifest.var_sequencer_.next();
-        const uint32_t idx_npr = manifest.var_sequencer_.next();
-        const uint32_t idx_pq_rs = manifest.var_sequencer_.next();
+        const uint32_t idx_p = manifest.frame_allocator_.bump(1);
+        const uint32_t idx_q = manifest.frame_allocator_.bump(1);
+        const uint32_t idx_r = manifest.frame_allocator_.bump(1);
+        const uint32_t idx_s = manifest.frame_allocator_.bump(1);
+        const uint32_t idx_pq = manifest.frame_allocator_.bump(1);
+        const uint32_t idx_rs = manifest.frame_allocator_.bump(1);
+        const uint32_t idx_np = manifest.frame_allocator_.bump(1);
+        const uint32_t idx_nr = manifest.frame_allocator_.bump(1);
+        const uint32_t idx_npr = manifest.frame_allocator_.bump(1);
+        const uint32_t idx_pq_rs = manifest.frame_allocator_.bump(1);
         const expr* var_p = saved_expr_pool_.make_var(idx_p);
         const expr* var_q = saved_expr_pool_.make_var(idx_q);
         const expr* var_r = saved_expr_pool_.make_var(idx_r);
@@ -2536,12 +2536,12 @@ TEST_F(BasicManifestIntegrationTest, EnumeratesAddPairsSummingLessThanTen) {
     ASSERT_EQ(expected.size(), 55u);
 
     initial_goal_exprs probe_goals;
-    basic_manifest probe_manifest{database, probe_goals, kInitialVarCount, kPeanoBudget, kSeed};
+    basic_manifest probe_manifest{database, probe_goals, kInitialFrameOffset, kPeanoBudget, kSeed};
     normalizer probe_normalizer{probe_manifest.loc_};
 
-    const uint32_t idx_x_probe = probe_manifest.var_sequencer_.next();
-    const uint32_t idx_y_probe = probe_manifest.var_sequencer_.next();
-    const uint32_t idx_s_probe = probe_manifest.var_sequencer_.next();
+    const uint32_t idx_x_probe = probe_manifest.frame_allocator_.bump(1);
+    const uint32_t idx_y_probe = probe_manifest.frame_allocator_.bump(1);
+    const uint32_t idx_s_probe = probe_manifest.frame_allocator_.bump(1);
     const expr* var_x_probe = saved_expr_pool_.make_var(idx_x_probe);
     const expr* var_y_probe = saved_expr_pool_.make_var(idx_y_probe);
     const expr* var_s_probe = saved_expr_pool_.make_var(idx_s_probe);
@@ -2568,12 +2568,12 @@ TEST_F(BasicManifestIntegrationTest, EnumeratesAddPairsSummingLessThanTen) {
         });
 
     initial_goal_exprs solve_goals;
-    basic_manifest manifest{database, solve_goals, kInitialVarCount, kPeanoBudget, kSeed};
+    basic_manifest manifest{database, solve_goals, kInitialFrameOffset, kPeanoBudget, kSeed};
     normalizer normalizer{manifest.loc_};
 
-    const uint32_t idx_x = manifest.var_sequencer_.next();
-    const uint32_t idx_y = manifest.var_sequencer_.next();
-    const uint32_t idx_s = manifest.var_sequencer_.next();
+    const uint32_t idx_x = manifest.frame_allocator_.bump(1);
+    const uint32_t idx_y = manifest.frame_allocator_.bump(1);
+    const uint32_t idx_s = manifest.frame_allocator_.bump(1);
     const expr* var_x = saved_expr_pool_.make_var(idx_x);
     const expr* var_y = saved_expr_pool_.make_var(idx_y);
     const expr* var_s = saved_expr_pool_.make_var(idx_s);
@@ -2641,11 +2641,11 @@ TEST_F(BasicManifestIntegrationTest, EnumeratesAddPairsSummingExactlyTen) {
         expected.insert({peano_saved(x), peano_saved(10 - x)});
     ASSERT_EQ(expected.size(), 11u);
 
-    basic_manifest manifest{database, initial_goals, kInitialVarCount, kPeanoBudget, kSeed};
+    basic_manifest manifest{database, initial_goals, 2u, kPeanoBudget, kSeed};
     normalizer normalizer{manifest.loc_};
 
-    const uint32_t idx_x = manifest.var_sequencer_.next();
-    const uint32_t idx_y = manifest.var_sequencer_.next();
+    const uint32_t idx_x = 0;
+    const uint32_t idx_y = 1;
     const expr* var_x = saved_expr_pool_.make_var(idx_x);
     const expr* var_y = saved_expr_pool_.make_var(idx_y);
 
@@ -2728,10 +2728,10 @@ TEST_F(BasicManifestIntegrationTest, EnumeratesMulPairsProductEight) {
         {peano_saved(8), peano_saved(1)},
     };
 
-    basic_manifest manifest{database, initial_goals, kInitialVarCount, kPeanoBudget, kSeed};
+    basic_manifest manifest{database, initial_goals, 2u, kPeanoBudget, kSeed};
     normalizer normalizer{manifest.loc_};
-    const uint32_t idx_x = manifest.var_sequencer_.next();
-    const uint32_t idx_y = manifest.var_sequencer_.next();
+    const uint32_t idx_x = 0;
+    const uint32_t idx_y = 1;
     const expr* var_x = saved_expr_pool_.make_var(idx_x);
     const expr* var_y = saved_expr_pool_.make_var(idx_y);
     const expr* eight = saved_expr_pool_.make_functor(functors.id("zero"), {});
@@ -2814,13 +2814,13 @@ TEST_F(BasicManifestIntegrationTest, EnumeratesDualBoundedSharedXSums) {
     }
     ASSERT_EQ(expected.size(), 30u);
 
-    basic_manifest manifest{database, initial_goals, kInitialVarCount, kPeanoBudget, kSeed};
+    basic_manifest manifest{database, initial_goals, 5u, kPeanoBudget, kSeed};
     normalizer normalizer{manifest.loc_};
-    const uint32_t idx_x = manifest.var_sequencer_.next();
-    const uint32_t idx_y = manifest.var_sequencer_.next();
-    const uint32_t idx_z = manifest.var_sequencer_.next();
-    const uint32_t idx_s = manifest.var_sequencer_.next();
-    const uint32_t idx_t = manifest.var_sequencer_.next();
+    const uint32_t idx_x = 0;
+    const uint32_t idx_y = 1;
+    const uint32_t idx_z = 2;
+    const uint32_t idx_s = 3;
+    const uint32_t idx_t = 4;
     const expr* var_x = saved_expr_pool_.make_var(idx_x);
     const expr* var_y = saved_expr_pool_.make_var(idx_y);
     const expr* var_z = saved_expr_pool_.make_var(idx_z);
@@ -2995,9 +2995,9 @@ TEST_F(BasicManifestIntegrationTest, EnumeratesCatalanTreesWithFiveNodes) {
     const expr* add_one = saved_expr_pool_.make_functor(functors.id("add"), {one, rv13, rv10});
     database.push(rule{nodes_head, {nodes_left, nodes_right, add_sizes, add_one}});
 
-    basic_manifest manifest{database, initial_goals, kInitialVarCount, kCatalanBudget, kSeed};
+    basic_manifest manifest{database, initial_goals, kInitialFrameOffset, kCatalanBudget, kSeed};
     normalizer normalizer{manifest.loc_};
-    const uint32_t idx_t = manifest.var_sequencer_.next();
+    const uint32_t idx_t = manifest.frame_allocator_.bump(1);
     const expr* var_t = saved_expr_pool_.make_var(idx_t);
     const expr* five = saved_expr_pool_.make_functor(functors.id("zero"), {});
     for (int i = 0; i < 5; ++i)
