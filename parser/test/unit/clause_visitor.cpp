@@ -30,7 +30,7 @@ static CHCParser::ClauseContext* parse_clause(antlr4::ANTLRInputStream& stream,
 struct ClauseVisitorTest : ParserCoreFixture {};
 
 TEST_F(ClauseVisitorTest, VisitClauseFact) {
-    clause_visitor cv{*pool, *pool, *var_seq, functor_map, next_functor_id};
+    clause_visitor cv{*pool, *pool, functor_map, next_functor_id};
 
     std::string input = "p(X, Y).";
     antlr4::ANTLRInputStream stream(input);
@@ -46,7 +46,7 @@ TEST_F(ClauseVisitorTest, VisitClauseFact) {
 }
 
 TEST_F(ClauseVisitorTest, VisitClauseRule) {
-    clause_visitor cv{*pool, *pool, *var_seq, functor_map, next_functor_id};
+    clause_visitor cv{*pool, *pool, functor_map, next_functor_id};
 
     std::string input = "p(X) :- q(X), r(X).";
     antlr4::ANTLRInputStream stream(input);
@@ -63,7 +63,7 @@ TEST_F(ClauseVisitorTest, VisitClauseRule) {
 }
 
 TEST_F(ClauseVisitorTest, VisitClauseVarScope) {
-    clause_visitor cv{*pool, *pool, *var_seq, functor_map, next_functor_id};
+    clause_visitor cv{*pool, *pool, functor_map, next_functor_id};
 
     {
         std::string input = "p(X).";
@@ -81,7 +81,7 @@ TEST_F(ClauseVisitorTest, VisitClauseVarScope) {
         antlr4::CommonTokenStream tokens(&lexer);
         CHCParser parser(&tokens);
         rule r = std::any_cast<rule>(cv.visitClause(parse_clause(stream, tokens, lexer, parser)));
-        EXPECT_EQ(r.head, pool->make_functor(functor_map.at("p"), {pool->make_var(1)}));
+        // Each clause scopes its own variables from index 0.
+        EXPECT_EQ(r.head, pool->make_functor(functor_map.at("p"), {pool->make_var(0)}));
     }
-    EXPECT_NE(pool->make_var(0), pool->make_var(1));
 }

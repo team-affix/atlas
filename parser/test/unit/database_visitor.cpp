@@ -24,7 +24,7 @@ struct DatabaseVisitorTest : ParserCoreFixture {};
 
 TEST_F(DatabaseVisitorTest, VisitDatabase) {
     db database;
-    database_visitor dv{*pool, *pool, *var_seq, database, functor_map, next_functor_id};
+    database_visitor dv{*pool, *pool, database, functor_map, next_functor_id};
 
     std::string input = "base(X). step(X) :- base(X).";
     antlr4::ANTLRInputStream stream(input);
@@ -39,11 +39,10 @@ TEST_F(DatabaseVisitorTest, VisitDatabase) {
     EXPECT_EQ(r0->head, pool->make_functor(functor_map.at("base"), {x0}));
     EXPECT_THAT(r0->body, IsEmpty());
 
-    const expr* x1 = pool->make_var(1);
     const rule* r1 = rule_at(database, rule_id{1});
-    EXPECT_EQ(r1->head, pool->make_functor(functor_map.at("step"), {x1}));
+    EXPECT_EQ(r1->head, pool->make_functor(functor_map.at("step"), {x0}));
     EXPECT_THAT(r1->body, SizeIs(1));
-    EXPECT_EQ(r1->body[0], pool->make_functor(functor_map.at("base"), {x1}));
+    EXPECT_EQ(r1->body[0], pool->make_functor(functor_map.at("base"), {x0}));
 
     EXPECT_THROW({ rule_at(database, rule_id{2}); }, std::out_of_range);
 }

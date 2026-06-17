@@ -16,7 +16,7 @@ struct ImportGoalsFromStringTest : ParserCoreFixture {};
 TEST_F(ImportGoalsFromStringTest, SingleGoal) {
     initial_goal_exprs goals;
 
-    auto var_name_to_idx = import_goals_from_string("reach(0, 2)", *pool, *pool, *var_seq, goals, functor_map, next_functor_id);
+    auto var_name_to_idx = import_goals_from_string("reach(0, 2)", *pool, *pool, var_seq, goals, functor_map, next_functor_id);
     EXPECT_EQ(goals.count(), 1u);
     EXPECT_EQ(goals.get(0), pool->make_functor(functor_map.at("reach"), {pool->make_functor(functor_map.at("0"), {}), pool->make_functor(functor_map.at("2"), {})}));
     EXPECT_TRUE(var_name_to_idx.empty());
@@ -25,7 +25,7 @@ TEST_F(ImportGoalsFromStringTest, SingleGoal) {
 TEST_F(ImportGoalsFromStringTest, MultipleGoalsShareVar) {
     initial_goal_exprs goals;
 
-    auto var_name_to_idx = import_goals_from_string("p(X), q(X)", *pool, *pool, *var_seq, goals, functor_map, next_functor_id);
+    auto var_name_to_idx = import_goals_from_string("p(X), q(X)", *pool, *pool, var_seq, goals, functor_map, next_functor_id);
     EXPECT_EQ(goals.count(), 2u);
 
     const expr* x = pool->make_var(0);
@@ -37,7 +37,7 @@ TEST_F(ImportGoalsFromStringTest, MultipleGoalsShareVar) {
 TEST_F(ImportGoalsFromStringTest, ComplexGoals) {
     initial_goal_exprs goals;
 
-    auto var_name_to_idx = import_goals_from_string("reach(X, Y), next(Y, Z), base(Z)", *pool, *pool, *var_seq, goals, functor_map, next_functor_id);
+    auto var_name_to_idx = import_goals_from_string("reach(X, Y), next(Y, Z), base(Z)", *pool, *pool, var_seq, goals, functor_map, next_functor_id);
 
     EXPECT_EQ(goals.count(), 3u);
     EXPECT_THAT(var_name_to_idx, SizeIs(3));
@@ -56,5 +56,5 @@ TEST_F(ImportGoalsFromStringTest, ComplexGoals) {
 
 TEST_F(ImportGoalsFromStringTest, BadInputThrows) {
     initial_goal_exprs goals;
-    EXPECT_THROW(import_goals_from_string(":-", *pool, *pool, *var_seq, goals, functor_map, next_functor_id), std::runtime_error);
+    EXPECT_THROW(import_goals_from_string(":-", *pool, *pool, var_seq, goals, functor_map, next_functor_id), std::runtime_error);
 }

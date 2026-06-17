@@ -22,7 +22,7 @@ struct ImportDatabaseFromFileTest : ParserCoreFixture {};
 
 TEST_F(ImportDatabaseFromFileTest, FactsFixture) {
     db database;
-    import_database_from_file("parser/fixtures/facts.chc", *pool, *pool, *var_seq, database, functor_map, next_functor_id);
+    import_database_from_file("parser/fixtures/facts.chc", *pool, *pool, database, functor_map, next_functor_id);
 
     for (rule_id id = 0; id < 3; ++id) {
         EXPECT_THAT(rule_at(database, id)->body, IsEmpty());
@@ -35,7 +35,7 @@ TEST_F(ImportDatabaseFromFileTest, FactsFixture) {
 
 TEST_F(ImportDatabaseFromFileTest, RulesFixture) {
     db database;
-    import_database_from_file("parser/fixtures/rules.chc", *pool, *pool, *var_seq, database, functor_map, next_functor_id);
+    import_database_from_file("parser/fixtures/rules.chc", *pool, *pool, database, functor_map, next_functor_id);
 
     EXPECT_THAT(rule_at(database, rule_id{0})->body, SizeIs(2));
     EXPECT_THAT(rule_at(database, rule_id{1})->body, SizeIs(2));
@@ -50,7 +50,7 @@ TEST_F(ImportDatabaseFromFileTest, RulesFixture) {
 
 TEST_F(ImportDatabaseFromFileTest, MixedFixture) {
     db database;
-    import_database_from_file("parser/fixtures/mixed.chc", *pool, *pool, *var_seq, database, functor_map, next_functor_id);
+    import_database_from_file("parser/fixtures/mixed.chc", *pool, *pool, database, functor_map, next_functor_id);
 
     EXPECT_THAT(rule_at(database, rule_id{0})->body, IsEmpty());
     EXPECT_THAT(rule_at(database, rule_id{1})->body, IsEmpty());
@@ -62,6 +62,6 @@ TEST_F(ImportDatabaseFromFileTest, MixedFixture) {
 
 TEST_F(ImportDatabaseFromFileTest, BadPathThrows) {
     db database;
-    EXPECT_THROW(import_database_from_file("parser/fixtures/nonexistent.chc", *pool, *pool, *var_seq, database, functor_map, next_functor_id),
+    EXPECT_THROW(import_database_from_file("parser/fixtures/nonexistent.chc", *pool, *pool, database, functor_map, next_functor_id),
                  std::runtime_error);
 }

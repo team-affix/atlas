@@ -1,7 +1,7 @@
 % Binary tree operations using functor notation.
-% A tree is either nil (leaf) or bin(L, R) (internal node with subtrees L and R).
+% A tree is either [] (leaf) or bin(L, R) (internal node with subtrees L and R).
 
-tree(nil).
+tree([]).
 tree(bin(X, Y)) :- tree(X), tree(Y).
 
 in(X, X).

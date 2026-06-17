@@ -31,7 +31,7 @@ struct ExprVisitorTest : ParserCoreFixture {};
 
 TEST_F(ExprVisitorTest, VisitAtom) {
     std::map<std::string, uint32_t> var_map;
-    expr_visitor ev{*pool, *pool, *var_seq, var_map, functor_map, next_functor_id};
+    expr_visitor ev{*pool, *pool, var_seq, var_map, functor_map, next_functor_id};
 
     std::string input = "foo";
     antlr4::ANTLRInputStream stream(input);
@@ -47,7 +47,7 @@ TEST_F(ExprVisitorTest, VisitAtom) {
 
 TEST_F(ExprVisitorTest, VisitVar) {
     std::map<std::string, uint32_t> var_map;
-    expr_visitor ev{*pool, *pool, *var_seq, var_map, functor_map, next_functor_id};
+    expr_visitor ev{*pool, *pool, var_seq, var_map, functor_map, next_functor_id};
 
     const expr* result = nullptr;
     {
@@ -75,7 +75,7 @@ TEST_F(ExprVisitorTest, VisitVar) {
 
 TEST_F(ExprVisitorTest, VisitFunctorNullary) {
     std::map<std::string, uint32_t> var_map;
-    expr_visitor ev{*pool, *pool, *var_seq, var_map, functor_map, next_functor_id};
+    expr_visitor ev{*pool, *pool, var_seq, var_map, functor_map, next_functor_id};
 
     std::string input = "foo";
     antlr4::ANTLRInputStream stream(input);
@@ -90,7 +90,7 @@ TEST_F(ExprVisitorTest, VisitFunctorNullary) {
 
 TEST_F(ExprVisitorTest, VisitFunctorUnary) {
     std::map<std::string, uint32_t> var_map;
-    expr_visitor ev{*pool, *pool, *var_seq, var_map, functor_map, next_functor_id};
+    expr_visitor ev{*pool, *pool, var_seq, var_map, functor_map, next_functor_id};
 
     std::string input = "suc(X)";
     antlr4::ANTLRInputStream stream(input);
@@ -105,7 +105,7 @@ TEST_F(ExprVisitorTest, VisitFunctorUnary) {
 
 TEST_F(ExprVisitorTest, VisitFunctorBinary) {
     std::map<std::string, uint32_t> var_map;
-    expr_visitor ev{*pool, *pool, *var_seq, var_map, functor_map, next_functor_id};
+    expr_visitor ev{*pool, *pool, var_seq, var_map, functor_map, next_functor_id};
 
     std::string input = "add(X, Y)";
     antlr4::ANTLRInputStream stream(input);
@@ -126,7 +126,7 @@ TEST_F(ExprVisitorTest, VisitFunctorBinary) {
 
 TEST_F(ExprVisitorTest, VisitListEmpty) {
     std::map<std::string, uint32_t> var_map;
-    expr_visitor ev{*pool, *pool, *var_seq, var_map, functor_map, next_functor_id};
+    expr_visitor ev{*pool, *pool, var_seq, var_map, functor_map, next_functor_id};
 
     std::string input = "[]";
     antlr4::ANTLRInputStream stream(input);
@@ -140,7 +140,7 @@ TEST_F(ExprVisitorTest, VisitListEmpty) {
 
 TEST_F(ExprVisitorTest, VisitList) {
     std::map<std::string, uint32_t> var_map;
-    expr_visitor ev{*pool, *pool, *var_seq, var_map, functor_map, next_functor_id};
+    expr_visitor ev{*pool, *pool, var_seq, var_map, functor_map, next_functor_id};
 
     std::string input = "[f, x, y]";
     antlr4::ANTLRInputStream stream(input);
@@ -157,7 +157,7 @@ TEST_F(ExprVisitorTest, VisitList) {
 
 TEST_F(ExprVisitorTest, VisitListPipe) {
     std::map<std::string, uint32_t> var_map;
-    expr_visitor ev{*pool, *pool, *var_seq, var_map, functor_map, next_functor_id};
+    expr_visitor ev{*pool, *pool, var_seq, var_map, functor_map, next_functor_id};
 
     std::string input = "[a, b|c]";
     antlr4::ANTLRInputStream stream(input);
@@ -173,7 +173,7 @@ TEST_F(ExprVisitorTest, VisitListPipe) {
 
 TEST_F(ExprVisitorTest, VisitListWithVars) {
     std::map<std::string, uint32_t> var_map;
-    expr_visitor ev{*pool, *pool, *var_seq, var_map, functor_map, next_functor_id};
+    expr_visitor ev{*pool, *pool, var_seq, var_map, functor_map, next_functor_id};
 
     std::string input = "[f, X, Y]";
     antlr4::ANTLRInputStream stream(input);
@@ -192,7 +192,7 @@ TEST_F(ExprVisitorTest, VisitListWithVars) {
 
 TEST_F(ExprVisitorTest, VisitListNestedList) {
     std::map<std::string, uint32_t> var_map;
-    expr_visitor ev{*pool, *pool, *var_seq, var_map, functor_map, next_functor_id};
+    expr_visitor ev{*pool, *pool, var_seq, var_map, functor_map, next_functor_id};
 
     std::string input = "[f, [g, a], b]";
     antlr4::ANTLRInputStream stream(input);
@@ -210,7 +210,7 @@ TEST_F(ExprVisitorTest, VisitListNestedList) {
 
 TEST_F(ExprVisitorTest, VisitVarSharing) {
     std::map<std::string, uint32_t> var_map;
-    expr_visitor ev{*pool, *pool, *var_seq, var_map, functor_map, next_functor_id};
+    expr_visitor ev{*pool, *pool, var_seq, var_map, functor_map, next_functor_id};
 
     std::string input = "[f, X, X]";
     antlr4::ANTLRInputStream stream(input);
@@ -228,7 +228,7 @@ TEST_F(ExprVisitorTest, VisitVarSharing) {
 
 TEST_F(ExprVisitorTest, VisitVarDiscard) {
     std::map<std::string, uint32_t> var_map;
-    expr_visitor ev{*pool, *pool, *var_seq, var_map, functor_map, next_functor_id};
+    expr_visitor ev{*pool, *pool, var_seq, var_map, functor_map, next_functor_id};
 
     std::string input = "[_|_]";
     antlr4::ANTLRInputStream stream(input);
@@ -246,7 +246,7 @@ TEST_F(ExprVisitorTest, VisitVarDiscard) {
 
 TEST_F(ExprVisitorTest, VisitVarDiscardInList) {
     std::map<std::string, uint32_t> var_map;
-    expr_visitor ev{*pool, *pool, *var_seq, var_map, functor_map, next_functor_id};
+    expr_visitor ev{*pool, *pool, var_seq, var_map, functor_map, next_functor_id};
 
     std::string input = "[f, _, _]";
     antlr4::ANTLRInputStream stream(input);

@@ -45,7 +45,7 @@ struct MockExprPrinter : public i_expr_printer {
 struct MockRuntime : public i_runtime {
     MOCK_METHOD(bool, next, (), (override));
     MOCK_METHOD(bool, solved, (), (const, override));
-    MOCK_METHOD(const expr*, normalize, (const expr*), (override));
+    MOCK_METHOD(const expr*, normalize, (framed_expr), (override));
     MOCK_METHOD(lemma, derive_decision_lemma, (), (const, override));
     MOCK_METHOD(lemma, derive_resolution_lemma, (), (const, override));
 };

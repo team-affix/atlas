@@ -30,7 +30,7 @@ struct BodyVisitorTest : ParserCoreFixture {};
 
 TEST_F(BodyVisitorTest, SingleAtom) {
     std::map<std::string, uint32_t> var_map;
-    body_visitor bv{*pool, *pool, *var_seq, var_map, functor_map, next_functor_id};
+    body_visitor bv{*pool, *pool, var_seq, var_map, functor_map, next_functor_id};
 
     std::string input = "foo";
     antlr4::ANTLRInputStream stream(input);
@@ -45,7 +45,7 @@ TEST_F(BodyVisitorTest, SingleAtom) {
 
 TEST_F(BodyVisitorTest, MultipleAtomsShareVar) {
     std::map<std::string, uint32_t> var_map;
-    body_visitor bv{*pool, *pool, *var_seq, var_map, functor_map, next_functor_id};
+    body_visitor bv{*pool, *pool, var_seq, var_map, functor_map, next_functor_id};
 
     std::string input = "p(X), q(X)";
     antlr4::ANTLRInputStream stream(input);
@@ -63,7 +63,7 @@ TEST_F(BodyVisitorTest, MultipleAtomsShareVar) {
 
 TEST_F(BodyVisitorTest, VarSharingAcrossAtoms) {
     std::map<std::string, uint32_t> var_map;
-    body_visitor bv{*pool, *pool, *var_seq, var_map, functor_map, next_functor_id};
+    body_visitor bv{*pool, *pool, var_seq, var_map, functor_map, next_functor_id};
 
     std::string input = "f(X, Y), g(Y, Z)";
     antlr4::ANTLRInputStream stream(input);

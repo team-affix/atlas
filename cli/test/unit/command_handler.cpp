@@ -151,7 +151,7 @@ TEST_P(CommandHandlerParamTest, ConstructsFromSatExample) {
 
 TEST_P(CommandHandlerParamTest, ConstructsFromTreesExample) {
     EXPECT_NO_THROW(construct_handler(
-        "cli/examples/trees/db.chc", "in(X, bin(nil, nil))", kMaxResolutions, GetParam()));
+        "cli/examples/trees/db.chc", "in(X, bin([], []))", kMaxResolutions, GetParam()));
 }
 
 TEST_P(CommandHandlerParamTest, ConstructsFromArithmeticExample) {
@@ -207,7 +207,7 @@ TEST_P(CommandHandlerParamTest, ArithmeticGroundGoalSolveThenRefute) {
 
 TEST_P(CommandHandlerParamTest, TreesGoalEnumeratesTreeMembership) {
     const std::string out = run_handler_capture(
-        "cli/examples/trees/db.chc", "in(X, bin(nil, nil))", kMaxResolutions, stdin_for_solutions(5),
+        "cli/examples/trees/db.chc", "in(X, bin([], []))", kMaxResolutions, stdin_for_solutions(5),
         GetParam());
     EXPECT_GE(count_substr(out, "SOLVED"), 2u);
     EXPECT_GE(count_substr(out, kBindingXEqEmptyList), 1u);
