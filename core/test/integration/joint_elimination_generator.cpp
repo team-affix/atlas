@@ -6,7 +6,7 @@
 #include <vector>
 #include "infrastructure/joint_elimination_generator.hpp"
 #include "infrastructure/cdcl_elimination_generator.hpp"
-#include "infrastructure/cdcl_sequencer.hpp"
+#include "infrastructure/chosen_goal_candidates.hpp"
 #include "infrastructure/mhu_elimination_generator.hpp"
 #include "infrastructure/bind_map.hpp"
 #include "infrastructure/bind_map_factory.hpp"
@@ -18,6 +18,7 @@
 #include "infrastructure/ra_rule_id_set_factory.hpp"
 #include "infrastructure/trail.hpp"
 #include "interfaces/i_learn_avoidance.hpp"
+#include "interfaces/i_clean_up_cdcl.hpp"
 #include "interfaces/i_try_add_mhu_head.hpp"
 #include "interfaces/i_clear_mhu_heads.hpp"
 #include "infrastructure/coroutine.hpp"
@@ -58,18 +59,16 @@ struct JointEliminationGeneratorIntegrationTest : public ::testing::Test {
     ra_rule_id_set_factory ra_rule_id_set_factory_;
     goal_candidate_rules ggcr{ra_rule_id_set_factory_};
     std::optional<expr_pool> pool;
-    cdcl_sequencer cdcl_seq;
+    chosen_goal_candidates chosen;
     std::optional<cdcl_elimination_generator> cdcl;
     std::optional<mhu_elimination_generator> mhu;
     std::optional<joint_elimination_generator> joint;
 
-    JointEliminationGeneratorIntegrationTest()
-        : cdcl_seq([&]() {
-              loc.bind_as<i_log_to_current_trail_frame>(t);
-              return cdcl_sequencer{loc};
-          }()) {
+    JointEliminationGeneratorIntegrationTest() {
         loc.bind_as<i_globalizer>(g_);
-        loc.bind_as<i_cdcl_sequencer>(cdcl_seq);
+        loc.bind_as<i_log_to_current_trail_frame>(t);
+        loc.bind_as<i_try_get_chosen_goal_candidate, i_set_chosen_goal_candidate,
+            i_clear_chosen_goal_candidates>(chosen);
         loc.bind_as<i_bind_map>(common);
         loc.bind_as<i_bind_map_factory>(bmf);
         loc.bind_as<i_unifier_factory>(uf);
@@ -79,7 +78,7 @@ struct JointEliminationGeneratorIntegrationTest : public ::testing::Test {
         loc.bind_as<i_make_functor, i_make_var, i_import_expr, i_get_expr_count>(*pool);
         cdcl.emplace(loc);
         mhu.emplace(loc);
-        loc.bind_as<i_learn_avoidance>(*cdcl);
+        loc.bind_as<i_learn_avoidance, i_clean_up_cdcl>(*cdcl);
         loc.bind_as<i_try_add_mhu_head, i_clear_mhu_heads>(*mhu);
         joint.emplace(loc);
     }
@@ -207,7 +206,7 @@ TEST_F(JointEliminationGeneratorIntegrationTest, ConstrainYieldsNothingWhenBothS
     EXPECT_THAT(collect_elims(joint->constrain(rl_a)), IsEmpty());
 }
 
-TEST_F(JointEliminationGeneratorIntegrationTest, PopRestoresCdclThroughJointConstrain) {
+TEST_F(JointEliminationGeneratorIntegrationTest, CleanupRestoresCdclThroughJointConstrain) {
     goal_lineage gl0{nullptr, 0};
     goal_lineage gl1{nullptr, 1};
     resolution_lineage rl0{&gl0, 0};
@@ -222,10 +221,16 @@ TEST_F(JointEliminationGeneratorIntegrationTest, PopRestoresCdclThroughJointCons
     ASSERT_EQ(cdcl->learn(lemma{{&rl0, &rl1}}), std::nullopt);
     ASSERT_TRUE(mhu->try_add_head(&rl0, {&goal, 0}, {&head, 0}));
 
-    t.push();
     EXPECT_THAT(collect_elims(joint->constrain(&rl0)), ElementsAre(&rl1));
+    EXPECT_THAT(collect_elims(cdcl->constrain(&rl0)), IsEmpty());
+
+    t.push();
+    EXPECT_THAT(collect_elims(cdcl->constrain(&rl0)), IsEmpty());
     t.pop();
 
+    cdcl->cleanup();
+    chosen.clear();
+    mhu->clear_mhu_heads();
     ASSERT_TRUE(mhu->try_add_head(&rl0, {&goal, 0}, {&head, 0}));
     EXPECT_THAT(collect_elims(joint->constrain(&rl0)), ElementsAre(&rl1));
 }

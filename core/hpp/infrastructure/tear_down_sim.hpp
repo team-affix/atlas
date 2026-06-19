@@ -15,6 +15,8 @@
 #include "interfaces/i_clear_bindings.hpp"
 #include "interfaces/i_trim_unpinned_lineages.hpp"
 #include "interfaces/i_frame_allocator.hpp"
+#include "interfaces/i_clean_up_cdcl.hpp"
+#include "interfaces/i_clear_chosen_goal_candidates.hpp"
 
 struct tear_down_sim : i_tear_down_sim {
     tear_down_sim(locator& loc);
@@ -32,6 +34,8 @@ private:
     i_clear_bindings& clear_bindings_;
     i_trim_unpinned_lineages& trim_unpinned_lineages_;
     i_frame_allocator& frame_allocator_;
+    i_clean_up_cdcl& clean_up_cdcl_;
+    i_clear_chosen_goal_candidates& clear_chosen_goal_candidates_;
 };
 
 #endif

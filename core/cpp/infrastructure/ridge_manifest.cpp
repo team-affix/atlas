@@ -16,7 +16,8 @@ ridge_manifest::early_wiring::early_wiring(
       unit_goals_(),
       decision_memory_(),
       resolution_memory_(),
-      candidate_frame_offsets_() {
+      candidate_frame_offsets_(),
+      chosen_goal_candidates_() {
     loc.bind_as<i_globalizer>(globalizer_);
     loc.bind_as<i_push_trail_frame, i_pop_trail_frame, i_log_to_current_trail_frame>(trail_);
     loc.bind_as<i_bind_map, i_clear_bindings>(bind_map_);
@@ -35,6 +36,7 @@ ridge_manifest::early_wiring::early_wiring(
     loc.bind_as<i_record_decision, i_clear_recorded_decisions, i_get_decision_count, i_derive_decision_lemma>(decision_memory_);
     loc.bind_as<i_record_resolution, i_clear_recorded_resolutions, i_get_resolution_count, i_derive_resolution_lemma>(resolution_memory_);
     loc.bind_as<i_get_candidate_frame_offset, i_set_candidate_frame_offset, i_unset_candidate_frame_offset, i_clear_candidate_frame_offsets>(candidate_frame_offsets_);
+    loc.bind_as<i_try_get_chosen_goal_candidate, i_set_chosen_goal_candidate, i_clear_chosen_goal_candidates>(chosen_goal_candidates_);
     loc.bind_as<i_get_rule, i_get_goal_db_rule_ids>(database);
     loc.bind_as<i_get_initial_goal_count, i_get_initial_goal_expr>(initial_goals);
 }
@@ -42,17 +44,15 @@ ridge_manifest::early_wiring::early_wiring(
 ridge_manifest::pool_wiring::pool_wiring(locator& loc, uint32_t initial_frame_offset)
     : expr_pool_(),
       frame_allocator_(initial_frame_offset),
-      cdcl_sequencer_(loc),
       elimination_backlog_(loc) {
     loc.bind_as<i_make_functor, i_make_var, i_import_expr, i_get_expr_count>(expr_pool_);
     loc.bind_as<i_frame_allocator>(frame_allocator_);
-    loc.bind_as<i_cdcl_sequencer>(cdcl_sequencer_);
     loc.bind_as<i_insert_backlogged_elimination, i_is_backlogged_elimination>(elimination_backlog_);
 }
 
 ridge_manifest::elim_wiring::elim_wiring(locator& loc)
     : cdcl_(loc), mhu_(loc) {
-    loc.bind_as<i_learn_avoidance>(cdcl_);
+    loc.bind_as<i_learn_avoidance, i_clean_up_cdcl>(cdcl_);
     loc.bind_as<i_try_add_mhu_head, i_clear_mhu_heads>(mhu_);
     joint_.emplace(loc);
     loc.bind_as<i_elimination_generator>(*joint_);
@@ -146,7 +146,6 @@ ridge_manifest::ridge_manifest(
       unifier_factory_(early_.unifier_factory_),
       expr_pool_(pools_.expr_pool_),
       frame_allocator_(pools_.frame_allocator_),
-      cdcl_sequencer_(pools_.cdcl_sequencer_),
       lineage_pool_(early_.lineage_pool_),
       srt_active_goals_(early_.srt_active_goals_),
       goal_exprs_(early_.goal_exprs_),

@@ -55,7 +55,7 @@
 #include "infrastructure/unit_goal_detector.hpp"
 #include "infrastructure/unit_goals.hpp"
 #include "infrastructure/unifier_factory.hpp"
-#include "infrastructure/cdcl_sequencer.hpp"
+#include "infrastructure/chosen_goal_candidates.hpp"
 
 struct ridge_manifest {
     ridge_manifest(
@@ -77,7 +77,6 @@ struct ridge_manifest {
     unifier_factory& unifier_factory_;
     expr_pool& expr_pool_;
     frame_bump_allocator& frame_allocator_;
-    cdcl_sequencer& cdcl_sequencer_;
     lineage_pool& lineage_pool_;
     srt_active_goals& srt_active_goals_;
     goal_exprs& goal_exprs_;
@@ -129,6 +128,7 @@ private:
         decision_memory decision_memory_;
         resolution_memory resolution_memory_;
         candidate_frame_offsets candidate_frame_offsets_;
+        chosen_goal_candidates chosen_goal_candidates_;
 
         early_wiring(locator& loc, db& database, initial_goal_exprs& initial_goals);
     };
@@ -136,7 +136,6 @@ private:
     struct pool_wiring {
         expr_pool expr_pool_;
         frame_bump_allocator frame_allocator_;
-        cdcl_sequencer cdcl_sequencer_;
         elimination_backlog elimination_backlog_;
 
         pool_wiring(locator& loc, uint32_t initial_frame_offset);

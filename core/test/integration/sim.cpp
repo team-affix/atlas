@@ -25,10 +25,10 @@
 #include "infrastructure/resolution_memory.hpp"
 #include "infrastructure/candidate_frame_offsets.hpp"
 #include "infrastructure/expr_pool.hpp"
-#include "infrastructure/cdcl_sequencer.hpp"
 #include "infrastructure/frame_bump_allocator.hpp"
 #include "infrastructure/elimination_backlog.hpp"
 #include "infrastructure/cdcl_elimination_generator.hpp"
+#include "infrastructure/chosen_goal_candidates.hpp"
 #include "infrastructure/mhu_elimination_generator.hpp"
 #include "infrastructure/joint_elimination_generator.hpp"
 #include "infrastructure/get_resolution_rule.hpp"
@@ -111,6 +111,10 @@
 #include "interfaces/i_insert_backlogged_elimination.hpp"
 #include "interfaces/i_is_backlogged_elimination.hpp"
 #include "interfaces/i_learn_avoidance.hpp"
+#include "interfaces/i_clean_up_cdcl.hpp"
+#include "interfaces/i_try_get_chosen_goal_candidate.hpp"
+#include "interfaces/i_set_chosen_goal_candidate.hpp"
+#include "interfaces/i_clear_chosen_goal_candidates.hpp"
 #include "interfaces/i_try_add_mhu_head.hpp"
 #include "interfaces/i_clear_mhu_heads.hpp"
 #include "interfaces/i_elimination_generator.hpp"
@@ -157,6 +161,7 @@ struct sim_early_wiring {
     decision_memory decision_memory_;
     resolution_memory resolution_memory_;
     candidate_frame_offsets candidate_frame_offsets_;
+    chosen_goal_candidates chosen_goal_candidates_;
 
     sim_early_wiring(locator& loc, db& database, initial_goal_exprs& initial_goals)
         : globalizer_(),
@@ -172,7 +177,8 @@ struct sim_early_wiring {
           unit_goals_(),
           decision_memory_(),
           resolution_memory_(),
-          candidate_frame_offsets_() {
+          candidate_frame_offsets_(),
+          chosen_goal_candidates_() {
         loc.bind_as<i_globalizer>(globalizer_);
         loc.bind_as<i_push_trail_frame, i_pop_trail_frame, i_log_to_current_trail_frame>(trail_);
         loc.bind_as<i_bind_map, i_clear_bindings>(bind_map_);
@@ -197,6 +203,8 @@ struct sim_early_wiring {
         loc.bind_as<i_get_candidate_frame_offset, i_set_candidate_frame_offset,
             i_unset_candidate_frame_offset, i_clear_candidate_frame_offsets>(
             candidate_frame_offsets_);
+        loc.bind_as<i_try_get_chosen_goal_candidate, i_set_chosen_goal_candidate,
+            i_clear_chosen_goal_candidates>(chosen_goal_candidates_);
         loc.bind_as<i_get_rule, i_get_goal_db_rule_ids>(database);
         loc.bind_as<i_get_initial_goal_count, i_get_initial_goal_expr>(initial_goals);
     }
@@ -205,17 +213,14 @@ struct sim_early_wiring {
 struct sim_pool_wiring {
     expr_pool expr_pool_;
     frame_bump_allocator frame_allocator_;
-    cdcl_sequencer cdcl_sequencer_;
     elimination_backlog elimination_backlog_;
 
     sim_pool_wiring(locator& loc)
         : expr_pool_(),
           frame_allocator_(0),
-          cdcl_sequencer_(loc),
           elimination_backlog_(loc) {
         loc.bind_as<i_make_functor, i_make_var, i_import_expr, i_get_expr_count>(expr_pool_);
         loc.bind_as<i_frame_allocator>(frame_allocator_);
-        loc.bind_as<i_cdcl_sequencer>(cdcl_sequencer_);
         loc.bind_as<i_insert_backlogged_elimination, i_is_backlogged_elimination>(
             elimination_backlog_);
     }
@@ -227,7 +232,7 @@ struct sim_elim_wiring {
     std::optional<joint_elimination_generator> joint_;
 
     sim_elim_wiring(locator& loc) : cdcl_(loc), mhu_(loc) {
-        loc.bind_as<i_learn_avoidance>(cdcl_);
+        loc.bind_as<i_learn_avoidance, i_clean_up_cdcl>(cdcl_);
         loc.bind_as<i_try_add_mhu_head, i_clear_mhu_heads>(mhu_);
         joint_.emplace(loc);
         loc.bind_as<i_elimination_generator>(*joint_);

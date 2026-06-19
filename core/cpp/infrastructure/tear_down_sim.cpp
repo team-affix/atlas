@@ -12,7 +12,9 @@ tear_down_sim::tear_down_sim(locator& loc)
       clear_mhu_heads_(loc.locate<i_clear_mhu_heads>()),
       clear_bindings_(loc.locate<i_clear_bindings>()),
       trim_unpinned_lineages_(loc.locate<i_trim_unpinned_lineages>()),
-      frame_allocator_(loc.locate<i_frame_allocator>()) {}
+      frame_allocator_(loc.locate<i_frame_allocator>()),
+      clean_up_cdcl_(loc.locate<i_clean_up_cdcl>()),
+      clear_chosen_goal_candidates_(loc.locate<i_clear_chosen_goal_candidates>()) {}
 
 void tear_down_sim::tear_down() {
     pop_trail_frame_.pop();
@@ -26,5 +28,7 @@ void tear_down_sim::tear_down() {
     clear_mhu_heads_.clear_mhu_heads();
     clear_bindings_.clear_bindings();
     frame_allocator_.reset();
+    clean_up_cdcl_.cleanup();
+    clear_chosen_goal_candidates_.clear();
     trim_unpinned_lineages_.trim();
 }

@@ -19,6 +19,8 @@
 #include "interfaces/i_clear_bindings.hpp"
 #include "interfaces/i_trim_unpinned_lineages.hpp"
 #include "interfaces/i_frame_allocator.hpp"
+#include "interfaces/i_clean_up_cdcl.hpp"
+#include "interfaces/i_clear_chosen_goal_candidates.hpp"
 
 using ::testing::NiceMock;
 
@@ -80,6 +82,14 @@ struct MockFrameAllocator : public i_frame_allocator {
     MOCK_METHOD(void, reset, (), (override));
 };
 
+struct MockCleanUpCdcl : public i_clean_up_cdcl {
+    MOCK_METHOD(void, cleanup, (), (override));
+};
+
+struct MockClearChosenGoalCandidates : public i_clear_chosen_goal_candidates {
+    MOCK_METHOD(void, clear, (), (override));
+};
+
 struct HorizonTearDownSimTest : public ::testing::Test {
     locator loc;
     MockClearGoalWeights clear_goal_weights;
@@ -96,6 +106,8 @@ struct HorizonTearDownSimTest : public ::testing::Test {
     NiceMock<MockClearBindings> clear_bindings;
     NiceMock<MockTrimUnpinnedLineages> trim_lineages;
     NiceMock<MockFrameAllocator> frame_allocator;
+    NiceMock<MockCleanUpCdcl> clean_up_cdcl;
+    NiceMock<MockClearChosenGoalCandidates> clear_chosen_goal_candidates;
     std::unique_ptr<horizon_tear_down_sim> tear_down;
 
     void SetUp() override {
@@ -113,6 +125,8 @@ struct HorizonTearDownSimTest : public ::testing::Test {
         loc.bind_as<i_clear_bindings>(clear_bindings);
         loc.bind_as<i_trim_unpinned_lineages>(trim_lineages);
         loc.bind_as<i_frame_allocator>(frame_allocator);
+        loc.bind_as<i_clean_up_cdcl>(clean_up_cdcl);
+        loc.bind_as<i_clear_chosen_goal_candidates>(clear_chosen_goal_candidates);
         tear_down = std::make_unique<horizon_tear_down_sim>(loc);
     }
 };

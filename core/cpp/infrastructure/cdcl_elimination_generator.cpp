@@ -1,110 +1,96 @@
-#include <memory>
 #include "infrastructure/cdcl_elimination_generator.hpp"
-#include "infrastructure/backtrackable_map_insert.hpp"
-#include "infrastructure/backtrackable_map_erase.hpp"
-#include "infrastructure/backtrackable_map_at_insert.hpp"
-#include "infrastructure/backtrackable_map_at_erase.hpp"
+#include <algorithm>
 
-cdcl_elimination_generator::cdcl_elimination_generator(locator& loc) :
-    avoidances(loc.locate<i_log_to_current_trail_frame>(), {}),
-    watched_goals(loc.locate<i_log_to_current_trail_frame>(), {}),
-    cdcl_sequencer(loc.locate<i_cdcl_sequencer>()) {
-}
+cdcl_elimination_generator::cdcl_elimination_generator(locator& loc)
+    : set_chosen_goal_candidate_(loc.locate<i_set_chosen_goal_candidate>()),
+      try_get_chosen_goal_candidate_(loc.locate<i_try_get_chosen_goal_candidate>()) {}
 
 std::optional<const resolution_lineage*> cdcl_elimination_generator::learn(const lemma& l) {
     const auto& resolutions = l.get_resolutions();
+    if (resolutions.empty())
+        return std::nullopt;
+    if (resolutions.size() == 1)
+        return *resolutions.begin();
 
-    avoidance_type av{resolutions.begin(), resolutions.end()};
-
-    return insert(std::move(av));
-}
-
-coroutine<const resolution_lineage*, void> cdcl_elimination_generator::constrain(const resolution_lineage* rl) {
-    const goal_lineage* gl = rl->parent;
-
-    auto it = watched_goals.get().find(gl);
-
-    if (it == watched_goals.get().end())
-        co_return;
-
-    auto av_ids = it->second;
-
-    for (avoidance_id id : av_ids) {
-        const avoidance_type& av = avoidances.get().at(id);
-        if (!av.contains(rl)) {
-            erase(id);
-            continue;
-        }
-
-        // reduce avoidance
-        avoidance_type reduced = av;
-        reduced.erase(rl);
-
-        // erase old avoidance
-        erase(id);
-
-        // insert new avoidance
-        if (auto elim = insert(std::move(reduced)))
-            co_yield *elim;
-    }
-
-    auto erase_mut = std::make_unique<
-        backtrackable_map_erase<
-        watched_goals_type>>(
-            gl);
-    watched_goals.mutate(std::move(erase_mut));
-}
-
-std::optional<const resolution_lineage*> cdcl_elimination_generator::insert(avoidance_type av) {
-    if (av.size() == 1)
-        return *av.begin();
-
-    avoidance_id id = cdcl_sequencer.next();
-
-    auto insert_mut = std::make_unique<
-        backtrackable_map_insert<
-        avoidances_type>>(
-            id, av);
-    avoidances.mutate(std::move(insert_mut));
-
-    for (const resolution_lineage* rl : av)
-        link(rl->parent, id);
-
+    std::vector<const resolution_lineage*> members(resolutions.begin(), resolutions.end());
+    std::sort(members.begin(), members.end(), [](const resolution_lineage* a, const resolution_lineage* b) {
+        if (a->parent != b->parent)
+            return a->parent < b->parent;
+        return a->idx < b->idx;
+    });
+    const avoidance_id id = next_avoidance_id_++;
+    avoidances_.emplace(id, avoidance{std::move(members), 0, 1});
+    watched_goals_[avoidances_.at(id).members.at(0)->parent].insert(id);
+    watched_goals_[avoidances_.at(id).members.at(1)->parent].insert(id);
     return std::nullopt;
 }
 
-void cdcl_elimination_generator::link(const goal_lineage* gl, avoidance_id id) {
-    if (!watched_goals.get().contains(gl)) {
-        auto insert_mut = std::make_unique<
-            backtrackable_map_insert<
-            watched_goals_type>>(
-                gl, std::unordered_set<avoidance_id>{});
-        watched_goals.mutate(std::move(insert_mut));
-    }
+coroutine<const resolution_lineage*, void> cdcl_elimination_generator::constrain(
+    const resolution_lineage* rl) {
+    set_chosen_goal_candidate_.set(rl->parent, rl->idx);
 
-    if (!watched_goals.get().at(gl).contains(id)) {
-        auto insert_mut = std::make_unique<
-            backtrackable_map_at_insert<
-            watched_goals_type>>(
-                gl, id);
-        watched_goals.mutate(std::move(insert_mut));
-    }
+    const auto it = watched_goals_.find(rl->parent);
+    if (it == watched_goals_.end())
+        co_return;
+
+    auto node = watched_goals_.extract(it);
+    for (const avoidance_id id : node.mapped())
+        if (auto forced = visit_avoidance(id, rl))
+            co_yield *forced;
 }
 
-void cdcl_elimination_generator::erase(avoidance_id id) {
-    const avoidance_type& av = avoidances.get().at(id);
+size_t cdcl_elimination_generator::scan(const avoidance& av) const {
+    for (size_t i = std::max(av.watcher_a_pos, av.watcher_b_pos) + 1; i < av.members.size(); ++i) {
+        const auto chosen = try_get_chosen_goal_candidate_.try_get(av.members.at(i)->parent);
+        if (!chosen)
+            return i;
+        if (*chosen != av.members.at(i)->idx)
+            return SIZE_MAX;
+    }
+    return av.members.size();
+}
 
-    for (const resolution_lineage* rl : av) {
-        auto erase_mut = std::make_unique<
-            backtrackable_map_at_erase<
-            watched_goals_type>>(
-                rl->parent, id);
-        watched_goals.mutate(std::move(erase_mut));
+std::optional<const resolution_lineage*> cdcl_elimination_generator::visit_avoidance(
+    avoidance_id id, const resolution_lineage* rl) {
+    avoidance& av = avoidances_.at(id);
+    visited_avoidances_.insert(id);
+
+    const goal_lineage* const watch_a = av.members.at(av.watcher_a_pos)->parent;
+    const goal_lineage* const watch_b = av.members.at(av.watcher_b_pos)->parent;
+    const bool          a_fired   = watch_a == rl->parent;
+    size_t&             fired_pos = a_fired ? av.watcher_a_pos : av.watcher_b_pos;
+    const size_t        other_pos = a_fired ? av.watcher_b_pos : av.watcher_a_pos;
+    const goal_lineage* other_gl  = av.members.at(other_pos)->parent;
+
+    if (av.members.at(fired_pos)->idx != rl->idx) {
+        watched_goals_[other_gl].erase(id);
+        return std::nullopt;
     }
 
-    auto erase_mut = std::make_unique<
-        backtrackable_map_erase<
-        avoidances_type>>(
-            id);
-    avoidances.mutate(std::move(erase_mut));
+    const size_t hit = scan(av);
+    if (hit == SIZE_MAX) {
+        watched_goals_[other_gl].erase(id);
+        return std::nullopt;
+    }
+    if (hit == av.members.size()) {
+        watched_goals_[other_gl].erase(id);
+        return av.members.at(other_pos);
+    }
+
+    watched_goals_[av.members.at(hit)->parent].insert(id);
+    fired_pos = hit;
+    return std::nullopt;
+}
+
+void cdcl_elimination_generator::cleanup() {
+    for (const avoidance_id id : visited_avoidances_) {
+        avoidance& av = avoidances_.at(id);
+        std::swap(av.members.at(0), av.members.at(av.watcher_a_pos));
+        std::swap(av.members.at(1), av.members.at(av.watcher_b_pos));
+        av.watcher_a_pos = 0;
+        av.watcher_b_pos = 1;
+        watched_goals_[av.members.at(0)->parent].insert(id);
+        watched_goals_[av.members.at(1)->parent].insert(id);
+    }
+    visited_avoidances_.clear();
 }

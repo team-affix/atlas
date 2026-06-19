@@ -1,23 +1,18 @@
 // cdcl_elimination_generator learns pairwise avoidance lemmas and yields eliminations
-// during constrain. Unit tests mock i_log_to_current_trail_frame logging and assert learn/constrain outcomes
-// on independent and dependent lineage trees.
+// during constrain. Unit tests exercise learn/constrain/cleanup through the public API only.
 
 #include <gtest/gtest.h>
 #include <gmock/gmock.h>
 #include <vector>
 #include "locator_fixture.hpp"
 #include "infrastructure/cdcl_elimination_generator.hpp"
-#include "infrastructure/cdcl_sequencer.hpp"
-#include "interfaces/i_log_to_current_trail_frame.hpp"
+#include "infrastructure/chosen_goal_candidates.hpp"
 #include "infrastructure/coroutine.hpp"
 
-using ::testing::_;
-using ::testing::AtLeast;
 using ::testing::ElementsAre;
 using ::testing::IsEmpty;
 using ::testing::UnorderedElementsAre;
-using ::testing::NiceMock;
-using ::testing::StrictMock;
+
 namespace {
 
 std::vector<const resolution_lineage*> collect_elims(
@@ -40,31 +35,27 @@ lemma make_lemma(std::initializer_list<const resolution_lineage*> rs) {
 
 } // namespace
 
-struct MockTrail : public i_log_to_current_trail_frame {
-    MOCK_METHOD(void, log, ((std::unique_ptr<i_backtrackable>)), (override));
-};
-
-// Mutually consistent avoidances only: at most one resolution per parent goal in each set.
-// Lineage naming: lin_i = ith root goal; lin_i_j = jth resolution of goal i;
-// lin_i_j_k = kth subgoal (goal) of resolution j of goal i; lin_i_j_k_m = mth resolution of that subgoal; ...
 struct CdclEliminationGeneratorUnitTest : public ::testing::Test {
 protected:
-    NiceMock<MockTrail> trail;
     locator loc;
-    cdcl_sequencer seq;
+    chosen_goal_candidates chosen;
     cdcl_elimination_generator cdcl;
 
     CdclEliminationGeneratorUnitTest()
-        : seq([&]() {
-              loc.bind_as<i_log_to_current_trail_frame>(trail);
-              return cdcl_sequencer{loc};
-          }()),
-          cdcl([this]() {
-              loc.bind_as<i_cdcl_sequencer>(seq);
+        : chosen(),
+          cdcl([&]() {
+              loc.bind_as<i_try_get_chosen_goal_candidate, i_set_chosen_goal_candidate,
+                  i_clear_chosen_goal_candidates>(chosen);
               return cdcl_elimination_generator{loc};
-          }()) {}
+          }()) {
+        loc.bind_as<i_learn_avoidance, i_clean_up_cdcl>(cdcl);
+    }
 
-    // Four independent root goals (no derivation parent).
+    void end_sim() {
+        cdcl.cleanup();
+        chosen.clear();
+    }
+
     goal_lineage lin_0{nullptr, 0};
     goal_lineage lin_1{nullptr, 1};
     goal_lineage lin_2{nullptr, 2};
@@ -76,9 +67,6 @@ protected:
     resolution_lineage lin_2_0{&lin_2, 2};
     resolution_lineage lin_3_0{&lin_3, 3};
 
-    // Dependent tree (one resolution lin_4_0 at goal 4, then sibling subgoals):
-    //   lin_4 --lin_4_0--> lin_4_0_0 --lin_4_0_0_0-->
-    //                    \-> lin_4_0_1 --lin_4_0_1_0-->
     goal_lineage lin_4{nullptr, 4};
     resolution_lineage lin_4_0{&lin_4, 5};
     goal_lineage lin_4_0_0{&lin_4_0, 0};
@@ -86,10 +74,6 @@ protected:
     resolution_lineage lin_4_0_0_0{&lin_4_0_0, 6};
     resolution_lineage lin_4_0_1_0{&lin_4_0_1, 7};
 };
-
-// ---------------------------------------------------------------------------
-// learn
-// ---------------------------------------------------------------------------
 
 TEST_F(CdclEliminationGeneratorUnitTest, LearnUnitAvoidanceReturnsEliminationWithoutStoring) {
     EXPECT_EQ(cdcl.learn(make_lemma({&lin_0_0})), std::optional{&lin_0_0});
@@ -99,52 +83,11 @@ TEST_F(CdclEliminationGeneratorUnitTest, LearnMultiMemberAvoidanceReturnsNull) {
     EXPECT_EQ(cdcl.learn(make_lemma({&lin_0_0, &lin_1_0})), std::nullopt);
 }
 
-TEST_F(CdclEliminationGeneratorUnitTest, LearnUnitAvoidanceDoesNotLogToTrail) {
-    StrictMock<MockTrail> strict_trail;
-    locator loc;
-    loc.bind_as<i_log_to_current_trail_frame>(strict_trail);
-    cdcl_sequencer seq{loc};
-    loc.bind_as<i_cdcl_sequencer>(seq);
-    cdcl_elimination_generator strict_cdcl{loc};
-
-    EXPECT_CALL(strict_trail, log(_)).Times(0);
-    EXPECT_EQ(strict_cdcl.learn(make_lemma({&lin_0_0})), std::optional{&lin_0_0});
-}
-
-TEST_F(CdclEliminationGeneratorUnitTest, LearnMultiMemberAvoidanceLogsToTrail) {
-    StrictMock<MockTrail> strict_trail;
-    locator loc;
-    loc.bind_as<i_log_to_current_trail_frame>(strict_trail);
-    cdcl_sequencer seq{loc};
-    loc.bind_as<i_cdcl_sequencer>(seq);
-    cdcl_elimination_generator strict_cdcl{loc};
-
-    EXPECT_CALL(strict_trail, log(_)).Times(AtLeast(1));
-    EXPECT_EQ(strict_cdcl.learn(make_lemma({&lin_0_0, &lin_1_0})), std::nullopt);
-}
-
-TEST_F(CdclEliminationGeneratorUnitTest, LearnDuplicateAvoidanceIsIdempotent) {
+TEST_F(CdclEliminationGeneratorUnitTest, LearnDuplicateAvoidanceStoresTwice) {
     const lemma l = make_lemma({&lin_0_0, &lin_1_0});
     EXPECT_EQ(cdcl.learn(l), std::nullopt);
     EXPECT_EQ(cdcl.learn(l), std::nullopt);
-}
-
-TEST_F(CdclEliminationGeneratorUnitTest, LearnDuplicateAvoidanceLogsToTrailEachTime) {
-    StrictMock<MockTrail> strict_trail;
-    locator loc;
-    loc.bind_as<i_log_to_current_trail_frame>(strict_trail);
-    cdcl_sequencer seq{loc};
-    loc.bind_as<i_cdcl_sequencer>(seq);
-    cdcl_elimination_generator strict_cdcl{loc};
-
-    const lemma l = make_lemma({&lin_0_0, &lin_1_0});
-
-    EXPECT_CALL(strict_trail, log(_)).Times(AtLeast(1));
-    EXPECT_EQ(strict_cdcl.learn(l), std::nullopt);
-    testing::Mock::VerifyAndClearExpectations(&strict_trail);
-
-    EXPECT_CALL(strict_trail, log(_)).Times(AtLeast(1));
-    EXPECT_EQ(strict_cdcl.learn(l), std::nullopt);
+    EXPECT_THAT(collect_elims(cdcl.constrain(&lin_0_0)), ElementsAre(&lin_1_0, &lin_1_0));
 }
 
 TEST_F(CdclEliminationGeneratorUnitTest, LearnThreeIndependentPairAvoidances) {
@@ -153,146 +96,79 @@ TEST_F(CdclEliminationGeneratorUnitTest, LearnThreeIndependentPairAvoidances) {
     EXPECT_EQ(cdcl.learn(make_lemma({&lin_4_0_0_0, &lin_4_0_1_0})), std::nullopt);
 }
 
-// ---------------------------------------------------------------------------
-// constrain — no prior learn
-// ---------------------------------------------------------------------------
-
 TEST_F(CdclEliminationGeneratorUnitTest, ConstrainWithNoLearnedAvoidancesYieldsNothing) {
-    auto elims = collect_elims(cdcl.constrain(&lin_0_0));
-    EXPECT_THAT(elims, IsEmpty());
+    EXPECT_THAT(collect_elims(cdcl.constrain(&lin_0_0)), IsEmpty());
 }
 
 TEST_F(CdclEliminationGeneratorUnitTest, ConstrainAfterUnitLearnYieldsNothing) {
     EXPECT_EQ(cdcl.learn(make_lemma({&lin_0_0})), std::optional{&lin_0_0});
-    auto elims = collect_elims(cdcl.constrain(&lin_0_0));
-    EXPECT_THAT(elims, IsEmpty());
+    EXPECT_THAT(collect_elims(cdcl.constrain(&lin_0_0)), IsEmpty());
 }
-
-// ---------------------------------------------------------------------------
-// constrain — single stored avoidance
-// ---------------------------------------------------------------------------
 
 TEST_F(CdclEliminationGeneratorUnitTest, ConstrainMember1YieldsMember2InBinaryAvoidance) {
     cdcl.learn(make_lemma({&lin_0_0, &lin_1_0}));
-
-    auto elims = collect_elims(cdcl.constrain(&lin_0_0));
-
-    EXPECT_THAT(elims, ElementsAre(&lin_1_0));
+    EXPECT_THAT(collect_elims(cdcl.constrain(&lin_0_0)), ElementsAre(&lin_1_0));
 }
 
 TEST_F(CdclEliminationGeneratorUnitTest, SecondConstrainOnSameGoalYieldsNothing) {
     cdcl.learn(make_lemma({&lin_0_0, &lin_1_0}));
-
     EXPECT_THAT(collect_elims(cdcl.constrain(&lin_0_0)), ElementsAre(&lin_1_0));
     EXPECT_THAT(collect_elims(cdcl.constrain(&lin_0_0)), IsEmpty());
 }
 
 TEST_F(CdclEliminationGeneratorUnitTest, ConstrainMutuallyExclusiveResolutionErasesWithoutYield) {
     cdcl.learn(make_lemma({&lin_0_0, &lin_1_0}));
-
-    auto elims = collect_elims(cdcl.constrain(&lin_0_1));
-
-    EXPECT_THAT(elims, IsEmpty());
+    EXPECT_THAT(collect_elims(cdcl.constrain(&lin_0_1)), IsEmpty());
 }
-
-// ---------------------------------------------------------------------------
-// constrain — multiple learned avoidances (independent)
-// ---------------------------------------------------------------------------
 
 TEST_F(CdclEliminationGeneratorUnitTest, TwoIndependentAvoidancesConstrainIndependently) {
     cdcl.learn(make_lemma({&lin_0_0, &lin_1_0}));
     cdcl.learn(make_lemma({&lin_2_0, &lin_3_0}));
-
-    auto from_lin_0 = collect_elims(cdcl.constrain(&lin_0_0));
-    auto from_lin_2 = collect_elims(cdcl.constrain(&lin_2_0));
-
-    EXPECT_THAT(from_lin_0, ElementsAre(&lin_1_0));
-    EXPECT_THAT(from_lin_2, ElementsAre(&lin_3_0));
+    EXPECT_THAT(collect_elims(cdcl.constrain(&lin_0_0)), ElementsAre(&lin_1_0));
+    EXPECT_THAT(collect_elims(cdcl.constrain(&lin_2_0)), ElementsAre(&lin_3_0));
 }
 
 TEST_F(CdclEliminationGeneratorUnitTest, SequentialConstrainOnDisjointIndependentAvoidances) {
     cdcl.learn(make_lemma({&lin_0_0, &lin_1_0}));
     cdcl.learn(make_lemma({&lin_2_0, &lin_3_0}));
-
-    auto first = collect_elims(cdcl.constrain(&lin_0_0));
-    auto second = collect_elims(cdcl.constrain(&lin_2_0));
-
-    EXPECT_THAT(first, ElementsAre(&lin_1_0));
-    EXPECT_THAT(second, ElementsAre(&lin_3_0));
+    EXPECT_THAT(collect_elims(cdcl.constrain(&lin_0_0)), ElementsAre(&lin_1_0));
+    EXPECT_THAT(collect_elims(cdcl.constrain(&lin_2_0)), ElementsAre(&lin_3_0));
 }
 
 TEST_F(CdclEliminationGeneratorUnitTest, ConstrainOnGoalWithNoLearnedAvoidanceYieldsNothing) {
     cdcl.learn(make_lemma({&lin_0_0, &lin_1_0}));
-
-    auto elims = collect_elims(cdcl.constrain(&lin_3_0));
-
-    EXPECT_THAT(elims, IsEmpty());
+    EXPECT_THAT(collect_elims(cdcl.constrain(&lin_3_0)), IsEmpty());
 }
-
-// ---------------------------------------------------------------------------
-// constrain — two avoidances watching lin_0 (one constrain per goal)
-// ---------------------------------------------------------------------------
 
 TEST_F(CdclEliminationGeneratorUnitTest, ConstrainYieldsFromConsistentAvoidanceAndNotMutuallyExclusiveAvoidance) {
     cdcl.learn(make_lemma({&lin_0_0, &lin_1_0}));
     cdcl.learn(make_lemma({&lin_0_1, &lin_2_0}));
-
-    auto elims = collect_elims(cdcl.constrain(&lin_0_1));
-
-    EXPECT_THAT(elims, ElementsAre(&lin_2_0));
+    EXPECT_THAT(collect_elims(cdcl.constrain(&lin_0_1)), ElementsAre(&lin_2_0));
 }
-
-// ---------------------------------------------------------------------------
-// constrain — dependent tree (distinct parents within each avoidance)
-// ---------------------------------------------------------------------------
 
 TEST_F(CdclEliminationGeneratorUnitTest, DependentAndIndependentAvoidancesDoNotInterfere) {
     cdcl.learn(make_lemma({&lin_4_0_0_0, &lin_4_0_1_0}));
     cdcl.learn(make_lemma({&lin_0_0, &lin_1_0}));
-
-    auto from_dependent = collect_elims(cdcl.constrain(&lin_4_0_0_0));
-    auto from_independent = collect_elims(cdcl.constrain(&lin_0_0));
-
-    EXPECT_THAT(from_dependent, ElementsAre(&lin_4_0_1_0));
-    EXPECT_THAT(from_independent, ElementsAre(&lin_1_0));
+    EXPECT_THAT(collect_elims(cdcl.constrain(&lin_4_0_0_0)), ElementsAre(&lin_4_0_1_0));
+    EXPECT_THAT(collect_elims(cdcl.constrain(&lin_0_0)), ElementsAre(&lin_1_0));
 }
-
-// ---------------------------------------------------------------------------
-// constrain — sequential reduction of a three-member avoidance
-// ---------------------------------------------------------------------------
 
 TEST_F(CdclEliminationGeneratorUnitTest, ThreeMemberAvoidanceSequentialConstrainEventuallyYieldsLast) {
     cdcl.learn(make_lemma({&lin_0_0, &lin_1_0, &lin_2_0}));
-
     EXPECT_THAT(collect_elims(cdcl.constrain(&lin_0_0)), IsEmpty());
     EXPECT_THAT(collect_elims(cdcl.constrain(&lin_1_0)), ElementsAre(&lin_2_0));
     EXPECT_THAT(collect_elims(cdcl.constrain(&lin_2_0)), IsEmpty());
 }
-
-// ---------------------------------------------------------------------------
-// constrain — batch of learn + multiple constrain in one scenario
-// ---------------------------------------------------------------------------
 
 TEST_F(CdclEliminationGeneratorUnitTest, LearnManyAvoidancesThenConstrainOneResolutionPerGoal) {
     cdcl.learn(make_lemma({&lin_0_0, &lin_1_0}));
     cdcl.learn(make_lemma({&lin_2_0, &lin_3_0}));
     cdcl.learn(make_lemma({&lin_0_1, &lin_2_0}));
     cdcl.learn(make_lemma({&lin_4_0_0_0, &lin_4_0_1_0}));
-
-    auto e_lin_4_0_0 = collect_elims(cdcl.constrain(&lin_4_0_0_0));
-    auto e_lin_0 = collect_elims(cdcl.constrain(&lin_0_1));
-    auto e_lin_2 = collect_elims(cdcl.constrain(&lin_2_0));
-
-    EXPECT_THAT(e_lin_4_0_0, ElementsAre(&lin_4_0_1_0));
-    EXPECT_THAT(e_lin_0, ElementsAre(&lin_2_0));
-    EXPECT_THAT(e_lin_2, ElementsAre(&lin_3_0));
+    EXPECT_THAT(collect_elims(cdcl.constrain(&lin_4_0_0_0)), ElementsAre(&lin_4_0_1_0));
+    EXPECT_THAT(collect_elims(cdcl.constrain(&lin_0_1)), ElementsAre(&lin_2_0));
+    EXPECT_THAT(collect_elims(cdcl.constrain(&lin_2_0)), ElementsAre(&lin_3_0));
 }
-
-// ---------------------------------------------------------------------------
-// constrain — four avoidances, each with a resolution on shared goal lin_0
-//   av0: {lin_0_0, lin_1_0}   av1: {lin_0_0, lin_2_0}   av2: {lin_0_0, lin_3_0}
-//   av3: {lin_0_1, lin_3_0}
-// ---------------------------------------------------------------------------
 
 TEST_F(CdclEliminationGeneratorUnitTest,
     FourAvoidancesSharingLin0ConstrainMemberLin0_0YieldsFromConsistentAvoidances) {
@@ -300,10 +176,9 @@ TEST_F(CdclEliminationGeneratorUnitTest,
     cdcl.learn(make_lemma({&lin_0_0, &lin_2_0}));
     cdcl.learn(make_lemma({&lin_0_0, &lin_3_0}));
     cdcl.learn(make_lemma({&lin_0_1, &lin_3_0}));
-
-    auto elims = collect_elims(cdcl.constrain(&lin_0_0));
-
-    EXPECT_THAT(elims, UnorderedElementsAre(&lin_1_0, &lin_2_0, &lin_3_0));
+    EXPECT_THAT(
+        collect_elims(cdcl.constrain(&lin_0_0)),
+        UnorderedElementsAre(&lin_1_0, &lin_2_0, &lin_3_0));
 }
 
 TEST_F(CdclEliminationGeneratorUnitTest,
@@ -312,10 +187,7 @@ TEST_F(CdclEliminationGeneratorUnitTest,
     cdcl.learn(make_lemma({&lin_0_0, &lin_2_0}));
     cdcl.learn(make_lemma({&lin_0_0, &lin_3_0}));
     cdcl.learn(make_lemma({&lin_0_1, &lin_3_0}));
-
-    auto elims = collect_elims(cdcl.constrain(&lin_0_1));
-
-    EXPECT_THAT(elims, ElementsAre(&lin_3_0));
+    EXPECT_THAT(collect_elims(cdcl.constrain(&lin_0_1)), ElementsAre(&lin_3_0));
 }
 
 TEST_F(CdclEliminationGeneratorUnitTest,
@@ -323,72 +195,67 @@ TEST_F(CdclEliminationGeneratorUnitTest,
     cdcl.learn(make_lemma({&lin_0_0, &lin_1_0}));
     cdcl.learn(make_lemma({&lin_0_0, &lin_2_0}));
     cdcl.learn(make_lemma({&lin_0_0, &lin_3_0}));
-
-    auto elims = collect_elims(cdcl.constrain(&lin_0_1));
-
-    EXPECT_THAT(elims, IsEmpty());
+    EXPECT_THAT(collect_elims(cdcl.constrain(&lin_0_1)), IsEmpty());
 }
 
 TEST_F(CdclEliminationGeneratorUnitTest,
     FourAvoidancesSharingLin0ConstrainExclusiveLin0_0ErasesOnlyLin0_1Avoidance) {
     cdcl.learn(make_lemma({&lin_0_1, &lin_3_0}));
-
-    auto elims = collect_elims(cdcl.constrain(&lin_0_0));
-
-    EXPECT_THAT(elims, IsEmpty());
+    EXPECT_THAT(collect_elims(cdcl.constrain(&lin_0_0)), IsEmpty());
 }
-
-// ---------------------------------------------------------------------------
-// constrain — one-shot-per-goal semantics (second sibling resolution)
-// ---------------------------------------------------------------------------
 
 TEST_F(CdclEliminationGeneratorUnitTest, SecondSiblingResolutionOnSameGoalYieldsNothingAfterUnwatch) {
     cdcl.learn(make_lemma({&lin_0_0, &lin_1_0}));
-
     EXPECT_THAT(collect_elims(cdcl.constrain(&lin_0_0)), ElementsAre(&lin_1_0));
     EXPECT_THAT(collect_elims(cdcl.constrain(&lin_0_1)), IsEmpty());
 }
 
 TEST_F(CdclEliminationGeneratorUnitTest, SecondSiblingOnSameGoalNoOpWhenReducedAvoidanceRemains) {
     cdcl.learn(make_lemma({&lin_0_0, &lin_1_0, &lin_2_0}));
-
     EXPECT_THAT(collect_elims(cdcl.constrain(&lin_0_0)), IsEmpty());
     EXPECT_THAT(collect_elims(cdcl.constrain(&lin_0_1)), IsEmpty());
     EXPECT_THAT(collect_elims(cdcl.constrain(&lin_1_0)), ElementsAre(&lin_2_0));
 }
 
-// ---------------------------------------------------------------------------
-// constrain — reduce-to-duplicate avoidance (no insert dedup; duplicate copies both yield)
-// ---------------------------------------------------------------------------
-
 TEST_F(CdclEliminationGeneratorUnitTest, ReduceToDuplicateAvoidanceYieldsFromEachCopy) {
     cdcl.learn(make_lemma({&lin_0_0, &lin_1_0, &lin_2_0}));
     cdcl.learn(make_lemma({&lin_1_0, &lin_2_0}));
-
     EXPECT_THAT(collect_elims(cdcl.constrain(&lin_0_0)), IsEmpty());
     EXPECT_THAT(collect_elims(cdcl.constrain(&lin_1_0)), ElementsAre(&lin_2_0, &lin_2_0));
 }
 
-// ---------------------------------------------------------------------------
-// constrain — four-member sequential reduction
-// ---------------------------------------------------------------------------
-
 TEST_F(CdclEliminationGeneratorUnitTest, FourMemberAvoidanceSequentialConstrainEventuallyYieldsLast) {
     cdcl.learn(make_lemma({&lin_0_0, &lin_1_0, &lin_2_0, &lin_3_0}));
-
     EXPECT_THAT(collect_elims(cdcl.constrain(&lin_0_0)), IsEmpty());
     EXPECT_THAT(collect_elims(cdcl.constrain(&lin_1_0)), IsEmpty());
     EXPECT_THAT(collect_elims(cdcl.constrain(&lin_2_0)), ElementsAre(&lin_3_0));
 }
 
-// ---------------------------------------------------------------------------
-// constrain — cross-goal exclusive isolation
-// ---------------------------------------------------------------------------
-
 TEST_F(CdclEliminationGeneratorUnitTest, ExclusiveConstrainOnOneGoalLeavesOtherGoalAvoidanceIntact) {
     cdcl.learn(make_lemma({&lin_0_0, &lin_1_0}));
     cdcl.learn(make_lemma({&lin_2_0, &lin_3_0}));
-
     EXPECT_THAT(collect_elims(cdcl.constrain(&lin_0_1)), IsEmpty());
     EXPECT_THAT(collect_elims(cdcl.constrain(&lin_2_0)), ElementsAre(&lin_3_0));
+}
+
+TEST_F(CdclEliminationGeneratorUnitTest, CleanupRestoresSatisfiedAvoidanceForNextSim) {
+    cdcl.learn(make_lemma({&lin_0_0, &lin_1_0}));
+    EXPECT_THAT(collect_elims(cdcl.constrain(&lin_0_1)), IsEmpty());
+    end_sim();
+    EXPECT_THAT(collect_elims(cdcl.constrain(&lin_0_0)), ElementsAre(&lin_1_0));
+}
+
+TEST_F(CdclEliminationGeneratorUnitTest, CleanupRestoresThreeMemberAvoidanceForNextSim) {
+    cdcl.learn(make_lemma({&lin_0_0, &lin_1_0, &lin_2_0}));
+    EXPECT_THAT(collect_elims(cdcl.constrain(&lin_0_0)), IsEmpty());
+    EXPECT_THAT(collect_elims(cdcl.constrain(&lin_1_0)), ElementsAre(&lin_2_0));
+    end_sim();
+    EXPECT_THAT(collect_elims(cdcl.constrain(&lin_0_0)), IsEmpty());
+    EXPECT_THAT(collect_elims(cdcl.constrain(&lin_1_0)), ElementsAre(&lin_2_0));
+}
+
+TEST_F(CdclEliminationGeneratorUnitTest, TerminalAvoidanceDoesNotRefireWithinSameSim) {
+    cdcl.learn(make_lemma({&lin_0_0, &lin_1_0}));
+    EXPECT_THAT(collect_elims(cdcl.constrain(&lin_0_0)), ElementsAre(&lin_1_0));
+    EXPECT_THAT(collect_elims(cdcl.constrain(&lin_1_0)), IsEmpty());
 }

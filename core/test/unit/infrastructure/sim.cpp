@@ -28,6 +28,8 @@
 #include "interfaces/i_clear_bindings.hpp"
 #include "interfaces/i_clear_candidate_frame_offsets.hpp"
 #include "interfaces/i_frame_allocator.hpp"
+#include "interfaces/i_clean_up_cdcl.hpp"
+#include "interfaces/i_clear_chosen_goal_candidates.hpp"
 #include "value_objects/elimination_result.hpp"
 
 using ::testing::Return;
@@ -151,6 +153,14 @@ struct MockFrameAllocator : public i_frame_allocator {
     MOCK_METHOD(void, reset, (), (override));
 };
 
+struct MockCleanUpCdcl : public i_clean_up_cdcl {
+    MOCK_METHOD(void, cleanup, (), (override));
+};
+
+struct MockClearChosenGoalCandidates : public i_clear_chosen_goal_candidates {
+    MOCK_METHOD(void, clear, (), (override));
+};
+
 struct simulation {
     set_up_sim set_up_sim_;
     run_sim run_sim_;
@@ -193,6 +203,8 @@ struct SimTest : public ::testing::Test {
     testing::NiceMock<MockClearBindings> clear_bindings;
     testing::NiceMock<MockTrimUnpinnedLineages> trim_unpinned_lineages;
     testing::NiceMock<MockFrameAllocator> frame_allocator;
+    testing::NiceMock<MockCleanUpCdcl> clean_up_cdcl;
+    testing::NiceMock<MockClearChosenGoalCandidates> clear_chosen_goal_candidates;
 
     locator loc;
 
@@ -223,6 +235,8 @@ struct SimTest : public ::testing::Test {
         loc.bind_as<i_clear_bindings>(clear_bindings);
         loc.bind_as<i_trim_unpinned_lineages>(trim_unpinned_lineages);
         loc.bind_as<i_frame_allocator>(frame_allocator);
+        loc.bind_as<i_clean_up_cdcl>(clean_up_cdcl);
+        loc.bind_as<i_clear_chosen_goal_candidates>(clear_chosen_goal_candidates);
     }
 
     simulation make_simulation(size_t max_resolutions = kMaxResolutions) {
@@ -289,6 +303,9 @@ TEST_F(SimTest, TearDownPopsTrailAndClearsNonBacktrackedStores) {
     EXPECT_CALL(clear_candidate_frame_offsets, clear_candidate_frame_offsets()).Times(1);
     EXPECT_CALL(clear_mhu_heads, clear_mhu_heads()).Times(1);
     EXPECT_CALL(clear_bindings, clear_bindings()).Times(1);
+    EXPECT_CALL(frame_allocator, reset()).Times(1);
+    EXPECT_CALL(clean_up_cdcl, cleanup()).Times(1);
+    EXPECT_CALL(clear_chosen_goal_candidates, clear()).Times(1);
     EXPECT_CALL(trim_unpinned_lineages, trim()).Times(1);
 
     simulation_.tear_down();
