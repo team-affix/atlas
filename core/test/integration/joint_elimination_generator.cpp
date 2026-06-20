@@ -25,7 +25,7 @@ using ::testing::ElementsAre;
 using ::testing::IsEmpty;
 
 using TestUnifierFactory = unifier_factory<bind_map>;
-using TestCdcl  = cdcl_elimination_generator<chosen_goal_candidates, chosen_goal_candidates>;
+using TestCdcl  = cdcl_elimination_generator<chosen_goal_candidates>;
 using TestMhu   = mhu_elimination_generator<
     bind_map, bind_map_factory, unifier<bind_map>, TestUnifierFactory,
     lineage_pool, expr_pool, goal_candidate_rules>;
@@ -68,7 +68,7 @@ struct JointEliminationGeneratorIntegrationTest : public ::testing::Test {
 
     JointEliminationGeneratorIntegrationTest() {
         pool.emplace();
-        cdcl.emplace(chosen, chosen);
+        cdcl.emplace(chosen);
         mhu.emplace(common, lp, *pool, bmf, uf, ggcr);
         joint.emplace(*cdcl, *mhu);
     }

@@ -34,12 +34,12 @@ lemma make_lemma(std::initializer_list<const resolution_lineage*> rs) {
 
 } // namespace
 
-using TestCdcl = cdcl_elimination_generator<chosen_goal_candidates, chosen_goal_candidates>;
+using TestCdcl = cdcl_elimination_generator<chosen_goal_candidates>;
 
 struct CdclEliminationGeneratorUnitTest : public ::testing::Test {
 protected:
     chosen_goal_candidates chosen;
-    TestCdcl cdcl{chosen, chosen};
+    TestCdcl cdcl{chosen};
 
     void end_sim() {
         cdcl.cleanup();
@@ -241,6 +241,7 @@ TEST_F(CdclEliminationGeneratorUnitTest, CleanupRestoresThreeMemberAvoidanceForN
     EXPECT_THAT(collect_elims(cdcl.constrain(&lin_1_0)), ElementsAre(&lin_2_0));
     end_sim();
     EXPECT_THAT(collect_elims(cdcl.constrain(&lin_0_0)), IsEmpty());
+    chosen.set(lin_0_0.parent, lin_0_0.idx);
     EXPECT_THAT(collect_elims(cdcl.constrain(&lin_1_0)), ElementsAre(&lin_2_0));
 }
 

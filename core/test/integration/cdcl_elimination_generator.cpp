@@ -9,7 +9,7 @@
 #include "infrastructure/trail.hpp"
 #include "infrastructure/coroutine.hpp"
 
-using TestCdcl = cdcl_elimination_generator<chosen_goal_candidates, chosen_goal_candidates>;
+using TestCdcl = cdcl_elimination_generator<chosen_goal_candidates>;
 
 using ::testing::ElementsAre;
 using ::testing::IsEmpty;
@@ -41,7 +41,7 @@ struct CdclEliminationGeneratorIntegrationTest : public ::testing::Test {
 protected:
     trail t;
     chosen_goal_candidates chosen;
-    TestCdcl cdcl{chosen, chosen};
+    TestCdcl cdcl{chosen};
 
     void end_sim() {
         cdcl.cleanup();
@@ -181,6 +181,7 @@ TEST_F(CdclEliminationGeneratorIntegrationTest, ThreeMemberAvoidancePartialConst
     EXPECT_THAT(collect_elims(cdcl.constrain(&lin_1_0)), ElementsAre(&lin_2_0));
     end_sim();
     EXPECT_THAT(collect_elims(cdcl.constrain(&lin_0_0)), IsEmpty());
+    chosen.set(lin_0_0.parent, lin_0_0.idx);
     EXPECT_THAT(collect_elims(cdcl.constrain(&lin_1_0)), ElementsAre(&lin_2_0));
 }
 
@@ -233,7 +234,9 @@ TEST_F(CdclEliminationGeneratorIntegrationTest, FourMemberAvoidancePartialConstr
     EXPECT_THAT(collect_elims(cdcl.constrain(&lin_2_0)), ElementsAre(&lin_3_0));
     end_sim();
     EXPECT_THAT(collect_elims(cdcl.constrain(&lin_0_0)), IsEmpty());
+    chosen.set(lin_0_0.parent, lin_0_0.idx);
     EXPECT_THAT(collect_elims(cdcl.constrain(&lin_1_0)), IsEmpty());
+    chosen.set(lin_1_0.parent, lin_1_0.idx);
     EXPECT_THAT(collect_elims(cdcl.constrain(&lin_2_0)), ElementsAre(&lin_3_0));
 }
 

@@ -63,6 +63,10 @@ struct MockDeactivateGoalCandidates {
     MOCK_METHOD(void, deactivate_goal_candidates, (const goal_lineage*));
 };
 
+struct MockSetChosenGoalCandidate {
+    MOCK_METHOD(void, set, (const goal_lineage*, rule_id));
+};
+
 template<typename Yield>
 std::vector<Yield> collect_yields(coroutine<Yield, void>& sm) {
     std::vector<Yield> out;
@@ -120,7 +124,8 @@ std::string format_snapshot(const SrtTreeSnapshot& snap) {
 
 using TestSubgoalsActivator    = subgoals_activator<lineage_pool, MockGoalActivator, MockGetRule, MockActivateGoalCandidates>;
 using TestSrtSubgoalsActivator = srt_subgoals_activator<srt_active_goals, TestSubgoalsActivator>;
-using TestResolver             = resolver<MockGoalDeactivator, TestSrtSubgoalsActivator, MockDeactivateGoalCandidates>;
+using TestResolver             = resolver<MockGoalDeactivator, TestSrtSubgoalsActivator,
+                                          MockDeactivateGoalCandidates, MockSetChosenGoalCandidate>;
 
 void collect_subtree(
     const goal_lineage* node,
@@ -410,6 +415,7 @@ struct SrtResolverOrderInvarianceIntegrationTest : public ::testing::Test {
     testing::NiceMock<MockActivateGoalCandidates> activate_candidates;
     testing::NiceMock<MockGoalDeactivator> goal_deactivator;
     testing::NiceMock<MockDeactivateGoalCandidates> deactivate_candidates;
+    testing::NiceMock<MockSetChosenGoalCandidate> set_chosen;
 
     std::unique_ptr<TestSubgoalsActivator> subgoals;
     std::unique_ptr<TestSrtSubgoalsActivator> srt_subgoals;
@@ -431,7 +437,8 @@ struct SrtResolverOrderInvarianceIntegrationTest : public ::testing::Test {
 
         subgoals = std::make_unique<TestSubgoalsActivator>(pool, goal_activator, get_rule, activate_candidates);
         srt_subgoals = std::make_unique<TestSrtSubgoalsActivator>(active_goals, *subgoals);
-        res = std::make_unique<TestResolver>(goal_deactivator, *srt_subgoals, deactivate_candidates);
+        res = std::make_unique<TestResolver>(goal_deactivator, *srt_subgoals, deactivate_candidates,
+                                             set_chosen);
     }
 };
 

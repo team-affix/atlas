@@ -66,7 +66,7 @@
 
 struct horizon_manifest {
     using UnifierFactory = unifier_factory<bind_map>;
-    using Cdcl  = cdcl_elimination_generator<chosen_goal_candidates, chosen_goal_candidates>;
+    using Cdcl  = cdcl_elimination_generator<chosen_goal_candidates>;
     using Mhu   = mhu_elimination_generator<
                     bind_map, bind_map_factory, unifier<bind_map>, UnifierFactory,
                     lineage_pool, expr_pool, goal_candidate_rules>;
@@ -102,7 +102,7 @@ struct horizon_manifest {
     using InitialGoalsActivator     = initial_goals_activator<initial_goal_exprs,
                                         HorizonInitialGoalActivator, MakeInitialGoalLineage, GoalCandidatesActivator>;
     using SrtInitialGoalsActivator  = srt_initial_goals_activator<srt_active_goals, InitialGoalsActivator>;
-    using Resolver                  = resolver<HorizonGoalDeactivator, SrtSubgoalsActivator, GoalCandidatesDeactivator>;
+    using Resolver                  = resolver<HorizonGoalDeactivator, SrtSubgoalsActivator, GoalCandidatesDeactivator, chosen_goal_candidates>;
     using HorizonResolver           = horizon_resolver<Resolver, db, goal_weights, cumulative_grounded_weight>;
     using SetUpSim      = set_up_sim<trail>;
     using TearDown      = tear_down_sim<trail, unit_goals, decision_memory, resolution_memory,

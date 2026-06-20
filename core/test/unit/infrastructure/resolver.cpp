@@ -18,13 +18,20 @@ struct MockDeactivateGoalCandidates {
     MOCK_METHOD(void, deactivate_goal_candidates, (const goal_lineage*));
 };
 
-using TestResolver = resolver<MockGoalDeactivator, MockActivateSubgoalsAndCandidates, MockDeactivateGoalCandidates>;
+struct MockSetChosenGoalCandidate {
+    MOCK_METHOD(void, set, (const goal_lineage*, rule_id));
+};
+
+using TestResolver = resolver<MockGoalDeactivator, MockActivateSubgoalsAndCandidates,
+                               MockDeactivateGoalCandidates, MockSetChosenGoalCandidate>;
 
 struct ResolverTest : public ::testing::Test {
     MockGoalDeactivator goal_deactivator;
     MockActivateSubgoalsAndCandidates activate_subgoals_and_candidates;
     MockDeactivateGoalCandidates deactivate_goal_candidates;
-    TestResolver res{goal_deactivator, activate_subgoals_and_candidates, deactivate_goal_candidates};
+    MockSetChosenGoalCandidate set_chosen_goal_candidate;
+    TestResolver res{goal_deactivator, activate_subgoals_and_candidates,
+                     deactivate_goal_candidates, set_chosen_goal_candidate};
 
     static constexpr rule_id kRule = 0;
 
@@ -36,6 +43,7 @@ TEST_F(ResolverTest, ReturnsFalseWhenSubgoalsFail) {
     EXPECT_CALL(activate_subgoals_and_candidates, activate_subgoals_and_candidates(&rl)).WillOnce(Return(false));
     EXPECT_CALL(deactivate_goal_candidates, deactivate_goal_candidates).Times(0);
     EXPECT_CALL(goal_deactivator, deactivate).Times(0);
+    EXPECT_CALL(set_chosen_goal_candidate, set).Times(0);
     EXPECT_FALSE(res.resolve(&rl));
 }
 
@@ -43,6 +51,7 @@ TEST_F(ResolverTest, EmptyBodyDeactivatesParentOnly) {
     EXPECT_CALL(activate_subgoals_and_candidates, activate_subgoals_and_candidates(&rl)).WillOnce(Return(true));
     EXPECT_CALL(deactivate_goal_candidates, deactivate_goal_candidates(&parent_gl)).Times(1);
     EXPECT_CALL(goal_deactivator, deactivate(&parent_gl)).Times(1);
+    EXPECT_CALL(set_chosen_goal_candidate, set(&parent_gl, kRule)).Times(1);
     EXPECT_TRUE(res.resolve(&rl));
 }
 
@@ -50,5 +59,6 @@ TEST_F(ResolverTest, SuccessDeactivatesParentCandidatesAndGoal) {
     EXPECT_CALL(activate_subgoals_and_candidates, activate_subgoals_and_candidates(&rl)).WillOnce(Return(true));
     EXPECT_CALL(deactivate_goal_candidates, deactivate_goal_candidates(&parent_gl)).Times(1);
     EXPECT_CALL(goal_deactivator, deactivate(&parent_gl)).Times(1);
+    EXPECT_CALL(set_chosen_goal_candidate, set(&parent_gl, kRule)).Times(1);
     EXPECT_TRUE(res.resolve(&rl));
 }

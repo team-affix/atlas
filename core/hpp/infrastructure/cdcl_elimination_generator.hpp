@@ -13,9 +13,9 @@
 #include "value_objects/avoidance.hpp"
 #include "value_objects/lemma.hpp"
 
-template<typename ISetChosenGoalCandidate, typename ITryGetChosenGoalCandidate>
+template<typename ITryGetChosenGoalCandidate>
 struct cdcl_elimination_generator {
-    cdcl_elimination_generator(ISetChosenGoalCandidate&, ITryGetChosenGoalCandidate&);
+    cdcl_elimination_generator(ITryGetChosenGoalCandidate&);
     std::optional<const resolution_lineage*> learn(const lemma&);
     coroutine<const resolution_lineage*, void> constrain(const resolution_lineage*);
     void cleanup();
@@ -30,19 +30,16 @@ private:
     std::unordered_map<const goal_lineage*, std::unordered_set<avoidance_id>> watched_goals_;
     std::unordered_set<avoidance_id> visited_avoidances_;
 
-    ISetChosenGoalCandidate& set_chosen_goal_candidate_;
     ITryGetChosenGoalCandidate& try_get_chosen_goal_candidate_;
 };
 
-template<typename ISGCC, typename ITGCC>
-cdcl_elimination_generator<ISGCC, ITGCC>::cdcl_elimination_generator(
-    ISGCC& sgcc, ITGCC& tgcc)
-    : set_chosen_goal_candidate_(sgcc),
-      try_get_chosen_goal_candidate_(tgcc) {}
+template<typename ITGCC>
+cdcl_elimination_generator<ITGCC>::cdcl_elimination_generator(ITGCC& tgcc)
+    : try_get_chosen_goal_candidate_(tgcc) {}
 
-template<typename ISGCC, typename ITGCC>
+template<typename ITGCC>
 std::optional<const resolution_lineage*>
-cdcl_elimination_generator<ISGCC, ITGCC>::learn(const lemma& l) {
+cdcl_elimination_generator<ITGCC>::learn(const lemma& l) {
     const auto& resolutions = l.get_resolutions();
     if (resolutions.empty())
         return std::nullopt;
@@ -62,11 +59,9 @@ cdcl_elimination_generator<ISGCC, ITGCC>::learn(const lemma& l) {
     return std::nullopt;
 }
 
-template<typename ISGCC, typename ITGCC>
+template<typename ITGCC>
 coroutine<const resolution_lineage*, void>
-cdcl_elimination_generator<ISGCC, ITGCC>::constrain(const resolution_lineage* rl) {
-    set_chosen_goal_candidate_.set(rl->parent, rl->idx);
-
+cdcl_elimination_generator<ITGCC>::constrain(const resolution_lineage* rl) {
     const auto it = watched_goals_.find(rl->parent);
     if (it == watched_goals_.end())
         co_return;
@@ -79,8 +74,8 @@ cdcl_elimination_generator<ISGCC, ITGCC>::constrain(const resolution_lineage* rl
     }
 }
 
-template<typename ISGCC, typename ITGCC>
-size_t cdcl_elimination_generator<ISGCC, ITGCC>::scan(const avoidance& av) const {
+template<typename ITGCC>
+size_t cdcl_elimination_generator<ITGCC>::scan(const avoidance& av) const {
     for (size_t i = std::max(av.watcher_a_pos, av.watcher_b_pos) + 1; i < av.members.size(); ++i) {
         const auto chosen = try_get_chosen_goal_candidate_.try_get(av.members.at(i)->parent);
         if (!chosen)
@@ -91,9 +86,9 @@ size_t cdcl_elimination_generator<ISGCC, ITGCC>::scan(const avoidance& av) const
     return av.members.size();
 }
 
-template<typename ISGCC, typename ITGCC>
+template<typename ITGCC>
 std::optional<const resolution_lineage*>
-cdcl_elimination_generator<ISGCC, ITGCC>::visit_avoidance(
+cdcl_elimination_generator<ITGCC>::visit_avoidance(
     avoidance_id id, const resolution_lineage* rl) {
     avoidance& av = avoidances_.at(id);
     visited_avoidances_.insert(id);
@@ -125,8 +120,8 @@ cdcl_elimination_generator<ISGCC, ITGCC>::visit_avoidance(
     return std::nullopt;
 }
 
-template<typename ISGCC, typename ITGCC>
-void cdcl_elimination_generator<ISGCC, ITGCC>::cleanup() {
+template<typename ITGCC>
+void cdcl_elimination_generator<ITGCC>::cleanup() {
     for (const avoidance_id id : visited_avoidances_) {
         avoidance& av = avoidances_.at(id);
         std::swap(av.members.at(0), av.members.at(av.watcher_a_pos));

@@ -42,6 +42,10 @@ struct MockDeactivateGoalCandidates {
     MOCK_METHOD(void, deactivate_goal_candidates, (const goal_lineage*));
 };
 
+struct MockSetChosenGoalCandidate {
+    MOCK_METHOD(void, set, (const goal_lineage*, rule_id));
+};
+
 struct MockGetInitialGoalCount {
     MOCK_METHOD(size_t, count, (), (const));
 };
@@ -115,7 +119,7 @@ protected:
                                       MockGetRule, MockActivateGoalCandidates>;
     using SrtSubgoalsActivatorType = srt_subgoals_activator<srt_active_goals, SubgoalsActivatorType>;
     using ResolverType = resolver<HorizonGoalDeactivatorType, SrtSubgoalsActivatorType,
-                              MockDeactivateGoalCandidates>;
+                              MockDeactivateGoalCandidates, MockSetChosenGoalCandidate>;
     using HorizonResolverType = horizon_resolver<ResolverType, MockGetRule,
                                     goal_weights, cumulative_grounded_weight>;
 
@@ -130,6 +134,7 @@ protected:
     candidate_frame_offsets candidate_frame_offsets_;
     NiceMock<MockActivateGoalCandidates> activate_goal_candidates;
     NiceMock<MockDeactivateGoalCandidates> deactivate_goal_candidates;
+    NiceMock<MockSetChosenGoalCandidate> set_chosen_goal_candidate;
     NiceMock<MockGetInitialGoalCount> get_initial_goal_count;
     NiceMock<MockGetInitialGoalExpr> get_initial_goal_expr;
     NiceMock<MockGetRule> get_rule;
@@ -181,7 +186,7 @@ protected:
                                     activate_goal_candidates);
         srt_subgoals_activator_.emplace(srt_active_goals_, *subgoals_activator_);
         resolver_.emplace(*horizon_goal_deactivator_, *srt_subgoals_activator_,
-                          deactivate_goal_candidates);
+                          deactivate_goal_candidates, set_chosen_goal_candidate);
         horizon_resolver_.emplace(*resolver_, get_rule, goal_weights_,
                                   cumulative_grounded_weight_);
     }

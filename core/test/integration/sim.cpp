@@ -65,7 +65,7 @@ struct MockGenerateDecision {
 namespace {
 
 using UnifierFactory            = unifier_factory<bind_map>;
-using Cdcl                      = cdcl_elimination_generator<chosen_goal_candidates, chosen_goal_candidates>;
+using Cdcl                      = cdcl_elimination_generator<chosen_goal_candidates>;
 using Mhu                       = mhu_elimination_generator<bind_map, bind_map_factory, unifier<bind_map>,
                                     UnifierFactory, lineage_pool, expr_pool, goal_candidate_rules>;
 using Joint                     = joint_elimination_generator<Cdcl, Mhu>;
@@ -93,7 +93,7 @@ using SubgoalsActivator         = subgoals_activator<lineage_pool, GoalActivator
                                     db, GoalCandidatesActivator>;
 using InitialGoalsActivator     = initial_goals_activator<initial_goal_exprs,
                                     InitialGoalActivator, MakeInitialGoalLineage, GoalCandidatesActivator>;
-using Resolver                  = resolver<GoalDeactivator, SubgoalsActivator, GoalCandidatesDeactivator>;
+using Resolver                  = resolver<GoalDeactivator, SubgoalsActivator, GoalCandidatesDeactivator, chosen_goal_candidates>;
 using SetUpSim  = set_up_sim<trail>;
 using TearDown  = tear_down_sim<trail, unit_goals, decision_memory, resolution_memory,
                     goal_candidate_rules, goal_exprs, ra_active_goals, candidate_frame_offsets,
@@ -127,7 +127,7 @@ struct sim_stack {
     frame_bump_allocator frame_allocator_{0};
     elimination_backlog elimination_backlog_{trail_};
 
-    Cdcl cdcl_{chosen_goal_candidates_, chosen_goal_candidates_};
+    Cdcl cdcl_{chosen_goal_candidates_};
     std::optional<Mhu> mhu_;
     std::optional<Joint> joint_;
 
@@ -174,7 +174,8 @@ struct sim_stack {
                                     *goal_candidates_activator_);
         initial_goals_activator_.emplace(initial_goals_, *initial_goal_activator_,
                                          make_initial_goal_lineage_, *goal_candidates_activator_);
-        resolver_.emplace(goal_deactivator_, *subgoals_activator_, *goal_candidates_deactivator_);
+        resolver_.emplace(goal_deactivator_, *subgoals_activator_, *goal_candidates_deactivator_,
+                          chosen_goal_candidates_);
     }
 };
 

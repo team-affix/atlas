@@ -54,7 +54,7 @@
 
 struct basic_manifest {
     using UnifierFactory = unifier_factory<bind_map>;
-    using Cdcl  = cdcl_elimination_generator<chosen_goal_candidates, chosen_goal_candidates>;
+    using Cdcl  = cdcl_elimination_generator<chosen_goal_candidates>;
     using Mhu   = mhu_elimination_generator<
                     bind_map, bind_map_factory, unifier<bind_map>, UnifierFactory,
                     lineage_pool, expr_pool, goal_candidate_rules>;
@@ -84,7 +84,7 @@ struct basic_manifest {
                                         db, GoalCandidatesActivator>;
     using InitialGoalsActivator     = initial_goals_activator<initial_goal_exprs,
                                         InitialGoalActivator, MakeInitialGoalLineage, GoalCandidatesActivator>;
-    using Resolver                  = resolver<GoalDeactivator, SubgoalsActivator, GoalCandidatesDeactivator>;
+    using Resolver                  = resolver<GoalDeactivator, SubgoalsActivator, GoalCandidatesDeactivator, chosen_goal_candidates>;
     using RandomDecisionGenerator   = random_decision_generator<lineage_pool, ra_active_goals, goal_candidate_rules>;
     using SetUpSim  = set_up_sim<trail>;
     using TearDown  = tear_down_sim<trail, unit_goals, decision_memory, resolution_memory,
