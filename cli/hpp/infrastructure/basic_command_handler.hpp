@@ -11,12 +11,10 @@
 #include "infrastructure/expr_pool.hpp"
 #include "infrastructure/expr_printer.hpp"
 #include "infrastructure/initial_goal_exprs.hpp"
-#include "infrastructure/locator.hpp"
 #include "infrastructure/non_backtracking_var_sequencer.hpp"
 #include "infrastructure/print_bindings.hpp"
 #include "infrastructure/print_progress.hpp"
 #include "infrastructure/solve_loop.hpp"
-#include "infrastructure/trail.hpp"
 #include "infrastructure/functor_names.hpp"
 #include "infrastructure/var_names.hpp"
 
@@ -34,8 +32,6 @@ struct basic_command_handler {
     void operator()();
 
 private:
-    locator parse_loc_;
-    trail parse_trail_;
     var_names var_names_;
     functor_names functor_names_;
     non_backtracking_var_sequencer parse_var_seq_;

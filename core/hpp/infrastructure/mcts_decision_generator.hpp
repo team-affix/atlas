@@ -6,36 +6,36 @@
 #include "value_objects/rule.hpp"
 #include "value_objects/mcts_choice.hpp"
 
-template<typename ILineagePool, typename ISrtActiveGoals,
-         typename IMctsChoose, typename IGoalCandidateRules>
+template<typename IMakeResolutionLineage, typename ISrtActiveGoals,
+         typename IMctsChoose, typename IGetGoalCandidateRuleIds>
 struct mcts_decision_generator {
-    mcts_decision_generator(ILineagePool&, ISrtActiveGoals&,
-                            IMctsChoose&, IGoalCandidateRules&);
+    mcts_decision_generator(IMakeResolutionLineage&, ISrtActiveGoals&,
+                            IMctsChoose&, IGetGoalCandidateRuleIds&);
     const resolution_lineage* generate();
 private:
     const goal_lineage* choose_goal();
     rule_id choose_candidate(const goal_lineage*);
-    ILineagePool& make_resolution_lineage_;
+    IMakeResolutionLineage& make_resolution_lineage_;
     ISrtActiveGoals& srt_active_goals_;
     IMctsChoose& mcts_choose_;
-    IGoalCandidateRules& get_goal_candidate_rule_ids_;
+    IGetGoalCandidateRuleIds& get_goal_candidate_rule_ids_;
 };
 
-template<typename ILP, typename ISAG, typename IMC, typename IGCR>
-mcts_decision_generator<ILP, ISAG, IMC, IGCR>::mcts_decision_generator(
-    ILP& lp, ISAG& sag, IMC& mc, IGCR& gcr)
+template<typename IMRL, typename ISAG, typename IMC, typename IGCRI>
+mcts_decision_generator<IMRL, ISAG, IMC, IGCRI>::mcts_decision_generator(
+    IMRL& lp, ISAG& sag, IMC& mc, IGCRI& gcr)
     : make_resolution_lineage_(lp), srt_active_goals_(sag),
       mcts_choose_(mc), get_goal_candidate_rule_ids_(gcr) {}
 
-template<typename ILP, typename ISAG, typename IMC, typename IGCR>
-const resolution_lineage* mcts_decision_generator<ILP, ISAG, IMC, IGCR>::generate() {
+template<typename IMRL, typename ISAG, typename IMC, typename IGCRI>
+const resolution_lineage* mcts_decision_generator<IMRL, ISAG, IMC, IGCRI>::generate() {
     const goal_lineage* gl = choose_goal();
     rule_id r = choose_candidate(gl);
     return make_resolution_lineage_.make_resolution_lineage(gl, r);
 }
 
-template<typename ILP, typename ISAG, typename IMC, typename IGCR>
-const goal_lineage* mcts_decision_generator<ILP, ISAG, IMC, IGCR>::choose_goal() {
+template<typename IMRL, typename ISAG, typename IMC, typename IGCRI>
+const goal_lineage* mcts_decision_generator<IMRL, ISAG, IMC, IGCRI>::choose_goal() {
     std::vector<mcts_choice> current;
     auto sm = srt_active_goals_.iterate_root_goals();
     while (true) {
@@ -52,8 +52,8 @@ const goal_lineage* mcts_decision_generator<ILP, ISAG, IMC, IGCR>::choose_goal()
     }
 }
 
-template<typename ILP, typename ISAG, typename IMC, typename IGCR>
-rule_id mcts_decision_generator<ILP, ISAG, IMC, IGCR>::choose_candidate(
+template<typename IMRL, typename ISAG, typename IMC, typename IGCRI>
+rule_id mcts_decision_generator<IMRL, ISAG, IMC, IGCRI>::choose_candidate(
     const goal_lineage* gl) {
     auto& rule_ids = get_goal_candidate_rule_ids_.get(gl);
     std::vector<mcts_choice> candidates;

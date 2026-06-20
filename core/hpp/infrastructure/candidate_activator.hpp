@@ -5,35 +5,35 @@
 #include "value_objects/rule.hpp"
 #include "value_objects/framed_expr.hpp"
 
-template<typename IFrameAllocator, typename ICandidateFrameOffsets,
-         typename IMhuEliminationGenerator, typename IEliminationBacklog,
-         typename IGoalExprs, typename IDb, typename IGoalCandidateRules>
+template<typename IBumpFrameAllocator, typename ISetCandidateFrameOffset,
+         typename ITryAddMhuHead, typename IIsBackloggedElimination,
+         typename IGetGoalExpr, typename IGetRule, typename ILinkGoalCandidate>
 struct candidate_activator {
-    candidate_activator(IFrameAllocator&, ICandidateFrameOffsets&,
-                        IMhuEliminationGenerator&, IEliminationBacklog&,
-                        IGoalExprs&, IDb&, IGoalCandidateRules&);
+    candidate_activator(IBumpFrameAllocator&, ISetCandidateFrameOffset&,
+                        ITryAddMhuHead&, IIsBackloggedElimination&,
+                        IGetGoalExpr&, IGetRule&, ILinkGoalCandidate&);
     void activate(const resolution_lineage*);
 private:
-    IFrameAllocator& frame_allocator;
-    ICandidateFrameOffsets& set_candidate_frame_offset;
-    IMhuEliminationGenerator& try_add_mhu_head;
-    IEliminationBacklog& is_backlogged_elimination;
-    IGoalExprs& get_goal_expr;
-    IDb& get_rule;
-    IGoalCandidateRules& link_goal_candidate;
+    IBumpFrameAllocator& frame_allocator;
+    ISetCandidateFrameOffset& set_candidate_frame_offset;
+    ITryAddMhuHead& try_add_mhu_head;
+    IIsBackloggedElimination& is_backlogged_elimination;
+    IGetGoalExpr& get_goal_expr;
+    IGetRule& get_rule;
+    ILinkGoalCandidate& link_goal_candidate;
 };
 
-template<typename IFA, typename ICFO, typename IMEG, typename IEB,
-         typename IGE, typename IDB, typename IGCR>
-candidate_activator<IFA, ICFO, IMEG, IEB, IGE, IDB, IGCR>::candidate_activator(
-    IFA& fa, ICFO& cfo, IMEG& meg, IEB& eb, IGE& ge, IDB& db, IGCR& gcr)
+template<typename IBFA, typename ISCFO, typename ITAMH, typename IIBE,
+         typename IGGE, typename IGR, typename ILGC>
+candidate_activator<IBFA, ISCFO, ITAMH, IIBE, IGGE, IGR, ILGC>::candidate_activator(
+    IBFA& fa, ISCFO& cfo, ITAMH& meg, IIBE& eb, IGGE& ge, IGR& db, ILGC& gcr)
     : frame_allocator(fa), set_candidate_frame_offset(cfo), try_add_mhu_head(meg),
       is_backlogged_elimination(eb), get_goal_expr(ge), get_rule(db),
       link_goal_candidate(gcr) {}
 
-template<typename IFA, typename ICFO, typename IMEG, typename IEB,
-         typename IGE, typename IDB, typename IGCR>
-void candidate_activator<IFA, ICFO, IMEG, IEB, IGE, IDB, IGCR>::activate(
+template<typename IBFA, typename ISCFO, typename ITAMH, typename IIBE,
+         typename IGGE, typename IGR, typename ILGC>
+void candidate_activator<IBFA, ISCFO, ITAMH, IIBE, IGGE, IGR, ILGC>::activate(
     const resolution_lineage* rl) {
     const goal_lineage* gl = rl->parent;
     const rule* r = get_rule.get(rl->idx);

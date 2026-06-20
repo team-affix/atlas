@@ -4,23 +4,23 @@
 #include "value_objects/lineage.hpp"
 #include "value_objects/rule.hpp"
 
-template<typename IResolver, typename IDb, typename IGoalWeights, typename ICumulativeGroundedWeight>
+template<typename IResolver, typename IGetRule, typename IGetGoalWeight, typename IAccumulateGroundedWeight>
 struct horizon_resolver {
-    horizon_resolver(IResolver&, IDb&, IGoalWeights&, ICumulativeGroundedWeight&);
+    horizon_resolver(IResolver&, IGetRule&, IGetGoalWeight&, IAccumulateGroundedWeight&);
     bool resolve(const resolution_lineage*);
 private:
     IResolver& resolver_;
-    IDb& get_rule_;
-    IGoalWeights& goal_weights_;
-    ICumulativeGroundedWeight& cumulative_grounded_weight_;
+    IGetRule& get_rule_;
+    IGetGoalWeight& goal_weights_;
+    IAccumulateGroundedWeight& cumulative_grounded_weight_;
 };
 
-template<typename IR, typename IDB, typename IGW, typename ICGW>
-horizon_resolver<IR,IDB,IGW,ICGW>::horizon_resolver(IR& r, IDB& db, IGW& gw, ICGW& cgw)
+template<typename IR, typename IGR, typename IGGW, typename IAGW>
+horizon_resolver<IR,IGR,IGGW,IAGW>::horizon_resolver(IR& r, IGR& db, IGGW& gw, IAGW& cgw)
     : resolver_(r), get_rule_(db), goal_weights_(gw), cumulative_grounded_weight_(cgw) {}
 
-template<typename IR, typename IDB, typename IGW, typename ICGW>
-bool horizon_resolver<IR,IDB,IGW,ICGW>::resolve(const resolution_lineage* rl) {
+template<typename IR, typename IGR, typename IGGW, typename IAGW>
+bool horizon_resolver<IR,IGR,IGGW,IAGW>::resolve(const resolution_lineage* rl) {
     const rule* rule = get_rule_.get(rl->idx);
     if (rule->body.empty()) {
         const double w = goal_weights_.get(rl->parent);

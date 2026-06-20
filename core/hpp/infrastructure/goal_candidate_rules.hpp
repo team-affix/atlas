@@ -22,37 +22,4 @@ private:
     std::unordered_map<const goal_lineage*, ra_rule_id_set> by_goal_;
 };
 
-inline goal_candidate_rules::goal_candidate_rules(ra_rule_id_set_factory& factory)
-    : factory_(factory) {}
-
-inline ra_rule_id_set& goal_candidate_rules::get(const goal_lineage* gl) {
-    return by_goal_.at(gl);
-}
-
-inline const ra_rule_id_set& goal_candidate_rules::get(const goal_lineage* gl) const {
-    return by_goal_.at(gl);
-}
-
-inline void goal_candidate_rules::insert(const goal_lineage* gl) {
-    DEBUG_ASSERT(!by_goal_.contains(gl));
-    by_goal_.emplace(gl, factory_.make());
-}
-
-inline void goal_candidate_rules::link_goal_candidate(const goal_lineage* gl, rule_id r) {
-    by_goal_.at(gl).insert(r);
-}
-
-inline void goal_candidate_rules::unlink_goal_candidate(const goal_lineage* gl, rule_id r) {
-    by_goal_.at(gl).erase(r);
-}
-
-inline void goal_candidate_rules::erase(const goal_lineage* gl) {
-    auto erased = by_goal_.erase(gl);
-    DEBUG_ASSERT(erased == 1);
-}
-
-inline void goal_candidate_rules::clear_goal_candidate_rule_ids() {
-    by_goal_.clear();
-}
-
 #endif

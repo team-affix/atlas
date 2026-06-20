@@ -5,28 +5,28 @@
 #include "value_objects/expr.hpp"
 #include "value_objects/framed_expr.hpp"
 
-template<typename IInitialGoalExprs, typename IMakeInitialGoalLineage,
-         typename IGoalExprs, typename IGoalCandidateRules, typename IActiveGoals>
+template<typename IGetInitialGoalExpr, typename IMakeInitialGoalLineage,
+         typename ISetGoalExpr, typename IInsertGoalCandidates, typename IInsertActiveGoal>
 struct initial_goal_activator {
-    initial_goal_activator(IInitialGoalExprs&, IMakeInitialGoalLineage&,
-                           IGoalExprs&, IGoalCandidateRules&, IActiveGoals&);
+    initial_goal_activator(IGetInitialGoalExpr&, IMakeInitialGoalLineage&,
+                           ISetGoalExpr&, IInsertGoalCandidates&, IInsertActiveGoal&);
     void activate_initial_goal(subgoal_id idx);
 private:
-    IInitialGoalExprs& get_initial_goal_expr;
+    IGetInitialGoalExpr& get_initial_goal_expr;
     IMakeInitialGoalLineage& make_initial_goal_lineage;
-    IGoalExprs& set_goal_expr;
-    IGoalCandidateRules& insert_goal_candidates;
-    IActiveGoals& insert_active_goal;
+    ISetGoalExpr& set_goal_expr;
+    IInsertGoalCandidates& insert_goal_candidates;
+    IInsertActiveGoal& insert_active_goal;
 };
 
-template<typename IIGE, typename IMIGL, typename IGE, typename IGCR, typename IAG>
-initial_goal_activator<IIGE, IMIGL, IGE, IGCR, IAG>::initial_goal_activator(
-    IIGE& ige, IMIGL& migl, IGE& ge, IGCR& gcr, IAG& ag)
+template<typename IGIGE, typename IMIGL, typename ISGE, typename IIGC, typename IIAG>
+initial_goal_activator<IGIGE, IMIGL, ISGE, IIGC, IIAG>::initial_goal_activator(
+    IGIGE& ige, IMIGL& migl, ISGE& ge, IIGC& gcr, IIAG& ag)
     : get_initial_goal_expr(ige), make_initial_goal_lineage(migl),
       set_goal_expr(ge), insert_goal_candidates(gcr), insert_active_goal(ag) {}
 
-template<typename IIGE, typename IMIGL, typename IGE, typename IGCR, typename IAG>
-void initial_goal_activator<IIGE, IMIGL, IGE, IGCR, IAG>::activate_initial_goal(
+template<typename IGIGE, typename IMIGL, typename ISGE, typename IIGC, typename IIAG>
+void initial_goal_activator<IGIGE, IMIGL, ISGE, IIGC, IIAG>::activate_initial_goal(
     subgoal_id idx) {
     const expr* goal_expr = get_initial_goal_expr.get(idx);
     const goal_lineage* gl = make_initial_goal_lineage.make(idx);

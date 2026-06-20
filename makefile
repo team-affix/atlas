@@ -160,8 +160,8 @@ CLI_DEBUG_FAST_GTEST_OBJ = \
 CLI_DEBUG_BIN_OBJ      = $(CLI_DEBUG_TEST_OBJ) $(CLI_DEBUG_GTEST_OBJ)
 CLI_DEBUG_FAST_BIN_OBJ = $(CLI_DEBUG_FAST_TEST_OBJ) $(CLI_DEBUG_FAST_GTEST_OBJ)
 
-CLI_DEBUG_TEST_CXXFLAGS      = $(DEBUG_CXXFLAGS) $(GTEST_CPPFLAGS) -Icli/test
-CLI_DEBUG_FAST_TEST_CXXFLAGS = $(DEBUG_FAST_CXXFLAGS) $(GTEST_CPPFLAGS) -Icli/test
+CLI_DEBUG_TEST_CXXFLAGS      = $(DEBUG_CXXFLAGS) $(GTEST_CPPFLAGS) -Icli/test -I$(ANTLR4_INC)
+CLI_DEBUG_FAST_TEST_CXXFLAGS = $(DEBUG_FAST_CXXFLAGS) $(GTEST_CPPFLAGS) -Icli/test -I$(ANTLR4_INC)
 
 # CLI: source files are always present; no codegen needed for compilation.
 # cli/cpp/ contains the library sources; cli/entry/ contains the entrypoint.
@@ -490,19 +490,19 @@ build/obj/parser_profile/%.o: parser/cpp/%.cpp | build/obj/parser_profile
 
 build/obj/cli/%.o: cli/cpp/%.cpp | build/obj/cli
 	mkdir -p $(dir $@)
-	$(CXX) $(CXXFLAGS) $(RELEASE_CXXFLAGS) -c $< -o $@
+	$(CXX) $(CXXFLAGS) $(RELEASE_CXXFLAGS) -I$(ANTLR4_INC) -c $< -o $@
 
 build/obj/cli_debug/%.o: cli/cpp/%.cpp | build/obj/cli_debug
 	mkdir -p $(dir $@)
-	$(CXX) $(CXXFLAGS) $(DEBUG_CXXFLAGS) -c $< -o $@
+	$(CXX) $(CXXFLAGS) $(DEBUG_CXXFLAGS) -I$(ANTLR4_INC) -c $< -o $@
 
 build/obj/cli_debug_fast/%.o: cli/cpp/%.cpp | build/obj/cli_debug_fast
 	mkdir -p $(dir $@)
-	$(CXX) $(CXXFLAGS) $(DEBUG_FAST_CXXFLAGS) -c $< -o $@
+	$(CXX) $(CXXFLAGS) $(DEBUG_FAST_CXXFLAGS) -I$(ANTLR4_INC) -c $< -o $@
 
 build/obj/cli_profile/%.o: cli/cpp/%.cpp | build/obj/cli_profile
 	mkdir -p $(dir $@)
-	$(CXX) $(CXXFLAGS) $(PROFILE_CXXFLAGS) -c $< -o $@
+	$(CXX) $(CXXFLAGS) $(PROFILE_CXXFLAGS) -I$(ANTLR4_INC) -c $< -o $@
 
 # ==============================================================================
 # Header dependencies (compiler-generated .d files)

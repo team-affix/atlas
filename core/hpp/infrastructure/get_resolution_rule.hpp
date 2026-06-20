@@ -4,19 +4,19 @@
 #include "value_objects/lineage.hpp"
 #include "value_objects/rule.hpp"
 
-template<typename IDb>
+template<typename IGetRule>
 struct get_resolution_rule {
-    explicit get_resolution_rule(const IDb& db);
+    explicit get_resolution_rule(const IGetRule& db);
     const rule* get(const resolution_lineage*) const;
 private:
-    const IDb& get_rule_;
+    const IGetRule& get_rule_;
 };
 
-template<typename IDb>
-get_resolution_rule<IDb>::get_resolution_rule(const IDb& db) : get_rule_(db) {}
+template<typename IGetRule>
+get_resolution_rule<IGetRule>::get_resolution_rule(const IGetRule& db) : get_rule_(db) {}
 
-template<typename IDb>
-const rule* get_resolution_rule<IDb>::get(const resolution_lineage* rl) const {
+template<typename IGetRule>
+const rule* get_resolution_rule<IGetRule>::get(const resolution_lineage* rl) const {
     return get_rule_.get(rl->idx);
 }
 

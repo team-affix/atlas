@@ -4,26 +4,26 @@
 #include "value_objects/lineage.hpp"
 #include "value_objects/rule.hpp"
 
-template<typename ILineagePool, typename IGoalActivator,
-         typename IDb, typename IGoalCandidatesActivator>
+template<typename IMakeGoalLineage, typename IGoalActivator,
+         typename IGetRule, typename IActivateGoalCandidates>
 struct subgoals_activator {
-    subgoals_activator(ILineagePool&, IGoalActivator&, IDb&, IGoalCandidatesActivator&);
+    subgoals_activator(IMakeGoalLineage&, IGoalActivator&, IGetRule&, IActivateGoalCandidates&);
     bool activate_subgoals_and_candidates(const resolution_lineage*);
 private:
-    ILineagePool& make_goal_lineage;
+    IMakeGoalLineage& make_goal_lineage;
     IGoalActivator& goal_activator;
-    IDb& get_rule;
-    IGoalCandidatesActivator& activate_goal_candidates;
+    IGetRule& get_rule;
+    IActivateGoalCandidates& activate_goal_candidates;
 };
 
-template<typename ILP, typename IGA, typename IDB, typename IGCA>
-subgoals_activator<ILP, IGA, IDB, IGCA>::subgoals_activator(
-    ILP& lp, IGA& ga, IDB& db, IGCA& gca)
+template<typename IMGL, typename IGA, typename IGR, typename IGCA>
+subgoals_activator<IMGL, IGA, IGR, IGCA>::subgoals_activator(
+    IMGL& lp, IGA& ga, IGR& db, IGCA& gca)
     : make_goal_lineage(lp), goal_activator(ga), get_rule(db),
       activate_goal_candidates(gca) {}
 
-template<typename ILP, typename IGA, typename IDB, typename IGCA>
-bool subgoals_activator<ILP, IGA, IDB, IGCA>::activate_subgoals_and_candidates(
+template<typename IMGL, typename IGA, typename IGR, typename IGCA>
+bool subgoals_activator<IMGL, IGA, IGR, IGCA>::activate_subgoals_and_candidates(
     const resolution_lineage* rl) {
     const rule* rule = get_rule.get(rl->idx);
     for (size_t body_idx = 0; body_idx < rule->body.size(); ++body_idx) {

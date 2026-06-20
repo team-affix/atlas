@@ -4,22 +4,22 @@
 #include "value_objects/lineage.hpp"
 #include "value_objects/rule.hpp"
 
-template<typename IGoalActivator, typename IGoalWeights, typename IDb>
+template<typename IGoalActivator, typename ISetGoalWeight, typename IGetRule>
 struct horizon_goal_activator {
-    horizon_goal_activator(IGoalActivator&, IGoalWeights&, IDb&);
+    horizon_goal_activator(IGoalActivator&, ISetGoalWeight&, IGetRule&);
     void activate(const goal_lineage*);
 private:
     IGoalActivator& goal_activator_;
-    IGoalWeights& goal_weights_;
-    IDb& get_rule_;
+    ISetGoalWeight& goal_weights_;
+    IGetRule& get_rule_;
 };
 
-template<typename IGA, typename IGW, typename IDB>
-horizon_goal_activator<IGA,IGW,IDB>::horizon_goal_activator(IGA& ga, IGW& gw, IDB& db)
+template<typename IGA, typename ISGW, typename IGR>
+horizon_goal_activator<IGA,ISGW,IGR>::horizon_goal_activator(IGA& ga, ISGW& gw, IGR& db)
     : goal_activator_(ga), goal_weights_(gw), get_rule_(db) {}
 
-template<typename IGA, typename IGW, typename IDB>
-void horizon_goal_activator<IGA,IGW,IDB>::activate(const goal_lineage* gl) {
+template<typename IGA, typename ISGW, typename IGR>
+void horizon_goal_activator<IGA,ISGW,IGR>::activate(const goal_lineage* gl) {
     goal_activator_.activate(gl);
     const resolution_lineage* rl = gl->parent;
     const goal_lineage* parent = rl->parent;

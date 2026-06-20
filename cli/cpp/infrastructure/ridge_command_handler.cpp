@@ -1,9 +1,6 @@
 #include "infrastructure/ridge_command_handler.hpp"
 #include "parser/hpp/import_database_from_file.hpp"
 #include "parser/hpp/import_goals_from_string.hpp"
-#include "interfaces/i_functor_names.hpp"
-#include "interfaces/i_log_to_current_trail_frame.hpp"
-#include "interfaces/i_var_names.hpp"
 #include <iostream>
 
 ridge_command_handler::ridge_command_handler(
@@ -15,9 +12,6 @@ ridge_command_handler::ridge_command_handler(
     size_t sim_progress_interval)
     : parse_var_seq_(0),
       solve_loop_(print_bindings_, print_progress_, sim_progress_interval) {
-    parse_loc_.bind_as<i_log_to_current_trail_frame>(parse_trail_);
-    parse_loc_.bind_as<i_var_names>(var_names_);
-    parse_loc_.bind_as<i_functor_names>(functor_names_);
     parse_pool_.emplace();
     printer_.emplace(std::cout, var_names_, functor_names_);
 

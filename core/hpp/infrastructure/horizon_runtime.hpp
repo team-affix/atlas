@@ -25,7 +25,7 @@ struct horizon_runtime {
     lemma derive_resolution_lemma() const;
 
 private:
-    using Normalizer = normalizer<globalizer, expr_pool, bind_map>;
+    using Normalizer = normalizer<globalizer, expr_pool, expr_pool, bind_map>;
     horizon_manifest manifest_;
     Normalizer normalizer_;
     solver_driver driver_;

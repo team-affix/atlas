@@ -1,19 +1,19 @@
 #ifndef RIDGE_REWARD_HPP
 #define RIDGE_REWARD_HPP
 
-template<typename IDecisionMemory>
+template<typename IGetDecisionCount>
 struct ridge_reward {
-    ridge_reward(IDecisionMemory& dm);
+    ridge_reward(IGetDecisionCount& dm);
     double compute_mcts_reward() const;
 private:
-    IDecisionMemory& decision_count_;
+    IGetDecisionCount& decision_count_;
 };
 
-template<typename IDecisionMemory>
-ridge_reward<IDecisionMemory>::ridge_reward(IDecisionMemory& dm) : decision_count_(dm) {}
+template<typename IGetDecisionCount>
+ridge_reward<IGetDecisionCount>::ridge_reward(IGetDecisionCount& dm) : decision_count_(dm) {}
 
-template<typename IDecisionMemory>
-double ridge_reward<IDecisionMemory>::compute_mcts_reward() const {
+template<typename IGetDecisionCount>
+double ridge_reward<IGetDecisionCount>::compute_mcts_reward() const {
     return -static_cast<double>(decision_count_.count());
 }
 

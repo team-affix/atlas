@@ -1320,7 +1320,7 @@ TEST_F(SimIntegrationTest, RunReturnsSolvedBuildingListOfFiveAbcWithoutDecisions
 
     EXPECT_EQ(simulation.run(), sim_termination::solved);
 
-    normalizer<globalizer, expr_pool, decltype(stack.bind_map_)> norm{stack.globalizer_, stack.expr_pool_, stack.bind_map_};
+    normalizer<globalizer, expr_pool, expr_pool, decltype(stack.bind_map_)> norm{stack.globalizer_, stack.expr_pool_, stack.expr_pool_, stack.bind_map_};
     const expr* tail = norm.normalize({var_r, 0});
     for (int i = 0; i < kListLength; ++i) {
         const expr::functor& cell = std::get<expr::functor>(tail->content);
@@ -1885,7 +1885,7 @@ TEST_F(SimIntegrationTest, RunReturnsSolvedStressListOfTwentyAbcWithoutDecisions
 
   EXPECT_EQ(simulation.run(), sim_termination::solved);
 
-  normalizer<globalizer, expr_pool, decltype(stack.bind_map_)> norm{stack.globalizer_, stack.expr_pool_, stack.bind_map_};
+  normalizer<globalizer, expr_pool, expr_pool, decltype(stack.bind_map_)> norm{stack.globalizer_, stack.expr_pool_, stack.expr_pool_, stack.bind_map_};
   const expr* tail = norm.normalize({var_r, 0});
   for (int i = 0; i < kListLength; ++i) {
     const expr::functor& cell = std::get<expr::functor>(tail->content);

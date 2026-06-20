@@ -7,7 +7,7 @@ basic_runtime::basic_runtime(
     size_t max_resolutions,
     uint32_t random_seed)
     : manifest_(database, goals, initial_frame_offset, max_resolutions, random_seed),
-      normalizer_(manifest_.globalizer_, manifest_.expr_pool_, manifest_.bind_map_),
+      normalizer_(manifest_.globalizer_, manifest_.expr_pool_, manifest_.expr_pool_, manifest_.bind_map_),
       driver_(manifest_.solver_.solve()) {}
 
 bool basic_runtime::next() {

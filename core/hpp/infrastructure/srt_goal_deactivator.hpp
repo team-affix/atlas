@@ -3,21 +3,21 @@
 
 #include "value_objects/lineage.hpp"
 
-template<typename IGoalExprs, typename IGoalCandidateRules>
+template<typename IUnsetGoalExpr, typename IEraseGoalCandidates>
 struct srt_goal_deactivator {
-    srt_goal_deactivator(IGoalExprs& ge, IGoalCandidateRules& gcr);
+    srt_goal_deactivator(IUnsetGoalExpr& ge, IEraseGoalCandidates& gcr);
     void deactivate(const goal_lineage*);
 private:
-    IGoalExprs& unset_goal_expr;
-    IGoalCandidateRules& erase_goal_candidates;
+    IUnsetGoalExpr& unset_goal_expr;
+    IEraseGoalCandidates& erase_goal_candidates;
 };
 
-template<typename IGE, typename IGCR>
-srt_goal_deactivator<IGE, IGCR>::srt_goal_deactivator(IGE& ge, IGCR& gcr)
+template<typename IUGE, typename IEGC>
+srt_goal_deactivator<IUGE, IEGC>::srt_goal_deactivator(IUGE& ge, IEGC& gcr)
     : unset_goal_expr(ge), erase_goal_candidates(gcr) {}
 
-template<typename IGE, typename IGCR>
-void srt_goal_deactivator<IGE, IGCR>::deactivate(const goal_lineage* gl) {
+template<typename IUGE, typename IEGC>
+void srt_goal_deactivator<IUGE, IEGC>::deactivate(const goal_lineage* gl) {
     erase_goal_candidates.erase(gl);
     unset_goal_expr.unset(gl);
 }

@@ -11,13 +11,12 @@
 #include "parser/hpp/database_visitor.hpp"
 #include "infrastructure/db.hpp"
 #include "value_objects/lineage.hpp"
-#include "interfaces/i_get_rule.hpp"
 
 using ::testing::IsEmpty;
 using ::testing::SizeIs;
 
 static const rule* rule_at(const db& database, rule_id id) {
-    return static_cast<const i_get_rule&>(database).get(id);
+    return database.get(id);
 }
 
 struct DatabaseVisitorTest : ParserCoreFixture {};

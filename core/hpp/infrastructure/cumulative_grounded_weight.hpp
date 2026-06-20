@@ -9,16 +9,4 @@ private:
     double value_{0.0};
 };
 
-inline void cumulative_grounded_weight::accumulate(double w) {
-    value_ += w;
-}
-
-inline double cumulative_grounded_weight::get() const {
-    return value_;
-}
-
-inline void cumulative_grounded_weight::clear() {
-    value_ = 0.0;
-}
-
 #endif

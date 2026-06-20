@@ -1,20 +1,20 @@
 #ifndef HORIZON_REWARD_HPP
 #define HORIZON_REWARD_HPP
 
-template<typename ICumulativeGroundedWeight>
+template<typename IGetGroundedWeight>
 struct horizon_reward {
-    horizon_reward(ICumulativeGroundedWeight& cgw);
+    horizon_reward(IGetGroundedWeight& cgw);
     double compute_mcts_reward() const;
 private:
-    ICumulativeGroundedWeight& grounded_weight_;
+    IGetGroundedWeight& grounded_weight_;
 };
 
-template<typename ICumulativeGroundedWeight>
-horizon_reward<ICumulativeGroundedWeight>::horizon_reward(ICumulativeGroundedWeight& cgw)
+template<typename IGetGroundedWeight>
+horizon_reward<IGetGroundedWeight>::horizon_reward(IGetGroundedWeight& cgw)
     : grounded_weight_(cgw) {}
 
-template<typename ICumulativeGroundedWeight>
-double horizon_reward<ICumulativeGroundedWeight>::compute_mcts_reward() const {
+template<typename IGetGroundedWeight>
+double horizon_reward<IGetGroundedWeight>::compute_mcts_reward() const {
     return grounded_weight_.get();
 }
 

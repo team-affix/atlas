@@ -8,10 +8,4 @@ private:
     double weight_;
 };
 
-inline initial_goal_weight::initial_goal_weight(double weight) : weight_(weight) {}
-
-inline double initial_goal_weight::get() const {
-    return weight_;
-}
-
 #endif

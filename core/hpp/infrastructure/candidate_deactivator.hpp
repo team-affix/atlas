@@ -3,21 +3,21 @@
 
 #include "value_objects/lineage.hpp"
 
-template<typename ICandidateFrameOffsets, typename IGoalCandidateRules>
+template<typename IUnsetCandidateFrameOffset, typename IUnlinkGoalCandidate>
 struct candidate_deactivator {
-    candidate_deactivator(ICandidateFrameOffsets& cfo, IGoalCandidateRules& gcr);
+    candidate_deactivator(IUnsetCandidateFrameOffset& cfo, IUnlinkGoalCandidate& gcr);
     void deactivate(const resolution_lineage*);
 private:
-    ICandidateFrameOffsets& unset_candidate_frame_offset;
-    IGoalCandidateRules& unlink_goal_candidate;
+    IUnsetCandidateFrameOffset& unset_candidate_frame_offset;
+    IUnlinkGoalCandidate& unlink_goal_candidate;
 };
 
-template<typename ICFO, typename IGCR>
-candidate_deactivator<ICFO, IGCR>::candidate_deactivator(ICFO& cfo, IGCR& gcr)
+template<typename IUCFO, typename IULGC>
+candidate_deactivator<IUCFO, IULGC>::candidate_deactivator(IUCFO& cfo, IULGC& gcr)
     : unset_candidate_frame_offset(cfo), unlink_goal_candidate(gcr) {}
 
-template<typename ICFO, typename IGCR>
-void candidate_deactivator<ICFO, IGCR>::deactivate(const resolution_lineage* rl) {
+template<typename IUCFO, typename IULGC>
+void candidate_deactivator<IUCFO, IULGC>::deactivate(const resolution_lineage* rl) {
     unlink_goal_candidate.unlink_goal_candidate(rl->parent, rl->idx);
     unset_candidate_frame_offset.unset(rl);
 }

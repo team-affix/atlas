@@ -14,20 +14,4 @@ private:
     std::unordered_set<const resolution_lineage*> decisions;
 };
 
-inline void decision_memory::record_decision(const resolution_lineage* rl) {
-    decisions.insert(rl);
-}
-
-inline void decision_memory::clear_recorded_decisions() {
-    decisions.clear();
-}
-
-inline size_t decision_memory::count() const {
-    return decisions.size();
-}
-
-inline lemma decision_memory::derive_decision_lemma() const {
-    return lemma{decisions};
-}
-
 #endif

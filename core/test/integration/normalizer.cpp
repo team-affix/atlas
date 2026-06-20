@@ -7,7 +7,7 @@
 #include "infrastructure/trail.hpp"
 #include "functor_fixture.hpp"
 
-using TestNormalizer = normalizer<globalizer, expr_pool, bind_map>;
+using TestNormalizer = normalizer<globalizer, expr_pool, expr_pool, bind_map>;
 
 struct NormalizerIntegrationTest : public ::testing::Test {
 protected:
@@ -16,7 +16,7 @@ protected:
         pool.emplace();
         glob.emplace();
         bm.emplace(*glob);
-        norm.emplace(*glob, *pool, *bm);
+        norm.emplace(*glob, *pool, *pool, *bm);
     }
 
     trail t;

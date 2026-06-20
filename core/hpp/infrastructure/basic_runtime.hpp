@@ -24,7 +24,7 @@ struct basic_runtime {
     lemma derive_resolution_lemma() const;
 
 private:
-    using Normalizer = normalizer<globalizer, expr_pool, bind_map>;
+    using Normalizer = normalizer<globalizer, expr_pool, expr_pool, bind_map>;
 
     basic_manifest manifest_;
     Normalizer normalizer_;

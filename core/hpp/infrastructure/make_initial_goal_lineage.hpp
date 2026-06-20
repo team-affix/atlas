@@ -3,20 +3,20 @@
 
 #include "value_objects/lineage.hpp"
 
-template<typename ILineagePool>
+template<typename IMakeGoalLineage>
 struct make_initial_goal_lineage {
-    explicit make_initial_goal_lineage(ILineagePool& lp);
+    explicit make_initial_goal_lineage(IMakeGoalLineage& lp);
     const goal_lineage* make(subgoal_id idx);
 private:
-    ILineagePool& make_goal_lineage;
+    IMakeGoalLineage& make_goal_lineage;
 };
 
-template<typename ILineagePool>
-make_initial_goal_lineage<ILineagePool>::make_initial_goal_lineage(ILineagePool& lp)
+template<typename IMakeGoalLineage>
+make_initial_goal_lineage<IMakeGoalLineage>::make_initial_goal_lineage(IMakeGoalLineage& lp)
     : make_goal_lineage(lp) {}
 
-template<typename ILineagePool>
-const goal_lineage* make_initial_goal_lineage<ILineagePool>::make(subgoal_id idx) {
+template<typename IMakeGoalLineage>
+const goal_lineage* make_initial_goal_lineage<IMakeGoalLineage>::make(subgoal_id idx) {
     return make_goal_lineage.make_goal_lineage(nullptr, idx);
 }
 

@@ -3,22 +3,22 @@
 
 #include "value_objects/lineage.hpp"
 
-template<typename IGoalExprs, typename IGoalCandidateRules, typename IActiveGoals>
+template<typename IUnsetGoalExpr, typename IEraseGoalCandidates, typename IEraseActiveGoal>
 struct goal_deactivator {
-    goal_deactivator(IGoalExprs& ge, IGoalCandidateRules& gcr, IActiveGoals& ag);
+    goal_deactivator(IUnsetGoalExpr& ge, IEraseGoalCandidates& gcr, IEraseActiveGoal& ag);
     void deactivate(const goal_lineage*);
 private:
-    IGoalExprs& unset_goal_expr;
-    IGoalCandidateRules& erase_goal_candidates;
-    IActiveGoals& erase_active_goal;
+    IUnsetGoalExpr& unset_goal_expr;
+    IEraseGoalCandidates& erase_goal_candidates;
+    IEraseActiveGoal& erase_active_goal;
 };
 
-template<typename IGE, typename IGCR, typename IAG>
-goal_deactivator<IGE, IGCR, IAG>::goal_deactivator(IGE& ge, IGCR& gcr, IAG& ag)
+template<typename IUGE, typename IEGC, typename IEAG>
+goal_deactivator<IUGE, IEGC, IEAG>::goal_deactivator(IUGE& ge, IEGC& gcr, IEAG& ag)
     : unset_goal_expr(ge), erase_goal_candidates(gcr), erase_active_goal(ag) {}
 
-template<typename IGE, typename IGCR, typename IAG>
-void goal_deactivator<IGE, IGCR, IAG>::deactivate(const goal_lineage* gl) {
+template<typename IUGE, typename IEGC, typename IEAG>
+void goal_deactivator<IUGE, IEGC, IEAG>::deactivate(const goal_lineage* gl) {
     erase_goal_candidates.erase(gl);
     unset_goal_expr.unset(gl);
     erase_active_goal.erase_active_goal(gl);

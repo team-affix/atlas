@@ -3,24 +3,24 @@
 
 #include "value_objects/lineage.hpp"
 
-template<typename IGoalCandidateRules, typename ILineagePool, typename ICandidateDeactivator>
+template<typename IGetGoalCandidateRuleIds, typename IMakeResolutionLineage, typename ICandidateDeactivator>
 struct goal_candidates_deactivator {
-    goal_candidates_deactivator(IGoalCandidateRules&, ILineagePool&, ICandidateDeactivator&);
+    goal_candidates_deactivator(IGetGoalCandidateRuleIds&, IMakeResolutionLineage&, ICandidateDeactivator&);
     void deactivate_goal_candidates(const goal_lineage*);
 private:
-    IGoalCandidateRules& get_goal_candidate_rule_ids;
-    ILineagePool& make_resolution_lineage;
+    IGetGoalCandidateRuleIds& get_goal_candidate_rule_ids;
+    IMakeResolutionLineage& make_resolution_lineage;
     ICandidateDeactivator& candidate_deactivator;
 };
 
-template<typename IGCR, typename ILP, typename ICD>
-goal_candidates_deactivator<IGCR, ILP, ICD>::goal_candidates_deactivator(
-    IGCR& gcr, ILP& lp, ICD& cd)
+template<typename IGCRI, typename IMRL, typename ICD>
+goal_candidates_deactivator<IGCRI, IMRL, ICD>::goal_candidates_deactivator(
+    IGCRI& gcr, IMRL& lp, ICD& cd)
     : get_goal_candidate_rule_ids(gcr), make_resolution_lineage(lp),
       candidate_deactivator(cd) {}
 
-template<typename IGCR, typename ILP, typename ICD>
-void goal_candidates_deactivator<IGCR, ILP, ICD>::deactivate_goal_candidates(
+template<typename IGCRI, typename IMRL, typename ICD>
+void goal_candidates_deactivator<IGCRI, IMRL, ICD>::deactivate_goal_candidates(
     const goal_lineage* gl) {
     auto candidate_rules = get_goal_candidate_rule_ids.get(gl).copy();
     auto cand_it = candidate_rules.iterate();
