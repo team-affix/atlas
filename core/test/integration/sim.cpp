@@ -48,301 +48,137 @@
 #include "infrastructure/subgoals_activator.hpp"
 #include "infrastructure/initial_goals_activator.hpp"
 #include "infrastructure/resolver.hpp"
-#include "interfaces/i_activate_goal_candidates.hpp"
-#include "interfaces/i_deactivate_goal_candidates.hpp"
-#include "interfaces/i_activate_subgoals_and_candidates.hpp"
-#include "interfaces/i_activate_initial_goals_and_candidates.hpp"
-#include "interfaces/i_generate_decision.hpp"
-#include "interfaces/i_make_initial_goal_lineage.hpp"
-#include "interfaces/i_make_resolution_lineage.hpp"
-#include "interfaces/i_make_goal_lineage.hpp"
-#include "interfaces/i_check_active_goals_empty.hpp"
-#include "interfaces/i_push_trail_frame.hpp"
-#include "interfaces/i_pop_trail_frame.hpp"
-#include "interfaces/i_log_to_current_trail_frame.hpp"
-#include "interfaces/i_bind_map.hpp"
-#include "interfaces/i_clear_bindings.hpp"
-#include "interfaces/i_bind_map_factory.hpp"
-#include "interfaces/i_unifier_factory.hpp"
-#include "interfaces/i_pin_goal_lineage.hpp"
-#include "interfaces/i_pin_resolution_lineage.hpp"
-#include "interfaces/i_trim_unpinned_lineages.hpp"
-#include "interfaces/i_import_goal_lineage.hpp"
-#include "interfaces/i_import_resolution_lineage.hpp"
-#include "interfaces/i_insert_active_goal.hpp"
-#include "interfaces/i_erase_active_goal.hpp"
-#include "interfaces/i_is_active_goal.hpp"
-#include "interfaces/i_random_access.hpp"
-#include "interfaces/i_active_goals_size.hpp"
-#include "interfaces/i_clear_active_goals.hpp"
-#include "interfaces/i_get_goal_expr.hpp"
-#include "interfaces/i_set_goal_expr.hpp"
-#include "interfaces/i_unset_goal_expr.hpp"
-#include "interfaces/i_clear_goal_exprs.hpp"
-#include "interfaces/i_get_goal_candidate_rule_ids.hpp"
-#include "interfaces/i_link_goal_candidate.hpp"
-#include "interfaces/i_unlink_goal_candidate.hpp"
-#include "interfaces/i_erase_goal_candidates.hpp"
-#include "interfaces/i_clear_goal_candidate_rule_ids.hpp"
-#include "interfaces/i_push_unit_goal.hpp"
-#include "interfaces/i_pop_unit_goal.hpp"
-#include "interfaces/i_clear_unit_goals.hpp"
-#include "interfaces/i_record_decision.hpp"
-#include "interfaces/i_clear_recorded_decisions.hpp"
-#include "interfaces/i_get_decision_count.hpp"
-#include "interfaces/i_derive_decision_lemma.hpp"
-#include "interfaces/i_record_resolution.hpp"
-#include "interfaces/i_clear_recorded_resolutions.hpp"
-#include "interfaces/i_get_resolution_count.hpp"
-#include "interfaces/i_derive_resolution_lemma.hpp"
-#include "interfaces/i_get_candidate_frame_offset.hpp"
-#include "interfaces/i_set_candidate_frame_offset.hpp"
-#include "interfaces/i_unset_candidate_frame_offset.hpp"
-#include "interfaces/i_clear_candidate_frame_offsets.hpp"
-#include "interfaces/i_get_rule.hpp"
-#include "interfaces/i_get_goal_db_rule_ids.hpp"
-#include "interfaces/i_get_initial_goal_count.hpp"
-#include "interfaces/i_get_initial_goal_expr.hpp"
-#include "interfaces/i_make_functor.hpp"
-#include "interfaces/i_make_var.hpp"
-#include "interfaces/i_import_expr.hpp"
-#include "interfaces/i_get_expr_count.hpp"
-#include "interfaces/i_frame_allocator.hpp"
-#include "interfaces/i_insert_backlogged_elimination.hpp"
-#include "interfaces/i_is_backlogged_elimination.hpp"
-#include "interfaces/i_learn_avoidance.hpp"
-#include "interfaces/i_clean_up_cdcl.hpp"
-#include "interfaces/i_try_get_chosen_goal_candidate.hpp"
-#include "interfaces/i_set_chosen_goal_candidate.hpp"
-#include "interfaces/i_clear_chosen_goal_candidates.hpp"
-#include "interfaces/i_try_add_mhu_head.hpp"
-#include "interfaces/i_clear_mhu_heads.hpp"
-#include "interfaces/i_elimination_generator.hpp"
-#include "interfaces/i_get_resolution_rule.hpp"
-#include "interfaces/i_conflict_detector.hpp"
-#include "interfaces/i_detect_unit_goal.hpp"
-#include "interfaces/i_solution_detector.hpp"
-#include "interfaces/i_goal_activator.hpp"
-#include "interfaces/i_goal_deactivator.hpp"
-#include "interfaces/i_candidate_activator.hpp"
-#include "interfaces/i_candidate_deactivator.hpp"
-#include "interfaces/i_elimination_router.hpp"
-#include "interfaces/i_get_unit_resolution.hpp"
-#include "interfaces/i_activate_initial_goal.hpp"
-#include "interfaces/i_resolver.hpp"
-#include "value_objects/sim_termination.hpp"
-#include "value_objects/lemma.hpp"
 #include "infrastructure/globalizer.hpp"
 #include "infrastructure/normalizer.hpp"
+#include "value_objects/sim_termination.hpp"
+#include "value_objects/lemma.hpp"
 #include "functor_fixture.hpp"
 
 using ::testing::IsEmpty;
 using ::testing::Return;
 using ::testing::UnorderedElementsAre;
 
-struct MockGenerateDecision : public i_generate_decision {
-    MOCK_METHOD(const resolution_lineage*, generate, (), (override));
+struct MockGenerateDecision {
+    MOCK_METHOD(const resolution_lineage*, generate, ());
 };
 
 namespace {
 
-struct sim_early_wiring {
+using UnifierFactory            = unifier_factory<bind_map>;
+using Cdcl                      = cdcl_elimination_generator<chosen_goal_candidates, chosen_goal_candidates>;
+using Mhu                       = mhu_elimination_generator<bind_map, bind_map_factory, unifier<bind_map>,
+                                    UnifierFactory, lineage_pool, expr_pool, goal_candidate_rules>;
+using Joint                     = joint_elimination_generator<Cdcl, Mhu>;
+using GetResolutionRule         = get_resolution_rule<db>;
+using ConflictDetector          = conflict_detector<goal_candidate_rules>;
+using UnitGoalDetector          = unit_goal_detector<goal_candidate_rules>;
+using SolutionDetector          = solution_detector<ra_active_goals>;
+using GoalActivator             = goal_activator<goal_exprs, goal_candidate_rules,
+                                    ra_active_goals, candidate_frame_offsets, GetResolutionRule>;
+using GoalDeactivator           = goal_deactivator<goal_exprs, goal_candidate_rules, ra_active_goals>;
+using CandidateDeactivator      = candidate_deactivator<candidate_frame_offsets, goal_candidate_rules>;
+using CandidateActivator        = candidate_activator<frame_bump_allocator, candidate_frame_offsets,
+                                    Mhu, elimination_backlog, goal_exprs, db, goal_candidate_rules>;
+using EliminationRouter         = elimination_router<goal_candidate_rules, ra_active_goals,
+                                    elimination_backlog, CandidateDeactivator>;
+using GetUnitResolution         = get_unit_resolution<goal_candidate_rules, lineage_pool>;
+using MakeInitialGoalLineage    = make_initial_goal_lineage<lineage_pool>;
+using InitialGoalActivator      = initial_goal_activator<initial_goal_exprs,
+                                    MakeInitialGoalLineage, goal_exprs, goal_candidate_rules, ra_active_goals>;
+using GoalCandidatesDeactivator = goal_candidates_deactivator<goal_candidate_rules,
+                                    lineage_pool, CandidateDeactivator>;
+using GoalCandidatesActivator   = goal_candidates_activator<db, lineage_pool, CandidateActivator,
+                                    ConflictDetector, UnitGoalDetector, unit_goals>;
+using SubgoalsActivator         = subgoals_activator<lineage_pool, GoalActivator,
+                                    db, GoalCandidatesActivator>;
+using InitialGoalsActivator     = initial_goals_activator<initial_goal_exprs,
+                                    InitialGoalActivator, MakeInitialGoalLineage, GoalCandidatesActivator>;
+using Resolver                  = resolver<GoalDeactivator, SubgoalsActivator, GoalCandidatesDeactivator>;
+using SetUpSim  = set_up_sim<trail>;
+using TearDown  = tear_down_sim<trail, unit_goals, decision_memory, resolution_memory,
+                    goal_candidate_rules, goal_exprs, ra_active_goals, candidate_frame_offsets,
+                    Mhu, bind_map, lineage_pool, frame_bump_allocator, Cdcl, chosen_goal_candidates>;
+using RunSim    = run_sim<InitialGoalsActivator, SolutionDetector, ConflictDetector,
+                    UnitGoalDetector, unit_goals, unit_goals, MockGenerateDecision,
+                    Joint, EliminationRouter, Resolver, GetUnitResolution,
+                    decision_memory, resolution_memory>;
+
+struct sim_stack {
+    db& database_;
+    initial_goal_exprs& initial_goals_;
+
     globalizer globalizer_;
     trail trail_;
-    bind_map bind_map_;
-    bind_map_factory bind_map_factory_;
-    unifier_factory unifier_factory_;
+    bind_map bind_map_{globalizer_};
+    bind_map_factory bind_map_factory_{globalizer_};
+    UnifierFactory unifier_factory_{globalizer_};
     lineage_pool lineage_pool_;
     ra_rule_id_set_factory ra_rule_id_set_factory_;
     ra_active_goals ra_active_goals_;
     goal_exprs goal_exprs_;
-    goal_candidate_rules goal_candidate_rules_;
+    goal_candidate_rules goal_candidate_rules_{ra_rule_id_set_factory_};
     unit_goals unit_goals_;
     decision_memory decision_memory_;
     resolution_memory resolution_memory_;
     candidate_frame_offsets candidate_frame_offsets_;
     chosen_goal_candidates chosen_goal_candidates_;
 
-    sim_early_wiring(locator& loc, db& database, initial_goal_exprs& initial_goals)
-        : globalizer_(),
-          trail_(),
-          bind_map_(globalizer_),
-          bind_map_factory_(globalizer_),
-          unifier_factory_(loc),
-          lineage_pool_(),
-          ra_rule_id_set_factory_(),
-          ra_active_goals_(),
-          goal_exprs_(),
-          goal_candidate_rules_(ra_rule_id_set_factory_),
-          unit_goals_(),
-          decision_memory_(),
-          resolution_memory_(),
-          candidate_frame_offsets_(),
-          chosen_goal_candidates_() {
-        loc.bind_as<i_globalizer>(globalizer_);
-        loc.bind_as<i_push_trail_frame, i_pop_trail_frame, i_log_to_current_trail_frame>(trail_);
-        loc.bind_as<i_bind_map, i_clear_bindings>(bind_map_);
-        loc.bind_as<i_bind_map_factory>(bind_map_factory_);
-        loc.bind_as<i_unifier_factory>(unifier_factory_);
-        loc.bind_as<i_make_goal_lineage, i_make_resolution_lineage, i_pin_goal_lineage,
-            i_pin_resolution_lineage, i_trim_unpinned_lineages, i_import_goal_lineage,
-            i_import_resolution_lineage>(lineage_pool_);
-        loc.bind_as<i_insert_active_goal, i_erase_active_goal, i_is_active_goal,
-            i_active_goals_size, i_check_active_goals_empty, i_clear_active_goals,
-            i_random_access<const goal_lineage*>>(ra_active_goals_);
-        loc.bind_as<i_get_goal_expr, i_set_goal_expr, i_unset_goal_expr, i_clear_goal_exprs>(
-            goal_exprs_);
-        loc.bind_as<i_get_goal_candidate_rule_ids, i_insert_goal_candidates, i_link_goal_candidate,
-            i_unlink_goal_candidate, i_erase_goal_candidates, i_clear_goal_candidate_rule_ids>(
-            goal_candidate_rules_);
-        loc.bind_as<i_push_unit_goal, i_pop_unit_goal, i_clear_unit_goals>(unit_goals_);
-        loc.bind_as<i_record_decision, i_clear_recorded_decisions, i_get_decision_count,
-            i_derive_decision_lemma>(decision_memory_);
-        loc.bind_as<i_record_resolution, i_clear_recorded_resolutions, i_get_resolution_count,
-            i_derive_resolution_lemma>(resolution_memory_);
-        loc.bind_as<i_get_candidate_frame_offset, i_set_candidate_frame_offset,
-            i_unset_candidate_frame_offset, i_clear_candidate_frame_offsets>(
-            candidate_frame_offsets_);
-        loc.bind_as<i_try_get_chosen_goal_candidate, i_set_chosen_goal_candidate,
-            i_clear_chosen_goal_candidates>(chosen_goal_candidates_);
-        loc.bind_as<i_get_rule, i_get_goal_db_rule_ids>(database);
-        loc.bind_as<i_get_initial_goal_count, i_get_initial_goal_expr>(initial_goals);
-    }
-};
-
-struct sim_pool_wiring {
     expr_pool expr_pool_;
-    frame_bump_allocator frame_allocator_;
-    elimination_backlog elimination_backlog_;
+    frame_bump_allocator frame_allocator_{0};
+    elimination_backlog elimination_backlog_{trail_};
 
-    sim_pool_wiring(locator& loc)
-        : expr_pool_(),
-          frame_allocator_(0),
-          elimination_backlog_(loc) {
-        loc.bind_as<i_make_functor, i_make_var, i_import_expr, i_get_expr_count>(expr_pool_);
-        loc.bind_as<i_frame_allocator>(frame_allocator_);
-        loc.bind_as<i_insert_backlogged_elimination, i_is_backlogged_elimination>(
-            elimination_backlog_);
-    }
-};
+    Cdcl cdcl_{chosen_goal_candidates_, chosen_goal_candidates_};
+    std::optional<Mhu> mhu_;
+    std::optional<Joint> joint_;
 
-struct sim_elim_wiring {
-    cdcl_elimination_generator cdcl_;
-    mhu_elimination_generator mhu_;
-    std::optional<joint_elimination_generator> joint_;
+    GetResolutionRule get_resolution_rule_{database_};
+    ConflictDetector conflict_detector_{goal_candidate_rules_};
+    UnitGoalDetector unit_goal_detector_{goal_candidate_rules_};
+    SolutionDetector solution_detector_{ra_active_goals_};
 
-    sim_elim_wiring(locator& loc) : cdcl_(loc), mhu_(loc) {
-        loc.bind_as<i_learn_avoidance, i_clean_up_cdcl>(cdcl_);
-        loc.bind_as<i_try_add_mhu_head, i_clear_mhu_heads>(mhu_);
-        joint_.emplace(loc);
-        loc.bind_as<i_elimination_generator>(*joint_);
-    }
-};
+    GoalActivator goal_activator_{goal_exprs_, goal_candidate_rules_, ra_active_goals_,
+                                   candidate_frame_offsets_, get_resolution_rule_};
+    GoalDeactivator goal_deactivator_{goal_exprs_, goal_candidate_rules_, ra_active_goals_};
+    CandidateDeactivator candidate_deactivator_{candidate_frame_offsets_, goal_candidate_rules_};
+    std::optional<CandidateActivator> candidate_activator_;
 
-struct sim_core_wiring {
-    get_resolution_rule get_resolution_rule_;
-    conflict_detector conflict_detector_;
-    unit_goal_detector unit_goal_detector_;
-    solution_detector solution_detector_;
+    EliminationRouter elimination_router_{goal_candidate_rules_, ra_active_goals_,
+                                          elimination_backlog_, candidate_deactivator_};
+    GetUnitResolution get_unit_resolution_{goal_candidate_rules_, lineage_pool_};
+    MakeInitialGoalLineage make_initial_goal_lineage_{lineage_pool_};
+    std::optional<InitialGoalActivator> initial_goal_activator_;
 
-    sim_core_wiring(locator& loc)
-        : get_resolution_rule_(loc),
-          conflict_detector_(loc),
-          unit_goal_detector_(loc),
-          solution_detector_(loc) {
-        loc.bind_as<i_get_resolution_rule>(get_resolution_rule_);
-        loc.bind_as<i_conflict_detector>(conflict_detector_);
-        loc.bind_as<i_detect_unit_goal>(unit_goal_detector_);
-        loc.bind_as<i_solution_detector>(solution_detector_);
-    }
-};
+    std::optional<GoalCandidatesDeactivator> goal_candidates_deactivator_;
+    std::optional<GoalCandidatesActivator> goal_candidates_activator_;
+    std::optional<SubgoalsActivator> subgoals_activator_;
+    std::optional<InitialGoalsActivator> initial_goals_activator_;
+    std::optional<Resolver> resolver_;
 
-struct sim_activator_wiring {
-    goal_activator goal_activator_;
-    goal_deactivator goal_deactivator_;
-    candidate_activator candidate_activator_;
-    candidate_deactivator candidate_deactivator_;
-
-    sim_activator_wiring(locator& loc)
-        : goal_activator_(loc),
-          goal_deactivator_(loc),
-          candidate_activator_(loc),
-          candidate_deactivator_(loc) {
-        loc.bind_as<i_goal_activator>(goal_activator_);
-        loc.bind_as<i_goal_deactivator>(goal_deactivator_);
-        loc.bind_as<i_candidate_activator>(candidate_activator_);
-        loc.bind_as<i_candidate_deactivator>(candidate_deactivator_);
-    }
-};
-
-struct sim_router_wiring {
-    elimination_router elimination_router_;
-    get_unit_resolution get_unit_resolution_;
-    make_initial_goal_lineage make_initial_goal_lineage_;
-    std::optional<initial_goal_activator> initial_goal_activator_;
-
-    sim_router_wiring(locator& loc)
-        : elimination_router_(loc),
-          get_unit_resolution_(loc),
-          make_initial_goal_lineage_(loc) {
-        loc.bind_as<i_elimination_router>(elimination_router_);
-        loc.bind_as<i_get_unit_resolution>(get_unit_resolution_);
-        loc.bind_as<i_make_initial_goal_lineage>(make_initial_goal_lineage_);
-        initial_goal_activator_.emplace(loc);
-        loc.bind_as<i_activate_initial_goal>(*initial_goal_activator_);
-    }
-};
-
-struct sim_orch_wiring {
-    goal_candidates_activator goal_candidates_activator_;
-    goal_candidates_deactivator goal_candidates_deactivator_;
-    std::optional<subgoals_activator> subgoals_activator_;
-    std::optional<initial_goals_activator> initial_goals_activator_;
-    std::optional<resolver> resolver_;
-
-    sim_orch_wiring(locator& loc)
-        : goal_candidates_activator_(loc),
-          goal_candidates_deactivator_(loc) {
-        loc.bind_as<i_activate_goal_candidates>(goal_candidates_activator_);
-        loc.bind_as<i_deactivate_goal_candidates>(goal_candidates_deactivator_);
-        subgoals_activator_.emplace(loc);
-        loc.bind_as<i_activate_subgoals_and_candidates>(*subgoals_activator_);
-        initial_goals_activator_.emplace(loc);
-        loc.bind_as<i_activate_initial_goals_and_candidates>(*initial_goals_activator_);
-        resolver_.emplace(loc);
-        loc.bind_as<i_resolver>(*resolver_);
-    }
-};
-
-struct sim_stack {
-    locator loc;
-    db& database;
-    initial_goal_exprs& initial_goals;
-    sim_early_wiring early;
-    sim_pool_wiring pools;
-    sim_elim_wiring elims;
-    sim_core_wiring core;
-    sim_activator_wiring activators;
-    sim_router_wiring routers;
-    sim_orch_wiring orch;
     testing::NiceMock<MockGenerateDecision> decision_generator;
 
     sim_stack(db& database_in, initial_goal_exprs& initial_goals_in)
-        : loc(),
-          database(database_in),
-          initial_goals(initial_goals_in),
-          early(loc, database, initial_goals),
-          pools(loc),
-          elims(loc),
-          core(loc),
-          activators(loc),
-          routers(loc),
-          orch(loc) {
-        loc.bind_as<i_generate_decision>(decision_generator);
+        : database_(database_in), initial_goals_(initial_goals_in) {
+        mhu_.emplace(bind_map_, lineage_pool_, expr_pool_, bind_map_factory_,
+                     unifier_factory_, goal_candidate_rules_);
+        joint_.emplace(cdcl_, *mhu_);
+        candidate_activator_.emplace(frame_allocator_, candidate_frame_offsets_, *mhu_,
+                                     elimination_backlog_, goal_exprs_, database_,
+                                     goal_candidate_rules_);
+        initial_goal_activator_.emplace(initial_goals_, make_initial_goal_lineage_,
+                                        goal_exprs_, goal_candidate_rules_, ra_active_goals_);
+        goal_candidates_deactivator_.emplace(goal_candidate_rules_, lineage_pool_,
+                                             candidate_deactivator_);
+        goal_candidates_activator_.emplace(database_, lineage_pool_, *candidate_activator_,
+                                           conflict_detector_, unit_goal_detector_, unit_goals_);
+        subgoals_activator_.emplace(lineage_pool_, goal_activator_, database_,
+                                    *goal_candidates_activator_);
+        initial_goals_activator_.emplace(initial_goals_, *initial_goal_activator_,
+                                         make_initial_goal_lineage_, *goal_candidates_activator_);
+        resolver_.emplace(goal_deactivator_, *subgoals_activator_, *goal_candidates_deactivator_);
     }
 };
 
-const expr* make_suc_n(test_functors& functors, i_make_functor& make_functor, const expr* zero, int n) {
+const expr* make_suc_n(test_functors& functors, expr_pool& make_functor, const expr* zero, int n) {
     const expr* cur = zero;
     for (int i = 0; i < n; ++i)
         cur = make_functor.make_functor(functors.id("suc"), {cur});
@@ -369,21 +205,30 @@ void chain_clause_db(test_functors& functors, db& database, std::vector<expr>& s
 }  // namespace
 
 struct simulation {
-    set_up_sim set_up_sim_;
-    run_sim run_sim_;
-    tear_down_sim tear_down_sim_;
+    SetUpSim set_up_sim_;
+    std::optional<TearDown> tear_down_sim_;
+    std::optional<RunSim> run_sim_;
 
-    simulation(locator& loc, size_t max_resolutions)
-        : set_up_sim_(loc), run_sim_(loc, max_resolutions), tear_down_sim_(loc) {}
+    simulation(sim_stack& s, size_t max_resolutions)
+        : set_up_sim_(s.trail_) {
+        tear_down_sim_.emplace(s.trail_, s.unit_goals_, s.decision_memory_, s.resolution_memory_,
+            s.goal_candidate_rules_, s.goal_exprs_, s.ra_active_goals_, s.candidate_frame_offsets_,
+            *s.mhu_, s.bind_map_, s.lineage_pool_, s.frame_allocator_, s.cdcl_,
+            s.chosen_goal_candidates_);
+        run_sim_.emplace(*s.initial_goals_activator_, s.solution_detector_, s.conflict_detector_,
+            s.unit_goal_detector_, s.unit_goals_, s.unit_goals_, s.decision_generator,
+            *s.joint_, s.elimination_router_, *s.resolver_, s.get_unit_resolution_,
+            s.decision_memory_, s.resolution_memory_, max_resolutions);
+    }
 
     void set_up() { set_up_sim_.set_up(); }
-    sim_termination run() { return run_sim_.run(); }
-    void tear_down() { tear_down_sim_.tear_down(); }
+    sim_termination run() { return run_sim_->run(); }
+    void tear_down() { tear_down_sim_->tear_down(); }
 };
 
 struct SimIntegrationTest : public ::testing::Test {
-    
-    test_functors functors;static constexpr size_t kDefaultMaxResolutions = 8;
+    test_functors functors;
+    static constexpr size_t kDefaultMaxResolutions = 8;
 
     db database;
     initial_goal_exprs initial_goals;
@@ -398,7 +243,7 @@ TEST_F(SimIntegrationTest, RunWithNoInitialGoalsAndEmptyDbNeverGeneratesDecision
      */
     EXPECT_CALL(stack.decision_generator, generate()).Times(0);
 
-    simulation simulation{stack.loc, kDefaultMaxResolutions};
+    simulation simulation{stack, kDefaultMaxResolutions};
     simulation.set_up();
     EXPECT_EQ(simulation.run(), sim_termination::solved);
     simulation.tear_down();
@@ -415,7 +260,7 @@ TEST_F(SimIntegrationTest, RunReturnsConflictedWhenInitialGoalHasNoDbCandidates)
 
     EXPECT_CALL(stack.decision_generator, generate()).Times(0);
 
-    simulation simulation{stack.loc, kDefaultMaxResolutions};
+    simulation simulation{stack, kDefaultMaxResolutions};
     simulation.set_up();
     EXPECT_EQ(simulation.run(), sim_termination::conflicted);
     simulation.tear_down();
@@ -435,7 +280,7 @@ TEST_F(SimIntegrationTest, RunReturnsSolvedWhenUnitFactAppliesToInitialGoal) {
 
     EXPECT_CALL(stack.decision_generator, generate()).Times(0);
 
-    simulation simulation{stack.loc, kDefaultMaxResolutions};
+    simulation simulation{stack, kDefaultMaxResolutions};
     simulation.set_up();
     EXPECT_EQ(simulation.run(), sim_termination::solved);
     simulation.tear_down();
@@ -455,7 +300,7 @@ TEST_F(SimIntegrationTest, RunReturnsConflictedWhenDbRuleHeadFailsToUnifyWithGoa
 
     EXPECT_CALL(stack.decision_generator, generate()).Times(0);
 
-    simulation simulation{stack.loc, kDefaultMaxResolutions};
+    simulation simulation{stack, kDefaultMaxResolutions};
     simulation.set_up();
     EXPECT_EQ(simulation.run(), sim_termination::conflicted);
     simulation.tear_down();
@@ -478,7 +323,7 @@ TEST_F(SimIntegrationTest, RunReturnsSolvedWhenOnlyOneOfTwoDbRulesUnifiesWithGoa
 
     EXPECT_CALL(stack.decision_generator, generate()).Times(0);
 
-    simulation simulation{stack.loc, kDefaultMaxResolutions};
+    simulation simulation{stack, kDefaultMaxResolutions};
     simulation.set_up();
     EXPECT_EQ(simulation.run(), sim_termination::solved);
     simulation.tear_down();
@@ -500,12 +345,12 @@ TEST_F(SimIntegrationTest, RunReturnsSolvedAfterSingleDecisionWithTwoMatchingFac
     database.push(rule{&head0, {}});
     database.push(rule{&head1, {}});
 
-    const goal_lineage* gl = stack.loc.locate<i_make_initial_goal_lineage>().make(0);
+    const goal_lineage* gl = stack.make_initial_goal_lineage_.make(0);
     const resolution_lineage* chosen =
-        stack.loc.locate<i_make_resolution_lineage>().make_resolution_lineage(gl, rule_id{1});
+        stack.lineage_pool_.make_resolution_lineage(gl, rule_id{1});
     EXPECT_CALL(stack.decision_generator, generate()).WillOnce(Return(chosen));
 
-    simulation simulation{stack.loc, kDefaultMaxResolutions};
+    simulation simulation{stack, kDefaultMaxResolutions};
     simulation.set_up();
     EXPECT_EQ(simulation.run(), sim_termination::solved);
     simulation.tear_down();
@@ -529,7 +374,7 @@ TEST_F(SimIntegrationTest, RunReturnsSolvedViaClauseThenBodyFactWithoutDecisions
 
     EXPECT_CALL(stack.decision_generator, generate()).Times(0);
 
-    simulation simulation{stack.loc, kDefaultMaxResolutions};
+    simulation simulation{stack, kDefaultMaxResolutions};
     simulation.set_up();
     EXPECT_EQ(simulation.run(), sim_termination::solved);
     simulation.tear_down();
@@ -552,7 +397,7 @@ TEST_F(SimIntegrationTest, RunReturnsConflictedWhenSecondInitialGoalHasNoCandida
 
     EXPECT_CALL(stack.decision_generator, generate()).Times(0);
 
-    simulation simulation{stack.loc, kDefaultMaxResolutions};
+    simulation simulation{stack, kDefaultMaxResolutions};
     simulation.set_up();
     EXPECT_EQ(simulation.run(), sim_termination::conflicted);
     simulation.tear_down();
@@ -578,7 +423,7 @@ TEST_F(SimIntegrationTest, RunReturnsSolvedWhenTwoInitialGoalsEachHaveMatchingFa
 
     EXPECT_CALL(stack.decision_generator, generate()).Times(0);
 
-    simulation simulation{stack.loc, kDefaultMaxResolutions};
+    simulation simulation{stack, kDefaultMaxResolutions};
     simulation.set_up();
     EXPECT_EQ(simulation.run(), sim_termination::solved);
     simulation.tear_down();
@@ -606,12 +451,12 @@ TEST_F(SimIntegrationTest, RunReturnsSolvedAfterOneDecisionWhenInitialGoalFHasTw
     database.push(rule{&f_head1, {}});
     database.push(rule{&g_head, {}});
 
-    const goal_lineage* gl_f = stack.loc.locate<i_make_initial_goal_lineage>().make(0);
+    const goal_lineage* gl_f = stack.make_initial_goal_lineage_.make(0);
     const resolution_lineage* chosen =
-        stack.loc.locate<i_make_resolution_lineage>().make_resolution_lineage(gl_f, rule_id{0});
+        stack.lineage_pool_.make_resolution_lineage(gl_f, rule_id{0});
     EXPECT_CALL(stack.decision_generator, generate()).WillOnce(Return(chosen));
 
-    simulation simulation{stack.loc, kDefaultMaxResolutions};
+    simulation simulation{stack, kDefaultMaxResolutions};
     simulation.set_up();
     EXPECT_EQ(simulation.run(), sim_termination::solved);
     simulation.tear_down();
@@ -637,7 +482,7 @@ TEST_F(SimIntegrationTest, RunReturnsConflictedWhenSecondInitialGoalLacksCandida
 
     EXPECT_CALL(stack.decision_generator, generate()).Times(0);
 
-    simulation simulation{stack.loc, kDefaultMaxResolutions};
+    simulation simulation{stack, kDefaultMaxResolutions};
     simulation.set_up();
     EXPECT_EQ(simulation.run(), sim_termination::conflicted);
     simulation.tear_down();
@@ -659,14 +504,14 @@ TEST_F(SimIntegrationTest, RunReturnsSolvedWhenRuleZeroIsBackloggedBeforeRun) {
     database.push(rule{&f_head0, {}});
     database.push(rule{&f_head1, {}});
 
-    i_make_initial_goal_lineage& make_initial_goal_lineage =
-        stack.loc.locate<i_make_initial_goal_lineage>();
-    i_make_resolution_lineage& make_resolution_lineage =
-        stack.loc.locate<i_make_resolution_lineage>();
-    i_insert_backlogged_elimination& insert_backlogged_elimination =
-        stack.loc.locate<i_insert_backlogged_elimination>();
-    i_derive_resolution_lemma& derive_resolution_lemma =
-        stack.loc.locate<i_derive_resolution_lemma>();
+    auto& make_initial_goal_lineage =
+        stack.make_initial_goal_lineage_;
+    auto& make_resolution_lineage =
+        stack.lineage_pool_;
+    auto& insert_backlogged_elimination =
+        stack.elimination_backlog_;
+    auto& derive_resolution_lemma =
+        stack.resolution_memory_;
 
     const goal_lineage* gl = make_initial_goal_lineage.make(0);
     const resolution_lineage* rl0 =
@@ -676,7 +521,7 @@ TEST_F(SimIntegrationTest, RunReturnsSolvedWhenRuleZeroIsBackloggedBeforeRun) {
 
     insert_backlogged_elimination.insert_backlogged_elimination(rl0);
 
-    simulation simulation{stack.loc, kDefaultMaxResolutions};
+    simulation simulation{stack, kDefaultMaxResolutions};
     simulation.set_up();
 
     EXPECT_CALL(stack.decision_generator, generate()).Times(0);
@@ -712,13 +557,13 @@ TEST_F(SimIntegrationTest, RunReturnsSolvedAfterCdclAvoidanceForcesG1RuleThree) 
     database.push(rule{&g_head2, {}});
     database.push(rule{&g_head3, {}});
 
-    i_make_initial_goal_lineage& make_initial_goal_lineage =
-        stack.loc.locate<i_make_initial_goal_lineage>();
-    i_make_resolution_lineage& make_resolution_lineage =
-        stack.loc.locate<i_make_resolution_lineage>();
-    i_learn_avoidance& learn_avoidance = stack.loc.locate<i_learn_avoidance>();
-    i_derive_resolution_lemma& derive_resolution_lemma =
-        stack.loc.locate<i_derive_resolution_lemma>();
+    auto& make_initial_goal_lineage =
+        stack.make_initial_goal_lineage_;
+    auto& make_resolution_lineage =
+        stack.lineage_pool_;
+    auto& learn_avoidance = stack.cdcl_;
+    auto& derive_resolution_lemma =
+        stack.resolution_memory_;
 
     const goal_lineage* gl0 = make_initial_goal_lineage.make(0);
     const goal_lineage* gl1 = make_initial_goal_lineage.make(1);
@@ -731,7 +576,7 @@ TEST_F(SimIntegrationTest, RunReturnsSolvedAfterCdclAvoidanceForcesG1RuleThree) 
 
     learn_avoidance.learn(lemma{{rl_g0_0, rl_g1_2}});
 
-    simulation simulation{stack.loc, kDefaultMaxResolutions};
+    simulation simulation{stack, kDefaultMaxResolutions};
     simulation.set_up();
 
     EXPECT_CALL(stack.decision_generator, generate()).WillOnce(Return(rl_g0_0));
@@ -772,7 +617,7 @@ TEST_F(SimIntegrationTest, RunReturnsSolvedOnRecursiveClauseTreeWithoutDecisions
 
     EXPECT_CALL(stack.decision_generator, generate()).Times(0);
 
-    simulation simulation{stack.loc, kDefaultMaxResolutions};
+    simulation simulation{stack, kDefaultMaxResolutions};
     simulation.set_up();
     EXPECT_EQ(simulation.run(), sim_termination::solved);
     simulation.tear_down();
@@ -819,10 +664,10 @@ TEST_F(SimIntegrationTest, RunReturnsSolvedAfterOneDecisionOnInitialGoalKWithTwo
     database.push(rule{&k_head0, {}});
     database.push(rule{&k_head1, {}});
 
-    i_make_initial_goal_lineage& make_initial_goal_lineage =
-        stack.loc.locate<i_make_initial_goal_lineage>();
-    i_make_resolution_lineage& make_resolution_lineage =
-        stack.loc.locate<i_make_resolution_lineage>();
+    auto& make_initial_goal_lineage =
+        stack.make_initial_goal_lineage_;
+    auto& make_resolution_lineage =
+        stack.lineage_pool_;
 
     const goal_lineage* gl_k = make_initial_goal_lineage.make(2);
     const resolution_lineage* rl_k_first =
@@ -831,7 +676,7 @@ TEST_F(SimIntegrationTest, RunReturnsSolvedAfterOneDecisionOnInitialGoalKWithTwo
     EXPECT_CALL(stack.decision_generator, generate()).WillOnce(Return(rl_k_first));
 
     static constexpr size_t kMaxResolutions = 32;
-    simulation simulation{stack.loc, kMaxResolutions};
+    simulation simulation{stack, kMaxResolutions};
     simulation.set_up();
     EXPECT_EQ(simulation.run(), sim_termination::solved);
     simulation.tear_down();
@@ -849,14 +694,14 @@ TEST_F(SimIntegrationTest, RunReturnsSolvedAndBindsVarsViaMhuWhenFactUnifiesGoal
     expr head{expr::functor{functors.id("f"), {&abc, &_123}}};
     database.push(rule{&head, {}});
 
-    i_bind_map& bind_map = stack.loc.locate<i_bind_map>();
-    i_frame_allocator& frame_alloc = stack.loc.locate<i_frame_allocator>();
-    i_make_var& make_var = stack.loc.locate<i_make_var>();
-    i_make_functor& make_functor = stack.loc.locate<i_make_functor>();
+    auto& bind_map = stack.bind_map_;
+    auto& frame_alloc = stack.frame_allocator_;
+    auto& make_var = stack.expr_pool_;
+    auto& make_functor = stack.expr_pool_;
 
     EXPECT_CALL(stack.decision_generator, generate()).Times(0);
 
-    simulation simulation{stack.loc, kDefaultMaxResolutions};
+    simulation simulation{stack, kDefaultMaxResolutions};
     simulation.set_up();
     const uint32_t idx_a = frame_alloc.bump(1);
     const uint32_t idx_b = frame_alloc.bump(1);
@@ -896,14 +741,14 @@ TEST_F(SimIntegrationTest, RunReturnsSolvedViaClauseBodyFactsBindingVarsWithoutD
     database.push(rule{&g_head, {}});
     database.push(rule{&h_head, {}});
 
-    i_bind_map& bind_map = stack.loc.locate<i_bind_map>();
-    i_frame_allocator& frame_alloc = stack.loc.locate<i_frame_allocator>();
-    i_make_var& make_var = stack.loc.locate<i_make_var>();
-    i_make_functor& make_functor = stack.loc.locate<i_make_functor>();
+    auto& bind_map = stack.bind_map_;
+    auto& frame_alloc = stack.frame_allocator_;
+    auto& make_var = stack.expr_pool_;
+    auto& make_functor = stack.expr_pool_;
 
     EXPECT_CALL(stack.decision_generator, generate()).Times(0);
 
-    simulation simulation{stack.loc, kDefaultMaxResolutions};
+    simulation simulation{stack, kDefaultMaxResolutions};
     simulation.set_up();
     const uint32_t idx_a = frame_alloc.bump(1);
     const uint32_t idx_b = frame_alloc.bump(1);
@@ -939,18 +784,18 @@ TEST_F(SimIntegrationTest, RunReturnsSolvedAfterDecisionBindingVarsFromChosenFac
     database.push(rule{&head0, {}});
     database.push(rule{&head1, {}});
 
-    const goal_lineage* gl = stack.loc.locate<i_make_initial_goal_lineage>().make(0);
+    const goal_lineage* gl = stack.make_initial_goal_lineage_.make(0);
     const resolution_lineage* chosen =
-        stack.loc.locate<i_make_resolution_lineage>().make_resolution_lineage(gl, rule_id{1});
+        stack.lineage_pool_.make_resolution_lineage(gl, rule_id{1});
 
-    i_bind_map& bind_map = stack.loc.locate<i_bind_map>();
-    i_frame_allocator& frame_alloc = stack.loc.locate<i_frame_allocator>();
-    i_make_var& make_var = stack.loc.locate<i_make_var>();
-    i_make_functor& make_functor = stack.loc.locate<i_make_functor>();
+    auto& bind_map = stack.bind_map_;
+    auto& frame_alloc = stack.frame_allocator_;
+    auto& make_var = stack.expr_pool_;
+    auto& make_functor = stack.expr_pool_;
 
     EXPECT_CALL(stack.decision_generator, generate()).WillOnce(Return(chosen));
 
-    simulation simulation{stack.loc, kDefaultMaxResolutions};
+    simulation simulation{stack, kDefaultMaxResolutions};
     simulation.set_up();
     const uint32_t idx_a = frame_alloc.bump(1);
     const uint32_t idx_b = frame_alloc.bump(1);
@@ -983,16 +828,16 @@ TEST_F(SimIntegrationTest, RunReturnsSolvedWhenMhuRejectsInconsistentRuleWithout
     database.push(rule{&head0, {}});
     database.push(rule{&head1, {}});
 
-    i_bind_map& bind_map = stack.loc.locate<i_bind_map>();
-    i_frame_allocator& frame_alloc = stack.loc.locate<i_frame_allocator>();
-    i_make_var& make_var = stack.loc.locate<i_make_var>();
-    i_make_functor& make_functor = stack.loc.locate<i_make_functor>();
-    i_make_initial_goal_lineage& make_initial_goal_lineage =
-        stack.loc.locate<i_make_initial_goal_lineage>();
-    i_make_resolution_lineage& make_resolution_lineage =
-        stack.loc.locate<i_make_resolution_lineage>();
-    i_derive_resolution_lemma& derive_resolution_lemma =
-        stack.loc.locate<i_derive_resolution_lemma>();
+    auto& bind_map = stack.bind_map_;
+    auto& frame_alloc = stack.frame_allocator_;
+    auto& make_var = stack.expr_pool_;
+    auto& make_functor = stack.expr_pool_;
+    auto& make_initial_goal_lineage =
+        stack.make_initial_goal_lineage_;
+    auto& make_resolution_lineage =
+        stack.lineage_pool_;
+    auto& derive_resolution_lemma =
+        stack.resolution_memory_;
 
     const goal_lineage* gl = make_initial_goal_lineage.make(0);
     const resolution_lineage* rl0 =
@@ -1000,7 +845,7 @@ TEST_F(SimIntegrationTest, RunReturnsSolvedWhenMhuRejectsInconsistentRuleWithout
 
     EXPECT_CALL(stack.decision_generator, generate()).Times(0);
 
-    simulation simulation{stack.loc, kDefaultMaxResolutions};
+    simulation simulation{stack, kDefaultMaxResolutions};
     simulation.set_up();
     const uint32_t idx_a = frame_alloc.bump(1);
     const expr* var_a = saved_expr_pool_.make_var(idx_a);
@@ -1032,16 +877,16 @@ TEST_F(SimIntegrationTest, RunDeactivatesRuleOneWhenDecisionResolvesRuleZeroOnMh
     database.push(rule{&head0, {}});
     database.push(rule{&head1, {}});
 
-    i_make_initial_goal_lineage& make_initial_goal_lineage =
-        stack.loc.locate<i_make_initial_goal_lineage>();
-    i_make_resolution_lineage& make_resolution_lineage =
-        stack.loc.locate<i_make_resolution_lineage>();
-    i_derive_resolution_lemma& derive_resolution_lemma =
-        stack.loc.locate<i_derive_resolution_lemma>();
-    i_bind_map& bind_map = stack.loc.locate<i_bind_map>();
-    i_frame_allocator& frame_alloc = stack.loc.locate<i_frame_allocator>();
-    i_make_var& make_var = stack.loc.locate<i_make_var>();
-    i_make_functor& make_functor = stack.loc.locate<i_make_functor>();
+    auto& make_initial_goal_lineage =
+        stack.make_initial_goal_lineage_;
+    auto& make_resolution_lineage =
+        stack.lineage_pool_;
+    auto& derive_resolution_lemma =
+        stack.resolution_memory_;
+    auto& bind_map = stack.bind_map_;
+    auto& frame_alloc = stack.frame_allocator_;
+    auto& make_var = stack.expr_pool_;
+    auto& make_functor = stack.expr_pool_;
 
     const goal_lineage* gl = make_initial_goal_lineage.make(0);
     const resolution_lineage* rl0 =
@@ -1051,7 +896,7 @@ TEST_F(SimIntegrationTest, RunDeactivatesRuleOneWhenDecisionResolvesRuleZeroOnMh
 
     EXPECT_CALL(stack.decision_generator, generate()).WillOnce(Return(rl0));
 
-    simulation simulation{stack.loc, kDefaultMaxResolutions};
+    simulation simulation{stack, kDefaultMaxResolutions};
     simulation.set_up();
     const expr* var_a = saved_expr_pool_.make_var(frame_alloc.bump(1));
     const expr* var_b = saved_expr_pool_.make_var(frame_alloc.bump(1));
@@ -1091,14 +936,14 @@ TEST_F(SimIntegrationTest, RunDeactivatesCrossGoalCandidateOnMhuIncompatibleHead
     database.push(rule{&head_g2, {}});
     database.push(rule{&head_g3, {}});
 
-    i_make_initial_goal_lineage& make_initial_goal_lineage =
-        stack.loc.locate<i_make_initial_goal_lineage>();
-    i_make_resolution_lineage& make_resolution_lineage =
-        stack.loc.locate<i_make_resolution_lineage>();
-    i_bind_map& bind_map = stack.loc.locate<i_bind_map>();
-    i_frame_allocator& frame_alloc = stack.loc.locate<i_frame_allocator>();
-    i_make_var& make_var = stack.loc.locate<i_make_var>();
-    i_make_functor& make_functor = stack.loc.locate<i_make_functor>();
+    auto& make_initial_goal_lineage =
+        stack.make_initial_goal_lineage_;
+    auto& make_resolution_lineage =
+        stack.lineage_pool_;
+    auto& bind_map = stack.bind_map_;
+    auto& frame_alloc = stack.frame_allocator_;
+    auto& make_var = stack.expr_pool_;
+    auto& make_functor = stack.expr_pool_;
 
     const goal_lineage* gl0 = make_initial_goal_lineage.make(0);
     const resolution_lineage* rl_f0 =
@@ -1106,7 +951,7 @@ TEST_F(SimIntegrationTest, RunDeactivatesCrossGoalCandidateOnMhuIncompatibleHead
 
     EXPECT_CALL(stack.decision_generator, generate()).WillOnce(Return(rl_f0));
 
-    simulation simulation{stack.loc, kDefaultMaxResolutions};
+    simulation simulation{stack, kDefaultMaxResolutions};
     simulation.set_up();
     const expr* var_a = saved_expr_pool_.make_var(frame_alloc.bump(1));
     initial_goals.push(saved_expr_pool_.make_functor(functors.id("f"), {var_a}));
@@ -1130,14 +975,14 @@ TEST_F(SimIntegrationTest, RunReturnsSolvedBindingVarInNestedFunctorArgWithoutDe
     expr head{expr::functor{functors.id("f"), {&g_abc}}};
     database.push(rule{&head, {}});
 
-    i_bind_map& bind_map = stack.loc.locate<i_bind_map>();
-    i_frame_allocator& frame_alloc = stack.loc.locate<i_frame_allocator>();
-    i_make_var& make_var = stack.loc.locate<i_make_var>();
-    i_make_functor& make_functor = stack.loc.locate<i_make_functor>();
+    auto& bind_map = stack.bind_map_;
+    auto& frame_alloc = stack.frame_allocator_;
+    auto& make_var = stack.expr_pool_;
+    auto& make_functor = stack.expr_pool_;
 
     EXPECT_CALL(stack.decision_generator, generate()).Times(0);
 
-    simulation simulation{stack.loc, kDefaultMaxResolutions};
+    simulation simulation{stack, kDefaultMaxResolutions};
     simulation.set_up();
     const uint32_t idx_a = frame_alloc.bump(1);
     const expr* var_a = saved_expr_pool_.make_var(idx_a);
@@ -1163,14 +1008,14 @@ TEST_F(SimIntegrationTest, RunReturnsSolvedBindingRemainingVarWhenGoalIsPartiall
     expr head{expr::functor{functors.id("f"), {&abc, &_123}}};
     database.push(rule{&head, {}});
 
-    i_bind_map& bind_map = stack.loc.locate<i_bind_map>();
-    i_frame_allocator& frame_alloc = stack.loc.locate<i_frame_allocator>();
-    i_make_var& make_var = stack.loc.locate<i_make_var>();
-    i_make_functor& make_functor = stack.loc.locate<i_make_functor>();
+    auto& bind_map = stack.bind_map_;
+    auto& frame_alloc = stack.frame_allocator_;
+    auto& make_var = stack.expr_pool_;
+    auto& make_functor = stack.expr_pool_;
 
     EXPECT_CALL(stack.decision_generator, generate()).Times(0);
 
-    simulation simulation{stack.loc, kDefaultMaxResolutions};
+    simulation simulation{stack, kDefaultMaxResolutions};
     simulation.set_up();
     const expr* abc_pool = saved_expr_pool_.make_functor(functors.id("abc"), {});
     const uint32_t idx_b = frame_alloc.bump(1);
@@ -1204,11 +1049,11 @@ TEST_F(SimIntegrationTest, RunReturnsConflictedWhenClauseBodyGoalHasNoUnifyingFa
 
     EXPECT_CALL(stack.decision_generator, generate()).Times(0);
 
-    i_frame_allocator& frame_alloc = stack.loc.locate<i_frame_allocator>();
-    i_make_var& make_var = stack.loc.locate<i_make_var>();
-    i_make_functor& make_functor = stack.loc.locate<i_make_functor>();
+    auto& frame_alloc = stack.frame_allocator_;
+    auto& make_var = stack.expr_pool_;
+    auto& make_functor = stack.expr_pool_;
 
-    simulation simulation{stack.loc, kDefaultMaxResolutions};
+    simulation simulation{stack, kDefaultMaxResolutions};
     simulation.set_up();
     const expr* var_a = saved_expr_pool_.make_var(frame_alloc.bump(1));
     const expr* var_b = saved_expr_pool_.make_var(frame_alloc.bump(1));
@@ -1242,9 +1087,9 @@ TEST_F(SimIntegrationTest, RunReturnsConflictedWhenClauseBodyFactMismatchesGroun
 
     EXPECT_CALL(stack.decision_generator, generate()).Times(0);
 
-    i_make_functor& make_functor = stack.loc.locate<i_make_functor>();
+    auto& make_functor = stack.expr_pool_;
 
-    simulation simulation{stack.loc, kDefaultMaxResolutions};
+    simulation simulation{stack, kDefaultMaxResolutions};
     simulation.set_up();
     initial_goals.push(saved_expr_pool_.make_functor(functors.id("f"),
         {saved_expr_pool_.make_functor(functors.id("abc"), {}), saved_expr_pool_.make_functor(functors.id("123"), {})}));
@@ -1280,15 +1125,15 @@ TEST_F(SimIntegrationTest, RunReturnsSolvedAfterDecisionOnBodyGoalWithTwoFacts) 
     database.push(rule{&g_head1, {}});
     database.push(rule{&h_head, {}});
 
-    i_make_initial_goal_lineage& make_initial_goal_lineage =
-        stack.loc.locate<i_make_initial_goal_lineage>();
-    i_make_resolution_lineage& make_resolution_lineage =
-        stack.loc.locate<i_make_resolution_lineage>();
-    i_make_goal_lineage& make_goal_lineage = stack.loc.locate<i_make_goal_lineage>();
-    i_bind_map& bind_map = stack.loc.locate<i_bind_map>();
-    i_frame_allocator& frame_alloc = stack.loc.locate<i_frame_allocator>();
-    i_make_var& make_var = stack.loc.locate<i_make_var>();
-    i_make_functor& make_functor = stack.loc.locate<i_make_functor>();
+    auto& make_initial_goal_lineage =
+        stack.make_initial_goal_lineage_;
+    auto& make_resolution_lineage =
+        stack.lineage_pool_;
+    auto& make_goal_lineage = stack.lineage_pool_;
+    auto& bind_map = stack.bind_map_;
+    auto& frame_alloc = stack.frame_allocator_;
+    auto& make_var = stack.expr_pool_;
+    auto& make_functor = stack.expr_pool_;
 
     const goal_lineage* gl_f = make_initial_goal_lineage.make(0);
     const resolution_lineage* rl_f =
@@ -1299,7 +1144,7 @@ TEST_F(SimIntegrationTest, RunReturnsSolvedAfterDecisionOnBodyGoalWithTwoFacts) 
 
     EXPECT_CALL(stack.decision_generator, generate()).WillOnce(Return(chosen_g));
 
-    simulation simulation{stack.loc, kDefaultMaxResolutions};
+    simulation simulation{stack, kDefaultMaxResolutions};
     simulation.set_up();
     const expr* var_a = saved_expr_pool_.make_var(frame_alloc.bump(1));
     const expr* var_b = saved_expr_pool_.make_var(frame_alloc.bump(1));
@@ -1337,14 +1182,14 @@ TEST_F(SimIntegrationTest, RunReturnsSolvedWhenSharedVarLinksTwoGoalsWithoutDeci
     database.push(rule{&g_head0, {}});
     database.push(rule{&g_head1, {}});
 
-    i_bind_map& bind_map = stack.loc.locate<i_bind_map>();
-    i_frame_allocator& frame_alloc = stack.loc.locate<i_frame_allocator>();
-    i_make_var& make_var = stack.loc.locate<i_make_var>();
-    i_make_functor& make_functor = stack.loc.locate<i_make_functor>();
+    auto& bind_map = stack.bind_map_;
+    auto& frame_alloc = stack.frame_allocator_;
+    auto& make_var = stack.expr_pool_;
+    auto& make_functor = stack.expr_pool_;
 
     EXPECT_CALL(stack.decision_generator, generate()).Times(0);
 
-    simulation simulation{stack.loc, kDefaultMaxResolutions};
+    simulation simulation{stack, kDefaultMaxResolutions};
     simulation.set_up();
     const expr* var_a = saved_expr_pool_.make_var(frame_alloc.bump(1));
     const expr* var_b = saved_expr_pool_.make_var(frame_alloc.bump(1));
@@ -1391,17 +1236,17 @@ TEST_F(SimIntegrationTest, RunReturnsSolvedWhenCdclAndMhuReduceGoalGCandidatesWi
     database.push(rule{&g_head2, {}});
     database.push(rule{&g_head3, {}});
 
-    i_make_initial_goal_lineage& make_initial_goal_lineage =
-        stack.loc.locate<i_make_initial_goal_lineage>();
-    i_make_resolution_lineage& make_resolution_lineage =
-        stack.loc.locate<i_make_resolution_lineage>();
-    i_learn_avoidance& learn_avoidance = stack.loc.locate<i_learn_avoidance>();
-    i_derive_resolution_lemma& derive_resolution_lemma =
-        stack.loc.locate<i_derive_resolution_lemma>();
-    i_bind_map& bind_map = stack.loc.locate<i_bind_map>();
-    i_frame_allocator& frame_alloc = stack.loc.locate<i_frame_allocator>();
-    i_make_var& make_var = stack.loc.locate<i_make_var>();
-    i_make_functor& make_functor = stack.loc.locate<i_make_functor>();
+    auto& make_initial_goal_lineage =
+        stack.make_initial_goal_lineage_;
+    auto& make_resolution_lineage =
+        stack.lineage_pool_;
+    auto& learn_avoidance = stack.cdcl_;
+    auto& derive_resolution_lemma =
+        stack.resolution_memory_;
+    auto& bind_map = stack.bind_map_;
+    auto& frame_alloc = stack.frame_allocator_;
+    auto& make_var = stack.expr_pool_;
+    auto& make_functor = stack.expr_pool_;
 
     const goal_lineage* gl_f = make_initial_goal_lineage.make(0);
     const goal_lineage* gl_g = make_initial_goal_lineage.make(1);
@@ -1416,7 +1261,7 @@ TEST_F(SimIntegrationTest, RunReturnsSolvedWhenCdclAndMhuReduceGoalGCandidatesWi
 
     EXPECT_CALL(stack.decision_generator, generate()).Times(0);
 
-    simulation simulation{stack.loc, kDefaultMaxResolutions};
+    simulation simulation{stack, kDefaultMaxResolutions};
     simulation.set_up();
     const expr* var_a = saved_expr_pool_.make_var(frame_alloc.bump(1));
     const expr* xyz = saved_expr_pool_.make_functor(functors.id("xyz"), {});
@@ -1454,16 +1299,16 @@ TEST_F(SimIntegrationTest, RunReturnsSolvedBuildingListOfFiveAbcWithoutDecisions
     database.push(rule{&head0, {}});
     database.push(rule{&head1, {&body1}});
 
-    i_bind_map& bind_map = stack.loc.locate<i_bind_map>();
-    i_frame_allocator& frame_alloc = stack.loc.locate<i_frame_allocator>();
-    i_make_var& make_var = stack.loc.locate<i_make_var>();
-    i_make_functor& make_functor = stack.loc.locate<i_make_functor>();
+    auto& bind_map = stack.bind_map_;
+    auto& frame_alloc = stack.frame_allocator_;
+    auto& make_var = stack.expr_pool_;
+    auto& make_functor = stack.expr_pool_;
 
     EXPECT_CALL(stack.decision_generator, generate()).Times(0);
 
     static constexpr size_t kMaxResolutions = 32;
     static constexpr int kListLength = 5;
-    simulation simulation{stack.loc, kMaxResolutions};
+    simulation simulation{stack, kMaxResolutions};
     simulation.set_up();
     const expr* zero_pool = saved_expr_pool_.make_functor(functors.id("zero"), {});
     const expr* len = zero_pool;
@@ -1475,7 +1320,7 @@ TEST_F(SimIntegrationTest, RunReturnsSolvedBuildingListOfFiveAbcWithoutDecisions
 
     EXPECT_EQ(simulation.run(), sim_termination::solved);
 
-    normalizer norm{stack.loc};
+    normalizer<globalizer, expr_pool, decltype(stack.bind_map_)> norm{stack.globalizer_, stack.expr_pool_, stack.bind_map_};
     const expr* tail = norm.normalize({var_r, 0});
     for (int i = 0; i < kListLength; ++i) {
         const expr::functor& cell = std::get<expr::functor>(tail->content);
@@ -1524,15 +1369,15 @@ TEST_F(SimIntegrationTest, RunReturnsConflictedWhenCdclEliminationExhaustsSiblin
     database.push(rule{&g_head0, {}});
     database.push(rule{&g_head1, {}});
 
-    i_make_initial_goal_lineage& make_initial_goal_lineage =
-        stack.loc.locate<i_make_initial_goal_lineage>();
-    i_make_resolution_lineage& make_resolution_lineage =
-        stack.loc.locate<i_make_resolution_lineage>();
-    i_learn_avoidance& learn_avoidance = stack.loc.locate<i_learn_avoidance>();
-    i_derive_resolution_lemma& derive_resolution_lemma =
-        stack.loc.locate<i_derive_resolution_lemma>();
-    i_get_resolution_count& get_resolution_count =
-        stack.loc.locate<i_get_resolution_count>();
+    auto& make_initial_goal_lineage =
+        stack.make_initial_goal_lineage_;
+    auto& make_resolution_lineage =
+        stack.lineage_pool_;
+    auto& learn_avoidance = stack.cdcl_;
+    auto& derive_resolution_lemma =
+        stack.resolution_memory_;
+    auto& get_resolution_count =
+        stack.resolution_memory_;
 
     const goal_lineage* gl_f = make_initial_goal_lineage.make(0);
     const goal_lineage* gl_g = make_initial_goal_lineage.make(1);
@@ -1546,7 +1391,7 @@ TEST_F(SimIntegrationTest, RunReturnsConflictedWhenCdclEliminationExhaustsSiblin
     learn_avoidance.learn(lemma{{rl_f_0, rl_g_0}});
     learn_avoidance.learn(lemma{{rl_f_0, rl_g_1}});
 
-    simulation simulation{stack.loc, kDefaultMaxResolutions};
+    simulation simulation{stack, kDefaultMaxResolutions};
     simulation.set_up();
 
     EXPECT_CALL(stack.decision_generator, generate()).WillOnce(Return(rl_f_0));
@@ -1575,10 +1420,10 @@ TEST_F(SimIntegrationTest, RunReturnsDepthExceededOnSelfRecursiveClause) {
     static constexpr size_t kMaxResolutions = 4;
     EXPECT_CALL(stack.decision_generator, generate()).Times(0);
 
-    simulation simulation{stack.loc, kMaxResolutions};
+    simulation simulation{stack, kMaxResolutions};
     simulation.set_up();
     EXPECT_EQ(simulation.run(), sim_termination::depth_exceeded);
-    EXPECT_EQ(stack.loc.locate<i_get_resolution_count>().get_resolution_count(), kMaxResolutions);
+    EXPECT_EQ(stack.resolution_memory_.get_resolution_count(), kMaxResolutions);
     simulation.tear_down();
 }
 
@@ -1607,14 +1452,14 @@ TEST_F(SimIntegrationTest, RunReturnsSolvedAfterTwoSequentialDecisions) {
     database.push(rule{&g_head0, {}});
     database.push(rule{&g_head1, {}});
 
-    i_make_initial_goal_lineage& make_initial_goal_lineage =
-        stack.loc.locate<i_make_initial_goal_lineage>();
-    i_make_resolution_lineage& make_resolution_lineage =
-        stack.loc.locate<i_make_resolution_lineage>();
-    i_derive_resolution_lemma& derive_resolution_lemma =
-        stack.loc.locate<i_derive_resolution_lemma>();
-    i_get_decision_count& get_decision_count =
-        stack.loc.locate<i_get_decision_count>();
+    auto& make_initial_goal_lineage =
+        stack.make_initial_goal_lineage_;
+    auto& make_resolution_lineage =
+        stack.lineage_pool_;
+    auto& derive_resolution_lemma =
+        stack.resolution_memory_;
+    auto& get_decision_count =
+        stack.decision_memory_;
 
     const goal_lineage* gl_f = make_initial_goal_lineage.make(0);
     const goal_lineage* gl_g = make_initial_goal_lineage.make(1);
@@ -1628,7 +1473,7 @@ TEST_F(SimIntegrationTest, RunReturnsSolvedAfterTwoSequentialDecisions) {
         .WillOnce(Return(rl_f_0))
         .WillOnce(Return(rl_g_1));
 
-    simulation simulation{stack.loc, kDefaultMaxResolutions};
+    simulation simulation{stack, kDefaultMaxResolutions};
     simulation.set_up();
     EXPECT_EQ(simulation.run(), sim_termination::solved);
     EXPECT_EQ(get_decision_count.count(), 2u);
@@ -1662,13 +1507,13 @@ TEST_F(SimIntegrationTest, RunReturnsSolvedWhenCdclUnitElimForcesRemainingCandid
     database.push(rule{&g_head0, {}});
     database.push(rule{&g_head1, {}});
 
-    i_make_initial_goal_lineage& make_initial_goal_lineage =
-        stack.loc.locate<i_make_initial_goal_lineage>();
-    i_make_resolution_lineage& make_resolution_lineage =
-        stack.loc.locate<i_make_resolution_lineage>();
-    i_learn_avoidance& learn_avoidance = stack.loc.locate<i_learn_avoidance>();
-    i_derive_resolution_lemma& derive_resolution_lemma =
-        stack.loc.locate<i_derive_resolution_lemma>();
+    auto& make_initial_goal_lineage =
+        stack.make_initial_goal_lineage_;
+    auto& make_resolution_lineage =
+        stack.lineage_pool_;
+    auto& learn_avoidance = stack.cdcl_;
+    auto& derive_resolution_lemma =
+        stack.resolution_memory_;
 
     const goal_lineage* gl_f = make_initial_goal_lineage.make(0);
     const goal_lineage* gl_g = make_initial_goal_lineage.make(1);
@@ -1681,7 +1526,7 @@ TEST_F(SimIntegrationTest, RunReturnsSolvedWhenCdclUnitElimForcesRemainingCandid
 
     learn_avoidance.learn(lemma{{rl_f_0, rl_g_2}});
 
-    simulation simulation{stack.loc, kDefaultMaxResolutions};
+    simulation simulation{stack, kDefaultMaxResolutions};
     simulation.set_up();
 
     EXPECT_CALL(stack.decision_generator, generate()).WillOnce(Return(rl_f_0));
@@ -1714,13 +1559,13 @@ TEST_F(SimIntegrationTest, RunReturnsConflictedAfterPartialProgressWhenDerivedGo
     database.push(rule{&h_head, {}});
     database.push(rule{&g_head, {}});
 
-    i_frame_allocator& frame_alloc = stack.loc.locate<i_frame_allocator>();
-    i_make_var& make_var = stack.loc.locate<i_make_var>();
-    i_make_functor& make_functor = stack.loc.locate<i_make_functor>();
+    auto& frame_alloc = stack.frame_allocator_;
+    auto& make_var = stack.expr_pool_;
+    auto& make_functor = stack.expr_pool_;
 
     EXPECT_CALL(stack.decision_generator, generate()).Times(0);
 
-    simulation simulation{stack.loc, kDefaultMaxResolutions};
+    simulation simulation{stack, kDefaultMaxResolutions};
     simulation.set_up();
     const expr* var_a = saved_expr_pool_.make_var(frame_alloc.bump(1));
     initial_goals.push(saved_expr_pool_.make_functor(functors.id("f"), {var_a}));
@@ -1736,43 +1581,43 @@ TEST_F(SimIntegrationTest, RunReturnsConflictedAfterPartialProgressWhenDerivedGo
 
 TEST_F(SimIntegrationTest, SetUpLifecyclePushesOneTrailFrameWithoutRunning) {
   // Capture baseline immediately before set_up(); wiring must not intern or push frames.
-  const size_t depth_before = stack.early.trail_.depth();
-  const size_t expr_before = stack.loc.locate<i_get_expr_count>().size();
+  const size_t depth_before = stack.trail_.depth();
+  const size_t expr_before = stack.expr_pool_.size();
 
-  simulation simulation{stack.loc, kDefaultMaxResolutions};
+  simulation simulation{stack, kDefaultMaxResolutions};
   simulation.set_up();
 
-  EXPECT_EQ(stack.early.trail_.depth(), depth_before + 1);
-  EXPECT_EQ(stack.loc.locate<i_get_expr_count>().size(), expr_before);
-  EXPECT_TRUE(stack.loc.locate<i_check_active_goals_empty>().empty());
+  EXPECT_EQ(stack.trail_.depth(), depth_before + 1);
+  EXPECT_EQ(stack.expr_pool_.size(), expr_before);
+  EXPECT_TRUE(stack.ra_active_goals_.empty());
   simulation.tear_down();
 }
 
 TEST_F(SimIntegrationTest, TearDownLifecycleRestoresTrailDepthAfterEmptyRun) {
-  const size_t depth_before = stack.early.trail_.depth();
+  const size_t depth_before = stack.trail_.depth();
 
-  simulation simulation{stack.loc, kDefaultMaxResolutions};
+  simulation simulation{stack, kDefaultMaxResolutions};
   simulation.set_up();
   EXPECT_EQ(simulation.run(), sim_termination::solved);
   simulation.tear_down();
 
-  EXPECT_EQ(stack.early.trail_.depth(), depth_before);
+  EXPECT_EQ(stack.trail_.depth(), depth_before);
 }
 
 TEST_F(SimIntegrationTest, TearDownLifecycleRestoresTrailDepthAfterConflictedRun) {
   expr goal{expr::functor{functors.id("f"), {}}};
   initial_goals.push(&goal);
 
-  const size_t depth_before = stack.early.trail_.depth();
+  const size_t depth_before = stack.trail_.depth();
 
   EXPECT_CALL(stack.decision_generator, generate()).Times(0);
 
-  simulation simulation{stack.loc, kDefaultMaxResolutions};
+  simulation simulation{stack, kDefaultMaxResolutions};
   simulation.set_up();
   EXPECT_EQ(simulation.run(), sim_termination::conflicted);
   simulation.tear_down();
 
-  EXPECT_EQ(stack.early.trail_.depth(), depth_before);
+  EXPECT_EQ(stack.trail_.depth(), depth_before);
 }
 
 TEST_F(SimIntegrationTest, TearDownLifecycleRestoresTrailDepthAfterDepthExceededRun) {
@@ -1783,16 +1628,16 @@ TEST_F(SimIntegrationTest, TearDownLifecycleRestoresTrailDepthAfterDepthExceeded
   database.push(rule{&f_head, {&f_body}});
 
   static constexpr size_t kMaxResolutions = 4;
-  const size_t depth_before = stack.early.trail_.depth();
+  const size_t depth_before = stack.trail_.depth();
 
   EXPECT_CALL(stack.decision_generator, generate()).Times(0);
 
-  simulation simulation{stack.loc, kMaxResolutions};
+  simulation simulation{stack, kMaxResolutions};
   simulation.set_up();
   EXPECT_EQ(simulation.run(), sim_termination::depth_exceeded);
   simulation.tear_down();
 
-  EXPECT_EQ(stack.early.trail_.depth(), depth_before);
+  EXPECT_EQ(stack.trail_.depth(), depth_before);
 }
 
 TEST_F(SimIntegrationTest, TearDownLifecycleClearsEphemeralStoresAfterSolvedRun) {
@@ -1801,10 +1646,10 @@ TEST_F(SimIntegrationTest, TearDownLifecycleClearsEphemeralStoresAfterSolvedRun)
   expr head{expr::functor{functors.id("f"), {&abc, &_123}}};
   database.push(rule{&head, {}});
 
-  i_bind_map& bind_map = stack.loc.locate<i_bind_map>();
-  i_frame_allocator& frame_alloc = stack.loc.locate<i_frame_allocator>();
-  i_make_var& make_var = stack.loc.locate<i_make_var>();
-  i_make_functor& make_functor = stack.loc.locate<i_make_functor>();
+  auto& bind_map = stack.bind_map_;
+  auto& frame_alloc = stack.frame_allocator_;
+  auto& make_var = stack.expr_pool_;
+  auto& make_functor = stack.expr_pool_;
 
   const uint32_t idx_test = frame_alloc.bump(1);
   const expr* test_var = saved_expr_pool_.make_var(idx_test);
@@ -1812,15 +1657,15 @@ TEST_F(SimIntegrationTest, TearDownLifecycleClearsEphemeralStoresAfterSolvedRun)
 
   EXPECT_CALL(stack.decision_generator, generate()).Times(0);
 
-  simulation simulation{stack.loc, kDefaultMaxResolutions};
+  simulation simulation{stack, kDefaultMaxResolutions};
   simulation.set_up();
   EXPECT_EQ(simulation.run(), sim_termination::solved);
   simulation.tear_down();
 
-  EXPECT_TRUE(stack.loc.locate<i_check_active_goals_empty>().empty());
-  EXPECT_EQ(stack.loc.locate<i_get_decision_count>().count(), 0u);
-  EXPECT_EQ(stack.loc.locate<i_get_resolution_count>().get_resolution_count(), 0u);
-  EXPECT_THAT(stack.loc.locate<i_derive_resolution_lemma>().derive_resolution_lemma().get_resolutions(),
+  EXPECT_TRUE(stack.ra_active_goals_.empty());
+  EXPECT_EQ(stack.decision_memory_.count(), 0u);
+  EXPECT_EQ(stack.resolution_memory_.get_resolution_count(), 0u);
+  EXPECT_THAT(stack.resolution_memory_.derive_resolution_lemma().get_resolutions(),
       IsEmpty());
   const expr* whnf = bind_map.whnf({test_var, 0}).skeleton;
   ASSERT_TRUE(std::holds_alternative<expr::var>(whnf->content));
@@ -1842,17 +1687,17 @@ TEST_F(SimIntegrationTest, TearDownLifecycleRetainsInFrameExprPoolGrowth) {
   database.push(rule{&head0, {}});
   database.push(rule{&head1, {&body1}});
 
-  i_frame_allocator& frame_alloc = stack.loc.locate<i_frame_allocator>();
-  i_make_var& make_var = stack.loc.locate<i_make_var>();
-  i_make_functor& make_functor = stack.loc.locate<i_make_functor>();
+  auto& frame_alloc = stack.frame_allocator_;
+  auto& make_var = stack.expr_pool_;
+  auto& make_functor = stack.expr_pool_;
 
-  const size_t expr_before = stack.loc.locate<i_get_expr_count>().size();
+  const size_t expr_before = stack.expr_pool_.size();
 
   static constexpr size_t kMaxResolutions = 32;
   static constexpr int kListLength = 5;
   EXPECT_CALL(stack.decision_generator, generate()).Times(0);
 
-  simulation simulation{stack.loc, kMaxResolutions};
+  simulation simulation{stack, kMaxResolutions};
   simulation.set_up();
   const expr* zero_pool = saved_expr_pool_.make_functor(functors.id("zero"), {});
   const expr* len = zero_pool;
@@ -1863,10 +1708,10 @@ TEST_F(SimIntegrationTest, TearDownLifecycleRetainsInFrameExprPoolGrowth) {
   initial_goals.push(saved_expr_pool_.make_functor(functors.id("make_list"), {len, abc, var_r}));
 
   EXPECT_EQ(simulation.run(), sim_termination::solved);
-  EXPECT_GT(stack.loc.locate<i_get_expr_count>().size(), expr_before);
+  EXPECT_GT(stack.expr_pool_.size(), expr_before);
 
   simulation.tear_down();
-  EXPECT_GT(stack.loc.locate<i_get_expr_count>().size(), expr_before);
+  EXPECT_GT(stack.expr_pool_.size(), expr_before);
 }
 
 TEST_F(SimIntegrationTest, TearDownLifecycleResetsVarSequencerWhenIncrementedInFrame) {
@@ -1878,9 +1723,9 @@ TEST_F(SimIntegrationTest, TearDownLifecycleResetsVarSequencerWhenIncrementedInF
   database.push(rule{&f_head, {&g_body}});
   database.push(rule{&g_head, {}});
 
-  i_frame_allocator& frame_alloc = stack.loc.locate<i_frame_allocator>();
-  i_make_var& make_var = stack.loc.locate<i_make_var>();
-  i_make_functor& make_functor = stack.loc.locate<i_make_functor>();
+  auto& frame_alloc = stack.frame_allocator_;
+  auto& make_var = stack.expr_pool_;
+  auto& make_functor = stack.expr_pool_;
 
   // In the real system, initial_frame_offset is baked into the frame_bump_allocator at
   // construction; here the wiring starts at 0. We verify that sim-frame bumps are undone.
@@ -1888,7 +1733,7 @@ TEST_F(SimIntegrationTest, TearDownLifecycleResetsVarSequencerWhenIncrementedInF
 
   EXPECT_CALL(stack.decision_generator, generate()).Times(0);
 
-  simulation simulation{stack.loc, kDefaultMaxResolutions};
+  simulation simulation{stack, kDefaultMaxResolutions};
   simulation.set_up();
   const expr* var_in_frame = saved_expr_pool_.make_var(frame_alloc.bump(1));
   initial_goals.push(saved_expr_pool_.make_functor(functors.id("f"), {var_in_frame}));
@@ -1913,15 +1758,15 @@ TEST_F(SimIntegrationTest, BaseFrameCdclLearnSurvivesLifecycleTearDown) {
   database.push(rule{&g_head2, {}});
   database.push(rule{&g_head3, {}});
 
-  i_make_initial_goal_lineage& make_initial_goal_lineage =
-      stack.loc.locate<i_make_initial_goal_lineage>();
-  i_make_resolution_lineage& make_resolution_lineage =
-      stack.loc.locate<i_make_resolution_lineage>();
-  i_learn_avoidance& learn_avoidance = stack.loc.locate<i_learn_avoidance>();
-  i_pin_resolution_lineage& pin_resolution_lineage =
-      stack.loc.locate<i_pin_resolution_lineage>();
-  i_derive_resolution_lemma& derive_resolution_lemma =
-      stack.loc.locate<i_derive_resolution_lemma>();
+  auto& make_initial_goal_lineage =
+      stack.make_initial_goal_lineage_;
+  auto& make_resolution_lineage =
+      stack.lineage_pool_;
+  auto& learn_avoidance = stack.cdcl_;
+  auto& pin_resolution_lineage =
+      stack.lineage_pool_;
+  auto& derive_resolution_lemma =
+      stack.resolution_memory_;
 
   const goal_lineage* gl0 = make_initial_goal_lineage.make(0);
   const goal_lineage* gl1 = make_initial_goal_lineage.make(1);
@@ -1937,7 +1782,7 @@ TEST_F(SimIntegrationTest, BaseFrameCdclLearnSurvivesLifecycleTearDown) {
   pin_resolution_lineage.pin(rl_g1_2);
   pin_resolution_lineage.pin(rl_g1_3);
 
-  simulation simulation{stack.loc, kDefaultMaxResolutions};
+  simulation simulation{stack, kDefaultMaxResolutions};
   simulation.set_up();
 
   EXPECT_CALL(stack.decision_generator, generate()).WillOnce(Return(rl_g0_0));
@@ -1960,13 +1805,13 @@ TEST_F(SimIntegrationTest, IdenticalSimCycleLifecycleRunsCleanAfterTearDown) {
   expr head{expr::functor{functors.id("f"), {&abc, &_123}}};
   database.push(rule{&head, {}});
 
-  i_bind_map& bind_map = stack.loc.locate<i_bind_map>();
-  i_frame_allocator& frame_alloc = stack.loc.locate<i_frame_allocator>();
-  i_make_var& make_var = stack.loc.locate<i_make_var>();
-  i_make_functor& make_functor = stack.loc.locate<i_make_functor>();
-  i_get_resolution_count& get_resolution_count =
-      stack.loc.locate<i_get_resolution_count>();
-  i_get_decision_count& get_decision_count = stack.loc.locate<i_get_decision_count>();
+  auto& bind_map = stack.bind_map_;
+  auto& frame_alloc = stack.frame_allocator_;
+  auto& make_var = stack.expr_pool_;
+  auto& make_functor = stack.expr_pool_;
+  auto& get_resolution_count =
+      stack.resolution_memory_;
+  auto& get_decision_count = stack.decision_memory_;
 
   const uint32_t idx_a = frame_alloc.bump(1);
   const uint32_t idx_b = frame_alloc.bump(1);
@@ -1977,7 +1822,7 @@ TEST_F(SimIntegrationTest, IdenticalSimCycleLifecycleRunsCleanAfterTearDown) {
 
   EXPECT_CALL(stack.decision_generator, generate()).Times(0);
 
-  simulation simulation{stack.loc, kDefaultMaxResolutions};
+  simulation simulation{stack, kDefaultMaxResolutions};
 
   simulation.set_up();
   EXPECT_EQ(simulation.run(), sim_termination::solved);
@@ -2021,16 +1866,16 @@ TEST_F(SimIntegrationTest, RunReturnsSolvedStressListOfTwentyAbcWithoutDecisions
   database.push(rule{&head0, {}});
   database.push(rule{&head1, {&body1}});
 
-  i_bind_map& bind_map = stack.loc.locate<i_bind_map>();
-  i_frame_allocator& frame_alloc = stack.loc.locate<i_frame_allocator>();
-  i_make_var& make_var = stack.loc.locate<i_make_var>();
-  i_make_functor& make_functor = stack.loc.locate<i_make_functor>();
+  auto& bind_map = stack.bind_map_;
+  auto& frame_alloc = stack.frame_allocator_;
+  auto& make_var = stack.expr_pool_;
+  auto& make_functor = stack.expr_pool_;
 
   static constexpr size_t kMaxResolutions = 64;
   static constexpr int kListLength = 20;
   EXPECT_CALL(stack.decision_generator, generate()).Times(0);
 
-  simulation simulation{stack.loc, kMaxResolutions};
+  simulation simulation{stack, kMaxResolutions};
   simulation.set_up();
   const expr* zero_pool = saved_expr_pool_.make_functor(functors.id("zero"), {});
   const expr* len = make_suc_n(functors, make_functor, zero_pool, kListLength);
@@ -2040,7 +1885,7 @@ TEST_F(SimIntegrationTest, RunReturnsSolvedStressListOfTwentyAbcWithoutDecisions
 
   EXPECT_EQ(simulation.run(), sim_termination::solved);
 
-  normalizer norm{stack.loc};
+  normalizer<globalizer, expr_pool, decltype(stack.bind_map_)> norm{stack.globalizer_, stack.expr_pool_, stack.bind_map_};
   const expr* tail = norm.normalize({var_r, 0});
   for (int i = 0; i < kListLength; ++i) {
     const expr::functor& cell = std::get<expr::functor>(tail->content);
@@ -2066,15 +1911,15 @@ TEST_F(SimIntegrationTest, RunReturnsSolvedStressLinearChainClauseDepthTwenty) {
   std::vector<expr> storage;
   chain_clause_db(functors, database, storage, "chain", kChainDepth, &ground);
 
-  i_get_resolution_count& get_resolution_count =
-      stack.loc.locate<i_get_resolution_count>();
+  auto& get_resolution_count =
+      stack.resolution_memory_;
 
   EXPECT_CALL(stack.decision_generator, generate()).Times(0);
 
   expr goal{expr::functor{functors.id("chain0"), {&ground}}};
   initial_goals.push(&goal);
 
-  simulation simulation{stack.loc, kMaxResolutions};
+  simulation simulation{stack, kMaxResolutions};
   simulation.set_up();
   EXPECT_EQ(simulation.run(), sim_termination::solved);
   EXPECT_GE(get_resolution_count.get_resolution_count(), kChainDepth);
@@ -2095,13 +1940,13 @@ TEST_F(SimIntegrationTest, RunReturnsSolvedStressEvenOddPeanoGoal) {
   database.push(rule{&odd_head, {&even_body}});
   database.push(rule{&even_head1, {&odd_body}});
 
-  i_make_functor& make_functor = stack.loc.locate<i_make_functor>();
+  auto& make_functor = stack.expr_pool_;
 
   static constexpr size_t kMaxResolutions = 128;
   static constexpr int kSucDepth = 12;
   EXPECT_CALL(stack.decision_generator, generate()).Times(0);
 
-  simulation simulation{stack.loc, kMaxResolutions};
+  simulation simulation{stack, kMaxResolutions};
   simulation.set_up();
   const expr* zero_pool = saved_expr_pool_.make_functor(functors.id("zero"), {});
   const expr* goal_even = saved_expr_pool_.make_functor(functors.id("even"), {make_suc_n(functors, make_functor, zero_pool, kSucDepth)});
@@ -2123,13 +1968,13 @@ TEST_F(SimIntegrationTest, RunReturnsSolvedStressDeepNestedFunctorTower) {
   database.push(rule{&unwrap_head, {&unwrap_body}});
   database.push(rule{&unwrap_zero, {}});
 
-  i_make_functor& make_functor = stack.loc.locate<i_make_functor>();
-  i_get_resolution_count& get_resolution_count =
-      stack.loc.locate<i_get_resolution_count>();
+  auto& make_functor = stack.expr_pool_;
+  auto& get_resolution_count =
+      stack.resolution_memory_;
 
   EXPECT_CALL(stack.decision_generator, generate()).Times(0);
 
-  simulation simulation{stack.loc, kMaxResolutions};
+  simulation simulation{stack, kMaxResolutions};
   simulation.set_up();
   const expr* inner = &zero;
   for (int i = 0; i < kTowerDepth; ++i)
@@ -2164,14 +2009,14 @@ TEST_F(SimIntegrationTest, RunReturnsSolvedStressLongSharedVarChainWithoutDecisi
   database.push(rule{&g4_head, {}});
   database.push(rule{&g5_head, {}});
 
-  i_bind_map& bind_map = stack.loc.locate<i_bind_map>();
-  i_frame_allocator& frame_alloc = stack.loc.locate<i_frame_allocator>();
-  i_make_var& make_var = stack.loc.locate<i_make_var>();
-  i_make_functor& make_functor = stack.loc.locate<i_make_functor>();
+  auto& bind_map = stack.bind_map_;
+  auto& frame_alloc = stack.frame_allocator_;
+  auto& make_var = stack.expr_pool_;
+  auto& make_functor = stack.expr_pool_;
 
   EXPECT_CALL(stack.decision_generator, generate()).Times(0);
 
-  simulation simulation{stack.loc, kDefaultMaxResolutions};
+  simulation simulation{stack, kDefaultMaxResolutions};
   simulation.set_up();
   std::vector<const expr*> vars;
   for (int i = 0; i <= kChainGoals; ++i)
@@ -2199,14 +2044,14 @@ TEST_F(SimIntegrationTest, RunReturnsSolvedStressDiamondSharedVarWithoutDecision
   database.push(rule{&g_head, {}});
   database.push(rule{&h_head, {}});
 
-  i_bind_map& bind_map = stack.loc.locate<i_bind_map>();
-  i_frame_allocator& frame_alloc = stack.loc.locate<i_frame_allocator>();
-  i_make_var& make_var = stack.loc.locate<i_make_var>();
-  i_make_functor& make_functor = stack.loc.locate<i_make_functor>();
+  auto& bind_map = stack.bind_map_;
+  auto& frame_alloc = stack.frame_allocator_;
+  auto& make_var = stack.expr_pool_;
+  auto& make_functor = stack.expr_pool_;
 
   EXPECT_CALL(stack.decision_generator, generate()).Times(0);
 
-  simulation simulation{stack.loc, kDefaultMaxResolutions};
+  simulation simulation{stack, kDefaultMaxResolutions};
   simulation.set_up();
   const expr* var_a = saved_expr_pool_.make_var(frame_alloc.bump(1));
   const expr* var_b = saved_expr_pool_.make_var(frame_alloc.bump(1));
@@ -2249,12 +2094,12 @@ TEST_F(SimIntegrationTest, RunReturnsSolvedStressWideClauseTreeWithoutDecisions)
   database.push(rule{&j_head, {}});
   database.push(rule{&l_head, {}});
 
-  i_get_resolution_count& get_resolution_count =
-      stack.loc.locate<i_get_resolution_count>();
+  auto& get_resolution_count =
+      stack.resolution_memory_;
 
   EXPECT_CALL(stack.decision_generator, generate()).Times(0);
 
-  simulation simulation{stack.loc, kDefaultMaxResolutions};
+  simulation simulation{stack, kDefaultMaxResolutions};
   simulation.set_up();
   EXPECT_EQ(simulation.run(), sim_termination::solved);
   EXPECT_GE(get_resolution_count.get_resolution_count(), kMinResolutions);
@@ -2288,11 +2133,11 @@ TEST_F(SimIntegrationTest, RunReturnsSolvedStressMultipleAvoidancesSeveralDecisi
   database.push(rule{&k0, {}});
   database.push(rule{&k1, {}});
 
-  i_make_initial_goal_lineage& make_initial_goal_lineage =
-      stack.loc.locate<i_make_initial_goal_lineage>();
-  i_make_resolution_lineage& make_resolution_lineage =
-      stack.loc.locate<i_make_resolution_lineage>();
-  i_get_decision_count& get_decision_count = stack.loc.locate<i_get_decision_count>();
+  auto& make_initial_goal_lineage =
+      stack.make_initial_goal_lineage_;
+  auto& make_resolution_lineage =
+      stack.lineage_pool_;
+  auto& get_decision_count = stack.decision_memory_;
 
   const goal_lineage* gl_f = make_initial_goal_lineage.make(0);
   const goal_lineage* gl_g = make_initial_goal_lineage.make(1);
@@ -2316,7 +2161,7 @@ TEST_F(SimIntegrationTest, RunReturnsSolvedStressMultipleAvoidancesSeveralDecisi
       .WillOnce(Return(rl_h_0))
       .WillOnce(Return(rl_k_1));
 
-  simulation simulation{stack.loc, kMaxResolutions};
+  simulation simulation{stack, kMaxResolutions};
   simulation.set_up();
   EXPECT_EQ(simulation.run(), sim_termination::solved);
   EXPECT_EQ(get_decision_count.count(), kExpectedDecisions);
@@ -2349,15 +2194,15 @@ TEST_F(SimIntegrationTest, RunReturnsSolvedStressCdclMhuManyGroundHeadsOnSharedV
   database.push(rule{&g5, {}});
   database.push(rule{&g_bad, {}});
 
-  i_make_initial_goal_lineage& make_initial_goal_lineage =
-      stack.loc.locate<i_make_initial_goal_lineage>();
-  i_make_resolution_lineage& make_resolution_lineage =
-      stack.loc.locate<i_make_resolution_lineage>();
-  i_learn_avoidance& learn_avoidance = stack.loc.locate<i_learn_avoidance>();
-  i_bind_map& bind_map = stack.loc.locate<i_bind_map>();
-  i_frame_allocator& frame_alloc = stack.loc.locate<i_frame_allocator>();
-  i_make_var& make_var = stack.loc.locate<i_make_var>();
-  i_make_functor& make_functor = stack.loc.locate<i_make_functor>();
+  auto& make_initial_goal_lineage =
+      stack.make_initial_goal_lineage_;
+  auto& make_resolution_lineage =
+      stack.lineage_pool_;
+  auto& learn_avoidance = stack.cdcl_;
+  auto& bind_map = stack.bind_map_;
+  auto& frame_alloc = stack.frame_allocator_;
+  auto& make_var = stack.expr_pool_;
+  auto& make_functor = stack.expr_pool_;
 
   const goal_lineage* gl_f = make_initial_goal_lineage.make(0);
   const goal_lineage* gl_g = make_initial_goal_lineage.make(1);
@@ -2374,7 +2219,7 @@ TEST_F(SimIntegrationTest, RunReturnsSolvedStressCdclMhuManyGroundHeadsOnSharedV
       .WillOnce(Return(rl_f_0))
       .WillOnce(Return(rl_g_def));
 
-  simulation simulation{stack.loc, kDefaultMaxResolutions};
+  simulation simulation{stack, kDefaultMaxResolutions};
   simulation.set_up();
   const expr* var_a = saved_expr_pool_.make_var(frame_alloc.bump(1));
   const expr* var_b = saved_expr_pool_.make_var(frame_alloc.bump(1));
@@ -2407,9 +2252,9 @@ TEST_F(SimIntegrationTest, RunReturnsDepthExceededStressOnDeepLinearChainWithinB
 
   EXPECT_CALL(stack.decision_generator, generate()).Times(0);
 
-  simulation simulation{stack.loc, kMaxResolutions};
+  simulation simulation{stack, kMaxResolutions};
   simulation.set_up();
   EXPECT_EQ(simulation.run(), sim_termination::depth_exceeded);
-  EXPECT_EQ(stack.loc.locate<i_get_resolution_count>().get_resolution_count(), kMaxResolutions);
+  EXPECT_EQ(stack.resolution_memory_.get_resolution_count(), kMaxResolutions);
   simulation.tear_down();
 }

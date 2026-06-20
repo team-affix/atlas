@@ -3,22 +3,34 @@
 
 #include <cstdint>
 #include <unordered_map>
-#include "interfaces/i_get_candidate_frame_offset.hpp"
-#include "interfaces/i_set_candidate_frame_offset.hpp"
-#include "interfaces/i_unset_candidate_frame_offset.hpp"
-#include "interfaces/i_clear_candidate_frame_offsets.hpp"
+#include "value_objects/lineage.hpp"
+#include "debug_assert.hpp"
 
-struct candidate_frame_offsets
-    : i_get_candidate_frame_offset
-    , i_set_candidate_frame_offset
-    , i_unset_candidate_frame_offset
-    , i_clear_candidate_frame_offsets {
-    uint32_t get(const resolution_lineage*) const override;
-    void set(const resolution_lineage*, uint32_t frame_offset) override;
-    void unset(const resolution_lineage*) override;
-    void clear_candidate_frame_offsets() override;
+struct candidate_frame_offsets {
+    uint32_t get(const resolution_lineage*) const;
+    void set(const resolution_lineage*, uint32_t frame_offset);
+    void unset(const resolution_lineage*);
+    void clear_candidate_frame_offsets();
 private:
     std::unordered_map<const resolution_lineage*, uint32_t> offsets_;
 };
+
+inline uint32_t candidate_frame_offsets::get(const resolution_lineage* rl) const {
+    return offsets_.at(rl);
+}
+
+inline void candidate_frame_offsets::set(const resolution_lineage* rl, uint32_t frame_offset) {
+    auto [_, inserted] = offsets_.insert({rl, frame_offset});
+    DEBUG_ASSERT(inserted);
+}
+
+inline void candidate_frame_offsets::unset(const resolution_lineage* rl) {
+    auto erased = offsets_.erase(rl);
+    DEBUG_ASSERT(erased == 1);
+}
+
+inline void candidate_frame_offsets::clear_candidate_frame_offsets() {
+    offsets_.clear();
+}
 
 #endif

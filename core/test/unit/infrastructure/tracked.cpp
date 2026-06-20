@@ -1,25 +1,24 @@
 // tracked wraps a value with trail-logged mutations. Unit tests mock
-// i_log_to_current_trail_frame and assert
-// get() returns the initial value and mutate() logs a backtrackable_increment once.
+// the log collaborator and assert get() returns the initial value
+// and mutate() logs a backtrackable_increment once.
 
 #include <gtest/gtest.h>
 #include <gmock/gmock.h>
 #include "infrastructure/tracked.hpp"
-#include "interfaces/i_log_to_current_trail_frame.hpp"
 #include "infrastructure/backtrackable_increment.hpp"
 
 using ::testing::_;
 using ::testing::NiceMock;
 using ::testing::StrictMock;
 
-struct MockTrail : public i_log_to_current_trail_frame {
-    MOCK_METHOD(void, log, ((std::unique_ptr<i_backtrackable>)), (override));
+struct MockTrail {
+    MOCK_METHOD(void, log, (std::unique_ptr<i_backtrackable>));
 };
 
 struct TrackedIntTest : public ::testing::Test {
 protected:
     NiceMock<MockTrail> trail;
-    tracked<int> v{trail, 10};
+    tracked<int, NiceMock<MockTrail>> v{trail, 10};
 };
 
 TEST_F(TrackedIntTest, GetReturnsInitialValue) {
@@ -28,7 +27,7 @@ TEST_F(TrackedIntTest, GetReturnsInitialValue) {
 
 TEST_F(TrackedIntTest, MutateChangesValue) {
     StrictMock<MockTrail> strict_trail;
-    tracked<int> strict_v{strict_trail, 10};
+    tracked<int, StrictMock<MockTrail>> strict_v{strict_trail, 10};
 
     EXPECT_CALL(strict_trail, log(_)).Times(1);
     strict_v.mutate(std::make_unique<backtrackable_increment<int>>());
@@ -37,7 +36,7 @@ TEST_F(TrackedIntTest, MutateChangesValue) {
 
 TEST_F(TrackedIntTest, MutateLogsBacktrackableThatRevertsOnBacktrack) {
     StrictMock<MockTrail> strict_trail;
-    tracked<int> strict_v{strict_trail, 10};
+    tracked<int, StrictMock<MockTrail>> strict_v{strict_trail, 10};
     std::unique_ptr<i_backtrackable> logged;
 
     EXPECT_CALL(strict_trail, log(_))

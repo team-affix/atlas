@@ -1,12 +1,11 @@
 // unifier performs Robinson unification with occurs-check over expressions, delegating
-// WHNF and bind to i_bind_map. Unit tests mock the bind map and assert bind/vars_touched outcomes
+// WHNF and bind to a bind_map. Unit tests mock the bind map and assert bind/vars_touched outcomes
 // for variables, functors, failure paths, and WHNF-normalized representatives.
 
 #include <unordered_set>
 #include <gtest/gtest.h>
 #include <gmock/gmock.h>
 #include "infrastructure/globalizer.hpp"
-#include "infrastructure/locator.hpp"
 #include "infrastructure/unifier.hpp"
 #include "functor_fixture.hpp"
 
@@ -16,7 +15,14 @@ using ::testing::UnorderedElementsAre;
 
 namespace {
 
-bool run_unify(unifier& u, const expr* lhs, const expr* rhs,
+struct MockBindMap {
+    MOCK_METHOD(void,        bind, (uint32_t, framed_expr));
+    MOCK_METHOD(framed_expr, whnf, (framed_expr));
+};
+
+using TestUnifier = unifier<MockBindMap>;
+
+bool run_unify(TestUnifier& u, const expr* lhs, const expr* rhs,
                std::unordered_set<uint32_t>& vars_touched) {
     auto task = u.unify({lhs, 0}, {rhs, 0});
     while (!task.done()) {
@@ -29,17 +35,11 @@ bool run_unify(unifier& u, const expr* lhs, const expr* rhs,
 
 } // namespace
 
-struct MockBindMap : public i_bind_map {
-    MOCK_METHOD(void,        bind, (uint32_t, framed_expr), (override));
-    MOCK_METHOD(framed_expr, whnf, (framed_expr),           (override));
-};
-
 struct UnifierTest : public ::testing::Test {
     test_functors functors;
     MockBindMap bm;
     globalizer g;
-    locator loc;
-    unifier u{[&]() -> locator& { loc.bind_as<i_globalizer>(g); return loc; }(), bm};
+    TestUnifier u{g, &bm};
     std::unordered_set<uint32_t> vars_touched;
 
     expr var0{expr::var{0}};
@@ -369,8 +369,6 @@ TEST_F(UnifierTest, UnifyAfterWhnfBothResolveToDifferentFunctorsFails) {
 }
 
 TEST_F(UnifierTest, UnifyAfterWhnfBothResolveToVarsBindsRepresentatives) {
-    // var0 is already in var2's eq class (whnf resolves it to var2)
-    // var1 is its own representative; bind(2, &var1) merges the classes
     EXPECT_CALL(bm, whnf(framed_expr{&var0, 0})).WillRepeatedly(Return(framed_expr{&var2, 0}));
     EXPECT_CALL(bm, whnf(framed_expr{&var1, 0})).WillRepeatedly(Return(framed_expr{&var1, 0}));
     EXPECT_CALL(bm, bind(2u, framed_expr{&var1, 0}));
@@ -380,8 +378,6 @@ TEST_F(UnifierTest, UnifyAfterWhnfBothResolveToVarsBindsRepresentatives) {
 }
 
 TEST_F(UnifierTest, UnifyAfterWhnfVarResolvesToVarFunctorBindsRepresentative) {
-    // var0 is already in var2's eq class; var1 resolves to a functor
-    // occurs_check and bind operate on var2 (the representative), not var0
     EXPECT_CALL(bm, whnf(framed_expr{&var0, 0})).WillRepeatedly(Return(framed_expr{&var2, 0}));
     EXPECT_CALL(bm, whnf(framed_expr{&var1, 0})).WillRepeatedly(Return(framed_expr{&func, 0}));
     EXPECT_CALL(bm, whnf(framed_expr{&func, 0})).WillRepeatedly(Return(framed_expr{&func, 0}));

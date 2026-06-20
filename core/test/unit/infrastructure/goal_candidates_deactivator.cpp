@@ -2,45 +2,34 @@
 
 #include <gtest/gtest.h>
 #include <gmock/gmock.h>
-#include "locator_fixture.hpp"
 #include "infrastructure/goal_candidates_deactivator.hpp"
 #include "infrastructure/rule_id_set.hpp"
-#include "interfaces/i_get_goal_candidate_rule_ids.hpp"
-#include "interfaces/i_make_resolution_lineage.hpp"
-#include "interfaces/i_candidate_deactivator.hpp"
 
 using ::testing::Return;
 using ::testing::ReturnRef;
 
-struct MockGetGoalCandidateRuleIds : public i_get_goal_candidate_rule_ids {
-    MOCK_METHOD(i_rule_id_set&, get, (const goal_lineage*), (override));
-    MOCK_METHOD(const i_rule_id_set&, get, (const goal_lineage*), (const, override));
+struct MockGetGoalCandidateRuleIds {
+    MOCK_METHOD(rule_id_set&, get, (const goal_lineage*));
 };
 
-struct MockMakeResolutionLineage : public i_make_resolution_lineage {
+struct MockMakeResolutionLineage {
     MOCK_METHOD((const resolution_lineage*), make_resolution_lineage,
-        (const goal_lineage*, rule_id), (override));
+        (const goal_lineage*, rule_id));
 };
 
-struct MockCandidateDeactivator : public i_candidate_deactivator {
-    MOCK_METHOD(void, deactivate, (const resolution_lineage*), (override));
+struct MockCandidateDeactivator {
+    MOCK_METHOD(void, deactivate, (const resolution_lineage*));
 };
+
+using TestGoalCandidatesDeactivator = goal_candidates_deactivator<
+    MockGetGoalCandidateRuleIds, MockMakeResolutionLineage, MockCandidateDeactivator>;
 
 struct GoalCandidatesDeactivatorTest : public ::testing::Test {
-    locator loc;
     MockGetGoalCandidateRuleIds get_goal_candidate_rule_ids;
     MockMakeResolutionLineage make_resolution_lineage;
     MockCandidateDeactivator candidate_deactivator;
-    goal_candidates_deactivator deactivator;
-
-    GoalCandidatesDeactivatorTest() : deactivator(init_deactivator()) {}
-
-    goal_candidates_deactivator init_deactivator() {
-        loc.bind_as<i_get_goal_candidate_rule_ids>(get_goal_candidate_rule_ids);
-        loc.bind_as<i_make_resolution_lineage>(make_resolution_lineage);
-        loc.bind_as<i_candidate_deactivator>(candidate_deactivator);
-        return goal_candidates_deactivator{loc};
-    }
+    TestGoalCandidatesDeactivator deactivator{get_goal_candidate_rule_ids,
+                                              make_resolution_lineage, candidate_deactivator};
 
     goal_lineage gl{nullptr, 0};
     rule_id_set parent_candidates;

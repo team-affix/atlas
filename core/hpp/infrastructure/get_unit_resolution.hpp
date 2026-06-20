@@ -1,17 +1,25 @@
 #ifndef GET_UNIT_RESOLUTION_HPP
 #define GET_UNIT_RESOLUTION_HPP
 
-#include "infrastructure/locator.hpp"
-#include "interfaces/i_get_unit_resolution.hpp"
-#include "interfaces/i_make_resolution_lineage.hpp"
-#include "interfaces/i_get_goal_candidate_rule_ids.hpp"
+#include "value_objects/lineage.hpp"
 
-struct get_unit_resolution : i_get_unit_resolution {
-    get_unit_resolution(locator& loc);
-    const resolution_lineage* get(const goal_lineage*) override;
+template<typename IGetGoalCandidateRuleIds, typename ILineagePool>
+struct get_unit_resolution {
+    get_unit_resolution(IGetGoalCandidateRuleIds& gcr, ILineagePool& lp);
+    const resolution_lineage* get(const goal_lineage*);
 private:
-    i_get_goal_candidate_rule_ids& get_goal_candidate_rule_ids;
-    i_make_resolution_lineage& make_resolution_lineage;
+    IGetGoalCandidateRuleIds& get_goal_candidate_rule_ids;
+    ILineagePool& make_resolution_lineage;
 };
+
+template<typename IGCR, typename ILP>
+get_unit_resolution<IGCR, ILP>::get_unit_resolution(IGCR& gcr, ILP& lp)
+    : get_goal_candidate_rule_ids(gcr), make_resolution_lineage(lp) {}
+
+template<typename IGCR, typename ILP>
+const resolution_lineage* get_unit_resolution<IGCR, ILP>::get(const goal_lineage* gl) {
+    return make_resolution_lineage.make_resolution_lineage(
+        gl, get_goal_candidate_rule_ids.get(gl).front());
+}
 
 #endif

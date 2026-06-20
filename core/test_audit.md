@@ -1,7 +1,28 @@
 <!--
-  CHC solver (core) test coverage audit — pass 3 (sim integration, deferred backlog).
+  CHC solver (core) test coverage audit — pass 4 (compile-time polymorphism migration).
   Authoritative rules: docs/testing.md (repo root)
 -->
+
+# Core test coverage audit (pass 4 — compile-time polymorphism)
+
+## Architectural change summary (pass 4)
+
+All `i_*` abstract base classes (except `i_backtrackable`) have been removed. The codebase
+now uses **compile-time polymorphism via C++ templates** exclusively:
+
+- **Missing-dependency bugs are now compile errors.** A class that forgets to wire a
+  dependency will fail to instantiate, not throw at runtime.
+- **Mock injection via template parameters** is the new contract-test mechanism.
+  Each unit test declares `using TestSUT = sut<Mock1, Mock2, ...>` and constructs the
+  SUT directly with mock references. No `locator`, no `bind_as`, no interface headers.
+- **`locator` has been removed** from production code. Manifests (`basic_manifest`,
+  `ridge_manifest`, `horizon_manifest`) are flat composition roots with `using` type
+  aliases for complex instantiations.
+- **Integration tests** construct the full stack via manifests or directly via type
+  aliases. The sim integration test uses `MockGenerateDecision` (a free-standing struct,
+  no base class) as the only scripted collaborator.
+
+---
 
 # Core test coverage audit (pass 3)
 

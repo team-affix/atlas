@@ -2,26 +2,49 @@
 #define RANDOM_DECISION_GENERATOR_HPP
 
 #include <random>
-#include "infrastructure/locator.hpp"
-#include "interfaces/i_generate_decision.hpp"
-#include "interfaces/i_make_resolution_lineage.hpp"
-#include "interfaces/i_random_access.hpp"
-#include "interfaces/i_active_goals_size.hpp"
-#include "interfaces/i_get_goal_candidate_rule_ids.hpp"
-#include "interfaces/i_ra_rule_id_set.hpp"
+#include "value_objects/lineage.hpp"
+#include "value_objects/rule.hpp"
 
-struct random_decision_generator : i_generate_decision {
-    random_decision_generator(locator& loc, std::mt19937& rng);
-    const resolution_lineage* generate() override;
+template<typename ILineagePool, typename IActiveGoals, typename IGoalCandidateRules>
+struct random_decision_generator {
+    random_decision_generator(ILineagePool&, IActiveGoals&, IGoalCandidateRules&,
+                              std::mt19937& rng);
+    const resolution_lineage* generate();
 private:
     const goal_lineage* choose_goal();
     rule_id choose_candidate(const goal_lineage*);
-
-    i_make_resolution_lineage& make_resolution_lineage;
-    i_random_access<const goal_lineage*>& goal_random_access;
-    i_active_goals_size& active_goals_size;
-    i_get_goal_candidate_rule_ids& get_goal_candidate_rule_ids;
+    ILineagePool& make_resolution_lineage;
+    IActiveGoals& goal_random_access;
+    IGoalCandidateRules& get_goal_candidate_rule_ids;
     std::mt19937& rng;
 };
+
+template<typename ILP, typename IAG, typename IGCR>
+random_decision_generator<ILP, IAG, IGCR>::random_decision_generator(
+    ILP& lp, IAG& ag, IGCR& gcr, std::mt19937& rng)
+    : make_resolution_lineage(lp), goal_random_access(ag),
+      get_goal_candidate_rule_ids(gcr), rng(rng) {}
+
+template<typename ILP, typename IAG, typename IGCR>
+const resolution_lineage* random_decision_generator<ILP, IAG, IGCR>::generate() {
+    const goal_lineage* gl = choose_goal();
+    rule_id r = choose_candidate(gl);
+    return make_resolution_lineage.make_resolution_lineage(gl, r);
+}
+
+template<typename ILP, typename IAG, typename IGCR>
+const goal_lineage* random_decision_generator<ILP, IAG, IGCR>::choose_goal() {
+    size_t n = goal_random_access.active_goals_size();
+    std::uniform_int_distribution<size_t> dist(0, n - 1);
+    return goal_random_access.select(dist(rng));
+}
+
+template<typename ILP, typename IAG, typename IGCR>
+rule_id random_decision_generator<ILP, IAG, IGCR>::choose_candidate(
+    const goal_lineage* gl) {
+    auto& rules = get_goal_candidate_rule_ids.get(gl);
+    std::uniform_int_distribution<size_t> dist(0, rules.size() - 1);
+    return rules.select(dist(rng));
+}
 
 #endif

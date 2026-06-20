@@ -2,41 +2,29 @@
 
 #include <gtest/gtest.h>
 #include <gmock/gmock.h>
-#include "locator_fixture.hpp"
 #include "infrastructure/resolver.hpp"
-#include "interfaces/i_goal_deactivator.hpp"
-#include "interfaces/i_activate_subgoals_and_candidates.hpp"
-#include "interfaces/i_deactivate_goal_candidates.hpp"
 
 using ::testing::Return;
 
-struct MockGoalDeactivator : public i_goal_deactivator {
-    MOCK_METHOD(void, deactivate, (const goal_lineage*), (override));
+struct MockGoalDeactivator {
+    MOCK_METHOD(void, deactivate, (const goal_lineage*));
 };
 
-struct MockActivateSubgoalsAndCandidates : public i_activate_subgoals_and_candidates {
-    MOCK_METHOD(bool, activate_subgoals_and_candidates, (const resolution_lineage*), (override));
+struct MockActivateSubgoalsAndCandidates {
+    MOCK_METHOD(bool, activate_subgoals_and_candidates, (const resolution_lineage*));
 };
 
-struct MockDeactivateGoalCandidates : public i_deactivate_goal_candidates {
-    MOCK_METHOD(void, deactivate_goal_candidates, (const goal_lineage*), (override));
+struct MockDeactivateGoalCandidates {
+    MOCK_METHOD(void, deactivate_goal_candidates, (const goal_lineage*));
 };
+
+using TestResolver = resolver<MockGoalDeactivator, MockActivateSubgoalsAndCandidates, MockDeactivateGoalCandidates>;
 
 struct ResolverTest : public ::testing::Test {
-    locator loc;
     MockGoalDeactivator goal_deactivator;
     MockActivateSubgoalsAndCandidates activate_subgoals_and_candidates;
     MockDeactivateGoalCandidates deactivate_goal_candidates;
-    resolver res;
-
-    ResolverTest() : res(init_resolver()) {}
-
-    resolver init_resolver() {
-        loc.bind_as<i_goal_deactivator>(goal_deactivator);
-        loc.bind_as<i_activate_subgoals_and_candidates>(activate_subgoals_and_candidates);
-        loc.bind_as<i_deactivate_goal_candidates>(deactivate_goal_candidates);
-        return resolver{loc};
-    }
+    TestResolver res{goal_deactivator, activate_subgoals_and_candidates, deactivate_goal_candidates};
 
     static constexpr rule_id kRule = 0;
 

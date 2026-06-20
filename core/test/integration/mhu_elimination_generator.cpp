@@ -24,6 +24,11 @@
 #include "infrastructure/coroutine.hpp"
 #include "functor_fixture.hpp"
 
+using TestUnifierFactory = unifier_factory<bind_map>;
+using TestMhu = mhu_elimination_generator<
+    bind_map, bind_map_factory, unifier<bind_map>, TestUnifierFactory,
+    lineage_pool, expr_pool, goal_candidate_rules>;
+
 using ::testing::ElementsAre;
 using ::testing::IsEmpty;
 using ::testing::UnorderedElementsAre;
@@ -63,29 +68,20 @@ expr make_functor_expr(test_functors& functors, const char* name, std::span<expr
 struct MhuEliminationGeneratorIntegrationTest : public ::testing::Test {
     
     test_functors functors;
-    locator loc;
     trail t;
     globalizer g_;
     bind_map common{g_};
     lineage_pool lp;
     bind_map_factory bmf{g_};
-    unifier_factory uf{loc};
+    TestUnifierFactory uf{g_};
     ra_rule_id_set_factory ra_rule_id_set_factory_;
     goal_candidate_rules ggcr{ra_rule_id_set_factory_};
     std::optional<expr_pool> pool;
-    std::optional<mhu_elimination_generator> mhu;
+    std::optional<TestMhu> mhu;
 
     MhuEliminationGeneratorIntegrationTest() {
-        loc.bind_as<i_globalizer>(g_);
-        loc.bind_as<i_log_to_current_trail_frame>(t);
-        loc.bind_as<i_bind_map>(common);
-        loc.bind_as<i_bind_map_factory>(bmf);
-        loc.bind_as<i_unifier_factory>(uf);
-        loc.bind_as<i_make_resolution_lineage>(lp);
-        loc.bind_as<i_get_goal_candidate_rule_ids, i_insert_goal_candidates>(ggcr);
         pool.emplace();
-        loc.bind_as<i_make_functor, i_make_var, i_import_expr, i_get_expr_count>(*pool);
-        mhu.emplace(loc);
+        mhu.emplace(common, lp, *pool, bmf, uf, ggcr);
     }
 
     size_t rules_for(const goal_lineage* gl) const { return ggcr.get(gl).size(); }

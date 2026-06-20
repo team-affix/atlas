@@ -6,14 +6,13 @@
 #include <gtest/gtest.h>
 #include <gmock/gmock.h>
 #include "infrastructure/ra_rule_id_set.hpp"
-#include "interfaces/i_rule_id_set.hpp"
 
 using ::testing::IsEmpty;
 using ::testing::UnorderedElementsAre;
 
 namespace {
 
-std::vector<rule_id> collect_rule_ids(const i_rule_id_set& rs) {
+std::vector<rule_id> collect_rule_ids(const ra_rule_id_set& rs) {
     std::vector<rule_id> out;
     auto sm = rs.iterate();
     while (!sm.done()) {
@@ -112,7 +111,7 @@ TEST_F(RaRuleIdSetTest, CopyPreservesRuleIds) {
     rules.insert(0);
     rules.insert(1);
     auto snapshot = rules.copy();
-    EXPECT_THAT(collect_rule_ids(*snapshot), UnorderedElementsAre(0, 1));
+    EXPECT_THAT(collect_rule_ids(snapshot), UnorderedElementsAre(0, 1));
 }
 
 TEST_F(RaRuleIdSetTest, CopyIsIndependentOfSubsequentMutations) {
@@ -120,7 +119,7 @@ TEST_F(RaRuleIdSetTest, CopyIsIndependentOfSubsequentMutations) {
     auto snapshot = rules.copy();
     rules.erase(0);
     rules.insert(1);
-    EXPECT_THAT(collect_rule_ids(*snapshot), UnorderedElementsAre(0));
+    EXPECT_THAT(collect_rule_ids(snapshot), UnorderedElementsAre(0));
     EXPECT_THAT(collect_rule_ids(rules), UnorderedElementsAre(1));
 }
 

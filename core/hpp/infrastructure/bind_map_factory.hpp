@@ -1,14 +1,19 @@
 #ifndef BIND_MAP_FACTORY_HPP
 #define BIND_MAP_FACTORY_HPP
 
-#include "interfaces/i_bind_map_factory.hpp"
-#include "interfaces/i_globalizer.hpp"
+#include "infrastructure/bind_map.hpp"
 
-struct bind_map_factory : i_bind_map_factory {
-    explicit bind_map_factory(i_globalizer&);
-    std::unique_ptr<i_bind_map> make() const override;
+struct bind_map_factory {
+    explicit bind_map_factory(globalizer&);
+    bind_map make() const;
 private:
-    i_globalizer& globalizer_;
+    globalizer& globalizer_;
 };
+
+inline bind_map_factory::bind_map_factory(globalizer& g) : globalizer_(g) {}
+
+inline bind_map bind_map_factory::make() const {
+    return bind_map{globalizer_};
+}
 
 #endif

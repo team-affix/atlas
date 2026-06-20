@@ -1,5 +1,5 @@
-// solve_loop: interval orchestration for cumulative sim progress. Mocks i_print_progress
-// and i_runtime; asserts print/finish_line are called at interval boundaries and before
+// solve_loop: interval orchestration for cumulative sim progress. Mocks IPrintProgress
+// and IRuntime; asserts print/finish_line are called at interval boundaries and before
 // SOLVED/REFUTED output, never when interval is zero.
 
 #include <map>
@@ -9,50 +9,40 @@
 #include <gtest/gtest.h>
 #include <gmock/gmock.h>
 #include "infrastructure/expr_pool.hpp"
-#include "infrastructure/locator.hpp"
 #include "infrastructure/solve_loop.hpp"
 #include "infrastructure/trail.hpp"
-#include "interfaces/i_log_to_current_trail_frame.hpp"
-#include "interfaces/i_derive_decision_lemma.hpp"
-#include "interfaces/i_derive_resolution_lemma.hpp"
-#include "interfaces/i_expr_printer.hpp"
-#include "interfaces/i_print_bindings.hpp"
-#include "interfaces/i_print_progress.hpp"
-#include "interfaces/i_runtime.hpp"
+#include "value_objects/framed_expr.hpp"
 #include "value_objects/lemma.hpp"
 
 using ::testing::_;
 using ::testing::InSequence;
 using ::testing::Return;
 
-struct MockPrintProgress : public i_print_progress {
-    MOCK_METHOD(void, print, (size_t total_sims), (override));
-    MOCK_METHOD(void, finish_line, (), (override));
+struct MockRuntime {
+    MOCK_METHOD(bool, next, ());
+    MOCK_METHOD(bool, solved, (), (const));
+    MOCK_METHOD(const expr*, normalize, (framed_expr));
+    MOCK_METHOD(lemma, derive_decision_lemma, (), (const));
+    MOCK_METHOD(lemma, derive_resolution_lemma, (), (const));
 };
 
-struct MockPrintBindings : public i_print_bindings {
-    MOCK_METHOD(
-        void,
-        print,
-        (i_runtime&, i_expr_printer&, expr_pool&, (const std::map<std::string, uint32_t>&)),
-        (override));
+struct MockExprPrinter {
+    MOCK_METHOD(void, print, (const expr*), (const));
 };
 
-struct MockExprPrinter : public i_expr_printer {
-    MOCK_METHOD(void, print, (const expr*), (const, override));
+struct MockPrintBindings {
+    MOCK_METHOD(void, print, (MockRuntime&, MockExprPrinter&, expr_pool&,
+        (const std::map<std::string, uint32_t>&)));
 };
 
-struct MockRuntime : public i_runtime {
-    MOCK_METHOD(bool, next, (), (override));
-    MOCK_METHOD(bool, solved, (), (const, override));
-    MOCK_METHOD(const expr*, normalize, (framed_expr), (override));
-    MOCK_METHOD(lemma, derive_decision_lemma, (), (const, override));
-    MOCK_METHOD(lemma, derive_resolution_lemma, (), (const, override));
+struct MockPrintProgress {
+    MOCK_METHOD(void, print, (size_t total_sims));
+    MOCK_METHOD(void, finish_line, ());
 };
+
+using TestSolveLoop = solve_loop<MockRuntime, MockExprPrinter, MockPrintBindings, MockPrintProgress>;
 
 struct SolveLoopTest : public ::testing::Test {
-    locator loc;
-    trail trail_;
     std::optional<expr_pool> pool;
     MockPrintBindings bindings;
     MockPrintProgress progress;
@@ -65,7 +55,7 @@ struct SolveLoopTest : public ::testing::Test {
     }
 
     void run_loop(size_t interval) {
-        solve_loop loop{bindings, progress, interval};
+        TestSolveLoop loop{bindings, progress, interval};
         loop.run(runtime, printer, *pool, var_name_to_idx);
     }
 

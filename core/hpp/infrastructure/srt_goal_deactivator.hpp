@@ -1,17 +1,25 @@
 #ifndef SRT_GOAL_DEACTIVATOR_HPP
 #define SRT_GOAL_DEACTIVATOR_HPP
 
-#include "infrastructure/locator.hpp"
-#include "interfaces/i_goal_deactivator.hpp"
-#include "interfaces/i_unset_goal_expr.hpp"
-#include "interfaces/i_erase_goal_candidates.hpp"
+#include "value_objects/lineage.hpp"
 
-struct srt_goal_deactivator : i_goal_deactivator {
-    srt_goal_deactivator(locator& loc);
-    void deactivate(const goal_lineage*) override;
+template<typename IGoalExprs, typename IGoalCandidateRules>
+struct srt_goal_deactivator {
+    srt_goal_deactivator(IGoalExprs& ge, IGoalCandidateRules& gcr);
+    void deactivate(const goal_lineage*);
 private:
-    i_unset_goal_expr& unset_goal_expr;
-    i_erase_goal_candidates& erase_goal_candidates;
+    IGoalExprs& unset_goal_expr;
+    IGoalCandidateRules& erase_goal_candidates;
 };
+
+template<typename IGE, typename IGCR>
+srt_goal_deactivator<IGE, IGCR>::srt_goal_deactivator(IGE& ge, IGCR& gcr)
+    : unset_goal_expr(ge), erase_goal_candidates(gcr) {}
+
+template<typename IGE, typename IGCR>
+void srt_goal_deactivator<IGE, IGCR>::deactivate(const goal_lineage* gl) {
+    erase_goal_candidates.erase(gl);
+    unset_goal_expr.unset(gl);
+}
 
 #endif

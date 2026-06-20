@@ -8,7 +8,7 @@ horizon_runtime::horizon_runtime(
     uint32_t random_seed,
     double exploration_constant)
     : manifest_(database, goals, initial_frame_offset, max_resolutions, random_seed, exploration_constant),
-      normalizer_(manifest_.loc_),
+      normalizer_(manifest_.globalizer_, manifest_.expr_pool_, manifest_.bind_map_),
       driver_(manifest_.solver_.solve()) {}
 
 bool horizon_runtime::next() {

@@ -18,7 +18,7 @@ basic_command_handler::basic_command_handler(
     parse_loc_.bind_as<i_var_names>(var_names_);
     parse_loc_.bind_as<i_functor_names>(functor_names_);
     parse_pool_.emplace();
-    printer_.emplace(std::cout, parse_loc_);
+    printer_.emplace(std::cout, var_names_, functor_names_);
 
     import_database_from_file(
         file, *parse_pool_, *parse_pool_, database_, functor_map_, next_functor_id_);

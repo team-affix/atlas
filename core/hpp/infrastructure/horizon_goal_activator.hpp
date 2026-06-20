@@ -1,21 +1,32 @@
 #ifndef HORIZON_GOAL_ACTIVATOR_HPP
 #define HORIZON_GOAL_ACTIVATOR_HPP
 
-#include "infrastructure/locator.hpp"
-#include "infrastructure/goal_activator.hpp"
-#include "interfaces/i_goal_activator.hpp"
-#include "interfaces/i_set_goal_weight.hpp"
-#include "interfaces/i_get_goal_weight.hpp"
-#include "interfaces/i_get_rule.hpp"
+#include "value_objects/lineage.hpp"
+#include "value_objects/rule.hpp"
 
-struct horizon_goal_activator : i_goal_activator {
-    horizon_goal_activator(locator& loc);
-    void activate(const goal_lineage*) override;
+template<typename IGoalActivator, typename IGoalWeights, typename IDb>
+struct horizon_goal_activator {
+    horizon_goal_activator(IGoalActivator&, IGoalWeights&, IDb&);
+    void activate(const goal_lineage*);
 private:
-    goal_activator& goal_activator_;
-    i_set_goal_weight& set_goal_weight_;
-    i_get_goal_weight& get_goal_weight_;
-    i_get_rule& get_rule_;
+    IGoalActivator& goal_activator_;
+    IGoalWeights& goal_weights_;
+    IDb& get_rule_;
 };
+
+template<typename IGA, typename IGW, typename IDB>
+horizon_goal_activator<IGA,IGW,IDB>::horizon_goal_activator(IGA& ga, IGW& gw, IDB& db)
+    : goal_activator_(ga), goal_weights_(gw), get_rule_(db) {}
+
+template<typename IGA, typename IGW, typename IDB>
+void horizon_goal_activator<IGA,IGW,IDB>::activate(const goal_lineage* gl) {
+    goal_activator_.activate(gl);
+    const resolution_lineage* rl = gl->parent;
+    const goal_lineage* parent = rl->parent;
+    const rule* rule = get_rule_.get(rl->idx);
+    const double parent_w = goal_weights_.get(parent);
+    const size_t g = rule->body.size();
+    goal_weights_.set(gl, parent_w / static_cast<double>(g));
+}
 
 #endif

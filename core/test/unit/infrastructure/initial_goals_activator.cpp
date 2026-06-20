@@ -2,48 +2,37 @@
 
 #include <gtest/gtest.h>
 #include <gmock/gmock.h>
-#include "locator_fixture.hpp"
 #include "infrastructure/initial_goals_activator.hpp"
-#include "interfaces/i_get_initial_goal_count.hpp"
-#include "interfaces/i_activate_initial_goal.hpp"
-#include "interfaces/i_make_initial_goal_lineage.hpp"
-#include "interfaces/i_activate_goal_candidates.hpp"
 
 using ::testing::Return;
 
-struct MockGetInitialGoalCount : public i_get_initial_goal_count {
-    MOCK_METHOD(size_t, count, (), (const, override));
+struct MockGetInitialGoalCount {
+    MOCK_METHOD(size_t, count, (), (const));
 };
 
-struct MockActivateInitialGoal : public i_activate_initial_goal {
-    MOCK_METHOD(void, activate_initial_goal, (subgoal_id), (override));
+struct MockActivateInitialGoal {
+    MOCK_METHOD(void, activate_initial_goal, (subgoal_id));
 };
 
-struct MockMakeInitialGoalLineage : public i_make_initial_goal_lineage {
-    MOCK_METHOD(const goal_lineage*, make, (subgoal_id), (override));
+struct MockMakeInitialGoalLineage {
+    MOCK_METHOD(const goal_lineage*, make, (subgoal_id));
 };
 
-struct MockActivateGoalCandidates : public i_activate_goal_candidates {
-    MOCK_METHOD(bool, activate_goal_candidates, (const goal_lineage*), (override));
+struct MockActivateGoalCandidates {
+    MOCK_METHOD(bool, activate_goal_candidates, (const goal_lineage*));
 };
+
+using TestInitialGoalsActivator = initial_goals_activator<
+    MockGetInitialGoalCount, MockActivateInitialGoal,
+    MockMakeInitialGoalLineage, MockActivateGoalCandidates>;
 
 struct InitialGoalsActivatorTest : public ::testing::Test {
-    locator loc;
     MockGetInitialGoalCount get_initial_goal_count;
     MockActivateInitialGoal activate_initial_goal;
     MockMakeInitialGoalLineage make_initial_goal_lineage;
     MockActivateGoalCandidates activate_goal_candidates;
-    initial_goals_activator activator;
-
-    InitialGoalsActivatorTest() : activator(init_activator()) {}
-
-    initial_goals_activator init_activator() {
-        loc.bind_as<i_get_initial_goal_count>(get_initial_goal_count);
-        loc.bind_as<i_activate_initial_goal>(activate_initial_goal);
-        loc.bind_as<i_make_initial_goal_lineage>(make_initial_goal_lineage);
-        loc.bind_as<i_activate_goal_candidates>(activate_goal_candidates);
-        return initial_goals_activator{loc};
-    }
+    TestInitialGoalsActivator activator{get_initial_goal_count, activate_initial_goal,
+                                        make_initial_goal_lineage, activate_goal_candidates};
 
     goal_lineage gl{nullptr, 0};
 };

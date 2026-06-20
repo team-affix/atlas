@@ -1,19 +1,27 @@
 #ifndef GOAL_DEACTIVATOR_HPP
 #define GOAL_DEACTIVATOR_HPP
 
-#include "infrastructure/locator.hpp"
-#include "interfaces/i_goal_deactivator.hpp"
-#include "interfaces/i_unset_goal_expr.hpp"
-#include "interfaces/i_erase_goal_candidates.hpp"
-#include "interfaces/i_erase_active_goal.hpp"
+#include "value_objects/lineage.hpp"
 
-struct goal_deactivator : i_goal_deactivator {
-    goal_deactivator(locator& loc);
-    void deactivate(const goal_lineage*) override;
+template<typename IGoalExprs, typename IGoalCandidateRules, typename IActiveGoals>
+struct goal_deactivator {
+    goal_deactivator(IGoalExprs& ge, IGoalCandidateRules& gcr, IActiveGoals& ag);
+    void deactivate(const goal_lineage*);
 private:
-    i_unset_goal_expr& unset_goal_expr;
-    i_erase_goal_candidates& erase_goal_candidates;
-    i_erase_active_goal& erase_active_goal;
+    IGoalExprs& unset_goal_expr;
+    IGoalCandidateRules& erase_goal_candidates;
+    IActiveGoals& erase_active_goal;
 };
+
+template<typename IGE, typename IGCR, typename IAG>
+goal_deactivator<IGE, IGCR, IAG>::goal_deactivator(IGE& ge, IGCR& gcr, IAG& ag)
+    : unset_goal_expr(ge), erase_goal_candidates(gcr), erase_active_goal(ag) {}
+
+template<typename IGE, typename IGCR, typename IAG>
+void goal_deactivator<IGE, IGCR, IAG>::deactivate(const goal_lineage* gl) {
+    erase_goal_candidates.erase(gl);
+    unset_goal_expr.unset(gl);
+    erase_active_goal.erase_active_goal(gl);
+}
 
 #endif

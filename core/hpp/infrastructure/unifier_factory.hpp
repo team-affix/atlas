@@ -1,14 +1,23 @@
 #ifndef UNIFIER_FACTORY_HPP
 #define UNIFIER_FACTORY_HPP
 
-#include "infrastructure/locator.hpp"
-#include "interfaces/i_unifier_factory.hpp"
+#include "infrastructure/globalizer.hpp"
+#include "infrastructure/unifier.hpp"
 
-struct unifier_factory : i_unifier_factory {
-    explicit unifier_factory(locator&);
-    std::unique_ptr<i_unifier> make(i_bind_map& bind_map) const override;
+template<typename IBindMap>
+struct unifier_factory {
+    explicit unifier_factory(globalizer&);
+    unifier<IBindMap> make(IBindMap* bm) const;
 private:
-    locator& loc_;
+    globalizer& globalizer_;
 };
+
+template<typename IBindMap>
+unifier_factory<IBindMap>::unifier_factory(globalizer& g) : globalizer_(g) {}
+
+template<typename IBindMap>
+unifier<IBindMap> unifier_factory<IBindMap>::make(IBindMap* bm) const {
+    return unifier<IBindMap>{globalizer_, bm};
+}
 
 #endif

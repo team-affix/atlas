@@ -2,14 +2,13 @@
 #include <unordered_set>
 #include <gtest/gtest.h>
 #include "infrastructure/globalizer.hpp"
-#include "infrastructure/locator.hpp"
 #include "infrastructure/unifier.hpp"
 #include "infrastructure/bind_map.hpp"
 #include "functor_fixture.hpp"
 
 namespace {
 
-bool run_unify(unifier& u, framed_expr lhs, framed_expr rhs,
+bool run_unify(unifier<bind_map>& u, framed_expr lhs, framed_expr rhs,
                std::unordered_set<uint32_t>& vars_touched) {
     auto task = u.unify(lhs, rhs);
     while (!task.done()) {
@@ -29,14 +28,12 @@ struct UnifierBindMapIntegrationTest : public ::testing::Test {
 protected:
     test_functors functors;
     void SetUp() override {
-        loc.bind_as<i_globalizer>(g);
-        u = std::make_unique<unifier>(loc, bm);
+        u = std::make_unique<unifier<bind_map>>(g, &bm);
     }
 
     globalizer g;
-    locator loc;
     bind_map bm{g};
-    std::unique_ptr<unifier> u;
+    std::unique_ptr<unifier<bind_map>> u;
     std::unordered_set<uint32_t> vars_touched;
     expr var0{expr::var{0}};
     expr var1{expr::var{1}};

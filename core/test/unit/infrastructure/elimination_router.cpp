@@ -3,66 +3,47 @@
 
 #include <gtest/gtest.h>
 #include <gmock/gmock.h>
-#include "locator_fixture.hpp"
 #include "infrastructure/elimination_router.hpp"
 #include "value_objects/elimination_result.hpp"
-#include "interfaces/i_rule_id_set.hpp"
-#include "interfaces/i_get_goal_candidate_rule_ids.hpp"
-#include "interfaces/i_is_active_goal.hpp"
-#include "interfaces/i_insert_backlogged_elimination.hpp"
-#include "interfaces/i_candidate_deactivator.hpp"
 
 using ::testing::Return;
 using ::testing::ReturnRef;
 
-struct MockRuleIdSet : public i_rule_id_set {
-    MOCK_METHOD(void, insert, (rule_id), (override));
-    MOCK_METHOD(void, erase, (rule_id), (override));
-    MOCK_METHOD(bool, contains, (rule_id), (const, override));
-    MOCK_METHOD((coroutine<rule_id, void>), iterate, (), (const, override));
-    MOCK_METHOD(rule_id, front, (), (const, override));
-    MOCK_METHOD(size_t, size, (), (const, override));
-    MOCK_METHOD(std::unique_ptr<i_rule_id_set>, copy, (), (const, override));
+struct MockRuleIdSet {
+    MOCK_METHOD(bool, contains, (rule_id), (const));
 };
 
-struct MockGetGoalCandidateRuleIds : public i_get_goal_candidate_rule_ids {
-    MOCK_METHOD(i_rule_id_set&, get, (const goal_lineage*), (override));
-    MOCK_METHOD(const i_rule_id_set&, get, (const goal_lineage*), (const, override));
+struct MockGetGoalCandidateRuleIds {
+    MOCK_METHOD(MockRuleIdSet&, get, (const goal_lineage*));
 };
 
-struct MockIsActiveGoal : public i_is_active_goal {
-    MOCK_METHOD(bool, is_active_goal, (const goal_lineage*), (const, override));
+struct MockIsActiveGoal {
+    MOCK_METHOD(bool, is_active_goal, (const goal_lineage*), (const));
 };
 
-struct MockInsertBackloggedElimination : public i_insert_backlogged_elimination {
-    MOCK_METHOD(void, insert_backlogged_elimination, (const resolution_lineage*), (override));
+struct MockInsertBackloggedElimination {
+    MOCK_METHOD(void, insert_backlogged_elimination, (const resolution_lineage*));
 };
 
-struct MockCandidateDeactivator : public i_candidate_deactivator {
-    MOCK_METHOD(void, deactivate, (const resolution_lineage*), (override));
+struct MockCandidateDeactivator {
+    MOCK_METHOD(void, deactivate, (const resolution_lineage*));
 };
+
+using TestEliminationRouter = elimination_router<
+    MockGetGoalCandidateRuleIds, MockIsActiveGoal,
+    MockInsertBackloggedElimination, MockCandidateDeactivator>;
 
 struct EliminationRouterTest : public ::testing::Test {
     goal_lineage parent{nullptr, 0};
     resolution_lineage rl{&parent, 0};
 
-    locator loc;
     MockRuleIdSet rule_ids;
     MockGetGoalCandidateRuleIds get_goal_candidate_rule_ids;
     MockIsActiveGoal is_active_goal;
     MockInsertBackloggedElimination insert_backlogged_elimination;
     MockCandidateDeactivator candidate_deactivator;
-    elimination_router router;
-
-    EliminationRouterTest() : router(init_router()) {}
-
-    elimination_router init_router() {
-        loc.bind_as<i_get_goal_candidate_rule_ids>(get_goal_candidate_rule_ids);
-        loc.bind_as<i_is_active_goal>(is_active_goal);
-        loc.bind_as<i_insert_backlogged_elimination>(insert_backlogged_elimination);
-        loc.bind_as<i_candidate_deactivator>(candidate_deactivator);
-        return elimination_router{loc};
-    }
+    TestEliminationRouter router{get_goal_candidate_rule_ids, is_active_goal,
+                                 insert_backlogged_elimination, candidate_deactivator};
 };
 
 TEST_F(EliminationRouterTest, AlreadyDeactivatedReturnsAlreadyDeactivated) {

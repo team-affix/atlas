@@ -1,15 +1,23 @@
 #ifndef UNIT_GOAL_DETECTOR_HPP
 #define UNIT_GOAL_DETECTOR_HPP
 
-#include "infrastructure/locator.hpp"
-#include "interfaces/i_detect_unit_goal.hpp"
-#include "interfaces/i_get_goal_candidate_rule_ids.hpp"
+#include "value_objects/lineage.hpp"
 
-struct unit_goal_detector : i_detect_unit_goal {
-    unit_goal_detector(locator& loc);
-    bool detect(const goal_lineage*) const override;
+template<typename IGetGoalCandidateRuleIds>
+struct unit_goal_detector {
+    unit_goal_detector(IGetGoalCandidateRuleIds& gcr);
+    bool detect(const goal_lineage*) const;
 private:
-    i_get_goal_candidate_rule_ids& get_goal_candidate_rule_ids;
+    IGetGoalCandidateRuleIds& get_goal_candidate_rule_ids;
 };
+
+template<typename IGetGoalCandidateRuleIds>
+unit_goal_detector<IGetGoalCandidateRuleIds>::unit_goal_detector(IGetGoalCandidateRuleIds& gcr)
+    : get_goal_candidate_rule_ids(gcr) {}
+
+template<typename IGetGoalCandidateRuleIds>
+bool unit_goal_detector<IGetGoalCandidateRuleIds>::detect(const goal_lineage* gl) const {
+    return get_goal_candidate_rule_ids.get(gl).size() == 1;
+}
 
 #endif

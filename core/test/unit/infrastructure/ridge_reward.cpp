@@ -1,26 +1,18 @@
 #include <gtest/gtest.h>
 #include <gmock/gmock.h>
-#include "locator_fixture.hpp"
 #include "infrastructure/ridge_reward.hpp"
-#include "interfaces/i_get_decision_count.hpp"
 
 using ::testing::Return;
 
-struct MockGetDecisionCount : public i_get_decision_count {
-    MOCK_METHOD(size_t, count, (), (const, override));
+struct MockGetDecisionCount {
+    MOCK_METHOD(size_t, count, (), (const));
 };
 
+using TestRidgeReward = ridge_reward<MockGetDecisionCount>;
+
 struct RidgeRewardTest : public ::testing::Test {
-    locator loc;
     MockGetDecisionCount decision_count;
-    ridge_reward reward;
-
-    RidgeRewardTest() : reward(init_reward()) {}
-
-    ridge_reward init_reward() {
-        loc.bind_as<i_get_decision_count>(decision_count);
-        return ridge_reward{loc};
-    }
+    TestRidgeReward reward{decision_count};
 };
 
 TEST_F(RidgeRewardTest, ReturnsNegativeDecisionCount) {

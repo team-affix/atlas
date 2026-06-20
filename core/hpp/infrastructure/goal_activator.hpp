@@ -1,23 +1,39 @@
 #ifndef GOAL_ACTIVATOR_HPP
 #define GOAL_ACTIVATOR_HPP
 
-#include "infrastructure/locator.hpp"
-#include "interfaces/i_goal_activator.hpp"
-#include "interfaces/i_set_goal_expr.hpp"
-#include "interfaces/i_insert_goal_candidates.hpp"
-#include "interfaces/i_insert_active_goal.hpp"
-#include "interfaces/i_get_candidate_frame_offset.hpp"
-#include "interfaces/i_get_resolution_rule.hpp"
+#include "value_objects/lineage.hpp"
+#include "value_objects/framed_expr.hpp"
+#include "value_objects/rule.hpp"
 
-struct goal_activator : i_goal_activator {
-    goal_activator(locator& loc);
-    void activate(const goal_lineage*) override;
+template<typename IGoalExprs, typename IGoalCandidateRules, typename IActiveGoals,
+         typename ICandidateFrameOffsets, typename IGetResolutionRule>
+struct goal_activator {
+    goal_activator(IGoalExprs&, IGoalCandidateRules&, IActiveGoals&,
+                   ICandidateFrameOffsets&, IGetResolutionRule&);
+    void activate(const goal_lineage*);
 private:
-    i_set_goal_expr& set_goal_expr;
-    i_insert_goal_candidates& insert_goal_candidates;
-    i_insert_active_goal& insert_active_goal;
-    i_get_candidate_frame_offset& get_candidate_frame_offset;
-    i_get_resolution_rule& get_resolution_rule;
+    IGoalExprs& set_goal_expr;
+    IGoalCandidateRules& insert_goal_candidates;
+    IActiveGoals& insert_active_goal;
+    ICandidateFrameOffsets& get_candidate_frame_offset;
+    IGetResolutionRule& get_resolution_rule;
 };
+
+template<typename IGE, typename IGCR, typename IAG, typename ICFO, typename IGRR>
+goal_activator<IGE, IGCR, IAG, ICFO, IGRR>::goal_activator(
+    IGE& ge, IGCR& gcr, IAG& ag, ICFO& cfo, IGRR& grr)
+    : set_goal_expr(ge), insert_goal_candidates(gcr), insert_active_goal(ag),
+      get_candidate_frame_offset(cfo), get_resolution_rule(grr) {}
+
+template<typename IGE, typename IGCR, typename IAG, typename ICFO, typename IGRR>
+void goal_activator<IGE, IGCR, IAG, ICFO, IGRR>::activate(const goal_lineage* gl) {
+    const resolution_lineage* rl = gl->parent;
+    const rule* r = get_resolution_rule.get(rl);
+    const uint32_t frame_offset = get_candidate_frame_offset.get(rl);
+    const expr* body_expr = r->body.at(gl->idx);
+    set_goal_expr.set(gl, framed_expr{body_expr, frame_offset});
+    insert_goal_candidates.insert(gl);
+    insert_active_goal.insert_active_goal(gl);
+}
 
 #endif

@@ -1,6 +1,5 @@
 #include <gtest/gtest.h>
 #include <optional>
-#include "locator_fixture.hpp"
 #include "infrastructure/normalizer.hpp"
 #include "infrastructure/globalizer.hpp"
 #include "infrastructure/expr_pool.hpp"
@@ -8,26 +7,23 @@
 #include "infrastructure/trail.hpp"
 #include "functor_fixture.hpp"
 
+using TestNormalizer = normalizer<globalizer, expr_pool, bind_map>;
+
 struct NormalizerIntegrationTest : public ::testing::Test {
 protected:
     test_functors functors;
     void SetUp() override {
-        loc.bind_as<i_log_to_current_trail_frame>(t);
         pool.emplace();
-        loc.bind_as<i_make_functor, i_make_var, i_import_expr, i_get_expr_count>(*pool);
         glob.emplace();
-        loc.bind_as<i_globalizer>(*glob);
         bm.emplace(*glob);
-        loc.bind_as<i_bind_map>(*bm);
-        norm.emplace(loc);
+        norm.emplace(*glob, *pool, *bm);
     }
 
-    locator loc;
     trail t;
     std::optional<globalizer> glob;
     std::optional<bind_map> bm;
     std::optional<expr_pool> pool;
-    std::optional<normalizer> norm;
+    std::optional<TestNormalizer> norm;
 
     expr var0{expr::var{0}};
     expr var1{expr::var{1}};

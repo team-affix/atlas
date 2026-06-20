@@ -1,19 +1,28 @@
 #ifndef SRT_SUBGOALS_ACTIVATOR_HPP
 #define SRT_SUBGOALS_ACTIVATOR_HPP
 
-#include "infrastructure/locator.hpp"
-#include "interfaces/i_activate_subgoals_and_candidates.hpp"
-#include "interfaces/i_srt_link_goal_batch_parent.hpp"
-#include "interfaces/i_srt_flush_goal_batch.hpp"
-#include "infrastructure/subgoals_activator.hpp"
+#include "value_objects/lineage.hpp"
 
-struct srt_subgoals_activator : i_activate_subgoals_and_candidates {
-    srt_subgoals_activator(locator& loc);
-    bool activate_subgoals_and_candidates(const resolution_lineage*) override;
+template<typename ISrtActiveGoals, typename ISubgoalsActivator>
+struct srt_subgoals_activator {
+    srt_subgoals_activator(ISrtActiveGoals&, ISubgoalsActivator&);
+    bool activate_subgoals_and_candidates(const resolution_lineage*);
 private:
-    i_srt_link_goal_batch_parent& link_srt_goal_batch_parent_;
-    i_srt_flush_goal_batch& flush_srt_goal_batch_;
-    subgoals_activator& subgoals_activator_;
+    ISrtActiveGoals& srt_active_goals_;
+    ISubgoalsActivator& subgoals_activator_;
 };
+
+template<typename ISAG, typename ISA>
+srt_subgoals_activator<ISAG, ISA>::srt_subgoals_activator(ISAG& sag, ISA& sa)
+    : srt_active_goals_(sag), subgoals_activator_(sa) {}
+
+template<typename ISAG, typename ISA>
+bool srt_subgoals_activator<ISAG, ISA>::activate_subgoals_and_candidates(
+    const resolution_lineage* rl) {
+    if (!subgoals_activator_.activate_subgoals_and_candidates(rl)) return false;
+    srt_active_goals_.link_srt_goal_batch_parent(rl->parent);
+    srt_active_goals_.flush_srt_goal_batch();
+    return true;
+}
 
 #endif

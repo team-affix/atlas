@@ -2,12 +2,11 @@
 #define UNIFY_HEAD_HPP
 
 #include <memory>
-#include "interfaces/i_bind_map.hpp"
-#include "interfaces/i_unifier.hpp"
 
+template<typename IBindMap, typename IUnifier>
 struct unify_head {
-    std::unique_ptr<i_bind_map> local_bind_map;
-    std::unique_ptr<i_unifier> unifier;
+    std::unique_ptr<IBindMap> local_bind_map;
+    IUnifier unifier;
 };
 
 #endif

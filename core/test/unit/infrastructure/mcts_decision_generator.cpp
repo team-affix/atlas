@@ -6,13 +6,9 @@
 #include <set>
 #include <variant>
 #include <vector>
-#include "locator_fixture.hpp"
 #include "infrastructure/mcts_decision_generator.hpp"
 #include "infrastructure/srt_active_goals.hpp"
 #include "infrastructure/ra_rule_id_set.hpp"
-#include "interfaces/i_mcts_choose.hpp"
-#include "interfaces/i_make_resolution_lineage.hpp"
-#include "interfaces/i_get_goal_candidate_rule_ids.hpp"
 
 using ::testing::Invoke;
 using ::testing::ReturnRef;
@@ -54,12 +50,12 @@ void link_two_children(
     goals.flush_srt_goal_batch();
 }
 
-struct ScriptingMctsChoose : i_mcts_choose {
+struct ScriptingMctsChoose {
     std::deque<mcts_choice> responses;
     std::vector<std::vector<mcts_choice>> goal_rounds;
     std::vector<std::vector<mcts_choice>> candidate_rounds;
 
-    mcts_choice choose(const std::vector<mcts_choice>& choices) override {
+    mcts_choice choose(const std::vector<mcts_choice>& choices) {
         if (!choices.empty()) {
             if (std::holds_alternative<const goal_lineage*>(choices.front()))
                 goal_rounds.push_back(choices);
@@ -74,35 +70,26 @@ struct ScriptingMctsChoose : i_mcts_choose {
     }
 };
 
-struct MockMakeResolutionLineage : public i_make_resolution_lineage {
+struct MockMakeResolutionLineage {
     MOCK_METHOD((const resolution_lineage*), make_resolution_lineage,
-        (const goal_lineage*, rule_id), (override));
+        (const goal_lineage*, rule_id));
 };
 
-struct MockGetGoalCandidateRuleIds : public i_get_goal_candidate_rule_ids {
-    MOCK_METHOD(i_rule_id_set&, get_mutable, (const goal_lineage*), ());
-    MOCK_METHOD(const i_rule_id_set&, get_const, (const goal_lineage*), (const));
-    i_rule_id_set& get(const goal_lineage* gl) override { return get_mutable(gl); }
-    const i_rule_id_set& get(const goal_lineage* gl) const override { return get_const(gl); }
+struct MockGetGoalCandidateRuleIds {
+    MOCK_METHOD(ra_rule_id_set&, get, (const goal_lineage*));
 };
+
+using TestMctsDecisionGenerator = mcts_decision_generator<
+    MockMakeResolutionLineage, srt_active_goals,
+    ScriptingMctsChoose, MockGetGoalCandidateRuleIds>;
 
 struct MctsDecisionGeneratorTest : public ::testing::Test {
-    locator loc;
     srt_active_goals active_goals;
     ScriptingMctsChoose mcts_choose;
     MockMakeResolutionLineage make_resolution;
     MockGetGoalCandidateRuleIds get_goal_candidate_rule_ids;
-    mcts_decision_generator generator;
-
-    MctsDecisionGeneratorTest() : generator(init_generator()) {}
-
-    mcts_decision_generator init_generator() {
-        loc.bind_as<i_iterate_root_goals, i_iterate_child_goals, i_is_active_goal>(active_goals);
-        loc.bind_as<i_mcts_choose>(mcts_choose);
-        loc.bind_as<i_make_resolution_lineage>(make_resolution);
-        loc.bind_as<i_get_goal_candidate_rule_ids>(get_goal_candidate_rule_ids);
-        return mcts_decision_generator{loc};
-    }
+    TestMctsDecisionGenerator generator{make_resolution, active_goals,
+                                        mcts_choose, get_goal_candidate_rule_ids};
 
     std::set<resolution_lineage> resolutions;
     ra_rule_id_set candidates;
@@ -122,7 +109,7 @@ TEST_F(MctsDecisionGeneratorTest, GenerateSingleActiveRootPicksGoalThenCandidate
     candidates.insert(7);
     mcts_choose.responses = {mcts_choice{&child0}, mcts_choice{rule_id{7}}};
 
-    EXPECT_CALL(get_goal_candidate_rule_ids, get_mutable(&child0)).WillOnce(ReturnRef(candidates));
+    EXPECT_CALL(get_goal_candidate_rule_ids, get(&child0)).WillOnce(ReturnRef(candidates));
     EXPECT_CALL(make_resolution, make_resolution_lineage(&child0, 7))
         .WillOnce(stub_make_resolution_lineage(resolutions));
 
@@ -142,7 +129,7 @@ TEST_F(MctsDecisionGeneratorTest, GenerateOffersAllRootsToMcts) {
     candidates.insert(0);
     mcts_choose.responses = {mcts_choice{&child1}, mcts_choice{rule_id{0}}};
 
-    EXPECT_CALL(get_goal_candidate_rule_ids, get_mutable(&child1)).WillOnce(ReturnRef(candidates));
+    EXPECT_CALL(get_goal_candidate_rule_ids, get(&child1)).WillOnce(ReturnRef(candidates));
     EXPECT_CALL(make_resolution, make_resolution_lineage(&child1, 0))
         .WillOnce(stub_make_resolution_lineage(resolutions));
 
@@ -160,7 +147,7 @@ TEST_F(MctsDecisionGeneratorTest, GenerateWalksBranchUntilActiveLeaf) {
     candidates.insert(2);
     mcts_choose.responses = {mcts_choice{&parent}, mcts_choice{&child0}, mcts_choice{rule_id{2}}};
 
-    EXPECT_CALL(get_goal_candidate_rule_ids, get_mutable(&child0)).WillOnce(ReturnRef(candidates));
+    EXPECT_CALL(get_goal_candidate_rule_ids, get(&child0)).WillOnce(ReturnRef(candidates));
     EXPECT_CALL(make_resolution, make_resolution_lineage(&child0, 2))
         .WillOnce(stub_make_resolution_lineage(resolutions));
 
@@ -192,7 +179,7 @@ TEST_F(MctsDecisionGeneratorTest, GenerateDeepTreeRequiresMultipleGoalChoices) {
         mcts_choice{rule_id{9}},
     };
 
-    EXPECT_CALL(get_goal_candidate_rule_ids, get_mutable(&child0)).WillOnce(ReturnRef(candidates));
+    EXPECT_CALL(get_goal_candidate_rule_ids, get(&child0)).WillOnce(ReturnRef(candidates));
     EXPECT_CALL(make_resolution, make_resolution_lineage(&child0, 9))
         .WillOnce(stub_make_resolution_lineage(resolutions));
 
@@ -215,7 +202,7 @@ TEST_F(MctsDecisionGeneratorTest, GenerateUsesMctsSelectedRootAmongIsolatedGoals
     candidates.insert(1);
     mcts_choose.responses = {mcts_choice{&child2}, mcts_choice{rule_id{1}}};
 
-    EXPECT_CALL(get_goal_candidate_rule_ids, get_mutable(&child2)).WillOnce(ReturnRef(candidates));
+    EXPECT_CALL(get_goal_candidate_rule_ids, get(&child2)).WillOnce(ReturnRef(candidates));
     EXPECT_CALL(make_resolution, make_resolution_lineage(&child2, 1))
         .WillOnce(stub_make_resolution_lineage(resolutions));
 
@@ -230,7 +217,7 @@ TEST_F(MctsDecisionGeneratorTest, GeneratePassesAllCandidatesToMcts) {
         candidates.insert(r);
     mcts_choose.responses = {mcts_choice{&child0}, mcts_choice{rule_id{3}}};
 
-    EXPECT_CALL(get_goal_candidate_rule_ids, get_mutable(&child0)).WillOnce(ReturnRef(candidates));
+    EXPECT_CALL(get_goal_candidate_rule_ids, get(&child0)).WillOnce(ReturnRef(candidates));
     EXPECT_CALL(make_resolution, make_resolution_lineage(&child0, 3))
         .WillOnce(stub_make_resolution_lineage(resolutions));
 
@@ -246,7 +233,7 @@ TEST_F(MctsDecisionGeneratorTest, GenerateSelectsSiblingBranchWhenMctsChoosesIt)
     candidates.insert(5);
     mcts_choose.responses = {mcts_choice{&parent}, mcts_choice{&child1}, mcts_choice{rule_id{5}}};
 
-    EXPECT_CALL(get_goal_candidate_rule_ids, get_mutable(&child1)).WillOnce(ReturnRef(candidates));
+    EXPECT_CALL(get_goal_candidate_rule_ids, get(&child1)).WillOnce(ReturnRef(candidates));
     EXPECT_CALL(make_resolution, make_resolution_lineage(&child1, 5))
         .WillOnce(stub_make_resolution_lineage(resolutions));
 
@@ -263,10 +250,10 @@ TEST_F(MctsDecisionGeneratorTest, GenerateStopsAtFirstActiveGoalWithoutDescendin
     candidates.insert(0);
     mcts_choose.responses = {mcts_choice{&child0}, mcts_choice{rule_id{0}}};
 
-    EXPECT_CALL(get_goal_candidate_rule_ids, get_mutable(&child0)).WillOnce(ReturnRef(candidates));
+    EXPECT_CALL(get_goal_candidate_rule_ids, get(&child0)).WillOnce(ReturnRef(candidates));
     EXPECT_CALL(make_resolution, make_resolution_lineage(&child0, 0))
         .WillOnce(stub_make_resolution_lineage(resolutions));
-    EXPECT_CALL(get_goal_candidate_rule_ids, get_mutable(&child1)).Times(0);
+    EXPECT_CALL(get_goal_candidate_rule_ids, get(&child1)).Times(0);
 
     generator.generate();
     EXPECT_EQ(mcts_choose.goal_rounds.size(), 1u);
@@ -281,7 +268,7 @@ TEST_F(MctsDecisionGeneratorTest, GenerateWithSingleChildLinkCollapsesToActiveLe
     candidates.insert(6);
     mcts_choose.responses = {mcts_choice{&child0}, mcts_choice{rule_id{6}}};
 
-    EXPECT_CALL(get_goal_candidate_rule_ids, get_mutable(&child0)).WillOnce(ReturnRef(candidates));
+    EXPECT_CALL(get_goal_candidate_rule_ids, get(&child0)).WillOnce(ReturnRef(candidates));
     EXPECT_CALL(make_resolution, make_resolution_lineage(&child0, 6))
         .WillOnce(stub_make_resolution_lineage(resolutions));
 
@@ -302,7 +289,7 @@ TEST_F(MctsDecisionGeneratorTest, GenerateSecondCallRepeatsRootIteration) {
         mcts_choice{rule_id{0}},
     };
 
-    EXPECT_CALL(get_goal_candidate_rule_ids, get_mutable(&child0))
+    EXPECT_CALL(get_goal_candidate_rule_ids, get(&child0))
         .Times(2)
         .WillRepeatedly(ReturnRef(candidates));
     EXPECT_CALL(make_resolution, make_resolution_lineage(&child0, 0))
@@ -321,7 +308,7 @@ TEST_F(MctsDecisionGeneratorTest, GeneratePicksAmongMultipleGoalsAndCandidates) 
     candidates.insert(1);
     mcts_choose.responses = {mcts_choice{&child1}, mcts_choice{rule_id{1}}};
 
-    EXPECT_CALL(get_goal_candidate_rule_ids, get_mutable(&child1))
+    EXPECT_CALL(get_goal_candidate_rule_ids, get(&child1))
         .WillRepeatedly(ReturnRef(candidates));
     EXPECT_CALL(make_resolution, make_resolution_lineage(testing::_, testing::_))
         .WillOnce(Invoke([&](const goal_lineage* gl, rule_id rid) {

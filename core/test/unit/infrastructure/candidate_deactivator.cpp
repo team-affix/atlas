@@ -2,35 +2,25 @@
 
 #include <gtest/gtest.h>
 #include <gmock/gmock.h>
-#include "locator_fixture.hpp"
 #include "infrastructure/candidate_deactivator.hpp"
-#include "interfaces/i_unset_candidate_frame_offset.hpp"
-#include "interfaces/i_unlink_goal_candidate.hpp"
 
-struct MockUnsetCandidateFrameOffset : public i_unset_candidate_frame_offset {
-    MOCK_METHOD(void, unset, (const resolution_lineage*), (override));
+struct MockUnsetCandidateFrameOffset {
+    MOCK_METHOD(void, unset, (const resolution_lineage*));
 };
 
-struct MockUnlinkGoalCandidate : public i_unlink_goal_candidate {
-    MOCK_METHOD(void, unlink_goal_candidate, (const goal_lineage*, rule_id), (override));
+struct MockUnlinkGoalCandidate {
+    MOCK_METHOD(void, unlink_goal_candidate, (const goal_lineage*, rule_id));
 };
+
+using TestCandidateDeactivator = candidate_deactivator<MockUnsetCandidateFrameOffset, MockUnlinkGoalCandidate>;
 
 struct CandidateDeactivatorTest : public ::testing::Test {
     static constexpr rule_id kRule = 0;
     static constexpr subgoal_id kGoal = 0;
 
-    locator loc;
     MockUnsetCandidateFrameOffset unset_frame;
     MockUnlinkGoalCandidate unlink;
-    candidate_deactivator deactivator;
-
-    CandidateDeactivatorTest() : deactivator(init_deactivator()) {}
-
-    candidate_deactivator init_deactivator() {
-        loc.bind_as<i_unset_candidate_frame_offset>(unset_frame);
-        loc.bind_as<i_unlink_goal_candidate>(unlink);
-        return candidate_deactivator{loc};
-    }
+    TestCandidateDeactivator deactivator{unset_frame, unlink};
 
     goal_lineage parent{nullptr, kGoal};
     resolution_lineage rl{&parent, kRule};

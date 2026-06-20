@@ -1,23 +1,38 @@
 #ifndef INITIAL_GOAL_ACTIVATOR_HPP
 #define INITIAL_GOAL_ACTIVATOR_HPP
 
-#include "infrastructure/locator.hpp"
-#include "interfaces/i_activate_initial_goal.hpp"
-#include "interfaces/i_get_initial_goal_expr.hpp"
-#include "interfaces/i_make_initial_goal_lineage.hpp"
-#include "interfaces/i_set_goal_expr.hpp"
-#include "interfaces/i_insert_goal_candidates.hpp"
-#include "interfaces/i_insert_active_goal.hpp"
+#include "value_objects/lineage.hpp"
+#include "value_objects/expr.hpp"
+#include "value_objects/framed_expr.hpp"
 
-struct initial_goal_activator : i_activate_initial_goal {
-    initial_goal_activator(locator& loc);
-    void activate_initial_goal(subgoal_id idx) override;
+template<typename IInitialGoalExprs, typename IMakeInitialGoalLineage,
+         typename IGoalExprs, typename IGoalCandidateRules, typename IActiveGoals>
+struct initial_goal_activator {
+    initial_goal_activator(IInitialGoalExprs&, IMakeInitialGoalLineage&,
+                           IGoalExprs&, IGoalCandidateRules&, IActiveGoals&);
+    void activate_initial_goal(subgoal_id idx);
 private:
-    i_get_initial_goal_expr& get_initial_goal_expr;
-    i_make_initial_goal_lineage& make_initial_goal_lineage;
-    i_set_goal_expr& set_goal_expr;
-    i_insert_goal_candidates& insert_goal_candidates;
-    i_insert_active_goal& insert_active_goal;
+    IInitialGoalExprs& get_initial_goal_expr;
+    IMakeInitialGoalLineage& make_initial_goal_lineage;
+    IGoalExprs& set_goal_expr;
+    IGoalCandidateRules& insert_goal_candidates;
+    IActiveGoals& insert_active_goal;
 };
+
+template<typename IIGE, typename IMIGL, typename IGE, typename IGCR, typename IAG>
+initial_goal_activator<IIGE, IMIGL, IGE, IGCR, IAG>::initial_goal_activator(
+    IIGE& ige, IMIGL& migl, IGE& ge, IGCR& gcr, IAG& ag)
+    : get_initial_goal_expr(ige), make_initial_goal_lineage(migl),
+      set_goal_expr(ge), insert_goal_candidates(gcr), insert_active_goal(ag) {}
+
+template<typename IIGE, typename IMIGL, typename IGE, typename IGCR, typename IAG>
+void initial_goal_activator<IIGE, IMIGL, IGE, IGCR, IAG>::activate_initial_goal(
+    subgoal_id idx) {
+    const expr* goal_expr = get_initial_goal_expr.get(idx);
+    const goal_lineage* gl = make_initial_goal_lineage.make(idx);
+    set_goal_expr.set(gl, framed_expr{goal_expr, 0});
+    insert_goal_candidates.insert(gl);
+    insert_active_goal.insert_active_goal(gl);
+}
 
 #endif

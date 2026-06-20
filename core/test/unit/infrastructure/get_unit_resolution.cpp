@@ -4,39 +4,28 @@
 #include <stdexcept>
 #include <gtest/gtest.h>
 #include <gmock/gmock.h>
-#include "locator_fixture.hpp"
 #include "infrastructure/get_unit_resolution.hpp"
 #include "infrastructure/rule_id_set.hpp"
-#include "interfaces/i_make_resolution_lineage.hpp"
-#include "interfaces/i_get_goal_candidate_rule_ids.hpp"
 
 using ::testing::Return;
 using ::testing::ReturnRef;
 using ::testing::Throw;
 
-struct MockMakeResolutionLineage : public i_make_resolution_lineage {
+struct MockMakeResolutionLineage {
     MOCK_METHOD((const resolution_lineage*), make_resolution_lineage,
-        (const goal_lineage*, rule_id), (override));
+        (const goal_lineage*, rule_id));
 };
 
-struct MockGetGoalCandidateRuleIds : public i_get_goal_candidate_rule_ids {
-    MOCK_METHOD(i_rule_id_set&, get, (const goal_lineage*), (override));
-    MOCK_METHOD(const i_rule_id_set&, get, (const goal_lineage*), (const, override));
+struct MockGetGoalCandidateRuleIds {
+    MOCK_METHOD(rule_id_set&, get, (const goal_lineage*));
 };
+
+using TestGetUnitResolution = get_unit_resolution<MockGetGoalCandidateRuleIds, MockMakeResolutionLineage>;
 
 struct GetUnitResolutionTest : public ::testing::Test {
     MockMakeResolutionLineage make_resolution_lineage;
     MockGetGoalCandidateRuleIds get_goal_candidate_rule_ids;
-    locator loc;
-    get_unit_resolution sut;
-
-    GetUnitResolutionTest() : sut(init_sut()) {}
-
-    get_unit_resolution init_sut() {
-        loc.bind_as<i_get_goal_candidate_rule_ids>(get_goal_candidate_rule_ids);
-        loc.bind_as<i_make_resolution_lineage>(make_resolution_lineage);
-        return get_unit_resolution{loc};
-    }
+    TestGetUnitResolution sut{get_goal_candidate_rule_ids, make_resolution_lineage};
 
     goal_lineage gl{nullptr, 0};
     rule_id_set candidates;

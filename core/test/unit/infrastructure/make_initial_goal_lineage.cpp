@@ -2,27 +2,23 @@
 
 #include <gtest/gtest.h>
 #include <gmock/gmock.h>
-#include "locator_fixture.hpp"
 #include "infrastructure/make_initial_goal_lineage.hpp"
-#include "interfaces/i_make_goal_lineage.hpp"
 
 using ::testing::Return;
 
-struct MockMakeGoalLineage : public i_make_goal_lineage {
+struct MockMakeGoalLineage {
     MOCK_METHOD(const goal_lineage*, make_goal_lineage,
-        (const resolution_lineage*, subgoal_id), (override));
+        (const resolution_lineage*, subgoal_id));
 };
+
+using TestMakeInitialGoalLineage = make_initial_goal_lineage<MockMakeGoalLineage>;
 
 struct MakeInitialGoalLineageTest : public ::testing::Test {
     static constexpr subgoal_id kIdx = 0;
 
-    locator loc;
     MockMakeGoalLineage make_goal_lineage;
-    make_initial_goal_lineage maker;
+    TestMakeInitialGoalLineage maker{make_goal_lineage};
 
-    MakeInitialGoalLineageTest()
-        : maker(bind_and_make<make_initial_goal_lineage, i_make_goal_lineage>(
-              loc, make_goal_lineage)) {}
     goal_lineage gl0{nullptr, kIdx};
 };
 

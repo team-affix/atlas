@@ -1,15 +1,23 @@
 #ifndef CONFLICT_DETECTOR_HPP
 #define CONFLICT_DETECTOR_HPP
 
-#include "infrastructure/locator.hpp"
-#include "interfaces/i_conflict_detector.hpp"
-#include "interfaces/i_get_goal_candidate_rule_ids.hpp"
+#include "value_objects/lineage.hpp"
 
-struct conflict_detector : i_conflict_detector {
-    conflict_detector(locator& loc);
-    bool detect(const goal_lineage*) const override;
+template<typename IGetGoalCandidateRuleIds>
+struct conflict_detector {
+    conflict_detector(IGetGoalCandidateRuleIds& gcr);
+    bool detect(const goal_lineage*) const;
 private:
-    i_get_goal_candidate_rule_ids& get_goal_candidate_rule_ids;
+    IGetGoalCandidateRuleIds& get_goal_candidate_rule_ids;
 };
+
+template<typename IGetGoalCandidateRuleIds>
+conflict_detector<IGetGoalCandidateRuleIds>::conflict_detector(IGetGoalCandidateRuleIds& gcr)
+    : get_goal_candidate_rule_ids(gcr) {}
+
+template<typename IGetGoalCandidateRuleIds>
+bool conflict_detector<IGetGoalCandidateRuleIds>::detect(const goal_lineage* gl) const {
+    return get_goal_candidate_rule_ids.get(gl).size() == 0;
+}
 
 #endif

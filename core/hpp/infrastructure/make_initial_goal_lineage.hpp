@@ -1,15 +1,23 @@
 #ifndef MAKE_INITIAL_GOAL_LINEAGE_HPP
 #define MAKE_INITIAL_GOAL_LINEAGE_HPP
 
-#include "infrastructure/locator.hpp"
-#include "interfaces/i_make_initial_goal_lineage.hpp"
-#include "interfaces/i_make_goal_lineage.hpp"
+#include "value_objects/lineage.hpp"
 
-struct make_initial_goal_lineage : i_make_initial_goal_lineage {
-    explicit make_initial_goal_lineage(locator& loc);
-    const goal_lineage* make(subgoal_id idx) override;
+template<typename ILineagePool>
+struct make_initial_goal_lineage {
+    explicit make_initial_goal_lineage(ILineagePool& lp);
+    const goal_lineage* make(subgoal_id idx);
 private:
-    i_make_goal_lineage& make_goal_lineage;
+    ILineagePool& make_goal_lineage;
 };
+
+template<typename ILineagePool>
+make_initial_goal_lineage<ILineagePool>::make_initial_goal_lineage(ILineagePool& lp)
+    : make_goal_lineage(lp) {}
+
+template<typename ILineagePool>
+const goal_lineage* make_initial_goal_lineage<ILineagePool>::make(subgoal_id idx) {
+    return make_goal_lineage.make_goal_lineage(nullptr, idx);
+}
 
 #endif

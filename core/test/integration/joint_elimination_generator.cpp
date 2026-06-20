@@ -17,16 +17,19 @@
 #include "infrastructure/goal_candidate_rules.hpp"
 #include "infrastructure/ra_rule_id_set_factory.hpp"
 #include "infrastructure/trail.hpp"
-#include "interfaces/i_learn_avoidance.hpp"
-#include "interfaces/i_clean_up_cdcl.hpp"
-#include "interfaces/i_try_add_mhu_head.hpp"
-#include "interfaces/i_clear_mhu_heads.hpp"
 #include "infrastructure/coroutine.hpp"
 #include "value_objects/lemma.hpp"
 #include "functor_fixture.hpp"
 
 using ::testing::ElementsAre;
 using ::testing::IsEmpty;
+
+using TestUnifierFactory = unifier_factory<bind_map>;
+using TestCdcl  = cdcl_elimination_generator<chosen_goal_candidates, chosen_goal_candidates>;
+using TestMhu   = mhu_elimination_generator<
+    bind_map, bind_map_factory, unifier<bind_map>, TestUnifierFactory,
+    lineage_pool, expr_pool, goal_candidate_rules>;
+using TestJoint = joint_elimination_generator<TestCdcl, TestMhu>;
 
 namespace {
 
@@ -49,38 +52,25 @@ std::vector<const resolution_lineage*> collect_elims(
 struct JointEliminationGeneratorIntegrationTest : public ::testing::Test {
     
     test_functors functors;
-    locator loc;
     trail t;
     globalizer g_;
     bind_map common{g_};
     lineage_pool lp;
     bind_map_factory bmf{g_};
-    unifier_factory uf{loc};
+    TestUnifierFactory uf{g_};
     ra_rule_id_set_factory ra_rule_id_set_factory_;
     goal_candidate_rules ggcr{ra_rule_id_set_factory_};
     std::optional<expr_pool> pool;
     chosen_goal_candidates chosen;
-    std::optional<cdcl_elimination_generator> cdcl;
-    std::optional<mhu_elimination_generator> mhu;
-    std::optional<joint_elimination_generator> joint;
+    std::optional<TestCdcl> cdcl;
+    std::optional<TestMhu> mhu;
+    std::optional<TestJoint> joint;
 
     JointEliminationGeneratorIntegrationTest() {
-        loc.bind_as<i_globalizer>(g_);
-        loc.bind_as<i_log_to_current_trail_frame>(t);
-        loc.bind_as<i_try_get_chosen_goal_candidate, i_set_chosen_goal_candidate,
-            i_clear_chosen_goal_candidates>(chosen);
-        loc.bind_as<i_bind_map>(common);
-        loc.bind_as<i_bind_map_factory>(bmf);
-        loc.bind_as<i_unifier_factory>(uf);
-        loc.bind_as<i_make_resolution_lineage>(lp);
-        loc.bind_as<i_get_goal_candidate_rule_ids, i_insert_goal_candidates>(ggcr);
         pool.emplace();
-        loc.bind_as<i_make_functor, i_make_var, i_import_expr, i_get_expr_count>(*pool);
-        cdcl.emplace(loc);
-        mhu.emplace(loc);
-        loc.bind_as<i_learn_avoidance, i_clean_up_cdcl>(*cdcl);
-        loc.bind_as<i_try_add_mhu_head, i_clear_mhu_heads>(*mhu);
-        joint.emplace(loc);
+        cdcl.emplace(chosen, chosen);
+        mhu.emplace(common, lp, *pool, bmf, uf, ggcr);
+        joint.emplace(*cdcl, *mhu);
     }
 };
 

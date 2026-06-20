@@ -1,21 +1,38 @@
 #ifndef NORMALIZER_HPP
 #define NORMALIZER_HPP
 
-#include "infrastructure/locator.hpp"
-#include "interfaces/i_normalizer.hpp"
-#include "interfaces/i_globalizer.hpp"
-#include "interfaces/i_make_functor.hpp"
-#include "interfaces/i_make_var.hpp"
-#include "interfaces/i_bind_map.hpp"
+#include <stdexcept>
+#include <vector>
+#include "value_objects/framed_expr.hpp"
+#include "value_objects/expr.hpp"
 
-struct normalizer : i_normalizer {
-    normalizer(locator& loc);
-    const expr* normalize(framed_expr) override;
+template<typename IGlobalizer, typename IExprPool, typename IBindMap>
+struct normalizer {
+    normalizer(IGlobalizer&, IExprPool&, IBindMap&);
+    const expr* normalize(framed_expr);
 private:
-    i_globalizer& globalizer_ref;
-    i_make_functor& make_functor_ref;
-    i_make_var& make_var_ref;
-    i_bind_map& bind_map_ref;
+    IGlobalizer& globalizer_ref;
+    IExprPool& expr_pool_ref;
+    IBindMap& bind_map_ref;
 };
+
+template<typename IG, typename IEP, typename IBM>
+normalizer<IG,IEP,IBM>::normalizer(IG& g, IEP& ep, IBM& bm)
+    : globalizer_ref(g), expr_pool_ref(ep), bind_map_ref(bm) {}
+
+template<typename IG, typename IEP, typename IBM>
+const expr* normalizer<IG,IEP,IBM>::normalize(framed_expr fe) {
+    framed_expr resolved = bind_map_ref.whnf(fe);
+    if (const expr::var* v = std::get_if<expr::var>(&resolved.skeleton->content))
+        return expr_pool_ref.make_var(globalizer_ref.globalize(resolved.frame_offset, v->index));
+    if (const expr::functor* f = std::get_if<expr::functor>(&resolved.skeleton->content)) {
+        std::vector<const expr*> args;
+        args.reserve(f->args.size());
+        for (const expr* arg : f->args)
+            args.push_back(normalize({arg, resolved.frame_offset}));
+        return expr_pool_ref.make_functor(f->id, args);
+    }
+    throw std::runtime_error("Unsupported expression type");
+}
 
 #endif

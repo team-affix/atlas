@@ -1,15 +1,23 @@
 #ifndef GET_RESOLUTION_RULE_HPP
 #define GET_RESOLUTION_RULE_HPP
 
-#include "infrastructure/locator.hpp"
-#include "interfaces/i_get_resolution_rule.hpp"
-#include "interfaces/i_get_rule.hpp"
+#include "value_objects/lineage.hpp"
+#include "value_objects/rule.hpp"
 
-struct get_resolution_rule : i_get_resolution_rule {
-    explicit get_resolution_rule(locator& loc);
-    const rule* get(const resolution_lineage*) const override;
+template<typename IDb>
+struct get_resolution_rule {
+    explicit get_resolution_rule(const IDb& db);
+    const rule* get(const resolution_lineage*) const;
 private:
-    const i_get_rule& get_rule_;
+    const IDb& get_rule_;
 };
+
+template<typename IDb>
+get_resolution_rule<IDb>::get_resolution_rule(const IDb& db) : get_rule_(db) {}
+
+template<typename IDb>
+const rule* get_resolution_rule<IDb>::get(const resolution_lineage* rl) const {
+    return get_rule_.get(rl->idx);
+}
 
 #endif

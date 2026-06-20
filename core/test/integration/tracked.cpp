@@ -6,7 +6,7 @@
 struct TrackedIntegrationTest : public ::testing::Test {
 protected:
     trail t;
-    tracked<int> v{t, 10};
+    tracked<int, trail> v{t, 10};
 };
 
 TEST_F(TrackedIntegrationTest, MutateAndPopRevertsToPrePushValue) {

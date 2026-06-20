@@ -21,28 +21,10 @@
 
 #include "infrastructure/coroutine.hpp"
 #include "infrastructure/lineage_pool.hpp"
-#include "infrastructure/locator.hpp"
 #include "infrastructure/resolver.hpp"
 #include "infrastructure/srt_active_goals.hpp"
 #include "infrastructure/srt_subgoals_activator.hpp"
 #include "infrastructure/subgoals_activator.hpp"
-#include "interfaces/i_activate_goal_candidates.hpp"
-#include "interfaces/i_activate_subgoals_and_candidates.hpp"
-#include "interfaces/i_active_goals_size.hpp"
-#include "interfaces/i_check_active_goals_empty.hpp"
-#include "interfaces/i_clear_active_goals.hpp"
-#include "interfaces/i_deactivate_goal_candidates.hpp"
-#include "interfaces/i_get_rule.hpp"
-#include "interfaces/i_goal_activator.hpp"
-#include "interfaces/i_goal_deactivator.hpp"
-#include "interfaces/i_insert_active_goal.hpp"
-#include "interfaces/i_is_active_goal.hpp"
-#include "interfaces/i_iterate_child_goals.hpp"
-#include "interfaces/i_iterate_root_goals.hpp"
-#include "interfaces/i_make_goal_lineage.hpp"
-#include "interfaces/i_make_resolution_lineage.hpp"
-#include "interfaces/i_srt_flush_goal_batch.hpp"
-#include "interfaces/i_srt_link_goal_batch_parent.hpp"
 #include "value_objects/expr.hpp"
 #include "value_objects/lineage.hpp"
 #include "value_objects/rule.hpp"
@@ -61,24 +43,24 @@ static constexpr size_t kOuterIterations = 1000;
 static constexpr size_t kMaxDrainSteps = 10'000;
 static constexpr size_t kMinDrainSteps = 3;
 
-struct MockGoalActivator : public i_goal_activator {
-    MOCK_METHOD(void, activate, (const goal_lineage*), (override));
+struct MockGoalActivator {
+    MOCK_METHOD(void, activate, (const goal_lineage*));
 };
 
-struct MockGetRule : public i_get_rule {
-    MOCK_METHOD(const rule*, get, (rule_id), (const, override));
+struct MockGetRule {
+    MOCK_METHOD(const rule*, get, (rule_id), (const));
 };
 
-struct MockActivateGoalCandidates : public i_activate_goal_candidates {
-    MOCK_METHOD(bool, activate_goal_candidates, (const goal_lineage*), (override));
+struct MockActivateGoalCandidates {
+    MOCK_METHOD(bool, activate_goal_candidates, (const goal_lineage*));
 };
 
-struct MockGoalDeactivator : public i_goal_deactivator {
-    MOCK_METHOD(void, deactivate, (const goal_lineage*), (override));
+struct MockGoalDeactivator {
+    MOCK_METHOD(void, deactivate, (const goal_lineage*));
 };
 
-struct MockDeactivateGoalCandidates : public i_deactivate_goal_candidates {
-    MOCK_METHOD(void, deactivate_goal_candidates, (const goal_lineage*), (override));
+struct MockDeactivateGoalCandidates {
+    MOCK_METHOD(void, deactivate_goal_candidates, (const goal_lineage*));
 };
 
 template<typename Yield>
@@ -136,24 +118,27 @@ std::string format_snapshot(const SrtTreeSnapshot& snap) {
     return os.str();
 }
 
+using TestSubgoalsActivator    = subgoals_activator<lineage_pool, MockGoalActivator, MockGetRule, MockActivateGoalCandidates>;
+using TestSrtSubgoalsActivator = srt_subgoals_activator<srt_active_goals, TestSubgoalsActivator>;
+using TestResolver             = resolver<MockGoalDeactivator, TestSrtSubgoalsActivator, MockDeactivateGoalCandidates>;
+
 void collect_subtree(
     const goal_lineage* node,
     bool is_root,
-    i_iterate_child_goals& iterate_children,
-    i_is_active_goal& is_active,
+    srt_active_goals& srt,
     SrtTreeSnapshot& snap) {
-    if (is_active.is_active_goal(node))
+    if (srt.is_active_goal(node))
         snap.sorted_leaves.push_back(node);
 
-    const bool isolated_root = is_root && is_active.is_active_goal(node);
+    const bool isolated_root = is_root && srt.is_active_goal(node);
     if (isolated_root)
         return;
 
     // Active goals are SRT leaves; they have no children row in the tree.
-    if (is_active.is_active_goal(node))
+    if (srt.is_active_goal(node))
         return;
 
-    auto child_sm = iterate_children.iterate_child_goals(node);
+    auto child_sm = srt.iterate_child_goals(node);
     std::vector<const goal_lineage*> children = collect_yields(child_sm);
     if (children.empty())
         return;
@@ -161,32 +146,26 @@ void collect_subtree(
     std::sort(children.begin(), children.end());
     snap.sorted_edges[node] = children;
     for (const goal_lineage* child : children)
-        collect_subtree(child, false, iterate_children, is_active, snap);
+        collect_subtree(child, false, srt, snap);
 }
 
-SrtTreeSnapshot snapshot_srt_tree(locator& loc) {
-    auto& iterate_roots = loc.locate<i_iterate_root_goals>();
-    auto& iterate_children = loc.locate<i_iterate_child_goals>();
-    auto& is_active = loc.locate<i_is_active_goal>();
-
+SrtTreeSnapshot snapshot_srt_tree(srt_active_goals& active_goals) {
     SrtTreeSnapshot snap;
-    auto root_sm = iterate_roots.iterate_root_goals();
+    auto root_sm = active_goals.iterate_root_goals();
     snap.sorted_roots = collect_yields(root_sm);
     std::sort(snap.sorted_roots.begin(), snap.sorted_roots.end());
 
     for (const goal_lineage* root : snap.sorted_roots)
-        collect_subtree(root, true, iterate_children, is_active, snap);
+        collect_subtree(root, true, active_goals, snap);
 
     std::sort(snap.sorted_leaves.begin(), snap.sorted_leaves.end());
     return snap;
 }
 
-void seed_initial_goals(locator& loc, const std::vector<const goal_lineage*>& initial) {
-    auto& insert = loc.locate<i_insert_active_goal>();
-    auto& flush = loc.locate<i_srt_flush_goal_batch>();
+void seed_initial_goals(srt_active_goals& active_goals, const std::vector<const goal_lineage*>& initial) {
     for (const goal_lineage* gl : initial) {
-        insert.insert_active_goal(gl);
-        flush.flush_srt_goal_batch();
+        active_goals.insert_active_goal(gl);
+        active_goals.flush_srt_goal_batch();
     }
 }
 
@@ -213,21 +192,20 @@ void expect_snapshots_not_equal(
 }
 
 void expect_identical_trees_for_orders(
-    locator& loc,
-    resolver& res,
+    srt_active_goals& active_goals,
+    TestResolver& res,
     const std::vector<const goal_lineage*>& initial_goals,
     const std::vector<const resolution_lineage*>& steps,
     const std::vector<std::vector<size_t>>& orders) {
     ASSERT_FALSE(orders.empty());
 
-    auto& clear = loc.locate<i_clear_active_goals>();
     std::optional<SrtTreeSnapshot> reference;
     for (const std::vector<size_t>& order : orders) {
-        clear.clear_active_goals();
-        seed_initial_goals(loc, initial_goals);
+        active_goals.clear_active_goals();
+        seed_initial_goals(active_goals, initial_goals);
         for (size_t step_idx : order)
             ASSERT_TRUE(res.resolve(steps[step_idx]));
-        SrtTreeSnapshot snap = snapshot_srt_tree(loc);
+        SrtTreeSnapshot snap = snapshot_srt_tree(active_goals);
         if (!reference)
             reference = snap;
         else
@@ -353,16 +331,16 @@ struct DrainResult {
 
 void fuzz_drain_to_empty(
     uint32_t order_seed,
-    locator& loc,
+    srt_active_goals& active_goals,
     lineage_pool& pool,
-    resolver& res,
+    TestResolver& res,
     const std::vector<const goal_lineage*>& initial,
     const std::array<rule, 4>& rule_table,
     std::unordered_map<const goal_lineage*, rule_id>& goal_rule,
     DrainResult& out) {
     goal_rule.clear();
-    loc.locate<i_clear_active_goals>().clear_active_goals();
-    seed_initial_goals(loc, initial);
+    active_goals.clear_active_goals();
+    seed_initial_goals(active_goals, initial);
 
     for (const goal_lineage* gl : initial)
         assign_rule(gl, goal_rule);
@@ -403,13 +381,12 @@ void fuzz_drain_to_empty(
         }
     }
 
-    out.snap = snapshot_srt_tree(loc);
+    out.snap = snapshot_srt_tree(active_goals);
 }
 
 }  // namespace
 
 struct SrtResolverOrderInvarianceIntegrationTest : public ::testing::Test {
-    locator loc;
     lineage_pool pool;
     srt_active_goals active_goals;
 
@@ -434,32 +411,14 @@ struct SrtResolverOrderInvarianceIntegrationTest : public ::testing::Test {
     testing::NiceMock<MockGoalDeactivator> goal_deactivator;
     testing::NiceMock<MockDeactivateGoalCandidates> deactivate_candidates;
 
-    std::unique_ptr<subgoals_activator> subgoals;
-    std::unique_ptr<srt_subgoals_activator> srt_subgoals;
-    std::unique_ptr<resolver> res;
+    std::unique_ptr<TestSubgoalsActivator> subgoals;
+    std::unique_ptr<TestSrtSubgoalsActivator> srt_subgoals;
+    std::unique_ptr<TestResolver> res;
 
     void SetUp() override {
-        loc.bind_as<i_make_goal_lineage, i_make_resolution_lineage>(pool);
-        loc.bind_as<
-            i_insert_active_goal,
-            i_srt_link_goal_batch_parent,
-            i_srt_flush_goal_batch,
-            i_clear_active_goals,
-            i_iterate_root_goals,
-            i_iterate_child_goals,
-            i_is_active_goal,
-            i_active_goals_size,
-            i_check_active_goals_empty>(active_goals);
-
-        loc.bind_as<i_goal_activator>(goal_activator);
-        loc.bind_as<i_get_rule>(get_rule);
-        loc.bind_as<i_activate_goal_candidates>(activate_candidates);
-        loc.bind_as<i_goal_deactivator>(goal_deactivator);
-        loc.bind_as<i_deactivate_goal_candidates>(deactivate_candidates);
-
         ON_CALL(goal_activator, activate(testing::_))
             .WillByDefault([this](const goal_lineage* gl) {
-                loc.locate<i_insert_active_goal>().insert_active_goal(gl);
+                active_goals.insert_active_goal(gl);
             });
 
         ON_CALL(get_rule, get(testing::_))
@@ -470,13 +429,9 @@ struct SrtResolverOrderInvarianceIntegrationTest : public ::testing::Test {
         ON_CALL(activate_candidates, activate_goal_candidates(testing::_))
             .WillByDefault(Return(true));
 
-        subgoals = std::make_unique<subgoals_activator>(loc);
-        loc.bind_as<>(*subgoals);
-
-        srt_subgoals = std::make_unique<srt_subgoals_activator>(loc);
-        loc.bind_as<i_activate_subgoals_and_candidates>(*srt_subgoals);
-
-        res = std::make_unique<resolver>(loc);
+        subgoals = std::make_unique<TestSubgoalsActivator>(pool, goal_activator, get_rule, activate_candidates);
+        srt_subgoals = std::make_unique<TestSrtSubgoalsActivator>(active_goals, *subgoals);
+        res = std::make_unique<TestResolver>(goal_deactivator, *srt_subgoals, deactivate_candidates);
     }
 };
 
@@ -494,8 +449,8 @@ TEST_F(SrtResolverOrderInvarianceIntegrationTest, IndependentRootsGroundedInEith
     const std::vector<const resolution_lineage*> steps{rl_ground_f, rl_ground_g};
     const std::vector<std::vector<size_t>> orders{{0, 1}, {1, 0}};
 
-    expect_identical_trees_for_orders(loc, *res, initial, steps, orders);
-    EXPECT_TRUE(loc.locate<i_check_active_goals_empty>().empty());
+    expect_identical_trees_for_orders(active_goals, *res, initial, steps, orders);
+    EXPECT_TRUE(active_goals.empty());
 }
 
 TEST_F(SrtResolverOrderInvarianceIntegrationTest, NestedLeavesGroundedInAllPermutations) {
@@ -525,8 +480,8 @@ TEST_F(SrtResolverOrderInvarianceIntegrationTest, NestedLeavesGroundedInAllPermu
     const std::vector<std::vector<size_t>> orders = permute_ground_steps(2, 3);
     ASSERT_EQ(orders.size(), 6u);
 
-    expect_identical_trees_for_orders(loc, *res, initial, steps, orders);
-    EXPECT_TRUE(loc.locate<i_check_active_goals_empty>().empty());
+    expect_identical_trees_for_orders(active_goals, *res, initial, steps, orders);
+    EXPECT_TRUE(active_goals.empty());
 }
 
 TEST_F(SrtResolverOrderInvarianceIntegrationTest, SiblingSubgoalsGroundedInEitherOrder) {
@@ -545,8 +500,8 @@ TEST_F(SrtResolverOrderInvarianceIntegrationTest, SiblingSubgoalsGroundedInEithe
     const std::vector<const resolution_lineage*> steps{rl_expand, rl_ground_a, rl_ground_b};
     const std::vector<std::vector<size_t>> orders{{0, 1, 2}, {0, 2, 1}};
 
-    expect_identical_trees_for_orders(loc, *res, initial, steps, orders);
-    EXPECT_TRUE(loc.locate<i_check_active_goals_empty>().empty());
+    expect_identical_trees_for_orders(active_goals, *res, initial, steps, orders);
+    EXPECT_TRUE(active_goals.empty());
 }
 
 TEST_F(SrtResolverOrderInvarianceIntegrationTest, TwoIndependentSubtreesExpandOrderInvariant) {
@@ -567,11 +522,11 @@ TEST_F(SrtResolverOrderInvarianceIntegrationTest, TwoIndependentSubtreesExpandOr
     const std::vector<const resolution_lineage*> steps{rl_expand_a, rl_expand_b};
     const std::vector<std::vector<size_t>> orders{{0, 1}, {1, 0}};
 
-    expect_identical_trees_for_orders(loc, *res, initial, steps, orders);
-    EXPECT_EQ(loc.locate<i_active_goals_size>().active_goals_size(), 4u);
+    expect_identical_trees_for_orders(active_goals, *res, initial, steps, orders);
+    EXPECT_EQ(active_goals.active_goals_size(), 4u);
 
-    loc.locate<i_clear_active_goals>().clear_active_goals();
-    seed_initial_goals(loc, initial);
+    active_goals.clear_active_goals();
+    seed_initial_goals(active_goals, initial);
     ASSERT_TRUE(res->resolve(rl_expand_a));
     ASSERT_TRUE(res->resolve(rl_expand_b));
     SrtTreeSnapshot expected{
@@ -582,7 +537,7 @@ TEST_F(SrtResolverOrderInvarianceIntegrationTest, TwoIndependentSubtreesExpandOr
         },
         .sorted_leaves = sorted_lineages({a0, a1, b0, b1}),
     };
-    expect_snapshots_equal(expected, snapshot_srt_tree(loc));
+    expect_snapshots_equal(expected, snapshot_srt_tree(active_goals));
 }
 
 TEST_F(SrtResolverOrderInvarianceIntegrationTest, TwoIndependentSubtreesCommutingGroundOrder) {
@@ -615,8 +570,8 @@ TEST_F(SrtResolverOrderInvarianceIntegrationTest, TwoIndependentSubtreesCommutin
     const std::vector<std::vector<size_t>> orders = permute_ground_steps(2, 4);
     ASSERT_EQ(orders.size(), 24u);
 
-    expect_identical_trees_for_orders(loc, *res, initial, steps, orders);
-    EXPECT_TRUE(loc.locate<i_check_active_goals_empty>().empty());
+    expect_identical_trees_for_orders(active_goals, *res, initial, steps, orders);
+    EXPECT_TRUE(active_goals.empty());
 }
 
 TEST_F(SrtResolverOrderInvarianceIntegrationTest, SingleChildExpandUnaryCollapse) {
@@ -630,20 +585,20 @@ TEST_F(SrtResolverOrderInvarianceIntegrationTest, SingleChildExpandUnaryCollapse
     const goal_lineage* child = pool.make_goal_lineage(rl_expand, 0);
     const resolution_lineage* rl_ground_child = pool.make_resolution_lineage(child, kGroundRule);
 
-    loc.locate<i_clear_active_goals>().clear_active_goals();
-    seed_initial_goals(loc, {parent});
+    active_goals.clear_active_goals();
+    seed_initial_goals(active_goals, {parent});
     ASSERT_TRUE(res->resolve(rl_expand));
 
-    SrtTreeSnapshot after_expand = snapshot_srt_tree(loc);
+    SrtTreeSnapshot after_expand = snapshot_srt_tree(active_goals);
     EXPECT_EQ(after_expand.sorted_roots, std::vector<const goal_lineage*>{child});
     EXPECT_EQ(after_expand.sorted_leaves, std::vector<const goal_lineage*>{child});
     EXPECT_TRUE(after_expand.sorted_edges.empty());
 
     ASSERT_TRUE(res->resolve(rl_ground_child));
-    SrtTreeSnapshot after_ground = snapshot_srt_tree(loc);
+    SrtTreeSnapshot after_ground = snapshot_srt_tree(active_goals);
     EXPECT_TRUE(after_ground.sorted_roots.empty());
     EXPECT_TRUE(after_ground.sorted_leaves.empty());
-    EXPECT_TRUE(loc.locate<i_check_active_goals_empty>().empty());
+    EXPECT_TRUE(active_goals.empty());
 }
 
 TEST_F(SrtResolverOrderInvarianceIntegrationTest, PartialSiblingGroundingDiffers) {
@@ -660,17 +615,17 @@ TEST_F(SrtResolverOrderInvarianceIntegrationTest, PartialSiblingGroundingDiffers
 
     const std::vector<const goal_lineage*> initial{parent};
 
-    loc.locate<i_clear_active_goals>().clear_active_goals();
-    seed_initial_goals(loc, initial);
+    active_goals.clear_active_goals();
+    seed_initial_goals(active_goals, initial);
     ASSERT_TRUE(res->resolve(rl_expand));
     ASSERT_TRUE(res->resolve(rl_ground_a));
-    const SrtTreeSnapshot ground_a_first = snapshot_srt_tree(loc);
+    const SrtTreeSnapshot ground_a_first = snapshot_srt_tree(active_goals);
 
-    loc.locate<i_clear_active_goals>().clear_active_goals();
-    seed_initial_goals(loc, initial);
+    active_goals.clear_active_goals();
+    seed_initial_goals(active_goals, initial);
     ASSERT_TRUE(res->resolve(rl_expand));
     ASSERT_TRUE(res->resolve(rl_ground_b));
-    const SrtTreeSnapshot ground_b_first = snapshot_srt_tree(loc);
+    const SrtTreeSnapshot ground_b_first = snapshot_srt_tree(active_goals);
 
     expect_snapshots_not_equal(ground_a_first, ground_b_first);
     EXPECT_EQ(ground_a_first.sorted_leaves, std::vector<const goal_lineage*>{child_b});
@@ -690,8 +645,8 @@ TEST_F(SrtResolverOrderInvarianceIntegrationTest, NestedPartialExpandCheckpoint)
     const goal_lineage* f0 = pool.make_goal_lineage(rl_expand_f, 0);
     const goal_lineage* f1 = pool.make_goal_lineage(rl_expand_f, 1);
 
-    loc.locate<i_clear_active_goals>().clear_active_goals();
-    seed_initial_goals(loc, {h});
+    active_goals.clear_active_goals();
+    seed_initial_goals(active_goals, {h});
     ASSERT_TRUE(res->resolve(rl_expand_h));
     ASSERT_TRUE(res->resolve(rl_expand_f));
 
@@ -703,8 +658,8 @@ TEST_F(SrtResolverOrderInvarianceIntegrationTest, NestedPartialExpandCheckpoint)
         },
         .sorted_leaves = sorted_lineages({f0, f1, g}),
     };
-    expect_snapshots_equal(expected, snapshot_srt_tree(loc));
-    EXPECT_EQ(loc.locate<i_active_goals_size>().active_goals_size(), 3u);
+    expect_snapshots_equal(expected, snapshot_srt_tree(active_goals));
+    EXPECT_EQ(active_goals.active_goals_size(), 3u);
 }
 
 TEST_F(SrtResolverOrderInvarianceIntegrationTest, InvalidOrderNegativeControl) {
@@ -723,30 +678,30 @@ TEST_F(SrtResolverOrderInvarianceIntegrationTest, InvalidOrderNegativeControl) {
 
     const std::vector<const goal_lineage*> initial{parent};
 
-    loc.locate<i_clear_active_goals>().clear_active_goals();
-    seed_initial_goals(loc, initial);
-    const SrtTreeSnapshot seeded = snapshot_srt_tree(loc);
+    active_goals.clear_active_goals();
+    seed_initial_goals(active_goals, initial);
+    const SrtTreeSnapshot seeded = snapshot_srt_tree(active_goals);
     EXPECT_TRUE(res->resolve(rl_ground_a));
-    expect_snapshots_equal(seeded, snapshot_srt_tree(loc));
+    expect_snapshots_equal(seeded, snapshot_srt_tree(active_goals));
 
-    loc.locate<i_clear_active_goals>().clear_active_goals();
-    seed_initial_goals(loc, initial);
+    active_goals.clear_active_goals();
+    seed_initial_goals(active_goals, initial);
     ASSERT_TRUE(res->resolve(rl_expand));
-    const SrtTreeSnapshot valid_after_expand = snapshot_srt_tree(loc);
+    const SrtTreeSnapshot valid_after_expand = snapshot_srt_tree(active_goals);
 
-    loc.locate<i_clear_active_goals>().clear_active_goals();
-    seed_initial_goals(loc, initial);
+    active_goals.clear_active_goals();
+    seed_initial_goals(active_goals, initial);
     EXPECT_TRUE(res->resolve(rl_ground_parent));
     ASSERT_TRUE(res->resolve(rl_expand));
-    const SrtTreeSnapshot invalid_after_expand = snapshot_srt_tree(loc);
+    const SrtTreeSnapshot invalid_after_expand = snapshot_srt_tree(active_goals);
 
     expect_snapshots_not_equal(valid_after_expand, invalid_after_expand);
 
-    loc.locate<i_clear_active_goals>().clear_active_goals();
-    seed_initial_goals(loc, initial);
+    active_goals.clear_active_goals();
+    seed_initial_goals(active_goals, initial);
     for (const resolution_lineage* step : {rl_expand, rl_ground_a, rl_ground_b})
         ASSERT_TRUE(res->resolve(step));
-    EXPECT_TRUE(loc.locate<i_check_active_goals_empty>().empty());
+    EXPECT_TRUE(active_goals.empty());
 }
 
 TEST_F(SrtResolverOrderInvarianceIntegrationTest, FourIndependentSubtreesStressFullGroundPermutations) {
@@ -760,8 +715,8 @@ TEST_F(SrtResolverOrderInvarianceIntegrationTest, FourIndependentSubtreesStressF
         script.expands.size(), script.grounds.size());
     ASSERT_EQ(orders.size(), 40320u);
 
-    expect_identical_trees_for_orders(loc, *res, script.initial, steps, orders);
-    EXPECT_TRUE(loc.locate<i_check_active_goals_empty>().empty());
+    expect_identical_trees_for_orders(active_goals, *res, script.initial, steps, orders);
+    EXPECT_TRUE(active_goals.empty());
 }
 
 TEST_F(SrtResolverOrderInvarianceIntegrationTest, BalancedBinaryTreeStressFullGroundPermutations) {
@@ -778,8 +733,8 @@ TEST_F(SrtResolverOrderInvarianceIntegrationTest, BalancedBinaryTreeStressFullGr
         script.expands.size(), script.grounds.size());
     ASSERT_EQ(orders.size(), 40320u);
 
-    expect_identical_trees_for_orders(loc, *res, script.initial, steps, orders);
-    EXPECT_TRUE(loc.locate<i_check_active_goals_empty>().empty());
+    expect_identical_trees_for_orders(active_goals, *res, script.initial, steps, orders);
+    EXPECT_TRUE(active_goals.empty());
 }
 
 TEST_F(SrtResolverOrderInvarianceIntegrationTest, EightIndependentRootsStressExpandOrderInvariant) {
@@ -791,8 +746,8 @@ TEST_F(SrtResolverOrderInvarianceIntegrationTest, EightIndependentRootsStressExp
     const std::vector<std::vector<size_t>> orders = permute_all_steps(script.expands.size());
     ASSERT_EQ(orders.size(), 40320u);
 
-    expect_identical_trees_for_orders(loc, *res, script.initial, script.expands, orders);
-    EXPECT_EQ(loc.locate<i_active_goals_size>().active_goals_size(), 16u);
+    expect_identical_trees_for_orders(active_goals, *res, script.initial, script.expands, orders);
+    EXPECT_EQ(active_goals.active_goals_size(), 16u);
 }
 
 TEST_F(SrtResolverOrderInvarianceIntegrationTest, RandomResolutionFuzzOrderInvariantTwoSeeds) {
@@ -816,9 +771,9 @@ TEST_F(SrtResolverOrderInvarianceIntegrationTest, RandomResolutionFuzzOrderInvar
         DrainResult result_a;
         DrainResult result_b;
         fuzz_drain_to_empty(
-            seed_a, loc, pool, *res, initial, rule_table_, goal_rule, result_a);
+            seed_a, active_goals, pool, *res, initial, rule_table_, goal_rule, result_a);
         fuzz_drain_to_empty(
-            seed_b, loc, pool, *res, initial, rule_table_, goal_rule, result_b);
+            seed_b, active_goals, pool, *res, initial, rule_table_, goal_rule, result_b);
 
         expect_snapshots_equal(result_a.snap, result_b.snap);
         ASSERT_EQ(result_a.resolves, result_b.resolves);

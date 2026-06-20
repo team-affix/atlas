@@ -4,25 +4,22 @@
 #include "infrastructure/tracked.hpp"
 #include "infrastructure/backtrackable_increment.hpp"
 
-template<typename IndexType>
+template<typename IndexType, typename ILog>
 struct sequencer {
-    sequencer(i_log_to_current_trail_frame& t, IndexType initial);
+    sequencer(ILog& t, IndexType initial);
     IndexType next();
 private:
-    tracked<IndexType> index;
+    tracked<IndexType, ILog> index;
 };
 
-template<typename IndexType>
-sequencer<IndexType>::sequencer(i_log_to_current_trail_frame& t, IndexType initial) :
-    index(t, initial) {
-}
+template<typename IndexType, typename ILog>
+sequencer<IndexType, ILog>::sequencer(ILog& t, IndexType initial) : index(t, initial) {}
 
-template<typename IndexType>
-IndexType sequencer<IndexType>::next() {
+template<typename IndexType, typename ILog>
+IndexType sequencer<IndexType, ILog>::next() {
     IndexType result = index.get();
     index.mutate(std::make_unique<backtrackable_increment<IndexType>>());
     return result;
 }
-
 
 #endif

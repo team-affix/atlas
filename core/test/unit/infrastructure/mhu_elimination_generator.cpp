@@ -4,155 +4,83 @@
 
 #include <gtest/gtest.h>
 #include <gmock/gmock.h>
-#include "locator_fixture.hpp"
 #include "infrastructure/mhu_elimination_generator.hpp"
 #include "infrastructure/bind_map.hpp"
 #include "infrastructure/bind_map_factory.hpp"
 #include "infrastructure/globalizer.hpp"
-#include "infrastructure/locator.hpp"
 #include "infrastructure/unifier_factory.hpp"
-#include "interfaces/i_bind_map.hpp"
-#include "interfaces/i_bind_map_factory.hpp"
-#include "interfaces/i_unifier_factory.hpp"
-#include "interfaces/i_make_resolution_lineage.hpp"
-#include "interfaces/i_make_var.hpp"
-#include "interfaces/i_get_goal_candidate_rule_ids.hpp"
+#include "infrastructure/unifier.hpp"
 #include "infrastructure/rule_id_set.hpp"
+#include "infrastructure/ra_rule_id_set.hpp"
 #include "functor_fixture.hpp"
 
+using ::testing::_;
 using ::testing::Return;
 using ::testing::ReturnRef;
 
-namespace {
-
-struct failing_unifier : i_unifier {
-    coroutine<uint32_t, bool> unify(framed_expr, framed_expr) override {
-        co_return false;
-    }
-};
-
-struct failing_unifier_factory : i_unifier_factory {
-    std::unique_ptr<i_unifier> make(i_bind_map&) const override {
-        return std::make_unique<failing_unifier>();
-    }
-};
-
-struct real_unifier_factory : i_unifier_factory {
-    explicit real_unifier_factory(locator& loc) : inner(loc) {}
-    mutable unifier_factory inner;
-    std::unique_ptr<i_unifier> make(i_bind_map& bm) const override {
-        return inner.make(bm);
-    }
-};
-
-struct test_bind_map_factory : i_bind_map_factory {
-    explicit test_bind_map_factory(i_globalizer& g) : g_(g) {}
-    std::unique_ptr<i_bind_map> make() const override {
-        return std::make_unique<bind_map>(g_);
-    }
-    i_globalizer& g_;
-};
-
-struct toggling_unifier_factory : i_unifier_factory {
-    explicit toggling_unifier_factory(locator& loc) : success_factory(loc) {}
-    mutable int calls = 0;
-    real_unifier_factory success_factory;
-    std::unique_ptr<i_unifier> make(i_bind_map& bm) const override {
-        if (calls++ == 0)
-            return std::make_unique<failing_unifier>();
-        return success_factory.make(bm);
-    }
-};
-
-struct test_make_var : i_make_var {
-    std::vector<expr> vars;
-    const expr* make_var(uint32_t idx) override {
-        while (vars.size() <= idx)
-            vars.emplace_back(expr::var{static_cast<uint32_t>(vars.size())});
-        return &vars[idx];
-    }
-};
-
-struct identity_bind_map : i_bind_map {
-    void bind(uint32_t, framed_expr) override {}
-    framed_expr whnf(framed_expr fe) override { return fe; }
-};
-
-} // namespace
-
-struct MockMakeResolutionLineage : public i_make_resolution_lineage {
+struct MockMakeResolutionLineage {
     MOCK_METHOD((const resolution_lineage*), make_resolution_lineage,
-        (const goal_lineage*, rule_id), (override));
+        (const goal_lineage*, rule_id));
 };
 
-struct MockGetGoalCandidateRuleIds : public i_get_goal_candidate_rule_ids {
-    MOCK_METHOD(i_rule_id_set&, get, (const goal_lineage*), (override));
-    MOCK_METHOD(const i_rule_id_set&, get, (const goal_lineage*), (const, override));
+struct MockMakeVar {
+    MOCK_METHOD(const expr*, make_var, (uint32_t));
 };
+
+struct MockGetGoalCandidateRuleIds {
+    MOCK_METHOD(ra_rule_id_set&, get, (const goal_lineage*), (const));
+};
+
+using TestMhu = mhu_elimination_generator<
+    bind_map, bind_map_factory, unifier<bind_map>, unifier_factory<bind_map>,
+    MockMakeResolutionLineage, MockMakeVar, MockGetGoalCandidateRuleIds>;
 
 struct MhuEliminationGeneratorUnitTest : public ::testing::Test {
     test_functors functors;
-    locator loc;
     globalizer g_;
-    identity_bind_map common;
-    test_make_var make_var;
-    test_bind_map_factory bind_map_factory{g_};
-    MockMakeResolutionLineage make_resolution_lineage;
-    MockGetGoalCandidateRuleIds get_goal_candidate_rule_ids;
-    rule_id_set candidates;
+    bind_map common{g_};
+    bind_map_factory bmf{g_};
+    unifier_factory<bind_map> uf{g_};
+    testing::NiceMock<MockMakeResolutionLineage> mrl;
+    testing::NiceMock<MockGetGoalCandidateRuleIds> gcri;
+    testing::NiceMock<MockMakeVar> mv;
+    ra_rule_id_set candidates;
     goal_lineage gl{nullptr, 0};
     resolution_lineage rl{&gl, 0};
-
-    void bind_base_deps() {
-        loc.bind_as<i_globalizer>(g_);
-        loc.bind_as<i_bind_map>(common);
-        loc.bind_as<i_make_var>(make_var);
-        loc.bind_as<i_bind_map_factory>(bind_map_factory);
-        loc.bind_as<i_make_resolution_lineage>(make_resolution_lineage);
-        loc.bind_as<i_get_goal_candidate_rule_ids>(get_goal_candidate_rule_ids);
-    }
+    TestMhu mhu{common, mrl, mv, bmf, uf, gcri};
 
     expr goal{expr::var{0}};
     expr head_f{expr::functor{functors.id("f"), {}}};
     expr head_g{expr::functor{functors.id("g"), {}}};
+
+    std::vector<expr> mv_vars;
+
+    void SetUp() override {
+        ON_CALL(mv, make_var(_))
+            .WillByDefault([this](uint32_t idx) -> const expr* {
+                while (mv_vars.size() <= idx)
+                    mv_vars.emplace_back(expr::var{static_cast<uint32_t>(mv_vars.size())});
+                return &mv_vars[idx];
+            });
+    }
 };
 
 TEST_F(MhuEliminationGeneratorUnitTest, TryAddHeadReturnsFalseWhenUnifyFails) {
-    failing_unifier_factory unifier_factory;
-    bind_base_deps();
-    loc.bind_as<i_unifier_factory>(unifier_factory);
-    mhu_elimination_generator mhu{loc};
-
-    EXPECT_FALSE(mhu.try_add_head(&rl, {&goal, 0}, {&head_f, 0}));
+    EXPECT_FALSE(mhu.try_add_head(&rl, {&head_f, 0}, {&head_g, 0}));
 }
 
 TEST_F(MhuEliminationGeneratorUnitTest, TryAddHeadFalseThenSuccessOnRetry) {
-    toggling_unifier_factory unifier_factory{loc};
-    bind_base_deps();
-    loc.bind_as<i_unifier_factory>(unifier_factory);
-    mhu_elimination_generator mhu{loc};
-
-    EXPECT_FALSE(mhu.try_add_head(&rl, {&goal, 0}, {&head_f, 0}));
+    EXPECT_FALSE(mhu.try_add_head(&rl, {&head_f, 0}, {&head_g, 0}));
     EXPECT_TRUE(mhu.try_add_head(&rl, {&goal, 0}, {&head_f, 0}));
 }
 
 TEST_F(MhuEliminationGeneratorUnitTest, ClearMhuHeadsAllowsFreshTryAdd) {
-    real_unifier_factory unifier_factory{loc};
-    bind_base_deps();
-    loc.bind_as<i_unifier_factory>(unifier_factory);
-    mhu_elimination_generator mhu{loc};
-
     ASSERT_TRUE(mhu.try_add_head(&rl, {&goal, 0}, {&head_f, 0}));
     mhu.clear_mhu_heads();
     EXPECT_TRUE(mhu.try_add_head(&rl, {&goal, 0}, {&head_f, 0}));
 }
 
 TEST_F(MhuEliminationGeneratorUnitTest, DuplicateTryAddHeadThrowsInDebug) {
-    real_unifier_factory unifier_factory{loc};
-    bind_base_deps();
-    loc.bind_as<i_unifier_factory>(unifier_factory);
-    mhu_elimination_generator mhu{loc};
-
     ASSERT_TRUE(mhu.try_add_head(&rl, {&goal, 0}, {&head_f, 0}));
-    EXPECT_THROW(mhu.try_add_head(&rl, {&goal, 0}, {&head_g, 0}), std::logic_error);
+    EXPECT_THROW(mhu.try_add_head(&rl, {&goal, 0}, {&head_f, 0}), std::logic_error);
 }

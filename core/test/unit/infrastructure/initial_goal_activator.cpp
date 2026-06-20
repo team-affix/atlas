@@ -3,57 +3,44 @@
 
 #include <gtest/gtest.h>
 #include <gmock/gmock.h>
-#include "locator_fixture.hpp"
 #include "infrastructure/initial_goal_activator.hpp"
-#include "interfaces/i_get_initial_goal_expr.hpp"
-#include "interfaces/i_make_initial_goal_lineage.hpp"
-#include "interfaces/i_set_goal_expr.hpp"
-#include "interfaces/i_insert_goal_candidates.hpp"
-#include "interfaces/i_insert_active_goal.hpp"
 
 using ::testing::Return;
 
-struct MockGetInitialGoalExpr : public i_get_initial_goal_expr {
-    MOCK_METHOD(const expr*, get, (size_t), (const, override));
+struct MockGetInitialGoalExpr {
+    MOCK_METHOD(const expr*, get, (size_t), (const));
 };
 
-struct MockMakeInitialGoalLineage : public i_make_initial_goal_lineage {
-    MOCK_METHOD(const goal_lineage*, make, (subgoal_id), (override));
+struct MockMakeInitialGoalLineage {
+    MOCK_METHOD(const goal_lineage*, make, (subgoal_id));
 };
 
-struct MockSetGoalExpr : public i_set_goal_expr {
-    MOCK_METHOD(void, set, (const goal_lineage*, framed_expr), (override));
+struct MockSetGoalExpr {
+    MOCK_METHOD(void, set, (const goal_lineage*, framed_expr));
 };
 
-struct MockInsertGoalCandidates : public i_insert_goal_candidates {
-    MOCK_METHOD(void, insert, (const goal_lineage*), (override));
+struct MockInsertGoalCandidates {
+    MOCK_METHOD(void, insert, (const goal_lineage*));
 };
 
-struct MockInsertActiveGoal : public i_insert_active_goal {
-    MOCK_METHOD(void, insert_active_goal, (const goal_lineage*), (override));
+struct MockInsertActiveGoal {
+    MOCK_METHOD(void, insert_active_goal, (const goal_lineage*));
 };
+
+using TestInitialGoalActivator = initial_goal_activator<
+    MockGetInitialGoalExpr, MockMakeInitialGoalLineage,
+    MockSetGoalExpr, MockInsertGoalCandidates, MockInsertActiveGoal>;
 
 struct InitialGoalActivatorTest : public ::testing::Test {
     static constexpr subgoal_id kIdx = 0;
 
-    locator loc;
     MockGetInitialGoalExpr get_initial_goal_expr;
     MockMakeInitialGoalLineage make_initial_goal_lineage;
     MockSetGoalExpr set_goal_expr;
     MockInsertGoalCandidates insert_goal_candidates;
     MockInsertActiveGoal insert_active_goal;
-    initial_goal_activator activator;
-
-    InitialGoalActivatorTest() : activator(init_activator()) {}
-
-    initial_goal_activator init_activator() {
-        loc.bind_as<i_get_initial_goal_expr>(get_initial_goal_expr);
-        loc.bind_as<i_make_initial_goal_lineage>(make_initial_goal_lineage);
-        loc.bind_as<i_set_goal_expr>(set_goal_expr);
-        loc.bind_as<i_insert_goal_candidates>(insert_goal_candidates);
-        loc.bind_as<i_insert_active_goal>(insert_active_goal);
-        return initial_goal_activator{loc};
-    }
+    TestInitialGoalActivator activator{get_initial_goal_expr, make_initial_goal_lineage,
+                                       set_goal_expr, insert_goal_candidates, insert_active_goal};
 
     expr e0{expr::var{0}};
     goal_lineage gl0{nullptr, kIdx};

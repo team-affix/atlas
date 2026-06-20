@@ -1,103 +1,94 @@
-// mcts_sim: wraps set_up_sim/tear_down_sim; owns MCTS tree; terminate score from i_compute_mcts_reward.
+// mcts_sim: wraps set_up_sim/tear_down_sim; owns MCTS tree; terminate score from compute_mcts_reward.
 
 #include <gtest/gtest.h>
 #include <gmock/gmock.h>
 #include <random>
 #include <vector>
-#include "locator_fixture.hpp"
 #include "infrastructure/mcts_sim.hpp"
 #include "infrastructure/set_up_sim.hpp"
 #include "infrastructure/tear_down_sim.hpp"
-#include "interfaces/i_push_trail_frame.hpp"
-#include "interfaces/i_pop_trail_frame.hpp"
-#include "interfaces/i_clear_unit_goals.hpp"
-#include "interfaces/i_clear_recorded_decisions.hpp"
-#include "interfaces/i_clear_recorded_resolutions.hpp"
-#include "interfaces/i_clear_goal_candidate_rule_ids.hpp"
-#include "interfaces/i_clear_goal_exprs.hpp"
-#include "interfaces/i_clear_active_goals.hpp"
-#include "interfaces/i_clear_candidate_frame_offsets.hpp"
-#include "interfaces/i_clear_mhu_heads.hpp"
-#include "interfaces/i_clear_bindings.hpp"
-#include "interfaces/i_trim_unpinned_lineages.hpp"
-#include "interfaces/i_frame_allocator.hpp"
-#include "interfaces/i_clean_up_cdcl.hpp"
-#include "interfaces/i_clear_chosen_goal_candidates.hpp"
-#include "interfaces/i_compute_mcts_reward.hpp"
 #include "value_objects/mcts_choice.hpp"
 
 using ::testing::Return;
 
-struct MockPushTrailFrame : public i_push_trail_frame {
-    MOCK_METHOD(void, push, (), (override));
+struct MockPushTrailFrame {
+    MOCK_METHOD(void, push, ());
 };
 
-struct MockPopTrailFrame : public i_pop_trail_frame {
-    MOCK_METHOD(void, pop, (), (override));
+struct MockPopTrailFrame {
+    MOCK_METHOD(void, pop, ());
 };
 
-struct MockClearUnitGoals : public i_clear_unit_goals {
-    MOCK_METHOD(void, clear, (), (override));
+struct MockClearUnitGoals {
+    MOCK_METHOD(void, clear, ());
 };
 
-struct MockClearRecordedDecisions : public i_clear_recorded_decisions {
-    MOCK_METHOD(void, clear_recorded_decisions, (), (override));
+struct MockClearRecordedDecisions {
+    MOCK_METHOD(void, clear_recorded_decisions, ());
 };
 
-struct MockClearRecordedResolutions : public i_clear_recorded_resolutions {
-    MOCK_METHOD(void, clear_recorded_resolutions, (), (override));
+struct MockClearRecordedResolutions {
+    MOCK_METHOD(void, clear_recorded_resolutions, ());
 };
 
-struct MockClearGoalCandidateRuleIds : public i_clear_goal_candidate_rule_ids {
-    MOCK_METHOD(void, clear_goal_candidate_rule_ids, (), (override));
+struct MockClearGoalCandidateRuleIds {
+    MOCK_METHOD(void, clear_goal_candidate_rule_ids, ());
 };
 
-struct MockClearGoalExprs : public i_clear_goal_exprs {
-    MOCK_METHOD(void, clear_goal_exprs, (), (override));
+struct MockClearGoalExprs {
+    MOCK_METHOD(void, clear_goal_exprs, ());
 };
 
-struct MockClearActiveGoals : public i_clear_active_goals {
-    MOCK_METHOD(void, clear_active_goals, (), (override));
+struct MockClearActiveGoals {
+    MOCK_METHOD(void, clear_active_goals, ());
 };
 
-struct MockClearCandidateFrameOffsets : public i_clear_candidate_frame_offsets {
-    MOCK_METHOD(void, clear_candidate_frame_offsets, (), (override));
+struct MockClearCandidateFrameOffsets {
+    MOCK_METHOD(void, clear_candidate_frame_offsets, ());
 };
 
-struct MockClearMhuHeads : public i_clear_mhu_heads {
-    MOCK_METHOD(void, clear_mhu_heads, (), (override));
+struct MockClearMhuHeads {
+    MOCK_METHOD(void, clear_mhu_heads, ());
 };
 
-struct MockClearBindings : public i_clear_bindings {
-    MOCK_METHOD(void, clear_bindings, (), (override));
+struct MockClearBindings {
+    MOCK_METHOD(void, clear_bindings, ());
 };
 
-struct MockTrimUnpinnedLineages : public i_trim_unpinned_lineages {
-    MOCK_METHOD(void, trim, (), (override));
+struct MockTrimUnpinnedLineages {
+    MOCK_METHOD(void, trim, ());
 };
 
-struct MockComputeMctsReward : public i_compute_mcts_reward {
-    MOCK_METHOD(double, compute_mcts_reward, (), (const, override));
+struct MockComputeMctsReward {
+    MOCK_METHOD(double, compute_mcts_reward, (), (const));
 };
 
-struct MockFrameAllocator : public i_frame_allocator {
-    MOCK_METHOD(uint32_t, bump, (uint32_t), (override));
-    MOCK_METHOD(uint32_t, peek, (), (const, override));
-    MOCK_METHOD(void, reset, (), (override));
+struct MockFrameAllocator {
+    MOCK_METHOD(uint32_t, bump, (uint32_t));
+    MOCK_METHOD(uint32_t, peek, (), (const));
+    MOCK_METHOD(void, reset, ());
 };
 
-struct MockCleanUpCdcl : public i_clean_up_cdcl {
-    MOCK_METHOD(void, cleanup, (), (override));
+struct MockCleanUpCdcl {
+    MOCK_METHOD(void, cleanup, ());
 };
 
-struct MockClearChosenGoalCandidates : public i_clear_chosen_goal_candidates {
-    MOCK_METHOD(void, clear, (), (override));
+struct MockClearChosenGoalCandidates {
+    MOCK_METHOD(void, clear, ());
 };
+
+using TestSetUpSim = set_up_sim<MockPushTrailFrame>;
+using TestTearDownSim = tear_down_sim<
+    MockPopTrailFrame, MockClearUnitGoals, MockClearRecordedDecisions,
+    MockClearRecordedResolutions, MockClearGoalCandidateRuleIds, MockClearGoalExprs,
+    MockClearActiveGoals, MockClearCandidateFrameOffsets, MockClearMhuHeads,
+    MockClearBindings, MockTrimUnpinnedLineages, MockFrameAllocator,
+    MockCleanUpCdcl, MockClearChosenGoalCandidates>;
+using TestMctsSim = mcts_sim<TestSetUpSim, TestTearDownSim, MockComputeMctsReward>;
 
 struct MctsSimTest : public ::testing::Test {
     static constexpr double kExplorationConstant = 1.414;
 
-    locator loc;
     MockPushTrailFrame push_trail_frame;
     MockPopTrailFrame pop_trail_frame;
     testing::NiceMock<MockClearUnitGoals> clear_unit_goals;
@@ -115,47 +106,22 @@ struct MctsSimTest : public ::testing::Test {
     testing::NiceMock<MockClearChosenGoalCandidates> clear_chosen_goal_candidates;
     MockComputeMctsReward compute_mcts_reward;
     std::mt19937 rng{42};
-    set_up_sim inner_set_up;
-    tear_down_sim inner_tear_down;
-    mcts_sim sim;
+
+    TestSetUpSim inner_set_up{push_trail_frame};
+    TestTearDownSim inner_tear_down{
+        pop_trail_frame, clear_unit_goals, clear_recorded_decisions,
+        clear_recorded_resolutions, clear_goal_candidate_rule_ids, clear_goal_exprs,
+        clear_active_goals, clear_candidate_frame_offsets, clear_mhu_heads,
+        clear_bindings, trim_unpinned_lineages, frame_allocator,
+        clean_up_cdcl, clear_chosen_goal_candidates};
+    TestMctsSim sim{inner_set_up, inner_tear_down, compute_mcts_reward,
+                    rng, kExplorationConstant};
 
     goal_lineage gl0{nullptr, 0};
     goal_lineage gl1{nullptr, 1};
 
-    MctsSimTest() : inner_set_up(init_inner_set_up()), inner_tear_down(init_inner_tear_down()), sim(init_sim()) {
+    void SetUp() override {
         ON_CALL(compute_mcts_reward, compute_mcts_reward()).WillByDefault(Return(0.0));
-    }
-
-    void bind_tear_down_deps() {
-        loc.bind_as<i_pop_trail_frame>(pop_trail_frame);
-        loc.bind_as<i_clear_unit_goals>(clear_unit_goals);
-        loc.bind_as<i_clear_recorded_decisions>(clear_recorded_decisions);
-        loc.bind_as<i_clear_recorded_resolutions>(clear_recorded_resolutions);
-        loc.bind_as<i_clear_goal_candidate_rule_ids>(clear_goal_candidate_rule_ids);
-        loc.bind_as<i_clear_goal_exprs>(clear_goal_exprs);
-        loc.bind_as<i_clear_active_goals>(clear_active_goals);
-        loc.bind_as<i_clear_candidate_frame_offsets>(clear_candidate_frame_offsets);
-        loc.bind_as<i_clear_mhu_heads>(clear_mhu_heads);
-        loc.bind_as<i_clear_bindings>(clear_bindings);
-        loc.bind_as<i_trim_unpinned_lineages>(trim_unpinned_lineages);
-        loc.bind_as<i_frame_allocator>(frame_allocator);
-        loc.bind_as<i_clean_up_cdcl>(clean_up_cdcl);
-        loc.bind_as<i_clear_chosen_goal_candidates>(clear_chosen_goal_candidates);
-    }
-
-    set_up_sim init_inner_set_up() {
-        loc.bind_as<i_push_trail_frame>(push_trail_frame);
-        return set_up_sim{loc};
-    }
-
-    tear_down_sim init_inner_tear_down() {
-        bind_tear_down_deps();
-        return tear_down_sim{loc};
-    }
-
-    mcts_sim init_sim() {
-        loc.bind_as<i_compute_mcts_reward>(compute_mcts_reward);
-        return mcts_sim{loc, inner_set_up, inner_tear_down, rng, kExplorationConstant};
     }
 };
 

@@ -4,12 +4,12 @@
 #include <cstdint>
 #include "infrastructure/ridge_manifest.hpp"
 #include "infrastructure/db.hpp"
-#include "infrastructure/solver_driver.hpp"
 #include "infrastructure/initial_goal_exprs.hpp"
 #include "infrastructure/normalizer.hpp"
-#include "interfaces/i_runtime.hpp"
+#include "infrastructure/solver_driver.hpp"
+#include "value_objects/lemma.hpp"
 
-struct ridge_runtime : i_runtime {
+struct ridge_runtime {
     ridge_runtime(
         db& database,
         initial_goal_exprs& goals,
@@ -18,16 +18,16 @@ struct ridge_runtime : i_runtime {
         uint32_t random_seed,
         double exploration_constant);
 
-    bool next() override;
-    bool solved() const override;
-
-    const expr* normalize(framed_expr) override;
-    lemma derive_decision_lemma() const override;
-    lemma derive_resolution_lemma() const override;
+    bool next();
+    bool solved() const;
+    const expr* normalize(framed_expr);
+    lemma derive_decision_lemma() const;
+    lemma derive_resolution_lemma() const;
 
 private:
+    using Normalizer = normalizer<globalizer, expr_pool, bind_map>;
     ridge_manifest manifest_;
-    normalizer normalizer_;
+    Normalizer normalizer_;
     solver_driver driver_;
 };
 

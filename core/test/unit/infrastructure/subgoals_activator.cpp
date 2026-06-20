@@ -2,50 +2,38 @@
 
 #include <gtest/gtest.h>
 #include <gmock/gmock.h>
-#include "locator_fixture.hpp"
 #include "infrastructure/subgoals_activator.hpp"
 #include "infrastructure/rule_id_set.hpp"
-#include "interfaces/i_make_goal_lineage.hpp"
-#include "interfaces/i_goal_activator.hpp"
-#include "interfaces/i_get_rule.hpp"
-#include "interfaces/i_activate_goal_candidates.hpp"
 
 using ::testing::Return;
 
-struct MockMakeGoalLineage : public i_make_goal_lineage {
+struct MockMakeGoalLineage {
     MOCK_METHOD((const goal_lineage*), make_goal_lineage,
-        (const resolution_lineage*, subgoal_id), (override));
+        (const resolution_lineage*, subgoal_id));
 };
 
-struct MockGoalActivator : public i_goal_activator {
-    MOCK_METHOD(void, activate, (const goal_lineage*), (override));
+struct MockGoalActivator {
+    MOCK_METHOD(void, activate, (const goal_lineage*));
 };
 
-struct MockGetRule : public i_get_rule {
-    MOCK_METHOD(const rule*, get, (rule_id), (const, override));
+struct MockGetRule {
+    MOCK_METHOD(const rule*, get, (rule_id), (const));
 };
 
-struct MockActivateGoalCandidates : public i_activate_goal_candidates {
-    MOCK_METHOD(bool, activate_goal_candidates, (const goal_lineage*), (override));
+struct MockActivateGoalCandidates {
+    MOCK_METHOD(bool, activate_goal_candidates, (const goal_lineage*));
 };
+
+using TestSubgoalsActivator = subgoals_activator<
+    MockMakeGoalLineage, MockGoalActivator, MockGetRule, MockActivateGoalCandidates>;
 
 struct SubgoalsActivatorTest : public ::testing::Test {
-    locator loc;
     MockMakeGoalLineage make_goal_lineage;
     MockGoalActivator goal_activator;
     MockGetRule get_rule;
     MockActivateGoalCandidates activate_goal_candidates;
-    subgoals_activator activator;
-
-    SubgoalsActivatorTest() : activator(init_activator()) {}
-
-    subgoals_activator init_activator() {
-        loc.bind_as<i_make_goal_lineage>(make_goal_lineage);
-        loc.bind_as<i_goal_activator>(goal_activator);
-        loc.bind_as<i_get_rule>(get_rule);
-        loc.bind_as<i_activate_goal_candidates>(activate_goal_candidates);
-        return subgoals_activator{loc};
-    }
+    TestSubgoalsActivator activator{make_goal_lineage, goal_activator,
+                                    get_rule, activate_goal_candidates};
 
     static constexpr rule_id kRule = 0;
     static constexpr subgoal_id kBodyIdx = 0;

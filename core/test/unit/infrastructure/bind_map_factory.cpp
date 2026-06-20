@@ -1,4 +1,4 @@
-// bind_map_factory: produces an i_bind_map that supports bind/whnf. The factory is the
+// bind_map_factory: produces a bind_map that supports bind/whnf. The factory is the
 // only production type under test; returned maps must resolve variable bindings.
 
 #include <gtest/gtest.h>
@@ -15,24 +15,20 @@ struct BindMapFactoryTest : public ::testing::Test {
 };
 
 TEST_F(BindMapFactoryTest, MakeReturnsBindMapThatResolvesBindings) {
-    std::unique_ptr<i_bind_map> bm = factory.make();
-    ASSERT_NE(bm, nullptr);
-    bm->bind(0, {&func, 0});
-    EXPECT_EQ(bm->whnf({&var0, 0}).skeleton, &func);
+    bind_map bm = factory.make();
+    bm.bind(0, {&func, 0});
+    EXPECT_EQ(bm.whnf({&var0, 0}).skeleton, &func);
 }
 
 TEST_F(BindMapFactoryTest, MakeReturnsIndependentInstances) {
-    std::unique_ptr<i_bind_map> bm0 = factory.make();
-    std::unique_ptr<i_bind_map> bm1 = factory.make();
-    ASSERT_NE(bm0, nullptr);
-    ASSERT_NE(bm1, nullptr);
-    bm0->bind(0, {&func, 0});
-    EXPECT_EQ(bm0->whnf({&var0, 0}).skeleton, &func);
-    EXPECT_EQ(bm1->whnf({&var0, 0}).skeleton, &var0);
+    bind_map bm0 = factory.make();
+    bind_map bm1 = factory.make();
+    bm0.bind(0, {&func, 0});
+    EXPECT_EQ(bm0.whnf({&var0, 0}).skeleton, &func);
+    EXPECT_EQ(bm1.whnf({&var0, 0}).skeleton, &var0);
 }
 
 TEST_F(BindMapFactoryTest, FreshMapHasEmptyBindings) {
-    std::unique_ptr<i_bind_map> bm = factory.make();
-    ASSERT_NE(bm, nullptr);
-    EXPECT_EQ(bm->whnf({&var0, 0}).skeleton, &var0);
+    bind_map bm = factory.make();
+    EXPECT_EQ(bm.whnf({&var0, 0}).skeleton, &var0);
 }

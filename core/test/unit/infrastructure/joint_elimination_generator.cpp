@@ -1,5 +1,5 @@
 // joint_elimination_generator composes CDCL and MHU elimination streams. These unit
-// tests mock elimination via i_elimination_generator and assert constrain() ordering;
+// tests mock elimination via plain mock types and assert constrain() ordering;
 // the joint stream ends with co_return, not a null pointer yield.
 // Duplicate yields for the same candidate are forwarded; elimination_router deduplicates.
 
@@ -7,21 +7,7 @@
 #include <gmock/gmock.h>
 #include <optional>
 #include <vector>
-#include "locator_fixture.hpp"
 #include "infrastructure/joint_elimination_generator.hpp"
-#include "infrastructure/cdcl_elimination_generator.hpp"
-#include "infrastructure/chosen_goal_candidates.hpp"
-#include "infrastructure/mhu_elimination_generator.hpp"
-#include "infrastructure/trail.hpp"
-#include "infrastructure/bind_map.hpp"
-#include "infrastructure/bind_map_factory.hpp"
-#include "infrastructure/globalizer.hpp"
-#include "infrastructure/unifier_factory.hpp"
-#include "infrastructure/lineage_pool.hpp"
-#include "infrastructure/goal_candidate_rules.hpp"
-#include "infrastructure/ra_rule_id_set_factory.hpp"
-#include "infrastructure/expr_pool.hpp"
-#include "interfaces/i_elimination_generator.hpp"
 #include "infrastructure/coroutine.hpp"
 
 using ::testing::ByMove;
@@ -57,81 +43,23 @@ std::vector<const resolution_lineage*> collect_non_null_elims(
 
 } // namespace
 
-struct MockEliminationGenerator : public i_elimination_generator {
+struct MockCdcl {
     MOCK_METHOD((coroutine<const resolution_lineage*, void>), constrain,
-        (const resolution_lineage*), (override));
+        (const resolution_lineage*));
 };
 
-struct cdcl_shim : cdcl_elimination_generator {
-    cdcl_shim(locator& loc, i_elimination_generator& impl)
-        : cdcl_elimination_generator(loc), impl_(impl) {}
-    coroutine<const resolution_lineage*, void> constrain(
-        const resolution_lineage* rl) override {
-        return impl_.constrain(rl);
-    }
-private:
-    i_elimination_generator& impl_;
+struct MockMhu {
+    MOCK_METHOD((coroutine<const resolution_lineage*, void>), constrain,
+        (const resolution_lineage*));
 };
 
-struct mhu_shim : mhu_elimination_generator {
-    mhu_shim(locator& loc, i_elimination_generator& impl)
-        : mhu_elimination_generator(loc), impl_(impl) {}
-    coroutine<const resolution_lineage*, void> constrain(
-        const resolution_lineage* rl) override {
-        return impl_.constrain(rl);
-    }
-private:
-    i_elimination_generator& impl_;
-};
+using TestJointEliminationGenerator = joint_elimination_generator<MockCdcl, MockMhu>;
 
 struct JointEliminationGeneratorUnitTest : public ::testing::Test {
     resolution_lineage rl{nullptr, 0};
-
-    trail trail_;
-    globalizer globalizer_;
-    bind_map bind_map_{globalizer_};
-    bind_map_factory bind_map_factory_{globalizer_};
-    unifier_factory unifier_factory_{loc};
-    lineage_pool lineage_pool_;
-    ra_rule_id_set_factory ra_rule_id_set_factory_;
-    goal_candidate_rules goal_candidate_rules_;
-    locator loc;
-    MockEliminationGenerator cdcl_mock;
-    MockEliminationGenerator mhu_mock;
-    std::optional<expr_pool> expr_pool_;
-    std::optional<chosen_goal_candidates> chosen_;
-    std::optional<cdcl_shim> cdcl_elims;
-    std::optional<mhu_shim> mhu_elims;
-    std::optional<joint_elimination_generator> joint;
-
-    JointEliminationGeneratorUnitTest()
-        : trail_(),
-          globalizer_(),
-          bind_map_(globalizer_),
-          bind_map_factory_(globalizer_),
-          unifier_factory_(loc),
-          lineage_pool_(),
-          ra_rule_id_set_factory_(),
-          goal_candidate_rules_(ra_rule_id_set_factory_),
-          loc() {
-        loc.bind_as<i_globalizer>(globalizer_);
-        loc.bind_as<i_log_to_current_trail_frame>(trail_);
-        loc.bind_as<i_bind_map>(bind_map_);
-        loc.bind_as<i_bind_map_factory>(bind_map_factory_);
-        loc.bind_as<i_unifier_factory>(unifier_factory_);
-        loc.bind_as<i_make_resolution_lineage>(lineage_pool_);
-        loc.bind_as<i_get_goal_candidate_rule_ids>(goal_candidate_rules_);
-        expr_pool_.emplace();
-        loc.bind_as<i_make_functor, i_make_var, i_import_expr, i_get_expr_count>(*expr_pool_);
-        chosen_.emplace();
-        loc.bind_as<i_try_get_chosen_goal_candidate, i_set_chosen_goal_candidate,
-            i_clear_chosen_goal_candidates>(*chosen_);
-        cdcl_elims.emplace(loc, cdcl_mock);
-        mhu_elims.emplace(loc, mhu_mock);
-        loc.bind_as<cdcl_elimination_generator>(*cdcl_elims);
-        loc.bind_as<mhu_elimination_generator>(*mhu_elims);
-        joint.emplace(loc);
-    }
+    MockCdcl cdcl_mock;
+    MockMhu mhu_mock;
+    TestJointEliminationGenerator joint{cdcl_mock, mhu_mock};
 };
 
 TEST_F(JointEliminationGeneratorUnitTest, ConstrainYieldsCdclThenMhu) {
@@ -140,7 +68,7 @@ TEST_F(JointEliminationGeneratorUnitTest, ConstrainYieldsCdclThenMhu) {
     EXPECT_CALL(mhu_mock, constrain(&rl))
         .WillOnce(Return(ByMove(make_single_elim_sm(&rl))));
 
-    auto sm = joint->constrain(&rl);
+    auto sm = joint.constrain(&rl);
     EXPECT_THAT(collect_non_null_elims(sm), ElementsAre(&rl, &rl));
 }
 
@@ -152,7 +80,7 @@ TEST_F(JointEliminationGeneratorUnitTest, ConstrainRunsCdclBeforeMhu) {
     EXPECT_CALL(mhu_mock, constrain(&rl))
         .WillOnce(Return(ByMove(make_single_elim_sm(&rl))));
 
-    auto sm = joint->constrain(&rl);
+    auto sm = joint.constrain(&rl);
     collect_non_null_elims(sm);
 }
 
@@ -162,7 +90,7 @@ TEST_F(JointEliminationGeneratorUnitTest, ConstrainYieldsOnlyMhuWhenCdclEmpty) {
     EXPECT_CALL(mhu_mock, constrain(&rl))
         .WillOnce(Return(ByMove(make_single_elim_sm(&rl))));
 
-    auto sm = joint->constrain(&rl);
+    auto sm = joint.constrain(&rl);
     EXPECT_THAT(collect_non_null_elims(sm), ElementsAre(&rl));
 }
 
@@ -172,7 +100,7 @@ TEST_F(JointEliminationGeneratorUnitTest, ConstrainYieldsNothingWhenBothStreamsE
     EXPECT_CALL(mhu_mock, constrain(&rl))
         .WillOnce(Return(ByMove(empty_elim_sm())));
 
-    auto sm = joint->constrain(&rl);
+    auto sm = joint.constrain(&rl);
     EXPECT_THAT(collect_non_null_elims(sm), ElementsAre());
     EXPECT_TRUE(sm.done());
 }
@@ -183,7 +111,7 @@ TEST_F(JointEliminationGeneratorUnitTest, ConstrainEndsWithDoneNotNullPointerYie
     EXPECT_CALL(mhu_mock, constrain(&rl))
         .WillOnce(Return(ByMove(make_single_elim_sm(&rl))));
 
-    auto sm = joint->constrain(&rl);
+    auto sm = joint.constrain(&rl);
     EXPECT_THAT(collect_non_null_elims(sm), ElementsAre(&rl, &rl));
     EXPECT_TRUE(sm.done());
 }

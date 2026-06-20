@@ -2,29 +2,21 @@
 
 #include <gtest/gtest.h>
 #include <gmock/gmock.h>
-#include "locator_fixture.hpp"
 #include "infrastructure/horizon_reward.hpp"
-#include "interfaces/i_get_grounded_weight.hpp"
 
 using ::testing::Return;
 
-struct MockGetGroundedWeight : public i_get_grounded_weight {
-    MOCK_METHOD(double, get, (), (const, override));
+struct MockCumulativeGroundedWeight {
+    MOCK_METHOD(double, get, (), (const));
 };
 
+using TestHorizonReward = horizon_reward<MockCumulativeGroundedWeight>;
+
 struct HorizonRewardTest : public ::testing::Test {
-    locator loc;
-    MockGetGroundedWeight grounded_weight;
-    horizon_reward reward;
+    MockCumulativeGroundedWeight grounded_weight;
+    TestHorizonReward reward{grounded_weight};
 
     static constexpr double kCgw = 0.75;
-
-    HorizonRewardTest() : reward(init_reward()) {}
-
-    horizon_reward init_reward() {
-        loc.bind_as<i_get_grounded_weight>(grounded_weight);
-        return horizon_reward{loc};
-    }
 };
 
 TEST_F(HorizonRewardTest, ReturnsGroundedWeight) {

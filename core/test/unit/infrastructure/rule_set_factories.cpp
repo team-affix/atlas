@@ -1,4 +1,4 @@
-// Rule set factories: make() returns the expected concrete type behind i_rule_id_set.
+// Rule set factories: make() returns the expected concrete type by value.
 
 #include <gtest/gtest.h>
 #include "infrastructure/rule_id_set_factory.hpp"
@@ -6,16 +6,14 @@
 #include "infrastructure/rule_id_set.hpp"
 #include "infrastructure/ra_rule_id_set.hpp"
 
-TEST(RuleIdSetFactoryTest, CreateReturnsRuleIdSet) {
+TEST(RuleIdSetFactoryTest, CreateReturnsEmptyRuleIdSet) {
     rule_id_set_factory factory;
-    auto set = factory.make();
-    EXPECT_NE(dynamic_cast<rule_id_set*>(set.get()), nullptr);
-    EXPECT_EQ(dynamic_cast<ra_rule_id_set*>(set.get()), nullptr);
+    rule_id_set set = factory.make();
+    EXPECT_EQ(set.size(), 0u);
 }
 
-TEST(RaRuleIdSetFactoryTest, CreateReturnsRaRuleIdSet) {
+TEST(RaRuleIdSetFactoryTest, CreateReturnsEmptyRaRuleIdSet) {
     ra_rule_id_set_factory factory;
-    auto set = factory.make();
-    EXPECT_NE(dynamic_cast<ra_rule_id_set*>(set.get()), nullptr);
-    EXPECT_EQ(dynamic_cast<rule_id_set*>(set.get()), nullptr);
+    ra_rule_id_set set = factory.make();
+    EXPECT_EQ(set.size(), 0u);
 }

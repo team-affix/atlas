@@ -21,6 +21,9 @@
 #include "infrastructure/var_names.hpp"
 
 struct horizon_command_handler {
+    using PrintBindings = print_bindings<horizon_runtime, expr_printer>;
+    using SolveLoop     = solve_loop<horizon_runtime, expr_printer, PrintBindings, print_progress>;
+
     horizon_command_handler(
         const std::string& file,
         const std::string& goals_str,
@@ -45,9 +48,9 @@ private:
     initial_goal_exprs initial_goals_;
     std::map<std::string, uint32_t> var_name_to_idx_;
     std::optional<horizon_runtime> runtime_;
-    print_bindings print_bindings_;
+    PrintBindings print_bindings_;
     print_progress print_progress_;
-    solve_loop solve_loop_;
+    SolveLoop solve_loop_;
 };
 
 #endif

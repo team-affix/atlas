@@ -15,6 +15,6 @@ struct BindMapFactoryIntegrationTest : public ::testing::Test {
 
 TEST_F(BindMapFactoryIntegrationTest, FactoryBindMapWhnfBindsAndResolves) {
     auto bm = bmf.make();
-    bm->bind(0, {&func, 0});
-    EXPECT_EQ(bm->whnf({&var0, 0}).skeleton, &func);
+    bm.bind(0, {&func, 0});
+    EXPECT_EQ(bm.whnf({&var0, 0}).skeleton, &func);
 }

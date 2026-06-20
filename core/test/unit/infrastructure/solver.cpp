@@ -3,56 +3,51 @@
 
 #include <gtest/gtest.h>
 #include <gmock/gmock.h>
-#include "locator_fixture.hpp"
 #include "infrastructure/solver.hpp"
-#include "interfaces/i_set_up_sim.hpp"
-#include "interfaces/i_tear_down_sim.hpp"
-#include "interfaces/i_run_sim.hpp"
-#include "interfaces/i_learn_avoidance.hpp"
-#include "interfaces/i_elimination_router.hpp"
-#include "interfaces/i_get_decision_count.hpp"
-#include "interfaces/i_derive_decision_lemma.hpp"
-#include "interfaces/i_pin_resolution_lineage.hpp"
+#include "value_objects/elimination_result.hpp"
 #include "value_objects/sim_termination.hpp"
 #include "value_objects/lemma.hpp"
 
 using ::testing::Return;
 using ::testing::_;
 
-struct MockSetUpSim : public i_set_up_sim {
-    MOCK_METHOD(void, set_up, (), (override));
+struct MockSetUpSim {
+    MOCK_METHOD(void, set_up, ());
 };
 
-struct MockTearDownSim : public i_tear_down_sim {
-    MOCK_METHOD(void, tear_down, (), (override));
+struct MockTearDownSim {
+    MOCK_METHOD(void, tear_down, ());
 };
 
-struct MockRunSim : public i_run_sim {
-    MOCK_METHOD(sim_termination, run, (), (override));
+struct MockRunSim {
+    MOCK_METHOD(sim_termination, run, ());
 };
 
-struct MockLearnAvoidance : public i_learn_avoidance {
-    MOCK_METHOD(std::optional<const resolution_lineage*>, learn, (const lemma&), (override));
+struct MockLearnAvoidance {
+    MOCK_METHOD(std::optional<const resolution_lineage*>, learn, (const lemma&));
 };
 
-struct MockEliminationRouter : public i_elimination_router {
-    MOCK_METHOD(elimination_result, route, (const resolution_lineage*), (override));
+struct MockEliminationRouter {
+    MOCK_METHOD(elimination_result, route, (const resolution_lineage*));
 };
 
-struct MockGetDecisionCount : public i_get_decision_count {
-    MOCK_METHOD(size_t, count, (), (const, override));
+struct MockGetDecisionCount {
+    MOCK_METHOD(size_t, count, (), (const));
 };
 
-struct MockDeriveDecisionLemma : public i_derive_decision_lemma {
-    MOCK_METHOD(lemma, derive_decision_lemma, (), (const, override));
+struct MockDeriveDecisionLemma {
+    MOCK_METHOD(lemma, derive_decision_lemma, (), (const));
 };
 
-struct MockPinResolutionLineage : public i_pin_resolution_lineage {
-    MOCK_METHOD(void, pin, (const resolution_lineage*), (override));
+struct MockPinResolutionLineage {
+    MOCK_METHOD(void, pin, (const resolution_lineage*));
 };
+
+using TestSolver = solver<MockSetUpSim, MockTearDownSim, MockRunSim,
+    MockGetDecisionCount, MockDeriveDecisionLemma, MockPinResolutionLineage,
+    MockLearnAvoidance, MockEliminationRouter>;
 
 struct SolverTest : public ::testing::Test {
-    locator loc;
     MockSetUpSim set_up_sim;
     MockTearDownSim tear_down_sim;
     MockRunSim run_sim;
@@ -61,21 +56,8 @@ struct SolverTest : public ::testing::Test {
     MockPinResolutionLineage pin_resolution_lineage;
     MockLearnAvoidance learn_avoidance;
     MockEliminationRouter router;
-    solver s;
-
-    SolverTest() : s(init_solver()) {}
-
-    solver init_solver() {
-        loc.bind_as<i_set_up_sim>(set_up_sim);
-        loc.bind_as<i_tear_down_sim>(tear_down_sim);
-        loc.bind_as<i_run_sim>(run_sim);
-        loc.bind_as<i_get_decision_count>(get_decision_count);
-        loc.bind_as<i_derive_decision_lemma>(derive_decision_lemma);
-        loc.bind_as<i_pin_resolution_lineage>(pin_resolution_lineage);
-        loc.bind_as<i_learn_avoidance>(learn_avoidance);
-        loc.bind_as<i_elimination_router>(router);
-        return solver{loc};
-    }
+    TestSolver s{set_up_sim, tear_down_sim, run_sim, get_decision_count,
+                 derive_decision_lemma, pin_resolution_lineage, learn_avoidance, router};
 };
 
 TEST_F(SolverTest, FirstYieldRunsSetUpThenRunBeforeTearDown) {

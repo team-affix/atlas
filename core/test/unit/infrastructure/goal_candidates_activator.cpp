@@ -2,65 +2,51 @@
 
 #include <gtest/gtest.h>
 #include <gmock/gmock.h>
-#include "locator_fixture.hpp"
 #include "infrastructure/goal_candidates_activator.hpp"
 #include "infrastructure/rule_id_set.hpp"
-#include "interfaces/i_get_goal_db_rule_ids.hpp"
-#include "interfaces/i_make_resolution_lineage.hpp"
-#include "interfaces/i_candidate_activator.hpp"
-#include "interfaces/i_conflict_detector.hpp"
-#include "interfaces/i_detect_unit_goal.hpp"
-#include "interfaces/i_push_unit_goal.hpp"
 
 using ::testing::Return;
 using ::testing::ReturnRef;
 
-struct MockGetGoalDbRuleIds : public i_get_goal_db_rule_ids {
-    MOCK_METHOD(i_rule_id_set&, get, (const goal_lineage*), (override));
+struct MockGetGoalDbRuleIds {
+    MOCK_METHOD(rule_id_set&, get, (const goal_lineage*));
 };
 
-struct MockMakeResolutionLineage : public i_make_resolution_lineage {
+struct MockMakeResolutionLineage {
     MOCK_METHOD((const resolution_lineage*), make_resolution_lineage,
-        (const goal_lineage*, rule_id), (override));
+        (const goal_lineage*, rule_id));
 };
 
-struct MockCandidateActivator : public i_candidate_activator {
-    MOCK_METHOD(void, activate, (const resolution_lineage*), (override));
+struct MockCandidateActivator {
+    MOCK_METHOD(void, activate, (const resolution_lineage*));
 };
 
-struct MockConflictDetector : public i_conflict_detector {
-    MOCK_METHOD(bool, detect, (const goal_lineage*), (const, override));
+struct MockConflictDetector {
+    MOCK_METHOD(bool, detect, (const goal_lineage*), (const));
 };
 
-struct MockUnitGoalDetector : public i_detect_unit_goal {
-    MOCK_METHOD(bool, detect, (const goal_lineage*), (const, override));
+struct MockUnitGoalDetector {
+    MOCK_METHOD(bool, detect, (const goal_lineage*), (const));
 };
 
-struct MockPushUnitGoal : public i_push_unit_goal {
-    MOCK_METHOD(void, push, (const goal_lineage*), (override));
+struct MockPushUnitGoal {
+    MOCK_METHOD(void, push, (const goal_lineage*));
 };
+
+using TestGoalCandidatesActivator = goal_candidates_activator<
+    MockGetGoalDbRuleIds, MockMakeResolutionLineage, MockCandidateActivator,
+    MockConflictDetector, MockUnitGoalDetector, MockPushUnitGoal>;
 
 struct GoalCandidatesActivatorTest : public ::testing::Test {
-    locator loc;
     MockGetGoalDbRuleIds get_goal_db_rule_ids;
     MockMakeResolutionLineage make_resolution_lineage;
     MockCandidateActivator candidate_activator;
     MockConflictDetector conflict_detector;
     MockUnitGoalDetector unit_goal_detector;
     MockPushUnitGoal push_unit_goal;
-    goal_candidates_activator activator;
-
-    GoalCandidatesActivatorTest() : activator(init_activator()) {}
-
-    goal_candidates_activator init_activator() {
-        loc.bind_as<i_get_goal_db_rule_ids>(get_goal_db_rule_ids);
-        loc.bind_as<i_make_resolution_lineage>(make_resolution_lineage);
-        loc.bind_as<i_candidate_activator>(candidate_activator);
-        loc.bind_as<i_conflict_detector>(conflict_detector);
-        loc.bind_as<i_detect_unit_goal>(unit_goal_detector);
-        loc.bind_as<i_push_unit_goal>(push_unit_goal);
-        return goal_candidates_activator{loc};
-    }
+    TestGoalCandidatesActivator activator{get_goal_db_rule_ids, make_resolution_lineage,
+                                          candidate_activator, conflict_detector,
+                                          unit_goal_detector, push_unit_goal};
 
     goal_lineage gl{nullptr, 0};
     rule_id_set db_rules;

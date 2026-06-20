@@ -1,26 +1,21 @@
 // solution_detector reports SAT when no active goals remain. Unit tests mock
-// i_check_active_goals_empty and assert detect() mirrors the empty() predicate.
+// check_active_goals_empty and assert detect() mirrors the empty() predicate.
 
 #include <gtest/gtest.h>
 #include <gmock/gmock.h>
-#include "locator_fixture.hpp"
 #include "infrastructure/solution_detector.hpp"
-#include "interfaces/i_check_active_goals_empty.hpp"
 
 using ::testing::Return;
 
-struct MockCheckActiveGoalsEmpty : public i_check_active_goals_empty {
-    MOCK_METHOD(bool, empty, (), (const, override));
+struct MockCheckActiveGoalsEmpty {
+    MOCK_METHOD(bool, empty, (), (const));
 };
 
-struct SolutionDetectorTest : public ::testing::Test {
-    locator loc;
-    MockCheckActiveGoalsEmpty check_active_goals_empty;
-    solution_detector detector;
+using TestSolutionDetector = solution_detector<MockCheckActiveGoalsEmpty>;
 
-    SolutionDetectorTest()
-        : detector(bind_and_make<solution_detector, i_check_active_goals_empty>(
-              loc, check_active_goals_empty)) {}
+struct SolutionDetectorTest : public ::testing::Test {
+    MockCheckActiveGoalsEmpty check_active_goals_empty;
+    TestSolutionDetector detector{check_active_goals_empty};
 };
 
 TEST_F(SolutionDetectorTest, EmptyActiveGoalsMeansSolution) {

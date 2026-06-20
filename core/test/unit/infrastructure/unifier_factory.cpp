@@ -5,9 +5,7 @@
 #include <gtest/gtest.h>
 #include <gmock/gmock.h>
 #include "infrastructure/globalizer.hpp"
-#include "infrastructure/locator.hpp"
 #include "infrastructure/unifier_factory.hpp"
-#include "interfaces/i_bind_map.hpp"
 #include "functor_fixture.hpp"
 
 using ::testing::Return;
@@ -15,7 +13,15 @@ using ::testing::_;
 
 namespace {
 
-bool run_unify(i_unifier& u, const expr* lhs, const expr* rhs,
+struct MockBindMap {
+    MOCK_METHOD(void, bind, (uint32_t, framed_expr));
+    MOCK_METHOD(framed_expr, whnf, (framed_expr));
+};
+
+using TestUnifierFactory = unifier_factory<MockBindMap>;
+using TestUnifier = unifier<MockBindMap>;
+
+bool run_unify(TestUnifier& u, const expr* lhs, const expr* rhs,
                std::unordered_set<uint32_t>& vars_touched) {
     auto task = u.unify({lhs, 0}, {rhs, 0});
     while (!task.done()) {
@@ -28,16 +34,10 @@ bool run_unify(i_unifier& u, const expr* lhs, const expr* rhs,
 
 } // namespace
 
-struct MockBindMap : public i_bind_map {
-    MOCK_METHOD(void, bind, (uint32_t, framed_expr), (override));
-    MOCK_METHOD(framed_expr, whnf, (framed_expr), (override));
-};
-
 struct UnifierFactoryTest : public ::testing::Test {
     test_functors functors;
     globalizer g;
-    locator loc;
-    unifier_factory factory{[&]() -> locator& { loc.bind_as<i_globalizer>(g); return loc; }()};
+    TestUnifierFactory factory{g};
     MockBindMap bind_map;
     expr var0{expr::var{0}};
     expr var1{expr::var{1}};
@@ -48,17 +48,15 @@ struct UnifierFactoryTest : public ::testing::Test {
 TEST_F(UnifierFactoryTest, MakeProducesUnifierThatUnifiesViaBindMap) {
     EXPECT_CALL(bind_map, whnf).WillRepeatedly([](framed_expr fe) { return fe; });
     EXPECT_CALL(bind_map, bind(1u, framed_expr{&var0, 0})).Times(1);
-    std::unique_ptr<i_unifier> u = factory.make(bind_map);
-    ASSERT_NE(u, nullptr);
+    TestUnifier u = factory.make(&bind_map);
     std::unordered_set<uint32_t> vars_touched;
-    EXPECT_TRUE(run_unify(*u, &var0, &var1, vars_touched));
+    EXPECT_TRUE(run_unify(u, &var0, &var1, vars_touched));
 }
 
 TEST_F(UnifierFactoryTest, MakeProducesUnifierThatReportsUnifyFailure) {
     EXPECT_CALL(bind_map, whnf).WillRepeatedly([](framed_expr fe) { return fe; });
     EXPECT_CALL(bind_map, bind(_, _)).Times(0);
-    std::unique_ptr<i_unifier> u = factory.make(bind_map);
-    ASSERT_NE(u, nullptr);
+    TestUnifier u = factory.make(&bind_map);
     std::unordered_set<uint32_t> vars_touched;
-    EXPECT_FALSE(run_unify(*u, &func_f, &func_g, vars_touched));
+    EXPECT_FALSE(run_unify(u, &func_f, &func_g, vars_touched));
 }

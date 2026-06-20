@@ -4,7 +4,6 @@
 #include <gtest/gtest.h>
 #include <gmock/gmock.h>
 #include <vector>
-#include "locator_fixture.hpp"
 #include "infrastructure/cdcl_elimination_generator.hpp"
 #include "infrastructure/chosen_goal_candidates.hpp"
 #include "infrastructure/coroutine.hpp"
@@ -35,21 +34,12 @@ lemma make_lemma(std::initializer_list<const resolution_lineage*> rs) {
 
 } // namespace
 
+using TestCdcl = cdcl_elimination_generator<chosen_goal_candidates, chosen_goal_candidates>;
+
 struct CdclEliminationGeneratorUnitTest : public ::testing::Test {
 protected:
-    locator loc;
     chosen_goal_candidates chosen;
-    cdcl_elimination_generator cdcl;
-
-    CdclEliminationGeneratorUnitTest()
-        : chosen(),
-          cdcl([&]() {
-              loc.bind_as<i_try_get_chosen_goal_candidate, i_set_chosen_goal_candidate,
-                  i_clear_chosen_goal_candidates>(chosen);
-              return cdcl_elimination_generator{loc};
-          }()) {
-        loc.bind_as<i_learn_avoidance, i_clean_up_cdcl>(cdcl);
-    }
+    TestCdcl cdcl{chosen, chosen};
 
     void end_sim() {
         cdcl.cleanup();

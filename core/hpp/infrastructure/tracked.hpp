@@ -3,32 +3,30 @@
 
 #include <memory>
 #include "infrastructure/backtrackable_mutation.hpp"
-#include "interfaces/i_log_to_current_trail_frame.hpp"
+#include "interfaces/i_backtrackable.hpp"
 
-template<typename T>
+template<typename T, typename ILog>
 struct tracked {
-    virtual ~tracked() = default;
-    tracked(i_log_to_current_trail_frame& t, const T& initial);
-    virtual void mutate(std::unique_ptr<backtrackable_mutation<T>>);
-    virtual const T& get() const;
+    tracked(ILog& t, const T& initial);
+    void mutate(std::unique_ptr<backtrackable_mutation<T>>);
+    const T& get() const;
 private:
-    i_log_to_current_trail_frame& t;
+    ILog& t;
     T value;
 };
 
-template<typename T>
-tracked<T>::tracked(i_log_to_current_trail_frame& t, const T& initial) : t(t), value(initial) {
-}
+template<typename T, typename ILog>
+tracked<T, ILog>::tracked(ILog& t, const T& initial) : t(t), value(initial) {}
 
-template<typename T>
-void tracked<T>::mutate(std::unique_ptr<backtrackable_mutation<T>> m) {
+template<typename T, typename ILog>
+void tracked<T, ILog>::mutate(std::unique_ptr<backtrackable_mutation<T>> m) {
     m->capture(value);
     m->invoke();
     t.log(std::move(m));
 }
 
-template<typename T>
-const T& tracked<T>::get() const {
+template<typename T, typename ILog>
+const T& tracked<T, ILog>::get() const {
     return value;
 }
 
