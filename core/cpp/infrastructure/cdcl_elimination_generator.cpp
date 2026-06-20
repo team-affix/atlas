@@ -33,10 +33,12 @@ coroutine<const resolution_lineage*, void> cdcl_elimination_generator::constrain
     if (it == watched_goals_.end())
         co_return;
 
-    auto node = watched_goals_.extract(it);
-    for (const avoidance_id id : node.mapped())
+    for (auto i = it->second.begin(); i != it->second.end(); ) {
+        const avoidance_id id = *i;
+        it->second.erase(i++);
         if (auto forced = visit_avoidance(id, rl))
             co_yield *forced;
+    }
 }
 
 size_t cdcl_elimination_generator::scan(const avoidance& av) const {
