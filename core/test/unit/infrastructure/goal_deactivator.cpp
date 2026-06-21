@@ -17,13 +17,13 @@ struct MockEraseActiveGoal {
     MOCK_METHOD(void, erase_active_goal, (const goal_lineage*));
 };
 
-using TestGoalDeactivator = goal_deactivator<MockUnsetGoalExpr, MockEraseGoalCandidates, MockEraseActiveGoal>;
+using test_goal_deactivator_t = goal_deactivator<MockUnsetGoalExpr, MockEraseGoalCandidates, MockEraseActiveGoal>;
 
 struct GoalDeactivatorTest : public ::testing::Test {
     MockUnsetGoalExpr unset_goal_expr;
     MockEraseGoalCandidates erase_goal_candidates;
     MockEraseActiveGoal erase_active_goal;
-    TestGoalDeactivator deactivator{unset_goal_expr, erase_goal_candidates, erase_active_goal};
+    test_goal_deactivator_t deactivator{unset_goal_expr, erase_goal_candidates, erase_active_goal};
 
     goal_lineage gl{nullptr, 0};
 };

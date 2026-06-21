@@ -10,11 +10,11 @@ struct MockCumulativeGroundedWeight {
     MOCK_METHOD(double, get, (), (const));
 };
 
-using TestHorizonReward = horizon_reward<MockCumulativeGroundedWeight>;
+using test_horizon_reward_t = horizon_reward<MockCumulativeGroundedWeight>;
 
 struct HorizonRewardTest : public ::testing::Test {
     MockCumulativeGroundedWeight grounded_weight;
-    TestHorizonReward reward{grounded_weight};
+    test_horizon_reward_t reward{grounded_weight};
 
     static constexpr double kCgw = 0.75;
 };

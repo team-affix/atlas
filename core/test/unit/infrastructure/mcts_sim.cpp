@@ -77,14 +77,14 @@ struct MockClearChosenGoalCandidates {
     MOCK_METHOD(void, clear, ());
 };
 
-using TestSetUpSim = set_up_sim<MockPushTrailFrame>;
-using TestTearDownSim = tear_down_sim<
+using test_set_up_sim_t = set_up_sim<MockPushTrailFrame>;
+using test_tear_down_sim_t = tear_down_sim<
     MockPopTrailFrame, MockClearUnitGoals, MockClearRecordedDecisions,
     MockClearRecordedResolutions, MockClearGoalCandidateRuleIds, MockClearGoalExprs,
     MockClearActiveGoals, MockClearCandidateFrameOffsets, MockClearMhuHeads,
     MockClearBindings, MockTrimUnpinnedLineages, MockFrameAllocator,
     MockCleanUpCdcl, MockClearChosenGoalCandidates>;
-using TestMctsSim = mcts_sim<TestSetUpSim, TestTearDownSim, MockComputeMctsReward>;
+using test_mcts_sim_t = mcts_sim<test_set_up_sim_t, test_tear_down_sim_t, MockComputeMctsReward>;
 
 struct MctsSimTest : public ::testing::Test {
     static constexpr double kExplorationConstant = 1.414;
@@ -107,14 +107,14 @@ struct MctsSimTest : public ::testing::Test {
     MockComputeMctsReward compute_mcts_reward;
     std::mt19937 rng{42};
 
-    TestSetUpSim inner_set_up{push_trail_frame};
-    TestTearDownSim inner_tear_down{
+    test_set_up_sim_t inner_set_up{push_trail_frame};
+    test_tear_down_sim_t inner_tear_down{
         pop_trail_frame, clear_unit_goals, clear_recorded_decisions,
         clear_recorded_resolutions, clear_goal_candidate_rule_ids, clear_goal_exprs,
         clear_active_goals, clear_candidate_frame_offsets, clear_mhu_heads,
         clear_bindings, trim_unpinned_lineages, frame_allocator,
         clean_up_cdcl, clear_chosen_goal_candidates};
-    TestMctsSim sim{inner_set_up, inner_tear_down, compute_mcts_reward,
+    test_mcts_sim_t sim{inner_set_up, inner_tear_down, compute_mcts_reward,
                     rng, kExplorationConstant};
 
     goal_lineage gl0{nullptr, 0};

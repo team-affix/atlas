@@ -57,54 +57,54 @@
 #include "infrastructure/unifier_factory.hpp"
 
 struct ridge_manifest {
-    using UnifierFactory = unifier_factory<bind_map>;
-    using Cdcl  = cdcl_elimination_generator<chosen_goal_candidates>;
-    using Mhu   = mhu_elimination_generator<
-                    bind_map, bind_map_factory, unifier<bind_map>, UnifierFactory,
+    using unifier_factory_t = unifier_factory<bind_map>;
+    using cdcl_t  = cdcl_elimination_generator<chosen_goal_candidates>;
+    using mhu_t   = mhu_elimination_generator<
+                    bind_map, bind_map_factory, unifier<bind_map>, unifier_factory_t,
                     lineage_pool, expr_pool, goal_candidate_rules>;
-    using Joint = joint_elimination_generator<Cdcl, Mhu>;
+    using joint_t = joint_elimination_generator<cdcl_t, mhu_t>;
 
-    using GetResolutionRule         = get_resolution_rule<db>;
-    using ConflictDetector          = conflict_detector<goal_candidate_rules>;
-    using UnitGoalDetector          = unit_goal_detector<goal_candidate_rules>;
-    using SolutionDetector          = solution_detector<srt_active_goals>;
-    using GoalActivator             = goal_activator<goal_exprs, goal_candidate_rules,
-                                        srt_active_goals, candidate_frame_offsets, GetResolutionRule>;
-    using SrtGoalDeactivator        = srt_goal_deactivator<goal_exprs, goal_candidate_rules>;
-    using CandidateDeactivator      = candidate_deactivator<candidate_frame_offsets, goal_candidate_rules>;
-    using CandidateActivator        = candidate_activator<frame_bump_allocator, candidate_frame_offsets,
-                                        Mhu, elimination_backlog, goal_exprs, db, goal_candidate_rules>;
-    using EliminationRouter         = elimination_router<goal_candidate_rules, srt_active_goals,
-                                        elimination_backlog, CandidateDeactivator>;
-    using GetUnitResolution         = get_unit_resolution<goal_candidate_rules, lineage_pool>;
-    using MakeInitialGoalLineage    = make_initial_goal_lineage<lineage_pool>;
-    using InitialGoalActivator      = initial_goal_activator<initial_goal_exprs,
-                                        MakeInitialGoalLineage, goal_exprs, goal_candidate_rules, srt_active_goals>;
-    using GoalCandidatesDeactivator = goal_candidates_deactivator<goal_candidate_rules,
-                                        lineage_pool, CandidateDeactivator>;
-    using GoalCandidatesActivator   = goal_candidates_activator<db, lineage_pool, CandidateActivator,
-                                        ConflictDetector, UnitGoalDetector, unit_goals>;
-    using SubgoalsActivator         = subgoals_activator<lineage_pool, GoalActivator,
-                                        db, GoalCandidatesActivator>;
-    using SrtSubgoalsActivator      = srt_subgoals_activator<srt_active_goals, SubgoalsActivator>;
-    using InitialGoalsActivator     = initial_goals_activator<initial_goal_exprs,
-                                        InitialGoalActivator, MakeInitialGoalLineage, GoalCandidatesActivator>;
-    using SrtInitialGoalsActivator  = srt_initial_goals_activator<srt_active_goals, InitialGoalsActivator>;
-    using Resolver                  = resolver<SrtGoalDeactivator, SrtSubgoalsActivator, GoalCandidatesDeactivator, chosen_goal_candidates>;
-    using SetUpSim      = set_up_sim<trail>;
-    using TearDown      = tear_down_sim<trail, unit_goals, decision_memory, resolution_memory,
+    using get_resolution_rule_t         = get_resolution_rule<db>;
+    using conflict_detector_t          = conflict_detector<goal_candidate_rules>;
+    using unit_goal_detector_t          = unit_goal_detector<goal_candidate_rules>;
+    using solution_detector_t          = solution_detector<srt_active_goals>;
+    using goal_activator_t             = goal_activator<goal_exprs, goal_candidate_rules,
+                                        srt_active_goals, candidate_frame_offsets, get_resolution_rule_t>;
+    using srt_goal_deactivator_t        = srt_goal_deactivator<goal_exprs, goal_candidate_rules>;
+    using candidate_deactivator_t      = candidate_deactivator<candidate_frame_offsets, goal_candidate_rules>;
+    using candidate_activator_t        = candidate_activator<frame_bump_allocator, candidate_frame_offsets,
+                                        mhu_t, elimination_backlog, goal_exprs, db, goal_candidate_rules>;
+    using elimination_router_t         = elimination_router<goal_candidate_rules, srt_active_goals,
+                                        elimination_backlog, candidate_deactivator_t>;
+    using get_unit_resolution_t         = get_unit_resolution<goal_candidate_rules, lineage_pool>;
+    using make_initial_goal_lineage_t    = make_initial_goal_lineage<lineage_pool>;
+    using initial_goal_activator_t      = initial_goal_activator<initial_goal_exprs,
+                                        make_initial_goal_lineage_t, goal_exprs, goal_candidate_rules, srt_active_goals>;
+    using goal_candidates_deactivator_t = goal_candidates_deactivator<goal_candidate_rules,
+                                        lineage_pool, candidate_deactivator_t>;
+    using goal_candidates_activator_t   = goal_candidates_activator<db, lineage_pool, candidate_activator_t,
+                                        conflict_detector_t, unit_goal_detector_t, unit_goals>;
+    using subgoals_activator_t         = subgoals_activator<lineage_pool, goal_activator_t,
+                                        db, goal_candidates_activator_t>;
+    using srt_subgoals_activator_t      = srt_subgoals_activator<srt_active_goals, subgoals_activator_t>;
+    using initial_goals_activator_t     = initial_goals_activator<initial_goal_exprs,
+                                        initial_goal_activator_t, make_initial_goal_lineage_t, goal_candidates_activator_t>;
+    using srt_initial_goals_activator_t  = srt_initial_goals_activator<srt_active_goals, initial_goals_activator_t>;
+    using resolver_t                  = resolver<srt_goal_deactivator_t, srt_subgoals_activator_t, goal_candidates_deactivator_t, chosen_goal_candidates>;
+    using set_up_sim_t      = set_up_sim<trail>;
+    using tear_down_sim_t      = tear_down_sim<trail, unit_goals, decision_memory, resolution_memory,
                             goal_candidate_rules, goal_exprs, srt_active_goals, candidate_frame_offsets,
-                            Mhu, bind_map, lineage_pool, frame_bump_allocator, Cdcl, chosen_goal_candidates>;
-    using RidgeReward   = ridge_reward<decision_memory>;
-    using MctsSimType   = mcts_sim<SetUpSim, TearDown, RidgeReward>;
-    using MctsDecisionGenerator = mcts_decision_generator<lineage_pool, srt_active_goals,
-                                    MctsSimType, goal_candidate_rules>;
-    using RunSim        = run_sim<SrtInitialGoalsActivator, SolutionDetector, ConflictDetector,
-                            UnitGoalDetector, unit_goals, unit_goals, MctsDecisionGenerator,
-                            Joint, EliminationRouter, Resolver, GetUnitResolution,
+                            mhu_t, bind_map, lineage_pool, frame_bump_allocator, cdcl_t, chosen_goal_candidates>;
+    using ridge_reward_t   = ridge_reward<decision_memory>;
+    using mcts_sim_t   = mcts_sim<set_up_sim_t, tear_down_sim_t, ridge_reward_t>;
+    using mcts_decision_generator_t = mcts_decision_generator<lineage_pool, srt_active_goals,
+                                    mcts_sim_t, goal_candidate_rules>;
+    using run_sim_t        = run_sim<srt_initial_goals_activator_t, solution_detector_t, conflict_detector_t,
+                            unit_goal_detector_t, unit_goals, unit_goals, mcts_decision_generator_t,
+                            joint_t, elimination_router_t, resolver_t, get_unit_resolution_t,
                             decision_memory, resolution_memory>;
-    using Solver        = solver<MctsSimType, MctsSimType, RunSim, decision_memory, decision_memory,
-                            lineage_pool, Cdcl, EliminationRouter>;
+    using solver_t        = solver<mcts_sim_t, mcts_sim_t, run_sim_t, decision_memory, decision_memory,
+                            lineage_pool, cdcl_t, elimination_router_t>;
 
     ridge_manifest(
         db& database,
@@ -118,7 +118,7 @@ struct ridge_manifest {
     trail                   trail_;
     bind_map                bind_map_;
     bind_map_factory        bind_map_factory_;
-    UnifierFactory          unifier_factory_;
+    unifier_factory_t          unifier_factory_;
     lineage_pool            lineage_pool_;
     rule_id_set_factory     rule_id_set_factory_;
     ra_rule_id_set_factory  ra_rule_id_set_factory_;
@@ -133,36 +133,36 @@ struct ridge_manifest {
     expr_pool               expr_pool_;
     frame_bump_allocator    frame_allocator_;
     elimination_backlog     elimination_backlog_;
-    Cdcl                    cdcl_;
-    Mhu                     mhu_;
-    Joint                   joint_;
-    GetResolutionRule           get_resolution_rule_;
-    ConflictDetector            conflict_detector_;
-    UnitGoalDetector            unit_goal_detector_;
-    SolutionDetector            solution_detector_;
-    GoalActivator               goal_activator_;
-    SrtGoalDeactivator          srt_goal_deactivator_;
-    CandidateActivator          candidate_activator_;
-    CandidateDeactivator        candidate_deactivator_;
-    EliminationRouter           elimination_router_;
-    GetUnitResolution           get_unit_resolution_;
-    MakeInitialGoalLineage      make_initial_goal_lineage_;
-    InitialGoalActivator        initial_goal_activator_;
-    GoalCandidatesDeactivator   goal_candidates_deactivator_;
-    GoalCandidatesActivator     goal_candidates_activator_;
-    SubgoalsActivator           subgoals_activator_;
-    SrtSubgoalsActivator        srt_subgoals_activator_;
-    InitialGoalsActivator       initial_goals_activator_;
-    SrtInitialGoalsActivator    srt_initial_goals_activator_;
-    Resolver                    resolver_;
-    SetUpSim                    set_up_sim_;
-    TearDown                    tear_down_sim_;
-    RidgeReward                 ridge_reward_;
+    cdcl_t                    cdcl_;
+    mhu_t                     mhu_;
+    joint_t                   joint_;
+    get_resolution_rule_t           get_resolution_rule_;
+    conflict_detector_t            conflict_detector_;
+    unit_goal_detector_t            unit_goal_detector_;
+    solution_detector_t            solution_detector_;
+    goal_activator_t               goal_activator_;
+    srt_goal_deactivator_t          srt_goal_deactivator_;
+    candidate_activator_t          candidate_activator_;
+    candidate_deactivator_t        candidate_deactivator_;
+    elimination_router_t           elimination_router_;
+    get_unit_resolution_t           get_unit_resolution_;
+    make_initial_goal_lineage_t      make_initial_goal_lineage_;
+    initial_goal_activator_t        initial_goal_activator_;
+    goal_candidates_deactivator_t   goal_candidates_deactivator_;
+    goal_candidates_activator_t     goal_candidates_activator_;
+    subgoals_activator_t           subgoals_activator_;
+    srt_subgoals_activator_t        srt_subgoals_activator_;
+    initial_goals_activator_t       initial_goals_activator_;
+    srt_initial_goals_activator_t    srt_initial_goals_activator_;
+    resolver_t                    resolver_;
+    set_up_sim_t                    set_up_sim_;
+    tear_down_sim_t                    tear_down_sim_;
+    ridge_reward_t                 ridge_reward_;
     std::mt19937                rng_;
-    MctsSimType                 mcts_sim_;
-    MctsDecisionGenerator       mcts_decision_generator_;
-    RunSim                      run_sim_;
-    Solver                      solver_;
+    mcts_sim_t                 mcts_sim_;
+    mcts_decision_generator_t       mcts_decision_generator_;
+    run_sim_t                      run_sim_;
+    solver_t                      solver_;
 };
 
 #endif

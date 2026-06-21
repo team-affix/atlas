@@ -79,7 +79,7 @@ struct MockGetGoalCandidateRuleIds {
     MOCK_METHOD(ra_rule_id_set&, get, (const goal_lineage*));
 };
 
-using TestMctsDecisionGenerator = mcts_decision_generator<
+using test_mcts_decision_generator_t = mcts_decision_generator<
     MockMakeResolutionLineage, srt_active_goals,
     ScriptingMctsChoose, MockGetGoalCandidateRuleIds>;
 
@@ -88,7 +88,7 @@ struct MctsDecisionGeneratorTest : public ::testing::Test {
     ScriptingMctsChoose mcts_choose;
     MockMakeResolutionLineage make_resolution;
     MockGetGoalCandidateRuleIds get_goal_candidate_rule_ids;
-    TestMctsDecisionGenerator generator{make_resolution, active_goals,
+    test_mcts_decision_generator_t generator{make_resolution, active_goals,
                                         mcts_choose, get_goal_candidate_rule_ids};
 
     std::set<resolution_lineage> resolutions;

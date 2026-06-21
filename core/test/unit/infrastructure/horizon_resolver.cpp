@@ -24,7 +24,7 @@ struct MockCumulativeGroundedWeight {
     MOCK_METHOD(void, accumulate, (double));
 };
 
-using TestHorizonResolver = horizon_resolver<MockResolver, MockGetRule, MockGoalWeights, MockCumulativeGroundedWeight>;
+using test_horizon_resolver_t = horizon_resolver<MockResolver, MockGetRule, MockGoalWeights, MockCumulativeGroundedWeight>;
 
 struct HorizonResolverTest : public ::testing::Test {
     MockResolver mock_resolver;
@@ -41,7 +41,7 @@ struct HorizonResolverTest : public ::testing::Test {
 
     static constexpr double kGoalWeight = 0.25;
 
-    TestHorizonResolver resolver_sut{mock_resolver, get_rule, goal_weights, cumulative_grounded_weight};
+    test_horizon_resolver_t resolver_sut{mock_resolver, get_rule, goal_weights, cumulative_grounded_weight};
 };
 
 TEST_F(HorizonResolverTest, FactResolutionAccumulatesWeightThenDelegates) {

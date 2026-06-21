@@ -13,13 +13,13 @@ struct MockGetGoalCandidateRuleIds {
     ra_rule_id_set& get(const goal_lineage* gl) { return get_mutable(gl); }
 };
 
-using TestUnitGoalDetector = unit_goal_detector<MockGetGoalCandidateRuleIds>;
+using test_unit_goal_detector_t = unit_goal_detector<MockGetGoalCandidateRuleIds>;
 
 struct UnitGoalDetectorTest : public ::testing::Test {
     goal_lineage gl{nullptr, 0};
     ra_rule_id_set rules;
     MockGetGoalCandidateRuleIds get_goal_candidate_rule_ids;
-    TestUnitGoalDetector detector{get_goal_candidate_rule_ids};
+    test_unit_goal_detector_t detector{get_goal_candidate_rule_ids};
 };
 
 TEST_F(UnitGoalDetectorTest, NoCandidatesIsNotUnit) {

@@ -27,7 +27,7 @@ struct MockInsertActiveGoal {
     MOCK_METHOD(void, insert_active_goal, (const goal_lineage*));
 };
 
-using TestInitialGoalActivator = initial_goal_activator<
+using test_initial_goal_activator_t = initial_goal_activator<
     MockGetInitialGoalExpr, MockMakeInitialGoalLineage,
     MockSetGoalExpr, MockInsertGoalCandidates, MockInsertActiveGoal>;
 
@@ -39,7 +39,7 @@ struct InitialGoalActivatorTest : public ::testing::Test {
     MockSetGoalExpr set_goal_expr;
     MockInsertGoalCandidates insert_goal_candidates;
     MockInsertActiveGoal insert_active_goal;
-    TestInitialGoalActivator activator{get_initial_goal_expr, make_initial_goal_lineage,
+    test_initial_goal_activator_t activator{get_initial_goal_expr, make_initial_goal_lineage,
                                        set_goal_expr, insert_goal_candidates, insert_active_goal};
 
     expr e0{expr::var{0}};

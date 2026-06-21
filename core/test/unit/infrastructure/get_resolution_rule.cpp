@@ -8,13 +8,13 @@ struct MockGetRule {
     MOCK_METHOD(const rule*, get, (rule_id), (const));
 };
 
-using TestGetResolutionRule = get_resolution_rule<MockGetRule>;
+using test_get_resolution_rule_t = get_resolution_rule<MockGetRule>;
 
 struct GetResolutionRuleTest : public ::testing::Test {
     static constexpr rule_id kRule = 2;
 
     MockGetRule get_rule;
-    TestGetResolutionRule lookup{get_rule};
+    test_get_resolution_rule_t lookup{get_rule};
 
     goal_lineage parent_gl{nullptr, 0};
     resolution_lineage rl{&parent_gl, kRule};

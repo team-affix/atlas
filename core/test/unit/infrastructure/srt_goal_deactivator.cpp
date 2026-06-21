@@ -13,12 +13,12 @@ struct MockEraseGoalCandidates {
     MOCK_METHOD(void, erase, (const goal_lineage*));
 };
 
-using TestSrtGoalDeactivator = srt_goal_deactivator<MockUnsetGoalExpr, MockEraseGoalCandidates>;
+using test_srt_goal_deactivator_t = srt_goal_deactivator<MockUnsetGoalExpr, MockEraseGoalCandidates>;
 
 struct SrtGoalDeactivatorTest : public ::testing::Test {
     MockUnsetGoalExpr unset_goal_expr;
     MockEraseGoalCandidates erase_goal_candidates;
-    TestSrtGoalDeactivator deactivator{unset_goal_expr, erase_goal_candidates};
+    test_srt_goal_deactivator_t deactivator{unset_goal_expr, erase_goal_candidates};
 
     goal_lineage gl{nullptr, 0};
 };

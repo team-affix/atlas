@@ -21,14 +21,14 @@ struct MockCandidateDeactivator {
     MOCK_METHOD(void, deactivate, (const resolution_lineage*));
 };
 
-using TestGoalCandidatesDeactivator = goal_candidates_deactivator<
+using test_goal_candidates_deactivator_t = goal_candidates_deactivator<
     MockGetGoalCandidateRuleIds, MockMakeResolutionLineage, MockCandidateDeactivator>;
 
 struct GoalCandidatesDeactivatorTest : public ::testing::Test {
     MockGetGoalCandidateRuleIds get_goal_candidate_rule_ids;
     MockMakeResolutionLineage make_resolution_lineage;
     MockCandidateDeactivator candidate_deactivator;
-    TestGoalCandidatesDeactivator deactivator{get_goal_candidate_rule_ids,
+    test_goal_candidates_deactivator_t deactivator{get_goal_candidate_rule_ids,
                                               make_resolution_lineage, candidate_deactivator};
 
     goal_lineage gl{nullptr, 0};

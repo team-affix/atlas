@@ -24,9 +24,9 @@
 #include "infrastructure/coroutine.hpp"
 #include "functor_fixture.hpp"
 
-using TestUnifierFactory = unifier_factory<bind_map>;
-using TestMhu = mhu_elimination_generator<
-    bind_map, bind_map_factory, unifier<bind_map>, TestUnifierFactory,
+using test_unifier_factory_t = unifier_factory<bind_map>;
+using test_mhu_t = mhu_elimination_generator<
+    bind_map, bind_map_factory, unifier<bind_map>, test_unifier_factory_t,
     lineage_pool, expr_pool, goal_candidate_rules>;
 
 using ::testing::ElementsAre;
@@ -73,11 +73,11 @@ struct MhuEliminationGeneratorIntegrationTest : public ::testing::Test {
     bind_map common{g_};
     lineage_pool lp;
     bind_map_factory bmf{g_};
-    TestUnifierFactory uf{g_};
+    test_unifier_factory_t uf{g_};
     ra_rule_id_set_factory ra_rule_id_set_factory_;
     goal_candidate_rules ggcr{ra_rule_id_set_factory_};
     std::optional<expr_pool> pool;
-    std::optional<TestMhu> mhu;
+    std::optional<test_mhu_t> mhu;
 
     MhuEliminationGeneratorIntegrationTest() {
         pool.emplace();

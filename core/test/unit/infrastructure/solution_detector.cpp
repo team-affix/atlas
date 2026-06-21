@@ -11,11 +11,11 @@ struct MockCheckActiveGoalsEmpty {
     MOCK_METHOD(bool, empty, (), (const));
 };
 
-using TestSolutionDetector = solution_detector<MockCheckActiveGoalsEmpty>;
+using test_solution_detector_t = solution_detector<MockCheckActiveGoalsEmpty>;
 
 struct SolutionDetectorTest : public ::testing::Test {
     MockCheckActiveGoalsEmpty check_active_goals_empty;
-    TestSolutionDetector detector{check_active_goals_empty};
+    test_solution_detector_t detector{check_active_goals_empty};
 };
 
 TEST_F(SolutionDetectorTest, EmptyActiveGoalsMeansSolution) {

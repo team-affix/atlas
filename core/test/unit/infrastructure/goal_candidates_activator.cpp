@@ -33,7 +33,7 @@ struct MockPushUnitGoal {
     MOCK_METHOD(void, push, (const goal_lineage*));
 };
 
-using TestGoalCandidatesActivator = goal_candidates_activator<
+using test_goal_candidates_activator_t = goal_candidates_activator<
     MockGetGoalDbRuleIds, MockMakeResolutionLineage, MockCandidateActivator,
     MockConflictDetector, MockUnitGoalDetector, MockPushUnitGoal>;
 
@@ -44,7 +44,7 @@ struct GoalCandidatesActivatorTest : public ::testing::Test {
     MockConflictDetector conflict_detector;
     MockUnitGoalDetector unit_goal_detector;
     MockPushUnitGoal push_unit_goal;
-    TestGoalCandidatesActivator activator{get_goal_db_rule_ids, make_resolution_lineage,
+    test_goal_candidates_activator_t activator{get_goal_db_rule_ids, make_resolution_lineage,
                                           candidate_activator, conflict_detector,
                                           unit_goal_detector, push_unit_goal};
 

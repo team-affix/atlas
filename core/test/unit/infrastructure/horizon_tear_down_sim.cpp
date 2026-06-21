@@ -18,13 +18,13 @@ struct MockCumulativeGroundedWeight {
     MOCK_METHOD(void, clear, ());
 };
 
-using TestHorizonTearDownSim = horizon_tear_down_sim<MockTearDownSim, MockGoalWeights, MockCumulativeGroundedWeight>;
+using test_horizon_tear_down_sim_t = horizon_tear_down_sim<MockTearDownSim, MockGoalWeights, MockCumulativeGroundedWeight>;
 
 struct HorizonTearDownSimTest : public ::testing::Test {
     MockGoalWeights goal_weights;
     MockCumulativeGroundedWeight cumulative_grounded_weight;
     MockTearDownSim mock_tear_down;
-    TestHorizonTearDownSim tear_down{mock_tear_down, goal_weights, cumulative_grounded_weight};
+    test_horizon_tear_down_sim_t tear_down{mock_tear_down, goal_weights, cumulative_grounded_weight};
 };
 
 TEST_F(HorizonTearDownSimTest, ClearsWeightsAndCgwBeforeBaseTearDown) {

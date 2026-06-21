@@ -53,13 +53,13 @@ struct MockMhu {
         (const resolution_lineage*));
 };
 
-using TestJointEliminationGenerator = joint_elimination_generator<MockCdcl, MockMhu>;
+using test_joint_elimination_generator_t = joint_elimination_generator<MockCdcl, MockMhu>;
 
 struct JointEliminationGeneratorUnitTest : public ::testing::Test {
     resolution_lineage rl{nullptr, 0};
     MockCdcl cdcl_mock;
     MockMhu mhu_mock;
-    TestJointEliminationGenerator joint{cdcl_mock, mhu_mock};
+    test_joint_elimination_generator_t joint{cdcl_mock, mhu_mock};
 };
 
 TEST_F(JointEliminationGeneratorUnitTest, ConstrainYieldsCdclThenMhu) {

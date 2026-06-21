@@ -9,7 +9,7 @@
 #include "infrastructure/trail.hpp"
 #include "infrastructure/coroutine.hpp"
 
-using TestCdcl = cdcl_elimination_generator<chosen_goal_candidates>;
+using test_cdcl_t = cdcl_elimination_generator<chosen_goal_candidates>;
 
 using ::testing::ElementsAre;
 using ::testing::IsEmpty;
@@ -41,7 +41,7 @@ struct CdclEliminationGeneratorIntegrationTest : public ::testing::Test {
 protected:
     trail t;
     chosen_goal_candidates chosen;
-    TestCdcl cdcl{chosen};
+    test_cdcl_t cdcl{chosen};
 
     void end_sim() {
         cdcl.cleanup();

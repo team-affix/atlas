@@ -8,11 +8,11 @@ struct MockGetDecisionCount {
     MOCK_METHOD(size_t, count, (), (const));
 };
 
-using TestRidgeReward = ridge_reward<MockGetDecisionCount>;
+using test_ridge_reward_t = ridge_reward<MockGetDecisionCount>;
 
 struct RidgeRewardTest : public ::testing::Test {
     MockGetDecisionCount decision_count;
-    TestRidgeReward reward{decision_count};
+    test_ridge_reward_t reward{decision_count};
 };
 
 TEST_F(RidgeRewardTest, ReturnsNegativeDecisionCount) {

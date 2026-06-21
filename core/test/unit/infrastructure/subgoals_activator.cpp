@@ -24,7 +24,7 @@ struct MockActivateGoalCandidates {
     MOCK_METHOD(bool, activate_goal_candidates, (const goal_lineage*));
 };
 
-using TestSubgoalsActivator = subgoals_activator<
+using test_subgoals_activator_t = subgoals_activator<
     MockMakeGoalLineage, MockGoalActivator, MockGetRule, MockActivateGoalCandidates>;
 
 struct SubgoalsActivatorTest : public ::testing::Test {
@@ -32,7 +32,7 @@ struct SubgoalsActivatorTest : public ::testing::Test {
     MockGoalActivator goal_activator;
     MockGetRule get_rule;
     MockActivateGoalCandidates activate_goal_candidates;
-    TestSubgoalsActivator activator{make_goal_lineage, goal_activator,
+    test_subgoals_activator_t activator{make_goal_lineage, goal_activator,
                                     get_rule, activate_goal_candidates};
 
     static constexpr rule_id kRule = 0;

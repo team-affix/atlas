@@ -7,7 +7,7 @@
 #include "infrastructure/trail.hpp"
 #include "functor_fixture.hpp"
 
-using TestNormalizer = normalizer<globalizer, expr_pool, expr_pool, bind_map>;
+using test_normalizer_t = normalizer<globalizer, expr_pool, expr_pool, bind_map>;
 
 struct NormalizerIntegrationTest : public ::testing::Test {
 protected:
@@ -23,7 +23,7 @@ protected:
     std::optional<globalizer> glob;
     std::optional<bind_map> bm;
     std::optional<expr_pool> pool;
-    std::optional<TestNormalizer> norm;
+    std::optional<test_normalizer_t> norm;
 
     expr var0{expr::var{0}};
     expr var1{expr::var{1}};

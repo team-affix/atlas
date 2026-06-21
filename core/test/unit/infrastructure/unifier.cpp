@@ -20,9 +20,9 @@ struct MockBindMap {
     MOCK_METHOD(framed_expr, whnf, (framed_expr));
 };
 
-using TestUnifier = unifier<MockBindMap>;
+using test_unifier_t = unifier<MockBindMap>;
 
-bool run_unify(TestUnifier& u, const expr* lhs, const expr* rhs,
+bool run_unify(test_unifier_t& u, const expr* lhs, const expr* rhs,
                std::unordered_set<uint32_t>& vars_touched) {
     auto task = u.unify({lhs, 0}, {rhs, 0});
     while (!task.done()) {
@@ -39,7 +39,7 @@ struct UnifierTest : public ::testing::Test {
     test_functors functors;
     MockBindMap bm;
     globalizer g;
-    TestUnifier u{g, &bm};
+    test_unifier_t u{g, &bm};
     std::unordered_set<uint32_t> vars_touched;
 
     expr var0{expr::var{0}};

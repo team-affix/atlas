@@ -31,7 +31,7 @@ struct MockGetGoalCandidateRuleIds {
     MOCK_METHOD(ra_rule_id_set&, get, (const goal_lineage*), (const));
 };
 
-using TestMhu = mhu_elimination_generator<
+using test_mhu_t = mhu_elimination_generator<
     bind_map, bind_map_factory, unifier<bind_map>, unifier_factory<bind_map>,
     MockMakeResolutionLineage, MockMakeVar, MockGetGoalCandidateRuleIds>;
 
@@ -47,7 +47,7 @@ struct MhuEliminationGeneratorUnitTest : public ::testing::Test {
     ra_rule_id_set candidates;
     goal_lineage gl{nullptr, 0};
     resolution_lineage rl{&gl, 0};
-    TestMhu mhu{common, mrl, mv, bmf, uf, gcri};
+    test_mhu_t mhu{common, mrl, mv, bmf, uf, gcri};
 
     expr goal{expr::var{0}};
     expr head_f{expr::functor{functors.id("f"), {}}};

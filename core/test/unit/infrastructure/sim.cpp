@@ -140,8 +140,8 @@ struct MockClearChosenGoalCandidates {
     MOCK_METHOD(void, clear, ());
 };
 
-using TestSetUpSim = set_up_sim<MockPushTrailFrame>;
-using TestRunSim = run_sim<
+using test_set_up_sim_t = set_up_sim<MockPushTrailFrame>;
+using test_run_sim_t = run_sim<
     MockActivateInitialGoalsAndCandidates,
     MockSolutionDetector,
     MockConflictDetector,
@@ -155,7 +155,7 @@ using TestRunSim = run_sim<
     MockGetUnitResolution,
     testing::NiceMock<MockRecordDecision>,
     testing::NiceMock<MockRecordResolution>>;
-using TestTearDownSim = tear_down_sim<
+using test_tear_down_sim_t = tear_down_sim<
     MockPopTrailFrame,
     testing::NiceMock<MockClearUnitGoals>,
     testing::NiceMock<MockClearRecordedDecisions>,
@@ -203,16 +203,16 @@ struct SimTest : public ::testing::Test {
     testing::NiceMock<MockCleanUpCdcl> clean_up_cdcl;
     testing::NiceMock<MockClearChosenGoalCandidates> clear_chosen_goal_candidates;
 
-    TestSetUpSim set_up_sim_{push_trail_frame};
-    TestTearDownSim tear_down_sim_{
+    test_set_up_sim_t set_up_sim_{push_trail_frame};
+    test_tear_down_sim_t tear_down_sim_{
         pop_trail_frame, clear_unit_goals, clear_recorded_decisions,
         clear_recorded_resolutions, clear_goal_candidate_rule_ids, clear_goal_exprs,
         clear_active_goals, clear_candidate_frame_offsets, clear_mhu_heads,
         clear_bindings, trim_unpinned_lineages, frame_allocator,
         clean_up_cdcl, clear_chosen_goal_candidates};
 
-    TestRunSim make_run_sim(size_t max_resolutions) {
-        return TestRunSim{
+    test_run_sim_t make_run_sim(size_t max_resolutions) {
+        return test_run_sim_t{
             activate_initial_goals_and_candidates,
             solution_detector, conflict_detector, unit_goal_detector,
             push_unit_goal, pop_unit_goal, decision_generator,
@@ -221,7 +221,7 @@ struct SimTest : public ::testing::Test {
             max_resolutions};
     }
 
-    TestRunSim run_sim_{make_run_sim(kMaxResolutions)};
+    test_run_sim_t run_sim_{make_run_sim(kMaxResolutions)};
 
     void set_up() { set_up_sim_.set_up(); }
     sim_termination run() { return run_sim_.run(); }
@@ -367,7 +367,7 @@ TEST_F(SimTest, RecordsDecisionWhenGeneratorChoosesResolution) {
 TEST_F(SimTest, RunUsesPoppedUnitGoalForNextResolution) {
     resolution_lineage unit_rl{&gl, 5};
 
-    TestRunSim one_resolution = make_run_sim(1);
+    test_run_sim_t one_resolution = make_run_sim(1);
 
     EXPECT_CALL(activate_initial_goals_and_candidates, activate_initial_goals_and_candidates()).WillOnce(Return(true));
     EXPECT_CALL(solution_detector, detect()).WillOnce(Return(false));

@@ -12,7 +12,7 @@ struct MockUnlinkGoalCandidate {
     MOCK_METHOD(void, unlink_goal_candidate, (const goal_lineage*, rule_id));
 };
 
-using TestCandidateDeactivator = candidate_deactivator<MockUnsetCandidateFrameOffset, MockUnlinkGoalCandidate>;
+using test_candidate_deactivator_t = candidate_deactivator<MockUnsetCandidateFrameOffset, MockUnlinkGoalCandidate>;
 
 struct CandidateDeactivatorTest : public ::testing::Test {
     static constexpr rule_id kRule = 0;
@@ -20,7 +20,7 @@ struct CandidateDeactivatorTest : public ::testing::Test {
 
     MockUnsetCandidateFrameOffset unset_frame;
     MockUnlinkGoalCandidate unlink;
-    TestCandidateDeactivator deactivator{unset_frame, unlink};
+    test_candidate_deactivator_t deactivator{unset_frame, unlink};
 
     goal_lineage parent{nullptr, kGoal};
     resolution_lineage rl{&parent, kRule};

@@ -4,7 +4,7 @@
 //   enumerate_all_solutions, next_until_refuted — binding enumeration
 //   next_branch_until_refuted — resolution-branch enumeration until refutation;
 //     asserts no duplicate branch visitation (stricter than next_until_refuted)
-// Solver ticks: sm.resume / has_yield / consume_yield.
+// solver_t ticks: sm.resume / has_yield / consume_yield.
 //
 // Bug policy (docs/testing.md): failing tests indicate suspected production bugs
 // unless setup/lifetime/key definitions are wrong. Do not delete or weaken tests.
@@ -62,7 +62,7 @@ void print_solution(
 }
 
 void enumerate_all_solutions(
-    basic_manifest::Solver& solver,
+    basic_manifest::solver_t& solver,
     expr_printer& printer,
     decision_memory& decision_count,
     resolution_memory& resolution_count,
@@ -98,7 +98,7 @@ void enumerate_all_solutions(
 }
 
 void next_until_refuted(
-    basic_manifest::Solver& solver,
+    basic_manifest::solver_t& solver,
     expr_printer& printer,
     decision_memory& decision_count,
     resolution_memory& resolution_count,
@@ -138,16 +138,16 @@ void next_until_refuted(
 // Resolution branch enumeration harness
 // ---------------------------------------------------------------------------
 
-using BranchGroups = std::vector<std::set<rule_id>>;
-using BranchTuple = std::vector<rule_id>;
+using branch_groups_t = std::vector<std::set<rule_id>>;
+using branch_tuple_t = std::vector<rule_id>;
 
 void next_branch_until_refuted(
-    basic_manifest::Solver& solver,
+    basic_manifest::solver_t& solver,
     resolution_memory& resolution_memory,
-    const BranchGroups& groups,
-    std::set<BranchTuple> expected) {
+    const branch_groups_t& groups,
+    std::set<branch_tuple_t> expected) {
     auto sm = solver.solve();
-    std::set<BranchTuple> visited;
+    std::set<branch_tuple_t> visited;
     while (true) {
         sm.resume();
         if (!sm.has_yield())
@@ -156,7 +156,7 @@ void next_branch_until_refuted(
             continue;
 
         const lemma resolution_lemma = resolution_memory.derive_resolution_lemma();
-        BranchTuple tuple;
+        branch_tuple_t tuple;
         tuple.reserve(groups.size());
         for (const std::set<rule_id>& group : groups) {
             std::set<rule_id> found;
@@ -825,7 +825,7 @@ TEST_F(BasicManifestIntegrationTest, SolverEnumeratesTwoGroundChoiceSolutions) {
 
     basic_manifest manifest{database, initial_goals, kInitialFrameOffset, kMaxResolutions, kSeed};
 
-    static const BranchGroups kGroups{{rule_id{0}, rule_id{1}}};
+    static const branch_groups_t kGroups{{rule_id{0}, rule_id{1}}};
     next_branch_until_refuted(
         manifest.solver_,
         manifest.resolution_memory_,
@@ -849,7 +849,7 @@ TEST_F(BasicManifestIntegrationTest, SolverRefutesAfterEnumeratingAllGroundBranc
 
     basic_manifest manifest{database, initial_goals, kInitialFrameOffset, kMaxResolutions, kSeed};
 
-    static const BranchGroups kGroups{{rule_id{0}, rule_id{1}}};
+    static const branch_groups_t kGroups{{rule_id{0}, rule_id{1}}};
     next_branch_until_refuted(
         manifest.solver_,
         manifest.resolution_memory_,
@@ -908,7 +908,7 @@ TEST_F(BasicManifestIntegrationTest, SolverEnumeratesTwoChoiceClauseSolutions) {
 
     basic_manifest manifest{database, initial_goals, kInitialFrameOffset, kMaxResolutions, kSeed};
 
-    static const BranchGroups kGroups{{rule_id{1}, rule_id{2}}};
+    static const branch_groups_t kGroups{{rule_id{1}, rule_id{2}}};
     next_branch_until_refuted(
         manifest.solver_,
         manifest.resolution_memory_,
@@ -1119,7 +1119,7 @@ TEST_F(BasicManifestIntegrationTest, TickThreeGroundBranchesEnumerateDistinct) {
 
     basic_manifest manifest{database, initial_goals, kInitialFrameOffset, kMaxResolutions, kSeed};
 
-    static const BranchGroups kGroups{{rule_id{0}, rule_id{1}, rule_id{2}}};
+    static const branch_groups_t kGroups{{rule_id{0}, rule_id{1}, rule_id{2}}};
     next_branch_until_refuted(
         manifest.solver_,
         manifest.resolution_memory_,
@@ -1345,7 +1345,7 @@ TEST_F(BasicManifestIntegrationTest, SolverEnumeratesFourTwoGoalGroundCombinatio
 
     basic_manifest manifest{database, initial_goals, kInitialFrameOffset, kMaxResolutions, kSeed};
 
-    static const BranchGroups kGroups{{rule_id{0}, rule_id{1}}, {rule_id{2}, rule_id{3}}};
+    static const branch_groups_t kGroups{{rule_id{0}, rule_id{1}}, {rule_id{2}, rule_id{3}}};
     next_branch_until_refuted(
         manifest.solver_,
         manifest.resolution_memory_,
@@ -1396,7 +1396,7 @@ TEST_F(BasicManifestIntegrationTest, SolverEnumeratesEightThreeGoalGroundCombina
 
         basic_manifest manifest{seed_db, seed_goals, kInitialFrameOffset, kMaxResolutions, seed};
 
-        static const BranchGroups kGroups{
+        static const branch_groups_t kGroups{
             {rule_id{0}, rule_id{1}}, {rule_id{2}, rule_id{3}}, {rule_id{4}, rule_id{5}}};
         next_branch_until_refuted(
             manifest.solver_,
@@ -1484,7 +1484,7 @@ TEST_F(BasicManifestIntegrationTest, SolverEnumeratesFourClauseBodyFactChoices) 
 
     basic_manifest manifest{database, initial_goals, kInitialFrameOffset, kMaxResolutions, kSeed};
 
-    static const BranchGroups kGroups{{rule_id{1}, rule_id{2}, rule_id{3}, rule_id{4}}};
+    static const branch_groups_t kGroups{{rule_id{1}, rule_id{2}, rule_id{3}, rule_id{4}}};
     next_branch_until_refuted(
         manifest.solver_,
         manifest.resolution_memory_,
@@ -1544,7 +1544,7 @@ TEST_F(BasicManifestIntegrationTest, SolverEnumeratesManySharedVarGroundHeads) {
         seed_goals.push(saved_expr_pool_.make_functor(functors.id("f"), {}));
         seed_goals.push(saved_expr_pool_.make_functor(functors.id("g"), {var_a, var_b, var_c}));
 
-        static const BranchGroups kBranchGroups{
+        static const branch_groups_t kBranchGroups{
             {rule_id{0}, rule_id{1}}, {rule_id{2}, rule_id{3}, rule_id{4}, rule_id{5}, rule_id{6}}};
         next_branch_until_refuted(
             manifest.solver_,

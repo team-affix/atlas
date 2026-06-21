@@ -1,4 +1,4 @@
-// Resolver: delegates subgoal activation, candidate deactivation, and goal expr teardown.
+// resolver_t: delegates subgoal activation, candidate deactivation, and goal expr teardown.
 
 #include <gtest/gtest.h>
 #include <gmock/gmock.h>
@@ -22,7 +22,7 @@ struct MockSetChosenGoalCandidate {
     MOCK_METHOD(void, set, (const goal_lineage*, rule_id));
 };
 
-using TestResolver = resolver<MockGoalDeactivator, MockActivateSubgoalsAndCandidates,
+using test_resolver_t = resolver<MockGoalDeactivator, MockActivateSubgoalsAndCandidates,
                                MockDeactivateGoalCandidates, MockSetChosenGoalCandidate>;
 
 struct ResolverTest : public ::testing::Test {
@@ -30,7 +30,7 @@ struct ResolverTest : public ::testing::Test {
     MockActivateSubgoalsAndCandidates activate_subgoals_and_candidates;
     MockDeactivateGoalCandidates deactivate_goal_candidates;
     MockSetChosenGoalCandidate set_chosen_goal_candidate;
-    TestResolver res{goal_deactivator, activate_subgoals_and_candidates,
+    test_resolver_t res{goal_deactivator, activate_subgoals_and_candidates,
                      deactivate_goal_candidates, set_chosen_goal_candidate};
 
     static constexpr rule_id kRule = 0;

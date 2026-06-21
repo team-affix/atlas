@@ -24,7 +24,7 @@ struct MockInitialGoalWeight {
     MOCK_METHOD(double, get, (), (const));
 };
 
-using TestHorizonInitialGoalActivator = horizon_initial_goal_activator<
+using test_horizon_initial_goal_activator_t = horizon_initial_goal_activator<
     MockInitialGoalActivator, MockMakeInitialGoalLineage,
     MockGoalWeights, MockInitialGoalWeight>;
 
@@ -38,7 +38,7 @@ struct HorizonInitialGoalActivatorTest : public ::testing::Test {
     static constexpr subgoal_id kIdx = 0;
     static constexpr double kInitialWeight = 0.5;
 
-    TestHorizonInitialGoalActivator activator{mock_initial, make_initial_goal_lineage,
+    test_horizon_initial_goal_activator_t activator{mock_initial, make_initial_goal_lineage,
                                               goal_weights, initial_goal_weight};
 };
 

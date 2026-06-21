@@ -102,25 +102,25 @@ double sum_active_weights(
 
 class HorizonWeightConservationIntegrationTest : public ::testing::Test {
 protected:
-    using GetResolutionRule  = get_resolution_rule<MockGetRule>;
-    using MakeInitGoalLineage = make_initial_goal_lineage<lineage_pool>;
-    using GoalActivatorType  = goal_activator<goal_exprs, goal_candidate_rules,
-                                  srt_active_goals, candidate_frame_offsets, GetResolutionRule>;
-    using SrtGoalDeactivatorType = srt_goal_deactivator<goal_exprs, goal_candidate_rules>;
-    using HorizonGoalActivatorType = horizon_goal_activator<GoalActivatorType, goal_weights, MockGetRule>;
-    using HorizonGoalDeactivatorType = horizon_goal_deactivator<SrtGoalDeactivatorType, goal_weights>;
-    using InitialGoalActivatorType = initial_goal_activator<MockGetInitialGoalExpr,
-                                        MakeInitGoalLineage, goal_exprs, goal_candidate_rules,
+    using get_resolution_rule_t  = get_resolution_rule<MockGetRule>;
+    using make_initial_goal_lineage_t = make_initial_goal_lineage<lineage_pool>;
+    using goal_activator_t  = goal_activator<goal_exprs, goal_candidate_rules,
+                                  srt_active_goals, candidate_frame_offsets, get_resolution_rule_t>;
+    using srt_goal_deactivator_t = srt_goal_deactivator<goal_exprs, goal_candidate_rules>;
+    using horizon_goal_activator_t = horizon_goal_activator<goal_activator_t, goal_weights, MockGetRule>;
+    using horizon_goal_deactivator_t = horizon_goal_deactivator<srt_goal_deactivator_t, goal_weights>;
+    using initial_goal_activator_t = initial_goal_activator<MockGetInitialGoalExpr,
+                                        make_initial_goal_lineage_t, goal_exprs, goal_candidate_rules,
                                         srt_active_goals>;
-    using HorizonInitialGoalActivatorType = horizon_initial_goal_activator<
-                                        InitialGoalActivatorType, MakeInitGoalLineage,
+    using horizon_initial_goal_activator_t = horizon_initial_goal_activator<
+                                        initial_goal_activator_t, make_initial_goal_lineage_t,
                                         goal_weights, initial_goal_weight>;
-    using SubgoalsActivatorType = subgoals_activator<lineage_pool, HorizonGoalActivatorType,
+    using subgoals_activator_t = subgoals_activator<lineage_pool, horizon_goal_activator_t,
                                       MockGetRule, MockActivateGoalCandidates>;
-    using SrtSubgoalsActivatorType = srt_subgoals_activator<srt_active_goals, SubgoalsActivatorType>;
-    using ResolverType = resolver<HorizonGoalDeactivatorType, SrtSubgoalsActivatorType,
+    using srt_subgoals_activator_t = srt_subgoals_activator<srt_active_goals, subgoals_activator_t>;
+    using resolver_t = resolver<horizon_goal_deactivator_t, srt_subgoals_activator_t,
                               MockDeactivateGoalCandidates, MockSetChosenGoalCandidate>;
-    using HorizonResolverType = horizon_resolver<ResolverType, MockGetRule,
+    using horizon_resolver_t = horizon_resolver<resolver_t, MockGetRule,
                                     goal_weights, cumulative_grounded_weight>;
 
     lineage_pool lineage_pool_;
@@ -139,18 +139,18 @@ protected:
     NiceMock<MockGetInitialGoalExpr> get_initial_goal_expr;
     NiceMock<MockGetRule> get_rule;
 
-    std::optional<GetResolutionRule>               get_resolution_rule_;
-    std::optional<MakeInitGoalLineage>             make_initial_goal_lineage_;
-    std::optional<GoalActivatorType>               goal_activator_;
-    std::optional<HorizonGoalActivatorType>        horizon_goal_activator_;
-    std::optional<SrtGoalDeactivatorType>          srt_goal_deactivator_;
-    std::optional<HorizonGoalDeactivatorType>      horizon_goal_deactivator_;
-    std::optional<InitialGoalActivatorType>        initial_goal_activator_;
-    std::optional<HorizonInitialGoalActivatorType> horizon_initial_goal_activator_;
-    std::optional<SubgoalsActivatorType>           subgoals_activator_;
-    std::optional<SrtSubgoalsActivatorType>        srt_subgoals_activator_;
-    std::optional<ResolverType>                    resolver_;
-    std::optional<HorizonResolverType>             horizon_resolver_;
+    std::optional<get_resolution_rule_t>               get_resolution_rule_;
+    std::optional<make_initial_goal_lineage_t>             make_initial_goal_lineage_;
+    std::optional<goal_activator_t>               goal_activator_;
+    std::optional<horizon_goal_activator_t>        horizon_goal_activator_;
+    std::optional<srt_goal_deactivator_t>          srt_goal_deactivator_;
+    std::optional<horizon_goal_deactivator_t>      horizon_goal_deactivator_;
+    std::optional<initial_goal_activator_t>        initial_goal_activator_;
+    std::optional<horizon_initial_goal_activator_t> horizon_initial_goal_activator_;
+    std::optional<subgoals_activator_t>           subgoals_activator_;
+    std::optional<srt_subgoals_activator_t>        srt_subgoals_activator_;
+    std::optional<resolver_t>                    resolver_;
+    std::optional<horizon_resolver_t>             horizon_resolver_;
 
     expr f_head{expr::var{0}};
     expr g_head{expr::var{1}};

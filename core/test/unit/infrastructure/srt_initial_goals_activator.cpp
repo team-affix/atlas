@@ -14,12 +14,12 @@ struct MockSrtActiveGoals {
     MOCK_METHOD(void, flush_srt_goal_batch, ());
 };
 
-using TestSrtInitialGoalsActivator = srt_initial_goals_activator<MockSrtActiveGoals, MockInitialGoalsActivator>;
+using test_srt_initial_goals_activator_t = srt_initial_goals_activator<MockSrtActiveGoals, MockInitialGoalsActivator>;
 
 struct SrtInitialGoalsActivatorTest : public ::testing::Test {
     MockSrtActiveGoals srt_active_goals;
     MockInitialGoalsActivator initial_goals_activator;
-    TestSrtInitialGoalsActivator activator{srt_active_goals, initial_goals_activator};
+    test_srt_initial_goals_activator_t activator{srt_active_goals, initial_goals_activator};
 };
 
 TEST_F(SrtInitialGoalsActivatorTest, DelegatesThenFlushesInOrder) {

@@ -15,13 +15,13 @@ struct MockGetGoalCandidateRuleIds {
     MOCK_METHOD(MockRuleIdSet&, get, (const goal_lineage*));
 };
 
-using TestConflictDetector = conflict_detector<MockGetGoalCandidateRuleIds>;
+using test_conflict_detector_t = conflict_detector<MockGetGoalCandidateRuleIds>;
 
 struct ConflictDetectorTest : public ::testing::Test {
     goal_lineage gl{nullptr, 0};
     MockRuleIdSet rules;
     MockGetGoalCandidateRuleIds get_goal_candidate_rule_ids;
-    TestConflictDetector detector{get_goal_candidate_rule_ids};
+    test_conflict_detector_t detector{get_goal_candidate_rule_ids};
 };
 
 TEST_F(ConflictDetectorTest, NoCandidatesIsConflict) {

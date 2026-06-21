@@ -40,7 +40,7 @@ struct MockLinkGoalCandidate {
     MOCK_METHOD(void, link_goal_candidate, (const goal_lineage*, rule_id));
 };
 
-using TestCandidateActivator = candidate_activator<
+using test_candidate_activator_t = candidate_activator<
     MockFrameAllocator, MockSetCandidateFrameOffset, MockTryAddMhuHead,
     MockIsBackloggedElimination, MockGetGoalExpr, MockGetRule, MockLinkGoalCandidate>;
 
@@ -57,7 +57,7 @@ struct CandidateActivatorTest : public ::testing::Test {
     MockGetGoalExpr get_goal_expr;
     MockGetRule get_rule;
     MockLinkGoalCandidate link;
-    TestCandidateActivator activator{frame_alloc, set_frame, mhu, is_backlogged, get_goal_expr, get_rule, link};
+    test_candidate_activator_t activator{frame_alloc, set_frame, mhu, is_backlogged, get_goal_expr, get_rule, link};
 
     expr goal_e{expr::var{0}};
     expr head{expr::var{10}};

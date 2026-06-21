@@ -34,12 +34,12 @@ lemma make_lemma(std::initializer_list<const resolution_lineage*> rs) {
 
 } // namespace
 
-using TestCdcl = cdcl_elimination_generator<chosen_goal_candidates>;
+using test_cdcl_t = cdcl_elimination_generator<chosen_goal_candidates>;
 
 struct CdclEliminationGeneratorUnitTest : public ::testing::Test {
 protected:
     chosen_goal_candidates chosen;
-    TestCdcl cdcl{chosen};
+    test_cdcl_t cdcl{chosen};
 
     void end_sim() {
         cdcl.cleanup();

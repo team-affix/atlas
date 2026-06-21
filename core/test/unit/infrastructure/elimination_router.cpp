@@ -29,7 +29,7 @@ struct MockCandidateDeactivator {
     MOCK_METHOD(void, deactivate, (const resolution_lineage*));
 };
 
-using TestEliminationRouter = elimination_router<
+using test_elimination_router_t = elimination_router<
     MockGetGoalCandidateRuleIds, MockIsActiveGoal,
     MockInsertBackloggedElimination, MockCandidateDeactivator>;
 
@@ -42,7 +42,7 @@ struct EliminationRouterTest : public ::testing::Test {
     MockIsActiveGoal is_active_goal;
     MockInsertBackloggedElimination insert_backlogged_elimination;
     MockCandidateDeactivator candidate_deactivator;
-    TestEliminationRouter router{get_goal_candidate_rule_ids, is_active_goal,
+    test_elimination_router_t router{get_goal_candidate_rule_ids, is_active_goal,
                                  insert_backlogged_elimination, candidate_deactivator};
 };
 

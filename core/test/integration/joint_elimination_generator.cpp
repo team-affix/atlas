@@ -24,12 +24,12 @@
 using ::testing::ElementsAre;
 using ::testing::IsEmpty;
 
-using TestUnifierFactory = unifier_factory<bind_map>;
-using TestCdcl  = cdcl_elimination_generator<chosen_goal_candidates>;
-using TestMhu   = mhu_elimination_generator<
-    bind_map, bind_map_factory, unifier<bind_map>, TestUnifierFactory,
+using test_unifier_factory_t = unifier_factory<bind_map>;
+using test_cdcl_t  = cdcl_elimination_generator<chosen_goal_candidates>;
+using test_mhu_t   = mhu_elimination_generator<
+    bind_map, bind_map_factory, unifier<bind_map>, test_unifier_factory_t,
     lineage_pool, expr_pool, goal_candidate_rules>;
-using TestJoint = joint_elimination_generator<TestCdcl, TestMhu>;
+using TestJoint = joint_elimination_generator<test_cdcl_t, test_mhu_t>;
 
 namespace {
 
@@ -57,13 +57,13 @@ struct JointEliminationGeneratorIntegrationTest : public ::testing::Test {
     bind_map common{g_};
     lineage_pool lp;
     bind_map_factory bmf{g_};
-    TestUnifierFactory uf{g_};
+    test_unifier_factory_t uf{g_};
     ra_rule_id_set_factory ra_rule_id_set_factory_;
     goal_candidate_rules ggcr{ra_rule_id_set_factory_};
     std::optional<expr_pool> pool;
     chosen_goal_candidates chosen;
-    std::optional<TestCdcl> cdcl;
-    std::optional<TestMhu> mhu;
+    std::optional<test_cdcl_t> cdcl;
+    std::optional<test_mhu_t> mhu;
     std::optional<TestJoint> joint;
 
     JointEliminationGeneratorIntegrationTest() {
@@ -152,7 +152,7 @@ TEST_F(JointEliminationGeneratorIntegrationTest,
     ConstrainMayYieldSameCandidateTwiceWhenCdclAndMhuAgree) {
     /*
      * CDCL avoidance {rl0, rl1} and MHU f/g heads on the same rep both eliminate rl1 when
-     * constraining rl0. Joint forwards both yields; elimination_router deduplicates on route.
+     * constraining rl0. joint_t forwards both yields; elimination_router deduplicates on route.
      */
     expr goal{expr::var{0}};
     expr head_f{expr::functor{functors.id("f"), {}}};

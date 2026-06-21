@@ -21,7 +21,7 @@ struct MockGetRule {
     MOCK_METHOD(const rule*, get, (rule_id), (const));
 };
 
-using TestHorizonGoalActivator = horizon_goal_activator<MockGoalActivator, MockGoalWeights, MockGetRule>;
+using test_horizon_goal_activator_t = horizon_goal_activator<MockGoalActivator, MockGoalWeights, MockGetRule>;
 
 struct HorizonGoalActivatorTest : public ::testing::Test {
     MockGoalActivator mock_goal_activator;
@@ -40,7 +40,7 @@ struct HorizonGoalActivatorTest : public ::testing::Test {
     static constexpr double kParentWeight = 1.0;
     static constexpr double kExpectedChildWeight = 0.5;
 
-    TestHorizonGoalActivator activator{mock_goal_activator, goal_weights, get_rule};
+    test_horizon_goal_activator_t activator{mock_goal_activator, goal_weights, get_rule};
 };
 
 TEST_F(HorizonGoalActivatorTest, DelegatesThenSetsParentWeightDividedByBodySize) {

@@ -11,13 +11,13 @@ struct MockMakeGoalLineage {
         (const resolution_lineage*, subgoal_id));
 };
 
-using TestMakeInitialGoalLineage = make_initial_goal_lineage<MockMakeGoalLineage>;
+using test_make_initial_goal_lineage_t = make_initial_goal_lineage<MockMakeGoalLineage>;
 
 struct MakeInitialGoalLineageTest : public ::testing::Test {
     static constexpr subgoal_id kIdx = 0;
 
     MockMakeGoalLineage make_goal_lineage;
-    TestMakeInitialGoalLineage maker{make_goal_lineage};
+    test_make_initial_goal_lineage_t maker{make_goal_lineage};
 
     goal_lineage gl0{nullptr, kIdx};
 };

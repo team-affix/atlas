@@ -122,9 +122,9 @@ std::string format_snapshot(const SrtTreeSnapshot& snap) {
     return os.str();
 }
 
-using TestSubgoalsActivator    = subgoals_activator<lineage_pool, MockGoalActivator, MockGetRule, MockActivateGoalCandidates>;
-using TestSrtSubgoalsActivator = srt_subgoals_activator<srt_active_goals, TestSubgoalsActivator>;
-using TestResolver             = resolver<MockGoalDeactivator, TestSrtSubgoalsActivator,
+using test_subgoals_activator_t    = subgoals_activator<lineage_pool, MockGoalActivator, MockGetRule, MockActivateGoalCandidates>;
+using test_srt_subgoals_activator_t = srt_subgoals_activator<srt_active_goals, test_subgoals_activator_t>;
+using test_resolver_t             = resolver<MockGoalDeactivator, test_srt_subgoals_activator_t,
                                           MockDeactivateGoalCandidates, MockSetChosenGoalCandidate>;
 
 void collect_subtree(
@@ -198,7 +198,7 @@ void expect_snapshots_not_equal(
 
 void expect_identical_trees_for_orders(
     srt_active_goals& active_goals,
-    TestResolver& res,
+    test_resolver_t& res,
     const std::vector<const goal_lineage*>& initial_goals,
     const std::vector<const resolution_lineage*>& steps,
     const std::vector<std::vector<size_t>>& orders) {
@@ -338,7 +338,7 @@ void fuzz_drain_to_empty(
     uint32_t order_seed,
     srt_active_goals& active_goals,
     lineage_pool& pool,
-    TestResolver& res,
+    test_resolver_t& res,
     const std::vector<const goal_lineage*>& initial,
     const std::array<rule, 4>& rule_table,
     std::unordered_map<const goal_lineage*, rule_id>& goal_rule,
@@ -417,9 +417,9 @@ struct SrtResolverOrderInvarianceIntegrationTest : public ::testing::Test {
     testing::NiceMock<MockDeactivateGoalCandidates> deactivate_candidates;
     testing::NiceMock<MockSetChosenGoalCandidate> set_chosen;
 
-    std::unique_ptr<TestSubgoalsActivator> subgoals;
-    std::unique_ptr<TestSrtSubgoalsActivator> srt_subgoals;
-    std::unique_ptr<TestResolver> res;
+    std::unique_ptr<test_subgoals_activator_t> subgoals;
+    std::unique_ptr<test_srt_subgoals_activator_t> srt_subgoals;
+    std::unique_ptr<test_resolver_t> res;
 
     void SetUp() override {
         ON_CALL(goal_activator, activate(testing::_))
@@ -435,9 +435,9 @@ struct SrtResolverOrderInvarianceIntegrationTest : public ::testing::Test {
         ON_CALL(activate_candidates, activate_goal_candidates(testing::_))
             .WillByDefault(Return(true));
 
-        subgoals = std::make_unique<TestSubgoalsActivator>(pool, goal_activator, get_rule, activate_candidates);
-        srt_subgoals = std::make_unique<TestSrtSubgoalsActivator>(active_goals, *subgoals);
-        res = std::make_unique<TestResolver>(goal_deactivator, *srt_subgoals, deactivate_candidates,
+        subgoals = std::make_unique<test_subgoals_activator_t>(pool, goal_activator, get_rule, activate_candidates);
+        srt_subgoals = std::make_unique<test_srt_subgoals_activator_t>(active_goals, *subgoals);
+        res = std::make_unique<test_resolver_t>(goal_deactivator, *srt_subgoals, deactivate_candidates,
                                              set_chosen);
     }
 };

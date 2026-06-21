@@ -28,7 +28,7 @@ struct MockGetResolutionRule {
     MOCK_METHOD(const rule*, get, (const resolution_lineage*), (const));
 };
 
-using TestGoalActivator = goal_activator<
+using test_goal_activator_t = goal_activator<
     MockSetGoalExpr, MockInsertGoalCandidates, MockInsertActiveGoal,
     MockGetCandidateFrameOffset, MockGetResolutionRule>;
 
@@ -42,7 +42,7 @@ struct GoalActivatorTest : public ::testing::Test {
     MockInsertActiveGoal insert_active_goal;
     MockGetCandidateFrameOffset get_candidate_frame_offset;
     MockGetResolutionRule get_resolution_rule;
-    TestGoalActivator activator{set_goal_expr, insert_goal_candidates, insert_active_goal,
+    test_goal_activator_t activator{set_goal_expr, insert_goal_candidates, insert_active_goal,
                                 get_candidate_frame_offset, get_resolution_rule};
 
     expr child_goal{expr::var{1}};

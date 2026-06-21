@@ -1,4 +1,4 @@
-// Solver coroutine: set_up, run (yield), derive, pin lemma resolutions, tear_down, learn/route.
+// solver_t coroutine: set_up, run (yield), derive, pin lemma resolutions, tear_down, learn/route.
 // Post-yield work runs on the second resume(); learn runs after tear_down (trail pop).
 
 #include <gtest/gtest.h>
@@ -43,7 +43,7 @@ struct MockPinResolutionLineage {
     MOCK_METHOD(void, pin, (const resolution_lineage*));
 };
 
-using TestSolver = solver<MockSetUpSim, MockTearDownSim, MockRunSim,
+using test_solver_t = solver<MockSetUpSim, MockTearDownSim, MockRunSim,
     MockGetDecisionCount, MockDeriveDecisionLemma, MockPinResolutionLineage,
     MockLearnAvoidance, MockEliminationRouter>;
 
@@ -56,7 +56,7 @@ struct SolverTest : public ::testing::Test {
     MockPinResolutionLineage pin_resolution_lineage;
     MockLearnAvoidance learn_avoidance;
     MockEliminationRouter router;
-    TestSolver s{set_up_sim, tear_down_sim, run_sim, get_decision_count,
+    test_solver_t s{set_up_sim, tear_down_sim, run_sim, get_decision_count,
                  derive_decision_lemma, pin_resolution_lineage, learn_avoidance, router};
 };
 

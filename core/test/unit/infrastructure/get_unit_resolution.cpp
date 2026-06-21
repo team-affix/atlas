@@ -20,12 +20,12 @@ struct MockGetGoalCandidateRuleIds {
     MOCK_METHOD(rule_id_set&, get, (const goal_lineage*));
 };
 
-using TestGetUnitResolution = get_unit_resolution<MockGetGoalCandidateRuleIds, MockMakeResolutionLineage>;
+using test_get_unit_resolution_t = get_unit_resolution<MockGetGoalCandidateRuleIds, MockMakeResolutionLineage>;
 
 struct GetUnitResolutionTest : public ::testing::Test {
     MockMakeResolutionLineage make_resolution_lineage;
     MockGetGoalCandidateRuleIds get_goal_candidate_rule_ids;
-    TestGetUnitResolution sut{get_goal_candidate_rule_ids, make_resolution_lineage};
+    test_get_unit_resolution_t sut{get_goal_candidate_rule_ids, make_resolution_lineage};
 
     goal_lineage gl{nullptr, 0};
     rule_id_set candidates;

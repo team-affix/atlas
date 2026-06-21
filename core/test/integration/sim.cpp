@@ -64,43 +64,43 @@ struct MockGenerateDecision {
 
 namespace {
 
-using UnifierFactory            = unifier_factory<bind_map>;
-using Cdcl                      = cdcl_elimination_generator<chosen_goal_candidates>;
-using Mhu                       = mhu_elimination_generator<bind_map, bind_map_factory, unifier<bind_map>,
-                                    UnifierFactory, lineage_pool, expr_pool, goal_candidate_rules>;
-using Joint                     = joint_elimination_generator<Cdcl, Mhu>;
-using GetResolutionRule         = get_resolution_rule<db>;
-using ConflictDetector          = conflict_detector<goal_candidate_rules>;
-using UnitGoalDetector          = unit_goal_detector<goal_candidate_rules>;
-using SolutionDetector          = solution_detector<ra_active_goals>;
-using GoalActivator             = goal_activator<goal_exprs, goal_candidate_rules,
-                                    ra_active_goals, candidate_frame_offsets, GetResolutionRule>;
-using GoalDeactivator           = goal_deactivator<goal_exprs, goal_candidate_rules, ra_active_goals>;
-using CandidateDeactivator      = candidate_deactivator<candidate_frame_offsets, goal_candidate_rules>;
-using CandidateActivator        = candidate_activator<frame_bump_allocator, candidate_frame_offsets,
-                                    Mhu, elimination_backlog, goal_exprs, db, goal_candidate_rules>;
-using EliminationRouter         = elimination_router<goal_candidate_rules, ra_active_goals,
-                                    elimination_backlog, CandidateDeactivator>;
-using GetUnitResolution         = get_unit_resolution<goal_candidate_rules, lineage_pool>;
-using MakeInitialGoalLineage    = make_initial_goal_lineage<lineage_pool>;
-using InitialGoalActivator      = initial_goal_activator<initial_goal_exprs,
-                                    MakeInitialGoalLineage, goal_exprs, goal_candidate_rules, ra_active_goals>;
-using GoalCandidatesDeactivator = goal_candidates_deactivator<goal_candidate_rules,
-                                    lineage_pool, CandidateDeactivator>;
-using GoalCandidatesActivator   = goal_candidates_activator<db, lineage_pool, CandidateActivator,
-                                    ConflictDetector, UnitGoalDetector, unit_goals>;
-using SubgoalsActivator         = subgoals_activator<lineage_pool, GoalActivator,
-                                    db, GoalCandidatesActivator>;
-using InitialGoalsActivator     = initial_goals_activator<initial_goal_exprs,
-                                    InitialGoalActivator, MakeInitialGoalLineage, GoalCandidatesActivator>;
-using Resolver                  = resolver<GoalDeactivator, SubgoalsActivator, GoalCandidatesDeactivator, chosen_goal_candidates>;
-using SetUpSim  = set_up_sim<trail>;
-using TearDown  = tear_down_sim<trail, unit_goals, decision_memory, resolution_memory,
+using unifier_factory_t            = unifier_factory<bind_map>;
+using cdcl_t                      = cdcl_elimination_generator<chosen_goal_candidates>;
+using mhu_t                       = mhu_elimination_generator<bind_map, bind_map_factory, unifier<bind_map>,
+                                    unifier_factory_t, lineage_pool, expr_pool, goal_candidate_rules>;
+using joint_t                     = joint_elimination_generator<cdcl_t, mhu_t>;
+using get_resolution_rule_t         = get_resolution_rule<db>;
+using conflict_detector_t          = conflict_detector<goal_candidate_rules>;
+using unit_goal_detector_t          = unit_goal_detector<goal_candidate_rules>;
+using solution_detector_t          = solution_detector<ra_active_goals>;
+using goal_activator_t             = goal_activator<goal_exprs, goal_candidate_rules,
+                                    ra_active_goals, candidate_frame_offsets, get_resolution_rule_t>;
+using goal_deactivator_t           = goal_deactivator<goal_exprs, goal_candidate_rules, ra_active_goals>;
+using candidate_deactivator_t      = candidate_deactivator<candidate_frame_offsets, goal_candidate_rules>;
+using candidate_activator_t        = candidate_activator<frame_bump_allocator, candidate_frame_offsets,
+                                    mhu_t, elimination_backlog, goal_exprs, db, goal_candidate_rules>;
+using elimination_router_t         = elimination_router<goal_candidate_rules, ra_active_goals,
+                                    elimination_backlog, candidate_deactivator_t>;
+using get_unit_resolution_t         = get_unit_resolution<goal_candidate_rules, lineage_pool>;
+using make_initial_goal_lineage_t    = make_initial_goal_lineage<lineage_pool>;
+using initial_goal_activator_t      = initial_goal_activator<initial_goal_exprs,
+                                    make_initial_goal_lineage_t, goal_exprs, goal_candidate_rules, ra_active_goals>;
+using goal_candidates_deactivator_t = goal_candidates_deactivator<goal_candidate_rules,
+                                    lineage_pool, candidate_deactivator_t>;
+using goal_candidates_activator_t   = goal_candidates_activator<db, lineage_pool, candidate_activator_t,
+                                    conflict_detector_t, unit_goal_detector_t, unit_goals>;
+using subgoals_activator_t         = subgoals_activator<lineage_pool, goal_activator_t,
+                                    db, goal_candidates_activator_t>;
+using initial_goals_activator_t     = initial_goals_activator<initial_goal_exprs,
+                                    initial_goal_activator_t, make_initial_goal_lineage_t, goal_candidates_activator_t>;
+using resolver_t                  = resolver<goal_deactivator_t, subgoals_activator_t, goal_candidates_deactivator_t, chosen_goal_candidates>;
+using set_up_sim_t  = set_up_sim<trail>;
+using tear_down_sim_t  = tear_down_sim<trail, unit_goals, decision_memory, resolution_memory,
                     goal_candidate_rules, goal_exprs, ra_active_goals, candidate_frame_offsets,
-                    Mhu, bind_map, lineage_pool, frame_bump_allocator, Cdcl, chosen_goal_candidates>;
-using RunSim    = run_sim<InitialGoalsActivator, SolutionDetector, ConflictDetector,
-                    UnitGoalDetector, unit_goals, unit_goals, MockGenerateDecision,
-                    Joint, EliminationRouter, Resolver, GetUnitResolution,
+                    mhu_t, bind_map, lineage_pool, frame_bump_allocator, cdcl_t, chosen_goal_candidates>;
+using run_sim_t    = run_sim<initial_goals_activator_t, solution_detector_t, conflict_detector_t,
+                    unit_goal_detector_t, unit_goals, unit_goals, MockGenerateDecision,
+                    joint_t, elimination_router_t, resolver_t, get_unit_resolution_t,
                     decision_memory, resolution_memory>;
 
 struct sim_stack {
@@ -111,7 +111,7 @@ struct sim_stack {
     trail trail_;
     bind_map bind_map_{globalizer_};
     bind_map_factory bind_map_factory_{globalizer_};
-    UnifierFactory unifier_factory_{globalizer_};
+    unifier_factory_t unifier_factory_{globalizer_};
     lineage_pool lineage_pool_;
     ra_rule_id_set_factory ra_rule_id_set_factory_;
     ra_active_goals ra_active_goals_;
@@ -127,32 +127,32 @@ struct sim_stack {
     frame_bump_allocator frame_allocator_{0};
     elimination_backlog elimination_backlog_{trail_};
 
-    Cdcl cdcl_{chosen_goal_candidates_};
-    std::optional<Mhu> mhu_;
-    std::optional<Joint> joint_;
+    cdcl_t cdcl_{chosen_goal_candidates_};
+    std::optional<mhu_t> mhu_;
+    std::optional<joint_t> joint_;
 
-    GetResolutionRule get_resolution_rule_{database_};
-    ConflictDetector conflict_detector_{goal_candidate_rules_};
-    UnitGoalDetector unit_goal_detector_{goal_candidate_rules_};
-    SolutionDetector solution_detector_{ra_active_goals_};
+    get_resolution_rule_t get_resolution_rule_{database_};
+    conflict_detector_t conflict_detector_{goal_candidate_rules_};
+    unit_goal_detector_t unit_goal_detector_{goal_candidate_rules_};
+    solution_detector_t solution_detector_{ra_active_goals_};
 
-    GoalActivator goal_activator_{goal_exprs_, goal_candidate_rules_, ra_active_goals_,
+    goal_activator_t goal_activator_{goal_exprs_, goal_candidate_rules_, ra_active_goals_,
                                    candidate_frame_offsets_, get_resolution_rule_};
-    GoalDeactivator goal_deactivator_{goal_exprs_, goal_candidate_rules_, ra_active_goals_};
-    CandidateDeactivator candidate_deactivator_{candidate_frame_offsets_, goal_candidate_rules_};
-    std::optional<CandidateActivator> candidate_activator_;
+    goal_deactivator_t goal_deactivator_{goal_exprs_, goal_candidate_rules_, ra_active_goals_};
+    candidate_deactivator_t candidate_deactivator_{candidate_frame_offsets_, goal_candidate_rules_};
+    std::optional<candidate_activator_t> candidate_activator_;
 
-    EliminationRouter elimination_router_{goal_candidate_rules_, ra_active_goals_,
+    elimination_router_t elimination_router_{goal_candidate_rules_, ra_active_goals_,
                                           elimination_backlog_, candidate_deactivator_};
-    GetUnitResolution get_unit_resolution_{goal_candidate_rules_, lineage_pool_};
-    MakeInitialGoalLineage make_initial_goal_lineage_{lineage_pool_};
-    std::optional<InitialGoalActivator> initial_goal_activator_;
+    get_unit_resolution_t get_unit_resolution_{goal_candidate_rules_, lineage_pool_};
+    make_initial_goal_lineage_t make_initial_goal_lineage_{lineage_pool_};
+    std::optional<initial_goal_activator_t> initial_goal_activator_;
 
-    std::optional<GoalCandidatesDeactivator> goal_candidates_deactivator_;
-    std::optional<GoalCandidatesActivator> goal_candidates_activator_;
-    std::optional<SubgoalsActivator> subgoals_activator_;
-    std::optional<InitialGoalsActivator> initial_goals_activator_;
-    std::optional<Resolver> resolver_;
+    std::optional<goal_candidates_deactivator_t> goal_candidates_deactivator_;
+    std::optional<goal_candidates_activator_t> goal_candidates_activator_;
+    std::optional<subgoals_activator_t> subgoals_activator_;
+    std::optional<initial_goals_activator_t> initial_goals_activator_;
+    std::optional<resolver_t> resolver_;
 
     testing::NiceMock<MockGenerateDecision> decision_generator;
 
@@ -206,9 +206,9 @@ void chain_clause_db(test_functors& functors, db& database, std::vector<expr>& s
 }  // namespace
 
 struct simulation {
-    SetUpSim set_up_sim_;
-    std::optional<TearDown> tear_down_sim_;
-    std::optional<RunSim> run_sim_;
+    set_up_sim_t set_up_sim_;
+    std::optional<tear_down_sim_t> tear_down_sim_;
+    std::optional<run_sim_t> run_sim_;
 
     simulation(sim_stack& s, size_t max_resolutions)
         : set_up_sim_(s.trail_) {

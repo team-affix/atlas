@@ -25,7 +25,7 @@ struct MockExprPool {
     MOCK_METHOD(const expr*, make_functor, (uint32_t, const std::vector<const expr*>&));
 };
 
-using TestNormalizer = normalizer<MockGlobalizer, MockExprPool, MockExprPool, MockBindMap>;
+using test_normalizer_t = normalizer<MockGlobalizer, MockExprPool, MockExprPool, MockBindMap>;
 
 struct NormalizerUnitTest : public ::testing::Test {
 protected:
@@ -51,7 +51,7 @@ protected:
     NiceMock<MockGlobalizer> glob;
     NiceMock<MockExprPool> pool;
 
-    TestNormalizer norm{glob, pool, pool, bm};
+    test_normalizer_t norm{glob, pool, pool, bm};
 
     expr var0{expr::var{0}};
     expr var1{expr::var{1}};
