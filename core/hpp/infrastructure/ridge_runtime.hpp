@@ -20,6 +20,8 @@ struct ridge_runtime {
 
     bool next();
     bool solved() const;
+    size_t resolution_depth() const;
+    size_t decision_depth() const;
     const expr* normalize(framed_expr);
     lemma derive_decision_lemma() const;
     lemma derive_resolution_lemma() const;

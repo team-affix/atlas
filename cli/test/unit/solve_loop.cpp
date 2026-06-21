@@ -21,6 +21,8 @@ using ::testing::Return;
 struct MockRuntime {
     MOCK_METHOD(bool, next, ());
     MOCK_METHOD(bool, solved, (), (const));
+    MOCK_METHOD(size_t, resolution_depth, (), (const));
+    MOCK_METHOD(size_t, decision_depth, (), (const));
     MOCK_METHOD(const expr*, normalize, (framed_expr));
     MOCK_METHOD(lemma, derive_decision_lemma, (), (const));
     MOCK_METHOD(lemma, derive_resolution_lemma, (), (const));
@@ -36,7 +38,7 @@ struct MockPrintBindings {
 };
 
 struct MockPrintProgress {
-    MOCK_METHOD(void, print, (size_t total_sims));
+    MOCK_METHOD(void, print, (size_t total_sims, double avg_res_depth, double avg_dec_depth, double avg_freq));
     MOCK_METHOD(void, finish_line, ());
 };
 
@@ -52,6 +54,8 @@ struct SolveLoopTest : public ::testing::Test {
 
     SolveLoopTest() {
         pool.emplace();
+        ON_CALL(runtime, resolution_depth()).WillByDefault(Return(0));
+        ON_CALL(runtime, decision_depth()).WillByDefault(Return(0));
     }
 
     void run_loop(size_t interval) {
@@ -87,7 +91,7 @@ TEST_F(SolveLoopTest, DisabledWhenIntervalZero) {
     size_t next_calls = 0;
     EXPECT_CALL(runtime, next()).WillRepeatedly([&] { return ++next_calls <= kTotalSims250; });
     EXPECT_CALL(runtime, solved()).WillRepeatedly(Return(false));
-    EXPECT_CALL(progress, print(_)).Times(0);
+    EXPECT_CALL(progress, print(_, _, _, _)).Times(0);
     EXPECT_CALL(progress, finish_line()).Times(0);
 
     run_loop(0);
@@ -97,9 +101,9 @@ TEST_F(SolveLoopTest, PrintsOnIntervalBoundary) {
     size_t next_calls = 0;
     EXPECT_CALL(runtime, next()).WillRepeatedly([&] { return ++next_calls <= kTotalSims250; });
     EXPECT_CALL(runtime, solved()).WillRepeatedly(Return(false));
-    EXPECT_CALL(progress, print(kInterval100));
-    EXPECT_CALL(progress, print(kInterval100 * 2));
-    EXPECT_CALL(progress, print(kTotalSims250));
+    EXPECT_CALL(progress, print(kInterval100, _, _, _));
+    EXPECT_CALL(progress, print(kInterval100 * 2, _, _, _));
+    EXPECT_CALL(progress, print(kTotalSims250, _, _, _));
     EXPECT_CALL(progress, finish_line()).Times(1);
 
     run_loop(kInterval100);
@@ -109,9 +113,9 @@ TEST_F(SolveLoopTest, PrintsFinalCountWhenNotOnBoundary) {
     size_t next_calls = 0;
     EXPECT_CALL(runtime, next()).WillRepeatedly([&] { return ++next_calls <= kTotalSims250; });
     EXPECT_CALL(runtime, solved()).WillRepeatedly(Return(false));
-    EXPECT_CALL(progress, print(kInterval100));
-    EXPECT_CALL(progress, print(kInterval100 * 2));
-    EXPECT_CALL(progress, print(kTotalSims250));
+    EXPECT_CALL(progress, print(kInterval100, _, _, _));
+    EXPECT_CALL(progress, print(kInterval100 * 2, _, _, _));
+    EXPECT_CALL(progress, print(kTotalSims250, _, _, _));
     EXPECT_CALL(progress, finish_line()).Times(1);
 
     run_loop(kInterval100);
@@ -128,9 +132,9 @@ TEST_F(SolveLoopTest, FinishLineBeforeSolved) {
         .WillOnce(Return(true));
     {
         InSequence seq;
-        EXPECT_CALL(progress, print(1));
-        EXPECT_CALL(progress, print(2));
-        EXPECT_CALL(progress, print(3));
+        EXPECT_CALL(progress, print(1, _, _, _));
+        EXPECT_CALL(progress, print(2, _, _, _));
+        EXPECT_CALL(progress, print(3, _, _, _));
         EXPECT_CALL(progress, finish_line());
         EXPECT_CALL(bindings, print(_, _, _, _));
         EXPECT_CALL(progress, finish_line());
@@ -141,7 +145,7 @@ TEST_F(SolveLoopTest, FinishLineBeforeSolved) {
 
 TEST_F(SolveLoopTest, DoesNotPrintWhenNextReturnsFalse) {
     EXPECT_CALL(runtime, next()).WillOnce(Return(false));
-    EXPECT_CALL(progress, print(_)).Times(0);
+    EXPECT_CALL(progress, print(_, _, _, _)).Times(0);
     EXPECT_CALL(progress, finish_line()).Times(0);
 
     run_loop(kInterval100);

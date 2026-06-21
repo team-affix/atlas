@@ -3,20 +3,28 @@
 
 #include <cstddef>
 #include <cstdio>
+#include <iomanip>
 #include <iostream>
+#include <sstream>
 #include <string>
 #include <unistd.h>
 
 struct print_progress {
-    void print(size_t total_sims);
+    void print(size_t total_sims, double avg_res_depth, double avg_dec_depth, double avg_freq);
     void finish_line();
 private:
     size_t previous_line_width_ = 0;
     bool progress_line_active_  = false;
 };
 
-inline void print_progress::print(size_t total_sims) {
-    const std::string text = std::to_string(total_sims) + " sims";
+inline void print_progress::print(
+    size_t total_sims, double avg_res_depth, double avg_dec_depth, double avg_freq) {
+    std::ostringstream oss;
+    oss << total_sims << " sims"
+        << " | res " << std::fixed << std::setprecision(1) << avg_res_depth
+        << " | dec " << std::fixed << std::setprecision(1) << avg_dec_depth
+        << " | " << static_cast<size_t>(avg_freq) << "/s";
+    const std::string text = oss.str();
     if (isatty(fileno(stdout))) {
         // TTY: overwrite the current line in place.
         const std::string padding(

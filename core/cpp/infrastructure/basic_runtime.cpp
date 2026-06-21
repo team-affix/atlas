@@ -22,6 +22,14 @@ const expr* basic_runtime::normalize(framed_expr fe) {
     return normalizer_.normalize(fe);
 }
 
+size_t basic_runtime::resolution_depth() const {
+    return manifest_.resolution_memory_.get_resolution_count();
+}
+
+size_t basic_runtime::decision_depth() const {
+    return manifest_.decision_memory_.count();
+}
+
 lemma basic_runtime::derive_decision_lemma() const {
     return manifest_.decision_memory_.derive_decision_lemma();
 }
