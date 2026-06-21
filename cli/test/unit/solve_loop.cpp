@@ -1,5 +1,5 @@
-// solve_loop: interval orchestration for cumulative sim progress. Mocks IPrintProgress
-// and IRuntime; asserts on_sim/print/finish_line are called at interval boundaries and
+// solve_loop: interval orchestration for sim progress. Mocks IPrintProgress and
+// IRuntime; asserts on_sim/print/finish_line are called at interval boundaries and
 // before SOLVED/REFUTED output, never when interval is zero.
 
 #include <map>
@@ -15,7 +15,6 @@
 #include "value_objects/lemma.hpp"
 
 using ::testing::_;
-using ::testing::AtLeast;
 using ::testing::InSequence;
 using ::testing::Return;
 
@@ -38,7 +37,7 @@ struct MockPrintBindings {
 
 struct MockPrintProgress {
     MOCK_METHOD(void, on_sim, ());
-    MOCK_METHOD(void, print, (size_t sims_since_last));
+    MOCK_METHOD(void, print, ());
     MOCK_METHOD(void, finish_line, ());
 };
 
@@ -80,8 +79,6 @@ namespace {
 
 constexpr size_t kInterval100  = 100;
 constexpr size_t kTotalSims250 = 250;
-// 250 sims / interval 100: two full intervals then remainder of 50
-constexpr size_t kRemainder50  = 50;
 
 }  // namespace
 
@@ -90,21 +87,21 @@ TEST_F(SolveLoopTest, DisabledWhenIntervalZero) {
     EXPECT_CALL(runtime, next()).WillRepeatedly([&] { return ++next_calls <= kTotalSims250; });
     EXPECT_CALL(runtime, solved()).WillRepeatedly(Return(false));
     EXPECT_CALL(progress, on_sim()).Times(0);
-    EXPECT_CALL(progress, print(_)).Times(0);
+    EXPECT_CALL(progress, print()).Times(0);
     EXPECT_CALL(progress, finish_line()).Times(0);
 
     run_loop(0);
 }
 
 TEST_F(SolveLoopTest, PrintsOnIntervalBoundary) {
-    // 250 sims, interval 100: print(100) at sim 100, print(100) at sim 200,
-    // print(50) at end, finish_line once.
+    // 250 sims, interval 100: print() at sims 100, 200, and once more at end
+    // (the end print is a no-op inside print_progress if sims_since_last_==0,
+    // but MockPrintProgress just records the call regardless).
     size_t next_calls = 0;
     EXPECT_CALL(runtime, next()).WillRepeatedly([&] { return ++next_calls <= kTotalSims250; });
     EXPECT_CALL(runtime, solved()).WillRepeatedly(Return(false));
     EXPECT_CALL(progress, on_sim()).Times(kTotalSims250);
-    EXPECT_CALL(progress, print(kInterval100)).Times(2);
-    EXPECT_CALL(progress, print(kRemainder50)).Times(1);
+    EXPECT_CALL(progress, print()).Times(3);  // sim 100, sim 200, end-of-loop
     EXPECT_CALL(progress, finish_line()).Times(1);
 
     run_loop(kInterval100);
@@ -113,7 +110,7 @@ TEST_F(SolveLoopTest, PrintsOnIntervalBoundary) {
 TEST_F(SolveLoopTest, DoesNotPrintWhenNextReturnsFalse) {
     EXPECT_CALL(runtime, next()).WillOnce(Return(false));
     EXPECT_CALL(progress, on_sim()).Times(0);
-    EXPECT_CALL(progress, print(_)).Times(0);
+    EXPECT_CALL(progress, print()).Times(0);
     EXPECT_CALL(progress, finish_line()).Times(0);
 
     run_loop(kInterval100);
@@ -121,8 +118,8 @@ TEST_F(SolveLoopTest, DoesNotPrintWhenNextReturnsFalse) {
 
 TEST_F(SolveLoopTest, FinishLineBeforeSolved) {
     // interval=1; 3 sims; solved on the 3rd.
-    // Key contract: finish_line precedes bindings.print (SOLVED), followed by a
-    // second finish_line at the end. total==last_printed so no extra print after loop.
+    // Key contract: finish_line precedes bindings.print (SOLVED), followed by
+    // a second finish_line at the end of the loop.
     redirect_cin("\n");
 
     size_t next_calls = 0;
@@ -132,7 +129,7 @@ TEST_F(SolveLoopTest, FinishLineBeforeSolved) {
         .WillOnce(Return(false))
         .WillOnce(Return(true));
     EXPECT_CALL(progress, on_sim()).Times(3);
-    EXPECT_CALL(progress, print(1)).Times(3);
+    EXPECT_CALL(progress, print()).Times(4);  // sims 1, 2, 3, plus end-of-loop
     {
         InSequence seq;
         EXPECT_CALL(progress, finish_line());

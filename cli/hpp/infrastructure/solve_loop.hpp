@@ -25,16 +25,13 @@ template<typename IR, typename IEP, typename IPB, typename IPP>
 void solve_loop<IR,IEP,IPB,IPP>::run(
     IR& runtime, IEP& printer, expr_pool& pool,
     const std::map<std::string, uint32_t>& var_name_to_idx) {
-    size_t total_sims  = 0;
-    size_t last_printed = 0;
+    size_t total_sims = 0;
     while (runtime.next()) {
         ++total_sims;
         if (sim_progress_interval_ > 0) {
             print_progress_.on_sim();
-            if (total_sims % sim_progress_interval_ == 0) {
-                print_progress_.print(total_sims - last_printed);
-                last_printed = total_sims;
-            }
+            if (total_sims % sim_progress_interval_ == 0)
+                print_progress_.print();
         }
         if (!runtime.solved()) continue;
         if (sim_progress_interval_ > 0) print_progress_.finish_line();
@@ -44,8 +41,7 @@ void solve_loop<IR,IEP,IPB,IPP>::run(
         std::cin.get();
     }
     if (sim_progress_interval_ > 0 && total_sims > 0) {
-        if (total_sims != last_printed)
-            print_progress_.print(total_sims - last_printed);
+        print_progress_.print();
         print_progress_.finish_line();
     }
     std::cout << "REFUTED\n";

@@ -12,7 +12,7 @@ struct horizon_print_progress {
     explicit horizon_print_progress(IPrintProgress& base);
     void set_runtime(horizon_runtime& rt);
     void on_sim();
-    void print(size_t sims_since_last);
+    void print();
     void finish_line();
 private:
     IPrintProgress&  base_;
@@ -36,8 +36,8 @@ void horizon_print_progress<IPP>::on_sim() {
 }
 
 template<typename IPP>
-void horizon_print_progress<IPP>::print(size_t sims_since_last) {
-    base_.print(sims_since_last);
+void horizon_print_progress<IPP>::print() {
+    base_.print();
     std::ostringstream oss;
     oss << " | cgw " << std::fixed << std::setprecision(2) << ema_cgw_;
     std::cout << oss.str() << std::flush;

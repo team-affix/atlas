@@ -60,7 +60,7 @@ struct PrintProgressTest : public ::testing::Test {
 TEST_F(PrintProgressTest, NonTtyOutputContainsSimCount) {
     auto pp = make_progress();
     pp.on_sim();
-    pp.print(1);
+    pp.print();
 
     EXPECT_THAT(captured.str(), HasSubstr("1 sims"));
 }
@@ -68,13 +68,23 @@ TEST_F(PrintProgressTest, NonTtyOutputContainsSimCount) {
 TEST_F(PrintProgressTest, NonTtyOutputContainsAllFields) {
     auto pp = make_progress();
     pp.on_sim();
-    pp.print(1);
+    pp.print();
 
     const std::string out = captured.str();
     EXPECT_THAT(out, HasSubstr("res "));
     EXPECT_THAT(out, HasSubstr("dec "));
     EXPECT_THAT(out, HasSubstr("sims/s"));
     EXPECT_THAT(out, HasSubstr("res/s"));
+}
+
+TEST_F(PrintProgressTest, PrintIsNoOpWhenNoSimsSinceLastPrint) {
+    auto pp = make_progress();
+    pp.on_sim();
+    pp.print();
+    const std::string after_first = captured.str();
+    pp.print();  // no on_sim() since last print — should be a no-op
+
+    EXPECT_EQ(captured.str(), after_first);
 }
 
 TEST_F(PrintProgressTest, FinishLineIsNoOpWhenNothingActive) {
@@ -89,7 +99,7 @@ TEST_F(PrintProgressTest, FinishLineAfterNonTtyPrintClosesLine) {
     // decorators can append to the same line. finish_line() closes it.
     auto pp = make_progress();
     pp.on_sim();
-    pp.print(1);
+    pp.print();
     const std::string before = captured.str();
     pp.finish_line();
 
@@ -99,10 +109,10 @@ TEST_F(PrintProgressTest, FinishLineAfterNonTtyPrintClosesLine) {
 
 TEST_F(PrintProgressTest, SequentialPrintsAccumulateTotalSims) {
     auto pp = make_progress();
-    pp.on_sim();
-    pp.print(500);
-    pp.on_sim();
-    pp.print(500);
+    for (size_t i = 0; i < 500; ++i) pp.on_sim();
+    pp.print();
+    for (size_t i = 0; i < 500; ++i) pp.on_sim();
+    pp.print();
 
     const std::string out = captured.str();
     EXPECT_THAT(out, HasSubstr("500 sims"));
@@ -116,10 +126,18 @@ TEST_F(PrintProgressTest, PrintOutputContainsResolutionDepthField) {
     auto pp = make_progress();
     pp.on_sim();
     pp.on_sim();
-    pp.print(2);
+    pp.print();
 
-    // res depth should be non-zero (EMA of 20)
     const std::string out = captured.str();
     EXPECT_THAT(out, HasSubstr("res "));
     EXPECT_THAT(out, HasSubstr("dec "));
+}
+
+TEST_F(PrintProgressTest, SimsSinceLastResetAfterPrint) {
+    auto pp = make_progress();
+    pp.on_sim();
+    pp.on_sim();
+    EXPECT_EQ(pp.sims_since_last(), 2u);
+    pp.print();
+    EXPECT_EQ(pp.sims_since_last(), 0u);
 }
