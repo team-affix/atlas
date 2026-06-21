@@ -1,6 +1,6 @@
 # Atlas
 
-Atlas is a **pure relational CHC (Constrained Horn Clause) solver** for goal-directed Horn logic. Problems are encoded as Horn clause databases; queries are conjunctive goals with free variables. Atlas searches for satisfying substitutions and enumerates distinct models until the decision space is exhausted.
+Atlas is a **pure relational CHC (Constrained Horn Clause) solver** for goal-directed Horn logic. A **database** of Horn rules defines the problem structure; the **query** (conjunctive goal with free variables) is the problem to solve. Atlas searches for satisfying substitutions and enumerates distinct models until the decision space is exhausted.
 
 **Completeness (design contract):**
 
@@ -31,13 +31,13 @@ X = liz
 REFUTED
 ```
 
-Solver subcommands: `horizon`, `ridge`, `basic`. Goals are passed with `--goal` as comma-separated atoms.
+Solver subcommands: `horizon`, `ridge`, `basic`. The query is passed with `--goal` as comma-separated atoms.
 
 ---
 
 ## What Atlas is for
 
-Horn clauses are a universal encoding for search: reachability, enumeration, constraint satisfaction, synthesis, and combinatorial exploration can all be expressed as rules plus a goal query. Atlas targets **Turing-complete search problems** expressed in this form.
+Horn clauses are a universal encoding for search: reachability, enumeration, constraint satisfaction, synthesis, and combinatorial exploration. Each instance pairs a **rule database** (the structure of the domain) with a **query** (what to find). Atlas targets **Turing-complete search problems** expressed in this form.
 
 Unlike theory-heavy CHC solvers (e.g. Spacer, Eldarica), Atlas is **pure Horn**: no built-in arithmetic, bitvectors, or residual goals. Numeric and logical structure is encoded relationally (Peano arithmetic, Boolean circuits as clauses, etc.). Search heuristics carry domain knowledge rather than a separate theory layer. Rule order in the database and atom order within a rule body are **semantically irrelevant** — subgoals are conjunctive relations, not sequential program steps — so reordering clauses or body atoms does not change whether or which solutions Atlas finds. This order-independence is what makes Atlas a **pure relational** solver rather than a procedural backtracking interpreter.
 
@@ -51,8 +51,8 @@ A conforming Atlas solver implements the following contract.
 
 ### Input
 
-- **Database:** `.chc` file — Prolog-style Horn clauses (facts and rules). See [Input format](#input-format).
-- **Goal:** conjunctive query on the command line (`--goal "G1, G2, ..."`). Variables may remain free.
+- **Database:** `.chc` file — Horn rules and facts defining the problem structure. See [Input format](#input-format).
+- **Query:** conjunctive goal on the command line (`--goal "G1, G2, ..."`). This is the problem instance; variables may remain free.
 - **Solver mode:** `horizon` | `ridge` | `basic`.
 
 No theory constraints, no residual goals. The logic is purely relational unification over first-order terms. Declaration order of rules and of body atoms is not part of the semantics.
@@ -148,6 +148,8 @@ See [docs/solvers.md](docs/solvers.md) for reward definitions and rationale.
 
 ## Input format
 
+The `.chc` file is the **database** (rules and facts). The **query** is supplied separately via `--goal`.
+
 **Facts:**
 ```prolog
 parent(tom, bob).
@@ -164,7 +166,7 @@ even(suc(suc(X))) :- even(X).
 - Variables: uppercase (`X`, `Y`). Atoms/functors: lowercase.
 - Lists: `[]`, `[H|T]`, `[a, b, c]`.
 - Comments: `%` to end of line.
-- Goals: command line only, not embedded in `.chc` files.
+- **Query:** command line only (`--goal`), not embedded in `.chc` files. The database holds rules; the query is the problem.
 - **Order:** rule order in the file and atom order in a rule body do not affect satisfiability or the set of solutions found.
 
 **Example:**
