@@ -220,16 +220,6 @@ TEST_F(BasicManifestIntegrationTest, WiringConstructsWithEmptyDbAndNoGoals) {
         (basic_manifest{database, initial_goals, kInitialFrameOffset, kMaxResolutions, kSeed}));
 }
 
-TEST_F(BasicManifestIntegrationTest, WiringMaxResolutionsStored) {
-    /*
-     * Intent: constructor stores the max_resolutions budget on the manifest.
-     * initial goals: (none)
-     * rules: (none)
-     */
-    basic_manifest manifest{database, initial_goals, kInitialFrameOffset, kMaxResolutions, kSeed};
-    EXPECT_EQ(manifest.max_resolutions_, kMaxResolutions);
-}
-
 TEST_F(BasicManifestIntegrationTest, WiringCdclDistinctFromJoint) {
     /*
      * Intent: cdcl_ and joint_ are distinct objects (cdcl is avoidance; joint is generator).

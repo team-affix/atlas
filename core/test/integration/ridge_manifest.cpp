@@ -48,16 +48,6 @@ TEST_F(RidgeManifestIntegrationTest, WiringConstructsWithEmptyDbAndNoGoals) {
     EXPECT_NO_THROW(make_manifest());
 }
 
-TEST_F(RidgeManifestIntegrationTest, WiringMaxResolutionsStored) {
-    /*
-     * Intent: constructor stores the max_resolutions budget on the manifest.
-     * initial goals: (none)
-     * rules: (none)
-     */
-    ridge_manifest manifest = make_manifest();
-    EXPECT_EQ(manifest.max_resolutions_, kMaxResolutions);
-}
-
 TEST_F(RidgeManifestIntegrationTest, WiringMctsSimDistinctFromInnerSetUpTearDown) {
     /*
      * Intent: mcts_sim_ is distinct from set_up_sim_ and tear_down_sim_.

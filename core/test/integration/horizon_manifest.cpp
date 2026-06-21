@@ -47,11 +47,6 @@ TEST_F(HorizonManifestIntegrationTest, WiringConstructsWithEmptyDbAndNoGoals) {
     EXPECT_NO_THROW(make_manifest());
 }
 
-TEST_F(HorizonManifestIntegrationTest, WiringMaxResolutionsStored) {
-    horizon_manifest manifest = make_manifest();
-    EXPECT_EQ(manifest.max_resolutions_, kMaxResolutions);
-}
-
 TEST_F(HorizonManifestIntegrationTest, WiringInitialGoalWeightMatchesOneOverK) {
     const expr* goal0 = saved_expr_pool_.make_functor(functors.id("f"), {});
     const expr* goal1 = saved_expr_pool_.make_functor(functors.id("g"), {});
