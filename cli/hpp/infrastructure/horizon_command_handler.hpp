@@ -13,6 +13,7 @@
 #include "infrastructure/initial_goal_exprs.hpp"
 #include "infrastructure/non_backtracking_var_sequencer.hpp"
 #include "infrastructure/print_bindings.hpp"
+#include "infrastructure/horizon_print_progress.hpp"
 #include "infrastructure/print_progress.hpp"
 #include "infrastructure/solve_loop.hpp"
 #include "infrastructure/functor_names.hpp"
@@ -20,7 +21,9 @@
 
 struct horizon_command_handler {
     using PrintBindings = print_bindings<horizon_runtime, expr_printer>;
-    using SolveLoop     = solve_loop<horizon_runtime, expr_printer, PrintBindings, print_progress>;
+    using BasePP        = print_progress<horizon_runtime>;
+    using PP            = horizon_print_progress<BasePP>;
+    using SolveLoop     = solve_loop<horizon_runtime, expr_printer, PrintBindings, PP>;
 
     horizon_command_handler(
         const std::string& file,
@@ -45,8 +48,9 @@ private:
     std::map<std::string, uint32_t> var_name_to_idx_;
     std::optional<horizon_runtime> runtime_;
     PrintBindings print_bindings_;
-    print_progress print_progress_;
-    SolveLoop solve_loop_;
+    BasePP        base_print_progress_;
+    PP            print_progress_;
+    SolveLoop     solve_loop_;
 };
 
 #endif

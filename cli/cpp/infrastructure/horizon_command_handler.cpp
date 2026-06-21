@@ -11,6 +11,7 @@ horizon_command_handler::horizon_command_handler(
     double exploration_constant,
     size_t sim_progress_interval)
     : parse_var_seq_(0),
+      print_progress_(base_print_progress_),
       solve_loop_(print_bindings_, print_progress_, sim_progress_interval) {
     parse_pool_.emplace();
     printer_.emplace(std::cout, var_names_, functor_names_);
@@ -27,6 +28,7 @@ horizon_command_handler::horizon_command_handler(
 
     runtime_.emplace(
         database_, initial_goals_, initial_frame_offset, max_resolutions, seed, exploration_constant);
+    print_progress_.set_runtime(*runtime_);
 }
 
 void horizon_command_handler::operator()() {

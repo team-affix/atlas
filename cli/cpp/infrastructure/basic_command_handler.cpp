@@ -25,6 +25,7 @@ basic_command_handler::basic_command_handler(
         functor_names_.set_name(id, name);
 
     runtime_.emplace(database_, initial_goals_, initial_frame_offset, max_resolutions, seed);
+    print_progress_.set_runtime(*runtime_);
 }
 
 void basic_command_handler::operator()() {

@@ -27,6 +27,7 @@ ridge_command_handler::ridge_command_handler(
 
     runtime_.emplace(
         database_, initial_goals_, initial_frame_offset, max_resolutions, seed, exploration_constant);
+    print_progress_.set_runtime(*runtime_);
 }
 
 void ridge_command_handler::operator()() {

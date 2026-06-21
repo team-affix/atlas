@@ -31,6 +31,10 @@ size_t horizon_runtime::decision_depth() const {
     return manifest_.decision_memory_.count();
 }
 
+double horizon_runtime::cgw() const {
+    return manifest_.cumulative_grounded_weight_.get();
+}
+
 lemma horizon_runtime::derive_decision_lemma() const {
     return manifest_.decision_memory_.derive_decision_lemma();
 }

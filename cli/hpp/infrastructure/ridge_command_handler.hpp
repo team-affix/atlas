@@ -19,8 +19,9 @@
 #include "infrastructure/var_names.hpp"
 
 struct ridge_command_handler {
-    using PrintBindings = print_bindings<ridge_runtime, expr_printer>;
-    using SolveLoop     = solve_loop<ridge_runtime, expr_printer, PrintBindings, print_progress>;
+    using PrintBindings  = print_bindings<ridge_runtime, expr_printer>;
+    using PrintProgress  = print_progress<ridge_runtime>;
+    using SolveLoop      = solve_loop<ridge_runtime, expr_printer, PrintBindings, PrintProgress>;
 
     ridge_command_handler(
         const std::string& file,
@@ -45,7 +46,7 @@ private:
     std::map<std::string, uint32_t> var_name_to_idx_;
     std::optional<ridge_runtime> runtime_;
     PrintBindings print_bindings_;
-    print_progress print_progress_;
+    PrintProgress print_progress_;
     SolveLoop solve_loop_;
 };
 
