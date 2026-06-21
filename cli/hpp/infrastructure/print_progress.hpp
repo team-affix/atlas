@@ -10,7 +10,7 @@
 #include <unistd.h>
 
 struct print_progress {
-    void print(size_t total_sims, double avg_res_depth, double avg_dec_depth, double avg_freq);
+    void print(size_t total_sims, double avg_res_depth, double avg_dec_depth, double sim_freq, double res_freq);
     void finish_line();
 private:
     size_t previous_line_width_ = 0;
@@ -18,12 +18,13 @@ private:
 };
 
 inline void print_progress::print(
-    size_t total_sims, double avg_res_depth, double avg_dec_depth, double avg_freq) {
+    size_t total_sims, double avg_res_depth, double avg_dec_depth, double sim_freq, double res_freq) {
     std::ostringstream oss;
     oss << total_sims << " sims"
         << " | res " << std::fixed << std::setprecision(1) << avg_res_depth
         << " | dec " << std::fixed << std::setprecision(1) << avg_dec_depth
-        << " | " << static_cast<size_t>(avg_freq) << "/s";
+        << " | " << static_cast<size_t>(sim_freq) << " sims/s"
+        << " | " << static_cast<size_t>(res_freq) << " res/s";
     const std::string text = oss.str();
     if (isatty(fileno(stdout))) {
         // TTY: overwrite the current line in place.

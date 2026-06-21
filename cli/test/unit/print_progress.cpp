@@ -55,7 +55,7 @@ constexpr size_t kCount999 = 999;
 
 TEST_F(PrintProgressTest, NonTtyPrintsNewlineWrappedCount) {
     print_progress progress;
-    progress.print(kCount1000, 0.0, 0.0, 0.0);
+    progress.print(kCount1000, 0.0, 0.0, 0.0, 0.0);
 
     EXPECT_THAT(captured.str(), HasSubstr("\n1000 sims"));
 }
@@ -69,7 +69,7 @@ TEST_F(PrintProgressTest, FinishLineIsNoOpWhenNothingActive) {
 
 TEST_F(PrintProgressTest, FinishLineAfterNonTtyPrintIsStillClean) {
     print_progress progress;
-    progress.print(kCount1000, 0.0, 0.0, 0.0);
+    progress.print(kCount1000, 0.0, 0.0, 0.0, 0.0);
     progress.finish_line();
 
     EXPECT_THAT(captured.str(), HasSubstr("\n1000 sims"));
@@ -78,8 +78,8 @@ TEST_F(PrintProgressTest, FinishLineAfterNonTtyPrintIsStillClean) {
 
 TEST_F(PrintProgressTest, SequentialPrintsEmitDistinctLines) {
     print_progress progress;
-    progress.print(kCount10000, 0.0, 0.0, 0.0);
-    progress.print(kCount999, 0.0, 0.0, 0.0);
+    progress.print(kCount10000, 0.0, 0.0, 0.0, 0.0);
+    progress.print(kCount999, 0.0, 0.0, 0.0, 0.0);
 
     const std::string out = captured.str();
     EXPECT_THAT(out, HasSubstr("\n10000 sims"));

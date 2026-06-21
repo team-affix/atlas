@@ -32,7 +32,7 @@ void solve_loop<IR,IEP,IPB,IPP>::run(
     size_t dec_depth_sum = 0;
     double ema_res_depth = 0.0;
     double ema_dec_depth = 0.0;
-    double ema_freq      = 0.0;
+    double ema_res_freq  = 0.0;
     bool   ema_init      = false;
     auto   last_time     = std::chrono::steady_clock::now();
 
@@ -40,20 +40,21 @@ void solve_loop<IR,IEP,IPB,IPP>::run(
         const size_t interval = sims - last_printed;
         const auto now = std::chrono::steady_clock::now();
         const double elapsed = std::chrono::duration<double>(now - last_time).count();
-        const double cur_res  = interval > 0 ? static_cast<double>(res_depth_sum) / interval : 0.0;
-        const double cur_dec  = interval > 0 ? static_cast<double>(dec_depth_sum) / interval : 0.0;
-        const double cur_freq = elapsed > 0.0 ? static_cast<double>(interval) / elapsed : 0.0;
+        const double cur_res      = interval > 0 ? static_cast<double>(res_depth_sum) / interval : 0.0;
+        const double cur_dec      = interval > 0 ? static_cast<double>(dec_depth_sum) / interval : 0.0;
+        const double cur_freq     = elapsed > 0.0 ? static_cast<double>(interval)     / elapsed : 0.0;
+        const double cur_res_freq = elapsed > 0.0 ? static_cast<double>(res_depth_sum) / elapsed : 0.0;
         if (!ema_init) {
             ema_res_depth = cur_res;
             ema_dec_depth = cur_dec;
-            ema_freq      = cur_freq;
+            ema_res_freq  = cur_res_freq;
             ema_init      = true;
         } else {
             ema_res_depth = 0.9 * ema_res_depth + 0.1 * cur_res;
             ema_dec_depth = 0.9 * ema_dec_depth + 0.1 * cur_dec;
-            ema_freq      = 0.9 * ema_freq      + 0.1 * cur_freq;
+            ema_res_freq  = 0.9 * ema_res_freq  + 0.1 * cur_res_freq;
         }
-        print_progress_.print(sims, ema_res_depth, ema_dec_depth, ema_freq);
+        print_progress_.print(sims, ema_res_depth, ema_dec_depth, cur_freq, ema_res_freq);
         res_depth_sum = 0;
         dec_depth_sum = 0;
         last_time     = now;
