@@ -5,6 +5,7 @@
 #include <random>
 #include <vector>
 #include "infrastructure/mcts_sim.hpp"
+#include "infrastructure/lineage_pool.hpp"
 #include "infrastructure/set_up_sim.hpp"
 #include "infrastructure/tear_down_sim.hpp"
 #include "value_objects/mcts_choice.hpp"
@@ -106,6 +107,7 @@ struct MctsSimTest : public ::testing::Test {
     testing::NiceMock<MockClearChosenGoalCandidates> clear_chosen_goal_candidates;
     MockComputeMctsReward compute_mcts_reward;
     std::mt19937 rng{42};
+    lineage_pool lp;
 
     test_set_up_sim_t inner_set_up{push_trail_frame};
     test_tear_down_sim_t inner_tear_down{
@@ -115,7 +117,7 @@ struct MctsSimTest : public ::testing::Test {
         clear_bindings, trim_unpinned_lineages, frame_allocator,
         clean_up_cdcl, clear_chosen_goal_candidates};
     test_mcts_sim_t sim{inner_set_up, inner_tear_down, compute_mcts_reward,
-                    rng, kExplorationConstant};
+                    lp, rng, kExplorationConstant};
 
     goal_lineage gl0{nullptr, 0};
     goal_lineage gl1{nullptr, 1};

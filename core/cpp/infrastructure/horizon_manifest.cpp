@@ -84,7 +84,7 @@ horizon_manifest::horizon_manifest(
       horizon_reward_(cumulative_grounded_weight_),
       rng_(random_seed),
       mcts_sim_(set_up_sim_, tear_down_sim_, horizon_reward_,
-                rng_, exploration_constant),
+                lineage_pool_, rng_, exploration_constant),
       mcts_decision_generator_(lineage_pool_, srt_active_goals_,
                                mcts_sim_, goal_candidate_rules_),
       run_sim_(srt_initial_goals_activator_, solution_detector_,
