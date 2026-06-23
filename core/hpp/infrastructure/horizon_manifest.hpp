@@ -110,7 +110,7 @@ struct horizon_manifest {
                             mhu_t, bind_map, lineage_pool, frame_bump_allocator, cdcl_t, chosen_goal_candidates>;
     using horizon_tear_down_sim_t   = horizon_tear_down_sim<tear_down_sim_t, goal_weights, cumulative_grounded_weight>;
     using horizon_reward_t     = horizon_reward<cumulative_grounded_weight>;
-    using mcts_sim_t       = mcts_sim<set_up_sim_t, horizon_tear_down_sim_t, horizon_reward_t>;
+    using mcts_sim_t       = mcts_sim<set_up_sim_t, horizon_tear_down_sim_t, horizon_reward_t, lineage_pool>;
     using mcts_decision_generator_t = mcts_decision_generator<lineage_pool, srt_active_goals,
                                     mcts_sim_t, goal_candidate_rules>;
     using run_sim_t        = run_sim<srt_initial_goals_activator_t, solution_detector_t, conflict_detector_t,

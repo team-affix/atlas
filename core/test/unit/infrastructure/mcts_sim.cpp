@@ -3,9 +3,9 @@
 #include <gtest/gtest.h>
 #include <gmock/gmock.h>
 #include <random>
+#include <set>
 #include <vector>
 #include "infrastructure/mcts_sim.hpp"
-#include "infrastructure/lineage_pool.hpp"
 #include "infrastructure/set_up_sim.hpp"
 #include "infrastructure/tear_down_sim.hpp"
 #include "value_objects/mcts_choice.hpp"
@@ -78,6 +78,11 @@ struct MockClearChosenGoalCandidates {
     MOCK_METHOD(void, clear, ());
 };
 
+struct MockMakeResolutionLineage {
+    MOCK_METHOD((const resolution_lineage*), make_resolution_lineage,
+        (const goal_lineage*, rule_id));
+};
+
 using test_set_up_sim_t = set_up_sim<MockPushTrailFrame>;
 using test_tear_down_sim_t = tear_down_sim<
     MockPopTrailFrame, MockClearUnitGoals, MockClearRecordedDecisions,
@@ -85,7 +90,8 @@ using test_tear_down_sim_t = tear_down_sim<
     MockClearActiveGoals, MockClearCandidateFrameOffsets, MockClearMhuHeads,
     MockClearBindings, MockTrimUnpinnedLineages, MockFrameAllocator,
     MockCleanUpCdcl, MockClearChosenGoalCandidates>;
-using test_mcts_sim_t = mcts_sim<test_set_up_sim_t, test_tear_down_sim_t, MockComputeMctsReward>;
+using test_mcts_sim_t = mcts_sim<test_set_up_sim_t, test_tear_down_sim_t,
+                                  MockComputeMctsReward, MockMakeResolutionLineage>;
 
 struct MctsSimTest : public ::testing::Test {
     static constexpr double kExplorationConstant = 1.414;
@@ -106,8 +112,9 @@ struct MctsSimTest : public ::testing::Test {
     testing::NiceMock<MockCleanUpCdcl> clean_up_cdcl;
     testing::NiceMock<MockClearChosenGoalCandidates> clear_chosen_goal_candidates;
     MockComputeMctsReward compute_mcts_reward;
+    testing::NiceMock<MockMakeResolutionLineage> make_resolution_lineage;
     std::mt19937 rng{42};
-    lineage_pool lp;
+    std::set<resolution_lineage> resolution_storage;
 
     test_set_up_sim_t inner_set_up{push_trail_frame};
     test_tear_down_sim_t inner_tear_down{
@@ -117,13 +124,18 @@ struct MctsSimTest : public ::testing::Test {
         clear_bindings, trim_unpinned_lineages, frame_allocator,
         clean_up_cdcl, clear_chosen_goal_candidates};
     test_mcts_sim_t sim{inner_set_up, inner_tear_down, compute_mcts_reward,
-                    lp, rng, kExplorationConstant};
+                        make_resolution_lineage, rng, kExplorationConstant};
 
     goal_lineage gl0{nullptr, 0};
     goal_lineage gl1{nullptr, 1};
 
     void SetUp() override {
         ON_CALL(compute_mcts_reward, compute_mcts_reward()).WillByDefault(Return(0.0));
+        ON_CALL(make_resolution_lineage, make_resolution_lineage(testing::_, testing::_))
+            .WillByDefault([this](const goal_lineage* gl, rule_id rid) {
+                auto [it, _] = resolution_storage.emplace(gl, rid);
+                return &*it;
+            });
     }
 };
 
