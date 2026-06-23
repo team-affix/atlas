@@ -4,6 +4,8 @@
 #include <gmock/gmock.h>
 #include "infrastructure/horizon_goal_deactivator.hpp"
 
+namespace {
+
 struct MockSrtGoalDeactivator {
     MOCK_METHOD(void, deactivate, (const goal_lineage*));
 };
@@ -11,6 +13,8 @@ struct MockSrtGoalDeactivator {
 struct MockGoalWeights {
     MOCK_METHOD(void, erase, (const goal_lineage*));
 };
+
+} // namespace
 
 using test_horizon_goal_deactivator_t = horizon_goal_deactivator<MockSrtGoalDeactivator, MockGoalWeights>;
 

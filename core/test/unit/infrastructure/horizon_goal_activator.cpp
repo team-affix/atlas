@@ -8,6 +8,8 @@
 
 using ::testing::Return;
 
+namespace {
+
 struct MockGoalActivator {
     MOCK_METHOD(void, activate, (const goal_lineage*));
 };
@@ -20,6 +22,8 @@ struct MockGoalWeights {
 struct MockGetRule {
     MOCK_METHOD(const rule*, get, (rule_id), (const));
 };
+
+} // namespace
 
 using test_horizon_goal_activator_t = horizon_goal_activator<MockGoalActivator, MockGoalWeights, MockGetRule>;
 
