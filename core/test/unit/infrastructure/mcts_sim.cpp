@@ -9,6 +9,7 @@
 #include "infrastructure/set_up_sim.hpp"
 #include "infrastructure/tear_down_sim.hpp"
 #include "value_objects/mcts_choice.hpp"
+#include "uniform_value_delta.hpp"
 
 using ::testing::Return;
 
@@ -90,8 +91,10 @@ using test_tear_down_sim_t = tear_down_sim<
     MockClearActiveGoals, MockClearCandidateFrameOffsets, MockClearMhuHeads,
     MockClearBindings, MockTrimUnpinnedLineages, MockFrameAllocator,
     MockCleanUpCdcl, MockClearChosenGoalCandidates>;
+using test_value_delta_t = monte_carlo::uniform_value_delta<double>;
 using test_mcts_sim_t = mcts_sim<test_set_up_sim_t, test_tear_down_sim_t,
-                                  MockComputeMctsReward, MockMakeResolutionLineage>;
+                                  MockComputeMctsReward, test_value_delta_t,
+                                  MockMakeResolutionLineage>;
 
 struct MctsSimTest : public ::testing::Test {
     static constexpr double kExplorationConstant = 1.414;
@@ -112,6 +115,7 @@ struct MctsSimTest : public ::testing::Test {
     testing::NiceMock<MockCleanUpCdcl> clean_up_cdcl;
     testing::NiceMock<MockClearChosenGoalCandidates> clear_chosen_goal_candidates;
     MockComputeMctsReward compute_mcts_reward;
+    test_value_delta_t value_delta;
     testing::NiceMock<MockMakeResolutionLineage> make_resolution_lineage;
     std::mt19937 rng{42};
     std::set<resolution_lineage> resolution_storage;
@@ -124,7 +128,7 @@ struct MctsSimTest : public ::testing::Test {
         clear_bindings, trim_unpinned_lineages, frame_allocator,
         clean_up_cdcl, clear_chosen_goal_candidates};
     test_mcts_sim_t sim{inner_set_up, inner_tear_down, compute_mcts_reward,
-                        make_resolution_lineage, rng, kExplorationConstant};
+                        value_delta, make_resolution_lineage, rng, kExplorationConstant};
 
     goal_lineage gl0{nullptr, 0};
     goal_lineage gl1{nullptr, 1};

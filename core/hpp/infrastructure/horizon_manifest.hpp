@@ -43,6 +43,7 @@
 #include "infrastructure/make_initial_goal_lineage.hpp"
 #include "infrastructure/mcts_decision_generator.hpp"
 #include "infrastructure/mcts_sim.hpp"
+#include "uniform_value_delta.hpp"
 #include "infrastructure/mhu_elimination_generator.hpp"
 #include "infrastructure/ra_rule_id_set_factory.hpp"
 #include "infrastructure/resolution_memory.hpp"
@@ -110,7 +111,9 @@ struct horizon_manifest {
                             mhu_t, bind_map, lineage_pool, frame_bump_allocator, cdcl_t, chosen_goal_candidates>;
     using horizon_tear_down_sim_t   = horizon_tear_down_sim<tear_down_sim_t, goal_weights, cumulative_grounded_weight>;
     using horizon_reward_t     = horizon_reward<cumulative_grounded_weight>;
-    using mcts_sim_t       = mcts_sim<set_up_sim_t, horizon_tear_down_sim_t, horizon_reward_t, lineage_pool>;
+    using value_delta_t    = monte_carlo::uniform_value_delta<double>;
+    using mcts_sim_t       = mcts_sim<set_up_sim_t, horizon_tear_down_sim_t, horizon_reward_t,
+                                      value_delta_t, lineage_pool>;
     using mcts_decision_generator_t = mcts_decision_generator<lineage_pool, srt_active_goals,
                                     mcts_sim_t, goal_candidate_rules>;
     using run_sim_t        = run_sim<srt_initial_goals_activator_t, solution_detector_t, conflict_detector_t,
@@ -179,6 +182,7 @@ struct horizon_manifest {
     horizon_resolver_t             horizon_resolver_;
     set_up_sim_t                    set_up_sim_;
     horizon_reward_t               horizon_reward_;
+    value_delta_t                  value_delta_;
     std::mt19937                rng_;
     mcts_sim_t                 mcts_sim_;
     mcts_decision_generator_t       mcts_decision_generator_;

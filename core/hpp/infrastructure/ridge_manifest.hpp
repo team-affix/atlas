@@ -34,6 +34,7 @@
 #include "infrastructure/make_initial_goal_lineage.hpp"
 #include "infrastructure/mcts_decision_generator.hpp"
 #include "infrastructure/mcts_sim.hpp"
+#include "uniform_value_delta.hpp"
 #include "infrastructure/mhu_elimination_generator.hpp"
 #include "infrastructure/ra_rule_id_set_factory.hpp"
 #include "infrastructure/resolution_memory.hpp"
@@ -96,7 +97,9 @@ struct ridge_manifest {
                             goal_candidate_rules, goal_exprs, srt_active_goals, candidate_frame_offsets,
                             mhu_t, bind_map, lineage_pool, frame_bump_allocator, cdcl_t, chosen_goal_candidates>;
     using ridge_reward_t   = ridge_reward<decision_memory>;
-    using mcts_sim_t   = mcts_sim<set_up_sim_t, tear_down_sim_t, ridge_reward_t, lineage_pool>;
+    using value_delta_t = monte_carlo::uniform_value_delta<double>;
+    using mcts_sim_t   = mcts_sim<set_up_sim_t, tear_down_sim_t, ridge_reward_t,
+                                   value_delta_t, lineage_pool>;
     using mcts_decision_generator_t = mcts_decision_generator<lineage_pool, srt_active_goals,
                                     mcts_sim_t, goal_candidate_rules>;
     using run_sim_t        = run_sim<srt_initial_goals_activator_t, solution_detector_t, conflict_detector_t,
@@ -158,6 +161,7 @@ struct ridge_manifest {
     set_up_sim_t                    set_up_sim_;
     tear_down_sim_t                    tear_down_sim_;
     ridge_reward_t                 ridge_reward_;
+    value_delta_t                  value_delta_;
     std::mt19937                rng_;
     mcts_sim_t                 mcts_sim_;
     mcts_decision_generator_t       mcts_decision_generator_;

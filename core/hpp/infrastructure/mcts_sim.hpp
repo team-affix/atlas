@@ -11,10 +11,10 @@
 #include "mcts.hpp"
 
 template<typename ISetUpSim, typename ITearDownSim, typename IComputeMctsReward,
-         typename IMakeResolutionLineage>
+         typename IGetValueDelta, typename IMakeResolutionLineage>
 struct mcts_sim {
     mcts_sim(ISetUpSim&, ITearDownSim&, IComputeMctsReward&,
-             IMakeResolutionLineage&, std::mt19937&, double exploration_constant);
+             IGetValueDelta&, IMakeResolutionLineage&, std::mt19937&, double exploration_constant);
 
     void set_up();
     void tear_down();
@@ -54,21 +54,23 @@ private:
     using rollout_t = monte_carlo::random_rollout<
                           mcts_choice, std::mt19937, choices_t, choices_t>;
     using mc_sim_t  = monte_carlo::sim<
-                          node_id_t,    // INodeHandle
-                          mcts_choice, // IChoice
-                          double,      // IFloat
-                          table_t,     // IGetVisits
-                          table_t,     // IGetValue
-                          table_t,     // ISetVisits
-                          table_t,     // ISetValue
-                          walker,      // IWalker
-                          choices_t,   // IGetChoiceCount
-                          choices_t,   // IGetChoiceAt
-                          rollout_t>;  // IRolloutChoose
+                          node_id_t,       // INodeHandle
+                          mcts_choice,     // IChoice
+                          double,          // IFloat
+                          table_t,         // IGetVisits
+                          table_t,         // IGetValue
+                          table_t,         // ISetVisits
+                          table_t,         // ISetValue
+                          walker,          // IWalker
+                          choices_t,       // IGetChoiceCount
+                          choices_t,       // IGetChoiceAt
+                          rollout_t,       // IRolloutChoose
+                          IGetValueDelta>; // IGetValueDelta
 
     ISetUpSim&            set_up_;
     ITearDownSim&         tear_down_;
     IComputeMctsReward&   compute_mcts_reward_;
+    IGetValueDelta&       value_delta_;
     double                exploration_constant_;
 
     // Persistent across all episodes — accumulates statistics over the
@@ -84,13 +86,13 @@ private:
 
 // ─── walker member function definitions ──────────────────────────────────────
 
-template<typename ISUS, typename ITDS, typename ICMR, typename IMRL>
-mcts_sim<ISUS, ITDS, ICMR, IMRL>::walker::walker(IMRL& mrl)
+template<typename ISUS, typename ITDS, typename ICMR, typename IGVD, typename IMRL>
+mcts_sim<ISUS, ITDS, ICMR, IGVD, IMRL>::walker::walker(IMRL& mrl)
     : make_resolution_lineage_(mrl) {}
 
-template<typename ISUS, typename ITDS, typename ICMR, typename IMRL>
-typename mcts_sim<ISUS, ITDS, ICMR, IMRL>::node_id_t
-mcts_sim<ISUS, ITDS, ICMR, IMRL>::walker::walk(
+template<typename ISUS, typename ITDS, typename ICMR, typename IGVD, typename IMRL>
+typename mcts_sim<ISUS, ITDS, ICMR, IGVD, IMRL>::node_id_t
+mcts_sim<ISUS, ITDS, ICMR, IGVD, IMRL>::walker::walk(
         const node_id_t& node, const mcts_choice& choice) const {
     if (const goal_lineage* const* gl_ptr =
             std::get_if<const goal_lineage*>(&choice)) {
@@ -106,13 +108,14 @@ mcts_sim<ISUS, ITDS, ICMR, IMRL>::walker::walk(
 
 // ─── mcts_sim member function definitions ────────────────────────────────────
 
-template<typename ISUS, typename ITDS, typename ICMR, typename IMRL>
-mcts_sim<ISUS, ITDS, ICMR, IMRL>::mcts_sim(
+template<typename ISUS, typename ITDS, typename ICMR, typename IGVD, typename IMRL>
+mcts_sim<ISUS, ITDS, ICMR, IGVD, IMRL>::mcts_sim(
         ISUS& sus, ITDS& tds, ICMR& cmr,
-        IMRL& mrl, std::mt19937& rng, double ec)
+        IGVD& gvd, IMRL& mrl, std::mt19937& rng, double ec)
     : set_up_(sus)
     , tear_down_(tds)
     , compute_mcts_reward_(cmr)
+    , value_delta_(gvd)
     , exploration_constant_(ec)
     , table_()
     , walker_(mrl)
@@ -120,24 +123,26 @@ mcts_sim<ISUS, ITDS, ICMR, IMRL>::mcts_sim(
     , mc_sim_{}
 {}
 
-template<typename ISUS, typename ITDS, typename ICMR, typename IMRL>
-void mcts_sim<ISUS, ITDS, ICMR, IMRL>::set_up() {
+template<typename ISUS, typename ITDS, typename ICMR, typename IGVD, typename IMRL>
+void mcts_sim<ISUS, ITDS, ICMR, IGVD, IMRL>::set_up() {
     mc_sim_.emplace(table_, table_, table_, table_,
                     walker_,
                     rollout_,
+                    value_delta_,
                     node_id_t{decision_set_t{}, nullptr},
                     exploration_constant_);
     set_up_.set_up();
 }
 
-template<typename ISUS, typename ITDS, typename ICMR, typename IMRL>
-void mcts_sim<ISUS, ITDS, ICMR, IMRL>::tear_down() {
-    mc_sim_->terminate(compute_mcts_reward_.compute_mcts_reward());
+template<typename ISUS, typename ITDS, typename ICMR, typename IGVD, typename IMRL>
+void mcts_sim<ISUS, ITDS, ICMR, IGVD, IMRL>::tear_down() {
+    value_delta_.set_value(compute_mcts_reward_.compute_mcts_reward());
+    mc_sim_->terminate();
     tear_down_.tear_down();
 }
 
-template<typename ISUS, typename ITDS, typename ICMR, typename IMRL>
-mcts_choice mcts_sim<ISUS, ITDS, ICMR, IMRL>::choose(
+template<typename ISUS, typename ITDS, typename ICMR, typename IGVD, typename IMRL>
+mcts_choice mcts_sim<ISUS, ITDS, ICMR, IGVD, IMRL>::choose(
         const std::vector<mcts_choice>& choices) {
     return mc_sim_->choose(choices, choices);
 }
