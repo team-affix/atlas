@@ -1,5 +1,6 @@
 #include <CLI/CLI.hpp>
 #include "infrastructure/basic_command_handler.hpp"
+#include "infrastructure/genius_command_handler.hpp"
 #include "infrastructure/horizon_command_handler.hpp"
 #include "infrastructure/ridge_command_handler.hpp"
 
@@ -82,6 +83,31 @@ int main(int argc, char** argv) {
                                   horizon_opts.max_resolutions, horizon_opts.seed,
                                   horizon_opts.exploration_constant,
                                   horizon_opts.sim_progress_interval);
+        h();
+    });
+
+    struct {
+        std::string file;
+        std::string goals_str;
+        size_t max_resolutions       = 1000;
+        uint32_t seed                = 0;
+        double exploration_constant  = 1.414;
+        size_t sim_progress_interval = 1000;
+    } genius_opts;
+
+    auto* genius_sub = app.add_subcommand("genius", "Run the genius solver (MCTS + per-node reward: cgw for rule nodes, ridge for goal nodes)");
+    genius_sub->add_option("file", genius_opts.file, "CHC input file")->required();
+    genius_sub->add_option("-g,--goal", genius_opts.goals_str, "Goal body string, e.g. \"p(X), q(X)\"")->required();
+    genius_sub->add_option("--max-resolutions", genius_opts.max_resolutions, "Max resolutions");
+    genius_sub->add_option("--seed", genius_opts.seed, "RNG seed");
+    genius_sub->add_option("--exploration-constant", genius_opts.exploration_constant, "MCTS exploration constant");
+    genius_sub->add_option("--sim-progress-interval", genius_opts.sim_progress_interval,
+                          "Print sim progress every N sims (0 disables)");
+    genius_sub->callback([&]() {
+        genius_command_handler h(genius_opts.file, genius_opts.goals_str,
+                                 genius_opts.max_resolutions, genius_opts.seed,
+                                 genius_opts.exploration_constant,
+                                 genius_opts.sim_progress_interval);
         h();
     });
 

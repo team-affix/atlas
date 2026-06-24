@@ -22,6 +22,7 @@
 #include "infrastructure/db.hpp"
 #include "infrastructure/expr_pool.hpp"
 #include "infrastructure/expr_printer.hpp"
+#include "infrastructure/genius_runtime.hpp"
 #include "infrastructure/initial_goal_exprs.hpp"
 #include "infrastructure/ridge_runtime.hpp"
 #include "infrastructure/horizon_runtime.hpp"
@@ -37,11 +38,11 @@ inline constexpr size_t kMaxResolutions = 32;
 inline constexpr uint32_t kSeed = 41;
 inline constexpr double kRidgeExplorationConstant = 1.414;
 
-enum class runtime_kind { basic, ridge, horizon };
+enum class runtime_kind { basic, ridge, horizon, genius };
 
 // Type-erased runtime reference for testing across all three runtime types.
 struct runtime_ref {
-    using variant_t = std::variant<basic_runtime*, ridge_runtime*, horizon_runtime*>;
+    using variant_t = std::variant<basic_runtime*, ridge_runtime*, horizon_runtime*, genius_runtime*>;
     explicit runtime_ref(variant_t v) : v_(v) {}
     bool next() { return std::visit([](auto* r) { return r->next(); }, v_); }
     bool solved() const { return std::visit([](const auto* r) { return r->solved(); }, v_); }
@@ -63,6 +64,7 @@ struct runtime_session_holder {
     std::optional<basic_runtime> basic;
     std::optional<ridge_runtime> ridge;
     std::optional<horizon_runtime> horizon;
+    std::optional<genius_runtime> genius;
     std::optional<runtime_ref> ref;
 };
 
@@ -99,6 +101,16 @@ runtime_ref& make_runtime_session(
                 seed,
                 kRidgeExplorationConstant);
             holder.ref.emplace(runtime_ref::variant_t{&*holder.horizon});
+            return *holder.ref;
+        case runtime_kind::genius:
+            holder.genius.emplace(
+                database,
+                goals,
+                initial_frame_offset,
+                max_resolutions,
+                seed,
+                kRidgeExplorationConstant);
+            holder.ref.emplace(runtime_ref::variant_t{&*holder.genius});
             return *holder.ref;
     }
     throw std::logic_error("unknown runtime_kind");
@@ -3029,12 +3041,13 @@ TEST_P(RuntimeParamTest, EnumeratesFibIndexPairsWithSumBelowThirty) {
 INSTANTIATE_TEST_SUITE_P(
     AllRuntimes,
     RuntimeParamTest,
-    ::testing::Values(runtime_kind::basic, runtime_kind::ridge, runtime_kind::horizon),
+    ::testing::Values(runtime_kind::basic, runtime_kind::ridge, runtime_kind::horizon, runtime_kind::genius),
     [](const ::testing::TestParamInfo<runtime_kind>& info) {
         switch (info.param) {
-            case runtime_kind::basic: return "basic";
-            case runtime_kind::ridge: return "ridge";
+            case runtime_kind::basic:   return "basic";
+            case runtime_kind::ridge:   return "ridge";
             case runtime_kind::horizon: return "horizon";
+            case runtime_kind::genius:  return "genius";
         }
         return "unknown";
     });
