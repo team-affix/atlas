@@ -4,9 +4,8 @@
 
 #include <gtest/gtest.h>
 #include <gmock/gmock.h>
-#include <set>
-#include <utility>
 #include "infrastructure/genius_value_delta.hpp"
+#include "value_objects/mcts_node_id.hpp"
 
 using ::testing::Return;
 
@@ -23,7 +22,6 @@ struct MockHorizonReward {
 } // namespace
 
 using test_genius_value_delta_t = genius_value_delta<MockRidgeReward, MockHorizonReward>;
-using node_id_t = test_genius_value_delta_t::node_id_t;
 
 struct GeniusValueDeltaTest : public ::testing::Test {
     MockRidgeReward   ridge;
@@ -36,20 +34,22 @@ struct GeniusValueDeltaTest : public ::testing::Test {
 // ── between-decisions node (second == nullptr) ────────────────────────────────
 
 TEST_F(GeniusValueDeltaTest, BetweenDecisionsUsesHorizonReward) {
-    node_id_t node{{}, nullptr};
+    mcts_node_id node{{}, nullptr};
+    EXPECT_CALL(ridge,   compute_mcts_reward()).Times(0);
     EXPECT_CALL(horizon, compute_mcts_reward()).WillOnce(Return(0.75));
     EXPECT_DOUBLE_EQ(delta.get_value_delta(node), 0.75);
 }
 
 TEST_F(GeniusValueDeltaTest, BetweenDecisionsDoesNotCallRidgeReward) {
-    node_id_t node{{}, nullptr};
+    mcts_node_id node{{}, nullptr};
     EXPECT_CALL(ridge, compute_mcts_reward()).Times(0);
     EXPECT_CALL(horizon, compute_mcts_reward()).WillOnce(Return(0.0));
     delta.get_value_delta(node);
 }
 
 TEST_F(GeniusValueDeltaTest, BetweenDecisionsReturnsHorizonValue) {
-    node_id_t node{{}, nullptr};
+    mcts_node_id node{{}, nullptr};
+    EXPECT_CALL(ridge,   compute_mcts_reward()).Times(0);
     EXPECT_CALL(horizon, compute_mcts_reward()).WillOnce(Return(-3.5));
     EXPECT_DOUBLE_EQ(delta.get_value_delta(node), -3.5);
 }
@@ -57,20 +57,22 @@ TEST_F(GeniusValueDeltaTest, BetweenDecisionsReturnsHorizonValue) {
 // ── goal-targeting node (second != nullptr) ───────────────────────────────────
 
 TEST_F(GeniusValueDeltaTest, GoalTargetingUsesRidgeReward) {
-    node_id_t node{{}, &gl};
-    EXPECT_CALL(ridge, compute_mcts_reward()).WillOnce(Return(-2.0));
+    mcts_node_id node{{}, &gl};
+    EXPECT_CALL(horizon, compute_mcts_reward()).Times(0);
+    EXPECT_CALL(ridge,   compute_mcts_reward()).WillOnce(Return(-2.0));
     EXPECT_DOUBLE_EQ(delta.get_value_delta(node), -2.0);
 }
 
 TEST_F(GeniusValueDeltaTest, GoalTargetingDoesNotCallHorizonReward) {
-    node_id_t node{{}, &gl};
+    mcts_node_id node{{}, &gl};
     EXPECT_CALL(horizon, compute_mcts_reward()).Times(0);
     EXPECT_CALL(ridge, compute_mcts_reward()).WillOnce(Return(0.0));
     delta.get_value_delta(node);
 }
 
 TEST_F(GeniusValueDeltaTest, GoalTargetingReturnsRidgeValue) {
-    node_id_t node{{}, &gl};
-    EXPECT_CALL(ridge, compute_mcts_reward()).WillOnce(Return(-7.0));
+    mcts_node_id node{{}, &gl};
+    EXPECT_CALL(horizon, compute_mcts_reward()).Times(0);
+    EXPECT_CALL(ridge,   compute_mcts_reward()).WillOnce(Return(-7.0));
     EXPECT_DOUBLE_EQ(delta.get_value_delta(node), -7.0);
 }

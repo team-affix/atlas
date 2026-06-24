@@ -4,10 +4,9 @@
 #include <map>
 #include <optional>
 #include <random>
-#include <set>
 #include <vector>
 #include "value_objects/mcts_choice.hpp"
-#include "value_objects/lineage.hpp"
+#include "value_objects/mcts_node_id.hpp"
 #include "mcts.hpp"
 
 template<typename ISetUpSim, typename ITearDownSim, typename IComputeMctsReward,
@@ -21,40 +20,25 @@ struct mcts_sim {
     mcts_choice choose(const std::vector<mcts_choice>&);
 
 private:
-    // ── node handle ──────────────────────────────────────────────────────────
-    // Each node is a pair:
-    //   first  — ordered set of resolution decisions committed so far
-    //   second — goal currently being targeted (nullptr between decisions)
-    //
-    // Transitions:
-    //   goal choice (const goal_lineage* gl) → {same set,  gl}
-    //   rule choice (rule_id r)              → {set ∪ {rl}, nullptr}
-    //     where rl = make_resolution_lineage(node.second, r)
-    //
-    // Every (decision-set, goal) pair is a distinct node, so MCTS can learn
-    // goal-selection policy.  Order-independence is preserved: two episodes
-    // reaching the same decision set in different orders both share the same
-    // {set, nullptr} node between decisions.
-    using decision_set_t = std::set<const resolution_lineage*>;
-    using node_id_t      = std::pair<decision_set_t, const goal_lineage*>;
+    using decision_set_t = mcts_node_id::first_type;
 
     // ── walker ───────────────────────────────────────────────────────────────
     // Pure function — no mutable state; all context is in the node handle.
     struct walker {
         IMakeResolutionLineage& make_resolution_lineage_;
         walker(IMakeResolutionLineage&);
-        node_id_t walk(const node_id_t&, const mcts_choice&) const;
+        mcts_node_id walk(const mcts_node_id&, const mcts_choice&) const;
     };
 
     // ── type aliases ─────────────────────────────────────────────────────────
-    // std::map is used because node_id_t contains std::set<> which has
+    // std::map is used because mcts_node_id contains std::set<> which has
     // operator< but no std::hash.
-    using table_t   = monte_carlo::map_table<node_id_t, double, std::map>;
+    using table_t   = monte_carlo::map_table<mcts_node_id, double, std::map>;
     using choices_t = std::vector<mcts_choice>;
     using rollout_t = monte_carlo::random_rollout<
                           mcts_choice, std::mt19937, choices_t, choices_t>;
     using mc_sim_t  = monte_carlo::sim<
-                          node_id_t,       // INodeHandle
+                          mcts_node_id,    // INodeHandle
                           mcts_choice,     // IChoice
                           double,          // IFloat
                           table_t,         // IGetVisits
@@ -91,9 +75,9 @@ mcts_sim<ISUS, ITDS, ICMR, IGVD, IMRL>::walker::walker(IMRL& mrl)
     : make_resolution_lineage_(mrl) {}
 
 template<typename ISUS, typename ITDS, typename ICMR, typename IGVD, typename IMRL>
-typename mcts_sim<ISUS, ITDS, ICMR, IGVD, IMRL>::node_id_t
+mcts_node_id
 mcts_sim<ISUS, ITDS, ICMR, IGVD, IMRL>::walker::walk(
-        const node_id_t& node, const mcts_choice& choice) const {
+        const mcts_node_id& node, const mcts_choice& choice) const {
     if (const goal_lineage* const* gl_ptr =
             std::get_if<const goal_lineage*>(&choice)) {
         return {node.first, *gl_ptr};
@@ -129,7 +113,7 @@ void mcts_sim<ISUS, ITDS, ICMR, IGVD, IMRL>::set_up() {
                     walker_,
                     rollout_,
                     value_delta_,
-                    node_id_t{decision_set_t{}, nullptr},
+                    mcts_node_id{decision_set_t{}, nullptr},
                     exploration_constant_);
     set_up_.set_up();
 }
