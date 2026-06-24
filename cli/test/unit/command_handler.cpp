@@ -1,11 +1,12 @@
 // command_handler: parameterized tests for basic_command_handler, ridge_command_handler,
-// and horizon_command_handler. Example DBs under cli/examples/.
+// horizon_command_handler, and genius_command_handler. Example DBs under cli/examples/.
 
 #include <sstream>
 #include <string>
 #include <gtest/gtest.h>
 #include <gmock/gmock.h>
 #include "infrastructure/basic_command_handler.hpp"
+#include "infrastructure/genius_command_handler.hpp"
 #include "infrastructure/horizon_command_handler.hpp"
 #include "infrastructure/ridge_command_handler.hpp"
 
@@ -13,7 +14,7 @@ using ::testing::Ge;
 using ::testing::HasSubstr;
 using ::testing::Not;
 
-enum class cli_solver_kind { basic, ridge, horizon };
+enum class cli_solver_kind { basic, ridge, horizon, genius };
 
 struct CommandHandlerParamTest : public ::testing::TestWithParam<cli_solver_kind> {
     static constexpr size_t kMaxResolutions       = 1000;
@@ -24,12 +25,13 @@ struct CommandHandlerParamTest : public ::testing::TestWithParam<cli_solver_kind
 INSTANTIATE_TEST_SUITE_P(
     AllSolvers,
     CommandHandlerParamTest,
-    ::testing::Values(cli_solver_kind::basic, cli_solver_kind::ridge, cli_solver_kind::horizon),
+    ::testing::Values(cli_solver_kind::basic, cli_solver_kind::ridge, cli_solver_kind::horizon, cli_solver_kind::genius),
     [](const auto& info) {
         switch (info.param) {
-            case cli_solver_kind::basic: return "basic";
-            case cli_solver_kind::ridge: return "ridge";
+            case cli_solver_kind::basic:   return "basic";
+            case cli_solver_kind::ridge:   return "ridge";
             case cli_solver_kind::horizon: return "horizon";
+            case cli_solver_kind::genius:  return "genius";
         }
         return "unknown";
     });
@@ -86,6 +88,11 @@ void construct_handler(const std::string& file, const std::string& goal, size_t 
                 file, goal, max_res, CommandHandlerParamTest::kSeed,
                 CommandHandlerParamTest::kExplorationConstant);
             break;
+        case cli_solver_kind::genius:
+            genius_command_handler(
+                file, goal, max_res, CommandHandlerParamTest::kSeed,
+                CommandHandlerParamTest::kExplorationConstant);
+            break;
     }
 }
 
@@ -110,6 +117,11 @@ std::string run_handler_capture(
             break;
         case cli_solver_kind::horizon:
             horizon_command_handler(
+                file, goal, max_resolutions, CommandHandlerParamTest::kSeed,
+                CommandHandlerParamTest::kExplorationConstant)();
+            break;
+        case cli_solver_kind::genius:
+            genius_command_handler(
                 file, goal, max_resolutions, CommandHandlerParamTest::kSeed,
                 CommandHandlerParamTest::kExplorationConstant)();
             break;
