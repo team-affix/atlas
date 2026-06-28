@@ -1,5 +1,6 @@
-// horizon_reward: MCTS reward equals cumulative grounded weight.
+// horizon_reward: MCTS reward is the logit transform of the cumulative grounded weight.
 
+#include <cmath>
 #include <gtest/gtest.h>
 #include <gmock/gmock.h>
 #include "infrastructure/horizon_reward.hpp"
@@ -19,7 +20,8 @@ struct HorizonRewardTest : public ::testing::Test {
     static constexpr double kCgw = 0.75;
 };
 
-TEST_F(HorizonRewardTest, ReturnsGroundedWeight) {
+TEST_F(HorizonRewardTest, ReturnsLogitOfGroundedWeight) {
     EXPECT_CALL(grounded_weight, get()).WillOnce(Return(kCgw));
-    EXPECT_DOUBLE_EQ(reward.compute_mcts_reward(), kCgw);
+    EXPECT_DOUBLE_EQ(reward.compute_mcts_reward(),
+                     std::log(kCgw / (1.0 - kCgw)));
 }

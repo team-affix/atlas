@@ -1,6 +1,8 @@
 // Integration: horizon_manifest — wiring identity + sim lifecycle via MCTS stack
 // with CGW reward and goal weight stores.
 
+#include <cmath>
+#include <limits>
 #include <gtest/gtest.h>
 #include "infrastructure/db.hpp"
 #include "infrastructure/expr_pool.hpp"
@@ -66,9 +68,10 @@ TEST_F(HorizonManifestIntegrationTest, WiringHorizonActivatorsDistinctFromInnerC
               static_cast<void*>(&manifest.initial_goal_activator_));
 }
 
-TEST_F(HorizonManifestIntegrationTest, WiringHorizonRewardReturnsZeroInitially) {
+TEST_F(HorizonManifestIntegrationTest, WiringHorizonRewardReturnsNegInfInitially) {
     horizon_manifest manifest = make_manifest();
-    EXPECT_DOUBLE_EQ(manifest.horizon_reward_.compute_mcts_reward(), 0.0);
+    EXPECT_EQ(manifest.horizon_reward_.compute_mcts_reward(),
+              -std::numeric_limits<double>::infinity());
 }
 
 TEST_F(HorizonManifestIntegrationTest, WiringMctsSimDistinctFromInnerSetUpTearDown) {
@@ -99,7 +102,8 @@ TEST_F(HorizonManifestIntegrationTest, SolverFindsSingleUnitSolutionWithFullCgw)
     sm.resume();
     ASSERT_TRUE(sm.has_yield());
     EXPECT_EQ(sm.consume_yield(), sim_termination::solved);
-    EXPECT_NEAR(manifest.horizon_reward_.compute_mcts_reward(), kTotalWeight, kWeightEpsilon);
+    EXPECT_EQ(manifest.horizon_reward_.compute_mcts_reward(),
+              std::numeric_limits<double>::infinity());
     sm.resume();
     EXPECT_FALSE(sm.has_yield());
 }
