@@ -33,7 +33,8 @@ private:
     // ── type aliases ─────────────────────────────────────────────────────────
     // std::map is used because mcts_node_id contains std::set<> which has
     // operator< but no std::hash.
-    using table_t   = monte_carlo::map_table<mcts_node_id, double, std::map>;
+    using visits_table_t = monte_carlo::visits_table<mcts_node_id, std::map>;
+    using value_table_t  = monte_carlo::value_table<mcts_node_id, double, std::map>;
     using choices_t = std::vector<mcts_choice>;
     using rollout_t = monte_carlo::random_rollout<
                           mcts_choice, std::mt19937, choices_t, choices_t>;
@@ -41,10 +42,10 @@ private:
                           mcts_node_id,    // INodeHandle
                           mcts_choice,     // IChoice
                           double,          // IFloat
-                          table_t,         // IGetVisits
-                          table_t,         // IGetValue
-                          table_t,         // ISetVisits
-                          table_t,         // ISetValue
+                          visits_table_t,  // IGetVisits
+                          value_table_t,   // IGetValue
+                          visits_table_t,  // ISetVisits
+                          value_table_t,   // ISetValue
                           walker,          // IWalker
                           choices_t,       // IGetChoiceCount
                           choices_t,       // IGetChoiceAt
@@ -59,7 +60,8 @@ private:
 
     // Persistent across all episodes — accumulates statistics over the
     // solver's lifetime so earlier sims inform later UCB1 decisions.
-    table_t               table_;
+    visits_table_t        visits_table_;
+    value_table_t         value_table_;
 
     walker                walker_;
     rollout_t             rollout_;
@@ -101,7 +103,8 @@ mcts_sim<ISUS, ITDS, ICMR, IGVD, IMRL>::mcts_sim(
     , compute_mcts_reward_(cmr)
     , value_delta_(gvd)
     , exploration_constant_(ec)
-    , table_()
+    , visits_table_()
+    , value_table_()
     , walker_(mrl)
     , rollout_(rng)
     , mc_sim_{}
@@ -109,7 +112,7 @@ mcts_sim<ISUS, ITDS, ICMR, IGVD, IMRL>::mcts_sim(
 
 template<typename ISUS, typename ITDS, typename ICMR, typename IGVD, typename IMRL>
 void mcts_sim<ISUS, ITDS, ICMR, IGVD, IMRL>::set_up() {
-    mc_sim_.emplace(table_, table_, table_, table_,
+    mc_sim_.emplace(visits_table_, value_table_, visits_table_, value_table_,
                     walker_,
                     rollout_,
                     value_delta_,
