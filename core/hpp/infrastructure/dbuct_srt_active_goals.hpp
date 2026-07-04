@@ -25,7 +25,6 @@ struct dbuct_srt_active_goals {
     bool is_active_goal(const goal_lineage* gl) const;
     size_t active_goals_size() const;
     bool empty() const;
-    void clear_active_goals();
     coroutine<const goal_lineage*, void> iterate_root_goals() const;
     coroutine<const goal_lineage*, void> iterate_child_goals(const goal_lineage* gl) const;
 
@@ -57,11 +56,6 @@ inline bool dbuct_srt_active_goals::is_active_goal(const goal_lineage* gl) const
 inline size_t dbuct_srt_active_goals::active_goals_size() const { return tree_.leaves().size(); }
 
 inline bool dbuct_srt_active_goals::empty() const { return tree_.leaves().empty(); }
-
-inline void dbuct_srt_active_goals::clear_active_goals() {
-    tree_.clear();
-    in_flight_.clear();
-}
 
 inline coroutine<const goal_lineage*, void> dbuct_srt_active_goals::iterate_root_goals() const {
     for (const goal_lineage* gl : tree_.roots()) co_yield gl;

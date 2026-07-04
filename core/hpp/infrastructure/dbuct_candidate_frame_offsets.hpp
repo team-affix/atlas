@@ -14,7 +14,6 @@ struct dbuct_candidate_frame_offsets {
     uint32_t get(const resolution_lineage* rl) const;
     void set(const resolution_lineage* rl, uint32_t frame_offset);
     void unset(const resolution_lineage* rl);
-    void clear_candidate_frame_offsets();
 
     snapshot_t snapshot() const;
     void restore(snapshot_t s);
@@ -34,8 +33,6 @@ inline void dbuct_candidate_frame_offsets::unset(const resolution_lineage* rl) {
     auto erased = offsets_.erase(rl);
     DEBUG_ASSERT(erased == 1);
 }
-
-inline void dbuct_candidate_frame_offsets::clear_candidate_frame_offsets() { offsets_.clear(); }
 
 inline dbuct_candidate_frame_offsets::snapshot_t dbuct_candidate_frame_offsets::snapshot() const { return offsets_; }
 inline void dbuct_candidate_frame_offsets::restore(snapshot_t s) { offsets_ = std::move(s); }

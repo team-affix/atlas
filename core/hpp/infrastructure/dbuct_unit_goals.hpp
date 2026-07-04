@@ -11,7 +11,6 @@ struct dbuct_unit_goals {
 
     void push(const goal_lineage* gl);
     std::optional<const goal_lineage*> pop();
-    void clear();
 
     snapshot_t snapshot() const;
     void restore(snapshot_t s);
@@ -28,8 +27,6 @@ inline std::optional<const goal_lineage*> dbuct_unit_goals::pop() {
     queue_.pop_back();
     return gl;
 }
-
-inline void dbuct_unit_goals::clear() { queue_.clear(); }
 
 inline dbuct_unit_goals::snapshot_t dbuct_unit_goals::snapshot() const { return queue_; }
 inline void dbuct_unit_goals::restore(snapshot_t s) { queue_ = std::move(s); }

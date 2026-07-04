@@ -17,18 +17,16 @@ struct dbuct_frame_bump_allocator {
 
     uint32_t bump(uint32_t n);
     uint32_t peek() const;
-    void reset();
 
     snapshot_t snapshot() const;
     void restore(snapshot_t s);
 
 private:
-    uint32_t initial_;
     uint32_t next_frame_offset_;
 };
 
 inline dbuct_frame_bump_allocator::dbuct_frame_bump_allocator(uint32_t initial)
-    : initial_(initial), next_frame_offset_(initial) {}
+    : next_frame_offset_(initial) {}
 
 inline uint32_t dbuct_frame_bump_allocator::bump(uint32_t n) {
     const uint32_t base = next_frame_offset_;
@@ -37,8 +35,6 @@ inline uint32_t dbuct_frame_bump_allocator::bump(uint32_t n) {
 }
 
 inline uint32_t dbuct_frame_bump_allocator::peek() const { return next_frame_offset_; }
-
-inline void dbuct_frame_bump_allocator::reset() { next_frame_offset_ = initial_; }
 
 inline dbuct_frame_bump_allocator::snapshot_t dbuct_frame_bump_allocator::snapshot() const { return next_frame_offset_; }
 inline void dbuct_frame_bump_allocator::restore(snapshot_t s) { next_frame_offset_ = s; }

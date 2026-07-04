@@ -22,7 +22,6 @@ struct dbuct_bind_map {
 
     void bind(uint32_t global_key, framed_expr value);
     framed_expr whnf(framed_expr fe);
-    void clear_bindings();
 
     snapshot_t snapshot() const;
     void restore(snapshot_t s);
@@ -56,8 +55,6 @@ inline framed_expr dbuct_bind_map::whnf(framed_expr fe) {
     it->second = resolved;
     return resolved;
 }
-
-inline void dbuct_bind_map::clear_bindings() { bindings_.clear(); }
 
 inline dbuct_bind_map::snapshot_t dbuct_bind_map::snapshot() const { return bindings_; }
 inline void dbuct_bind_map::restore(snapshot_t s) { bindings_ = std::move(s); }

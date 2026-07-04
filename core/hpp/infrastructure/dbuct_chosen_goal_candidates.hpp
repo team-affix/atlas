@@ -12,7 +12,6 @@ struct dbuct_chosen_goal_candidates {
 
     std::optional<rule_id> try_get(const goal_lineage* gl) const;
     void set(const goal_lineage* gl, rule_id r);
-    void clear();
 
     snapshot_t snapshot() const;
     void restore(snapshot_t s);
@@ -28,8 +27,6 @@ inline std::optional<rule_id> dbuct_chosen_goal_candidates::try_get(const goal_l
 }
 
 inline void dbuct_chosen_goal_candidates::set(const goal_lineage* gl, rule_id r) { by_goal_[gl] = r; }
-
-inline void dbuct_chosen_goal_candidates::clear() { by_goal_.clear(); }
 
 inline dbuct_chosen_goal_candidates::snapshot_t dbuct_chosen_goal_candidates::snapshot() const { return by_goal_; }
 inline void dbuct_chosen_goal_candidates::restore(snapshot_t s) { by_goal_ = std::move(s); }

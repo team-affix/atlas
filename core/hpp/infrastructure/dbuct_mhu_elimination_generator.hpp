@@ -34,7 +34,6 @@ struct dbuct_mhu_elimination_generator {
 
     bool try_add_head(const resolution_lineage*, framed_expr goal, framed_expr head);
     coroutine<const resolution_lineage*, void> constrain(const resolution_lineage*);
-    void clear_mhu_heads();
 
     struct snapshot_t {
         std::unordered_map<const resolution_lineage*, unify_head<IBindMap, IUnifier>> heads;
@@ -129,13 +128,6 @@ dbuct_mhu_elimination_generator<IBM, IBMF, IU, IUF, IMRL, IMV, IGCRI>::constrain
     }
 
     heads_.erase(lineage);
-}
-
-template<typename IBM, typename IBMF, typename IU, typename IUF, typename IMRL, typename IMV, typename IGCRI>
-void dbuct_mhu_elimination_generator<IBM, IBMF, IU, IUF, IMRL, IMV, IGCRI>::clear_mhu_heads() {
-    heads_.clear();
-    rep_to_rls_.clear();
-    rl_to_reps_.clear();
 }
 
 template<typename IBM, typename IBMF, typename IU, typename IUF, typename IMRL, typename IMV, typename IGCRI>

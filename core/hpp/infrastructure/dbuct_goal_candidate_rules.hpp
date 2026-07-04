@@ -27,7 +27,6 @@ struct dbuct_goal_candidate_rules {
     void link_goal_candidate(const goal_lineage* gl, rule_id r);
     void unlink_goal_candidate(const goal_lineage* gl, rule_id r);
     void erase(const goal_lineage* gl);
-    void clear_goal_candidate_rule_ids();
 
     snapshot_t snapshot() const;
     void restore(snapshot_t s);
@@ -60,8 +59,6 @@ inline void dbuct_goal_candidate_rules::erase(const goal_lineage* gl) {
     auto erased = by_goal_.erase(gl);
     DEBUG_ASSERT(erased == 1);
 }
-
-inline void dbuct_goal_candidate_rules::clear_goal_candidate_rule_ids() { by_goal_.clear(); }
 
 inline dbuct_goal_candidate_rules::snapshot_t dbuct_goal_candidate_rules::snapshot() const { return by_goal_; }
 inline void dbuct_goal_candidate_rules::restore(snapshot_t s) { by_goal_ = std::move(s); }

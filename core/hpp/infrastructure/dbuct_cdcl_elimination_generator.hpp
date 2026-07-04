@@ -58,8 +58,6 @@ struct dbuct_cdcl_elimination_generator {
 
     bool reapply_found_realized_conflict() const;
 
-    void cleanup();
-
 private:
     using avoidance_id = size_t;
     enum class scan_result { none, forced, realized };
@@ -142,9 +140,6 @@ template<typename ITryGetChosenGoalCandidate>
 bool dbuct_cdcl_elimination_generator<ITryGetChosenGoalCandidate>::reapply_found_realized_conflict() const {
     return reapply_realized_;
 }
-
-template<typename ITryGetChosenGoalCandidate>
-void dbuct_cdcl_elimination_generator<ITryGetChosenGoalCandidate>::cleanup() {}
 
 template<typename ITryGetChosenGoalCandidate>
 typename dbuct_cdcl_elimination_generator<ITryGetChosenGoalCandidate>::scan_result

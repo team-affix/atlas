@@ -12,7 +12,6 @@ struct dbuct_resolution_memory {
     using snapshot_t = std::unordered_set<const resolution_lineage*>;
 
     void record_resolution(const resolution_lineage* rl);
-    void clear_recorded_resolutions();
     size_t get_resolution_count() const;
     lemma derive_resolution_lemma() const;
 
@@ -24,7 +23,6 @@ private:
 };
 
 inline void dbuct_resolution_memory::record_resolution(const resolution_lineage* rl) { resolutions.insert(rl); }
-inline void dbuct_resolution_memory::clear_recorded_resolutions() { resolutions.clear(); }
 inline size_t dbuct_resolution_memory::get_resolution_count() const { return resolutions.size(); }
 inline lemma dbuct_resolution_memory::derive_resolution_lemma() const { return lemma{resolutions}; }
 

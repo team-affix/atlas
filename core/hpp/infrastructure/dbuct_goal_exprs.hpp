@@ -18,7 +18,6 @@ struct dbuct_goal_exprs {
     framed_expr get(const goal_lineage* gl) const;
     void set(const goal_lineage* gl, framed_expr fe);
     void unset(const goal_lineage* gl);
-    void clear_goal_exprs();
 
     snapshot_t snapshot() const;
     void restore(snapshot_t s);
@@ -38,8 +37,6 @@ inline void dbuct_goal_exprs::unset(const goal_lineage* gl) {
     auto erased = exprs_.erase(gl);
     DEBUG_ASSERT(erased == 1);
 }
-
-inline void dbuct_goal_exprs::clear_goal_exprs() { exprs_.clear(); }
 
 inline dbuct_goal_exprs::snapshot_t dbuct_goal_exprs::snapshot() const { return exprs_; }
 inline void dbuct_goal_exprs::restore(snapshot_t s) { exprs_ = std::move(s); }

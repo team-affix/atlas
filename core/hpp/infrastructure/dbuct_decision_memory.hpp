@@ -16,7 +16,6 @@ struct dbuct_decision_memory {
     using snapshot_t = std::unordered_set<const resolution_lineage*>;
 
     void record_decision(const resolution_lineage* rl);
-    void clear_recorded_decisions();
     size_t count() const;
     lemma derive_decision_lemma() const;
 
@@ -28,8 +27,6 @@ private:
 };
 
 inline void dbuct_decision_memory::record_decision(const resolution_lineage* rl) { decisions.insert(rl); }
-
-inline void dbuct_decision_memory::clear_recorded_decisions() { decisions.clear(); }
 
 inline size_t dbuct_decision_memory::count() const { return decisions.size(); }
 
