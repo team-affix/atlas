@@ -9,22 +9,29 @@
 struct dbuct_unit_goals {
     using snapshot_t = std::vector<const goal_lineage*>;
 
-    void push(const goal_lineage* gl) { queue_.push_back(gl); }
+    void push(const goal_lineage* gl);
+    std::optional<const goal_lineage*> pop();
+    void clear();
 
-    std::optional<const goal_lineage*> pop() {
-        if (queue_.empty()) return std::nullopt;
-        const goal_lineage* gl = queue_.back();
-        queue_.pop_back();
-        return gl;
-    }
-
-    void clear() { queue_.clear(); }
-
-    snapshot_t snapshot() const { return queue_; }
-    void restore(snapshot_t s) { queue_ = std::move(s); }
+    snapshot_t snapshot() const;
+    void restore(snapshot_t s);
 
 private:
     std::vector<const goal_lineage*> queue_;
 };
+
+inline void dbuct_unit_goals::push(const goal_lineage* gl) { queue_.push_back(gl); }
+
+inline std::optional<const goal_lineage*> dbuct_unit_goals::pop() {
+    if (queue_.empty()) return std::nullopt;
+    const goal_lineage* gl = queue_.back();
+    queue_.pop_back();
+    return gl;
+}
+
+inline void dbuct_unit_goals::clear() { queue_.clear(); }
+
+inline dbuct_unit_goals::snapshot_t dbuct_unit_goals::snapshot() const { return queue_; }
+inline void dbuct_unit_goals::restore(snapshot_t s) { queue_ = std::move(s); }
 
 #endif

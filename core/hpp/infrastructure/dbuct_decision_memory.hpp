@@ -15,19 +15,27 @@
 struct dbuct_decision_memory {
     using snapshot_t = std::unordered_set<const resolution_lineage*>;
 
-    void record_decision(const resolution_lineage* rl) { decisions.insert(rl); }
+    void record_decision(const resolution_lineage* rl);
+    void clear_recorded_decisions();
+    size_t count() const;
+    lemma derive_decision_lemma() const;
 
-    void clear_recorded_decisions() { decisions.clear(); }
-
-    size_t count() const { return decisions.size(); }
-
-    lemma derive_decision_lemma() const { return lemma{decisions}; }
-
-    snapshot_t snapshot() const { return decisions; }
-    void restore(snapshot_t s) { decisions = std::move(s); }
+    snapshot_t snapshot() const;
+    void restore(snapshot_t s);
 
 private:
     std::unordered_set<const resolution_lineage*> decisions;
 };
+
+inline void dbuct_decision_memory::record_decision(const resolution_lineage* rl) { decisions.insert(rl); }
+
+inline void dbuct_decision_memory::clear_recorded_decisions() { decisions.clear(); }
+
+inline size_t dbuct_decision_memory::count() const { return decisions.size(); }
+
+inline lemma dbuct_decision_memory::derive_decision_lemma() const { return lemma{decisions}; }
+
+inline dbuct_decision_memory::snapshot_t dbuct_decision_memory::snapshot() const { return decisions; }
+inline void dbuct_decision_memory::restore(snapshot_t s) { decisions = std::move(s); }
 
 #endif

@@ -15,25 +15,33 @@
 struct dbuct_goal_exprs {
     using snapshot_t = std::unordered_map<const goal_lineage*, framed_expr>;
 
-    framed_expr get(const goal_lineage* gl) const { return exprs_.at(gl); }
+    framed_expr get(const goal_lineage* gl) const;
+    void set(const goal_lineage* gl, framed_expr fe);
+    void unset(const goal_lineage* gl);
+    void clear_goal_exprs();
 
-    void set(const goal_lineage* gl, framed_expr fe) {
-        auto [_, inserted] = exprs_.insert({gl, fe});
-        DEBUG_ASSERT(inserted);
-    }
-
-    void unset(const goal_lineage* gl) {
-        auto erased = exprs_.erase(gl);
-        DEBUG_ASSERT(erased == 1);
-    }
-
-    void clear_goal_exprs() { exprs_.clear(); }
-
-    snapshot_t snapshot() const { return exprs_; }
-    void restore(snapshot_t s) { exprs_ = std::move(s); }
+    snapshot_t snapshot() const;
+    void restore(snapshot_t s);
 
 private:
     std::unordered_map<const goal_lineage*, framed_expr> exprs_;
 };
+
+inline framed_expr dbuct_goal_exprs::get(const goal_lineage* gl) const { return exprs_.at(gl); }
+
+inline void dbuct_goal_exprs::set(const goal_lineage* gl, framed_expr fe) {
+    auto [_, inserted] = exprs_.insert({gl, fe});
+    DEBUG_ASSERT(inserted);
+}
+
+inline void dbuct_goal_exprs::unset(const goal_lineage* gl) {
+    auto erased = exprs_.erase(gl);
+    DEBUG_ASSERT(erased == 1);
+}
+
+inline void dbuct_goal_exprs::clear_goal_exprs() { exprs_.clear(); }
+
+inline dbuct_goal_exprs::snapshot_t dbuct_goal_exprs::snapshot() const { return exprs_; }
+inline void dbuct_goal_exprs::restore(snapshot_t s) { exprs_ = std::move(s); }
 
 #endif

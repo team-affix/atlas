@@ -30,8 +30,7 @@
 // backtrack.
 template<typename ITryGetChosenGoalCandidate>
 struct dbuct_cdcl_elimination_generator {
-    explicit dbuct_cdcl_elimination_generator(ITryGetChosenGoalCandidate& tgcc)
-        : try_get_chosen_goal_candidate_(tgcc) {}
+    explicit dbuct_cdcl_elimination_generator(ITryGetChosenGoalCandidate& tgcc);
 
     // Register a conflict lemma as a persistent avoidance. Crucially this stores
     // EVERY lemma, including single-member (unit) ones: under camping a learned
@@ -43,43 +42,11 @@ struct dbuct_cdcl_elimination_generator {
     //
     // Returns nullopt: application (and conflict detection) is driven uniformly by
     // reapply()/constrain(), never by a one-shot forced elimination.
-    std::optional<const resolution_lineage*> learn(const lemma& l) {
-        const auto& resolutions = l.get_resolutions();
-        if (resolutions.empty())
-            return std::nullopt;
-
-        std::vector<const resolution_lineage*> members(resolutions.begin(), resolutions.end());
-        std::sort(members.begin(), members.end(),
-                  [](const resolution_lineage* a, const resolution_lineage* b) {
-                      if (a->parent != b->parent) return a->parent < b->parent;
-                      return a->idx < b->idx;
-                  });
-        const size_t watcher_b = members.size() > 1 ? size_t{1} : size_t{0};
-        const avoidance_id id = next_avoidance_id_++;
-        avoidances_.emplace(id, avoidance{std::move(members), 0, watcher_b});
-        for (const resolution_lineage* m : avoidances_.at(id).members)
-            goal_index_[m->parent].insert(id);
-        return std::nullopt;
-    }
+    std::optional<const resolution_lineage*> learn(const lemma& l);
 
     // In-episode propagation: react to the resolution rl that is about to be
     // committed, forcing any avoidance that becomes unit under it.
-    coroutine<const resolution_lineage*, void> constrain(const resolution_lineage* rl) {
-        const auto it = goal_index_.find(rl->parent);
-        if (it == goal_index_.end())
-            co_return;
-        // Copy ids: classification does not mutate the index, but avoid iterator
-        // surprises if learn() were ever interleaved.
-        const std::vector<avoidance_id> ids(it->second.begin(), it->second.end());
-        for (const avoidance_id id : ids) {
-            const resolution_lineage* forced = nullptr;
-            switch (classify(avoidances_.at(id), rl, forced)) {
-                case scan_result::forced:   co_yield forced; break;
-                case scan_result::realized: co_yield rl;     break;
-                case scan_result::none:     break;
-            }
-        }
-    }
+    coroutine<const resolution_lineage*, void> constrain(const resolution_lineage* rl);
 
     // Post-backtrack re-application: re-derive every forced elimination for the
     // current (restored) frontier and flag a realized conflict if the frontier
@@ -87,23 +54,11 @@ struct dbuct_cdcl_elimination_generator {
     // a batch (a plain vector rather than a coroutine, so this header can be
     // instantiated across translation units without tripping GCC's coroutine
     // comdat-folding bug).
-    std::vector<const resolution_lineage*> reapply() {
-        reapply_realized_ = false;
-        std::vector<const resolution_lineage*> forced_eliminations;
-        for (const auto& [id, av] : avoidances_) {
-            const resolution_lineage* forced = nullptr;
-            switch (classify(av, nullptr, forced)) {
-                case scan_result::forced:   forced_eliminations.push_back(forced); break;
-                case scan_result::realized: reapply_realized_ = true; break;
-                case scan_result::none:     break;
-            }
-        }
-        return forced_eliminations;
-    }
+    std::vector<const resolution_lineage*> reapply();
 
-    bool reapply_found_realized_conflict() const { return reapply_realized_; }
+    bool reapply_found_realized_conflict() const;
 
-    void cleanup() {}
+    void cleanup();
 
 private:
     using avoidance_id = size_t;
@@ -112,27 +67,7 @@ private:
     // committing may be null (pure re-application) or the resolution being
     // committed (in-episode), which is treated as chosen for its goal.
     scan_result classify(const avoidance& av, const resolution_lineage* committing,
-                         const resolution_lineage*& out_forced) const {
-        const resolution_lineage* unassigned = nullptr;
-        size_t unassigned_count = 0;
-        for (const resolution_lineage* m : av.members) {
-            std::optional<rule_id> chosen;
-            if (committing != nullptr && m->parent == committing->parent)
-                chosen = committing->idx;
-            else
-                chosen = try_get_chosen_goal_candidate_.try_get(m->parent);
-
-            if (!chosen.has_value()) {
-                unassigned = m;
-                ++unassigned_count;
-            } else if (*chosen != m->idx) {
-                return scan_result::none;  // a member diverged: avoidance can't fire
-            }
-        }
-        if (unassigned_count == 0) return scan_result::realized;
-        if (unassigned_count == 1) { out_forced = unassigned; return scan_result::forced; }
-        return scan_result::none;
-    }
+                         const resolution_lineage*& out_forced) const;
 
     std::unordered_map<avoidance_id, avoidance> avoidances_;
     size_t next_avoidance_id_ = 0;
@@ -141,5 +76,100 @@ private:
 
     ITryGetChosenGoalCandidate& try_get_chosen_goal_candidate_;
 };
+
+template<typename ITryGetChosenGoalCandidate>
+dbuct_cdcl_elimination_generator<ITryGetChosenGoalCandidate>::dbuct_cdcl_elimination_generator(
+    ITryGetChosenGoalCandidate& tgcc)
+    : try_get_chosen_goal_candidate_(tgcc) {}
+
+template<typename ITryGetChosenGoalCandidate>
+std::optional<const resolution_lineage*>
+dbuct_cdcl_elimination_generator<ITryGetChosenGoalCandidate>::learn(const lemma& l) {
+    const auto& resolutions = l.get_resolutions();
+    if (resolutions.empty())
+        return std::nullopt;
+
+    std::vector<const resolution_lineage*> members(resolutions.begin(), resolutions.end());
+    std::sort(members.begin(), members.end(),
+              [](const resolution_lineage* a, const resolution_lineage* b) {
+                  if (a->parent != b->parent) return a->parent < b->parent;
+                  return a->idx < b->idx;
+              });
+    const size_t watcher_b = members.size() > 1 ? size_t{1} : size_t{0};
+    const avoidance_id id = next_avoidance_id_++;
+    avoidances_.emplace(id, avoidance{std::move(members), 0, watcher_b});
+    for (const resolution_lineage* m : avoidances_.at(id).members)
+        goal_index_[m->parent].insert(id);
+    return std::nullopt;
+}
+
+template<typename ITryGetChosenGoalCandidate>
+coroutine<const resolution_lineage*, void>
+dbuct_cdcl_elimination_generator<ITryGetChosenGoalCandidate>::constrain(const resolution_lineage* rl) {
+    const auto it = goal_index_.find(rl->parent);
+    if (it == goal_index_.end())
+        co_return;
+    // Copy ids: classification does not mutate the index, but avoid iterator
+    // surprises if learn() were ever interleaved.
+    const std::vector<avoidance_id> ids(it->second.begin(), it->second.end());
+    for (const avoidance_id id : ids) {
+        const resolution_lineage* forced = nullptr;
+        switch (classify(avoidances_.at(id), rl, forced)) {
+            case scan_result::forced:   co_yield forced; break;
+            case scan_result::realized: co_yield rl;     break;
+            case scan_result::none:     break;
+        }
+    }
+}
+
+template<typename ITryGetChosenGoalCandidate>
+std::vector<const resolution_lineage*>
+dbuct_cdcl_elimination_generator<ITryGetChosenGoalCandidate>::reapply() {
+    reapply_realized_ = false;
+    std::vector<const resolution_lineage*> forced_eliminations;
+    for (const auto& [id, av] : avoidances_) {
+        const resolution_lineage* forced = nullptr;
+        switch (classify(av, nullptr, forced)) {
+            case scan_result::forced:   forced_eliminations.push_back(forced); break;
+            case scan_result::realized: reapply_realized_ = true; break;
+            case scan_result::none:     break;
+        }
+    }
+    return forced_eliminations;
+}
+
+template<typename ITryGetChosenGoalCandidate>
+bool dbuct_cdcl_elimination_generator<ITryGetChosenGoalCandidate>::reapply_found_realized_conflict() const {
+    return reapply_realized_;
+}
+
+template<typename ITryGetChosenGoalCandidate>
+void dbuct_cdcl_elimination_generator<ITryGetChosenGoalCandidate>::cleanup() {}
+
+template<typename ITryGetChosenGoalCandidate>
+typename dbuct_cdcl_elimination_generator<ITryGetChosenGoalCandidate>::scan_result
+dbuct_cdcl_elimination_generator<ITryGetChosenGoalCandidate>::classify(
+    const avoidance& av, const resolution_lineage* committing,
+    const resolution_lineage*& out_forced) const {
+    const resolution_lineage* unassigned = nullptr;
+    size_t unassigned_count = 0;
+    for (const resolution_lineage* m : av.members) {
+        std::optional<rule_id> chosen;
+        if (committing != nullptr && m->parent == committing->parent)
+            chosen = committing->idx;
+        else
+            chosen = try_get_chosen_goal_candidate_.try_get(m->parent);
+
+        if (!chosen.has_value()) {
+            unassigned = m;
+            ++unassigned_count;
+        } else if (*chosen != m->idx) {
+            return scan_result::none;  // a member diverged: avoidance can't fire
+        }
+    }
+    if (unassigned_count == 0) return scan_result::realized;
+    if (unassigned_count == 1) { out_forced = unassigned; return scan_result::forced; }
+    return scan_result::none;
+}
 
 #endif

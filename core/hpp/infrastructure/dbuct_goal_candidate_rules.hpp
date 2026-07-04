@@ -19,38 +19,51 @@
 struct dbuct_goal_candidate_rules {
     using snapshot_t = std::unordered_map<const goal_lineage*, ra_rule_id_set>;
 
-    explicit dbuct_goal_candidate_rules(ra_rule_id_set_factory& factory)
-        : factory_(factory) {}
+    explicit dbuct_goal_candidate_rules(ra_rule_id_set_factory& factory);
 
-    ra_rule_id_set& get(const goal_lineage* gl) { return by_goal_.at(gl); }
-    const ra_rule_id_set& get(const goal_lineage* gl) const { return by_goal_.at(gl); }
+    ra_rule_id_set& get(const goal_lineage* gl);
+    const ra_rule_id_set& get(const goal_lineage* gl) const;
+    void insert(const goal_lineage* gl);
+    void link_goal_candidate(const goal_lineage* gl, rule_id r);
+    void unlink_goal_candidate(const goal_lineage* gl, rule_id r);
+    void erase(const goal_lineage* gl);
+    void clear_goal_candidate_rule_ids();
 
-    void insert(const goal_lineage* gl) {
-        DEBUG_ASSERT(!by_goal_.contains(gl));
-        by_goal_.emplace(gl, factory_.make());
-    }
-
-    void link_goal_candidate(const goal_lineage* gl, rule_id r) {
-        by_goal_.at(gl).insert(r);
-    }
-
-    void unlink_goal_candidate(const goal_lineage* gl, rule_id r) {
-        by_goal_.at(gl).erase(r);
-    }
-
-    void erase(const goal_lineage* gl) {
-        auto erased = by_goal_.erase(gl);
-        DEBUG_ASSERT(erased == 1);
-    }
-
-    void clear_goal_candidate_rule_ids() { by_goal_.clear(); }
-
-    snapshot_t snapshot() const { return by_goal_; }
-    void restore(snapshot_t s) { by_goal_ = std::move(s); }
+    snapshot_t snapshot() const;
+    void restore(snapshot_t s);
 
 private:
     ra_rule_id_set_factory& factory_;
     std::unordered_map<const goal_lineage*, ra_rule_id_set> by_goal_;
 };
+
+inline dbuct_goal_candidate_rules::dbuct_goal_candidate_rules(ra_rule_id_set_factory& factory)
+    : factory_(factory) {}
+
+inline ra_rule_id_set& dbuct_goal_candidate_rules::get(const goal_lineage* gl) { return by_goal_.at(gl); }
+inline const ra_rule_id_set& dbuct_goal_candidate_rules::get(const goal_lineage* gl) const { return by_goal_.at(gl); }
+
+inline void dbuct_goal_candidate_rules::insert(const goal_lineage* gl) {
+    DEBUG_ASSERT(!by_goal_.contains(gl));
+    by_goal_.emplace(gl, factory_.make());
+}
+
+inline void dbuct_goal_candidate_rules::link_goal_candidate(const goal_lineage* gl, rule_id r) {
+    by_goal_.at(gl).insert(r);
+}
+
+inline void dbuct_goal_candidate_rules::unlink_goal_candidate(const goal_lineage* gl, rule_id r) {
+    by_goal_.at(gl).erase(r);
+}
+
+inline void dbuct_goal_candidate_rules::erase(const goal_lineage* gl) {
+    auto erased = by_goal_.erase(gl);
+    DEBUG_ASSERT(erased == 1);
+}
+
+inline void dbuct_goal_candidate_rules::clear_goal_candidate_rule_ids() { by_goal_.clear(); }
+
+inline dbuct_goal_candidate_rules::snapshot_t dbuct_goal_candidate_rules::snapshot() const { return by_goal_; }
+inline void dbuct_goal_candidate_rules::restore(snapshot_t s) { by_goal_ = std::move(s); }
 
 #endif

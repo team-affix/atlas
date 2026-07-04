@@ -23,35 +23,15 @@ struct dbuct_learn_reapply {
     dbuct_learn_reapply(ICdclReapply& cdcl, IEliminationRouter& router,
                         IConflictDetector& conflict_detector,
                         IUnitGoalDetector& unit_goal_detector,
-                        IPushUnitGoal& push_unit_goal)
-        : cdcl_(cdcl), router_(router), conflict_detector_(conflict_detector),
-          unit_goal_detector_(unit_goal_detector), push_unit_goal_(push_unit_goal) {}
+                        IPushUnitGoal& push_unit_goal);
 
     // Route a single elimination (e.g. a freshly learned unit no-good). Returns
     // true if it emptied the active candidate set of its goal.
-    bool route_elimination(const resolution_lineage* rl) {
-        if (router_.route(rl) != elimination_result::eliminated)
-            return false;
-        const goal_lineage* gl = rl->parent;
-        if (conflict_detector_.detect(gl))
-            return true;
-        if (unit_goal_detector_.detect(gl))
-            push_unit_goal_.push(gl);
-        return false;
-    }
+    bool route_elimination(const resolution_lineage* rl);
 
     // Re-derive and route all forced eliminations for the current frontier.
     // Returns true if the frontier is conflicted.
-    bool reapply_frontier() {
-        bool conflict = false;
-        for (const resolution_lineage* forced : cdcl_.reapply()) {
-            if (route_elimination(forced))
-                conflict = true;
-        }
-        if (cdcl_.reapply_found_realized_conflict())
-            conflict = true;
-        return conflict;
-    }
+    bool reapply_frontier();
 
 private:
     ICdclReapply& cdcl_;
@@ -60,5 +40,42 @@ private:
     IUnitGoalDetector& unit_goal_detector_;
     IPushUnitGoal& push_unit_goal_;
 };
+
+template<typename ICdclReapply, typename IEliminationRouter, typename IConflictDetector,
+         typename IUnitGoalDetector, typename IPushUnitGoal>
+dbuct_learn_reapply<ICdclReapply, IEliminationRouter, IConflictDetector,
+                    IUnitGoalDetector, IPushUnitGoal>::dbuct_learn_reapply(
+    ICdclReapply& cdcl, IEliminationRouter& router, IConflictDetector& conflict_detector,
+    IUnitGoalDetector& unit_goal_detector, IPushUnitGoal& push_unit_goal)
+    : cdcl_(cdcl), router_(router), conflict_detector_(conflict_detector),
+      unit_goal_detector_(unit_goal_detector), push_unit_goal_(push_unit_goal) {}
+
+template<typename ICdclReapply, typename IEliminationRouter, typename IConflictDetector,
+         typename IUnitGoalDetector, typename IPushUnitGoal>
+bool dbuct_learn_reapply<ICdclReapply, IEliminationRouter, IConflictDetector,
+                         IUnitGoalDetector, IPushUnitGoal>::route_elimination(const resolution_lineage* rl) {
+    if (router_.route(rl) != elimination_result::eliminated)
+        return false;
+    const goal_lineage* gl = rl->parent;
+    if (conflict_detector_.detect(gl))
+        return true;
+    if (unit_goal_detector_.detect(gl))
+        push_unit_goal_.push(gl);
+    return false;
+}
+
+template<typename ICdclReapply, typename IEliminationRouter, typename IConflictDetector,
+         typename IUnitGoalDetector, typename IPushUnitGoal>
+bool dbuct_learn_reapply<ICdclReapply, IEliminationRouter, IConflictDetector,
+                         IUnitGoalDetector, IPushUnitGoal>::reapply_frontier() {
+    bool conflict = false;
+    for (const resolution_lineage* forced : cdcl_.reapply()) {
+        if (route_elimination(forced))
+            conflict = true;
+    }
+    if (cdcl_.reapply_found_realized_conflict())
+        conflict = true;
+    return conflict;
+}
 
 #endif
