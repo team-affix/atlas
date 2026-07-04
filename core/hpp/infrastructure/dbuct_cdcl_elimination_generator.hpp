@@ -33,15 +33,20 @@ struct dbuct_cdcl_elimination_generator {
     explicit dbuct_cdcl_elimination_generator(ITryGetChosenGoalCandidate& tgcc)
         : try_get_chosen_goal_candidate_(tgcc) {}
 
-    // Register a conflict lemma. A single-member lemma is returned as an
-    // immediately-forced elimination; a multi-member lemma becomes a persistent
-    // avoidance and nothing is forced yet.
+    // Register a conflict lemma as a persistent avoidance. Crucially this stores
+    // EVERY lemma, including single-member (unit) ones: under camping a learned
+    // no-good must survive arbitrary backtracking and be re-derived at every
+    // resume level (reapply()), because a later backstep resurrects the candidate
+    // it forbids. Storing units as avoidances (rather than routing them once and
+    // forgetting them) is what keeps the "learning survives backtracking" contract
+    // — and lets the cascade observe the emptied-goal conflict a unit can cause.
+    //
+    // Returns nullopt: application (and conflict detection) is driven uniformly by
+    // reapply()/constrain(), never by a one-shot forced elimination.
     std::optional<const resolution_lineage*> learn(const lemma& l) {
         const auto& resolutions = l.get_resolutions();
         if (resolutions.empty())
             return std::nullopt;
-        if (resolutions.size() == 1)
-            return *resolutions.begin();
 
         std::vector<const resolution_lineage*> members(resolutions.begin(), resolutions.end());
         std::sort(members.begin(), members.end(),
@@ -49,8 +54,9 @@ struct dbuct_cdcl_elimination_generator {
                       if (a->parent != b->parent) return a->parent < b->parent;
                       return a->idx < b->idx;
                   });
+        const size_t watcher_b = members.size() > 1 ? size_t{1} : size_t{0};
         const avoidance_id id = next_avoidance_id_++;
-        avoidances_.emplace(id, avoidance{std::move(members), 0, 1});
+        avoidances_.emplace(id, avoidance{std::move(members), 0, watcher_b});
         for (const resolution_lineage* m : avoidances_.at(id).members)
             goal_index_[m->parent].insert(id);
         return std::nullopt;
@@ -77,17 +83,22 @@ struct dbuct_cdcl_elimination_generator {
 
     // Post-backtrack re-application: re-derive every forced elimination for the
     // current (restored) frontier and flag a realized conflict if the frontier
-    // already contains a full learned no-good.
-    coroutine<const resolution_lineage*, void> reapply() {
+    // already contains a full learned no-good. Returns the forced eliminations as
+    // a batch (a plain vector rather than a coroutine, so this header can be
+    // instantiated across translation units without tripping GCC's coroutine
+    // comdat-folding bug).
+    std::vector<const resolution_lineage*> reapply() {
         reapply_realized_ = false;
+        std::vector<const resolution_lineage*> forced_eliminations;
         for (const auto& [id, av] : avoidances_) {
             const resolution_lineage* forced = nullptr;
             switch (classify(av, nullptr, forced)) {
-                case scan_result::forced:   co_yield forced; break;
+                case scan_result::forced:   forced_eliminations.push_back(forced); break;
                 case scan_result::realized: reapply_realized_ = true; break;
                 case scan_result::none:     break;
             }
         }
+        return forced_eliminations;
     }
 
     bool reapply_found_realized_conflict() const { return reapply_realized_; }

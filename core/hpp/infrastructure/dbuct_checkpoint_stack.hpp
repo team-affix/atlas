@@ -51,6 +51,24 @@ struct dbuct_checkpoint_stack {
         : ge_(ge), gcr_(gcr), srt_(srt), cfo_(cfo), cgc_(cgc), ug_(ug), dm_(dm),
           fba_(fba), bm_(bm), mhu_(mhu), eb_(eb), rm_(rm) {}
 
+    // Capture the root frontier (initial goals + all candidates, no resolutions
+    // yet), taken once after one-time activation. This is the only snapshot of the
+    // pre-episode state when a solve makes zero tree-policy choices (a purely
+    // unit-propagated solution pushes no frames), so it is what restores the
+    // observable frontier to root when such a search is exhausted.
+    void mark_root() { root_.emplace(capture()); }
+
+    // Restore the root frontier and drop all episode state. One-shot: used at
+    // exhaustion, after which the solve is finished.
+    void restore_root() {
+        if (root_.has_value())
+            apply(std::move(*root_));
+        root_.reset();
+        frames_.clear();
+        rollout_.reset();
+        in_rollout_ = false;
+    }
+
     // One snapshot per tree-policy choose(); kept in lockstep with DBUCT's stack.
     void push_tree_policy() { frames_.push_back(capture()); }
 
@@ -126,6 +144,7 @@ private:
 
     std::vector<checkpoint>   frames_;
     std::optional<checkpoint> rollout_;
+    std::optional<checkpoint> root_;
     bool                      in_rollout_ = false;
 };
 

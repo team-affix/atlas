@@ -69,6 +69,11 @@ dbuct_solver<IA, IRS, IGDC, IDL, ICR, IT, ILA, ILR>::solve() {
         co_return;
     }
 
+    // Snapshot the root frontier so an exhausted search can restore the caller's
+    // observable state (bindings, active goals) to root — matching the restarting
+    // solver, whose final teardown leaves the frontier back at the initial goals.
+    terminate_.mark_root();
+
     bool refuted = false;
     while (!refuted) {
         const sim_termination term = run_sim_.run();
@@ -77,9 +82,13 @@ dbuct_solver<IA, IRS, IGDC, IDL, ICR, IT, ILA, ILR>::solve() {
         // BEFORE any backstep rolls it back.
         co_yield term;
 
-        // A path with no decisions leaves no branch to explore.
-        if (get_decision_count_.count() == 0)
+        // A path with no decisions leaves no branch to explore. The search is
+        // exhausted: restore the root frontier so the caller's post-refutation
+        // view matches the restarting solver (no leftover solution bindings).
+        if (get_decision_count_.count() == 0) {
+            terminate_.restore_root();
             co_return;
+        }
 
         // Learn from the terminal path, then lazily backstep. terminate() reports
         // how many choice frames DBUCT unwound and drives the matching checkpoint
@@ -94,6 +103,10 @@ dbuct_solver<IA, IRS, IGDC, IDL, ICR, IT, ILA, ILR>::solve() {
 
         refuted = reapply_cascade();
     }
+
+    // Exhausted via a collapsed (root-level) frontier: normalise the observable
+    // state back to root, as the restarting solver does at final teardown.
+    terminate_.restore_root();
 }
 
 template<typename IA, typename IRS, typename IGDC, typename IDL, typename ICR,

@@ -38,6 +38,10 @@ struct dbuct_sim {
     std::size_t terminate(double reward);
     bool in_rollout() const { return dbuct_->in_rollout(); }
 
+    // Root-frontier snapshot management, mirrored onto the checkpoint stack.
+    void mark_root() { checkpoints_.mark_root(); }
+    void restore_root() { checkpoints_.restore_root(); }
+
 private:
     using decision_set_t = mcts_node_id::first_type;
 
@@ -128,7 +132,28 @@ mcts_choice dbuct_sim<ICS, IMRL>::choose(const std::vector<mcts_choice>& choices
 
 template<typename ICS, typename IMRL>
 std::size_t dbuct_sim<ICS, IMRL>::terminate(double reward) {
-    const std::size_t steps = dbuct_->terminate(reward);
+    // Whether this episode explored any new ground. If it never entered the
+    // rollout phase, every node on its path was already expanded: tree policy
+    // walked a fully-known path straight to a terminal.
+    const bool was_rollout = dbuct_->in_rollout();
+
+    std::size_t steps = dbuct_->terminate(reward);
+
+    // A pure tree-policy episode that DBUCT would keep camped (steps == 0) has
+    // exhausted its camped subtree: re-running from that node only re-derives the
+    // same terminal — and if that terminal is a conflict, the next episode would
+    // re-enter run_sim from an already-collapsed frontier (an active goal with no
+    // candidates) and fault. Force at least one backstep so we always leave an
+    // exhausted terminal. Repeated terminate() dispatches sink the node's granted
+    // budget until it pops; because every extra dispatch scores the same terminal
+    // reward the node's mean value is unchanged, so this only (correctly) drives
+    // exploration away from the exhausted leaf.
+    if (steps == 0 && !was_rollout) {
+        do {
+            steps = dbuct_->terminate(reward);
+        } while (steps == 0);
+    }
+
     checkpoints_.end_episode(steps);
     return steps;
 }

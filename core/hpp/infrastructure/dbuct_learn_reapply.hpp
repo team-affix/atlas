@@ -44,12 +44,8 @@ struct dbuct_learn_reapply {
     // Returns true if the frontier is conflicted.
     bool reapply_frontier() {
         bool conflict = false;
-        auto sm = cdcl_.reapply();
-        while (!sm.done()) {
-            sm.resume();
-            if (!sm.has_yield())
-                continue;
-            if (route_elimination(sm.consume_yield()))
+        for (const resolution_lineage* forced : cdcl_.reapply()) {
+            if (route_elimination(forced))
                 conflict = true;
         }
         if (cdcl_.reapply_found_realized_conflict())
