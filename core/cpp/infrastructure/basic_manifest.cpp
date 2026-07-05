@@ -68,7 +68,7 @@ basic_manifest::basic_manifest(
                unit_goal_detector_, unit_goals_, unit_goals_,
                random_decision_generator_, joint_, elimination_router_,
                resolver_, get_unit_resolution_, decision_memory_,
-               resolution_memory_, max_resolutions),
+               resolution_memory_, resolution_memory_, max_resolutions),
       solver_(set_up_sim_, tear_down_sim_, run_sim_,
               decision_memory_, decision_memory_,
               lineage_pool_, cdcl_, elimination_router_) {}

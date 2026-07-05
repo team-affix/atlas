@@ -93,7 +93,7 @@ horizon_manifest::horizon_manifest(
                unit_goals_, unit_goals_,
                mcts_decision_generator_, joint_, elimination_router_,
                horizon_resolver_, get_unit_resolution_, decision_memory_,
-               resolution_memory_, max_resolutions),
+               resolution_memory_, resolution_memory_, max_resolutions),
       tear_down_base_(trail_, unit_goals_, decision_memory_, resolution_memory_,
                       goal_candidate_rules_, goal_exprs_, srt_active_goals_,
                       candidate_frame_offsets_, mhu_, bind_map_,

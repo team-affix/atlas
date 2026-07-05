@@ -101,7 +101,7 @@ using tear_down_sim_t  = tear_down_sim<trail, unit_goals, decision_memory, resol
 using run_sim_t    = run_sim<initial_goals_activator_t, solution_detector_t, conflict_detector_t,
                     unit_goal_detector_t, unit_goals, unit_goals, MockGenerateDecision,
                     joint_t, elimination_router_t, resolver_t, get_unit_resolution_t,
-                    decision_memory, resolution_memory>;
+                    decision_memory, resolution_memory, resolution_memory>;
 
 struct sim_stack {
     db& database_;
@@ -219,7 +219,7 @@ struct simulation {
         run_sim_.emplace(*s.initial_goals_activator_, s.solution_detector_, s.conflict_detector_,
             s.unit_goal_detector_, s.unit_goals_, s.unit_goals_, s.decision_generator,
             *s.joint_, s.elimination_router_, *s.resolver_, s.get_unit_resolution_,
-            s.decision_memory_, s.resolution_memory_, max_resolutions);
+            s.decision_memory_, s.resolution_memory_, s.resolution_memory_, max_resolutions);
     }
 
     void set_up() { set_up_sim_.set_up(); }

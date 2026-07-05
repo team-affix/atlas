@@ -117,7 +117,7 @@ struct dbuct_manifest {
     using run_sim_t                     = run_sim<dbuct_frontier_ready, solution_detector_t, conflict_detector_t,
                                           unit_goal_detector_t, dbuct_unit_goals, dbuct_unit_goals, mcts_decision_generator_t,
                                           joint_t, elimination_router_t, resolver_t, get_unit_resolution_t,
-                                          dbuct_decision_memory, dbuct_resolution_memory>;
+                                          dbuct_decision_memory, dbuct_resolution_memory, dbuct_resolution_memory>;
     using learn_reapply_t               = dbuct_learn_reapply<cdcl_t, elimination_router_t, conflict_detector_t,
                                           unit_goal_detector_t, dbuct_unit_goals>;
     using solver_t                      = dbuct_solver<srt_initial_goals_activator_t, run_sim_t, dbuct_decision_memory,
@@ -255,7 +255,7 @@ inline dbuct_manifest::dbuct_manifest(
                unit_goal_detector_, unit_goals_, unit_goals_,
                mcts_decision_generator_, joint_, elimination_router_,
                resolver_, get_unit_resolution_, decision_memory_,
-               resolution_memory_, max_resolutions),
+               resolution_memory_, resolution_memory_, max_resolutions),
       learn_reapply_(cdcl_, elimination_router_, conflict_detector_,
                      unit_goal_detector_, unit_goals_),
       solver_(srt_initial_goals_activator_, run_sim_, decision_memory_,
