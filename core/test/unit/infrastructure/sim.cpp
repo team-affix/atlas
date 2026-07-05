@@ -86,6 +86,10 @@ struct MockRecordResolution {
     MOCK_METHOD(void, record_resolution, (const resolution_lineage*));
 };
 
+struct MockGetResolutionCount {
+    MOCK_METHOD(size_t, get_resolution_count, (), (const));
+};
+
 struct MockClearUnitGoals {
     MOCK_METHOD(void, clear, ());
 };
@@ -154,7 +158,8 @@ using test_run_sim_t = run_sim<
     MockResolver,
     MockGetUnitResolution,
     testing::NiceMock<MockRecordDecision>,
-    testing::NiceMock<MockRecordResolution>>;
+    testing::NiceMock<MockRecordResolution>,
+    testing::NiceMock<MockGetResolutionCount>>;
 using test_tear_down_sim_t = tear_down_sim<
     MockPopTrailFrame,
     testing::NiceMock<MockClearUnitGoals>,
@@ -189,6 +194,8 @@ struct SimTest : public ::testing::Test {
     MockGetUnitResolution get_unit_resolution;
     testing::NiceMock<MockRecordDecision> record_decision;
     testing::NiceMock<MockRecordResolution> record_resolution;
+    testing::NiceMock<MockGetResolutionCount> get_resolution_count;
+    size_t resolution_count_ = 0;
     testing::NiceMock<MockClearUnitGoals> clear_unit_goals;
     testing::NiceMock<MockClearRecordedDecisions> clear_recorded_decisions;
     testing::NiceMock<MockClearRecordedResolutions> clear_recorded_resolutions;
@@ -218,7 +225,7 @@ struct SimTest : public ::testing::Test {
             push_unit_goal, pop_unit_goal, decision_generator,
             elimination_generator, elimination_router, resolver,
             get_unit_resolution, record_decision, record_resolution,
-            max_resolutions};
+            get_resolution_count, max_resolutions};
     }
 
     test_run_sim_t run_sim_{make_run_sim(kMaxResolutions)};
@@ -233,6 +240,12 @@ struct SimTest : public ::testing::Test {
     void SetUp() override {
         ON_CALL(activate_initial_goals_and_candidates,
                 activate_initial_goals_and_candidates()).WillByDefault(Return(true));
+        // Mirror production: get_resolution_count() tracks how many resolutions
+        // have been recorded so far, so the run loop is bounded by max_resolutions.
+        ON_CALL(record_resolution, record_resolution(testing::_))
+            .WillByDefault([this](const resolution_lineage*) { ++resolution_count_; });
+        ON_CALL(get_resolution_count, get_resolution_count())
+            .WillByDefault([this] { return resolution_count_; });
     }
 };
 

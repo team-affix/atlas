@@ -105,7 +105,7 @@ struct ridge_manifest {
     using run_sim_t        = run_sim<srt_initial_goals_activator_t, solution_detector_t, conflict_detector_t,
                             unit_goal_detector_t, unit_goals, unit_goals, mcts_decision_generator_t,
                             joint_t, elimination_router_t, resolver_t, get_unit_resolution_t,
-                            decision_memory, resolution_memory>;
+                            decision_memory, resolution_memory, resolution_memory>;
     using solver_t        = solver<mcts_sim_t, mcts_sim_t, run_sim_t, decision_memory, decision_memory,
                             lineage_pool, cdcl_t, elimination_router_t>;
 

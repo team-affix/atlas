@@ -10,13 +10,13 @@ template<typename IActivateInitialGoals, typename ISolutionDetector, typename IC
          typename IUnitGoalDetector, typename IPushUnitGoal, typename IPopUnitGoal,
          typename IGenerateDecision, typename IEliminationGenerator, typename IEliminationRouter,
          typename IResolver, typename IGetUnitResolution, typename IRecordDecision,
-         typename IRecordResolution>
+         typename IRecordResolution, typename IGetResolutionCount>
 struct run_sim {
     run_sim(IActivateInitialGoals&, ISolutionDetector&, IConflictDetector&,
             IUnitGoalDetector&, IPushUnitGoal&, IPopUnitGoal&,
             IGenerateDecision&, IEliminationGenerator&, IEliminationRouter&,
             IResolver&, IGetUnitResolution&, IRecordDecision&, IRecordResolution&,
-            size_t max_resolutions);
+            IGetResolutionCount&, size_t max_resolutions);
     sim_termination run();
 private:
     const resolution_lineage* next_resolution();
@@ -35,17 +35,19 @@ private:
     IGetUnitResolution& get_unit_resolution_;
     IRecordDecision& record_decision_;
     IRecordResolution& record_resolution_;
+    IGetResolutionCount& get_resolution_count_;
 };
 
 // --- method definitions ---
 
 template<typename IAI, typename ISD, typename ICD, typename IUGD,
          typename IPUG, typename IPOG, typename IGD, typename IEG,
-         typename IER, typename IR, typename IGUR, typename IRD, typename IRR>
-run_sim<IAI,ISD,ICD,IUGD,IPUG,IPOG,IGD,IEG,IER,IR,IGUR,IRD,IRR>::run_sim(
+         typename IER, typename IR, typename IGUR, typename IRD, typename IRR,
+         typename IGRC>
+run_sim<IAI,ISD,ICD,IUGD,IPUG,IPOG,IGD,IEG,IER,IR,IGUR,IRD,IRR,IGRC>::run_sim(
     IAI& ai, ISD& sd, ICD& cd, IUGD& ugd, IPUG& pug, IPOG& pog,
     IGD& gd, IEG& eg, IER& er, IR& r, IGUR& gur, IRD& rd, IRR& rr,
-    size_t max_resolutions)
+    IGRC& grc, size_t max_resolutions)
     : max_resolutions_(max_resolutions),
       activate_initial_goals_and_candidates_(ai),
       solution_detector_(sd),
@@ -59,16 +61,18 @@ run_sim<IAI,ISD,ICD,IUGD,IPUG,IPOG,IGD,IEG,IER,IR,IGUR,IRD,IRR>::run_sim(
       resolver_(r),
       get_unit_resolution_(gur),
       record_decision_(rd),
-      record_resolution_(rr) {}
+      record_resolution_(rr),
+      get_resolution_count_(grc) {}
 
 template<typename IAI, typename ISD, typename ICD, typename IUGD,
          typename IPUG, typename IPOG, typename IGD, typename IEG,
-         typename IER, typename IR, typename IGUR, typename IRD, typename IRR>
-sim_termination run_sim<IAI,ISD,ICD,IUGD,IPUG,IPOG,IGD,IEG,IER,IR,IGUR,IRD,IRR>::run() {
+         typename IER, typename IR, typename IGUR, typename IRD, typename IRR,
+         typename IGRC>
+sim_termination run_sim<IAI,ISD,ICD,IUGD,IPUG,IPOG,IGD,IEG,IER,IR,IGUR,IRD,IRR,IGRC>::run() {
     if (!activate_initial_goals_and_candidates_.activate_initial_goals_and_candidates())
         return sim_termination::conflicted;
 
-    for (size_t i = 0; i < max_resolutions_; ++i) {
+    while (get_resolution_count_.get_resolution_count() < max_resolutions_) {
         if (solution_detector_.detect())
             return sim_termination::solved;
         const resolution_lineage* rl = next_resolution();
@@ -94,9 +98,10 @@ sim_termination run_sim<IAI,ISD,ICD,IUGD,IPUG,IPOG,IGD,IEG,IER,IR,IGUR,IRD,IRR>:
 
 template<typename IAI, typename ISD, typename ICD, typename IUGD,
          typename IPUG, typename IPOG, typename IGD, typename IEG,
-         typename IER, typename IR, typename IGUR, typename IRD, typename IRR>
+         typename IER, typename IR, typename IGUR, typename IRD, typename IRR,
+         typename IGRC>
 const resolution_lineage*
-run_sim<IAI,ISD,ICD,IUGD,IPUG,IPOG,IGD,IEG,IER,IR,IGUR,IRD,IRR>::next_resolution() {
+run_sim<IAI,ISD,ICD,IUGD,IPUG,IPOG,IGD,IEG,IER,IR,IGUR,IRD,IRR,IGRC>::next_resolution() {
     const resolution_lineage* rl;
     auto maybe_gl = pop_unit_goal_.pop();
     if (!maybe_gl.has_value()) {

@@ -77,7 +77,7 @@ ridge_manifest::ridge_manifest(
                unit_goals_, unit_goals_,
                mcts_decision_generator_, joint_, elimination_router_,
                resolver_, get_unit_resolution_, decision_memory_,
-               resolution_memory_, max_resolutions),
+               resolution_memory_, resolution_memory_, max_resolutions),
       solver_(mcts_sim_, mcts_sim_, run_sim_,
               decision_memory_, decision_memory_,
               lineage_pool_, cdcl_, elimination_router_) {}
