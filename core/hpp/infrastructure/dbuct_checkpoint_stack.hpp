@@ -3,43 +3,50 @@
 
 #include <cstddef>
 #include "debug_assert.hpp"
-#include "infrastructure/trail.hpp"
 
 // Trail translator for the delayed-backtracking solver.
 //
 // Every camped store is trail-backed (its mutations journal a backtrackable
 // operation), so incremental backtracking replaces the former O(state) full-copy
 // checkpointing entirely. This stack no longer copies state; it maps DBUCT's
-// episode lifecycle onto the shared trail:
+// episode lifecycle onto the trail's frame operations, supplied as the abstract
+// IPushFrame / IPopFrame (not a concrete trail):
 //
-//   * initial-goal activation logs mutations with no enclosing frame (below the
-//     root baseline), so restore_root() never undoes them — that is the root
+//   * initial-goal activation logs mutations before mark_root (below the root
+//     episode frame), so restore_root() never undoes them — that is the root
 //     frontier;
-//   * each tree-policy choose() opens one trail frame (push_tree_policy); a
+//   * mark_root() opens a persistent root episode frame that encloses an
+//     episode's leading unit propagation (which runs before any tree-policy
+//     choose(), so it would otherwise be logged frame-less and un-poppable);
+//   * each tree-policy choose() opens one more frame (push_tree_policy); a
 //     choice's downstream resolution mutations land in that frame;
 //   * entering the rollout phase opens one more frame (enter_rollout);
-//   * terminate()'s reported backstep count becomes trail pops (end_episode):
+//   * terminate()'s reported backstep count becomes frame pops (end_episode):
 //     the rollout frame first, then `steps` tree frames.
 //
 // A backstep leaves the resume frame open, so cascading re-application of learned
 // avoidances logs into it and is itself undone on any further backstep — exactly
 // the behaviour a snapshot scheme reproduced by re-deriving eliminations after a
 // full restore. Durable CDCL learning lives outside the trail, so it survives.
+//
+// frames_open_ tracks every frame opened since mark_root (the root episode frame
+// plus any tree/rollout frames) so restore_root() can pop back to the baseline
+// without querying the trail's depth.
+template<typename IPushFrame, typename IPopFrame>
 struct dbuct_checkpoint_stack {
-    explicit dbuct_checkpoint_stack(trail& t);
+    dbuct_checkpoint_stack(IPushFrame& push_frame, IPopFrame& pop_frame);
 
-    // Baseline the root frontier (initial goals + all candidates, no resolutions
-    // yet), taken once after one-time activation. restore_root() rewinds to here.
+    // Open the persistent root episode frame. restore_root() rewinds to here.
     void mark_root();
 
-    // Rewind to the root frontier and drop all episode frames. One-shot: used at
-    // exhaustion, after which the solve is finished.
+    // Rewind past the root episode frame and drop all episode frames. One-shot:
+    // used at exhaustion, after which the solve is finished.
     void restore_root();
 
-    // One trail frame per tree-policy choose(); kept in lockstep with DBUCT.
+    // One frame per tree-policy choose(); kept in lockstep with DBUCT.
     void push_tree_policy();
 
-    // One trail frame opened when an episode transitions into its rollout phase.
+    // One frame opened when an episode transitions into its rollout phase.
     void enter_rollout();
 
     // Synchronise with terminate()'s reported backstep count: pop the rollout
@@ -53,59 +60,69 @@ struct dbuct_checkpoint_stack {
     size_t frame_depth() const;
 
 private:
-    trail& trail_;
-    size_t root_baseline_ = 0;
+    IPushFrame& push_frame_;
+    IPopFrame& pop_frame_;
+    size_t frames_open_ = 0;
     size_t tree_frames_ = 0;
     bool in_rollout_ = false;
 };
 
-inline dbuct_checkpoint_stack::dbuct_checkpoint_stack(trail& t) : trail_(t) {}
+template<typename IPushFrame, typename IPopFrame>
+dbuct_checkpoint_stack<IPushFrame, IPopFrame>::dbuct_checkpoint_stack(IPushFrame& push_frame, IPopFrame& pop_frame)
+    : push_frame_(push_frame), pop_frame_(pop_frame) {}
 
-inline void dbuct_checkpoint_stack::mark_root() {
-    // Open a persistent root episode frame ABOVE the baseline. Initial-goal
-    // activation logged its mutations below the baseline (they are the permanent
-    // root frontier). But an episode's leading unit propagation runs before any
-    // tree-policy choose(), so without this frame those resolution binds would be
-    // logged frame-less and restore_root could not undo them (e.g. a zero-decision
-    // unit solution must leave the goal vars unbound again once exhausted).
-    root_baseline_ = trail_.depth();
-    trail_.push();
+template<typename IPushFrame, typename IPopFrame>
+void dbuct_checkpoint_stack<IPushFrame, IPopFrame>::mark_root() {
+    push_frame_.push();
+    frames_open_ = 1;
     tree_frames_ = 0;
     in_rollout_ = false;
 }
 
-inline void dbuct_checkpoint_stack::restore_root() {
-    while (trail_.depth() > root_baseline_)
-        trail_.pop();
+template<typename IPushFrame, typename IPopFrame>
+void dbuct_checkpoint_stack<IPushFrame, IPopFrame>::restore_root() {
+    for (size_t i = 0; i < frames_open_; ++i)
+        pop_frame_.pop();
+    frames_open_ = 0;
     tree_frames_ = 0;
     in_rollout_ = false;
 }
 
-inline void dbuct_checkpoint_stack::push_tree_policy() {
-    trail_.push();
+template<typename IPushFrame, typename IPopFrame>
+void dbuct_checkpoint_stack<IPushFrame, IPopFrame>::push_tree_policy() {
+    push_frame_.push();
+    ++frames_open_;
     ++tree_frames_;
 }
 
-inline void dbuct_checkpoint_stack::enter_rollout() {
-    trail_.push();
+template<typename IPushFrame, typename IPopFrame>
+void dbuct_checkpoint_stack<IPushFrame, IPopFrame>::enter_rollout() {
+    push_frame_.push();
+    ++frames_open_;
     in_rollout_ = true;
 }
 
-inline void dbuct_checkpoint_stack::end_episode(size_t steps) {
+template<typename IPushFrame, typename IPopFrame>
+void dbuct_checkpoint_stack<IPushFrame, IPopFrame>::end_episode(size_t steps) {
     if (in_rollout_) {
-        trail_.pop();
+        pop_frame_.pop();
+        --frames_open_;
         in_rollout_ = false;
     }
     pop_and_restore(steps);
 }
 
-inline void dbuct_checkpoint_stack::pop_and_restore(size_t steps) {
+template<typename IPushFrame, typename IPopFrame>
+void dbuct_checkpoint_stack<IPushFrame, IPopFrame>::pop_and_restore(size_t steps) {
     DEBUG_ASSERT(steps <= tree_frames_);
-    for (size_t i = 0; i < steps; ++i)
-        trail_.pop();
+    for (size_t i = 0; i < steps; ++i) {
+        pop_frame_.pop();
+        --frames_open_;
+    }
     tree_frames_ -= steps;
 }
 
-inline size_t dbuct_checkpoint_stack::frame_depth() const { return tree_frames_; }
+template<typename IPushFrame, typename IPopFrame>
+size_t dbuct_checkpoint_stack<IPushFrame, IPopFrame>::frame_depth() const { return tree_frames_; }
 
 #endif

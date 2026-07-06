@@ -14,27 +14,27 @@
 #include "infrastructure/backtrackable_set_erase.hpp"
 #include "infrastructure/backtrackable_set_insert.hpp"
 #include "infrastructure/tracked.hpp"
-#include "infrastructure/trail.hpp"
 
 // Trail-journalled series-reduced tree: the delayed-backtracking counterpart of
 // series_reduced_tree (which the restarting solvers keep and clear wholesale).
 //
-// The forest is held in four tracked containers on the shared trail. Every
-// container mutation (including those inside the destructive unary/nullary
-// reduction cascades) is a primitive backtrackable mutation, so a single
-// link()+cascade logs a sequence of primitives whose LIFO replay on trail pop
-// reconstructs the exact pre-link topology. No bespoke compound inverse is
-// needed: the reduction that makes the tree "series-reduced" is undone step by
-// step. All inner-set mutations capture the outer map and re-look-up the key on
-// undo, so they survive a node being erased and re-inserted within the frame.
-template<typename NodeId>
+// The forest is held in four tracked containers on the trail (supplied as the
+// abstract ILogTrailAction, not a concrete trail). Every container mutation
+// (including those inside the destructive unary/nullary reduction cascades) is a
+// primitive backtrackable mutation, so a single link()+cascade logs a sequence of
+// primitives whose LIFO replay on trail pop reconstructs the exact pre-link
+// topology. No bespoke compound inverse is needed: the reduction that makes the
+// tree "series-reduced" is undone step by step. All inner-set mutations capture
+// the outer map and re-look-up the key on undo, so they survive a node being
+// erased and re-inserted within the frame.
+template<typename NodeId, typename ILogTrailAction>
 struct dbuct_series_reduced_tree {
     using node_set_t     = std::unordered_set<NodeId>;
     using child_set_t    = std::set<NodeId>;
     using children_map_t = std::unordered_map<NodeId, child_set_t>;
     using parents_map_t  = std::unordered_map<NodeId, NodeId>;
 
-    explicit dbuct_series_reduced_tree(trail& t);
+    explicit dbuct_series_reduced_tree(ILogTrailAction& t);
 
     bool insert(NodeId node);
     bool link(NodeId parent, child_set_t children);
@@ -48,19 +48,19 @@ private:
     void reduce_nullary(NodeId node);
     void reduce_unary(NodeId parent);
 
-    tracked<node_set_t, trail>     roots_;
-    tracked<node_set_t, trail>     leaves_;
-    tracked<children_map_t, trail> children_;
-    tracked<parents_map_t, trail>  parents_;
+    tracked<node_set_t, ILogTrailAction>     roots_;
+    tracked<node_set_t, ILogTrailAction>     leaves_;
+    tracked<children_map_t, ILogTrailAction> children_;
+    tracked<parents_map_t, ILogTrailAction>  parents_;
 };
 
-template<typename NodeId>
-dbuct_series_reduced_tree<NodeId>::dbuct_series_reduced_tree(trail& t)
+template<typename NodeId, typename ILogTrailAction>
+dbuct_series_reduced_tree<NodeId, ILogTrailAction>::dbuct_series_reduced_tree(ILogTrailAction& t)
     : roots_(t, node_set_t{}), leaves_(t, node_set_t{}),
       children_(t, children_map_t{}), parents_(t, parents_map_t{}) {}
 
-template<typename NodeId>
-bool dbuct_series_reduced_tree<NodeId>::insert(NodeId node) {
+template<typename NodeId, typename ILogTrailAction>
+bool dbuct_series_reduced_tree<NodeId, ILogTrailAction>::insert(NodeId node) {
     if (roots_.get().contains(node) || parents_.get().contains(node))
         return false;
     roots_.mutate(std::make_unique<backtrackable_set_insert<node_set_t>>(node));
@@ -68,8 +68,8 @@ bool dbuct_series_reduced_tree<NodeId>::insert(NodeId node) {
     return true;
 }
 
-template<typename NodeId>
-bool dbuct_series_reduced_tree<NodeId>::link(NodeId parent, child_set_t children) {
+template<typename NodeId, typename ILogTrailAction>
+bool dbuct_series_reduced_tree<NodeId, ILogTrailAction>::link(NodeId parent, child_set_t children) {
     if (!leaves_.get().contains(parent))
         return false;
     if (std::any_of(children.begin(), children.end(), [&](const NodeId& c) {
@@ -91,20 +91,20 @@ bool dbuct_series_reduced_tree<NodeId>::link(NodeId parent, child_set_t children
     return true;
 }
 
-template<typename NodeId>
-const typename dbuct_series_reduced_tree<NodeId>::node_set_t&
-dbuct_series_reduced_tree<NodeId>::roots() const { return roots_.get(); }
+template<typename NodeId, typename ILogTrailAction>
+const typename dbuct_series_reduced_tree<NodeId, ILogTrailAction>::node_set_t&
+dbuct_series_reduced_tree<NodeId, ILogTrailAction>::roots() const { return roots_.get(); }
 
-template<typename NodeId>
-const typename dbuct_series_reduced_tree<NodeId>::node_set_t&
-dbuct_series_reduced_tree<NodeId>::leaves() const { return leaves_.get(); }
+template<typename NodeId, typename ILogTrailAction>
+const typename dbuct_series_reduced_tree<NodeId, ILogTrailAction>::node_set_t&
+dbuct_series_reduced_tree<NodeId, ILogTrailAction>::leaves() const { return leaves_.get(); }
 
-template<typename NodeId>
-const typename dbuct_series_reduced_tree<NodeId>::child_set_t&
-dbuct_series_reduced_tree<NodeId>::children(NodeId parent) const { return children_.get().at(parent); }
+template<typename NodeId, typename ILogTrailAction>
+const typename dbuct_series_reduced_tree<NodeId, ILogTrailAction>::child_set_t&
+dbuct_series_reduced_tree<NodeId, ILogTrailAction>::children(NodeId parent) const { return children_.get().at(parent); }
 
-template<typename NodeId>
-void dbuct_series_reduced_tree<NodeId>::try_reduce(NodeId node) {
+template<typename NodeId, typename ILogTrailAction>
+void dbuct_series_reduced_tree<NodeId, ILogTrailAction>::try_reduce(NodeId node) {
     auto it = children_.get().find(node);
     if (it == children_.get().end())
         return;
@@ -116,8 +116,8 @@ void dbuct_series_reduced_tree<NodeId>::try_reduce(NodeId node) {
         reduce_unary(node);
 }
 
-template<typename NodeId>
-void dbuct_series_reduced_tree<NodeId>::reduce_nullary(NodeId node) {
+template<typename NodeId, typename ILogTrailAction>
+void dbuct_series_reduced_tree<NodeId, ILogTrailAction>::reduce_nullary(NodeId node) {
     children_.mutate(std::make_unique<backtrackable_map_erase<children_map_t>>(node));
 
     auto grandparent_it = parents_.get().find(node);
@@ -131,8 +131,8 @@ void dbuct_series_reduced_tree<NodeId>::reduce_nullary(NodeId node) {
     }
 }
 
-template<typename NodeId>
-void dbuct_series_reduced_tree<NodeId>::reduce_unary(NodeId parent) {
+template<typename NodeId, typename ILogTrailAction>
+void dbuct_series_reduced_tree<NodeId, ILogTrailAction>::reduce_unary(NodeId parent) {
     const NodeId child = *children_.get().at(parent).begin();
 
     children_.mutate(std::make_unique<backtrackable_map_erase<children_map_t>>(parent));

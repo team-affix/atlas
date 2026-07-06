@@ -6,39 +6,44 @@
 #include "infrastructure/backtrackable_map_erase.hpp"
 #include "infrastructure/backtrackable_map_insert.hpp"
 #include "infrastructure/tracked.hpp"
-#include "infrastructure/trail.hpp"
 #include "value_objects/lineage.hpp"
 #include "value_objects/framed_expr.hpp"
 
 // Delayed-backtracking (DBUCT) variant of goal_exprs.
 //
 // Behaviourally identical to goal_exprs, but its mutations are journalled on the
-// shared trail: set/unset log a backtrackable map insert/erase so a camped choice
-// frame rolls the goal-expr map back exactly when the trail pops. The DBUCT solver
-// never clears this wholesale per sim; it is carried across episodes and rewound
-// incrementally by trail pops rather than by a full-copy checkpoint.
+// trail (supplied as the abstract ILogTrailAction, not a concrete trail): set/
+// unset log a backtrackable map insert/erase so a camped choice frame rolls the
+// goal-expr map back exactly when the trail pops. The DBUCT solver never clears
+// this wholesale per sim; it is carried across episodes and rewound incrementally
+// by trail pops rather than by a full-copy checkpoint.
+template<typename ILogTrailAction>
 struct dbuct_goal_exprs {
     using map_t = std::unordered_map<const goal_lineage*, framed_expr>;
 
-    explicit dbuct_goal_exprs(trail& t);
+    explicit dbuct_goal_exprs(ILogTrailAction& t);
 
     framed_expr get(const goal_lineage* gl) const;
     void set(const goal_lineage* gl, framed_expr fe);
     void unset(const goal_lineage* gl);
 
 private:
-    tracked<map_t, trail> exprs_;
+    tracked<map_t, ILogTrailAction> exprs_;
 };
 
-inline dbuct_goal_exprs::dbuct_goal_exprs(trail& t) : exprs_(t, map_t{}) {}
+template<typename ILogTrailAction>
+dbuct_goal_exprs<ILogTrailAction>::dbuct_goal_exprs(ILogTrailAction& t) : exprs_(t, map_t{}) {}
 
-inline framed_expr dbuct_goal_exprs::get(const goal_lineage* gl) const { return exprs_.get().at(gl); }
+template<typename ILogTrailAction>
+framed_expr dbuct_goal_exprs<ILogTrailAction>::get(const goal_lineage* gl) const { return exprs_.get().at(gl); }
 
-inline void dbuct_goal_exprs::set(const goal_lineage* gl, framed_expr fe) {
+template<typename ILogTrailAction>
+void dbuct_goal_exprs<ILogTrailAction>::set(const goal_lineage* gl, framed_expr fe) {
     exprs_.mutate(std::make_unique<backtrackable_map_insert<map_t>>(gl, fe));
 }
 
-inline void dbuct_goal_exprs::unset(const goal_lineage* gl) {
+template<typename ILogTrailAction>
+void dbuct_goal_exprs<ILogTrailAction>::unset(const goal_lineage* gl) {
     exprs_.mutate(std::make_unique<backtrackable_map_erase<map_t>>(gl));
 }
 

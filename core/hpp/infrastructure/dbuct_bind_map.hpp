@@ -5,18 +5,18 @@
 #include <unordered_map>
 #include "infrastructure/backtrackable_map_insert.hpp"
 #include "infrastructure/globalizer.hpp"
-#include "infrastructure/trail.hpp"
 #include "value_objects/framed_expr.hpp"
 #include "debug_assert.hpp"
 
 // Delayed-backtracking variant of bind_map.
 //
-// Bindings are journalled on the shared trail: bind() logs a backtrackable map
-// insert so any substitution made since a choice frame is reverted exactly when
-// the trail pops. whnf performs NO path-compression write-back (unlike the
-// restarting bind_map): a compression write is a hidden mutation that the trail
-// would otherwise have to journal, so it is dropped (correctness is unaffected;
-// only intermediate sharing is lost).
+// Bindings are journalled on the trail (supplied as the abstract ILogTrailAction,
+// not a concrete trail): bind() logs a backtrackable map insert so any
+// substitution made since a choice frame is reverted exactly when the trail pops.
+// whnf performs NO path-compression write-back (unlike the restarting bind_map):
+// a compression write is a hidden mutation that the trail would otherwise have to
+// journal, so it is dropped (correctness is unaffected; only intermediate sharing
+// is lost).
 //
 // A journaling toggle supports the MHU: each head owns a heap-allocated local
 // bind_map that is mutated during a tentative unification BEFORE the head is
@@ -25,10 +25,11 @@
 // backtrack); once the head commits, enable_journaling() makes subsequent rebase
 // binds individually reversible. The common bind_map is constructed with
 // journaling on.
+template<typename ILogTrailAction>
 struct dbuct_bind_map {
     using map_t = std::unordered_map<uint32_t, framed_expr>;
 
-    dbuct_bind_map(globalizer& g, trail& t, bool journaling);
+    dbuct_bind_map(globalizer& g, ILogTrailAction& t, bool journaling);
 
     void bind(uint32_t global_key, framed_expr value);
     framed_expr whnf(framed_expr fe);
@@ -37,17 +38,20 @@ struct dbuct_bind_map {
 
 private:
     globalizer& globalizer_;
-    trail& trail_;
+    ILogTrailAction& trail_;
     bool journaling_;
     map_t bindings_;
 };
 
-inline dbuct_bind_map::dbuct_bind_map(globalizer& g, trail& t, bool journaling)
+template<typename ILogTrailAction>
+dbuct_bind_map<ILogTrailAction>::dbuct_bind_map(globalizer& g, ILogTrailAction& t, bool journaling)
     : globalizer_(g), trail_(t), journaling_(journaling) {}
 
-inline void dbuct_bind_map::enable_journaling() { journaling_ = true; }
+template<typename ILogTrailAction>
+void dbuct_bind_map<ILogTrailAction>::enable_journaling() { journaling_ = true; }
 
-inline void dbuct_bind_map::bind(uint32_t global_key, framed_expr value) {
+template<typename ILogTrailAction>
+void dbuct_bind_map<ILogTrailAction>::bind(uint32_t global_key, framed_expr value) {
     DEBUG_ASSERT(
         !std::holds_alternative<expr::var>(value.skeleton->content)
         || global_key > globalizer_.globalize(
@@ -64,7 +68,8 @@ inline void dbuct_bind_map::bind(uint32_t global_key, framed_expr value) {
     }
 }
 
-inline framed_expr dbuct_bind_map::whnf(framed_expr fe) {
+template<typename ILogTrailAction>
+framed_expr dbuct_bind_map<ILogTrailAction>::whnf(framed_expr fe) {
     if (!std::holds_alternative<expr::var>(fe.skeleton->content))
         return fe;
     const uint32_t global_key = globalizer_.globalize(

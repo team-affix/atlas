@@ -12,7 +12,7 @@
 struct DbuctSeriesReducedTreeTest : public ::testing::Test {
 protected:
     trail t;
-    dbuct_series_reduced_tree<int> tree{t};
+    dbuct_series_reduced_tree<int, trail> tree{t};
 
     void SetUp() override {
         tree.insert(1);

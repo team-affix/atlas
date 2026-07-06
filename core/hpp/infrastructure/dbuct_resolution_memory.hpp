@@ -5,36 +5,41 @@
 #include <unordered_set>
 #include "infrastructure/backtrackable_set_insert.hpp"
 #include "infrastructure/tracked.hpp"
-#include "infrastructure/trail.hpp"
 #include "value_objects/lineage.hpp"
 #include "value_objects/lemma.hpp"
 
-// Delayed-backtracking variant of resolution_memory. Trail-journalled so that
-// get_resolution_count() reflects the resolutions on the currently active
-// (camped) path rather than a lifetime-cumulative count: a choice-frame pop
-// removes exactly the resolutions recorded since that frame was opened.
+// Delayed-backtracking variant of resolution_memory. Trail-journalled (via the
+// abstract ILogTrailAction) so that get_resolution_count() reflects the
+// resolutions on the currently active (camped) path rather than a
+// lifetime-cumulative count: a choice-frame pop removes exactly the resolutions
+// recorded since that frame was opened.
+template<typename ILogTrailAction>
 struct dbuct_resolution_memory {
     using set_t = std::unordered_set<const resolution_lineage*>;
 
-    explicit dbuct_resolution_memory(trail& t);
+    explicit dbuct_resolution_memory(ILogTrailAction& t);
 
     void record_resolution(const resolution_lineage* rl);
     size_t get_resolution_count() const;
     lemma derive_resolution_lemma() const;
 
 private:
-    tracked<set_t, trail> resolutions_;
+    tracked<set_t, ILogTrailAction> resolutions_;
 };
 
-inline dbuct_resolution_memory::dbuct_resolution_memory(trail& t) : resolutions_(t, set_t{}) {}
+template<typename ILogTrailAction>
+dbuct_resolution_memory<ILogTrailAction>::dbuct_resolution_memory(ILogTrailAction& t) : resolutions_(t, set_t{}) {}
 
-inline void dbuct_resolution_memory::record_resolution(const resolution_lineage* rl) {
+template<typename ILogTrailAction>
+void dbuct_resolution_memory<ILogTrailAction>::record_resolution(const resolution_lineage* rl) {
     if (resolutions_.get().contains(rl)) return;
     resolutions_.mutate(std::make_unique<backtrackable_set_insert<set_t>>(rl));
 }
 
-inline size_t dbuct_resolution_memory::get_resolution_count() const { return resolutions_.get().size(); }
+template<typename ILogTrailAction>
+size_t dbuct_resolution_memory<ILogTrailAction>::get_resolution_count() const { return resolutions_.get().size(); }
 
-inline lemma dbuct_resolution_memory::derive_resolution_lemma() const { return lemma{resolutions_.get()}; }
+template<typename ILogTrailAction>
+lemma dbuct_resolution_memory<ILogTrailAction>::derive_resolution_lemma() const { return lemma{resolutions_.get()}; }
 
 #endif

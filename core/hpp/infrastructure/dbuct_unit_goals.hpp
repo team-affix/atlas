@@ -7,30 +7,34 @@
 #include "infrastructure/backtrackable_vector_pop_back.hpp"
 #include "infrastructure/backtrackable_vector_push_back.hpp"
 #include "infrastructure/tracked.hpp"
-#include "infrastructure/trail.hpp"
 #include "value_objects/lineage.hpp"
 
 // Delayed-backtracking variant of unit_goals. The LIFO queue is trail-journalled
-// so a choice-frame pop restores the exact pending unit-goal stack.
+// (via the abstract ILogTrailAction) so a choice-frame pop restores the exact
+// pending unit-goal stack.
+template<typename ILogTrailAction>
 struct dbuct_unit_goals {
     using vec_t = std::vector<const goal_lineage*>;
 
-    explicit dbuct_unit_goals(trail& t);
+    explicit dbuct_unit_goals(ILogTrailAction& t);
 
     void push(const goal_lineage* gl);
     std::optional<const goal_lineage*> pop();
 
 private:
-    tracked<vec_t, trail> queue_;
+    tracked<vec_t, ILogTrailAction> queue_;
 };
 
-inline dbuct_unit_goals::dbuct_unit_goals(trail& t) : queue_(t, vec_t{}) {}
+template<typename ILogTrailAction>
+dbuct_unit_goals<ILogTrailAction>::dbuct_unit_goals(ILogTrailAction& t) : queue_(t, vec_t{}) {}
 
-inline void dbuct_unit_goals::push(const goal_lineage* gl) {
+template<typename ILogTrailAction>
+void dbuct_unit_goals<ILogTrailAction>::push(const goal_lineage* gl) {
     queue_.mutate(std::make_unique<backtrackable_vector_push_back<vec_t>>(gl));
 }
 
-inline std::optional<const goal_lineage*> dbuct_unit_goals::pop() {
+template<typename ILogTrailAction>
+std::optional<const goal_lineage*> dbuct_unit_goals<ILogTrailAction>::pop() {
     if (queue_.get().empty()) return std::nullopt;
     const goal_lineage* gl = queue_.get().back();
     queue_.mutate(std::make_unique<backtrackable_vector_pop_back<vec_t>>());

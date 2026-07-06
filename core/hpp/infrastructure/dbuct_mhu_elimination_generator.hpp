@@ -14,15 +14,13 @@
 #include "infrastructure/backtrackable_map_insert.hpp"
 #include "infrastructure/coroutine.hpp"
 #include "infrastructure/tracked.hpp"
-#include "infrastructure/trail.hpp"
-#include "infrastructure/unifier_factory.hpp"
-#include "infrastructure/unifier.hpp"
 #include "value_objects/framed_expr.hpp"
 #include "value_objects/lineage.hpp"
 #include "value_objects/unify_head.hpp"
 
 // Delayed-backtracking variant of mhu_elimination_generator, fully journalled on
-// the shared trail (no snapshot/restore, no deep clone).
+// the trail (supplied as the abstract ILogTrailAction, not a concrete trail); no
+// snapshot/restore, no deep clone.
 //
 // The one hard structure: each head owns a unique_ptr<local bind_map> and a
 // unifier that holds a raw pointer INTO that bind map. The heap-allocated bind
@@ -46,11 +44,12 @@
 //     common bind map (always journaling), which lives for the whole solve.
 template<typename IBindMap, typename IBindMapFactory, typename IUnifier,
          typename IUnifierFactory, typename IMakeResolutionLineage,
-         typename IMakeVar, typename IGetGoalCandidateRuleIds>
+         typename IMakeVar, typename IGetGoalCandidateRuleIds,
+         typename ILogTrailAction>
 struct dbuct_mhu_elimination_generator {
     dbuct_mhu_elimination_generator(IBindMap&, IMakeResolutionLineage&, IMakeVar&,
                                     IBindMapFactory&, IUnifierFactory&,
-                                    const IGetGoalCandidateRuleIds&, trail&);
+                                    const IGetGoalCandidateRuleIds&, ILogTrailAction&);
 
     bool try_add_head(const resolution_lineage*, framed_expr goal, framed_expr head);
     coroutine<const resolution_lineage*, void> constrain(const resolution_lineage*);
@@ -77,24 +76,24 @@ private:
     IBindMapFactory& bind_map_factory_;
     IUnifierFactory& unifier_factory_;
     const IGetGoalCandidateRuleIds& get_goal_candidate_rule_ids_;
-    trail& trail_;
+    ILogTrailAction& trail_;
 
     arena_t arena_;
-    tracked<heads_map_t, trail> heads_;
-    tracked<rep_to_rls_t, trail> rep_to_rls_;
-    tracked<rl_to_reps_t, trail> rl_to_reps_;
+    tracked<heads_map_t, ILogTrailAction> heads_;
+    tracked<rep_to_rls_t, ILogTrailAction> rep_to_rls_;
+    tracked<rl_to_reps_t, ILogTrailAction> rl_to_reps_;
 };
 
-template<typename IBM, typename IBMF, typename IU, typename IUF, typename IMRL, typename IMV, typename IGCRI>
-dbuct_mhu_elimination_generator<IBM, IBMF, IU, IUF, IMRL, IMV, IGCRI>::dbuct_mhu_elimination_generator(
-    IBM& common, IMRL& mrl, IMV& mv, IBMF& bmf, IUF& uf, const IGCRI& gcri, trail& t)
+template<typename IBM, typename IBMF, typename IU, typename IUF, typename IMRL, typename IMV, typename IGCRI, typename ILog>
+dbuct_mhu_elimination_generator<IBM, IBMF, IU, IUF, IMRL, IMV, IGCRI, ILog>::dbuct_mhu_elimination_generator(
+    IBM& common, IMRL& mrl, IMV& mv, IBMF& bmf, IUF& uf, const IGCRI& gcri, ILog& t)
     : common_(common), make_resolution_lineage_(mrl), make_var_(mv),
       bind_map_factory_(bmf), unifier_factory_(uf),
       get_goal_candidate_rule_ids_(gcri), trail_(t),
       heads_(t, heads_map_t{}), rep_to_rls_(t, rep_to_rls_t{}), rl_to_reps_(t, rl_to_reps_t{}) {}
 
-template<typename IBM, typename IBMF, typename IU, typename IUF, typename IMRL, typename IMV, typename IGCRI>
-bool dbuct_mhu_elimination_generator<IBM, IBMF, IU, IUF, IMRL, IMV, IGCRI>::try_add_head(
+template<typename IBM, typename IBMF, typename IU, typename IUF, typename IMRL, typename IMV, typename IGCRI, typename ILog>
+bool dbuct_mhu_elimination_generator<IBM, IBMF, IU, IUF, IMRL, IMV, IGCRI, ILog>::try_add_head(
     const resolution_lineage* lineage, framed_expr lhs, framed_expr rhs) {
     auto bm = std::make_unique<IBM>(bind_map_factory_.make());
     IU u = unifier_factory_.make(bm.get());
@@ -128,9 +127,9 @@ bool dbuct_mhu_elimination_generator<IBM, IBMF, IU, IUF, IMRL, IMV, IGCRI>::try_
     return true;
 }
 
-template<typename IBM, typename IBMF, typename IU, typename IUF, typename IMRL, typename IMV, typename IGCRI>
+template<typename IBM, typename IBMF, typename IU, typename IUF, typename IMRL, typename IMV, typename IGCRI, typename ILog>
 coroutine<const resolution_lineage*, void>
-dbuct_mhu_elimination_generator<IBM, IBMF, IU, IUF, IMRL, IMV, IGCRI>::constrain(
+dbuct_mhu_elimination_generator<IBM, IBMF, IU, IUF, IMRL, IMV, IGCRI, ILog>::constrain(
     const resolution_lineage* lineage) {
     auto gl = lineage->parent;
     auto& candidates = get_goal_candidate_rule_ids_.get(gl);
@@ -158,9 +157,9 @@ dbuct_mhu_elimination_generator<IBM, IBMF, IU, IUF, IMRL, IMV, IGCRI>::constrain
         heads_.mutate(std::make_unique<backtrackable_map_erase<heads_map_t>>(lineage));
 }
 
-template<typename IBM, typename IBMF, typename IU, typename IUF, typename IMRL, typename IMV, typename IGCRI>
+template<typename IBM, typename IBMF, typename IU, typename IUF, typename IMRL, typename IMV, typename IGCRI, typename ILog>
 coroutine<const resolution_lineage*, void>
-dbuct_mhu_elimination_generator<IBM, IBMF, IU, IUF, IMRL, IMV, IGCRI>::accept_bindings(
+dbuct_mhu_elimination_generator<IBM, IBMF, IU, IUF, IMRL, IMV, IGCRI, ILog>::accept_bindings(
     IBM& local_bind_map, const std::unordered_set<uint32_t>& c_reps) {
     for (auto c_rep : c_reps) {
         auto rep_expr = make_var_.make_var(c_rep);
@@ -180,9 +179,9 @@ dbuct_mhu_elimination_generator<IBM, IBMF, IU, IUF, IMRL, IMV, IGCRI>::accept_bi
     }
 }
 
-template<typename IBM, typename IBMF, typename IU, typename IUF, typename IMRL, typename IMV, typename IGCRI>
+template<typename IBM, typename IBMF, typename IU, typename IUF, typename IMRL, typename IMV, typename IGCRI, typename ILog>
 coroutine<const resolution_lineage*, void>
-dbuct_mhu_elimination_generator<IBM, IBMF, IU, IUF, IMRL, IMV, IGCRI>::rebase_all(uint32_t rep) {
+dbuct_mhu_elimination_generator<IBM, IBMF, IU, IUF, IMRL, IMV, IGCRI, ILog>::rebase_all(uint32_t rep) {
     auto remaining_rls = unlink(rep);
     for (auto rl : remaining_rls) {
         std::queue<uint32_t> touched_vars;
@@ -194,8 +193,8 @@ dbuct_mhu_elimination_generator<IBM, IBMF, IU, IUF, IMRL, IMV, IGCRI>::rebase_al
     }
 }
 
-template<typename IBM, typename IBMF, typename IU, typename IUF, typename IMRL, typename IMV, typename IGCRI>
-bool dbuct_mhu_elimination_generator<IBM, IBMF, IU, IUF, IMRL, IMV, IGCRI>::sync_and_link(
+template<typename IBM, typename IBMF, typename IU, typename IUF, typename IMRL, typename IMV, typename IGCRI, typename ILog>
+bool dbuct_mhu_elimination_generator<IBM, IBMF, IU, IUF, IMRL, IMV, IGCRI, ILog>::sync_and_link(
     const resolution_lineage* lineage, IU& unifier, std::queue<uint32_t>& touched_vars) {
     std::unordered_set<uint32_t> c_reps;
     auto sync_task = synchronize(unifier, touched_vars);
@@ -210,9 +209,9 @@ bool dbuct_mhu_elimination_generator<IBM, IBMF, IU, IUF, IMRL, IMV, IGCRI>::sync
     return true;
 }
 
-template<typename IBM, typename IBMF, typename IU, typename IUF, typename IMRL, typename IMV, typename IGCRI>
+template<typename IBM, typename IBMF, typename IU, typename IUF, typename IMRL, typename IMV, typename IGCRI, typename ILog>
 coroutine<uint32_t, bool>
-dbuct_mhu_elimination_generator<IBM, IBMF, IU, IUF, IMRL, IMV, IGCRI>::synchronize(
+dbuct_mhu_elimination_generator<IBM, IBMF, IU, IUF, IMRL, IMV, IGCRI, ILog>::synchronize(
     IU& unifier, std::queue<uint32_t>& touched_vars) {
     while (!touched_vars.empty()) {
         auto var = touched_vars.front();
@@ -239,8 +238,8 @@ dbuct_mhu_elimination_generator<IBM, IBMF, IU, IUF, IMRL, IMV, IGCRI>::synchroni
     co_return true;
 }
 
-template<typename IBM, typename IBMF, typename IU, typename IUF, typename IMRL, typename IMV, typename IGCRI>
-void dbuct_mhu_elimination_generator<IBM, IBMF, IU, IUF, IMRL, IMV, IGCRI>::link(
+template<typename IBM, typename IBMF, typename IU, typename IUF, typename IMRL, typename IMV, typename IGCRI, typename ILog>
+void dbuct_mhu_elimination_generator<IBM, IBMF, IU, IUF, IMRL, IMV, IGCRI, ILog>::link(
     const std::unordered_set<uint32_t>& reps,
     const std::unordered_set<const resolution_lineage*>& rls) {
     for (auto rep : reps) {
@@ -261,9 +260,9 @@ void dbuct_mhu_elimination_generator<IBM, IBMF, IU, IUF, IMRL, IMV, IGCRI>::link
     }
 }
 
-template<typename IBM, typename IBMF, typename IU, typename IUF, typename IMRL, typename IMV, typename IGCRI>
+template<typename IBM, typename IBMF, typename IU, typename IUF, typename IMRL, typename IMV, typename IGCRI, typename ILog>
 std::unordered_set<const resolution_lineage*>
-dbuct_mhu_elimination_generator<IBM, IBMF, IU, IUF, IMRL, IMV, IGCRI>::unlink(uint32_t rep) {
+dbuct_mhu_elimination_generator<IBM, IBMF, IU, IUF, IMRL, IMV, IGCRI, ILog>::unlink(uint32_t rep) {
     if (!rep_to_rls_.get().contains(rep))
         return {};
 
@@ -277,9 +276,9 @@ dbuct_mhu_elimination_generator<IBM, IBMF, IU, IUF, IMRL, IMV, IGCRI>::unlink(ui
     return rls;
 }
 
-template<typename IBM, typename IBMF, typename IU, typename IUF, typename IMRL, typename IMV, typename IGCRI>
+template<typename IBM, typename IBMF, typename IU, typename IUF, typename IMRL, typename IMV, typename IGCRI, typename ILog>
 std::unordered_set<uint32_t>
-dbuct_mhu_elimination_generator<IBM, IBMF, IU, IUF, IMRL, IMV, IGCRI>::unlink(
+dbuct_mhu_elimination_generator<IBM, IBMF, IU, IUF, IMRL, IMV, IGCRI, ILog>::unlink(
     const resolution_lineage* rl) {
     if (!rl_to_reps_.get().contains(rl))
         return {};
@@ -294,8 +293,8 @@ dbuct_mhu_elimination_generator<IBM, IBMF, IU, IUF, IMRL, IMV, IGCRI>::unlink(
     return reps;
 }
 
-template<typename IBM, typename IBMF, typename IU, typename IUF, typename IMRL, typename IMV, typename IGCRI>
-void dbuct_mhu_elimination_generator<IBM, IBMF, IU, IUF, IMRL, IMV, IGCRI>::remove_head(
+template<typename IBM, typename IBMF, typename IU, typename IUF, typename IMRL, typename IMV, typename IGCRI, typename ILog>
+void dbuct_mhu_elimination_generator<IBM, IBMF, IU, IUF, IMRL, IMV, IGCRI, ILog>::remove_head(
     const resolution_lineage* rl) {
     // Logical removal only: the arena slot is destroyed when its creation frame
     // pops, so the head object outlives this erase.

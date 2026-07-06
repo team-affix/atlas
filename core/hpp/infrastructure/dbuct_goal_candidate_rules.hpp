@@ -10,23 +10,24 @@
 #include "infrastructure/ra_rule_id_set_factory.hpp"
 #include "infrastructure/ra_rule_id_set.hpp"
 #include "infrastructure/tracked.hpp"
-#include "infrastructure/trail.hpp"
 #include "value_objects/lineage.hpp"
 
 // Delayed-backtracking variant of goal_candidate_rules.
 //
 // The active candidate set per goal is the structure that CDCL re-application
 // prunes after a backtrack. Under DBUCT it is carried across episodes and rolled
-// back to any choice boundary by the trail. Outer inserts/erases and inner
-// link/unlink each journal a backtrackable mutation; the inner mutations capture
-// the outer map and re-look-up the goal on undo, so they stay valid even if the
-// goal's node is erased and re-inserted (at a new address) within the same frame.
-// (ra_rule_id_set erase is a swap-remove, so re-insertion order may differ after
-// undo, which only affects exploration order, not membership/correctness.)
+// back to any choice boundary by the trail (abstracted as ILogTrailAction). Outer
+// inserts/erases and inner link/unlink each journal a backtrackable mutation; the
+// inner mutations capture the outer map and re-look-up the goal on undo, so they
+// stay valid even if the goal's node is erased and re-inserted (at a new address)
+// within the same frame. (ra_rule_id_set erase is a swap-remove, so re-insertion
+// order may differ after undo, which only affects exploration order, not
+// membership/correctness.)
+template<typename ILogTrailAction>
 struct dbuct_goal_candidate_rules {
     using map_t = std::unordered_map<const goal_lineage*, ra_rule_id_set>;
 
-    dbuct_goal_candidate_rules(trail& t, ra_rule_id_set_factory& factory);
+    dbuct_goal_candidate_rules(ILogTrailAction& t, ra_rule_id_set_factory& factory);
 
     const ra_rule_id_set& get(const goal_lineage* gl) const;
     void insert(const goal_lineage* gl);
@@ -36,27 +37,33 @@ struct dbuct_goal_candidate_rules {
 
 private:
     ra_rule_id_set_factory& factory_;
-    tracked<map_t, trail> by_goal_;
+    tracked<map_t, ILogTrailAction> by_goal_;
 };
 
-inline dbuct_goal_candidate_rules::dbuct_goal_candidate_rules(trail& t, ra_rule_id_set_factory& factory)
+template<typename ILogTrailAction>
+dbuct_goal_candidate_rules<ILogTrailAction>::dbuct_goal_candidate_rules(ILogTrailAction& t, ra_rule_id_set_factory& factory)
     : factory_(factory), by_goal_(t, map_t{}) {}
 
-inline const ra_rule_id_set& dbuct_goal_candidate_rules::get(const goal_lineage* gl) const { return by_goal_.get().at(gl); }
+template<typename ILogTrailAction>
+const ra_rule_id_set& dbuct_goal_candidate_rules<ILogTrailAction>::get(const goal_lineage* gl) const { return by_goal_.get().at(gl); }
 
-inline void dbuct_goal_candidate_rules::insert(const goal_lineage* gl) {
+template<typename ILogTrailAction>
+void dbuct_goal_candidate_rules<ILogTrailAction>::insert(const goal_lineage* gl) {
     by_goal_.mutate(std::make_unique<backtrackable_map_insert<map_t>>(gl, factory_.make()));
 }
 
-inline void dbuct_goal_candidate_rules::link_goal_candidate(const goal_lineage* gl, rule_id r) {
+template<typename ILogTrailAction>
+void dbuct_goal_candidate_rules<ILogTrailAction>::link_goal_candidate(const goal_lineage* gl, rule_id r) {
     by_goal_.mutate(std::make_unique<backtrackable_map_at_ra_insert<map_t>>(gl, r));
 }
 
-inline void dbuct_goal_candidate_rules::unlink_goal_candidate(const goal_lineage* gl, rule_id r) {
+template<typename ILogTrailAction>
+void dbuct_goal_candidate_rules<ILogTrailAction>::unlink_goal_candidate(const goal_lineage* gl, rule_id r) {
     by_goal_.mutate(std::make_unique<backtrackable_map_at_ra_erase<map_t>>(gl, r));
 }
 
-inline void dbuct_goal_candidate_rules::erase(const goal_lineage* gl) {
+template<typename ILogTrailAction>
+void dbuct_goal_candidate_rules<ILogTrailAction>::erase(const goal_lineage* gl) {
     by_goal_.mutate(std::make_unique<backtrackable_map_erase<map_t>>(gl));
 }
 

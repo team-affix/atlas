@@ -70,55 +70,72 @@
 // generator, joint eliminator) is reused unchanged, instantiated over the
 // dbuct_* state types.
 struct dbuct_manifest {
-    using unifier_factory_t = unifier_factory<dbuct_bind_map>;
-    using cdcl_t  = dbuct_cdcl_elimination_generator<dbuct_chosen_goal_candidates>;
+    // The concrete trail satisfies the trail-capability interfaces the DBUCT
+    // state structs are templated on: ILogTrailAction (log) for every camped
+    // store, and IPushFrame/IPopFrame (push/pop) for the checkpoint translator.
+    // Nothing below names the concrete trail type directly except these aliases.
+    using bind_map_t                = dbuct_bind_map<trail>;
+    using bind_map_factory_t        = dbuct_bind_map_factory<trail>;
+    using goal_exprs_t              = dbuct_goal_exprs<trail>;
+    using goal_candidate_rules_t    = dbuct_goal_candidate_rules<trail>;
+    using srt_active_goals_t        = dbuct_srt_active_goals<trail>;
+    using unit_goals_t             = dbuct_unit_goals<trail>;
+    using decision_memory_t        = dbuct_decision_memory<trail>;
+    using resolution_memory_t      = dbuct_resolution_memory<trail>;
+    using candidate_frame_offsets_t = dbuct_candidate_frame_offsets<trail>;
+    using chosen_goal_candidates_t  = dbuct_chosen_goal_candidates<trail>;
+    using frame_bump_allocator_t    = dbuct_frame_bump_allocator<trail>;
+    using elimination_backlog_t     = dbuct_elimination_backlog<trail>;
+
+    using unifier_factory_t = unifier_factory<bind_map_t>;
+    using cdcl_t  = dbuct_cdcl_elimination_generator<chosen_goal_candidates_t>;
     using mhu_t   = dbuct_mhu_elimination_generator<
-                    dbuct_bind_map, dbuct_bind_map_factory, unifier<dbuct_bind_map>,
-                    unifier_factory_t, lineage_pool, expr_pool, dbuct_goal_candidate_rules>;
+                    bind_map_t, bind_map_factory_t, unifier<bind_map_t>,
+                    unifier_factory_t, lineage_pool, expr_pool, goal_candidate_rules_t, trail>;
     using joint_t = joint_elimination_generator<cdcl_t, mhu_t>;
 
     using get_resolution_rule_t         = get_resolution_rule<db>;
-    using conflict_detector_t           = conflict_detector<dbuct_goal_candidate_rules>;
-    using unit_goal_detector_t          = unit_goal_detector<dbuct_goal_candidate_rules>;
-    using solution_detector_t           = solution_detector<dbuct_srt_active_goals>;
-    using goal_activator_t              = goal_activator<dbuct_goal_exprs, dbuct_goal_candidate_rules,
-                                          dbuct_srt_active_goals, dbuct_candidate_frame_offsets, get_resolution_rule_t>;
-    using srt_goal_deactivator_t        = srt_goal_deactivator<dbuct_goal_exprs, dbuct_goal_candidate_rules>;
-    using candidate_deactivator_t       = candidate_deactivator<dbuct_candidate_frame_offsets, dbuct_goal_candidate_rules>;
-    using candidate_activator_t         = candidate_activator<dbuct_frame_bump_allocator, dbuct_candidate_frame_offsets,
-                                          mhu_t, dbuct_elimination_backlog, dbuct_goal_exprs, db, dbuct_goal_candidate_rules>;
-    using elimination_router_t          = elimination_router<dbuct_goal_candidate_rules, dbuct_srt_active_goals,
-                                          dbuct_elimination_backlog, candidate_deactivator_t>;
-    using get_unit_resolution_t         = get_unit_resolution<dbuct_goal_candidate_rules, lineage_pool>;
+    using conflict_detector_t           = conflict_detector<goal_candidate_rules_t>;
+    using unit_goal_detector_t          = unit_goal_detector<goal_candidate_rules_t>;
+    using solution_detector_t           = solution_detector<srt_active_goals_t>;
+    using goal_activator_t              = goal_activator<goal_exprs_t, goal_candidate_rules_t,
+                                          srt_active_goals_t, candidate_frame_offsets_t, get_resolution_rule_t>;
+    using srt_goal_deactivator_t        = srt_goal_deactivator<goal_exprs_t, goal_candidate_rules_t>;
+    using candidate_deactivator_t       = candidate_deactivator<candidate_frame_offsets_t, goal_candidate_rules_t>;
+    using candidate_activator_t         = candidate_activator<frame_bump_allocator_t, candidate_frame_offsets_t,
+                                          mhu_t, elimination_backlog_t, goal_exprs_t, db, goal_candidate_rules_t>;
+    using elimination_router_t          = elimination_router<goal_candidate_rules_t, srt_active_goals_t,
+                                          elimination_backlog_t, candidate_deactivator_t>;
+    using get_unit_resolution_t         = get_unit_resolution<goal_candidate_rules_t, lineage_pool>;
     using make_initial_goal_lineage_t   = make_initial_goal_lineage<lineage_pool>;
     using initial_goal_activator_t      = initial_goal_activator<initial_goal_exprs,
-                                          make_initial_goal_lineage_t, dbuct_goal_exprs, dbuct_goal_candidate_rules, dbuct_srt_active_goals>;
-    using goal_candidates_deactivator_t = goal_candidates_deactivator<dbuct_goal_candidate_rules,
+                                          make_initial_goal_lineage_t, goal_exprs_t, goal_candidate_rules_t, srt_active_goals_t>;
+    using goal_candidates_deactivator_t = goal_candidates_deactivator<goal_candidate_rules_t,
                                           lineage_pool, candidate_deactivator_t>;
     using goal_candidates_activator_t   = goal_candidates_activator<db, lineage_pool, candidate_activator_t,
-                                          conflict_detector_t, unit_goal_detector_t, dbuct_unit_goals>;
+                                          conflict_detector_t, unit_goal_detector_t, unit_goals_t>;
     using subgoals_activator_t          = subgoals_activator<lineage_pool, goal_activator_t,
                                           db, goal_candidates_activator_t>;
-    using srt_subgoals_activator_t      = srt_subgoals_activator<dbuct_srt_active_goals, subgoals_activator_t>;
+    using srt_subgoals_activator_t      = srt_subgoals_activator<srt_active_goals_t, subgoals_activator_t>;
     using initial_goals_activator_t     = initial_goals_activator<initial_goal_exprs,
                                           initial_goal_activator_t, make_initial_goal_lineage_t, goal_candidates_activator_t>;
-    using srt_initial_goals_activator_t = srt_initial_goals_activator<dbuct_srt_active_goals, initial_goals_activator_t>;
+    using srt_initial_goals_activator_t = srt_initial_goals_activator<srt_active_goals_t, initial_goals_activator_t>;
     using resolver_t                    = resolver<srt_goal_deactivator_t, srt_subgoals_activator_t,
-                                          goal_candidates_deactivator_t, dbuct_chosen_goal_candidates>;
-    using ridge_reward_t                = ridge_reward<dbuct_decision_memory>;
+                                          goal_candidates_deactivator_t, chosen_goal_candidates_t>;
+    using ridge_reward_t                = ridge_reward<decision_memory_t>;
 
-    using checkpoint_stack_t            = dbuct_checkpoint_stack;
+    using checkpoint_stack_t            = dbuct_checkpoint_stack<trail, trail>;
     using dbuct_sim_t                   = dbuct_sim<checkpoint_stack_t, lineage_pool>;
-    using mcts_decision_generator_t     = mcts_decision_generator<lineage_pool, dbuct_srt_active_goals,
-                                          dbuct_sim_t, dbuct_goal_candidate_rules>;
+    using mcts_decision_generator_t     = mcts_decision_generator<lineage_pool, srt_active_goals_t,
+                                          dbuct_sim_t, goal_candidate_rules_t>;
     using run_sim_t                     = run_sim<dbuct_frontier_ready, solution_detector_t, conflict_detector_t,
-                                          unit_goal_detector_t, dbuct_unit_goals, dbuct_unit_goals, mcts_decision_generator_t,
+                                          unit_goal_detector_t, unit_goals_t, unit_goals_t, mcts_decision_generator_t,
                                           joint_t, elimination_router_t, resolver_t, get_unit_resolution_t,
-                                          dbuct_decision_memory, dbuct_resolution_memory, dbuct_resolution_memory>;
+                                          decision_memory_t, resolution_memory_t, resolution_memory_t>;
     using learn_reapply_t               = dbuct_learn_reapply<cdcl_t, elimination_router_t, conflict_detector_t,
-                                          unit_goal_detector_t, dbuct_unit_goals>;
-    using solver_t                      = dbuct_solver<srt_initial_goals_activator_t, run_sim_t, dbuct_decision_memory,
-                                          dbuct_decision_memory, ridge_reward_t, dbuct_sim_t, cdcl_t, learn_reapply_t>;
+                                          unit_goal_detector_t, unit_goals_t>;
+    using solver_t                      = dbuct_solver<srt_initial_goals_activator_t, run_sim_t, decision_memory_t,
+                                          decision_memory_t, ridge_reward_t, dbuct_sim_t, cdcl_t, learn_reapply_t>;
 
     dbuct_manifest(
         db& database,
@@ -131,22 +148,22 @@ struct dbuct_manifest {
 
     globalizer                    globalizer_;
     trail                         trail_;
-    dbuct_bind_map                bind_map_;
-    dbuct_bind_map_factory        bind_map_factory_;
+    bind_map_t                    bind_map_;
+    bind_map_factory_t            bind_map_factory_;
     unifier_factory_t             unifier_factory_;
     lineage_pool                  lineage_pool_;
     ra_rule_id_set_factory        ra_rule_id_set_factory_;
-    dbuct_srt_active_goals        srt_active_goals_;
-    dbuct_goal_exprs              goal_exprs_;
-    dbuct_goal_candidate_rules    goal_candidate_rules_;
-    dbuct_unit_goals              unit_goals_;
-    dbuct_decision_memory         decision_memory_;
-    dbuct_resolution_memory       resolution_memory_;
-    dbuct_candidate_frame_offsets candidate_frame_offsets_;
-    dbuct_chosen_goal_candidates  chosen_goal_candidates_;
+    srt_active_goals_t            srt_active_goals_;
+    goal_exprs_t                  goal_exprs_;
+    goal_candidate_rules_t        goal_candidate_rules_;
+    unit_goals_t                  unit_goals_;
+    decision_memory_t             decision_memory_;
+    resolution_memory_t           resolution_memory_;
+    candidate_frame_offsets_t     candidate_frame_offsets_;
+    chosen_goal_candidates_t      chosen_goal_candidates_;
     expr_pool                     expr_pool_;
-    dbuct_frame_bump_allocator    frame_allocator_;
-    dbuct_elimination_backlog     elimination_backlog_;
+    frame_bump_allocator_t        frame_allocator_;
+    elimination_backlog_t         elimination_backlog_;
     cdcl_t                        cdcl_;
     mhu_t                         mhu_;
     joint_t                       joint_;
@@ -240,7 +257,7 @@ inline dbuct_manifest::dbuct_manifest(
       resolver_(srt_goal_deactivator_, srt_subgoals_activator_,
                 goal_candidates_deactivator_, chosen_goal_candidates_),
       ridge_reward_(decision_memory_),
-      checkpoints_(trail_),
+      checkpoints_(trail_, trail_),
       rng_(random_seed),
       dbuct_sim_(checkpoints_, lineage_pool_, rng_, exploration_constant,
                  grant_increment_interval),
