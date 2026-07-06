@@ -2,49 +2,66 @@
 #define DBUCT_MHU_ELIMINATION_GENERATOR_HPP
 
 #include <cstdint>
+#include <deque>
+#include <memory>
 #include <queue>
 #include <unordered_map>
 #include <unordered_set>
-#include "debug_assert.hpp"
+#include "infrastructure/backtrackable_deque_emplace_back.hpp"
+#include "infrastructure/backtrackable_map_at_erase.hpp"
+#include "infrastructure/backtrackable_map_at_insert.hpp"
+#include "infrastructure/backtrackable_map_erase.hpp"
+#include "infrastructure/backtrackable_map_insert.hpp"
 #include "infrastructure/coroutine.hpp"
+#include "infrastructure/tracked.hpp"
+#include "infrastructure/trail.hpp"
 #include "infrastructure/unifier_factory.hpp"
 #include "infrastructure/unifier.hpp"
 #include "value_objects/framed_expr.hpp"
 #include "value_objects/lineage.hpp"
 #include "value_objects/unify_head.hpp"
 
-// Delayed-backtracking variant of mhu_elimination_generator.
+// Delayed-backtracking variant of mhu_elimination_generator, fully journalled on
+// the shared trail (no snapshot/restore, no deep clone).
 //
-// The elimination logic is identical to the production generator. The only
-// addition is snapshot()/restore(): MHU is the one per-sim structure that is
-// neither cleared-and-rebuilt cheaply nor trivially copyable (each unify_head
-// owns a unique_ptr<local bind_map> plus a unifier that points into it), so we
-// provide an explicit deep clone. A snapshot deep-copies every live head (fresh
-// local bind_map + a unifier re-pointed at it via the unifier factory) together
-// with the rep<->lineage link tables. Restoring re-instates the exact MHU state
-// at a choice boundary, so the common bind_map substitutions and pending
-// eliminations roll back precisely alongside the rest of the frontier.
+// The one hard structure: each head owns a unique_ptr<local bind_map> and a
+// unifier that holds a raw pointer INTO that bind map. The heap-allocated bind
+// map keeps a stable address for the head's whole lifetime, so the challenge is
+// purely lifetime management of the head object.
+//
+// Design:
+//   * Heads live in a std::deque arena (end-ops never relocate existing
+//     elements), and each creation logs a backtrackable_deque_emplace_back whose
+//     undo pop_back destroys the slot. heads_ maps lineage -> unify_head* and is
+//     journalled with map insert/erase over the (copyable) pointer.
+//   * Logical head removal only journal-erases the heads_ pointer entry and the
+//     rep/rl link-table entries; the arena slot's physical destruction is
+//     DEFERRED to the creation frame's pop. LIFO guarantees every bind-undo and
+//     link-undo that references a head runs before that head's emplace_back undo,
+//     so no undo ever dangles.
+//   * A head's creation-time binds run with the local bind map's journaling OFF
+//     (they are subsumed by the arena undo that destroys the whole map);
+//     enable_journaling() is flipped on once the head commits, so later rebase
+//     binds are individually reversible. Common-substitution binds journal on the
+//     common bind map (always journaling), which lives for the whole solve.
 template<typename IBindMap, typename IBindMapFactory, typename IUnifier,
          typename IUnifierFactory, typename IMakeResolutionLineage,
          typename IMakeVar, typename IGetGoalCandidateRuleIds>
 struct dbuct_mhu_elimination_generator {
     dbuct_mhu_elimination_generator(IBindMap&, IMakeResolutionLineage&, IMakeVar&,
                                     IBindMapFactory&, IUnifierFactory&,
-                                    const IGetGoalCandidateRuleIds&);
+                                    const IGetGoalCandidateRuleIds&, trail&);
 
     bool try_add_head(const resolution_lineage*, framed_expr goal, framed_expr head);
     coroutine<const resolution_lineage*, void> constrain(const resolution_lineage*);
 
-    struct snapshot_t {
-        std::unordered_map<const resolution_lineage*, unify_head<IBindMap, IUnifier>> heads;
-        std::unordered_map<uint32_t, std::unordered_set<const resolution_lineage*>> rep_to_rls;
-        std::unordered_map<const resolution_lineage*, std::unordered_set<uint32_t>> rl_to_reps;
-    };
-
-    snapshot_t snapshot() const;
-    void restore(snapshot_t);
-
 private:
+    using head_t        = unify_head<IBindMap, IUnifier>;
+    using arena_t       = std::deque<head_t>;
+    using heads_map_t   = std::unordered_map<const resolution_lineage*, head_t*>;
+    using rep_to_rls_t  = std::unordered_map<uint32_t, std::unordered_set<const resolution_lineage*>>;
+    using rl_to_reps_t  = std::unordered_map<const resolution_lineage*, std::unordered_set<uint32_t>>;
+
     coroutine<const resolution_lineage*, void> accept_bindings(IBindMap&, const std::unordered_set<uint32_t>&);
     coroutine<const resolution_lineage*, void> rebase_all(uint32_t);
     bool sync_and_link(const resolution_lineage*, IUnifier&, std::queue<uint32_t>&);
@@ -54,26 +71,27 @@ private:
     std::unordered_set<uint32_t> unlink(const resolution_lineage*);
     void remove_head(const resolution_lineage*);
 
-    unify_head<IBindMap, IUnifier> clone_head(const unify_head<IBindMap, IUnifier>&) const;
-
     IBindMap& common_;
     IMakeResolutionLineage& make_resolution_lineage_;
     IMakeVar& make_var_;
     IBindMapFactory& bind_map_factory_;
     IUnifierFactory& unifier_factory_;
     const IGetGoalCandidateRuleIds& get_goal_candidate_rule_ids_;
+    trail& trail_;
 
-    std::unordered_map<const resolution_lineage*, unify_head<IBindMap, IUnifier>> heads_;
-    std::unordered_map<uint32_t, std::unordered_set<const resolution_lineage*>> rep_to_rls_;
-    std::unordered_map<const resolution_lineage*, std::unordered_set<uint32_t>> rl_to_reps_;
+    arena_t arena_;
+    tracked<heads_map_t, trail> heads_;
+    tracked<rep_to_rls_t, trail> rep_to_rls_;
+    tracked<rl_to_reps_t, trail> rl_to_reps_;
 };
 
 template<typename IBM, typename IBMF, typename IU, typename IUF, typename IMRL, typename IMV, typename IGCRI>
 dbuct_mhu_elimination_generator<IBM, IBMF, IU, IUF, IMRL, IMV, IGCRI>::dbuct_mhu_elimination_generator(
-    IBM& common, IMRL& mrl, IMV& mv, IBMF& bmf, IUF& uf, const IGCRI& gcri)
+    IBM& common, IMRL& mrl, IMV& mv, IBMF& bmf, IUF& uf, const IGCRI& gcri, trail& t)
     : common_(common), make_resolution_lineage_(mrl), make_var_(mv),
       bind_map_factory_(bmf), unifier_factory_(uf),
-      get_goal_candidate_rule_ids_(gcri) {}
+      get_goal_candidate_rule_ids_(gcri), trail_(t),
+      heads_(t, heads_map_t{}), rep_to_rls_(t, rep_to_rls_t{}), rl_to_reps_(t, rl_to_reps_t{}) {}
 
 template<typename IBM, typename IBMF, typename IU, typename IUF, typename IMRL, typename IMV, typename IGCRI>
 bool dbuct_mhu_elimination_generator<IBM, IBMF, IU, IUF, IMRL, IMV, IGCRI>::try_add_head(
@@ -95,9 +113,18 @@ bool dbuct_mhu_elimination_generator<IBM, IBMF, IU, IUF, IMRL, IMV, IGCRI>::try_
     if (!sync_and_link(lineage, u, touched_vars))
         return false;
 
-    unify_head<IBM, IU> head{std::move(bm), std::move(u)};
-    const auto [_, inserted] = heads_.insert({lineage, std::move(head)});
-    DEBUG_ASSERT(inserted);
+    // The head commits: journal its subsequent (rebase) binds. Creation binds
+    // above are subsumed by the arena's own undo.
+    bm->enable_journaling();
+
+    head_t head{std::move(bm), std::move(u)};
+    auto emplace = std::make_unique<backtrackable_deque_emplace_back<arena_t>>(std::move(head));
+    emplace->capture(arena_);
+    emplace->invoke();
+    trail_.log(std::move(emplace));
+
+    head_t* head_ptr = &arena_.back();
+    heads_.mutate(std::make_unique<backtrackable_map_insert<heads_map_t>>(lineage, head_ptr));
     return true;
 }
 
@@ -118,16 +145,17 @@ dbuct_mhu_elimination_generator<IBM, IBMF, IU, IUF, IMRL, IMV, IGCRI>::constrain
         remove_head(make_resolution_lineage_.make_resolution_lineage(gl, candidate));
     }
 
-    auto& head = heads_.at(lineage);
+    head_t* head = heads_.get().at(lineage);
     auto c_reps = unlink(lineage);
-    auto sm0 = accept_bindings(*head.local_bind_map, c_reps);
+    auto sm0 = accept_bindings(*head->local_bind_map, c_reps);
     while (!sm0.done()) {
         sm0.resume();
         if (sm0.has_yield())
             co_yield sm0.consume_yield();
     }
 
-    heads_.erase(lineage);
+    if (heads_.get().contains(lineage))
+        heads_.mutate(std::make_unique<backtrackable_map_erase<heads_map_t>>(lineage));
 }
 
 template<typename IBM, typename IBMF, typename IU, typename IUF, typename IMRL, typename IMV, typename IGCRI>
@@ -159,7 +187,7 @@ dbuct_mhu_elimination_generator<IBM, IBMF, IU, IUF, IMRL, IMV, IGCRI>::rebase_al
     for (auto rl : remaining_rls) {
         std::queue<uint32_t> touched_vars;
         touched_vars.push(rep);
-        if (!sync_and_link(rl, heads_.at(rl).unifier, touched_vars)) {
+        if (!sync_and_link(rl, heads_.get().at(rl)->unifier, touched_vars)) {
             remove_head(rl);
             co_yield rl;
         }
@@ -215,79 +243,65 @@ template<typename IBM, typename IBMF, typename IU, typename IUF, typename IMRL, 
 void dbuct_mhu_elimination_generator<IBM, IBMF, IU, IUF, IMRL, IMV, IGCRI>::link(
     const std::unordered_set<uint32_t>& reps,
     const std::unordered_set<const resolution_lineage*>& rls) {
-    for (auto rep : reps)
-        rep_to_rls_[rep].insert(rls.begin(), rls.end());
-    for (auto rl : rls)
-        rl_to_reps_[rl].insert(reps.begin(), reps.end());
+    for (auto rep : reps) {
+        if (!rep_to_rls_.get().contains(rep))
+            rep_to_rls_.mutate(std::make_unique<backtrackable_map_insert<rep_to_rls_t>>(
+                rep, std::unordered_set<const resolution_lineage*>{}));
+        for (auto rl : rls)
+            if (!rep_to_rls_.get().at(rep).contains(rl))
+                rep_to_rls_.mutate(std::make_unique<backtrackable_map_at_insert<rep_to_rls_t>>(rep, rl));
+    }
+    for (auto rl : rls) {
+        if (!rl_to_reps_.get().contains(rl))
+            rl_to_reps_.mutate(std::make_unique<backtrackable_map_insert<rl_to_reps_t>>(
+                rl, std::unordered_set<uint32_t>{}));
+        for (auto rep : reps)
+            if (!rl_to_reps_.get().at(rl).contains(rep))
+                rl_to_reps_.mutate(std::make_unique<backtrackable_map_at_insert<rl_to_reps_t>>(rl, rep));
+    }
 }
 
 template<typename IBM, typename IBMF, typename IU, typename IUF, typename IMRL, typename IMV, typename IGCRI>
 std::unordered_set<const resolution_lineage*>
 dbuct_mhu_elimination_generator<IBM, IBMF, IU, IUF, IMRL, IMV, IGCRI>::unlink(uint32_t rep) {
-    auto node = rep_to_rls_.extract(rep);
-    if (node.empty())
+    if (!rep_to_rls_.get().contains(rep))
         return {};
 
-    auto& rls = node.mapped();
+    std::unordered_set<const resolution_lineage*> rls = rep_to_rls_.get().at(rep);
     for (auto rl : rls) {
-        auto& reps = rl_to_reps_.at(rl);
-        reps.erase(rep);
-        if (reps.empty())
-            rl_to_reps_.erase(rl);
+        rl_to_reps_.mutate(std::make_unique<backtrackable_map_at_erase<rl_to_reps_t>>(rl, rep));
+        if (rl_to_reps_.get().at(rl).empty())
+            rl_to_reps_.mutate(std::make_unique<backtrackable_map_erase<rl_to_reps_t>>(rl));
     }
-    return std::move(rls);
+    rep_to_rls_.mutate(std::make_unique<backtrackable_map_erase<rep_to_rls_t>>(rep));
+    return rls;
 }
 
 template<typename IBM, typename IBMF, typename IU, typename IUF, typename IMRL, typename IMV, typename IGCRI>
 std::unordered_set<uint32_t>
 dbuct_mhu_elimination_generator<IBM, IBMF, IU, IUF, IMRL, IMV, IGCRI>::unlink(
     const resolution_lineage* rl) {
-    auto node = rl_to_reps_.extract(rl);
-    if (node.empty())
+    if (!rl_to_reps_.get().contains(rl))
         return {};
 
-    auto& reps = node.mapped();
+    std::unordered_set<uint32_t> reps = rl_to_reps_.get().at(rl);
     for (auto rep : reps) {
-        auto& heads = rep_to_rls_.at(rep);
-        heads.erase(rl);
-        if (heads.empty())
-            rep_to_rls_.erase(rep);
+        rep_to_rls_.mutate(std::make_unique<backtrackable_map_at_erase<rep_to_rls_t>>(rep, rl));
+        if (rep_to_rls_.get().at(rep).empty())
+            rep_to_rls_.mutate(std::make_unique<backtrackable_map_erase<rep_to_rls_t>>(rep));
     }
-    return std::move(reps);
+    rl_to_reps_.mutate(std::make_unique<backtrackable_map_erase<rl_to_reps_t>>(rl));
+    return reps;
 }
 
 template<typename IBM, typename IBMF, typename IU, typename IUF, typename IMRL, typename IMV, typename IGCRI>
 void dbuct_mhu_elimination_generator<IBM, IBMF, IU, IUF, IMRL, IMV, IGCRI>::remove_head(
     const resolution_lineage* rl) {
-    heads_.erase(rl);
+    // Logical removal only: the arena slot is destroyed when its creation frame
+    // pops, so the head object outlives this erase.
+    if (heads_.get().contains(rl))
+        heads_.mutate(std::make_unique<backtrackable_map_erase<heads_map_t>>(rl));
     unlink(rl);
-}
-
-template<typename IBM, typename IBMF, typename IU, typename IUF, typename IMRL, typename IMV, typename IGCRI>
-unify_head<IBM, IU>
-dbuct_mhu_elimination_generator<IBM, IBMF, IU, IUF, IMRL, IMV, IGCRI>::clone_head(
-    const unify_head<IBM, IU>& head) const {
-    auto bm = std::make_unique<IBM>(*head.local_bind_map);
-    IU u = unifier_factory_.make(bm.get());
-    return unify_head<IBM, IU>{std::move(bm), std::move(u)};
-}
-
-template<typename IBM, typename IBMF, typename IU, typename IUF, typename IMRL, typename IMV, typename IGCRI>
-typename dbuct_mhu_elimination_generator<IBM, IBMF, IU, IUF, IMRL, IMV, IGCRI>::snapshot_t
-dbuct_mhu_elimination_generator<IBM, IBMF, IU, IUF, IMRL, IMV, IGCRI>::snapshot() const {
-    snapshot_t snap;
-    for (const auto& [rl, head] : heads_)
-        snap.heads.emplace(rl, clone_head(head));
-    snap.rep_to_rls = rep_to_rls_;
-    snap.rl_to_reps = rl_to_reps_;
-    return snap;
-}
-
-template<typename IBM, typename IBMF, typename IU, typename IUF, typename IMRL, typename IMV, typename IGCRI>
-void dbuct_mhu_elimination_generator<IBM, IBMF, IU, IUF, IMRL, IMV, IGCRI>::restore(snapshot_t snap) {
-    heads_ = std::move(snap.heads);
-    rep_to_rls_ = std::move(snap.rep_to_rls);
-    rl_to_reps_ = std::move(snap.rl_to_reps);
 }
 
 #endif

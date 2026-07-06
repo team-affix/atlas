@@ -2,208 +2,110 @@
 #define DBUCT_CHECKPOINT_STACK_HPP
 
 #include <cstddef>
-#include <optional>
-#include <utility>
-#include <vector>
+#include "debug_assert.hpp"
+#include "infrastructure/trail.hpp"
 
-// Full per-sim state checkpointing for the delayed-backtracking solver.
+// Trail translator for the delayed-backtracking solver.
 //
-// DBUCT camps deep in the search tree and backtracks lazily: terminate() reports
-// how many tree-policy choice frames it unwound, and the caller must restore its
-// own state to the corresponding resume node. This stack keeps one full state
-// snapshot per tree-policy choice frame, held in lockstep with DBUCT's internal
-// frame stack (one push_tree_policy() per tree-policy choose()), plus a single
-// transient snapshot for the rollout phase.
+// Every camped store is trail-backed (its mutations journal a backtrackable
+// operation), so incremental backtracking replaces the former O(state) full-copy
+// checkpointing entirely. This stack no longer copies state; it maps DBUCT's
+// episode lifecycle onto the shared trail:
 //
-// Restoration is exact: a snapshot captures the entire mutable per-sim frontier
-// (goal exprs, candidate sets, active-goal tree, frame offsets, chosen
-// candidates, unit queue, decision memory, bump cursor, common bind_map, MHU,
-// and the elimination backlog). Popping N frames and re-installing the shallowest
-// popped snapshot reconstructs the frontier as it stood before those N choices —
-// including the MHU heads and common substitutions that a delta-based scheme
-// could not cheaply undo.
+//   * initial-goal activation logs mutations with no enclosing frame (below the
+//     root baseline), so restore_root() never undoes them — that is the root
+//     frontier;
+//   * each tree-policy choose() opens one trail frame (push_tree_policy); a
+//     choice's downstream resolution mutations land in that frame;
+//   * entering the rollout phase opens one more frame (enter_rollout);
+//   * terminate()'s reported backstep count becomes trail pops (end_episode):
+//     the rollout frame first, then `steps` tree frames.
 //
-// This is the maximally faithful realisation of delayed backtracking; the O(state)
-// cost per choice frame is the obvious first target for a future incremental
-// (journalled) optimisation, but correctness here is independent of that.
-template<typename GoalExprs, typename GCR, typename SRT, typename CFO,
-         typename CGC, typename UG, typename DM, typename FBA,
-         typename BindMap, typename Mhu, typename EB, typename RM>
+// A backstep leaves the resume frame open, so cascading re-application of learned
+// avoidances logs into it and is itself undone on any further backstep — exactly
+// the behaviour a snapshot scheme reproduced by re-deriving eliminations after a
+// full restore. Durable CDCL learning lives outside the trail, so it survives.
 struct dbuct_checkpoint_stack {
-    struct checkpoint {
-        typename GoalExprs::snapshot_t goal_exprs;
-        typename GCR::snapshot_t       gcr;
-        typename SRT::snapshot_t       srt;
-        typename CFO::snapshot_t       cfo;
-        typename CGC::snapshot_t       cgc;
-        typename UG::snapshot_t        ug;
-        typename DM::snapshot_t        dm;
-        typename FBA::snapshot_t       fba;
-        typename BindMap::snapshot_t   bind_map;
-        typename Mhu::snapshot_t       mhu;   // move-only
-        typename EB::snapshot_t        eb;
-        typename RM::snapshot_t        rm;
-    };
+    explicit dbuct_checkpoint_stack(trail& t);
 
-    dbuct_checkpoint_stack(GoalExprs& ge, GCR& gcr, SRT& srt, CFO& cfo, CGC& cgc,
-                           UG& ug, DM& dm, FBA& fba, BindMap& bm, Mhu& mhu, EB& eb,
-                           RM& rm);
-
-    // Capture the root frontier (initial goals + all candidates, no resolutions
-    // yet), taken once after one-time activation. This is the only snapshot of the
-    // pre-episode state when a solve makes zero tree-policy choices (a purely
-    // unit-propagated solution pushes no frames), so it is what restores the
-    // observable frontier to root when such a search is exhausted.
+    // Baseline the root frontier (initial goals + all candidates, no resolutions
+    // yet), taken once after one-time activation. restore_root() rewinds to here.
     void mark_root();
 
-    // Restore the root frontier and drop all episode state. One-shot: used at
+    // Rewind to the root frontier and drop all episode frames. One-shot: used at
     // exhaustion, after which the solve is finished.
     void restore_root();
 
-    // One snapshot per tree-policy choose(); kept in lockstep with DBUCT's stack.
+    // One trail frame per tree-policy choose(); kept in lockstep with DBUCT.
     void push_tree_policy();
 
-    // Captured once when an episode transitions into its rollout phase.
+    // One trail frame opened when an episode transitions into its rollout phase.
     void enter_rollout();
 
-    // Synchronise with terminate()'s reported backstep count and drop the
-    // rollout snapshot. When steps > 0 the shallowest popped frame is a full
-    // snapshot taken before rollout began, so it subsumes the rollout state too.
+    // Synchronise with terminate()'s reported backstep count: pop the rollout
+    // frame (if any) then `steps` tree frames.
     void end_episode(size_t steps);
 
-    // Additional lazy backtrack driven by cascading re-application (a learned
-    // avoidance that empties an ancestor frontier). Pops `steps` more choice
-    // frames and restores the resume node.
+    // Additional lazy backtrack driven by cascading re-application: pop `steps`
+    // more tree frames.
     void pop_and_restore(size_t steps);
 
     size_t frame_depth() const;
 
 private:
-    checkpoint capture() const;
-    void apply(checkpoint cp);
-
-    GoalExprs& ge_;
-    GCR&       gcr_;
-    SRT&       srt_;
-    CFO&       cfo_;
-    CGC&       cgc_;
-    UG&        ug_;
-    DM&        dm_;
-    FBA&       fba_;
-    BindMap&   bm_;
-    Mhu&       mhu_;
-    EB&        eb_;
-    RM&        rm_;
-
-    std::vector<checkpoint>   frames_;
-    std::optional<checkpoint> rollout_;
-    std::optional<checkpoint> root_;
-    bool                      in_rollout_ = false;
+    trail& trail_;
+    size_t root_baseline_ = 0;
+    size_t tree_frames_ = 0;
+    bool in_rollout_ = false;
 };
 
-template<typename GE, typename GCR, typename SRT, typename CFO, typename CGC,
-         typename UG, typename DM, typename FBA, typename BM, typename MHU,
-         typename EB, typename RM>
-dbuct_checkpoint_stack<GE, GCR, SRT, CFO, CGC, UG, DM, FBA, BM, MHU, EB, RM>::dbuct_checkpoint_stack(
-    GE& ge, GCR& gcr, SRT& srt, CFO& cfo, CGC& cgc, UG& ug, DM& dm, FBA& fba,
-    BM& bm, MHU& mhu, EB& eb, RM& rm)
-    : ge_(ge), gcr_(gcr), srt_(srt), cfo_(cfo), cgc_(cgc), ug_(ug), dm_(dm),
-      fba_(fba), bm_(bm), mhu_(mhu), eb_(eb), rm_(rm) {}
+inline dbuct_checkpoint_stack::dbuct_checkpoint_stack(trail& t) : trail_(t) {}
 
-template<typename GE, typename GCR, typename SRT, typename CFO, typename CGC,
-         typename UG, typename DM, typename FBA, typename BM, typename MHU,
-         typename EB, typename RM>
-void dbuct_checkpoint_stack<GE, GCR, SRT, CFO, CGC, UG, DM, FBA, BM, MHU, EB, RM>::mark_root() {
-    root_.emplace(capture());
-}
-
-template<typename GE, typename GCR, typename SRT, typename CFO, typename CGC,
-         typename UG, typename DM, typename FBA, typename BM, typename MHU,
-         typename EB, typename RM>
-void dbuct_checkpoint_stack<GE, GCR, SRT, CFO, CGC, UG, DM, FBA, BM, MHU, EB, RM>::restore_root() {
-    if (root_.has_value())
-        apply(std::move(*root_));
-    root_.reset();
-    frames_.clear();
-    rollout_.reset();
+inline void dbuct_checkpoint_stack::mark_root() {
+    // Open a persistent root episode frame ABOVE the baseline. Initial-goal
+    // activation logged its mutations below the baseline (they are the permanent
+    // root frontier). But an episode's leading unit propagation runs before any
+    // tree-policy choose(), so without this frame those resolution binds would be
+    // logged frame-less and restore_root could not undo them (e.g. a zero-decision
+    // unit solution must leave the goal vars unbound again once exhausted).
+    root_baseline_ = trail_.depth();
+    trail_.push();
+    tree_frames_ = 0;
     in_rollout_ = false;
 }
 
-template<typename GE, typename GCR, typename SRT, typename CFO, typename CGC,
-         typename UG, typename DM, typename FBA, typename BM, typename MHU,
-         typename EB, typename RM>
-void dbuct_checkpoint_stack<GE, GCR, SRT, CFO, CGC, UG, DM, FBA, BM, MHU, EB, RM>::push_tree_policy() {
-    frames_.push_back(capture());
+inline void dbuct_checkpoint_stack::restore_root() {
+    while (trail_.depth() > root_baseline_)
+        trail_.pop();
+    tree_frames_ = 0;
+    in_rollout_ = false;
 }
 
-template<typename GE, typename GCR, typename SRT, typename CFO, typename CGC,
-         typename UG, typename DM, typename FBA, typename BM, typename MHU,
-         typename EB, typename RM>
-void dbuct_checkpoint_stack<GE, GCR, SRT, CFO, CGC, UG, DM, FBA, BM, MHU, EB, RM>::enter_rollout() {
-    rollout_.emplace(capture());
+inline void dbuct_checkpoint_stack::push_tree_policy() {
+    trail_.push();
+    ++tree_frames_;
+}
+
+inline void dbuct_checkpoint_stack::enter_rollout() {
+    trail_.push();
     in_rollout_ = true;
 }
 
-template<typename GE, typename GCR, typename SRT, typename CFO, typename CGC,
-         typename UG, typename DM, typename FBA, typename BM, typename MHU,
-         typename EB, typename RM>
-void dbuct_checkpoint_stack<GE, GCR, SRT, CFO, CGC, UG, DM, FBA, BM, MHU, EB, RM>::end_episode(size_t steps) {
-    if (steps > 0) {
-        pop_and_restore(steps);
-    } else if (in_rollout_) {
-        apply(std::move(*rollout_));
+inline void dbuct_checkpoint_stack::end_episode(size_t steps) {
+    if (in_rollout_) {
+        trail_.pop();
+        in_rollout_ = false;
     }
-    rollout_.reset();
-    in_rollout_ = false;
+    pop_and_restore(steps);
 }
 
-template<typename GE, typename GCR, typename SRT, typename CFO, typename CGC,
-         typename UG, typename DM, typename FBA, typename BM, typename MHU,
-         typename EB, typename RM>
-void dbuct_checkpoint_stack<GE, GCR, SRT, CFO, CGC, UG, DM, FBA, BM, MHU, EB, RM>::pop_and_restore(size_t steps) {
-    if (steps == 0) return;
-    checkpoint cp;
-    for (size_t i = 0; i < steps; ++i) {
-        cp = std::move(frames_.back());
-        frames_.pop_back();
-    }
-    apply(std::move(cp));
+inline void dbuct_checkpoint_stack::pop_and_restore(size_t steps) {
+    DEBUG_ASSERT(steps <= tree_frames_);
+    for (size_t i = 0; i < steps; ++i)
+        trail_.pop();
+    tree_frames_ -= steps;
 }
 
-template<typename GE, typename GCR, typename SRT, typename CFO, typename CGC,
-         typename UG, typename DM, typename FBA, typename BM, typename MHU,
-         typename EB, typename RM>
-size_t dbuct_checkpoint_stack<GE, GCR, SRT, CFO, CGC, UG, DM, FBA, BM, MHU, EB, RM>::frame_depth() const {
-    return frames_.size();
-}
-
-template<typename GE, typename GCR, typename SRT, typename CFO, typename CGC,
-         typename UG, typename DM, typename FBA, typename BM, typename MHU,
-         typename EB, typename RM>
-typename dbuct_checkpoint_stack<GE, GCR, SRT, CFO, CGC, UG, DM, FBA, BM, MHU, EB, RM>::checkpoint
-dbuct_checkpoint_stack<GE, GCR, SRT, CFO, CGC, UG, DM, FBA, BM, MHU, EB, RM>::capture() const {
-    return checkpoint{
-        ge_.snapshot(),  gcr_.snapshot(), srt_.snapshot(), cfo_.snapshot(),
-        cgc_.snapshot(), ug_.snapshot(),  dm_.snapshot(),  fba_.snapshot(),
-        bm_.snapshot(),  mhu_.snapshot(), eb_.snapshot(),  rm_.snapshot()};
-}
-
-template<typename GE, typename GCR, typename SRT, typename CFO, typename CGC,
-         typename UG, typename DM, typename FBA, typename BM, typename MHU,
-         typename EB, typename RM>
-void dbuct_checkpoint_stack<GE, GCR, SRT, CFO, CGC, UG, DM, FBA, BM, MHU, EB, RM>::apply(checkpoint cp) {
-    ge_.restore(std::move(cp.goal_exprs));
-    gcr_.restore(std::move(cp.gcr));
-    srt_.restore(std::move(cp.srt));
-    cfo_.restore(std::move(cp.cfo));
-    cgc_.restore(std::move(cp.cgc));
-    ug_.restore(std::move(cp.ug));
-    dm_.restore(std::move(cp.dm));
-    fba_.restore(std::move(cp.fba));
-    bm_.restore(std::move(cp.bind_map));
-    mhu_.restore(std::move(cp.mhu));
-    eb_.restore(std::move(cp.eb));
-    rm_.restore(std::move(cp.rm));
-}
+inline size_t dbuct_checkpoint_stack::frame_depth() const { return tree_frames_; }
 
 #endif

@@ -1,37 +1,51 @@
 #ifndef DBUCT_BIND_MAP_HPP
 #define DBUCT_BIND_MAP_HPP
 
+#include <memory>
 #include <unordered_map>
+#include "infrastructure/backtrackable_map_insert.hpp"
 #include "infrastructure/globalizer.hpp"
+#include "infrastructure/trail.hpp"
 #include "value_objects/framed_expr.hpp"
 #include "debug_assert.hpp"
 
 // Delayed-backtracking variant of bind_map.
 //
-// Copyable (so MHU unify-heads that own a local bind_map can be deep-cloned for
-// checkpointing) and snapshot/restore capable so the common substitution store
-// rolls back exactly to any choice boundary. Because a snapshot captures the
-// entire bindings map, the whnf path-compression write-back is completely safe
-// here: any compression performed since a checkpoint is reverted by restore(),
-// so the classic "compressed a binding that a shallower frame must not see"
-// hazard cannot occur.
+// Bindings are journalled on the shared trail: bind() logs a backtrackable map
+// insert so any substitution made since a choice frame is reverted exactly when
+// the trail pops. whnf performs NO path-compression write-back (unlike the
+// restarting bind_map): a compression write is a hidden mutation that the trail
+// would otherwise have to journal, so it is dropped (correctness is unaffected;
+// only intermediate sharing is lost).
+//
+// A journaling toggle supports the MHU: each head owns a heap-allocated local
+// bind_map that is mutated during a tentative unification BEFORE the head is
+// committed. Those creation-time binds run with journaling off (they are
+// subsumed by the head arena's own undo, which destroys the whole local map on
+// backtrack); once the head commits, enable_journaling() makes subsequent rebase
+// binds individually reversible. The common bind_map is constructed with
+// journaling on.
 struct dbuct_bind_map {
-    using snapshot_t = std::unordered_map<uint32_t, framed_expr>;
+    using map_t = std::unordered_map<uint32_t, framed_expr>;
 
-    explicit dbuct_bind_map(globalizer& g);
+    dbuct_bind_map(globalizer& g, trail& t, bool journaling);
 
     void bind(uint32_t global_key, framed_expr value);
     framed_expr whnf(framed_expr fe);
 
-    snapshot_t snapshot() const;
-    void restore(snapshot_t s);
+    void enable_journaling();
 
 private:
     globalizer& globalizer_;
-    std::unordered_map<uint32_t, framed_expr> bindings_;
+    trail& trail_;
+    bool journaling_;
+    map_t bindings_;
 };
 
-inline dbuct_bind_map::dbuct_bind_map(globalizer& g) : globalizer_(g) {}
+inline dbuct_bind_map::dbuct_bind_map(globalizer& g, trail& t, bool journaling)
+    : globalizer_(g), trail_(t), journaling_(journaling) {}
+
+inline void dbuct_bind_map::enable_journaling() { journaling_ = true; }
 
 inline void dbuct_bind_map::bind(uint32_t global_key, framed_expr value) {
     DEBUG_ASSERT(
@@ -39,8 +53,15 @@ inline void dbuct_bind_map::bind(uint32_t global_key, framed_expr value) {
         || global_key > globalizer_.globalize(
                value.frame_offset,
                std::get<expr::var>(value.skeleton->content).index));
-    auto [_, inserted] = bindings_.insert({global_key, value});
-    DEBUG_ASSERT(inserted);
+    if (journaling_) {
+        auto m = std::make_unique<backtrackable_map_insert<map_t>>(global_key, value);
+        m->capture(bindings_);
+        m->invoke();
+        trail_.log(std::move(m));
+    } else {
+        auto [_, inserted] = bindings_.insert({global_key, value});
+        DEBUG_ASSERT(inserted);
+    }
 }
 
 inline framed_expr dbuct_bind_map::whnf(framed_expr fe) {
@@ -51,12 +72,7 @@ inline framed_expr dbuct_bind_map::whnf(framed_expr fe) {
     auto it = bindings_.find(global_key);
     if (it == bindings_.end())
         return fe;
-    framed_expr resolved = whnf(it->second);
-    it->second = resolved;
-    return resolved;
+    return whnf(it->second);
 }
-
-inline dbuct_bind_map::snapshot_t dbuct_bind_map::snapshot() const { return bindings_; }
-inline void dbuct_bind_map::restore(snapshot_t s) { bindings_ = std::move(s); }
 
 #endif

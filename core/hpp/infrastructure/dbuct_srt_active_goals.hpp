@@ -1,23 +1,28 @@
 #ifndef DBUCT_SRT_ACTIVE_GOALS_HPP
 #define DBUCT_SRT_ACTIVE_GOALS_HPP
 
+#include <memory>
 #include <set>
-#include "infrastructure/series_reduced_tree.hpp"
+#include "infrastructure/backtrackable_set_clear.hpp"
+#include "infrastructure/backtrackable_set_insert.hpp"
 #include "infrastructure/coroutine.hpp"
+#include "infrastructure/dbuct_series_reduced_tree.hpp"
+#include "infrastructure/tracked.hpp"
+#include "infrastructure/trail.hpp"
 #include "value_objects/lineage.hpp"
 #include "debug_assert.hpp"
 
 // Delayed-backtracking variant of srt_active_goals.
 //
-// The series-reduced goal tree is built out of standard containers and is
-// therefore copyable; a snapshot captures the whole tree plus the in-flight
-// batch set, so restoration re-instates the exact active frontier at any choice
-// boundary (including the correct branch/leaf structure that MCTS navigates).
+// Wraps a trail-journalled series-reduced goal tree plus a trail-journalled
+// in-flight batch set. Instead of copying the whole tree per choice, the active
+// frontier (with its exact branch/leaf structure that MCTS navigates) is rolled
+// back incrementally when the trail pops. flush logs a set-clear whose undo
+// restores the batch.
 struct dbuct_srt_active_goals {
-    struct snapshot_t {
-        series_reduced_tree<const goal_lineage*> tree;
-        std::set<const goal_lineage*> in_flight;
-    };
+    using in_flight_t = std::set<const goal_lineage*>;
+
+    explicit dbuct_srt_active_goals(trail& t);
 
     void insert_active_goal(const goal_lineage* gl);
     void link_srt_goal_batch_parent(const goal_lineage* parent);
@@ -28,26 +33,26 @@ struct dbuct_srt_active_goals {
     coroutine<const goal_lineage*, void> iterate_root_goals() const;
     coroutine<const goal_lineage*, void> iterate_child_goals(const goal_lineage* gl) const;
 
-    snapshot_t snapshot() const;
-    void restore(snapshot_t s);
-
 private:
-    series_reduced_tree<const goal_lineage*> tree_;
-    std::set<const goal_lineage*> in_flight_;
+    dbuct_series_reduced_tree<const goal_lineage*> tree_;
+    tracked<in_flight_t, trail> in_flight_;
 };
 
+inline dbuct_srt_active_goals::dbuct_srt_active_goals(trail& t) : tree_(t), in_flight_(t, in_flight_t{}) {}
+
 inline void dbuct_srt_active_goals::insert_active_goal(const goal_lineage* gl) {
-    auto [_, inserted] = in_flight_.emplace(gl);
-    DEBUG_ASSERT(inserted);
+    in_flight_.mutate(std::make_unique<backtrackable_set_insert<in_flight_t>>(gl));
     const bool tree_inserted = tree_.insert(gl);
     DEBUG_ASSERT(tree_inserted);
 }
 
 inline void dbuct_srt_active_goals::link_srt_goal_batch_parent(const goal_lineage* parent) {
-    tree_.link(parent, in_flight_);
+    tree_.link(parent, in_flight_.get());
 }
 
-inline void dbuct_srt_active_goals::flush_srt_goal_batch() { in_flight_.clear(); }
+inline void dbuct_srt_active_goals::flush_srt_goal_batch() {
+    in_flight_.mutate(std::make_unique<backtrackable_set_clear<in_flight_t>>());
+}
 
 inline bool dbuct_srt_active_goals::is_active_goal(const goal_lineage* gl) const {
     return tree_.leaves().contains(gl);
@@ -63,12 +68,6 @@ inline coroutine<const goal_lineage*, void> dbuct_srt_active_goals::iterate_root
 
 inline coroutine<const goal_lineage*, void> dbuct_srt_active_goals::iterate_child_goals(const goal_lineage* gl) const {
     for (const goal_lineage* child : tree_.children(gl)) co_yield child;
-}
-
-inline dbuct_srt_active_goals::snapshot_t dbuct_srt_active_goals::snapshot() const { return snapshot_t{tree_, in_flight_}; }
-inline void dbuct_srt_active_goals::restore(snapshot_t s) {
-    tree_ = std::move(s.tree);
-    in_flight_ = std::move(s.in_flight);
 }
 
 #endif

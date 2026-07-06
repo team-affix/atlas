@@ -34,6 +34,7 @@
 #include "infrastructure/srt_initial_goals_activator.hpp"
 #include "infrastructure/srt_subgoals_activator.hpp"
 #include "infrastructure/subgoals_activator.hpp"
+#include "infrastructure/trail.hpp"
 #include "infrastructure/unit_goal_detector.hpp"
 #include "infrastructure/unifier.hpp"
 #include "infrastructure/unifier_factory.hpp"
@@ -106,11 +107,7 @@ struct dbuct_manifest {
                                           goal_candidates_deactivator_t, dbuct_chosen_goal_candidates>;
     using ridge_reward_t                = ridge_reward<dbuct_decision_memory>;
 
-    using checkpoint_stack_t            = dbuct_checkpoint_stack<
-                                          dbuct_goal_exprs, dbuct_goal_candidate_rules, dbuct_srt_active_goals,
-                                          dbuct_candidate_frame_offsets, dbuct_chosen_goal_candidates, dbuct_unit_goals,
-                                          dbuct_decision_memory, dbuct_frame_bump_allocator, dbuct_bind_map, mhu_t,
-                                          dbuct_elimination_backlog, dbuct_resolution_memory>;
+    using checkpoint_stack_t            = dbuct_checkpoint_stack;
     using dbuct_sim_t                   = dbuct_sim<checkpoint_stack_t, lineage_pool>;
     using mcts_decision_generator_t     = mcts_decision_generator<lineage_pool, dbuct_srt_active_goals,
                                           dbuct_sim_t, dbuct_goal_candidate_rules>;
@@ -133,6 +130,7 @@ struct dbuct_manifest {
         size_t grant_increment_interval);
 
     globalizer                    globalizer_;
+    trail                         trail_;
     dbuct_bind_map                bind_map_;
     dbuct_bind_map_factory        bind_map_factory_;
     unifier_factory_t             unifier_factory_;
@@ -191,25 +189,26 @@ inline dbuct_manifest::dbuct_manifest(
     double exploration_constant,
     size_t grant_increment_interval)
     : globalizer_(),
-      bind_map_(globalizer_),
-      bind_map_factory_(globalizer_),
+      trail_(),
+      bind_map_(globalizer_, trail_, true),
+      bind_map_factory_(globalizer_, trail_),
       unifier_factory_(globalizer_),
       lineage_pool_(),
       ra_rule_id_set_factory_(),
-      srt_active_goals_(),
-      goal_exprs_(),
-      goal_candidate_rules_(ra_rule_id_set_factory_),
-      unit_goals_(),
-      decision_memory_(),
-      resolution_memory_(),
-      candidate_frame_offsets_(),
-      chosen_goal_candidates_(),
+      srt_active_goals_(trail_),
+      goal_exprs_(trail_),
+      goal_candidate_rules_(trail_, ra_rule_id_set_factory_),
+      unit_goals_(trail_),
+      decision_memory_(trail_),
+      resolution_memory_(trail_),
+      candidate_frame_offsets_(trail_),
+      chosen_goal_candidates_(trail_),
       expr_pool_(),
-      frame_allocator_(initial_frame_offset),
-      elimination_backlog_(),
+      frame_allocator_(trail_, initial_frame_offset),
+      elimination_backlog_(trail_),
       cdcl_(chosen_goal_candidates_),
       mhu_(bind_map_, lineage_pool_, expr_pool_,
-           bind_map_factory_, unifier_factory_, goal_candidate_rules_),
+           bind_map_factory_, unifier_factory_, goal_candidate_rules_, trail_),
       joint_(cdcl_, mhu_),
       get_resolution_rule_(database),
       conflict_detector_(goal_candidate_rules_),
@@ -241,10 +240,7 @@ inline dbuct_manifest::dbuct_manifest(
       resolver_(srt_goal_deactivator_, srt_subgoals_activator_,
                 goal_candidates_deactivator_, chosen_goal_candidates_),
       ridge_reward_(decision_memory_),
-      checkpoints_(goal_exprs_, goal_candidate_rules_, srt_active_goals_,
-                   candidate_frame_offsets_, chosen_goal_candidates_, unit_goals_,
-                   decision_memory_, frame_allocator_, bind_map_, mhu_,
-                   elimination_backlog_, resolution_memory_),
+      checkpoints_(trail_),
       rng_(random_seed),
       dbuct_sim_(checkpoints_, lineage_pool_, rng_, exploration_constant,
                  grant_increment_interval),

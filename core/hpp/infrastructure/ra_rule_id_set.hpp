@@ -9,6 +9,8 @@
 #include "debug_assert.hpp"
 
 struct ra_rule_id_set {
+    using value_type = rule_id;
+
     void insert(rule_id);
     void erase(rule_id);
     bool contains(rule_id) const;

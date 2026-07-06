@@ -1,43 +1,52 @@
 #ifndef DBUCT_ELIMINATION_BACKLOG_HPP
 #define DBUCT_ELIMINATION_BACKLOG_HPP
 
+#include <memory>
 #include <unordered_map>
 #include <unordered_set>
+#include "infrastructure/backtrackable_map_at_insert.hpp"
+#include "infrastructure/backtrackable_map_insert.hpp"
+#include "infrastructure/tracked.hpp"
+#include "infrastructure/trail.hpp"
 #include "value_objects/lineage.hpp"
 #include "value_objects/rule.hpp"
 
 // Delayed-backtracking variant of elimination_backlog.
 //
-// The production elimination_backlog routes its mutations through the global
-// trail. Under DBUCT the whole per-sim state (this backlog included) is captured
-// by the checkpoint machinery, so a plain map with snapshot()/restore() is both
-// simpler and rolls back exactly with every other structure at a choice boundary.
+// Like the production elimination_backlog, this routes its mutations through the
+// shared trail (rather than a full-copy snapshot): a new goal key logs a map
+// insert and each eliminated candidate logs an inner-set insert, so a choice
+// frame rolls the backlog back exactly on pop.
 struct dbuct_elimination_backlog {
     using eliminated_candidates_type =
         std::unordered_map<const goal_lineage*, std::unordered_set<rule_id>>;
-    using snapshot_t = eliminated_candidates_type;
+
+    explicit dbuct_elimination_backlog(trail& t);
 
     void insert_backlogged_elimination(const resolution_lineage* rl);
     bool is_backlogged_elimination(const resolution_lineage* rl) const;
 
-    snapshot_t snapshot() const;
-    void restore(snapshot_t s);
-
 private:
-    eliminated_candidates_type eliminated_candidates_;
+    tracked<eliminated_candidates_type, trail> eliminated_candidates_;
 };
 
+inline dbuct_elimination_backlog::dbuct_elimination_backlog(trail& t) : eliminated_candidates_(t, eliminated_candidates_type{}) {}
+
 inline void dbuct_elimination_backlog::insert_backlogged_elimination(const resolution_lineage* rl) {
-    eliminated_candidates_[rl->parent].insert(rl->idx);
+    const goal_lineage* gl = rl->parent;
+    if (!eliminated_candidates_.get().contains(gl))
+        eliminated_candidates_.mutate(
+            std::make_unique<backtrackable_map_insert<eliminated_candidates_type>>(gl, std::unordered_set<rule_id>{}));
+    if (!eliminated_candidates_.get().at(gl).contains(rl->idx))
+        eliminated_candidates_.mutate(
+            std::make_unique<backtrackable_map_at_insert<eliminated_candidates_type>>(gl, rl->idx));
 }
 
 inline bool dbuct_elimination_backlog::is_backlogged_elimination(const resolution_lineage* rl) const {
-    auto it = eliminated_candidates_.find(rl->parent);
-    if (it == eliminated_candidates_.end()) return false;
+    const auto& m = eliminated_candidates_.get();
+    auto it = m.find(rl->parent);
+    if (it == m.end()) return false;
     return it->second.contains(rl->idx);
 }
-
-inline dbuct_elimination_backlog::snapshot_t dbuct_elimination_backlog::snapshot() const { return eliminated_candidates_; }
-inline void dbuct_elimination_backlog::restore(snapshot_t s) { eliminated_candidates_ = std::move(s); }
 
 #endif

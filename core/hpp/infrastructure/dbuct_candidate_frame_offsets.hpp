@@ -2,39 +2,39 @@
 #define DBUCT_CANDIDATE_FRAME_OFFSETS_HPP
 
 #include <cstdint>
+#include <memory>
 #include <unordered_map>
+#include "infrastructure/backtrackable_map_erase.hpp"
+#include "infrastructure/backtrackable_map_insert.hpp"
+#include "infrastructure/tracked.hpp"
+#include "infrastructure/trail.hpp"
 #include "value_objects/lineage.hpp"
-#include "debug_assert.hpp"
 
 // Delayed-backtracking variant of candidate_frame_offsets (see dbuct_goal_exprs
-// for the rationale behind snapshot()/restore()).
+// for the rationale behind trail-journalled mutations).
 struct dbuct_candidate_frame_offsets {
-    using snapshot_t = std::unordered_map<const resolution_lineage*, uint32_t>;
+    using map_t = std::unordered_map<const resolution_lineage*, uint32_t>;
+
+    explicit dbuct_candidate_frame_offsets(trail& t);
 
     uint32_t get(const resolution_lineage* rl) const;
     void set(const resolution_lineage* rl, uint32_t frame_offset);
     void unset(const resolution_lineage* rl);
 
-    snapshot_t snapshot() const;
-    void restore(snapshot_t s);
-
 private:
-    std::unordered_map<const resolution_lineage*, uint32_t> offsets_;
+    tracked<map_t, trail> offsets_;
 };
 
-inline uint32_t dbuct_candidate_frame_offsets::get(const resolution_lineage* rl) const { return offsets_.at(rl); }
+inline dbuct_candidate_frame_offsets::dbuct_candidate_frame_offsets(trail& t) : offsets_(t, map_t{}) {}
+
+inline uint32_t dbuct_candidate_frame_offsets::get(const resolution_lineage* rl) const { return offsets_.get().at(rl); }
 
 inline void dbuct_candidate_frame_offsets::set(const resolution_lineage* rl, uint32_t frame_offset) {
-    auto [_, inserted] = offsets_.insert({rl, frame_offset});
-    DEBUG_ASSERT(inserted);
+    offsets_.mutate(std::make_unique<backtrackable_map_insert<map_t>>(rl, frame_offset));
 }
 
 inline void dbuct_candidate_frame_offsets::unset(const resolution_lineage* rl) {
-    auto erased = offsets_.erase(rl);
-    DEBUG_ASSERT(erased == 1);
+    offsets_.mutate(std::make_unique<backtrackable_map_erase<map_t>>(rl));
 }
-
-inline dbuct_candidate_frame_offsets::snapshot_t dbuct_candidate_frame_offsets::snapshot() const { return offsets_; }
-inline void dbuct_candidate_frame_offsets::restore(snapshot_t s) { offsets_ = std::move(s); }
 
 #endif

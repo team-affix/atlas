@@ -1,66 +1,63 @@
 #ifndef DBUCT_GOAL_CANDIDATE_RULES_HPP
 #define DBUCT_GOAL_CANDIDATE_RULES_HPP
 
+#include <memory>
 #include <unordered_map>
+#include "infrastructure/backtrackable_map_at_ra_erase.hpp"
+#include "infrastructure/backtrackable_map_at_ra_insert.hpp"
+#include "infrastructure/backtrackable_map_erase.hpp"
+#include "infrastructure/backtrackable_map_insert.hpp"
 #include "infrastructure/ra_rule_id_set_factory.hpp"
 #include "infrastructure/ra_rule_id_set.hpp"
+#include "infrastructure/tracked.hpp"
+#include "infrastructure/trail.hpp"
 #include "value_objects/lineage.hpp"
-#include "value_objects/rule.hpp"
-#include "debug_assert.hpp"
 
 // Delayed-backtracking variant of goal_candidate_rules.
 //
 // The active candidate set per goal is the structure that CDCL re-application
-// prunes after a backtrack. Under DBUCT it is carried across episodes and
-// restored to any choice boundary. ra_rule_id_set is copyable, so a snapshot is
-// just a copy of the by-goal map (membership is restored exactly; note the
-// random-access iteration order within a set may differ after erase+restore,
-// which only affects exploration order, not membership/correctness).
+// prunes after a backtrack. Under DBUCT it is carried across episodes and rolled
+// back to any choice boundary by the trail. Outer inserts/erases and inner
+// link/unlink each journal a backtrackable mutation; the inner mutations capture
+// the outer map and re-look-up the goal on undo, so they stay valid even if the
+// goal's node is erased and re-inserted (at a new address) within the same frame.
+// (ra_rule_id_set erase is a swap-remove, so re-insertion order may differ after
+// undo, which only affects exploration order, not membership/correctness.)
 struct dbuct_goal_candidate_rules {
-    using snapshot_t = std::unordered_map<const goal_lineage*, ra_rule_id_set>;
+    using map_t = std::unordered_map<const goal_lineage*, ra_rule_id_set>;
 
-    explicit dbuct_goal_candidate_rules(ra_rule_id_set_factory& factory);
+    dbuct_goal_candidate_rules(trail& t, ra_rule_id_set_factory& factory);
 
-    ra_rule_id_set& get(const goal_lineage* gl);
     const ra_rule_id_set& get(const goal_lineage* gl) const;
     void insert(const goal_lineage* gl);
     void link_goal_candidate(const goal_lineage* gl, rule_id r);
     void unlink_goal_candidate(const goal_lineage* gl, rule_id r);
     void erase(const goal_lineage* gl);
 
-    snapshot_t snapshot() const;
-    void restore(snapshot_t s);
-
 private:
     ra_rule_id_set_factory& factory_;
-    std::unordered_map<const goal_lineage*, ra_rule_id_set> by_goal_;
+    tracked<map_t, trail> by_goal_;
 };
 
-inline dbuct_goal_candidate_rules::dbuct_goal_candidate_rules(ra_rule_id_set_factory& factory)
-    : factory_(factory) {}
+inline dbuct_goal_candidate_rules::dbuct_goal_candidate_rules(trail& t, ra_rule_id_set_factory& factory)
+    : factory_(factory), by_goal_(t, map_t{}) {}
 
-inline ra_rule_id_set& dbuct_goal_candidate_rules::get(const goal_lineage* gl) { return by_goal_.at(gl); }
-inline const ra_rule_id_set& dbuct_goal_candidate_rules::get(const goal_lineage* gl) const { return by_goal_.at(gl); }
+inline const ra_rule_id_set& dbuct_goal_candidate_rules::get(const goal_lineage* gl) const { return by_goal_.get().at(gl); }
 
 inline void dbuct_goal_candidate_rules::insert(const goal_lineage* gl) {
-    DEBUG_ASSERT(!by_goal_.contains(gl));
-    by_goal_.emplace(gl, factory_.make());
+    by_goal_.mutate(std::make_unique<backtrackable_map_insert<map_t>>(gl, factory_.make()));
 }
 
 inline void dbuct_goal_candidate_rules::link_goal_candidate(const goal_lineage* gl, rule_id r) {
-    by_goal_.at(gl).insert(r);
+    by_goal_.mutate(std::make_unique<backtrackable_map_at_ra_insert<map_t>>(gl, r));
 }
 
 inline void dbuct_goal_candidate_rules::unlink_goal_candidate(const goal_lineage* gl, rule_id r) {
-    by_goal_.at(gl).erase(r);
+    by_goal_.mutate(std::make_unique<backtrackable_map_at_ra_erase<map_t>>(gl, r));
 }
 
 inline void dbuct_goal_candidate_rules::erase(const goal_lineage* gl) {
-    auto erased = by_goal_.erase(gl);
-    DEBUG_ASSERT(erased == 1);
+    by_goal_.mutate(std::make_unique<backtrackable_map_erase<map_t>>(gl));
 }
-
-inline dbuct_goal_candidate_rules::snapshot_t dbuct_goal_candidate_rules::snapshot() const { return by_goal_; }
-inline void dbuct_goal_candidate_rules::restore(snapshot_t s) { by_goal_ = std::move(s); }
 
 #endif
