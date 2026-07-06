@@ -1,6 +1,6 @@
-#include "infrastructure/dbuct_manifest.hpp"
+#include "infrastructure/dbuct_ridge_manifest.hpp"
 
-dbuct_manifest::dbuct_manifest(
+dbuct_ridge_manifest::dbuct_ridge_manifest(
     db& database,
     initial_goal_exprs& initial_goals,
     uint32_t initial_frame_offset,

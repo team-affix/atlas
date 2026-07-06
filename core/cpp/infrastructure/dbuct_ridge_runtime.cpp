@@ -1,6 +1,6 @@
-#include "infrastructure/dbuct_runtime.hpp"
+#include "infrastructure/dbuct_ridge_runtime.hpp"
 
-dbuct_runtime::dbuct_runtime(
+dbuct_ridge_runtime::dbuct_ridge_runtime(
     db& database,
     initial_goal_exprs& goals,
     uint32_t initial_frame_offset,
@@ -14,30 +14,30 @@ dbuct_runtime::dbuct_runtime(
                   manifest_.expr_pool_, manifest_.bind_map_),
       driver_(manifest_.solver_.solve()) {}
 
-bool dbuct_runtime::next() {
+bool dbuct_ridge_runtime::next() {
     return driver_.next();
 }
 
-bool dbuct_runtime::solved() const {
+bool dbuct_ridge_runtime::solved() const {
     return driver_.solved();
 }
 
-const expr* dbuct_runtime::normalize(framed_expr fe) {
+const expr* dbuct_ridge_runtime::normalize(framed_expr fe) {
     return normalizer_.normalize(fe);
 }
 
-size_t dbuct_runtime::resolution_depth() const {
+size_t dbuct_ridge_runtime::resolution_depth() const {
     return manifest_.resolution_memory_.get_resolution_count();
 }
 
-size_t dbuct_runtime::decision_depth() const {
+size_t dbuct_ridge_runtime::decision_depth() const {
     return manifest_.decision_memory_.count();
 }
 
-lemma dbuct_runtime::derive_decision_lemma() const {
+lemma dbuct_ridge_runtime::derive_decision_lemma() const {
     return manifest_.decision_memory_.derive_decision_lemma();
 }
 
-lemma dbuct_runtime::derive_resolution_lemma() const {
+lemma dbuct_ridge_runtime::derive_resolution_lemma() const {
     return manifest_.resolution_memory_.derive_resolution_lemma();
 }

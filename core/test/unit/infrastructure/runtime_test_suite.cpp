@@ -20,7 +20,7 @@
 #include <gmock/gmock.h>
 #include "infrastructure/basic_runtime.hpp"
 #include "infrastructure/db.hpp"
-#include "infrastructure/dbuct_runtime.hpp"
+#include "infrastructure/dbuct_ridge_runtime.hpp"
 #include "infrastructure/expr_pool.hpp"
 #include "infrastructure/expr_printer.hpp"
 #include "infrastructure/genius_runtime.hpp"
@@ -43,7 +43,7 @@ enum class runtime_kind { basic, ridge, horizon, genius, dbuct };
 
 // Type-erased runtime reference for testing across all runtime types.
 struct runtime_ref {
-    using variant_t = std::variant<basic_runtime*, ridge_runtime*, horizon_runtime*, genius_runtime*, dbuct_runtime*>;
+    using variant_t = std::variant<basic_runtime*, ridge_runtime*, horizon_runtime*, genius_runtime*, dbuct_ridge_runtime*>;
     explicit runtime_ref(variant_t v) : v_(v) {}
     bool next() { return std::visit([](auto* r) { return r->next(); }, v_); }
     bool solved() const { return std::visit([](const auto* r) { return r->solved(); }, v_); }
@@ -66,7 +66,7 @@ struct runtime_session_holder {
     std::optional<ridge_runtime> ridge;
     std::optional<horizon_runtime> horizon;
     std::optional<genius_runtime> genius;
-    std::optional<dbuct_runtime> dbuct;
+    std::optional<dbuct_ridge_runtime> dbuct;
     std::optional<runtime_ref> ref;
 };
 

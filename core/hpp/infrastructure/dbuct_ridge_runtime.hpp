@@ -1,9 +1,9 @@
-#ifndef DBUCT_RUNTIME_HPP
-#define DBUCT_RUNTIME_HPP
+#ifndef DBUCT_RIDGE_RUNTIME_HPP
+#define DBUCT_RIDGE_RUNTIME_HPP
 
 #include <cstddef>
 #include <cstdint>
-#include "infrastructure/dbuct_manifest.hpp"
+#include "infrastructure/dbuct_ridge_manifest.hpp"
 #include "infrastructure/db.hpp"
 #include "infrastructure/initial_goal_exprs.hpp"
 #include "infrastructure/normalizer.hpp"
@@ -14,10 +14,10 @@
 // delayed-backtracking (camping) solver stack. grant_increment_interval controls
 // DBUCT's per-node compute batch growth (larger ⇒ camps longer); it defaults so
 // the constructor signature matches the other runtimes for shared harnesses.
-struct dbuct_runtime {
+struct dbuct_ridge_runtime {
     static constexpr size_t kDefaultGrantIncrementInterval = 4;
 
-    dbuct_runtime(
+    dbuct_ridge_runtime(
         db& database,
         initial_goal_exprs& goals,
         uint32_t initial_frame_offset,
@@ -35,8 +35,8 @@ struct dbuct_runtime {
     lemma derive_resolution_lemma() const;
 
 private:
-    using normalizer_t = normalizer<globalizer, expr_pool, expr_pool, dbuct_manifest::bind_map_t>;
-    dbuct_manifest manifest_;
+    using normalizer_t = normalizer<globalizer, expr_pool, expr_pool, dbuct_ridge_manifest::bind_map_t>;
+    dbuct_ridge_manifest manifest_;
     normalizer_t normalizer_;
     solver_driver driver_;
 };

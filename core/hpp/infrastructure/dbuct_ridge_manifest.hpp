@@ -1,5 +1,5 @@
-#ifndef DBUCT_MANIFEST_HPP
-#define DBUCT_MANIFEST_HPP
+#ifndef DBUCT_RIDGE_MANIFEST_HPP
+#define DBUCT_RIDGE_MANIFEST_HPP
 
 #include <cstddef>
 #include <cstdint>
@@ -64,7 +64,7 @@
 // solver-agnostic infrastructure instantiated over the dbuct_* types. The
 // concrete trail satisfies the ILogTrailAction / IPushFrame / IPopFrame
 // interfaces those dbuct_* structs are templated on.
-struct dbuct_manifest {
+struct dbuct_ridge_manifest {
     using bind_map_t                = dbuct_bind_map<globalizer, trail>;
     using bind_map_factory_t        = dbuct_bind_map_factory<globalizer, trail>;
     using goal_exprs_t              = dbuct_goal_exprs<trail>;
@@ -128,7 +128,7 @@ struct dbuct_manifest {
     using solver_t                      = dbuct_solver<srt_initial_goals_activator_t, run_sim_t, decision_memory_t,
                                           decision_memory_t, ridge_reward_t, dbuct_sim_t, cdcl_t, learn_reapply_t>;
 
-    dbuct_manifest(
+    dbuct_ridge_manifest(
         db& database,
         initial_goal_exprs& initial_goals,
         uint32_t initial_frame_offset,

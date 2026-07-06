@@ -1,4 +1,4 @@
-// Integration: dbuct_manifest — delayed-backtracking (ridge_dbuct) solver.
+// Integration: dbuct_ridge_manifest — delayed-backtracking (ridge_dbuct) solver.
 //
 // The ridge_dbuct solver camps deep in the search tree and backtracks lazily
 // (DBUCT) instead of restarting each simulation from the root. These tests fix
@@ -21,8 +21,8 @@
 #include "infrastructure/db.hpp"
 #include "infrastructure/expr_pool.hpp"
 #include "infrastructure/initial_goal_exprs.hpp"
-#include "infrastructure/dbuct_manifest.hpp"
-#include "infrastructure/dbuct_runtime.hpp"
+#include "infrastructure/dbuct_ridge_manifest.hpp"
+#include "infrastructure/dbuct_ridge_runtime.hpp"
 #include "infrastructure/ridge_runtime.hpp"
 #include "value_objects/expr.hpp"
 #include "value_objects/lemma.hpp"
@@ -64,18 +64,18 @@ protected:
     initial_goal_exprs initial_goals;
     expr_pool pool;  // shared: problem construction + cross-runtime import
 
-    dbuct_manifest make_manifest(uint32_t initial_frame_offset = 0,
+    dbuct_ridge_manifest make_manifest(uint32_t initial_frame_offset = 0,
                                  size_t max_resolutions = kMaxResolutions,
                                  size_t grant_interval = kGrantInterval) {
-        return dbuct_manifest{
+        return dbuct_ridge_manifest{
             database, initial_goals, initial_frame_offset, max_resolutions, kSeed,
             kExplorationConstant, grant_interval};
     }
 
-    dbuct_runtime make_dbuct(uint32_t initial_var_count,
+    dbuct_ridge_runtime make_dbuct(uint32_t initial_var_count,
                              size_t max_resolutions = kMaxResolutions,
                              size_t grant_interval = kGrantInterval) {
-        return dbuct_runtime{database, initial_goals, initial_var_count,
+        return dbuct_ridge_runtime{database, initial_goals, initial_var_count,
                              max_resolutions, kSeed, kExplorationConstant,
                              grant_interval};
     }
@@ -98,7 +98,7 @@ TEST_F(DbuctManifestIntegrationTest, WiringConstructsWithEmptyProblem) {
 }
 
 TEST_F(DbuctManifestIntegrationTest, WiringCampingStackDistinctFromEliminators) {
-    dbuct_manifest m = make_manifest();
+    dbuct_ridge_manifest m = make_manifest();
     EXPECT_NE(static_cast<void*>(&m.cdcl_), static_cast<void*>(&m.joint_));
     EXPECT_NE(static_cast<void*>(&m.dbuct_sim_), static_cast<void*>(&m.checkpoints_));
 }
@@ -106,7 +106,7 @@ TEST_F(DbuctManifestIntegrationTest, WiringCampingStackDistinctFromEliminators) 
 // ── Scenario 2: vacuous / trivial refutation contract ────────────────────────
 
 TEST_F(DbuctManifestIntegrationTest, VacuousSolvedThenRefutesOnEmptyProblem) {
-    dbuct_runtime rt = make_dbuct(0);
+    dbuct_ridge_runtime rt = make_dbuct(0);
     ASSERT_TRUE(rt.next());
     EXPECT_TRUE(rt.solved());
     EXPECT_TRUE(rt.derive_decision_lemma().get_resolutions().empty());
@@ -115,7 +115,7 @@ TEST_F(DbuctManifestIntegrationTest, VacuousSolvedThenRefutesOnEmptyProblem) {
 
 TEST_F(DbuctManifestIntegrationTest, RefutesWhenInitialGoalHasNoCandidates) {
     initial_goals.push(fun("f"));
-    dbuct_runtime rt = make_dbuct(0);
+    dbuct_ridge_runtime rt = make_dbuct(0);
     ASSERT_TRUE(rt.next());
     EXPECT_FALSE(rt.solved()) << "no matching rule ⇒ conflict";
     EXPECT_FALSE(rt.next()) << "root refuted";
@@ -126,7 +126,7 @@ TEST_F(DbuctManifestIntegrationTest, RefutesWhenInitialGoalHasNoCandidates) {
 TEST_F(DbuctManifestIntegrationTest, SingleUnitSolutionMakesNoDecision) {
     initial_goals.push(fun("f"));
     database.push(rule{fun("f"), {}});
-    dbuct_runtime rt = make_dbuct(0);
+    dbuct_ridge_runtime rt = make_dbuct(0);
     ASSERT_TRUE(rt.next());
     EXPECT_TRUE(rt.solved());
     EXPECT_TRUE(rt.derive_decision_lemma().get_resolutions().empty());
@@ -137,7 +137,7 @@ TEST_F(DbuctManifestIntegrationTest, ClauseDerivedUnitSolutionChainsSubgoals) {
     initial_goals.push(fun("f"));
     database.push(rule{fun("f"), {fun("g")}});
     database.push(rule{fun("g"), {}});
-    dbuct_runtime rt = make_dbuct(0);
+    dbuct_ridge_runtime rt = make_dbuct(0);
     ASSERT_TRUE(rt.next());
     EXPECT_TRUE(rt.solved());
     EXPECT_TRUE(rt.derive_decision_lemma().get_resolutions().empty());
@@ -152,7 +152,7 @@ TEST_F(DbuctManifestIntegrationTest, GroundHeadBindingsAreCorrect) {
     database.push(rule{fun("f", {abc, _123}), {}});
     initial_goals.push(fun("f", {pool.make_var(0), pool.make_var(1)}));
 
-    dbuct_runtime rt = make_dbuct(2);
+    dbuct_ridge_runtime rt = make_dbuct(2);
     ASSERT_TRUE(rt.next());
     ASSERT_TRUE(rt.solved());
     EXPECT_EQ(*pool.import(rt.normalize({pool.make_var(0), 0})), *abc);
@@ -169,7 +169,7 @@ TEST_F(DbuctManifestIntegrationTest, ClauseBodyBindingsFlowThroughSubgoals) {
     database.push(rule{fun("h", {_123}), {}});
     initial_goals.push(fun("f", {pool.make_var(0), pool.make_var(1)}));
 
-    dbuct_runtime rt = make_dbuct(2);
+    dbuct_ridge_runtime rt = make_dbuct(2);
     ASSERT_TRUE(rt.next());
     ASSERT_TRUE(rt.solved());
     EXPECT_EQ(*pool.import(rt.normalize({pool.make_var(0), 0})), *abc);
@@ -194,7 +194,7 @@ TEST_F(DbuctManifestIntegrationTest, SolverCampsBelowRootAcrossEpisodes) {
     database.push(rule{fun("f", {d}), {}});
     initial_goals.push(fun("f", {pool.make_var(0)}));
 
-    dbuct_manifest m = make_manifest(/*initial_frame_offset=*/1);
+    dbuct_ridge_manifest m = make_manifest(/*initial_frame_offset=*/1);
     auto sm = m.solver_.solve();
     size_t max_camp_depth = 0;
     bool made_decision = false;
@@ -226,7 +226,7 @@ TEST_F(DbuctManifestIntegrationTest, ParitySingleBindingSolution) {
     std::set<solution> expected = collect_solutions(
         r, [&] { return get(r); }, kTickCap);
 
-    dbuct_runtime d = make_dbuct(2);
+    dbuct_ridge_runtime d = make_dbuct(2);
     std::set<solution> got = collect_solutions(
         d, [&] { return get(d); }, kTickCap);
 
@@ -250,7 +250,7 @@ TEST_F(DbuctManifestIntegrationTest, ParityMultipleGroundFacts) {
     ridge_runtime r = make_ridge(1);
     std::set<solution> expected = collect_solutions(r, [&] { return get(r); }, kTickCap);
 
-    dbuct_runtime d = make_dbuct(1);
+    dbuct_ridge_runtime d = make_dbuct(1);
     std::set<solution> got = collect_solutions(d, [&] { return get(d); }, kTickCap);
 
     EXPECT_EQ(got, expected);
@@ -277,7 +277,7 @@ TEST_F(DbuctManifestIntegrationTest, ParityTwoGoalsCrossProduct) {
     ridge_runtime r = make_ridge(2);
     std::set<solution> expected = collect_solutions(r, [&] { return get(r); }, kTickCap);
 
-    dbuct_runtime d = make_dbuct(2);
+    dbuct_ridge_runtime d = make_dbuct(2);
     std::set<solution> got = collect_solutions(d, [&] { return get(d); }, kTickCap);
 
     EXPECT_EQ(got, expected);
@@ -306,7 +306,7 @@ TEST_F(DbuctManifestIntegrationTest, ParityConflictDrivenPruning) {
     ridge_runtime r = make_ridge(1);
     std::set<solution> expected = collect_solutions(r, [&] { return get(r); }, kTickCap);
 
-    dbuct_runtime d = make_dbuct(1);
+    dbuct_ridge_runtime d = make_dbuct(1);
     std::set<solution> got = collect_solutions(d, [&] { return get(d); }, kTickCap);
 
     EXPECT_EQ(got, expected);
@@ -329,7 +329,7 @@ TEST_F(DbuctManifestIntegrationTest, BindingsRemainSoundAcrossEnumeration) {
     initial_goals.push(fun("f", {pool.make_var(0)}));
 
     std::set<const expr*> facts{pool.import(a), pool.import(b), pool.import(c)};
-    dbuct_runtime d = make_dbuct(1);
+    dbuct_ridge_runtime d = make_dbuct(1);
     auto got = collect_solutions(
         d, [&] { return solution{pool.import(d.normalize({pool.make_var(0), 0}))}; },
         kTickCap);
@@ -345,7 +345,7 @@ TEST_F(DbuctManifestIntegrationTest, ImportedSolutionSurvivesFurtherTicks) {
     database.push(rule{fun("f", {abc}), {}});
     initial_goals.push(fun("f", {pool.make_var(0)}));
 
-    dbuct_runtime d = make_dbuct(1);
+    dbuct_ridge_runtime d = make_dbuct(1);
     ASSERT_TRUE(d.next());
     ASSERT_TRUE(d.solved());
     const expr* kept = pool.import(d.normalize({pool.make_var(0), 0}));
@@ -364,7 +364,7 @@ TEST_F(DbuctManifestIntegrationTest, TightResolutionBudgetTerminatesGracefully) 
     database.push(rule{fun("nat", {fun("z")}), {}});
     initial_goals.push(fun("nat", {pool.make_var(0)}));
 
-    dbuct_runtime d = make_dbuct(1, /*max_resolutions=*/4);
+    dbuct_ridge_runtime d = make_dbuct(1, /*max_resolutions=*/4);
     bool any_solution = false;
     for (size_t t = 0; t < 64; ++t) {
         if (!d.next()) break;
@@ -397,7 +397,7 @@ TEST_F(DbuctManifestIntegrationTest, RecursionEnumeratesOnlyWellFormedNats) {
         }
     };
 
-    dbuct_runtime d = make_dbuct(1, /*max_resolutions=*/8);
+    dbuct_ridge_runtime d = make_dbuct(1, /*max_resolutions=*/8);
     std::set<solution> got = collect_solutions(
         d, [&] { return solution{pool.import(d.normalize({pool.make_var(0), 0}))}; },
         256);
@@ -426,10 +426,10 @@ TEST_F(DbuctManifestIntegrationTest, GrantIntervalDoesNotChangeSolutionSet) {
     auto get = [&](auto& rt) {
         return solution{pool.import(rt.normalize({pool.make_var(0), 0}))};
     };
-    dbuct_runtime small = make_dbuct(1, kMaxResolutions, /*grant_interval=*/1);
+    dbuct_ridge_runtime small = make_dbuct(1, kMaxResolutions, /*grant_interval=*/1);
     std::set<solution> got_small = collect_solutions(small, [&] { return get(small); }, kTickCap);
 
-    dbuct_runtime large = make_dbuct(1, kMaxResolutions, /*grant_interval=*/1024);
+    dbuct_ridge_runtime large = make_dbuct(1, kMaxResolutions, /*grant_interval=*/1024);
     std::set<solution> got_large = collect_solutions(large, [&] { return get(large); }, kTickCap);
 
     EXPECT_EQ(got_small, got_large);
@@ -451,7 +451,7 @@ TEST_F(DbuctManifestIntegrationTest, DecisionCountConsistentAcrossManyTicks) {
     initial_goals.push(fun("f", {pool.make_var(0)}));
     initial_goals.push(fun("g", {pool.make_var(1)}));
 
-    dbuct_manifest m = make_manifest(/*initial_frame_offset=*/2);
+    dbuct_ridge_manifest m = make_manifest(/*initial_frame_offset=*/2);
     auto sm = m.solver_.solve();
     for (size_t t = 0; t < 64; ++t) {
         sm.resume();
