@@ -91,7 +91,7 @@ struct dbuct_manifest {
     using cdcl_t  = dbuct_cdcl_elimination_generator<chosen_goal_candidates_t>;
     using mhu_t   = dbuct_mhu_elimination_generator<
                     bind_map_t, bind_map_factory_t, unifier<bind_map_t>,
-                    unifier_factory_t, lineage_pool, expr_pool, goal_candidate_rules_t, trail>;
+                    unifier_factory_t, lineage_pool, expr_pool, goal_candidate_rules_t, trail, trail>;
     using joint_t = joint_elimination_generator<cdcl_t, mhu_t>;
 
     using get_resolution_rule_t         = get_resolution_rule<db>;
@@ -207,7 +207,7 @@ inline dbuct_manifest::dbuct_manifest(
     size_t grant_increment_interval)
     : globalizer_(),
       trail_(),
-      bind_map_(globalizer_, trail_, true),
+      bind_map_(globalizer_, trail_),
       bind_map_factory_(globalizer_, trail_),
       unifier_factory_(globalizer_),
       lineage_pool_(),
@@ -225,7 +225,7 @@ inline dbuct_manifest::dbuct_manifest(
       elimination_backlog_(trail_),
       cdcl_(chosen_goal_candidates_),
       mhu_(bind_map_, lineage_pool_, expr_pool_,
-           bind_map_factory_, unifier_factory_, goal_candidate_rules_, trail_),
+           bind_map_factory_, unifier_factory_, goal_candidate_rules_, trail_, trail_),
       joint_(cdcl_, mhu_),
       get_resolution_rule_(database),
       conflict_detector_(goal_candidate_rules_),

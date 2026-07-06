@@ -1,4 +1,5 @@
 #include "infrastructure/trail.hpp"
+#include "debug_assert.hpp"
 
 void trail::push() {
     frame_boundary_stack.push(undo_stack.size());
@@ -11,6 +12,11 @@ void trail::pop() {
         undo_stack.top()->backtrack();
         undo_stack.pop();
     }
+}
+
+void trail::squash_one() {
+    DEBUG_ASSERT(!frame_boundary_stack.empty());
+    frame_boundary_stack.pop();
 }
 
 void trail::log(std::unique_ptr<i_backtrackable> op) {
