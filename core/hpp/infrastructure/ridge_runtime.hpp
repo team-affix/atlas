@@ -27,7 +27,7 @@ struct ridge_runtime {
     lemma derive_resolution_lemma() const;
 
 private:
-    using normalizer_t = normalizer<globalizer, expr_pool, expr_pool, bind_map>;
+    using normalizer_t = normalizer<globalizer, expr_pool, expr_pool, ridge_manifest::bind_map_t>;
     ridge_manifest manifest_;
     normalizer_t normalizer_;
     solver_driver driver_;

@@ -1,23 +1,22 @@
 #ifndef UNIFIER_FACTORY_HPP
 #define UNIFIER_FACTORY_HPP
 
-#include "infrastructure/globalizer.hpp"
 #include "infrastructure/unifier.hpp"
 
-template<typename IBindMap>
+template<typename IGlobalize, typename IBindMap>
 struct unifier_factory {
-    explicit unifier_factory(globalizer&);
-    unifier<IBindMap> make(IBindMap* bm) const;
+    explicit unifier_factory(IGlobalize&);
+    unifier<IGlobalize, IBindMap> make(IBindMap* bm) const;
 private:
-    globalizer& globalizer_;
+    IGlobalize& globalizer_;
 };
 
-template<typename IBindMap>
-unifier_factory<IBindMap>::unifier_factory(globalizer& g) : globalizer_(g) {}
+template<typename IGlobalize, typename IBindMap>
+unifier_factory<IGlobalize, IBindMap>::unifier_factory(IGlobalize& g) : globalizer_(g) {}
 
-template<typename IBindMap>
-unifier<IBindMap> unifier_factory<IBindMap>::make(IBindMap* bm) const {
-    return unifier<IBindMap>{globalizer_, bm};
+template<typename IGlobalize, typename IBindMap>
+unifier<IGlobalize, IBindMap> unifier_factory<IGlobalize, IBindMap>::make(IBindMap* bm) const {
+    return unifier<IGlobalize, IBindMap>{globalizer_, bm};
 }
 
 #endif

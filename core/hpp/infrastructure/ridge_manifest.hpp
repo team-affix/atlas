@@ -58,10 +58,12 @@
 #include "infrastructure/unifier_factory.hpp"
 
 struct ridge_manifest {
-    using unifier_factory_t = unifier_factory<bind_map>;
+    using bind_map_t        = bind_map<globalizer>;
+    using bind_map_factory_t = bind_map_factory<globalizer>;
+    using unifier_factory_t = unifier_factory<globalizer, bind_map_t>;
     using cdcl_t  = cdcl_elimination_generator<chosen_goal_candidates>;
     using mhu_t   = mhu_elimination_generator<
-                    bind_map, bind_map_factory, unifier<bind_map>, unifier_factory_t,
+                    bind_map_t, bind_map_factory_t, unifier<globalizer, bind_map_t>, unifier_factory_t,
                     lineage_pool, expr_pool, goal_candidate_rules>;
     using joint_t = joint_elimination_generator<cdcl_t, mhu_t>;
 
@@ -95,7 +97,7 @@ struct ridge_manifest {
     using set_up_sim_t      = set_up_sim<trail>;
     using tear_down_sim_t      = tear_down_sim<trail, unit_goals, decision_memory, resolution_memory,
                             goal_candidate_rules, goal_exprs, srt_active_goals, candidate_frame_offsets,
-                            mhu_t, bind_map, lineage_pool, frame_bump_allocator, cdcl_t, chosen_goal_candidates>;
+                            mhu_t, bind_map_t, lineage_pool, frame_bump_allocator, cdcl_t, chosen_goal_candidates>;
     using ridge_reward_t   = ridge_reward<decision_memory>;
     using value_delta_t = monte_carlo::uniform_value_delta<double>;
     using mcts_sim_t   = mcts_sim<set_up_sim_t, tear_down_sim_t, ridge_reward_t,
@@ -119,8 +121,8 @@ struct ridge_manifest {
 
     globalizer              globalizer_;
     trail                   trail_;
-    bind_map                bind_map_;
-    bind_map_factory        bind_map_factory_;
+    bind_map_t              bind_map_;
+    bind_map_factory_t      bind_map_factory_;
     unifier_factory_t          unifier_factory_;
     lineage_pool            lineage_pool_;
     rule_id_set_factory     rule_id_set_factory_;

@@ -3,26 +3,25 @@
 
 #include <cstdint>
 #include "infrastructure/coroutine.hpp"
-#include "infrastructure/globalizer.hpp"
 #include "value_objects/framed_expr.hpp"
 #include "value_objects/expr.hpp"
 
-template<typename IBindMap>
+template<typename IGlobalize, typename IBindMap>
 struct unifier {
-    unifier(globalizer& g, IBindMap* bm);
+    unifier(IGlobalize& g, IBindMap* bm);
     coroutine<uint32_t, bool> unify(framed_expr lhs, framed_expr rhs);
 private:
     bool occurs_check(uint32_t global_key, framed_expr);
     IBindMap* bind_map;
-    globalizer& globalizer_;
+    IGlobalize& globalizer_;
 };
 
-template<typename IBindMap>
-unifier<IBindMap>::unifier(globalizer& g, IBindMap* bm)
+template<typename IGlobalize, typename IBindMap>
+unifier<IGlobalize, IBindMap>::unifier(IGlobalize& g, IBindMap* bm)
     : bind_map(bm), globalizer_(g) {}
 
-template<typename IBindMap>
-coroutine<uint32_t, bool> unifier<IBindMap>::unify(framed_expr lhs, framed_expr rhs) {
+template<typename IGlobalize, typename IBindMap>
+coroutine<uint32_t, bool> unifier<IGlobalize, IBindMap>::unify(framed_expr lhs, framed_expr rhs) {
     lhs = bind_map->whnf(lhs);
     rhs = bind_map->whnf(rhs);
 
@@ -73,8 +72,8 @@ coroutine<uint32_t, bool> unifier<IBindMap>::unify(framed_expr lhs, framed_expr 
     co_return true;
 }
 
-template<typename IBindMap>
-bool unifier<IBindMap>::occurs_check(uint32_t global_key, framed_expr fe) {
+template<typename IGlobalize, typename IBindMap>
+bool unifier<IGlobalize, IBindMap>::occurs_check(uint32_t global_key, framed_expr fe) {
     fe = bind_map->whnf(fe);
 
     if (const expr::var* v = std::get_if<expr::var>(&fe.skeleton->content))

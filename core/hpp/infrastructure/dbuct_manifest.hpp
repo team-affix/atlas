@@ -65,8 +65,8 @@
 // concrete trail satisfies the ILogTrailAction / IPushFrame / IPopFrame
 // interfaces those dbuct_* structs are templated on.
 struct dbuct_manifest {
-    using bind_map_t                = dbuct_bind_map<trail>;
-    using bind_map_factory_t        = dbuct_bind_map_factory<trail>;
+    using bind_map_t                = dbuct_bind_map<globalizer, trail>;
+    using bind_map_factory_t        = dbuct_bind_map_factory<globalizer, trail>;
     using goal_exprs_t              = dbuct_goal_exprs<trail>;
     using goal_candidate_rules_t    = dbuct_goal_candidate_rules<trail>;
     using srt_active_goals_t        = dbuct_srt_active_goals<trail>;
@@ -78,10 +78,10 @@ struct dbuct_manifest {
     using frame_bump_allocator_t    = dbuct_frame_bump_allocator<trail>;
     using elimination_backlog_t     = dbuct_elimination_backlog<trail>;
 
-    using unifier_factory_t = unifier_factory<bind_map_t>;
+    using unifier_factory_t = unifier_factory<globalizer, bind_map_t>;
     using cdcl_t  = dbuct_cdcl_elimination_generator<chosen_goal_candidates_t>;
     using mhu_t   = dbuct_mhu_elimination_generator<
-                    bind_map_t, bind_map_factory_t, unifier<bind_map_t>,
+                    bind_map_t, bind_map_factory_t, unifier<globalizer, bind_map_t>,
                     unifier_factory_t, lineage_pool, expr_pool, goal_candidate_rules_t, trail, trail>;
     using joint_t = joint_elimination_generator<cdcl_t, mhu_t>;
 

@@ -24,9 +24,9 @@
 #include "infrastructure/coroutine.hpp"
 #include "functor_fixture.hpp"
 
-using test_unifier_factory_t = unifier_factory<bind_map>;
+using test_unifier_factory_t = unifier_factory<globalizer, bind_map<globalizer>>;
 using test_mhu_t = mhu_elimination_generator<
-    bind_map, bind_map_factory, unifier<bind_map>, test_unifier_factory_t,
+    bind_map<globalizer>, bind_map_factory<globalizer>, unifier<globalizer, bind_map<globalizer>>, test_unifier_factory_t,
     lineage_pool, expr_pool, goal_candidate_rules>;
 
 using ::testing::ElementsAre;
@@ -49,7 +49,7 @@ std::vector<const resolution_lineage*> collect_elims(
     return out;
 }
 
-void expect_whnf_functor(test_functors& functors, bind_map& bm, const expr* e, const char* name, size_t argc) {
+void expect_whnf_functor(test_functors& functors, bind_map<globalizer>& bm, const expr* e, const char* name, size_t argc) {
     const auto& f = std::get<expr::functor>(bm.whnf({e, 0}).skeleton->content);
     EXPECT_EQ(f.id, functors.id(name));
     EXPECT_EQ(f.args.size(), argc);
@@ -70,9 +70,9 @@ struct MhuEliminationGeneratorIntegrationTest : public ::testing::Test {
     test_functors functors;
     trail t;
     globalizer g_;
-    bind_map common{g_};
+    bind_map<globalizer> common{g_};
     lineage_pool lp;
-    bind_map_factory bmf{g_};
+    bind_map_factory<globalizer> bmf{g_};
     test_unifier_factory_t uf{g_};
     ra_rule_id_set_factory ra_rule_id_set_factory_;
     goal_candidate_rules ggcr{ra_rule_id_set_factory_};
@@ -1393,18 +1393,18 @@ TEST_F(MhuEliminationGeneratorIntegrationTest, RebaseFollowsCommonWhnfThroughFun
 
 namespace {
 
-void expect_all_whnf_abc(test_functors& functors, bind_map& common, std::initializer_list<expr*> vars) {
+void expect_all_whnf_abc(test_functors& functors, bind_map<globalizer>& common, std::initializer_list<expr*> vars) {
     for (expr* v : vars)
         expect_whnf_functor(functors, common, v, "abc", 0);
 }
 
-void expect_equated_to_canonical(bind_map& common, std::initializer_list<expr*> vars,
+void expect_equated_to_canonical(bind_map<globalizer>& common, std::initializer_list<expr*> vars,
     const expr* canonical) {
     for (expr* v : vars)
         EXPECT_EQ(common.whnf({v, 0}).skeleton, canonical);
 }
 
-void expect_free_reps(bind_map& common, std::initializer_list<expr*> vars) {
+void expect_free_reps(bind_map<globalizer>& common, std::initializer_list<expr*> vars) {
     for (expr* v : vars)
         EXPECT_EQ(common.whnf({v, 0}).skeleton, v);
 }

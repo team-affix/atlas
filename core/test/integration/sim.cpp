@@ -64,9 +64,9 @@ struct MockGenerateDecision {
 
 namespace {
 
-using unifier_factory_t            = unifier_factory<bind_map>;
+using unifier_factory_t            = unifier_factory<globalizer, bind_map<globalizer>>;
 using cdcl_t                      = cdcl_elimination_generator<chosen_goal_candidates>;
-using mhu_t                       = mhu_elimination_generator<bind_map, bind_map_factory, unifier<bind_map>,
+using mhu_t                       = mhu_elimination_generator<bind_map<globalizer>, bind_map_factory<globalizer>, unifier<globalizer, bind_map<globalizer>>,
                                     unifier_factory_t, lineage_pool, expr_pool, goal_candidate_rules>;
 using joint_t                     = joint_elimination_generator<cdcl_t, mhu_t>;
 using get_resolution_rule_t         = get_resolution_rule<db>;
@@ -97,7 +97,7 @@ using resolver_t                  = resolver<goal_deactivator_t, subgoals_activa
 using set_up_sim_t  = set_up_sim<trail>;
 using tear_down_sim_t  = tear_down_sim<trail, unit_goals, decision_memory, resolution_memory,
                     goal_candidate_rules, goal_exprs, ra_active_goals, candidate_frame_offsets,
-                    mhu_t, bind_map, lineage_pool, frame_bump_allocator, cdcl_t, chosen_goal_candidates>;
+                    mhu_t, bind_map<globalizer>, lineage_pool, frame_bump_allocator, cdcl_t, chosen_goal_candidates>;
 using run_sim_t    = run_sim<initial_goals_activator_t, solution_detector_t, conflict_detector_t,
                     unit_goal_detector_t, unit_goals, unit_goals, MockGenerateDecision,
                     joint_t, elimination_router_t, resolver_t, get_unit_resolution_t,
@@ -109,8 +109,8 @@ struct sim_stack {
 
     globalizer globalizer_;
     trail trail_;
-    bind_map bind_map_{globalizer_};
-    bind_map_factory bind_map_factory_{globalizer_};
+    bind_map<globalizer> bind_map_{globalizer_};
+    bind_map_factory<globalizer> bind_map_factory_{globalizer_};
     unifier_factory_t unifier_factory_{globalizer_};
     lineage_pool lineage_pool_;
     ra_rule_id_set_factory ra_rule_id_set_factory_;

@@ -7,7 +7,7 @@
 #include "functor_fixture.hpp"
 
 // Helper: whnf with global frame (offset 0), return skeleton.
-static const expr* whnf0(bind_map& bm, const expr* e) {
+static const expr* whnf0(bind_map<globalizer>& bm, const expr* e) {
     return bm.whnf({e, 0}).skeleton;
 }
 
@@ -15,7 +15,7 @@ struct BindMapTest : public ::testing::Test {
 protected:
     test_functors functors;
     globalizer g;
-    bind_map bm{g};
+    bind_map<globalizer> bm{g};
     expr var0{expr::var{0}};
     expr var1{expr::var{1}};
     expr var2{expr::var{2}};

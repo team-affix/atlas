@@ -24,10 +24,10 @@
 using ::testing::ElementsAre;
 using ::testing::IsEmpty;
 
-using test_unifier_factory_t = unifier_factory<bind_map>;
+using test_unifier_factory_t = unifier_factory<globalizer, bind_map<globalizer>>;
 using test_cdcl_t  = cdcl_elimination_generator<chosen_goal_candidates>;
 using test_mhu_t   = mhu_elimination_generator<
-    bind_map, bind_map_factory, unifier<bind_map>, test_unifier_factory_t,
+    bind_map<globalizer>, bind_map_factory<globalizer>, unifier<globalizer, bind_map<globalizer>>, test_unifier_factory_t,
     lineage_pool, expr_pool, goal_candidate_rules>;
 using TestJoint = joint_elimination_generator<test_cdcl_t, test_mhu_t>;
 
@@ -54,9 +54,9 @@ struct JointEliminationGeneratorIntegrationTest : public ::testing::Test {
     test_functors functors;
     trail t;
     globalizer g_;
-    bind_map common{g_};
+    bind_map<globalizer> common{g_};
     lineage_pool lp;
-    bind_map_factory bmf{g_};
+    bind_map_factory<globalizer> bmf{g_};
     test_unifier_factory_t uf{g_};
     ra_rule_id_set_factory ra_rule_id_set_factory_;
     goal_candidate_rules ggcr{ra_rule_id_set_factory_};
