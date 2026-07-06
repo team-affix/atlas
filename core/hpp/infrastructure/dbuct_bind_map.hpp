@@ -3,6 +3,7 @@
 
 #include <memory>
 #include <unordered_map>
+#include "infrastructure/backtrackable_map_assign.hpp"
 #include "infrastructure/backtrackable_map_insert.hpp"
 #include "infrastructure/globalizer.hpp"
 #include "value_objects/framed_expr.hpp"
@@ -13,10 +14,16 @@
 // Bindings are journalled on the trail (supplied as the abstract ILogTrailAction,
 // not a concrete trail): bind() logs a backtrackable map insert so any
 // substitution made since a choice frame is reverted exactly when the trail pops.
-// whnf performs NO path-compression write-back (unlike the restarting bind_map):
-// a compression write is a hidden mutation that the trail would otherwise have to
-// journal, so it is dropped (correctness is unaffected; only intermediate sharing
-// is lost).
+//
+// whnf keeps the union-find path-compression write-back (collapsing a resolved
+// chain to depth 1, so repeated lookups stay amortised O(1) instead of degrading
+// to O(chain length)), but makes it trail-safe: when journalling, the compression
+// write is logged as a backtrackable map assign rather than applied silently. A
+// compressed value depends only on bindings at or below the current frame, and
+// the compression is always logged at the current (top) frame, so on rollback it
+// is undone before any binding it relies on — restoring the original chain link
+// exactly. The write only fires when it actually shortens the chain, so an
+// already-collapsed lookup logs nothing.
 //
 // A journaling toggle supports the MHU: each head owns a heap-allocated local
 // bind_map that is mutated during a tentative unification BEFORE the head is
@@ -77,7 +84,21 @@ framed_expr dbuct_bind_map<ILogTrailAction>::whnf(framed_expr fe) {
     auto it = bindings_.find(global_key);
     if (it == bindings_.end())
         return fe;
-    return whnf(it->second);
+    const framed_expr resolved = whnf(it->second);
+    // Path compression. whnf never inserts (only bind() does), so the recursion
+    // above cannot rehash bindings_ and `it` stays valid. Skip the write when the
+    // link is already collapsed so no-op compressions never touch the trail.
+    if (!(it->second == resolved)) {
+        if (journaling_) {
+            auto m = std::make_unique<backtrackable_map_assign<map_t>>(global_key, resolved);
+            m->capture(bindings_);
+            m->invoke();
+            trail_.log(std::move(m));
+        } else {
+            it->second = resolved;
+        }
+    }
+    return resolved;
 }
 
 #endif
