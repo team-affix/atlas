@@ -8,14 +8,10 @@
 #include "value_objects/lineage.hpp"
 #include "value_objects/lemma.hpp"
 
-// Delayed-backtracking variant of decision_memory.
-//
-// Under DBUCT this is NOT cleared per sim: it accumulates the resolution
-// decisions along the currently active (camped) path from the root, so count()
-// yields the full-path decision count used by the reward, and
-// derive_decision_lemma() yields the full-path conflict lemma. Its inserts are
-// journalled on the trail (via the abstract ILogTrailAction), so a choice-frame
-// pop rolls it back exactly.
+// Delayed-backtracking variant of decision_memory. Not cleared per sim: it
+// accumulates the decisions along the active (camped) path (so count() and
+// derive_decision_lemma() are full-path), journalled on the trail (via
+// ILogTrailAction) so a choice-frame pop rolls it back exactly.
 template<typename ILogTrailAction>
 struct dbuct_decision_memory {
     using set_t = std::unordered_set<const resolution_lineage*>;

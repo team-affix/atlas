@@ -9,12 +9,10 @@
 #include "infrastructure/tracked.hpp"
 #include "value_objects/lineage.hpp"
 
-// Delayed-backtracking variant of elimination_backlog.
-//
-// Like the production elimination_backlog, this routes its mutations through the
-// trail (abstracted as ILogTrailAction) rather than a full-copy snapshot: a new
-// goal key logs a map insert and each eliminated candidate logs an inner-set
-// insert, so a choice frame rolls the backlog back exactly on pop.
+// Delayed-backtracking variant of elimination_backlog. Routes its mutations
+// through the trail (via ILogTrailAction) rather than a full-copy snapshot: a new
+// goal key logs a map insert and each eliminated candidate an inner-set insert, so
+// a choice frame rolls the backlog back exactly on pop.
 template<typename ILogTrailAction>
 struct dbuct_elimination_backlog {
     using eliminated_candidates_type =

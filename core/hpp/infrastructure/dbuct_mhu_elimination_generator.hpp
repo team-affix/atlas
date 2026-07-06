@@ -20,33 +20,11 @@
 #include "value_objects/unify_head.hpp"
 
 // Delayed-backtracking variant of mhu_elimination_generator, fully journalled on
-// the trail (supplied as the abstract ILogTrailAction, not a concrete trail); no
-// snapshot/restore, no deep clone, no conditional journaling.
-//
-// The one hard structure: each head owns a unique_ptr<local bind_map> and a
-// unifier that holds a raw pointer INTO that bind map. The heap-allocated bind
-// map keeps a stable address for the head's whole lifetime, so the challenge is
-// purely lifetime management of the head object.
-//
-// Design:
-//   * Heads live in a std::deque arena (end-ops never relocate existing
-//     elements), and each creation logs a backtrackable_deque_emplace_back whose
-//     undo pop_back destroys the slot. heads_ maps lineage -> unify_head* and is
-//     journalled with map insert/erase over the (copyable) pointer.
-//   * Logical head removal only journal-erases the heads_ pointer entry and the
-//     rep/rl link-table entries; the arena slot's physical destruction is
-//     DEFERRED to the creation frame's pop. LIFO guarantees every bind-undo and
-//     link-undo that references a head runs before that head's emplace_back undo,
-//     so no undo ever dangles.
-//   * try_add_head is a trail transaction (via IFrameControl / trail_savepoint):
-//     it emplaces the head FIRST (so the arena undo is logged before any bind
-//     into the head's map), then unifies with journaling always on. On failure
-//     the savepoint pops (unwinding the partial binds while the map is still
-//     alive, then the emplace); on success it squashes the temp frame into the
-//     enclosing frame, so head creation never leaves a lingering frame and every
-//     bind is uniformly journalled — no per-map journaling toggle.
-//   * Common-substitution binds journal on the common bind map, which lives for
-//     the whole solve.
+// the trail. Heads live in a std::deque arena (stable addresses); each head owns
+// a local bind map its unifier points into, and an arena slot's destruction is
+// deferred to its creation frame's pop. try_add_head is a trail transaction (see
+// trail_savepoint): it pops on unify failure and squashes on success, so every
+// bind is journalled uniformly with no per-head journaling toggle.
 template<typename IBindMap, typename IBindMapFactory, typename IUnifier,
          typename IUnifierFactory, typename IMakeResolutionLineage,
          typename IMakeVar, typename IGetGoalCandidateRuleIds,
@@ -102,16 +80,8 @@ dbuct_mhu_elimination_generator<IBM, IBMF, IU, IUF, IMRL, IMV, IGCRI, ILog, IFC>
 template<typename IBM, typename IBMF, typename IU, typename IUF, typename IMRL, typename IMV, typename IGCRI, typename ILog, typename IFC>
 bool dbuct_mhu_elimination_generator<IBM, IBMF, IU, IUF, IMRL, IMV, IGCRI, ILog, IFC>::try_add_head(
     const resolution_lineage* lineage, framed_expr lhs, framed_expr rhs) {
-    // Head creation is a trail transaction: everything below is journalled, and
-    // the savepoint either pops it all (failure) or squashes it into the enclosing
-    // frame (success), so there is never a per-head frame nor an unjournalled bind.
     trail_savepoint<IFC> savepoint(frames_);
 
-    // Emplace the (empty) head FIRST so its arena pop_back undo is logged before
-    // any bind into its local map; LIFO then runs the bind-undos while the map is
-    // still alive, and only then destroys it. The bind map's heap object keeps a
-    // stable address across the unique_ptr moves, so the unifier's raw pointer
-    // into it stays valid after the head lands in the arena.
     auto bm = std::make_unique<IBM>(bind_map_factory_.make());
     IU u = unifier_factory_.make(bm.get());
     auto emplace = std::make_unique<backtrackable_deque_emplace_back<arena_t>>(
@@ -130,10 +100,10 @@ bool dbuct_mhu_elimination_generator<IBM, IBMF, IU, IUF, IMRL, IMV, IGCRI, ILog,
     }
 
     if (!task.result())
-        return false;  // savepoint pops: unwinds partial binds, then the emplace
+        return false;
 
     if (!sync_and_link(lineage, head_ptr->unifier, touched_vars))
-        return false;  // savepoint pops
+        return false;
 
     heads_.mutate(std::make_unique<backtrackable_map_insert<heads_map_t>>(lineage, head_ptr));
     savepoint.commit();
@@ -309,8 +279,6 @@ dbuct_mhu_elimination_generator<IBM, IBMF, IU, IUF, IMRL, IMV, IGCRI, ILog, IFC>
 template<typename IBM, typename IBMF, typename IU, typename IUF, typename IMRL, typename IMV, typename IGCRI, typename ILog, typename IFC>
 void dbuct_mhu_elimination_generator<IBM, IBMF, IU, IUF, IMRL, IMV, IGCRI, ILog, IFC>::remove_head(
     const resolution_lineage* rl) {
-    // Logical removal only: the arena slot is destroyed when its creation frame
-    // pops, so the head object outlives this erase.
     if (heads_.get().contains(rl))
         heads_.mutate(std::make_unique<backtrackable_map_erase<heads_map_t>>(rl));
     unlink(rl);

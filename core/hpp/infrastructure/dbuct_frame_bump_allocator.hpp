@@ -6,15 +6,10 @@
 #include "infrastructure/backtrackable_add.hpp"
 #include "infrastructure/tracked.hpp"
 
-// Delayed-backtracking variant of frame_bump_allocator.
-//
-// The bump cursor is part of the per-sim state: when a choice frame is rolled
-// back, the offsets handed out to candidates activated in that frame become
-// free again, so the cursor must rewind too (otherwise a subsequent
-// (re)activation would collide global keys against stale bind_map bindings).
-// The cursor is trail-journalled (via the abstract ILogTrailAction): each bump
-// logs a backtrackable add whose undo subtracts the same amount, rewinding the
-// cursor exactly on pop.
+// Delayed-backtracking variant of frame_bump_allocator. The bump cursor is
+// trail-journalled (via ILogTrailAction): each bump logs a backtrackable add so a
+// rolled-back choice frame rewinds the cursor, freeing the offsets it handed out
+// (otherwise reactivation would collide global keys against stale bindings).
 template<typename ILogTrailAction>
 struct dbuct_frame_bump_allocator {
     dbuct_frame_bump_allocator(ILogTrailAction& t, uint32_t initial);

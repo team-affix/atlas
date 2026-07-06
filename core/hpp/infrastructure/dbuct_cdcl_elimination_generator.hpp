@@ -13,47 +13,19 @@
 #include "value_objects/avoidance.hpp"
 #include "value_objects/lemma.hpp"
 
-// Delayed-backtracking variant of cdcl_elimination_generator.
-//
-// The learned avoidances are the durable product of conflict analysis: they must
-// SURVIVE backtracking (that is the whole point of re-application after camping
-// backsteps). So this generator is NOT checkpointed — avoidances_ only ever
-// grows via learn().
-//
-// The production generator uses a two-watched-literal scheme whose watcher
-// cursors are incremental mutable state. Under camping those cursors would fall
-// out of sync with the restored partial assignment after a backstep. This variant
-// instead classifies each avoidance by a fresh scan of chosen_goal_candidates
-// (which IS checkpointed), so propagation is automatically consistent with the
-// current frontier at any camp depth. It exposes reapply(), which re-derives all
-// forced eliminations / realized conflicts for the current frontier after a
-// backtrack.
+// Delayed-backtracking variant of cdcl_elimination_generator. Learned avoidances
+// are durable (never checkpointed) so they survive backtracking; each is
+// classified by a fresh scan of the checkpointed chosen_goal_candidates instead
+// of watched-literal cursors, so reapply() re-derives every forced elimination
+// and realized conflict for the restored frontier at any camp depth.
 template<typename ITryGetChosenGoalCandidate>
 struct dbuct_cdcl_elimination_generator {
     explicit dbuct_cdcl_elimination_generator(ITryGetChosenGoalCandidate& tgcc);
 
-    // Register a conflict lemma as a persistent avoidance. Crucially this stores
-    // EVERY lemma, including single-member (unit) ones: under camping a learned
-    // no-good must survive arbitrary backtracking and be re-derived at every
-    // resume level (reapply()), because a later backstep resurrects the candidate
-    // it forbids. Storing units as avoidances (rather than routing them once and
-    // forgetting them) is what keeps the "learning survives backtracking" contract
-    // — and lets the cascade observe the emptied-goal conflict a unit can cause.
-    //
-    // Returns nullopt: application (and conflict detection) is driven uniformly by
-    // reapply()/constrain(), never by a one-shot forced elimination.
     std::optional<const resolution_lineage*> learn(const lemma& l);
 
-    // In-episode propagation: react to the resolution rl that is about to be
-    // committed, forcing any avoidance that becomes unit under it.
     coroutine<const resolution_lineage*, void> constrain(const resolution_lineage* rl);
 
-    // Post-backtrack re-application: re-derive every forced elimination for the
-    // current (restored) frontier and flag a realized conflict if the frontier
-    // already contains a full learned no-good. Returns the forced eliminations as
-    // a batch (a plain vector rather than a coroutine, so this header can be
-    // instantiated across translation units without tripping GCC's coroutine
-    // comdat-folding bug).
     std::vector<const resolution_lineage*> reapply();
 
     bool reapply_found_realized_conflict() const;
@@ -62,8 +34,6 @@ private:
     using avoidance_id = size_t;
     enum class scan_result { none, forced, realized };
 
-    // committing may be null (pure re-application) or the resolution being
-    // committed (in-episode), which is treated as chosen for its goal.
     scan_result classify(const avoidance& av, const resolution_lineage* committing,
                          const resolution_lineage*& out_forced) const;
 
@@ -107,8 +77,6 @@ dbuct_cdcl_elimination_generator<ITryGetChosenGoalCandidate>::constrain(const re
     const auto it = goal_index_.find(rl->parent);
     if (it == goal_index_.end())
         co_return;
-    // Copy ids: classification does not mutate the index, but avoid iterator
-    // surprises if learn() were ever interleaved.
     const std::vector<avoidance_id> ids(it->second.begin(), it->second.end());
     for (const avoidance_id id : ids) {
         const resolution_lineage* forced = nullptr;
@@ -159,7 +127,7 @@ dbuct_cdcl_elimination_generator<ITryGetChosenGoalCandidate>::classify(
             unassigned = m;
             ++unassigned_count;
         } else if (*chosen != m->idx) {
-            return scan_result::none;  // a member diverged: avoidance can't fire
+            return scan_result::none;
         }
     }
     if (unassigned_count == 0) return scan_result::realized;

@@ -8,11 +8,9 @@
 #include "value_objects/lineage.hpp"
 #include "value_objects/lemma.hpp"
 
-// Delayed-backtracking variant of resolution_memory. Trail-journalled (via the
-// abstract ILogTrailAction) so that get_resolution_count() reflects the
-// resolutions on the currently active (camped) path rather than a
-// lifetime-cumulative count: a choice-frame pop removes exactly the resolutions
-// recorded since that frame was opened.
+// Delayed-backtracking variant of resolution_memory. Trail-journalled (via
+// ILogTrailAction) so get_resolution_count() reflects the resolutions on the
+// active (camped) path: a choice-frame pop removes exactly those recorded since.
 template<typename ILogTrailAction>
 struct dbuct_resolution_memory {
     using set_t = std::unordered_set<const resolution_lineage*>;

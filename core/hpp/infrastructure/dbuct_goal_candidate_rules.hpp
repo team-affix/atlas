@@ -12,17 +12,11 @@
 #include "infrastructure/tracked.hpp"
 #include "value_objects/lineage.hpp"
 
-// Delayed-backtracking variant of goal_candidate_rules.
-//
-// The active candidate set per goal is the structure that CDCL re-application
-// prunes after a backtrack. Under DBUCT it is carried across episodes and rolled
-// back to any choice boundary by the trail (abstracted as ILogTrailAction). Outer
-// inserts/erases and inner link/unlink each journal a backtrackable mutation; the
-// inner mutations capture the outer map and re-look-up the goal on undo, so they
-// stay valid even if the goal's node is erased and re-inserted (at a new address)
-// within the same frame. (ra_rule_id_set erase is a swap-remove, so re-insertion
-// order may differ after undo, which only affects exploration order, not
-// membership/correctness.)
+// Delayed-backtracking variant of goal_candidate_rules. The per-goal active
+// candidate set (what CDCL re-application prunes) is carried across episodes and
+// rolled back to any choice boundary by the trail (via ILogTrailAction); outer and
+// inner mutations each journal a backtrackable mutation, and inner ones re-look-up
+// the goal on undo so they survive a node being erased and re-inserted in a frame.
 template<typename ILogTrailAction>
 struct dbuct_goal_candidate_rules {
     using map_t = std::unordered_map<const goal_lineage*, ra_rule_id_set>;

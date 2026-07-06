@@ -18,6 +18,9 @@
 #include "infrastructure/functor_names.hpp"
 #include "infrastructure/var_names.hpp"
 
+// CLI handler for the `dbuct-ridge` command: parses the database and goals, wires
+// up a dbuct_runtime (the delayed-backtracking solver), and drives the shared
+// solve loop that prints solutions and progress.
 struct dbuct_ridge_command_handler {
     using PrintBindings  = print_bindings<dbuct_runtime, expr_printer>;
     using PrintProgress  = print_progress<dbuct_runtime>;

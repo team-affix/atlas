@@ -11,14 +11,10 @@
 #include "value_objects/lineage.hpp"
 #include "debug_assert.hpp"
 
-// Delayed-backtracking variant of srt_active_goals.
-//
-// Wraps a trail-journalled series-reduced goal tree plus a trail-journalled
-// in-flight batch set. The trail is supplied as the abstract ILogTrailAction, not
-// a concrete trail. Instead of copying the whole tree per choice, the active
-// frontier (with its exact branch/leaf structure that MCTS navigates) is rolled
-// back incrementally when the trail pops. flush logs a set-clear whose undo
-// restores the batch.
+// Delayed-backtracking variant of srt_active_goals. Wraps a trail-journalled
+// series-reduced goal tree plus a trail-journalled in-flight batch set (trail
+// abstracted as ILogTrailAction), so the active frontier MCTS navigates is rolled
+// back incrementally on trail pop instead of copied per choice.
 template<typename ILogTrailAction>
 struct dbuct_srt_active_goals {
     using in_flight_t = std::set<const goal_lineage*>;

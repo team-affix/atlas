@@ -9,14 +9,10 @@
 #include "value_objects/lineage.hpp"
 #include "value_objects/framed_expr.hpp"
 
-// Delayed-backtracking (DBUCT) variant of goal_exprs.
-//
-// Behaviourally identical to goal_exprs, but its mutations are journalled on the
-// trail (supplied as the abstract ILogTrailAction, not a concrete trail): set/
-// unset log a backtrackable map insert/erase so a camped choice frame rolls the
-// goal-expr map back exactly when the trail pops. The DBUCT solver never clears
-// this wholesale per sim; it is carried across episodes and rewound incrementally
-// by trail pops rather than by a full-copy checkpoint.
+// Delayed-backtracking variant of goal_exprs. set/unset journal a backtrackable
+// map insert/erase on the trail (abstracted as ILogTrailAction), so a camped
+// choice frame rewinds the goal-expr map incrementally on trail pop rather than
+// via a full-copy checkpoint.
 template<typename ILogTrailAction>
 struct dbuct_goal_exprs {
     using map_t = std::unordered_map<const goal_lineage*, framed_expr>;

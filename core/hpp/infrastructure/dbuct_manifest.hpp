@@ -5,7 +5,6 @@
 #include <cstdint>
 #include <random>
 
-// Reused, solver-agnostic infrastructure (templated over the state structs).
 #include "infrastructure/candidate_activator.hpp"
 #include "infrastructure/candidate_deactivator.hpp"
 #include "infrastructure/conflict_detector.hpp"
@@ -39,7 +38,6 @@
 #include "infrastructure/unifier.hpp"
 #include "infrastructure/unifier_factory.hpp"
 
-// Delayed-backtracking (DBUCT) infrastructure.
 #include "infrastructure/dbuct_bind_map.hpp"
 #include "infrastructure/dbuct_bind_map_factory.hpp"
 #include "infrastructure/dbuct_candidate_frame_offsets.hpp"
@@ -60,20 +58,13 @@
 #include "infrastructure/dbuct_srt_active_goals.hpp"
 #include "infrastructure/dbuct_unit_goals.hpp"
 
-// ridge_dbuct — delayed-backtracking CHC solver.
-//
-// This is a copy of ridge_manifest that swaps the restarting MCTS stack
-// (mcts_sim / set_up_sim / tear_down_sim / solver) for the DBUCT camping stack
-// (dbuct_sim / checkpoint_stack / dbuct_solver) and swaps every per-sim state
-// struct for its backtrackable dbuct_* counterpart. All solver-agnostic
-// infrastructure (activators, detectors, resolver, elimination router, decision
-// generator, joint eliminator) is reused unchanged, instantiated over the
-// dbuct_* state types.
+// ridge_dbuct — delayed-backtracking CHC solver. A copy of ridge_manifest that
+// swaps the restarting MCTS stack for the DBUCT camping stack and every per-sim
+// state struct for its trail-backed dbuct_* counterpart, reusing all
+// solver-agnostic infrastructure instantiated over the dbuct_* types. The
+// concrete trail satisfies the ILogTrailAction / IPushFrame / IPopFrame
+// interfaces those dbuct_* structs are templated on.
 struct dbuct_manifest {
-    // The concrete trail satisfies the trail-capability interfaces the DBUCT
-    // state structs are templated on: ILogTrailAction (log) for every camped
-    // store, and IPushFrame/IPopFrame (push/pop) for the checkpoint translator.
-    // Nothing below names the concrete trail type directly except these aliases.
     using bind_map_t                = dbuct_bind_map<trail>;
     using bind_map_factory_t        = dbuct_bind_map_factory<trail>;
     using goal_exprs_t              = dbuct_goal_exprs<trail>;

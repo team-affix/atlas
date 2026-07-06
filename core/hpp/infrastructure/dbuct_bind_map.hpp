@@ -9,27 +9,10 @@
 #include "value_objects/framed_expr.hpp"
 #include "debug_assert.hpp"
 
-// Delayed-backtracking variant of bind_map.
-//
-// Every mutation is journalled on the trail (supplied as the abstract
-// ILogTrailAction, not a concrete trail) — there is no conditional/unjournalled
-// mode. bind() logs a backtrackable map insert so any substitution made since a
-// choice frame is reverted exactly when the trail pops.
-//
-// whnf keeps the union-find path-compression write-back (collapsing a resolved
-// chain to depth 1, so repeated lookups stay amortised O(1) instead of degrading
-// to O(chain length)), made trail-safe by logging the compression write as a
-// backtrackable map assign rather than applying it silently. A compressed value
-// depends only on bindings at or below the current frame, and the compression is
-// always logged at the current (top) frame, so on rollback it is undone before
-// any binding it relies on — restoring the original chain link exactly. The write
-// only fires when it actually shortens the chain, so an already-collapsed lookup
-// logs nothing.
-//
-// The MHU's per-head local bind maps are also of this type and also always
-// journal. Their tentative-unification transience is handled by the caller
-// (a trail savepoint that pops on failure / squashes on success) rather than by
-// suppressing journaling here, so this class stays a single uniform mode.
+// Delayed-backtracking variant of bind_map. Every mutation is journalled on the
+// trail (via ILogTrailAction) — there is no unjournalled mode: bind() logs an
+// insert and whnf's path-compression write logs an assign, so both rewind exactly
+// on trail pop.
 template<typename ILogTrailAction>
 struct dbuct_bind_map {
     using map_t = std::unordered_map<uint32_t, framed_expr>;
@@ -72,9 +55,6 @@ framed_expr dbuct_bind_map<ILogTrailAction>::whnf(framed_expr fe) {
     if (it == bindings_.end())
         return fe;
     const framed_expr resolved = whnf(it->second);
-    // Path compression. whnf never inserts (only bind() does), so the recursion
-    // above cannot rehash bindings_ and `it` stays valid. Skip the write when the
-    // link is already collapsed so no-op compressions never touch the trail.
     if (!(it->second == resolved)) {
         auto m = std::make_unique<backtrackable_map_assign<map_t>>(global_key, resolved);
         m->capture(bindings_);

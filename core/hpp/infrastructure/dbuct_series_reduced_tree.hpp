@@ -16,17 +16,11 @@
 #include "infrastructure/tracked.hpp"
 
 // Trail-journalled series-reduced tree: the delayed-backtracking counterpart of
-// series_reduced_tree (which the restarting solvers keep and clear wholesale).
-//
-// The forest is held in four tracked containers on the trail (supplied as the
-// abstract ILogTrailAction, not a concrete trail). Every container mutation
-// (including those inside the destructive unary/nullary reduction cascades) is a
-// primitive backtrackable mutation, so a single link()+cascade logs a sequence of
-// primitives whose LIFO replay on trail pop reconstructs the exact pre-link
-// topology. No bespoke compound inverse is needed: the reduction that makes the
-// tree "series-reduced" is undone step by step. All inner-set mutations capture
-// the outer map and re-look-up the key on undo, so they survive a node being
-// erased and re-inserted within the frame.
+// series_reduced_tree. The forest is held in four tracked containers on the trail
+// (abstracted as ILogTrailAction); every mutation, including those in the
+// unary/nullary reduction cascades, is a primitive backtrackable mutation, so a
+// link()+cascade's LIFO replay on trail pop reconstructs the exact pre-link
+// topology without any bespoke compound inverse.
 template<typename NodeId, typename ILogTrailAction>
 struct dbuct_series_reduced_tree {
     using node_set_t     = std::unordered_set<NodeId>;
