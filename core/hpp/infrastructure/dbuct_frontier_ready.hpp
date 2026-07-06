@@ -9,6 +9,4 @@ struct dbuct_frontier_ready {
     bool activate_initial_goals_and_candidates();
 };
 
-inline bool dbuct_frontier_ready::activate_initial_goals_and_candidates() { return true; }
-
 #endif
