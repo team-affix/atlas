@@ -6,7 +6,7 @@
 
 template<typename ILogTrailAction>
 struct dbuct_decision_frames {
-    explicit dbuct_decision_frames(ILogTrailAction& t);
+    dbuct_decision_frames(ILogTrailAction& t);
 
     void set_decision_frame(const resolution_lineage* rl, size_t frame);
 

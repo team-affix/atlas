@@ -5,7 +5,7 @@
 
 template<typename ILogTrailAction>
 struct dbuct_trailing_leaf_decisions {
-    explicit dbuct_trailing_leaf_decisions(ILogTrailAction& t);
+    dbuct_trailing_leaf_decisions(ILogTrailAction& t);
 
     void log_decision(const resolution_lineage* rl);
 
