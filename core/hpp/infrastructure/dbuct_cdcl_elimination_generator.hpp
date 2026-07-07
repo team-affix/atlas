@@ -14,15 +14,20 @@
 #include "value_objects/lemma.hpp"
 
 // Delayed-backtracking variant of cdcl_elimination_generator. Learned avoidances
-// are durable (never checkpointed) so they survive backtracking; each is
-// classified by a fresh scan of the checkpointed chosen_goal_candidates instead
-// of watched-literal cursors, so reapply() re-derives every forced elimination
-// and realized conflict for the restored frontier at any camp depth.
+// are durable (never checkpointed) so they survive backtracking, but their forced
+// eliminations are journaled on the trail and get undone by a backstep even when
+// the avoidance is still forced at a shallower frontier. To re-route those without
+// rescanning the whole store, every avoidance that constrain (or learn) sees at or
+// near the frontier is added to a durable watchlist; reapply() reclassifies just
+// that watchlist -- routing the forced ones, reporting realized conflicts, keeping
+// satisfied ones (they revive as forced on backtrack, with no resolution to re-add
+// them), and dropping only dormant ones (those re-arm through constrain on the next
+// descent). classify is the sole authority on the four states.
 template<typename ITryGetChosenGoalCandidate>
 struct dbuct_cdcl_elimination_generator {
     explicit dbuct_cdcl_elimination_generator(ITryGetChosenGoalCandidate& tgcc);
 
-    std::optional<const resolution_lineage*> learn(const lemma& l);
+    void learn(const lemma& l);
 
     coroutine<const resolution_lineage*, void> constrain(const resolution_lineage* rl);
 
@@ -32,7 +37,7 @@ struct dbuct_cdcl_elimination_generator {
 
 private:
     using avoidance_id = size_t;
-    enum class scan_result { none, forced, realized };
+    enum class scan_result { dormant, satisfied, forced, realized };
 
     scan_result classify(const avoidance& av, const resolution_lineage* committing,
                          const resolution_lineage*& out_forced) const;
@@ -40,6 +45,7 @@ private:
     std::unordered_map<avoidance_id, avoidance> avoidances_;
     size_t next_avoidance_id_ = 0;
     std::unordered_map<const goal_lineage*, std::unordered_set<avoidance_id>> goal_index_;
+    std::unordered_set<avoidance_id> watchlist_;
     bool reapply_realized_ = false;
 
     ITryGetChosenGoalCandidate& try_get_chosen_goal_candidate_;
@@ -51,11 +57,10 @@ dbuct_cdcl_elimination_generator<ITryGetChosenGoalCandidate>::dbuct_cdcl_elimina
     : try_get_chosen_goal_candidate_(tgcc) {}
 
 template<typename ITryGetChosenGoalCandidate>
-std::optional<const resolution_lineage*>
-dbuct_cdcl_elimination_generator<ITryGetChosenGoalCandidate>::learn(const lemma& l) {
+void dbuct_cdcl_elimination_generator<ITryGetChosenGoalCandidate>::learn(const lemma& l) {
     const auto& resolutions = l.get_resolutions();
     if (resolutions.empty())
-        return std::nullopt;
+        return;
 
     std::vector<const resolution_lineage*> members(resolutions.begin(), resolutions.end());
     std::sort(members.begin(), members.end(),
@@ -68,7 +73,7 @@ dbuct_cdcl_elimination_generator<ITryGetChosenGoalCandidate>::learn(const lemma&
     avoidances_.emplace(id, avoidance{std::move(members), 0, watcher_b});
     for (const resolution_lineage* m : avoidances_.at(id).members)
         goal_index_[m->parent].insert(id);
-    return std::nullopt;
+    watchlist_.insert(id);
 }
 
 template<typename ITryGetChosenGoalCandidate>
@@ -81,9 +86,10 @@ dbuct_cdcl_elimination_generator<ITryGetChosenGoalCandidate>::constrain(const re
     for (const avoidance_id id : ids) {
         const resolution_lineage* forced = nullptr;
         switch (classify(avoidances_.at(id), rl, forced)) {
-            case scan_result::forced:   co_yield forced; break;
-            case scan_result::realized: co_yield rl;     break;
-            case scan_result::none:     break;
+            case scan_result::forced:    watchlist_.insert(id); co_yield forced; break;
+            case scan_result::realized:  watchlist_.insert(id); co_yield rl;     break;
+            case scan_result::satisfied: watchlist_.insert(id); break;
+            case scan_result::dormant:   break;
         }
     }
 }
@@ -93,12 +99,13 @@ std::vector<const resolution_lineage*>
 dbuct_cdcl_elimination_generator<ITryGetChosenGoalCandidate>::reapply() {
     reapply_realized_ = false;
     std::vector<const resolution_lineage*> forced_eliminations;
-    for (const auto& [id, av] : avoidances_) {
+    for (auto it = watchlist_.begin(); it != watchlist_.end();) {
         const resolution_lineage* forced = nullptr;
-        switch (classify(av, nullptr, forced)) {
-            case scan_result::forced:   forced_eliminations.push_back(forced); break;
-            case scan_result::realized: reapply_realized_ = true; break;
-            case scan_result::none:     break;
+        switch (classify(avoidances_.at(*it), nullptr, forced)) {
+            case scan_result::forced:    forced_eliminations.push_back(forced); ++it; break;
+            case scan_result::realized:  reapply_realized_ = true; ++it; break;
+            case scan_result::satisfied: ++it; break;
+            case scan_result::dormant:   it = watchlist_.erase(it); break;
         }
     }
     return forced_eliminations;
@@ -127,12 +134,12 @@ dbuct_cdcl_elimination_generator<ITryGetChosenGoalCandidate>::classify(
             unassigned = m;
             ++unassigned_count;
         } else if (*chosen != m->idx) {
-            return scan_result::none;
+            return scan_result::satisfied;
         }
     }
     if (unassigned_count == 0) return scan_result::realized;
     if (unassigned_count == 1) { out_forced = unassigned; return scan_result::forced; }
-    return scan_result::none;
+    return scan_result::dormant;
 }
 
 #endif

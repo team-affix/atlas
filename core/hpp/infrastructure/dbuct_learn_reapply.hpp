@@ -5,10 +5,11 @@
 #include "value_objects/elimination_result.hpp"
 
 // Re-applies learned avoidances to the current (post-backtrack) frontier. After
-// DBUCT unwinds to a resume node, that frontier lacks the eliminations discovered
-// deeper in the tree; reapply_frontier() re-derives and routes every forced
-// elimination and reports whether the frontier collapsed. The solver drives this
-// to a fixpoint across levels, which is how cascading backjumps arise.
+// DBUCT unwinds to a resume node, that frontier can lack eliminations that were
+// forced deeper in the tree; reapply_frontier() asks the CDCL store to reclassify
+// its watchlist of near-frontier avoidances, routes every forced elimination, and
+// reports whether the frontier collapsed. The solver drives this across levels,
+// which is how cascading backjumps arise.
 template<typename ICdclReapply, typename IEliminationRouter, typename IConflictDetector,
          typename IUnitGoalDetector, typename IPushUnitGoal>
 struct dbuct_learn_reapply {

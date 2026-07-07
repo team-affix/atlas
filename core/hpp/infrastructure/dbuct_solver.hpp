@@ -2,11 +2,9 @@
 #define DBUCT_SOLVER_HPP
 
 #include <cstddef>
-#include <optional>
 #include "infrastructure/coroutine.hpp"
 #include "value_objects/sim_termination.hpp"
 #include "value_objects/lemma.hpp"
-#include "value_objects/lineage.hpp"
 
 // Delayed-backtracking solver: the camping analogue of `solver`. Activates the
 // initial goals once, then keeps a single DBUCT instance camped across episodes —
@@ -71,9 +69,7 @@ dbuct_solver<IA, IRS, IGDC, IDL, ICR, IT, ILA, ILR>::solve() {
         const double reward = compute_reward_.compute_mcts_reward();
         terminate_.terminate(reward);
 
-        std::optional<const resolution_lineage*> forced = learn_.learn(dl);
-        if (forced.has_value())
-            learn_reapply_.route_elimination(forced.value());
+        learn_.learn(dl);
 
         refuted = reapply_cascade();
     }
@@ -97,9 +93,7 @@ bool dbuct_solver<IA, IRS, IGDC, IDL, ICR, IT, ILA, ILR>::reapply_cascade() {
         while (steps == 0)
             steps = terminate_.terminate(reward);
 
-        std::optional<const resolution_lineage*> forced = learn_.learn(dl);
-        if (forced.has_value())
-            learn_reapply_.route_elimination(forced.value());
+        learn_.learn(dl);
     }
 }
 
