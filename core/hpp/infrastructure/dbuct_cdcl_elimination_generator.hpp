@@ -9,7 +9,6 @@
 #include <vector>
 #include "infrastructure/coroutine.hpp"
 #include "value_objects/lineage.hpp"
-#include "value_objects/rule.hpp"
 #include "value_objects/avoidance.hpp"
 #include "value_objects/lemma.hpp"
 
