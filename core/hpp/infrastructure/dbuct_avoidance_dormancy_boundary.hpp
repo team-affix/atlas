@@ -8,6 +8,7 @@ struct dbuct_avoidance_dormancy_boundary {
     dbuct_avoidance_dormancy_boundary(IGetNearestDecision& nd, IGetFrameCount& fc, ILogTrailAction& t);
 
     void log_decision(const resolution_lineage* rl);
+    size_t get_decision_boundary() const;
 
 private:
     const resolution_lineage* ultimate_;
@@ -40,6 +41,11 @@ void dbuct_avoidance_dormancy_boundary<IGetNearestDecision, IGetFrameCount, ILog
 
     ultimate_ = rl;
     ultimate_frame_index_ = get_frame_count_.depth();
+}
+
+template<typename IGetNearestDecision, typename IGetFrameCount, typename ILogTrailAction>
+size_t dbuct_avoidance_dormancy_boundary<IGetNearestDecision, IGetFrameCount, ILogTrailAction>::get_decision_boundary() const {
+    return dormancy_frame_index_;
 }
 
 #endif
