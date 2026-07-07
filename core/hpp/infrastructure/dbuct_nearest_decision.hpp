@@ -1,36 +1,36 @@
 #ifndef DBUCT_NEAREST_DECISION_HPP
 #define DBUCT_NEAREST_DECISION_HPP
 
+#include <memory>
 #include <unordered_map>
-#include "debug_assert.hpp"
+#include "infrastructure/backtrackable_map_insert.hpp"
+#include "infrastructure/tracked.hpp"
 #include "value_objects/lineage.hpp"
 
 template<typename ILogTrailAction>
 struct dbuct_nearest_decision {
+    using map_t = std::unordered_map<const resolution_lineage*, const resolution_lineage*>;
+
     explicit dbuct_nearest_decision(ILogTrailAction& t);
 
     void note_unit_resolution(const resolution_lineage* rl);
     void note_decision_resolution(const resolution_lineage* rl);
 
 private:
-    std::unordered_map<const resolution_lineage*, const resolution_lineage*> nd_;
-
-    ILogTrailAction& trail_;
+    tracked<map_t, ILogTrailAction> nd_;
 };
 
 template<typename ILogTrailAction>
-dbuct_nearest_decision<ILogTrailAction>::dbuct_nearest_decision(ILogTrailAction& t) : trail_(t) {}
+dbuct_nearest_decision<ILogTrailAction>::dbuct_nearest_decision(ILogTrailAction& t) : nd_(t, map_t{}) {}
 
 template<typename ILogTrailAction>
 void dbuct_nearest_decision<ILogTrailAction>::note_unit_resolution(const resolution_lineage* rl) {
-    auto [_, inserted] = nd_.insert({rl, nd_.at(rl->parent->parent)});
-    DEBUG_ASSERT(inserted);
+    nd_.mutate(std::make_unique<backtrackable_map_insert<map_t>>(rl, nd_.get().at(rl->parent->parent)));
 }
 
 template<typename ILogTrailAction>
 void dbuct_nearest_decision<ILogTrailAction>::note_decision_resolution(const resolution_lineage* rl) {
-    auto [_, inserted] = nd_.insert({rl, rl});
-    DEBUG_ASSERT(inserted);
+    nd_.mutate(std::make_unique<backtrackable_map_insert<map_t>>(rl, rl));
 }
 
 #endif
