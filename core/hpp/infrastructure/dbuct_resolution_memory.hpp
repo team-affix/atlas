@@ -13,8 +13,6 @@
 // active (camped) path: a choice-frame pop removes exactly those recorded since.
 template<typename ILogTrailAction>
 struct dbuct_resolution_memory {
-    using set_t = std::unordered_set<const resolution_lineage*>;
-
     explicit dbuct_resolution_memory(ILogTrailAction& t);
 
     void record_resolution(const resolution_lineage* rl);
@@ -22,6 +20,8 @@ struct dbuct_resolution_memory {
     lemma derive_resolution_lemma() const;
 
 private:
+    using set_t = std::unordered_set<const resolution_lineage*>;
+
     tracked<set_t, ILogTrailAction> resolutions_;
 };
 

@@ -25,8 +25,6 @@ template<typename NodeId, typename ILogTrailAction>
 struct dbuct_series_reduced_tree {
     using node_set_t     = std::unordered_set<NodeId>;
     using child_set_t    = std::set<NodeId>;
-    using children_map_t = std::unordered_map<NodeId, child_set_t>;
-    using parents_map_t  = std::unordered_map<NodeId, NodeId>;
 
     explicit dbuct_series_reduced_tree(ILogTrailAction& t);
 
@@ -38,6 +36,9 @@ struct dbuct_series_reduced_tree {
     const child_set_t& children(NodeId parent) const;
 
 private:
+    using children_map_t = std::unordered_map<NodeId, child_set_t>;
+    using parents_map_t  = std::unordered_map<NodeId, NodeId>;
+
     void try_reduce(NodeId node);
     void reduce_nullary(NodeId node);
     void reduce_unary(NodeId parent);

@@ -15,8 +15,6 @@
 // via a full-copy checkpoint.
 template<typename ILogTrailAction>
 struct dbuct_goal_exprs {
-    using map_t = std::unordered_map<const goal_lineage*, framed_expr>;
-
     explicit dbuct_goal_exprs(ILogTrailAction& t);
 
     framed_expr get(const goal_lineage* gl) const;
@@ -24,6 +22,8 @@ struct dbuct_goal_exprs {
     void unset(const goal_lineage* gl);
 
 private:
+    using map_t = std::unordered_map<const goal_lineage*, framed_expr>;
+
     tracked<map_t, ILogTrailAction> exprs_;
 };
 

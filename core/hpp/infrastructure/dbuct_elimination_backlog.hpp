@@ -15,15 +15,15 @@
 // a choice frame rolls the backlog back exactly on pop.
 template<typename ILogTrailAction>
 struct dbuct_elimination_backlog {
-    using eliminated_candidates_type =
-        std::unordered_map<const goal_lineage*, std::unordered_set<rule_id>>;
-
     explicit dbuct_elimination_backlog(ILogTrailAction& t);
 
     void insert_backlogged_elimination(const resolution_lineage* rl);
     bool is_backlogged_elimination(const resolution_lineage* rl) const;
 
 private:
+    using eliminated_candidates_type =
+        std::unordered_map<const goal_lineage*, std::unordered_set<rule_id>>;
+
     tracked<eliminated_candidates_type, ILogTrailAction> eliminated_candidates_;
 };
 

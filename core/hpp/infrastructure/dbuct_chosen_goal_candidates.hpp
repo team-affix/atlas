@@ -16,14 +16,14 @@
 // as ILogTrailAction) rolls the choice back exactly on pop.
 template<typename ILogTrailAction>
 struct dbuct_chosen_goal_candidates {
-    using map_t = std::unordered_map<const goal_lineage*, rule_id>;
-
     explicit dbuct_chosen_goal_candidates(ILogTrailAction& t);
 
     std::optional<rule_id> try_get(const goal_lineage* gl) const;
     void set(const goal_lineage* gl, rule_id r);
 
 private:
+    using map_t = std::unordered_map<const goal_lineage*, rule_id>;
+
     tracked<map_t, ILogTrailAction> by_goal_;
 };
 

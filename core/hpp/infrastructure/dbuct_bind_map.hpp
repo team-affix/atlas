@@ -14,14 +14,14 @@
 // on trail pop.
 template<typename IGlobalize, typename ILogTrailAction>
 struct dbuct_bind_map {
-    using map_t = std::unordered_map<uint32_t, framed_expr>;
-
     dbuct_bind_map(IGlobalize& g, ILogTrailAction& t);
 
     void bind(uint32_t global_key, framed_expr value);
     framed_expr whnf(framed_expr fe);
 
 private:
+    using map_t = std::unordered_map<uint32_t, framed_expr>;
+
     IGlobalize& globalizer_;
     ILogTrailAction& trail_;
     map_t bindings_;

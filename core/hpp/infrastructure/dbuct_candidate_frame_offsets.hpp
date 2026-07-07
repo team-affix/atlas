@@ -14,8 +14,6 @@
 // the trail's log capability.
 template<typename ILogTrailAction>
 struct dbuct_candidate_frame_offsets {
-    using map_t = std::unordered_map<const resolution_lineage*, uint32_t>;
-
     explicit dbuct_candidate_frame_offsets(ILogTrailAction& t);
 
     uint32_t get(const resolution_lineage* rl) const;
@@ -23,6 +21,8 @@ struct dbuct_candidate_frame_offsets {
     void unset(const resolution_lineage* rl);
 
 private:
+    using map_t = std::unordered_map<const resolution_lineage*, uint32_t>;
+
     tracked<map_t, ILogTrailAction> offsets_;
 };
 

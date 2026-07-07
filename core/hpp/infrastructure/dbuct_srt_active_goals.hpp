@@ -17,8 +17,6 @@
 // back incrementally on trail pop instead of copied per choice.
 template<typename ILogTrailAction>
 struct dbuct_srt_active_goals {
-    using in_flight_t = std::set<const goal_lineage*>;
-
     explicit dbuct_srt_active_goals(ILogTrailAction& t);
 
     void insert_active_goal(const goal_lineage* gl);
@@ -31,6 +29,8 @@ struct dbuct_srt_active_goals {
     coroutine<const goal_lineage*, void> iterate_child_goals(const goal_lineage* gl) const;
 
 private:
+    using in_flight_t = std::set<const goal_lineage*>;
+
     dbuct_series_reduced_tree<const goal_lineage*, ILogTrailAction> tree_;
     tracked<in_flight_t, ILogTrailAction> in_flight_;
 };

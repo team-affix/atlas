@@ -19,8 +19,6 @@
 // the goal on undo so they survive a node being erased and re-inserted in a frame.
 template<typename ILogTrailAction>
 struct dbuct_goal_candidate_rules {
-    using map_t = std::unordered_map<const goal_lineage*, ra_rule_id_set>;
-
     dbuct_goal_candidate_rules(ILogTrailAction& t, ra_rule_id_set_factory& factory);
 
     const ra_rule_id_set& get(const goal_lineage* gl) const;
@@ -30,6 +28,8 @@ struct dbuct_goal_candidate_rules {
     void erase(const goal_lineage* gl);
 
 private:
+    using map_t = std::unordered_map<const goal_lineage*, ra_rule_id_set>;
+
     ra_rule_id_set_factory& factory_;
     tracked<map_t, ILogTrailAction> by_goal_;
 };

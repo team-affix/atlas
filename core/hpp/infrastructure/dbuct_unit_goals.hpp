@@ -14,14 +14,14 @@
 // pending unit-goal stack.
 template<typename ILogTrailAction>
 struct dbuct_unit_goals {
-    using vec_t = std::vector<const goal_lineage*>;
-
     explicit dbuct_unit_goals(ILogTrailAction& t);
 
     void push(const goal_lineage* gl);
     std::optional<const goal_lineage*> pop();
 
 private:
+    using vec_t = std::vector<const goal_lineage*>;
+
     tracked<vec_t, ILogTrailAction> queue_;
 };
 

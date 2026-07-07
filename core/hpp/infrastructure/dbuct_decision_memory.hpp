@@ -14,8 +14,6 @@
 // ILogTrailAction) so a choice-frame pop rolls it back exactly.
 template<typename ILogTrailAction>
 struct dbuct_decision_memory {
-    using set_t = std::unordered_set<const resolution_lineage*>;
-
     explicit dbuct_decision_memory(ILogTrailAction& t);
 
     void record_decision(const resolution_lineage* rl);
@@ -23,6 +21,8 @@ struct dbuct_decision_memory {
     lemma derive_decision_lemma() const;
 
 private:
+    using set_t = std::unordered_set<const resolution_lineage*>;
+
     tracked<set_t, ILogTrailAction> decisions_;
 };
 
