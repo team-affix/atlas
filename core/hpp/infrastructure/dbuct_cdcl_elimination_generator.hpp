@@ -13,133 +13,125 @@
 #include "value_objects/avoidance.hpp"
 #include "value_objects/lemma.hpp"
 
-// Delayed-backtracking variant of cdcl_elimination_generator. Learned avoidances
-// are durable (never checkpointed) so they survive backtracking, but their forced
-// eliminations are journaled on the trail and get undone by a backstep even when
-// the avoidance is still forced at a shallower frontier. To re-route those without
-// rescanning the whole store, every avoidance that constrain (or learn) sees at or
-// near the frontier is added to a durable watchlist; reapply() reclassifies just
-// that watchlist -- routing the forced ones, reporting realized conflicts, keeping
-// satisfied ones (they revive as forced on backtrack, with no resolution to re-add
-// them), and dropping only dormant ones (those re-arm through constrain on the next
-// descent). classify is the sole authority on the four states.
 template<typename ITryGetChosenGoalCandidate>
 struct dbuct_cdcl_elimination_generator {
-    explicit dbuct_cdcl_elimination_generator(ITryGetChosenGoalCandidate& tgcc);
-
-    void learn(const lemma& l);
-
-    coroutine<const resolution_lineage*, void> constrain(const resolution_lineage* rl);
-
-    std::vector<const resolution_lineage*> reapply();
-
-    bool reapply_found_realized_conflict() const;
-
+    dbuct_cdcl_elimination_generator(ITryGetChosenGoalCandidate&);
+    std::optional<const resolution_lineage*> learn(const lemma&);
+    coroutine<const resolution_lineage*, void> constrain(const resolution_lineage*);
+    void cleanup();
 private:
     using avoidance_id = size_t;
-    enum class scan_result { dormant, satisfied, forced, realized };
 
-    scan_result classify(const avoidance& av, const resolution_lineage* committing,
-                         const resolution_lineage*& out_forced) const;
+    size_t scan(const avoidance& av) const;
+    std::optional<const resolution_lineage*> visit_avoidance(avoidance_id, const resolution_lineage*);
 
     std::unordered_map<avoidance_id, avoidance> avoidances_;
     size_t next_avoidance_id_ = 0;
-    std::unordered_map<const goal_lineage*, std::unordered_set<avoidance_id>> goal_index_;
-    std::unordered_set<avoidance_id> watchlist_;
-    bool reapply_realized_ = false;
+    std::unordered_map<const goal_lineage*, std::unordered_set<avoidance_id>> watched_goals_;
+    std::unordered_set<avoidance_id> visited_avoidances_;
 
     ITryGetChosenGoalCandidate& try_get_chosen_goal_candidate_;
 };
 
-template<typename ITryGetChosenGoalCandidate>
-dbuct_cdcl_elimination_generator<ITryGetChosenGoalCandidate>::dbuct_cdcl_elimination_generator(
-    ITryGetChosenGoalCandidate& tgcc)
+template<typename ITGCC>
+dbuct_cdcl_elimination_generator<ITGCC>::dbuct_cdcl_elimination_generator(ITGCC& tgcc)
     : try_get_chosen_goal_candidate_(tgcc) {}
 
-template<typename ITryGetChosenGoalCandidate>
-void dbuct_cdcl_elimination_generator<ITryGetChosenGoalCandidate>::learn(const lemma& l) {
+template<typename ITGCC>
+std::optional<const resolution_lineage*>
+dbuct_cdcl_elimination_generator<ITGCC>::learn(const lemma& l) {
     const auto& resolutions = l.get_resolutions();
     if (resolutions.empty())
-        return;
+        return std::nullopt;
+    if (resolutions.size() == 1)
+        return *resolutions.begin();
 
     std::vector<const resolution_lineage*> members(resolutions.begin(), resolutions.end());
-    std::sort(members.begin(), members.end(),
-              [](const resolution_lineage* a, const resolution_lineage* b) {
-                  if (a->parent != b->parent) return a->parent < b->parent;
-                  return a->idx < b->idx;
-              });
-    const size_t watcher_b = members.size() > 1 ? size_t{1} : size_t{0};
+    std::sort(members.begin(), members.end(), [](const resolution_lineage* a, const resolution_lineage* b) {
+        if (a->parent != b->parent)
+            return a->parent < b->parent;
+        return a->idx < b->idx;
+    });
     const avoidance_id id = next_avoidance_id_++;
-    avoidances_.emplace(id, avoidance{std::move(members), 0, watcher_b});
-    for (const resolution_lineage* m : avoidances_.at(id).members)
-        goal_index_[m->parent].insert(id);
-    watchlist_.insert(id);
+    avoidances_.emplace(id, avoidance{std::move(members), 0, 1});
+    watched_goals_[avoidances_.at(id).members.at(0)->parent].insert(id);
+    watched_goals_[avoidances_.at(id).members.at(1)->parent].insert(id);
+    return std::nullopt;
 }
 
-template<typename ITryGetChosenGoalCandidate>
+template<typename ITGCC>
 coroutine<const resolution_lineage*, void>
-dbuct_cdcl_elimination_generator<ITryGetChosenGoalCandidate>::constrain(const resolution_lineage* rl) {
-    const auto it = goal_index_.find(rl->parent);
-    if (it == goal_index_.end())
+dbuct_cdcl_elimination_generator<ITGCC>::constrain(const resolution_lineage* rl) {
+    const auto it = watched_goals_.find(rl->parent);
+    if (it == watched_goals_.end())
         co_return;
-    const std::vector<avoidance_id> ids(it->second.begin(), it->second.end());
-    for (const avoidance_id id : ids) {
-        const resolution_lineage* forced = nullptr;
-        switch (classify(avoidances_.at(id), rl, forced)) {
-            case scan_result::forced:    watchlist_.insert(id); co_yield forced; break;
-            case scan_result::realized:  watchlist_.insert(id); co_yield rl;     break;
-            case scan_result::satisfied: watchlist_.insert(id); break;
-            case scan_result::dormant:   break;
-        }
+
+    for (auto i = it->second.begin(); i != it->second.end(); ) {
+        const avoidance_id id = *i;
+        it->second.erase(i++);
+        if (auto forced = visit_avoidance(id, rl))
+            co_yield *forced;
     }
 }
 
-template<typename ITryGetChosenGoalCandidate>
-std::vector<const resolution_lineage*>
-dbuct_cdcl_elimination_generator<ITryGetChosenGoalCandidate>::reapply() {
-    reapply_realized_ = false;
-    std::vector<const resolution_lineage*> forced_eliminations;
-    for (auto it = watchlist_.begin(); it != watchlist_.end();) {
-        const resolution_lineage* forced = nullptr;
-        switch (classify(avoidances_.at(*it), nullptr, forced)) {
-            case scan_result::forced:    forced_eliminations.push_back(forced); ++it; break;
-            case scan_result::realized:  reapply_realized_ = true; ++it; break;
-            case scan_result::satisfied: ++it; break;
-            case scan_result::dormant:   it = watchlist_.erase(it); break;
-        }
+template<typename ITGCC>
+size_t dbuct_cdcl_elimination_generator<ITGCC>::scan(const avoidance& av) const {
+    for (size_t i = std::max(av.watcher_a_pos, av.watcher_b_pos) + 1; i < av.members.size(); ++i) {
+        const auto chosen = try_get_chosen_goal_candidate_.try_get(av.members.at(i)->parent);
+        if (!chosen)
+            return i;
+        if (*chosen != av.members.at(i)->idx)
+            return SIZE_MAX;
     }
-    return forced_eliminations;
+    return av.members.size();
 }
 
-template<typename ITryGetChosenGoalCandidate>
-bool dbuct_cdcl_elimination_generator<ITryGetChosenGoalCandidate>::reapply_found_realized_conflict() const {
-    return reapply_realized_;
+template<typename ITGCC>
+std::optional<const resolution_lineage*>
+dbuct_cdcl_elimination_generator<ITGCC>::visit_avoidance(
+    avoidance_id id, const resolution_lineage* rl) {
+    avoidance& av = avoidances_.at(id);
+    visited_avoidances_.insert(id);
+
+    const goal_lineage* const watch_a = av.members.at(av.watcher_a_pos)->parent;
+    const goal_lineage* const watch_b = av.members.at(av.watcher_b_pos)->parent;
+    const bool          a_fired   = watch_a == rl->parent;
+    size_t&             fired_pos = a_fired ? av.watcher_a_pos : av.watcher_b_pos;
+    const size_t        other_pos = a_fired ? av.watcher_b_pos : av.watcher_a_pos;
+    const goal_lineage* other_gl  = av.members.at(other_pos)->parent;
+
+    if (av.members.at(fired_pos)->idx != rl->idx) {
+        watched_goals_[other_gl].erase(id);
+        return std::nullopt;
+    }
+
+    const size_t hit = scan(av);
+    if (hit == SIZE_MAX) {
+        watched_goals_[other_gl].erase(id);
+        return std::nullopt;
+    }
+    if (hit == av.members.size()) {
+        watched_goals_[other_gl].erase(id);
+        return av.members.at(other_pos);
+    }
+
+    watched_goals_[av.members.at(hit)->parent].insert(id);
+    fired_pos = hit;
+    return std::nullopt;
 }
 
-template<typename ITryGetChosenGoalCandidate>
-typename dbuct_cdcl_elimination_generator<ITryGetChosenGoalCandidate>::scan_result
-dbuct_cdcl_elimination_generator<ITryGetChosenGoalCandidate>::classify(
-    const avoidance& av, const resolution_lineage* committing,
-    const resolution_lineage*& out_forced) const {
-    const resolution_lineage* unassigned = nullptr;
-    size_t unassigned_count = 0;
-    for (const resolution_lineage* m : av.members) {
-        std::optional<rule_id> chosen;
-        if (committing != nullptr && m->parent == committing->parent)
-            chosen = committing->idx;
-        else
-            chosen = try_get_chosen_goal_candidate_.try_get(m->parent);
-
-        if (!chosen.has_value()) {
-            unassigned = m;
-            ++unassigned_count;
-        } else if (*chosen != m->idx) {
-            return scan_result::satisfied;
-        }
+template<typename ITGCC>
+void dbuct_cdcl_elimination_generator<ITGCC>::cleanup() {
+    for (const avoidance_id id : visited_avoidances_) {
+        avoidance& av = avoidances_.at(id);
+        std::swap(av.members.at(0), av.members.at(av.watcher_a_pos));
+        std::swap(av.members.at(1), av.members.at(av.watcher_b_pos));
+        av.watcher_a_pos = 0;
+        av.watcher_b_pos = 1;
+        watched_goals_[av.members.at(0)->parent].insert(id);
+        watched_goals_[av.members.at(1)->parent].insert(id);
     }
-    if (unassigned_count == 0) return scan_result::realized;
-    if (unassigned_count == 1) { out_forced = unassigned; return scan_result::forced; }
-    return scan_result::dormant;
+    visited_avoidances_.clear();
 }
 
 #endif
