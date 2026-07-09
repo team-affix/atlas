@@ -23,7 +23,7 @@ private:
 };
 
 template<typename ILogTrailAction>
-dbuct_nearest_decision<ILogTrailAction>::dbuct_nearest_decision(ILogTrailAction& t) : nd_(t, map_t{}) {}
+dbuct_nearest_decision<ILogTrailAction>::dbuct_nearest_decision(ILogTrailAction& t) : nd_(t, map_t{{nullptr, nullptr}}) {}
 
 template<typename ILogTrailAction>
 void dbuct_nearest_decision<ILogTrailAction>::note_unit_resolution(const resolution_lineage* rl) {
