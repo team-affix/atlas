@@ -222,16 +222,32 @@ void dbuct_cdcl_elimination_generator<ITGCC, IGUB, IDL, IGUD, IGPD>::undo_action
         link_watchers(unwatch->id);
     }
     else {
+        // undo watcher_pos update (but keep watcher the same)
+        // this is to make it so that the watchers that took longer to fire
+        // will be the default watchers
+
+        // follow this pattern to update the watcher_pos:
+        // [a,b,c,d|(h),(f),g,e]
+        // [a,b,c|(f),(h),d,g,e]
+        // [a,b|(h),(f),c,d,g,e]
+        // [a|(f),(h),b,c,d,g,e]
+        // [(h),(f),a,b,c,d,g,e]
+
         const auto& wu = std::get<avoidance_watcher_update>(action);
         auto& av = avoidances_.at(wu.id);
+        auto& members = av.members;
         auto& watcher_pos = wu.watcher_a_fired ? av.watcher_a_pos : av.watcher_b_pos;
-        const auto& watcher_rl = av.members.at(watcher_pos);
-        const auto& watcher_gl = watcher_rl->parent;
-        watched_goals_[watcher_gl].erase(wu.id);
+
+        // swap the watchers
+        std::swap(members.at(watcher_pos), members.at(wu.prev_watcher_pos));
+        
+        // update watcher_pos (but same watcher since we moved it there)
         watcher_pos = wu.prev_watcher_pos;
-        const auto& new_watcher_rl = av.members.at(watcher_pos);
-        const auto& new_watcher_gl = new_watcher_rl->parent;
-        watched_goals_[new_watcher_gl].insert(wu.id);
+        
+        // this whole operation SHOULD be valid since we only swap members that are both not visited yet.
+        // for something to be a watcher, it must be unvisited, and given that at the current frame, we
+        // know what used to be the watcher, we know that it also must be unvisited.
+
     }
 }
 
