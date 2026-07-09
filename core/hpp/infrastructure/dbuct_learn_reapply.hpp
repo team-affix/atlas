@@ -1,49 +1,52 @@
 #ifndef DBUCT_LEARN_REAPPLY_HPP
 #define DBUCT_LEARN_REAPPLY_HPP
 
+#include <vector>
 #include "value_objects/lineage.hpp"
 #include "value_objects/elimination_result.hpp"
 
-// Re-applies learned avoidances to the current (post-backtrack) frontier. After
-// DBUCT unwinds to a resume node, that frontier can lack eliminations that were
-// forced deeper in the tree; reapply_frontier() asks the CDCL store to reclassify
-// its watchlist of near-frontier avoidances, routes every forced elimination, and
-// reports whether the frontier collapsed. The solver drives this across levels,
-// which is how cascading backjumps arise.
-template<typename ICdclReapply, typename IEliminationRouter, typename IConflictDetector,
+// Routes the eliminations CDCL emits from pop_frame during backtracking. These
+// forced eliminations bypass the joint eliminator (they surface from the frame
+// pops in dbuct_sim::terminate, not from constrain), so this router carries the
+// same obligations the joint applies to CDCL constrain hits: drop the lineage's
+// MHU head, deactivate the candidate through the shared elimination router, and
+// -- when a goal fully collapses -- fire conflict / unit-goal detection. The
+// solver cascades on the returned "a conflict was realized" signal.
+template<typename IMhu, typename IEliminationRouter, typename IConflictDetector,
          typename IUnitGoalDetector, typename IPushUnitGoal>
 struct dbuct_learn_reapply {
-    dbuct_learn_reapply(ICdclReapply& cdcl, IEliminationRouter& router,
+    dbuct_learn_reapply(IMhu& mhu, IEliminationRouter& router,
                         IConflictDetector& conflict_detector,
                         IUnitGoalDetector& unit_goal_detector,
                         IPushUnitGoal& push_unit_goal);
 
     bool route_elimination(const resolution_lineage* rl);
-
-    bool reapply_frontier();
+    bool route_eliminations(const std::vector<const resolution_lineage*>& elims);
 
 private:
-    ICdclReapply& cdcl_;
+    IMhu& mhu_;
     IEliminationRouter& router_;
     IConflictDetector& conflict_detector_;
     IUnitGoalDetector& unit_goal_detector_;
     IPushUnitGoal& push_unit_goal_;
 };
 
-template<typename ICdclReapply, typename IEliminationRouter, typename IConflictDetector,
+template<typename IMhu, typename IEliminationRouter, typename IConflictDetector,
          typename IUnitGoalDetector, typename IPushUnitGoal>
-dbuct_learn_reapply<ICdclReapply, IEliminationRouter, IConflictDetector,
+dbuct_learn_reapply<IMhu, IEliminationRouter, IConflictDetector,
                     IUnitGoalDetector, IPushUnitGoal>::dbuct_learn_reapply(
-    ICdclReapply& cdcl, IEliminationRouter& router, IConflictDetector& conflict_detector,
+    IMhu& mhu, IEliminationRouter& router, IConflictDetector& conflict_detector,
     IUnitGoalDetector& unit_goal_detector, IPushUnitGoal& push_unit_goal)
-    : cdcl_(cdcl), router_(router), conflict_detector_(conflict_detector),
+    : mhu_(mhu), router_(router), conflict_detector_(conflict_detector),
       unit_goal_detector_(unit_goal_detector), push_unit_goal_(push_unit_goal) {}
 
-template<typename ICdclReapply, typename IEliminationRouter, typename IConflictDetector,
+template<typename IMhu, typename IEliminationRouter, typename IConflictDetector,
          typename IUnitGoalDetector, typename IPushUnitGoal>
-bool dbuct_learn_reapply<ICdclReapply, IEliminationRouter, IConflictDetector,
+bool dbuct_learn_reapply<IMhu, IEliminationRouter, IConflictDetector,
                          IUnitGoalDetector, IPushUnitGoal>::route_elimination(const resolution_lineage* rl) {
-    if (router_.route(rl) != elimination_result::eliminated)
+    mhu_.remove_head(rl);
+    const elimination_result res = router_.route(rl);
+    if (res != elimination_result::eliminated)
         return false;
     const goal_lineage* gl = rl->parent;
     if (conflict_detector_.detect(gl))
@@ -53,17 +56,16 @@ bool dbuct_learn_reapply<ICdclReapply, IEliminationRouter, IConflictDetector,
     return false;
 }
 
-template<typename ICdclReapply, typename IEliminationRouter, typename IConflictDetector,
+template<typename IMhu, typename IEliminationRouter, typename IConflictDetector,
          typename IUnitGoalDetector, typename IPushUnitGoal>
-bool dbuct_learn_reapply<ICdclReapply, IEliminationRouter, IConflictDetector,
-                         IUnitGoalDetector, IPushUnitGoal>::reapply_frontier() {
+bool dbuct_learn_reapply<IMhu, IEliminationRouter, IConflictDetector,
+                         IUnitGoalDetector, IPushUnitGoal>::route_eliminations(
+    const std::vector<const resolution_lineage*>& elims) {
     bool conflict = false;
-    for (const resolution_lineage* forced : cdcl_.reapply()) {
-        if (route_elimination(forced))
+    for (const resolution_lineage* rl : elims) {
+        if (route_elimination(rl))
             conflict = true;
     }
-    if (cdcl_.reapply_found_realized_conflict())
-        conflict = true;
     return conflict;
 }
 

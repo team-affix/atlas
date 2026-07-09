@@ -37,6 +37,7 @@ struct dbuct_mhu_elimination_generator {
 
     bool try_add_head(const resolution_lineage*, framed_expr goal, framed_expr head);
     coroutine<const resolution_lineage*, void> constrain(const resolution_lineage*);
+    void remove_head(const resolution_lineage*);
 
 private:
     using head_t        = unify_head<IBindMap, IUnifier>;
@@ -52,7 +53,6 @@ private:
     void link(const std::unordered_set<uint32_t>&, const std::unordered_set<const resolution_lineage*>&);
     std::unordered_set<const resolution_lineage*> unlink(uint32_t);
     std::unordered_set<uint32_t> unlink(const resolution_lineage*);
-    void remove_head(const resolution_lineage*);
 
     IBindMap& common_;
     IMakeResolutionLineage& make_resolution_lineage_;

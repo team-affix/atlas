@@ -99,7 +99,7 @@ TEST_F(DbuctManifestIntegrationTest, WiringConstructsWithEmptyProblem) {
 
 TEST_F(DbuctManifestIntegrationTest, WiringCampingStackDistinctFromEliminators) {
     dbuct_ridge_manifest m = make_manifest();
-    EXPECT_NE(static_cast<void*>(&m.cdcl_), static_cast<void*>(&m.joint_));
+    EXPECT_NE(static_cast<void*>(&m.cdcl_), static_cast<void*>(&m.dbuct_joint_));
 }
 
 // ── Scenario 2: vacuous / trivial refutation contract ────────────────────────
