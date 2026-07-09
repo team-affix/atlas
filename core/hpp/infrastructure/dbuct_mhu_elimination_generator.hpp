@@ -279,8 +279,9 @@ dbuct_mhu_elimination_generator<IBM, IBMF, IU, IUF, IMRL, IMV, IGCRI, ILog, IFC>
 template<typename IBM, typename IBMF, typename IU, typename IUF, typename IMRL, typename IMV, typename IGCRI, typename ILog, typename IFC>
 void dbuct_mhu_elimination_generator<IBM, IBMF, IU, IUF, IMRL, IMV, IGCRI, ILog, IFC>::remove_head(
     const resolution_lineage* rl) {
-    if (heads_.get().contains(rl))
-        heads_.mutate(std::make_unique<backtrackable_map_erase<heads_map_t>>(rl));
+    if (!heads_.get().contains(rl))
+        return;
+    heads_.mutate(std::make_unique<backtrackable_map_erase<heads_map_t>>(rl));
     unlink(rl);
 }
 
