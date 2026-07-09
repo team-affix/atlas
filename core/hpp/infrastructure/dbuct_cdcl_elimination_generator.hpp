@@ -14,14 +14,24 @@
 #include "value_objects/avoidance_id.hpp"
 #include "value_objects/lineage.hpp"
 #include "value_objects/lemma.hpp"
-#include "value_objects/avoidance_visitation.hpp"
+#include "value_objects/avoidance_action.hpp"
+#include "value_objects/raised_unit_avoidance.hpp"
 #include "debug_assert.hpp"
 
 // NOTES: learn() can be void since learn() is always expected to be called immediately before pop(),
 // since learn() is only ever invoked at a terminal state where there is nothing left to do.
-template<typename ITryGetChosenGoalCandidate, typename IGetUnitBoundary, typename IDeriveDecisionLemma, typename IGetUltimateDecision>
+template<typename ITryGetChosenGoalCandidate,
+    typename IGetUnitBoundary, 
+    typename IDeriveDecisionLemma,
+    typename IGetUltimateDecision,
+    typename IGetPenultimateDecision>
 struct dbuct_cdcl_elimination_generator {
-    dbuct_cdcl_elimination_generator(ITryGetChosenGoalCandidate&, IGetUnitBoundary&, IDeriveDecisionLemma&, IGetUltimateDecision&);
+    dbuct_cdcl_elimination_generator(
+        ITryGetChosenGoalCandidate&,
+        IGetUnitBoundary&,
+        IDeriveDecisionLemma&,
+        IGetUltimateDecision&,
+        IGetPenultimateDecision&);
     void learn();
     coroutine<const resolution_lineage*, void> constrain(const resolution_lineage*);
     void push_frame();
@@ -29,7 +39,8 @@ struct dbuct_cdcl_elimination_generator {
 private:
     size_t scan(const avoidance& av) const;
     std::optional<const resolution_lineage*> visit_avoidance(avoidance_id, const resolution_lineage*);
-    void raise_elimination();
+    void undo_action(const avoidance_action& action);
+    void link_watchers(avoidance_id id);
 
     std::unordered_map<avoidance_id, avoidance> avoidances_;
     size_t next_avoidance_id_ = 0;
@@ -48,67 +59,67 @@ private:
     // we bubble them up to the front of the list (never violating the visitation boundary, we never want
     // to modify the list to the left of the pipe). The pipe slides leftward as we backtrack basically.
     struct frame {
-        std::list<avoidance_visitation> avoidance_visitations;
+        std::list<avoidance_action> actions;
+        std::list<raised_unit_avoidance> raised_unit_avoidance_lump;
     };
-    std::vector<frame> frame_stack_;
-
-    // if ever we are strictly above the unit boundary, this elimination no longer applies and
-    // should be erased. else, apply the elimination (yield it)
-    struct raised_elimination {
-        const resolution_lineage* lineage;
-        size_t unit_boundary;
-    };
-    std::list<raised_elimination> raised_eliminations_;
+    std::stack<frame> frame_stack_;
     
     ITryGetChosenGoalCandidate& try_get_chosen_goal_candidate_;
     IGetUnitBoundary& get_unit_boundary_;
     IDeriveDecisionLemma& derive_decision_lemma_;
     IGetUltimateDecision& get_ultimate_decision_;
+    IGetPenultimateDecision& get_penultimate_decision_;
 };
 
-template<typename ITGCC, typename IGUB, typename IDL, typename IGUD>
-dbuct_cdcl_elimination_generator<ITGCC, IGUB, IDL, IGUD>::dbuct_cdcl_elimination_generator(ITGCC& tgcc, IGUB& gub, IDL& dl, IGUD& gud)
-    : try_get_chosen_goal_candidate_(tgcc), get_unit_boundary_(gub), derive_decision_lemma_(dl), get_ultimate_decision_(gud), frame_stack_(1) {}
+template<typename ITGCC, typename IGUB, typename IDL, typename IGUD, typename IGPD>
+dbuct_cdcl_elimination_generator<ITGCC, IGUB, IDL, IGUD, IGPD>::dbuct_cdcl_elimination_generator(ITGCC& tgcc, IGUB& gub, IDL& dl, IGUD& gud, IGPD& gpd)
+    : try_get_chosen_goal_candidate_(tgcc), get_unit_boundary_(gub), derive_decision_lemma_(dl), get_ultimate_decision_(gud), get_penultimate_decision_(gpd), frame_stack_(1) {}
 
-template<typename ITGCC, typename IGUB, typename IDL, typename IGUD>
+template<typename ITGCC, typename IGUB, typename IDL, typename IGUD, typename IGPD>
 void
-dbuct_cdcl_elimination_generator<ITGCC, IGUB, IDL, IGUD>::learn() {
+dbuct_cdcl_elimination_generator<ITGCC, IGUB, IDL, IGUD, IGPD>::learn() {
     // get the decision lemma from the current position
     lemma l = derive_decision_lemma_.derive_decision_lemma();
     
-    const auto& resolutions = l.get_resolutions();
+    auto resolutions = l.get_resolutions();
     
     if (resolutions.size() == 0)
         return;
 
-    // raise the ultimate decision as an elimination
-    raise_elimination();
+    const avoidance_id id = next_avoidance_id_++;
+
+    // raise the unit avoidance
+    size_t unit_boundary = get_unit_boundary_.get_unit_boundary();
+    frame_stack_.top().avoidance_actions.emplace_back(raised_unit_avoidance{id, unit_boundary});
 
     // if size==1, then no avoidance needs to be created, we just float this elimination
     // to the top.
     if (resolutions.size() == 1)
         return;
 
-    std::vector<const resolution_lineage*> members(resolutions.begin(), resolutions.end());
-    std::sort(members.begin(), members.end(), [](const resolution_lineage* a, const resolution_lineage* b) {
-        if (a->parent != b->parent)
-            return a->parent < b->parent;
-        return a->idx < b->idx;
-    });
+    // get the ultimate and penultimate decisions
+    auto ultimate_decision = get_ultimate_decision_.get_ultimate_decision();
+    auto penultimate_decision = get_penultimate_decision_.get_penultimate_decision();
+
+    // remove the decisions from the avoidance set
+    resolutions.erase(ultimate_decision);
+    resolutions.erase(penultimate_decision);
     
-    const avoidance_id id = next_avoidance_id_++;
+    // create the avoidance members
+    std::vector<const resolution_lineage*> members(2 + resolutions.size());
+    members[0] = ultimate_decision;
+    members[1] = penultimate_decision;
+    std::copy(resolutions.begin(), resolutions.end(), members.begin() + 2);
+    
     avoidances_.emplace(id, avoidance{std::move(members), 0, 1});
 
-    watched_goals_[avoidances_.at(id).members.at(0)->parent].insert(id);
-    watched_goals_[avoidances_.at(id).members.at(1)->parent].insert(id);
-
-    // add this learnt avoidance to the frame stack so when we backtrack above the unit boundary,
-    // we 
+    // we don't link the goals here since avoidances are always non-dormant at creation,
+    // so we don't need to watch the goals.
 }
 
-template<typename ITGCC, typename IGUB, typename IDL, typename IGUD>
+template<typename ITGCC, typename IGUB, typename IDL, typename IGUD, typename IGPD>
 coroutine<const resolution_lineage*, void>
-dbuct_cdcl_elimination_generator<ITGCC, IGUB, IDL, IGUD>::constrain(const resolution_lineage* rl) {
+dbuct_cdcl_elimination_generator<ITGCC, IGUB, IDL, IGUD, IGPD>::constrain(const resolution_lineage* rl) {
     const auto it = watched_goals_.find(rl->parent);
     if (it == watched_goals_.end())
         co_return;
@@ -121,8 +132,8 @@ dbuct_cdcl_elimination_generator<ITGCC, IGUB, IDL, IGUD>::constrain(const resolu
     }
 }
 
-template<typename ITGCC, typename IGUB, typename IDL, typename IGUD>
-size_t dbuct_cdcl_elimination_generator<ITGCC, IGUB, IDL, IGUD>::scan(const avoidance& av) const {
+template<typename ITGCC, typename IGUB, typename IDL, typename IGUD, typename IGPD>
+size_t dbuct_cdcl_elimination_generator<ITGCC, IGUB, IDL, IGUD, IGPD>::scan(const avoidance& av) const {
     for (size_t i = std::max(av.watcher_a_pos, av.watcher_b_pos) + 1; i < av.members.size(); ++i) {
         const auto chosen = try_get_chosen_goal_candidate_.try_get(av.members.at(i)->parent);
         if (!chosen)
@@ -133,9 +144,9 @@ size_t dbuct_cdcl_elimination_generator<ITGCC, IGUB, IDL, IGUD>::scan(const avoi
     return av.members.size();
 }
 
-template<typename ITGCC, typename IGUB, typename IDL, typename IGUD>
+template<typename ITGCC, typename IGUB, typename IDL, typename IGUD, typename IGPD>
 std::optional<const resolution_lineage*>
-dbuct_cdcl_elimination_generator<ITGCC, IGUB, IDL, IGUD>::visit_avoidance(
+dbuct_cdcl_elimination_generator<ITGCC, IGUB, IDL, IGUD, IGPD>::visit_avoidance(
     avoidance_id id, const resolution_lineage* rl) {
     avoidance& av = avoidances_.at(id);
 
@@ -146,41 +157,91 @@ dbuct_cdcl_elimination_generator<ITGCC, IGUB, IDL, IGUD>::visit_avoidance(
     const size_t        other_pos = a_fired ? av.watcher_b_pos : av.watcher_a_pos;
     const goal_lineage* other_gl  = av.members.at(other_pos)->parent;
 
+    auto& actions = frame_stack_.back().actions;
+    
     if (av.members.at(fired_pos)->idx != rl->idx) {
         watched_goals_[other_gl].erase(id);
+        actions.emplace_back(avoidance_unwatch{id});
         return std::nullopt;
     }
 
     const size_t hit = scan(av);
+
     if (hit == SIZE_MAX) {
         watched_goals_[other_gl].erase(id);
+        actions.emplace_back(avoidance_unwatch{id});
         return std::nullopt;
     }
     if (hit == av.members.size()) {
         watched_goals_[other_gl].erase(id);
+        actions.emplace_back(avoidance_unwatch{id});
         return av.members.at(other_pos);
     }
 
     watched_goals_[av.members.at(hit)->parent].insert(id);
     fired_pos = hit;
+
+    actions.emplace_back(avoidance_watcher_update{id, a_fired, fired_pos});
     return std::nullopt;
 }
 
-template<typename ITGCC, typename IGUB, typename IDL, typename IGUD>
-void dbuct_cdcl_elimination_generator<ITGCC, IGUB, IDL, IGUD>::raise_elimination() {
-    auto unit_boundary = get_unit_boundary_.get_unit_boundary();
-    auto ultimate_decision = get_ultimate_decision_.get_ultimate_decision();
-    raised_eliminations_.emplace_back(ultimate_decision, unit_boundary);
+template<typename ITGCC, typename IGUB, typename IDL, typename IGUD, typename IGPD>
+void dbuct_cdcl_elimination_generator<ITGCC, IGUB, IDL, IGUD, IGPD>::push_frame() {
+    frame_stack_.push(frame{});
 }
 
-template<typename ITGCC, typename IGUB, typename IDL, typename IGUD>
-void dbuct_cdcl_elimination_generator<ITGCC, IGUB, IDL, IGUD>::push_frame() {
+template<typename ITGCC, typename IGUB, typename IDL, typename IGUD, typename IGPD>
+coroutine<const resolution_lineage*, void> dbuct_cdcl_elimination_generator<ITGCC, IGUB, IDL, IGUD, IGPD>::pop_frame() {
+    auto current = std::move(frame_stack_.top());
+    frame_stack_.pop();
+
+    auto& parent = frame_stack_.top();
+
+    // undo the actions in reverse order
+    for (auto it = current.actions.rbegin(); it != current.actions.rend(); ++it)
+        undo_action(*it);
     
+    for (auto& rua : current.raised_unit_avoidance_lump) {
+        if (frame_stack_.size() < rua.unit_boundary) {
+            link_watchers(rua.id);
+            continue;
+        }
+        // still unit
+        const auto& av = avoidances_.at(rua.id);
+        const auto& rl_a = av.members.at(av.watcher_a_pos);
+        // yield elimination
+        co_yield rl_a;
+        // bubble up the unit avoidance
+        parent.raised_unit_avoidance_lump.push_back(rua);
+    }
 }
 
-template<typename ITGCC, typename IGUB, typename IDL, typename IGUD>
-void dbuct_cdcl_elimination_generator<ITGCC, IGUB, IDL, IGUD>::pop_frame() {
-    
+template<typename ITGCC, typename IGUB, typename IDL, typename IGUD, typename IGPD>
+void dbuct_cdcl_elimination_generator<ITGCC, IGUB, IDL, IGUD, IGPD>::undo_action(const avoidance_action& action) {
+    if (const auto* unwatch = std::get_if<avoidance_unwatch>(&action)) {
+        link_watchers(unwatch->id);
+    }
+    else {
+        const auto& wu = std::get<avoidance_watcher_update>(action);
+        auto& av = avoidances_.at(wu.id);
+        auto& watcher_pos = wu.watcher_a_fired ? av.watcher_a_pos : av.watcher_b_pos;
+        const auto& watcher_rl = av.members.at(watcher_pos);
+        const auto& watcher_gl = watcher_rl->parent;
+        watched_goals_[watcher_gl].erase(wu.id);
+        watcher_pos = wu.prev_watcher_pos;
+        const auto& new_watcher_rl = av.members.at(watcher_pos);
+        const auto& new_watcher_gl = new_watcher_rl->parent;
+        watched_goals_[new_watcher_gl].insert(wu.id);
+    }
+}
+
+template<typename ITGCC, typename IGUB, typename IDL, typename IGUD, typename IGPD>
+void dbuct_cdcl_elimination_generator<ITGCC, IGUB, IDL, IGUD, IGPD>::link_watchers(avoidance_id id) {
+    const auto& av = avoidances_.at(id);
+    const auto& rl_a = av.members.at(av.watcher_a_pos);
+    const auto& rl_b = av.members.at(av.watcher_b_pos);
+    watched_goals_[rl_a->parent].insert(id);
+    watched_goals_[rl_b->parent].insert(id);
 }
 
 #endif
