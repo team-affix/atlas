@@ -42,7 +42,6 @@
 #include "infrastructure/dbuct_bind_map_factory.hpp"
 #include "infrastructure/dbuct_candidate_frame_offsets.hpp"
 #include "infrastructure/dbuct_cdcl_elimination_generator.hpp"
-#include "infrastructure/dbuct_checkpoint_stack.hpp"
 #include "infrastructure/dbuct_chosen_goal_candidates.hpp"
 #include "infrastructure/dbuct_decision_memory.hpp"
 #include "infrastructure/dbuct_elimination_backlog.hpp"
@@ -115,8 +114,7 @@ struct dbuct_ridge_manifest {
                                           goal_candidates_deactivator_t, chosen_goal_candidates_t>;
     using ridge_reward_t                = ridge_reward<decision_memory_t>;
 
-    using checkpoint_stack_t            = dbuct_checkpoint_stack<trail, trail>;
-    using dbuct_sim_t                   = dbuct_sim<checkpoint_stack_t, lineage_pool>;
+    using dbuct_sim_t                   = dbuct_sim<trail, lineage_pool>;
     using mcts_decision_generator_t     = mcts_decision_generator<lineage_pool, srt_active_goals_t,
                                           dbuct_sim_t, goal_candidate_rules_t>;
     using run_sim_t                     = run_sim<dbuct_frontier_ready, solution_detector_t, conflict_detector_t,
@@ -178,7 +176,6 @@ struct dbuct_ridge_manifest {
     srt_initial_goals_activator_t srt_initial_goals_activator_;
     resolver_t                    resolver_;
     ridge_reward_t                ridge_reward_;
-    checkpoint_stack_t            checkpoints_;
     std::mt19937                  rng_;
     dbuct_sim_t                   dbuct_sim_;
     mcts_decision_generator_t     mcts_decision_generator_;

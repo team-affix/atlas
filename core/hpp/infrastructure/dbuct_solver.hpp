@@ -1,7 +1,6 @@
 #ifndef DBUCT_SOLVER_HPP
 #define DBUCT_SOLVER_HPP
 
-#include <cstddef>
 #include "infrastructure/coroutine.hpp"
 #include "value_objects/sim_termination.hpp"
 #include "value_objects/lemma.hpp"
@@ -89,9 +88,9 @@ bool dbuct_solver<IA, IRS, IGDC, IDL, ICR, IT, ILA, ILR>::reapply_cascade() {
 
         const lemma dl = derive_decision_lemma_.derive_decision_lemma();
         const double reward = compute_reward_.compute_mcts_reward();
-        std::size_t steps = 0;
-        while (steps == 0)
-            steps = terminate_.terminate(reward);
+        // terminate() reports the frame index backtracked TO; index 0 (root) is a
+        // valid outcome, not a retry signal, so a single call syncs the frontier.
+        terminate_.terminate(reward);
 
         learn_.learn(dl);
     }

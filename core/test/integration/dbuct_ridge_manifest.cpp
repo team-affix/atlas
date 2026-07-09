@@ -100,7 +100,6 @@ TEST_F(DbuctManifestIntegrationTest, WiringConstructsWithEmptyProblem) {
 TEST_F(DbuctManifestIntegrationTest, WiringCampingStackDistinctFromEliminators) {
     dbuct_ridge_manifest m = make_manifest();
     EXPECT_NE(static_cast<void*>(&m.cdcl_), static_cast<void*>(&m.joint_));
-    EXPECT_NE(static_cast<void*>(&m.dbuct_sim_), static_cast<void*>(&m.checkpoints_));
 }
 
 // ── Scenario 2: vacuous / trivial refutation contract ────────────────────────
@@ -182,8 +181,8 @@ TEST_F(DbuctManifestIntegrationTest, SolverCampsBelowRootAcrossEpisodes) {
     // Two competing candidates for f force a branching decision. A restarting
     // solver would tear back down to the root between every episode, so its
     // camp depth would always be zero. DBUCT keeps choice frames live below the
-    // root once the tree has grown: over several episodes the checkpoint stack
-    // must, at some yield, hold at least one camped choice frame.
+    // root once the tree has grown: over several episodes the camped path must,
+    // at some yield, hold at least one choice frame below the root.
     const expr* a = fun("a");
     const expr* b = fun("b");
     const expr* c = fun("c");
@@ -203,7 +202,7 @@ TEST_F(DbuctManifestIntegrationTest, SolverCampsBelowRootAcrossEpisodes) {
         if (!sm.has_yield()) break;
         sm.consume_yield();
         made_decision = made_decision || m.decision_memory_.count() >= 1;
-        max_camp_depth = std::max(max_camp_depth, m.checkpoints_.frame_depth());
+        max_camp_depth = std::max(max_camp_depth, m.dbuct_sim_.camp_depth());
     }
     EXPECT_TRUE(made_decision) << "a branching decision was made";
     EXPECT_GT(max_camp_depth, 0u)

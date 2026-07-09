@@ -73,7 +73,9 @@ private:
 
 template<typename ITGCC, typename IGUB, typename IDL, typename IGUD, typename IGPD>
 dbuct_cdcl_elimination_generator<ITGCC, IGUB, IDL, IGUD, IGPD>::dbuct_cdcl_elimination_generator(ITGCC& tgcc, IGUB& gub, IDL& dl, IGUD& gud, IGPD& gpd)
-    : try_get_chosen_goal_candidate_(tgcc), get_unit_boundary_(gub), derive_decision_lemma_(dl), get_ultimate_decision_(gud), get_penultimate_decision_(gpd), frame_stack_(1) {}
+    : try_get_chosen_goal_candidate_(tgcc), get_unit_boundary_(gub), derive_decision_lemma_(dl), get_ultimate_decision_(gud), get_penultimate_decision_(gpd) {
+    frame_stack_.push(frame{});
+}
 
 template<typename ITGCC, typename IGUB, typename IDL, typename IGUD, typename IGPD>
 void
@@ -90,12 +92,17 @@ dbuct_cdcl_elimination_generator<ITGCC, IGUB, IDL, IGUD, IGPD>::learn() {
 
     // raise the unit avoidance
     size_t unit_boundary = get_unit_boundary_.get_unit_boundary();
-    frame_stack_.top().avoidance_actions.emplace_back(raised_unit_avoidance{id, unit_boundary});
+    frame_stack_.top().raised_unit_avoidance_lump.emplace_back(raised_unit_avoidance{id, unit_boundary});
 
-    // if size==1, then no avoidance needs to be created, we just float this elimination
-    // to the top.
-    if (resolutions.size() == 1)
+    // if size==1, store a degenerate single-member avoidance so pop_frame can find
+    // the resolution to float to the top. watcher_b_pos is a SIZE_MAX poison: a unit
+    // has no second literal to watch. A unit's unit_boundary is 0, so it can never
+    // hit pop_frame's arm branch (frame_stack_.size() < 0 is impossible), which is
+    // the only site that would dereference watcher_b_pos -- see the assert there.
+    if (resolutions.size() == 1) {
+        avoidances_.emplace(id, avoidance{{*resolutions.begin()}, 0, SIZE_MAX});
         return;
+    }
 
     // get the ultimate and penultimate decisions
     auto ultimate_decision = get_ultimate_decision_.get_ultimate_decision();
@@ -157,7 +164,7 @@ dbuct_cdcl_elimination_generator<ITGCC, IGUB, IDL, IGUD, IGPD>::visit_avoidance(
     const size_t        other_pos = a_fired ? av.watcher_b_pos : av.watcher_a_pos;
     const goal_lineage* other_gl  = av.members.at(other_pos)->parent;
 
-    auto& actions = frame_stack_.back().actions;
+    auto& actions = frame_stack_.top().actions;
     
     if (av.members.at(fired_pos)->idx != rl->idx) {
         watched_goals_[other_gl].erase(id);
@@ -179,9 +186,13 @@ dbuct_cdcl_elimination_generator<ITGCC, IGUB, IDL, IGUD, IGPD>::visit_avoidance(
     }
 
     watched_goals_[av.members.at(hit)->parent].insert(id);
+    // capture the pre-migration slot BEFORE overwriting the alias: pop must relocate
+    // the member that just became unvisited (the old watched member) back out past
+    // the watchers, keeping the watcher itself on its new (still-unvisited) member.
+    const size_t prev_watcher_pos = fired_pos;
     fired_pos = hit;
 
-    actions.emplace_back(avoidance_watcher_update{id, a_fired, fired_pos});
+    actions.emplace_back(avoidance_watcher_update{id, a_fired, prev_watcher_pos});
     return std::nullopt;
 }
 
@@ -203,6 +214,9 @@ coroutine<const resolution_lineage*, void> dbuct_cdcl_elimination_generator<ITGC
     
     for (auto& rua : current.raised_unit_avoidance_lump) {
         if (frame_stack_.size() < rua.unit_boundary) {
+            // A single-member (unit) avoidance has no second watcher and must never
+            // be armed; its unit_boundary is 0 so this branch is unreachable for it.
+            DEBUG_ASSERT(avoidances_.at(rua.id).watcher_b_pos != SIZE_MAX);
             link_watchers(rua.id);
             continue;
         }
