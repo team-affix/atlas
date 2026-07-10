@@ -22,7 +22,7 @@
 // stack in lockstep: exactly one frame per MCTS choose, whether that choose is a
 // tree-policy step or a rollout step. dbuct itself does NOT grow during rollout,
 // so an episode ends with the trail/CDCL deeper than dbuct; terminate() simply
-// pops the excess back down to the index dbuct reports. Because both counters
+// pops the excess back down to the stack size dbuct reports. Because both counters
 // are pushed and popped together and both start at 1 (the base frame here, the
 // learner's ctor root frame there), trail.depth() equals the learner's frame
 // depth at all times -- which is why the avoidance-unit-boundary oracle can read
@@ -145,7 +145,7 @@ mcts_choice dbuct_sim<ITrail, IMRL, IFC>::choose(const std::vector<mcts_choice>&
     mcts_choice chosen = dbuct_->choose(choices, choices);
     // One trail frame + one matching CDCL frame per choose, unconditionally. Any
     // excess (rollout steps, which dbuct does not track) is reconciled away in
-    // terminate() by popping down to the index dbuct reports.
+    // terminate() by popping down to the stack size dbuct reports.
     trail_.push();
     frames_.push_frame();
     return chosen;
@@ -153,20 +153,21 @@ mcts_choice dbuct_sim<ITrail, IMRL, IFC>::choose(const std::vector<mcts_choice>&
 
 template<typename ITrail, typename IMRL, typename IFC>
 std::vector<const resolution_lineage*> dbuct_sim<ITrail, IMRL, IFC>::terminate(double reward, bool force_progress) {
-    // dbuct returns the 0-based frame index it backtracked TO (root == 0). The
-    // trail holds the base frame plus one frame per choose, so restoring is just
-    // popping down to `idx + 1` (base frame + idx live frames). Each popped CDCL
-    // frame surfaces the eliminations still forced past its boundary. Only the
-    // FINAL pop -- the one landing at the resume depth -- yields eliminations
-    // valid at the resume frontier; earlier pops emit conflicts still unit at
-    // THAT (deeper) level which CDCL re-arms as watched clauses as we pop past
-    // their boundaries, so routing them at the shallower resume frontier would
-    // over-eliminate. Clearing before each pop keeps exactly the resume-level set.
+    // dbuct returns the frame stack size it backtracked TO (root only == 1). The
+    // trail's depth mirrors that stack -- both start at 1 (the base frame here,
+    // dbuct's root there) -- so restoring is just popping the trail down to that
+    // size directly, no off-by-one. Each popped CDCL frame surfaces the
+    // eliminations still forced past its boundary. Only the FINAL pop -- the one
+    // landing at the resume depth -- yields eliminations valid at the resume
+    // frontier; earlier pops emit conflicts still unit at THAT (deeper) level
+    // which CDCL re-arms as watched clauses as we pop past their boundaries, so
+    // routing them at the shallower resume frontier would over-eliminate.
+    // Clearing before each pop keeps exactly the resume-level set.
     std::vector<const resolution_lineage*> eliminations;
     const std::size_t start_depth = trail_.depth();
     while (true) {
-        const std::size_t idx = dbuct_->terminate(reward);
-        while (trail_.depth() > idx + 1) {
+        const std::size_t stack_size = dbuct_->terminate(reward);
+        while (trail_.depth() > stack_size) {
             eliminations.clear();
             trail_.pop();
             auto sm = frames_.pop_frame();
