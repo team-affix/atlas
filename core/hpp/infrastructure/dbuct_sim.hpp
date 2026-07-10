@@ -16,53 +16,50 @@
 #include "linear_batch_increment.hpp"
 #include "random_rollout.hpp"
 
+// What terminate() hands back: the 0-based frame index DBUCT backtracked TO
+// (root == 0), plus the forced eliminations the final CDCL frame pop surfaced at
+// the resume frontier.
+struct dbuct_backtrack_result {
+    std::size_t frame_index;
+    std::vector<const resolution_lineage*> eliminations;
+};
+
 // Delayed-backtracking counterpart of mcts_sim. Constructs a single
 // monte_carlo::dbuct on the MCT root for the whole solve (episodes camp deep in
-// the tree) and keeps three stacks in lockstep, one frame per tree-policy choose
-// (plus one transient rollout frame):
-//   * the trail's frame stack (rolls back the trail-journalled dbuct_* state),
-//   * the CDCL learner's own frame stack (push_frame/pop_frame), and
-//   * a plain frame counter that mirrors the learner's stack size for the
-//     avoidance-unit-boundary oracle.
-// terminate() restores to the frame index DBUCT backtracked TO by popping each
-// stack down to that depth; because a CDCL pop_frame emits the still-forced
-// eliminations sitting in the popped frame, terminate() (and restore_root())
-// drain those and hand them back so the solver can route them at the resume
-// frontier. The reward passes straight through to DBUCT.
-template<typename ITrail, typename IMakeResolutionLineage,
-         typename IFrameControl, typename IFrameCount>
+// the tree) and keeps the trail's frame stack and the CDCL learner's own frame
+// stack in lockstep: exactly one frame per MCTS choose, whether that choose is a
+// tree-policy step or a rollout step. dbuct itself does NOT grow during rollout,
+// so an episode ends with the trail/CDCL deeper than dbuct; terminate() simply
+// pops the excess back down to the index dbuct reports. Because both counters
+// are pushed and popped together and both start at 1 (the base frame here, the
+// learner's ctor root frame there), trail.depth() equals the learner's frame
+// depth at all times -- which is why the avoidance-unit-boundary oracle can read
+// trail.depth() directly. Nothing here inspects or cares whether dbuct is in
+// rollout.
+template<typename ITrail, typename IMakeResolutionLineage, typename IFrameControl>
 struct dbuct_sim {
-    dbuct_sim(ITrail&, IMakeResolutionLineage&, IFrameControl&, IFrameCount&,
+    dbuct_sim(ITrail&, IMakeResolutionLineage&, IFrameControl&,
               std::mt19937&, double exploration_constant,
               std::size_t grant_increment_interval);
 
     mcts_choice choose(const std::vector<mcts_choice>&);
-    // force_progress: when the episode ended in a conflict, the resume frontier
-    // must not be left holding the dead-end simulation work, so we keep reporting
-    // the episode (accruing visits until a frame budget is spent) until at least
-    // one frame is actually popped. A solved/depth-exceeded episode leaves a valid
-    // frontier, so a zero-pop backtrack there is fine.
-    std::vector<const resolution_lineage*> terminate(double reward, bool force_progress);
-    bool in_rollout() const { return dbuct_->in_rollout(); }
+    // force_progress: a conflicted terminal must not leave its dead-end frontier
+    // in place, so we keep reporting the episode (accruing visits until a frame
+    // budget is spent) until at least one frame is actually popped. A
+    // solved/depth-exceeded terminal leaves a valid frontier, so a zero-pop
+    // backtrack there is fine.
+    dbuct_backtrack_result terminate(double reward, bool force_progress);
 
-    // Trail frames held below the root for the current camped path (excludes the
-    // root frame and any transient rollout frame). Behavioral camp-depth probe.
-    std::size_t camp_depth() const {
-        const std::size_t base = root_depth_ + 1 + (dbuct_->in_rollout() ? 1 : 0);
-        const std::size_t d = trail_.depth();
-        return d > base ? d - base : 0;
-    }
-
-    void mark_root() { root_depth_ = trail_.depth(); trail_.push(); }
-    void restore_root();
+    // Undo all trail-journalled work back to the pristine pre-activation state.
+    // The solver calls this once, on refutation, so an exhausted solve leaves the
+    // clean initial state a restarting solver would (a refuted session normalizes
+    // its query vars back to unbound, including bindings from root-frontier unit
+    // resolutions that never opened a choose frame). CDCL's own ctor root frame is
+    // left intact -- the base trail frame mirrors it but was pushed without a
+    // matching push_frame, so it is popped trail-only.
+    void unwind_to_root();
 
 private:
-    // Pop one camp frame off all three stacks. The trail frame rolls back the
-    // trail-journalled state; the CDCL frame pop yields the eliminations still
-    // forced past its boundary (appended to `out` when non-null); the counter
-    // mirrors the learner's stack size.
-    void pop_camp_frame(std::vector<const resolution_lineage*>* out);
-
     using decision_set_t = mcts_node_id::first_type;
 
     struct walker {
@@ -107,8 +104,6 @@ private:
 
     ITrail&                trail_;
     IFrameControl&         frames_;
-    IFrameCount&           count_;
-    std::size_t            root_depth_ = 0;
     visits_table_t         visits_table_;
     value_table_t          value_table_;
     dispatches_table_t     dispatches_table_;
@@ -118,13 +113,12 @@ private:
     std::optional<dbuct_t> dbuct_;
 };
 
-template<typename ITrail, typename IMRL, typename IFC, typename IFN>
-dbuct_sim<ITrail, IMRL, IFC, IFN>::dbuct_sim(ITrail& trail, IMRL& mrl, IFC& frames,
-                                IFN& count, std::mt19937& rng,
+template<typename ITrail, typename IMRL, typename IFC>
+dbuct_sim<ITrail, IMRL, IFC>::dbuct_sim(ITrail& trail, IMRL& mrl, IFC& frames,
+                                std::mt19937& rng,
                                 double ec, std::size_t grant_increment_interval)
     : trail_(trail)
     , frames_(frames)
-    , count_(count)
     , visits_table_()
     , value_table_()
     , dispatches_table_()
@@ -138,78 +132,75 @@ dbuct_sim<ITrail, IMRL, IFC, IFN>::dbuct_sim(ITrail& trail, IMRL& mrl, IFC& fram
                    walker_, rollout_,
                    mcts_node_id{decision_set_t{}, nullptr},
                    ec);
+    // Base frame: the trail's mirror of the permanent root that dbuct's stack and
+    // the CDCL learner's frame stack already hold. It keeps trail.depth() equal to
+    // the learner's frame depth (both start at 1) and is never popped during a
+    // solve, so trail.depth() == 1 means "at root".
+    trail_.push();
 }
 
-template<typename ITrail, typename IMRL, typename IFC, typename IFN>
-mcts_choice dbuct_sim<ITrail, IMRL, IFC, IFN>::choose(const std::vector<mcts_choice>& choices) {
-    const bool was_rollout = dbuct_->in_rollout();
+template<typename ITrail, typename IMRL, typename IFC>
+mcts_choice dbuct_sim<ITrail, IMRL, IFC>::choose(const std::vector<mcts_choice>& choices) {
     mcts_choice chosen = dbuct_->choose(choices, choices);
-    // A tree-policy choose opens a tree frame; the first choose that flips into
-    // rollout opens a single rollout frame that later rollout chooses reuse. Each
-    // opened trail frame gets a matching CDCL frame and counter bump so all three
-    // stacks stay 1:1.
-    if (!dbuct_->in_rollout() || !was_rollout) {
-        trail_.push();
-        frames_.push_frame();
-        count_.push();
-    }
+    // One trail frame + one matching CDCL frame per choose, unconditionally. Any
+    // excess (rollout steps, which dbuct does not track) is reconciled away in
+    // terminate() by popping down to the index dbuct reports.
+    trail_.push();
+    frames_.push_frame();
     return chosen;
 }
 
-template<typename ITrail, typename IMRL, typename IFC, typename IFN>
-void dbuct_sim<ITrail, IMRL, IFC, IFN>::pop_camp_frame(std::vector<const resolution_lineage*>* out) {
-    trail_.pop();
-    auto sm = frames_.pop_frame();
-    while (!sm.done()) {
-        sm.resume();
-        if (sm.has_yield()) {
-            const resolution_lineage* elim = sm.consume_yield();
-            if (out)
-                out->push_back(elim);
-        }
-    }
-    count_.pop();
-}
-
-template<typename ITrail, typename IMRL, typename IFC, typename IFN>
-std::vector<const resolution_lineage*> dbuct_sim<ITrail, IMRL, IFC, IFN>::terminate(double reward, bool force_progress) {
-    // DBUCT returns the 0-based frame index it backtracked TO (root = 0). The
-    // trail holds the root frame plus one frame per tree choose (and possibly a
-    // transient rollout frame on top), so restoring is just popping down to the
-    // depth that leaves exactly `idx` tree frames. Each popped CDCL frame surfaces
-    // the eliminations still forced past its boundary, which we return for routing.
-    // Only the FINAL pop -- the one that lands us at the resume depth -- surfaces
-    // eliminations valid at the resume frontier. Each intermediate pop emits the
-    // conflicts still unit at THAT (deeper) level; as we keep popping past their
-    // boundaries CDCL re-arms them as watched clauses (they later fire through
-    // constrain), so routing those intermediate emissions at the shallower resume
-    // frontier would over-eliminate. Clearing before each pop keeps exactly the
-    // resume-level set.
-    std::vector<const resolution_lineage*> eliminations;
+template<typename ITrail, typename IMRL, typename IFC>
+dbuct_backtrack_result dbuct_sim<ITrail, IMRL, IFC>::terminate(double reward, bool force_progress) {
+    // dbuct returns the 0-based frame index it backtracked TO (root == 0). The
+    // trail holds the base frame plus one frame per choose, so restoring is just
+    // popping down to `idx + 1` (base frame + idx live frames). Each popped CDCL
+    // frame surfaces the eliminations still forced past its boundary. Only the
+    // FINAL pop -- the one landing at the resume depth -- yields eliminations
+    // valid at the resume frontier; earlier pops emit conflicts still unit at
+    // THAT (deeper) level which CDCL re-arms as watched clauses as we pop past
+    // their boundaries, so routing them at the shallower resume frontier would
+    // over-eliminate. Clearing before each pop keeps exactly the resume-level set.
+    dbuct_backtrack_result result{0, {}};
     const std::size_t start_depth = trail_.depth();
     while (true) {
         const std::size_t idx = dbuct_->terminate(reward);
-        while (trail_.depth() > root_depth_ + 1 + idx) {
-            eliminations.clear();
-            pop_camp_frame(&eliminations);
+        result.frame_index = idx;
+        while (trail_.depth() > idx + 1) {
+            result.eliminations.clear();
+            trail_.pop();
+            auto sm = frames_.pop_frame();
+            while (!sm.done()) {
+                sm.resume();
+                if (sm.has_yield())
+                    result.eliminations.push_back(sm.consume_yield());
+            }
         }
         // Stop once we've made progress, reached the root, or the caller is fine
-        // with a zero-pop backtrack (non-conflict terminal).
-        if (!force_progress || trail_.depth() < start_depth || trail_.depth() <= root_depth_ + 1)
+        // with a zero-pop backtrack (a non-conflict terminal). Root is depth 1.
+        if (!force_progress || trail_.depth() < start_depth || trail_.depth() <= 1)
             break;
     }
-    return eliminations;
+    return result;
 }
 
-template<typename ITrail, typename IMRL, typename IFC, typename IFN>
-void dbuct_sim<ITrail, IMRL, IFC, IFN>::restore_root() {
-    // Tear the whole camped path down: pop every camp frame (draining/ignoring
-    // its CDCL eliminations -- the solve is ending), then the bare trail root
-    // frame. The root has no CDCL frame (the learner's ctor root stays), so the
-    // counter settles back at 1.
-    while (trail_.depth() > root_depth_ + 1)
-        pop_camp_frame(nullptr);
-    if (trail_.depth() > root_depth_)
+template<typename ITrail, typename IMRL, typename IFC>
+void dbuct_sim<ITrail, IMRL, IFC>::unwind_to_root() {
+    // Pop every episode frame (each paired with its matching CDCL frame).
+    while (trail_.depth() > 1) {
+        trail_.pop();
+        auto sm = frames_.pop_frame();
+        while (!sm.done()) {
+            sm.resume();
+            if (sm.has_yield())
+                sm.consume_yield();
+        }
+    }
+    // Then the base trail frame itself, undoing the initial-goal activation and
+    // any root-frontier unit resolutions. It has no matching CDCL frame (it
+    // mirrors CDCL's permanent ctor root, which is left in place), so pop the
+    // trail only.
+    if (trail_.depth() > 0)
         trail_.pop();
 }
 

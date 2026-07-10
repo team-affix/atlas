@@ -23,6 +23,7 @@
 #include "infrastructure/unit_goals.hpp"
 #include "infrastructure/decision_memory.hpp"
 #include "infrastructure/resolution_memory.hpp"
+#include "infrastructure/resolution_recorder.hpp"
 #include "infrastructure/candidate_frame_offsets.hpp"
 #include "infrastructure/expr_pool.hpp"
 #include "infrastructure/frame_bump_allocator.hpp"
@@ -98,10 +99,11 @@ using set_up_sim_t  = set_up_sim<trail>;
 using tear_down_sim_t  = tear_down_sim<trail, unit_goals, decision_memory, resolution_memory,
                     goal_candidate_rules, goal_exprs, ra_active_goals, candidate_frame_offsets,
                     mhu_t, bind_map<globalizer>, lineage_pool, frame_bump_allocator, cdcl_t, chosen_goal_candidates>;
+using resolution_recorder_t = resolution_recorder<decision_memory, resolution_memory>;
 using run_sim_t    = run_sim<initial_goals_activator_t, solution_detector_t, conflict_detector_t,
                     unit_goal_detector_t, unit_goals, unit_goals, MockGenerateDecision,
                     joint_t, elimination_router_t, resolver_t, get_unit_resolution_t,
-                    decision_memory, resolution_memory, resolution_memory>;
+                    resolution_recorder_t, resolution_recorder_t, resolution_memory>;
 
 struct sim_stack {
     db& database_;
@@ -122,6 +124,7 @@ struct sim_stack {
     resolution_memory resolution_memory_;
     candidate_frame_offsets candidate_frame_offsets_;
     chosen_goal_candidates chosen_goal_candidates_;
+    resolution_recorder_t resolution_recorder_{decision_memory_, resolution_memory_};
 
     expr_pool expr_pool_;
     frame_bump_allocator frame_allocator_{0};
@@ -219,7 +222,7 @@ struct simulation {
         run_sim_.emplace(*s.initial_goals_activator_, s.solution_detector_, s.conflict_detector_,
             s.unit_goal_detector_, s.unit_goals_, s.unit_goals_, s.decision_generator,
             *s.joint_, s.elimination_router_, *s.resolver_, s.get_unit_resolution_,
-            s.decision_memory_, s.resolution_memory_, s.resolution_memory_, max_resolutions);
+            s.resolution_recorder_, s.resolution_recorder_, s.resolution_memory_, max_resolutions);
     }
 
     void set_up() { set_up_sim_.set_up(); }

@@ -38,6 +38,7 @@
 #include "infrastructure/mhu_elimination_generator.hpp"
 #include "infrastructure/ra_rule_id_set_factory.hpp"
 #include "infrastructure/resolution_memory.hpp"
+#include "infrastructure/resolution_recorder.hpp"
 #include "infrastructure/resolver.hpp"
 #include "infrastructure/ridge_reward.hpp"
 #include "infrastructure/rule_id_set_factory.hpp"
@@ -104,10 +105,11 @@ struct ridge_manifest {
                                    value_delta_t, lineage_pool>;
     using mcts_decision_generator_t = mcts_decision_generator<lineage_pool, srt_active_goals,
                                     mcts_sim_t, goal_candidate_rules>;
+    using resolution_recorder_t = resolution_recorder<decision_memory, resolution_memory>;
     using run_sim_t        = run_sim<srt_initial_goals_activator_t, solution_detector_t, conflict_detector_t,
                             unit_goal_detector_t, unit_goals, unit_goals, mcts_decision_generator_t,
                             joint_t, elimination_router_t, resolver_t, get_unit_resolution_t,
-                            decision_memory, resolution_memory, resolution_memory>;
+                            resolution_recorder_t, resolution_recorder_t, resolution_memory>;
     using solver_t        = solver<mcts_sim_t, mcts_sim_t, run_sim_t, decision_memory, decision_memory,
                             lineage_pool, cdcl_t, elimination_router_t>;
 
@@ -167,6 +169,7 @@ struct ridge_manifest {
     std::mt19937                rng_;
     mcts_sim_t                 mcts_sim_;
     mcts_decision_generator_t       mcts_decision_generator_;
+    resolution_recorder_t            resolution_recorder_;
     run_sim_t                      run_sim_;
     solver_t                      solver_;
 };
