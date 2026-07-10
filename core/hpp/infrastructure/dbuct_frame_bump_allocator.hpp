@@ -2,37 +2,69 @@
 #define DBUCT_FRAME_BUMP_ALLOCATOR_HPP
 
 #include <cstdint>
-#include <memory>
-#include "infrastructure/backtrackable_add.hpp"
-#include "infrastructure/tracked.hpp"
+#include <list>
+#include <stack>
+#include "value_objects/frame_bump_action.hpp"
+#include "debug_assert.hpp"
 
-// Delayed-backtracking variant of frame_bump_allocator. The bump cursor is
-// trail-journalled (via ILogTrailAction): each bump logs a backtrackable add so a
-// rolled-back choice frame rewinds the cursor, freeing the offsets it handed out
-// (otherwise reactivation would collide global keys against stale bindings).
-template<typename ILogTrailAction>
 struct dbuct_frame_bump_allocator {
-    dbuct_frame_bump_allocator(ILogTrailAction& t, uint32_t initial);
+    explicit dbuct_frame_bump_allocator(uint32_t initial);
 
     uint32_t bump(uint32_t n);
     uint32_t peek() const;
 
+    void push_frame();
+    void pop_frame();
+    void squash_frame();
+
 private:
-    tracked<uint32_t, ILogTrailAction> next_frame_offset_;
+    struct frame {
+        std::list<frame_bump_action> actions;
+    };
+
+    void log(frame_bump_action action);
+    void undo_action(const frame_bump_action& action);
+
+    uint32_t next_frame_offset_;
+    std::stack<frame> frame_stack_;
 };
 
-template<typename ILogTrailAction>
-dbuct_frame_bump_allocator<ILogTrailAction>::dbuct_frame_bump_allocator(ILogTrailAction& t, uint32_t initial)
-    : next_frame_offset_(t, initial) {}
+inline dbuct_frame_bump_allocator::dbuct_frame_bump_allocator(uint32_t initial)
+    : next_frame_offset_(initial) {}
 
-template<typename ILogTrailAction>
-uint32_t dbuct_frame_bump_allocator<ILogTrailAction>::bump(uint32_t n) {
-    const uint32_t base = next_frame_offset_.get();
-    next_frame_offset_.mutate(std::make_unique<backtrackable_add<uint32_t>>(n));
+inline uint32_t dbuct_frame_bump_allocator::bump(uint32_t n) {
+    const uint32_t base = next_frame_offset_;
+    next_frame_offset_ += n;
+    log(scalar_add_u32{n});
     return base;
 }
 
-template<typename ILogTrailAction>
-uint32_t dbuct_frame_bump_allocator<ILogTrailAction>::peek() const { return next_frame_offset_.get(); }
+inline uint32_t dbuct_frame_bump_allocator::peek() const { return next_frame_offset_; }
+
+inline void dbuct_frame_bump_allocator::push_frame() { frame_stack_.push(frame{}); }
+
+inline void dbuct_frame_bump_allocator::pop_frame() {
+    auto current = std::move(frame_stack_.top());
+    frame_stack_.pop();
+    for (auto it = current.actions.rbegin(); it != current.actions.rend(); ++it)
+        undo_action(*it);
+}
+
+inline void dbuct_frame_bump_allocator::squash_frame() {
+    auto top = std::move(frame_stack_.top());
+    frame_stack_.pop();
+    auto& parent = frame_stack_.top().actions;
+    parent.splice(parent.end(), std::move(top.actions));
+}
+
+inline void dbuct_frame_bump_allocator::log(frame_bump_action action) {
+    DEBUG_ASSERT(!frame_stack_.empty());
+    frame_stack_.top().actions.push_back(std::move(action));
+}
+
+inline void dbuct_frame_bump_allocator::undo_action(const frame_bump_action& action) {
+    const auto& add = std::get<scalar_add_u32>(action);
+    next_frame_offset_ -= add.amount;
+}
 
 #endif

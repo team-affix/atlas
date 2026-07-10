@@ -26,7 +26,6 @@
 #include "infrastructure/expr_printer.hpp"
 #include "infrastructure/initial_goal_exprs.hpp"
 #include "infrastructure/normalizer.hpp"
-#include "infrastructure/trail.hpp"
 #include "infrastructure/var_names.hpp"
 #include "value_objects/sim_termination.hpp"
 #include "value_objects/lemma.hpp"
@@ -239,11 +238,11 @@ TEST_F(BasicManifestIntegrationTest, SimLifecycleTrailDepthRestoresAfterEmptyRun
      * rules: (none)
      */
     basic_manifest manifest{database, initial_goals, kInitialFrameOffset, kMaxResolutions, kSeed};
-    const size_t depth_before = manifest.trail_.depth();
+    const size_t depth_before = manifest.elimination_backlog_.depth();
     manifest.set_up_sim_.set_up();
     EXPECT_EQ(manifest.run_sim_.run(), sim_termination::solved);
     manifest.tear_down_sim_.tear_down();
-    EXPECT_EQ(manifest.trail_.depth(), depth_before);
+    EXPECT_EQ(manifest.elimination_backlog_.depth(), depth_before);
 }
 
 TEST_F(BasicManifestIntegrationTest, SimLifecycleTrailDepthRestoresAfterConflictedRun) {
@@ -255,11 +254,11 @@ TEST_F(BasicManifestIntegrationTest, SimLifecycleTrailDepthRestoresAfterConflict
     const expr* goal = saved_expr_pool_.make_functor(functors.id("f"), {});
     initial_goals.push(goal);
     basic_manifest manifest{database, initial_goals, kInitialFrameOffset, kMaxResolutions, kSeed};
-    const size_t depth_before = manifest.trail_.depth();
+    const size_t depth_before = manifest.elimination_backlog_.depth();
     manifest.set_up_sim_.set_up();
     EXPECT_EQ(manifest.run_sim_.run(), sim_termination::conflicted);
     manifest.tear_down_sim_.tear_down();
-    EXPECT_EQ(manifest.trail_.depth(), depth_before);
+    EXPECT_EQ(manifest.elimination_backlog_.depth(), depth_before);
 }
 
 TEST_F(BasicManifestIntegrationTest, SimLifecycleTrailDepthRestoresAfterDepthExceededRun) {
@@ -276,11 +275,11 @@ TEST_F(BasicManifestIntegrationTest, SimLifecycleTrailDepthRestoresAfterDepthExc
     database.push(rule{f_head, {f_body}});
     static constexpr size_t kLowBudget = 4;
     basic_manifest manifest{database, initial_goals, kInitialFrameOffset, kLowBudget, kSeed};
-    const size_t depth_before = manifest.trail_.depth();
+    const size_t depth_before = manifest.elimination_backlog_.depth();
     manifest.set_up_sim_.set_up();
     EXPECT_EQ(manifest.run_sim_.run(), sim_termination::depth_exceeded);
     manifest.tear_down_sim_.tear_down();
-    EXPECT_EQ(manifest.trail_.depth(), depth_before);
+    EXPECT_EQ(manifest.elimination_backlog_.depth(), depth_before);
 }
 
 TEST_F(BasicManifestIntegrationTest, SimLifecycleClearsEphemeralStoresAfterSolvedRun) {

@@ -2,31 +2,19 @@
 #define DBUCT_SERIES_REDUCED_TREE_HPP
 
 #include <algorithm>
-#include <memory>
+#include <list>
 #include <set>
+#include <stack>
 #include <unordered_map>
 #include <unordered_set>
-#include "infrastructure/backtrackable_map_assign.hpp"
-#include "infrastructure/backtrackable_map_at_erase.hpp"
-#include "infrastructure/backtrackable_map_at_insert.hpp"
-#include "infrastructure/backtrackable_map_erase.hpp"
-#include "infrastructure/backtrackable_map_insert.hpp"
-#include "infrastructure/backtrackable_set_erase.hpp"
-#include "infrastructure/backtrackable_set_insert.hpp"
-#include "infrastructure/tracked.hpp"
+#include <variant>
+#include "value_objects/srt_action.hpp"
+#include "debug_assert.hpp"
 
-// Trail-journalled series-reduced tree: the delayed-backtracking counterpart of
-// series_reduced_tree. The forest is held in four tracked containers on the trail
-// (abstracted as ILogTrailAction); every mutation, including those in the
-// unary/nullary reduction cascades, is a primitive backtrackable mutation, so a
-// link()+cascade's LIFO replay on trail pop reconstructs the exact pre-link
-// topology without any bespoke compound inverse.
-template<typename NodeId, typename ILogTrailAction>
+template<typename NodeId>
 struct dbuct_series_reduced_tree {
-    using node_set_t     = std::unordered_set<NodeId>;
-    using child_set_t    = std::set<NodeId>;
-
-    explicit dbuct_series_reduced_tree(ILogTrailAction& t);
+    using node_set_t  = std::unordered_set<NodeId>;
+    using child_set_t = std::set<NodeId>;
 
     bool insert(NodeId node);
     bool link(NodeId parent, child_set_t children);
@@ -35,75 +23,95 @@ struct dbuct_series_reduced_tree {
     const node_set_t& leaves() const;
     const child_set_t& children(NodeId parent) const;
 
+    void push_frame();
+    void pop_frame();
+    void squash_frame();
+
 private:
     using children_map_t = std::unordered_map<NodeId, child_set_t>;
     using parents_map_t  = std::unordered_map<NodeId, NodeId>;
+
+    struct frame {
+        std::list<srt_action<NodeId>> actions;
+    };
 
     void try_reduce(NodeId node);
     void reduce_nullary(NodeId node);
     void reduce_unary(NodeId parent);
 
-    tracked<node_set_t, ILogTrailAction>     roots_;
-    tracked<node_set_t, ILogTrailAction>     leaves_;
-    tracked<children_map_t, ILogTrailAction> children_;
-    tracked<parents_map_t, ILogTrailAction>  parents_;
+    void log(srt_action<NodeId> action);
+    void undo_action(const srt_action<NodeId>& action);
+
+    node_set_t roots_;
+    node_set_t leaves_;
+    children_map_t children_;
+    parents_map_t parents_;
+    std::stack<frame> frame_stack_;
 };
 
-template<typename NodeId, typename ILogTrailAction>
-dbuct_series_reduced_tree<NodeId, ILogTrailAction>::dbuct_series_reduced_tree(ILogTrailAction& t)
-    : roots_(t, node_set_t{}), leaves_(t, node_set_t{}),
-      children_(t, children_map_t{}), parents_(t, parents_map_t{}) {}
-
-template<typename NodeId, typename ILogTrailAction>
-bool dbuct_series_reduced_tree<NodeId, ILogTrailAction>::insert(NodeId node) {
-    if (roots_.get().contains(node) || parents_.get().contains(node))
+template<typename NodeId>
+bool dbuct_series_reduced_tree<NodeId>::insert(NodeId node) {
+    if (roots_.contains(node) || parents_.contains(node))
         return false;
-    roots_.mutate(std::make_unique<backtrackable_set_insert<node_set_t>>(node));
-    leaves_.mutate(std::make_unique<backtrackable_set_insert<node_set_t>>(node));
+    roots_.insert(node);
+    leaves_.insert(node);
+    log(srt_set_insert<NodeId>{srt_set_target::roots, node});
+    log(srt_set_insert<NodeId>{srt_set_target::leaves, node});
     return true;
 }
 
-template<typename NodeId, typename ILogTrailAction>
-bool dbuct_series_reduced_tree<NodeId, ILogTrailAction>::link(NodeId parent, child_set_t children) {
-    if (!leaves_.get().contains(parent))
+template<typename NodeId>
+bool dbuct_series_reduced_tree<NodeId>::link(NodeId parent, child_set_t children) {
+    if (!leaves_.contains(parent))
         return false;
     if (std::any_of(children.begin(), children.end(), [&](const NodeId& c) {
-            return !roots_.get().contains(c);
+            return !roots_.contains(c);
         }))
         return false;
 
-    children_.mutate(std::make_unique<backtrackable_map_insert<children_map_t>>(parent, children));
-    for (const NodeId& c : children)
-        parents_.mutate(std::make_unique<backtrackable_map_insert<parents_map_t>>(c, parent));
+    children_.insert({parent, children});
+    log(srt_children_insert<NodeId>{parent, children});
 
-    leaves_.mutate(std::make_unique<backtrackable_set_erase<node_set_t>>(parent));
+    for (const NodeId& c : children) {
+        parents_.insert({c, parent});
+        log(srt_parent_insert<NodeId>{c, parent});
+    }
 
-    for (const NodeId& c : children)
-        roots_.mutate(std::make_unique<backtrackable_set_erase<node_set_t>>(c));
+    leaves_.erase(parent);
+    log(srt_set_erase<NodeId>{srt_set_target::leaves, parent});
+
+    for (const NodeId& c : children) {
+        roots_.erase(c);
+        log(srt_set_erase<NodeId>{srt_set_target::roots, c});
+    }
 
     try_reduce(parent);
-
     return true;
 }
 
-template<typename NodeId, typename ILogTrailAction>
-const typename dbuct_series_reduced_tree<NodeId, ILogTrailAction>::node_set_t&
-dbuct_series_reduced_tree<NodeId, ILogTrailAction>::roots() const { return roots_.get(); }
+template<typename NodeId>
+const typename dbuct_series_reduced_tree<NodeId>::node_set_t&
+dbuct_series_reduced_tree<NodeId>::roots() const {
+    return roots_;
+}
 
-template<typename NodeId, typename ILogTrailAction>
-const typename dbuct_series_reduced_tree<NodeId, ILogTrailAction>::node_set_t&
-dbuct_series_reduced_tree<NodeId, ILogTrailAction>::leaves() const { return leaves_.get(); }
+template<typename NodeId>
+const typename dbuct_series_reduced_tree<NodeId>::node_set_t&
+dbuct_series_reduced_tree<NodeId>::leaves() const {
+    return leaves_;
+}
 
-template<typename NodeId, typename ILogTrailAction>
-const typename dbuct_series_reduced_tree<NodeId, ILogTrailAction>::child_set_t&
-dbuct_series_reduced_tree<NodeId, ILogTrailAction>::children(NodeId parent) const { return children_.get().at(parent); }
+template<typename NodeId>
+const typename dbuct_series_reduced_tree<NodeId>::child_set_t&
+dbuct_series_reduced_tree<NodeId>::children(NodeId parent) const {
+    return children_.at(parent);
+}
 
-template<typename NodeId, typename ILogTrailAction>
-void dbuct_series_reduced_tree<NodeId, ILogTrailAction>::try_reduce(NodeId node) {
-    auto it = children_.get().find(node);
-    if (it == children_.get().end())
+template<typename NodeId>
+void dbuct_series_reduced_tree<NodeId>::try_reduce(NodeId node) {
+    auto it = children_.find(node);
+    if (it == children_.end())
         return;
-
     const size_t child_count = it->second.size();
     if (child_count == 0)
         reduce_nullary(node);
@@ -111,39 +119,115 @@ void dbuct_series_reduced_tree<NodeId, ILogTrailAction>::try_reduce(NodeId node)
         reduce_unary(node);
 }
 
-template<typename NodeId, typename ILogTrailAction>
-void dbuct_series_reduced_tree<NodeId, ILogTrailAction>::reduce_nullary(NodeId node) {
-    children_.mutate(std::make_unique<backtrackable_map_erase<children_map_t>>(node));
+template<typename NodeId>
+void dbuct_series_reduced_tree<NodeId>::reduce_nullary(NodeId node) {
+    child_set_t captured = std::move(children_.at(node));
+    children_.erase(node);
+    log(srt_children_erase<NodeId>{node, std::move(captured)});
 
-    auto grandparent_it = parents_.get().find(node);
-    if (grandparent_it == parents_.get().end()) {
-        roots_.mutate(std::make_unique<backtrackable_set_erase<node_set_t>>(node));
+    auto grandparent_it = parents_.find(node);
+    if (grandparent_it == parents_.end()) {
+        roots_.erase(node);
+        log(srt_set_erase<NodeId>{srt_set_target::roots, node});
     } else {
         const NodeId grandparent = grandparent_it->second;
-        children_.mutate(std::make_unique<backtrackable_map_at_erase<children_map_t>>(grandparent, node));
-        parents_.mutate(std::make_unique<backtrackable_map_erase<parents_map_t>>(node));
+        children_.at(grandparent).erase(node);
+        log(srt_children_at_erase<NodeId>{grandparent, node});
+        NodeId captured_parent = grandparent_it->second;
+        parents_.erase(node);
+        log(srt_parent_erase<NodeId>{node, captured_parent});
         try_reduce(grandparent);
     }
 }
 
-template<typename NodeId, typename ILogTrailAction>
-void dbuct_series_reduced_tree<NodeId, ILogTrailAction>::reduce_unary(NodeId parent) {
-    const NodeId child = *children_.get().at(parent).begin();
+template<typename NodeId>
+void dbuct_series_reduced_tree<NodeId>::reduce_unary(NodeId parent) {
+    const NodeId child = *children_.at(parent).begin();
 
-    children_.mutate(std::make_unique<backtrackable_map_erase<children_map_t>>(parent));
+    child_set_t captured_children = std::move(children_.at(parent));
+    children_.erase(parent);
+    log(srt_children_erase<NodeId>{parent, std::move(captured_children)});
 
-    auto grandparent_it = parents_.get().find(parent);
-    if (grandparent_it == parents_.get().end()) {
-        parents_.mutate(std::make_unique<backtrackable_map_erase<parents_map_t>>(child));
-        roots_.mutate(std::make_unique<backtrackable_set_erase<node_set_t>>(parent));
-        roots_.mutate(std::make_unique<backtrackable_set_insert<node_set_t>>(child));
+    auto grandparent_it = parents_.find(parent);
+    if (grandparent_it == parents_.end()) {
+        NodeId captured_parent = parents_.at(child);
+        parents_.erase(child);
+        log(srt_parent_erase<NodeId>{child, captured_parent});
+        roots_.erase(parent);
+        log(srt_set_erase<NodeId>{srt_set_target::roots, parent});
+        roots_.insert(child);
+        log(srt_set_insert<NodeId>{srt_set_target::roots, child});
     } else {
         const NodeId grandparent = grandparent_it->second;
-        parents_.mutate(std::make_unique<backtrackable_map_assign<parents_map_t>>(child, grandparent));
-        children_.mutate(std::make_unique<backtrackable_map_at_erase<children_map_t>>(grandparent, parent));
-        children_.mutate(std::make_unique<backtrackable_map_at_insert<children_map_t>>(grandparent, child));
-        parents_.mutate(std::make_unique<backtrackable_map_erase<parents_map_t>>(parent));
+        NodeId previous_parent = parents_.at(child);
+        parents_.at(child) = grandparent;
+        log(srt_parent_assign<NodeId>{child, previous_parent});
+        children_.at(grandparent).erase(parent);
+        log(srt_children_at_erase<NodeId>{grandparent, parent});
+        children_.at(grandparent).insert(child);
+        log(srt_children_at_insert<NodeId>{grandparent, child});
+        parents_.erase(parent);
+        log(srt_parent_erase<NodeId>{parent, grandparent});
     }
+}
+
+template<typename NodeId>
+void dbuct_series_reduced_tree<NodeId>::push_frame() {
+    frame_stack_.push(frame{});
+}
+
+template<typename NodeId>
+void dbuct_series_reduced_tree<NodeId>::pop_frame() {
+    auto current = std::move(frame_stack_.top());
+    frame_stack_.pop();
+    for (auto it = current.actions.rbegin(); it != current.actions.rend(); ++it)
+        undo_action(*it);
+}
+
+template<typename NodeId>
+void dbuct_series_reduced_tree<NodeId>::squash_frame() {
+    auto top = std::move(frame_stack_.top());
+    frame_stack_.pop();
+    auto& parent = frame_stack_.top().actions;
+    parent.splice(parent.end(), std::move(top.actions));
+}
+
+template<typename NodeId>
+void dbuct_series_reduced_tree<NodeId>::log(srt_action<NodeId> action) {
+    DEBUG_ASSERT(!frame_stack_.empty());
+    frame_stack_.top().actions.push_back(std::move(action));
+}
+
+template<typename NodeId>
+void dbuct_series_reduced_tree<NodeId>::undo_action(const srt_action<NodeId>& action) {
+    std::visit([&](const auto& op) {
+        using T = std::decay_t<decltype(op)>;
+        if constexpr (std::is_same_v<T, srt_set_insert<NodeId>>) {
+            if (op.target == srt_set_target::roots)
+                roots_.erase(op.node);
+            else
+                leaves_.erase(op.node);
+        } else if constexpr (std::is_same_v<T, srt_set_erase<NodeId>>) {
+            if (op.target == srt_set_target::roots)
+                roots_.insert(op.node);
+            else
+                leaves_.insert(op.node);
+        } else if constexpr (std::is_same_v<T, srt_children_insert<NodeId>>) {
+            children_.erase(op.parent);
+        } else if constexpr (std::is_same_v<T, srt_children_erase<NodeId>>) {
+            children_.insert({op.parent, op.children});
+        } else if constexpr (std::is_same_v<T, srt_parent_insert<NodeId>>) {
+            parents_.erase(op.child);
+        } else if constexpr (std::is_same_v<T, srt_parent_erase<NodeId>>) {
+            parents_.insert({op.child, op.parent});
+        } else if constexpr (std::is_same_v<T, srt_parent_assign<NodeId>>) {
+            parents_.at(op.child) = op.previous;
+        } else if constexpr (std::is_same_v<T, srt_children_at_insert<NodeId>>) {
+            children_.at(op.parent).erase(op.child);
+        } else if constexpr (std::is_same_v<T, srt_children_at_erase<NodeId>>) {
+            children_.at(op.parent).insert(op.child);
+        }
+    }, action);
 }
 
 #endif

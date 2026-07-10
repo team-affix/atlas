@@ -6,7 +6,6 @@
 #include "infrastructure/expr_pool.hpp"
 #include "infrastructure/horizon_manifest.hpp"
 #include "infrastructure/initial_goal_exprs.hpp"
-#include "infrastructure/trail.hpp"
 #include "value_objects/expr.hpp"
 #include "value_objects/lemma.hpp"
 #include "value_objects/sim_termination.hpp"

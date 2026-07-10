@@ -13,12 +13,12 @@
 
 using ::testing::Return;
 
-struct MockPushTrailFrame {
-    MOCK_METHOD(void, push, ());
+struct MockPushFrame {
+    MOCK_METHOD(void, push_frame, ());
 };
 
-struct MockPopTrailFrame {
-    MOCK_METHOD(void, pop, ());
+struct MockPopFrame {
+    MOCK_METHOD(void, pop_frame, ());
 };
 
 struct MockClearUnitGoals {
@@ -84,9 +84,9 @@ struct MockMakeResolutionLineage {
         (const goal_lineage*, rule_id));
 };
 
-using test_set_up_sim_t = set_up_sim<MockPushTrailFrame>;
+using test_set_up_sim_t = set_up_sim<MockPushFrame>;
 using test_tear_down_sim_t = tear_down_sim<
-    MockPopTrailFrame, MockClearUnitGoals, MockClearRecordedDecisions,
+    MockPopFrame, MockClearUnitGoals, MockClearRecordedDecisions,
     MockClearRecordedResolutions, MockClearGoalCandidateRuleIds, MockClearGoalExprs,
     MockClearActiveGoals, MockClearCandidateFrameOffsets, MockClearMhuHeads,
     MockClearBindings, MockTrimUnpinnedLineages, MockFrameAllocator,
@@ -99,8 +99,8 @@ using test_mcts_sim_t = mcts_sim<test_set_up_sim_t, test_tear_down_sim_t,
 struct MctsSimTest : public ::testing::Test {
     static constexpr double kExplorationConstant = 1.414;
 
-    MockPushTrailFrame push_trail_frame;
-    MockPopTrailFrame pop_trail_frame;
+    MockPushFrame push_frame;
+    MockPopFrame pop_frame;
     testing::NiceMock<MockClearUnitGoals> clear_unit_goals;
     testing::NiceMock<MockClearRecordedDecisions> clear_recorded_decisions;
     testing::NiceMock<MockClearRecordedResolutions> clear_recorded_resolutions;
@@ -120,9 +120,9 @@ struct MctsSimTest : public ::testing::Test {
     std::mt19937 rng{42};
     std::set<resolution_lineage> resolution_storage;
 
-    test_set_up_sim_t inner_set_up{push_trail_frame};
+    test_set_up_sim_t inner_set_up{push_frame};
     test_tear_down_sim_t inner_tear_down{
-        pop_trail_frame, clear_unit_goals, clear_recorded_decisions,
+        pop_frame, clear_unit_goals, clear_recorded_decisions,
         clear_recorded_resolutions, clear_goal_candidate_rule_ids, clear_goal_exprs,
         clear_active_goals, clear_candidate_frame_offsets, clear_mhu_heads,
         clear_bindings, trim_unpinned_lineages, frame_allocator,
@@ -145,27 +145,27 @@ struct MctsSimTest : public ::testing::Test {
 
 TEST_F(MctsSimTest, SetUpDelegatesToInnerSetUpSim) {
     testing::InSequence seq;
-    EXPECT_CALL(push_trail_frame, push()).Times(1);
+    EXPECT_CALL(push_frame, push_frame()).Times(1);
     EXPECT_CALL(compute_mcts_reward, compute_mcts_reward()).Times(1);
-    EXPECT_CALL(pop_trail_frame, pop()).Times(1);
+    EXPECT_CALL(pop_frame, pop_frame()).Times(1);
     sim.set_up();
     sim.tear_down();
 }
 
 TEST_F(MctsSimTest, TearDownQueriesMctsRewardBeforeInnerTearDown) {
     testing::InSequence seq;
-    EXPECT_CALL(push_trail_frame, push()).Times(1);
+    EXPECT_CALL(push_frame, push_frame()).Times(1);
     sim.set_up();
     EXPECT_CALL(compute_mcts_reward, compute_mcts_reward()).WillOnce(Return(-5.0));
-    EXPECT_CALL(pop_trail_frame, pop()).Times(1);
+    EXPECT_CALL(pop_frame, pop_frame()).Times(1);
     sim.tear_down();
 }
 
 TEST_F(MctsSimTest, TearDownDelegatesFullClearSequenceToInnerTearDown) {
-    EXPECT_CALL(push_trail_frame, push()).Times(1);
+    EXPECT_CALL(push_frame, push_frame()).Times(1);
     sim.set_up();
     EXPECT_CALL(compute_mcts_reward, compute_mcts_reward()).WillOnce(Return(0.0));
-    EXPECT_CALL(pop_trail_frame, pop()).Times(1);
+    EXPECT_CALL(pop_frame, pop_frame()).Times(1);
     EXPECT_CALL(clear_unit_goals, clear()).Times(1);
     EXPECT_CALL(clear_recorded_decisions, clear_recorded_decisions()).Times(1);
     EXPECT_CALL(clear_recorded_resolutions, clear_recorded_resolutions()).Times(1);
@@ -183,7 +183,7 @@ TEST_F(MctsSimTest, TearDownDelegatesFullClearSequenceToInnerTearDown) {
 }
 
 TEST_F(MctsSimTest, ChooseAfterSetUpReturnsOneOfSuppliedGoalChoices) {
-    EXPECT_CALL(push_trail_frame, push()).Times(1);
+    EXPECT_CALL(push_frame, push_frame()).Times(1);
     sim.set_up();
     std::vector<mcts_choice> choices{mcts_choice{&gl0}, mcts_choice{&gl1}};
     mcts_choice picked = sim.choose(choices);
@@ -191,12 +191,12 @@ TEST_F(MctsSimTest, ChooseAfterSetUpReturnsOneOfSuppliedGoalChoices) {
     ASSERT_NE(picked_gl, nullptr);
     EXPECT_TRUE(*picked_gl == &gl0 || *picked_gl == &gl1);
     EXPECT_CALL(compute_mcts_reward, compute_mcts_reward()).Times(1);
-    EXPECT_CALL(pop_trail_frame, pop()).Times(1);
+    EXPECT_CALL(pop_frame, pop_frame()).Times(1);
     sim.tear_down();
 }
 
 TEST_F(MctsSimTest, ChooseAfterSetUpReturnsOneOfSuppliedRuleChoices) {
-    EXPECT_CALL(push_trail_frame, push()).Times(1);
+    EXPECT_CALL(push_frame, push_frame()).Times(1);
     sim.set_up();
     std::vector<mcts_choice> choices{mcts_choice{rule_id{0}}, mcts_choice{rule_id{1}}};
     mcts_choice picked = sim.choose(choices);
@@ -204,12 +204,12 @@ TEST_F(MctsSimTest, ChooseAfterSetUpReturnsOneOfSuppliedRuleChoices) {
     ASSERT_NE(picked_rule, nullptr);
     EXPECT_TRUE(*picked_rule == 0 || *picked_rule == 1);
     EXPECT_CALL(compute_mcts_reward, compute_mcts_reward()).Times(1);
-    EXPECT_CALL(pop_trail_frame, pop()).Times(1);
+    EXPECT_CALL(pop_frame, pop_frame()).Times(1);
     sim.tear_down();
 }
 
 TEST_F(MctsSimTest, MultipleRolloutChoosesStayWithinChoiceSet) {
-    EXPECT_CALL(push_trail_frame, push()).Times(1);
+    EXPECT_CALL(push_frame, push_frame()).Times(1);
     sim.set_up();
     std::vector<mcts_choice> choices{mcts_choice{&gl0}, mcts_choice{&gl1}};
     for (int i = 0; i < 10; ++i) {
@@ -219,7 +219,7 @@ TEST_F(MctsSimTest, MultipleRolloutChoosesStayWithinChoiceSet) {
         EXPECT_TRUE(*picked_gl == &gl0 || *picked_gl == &gl1);
     }
     EXPECT_CALL(compute_mcts_reward, compute_mcts_reward()).Times(1);
-    EXPECT_CALL(pop_trail_frame, pop()).Times(1);
+    EXPECT_CALL(pop_frame, pop_frame()).Times(1);
     sim.tear_down();
 }
 
@@ -227,12 +227,12 @@ TEST_F(MctsSimTest, FullLifecycleSetUpChooseTearDownTwice) {
     std::vector<mcts_choice> choices{mcts_choice{rule_id{0}}, mcts_choice{rule_id{1}}};
     for (int cycle = 0; cycle < 2; ++cycle) {
         testing::InSequence seq;
-        EXPECT_CALL(push_trail_frame, push()).Times(1);
+        EXPECT_CALL(push_frame, push_frame()).Times(1);
         sim.set_up();
         mcts_choice picked = sim.choose(choices);
         EXPECT_TRUE(std::holds_alternative<rule_id>(picked));
         EXPECT_CALL(compute_mcts_reward, compute_mcts_reward()).WillOnce(Return(-static_cast<double>(cycle)));
-        EXPECT_CALL(pop_trail_frame, pop()).Times(1);
+        EXPECT_CALL(pop_frame, pop_frame()).Times(1);
         sim.tear_down();
     }
 }

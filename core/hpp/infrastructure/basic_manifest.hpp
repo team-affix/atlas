@@ -47,7 +47,6 @@
 #include "infrastructure/solver.hpp"
 #include "infrastructure/subgoals_activator.hpp"
 #include "infrastructure/tear_down_sim.hpp"
-#include "infrastructure/trail.hpp"
 #include "infrastructure/unifier.hpp"
 #include "infrastructure/unifier_factory.hpp"
 #include "infrastructure/unit_goal_detector.hpp"
@@ -89,8 +88,8 @@ struct basic_manifest {
                                         initial_goal_activator_t, make_initial_goal_lineage_t, goal_candidates_activator_t>;
     using resolver_t                  = resolver<goal_deactivator_t, subgoals_activator_t, goal_candidates_deactivator_t, chosen_goal_candidates>;
     using random_decision_generator_t   = random_decision_generator<lineage_pool, ra_active_goals, goal_candidate_rules>;
-    using set_up_sim_t  = set_up_sim<trail>;
-    using tear_down_sim_t  = tear_down_sim<trail, unit_goals, decision_memory, resolution_memory,
+    using set_up_sim_t  = set_up_sim<elimination_backlog>;
+    using tear_down_sim_t  = tear_down_sim<elimination_backlog, unit_goals, decision_memory, resolution_memory,
                         goal_candidate_rules, goal_exprs, ra_active_goals, candidate_frame_offsets,
                         mhu_t, bind_map_t, lineage_pool, frame_bump_allocator, cdcl_t, chosen_goal_candidates>;
     using resolution_recorder_t = resolution_recorder<decision_memory, resolution_memory>;
@@ -109,7 +108,6 @@ struct basic_manifest {
         uint32_t random_seed);
 
     globalizer              globalizer_;
-    trail                   trail_;
     bind_map_t              bind_map_;
     bind_map_factory_t      bind_map_factory_;
     unifier_factory_t          unifier_factory_;

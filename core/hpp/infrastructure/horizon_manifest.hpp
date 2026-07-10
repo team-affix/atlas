@@ -60,7 +60,6 @@
 #include "infrastructure/srt_subgoals_activator.hpp"
 #include "infrastructure/subgoals_activator.hpp"
 #include "infrastructure/tear_down_sim.hpp"
-#include "infrastructure/trail.hpp"
 #include "infrastructure/unit_goal_detector.hpp"
 #include "infrastructure/unit_goals.hpp"
 #include "infrastructure/unifier.hpp"
@@ -108,8 +107,8 @@ struct horizon_manifest {
     using srt_initial_goals_activator_t  = srt_initial_goals_activator<srt_active_goals, initial_goals_activator_t>;
     using resolver_t                  = resolver<horizon_goal_deactivator_t, srt_subgoals_activator_t, goal_candidates_deactivator_t, chosen_goal_candidates>;
     using horizon_resolver_t           = horizon_resolver<resolver_t, db, goal_weights, cumulative_grounded_weight>;
-    using set_up_sim_t      = set_up_sim<trail>;
-    using tear_down_sim_t      = tear_down_sim<trail, unit_goals, decision_memory, resolution_memory,
+    using set_up_sim_t      = set_up_sim<elimination_backlog>;
+    using tear_down_sim_t      = tear_down_sim<elimination_backlog, unit_goals, decision_memory, resolution_memory,
                             goal_candidate_rules, goal_exprs, srt_active_goals, candidate_frame_offsets,
                             mhu_t, bind_map_t, lineage_pool, frame_bump_allocator, cdcl_t, chosen_goal_candidates>;
     using horizon_tear_down_sim_t   = horizon_tear_down_sim<tear_down_sim_t, goal_weights, cumulative_grounded_weight>;
@@ -136,7 +135,6 @@ struct horizon_manifest {
         double exploration_constant);
 
     globalizer              globalizer_;
-    trail                   trail_;
     bind_map_t              bind_map_;
     bind_map_factory_t      bind_map_factory_;
     unifier_factory_t          unifier_factory_;

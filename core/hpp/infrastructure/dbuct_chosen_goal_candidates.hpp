@@ -1,49 +1,82 @@
 #ifndef DBUCT_CHOSEN_GOAL_CANDIDATES_HPP
 #define DBUCT_CHOSEN_GOAL_CANDIDATES_HPP
 
-#include <memory>
+#include <list>
 #include <optional>
+#include <stack>
 #include <unordered_map>
-#include "infrastructure/backtrackable_map_assign.hpp"
-#include "infrastructure/backtrackable_map_insert.hpp"
-#include "infrastructure/tracked.hpp"
+#include "value_objects/chosen_candidate_action.hpp"
 #include "value_objects/lineage.hpp"
+#include "value_objects/rule.hpp"
+#include "debug_assert.hpp"
 
-// Delayed-backtracking variant of chosen_goal_candidates.
-//
-// set() is insert-or-assign, so it journals a map insert for a new goal and a
-// map assign (value swap) for an existing one; either way the trail (abstracted
-// as ILogTrailAction) rolls the choice back exactly on pop.
-template<typename ILogTrailAction>
 struct dbuct_chosen_goal_candidates {
-    explicit dbuct_chosen_goal_candidates(ILogTrailAction& t);
-
     std::optional<rule_id> try_get(const goal_lineage* gl) const;
     void set(const goal_lineage* gl, rule_id r);
 
+    void push_frame();
+    void pop_frame();
+    void squash_frame();
+
 private:
+    struct frame {
+        std::list<chosen_candidate_action> actions;
+    };
+
     using map_t = std::unordered_map<const goal_lineage*, rule_id>;
 
-    tracked<map_t, ILogTrailAction> by_goal_;
+    void log(chosen_candidate_action action);
+    void undo_action(const chosen_candidate_action& action);
+
+    map_t by_goal_;
+    std::stack<frame> frame_stack_;
 };
 
-template<typename ILogTrailAction>
-dbuct_chosen_goal_candidates<ILogTrailAction>::dbuct_chosen_goal_candidates(ILogTrailAction& t) : by_goal_(t, map_t{}) {}
-
-template<typename ILogTrailAction>
-std::optional<rule_id> dbuct_chosen_goal_candidates<ILogTrailAction>::try_get(const goal_lineage* gl) const {
-    const auto& m = by_goal_.get();
-    const auto it = m.find(gl);
-    if (it == m.end()) return std::nullopt;
+inline std::optional<rule_id> dbuct_chosen_goal_candidates::try_get(const goal_lineage* gl) const {
+    const auto it = by_goal_.find(gl);
+    if (it == by_goal_.end())
+        return std::nullopt;
     return it->second;
 }
 
-template<typename ILogTrailAction>
-void dbuct_chosen_goal_candidates<ILogTrailAction>::set(const goal_lineage* gl, rule_id r) {
-    if (by_goal_.get().contains(gl))
-        by_goal_.mutate(std::make_unique<backtrackable_map_assign<map_t>>(gl, r));
-    else
-        by_goal_.mutate(std::make_unique<backtrackable_map_insert<map_t>>(gl, r));
+inline void dbuct_chosen_goal_candidates::set(const goal_lineage* gl, rule_id r) {
+    if (by_goal_.contains(gl)) {
+        std::swap(by_goal_.at(gl), r);
+        log(chosen_candidate_assign{gl, r});
+    } else {
+        by_goal_.insert({gl, r});
+        log(chosen_candidate_insert{gl, r});
+    }
+}
+
+inline void dbuct_chosen_goal_candidates::push_frame() { frame_stack_.push(frame{}); }
+
+inline void dbuct_chosen_goal_candidates::pop_frame() {
+    auto current = std::move(frame_stack_.top());
+    frame_stack_.pop();
+    for (auto it = current.actions.rbegin(); it != current.actions.rend(); ++it)
+        undo_action(*it);
+}
+
+inline void dbuct_chosen_goal_candidates::squash_frame() {
+    auto top = std::move(frame_stack_.top());
+    frame_stack_.pop();
+    auto& parent = frame_stack_.top().actions;
+    parent.splice(parent.end(), std::move(top.actions));
+}
+
+inline void dbuct_chosen_goal_candidates::log(chosen_candidate_action action) {
+    DEBUG_ASSERT(!frame_stack_.empty());
+    frame_stack_.top().actions.push_back(std::move(action));
+}
+
+inline void dbuct_chosen_goal_candidates::undo_action(const chosen_candidate_action& action) {
+    if (const auto* ins = std::get_if<chosen_candidate_insert>(&action))
+        by_goal_.erase(ins->gl);
+    else {
+        const auto& asg = std::get<chosen_candidate_assign>(action);
+        by_goal_.at(asg.gl) = asg.value;
+    }
 }
 
 #endif

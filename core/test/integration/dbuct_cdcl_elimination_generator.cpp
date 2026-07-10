@@ -18,6 +18,7 @@
 #include <gmock/gmock.h>
 #include "infrastructure/dbuct_cdcl_elimination_generator.hpp"
 #include "infrastructure/dbuct_avoidance_unit_boundary.hpp"
+#include "infrastructure/frame_depth_tracker.hpp"
 #include "infrastructure/coroutine.hpp"
 
 using ::testing::_;
@@ -29,12 +30,6 @@ using ::testing::ReturnPointee;
 
 namespace {
 
-struct MockTrail {
-    MOCK_METHOD(void, log, (std::unique_ptr<i_backtrackable>));
-};
-struct MockGetFrameCount {
-    MOCK_METHOD(size_t, depth, (), (const));
-};
 struct MockGetNearestDecision {
     MOCK_METHOD(const resolution_lineage*, get_nearest_decision, (const resolution_lineage*), (const));
 };
@@ -64,8 +59,7 @@ lemma make_lemma(std::initializer_list<const resolution_lineage*> rs) {
 }
 
 using boundary_t = dbuct_avoidance_unit_boundary<NiceMock<MockGetNearestDecision>,
-                                                 NiceMock<MockGetFrameCount>,
-                                                 NiceMock<MockTrail>>;
+                                                 frame_depth_tracker>;
 using sut_t = dbuct_cdcl_elimination_generator<NiceMock<MockTryGetChosenGoalCandidate>,
                                                boundary_t,
                                                NiceMock<MockDeriveDecisionLemma>,
@@ -73,13 +67,12 @@ using sut_t = dbuct_cdcl_elimination_generator<NiceMock<MockTryGetChosenGoalCand
                                                boundary_t>;
 
 struct DbuctCdclEliminationGeneratorIntegrationTest : public ::testing::Test {
-    NiceMock<MockTrail> trail;
-    NiceMock<MockGetFrameCount> fc;
+    frame_depth_tracker fc;
     NiceMock<MockGetNearestDecision> nd;
     NiceMock<MockTryGetChosenGoalCandidate> tgcc;
     NiceMock<MockDeriveDecisionLemma> dl;
 
-    boundary_t aub{nd, fc, trail};
+    boundary_t aub{nd, fc};
     sut_t sut{tgcc, aub, dl, aub, aub};
 
     // Three decisions, each on its own chain with a real grandparent resolution so
@@ -101,10 +94,8 @@ struct DbuctCdclEliminationGeneratorIntegrationTest : public ::testing::Test {
     // path that advances the lagging unit boundary.
     resolution_lineage sentinel{nullptr, 99};
 
-    size_t depth = 1;  // mirrors the generator's frame depth (root frame == 1)
-
     void SetUp() override {
-        ON_CALL(fc, depth()).WillByDefault(ReturnPointee(&depth));
+        aub.push_frame();
         ON_CALL(nd, get_nearest_decision(_)).WillByDefault(Return(&sentinel));
         ON_CALL(tgcc, try_get(_)).WillByDefault(Return(std::optional<rule_id>{}));
     }
@@ -114,11 +105,11 @@ struct DbuctCdclEliminationGeneratorIntegrationTest : public ::testing::Test {
 // D1's frame index (1) as the unit boundary. A 2-member conflict learned at depth 2
 // is still unit when we pop back to depth 1, so pop emits the ultimate (D2).
 TEST_F(DbuctCdclEliminationGeneratorIntegrationTest, RotatedBoundaryKeepsConflictUnitOnPop) {
-    depth = 1;
+    fc.push();
     aub.log_decision(&D1);
     sut.push_frame();
-    depth = 2;
-    aub.log_decision(&D2);  // rotate: ultimate=D2, penultimate=D1, boundary=1
+    fc.push();
+    aub.log_decision(&D2);
 
     EXPECT_CALL(dl, derive_decision_lemma()).WillOnce(Return(make_lemma({&D2, &D1})));
     sut.learn();  // members = [ultimate=D2, penultimate=D1]
@@ -132,14 +123,14 @@ TEST_F(DbuctCdclEliminationGeneratorIntegrationTest, RotatedBoundaryKeepsConflic
 // ABOVE the boundary to depth 1 -- is armed as a watched clause instead. Committing
 // the ultimate then forces the other watcher through normal propagation.
 TEST_F(DbuctCdclEliminationGeneratorIntegrationTest, DeepBoundaryEmitsThenArmsThenPropagates) {
-    depth = 1;
+    fc.push();
     aub.log_decision(&D1);
     sut.push_frame();
-    depth = 2;
+    fc.push();
     aub.log_decision(&D2);
     sut.push_frame();
-    depth = 3;
-    aub.log_decision(&D3);  // rotate: ultimate=D3, penultimate=D2, boundary=2
+    fc.push();
+    aub.log_decision(&D3);
 
     EXPECT_CALL(dl, derive_decision_lemma()).WillOnce(Return(make_lemma({&D3, &D2})));
     sut.learn();  // members = [ultimate=D3, penultimate=D2], boundary 2
