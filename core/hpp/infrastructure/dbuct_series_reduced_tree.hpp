@@ -200,34 +200,31 @@ void dbuct_series_reduced_tree<NodeId>::log(srt_action<NodeId> action) {
 
 template<typename NodeId>
 void dbuct_series_reduced_tree<NodeId>::undo_action(const srt_action<NodeId>& action) {
-    std::visit([&](const auto& op) {
-        using T = std::decay_t<decltype(op)>;
-        if constexpr (std::is_same_v<T, srt_set_insert<NodeId>>) {
-            if (op.target == srt_set_target::roots)
-                roots_.erase(op.node);
-            else
-                leaves_.erase(op.node);
-        } else if constexpr (std::is_same_v<T, srt_set_erase<NodeId>>) {
-            if (op.target == srt_set_target::roots)
-                roots_.insert(op.node);
-            else
-                leaves_.insert(op.node);
-        } else if constexpr (std::is_same_v<T, srt_children_insert<NodeId>>) {
-            children_.erase(op.parent);
-        } else if constexpr (std::is_same_v<T, srt_children_erase<NodeId>>) {
-            children_.insert({op.parent, op.children});
-        } else if constexpr (std::is_same_v<T, srt_parent_insert<NodeId>>) {
-            parents_.erase(op.child);
-        } else if constexpr (std::is_same_v<T, srt_parent_erase<NodeId>>) {
-            parents_.insert({op.child, op.parent});
-        } else if constexpr (std::is_same_v<T, srt_parent_assign<NodeId>>) {
-            parents_.at(op.child) = op.previous;
-        } else if constexpr (std::is_same_v<T, srt_children_at_insert<NodeId>>) {
-            children_.at(op.parent).erase(op.child);
-        } else if constexpr (std::is_same_v<T, srt_children_at_erase<NodeId>>) {
-            children_.at(op.parent).insert(op.child);
-        }
-    }, action);
+    if (const auto* op = std::get_if<srt_set_insert<NodeId>>(&action)) {
+        if (op->target == srt_set_target::roots)
+            roots_.erase(op->node);
+        else
+            leaves_.erase(op->node);
+    } else if (const auto* op = std::get_if<srt_set_erase<NodeId>>(&action)) {
+        if (op->target == srt_set_target::roots)
+            roots_.insert(op->node);
+        else
+            leaves_.insert(op->node);
+    } else if (const auto* op = std::get_if<srt_children_insert<NodeId>>(&action)) {
+        children_.erase(op->parent);
+    } else if (const auto* op = std::get_if<srt_children_erase<NodeId>>(&action)) {
+        children_.insert({op->parent, op->children});
+    } else if (const auto* op = std::get_if<srt_parent_insert<NodeId>>(&action)) {
+        parents_.erase(op->child);
+    } else if (const auto* op = std::get_if<srt_parent_erase<NodeId>>(&action)) {
+        parents_.insert({op->child, op->parent});
+    } else if (const auto* op = std::get_if<srt_parent_assign<NodeId>>(&action)) {
+        parents_.at(op->child) = op->previous;
+    } else if (const auto* op = std::get_if<srt_children_at_insert<NodeId>>(&action)) {
+        children_.at(op->parent).erase(op->child);
+    } else if (const auto* op = std::get_if<srt_children_at_erase<NodeId>>(&action)) {
+        children_.at(op->parent).insert(op->child);
+    }
 }
 
 #endif

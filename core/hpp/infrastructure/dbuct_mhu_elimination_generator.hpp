@@ -353,32 +353,29 @@ void dbuct_mhu_elimination_generator<IBM, IBMF, IU, IUF, IMRL, IMV, IGCRI, IHUB>
 template<typename IBM, typename IBMF, typename IU, typename IUF, typename IMRL, typename IMV, typename IGCRI, typename IHUB>
 void dbuct_mhu_elimination_generator<IBM, IBMF, IU, IUF, IMRL, IMV, IGCRI, IHUB>::undo_action(
     const action_t& action) {
-    std::visit([&](const auto& op) {
-        using T = std::decay_t<decltype(op)>;
-        if constexpr (std::is_same_v<T, mhu_arena_emplace>) {
-            arena_.pop_back();
-        } else if constexpr (std::is_same_v<T, mhu_heads_insert<IBM, IU>>) {
-            heads_.erase(op.rl);
-        } else if constexpr (std::is_same_v<T, mhu_heads_erase<IBM, IU>>) {
-            heads_.insert({op.rl, op.head});
-        } else if constexpr (std::is_same_v<T, mhu_rep_map_insert>) {
-            rep_to_rls_.erase(op.rep);
-        } else if constexpr (std::is_same_v<T, mhu_rep_map_erase>) {
-            rep_to_rls_.insert({op.rep, op.value});
-        } else if constexpr (std::is_same_v<T, mhu_rep_at_insert>) {
-            rep_to_rls_.at(op.rep).erase(op.rl);
-        } else if constexpr (std::is_same_v<T, mhu_rep_at_erase>) {
-            rep_to_rls_.at(op.rep).insert(op.rl);
-        } else if constexpr (std::is_same_v<T, mhu_rl_map_insert>) {
-            rl_to_reps_.erase(op.rl);
-        } else if constexpr (std::is_same_v<T, mhu_rl_map_erase>) {
-            rl_to_reps_.insert({op.rl, op.value});
-        } else if constexpr (std::is_same_v<T, mhu_rl_at_insert>) {
-            rl_to_reps_.at(op.rl).erase(op.rep);
-        } else if constexpr (std::is_same_v<T, mhu_rl_at_erase>) {
-            rl_to_reps_.at(op.rl).insert(op.rep);
-        }
-    }, action);
+    if (std::holds_alternative<mhu_arena_emplace>(action)) {
+        arena_.pop_back();
+    } else if (const auto* op = std::get_if<mhu_heads_insert<IBM, IU>>(&action)) {
+        heads_.erase(op->rl);
+    } else if (const auto* op = std::get_if<mhu_heads_erase<IBM, IU>>(&action)) {
+        heads_.insert({op->rl, op->head});
+    } else if (const auto* op = std::get_if<mhu_rep_map_insert>(&action)) {
+        rep_to_rls_.erase(op->rep);
+    } else if (const auto* op = std::get_if<mhu_rep_map_erase>(&action)) {
+        rep_to_rls_.insert({op->rep, op->value});
+    } else if (const auto* op = std::get_if<mhu_rep_at_insert>(&action)) {
+        rep_to_rls_.at(op->rep).erase(op->rl);
+    } else if (const auto* op = std::get_if<mhu_rep_at_erase>(&action)) {
+        rep_to_rls_.at(op->rep).insert(op->rl);
+    } else if (const auto* op = std::get_if<mhu_rl_map_insert>(&action)) {
+        rl_to_reps_.erase(op->rl);
+    } else if (const auto* op = std::get_if<mhu_rl_map_erase>(&action)) {
+        rl_to_reps_.insert({op->rl, op->value});
+    } else if (const auto* op = std::get_if<mhu_rl_at_insert>(&action)) {
+        rl_to_reps_.at(op->rl).erase(op->rep);
+    } else if (const auto* op = std::get_if<mhu_rl_at_erase>(&action)) {
+        rl_to_reps_.at(op->rl).insert(op->rep);
+    }
 }
 
 #endif
