@@ -77,5 +77,5 @@ dbuct_ridge_manifest::dbuct_ridge_manifest(
                resolver_, get_unit_resolution_, resolution_recorder_,
                resolution_recorder_, resolution_memory_, max_resolutions),
       solver_(srt_initial_goals_activator_, run_sim_, decision_memory_,
-              ridge_reward_, dbuct_sim_, cdcl_, mhu_, elimination_router_,
+              ridge_reward_, dbuct_sim_, dbuct_sim_, cdcl_, mhu_, elimination_router_,
               conflict_detector_, unit_goal_detector_, unit_goals_) {}

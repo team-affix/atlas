@@ -16,14 +16,6 @@
 #include "linear_batch_increment.hpp"
 #include "random_rollout.hpp"
 
-// What terminate() hands back: the 0-based frame index DBUCT backtracked TO
-// (root == 0), plus the forced eliminations the final CDCL frame pop surfaced at
-// the resume frontier.
-struct dbuct_backtrack_result {
-    std::size_t frame_index;
-    std::vector<const resolution_lineage*> eliminations;
-};
-
 // Delayed-backtracking counterpart of mcts_sim. Constructs a single
 // monte_carlo::dbuct on the MCT root for the whole solve (episodes camp deep in
 // the tree) and keeps the trail's frame stack and the CDCL learner's own frame
@@ -47,8 +39,17 @@ struct dbuct_sim {
     // in place, so we keep reporting the episode (accruing visits until a frame
     // budget is spent) until at least one frame is actually popped. A
     // solved/depth-exceeded terminal leaves a valid frontier, so a zero-pop
-    // backtrack there is fine.
-    dbuct_backtrack_result terminate(double reward, bool force_progress);
+    // backtrack there is fine. Returns the forced eliminations the final CDCL
+    // frame pop surfaced at the resume frontier.
+    std::vector<const resolution_lineage*> terminate(double reward, bool force_progress);
+
+    // Whether the camped path is back at the root: the base frame is the only
+    // frame left. dbuct_sim owns this convention -- it pushed the single base
+    // frame in its ctor -- so it, rather than the caller, maps trail depth to
+    // "at root". The solver uses this both to bound its backstep loops (the root
+    // is the floor) and to gate refutation (a zero-decision run only proves the
+    // search exhausted when it started at the root).
+    bool at_root() const { return trail_.depth() == 1; }
 
     // Undo all trail-journalled work back to the pristine pre-activation state.
     // The solver calls this once, on refutation, so an exhausted solve leaves the
@@ -151,7 +152,7 @@ mcts_choice dbuct_sim<ITrail, IMRL, IFC>::choose(const std::vector<mcts_choice>&
 }
 
 template<typename ITrail, typename IMRL, typename IFC>
-dbuct_backtrack_result dbuct_sim<ITrail, IMRL, IFC>::terminate(double reward, bool force_progress) {
+std::vector<const resolution_lineage*> dbuct_sim<ITrail, IMRL, IFC>::terminate(double reward, bool force_progress) {
     // dbuct returns the 0-based frame index it backtracked TO (root == 0). The
     // trail holds the base frame plus one frame per choose, so restoring is just
     // popping down to `idx + 1` (base frame + idx live frames). Each popped CDCL
@@ -161,19 +162,18 @@ dbuct_backtrack_result dbuct_sim<ITrail, IMRL, IFC>::terminate(double reward, bo
     // THAT (deeper) level which CDCL re-arms as watched clauses as we pop past
     // their boundaries, so routing them at the shallower resume frontier would
     // over-eliminate. Clearing before each pop keeps exactly the resume-level set.
-    dbuct_backtrack_result result{0, {}};
+    std::vector<const resolution_lineage*> eliminations;
     const std::size_t start_depth = trail_.depth();
     while (true) {
         const std::size_t idx = dbuct_->terminate(reward);
-        result.frame_index = idx;
         while (trail_.depth() > idx + 1) {
-            result.eliminations.clear();
+            eliminations.clear();
             trail_.pop();
             auto sm = frames_.pop_frame();
             while (!sm.done()) {
                 sm.resume();
                 if (sm.has_yield())
-                    result.eliminations.push_back(sm.consume_yield());
+                    eliminations.push_back(sm.consume_yield());
             }
         }
         // Stop once we've made progress, reached the root, or the caller is fine
@@ -181,7 +181,7 @@ dbuct_backtrack_result dbuct_sim<ITrail, IMRL, IFC>::terminate(double reward, bo
         if (!force_progress || trail_.depth() < start_depth || trail_.depth() <= 1)
             break;
     }
-    return result;
+    return eliminations;
 }
 
 template<typename ITrail, typename IMRL, typename IFC>

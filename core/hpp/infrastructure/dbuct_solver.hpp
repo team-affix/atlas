@@ -19,19 +19,21 @@
 // learns + terminates again, cascading backjumps until the frontier is stable or
 // a zero-decision path proves the search exhausted (refuted).
 //
-// terminate() reports the 0-based frame index it backtracked TO; index 0 is the
-// root. That index is the only "are we at the root" signal -- the solver keeps no
-// base offset of its own -- and it drives both refutation (a root run with zero
-// decisions) and the cascade's stop conditions.
+// "Are we at the root?" is the only frame signal the solver needs -- it keeps no
+// base offset of its own. It asks a dedicated collaborator (ICheckIsAtRoot,
+// backed by dbuct_sim, which owns the trail-depth convention) rather than reading
+// a frame index off terminate(). The answer drives both refutation (a root run
+// with zero decisions) and the cascade's stop conditions.
 template<typename IActivateInitialGoalsOnce, typename IRunSim,
          typename IGetDecisionCount, typename IComputeReward,
-         typename ITerminate, typename ILearnAvoidance,
+         typename ITerminate, typename ICheckIsAtRoot, typename ILearnAvoidance,
          typename IMhu, typename IEliminationRouter, typename IConflictDetector,
          typename IUnitGoalDetector, typename IPushUnitGoal>
 struct dbuct_solver {
     dbuct_solver(IActivateInitialGoalsOnce& activate_once, IRunSim& run_sim,
                  IGetDecisionCount& get_decision_count,
                  IComputeReward& compute_reward, ITerminate& terminate,
+                 ICheckIsAtRoot& check_is_at_root,
                  ILearnAvoidance& learn, IMhu& mhu, IEliminationRouter& router,
                  IConflictDetector& conflict_detector,
                  IUnitGoalDetector& unit_goal_detector,
@@ -39,6 +41,7 @@ struct dbuct_solver {
         : activate_once_(activate_once), run_sim_(run_sim),
           get_decision_count_(get_decision_count),
           compute_reward_(compute_reward), terminate_(terminate),
+          check_is_at_root_(check_is_at_root),
           learn_(learn), mhu_(mhu), router_(router),
           conflict_detector_(conflict_detector),
           unit_goal_detector_(unit_goal_detector),
@@ -49,10 +52,9 @@ struct dbuct_solver {
 private:
     // Learn the current terminal conflict, backtrack, route the emitted
     // eliminations, and cascade further learn/backtrack rounds while the resume
-    // frontier keeps collapsing. Returns whether the cascade left us at the root
-    // (the next episode's "runs from root" flag). Refutation is decided by the
-    // top-level loop (a root-frontier run with no decisions), never here.
-    bool learn_terminate_cascade(bool conflicted);
+    // frontier keeps collapsing. Refutation is decided by the top-level loop (a
+    // root-frontier run with no decisions), never here.
+    void learn_terminate_cascade(bool conflicted);
 
     // Route one pop_frame elimination at the resume frontier. Forced eliminations
     // surfaced by pop_frame bypass the joint eliminator, so they carry the same
@@ -68,6 +70,7 @@ private:
     IGetDecisionCount& get_decision_count_;
     IComputeReward& compute_reward_;
     ITerminate& terminate_;
+    ICheckIsAtRoot& check_is_at_root_;
     ILearnAvoidance& learn_;
     IMhu& mhu_;
     IEliminationRouter& router_;
@@ -77,17 +80,14 @@ private:
 };
 
 template<typename IA, typename IRS, typename IGDC, typename ICR,
-         typename IT, typename ILA, typename IM, typename IER,
+         typename IT, typename ICAR, typename ILA, typename IM, typename IER,
          typename ICD, typename IUGD, typename IPUG>
 coroutine<sim_termination, void>
-dbuct_solver<IA, IRS, IGDC, ICR, IT, ILA, IM, IER, ICD, IUGD, IPUG>::solve() {
+dbuct_solver<IA, IRS, IGDC, ICR, IT, ICAR, ILA, IM, IER, ICD, IUGD, IPUG>::solve() {
     if (!activate_once_.activate_initial_goals_and_candidates()) {
         co_yield sim_termination::conflicted;
         co_return;
     }
-
-    // The base frame is the root, so the first episode runs from the root.
-    bool at_root = true;
 
     while (true) {
         // Whether this episode runs from the root frontier (no camped decisions
@@ -98,7 +98,7 @@ dbuct_solver<IA, IRS, IGDC, ICR, IT, ILA, IM, IER, ICD, IUGD, IPUG>::solve() {
         // root and records zero decisions proves the search exhausted -- this is
         // exactly the restarting solver's `count()==0` test, always evaluated
         // from the root.
-        const bool from_root = at_root;
+        const bool from_root = check_is_at_root_.at_root();
 
         const sim_termination term = run_sim_.run();
 
@@ -111,14 +111,14 @@ dbuct_solver<IA, IRS, IGDC, ICR, IT, ILA, IM, IER, ICD, IUGD, IPUG>::solve() {
             break;
         }
 
-        at_root = learn_terminate_cascade(term == sim_termination::conflicted);
+        learn_terminate_cascade(term == sim_termination::conflicted);
     }
 }
 
 template<typename IA, typename IRS, typename IGDC, typename ICR,
-         typename IT, typename ILA, typename IM, typename IER,
+         typename IT, typename ICAR, typename ILA, typename IM, typename IER,
          typename ICD, typename IUGD, typename IPUG>
-bool dbuct_solver<IA, IRS, IGDC, ICR, IT, ILA, IM, IER, ICD, IUGD, IPUG>::learn_terminate_cascade(bool conflicted) {
+void dbuct_solver<IA, IRS, IGDC, ICR, IT, ICAR, ILA, IM, IER, ICD, IUGD, IPUG>::learn_terminate_cascade(bool conflicted) {
     // Fixed adjacency: record the terminal conflict, then immediately backtrack;
     // terminate()'s first pop_frame yields the forced elimination for it. Nothing
     // may sit between learn() and terminate(). Every terminal -- conflict OR
@@ -131,7 +131,7 @@ bool dbuct_solver<IA, IRS, IGDC, ICR, IT, ILA, IM, IER, ICD, IUGD, IPUG>::learn_
     const std::size_t decisions_before = get_decision_count_.count();
     const double reward = compute_reward_.compute_mcts_reward();
     learn_.learn();
-    auto result = terminate_.terminate(reward, true);
+    auto elims = terminate_.terminate(reward, true);
     // Backstep to the next genuine branch point: a frontier that both drops a
     // decision from the terminated path AND still carries at least one decision
     // to explore. Stopping short of that leaves a spent or deterministic frontier
@@ -139,31 +139,29 @@ bool dbuct_solver<IA, IRS, IGDC, ICR, IT, ILA, IM, IER, ICD, IUGD, IPUG>::learn_
     // the same path) or a decision-free tail that unit-propagates to the very
     // solution the root already yields (a duplicate solved tick). Collapse all
     // the way to the root when no shallower branch point survives.
-    while (result.frame_index > 0 &&
+    while (!check_is_at_root_.at_root() &&
            !(get_decision_count_.count() < decisions_before &&
              get_decision_count_.count() > 0)) {
         const double r = compute_reward_.compute_mcts_reward();
-        result = terminate_.terminate(r, true);
+        elims = terminate_.terminate(r, true);
     }
 
     // Route the pop_frame eliminations at the resume frontier; if that realizes a
     // fresh conflict, learn + backtrack again and repeat until the frontier is
     // stable or we have collapsed all the way back to the root.
-    while (route_eliminations(result.eliminations)) {
-        if (result.frame_index == 0)
+    while (route_eliminations(elims)) {
+        if (check_is_at_root_.at_root())
             break;
         const double r = compute_reward_.compute_mcts_reward();
         learn_.learn();
-        result = terminate_.terminate(r, true);
+        elims = terminate_.terminate(r, true);
     }
-
-    return result.frame_index == 0;
 }
 
 template<typename IA, typename IRS, typename IGDC, typename ICR,
-         typename IT, typename ILA, typename IM, typename IER,
+         typename IT, typename ICAR, typename ILA, typename IM, typename IER,
          typename ICD, typename IUGD, typename IPUG>
-bool dbuct_solver<IA, IRS, IGDC, ICR, IT, ILA, IM, IER, ICD, IUGD, IPUG>::route_elimination(const resolution_lineage* rl) {
+bool dbuct_solver<IA, IRS, IGDC, ICR, IT, ICAR, ILA, IM, IER, ICD, IUGD, IPUG>::route_elimination(const resolution_lineage* rl) {
     mhu_.remove_head(rl);
     const elimination_result res = router_.route(rl);
     if (res != elimination_result::eliminated)
@@ -177,9 +175,9 @@ bool dbuct_solver<IA, IRS, IGDC, ICR, IT, ILA, IM, IER, ICD, IUGD, IPUG>::route_
 }
 
 template<typename IA, typename IRS, typename IGDC, typename ICR,
-         typename IT, typename ILA, typename IM, typename IER,
+         typename IT, typename ICAR, typename ILA, typename IM, typename IER,
          typename ICD, typename IUGD, typename IPUG>
-bool dbuct_solver<IA, IRS, IGDC, ICR, IT, ILA, IM, IER, ICD, IUGD, IPUG>::route_eliminations(
+bool dbuct_solver<IA, IRS, IGDC, ICR, IT, ICAR, ILA, IM, IER, ICD, IUGD, IPUG>::route_eliminations(
     const std::vector<const resolution_lineage*>& elims) {
     bool conflict = false;
     for (const resolution_lineage* rl : elims) {
