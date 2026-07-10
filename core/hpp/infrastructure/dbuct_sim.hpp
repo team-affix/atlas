@@ -2,6 +2,7 @@
 #define DBUCT_SIM_HPP
 
 #include <cstddef>
+#include <cstdint>
 #include <map>
 #include <optional>
 #include <random>
@@ -23,7 +24,7 @@ struct dbuct_sim {
               std::size_t grant_increment_interval);
 
     mcts_choice choose(const std::vector<mcts_choice>&);
-    std::vector<const resolution_lineage*> terminate(double reward, bool force_progress);
+    std::vector<const resolution_lineage*> terminate(double reward);
     bool at_root() const { return hub_.depth() == 1; }
     void unwind_to_root();
     void push_base_frame();
@@ -117,23 +118,23 @@ mcts_choice dbuct_sim<IFrameHub, IMRL, IFC>::choose(const std::vector<mcts_choic
 }
 
 template<typename IFrameHub, typename IMRL, typename IFC>
-std::vector<const resolution_lineage*> dbuct_sim<IFrameHub, IMRL, IFC>::terminate(double reward, bool force_progress) {
+std::vector<const resolution_lineage*> dbuct_sim<IFrameHub, IMRL, IFC>::terminate(double reward) {
+    // Force at least one backstep by capping dbuct's return one below the current
+    // depth, unless already at root (depth 1) where nothing can be popped
+    // (depth-1 == 0 is undefined for max_return_depth, so pass SIZE_MAX there).
+    const std::size_t max_return_depth =
+        hub_.depth() > 1 ? hub_.depth() - 1 : SIZE_MAX;
+    const std::size_t stack_size = dbuct_->terminate(reward, max_return_depth);
     std::vector<const resolution_lineage*> eliminations;
-    const std::size_t start_depth = hub_.depth();
-    while (true) {
-        const std::size_t idx = dbuct_->terminate(reward);
-        while (hub_.depth() > idx + 1) {
-            eliminations.clear();
-            hub_.pop_frame();
-            auto sm = frames_.pop_frame();
-            while (!sm.done()) {
-                sm.resume();
-                if (sm.has_yield())
-                    eliminations.push_back(sm.consume_yield());
-            }
+    while (hub_.depth() > stack_size) {
+        eliminations.clear();
+        hub_.pop_frame();
+        auto sm = frames_.pop_frame();
+        while (!sm.done()) {
+            sm.resume();
+            if (sm.has_yield())
+                eliminations.push_back(sm.consume_yield());
         }
-        if (!force_progress || hub_.depth() < start_depth || hub_.depth() <= 1)
-            break;
     }
     return eliminations;
 }

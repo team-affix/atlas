@@ -131,7 +131,7 @@ void dbuct_solver<IA, IRS, IGDC, ICR, IT, ICAR, ILA, IM, IER, ICD, IUGD, IPUG>::
     const std::size_t decisions_before = get_decision_count_.count();
     const double reward = compute_reward_.compute_mcts_reward();
     learn_.learn();
-    auto elims = terminate_.terminate(reward, true);
+    auto elims = terminate_.terminate(reward);
     // Backstep to the next genuine branch point: a frontier that both drops a
     // decision from the terminated path AND still carries at least one decision
     // to explore. Stopping short of that leaves a spent or deterministic frontier
@@ -143,7 +143,7 @@ void dbuct_solver<IA, IRS, IGDC, ICR, IT, ICAR, ILA, IM, IER, ICD, IUGD, IPUG>::
            !(get_decision_count_.count() < decisions_before &&
              get_decision_count_.count() > 0)) {
         const double r = compute_reward_.compute_mcts_reward();
-        elims = terminate_.terminate(r, true);
+        elims = terminate_.terminate(r);
     }
 
     // Route the pop_frame eliminations at the resume frontier; if that realizes a
@@ -154,7 +154,7 @@ void dbuct_solver<IA, IRS, IGDC, ICR, IT, ICAR, ILA, IM, IER, ICD, IUGD, IPUG>::
             break;
         const double r = compute_reward_.compute_mcts_reward();
         learn_.learn();
-        elims = terminate_.terminate(r, true);
+        elims = terminate_.terminate(r);
     }
 }
 
