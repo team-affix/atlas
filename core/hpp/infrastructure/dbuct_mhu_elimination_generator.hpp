@@ -3,13 +3,13 @@
 
 #include <cstdint>
 #include <deque>
-#include <functional>
 #include <list>
 #include <memory>
 #include <queue>
 #include <stack>
 #include <unordered_map>
 #include <unordered_set>
+#include "infrastructure/bind_map_trail.hpp"
 #include "infrastructure/coroutine.hpp"
 #include "infrastructure/frame_savepoint.hpp"
 #include "value_objects/framed_expr.hpp"
@@ -72,6 +72,7 @@ private:
     rep_to_rls_t rep_to_rls_;
     rl_to_reps_t rl_to_reps_;
     std::stack<frame> frame_stack_;
+    bind_map_trail<IBindMap> trail_;
 };
 
 template<typename IBM, typename IBMF, typename IU, typename IUF, typename IMRL, typename IMV, typename IGCRI, typename IHUB>
@@ -93,9 +94,7 @@ bool dbuct_mhu_elimination_generator<IBM, IBMF, IU, IUF, IMRL, IMV, IGCRI, IHUB>
 
     auto bm = std::make_unique<IBM>(bind_map_factory_.make());
     IBM* const local_bind_map = bm.get();
-    local_bind_map->set_journal([this, local_bind_map](bind_map_action action) {
-        log(mhu_bind_map_journal<IBM>{local_bind_map, std::move(action)});
-    });
+    local_bind_map->attach_trail(&trail_);
     IU u = unifier_factory_.make(local_bind_map);
     arena_.emplace_back(std::move(bm), std::move(u));
     log(mhu_arena_emplace{});
@@ -323,11 +322,13 @@ void dbuct_mhu_elimination_generator<IBM, IBMF, IU, IUF, IMRL, IMV, IGCRI, IHUB>
 
 template<typename IBM, typename IBMF, typename IU, typename IUF, typename IMRL, typename IMV, typename IGCRI, typename IHUB>
 void dbuct_mhu_elimination_generator<IBM, IBMF, IU, IUF, IMRL, IMV, IGCRI, IHUB>::push_frame() {
+    trail_.push_frame();
     frame_stack_.push(frame{});
 }
 
 template<typename IBM, typename IBMF, typename IU, typename IUF, typename IMRL, typename IMV, typename IGCRI, typename IHUB>
 void dbuct_mhu_elimination_generator<IBM, IBMF, IU, IUF, IMRL, IMV, IGCRI, IHUB>::pop_frame() {
+    trail_.pop_frame();
     auto current = std::move(frame_stack_.top());
     frame_stack_.pop();
     for (auto it = current.actions.rbegin(); it != current.actions.rend(); ++it)
@@ -336,6 +337,7 @@ void dbuct_mhu_elimination_generator<IBM, IBMF, IU, IUF, IMRL, IMV, IGCRI, IHUB>
 
 template<typename IBM, typename IBMF, typename IU, typename IUF, typename IMRL, typename IMV, typename IGCRI, typename IHUB>
 void dbuct_mhu_elimination_generator<IBM, IBMF, IU, IUF, IMRL, IMV, IGCRI, IHUB>::squash_frame() {
+    trail_.squash_frame();
     auto top = std::move(frame_stack_.top());
     frame_stack_.pop();
     auto& parent = frame_stack_.top().actions;
@@ -375,8 +377,6 @@ void dbuct_mhu_elimination_generator<IBM, IBMF, IU, IUF, IMRL, IMV, IGCRI, IHUB>
             rl_to_reps_.at(op.rl).erase(op.rep);
         } else if constexpr (std::is_same_v<T, mhu_rl_at_erase>) {
             rl_to_reps_.at(op.rl).insert(op.rep);
-        } else if constexpr (std::is_same_v<T, mhu_bind_map_journal<IBM>>) {
-            op.bind_map->undo_logged_action(op.action);
         }
     }, action);
 }
