@@ -2,6 +2,7 @@
 #define DBUCT_SIM_HPP
 
 #include <cstddef>
+#include <cstdint>
 #include <map>
 #include <optional>
 #include <random>
@@ -35,13 +36,13 @@ struct dbuct_sim {
               std::size_t grant_increment_interval);
 
     mcts_choice choose(const std::vector<mcts_choice>&);
-    // force_progress: a conflicted terminal must not leave its dead-end frontier
-    // in place, so we keep reporting the episode (accruing visits until a frame
-    // budget is spent) until at least one frame is actually popped. A
-    // solved/depth-exceeded terminal leaves a valid frontier, so a zero-pop
-    // backtrack there is fine. Returns the forced eliminations the final CDCL
-    // frame pop surfaced at the resume frontier.
-    std::vector<const resolution_lineage*> terminate(double reward, bool force_progress);
+    // A terminal must not leave its spent frontier in place -- the next episode
+    // would re-detect it verbatim -- so terminate always backtracks at least one
+    // frame, asking dbuct to force a backstep (max_return_depth = current depth
+    // minus one) unless we are already at the root, where nothing is left to pop.
+    // Returns the forced eliminations the final CDCL frame pop surfaced at the
+    // resume frontier.
+    std::vector<const resolution_lineage*> terminate(double reward);
 
     // Whether the camped path is back at the root: the base frame is the only
     // frame left. dbuct_sim owns this convention -- it pushed the single base
@@ -152,7 +153,16 @@ mcts_choice dbuct_sim<ITrail, IMRL, IFC>::choose(const std::vector<mcts_choice>&
 }
 
 template<typename ITrail, typename IMRL, typename IFC>
-std::vector<const resolution_lineage*> dbuct_sim<ITrail, IMRL, IFC>::terminate(double reward, bool force_progress) {
+std::vector<const resolution_lineage*> dbuct_sim<ITrail, IMRL, IFC>::terminate(double reward) {
+    // Force at least one backstep: cap dbuct's return at one below the current
+    // depth so it must pop a frame, unless we are already at the root (depth 1),
+    // where there is nothing left to pop -- passing SIZE_MAX there disables the
+    // cap (and avoids the undefined depth-1 == 0 argument). The trail depth is
+    // never below dbuct's own stack (rollout pushes trail-only excess), so the
+    // cap only bites on a no-rollout terminal; a rollout terminal already resumes
+    // shallower once its throwaway frames pop.
+    const std::size_t max_return_depth =
+        trail_.depth() > 1 ? trail_.depth() - 1 : SIZE_MAX;
     // dbuct returns the frame stack size it backtracked TO (root only == 1). The
     // trail's depth mirrors that stack -- both start at 1 (the base frame here,
     // dbuct's root there) -- so restoring is just popping the trail down to that
@@ -163,24 +173,17 @@ std::vector<const resolution_lineage*> dbuct_sim<ITrail, IMRL, IFC>::terminate(d
     // which CDCL re-arms as watched clauses as we pop past their boundaries, so
     // routing them at the shallower resume frontier would over-eliminate.
     // Clearing before each pop keeps exactly the resume-level set.
+    const std::size_t stack_size = dbuct_->terminate(reward, max_return_depth);
     std::vector<const resolution_lineage*> eliminations;
-    const std::size_t start_depth = trail_.depth();
-    while (true) {
-        const std::size_t stack_size = dbuct_->terminate(reward);
-        while (trail_.depth() > stack_size) {
-            eliminations.clear();
-            trail_.pop();
-            auto sm = frames_.pop_frame();
-            while (!sm.done()) {
-                sm.resume();
-                if (sm.has_yield())
-                    eliminations.push_back(sm.consume_yield());
-            }
+    while (trail_.depth() > stack_size) {
+        eliminations.clear();
+        trail_.pop();
+        auto sm = frames_.pop_frame();
+        while (!sm.done()) {
+            sm.resume();
+            if (sm.has_yield())
+                eliminations.push_back(sm.consume_yield());
         }
-        // Stop once we've made progress, reached the root, or the caller is fine
-        // with a zero-pop backtrack (a non-conflict terminal). Root is depth 1.
-        if (!force_progress || trail_.depth() < start_depth || trail_.depth() <= 1)
-            break;
     }
     return eliminations;
 }
