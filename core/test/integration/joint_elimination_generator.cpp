@@ -16,7 +16,7 @@
 #include "infrastructure/lineage_pool.hpp"
 #include "infrastructure/goal_candidate_rules.hpp"
 #include "infrastructure/ra_rule_id_set_factory.hpp"
-#include "infrastructure/trail.hpp"
+#include "infrastructure/elimination_backlog.hpp"
 #include "infrastructure/coroutine.hpp"
 #include "value_objects/lemma.hpp"
 #include "functor_fixture.hpp"
@@ -52,7 +52,7 @@ std::vector<const resolution_lineage*> collect_elims(
 struct JointEliminationGeneratorIntegrationTest : public ::testing::Test {
     
     test_functors functors;
-    trail t;
+    elimination_backlog frames;
     globalizer g_;
     bind_map<globalizer> common{g_};
     lineage_pool lp;
@@ -214,9 +214,9 @@ TEST_F(JointEliminationGeneratorIntegrationTest, CleanupRestoresCdclThroughJoint
     EXPECT_THAT(collect_elims(joint->constrain(&rl0)), ElementsAre(&rl1));
     EXPECT_THAT(collect_elims(cdcl->constrain(&rl0)), IsEmpty());
 
-    t.push();
+    frames.push_frame();
     EXPECT_THAT(collect_elims(cdcl->constrain(&rl0)), IsEmpty());
-    t.pop();
+    frames.pop_frame();
 
     cdcl->cleanup();
     chosen.clear();

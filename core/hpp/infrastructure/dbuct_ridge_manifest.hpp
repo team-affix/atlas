@@ -32,7 +32,6 @@
 #include "infrastructure/srt_initial_goals_activator.hpp"
 #include "infrastructure/srt_subgoals_activator.hpp"
 #include "infrastructure/subgoals_activator.hpp"
-#include "infrastructure/trail.hpp"
 #include "infrastructure/unit_goal_detector.hpp"
 #include "infrastructure/unifier.hpp"
 #include "infrastructure/unifier_factory.hpp"
@@ -46,6 +45,7 @@
 #include "infrastructure/dbuct_decision_memory.hpp"
 #include "infrastructure/dbuct_elimination_backlog.hpp"
 #include "infrastructure/dbuct_frame_bump_allocator.hpp"
+#include "infrastructure/dbuct_frame_hub.hpp"
 #include "infrastructure/dbuct_frontier_ready.hpp"
 #include "infrastructure/dbuct_goal_candidate_rules.hpp"
 #include "infrastructure/dbuct_goal_exprs.hpp"
@@ -58,38 +58,33 @@
 #include "infrastructure/dbuct_solver.hpp"
 #include "infrastructure/dbuct_srt_active_goals.hpp"
 #include "infrastructure/dbuct_unit_goals.hpp"
+#include "infrastructure/frame_depth_tracker.hpp"
 
-// ridge_dbuct — delayed-backtracking CHC solver. A copy of ridge_manifest that
-// swaps the restarting MCTS stack for the DBUCT camping stack and every per-sim
-// state struct for its trail-backed dbuct_* counterpart, reusing all
-// solver-agnostic infrastructure instantiated over the dbuct_* types. The
-// concrete trail satisfies the ILogTrailAction / IPushFrame / IPopFrame
-// interfaces those dbuct_* structs are templated on.
 struct dbuct_ridge_manifest {
-    using bind_map_t                = dbuct_bind_map<globalizer, trail>;
-    using bind_map_factory_t        = dbuct_bind_map_factory<globalizer, trail>;
-    using goal_exprs_t              = dbuct_goal_exprs<trail>;
-    using goal_candidate_rules_t    = dbuct_goal_candidate_rules<trail>;
-    using srt_active_goals_t        = dbuct_srt_active_goals<trail>;
-    using unit_goals_t             = dbuct_unit_goals<trail>;
-    using decision_memory_t        = dbuct_decision_memory<trail>;
-    using resolution_memory_t      = dbuct_resolution_memory<trail>;
-    using candidate_frame_offsets_t = dbuct_candidate_frame_offsets<trail>;
-    using chosen_goal_candidates_t  = dbuct_chosen_goal_candidates<trail>;
-    using frame_bump_allocator_t    = dbuct_frame_bump_allocator<trail>;
-    using elimination_backlog_t     = dbuct_elimination_backlog<trail>;
-    using nearest_decision_t        = dbuct_nearest_decision<trail>;
-    // The trail is the frame counter: its base frame makes depth() 1-based, so it
-    // mirrors the CDCL learner's own frame_stack_ size exactly (see dbuct_sim).
-    using avoidance_unit_boundary_t = dbuct_avoidance_unit_boundary<nearest_decision_t, trail, trail>;
-
+    using bind_map_t                = dbuct_bind_map<globalizer>;
+    using bind_map_factory_t        = dbuct_bind_map_factory<globalizer>;
+    using goal_exprs_t              = dbuct_goal_exprs;
+    using goal_candidate_rules_t    = dbuct_goal_candidate_rules;
+    using srt_active_goals_t        = dbuct_srt_active_goals;
+    using unit_goals_t              = dbuct_unit_goals;
+    using decision_memory_t         = dbuct_decision_memory;
+    using resolution_memory_t       = dbuct_resolution_memory;
+    using candidate_frame_offsets_t = dbuct_candidate_frame_offsets;
+    using chosen_goal_candidates_t  = dbuct_chosen_goal_candidates;
+    using frame_bump_allocator_t    = dbuct_frame_bump_allocator;
+    using elimination_backlog_t     = dbuct_elimination_backlog;
+    using nearest_decision_t        = dbuct_nearest_decision;
+    using avoidance_unit_boundary_t = dbuct_avoidance_unit_boundary<
+        nearest_decision_t, frame_depth_tracker>;
     using unifier_factory_t = unifier_factory<globalizer, bind_map_t>;
     using cdcl_t  = dbuct_cdcl_elimination_generator<
                     chosen_goal_candidates_t, avoidance_unit_boundary_t, decision_memory_t,
                     avoidance_unit_boundary_t, avoidance_unit_boundary_t>;
+    using hub_t   = dbuct_frame_hub<bind_map_t, avoidance_unit_boundary_t>;
     using mhu_t   = dbuct_mhu_elimination_generator<
                     bind_map_t, bind_map_factory_t, unifier<globalizer, bind_map_t>,
-                    unifier_factory_t, lineage_pool, expr_pool, goal_candidate_rules_t, trail, trail>;
+                    unifier_factory_t, lineage_pool, expr_pool, goal_candidate_rules_t,
+                    hub_t>;
     using dbuct_joint_t = dbuct_joint_elimination_generator<cdcl_t, mhu_t>;
     using resolution_recorder_t = dbuct_resolution_recorder<decision_memory_t, resolution_memory_t,
                                 nearest_decision_t, avoidance_unit_boundary_t>;
@@ -124,7 +119,7 @@ struct dbuct_ridge_manifest {
                                           goal_candidates_deactivator_t, chosen_goal_candidates_t>;
     using ridge_reward_t                = ridge_reward<decision_memory_t>;
 
-    using dbuct_sim_t                   = dbuct_sim<trail, lineage_pool, cdcl_t>;
+    using dbuct_sim_t                   = dbuct_sim<hub_t, lineage_pool, cdcl_t>;
     using mcts_decision_generator_t     = mcts_decision_generator<lineage_pool, srt_active_goals_t,
                                           dbuct_sim_t, goal_candidate_rules_t>;
     using run_sim_t                     = run_sim<dbuct_frontier_ready, solution_detector_t, conflict_detector_t,
@@ -145,7 +140,7 @@ struct dbuct_ridge_manifest {
         size_t grant_increment_interval);
 
     globalizer                    globalizer_;
-    trail                         trail_;
+    frame_depth_tracker           frame_depth_;
     bind_map_t                    bind_map_;
     bind_map_factory_t            bind_map_factory_;
     unifier_factory_t             unifier_factory_;
@@ -166,6 +161,7 @@ struct dbuct_ridge_manifest {
     avoidance_unit_boundary_t     avoidance_unit_boundary_;
     cdcl_t                        cdcl_;
     mhu_t                         mhu_;
+    hub_t                         hub_;
     dbuct_joint_t                 dbuct_joint_;
     resolution_recorder_t           resolution_recorder_;
     get_resolution_rule_t         get_resolution_rule_;

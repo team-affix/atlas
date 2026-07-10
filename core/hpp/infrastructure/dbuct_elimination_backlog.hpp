@@ -1,53 +1,85 @@
 #ifndef DBUCT_ELIMINATION_BACKLOG_HPP
 #define DBUCT_ELIMINATION_BACKLOG_HPP
 
-#include <memory>
+#include <list>
+#include <stack>
 #include <unordered_map>
 #include <unordered_set>
-#include "infrastructure/backtrackable_map_at_insert.hpp"
-#include "infrastructure/backtrackable_map_insert.hpp"
-#include "infrastructure/tracked.hpp"
+#include "value_objects/elimination_backlog_action.hpp"
 #include "value_objects/lineage.hpp"
+#include "value_objects/rule.hpp"
+#include "debug_assert.hpp"
 
-// Delayed-backtracking variant of elimination_backlog. Routes its mutations
-// through the trail (via ILogTrailAction) rather than a full-copy snapshot: a new
-// goal key logs a map insert and each eliminated candidate an inner-set insert, so
-// a choice frame rolls the backlog back exactly on pop.
-template<typename ILogTrailAction>
 struct dbuct_elimination_backlog {
-    explicit dbuct_elimination_backlog(ILogTrailAction& t);
-
     void insert_backlogged_elimination(const resolution_lineage* rl);
     bool is_backlogged_elimination(const resolution_lineage* rl) const;
 
+    void push_frame();
+    void pop_frame();
+    void squash_frame();
+
 private:
+    struct frame {
+        std::list<elimination_backlog_action> actions;
+    };
+
     using eliminated_candidates_type =
         std::unordered_map<const goal_lineage*, std::unordered_set<rule_id>>;
 
-    tracked<eliminated_candidates_type, ILogTrailAction> eliminated_candidates_;
+    void log(elimination_backlog_action action);
+    void undo_action(const elimination_backlog_action& action);
+
+    eliminated_candidates_type eliminated_candidates_;
+    std::stack<frame> frame_stack_;
 };
 
-template<typename ILogTrailAction>
-dbuct_elimination_backlog<ILogTrailAction>::dbuct_elimination_backlog(ILogTrailAction& t)
-    : eliminated_candidates_(t, eliminated_candidates_type{}) {}
-
-template<typename ILogTrailAction>
-void dbuct_elimination_backlog<ILogTrailAction>::insert_backlogged_elimination(const resolution_lineage* rl) {
+inline void dbuct_elimination_backlog::insert_backlogged_elimination(const resolution_lineage* rl) {
     const goal_lineage* gl = rl->parent;
-    if (!eliminated_candidates_.get().contains(gl))
-        eliminated_candidates_.mutate(
-            std::make_unique<backtrackable_map_insert<eliminated_candidates_type>>(gl, std::unordered_set<rule_id>{}));
-    if (!eliminated_candidates_.get().at(gl).contains(rl->idx))
-        eliminated_candidates_.mutate(
-            std::make_unique<backtrackable_map_at_insert<eliminated_candidates_type>>(gl, rl->idx));
+    if (!eliminated_candidates_.contains(gl)) {
+        eliminated_candidates_.insert({gl, std::unordered_set<rule_id>{}});
+        log(elimination_backlog_goal_insert{gl, {}});
+    }
+    if (!eliminated_candidates_.at(gl).contains(rl->idx)) {
+        eliminated_candidates_.at(gl).insert(rl->idx);
+        log(elimination_backlog_candidate_insert{gl, rl->idx});
+    }
 }
 
-template<typename ILogTrailAction>
-bool dbuct_elimination_backlog<ILogTrailAction>::is_backlogged_elimination(const resolution_lineage* rl) const {
-    const auto& m = eliminated_candidates_.get();
-    auto it = m.find(rl->parent);
-    if (it == m.end()) return false;
+inline bool dbuct_elimination_backlog::is_backlogged_elimination(const resolution_lineage* rl) const {
+    const auto it = eliminated_candidates_.find(rl->parent);
+    if (it == eliminated_candidates_.end())
+        return false;
     return it->second.contains(rl->idx);
+}
+
+inline void dbuct_elimination_backlog::push_frame() { frame_stack_.push(frame{}); }
+
+inline void dbuct_elimination_backlog::pop_frame() {
+    auto current = std::move(frame_stack_.top());
+    frame_stack_.pop();
+    for (auto it = current.actions.rbegin(); it != current.actions.rend(); ++it)
+        undo_action(*it);
+}
+
+inline void dbuct_elimination_backlog::squash_frame() {
+    auto top = std::move(frame_stack_.top());
+    frame_stack_.pop();
+    auto& parent = frame_stack_.top().actions;
+    parent.splice(parent.end(), std::move(top.actions));
+}
+
+inline void dbuct_elimination_backlog::log(elimination_backlog_action action) {
+    if (!frame_stack_.empty())
+        frame_stack_.top().actions.push_back(std::move(action));
+}
+
+inline void dbuct_elimination_backlog::undo_action(const elimination_backlog_action& action) {
+    if (const auto* ins = std::get_if<elimination_backlog_goal_insert>(&action))
+        eliminated_candidates_.erase(ins->gl);
+    else {
+        const auto& cand = std::get<elimination_backlog_candidate_insert>(action);
+        eliminated_candidates_.at(cand.gl).erase(cand.candidate);
+    }
 }
 
 #endif

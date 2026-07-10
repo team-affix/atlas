@@ -11,7 +11,6 @@
 #include "infrastructure/run_sim.hpp"
 #include "infrastructure/db.hpp"
 #include "infrastructure/initial_goal_exprs.hpp"
-#include "infrastructure/trail.hpp"
 #include "infrastructure/bind_map.hpp"
 #include "infrastructure/bind_map_factory.hpp"
 #include "infrastructure/unifier_factory.hpp"
@@ -95,8 +94,8 @@ using subgoals_activator_t         = subgoals_activator<lineage_pool, goal_activ
 using initial_goals_activator_t     = initial_goals_activator<initial_goal_exprs,
                                     initial_goal_activator_t, make_initial_goal_lineage_t, goal_candidates_activator_t>;
 using resolver_t                  = resolver<goal_deactivator_t, subgoals_activator_t, goal_candidates_deactivator_t, chosen_goal_candidates>;
-using set_up_sim_t  = set_up_sim<trail>;
-using tear_down_sim_t  = tear_down_sim<trail, unit_goals, decision_memory, resolution_memory,
+using set_up_sim_t  = set_up_sim<elimination_backlog>;
+using tear_down_sim_t  = tear_down_sim<elimination_backlog, unit_goals, decision_memory, resolution_memory,
                     goal_candidate_rules, goal_exprs, ra_active_goals, candidate_frame_offsets,
                     mhu_t, bind_map<globalizer>, lineage_pool, frame_bump_allocator, cdcl_t, chosen_goal_candidates>;
 using resolution_recorder_t = resolution_recorder<decision_memory, resolution_memory>;
@@ -110,7 +109,6 @@ struct sim_stack {
     initial_goal_exprs& initial_goals_;
 
     globalizer globalizer_;
-    trail trail_;
     bind_map<globalizer> bind_map_{globalizer_};
     bind_map_factory<globalizer> bind_map_factory_{globalizer_};
     unifier_factory_t unifier_factory_{globalizer_};
@@ -128,7 +126,7 @@ struct sim_stack {
 
     expr_pool expr_pool_;
     frame_bump_allocator frame_allocator_{0};
-    elimination_backlog elimination_backlog_{trail_};
+    elimination_backlog elimination_backlog_;
 
     cdcl_t cdcl_{chosen_goal_candidates_};
     std::optional<mhu_t> mhu_;
@@ -214,8 +212,8 @@ struct simulation {
     std::optional<run_sim_t> run_sim_;
 
     simulation(sim_stack& s, size_t max_resolutions)
-        : set_up_sim_(s.trail_) {
-        tear_down_sim_.emplace(s.trail_, s.unit_goals_, s.decision_memory_, s.resolution_memory_,
+        : set_up_sim_(s.elimination_backlog_) {
+        tear_down_sim_.emplace(s.elimination_backlog_, s.unit_goals_, s.decision_memory_, s.resolution_memory_,
             s.goal_candidate_rules_, s.goal_exprs_, s.ra_active_goals_, s.candidate_frame_offsets_,
             *s.mhu_, s.bind_map_, s.lineage_pool_, s.frame_allocator_, s.cdcl_,
             s.chosen_goal_candidates_);
@@ -1585,34 +1583,34 @@ TEST_F(SimIntegrationTest, RunReturnsConflictedAfterPartialProgressWhenDerivedGo
 
 TEST_F(SimIntegrationTest, SetUpLifecyclePushesOneTrailFrameWithoutRunning) {
   // Capture baseline immediately before set_up(); wiring must not intern or push frames.
-  const size_t depth_before = stack.trail_.depth();
+  const size_t depth_before = stack.elimination_backlog_.depth();
   const size_t expr_before = stack.expr_pool_.size();
 
   simulation simulation{stack, kDefaultMaxResolutions};
   simulation.set_up();
 
-  EXPECT_EQ(stack.trail_.depth(), depth_before + 1);
+  EXPECT_EQ(stack.elimination_backlog_.depth(), depth_before + 1);
   EXPECT_EQ(stack.expr_pool_.size(), expr_before);
   EXPECT_TRUE(stack.ra_active_goals_.empty());
   simulation.tear_down();
 }
 
 TEST_F(SimIntegrationTest, TearDownLifecycleRestoresTrailDepthAfterEmptyRun) {
-  const size_t depth_before = stack.trail_.depth();
+  const size_t depth_before = stack.elimination_backlog_.depth();
 
   simulation simulation{stack, kDefaultMaxResolutions};
   simulation.set_up();
   EXPECT_EQ(simulation.run(), sim_termination::solved);
   simulation.tear_down();
 
-  EXPECT_EQ(stack.trail_.depth(), depth_before);
+  EXPECT_EQ(stack.elimination_backlog_.depth(), depth_before);
 }
 
 TEST_F(SimIntegrationTest, TearDownLifecycleRestoresTrailDepthAfterConflictedRun) {
   expr goal{expr::functor{functors.id("f"), {}}};
   initial_goals.push(&goal);
 
-  const size_t depth_before = stack.trail_.depth();
+  const size_t depth_before = stack.elimination_backlog_.depth();
 
   EXPECT_CALL(stack.decision_generator, generate()).Times(0);
 
@@ -1621,7 +1619,7 @@ TEST_F(SimIntegrationTest, TearDownLifecycleRestoresTrailDepthAfterConflictedRun
   EXPECT_EQ(simulation.run(), sim_termination::conflicted);
   simulation.tear_down();
 
-  EXPECT_EQ(stack.trail_.depth(), depth_before);
+  EXPECT_EQ(stack.elimination_backlog_.depth(), depth_before);
 }
 
 TEST_F(SimIntegrationTest, TearDownLifecycleRestoresTrailDepthAfterDepthExceededRun) {
@@ -1632,7 +1630,7 @@ TEST_F(SimIntegrationTest, TearDownLifecycleRestoresTrailDepthAfterDepthExceeded
   database.push(rule{&f_head, {&f_body}});
 
   static constexpr size_t kMaxResolutions = 4;
-  const size_t depth_before = stack.trail_.depth();
+  const size_t depth_before = stack.elimination_backlog_.depth();
 
   EXPECT_CALL(stack.decision_generator, generate()).Times(0);
 
@@ -1641,7 +1639,7 @@ TEST_F(SimIntegrationTest, TearDownLifecycleRestoresTrailDepthAfterDepthExceeded
   EXPECT_EQ(simulation.run(), sim_termination::depth_exceeded);
   simulation.tear_down();
 
-  EXPECT_EQ(stack.trail_.depth(), depth_before);
+  EXPECT_EQ(stack.elimination_backlog_.depth(), depth_before);
 }
 
 TEST_F(SimIntegrationTest, TearDownLifecycleClearsEphemeralStoresAfterSolvedRun) {

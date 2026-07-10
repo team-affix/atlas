@@ -66,12 +66,12 @@ struct MockGetUnitResolution {
     MOCK_METHOD(const resolution_lineage*, get, (const goal_lineage*));
 };
 
-struct MockPushTrailFrame {
-    MOCK_METHOD(void, push, ());
+struct MockPushFrame {
+    MOCK_METHOD(void, push_frame, ());
 };
 
-struct MockPopTrailFrame {
-    MOCK_METHOD(void, pop, ());
+struct MockPopFrame {
+    MOCK_METHOD(void, pop_frame, ());
 };
 
 struct MockActivateInitialGoalsAndCandidates {
@@ -141,7 +141,7 @@ struct MockClearChosenGoalCandidates {
     MOCK_METHOD(void, clear, ());
 };
 
-using test_set_up_sim_t = set_up_sim<MockPushTrailFrame>;
+using test_set_up_sim_t = set_up_sim<MockPushFrame>;
 using test_run_sim_t = run_sim<
     MockActivateInitialGoalsAndCandidates,
     MockSolutionDetector,
@@ -158,7 +158,7 @@ using test_run_sim_t = run_sim<
     testing::NiceMock<MockRecorder>,
     testing::NiceMock<MockGetResolutionCount>>;
 using test_tear_down_sim_t = tear_down_sim<
-    MockPopTrailFrame,
+    MockPopFrame,
     testing::NiceMock<MockClearUnitGoals>,
     testing::NiceMock<MockClearRecordedDecisions>,
     testing::NiceMock<MockClearRecordedResolutions>,
@@ -176,8 +176,8 @@ using test_tear_down_sim_t = tear_down_sim<
 struct SimTest : public ::testing::Test {
     static constexpr size_t kMaxResolutions = 2;
 
-    MockPushTrailFrame push_trail_frame;
-    MockPopTrailFrame pop_trail_frame;
+    MockPushFrame push_frame;
+    MockPopFrame pop_frame;
     MockActivateInitialGoalsAndCandidates activate_initial_goals_and_candidates;
     MockSolutionDetector solution_detector;
     MockConflictDetector conflict_detector;
@@ -206,9 +206,9 @@ struct SimTest : public ::testing::Test {
     testing::NiceMock<MockCleanUpCdcl> clean_up_cdcl;
     testing::NiceMock<MockClearChosenGoalCandidates> clear_chosen_goal_candidates;
 
-    test_set_up_sim_t set_up_sim_{push_trail_frame};
+    test_set_up_sim_t set_up_sim_{push_frame};
     test_tear_down_sim_t tear_down_sim_{
-        pop_trail_frame, clear_unit_goals, clear_recorded_decisions,
+        pop_frame, clear_unit_goals, clear_recorded_decisions,
         clear_recorded_resolutions, clear_goal_candidate_rule_ids, clear_goal_exprs,
         clear_active_goals, clear_candidate_frame_offsets, clear_mhu_heads,
         clear_bindings, trim_unpinned_lineages, frame_allocator,
@@ -283,8 +283,8 @@ TEST_F(SimTest, RunReturnsConflictedWhenInitialGoalsFail) {
     EXPECT_EQ(run(), sim_termination::conflicted);
 }
 
-TEST_F(SimTest, TearDownPopsTrailAndClearsNonBacktrackedStores) {
-    EXPECT_CALL(pop_trail_frame, pop()).Times(1);
+TEST_F(SimTest, TearDownPopsFrameAndClearsNonBacktrackedStores) {
+    EXPECT_CALL(pop_frame, pop_frame()).Times(1);
     EXPECT_CALL(clear_unit_goals, clear()).Times(1);
     EXPECT_CALL(clear_recorded_decisions, clear_recorded_decisions()).Times(1);
     EXPECT_CALL(clear_recorded_resolutions, clear_recorded_resolutions()).Times(1);
@@ -302,8 +302,8 @@ TEST_F(SimTest, TearDownPopsTrailAndClearsNonBacktrackedStores) {
     tear_down();
 }
 
-TEST_F(SimTest, SetUpPushesTrailFrameOnly) {
-    EXPECT_CALL(push_trail_frame, push()).Times(1);
+TEST_F(SimTest, SetUpPushesFrameOnly) {
+    EXPECT_CALL(push_frame, push_frame()).Times(1);
     EXPECT_CALL(activate_initial_goals_and_candidates, activate_initial_goals_and_candidates()).Times(0);
     set_up();
     tear_down();

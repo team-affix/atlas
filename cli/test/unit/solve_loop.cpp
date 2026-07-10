@@ -10,7 +10,6 @@
 #include <gmock/gmock.h>
 #include "infrastructure/expr_pool.hpp"
 #include "infrastructure/solve_loop.hpp"
-#include "infrastructure/trail.hpp"
 #include "value_objects/framed_expr.hpp"
 #include "value_objects/lemma.hpp"
 

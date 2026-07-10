@@ -20,7 +20,6 @@
 #include "infrastructure/lineage_pool.hpp"
 #include "infrastructure/goal_candidate_rules.hpp"
 #include "infrastructure/ra_rule_id_set_factory.hpp"
-#include "infrastructure/trail.hpp"
 #include "infrastructure/coroutine.hpp"
 #include "functor_fixture.hpp"
 
@@ -68,7 +67,6 @@ expr make_functor_expr(test_functors& functors, const char* name, std::span<expr
 struct MhuEliminationGeneratorIntegrationTest : public ::testing::Test {
     
     test_functors functors;
-    trail t;
     globalizer g_;
     bind_map<globalizer> common{g_};
     lineage_pool lp;

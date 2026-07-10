@@ -6,7 +6,7 @@
 #include <vector>
 #include "infrastructure/cdcl_elimination_generator.hpp"
 #include "infrastructure/chosen_goal_candidates.hpp"
-#include "infrastructure/trail.hpp"
+#include "infrastructure/elimination_backlog.hpp"
 #include "infrastructure/coroutine.hpp"
 
 using test_cdcl_t = cdcl_elimination_generator<chosen_goal_candidates>;
@@ -39,7 +39,7 @@ lemma make_lemma(std::initializer_list<const resolution_lineage*> rs) {
 
 struct CdclEliminationGeneratorIntegrationTest : public ::testing::Test {
 protected:
-    trail t;
+    elimination_backlog frames;
     chosen_goal_candidates chosen;
     test_cdcl_t cdcl{chosen};
 
@@ -71,8 +71,8 @@ protected:
 TEST_F(CdclEliminationGeneratorIntegrationTest, AvoidanceSurvivesTrailPopAcrossEmptyFrame) {
     cdcl.learn(make_lemma({&lin_0_0, &lin_1_0}));
 
-    t.push();
-    t.pop();
+    frames.push_frame();
+    frames.pop_frame();
 
     EXPECT_THAT(collect_elims(cdcl.constrain(&lin_0_0)), ElementsAre(&lin_1_0));
 }
@@ -83,8 +83,8 @@ TEST_F(CdclEliminationGeneratorIntegrationTest, LearnManyAvoidancesSurvivesEmpty
     cdcl.learn(make_lemma({&lin_0_1, &lin_2_0}));
     cdcl.learn(make_lemma({&lin_4_0_0_0, &lin_4_0_1_0}));
 
-    t.push();
-    t.pop();
+    frames.push_frame();
+    frames.pop_frame();
 
     EXPECT_THAT(collect_elims(cdcl.constrain(&lin_4_0_0_0)), ElementsAre(&lin_4_0_1_0));
     EXPECT_THAT(collect_elims(cdcl.constrain(&lin_0_1)), ElementsAre(&lin_2_0));
@@ -92,9 +92,9 @@ TEST_F(CdclEliminationGeneratorIntegrationTest, LearnManyAvoidancesSurvivesEmpty
 }
 
 TEST_F(CdclEliminationGeneratorIntegrationTest, LearnInFrameSurvivesPop) {
-    t.push();
+    frames.push_frame();
     EXPECT_EQ(cdcl.learn(make_lemma({&lin_0_0, &lin_1_0})), std::nullopt);
-    t.pop();
+    frames.pop_frame();
 
     EXPECT_THAT(collect_elims(cdcl.constrain(&lin_0_0)), ElementsAre(&lin_1_0));
 }
@@ -102,9 +102,9 @@ TEST_F(CdclEliminationGeneratorIntegrationTest, LearnInFrameSurvivesPop) {
 TEST_F(CdclEliminationGeneratorIntegrationTest, LearnBeforePushSurvivesPopIncludingInnerLearn) {
     EXPECT_EQ(cdcl.learn(make_lemma({&lin_0_0, &lin_1_0})), std::nullopt);
 
-    t.push();
+    frames.push_frame();
     EXPECT_EQ(cdcl.learn(make_lemma({&lin_2_0, &lin_3_0})), std::nullopt);
-    t.pop();
+    frames.pop_frame();
 
     EXPECT_THAT(collect_elims(cdcl.constrain(&lin_0_0)), ElementsAre(&lin_1_0));
     EXPECT_THAT(collect_elims(cdcl.constrain(&lin_2_0)), ElementsAre(&lin_3_0));
@@ -113,9 +113,9 @@ TEST_F(CdclEliminationGeneratorIntegrationTest, LearnBeforePushSurvivesPopInclud
 TEST_F(CdclEliminationGeneratorIntegrationTest, ConstrainInFramePersistsAcrossPop) {
     cdcl.learn(make_lemma({&lin_0_0, &lin_1_0}));
 
-    t.push();
+    frames.push_frame();
     EXPECT_THAT(collect_elims(cdcl.constrain(&lin_0_0)), ElementsAre(&lin_1_0));
-    t.pop();
+    frames.pop_frame();
 
     EXPECT_THAT(collect_elims(cdcl.constrain(&lin_0_0)), IsEmpty());
     EXPECT_THAT(collect_elims(cdcl.constrain(&lin_1_0)), IsEmpty());
@@ -124,9 +124,9 @@ TEST_F(CdclEliminationGeneratorIntegrationTest, ConstrainInFramePersistsAcrossPo
 TEST_F(CdclEliminationGeneratorIntegrationTest, ExclusiveConstrainInFramePersistsUntilCleanup) {
     cdcl.learn(make_lemma({&lin_0_0, &lin_1_0}));
 
-    t.push();
+    frames.push_frame();
     EXPECT_THAT(collect_elims(cdcl.constrain(&lin_0_1)), IsEmpty());
-    t.pop();
+    frames.pop_frame();
 
     EXPECT_THAT(collect_elims(cdcl.constrain(&lin_0_0)), IsEmpty());
     end_sim();
@@ -134,10 +134,10 @@ TEST_F(CdclEliminationGeneratorIntegrationTest, ExclusiveConstrainInFramePersist
 }
 
 TEST_F(CdclEliminationGeneratorIntegrationTest, LearnAndConstrainInSameFramePersistUntilCleanup) {
-    t.push();
+    frames.push_frame();
     cdcl.learn(make_lemma({&lin_0_0, &lin_1_0}));
     EXPECT_THAT(collect_elims(cdcl.constrain(&lin_0_0)), ElementsAre(&lin_1_0));
-    t.pop();
+    frames.pop_frame();
 
     EXPECT_THAT(collect_elims(cdcl.constrain(&lin_0_0)), IsEmpty());
     end_sim();
@@ -145,10 +145,10 @@ TEST_F(CdclEliminationGeneratorIntegrationTest, LearnAndConstrainInSameFramePers
 }
 
 TEST_F(CdclEliminationGeneratorIntegrationTest, MultipleLearnsInFrameAllSurvivePop) {
-    t.push();
+    frames.push_frame();
     EXPECT_EQ(cdcl.learn(make_lemma({&lin_0_0, &lin_1_0})), std::nullopt);
     EXPECT_EQ(cdcl.learn(make_lemma({&lin_2_0, &lin_3_0})), std::nullopt);
-    t.pop();
+    frames.pop_frame();
 
     EXPECT_THAT(collect_elims(cdcl.constrain(&lin_0_0)), ElementsAre(&lin_1_0));
     EXPECT_THAT(collect_elims(cdcl.constrain(&lin_2_0)), ElementsAre(&lin_3_0));
@@ -158,10 +158,10 @@ TEST_F(CdclEliminationGeneratorIntegrationTest, MultipleConstrainsInFramePersist
     cdcl.learn(make_lemma({&lin_0_0, &lin_1_0}));
     cdcl.learn(make_lemma({&lin_2_0, &lin_3_0}));
 
-    t.push();
+    frames.push_frame();
     EXPECT_THAT(collect_elims(cdcl.constrain(&lin_0_0)), ElementsAre(&lin_1_0));
     EXPECT_THAT(collect_elims(cdcl.constrain(&lin_2_0)), ElementsAre(&lin_3_0));
-    t.pop();
+    frames.pop_frame();
 
     EXPECT_THAT(collect_elims(cdcl.constrain(&lin_0_0)), IsEmpty());
     EXPECT_THAT(collect_elims(cdcl.constrain(&lin_2_0)), IsEmpty());
@@ -173,9 +173,9 @@ TEST_F(CdclEliminationGeneratorIntegrationTest, MultipleConstrainsInFramePersist
 TEST_F(CdclEliminationGeneratorIntegrationTest, ThreeMemberAvoidancePartialConstrainRestoredByCleanup) {
     cdcl.learn(make_lemma({&lin_0_0, &lin_1_0, &lin_2_0}));
 
-    t.push();
+    frames.push_frame();
     EXPECT_THAT(collect_elims(cdcl.constrain(&lin_0_0)), IsEmpty());
-    t.pop();
+    frames.pop_frame();
 
     EXPECT_THAT(collect_elims(cdcl.constrain(&lin_0_0)), IsEmpty());
     EXPECT_THAT(collect_elims(cdcl.constrain(&lin_1_0)), ElementsAre(&lin_2_0));
@@ -191,11 +191,11 @@ TEST_F(CdclEliminationGeneratorIntegrationTest, FourAvoidancesSharingGoalConstra
     cdcl.learn(make_lemma({&lin_0_0, &lin_3_0}));
     cdcl.learn(make_lemma({&lin_0_1, &lin_3_0}));
 
-    t.push();
+    frames.push_frame();
     EXPECT_THAT(
         collect_elims(cdcl.constrain(&lin_0_0)),
         UnorderedElementsAre(&lin_1_0, &lin_2_0, &lin_3_0));
-    t.pop();
+    frames.pop_frame();
 
     EXPECT_THAT(collect_elims(cdcl.constrain(&lin_0_0)), IsEmpty());
     end_sim();
@@ -207,14 +207,14 @@ TEST_F(CdclEliminationGeneratorIntegrationTest, FourAvoidancesSharingGoalConstra
 TEST_F(CdclEliminationGeneratorIntegrationTest, TwoNestedFramesInnerLearnSurvivesInnerPop) {
     EXPECT_EQ(cdcl.learn(make_lemma({&lin_0_0, &lin_1_0})), std::nullopt);
 
-    t.push();
-    t.push();
+    frames.push_frame();
+    frames.push_frame();
     EXPECT_EQ(cdcl.learn(make_lemma({&lin_2_0, &lin_3_0})), std::nullopt);
-    t.pop();
+    frames.pop_frame();
 
     EXPECT_THAT(collect_elims(cdcl.constrain(&lin_0_0)), ElementsAre(&lin_1_0));
     EXPECT_THAT(collect_elims(cdcl.constrain(&lin_2_0)), ElementsAre(&lin_3_0));
-    t.pop();
+    frames.pop_frame();
 
     EXPECT_THAT(collect_elims(cdcl.constrain(&lin_0_0)), IsEmpty());
     end_sim();
@@ -224,10 +224,10 @@ TEST_F(CdclEliminationGeneratorIntegrationTest, TwoNestedFramesInnerLearnSurvive
 TEST_F(CdclEliminationGeneratorIntegrationTest, FourMemberAvoidancePartialConstrainRestoredByCleanup) {
     cdcl.learn(make_lemma({&lin_0_0, &lin_1_0, &lin_2_0, &lin_3_0}));
 
-    t.push();
+    frames.push_frame();
     EXPECT_THAT(collect_elims(cdcl.constrain(&lin_0_0)), IsEmpty());
     EXPECT_THAT(collect_elims(cdcl.constrain(&lin_1_0)), IsEmpty());
-    t.pop();
+    frames.pop_frame();
 
     EXPECT_THAT(collect_elims(cdcl.constrain(&lin_0_0)), IsEmpty());
     EXPECT_THAT(collect_elims(cdcl.constrain(&lin_1_0)), IsEmpty());
@@ -243,9 +243,9 @@ TEST_F(CdclEliminationGeneratorIntegrationTest, FourMemberAvoidancePartialConstr
 TEST_F(CdclEliminationGeneratorIntegrationTest, DependentTreeExclusiveConstrainRestoredByCleanup) {
     cdcl.learn(make_lemma({&lin_4_0_0_0, &lin_4_0_1_0}));
 
-    t.push();
+    frames.push_frame();
     EXPECT_THAT(collect_elims(cdcl.constrain(&lin_4_0_0_1)), IsEmpty());
-    t.pop();
+    frames.pop_frame();
 
     EXPECT_THAT(collect_elims(cdcl.constrain(&lin_4_0_0_0)), IsEmpty());
     end_sim();
@@ -255,11 +255,11 @@ TEST_F(CdclEliminationGeneratorIntegrationTest, DependentTreeExclusiveConstrainR
 TEST_F(CdclEliminationGeneratorIntegrationTest, LearnAfterConstrainInFramePersistsUntilCleanup) {
     cdcl.learn(make_lemma({&lin_0_0, &lin_1_0}));
 
-    t.push();
+    frames.push_frame();
     EXPECT_THAT(collect_elims(cdcl.constrain(&lin_0_0)), ElementsAre(&lin_1_0));
     cdcl.learn(make_lemma({&lin_2_0, &lin_3_0}));
     EXPECT_THAT(collect_elims(cdcl.constrain(&lin_2_0)), ElementsAre(&lin_3_0));
-    t.pop();
+    frames.pop_frame();
 
     EXPECT_THAT(collect_elims(cdcl.constrain(&lin_0_0)), IsEmpty());
     EXPECT_THAT(collect_elims(cdcl.constrain(&lin_2_0)), IsEmpty());

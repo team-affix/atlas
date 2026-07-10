@@ -5,7 +5,6 @@
 #include "infrastructure/expr_pool.hpp"
 #include "infrastructure/initial_goal_exprs.hpp"
 #include "infrastructure/ridge_manifest.hpp"
-#include "infrastructure/trail.hpp"
 #include "value_objects/expr.hpp"
 #include "value_objects/lemma.hpp"
 #include "value_objects/sim_termination.hpp"
@@ -81,11 +80,11 @@ TEST_F(RidgeManifestIntegrationTest, SimLifecycleTrailDepthRestoresAfterEmptyRun
      * rules: (none)
      */
     ridge_manifest manifest = make_manifest();
-    const size_t depth_before = manifest.trail_.depth();
+    const size_t depth_before = manifest.elimination_backlog_.depth();
     manifest.mcts_sim_.set_up();
     EXPECT_EQ(manifest.run_sim_.run(), sim_termination::solved);
     manifest.mcts_sim_.tear_down();
-    EXPECT_EQ(manifest.trail_.depth(), depth_before);
+    EXPECT_EQ(manifest.elimination_backlog_.depth(), depth_before);
 }
 
 TEST_F(RidgeManifestIntegrationTest, SimLifecycleClearsActiveGoalsAfterEmptyRun) {
@@ -111,11 +110,11 @@ TEST_F(RidgeManifestIntegrationTest, SimLifecycleTrailDepthRestoresAfterConflict
     const expr* goal = saved_expr_pool_.make_functor(functors.id("f"), {});
     initial_goals.push(goal);
     ridge_manifest manifest = make_manifest();
-    const size_t depth_before = manifest.trail_.depth();
+    const size_t depth_before = manifest.elimination_backlog_.depth();
     manifest.set_up_sim_.set_up();
     EXPECT_EQ(manifest.run_sim_.run(), sim_termination::conflicted);
     manifest.tear_down_sim_.tear_down();
-    EXPECT_EQ(manifest.trail_.depth(), depth_before);
+    EXPECT_EQ(manifest.elimination_backlog_.depth(), depth_before);
 }
 
 TEST_F(RidgeManifestIntegrationTest, SimMctsDecisionGeneratorRecordsDecisionWithFixedSeed) {

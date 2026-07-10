@@ -4,7 +4,6 @@
 #include "infrastructure/globalizer.hpp"
 #include "infrastructure/expr_pool.hpp"
 #include "infrastructure/bind_map.hpp"
-#include "infrastructure/trail.hpp"
 #include "functor_fixture.hpp"
 
 using test_normalizer_t = normalizer<globalizer, expr_pool, expr_pool, bind_map<globalizer>>;
@@ -18,8 +17,6 @@ protected:
         bm.emplace(*glob);
         norm.emplace(*glob, *pool, *pool, *bm);
     }
-
-    trail t;
     std::optional<globalizer> glob;
     std::optional<bind_map<globalizer>> bm;
     std::optional<expr_pool> pool;

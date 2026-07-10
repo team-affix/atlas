@@ -27,7 +27,6 @@
 #include "infrastructure/initial_goal_exprs.hpp"
 #include "infrastructure/ridge_runtime.hpp"
 #include "infrastructure/horizon_runtime.hpp"
-#include "infrastructure/trail.hpp"
 #include "infrastructure/functor_names.hpp"
 #include "infrastructure/var_names.hpp"
 #include "value_objects/expr.hpp"

@@ -1,44 +1,78 @@
 #ifndef DBUCT_UNIT_GOALS_HPP
 #define DBUCT_UNIT_GOALS_HPP
 
-#include <memory>
+#include <list>
 #include <optional>
+#include <stack>
 #include <vector>
-#include "infrastructure/backtrackable_vector_pop_back.hpp"
-#include "infrastructure/backtrackable_vector_push_back.hpp"
-#include "infrastructure/tracked.hpp"
 #include "value_objects/lineage.hpp"
+#include "value_objects/unit_goals_action.hpp"
+#include "debug_assert.hpp"
 
-// Delayed-backtracking variant of unit_goals. The LIFO queue is trail-journalled
-// (via the abstract ILogTrailAction) so a choice-frame pop restores the exact
-// pending unit-goal stack.
-template<typename ILogTrailAction>
 struct dbuct_unit_goals {
-    explicit dbuct_unit_goals(ILogTrailAction& t);
-
     void push(const goal_lineage* gl);
     std::optional<const goal_lineage*> pop();
 
+    void push_frame();
+    void pop_frame();
+    void squash_frame();
+
 private:
+    struct frame {
+        std::list<unit_goals_action> actions;
+    };
+
     using vec_t = std::vector<const goal_lineage*>;
 
-    tracked<vec_t, ILogTrailAction> queue_;
+    void log(unit_goals_action action);
+    void undo_action(const unit_goals_action& action);
+
+    vec_t queue_;
+    std::stack<frame> frame_stack_;
 };
 
-template<typename ILogTrailAction>
-dbuct_unit_goals<ILogTrailAction>::dbuct_unit_goals(ILogTrailAction& t) : queue_(t, vec_t{}) {}
-
-template<typename ILogTrailAction>
-void dbuct_unit_goals<ILogTrailAction>::push(const goal_lineage* gl) {
-    queue_.mutate(std::make_unique<backtrackable_vector_push_back<vec_t>>(gl));
+inline void dbuct_unit_goals::push(const goal_lineage* gl) {
+    queue_.push_back(gl);
+    log(vector_push_back_goal{gl});
 }
 
-template<typename ILogTrailAction>
-std::optional<const goal_lineage*> dbuct_unit_goals<ILogTrailAction>::pop() {
-    if (queue_.get().empty()) return std::nullopt;
-    const goal_lineage* gl = queue_.get().back();
-    queue_.mutate(std::make_unique<backtrackable_vector_pop_back<vec_t>>());
+inline std::optional<const goal_lineage*> dbuct_unit_goals::pop() {
+    if (queue_.empty())
+        return std::nullopt;
+    const goal_lineage* gl = queue_.back();
+    queue_.pop_back();
+    log(vector_pop_back_goal{gl});
     return gl;
+}
+
+inline void dbuct_unit_goals::push_frame() { frame_stack_.push(frame{}); }
+
+inline void dbuct_unit_goals::pop_frame() {
+    auto current = std::move(frame_stack_.top());
+    frame_stack_.pop();
+    for (auto it = current.actions.rbegin(); it != current.actions.rend(); ++it)
+        undo_action(*it);
+}
+
+inline void dbuct_unit_goals::squash_frame() {
+    auto top = std::move(frame_stack_.top());
+    frame_stack_.pop();
+    auto& parent = frame_stack_.top().actions;
+    parent.splice(parent.end(), std::move(top.actions));
+}
+
+inline void dbuct_unit_goals::log(unit_goals_action action) {
+    DEBUG_ASSERT(!frame_stack_.empty());
+    frame_stack_.top().actions.push_back(std::move(action));
+}
+
+inline void dbuct_unit_goals::undo_action(const unit_goals_action& action) {
+    if (const auto* push = std::get_if<vector_push_back_goal>(&action))
+        queue_.pop_back();
+    else {
+        const auto& pop = std::get<vector_pop_back_goal>(action);
+        queue_.push_back(pop.gl);
+    }
 }
 
 #endif
