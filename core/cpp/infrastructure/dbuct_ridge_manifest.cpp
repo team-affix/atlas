@@ -35,7 +35,7 @@ dbuct_ridge_manifest::dbuct_ridge_manifest(
       hub_(frame_depth_, goal_exprs_, goal_candidate_rules_, chosen_goal_candidates_,
            decision_memory_, resolution_memory_, unit_goals_, candidate_frame_offsets_,
            frame_allocator_, nearest_decision_, elimination_backlog_,
-           avoidance_unit_boundary_, srt_active_goals_, bind_map_),
+           avoidance_unit_boundary_, srt_active_goals_, bind_map_, mhu_),
       dbuct_joint_(cdcl_, mhu_),
       resolution_recorder_(decision_memory_, resolution_memory_, nearest_decision_,
                          avoidance_unit_boundary_),
@@ -83,8 +83,5 @@ dbuct_ridge_manifest::dbuct_ridge_manifest(
       solver_(srt_initial_goals_activator_, run_sim_, decision_memory_,
               ridge_reward_, dbuct_sim_, dbuct_sim_, cdcl_, mhu_, elimination_router_,
               conflict_detector_, unit_goal_detector_, unit_goals_) {
-    hub_.bind_mhu(
-        [this]() { mhu_.push_frame(); },
-        [this]() { mhu_.pop_frame(); });
     dbuct_sim_.push_base_frame();
 }

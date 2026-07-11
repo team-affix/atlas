@@ -1,4 +1,4 @@
-// dbuct_frame_hub coordinates per-component frame stacks and optional MHU hooks.
+// dbuct_frame_hub coordinates per-component frame stacks, including the MHU.
 
 #include <gtest/gtest.h>
 #include "infrastructure/dbuct_avoidance_unit_boundary.hpp"
@@ -24,7 +24,20 @@ namespace {
 
 using bind_map_t = dbuct_bind_map<globalizer>;
 using boundary_t = dbuct_avoidance_unit_boundary<dbuct_nearest_decision, frame_depth_tracker>;
-using hub_t = dbuct_frame_hub<bind_map_t, boundary_t>;
+
+struct fake_mhu {
+    int pushes = 0;
+    int pops = 0;
+    void push_frame() { ++pushes; }
+    void pop_frame() { ++pops; }
+};
+
+using hub_t = dbuct_frame_hub<
+    frame_depth_tracker, dbuct_goal_exprs, dbuct_goal_candidate_rules,
+    dbuct_chosen_goal_candidates, dbuct_decision_memory, dbuct_resolution_memory,
+    dbuct_unit_goals, dbuct_candidate_frame_offsets, dbuct_frame_bump_allocator,
+    dbuct_nearest_decision, dbuct_elimination_backlog, boundary_t,
+    dbuct_srt_active_goals, bind_map_t, fake_mhu>;
 
 struct hub_fixture {
     frame_depth_tracker depth_tracker;
@@ -43,10 +56,8 @@ struct hub_fixture {
     dbuct_elimination_backlog elimination_backlog;
     boundary_t avoidance_unit_boundary{nearest_decision, depth_tracker};
     dbuct_srt_active_goals srt_active_goals;
+    fake_mhu mhu;
     hub_t frame_hub;
-
-    int mhu_push = 0;
-    int mhu_pop = 0;
 
     hub_fixture()
         : frame_hub(depth_tracker,
@@ -62,11 +73,8 @@ struct hub_fixture {
                     elimination_backlog,
                     avoidance_unit_boundary,
                     srt_active_goals,
-                    bind_map) {
-        frame_hub.bind_mhu(
-            [this]() { ++mhu_push; },
-            [this]() { ++mhu_pop; });
-    }
+                    bind_map,
+                    mhu) {}
 };
 
 }  // namespace
@@ -77,12 +85,12 @@ TEST(DbuctFrameHubTest, PushPopTracksDepthAndMhuHooks) {
 
     f.frame_hub.push_frame();
     EXPECT_EQ(f.depth_tracker.depth(), 1u);
-    EXPECT_EQ(f.mhu_push, 1);
-    EXPECT_EQ(f.mhu_pop, 0);
+    EXPECT_EQ(f.mhu.pushes, 1);
+    EXPECT_EQ(f.mhu.pops, 0);
 
     f.frame_hub.pop_frame();
     EXPECT_EQ(f.depth_tracker.depth(), 0u);
-    EXPECT_EQ(f.mhu_pop, 1);
+    EXPECT_EQ(f.mhu.pops, 1);
 }
 
 TEST(DbuctFrameHubTest, PopRevertsJournaledGoalExpr) {
