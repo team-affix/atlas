@@ -5,7 +5,7 @@ size_t dbuct_tree_walker::make_root() {
 }
 
 size_t dbuct_tree_walker::walk(size_t node, const mcts_choice& choice) {
-    auto& children = edges_[node];
+    children_t& children = edges_[node];
     auto it = children.find(choice);
     if (it != children.end())
         return it->second;
