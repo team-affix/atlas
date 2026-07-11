@@ -68,19 +68,19 @@ struct dbuct_sim {
     void push_base_frame();
 
 private:
-    using node_id_t = typename IWalk::node_id_t;
+    using node_handle_t = decltype(IWalk::make_root());
     using visits_table_t = typename dbuct_visits_table_selector<
-        node_id_t, IWalk::use_unordered_tables>::type;
+        node_handle_t, IWalk::use_unordered_tables>::type;
     using value_table_t = typename dbuct_value_table_selector<
-        node_id_t, IWalk::use_unordered_tables>::type;
+        node_handle_t, IWalk::use_unordered_tables>::type;
     using dispatches_table_t = typename dbuct_dispatches_table_selector<
-        node_id_t, IWalk::use_unordered_tables>::type;
+        node_handle_t, IWalk::use_unordered_tables>::type;
     using choices_t          = std::vector<mcts_choice>;
     using rollout_t          = monte_carlo::random_rollout<
                                    mcts_choice, std::mt19937, choices_t, choices_t>;
     using batch_t            = monte_carlo::linear_batch_increment;
     using dbuct_t            = monte_carlo::dbuct<
-                                   node_id_t,
+                                   node_handle_t,
                                    mcts_choice,
                                    double,
                                    visits_table_t,

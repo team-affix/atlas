@@ -1,10 +1,10 @@
 #include <gtest/gtest.h>
-#include "infrastructure/dbuct_set_walker.hpp"
+#include "infrastructure/dbuct_scope_contraction_walker.hpp"
 #include "infrastructure/lineage_pool.hpp"
 
-struct DbuctSetWalkerTest : public ::testing::Test {
+struct DbuctScopeContractionWalkerTest : public ::testing::Test {
     lineage_pool pool;
-    dbuct_set_walker<lineage_pool> walker{pool};
+    dbuct_scope_contraction_walker<lineage_pool> walker{pool};
 
     const goal_lineage* root_goal() {
         return pool.make_goal_lineage(nullptr, subgoal_id{0});
@@ -15,14 +15,14 @@ struct DbuctSetWalkerTest : public ::testing::Test {
     }
 };
 
-TEST_F(DbuctSetWalkerTest, MakeRootIsEmptySetAndNullGoal) {
-    const mcts_node_id root = dbuct_set_walker<lineage_pool>::make_root();
+TEST_F(DbuctScopeContractionWalkerTest, MakeRootIsEmptySetAndNullGoal) {
+    const mcts_node_id root = dbuct_scope_contraction_walker<lineage_pool>::make_root();
     EXPECT_TRUE(root.first.empty());
     EXPECT_EQ(root.second, nullptr);
 }
 
-TEST_F(DbuctSetWalkerTest, GoalChoiceKeepsDecisionSetAndUpdatesGoal) {
-    const mcts_node_id root = dbuct_set_walker<lineage_pool>::make_root();
+TEST_F(DbuctScopeContractionWalkerTest, GoalChoiceKeepsDecisionSetAndUpdatesGoal) {
+    const mcts_node_id root = dbuct_scope_contraction_walker<lineage_pool>::make_root();
     const goal_lineage* goal = root_goal();
     const mcts_node_id next = walker.walk(root, goal);
 
@@ -30,7 +30,7 @@ TEST_F(DbuctSetWalkerTest, GoalChoiceKeepsDecisionSetAndUpdatesGoal) {
     EXPECT_EQ(next.second, goal);
 }
 
-TEST_F(DbuctSetWalkerTest, RuleChoiceInsertsResolutionAndClearsGoal) {
+TEST_F(DbuctScopeContractionWalkerTest, RuleChoiceInsertsResolutionAndClearsGoal) {
     const goal_lineage* goal = root_goal();
     const mcts_node_id at_goal{{}, goal};
     const mcts_node_id next = walker.walk(at_goal, rule_id{1});
@@ -40,7 +40,7 @@ TEST_F(DbuctSetWalkerTest, RuleChoiceInsertsResolutionAndClearsGoal) {
     EXPECT_EQ(next.second, nullptr);
 }
 
-TEST_F(DbuctSetWalkerTest, RuleChoiceCopiesExistingDecisionSet) {
+TEST_F(DbuctScopeContractionWalkerTest, RuleChoiceCopiesExistingDecisionSet) {
     const resolution_lineage* prior = root_resolution();
     const goal_lineage* goal = root_goal();
     const mcts_node_id at_goal{{prior}, goal};
