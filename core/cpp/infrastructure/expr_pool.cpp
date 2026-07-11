@@ -22,9 +22,9 @@ const expr* expr_pool::import(const expr* e) {
 }
 
 const expr* expr_pool::intern(expr&& e) {
-    return &*exprs.emplace(std::move(e)).first;
+    return &*exprs_.insert(std::move(e)).first;
 }
 
 size_t expr_pool::size() const {
-    return exprs.size();
+    return exprs_.size();
 }
