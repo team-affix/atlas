@@ -11,33 +11,37 @@ const resolution_lineage* lineage_pool::make_resolution_lineage(const goal_linea
 void lineage_pool::pin(const goal_lineage* lineage) {
     if (!lineage)
         return;
-    if (!pinned_goals_.insert(lineage).second)
+    bool& is_pinned = goal_lineages_.at(*lineage);
+    if (is_pinned)
         return;
+    is_pinned = true;
     pin(lineage->parent);
 }
 
 void lineage_pool::pin(const resolution_lineage* lineage) {
     if (!lineage)
         return;
-    if (!pinned_resolutions_.insert(lineage).second)
+    bool& is_pinned = resolution_lineages_.at(*lineage);
+    if (is_pinned)
         return;
+    is_pinned = true;
     pin(lineage->parent);
 }
 
 void lineage_pool::trim() {
     for (auto it = goal_lineages_.begin(); it != goal_lineages_.end();) {
-        if (pinned_goals_.contains(&*it)) {
+        if (it->second) {
             ++it;
             continue;
         }
-        it = goal_lineages_.erase(it);
+        goal_lineages_.erase(it++);
     }
     for (auto it = resolution_lineages_.begin(); it != resolution_lineages_.end();) {
-        if (pinned_resolutions_.contains(&*it)) {
+        if (it->second) {
             ++it;
             continue;
         }
-        it = resolution_lineages_.erase(it);
+        resolution_lineages_.erase(it++);
     }
 }
 
@@ -54,9 +58,9 @@ const resolution_lineage* lineage_pool::import(const resolution_lineage* lineage
 }
 
 const goal_lineage* lineage_pool::intern(goal_lineage&& lineage) {
-    return &*goal_lineages_.insert(std::move(lineage)).first;
+    return &goal_lineages_.emplace(std::move(lineage), false).first->first;
 }
 
 const resolution_lineage* lineage_pool::intern(resolution_lineage&& lineage) {
-    return &*resolution_lineages_.insert(std::move(lineage)).first;
+    return &resolution_lineages_.emplace(std::move(lineage), false).first->first;
 }
