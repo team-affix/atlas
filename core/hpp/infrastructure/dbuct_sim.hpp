@@ -55,9 +55,9 @@ struct dbuct_dispatches_table_selector<NodeHandle, true> {
     using type = monte_carlo::dispatches_table<NodeHandle, std::unordered_map>;
 };
 
-template<typename IFrameHub, typename IFrameControl, typename IWalk>
+template<typename IFrameHub, typename IFrameControl, typename IWalk, typename NodeHandle>
 struct dbuct_sim {
-    dbuct_sim(IFrameHub&, IFrameControl&, IWalk&,
+    dbuct_sim(IFrameHub&, IFrameControl&, IWalk&, NodeHandle root,
               std::mt19937&, double exploration_constant,
               std::size_t grant_increment_interval);
 
@@ -68,7 +68,7 @@ struct dbuct_sim {
     void push_base_frame();
 
 private:
-    using node_handle_t = decltype(IWalk::make_root());
+    using node_handle_t = NodeHandle;
     using visits_table_t = typename dbuct_visits_table_selector<
         node_handle_t, IWalk::use_unordered_tables>::type;
     using value_table_t = typename dbuct_value_table_selector<
@@ -106,14 +106,14 @@ private:
     std::optional<dbuct_t> dbuct_;
 };
 
-template<typename IFrameHub, typename IFrameControl, typename IWalk>
-bool dbuct_sim<IFrameHub, IFrameControl, IWalk>::at_root() const {
+template<typename IFrameHub, typename IFrameControl, typename IWalk, typename NodeHandle>
+bool dbuct_sim<IFrameHub, IFrameControl, IWalk, NodeHandle>::at_root() const {
     return hub_.depth() == 1;
 }
 
-template<typename IFrameHub, typename IFrameControl, typename IWalk>
-dbuct_sim<IFrameHub, IFrameControl, IWalk>::dbuct_sim(
-    IFrameHub& hub, IFrameControl& frames, IWalk& walk,
+template<typename IFrameHub, typename IFrameControl, typename IWalk, typename NodeHandle>
+dbuct_sim<IFrameHub, IFrameControl, IWalk, NodeHandle>::dbuct_sim(
+    IFrameHub& hub, IFrameControl& frames, IWalk& walk, NodeHandle root,
     std::mt19937& rng, double ec, std::size_t grant_increment_interval)
     : hub_(hub)
     , frames_(frames)
@@ -127,17 +127,17 @@ dbuct_sim<IFrameHub, IFrameControl, IWalk>::dbuct_sim(
     dbuct_.emplace(visits_table_, value_table_, visits_table_, value_table_,
                    dispatches_table_, dispatches_table_, batch_,
                    walk_, rollout_,
-                   IWalk::make_root(),
+                   root,
                    ec);
 }
 
-template<typename IFrameHub, typename IFrameControl, typename IWalk>
-void dbuct_sim<IFrameHub, IFrameControl, IWalk>::push_base_frame() {
+template<typename IFrameHub, typename IFrameControl, typename IWalk, typename NodeHandle>
+void dbuct_sim<IFrameHub, IFrameControl, IWalk, NodeHandle>::push_base_frame() {
     hub_.push_frame();
 }
 
-template<typename IFrameHub, typename IFrameControl, typename IWalk>
-mcts_choice dbuct_sim<IFrameHub, IFrameControl, IWalk>::choose(
+template<typename IFrameHub, typename IFrameControl, typename IWalk, typename NodeHandle>
+mcts_choice dbuct_sim<IFrameHub, IFrameControl, IWalk, NodeHandle>::choose(
     const std::vector<mcts_choice>& choices) {
     const bool was_in_rollout = dbuct_->in_rollout();
     mcts_choice chosen = dbuct_->choose(choices, choices);
@@ -148,8 +148,8 @@ mcts_choice dbuct_sim<IFrameHub, IFrameControl, IWalk>::choose(
     return chosen;
 }
 
-template<typename IFrameHub, typename IFrameControl, typename IWalk>
-std::vector<const resolution_lineage*> dbuct_sim<IFrameHub, IFrameControl, IWalk>::terminate(
+template<typename IFrameHub, typename IFrameControl, typename IWalk, typename NodeHandle>
+std::vector<const resolution_lineage*> dbuct_sim<IFrameHub, IFrameControl, IWalk, NodeHandle>::terminate(
     double reward) {
     const std::size_t max_return_depth =
         hub_.depth() > 1 ? hub_.depth() - 1 : SIZE_MAX;
@@ -168,8 +168,8 @@ std::vector<const resolution_lineage*> dbuct_sim<IFrameHub, IFrameControl, IWalk
     return eliminations;
 }
 
-template<typename IFrameHub, typename IFrameControl, typename IWalk>
-void dbuct_sim<IFrameHub, IFrameControl, IWalk>::unwind_to_root() {
+template<typename IFrameHub, typename IFrameControl, typename IWalk, typename NodeHandle>
+void dbuct_sim<IFrameHub, IFrameControl, IWalk, NodeHandle>::unwind_to_root() {
     while (hub_.depth() > 1) {
         hub_.pop_frame();
         auto sm = frames_.pop_frame();

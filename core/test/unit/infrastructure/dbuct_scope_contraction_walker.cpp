@@ -15,14 +15,8 @@ struct DbuctScopeContractionWalkerTest : public ::testing::Test {
     }
 };
 
-TEST_F(DbuctScopeContractionWalkerTest, MakeRootIsEmptySetAndNullGoal) {
-    const mcts_node_id root = dbuct_scope_contraction_walker<lineage_pool>::make_root();
-    EXPECT_TRUE(root.first.empty());
-    EXPECT_EQ(root.second, nullptr);
-}
-
 TEST_F(DbuctScopeContractionWalkerTest, GoalChoiceKeepsDecisionSetAndUpdatesGoal) {
-    const mcts_node_id root = dbuct_scope_contraction_walker<lineage_pool>::make_root();
+    const mcts_node_id root{{}, nullptr};
     const goal_lineage* goal = root_goal();
     const mcts_node_id next = walker.walk(root, goal);
 
