@@ -25,7 +25,6 @@ struct dbuct_series_reduced_tree {
 
     void push_frame();
     void pop_frame();
-    void squash_frame();
 
 private:
     using children_map_t = std::unordered_map<NodeId, child_set_t>;
@@ -182,14 +181,6 @@ void dbuct_series_reduced_tree<NodeId>::pop_frame() {
     frame_stack_.pop();
     for (auto it = current.actions.rbegin(); it != current.actions.rend(); ++it)
         undo_action(*it);
-}
-
-template<typename NodeId>
-void dbuct_series_reduced_tree<NodeId>::squash_frame() {
-    auto top = std::move(frame_stack_.top());
-    frame_stack_.pop();
-    auto& parent = frame_stack_.top().actions;
-    parent.splice(parent.end(), std::move(top.actions));
 }
 
 template<typename NodeId>

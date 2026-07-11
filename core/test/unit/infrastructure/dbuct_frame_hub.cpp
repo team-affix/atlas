@@ -47,7 +47,6 @@ struct hub_fixture {
 
     int mhu_push = 0;
     int mhu_pop = 0;
-    int mhu_squash = 0;
 
     hub_fixture()
         : frame_hub(depth_tracker,
@@ -66,8 +65,7 @@ struct hub_fixture {
                     bind_map) {
         frame_hub.bind_mhu(
             [this]() { ++mhu_push; },
-            [this]() { ++mhu_pop; },
-            [this]() { ++mhu_squash; });
+            [this]() { ++mhu_pop; });
     }
 };
 
@@ -85,15 +83,6 @@ TEST(DbuctFrameHubTest, PushPopTracksDepthAndMhuHooks) {
     f.frame_hub.pop_frame();
     EXPECT_EQ(f.depth_tracker.depth(), 0u);
     EXPECT_EQ(f.mhu_pop, 1);
-}
-
-TEST(DbuctFrameHubTest, SquashCommitsWithoutPoppingMhu) {
-    hub_fixture f;
-    f.frame_hub.push_frame();
-    f.frame_hub.squash_frame();
-    EXPECT_EQ(f.depth_tracker.depth(), 0u);
-    EXPECT_EQ(f.mhu_squash, 1);
-    EXPECT_EQ(f.mhu_pop, 0);
 }
 
 TEST(DbuctFrameHubTest, PopRevertsJournaledGoalExpr) {

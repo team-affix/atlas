@@ -85,8 +85,6 @@ dbuct_ridge_manifest::dbuct_ridge_manifest(
               conflict_detector_, unit_goal_detector_, unit_goals_) {
     hub_.bind_mhu(
         [this]() { mhu_.push_frame(); },
-        [this]() { mhu_.pop_frame(); },
-        [this]() { mhu_.squash_frame(); });
-    mhu_.bind_hub(hub_);
+        [this]() { mhu_.pop_frame(); });
     dbuct_sim_.push_base_frame();
 }

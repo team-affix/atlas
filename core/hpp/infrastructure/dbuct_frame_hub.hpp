@@ -36,11 +36,10 @@ struct dbuct_frame_hub {
         dbuct_srt_active_goals&,
         IBindMap&);
 
-    void bind_mhu(std::function<void()> push, std::function<void()> pop, std::function<void()> squash);
+    void bind_mhu(std::function<void()> push, std::function<void()> pop);
 
     void push_frame();
     void pop_frame();
-    void squash_frame();
     size_t depth() const;
 
 private:
@@ -60,7 +59,6 @@ private:
     IBindMap& bind_map_;
     std::function<void()> mhu_push_;
     std::function<void()> mhu_pop_;
-    std::function<void()> mhu_squash_;
 };
 
 #include "infrastructure/dbuct_frame_hub_impl.hpp"

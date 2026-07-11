@@ -83,8 +83,7 @@ struct dbuct_ridge_manifest {
     using hub_t   = dbuct_frame_hub<bind_map_t, avoidance_unit_boundary_t>;
     using mhu_t   = dbuct_mhu_elimination_generator<
                     bind_map_t, bind_map_factory_t, unifier<globalizer, bind_map_t>,
-                    unifier_factory_t, lineage_pool, expr_pool, goal_candidate_rules_t,
-                    hub_t>;
+                    unifier_factory_t, lineage_pool, expr_pool, goal_candidate_rules_t>;
     using dbuct_joint_t = dbuct_joint_elimination_generator<cdcl_t, mhu_t>;
     using resolution_recorder_t = dbuct_resolution_recorder<decision_memory_t, resolution_memory_t,
                                 nearest_decision_t, avoidance_unit_boundary_t>;

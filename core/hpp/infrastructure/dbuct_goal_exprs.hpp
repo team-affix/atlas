@@ -16,7 +16,6 @@ struct dbuct_goal_exprs {
 
     void push_frame();
     void pop_frame();
-    void squash_frame();
 
 private:
     struct frame {
@@ -57,13 +56,6 @@ inline void dbuct_goal_exprs::pop_frame() {
     frame_stack_.pop();
     for (auto it = current.actions.rbegin(); it != current.actions.rend(); ++it)
         undo_action(*it);
-}
-
-inline void dbuct_goal_exprs::squash_frame() {
-    auto top = std::move(frame_stack_.top());
-    frame_stack_.pop();
-    auto& parent = frame_stack_.top().actions;
-    parent.splice(parent.end(), std::move(top.actions));
 }
 
 inline void dbuct_goal_exprs::log(goal_expr_action action) {

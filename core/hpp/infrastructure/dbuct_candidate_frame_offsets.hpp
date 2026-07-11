@@ -16,7 +16,6 @@ struct dbuct_candidate_frame_offsets {
 
     void push_frame();
     void pop_frame();
-    void squash_frame();
 
 private:
     struct frame {
@@ -54,13 +53,6 @@ inline void dbuct_candidate_frame_offsets::pop_frame() {
     frame_stack_.pop();
     for (auto it = current.actions.rbegin(); it != current.actions.rend(); ++it)
         undo_action(*it);
-}
-
-inline void dbuct_candidate_frame_offsets::squash_frame() {
-    auto top = std::move(frame_stack_.top());
-    frame_stack_.pop();
-    auto& parent = frame_stack_.top().actions;
-    parent.splice(parent.end(), std::move(top.actions));
 }
 
 inline void dbuct_candidate_frame_offsets::log(candidate_offset_action action) {

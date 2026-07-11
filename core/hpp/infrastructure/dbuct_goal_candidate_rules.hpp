@@ -21,7 +21,6 @@ struct dbuct_goal_candidate_rules {
 
     void push_frame();
     void pop_frame();
-    void squash_frame();
 
 private:
     struct frame {
@@ -74,13 +73,6 @@ inline void dbuct_goal_candidate_rules::pop_frame() {
     frame_stack_.pop();
     for (auto it = current.actions.rbegin(); it != current.actions.rend(); ++it)
         undo_action(*it);
-}
-
-inline void dbuct_goal_candidate_rules::squash_frame() {
-    auto top = std::move(frame_stack_.top());
-    frame_stack_.pop();
-    auto& parent = frame_stack_.top().actions;
-    parent.splice(parent.end(), std::move(top.actions));
 }
 
 inline void dbuct_goal_candidate_rules::log(goal_candidate_rules_action action) {

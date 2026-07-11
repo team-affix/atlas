@@ -16,7 +16,6 @@ struct dbuct_resolution_memory {
 
     void push_frame();
     void pop_frame();
-    void squash_frame();
 
 private:
     struct frame {
@@ -50,13 +49,6 @@ inline void dbuct_resolution_memory::pop_frame() {
     frame_stack_.pop();
     for (auto it = current.actions.rbegin(); it != current.actions.rend(); ++it)
         undo_action(*it);
-}
-
-inline void dbuct_resolution_memory::squash_frame() {
-    auto top = std::move(frame_stack_.top());
-    frame_stack_.pop();
-    auto& parent = frame_stack_.top().actions;
-    parent.splice(parent.end(), std::move(top.actions));
 }
 
 inline void dbuct_resolution_memory::log(decision_memory_action action) {

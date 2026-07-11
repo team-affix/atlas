@@ -10,7 +10,6 @@
 #include <unordered_map>
 #include <unordered_set>
 #include "infrastructure/coroutine.hpp"
-#include "infrastructure/frame_savepoint.hpp"
 #include "value_objects/framed_expr.hpp"
 #include "value_objects/lineage.hpp"
 #include "value_objects/mhu_action.hpp"
@@ -19,13 +18,11 @@
 
 template<typename IBindMap, typename IBindMapFactory, typename IUnifier,
          typename IUnifierFactory, typename IMakeResolutionLineage,
-         typename IMakeVar, typename IGetGoalCandidateRuleIds, typename IFrameHub>
+         typename IMakeVar, typename IGetGoalCandidateRuleIds>
 struct dbuct_mhu_elimination_generator {
     dbuct_mhu_elimination_generator(IBindMap&, IMakeResolutionLineage&, IMakeVar&,
                                     IBindMapFactory&, IUnifierFactory&,
                                     const IGetGoalCandidateRuleIds&);
-
-    void bind_hub(IFrameHub&);
 
     bool try_add_head(const resolution_lineage*, framed_expr goal, framed_expr head);
     coroutine<const resolution_lineage*, void> constrain(const resolution_lineage*);
@@ -66,7 +63,6 @@ private:
     IBindMapFactory& bind_map_factory_;
     IUnifierFactory& unifier_factory_;
     const IGetGoalCandidateRuleIds& get_goal_candidate_rule_ids_;
-    IFrameHub* hub_ = nullptr;
 
     arena_t arena_;
     heads_map_t heads_;
@@ -75,22 +71,17 @@ private:
     std::stack<frame> frame_stack_;
 };
 
-template<typename IBM, typename IBMF, typename IU, typename IUF, typename IMRL, typename IMV, typename IGCRI, typename IHUB>
-dbuct_mhu_elimination_generator<IBM, IBMF, IU, IUF, IMRL, IMV, IGCRI, IHUB>::dbuct_mhu_elimination_generator(
+template<typename IBM, typename IBMF, typename IU, typename IUF, typename IMRL, typename IMV, typename IGCRI>
+dbuct_mhu_elimination_generator<IBM, IBMF, IU, IUF, IMRL, IMV, IGCRI>::dbuct_mhu_elimination_generator(
     IBM& common, IMRL& mrl, IMV& mv, IBMF& bmf, IUF& uf, const IGCRI& gcri)
     : common_(common), make_resolution_lineage_(mrl), make_var_(mv),
       bind_map_factory_(bmf), unifier_factory_(uf),
       get_goal_candidate_rule_ids_(gcri) {}
 
-template<typename IBM, typename IBMF, typename IU, typename IUF, typename IMRL, typename IMV, typename IGCRI, typename IHUB>
-void dbuct_mhu_elimination_generator<IBM, IBMF, IU, IUF, IMRL, IMV, IGCRI, IHUB>::bind_hub(IHUB& hub) {
-    hub_ = &hub;
-}
-
-template<typename IBM, typename IBMF, typename IU, typename IUF, typename IMRL, typename IMV, typename IGCRI, typename IHUB>
-bool dbuct_mhu_elimination_generator<IBM, IBMF, IU, IUF, IMRL, IMV, IGCRI, IHUB>::try_add_head(
+template<typename IBM, typename IBMF, typename IU, typename IUF, typename IMRL, typename IMV, typename IGCRI>
+bool dbuct_mhu_elimination_generator<IBM, IBMF, IU, IUF, IMRL, IMV, IGCRI>::try_add_head(
     const resolution_lineage* lineage, framed_expr lhs, framed_expr rhs) {
-    frame_savepoint savepoint(*hub_);
+    push_frame();
 
     auto bm = std::make_unique<IBM>(bind_map_factory_.make());
     IBM* const local_bind_map = bm.get();
@@ -108,21 +99,25 @@ bool dbuct_mhu_elimination_generator<IBM, IBMF, IU, IUF, IMRL, IMV, IGCRI, IHUB>
             touched_vars.push(task.consume_yield());
     }
 
-    if (!task.result())
+    if (!task.result()) {
+        pop_frame();
         return false;
+    }
 
-    if (!sync_and_link(lineage, head_ptr->unifier, touched_vars))
+    if (!sync_and_link(lineage, head_ptr->unifier, touched_vars)) {
+        pop_frame();
         return false;
+    }
 
     heads_.insert({lineage, head_ptr});
     log(mhu_heads_insert<IBM, IU>{lineage, head_ptr});
-    savepoint.commit();
+    squash_frame();
     return true;
 }
 
-template<typename IBM, typename IBMF, typename IU, typename IUF, typename IMRL, typename IMV, typename IGCRI, typename IHUB>
+template<typename IBM, typename IBMF, typename IU, typename IUF, typename IMRL, typename IMV, typename IGCRI>
 coroutine<const resolution_lineage*, void>
-dbuct_mhu_elimination_generator<IBM, IBMF, IU, IUF, IMRL, IMV, IGCRI, IHUB>::constrain(
+dbuct_mhu_elimination_generator<IBM, IBMF, IU, IUF, IMRL, IMV, IGCRI>::constrain(
     const resolution_lineage* lineage) {
     auto gl = lineage->parent;
     auto& candidates = get_goal_candidate_rule_ids_.get(gl);
@@ -153,9 +148,9 @@ dbuct_mhu_elimination_generator<IBM, IBMF, IU, IUF, IMRL, IMV, IGCRI, IHUB>::con
     }
 }
 
-template<typename IBM, typename IBMF, typename IU, typename IUF, typename IMRL, typename IMV, typename IGCRI, typename IHUB>
+template<typename IBM, typename IBMF, typename IU, typename IUF, typename IMRL, typename IMV, typename IGCRI>
 coroutine<const resolution_lineage*, void>
-dbuct_mhu_elimination_generator<IBM, IBMF, IU, IUF, IMRL, IMV, IGCRI, IHUB>::accept_bindings(
+dbuct_mhu_elimination_generator<IBM, IBMF, IU, IUF, IMRL, IMV, IGCRI>::accept_bindings(
     IBM& local_bind_map, const std::unordered_set<uint32_t>& c_reps) {
     for (auto c_rep : c_reps) {
         visit(&local_bind_map);
@@ -176,9 +171,9 @@ dbuct_mhu_elimination_generator<IBM, IBMF, IU, IUF, IMRL, IMV, IGCRI, IHUB>::acc
     }
 }
 
-template<typename IBM, typename IBMF, typename IU, typename IUF, typename IMRL, typename IMV, typename IGCRI, typename IHUB>
+template<typename IBM, typename IBMF, typename IU, typename IUF, typename IMRL, typename IMV, typename IGCRI>
 coroutine<const resolution_lineage*, void>
-dbuct_mhu_elimination_generator<IBM, IBMF, IU, IUF, IMRL, IMV, IGCRI, IHUB>::rebase_all(uint32_t rep) {
+dbuct_mhu_elimination_generator<IBM, IBMF, IU, IUF, IMRL, IMV, IGCRI>::rebase_all(uint32_t rep) {
     auto remaining_rls = unlink(rep);
     for (auto rl : remaining_rls) {
         std::queue<uint32_t> touched_vars;
@@ -191,8 +186,8 @@ dbuct_mhu_elimination_generator<IBM, IBMF, IU, IUF, IMRL, IMV, IGCRI, IHUB>::reb
     }
 }
 
-template<typename IBM, typename IBMF, typename IU, typename IUF, typename IMRL, typename IMV, typename IGCRI, typename IHUB>
-bool dbuct_mhu_elimination_generator<IBM, IBMF, IU, IUF, IMRL, IMV, IGCRI, IHUB>::sync_and_link(
+template<typename IBM, typename IBMF, typename IU, typename IUF, typename IMRL, typename IMV, typename IGCRI>
+bool dbuct_mhu_elimination_generator<IBM, IBMF, IU, IUF, IMRL, IMV, IGCRI>::sync_and_link(
     const resolution_lineage* lineage, IU& unifier, std::queue<uint32_t>& touched_vars) {
     std::unordered_set<uint32_t> c_reps;
     auto sync_task = synchronize(unifier, touched_vars);
@@ -207,9 +202,9 @@ bool dbuct_mhu_elimination_generator<IBM, IBMF, IU, IUF, IMRL, IMV, IGCRI, IHUB>
     return true;
 }
 
-template<typename IBM, typename IBMF, typename IU, typename IUF, typename IMRL, typename IMV, typename IGCRI, typename IHUB>
+template<typename IBM, typename IBMF, typename IU, typename IUF, typename IMRL, typename IMV, typename IGCRI>
 coroutine<uint32_t, bool>
-dbuct_mhu_elimination_generator<IBM, IBMF, IU, IUF, IMRL, IMV, IGCRI, IHUB>::synchronize(
+dbuct_mhu_elimination_generator<IBM, IBMF, IU, IUF, IMRL, IMV, IGCRI>::synchronize(
     IU& unifier, std::queue<uint32_t>& touched_vars) {
     while (!touched_vars.empty()) {
         auto var = touched_vars.front();
@@ -236,8 +231,8 @@ dbuct_mhu_elimination_generator<IBM, IBMF, IU, IUF, IMRL, IMV, IGCRI, IHUB>::syn
     co_return true;
 }
 
-template<typename IBM, typename IBMF, typename IU, typename IUF, typename IMRL, typename IMV, typename IGCRI, typename IHUB>
-void dbuct_mhu_elimination_generator<IBM, IBMF, IU, IUF, IMRL, IMV, IGCRI, IHUB>::link(
+template<typename IBM, typename IBMF, typename IU, typename IUF, typename IMRL, typename IMV, typename IGCRI>
+void dbuct_mhu_elimination_generator<IBM, IBMF, IU, IUF, IMRL, IMV, IGCRI>::link(
     const std::unordered_set<uint32_t>& reps,
     const std::unordered_set<const resolution_lineage*>& rls) {
     for (auto rep : reps) {
@@ -266,9 +261,9 @@ void dbuct_mhu_elimination_generator<IBM, IBMF, IU, IUF, IMRL, IMV, IGCRI, IHUB>
     }
 }
 
-template<typename IBM, typename IBMF, typename IU, typename IUF, typename IMRL, typename IMV, typename IGCRI, typename IHUB>
+template<typename IBM, typename IBMF, typename IU, typename IUF, typename IMRL, typename IMV, typename IGCRI>
 std::unordered_set<const resolution_lineage*>
-dbuct_mhu_elimination_generator<IBM, IBMF, IU, IUF, IMRL, IMV, IGCRI, IHUB>::unlink(uint32_t rep) {
+dbuct_mhu_elimination_generator<IBM, IBMF, IU, IUF, IMRL, IMV, IGCRI>::unlink(uint32_t rep) {
     if (!rep_to_rls_.contains(rep))
         return {};
 
@@ -288,9 +283,9 @@ dbuct_mhu_elimination_generator<IBM, IBMF, IU, IUF, IMRL, IMV, IGCRI, IHUB>::unl
     return rls;
 }
 
-template<typename IBM, typename IBMF, typename IU, typename IUF, typename IMRL, typename IMV, typename IGCRI, typename IHUB>
+template<typename IBM, typename IBMF, typename IU, typename IUF, typename IMRL, typename IMV, typename IGCRI>
 std::unordered_set<uint32_t>
-dbuct_mhu_elimination_generator<IBM, IBMF, IU, IUF, IMRL, IMV, IGCRI, IHUB>::unlink(
+dbuct_mhu_elimination_generator<IBM, IBMF, IU, IUF, IMRL, IMV, IGCRI>::unlink(
     const resolution_lineage* rl) {
     if (!rl_to_reps_.contains(rl))
         return {};
@@ -311,8 +306,8 @@ dbuct_mhu_elimination_generator<IBM, IBMF, IU, IUF, IMRL, IMV, IGCRI, IHUB>::unl
     return reps;
 }
 
-template<typename IBM, typename IBMF, typename IU, typename IUF, typename IMRL, typename IMV, typename IGCRI, typename IHUB>
-void dbuct_mhu_elimination_generator<IBM, IBMF, IU, IUF, IMRL, IMV, IGCRI, IHUB>::remove_head(
+template<typename IBM, typename IBMF, typename IU, typename IUF, typename IMRL, typename IMV, typename IGCRI>
+void dbuct_mhu_elimination_generator<IBM, IBMF, IU, IUF, IMRL, IMV, IGCRI>::remove_head(
     const resolution_lineage* rl) {
     if (!heads_.contains(rl))
         return;
@@ -322,13 +317,13 @@ void dbuct_mhu_elimination_generator<IBM, IBMF, IU, IUF, IMRL, IMV, IGCRI, IHUB>
     unlink(rl);
 }
 
-template<typename IBM, typename IBMF, typename IU, typename IUF, typename IMRL, typename IMV, typename IGCRI, typename IHUB>
-void dbuct_mhu_elimination_generator<IBM, IBMF, IU, IUF, IMRL, IMV, IGCRI, IHUB>::push_frame() {
+template<typename IBM, typename IBMF, typename IU, typename IUF, typename IMRL, typename IMV, typename IGCRI>
+void dbuct_mhu_elimination_generator<IBM, IBMF, IU, IUF, IMRL, IMV, IGCRI>::push_frame() {
     frame_stack_.push(frame{});
 }
 
-template<typename IBM, typename IBMF, typename IU, typename IUF, typename IMRL, typename IMV, typename IGCRI, typename IHUB>
-void dbuct_mhu_elimination_generator<IBM, IBMF, IU, IUF, IMRL, IMV, IGCRI, IHUB>::pop_frame() {
+template<typename IBM, typename IBMF, typename IU, typename IUF, typename IMRL, typename IMV, typename IGCRI>
+void dbuct_mhu_elimination_generator<IBM, IBMF, IU, IUF, IMRL, IMV, IGCRI>::pop_frame() {
     auto current = std::move(frame_stack_.top());
     frame_stack_.pop();
     for (IBM* m : current.visited)
@@ -337,8 +332,8 @@ void dbuct_mhu_elimination_generator<IBM, IBMF, IU, IUF, IMRL, IMV, IGCRI, IHUB>
         undo_action(*it);
 }
 
-template<typename IBM, typename IBMF, typename IU, typename IUF, typename IMRL, typename IMV, typename IGCRI, typename IHUB>
-void dbuct_mhu_elimination_generator<IBM, IBMF, IU, IUF, IMRL, IMV, IGCRI, IHUB>::squash_frame() {
+template<typename IBM, typename IBMF, typename IU, typename IUF, typename IMRL, typename IMV, typename IGCRI>
+void dbuct_mhu_elimination_generator<IBM, IBMF, IU, IUF, IMRL, IMV, IGCRI>::squash_frame() {
     auto top = std::move(frame_stack_.top());
     frame_stack_.pop();
     for (IBM* m : top.visited)
@@ -347,14 +342,14 @@ void dbuct_mhu_elimination_generator<IBM, IBMF, IU, IUF, IMRL, IMV, IGCRI, IHUB>
     parent.splice(parent.end(), std::move(top.actions));
 }
 
-template<typename IBM, typename IBMF, typename IU, typename IUF, typename IMRL, typename IMV, typename IGCRI, typename IHUB>
-void dbuct_mhu_elimination_generator<IBM, IBMF, IU, IUF, IMRL, IMV, IGCRI, IHUB>::log(action_t action) {
+template<typename IBM, typename IBMF, typename IU, typename IUF, typename IMRL, typename IMV, typename IGCRI>
+void dbuct_mhu_elimination_generator<IBM, IBMF, IU, IUF, IMRL, IMV, IGCRI>::log(action_t action) {
     DEBUG_ASSERT(!frame_stack_.empty());
     frame_stack_.top().actions.push_back(std::move(action));
 }
 
-template<typename IBM, typename IBMF, typename IU, typename IUF, typename IMRL, typename IMV, typename IGCRI, typename IHUB>
-void dbuct_mhu_elimination_generator<IBM, IBMF, IU, IUF, IMRL, IMV, IGCRI, IHUB>::undo_action(
+template<typename IBM, typename IBMF, typename IU, typename IUF, typename IMRL, typename IMV, typename IGCRI>
+void dbuct_mhu_elimination_generator<IBM, IBMF, IU, IUF, IMRL, IMV, IGCRI>::undo_action(
     const action_t& action) {
     if (std::holds_alternative<mhu_arena_emplace>(action)) {
         arena_.pop_back();
@@ -381,8 +376,8 @@ void dbuct_mhu_elimination_generator<IBM, IBMF, IU, IUF, IMRL, IMV, IGCRI, IHUB>
     }
 }
 
-template<typename IBM, typename IBMF, typename IU, typename IUF, typename IMRL, typename IMV, typename IGCRI, typename IHUB>
-void dbuct_mhu_elimination_generator<IBM, IBMF, IU, IUF, IMRL, IMV, IGCRI, IHUB>::visit(IBM* m) {
+template<typename IBM, typename IBMF, typename IU, typename IUF, typename IMRL, typename IMV, typename IGCRI>
+void dbuct_mhu_elimination_generator<IBM, IBMF, IU, IUF, IMRL, IMV, IGCRI>::visit(IBM* m) {
     if (frame_stack_.top().visited.insert(m).second)
         m->push_frame();
 }

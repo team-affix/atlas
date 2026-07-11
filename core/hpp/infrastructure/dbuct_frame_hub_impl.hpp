@@ -47,11 +47,9 @@ dbuct_frame_hub<IBindMap, IAvoidanceUnitBoundary>::dbuct_frame_hub(
 template<typename IBindMap, typename IAvoidanceUnitBoundary>
 void dbuct_frame_hub<IBindMap, IAvoidanceUnitBoundary>::bind_mhu(
     std::function<void()> push,
-    std::function<void()> pop,
-    std::function<void()> squash) {
+    std::function<void()> pop) {
     mhu_push_ = std::move(push);
     mhu_pop_ = std::move(pop);
-    mhu_squash_ = std::move(squash);
 }
 
 template<typename IBindMap, typename IAvoidanceUnitBoundary>
@@ -91,26 +89,6 @@ void dbuct_frame_hub<IBindMap, IAvoidanceUnitBoundary>::pop_frame() {
     chosen_goal_candidates_.pop_frame();
     goal_candidate_rules_.pop_frame();
     goal_exprs_.pop_frame();
-    depth_tracker_.pop();
-}
-
-template<typename IBindMap, typename IAvoidanceUnitBoundary>
-void dbuct_frame_hub<IBindMap, IAvoidanceUnitBoundary>::squash_frame() {
-    if (mhu_squash_)
-        mhu_squash_();
-    bind_map_.squash_frame();
-    srt_active_goals_.squash_frame();
-    avoidance_unit_boundary_.squash_frame();
-    elimination_backlog_.squash_frame();
-    nearest_decision_.squash_frame();
-    frame_bump_allocator_.squash_frame();
-    candidate_frame_offsets_.squash_frame();
-    unit_goals_.squash_frame();
-    resolution_memory_.squash_frame();
-    decision_memory_.squash_frame();
-    chosen_goal_candidates_.squash_frame();
-    goal_candidate_rules_.squash_frame();
-    goal_exprs_.squash_frame();
     depth_tracker_.pop();
 }
 

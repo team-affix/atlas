@@ -22,7 +22,6 @@ struct dbuct_srt_active_goals {
 
     void push_frame();
     void pop_frame();
-    void squash_frame();
 
 private:
     struct in_flight_frame {
@@ -90,14 +89,6 @@ inline void dbuct_srt_active_goals::pop_frame() {
     in_flight_frames_.pop();
     for (auto it = current.actions.rbegin(); it != current.actions.rend(); ++it)
         undo_in_flight_action(*it);
-}
-
-inline void dbuct_srt_active_goals::squash_frame() {
-    tree_.squash_frame();
-    auto top = std::move(in_flight_frames_.top());
-    in_flight_frames_.pop();
-    auto& parent = in_flight_frames_.top().actions;
-    parent.splice(parent.end(), std::move(top.actions));
 }
 
 inline void dbuct_srt_active_goals::log_in_flight(srt_active_goals_action action) {

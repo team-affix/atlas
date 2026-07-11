@@ -19,7 +19,6 @@ struct dbuct_avoidance_unit_boundary {
 
     void push_frame();
     void pop_frame();
-    void squash_frame();
 
 private:
     struct frame {
@@ -85,14 +84,6 @@ void dbuct_avoidance_unit_boundary<IGetNearestDecision, IGetFrameDepth>::pop_fra
     frame_stack_.pop();
     for (auto it = current.actions.rbegin(); it != current.actions.rend(); ++it)
         undo_action(*it);
-}
-
-template<typename IGetNearestDecision, typename IGetFrameDepth>
-void dbuct_avoidance_unit_boundary<IGetNearestDecision, IGetFrameDepth>::squash_frame() {
-    auto top = std::move(frame_stack_.top());
-    frame_stack_.pop();
-    auto& parent = frame_stack_.top().actions;
-    parent.splice(parent.end(), std::move(top.actions));
 }
 
 template<typename IGetNearestDecision, typename IGetFrameDepth>
