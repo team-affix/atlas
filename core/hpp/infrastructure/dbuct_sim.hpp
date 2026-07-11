@@ -120,7 +120,10 @@ void dbuct_sim<IFrameHub, IMRL, IFC>::push_base_frame() {
 
 template<typename IFrameHub, typename IMRL, typename IFC>
 mcts_choice dbuct_sim<IFrameHub, IMRL, IFC>::choose(const std::vector<mcts_choice>& choices) {
+    const bool was_in_rollout = dbuct_->in_rollout();
     mcts_choice chosen = dbuct_->choose(choices, choices);
+    if (was_in_rollout)
+        return chosen;
     hub_.push_frame();
     frames_.push_frame();
     return chosen;
