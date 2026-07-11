@@ -1,0 +1,37 @@
+---
+description: Dependency injection, template collaborators, and strategy interfaces
+globs: **/*.{hpp,cpp}
+alwaysApply: true
+---
+
+# Dependency Injection & Behavior Swapping
+
+- Swap behavior with templates, not inheritance. The ONLY allowed use of
+  inheritance is ANTLR visitors.
+- Inject collaborators by reference. A struct must not OWN large collaborators
+  that have behavior; it holds a `T&` supplied at construction. Value objects
+  and small state may be owned.
+  - Exception: manifests own their collaborators by value (they are the
+    composition root, e.g. `dbuct_ridge_manifest`).
+- Take a separate template type parameter per collaborator capability. Do not
+  bundle multiple roles into one parameter. One concrete object may be passed
+  for several slots when it provides all those capabilities.
+
+```cpp
+template<typename IFrameDepthTracker, typename IGoalExprs, typename IMhu>
+struct dbuct_frame_hub {
+    dbuct_frame_hub(IFrameDepthTracker& depth_tracker, IGoalExprs& goal_exprs, IMhu& mhu)
+        : depth_tracker_(depth_tracker), goal_exprs_(goal_exprs), mhu_(mhu) {}
+private:
+    IFrameDepthTracker& depth_tracker_;   // injected by reference, not owned
+    IGoalExprs& goal_exprs_;
+    IMhu& mhu_;
+};
+```
+
+## Strategy-style interfaces
+
+Choose a variant by which strategy is injected, not by branching inside a
+top-level type. E.g. Scott vs Church is selected by injecting the corresponding
+transpiler; the top-level transpiler holds a reference and never branches on
+the variant itself.

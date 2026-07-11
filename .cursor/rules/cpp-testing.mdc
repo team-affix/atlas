@@ -1,0 +1,34 @@
+---
+description: Unit vs integration test conventions and preferred build variant
+globs: **/test/**/*.cpp
+alwaysApply: true
+---
+
+# Testing
+
+- For timely local development, prefer the `_fast` debug variant
+  (e.g. `make core_debug_fast`), which builds with `-DDEBUG -g -O3`.
+
+## Unit tests
+
+Exactly ONE concrete System Under Test; every other dependency is mocked.
+Mocks are small structs supplied as the SUT's template parameters, using gmock
+`MOCK_METHOD`.
+
+```cpp
+struct MockGetGoalCandidateRuleIds {
+    MOCK_METHOD(MockRuleIdSet&, get, (const goal_lineage*));
+};
+using test_conflict_detector_t = conflict_detector<MockGetGoalCandidateRuleIds>;
+```
+
+## Integration tests
+
+Exercise how multiple CONCRETE systems compose together (unlike unit tests).
+Some infrastructure may still be mocked, but the point is real cross-system
+interplay via a manifest.
+
+## Style
+
+Tests favor less abstraction. Prefer straightforward, readable setup over DRY
+factoring; some duplication is acceptable when it keeps a test self-contained.
