@@ -9,7 +9,6 @@
 #include <stack>
 #include <unordered_map>
 #include <unordered_set>
-#include "infrastructure/bind_map_trail.hpp"
 #include "infrastructure/coroutine.hpp"
 #include "infrastructure/frame_savepoint.hpp"
 #include "value_objects/framed_expr.hpp"
@@ -46,6 +45,7 @@ private:
 
     struct frame {
         std::list<action_t> actions;
+        std::unordered_set<IBindMap*> visited;
     };
 
     coroutine<const resolution_lineage*, void> accept_bindings(IBindMap&, const std::unordered_set<uint32_t>&);
@@ -58,6 +58,7 @@ private:
 
     void log(action_t action);
     void undo_action(const action_t& action);
+    void visit(IBindMap* m);
 
     IBindMap& common_;
     IMakeResolutionLineage& make_resolution_lineage_;
@@ -72,7 +73,6 @@ private:
     rep_to_rls_t rep_to_rls_;
     rl_to_reps_t rl_to_reps_;
     std::stack<frame> frame_stack_;
-    bind_map_trail<IBindMap> trail_;
 };
 
 template<typename IBM, typename IBMF, typename IU, typename IUF, typename IMRL, typename IMV, typename IGCRI, typename IHUB>
@@ -94,13 +94,13 @@ bool dbuct_mhu_elimination_generator<IBM, IBMF, IU, IUF, IMRL, IMV, IGCRI, IHUB>
 
     auto bm = std::make_unique<IBM>(bind_map_factory_.make());
     IBM* const local_bind_map = bm.get();
-    local_bind_map->attach_trail(&trail_);
     IU u = unifier_factory_.make(local_bind_map);
     arena_.emplace_back(std::move(bm), std::move(u));
     log(mhu_arena_emplace{});
     head_t* head_ptr = &arena_.back();
 
     std::queue<uint32_t> touched_vars;
+    visit(local_bind_map);
     auto task = head_ptr->unifier.unify(lhs, rhs);
     while (!task.done()) {
         task.resume();
@@ -158,6 +158,7 @@ coroutine<const resolution_lineage*, void>
 dbuct_mhu_elimination_generator<IBM, IBMF, IU, IUF, IMRL, IMV, IGCRI, IHUB>::accept_bindings(
     IBM& local_bind_map, const std::unordered_set<uint32_t>& c_reps) {
     for (auto c_rep : c_reps) {
+        visit(&local_bind_map);
         auto rep_expr = make_var_.make_var(c_rep);
         framed_expr whnf = local_bind_map.whnf({rep_expr, 0});
 
@@ -182,6 +183,7 @@ dbuct_mhu_elimination_generator<IBM, IBMF, IU, IUF, IMRL, IMV, IGCRI, IHUB>::reb
     for (auto rl : remaining_rls) {
         std::queue<uint32_t> touched_vars;
         touched_vars.push(rep);
+        visit(heads_.at(rl)->local_bind_map.get());
         if (!sync_and_link(rl, heads_.at(rl)->unifier, touched_vars)) {
             remove_head(rl);
             co_yield rl;
@@ -322,24 +324,25 @@ void dbuct_mhu_elimination_generator<IBM, IBMF, IU, IUF, IMRL, IMV, IGCRI, IHUB>
 
 template<typename IBM, typename IBMF, typename IU, typename IUF, typename IMRL, typename IMV, typename IGCRI, typename IHUB>
 void dbuct_mhu_elimination_generator<IBM, IBMF, IU, IUF, IMRL, IMV, IGCRI, IHUB>::push_frame() {
-    trail_.push_frame();
     frame_stack_.push(frame{});
 }
 
 template<typename IBM, typename IBMF, typename IU, typename IUF, typename IMRL, typename IMV, typename IGCRI, typename IHUB>
 void dbuct_mhu_elimination_generator<IBM, IBMF, IU, IUF, IMRL, IMV, IGCRI, IHUB>::pop_frame() {
-    trail_.pop_frame();
     auto current = std::move(frame_stack_.top());
     frame_stack_.pop();
+    for (IBM* m : current.visited)
+        m->pop_frame();
     for (auto it = current.actions.rbegin(); it != current.actions.rend(); ++it)
         undo_action(*it);
 }
 
 template<typename IBM, typename IBMF, typename IU, typename IUF, typename IMRL, typename IMV, typename IGCRI, typename IHUB>
 void dbuct_mhu_elimination_generator<IBM, IBMF, IU, IUF, IMRL, IMV, IGCRI, IHUB>::squash_frame() {
-    trail_.squash_frame();
     auto top = std::move(frame_stack_.top());
     frame_stack_.pop();
+    for (IBM* m : top.visited)
+        m->squash_frame();
     auto& parent = frame_stack_.top().actions;
     parent.splice(parent.end(), std::move(top.actions));
 }
@@ -376,6 +379,12 @@ void dbuct_mhu_elimination_generator<IBM, IBMF, IU, IUF, IMRL, IMV, IGCRI, IHUB>
     } else if (const auto* op = std::get_if<mhu_rl_at_erase>(&action)) {
         rl_to_reps_.at(op->rl).insert(op->rep);
     }
+}
+
+template<typename IBM, typename IBMF, typename IU, typename IUF, typename IMRL, typename IMV, typename IGCRI, typename IHUB>
+void dbuct_mhu_elimination_generator<IBM, IBMF, IU, IUF, IMRL, IMV, IGCRI, IHUB>::visit(IBM* m) {
+    if (frame_stack_.top().visited.insert(m).second)
+        m->push_frame();
 }
 
 #endif
