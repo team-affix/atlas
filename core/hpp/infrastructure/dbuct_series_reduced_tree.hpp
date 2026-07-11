@@ -63,10 +63,9 @@ template<typename NodeId>
 bool dbuct_series_reduced_tree<NodeId>::link(NodeId parent, child_set_t children) {
     if (!leaves_.contains(parent))
         return false;
-    if (std::any_of(children.begin(), children.end(), [&](const NodeId& c) {
-            return !roots_.contains(c);
-        }))
-        return false;
+    for (const NodeId& c : children)
+        if (!roots_.contains(c))
+            return false;
 
     children_.insert({parent, children});
     log(srt_children_insert<NodeId>{parent, children});

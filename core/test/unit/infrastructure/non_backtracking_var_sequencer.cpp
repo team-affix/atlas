@@ -5,12 +5,12 @@
 #include "infrastructure/non_backtracking_var_sequencer.hpp"
 
 TEST(NonBacktrackingVarSequencerTest, PeekZeroInitially) {
-    non_backtracking_var_sequencer seq;
+    non_backtracking_var_sequencer seq{0};
     EXPECT_EQ(seq.peek(), 0u);
 }
 
 TEST(NonBacktrackingVarSequencerTest, NextAndPeekTrackIssuedCount) {
-    non_backtracking_var_sequencer seq;
+    non_backtracking_var_sequencer seq{0};
     EXPECT_EQ(seq.next(), 0u);
     EXPECT_EQ(seq.peek(), 1u);
     EXPECT_EQ(seq.next(), 1u);

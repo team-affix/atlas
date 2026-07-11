@@ -5,7 +5,7 @@
 
 template<typename IGlobalize>
 struct bind_map_factory {
-    explicit bind_map_factory(IGlobalize&);
+    bind_map_factory(IGlobalize&);
     bind_map<IGlobalize> make() const;
 private:
     IGlobalize& globalizer_;

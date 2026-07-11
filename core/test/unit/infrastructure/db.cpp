@@ -17,15 +17,15 @@ struct DbTest : public ::testing::Test {
 
 TEST_F(DbTest, DefaultDbReturnsEmptyRuleSet) {
     db database;
-    EXPECT_EQ(database.get(&gl0).size(), 0u);
+    EXPECT_EQ(database.get_candidate_rules(&gl0).size(), 0u);
 }
 
 TEST_F(DbTest, PushAssignsIdAndExposesRule) {
     db database;
     const rule_id id = database.push(r);
     EXPECT_EQ(id, 0u);
-    EXPECT_EQ(*database.get(id), r);
-    EXPECT_EQ(database.get(&gl0).size(), 1u);
+    EXPECT_EQ(*database.get_rule(id), r);
+    EXPECT_EQ(database.get_candidate_rules(&gl0).size(), 1u);
 }
 
 TEST_F(DbTest, TotalRuleSetContainsAllIndices) {
@@ -36,7 +36,7 @@ TEST_F(DbTest, TotalRuleSetContainsAllIndices) {
     database.push(r1);
 
     std::vector<rule_id> ids;
-    auto it = database.get(&gl0).iterate();
+    auto it = database.get_candidate_rules(&gl0).iterate();
     while (!it.done()) {
         it.resume();
         if (it.has_yield())
@@ -48,18 +48,18 @@ TEST_F(DbTest, TotalRuleSetContainsAllIndices) {
 TEST_F(DbTest, SameTotalRulesForDifferentGoals) {
     db database;
     database.push(r);
-    EXPECT_EQ(&database.get(&gl0), &database.get(&gl1));
+    EXPECT_EQ(&database.get_candidate_rules(&gl0), &database.get_candidate_rules(&gl1));
 }
 
 TEST_F(DbTest, GetRuleIdOutOfRangeThrows) {
     db database;
     database.push(r);
-    EXPECT_THROW(database.get(1), std::out_of_range);
+    EXPECT_THROW(database.get_rule(1), std::out_of_range);
 }
 
 TEST_F(DbTest, MutationsThroughGetVisibleToAllGoals) {
     db database;
     database.push(r);
-    database.get(&gl0).erase(0);
-    EXPECT_EQ(database.get(&gl1).size(), 0u);
+    database.get_candidate_rules(&gl0).erase(0);
+    EXPECT_EQ(database.get_candidate_rules(&gl1).size(), 0u);
 }

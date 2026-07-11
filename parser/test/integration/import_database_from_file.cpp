@@ -14,7 +14,7 @@ using ::testing::IsEmpty;
 using ::testing::SizeIs;
 
 static const rule* rule_at(const db& database, rule_id id) {
-    return database.get(id);
+    return database.get_rule(id);
 }
 
 struct ImportDatabaseFromFileTest : ParserCoreFixture {};

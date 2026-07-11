@@ -21,27 +21,44 @@ struct dbuct_resolution_recorder {
         : decision_memory_(dm), resolution_memory_(rm),
           nearest_decision_(nd), avoidance_unit_boundary_(aub) {}
 
-    void record_decision_resolution(const resolution_lineage* rl) {
-        decision_memory_.record_decision(rl);
-        nearest_decision_.note_decision_resolution(rl);
-        avoidance_unit_boundary_.log_decision(rl);
-        record_resolution(rl);
-    }
-
-    void record_unit_resolution(const resolution_lineage* rl) {
-        record_resolution(rl);
-        nearest_decision_.note_unit_resolution(rl);
-    }
+    void record_decision_resolution(const resolution_lineage* rl);
+    void record_unit_resolution(const resolution_lineage* rl);
 
 private:
-    void record_resolution(const resolution_lineage* rl) {
-        resolution_memory_.record_resolution(rl);
-    }
+    void record_resolution(const resolution_lineage* rl);
 
     IRecordDecision& decision_memory_;
     IRecordResolution& resolution_memory_;
     INearestDecision& nearest_decision_;
     ILogDecision& avoidance_unit_boundary_;
 };
+
+template<typename IRecordDecision, typename IRecordResolution,
+         typename INearestDecision, typename ILogDecision>
+void dbuct_resolution_recorder<IRecordDecision, IRecordResolution,
+                               INearestDecision, ILogDecision>::record_decision_resolution(
+    const resolution_lineage* rl) {
+    decision_memory_.record_decision(rl);
+    nearest_decision_.note_decision_resolution(rl);
+    avoidance_unit_boundary_.log_decision(rl);
+    record_resolution(rl);
+}
+
+template<typename IRecordDecision, typename IRecordResolution,
+         typename INearestDecision, typename ILogDecision>
+void dbuct_resolution_recorder<IRecordDecision, IRecordResolution,
+                               INearestDecision, ILogDecision>::record_unit_resolution(
+    const resolution_lineage* rl) {
+    record_resolution(rl);
+    nearest_decision_.note_unit_resolution(rl);
+}
+
+template<typename IRecordDecision, typename IRecordResolution,
+         typename INearestDecision, typename ILogDecision>
+void dbuct_resolution_recorder<IRecordDecision, IRecordResolution,
+                               INearestDecision, ILogDecision>::record_resolution(
+    const resolution_lineage* rl) {
+    resolution_memory_.record_resolution(rl);
+}
 
 #endif

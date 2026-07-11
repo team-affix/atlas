@@ -7,7 +7,7 @@
 
 template<typename IGlobalize>
 struct bind_map {
-    explicit bind_map(IGlobalize&);
+    bind_map(IGlobalize&);
     void bind(uint32_t global_key, framed_expr value);
     framed_expr whnf(framed_expr);
     void clear_bindings();

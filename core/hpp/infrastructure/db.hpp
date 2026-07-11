@@ -10,8 +10,8 @@
 struct db {
     db();
     rule_id push(rule r);
-    const rule* get(rule_id) const;
-    rule_id_set& get(const goal_lineage*);
+    const rule* get_rule(rule_id) const;
+    rule_id_set& get_candidate_rules(const goal_lineage*);
 private:
     static uint32_t max_var_count_in_expr(const expr* e);
     static uint32_t compute_var_count(const rule& r);

@@ -20,7 +20,7 @@ struct MockGoalWeights {
 };
 
 struct MockGetRule {
-    MOCK_METHOD(const rule*, get, (rule_id), (const));
+    MOCK_METHOD(const rule*, get_rule, (rule_id), (const));
 };
 
 } // namespace
@@ -50,7 +50,7 @@ struct HorizonGoalActivatorTest : public ::testing::Test {
 TEST_F(HorizonGoalActivatorTest, DelegatesThenSetsParentWeightDividedByBodySize) {
     testing::InSequence seq;
     EXPECT_CALL(mock_goal_activator, activate(&child_gl)).Times(1);
-    EXPECT_CALL(get_rule, get(rl.idx)).WillOnce(Return(&two_body_rule));
+    EXPECT_CALL(get_rule, get_rule(rl.idx)).WillOnce(Return(&two_body_rule));
     EXPECT_CALL(goal_weights, get(&parent_gl)).WillOnce(Return(kParentWeight));
     EXPECT_CALL(goal_weights, set(&child_gl, kExpectedChildWeight)).Times(1);
     activator.activate(&child_gl);

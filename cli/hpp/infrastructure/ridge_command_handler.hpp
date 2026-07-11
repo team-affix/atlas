@@ -36,7 +36,7 @@ struct ridge_command_handler {
 private:
     var_names var_names_;
     functor_names functor_names_;
-    non_backtracking_var_sequencer parse_var_seq_;
+    non_backtracking_var_sequencer parse_var_seq_{0};
     std::map<std::string, uint32_t> functor_map_;
     uint32_t next_functor_id_ = k_first_user_functor_id;
     std::optional<expr_pool> parse_pool_;

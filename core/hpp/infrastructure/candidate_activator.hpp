@@ -36,7 +36,7 @@ template<typename IBFA, typename ISCFO, typename ITAMH, typename IIBE,
 void candidate_activator<IBFA, ISCFO, ITAMH, IIBE, IGGE, IGR, ILGC>::activate(
     const resolution_lineage* rl) {
     const goal_lineage* gl = rl->parent;
-    const rule* r = get_rule.get(rl->idx);
+    const rule* r = get_rule.get_rule(rl->idx);
     if (is_backlogged_elimination.is_backlogged_elimination(rl)) return;
     const uint32_t frame_offset = frame_allocator.bump(r->var_count);
     const framed_expr goal = get_goal_expr.get(gl);

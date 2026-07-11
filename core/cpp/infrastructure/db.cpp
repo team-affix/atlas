@@ -11,11 +11,11 @@ rule_id db::push(rule r) {
     return id;
 }
 
-const rule* db::get(rule_id id) const {
+const rule* db::get_rule(rule_id id) const {
     return &rules_.at(id);
 }
 
-rule_id_set& db::get(const goal_lineage* /*gl*/) {
+rule_id_set& db::get_candidate_rules(const goal_lineage* /*gl*/) {
     return total_rule_set_;
 }
 

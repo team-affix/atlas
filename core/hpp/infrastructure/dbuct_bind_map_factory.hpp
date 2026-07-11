@@ -5,7 +5,7 @@
 
 template<typename IGlobalize>
 struct dbuct_bind_map_factory {
-    explicit dbuct_bind_map_factory(IGlobalize& g);
+    dbuct_bind_map_factory(IGlobalize& g);
 
     dbuct_bind_map<IGlobalize> make() const;
 

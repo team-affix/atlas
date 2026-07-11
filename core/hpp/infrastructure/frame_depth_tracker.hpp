@@ -4,9 +4,9 @@
 #include <cstddef>
 
 struct frame_depth_tracker {
-    void push() { ++depth_; }
-    void pop() { --depth_; }
-    size_t depth() const { return depth_; }
+    void push();
+    void pop();
+    size_t depth() const;
 
 private:
     size_t depth_ = 0;

@@ -9,7 +9,7 @@ using ::testing::Return;
 using ::testing::ReturnRef;
 
 struct MockGetGoalDbRuleIds {
-    MOCK_METHOD(rule_id_set&, get, (const goal_lineage*));
+    MOCK_METHOD(rule_id_set&, get_candidate_rules, (const goal_lineage*));
 };
 
 struct MockMakeResolutionLineage {
@@ -53,7 +53,7 @@ struct GoalCandidatesActivatorTest : public ::testing::Test {
 };
 
 TEST_F(GoalCandidatesActivatorTest, ReturnsFalseOnConflict) {
-    EXPECT_CALL(get_goal_db_rule_ids, get(&gl)).WillOnce(ReturnRef(db_rules));
+    EXPECT_CALL(get_goal_db_rule_ids, get_candidate_rules(&gl)).WillOnce(ReturnRef(db_rules));
     EXPECT_CALL(conflict_detector, detect(&gl)).WillOnce(Return(true));
     EXPECT_CALL(push_unit_goal, push).Times(0);
     EXPECT_FALSE(activator.activate_goal_candidates(&gl));
@@ -64,7 +64,7 @@ TEST_F(GoalCandidatesActivatorTest, ActivatesDbRuleCandidates) {
     db_rules.insert(kDbRule);
     resolution_lineage db_rl{&gl, kDbRule};
 
-    EXPECT_CALL(get_goal_db_rule_ids, get(&gl)).WillOnce(ReturnRef(db_rules));
+    EXPECT_CALL(get_goal_db_rule_ids, get_candidate_rules(&gl)).WillOnce(ReturnRef(db_rules));
     EXPECT_CALL(make_resolution_lineage, make_resolution_lineage(&gl, kDbRule))
         .WillOnce(Return(&db_rl));
     EXPECT_CALL(candidate_activator, activate(&db_rl)).Times(1);
@@ -74,7 +74,7 @@ TEST_F(GoalCandidatesActivatorTest, ActivatesDbRuleCandidates) {
 }
 
 TEST_F(GoalCandidatesActivatorTest, PushesUnitGoalWhenDetected) {
-    EXPECT_CALL(get_goal_db_rule_ids, get(&gl)).WillOnce(ReturnRef(db_rules));
+    EXPECT_CALL(get_goal_db_rule_ids, get_candidate_rules(&gl)).WillOnce(ReturnRef(db_rules));
     EXPECT_CALL(conflict_detector, detect(&gl)).WillOnce(Return(false));
     EXPECT_CALL(unit_goal_detector, detect(&gl)).WillOnce(Return(true));
     EXPECT_CALL(push_unit_goal, push(&gl)).Times(1);

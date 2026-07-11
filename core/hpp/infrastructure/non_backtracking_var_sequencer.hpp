@@ -4,7 +4,7 @@
 #include <cstdint>
 
 struct non_backtracking_var_sequencer {
-    explicit non_backtracking_var_sequencer(uint32_t initial = 0);
+    non_backtracking_var_sequencer(uint32_t initial);
     uint32_t next();
     uint32_t peek() const;
 private:

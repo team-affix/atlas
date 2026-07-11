@@ -27,7 +27,7 @@ goal_candidates_activator<IGGDRI, IMRL, ICA, ICD, IUGD, IPUG>::goal_candidates_a
 template<typename IGGDRI, typename IMRL, typename ICA, typename ICD, typename IUGD, typename IPUG>
 bool goal_candidates_activator<IGGDRI, IMRL, ICA, ICD, IUGD, IPUG>::activate_goal_candidates(
     const goal_lineage* gl) {
-    auto& db_rules = get_goal_db_rule_ids.get(gl);
+    auto& db_rules = get_goal_db_rule_ids.get_candidate_rules(gl);
     auto db_it = db_rules.iterate();
     while (!db_it.done()) {
         db_it.resume();

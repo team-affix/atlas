@@ -13,18 +13,25 @@ struct resolution_recorder {
     resolution_recorder(IRecordDecision& dm, IRecordResolution& rm)
         : decision_memory_(dm), resolution_memory_(rm) {}
 
-    void record_decision_resolution(const resolution_lineage* rl) {
-        decision_memory_.record_decision(rl);
-        resolution_memory_.record_resolution(rl);
-    }
-
-    void record_unit_resolution(const resolution_lineage* rl) {
-        resolution_memory_.record_resolution(rl);
-    }
+    void record_decision_resolution(const resolution_lineage* rl);
+    void record_unit_resolution(const resolution_lineage* rl);
 
 private:
     IRecordDecision& decision_memory_;
     IRecordResolution& resolution_memory_;
 };
+
+template<typename IRecordDecision, typename IRecordResolution>
+void resolution_recorder<IRecordDecision, IRecordResolution>::record_decision_resolution(
+    const resolution_lineage* rl) {
+    decision_memory_.record_decision(rl);
+    resolution_memory_.record_resolution(rl);
+}
+
+template<typename IRecordDecision, typename IRecordResolution>
+void resolution_recorder<IRecordDecision, IRecordResolution>::record_unit_resolution(
+    const resolution_lineage* rl) {
+    resolution_memory_.record_resolution(rl);
+}
 
 #endif

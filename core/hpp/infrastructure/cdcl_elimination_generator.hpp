@@ -13,6 +13,12 @@
 #include "value_objects/avoidance.hpp"
 #include "value_objects/lemma.hpp"
 
+inline bool avoidance_member_less(const resolution_lineage* a, const resolution_lineage* b) {
+    if (a->parent != b->parent)
+        return a->parent < b->parent;
+    return a->idx < b->idx;
+}
+
 template<typename ITryGetChosenGoalCandidate>
 struct cdcl_elimination_generator {
     cdcl_elimination_generator(ITryGetChosenGoalCandidate&);
@@ -47,11 +53,7 @@ cdcl_elimination_generator<ITGCC>::learn(const lemma& l) {
         return *resolutions.begin();
 
     std::vector<const resolution_lineage*> members(resolutions.begin(), resolutions.end());
-    std::sort(members.begin(), members.end(), [](const resolution_lineage* a, const resolution_lineage* b) {
-        if (a->parent != b->parent)
-            return a->parent < b->parent;
-        return a->idx < b->idx;
-    });
+    std::sort(members.begin(), members.end(), avoidance_member_less);
     const avoidance_id id = next_avoidance_id_++;
     avoidances_.emplace(id, avoidance{std::move(members), 0, 1});
     watched_goals_[avoidances_.at(id).members.at(0)->parent].insert(id);

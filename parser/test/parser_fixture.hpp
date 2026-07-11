@@ -11,13 +11,13 @@
 struct ParserCoreFixture : public ::testing::Test {
     void SetUp() override {
         pool.emplace();
-        var_seq = non_backtracking_var_sequencer{};
+        var_seq = non_backtracking_var_sequencer{0};
         functor_map.clear();
         next_functor_id = k_first_user_functor_id;
     }
 
     std::optional<expr_pool> pool;
-    non_backtracking_var_sequencer var_seq;
+    non_backtracking_var_sequencer var_seq{0};
     std::map<std::string, uint32_t> functor_map;
     uint32_t next_functor_id = k_first_user_functor_id;
 };

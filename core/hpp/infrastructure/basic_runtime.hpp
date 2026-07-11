@@ -15,7 +15,7 @@ struct basic_runtime {
         initial_goal_exprs& goals,
         uint32_t initial_frame_offset,
         size_t max_resolutions,
-        uint32_t random_seed = 0);
+        uint32_t random_seed);
 
     bool next();
     bool solved() const;

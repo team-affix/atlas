@@ -13,7 +13,7 @@ struct MockResolver {
 };
 
 struct MockGetRule {
-    MOCK_METHOD(const rule*, get, (rule_id), (const));
+    MOCK_METHOD(const rule*, get_rule, (rule_id), (const));
 };
 
 struct MockGoalWeights {
@@ -46,7 +46,7 @@ struct HorizonResolverTest : public ::testing::Test {
 
 TEST_F(HorizonResolverTest, FactResolutionAccumulatesWeightThenDelegates) {
     testing::InSequence seq;
-    EXPECT_CALL(get_rule, get(rl.idx)).WillOnce(Return(&fact_rule));
+    EXPECT_CALL(get_rule, get_rule(rl.idx)).WillOnce(Return(&fact_rule));
     EXPECT_CALL(goal_weights, get(&parent_gl)).WillOnce(Return(kGoalWeight));
     EXPECT_CALL(cumulative_grounded_weight, accumulate(kGoalWeight)).Times(1);
     EXPECT_CALL(mock_resolver, resolve(&rl)).WillOnce(Return(true));
@@ -54,14 +54,14 @@ TEST_F(HorizonResolverTest, FactResolutionAccumulatesWeightThenDelegates) {
 }
 
 TEST_F(HorizonResolverTest, NonFactResolutionDelegatesWithoutAccumulating) {
-    EXPECT_CALL(get_rule, get(rl.idx)).WillOnce(Return(&clause_rule));
+    EXPECT_CALL(get_rule, get_rule(rl.idx)).WillOnce(Return(&clause_rule));
     EXPECT_CALL(cumulative_grounded_weight, accumulate).Times(0);
     EXPECT_CALL(mock_resolver, resolve(&rl)).WillOnce(Return(true));
     EXPECT_TRUE(resolver_sut.resolve(&rl));
 }
 
 TEST_F(HorizonResolverTest, PropagatesInnerFalse) {
-    EXPECT_CALL(get_rule, get(rl.idx)).WillOnce(Return(&clause_rule));
+    EXPECT_CALL(get_rule, get_rule(rl.idx)).WillOnce(Return(&clause_rule));
     EXPECT_CALL(mock_resolver, resolve(&rl)).WillOnce(Return(false));
     EXPECT_FALSE(resolver_sut.resolve(&rl));
 }

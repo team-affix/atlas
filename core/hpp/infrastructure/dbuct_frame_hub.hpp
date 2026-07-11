@@ -51,45 +51,9 @@ struct dbuct_frame_hub {
           bind_map_(bind_map),
           mhu_(mhu) {}
 
-    void push_frame() {
-        depth_tracker_.push();
-        goal_exprs_.push_frame();
-        goal_candidate_rules_.push_frame();
-        chosen_goal_candidates_.push_frame();
-        decision_memory_.push_frame();
-        resolution_memory_.push_frame();
-        unit_goals_.push_frame();
-        candidate_frame_offsets_.push_frame();
-        frame_bump_allocator_.push_frame();
-        nearest_decision_.push_frame();
-        elimination_backlog_.push_frame();
-        avoidance_unit_boundary_.push_frame();
-        srt_active_goals_.push_frame();
-        bind_map_.push_frame();
-        mhu_.push_frame();
-    }
-
-    void pop_frame() {
-        mhu_.pop_frame();
-        bind_map_.pop_frame();
-        srt_active_goals_.pop_frame();
-        avoidance_unit_boundary_.pop_frame();
-        elimination_backlog_.pop_frame();
-        nearest_decision_.pop_frame();
-        frame_bump_allocator_.pop_frame();
-        candidate_frame_offsets_.pop_frame();
-        unit_goals_.pop_frame();
-        resolution_memory_.pop_frame();
-        decision_memory_.pop_frame();
-        chosen_goal_candidates_.pop_frame();
-        goal_candidate_rules_.pop_frame();
-        goal_exprs_.pop_frame();
-        depth_tracker_.pop();
-    }
-
-    size_t depth() const {
-        return depth_tracker_.depth();
-    }
+    void push_frame();
+    void pop_frame();
+    size_t depth() const;
 
 private:
     IFrameDepthTracker& depth_tracker_;
@@ -108,5 +72,57 @@ private:
     IBindMap& bind_map_;
     IMhu& mhu_;
 };
+
+template<typename IFDT, typename IGE, typename IGCR, typename ICGC, typename IDM,
+         typename IRM, typename IUG, typename ICFO, typename IFBA, typename IND,
+         typename IEB, typename IAUB, typename ISAG, typename IBM, typename IMHU>
+void dbuct_frame_hub<IFDT, IGE, IGCR, ICGC, IDM, IRM, IUG, ICFO, IFBA, IND,
+                     IEB, IAUB, ISAG, IBM, IMHU>::push_frame() {
+    depth_tracker_.push();
+    goal_exprs_.push_frame();
+    goal_candidate_rules_.push_frame();
+    chosen_goal_candidates_.push_frame();
+    decision_memory_.push_frame();
+    resolution_memory_.push_frame();
+    unit_goals_.push_frame();
+    candidate_frame_offsets_.push_frame();
+    frame_bump_allocator_.push_frame();
+    nearest_decision_.push_frame();
+    elimination_backlog_.push_frame();
+    avoidance_unit_boundary_.push_frame();
+    srt_active_goals_.push_frame();
+    bind_map_.push_frame();
+    mhu_.push_frame();
+}
+
+template<typename IFDT, typename IGE, typename IGCR, typename ICGC, typename IDM,
+         typename IRM, typename IUG, typename ICFO, typename IFBA, typename IND,
+         typename IEB, typename IAUB, typename ISAG, typename IBM, typename IMHU>
+void dbuct_frame_hub<IFDT, IGE, IGCR, ICGC, IDM, IRM, IUG, ICFO, IFBA, IND,
+                     IEB, IAUB, ISAG, IBM, IMHU>::pop_frame() {
+    mhu_.pop_frame();
+    bind_map_.pop_frame();
+    srt_active_goals_.pop_frame();
+    avoidance_unit_boundary_.pop_frame();
+    elimination_backlog_.pop_frame();
+    nearest_decision_.pop_frame();
+    frame_bump_allocator_.pop_frame();
+    candidate_frame_offsets_.pop_frame();
+    unit_goals_.pop_frame();
+    resolution_memory_.pop_frame();
+    decision_memory_.pop_frame();
+    chosen_goal_candidates_.pop_frame();
+    goal_candidate_rules_.pop_frame();
+    goal_exprs_.pop_frame();
+    depth_tracker_.pop();
+}
+
+template<typename IFDT, typename IGE, typename IGCR, typename ICGC, typename IDM,
+         typename IRM, typename IUG, typename ICFO, typename IFBA, typename IND,
+         typename IEB, typename IAUB, typename ISAG, typename IBM, typename IMHU>
+size_t dbuct_frame_hub<IFDT, IGE, IGCR, ICGC, IDM, IRM, IUG, ICFO, IFBA, IND,
+                       IEB, IAUB, ISAG, IBM, IMHU>::depth() const {
+    return depth_tracker_.depth();
+}
 
 #endif

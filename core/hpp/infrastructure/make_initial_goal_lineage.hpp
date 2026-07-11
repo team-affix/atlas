@@ -5,7 +5,7 @@
 
 template<typename IMakeGoalLineage>
 struct make_initial_goal_lineage {
-    explicit make_initial_goal_lineage(IMakeGoalLineage& lp);
+    make_initial_goal_lineage(IMakeGoalLineage& lp);
     const goal_lineage* make(subgoal_id idx);
 private:
     IMakeGoalLineage& make_goal_lineage;

@@ -5,7 +5,7 @@
 #include "value_objects/sim_termination.hpp"
 
 struct solver_driver {
-    explicit solver_driver(coroutine<sim_termination, void> search);
+    solver_driver(coroutine<sim_termination, void> search);
     bool next();
     bool solved() const;
 private:

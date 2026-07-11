@@ -62,10 +62,9 @@ bool series_reduced_tree<NodeId>::link(NodeId parent, std::set<NodeId> children)
     if (!leaves_.contains(parent))
         return false;
 
-    if (std::any_of(children.begin(), children.end(), [&](const NodeId& c) {
-            return !roots_.contains(c);
-        }))
-        return false;
+    for (const NodeId& c : children)
+        if (!roots_.contains(c))
+            return false;
     
     // wire them up
     children_.emplace(parent, children);

@@ -9,7 +9,7 @@
 #include "debug_assert.hpp"
 
 struct goal_candidate_rules {
-    explicit goal_candidate_rules(ra_rule_id_set_factory&);
+    goal_candidate_rules(ra_rule_id_set_factory&);
     ra_rule_id_set& get(const goal_lineage*);
     const ra_rule_id_set& get(const goal_lineage*) const;
     void insert(const goal_lineage*);

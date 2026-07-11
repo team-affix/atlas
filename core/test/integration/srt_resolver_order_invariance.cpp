@@ -48,7 +48,7 @@ struct MockGoalActivator {
 };
 
 struct MockGetRule {
-    MOCK_METHOD(const rule*, get, (rule_id), (const));
+    MOCK_METHOD(const rule*, get_rule, (rule_id), (const));
 };
 
 struct MockActivateGoalCandidates {
@@ -427,7 +427,7 @@ struct SrtResolverOrderInvarianceIntegrationTest : public ::testing::Test {
                 active_goals.insert_active_goal(gl);
             });
 
-        ON_CALL(get_rule, get(testing::_))
+        ON_CALL(get_rule, get_rule(testing::_))
             .WillByDefault([this](rule_id id) -> const rule* {
                 return id < rule_table_.size() ? &rule_table_[id] : nullptr;
             });

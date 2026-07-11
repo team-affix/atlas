@@ -55,7 +55,7 @@ struct MockGetInitialGoalExpr {
 };
 
 struct MockGetRule {
-    MOCK_METHOD(const rule*, get, (rule_id), (const));
+    MOCK_METHOD(const rule*, get_rule, (rule_id), (const));
 };
 
 void add_active_leaf_weight(
@@ -163,7 +163,7 @@ protected:
         ON_CALL(get_initial_goal_count, count()).WillByDefault(Return(1));
         ON_CALL(get_initial_goal_expr, get(0)).WillByDefault(Return(&f_head));
         ON_CALL(activate_goal_candidates, activate_goal_candidates).WillByDefault(Return(true));
-        ON_CALL(get_rule, get).WillByDefault([&](rule_id id) -> const rule* {
+        ON_CALL(get_rule, get_rule).WillByDefault([&](rule_id id) -> const rule* {
             if (id == 0) return &expand_rule;
             if (id == 1) return &ground_g;
             if (id == 2) return &ground_h;

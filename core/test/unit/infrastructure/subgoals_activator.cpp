@@ -17,7 +17,7 @@ struct MockGoalActivator {
 };
 
 struct MockGetRule {
-    MOCK_METHOD(const rule*, get, (rule_id), (const));
+    MOCK_METHOD(const rule*, get_rule, (rule_id), (const));
 };
 
 struct MockActivateGoalCandidates {
@@ -50,12 +50,12 @@ struct SubgoalsActivatorTest : public ::testing::Test {
 
 TEST_F(SubgoalsActivatorTest, EmptyBodyReturnsTrue) {
     resolution_lineage empty_rl{&parent_gl, kRule};
-    EXPECT_CALL(get_rule, get(kRule)).WillOnce(Return(&empty_body_rule));
+    EXPECT_CALL(get_rule, get_rule(kRule)).WillOnce(Return(&empty_body_rule));
     EXPECT_TRUE(activator.activate_subgoals_and_candidates(&empty_rl));
 }
 
 TEST_F(SubgoalsActivatorTest, ConflictOnBodyGoalReturnsFalse) {
-    EXPECT_CALL(get_rule, get(kRule)).WillOnce(Return(&idx));
+    EXPECT_CALL(get_rule, get_rule(kRule)).WillOnce(Return(&idx));
     EXPECT_CALL(make_goal_lineage, make_goal_lineage(&rl, kBodyIdx)).WillOnce(Return(&body_gl));
     EXPECT_CALL(goal_activator, activate(&body_gl)).Times(1);
     EXPECT_CALL(activate_goal_candidates, activate_goal_candidates(&body_gl)).WillOnce(Return(false));
@@ -70,7 +70,7 @@ TEST_F(SubgoalsActivatorTest, ActivatesEveryBodySubgoal) {
     goal_lineage body_gl0{&rl_two, 0};
     goal_lineage body_gl1{&rl_two, 1};
 
-    EXPECT_CALL(get_rule, get(kRule)).WillOnce(Return(&two_body));
+    EXPECT_CALL(get_rule, get_rule(kRule)).WillOnce(Return(&two_body));
     EXPECT_CALL(make_goal_lineage, make_goal_lineage(&rl_two, 0)).WillOnce(Return(&body_gl0));
     EXPECT_CALL(make_goal_lineage, make_goal_lineage(&rl_two, 1)).WillOnce(Return(&body_gl1));
     EXPECT_CALL(goal_activator, activate(&body_gl0)).Times(1);

@@ -25,7 +25,7 @@ struct dbuct_sim {
 
     mcts_choice choose(const std::vector<mcts_choice>&);
     std::vector<const resolution_lineage*> terminate(double reward);
-    bool at_root() const { return hub_.depth() == 1; }
+    bool at_root() const;
     void unwind_to_root();
     void push_base_frame();
 
@@ -34,19 +34,8 @@ private:
 
     struct walker {
         IMakeResolutionLineage& make_resolution_lineage_;
-        explicit walker(IMakeResolutionLineage& mrl) : make_resolution_lineage_(mrl) {}
-        mcts_node_id walk(const mcts_node_id& node, const mcts_choice& choice) const {
-            if (const goal_lineage* const* gl_ptr =
-                    std::get_if<const goal_lineage*>(&choice)) {
-                return {node.first, *gl_ptr};
-            }
-            const resolution_lineage* rl =
-                make_resolution_lineage_.make_resolution_lineage(
-                    node.second, std::get<rule_id>(choice));
-            decision_set_t next_set = node.first;
-            next_set.insert(rl);
-            return {std::move(next_set), nullptr};
-        }
+        walker(IMakeResolutionLineage& mrl) : make_resolution_lineage_(mrl) {}
+        mcts_node_id walk(const mcts_node_id& node, const mcts_choice& choice) const;
     };
 
     using visits_table_t     = monte_carlo::visits_table<mcts_node_id, std::map>;
@@ -82,6 +71,26 @@ private:
     rollout_t              rollout_;
     std::optional<dbuct_t> dbuct_;
 };
+
+template<typename IFrameHub, typename IMRL, typename IFC>
+mcts_node_id dbuct_sim<IFrameHub, IMRL, IFC>::walker::walk(
+        const mcts_node_id& node, const mcts_choice& choice) const {
+    if (const goal_lineage* const* gl_ptr =
+            std::get_if<const goal_lineage*>(&choice)) {
+        return {node.first, *gl_ptr};
+    }
+    const resolution_lineage* rl =
+        make_resolution_lineage_.make_resolution_lineage(
+            node.second, std::get<rule_id>(choice));
+    decision_set_t next_set = node.first;
+    next_set.insert(rl);
+    return {std::move(next_set), nullptr};
+}
+
+template<typename IFrameHub, typename IMRL, typename IFC>
+bool dbuct_sim<IFrameHub, IMRL, IFC>::at_root() const {
+    return hub_.depth() == 1;
+}
 
 template<typename IFrameHub, typename IMRL, typename IFC>
 dbuct_sim<IFrameHub, IMRL, IFC>::dbuct_sim(IFrameHub& hub, IMRL& mrl, IFC& frames,

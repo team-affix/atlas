@@ -5,7 +5,7 @@
 
 template<typename IGlobalize, typename IBindMap>
 struct unifier_factory {
-    explicit unifier_factory(IGlobalize&);
+    unifier_factory(IGlobalize&);
     unifier<IGlobalize, IBindMap> make(IBindMap* bm) const;
 private:
     IGlobalize& globalizer_;
