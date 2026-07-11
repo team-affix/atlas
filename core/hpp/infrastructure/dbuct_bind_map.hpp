@@ -17,7 +17,6 @@ struct dbuct_bind_map {
 
     void push_frame();
     void pop_frame();
-    void squash_frame();
 
 private:
     using map_t = std::unordered_map<uint32_t, framed_expr>;
@@ -75,17 +74,6 @@ template<typename IGlobalize>
 void dbuct_bind_map<IGlobalize>::pop_frame() {
     undo_frame(frames_.back());
     frames_.pop_back();
-}
-
-template<typename IGlobalize>
-void dbuct_bind_map<IGlobalize>::squash_frame() {
-    if (frames_.size() < 2)
-        return;
-    frame top = std::move(frames_.back());
-    frames_.pop_back();
-    auto& parent = frames_.back().preimages;
-    for (auto& [key, prev] : top.preimages)
-        parent.emplace(key, std::move(prev));
 }
 
 template<typename IGlobalize>
