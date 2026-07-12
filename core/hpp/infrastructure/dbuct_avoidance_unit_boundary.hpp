@@ -2,6 +2,7 @@
 #define DBUCT_AVOIDANCE_UNIT_BOUNDARY_HPP
 
 #include <cstddef>
+#include <deque>
 #include <list>
 #include <stack>
 #include "value_objects/avoidance_boundary_action.hpp"
@@ -40,7 +41,7 @@ private:
 
     IGetNearestDecision& get_nearest_decision_;
     IGetFrameDepth& get_frame_depth_;
-    std::stack<frame> frame_stack_;
+    std::stack<frame> frame_stack_{std::deque<frame>{frame{}}};
 };
 
 template<typename IGetNearestDecision, typename IGetFrameDepth>

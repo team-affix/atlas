@@ -1,6 +1,7 @@
 #ifndef DBUCT_CHOSEN_GOAL_CANDIDATES_HPP
 #define DBUCT_CHOSEN_GOAL_CANDIDATES_HPP
 
+#include <deque>
 #include <list>
 #include <optional>
 #include <stack>
@@ -28,7 +29,7 @@ private:
     void undo_action(const chosen_candidate_action& action);
 
     map_t by_goal_;
-    std::stack<frame> frame_stack_;
+    std::stack<frame> frame_stack_{std::deque<frame>{frame{}}};
 };
 
 #endif

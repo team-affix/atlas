@@ -1,6 +1,7 @@
 #ifndef DBUCT_ELIMINATION_BACKLOG_HPP
 #define DBUCT_ELIMINATION_BACKLOG_HPP
 
+#include <deque>
 #include <list>
 #include <stack>
 #include <unordered_map>
@@ -29,7 +30,7 @@ private:
     void undo_action(const elimination_backlog_action& action);
 
     eliminated_candidates_type eliminated_candidates_;
-    std::stack<frame> frame_stack_;
+    std::stack<frame> frame_stack_{std::deque<frame>{frame{}}};
 };
 
 #endif

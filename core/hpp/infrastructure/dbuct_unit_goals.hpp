@@ -1,6 +1,7 @@
 #ifndef DBUCT_UNIT_GOALS_HPP
 #define DBUCT_UNIT_GOALS_HPP
 
+#include <deque>
 #include <list>
 #include <optional>
 #include <stack>
@@ -27,7 +28,7 @@ private:
     void undo_action(const unit_goals_action& action);
 
     vec_t queue_;
-    std::stack<frame> frame_stack_;
+    std::stack<frame> frame_stack_{std::deque<frame>{frame{}}};
 };
 
 #endif

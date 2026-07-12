@@ -1,6 +1,7 @@
 #ifndef DBUCT_RESOLUTION_MEMORY_HPP
 #define DBUCT_RESOLUTION_MEMORY_HPP
 
+#include <deque>
 #include <list>
 #include <stack>
 #include <unordered_set>
@@ -28,7 +29,7 @@ private:
     void undo_action(const decision_memory_action& action);
 
     set_t resolutions_;
-    std::stack<frame> frame_stack_;
+    std::stack<frame> frame_stack_{std::deque<frame>{frame{}}};
 };
 
 #endif

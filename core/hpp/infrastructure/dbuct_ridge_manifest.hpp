@@ -99,7 +99,7 @@ struct dbuct_ridge_manifest {
                     chosen_goal_candidates_t, decision_memory_t, resolution_memory_t,
                     unit_goals_t, candidate_frame_offsets_t, frame_bump_allocator_t,
                     nearest_decision_t, elimination_backlog_t, avoidance_unit_boundary_t,
-                    srt_active_goals_t, bind_map_t, mhu_t>;
+                    srt_active_goals_t, bind_map_t, mhu_t, cdcl_t>;
     using dbuct_joint_t = dbuct_joint_elimination_generator<cdcl_t, mhu_t>;
     using resolution_recorder_t = dbuct_resolution_recorder<decision_memory_t, resolution_memory_t,
                                 nearest_decision_t, avoidance_unit_boundary_t>;
@@ -150,7 +150,7 @@ struct dbuct_ridge_manifest {
                                          dbuct_dispatches_table_t, dbuct_dispatches_table_t,
                                          dbuct_batch_t, dbuct_tree_walker_t,
                                          dbuct_choices_t, dbuct_choices_t, dbuct_rollout_t>;
-    using dbuct_sim_t              = dbuct_sim<hub_t, cdcl_t, avoidance_unit_boundary_t, dbuct_t>;
+    using dbuct_sim_t              = dbuct_sim<hub_t, avoidance_unit_boundary_t, dbuct_t>;
     using mcts_decision_generator_t     = mcts_decision_generator<lineage_pool, srt_active_goals_t,
                                           dbuct_sim_t, goal_candidate_rules_t>;
     using run_sim_t                     = run_sim<dbuct_frontier_ready, solution_detector_t, conflict_detector_t,

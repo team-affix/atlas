@@ -2,6 +2,7 @@
 #define DBUCT_SERIES_REDUCED_TREE_HPP
 
 #include <algorithm>
+#include <deque>
 #include <list>
 #include <set>
 #include <stack>
@@ -45,7 +46,7 @@ private:
     node_set_t leaves_;
     children_map_t children_;
     parents_map_t parents_;
-    std::stack<frame> frame_stack_;
+    std::stack<frame> frame_stack_{std::deque<frame>{frame{}}};
 };
 
 template<typename NodeId>

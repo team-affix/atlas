@@ -1,6 +1,7 @@
 #ifndef DBUCT_GOAL_CANDIDATE_RULES_HPP
 #define DBUCT_GOAL_CANDIDATE_RULES_HPP
 
+#include <deque>
 #include <list>
 #include <stack>
 #include <unordered_map>
@@ -34,7 +35,7 @@ private:
 
     ra_rule_id_set_factory& factory_;
     map_t by_goal_;
-    std::stack<frame> frame_stack_;
+    std::stack<frame> frame_stack_{std::deque<frame>{frame{}}};
 };
 
 #endif

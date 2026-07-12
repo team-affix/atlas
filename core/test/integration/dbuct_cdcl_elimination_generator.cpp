@@ -94,8 +94,9 @@ struct DbuctCdclEliminationGeneratorIntegrationTest : public ::testing::Test {
     // path that advances the lagging unit boundary.
     resolution_lineage sentinel{nullptr, 99};
 
+    // Every backtrackable is constructor-ready with one root frame (fc.depth()==1,
+    // aub and sut each hold a root frame), so no bootstrap push is needed here.
     void SetUp() override {
-        aub.push_frame();
         ON_CALL(nd, get_nearest_decision(_)).WillByDefault(Return(&sentinel));
         ON_CALL(tgcc, try_get(_)).WillByDefault(Return(std::optional<rule_id>{}));
     }
@@ -105,7 +106,6 @@ struct DbuctCdclEliminationGeneratorIntegrationTest : public ::testing::Test {
 // D1's frame index (1) as the unit boundary. A 2-member conflict learned at depth 2
 // is still unit when we pop back to depth 1, so pop emits the ultimate (D2).
 TEST_F(DbuctCdclEliminationGeneratorIntegrationTest, RotatedBoundaryKeepsConflictUnitOnPop) {
-    fc.push();
     aub.log_decision(&D1);
     sut.push_frame();
     fc.push();
@@ -123,7 +123,6 @@ TEST_F(DbuctCdclEliminationGeneratorIntegrationTest, RotatedBoundaryKeepsConflic
 // ABOVE the boundary to depth 1 -- is armed as a watched clause instead. Committing
 // the ultimate then forces the other watcher through normal propagation.
 TEST_F(DbuctCdclEliminationGeneratorIntegrationTest, DeepBoundaryEmitsThenArmsThenPropagates) {
-    fc.push();
     aub.log_decision(&D1);
     sut.push_frame();
     fc.push();

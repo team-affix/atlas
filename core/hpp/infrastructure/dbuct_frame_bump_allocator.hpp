@@ -2,6 +2,7 @@
 #define DBUCT_FRAME_BUMP_ALLOCATOR_HPP
 
 #include <cstdint>
+#include <deque>
 #include <list>
 #include <stack>
 #include "value_objects/frame_bump_action.hpp"
@@ -25,7 +26,7 @@ private:
     void undo_action(const frame_bump_action& action);
 
     uint32_t next_frame_offset_;
-    std::stack<frame> frame_stack_;
+    std::stack<frame> frame_stack_{std::deque<frame>{frame{}}};
 };
 
 #endif

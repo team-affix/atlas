@@ -1,6 +1,7 @@
 #ifndef DBUCT_GOAL_EXPRS_HPP
 #define DBUCT_GOAL_EXPRS_HPP
 
+#include <deque>
 #include <list>
 #include <stack>
 #include <unordered_map>
@@ -28,7 +29,7 @@ private:
     void undo_action(const goal_expr_action& action);
 
     map_t exprs_;
-    std::stack<frame> frame_stack_;
+    std::stack<frame> frame_stack_{std::deque<frame>{frame{}}};
 };
 
 #endif

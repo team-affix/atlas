@@ -2,6 +2,8 @@
 #define DBUCT_FRAME_HUB_HPP
 
 #include <cstddef>
+#include "infrastructure/coroutine.hpp"
+#include "value_objects/lineage.hpp"
 
 template<typename IFrameDepthTracker,
          typename IGoalExprs,
@@ -17,7 +19,8 @@ template<typename IFrameDepthTracker,
          typename IAvoidanceUnitBoundary,
          typename ISrtActiveGoals,
          typename IBindMap,
-         typename IMhu>
+         typename IMhu,
+         typename ICdcl>
 struct dbuct_frame_hub {
     dbuct_frame_hub(
         IFrameDepthTracker& depth_tracker,
@@ -34,7 +37,8 @@ struct dbuct_frame_hub {
         IAvoidanceUnitBoundary& avoidance_unit_boundary,
         ISrtActiveGoals& srt_active_goals,
         IBindMap& bind_map,
-        IMhu& mhu)
+        IMhu& mhu,
+        ICdcl& cdcl)
         : depth_tracker_(depth_tracker),
           goal_exprs_(goal_exprs),
           goal_candidate_rules_(goal_candidate_rules),
@@ -49,10 +53,11 @@ struct dbuct_frame_hub {
           avoidance_unit_boundary_(avoidance_unit_boundary),
           srt_active_goals_(srt_active_goals),
           bind_map_(bind_map),
-          mhu_(mhu) {}
+          mhu_(mhu),
+          cdcl_(cdcl) {}
 
     void push_frame();
-    void pop_frame();
+    coroutine<const resolution_lineage*, void> pop_frame();
     size_t depth() const;
 
 private:
@@ -71,13 +76,15 @@ private:
     ISrtActiveGoals& srt_active_goals_;
     IBindMap& bind_map_;
     IMhu& mhu_;
+    ICdcl& cdcl_;
 };
 
 template<typename IFDT, typename IGE, typename IGCR, typename ICGC, typename IDM,
          typename IRM, typename IUG, typename ICFO, typename IFBA, typename IND,
-         typename IEB, typename IAUB, typename ISAG, typename IBM, typename IMHU>
+         typename IEB, typename IAUB, typename ISAG, typename IBM, typename IMHU,
+         typename ICDCL>
 void dbuct_frame_hub<IFDT, IGE, IGCR, ICGC, IDM, IRM, IUG, ICFO, IFBA, IND,
-                     IEB, IAUB, ISAG, IBM, IMHU>::push_frame() {
+                     IEB, IAUB, ISAG, IBM, IMHU, ICDCL>::push_frame() {
     depth_tracker_.push();
     goal_exprs_.push_frame();
     goal_candidate_rules_.push_frame();
@@ -93,13 +100,16 @@ void dbuct_frame_hub<IFDT, IGE, IGCR, ICGC, IDM, IRM, IUG, ICFO, IFBA, IND,
     srt_active_goals_.push_frame();
     bind_map_.push_frame();
     mhu_.push_frame();
+    cdcl_.push_frame();
 }
 
 template<typename IFDT, typename IGE, typename IGCR, typename ICGC, typename IDM,
          typename IRM, typename IUG, typename ICFO, typename IFBA, typename IND,
-         typename IEB, typename IAUB, typename ISAG, typename IBM, typename IMHU>
-void dbuct_frame_hub<IFDT, IGE, IGCR, ICGC, IDM, IRM, IUG, ICFO, IFBA, IND,
-                     IEB, IAUB, ISAG, IBM, IMHU>::pop_frame() {
+         typename IEB, typename IAUB, typename ISAG, typename IBM, typename IMHU,
+         typename ICDCL>
+coroutine<const resolution_lineage*, void>
+dbuct_frame_hub<IFDT, IGE, IGCR, ICGC, IDM, IRM, IUG, ICFO, IFBA, IND,
+                IEB, IAUB, ISAG, IBM, IMHU, ICDCL>::pop_frame() {
     mhu_.pop_frame();
     bind_map_.pop_frame();
     srt_active_goals_.pop_frame();
@@ -115,13 +125,21 @@ void dbuct_frame_hub<IFDT, IGE, IGCR, ICGC, IDM, IRM, IUG, ICFO, IFBA, IND,
     goal_candidate_rules_.pop_frame();
     goal_exprs_.pop_frame();
     depth_tracker_.pop();
+
+    auto sm = cdcl_.pop_frame();
+    while (!sm.done()) {
+        sm.resume();
+        if (sm.has_yield())
+            co_yield sm.consume_yield();
+    }
 }
 
 template<typename IFDT, typename IGE, typename IGCR, typename ICGC, typename IDM,
          typename IRM, typename IUG, typename ICFO, typename IFBA, typename IND,
-         typename IEB, typename IAUB, typename ISAG, typename IBM, typename IMHU>
+         typename IEB, typename IAUB, typename ISAG, typename IBM, typename IMHU,
+         typename ICDCL>
 size_t dbuct_frame_hub<IFDT, IGE, IGCR, ICGC, IDM, IRM, IUG, ICFO, IFBA, IND,
-                       IEB, IAUB, ISAG, IBM, IMHU>::depth() const {
+                       IEB, IAUB, ISAG, IBM, IMHU, ICDCL>::depth() const {
     return depth_tracker_.depth();
 }
 

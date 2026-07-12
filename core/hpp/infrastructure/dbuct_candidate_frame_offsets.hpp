@@ -2,6 +2,7 @@
 #define DBUCT_CANDIDATE_FRAME_OFFSETS_HPP
 
 #include <cstdint>
+#include <deque>
 #include <list>
 #include <stack>
 #include <unordered_map>
@@ -28,7 +29,7 @@ private:
     void undo_action(const candidate_offset_action& action);
 
     map_t offsets_;
-    std::stack<frame> frame_stack_;
+    std::stack<frame> frame_stack_{std::deque<frame>{frame{}}};
 };
 
 #endif

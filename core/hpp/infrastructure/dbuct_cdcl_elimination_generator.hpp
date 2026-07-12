@@ -3,6 +3,7 @@
 
 #include <algorithm>
 #include <cstddef>
+#include <deque>
 #include <optional>
 #include <unordered_map>
 #include <unordered_set>
@@ -62,7 +63,7 @@ private:
         std::list<avoidance_action> actions;
         std::list<raised_unit_avoidance> raised_unit_avoidance_lump;
     };
-    std::stack<frame> frame_stack_;
+    std::stack<frame> frame_stack_{std::deque<frame>{frame{}}};
     
     ITryGetChosenGoalCandidate& try_get_chosen_goal_candidate_;
     IGetUnitBoundary& get_unit_boundary_;
@@ -73,9 +74,7 @@ private:
 
 template<typename ITGCC, typename IGUB, typename IDL, typename IGUD, typename IGPD>
 dbuct_cdcl_elimination_generator<ITGCC, IGUB, IDL, IGUD, IGPD>::dbuct_cdcl_elimination_generator(ITGCC& tgcc, IGUB& gub, IDL& dl, IGUD& gud, IGPD& gpd)
-    : try_get_chosen_goal_candidate_(tgcc), get_unit_boundary_(gub), derive_decision_lemma_(dl), get_ultimate_decision_(gud), get_penultimate_decision_(gpd) {
-    frame_stack_.push(frame{});
-}
+    : try_get_chosen_goal_candidate_(tgcc), get_unit_boundary_(gub), derive_decision_lemma_(dl), get_ultimate_decision_(gud), get_penultimate_decision_(gpd) {}
 
 template<typename ITGCC, typename IGUB, typename IDL, typename IGUD, typename IGPD>
 void

@@ -15,6 +15,7 @@
 #include "infrastructure/dbuct_resolution_memory.hpp"
 #include "infrastructure/dbuct_srt_active_goals.hpp"
 #include "infrastructure/dbuct_unit_goals.hpp"
+#include "infrastructure/coroutine.hpp"
 #include "infrastructure/frame_depth_tracker.hpp"
 #include "infrastructure/globalizer.hpp"
 #include "infrastructure/ra_rule_id_set_factory.hpp"
@@ -32,12 +33,27 @@ struct fake_mhu {
     void pop_frame() { ++pops; }
 };
 
+struct fake_cdcl {
+    int pushes = 0;
+    int pops = 0;
+    void push_frame() { ++pushes; }
+    coroutine<const resolution_lineage*, void> pop_frame() {
+        ++pops;
+        co_return;
+    }
+};
+
+void drain(coroutine<const resolution_lineage*, void> sm) {
+    while (!sm.done())
+        sm.resume();
+}
+
 using hub_t = dbuct_frame_hub<
     frame_depth_tracker, dbuct_goal_exprs, dbuct_goal_candidate_rules,
     dbuct_chosen_goal_candidates, dbuct_decision_memory, dbuct_resolution_memory,
     dbuct_unit_goals, dbuct_candidate_frame_offsets, dbuct_frame_bump_allocator,
     dbuct_nearest_decision, dbuct_elimination_backlog, boundary_t,
-    dbuct_srt_active_goals, bind_map_t, fake_mhu>;
+    dbuct_srt_active_goals, bind_map_t, fake_mhu, fake_cdcl>;
 
 struct hub_fixture {
     frame_depth_tracker depth_tracker;
@@ -57,6 +73,7 @@ struct hub_fixture {
     boundary_t avoidance_unit_boundary{nearest_decision, depth_tracker};
     dbuct_srt_active_goals srt_active_goals;
     fake_mhu mhu;
+    fake_cdcl cdcl;
     hub_t frame_hub;
 
     hub_fixture()
@@ -74,23 +91,28 @@ struct hub_fixture {
                     avoidance_unit_boundary,
                     srt_active_goals,
                     bind_map,
-                    mhu) {}
+                    mhu,
+                    cdcl) {}
 };
 
 }  // namespace
 
 TEST(DbuctFrameHubTest, PushPopTracksDepthAndMhuHooks) {
     hub_fixture f;
-    EXPECT_EQ(f.depth_tracker.depth(), 0u);
+    // Every backtrackable starts constructor-ready with one root frame.
+    EXPECT_EQ(f.depth_tracker.depth(), 1u);
 
     f.frame_hub.push_frame();
-    EXPECT_EQ(f.depth_tracker.depth(), 1u);
+    EXPECT_EQ(f.depth_tracker.depth(), 2u);
     EXPECT_EQ(f.mhu.pushes, 1);
     EXPECT_EQ(f.mhu.pops, 0);
+    EXPECT_EQ(f.cdcl.pushes, 1);
+    EXPECT_EQ(f.cdcl.pops, 0);
 
-    f.frame_hub.pop_frame();
-    EXPECT_EQ(f.depth_tracker.depth(), 0u);
+    drain(f.frame_hub.pop_frame());
+    EXPECT_EQ(f.depth_tracker.depth(), 1u);
     EXPECT_EQ(f.mhu.pops, 1);
+    EXPECT_EQ(f.cdcl.pops, 1);
 }
 
 TEST(DbuctFrameHubTest, PopRevertsJournaledGoalExpr) {
@@ -100,6 +122,6 @@ TEST(DbuctFrameHubTest, PopRevertsJournaledGoalExpr) {
 
     f.frame_hub.push_frame();
     f.goal_exprs.set(&gl, fe);
-    f.frame_hub.pop_frame();
+    drain(f.frame_hub.pop_frame());
     EXPECT_THROW(f.goal_exprs.get(&gl), std::out_of_range);
 }

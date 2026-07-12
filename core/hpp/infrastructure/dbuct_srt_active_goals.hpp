@@ -1,6 +1,7 @@
 #ifndef DBUCT_SRT_ACTIVE_GOALS_HPP
 #define DBUCT_SRT_ACTIVE_GOALS_HPP
 
+#include <deque>
 #include <list>
 #include <set>
 #include <stack>
@@ -35,7 +36,7 @@ private:
 
     dbuct_series_reduced_tree<const goal_lineage*> tree_;
     in_flight_t in_flight_;
-    std::stack<in_flight_frame> in_flight_frames_;
+    std::stack<in_flight_frame> in_flight_frames_{std::deque<in_flight_frame>{in_flight_frame{}}};
 };
 
 #endif

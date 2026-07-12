@@ -35,7 +35,7 @@ dbuct_ridge_manifest::dbuct_ridge_manifest(
       hub_(frame_depth_, goal_exprs_, goal_candidate_rules_, chosen_goal_candidates_,
            decision_memory_, resolution_memory_, unit_goals_, candidate_frame_offsets_,
            frame_allocator_, nearest_decision_, elimination_backlog_,
-           avoidance_unit_boundary_, srt_active_goals_, bind_map_, mhu_),
+           avoidance_unit_boundary_, srt_active_goals_, bind_map_, mhu_, cdcl_),
       dbuct_joint_(cdcl_, mhu_),
       resolution_recorder_(decision_memory_, resolution_memory_, nearest_decision_,
                          avoidance_unit_boundary_),
@@ -81,7 +81,7 @@ dbuct_ridge_manifest::dbuct_ridge_manifest(
              dbuct_dispatches_table_, dbuct_dispatches_table_,
              dbuct_batch_, dbuct_tree_walker_, dbuct_rollout_,
              0, exploration_constant),
-      dbuct_sim_(hub_, cdcl_, avoidance_unit_boundary_, dbuct_),
+      dbuct_sim_(hub_, avoidance_unit_boundary_, dbuct_),
       mcts_decision_generator_(lineage_pool_, srt_active_goals_,
                                dbuct_sim_, goal_candidate_rules_),
       frontier_ready_(),
@@ -93,5 +93,4 @@ dbuct_ridge_manifest::dbuct_ridge_manifest(
       solver_(srt_initial_goals_activator_, run_sim_, decision_memory_,
               ridge_reward_, dbuct_sim_, dbuct_sim_, cdcl_, mhu_, elimination_router_,
               conflict_detector_, unit_goal_detector_, unit_goals_) {
-    dbuct_sim_.push_base_frame();
 }

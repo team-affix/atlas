@@ -1,6 +1,7 @@
 #ifndef DBUCT_NEAREST_DECISION_HPP
 #define DBUCT_NEAREST_DECISION_HPP
 
+#include <deque>
 #include <list>
 #include <stack>
 #include <unordered_map>
@@ -27,7 +28,7 @@ private:
     void undo_action(const nearest_decision_action& action);
 
     map_t nd_{{nullptr, nullptr}};
-    std::stack<frame> frame_stack_;
+    std::stack<frame> frame_stack_{std::deque<frame>{frame{}}};
 };
 
 #endif

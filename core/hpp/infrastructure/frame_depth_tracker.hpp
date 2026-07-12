@@ -9,7 +9,7 @@ struct frame_depth_tracker {
     size_t depth() const;
 
 private:
-    size_t depth_ = 0;
+    size_t depth_ = 1;
 };
 
 #endif

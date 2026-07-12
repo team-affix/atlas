@@ -67,7 +67,7 @@ private:
     heads_map_t heads_;
     rep_to_rls_t rep_to_rls_;
     rl_to_reps_t rl_to_reps_;
-    std::stack<frame> frame_stack_;
+    std::stack<frame> frame_stack_{std::deque<frame>{frame{}}};
 };
 
 template<typename IBM, typename IBMF, typename IU, typename IUF, typename IMRL, typename IMV, typename IGCRI>
