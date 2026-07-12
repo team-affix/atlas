@@ -54,7 +54,7 @@
 #include "infrastructure/dbuct_nearest_decision.hpp"
 #include "infrastructure/dbuct_resolution_memory.hpp"
 #include "infrastructure/dbuct_resolution_recorder.hpp"
-#include "infrastructure/dbuct_scope_contraction_walker.hpp"
+#include "infrastructure/dbuct_tree_walker.hpp"
 #include "infrastructure/dbuct_sim.hpp"
 #include "infrastructure/dbuct_solver.hpp"
 #include "infrastructure/dbuct_srt_active_goals.hpp"
@@ -124,8 +124,8 @@ struct dbuct_ridge_manifest {
                                           goal_candidates_deactivator_t, chosen_goal_candidates_t>;
     using ridge_reward_t                = ridge_reward<decision_memory_t>;
 
-    using dbuct_scope_contraction_walker_t = dbuct_scope_contraction_walker<lineage_pool>;
-    using dbuct_sim_t                      = dbuct_sim<hub_t, cdcl_t, dbuct_scope_contraction_walker_t, mcts_node_id>;
+    using dbuct_tree_walker_t = dbuct_tree_walker;
+    using dbuct_sim_t         = dbuct_sim<hub_t, cdcl_t, dbuct_tree_walker_t, size_t>;
     using mcts_decision_generator_t     = mcts_decision_generator<lineage_pool, srt_active_goals_t,
                                           dbuct_sim_t, goal_candidate_rules_t>;
     using run_sim_t                     = run_sim<dbuct_frontier_ready, solution_detector_t, conflict_detector_t,
@@ -191,7 +191,7 @@ struct dbuct_ridge_manifest {
     resolver_t                    resolver_;
     ridge_reward_t                ridge_reward_;
     std::mt19937                  rng_;
-    dbuct_scope_contraction_walker_t dbuct_scope_contraction_walker_;
+    dbuct_tree_walker_t           dbuct_tree_walker_;
     dbuct_sim_t                   dbuct_sim_;
     mcts_decision_generator_t     mcts_decision_generator_;
     dbuct_frontier_ready          frontier_ready_;
