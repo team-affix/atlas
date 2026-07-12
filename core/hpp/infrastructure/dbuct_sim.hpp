@@ -153,9 +153,9 @@ std::vector<const resolution_lineage*> dbuct_sim<IFrameHub, IFrameControl, IWalk
     double reward) {
     const std::size_t max_return_depth =
         hub_.depth() > 1 ? hub_.depth() - 1 : SIZE_MAX;
-    const std::size_t stack_size = dbuct_->terminate(reward, max_return_depth);
+    const std::size_t return_depth = dbuct_->terminate(reward, max_return_depth);
     std::vector<const resolution_lineage*> eliminations;
-    while (hub_.depth() > stack_size) {
+    while (hub_.depth() > return_depth) {
         eliminations.clear();
         hub_.pop_frame();
         auto sm = frames_.pop_frame();
