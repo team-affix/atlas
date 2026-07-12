@@ -7,10 +7,15 @@ alwaysApply: true
 # Type & Member Design
 
 - Use `struct`, never `class`.
-- One outermost type per file. Nested subtypes of that type are fine; do not
-  define unrelated types in the same file.
+- One outermost type per file (source code). Nested subtypes of that type are
+  fine; do not define unrelated types in the same file. The ONLY exception is a
+  genuine circular dependency between two types that cannot otherwise be broken —
+  then they may share a file. Test code is exempt from this rule.
 - No public member variables, EXCEPT value objects (plain data + `operator<=>`).
   Value objects may only have member functions that assist construction.
+- No default member initializers. Do NOT set member values in the class/struct
+  declaration. Initialize members in the constructor's member initializer list
+  when possible, or, as a last-resort fallback, in the constructor body.
 - All member functions are `private` except the constructor and destructor.
 - Prefer a single constructor and single destructor. Do not overload them.
 - No function overloading. Two functions with distinct purposes get distinct
@@ -36,4 +41,26 @@ private:
     void undo_action(const unit_goals_action& action);
     vec_t queue_;
 };
+```
+
+## Member initialization
+
+```cpp
+// BAD: default member initializers in the declaration
+struct dbuct_frame_bump_allocator {
+    uint32_t next_frame_offset_ = 0;
+    std::stack<frame> frame_stack_{std::deque<frame>{frame{}}};
+};
+
+// GOOD: initialize in the constructor's member initializer list
+struct dbuct_frame_bump_allocator {
+    dbuct_frame_bump_allocator();
+private:
+    uint32_t next_frame_offset_;
+    std::stack<frame> frame_stack_;
+};
+
+dbuct_frame_bump_allocator::dbuct_frame_bump_allocator()
+    : next_frame_offset_(0)
+    , frame_stack_(std::deque<frame>{frame{}}) {}
 ```
