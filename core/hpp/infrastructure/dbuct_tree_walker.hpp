@@ -7,8 +7,6 @@
 #include "value_objects/mcts_choice_hash.hpp"
 
 struct dbuct_tree_walker {
-    static constexpr bool use_unordered_tables = true;
-
     size_t walk(size_t node, const mcts_choice& choice);
 
 private:

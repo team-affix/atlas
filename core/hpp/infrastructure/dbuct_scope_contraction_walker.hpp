@@ -8,8 +8,6 @@
 
 template<typename IMakeResolutionLineage>
 struct dbuct_scope_contraction_walker {
-    static constexpr bool use_unordered_tables = false;
-
     dbuct_scope_contraction_walker(IMakeResolutionLineage& make_resolution_lineage);
 
     mcts_node_id walk(const mcts_node_id& node, const mcts_choice& choice) const;
