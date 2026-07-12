@@ -1,9 +1,9 @@
 // dbuct_avoidance_unit_boundary tracks the two most recent decisions (ultimate,
-// penultimate) and a "unit boundary" frame index that always lags exactly one
+// penultimate) and a "unit boundary" frame depth that always lags exactly one
 // decision behind. On each log_decision it consults the nearest-decision oracle:
 // if the new decision extends the current ultimate's chain it overwrites the
 // ultimate in place; otherwise it rotates, promoting the old ultimate to
-// penultimate and publishing the old ultimate's frame index as the new boundary.
+// penultimate and publishing the old ultimate's frame depth as the new boundary.
 //
 // SUT: dbuct_avoidance_unit_boundary (real). The nearest-decision infrastructure
 // and frame depth are mocked so the rotate-vs-overwrite branch is deterministic.

@@ -28,15 +28,15 @@ private:
 
     void assign_ultimate(const resolution_lineage* rl);
     void assign_penultimate(const resolution_lineage* rl);
-    void assign_ultimate_frame_index(size_t value);
-    void assign_unit_boundary_frame_index(size_t value);
+    void assign_ultimate_frame_depth(size_t value);
+    void assign_unit_boundary_frame_depth(size_t value);
     void log(avoidance_boundary_action action);
     void undo_action(const avoidance_boundary_action& action);
 
     const resolution_lineage* ultimate_ = nullptr;
     const resolution_lineage* penultimate_ = nullptr;
-    size_t ultimate_frame_index_ = 0;
-    size_t unit_boundary_frame_index_ = 0;
+    size_t ultimate_frame_depth_ = 0;
+    size_t unit_boundary_frame_depth_ = 0;
 
     IGetNearestDecision& get_nearest_decision_;
     IGetFrameDepth& get_frame_depth_;
@@ -53,15 +53,15 @@ void dbuct_avoidance_unit_boundary<IGetNearestDecision, IGetFrameDepth>::log_dec
     const resolution_lineage* rl) {
     if (ultimate_ != get_nearest_decision_.get_nearest_decision(rl->parent->parent)) {
         assign_penultimate(ultimate_);
-        assign_unit_boundary_frame_index(ultimate_frame_index_);
+        assign_unit_boundary_frame_depth(ultimate_frame_depth_);
     }
     assign_ultimate(rl);
-    assign_ultimate_frame_index(get_frame_depth_.depth());
+    assign_ultimate_frame_depth(get_frame_depth_.depth());
 }
 
 template<typename IGetNearestDecision, typename IGetFrameDepth>
 size_t dbuct_avoidance_unit_boundary<IGetNearestDecision, IGetFrameDepth>::get_unit_boundary() const {
-    return unit_boundary_frame_index_;
+    return unit_boundary_frame_depth_;
 }
 
 template<typename IGetNearestDecision, typename IGetFrameDepth>
@@ -76,7 +76,7 @@ const resolution_lineage* dbuct_avoidance_unit_boundary<IGetNearestDecision, IGe
 
 template<typename IGetNearestDecision, typename IGetFrameDepth>
 size_t dbuct_avoidance_unit_boundary<IGetNearestDecision, IGetFrameDepth>::get_ultimate_decision_depth() const {
-    return ultimate_frame_index_;
+    return ultimate_frame_depth_;
 }
 
 template<typename IGetNearestDecision, typename IGetFrameDepth>
@@ -109,18 +109,18 @@ void dbuct_avoidance_unit_boundary<IGetNearestDecision, IGetFrameDepth>::assign_
 }
 
 template<typename IGetNearestDecision, typename IGetFrameDepth>
-void dbuct_avoidance_unit_boundary<IGetNearestDecision, IGetFrameDepth>::assign_ultimate_frame_index(
+void dbuct_avoidance_unit_boundary<IGetNearestDecision, IGetFrameDepth>::assign_ultimate_frame_depth(
     size_t value) {
-    avoidance_boundary_frame_assign action{avoidance_frame_slot::ultimate_frame_index, ultimate_frame_index_};
-    ultimate_frame_index_ = value;
+    avoidance_boundary_frame_assign action{avoidance_frame_slot::ultimate_frame_depth, ultimate_frame_depth_};
+    ultimate_frame_depth_ = value;
     log(std::move(action));
 }
 
 template<typename IGetNearestDecision, typename IGetFrameDepth>
-void dbuct_avoidance_unit_boundary<IGetNearestDecision, IGetFrameDepth>::assign_unit_boundary_frame_index(
+void dbuct_avoidance_unit_boundary<IGetNearestDecision, IGetFrameDepth>::assign_unit_boundary_frame_depth(
     size_t value) {
-    avoidance_boundary_frame_assign action{avoidance_frame_slot::unit_boundary_frame_index, unit_boundary_frame_index_};
-    unit_boundary_frame_index_ = value;
+    avoidance_boundary_frame_assign action{avoidance_frame_slot::unit_boundary_frame_depth, unit_boundary_frame_depth_};
+    unit_boundary_frame_depth_ = value;
     log(std::move(action));
 }
 
@@ -140,10 +140,10 @@ void dbuct_avoidance_unit_boundary<IGetNearestDecision, IGetFrameDepth>::undo_ac
             penultimate_ = rl->previous;
     } else {
         const auto& fr = std::get<avoidance_boundary_frame_assign>(action);
-        if (fr.slot == avoidance_frame_slot::ultimate_frame_index)
-            ultimate_frame_index_ = fr.previous;
+        if (fr.slot == avoidance_frame_slot::ultimate_frame_depth)
+            ultimate_frame_depth_ = fr.previous;
         else
-            unit_boundary_frame_index_ = fr.previous;
+            unit_boundary_frame_depth_ = fr.previous;
     }
 }
 
