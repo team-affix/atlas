@@ -55,10 +55,11 @@ struct dbuct_dispatches_table_selector<NodeHandle, true> {
     using type = monte_carlo::dispatches_table<NodeHandle, std::unordered_map>;
 };
 
-template<typename IFrameHub, typename IFrameControl, typename IWalk, typename NodeHandle>
+template<typename IFrameHub, typename IFrameControl, typename IWalk,
+         typename IGetUltimateDecisionDepth, typename NodeHandle>
 struct dbuct_sim {
-    dbuct_sim(IFrameHub&, IFrameControl&, IWalk&, NodeHandle root,
-              std::mt19937&, double exploration_constant,
+    dbuct_sim(IFrameHub&, IFrameControl&, IWalk&, IGetUltimateDecisionDepth&,
+              NodeHandle root, std::mt19937&, double exploration_constant,
               std::size_t grant_increment_interval);
 
     mcts_choice choose(const std::vector<mcts_choice>&);
@@ -95,9 +96,10 @@ private:
                                    choices_t,
                                    rollout_t>;
 
-    IFrameHub&             hub_;
-    IFrameControl&         frames_;
-    IWalk&                 walk_;
+    IFrameHub&                   hub_;
+    IFrameControl&               frames_;
+    IWalk&                       walk_;
+    IGetUltimateDecisionDepth&   ultimate_decision_depth_;
     visits_table_t         visits_table_;
     value_table_t          value_table_;
     dispatches_table_t     dispatches_table_;
@@ -106,18 +108,22 @@ private:
     std::optional<dbuct_t> dbuct_;
 };
 
-template<typename IFrameHub, typename IFrameControl, typename IWalk, typename NodeHandle>
-bool dbuct_sim<IFrameHub, IFrameControl, IWalk, NodeHandle>::at_root() const {
+template<typename IFrameHub, typename IFrameControl, typename IWalk,
+         typename IGetUltimateDecisionDepth, typename NodeHandle>
+bool dbuct_sim<IFrameHub, IFrameControl, IWalk, IGetUltimateDecisionDepth, NodeHandle>::at_root() const {
     return hub_.depth() == 1;
 }
 
-template<typename IFrameHub, typename IFrameControl, typename IWalk, typename NodeHandle>
-dbuct_sim<IFrameHub, IFrameControl, IWalk, NodeHandle>::dbuct_sim(
-    IFrameHub& hub, IFrameControl& frames, IWalk& walk, NodeHandle root,
+template<typename IFrameHub, typename IFrameControl, typename IWalk,
+         typename IGetUltimateDecisionDepth, typename NodeHandle>
+dbuct_sim<IFrameHub, IFrameControl, IWalk, IGetUltimateDecisionDepth, NodeHandle>::dbuct_sim(
+    IFrameHub& hub, IFrameControl& frames, IWalk& walk,
+    IGetUltimateDecisionDepth& ultimate_decision_depth, NodeHandle root,
     std::mt19937& rng, double ec, std::size_t grant_increment_interval)
     : hub_(hub)
     , frames_(frames)
     , walk_(walk)
+    , ultimate_decision_depth_(ultimate_decision_depth)
     , visits_table_()
     , value_table_()
     , dispatches_table_()
@@ -131,13 +137,15 @@ dbuct_sim<IFrameHub, IFrameControl, IWalk, NodeHandle>::dbuct_sim(
                    ec);
 }
 
-template<typename IFrameHub, typename IFrameControl, typename IWalk, typename NodeHandle>
-void dbuct_sim<IFrameHub, IFrameControl, IWalk, NodeHandle>::push_base_frame() {
+template<typename IFrameHub, typename IFrameControl, typename IWalk,
+         typename IGetUltimateDecisionDepth, typename NodeHandle>
+void dbuct_sim<IFrameHub, IFrameControl, IWalk, IGetUltimateDecisionDepth, NodeHandle>::push_base_frame() {
     hub_.push_frame();
 }
 
-template<typename IFrameHub, typename IFrameControl, typename IWalk, typename NodeHandle>
-mcts_choice dbuct_sim<IFrameHub, IFrameControl, IWalk, NodeHandle>::choose(
+template<typename IFrameHub, typename IFrameControl, typename IWalk,
+         typename IGetUltimateDecisionDepth, typename NodeHandle>
+mcts_choice dbuct_sim<IFrameHub, IFrameControl, IWalk, IGetUltimateDecisionDepth, NodeHandle>::choose(
     const std::vector<mcts_choice>& choices) {
     const bool was_in_rollout = dbuct_->in_rollout();
     mcts_choice chosen = dbuct_->choose(choices, choices);
@@ -148,11 +156,16 @@ mcts_choice dbuct_sim<IFrameHub, IFrameControl, IWalk, NodeHandle>::choose(
     return chosen;
 }
 
-template<typename IFrameHub, typename IFrameControl, typename IWalk, typename NodeHandle>
-std::vector<const resolution_lineage*> dbuct_sim<IFrameHub, IFrameControl, IWalk, NodeHandle>::terminate(
+template<typename IFrameHub, typename IFrameControl, typename IWalk,
+         typename IGetUltimateDecisionDepth, typename NodeHandle>
+std::vector<const resolution_lineage*> dbuct_sim<IFrameHub, IFrameControl, IWalk, IGetUltimateDecisionDepth, NodeHandle>::terminate(
     double reward) {
+    const std::size_t ultimate_depth =
+        ultimate_decision_depth_.get_ultimate_decision_depth();
     const std::size_t max_return_depth =
-        hub_.depth() > 1 ? hub_.depth() - 1 : SIZE_MAX;
+        hub_.depth() > 1
+            ? (ultimate_depth > 0 ? ultimate_depth - 1 : 0)
+            : SIZE_MAX;
     const std::size_t return_depth = dbuct_->terminate(reward, max_return_depth);
     std::vector<const resolution_lineage*> eliminations;
     while (hub_.depth() > return_depth) {
@@ -168,8 +181,9 @@ std::vector<const resolution_lineage*> dbuct_sim<IFrameHub, IFrameControl, IWalk
     return eliminations;
 }
 
-template<typename IFrameHub, typename IFrameControl, typename IWalk, typename NodeHandle>
-void dbuct_sim<IFrameHub, IFrameControl, IWalk, NodeHandle>::unwind_to_root() {
+template<typename IFrameHub, typename IFrameControl, typename IWalk,
+         typename IGetUltimateDecisionDepth, typename NodeHandle>
+void dbuct_sim<IFrameHub, IFrameControl, IWalk, IGetUltimateDecisionDepth, NodeHandle>::unwind_to_root() {
     while (hub_.depth() > 1) {
         hub_.pop_frame();
         auto sm = frames_.pop_frame();

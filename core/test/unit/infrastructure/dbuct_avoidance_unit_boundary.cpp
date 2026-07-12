@@ -92,6 +92,20 @@ TEST_F(DbuctAvoidanceUnitBoundaryTest, OverwriteWhenNewDecisionExtendsUltimateKe
     EXPECT_EQ(sut.get_ultimate_decision(), &rl2);
 }
 
+TEST_F(DbuctAvoidanceUnitBoundaryTest, UltimateDecisionDepthTracksLoggedFrame) {
+    constexpr size_t d1 = 3;
+    constexpr size_t d2 = 7;
+
+    fc.push();
+    while (fc.depth() < d1) fc.push();
+    sut.log_decision(&rl1);
+    EXPECT_EQ(sut.get_ultimate_decision_depth(), d1);
+
+    while (fc.depth() < d2) fc.push();
+    sut.log_decision(&rl2);
+    EXPECT_EQ(sut.get_ultimate_decision_depth(), d2);
+}
+
 TEST_F(DbuctAvoidanceUnitBoundaryTest, PopRevertsLoggedDecision) {
     fc.push();
     sut.log_decision(&rl1);

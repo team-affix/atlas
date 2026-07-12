@@ -71,7 +71,7 @@ dbuct_ridge_manifest::dbuct_ridge_manifest(
       ridge_reward_(decision_memory_),
       rng_(random_seed),
       dbuct_tree_walker_(),
-      dbuct_sim_(hub_, cdcl_, dbuct_tree_walker_, 0,
+      dbuct_sim_(hub_, cdcl_, dbuct_tree_walker_, avoidance_unit_boundary_, 0,
                  rng_, exploration_constant, grant_increment_interval),
       mcts_decision_generator_(lineage_pool_, srt_active_goals_,
                                dbuct_sim_, goal_candidate_rules_),

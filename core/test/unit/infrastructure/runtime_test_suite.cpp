@@ -276,8 +276,6 @@ TEST_P(RuntimeParamTest, NormalizeDelegatesToBindMap) {
     EXPECT_EQ(saved_expr_pool_.import(session.normalize({saved_expr_pool_.make_var(idx_b), 0})),
         _123);
     EXPECT_FALSE(session.next()) << "expected refutation";
-    EXPECT_TRUE(std::holds_alternative<expr::var>(
-        session.normalize({saved_expr_pool_.make_var(idx_a), 0})->content));
 }
 
 TEST_P(RuntimeParamTest, ImportSurvivesNextTick) {

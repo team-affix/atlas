@@ -16,6 +16,7 @@ struct dbuct_avoidance_unit_boundary {
     size_t get_unit_boundary() const;
     const resolution_lineage* get_ultimate_decision() const;
     const resolution_lineage* get_penultimate_decision() const;
+    size_t get_ultimate_decision_depth() const;
 
     void push_frame();
     void pop_frame();
@@ -71,6 +72,11 @@ const resolution_lineage* dbuct_avoidance_unit_boundary<IGetNearestDecision, IGe
 template<typename IGetNearestDecision, typename IGetFrameDepth>
 const resolution_lineage* dbuct_avoidance_unit_boundary<IGetNearestDecision, IGetFrameDepth>::get_penultimate_decision() const {
     return penultimate_;
+}
+
+template<typename IGetNearestDecision, typename IGetFrameDepth>
+size_t dbuct_avoidance_unit_boundary<IGetNearestDecision, IGetFrameDepth>::get_ultimate_decision_depth() const {
+    return ultimate_frame_index_;
 }
 
 template<typename IGetNearestDecision, typename IGetFrameDepth>

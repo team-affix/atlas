@@ -125,7 +125,8 @@ struct dbuct_ridge_manifest {
     using ridge_reward_t                = ridge_reward<decision_memory_t>;
 
     using dbuct_tree_walker_t = dbuct_tree_walker;
-    using dbuct_sim_t         = dbuct_sim<hub_t, cdcl_t, dbuct_tree_walker_t, size_t>;
+    using dbuct_sim_t         = dbuct_sim<hub_t, cdcl_t, dbuct_tree_walker_t,
+                                          avoidance_unit_boundary_t, size_t>;
     using mcts_decision_generator_t     = mcts_decision_generator<lineage_pool, srt_active_goals_t,
                                           dbuct_sim_t, goal_candidate_rules_t>;
     using run_sim_t                     = run_sim<dbuct_frontier_ready, solution_detector_t, conflict_detector_t,
