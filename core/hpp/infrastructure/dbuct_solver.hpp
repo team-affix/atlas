@@ -54,7 +54,7 @@ private:
     // eliminations, and cascade further learn/backtrack rounds while the resume
     // frontier keeps collapsing. Refutation is decided by the top-level loop (a
     // root-frontier run with no decisions), never here.
-    void learn_terminate_cascade(bool conflicted);
+    bool learn_terminate_cascade();
 
     // Route one pop_frame elimination at the resume frontier. Forced eliminations
     // surfaced by pop_frame bypass the joint eliminator, so they carry the same
@@ -90,71 +90,36 @@ dbuct_solver<IA, IRS, IGDC, ICR, IT, ICAR, ILA, IM, IER, ICD, IUGD, IPUG>::solve
     }
 
     while (true) {
-        // Whether this episode runs from the root frontier (no camped decisions
-        // above it). dbuct backtracks at trail-frame granularity, which is FINER
-        // than a decision (each generate() makes several tree-policy chooses: one
-        // per goal-navigation step plus the candidate), so being off the root
-        // does NOT imply a decision is recorded. Only a run that STARTS at the
-        // root and records zero decisions proves the search exhausted -- this is
-        // exactly the restarting solver's `count()==0` test, always evaluated
-        // from the root.
-        const bool from_root = check_is_at_root_.at_root();
-
         const sim_termination term = run_sim_.run();
 
         co_yield term;
 
-        if (from_root && get_decision_count_.count() == 0) {
-            // Search exhausted: unwind the episode's work so the refuted session
-            // is left in the clean root state (query vars normalize to unbound).
-            terminate_.unwind_to_root();
-            break;
-        }
+        if (get_decision_count_.count() == 0)
+            break; // refuted
 
-        learn_terminate_cascade(term == sim_termination::conflicted);
+        learn_terminate_cascade();
     }
 }
 
 template<typename IA, typename IRS, typename IGDC, typename ICR,
          typename IT, typename ICAR, typename ILA, typename IM, typename IER,
          typename ICD, typename IUGD, typename IPUG>
-void dbuct_solver<IA, IRS, IGDC, ICR, IT, ICAR, ILA, IM, IER, ICD, IUGD, IPUG>::learn_terminate_cascade(bool conflicted) {
-    // Fixed adjacency: record the terminal conflict, then immediately backtrack;
-    // terminate()'s first pop_frame yields the forced elimination for it. Nothing
-    // may sit between learn() and terminate(). Every terminal -- conflict OR
-    // solution -- must pop at least one frame: a spent frontier left in place is
-    // re-detected verbatim by the next episode, re-reporting the same solution
-    // (or re-deriving the same conflict) and never applying the avoidance just
-    // learned. Forcing one pop lets that first pop_frame surface the avoidance
-    // and advances the camped path toward the root.
-    (void)conflicted;
-    const std::size_t decisions_before = get_decision_count_.count();
-    const double reward = compute_reward_.compute_mcts_reward();
-    learn_.learn();
-    auto elims = terminate_.terminate(reward);
-    // Backstep to the next genuine branch point: a frontier that both drops a
-    // decision from the terminated path AND still carries at least one decision
-    // to explore. Stopping short of that leaves a spent or deterministic frontier
-    // in place -- either one whose recorded decisions are all intact (re-derives
-    // the same path) or a decision-free tail that unit-propagates to the very
-    // solution the root already yields (a duplicate solved tick). Collapse all
-    // the way to the root when no shallower branch point survives.
-    while (!check_is_at_root_.at_root() &&
-           !(get_decision_count_.count() < decisions_before &&
-             get_decision_count_.count() > 0)) {
-        const double r = compute_reward_.compute_mcts_reward();
-        elims = terminate_.terminate(r);
-    }
-
+bool dbuct_solver<IA, IRS, IGDC, ICR, IT, ICAR, ILA, IM, IER, ICD, IUGD, IPUG>::learn_terminate_cascade() {
     // Route the pop_frame eliminations at the resume frontier; if that realizes a
     // fresh conflict, learn + backtrack again and repeat until the frontier is
     // stable or we have collapsed all the way back to the root.
-    while (route_eliminations(elims)) {
-        if (check_is_at_root_.at_root())
-            break;
-        const double r = compute_reward_.compute_mcts_reward();
+    while (true) {
         learn_.learn();
-        elims = terminate_.terminate(r);
+        const double r = compute_reward_.compute_mcts_reward();
+        auto elims = terminate_.terminate(r);
+
+        // if no conflict is realized, return false
+        if (!route_eliminations(elims))
+            return false;
+        
+        // if conflict realized while at root, return true
+        if (check_is_at_root_.at_root())
+            return true;
     }
 }
 
@@ -179,12 +144,11 @@ template<typename IA, typename IRS, typename IGDC, typename ICR,
          typename ICD, typename IUGD, typename IPUG>
 bool dbuct_solver<IA, IRS, IGDC, ICR, IT, ICAR, ILA, IM, IER, ICD, IUGD, IPUG>::route_eliminations(
     const std::vector<const resolution_lineage*>& elims) {
-    bool conflict = false;
     for (const resolution_lineage* rl : elims) {
         if (route_elimination(rl))
-            conflict = true;
+            return true;
     }
-    return conflict;
+    return false;
 }
 
 #endif
