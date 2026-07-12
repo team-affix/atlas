@@ -97,7 +97,8 @@ dbuct_solver<IA, IRS, IGDC, ICR, IT, ICAR, ILA, IM, IER, ICD, IUGD, IPUG>::solve
         if (get_decision_count_.count() == 0)
             break; // refuted
 
-        learn_terminate_cascade();
+        if (learn_terminate_cascade())
+            break; // refuted
     }
 }
 
@@ -105,9 +106,6 @@ template<typename IA, typename IRS, typename IGDC, typename ICR,
          typename IT, typename ICAR, typename ILA, typename IM, typename IER,
          typename ICD, typename IUGD, typename IPUG>
 bool dbuct_solver<IA, IRS, IGDC, ICR, IT, ICAR, ILA, IM, IER, ICD, IUGD, IPUG>::learn_terminate_cascade() {
-    // Route the pop_frame eliminations at the resume frontier; if that realizes a
-    // fresh conflict, learn + backtrack again and repeat until the frontier is
-    // stable or we have collapsed all the way back to the root.
     while (true) {
         learn_.learn();
         const double r = compute_reward_.compute_mcts_reward();
