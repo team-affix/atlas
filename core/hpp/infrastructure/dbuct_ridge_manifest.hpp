@@ -70,7 +70,6 @@
 #include "infrastructure/dbuct_solver.hpp"
 #include "infrastructure/dbuct_srt_active_goals.hpp"
 #include "infrastructure/dbuct_unit_goals.hpp"
-#include "infrastructure/frame_depth_tracker.hpp"
 #include "infrastructure/normalizer.hpp"
 #include "infrastructure/solver_driver.hpp"
 
@@ -88,9 +87,27 @@ struct dbuct_ridge_manifest {
     using frame_bump_allocator_t    = dbuct_frame_bump_allocator;
     using elimination_backlog_t     = dbuct_elimination_backlog;
     using nearest_decision_t        = dbuct_nearest_decision;
-    using avoidance_unit_boundary_t = dbuct_avoidance_unit_boundary<
-        nearest_decision_t, frame_depth_tracker>;
     using unifier_factory_t = unifier_factory<globalizer, bind_map_t>;
+
+    using dbuct_tree_walker_t      = dbuct_tree_walker;
+    using dbuct_node_t             = size_t;
+    using dbuct_choices_t          = std::vector<mcts_choice>;
+    using dbuct_visits_table_t     = monte_carlo::visits_table<dbuct_node_t, std::unordered_map>;
+    using dbuct_value_table_t      = monte_carlo::value_table<dbuct_node_t, double, std::unordered_map>;
+    using dbuct_dispatches_table_t = monte_carlo::dispatches_table<dbuct_node_t, std::unordered_map>;
+    using dbuct_rollout_t          = monte_carlo::random_rollout<mcts_choice, std::mt19937,
+                                              dbuct_choices_t, dbuct_choices_t>;
+    using dbuct_batch_t            = monte_carlo::linear_batch_increment;
+    using dbuct_t                  = monte_carlo::dbuct<
+                                         dbuct_node_t, mcts_choice, double,
+                                         dbuct_visits_table_t, dbuct_value_table_t,
+                                         dbuct_visits_table_t, dbuct_value_table_t,
+                                         dbuct_dispatches_table_t, dbuct_dispatches_table_t,
+                                         dbuct_batch_t, dbuct_tree_walker_t,
+                                         dbuct_choices_t, dbuct_choices_t, dbuct_rollout_t>;
+
+    using avoidance_unit_boundary_t = dbuct_avoidance_unit_boundary<
+        nearest_decision_t, dbuct_t>;
     using cdcl_t  = dbuct_cdcl_elimination_generator<
                     chosen_goal_candidates_t, avoidance_unit_boundary_t, decision_memory_t,
                     avoidance_unit_boundary_t, avoidance_unit_boundary_t>;
@@ -99,7 +116,7 @@ struct dbuct_ridge_manifest {
                     unifier<globalizer, bind_map_t>, unifier_factory_t, lineage_pool,
                     expr_pool, goal_candidate_rules_t>;
     using hub_t   = dbuct_frame_hub<
-                    frame_depth_tracker, frame_depth_tracker, frame_depth_tracker,
+                    decision_memory_t,
                     goal_exprs_t, goal_exprs_t,
                     goal_candidate_rules_t, goal_candidate_rules_t,
                     chosen_goal_candidates_t, chosen_goal_candidates_t,
@@ -151,24 +168,10 @@ struct dbuct_ridge_manifest {
                                           goal_candidates_deactivator_t, chosen_goal_candidates_t>;
     using ridge_reward_t                = ridge_reward<decision_memory_t>;
 
-    using dbuct_tree_walker_t      = dbuct_tree_walker;
-    using dbuct_node_t             = size_t;
-    using dbuct_choices_t          = std::vector<mcts_choice>;
-    using dbuct_visits_table_t     = monte_carlo::visits_table<dbuct_node_t, std::unordered_map>;
-    using dbuct_value_table_t      = monte_carlo::value_table<dbuct_node_t, double, std::unordered_map>;
-    using dbuct_dispatches_table_t = monte_carlo::dispatches_table<dbuct_node_t, std::unordered_map>;
-    using dbuct_rollout_t          = monte_carlo::random_rollout<mcts_choice, std::mt19937,
-                                              dbuct_choices_t, dbuct_choices_t>;
-    using dbuct_batch_t            = monte_carlo::linear_batch_increment;
-    using dbuct_t                  = monte_carlo::dbuct<
-                                         dbuct_node_t, mcts_choice, double,
-                                         dbuct_visits_table_t, dbuct_value_table_t,
-                                         dbuct_visits_table_t, dbuct_value_table_t,
-                                         dbuct_dispatches_table_t, dbuct_dispatches_table_t,
-                                         dbuct_batch_t, dbuct_tree_walker_t,
-                                         dbuct_choices_t, dbuct_choices_t, dbuct_rollout_t>;
     using dbuct_sim_t              = dbuct_sim<hub_t, hub_t, hub_t,
-                                          avoidance_unit_boundary_t, dbuct_t, dbuct_t, dbuct_t>;
+                                          decision_memory_t,
+                                          avoidance_unit_boundary_t, avoidance_unit_boundary_t,
+                                          dbuct_t, dbuct_t, dbuct_t, dbuct_t, dbuct_t>;
     using mcts_decision_generator_t     = mcts_decision_generator<lineage_pool,
                                           srt_active_goals_t, srt_active_goals_t, srt_active_goals_t,
                                           dbuct_sim_t, goal_candidate_rules_t>;
@@ -191,7 +194,6 @@ struct dbuct_ridge_manifest {
         size_t grant_increment_interval);
 
     globalizer                    globalizer_;
-    frame_depth_tracker           frame_depth_;
     bind_map_t                    bind_map_;
     bind_map_factory_t            bind_map_factory_;
     unifier_factory_t             unifier_factory_;
@@ -210,6 +212,14 @@ struct dbuct_ridge_manifest {
     frame_bump_allocator_t        frame_allocator_;
     elimination_backlog_t         elimination_backlog_;
     nearest_decision_t            nearest_decision_;
+    std::mt19937                  rng_;
+    dbuct_tree_walker_t           dbuct_tree_walker_;
+    dbuct_visits_table_t          dbuct_visits_table_;
+    dbuct_value_table_t           dbuct_value_table_;
+    dbuct_dispatches_table_t      dbuct_dispatches_table_;
+    dbuct_batch_t                 dbuct_batch_;
+    dbuct_rollout_t               dbuct_rollout_;
+    dbuct_t                       dbuct_;
     avoidance_unit_boundary_t     avoidance_unit_boundary_;
     cdcl_t                        cdcl_;
     mhu_t                         mhu_;
@@ -236,14 +246,6 @@ struct dbuct_ridge_manifest {
     srt_initial_goals_activator_t srt_initial_goals_activator_;
     resolver_t                    resolver_;
     ridge_reward_t                ridge_reward_;
-    std::mt19937                  rng_;
-    dbuct_tree_walker_t           dbuct_tree_walker_;
-    dbuct_visits_table_t          dbuct_visits_table_;
-    dbuct_value_table_t           dbuct_value_table_;
-    dbuct_dispatches_table_t      dbuct_dispatches_table_;
-    dbuct_batch_t                 dbuct_batch_;
-    dbuct_rollout_t               dbuct_rollout_;
-    dbuct_t                       dbuct_;
     dbuct_sim_t                   dbuct_sim_;
     mcts_decision_generator_t     mcts_decision_generator_;
     dbuct_frontier_ready          frontier_ready_;

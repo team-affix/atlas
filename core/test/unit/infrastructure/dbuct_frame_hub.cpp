@@ -16,15 +16,19 @@
 #include "infrastructure/dbuct_srt_active_goals.hpp"
 #include "infrastructure/dbuct_unit_goals.hpp"
 #include "infrastructure/coroutine.hpp"
-#include "infrastructure/frame_depth_tracker.hpp"
 #include "infrastructure/globalizer.hpp"
 #include "infrastructure/ra_rule_id_set_factory.hpp"
 #include "value_objects/lineage.hpp"
 
 namespace {
 
+struct fake_choice_depth {
+    size_t depth_value;
+    size_t depth() const { return depth_value; }
+};
+
 using bind_map_t = dbuct_bind_map<globalizer>;
-using boundary_t = dbuct_avoidance_unit_boundary<dbuct_nearest_decision, frame_depth_tracker>;
+using boundary_t = dbuct_avoidance_unit_boundary<dbuct_nearest_decision, fake_choice_depth>;
 
 struct fake_mhu {
     int pushes = 0;
@@ -49,7 +53,7 @@ void drain(coroutine<const resolution_lineage*, void> sm) {
 }
 
 using hub_t = dbuct_frame_hub<
-    frame_depth_tracker, frame_depth_tracker, frame_depth_tracker,
+    dbuct_decision_memory,
     dbuct_goal_exprs, dbuct_goal_exprs,
     dbuct_goal_candidate_rules, dbuct_goal_candidate_rules,
     dbuct_chosen_goal_candidates, dbuct_chosen_goal_candidates,
@@ -67,7 +71,7 @@ using hub_t = dbuct_frame_hub<
     fake_cdcl, fake_cdcl>;
 
 struct hub_fixture {
-    frame_depth_tracker depth_tracker;
+    fake_choice_depth choice_depth{1};
     globalizer g;
     bind_map_t bind_map{g};
     ra_rule_id_set_factory rule_factory;
@@ -81,14 +85,14 @@ struct hub_fixture {
     dbuct_frame_bump_allocator frame_bump_allocator{0};
     dbuct_nearest_decision nearest_decision;
     dbuct_elimination_backlog elimination_backlog;
-    boundary_t avoidance_unit_boundary{nearest_decision, depth_tracker};
+    boundary_t avoidance_unit_boundary{nearest_decision, choice_depth};
     dbuct_srt_active_goals srt_active_goals;
     fake_mhu mhu;
     fake_cdcl cdcl;
     hub_t frame_hub;
 
     hub_fixture()
-        : frame_hub(depth_tracker, depth_tracker, depth_tracker,
+        : frame_hub(decision_memory,
                     goal_exprs, goal_exprs,
                     goal_candidate_rules, goal_candidate_rules,
                     chosen_goal_candidates, chosen_goal_candidates,
@@ -108,20 +112,17 @@ struct hub_fixture {
 
 }  // namespace
 
-TEST(DbuctFrameHubTest, PushPopTracksDepthAndMhuHooks) {
+TEST(DbuctFrameHubTest, PushPopTracksMhuHooks) {
     hub_fixture f;
-    // Every backtrackable starts constructor-ready with one root frame.
-    EXPECT_EQ(f.depth_tracker.depth(), 1u);
+    EXPECT_EQ(f.frame_hub.depth(), 1u);
 
-    f.frame_hub.push_frame();
-    EXPECT_EQ(f.depth_tracker.depth(), 2u);
+    f.frame_hub.push_decision_frame();
     EXPECT_EQ(f.mhu.pushes, 1);
     EXPECT_EQ(f.mhu.pops, 0);
     EXPECT_EQ(f.cdcl.pushes, 1);
     EXPECT_EQ(f.cdcl.pops, 0);
 
-    drain(f.frame_hub.pop_frame());
-    EXPECT_EQ(f.depth_tracker.depth(), 1u);
+    drain(f.frame_hub.pop_decision_frame());
     EXPECT_EQ(f.mhu.pops, 1);
     EXPECT_EQ(f.cdcl.pops, 1);
 }
@@ -131,8 +132,18 @@ TEST(DbuctFrameHubTest, PopRevertsJournaledGoalExpr) {
     goal_lineage gl{nullptr, 0};
     framed_expr fe{{nullptr}, 2};
 
-    f.frame_hub.push_frame();
+    f.frame_hub.push_decision_frame();
     f.goal_exprs.set(&gl, fe);
-    drain(f.frame_hub.pop_frame());
+    drain(f.frame_hub.pop_decision_frame());
     EXPECT_THROW(f.goal_exprs.get(&gl), std::out_of_range);
+}
+
+TEST(DbuctFrameHubTest, DepthTracksDecisionMemoryCount) {
+    hub_fixture f;
+    resolution_lineage gp{nullptr, 1};
+    goal_lineage g{&gp, 0};
+    resolution_lineage rl{&g, 0};
+
+    f.decision_memory.record_decision(&rl);
+    EXPECT_EQ(f.frame_hub.depth(), 2u);
 }

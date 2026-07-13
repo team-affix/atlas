@@ -1,13 +1,13 @@
 // Integration slice: a real dbuct_cdcl_elimination_generator wired to a real
 // dbuct_avoidance_unit_boundary. In production the boundary object is exactly what
-// supplies three of the generator's five collaborators -- IGetUnitBoundary,
+// supplies three of the generator's five collaborators -- IGetPenultimateDecisionChoiceDepth,
 // IGetUltimateDecision, IGetPenultimateDecision -- so this proves the two cooperate
 // end to end: real decision bookkeeping (ultimate / penultimate / the one-decision
-// lagging unit boundary) flows into learn(), and the resulting raised unit
+// lagging penultimate choice depth) flows into learn(), and the resulting raised unit
 // avoidance is emitted-vs-armed at pop according to the boundary the REAL component
 // computed.
 //
-// Everything outside the slice is mocked: the trail and frame-count the boundary
+// Everything outside the slice is mocked: the choice depth the boundary
 // depends on, the nearest-decision oracle that drives its rotate/overwrite branch,
 // and the generator's chosen-candidate and derive-lemma collaborators. Assertions
 // are made only against the eliminations yielded by constrain()/pop_frame().
@@ -18,7 +18,6 @@
 #include <gmock/gmock.h>
 #include "infrastructure/dbuct_cdcl_elimination_generator.hpp"
 #include "infrastructure/dbuct_avoidance_unit_boundary.hpp"
-#include "infrastructure/frame_depth_tracker.hpp"
 #include "infrastructure/coroutine.hpp"
 
 using ::testing::_;
@@ -26,9 +25,13 @@ using ::testing::ElementsAre;
 using ::testing::IsEmpty;
 using ::testing::NiceMock;
 using ::testing::Return;
-using ::testing::ReturnPointee;
 
 namespace {
+
+struct fake_choice_depth {
+    size_t depth_value;
+    size_t depth() const { return depth_value; }
+};
 
 struct MockGetNearestDecision {
     MOCK_METHOD(const resolution_lineage*, get_nearest_decision, (const resolution_lineage*), (const));
@@ -59,7 +62,7 @@ lemma make_lemma(std::initializer_list<const resolution_lineage*> rs) {
 }
 
 using boundary_t = dbuct_avoidance_unit_boundary<NiceMock<MockGetNearestDecision>,
-                                                 frame_depth_tracker>;
+                                                 fake_choice_depth>;
 using sut_t = dbuct_cdcl_elimination_generator<NiceMock<MockTryGetChosenGoalCandidate>,
                                                boundary_t,
                                                NiceMock<MockDeriveDecisionLemma>,
@@ -67,7 +70,7 @@ using sut_t = dbuct_cdcl_elimination_generator<NiceMock<MockTryGetChosenGoalCand
                                                boundary_t>;
 
 struct DbuctCdclEliminationGeneratorIntegrationTest : public ::testing::Test {
-    frame_depth_tracker fc;
+    fake_choice_depth fc{1};
     NiceMock<MockGetNearestDecision> nd;
     NiceMock<MockTryGetChosenGoalCandidate> tgcc;
     NiceMock<MockDeriveDecisionLemma> dl;
@@ -75,8 +78,6 @@ struct DbuctCdclEliminationGeneratorIntegrationTest : public ::testing::Test {
     boundary_t aub{nd, fc};
     sut_t sut{tgcc, aub, dl, aub, aub};
 
-    // Three decisions, each on its own chain with a real grandparent resolution so
-    // log_decision's rl->parent->parent lookup is well formed.
     resolution_lineage gpr1{nullptr, 10};
     goal_lineage gg1{&gpr1, 0};
     resolution_lineage D1{&gg1, 0};
@@ -89,56 +90,42 @@ struct DbuctCdclEliminationGeneratorIntegrationTest : public ::testing::Test {
     goal_lineage gg3{&gpr3, 0};
     resolution_lineage D3{&gg3, 0};
 
-    // Distinct from every ultimate, so the real nearest-decision map never matches
-    // the current ultimate and each logged decision takes the ROTATE branch -- the
-    // path that advances the lagging unit boundary.
     resolution_lineage sentinel{nullptr, 99};
 
-    // Every backtrackable is constructor-ready with one root frame (fc.depth()==1,
-    // aub and sut each hold a root frame), so no bootstrap push is needed here.
     void SetUp() override {
         ON_CALL(nd, get_nearest_decision(_)).WillByDefault(Return(&sentinel));
         ON_CALL(tgcc, try_get(_)).WillByDefault(Return(std::optional<rule_id>{}));
     }
 };
 
-// Two rotated decisions: the real boundary lags one decision behind, publishing
-// D1's frame index (1) as the unit boundary. A 2-member conflict learned at depth 2
-// is still unit when we pop back to depth 1, so pop emits the ultimate (D2).
 TEST_F(DbuctCdclEliminationGeneratorIntegrationTest, RotatedBoundaryKeepsConflictUnitOnPop) {
+    fc.depth_value = 1;
     aub.log_decision(&D1);
     sut.push_frame();
-    fc.push();
+    fc.depth_value = 2;
     aub.log_decision(&D2);
 
     EXPECT_CALL(dl, derive_decision_lemma()).WillOnce(Return(make_lemma({&D2, &D1})));
-    sut.learn();  // members = [ultimate=D2, penultimate=D1]
+    sut.learn();
 
-    // depth-after-pop 1, boundary 1 -> 1 < 1 is false -> still unit -> emit D2.
     EXPECT_THAT(collect_elims(sut.pop_frame()), ElementsAre(&D2));
 }
 
-// Full end-to-end: three rotated decisions push the lagging boundary to 2. A
-// conflict learned at depth 3 stays unit (emits) at depth 2, then -- once we pop
-// ABOVE the boundary to depth 1 -- is armed as a watched clause instead. Committing
-// the ultimate then forces the other watcher through normal propagation.
 TEST_F(DbuctCdclEliminationGeneratorIntegrationTest, DeepBoundaryEmitsThenArmsThenPropagates) {
+    fc.depth_value = 1;
     aub.log_decision(&D1);
     sut.push_frame();
-    fc.push();
+    fc.depth_value = 2;
     aub.log_decision(&D2);
     sut.push_frame();
-    fc.push();
+    fc.depth_value = 3;
     aub.log_decision(&D3);
 
     EXPECT_CALL(dl, derive_decision_lemma()).WillOnce(Return(make_lemma({&D3, &D2})));
-    sut.learn();  // members = [ultimate=D3, penultimate=D2], boundary 2
+    sut.learn();
 
-    // depth-after-pop 2, boundary 2 -> still unit -> emit D3.
     EXPECT_THAT(collect_elims(sut.pop_frame()), ElementsAre(&D3));
-    // depth-after-pop 1, boundary 2 -> 1 < 2 -> no longer unit -> armed, no emit.
     EXPECT_THAT(collect_elims(sut.pop_frame()), IsEmpty());
-    // Armed: committing the ultimate (D3) forces the penultimate (D2).
     EXPECT_THAT(collect_elims(sut.constrain(&D3)), ElementsAre(&D2));
 }
 

@@ -22,14 +22,14 @@
 // NOTES: learn() can be void since learn() is always expected to be called immediately before pop(),
 // since learn() is only ever invoked at a terminal state where there is nothing left to do.
 template<typename ITryGetChosenGoalCandidate,
-    typename IGetUnitBoundary, 
+    typename IGetPenultimateDecisionChoiceDepth,
     typename IDeriveDecisionLemma,
     typename IGetUltimateDecision,
     typename IGetPenultimateDecision>
 struct dbuct_cdcl_elimination_generator {
     dbuct_cdcl_elimination_generator(
         ITryGetChosenGoalCandidate&,
-        IGetUnitBoundary&,
+        IGetPenultimateDecisionChoiceDepth&,
         IDeriveDecisionLemma&,
         IGetUltimateDecision&,
         IGetPenultimateDecision&);
@@ -66,7 +66,7 @@ private:
     std::stack<frame> frame_stack_;
     
     ITryGetChosenGoalCandidate& try_get_chosen_goal_candidate_;
-    IGetUnitBoundary& get_unit_boundary_;
+    IGetPenultimateDecisionChoiceDepth& get_penultimate_decision_choice_depth_;
     IDeriveDecisionLemma& derive_decision_lemma_;
     IGetUltimateDecision& get_ultimate_decision_;
     IGetPenultimateDecision& get_penultimate_decision_;
@@ -76,7 +76,7 @@ template<typename ITGCC, typename IGUB, typename IDL, typename IGUD, typename IG
 dbuct_cdcl_elimination_generator<ITGCC, IGUB, IDL, IGUD, IGPD>::dbuct_cdcl_elimination_generator(
     ITGCC& tgcc, IGUB& gub, IDL& dl, IGUD& gud, IGPD& gpd)
     : next_avoidance_id_(0), frame_stack_(std::deque<frame>{frame{}}),
-      try_get_chosen_goal_candidate_(tgcc), get_unit_boundary_(gub),
+      try_get_chosen_goal_candidate_(tgcc), get_penultimate_decision_choice_depth_(gub),
       derive_decision_lemma_(dl), get_ultimate_decision_(gud),
       get_penultimate_decision_(gpd) {}
 
@@ -94,7 +94,7 @@ dbuct_cdcl_elimination_generator<ITGCC, IGUB, IDL, IGUD, IGPD>::learn() {
     const avoidance_id id = next_avoidance_id_++;
 
     // raise the unit avoidance
-    size_t unit_boundary = get_unit_boundary_.get_unit_boundary();
+    size_t unit_boundary = get_penultimate_decision_choice_depth_.get_penultimate_decision_choice_depth();
     frame_stack_.top().raised_unit_avoidance_lump.emplace_back(raised_unit_avoidance{id, unit_boundary});
 
     // if size==1, store a degenerate single-member avoidance so pop_frame can find

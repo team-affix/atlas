@@ -1,21 +1,19 @@
 // dbuct_avoidance_unit_boundary tracks the two most recent decisions (ultimate,
-// penultimate) and a "unit boundary" frame depth that always lags exactly one
+// penultimate) and a penultimate choice depth that always lags exactly one
 // decision behind. On each log_decision it consults the nearest-decision oracle:
 // if the new decision extends the current ultimate's chain it overwrites the
 // ultimate in place; otherwise it rotates, promoting the old ultimate to
-// penultimate and publishing the old ultimate's frame depth as the new boundary.
+// penultimate and publishing the old ultimate's choice depth as the new boundary.
 //
 // SUT: dbuct_avoidance_unit_boundary (real). The nearest-decision infrastructure
-// and frame depth are mocked so the rotate-vs-overwrite branch is deterministic.
+// and choice depth are mocked so the rotate-vs-overwrite branch is deterministic.
 
 #include <gtest/gtest.h>
 #include <gmock/gmock.h>
 #include "infrastructure/dbuct_avoidance_unit_boundary.hpp"
-#include "infrastructure/frame_depth_tracker.hpp"
 
 using ::testing::NiceMock;
 using ::testing::Return;
-using ::testing::ReturnPointee;
 
 namespace {
 
@@ -23,12 +21,16 @@ struct MockGetNearestDecision {
     MOCK_METHOD(const resolution_lineage*, get_nearest_decision, (const resolution_lineage*), (const));
 };
 
+struct MockGetChoiceDepth {
+    MOCK_METHOD(size_t, depth, (), (const));
+};
+
 struct DbuctAvoidanceUnitBoundaryTest : public ::testing::Test {
     NiceMock<MockGetNearestDecision> nd;
-    frame_depth_tracker fc;
+    NiceMock<MockGetChoiceDepth> choice_depth;
 
-    dbuct_avoidance_unit_boundary<NiceMock<MockGetNearestDecision>, frame_depth_tracker>
-        sut{nd, fc};
+    dbuct_avoidance_unit_boundary<NiceMock<MockGetNearestDecision>, MockGetChoiceDepth>
+        sut{nd, choice_depth};
 
     resolution_lineage gp1{nullptr, 1};
     goal_lineage g1{&gp1, 0};
@@ -44,70 +46,68 @@ struct DbuctAvoidanceUnitBoundaryTest : public ::testing::Test {
         sut.push_frame();
         ON_CALL(nd, get_nearest_decision(&gp1)).WillByDefault(Return(&sentinel));
         ON_CALL(nd, get_nearest_decision(&gp2)).WillByDefault(Return(&sentinel));
+        ON_CALL(choice_depth, depth()).WillByDefault(Return(1u));
     }
 };
 
 TEST_F(DbuctAvoidanceUnitBoundaryTest, InitiallyBoundaryZeroAndDecisionsNull) {
-    EXPECT_EQ(sut.get_unit_boundary(), 0u);
+    EXPECT_EQ(sut.get_penultimate_decision_choice_depth(), 0u);
     EXPECT_EQ(sut.get_ultimate_decision(), nullptr);
     EXPECT_EQ(sut.get_penultimate_decision(), nullptr);
 }
 
 TEST_F(DbuctAvoidanceUnitBoundaryTest, FirstDecisionLeavesBoundaryAtZero) {
-    fc.push();
+    ON_CALL(choice_depth, depth()).WillByDefault(Return(2u));
     sut.log_decision(&rl1);
 
-    EXPECT_EQ(sut.get_unit_boundary(), 0u);
+    EXPECT_EQ(sut.get_penultimate_decision_choice_depth(), 0u);
     EXPECT_EQ(sut.get_ultimate_decision(), &rl1);
 }
 
-TEST_F(DbuctAvoidanceUnitBoundaryTest, SecondDecisionSetsBoundaryToPriorDecisionFrame) {
+TEST_F(DbuctAvoidanceUnitBoundaryTest, SecondDecisionSetsBoundaryToPriorDecisionChoiceDepth) {
     constexpr size_t d1 = 3;
     constexpr size_t d2 = 7;
 
-    fc.push();
-    while (fc.depth() < d1) fc.push();
+    ON_CALL(choice_depth, depth()).WillByDefault(Return(d1));
     sut.log_decision(&rl1);
 
-    while (fc.depth() < d2) fc.push();
+    ON_CALL(choice_depth, depth()).WillByDefault(Return(d2));
     sut.log_decision(&rl2);
 
-    EXPECT_EQ(sut.get_unit_boundary(), d1);
-    EXPECT_NE(sut.get_unit_boundary(), d2);
+    EXPECT_EQ(sut.get_penultimate_decision_choice_depth(), d1);
+    EXPECT_NE(sut.get_penultimate_decision_choice_depth(), d2);
     EXPECT_EQ(sut.get_penultimate_decision(), &rl1);
     EXPECT_EQ(sut.get_ultimate_decision(), &rl2);
 }
 
 TEST_F(DbuctAvoidanceUnitBoundaryTest, OverwriteWhenNewDecisionExtendsUltimateKeepsBoundary) {
-    fc.push();
+    ON_CALL(choice_depth, depth()).WillByDefault(Return(2u));
     sut.log_decision(&rl1);
 
     ON_CALL(nd, get_nearest_decision(&gp2)).WillByDefault(Return(&rl1));
-
-    while (fc.depth() < 9) fc.push();
+    ON_CALL(choice_depth, depth()).WillByDefault(Return(9u));
     sut.log_decision(&rl2);
 
-    EXPECT_EQ(sut.get_unit_boundary(), 0u);
+    EXPECT_EQ(sut.get_penultimate_decision_choice_depth(), 0u);
     EXPECT_EQ(sut.get_penultimate_decision(), nullptr);
     EXPECT_EQ(sut.get_ultimate_decision(), &rl2);
 }
 
-TEST_F(DbuctAvoidanceUnitBoundaryTest, UltimateDecisionDepthTracksLoggedFrame) {
+TEST_F(DbuctAvoidanceUnitBoundaryTest, UltimateDecisionChoiceDepthTracksLoggedChoiceDepth) {
     constexpr size_t d1 = 3;
     constexpr size_t d2 = 7;
 
-    fc.push();
-    while (fc.depth() < d1) fc.push();
+    ON_CALL(choice_depth, depth()).WillByDefault(Return(d1));
     sut.log_decision(&rl1);
-    EXPECT_EQ(sut.get_ultimate_decision_depth(), d1);
+    EXPECT_EQ(sut.get_ultimate_decision_choice_depth(), d1);
 
-    while (fc.depth() < d2) fc.push();
+    ON_CALL(choice_depth, depth()).WillByDefault(Return(d2));
     sut.log_decision(&rl2);
-    EXPECT_EQ(sut.get_ultimate_decision_depth(), d2);
+    EXPECT_EQ(sut.get_ultimate_decision_choice_depth(), d2);
 }
 
 TEST_F(DbuctAvoidanceUnitBoundaryTest, PopRevertsLoggedDecision) {
-    fc.push();
+    ON_CALL(choice_depth, depth()).WillByDefault(Return(2u));
     sut.log_decision(&rl1);
     ASSERT_EQ(sut.get_ultimate_decision(), &rl1);
     sut.pop_frame();
