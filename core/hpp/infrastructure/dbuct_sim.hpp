@@ -79,9 +79,7 @@ template<typename IPDF, typename IPopDF, typename IGDD, typename IGDC,
          typename IGPDCD, typename IGUDCD, typename IGCD, typename IBSCF,
          typename IIR, typename IC, typename IT>
 bool dbuct_sim<IPDF, IPopDF, IGDD, IGDC, IGPDCD, IGUDCD, IGCD, IBSCF, IIR, IC, IT>::at_root() const {
-    (void)get_decision_depth_;
-    (void)get_decision_count_;
-    return false;
+    return get_decision_depth_.depth() == 0;
 }
 
 template<typename IPDF, typename IPopDF, typename IGDD, typename IGDC,
@@ -104,12 +102,9 @@ template<typename IPDF, typename IPopDF, typename IGDD, typename IGDC,
 std::vector<const resolution_lineage*> dbuct_sim<IPDF, IPopDF, IGDD, IGDC, IGPDCD, IGUDCD, IGCD, IBSCF, IIR, IC, IT>::terminate(
     double reward) {
 
-    // 0. get mcts reward
-    double mcts_reward = terminate_.terminate(reward);
-
     // 1. terminate dbuct
     terminate_.terminate(reward);
-    
+
     // 2. navigate back to nearest decision frame that is
     //    at most as deep as the penultimate decision. pop choice frames
 
