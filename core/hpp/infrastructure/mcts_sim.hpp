@@ -17,7 +17,7 @@ struct mcts_sim {
 
     void set_up();
     void tear_down();
-    mcts_choice choose(const std::vector<mcts_choice>&);
+    mcts_choice choose(const std::vector<mcts_choice>&, bool is_rule_choice);
 
 private:
     using set_t = std::set<const resolution_lineage*>;
@@ -130,7 +130,8 @@ void mcts_sim<ISUS, ITDS, ICMR, IGVD, IMRL>::tear_down() {
 
 template<typename ISUS, typename ITDS, typename ICMR, typename IGVD, typename IMRL>
 mcts_choice mcts_sim<ISUS, ITDS, ICMR, IGVD, IMRL>::choose(
-        const std::vector<mcts_choice>& choices) {
+        const std::vector<mcts_choice>& choices, bool is_rule_choice) {
+    (void)is_rule_choice;
     return mc_sim_->choose(choices, choices);
 }
 

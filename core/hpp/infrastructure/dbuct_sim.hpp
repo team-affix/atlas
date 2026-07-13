@@ -8,7 +8,7 @@
 
 template<typename IPushDecisionFrame,
          typename IPopDecisionFrame,
-         typename IGetDecisionDepth,
+         typename IGetDecisionFrameDepth,
          typename IGetDecisionCount,
          typename IGetPenultimateDecisionChoiceDepth,
          typename IGetUltimateDecisionChoiceDepth,
@@ -20,7 +20,7 @@ template<typename IPushDecisionFrame,
 struct dbuct_sim {
     dbuct_sim(IPushDecisionFrame&,
               IPopDecisionFrame&,
-              IGetDecisionDepth&,
+              IGetDecisionFrameDepth&,
               IGetDecisionCount&,
               IGetPenultimateDecisionChoiceDepth&,
               IGetUltimateDecisionChoiceDepth&,
@@ -37,7 +37,7 @@ struct dbuct_sim {
 private:
     IPushDecisionFrame&                   push_decision_frame_;
     IPopDecisionFrame&                    pop_decision_frame_;
-    IGetDecisionDepth&                    get_decision_depth_;
+    IGetDecisionFrameDepth&                    get_decision_frame_depth_;
     IGetDecisionCount&                    get_decision_count_;
     IGetPenultimateDecisionChoiceDepth&   get_penultimate_decision_choice_depth_;
     IGetUltimateDecisionChoiceDepth&      get_ultimate_decision_choice_depth_;
@@ -54,7 +54,7 @@ template<typename IPDF, typename IPopDF, typename IGDD, typename IGDC,
 dbuct_sim<IPDF, IPopDF, IGDD, IGDC, IGPDCD, IGUDCD, IGCD, IBSCF, IIR, IC, IT>::dbuct_sim(
     IPDF& push_decision_frame,
     IPopDF& pop_decision_frame,
-    IGDD& get_decision_depth,
+    IGDD& get_decision_frame_depth,
     IGDC& get_decision_count,
     IGPDCD& get_penultimate_decision_choice_depth,
     IGUDCD& get_ultimate_decision_choice_depth,
@@ -65,7 +65,7 @@ dbuct_sim<IPDF, IPopDF, IGDD, IGDC, IGPDCD, IGUDCD, IGCD, IBSCF, IIR, IC, IT>::d
     IT& terminate)
     : push_decision_frame_(push_decision_frame)
     , pop_decision_frame_(pop_decision_frame)
-    , get_decision_depth_(get_decision_depth)
+    , get_decision_frame_depth_(get_decision_frame_depth)
     , get_decision_count_(get_decision_count)
     , get_penultimate_decision_choice_depth_(get_penultimate_decision_choice_depth)
     , get_ultimate_decision_choice_depth_(get_ultimate_decision_choice_depth)
@@ -79,7 +79,7 @@ template<typename IPDF, typename IPopDF, typename IGDD, typename IGDC,
          typename IGPDCD, typename IGUDCD, typename IGCD, typename IBSCF,
          typename IIR, typename IC, typename IT>
 bool dbuct_sim<IPDF, IPopDF, IGDD, IGDC, IGPDCD, IGUDCD, IGCD, IBSCF, IIR, IC, IT>::at_root() const {
-    return get_decision_depth_.depth() == 0;
+    return get_decision_count_.get_decision_count() == 0;
 }
 
 template<typename IPDF, typename IPopDF, typename IGDD, typename IGDC,

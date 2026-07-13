@@ -186,7 +186,7 @@ TEST_F(MctsSimTest, ChooseAfterSetUpReturnsOneOfSuppliedGoalChoices) {
     EXPECT_CALL(push_frame, push_frame()).Times(1);
     sim.set_up();
     std::vector<mcts_choice> choices{mcts_choice{&gl0}, mcts_choice{&gl1}};
-    mcts_choice picked = sim.choose(choices);
+    mcts_choice picked = sim.choose(choices, false);
     const auto* picked_gl = std::get_if<const goal_lineage*>(&picked);
     ASSERT_NE(picked_gl, nullptr);
     EXPECT_TRUE(*picked_gl == &gl0 || *picked_gl == &gl1);
@@ -199,7 +199,7 @@ TEST_F(MctsSimTest, ChooseAfterSetUpReturnsOneOfSuppliedRuleChoices) {
     EXPECT_CALL(push_frame, push_frame()).Times(1);
     sim.set_up();
     std::vector<mcts_choice> choices{mcts_choice{rule_id{0}}, mcts_choice{rule_id{1}}};
-    mcts_choice picked = sim.choose(choices);
+    mcts_choice picked = sim.choose(choices, false);
     const auto* picked_rule = std::get_if<rule_id>(&picked);
     ASSERT_NE(picked_rule, nullptr);
     EXPECT_TRUE(*picked_rule == 0 || *picked_rule == 1);
@@ -213,7 +213,7 @@ TEST_F(MctsSimTest, MultipleRolloutChoosesStayWithinChoiceSet) {
     sim.set_up();
     std::vector<mcts_choice> choices{mcts_choice{&gl0}, mcts_choice{&gl1}};
     for (int i = 0; i < 10; ++i) {
-        mcts_choice picked = sim.choose(choices);
+        mcts_choice picked = sim.choose(choices, false);
         const auto* picked_gl = std::get_if<const goal_lineage*>(&picked);
         ASSERT_NE(picked_gl, nullptr);
         EXPECT_TRUE(*picked_gl == &gl0 || *picked_gl == &gl1);
@@ -229,7 +229,7 @@ TEST_F(MctsSimTest, FullLifecycleSetUpChooseTearDownTwice) {
         testing::InSequence seq;
         EXPECT_CALL(push_frame, push_frame()).Times(1);
         sim.set_up();
-        mcts_choice picked = sim.choose(choices);
+        mcts_choice picked = sim.choose(choices, false);
         EXPECT_TRUE(std::holds_alternative<rule_id>(picked));
         EXPECT_CALL(compute_mcts_reward, compute_mcts_reward()).WillOnce(Return(-static_cast<double>(cycle)));
         EXPECT_CALL(pop_frame, pop_frame()).Times(1);
