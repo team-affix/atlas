@@ -24,6 +24,16 @@ alwaysApply: true
 - No optional arguments and no optional template arguments.
 - Remove `explicit` on constructors; we don't keep it (it's usually unnecessary).
 
+## Value objects
+
+A type is a **value object** when it is meant to be regularly constructed, copied
+and passed around by value, and destroyed, and it exists to carry data rather than
+behavior. Value objects are the exception to the member rules above: their data
+members are `public`, and they define `operator<=>`. They may only have member
+functions that assist their own construction — no injected collaborators, no
+lifecycle/orchestration behavior. Behavior types (private state, injected
+collaborators, methods that do work) are NOT value objects.
+
 ```cpp
 // value object: public data is allowed
 struct goal_lineage {
