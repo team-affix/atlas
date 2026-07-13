@@ -2312,16 +2312,18 @@ TEST_F(BasicManifestIntegrationTest, EnumeratesAddPairsSummingLessThanTen) {
     }
     ASSERT_EQ(expected.size(), 55u);
 
+    static constexpr uint32_t kGoalVarCount = 3;
+    static constexpr uint32_t idx_x = 0;
+    static constexpr uint32_t idx_y = 1;
+    static constexpr uint32_t idx_s = 2;
+
     initial_goal_exprs probe_goals;
-    basic_manifest probe_manifest{database, probe_goals, kInitialFrameOffset, kPeanoBudget, kSeed};
+    basic_manifest probe_manifest{database, probe_goals, kGoalVarCount, kPeanoBudget, kSeed};
     normalizer<globalizer, expr_pool, expr_pool, bind_map<globalizer>> probe_norm{probe_manifest.globalizer_, probe_manifest.expr_pool_, probe_manifest.expr_pool_, probe_manifest.bind_map_};
 
-    const uint32_t idx_x_probe = probe_manifest.frame_allocator_.bump(1);
-    const uint32_t idx_y_probe = probe_manifest.frame_allocator_.bump(1);
-    const uint32_t idx_s_probe = probe_manifest.frame_allocator_.bump(1);
-    const expr* var_x_probe = saved_expr_pool_.make_var(idx_x_probe);
-    const expr* var_y_probe = saved_expr_pool_.make_var(idx_y_probe);
-    const expr* var_s_probe = saved_expr_pool_.make_var(idx_s_probe);
+    const expr* var_x_probe = saved_expr_pool_.make_var(idx_x);
+    const expr* var_y_probe = saved_expr_pool_.make_var(idx_y);
+    const expr* var_s_probe = saved_expr_pool_.make_var(idx_s);
 
     const expr* ten_probe = saved_expr_pool_.make_functor(functors.id("zero"), {});
     for (int i = 0; i < 10; ++i)
@@ -2338,19 +2340,16 @@ TEST_F(BasicManifestIntegrationTest, EnumeratesAddPairsSummingLessThanTen) {
         [&]() -> solution {
             return {
                 saved_expr_pool_.import(
-                    probe_norm.normalize({saved_expr_pool_.make_var(idx_x_probe), 0})),
+                    probe_norm.normalize({saved_expr_pool_.make_var(idx_x), 0})),
                 saved_expr_pool_.import(
-                    probe_norm.normalize({saved_expr_pool_.make_var(idx_y_probe), 0})),
+                    probe_norm.normalize({saved_expr_pool_.make_var(idx_y), 0})),
             };
         });
 
     initial_goal_exprs solve_goals;
-    basic_manifest manifest{database, solve_goals, kInitialFrameOffset, kPeanoBudget, kSeed};
+    basic_manifest manifest{database, solve_goals, kGoalVarCount, kPeanoBudget, kSeed};
     normalizer<globalizer, expr_pool, expr_pool, bind_map<globalizer>> norm{manifest.globalizer_, manifest.expr_pool_, manifest.expr_pool_, manifest.bind_map_};
 
-    const uint32_t idx_x = manifest.frame_allocator_.bump(1);
-    const uint32_t idx_y = manifest.frame_allocator_.bump(1);
-    const uint32_t idx_s = manifest.frame_allocator_.bump(1);
     const expr* var_x = saved_expr_pool_.make_var(idx_x);
     const expr* var_y = saved_expr_pool_.make_var(idx_y);
     const expr* var_s = saved_expr_pool_.make_var(idx_s);
@@ -2772,9 +2771,9 @@ TEST_F(BasicManifestIntegrationTest, EnumeratesCatalanTreesWithFiveNodes) {
     const expr* add_one = saved_expr_pool_.make_functor(functors.id("add"), {one, rv13, rv10});
     database.push(rule{nodes_head, {nodes_left, nodes_right, add_sizes, add_one}});
 
-    basic_manifest manifest{database, initial_goals, kInitialFrameOffset, kCatalanBudget, kSeed};
+    basic_manifest manifest{database, initial_goals, 1u, kCatalanBudget, kSeed};
     normalizer<globalizer, expr_pool, expr_pool, bind_map<globalizer>> norm{manifest.globalizer_, manifest.expr_pool_, manifest.expr_pool_, manifest.bind_map_};
-    const uint32_t idx_t = manifest.frame_allocator_.bump(1);
+    static constexpr uint32_t idx_t = 0;
     const expr* var_t = saved_expr_pool_.make_var(idx_t);
     const expr* five = saved_expr_pool_.make_functor(functors.id("zero"), {});
     for (int i = 0; i < 5; ++i)

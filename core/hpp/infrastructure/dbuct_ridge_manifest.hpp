@@ -58,6 +58,7 @@
 #include "infrastructure/dbuct_frontier_ready.hpp"
 #include "infrastructure/dbuct_goal_candidate_rules.hpp"
 #include "infrastructure/dbuct_goal_exprs.hpp"
+#include "infrastructure/querier.hpp"
 #include "infrastructure/dbuct_joint_elimination_generator.hpp"
 #include "infrastructure/dbuct_mhu_elimination_generator.hpp"
 #include "infrastructure/dbuct_nearest_decision.hpp"
@@ -136,8 +137,10 @@ struct dbuct_ridge_manifest {
                                           make_initial_goal_lineage_t, goal_exprs_t, goal_candidate_rules_t, srt_active_goals_t>;
     using goal_candidates_deactivator_t = goal_candidates_deactivator<goal_candidate_rules_t,
                                           lineage_pool, candidate_deactivator_t>;
-    using goal_candidates_activator_t   = goal_candidates_activator<db, lineage_pool, candidate_activator_t,
-                                          conflict_detector_t, unit_goal_detector_t, unit_goals_t>;
+    using querier_t                     = querier<goal_exprs_t, db, db>;
+    using goal_candidates_activator_t   = goal_candidates_activator<querier_t, lineage_pool,
+                                          candidate_activator_t, conflict_detector_t,
+                                          unit_goal_detector_t, unit_goals_t>;
     using subgoals_activator_t          = subgoals_activator<lineage_pool, goal_activator_t,
                                           db, goal_candidates_activator_t>;
     using srt_subgoals_activator_t      = srt_subgoals_activator<srt_active_goals_t, srt_active_goals_t, subgoals_activator_t>;
@@ -196,6 +199,7 @@ struct dbuct_ridge_manifest {
     ra_rule_id_set_factory        ra_rule_id_set_factory_;
     srt_active_goals_t            srt_active_goals_;
     goal_exprs_t                  goal_exprs_;
+    querier_t                     querier_;
     goal_candidate_rules_t        goal_candidate_rules_;
     unit_goals_t                  unit_goals_;
     decision_memory_t             decision_memory_;

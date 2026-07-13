@@ -9,7 +9,7 @@ using ::testing::Return;
 using ::testing::ReturnRef;
 
 struct MockGetGoalDbRuleIds {
-    MOCK_METHOD(rule_id_set&, get_candidate_rules, (const goal_lineage*));
+    MOCK_METHOD(const rule_id_set&, get_candidate_rules, (const goal_lineage*), (const));
 };
 
 struct MockMakeResolutionLineage {

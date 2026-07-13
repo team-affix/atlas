@@ -28,6 +28,7 @@
 #include "infrastructure/goal_candidates_activator.hpp"
 #include "infrastructure/goal_candidates_deactivator.hpp"
 #include "infrastructure/goal_exprs.hpp"
+#include "infrastructure/querier.hpp"
 #include "infrastructure/goal_weights.hpp"
 #include "infrastructure/horizon_goal_activator.hpp"
 #include "infrastructure/horizon_goal_deactivator.hpp"
@@ -97,8 +98,10 @@ struct genius_manifest {
                                         make_initial_goal_lineage_t, goal_exprs, goal_candidate_rules, srt_active_goals>;
     using goal_candidates_deactivator_t = goal_candidates_deactivator<goal_candidate_rules,
                                         lineage_pool, candidate_deactivator_t>;
-    using goal_candidates_activator_t   = goal_candidates_activator<db, lineage_pool, candidate_activator_t,
-                                        conflict_detector_t, unit_goal_detector_t, unit_goals>;
+    using querier_t                     = querier<goal_exprs, db, db>;
+    using goal_candidates_activator_t   = goal_candidates_activator<querier_t, lineage_pool,
+                                        candidate_activator_t, conflict_detector_t,
+                                        unit_goal_detector_t, unit_goals>;
     using horizon_goal_activator_t      = horizon_goal_activator<goal_activator_t, goal_weights, goal_weights, db>;
     using horizon_goal_deactivator_t    = horizon_goal_deactivator<srt_goal_deactivator_t, goal_weights>;
     using horizon_initial_goal_activator_t = horizon_initial_goal_activator<initial_goal_activator_t,
@@ -149,6 +152,7 @@ struct genius_manifest {
     ra_rule_id_set_factory  ra_rule_id_set_factory_;
     srt_active_goals        srt_active_goals_;
     goal_exprs              goal_exprs_;
+    querier_t               querier_;
     goal_weights            goal_weights_;
     cumulative_grounded_weight cumulative_grounded_weight_;
     initial_goal_weight     initial_goal_weight_;

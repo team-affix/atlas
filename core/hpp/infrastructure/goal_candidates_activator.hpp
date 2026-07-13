@@ -1,6 +1,7 @@
 #ifndef GOAL_CANDIDATES_ACTIVATOR_HPP
 #define GOAL_CANDIDATES_ACTIVATOR_HPP
 
+#include "infrastructure/rule_id_set.hpp"
 #include "value_objects/lineage.hpp"
 
 template<typename IGetGoalDbRuleIds, typename IMakeResolutionLineage, typename ICandidateActivator,
@@ -21,12 +22,13 @@ private:
 template<typename IGGDRI, typename IMRL, typename ICA, typename ICD, typename IUGD, typename IPUG>
 goal_candidates_activator<IGGDRI, IMRL, ICA, ICD, IUGD, IPUG>::goal_candidates_activator(
     IGGDRI& db, IMRL& lp, ICA& ca, ICD& cd, IUGD& ugd, IPUG& ug)
-    : get_goal_db_rule_ids_(db), make_resolution_lineage_(lp), candidate_activator_(ca), conflict_detector_(cd), ugd_(ugd), push_unit_goal_(ug) {}
+    : get_goal_db_rule_ids_(db), make_resolution_lineage_(lp), candidate_activator_(ca),
+      conflict_detector_(cd), ugd_(ugd), push_unit_goal_(ug) {}
 
 template<typename IGGDRI, typename IMRL, typename ICA, typename ICD, typename IUGD, typename IPUG>
 bool goal_candidates_activator<IGGDRI, IMRL, ICA, ICD, IUGD, IPUG>::activate_goal_candidates(
     const goal_lineage* gl) {
-    auto& db_rules = get_goal_db_rule_ids_.get_candidate_rules(gl);
+    const rule_id_set& db_rules = get_goal_db_rule_ids_.get_candidate_rules(gl);
     auto db_it = db_rules.iterate();
     while (!db_it.done()) {
         db_it.resume();

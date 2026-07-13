@@ -44,6 +44,7 @@
 #include "infrastructure/make_initial_goal_lineage.hpp"
 #include "infrastructure/initial_goal_activator.hpp"
 #include "infrastructure/goal_candidates_activator.hpp"
+#include "infrastructure/querier.hpp"
 #include "infrastructure/goal_candidates_deactivator.hpp"
 #include "infrastructure/subgoals_activator.hpp"
 #include "infrastructure/initial_goals_activator.hpp"
@@ -89,8 +90,10 @@ using initial_goal_activator_t      = initial_goal_activator<initial_goal_exprs,
                                     make_initial_goal_lineage_t, goal_exprs, goal_candidate_rules, ra_active_goals>;
 using goal_candidates_deactivator_t = goal_candidates_deactivator<goal_candidate_rules,
                                     lineage_pool, candidate_deactivator_t>;
-using goal_candidates_activator_t   = goal_candidates_activator<db, lineage_pool, candidate_activator_t,
-                                    conflict_detector_t, unit_goal_detector_t, unit_goals>;
+using querier_t                     = querier<goal_exprs, db, db>;
+using goal_candidates_activator_t   = goal_candidates_activator<querier_t, lineage_pool,
+                                    candidate_activator_t, conflict_detector_t,
+                                    unit_goal_detector_t, unit_goals>;
 using subgoals_activator_t         = subgoals_activator<lineage_pool, goal_activator_t,
                                     db, goal_candidates_activator_t>;
 using initial_goals_activator_t     = initial_goals_activator<initial_goal_exprs,
@@ -118,6 +121,7 @@ struct sim_stack {
     ra_rule_id_set_factory ra_rule_id_set_factory_;
     ra_active_goals ra_active_goals_;
     goal_exprs goal_exprs_;
+    querier_t querier_{goal_exprs_, database_, database_};
     goal_candidate_rules goal_candidate_rules_{ra_rule_id_set_factory_};
     unit_goals unit_goals_;
     decision_memory decision_memory_;
@@ -171,7 +175,7 @@ struct sim_stack {
                                         goal_exprs_, goal_candidate_rules_, ra_active_goals_);
         goal_candidates_deactivator_.emplace(goal_candidate_rules_, lineage_pool_,
                                              candidate_deactivator_);
-        goal_candidates_activator_.emplace(database_, lineage_pool_, *candidate_activator_,
+        goal_candidates_activator_.emplace(querier_, lineage_pool_, *candidate_activator_,
                                            conflict_detector_, unit_goal_detector_, unit_goals_);
         subgoals_activator_.emplace(lineage_pool_, goal_activator_, database_,
                                     *goal_candidates_activator_);
