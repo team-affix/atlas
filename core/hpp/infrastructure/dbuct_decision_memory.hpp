@@ -11,6 +11,7 @@
 #include "debug_assert.hpp"
 
 struct dbuct_decision_memory {
+    dbuct_decision_memory();
     void record_decision(const resolution_lineage* rl);
     size_t count() const;
     lemma derive_decision_lemma() const;
@@ -20,7 +21,7 @@ struct dbuct_decision_memory {
 
 private:
     struct frame {
-        std::list<decision_memory_action> actions;
+        std::list<decision_memory_action> actions_;
     };
 
     using set_t = std::unordered_set<const resolution_lineage*>;
@@ -29,7 +30,7 @@ private:
     void undo_action(const decision_memory_action& action);
 
     set_t decisions_;
-    std::stack<frame> frame_stack_{std::deque<frame>{frame{}}};
+    std::stack<frame> frame_stack_;
 };
 
 #endif

@@ -10,8 +10,7 @@
 //   * a unit resolution updates only the resolution memory.
 template<typename IRecordDecision, typename IRecordResolution>
 struct resolution_recorder {
-    resolution_recorder(IRecordDecision& dm, IRecordResolution& rm)
-        : decision_memory_(dm), resolution_memory_(rm) {}
+    resolution_recorder(IRecordDecision& dm, IRecordResolution& rm);
 
     void record_decision_resolution(const resolution_lineage* rl);
     void record_unit_resolution(const resolution_lineage* rl);
@@ -20,6 +19,11 @@ private:
     IRecordDecision& decision_memory_;
     IRecordResolution& resolution_memory_;
 };
+
+template<typename IRecordDecision, typename IRecordResolution>
+resolution_recorder<IRecordDecision, IRecordResolution>::resolution_recorder(
+    IRecordDecision& dm, IRecordResolution& rm)
+    : decision_memory_(dm), resolution_memory_(rm) {}
 
 template<typename IRecordDecision, typename IRecordResolution>
 void resolution_recorder<IRecordDecision, IRecordResolution>::record_decision_resolution(

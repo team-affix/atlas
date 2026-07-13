@@ -19,14 +19,14 @@ struct dbuct_frame_bump_allocator {
 
 private:
     struct frame {
-        std::list<frame_bump_action> actions;
+        std::list<frame_bump_action> actions_;
     };
 
     void log(frame_bump_action action);
     void undo_action(const frame_bump_action& action);
 
     uint32_t next_frame_offset_;
-    std::stack<frame> frame_stack_{std::deque<frame>{frame{}}};
+    std::stack<frame> frame_stack_;
 };
 
 #endif

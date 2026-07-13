@@ -11,6 +11,7 @@
 #include "debug_assert.hpp"
 
 struct dbuct_unit_goals {
+    dbuct_unit_goals();
     void push(const goal_lineage* gl);
     std::optional<const goal_lineage*> pop();
 
@@ -19,7 +20,7 @@ struct dbuct_unit_goals {
 
 private:
     struct frame {
-        std::list<unit_goals_action> actions;
+        std::list<unit_goals_action> actions_;
     };
 
     using vec_t = std::vector<const goal_lineage*>;
@@ -28,7 +29,7 @@ private:
     void undo_action(const unit_goals_action& action);
 
     vec_t queue_;
-    std::stack<frame> frame_stack_{std::deque<frame>{frame{}}};
+    std::stack<frame> frame_stack_;
 };
 
 #endif

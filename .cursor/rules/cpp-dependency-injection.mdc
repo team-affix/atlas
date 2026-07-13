@@ -8,6 +8,11 @@ alwaysApply: true
 
 - Swap behavior with templates, not inheritance. The ONLY allowed use of
   inheritance is ANTLR visitors.
+- Inject collaborators through TEMPLATE parameters, never as concrete types. A
+  collaborator's type is always a template parameter (named for its capability),
+  even when only one production implementation exists. Naming a concrete
+  collaborator type in a constructor/member is wrong — it defeats swapping and
+  mock-based testing.
 - Inject collaborators by reference. A struct must not OWN large collaborators
   that have behavior; it holds a `T&` supplied at construction. Value objects
   and small state may be owned.
@@ -28,6 +33,29 @@ private:
     IMhu& mhu_;
 };
 ```
+
+## Always template the collaborator, never name its concrete type
+
+```cpp
+// BAD: constructor names the concrete collaborator type
+struct dbuct_goal_candidate_rules {
+    dbuct_goal_candidate_rules(ra_rule_id_set_factory& factory);
+private:
+    ra_rule_id_set_factory& factory_;
+};
+
+// GOOD: the collaborator is a template parameter named for the invoked capability
+template<typename IMakeRuleIdSet>
+struct dbuct_goal_candidate_rules {
+    dbuct_goal_candidate_rules(IMakeRuleIdSet& make_rule_id_set);
+private:
+    IMakeRuleIdSet& make_rule_id_set_;   // we only ever call make_rule_id_set_.make()
+};
+```
+
+The only method invoked on the factory is `.make()`, so the capability is
+`IMakeRuleIdSet` — not `IRaRuleIdSetFactory`, which would re-introduce the
+concrete concept (see "Depend on capabilities, not concepts" below).
 
 ## Depend on capabilities, not concepts (no verbal coupling)
 

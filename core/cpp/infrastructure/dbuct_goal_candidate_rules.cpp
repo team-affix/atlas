@@ -1,7 +1,7 @@
 #include "infrastructure/dbuct_goal_candidate_rules.hpp"
 
 dbuct_goal_candidate_rules::dbuct_goal_candidate_rules(ra_rule_id_set_factory& factory)
-    : factory_(factory) {}
+    : factory_(factory), frame_stack_(std::deque<frame>{frame{}}) {}
 
 const ra_rule_id_set& dbuct_goal_candidate_rules::get(const goal_lineage* gl) const {
     return by_goal_.at(gl);
@@ -34,13 +34,13 @@ void dbuct_goal_candidate_rules::push_frame() { frame_stack_.push(frame{}); }
 void dbuct_goal_candidate_rules::pop_frame() {
     auto current = std::move(frame_stack_.top());
     frame_stack_.pop();
-    for (auto it = current.actions.rbegin(); it != current.actions.rend(); ++it)
+    for (auto it = current.actions_.rbegin(); it != current.actions_.rend(); ++it)
         undo_action(*it);
 }
 
 void dbuct_goal_candidate_rules::log(goal_candidate_rules_action action) {
     DEBUG_ASSERT(!frame_stack_.empty());
-    frame_stack_.top().actions.push_back(std::move(action));
+    frame_stack_.top().actions_.push_back(std::move(action));
 }
 
 void dbuct_goal_candidate_rules::undo_action(const goal_candidate_rules_action& action) {

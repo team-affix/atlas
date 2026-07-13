@@ -14,23 +14,21 @@ struct solver {
            IPinResolutionLineage&, ILearnAvoidance&, IEliminationRouter&);
     coroutine<sim_termination, void> solve();
 private:
-    ISetUpSim& set_up_sim;
-    ITearDownSim& tear_down_sim;
-    IRunSim& run_sim;
-    IGetDecisionCount& get_decision_count;
-    IDeriveLemma& derive_decision_lemma;
-    IPinResolutionLineage& pin_resolution_lineage;
-    ILearnAvoidance& learn_avoidance;
-    IEliminationRouter& elimination_router;
+    ISetUpSim& set_up_sim_;
+    ITearDownSim& tear_down_sim_;
+    IRunSim& run_sim_;
+    IGetDecisionCount& get_decision_count_;
+    IDeriveLemma& derive_decision_lemma_;
+    IPinResolutionLineage& pin_resolution_lineage_;
+    ILearnAvoidance& learn_avoidance_;
+    IEliminationRouter& elimination_router_;
 };
 
 template<typename ISUS, typename ITDS, typename IRS, typename IGDC, typename IDL,
          typename IPRL, typename ILA, typename IER>
 solver<ISUS,ITDS,IRS,IGDC,IDL,IPRL,ILA,IER>::solver(
     ISUS& sus, ITDS& tds, IRS& rs, IGDC& gdc, IDL& dl, IPRL& prl, ILA& la, IER& er)
-    : set_up_sim(sus), tear_down_sim(tds), run_sim(rs), get_decision_count(gdc),
-      derive_decision_lemma(dl), pin_resolution_lineage(prl), learn_avoidance(la),
-      elimination_router(er) {}
+    : set_up_sim_(sus), tear_down_sim_(tds), run_sim_(rs), get_decision_count_(gdc), derive_decision_lemma_(dl), pin_resolution_lineage_(prl), learn_avoidance_(la), elimination_router_(er) {}
 
 template<typename ISUS, typename ITDS, typename IRS, typename IGDC, typename IDL,
          typename IPRL, typename ILA, typename IER>
@@ -38,16 +36,16 @@ coroutine<sim_termination, void>
 solver<ISUS,ITDS,IRS,IGDC,IDL,IPRL,ILA,IER>::solve() {
     bool refuted = false;
     while (!refuted) {
-        set_up_sim.set_up();
-        co_yield run_sim.run();
-        refuted = get_decision_count.count() == 0;
-        const lemma l = derive_decision_lemma.derive_decision_lemma();
+        set_up_sim_.set_up();
+        co_yield run_sim_.run();
+        refuted = get_decision_count_.count() == 0;
+        const lemma l = derive_decision_lemma_.derive_decision_lemma();
         for (const resolution_lineage* rl : l.get_resolutions())
-            pin_resolution_lineage.pin(rl);
-        tear_down_sim.tear_down();
-        auto elim = learn_avoidance.learn(l);
+            pin_resolution_lineage_.pin(rl);
+        tear_down_sim_.tear_down();
+        auto elim = learn_avoidance_.learn(l);
         if (elim.has_value())
-            elimination_router.route(elim.value());
+            elimination_router_.route(elim.value());
     }
 }
 

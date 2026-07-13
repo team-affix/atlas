@@ -12,6 +12,7 @@
 #include "debug_assert.hpp"
 
 struct dbuct_elimination_backlog {
+    dbuct_elimination_backlog();
     void insert_backlogged_elimination(const resolution_lineage* rl);
     bool is_backlogged_elimination(const resolution_lineage* rl) const;
 
@@ -20,7 +21,7 @@ struct dbuct_elimination_backlog {
 
 private:
     struct frame {
-        std::list<elimination_backlog_action> actions;
+        std::list<elimination_backlog_action> actions_;
     };
 
     using eliminated_candidates_type =
@@ -30,7 +31,7 @@ private:
     void undo_action(const elimination_backlog_action& action);
 
     eliminated_candidates_type eliminated_candidates_;
-    std::stack<frame> frame_stack_{std::deque<frame>{frame{}}};
+    std::stack<frame> frame_stack_;
 };
 
 #endif

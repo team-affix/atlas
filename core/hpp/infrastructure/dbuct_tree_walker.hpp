@@ -7,12 +7,15 @@
 #include "value_objects/mcts_choice_hash.hpp"
 
 struct dbuct_tree_walker {
+    dbuct_tree_walker();
+
     size_t walk(size_t node, const mcts_choice& choice);
 
 private:
-    using children_t = std::unordered_map<mcts_choice, size_t, mcts_choice_hash>;
-    std::unordered_map<size_t, children_t> edges_;
-    size_t next_id_ = 0;
+    using map_t = std::unordered_map<mcts_choice, size_t, mcts_choice_hash>;
+
+    std::unordered_map<size_t, map_t> edges_;
+    size_t next_id_;
 };
 
 #endif

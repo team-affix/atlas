@@ -20,7 +20,7 @@ struct elimination_backlog {
 
 private:
     struct frame {
-        std::list<elimination_backlog_action> actions;
+        std::list<elimination_backlog_action> actions_;
     };
 
     using eliminated_candidates_type =

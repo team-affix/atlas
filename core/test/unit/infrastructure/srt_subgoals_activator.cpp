@@ -15,12 +15,13 @@ struct MockSrtActiveGoals {
     MOCK_METHOD(void, flush_srt_goal_batch, ());
 };
 
-using test_srt_subgoals_activator_t = srt_subgoals_activator<MockSrtActiveGoals, MockSubgoalsActivator>;
+using test_srt_subgoals_activator_t = srt_subgoals_activator<
+    MockSrtActiveGoals, MockSrtActiveGoals, MockSubgoalsActivator>;
 
 struct SrtSubgoalsActivatorTest : public ::testing::Test {
     MockSrtActiveGoals srt_active_goals;
     MockSubgoalsActivator subgoals_activator;
-    test_srt_subgoals_activator_t activator{srt_active_goals, subgoals_activator};
+    test_srt_subgoals_activator_t activator{srt_active_goals, srt_active_goals, subgoals_activator};
 
     goal_lineage parent_gl{nullptr, 0};
     resolution_lineage rl{&parent_gl, 1};

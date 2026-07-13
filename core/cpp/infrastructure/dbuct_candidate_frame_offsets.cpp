@@ -1,5 +1,7 @@
 #include "infrastructure/dbuct_candidate_frame_offsets.hpp"
 
+dbuct_candidate_frame_offsets::dbuct_candidate_frame_offsets() : frame_stack_(std::deque<frame>{frame{}}) {}
+
 void dbuct_candidate_frame_offsets::set(const resolution_lineage* rl, uint32_t frame_offset) {
     offsets_.insert({rl, frame_offset});
     log(candidate_offset_insert{rl, frame_offset});
@@ -20,13 +22,13 @@ void dbuct_candidate_frame_offsets::push_frame() { frame_stack_.push(frame{}); }
 void dbuct_candidate_frame_offsets::pop_frame() {
     auto current = std::move(frame_stack_.top());
     frame_stack_.pop();
-    for (auto it = current.actions.rbegin(); it != current.actions.rend(); ++it)
+    for (auto it = current.actions_.rbegin(); it != current.actions_.rend(); ++it)
         undo_action(*it);
 }
 
 void dbuct_candidate_frame_offsets::log(candidate_offset_action action) {
     DEBUG_ASSERT(!frame_stack_.empty());
-    frame_stack_.top().actions.push_back(std::move(action));
+    frame_stack_.top().actions_.push_back(std::move(action));
 }
 
 void dbuct_candidate_frame_offsets::undo_action(const candidate_offset_action& action) {

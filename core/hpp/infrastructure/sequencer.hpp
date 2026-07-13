@@ -15,7 +15,7 @@ struct sequencer {
 
 private:
     struct frame {
-        std::list<frame_bump_action> actions;
+        std::list<frame_bump_action> actions_;
     };
 
     void log(frame_bump_action action);
@@ -45,14 +45,14 @@ template<typename IndexType>
 void sequencer<IndexType>::pop_frame() {
     auto current = std::move(frame_stack_.top());
     frame_stack_.pop();
-    for (auto it = current.actions.rbegin(); it != current.actions.rend(); ++it)
+    for (auto it = current.actions_.rbegin(); it != current.actions_.rend(); ++it)
         undo_action(*it);
 }
 
 template<typename IndexType>
 void sequencer<IndexType>::log(frame_bump_action action) {
     if (!frame_stack_.empty())
-        frame_stack_.top().actions.push_back(std::move(action));
+        frame_stack_.top().actions_.push_back(std::move(action));
 }
 
 template<typename IndexType>

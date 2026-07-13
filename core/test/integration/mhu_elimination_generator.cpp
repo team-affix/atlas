@@ -25,7 +25,8 @@
 
 using test_unifier_factory_t = unifier_factory<globalizer, bind_map<globalizer>>;
 using test_mhu_t = mhu_elimination_generator<
-    bind_map<globalizer>, bind_map_factory<globalizer>, unifier<globalizer, bind_map<globalizer>>, test_unifier_factory_t,
+    bind_map<globalizer>, bind_map<globalizer>, bind_map<globalizer>,
+    bind_map_factory<globalizer>, unifier<globalizer, bind_map<globalizer>>, test_unifier_factory_t,
     lineage_pool, expr_pool, goal_candidate_rules>;
 
 using ::testing::ElementsAre;
@@ -79,7 +80,7 @@ struct MhuEliminationGeneratorIntegrationTest : public ::testing::Test {
 
     MhuEliminationGeneratorIntegrationTest() {
         pool.emplace();
-        mhu.emplace(common, lp, *pool, bmf, uf, ggcr);
+        mhu.emplace(common, common, lp, *pool, bmf, uf, ggcr);
     }
 
     size_t rules_for(const goal_lineage* gl) const { return ggcr.get(gl).size(); }

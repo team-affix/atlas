@@ -32,7 +32,7 @@ private:
     std::optional<const resolution_lineage*> visit_avoidance(avoidance_id, const resolution_lineage*);
 
     std::unordered_map<avoidance_id, avoidance> avoidances_;
-    size_t next_avoidance_id_ = 0;
+    size_t next_avoidance_id_;
     std::unordered_map<const goal_lineage*, std::unordered_set<avoidance_id>> watched_goals_;
     std::unordered_set<avoidance_id> visited_avoidances_;
 
@@ -41,7 +41,7 @@ private:
 
 template<typename ITGCC>
 cdcl_elimination_generator<ITGCC>::cdcl_elimination_generator(ITGCC& tgcc)
-    : try_get_chosen_goal_candidate_(tgcc) {}
+    : next_avoidance_id_(0), try_get_chosen_goal_candidate_(tgcc) {}
 
 template<typename ITGCC>
 std::optional<const resolution_lineage*>

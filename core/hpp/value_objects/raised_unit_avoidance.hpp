@@ -1,5 +1,5 @@
-#ifndef RAISED_UNIT_AVOIDANCE_ACTION_HPP
-#define RAISED_UNIT_AVOIDANCE_ACTION_HPP
+#ifndef RAISED_UNIT_AVOIDANCE_HPP
+#define RAISED_UNIT_AVOIDANCE_HPP
 
 #include <compare>
 #include "value_objects/avoidance_id.hpp"

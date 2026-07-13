@@ -6,20 +6,18 @@ basic_runtime::basic_runtime(
     uint32_t initial_frame_offset,
     size_t max_resolutions,
     uint32_t random_seed)
-    : manifest_(database, goals, initial_frame_offset, max_resolutions, random_seed),
-      normalizer_(manifest_.globalizer_, manifest_.expr_pool_, manifest_.expr_pool_, manifest_.bind_map_),
-      driver_(manifest_.solver_.solve()) {}
+    : manifest_(database, goals, initial_frame_offset, max_resolutions, random_seed) {}
 
 bool basic_runtime::next() {
-    return driver_.next();
+    return manifest_.driver_.next();
 }
 
 bool basic_runtime::solved() const {
-    return driver_.solved();
+    return manifest_.driver_.solved();
 }
 
 const expr* basic_runtime::normalize(framed_expr fe) {
-    return normalizer_.normalize(fe);
+    return manifest_.normalizer_.normalize(fe);
 }
 
 size_t basic_runtime::resolution_depth() const {

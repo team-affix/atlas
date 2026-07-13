@@ -10,32 +10,32 @@
 // from the MHU unit (the cdcl/mhu interaction is now coupled -- a goal CDCL forces
 // out can no longer be a live MHU head). MHU already self-removes the heads it
 // forces via its own constrain, so we only remove_head on the CDCL yields.
-template<typename ICdcl, typename IMhu>
+template<typename IConstrainCdcl, typename IConstrainMhu>
 struct dbuct_joint_elimination_generator {
-    dbuct_joint_elimination_generator(ICdcl&, IMhu&);
+    dbuct_joint_elimination_generator(IConstrainCdcl&, IConstrainMhu&);
     coroutine<const resolution_lineage*, void> constrain(const resolution_lineage*);
 private:
-    ICdcl& cdcl;
-    IMhu& mhu;
+    IConstrainCdcl& constrain_cdcl_;
+    IConstrainMhu& constrain_mhu_;
 };
 
-template<typename ICdcl, typename IMhu>
-dbuct_joint_elimination_generator<ICdcl, IMhu>::dbuct_joint_elimination_generator(ICdcl& c, IMhu& m)
-    : cdcl(c), mhu(m) {}
+template<typename ICC, typename ICM>
+dbuct_joint_elimination_generator<ICC, ICM>::dbuct_joint_elimination_generator(ICC& c, ICM& m)
+    : constrain_cdcl_(c), constrain_mhu_(m) {}
 
-template<typename ICdcl, typename IMhu>
+template<typename ICC, typename ICM>
 coroutine<const resolution_lineage*, void>
-dbuct_joint_elimination_generator<ICdcl, IMhu>::constrain(const resolution_lineage* rl) {
-    auto cdcl_sm = cdcl.constrain(rl);
+dbuct_joint_elimination_generator<ICC, ICM>::constrain(const resolution_lineage* rl) {
+    auto cdcl_sm = constrain_cdcl_.constrain(rl);
     while (!cdcl_sm.done()) {
         cdcl_sm.resume();
         if (cdcl_sm.has_yield()) {
             const resolution_lineage* elim = cdcl_sm.consume_yield();
-            mhu.remove_head(elim);
+            constrain_mhu_.remove_head(elim);
             co_yield elim;
         }
     }
-    auto mhu_sm = mhu.constrain(rl);
+    auto mhu_sm = constrain_mhu_.constrain(rl);
     while (!mhu_sm.done()) {
         mhu_sm.resume();
         if (mhu_sm.has_yield())

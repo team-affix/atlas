@@ -49,11 +49,22 @@ void drain(coroutine<const resolution_lineage*, void> sm) {
 }
 
 using hub_t = dbuct_frame_hub<
-    frame_depth_tracker, dbuct_goal_exprs, dbuct_goal_candidate_rules,
-    dbuct_chosen_goal_candidates, dbuct_decision_memory, dbuct_resolution_memory,
-    dbuct_unit_goals, dbuct_candidate_frame_offsets, dbuct_frame_bump_allocator,
-    dbuct_nearest_decision, dbuct_elimination_backlog, boundary_t,
-    dbuct_srt_active_goals, bind_map_t, fake_mhu, fake_cdcl>;
+    frame_depth_tracker, frame_depth_tracker, frame_depth_tracker,
+    dbuct_goal_exprs, dbuct_goal_exprs,
+    dbuct_goal_candidate_rules, dbuct_goal_candidate_rules,
+    dbuct_chosen_goal_candidates, dbuct_chosen_goal_candidates,
+    dbuct_decision_memory, dbuct_decision_memory,
+    dbuct_resolution_memory, dbuct_resolution_memory,
+    dbuct_unit_goals, dbuct_unit_goals,
+    dbuct_candidate_frame_offsets, dbuct_candidate_frame_offsets,
+    dbuct_frame_bump_allocator, dbuct_frame_bump_allocator,
+    dbuct_nearest_decision, dbuct_nearest_decision,
+    dbuct_elimination_backlog, dbuct_elimination_backlog,
+    boundary_t, boundary_t,
+    dbuct_srt_active_goals, dbuct_srt_active_goals,
+    bind_map_t, bind_map_t,
+    fake_mhu, fake_mhu,
+    fake_cdcl, fake_cdcl>;
 
 struct hub_fixture {
     frame_depth_tracker depth_tracker;
@@ -77,22 +88,22 @@ struct hub_fixture {
     hub_t frame_hub;
 
     hub_fixture()
-        : frame_hub(depth_tracker,
-                    goal_exprs,
-                    goal_candidate_rules,
-                    chosen_goal_candidates,
-                    decision_memory,
-                    resolution_memory,
-                    unit_goals,
-                    candidate_frame_offsets,
-                    frame_bump_allocator,
-                    nearest_decision,
-                    elimination_backlog,
-                    avoidance_unit_boundary,
-                    srt_active_goals,
-                    bind_map,
-                    mhu,
-                    cdcl) {}
+        : frame_hub(depth_tracker, depth_tracker, depth_tracker,
+                    goal_exprs, goal_exprs,
+                    goal_candidate_rules, goal_candidate_rules,
+                    chosen_goal_candidates, chosen_goal_candidates,
+                    decision_memory, decision_memory,
+                    resolution_memory, resolution_memory,
+                    unit_goals, unit_goals,
+                    candidate_frame_offsets, candidate_frame_offsets,
+                    frame_bump_allocator, frame_bump_allocator,
+                    nearest_decision, nearest_decision,
+                    elimination_backlog, elimination_backlog,
+                    avoidance_unit_boundary, avoidance_unit_boundary,
+                    srt_active_goals, srt_active_goals,
+                    bind_map, bind_map,
+                    mhu, mhu,
+                    cdcl, cdcl) {}
 };
 
 }  // namespace

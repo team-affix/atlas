@@ -1,5 +1,7 @@
 #include "infrastructure/dbuct_goal_exprs.hpp"
 
+dbuct_goal_exprs::dbuct_goal_exprs() : frame_stack_(std::deque<frame>{frame{}}) {}
+
 framed_expr dbuct_goal_exprs::get(const goal_lineage* gl) const {
     return exprs_.at(gl);
 }
@@ -23,13 +25,13 @@ void dbuct_goal_exprs::push_frame() {
 void dbuct_goal_exprs::pop_frame() {
     auto current = std::move(frame_stack_.top());
     frame_stack_.pop();
-    for (auto it = current.actions.rbegin(); it != current.actions.rend(); ++it)
+    for (auto it = current.actions_.rbegin(); it != current.actions_.rend(); ++it)
         undo_action(*it);
 }
 
 void dbuct_goal_exprs::log(goal_expr_action action) {
     DEBUG_ASSERT(!frame_stack_.empty());
-    frame_stack_.top().actions.push_back(std::move(action));
+    frame_stack_.top().actions_.push_back(std::move(action));
 }
 
 void dbuct_goal_exprs::undo_action(const goal_expr_action& action) {

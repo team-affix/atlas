@@ -4,12 +4,13 @@
 #include <cstddef>
 
 struct frame_depth_tracker {
+    frame_depth_tracker();
     void push();
     void pop();
     size_t depth() const;
 
 private:
-    size_t depth_ = 1;
+    size_t depth_;
 };
 
 #endif

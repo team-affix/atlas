@@ -12,6 +12,7 @@
 #include "debug_assert.hpp"
 
 struct dbuct_srt_active_goals {
+    dbuct_srt_active_goals();
     void insert_active_goal(const goal_lineage* gl);
     void link_srt_goal_batch_parent(const goal_lineage* parent);
     void flush_srt_goal_batch();
@@ -26,17 +27,17 @@ struct dbuct_srt_active_goals {
 
 private:
     struct in_flight_frame {
-        std::list<srt_active_goals_action> actions;
+        std::list<srt_active_goals_action> actions_;
     };
 
-    using in_flight_t = std::set<const goal_lineage*>;
+    using set_t = std::set<const goal_lineage*>;
 
     void log_in_flight(srt_active_goals_action action);
     void undo_in_flight_action(const srt_active_goals_action& action);
 
     dbuct_series_reduced_tree<const goal_lineage*> tree_;
-    in_flight_t in_flight_;
-    std::stack<in_flight_frame> in_flight_frames_{std::deque<in_flight_frame>{in_flight_frame{}}};
+    set_t in_flight_;
+    std::stack<in_flight_frame> in_flight_frames_;
 };
 
 #endif

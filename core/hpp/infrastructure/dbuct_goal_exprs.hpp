@@ -11,6 +11,7 @@
 #include "debug_assert.hpp"
 
 struct dbuct_goal_exprs {
+    dbuct_goal_exprs();
     framed_expr get(const goal_lineage* gl) const;
     void set(const goal_lineage* gl, framed_expr fe);
     void unset(const goal_lineage* gl);
@@ -20,7 +21,7 @@ struct dbuct_goal_exprs {
 
 private:
     struct frame {
-        std::list<goal_expr_action> actions;
+        std::list<goal_expr_action> actions_;
     };
 
     using map_t = std::unordered_map<const goal_lineage*, framed_expr>;
@@ -29,7 +30,7 @@ private:
     void undo_action(const goal_expr_action& action);
 
     map_t exprs_;
-    std::stack<frame> frame_stack_{std::deque<frame>{frame{}}};
+    std::stack<frame> frame_stack_;
 };
 
 #endif

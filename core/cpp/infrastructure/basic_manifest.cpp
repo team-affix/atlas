@@ -25,7 +25,7 @@ basic_manifest::basic_manifest(
       frame_allocator_(initial_frame_offset),
       elimination_backlog_(),
       cdcl_(chosen_goal_candidates_),
-      mhu_(bind_map_, lineage_pool_, expr_pool_,
+      mhu_(bind_map_, bind_map_, lineage_pool_, expr_pool_,
            bind_map_factory_, unifier_factory_, goal_candidate_rules_),
       joint_(cdcl_, mhu_),
       get_resolution_rule_(database),
@@ -72,4 +72,6 @@ basic_manifest::basic_manifest(
                resolution_recorder_, resolution_memory_, max_resolutions),
       solver_(set_up_sim_, tear_down_sim_, run_sim_,
               decision_memory_, decision_memory_,
-              lineage_pool_, cdcl_, elimination_router_) {}
+              lineage_pool_, cdcl_, elimination_router_),
+      normalizer_(globalizer_, expr_pool_, expr_pool_, bind_map_),
+      driver_(solver_.solve()) {}

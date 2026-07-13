@@ -27,25 +27,17 @@
 template<typename IActivateInitialGoalsOnce, typename IRunSim,
          typename IGetDecisionCount, typename IComputeReward,
          typename ITerminate, typename ICheckIsAtRoot, typename ILearnAvoidance,
-         typename IMhu, typename IEliminationRouter, typename IConflictDetector,
+         typename IRemoveMhuHead, typename IEliminationRouter, typename IConflictDetector,
          typename IUnitGoalDetector, typename IPushUnitGoal>
 struct dbuct_solver {
     dbuct_solver(IActivateInitialGoalsOnce& activate_once, IRunSim& run_sim,
                  IGetDecisionCount& get_decision_count,
                  IComputeReward& compute_reward, ITerminate& terminate,
                  ICheckIsAtRoot& check_is_at_root,
-                 ILearnAvoidance& learn, IMhu& mhu, IEliminationRouter& router,
+                 ILearnAvoidance& learn, IRemoveMhuHead& remove_mhu_head, IEliminationRouter& router,
                  IConflictDetector& conflict_detector,
                  IUnitGoalDetector& unit_goal_detector,
-                 IPushUnitGoal& push_unit_goal)
-        : activate_once_(activate_once), run_sim_(run_sim),
-          get_decision_count_(get_decision_count),
-          compute_reward_(compute_reward), terminate_(terminate),
-          check_is_at_root_(check_is_at_root),
-          learn_(learn), mhu_(mhu), router_(router),
-          conflict_detector_(conflict_detector),
-          unit_goal_detector_(unit_goal_detector),
-          push_unit_goal_(push_unit_goal) {}
+                 IPushUnitGoal& push_unit_goal);
 
     coroutine<sim_termination, void> solve();
 
@@ -72,7 +64,7 @@ private:
     ITerminate& terminate_;
     ICheckIsAtRoot& check_is_at_root_;
     ILearnAvoidance& learn_;
-    IMhu& mhu_;
+    IRemoveMhuHead& remove_mhu_head_;
     IEliminationRouter& router_;
     IConflictDetector& conflict_detector_;
     IUnitGoalDetector& unit_goal_detector_;
@@ -80,10 +72,27 @@ private:
 };
 
 template<typename IA, typename IRS, typename IGDC, typename ICR,
-         typename IT, typename ICAR, typename ILA, typename IM, typename IER,
+         typename IT, typename ICAR, typename ILA, typename IRMH, typename IER,
+         typename ICD, typename IUGD, typename IPUG>
+dbuct_solver<IA, IRS, IGDC, ICR, IT, ICAR, ILA, IRMH, IER, ICD, IUGD, IPUG>::dbuct_solver(
+    IA& activate_once, IRS& run_sim, IGDC& get_decision_count,
+    ICR& compute_reward, IT& terminate, ICAR& check_is_at_root,
+    ILA& learn, IRMH& remove_mhu_head, IER& router, ICD& conflict_detector,
+    IUGD& unit_goal_detector, IPUG& push_unit_goal)
+    : activate_once_(activate_once), run_sim_(run_sim),
+      get_decision_count_(get_decision_count),
+      compute_reward_(compute_reward), terminate_(terminate),
+      check_is_at_root_(check_is_at_root),
+      learn_(learn), remove_mhu_head_(remove_mhu_head), router_(router),
+      conflict_detector_(conflict_detector),
+      unit_goal_detector_(unit_goal_detector),
+      push_unit_goal_(push_unit_goal) {}
+
+template<typename IA, typename IRS, typename IGDC, typename ICR,
+         typename IT, typename ICAR, typename ILA, typename IRMH, typename IER,
          typename ICD, typename IUGD, typename IPUG>
 coroutine<sim_termination, void>
-dbuct_solver<IA, IRS, IGDC, ICR, IT, ICAR, ILA, IM, IER, ICD, IUGD, IPUG>::solve() {
+dbuct_solver<IA, IRS, IGDC, ICR, IT, ICAR, ILA, IRMH, IER, ICD, IUGD, IPUG>::solve() {
     if (!activate_once_.activate_initial_goals_and_candidates()) {
         co_yield sim_termination::conflicted;
         co_return;
@@ -103,9 +112,9 @@ dbuct_solver<IA, IRS, IGDC, ICR, IT, ICAR, ILA, IM, IER, ICD, IUGD, IPUG>::solve
 }
 
 template<typename IA, typename IRS, typename IGDC, typename ICR,
-         typename IT, typename ICAR, typename ILA, typename IM, typename IER,
+         typename IT, typename ICAR, typename ILA, typename IRMH, typename IER,
          typename ICD, typename IUGD, typename IPUG>
-bool dbuct_solver<IA, IRS, IGDC, ICR, IT, ICAR, ILA, IM, IER, ICD, IUGD, IPUG>::learn_terminate_cascade() {
+bool dbuct_solver<IA, IRS, IGDC, ICR, IT, ICAR, ILA, IRMH, IER, ICD, IUGD, IPUG>::learn_terminate_cascade() {
     while (true) {
         learn_.learn();
         const double r = compute_reward_.compute_mcts_reward();
@@ -122,10 +131,10 @@ bool dbuct_solver<IA, IRS, IGDC, ICR, IT, ICAR, ILA, IM, IER, ICD, IUGD, IPUG>::
 }
 
 template<typename IA, typename IRS, typename IGDC, typename ICR,
-         typename IT, typename ICAR, typename ILA, typename IM, typename IER,
+         typename IT, typename ICAR, typename ILA, typename IRMH, typename IER,
          typename ICD, typename IUGD, typename IPUG>
-bool dbuct_solver<IA, IRS, IGDC, ICR, IT, ICAR, ILA, IM, IER, ICD, IUGD, IPUG>::route_elimination(const resolution_lineage* rl) {
-    mhu_.remove_head(rl);
+bool dbuct_solver<IA, IRS, IGDC, ICR, IT, ICAR, ILA, IRMH, IER, ICD, IUGD, IPUG>::route_elimination(const resolution_lineage* rl) {
+    remove_mhu_head_.remove_head(rl);
     const elimination_result res = router_.route(rl);
     if (res != elimination_result::eliminated)
         return false;
@@ -138,9 +147,9 @@ bool dbuct_solver<IA, IRS, IGDC, ICR, IT, ICAR, ILA, IM, IER, ICD, IUGD, IPUG>::
 }
 
 template<typename IA, typename IRS, typename IGDC, typename ICR,
-         typename IT, typename ICAR, typename ILA, typename IM, typename IER,
+         typename IT, typename ICAR, typename ILA, typename IRMH, typename IER,
          typename ICD, typename IUGD, typename IPUG>
-bool dbuct_solver<IA, IRS, IGDC, ICR, IT, ICAR, ILA, IM, IER, ICD, IUGD, IPUG>::route_eliminations(
+bool dbuct_solver<IA, IRS, IGDC, ICR, IT, ICAR, ILA, IRMH, IER, ICD, IUGD, IPUG>::route_eliminations(
     const std::vector<const resolution_lineage*>& elims) {
     for (const resolution_lineage* rl : elims) {
         if (route_elimination(rl))

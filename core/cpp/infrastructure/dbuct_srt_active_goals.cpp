@@ -1,5 +1,9 @@
 #include "infrastructure/dbuct_srt_active_goals.hpp"
 
+dbuct_srt_active_goals::dbuct_srt_active_goals()
+    : in_flight_frames_(std::deque<in_flight_frame>{in_flight_frame{}}) {}
+
+
 void dbuct_srt_active_goals::insert_active_goal(const goal_lineage* gl) {
     in_flight_.insert(gl);
     log_in_flight(srt_in_flight_insert{gl});
@@ -49,13 +53,13 @@ void dbuct_srt_active_goals::pop_frame() {
     tree_.pop_frame();
     auto current = std::move(in_flight_frames_.top());
     in_flight_frames_.pop();
-    for (auto it = current.actions.rbegin(); it != current.actions.rend(); ++it)
+    for (auto it = current.actions_.rbegin(); it != current.actions_.rend(); ++it)
         undo_in_flight_action(*it);
 }
 
 void dbuct_srt_active_goals::log_in_flight(srt_active_goals_action action) {
     DEBUG_ASSERT(!in_flight_frames_.empty());
-    in_flight_frames_.top().actions.push_back(std::move(action));
+    in_flight_frames_.top().actions_.push_back(std::move(action));
 }
 
 void dbuct_srt_active_goals::undo_in_flight_action(const srt_active_goals_action& action) {

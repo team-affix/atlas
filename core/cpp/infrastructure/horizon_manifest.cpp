@@ -2,12 +2,12 @@
 
 namespace {
 
-constexpr double kTotalWeight = 1.0;
+constexpr double k_total_weight = 1.0;
 
 double compute_initial_goal_weight(size_t count) {
     if (count == 0)
         return 0.0;
-    return kTotalWeight / static_cast<double>(count);
+    return k_total_weight / static_cast<double>(count);
 }
 
 }
@@ -41,7 +41,7 @@ horizon_manifest::horizon_manifest(
       frame_allocator_(initial_frame_offset),
       elimination_backlog_(),
       cdcl_(chosen_goal_candidates_),
-      mhu_(bind_map_, lineage_pool_, expr_pool_,
+      mhu_(bind_map_, bind_map_, lineage_pool_, expr_pool_,
            bind_map_factory_, unifier_factory_, goal_candidate_rules_),
       joint_(cdcl_, mhu_),
       get_resolution_rule_(database),
@@ -50,7 +50,7 @@ horizon_manifest::horizon_manifest(
       solution_detector_(srt_active_goals_),
       goal_activator_(goal_exprs_, goal_candidate_rules_, srt_active_goals_,
                       candidate_frame_offsets_, get_resolution_rule_),
-      horizon_goal_activator_(goal_activator_, goal_weights_, database),
+      horizon_goal_activator_(goal_activator_, goal_weights_, goal_weights_, database),
       srt_goal_deactivator_(goal_exprs_, goal_candidate_rules_),
       horizon_goal_deactivator_(srt_goal_deactivator_, goal_weights_),
       candidate_activator_(frame_allocator_, candidate_frame_offsets_, mhu_,
@@ -71,7 +71,7 @@ horizon_manifest::horizon_manifest(
                                  conflict_detector_, unit_goal_detector_, unit_goals_),
       subgoals_activator_(lineage_pool_, horizon_goal_activator_, database,
                           goal_candidates_activator_),
-      srt_subgoals_activator_(srt_active_goals_, subgoals_activator_),
+      srt_subgoals_activator_(srt_active_goals_, srt_active_goals_, subgoals_activator_),
       initial_goals_activator_(initial_goals, horizon_initial_goal_activator_,
                                make_initial_goal_lineage_, goal_candidates_activator_),
       srt_initial_goals_activator_(srt_active_goals_, initial_goals_activator_),
@@ -85,8 +85,8 @@ horizon_manifest::horizon_manifest(
       rng_(random_seed),
       mcts_sim_(set_up_sim_, tear_down_sim_, horizon_reward_,
                 value_delta_, lineage_pool_, rng_, exploration_constant),
-      mcts_decision_generator_(lineage_pool_, srt_active_goals_,
-                               mcts_sim_, goal_candidate_rules_),
+      mcts_decision_generator_(lineage_pool_, srt_active_goals_, srt_active_goals_,
+                               srt_active_goals_, mcts_sim_, goal_candidate_rules_),
       resolution_recorder_(decision_memory_, resolution_memory_),
       run_sim_(srt_initial_goals_activator_, solution_detector_,
                conflict_detector_, unit_goal_detector_,
@@ -102,4 +102,6 @@ horizon_manifest::horizon_manifest(
       tear_down_sim_(tear_down_base_, goal_weights_, cumulative_grounded_weight_),
       solver_(mcts_sim_, mcts_sim_, run_sim_,
               decision_memory_, decision_memory_,
-              lineage_pool_, cdcl_, elimination_router_) {}
+              lineage_pool_, cdcl_, elimination_router_),
+      normalizer_(globalizer_, expr_pool_, expr_pool_, bind_map_),
+      driver_(solver_.solve()) {}

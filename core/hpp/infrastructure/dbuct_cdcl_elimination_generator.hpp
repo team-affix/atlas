@@ -44,7 +44,7 @@ private:
     void link_watchers(avoidance_id id);
 
     std::unordered_map<avoidance_id, avoidance> avoidances_;
-    size_t next_avoidance_id_ = 0;
+    size_t next_avoidance_id_;
     std::unordered_map<const goal_lineage*, std::unordered_set<avoidance_id>> watched_goals_;
 
     // frame-based system for dbuct
@@ -60,10 +60,10 @@ private:
     // we bubble them up to the front of the list (never violating the visitation boundary, we never want
     // to modify the list to the left of the pipe). The pipe slides leftward as we backtrack basically.
     struct frame {
-        std::list<avoidance_action> actions;
+        std::list<avoidance_action> actions_;
         std::list<raised_unit_avoidance> raised_unit_avoidance_lump;
     };
-    std::stack<frame> frame_stack_{std::deque<frame>{frame{}}};
+    std::stack<frame> frame_stack_;
     
     ITryGetChosenGoalCandidate& try_get_chosen_goal_candidate_;
     IGetUnitBoundary& get_unit_boundary_;
@@ -73,8 +73,12 @@ private:
 };
 
 template<typename ITGCC, typename IGUB, typename IDL, typename IGUD, typename IGPD>
-dbuct_cdcl_elimination_generator<ITGCC, IGUB, IDL, IGUD, IGPD>::dbuct_cdcl_elimination_generator(ITGCC& tgcc, IGUB& gub, IDL& dl, IGUD& gud, IGPD& gpd)
-    : try_get_chosen_goal_candidate_(tgcc), get_unit_boundary_(gub), derive_decision_lemma_(dl), get_ultimate_decision_(gud), get_penultimate_decision_(gpd) {}
+dbuct_cdcl_elimination_generator<ITGCC, IGUB, IDL, IGUD, IGPD>::dbuct_cdcl_elimination_generator(
+    ITGCC& tgcc, IGUB& gub, IDL& dl, IGUD& gud, IGPD& gpd)
+    : next_avoidance_id_(0), frame_stack_(std::deque<frame>{frame{}}),
+      try_get_chosen_goal_candidate_(tgcc), get_unit_boundary_(gub),
+      derive_decision_lemma_(dl), get_ultimate_decision_(gud),
+      get_penultimate_decision_(gpd) {}
 
 template<typename ITGCC, typename IGUB, typename IDL, typename IGUD, typename IGPD>
 void
@@ -163,7 +167,7 @@ dbuct_cdcl_elimination_generator<ITGCC, IGUB, IDL, IGUD, IGPD>::visit_avoidance(
     const size_t        other_pos = a_fired ? av.watcher_b_pos : av.watcher_a_pos;
     const goal_lineage* other_gl  = av.members.at(other_pos)->parent;
 
-    auto& actions = frame_stack_.top().actions;
+    auto& actions = frame_stack_.top().actions_;
     
     if (av.members.at(fired_pos)->idx != rl->idx) {
         watched_goals_[other_gl].erase(id);
@@ -208,7 +212,7 @@ coroutine<const resolution_lineage*, void> dbuct_cdcl_elimination_generator<ITGC
     auto& parent = frame_stack_.top();
 
     // undo the actions in reverse order
-    for (auto it = current.actions.rbegin(); it != current.actions.rend(); ++it)
+    for (auto it = current.actions_.rbegin(); it != current.actions_.rend(); ++it)
         undo_action(*it);
     
     for (auto& rua : current.raised_unit_avoidance_lump) {

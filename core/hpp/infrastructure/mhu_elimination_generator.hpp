@@ -5,19 +5,20 @@
 #include <queue>
 #include <unordered_map>
 #include <unordered_set>
-#include "debug_assert.hpp"
 #include "infrastructure/coroutine.hpp"
 #include "infrastructure/unifier_factory.hpp"
 #include "infrastructure/unifier.hpp"
 #include "value_objects/framed_expr.hpp"
 #include "value_objects/lineage.hpp"
 #include "value_objects/unify_head.hpp"
+#include "debug_assert.hpp"
 
-template<typename IBindMap, typename IBindMapFactory, typename IUnifier,
+template<typename IBindMap, typename IBindCommonVar, typename IWhnfCommonExpr,
+         typename IBindMapFactory, typename IUnifier,
          typename IUnifierFactory, typename IMakeResolutionLineage,
          typename IMakeVar, typename IGetGoalCandidateRuleIds>
 struct mhu_elimination_generator {
-    mhu_elimination_generator(IBindMap&, IMakeResolutionLineage&, IMakeVar&,
+    mhu_elimination_generator(IBindCommonVar&, IWhnfCommonExpr&, IMakeResolutionLineage&, IMakeVar&,
                                IBindMapFactory&, IUnifierFactory&,
                                const IGetGoalCandidateRuleIds&);
     bool try_add_head(const resolution_lineage*, framed_expr goal, framed_expr head);
@@ -29,11 +30,12 @@ private:
     bool sync_and_link(const resolution_lineage*, IUnifier&, std::queue<uint32_t>&);
     coroutine<uint32_t, bool> synchronize(IUnifier&, std::queue<uint32_t>&);
     void link(const std::unordered_set<uint32_t>&, const std::unordered_set<const resolution_lineage*>&);
-    std::unordered_set<const resolution_lineage*> unlink(uint32_t);
-    std::unordered_set<uint32_t> unlink(const resolution_lineage*);
+    std::unordered_set<const resolution_lineage*> unlink_rep(uint32_t);
+    std::unordered_set<uint32_t> unlink_resolution(const resolution_lineage*);
     void remove_head(const resolution_lineage*);
 
-    IBindMap& common_;
+    IBindCommonVar& bind_common_var_;
+    IWhnfCommonExpr& whnf_common_expr_;
     IMakeResolutionLineage& make_resolution_lineage_;
     IMakeVar& make_var_;
     IBindMapFactory& bind_map_factory_;
@@ -45,15 +47,15 @@ private:
     std::unordered_map<const resolution_lineage*, std::unordered_set<uint32_t>> rl_to_reps_;
 };
 
-template<typename IBM, typename IBMF, typename IU, typename IUF, typename IMRL, typename IMV, typename IGCRI>
-mhu_elimination_generator<IBM, IBMF, IU, IUF, IMRL, IMV, IGCRI>::mhu_elimination_generator(
-    IBM& common, IMRL& mrl, IMV& mv, IBMF& bmf, IUF& uf, const IGCRI& gcri)
-    : common_(common), make_resolution_lineage_(mrl), make_var_(mv),
+template<typename IBM, typename IBCV, typename IWCE, typename IBMF, typename IU, typename IUF, typename IMRL, typename IMV, typename IGCRI>
+mhu_elimination_generator<IBM, IBCV, IWCE, IBMF, IU, IUF, IMRL, IMV, IGCRI>::mhu_elimination_generator(
+    IBCV& bcv, IWCE& wce, IMRL& mrl, IMV& mv, IBMF& bmf, IUF& uf, const IGCRI& gcri)
+    : bind_common_var_(bcv), whnf_common_expr_(wce), make_resolution_lineage_(mrl), make_var_(mv),
       bind_map_factory_(bmf), unifier_factory_(uf),
       get_goal_candidate_rule_ids_(gcri) {}
 
-template<typename IBM, typename IBMF, typename IU, typename IUF, typename IMRL, typename IMV, typename IGCRI>
-bool mhu_elimination_generator<IBM, IBMF, IU, IUF, IMRL, IMV, IGCRI>::try_add_head(
+template<typename IBM, typename IBCV, typename IWCE, typename IBMF, typename IU, typename IUF, typename IMRL, typename IMV, typename IGCRI>
+bool mhu_elimination_generator<IBM, IBCV, IWCE, IBMF, IU, IUF, IMRL, IMV, IGCRI>::try_add_head(
     const resolution_lineage* lineage, framed_expr lhs, framed_expr rhs) {
     auto bm = std::make_unique<IBM>(bind_map_factory_.make());
     IU u = unifier_factory_.make(bm.get());
@@ -72,15 +74,15 @@ bool mhu_elimination_generator<IBM, IBMF, IU, IUF, IMRL, IMV, IGCRI>::try_add_he
     if (!sync_and_link(lineage, u, touched_vars))
         return false;
 
-    unify_head<IBM, IU> head{std::move(bm), std::move(u)};
+    unify_head<IBM, IU> head(std::move(bm), std::move(u));
     const auto [_, inserted] = heads_.insert({lineage, std::move(head)});
     DEBUG_ASSERT(inserted);
     return true;
 }
 
-template<typename IBM, typename IBMF, typename IU, typename IUF, typename IMRL, typename IMV, typename IGCRI>
+template<typename IBM, typename IBCV, typename IWCE, typename IBMF, typename IU, typename IUF, typename IMRL, typename IMV, typename IGCRI>
 coroutine<const resolution_lineage*, void>
-mhu_elimination_generator<IBM, IBMF, IU, IUF, IMRL, IMV, IGCRI>::constrain(
+mhu_elimination_generator<IBM, IBCV, IWCE, IBMF, IU, IUF, IMRL, IMV, IGCRI>::constrain(
     const resolution_lineage* lineage) {
     auto gl = lineage->parent;
     auto& candidates = get_goal_candidate_rule_ids_.get(gl);
@@ -96,8 +98,8 @@ mhu_elimination_generator<IBM, IBMF, IU, IUF, IMRL, IMV, IGCRI>::constrain(
     }
 
     auto& head = heads_.at(lineage);
-    auto c_reps = unlink(lineage);
-    auto sm0 = accept_bindings(*head.local_bind_map, c_reps);
+    auto c_reps = unlink_resolution(lineage);
+    auto sm0 = accept_bindings(head.local_bind_map(), c_reps);
     while (!sm0.done()) {
         sm0.resume();
         if (sm0.has_yield())
@@ -107,16 +109,16 @@ mhu_elimination_generator<IBM, IBMF, IU, IUF, IMRL, IMV, IGCRI>::constrain(
     heads_.erase(lineage);
 }
 
-template<typename IBM, typename IBMF, typename IU, typename IUF, typename IMRL, typename IMV, typename IGCRI>
-void mhu_elimination_generator<IBM, IBMF, IU, IUF, IMRL, IMV, IGCRI>::clear_mhu_heads() {
+template<typename IBM, typename IBCV, typename IWCE, typename IBMF, typename IU, typename IUF, typename IMRL, typename IMV, typename IGCRI>
+void mhu_elimination_generator<IBM, IBCV, IWCE, IBMF, IU, IUF, IMRL, IMV, IGCRI>::clear_mhu_heads() {
     heads_.clear();
     rep_to_rls_.clear();
     rl_to_reps_.clear();
 }
 
-template<typename IBM, typename IBMF, typename IU, typename IUF, typename IMRL, typename IMV, typename IGCRI>
+template<typename IBM, typename IBCV, typename IWCE, typename IBMF, typename IU, typename IUF, typename IMRL, typename IMV, typename IGCRI>
 coroutine<const resolution_lineage*, void>
-mhu_elimination_generator<IBM, IBMF, IU, IUF, IMRL, IMV, IGCRI>::accept_bindings(
+mhu_elimination_generator<IBM, IBCV, IWCE, IBMF, IU, IUF, IMRL, IMV, IGCRI>::accept_bindings(
     IBM& local_bind_map, const std::unordered_set<uint32_t>& c_reps) {
     for (auto c_rep : c_reps) {
         auto rep_expr = make_var_.make_var(c_rep);
@@ -125,7 +127,7 @@ mhu_elimination_generator<IBM, IBMF, IU, IUF, IMRL, IMV, IGCRI>::accept_bindings
         if (rep_expr == whnf.skeleton && whnf.frame_offset == 0)
             continue;
 
-        common_.bind(c_rep, whnf);
+        bind_common_var_.bind(c_rep, whnf);
 
         auto sm0 = rebase_all(c_rep);
         while (!sm0.done()) {
@@ -136,22 +138,22 @@ mhu_elimination_generator<IBM, IBMF, IU, IUF, IMRL, IMV, IGCRI>::accept_bindings
     }
 }
 
-template<typename IBM, typename IBMF, typename IU, typename IUF, typename IMRL, typename IMV, typename IGCRI>
+template<typename IBM, typename IBCV, typename IWCE, typename IBMF, typename IU, typename IUF, typename IMRL, typename IMV, typename IGCRI>
 coroutine<const resolution_lineage*, void>
-mhu_elimination_generator<IBM, IBMF, IU, IUF, IMRL, IMV, IGCRI>::rebase_all(uint32_t rep) {
-    auto remaining_rls = unlink(rep);
+mhu_elimination_generator<IBM, IBCV, IWCE, IBMF, IU, IUF, IMRL, IMV, IGCRI>::rebase_all(uint32_t rep) {
+    auto remaining_rls = unlink_rep(rep);
     for (auto rl : remaining_rls) {
         std::queue<uint32_t> touched_vars;
         touched_vars.push(rep);
-        if (!sync_and_link(rl, heads_.at(rl).unifier, touched_vars)) {
+        if (!sync_and_link(rl, heads_.at(rl).unifier(), touched_vars)) {
             remove_head(rl);
             co_yield rl;
         }
     }
 }
 
-template<typename IBM, typename IBMF, typename IU, typename IUF, typename IMRL, typename IMV, typename IGCRI>
-bool mhu_elimination_generator<IBM, IBMF, IU, IUF, IMRL, IMV, IGCRI>::sync_and_link(
+template<typename IBM, typename IBCV, typename IWCE, typename IBMF, typename IU, typename IUF, typename IMRL, typename IMV, typename IGCRI>
+bool mhu_elimination_generator<IBM, IBCV, IWCE, IBMF, IU, IUF, IMRL, IMV, IGCRI>::sync_and_link(
     const resolution_lineage* lineage, IU& unifier, std::queue<uint32_t>& touched_vars) {
     std::unordered_set<uint32_t> c_reps;
     auto sync_task = synchronize(unifier, touched_vars);
@@ -166,16 +168,16 @@ bool mhu_elimination_generator<IBM, IBMF, IU, IUF, IMRL, IMV, IGCRI>::sync_and_l
     return true;
 }
 
-template<typename IBM, typename IBMF, typename IU, typename IUF, typename IMRL, typename IMV, typename IGCRI>
+template<typename IBM, typename IBCV, typename IWCE, typename IBMF, typename IU, typename IUF, typename IMRL, typename IMV, typename IGCRI>
 coroutine<uint32_t, bool>
-mhu_elimination_generator<IBM, IBMF, IU, IUF, IMRL, IMV, IGCRI>::synchronize(
+mhu_elimination_generator<IBM, IBCV, IWCE, IBMF, IU, IUF, IMRL, IMV, IGCRI>::synchronize(
     IU& unifier, std::queue<uint32_t>& touched_vars) {
     while (!touched_vars.empty()) {
         auto var = touched_vars.front();
         touched_vars.pop();
 
         auto var_expr = make_var_.make_var(var);
-        framed_expr whnf = common_.whnf({var_expr, 0});
+        framed_expr whnf = whnf_common_expr_.whnf({var_expr, 0});
 
         if (var_expr == whnf.skeleton && whnf.frame_offset == 0) {
             co_yield var;
@@ -195,8 +197,8 @@ mhu_elimination_generator<IBM, IBMF, IU, IUF, IMRL, IMV, IGCRI>::synchronize(
     co_return true;
 }
 
-template<typename IBM, typename IBMF, typename IU, typename IUF, typename IMRL, typename IMV, typename IGCRI>
-void mhu_elimination_generator<IBM, IBMF, IU, IUF, IMRL, IMV, IGCRI>::link(
+template<typename IBM, typename IBCV, typename IWCE, typename IBMF, typename IU, typename IUF, typename IMRL, typename IMV, typename IGCRI>
+void mhu_elimination_generator<IBM, IBCV, IWCE, IBMF, IU, IUF, IMRL, IMV, IGCRI>::link(
     const std::unordered_set<uint32_t>& reps,
     const std::unordered_set<const resolution_lineage*>& rls) {
     for (auto rep : reps)
@@ -205,9 +207,9 @@ void mhu_elimination_generator<IBM, IBMF, IU, IUF, IMRL, IMV, IGCRI>::link(
         rl_to_reps_[rl].insert(reps.begin(), reps.end());
 }
 
-template<typename IBM, typename IBMF, typename IU, typename IUF, typename IMRL, typename IMV, typename IGCRI>
+template<typename IBM, typename IBCV, typename IWCE, typename IBMF, typename IU, typename IUF, typename IMRL, typename IMV, typename IGCRI>
 std::unordered_set<const resolution_lineage*>
-mhu_elimination_generator<IBM, IBMF, IU, IUF, IMRL, IMV, IGCRI>::unlink(uint32_t rep) {
+mhu_elimination_generator<IBM, IBCV, IWCE, IBMF, IU, IUF, IMRL, IMV, IGCRI>::unlink_rep(uint32_t rep) {
     auto node = rep_to_rls_.extract(rep);
     if (node.empty())
         return {};
@@ -222,9 +224,9 @@ mhu_elimination_generator<IBM, IBMF, IU, IUF, IMRL, IMV, IGCRI>::unlink(uint32_t
     return std::move(rls);
 }
 
-template<typename IBM, typename IBMF, typename IU, typename IUF, typename IMRL, typename IMV, typename IGCRI>
+template<typename IBM, typename IBCV, typename IWCE, typename IBMF, typename IU, typename IUF, typename IMRL, typename IMV, typename IGCRI>
 std::unordered_set<uint32_t>
-mhu_elimination_generator<IBM, IBMF, IU, IUF, IMRL, IMV, IGCRI>::unlink(
+mhu_elimination_generator<IBM, IBCV, IWCE, IBMF, IU, IUF, IMRL, IMV, IGCRI>::unlink_resolution(
     const resolution_lineage* rl) {
     auto node = rl_to_reps_.extract(rl);
     if (node.empty())
@@ -240,11 +242,11 @@ mhu_elimination_generator<IBM, IBMF, IU, IUF, IMRL, IMV, IGCRI>::unlink(
     return std::move(reps);
 }
 
-template<typename IBM, typename IBMF, typename IU, typename IUF, typename IMRL, typename IMV, typename IGCRI>
-void mhu_elimination_generator<IBM, IBMF, IU, IUF, IMRL, IMV, IGCRI>::remove_head(
+template<typename IBM, typename IBCV, typename IWCE, typename IBMF, typename IU, typename IUF, typename IMRL, typename IMV, typename IGCRI>
+void mhu_elimination_generator<IBM, IBCV, IWCE, IBMF, IU, IUF, IMRL, IMV, IGCRI>::remove_head(
     const resolution_lineage* rl) {
     heads_.erase(rl);
-    unlink(rl);
+    unlink_resolution(rl);
 }
 
 #endif

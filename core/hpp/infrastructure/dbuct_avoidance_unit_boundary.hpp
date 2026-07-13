@@ -24,7 +24,7 @@ struct dbuct_avoidance_unit_boundary {
 
 private:
     struct frame {
-        std::list<avoidance_boundary_action> actions;
+        std::list<avoidance_boundary_action> actions_;
     };
 
     void assign_ultimate(const resolution_lineage* rl);
@@ -34,20 +34,22 @@ private:
     void log(avoidance_boundary_action action);
     void undo_action(const avoidance_boundary_action& action);
 
-    const resolution_lineage* ultimate_ = nullptr;
-    const resolution_lineage* penultimate_ = nullptr;
-    size_t ultimate_frame_depth_ = 0;
-    size_t unit_boundary_frame_depth_ = 0;
+    const resolution_lineage* ultimate_;
+    const resolution_lineage* penultimate_;
+    size_t ultimate_frame_depth_;
+    size_t unit_boundary_frame_depth_;
 
     IGetNearestDecision& get_nearest_decision_;
     IGetFrameDepth& get_frame_depth_;
-    std::stack<frame> frame_stack_{std::deque<frame>{frame{}}};
+    std::stack<frame> frame_stack_;
 };
 
 template<typename IGetNearestDecision, typename IGetFrameDepth>
 dbuct_avoidance_unit_boundary<IGetNearestDecision, IGetFrameDepth>::dbuct_avoidance_unit_boundary(
     IGetNearestDecision& nd, IGetFrameDepth& depth)
-    : get_nearest_decision_(nd), get_frame_depth_(depth) {}
+    : ultimate_(nullptr), penultimate_(nullptr), ultimate_frame_depth_(0),
+      unit_boundary_frame_depth_(0), get_nearest_decision_(nd), get_frame_depth_(depth),
+      frame_stack_(std::deque<frame>{frame{}}) {}
 
 template<typename IGetNearestDecision, typename IGetFrameDepth>
 void dbuct_avoidance_unit_boundary<IGetNearestDecision, IGetFrameDepth>::log_decision(
@@ -89,7 +91,7 @@ template<typename IGetNearestDecision, typename IGetFrameDepth>
 void dbuct_avoidance_unit_boundary<IGetNearestDecision, IGetFrameDepth>::pop_frame() {
     auto current = std::move(frame_stack_.top());
     frame_stack_.pop();
-    for (auto it = current.actions.rbegin(); it != current.actions.rend(); ++it)
+    for (auto it = current.actions_.rbegin(); it != current.actions_.rend(); ++it)
         undo_action(*it);
 }
 
@@ -128,7 +130,7 @@ void dbuct_avoidance_unit_boundary<IGetNearestDecision, IGetFrameDepth>::assign_
 template<typename IGetNearestDecision, typename IGetFrameDepth>
 void dbuct_avoidance_unit_boundary<IGetNearestDecision, IGetFrameDepth>::log(avoidance_boundary_action action) {
     DEBUG_ASSERT(!frame_stack_.empty());
-    frame_stack_.top().actions.push_back(std::move(action));
+    frame_stack_.top().actions_.push_back(std::move(action));
 }
 
 template<typename IGetNearestDecision, typename IGetFrameDepth>

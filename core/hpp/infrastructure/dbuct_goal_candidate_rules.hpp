@@ -25,7 +25,7 @@ struct dbuct_goal_candidate_rules {
 
 private:
     struct frame {
-        std::list<goal_candidate_rules_action> actions;
+        std::list<goal_candidate_rules_action> actions_;
     };
 
     using map_t = std::unordered_map<const goal_lineage*, ra_rule_id_set>;
@@ -35,7 +35,7 @@ private:
 
     ra_rule_id_set_factory& factory_;
     map_t by_goal_;
-    std::stack<frame> frame_stack_{std::deque<frame>{frame{}}};
+    std::stack<frame> frame_stack_;
 };
 
 #endif

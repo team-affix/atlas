@@ -65,6 +65,8 @@
 #include "infrastructure/unit_goals.hpp"
 #include "infrastructure/unifier.hpp"
 #include "infrastructure/unifier_factory.hpp"
+#include "infrastructure/normalizer.hpp"
+#include "infrastructure/solver_driver.hpp"
 
 struct genius_manifest {
     using bind_map_t        = bind_map<globalizer>;
@@ -72,7 +74,8 @@ struct genius_manifest {
     using unifier_factory_t = unifier_factory<globalizer, bind_map_t>;
     using cdcl_t  = cdcl_elimination_generator<chosen_goal_candidates>;
     using mhu_t   = mhu_elimination_generator<
-                    bind_map_t, bind_map_factory_t, unifier<globalizer, bind_map_t>, unifier_factory_t,
+                    bind_map_t, bind_map_t, bind_map_t, bind_map_factory_t,
+                    unifier<globalizer, bind_map_t>, unifier_factory_t,
                     lineage_pool, expr_pool, goal_candidate_rules>;
     using joint_t = joint_elimination_generator<cdcl_t, mhu_t>;
 
@@ -96,13 +99,13 @@ struct genius_manifest {
                                         lineage_pool, candidate_deactivator_t>;
     using goal_candidates_activator_t   = goal_candidates_activator<db, lineage_pool, candidate_activator_t,
                                         conflict_detector_t, unit_goal_detector_t, unit_goals>;
-    using horizon_goal_activator_t      = horizon_goal_activator<goal_activator_t, goal_weights, db>;
+    using horizon_goal_activator_t      = horizon_goal_activator<goal_activator_t, goal_weights, goal_weights, db>;
     using horizon_goal_deactivator_t    = horizon_goal_deactivator<srt_goal_deactivator_t, goal_weights>;
     using horizon_initial_goal_activator_t = horizon_initial_goal_activator<initial_goal_activator_t,
                                         make_initial_goal_lineage_t, goal_weights, initial_goal_weight>;
     using subgoals_activator_t         = subgoals_activator<lineage_pool, horizon_goal_activator_t,
                                         db, goal_candidates_activator_t>;
-    using srt_subgoals_activator_t      = srt_subgoals_activator<srt_active_goals, subgoals_activator_t>;
+    using srt_subgoals_activator_t      = srt_subgoals_activator<srt_active_goals, srt_active_goals, subgoals_activator_t>;
     using initial_goals_activator_t     = initial_goals_activator<initial_goal_exprs,
                                         horizon_initial_goal_activator_t, make_initial_goal_lineage_t, goal_candidates_activator_t>;
     using srt_initial_goals_activator_t  = srt_initial_goals_activator<srt_active_goals, initial_goals_activator_t>;
@@ -119,7 +122,7 @@ struct genius_manifest {
     using mcts_sim_t        = mcts_sim<set_up_sim_t, horizon_tear_down_sim_t, ridge_reward_t,
                                        value_delta_t, lineage_pool>;
     using mcts_decision_generator_t = mcts_decision_generator<lineage_pool, srt_active_goals,
-                                    mcts_sim_t, goal_candidate_rules>;
+                                    srt_active_goals, srt_active_goals, mcts_sim_t, goal_candidate_rules>;
     using resolution_recorder_t = resolution_recorder<decision_memory, resolution_memory>;
     using run_sim_t        = run_sim<srt_initial_goals_activator_t, solution_detector_t, conflict_detector_t,
                             unit_goal_detector_t, unit_goals, unit_goals, mcts_decision_generator_t,
@@ -127,6 +130,7 @@ struct genius_manifest {
                             resolution_recorder_t, resolution_recorder_t, resolution_memory>;
     using solver_t        = solver<mcts_sim_t, mcts_sim_t, run_sim_t, decision_memory, decision_memory,
                             lineage_pool, cdcl_t, elimination_router_t>;
+    using normalizer_t    = normalizer<globalizer, expr_pool, expr_pool, bind_map_t>;
 
     genius_manifest(
         db& database,
@@ -195,6 +199,8 @@ struct genius_manifest {
     run_sim_t                      run_sim_;
     horizon_tear_down_sim_t             tear_down_sim_;
     solver_t                      solver_;
+    normalizer_t                  normalizer_;
+    solver_driver                 driver_;
 };
 
 #endif

@@ -123,7 +123,8 @@ std::string format_snapshot(const SrtTreeSnapshot& snap) {
 }
 
 using test_subgoals_activator_t    = subgoals_activator<lineage_pool, MockGoalActivator, MockGetRule, MockActivateGoalCandidates>;
-using test_srt_subgoals_activator_t = srt_subgoals_activator<srt_active_goals, test_subgoals_activator_t>;
+using test_srt_subgoals_activator_t = srt_subgoals_activator<
+    srt_active_goals, srt_active_goals, test_subgoals_activator_t>;
 using test_resolver_t             = resolver<MockGoalDeactivator, test_srt_subgoals_activator_t,
                                           MockDeactivateGoalCandidates, MockSetChosenGoalCandidate>;
 
@@ -436,7 +437,8 @@ struct SrtResolverOrderInvarianceIntegrationTest : public ::testing::Test {
             .WillByDefault(Return(true));
 
         subgoals = std::make_unique<test_subgoals_activator_t>(pool, goal_activator, get_rule, activate_candidates);
-        srt_subgoals = std::make_unique<test_srt_subgoals_activator_t>(active_goals, *subgoals);
+        srt_subgoals = std::make_unique<test_srt_subgoals_activator_t>(
+            active_goals, active_goals, *subgoals);
         res = std::make_unique<test_resolver_t>(goal_deactivator, *srt_subgoals, deactivate_candidates,
                                              set_chosen);
     }

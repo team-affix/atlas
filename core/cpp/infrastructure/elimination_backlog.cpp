@@ -26,7 +26,7 @@ void elimination_backlog::push_frame() {
 void elimination_backlog::pop_frame() {
     auto current = std::move(frame_stack_.top());
     frame_stack_.pop();
-    for (auto it = current.actions.rbegin(); it != current.actions.rend(); ++it)
+    for (auto it = current.actions_.rbegin(); it != current.actions_.rend(); ++it)
         undo_action(*it);
 }
 
@@ -36,7 +36,7 @@ size_t elimination_backlog::depth() const {
 
 void elimination_backlog::log(elimination_backlog_action action) {
     if (!frame_stack_.empty())
-        frame_stack_.top().actions.push_back(std::move(action));
+        frame_stack_.top().actions_.push_back(std::move(action));
 }
 
 void elimination_backlog::undo_action(const elimination_backlog_action& action) {

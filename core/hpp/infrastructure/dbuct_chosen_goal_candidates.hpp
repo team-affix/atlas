@@ -12,6 +12,7 @@
 #include "debug_assert.hpp"
 
 struct dbuct_chosen_goal_candidates {
+    dbuct_chosen_goal_candidates();
     std::optional<rule_id> try_get(const goal_lineage* gl) const;
     void set(const goal_lineage* gl, rule_id r);
 
@@ -20,7 +21,7 @@ struct dbuct_chosen_goal_candidates {
 
 private:
     struct frame {
-        std::list<chosen_candidate_action> actions;
+        std::list<chosen_candidate_action> actions_;
     };
 
     using map_t = std::unordered_map<const goal_lineage*, rule_id>;
@@ -29,7 +30,7 @@ private:
     void undo_action(const chosen_candidate_action& action);
 
     map_t by_goal_;
-    std::stack<frame> frame_stack_{std::deque<frame>{frame{}}};
+    std::stack<frame> frame_stack_;
 };
 
 #endif

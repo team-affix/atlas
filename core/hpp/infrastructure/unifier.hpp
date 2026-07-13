@@ -12,18 +12,18 @@ struct unifier {
     coroutine<uint32_t, bool> unify(framed_expr lhs, framed_expr rhs);
 private:
     bool occurs_check(uint32_t global_key, framed_expr);
-    IBindMap* bind_map;
+    IBindMap* bind_map_;
     IGlobalize& globalizer_;
 };
 
 template<typename IGlobalize, typename IBindMap>
 unifier<IGlobalize, IBindMap>::unifier(IGlobalize& g, IBindMap* bm)
-    : bind_map(bm), globalizer_(g) {}
+    : bind_map_(bm), globalizer_(g) {}
 
 template<typename IGlobalize, typename IBindMap>
 coroutine<uint32_t, bool> unifier<IGlobalize, IBindMap>::unify(framed_expr lhs, framed_expr rhs) {
-    lhs = bind_map->whnf(lhs);
-    rhs = bind_map->whnf(rhs);
+    lhs = bind_map_->whnf(lhs);
+    rhs = bind_map_->whnf(rhs);
 
     const expr::var* lv = std::get_if<expr::var>(&lhs.skeleton->content);
     const expr::var* rv = std::get_if<expr::var>(&rhs.skeleton->content);
@@ -42,7 +42,7 @@ coroutine<uint32_t, bool> unifier<IGlobalize, IBindMap>::unify(framed_expr lhs, 
             co_return false;
         co_yield lv_global;
         co_yield rv_global;
-        bind_map->bind(young_global, target);
+        bind_map_->bind(young_global, target);
         co_return true;
     }
 
@@ -52,7 +52,7 @@ coroutine<uint32_t, bool> unifier<IGlobalize, IBindMap>::unify(framed_expr lhs, 
         if (occurs_check(var_global, other))
             co_return false;
         co_yield var_global;
-        bind_map->bind(var_global, other);
+        bind_map_->bind(var_global, other);
         co_return true;
     }
 
@@ -74,7 +74,7 @@ coroutine<uint32_t, bool> unifier<IGlobalize, IBindMap>::unify(framed_expr lhs, 
 
 template<typename IGlobalize, typename IBindMap>
 bool unifier<IGlobalize, IBindMap>::occurs_check(uint32_t global_key, framed_expr fe) {
-    fe = bind_map->whnf(fe);
+    fe = bind_map_->whnf(fe);
 
     if (const expr::var* v = std::get_if<expr::var>(&fe.skeleton->content))
         return globalizer_.globalize(fe.frame_offset, v->index) == global_key;

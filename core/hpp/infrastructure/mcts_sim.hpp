@@ -20,7 +20,8 @@ struct mcts_sim {
     mcts_choice choose(const std::vector<mcts_choice>&);
 
 private:
-    using decision_set_t = mcts_node_id::first_type;
+    using set_t = std::set<const resolution_lineage*>;
+    using vec_t = std::vector<mcts_choice>;
 
     // ── walker ───────────────────────────────────────────────────────────────
     // Pure function — no mutable state; all context is in the node handle.
@@ -35,9 +36,8 @@ private:
     // operator< but no std::hash.
     using visits_table_t = monte_carlo::visits_table<mcts_node_id, std::map>;
     using value_table_t  = monte_carlo::value_table<mcts_node_id, double, std::map>;
-    using choices_t = std::vector<mcts_choice>;
     using rollout_t = monte_carlo::random_rollout<
-                          mcts_choice, std::mt19937, choices_t, choices_t>;
+                          mcts_choice, std::mt19937, vec_t, vec_t>;
     using mc_sim_t  = monte_carlo::sim<
                           mcts_node_id,    // INodeHandle
                           mcts_choice,     // IChoice
@@ -47,8 +47,8 @@ private:
                           visits_table_t,  // ISetVisits
                           value_table_t,   // ISetValue
                           walker,          // IWalker
-                          choices_t,       // IGetChoiceCount
-                          choices_t,       // IGetChoiceAt
+                          vec_t,           // IGetChoiceCount
+                          vec_t,           // IGetChoiceAt
                           rollout_t,       // IRolloutChoose
                           IGetValueDelta>; // IGetValueDelta
 
@@ -87,7 +87,7 @@ mcts_sim<ISUS, ITDS, ICMR, IGVD, IMRL>::walker::walk(
     const resolution_lineage* rl =
         make_resolution_lineage_.make_resolution_lineage(
             node.second, std::get<rule_id>(choice));
-    decision_set_t next_set = node.first;
+    set_t next_set = node.first;
     next_set.insert(rl);
     return {std::move(next_set), nullptr};
 }
@@ -116,7 +116,7 @@ void mcts_sim<ISUS, ITDS, ICMR, IGVD, IMRL>::set_up() {
                     walker_,
                     rollout_,
                     value_delta_,
-                    mcts_node_id{decision_set_t{}, nullptr},
+                    mcts_node_id{set_t{}, nullptr},
                     exploration_constant_);
     set_up_.set_up();
 }

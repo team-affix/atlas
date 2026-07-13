@@ -11,6 +11,7 @@
 #include "debug_assert.hpp"
 
 struct dbuct_candidate_frame_offsets {
+    dbuct_candidate_frame_offsets();
     void set(const resolution_lineage* rl, uint32_t frame_offset);
     void unset(const resolution_lineage* rl);
     uint32_t get(const resolution_lineage* rl) const;
@@ -20,7 +21,7 @@ struct dbuct_candidate_frame_offsets {
 
 private:
     struct frame {
-        std::list<candidate_offset_action> actions;
+        std::list<candidate_offset_action> actions_;
     };
 
     using map_t = std::unordered_map<const resolution_lineage*, uint32_t>;
@@ -29,7 +30,7 @@ private:
     void undo_action(const candidate_offset_action& action);
 
     map_t offsets_;
-    std::stack<frame> frame_stack_{std::deque<frame>{frame{}}};
+    std::stack<frame> frame_stack_;
 };
 
 #endif

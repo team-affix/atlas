@@ -7,20 +7,18 @@ genius_runtime::genius_runtime(
     size_t max_resolutions,
     uint32_t random_seed,
     double exploration_constant)
-    : manifest_(database, goals, initial_frame_offset, max_resolutions, random_seed, exploration_constant),
-      normalizer_(manifest_.globalizer_, manifest_.expr_pool_, manifest_.expr_pool_, manifest_.bind_map_),
-      driver_(manifest_.solver_.solve()) {}
+    : manifest_(database, goals, initial_frame_offset, max_resolutions, random_seed, exploration_constant) {}
 
 bool genius_runtime::next() {
-    return driver_.next();
+    return manifest_.driver_.next();
 }
 
 bool genius_runtime::solved() const {
-    return driver_.solved();
+    return manifest_.driver_.solved();
 }
 
 const expr* genius_runtime::normalize(framed_expr fe) {
-    return normalizer_.normalize(fe);
+    return manifest_.normalizer_.normalize(fe);
 }
 
 size_t genius_runtime::resolution_depth() const {

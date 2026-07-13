@@ -18,8 +18,10 @@ struct goal_candidate_rules {
     void erase(const goal_lineage*);
     void clear_goal_candidate_rule_ids();
 private:
+    using map_t = std::unordered_map<const goal_lineage*, ra_rule_id_set>;
+
     ra_rule_id_set_factory& factory_;
-    std::unordered_map<const goal_lineage*, ra_rule_id_set> by_goal_;
+    map_t by_goal_;
 };
 
 #endif

@@ -70,6 +70,8 @@
 #include "infrastructure/dbuct_srt_active_goals.hpp"
 #include "infrastructure/dbuct_unit_goals.hpp"
 #include "infrastructure/frame_depth_tracker.hpp"
+#include "infrastructure/normalizer.hpp"
+#include "infrastructure/solver_driver.hpp"
 
 struct dbuct_ridge_manifest {
     using bind_map_t                = dbuct_bind_map<globalizer>;
@@ -92,17 +94,29 @@ struct dbuct_ridge_manifest {
                     chosen_goal_candidates_t, avoidance_unit_boundary_t, decision_memory_t,
                     avoidance_unit_boundary_t, avoidance_unit_boundary_t>;
     using mhu_t   = dbuct_mhu_elimination_generator<
-                    bind_map_t, bind_map_factory_t, unifier<globalizer, bind_map_t>,
-                    unifier_factory_t, lineage_pool, expr_pool, goal_candidate_rules_t>;
+                    bind_map_t, bind_map_t, bind_map_t, bind_map_factory_t,
+                    unifier<globalizer, bind_map_t>, unifier_factory_t, lineage_pool,
+                    expr_pool, goal_candidate_rules_t>;
     using hub_t   = dbuct_frame_hub<
-                    frame_depth_tracker, goal_exprs_t, goal_candidate_rules_t,
-                    chosen_goal_candidates_t, decision_memory_t, resolution_memory_t,
-                    unit_goals_t, candidate_frame_offsets_t, frame_bump_allocator_t,
-                    nearest_decision_t, elimination_backlog_t, avoidance_unit_boundary_t,
-                    srt_active_goals_t, bind_map_t, mhu_t, cdcl_t>;
+                    frame_depth_tracker, frame_depth_tracker, frame_depth_tracker,
+                    goal_exprs_t, goal_exprs_t,
+                    goal_candidate_rules_t, goal_candidate_rules_t,
+                    chosen_goal_candidates_t, chosen_goal_candidates_t,
+                    decision_memory_t, decision_memory_t,
+                    resolution_memory_t, resolution_memory_t,
+                    unit_goals_t, unit_goals_t,
+                    candidate_frame_offsets_t, candidate_frame_offsets_t,
+                    frame_bump_allocator_t, frame_bump_allocator_t,
+                    nearest_decision_t, nearest_decision_t,
+                    elimination_backlog_t, elimination_backlog_t,
+                    avoidance_unit_boundary_t, avoidance_unit_boundary_t,
+                    srt_active_goals_t, srt_active_goals_t,
+                    bind_map_t, bind_map_t,
+                    mhu_t, mhu_t,
+                    cdcl_t, cdcl_t>;
     using dbuct_joint_t = dbuct_joint_elimination_generator<cdcl_t, mhu_t>;
     using resolution_recorder_t = dbuct_resolution_recorder<decision_memory_t, resolution_memory_t,
-                                nearest_decision_t, avoidance_unit_boundary_t>;
+                                nearest_decision_t, nearest_decision_t, avoidance_unit_boundary_t>;
 
     using get_resolution_rule_t         = get_resolution_rule<db>;
     using conflict_detector_t           = conflict_detector<goal_candidate_rules_t>;
@@ -126,7 +140,7 @@ struct dbuct_ridge_manifest {
                                           conflict_detector_t, unit_goal_detector_t, unit_goals_t>;
     using subgoals_activator_t          = subgoals_activator<lineage_pool, goal_activator_t,
                                           db, goal_candidates_activator_t>;
-    using srt_subgoals_activator_t      = srt_subgoals_activator<srt_active_goals_t, subgoals_activator_t>;
+    using srt_subgoals_activator_t      = srt_subgoals_activator<srt_active_goals_t, srt_active_goals_t, subgoals_activator_t>;
     using initial_goals_activator_t     = initial_goals_activator<initial_goal_exprs,
                                           initial_goal_activator_t, make_initial_goal_lineage_t, goal_candidates_activator_t>;
     using srt_initial_goals_activator_t = srt_initial_goals_activator<srt_active_goals_t, initial_goals_activator_t>;
@@ -150,8 +164,10 @@ struct dbuct_ridge_manifest {
                                          dbuct_dispatches_table_t, dbuct_dispatches_table_t,
                                          dbuct_batch_t, dbuct_tree_walker_t,
                                          dbuct_choices_t, dbuct_choices_t, dbuct_rollout_t>;
-    using dbuct_sim_t              = dbuct_sim<hub_t, avoidance_unit_boundary_t, dbuct_t>;
-    using mcts_decision_generator_t     = mcts_decision_generator<lineage_pool, srt_active_goals_t,
+    using dbuct_sim_t              = dbuct_sim<hub_t, hub_t, hub_t,
+                                          avoidance_unit_boundary_t, dbuct_t, dbuct_t, dbuct_t>;
+    using mcts_decision_generator_t     = mcts_decision_generator<lineage_pool,
+                                          srt_active_goals_t, srt_active_goals_t, srt_active_goals_t,
                                           dbuct_sim_t, goal_candidate_rules_t>;
     using run_sim_t                     = run_sim<dbuct_frontier_ready, solution_detector_t, conflict_detector_t,
                                           unit_goal_detector_t, unit_goals_t, unit_goals_t, mcts_decision_generator_t,
@@ -160,6 +176,7 @@ struct dbuct_ridge_manifest {
     using solver_t                      = dbuct_solver<srt_initial_goals_activator_t, run_sim_t, decision_memory_t,
                                           ridge_reward_t, dbuct_sim_t, dbuct_sim_t, cdcl_t, mhu_t, elimination_router_t,
                                           conflict_detector_t, unit_goal_detector_t, unit_goals_t>;
+    using normalizer_t                  = normalizer<globalizer, expr_pool, expr_pool, bind_map_t>;
 
     dbuct_ridge_manifest(
         db& database,
@@ -228,6 +245,8 @@ struct dbuct_ridge_manifest {
     dbuct_frontier_ready          frontier_ready_;
     run_sim_t                     run_sim_;
     solver_t                      solver_;
+    normalizer_t                  normalizer_;
+    solver_driver                 driver_;
 };
 
 #endif

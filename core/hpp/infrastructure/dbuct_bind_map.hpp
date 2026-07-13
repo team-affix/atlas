@@ -31,11 +31,11 @@ private:
 
     IGlobalize& globalizer_;
     map_t bindings_;
-    std::vector<frame> frames_{frame{}};
+    std::vector<frame> frames_;
 };
 
 template<typename IGlobalize>
-dbuct_bind_map<IGlobalize>::dbuct_bind_map(IGlobalize& g) : globalizer_(g) {}
+dbuct_bind_map<IGlobalize>::dbuct_bind_map(IGlobalize& g) : globalizer_(g), frames_(1) {}
 
 template<typename IGlobalize>
 void dbuct_bind_map<IGlobalize>::bind(uint32_t global_key, framed_expr value) {

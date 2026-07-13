@@ -9,21 +9,18 @@ dbuct_ridge_runtime::dbuct_ridge_runtime(
     double exploration_constant,
     size_t grant_increment_interval)
     : manifest_(database, goals, initial_frame_offset, max_resolutions,
-                random_seed, exploration_constant, grant_increment_interval),
-      normalizer_(manifest_.globalizer_, manifest_.expr_pool_,
-                  manifest_.expr_pool_, manifest_.bind_map_),
-      driver_(manifest_.solver_.solve()) {}
+                random_seed, exploration_constant, grant_increment_interval) {}
 
 bool dbuct_ridge_runtime::next() {
-    return driver_.next();
+    return manifest_.driver_.next();
 }
 
 bool dbuct_ridge_runtime::solved() const {
-    return driver_.solved();
+    return manifest_.driver_.solved();
 }
 
 const expr* dbuct_ridge_runtime::normalize(framed_expr fe) {
-    return normalizer_.normalize(fe);
+    return manifest_.normalizer_.normalize(fe);
 }
 
 size_t dbuct_ridge_runtime::resolution_depth() const {

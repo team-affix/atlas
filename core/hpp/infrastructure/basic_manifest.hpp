@@ -51,6 +51,8 @@
 #include "infrastructure/unifier_factory.hpp"
 #include "infrastructure/unit_goal_detector.hpp"
 #include "infrastructure/unit_goals.hpp"
+#include "infrastructure/normalizer.hpp"
+#include "infrastructure/solver_driver.hpp"
 
 struct basic_manifest {
     using bind_map_t        = bind_map<globalizer>;
@@ -58,7 +60,8 @@ struct basic_manifest {
     using unifier_factory_t = unifier_factory<globalizer, bind_map_t>;
     using cdcl_t  = cdcl_elimination_generator<chosen_goal_candidates>;
     using mhu_t   = mhu_elimination_generator<
-                    bind_map_t, bind_map_factory_t, unifier<globalizer, bind_map_t>, unifier_factory_t,
+                    bind_map_t, bind_map_t, bind_map_t, bind_map_factory_t,
+                    unifier<globalizer, bind_map_t>, unifier_factory_t,
                     lineage_pool, expr_pool, goal_candidate_rules>;
     using joint_t = joint_elimination_generator<cdcl_t, mhu_t>;
 
@@ -99,6 +102,7 @@ struct basic_manifest {
                         resolution_recorder_t, resolution_recorder_t, resolution_memory>;
     using solver_t    = solver<set_up_sim_t, tear_down_sim_t, run_sim_t, decision_memory, decision_memory,
                         lineage_pool, cdcl_t, elimination_router_t>;
+    using normalizer_t = normalizer<globalizer, expr_pool, expr_pool, bind_map_t>;
 
     basic_manifest(
         db& database,
@@ -152,6 +156,8 @@ struct basic_manifest {
     resolution_recorder_t            resolution_recorder_;
     run_sim_t                      run_sim_;
     solver_t                      solver_;
+    normalizer_t                  normalizer_;
+    solver_driver                 driver_;
 };
 
 #endif
