@@ -6,7 +6,7 @@
 // SUT: dbuct_cdcl_elimination_generator (real). Every collaborator is a GMock
 // double:
 //   - ITryGetChosenGoalCandidate : try_get(goal) -> optional<rule_id>
-//   - IGetPenultimateDecisionChoiceDepth : get_penultimate_decision_choice_depth() -> size_t
+//   - IGetPenultimateMctsFrameDepth : get_penultimate_mcts_frame_depth() -> size_t
 //   - IDeriveDecisionLemma       : derive_decision_lemma() -> lemma
 //   - IGetUltimateDecision       : get_ultimate_decision()   -> resolution_lineage*
 //   - IGetPenultimateDecision    : get_penultimate_decision() -> resolution_lineage*
@@ -35,8 +35,8 @@ namespace {
 struct MockTryGetChosenGoalCandidate {
     MOCK_METHOD(std::optional<rule_id>, try_get, (const goal_lineage*), (const));
 };
-struct MockGetPenultimateDecisionChoiceDepth {
-    MOCK_METHOD(size_t, get_penultimate_decision_choice_depth, (), (const));
+struct MockGetPenultimateMctsFrameDepth {
+    MOCK_METHOD(size_t, get_penultimate_mcts_frame_depth, (), (const));
 };
 struct MockDeriveDecisionLemma {
     MOCK_METHOD(lemma, derive_decision_lemma, ());
@@ -68,14 +68,14 @@ lemma make_lemma(std::initializer_list<const resolution_lineage*> rs) {
 
 using sut_t = dbuct_cdcl_elimination_generator<
     NiceMock<MockTryGetChosenGoalCandidate>,
-    NiceMock<MockGetPenultimateDecisionChoiceDepth>,
+    NiceMock<MockGetPenultimateMctsFrameDepth>,
     NiceMock<MockDeriveDecisionLemma>,
     NiceMock<MockGetUltimateDecision>,
     NiceMock<MockGetPenultimateDecision>>;
 
 struct DbuctCdclEliminationGeneratorUnitTest : public ::testing::Test {
     NiceMock<MockTryGetChosenGoalCandidate> tgcc;
-    NiceMock<MockGetPenultimateDecisionChoiceDepth> ub;
+    NiceMock<MockGetPenultimateMctsFrameDepth> ub;
     NiceMock<MockDeriveDecisionLemma> dl;
     NiceMock<MockGetUltimateDecision> gud;
     NiceMock<MockGetPenultimateDecision> gpd;
@@ -103,7 +103,7 @@ struct DbuctCdclEliminationGeneratorUnitTest : public ::testing::Test {
         // candidate (every member is "unassigned"). Call counts on these reads are
         // not part of the contract, so they are ON_CALL defaults, not EXPECT_CALLs.
         ON_CALL(tgcc, try_get(_)).WillByDefault(Return(std::optional<rule_id>{}));
-        ON_CALL(ub, get_penultimate_decision_choice_depth()).WillByDefault(Return(0u));
+        ON_CALL(ub, get_penultimate_mcts_frame_depth()).WillByDefault(Return(0u));
         ON_CALL(gud, get_ultimate_decision()).WillByDefault(Return(&ult));
         ON_CALL(gpd, get_penultimate_decision()).WillByDefault(Return(&pen));
     }
@@ -118,7 +118,7 @@ struct DbuctCdclEliminationGeneratorUnitTest : public ::testing::Test {
         EXPECT_CALL(dl, derive_decision_lemma())
             .WillOnce(Return(make_lemma(members)))
             .RetiresOnSaturation();
-        ON_CALL(ub, get_penultimate_decision_choice_depth()).WillByDefault(Return(boundary));
+        ON_CALL(ub, get_penultimate_mcts_frame_depth()).WillByDefault(Return(boundary));
         ON_CALL(gud, get_ultimate_decision()).WillByDefault(Return(ultimate));
         ON_CALL(gpd, get_penultimate_decision()).WillByDefault(Return(penultimate));
         sut.learn();
@@ -322,7 +322,7 @@ TEST_F(DbuctCdclEliminationGeneratorUnitTest, LearnConsultsUnitBoundaryForEachSt
     // The boundary read is what makes a raised unit avoidance decide between
     // emit-vs-arm on pop, so learn must consult it at least once per learned
     // conflict. Exact count is an implementation detail -> AtLeast(1).
-    EXPECT_CALL(ub, get_penultimate_decision_choice_depth()).Times(AtLeast(1)).WillRepeatedly(Return(0u));
+    EXPECT_CALL(ub, get_penultimate_mcts_frame_depth()).Times(AtLeast(1)).WillRepeatedly(Return(0u));
     sut.push_frame();
     EXPECT_CALL(dl, derive_decision_lemma()).WillOnce(Return(make_lemma({&ult, &pen})));
     sut.learn();

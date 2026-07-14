@@ -5,8 +5,8 @@
 #include <cstddef>
 
 enum class avoidance_frame_slot : bool {
-    ultimate_frame_depth,
-    unit_boundary_frame_depth
+    ultimate_mcts_frame_depth,
+    penultimate_mcts_frame_depth
 };
 
 struct avoidance_boundary_frame_assign {

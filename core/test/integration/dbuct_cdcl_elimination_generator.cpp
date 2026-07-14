@@ -1,13 +1,13 @@
 // Integration slice: a real dbuct_cdcl_elimination_generator wired to a real
 // dbuct_avoidance_unit_boundary. In production the boundary object is exactly what
-// supplies three of the generator's five collaborators -- IGetPenultimateDecisionChoiceDepth,
+// supplies three of the generator's five collaborators -- IGetPenultimateMctsFrameDepth,
 // IGetUltimateDecision, IGetPenultimateDecision -- so this proves the two cooperate
 // end to end: real decision bookkeeping (ultimate / penultimate / the one-decision
-// lagging penultimate choice depth) flows into learn(), and the resulting raised unit
+// lagging penultimate mcts frame depth) flows into learn(), and the resulting raised unit
 // avoidance is emitted-vs-armed at pop according to the boundary the REAL component
 // computed.
 //
-// Everything outside the slice is mocked: the choice depth the boundary
+// Everything outside the slice is mocked: the mcts frame depth the boundary
 // depends on, the nearest-decision oracle that drives its rotate/overwrite branch,
 // and the generator's chosen-candidate and derive-lemma collaborators. Assertions
 // are made only against the eliminations yielded by constrain()/pop_frame().
@@ -28,9 +28,9 @@ using ::testing::Return;
 
 namespace {
 
-struct fake_choice_depth {
+struct fake_mcts_frame_depth {
     size_t depth_value;
-    size_t depth() const { return depth_value; }
+    size_t mcts_frame_depth() const { return depth_value; }
 };
 
 struct MockGetNearestDecision {
@@ -62,7 +62,7 @@ lemma make_lemma(std::initializer_list<const resolution_lineage*> rs) {
 }
 
 using boundary_t = dbuct_avoidance_unit_boundary<NiceMock<MockGetNearestDecision>,
-                                                 fake_choice_depth>;
+                                                 fake_mcts_frame_depth>;
 using sut_t = dbuct_cdcl_elimination_generator<NiceMock<MockTryGetChosenGoalCandidate>,
                                                boundary_t,
                                                NiceMock<MockDeriveDecisionLemma>,
@@ -70,7 +70,7 @@ using sut_t = dbuct_cdcl_elimination_generator<NiceMock<MockTryGetChosenGoalCand
                                                boundary_t>;
 
 struct DbuctCdclEliminationGeneratorIntegrationTest : public ::testing::Test {
-    fake_choice_depth fc{1};
+    fake_mcts_frame_depth fc{1};
     NiceMock<MockGetNearestDecision> nd;
     NiceMock<MockTryGetChosenGoalCandidate> tgcc;
     NiceMock<MockDeriveDecisionLemma> dl;

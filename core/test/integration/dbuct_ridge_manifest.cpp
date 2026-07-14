@@ -180,9 +180,9 @@ TEST_F(DbuctManifestIntegrationTest, ClauseBodyBindingsFlowThroughSubgoals) {
 TEST_F(DbuctManifestIntegrationTest, SolverCampsBelowRootAcrossEpisodes) {
     // Two competing candidates for f force a branching decision. A restarting
     // solver would tear back down to the root between every episode, so its
-    // camp depth would always be zero. DBUCT keeps choice frames live below the
+    // camp depth would always be zero. DBUCT keeps solver frames live below the
     // root once the tree has grown: over several episodes the camped path must,
-    // at some yield, hold at least one choice frame below the root.
+    // at some yield, hold at least one solver frame below the root.
     const expr* a = fun("a");
     const expr* b = fun("b");
     const expr* c = fun("c");
@@ -195,20 +195,20 @@ TEST_F(DbuctManifestIntegrationTest, SolverCampsBelowRootAcrossEpisodes) {
 
     dbuct_ridge_manifest m = make_manifest(/*initial_frame_offset=*/1);
     auto sm = m.solver_.solve();
-    // hub.depth() is the frame counter: the base (root) frame keeps it at 1, so
-    // any depth beyond 1 is a choice frame held below the root.
-    size_t max_depth = 0;
+    // hub.solver_frame_depth() is the frame counter: the base (root) frame keeps it at 1, so
+    // any solver_frame_depth beyond 1 is a solver frame held below the root.
+    size_t max_solver_frame_depth = 0;
     bool made_decision = false;
     for (size_t episode = 0; episode < 32; ++episode) {
         sm.resume();
         if (!sm.has_yield()) break;
         sm.consume_yield();
         made_decision = made_decision || m.decision_memory_.count() >= 1;
-        max_depth = std::max(max_depth, m.hub_.depth());
+        max_solver_frame_depth = std::max(max_solver_frame_depth, m.hub_.solver_frame_depth());
     }
     EXPECT_TRUE(made_decision) << "a branching decision was made";
-    EXPECT_GT(max_depth, 1u)
-        << "solver camped below root: choice frames held across episodes";
+    EXPECT_GT(max_solver_frame_depth, 1u)
+        << "solver camped below root: solver frames held across episodes";
 }
 
 // ── Scenario 6-8: differential solution-set parity (soundness+completeness) ───

@@ -22,13 +22,13 @@
 
 namespace {
 
-struct fake_choice_depth {
+struct fake_mcts_frame_depth {
     size_t depth_value;
-    size_t depth() const { return depth_value; }
+    size_t mcts_frame_depth() const { return depth_value; }
 };
 
 using bind_map_t = dbuct_bind_map<globalizer>;
-using boundary_t = dbuct_avoidance_unit_boundary<dbuct_nearest_decision, fake_choice_depth>;
+using boundary_t = dbuct_avoidance_unit_boundary<dbuct_nearest_decision, fake_mcts_frame_depth>;
 
 struct fake_mhu {
     int pushes = 0;
@@ -71,7 +71,7 @@ using hub_t = dbuct_frame_hub<
     fake_cdcl, fake_cdcl>;
 
 struct hub_fixture {
-    fake_choice_depth choice_depth{1};
+    fake_mcts_frame_depth mcts_frame_depth{1};
     globalizer g;
     bind_map_t bind_map{g};
     ra_rule_id_set_factory rule_factory;
@@ -85,7 +85,7 @@ struct hub_fixture {
     dbuct_frame_bump_allocator frame_bump_allocator{0};
     dbuct_nearest_decision nearest_decision;
     dbuct_elimination_backlog elimination_backlog;
-    boundary_t avoidance_unit_boundary{nearest_decision, choice_depth};
+    boundary_t avoidance_unit_boundary{nearest_decision, mcts_frame_depth};
     dbuct_srt_active_goals srt_active_goals;
     fake_mhu mhu;
     fake_cdcl cdcl;
@@ -114,15 +114,15 @@ struct hub_fixture {
 
 TEST(DbuctFrameHubTest, PushPopTracksMhuHooks) {
     hub_fixture f;
-    EXPECT_EQ(f.frame_hub.depth(), 1u);
+    EXPECT_EQ(f.frame_hub.solver_frame_depth(), 1u);
 
-    f.frame_hub.push_decision_frame();
+    f.frame_hub.push_solver_frame();
     EXPECT_EQ(f.mhu.pushes, 1);
     EXPECT_EQ(f.mhu.pops, 0);
     EXPECT_EQ(f.cdcl.pushes, 1);
     EXPECT_EQ(f.cdcl.pops, 0);
 
-    drain(f.frame_hub.pop_decision_frame());
+    drain(f.frame_hub.pop_solver_frame());
     EXPECT_EQ(f.mhu.pops, 1);
     EXPECT_EQ(f.cdcl.pops, 1);
 }
@@ -132,18 +132,18 @@ TEST(DbuctFrameHubTest, PopRevertsJournaledGoalExpr) {
     goal_lineage gl{nullptr, 0};
     framed_expr fe{{nullptr}, 2};
 
-    f.frame_hub.push_decision_frame();
+    f.frame_hub.push_solver_frame();
     f.goal_exprs.set(&gl, fe);
-    drain(f.frame_hub.pop_decision_frame());
+    drain(f.frame_hub.pop_solver_frame());
     EXPECT_THROW(f.goal_exprs.get(&gl), std::out_of_range);
 }
 
-TEST(DbuctFrameHubTest, DepthTracksDecisionMemoryCount) {
+TEST(DbuctFrameHubTest, SolverFrameDepthTracksDecisionMemoryCount) {
     hub_fixture f;
     resolution_lineage gp{nullptr, 1};
     goal_lineage g{&gp, 0};
     resolution_lineage rl{&g, 0};
 
     f.decision_memory.record_decision(&rl);
-    EXPECT_EQ(f.frame_hub.depth(), 2u);
+    EXPECT_EQ(f.frame_hub.solver_frame_depth(), 2u);
 }

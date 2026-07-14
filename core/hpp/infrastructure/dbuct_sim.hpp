@@ -6,26 +6,26 @@
 #include "value_objects/lineage.hpp"
 #include "value_objects/mcts_choice.hpp"
 
-template<typename IPushDecisionFrame,
-         typename IPopDecisionFrame,
-         typename IGetDecisionFrameDepth,
+template<typename IPushSolverFrame,
+         typename IPopSolverFrame,
+         typename IGetSolverFrameDepth,
          typename IGetDecisionCount,
-         typename IGetPenultimateDecisionChoiceDepth,
-         typename IGetUltimateDecisionChoiceDepth,
-         typename IGetChoiceDepth,
-         typename IBackstepChoiceFrame,
+         typename IGetPenultimateMctsFrameDepth,
+         typename IGetUltimateMctsFrameDepth,
+         typename IGetMctsFrameDepth,
+         typename IBackstepMctsFrame,
          typename IInRollout,
          typename IChoose,
          typename ITerminate>
 struct dbuct_sim {
-    dbuct_sim(IPushDecisionFrame&,
-              IPopDecisionFrame&,
-              IGetDecisionFrameDepth&,
+    dbuct_sim(IPushSolverFrame&,
+              IPopSolverFrame&,
+              IGetSolverFrameDepth&,
               IGetDecisionCount&,
-              IGetPenultimateDecisionChoiceDepth&,
-              IGetUltimateDecisionChoiceDepth&,
-              IGetChoiceDepth&,
-              IBackstepChoiceFrame&,
+              IGetPenultimateMctsFrameDepth&,
+              IGetUltimateMctsFrameDepth&,
+              IGetMctsFrameDepth&,
+              IBackstepMctsFrame&,
               IInRollout&,
               IChoose&,
               ITerminate&);
@@ -35,105 +35,105 @@ struct dbuct_sim {
     bool at_root() const;
 
 private:
-    IPushDecisionFrame&                   push_decision_frame_;
-    IPopDecisionFrame&                    pop_decision_frame_;
-    IGetDecisionFrameDepth&                    get_decision_frame_depth_;
-    IGetDecisionCount&                    get_decision_count_;
-    IGetPenultimateDecisionChoiceDepth&   get_penultimate_decision_choice_depth_;
-    IGetUltimateDecisionChoiceDepth&      get_ultimate_decision_choice_depth_;
-    IGetChoiceDepth&                      get_choice_depth_;
-    IBackstepChoiceFrame&                 backstep_choice_frame_;
-    IInRollout&                           in_rollout_;
-    IChoose&                              choose_;
-    ITerminate&                           terminate_;
+    IPushSolverFrame&                   push_solver_frame_;
+    IPopSolverFrame&                    pop_solver_frame_;
+    IGetSolverFrameDepth&               get_solver_frame_depth_;
+    IGetDecisionCount&                  get_decision_count_;
+    IGetPenultimateMctsFrameDepth&      get_penultimate_mcts_frame_depth_;
+    IGetUltimateMctsFrameDepth&         get_ultimate_mcts_frame_depth_;
+    IGetMctsFrameDepth&                 get_mcts_frame_depth_;
+    IBackstepMctsFrame&                 backstep_mcts_frame_;
+    IInRollout&                         in_rollout_;
+    IChoose&                            choose_;
+    ITerminate&                         terminate_;
 };
 
-template<typename IPDF, typename IPopDF, typename IGDD, typename IGDC,
-         typename IGPDCD, typename IGUDCD, typename IGCD, typename IBSCF,
+template<typename IPSF, typename IPopSF, typename IGSFD, typename IGDC,
+         typename IGPMFD, typename IGUMFD, typename IGMFD, typename IBMF,
          typename IIR, typename IC, typename IT>
-dbuct_sim<IPDF, IPopDF, IGDD, IGDC, IGPDCD, IGUDCD, IGCD, IBSCF, IIR, IC, IT>::dbuct_sim(
-    IPDF& push_decision_frame,
-    IPopDF& pop_decision_frame,
-    IGDD& get_decision_frame_depth,
+dbuct_sim<IPSF, IPopSF, IGSFD, IGDC, IGPMFD, IGUMFD, IGMFD, IBMF, IIR, IC, IT>::dbuct_sim(
+    IPSF& push_solver_frame,
+    IPopSF& pop_solver_frame,
+    IGSFD& get_solver_frame_depth,
     IGDC& get_decision_count,
-    IGPDCD& get_penultimate_decision_choice_depth,
-    IGUDCD& get_ultimate_decision_choice_depth,
-    IGCD& get_choice_depth,
-    IBSCF& backstep_choice_frame,
+    IGPMFD& get_penultimate_mcts_frame_depth,
+    IGUMFD& get_ultimate_mcts_frame_depth,
+    IGMFD& get_mcts_frame_depth,
+    IBMF& backstep_mcts_frame,
     IIR& in_rollout,
     IC& choose,
     IT& terminate)
-    : push_decision_frame_(push_decision_frame)
-    , pop_decision_frame_(pop_decision_frame)
-    , get_decision_frame_depth_(get_decision_frame_depth)
+    : push_solver_frame_(push_solver_frame)
+    , pop_solver_frame_(pop_solver_frame)
+    , get_solver_frame_depth_(get_solver_frame_depth)
     , get_decision_count_(get_decision_count)
-    , get_penultimate_decision_choice_depth_(get_penultimate_decision_choice_depth)
-    , get_ultimate_decision_choice_depth_(get_ultimate_decision_choice_depth)
-    , get_choice_depth_(get_choice_depth)
-    , backstep_choice_frame_(backstep_choice_frame)
+    , get_penultimate_mcts_frame_depth_(get_penultimate_mcts_frame_depth)
+    , get_ultimate_mcts_frame_depth_(get_ultimate_mcts_frame_depth)
+    , get_mcts_frame_depth_(get_mcts_frame_depth)
+    , backstep_mcts_frame_(backstep_mcts_frame)
     , in_rollout_(in_rollout)
     , choose_(choose)
     , terminate_(terminate) {}
 
-template<typename IPDF, typename IPopDF, typename IGDD, typename IGDC,
-         typename IGPDCD, typename IGUDCD, typename IGCD, typename IBSCF,
+template<typename IPSF, typename IPopSF, typename IGSFD, typename IGDC,
+         typename IGPMFD, typename IGUMFD, typename IGMFD, typename IBMF,
          typename IIR, typename IC, typename IT>
-bool dbuct_sim<IPDF, IPopDF, IGDD, IGDC, IGPDCD, IGUDCD, IGCD, IBSCF, IIR, IC, IT>::at_root() const {
-    return get_decision_count_.get_decision_count() == 0;
+bool dbuct_sim<IPSF, IPopSF, IGSFD, IGDC, IGPMFD, IGUMFD, IGMFD, IBMF, IIR, IC, IT>::at_root() const {
+    return get_decision_count_.count() == 0;
 }
 
-template<typename IPDF, typename IPopDF, typename IGDD, typename IGDC,
-         typename IGPDCD, typename IGUDCD, typename IGCD, typename IBSCF,
+template<typename IPSF, typename IPopSF, typename IGSFD, typename IGDC,
+         typename IGPMFD, typename IGUMFD, typename IGMFD, typename IBMF,
          typename IIR, typename IC, typename IT>
-mcts_choice dbuct_sim<IPDF, IPopDF, IGDD, IGDC, IGPDCD, IGUDCD, IGCD, IBSCF, IIR, IC, IT>::choose(
+mcts_choice dbuct_sim<IPSF, IPopSF, IGSFD, IGDC, IGPMFD, IGUMFD, IGMFD, IBMF, IIR, IC, IT>::choose(
     const std::vector<mcts_choice>& choices, bool is_rule_choice) {
     const bool was_in_rollout = in_rollout_.in_rollout();
     mcts_choice chosen = choose_.choose(choices, choices);
     if (was_in_rollout)
         return chosen;
     if (is_rule_choice)
-        push_decision_frame_.push_decision_frame();
+        push_solver_frame_.push_solver_frame();
     return chosen;
 }
 
-template<typename IPDF, typename IPopDF, typename IGDD, typename IGDC,
-         typename IGPDCD, typename IGUDCD, typename IGCD, typename IBSCF,
+template<typename IPSF, typename IPopSF, typename IGSFD, typename IGDC,
+         typename IGPMFD, typename IGUMFD, typename IGMFD, typename IBMF,
          typename IIR, typename IC, typename IT>
-std::vector<const resolution_lineage*> dbuct_sim<IPDF, IPopDF, IGDD, IGDC, IGPDCD, IGUDCD, IGCD, IBSCF, IIR, IC, IT>::terminate(
+std::vector<const resolution_lineage*> dbuct_sim<IPSF, IPopSF, IGSFD, IGDC, IGPMFD, IGUMFD, IGMFD, IBMF, IIR, IC, IT>::terminate(
     double reward) {
 
-    // 1. terminate dbuct
+    // 1. terminate mcts
     terminate_.terminate(reward);
 
-    // 2. navigate back to nearest decision frame that is
-    //    at most as deep as the penultimate decision. pop choice frames
+    // 2. navigate back to nearest mcts frame that is
+    //    at most as deep as the penultimate decision. pop mcts frames
 
-    // navigate back to the penultimate frame IF DEEPER than penultimate
-    size_t penultimate_decision_choice_depth = get_penultimate_decision_choice_depth_.get_penultimate_decision_choice_depth();
-    while (get_choice_depth_.depth() > penultimate_decision_choice_depth)
-        backstep_choice_frame_.backstep();
-    
-    // 3. pop decision frames to synchronize
+    // navigate back to the penultimate mcts frame depth IF DEEPER than penultimate
+    size_t penultimate_mcts_frame_depth = get_penultimate_mcts_frame_depth_.get_penultimate_mcts_frame_depth();
+    while (get_mcts_frame_depth_.mcts_frame_depth() > penultimate_mcts_frame_depth)
+        backstep_mcts_frame_.backstep();
+
+    // 3. pop solver frames to synchronize
     std::vector<const resolution_lineage*> eliminations;
 
-    size_t return_depth = get_choice_depth_.depth();
-    
-    while(get_ultimate_decision_choice_depth_.get_ultimate_decision_choice_depth() > return_depth) {
+    size_t return_mcts_frame_depth = get_mcts_frame_depth_.mcts_frame_depth();
+
+    while(get_ultimate_mcts_frame_depth_.get_ultimate_mcts_frame_depth() > return_mcts_frame_depth) {
         eliminations.clear();
-        // pop decision frame
-        auto sm = pop_decision_frame_.pop_decision_frame();
+        // pop solver frame
+        auto sm = pop_solver_frame_.pop_solver_frame();
         while (!sm.done()) {
             sm.resume();
             if (sm.has_yield())
                 eliminations.push_back(sm.consume_yield());
         }
     }
-    
-    // snap to nearest decision frame IF return depth is DEEPER than nearest decision frame
-    size_t new_ultimate_decision_choice_depth = get_ultimate_decision_choice_depth_.get_ultimate_decision_choice_depth();
-    while (get_choice_depth_.depth() > new_ultimate_decision_choice_depth)
-        backstep_choice_frame_.backstep();
-    
+
+    // snap to nearest mcts frame IF return mcts frame depth is DEEPER than nearest decision's mcts frame depth
+    size_t new_ultimate_mcts_frame_depth = get_ultimate_mcts_frame_depth_.get_ultimate_mcts_frame_depth();
+    while (get_mcts_frame_depth_.mcts_frame_depth() > new_ultimate_mcts_frame_depth)
+        backstep_mcts_frame_.backstep();
+
     // 4. return eliminations
     return eliminations;
 }

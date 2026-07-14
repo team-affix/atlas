@@ -70,9 +70,9 @@ struct dbuct_frame_hub {
         IPushCdclFrame& push_cdcl_frame,
         IPopCdclFrame& pop_cdcl_frame);
 
-    void push_decision_frame();
-    coroutine<const resolution_lineage*, void> pop_decision_frame();
-    size_t depth() const;
+    void push_solver_frame();
+    coroutine<const resolution_lineage*, void> pop_solver_frame();
+    size_t solver_frame_depth() const;
 
 private:
     IGetDecisionCount& get_decision_count_;
@@ -234,7 +234,7 @@ void dbuct_frame_hub<IGDC,
                      IPSAGF, IPopSAGF,
                      IPBMF, IPopBMF,
                      IPMHUF, IPopMHUF,
-                     IPCDF, IPopCDF>::push_decision_frame() {
+                     IPCDF, IPopCDF>::push_solver_frame() {
     push_goal_expr_frame_.push_frame();
     push_goal_candidate_rules_frame_.push_frame();
     push_chosen_goal_candidates_frame_.push_frame();
@@ -284,7 +284,7 @@ dbuct_frame_hub<IGDC,
                 IPSAGF, IPopSAGF,
                 IPBMF, IPopBMF,
                 IPMHUF, IPopMHUF,
-                IPCDF, IPopCDF>::pop_decision_frame() {
+                IPCDF, IPopCDF>::pop_solver_frame() {
     auto sm = pop_cdcl_frame_.pop_frame();
     pop_mhu_frame_.pop_frame();
     pop_bind_map_frame_.pop_frame();
@@ -339,7 +339,7 @@ size_t dbuct_frame_hub<IGDC,
                        IPSAGF, IPopSAGF,
                        IPBMF, IPopBMF,
                        IPMHUF, IPopMHUF,
-                       IPCDF, IPopCDF>::depth() const {
+                       IPCDF, IPopCDF>::solver_frame_depth() const {
     return 1 + get_decision_count_.count();
 }
 

@@ -1,7 +1,7 @@
 // Integration slice: real dbuct_avoidance_unit_boundary wired to a real
-// dbuct_nearest_decision. Choice depth uses a fake depth source. This proves the
+// dbuct_nearest_decision. Mcts frame depth uses a fake source. This proves the
 // actual nearest-decision map selects the rotate-vs-overwrite branch, and that
-// the penultimate choice depth lags exactly one decision behind end to end.
+// the penultimate mcts frame depth lags exactly one decision behind end to end.
 
 #include <gtest/gtest.h>
 #include "infrastructure/dbuct_nearest_decision.hpp"
@@ -9,15 +9,15 @@
 
 namespace {
 
-struct fake_choice_depth {
+struct fake_mcts_frame_depth {
     size_t depth_value;
-    size_t depth() const { return depth_value; }
+    size_t mcts_frame_depth() const { return depth_value; }
 };
 
 struct DbuctAvoidanceUnitBoundaryIntegrationTest : public ::testing::Test {
-    fake_choice_depth fc{1};
+    fake_mcts_frame_depth fc{1};
     dbuct_nearest_decision nd;
-    dbuct_avoidance_unit_boundary<dbuct_nearest_decision, fake_choice_depth> aub{nd, fc};
+    dbuct_avoidance_unit_boundary<dbuct_nearest_decision, fake_mcts_frame_depth> aub{nd, fc};
 
     resolution_lineage R0{nullptr, 0};
     goal_lineage g0{&R0, 0};
@@ -44,7 +44,7 @@ TEST_F(DbuctAvoidanceUnitBoundaryIntegrationTest, FirstDecisionKeepsBoundaryZero
     fc.depth_value = 3;
     aub.log_decision(&Da);
 
-    EXPECT_EQ(aub.get_penultimate_decision_choice_depth(), 0u);
+    EXPECT_EQ(aub.get_penultimate_mcts_frame_depth(), 0u);
     EXPECT_EQ(aub.get_ultimate_decision(), &Da);
 }
 
@@ -55,7 +55,7 @@ TEST_F(DbuctAvoidanceUnitBoundaryIntegrationTest, OverwriteWhenSecondDecisionExt
     fc.depth_value = 7;
     aub.log_decision(&Db);
 
-    EXPECT_EQ(aub.get_penultimate_decision_choice_depth(), 0u);
+    EXPECT_EQ(aub.get_penultimate_mcts_frame_depth(), 0u);
     EXPECT_EQ(aub.get_penultimate_decision(), nullptr);
     EXPECT_EQ(aub.get_ultimate_decision(), &Db);
 }
@@ -67,7 +67,7 @@ TEST_F(DbuctAvoidanceUnitBoundaryIntegrationTest, RotateWhenSecondDecisionStarts
     fc.depth_value = 9;
     aub.log_decision(&Dc);
 
-    EXPECT_EQ(aub.get_penultimate_decision_choice_depth(), 3u);
+    EXPECT_EQ(aub.get_penultimate_mcts_frame_depth(), 3u);
     EXPECT_EQ(aub.get_penultimate_decision(), &Da);
     EXPECT_EQ(aub.get_ultimate_decision(), &Dc);
 }
