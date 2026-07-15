@@ -30,7 +30,7 @@ namespace {
 
 struct fake_mcts_frame_depth {
     size_t depth_value;
-    size_t mcts_frame_depth() const { return depth_value; }
+    size_t depth() const { return depth_value; }
 };
 
 struct MockGetNearestDecision {

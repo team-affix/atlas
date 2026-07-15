@@ -123,7 +123,7 @@ void dbuct_sim<IPSF, IPopSF, IGSFD, IGDC, IGPMFD, IGUMFD, IGMFD, IBMF, IIR, IC, 
     terminate_.terminate(reward);
 
     // if we are still at or deeper than ultimate, backstep once
-    if (get_mcts_frame_depth_.mcts_frame_depth() >= get_ultimate_mcts_frame_depth_.get_ultimate_mcts_frame_depth())
+    if (get_mcts_frame_depth_.depth() >= get_ultimate_mcts_frame_depth_.get_ultimate_mcts_frame_depth())
         backstep_mcts_frame_.backstep();
 }
 
@@ -133,7 +133,7 @@ template<typename IPSF, typename IPopSF, typename IGSFD, typename IGDC,
 std::vector<const resolution_lineage*> dbuct_sim<IPSF, IPopSF, IGSFD, IGDC, IGPMFD, IGUMFD, IGMFD, IBMF, IIR, IC, ICMR, IT>::backtrack_solver_and_align() {
     // pop solver frames until at or before current mcts frame depth
     std::vector<const resolution_lineage*> eliminations;
-    while (get_ultimate_mcts_frame_depth_.get_ultimate_mcts_frame_depth() > get_mcts_frame_depth_.mcts_frame_depth()) {
+    while (get_ultimate_mcts_frame_depth_.get_ultimate_mcts_frame_depth() > get_mcts_frame_depth_.depth()) {
         eliminations.clear();
         auto sm = pop_solver_frame_.pop_solver_frame();
         while (!sm.done()) {
@@ -147,7 +147,7 @@ std::vector<const resolution_lineage*> dbuct_sim<IPSF, IPopSF, IGSFD, IGDC, IGPM
     size_t ultimate_mcts_frame_depth = get_ultimate_mcts_frame_depth_.get_ultimate_mcts_frame_depth();
     
     // backstep mcts frames until at solver frame
-    while (get_mcts_frame_depth_.mcts_frame_depth() > ultimate_mcts_frame_depth)
+    while (get_mcts_frame_depth_.depth() > ultimate_mcts_frame_depth)
         backstep_mcts_frame_.backstep();
 
     return eliminations;

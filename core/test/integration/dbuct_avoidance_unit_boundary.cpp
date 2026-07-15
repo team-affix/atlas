@@ -11,7 +11,7 @@ namespace {
 
 struct fake_mcts_frame_depth {
     size_t depth_value;
-    size_t mcts_frame_depth() const { return depth_value; }
+    size_t depth() const { return depth_value; }
 };
 
 struct DbuctAvoidanceUnitBoundaryIntegrationTest : public ::testing::Test {
@@ -40,11 +40,11 @@ struct DbuctAvoidanceUnitBoundaryIntegrationTest : public ::testing::Test {
     }
 };
 
-TEST_F(DbuctAvoidanceUnitBoundaryIntegrationTest, FirstDecisionKeepsBoundaryZero) {
+TEST_F(DbuctAvoidanceUnitBoundaryIntegrationTest, FirstDecisionKeepsBoundaryAtRootMctsFrameDepth) {
     fc.depth_value = 3;
     aub.log_decision(&Da);
 
-    EXPECT_EQ(aub.get_penultimate_mcts_frame_depth(), 0u);
+    EXPECT_EQ(aub.get_penultimate_mcts_frame_depth(), 1u);
     EXPECT_EQ(aub.get_ultimate_decision(), &Da);
 }
 
@@ -55,7 +55,7 @@ TEST_F(DbuctAvoidanceUnitBoundaryIntegrationTest, OverwriteWhenSecondDecisionExt
     fc.depth_value = 7;
     aub.log_decision(&Db);
 
-    EXPECT_EQ(aub.get_penultimate_mcts_frame_depth(), 0u);
+    EXPECT_EQ(aub.get_penultimate_mcts_frame_depth(), 1u);
     EXPECT_EQ(aub.get_penultimate_decision(), nullptr);
     EXPECT_EQ(aub.get_ultimate_decision(), &Db);
 }

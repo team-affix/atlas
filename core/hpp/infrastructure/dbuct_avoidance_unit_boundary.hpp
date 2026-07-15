@@ -59,7 +59,7 @@ void dbuct_avoidance_unit_boundary<IGetNearestDecision, IGetMctsFrameDepth>::log
         assign_penultimate_mcts_frame_depth(ultimate_mcts_frame_depth_);
     }
     assign_ultimate(rl);
-    assign_ultimate_mcts_frame_depth(get_mcts_frame_depth_.mcts_frame_depth());
+    assign_ultimate_mcts_frame_depth(get_mcts_frame_depth_.depth());
 }
 
 template<typename IGetNearestDecision, typename IGetMctsFrameDepth>

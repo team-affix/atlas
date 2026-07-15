@@ -171,7 +171,8 @@ struct dbuct_ridge_manifest {
     using dbuct_sim_t              = dbuct_sim<hub_t, hub_t, hub_t,
                                           decision_memory_t,
                                           avoidance_unit_boundary_t, avoidance_unit_boundary_t,
-                                          dbuct_t, dbuct_t, dbuct_t, dbuct_t, dbuct_t>;
+                                          dbuct_t, dbuct_t, dbuct_t, dbuct_t,
+                                          ridge_reward_t, dbuct_t>;
     using mcts_decision_generator_t     = mcts_decision_generator<lineage_pool,
                                           srt_active_goals_t, srt_active_goals_t, srt_active_goals_t,
                                           dbuct_sim_t, goal_candidate_rules_t>;
@@ -180,7 +181,7 @@ struct dbuct_ridge_manifest {
                                           dbuct_joint_t, elimination_router_t, resolver_t, get_unit_resolution_t,
                                           resolution_recorder_t, resolution_recorder_t, resolution_memory_t>;
     using solver_t                      = dbuct_solver<srt_initial_goals_activator_t, run_sim_t, decision_memory_t,
-                                          ridge_reward_t, dbuct_sim_t, dbuct_sim_t, cdcl_t, mhu_t, elimination_router_t,
+                                          dbuct_sim_t, dbuct_sim_t, cdcl_t, mhu_t, elimination_router_t,
                                           conflict_detector_t, unit_goal_detector_t, unit_goals_t>;
     using normalizer_t                  = normalizer<globalizer, expr_pool, expr_pool, bind_map_t>;
 

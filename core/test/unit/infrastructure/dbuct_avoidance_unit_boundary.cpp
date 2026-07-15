@@ -22,7 +22,7 @@ struct MockGetNearestDecision {
 };
 
 struct MockGetMctsFrameDepth {
-    MOCK_METHOD(size_t, mcts_frame_depth, (), (const));
+    MOCK_METHOD(size_t, depth, (), (const));
 };
 
 struct DbuctAvoidanceUnitBoundaryTest : public ::testing::Test {
@@ -46,21 +46,21 @@ struct DbuctAvoidanceUnitBoundaryTest : public ::testing::Test {
         sut.push_frame();
         ON_CALL(nd, get_nearest_decision(&gp1)).WillByDefault(Return(&sentinel));
         ON_CALL(nd, get_nearest_decision(&gp2)).WillByDefault(Return(&sentinel));
-        ON_CALL(mcts_frame_depth, mcts_frame_depth()).WillByDefault(Return(1u));
+        ON_CALL(mcts_frame_depth, depth()).WillByDefault(Return(1u));
     }
 };
 
-TEST_F(DbuctAvoidanceUnitBoundaryTest, InitiallyBoundaryZeroAndDecisionsNull) {
-    EXPECT_EQ(sut.get_penultimate_mcts_frame_depth(), 0u);
+TEST_F(DbuctAvoidanceUnitBoundaryTest, InitiallyBoundaryMatchesRootMctsFrameDepthAndDecisionsNull) {
+    EXPECT_EQ(sut.get_penultimate_mcts_frame_depth(), 1u);
     EXPECT_EQ(sut.get_ultimate_decision(), nullptr);
     EXPECT_EQ(sut.get_penultimate_decision(), nullptr);
 }
 
-TEST_F(DbuctAvoidanceUnitBoundaryTest, FirstDecisionLeavesBoundaryAtZero) {
-    ON_CALL(mcts_frame_depth, mcts_frame_depth()).WillByDefault(Return(2u));
+TEST_F(DbuctAvoidanceUnitBoundaryTest, FirstDecisionLeavesBoundaryAtRootMctsFrameDepth) {
+    ON_CALL(mcts_frame_depth, depth()).WillByDefault(Return(2u));
     sut.log_decision(&rl1);
 
-    EXPECT_EQ(sut.get_penultimate_mcts_frame_depth(), 0u);
+    EXPECT_EQ(sut.get_penultimate_mcts_frame_depth(), 1u);
     EXPECT_EQ(sut.get_ultimate_decision(), &rl1);
 }
 
@@ -68,10 +68,10 @@ TEST_F(DbuctAvoidanceUnitBoundaryTest, SecondDecisionSetsBoundaryToPriorMctsFram
     constexpr size_t d1 = 3;
     constexpr size_t d2 = 7;
 
-    ON_CALL(mcts_frame_depth, mcts_frame_depth()).WillByDefault(Return(d1));
+    ON_CALL(mcts_frame_depth, depth()).WillByDefault(Return(d1));
     sut.log_decision(&rl1);
 
-    ON_CALL(mcts_frame_depth, mcts_frame_depth()).WillByDefault(Return(d2));
+    ON_CALL(mcts_frame_depth, depth()).WillByDefault(Return(d2));
     sut.log_decision(&rl2);
 
     EXPECT_EQ(sut.get_penultimate_mcts_frame_depth(), d1);
@@ -81,14 +81,14 @@ TEST_F(DbuctAvoidanceUnitBoundaryTest, SecondDecisionSetsBoundaryToPriorMctsFram
 }
 
 TEST_F(DbuctAvoidanceUnitBoundaryTest, OverwriteWhenNewDecisionExtendsUltimateKeepsBoundary) {
-    ON_CALL(mcts_frame_depth, mcts_frame_depth()).WillByDefault(Return(2u));
+    ON_CALL(mcts_frame_depth, depth()).WillByDefault(Return(2u));
     sut.log_decision(&rl1);
 
     ON_CALL(nd, get_nearest_decision(&gp2)).WillByDefault(Return(&rl1));
-    ON_CALL(mcts_frame_depth, mcts_frame_depth()).WillByDefault(Return(9u));
+    ON_CALL(mcts_frame_depth, depth()).WillByDefault(Return(9u));
     sut.log_decision(&rl2);
 
-    EXPECT_EQ(sut.get_penultimate_mcts_frame_depth(), 0u);
+    EXPECT_EQ(sut.get_penultimate_mcts_frame_depth(), 1u);
     EXPECT_EQ(sut.get_penultimate_decision(), nullptr);
     EXPECT_EQ(sut.get_ultimate_decision(), &rl2);
 }
@@ -97,17 +97,17 @@ TEST_F(DbuctAvoidanceUnitBoundaryTest, UltimateMctsFrameDepthTracksLoggedMctsFra
     constexpr size_t d1 = 3;
     constexpr size_t d2 = 7;
 
-    ON_CALL(mcts_frame_depth, mcts_frame_depth()).WillByDefault(Return(d1));
+    ON_CALL(mcts_frame_depth, depth()).WillByDefault(Return(d1));
     sut.log_decision(&rl1);
     EXPECT_EQ(sut.get_ultimate_mcts_frame_depth(), d1);
 
-    ON_CALL(mcts_frame_depth, mcts_frame_depth()).WillByDefault(Return(d2));
+    ON_CALL(mcts_frame_depth, depth()).WillByDefault(Return(d2));
     sut.log_decision(&rl2);
     EXPECT_EQ(sut.get_ultimate_mcts_frame_depth(), d2);
 }
 
 TEST_F(DbuctAvoidanceUnitBoundaryTest, PopRevertsLoggedDecision) {
-    ON_CALL(mcts_frame_depth, mcts_frame_depth()).WillByDefault(Return(2u));
+    ON_CALL(mcts_frame_depth, depth()).WillByDefault(Return(2u));
     sut.log_decision(&rl1);
     ASSERT_EQ(sut.get_ultimate_decision(), &rl1);
     sut.pop_frame();
