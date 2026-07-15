@@ -95,9 +95,9 @@ template<typename IPSF, typename IPopSF, typename IGSFD, typename IGDC,
          typename IIR, typename IC, typename ICMR, typename IT>
 mcts_choice dbuct_sim<IPSF, IPopSF, IGSFD, IGDC, IGPMFD, IGUMFD, IGMFD, IBMF, IIR, IC, ICMR, IT>::choose(
     const std::vector<mcts_choice>& choices, bool is_rule_choice) {
-    const bool was_in_rollout = in_rollout_.in_rollout();
     mcts_choice chosen = choose_.choose(choices, choices);
-    if (was_in_rollout)
+    // if there has not been a mcts frame since the last decision, don't push solver frame.
+    if (get_mcts_frame_depth_.depth() <= get_ultimate_mcts_frame_depth_.get_ultimate_mcts_frame_depth())
         return chosen;
     if (is_rule_choice)
         push_solver_frame_.push_solver_frame();
