@@ -47,8 +47,8 @@ private:
 template<typename IGetNearestDecision, typename IGetMctsFrameDepth>
 dbuct_avoidance_unit_boundary<IGetNearestDecision, IGetMctsFrameDepth>::dbuct_avoidance_unit_boundary(
     IGetNearestDecision& nd, IGetMctsFrameDepth& mcts_frame_depth)
-    : ultimate_(nullptr), penultimate_(nullptr), ultimate_mcts_frame_depth_(0),
-      penultimate_mcts_frame_depth_(0), get_nearest_decision_(nd), get_mcts_frame_depth_(mcts_frame_depth),
+    : ultimate_(nullptr), penultimate_(nullptr), ultimate_mcts_frame_depth_(1),
+      penultimate_mcts_frame_depth_(1), get_nearest_decision_(nd), get_mcts_frame_depth_(mcts_frame_depth),
       frame_stack_(std::deque<frame>{frame{}}) {}
 
 template<typename IGetNearestDecision, typename IGetMctsFrameDepth>
