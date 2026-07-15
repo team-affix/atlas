@@ -98,7 +98,8 @@ dbuct_ridge_manifest::dbuct_ridge_manifest(
       dbuct_sim_(hub_, hub_, hub_,
                  decision_memory_,
                  avoidance_unit_boundary_, avoidance_unit_boundary_,
-                 dbuct_, dbuct_, dbuct_, dbuct_, ridge_reward_, value_delta_, dbuct_),
+                 dbuct_, dbuct_, dbuct_, dbuct_, dbuct_),
+      dbuct_ridge_terminate_sim_(ridge_reward_, value_delta_, dbuct_sim_),
       mcts_decision_generator_(lineage_pool_, srt_active_goals_, srt_active_goals_,
                                srt_active_goals_, dbuct_sim_, goal_candidate_rules_),
       frontier_ready_(),
@@ -108,7 +109,7 @@ dbuct_ridge_manifest::dbuct_ridge_manifest(
                resolver_, get_unit_resolution_, resolution_recorder_,
                resolution_recorder_, resolution_memory_, max_resolutions),
       solver_(srt_initial_goals_activator_, run_sim_, decision_memory_,
-              dbuct_sim_, dbuct_sim_, cdcl_, mhu_, elimination_router_,
+              dbuct_ridge_terminate_sim_, dbuct_sim_, cdcl_, mhu_, elimination_router_,
               conflict_detector_, unit_goal_detector_, unit_goals_),
       normalizer_(globalizer_, expr_pool_, expr_pool_, bind_map_),
       driver_(solver_.solve()) {

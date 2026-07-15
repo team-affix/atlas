@@ -67,6 +67,7 @@
 #include "infrastructure/dbuct_resolution_recorder.hpp"
 #include "infrastructure/dbuct_tree_walker.hpp"
 #include "infrastructure/dbuct_sim.hpp"
+#include "infrastructure/dbuct_ridge_terminate_sim.hpp"
 #include "value_objects/mcts_choice.hpp"
 #include "infrastructure/dbuct_solver.hpp"
 #include "infrastructure/dbuct_srt_active_goals.hpp"
@@ -175,7 +176,9 @@ struct dbuct_ridge_manifest {
                                           decision_memory_t,
                                           avoidance_unit_boundary_t, avoidance_unit_boundary_t,
                                           dbuct_t, dbuct_t, dbuct_t, dbuct_t,
-                                          ridge_reward_t, value_delta_t, dbuct_t>;
+                                          dbuct_t>;
+    using dbuct_ridge_terminate_sim_t = dbuct_ridge_terminate_sim<
+                                          ridge_reward_t, value_delta_t, dbuct_sim_t>;
     using mcts_decision_generator_t     = mcts_decision_generator<lineage_pool,
                                           srt_active_goals_t, srt_active_goals_t, srt_active_goals_t,
                                           dbuct_sim_t, goal_candidate_rules_t>;
@@ -184,7 +187,7 @@ struct dbuct_ridge_manifest {
                                           dbuct_joint_t, elimination_router_t, resolver_t, get_unit_resolution_t,
                                           resolution_recorder_t, resolution_recorder_t, resolution_memory_t>;
     using solver_t                      = dbuct_solver<srt_initial_goals_activator_t, run_sim_t, decision_memory_t,
-                                          dbuct_sim_t, dbuct_sim_t, cdcl_t, mhu_t, elimination_router_t,
+                                          dbuct_ridge_terminate_sim_t, dbuct_sim_t, cdcl_t, mhu_t, elimination_router_t,
                                           conflict_detector_t, unit_goal_detector_t, unit_goals_t>;
     using normalizer_t                  = normalizer<globalizer, expr_pool, expr_pool, bind_map_t>;
 
@@ -252,6 +255,7 @@ struct dbuct_ridge_manifest {
     resolver_t                    resolver_;
     ridge_reward_t                ridge_reward_;
     dbuct_sim_t                   dbuct_sim_;
+    dbuct_ridge_terminate_sim_t   dbuct_ridge_terminate_sim_;
     mcts_decision_generator_t     mcts_decision_generator_;
     dbuct_frontier_ready          frontier_ready_;
     run_sim_t                     run_sim_;
