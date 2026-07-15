@@ -67,6 +67,7 @@
 #include "infrastructure/dbuct_resolution_recorder.hpp"
 #include "infrastructure/tree_walker.hpp"
 #include "infrastructure/mcts_root_tree_node.hpp"
+#include "infrastructure/check_mcts_choice_is_rule_choice.hpp"
 #include "infrastructure/dbuct_sim.hpp"
 #include "infrastructure/dbuct_ridge_terminate_sim.hpp"
 #include "value_objects/mcts_choice.hpp"
@@ -173,11 +174,13 @@ struct dbuct_ridge_manifest {
                                           goal_candidates_deactivator_t, chosen_goal_candidates_t>;
     using ridge_reward_t                = ridge_reward<decision_memory_t>;
 
-    using dbuct_sim_t              = dbuct_sim<hub_t, hub_t, hub_t,
+    using dbuct_sim_t              = dbuct_sim<mcts_choice,
+                                          hub_t, hub_t, hub_t,
                                           decision_memory_t,
                                           avoidance_unit_boundary_t, avoidance_unit_boundary_t,
                                           dbuct_t, dbuct_t, dbuct_t, dbuct_t,
-                                          dbuct_t>;
+                                          dbuct_t,
+                                          check_mcts_choice_is_rule_choice>;
     using dbuct_ridge_terminate_sim_t = dbuct_ridge_terminate_sim<
                                           ridge_reward_t, value_delta_t, dbuct_sim_t>;
     using mcts_decision_generator_t     = mcts_decision_generator<lineage_pool,
@@ -256,6 +259,7 @@ struct dbuct_ridge_manifest {
     srt_initial_goals_activator_t srt_initial_goals_activator_;
     resolver_t                    resolver_;
     ridge_reward_t                ridge_reward_;
+    check_mcts_choice_is_rule_choice check_mcts_choice_is_rule_choice_;
     dbuct_sim_t                   dbuct_sim_;
     dbuct_ridge_terminate_sim_t   dbuct_ridge_terminate_sim_;
     mcts_decision_generator_t     mcts_decision_generator_;
