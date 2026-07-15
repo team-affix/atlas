@@ -123,7 +123,7 @@ void dbuct_sim<IPSF, IPopSF, IGSFD, IGDC, IGPMFD, IGUMFD, IGMFD, IBMF, IIR, IC, 
     terminate_.terminate(reward);
 
     // if we are still at or deeper than ultimate, backstep once
-    if (get_mcts_frame_depth_.depth() >= get_ultimate_mcts_frame_depth_.get_ultimate_mcts_frame_depth())
+    if (get_mcts_frame_depth_.depth() > 1 && get_mcts_frame_depth_.depth() >= get_ultimate_mcts_frame_depth_.get_ultimate_mcts_frame_depth())
         backstep_mcts_frame_.backstep();
 }
 
