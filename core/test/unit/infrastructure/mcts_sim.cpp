@@ -1,4 +1,4 @@
-// mcts_sim: wraps set_up_sim/tear_down_sim; owns MCTS tree; terminate score from compute_mcts_reward.
+// mcts_sim: owns and drives the internal Monte Carlo simulation only.
 
 #include <gtest/gtest.h>
 #include <gmock/gmock.h>
@@ -6,135 +6,31 @@
 #include <set>
 #include <vector>
 #include "infrastructure/mcts_sim.hpp"
-#include "infrastructure/set_up_sim.hpp"
-#include "infrastructure/tear_down_sim.hpp"
 #include "value_objects/mcts_choice.hpp"
 #include "uniform_value_delta.hpp"
-
-using ::testing::Return;
-
-struct MockPushFrame {
-    MOCK_METHOD(void, push_frame, ());
-};
-
-struct MockPopFrame {
-    MOCK_METHOD(void, pop_frame, ());
-};
-
-struct MockClearUnitGoals {
-    MOCK_METHOD(void, clear, ());
-};
-
-struct MockClearRecordedDecisions {
-    MOCK_METHOD(void, clear_recorded_decisions, ());
-};
-
-struct MockClearRecordedResolutions {
-    MOCK_METHOD(void, clear_recorded_resolutions, ());
-};
-
-struct MockClearGoalCandidateRuleIds {
-    MOCK_METHOD(void, clear_goal_candidate_rule_ids, ());
-};
-
-struct MockClearGoalExprs {
-    MOCK_METHOD(void, clear_goal_exprs, ());
-};
-
-struct MockClearActiveGoals {
-    MOCK_METHOD(void, clear_active_goals, ());
-};
-
-struct MockClearCandidateFrameOffsets {
-    MOCK_METHOD(void, clear_candidate_frame_offsets, ());
-};
-
-struct MockClearMhuHeads {
-    MOCK_METHOD(void, clear_mhu_heads, ());
-};
-
-struct MockClearBindings {
-    MOCK_METHOD(void, clear_bindings, ());
-};
-
-struct MockTrimUnpinnedLineages {
-    MOCK_METHOD(void, trim, ());
-};
-
-struct MockComputeMctsReward {
-    MOCK_METHOD(double, compute_mcts_reward, (), (const));
-};
-
-struct MockFrameAllocator {
-    MOCK_METHOD(uint32_t, bump, (uint32_t));
-    MOCK_METHOD(uint32_t, peek, (), (const));
-    MOCK_METHOD(void, reset, ());
-};
-
-struct MockCleanUpCdcl {
-    MOCK_METHOD(void, cleanup, ());
-};
-
-struct MockClearChosenGoalCandidates {
-    MOCK_METHOD(void, clear, ());
-};
 
 struct MockMakeResolutionLineage {
     MOCK_METHOD((const resolution_lineage*), make_resolution_lineage,
         (const goal_lineage*, rule_id));
 };
 
-using test_set_up_sim_t = set_up_sim<MockPushFrame>;
-using test_tear_down_sim_t = tear_down_sim<
-    MockPopFrame, MockClearUnitGoals, MockClearRecordedDecisions,
-    MockClearRecordedResolutions, MockClearGoalCandidateRuleIds, MockClearGoalExprs,
-    MockClearActiveGoals, MockClearCandidateFrameOffsets, MockClearMhuHeads,
-    MockClearBindings, MockTrimUnpinnedLineages, MockFrameAllocator,
-    MockCleanUpCdcl, MockClearChosenGoalCandidates>;
 using test_value_delta_t = monte_carlo::uniform_value_delta<double>;
-using test_mcts_sim_t = mcts_sim<test_set_up_sim_t, test_tear_down_sim_t,
-                                  MockComputeMctsReward, test_value_delta_t,
-                                  MockMakeResolutionLineage>;
+using test_mcts_sim_t = mcts_sim<test_value_delta_t, MockMakeResolutionLineage>;
 
 struct MctsSimTest : public ::testing::Test {
     static constexpr double kExplorationConstant = 1.414;
 
-    MockPushFrame push_frame;
-    MockPopFrame pop_frame;
-    testing::NiceMock<MockClearUnitGoals> clear_unit_goals;
-    testing::NiceMock<MockClearRecordedDecisions> clear_recorded_decisions;
-    testing::NiceMock<MockClearRecordedResolutions> clear_recorded_resolutions;
-    testing::NiceMock<MockClearGoalCandidateRuleIds> clear_goal_candidate_rule_ids;
-    testing::NiceMock<MockClearGoalExprs> clear_goal_exprs;
-    testing::NiceMock<MockClearActiveGoals> clear_active_goals;
-    testing::NiceMock<MockClearCandidateFrameOffsets> clear_candidate_frame_offsets;
-    testing::NiceMock<MockClearMhuHeads> clear_mhu_heads;
-    testing::NiceMock<MockClearBindings> clear_bindings;
-    testing::NiceMock<MockTrimUnpinnedLineages> trim_unpinned_lineages;
-    testing::NiceMock<MockFrameAllocator> frame_allocator;
-    testing::NiceMock<MockCleanUpCdcl> clean_up_cdcl;
-    testing::NiceMock<MockClearChosenGoalCandidates> clear_chosen_goal_candidates;
-    MockComputeMctsReward compute_mcts_reward;
     test_value_delta_t value_delta;
     testing::NiceMock<MockMakeResolutionLineage> make_resolution_lineage;
     std::mt19937 rng{42};
     std::set<resolution_lineage> resolution_storage;
 
-    test_set_up_sim_t inner_set_up{push_frame};
-    test_tear_down_sim_t inner_tear_down{
-        pop_frame, clear_unit_goals, clear_recorded_decisions,
-        clear_recorded_resolutions, clear_goal_candidate_rule_ids, clear_goal_exprs,
-        clear_active_goals, clear_candidate_frame_offsets, clear_mhu_heads,
-        clear_bindings, trim_unpinned_lineages, frame_allocator,
-        clean_up_cdcl, clear_chosen_goal_candidates};
-    test_mcts_sim_t sim{inner_set_up, inner_tear_down, compute_mcts_reward,
-                        value_delta, make_resolution_lineage, rng, kExplorationConstant};
+    test_mcts_sim_t sim{value_delta, make_resolution_lineage, rng, kExplorationConstant};
 
     goal_lineage gl0{nullptr, 0};
     goal_lineage gl1{nullptr, 1};
 
     void SetUp() override {
-        ON_CALL(compute_mcts_reward, compute_mcts_reward()).WillByDefault(Return(0.0));
         ON_CALL(make_resolution_lineage, make_resolution_lineage(testing::_, testing::_))
             .WillByDefault([this](const goal_lineage* gl, rule_id rid) {
                 auto [it, _] = resolution_storage.emplace(gl, rid);
@@ -143,73 +39,35 @@ struct MctsSimTest : public ::testing::Test {
     }
 };
 
-TEST_F(MctsSimTest, SetUpDelegatesToInnerSetUpSim) {
-    testing::InSequence seq;
-    EXPECT_CALL(push_frame, push_frame()).Times(1);
-    EXPECT_CALL(compute_mcts_reward, compute_mcts_reward()).Times(1);
-    EXPECT_CALL(pop_frame, pop_frame()).Times(1);
+TEST_F(MctsSimTest, SetUpThenTearDownRunsWithoutSolverStateCollaborators) {
+    value_delta.set_value(-1.0);
     sim.set_up();
-    sim.tear_down();
-}
-
-TEST_F(MctsSimTest, TearDownQueriesMctsRewardBeforeInnerTearDown) {
-    testing::InSequence seq;
-    EXPECT_CALL(push_frame, push_frame()).Times(1);
-    sim.set_up();
-    EXPECT_CALL(compute_mcts_reward, compute_mcts_reward()).WillOnce(Return(-5.0));
-    EXPECT_CALL(pop_frame, pop_frame()).Times(1);
-    sim.tear_down();
-}
-
-TEST_F(MctsSimTest, TearDownDelegatesFullClearSequenceToInnerTearDown) {
-    EXPECT_CALL(push_frame, push_frame()).Times(1);
-    sim.set_up();
-    EXPECT_CALL(compute_mcts_reward, compute_mcts_reward()).WillOnce(Return(0.0));
-    EXPECT_CALL(pop_frame, pop_frame()).Times(1);
-    EXPECT_CALL(clear_unit_goals, clear()).Times(1);
-    EXPECT_CALL(clear_recorded_decisions, clear_recorded_decisions()).Times(1);
-    EXPECT_CALL(clear_recorded_resolutions, clear_recorded_resolutions()).Times(1);
-    EXPECT_CALL(clear_goal_candidate_rule_ids, clear_goal_candidate_rule_ids()).Times(1);
-    EXPECT_CALL(clear_goal_exprs, clear_goal_exprs()).Times(1);
-    EXPECT_CALL(clear_active_goals, clear_active_goals()).Times(1);
-    EXPECT_CALL(clear_candidate_frame_offsets, clear_candidate_frame_offsets()).Times(1);
-    EXPECT_CALL(clear_mhu_heads, clear_mhu_heads()).Times(1);
-    EXPECT_CALL(clear_bindings, clear_bindings()).Times(1);
-    EXPECT_CALL(frame_allocator, reset()).Times(1);
-    EXPECT_CALL(clean_up_cdcl, cleanup()).Times(1);
-    EXPECT_CALL(clear_chosen_goal_candidates, clear()).Times(1);
-    EXPECT_CALL(trim_unpinned_lineages, trim()).Times(1);
     sim.tear_down();
 }
 
 TEST_F(MctsSimTest, ChooseAfterSetUpReturnsOneOfSuppliedGoalChoices) {
-    EXPECT_CALL(push_frame, push_frame()).Times(1);
     sim.set_up();
     std::vector<mcts_choice> choices{mcts_choice{&gl0}, mcts_choice{&gl1}};
     mcts_choice picked = sim.choose(choices, false);
     const auto* picked_gl = std::get_if<const goal_lineage*>(&picked);
     ASSERT_NE(picked_gl, nullptr);
     EXPECT_TRUE(*picked_gl == &gl0 || *picked_gl == &gl1);
-    EXPECT_CALL(compute_mcts_reward, compute_mcts_reward()).Times(1);
-    EXPECT_CALL(pop_frame, pop_frame()).Times(1);
+    value_delta.set_value(0.0);
     sim.tear_down();
 }
 
 TEST_F(MctsSimTest, ChooseAfterSetUpReturnsOneOfSuppliedRuleChoices) {
-    EXPECT_CALL(push_frame, push_frame()).Times(1);
     sim.set_up();
     std::vector<mcts_choice> choices{mcts_choice{rule_id{0}}, mcts_choice{rule_id{1}}};
     mcts_choice picked = sim.choose(choices, false);
     const auto* picked_rule = std::get_if<rule_id>(&picked);
     ASSERT_NE(picked_rule, nullptr);
     EXPECT_TRUE(*picked_rule == 0 || *picked_rule == 1);
-    EXPECT_CALL(compute_mcts_reward, compute_mcts_reward()).Times(1);
-    EXPECT_CALL(pop_frame, pop_frame()).Times(1);
+    value_delta.set_value(0.0);
     sim.tear_down();
 }
 
 TEST_F(MctsSimTest, MultipleRolloutChoosesStayWithinChoiceSet) {
-    EXPECT_CALL(push_frame, push_frame()).Times(1);
     sim.set_up();
     std::vector<mcts_choice> choices{mcts_choice{&gl0}, mcts_choice{&gl1}};
     for (int i = 0; i < 10; ++i) {
@@ -218,21 +76,17 @@ TEST_F(MctsSimTest, MultipleRolloutChoosesStayWithinChoiceSet) {
         ASSERT_NE(picked_gl, nullptr);
         EXPECT_TRUE(*picked_gl == &gl0 || *picked_gl == &gl1);
     }
-    EXPECT_CALL(compute_mcts_reward, compute_mcts_reward()).Times(1);
-    EXPECT_CALL(pop_frame, pop_frame()).Times(1);
+    value_delta.set_value(0.0);
     sim.tear_down();
 }
 
 TEST_F(MctsSimTest, FullLifecycleSetUpChooseTearDownTwice) {
     std::vector<mcts_choice> choices{mcts_choice{rule_id{0}}, mcts_choice{rule_id{1}}};
     for (int cycle = 0; cycle < 2; ++cycle) {
-        testing::InSequence seq;
-        EXPECT_CALL(push_frame, push_frame()).Times(1);
         sim.set_up();
         mcts_choice picked = sim.choose(choices, false);
         EXPECT_TRUE(std::holds_alternative<rule_id>(picked));
-        EXPECT_CALL(compute_mcts_reward, compute_mcts_reward()).WillOnce(Return(-static_cast<double>(cycle)));
-        EXPECT_CALL(pop_frame, pop_frame()).Times(1);
+        value_delta.set_value(-static_cast<double>(cycle));
         sim.tear_down();
     }
 }

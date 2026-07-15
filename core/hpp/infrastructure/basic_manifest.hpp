@@ -43,6 +43,8 @@
 #include "infrastructure/resolver.hpp"
 #include "infrastructure/rule_id_set_factory.hpp"
 #include "infrastructure/run_sim.hpp"
+#include "infrastructure/basic_set_up_sim.hpp"
+#include "infrastructure/basic_tear_down_sim.hpp"
 #include "infrastructure/set_up_sim.hpp"
 #include "infrastructure/solution_detector.hpp"
 #include "infrastructure/solver.hpp"
@@ -98,12 +100,14 @@ struct basic_manifest {
     using tear_down_sim_t  = tear_down_sim<elimination_backlog, unit_goals, decision_memory, resolution_memory,
                         goal_candidate_rules, goal_exprs, ra_active_goals, candidate_frame_offsets,
                         mhu_t, bind_map_t, lineage_pool, frame_bump_allocator, cdcl_t, chosen_goal_candidates>;
+    using basic_set_up_sim_t = basic_set_up_sim<set_up_sim_t>;
+    using basic_tear_down_sim_t = basic_tear_down_sim<tear_down_sim_t>;
     using resolution_recorder_t = resolution_recorder<decision_memory, resolution_memory>;
     using run_sim_t    = run_sim<initial_goals_activator_t, solution_detector_t, conflict_detector_t,
                         unit_goal_detector_t, unit_goals, unit_goals, random_decision_generator_t,
                         joint_t, elimination_router_t, resolver_t, get_unit_resolution_t,
                         resolution_recorder_t, resolution_recorder_t, resolution_memory>;
-    using solver_t    = solver<set_up_sim_t, tear_down_sim_t, run_sim_t, decision_memory, decision_memory,
+    using solver_t    = solver<basic_set_up_sim_t, basic_tear_down_sim_t, run_sim_t, decision_memory, decision_memory,
                         lineage_pool, cdcl_t, elimination_router_t>;
     using normalizer_t = normalizer<globalizer, expr_pool, expr_pool, bind_map_t>;
 
@@ -157,6 +161,8 @@ struct basic_manifest {
     resolver_t                    resolver_;
     set_up_sim_t                    set_up_sim_;
     tear_down_sim_t                    tear_down_sim_;
+    basic_set_up_sim_t              basic_set_up_sim_;
+    basic_tear_down_sim_t           basic_tear_down_sim_;
     resolution_recorder_t            resolution_recorder_;
     run_sim_t                      run_sim_;
     solver_t                      solver_;

@@ -36,6 +36,7 @@
 #include "infrastructure/resolver.hpp"
 #include "infrastructure/ridge_reward.hpp"
 #include "infrastructure/run_sim.hpp"
+#include "uniform_value_delta.hpp"
 #include "infrastructure/solution_detector.hpp"
 #include "infrastructure/srt_goal_deactivator.hpp"
 #include "infrastructure/srt_initial_goals_activator.hpp"
@@ -98,13 +99,15 @@ struct dbuct_ridge_manifest {
     using dbuct_rollout_t          = monte_carlo::random_rollout<mcts_choice, std::mt19937,
                                               dbuct_choices_t, dbuct_choices_t>;
     using dbuct_batch_t            = monte_carlo::linear_batch_increment;
+    using value_delta_t            = monte_carlo::uniform_value_delta<double>;
     using dbuct_t                  = monte_carlo::dbuct<
                                          dbuct_node_t, mcts_choice, double,
                                          dbuct_visits_table_t, dbuct_value_table_t,
                                          dbuct_visits_table_t, dbuct_value_table_t,
                                          dbuct_dispatches_table_t, dbuct_dispatches_table_t,
                                          dbuct_batch_t, dbuct_tree_walker_t,
-                                         dbuct_choices_t, dbuct_choices_t, dbuct_rollout_t>;
+                                         dbuct_choices_t, dbuct_choices_t, dbuct_rollout_t,
+                                         value_delta_t>;
 
     using avoidance_unit_boundary_t = dbuct_avoidance_unit_boundary<
         nearest_decision_t, dbuct_t>;
@@ -172,7 +175,7 @@ struct dbuct_ridge_manifest {
                                           decision_memory_t,
                                           avoidance_unit_boundary_t, avoidance_unit_boundary_t,
                                           dbuct_t, dbuct_t, dbuct_t, dbuct_t,
-                                          ridge_reward_t, dbuct_t>;
+                                          ridge_reward_t, value_delta_t, dbuct_t>;
     using mcts_decision_generator_t     = mcts_decision_generator<lineage_pool,
                                           srt_active_goals_t, srt_active_goals_t, srt_active_goals_t,
                                           dbuct_sim_t, goal_candidate_rules_t>;
@@ -220,6 +223,7 @@ struct dbuct_ridge_manifest {
     dbuct_dispatches_table_t      dbuct_dispatches_table_;
     dbuct_batch_t                 dbuct_batch_;
     dbuct_rollout_t               dbuct_rollout_;
+    value_delta_t                 value_delta_;
     dbuct_t                       dbuct_;
     avoidance_unit_boundary_t     avoidance_unit_boundary_;
     cdcl_t                        cdcl_;

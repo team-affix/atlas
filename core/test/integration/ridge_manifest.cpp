@@ -47,9 +47,9 @@ TEST_F(RidgeManifestIntegrationTest, WiringConstructsWithEmptyDbAndNoGoals) {
     EXPECT_NO_THROW(make_manifest());
 }
 
-TEST_F(RidgeManifestIntegrationTest, WiringMctsSimDistinctFromInnerSetUpTearDown) {
+TEST_F(RidgeManifestIntegrationTest, WiringMctsSimDistinctFromOuterAndInnerLifecycle) {
     /*
-     * Intent: mcts_sim_ is distinct from set_up_sim_ and tear_down_sim_.
+     * Intent: mcts_sim_ is distinct from outer and base setup/teardown components.
      * initial goals: (none)
      * rules: (none)
      */
@@ -57,6 +57,10 @@ TEST_F(RidgeManifestIntegrationTest, WiringMctsSimDistinctFromInnerSetUpTearDown
     EXPECT_NE(static_cast<void*>(&manifest.set_up_sim_),
               static_cast<void*>(&manifest.mcts_sim_));
     EXPECT_NE(static_cast<void*>(&manifest.tear_down_sim_),
+              static_cast<void*>(&manifest.mcts_sim_));
+    EXPECT_NE(static_cast<void*>(&manifest.ridge_set_up_sim_),
+              static_cast<void*>(&manifest.mcts_sim_));
+    EXPECT_NE(static_cast<void*>(&manifest.ridge_tear_down_sim_),
               static_cast<void*>(&manifest.mcts_sim_));
 }
 
@@ -81,9 +85,9 @@ TEST_F(RidgeManifestIntegrationTest, SimLifecycleTrailDepthRestoresAfterEmptyRun
      */
     ridge_manifest manifest = make_manifest();
     const size_t depth_before = manifest.elimination_backlog_.depth();
-    manifest.mcts_sim_.set_up();
+    manifest.ridge_set_up_sim_.set_up();
     EXPECT_EQ(manifest.run_sim_.run(), sim_termination::solved);
-    manifest.mcts_sim_.tear_down();
+    manifest.ridge_tear_down_sim_.tear_down();
     EXPECT_EQ(manifest.elimination_backlog_.depth(), depth_before);
 }
 
@@ -94,9 +98,9 @@ TEST_F(RidgeManifestIntegrationTest, SimLifecycleClearsActiveGoalsAfterEmptyRun)
      * rules: (none)
      */
     ridge_manifest manifest = make_manifest();
-    manifest.mcts_sim_.set_up();
+    manifest.ridge_set_up_sim_.set_up();
     EXPECT_EQ(manifest.run_sim_.run(), sim_termination::solved);
-    manifest.mcts_sim_.tear_down();
+    manifest.ridge_tear_down_sim_.tear_down();
     EXPECT_TRUE(manifest.srt_active_goals_.empty());
     EXPECT_EQ(manifest.decision_memory_.count(), 0u);
 }
@@ -111,9 +115,9 @@ TEST_F(RidgeManifestIntegrationTest, SimLifecycleTrailDepthRestoresAfterConflict
     initial_goals.push(goal);
     ridge_manifest manifest = make_manifest();
     const size_t depth_before = manifest.elimination_backlog_.depth();
-    manifest.set_up_sim_.set_up();
+    manifest.ridge_set_up_sim_.set_up();
     EXPECT_EQ(manifest.run_sim_.run(), sim_termination::conflicted);
-    manifest.tear_down_sim_.tear_down();
+    manifest.ridge_tear_down_sim_.tear_down();
     EXPECT_EQ(manifest.elimination_backlog_.depth(), depth_before);
 }
 
@@ -133,14 +137,14 @@ TEST_F(RidgeManifestIntegrationTest, SimMctsDecisionGeneratorRecordsDecisionWith
     database.push(rule{f_head1, {}});
 
     ridge_manifest manifest = make_manifest();
-    manifest.mcts_sim_.set_up();
+    manifest.ridge_set_up_sim_.set_up();
     EXPECT_EQ(manifest.run_sim_.run(), sim_termination::solved);
     EXPECT_EQ(manifest.decision_memory_.count(), 1u);
     const lemma dl = manifest.decision_memory_.derive_decision_lemma();
     ASSERT_EQ(dl.get_resolutions().size(), 1u);
     const rule_id chosen = (*dl.get_resolutions().begin())->idx;
     EXPECT_TRUE(chosen == 0 || chosen == 1);
-    manifest.mcts_sim_.tear_down();
+    manifest.ridge_tear_down_sim_.tear_down();
 }
 
 // Tier X — single solver tick

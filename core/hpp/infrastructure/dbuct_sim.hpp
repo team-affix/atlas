@@ -17,6 +17,7 @@ template<typename IPushSolverFrame,
          typename IInRollout,
          typename IChoose,
          typename IComputeMctsReward,
+         typename ISetValueDelta,
          typename ITerminate>
 struct dbuct_sim {
     dbuct_sim(IPushSolverFrame&,
@@ -30,6 +31,7 @@ struct dbuct_sim {
               IInRollout&,
               IChoose&,
               IComputeMctsReward&,
+              ISetValueDelta&,
               ITerminate&);
 
     mcts_choice choose(const std::vector<mcts_choice>&, bool is_rule_choice);
@@ -51,13 +53,14 @@ private:
     IInRollout&                         in_rollout_;
     IChoose&                            choose_;
     IComputeMctsReward&                 compute_mcts_reward_;
+    ISetValueDelta&                     set_value_delta_;
     ITerminate&                         terminate_;
 };
 
 template<typename IPSF, typename IPopSF, typename IGSFD, typename IGDC,
          typename IGPMFD, typename IGUMFD, typename IGMFD, typename IBMF,
-         typename IIR, typename IC, typename ICMR, typename IT>
-dbuct_sim<IPSF, IPopSF, IGSFD, IGDC, IGPMFD, IGUMFD, IGMFD, IBMF, IIR, IC, ICMR, IT>::dbuct_sim(
+         typename IIR, typename IC, typename ICMR, typename ISVD, typename IT>
+dbuct_sim<IPSF, IPopSF, IGSFD, IGDC, IGPMFD, IGUMFD, IGMFD, IBMF, IIR, IC, ICMR, ISVD, IT>::dbuct_sim(
     IPSF& push_solver_frame,
     IPopSF& pop_solver_frame,
     IGSFD& get_solver_frame_depth,
@@ -69,6 +72,7 @@ dbuct_sim<IPSF, IPopSF, IGSFD, IGDC, IGPMFD, IGUMFD, IGMFD, IBMF, IIR, IC, ICMR,
     IIR& in_rollout,
     IC& choose,
     ICMR& compute_mcts_reward,
+    ISVD& set_value_delta,
     IT& terminate)
     : push_solver_frame_(push_solver_frame)
     , pop_solver_frame_(pop_solver_frame)
@@ -81,19 +85,20 @@ dbuct_sim<IPSF, IPopSF, IGSFD, IGDC, IGPMFD, IGUMFD, IGMFD, IBMF, IIR, IC, ICMR,
     , in_rollout_(in_rollout)
     , choose_(choose)
     , compute_mcts_reward_(compute_mcts_reward)
+    , set_value_delta_(set_value_delta)
     , terminate_(terminate) {}
 
 template<typename IPSF, typename IPopSF, typename IGSFD, typename IGDC,
          typename IGPMFD, typename IGUMFD, typename IGMFD, typename IBMF,
-         typename IIR, typename IC, typename ICMR, typename IT>
-bool dbuct_sim<IPSF, IPopSF, IGSFD, IGDC, IGPMFD, IGUMFD, IGMFD, IBMF, IIR, IC, ICMR, IT>::at_root() const {
+         typename IIR, typename IC, typename ICMR, typename ISVD, typename IT>
+bool dbuct_sim<IPSF, IPopSF, IGSFD, IGDC, IGPMFD, IGUMFD, IGMFD, IBMF, IIR, IC, ICMR, ISVD, IT>::at_root() const {
     return get_decision_count_.count() == 0;
 }
 
 template<typename IPSF, typename IPopSF, typename IGSFD, typename IGDC,
          typename IGPMFD, typename IGUMFD, typename IGMFD, typename IBMF,
-         typename IIR, typename IC, typename ICMR, typename IT>
-mcts_choice dbuct_sim<IPSF, IPopSF, IGSFD, IGDC, IGPMFD, IGUMFD, IGMFD, IBMF, IIR, IC, ICMR, IT>::choose(
+         typename IIR, typename IC, typename ICMR, typename ISVD, typename IT>
+mcts_choice dbuct_sim<IPSF, IPopSF, IGSFD, IGDC, IGPMFD, IGUMFD, IGMFD, IBMF, IIR, IC, ICMR, ISVD, IT>::choose(
     const std::vector<mcts_choice>& choices, bool is_rule_choice) {
     mcts_choice chosen = choose_.choose(choices, choices);
     // if there has not been a mcts frame since the last decision, don't push solver frame.
@@ -106,21 +111,18 @@ mcts_choice dbuct_sim<IPSF, IPopSF, IGSFD, IGDC, IGPMFD, IGUMFD, IGMFD, IBMF, II
 
 template<typename IPSF, typename IPopSF, typename IGSFD, typename IGDC,
          typename IGPMFD, typename IGUMFD, typename IGMFD, typename IBMF,
-         typename IIR, typename IC, typename ICMR, typename IT>
-std::vector<const resolution_lineage*> dbuct_sim<IPSF, IPopSF, IGSFD, IGDC, IGPMFD, IGUMFD, IGMFD, IBMF, IIR, IC, ICMR, IT>::terminate() {
+         typename IIR, typename IC, typename ICMR, typename ISVD, typename IT>
+std::vector<const resolution_lineage*> dbuct_sim<IPSF, IPopSF, IGSFD, IGDC, IGPMFD, IGUMFD, IGMFD, IBMF, IIR, IC, ICMR, ISVD, IT>::terminate() {
     backtrack_mcts();
     return backtrack_solver_and_align();
 }
 
 template<typename IPSF, typename IPopSF, typename IGSFD, typename IGDC,
          typename IGPMFD, typename IGUMFD, typename IGMFD, typename IBMF,
-         typename IIR, typename IC, typename ICMR, typename IT>
-void dbuct_sim<IPSF, IPopSF, IGSFD, IGDC, IGPMFD, IGUMFD, IGMFD, IBMF, IIR, IC, ICMR, IT>::backtrack_mcts() {
-    // get reward
-    double reward = compute_mcts_reward_.compute_mcts_reward();
-
-    // terminate mcts + backstep to suggested return depth
-    terminate_.terminate(reward);
+         typename IIR, typename IC, typename ICMR, typename ISVD, typename IT>
+void dbuct_sim<IPSF, IPopSF, IGSFD, IGDC, IGPMFD, IGUMFD, IGMFD, IBMF, IIR, IC, ICMR, ISVD, IT>::backtrack_mcts() {
+    set_value_delta_.set_value(compute_mcts_reward_.compute_mcts_reward());
+    terminate_.terminate();
 
     // if we are still at or deeper than ultimate, backstep once
     if (get_mcts_frame_depth_.depth() > 1 && get_mcts_frame_depth_.depth() >= get_ultimate_mcts_frame_depth_.get_ultimate_mcts_frame_depth())
@@ -129,8 +131,8 @@ void dbuct_sim<IPSF, IPopSF, IGSFD, IGDC, IGPMFD, IGUMFD, IGMFD, IBMF, IIR, IC, 
 
 template<typename IPSF, typename IPopSF, typename IGSFD, typename IGDC,
          typename IGPMFD, typename IGUMFD, typename IGMFD, typename IBMF,
-         typename IIR, typename IC, typename ICMR, typename IT>
-std::vector<const resolution_lineage*> dbuct_sim<IPSF, IPopSF, IGSFD, IGDC, IGPMFD, IGUMFD, IGMFD, IBMF, IIR, IC, ICMR, IT>::backtrack_solver_and_align() {
+         typename IIR, typename IC, typename ICMR, typename ISVD, typename IT>
+std::vector<const resolution_lineage*> dbuct_sim<IPSF, IPopSF, IGSFD, IGDC, IGPMFD, IGUMFD, IGMFD, IBMF, IIR, IC, ICMR, ISVD, IT>::backtrack_solver_and_align() {
     // pop solver frames until at or before current mcts frame depth
     std::vector<const resolution_lineage*> eliminations;
     while (get_ultimate_mcts_frame_depth_.get_ultimate_mcts_frame_depth() > get_mcts_frame_depth_.depth()) {

@@ -9,11 +9,12 @@
 #include "value_objects/mcts_node_id.hpp"
 #include "mcts.hpp"
 
-template<typename ISetUpSim, typename ITearDownSim, typename IComputeMctsReward,
-         typename IGetValueDelta, typename IMakeResolutionLineage>
+// Owns the Monte Carlo simulation object for one solver lifetime. set_up() and
+// tear_down() only construct and terminate that object; solver-specific outer
+// lifecycle components coordinate those calls with reward and state cleanup.
+template<typename IGetValueDelta, typename IMakeResolutionLineage>
 struct mcts_sim {
-    mcts_sim(ISetUpSim&, ITearDownSim&, IComputeMctsReward&,
-             IGetValueDelta&, IMakeResolutionLineage&, std::mt19937&, double exploration_constant);
+    mcts_sim(IGetValueDelta&, IMakeResolutionLineage&, std::mt19937&, double exploration_constant);
 
     void set_up();
     void tear_down();
@@ -52,9 +53,6 @@ private:
                           rollout_t,       // IRolloutChoose
                           IGetValueDelta>; // IGetValueDelta
 
-    ISetUpSim&            set_up_;
-    ITearDownSim&         tear_down_;
-    IComputeMctsReward&   compute_mcts_reward_;
     IGetValueDelta&       value_delta_;
     double                exploration_constant_;
 
@@ -72,13 +70,13 @@ private:
 
 // ─── walker member function definitions ──────────────────────────────────────
 
-template<typename ISUS, typename ITDS, typename ICMR, typename IGVD, typename IMRL>
-mcts_sim<ISUS, ITDS, ICMR, IGVD, IMRL>::walker::walker(IMRL& mrl)
+template<typename IGVD, typename IMRL>
+mcts_sim<IGVD, IMRL>::walker::walker(IMRL& mrl)
     : make_resolution_lineage_(mrl) {}
 
-template<typename ISUS, typename ITDS, typename ICMR, typename IGVD, typename IMRL>
+template<typename IGVD, typename IMRL>
 mcts_node_id
-mcts_sim<ISUS, ITDS, ICMR, IGVD, IMRL>::walker::walk(
+mcts_sim<IGVD, IMRL>::walker::walk(
         const mcts_node_id& node, const mcts_choice& choice) const {
     if (const goal_lineage* const* gl_ptr =
             std::get_if<const goal_lineage*>(&choice)) {
@@ -94,14 +92,10 @@ mcts_sim<ISUS, ITDS, ICMR, IGVD, IMRL>::walker::walk(
 
 // ─── mcts_sim member function definitions ────────────────────────────────────
 
-template<typename ISUS, typename ITDS, typename ICMR, typename IGVD, typename IMRL>
-mcts_sim<ISUS, ITDS, ICMR, IGVD, IMRL>::mcts_sim(
-        ISUS& sus, ITDS& tds, ICMR& cmr,
+template<typename IGVD, typename IMRL>
+mcts_sim<IGVD, IMRL>::mcts_sim(
         IGVD& gvd, IMRL& mrl, std::mt19937& rng, double ec)
-    : set_up_(sus)
-    , tear_down_(tds)
-    , compute_mcts_reward_(cmr)
-    , value_delta_(gvd)
+    : value_delta_(gvd)
     , exploration_constant_(ec)
     , visits_table_()
     , value_table_()
@@ -110,26 +104,23 @@ mcts_sim<ISUS, ITDS, ICMR, IGVD, IMRL>::mcts_sim(
     , mc_sim_{}
 {}
 
-template<typename ISUS, typename ITDS, typename ICMR, typename IGVD, typename IMRL>
-void mcts_sim<ISUS, ITDS, ICMR, IGVD, IMRL>::set_up() {
+template<typename IGVD, typename IMRL>
+void mcts_sim<IGVD, IMRL>::set_up() {
     mc_sim_.emplace(visits_table_, value_table_, visits_table_, value_table_,
                     walker_,
                     rollout_,
                     value_delta_,
                     mcts_node_id{set_t{}, nullptr},
                     exploration_constant_);
-    set_up_.set_up();
 }
 
-template<typename ISUS, typename ITDS, typename ICMR, typename IGVD, typename IMRL>
-void mcts_sim<ISUS, ITDS, ICMR, IGVD, IMRL>::tear_down() {
-    value_delta_.set_value(compute_mcts_reward_.compute_mcts_reward());
+template<typename IGVD, typename IMRL>
+void mcts_sim<IGVD, IMRL>::tear_down() {
     mc_sim_->terminate();
-    tear_down_.tear_down();
 }
 
-template<typename ISUS, typename ITDS, typename ICMR, typename IGVD, typename IMRL>
-mcts_choice mcts_sim<ISUS, ITDS, ICMR, IGVD, IMRL>::choose(
+template<typename IGVD, typename IMRL>
+mcts_choice mcts_sim<IGVD, IMRL>::choose(
         const std::vector<mcts_choice>& choices, bool is_rule_choice) {
     (void)is_rule_choice;
     return mc_sim_->choose(choices, choices);

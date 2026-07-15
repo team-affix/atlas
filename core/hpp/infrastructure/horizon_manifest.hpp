@@ -34,6 +34,7 @@
 #include "infrastructure/horizon_initial_goal_activator.hpp"
 #include "infrastructure/horizon_resolver.hpp"
 #include "infrastructure/horizon_reward.hpp"
+#include "infrastructure/horizon_set_up_sim.hpp"
 #include "infrastructure/horizon_tear_down_sim.hpp"
 #include "infrastructure/initial_goal_activator.hpp"
 #include "infrastructure/initial_goal_exprs.hpp"
@@ -117,11 +118,13 @@ struct horizon_manifest {
     using tear_down_sim_t      = tear_down_sim<elimination_backlog, unit_goals, decision_memory, resolution_memory,
                             goal_candidate_rules, goal_exprs, srt_active_goals, candidate_frame_offsets,
                             mhu_t, bind_map_t, lineage_pool, frame_bump_allocator, cdcl_t, chosen_goal_candidates>;
-    using horizon_tear_down_sim_t   = horizon_tear_down_sim<tear_down_sim_t, goal_weights, cumulative_grounded_weight>;
     using horizon_reward_t     = horizon_reward<cumulative_grounded_weight>;
     using value_delta_t    = monte_carlo::uniform_value_delta<double>;
-    using mcts_sim_t       = mcts_sim<set_up_sim_t, horizon_tear_down_sim_t, horizon_reward_t,
-                                      value_delta_t, lineage_pool>;
+    using mcts_sim_t       = mcts_sim<value_delta_t, lineage_pool>;
+    using horizon_set_up_sim_t = horizon_set_up_sim<mcts_sim_t, set_up_sim_t>;
+    using horizon_tear_down_sim_t = horizon_tear_down_sim<
+        horizon_reward_t, value_delta_t, mcts_sim_t,
+        goal_weights, cumulative_grounded_weight, tear_down_sim_t>;
     using mcts_decision_generator_t = mcts_decision_generator<lineage_pool, srt_active_goals,
                                     srt_active_goals, srt_active_goals, mcts_sim_t, goal_candidate_rules>;
     using resolution_recorder_t = resolution_recorder<decision_memory, resolution_memory>;
@@ -129,7 +132,8 @@ struct horizon_manifest {
                             unit_goal_detector_t, unit_goals, unit_goals, mcts_decision_generator_t,
                             joint_t, elimination_router_t, horizon_resolver_t, get_unit_resolution_t,
                             resolution_recorder_t, resolution_recorder_t, resolution_memory>;
-    using solver_t        = solver<mcts_sim_t, mcts_sim_t, run_sim_t, decision_memory, decision_memory,
+    using solver_t        = solver<horizon_set_up_sim_t, horizon_tear_down_sim_t, run_sim_t,
+                            decision_memory, decision_memory,
                             lineage_pool, cdcl_t, elimination_router_t>;
     using normalizer_t    = normalizer<globalizer, expr_pool, expr_pool, bind_map_t>;
 
@@ -187,18 +191,19 @@ struct horizon_manifest {
     srt_subgoals_activator_t        srt_subgoals_activator_;
     initial_goals_activator_t       initial_goals_activator_;
     srt_initial_goals_activator_t    srt_initial_goals_activator_;
-    tear_down_sim_t                    tear_down_base_;
     resolver_t                    resolver_;
     horizon_resolver_t             horizon_resolver_;
     set_up_sim_t                    set_up_sim_;
+    tear_down_sim_t                    tear_down_sim_;
     horizon_reward_t               horizon_reward_;
     value_delta_t                  value_delta_;
     std::mt19937                rng_;
     mcts_sim_t                 mcts_sim_;
+    horizon_set_up_sim_t           horizon_set_up_sim_;
+    horizon_tear_down_sim_t        horizon_tear_down_sim_;
     mcts_decision_generator_t       mcts_decision_generator_;
     resolution_recorder_t            resolution_recorder_;
     run_sim_t                      run_sim_;
-    horizon_tear_down_sim_t             tear_down_sim_;
     solver_t                      solver_;
     normalizer_t                  normalizer_;
     solver_driver                 driver_;

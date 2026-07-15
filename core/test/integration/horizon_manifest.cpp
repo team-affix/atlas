@@ -70,19 +70,23 @@ TEST_F(HorizonManifestIntegrationTest, WiringHorizonRewardReturnsZeroInitially) 
     EXPECT_DOUBLE_EQ(manifest.horizon_reward_.compute_mcts_reward(), 0.0);
 }
 
-TEST_F(HorizonManifestIntegrationTest, WiringMctsSimDistinctFromInnerSetUpTearDown) {
+TEST_F(HorizonManifestIntegrationTest, WiringMctsSimDistinctFromOuterAndInnerLifecycle) {
     horizon_manifest manifest = make_manifest();
     EXPECT_NE(static_cast<void*>(&manifest.set_up_sim_),
               static_cast<void*>(&manifest.mcts_sim_));
     EXPECT_NE(static_cast<void*>(&manifest.tear_down_sim_),
               static_cast<void*>(&manifest.mcts_sim_));
+    EXPECT_NE(static_cast<void*>(&manifest.horizon_set_up_sim_),
+              static_cast<void*>(&manifest.mcts_sim_));
+    EXPECT_NE(static_cast<void*>(&manifest.horizon_tear_down_sim_),
+              static_cast<void*>(&manifest.mcts_sim_));
 }
 
 TEST_F(HorizonManifestIntegrationTest, SimLifecycleClearsCgwAfterEmptyRun) {
     horizon_manifest manifest = make_manifest();
-    manifest.set_up_sim_.set_up();
+    manifest.horizon_set_up_sim_.set_up();
     EXPECT_EQ(manifest.run_sim_.run(), sim_termination::solved);
-    manifest.tear_down_sim_.tear_down();
+    manifest.horizon_tear_down_sim_.tear_down();
     EXPECT_DOUBLE_EQ(manifest.cumulative_grounded_weight_.get(), 0.0);
     EXPECT_TRUE(manifest.srt_active_goals_.empty());
 }

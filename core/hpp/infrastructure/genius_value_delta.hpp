@@ -7,7 +7,6 @@ template<typename IRidgeReward, typename IHorizonReward>
 struct genius_value_delta {
     genius_value_delta(IRidgeReward&, IHorizonReward&);
 
-    void   set_value(double) {}
     double get_value_delta(const mcts_node_id&) const;
 
 private:

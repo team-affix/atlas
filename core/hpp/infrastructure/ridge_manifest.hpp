@@ -42,6 +42,8 @@
 #include "infrastructure/resolution_recorder.hpp"
 #include "infrastructure/resolver.hpp"
 #include "infrastructure/ridge_reward.hpp"
+#include "infrastructure/ridge_set_up_sim.hpp"
+#include "infrastructure/ridge_tear_down_sim.hpp"
 #include "infrastructure/rule_id_set_factory.hpp"
 #include "infrastructure/run_sim.hpp"
 #include "infrastructure/set_up_sim.hpp"
@@ -107,8 +109,10 @@ struct ridge_manifest {
                             mhu_t, bind_map_t, lineage_pool, frame_bump_allocator, cdcl_t, chosen_goal_candidates>;
     using ridge_reward_t   = ridge_reward<decision_memory>;
     using value_delta_t = monte_carlo::uniform_value_delta<double>;
-    using mcts_sim_t   = mcts_sim<set_up_sim_t, tear_down_sim_t, ridge_reward_t,
-                                   value_delta_t, lineage_pool>;
+    using mcts_sim_t   = mcts_sim<value_delta_t, lineage_pool>;
+    using ridge_set_up_sim_t = ridge_set_up_sim<mcts_sim_t, set_up_sim_t>;
+    using ridge_tear_down_sim_t = ridge_tear_down_sim<
+        ridge_reward_t, value_delta_t, mcts_sim_t, tear_down_sim_t>;
     using mcts_decision_generator_t = mcts_decision_generator<lineage_pool, srt_active_goals,
                                     srt_active_goals, srt_active_goals, mcts_sim_t, goal_candidate_rules>;
     using resolution_recorder_t = resolution_recorder<decision_memory, resolution_memory>;
@@ -116,7 +120,8 @@ struct ridge_manifest {
                             unit_goal_detector_t, unit_goals, unit_goals, mcts_decision_generator_t,
                             joint_t, elimination_router_t, resolver_t, get_unit_resolution_t,
                             resolution_recorder_t, resolution_recorder_t, resolution_memory>;
-    using solver_t        = solver<mcts_sim_t, mcts_sim_t, run_sim_t, decision_memory, decision_memory,
+    using solver_t        = solver<ridge_set_up_sim_t, ridge_tear_down_sim_t, run_sim_t,
+                            decision_memory, decision_memory,
                             lineage_pool, cdcl_t, elimination_router_t>;
     using normalizer_t    = normalizer<globalizer, expr_pool, expr_pool, bind_map_t>;
 
@@ -175,6 +180,8 @@ struct ridge_manifest {
     value_delta_t                  value_delta_;
     std::mt19937                rng_;
     mcts_sim_t                 mcts_sim_;
+    ridge_set_up_sim_t             ridge_set_up_sim_;
+    ridge_tear_down_sim_t          ridge_tear_down_sim_;
     mcts_decision_generator_t       mcts_decision_generator_;
     resolution_recorder_t            resolution_recorder_;
     run_sim_t                      run_sim_;
