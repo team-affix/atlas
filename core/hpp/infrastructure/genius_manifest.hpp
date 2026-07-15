@@ -3,7 +3,9 @@
 
 #include <cstddef>
 #include <cstdint>
+#include <map>
 #include <random>
+#include <vector>
 #include "infrastructure/bind_map.hpp"
 #include "infrastructure/bind_map_factory.hpp"
 #include "infrastructure/candidate_activator.hpp"
@@ -45,7 +47,14 @@
 #include "infrastructure/lineage_pool.hpp"
 #include "infrastructure/make_initial_goal_lineage.hpp"
 #include "infrastructure/mcts_decision_generator.hpp"
+#include "infrastructure/mcts_root_scope_node.hpp"
 #include "infrastructure/mcts_sim.hpp"
+#include "infrastructure/scope_walker.hpp"
+#include "random_rollout.hpp"
+#include "value_table.hpp"
+#include "visits_table.hpp"
+#include "value_objects/mcts_choice.hpp"
+#include "value_objects/mcts_scope_node_id.hpp"
 #include "infrastructure/mhu_elimination_generator.hpp"
 #include "infrastructure/ra_rule_id_set_factory.hpp"
 #include "infrastructure/resolution_memory.hpp"
@@ -122,7 +131,23 @@ struct genius_manifest {
     using ridge_reward_t    = ridge_reward<decision_memory>;
     using horizon_reward_t  = horizon_reward<cumulative_grounded_weight>;
     using value_delta_t     = genius_value_delta<ridge_reward_t, horizon_reward_t>;
-    using mcts_sim_t        = mcts_sim<value_delta_t, lineage_pool>;
+    using mcts_choices_t = std::vector<mcts_choice>;
+    using mcts_visits_table_t = monte_carlo::visits_table<mcts_scope_node_id, std::map>;
+    using mcts_value_table_t = monte_carlo::value_table<mcts_scope_node_id, double, std::map>;
+    using mcts_rollout_t = monte_carlo::random_rollout<
+        mcts_choice, std::mt19937, mcts_choices_t, mcts_choices_t>;
+    using scope_walker_t = scope_walker<lineage_pool>;
+    using mcts_sim_t        = mcts_sim<
+        mcts_scope_node_id,
+        mcts_choice,
+        mcts_visits_table_t,
+        mcts_visits_table_t,
+        mcts_value_table_t,
+        mcts_value_table_t,
+        scope_walker_t,
+        mcts_rollout_t,
+        value_delta_t,
+        mcts_root_scope_node>;
     using genius_set_up_sim_t = genius_set_up_sim<mcts_sim_t, set_up_sim_t>;
     using genius_tear_down_sim_t = genius_tear_down_sim<
         mcts_sim_t, goal_weights, cumulative_grounded_weight, tear_down_sim_t>;
@@ -200,6 +225,11 @@ struct genius_manifest {
     horizon_reward_t               horizon_reward_;
     value_delta_t                  value_delta_;
     std::mt19937                rng_;
+    mcts_visits_table_t            mcts_visits_table_;
+    mcts_value_table_t             mcts_value_table_;
+    scope_walker_t                 scope_walker_;
+    mcts_rollout_t                 mcts_rollout_;
+    mcts_root_scope_node           mcts_root_scope_node_;
     mcts_sim_t                 mcts_sim_;
     genius_set_up_sim_t            genius_set_up_sim_;
     genius_tear_down_sim_t         genius_tear_down_sim_;

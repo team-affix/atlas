@@ -4,6 +4,8 @@
 #include <cstddef>
 #include <cstdint>
 #include <random>
+#include <unordered_map>
+#include <vector>
 #include "infrastructure/bind_map.hpp"
 #include "infrastructure/bind_map_factory.hpp"
 #include "infrastructure/candidate_activator.hpp"
@@ -34,8 +36,15 @@
 #include "infrastructure/lineage_pool.hpp"
 #include "infrastructure/make_initial_goal_lineage.hpp"
 #include "infrastructure/mcts_decision_generator.hpp"
+#include "infrastructure/mcts_root_tree_node.hpp"
 #include "infrastructure/mcts_sim.hpp"
+#include "infrastructure/tree_walker.hpp"
 #include "uniform_value_delta.hpp"
+#include "random_rollout.hpp"
+#include "value_table.hpp"
+#include "visits_table.hpp"
+#include "value_objects/mcts_choice.hpp"
+#include "value_objects/mcts_tree_node_id.hpp"
 #include "infrastructure/mhu_elimination_generator.hpp"
 #include "infrastructure/ra_rule_id_set_factory.hpp"
 #include "infrastructure/resolution_memory.hpp"
@@ -109,7 +118,22 @@ struct ridge_manifest {
                             mhu_t, bind_map_t, lineage_pool, frame_bump_allocator, cdcl_t, chosen_goal_candidates>;
     using ridge_reward_t   = ridge_reward<decision_memory>;
     using value_delta_t = monte_carlo::uniform_value_delta<double>;
-    using mcts_sim_t   = mcts_sim<value_delta_t, lineage_pool>;
+    using mcts_choices_t = std::vector<mcts_choice>;
+    using mcts_visits_table_t = monte_carlo::visits_table<mcts_tree_node_id, std::unordered_map>;
+    using mcts_value_table_t = monte_carlo::value_table<mcts_tree_node_id, double, std::unordered_map>;
+    using mcts_rollout_t = monte_carlo::random_rollout<
+        mcts_choice, std::mt19937, mcts_choices_t, mcts_choices_t>;
+    using mcts_sim_t   = mcts_sim<
+        mcts_tree_node_id,
+        mcts_choice,
+        mcts_visits_table_t,
+        mcts_visits_table_t,
+        mcts_value_table_t,
+        mcts_value_table_t,
+        tree_walker,
+        mcts_rollout_t,
+        value_delta_t,
+        mcts_root_tree_node>;
     using ridge_set_up_sim_t = ridge_set_up_sim<mcts_sim_t, set_up_sim_t>;
     using ridge_tear_down_sim_t = ridge_tear_down_sim<
         ridge_reward_t, value_delta_t, mcts_sim_t, tear_down_sim_t>;
@@ -179,6 +203,11 @@ struct ridge_manifest {
     ridge_reward_t                 ridge_reward_;
     value_delta_t                  value_delta_;
     std::mt19937                rng_;
+    mcts_visits_table_t            mcts_visits_table_;
+    mcts_value_table_t             mcts_value_table_;
+    tree_walker                    tree_walker_;
+    mcts_rollout_t                 mcts_rollout_;
+    mcts_root_tree_node            mcts_root_tree_node_;
     mcts_sim_t                 mcts_sim_;
     ridge_set_up_sim_t             ridge_set_up_sim_;
     ridge_tear_down_sim_t          ridge_tear_down_sim_;

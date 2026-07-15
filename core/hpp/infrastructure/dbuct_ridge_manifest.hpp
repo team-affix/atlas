@@ -65,10 +65,12 @@
 #include "infrastructure/dbuct_nearest_decision.hpp"
 #include "infrastructure/dbuct_resolution_memory.hpp"
 #include "infrastructure/dbuct_resolution_recorder.hpp"
-#include "infrastructure/dbuct_tree_walker.hpp"
+#include "infrastructure/tree_walker.hpp"
+#include "infrastructure/mcts_root_tree_node.hpp"
 #include "infrastructure/dbuct_sim.hpp"
 #include "infrastructure/dbuct_ridge_terminate_sim.hpp"
 #include "value_objects/mcts_choice.hpp"
+#include "value_objects/mcts_tree_node_id.hpp"
 #include "infrastructure/dbuct_solver.hpp"
 #include "infrastructure/dbuct_srt_active_goals.hpp"
 #include "infrastructure/dbuct_unit_goals.hpp"
@@ -91,22 +93,21 @@ struct dbuct_ridge_manifest {
     using nearest_decision_t        = dbuct_nearest_decision;
     using unifier_factory_t = unifier_factory<globalizer, bind_map_t>;
 
-    using dbuct_tree_walker_t      = dbuct_tree_walker;
-    using dbuct_node_t             = size_t;
+    using tree_walker_t            = tree_walker;
     using dbuct_choices_t          = std::vector<mcts_choice>;
-    using dbuct_visits_table_t     = monte_carlo::visits_table<dbuct_node_t, std::unordered_map>;
-    using dbuct_value_table_t      = monte_carlo::value_table<dbuct_node_t, double, std::unordered_map>;
-    using dbuct_dispatches_table_t = monte_carlo::dispatches_table<dbuct_node_t, std::unordered_map>;
+    using dbuct_visits_table_t     = monte_carlo::visits_table<mcts_tree_node_id, std::unordered_map>;
+    using dbuct_value_table_t      = monte_carlo::value_table<mcts_tree_node_id, double, std::unordered_map>;
+    using dbuct_dispatches_table_t = monte_carlo::dispatches_table<mcts_tree_node_id, std::unordered_map>;
     using dbuct_rollout_t          = monte_carlo::random_rollout<mcts_choice, std::mt19937,
                                               dbuct_choices_t, dbuct_choices_t>;
     using dbuct_batch_t            = monte_carlo::linear_batch_increment;
     using value_delta_t            = monte_carlo::uniform_value_delta<double>;
     using dbuct_t                  = monte_carlo::dbuct<
-                                         dbuct_node_t, mcts_choice, double,
+                                         mcts_tree_node_id, mcts_choice, double,
                                          dbuct_visits_table_t, dbuct_value_table_t,
                                          dbuct_visits_table_t, dbuct_value_table_t,
                                          dbuct_dispatches_table_t, dbuct_dispatches_table_t,
-                                         dbuct_batch_t, dbuct_tree_walker_t,
+                                         dbuct_batch_t, tree_walker_t,
                                          dbuct_choices_t, dbuct_choices_t, dbuct_rollout_t,
                                          value_delta_t>;
 
@@ -220,13 +221,14 @@ struct dbuct_ridge_manifest {
     elimination_backlog_t         elimination_backlog_;
     nearest_decision_t            nearest_decision_;
     std::mt19937                  rng_;
-    dbuct_tree_walker_t           dbuct_tree_walker_;
+    tree_walker_t                 tree_walker_;
     dbuct_visits_table_t          dbuct_visits_table_;
     dbuct_value_table_t           dbuct_value_table_;
     dbuct_dispatches_table_t      dbuct_dispatches_table_;
     dbuct_batch_t                 dbuct_batch_;
     dbuct_rollout_t               dbuct_rollout_;
     value_delta_t                 value_delta_;
+    mcts_root_tree_node           mcts_root_tree_node_;
     dbuct_t                       dbuct_;
     avoidance_unit_boundary_t     avoidance_unit_boundary_;
     cdcl_t                        cdcl_;

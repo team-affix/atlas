@@ -1,45 +1,55 @@
-// mcts_sim: owns and drives the internal Monte Carlo simulation only.
+// mcts_sim: orchestrates injected Monte Carlo collaborators.
 
 #include <gtest/gtest.h>
 #include <gmock/gmock.h>
 #include <random>
-#include <set>
 #include <vector>
 #include "infrastructure/mcts_sim.hpp"
-#include "value_objects/mcts_choice.hpp"
+#include "infrastructure/mcts_root_tree_node.hpp"
+#include "infrastructure/tree_walker.hpp"
 #include "uniform_value_delta.hpp"
+#include "value_table.hpp"
+#include "visits_table.hpp"
+#include "random_rollout.hpp"
+#include "value_objects/mcts_choice.hpp"
+#include "value_objects/mcts_tree_node_id.hpp"
 
-struct MockMakeResolutionLineage {
-    MOCK_METHOD((const resolution_lineage*), make_resolution_lineage,
-        (const goal_lineage*, rule_id));
-};
-
+using test_visits_t = monte_carlo::visits_table<mcts_tree_node_id, std::unordered_map>;
+using test_value_t = monte_carlo::value_table<mcts_tree_node_id, double, std::unordered_map>;
+using test_rollout_t = monte_carlo::random_rollout<
+    mcts_choice, std::mt19937, std::vector<mcts_choice>, std::vector<mcts_choice>>;
 using test_value_delta_t = monte_carlo::uniform_value_delta<double>;
-using test_mcts_sim_t = mcts_sim<test_value_delta_t, MockMakeResolutionLineage>;
+using test_mcts_sim_t = mcts_sim<
+    mcts_tree_node_id,
+    mcts_choice,
+    test_visits_t,
+    test_visits_t,
+    test_value_t,
+    test_value_t,
+    tree_walker,
+    test_rollout_t,
+    test_value_delta_t,
+    mcts_root_tree_node>;
 
 struct MctsSimTest : public ::testing::Test {
     static constexpr double kExplorationConstant = 1.414;
 
-    test_value_delta_t value_delta;
-    testing::NiceMock<MockMakeResolutionLineage> make_resolution_lineage;
+    test_visits_t visits;
+    test_value_t values;
+    tree_walker walker;
     std::mt19937 rng{42};
-    std::set<resolution_lineage> resolution_storage;
-
-    test_mcts_sim_t sim{value_delta, make_resolution_lineage, rng, kExplorationConstant};
+    test_rollout_t rollout{rng};
+    test_value_delta_t value_delta;
+    mcts_root_tree_node root;
+    test_mcts_sim_t sim{
+        visits, visits, values, values,
+        walker, rollout, value_delta, root, kExplorationConstant};
 
     goal_lineage gl0{nullptr, 0};
     goal_lineage gl1{nullptr, 1};
-
-    void SetUp() override {
-        ON_CALL(make_resolution_lineage, make_resolution_lineage(testing::_, testing::_))
-            .WillByDefault([this](const goal_lineage* gl, rule_id rid) {
-                auto [it, _] = resolution_storage.emplace(gl, rid);
-                return &*it;
-            });
-    }
 };
 
-TEST_F(MctsSimTest, SetUpThenTearDownRunsWithoutSolverStateCollaborators) {
+TEST_F(MctsSimTest, SetUpThenTearDownRuns) {
     value_delta.set_value(-1.0);
     sim.set_up();
     sim.tear_down();
