@@ -99,8 +99,8 @@ dbuct_cdcl_elimination_generator<ITGCC, IGUB, IDL, IGUD, IGPD>::learn() {
 
     // if size==1, store a degenerate single-member avoidance so pop_frame can find
     // the resolution to float to the top. watcher_b_pos is a SIZE_MAX poison: a unit
-    // has no second literal to watch. A unit's unit_boundary is 0, so it can never
-    // hit pop_frame's arm branch (frame_stack_.size() < 0 is impossible), which is
+    // has no second literal to watch. A unit's unit_boundary is 1, so it can never
+    // hit pop_frame's arm branch (frame_stack_.size() < 1 is impossible), which is
     // the only site that would dereference watcher_b_pos -- see the assert there.
     if (resolutions.size() == 1) {
         avoidances_.emplace(id, avoidance{{*resolutions.begin()}, 0, SIZE_MAX});
