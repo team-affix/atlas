@@ -7,6 +7,8 @@
 
 using ::testing::NiceMock;
 
+namespace {
+
 struct MockRecordDecision {
     MOCK_METHOD(void, record_decision, (const resolution_lineage*));
 };
@@ -63,3 +65,5 @@ TEST_F(DbuctResolutionRecorderTest, UnitResolutionNotifiesResolutionPathOnly) {
 
     recorder.record_unit_resolution(&rl);
 }
+
+}  // namespace

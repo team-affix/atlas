@@ -10,6 +10,8 @@
 using ::testing::NiceMock;
 using ::testing::Return;
 
+namespace {
+
 struct MockActivateInitialGoalsOnce {
     MOCK_METHOD(bool, activate_initial_goals_and_candidates, ());
 };
@@ -204,3 +206,5 @@ TEST_F(DbuctSolverTest, UnitGoalIsPushedWhenRoutingCollapsesToUnit) {
     sm.resume();
     EXPECT_TRUE(sm.done());
 }
+
+}  // namespace

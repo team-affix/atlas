@@ -25,8 +25,6 @@ coroutine<const resolution_lineage*, void> empty_pop_stream() {
     co_return;
 }
 
-} // namespace
-
 struct MockPushSolverFrame {
     MOCK_METHOD(void, push_solver_frame, ());
 };
@@ -181,3 +179,5 @@ TEST_F(DbuctSimTest, TerminateWithNothingToAlignReturnsEmpty) {
 
     EXPECT_TRUE(sim.terminate().empty());
 }
+
+}  // namespace

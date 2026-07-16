@@ -33,8 +33,6 @@ std::vector<const resolution_lineage*> collect_elims(
     return out;
 }
 
-} // namespace
-
 struct MockConstrainCdcl {
     MOCK_METHOD((coroutine<const resolution_lineage*, void>), constrain,
         (const resolution_lineage*));
@@ -101,3 +99,5 @@ TEST_F(DbuctJointEliminationGeneratorTest, CdclResultsPrecedeMhuResults) {
     auto sm = joint.constrain(&rl);
     EXPECT_THAT(collect_elims(sm), ElementsAre(&cdcl_elim, &mhu_elim));
 }
+
+}  // namespace

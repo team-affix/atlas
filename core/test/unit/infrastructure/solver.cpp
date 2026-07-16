@@ -11,6 +11,8 @@
 using ::testing::Return;
 using ::testing::_;
 
+namespace {
+
 struct MockSetUpSim {
     MOCK_METHOD(void, set_up, ());
 };
@@ -173,3 +175,5 @@ TEST_F(SolverTest, RoutesEliminationWhenLearnReturnsLineage) {
     sm.resume();
     EXPECT_TRUE(sm.done());
 }
+
+}  // namespace
