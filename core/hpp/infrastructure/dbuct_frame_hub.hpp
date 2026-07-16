@@ -5,7 +5,8 @@
 #include "infrastructure/coroutine.hpp"
 #include "value_objects/lineage.hpp"
 
-template<typename IGetDecisionCount,
+template<typename IPushSolverFrameDepthFrame,
+         typename IPopSolverFrameDepthFrame,
          typename IPushGoalExprFrame,
          typename IPopGoalExprFrame,
          typename IPushGoalCandidateRulesFrame,
@@ -38,7 +39,8 @@ template<typename IGetDecisionCount,
          typename IPopCdclFrame>
 struct dbuct_frame_hub {
     dbuct_frame_hub(
-        IGetDecisionCount& get_decision_count,
+        IPushSolverFrameDepthFrame& push_solver_frame_depth_frame,
+        IPopSolverFrameDepthFrame& pop_solver_frame_depth_frame,
         IPushGoalExprFrame& push_goal_expr_frame,
         IPopGoalExprFrame& pop_goal_expr_frame,
         IPushGoalCandidateRulesFrame& push_goal_candidate_rules_frame,
@@ -72,10 +74,10 @@ struct dbuct_frame_hub {
 
     void push_solver_frame();
     coroutine<const resolution_lineage*, void> pop_solver_frame();
-    size_t solver_frame_depth() const;
 
 private:
-    IGetDecisionCount& get_decision_count_;
+    IPushSolverFrameDepthFrame& push_solver_frame_depth_frame_;
+    IPopSolverFrameDepthFrame& pop_solver_frame_depth_frame_;
     IPushGoalExprFrame& push_goal_expr_frame_;
     IPopGoalExprFrame& pop_goal_expr_frame_;
     IPushGoalCandidateRulesFrame& push_goal_candidate_rules_frame_;
@@ -108,7 +110,7 @@ private:
     IPopCdclFrame& pop_cdcl_frame_;
 };
 
-template<typename IGDC,
+template<typename IPSFDF, typename IPopSFDF,
          typename IPGEF, typename IPopGEF,
          typename IPGCRF, typename IPopGCRF,
          typename IPCGCF, typename IPopCGCF,
@@ -124,7 +126,7 @@ template<typename IGDC,
          typename IPBMF, typename IPopBMF,
          typename IPMHUF, typename IPopMHUF,
          typename IPCDF, typename IPopCDF>
-dbuct_frame_hub<IGDC,
+dbuct_frame_hub<IPSFDF, IPopSFDF,
                 IPGEF, IPopGEF,
                 IPGCRF, IPopGCRF,
                 IPCGCF, IPopCGCF,
@@ -140,7 +142,8 @@ dbuct_frame_hub<IGDC,
                 IPBMF, IPopBMF,
                 IPMHUF, IPopMHUF,
                 IPCDF, IPopCDF>::dbuct_frame_hub(
-    IGDC& get_decision_count,
+    IPSFDF& push_solver_frame_depth_frame,
+    IPopSFDF& pop_solver_frame_depth_frame,
     IPGEF& push_goal_expr_frame,
     IPopGEF& pop_goal_expr_frame,
     IPGCRF& push_goal_candidate_rules_frame,
@@ -171,7 +174,8 @@ dbuct_frame_hub<IGDC,
     IPopMHUF& pop_mhu_frame,
     IPCDF& push_cdcl_frame,
     IPopCDF& pop_cdcl_frame)
-    : get_decision_count_(get_decision_count),
+    : push_solver_frame_depth_frame_(push_solver_frame_depth_frame),
+      pop_solver_frame_depth_frame_(pop_solver_frame_depth_frame),
       push_goal_expr_frame_(push_goal_expr_frame),
       pop_goal_expr_frame_(pop_goal_expr_frame),
       push_goal_candidate_rules_frame_(push_goal_candidate_rules_frame),
@@ -203,7 +207,7 @@ dbuct_frame_hub<IGDC,
       push_cdcl_frame_(push_cdcl_frame),
       pop_cdcl_frame_(pop_cdcl_frame) {}
 
-template<typename IGDC,
+template<typename IPSFDF, typename IPopSFDF,
          typename IPGEF, typename IPopGEF,
          typename IPGCRF, typename IPopGCRF,
          typename IPCGCF, typename IPopCGCF,
@@ -219,7 +223,7 @@ template<typename IGDC,
          typename IPBMF, typename IPopBMF,
          typename IPMHUF, typename IPopMHUF,
          typename IPCDF, typename IPopCDF>
-void dbuct_frame_hub<IGDC,
+void dbuct_frame_hub<IPSFDF, IPopSFDF,
                      IPGEF, IPopGEF,
                      IPGCRF, IPopGCRF,
                      IPCGCF, IPopCGCF,
@@ -235,6 +239,7 @@ void dbuct_frame_hub<IGDC,
                      IPBMF, IPopBMF,
                      IPMHUF, IPopMHUF,
                      IPCDF, IPopCDF>::push_solver_frame() {
+    push_solver_frame_depth_frame_.push_frame();
     push_goal_expr_frame_.push_frame();
     push_goal_candidate_rules_frame_.push_frame();
     push_chosen_goal_candidates_frame_.push_frame();
@@ -252,7 +257,7 @@ void dbuct_frame_hub<IGDC,
     push_cdcl_frame_.push_frame();
 }
 
-template<typename IGDC,
+template<typename IPSFDF, typename IPopSFDF,
          typename IPGEF, typename IPopGEF,
          typename IPGCRF, typename IPopGCRF,
          typename IPCGCF, typename IPopCGCF,
@@ -269,7 +274,7 @@ template<typename IGDC,
          typename IPMHUF, typename IPopMHUF,
          typename IPCDF, typename IPopCDF>
 coroutine<const resolution_lineage*, void>
-dbuct_frame_hub<IGDC,
+dbuct_frame_hub<IPSFDF, IPopSFDF,
                 IPGEF, IPopGEF,
                 IPGCRF, IPopGCRF,
                 IPCGCF, IPopCGCF,
@@ -285,7 +290,8 @@ dbuct_frame_hub<IGDC,
                 IPBMF, IPopBMF,
                 IPMHUF, IPopMHUF,
                 IPCDF, IPopCDF>::pop_solver_frame() {
-    auto sm = pop_cdcl_frame_.pop_frame();
+    // Reverse of push except CDCL last: AUB (and peers) restore before CDCL
+    // evaluates emit-vs-arm against ultimate MCTS depth.
     pop_mhu_frame_.pop_frame();
     pop_bind_map_frame_.pop_frame();
     pop_srt_active_goals_frame_.pop_frame();
@@ -300,47 +306,14 @@ dbuct_frame_hub<IGDC,
     pop_chosen_goal_candidates_frame_.pop_frame();
     pop_goal_candidate_rules_frame_.pop_frame();
     pop_goal_expr_frame_.pop_frame();
+    pop_solver_frame_depth_frame_.pop_frame();
 
+    auto sm = pop_cdcl_frame_.pop_frame();
     while (!sm.done()) {
         sm.resume();
         if (sm.has_yield())
             co_yield sm.consume_yield();
     }
-}
-
-template<typename IGDC,
-         typename IPGEF, typename IPopGEF,
-         typename IPGCRF, typename IPopGCRF,
-         typename IPCGCF, typename IPopCGCF,
-         typename IPDMF, typename IPopDMF,
-         typename IPRMF, typename IPopRMF,
-         typename IPUGF, typename IPopUGF,
-         typename IPCFOF, typename IPopCFOF,
-         typename IPFBAF, typename IPopFBAF,
-         typename IPNDF, typename IPopNDF,
-         typename IPEBF, typename IPopEBF,
-         typename IPAUBF, typename IPopAUBF,
-         typename IPSAGF, typename IPopSAGF,
-         typename IPBMF, typename IPopBMF,
-         typename IPMHUF, typename IPopMHUF,
-         typename IPCDF, typename IPopCDF>
-size_t dbuct_frame_hub<IGDC,
-                       IPGEF, IPopGEF,
-                       IPGCRF, IPopGCRF,
-                       IPCGCF, IPopCGCF,
-                       IPDMF, IPopDMF,
-                       IPRMF, IPopRMF,
-                       IPUGF, IPopUGF,
-                       IPCFOF, IPopCFOF,
-                       IPFBAF, IPopFBAF,
-                       IPNDF, IPopNDF,
-                       IPEBF, IPopEBF,
-                       IPAUBF, IPopAUBF,
-                       IPSAGF, IPopSAGF,
-                       IPBMF, IPopBMF,
-                       IPMHUF, IPopMHUF,
-                       IPCDF, IPopCDF>::solver_frame_depth() const {
-    return 1 + get_decision_count_.count();
 }
 
 #endif

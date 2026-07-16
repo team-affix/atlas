@@ -1,7 +1,7 @@
 // Integration slice: a real dbuct_cdcl_elimination_generator wired to a real
 // dbuct_avoidance_unit_boundary. In production the boundary object is exactly what
-// supplies three of the generator's five collaborators -- IGetPenultimateMctsFrameDepth,
-// IGetUltimateDecision, IGetPenultimateDecision -- so this proves the two cooperate
+// supplies four of the generator's six collaborators -- IGetPenultimateMctsFrameDepth,
+// IGetUltimateDecision, IGetPenultimateDecision, IGetUltimateMctsFrameDepth -- so this proves the two cooperate
 // end to end: real decision bookkeeping (ultimate / penultimate / the one-decision
 // lagging penultimate mcts frame depth) flows into learn(), and the resulting raised unit
 // avoidance is emitted-vs-armed at pop according to the boundary the REAL component
@@ -67,6 +67,7 @@ using sut_t = dbuct_cdcl_elimination_generator<NiceMock<MockTryGetChosenGoalCand
                                                boundary_t,
                                                NiceMock<MockDeriveDecisionLemma>,
                                                boundary_t,
+                                               boundary_t,
                                                boundary_t>;
 
 struct DbuctCdclEliminationGeneratorIntegrationTest : public ::testing::Test {
@@ -76,7 +77,7 @@ struct DbuctCdclEliminationGeneratorIntegrationTest : public ::testing::Test {
     NiceMock<MockDeriveDecisionLemma> dl;
 
     boundary_t aub{nd, fc};
-    sut_t sut{tgcc, aub, dl, aub, aub};
+    sut_t sut{tgcc, aub, dl, aub, aub, aub};
 
     resolution_lineage gpr1{nullptr, 10};
     goal_lineage gg1{&gpr1, 0};
@@ -92,6 +93,11 @@ struct DbuctCdclEliminationGeneratorIntegrationTest : public ::testing::Test {
 
     resolution_lineage sentinel{nullptr, 99};
 
+    std::vector<const resolution_lineage*> pop_solver_frame() {
+        aub.pop_frame();
+        return collect_elims(sut.pop_frame());
+    }
+
     void SetUp() override {
         ON_CALL(nd, get_nearest_decision(_)).WillByDefault(Return(&sentinel));
         ON_CALL(tgcc, try_get(_)).WillByDefault(Return(std::optional<rule_id>{}));
@@ -102,30 +108,33 @@ TEST_F(DbuctCdclEliminationGeneratorIntegrationTest, RotatedBoundaryKeepsConflic
     fc.depth_value = 1;
     aub.log_decision(&D1);
     sut.push_frame();
+    aub.push_frame();
     fc.depth_value = 2;
     aub.log_decision(&D2);
 
     EXPECT_CALL(dl, derive_decision_lemma()).WillOnce(Return(make_lemma({&D2, &D1})));
     sut.learn();
 
-    EXPECT_THAT(collect_elims(sut.pop_frame()), ElementsAre(&D2));
+    EXPECT_THAT(pop_solver_frame(), ElementsAre(&D2));
 }
 
 TEST_F(DbuctCdclEliminationGeneratorIntegrationTest, DeepBoundaryEmitsThenArmsThenPropagates) {
     fc.depth_value = 1;
     aub.log_decision(&D1);
     sut.push_frame();
+    aub.push_frame();
     fc.depth_value = 2;
     aub.log_decision(&D2);
     sut.push_frame();
+    aub.push_frame();
     fc.depth_value = 3;
     aub.log_decision(&D3);
 
     EXPECT_CALL(dl, derive_decision_lemma()).WillOnce(Return(make_lemma({&D3, &D2})));
     sut.learn();
 
-    EXPECT_THAT(collect_elims(sut.pop_frame()), ElementsAre(&D3));
-    EXPECT_THAT(collect_elims(sut.pop_frame()), IsEmpty());
+    EXPECT_THAT(pop_solver_frame(), ElementsAre(&D3));
+    EXPECT_THAT(pop_solver_frame(), IsEmpty());
     EXPECT_THAT(collect_elims(sut.constrain(&D3)), ElementsAre(&D2));
 }
 

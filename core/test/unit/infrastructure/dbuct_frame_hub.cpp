@@ -10,6 +10,7 @@
 #include "infrastructure/dbuct_elimination_backlog.hpp"
 #include "infrastructure/dbuct_frame_bump_allocator.hpp"
 #include "infrastructure/dbuct_frame_hub.hpp"
+#include "infrastructure/solver_frame_depth_tracker.hpp"
 #include "infrastructure/dbuct_goal_candidate_rules.hpp"
 #include "infrastructure/dbuct_goal_exprs.hpp"
 #include "infrastructure/dbuct_nearest_decision.hpp"
@@ -54,7 +55,7 @@ void drain(coroutine<const resolution_lineage*, void> sm) {
 }
 
 using hub_t = dbuct_frame_hub<
-    dbuct_decision_memory,
+    solver_frame_depth_tracker, solver_frame_depth_tracker,
     dbuct_goal_exprs, dbuct_goal_exprs,
     dbuct_goal_candidate_rules, dbuct_goal_candidate_rules,
     dbuct_chosen_goal_candidates, dbuct_chosen_goal_candidates,
@@ -73,6 +74,7 @@ using hub_t = dbuct_frame_hub<
 
 struct hub_fixture {
     fake_mcts_frame_depth mcts_frame_depth{1};
+    solver_frame_depth_tracker solver_frame_depth_tracker_;
     globalizer g;
     bind_map_t bind_map{g};
     ra_rule_id_set_factory rule_factory;
@@ -93,7 +95,7 @@ struct hub_fixture {
     hub_t frame_hub;
 
     hub_fixture()
-        : frame_hub(decision_memory,
+        : frame_hub(solver_frame_depth_tracker_, solver_frame_depth_tracker_,
                     goal_exprs, goal_exprs,
                     goal_candidate_rules, goal_candidate_rules,
                     chosen_goal_candidates, chosen_goal_candidates,
@@ -115,7 +117,7 @@ struct hub_fixture {
 
 TEST(DbuctFrameHubTest, PushPopTracksMhuHooks) {
     hub_fixture f;
-    EXPECT_EQ(f.frame_hub.solver_frame_depth(), 1u);
+    EXPECT_EQ(f.solver_frame_depth_tracker_.solver_frame_depth(), 1u);
 
     f.frame_hub.push_solver_frame();
     EXPECT_EQ(f.mhu.pushes, 1);
@@ -139,14 +141,14 @@ TEST(DbuctFrameHubTest, PopRevertsJournaledGoalExpr) {
     EXPECT_THROW(f.goal_exprs.get(&gl), std::out_of_range);
 }
 
-TEST(DbuctFrameHubTest, SolverFrameDepthTracksDecisionMemoryCount) {
+TEST(DbuctFrameHubTest, SolverFrameDepthTracksTracker) {
     hub_fixture f;
-    resolution_lineage gp{nullptr, 1};
-    goal_lineage g{&gp, 0};
-    resolution_lineage rl{&g, 0};
 
-    f.decision_memory.record_decision(&rl);
-    EXPECT_EQ(f.frame_hub.solver_frame_depth(), 2u);
+    f.frame_hub.push_solver_frame();
+    EXPECT_EQ(f.solver_frame_depth_tracker_.solver_frame_depth(), 2u);
+
+    drain(f.frame_hub.pop_solver_frame());
+    EXPECT_EQ(f.solver_frame_depth_tracker_.solver_frame_depth(), 1u);
 }
 
 namespace {
@@ -155,8 +157,12 @@ coroutine<const resolution_lineage*, void> empty_cdcl_pop() {
     co_return;
 }
 
-struct MockGetDecisionCount {
-    MOCK_METHOD(size_t, count, (), (const));
+struct MockPushSolverFrameDepthFrame {
+    MOCK_METHOD(void, push_frame, ());
+};
+
+struct MockPopSolverFrameDepthFrame {
+    MOCK_METHOD(void, pop_frame, ());
 };
 
 struct MockPushFrame {
@@ -172,7 +178,7 @@ struct MockPopCdclFrame {
 };
 
 using mock_hub_t = dbuct_frame_hub<
-    MockGetDecisionCount,
+    MockPushSolverFrameDepthFrame, MockPopSolverFrameDepthFrame,
     MockPushFrame, MockPopFrame,
     MockPushFrame, MockPopFrame,
     MockPushFrame, MockPopFrame,
@@ -190,7 +196,8 @@ using mock_hub_t = dbuct_frame_hub<
     MockPushFrame, MockPopCdclFrame>;
 
 struct DbuctFrameHubMockTest : public ::testing::Test {
-    ::testing::StrictMock<MockGetDecisionCount> get_decision_count;
+    ::testing::StrictMock<MockPushSolverFrameDepthFrame> push_solver_frame_depth;
+    ::testing::StrictMock<MockPopSolverFrameDepthFrame> pop_solver_frame_depth;
     ::testing::StrictMock<MockPushFrame> push_goal_expr;
     ::testing::StrictMock<MockPopFrame> pop_goal_expr;
     ::testing::StrictMock<MockPushFrame> push_goal_candidate_rules;
@@ -223,7 +230,7 @@ struct DbuctFrameHubMockTest : public ::testing::Test {
     ::testing::StrictMock<MockPopCdclFrame> pop_cdcl;
 
     mock_hub_t hub{
-        get_decision_count,
+        push_solver_frame_depth, pop_solver_frame_depth,
         push_goal_expr, pop_goal_expr,
         push_goal_candidate_rules, pop_goal_candidate_rules,
         push_chosen_goal_candidates, pop_chosen_goal_candidates,
@@ -243,14 +250,10 @@ struct DbuctFrameHubMockTest : public ::testing::Test {
 
 }  // namespace
 
-TEST_F(DbuctFrameHubMockTest, SolverFrameDepthMatchesDecisionCountCollaborator) {
-    EXPECT_CALL(get_decision_count, count()).WillOnce(::testing::Return(3));
-    EXPECT_EQ(hub.solver_frame_depth(), 4u);
-}
-
 TEST_F(DbuctFrameHubMockTest, PushThenPopUnwindsInReverseOrder) {
     {
         ::testing::InSequence seq;
+        EXPECT_CALL(push_solver_frame_depth, push_frame());
         EXPECT_CALL(push_goal_expr, push_frame());
         EXPECT_CALL(push_goal_candidate_rules, push_frame());
         EXPECT_CALL(push_chosen_goal_candidates, push_frame());
@@ -271,8 +274,6 @@ TEST_F(DbuctFrameHubMockTest, PushThenPopUnwindsInReverseOrder) {
 
     {
         ::testing::InSequence seq;
-        EXPECT_CALL(pop_cdcl, pop_frame())
-            .WillOnce(::testing::Return(::testing::ByMove(empty_cdcl_pop())));
         EXPECT_CALL(pop_mhu, pop_frame());
         EXPECT_CALL(pop_bind_map, pop_frame());
         EXPECT_CALL(pop_srt_active_goals, pop_frame());
@@ -287,6 +288,9 @@ TEST_F(DbuctFrameHubMockTest, PushThenPopUnwindsInReverseOrder) {
         EXPECT_CALL(pop_chosen_goal_candidates, pop_frame());
         EXPECT_CALL(pop_goal_candidate_rules, pop_frame());
         EXPECT_CALL(pop_goal_expr, pop_frame());
+        EXPECT_CALL(pop_solver_frame_depth, pop_frame());
+        EXPECT_CALL(pop_cdcl, pop_frame())
+            .WillOnce(::testing::Return(::testing::ByMove(empty_cdcl_pop())));
     }
     drain(hub.pop_solver_frame());
 }

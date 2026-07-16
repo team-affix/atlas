@@ -10,6 +10,7 @@
 //   - IDeriveDecisionLemma       : derive_decision_lemma() -> lemma
 //   - IGetUltimateDecision       : get_ultimate_decision()   -> resolution_lineage*
 //   - IGetPenultimateDecision    : get_penultimate_decision() -> resolution_lineage*
+//   - IGetUltimateMctsFrameDepth : get_ultimate_mcts_frame_depth() -> size_t
 //
 // Observability rule: the SUT exposes no getters and learn()/push_frame() are
 // void, so EVERY assertion is made against the resolution_lineage* eliminations
@@ -47,6 +48,9 @@ struct MockGetUltimateDecision {
 struct MockGetPenultimateDecision {
     MOCK_METHOD(const resolution_lineage*, get_penultimate_decision, (), (const));
 };
+struct MockGetUltimateMctsFrameDepth {
+    MOCK_METHOD(size_t, get_ultimate_mcts_frame_depth, (), (const));
+};
 
 std::vector<const resolution_lineage*> collect_elims(
     coroutine<const resolution_lineage*, void> sm) {
@@ -71,7 +75,8 @@ using sut_t = dbuct_cdcl_elimination_generator<
     NiceMock<MockGetPenultimateMctsFrameDepth>,
     NiceMock<MockDeriveDecisionLemma>,
     NiceMock<MockGetUltimateDecision>,
-    NiceMock<MockGetPenultimateDecision>>;
+    NiceMock<MockGetPenultimateDecision>,
+    NiceMock<MockGetUltimateMctsFrameDepth>>;
 
 struct DbuctCdclEliminationGeneratorUnitTest : public ::testing::Test {
     NiceMock<MockTryGetChosenGoalCandidate> tgcc;
@@ -79,8 +84,9 @@ struct DbuctCdclEliminationGeneratorUnitTest : public ::testing::Test {
     NiceMock<MockDeriveDecisionLemma> dl;
     NiceMock<MockGetUltimateDecision> gud;
     NiceMock<MockGetPenultimateDecision> gpd;
+    NiceMock<MockGetUltimateMctsFrameDepth> gumfd;
 
-    sut_t sut{tgcc, ub, dl, gud, gpd};
+    sut_t sut{tgcc, ub, dl, gud, gpd, gumfd};
 
     // Members live on distinct top-level goals so (a) they are never ancestors of
     // one another (lemma's ancestor-removal leaves the set intact) and (b) each
@@ -106,6 +112,7 @@ struct DbuctCdclEliminationGeneratorUnitTest : public ::testing::Test {
         ON_CALL(ub, get_penultimate_mcts_frame_depth()).WillByDefault(Return(0u));
         ON_CALL(gud, get_ultimate_decision()).WillByDefault(Return(&ult));
         ON_CALL(gpd, get_penultimate_decision()).WillByDefault(Return(&pen));
+        ON_CALL(gumfd, get_ultimate_mcts_frame_depth()).WillByDefault(Return(1u));
     }
 
     // Drive one learn(): the lemma is fed through the derive mock (retiring so
@@ -167,8 +174,8 @@ TEST_F(DbuctCdclEliminationGeneratorUnitTest, FreshlyLearnedAvoidanceIsNotWatche
 
 TEST_F(DbuctCdclEliminationGeneratorUnitTest, PopWhileStillUnitYieldsForcedElimination) {
     sut.push_frame();
-    // boundary 0 <= depth-after-pop (1): the conflict is still unit at the parent,
-    // so the forced literal (the ultimate, members[watcher_a]) is emitted.
+    // ultimate_mcts (1) is not < boundary (0): the conflict is still unit at the
+    // parent, so the forced literal (the ultimate, members[watcher_a]) is emitted.
     do_learn({&ult, &pen}, &ult, &pen, /*boundary=*/0);
     EXPECT_THAT(pop(), ElementsAre(&ult));
 }
@@ -185,7 +192,7 @@ TEST_F(DbuctCdclEliminationGeneratorUnitTest, StillUnitAvoidanceBubblesUpAndReem
 
 TEST_F(DbuctCdclEliminationGeneratorUnitTest, PopPastBoundaryArmsAvoidanceInsteadOfEmitting) {
     sut.push_frame();
-    // boundary 5 > depth-after-pop (1): we have backtracked above the boundary, so
+    // ultimate_mcts (1) < boundary (5): we have backtracked above the boundary, so
     // the conflict is no longer unit -- it is armed as a watched clause and nothing
     // is emitted at pop.
     do_learn({&ult, &pen}, &ult, &pen, /*boundary=*/5);
@@ -301,17 +308,17 @@ TEST_F(DbuctCdclEliminationGeneratorUnitTest, SingleResolutionLemmaFloatsToPopAs
     // A one-member lemma is a pure unit: the comment on learn() says it should
     // "float this elimination to the top", i.e. be emitted at pop like any other
     // still-unit conflict.
-    do_learn({&m}, &m, &pen, /*boundary=*/0);
+    do_learn({&m}, &m, &pen, /*boundary=*/1);
     EXPECT_THAT(pop(), ElementsAre(&m));
 }
 
 TEST_F(DbuctCdclEliminationGeneratorUnitTest, SingleResolutionLemmaStaysUnitAcrossMultiplePops) {
     sut.push_frame();  // depth 2
     sut.push_frame();  // depth 3
-    // A lone unit has boundary 0, so it can never arm (an unsigned depth is never
-    // < 0): it re-emits at every pop as it bubbles toward the root, and never
-    // reaches the arm branch that would dereference its SIZE_MAX second watcher.
-    do_learn({&m}, &m, &pen, /*boundary=*/0);
+    // A lone unit has boundary 1, so it can never arm (ultimate_mcts < 1 is
+    // impossible): it re-emits at every pop as it bubbles toward the root, and
+    // never reaches the arm branch that would dereference its SIZE_MAX second watcher.
+    do_learn({&m}, &m, &pen, /*boundary=*/1);
     EXPECT_THAT(pop(), ElementsAre(&m));
     EXPECT_THAT(pop(), ElementsAre(&m));
 }

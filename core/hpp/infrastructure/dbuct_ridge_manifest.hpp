@@ -56,6 +56,7 @@
 #include "infrastructure/dbuct_elimination_backlog.hpp"
 #include "infrastructure/dbuct_frame_bump_allocator.hpp"
 #include "infrastructure/dbuct_frame_hub.hpp"
+#include "infrastructure/solver_frame_depth_tracker.hpp"
 #include "infrastructure/dbuct_frontier_ready.hpp"
 #include "infrastructure/dbuct_goal_candidate_rules.hpp"
 #include "infrastructure/dbuct_goal_exprs.hpp"
@@ -114,15 +115,17 @@ struct dbuct_ridge_manifest {
 
     using avoidance_unit_boundary_t = dbuct_avoidance_unit_boundary<
         nearest_decision_t, dbuct_t>;
+    using solver_frame_depth_tracker_t = solver_frame_depth_tracker;
     using cdcl_t  = dbuct_cdcl_elimination_generator<
                     chosen_goal_candidates_t, avoidance_unit_boundary_t, decision_memory_t,
-                    avoidance_unit_boundary_t, avoidance_unit_boundary_t>;
+                    avoidance_unit_boundary_t, avoidance_unit_boundary_t,
+                    avoidance_unit_boundary_t>;
     using mhu_t   = dbuct_mhu_elimination_generator<
                     bind_map_t, bind_map_t, bind_map_t, bind_map_factory_t,
                     unifier<globalizer, bind_map_t>, unifier_factory_t, lineage_pool,
                     expr_pool, goal_candidate_rules_t>;
     using hub_t   = dbuct_frame_hub<
-                    decision_memory_t,
+                    solver_frame_depth_tracker_t, solver_frame_depth_tracker_t,
                     goal_exprs_t, goal_exprs_t,
                     goal_candidate_rules_t, goal_candidate_rules_t,
                     chosen_goal_candidates_t, chosen_goal_candidates_t,
@@ -175,7 +178,8 @@ struct dbuct_ridge_manifest {
     using ridge_reward_t                = ridge_reward<decision_memory_t>;
 
     using dbuct_sim_t              = dbuct_sim<mcts_choice,
-                                          hub_t, hub_t, hub_t,
+                                          hub_t, hub_t,
+                                          solver_frame_depth_tracker_t,
                                           decision_memory_t,
                                           avoidance_unit_boundary_t, avoidance_unit_boundary_t,
                                           dbuct_t, dbuct_t, dbuct_t, dbuct_t,
@@ -234,6 +238,7 @@ struct dbuct_ridge_manifest {
     mcts_root_tree_node           mcts_root_tree_node_;
     dbuct_t                       dbuct_;
     avoidance_unit_boundary_t     avoidance_unit_boundary_;
+    solver_frame_depth_tracker_t  solver_frame_depth_tracker_;
     cdcl_t                        cdcl_;
     mhu_t                         mhu_;
     hub_t                         hub_;

@@ -25,14 +25,16 @@ template<typename ITryGetChosenGoalCandidate,
     typename IGetPenultimateMctsFrameDepth,
     typename IDeriveDecisionLemma,
     typename IGetUltimateDecision,
-    typename IGetPenultimateDecision>
+    typename IGetPenultimateDecision,
+    typename IGetUltimateMctsFrameDepth>
 struct dbuct_cdcl_elimination_generator {
     dbuct_cdcl_elimination_generator(
         ITryGetChosenGoalCandidate&,
         IGetPenultimateMctsFrameDepth&,
         IDeriveDecisionLemma&,
         IGetUltimateDecision&,
-        IGetPenultimateDecision&);
+        IGetPenultimateDecision&,
+        IGetUltimateMctsFrameDepth&);
     void learn();
     coroutine<const resolution_lineage*, void> constrain(const resolution_lineage*);
     void push_frame();
@@ -70,19 +72,23 @@ private:
     IDeriveDecisionLemma& derive_decision_lemma_;
     IGetUltimateDecision& get_ultimate_decision_;
     IGetPenultimateDecision& get_penultimate_decision_;
+    IGetUltimateMctsFrameDepth& get_ultimate_mcts_frame_depth_;
 };
 
-template<typename ITGCC, typename IGUB, typename IDL, typename IGUD, typename IGPD>
-dbuct_cdcl_elimination_generator<ITGCC, IGUB, IDL, IGUD, IGPD>::dbuct_cdcl_elimination_generator(
-    ITGCC& tgcc, IGUB& gub, IDL& dl, IGUD& gud, IGPD& gpd)
+template<typename ITGCC, typename IGUB, typename IDL, typename IGUD, typename IGPD,
+         typename IGUMFD>
+dbuct_cdcl_elimination_generator<ITGCC, IGUB, IDL, IGUD, IGPD, IGUMFD>::
+dbuct_cdcl_elimination_generator(
+    ITGCC& tgcc, IGUB& gub, IDL& dl, IGUD& gud, IGPD& gpd, IGUMFD& gumfd)
     : next_avoidance_id_(0), frame_stack_(std::deque<frame>{frame{}}),
       try_get_chosen_goal_candidate_(tgcc), get_penultimate_mcts_frame_depth_(gub),
       derive_decision_lemma_(dl), get_ultimate_decision_(gud),
-      get_penultimate_decision_(gpd) {}
+      get_penultimate_decision_(gpd), get_ultimate_mcts_frame_depth_(gumfd) {}
 
-template<typename ITGCC, typename IGUB, typename IDL, typename IGUD, typename IGPD>
+template<typename ITGCC, typename IGUB, typename IDL, typename IGUD, typename IGPD,
+         typename IGUMFD>
 void
-dbuct_cdcl_elimination_generator<ITGCC, IGUB, IDL, IGUD, IGPD>::learn() {
+dbuct_cdcl_elimination_generator<ITGCC, IGUB, IDL, IGUD, IGPD, IGUMFD>::learn() {
     // get the decision lemma from the current position
     lemma l = derive_decision_lemma_.derive_decision_lemma();
     
@@ -100,7 +106,7 @@ dbuct_cdcl_elimination_generator<ITGCC, IGUB, IDL, IGUD, IGPD>::learn() {
     // if size==1, store a degenerate single-member avoidance so pop_frame can find
     // the resolution to float to the top. watcher_b_pos is a SIZE_MAX poison: a unit
     // has no second literal to watch. A unit's unit_boundary is 1, so it can never
-    // hit pop_frame's arm branch (frame_stack_.size() < 1 is impossible), which is
+    // hit pop_frame's arm branch (ultimate_mcts < 1 is impossible), which is
     // the only site that would dereference watcher_b_pos -- see the assert there.
     if (resolutions.size() == 1) {
         avoidances_.emplace(id, avoidance{{*resolutions.begin()}, 0, SIZE_MAX});
@@ -127,9 +133,11 @@ dbuct_cdcl_elimination_generator<ITGCC, IGUB, IDL, IGUD, IGPD>::learn() {
     // so we don't need to watch the goals.
 }
 
-template<typename ITGCC, typename IGUB, typename IDL, typename IGUD, typename IGPD>
+template<typename ITGCC, typename IGUB, typename IDL, typename IGUD, typename IGPD,
+         typename IGUMFD>
 coroutine<const resolution_lineage*, void>
-dbuct_cdcl_elimination_generator<ITGCC, IGUB, IDL, IGUD, IGPD>::constrain(const resolution_lineage* rl) {
+dbuct_cdcl_elimination_generator<ITGCC, IGUB, IDL, IGUD, IGPD, IGUMFD>::constrain(
+    const resolution_lineage* rl) {
     const auto it = watched_goals_.find(rl->parent);
     if (it == watched_goals_.end())
         co_return;
@@ -142,8 +150,10 @@ dbuct_cdcl_elimination_generator<ITGCC, IGUB, IDL, IGUD, IGPD>::constrain(const 
     }
 }
 
-template<typename ITGCC, typename IGUB, typename IDL, typename IGUD, typename IGPD>
-size_t dbuct_cdcl_elimination_generator<ITGCC, IGUB, IDL, IGUD, IGPD>::scan(const avoidance& av) const {
+template<typename ITGCC, typename IGUB, typename IDL, typename IGUD, typename IGPD,
+         typename IGUMFD>
+size_t dbuct_cdcl_elimination_generator<ITGCC, IGUB, IDL, IGUD, IGPD, IGUMFD>::scan(
+    const avoidance& av) const {
     for (size_t i = std::max(av.watcher_a_pos, av.watcher_b_pos) + 1; i < av.members.size(); ++i) {
         const auto chosen = try_get_chosen_goal_candidate_.try_get(av.members.at(i)->parent);
         if (!chosen)
@@ -154,9 +164,10 @@ size_t dbuct_cdcl_elimination_generator<ITGCC, IGUB, IDL, IGUD, IGPD>::scan(cons
     return av.members.size();
 }
 
-template<typename ITGCC, typename IGUB, typename IDL, typename IGUD, typename IGPD>
+template<typename ITGCC, typename IGUB, typename IDL, typename IGUD, typename IGPD,
+         typename IGUMFD>
 std::optional<const resolution_lineage*>
-dbuct_cdcl_elimination_generator<ITGCC, IGUB, IDL, IGUD, IGPD>::visit_avoidance(
+dbuct_cdcl_elimination_generator<ITGCC, IGUB, IDL, IGUD, IGPD, IGUMFD>::visit_avoidance(
     avoidance_id id, const resolution_lineage* rl) {
     avoidance& av = avoidances_.at(id);
 
@@ -199,13 +210,16 @@ dbuct_cdcl_elimination_generator<ITGCC, IGUB, IDL, IGUD, IGPD>::visit_avoidance(
     return std::nullopt;
 }
 
-template<typename ITGCC, typename IGUB, typename IDL, typename IGUD, typename IGPD>
-void dbuct_cdcl_elimination_generator<ITGCC, IGUB, IDL, IGUD, IGPD>::push_frame() {
+template<typename ITGCC, typename IGUB, typename IDL, typename IGUD, typename IGPD,
+         typename IGUMFD>
+void dbuct_cdcl_elimination_generator<ITGCC, IGUB, IDL, IGUD, IGPD, IGUMFD>::push_frame() {
     frame_stack_.push(frame{});
 }
 
-template<typename ITGCC, typename IGUB, typename IDL, typename IGUD, typename IGPD>
-coroutine<const resolution_lineage*, void> dbuct_cdcl_elimination_generator<ITGCC, IGUB, IDL, IGUD, IGPD>::pop_frame() {
+template<typename ITGCC, typename IGUB, typename IDL, typename IGUD, typename IGPD,
+         typename IGUMFD>
+coroutine<const resolution_lineage*, void>
+dbuct_cdcl_elimination_generator<ITGCC, IGUB, IDL, IGUD, IGPD, IGUMFD>::pop_frame() {
     auto current = std::move(frame_stack_.top());
     frame_stack_.pop();
 
@@ -215,10 +229,14 @@ coroutine<const resolution_lineage*, void> dbuct_cdcl_elimination_generator<ITGC
     for (auto it = current.actions_.rbegin(); it != current.actions_.rend(); ++it)
         undo_action(*it);
     
+    // unit_boundary and ultimate_mcts are both MCTS-frame depths. Hub must pop
+    // avoidance_unit_boundary before this so ultimate reflects the parent frame.
+    const size_t ultimate_mcts =
+        get_ultimate_mcts_frame_depth_.get_ultimate_mcts_frame_depth();
     for (auto& rua : current.raised_unit_avoidance_lump) {
-        if (frame_stack_.size() < rua.unit_boundary) {
+        if (ultimate_mcts < rua.unit_boundary) {
             // A single-member (unit) avoidance has no second watcher and must never
-            // be armed; its unit_boundary is 0 so this branch is unreachable for it.
+            // be armed; its unit_boundary is 1 so this branch is unreachable for it.
             DEBUG_ASSERT(avoidances_.at(rua.id).watcher_b_pos != SIZE_MAX);
             link_watchers(rua.id);
             continue;
@@ -233,8 +251,10 @@ coroutine<const resolution_lineage*, void> dbuct_cdcl_elimination_generator<ITGC
     }
 }
 
-template<typename ITGCC, typename IGUB, typename IDL, typename IGUD, typename IGPD>
-void dbuct_cdcl_elimination_generator<ITGCC, IGUB, IDL, IGUD, IGPD>::undo_action(const avoidance_action& action) {
+template<typename ITGCC, typename IGUB, typename IDL, typename IGUD, typename IGPD,
+         typename IGUMFD>
+void dbuct_cdcl_elimination_generator<ITGCC, IGUB, IDL, IGUD, IGPD, IGUMFD>::undo_action(
+    const avoidance_action& action) {
     if (const auto* unwatch = std::get_if<avoidance_unwatch>(&action)) {
         link_watchers(unwatch->id);
     }
@@ -268,8 +288,10 @@ void dbuct_cdcl_elimination_generator<ITGCC, IGUB, IDL, IGUD, IGPD>::undo_action
     }
 }
 
-template<typename ITGCC, typename IGUB, typename IDL, typename IGUD, typename IGPD>
-void dbuct_cdcl_elimination_generator<ITGCC, IGUB, IDL, IGUD, IGPD>::link_watchers(avoidance_id id) {
+template<typename ITGCC, typename IGUB, typename IDL, typename IGUD, typename IGPD,
+         typename IGUMFD>
+void dbuct_cdcl_elimination_generator<ITGCC, IGUB, IDL, IGUD, IGPD, IGUMFD>::link_watchers(
+    avoidance_id id) {
     const auto& av = avoidances_.at(id);
     const auto& rl_a = av.members.at(av.watcher_a_pos);
     const auto& rl_b = av.members.at(av.watcher_b_pos);

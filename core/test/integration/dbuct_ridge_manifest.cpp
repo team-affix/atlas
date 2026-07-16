@@ -195,7 +195,7 @@ TEST_F(DbuctManifestIntegrationTest, SolverCampsBelowRootAcrossEpisodes) {
 
     dbuct_ridge_manifest m = make_manifest(/*initial_frame_offset=*/1);
     auto sm = m.solver_.solve();
-    // hub.solver_frame_depth() is the frame counter: the base (root) frame keeps it at 1, so
+    // solver_frame_depth_tracker_.solver_frame_depth() is the frame counter: the base (root) frame keeps it at 1, so
     // any solver_frame_depth beyond 1 is a solver frame held below the root.
     size_t max_solver_frame_depth = 0;
     bool made_decision = false;
@@ -204,7 +204,7 @@ TEST_F(DbuctManifestIntegrationTest, SolverCampsBelowRootAcrossEpisodes) {
         if (!sm.has_yield()) break;
         sm.consume_yield();
         made_decision = made_decision || m.decision_memory_.count() >= 1;
-        max_solver_frame_depth = std::max(max_solver_frame_depth, m.hub_.solver_frame_depth());
+        max_solver_frame_depth = std::max(max_solver_frame_depth, m.solver_frame_depth_tracker_.solver_frame_depth());
     }
     EXPECT_TRUE(made_decision) << "a branching decision was made";
     EXPECT_GT(max_solver_frame_depth, 1u)

@@ -14,6 +14,7 @@
 #include "infrastructure/dbuct_elimination_backlog.hpp"
 #include "infrastructure/dbuct_frame_bump_allocator.hpp"
 #include "infrastructure/dbuct_frame_hub.hpp"
+#include "infrastructure/solver_frame_depth_tracker.hpp"
 #include "infrastructure/dbuct_goal_candidate_rules.hpp"
 #include "infrastructure/dbuct_goal_exprs.hpp"
 #include "infrastructure/dbuct_nearest_decision.hpp"
@@ -71,7 +72,7 @@ using bind_map_t = dbuct_bind_map<globalizer>;
 using boundary_t = dbuct_avoidance_unit_boundary<dbuct_nearest_decision, MockMctsOps>;
 
 using hub_t = dbuct_frame_hub<
-    dbuct_decision_memory,
+    solver_frame_depth_tracker, solver_frame_depth_tracker,
     dbuct_goal_exprs, dbuct_goal_exprs,
     dbuct_goal_candidate_rules, dbuct_goal_candidate_rules,
     dbuct_chosen_goal_candidates, dbuct_chosen_goal_candidates,
@@ -90,7 +91,8 @@ using hub_t = dbuct_frame_hub<
 
 using sim_t = dbuct_sim<
     mcts_choice,
-    hub_t, hub_t, hub_t,
+    hub_t, hub_t,
+    solver_frame_depth_tracker,
     dbuct_decision_memory,
     boundary_t, boundary_t,
     MockMctsOps, MockMctsOps, MockMctsOps, MockMctsOps, MockMctsOps,
@@ -115,6 +117,7 @@ struct DbuctSimIntegrationTest : public ::testing::Test {
     dbuct_elimination_backlog elimination_backlog;
     boundary_t avoidance_unit_boundary{nearest_decision, mcts};
     dbuct_srt_active_goals srt_active_goals;
+    solver_frame_depth_tracker solver_frame_depth_tracker_;
     fake_mhu mhu;
     yielding_cdcl cdcl;
     hub_t hub;
@@ -124,7 +127,7 @@ struct DbuctSimIntegrationTest : public ::testing::Test {
     resolution_lineage elim{&gl, 0};
 
     DbuctSimIntegrationTest()
-        : hub(decision_memory,
+        : hub(solver_frame_depth_tracker_, solver_frame_depth_tracker_,
               goal_exprs, goal_exprs,
               goal_candidate_rules, goal_candidate_rules,
               chosen_goal_candidates, chosen_goal_candidates,
@@ -140,7 +143,7 @@ struct DbuctSimIntegrationTest : public ::testing::Test {
               bind_map, bind_map,
               mhu, mhu,
               cdcl, cdcl)
-        , sim(hub, hub, hub,
+        , sim(hub, hub, solver_frame_depth_tracker_,
               decision_memory,
               avoidance_unit_boundary, avoidance_unit_boundary,
               mcts, mcts, mcts, mcts, mcts,
