@@ -1,5 +1,6 @@
 #include <CLI/CLI.hpp>
 #include "infrastructure/basic_command_handler.hpp"
+#include "infrastructure/dbuct_horizon_command_handler.hpp"
 #include "infrastructure/dbuct_ridge_command_handler.hpp"
 #include "infrastructure/genius_command_handler.hpp"
 #include "infrastructure/horizon_command_handler.hpp"
@@ -88,6 +89,35 @@ int main(int argc, char** argv) {
                                       dbuct_ridge_opts.exploration_constant,
                                       dbuct_ridge_opts.grant_increment_interval,
                                       dbuct_ridge_opts.sim_progress_interval);
+        h();
+    });
+
+    struct {
+        std::string file;
+        std::string goals_str;
+        size_t max_resolutions        = 1000;
+        uint32_t seed                 = 0;
+        double exploration_constant   = 1.414;
+        size_t grant_increment_interval = dbuct_horizon_runtime::k_default_grant_increment_interval;
+        size_t sim_progress_interval  = 1000;
+    } dbuct_horizon_opts;
+
+    auto* dbuct_horizon_sub = app.add_subcommand("dbuct-horizon", "Run the horizon solver with delayed-backtracking UCT (camps deep in the search tree instead of restarting from the root each sim)");
+    dbuct_horizon_sub->add_option("file", dbuct_horizon_opts.file, "CHC input file")->required();
+    dbuct_horizon_sub->add_option("-g,--goal", dbuct_horizon_opts.goals_str, "Goal body string, e.g. \"p(X), q(X)\"")->required();
+    dbuct_horizon_sub->add_option("--max-resolutions", dbuct_horizon_opts.max_resolutions, "Max resolutions");
+    dbuct_horizon_sub->add_option("--seed", dbuct_horizon_opts.seed, "RNG seed");
+    dbuct_horizon_sub->add_option("--exploration-constant", dbuct_horizon_opts.exploration_constant, "MCTS exploration constant");
+    dbuct_horizon_sub->add_option("--grant-increment-interval", dbuct_horizon_opts.grant_increment_interval,
+                          "DBUCT per-node compute batch growth (larger camps longer before backtracking)");
+    dbuct_horizon_sub->add_option("--sim-progress-interval", dbuct_horizon_opts.sim_progress_interval,
+                          "Print sim progress every N sims (0 disables)");
+    dbuct_horizon_sub->callback([&]() {
+        dbuct_horizon_command_handler h(dbuct_horizon_opts.file, dbuct_horizon_opts.goals_str,
+                                        dbuct_horizon_opts.max_resolutions, dbuct_horizon_opts.seed,
+                                        dbuct_horizon_opts.exploration_constant,
+                                        dbuct_horizon_opts.grant_increment_interval,
+                                        dbuct_horizon_opts.sim_progress_interval);
         h();
     });
 
