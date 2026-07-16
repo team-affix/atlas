@@ -439,6 +439,22 @@ TEST_F(DbuctManifestIntegrationTest, GrantIntervalDoesNotChangeSolutionSet) {
 
 // ── Scenario 15b: camping persists across episodes without corrupting state ───
 
+TEST_F(DbuctManifestIntegrationTest, RuntimeFacadeDepthsAfterBranchingDecision) {
+    // Composition-root facade: decision_depth / resolution_depth reflect memory
+    // counts after a tick that must branch (multiple facts for one goal).
+    const expr* a = fun("a");
+    const expr* b = fun("b");
+    database.push(rule{fun("f", {a}), {}});
+    database.push(rule{fun("f", {b}), {}});
+    initial_goals.push(fun("f", {pool.make_var(0)}));
+
+    dbuct_ridge_runtime rt = make_dbuct(1);
+    ASSERT_TRUE(rt.next());
+    EXPECT_GE(rt.decision_depth(), 1u);
+    EXPECT_GE(rt.resolution_depth(), 1u);
+    EXPECT_EQ(rt.decision_depth(), rt.derive_decision_lemma().get_resolutions().size());
+}
+
 TEST_F(DbuctManifestIntegrationTest, DecisionCountConsistentAcrossManyTicks) {
     // Drive many camping episodes; the full-path decision count must stay
     // bounded by the resolution budget and the derived lemma must always be a

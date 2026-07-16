@@ -107,4 +107,24 @@ TEST_F(HorizonManifestIntegrationTest, SolverFindsSingleUnitSolutionWithFullCgw)
     EXPECT_FALSE(sm.has_yield());
 }
 
+TEST_F(HorizonManifestIntegrationTest, RuntimeCgwConservedThenClearedAcrossCycles) {
+    const expr* goal = saved_expr_pool_.make_functor(functors.id("f"), {});
+    const expr* head = saved_expr_pool_.make_functor(functors.id("f"), {});
+    initial_goals.push(goal);
+    database.push(rule{head, {}});
+
+    horizon_manifest manifest = make_manifest();
+    manifest.horizon_set_up_sim_.set_up();
+    EXPECT_EQ(manifest.run_sim_.run(), sim_termination::solved);
+    EXPECT_NEAR(manifest.cumulative_grounded_weight_.get(), kTotalWeight, kWeightEpsilon);
+    manifest.horizon_tear_down_sim_.tear_down();
+    EXPECT_DOUBLE_EQ(manifest.cumulative_grounded_weight_.get(), 0.0);
+
+    manifest.horizon_set_up_sim_.set_up();
+    EXPECT_EQ(manifest.run_sim_.run(), sim_termination::solved);
+    EXPECT_NEAR(manifest.cumulative_grounded_weight_.get(), kTotalWeight, kWeightEpsilon);
+    manifest.horizon_tear_down_sim_.tear_down();
+    EXPECT_DOUBLE_EQ(manifest.cumulative_grounded_weight_.get(), 0.0);
+}
+
 }  // namespace
