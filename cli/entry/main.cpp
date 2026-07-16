@@ -44,7 +44,7 @@ int main(int argc, char** argv) {
         std::string goals_str;
         size_t max_resolutions       = 1000;
         uint32_t seed                = 0;
-        double exploration_constant  = 1.414;
+        double exploration_constant  = 15;
         size_t sim_progress_interval = 1000;
     } ridge_opts;
 
@@ -69,7 +69,7 @@ int main(int argc, char** argv) {
         std::string goals_str;
         size_t max_resolutions        = 1000;
         uint32_t seed                 = 0;
-        double exploration_constant   = 1.414;
+        double exploration_constant   = 15;
         size_t grant_increment_interval = dbuct_ridge_runtime::k_default_grant_increment_interval;
         size_t sim_progress_interval  = 1000;
     } dbuct_ridge_opts;
@@ -98,7 +98,7 @@ int main(int argc, char** argv) {
         std::string goals_str;
         size_t max_resolutions        = 1000;
         uint32_t seed                 = 0;
-        double exploration_constant   = 1.414;
+        double exploration_constant   = 2;
         size_t grant_increment_interval = dbuct_horizon_runtime::k_default_grant_increment_interval;
         size_t sim_progress_interval  = 1000;
     } dbuct_horizon_opts;
@@ -161,7 +161,7 @@ int main(int argc, char** argv) {
         std::string goals_str;
         size_t max_resolutions       = 1000;
         uint32_t seed                = 0;
-        double exploration_constant  = 1.414;
+        double exploration_constant  = 2;
         size_t sim_progress_interval = 1000;
     } horizon_opts;
 
