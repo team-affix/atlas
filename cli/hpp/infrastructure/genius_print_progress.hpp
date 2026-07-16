@@ -14,6 +14,8 @@ struct genius_print_progress {
     void on_sim();
     void print();
     void finish_line();
+    void note_idle_begin();
+    void note_idle_end();
 private:
     IPrintProgress&  base_;
     genius_runtime*  runtime_ = nullptr;
@@ -46,6 +48,16 @@ void genius_print_progress<IPP>::print() {
 template<typename IPP>
 void genius_print_progress<IPP>::finish_line() {
     base_.finish_line();
+}
+
+template<typename IPP>
+void genius_print_progress<IPP>::note_idle_begin() {
+    base_.note_idle_begin();
+}
+
+template<typename IPP>
+void genius_print_progress<IPP>::note_idle_end() {
+    base_.note_idle_end();
 }
 
 #endif

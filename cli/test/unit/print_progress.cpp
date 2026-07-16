@@ -1,7 +1,7 @@
 // print_progress<IRuntime>: stat-accumulating, TTY-aware progress reporter.
 // Non-TTY path (captured stdout) wraps each line in newlines. Tests verify the
-// output string contains the expected labelled fields; numeric values are not
-// hard-coded because EMAs depend on timing.
+// output string contains the expected labelled fields; rates are instantaneous
+// over the print window (idle time from note_idle_* is excluded).
 
 #include <sstream>
 #include <string>
@@ -140,4 +140,22 @@ TEST_F(PrintProgressTest, SimsSinceLastResetAfterPrint) {
     EXPECT_EQ(pp.sims_since_last(), 2u);
     pp.print();
     EXPECT_EQ(pp.sims_since_last(), 0u);
+}
+
+TEST_F(PrintProgressTest, IdleTimeIsExcludedFromRates) {
+    ON_CALL(mock_rt, resolution_depth()).WillByDefault(Return(100));
+    auto pp = make_progress();
+
+    pp.on_sim();
+    pp.note_idle_begin();
+    usleep(200000);  // 200ms idle must not count as sim time
+    pp.note_idle_end();
+    pp.on_sim();
+    pp.print();
+
+    const std::string out = captured.str();
+    EXPECT_THAT(out, HasSubstr("2 sims"));
+    // With idle excluded, 2 sims in <<200ms of work should not collapse to 0.
+    EXPECT_THAT(out, Not(HasSubstr("0 sims/s")));
+    EXPECT_THAT(out, Not(HasSubstr("0 res/s")));
 }

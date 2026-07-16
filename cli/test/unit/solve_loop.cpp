@@ -38,6 +38,8 @@ struct MockPrintProgress {
     MOCK_METHOD(void, on_sim, ());
     MOCK_METHOD(void, print, ());
     MOCK_METHOD(void, finish_line, ());
+    MOCK_METHOD(void, note_idle_begin, ());
+    MOCK_METHOD(void, note_idle_end, ());
 };
 
 using TestSolveLoop = solve_loop<MockRuntime, MockExprPrinter, MockPrintBindings, MockPrintProgress>;
@@ -117,8 +119,8 @@ TEST_F(SolveLoopTest, DoesNotPrintWhenNextReturnsFalse) {
 
 TEST_F(SolveLoopTest, FinishLineBeforeSolved) {
     // interval=1; 3 sims; solved on the 3rd.
-    // Key contract: finish_line precedes bindings.print (SOLVED), followed by
-    // a second finish_line at the end of the loop.
+    // Key contract: finish_line precedes bindings.print (SOLVED), idle is
+    // excluded around Enter, then a second finish_line at end of loop.
     redirect_cin("\n");
 
     size_t next_calls = 0;
@@ -133,8 +135,24 @@ TEST_F(SolveLoopTest, FinishLineBeforeSolved) {
         InSequence seq;
         EXPECT_CALL(progress, finish_line());
         EXPECT_CALL(bindings, print(_, _, _, _));
+        EXPECT_CALL(progress, note_idle_begin());
+        EXPECT_CALL(progress, note_idle_end());
         EXPECT_CALL(progress, finish_line());
     }
 
     run_loop(1);
+}
+
+TEST_F(SolveLoopTest, IdleNotNotedWhenIntervalZero) {
+    redirect_cin("\n");
+
+    size_t next_calls = 0;
+    EXPECT_CALL(runtime, next()).WillRepeatedly([&] { return ++next_calls <= 1; });
+    EXPECT_CALL(runtime, solved()).WillOnce(Return(true));
+    EXPECT_CALL(progress, on_sim()).Times(0);
+    EXPECT_CALL(progress, note_idle_begin()).Times(0);
+    EXPECT_CALL(progress, note_idle_end()).Times(0);
+    EXPECT_CALL(bindings, print(_, _, _, _));
+
+    run_loop(0);
 }

@@ -38,7 +38,9 @@ void solve_loop<IR,IEP,IPB,IPP>::run(
         std::cout << "SOLVED\n";
         print_bindings_.print(runtime, printer, pool, var_name_to_idx);
         std::cout << "[press Enter for next solution]";
+        if (sim_progress_interval_ > 0) print_progress_.note_idle_begin();
         std::cin.get();
+        if (sim_progress_interval_ > 0) print_progress_.note_idle_end();
     }
     if (sim_progress_interval_ > 0 && total_sims > 0) {
         print_progress_.print();
