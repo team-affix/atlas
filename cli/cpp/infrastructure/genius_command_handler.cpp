@@ -8,7 +8,8 @@ genius_command_handler::genius_command_handler(
     const std::string& goals_str,
     size_t max_resolutions,
     uint32_t seed,
-    double exploration_constant,
+    double ridge_exploration_constant,
+    double horizon_exploration_constant,
     size_t sim_progress_interval)
     : parse_var_seq_(0),
       print_progress_(base_print_progress_),
@@ -27,7 +28,8 @@ genius_command_handler::genius_command_handler(
         functor_names_.set_name(id, name);
 
     runtime_.emplace(
-        database_, initial_goals_, initial_frame_offset, max_resolutions, seed, exploration_constant);
+        database_, initial_goals_, initial_frame_offset, max_resolutions, seed,
+        ridge_exploration_constant, horizon_exploration_constant);
     print_progress_.set_runtime(*runtime_);
 }
 

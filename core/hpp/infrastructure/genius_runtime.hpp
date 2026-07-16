@@ -14,7 +14,8 @@ struct genius_runtime {
         uint32_t initial_frame_offset,
         size_t max_resolutions,
         uint32_t random_seed,
-        double exploration_constant);
+        double ridge_exploration_constant,
+        double horizon_exploration_constant);
 
     bool next();
     bool solved() const;

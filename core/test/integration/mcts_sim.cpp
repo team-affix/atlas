@@ -8,6 +8,7 @@
 #include "infrastructure/mcts_sim.hpp"
 #include "infrastructure/tree_walker.hpp"
 #include "random_rollout.hpp"
+#include "uniform_exploration_constant.hpp"
 #include "uniform_value_delta.hpp"
 #include "value_objects/mcts_choice.hpp"
 #include "value_objects/mcts_tree_node_id.hpp"
@@ -21,6 +22,7 @@ using test_value_t = monte_carlo::value_table<mcts_tree_node_id, double, std::un
 using test_rollout_t = monte_carlo::random_rollout<
     mcts_choice, std::mt19937, std::vector<mcts_choice>, std::vector<mcts_choice>>;
 using test_value_delta_t = monte_carlo::uniform_value_delta<double>;
+using test_exploration_constant_t = monte_carlo::uniform_exploration_constant<double>;
 using test_mcts_sim_t = mcts_sim<
     mcts_tree_node_id,
     mcts_choice,
@@ -31,6 +33,7 @@ using test_mcts_sim_t = mcts_sim<
     tree_walker,
     test_rollout_t,
     test_value_delta_t,
+    test_exploration_constant_t,
     mcts_root_tree_node>;
 
 struct MctsSimIntegrationTest : public ::testing::Test {
@@ -42,10 +45,11 @@ struct MctsSimIntegrationTest : public ::testing::Test {
     std::mt19937 rng{7};
     test_rollout_t rollout{rng};
     test_value_delta_t value_delta;
+    test_exploration_constant_t exploration_constant{kExplorationConstant};
     mcts_root_tree_node root;
     test_mcts_sim_t sim{
         visits, visits, values, values,
-        walker, rollout, value_delta, root, kExplorationConstant};
+        walker, rollout, value_delta, exploration_constant, root};
 
     goal_lineage gl0{nullptr, 0};
     goal_lineage gl1{nullptr, 1};

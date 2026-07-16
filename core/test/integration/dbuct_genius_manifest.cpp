@@ -70,7 +70,7 @@ protected:
                                  size_t grant_interval = kGrantInterval) {
         return dbuct_genius_manifest{
             database, initial_goals, initial_frame_offset, max_resolutions, kSeed,
-            kExplorationConstant, grant_interval};
+            kExplorationConstant, kExplorationConstant, grant_interval};
     }
 
     dbuct_genius_runtime make_dbuct(uint32_t initial_var_count,
@@ -78,13 +78,14 @@ protected:
                              size_t grant_interval = kGrantInterval) {
         return dbuct_genius_runtime{database, initial_goals, initial_var_count,
                              max_resolutions, kSeed, kExplorationConstant,
-                             grant_interval};
+                             kExplorationConstant, grant_interval};
     }
 
     genius_runtime make_genius(uint32_t initial_var_count,
                              size_t max_resolutions = kMaxResolutions) {
         return genius_runtime{database, initial_goals, initial_var_count,
-                             max_resolutions, kSeed, kExplorationConstant};
+                             max_resolutions, kSeed, kExplorationConstant,
+                             kExplorationConstant};
     }
 
     const expr* fun(const char* name, std::vector<const expr*> args = {}) {

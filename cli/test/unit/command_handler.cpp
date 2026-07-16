@@ -100,6 +100,7 @@ void construct_handler(const std::string& file, const std::string& goal, size_t 
         case cli_solver_kind::genius:
             genius_command_handler(
                 file, goal, max_res, CommandHandlerParamTest::kSeed,
+                CommandHandlerParamTest::kExplorationConstant,
                 CommandHandlerParamTest::kExplorationConstant);
             break;
         case cli_solver_kind::dbuct_ridge:
@@ -115,6 +116,7 @@ void construct_handler(const std::string& file, const std::string& goal, size_t 
         case cli_solver_kind::dbuct_genius:
             dbuct_genius_command_handler(
                 file, goal, max_res, CommandHandlerParamTest::kSeed,
+                CommandHandlerParamTest::kExplorationConstant,
                 CommandHandlerParamTest::kExplorationConstant);
             break;
     }
@@ -147,6 +149,7 @@ std::string run_handler_capture(
         case cli_solver_kind::genius:
             genius_command_handler(
                 file, goal, max_resolutions, CommandHandlerParamTest::kSeed,
+                CommandHandlerParamTest::kExplorationConstant,
                 CommandHandlerParamTest::kExplorationConstant)();
             break;
         case cli_solver_kind::dbuct_ridge:
@@ -162,6 +165,7 @@ std::string run_handler_capture(
         case cli_solver_kind::dbuct_genius:
             dbuct_genius_command_handler(
                 file, goal, max_resolutions, CommandHandlerParamTest::kSeed,
+                CommandHandlerParamTest::kExplorationConstant,
                 CommandHandlerParamTest::kExplorationConstant)();
             break;
     }

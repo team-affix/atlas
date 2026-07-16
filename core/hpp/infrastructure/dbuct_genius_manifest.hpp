@@ -22,6 +22,7 @@
 #include "infrastructure/expr_pool.hpp"
 #include "infrastructure/get_resolution_rule.hpp"
 #include "infrastructure/get_unit_resolution.hpp"
+#include "infrastructure/genius_exploration_constant.hpp"
 #include "infrastructure/genius_value_delta.hpp"
 #include "infrastructure/globalizer.hpp"
 #include "infrastructure/goal_activator.hpp"
@@ -117,6 +118,7 @@ struct dbuct_genius_manifest {
     using ridge_reward_t           = ridge_reward<decision_memory_t>;
     using horizon_reward_t         = horizon_reward<cumulative_grounded_weight_t>;
     using value_delta_t            = genius_value_delta<ridge_reward_t, horizon_reward_t>;
+    using exploration_constant_t   = genius_exploration_constant<srt_active_goals_t>;
     using dbuct_t                  = monte_carlo::dbuct<
                                          mcts_scope_node_id, mcts_choice, double,
                                          dbuct_visits_table_t, dbuct_value_table_t,
@@ -124,7 +126,7 @@ struct dbuct_genius_manifest {
                                          dbuct_dispatches_table_t, dbuct_dispatches_table_t,
                                          dbuct_batch_t, scope_walker_t,
                                          dbuct_choices_t, dbuct_choices_t, dbuct_rollout_t,
-                                         value_delta_t>;
+                                         value_delta_t, exploration_constant_t>;
 
     using avoidance_unit_boundary_t = dbuct_avoidance_unit_boundary<
         nearest_decision_t, dbuct_t>;
@@ -225,7 +227,8 @@ struct dbuct_genius_manifest {
         uint32_t initial_frame_offset,
         size_t max_resolutions,
         uint32_t random_seed,
-        double exploration_constant,
+        double ridge_exploration_constant,
+        double horizon_exploration_constant,
         size_t grant_increment_interval);
 
     globalizer                    globalizer_;
@@ -261,6 +264,7 @@ struct dbuct_genius_manifest {
     horizon_reward_t              horizon_reward_;
     value_delta_t                 value_delta_;
     mcts_root_scope_node          mcts_root_scope_node_;
+    exploration_constant_t        exploration_constant_;
     dbuct_t                       dbuct_;
     avoidance_unit_boundary_t     avoidance_unit_boundary_;
     solver_frame_depth_tracker_t  solver_frame_depth_tracker_;

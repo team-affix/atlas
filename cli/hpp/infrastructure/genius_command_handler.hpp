@@ -30,7 +30,8 @@ struct genius_command_handler {
         const std::string& goals_str,
         size_t max_resolutions,
         uint32_t seed,
-        double exploration_constant = 1.414,
+        double ridge_exploration_constant,
+        double horizon_exploration_constant,
         size_t sim_progress_interval = 1000);
 
     void operator()();

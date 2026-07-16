@@ -127,7 +127,8 @@ int main(int argc, char** argv) {
         std::string goals_str;
         size_t max_resolutions        = 1000;
         uint32_t seed                 = 0;
-        double exploration_constant   = 1.414;
+        double ridge_exploration_constant = 15;
+        double horizon_exploration_constant = 2;
         size_t grant_increment_interval = dbuct_genius_runtime::k_default_grant_increment_interval;
         size_t sim_progress_interval  = 1000;
     } dbuct_genius_opts;
@@ -137,7 +138,10 @@ int main(int argc, char** argv) {
     dbuct_genius_sub->add_option("-g,--goal", dbuct_genius_opts.goals_str, "Goal body string, e.g. \"p(X), q(X)\"")->required();
     dbuct_genius_sub->add_option("--max-resolutions", dbuct_genius_opts.max_resolutions, "Max resolutions");
     dbuct_genius_sub->add_option("--seed", dbuct_genius_opts.seed, "RNG seed");
-    dbuct_genius_sub->add_option("--exploration-constant", dbuct_genius_opts.exploration_constant, "MCTS exploration constant");
+    dbuct_genius_sub->add_option("--ridge-exploration-constant", dbuct_genius_opts.ridge_exploration_constant,
+                          "MCTS exploration constant for ridge (goal-nav) nodes");
+    dbuct_genius_sub->add_option("--horizon-exploration-constant", dbuct_genius_opts.horizon_exploration_constant,
+                          "MCTS exploration constant for horizon (rule-choice) nodes");
     dbuct_genius_sub->add_option("--grant-increment-interval", dbuct_genius_opts.grant_increment_interval,
                           "DBUCT per-node compute batch growth (larger camps longer before backtracking)");
     dbuct_genius_sub->add_option("--sim-progress-interval", dbuct_genius_opts.sim_progress_interval,
@@ -145,7 +149,8 @@ int main(int argc, char** argv) {
     dbuct_genius_sub->callback([&]() {
         dbuct_genius_command_handler h(dbuct_genius_opts.file, dbuct_genius_opts.goals_str,
                                        dbuct_genius_opts.max_resolutions, dbuct_genius_opts.seed,
-                                       dbuct_genius_opts.exploration_constant,
+                                       dbuct_genius_opts.ridge_exploration_constant,
+                                       dbuct_genius_opts.horizon_exploration_constant,
                                        dbuct_genius_opts.grant_increment_interval,
                                        dbuct_genius_opts.sim_progress_interval);
         h();
@@ -181,7 +186,8 @@ int main(int argc, char** argv) {
         std::string goals_str;
         size_t max_resolutions       = 1000;
         uint32_t seed                = 0;
-        double exploration_constant  = 1.414;
+        double ridge_exploration_constant = 15;
+        double horizon_exploration_constant = 2;
         size_t sim_progress_interval = 1000;
     } genius_opts;
 
@@ -190,13 +196,17 @@ int main(int argc, char** argv) {
     genius_sub->add_option("-g,--goal", genius_opts.goals_str, "Goal body string, e.g. \"p(X), q(X)\"")->required();
     genius_sub->add_option("--max-resolutions", genius_opts.max_resolutions, "Max resolutions");
     genius_sub->add_option("--seed", genius_opts.seed, "RNG seed");
-    genius_sub->add_option("--exploration-constant", genius_opts.exploration_constant, "MCTS exploration constant");
+    genius_sub->add_option("--ridge-exploration-constant", genius_opts.ridge_exploration_constant,
+                          "MCTS exploration constant for ridge (goal-nav) nodes");
+    genius_sub->add_option("--horizon-exploration-constant", genius_opts.horizon_exploration_constant,
+                          "MCTS exploration constant for horizon (rule-choice) nodes");
     genius_sub->add_option("--sim-progress-interval", genius_opts.sim_progress_interval,
                           "Print sim progress every N sims (0 disables)");
     genius_sub->callback([&]() {
         genius_command_handler h(genius_opts.file, genius_opts.goals_str,
                                  genius_opts.max_resolutions, genius_opts.seed,
-                                 genius_opts.exploration_constant,
+                                 genius_opts.ridge_exploration_constant,
+                                 genius_opts.horizon_exploration_constant,
                                  genius_opts.sim_progress_interval);
         h();
     });

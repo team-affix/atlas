@@ -8,7 +8,8 @@ dbuct_genius_command_handler::dbuct_genius_command_handler(
     const std::string& goals_str,
     size_t max_resolutions,
     uint32_t seed,
-    double exploration_constant,
+    double ridge_exploration_constant,
+    double horizon_exploration_constant,
     size_t grant_increment_interval,
     size_t sim_progress_interval)
     : parse_var_seq_(0),
@@ -29,7 +30,8 @@ dbuct_genius_command_handler::dbuct_genius_command_handler(
 
     runtime_.emplace(
         database_, initial_goals_, initial_frame_offset, max_resolutions, seed,
-        exploration_constant, grant_increment_interval);
+        ridge_exploration_constant, horizon_exploration_constant,
+        grant_increment_interval);
     print_progress_.set_runtime(*runtime_);
 }
 

@@ -39,6 +39,7 @@
 #include "infrastructure/mcts_root_tree_node.hpp"
 #include "infrastructure/mcts_sim.hpp"
 #include "infrastructure/tree_walker.hpp"
+#include "uniform_exploration_constant.hpp"
 #include "uniform_value_delta.hpp"
 #include "random_rollout.hpp"
 #include "value_table.hpp"
@@ -118,6 +119,7 @@ struct ridge_manifest {
                             mhu_t, bind_map_t, lineage_pool, frame_bump_allocator, cdcl_t, chosen_goal_candidates>;
     using ridge_reward_t   = ridge_reward<decision_memory>;
     using value_delta_t = monte_carlo::uniform_value_delta<double>;
+    using exploration_constant_t = monte_carlo::uniform_exploration_constant<double>;
     using mcts_choices_t = std::vector<mcts_choice>;
     using mcts_visits_table_t = monte_carlo::visits_table<mcts_tree_node_id, std::unordered_map>;
     using mcts_value_table_t = monte_carlo::value_table<mcts_tree_node_id, double, std::unordered_map>;
@@ -133,6 +135,7 @@ struct ridge_manifest {
         tree_walker,
         mcts_rollout_t,
         value_delta_t,
+        exploration_constant_t,
         mcts_root_tree_node>;
     using ridge_set_up_sim_t = ridge_set_up_sim<mcts_sim_t, set_up_sim_t>;
     using ridge_tear_down_sim_t = ridge_tear_down_sim<
@@ -208,6 +211,7 @@ struct ridge_manifest {
     tree_walker                    tree_walker_;
     mcts_rollout_t                 mcts_rollout_;
     mcts_root_tree_node            mcts_root_tree_node_;
+    exploration_constant_t         exploration_constant_;
     mcts_sim_t                 mcts_sim_;
     ridge_set_up_sim_t             ridge_set_up_sim_;
     ridge_tear_down_sim_t          ridge_tear_down_sim_;

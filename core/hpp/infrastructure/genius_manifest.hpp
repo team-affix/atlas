@@ -21,6 +21,7 @@
 #include "infrastructure/elimination_router.hpp"
 #include "infrastructure/expr_pool.hpp"
 #include "infrastructure/frame_bump_allocator.hpp"
+#include "infrastructure/genius_exploration_constant.hpp"
 #include "infrastructure/genius_set_up_sim.hpp"
 #include "infrastructure/genius_tear_down_sim.hpp"
 #include "infrastructure/genius_value_delta.hpp"
@@ -131,6 +132,7 @@ struct genius_manifest {
     using ridge_reward_t    = ridge_reward<decision_memory>;
     using horizon_reward_t  = horizon_reward<cumulative_grounded_weight>;
     using value_delta_t     = genius_value_delta<ridge_reward_t, horizon_reward_t>;
+    using exploration_constant_t = genius_exploration_constant<srt_active_goals>;
     using mcts_choices_t = std::vector<mcts_choice>;
     using mcts_visits_table_t = monte_carlo::visits_table<mcts_scope_node_id, std::map>;
     using mcts_value_table_t = monte_carlo::value_table<mcts_scope_node_id, double, std::map>;
@@ -147,6 +149,7 @@ struct genius_manifest {
         scope_walker_t,
         mcts_rollout_t,
         value_delta_t,
+        exploration_constant_t,
         mcts_root_scope_node>;
     using genius_set_up_sim_t = genius_set_up_sim<mcts_sim_t, set_up_sim_t>;
     using genius_tear_down_sim_t = genius_tear_down_sim<
@@ -169,7 +172,8 @@ struct genius_manifest {
         uint32_t initial_frame_offset,
         size_t max_resolutions,
         uint32_t random_seed,
-        double exploration_constant);
+        double ridge_exploration_constant,
+        double horizon_exploration_constant);
 
     globalizer              globalizer_;
     bind_map_t              bind_map_;
@@ -230,6 +234,7 @@ struct genius_manifest {
     scope_walker_t                 scope_walker_;
     mcts_rollout_t                 mcts_rollout_;
     mcts_root_scope_node           mcts_root_scope_node_;
+    exploration_constant_t         exploration_constant_;
     mcts_sim_t                 mcts_sim_;
     genius_set_up_sim_t            genius_set_up_sim_;
     genius_tear_down_sim_t         genius_tear_down_sim_;

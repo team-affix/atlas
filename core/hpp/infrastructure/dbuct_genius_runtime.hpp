@@ -18,7 +18,8 @@ struct dbuct_genius_runtime {
         uint32_t initial_frame_offset,
         size_t max_resolutions,
         uint32_t random_seed,
-        double exploration_constant,
+        double ridge_exploration_constant,
+        double horizon_exploration_constant,
         size_t grant_increment_interval = k_default_grant_increment_interval);
 
     bool next();

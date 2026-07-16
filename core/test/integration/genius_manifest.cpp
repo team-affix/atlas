@@ -27,13 +27,13 @@ struct GeniusManifestIntegrationTest : public ::testing::Test {
     genius_manifest make_manifest(uint32_t initial_var_count = 0) {
         return genius_manifest{
             database, initial_goals, initial_var_count, kMaxResolutions, kSeed,
-            kExplorationConstant};
+            kExplorationConstant, kExplorationConstant};
     }
 
     genius_runtime make_runtime(uint32_t initial_var_count = 0) {
         return genius_runtime{
             database, initial_goals, initial_var_count, kMaxResolutions, kSeed,
-            kExplorationConstant};
+            kExplorationConstant, kExplorationConstant};
     }
 
     const expr* fun(const char* name, std::vector<const expr*> args = {}) {

@@ -120,6 +120,7 @@ runtime_ref& make_runtime_session(
                 initial_frame_offset,
                 max_resolutions,
                 seed,
+                kRidgeExplorationConstant,
                 kRidgeExplorationConstant);
             holder.ref.emplace(runtime_ref::variant_t{&*holder.genius});
             return *holder.ref;
@@ -150,6 +151,7 @@ runtime_ref& make_runtime_session(
                 initial_frame_offset,
                 max_resolutions,
                 seed,
+                kRidgeExplorationConstant,
                 kRidgeExplorationConstant);
             holder.ref.emplace(runtime_ref::variant_t{&*holder.dbuct_genius});
             return *holder.ref;
