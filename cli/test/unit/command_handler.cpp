@@ -7,6 +7,7 @@
 #include <gtest/gtest.h>
 #include <gmock/gmock.h>
 #include "infrastructure/basic_command_handler.hpp"
+#include "infrastructure/dbuct_genius_command_handler.hpp"
 #include "infrastructure/dbuct_horizon_command_handler.hpp"
 #include "infrastructure/dbuct_ridge_command_handler.hpp"
 #include "infrastructure/genius_command_handler.hpp"
@@ -17,7 +18,7 @@ using ::testing::Ge;
 using ::testing::HasSubstr;
 using ::testing::Not;
 
-enum class cli_solver_kind { basic, ridge, horizon, genius, dbuct_ridge, dbuct_horizon };
+enum class cli_solver_kind { basic, ridge, horizon, genius, dbuct_ridge, dbuct_horizon, dbuct_genius };
 
 struct CommandHandlerParamTest : public ::testing::TestWithParam<cli_solver_kind> {
     static constexpr size_t kMaxResolutions       = 1000;
@@ -29,7 +30,8 @@ INSTANTIATE_TEST_SUITE_P(
     AllSolvers,
     CommandHandlerParamTest,
     ::testing::Values(cli_solver_kind::basic, cli_solver_kind::ridge, cli_solver_kind::horizon,
-                      cli_solver_kind::genius, cli_solver_kind::dbuct_ridge, cli_solver_kind::dbuct_horizon),
+                      cli_solver_kind::genius, cli_solver_kind::dbuct_ridge, cli_solver_kind::dbuct_horizon,
+                      cli_solver_kind::dbuct_genius),
     [](const auto& info) {
         switch (info.param) {
             case cli_solver_kind::basic:         return "basic";
@@ -38,6 +40,7 @@ INSTANTIATE_TEST_SUITE_P(
             case cli_solver_kind::genius:        return "genius";
             case cli_solver_kind::dbuct_ridge:   return "dbuct_ridge";
             case cli_solver_kind::dbuct_horizon: return "dbuct_horizon";
+            case cli_solver_kind::dbuct_genius:  return "dbuct_genius";
         }
         return "unknown";
     });
@@ -109,6 +112,11 @@ void construct_handler(const std::string& file, const std::string& goal, size_t 
                 file, goal, max_res, CommandHandlerParamTest::kSeed,
                 CommandHandlerParamTest::kExplorationConstant);
             break;
+        case cli_solver_kind::dbuct_genius:
+            dbuct_genius_command_handler(
+                file, goal, max_res, CommandHandlerParamTest::kSeed,
+                CommandHandlerParamTest::kExplorationConstant);
+            break;
     }
 }
 
@@ -148,6 +156,11 @@ std::string run_handler_capture(
             break;
         case cli_solver_kind::dbuct_horizon:
             dbuct_horizon_command_handler(
+                file, goal, max_resolutions, CommandHandlerParamTest::kSeed,
+                CommandHandlerParamTest::kExplorationConstant)();
+            break;
+        case cli_solver_kind::dbuct_genius:
+            dbuct_genius_command_handler(
                 file, goal, max_resolutions, CommandHandlerParamTest::kSeed,
                 CommandHandlerParamTest::kExplorationConstant)();
             break;

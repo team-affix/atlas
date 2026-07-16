@@ -5,12 +5,11 @@
 #include <iomanip>
 #include <iostream>
 #include <sstream>
-#include "infrastructure/genius_runtime.hpp"
 
-template<typename IPrintProgress>
+template<typename IPrintProgress, typename IRuntime>
 struct genius_print_progress {
     explicit genius_print_progress(IPrintProgress& base);
-    void set_runtime(genius_runtime& rt);
+    void set_runtime(IRuntime& rt);
     void on_sim();
     void print();
     void finish_line();
@@ -18,45 +17,45 @@ struct genius_print_progress {
     void note_idle_end();
 private:
     IPrintProgress&  base_;
-    genius_runtime*  runtime_ = nullptr;
+    IRuntime*        runtime_ = nullptr;
     double           ema_cgw_ = 0.0;
 };
 
-template<typename IPP>
-genius_print_progress<IPP>::genius_print_progress(IPP& base) : base_(base) {}
+template<typename IPP, typename IRT>
+genius_print_progress<IPP, IRT>::genius_print_progress(IPP& base) : base_(base) {}
 
-template<typename IPP>
-void genius_print_progress<IPP>::set_runtime(genius_runtime& rt) {
+template<typename IPP, typename IRT>
+void genius_print_progress<IPP, IRT>::set_runtime(IRT& rt) {
     runtime_ = &rt;
     base_.set_runtime(rt);
 }
 
-template<typename IPP>
-void genius_print_progress<IPP>::on_sim() {
+template<typename IPP, typename IRT>
+void genius_print_progress<IPP, IRT>::on_sim() {
     base_.on_sim();
     ema_cgw_ = 0.9 * ema_cgw_ + 0.1 * runtime_->cgw();
 }
 
-template<typename IPP>
-void genius_print_progress<IPP>::print() {
+template<typename IPP, typename IRT>
+void genius_print_progress<IPP, IRT>::print() {
     base_.print();
     std::ostringstream oss;
     oss << " | cgw " << std::fixed << std::setprecision(2) << ema_cgw_;
     std::cout << oss.str() << std::flush;
 }
 
-template<typename IPP>
-void genius_print_progress<IPP>::finish_line() {
+template<typename IPP, typename IRT>
+void genius_print_progress<IPP, IRT>::finish_line() {
     base_.finish_line();
 }
 
-template<typename IPP>
-void genius_print_progress<IPP>::note_idle_begin() {
+template<typename IPP, typename IRT>
+void genius_print_progress<IPP, IRT>::note_idle_begin() {
     base_.note_idle_begin();
 }
 
-template<typename IPP>
-void genius_print_progress<IPP>::note_idle_end() {
+template<typename IPP, typename IRT>
+void genius_print_progress<IPP, IRT>::note_idle_end() {
     base_.note_idle_end();
 }
 

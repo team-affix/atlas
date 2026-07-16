@@ -20,6 +20,7 @@
 #include <gmock/gmock.h>
 #include "infrastructure/basic_runtime.hpp"
 #include "infrastructure/db.hpp"
+#include "infrastructure/dbuct_genius_runtime.hpp"
 #include "infrastructure/dbuct_horizon_runtime.hpp"
 #include "infrastructure/dbuct_ridge_runtime.hpp"
 #include "infrastructure/expr_pool.hpp"
@@ -39,11 +40,11 @@ inline constexpr size_t kMaxResolutions = 32;
 inline constexpr uint32_t kSeed = 41;
 inline constexpr double kRidgeExplorationConstant = 1.414;
 
-enum class runtime_kind { basic, ridge, horizon, genius, dbuct_ridge, dbuct_horizon };
+enum class runtime_kind { basic, ridge, horizon, genius, dbuct_ridge, dbuct_horizon, dbuct_genius };
 
 // Type-erased runtime reference for testing across all runtime types.
 struct runtime_ref {
-    using variant_t = std::variant<basic_runtime*, ridge_runtime*, horizon_runtime*, genius_runtime*, dbuct_ridge_runtime*, dbuct_horizon_runtime*>;
+    using variant_t = std::variant<basic_runtime*, ridge_runtime*, horizon_runtime*, genius_runtime*, dbuct_ridge_runtime*, dbuct_horizon_runtime*, dbuct_genius_runtime*>;
     explicit runtime_ref(variant_t v) : v_(v) {}
     bool next() { return std::visit([](auto* r) { return r->next(); }, v_); }
     bool solved() const { return std::visit([](const auto* r) { return r->solved(); }, v_); }
@@ -74,6 +75,7 @@ struct runtime_session_holder {
     std::optional<genius_runtime> genius;
     std::optional<dbuct_ridge_runtime> dbuct_ridge;
     std::optional<dbuct_horizon_runtime> dbuct_horizon;
+    std::optional<dbuct_genius_runtime> dbuct_genius;
     std::optional<runtime_ref> ref;
 };
 
@@ -140,6 +142,16 @@ runtime_ref& make_runtime_session(
                 seed,
                 kRidgeExplorationConstant);
             holder.ref.emplace(runtime_ref::variant_t{&*holder.dbuct_horizon});
+            return *holder.ref;
+        case runtime_kind::dbuct_genius:
+            holder.dbuct_genius.emplace(
+                database,
+                goals,
+                initial_frame_offset,
+                max_resolutions,
+                seed,
+                kRidgeExplorationConstant);
+            holder.ref.emplace(runtime_ref::variant_t{&*holder.dbuct_genius});
             return *holder.ref;
     }
     throw std::logic_error("unknown runtime_kind");
@@ -3096,8 +3108,9 @@ TEST_P(RuntimeParamTest, FacadeDepthsAfterBranchingDecision) {
 TEST_P(RuntimeParamTest, HorizonGeniusCgwAfterUnitSolution) {
     if (GetParam() != runtime_kind::horizon
         && GetParam() != runtime_kind::genius
-        && GetParam() != runtime_kind::dbuct_horizon)
-        GTEST_SKIP() << "cgw() is horizon/genius/dbuct_horizon only";
+        && GetParam() != runtime_kind::dbuct_horizon
+        && GetParam() != runtime_kind::dbuct_genius)
+        GTEST_SKIP() << "cgw() is horizon/genius/dbuct_horizon/dbuct_genius only";
 
     static constexpr size_t kInitialVarCount = 0;
     initial_goals.push(saved_expr_pool_.make_functor(holder_.functors.id("f"), {}));
@@ -3112,9 +3125,12 @@ TEST_P(RuntimeParamTest, HorizonGeniusCgwAfterUnitSolution) {
     } else if (GetParam() == runtime_kind::genius) {
         ASSERT_TRUE(holder_.genius.has_value());
         EXPECT_NEAR(holder_.genius->cgw(), 1.0, 1e-9);
-    } else {
+    } else if (GetParam() == runtime_kind::dbuct_horizon) {
         ASSERT_TRUE(holder_.dbuct_horizon.has_value());
         EXPECT_NEAR(holder_.dbuct_horizon->cgw(), 1.0, 1e-9);
+    } else {
+        ASSERT_TRUE(holder_.dbuct_genius.has_value());
+        EXPECT_NEAR(holder_.dbuct_genius->cgw(), 1.0, 1e-9);
     }
 }
 
@@ -3122,7 +3138,8 @@ INSTANTIATE_TEST_SUITE_P(
     AllRuntimes,
     RuntimeParamTest,
     ::testing::Values(runtime_kind::basic, runtime_kind::ridge, runtime_kind::horizon,
-                      runtime_kind::genius, runtime_kind::dbuct_ridge, runtime_kind::dbuct_horizon),
+                      runtime_kind::genius, runtime_kind::dbuct_ridge, runtime_kind::dbuct_horizon,
+                      runtime_kind::dbuct_genius),
     [](const ::testing::TestParamInfo<runtime_kind>& info) {
         switch (info.param) {
             case runtime_kind::basic:         return "basic";
@@ -3131,6 +3148,7 @@ INSTANTIATE_TEST_SUITE_P(
             case runtime_kind::genius:        return "genius";
             case runtime_kind::dbuct_ridge:   return "dbuct_ridge";
             case runtime_kind::dbuct_horizon: return "dbuct_horizon";
+            case runtime_kind::dbuct_genius:  return "dbuct_genius";
         }
         return "unknown";
     });
