@@ -142,20 +142,43 @@ TEST_F(PrintProgressTest, SimsSinceLastResetAfterPrint) {
     EXPECT_EQ(pp.sims_since_last(), 0u);
 }
 
+namespace {
+
+// Parse the integer immediately before `suffix` (e.g. "40" in "40 sims/s").
+size_t rate_before(const std::string& out, const std::string& suffix) {
+    const auto end = out.rfind(suffix);
+    if (end == std::string::npos || end == 0)
+        return 0;
+    size_t start = end;
+    while (start > 0 && out[start - 1] >= '0' && out[start - 1] <= '9')
+        --start;
+    if (start == end)
+        return 0;
+    return static_cast<size_t>(std::stoul(out.substr(start, end - start)));
+}
+
+}  // namespace
+
 TEST_F(PrintProgressTest, IdleTimeIsExcludedFromRates) {
     ON_CALL(mock_rt, resolution_depth()).WillByDefault(Return(100));
     auto pp = make_progress();
 
+    // Counted work vs idle: if idle leaked into the window, rates would sit near
+    // 2/0.4s = 5 sims/s and 200/0.4s = 500 res/s. With idle excluded they sit
+    // near 2/0.1s = 20 sims/s and 2000 res/s. Require well above the diluted bar.
+    constexpr useconds_t k_work_us = 100000;
+    constexpr useconds_t k_idle_us = 300000;
+
     pp.on_sim();
+    usleep(k_work_us);
     pp.note_idle_begin();
-    usleep(200000);  // 200ms idle must not count as sim time
+    usleep(k_idle_us);
     pp.note_idle_end();
     pp.on_sim();
     pp.print();
 
     const std::string out = captured.str();
     EXPECT_THAT(out, HasSubstr("2 sims"));
-    // With idle excluded, 2 sims in <<200ms of work should not collapse to 0.
-    EXPECT_THAT(out, Not(HasSubstr("0 sims/s")));
-    EXPECT_THAT(out, Not(HasSubstr("0 res/s")));
+    EXPECT_GE(rate_before(out, " sims/s"), 10u);
+    EXPECT_GE(rate_before(out, " res/s"), 1000u);
 }
