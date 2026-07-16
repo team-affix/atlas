@@ -58,7 +58,7 @@ TEST_F(MctsSimTest, SetUpThenTearDownRuns) {
 TEST_F(MctsSimTest, ChooseAfterSetUpReturnsOneOfSuppliedGoalChoices) {
     sim.set_up();
     std::vector<mcts_choice> choices{mcts_choice{&gl0}, mcts_choice{&gl1}};
-    mcts_choice picked = sim.choose(choices, false);
+    mcts_choice picked = sim.choose(choices);
     const auto* picked_gl = std::get_if<const goal_lineage*>(&picked);
     ASSERT_NE(picked_gl, nullptr);
     EXPECT_TRUE(*picked_gl == &gl0 || *picked_gl == &gl1);
@@ -69,7 +69,7 @@ TEST_F(MctsSimTest, ChooseAfterSetUpReturnsOneOfSuppliedGoalChoices) {
 TEST_F(MctsSimTest, ChooseAfterSetUpReturnsOneOfSuppliedRuleChoices) {
     sim.set_up();
     std::vector<mcts_choice> choices{mcts_choice{rule_id{0}}, mcts_choice{rule_id{1}}};
-    mcts_choice picked = sim.choose(choices, false);
+    mcts_choice picked = sim.choose(choices);
     const auto* picked_rule = std::get_if<rule_id>(&picked);
     ASSERT_NE(picked_rule, nullptr);
     EXPECT_TRUE(*picked_rule == 0 || *picked_rule == 1);
@@ -81,7 +81,7 @@ TEST_F(MctsSimTest, MultipleRolloutChoosesStayWithinChoiceSet) {
     sim.set_up();
     std::vector<mcts_choice> choices{mcts_choice{&gl0}, mcts_choice{&gl1}};
     for (int i = 0; i < 10; ++i) {
-        mcts_choice picked = sim.choose(choices, false);
+        mcts_choice picked = sim.choose(choices);
         const auto* picked_gl = std::get_if<const goal_lineage*>(&picked);
         ASSERT_NE(picked_gl, nullptr);
         EXPECT_TRUE(*picked_gl == &gl0 || *picked_gl == &gl1);
@@ -94,7 +94,7 @@ TEST_F(MctsSimTest, FullLifecycleSetUpChooseTearDownTwice) {
     std::vector<mcts_choice> choices{mcts_choice{rule_id{0}}, mcts_choice{rule_id{1}}};
     for (int cycle = 0; cycle < 2; ++cycle) {
         sim.set_up();
-        mcts_choice picked = sim.choose(choices, false);
+        mcts_choice picked = sim.choose(choices);
         EXPECT_TRUE(std::holds_alternative<rule_id>(picked));
         value_delta.set_value(-static_cast<double>(cycle));
         sim.tear_down();

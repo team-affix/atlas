@@ -32,7 +32,7 @@ struct dbuct_sim {
               ITerminate&,
               ICheckMctsChoiceIsRuleChoice&);
 
-    MctsChoice choose(const std::vector<MctsChoice>&, bool is_rule_choice);
+    MctsChoice choose(const std::vector<MctsChoice>&);
     std::vector<const resolution_lineage*> terminate();
     bool at_root() const;
 
@@ -94,8 +94,7 @@ template<typename MC, typename IPSF, typename IPopSF, typename IGSFD, typename I
          typename IGPMFD, typename IGUMFD, typename IGMFD, typename IBMF,
          typename IIR, typename IC, typename IT, typename ICMCR>
 MC dbuct_sim<MC, IPSF, IPopSF, IGSFD, IGDC, IGPMFD, IGUMFD, IGMFD, IBMF, IIR, IC, IT, ICMCR>::choose(
-    const std::vector<MC>& choices, bool is_rule_choice) {
-    (void)is_rule_choice;
+    const std::vector<MC>& choices) {
     MC chosen = choose_.choose(choices, choices);
     // if there has not been a mcts frame since the last decision, don't push solver frame.
     if (get_mcts_frame_depth_.depth() <= get_ultimate_mcts_frame_depth_.get_ultimate_mcts_frame_depth())

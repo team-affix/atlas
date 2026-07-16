@@ -31,7 +31,7 @@ struct mcts_sim {
 
     void set_up();
     void tear_down();
-    MctsChoice choose(const std::vector<MctsChoice>&, bool is_rule_choice);
+    MctsChoice choose(const std::vector<MctsChoice>&);
 
 private:
     using vec_t = std::vector<MctsChoice>;
@@ -112,8 +112,7 @@ template<typename MN, typename MC,
          typename IGVis, typename ISVis, typename IGVal, typename ISVal,
          typename IWM, typename IRC, typename IGVD, typename IGRN>
 MC mcts_sim<MN, MC, IGVis, ISVis, IGVal, ISVal, IWM, IRC, IGVD, IGRN>::choose(
-        const std::vector<MC>& choices, bool is_rule_choice) {
-    (void)is_rule_choice;
+        const std::vector<MC>& choices) {
     return mc_sim_->choose(choices, choices);
 }
 

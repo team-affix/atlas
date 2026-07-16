@@ -55,8 +55,7 @@ struct ScriptingMctsChoose {
     std::vector<std::vector<mcts_choice>> goal_rounds;
     std::vector<std::vector<mcts_choice>> candidate_rounds;
 
-    mcts_choice choose(const std::vector<mcts_choice>& choices, bool is_rule_choice) {
-        (void)is_rule_choice;
+    mcts_choice choose(const std::vector<mcts_choice>& choices) {
         if (!choices.empty()) {
             if (std::holds_alternative<const goal_lineage*>(choices.front()))
                 goal_rounds.push_back(choices);
