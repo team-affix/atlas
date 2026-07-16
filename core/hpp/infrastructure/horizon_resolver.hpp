@@ -21,7 +21,7 @@ horizon_resolver<IR,IGR,IGGW,IAGW>::horizon_resolver(IR& r, IGR& db, IGGW& gw, I
 
 template<typename IR, typename IGR, typename IGGW, typename IAGW>
 bool horizon_resolver<IR,IGR,IGGW,IAGW>::resolve(const resolution_lineage* rl) {
-    const rule* rule = get_rule_.get(rl->idx);
+    const rule* rule = get_rule_.get_rule(rl->idx);
     if (rule->body.empty()) {
         const double w = goal_weights_.get(rl->parent);
         cumulative_grounded_weight_.accumulate(w);

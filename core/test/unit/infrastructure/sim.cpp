@@ -66,24 +66,21 @@ struct MockGetUnitResolution {
     MOCK_METHOD(const resolution_lineage*, get, (const goal_lineage*));
 };
 
-struct MockPushTrailFrame {
-    MOCK_METHOD(void, push, ());
+struct MockPushFrame {
+    MOCK_METHOD(void, push_frame, ());
 };
 
-struct MockPopTrailFrame {
-    MOCK_METHOD(void, pop, ());
+struct MockPopFrame {
+    MOCK_METHOD(void, pop_frame, ());
 };
 
 struct MockActivateInitialGoalsAndCandidates {
     MOCK_METHOD(bool, activate_initial_goals_and_candidates, ());
 };
 
-struct MockRecordDecision {
-    MOCK_METHOD(void, record_decision, (const resolution_lineage*));
-};
-
-struct MockRecordResolution {
-    MOCK_METHOD(void, record_resolution, (const resolution_lineage*));
+struct MockRecorder {
+    MOCK_METHOD(void, record_decision_resolution, (const resolution_lineage*));
+    MOCK_METHOD(void, record_unit_resolution, (const resolution_lineage*));
 };
 
 struct MockGetResolutionCount {
@@ -144,7 +141,7 @@ struct MockClearChosenGoalCandidates {
     MOCK_METHOD(void, clear, ());
 };
 
-using test_set_up_sim_t = set_up_sim<MockPushTrailFrame>;
+using test_set_up_sim_t = set_up_sim<MockPushFrame>;
 using test_run_sim_t = run_sim<
     MockActivateInitialGoalsAndCandidates,
     MockSolutionDetector,
@@ -157,11 +154,11 @@ using test_run_sim_t = run_sim<
     MockEliminationRouter,
     MockResolver,
     MockGetUnitResolution,
-    testing::NiceMock<MockRecordDecision>,
-    testing::NiceMock<MockRecordResolution>,
+    testing::NiceMock<MockRecorder>,
+    testing::NiceMock<MockRecorder>,
     testing::NiceMock<MockGetResolutionCount>>;
 using test_tear_down_sim_t = tear_down_sim<
-    MockPopTrailFrame,
+    MockPopFrame,
     testing::NiceMock<MockClearUnitGoals>,
     testing::NiceMock<MockClearRecordedDecisions>,
     testing::NiceMock<MockClearRecordedResolutions>,
@@ -179,8 +176,8 @@ using test_tear_down_sim_t = tear_down_sim<
 struct SimTest : public ::testing::Test {
     static constexpr size_t kMaxResolutions = 2;
 
-    MockPushTrailFrame push_trail_frame;
-    MockPopTrailFrame pop_trail_frame;
+    MockPushFrame push_frame;
+    MockPopFrame pop_frame;
     MockActivateInitialGoalsAndCandidates activate_initial_goals_and_candidates;
     MockSolutionDetector solution_detector;
     MockConflictDetector conflict_detector;
@@ -192,8 +189,7 @@ struct SimTest : public ::testing::Test {
     MockEliminationRouter elimination_router;
     MockResolver resolver;
     MockGetUnitResolution get_unit_resolution;
-    testing::NiceMock<MockRecordDecision> record_decision;
-    testing::NiceMock<MockRecordResolution> record_resolution;
+    testing::NiceMock<MockRecorder> recorder;
     testing::NiceMock<MockGetResolutionCount> get_resolution_count;
     size_t resolution_count_ = 0;
     testing::NiceMock<MockClearUnitGoals> clear_unit_goals;
@@ -210,9 +206,9 @@ struct SimTest : public ::testing::Test {
     testing::NiceMock<MockCleanUpCdcl> clean_up_cdcl;
     testing::NiceMock<MockClearChosenGoalCandidates> clear_chosen_goal_candidates;
 
-    test_set_up_sim_t set_up_sim_{push_trail_frame};
+    test_set_up_sim_t set_up_sim_{push_frame};
     test_tear_down_sim_t tear_down_sim_{
-        pop_trail_frame, clear_unit_goals, clear_recorded_decisions,
+        pop_frame, clear_unit_goals, clear_recorded_decisions,
         clear_recorded_resolutions, clear_goal_candidate_rule_ids, clear_goal_exprs,
         clear_active_goals, clear_candidate_frame_offsets, clear_mhu_heads,
         clear_bindings, trim_unpinned_lineages, frame_allocator,
@@ -224,7 +220,7 @@ struct SimTest : public ::testing::Test {
             solution_detector, conflict_detector, unit_goal_detector,
             push_unit_goal, pop_unit_goal, decision_generator,
             elimination_generator, elimination_router, resolver,
-            get_unit_resolution, record_decision, record_resolution,
+            get_unit_resolution, recorder, recorder,
             get_resolution_count, max_resolutions};
     }
 
@@ -242,7 +238,10 @@ struct SimTest : public ::testing::Test {
                 activate_initial_goals_and_candidates()).WillByDefault(Return(true));
         // Mirror production: get_resolution_count() tracks how many resolutions
         // have been recorded so far, so the run loop is bounded by max_resolutions.
-        ON_CALL(record_resolution, record_resolution(testing::_))
+        // Every resolution -- decision or unit -- records exactly once.
+        ON_CALL(recorder, record_decision_resolution(testing::_))
+            .WillByDefault([this](const resolution_lineage*) { ++resolution_count_; });
+        ON_CALL(recorder, record_unit_resolution(testing::_))
             .WillByDefault([this](const resolution_lineage*) { ++resolution_count_; });
         ON_CALL(get_resolution_count, get_resolution_count())
             .WillByDefault([this] { return resolution_count_; });
@@ -284,8 +283,8 @@ TEST_F(SimTest, RunReturnsConflictedWhenInitialGoalsFail) {
     EXPECT_EQ(run(), sim_termination::conflicted);
 }
 
-TEST_F(SimTest, TearDownPopsTrailAndClearsNonBacktrackedStores) {
-    EXPECT_CALL(pop_trail_frame, pop()).Times(1);
+TEST_F(SimTest, TearDownPopsFrameAndClearsNonBacktrackedStores) {
+    EXPECT_CALL(pop_frame, pop_frame()).Times(1);
     EXPECT_CALL(clear_unit_goals, clear()).Times(1);
     EXPECT_CALL(clear_recorded_decisions, clear_recorded_decisions()).Times(1);
     EXPECT_CALL(clear_recorded_resolutions, clear_recorded_resolutions()).Times(1);
@@ -303,8 +302,8 @@ TEST_F(SimTest, TearDownPopsTrailAndClearsNonBacktrackedStores) {
     tear_down();
 }
 
-TEST_F(SimTest, SetUpPushesTrailFrameOnly) {
-    EXPECT_CALL(push_trail_frame, push()).Times(1);
+TEST_F(SimTest, SetUpPushesFrameOnly) {
+    EXPECT_CALL(push_frame, push_frame()).Times(1);
     EXPECT_CALL(activate_initial_goals_and_candidates, activate_initial_goals_and_candidates()).Times(0);
     set_up();
     tear_down();
@@ -368,8 +367,7 @@ TEST_F(SimTest, RecordsDecisionWhenGeneratorChoosesResolution) {
     EXPECT_CALL(solution_detector, detect()).WillRepeatedly(Return(false));
     EXPECT_CALL(pop_unit_goal, pop()).WillRepeatedly(Return(std::nullopt));
     EXPECT_CALL(decision_generator, generate()).WillRepeatedly(Return(&rl));
-    EXPECT_CALL(record_decision, record_decision(&rl)).Times(2);
-    EXPECT_CALL(record_resolution, record_resolution(&rl)).Times(2);
+    EXPECT_CALL(recorder, record_decision_resolution(&rl)).Times(2);
     EXPECT_CALL(elimination_generator, constrain(&rl))
         .WillRepeatedly([] { return empty_eliminations(); });
     EXPECT_CALL(resolver, resolve(&rl)).WillRepeatedly(Return(true));
@@ -387,8 +385,8 @@ TEST_F(SimTest, RunUsesPoppedUnitGoalForNextResolution) {
     EXPECT_CALL(pop_unit_goal, pop()).WillOnce(Return(&gl));
     EXPECT_CALL(get_unit_resolution, get(&gl)).WillOnce(Return(&unit_rl));
     EXPECT_CALL(decision_generator, generate()).Times(0);
-    EXPECT_CALL(record_decision, record_decision).Times(0);
-    EXPECT_CALL(record_resolution, record_resolution(&unit_rl)).Times(1);
+    EXPECT_CALL(recorder, record_decision_resolution).Times(0);
+    EXPECT_CALL(recorder, record_unit_resolution(&unit_rl)).Times(1);
     EXPECT_CALL(elimination_generator, constrain(&unit_rl))
         .WillOnce([] { return empty_eliminations(); });
     EXPECT_CALL(resolver, resolve(&unit_rl)).WillOnce(Return(true));

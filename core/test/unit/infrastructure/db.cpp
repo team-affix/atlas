@@ -1,42 +1,79 @@
-// Goal database: vector-backed rules indexed by rule_id, with total_rule_set holding
-// every id 0 .. rules.size() - 1. All goals share the same rule_id_set reference.
+// Goal database: vector-backed rules indexed by rule_id, with functor-indexed lookup buckets.
 
 #include <gtest/gtest.h>
 #include <gmock/gmock.h>
 
 using ::testing::UnorderedElementsAre;
 #include "infrastructure/db.hpp"
-#include "value_objects/lineage.hpp"
+#include "functor_fixture.hpp"
 
 struct DbTest : public ::testing::Test {
-    expr head{expr::var{0}};
-    rule r{&head, {}, 1};
-    goal_lineage gl0{nullptr, 0};
-    goal_lineage gl1{nullptr, 1};
+    test_functors functors;
+    expr f_head{expr::functor{functors.id("f"), {}}};
+    expr g_head{expr::functor{functors.id("g"), {}}};
+    expr var_head{expr::var{0}};
+    rule f_rule{&f_head, {}, 1};
+    rule g_rule{&g_head, {}};
+    rule var_rule{&var_head, {}};
 };
 
-TEST_F(DbTest, DefaultDbReturnsEmptyRuleSet) {
+TEST_F(DbTest, DefaultDbLookupAllRulesEmpty) {
     db database;
-    EXPECT_EQ(database.get(&gl0).size(), 0u);
+    EXPECT_EQ(database.lookup_all_rules().size(), 0u);
+}
+
+TEST_F(DbTest, PushVarHeadedRuleThrows) {
+    db database;
+    EXPECT_THROW(database.push(var_rule), std::invalid_argument);
 }
 
 TEST_F(DbTest, PushAssignsIdAndExposesRule) {
     db database;
-    const rule_id id = database.push(r);
+    const rule_id id = database.push(f_rule);
     EXPECT_EQ(id, 0u);
-    EXPECT_EQ(*database.get(id), r);
-    EXPECT_EQ(database.get(&gl0).size(), 1u);
+    EXPECT_EQ(*database.get_rule(id), f_rule);
+    EXPECT_EQ(database.lookup_all_rules().size(), 1u);
 }
 
-TEST_F(DbTest, TotalRuleSetContainsAllIndices) {
+TEST_F(DbTest, LookupByFunctorReturnsMatchingRules) {
     db database;
-    database.push(r);
-    expr head1{expr::var{1}};
-    rule r1{&head1, {}};
-    database.push(r1);
+    const rule_id f0 = database.push(f_rule);
+    expr f_head2{expr::functor{functors.id("f"), {}}};
+    const rule_id f1 = database.push(rule{&f_head2, {}});
+    database.push(g_rule);
 
     std::vector<rule_id> ids;
-    auto it = database.get(&gl0).iterate();
+    auto it = database.lookup_rule_by_outermost_functor(functors.id("f")).iterate();
+    while (!it.done()) {
+        it.resume();
+        if (it.has_yield())
+            ids.push_back(it.consume_yield());
+    }
+    EXPECT_THAT(ids, UnorderedElementsAre(f0, f1));
+}
+
+TEST_F(DbTest, LookupByFunctorExcludesOtherFunctors) {
+    db database;
+    database.push(f_rule);
+    database.push(g_rule);
+
+    EXPECT_EQ(database.lookup_rule_by_outermost_functor(functors.id("g")).size(), 1u);
+    EXPECT_EQ(database.lookup_rule_by_outermost_functor(functors.id("f")).size(), 1u);
+}
+
+TEST_F(DbTest, LookupUnknownFunctorReturnsEmpty) {
+    db database;
+    database.push(f_rule);
+    EXPECT_EQ(database.lookup_rule_by_outermost_functor(functors.id("h")).size(), 0u);
+}
+
+TEST_F(DbTest, LookupAllRulesReturnsEveryPushedRule) {
+    db database;
+    database.push(f_rule);
+    database.push(g_rule);
+
+    std::vector<rule_id> ids;
+    auto it = database.lookup_all_rules().iterate();
     while (!it.done()) {
         it.resume();
         if (it.has_yield())
@@ -45,21 +82,8 @@ TEST_F(DbTest, TotalRuleSetContainsAllIndices) {
     EXPECT_THAT(ids, UnorderedElementsAre(0, 1));
 }
 
-TEST_F(DbTest, SameTotalRulesForDifferentGoals) {
-    db database;
-    database.push(r);
-    EXPECT_EQ(&database.get(&gl0), &database.get(&gl1));
-}
-
 TEST_F(DbTest, GetRuleIdOutOfRangeThrows) {
     db database;
-    database.push(r);
-    EXPECT_THROW(database.get(1), std::out_of_range);
-}
-
-TEST_F(DbTest, MutationsThroughGetVisibleToAllGoals) {
-    db database;
-    database.push(r);
-    database.get(&gl0).erase(0);
-    EXPECT_EQ(database.get(&gl1).size(), 0u);
+    database.push(f_rule);
+    EXPECT_THROW(database.get_rule(1), std::out_of_range);
 }

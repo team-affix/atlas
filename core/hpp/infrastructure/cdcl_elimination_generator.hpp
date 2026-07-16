@@ -13,6 +13,12 @@
 #include "value_objects/avoidance.hpp"
 #include "value_objects/lemma.hpp"
 
+inline bool avoidance_member_less(const resolution_lineage* a, const resolution_lineage* b) {
+    if (a->parent != b->parent)
+        return a->parent < b->parent;
+    return a->idx < b->idx;
+}
+
 template<typename ITryGetChosenGoalCandidate>
 struct cdcl_elimination_generator {
     cdcl_elimination_generator(ITryGetChosenGoalCandidate&);
@@ -26,7 +32,7 @@ private:
     std::optional<const resolution_lineage*> visit_avoidance(avoidance_id, const resolution_lineage*);
 
     std::unordered_map<avoidance_id, avoidance> avoidances_;
-    size_t next_avoidance_id_ = 0;
+    size_t next_avoidance_id_;
     std::unordered_map<const goal_lineage*, std::unordered_set<avoidance_id>> watched_goals_;
     std::unordered_set<avoidance_id> visited_avoidances_;
 
@@ -35,7 +41,7 @@ private:
 
 template<typename ITGCC>
 cdcl_elimination_generator<ITGCC>::cdcl_elimination_generator(ITGCC& tgcc)
-    : try_get_chosen_goal_candidate_(tgcc) {}
+    : next_avoidance_id_(0), try_get_chosen_goal_candidate_(tgcc) {}
 
 template<typename ITGCC>
 std::optional<const resolution_lineage*>
@@ -47,11 +53,7 @@ cdcl_elimination_generator<ITGCC>::learn(const lemma& l) {
         return *resolutions.begin();
 
     std::vector<const resolution_lineage*> members(resolutions.begin(), resolutions.end());
-    std::sort(members.begin(), members.end(), [](const resolution_lineage* a, const resolution_lineage* b) {
-        if (a->parent != b->parent)
-            return a->parent < b->parent;
-        return a->idx < b->idx;
-    });
+    std::sort(members.begin(), members.end(), avoidance_member_less);
     const avoidance_id id = next_avoidance_id_++;
     avoidances_.emplace(id, avoidance{std::move(members), 0, 1});
     watched_goals_[avoidances_.at(id).members.at(0)->parent].insert(id);

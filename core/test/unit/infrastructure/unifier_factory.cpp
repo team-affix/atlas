@@ -18,8 +18,8 @@ struct MockBindMap {
     MOCK_METHOD(framed_expr, whnf, (framed_expr));
 };
 
-using TestUnifierFactory = unifier_factory<MockBindMap>;
-using TestUnifier = unifier<MockBindMap>;
+using TestUnifierFactory = unifier_factory<globalizer, MockBindMap>;
+using TestUnifier = unifier<globalizer, MockBindMap>;
 
 bool run_unify(TestUnifier& u, const expr* lhs, const expr* rhs,
                std::unordered_set<uint32_t>& vars_touched) {

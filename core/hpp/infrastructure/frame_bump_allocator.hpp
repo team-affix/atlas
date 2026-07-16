@@ -4,7 +4,7 @@
 #include <cstdint>
 
 struct frame_bump_allocator {
-    explicit frame_bump_allocator(uint32_t initial);
+    frame_bump_allocator(uint32_t initial);
     uint32_t bump(uint32_t n);
     uint32_t peek() const;
     void reset();

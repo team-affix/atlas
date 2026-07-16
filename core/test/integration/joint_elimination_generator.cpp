@@ -16,7 +16,7 @@
 #include "infrastructure/lineage_pool.hpp"
 #include "infrastructure/goal_candidate_rules.hpp"
 #include "infrastructure/ra_rule_id_set_factory.hpp"
-#include "infrastructure/trail.hpp"
+#include "infrastructure/elimination_backlog.hpp"
 #include "infrastructure/coroutine.hpp"
 #include "value_objects/lemma.hpp"
 #include "functor_fixture.hpp"
@@ -24,10 +24,11 @@
 using ::testing::ElementsAre;
 using ::testing::IsEmpty;
 
-using test_unifier_factory_t = unifier_factory<bind_map>;
+using test_unifier_factory_t = unifier_factory<globalizer, bind_map<globalizer>>;
 using test_cdcl_t  = cdcl_elimination_generator<chosen_goal_candidates>;
 using test_mhu_t   = mhu_elimination_generator<
-    bind_map, bind_map_factory, unifier<bind_map>, test_unifier_factory_t,
+    bind_map<globalizer>, bind_map<globalizer>, bind_map<globalizer>,
+    bind_map_factory<globalizer>, unifier<globalizer, bind_map<globalizer>>, test_unifier_factory_t,
     lineage_pool, expr_pool, goal_candidate_rules>;
 using TestJoint = joint_elimination_generator<test_cdcl_t, test_mhu_t>;
 
@@ -52,11 +53,11 @@ std::vector<const resolution_lineage*> collect_elims(
 struct JointEliminationGeneratorIntegrationTest : public ::testing::Test {
     
     test_functors functors;
-    trail t;
+    elimination_backlog frames;
     globalizer g_;
-    bind_map common{g_};
+    bind_map<globalizer> common{g_};
     lineage_pool lp;
-    bind_map_factory bmf{g_};
+    bind_map_factory<globalizer> bmf{g_};
     test_unifier_factory_t uf{g_};
     ra_rule_id_set_factory ra_rule_id_set_factory_;
     goal_candidate_rules ggcr{ra_rule_id_set_factory_};
@@ -69,7 +70,7 @@ struct JointEliminationGeneratorIntegrationTest : public ::testing::Test {
     JointEliminationGeneratorIntegrationTest() {
         pool.emplace();
         cdcl.emplace(chosen);
-        mhu.emplace(common, lp, *pool, bmf, uf, ggcr);
+        mhu.emplace(common, common, lp, *pool, bmf, uf, ggcr);
         joint.emplace(*cdcl, *mhu);
     }
 };
@@ -214,9 +215,9 @@ TEST_F(JointEliminationGeneratorIntegrationTest, CleanupRestoresCdclThroughJoint
     EXPECT_THAT(collect_elims(joint->constrain(&rl0)), ElementsAre(&rl1));
     EXPECT_THAT(collect_elims(cdcl->constrain(&rl0)), IsEmpty());
 
-    t.push();
+    frames.push_frame();
     EXPECT_THAT(collect_elims(cdcl->constrain(&rl0)), IsEmpty());
-    t.pop();
+    frames.pop_frame();
 
     cdcl->cleanup();
     chosen.clear();

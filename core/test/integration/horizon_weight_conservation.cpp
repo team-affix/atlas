@@ -55,7 +55,7 @@ struct MockGetInitialGoalExpr {
 };
 
 struct MockGetRule {
-    MOCK_METHOD(const rule*, get, (rule_id), (const));
+    MOCK_METHOD(const rule*, get_rule, (rule_id), (const));
 };
 
 void add_active_leaf_weight(
@@ -107,7 +107,8 @@ protected:
     using goal_activator_t  = goal_activator<goal_exprs, goal_candidate_rules,
                                   srt_active_goals, candidate_frame_offsets, get_resolution_rule_t>;
     using srt_goal_deactivator_t = srt_goal_deactivator<goal_exprs, goal_candidate_rules>;
-    using horizon_goal_activator_t = horizon_goal_activator<goal_activator_t, goal_weights, MockGetRule>;
+    using horizon_goal_activator_t = horizon_goal_activator<
+        goal_activator_t, goal_weights, goal_weights, MockGetRule>;
     using horizon_goal_deactivator_t = horizon_goal_deactivator<srt_goal_deactivator_t, goal_weights>;
     using initial_goal_activator_t = initial_goal_activator<MockGetInitialGoalExpr,
                                         make_initial_goal_lineage_t, goal_exprs, goal_candidate_rules,
@@ -117,7 +118,8 @@ protected:
                                         goal_weights, initial_goal_weight>;
     using subgoals_activator_t = subgoals_activator<lineage_pool, horizon_goal_activator_t,
                                       MockGetRule, MockActivateGoalCandidates>;
-    using srt_subgoals_activator_t = srt_subgoals_activator<srt_active_goals, subgoals_activator_t>;
+    using srt_subgoals_activator_t = srt_subgoals_activator<
+        srt_active_goals, srt_active_goals, subgoals_activator_t>;
     using resolver_t = resolver<horizon_goal_deactivator_t, srt_subgoals_activator_t,
                               MockDeactivateGoalCandidates, MockSetChosenGoalCandidate>;
     using horizon_resolver_t = horizon_resolver<resolver_t, MockGetRule,
@@ -163,7 +165,7 @@ protected:
         ON_CALL(get_initial_goal_count, count()).WillByDefault(Return(1));
         ON_CALL(get_initial_goal_expr, get(0)).WillByDefault(Return(&f_head));
         ON_CALL(activate_goal_candidates, activate_goal_candidates).WillByDefault(Return(true));
-        ON_CALL(get_rule, get).WillByDefault([&](rule_id id) -> const rule* {
+        ON_CALL(get_rule, get_rule).WillByDefault([&](rule_id id) -> const rule* {
             if (id == 0) return &expand_rule;
             if (id == 1) return &ground_g;
             if (id == 2) return &ground_h;
@@ -174,7 +176,7 @@ protected:
         make_initial_goal_lineage_.emplace(lineage_pool_);
         goal_activator_.emplace(goal_exprs_, goal_candidate_rules_, srt_active_goals_,
                                 candidate_frame_offsets_, *get_resolution_rule_);
-        horizon_goal_activator_.emplace(*goal_activator_, goal_weights_, get_rule);
+        horizon_goal_activator_.emplace(*goal_activator_, goal_weights_, goal_weights_, get_rule);
         srt_goal_deactivator_.emplace(goal_exprs_, goal_candidate_rules_);
         horizon_goal_deactivator_.emplace(*srt_goal_deactivator_, goal_weights_);
         initial_goal_activator_.emplace(get_initial_goal_expr, *make_initial_goal_lineage_,
@@ -184,7 +186,7 @@ protected:
                                                 goal_weights_, initial_goal_weight_);
         subgoals_activator_.emplace(lineage_pool_, *horizon_goal_activator_, get_rule,
                                     activate_goal_candidates);
-        srt_subgoals_activator_.emplace(srt_active_goals_, *subgoals_activator_);
+        srt_subgoals_activator_.emplace(srt_active_goals_, srt_active_goals_, *subgoals_activator_);
         resolver_.emplace(*horizon_goal_deactivator_, *srt_subgoals_activator_,
                           deactivate_goal_candidates, set_chosen_goal_candidate);
         horizon_resolver_.emplace(*resolver_, get_rule, goal_weights_,

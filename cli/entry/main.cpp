@@ -68,7 +68,7 @@ int main(int argc, char** argv) {
         size_t max_resolutions        = 1000;
         uint32_t seed                 = 0;
         double exploration_constant   = 1.414;
-        size_t grant_increment_interval = dbuct_runtime::kDefaultGrantIncrementInterval;
+        size_t grant_increment_interval = dbuct_ridge_runtime::k_default_grant_increment_interval;
         size_t sim_progress_interval  = 1000;
     } dbuct_ridge_opts;
 

@@ -51,3 +51,18 @@ TEST_F(SolverDriverTest, SolvedFalseAfterDepthExceeded) {
     EXPECT_TRUE(driver.next());
     EXPECT_FALSE(driver.solved());
 }
+
+TEST_F(SolverDriverTest, ConflictedThenSolvedTracksLastTerminalOutcome) {
+    solver_driver driver = make_driver({
+        sim_termination::conflicted,
+        sim_termination::solved});
+
+    EXPECT_TRUE(driver.next());
+    EXPECT_FALSE(driver.solved());
+
+    EXPECT_TRUE(driver.next());
+    EXPECT_TRUE(driver.solved());
+
+    EXPECT_FALSE(driver.next());
+    EXPECT_TRUE(driver.solved()) << "last solved state sticks after next()==false";
+}

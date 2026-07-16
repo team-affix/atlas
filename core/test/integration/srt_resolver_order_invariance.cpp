@@ -48,7 +48,7 @@ struct MockGoalActivator {
 };
 
 struct MockGetRule {
-    MOCK_METHOD(const rule*, get, (rule_id), (const));
+    MOCK_METHOD(const rule*, get_rule, (rule_id), (const));
 };
 
 struct MockActivateGoalCandidates {
@@ -123,7 +123,8 @@ std::string format_snapshot(const SrtTreeSnapshot& snap) {
 }
 
 using test_subgoals_activator_t    = subgoals_activator<lineage_pool, MockGoalActivator, MockGetRule, MockActivateGoalCandidates>;
-using test_srt_subgoals_activator_t = srt_subgoals_activator<srt_active_goals, test_subgoals_activator_t>;
+using test_srt_subgoals_activator_t = srt_subgoals_activator<
+    srt_active_goals, srt_active_goals, test_subgoals_activator_t>;
 using test_resolver_t             = resolver<MockGoalDeactivator, test_srt_subgoals_activator_t,
                                           MockDeactivateGoalCandidates, MockSetChosenGoalCandidate>;
 
@@ -427,7 +428,7 @@ struct SrtResolverOrderInvarianceIntegrationTest : public ::testing::Test {
                 active_goals.insert_active_goal(gl);
             });
 
-        ON_CALL(get_rule, get(testing::_))
+        ON_CALL(get_rule, get_rule(testing::_))
             .WillByDefault([this](rule_id id) -> const rule* {
                 return id < rule_table_.size() ? &rule_table_[id] : nullptr;
             });
@@ -436,7 +437,8 @@ struct SrtResolverOrderInvarianceIntegrationTest : public ::testing::Test {
             .WillByDefault(Return(true));
 
         subgoals = std::make_unique<test_subgoals_activator_t>(pool, goal_activator, get_rule, activate_candidates);
-        srt_subgoals = std::make_unique<test_srt_subgoals_activator_t>(active_goals, *subgoals);
+        srt_subgoals = std::make_unique<test_srt_subgoals_activator_t>(
+            active_goals, active_goals, *subgoals);
         res = std::make_unique<test_resolver_t>(goal_deactivator, *srt_subgoals, deactivate_candidates,
                                              set_chosen);
     }

@@ -5,19 +5,19 @@
 
 template<typename IMakeGoalLineage>
 struct make_initial_goal_lineage {
-    explicit make_initial_goal_lineage(IMakeGoalLineage& lp);
+    make_initial_goal_lineage(IMakeGoalLineage& lp);
     const goal_lineage* make(subgoal_id idx);
 private:
-    IMakeGoalLineage& make_goal_lineage;
+    IMakeGoalLineage& make_goal_lineage_;
 };
 
 template<typename IMakeGoalLineage>
 make_initial_goal_lineage<IMakeGoalLineage>::make_initial_goal_lineage(IMakeGoalLineage& lp)
-    : make_goal_lineage(lp) {}
+    : make_goal_lineage_(lp) {}
 
 template<typename IMakeGoalLineage>
 const goal_lineage* make_initial_goal_lineage<IMakeGoalLineage>::make(subgoal_id idx) {
-    return make_goal_lineage.make_goal_lineage(nullptr, idx);
+    return make_goal_lineage_.make_goal_lineage(nullptr, idx);
 }
 
 #endif

@@ -1,38 +1,36 @@
 #ifndef DBUCT_DECISION_MEMORY_HPP
 #define DBUCT_DECISION_MEMORY_HPP
 
+#include <deque>
+#include <list>
+#include <stack>
 #include <unordered_set>
-#include "value_objects/lineage.hpp"
+#include "value_objects/decision_memory_action.hpp"
 #include "value_objects/lemma.hpp"
+#include "value_objects/lineage.hpp"
+#include "debug_assert.hpp"
 
-// Delayed-backtracking variant of decision_memory.
-//
-// Under DBUCT this is NOT cleared per sim: it accumulates the resolution
-// decisions along the currently active (camped) path from the root, so count()
-// yields the full-path decision count used by the reward, and
-// derive_decision_lemma() yields the full-path conflict lemma. Checkpoint
-// restore rolls it back exactly to any choice boundary.
 struct dbuct_decision_memory {
-    using snapshot_t = std::unordered_set<const resolution_lineage*>;
-
+    dbuct_decision_memory();
     void record_decision(const resolution_lineage* rl);
     size_t count() const;
     lemma derive_decision_lemma() const;
 
-    snapshot_t snapshot() const;
-    void restore(snapshot_t s);
+    void push_frame();
+    void pop_frame();
 
 private:
-    std::unordered_set<const resolution_lineage*> decisions;
+    struct frame {
+        std::list<decision_memory_action> actions_;
+    };
+
+    using set_t = std::unordered_set<const resolution_lineage*>;
+
+    void log(decision_memory_action action);
+    void undo_action(const decision_memory_action& action);
+
+    set_t decisions_;
+    std::stack<frame> frame_stack_;
 };
-
-inline void dbuct_decision_memory::record_decision(const resolution_lineage* rl) { decisions.insert(rl); }
-
-inline size_t dbuct_decision_memory::count() const { return decisions.size(); }
-
-inline lemma dbuct_decision_memory::derive_decision_lemma() const { return lemma{decisions}; }
-
-inline dbuct_decision_memory::snapshot_t dbuct_decision_memory::snapshot() const { return decisions; }
-inline void dbuct_decision_memory::restore(snapshot_t s) { decisions = std::move(s); }
 
 #endif

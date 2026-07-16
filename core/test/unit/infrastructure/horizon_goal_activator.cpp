@@ -20,12 +20,13 @@ struct MockGoalWeights {
 };
 
 struct MockGetRule {
-    MOCK_METHOD(const rule*, get, (rule_id), (const));
+    MOCK_METHOD(const rule*, get_rule, (rule_id), (const));
 };
 
 } // namespace
 
-using test_horizon_goal_activator_t = horizon_goal_activator<MockGoalActivator, MockGoalWeights, MockGetRule>;
+using test_horizon_goal_activator_t = horizon_goal_activator<
+    MockGoalActivator, MockGoalWeights, MockGoalWeights, MockGetRule>;
 
 struct HorizonGoalActivatorTest : public ::testing::Test {
     MockGoalActivator mock_goal_activator;
@@ -44,13 +45,13 @@ struct HorizonGoalActivatorTest : public ::testing::Test {
     static constexpr double kParentWeight = 1.0;
     static constexpr double kExpectedChildWeight = 0.5;
 
-    test_horizon_goal_activator_t activator{mock_goal_activator, goal_weights, get_rule};
+    test_horizon_goal_activator_t activator{mock_goal_activator, goal_weights, goal_weights, get_rule};
 };
 
 TEST_F(HorizonGoalActivatorTest, DelegatesThenSetsParentWeightDividedByBodySize) {
     testing::InSequence seq;
     EXPECT_CALL(mock_goal_activator, activate(&child_gl)).Times(1);
-    EXPECT_CALL(get_rule, get(rl.idx)).WillOnce(Return(&two_body_rule));
+    EXPECT_CALL(get_rule, get_rule(rl.idx)).WillOnce(Return(&two_body_rule));
     EXPECT_CALL(goal_weights, get(&parent_gl)).WillOnce(Return(kParentWeight));
     EXPECT_CALL(goal_weights, set(&child_gl, kExpectedChildWeight)).Times(1);
     activator.activate(&child_gl);

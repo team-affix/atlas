@@ -1,49 +1,55 @@
 #ifndef DBUCT_BIND_MAP_HPP
 #define DBUCT_BIND_MAP_HPP
 
+#include <cstdint>
+#include <optional>
 #include <unordered_map>
-#include "infrastructure/globalizer.hpp"
+#include <vector>
 #include "value_objects/framed_expr.hpp"
 #include "debug_assert.hpp"
 
-// Delayed-backtracking variant of bind_map.
-//
-// Copyable (so MHU unify-heads that own a local bind_map can be deep-cloned for
-// checkpointing) and snapshot/restore capable so the common substitution store
-// rolls back exactly to any choice boundary. Because a snapshot captures the
-// entire bindings map, the whnf path-compression write-back is completely safe
-// here: any compression performed since a checkpoint is reverted by restore(),
-// so the classic "compressed a binding that a shallower frame must not see"
-// hazard cannot occur.
+template<typename IGlobalize>
 struct dbuct_bind_map {
-    using snapshot_t = std::unordered_map<uint32_t, framed_expr>;
-
-    explicit dbuct_bind_map(globalizer& g);
+    dbuct_bind_map(IGlobalize& g);
 
     void bind(uint32_t global_key, framed_expr value);
     framed_expr whnf(framed_expr fe);
 
-    snapshot_t snapshot() const;
-    void restore(snapshot_t s);
+    void push_frame();
+    void pop_frame();
 
 private:
-    globalizer& globalizer_;
-    std::unordered_map<uint32_t, framed_expr> bindings_;
+    using map_t = std::unordered_map<uint32_t, framed_expr>;
+    using preimage_t = std::optional<framed_expr>;
+
+    struct frame {
+        std::unordered_map<uint32_t, preimage_t> preimages;
+    };
+
+    void record(uint32_t key, preimage_t prev);
+    void undo_frame(frame& f);
+
+    IGlobalize& globalizer_;
+    map_t bindings_;
+    std::vector<frame> frames_;
 };
 
-inline dbuct_bind_map::dbuct_bind_map(globalizer& g) : globalizer_(g) {}
+template<typename IGlobalize>
+dbuct_bind_map<IGlobalize>::dbuct_bind_map(IGlobalize& g) : globalizer_(g), frames_(1) {}
 
-inline void dbuct_bind_map::bind(uint32_t global_key, framed_expr value) {
+template<typename IGlobalize>
+void dbuct_bind_map<IGlobalize>::bind(uint32_t global_key, framed_expr value) {
     DEBUG_ASSERT(
         !std::holds_alternative<expr::var>(value.skeleton->content)
         || global_key > globalizer_.globalize(
                value.frame_offset,
                std::get<expr::var>(value.skeleton->content).index));
-    auto [_, inserted] = bindings_.insert({global_key, value});
-    DEBUG_ASSERT(inserted);
+    bindings_.insert({global_key, std::move(value)});
+    record(global_key, std::nullopt);
 }
 
-inline framed_expr dbuct_bind_map::whnf(framed_expr fe) {
+template<typename IGlobalize>
+framed_expr dbuct_bind_map<IGlobalize>::whnf(framed_expr fe) {
     if (!std::holds_alternative<expr::var>(fe.skeleton->content))
         return fe;
     const uint32_t global_key = globalizer_.globalize(
@@ -51,12 +57,38 @@ inline framed_expr dbuct_bind_map::whnf(framed_expr fe) {
     auto it = bindings_.find(global_key);
     if (it == bindings_.end())
         return fe;
-    framed_expr resolved = whnf(it->second);
-    it->second = resolved;
+    const framed_expr resolved = whnf(it->second);
+    if (!(it->second == resolved)) {
+        record(global_key, it->second);
+        it->second = resolved;
+    }
     return resolved;
 }
 
-inline dbuct_bind_map::snapshot_t dbuct_bind_map::snapshot() const { return bindings_; }
-inline void dbuct_bind_map::restore(snapshot_t s) { bindings_ = std::move(s); }
+template<typename IGlobalize>
+void dbuct_bind_map<IGlobalize>::push_frame() {
+    frames_.emplace_back();
+}
+
+template<typename IGlobalize>
+void dbuct_bind_map<IGlobalize>::pop_frame() {
+    undo_frame(frames_.back());
+    frames_.pop_back();
+}
+
+template<typename IGlobalize>
+void dbuct_bind_map<IGlobalize>::record(uint32_t key, preimage_t prev) {
+    frames_.back().preimages.emplace(key, std::move(prev));
+}
+
+template<typename IGlobalize>
+void dbuct_bind_map<IGlobalize>::undo_frame(frame& f) {
+    for (auto& [key, prev] : f.preimages) {
+        if (prev)
+            bindings_[key] = std::move(*prev);
+        else
+            bindings_.erase(key);
+    }
+}
 
 #endif

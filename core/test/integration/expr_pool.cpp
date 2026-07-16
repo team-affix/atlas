@@ -1,7 +1,7 @@
 #include <gtest/gtest.h>
 #include <optional>
 #include "infrastructure/expr_pool.hpp"
-#include "infrastructure/trail.hpp"
+#include "infrastructure/elimination_backlog.hpp"
 #include "functor_fixture.hpp"
 
 struct ExprPoolIntegrationTest : public ::testing::Test {
@@ -11,7 +11,7 @@ protected:
         pool.emplace();
     }
 
-    trail t;
+    elimination_backlog frames;
     std::optional<expr_pool> pool;
 };
 
@@ -35,8 +35,8 @@ TEST_F(ExprPoolIntegrationTest, RepeatInternDoesNotIncreaseSize) {
 TEST_F(ExprPoolIntegrationTest, VarInternedBeforePushSurvivesPop) {
     const expr* p = pool->make_var(0);
     EXPECT_EQ(pool->size(), 1u);
-    t.push();
-    t.pop();
+    frames.push_frame();
+    frames.pop_frame();
     EXPECT_EQ(pool->make_var(0), p);
     EXPECT_EQ(pool->size(), 1u);
 }
@@ -44,8 +44,8 @@ TEST_F(ExprPoolIntegrationTest, VarInternedBeforePushSurvivesPop) {
 TEST_F(ExprPoolIntegrationTest, PushPopWithoutInternLeavesSizeUnchanged) {
     pool->make_var(0);
     EXPECT_EQ(pool->size(), 1u);
-    t.push();
-    t.pop();
+    frames.push_frame();
+    frames.pop_frame();
     EXPECT_EQ(pool->size(), 1u);
 }
 
@@ -53,10 +53,10 @@ TEST_F(ExprPoolIntegrationTest, SizePersistsAfterInternInFrame) {
     pool->make_var(0);
     EXPECT_EQ(pool->size(), 1u);
 
-    t.push();
+    frames.push_frame();
     pool->make_var(1);
     EXPECT_EQ(pool->size(), 2u);
-    t.pop();
+    frames.pop_frame();
 
     EXPECT_EQ(pool->size(), 2u);
 }
@@ -65,22 +65,22 @@ TEST_F(ExprPoolIntegrationTest, ExprInternedBeforeFrameSurvivesPop) {
     const expr* p0 = pool->make_var(0);
     EXPECT_EQ(pool->size(), 1u);
 
-    t.push();
+    frames.push_frame();
     pool->make_var(1);
     EXPECT_EQ(pool->size(), 2u);
-    t.pop();
+    frames.pop_frame();
 
     EXPECT_EQ(pool->make_var(0), p0);
     EXPECT_EQ(pool->size(), 2u);
 }
 
 TEST_F(ExprPoolIntegrationTest, MultipleInternsInFramePersistAfterPop) {
-    t.push();
+    frames.push_frame();
     pool->make_var(0);
     pool->make_var(1);
     pool->make_functor(functors.id("f"), {});
     EXPECT_EQ(pool->size(), 3u);
-    t.pop();
+    frames.pop_frame();
     EXPECT_EQ(pool->size(), 3u);
 }
 
@@ -88,39 +88,39 @@ TEST_F(ExprPoolIntegrationTest, FunctorInternedInFramePersistsAfterPop) {
     const expr* v0 = pool->make_var(0);
     EXPECT_EQ(pool->size(), 1u);
 
-    t.push();
+    frames.push_frame();
     pool->make_functor(functors.id("f"), {v0});
     EXPECT_EQ(pool->size(), 2u);
-    t.pop();
+    frames.pop_frame();
 
     EXPECT_EQ(pool->size(), 2u);
     EXPECT_EQ(pool->make_var(0), v0);
 }
 
 TEST_F(ExprPoolIntegrationTest, TwoNestedFramesInnerPopRetainsAllInterns) {
-    t.push();
+    frames.push_frame();
     pool->make_var(0);
     EXPECT_EQ(pool->size(), 1u);
 
-    t.push();
+    frames.push_frame();
     pool->make_var(1);
     EXPECT_EQ(pool->size(), 2u);
-    t.pop();
+    frames.pop_frame();
     EXPECT_EQ(pool->size(), 2u);
 
-    t.pop();
+    frames.pop_frame();
     EXPECT_EQ(pool->size(), 2u);
 }
 
 TEST_F(ExprPoolIntegrationTest, TwoNestedFramesOuterExprSurvivesInnerPop) {
-    t.push();
+    frames.push_frame();
     const expr* p0 = pool->make_var(0);
     EXPECT_EQ(pool->size(), 1u);
 
-    t.push();
+    frames.push_frame();
     pool->make_var(1);
     EXPECT_EQ(pool->size(), 2u);
-    t.pop();
+    frames.pop_frame();
 
     EXPECT_EQ(pool->make_var(0), p0);
     EXPECT_EQ(pool->size(), 2u);
@@ -130,10 +130,10 @@ TEST_F(ExprPoolIntegrationTest, ImportInFramePersistsAfterPop) {
     expr e{expr::var{7}};
     EXPECT_EQ(pool->size(), 0u);
 
-    t.push();
+    frames.push_frame();
     pool->import(&e);
     EXPECT_EQ(pool->size(), 1u);
-    t.pop();
+    frames.pop_frame();
 
     EXPECT_EQ(pool->size(), 1u);
 }
@@ -143,10 +143,10 @@ TEST_F(ExprPoolIntegrationTest, ImportFunctorInFramePersistsAfterPop) {
     expr root{expr::functor{functors.id("f"), {&arg}}};
     EXPECT_EQ(pool->size(), 0u);
 
-    t.push();
+    frames.push_frame();
     pool->import(&root);
     EXPECT_EQ(pool->size(), 2u);
-    t.pop();
+    frames.pop_frame();
 
     EXPECT_EQ(pool->size(), 2u);
 }

@@ -12,7 +12,7 @@ struct expr_printer {
     expr_printer(std::ostream& os, const var_names& vn, const functor_names& fn);
     void print(const expr*) const;
 private:
-    std::ostream& os;
+    std::ostream& os_;
     const var_names& var_names_;
     const functor_names& functor_names_;
 };

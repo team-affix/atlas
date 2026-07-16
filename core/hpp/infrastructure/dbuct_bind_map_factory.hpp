@@ -3,16 +3,22 @@
 
 #include "infrastructure/dbuct_bind_map.hpp"
 
-// Delayed-backtracking variant of bind_map_factory: mints the throwaway local
-// bind maps MHU uses for per-head unification trials.
+template<typename IGlobalize>
 struct dbuct_bind_map_factory {
-    explicit dbuct_bind_map_factory(globalizer& g);
-    dbuct_bind_map make() const;
+    dbuct_bind_map_factory(IGlobalize& g);
+
+    dbuct_bind_map<IGlobalize> make() const;
+
 private:
-    globalizer& globalizer_;
+    IGlobalize& globalizer_;
 };
 
-inline dbuct_bind_map_factory::dbuct_bind_map_factory(globalizer& g) : globalizer_(g) {}
-inline dbuct_bind_map dbuct_bind_map_factory::make() const { return dbuct_bind_map{globalizer_}; }
+template<typename IGlobalize>
+dbuct_bind_map_factory<IGlobalize>::dbuct_bind_map_factory(IGlobalize& g) : globalizer_(g) {}
+
+template<typename IGlobalize>
+dbuct_bind_map<IGlobalize> dbuct_bind_map_factory<IGlobalize>::make() const {
+    return dbuct_bind_map<IGlobalize>{globalizer_};
+}
 
 #endif

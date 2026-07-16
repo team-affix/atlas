@@ -8,18 +8,18 @@ struct get_unit_resolution {
     get_unit_resolution(IGetGoalCandidateRuleIds& gcr, IMakeResolutionLineage& lp);
     const resolution_lineage* get(const goal_lineage*);
 private:
-    IGetGoalCandidateRuleIds& get_goal_candidate_rule_ids;
-    IMakeResolutionLineage& make_resolution_lineage;
+    IGetGoalCandidateRuleIds& get_goal_candidate_rule_ids_;
+    IMakeResolutionLineage& make_resolution_lineage_;
 };
 
 template<typename IGCR, typename IMRL>
 get_unit_resolution<IGCR, IMRL>::get_unit_resolution(IGCR& gcr, IMRL& lp)
-    : get_goal_candidate_rule_ids(gcr), make_resolution_lineage(lp) {}
+    : get_goal_candidate_rule_ids_(gcr), make_resolution_lineage_(lp) {}
 
 template<typename IGCR, typename IMRL>
 const resolution_lineage* get_unit_resolution<IGCR, IMRL>::get(const goal_lineage* gl) {
-    return make_resolution_lineage.make_resolution_lineage(
-        gl, get_goal_candidate_rule_ids.get(gl).front());
+    return make_resolution_lineage_.make_resolution_lineage(
+        gl, get_goal_candidate_rule_ids_.get(gl).front());
 }
 
 #endif

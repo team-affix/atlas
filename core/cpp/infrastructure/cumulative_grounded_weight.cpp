@@ -1,5 +1,8 @@
 #include "infrastructure/cumulative_grounded_weight.hpp"
 
+cumulative_grounded_weight::cumulative_grounded_weight() : value_(0.0) {}
+
+
 void cumulative_grounded_weight::accumulate(double w) {
     value_ += w;
 }

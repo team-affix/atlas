@@ -5,8 +5,6 @@
 #include "infrastructure/basic_manifest.hpp"
 #include "infrastructure/db.hpp"
 #include "infrastructure/initial_goal_exprs.hpp"
-#include "infrastructure/normalizer.hpp"
-#include "infrastructure/solver_driver.hpp"
 #include "value_objects/lemma.hpp"
 
 struct basic_runtime {
@@ -15,7 +13,7 @@ struct basic_runtime {
         initial_goal_exprs& goals,
         uint32_t initial_frame_offset,
         size_t max_resolutions,
-        uint32_t random_seed = 0);
+        uint32_t random_seed);
 
     bool next();
     bool solved() const;
@@ -26,11 +24,7 @@ struct basic_runtime {
     lemma derive_resolution_lemma() const;
 
 private:
-    using normalizer_t = normalizer<globalizer, expr_pool, expr_pool, bind_map>;
-
     basic_manifest manifest_;
-    normalizer_t normalizer_;
-    solver_driver driver_;
 };
 
 #endif

@@ -6,262 +6,364 @@
 #include <stdexcept>
 #include <type_traits>
 #include <utility>
-
-template<typename Promise>
-struct coroutine_ops {
-    explicit coroutine_ops(std::coroutine_handle<Promise> h) : handle_(h) {}
-
-    ~coroutine_ops() {
-        if (handle_)
-            handle_.destroy();
-    }
-
-    coroutine_ops(const coroutine_ops&) = delete;
-    coroutine_ops& operator=(const coroutine_ops&) = delete;
-
-    coroutine_ops(coroutine_ops&& other) noexcept : handle_(other.handle_) {
-        other.handle_ = nullptr;
-    }
-
-    coroutine_ops& operator=(coroutine_ops&& other) noexcept {
-        if (this != &other) {
-            if (handle_)
-                handle_.destroy();
-            handle_ = other.handle_;
-            other.handle_ = nullptr;
-        }
-        return *this;
-    }
-
-    void resume() {
-        if (handle_.promise().exception_)
-            std::rethrow_exception(handle_.promise().exception_);
-        if (handle_.done())
-            return;
-        handle_.promise().at_yield_ = false;
-        handle_.resume();
-        if (handle_.promise().exception_)
-            std::rethrow_exception(handle_.promise().exception_);
-    }
-
-    bool done() const { return !handle_ || handle_.done(); }
-
-    bool has_yield() const { return handle_ && handle_.promise().at_yield_; }
-
-    Promise& promise() { return handle_.promise(); }
-
-    const Promise& promise() const { return handle_.promise(); }
-
-private:
-    std::coroutine_handle<Promise> handle_{};
-};
-
-// --- coroutine<Yield, Return> ---
+#include "infrastructure/coroutine_ops.hpp"
 
 template<typename Yield, typename Return>
 struct coroutine;
-
-// coroutine<Yield, Return> — value yields, value return
 
 template<typename Yield, typename Return>
     requires(!std::is_void_v<Yield> && !std::is_void_v<Return>)
 struct coroutine<Yield, Return> {
     struct promise_type {
-        coroutine get_return_object() {
-            return coroutine{
-                std::coroutine_handle<promise_type>::from_promise(*this)};
-        }
+        promise_type();
 
-        std::suspend_always initial_suspend() { return {}; }
-        std::suspend_always final_suspend() noexcept { return {}; }
+        coroutine get_return_object();
+        std::suspend_always initial_suspend();
+        std::suspend_always final_suspend() noexcept;
+        void unhandled_exception();
+        std::suspend_always yield_value(Yield v);
+        void return_value(Return r);
 
-        void unhandled_exception() { exception_ = std::current_exception(); }
-
-        std::suspend_always yield_value(Yield v) {
-            yield_ = std::move(v);
-            at_yield_ = true;
-            return {};
-        }
-
-        void return_value(Return r) {
-            return_ = std::move(r);
-            return_ready_ = true;
-            at_yield_ = false;
-            exception_ = nullptr;
-        }
-
-        Yield yield_{};
-        Return return_{};
-        bool return_ready_{false};
-        bool at_yield_{false};
-        std::exception_ptr exception_{};
+        Yield yield_;
+        Return return_;
+        bool return_ready_;
+        bool at_yield_;
+        std::exception_ptr exception_;
     };
 
-    explicit coroutine(std::coroutine_handle<promise_type> h) : ops_(h) {}
+    coroutine(std::coroutine_handle<promise_type> h);
 
     coroutine(coroutine&&) = default;
     coroutine& operator=(coroutine&&) = default;
     coroutine(const coroutine&) = delete;
     coroutine& operator=(const coroutine&) = delete;
 
-    void resume() { ops_.resume(); }
-    bool done() const { return ops_.done(); }
-    bool has_yield() const { return ops_.has_yield(); }
-
-    Yield consume_yield() {
-        if (!has_yield())
-            throw std::logic_error("coroutine::consume_yield without yield");
-        auto v = std::move(ops_.promise().yield_);
-        ops_.promise().at_yield_ = false;
-        return v;
-    }
-
-    Return result() const {
-        if (!done() || !ops_.promise().return_ready_)
-            throw std::logic_error("coroutine::result before completion");
-        return ops_.promise().return_;
-    }
+    void resume();
+    bool done() const;
+    bool has_yield() const;
+    Yield consume_yield();
+    Return result() const;
 
 private:
     coroutine_ops<promise_type> ops_;
 };
-
-// coroutine<Yield, void> — value yields, void return
 
 template<typename Yield>
     requires(!std::is_void_v<Yield>)
 struct coroutine<Yield, void> {
     struct promise_type {
-        coroutine get_return_object() {
-            return coroutine{
-                std::coroutine_handle<promise_type>::from_promise(*this)};
-        }
+        promise_type();
 
-        std::suspend_always initial_suspend() { return {}; }
-        std::suspend_always final_suspend() noexcept { return {}; }
+        coroutine get_return_object();
+        std::suspend_always initial_suspend();
+        std::suspend_always final_suspend() noexcept;
+        void unhandled_exception();
+        std::suspend_always yield_value(Yield v);
+        void return_void();
 
-        void unhandled_exception() { exception_ = std::current_exception(); }
-
-        std::suspend_always yield_value(Yield v) {
-            yield_ = std::move(v);
-            at_yield_ = true;
-            return {};
-        }
-
-        void return_void() {
-            at_yield_ = false;
-            exception_ = nullptr;
-        }
-
-        Yield yield_{};
-        bool at_yield_{false};
-        std::exception_ptr exception_{};
+        Yield yield_;
+        bool at_yield_;
+        std::exception_ptr exception_;
     };
 
-    explicit coroutine(std::coroutine_handle<promise_type> h) : ops_(h) {}
+    coroutine(std::coroutine_handle<promise_type> h);
 
     coroutine(coroutine&&) = default;
     coroutine& operator=(coroutine&&) = default;
     coroutine(const coroutine&) = delete;
     coroutine& operator=(const coroutine&) = delete;
 
-    void resume() { ops_.resume(); }
-    bool done() const { return ops_.done(); }
-    bool has_yield() const { return ops_.has_yield(); }
-
-    Yield consume_yield() {
-        if (!has_yield())
-            throw std::logic_error("coroutine::consume_yield without yield");
-        auto v = std::move(ops_.promise().yield_);
-        ops_.promise().at_yield_ = false;
-        return v;
-    }
+    void resume();
+    bool done() const;
+    bool has_yield() const;
+    Yield consume_yield();
 
 private:
     coroutine_ops<promise_type> ops_;
 };
-
-// coroutine<void, Return> — suspend with co_await std::suspend_always{}
 
 template<typename Return>
     requires(!std::is_void_v<Return>)
 struct coroutine<void, Return> {
     struct promise_type {
-        coroutine get_return_object() {
-            return coroutine{
-                std::coroutine_handle<promise_type>::from_promise(*this)};
-        }
+        promise_type();
 
-        std::suspend_always initial_suspend() { return {}; }
-        std::suspend_always final_suspend() noexcept { return {}; }
+        coroutine get_return_object();
+        std::suspend_always initial_suspend();
+        std::suspend_always final_suspend() noexcept;
+        void unhandled_exception();
+        void return_value(Return r);
 
-        void unhandled_exception() { exception_ = std::current_exception(); }
-
-        void return_value(Return r) {
-            return_ = std::move(r);
-            return_ready_ = true;
-            exception_ = nullptr;
-        }
-
-        Return return_{};
-        bool return_ready_{false};
-        bool at_yield_{false};
-        std::exception_ptr exception_{};
+        Return return_;
+        bool return_ready_;
+        bool at_yield_;
+        std::exception_ptr exception_;
     };
 
-    explicit coroutine(std::coroutine_handle<promise_type> h) : ops_(h) {}
+    coroutine(std::coroutine_handle<promise_type> h);
 
     coroutine(coroutine&&) = default;
     coroutine& operator=(coroutine&&) = default;
     coroutine(const coroutine&) = delete;
     coroutine& operator=(const coroutine&) = delete;
 
-    void resume() { ops_.resume(); }
-    bool done() const { return ops_.done(); }
-
-    Return result() const {
-        if (!done() || !ops_.promise().return_ready_)
-            throw std::logic_error("coroutine::result before completion");
-        return ops_.promise().return_;
-    }
+    void resume();
+    bool done() const;
+    Return result() const;
 
 private:
     coroutine_ops<promise_type> ops_;
 };
-
-// coroutine<void, void> — suspend with co_await std::suspend_always{}
 
 template<>
 struct coroutine<void, void> {
     struct promise_type {
-        coroutine get_return_object() {
-            return coroutine{
-                std::coroutine_handle<promise_type>::from_promise(*this)};
-        }
+        promise_type();
 
-        std::suspend_always initial_suspend() { return {}; }
-        std::suspend_always final_suspend() noexcept { return {}; }
+        coroutine get_return_object();
+        std::suspend_always initial_suspend();
+        std::suspend_always final_suspend() noexcept;
+        void unhandled_exception();
+        void return_void();
 
-        void unhandled_exception() { exception_ = std::current_exception(); }
-
-        void return_void() { exception_ = nullptr; }
-
-        bool at_yield_{false};
-        std::exception_ptr exception_{};
+        bool at_yield_;
+        std::exception_ptr exception_;
     };
 
-    explicit coroutine(std::coroutine_handle<promise_type> h) : ops_(h) {}
+    coroutine(std::coroutine_handle<promise_type> h);
 
     coroutine(coroutine&&) = default;
     coroutine& operator=(coroutine&&) = default;
     coroutine(const coroutine&) = delete;
     coroutine& operator=(const coroutine&) = delete;
 
-    void resume() { ops_.resume(); }
-    bool done() const { return ops_.done(); }
+    void resume();
+    bool done() const;
 
 private:
     coroutine_ops<promise_type> ops_;
 };
+
+template<typename Yield, typename Return>
+    requires(!std::is_void_v<Yield> && !std::is_void_v<Return>)
+coroutine<Yield, Return>::promise_type::promise_type()
+    : return_ready_(false), at_yield_(false), exception_(nullptr) {}
+
+template<typename Yield, typename Return>
+    requires(!std::is_void_v<Yield> && !std::is_void_v<Return>)
+coroutine<Yield, Return>
+coroutine<Yield, Return>::promise_type::get_return_object() {
+    return coroutine{std::coroutine_handle<promise_type>::from_promise(*this)};
+}
+
+template<typename Yield, typename Return>
+    requires(!std::is_void_v<Yield> && !std::is_void_v<Return>)
+std::suspend_always coroutine<Yield, Return>::promise_type::initial_suspend() { return {}; }
+
+template<typename Yield, typename Return>
+    requires(!std::is_void_v<Yield> && !std::is_void_v<Return>)
+std::suspend_always coroutine<Yield, Return>::promise_type::final_suspend() noexcept { return {}; }
+
+template<typename Yield, typename Return>
+    requires(!std::is_void_v<Yield> && !std::is_void_v<Return>)
+void coroutine<Yield, Return>::promise_type::unhandled_exception() {
+    exception_ = std::current_exception();
+}
+
+template<typename Yield, typename Return>
+    requires(!std::is_void_v<Yield> && !std::is_void_v<Return>)
+std::suspend_always coroutine<Yield, Return>::promise_type::yield_value(Yield v) {
+    yield_ = std::move(v);
+    at_yield_ = true;
+    return {};
+}
+
+template<typename Yield, typename Return>
+    requires(!std::is_void_v<Yield> && !std::is_void_v<Return>)
+void coroutine<Yield, Return>::promise_type::return_value(Return r) {
+    return_ = std::move(r);
+    return_ready_ = true;
+    at_yield_ = false;
+    exception_ = nullptr;
+}
+
+template<typename Yield, typename Return>
+    requires(!std::is_void_v<Yield> && !std::is_void_v<Return>)
+coroutine<Yield, Return>::coroutine(std::coroutine_handle<promise_type> h) : ops_(h) {}
+
+template<typename Yield, typename Return>
+    requires(!std::is_void_v<Yield> && !std::is_void_v<Return>)
+void coroutine<Yield, Return>::resume() { ops_.resume(); }
+
+template<typename Yield, typename Return>
+    requires(!std::is_void_v<Yield> && !std::is_void_v<Return>)
+bool coroutine<Yield, Return>::done() const { return ops_.done(); }
+
+template<typename Yield, typename Return>
+    requires(!std::is_void_v<Yield> && !std::is_void_v<Return>)
+bool coroutine<Yield, Return>::has_yield() const { return ops_.has_yield(); }
+
+template<typename Yield, typename Return>
+    requires(!std::is_void_v<Yield> && !std::is_void_v<Return>)
+Yield coroutine<Yield, Return>::consume_yield() {
+    if (!has_yield())
+        throw std::logic_error("coroutine::consume_yield without yield");
+    auto v = std::move(ops_.promise().yield_);
+    ops_.promise().at_yield_ = false;
+    return v;
+}
+
+template<typename Yield, typename Return>
+    requires(!std::is_void_v<Yield> && !std::is_void_v<Return>)
+Return coroutine<Yield, Return>::result() const {
+    if (!done() || !ops_.promise_const().return_ready_)
+        throw std::logic_error("coroutine::result before completion");
+    return ops_.promise_const().return_;
+}
+
+template<typename Yield>
+    requires(!std::is_void_v<Yield>)
+coroutine<Yield, void>::promise_type::promise_type()
+    : at_yield_(false), exception_(nullptr) {}
+
+template<typename Yield>
+    requires(!std::is_void_v<Yield>)
+coroutine<Yield, void>
+coroutine<Yield, void>::promise_type::get_return_object() {
+    return coroutine{std::coroutine_handle<promise_type>::from_promise(*this)};
+}
+
+template<typename Yield>
+    requires(!std::is_void_v<Yield>)
+std::suspend_always coroutine<Yield, void>::promise_type::initial_suspend() { return {}; }
+
+template<typename Yield>
+    requires(!std::is_void_v<Yield>)
+std::suspend_always coroutine<Yield, void>::promise_type::final_suspend() noexcept { return {}; }
+
+template<typename Yield>
+    requires(!std::is_void_v<Yield>)
+void coroutine<Yield, void>::promise_type::unhandled_exception() {
+    exception_ = std::current_exception();
+}
+
+template<typename Yield>
+    requires(!std::is_void_v<Yield>)
+std::suspend_always coroutine<Yield, void>::promise_type::yield_value(Yield v) {
+    yield_ = std::move(v);
+    at_yield_ = true;
+    return {};
+}
+
+template<typename Yield>
+    requires(!std::is_void_v<Yield>)
+void coroutine<Yield, void>::promise_type::return_void() {
+    at_yield_ = false;
+    exception_ = nullptr;
+}
+
+template<typename Yield>
+    requires(!std::is_void_v<Yield>)
+coroutine<Yield, void>::coroutine(std::coroutine_handle<promise_type> h) : ops_(h) {}
+
+template<typename Yield>
+    requires(!std::is_void_v<Yield>)
+void coroutine<Yield, void>::resume() { ops_.resume(); }
+
+template<typename Yield>
+    requires(!std::is_void_v<Yield>)
+bool coroutine<Yield, void>::done() const { return ops_.done(); }
+
+template<typename Yield>
+    requires(!std::is_void_v<Yield>)
+bool coroutine<Yield, void>::has_yield() const { return ops_.has_yield(); }
+
+template<typename Yield>
+    requires(!std::is_void_v<Yield>)
+Yield coroutine<Yield, void>::consume_yield() {
+    if (!has_yield())
+        throw std::logic_error("coroutine::consume_yield without yield");
+    auto v = std::move(ops_.promise().yield_);
+    ops_.promise().at_yield_ = false;
+    return v;
+}
+
+template<typename Return>
+    requires(!std::is_void_v<Return>)
+coroutine<void, Return>::promise_type::promise_type()
+    : return_ready_(false), at_yield_(false), exception_(nullptr) {}
+
+template<typename Return>
+    requires(!std::is_void_v<Return>)
+coroutine<void, Return>
+coroutine<void, Return>::promise_type::get_return_object() {
+    return coroutine{std::coroutine_handle<promise_type>::from_promise(*this)};
+}
+
+template<typename Return>
+    requires(!std::is_void_v<Return>)
+std::suspend_always coroutine<void, Return>::promise_type::initial_suspend() { return {}; }
+
+template<typename Return>
+    requires(!std::is_void_v<Return>)
+std::suspend_always coroutine<void, Return>::promise_type::final_suspend() noexcept { return {}; }
+
+template<typename Return>
+    requires(!std::is_void_v<Return>)
+void coroutine<void, Return>::promise_type::unhandled_exception() {
+    exception_ = std::current_exception();
+}
+
+template<typename Return>
+    requires(!std::is_void_v<Return>)
+void coroutine<void, Return>::promise_type::return_value(Return r) {
+    return_ = std::move(r);
+    return_ready_ = true;
+    exception_ = nullptr;
+}
+
+template<typename Return>
+    requires(!std::is_void_v<Return>)
+coroutine<void, Return>::coroutine(std::coroutine_handle<promise_type> h) : ops_(h) {}
+
+template<typename Return>
+    requires(!std::is_void_v<Return>)
+void coroutine<void, Return>::resume() { ops_.resume(); }
+
+template<typename Return>
+    requires(!std::is_void_v<Return>)
+bool coroutine<void, Return>::done() const { return ops_.done(); }
+
+template<typename Return>
+    requires(!std::is_void_v<Return>)
+Return coroutine<void, Return>::result() const {
+    if (!done() || !ops_.promise_const().return_ready_)
+        throw std::logic_error("coroutine::result before completion");
+    return ops_.promise_const().return_;
+}
+
+inline coroutine<void, void>::promise_type::promise_type()
+    : at_yield_(false), exception_(nullptr) {}
+
+inline coroutine<void, void>
+coroutine<void, void>::promise_type::get_return_object() {
+    return coroutine{std::coroutine_handle<promise_type>::from_promise(*this)};
+}
+
+inline std::suspend_always coroutine<void, void>::promise_type::initial_suspend() { return {}; }
+
+inline std::suspend_always coroutine<void, void>::promise_type::final_suspend() noexcept { return {}; }
+
+inline void coroutine<void, void>::promise_type::unhandled_exception() {
+    exception_ = std::current_exception();
+}
+
+inline void coroutine<void, void>::promise_type::return_void() { exception_ = nullptr; }
+
+inline coroutine<void, void>::coroutine(std::coroutine_handle<promise_type> h) : ops_(h) {}
+
+inline void coroutine<void, void>::resume() { ops_.resume(); }
+
+inline bool coroutine<void, void>::done() const { return ops_.done(); }
 
 #endif

@@ -5,7 +5,7 @@
 using ::testing::Return;
 
 struct MockGetRule {
-    MOCK_METHOD(const rule*, get, (rule_id), (const));
+    MOCK_METHOD(const rule*, get_rule, (rule_id), (const));
 };
 
 using test_get_resolution_rule_t = get_resolution_rule<MockGetRule>;
@@ -23,6 +23,6 @@ struct GetResolutionRuleTest : public ::testing::Test {
 };
 
 TEST_F(GetResolutionRuleTest, DelegatesToRuleLookupByResolutionIdx) {
-    EXPECT_CALL(get_rule, get(kRule)).WillOnce(Return(&r));
+    EXPECT_CALL(get_rule, get_rule(kRule)).WillOnce(Return(&r));
     EXPECT_EQ(lookup.get(&rl), &r);
 }

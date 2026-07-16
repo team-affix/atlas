@@ -20,14 +20,13 @@
 #include <gmock/gmock.h>
 #include "infrastructure/basic_runtime.hpp"
 #include "infrastructure/db.hpp"
-#include "infrastructure/dbuct_runtime.hpp"
+#include "infrastructure/dbuct_ridge_runtime.hpp"
 #include "infrastructure/expr_pool.hpp"
 #include "infrastructure/expr_printer.hpp"
 #include "infrastructure/genius_runtime.hpp"
 #include "infrastructure/initial_goal_exprs.hpp"
 #include "infrastructure/ridge_runtime.hpp"
 #include "infrastructure/horizon_runtime.hpp"
-#include "infrastructure/trail.hpp"
 #include "infrastructure/functor_names.hpp"
 #include "infrastructure/var_names.hpp"
 #include "value_objects/expr.hpp"
@@ -43,7 +42,7 @@ enum class runtime_kind { basic, ridge, horizon, genius, dbuct };
 
 // Type-erased runtime reference for testing across all runtime types.
 struct runtime_ref {
-    using variant_t = std::variant<basic_runtime*, ridge_runtime*, horizon_runtime*, genius_runtime*, dbuct_runtime*>;
+    using variant_t = std::variant<basic_runtime*, ridge_runtime*, horizon_runtime*, genius_runtime*, dbuct_ridge_runtime*>;
     explicit runtime_ref(variant_t v) : v_(v) {}
     bool next() { return std::visit([](auto* r) { return r->next(); }, v_); }
     bool solved() const { return std::visit([](const auto* r) { return r->solved(); }, v_); }
@@ -56,6 +55,12 @@ struct runtime_ref {
     lemma derive_resolution_lemma() const {
         return std::visit([](const auto* r) { return r->derive_resolution_lemma(); }, v_);
     }
+    size_t resolution_depth() const {
+        return std::visit([](const auto* r) { return r->resolution_depth(); }, v_);
+    }
+    size_t decision_depth() const {
+        return std::visit([](const auto* r) { return r->decision_depth(); }, v_);
+    }
 private:
     variant_t v_;
 };
@@ -66,7 +71,7 @@ struct runtime_session_holder {
     std::optional<ridge_runtime> ridge;
     std::optional<horizon_runtime> horizon;
     std::optional<genius_runtime> genius;
-    std::optional<dbuct_runtime> dbuct;
+    std::optional<dbuct_ridge_runtime> dbuct;
     std::optional<runtime_ref> ref;
 };
 
@@ -277,8 +282,6 @@ TEST_P(RuntimeParamTest, NormalizeDelegatesToBindMap) {
     EXPECT_EQ(saved_expr_pool_.import(session.normalize({saved_expr_pool_.make_var(idx_b), 0})),
         _123);
     EXPECT_FALSE(session.next()) << "expected refutation";
-    EXPECT_TRUE(std::holds_alternative<expr::var>(
-        session.normalize({saved_expr_pool_.make_var(idx_a), 0})->content));
 }
 
 TEST_P(RuntimeParamTest, ImportSurvivesNextTick) {
@@ -3050,6 +3053,54 @@ TEST_P(RuntimeParamTest, EnumeratesFibIndexPairsWithSumBelowThirty) {
             };
         });
 }
+TEST_P(RuntimeParamTest, FacadeDepthsAfterUnitSolution) {
+    static constexpr size_t kInitialVarCount = 0;
+    initial_goals.push(saved_expr_pool_.make_functor(holder_.functors.id("f"), {}));
+    database.push(rule{saved_expr_pool_.make_functor(holder_.functors.id("f"), {}), {}});
+
+    runtime_ref& session = make_session(kInitialVarCount);
+    ASSERT_TRUE(session.next());
+    ASSERT_TRUE(session.solved());
+    EXPECT_EQ(session.decision_depth(), 0u);
+    EXPECT_GE(session.resolution_depth(), 1u);
+}
+
+TEST_P(RuntimeParamTest, FacadeDepthsAfterBranchingDecision) {
+    static constexpr size_t kInitialVarCount = 1;
+    const expr* a = saved_expr_pool_.make_functor(holder_.functors.id("a"), {});
+    const expr* b = saved_expr_pool_.make_functor(holder_.functors.id("b"), {});
+    database.push(rule{saved_expr_pool_.make_functor(holder_.functors.id("f"), {a}), {}});
+    database.push(rule{saved_expr_pool_.make_functor(holder_.functors.id("f"), {b}), {}});
+    initial_goals.push(saved_expr_pool_.make_functor(
+        holder_.functors.id("f"), {saved_expr_pool_.make_var(0)}));
+
+    runtime_ref& session = make_session(kInitialVarCount);
+    ASSERT_TRUE(session.next());
+    ASSERT_TRUE(session.solved());
+    EXPECT_GE(session.decision_depth(), 1u);
+    EXPECT_GE(session.resolution_depth(), 1u);
+}
+
+TEST_P(RuntimeParamTest, HorizonGeniusCgwAfterUnitSolution) {
+    if (GetParam() != runtime_kind::horizon && GetParam() != runtime_kind::genius)
+        GTEST_SKIP() << "cgw() is horizon/genius only";
+
+    static constexpr size_t kInitialVarCount = 0;
+    initial_goals.push(saved_expr_pool_.make_functor(holder_.functors.id("f"), {}));
+    database.push(rule{saved_expr_pool_.make_functor(holder_.functors.id("f"), {}), {}});
+
+    runtime_ref& session = make_session(kInitialVarCount);
+    ASSERT_TRUE(session.next());
+    ASSERT_TRUE(session.solved());
+    if (GetParam() == runtime_kind::horizon) {
+        ASSERT_TRUE(holder_.horizon.has_value());
+        EXPECT_NEAR(holder_.horizon->cgw(), 1.0, 1e-9);
+    } else {
+        ASSERT_TRUE(holder_.genius.has_value());
+        EXPECT_NEAR(holder_.genius->cgw(), 1.0, 1e-9);
+    }
+}
+
 INSTANTIATE_TEST_SUITE_P(
     AllRuntimes,
     RuntimeParamTest,

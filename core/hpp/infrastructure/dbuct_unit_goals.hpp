@@ -1,34 +1,35 @@
 #ifndef DBUCT_UNIT_GOALS_HPP
 #define DBUCT_UNIT_GOALS_HPP
 
+#include <deque>
+#include <list>
 #include <optional>
+#include <stack>
 #include <vector>
 #include "value_objects/lineage.hpp"
+#include "value_objects/unit_goals_action.hpp"
+#include "debug_assert.hpp"
 
-// Delayed-backtracking variant of unit_goals.
 struct dbuct_unit_goals {
-    using snapshot_t = std::vector<const goal_lineage*>;
-
+    dbuct_unit_goals();
     void push(const goal_lineage* gl);
     std::optional<const goal_lineage*> pop();
 
-    snapshot_t snapshot() const;
-    void restore(snapshot_t s);
+    void push_frame();
+    void pop_frame();
 
 private:
-    std::vector<const goal_lineage*> queue_;
+    struct frame {
+        std::list<unit_goals_action> actions_;
+    };
+
+    using vec_t = std::vector<const goal_lineage*>;
+
+    void log(unit_goals_action action);
+    void undo_action(const unit_goals_action& action);
+
+    vec_t queue_;
+    std::stack<frame> frame_stack_;
 };
-
-inline void dbuct_unit_goals::push(const goal_lineage* gl) { queue_.push_back(gl); }
-
-inline std::optional<const goal_lineage*> dbuct_unit_goals::pop() {
-    if (queue_.empty()) return std::nullopt;
-    const goal_lineage* gl = queue_.back();
-    queue_.pop_back();
-    return gl;
-}
-
-inline dbuct_unit_goals::snapshot_t dbuct_unit_goals::snapshot() const { return queue_; }
-inline void dbuct_unit_goals::restore(snapshot_t s) { queue_ = std::move(s); }
 
 #endif

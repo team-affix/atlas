@@ -2,160 +2,151 @@
 #define DBUCT_SIM_HPP
 
 #include <cstddef>
-#include <map>
-#include <optional>
-#include <random>
 #include <vector>
-#include "value_objects/mcts_choice.hpp"
-#include "value_objects/mcts_node_id.hpp"
-#include "dbuct.hpp"
-#include "visits_table.hpp"
-#include "value_table.hpp"
-#include "dispatches_table.hpp"
-#include "linear_batch_increment.hpp"
-#include "random_rollout.hpp"
+#include "value_objects/lineage.hpp"
 
-// Delayed-backtracking counterpart of mcts_sim.
-//
-// Unlike mcts_sim (which recreates monte_carlo::sim per episode and always
-// restarts from the root), dbuct_sim constructs a single monte_carlo::dbuct on
-// the common MCT root for the entire solve. Episodes camp deep in the tree;
-// terminate(reward) reports how many tree-policy choice frames DBUCT unwound,
-// and dbuct_sim keeps the caller's checkpoint stack in lockstep:
-//   * each tree-policy choose() pushes exactly one checkpoint (mirroring the
-//     internal DBUCT frame it pushes),
-//   * the transition into the rollout phase captures one transient snapshot,
-//   * terminate() drives the matching restoration via end_episode(steps).
-//
-// The reward is passed straight through to DBUCT (no IGetValueDelta indirection):
-// DBUCT backpropagates it up the camped path itself.
-template<typename ICheckpointStack, typename IMakeResolutionLineage>
+template<typename MctsChoice,
+         typename IPushSolverFrame,
+         typename IPopSolverFrame,
+         typename IGetSolverFrameDepth,
+         typename IGetDecisionCount,
+         typename IGetPenultimateMctsFrameDepth,
+         typename IGetUltimateMctsFrameDepth,
+         typename IGetMctsFrameDepth,
+         typename IBackstepMctsFrame,
+         typename IInRollout,
+         typename IChoose,
+         typename ITerminate,
+         typename ICheckMctsChoiceIsRuleChoice>
 struct dbuct_sim {
-    dbuct_sim(ICheckpointStack&, IMakeResolutionLineage&, std::mt19937&,
-              double exploration_constant, std::size_t grant_increment_interval);
+    dbuct_sim(IPushSolverFrame&,
+              IPopSolverFrame&,
+              IGetSolverFrameDepth&,
+              IGetDecisionCount&,
+              IGetPenultimateMctsFrameDepth&,
+              IGetUltimateMctsFrameDepth&,
+              IGetMctsFrameDepth&,
+              IBackstepMctsFrame&,
+              IInRollout&,
+              IChoose&,
+              ITerminate&,
+              ICheckMctsChoiceIsRuleChoice&);
 
-    mcts_choice choose(const std::vector<mcts_choice>&);
-    std::size_t terminate(double reward);
-    bool in_rollout() const { return dbuct_->in_rollout(); }
-
-    // Root-frontier snapshot management, mirrored onto the checkpoint stack.
-    void mark_root() { checkpoints_.mark_root(); }
-    void restore_root() { checkpoints_.restore_root(); }
+    MctsChoice choose(const std::vector<MctsChoice>&);
+    std::vector<const resolution_lineage*> terminate();
+    bool at_root() const;
 
 private:
-    using decision_set_t = mcts_node_id::first_type;
+    void backtrack_mcts();
+    std::vector<const resolution_lineage*> backtrack_solver_and_align();
 
-    // Pure function — no mutable state; all context is in the node handle.
-    struct walker {
-        IMakeResolutionLineage& make_resolution_lineage_;
-        explicit walker(IMakeResolutionLineage& mrl) : make_resolution_lineage_(mrl) {}
-        mcts_node_id walk(const mcts_node_id& node, const mcts_choice& choice) const {
-            if (const goal_lineage* const* gl_ptr =
-                    std::get_if<const goal_lineage*>(&choice)) {
-                return {node.first, *gl_ptr};
-            }
-            const resolution_lineage* rl =
-                make_resolution_lineage_.make_resolution_lineage(
-                    node.second, std::get<rule_id>(choice));
-            decision_set_t next_set = node.first;
-            next_set.insert(rl);
-            return {std::move(next_set), nullptr};
-        }
-    };
-
-    using visits_table_t     = monte_carlo::visits_table<mcts_node_id, std::map>;
-    using value_table_t      = monte_carlo::value_table<mcts_node_id, double, std::map>;
-    using dispatches_table_t = monte_carlo::dispatches_table<mcts_node_id, std::map>;
-    using choices_t          = std::vector<mcts_choice>;
-    using rollout_t          = monte_carlo::random_rollout<
-                                   mcts_choice, std::mt19937, choices_t, choices_t>;
-    using batch_t            = monte_carlo::linear_batch_increment;
-    using dbuct_t            = monte_carlo::dbuct<
-                                   mcts_node_id,        // INodeHandle
-                                   mcts_choice,         // IChoice
-                                   double,              // IFloat
-                                   visits_table_t,      // IGetVisits
-                                   value_table_t,       // IGetValue
-                                   visits_table_t,      // ISetVisits
-                                   value_table_t,       // ISetValue
-                                   dispatches_table_t,  // IGetDispatches
-                                   dispatches_table_t,  // ISetDispatches
-                                   batch_t,             // IComputeBatchSize
-                                   walker,              // IWalker
-                                   choices_t,           // IGetChoiceCount
-                                   choices_t,           // IGetChoiceAt
-                                   rollout_t>;          // IRolloutChoose
-
-    ICheckpointStack&      checkpoints_;
-    visits_table_t         visits_table_;
-    value_table_t          value_table_;
-    dispatches_table_t     dispatches_table_;
-    batch_t                batch_;
-    walker                 walker_;
-    rollout_t              rollout_;
-    std::optional<dbuct_t> dbuct_;
+    IPushSolverFrame&                   push_solver_frame_;
+    IPopSolverFrame&                    pop_solver_frame_;
+    IGetSolverFrameDepth&               get_solver_frame_depth_;
+    IGetDecisionCount&                  get_decision_count_;
+    IGetPenultimateMctsFrameDepth&      get_penultimate_mcts_frame_depth_;
+    IGetUltimateMctsFrameDepth&         get_ultimate_mcts_frame_depth_;
+    IGetMctsFrameDepth&                 get_mcts_frame_depth_;
+    IBackstepMctsFrame&                 backstep_mcts_frame_;
+    IInRollout&                         in_rollout_;
+    IChoose&                            choose_;
+    ITerminate&                         terminate_;
+    ICheckMctsChoiceIsRuleChoice&       check_rule_choice_;
 };
 
-template<typename ICS, typename IMRL>
-dbuct_sim<ICS, IMRL>::dbuct_sim(ICS& checkpoints, IMRL& mrl, std::mt19937& rng,
-                                double ec, std::size_t grant_increment_interval)
-    : checkpoints_(checkpoints)
-    , visits_table_()
-    , value_table_()
-    , dispatches_table_()
-    , batch_(grant_increment_interval)
-    , walker_(mrl)
-    , rollout_(rng)
-    , dbuct_(std::nullopt)
-{
-    dbuct_.emplace(visits_table_, value_table_, visits_table_, value_table_,
-                   dispatches_table_, dispatches_table_, batch_,
-                   walker_, rollout_,
-                   mcts_node_id{decision_set_t{}, nullptr},
-                   ec);
+template<typename MC, typename IPSF, typename IPopSF, typename IGSFD, typename IGDC,
+         typename IGPMFD, typename IGUMFD, typename IGMFD, typename IBMF,
+         typename IIR, typename IC, typename IT, typename ICMCR>
+dbuct_sim<MC, IPSF, IPopSF, IGSFD, IGDC, IGPMFD, IGUMFD, IGMFD, IBMF, IIR, IC, IT, ICMCR>::dbuct_sim(
+    IPSF& push_solver_frame,
+    IPopSF& pop_solver_frame,
+    IGSFD& get_solver_frame_depth,
+    IGDC& get_decision_count,
+    IGPMFD& get_penultimate_mcts_frame_depth,
+    IGUMFD& get_ultimate_mcts_frame_depth,
+    IGMFD& get_mcts_frame_depth,
+    IBMF& backstep_mcts_frame,
+    IIR& in_rollout,
+    IC& choose,
+    IT& terminate,
+    ICMCR& check_rule_choice)
+    : push_solver_frame_(push_solver_frame)
+    , pop_solver_frame_(pop_solver_frame)
+    , get_solver_frame_depth_(get_solver_frame_depth)
+    , get_decision_count_(get_decision_count)
+    , get_penultimate_mcts_frame_depth_(get_penultimate_mcts_frame_depth)
+    , get_ultimate_mcts_frame_depth_(get_ultimate_mcts_frame_depth)
+    , get_mcts_frame_depth_(get_mcts_frame_depth)
+    , backstep_mcts_frame_(backstep_mcts_frame)
+    , in_rollout_(in_rollout)
+    , choose_(choose)
+    , terminate_(terminate)
+    , check_rule_choice_(check_rule_choice) {}
+
+template<typename MC, typename IPSF, typename IPopSF, typename IGSFD, typename IGDC,
+         typename IGPMFD, typename IGUMFD, typename IGMFD, typename IBMF,
+         typename IIR, typename IC, typename IT, typename ICMCR>
+bool dbuct_sim<MC, IPSF, IPopSF, IGSFD, IGDC, IGPMFD, IGUMFD, IGMFD, IBMF, IIR, IC, IT, ICMCR>::at_root() const {
+    return get_decision_count_.count() == 0;
 }
 
-template<typename ICS, typename IMRL>
-mcts_choice dbuct_sim<ICS, IMRL>::choose(const std::vector<mcts_choice>& choices) {
-    const bool was_rollout = dbuct_->in_rollout();
-    mcts_choice chosen = dbuct_->choose(choices, choices);
-    if (!dbuct_->in_rollout()) {
-        // Tree-policy choice: DBUCT pushed an internal frame; capture the state
-        // as it stands before this choice's downstream mutations.
-        checkpoints_.push_tree_policy();
-    } else if (!was_rollout) {
-        // First step of the rollout phase: capture the transient snapshot once.
-        checkpoints_.enter_rollout();
-    }
+template<typename MC, typename IPSF, typename IPopSF, typename IGSFD, typename IGDC,
+         typename IGPMFD, typename IGUMFD, typename IGMFD, typename IBMF,
+         typename IIR, typename IC, typename IT, typename ICMCR>
+MC dbuct_sim<MC, IPSF, IPopSF, IGSFD, IGDC, IGPMFD, IGUMFD, IGMFD, IBMF, IIR, IC, IT, ICMCR>::choose(
+    const std::vector<MC>& choices) {
+    MC chosen = choose_.choose(choices, choices);
+    // if there has not been a mcts frame since the last decision, don't push solver frame.
+    if (get_mcts_frame_depth_.depth() <= get_ultimate_mcts_frame_depth_.get_ultimate_mcts_frame_depth())
+        return chosen;
+    if (check_rule_choice_.check_is_rule_choice(chosen))
+        push_solver_frame_.push_solver_frame();
     return chosen;
 }
 
-template<typename ICS, typename IMRL>
-std::size_t dbuct_sim<ICS, IMRL>::terminate(double reward) {
-    // Whether this episode explored any new ground. If it never entered the
-    // rollout phase, every node on its path was already expanded: tree policy
-    // walked a fully-known path straight to a terminal.
-    const bool was_rollout = dbuct_->in_rollout();
+template<typename MC, typename IPSF, typename IPopSF, typename IGSFD, typename IGDC,
+         typename IGPMFD, typename IGUMFD, typename IGMFD, typename IBMF,
+         typename IIR, typename IC, typename IT, typename ICMCR>
+std::vector<const resolution_lineage*> dbuct_sim<MC, IPSF, IPopSF, IGSFD, IGDC, IGPMFD, IGUMFD, IGMFD, IBMF, IIR, IC, IT, ICMCR>::terminate() {
+    backtrack_mcts();
+    return backtrack_solver_and_align();
+}
 
-    std::size_t steps = dbuct_->terminate(reward);
+template<typename MC, typename IPSF, typename IPopSF, typename IGSFD, typename IGDC,
+         typename IGPMFD, typename IGUMFD, typename IGMFD, typename IBMF,
+         typename IIR, typename IC, typename IT, typename ICMCR>
+void dbuct_sim<MC, IPSF, IPopSF, IGSFD, IGDC, IGPMFD, IGUMFD, IGMFD, IBMF, IIR, IC, IT, ICMCR>::backtrack_mcts() {
+    terminate_.terminate();
 
-    // A pure tree-policy episode that DBUCT would keep camped (steps == 0) has
-    // exhausted its camped subtree: re-running from that node only re-derives the
-    // same terminal — and if that terminal is a conflict, the next episode would
-    // re-enter run_sim from an already-collapsed frontier (an active goal with no
-    // candidates) and fault. Force at least one backstep so we always leave an
-    // exhausted terminal. Repeated terminate() dispatches sink the node's granted
-    // budget until it pops; because every extra dispatch scores the same terminal
-    // reward the node's mean value is unchanged, so this only (correctly) drives
-    // exploration away from the exhausted leaf.
-    if (steps == 0 && !was_rollout) {
-        do {
-            steps = dbuct_->terminate(reward);
-        } while (steps == 0);
+    // if we are still at or deeper than ultimate, backstep once
+    if (get_mcts_frame_depth_.depth() > 1 && get_mcts_frame_depth_.depth() >= get_ultimate_mcts_frame_depth_.get_ultimate_mcts_frame_depth())
+        backstep_mcts_frame_.backstep();
+}
+
+template<typename MC, typename IPSF, typename IPopSF, typename IGSFD, typename IGDC,
+         typename IGPMFD, typename IGUMFD, typename IGMFD, typename IBMF,
+         typename IIR, typename IC, typename IT, typename ICMCR>
+std::vector<const resolution_lineage*> dbuct_sim<MC, IPSF, IPopSF, IGSFD, IGDC, IGPMFD, IGUMFD, IGMFD, IBMF, IIR, IC, IT, ICMCR>::backtrack_solver_and_align() {
+    // pop solver frames until at or before current mcts frame depth
+    std::vector<const resolution_lineage*> eliminations;
+    while (get_ultimate_mcts_frame_depth_.get_ultimate_mcts_frame_depth() > get_mcts_frame_depth_.depth()) {
+        eliminations.clear();
+        auto sm = pop_solver_frame_.pop_solver_frame();
+        while (!sm.done()) {
+            sm.resume();
+            if (sm.has_yield())
+                eliminations.push_back(sm.consume_yield());
+        }
     }
 
-    checkpoints_.end_episode(steps);
-    return steps;
+    // get ultimate mcts frame depth (mcts depth of the ultimate decision)
+    size_t ultimate_mcts_frame_depth = get_ultimate_mcts_frame_depth_.get_ultimate_mcts_frame_depth();
+
+    // backstep mcts frames until at solver frame
+    while (get_mcts_frame_depth_.depth() > ultimate_mcts_frame_depth)
+        backstep_mcts_frame_.backstep();
+
+    return eliminations;
 }
 
 #endif

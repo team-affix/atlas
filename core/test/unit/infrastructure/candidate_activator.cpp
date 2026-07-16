@@ -33,7 +33,7 @@ struct MockGetGoalExpr {
 };
 
 struct MockGetRule {
-    MOCK_METHOD(const rule*, get, (rule_id), (const));
+    MOCK_METHOD(const rule*, get_rule, (rule_id), (const));
 };
 
 struct MockLinkGoalCandidate {
@@ -68,7 +68,7 @@ struct CandidateActivatorTest : public ::testing::Test {
 };
 
 TEST_F(CandidateActivatorTest, BackloggedSkipsAllSideEffects) {
-    EXPECT_CALL(get_rule, get(kRule)).WillOnce(Return(&r));
+    EXPECT_CALL(get_rule, get_rule(kRule)).WillOnce(Return(&r));
     EXPECT_CALL(is_backlogged, is_backlogged_elimination(&rl)).WillOnce(Return(true));
     EXPECT_CALL(frame_alloc, bump).Times(0);
     EXPECT_CALL(get_goal_expr, get).Times(0);
@@ -80,7 +80,7 @@ TEST_F(CandidateActivatorTest, BackloggedSkipsAllSideEffects) {
 
 TEST_F(CandidateActivatorTest, RejectedHeadSkipsFrameStoreAndLink) {
     const framed_expr goal_fe{&goal_e, 0};
-    EXPECT_CALL(get_rule, get(kRule)).WillOnce(Return(&r));
+    EXPECT_CALL(get_rule, get_rule(kRule)).WillOnce(Return(&r));
     EXPECT_CALL(is_backlogged, is_backlogged_elimination(&rl)).WillOnce(Return(false));
     EXPECT_CALL(frame_alloc, bump(3)).WillOnce(Return(kFrameOffset));
     EXPECT_CALL(get_goal_expr, get(&parent)).WillOnce(Return(goal_fe));
@@ -93,7 +93,7 @@ TEST_F(CandidateActivatorTest, RejectedHeadSkipsFrameStoreAndLink) {
 
 TEST_F(CandidateActivatorTest, AcceptedHeadStoresFrameOffsetAndLinks) {
     const framed_expr goal_fe{&goal_e, 0};
-    EXPECT_CALL(get_rule, get(kRule)).WillOnce(Return(&r));
+    EXPECT_CALL(get_rule, get_rule(kRule)).WillOnce(Return(&r));
     EXPECT_CALL(is_backlogged, is_backlogged_elimination(&rl)).WillOnce(Return(false));
     EXPECT_CALL(frame_alloc, bump(3)).WillOnce(Return(kFrameOffset));
     EXPECT_CALL(get_goal_expr, get(&parent)).WillOnce(Return(goal_fe));

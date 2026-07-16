@@ -11,28 +11,28 @@ struct elimination_router {
                        IInsertBackloggedElimination&, ICandidateDeactivator&);
     elimination_result route(const resolution_lineage*);
 private:
-    IGetGoalCandidateRuleIds& get_goal_candidate_rule_ids;
-    IIsActiveGoal& is_active_goal;
-    IInsertBackloggedElimination& insert_backlogged_elimination;
-    ICandidateDeactivator& candidate_deactivator;
+    IGetGoalCandidateRuleIds& get_goal_candidate_rule_ids_;
+    IIsActiveGoal& is_active_goal_;
+    IInsertBackloggedElimination& insert_backlogged_elimination_;
+    ICandidateDeactivator& candidate_deactivator_;
 };
 
 template<typename IGCRI, typename IIAG, typename IIBE, typename ICD>
 elimination_router<IGCRI, IIAG, IIBE, ICD>::elimination_router(
     IGCRI& gcr, IIAG& ag, IIBE& eb, ICD& cd)
-    : get_goal_candidate_rule_ids(gcr), is_active_goal(ag),
-      insert_backlogged_elimination(eb), candidate_deactivator(cd) {}
+    : get_goal_candidate_rule_ids_(gcr), is_active_goal_(ag),
+      insert_backlogged_elimination_(eb), candidate_deactivator_(cd) {}
 
 template<typename IGCRI, typename IIAG, typename IIBE, typename ICD>
 elimination_result elimination_router<IGCRI, IIAG, IIBE, ICD>::route(
     const resolution_lineage* rl) {
-    if (!is_active_goal.is_active_goal(rl->parent)) {
-        insert_backlogged_elimination.insert_backlogged_elimination(rl);
+    if (!is_active_goal_.is_active_goal(rl->parent)) {
+        insert_backlogged_elimination_.insert_backlogged_elimination(rl);
         return elimination_result::added_to_backlog;
     }
-    if (!get_goal_candidate_rule_ids.get(rl->parent).contains(rl->idx))
+    if (!get_goal_candidate_rule_ids_.get(rl->parent).contains(rl->idx))
         return elimination_result::already_deactivated;
-    candidate_deactivator.deactivate(rl);
+    candidate_deactivator_.deactivate(rl);
     return elimination_result::eliminated;
 }
 

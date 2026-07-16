@@ -1,10 +1,11 @@
 #ifndef EXPR_POOL_HPP
 #define EXPR_POOL_HPP
 
-#include <set>
 #include <stdexcept>
+#include <unordered_set>
 #include <vector>
 #include "value_objects/expr.hpp"
+#include "value_objects/expr_hash.hpp"
 
 struct expr_pool {
     const expr* make_functor(uint32_t id, const std::vector<const expr*>& args);
@@ -13,7 +14,7 @@ struct expr_pool {
     size_t size() const;
 private:
     const expr* intern(expr&&);
-    std::set<expr> exprs;
+    std::unordered_set<expr, expr_hash> exprs_;
 };
 
 #endif

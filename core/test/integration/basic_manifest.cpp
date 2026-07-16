@@ -26,7 +26,6 @@
 #include "infrastructure/expr_printer.hpp"
 #include "infrastructure/initial_goal_exprs.hpp"
 #include "infrastructure/normalizer.hpp"
-#include "infrastructure/trail.hpp"
 #include "infrastructure/var_names.hpp"
 #include "value_objects/sim_termination.hpp"
 #include "value_objects/lemma.hpp"
@@ -239,11 +238,11 @@ TEST_F(BasicManifestIntegrationTest, SimLifecycleTrailDepthRestoresAfterEmptyRun
      * rules: (none)
      */
     basic_manifest manifest{database, initial_goals, kInitialFrameOffset, kMaxResolutions, kSeed};
-    const size_t depth_before = manifest.trail_.depth();
+    const size_t depth_before = manifest.elimination_backlog_.depth();
     manifest.set_up_sim_.set_up();
     EXPECT_EQ(manifest.run_sim_.run(), sim_termination::solved);
     manifest.tear_down_sim_.tear_down();
-    EXPECT_EQ(manifest.trail_.depth(), depth_before);
+    EXPECT_EQ(manifest.elimination_backlog_.depth(), depth_before);
 }
 
 TEST_F(BasicManifestIntegrationTest, SimLifecycleTrailDepthRestoresAfterConflictedRun) {
@@ -255,11 +254,11 @@ TEST_F(BasicManifestIntegrationTest, SimLifecycleTrailDepthRestoresAfterConflict
     const expr* goal = saved_expr_pool_.make_functor(functors.id("f"), {});
     initial_goals.push(goal);
     basic_manifest manifest{database, initial_goals, kInitialFrameOffset, kMaxResolutions, kSeed};
-    const size_t depth_before = manifest.trail_.depth();
+    const size_t depth_before = manifest.elimination_backlog_.depth();
     manifest.set_up_sim_.set_up();
     EXPECT_EQ(manifest.run_sim_.run(), sim_termination::conflicted);
     manifest.tear_down_sim_.tear_down();
-    EXPECT_EQ(manifest.trail_.depth(), depth_before);
+    EXPECT_EQ(manifest.elimination_backlog_.depth(), depth_before);
 }
 
 TEST_F(BasicManifestIntegrationTest, SimLifecycleTrailDepthRestoresAfterDepthExceededRun) {
@@ -276,11 +275,11 @@ TEST_F(BasicManifestIntegrationTest, SimLifecycleTrailDepthRestoresAfterDepthExc
     database.push(rule{f_head, {f_body}});
     static constexpr size_t kLowBudget = 4;
     basic_manifest manifest{database, initial_goals, kInitialFrameOffset, kLowBudget, kSeed};
-    const size_t depth_before = manifest.trail_.depth();
+    const size_t depth_before = manifest.elimination_backlog_.depth();
     manifest.set_up_sim_.set_up();
     EXPECT_EQ(manifest.run_sim_.run(), sim_termination::depth_exceeded);
     manifest.tear_down_sim_.tear_down();
-    EXPECT_EQ(manifest.trail_.depth(), depth_before);
+    EXPECT_EQ(manifest.elimination_backlog_.depth(), depth_before);
 }
 
 TEST_F(BasicManifestIntegrationTest, SimLifecycleClearsEphemeralStoresAfterSolvedRun) {
@@ -504,7 +503,7 @@ TEST_F(BasicManifestIntegrationTest, BindingsBeforeTearDown) {
     database.push(rule{head, {}});
 
     basic_manifest manifest{database, initial_goals, kInitialFrameOffset, kMaxResolutions, kSeed};
-    normalizer<globalizer, expr_pool, expr_pool, bind_map> norm{manifest.globalizer_, manifest.expr_pool_, manifest.expr_pool_, manifest.bind_map_};
+    normalizer<globalizer, expr_pool, expr_pool, bind_map<globalizer>> norm{manifest.globalizer_, manifest.expr_pool_, manifest.expr_pool_, manifest.bind_map_};
     const uint32_t idx_a = manifest.frame_allocator_.bump(1);
     const uint32_t idx_b = manifest.frame_allocator_.bump(1);
     const expr* var_a = saved_expr_pool_.make_var(idx_a);
@@ -929,7 +928,7 @@ TEST_F(BasicManifestIntegrationTest, SolverFindsSolutionWithCorrectBindings) {
     database.push(rule{head, {}});
 
     basic_manifest manifest{database, initial_goals, kInitialFrameOffset, kMaxResolutions, kSeed};
-    normalizer<globalizer, expr_pool, expr_pool, bind_map> norm{manifest.globalizer_, manifest.expr_pool_, manifest.expr_pool_, manifest.bind_map_};
+    normalizer<globalizer, expr_pool, expr_pool, bind_map<globalizer>> norm{manifest.globalizer_, manifest.expr_pool_, manifest.expr_pool_, manifest.bind_map_};
     const uint32_t idx_a = manifest.frame_allocator_.bump(1);
     const uint32_t idx_b = manifest.frame_allocator_.bump(1);
     const expr* var_a = saved_expr_pool_.make_var(idx_a);
@@ -972,7 +971,7 @@ TEST_F(BasicManifestIntegrationTest, SolverFindsClauseBodyBindingSolution) {
     database.push(rule{h_head, {}});
 
     basic_manifest manifest{database, initial_goals, kInitialFrameOffset, kMaxResolutions, kSeed};
-    normalizer<globalizer, expr_pool, expr_pool, bind_map> norm{manifest.globalizer_, manifest.expr_pool_, manifest.expr_pool_, manifest.bind_map_};
+    normalizer<globalizer, expr_pool, expr_pool, bind_map<globalizer>> norm{manifest.globalizer_, manifest.expr_pool_, manifest.expr_pool_, manifest.bind_map_};
     const uint32_t idx_a = manifest.frame_allocator_.bump(1);
     const uint32_t idx_b = manifest.frame_allocator_.bump(1);
     const expr* var_a = saved_expr_pool_.make_var(idx_a);
@@ -1006,7 +1005,7 @@ TEST_F(BasicManifestIntegrationTest, SolverEnumeratesTwoVarChoiceSolutions) {
     database.push(rule{head1, {}});
 
     basic_manifest manifest{database, initial_goals, kInitialFrameOffset, kMaxResolutions, kSeed};
-    normalizer<globalizer, expr_pool, expr_pool, bind_map> norm{manifest.globalizer_, manifest.expr_pool_, manifest.expr_pool_, manifest.bind_map_};
+    normalizer<globalizer, expr_pool, expr_pool, bind_map<globalizer>> norm{manifest.globalizer_, manifest.expr_pool_, manifest.expr_pool_, manifest.bind_map_};
 
     const uint32_t idx_a = manifest.frame_allocator_.bump(1);
     const expr* var_a = saved_expr_pool_.make_var(idx_a);
@@ -1040,7 +1039,7 @@ TEST_F(BasicManifestIntegrationTest, SolverRefutesAfterEnumeratingAllVarBranches
     database.push(rule{head1, {}});
 
     basic_manifest manifest{database, initial_goals, kInitialFrameOffset, kMaxResolutions, kSeed};
-    normalizer<globalizer, expr_pool, expr_pool, bind_map> norm{manifest.globalizer_, manifest.expr_pool_, manifest.expr_pool_, manifest.bind_map_};
+    normalizer<globalizer, expr_pool, expr_pool, bind_map<globalizer>> norm{manifest.globalizer_, manifest.expr_pool_, manifest.expr_pool_, manifest.bind_map_};
 
     const uint32_t idx_a = manifest.frame_allocator_.bump(1);
     const expr* var_a = saved_expr_pool_.make_var(idx_a);
@@ -1079,7 +1078,7 @@ TEST_F(BasicManifestIntegrationTest, SolverEnumeratesTwoGoalSharedVarSolutions) 
     database.push(rule{g_head1, {}});
 
     basic_manifest manifest{database, initial_goals, kInitialFrameOffset, kMaxResolutions, kSeed};
-    normalizer<globalizer, expr_pool, expr_pool, bind_map> norm{manifest.globalizer_, manifest.expr_pool_, manifest.expr_pool_, manifest.bind_map_};
+    normalizer<globalizer, expr_pool, expr_pool, bind_map<globalizer>> norm{manifest.globalizer_, manifest.expr_pool_, manifest.expr_pool_, manifest.bind_map_};
 
     const uint32_t idx_a = manifest.frame_allocator_.bump(1);
     const expr* var_a = saved_expr_pool_.make_var(idx_a);
@@ -1436,7 +1435,7 @@ TEST_F(BasicManifestIntegrationTest, SolverEnumeratesFourVarBindingSolutions) {
     database.push(rule{head3, {}});
 
     basic_manifest manifest{database, initial_goals, kInitialFrameOffset, kMaxResolutions, kSeed};
-    normalizer<globalizer, expr_pool, expr_pool, bind_map> norm{manifest.globalizer_, manifest.expr_pool_, manifest.expr_pool_, manifest.bind_map_};
+    normalizer<globalizer, expr_pool, expr_pool, bind_map<globalizer>> norm{manifest.globalizer_, manifest.expr_pool_, manifest.expr_pool_, manifest.bind_map_};
 
     const uint32_t idx_a = manifest.frame_allocator_.bump(1);
     const expr* var_a = saved_expr_pool_.make_var(idx_a);
@@ -1568,7 +1567,7 @@ TEST_F(BasicManifestIntegrationTest, SolverEnumeratesManySharedVarGroundHeads) {
         binding_db.push(rule{g_mno, {}});
 
         basic_manifest binding_manifest{binding_db, binding_goals, kInitialFrameOffset, kMaxResolutions, seed};
-        normalizer<globalizer, expr_pool, expr_pool, bind_map> binding_norm{binding_manifest.globalizer_, binding_manifest.expr_pool_, binding_manifest.expr_pool_, binding_manifest.bind_map_};
+        normalizer<globalizer, expr_pool, expr_pool, bind_map<globalizer>> binding_norm{binding_manifest.globalizer_, binding_manifest.expr_pool_, binding_manifest.expr_pool_, binding_manifest.bind_map_};
         const uint32_t idx_a_bind = binding_manifest.frame_allocator_.bump(1);
         const uint32_t idx_b_bind = binding_manifest.frame_allocator_.bump(1);
         const uint32_t idx_c_bind = binding_manifest.frame_allocator_.bump(1);
@@ -1682,7 +1681,7 @@ TEST_F(BasicManifestIntegrationTest, FindsUniqueSharedVarConjunctionThenRefutes)
     database.push(rule{is_b3, {}});
 
     basic_manifest manifest{database, initial_goals, kInitialFrameOffset, kMaxResolutions, kSeed};
-    normalizer<globalizer, expr_pool, expr_pool, bind_map> norm{manifest.globalizer_, manifest.expr_pool_, manifest.expr_pool_, manifest.bind_map_};
+    normalizer<globalizer, expr_pool, expr_pool, bind_map<globalizer>> norm{manifest.globalizer_, manifest.expr_pool_, manifest.expr_pool_, manifest.bind_map_};
     const uint32_t idx_x = manifest.frame_allocator_.bump(1);
     const expr* var_x = saved_expr_pool_.make_var(idx_x);
     initial_goals.push(saved_expr_pool_.make_functor(functors.id("is_a"), {var_x}));
@@ -1719,7 +1718,7 @@ TEST_F(BasicManifestIntegrationTest, EnumeratesTwoParentBindingsForAlice) {
     database.push(rule{parent_dave_bob, {}});
 
     basic_manifest manifest{database, initial_goals, kInitialFrameOffset, kMaxResolutions, kSeed};
-    normalizer<globalizer, expr_pool, expr_pool, bind_map> norm{manifest.globalizer_, manifest.expr_pool_, manifest.expr_pool_, manifest.bind_map_};
+    normalizer<globalizer, expr_pool, expr_pool, bind_map<globalizer>> norm{manifest.globalizer_, manifest.expr_pool_, manifest.expr_pool_, manifest.bind_map_};
     const uint32_t idx_x = manifest.frame_allocator_.bump(1);
     const expr* var_x = saved_expr_pool_.make_var(idx_x);
     const expr* alice_goal = saved_expr_pool_.make_functor(functors.id("alice"), {});
@@ -1783,7 +1782,7 @@ TEST_F(BasicManifestIntegrationTest, EnumeratesPeanoLessThanSeven) {
         expected.insert({peano_saved(n)});
 
     basic_manifest manifest{database, initial_goals, 1u, kPeanoBudget, kSeed};
-    normalizer<globalizer, expr_pool, expr_pool, bind_map> norm{manifest.globalizer_, manifest.expr_pool_, manifest.expr_pool_, manifest.bind_map_};
+    normalizer<globalizer, expr_pool, expr_pool, bind_map<globalizer>> norm{manifest.globalizer_, manifest.expr_pool_, manifest.expr_pool_, manifest.bind_map_};
 
     const uint32_t idx_n = 0;
     const expr* var_n = saved_expr_pool_.make_var(idx_n);
@@ -1840,7 +1839,7 @@ TEST_F(BasicManifestIntegrationTest, EnumeratesSatPAndQOrR) {
     database.push(rule{and_false_x_false, {and_bool_body2}});
 
     basic_manifest manifest{database, initial_goals, kInitialFrameOffset, kMaxResolutions, kSeed};
-    normalizer<globalizer, expr_pool, expr_pool, bind_map> norm{manifest.globalizer_, manifest.expr_pool_, manifest.expr_pool_, manifest.bind_map_};
+    normalizer<globalizer, expr_pool, expr_pool, bind_map<globalizer>> norm{manifest.globalizer_, manifest.expr_pool_, manifest.expr_pool_, manifest.bind_map_};
     const uint32_t idx_p = manifest.frame_allocator_.bump(1);
     const uint32_t idx_q = manifest.frame_allocator_.bump(1);
     const uint32_t idx_r = manifest.frame_allocator_.bump(1);
@@ -1899,7 +1898,7 @@ TEST_F(BasicManifestIntegrationTest, EnumeratesTwoSatAssignmentsForImpliesQ) {
     database.push(rule{or_f_f_f, {}});
 
     basic_manifest manifest{database, initial_goals, kInitialFrameOffset, kMaxResolutions, kSeed};
-    normalizer<globalizer, expr_pool, expr_pool, bind_map> norm{manifest.globalizer_, manifest.expr_pool_, manifest.expr_pool_, manifest.bind_map_};
+    normalizer<globalizer, expr_pool, expr_pool, bind_map<globalizer>> norm{manifest.globalizer_, manifest.expr_pool_, manifest.expr_pool_, manifest.bind_map_};
     const uint32_t idx_p = manifest.frame_allocator_.bump(1);
     const uint32_t idx_q = manifest.frame_allocator_.bump(1);
     const uint32_t idx_np = manifest.frame_allocator_.bump(1);
@@ -1958,7 +1957,7 @@ TEST_F(BasicManifestIntegrationTest, EnumeratesTwoPathTwoColorings) {
     database.push(rule{diff_blue_red, {}});
 
     basic_manifest manifest{database, initial_goals, kInitialFrameOffset, kMaxResolutions, kSeed};
-    normalizer<globalizer, expr_pool, expr_pool, bind_map> norm{manifest.globalizer_, manifest.expr_pool_, manifest.expr_pool_, manifest.bind_map_};
+    normalizer<globalizer, expr_pool, expr_pool, bind_map<globalizer>> norm{manifest.globalizer_, manifest.expr_pool_, manifest.expr_pool_, manifest.bind_map_};
     const uint32_t idx_a = manifest.frame_allocator_.bump(1);
     const uint32_t idx_b = manifest.frame_allocator_.bump(1);
     const uint32_t idx_c = manifest.frame_allocator_.bump(1);
@@ -2049,7 +2048,7 @@ TEST_F(BasicManifestIntegrationTest, EnumeratesK3ThreeColorings) {
         seed_db.push(rule{diff_blue_green, {}});
 
         basic_manifest manifest{seed_db, seed_goals, kInitialFrameOffset, 128, seed};
-        normalizer<globalizer, expr_pool, expr_pool, bind_map> seed_norm{manifest.globalizer_, manifest.expr_pool_, manifest.expr_pool_, manifest.bind_map_};
+        normalizer<globalizer, expr_pool, expr_pool, bind_map<globalizer>> seed_norm{manifest.globalizer_, manifest.expr_pool_, manifest.expr_pool_, manifest.bind_map_};
         const uint32_t idx_a = manifest.frame_allocator_.bump(1);
         const uint32_t idx_b = manifest.frame_allocator_.bump(1);
         const uint32_t idx_c = manifest.frame_allocator_.bump(1);
@@ -2116,7 +2115,7 @@ TEST_F(BasicManifestIntegrationTest, EnumeratesK3TailFourNodeColorings) {
         seed_db.push(rule{diff_br, {}});
         seed_db.push(rule{diff_bg, {}});
         basic_manifest manifest{seed_db, seed_goals, kInitialFrameOffset, 128, seed};
-        normalizer<globalizer, expr_pool, expr_pool, bind_map> seed_norm{manifest.globalizer_, manifest.expr_pool_, manifest.expr_pool_, manifest.bind_map_};
+        normalizer<globalizer, expr_pool, expr_pool, bind_map<globalizer>> seed_norm{manifest.globalizer_, manifest.expr_pool_, manifest.expr_pool_, manifest.bind_map_};
         const uint32_t idx_a = manifest.frame_allocator_.bump(1);
         const uint32_t idx_b = manifest.frame_allocator_.bump(1);
         const uint32_t idx_c = manifest.frame_allocator_.bump(1);
@@ -2192,7 +2191,7 @@ TEST_F(BasicManifestIntegrationTest, EnumeratesFourVarSatThreeClauses) {
         seed_db.push(rule{and_f_f_f, {}});
 
         basic_manifest manifest{seed_db, seed_goals, kInitialFrameOffset, kSatBudget, seed};
-        normalizer<globalizer, expr_pool, expr_pool, bind_map> seed_norm{manifest.globalizer_, manifest.expr_pool_, manifest.expr_pool_, manifest.bind_map_};
+        normalizer<globalizer, expr_pool, expr_pool, bind_map<globalizer>> seed_norm{manifest.globalizer_, manifest.expr_pool_, manifest.expr_pool_, manifest.bind_map_};
         const uint32_t idx_p = manifest.frame_allocator_.bump(1);
         const uint32_t idx_q = manifest.frame_allocator_.bump(1);
         const uint32_t idx_r = manifest.frame_allocator_.bump(1);
@@ -2313,16 +2312,18 @@ TEST_F(BasicManifestIntegrationTest, EnumeratesAddPairsSummingLessThanTen) {
     }
     ASSERT_EQ(expected.size(), 55u);
 
-    initial_goal_exprs probe_goals;
-    basic_manifest probe_manifest{database, probe_goals, kInitialFrameOffset, kPeanoBudget, kSeed};
-    normalizer<globalizer, expr_pool, expr_pool, bind_map> probe_norm{probe_manifest.globalizer_, probe_manifest.expr_pool_, probe_manifest.expr_pool_, probe_manifest.bind_map_};
+    static constexpr uint32_t kGoalVarCount = 3;
+    static constexpr uint32_t idx_x = 0;
+    static constexpr uint32_t idx_y = 1;
+    static constexpr uint32_t idx_s = 2;
 
-    const uint32_t idx_x_probe = probe_manifest.frame_allocator_.bump(1);
-    const uint32_t idx_y_probe = probe_manifest.frame_allocator_.bump(1);
-    const uint32_t idx_s_probe = probe_manifest.frame_allocator_.bump(1);
-    const expr* var_x_probe = saved_expr_pool_.make_var(idx_x_probe);
-    const expr* var_y_probe = saved_expr_pool_.make_var(idx_y_probe);
-    const expr* var_s_probe = saved_expr_pool_.make_var(idx_s_probe);
+    initial_goal_exprs probe_goals;
+    basic_manifest probe_manifest{database, probe_goals, kGoalVarCount, kPeanoBudget, kSeed};
+    normalizer<globalizer, expr_pool, expr_pool, bind_map<globalizer>> probe_norm{probe_manifest.globalizer_, probe_manifest.expr_pool_, probe_manifest.expr_pool_, probe_manifest.bind_map_};
+
+    const expr* var_x_probe = saved_expr_pool_.make_var(idx_x);
+    const expr* var_y_probe = saved_expr_pool_.make_var(idx_y);
+    const expr* var_s_probe = saved_expr_pool_.make_var(idx_s);
 
     const expr* ten_probe = saved_expr_pool_.make_functor(functors.id("zero"), {});
     for (int i = 0; i < 10; ++i)
@@ -2339,19 +2340,16 @@ TEST_F(BasicManifestIntegrationTest, EnumeratesAddPairsSummingLessThanTen) {
         [&]() -> solution {
             return {
                 saved_expr_pool_.import(
-                    probe_norm.normalize({saved_expr_pool_.make_var(idx_x_probe), 0})),
+                    probe_norm.normalize({saved_expr_pool_.make_var(idx_x), 0})),
                 saved_expr_pool_.import(
-                    probe_norm.normalize({saved_expr_pool_.make_var(idx_y_probe), 0})),
+                    probe_norm.normalize({saved_expr_pool_.make_var(idx_y), 0})),
             };
         });
 
     initial_goal_exprs solve_goals;
-    basic_manifest manifest{database, solve_goals, kInitialFrameOffset, kPeanoBudget, kSeed};
-    normalizer<globalizer, expr_pool, expr_pool, bind_map> norm{manifest.globalizer_, manifest.expr_pool_, manifest.expr_pool_, manifest.bind_map_};
+    basic_manifest manifest{database, solve_goals, kGoalVarCount, kPeanoBudget, kSeed};
+    normalizer<globalizer, expr_pool, expr_pool, bind_map<globalizer>> norm{manifest.globalizer_, manifest.expr_pool_, manifest.expr_pool_, manifest.bind_map_};
 
-    const uint32_t idx_x = manifest.frame_allocator_.bump(1);
-    const uint32_t idx_y = manifest.frame_allocator_.bump(1);
-    const uint32_t idx_s = manifest.frame_allocator_.bump(1);
     const expr* var_x = saved_expr_pool_.make_var(idx_x);
     const expr* var_y = saved_expr_pool_.make_var(idx_y);
     const expr* var_s = saved_expr_pool_.make_var(idx_s);
@@ -2420,7 +2418,7 @@ TEST_F(BasicManifestIntegrationTest, EnumeratesAddPairsSummingExactlyTen) {
     ASSERT_EQ(expected.size(), 11u);
 
     basic_manifest manifest{database, initial_goals, 2u, kPeanoBudget, kSeed};
-    normalizer<globalizer, expr_pool, expr_pool, bind_map> norm{manifest.globalizer_, manifest.expr_pool_, manifest.expr_pool_, manifest.bind_map_};
+    normalizer<globalizer, expr_pool, expr_pool, bind_map<globalizer>> norm{manifest.globalizer_, manifest.expr_pool_, manifest.expr_pool_, manifest.bind_map_};
 
     const uint32_t idx_x = 0;
     const uint32_t idx_y = 1;
@@ -2507,7 +2505,7 @@ TEST_F(BasicManifestIntegrationTest, EnumeratesMulPairsProductEight) {
     };
 
     basic_manifest manifest{database, initial_goals, 2u, kPeanoBudget, kSeed};
-    normalizer<globalizer, expr_pool, expr_pool, bind_map> norm{manifest.globalizer_, manifest.expr_pool_, manifest.expr_pool_, manifest.bind_map_};
+    normalizer<globalizer, expr_pool, expr_pool, bind_map<globalizer>> norm{manifest.globalizer_, manifest.expr_pool_, manifest.expr_pool_, manifest.bind_map_};
     const uint32_t idx_x = 0;
     const uint32_t idx_y = 1;
     const expr* var_x = saved_expr_pool_.make_var(idx_x);
@@ -2593,7 +2591,7 @@ TEST_F(BasicManifestIntegrationTest, EnumeratesDualBoundedSharedXSums) {
     ASSERT_EQ(expected.size(), 30u);
 
     basic_manifest manifest{database, initial_goals, 5u, kPeanoBudget, kSeed};
-    normalizer<globalizer, expr_pool, expr_pool, bind_map> norm{manifest.globalizer_, manifest.expr_pool_, manifest.expr_pool_, manifest.bind_map_};
+    normalizer<globalizer, expr_pool, expr_pool, bind_map<globalizer>> norm{manifest.globalizer_, manifest.expr_pool_, manifest.expr_pool_, manifest.bind_map_};
     const uint32_t idx_x = 0;
     const uint32_t idx_y = 1;
     const uint32_t idx_z = 2;
@@ -2773,9 +2771,9 @@ TEST_F(BasicManifestIntegrationTest, EnumeratesCatalanTreesWithFiveNodes) {
     const expr* add_one = saved_expr_pool_.make_functor(functors.id("add"), {one, rv13, rv10});
     database.push(rule{nodes_head, {nodes_left, nodes_right, add_sizes, add_one}});
 
-    basic_manifest manifest{database, initial_goals, kInitialFrameOffset, kCatalanBudget, kSeed};
-    normalizer<globalizer, expr_pool, expr_pool, bind_map> norm{manifest.globalizer_, manifest.expr_pool_, manifest.expr_pool_, manifest.bind_map_};
-    const uint32_t idx_t = manifest.frame_allocator_.bump(1);
+    basic_manifest manifest{database, initial_goals, 1u, kCatalanBudget, kSeed};
+    normalizer<globalizer, expr_pool, expr_pool, bind_map<globalizer>> norm{manifest.globalizer_, manifest.expr_pool_, manifest.expr_pool_, manifest.bind_map_};
+    static constexpr uint32_t idx_t = 0;
     const expr* var_t = saved_expr_pool_.make_var(idx_t);
     const expr* five = saved_expr_pool_.make_functor(functors.id("zero"), {});
     for (int i = 0; i < 5; ++i)

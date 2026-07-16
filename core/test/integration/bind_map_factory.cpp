@@ -7,7 +7,7 @@
 struct BindMapFactoryIntegrationTest : public ::testing::Test {
     test_functors functors;
     globalizer g;
-    bind_map_factory bmf{g};
+    bind_map_factory<globalizer> bmf{g};
 
     expr var0{expr::var{0}};
     expr func{expr::functor{functors.id("f"), {}}};

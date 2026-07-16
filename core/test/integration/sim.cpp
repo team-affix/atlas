@@ -11,7 +11,6 @@
 #include "infrastructure/run_sim.hpp"
 #include "infrastructure/db.hpp"
 #include "infrastructure/initial_goal_exprs.hpp"
-#include "infrastructure/trail.hpp"
 #include "infrastructure/bind_map.hpp"
 #include "infrastructure/bind_map_factory.hpp"
 #include "infrastructure/unifier_factory.hpp"
@@ -23,6 +22,7 @@
 #include "infrastructure/unit_goals.hpp"
 #include "infrastructure/decision_memory.hpp"
 #include "infrastructure/resolution_memory.hpp"
+#include "infrastructure/resolution_recorder.hpp"
 #include "infrastructure/candidate_frame_offsets.hpp"
 #include "infrastructure/expr_pool.hpp"
 #include "infrastructure/frame_bump_allocator.hpp"
@@ -44,6 +44,7 @@
 #include "infrastructure/make_initial_goal_lineage.hpp"
 #include "infrastructure/initial_goal_activator.hpp"
 #include "infrastructure/goal_candidates_activator.hpp"
+#include "infrastructure/querier.hpp"
 #include "infrastructure/goal_candidates_deactivator.hpp"
 #include "infrastructure/subgoals_activator.hpp"
 #include "infrastructure/initial_goals_activator.hpp"
@@ -64,9 +65,11 @@ struct MockGenerateDecision {
 
 namespace {
 
-using unifier_factory_t            = unifier_factory<bind_map>;
+using unifier_factory_t            = unifier_factory<globalizer, bind_map<globalizer>>;
 using cdcl_t                      = cdcl_elimination_generator<chosen_goal_candidates>;
-using mhu_t                       = mhu_elimination_generator<bind_map, bind_map_factory, unifier<bind_map>,
+using mhu_t                       = mhu_elimination_generator<
+                                    bind_map<globalizer>, bind_map<globalizer>, bind_map<globalizer>,
+                                    bind_map_factory<globalizer>, unifier<globalizer, bind_map<globalizer>>,
                                     unifier_factory_t, lineage_pool, expr_pool, goal_candidate_rules>;
 using joint_t                     = joint_elimination_generator<cdcl_t, mhu_t>;
 using get_resolution_rule_t         = get_resolution_rule<db>;
@@ -87,45 +90,49 @@ using initial_goal_activator_t      = initial_goal_activator<initial_goal_exprs,
                                     make_initial_goal_lineage_t, goal_exprs, goal_candidate_rules, ra_active_goals>;
 using goal_candidates_deactivator_t = goal_candidates_deactivator<goal_candidate_rules,
                                     lineage_pool, candidate_deactivator_t>;
-using goal_candidates_activator_t   = goal_candidates_activator<db, lineage_pool, candidate_activator_t,
-                                    conflict_detector_t, unit_goal_detector_t, unit_goals>;
+using querier_t                     = querier<goal_exprs, db, db>;
+using goal_candidates_activator_t   = goal_candidates_activator<querier_t, lineage_pool,
+                                    candidate_activator_t, conflict_detector_t,
+                                    unit_goal_detector_t, unit_goals>;
 using subgoals_activator_t         = subgoals_activator<lineage_pool, goal_activator_t,
                                     db, goal_candidates_activator_t>;
 using initial_goals_activator_t     = initial_goals_activator<initial_goal_exprs,
                                     initial_goal_activator_t, make_initial_goal_lineage_t, goal_candidates_activator_t>;
 using resolver_t                  = resolver<goal_deactivator_t, subgoals_activator_t, goal_candidates_deactivator_t, chosen_goal_candidates>;
-using set_up_sim_t  = set_up_sim<trail>;
-using tear_down_sim_t  = tear_down_sim<trail, unit_goals, decision_memory, resolution_memory,
+using set_up_sim_t  = set_up_sim<elimination_backlog>;
+using tear_down_sim_t  = tear_down_sim<elimination_backlog, unit_goals, decision_memory, resolution_memory,
                     goal_candidate_rules, goal_exprs, ra_active_goals, candidate_frame_offsets,
-                    mhu_t, bind_map, lineage_pool, frame_bump_allocator, cdcl_t, chosen_goal_candidates>;
+                    mhu_t, bind_map<globalizer>, lineage_pool, frame_bump_allocator, cdcl_t, chosen_goal_candidates>;
+using resolution_recorder_t = resolution_recorder<decision_memory, resolution_memory>;
 using run_sim_t    = run_sim<initial_goals_activator_t, solution_detector_t, conflict_detector_t,
                     unit_goal_detector_t, unit_goals, unit_goals, MockGenerateDecision,
                     joint_t, elimination_router_t, resolver_t, get_unit_resolution_t,
-                    decision_memory, resolution_memory, resolution_memory>;
+                    resolution_recorder_t, resolution_recorder_t, resolution_memory>;
 
 struct sim_stack {
     db& database_;
     initial_goal_exprs& initial_goals_;
 
     globalizer globalizer_;
-    trail trail_;
-    bind_map bind_map_{globalizer_};
-    bind_map_factory bind_map_factory_{globalizer_};
+    bind_map<globalizer> bind_map_{globalizer_};
+    bind_map_factory<globalizer> bind_map_factory_{globalizer_};
     unifier_factory_t unifier_factory_{globalizer_};
     lineage_pool lineage_pool_;
     ra_rule_id_set_factory ra_rule_id_set_factory_;
     ra_active_goals ra_active_goals_;
     goal_exprs goal_exprs_;
+    querier_t querier_{goal_exprs_, database_, database_};
     goal_candidate_rules goal_candidate_rules_{ra_rule_id_set_factory_};
     unit_goals unit_goals_;
     decision_memory decision_memory_;
     resolution_memory resolution_memory_;
     candidate_frame_offsets candidate_frame_offsets_;
     chosen_goal_candidates chosen_goal_candidates_;
+    resolution_recorder_t resolution_recorder_{decision_memory_, resolution_memory_};
 
     expr_pool expr_pool_;
     frame_bump_allocator frame_allocator_{0};
-    elimination_backlog elimination_backlog_{trail_};
+    elimination_backlog elimination_backlog_;
 
     cdcl_t cdcl_{chosen_goal_candidates_};
     std::optional<mhu_t> mhu_;
@@ -158,7 +165,7 @@ struct sim_stack {
 
     sim_stack(db& database_in, initial_goal_exprs& initial_goals_in)
         : database_(database_in), initial_goals_(initial_goals_in) {
-        mhu_.emplace(bind_map_, lineage_pool_, expr_pool_, bind_map_factory_,
+        mhu_.emplace(bind_map_, bind_map_, lineage_pool_, expr_pool_, bind_map_factory_,
                      unifier_factory_, goal_candidate_rules_);
         joint_.emplace(cdcl_, *mhu_);
         candidate_activator_.emplace(frame_allocator_, candidate_frame_offsets_, *mhu_,
@@ -168,7 +175,7 @@ struct sim_stack {
                                         goal_exprs_, goal_candidate_rules_, ra_active_goals_);
         goal_candidates_deactivator_.emplace(goal_candidate_rules_, lineage_pool_,
                                              candidate_deactivator_);
-        goal_candidates_activator_.emplace(database_, lineage_pool_, *candidate_activator_,
+        goal_candidates_activator_.emplace(querier_, lineage_pool_, *candidate_activator_,
                                            conflict_detector_, unit_goal_detector_, unit_goals_);
         subgoals_activator_.emplace(lineage_pool_, goal_activator_, database_,
                                     *goal_candidates_activator_);
@@ -211,15 +218,15 @@ struct simulation {
     std::optional<run_sim_t> run_sim_;
 
     simulation(sim_stack& s, size_t max_resolutions)
-        : set_up_sim_(s.trail_) {
-        tear_down_sim_.emplace(s.trail_, s.unit_goals_, s.decision_memory_, s.resolution_memory_,
+        : set_up_sim_(s.elimination_backlog_) {
+        tear_down_sim_.emplace(s.elimination_backlog_, s.unit_goals_, s.decision_memory_, s.resolution_memory_,
             s.goal_candidate_rules_, s.goal_exprs_, s.ra_active_goals_, s.candidate_frame_offsets_,
             *s.mhu_, s.bind_map_, s.lineage_pool_, s.frame_allocator_, s.cdcl_,
             s.chosen_goal_candidates_);
         run_sim_.emplace(*s.initial_goals_activator_, s.solution_detector_, s.conflict_detector_,
             s.unit_goal_detector_, s.unit_goals_, s.unit_goals_, s.decision_generator,
             *s.joint_, s.elimination_router_, *s.resolver_, s.get_unit_resolution_,
-            s.decision_memory_, s.resolution_memory_, s.resolution_memory_, max_resolutions);
+            s.resolution_recorder_, s.resolution_recorder_, s.resolution_memory_, max_resolutions);
     }
 
     void set_up() { set_up_sim_.set_up(); }
@@ -1582,34 +1589,34 @@ TEST_F(SimIntegrationTest, RunReturnsConflictedAfterPartialProgressWhenDerivedGo
 
 TEST_F(SimIntegrationTest, SetUpLifecyclePushesOneTrailFrameWithoutRunning) {
   // Capture baseline immediately before set_up(); wiring must not intern or push frames.
-  const size_t depth_before = stack.trail_.depth();
+  const size_t depth_before = stack.elimination_backlog_.depth();
   const size_t expr_before = stack.expr_pool_.size();
 
   simulation simulation{stack, kDefaultMaxResolutions};
   simulation.set_up();
 
-  EXPECT_EQ(stack.trail_.depth(), depth_before + 1);
+  EXPECT_EQ(stack.elimination_backlog_.depth(), depth_before + 1);
   EXPECT_EQ(stack.expr_pool_.size(), expr_before);
   EXPECT_TRUE(stack.ra_active_goals_.empty());
   simulation.tear_down();
 }
 
 TEST_F(SimIntegrationTest, TearDownLifecycleRestoresTrailDepthAfterEmptyRun) {
-  const size_t depth_before = stack.trail_.depth();
+  const size_t depth_before = stack.elimination_backlog_.depth();
 
   simulation simulation{stack, kDefaultMaxResolutions};
   simulation.set_up();
   EXPECT_EQ(simulation.run(), sim_termination::solved);
   simulation.tear_down();
 
-  EXPECT_EQ(stack.trail_.depth(), depth_before);
+  EXPECT_EQ(stack.elimination_backlog_.depth(), depth_before);
 }
 
 TEST_F(SimIntegrationTest, TearDownLifecycleRestoresTrailDepthAfterConflictedRun) {
   expr goal{expr::functor{functors.id("f"), {}}};
   initial_goals.push(&goal);
 
-  const size_t depth_before = stack.trail_.depth();
+  const size_t depth_before = stack.elimination_backlog_.depth();
 
   EXPECT_CALL(stack.decision_generator, generate()).Times(0);
 
@@ -1618,7 +1625,7 @@ TEST_F(SimIntegrationTest, TearDownLifecycleRestoresTrailDepthAfterConflictedRun
   EXPECT_EQ(simulation.run(), sim_termination::conflicted);
   simulation.tear_down();
 
-  EXPECT_EQ(stack.trail_.depth(), depth_before);
+  EXPECT_EQ(stack.elimination_backlog_.depth(), depth_before);
 }
 
 TEST_F(SimIntegrationTest, TearDownLifecycleRestoresTrailDepthAfterDepthExceededRun) {
@@ -1629,7 +1636,7 @@ TEST_F(SimIntegrationTest, TearDownLifecycleRestoresTrailDepthAfterDepthExceeded
   database.push(rule{&f_head, {&f_body}});
 
   static constexpr size_t kMaxResolutions = 4;
-  const size_t depth_before = stack.trail_.depth();
+  const size_t depth_before = stack.elimination_backlog_.depth();
 
   EXPECT_CALL(stack.decision_generator, generate()).Times(0);
 
@@ -1638,7 +1645,7 @@ TEST_F(SimIntegrationTest, TearDownLifecycleRestoresTrailDepthAfterDepthExceeded
   EXPECT_EQ(simulation.run(), sim_termination::depth_exceeded);
   simulation.tear_down();
 
-  EXPECT_EQ(stack.trail_.depth(), depth_before);
+  EXPECT_EQ(stack.elimination_backlog_.depth(), depth_before);
 }
 
 TEST_F(SimIntegrationTest, TearDownLifecycleClearsEphemeralStoresAfterSolvedRun) {

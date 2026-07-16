@@ -1,7 +1,7 @@
 #include "value_objects/lemma.hpp"
 
-lemma::lemma(const std::unordered_set<const resolution_lineage*>& input) :
-    rs(input) {
+lemma::lemma(const std::unordered_set<const resolution_lineage*>& input)
+    : rs_(input) {
 
     std::unordered_set<const resolution_lineage*> visited;
 
@@ -11,7 +11,7 @@ lemma::lemma(const std::unordered_set<const resolution_lineage*>& input) :
 }
 
 const std::unordered_set<const resolution_lineage*>& lemma::get_resolutions() const {
-    return rs;
+    return rs_;
 }
 
 void lemma::remove_ancestors(const resolution_lineage* rl, std::unordered_set<const resolution_lineage*>& visited) {
@@ -25,7 +25,7 @@ void lemma::remove_ancestors(const resolution_lineage* rl, std::unordered_set<co
 
         visited.insert(grandparent);
 
-        rs.erase(grandparent);
+        rs_.erase(grandparent);
 
         rl = grandparent;
     }

@@ -1,20 +1,20 @@
 #ifndef TEAR_DOWN_SIM_HPP
 #define TEAR_DOWN_SIM_HPP
 
-template<typename IPopTrailFrame, typename IClearUnitGoals, typename IClearRecordedDecisions,
+template<typename IPopFrame, typename IClearUnitGoals, typename IClearRecordedDecisions,
          typename IClearRecordedResolutions, typename IClearGoalCandidateRuleIds, typename IClearGoalExprs,
          typename IClearActiveGoals, typename IClearCandidateFrameOffsets, typename IClearMhuHeads,
          typename IClearBindings, typename ITrimUnpinnedLineages, typename IResetFrameAllocator,
          typename ICleanUpCdcl, typename IClearChosenGoalCandidates>
 struct tear_down_sim {
-    tear_down_sim(IPopTrailFrame&, IClearUnitGoals&, IClearRecordedDecisions&, IClearRecordedResolutions&,
+    tear_down_sim(IPopFrame&, IClearUnitGoals&, IClearRecordedDecisions&, IClearRecordedResolutions&,
                   IClearGoalCandidateRuleIds&, IClearGoalExprs&, IClearActiveGoals&,
                   IClearCandidateFrameOffsets&, IClearMhuHeads&, IClearBindings&,
                   ITrimUnpinnedLineages&, IResetFrameAllocator&, ICleanUpCdcl&,
                   IClearChosenGoalCandidates&);
     void tear_down();
 private:
-    IPopTrailFrame& pop_trail_frame_;
+    IPopFrame& pop_frame_;
     IClearUnitGoals& clear_unit_goals_;
     IClearRecordedDecisions& clear_recorded_decisions_;
     IClearRecordedResolutions& clear_recorded_resolutions_;
@@ -36,7 +36,7 @@ template<typename IPTF, typename ICUG, typename ICRD, typename ICRR, typename IC
 tear_down_sim<IPTF,ICUG,ICRD,ICRR,ICGCRI,ICGE,ICAG,ICCFO,ICMH,ICB,ITUL,IRFA,ICUC,ICCGC>::tear_down_sim(
     IPTF& t, ICUG& ug, ICRD& dm, ICRR& rm, ICGCRI& gcr, ICGE& ge, ICAG& ag,
     ICCFO& cfo, ICMH& meg, ICB& bm, ITUL& lp, IRFA& fa, ICUC& ceg, ICCGC& cgc)
-    : pop_trail_frame_(t), clear_unit_goals_(ug), clear_recorded_decisions_(dm),
+    : pop_frame_(t), clear_unit_goals_(ug), clear_recorded_decisions_(dm),
       clear_recorded_resolutions_(rm), clear_goal_candidate_rule_ids_(gcr),
       clear_goal_exprs_(ge), clear_active_goals_(ag), clear_candidate_frame_offsets_(cfo),
       clear_mhu_heads_(meg), clear_bindings_(bm), trim_unpinned_lineages_(lp),
@@ -46,7 +46,7 @@ template<typename IPTF, typename ICUG, typename ICRD, typename ICRR, typename IC
          typename ICGE, typename ICAG, typename ICCFO, typename ICMH, typename ICB,
          typename ITUL, typename IRFA, typename ICUC, typename ICCGC>
 void tear_down_sim<IPTF,ICUG,ICRD,ICRR,ICGCRI,ICGE,ICAG,ICCFO,ICMH,ICB,ITUL,IRFA,ICUC,ICCGC>::tear_down() {
-    pop_trail_frame_.pop();
+    pop_frame_.pop_frame();
     clear_unit_goals_.clear();
     clear_recorded_decisions_.clear_recorded_decisions();
     clear_recorded_resolutions_.clear_recorded_resolutions();

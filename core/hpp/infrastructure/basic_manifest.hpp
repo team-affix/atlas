@@ -27,6 +27,7 @@
 #include "infrastructure/goal_candidates_deactivator.hpp"
 #include "infrastructure/goal_deactivator.hpp"
 #include "infrastructure/goal_exprs.hpp"
+#include "infrastructure/querier.hpp"
 #include "infrastructure/initial_goal_activator.hpp"
 #include "infrastructure/initial_goal_exprs.hpp"
 #include "infrastructure/initial_goals_activator.hpp"
@@ -38,25 +39,32 @@
 #include "infrastructure/ra_rule_id_set_factory.hpp"
 #include "infrastructure/random_decision_generator.hpp"
 #include "infrastructure/resolution_memory.hpp"
+#include "infrastructure/resolution_recorder.hpp"
 #include "infrastructure/resolver.hpp"
 #include "infrastructure/rule_id_set_factory.hpp"
 #include "infrastructure/run_sim.hpp"
+#include "infrastructure/basic_set_up_sim.hpp"
+#include "infrastructure/basic_tear_down_sim.hpp"
 #include "infrastructure/set_up_sim.hpp"
 #include "infrastructure/solution_detector.hpp"
 #include "infrastructure/solver.hpp"
 #include "infrastructure/subgoals_activator.hpp"
 #include "infrastructure/tear_down_sim.hpp"
-#include "infrastructure/trail.hpp"
 #include "infrastructure/unifier.hpp"
 #include "infrastructure/unifier_factory.hpp"
 #include "infrastructure/unit_goal_detector.hpp"
 #include "infrastructure/unit_goals.hpp"
+#include "infrastructure/normalizer.hpp"
+#include "infrastructure/solver_driver.hpp"
 
 struct basic_manifest {
-    using unifier_factory_t = unifier_factory<bind_map>;
+    using bind_map_t        = bind_map<globalizer>;
+    using bind_map_factory_t = bind_map_factory<globalizer>;
+    using unifier_factory_t = unifier_factory<globalizer, bind_map_t>;
     using cdcl_t  = cdcl_elimination_generator<chosen_goal_candidates>;
     using mhu_t   = mhu_elimination_generator<
-                    bind_map, bind_map_factory, unifier<bind_map>, unifier_factory_t,
+                    bind_map_t, bind_map_t, bind_map_t, bind_map_factory_t,
+                    unifier<globalizer, bind_map_t>, unifier_factory_t,
                     lineage_pool, expr_pool, goal_candidate_rules>;
     using joint_t = joint_elimination_generator<cdcl_t, mhu_t>;
 
@@ -78,24 +86,30 @@ struct basic_manifest {
                                         make_initial_goal_lineage_t, goal_exprs, goal_candidate_rules, ra_active_goals>;
     using goal_candidates_deactivator_t = goal_candidates_deactivator<goal_candidate_rules,
                                         lineage_pool, candidate_deactivator_t>;
-    using goal_candidates_activator_t   = goal_candidates_activator<db, lineage_pool, candidate_activator_t,
-                                        conflict_detector_t, unit_goal_detector_t, unit_goals>;
+    using querier_t                     = querier<goal_exprs, db, db>;
+    using goal_candidates_activator_t   = goal_candidates_activator<querier_t, lineage_pool,
+                                        candidate_activator_t, conflict_detector_t,
+                                        unit_goal_detector_t, unit_goals>;
     using subgoals_activator_t         = subgoals_activator<lineage_pool, goal_activator_t,
                                         db, goal_candidates_activator_t>;
     using initial_goals_activator_t     = initial_goals_activator<initial_goal_exprs,
                                         initial_goal_activator_t, make_initial_goal_lineage_t, goal_candidates_activator_t>;
     using resolver_t                  = resolver<goal_deactivator_t, subgoals_activator_t, goal_candidates_deactivator_t, chosen_goal_candidates>;
     using random_decision_generator_t   = random_decision_generator<lineage_pool, ra_active_goals, goal_candidate_rules>;
-    using set_up_sim_t  = set_up_sim<trail>;
-    using tear_down_sim_t  = tear_down_sim<trail, unit_goals, decision_memory, resolution_memory,
+    using set_up_sim_t  = set_up_sim<elimination_backlog>;
+    using tear_down_sim_t  = tear_down_sim<elimination_backlog, unit_goals, decision_memory, resolution_memory,
                         goal_candidate_rules, goal_exprs, ra_active_goals, candidate_frame_offsets,
-                        mhu_t, bind_map, lineage_pool, frame_bump_allocator, cdcl_t, chosen_goal_candidates>;
+                        mhu_t, bind_map_t, lineage_pool, frame_bump_allocator, cdcl_t, chosen_goal_candidates>;
+    using basic_set_up_sim_t = basic_set_up_sim<set_up_sim_t>;
+    using basic_tear_down_sim_t = basic_tear_down_sim<tear_down_sim_t>;
+    using resolution_recorder_t = resolution_recorder<decision_memory, resolution_memory>;
     using run_sim_t    = run_sim<initial_goals_activator_t, solution_detector_t, conflict_detector_t,
                         unit_goal_detector_t, unit_goals, unit_goals, random_decision_generator_t,
                         joint_t, elimination_router_t, resolver_t, get_unit_resolution_t,
-                        decision_memory, resolution_memory, resolution_memory>;
-    using solver_t    = solver<set_up_sim_t, tear_down_sim_t, run_sim_t, decision_memory, decision_memory,
+                        resolution_recorder_t, resolution_recorder_t, resolution_memory>;
+    using solver_t    = solver<basic_set_up_sim_t, basic_tear_down_sim_t, run_sim_t, decision_memory, decision_memory,
                         lineage_pool, cdcl_t, elimination_router_t>;
+    using normalizer_t = normalizer<globalizer, expr_pool, expr_pool, bind_map_t>;
 
     basic_manifest(
         db& database,
@@ -105,15 +119,15 @@ struct basic_manifest {
         uint32_t random_seed);
 
     globalizer              globalizer_;
-    trail                   trail_;
-    bind_map                bind_map_;
-    bind_map_factory        bind_map_factory_;
+    bind_map_t              bind_map_;
+    bind_map_factory_t      bind_map_factory_;
     unifier_factory_t          unifier_factory_;
     lineage_pool            lineage_pool_;
     rule_id_set_factory     rule_id_set_factory_;
     ra_rule_id_set_factory  ra_rule_id_set_factory_;
     ra_active_goals         ra_active_goals_;
     goal_exprs              goal_exprs_;
+    querier_t               querier_;
     goal_candidate_rules    goal_candidate_rules_;
     unit_goals              unit_goals_;
     decision_memory         decision_memory_;
@@ -147,8 +161,13 @@ struct basic_manifest {
     resolver_t                    resolver_;
     set_up_sim_t                    set_up_sim_;
     tear_down_sim_t                    tear_down_sim_;
+    basic_set_up_sim_t              basic_set_up_sim_;
+    basic_tear_down_sim_t           basic_tear_down_sim_;
+    resolution_recorder_t            resolution_recorder_;
     run_sim_t                      run_sim_;
     solver_t                      solver_;
+    normalizer_t                  normalizer_;
+    solver_driver                 driver_;
 };
 
 #endif
