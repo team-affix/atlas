@@ -180,4 +180,80 @@ TEST_F(DbuctSimTest, TerminateWithNothingToAlignReturnsEmpty) {
     EXPECT_TRUE(sim.terminate().empty());
 }
 
+// Contract: each hub-pop iteration clears eliminations, so terminate() returns
+// only the last pop's yields. Earlier pops may yield internally; the solver
+// never sees them from this terminate() call.
+//
+// With mcts.depth() pinned at 1, ultimate sequences 3 → 2 → 1 force exactly two
+// pops (loop: 3>1 pop, 2>1 pop, 1>1 exit), then a final ultimate read of 1.
+
+TEST_F(DbuctSimTest, TerminateMultiPopLastPopYieldWins) {
+    resolution_lineage rl_a{&gl, 0};
+    resolution_lineage rl_b{&gl, 1};
+    EXPECT_CALL(terminate, terminate()).Times(1);
+    EXPECT_CALL(get_mcts_depth, depth()).WillRepeatedly(Return(1));
+    EXPECT_CALL(get_ultimate, get_ultimate_mcts_frame_depth())
+        .WillOnce(Return(3))
+        .WillOnce(Return(2))
+        .WillOnce(Return(1))
+        .WillRepeatedly(Return(1));
+    EXPECT_CALL(pop_solver_frame, pop_solver_frame())
+        .WillOnce(Return(ByMove(make_pop_stream({&rl_a}))))
+        .WillOnce(Return(ByMove(make_pop_stream({&rl_b}))));
+    EXPECT_CALL(backstep, backstep()).Times(0);
+
+    EXPECT_EQ(sim.terminate(), std::vector<const resolution_lineage*>{&rl_b});
+}
+
+TEST_F(DbuctSimTest, TerminateMultiPopFirstYieldDiscardedWhenSecondEmpty) {
+    resolution_lineage rl_a{&gl, 0};
+    EXPECT_CALL(terminate, terminate()).Times(1);
+    EXPECT_CALL(get_mcts_depth, depth()).WillRepeatedly(Return(1));
+    EXPECT_CALL(get_ultimate, get_ultimate_mcts_frame_depth())
+        .WillOnce(Return(3))
+        .WillOnce(Return(2))
+        .WillOnce(Return(1))
+        .WillRepeatedly(Return(1));
+    EXPECT_CALL(pop_solver_frame, pop_solver_frame())
+        .WillOnce(Return(ByMove(make_pop_stream({&rl_a}))))
+        .WillOnce(Return(ByMove(empty_pop_stream())));
+    EXPECT_CALL(backstep, backstep()).Times(0);
+
+    EXPECT_TRUE(sim.terminate().empty());
+}
+
+TEST_F(DbuctSimTest, TerminateMultiPopSecondYieldReturnedWhenFirstEmpty) {
+    resolution_lineage rl_b{&gl, 1};
+    EXPECT_CALL(terminate, terminate()).Times(1);
+    EXPECT_CALL(get_mcts_depth, depth()).WillRepeatedly(Return(1));
+    EXPECT_CALL(get_ultimate, get_ultimate_mcts_frame_depth())
+        .WillOnce(Return(3))
+        .WillOnce(Return(2))
+        .WillOnce(Return(1))
+        .WillRepeatedly(Return(1));
+    EXPECT_CALL(pop_solver_frame, pop_solver_frame())
+        .WillOnce(Return(ByMove(empty_pop_stream())))
+        .WillOnce(Return(ByMove(make_pop_stream({&rl_b}))));
+    EXPECT_CALL(backstep, backstep()).Times(0);
+
+    EXPECT_EQ(sim.terminate(), std::vector<const resolution_lineage*>{&rl_b});
+}
+
+TEST_F(DbuctSimTest, TerminateMultiPopSameElimWhenBothPopYield) {
+    resolution_lineage rl{&gl, 0};
+    EXPECT_CALL(terminate, terminate()).Times(1);
+    EXPECT_CALL(get_mcts_depth, depth()).WillRepeatedly(Return(1));
+    EXPECT_CALL(get_ultimate, get_ultimate_mcts_frame_depth())
+        .WillOnce(Return(3))
+        .WillOnce(Return(2))
+        .WillOnce(Return(1))
+        .WillRepeatedly(Return(1));
+    EXPECT_CALL(pop_solver_frame, pop_solver_frame())
+        .WillOnce(Return(ByMove(make_pop_stream({&rl}))))
+        .WillOnce(Return(ByMove(make_pop_stream({&rl}))));
+    EXPECT_CALL(backstep, backstep()).Times(0);
+
+    EXPECT_EQ(sim.terminate(), std::vector<const resolution_lineage*>{&rl});
+}
+
 }  // namespace

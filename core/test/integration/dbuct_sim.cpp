@@ -1,6 +1,7 @@
 // Integration: dbuct_sim with a real frame hub + framed stores.
 // Mock only MCTS choose/terminate/depth/backstep and the rule-choice checker.
 
+#include <deque>
 #include <gtest/gtest.h>
 #include <gmock/gmock.h>
 #include <cstddef>
@@ -47,8 +48,9 @@ struct MockCheckRuleChoice {
     MOCK_METHOD(bool, check_is_rule_choice, (const mcts_choice&), (const));
 };
 
-struct yielding_cdcl {
-    std::vector<const resolution_lineage*> to_yield;
+// Per-pop yield sequences for multi-pop terminate contracts.
+struct sequencing_cdcl {
+    std::deque<std::vector<const resolution_lineage*>> pop_yields;
     int pushes = 0;
     int pops = 0;
 
@@ -56,7 +58,12 @@ struct yielding_cdcl {
 
     coroutine<const resolution_lineage*, void> pop_frame() {
         ++pops;
-        for (const resolution_lineage* rl : to_yield)
+        std::vector<const resolution_lineage*> yields;
+        if (!pop_yields.empty()) {
+            yields = std::move(pop_yields.front());
+            pop_yields.pop_front();
+        }
+        for (const resolution_lineage* rl : yields)
             co_yield rl;
     }
 };
@@ -87,7 +94,7 @@ using hub_t = dbuct_frame_hub<
     dbuct_srt_active_goals, dbuct_srt_active_goals,
     bind_map_t, bind_map_t,
     fake_mhu, fake_mhu,
-    yielding_cdcl, yielding_cdcl>;
+    sequencing_cdcl, sequencing_cdcl>;
 
 using sim_t = dbuct_sim<
     mcts_choice,
@@ -119,12 +126,14 @@ struct DbuctSimIntegrationTest : public ::testing::Test {
     dbuct_srt_active_goals srt_active_goals;
     solver_frame_depth_tracker solver_frame_depth_tracker_;
     fake_mhu mhu;
-    yielding_cdcl cdcl;
+    sequencing_cdcl cdcl;
     hub_t hub;
     sim_t sim;
 
     goal_lineage gl{nullptr, 0};
     resolution_lineage elim{&gl, 0};
+    resolution_lineage D1{&gl, 1};
+    resolution_lineage D2{&gl, 2};
 
     DbuctSimIntegrationTest()
         : hub(solver_frame_depth_tracker_, solver_frame_depth_tracker_,
@@ -173,7 +182,7 @@ TEST_F(DbuctSimIntegrationTest, RuleChoosePastUltimatePushesVisibleSolverFrame) 
 TEST_F(DbuctSimIntegrationTest, TerminateRestoresStoresAndReturnsPopEliminations) {
     mcts_choice chosen = rule_id{1};
     std::vector<mcts_choice> choices{chosen};
-    cdcl.to_yield = {&elim};
+    cdcl.pop_yields.push_back({&elim});
 
     EXPECT_CALL(mcts, choose(::testing::_, ::testing::_)).WillOnce(Return(chosen));
     EXPECT_CALL(check_rule_choice, check_is_rule_choice(chosen)).WillOnce(Return(true));
@@ -201,4 +210,101 @@ TEST_F(DbuctSimIntegrationTest, TerminateRestoresStoresAndReturnsPopEliminations
     EXPECT_EQ(cdcl.pops, 1);
     EXPECT_THROW(goal_exprs.get(&gl), std::out_of_range);
     EXPECT_EQ(avoidance_unit_boundary.get_ultimate_mcts_frame_depth(), 1u);
+}
+
+TEST_F(DbuctSimIntegrationTest, TerminateSingleCampRestoresTrackerAndDecisionMemory) {
+    mcts_choice chosen = rule_id{1};
+    std::vector<mcts_choice> choices{chosen};
+    cdcl.pop_yields.push_back({&elim});
+
+    EXPECT_CALL(mcts, choose(::testing::_, ::testing::_)).WillOnce(Return(chosen));
+    EXPECT_CALL(check_rule_choice, check_is_rule_choice(chosen)).WillOnce(Return(true));
+    // choose at 3 → push; record/log at 4; terminate with mcts at 1.
+    EXPECT_CALL(mcts, depth())
+        .WillOnce(Return(3))
+        .WillOnce(Return(4))
+        .WillRepeatedly(Return(1));
+
+    EXPECT_EQ(sim.choose(choices), chosen);
+    EXPECT_EQ(solver_frame_depth_tracker_.solver_frame_depth(), 2u);
+
+    decision_memory.record_decision(&elim);
+    EXPECT_EQ(decision_memory.count(), 1u);
+    EXPECT_EQ(solver_frame_depth_tracker_.solver_frame_depth(),
+              decision_memory.count() + 1);
+
+    avoidance_unit_boundary.log_decision(&elim);
+    EXPECT_EQ(avoidance_unit_boundary.get_ultimate_mcts_frame_depth(), 4u);
+
+    EXPECT_CALL(mcts, terminate()).Times(1);
+    EXPECT_CALL(mcts, backstep()).Times(0);
+
+    std::vector<const resolution_lineage*> got = sim.terminate();
+    EXPECT_EQ(got, std::vector<const resolution_lineage*>{&elim});
+    EXPECT_EQ(solver_frame_depth_tracker_.solver_frame_depth(), 1u);
+    EXPECT_EQ(decision_memory.count(), 0u);
+    EXPECT_EQ(solver_frame_depth_tracker_.solver_frame_depth(),
+              decision_memory.count() + 1);
+    EXPECT_EQ(avoidance_unit_boundary.get_ultimate_mcts_frame_depth(), 1u);
+    EXPECT_LE(avoidance_unit_boundary.get_ultimate_mcts_frame_depth(), 1u);
+    EXPECT_EQ(mhu.pops, 1);
+    EXPECT_EQ(cdcl.pops, 1);
+}
+
+TEST_F(DbuctSimIntegrationTest, TerminateDoubleCampPopsTwiceAndRestoresTracker) {
+    // Two camped frames: first pop yields D2, second pop empty → terminate()
+    // returns {} (last-pop contract) while tracker/AUB/decision_memory restore.
+    mcts_choice c1 = rule_id{1};
+    mcts_choice c2 = rule_id{2};
+    std::vector<mcts_choice> choices1{c1};
+    std::vector<mcts_choice> choices2{c2};
+    cdcl.pop_yields.push_back({&D2});
+    cdcl.pop_yields.push_back({});
+
+    EXPECT_CALL(mcts, choose(::testing::_, ::testing::_))
+        .WillOnce(Return(c1))
+        .WillOnce(Return(c2));
+    EXPECT_CALL(check_rule_choice, check_is_rule_choice(::testing::_))
+        .WillOnce(Return(true))
+        .WillOnce(Return(true));
+    // choose1 at 3; log D1 at 3; choose2 at 5; log D2 at 5; terminate at 1.
+    EXPECT_CALL(mcts, depth())
+        .WillOnce(Return(3))
+        .WillOnce(Return(3))
+        .WillOnce(Return(5))
+        .WillOnce(Return(5))
+        .WillRepeatedly(Return(1));
+
+    EXPECT_EQ(sim.choose(choices1), c1);
+    EXPECT_EQ(solver_frame_depth_tracker_.solver_frame_depth(), 2u);
+    decision_memory.record_decision(&D1);
+    avoidance_unit_boundary.log_decision(&D1);
+    EXPECT_EQ(avoidance_unit_boundary.get_ultimate_mcts_frame_depth(), 3u);
+    EXPECT_EQ(decision_memory.count(), 1u);
+    EXPECT_EQ(solver_frame_depth_tracker_.solver_frame_depth(),
+              decision_memory.count() + 1);
+
+    EXPECT_EQ(sim.choose(choices2), c2);
+    EXPECT_EQ(solver_frame_depth_tracker_.solver_frame_depth(), 3u);
+    decision_memory.record_decision(&D2);
+    avoidance_unit_boundary.log_decision(&D2);
+    EXPECT_EQ(avoidance_unit_boundary.get_ultimate_mcts_frame_depth(), 5u);
+    EXPECT_EQ(decision_memory.count(), 2u);
+    EXPECT_EQ(solver_frame_depth_tracker_.solver_frame_depth(),
+              decision_memory.count() + 1);
+
+    EXPECT_CALL(mcts, terminate()).Times(1);
+    EXPECT_CALL(mcts, backstep()).Times(0);
+
+    std::vector<const resolution_lineage*> got = sim.terminate();
+    // Last pop empty: first-pop yield D2 was cleared; solver sees nothing.
+    EXPECT_TRUE(got.empty());
+    EXPECT_EQ(mhu.pops, 2);
+    EXPECT_EQ(cdcl.pops, 2);
+    EXPECT_EQ(solver_frame_depth_tracker_.solver_frame_depth(), 1u);
+    EXPECT_EQ(decision_memory.count(), 0u);
+    EXPECT_EQ(solver_frame_depth_tracker_.solver_frame_depth(),
+              decision_memory.count() + 1);
+    EXPECT_EQ(avoidance_unit_boundary.get_ultimate_mcts_frame_depth(), 1u);
+    EXPECT_LE(avoidance_unit_boundary.get_ultimate_mcts_frame_depth(), 1u);
 }
