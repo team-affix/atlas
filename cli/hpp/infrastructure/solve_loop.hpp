@@ -7,24 +7,38 @@
 #include <string>
 #include "infrastructure/expr_pool.hpp"
 
-template<typename IRuntime, typename IExprPrinter, typename IPrintBindings, typename IPrintProgress>
+template<typename IRuntime,
+         typename IExprPrinter,
+         typename IPrintBindings,
+         typename IPrintProgress,
+         typename IPause,
+         typename IResume>
 struct solve_loop {
-    solve_loop(IPrintBindings&, IPrintProgress&, size_t interval = 1000);
+    solve_loop(IPrintBindings&, IPrintProgress&, IPause&, IResume&, size_t interval);
     void run(IRuntime&, IExprPrinter&, expr_pool&, const std::map<std::string, uint32_t>&);
 private:
     IPrintBindings& print_bindings_;
     IPrintProgress& print_progress_;
+    IPause& pause_;
+    IResume& resume_;
     size_t sim_progress_interval_;
 };
 
-template<typename IR, typename IEP, typename IPB, typename IPP>
-solve_loop<IR,IEP,IPB,IPP>::solve_loop(IPB& pb, IPP& pp, size_t interval)
-    : print_bindings_(pb), print_progress_(pp), sim_progress_interval_(interval) {}
+template<typename IR, typename IEP, typename IPB, typename IPP, typename IPa, typename IRe>
+solve_loop<IR, IEP, IPB, IPP, IPa, IRe>::solve_loop(
+    IPB& pb, IPP& pp, IPa& pause, IRe& resume, size_t interval)
+    : print_bindings_(pb)
+    , print_progress_(pp)
+    , pause_(pause)
+    , resume_(resume)
+    , sim_progress_interval_(interval)
+{}
 
-template<typename IR, typename IEP, typename IPB, typename IPP>
-void solve_loop<IR,IEP,IPB,IPP>::run(
+template<typename IR, typename IEP, typename IPB, typename IPP, typename IPa, typename IRe>
+void solve_loop<IR, IEP, IPB, IPP, IPa, IRe>::run(
     IR& runtime, IEP& printer, expr_pool& pool,
     const std::map<std::string, uint32_t>& var_name_to_idx) {
+    resume_.resume();
     size_t total_sims = 0;
     while (runtime.next()) {
         ++total_sims;
@@ -38,9 +52,9 @@ void solve_loop<IR,IEP,IPB,IPP>::run(
         std::cout << "SOLVED\n";
         print_bindings_.print(runtime, printer, pool, var_name_to_idx);
         std::cout << "[press Enter for next solution]";
-        if (sim_progress_interval_ > 0) print_progress_.note_idle_begin();
+        pause_.pause();
         std::cin.get();
-        if (sim_progress_interval_ > 0) print_progress_.note_idle_end();
+        resume_.resume();
     }
     if (sim_progress_interval_ > 0 && total_sims > 0) {
         print_progress_.print();

@@ -8,21 +8,23 @@
 
 template<typename IPrintProgress, typename IRuntime>
 struct horizon_print_progress {
-    explicit horizon_print_progress(IPrintProgress& base);
+    horizon_print_progress(IPrintProgress& base);
     void set_runtime(IRuntime& rt);
     void on_sim();
     void print();
     void finish_line();
-    void note_idle_begin();
-    void note_idle_end();
 private:
     IPrintProgress&  base_;
-    IRuntime*        runtime_ = nullptr;
-    double           ema_cgw_ = 0.0;
+    IRuntime*        runtime_;
+    double           ema_cgw_;
 };
 
 template<typename IPP, typename IRT>
-horizon_print_progress<IPP, IRT>::horizon_print_progress(IPP& base) : base_(base) {}
+horizon_print_progress<IPP, IRT>::horizon_print_progress(IPP& base)
+    : base_(base)
+    , runtime_(nullptr)
+    , ema_cgw_(0.0)
+{}
 
 template<typename IPP, typename IRT>
 void horizon_print_progress<IPP, IRT>::set_runtime(IRT& rt) {
@@ -47,16 +49,6 @@ void horizon_print_progress<IPP, IRT>::print() {
 template<typename IPP, typename IRT>
 void horizon_print_progress<IPP, IRT>::finish_line() {
     base_.finish_line();
-}
-
-template<typename IPP, typename IRT>
-void horizon_print_progress<IPP, IRT>::note_idle_begin() {
-    base_.note_idle_begin();
-}
-
-template<typename IPP, typename IRT>
-void horizon_print_progress<IPP, IRT>::note_idle_end() {
-    base_.note_idle_end();
 }
 
 #endif

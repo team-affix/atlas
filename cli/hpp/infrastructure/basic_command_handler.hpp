@@ -15,13 +15,17 @@
 #include "infrastructure/print_bindings.hpp"
 #include "infrastructure/print_progress.hpp"
 #include "infrastructure/solve_loop.hpp"
+#include "infrastructure/solve_timer.hpp"
+#include "infrastructure/steady_now.hpp"
 #include "infrastructure/functor_names.hpp"
 #include "infrastructure/var_names.hpp"
 
 struct basic_command_handler {
+    using SolveTimer     = solve_timer<steady_now>;
     using PrintBindings  = print_bindings<basic_runtime, expr_printer>;
-    using PrintProgress  = print_progress<basic_runtime>;
-    using SolveLoop      = solve_loop<basic_runtime, expr_printer, PrintBindings, PrintProgress>;
+    using PrintProgress  = print_progress<basic_runtime, SolveTimer>;
+    using SolveLoop      = solve_loop<basic_runtime, expr_printer, PrintBindings, PrintProgress,
+                                      SolveTimer, SolveTimer>;
 
     basic_command_handler(
         const std::string& file,
@@ -44,6 +48,8 @@ private:
     initial_goal_exprs initial_goals_;
     std::map<std::string, uint32_t> var_name_to_idx_;
     std::optional<basic_runtime> runtime_;
+    steady_now clock_;
+    SolveTimer solve_timer_;
     PrintBindings print_bindings_;
     PrintProgress print_progress_;
     SolveLoop solve_loop_;

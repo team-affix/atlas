@@ -12,7 +12,10 @@ dbuct_ridge_command_handler::dbuct_ridge_command_handler(
     size_t grant_increment_interval,
     size_t sim_progress_interval)
     : parse_var_seq_(0),
-      solve_loop_(print_bindings_, print_progress_, sim_progress_interval) {
+      solve_timer_(clock_),
+      print_progress_(solve_timer_),
+      solve_loop_(print_bindings_, print_progress_, solve_timer_, solve_timer_,
+                  sim_progress_interval) {
     parse_pool_.emplace();
     printer_.emplace(std::cout, var_names_, functor_names_);
 

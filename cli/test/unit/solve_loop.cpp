@@ -1,6 +1,7 @@
 // solve_loop: interval orchestration for sim progress. Mocks IPrintProgress and
 // IRuntime; asserts on_sim/print/finish_line are called at interval boundaries and
-// before SOLVED/REFUTED output, never when interval is zero.
+// before SOLVED/REFUTED output, never when interval is zero. Pause/resume bracket
+// the Enter wait after a solution.
 
 #include <map>
 #include <optional>
@@ -38,16 +39,26 @@ struct MockPrintProgress {
     MOCK_METHOD(void, on_sim, ());
     MOCK_METHOD(void, print, ());
     MOCK_METHOD(void, finish_line, ());
-    MOCK_METHOD(void, note_idle_begin, ());
-    MOCK_METHOD(void, note_idle_end, ());
 };
 
-using TestSolveLoop = solve_loop<MockRuntime, MockExprPrinter, MockPrintBindings, MockPrintProgress>;
+struct MockPause {
+    MOCK_METHOD(void, pause, ());
+};
+
+struct MockResume {
+    MOCK_METHOD(void, resume, ());
+};
+
+using TestSolveLoop = solve_loop<
+    MockRuntime, MockExprPrinter, MockPrintBindings, MockPrintProgress,
+    MockPause, MockResume>;
 
 struct SolveLoopTest : public ::testing::Test {
     std::optional<expr_pool> pool;
     MockPrintBindings bindings;
     MockPrintProgress progress;
+    MockPause pause;
+    MockResume resume;
     MockRuntime runtime;
     MockExprPrinter printer;
     std::map<std::string, uint32_t> var_name_to_idx;
@@ -55,7 +66,7 @@ struct SolveLoopTest : public ::testing::Test {
     SolveLoopTest() { pool.emplace(); }
 
     void run_loop(size_t interval) {
-        TestSolveLoop loop{bindings, progress, interval};
+        TestSolveLoop loop{bindings, progress, pause, resume, interval};
         loop.run(runtime, printer, *pool, var_name_to_idx);
     }
 
@@ -85,30 +96,31 @@ constexpr size_t kTotalSims250 = 250;
 
 TEST_F(SolveLoopTest, DisabledWhenIntervalZero) {
     size_t next_calls = 0;
+    EXPECT_CALL(resume, resume()).Times(1);
     EXPECT_CALL(runtime, next()).WillRepeatedly([&] { return ++next_calls <= kTotalSims250; });
     EXPECT_CALL(runtime, solved()).WillRepeatedly(Return(false));
     EXPECT_CALL(progress, on_sim()).Times(0);
     EXPECT_CALL(progress, print()).Times(0);
     EXPECT_CALL(progress, finish_line()).Times(0);
+    EXPECT_CALL(pause, pause()).Times(0);
 
     run_loop(0);
 }
 
 TEST_F(SolveLoopTest, PrintsOnIntervalBoundary) {
-    // 250 sims, interval 100: print() at sims 100, 200, and once more at end
-    // (the end print is a no-op inside print_progress if sims_since_last_==0,
-    // but MockPrintProgress just records the call regardless).
     size_t next_calls = 0;
+    EXPECT_CALL(resume, resume()).Times(1);
     EXPECT_CALL(runtime, next()).WillRepeatedly([&] { return ++next_calls <= kTotalSims250; });
     EXPECT_CALL(runtime, solved()).WillRepeatedly(Return(false));
     EXPECT_CALL(progress, on_sim()).Times(kTotalSims250);
-    EXPECT_CALL(progress, print()).Times(3);  // sim 100, sim 200, end-of-loop
+    EXPECT_CALL(progress, print()).Times(3);
     EXPECT_CALL(progress, finish_line()).Times(1);
 
     run_loop(kInterval100);
 }
 
 TEST_F(SolveLoopTest, DoesNotPrintWhenNextReturnsFalse) {
+    EXPECT_CALL(resume, resume()).Times(1);
     EXPECT_CALL(runtime, next()).WillOnce(Return(false));
     EXPECT_CALL(progress, on_sim()).Times(0);
     EXPECT_CALL(progress, print()).Times(0);
@@ -117,10 +129,7 @@ TEST_F(SolveLoopTest, DoesNotPrintWhenNextReturnsFalse) {
     run_loop(kInterval100);
 }
 
-TEST_F(SolveLoopTest, FinishLineBeforeSolved) {
-    // interval=1; 3 sims; solved on the 3rd.
-    // Key contract: finish_line precedes bindings.print (SOLVED), idle is
-    // excluded around Enter, then a second finish_line at end of loop.
+TEST_F(SolveLoopTest, FinishLineBeforeSolvedAndPauseAroundEnter) {
     redirect_cin("\n");
 
     size_t next_calls = 0;
@@ -130,29 +139,34 @@ TEST_F(SolveLoopTest, FinishLineBeforeSolved) {
         .WillOnce(Return(false))
         .WillOnce(Return(true));
     EXPECT_CALL(progress, on_sim()).Times(3);
-    EXPECT_CALL(progress, print()).Times(4);  // sims 1, 2, 3, plus end-of-loop
+    EXPECT_CALL(progress, print()).Times(4);
     {
         InSequence seq;
+        EXPECT_CALL(resume, resume());
         EXPECT_CALL(progress, finish_line());
         EXPECT_CALL(bindings, print(_, _, _, _));
-        EXPECT_CALL(progress, note_idle_begin());
-        EXPECT_CALL(progress, note_idle_end());
+        EXPECT_CALL(pause, pause());
+        EXPECT_CALL(resume, resume());
         EXPECT_CALL(progress, finish_line());
     }
 
     run_loop(1);
 }
 
-TEST_F(SolveLoopTest, IdleNotNotedWhenIntervalZero) {
+TEST_F(SolveLoopTest, PauseStillBracketsEnterWhenIntervalZero) {
     redirect_cin("\n");
 
     size_t next_calls = 0;
     EXPECT_CALL(runtime, next()).WillRepeatedly([&] { return ++next_calls <= 1; });
     EXPECT_CALL(runtime, solved()).WillOnce(Return(true));
     EXPECT_CALL(progress, on_sim()).Times(0);
-    EXPECT_CALL(progress, note_idle_begin()).Times(0);
-    EXPECT_CALL(progress, note_idle_end()).Times(0);
-    EXPECT_CALL(bindings, print(_, _, _, _));
+    {
+        InSequence seq;
+        EXPECT_CALL(resume, resume());
+        EXPECT_CALL(bindings, print(_, _, _, _));
+        EXPECT_CALL(pause, pause());
+        EXPECT_CALL(resume, resume());
+    }
 
     run_loop(0);
 }

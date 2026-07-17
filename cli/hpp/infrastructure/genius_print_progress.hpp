@@ -8,21 +8,23 @@
 
 template<typename IPrintProgress, typename IRuntime>
 struct genius_print_progress {
-    explicit genius_print_progress(IPrintProgress& base);
+    genius_print_progress(IPrintProgress& base);
     void set_runtime(IRuntime& rt);
     void on_sim();
     void print();
     void finish_line();
-    void note_idle_begin();
-    void note_idle_end();
 private:
     IPrintProgress&  base_;
-    IRuntime*        runtime_ = nullptr;
-    double           ema_cgw_ = 0.0;
+    IRuntime*        runtime_;
+    double           ema_cgw_;
 };
 
 template<typename IPP, typename IRT>
-genius_print_progress<IPP, IRT>::genius_print_progress(IPP& base) : base_(base) {}
+genius_print_progress<IPP, IRT>::genius_print_progress(IPP& base)
+    : base_(base)
+    , runtime_(nullptr)
+    , ema_cgw_(0.0)
+{}
 
 template<typename IPP, typename IRT>
 void genius_print_progress<IPP, IRT>::set_runtime(IRT& rt) {
@@ -47,16 +49,6 @@ void genius_print_progress<IPP, IRT>::print() {
 template<typename IPP, typename IRT>
 void genius_print_progress<IPP, IRT>::finish_line() {
     base_.finish_line();
-}
-
-template<typename IPP, typename IRT>
-void genius_print_progress<IPP, IRT>::note_idle_begin() {
-    base_.note_idle_begin();
-}
-
-template<typename IPP, typename IRT>
-void genius_print_progress<IPP, IRT>::note_idle_end() {
-    base_.note_idle_end();
 }
 
 #endif
