@@ -30,14 +30,16 @@ mcts_decision_generator<IMRL, IIRG, IIAG, IICG, IMC, IGCRI>::mcts_decision_gener
       iterate_child_goals_(icg), mcts_choose_(mc), get_goal_candidate_rule_ids_(gcr) {}
 
 template<typename IMRL, typename IIRG, typename IIAG, typename IICG, typename IMC, typename IGCRI>
-const resolution_lineage* mcts_decision_generator<IMRL, IIRG, IIAG, IICG, IMC, IGCRI>::generate() {
+const resolution_lineage*
+mcts_decision_generator<IMRL, IIRG, IIAG, IICG, IMC, IGCRI>::generate() {
     const goal_lineage* gl = choose_goal();
     rule_id r = choose_candidate(gl);
     return make_resolution_lineage_.make_resolution_lineage(gl, r);
 }
 
 template<typename IMRL, typename IIRG, typename IIAG, typename IICG, typename IMC, typename IGCRI>
-const goal_lineage* mcts_decision_generator<IMRL, IIRG, IIAG, IICG, IMC, IGCRI>::choose_goal() {
+const goal_lineage*
+mcts_decision_generator<IMRL, IIRG, IIAG, IICG, IMC, IGCRI>::choose_goal() {
     std::vector<mcts_choice> current;
     auto sm = iterate_root_goals_.iterate_root_goals();
     while (true) {

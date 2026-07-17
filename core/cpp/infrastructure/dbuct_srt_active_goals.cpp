@@ -21,6 +21,12 @@ void dbuct_srt_active_goals::flush_srt_goal_batch() {
     log_in_flight(std::move(captured));
 }
 
+const goal_lineage* dbuct_srt_active_goals::get_parent_goal(const goal_lineage* gl) const {
+    if (tree_.roots().contains(gl))
+        return nullptr;
+    return tree_.parent(gl);
+}
+
 bool dbuct_srt_active_goals::is_active_goal(const goal_lineage* gl) const {
     return tree_.leaves().contains(gl);
 }

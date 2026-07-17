@@ -15,6 +15,7 @@ struct srt_active_goals {
     void clear_active_goals();
     void link_srt_goal_batch_parent(const goal_lineage*);
     void flush_srt_goal_batch();
+    const goal_lineage* get_parent_goal(const goal_lineage*) const;
     coroutine<const goal_lineage*, void> iterate_root_goals() const;
     coroutine<const goal_lineage*, void> iterate_child_goals(const goal_lineage*) const;
 private:

@@ -22,6 +22,7 @@ struct dbuct_series_reduced_tree {
     const std::unordered_set<NodeId>& roots() const;
     const std::unordered_set<NodeId>& leaves() const;
     const std::set<NodeId>& children(NodeId parent) const;
+    NodeId parent(NodeId child) const;
 
     void push_frame();
     void pop_frame();
@@ -110,6 +111,11 @@ template<typename NodeId>
 const std::set<NodeId>&
 dbuct_series_reduced_tree<NodeId>::children(NodeId parent) const {
     return map_.at(parent);
+}
+
+template<typename NodeId>
+NodeId dbuct_series_reduced_tree<NodeId>::parent(NodeId child) const {
+    return parent_map_.at(child);
 }
 
 template<typename NodeId>

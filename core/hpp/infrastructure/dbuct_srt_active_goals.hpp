@@ -16,6 +16,7 @@ struct dbuct_srt_active_goals {
     void insert_active_goal(const goal_lineage* gl);
     void link_srt_goal_batch_parent(const goal_lineage* parent);
     void flush_srt_goal_batch();
+    const goal_lineage* get_parent_goal(const goal_lineage* gl) const;
     bool is_active_goal(const goal_lineage* gl) const;
     size_t active_goals_size() const;
     bool empty() const;

@@ -15,6 +15,12 @@ void srt_active_goals::flush_srt_goal_batch() {
     in_flight_.clear();
 }
 
+const goal_lineage* srt_active_goals::get_parent_goal(const goal_lineage* gl) const {
+    if (tree_.roots().contains(gl))
+        return nullptr;
+    return tree_.parent(gl);
+}
+
 bool srt_active_goals::is_active_goal(const goal_lineage* gl) const {
     return tree_.leaves().contains(gl);
 }

@@ -4,69 +4,71 @@
 #include <algorithm>
 #include <limits>
 #include <unordered_map>
-#include <unordered_set>
 #include "value_objects/lineage.hpp"
 #include "debug_assert.hpp"
 
-template<typename IGetParentGoal, typename IIterateChildGoals, typename IComputeActiveGoalValue>
+template<typename IInsertActiveGoal, typename IClearActiveGoals,
+         typename IGetParentGoal, typename IIterateChildGoals>
 struct srt_active_goals_heuristics {
-    srt_active_goals_heuristics(IGetParentGoal&, IIterateChildGoals&, IComputeActiveGoalValue&);
+    srt_active_goals_heuristics(IInsertActiveGoal&, IClearActiveGoals&,
+                                IGetParentGoal&, IIterateChildGoals&);
 
     void insert_active_goal(const goal_lineage* gl);
-    void flush_srt_goal_batch();
     void clear_active_goals();
+    void set_active_goal_value(const goal_lineage* gl, double value);
     double get(const goal_lineage* gl) const;
 
 private:
     using map_t = std::unordered_map<const goal_lineage*, double>;
-    using set_t = std::unordered_set<const goal_lineage*>;
 
     double max_child_score(const goal_lineage* parent) const;
     void percolate_from(const goal_lineage* parent);
 
+    IInsertActiveGoal& insert_active_goal_;
+    IClearActiveGoals& clear_active_goals_;
     IGetParentGoal& get_parent_goal_;
     IIterateChildGoals& iterate_child_goals_;
-    IComputeActiveGoalValue& compute_active_goal_value_;
     map_t scores_;
-    set_t pending_;
 };
 
-template<typename IPG, typename IICG, typename ICAV>
-srt_active_goals_heuristics<IPG, IICG, ICAV>::srt_active_goals_heuristics(
-    IPG& get_parent_goal, IICG& iterate_child_goals, ICAV& compute_active_goal_value)
-    : get_parent_goal_(get_parent_goal)
-    , iterate_child_goals_(iterate_child_goals)
-    , compute_active_goal_value_(compute_active_goal_value) {}
+template<typename IIAG, typename ICAG, typename IPG, typename IICG>
+srt_active_goals_heuristics<IIAG, ICAG, IPG, IICG>::srt_active_goals_heuristics(
+    IIAG& insert_active_goal, ICAG& clear_active_goals,
+    IPG& get_parent_goal, IICG& iterate_child_goals)
+    : insert_active_goal_(insert_active_goal)
+    , clear_active_goals_(clear_active_goals)
+    , get_parent_goal_(get_parent_goal)
+    , iterate_child_goals_(iterate_child_goals) {}
 
-template<typename IPG, typename IICG, typename ICAV>
-void srt_active_goals_heuristics<IPG, IICG, ICAV>::insert_active_goal(const goal_lineage* gl) {
-    auto [_, inserted] = scores_.emplace(
-        gl, compute_active_goal_value_.compute_active_goal_value(gl));
+template<typename IIAG, typename ICAG, typename IPG, typename IICG>
+void srt_active_goals_heuristics<IIAG, ICAG, IPG, IICG>::insert_active_goal(
+    const goal_lineage* gl) {
+    insert_active_goal_.insert_active_goal(gl);
+    auto [_, inserted] = scores_.emplace(gl, 0.0);
     DEBUG_ASSERT(inserted);
-    auto [__, pending_inserted] = pending_.insert(gl);
-    DEBUG_ASSERT(pending_inserted);
 }
 
-template<typename IPG, typename IICG, typename ICAV>
-void srt_active_goals_heuristics<IPG, IICG, ICAV>::flush_srt_goal_batch() {
-    if (pending_.empty()) return;
-    percolate_from(get_parent_goal_.get_parent_goal(*pending_.begin()));
-    pending_.clear();
-}
-
-template<typename IPG, typename IICG, typename ICAV>
-void srt_active_goals_heuristics<IPG, IICG, ICAV>::clear_active_goals() {
+template<typename IIAG, typename ICAG, typename IPG, typename IICG>
+void srt_active_goals_heuristics<IIAG, ICAG, IPG, IICG>::clear_active_goals() {
+    clear_active_goals_.clear_active_goals();
     scores_.clear();
-    pending_.clear();
 }
 
-template<typename IPG, typename IICG, typename ICAV>
-double srt_active_goals_heuristics<IPG, IICG, ICAV>::get(const goal_lineage* gl) const {
+template<typename IIAG, typename ICAG, typename IPG, typename IICG>
+void srt_active_goals_heuristics<IIAG, ICAG, IPG, IICG>::set_active_goal_value(
+    const goal_lineage* gl, double value) {
+    scores_.at(gl) = value;
+    percolate_from(get_parent_goal_.get_parent_goal(gl));
+}
+
+template<typename IIAG, typename ICAG, typename IPG, typename IICG>
+double srt_active_goals_heuristics<IIAG, ICAG, IPG, IICG>::get(
+    const goal_lineage* gl) const {
     return scores_.at(gl);
 }
 
-template<typename IPG, typename IICG, typename ICAV>
-double srt_active_goals_heuristics<IPG, IICG, ICAV>::max_child_score(
+template<typename IIAG, typename ICAG, typename IPG, typename IICG>
+double srt_active_goals_heuristics<IIAG, ICAG, IPG, IICG>::max_child_score(
     const goal_lineage* parent) const {
     double best = -std::numeric_limits<double>::infinity();
     auto sm = iterate_child_goals_.iterate_child_goals(parent);
@@ -78,10 +80,13 @@ double srt_active_goals_heuristics<IPG, IICG, ICAV>::max_child_score(
     return best;
 }
 
-template<typename IPG, typename IICG, typename ICAV>
-void srt_active_goals_heuristics<IPG, IICG, ICAV>::percolate_from(const goal_lineage* parent) {
+template<typename IIAG, typename ICAG, typename IPG, typename IICG>
+void srt_active_goals_heuristics<IIAG, ICAG, IPG, IICG>::percolate_from(
+    const goal_lineage* parent) {
     while (parent != nullptr) {
-        scores_.at(parent) = max_child_score(parent);
+        const double new_val = max_child_score(parent);
+        if (new_val == scores_.at(parent)) return;
+        scores_.at(parent) = new_val;
         parent = get_parent_goal_.get_parent_goal(parent);
     }
 }
