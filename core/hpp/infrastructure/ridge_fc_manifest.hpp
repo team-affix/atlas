@@ -132,7 +132,7 @@ struct ridge_fc_manifest {
             rp_srt_active_goals_t>;
     using subgoals_activator_t         = subgoals_activator<lineage_pool, goal_activator_t,
                                         db, goal_candidates_activator_t>;
-    using srt_subgoals_activator_t      = srt_subgoals_activator<srt_active_goals, srt_active_goals,
+    using srt_subgoals_activator_t      = srt_subgoals_activator<rp_srt_active_goals_t, srt_active_goals,
                                         subgoals_activator_t>;
     using rp_fewer_candidate_srt_subgoals_activator_t =
         rp_fewer_candidate_srt_subgoals_activator<

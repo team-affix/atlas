@@ -25,7 +25,7 @@ using rp_srt_t = rp_srt_active_goals<
     srt_active_goals>;
 using compute_t = rp_compute_fewer_candidate_goal_value<goal_candidate_rules>;
 
-// Hand-rolls full activate (insert + link + flush), matching srt_subgoals_activator.
+// Hand-rolls full activate matching srt_subgoals: insert, then RP link (−∞), then flush.
 struct HandRollActivateSubgoalsAndCandidates {
     srt_active_goals* srt;
     rp_srt_t* rp;
@@ -41,7 +41,7 @@ struct HandRollActivateSubgoalsAndCandidates {
             for (rule_id id : ids)
                 rules->link_goal_candidate(child, id);
         }
-        srt->link_srt_goal_batch_parent(rl->parent);
+        rp->link_srt_goal_batch_parent(rl->parent);
         srt->flush_srt_goal_batch();
         return true;
     }
@@ -107,10 +107,10 @@ TEST_F(RpFewerCandidateResolveScoresIntegrationTest, TwoChildrenDifferentCandida
     EXPECT_NE(rp.get(&p), kNegInf);
 }
 
-TEST_F(RpFewerCandidateResolveScoresIntegrationTest, EmptyBodyDoesNotWriteScores) {
+TEST_F(RpFewerCandidateResolveScoresIntegrationTest, FactEmptyBodyOnlyNegInfPercolate) {
     /*
-     * Intent: empty-body resolve activates (link+flush) but writes no RP scores.
-     * Parent / ancestor scores stay as they were before activate.
+     * Intent: empty-body resolve still RP-links the parent to −∞ and percolates.
+     * Sibling under grandparent keeps −1; grandparent becomes max(−∞, −1) = −1.
      */
     insert_leaf(&gp);
     rp.insert_active_goal(&p);
@@ -127,9 +127,8 @@ TEST_F(RpFewerCandidateResolveScoresIntegrationTest, EmptyBodyDoesNotWriteScores
 
     EXPECT_TRUE(activator.activate_subgoals_and_candidates(&rl));
 
-    EXPECT_EQ(rp.get(&p), 0.0);
-    EXPECT_EQ(rp.get(&gp), 0.0);
-    EXPECT_EQ(rp.get(&sibling), -1.0);
+    EXPECT_EQ(rp.get(&p), kNegInf);
+    EXPECT_EQ(rp.get(&gp), -1.0);
 }
 
 TEST_F(RpFewerCandidateResolveScoresIntegrationTest, ActivateFailureSkipsScoring) {
