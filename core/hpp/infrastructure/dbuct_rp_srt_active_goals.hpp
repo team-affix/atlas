@@ -11,11 +11,14 @@
 #include "value_objects/rp_srt_active_goals_action.hpp"
 #include "debug_assert.hpp"
 
-template<typename IInsertActiveGoal, typename IGetParentGoal, typename IIterateChildGoals>
+template<typename IInsertActiveGoal, typename IGetParentGoal, typename IIterateChildGoals,
+         typename ILinkSrtGoalBatchParent>
 struct dbuct_rp_srt_active_goals {
-    dbuct_rp_srt_active_goals(IInsertActiveGoal&, IGetParentGoal&, IIterateChildGoals&);
+    dbuct_rp_srt_active_goals(IInsertActiveGoal&, IGetParentGoal&, IIterateChildGoals&,
+                              ILinkSrtGoalBatchParent&);
 
     void insert_active_goal(const goal_lineage* gl);
+    void link_srt_goal_batch_parent(const goal_lineage* parent);
     void set_active_goal_value(const goal_lineage* gl, double value);
     double get(const goal_lineage* gl) const;
 
@@ -38,20 +41,23 @@ private:
     IInsertActiveGoal& insert_active_goal_;
     IGetParentGoal& get_parent_goal_;
     IIterateChildGoals& iterate_child_goals_;
+    ILinkSrtGoalBatchParent& link_srt_goal_batch_parent_;
     map_t scores_;
     std::stack<frame> frame_stack_;
 };
 
-template<typename IIAG, typename IPG, typename IICG>
-dbuct_rp_srt_active_goals<IIAG, IPG, IICG>::dbuct_rp_srt_active_goals(
-    IIAG& insert_active_goal, IPG& get_parent_goal, IICG& iterate_child_goals)
+template<typename IIAG, typename IPG, typename IICG, typename ILSP>
+dbuct_rp_srt_active_goals<IIAG, IPG, IICG, ILSP>::dbuct_rp_srt_active_goals(
+    IIAG& insert_active_goal, IPG& get_parent_goal, IICG& iterate_child_goals,
+    ILSP& link_srt_goal_batch_parent)
     : insert_active_goal_(insert_active_goal)
     , get_parent_goal_(get_parent_goal)
     , iterate_child_goals_(iterate_child_goals)
+    , link_srt_goal_batch_parent_(link_srt_goal_batch_parent)
     , frame_stack_(std::deque<frame>{frame{}}) {}
 
-template<typename IIAG, typename IPG, typename IICG>
-void dbuct_rp_srt_active_goals<IIAG, IPG, IICG>::insert_active_goal(
+template<typename IIAG, typename IPG, typename IICG, typename ILSP>
+void dbuct_rp_srt_active_goals<IIAG, IPG, IICG, ILSP>::insert_active_goal(
     const goal_lineage* gl) {
     insert_active_goal_.insert_active_goal(gl);
     auto [_, inserted] = scores_.emplace(gl, 0.0);
@@ -59,34 +65,42 @@ void dbuct_rp_srt_active_goals<IIAG, IPG, IICG>::insert_active_goal(
     log(rp_srt_score_insert{gl});
 }
 
-template<typename IIAG, typename IPG, typename IICG>
-void dbuct_rp_srt_active_goals<IIAG, IPG, IICG>::set_active_goal_value(
+template<typename IIAG, typename IPG, typename IICG, typename ILSP>
+void dbuct_rp_srt_active_goals<IIAG, IPG, IICG, ILSP>::link_srt_goal_batch_parent(
+    const goal_lineage* parent) {
+    assign_score(parent, -std::numeric_limits<double>::infinity());
+    percolate_from(get_parent_goal_.get_parent_goal(parent));
+    link_srt_goal_batch_parent_.link_srt_goal_batch_parent(parent);
+}
+
+template<typename IIAG, typename IPG, typename IICG, typename ILSP>
+void dbuct_rp_srt_active_goals<IIAG, IPG, IICG, ILSP>::set_active_goal_value(
     const goal_lineage* gl, double value) {
     assign_score(gl, value);
     percolate_from(get_parent_goal_.get_parent_goal(gl));
 }
 
-template<typename IIAG, typename IPG, typename IICG>
-double dbuct_rp_srt_active_goals<IIAG, IPG, IICG>::get(
+template<typename IIAG, typename IPG, typename IICG, typename ILSP>
+double dbuct_rp_srt_active_goals<IIAG, IPG, IICG, ILSP>::get(
     const goal_lineage* gl) const {
     return scores_.at(gl);
 }
 
-template<typename IIAG, typename IPG, typename IICG>
-void dbuct_rp_srt_active_goals<IIAG, IPG, IICG>::push_frame() {
+template<typename IIAG, typename IPG, typename IICG, typename ILSP>
+void dbuct_rp_srt_active_goals<IIAG, IPG, IICG, ILSP>::push_frame() {
     frame_stack_.push(frame{});
 }
 
-template<typename IIAG, typename IPG, typename IICG>
-void dbuct_rp_srt_active_goals<IIAG, IPG, IICG>::pop_frame() {
+template<typename IIAG, typename IPG, typename IICG, typename ILSP>
+void dbuct_rp_srt_active_goals<IIAG, IPG, IICG, ILSP>::pop_frame() {
     auto current = std::move(frame_stack_.top());
     frame_stack_.pop();
     for (auto it = current.actions_.rbegin(); it != current.actions_.rend(); ++it)
         undo_action(*it);
 }
 
-template<typename IIAG, typename IPG, typename IICG>
-double dbuct_rp_srt_active_goals<IIAG, IPG, IICG>::max_child_score(
+template<typename IIAG, typename IPG, typename IICG, typename ILSP>
+double dbuct_rp_srt_active_goals<IIAG, IPG, IICG, ILSP>::max_child_score(
     const goal_lineage* parent) const {
     double best = -std::numeric_limits<double>::infinity();
     auto sm = iterate_child_goals_.iterate_child_goals(parent);
@@ -98,8 +112,8 @@ double dbuct_rp_srt_active_goals<IIAG, IPG, IICG>::max_child_score(
     return best;
 }
 
-template<typename IIAG, typename IPG, typename IICG>
-void dbuct_rp_srt_active_goals<IIAG, IPG, IICG>::percolate_from(
+template<typename IIAG, typename IPG, typename IICG, typename ILSP>
+void dbuct_rp_srt_active_goals<IIAG, IPG, IICG, ILSP>::percolate_from(
     const goal_lineage* parent) {
     while (parent != nullptr) {
         const double new_val = max_child_score(parent);
@@ -109,8 +123,8 @@ void dbuct_rp_srt_active_goals<IIAG, IPG, IICG>::percolate_from(
     }
 }
 
-template<typename IIAG, typename IPG, typename IICG>
-void dbuct_rp_srt_active_goals<IIAG, IPG, IICG>::assign_score(
+template<typename IIAG, typename IPG, typename IICG, typename ILSP>
+void dbuct_rp_srt_active_goals<IIAG, IPG, IICG, ILSP>::assign_score(
     const goal_lineage* gl, double value) {
     double& slot = scores_.at(gl);
     const double previous = slot;
@@ -118,15 +132,15 @@ void dbuct_rp_srt_active_goals<IIAG, IPG, IICG>::assign_score(
     log(rp_srt_score_assign{gl, previous});
 }
 
-template<typename IIAG, typename IPG, typename IICG>
-void dbuct_rp_srt_active_goals<IIAG, IPG, IICG>::log(
+template<typename IIAG, typename IPG, typename IICG, typename ILSP>
+void dbuct_rp_srt_active_goals<IIAG, IPG, IICG, ILSP>::log(
     rp_srt_active_goals_action action) {
     DEBUG_ASSERT(!frame_stack_.empty());
     frame_stack_.top().actions_.push_back(std::move(action));
 }
 
-template<typename IIAG, typename IPG, typename IICG>
-void dbuct_rp_srt_active_goals<IIAG, IPG, IICG>::undo_action(
+template<typename IIAG, typename IPG, typename IICG, typename ILSP>
+void dbuct_rp_srt_active_goals<IIAG, IPG, IICG, ILSP>::undo_action(
     const rp_srt_active_goals_action& action) {
     if (const auto* insert = std::get_if<rp_srt_score_insert>(&action)) {
         scores_.erase(insert->gl);

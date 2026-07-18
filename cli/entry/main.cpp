@@ -3,6 +3,7 @@
 #include "infrastructure/dbuct_genius_command_handler.hpp"
 #include "infrastructure/dbuct_horizon_command_handler.hpp"
 #include "infrastructure/dbuct_ridge_command_handler.hpp"
+#include "infrastructure/dbuct_ridge_fc_command_handler.hpp"
 #include "infrastructure/genius_command_handler.hpp"
 #include "infrastructure/horizon_command_handler.hpp"
 #include "infrastructure/ridge_command_handler.hpp"
@@ -118,6 +119,37 @@ int main(int argc, char** argv) {
                                       dbuct_ridge_opts.exploration_constant,
                                       dbuct_ridge_opts.grant_increment_interval,
                                       dbuct_ridge_opts.sim_progress_interval);
+        h();
+    });
+
+    struct {
+        std::string file;
+        std::string goals_str;
+        size_t max_resolutions        = 1000;
+        uint32_t seed                 = 0;
+        double exploration_constant   = 15;
+        size_t grant_increment_interval = dbuct_ridge_fc_runtime::k_default_grant_increment_interval;
+        size_t sim_progress_interval  = 1000;
+    } dbuct_ridge_fc_opts;
+
+    auto* dbuct_ridge_fc_sub = app.add_subcommand(
+        "dbuct-ridge-fc",
+        "Run the ridge solver with delayed-backtracking UCT and fewer-candidate rollout");
+    dbuct_ridge_fc_sub->add_option("file", dbuct_ridge_fc_opts.file, "CHC input file")->required();
+    dbuct_ridge_fc_sub->add_option("-g,--goal", dbuct_ridge_fc_opts.goals_str, "Goal body string, e.g. \"p(X), q(X)\"")->required();
+    dbuct_ridge_fc_sub->add_option("--max-resolutions", dbuct_ridge_fc_opts.max_resolutions, "Max resolutions");
+    dbuct_ridge_fc_sub->add_option("--seed", dbuct_ridge_fc_opts.seed, "RNG seed");
+    dbuct_ridge_fc_sub->add_option("--exploration-constant", dbuct_ridge_fc_opts.exploration_constant, "MCTS exploration constant");
+    dbuct_ridge_fc_sub->add_option("--grant-increment-interval", dbuct_ridge_fc_opts.grant_increment_interval,
+                          "DBUCT per-node compute batch growth (larger camps longer before backtracking)");
+    dbuct_ridge_fc_sub->add_option("--sim-progress-interval", dbuct_ridge_fc_opts.sim_progress_interval,
+                          "Print sim progress every N sims (0 disables)");
+    dbuct_ridge_fc_sub->callback([&]() {
+        dbuct_ridge_fc_command_handler h(dbuct_ridge_fc_opts.file, dbuct_ridge_fc_opts.goals_str,
+                                         dbuct_ridge_fc_opts.max_resolutions, dbuct_ridge_fc_opts.seed,
+                                         dbuct_ridge_fc_opts.exploration_constant,
+                                         dbuct_ridge_fc_opts.grant_increment_interval,
+                                         dbuct_ridge_fc_opts.sim_progress_interval);
         h();
     });
 

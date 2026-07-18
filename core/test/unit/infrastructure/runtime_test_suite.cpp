@@ -23,6 +23,7 @@
 #include "infrastructure/dbuct_genius_runtime.hpp"
 #include "infrastructure/dbuct_horizon_runtime.hpp"
 #include "infrastructure/dbuct_ridge_runtime.hpp"
+#include "infrastructure/dbuct_ridge_fc_runtime.hpp"
 #include "infrastructure/expr_pool.hpp"
 #include "infrastructure/expr_printer.hpp"
 #include "infrastructure/genius_runtime.hpp"
@@ -41,11 +42,11 @@ inline constexpr size_t kMaxResolutions = 32;
 inline constexpr uint32_t kSeed = 41;
 inline constexpr double kRidgeExplorationConstant = 1.414;
 
-enum class runtime_kind { basic, ridge, ridge_fc, horizon, genius, dbuct_ridge, dbuct_horizon, dbuct_genius };
+enum class runtime_kind { basic, ridge, ridge_fc, horizon, genius, dbuct_ridge, dbuct_ridge_fc, dbuct_horizon, dbuct_genius };
 
 // Type-erased runtime reference for testing across all runtime types.
 struct runtime_ref {
-    using variant_t = std::variant<basic_runtime*, ridge_runtime*, ridge_fc_runtime*, horizon_runtime*, genius_runtime*, dbuct_ridge_runtime*, dbuct_horizon_runtime*, dbuct_genius_runtime*>;
+    using variant_t = std::variant<basic_runtime*, ridge_runtime*, ridge_fc_runtime*, horizon_runtime*, genius_runtime*, dbuct_ridge_runtime*, dbuct_ridge_fc_runtime*, dbuct_horizon_runtime*, dbuct_genius_runtime*>;
     explicit runtime_ref(variant_t v) : v_(v) {}
     bool next() { return std::visit([](auto* r) { return r->next(); }, v_); }
     bool solved() const { return std::visit([](const auto* r) { return r->solved(); }, v_); }
@@ -76,6 +77,7 @@ struct runtime_session_holder {
     std::optional<horizon_runtime> horizon;
     std::optional<genius_runtime> genius;
     std::optional<dbuct_ridge_runtime> dbuct_ridge;
+    std::optional<dbuct_ridge_fc_runtime> dbuct_ridge_fc;
     std::optional<dbuct_horizon_runtime> dbuct_horizon;
     std::optional<dbuct_genius_runtime> dbuct_genius;
     std::optional<runtime_ref> ref;
@@ -145,6 +147,16 @@ runtime_ref& make_runtime_session(
                 seed,
                 kRidgeExplorationConstant);
             holder.ref.emplace(runtime_ref::variant_t{&*holder.dbuct_ridge});
+            return *holder.ref;
+        case runtime_kind::dbuct_ridge_fc:
+            holder.dbuct_ridge_fc.emplace(
+                database,
+                goals,
+                initial_frame_offset,
+                max_resolutions,
+                seed,
+                kRidgeExplorationConstant);
+            holder.ref.emplace(runtime_ref::variant_t{&*holder.dbuct_ridge_fc});
             return *holder.ref;
         case runtime_kind::dbuct_horizon:
             holder.dbuct_horizon.emplace(
@@ -3153,17 +3165,19 @@ INSTANTIATE_TEST_SUITE_P(
     RuntimeParamTest,
     ::testing::Values(runtime_kind::basic, runtime_kind::ridge, runtime_kind::ridge_fc,
                       runtime_kind::horizon, runtime_kind::genius, runtime_kind::dbuct_ridge,
-                      runtime_kind::dbuct_horizon, runtime_kind::dbuct_genius),
+                      runtime_kind::dbuct_ridge_fc, runtime_kind::dbuct_horizon,
+                      runtime_kind::dbuct_genius),
     [](const ::testing::TestParamInfo<runtime_kind>& info) {
         switch (info.param) {
-            case runtime_kind::basic:         return "basic";
-            case runtime_kind::ridge:         return "ridge";
-            case runtime_kind::ridge_fc:      return "ridge_fc";
-            case runtime_kind::horizon:       return "horizon";
-            case runtime_kind::genius:        return "genius";
-            case runtime_kind::dbuct_ridge:   return "dbuct_ridge";
-            case runtime_kind::dbuct_horizon: return "dbuct_horizon";
-            case runtime_kind::dbuct_genius:  return "dbuct_genius";
+            case runtime_kind::basic:           return "basic";
+            case runtime_kind::ridge:           return "ridge";
+            case runtime_kind::ridge_fc:        return "ridge_fc";
+            case runtime_kind::horizon:         return "horizon";
+            case runtime_kind::genius:          return "genius";
+            case runtime_kind::dbuct_ridge:     return "dbuct_ridge";
+            case runtime_kind::dbuct_ridge_fc:  return "dbuct_ridge_fc";
+            case runtime_kind::dbuct_horizon:   return "dbuct_horizon";
+            case runtime_kind::dbuct_genius:    return "dbuct_genius";
         }
         return "unknown";
     });
