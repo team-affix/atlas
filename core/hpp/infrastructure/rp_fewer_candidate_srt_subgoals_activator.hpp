@@ -2,54 +2,47 @@
 #define RP_FEWER_CANDIDATE_SRT_SUBGOALS_ACTIVATOR_HPP
 
 #include "value_objects/lineage.hpp"
+#include "value_objects/rule.hpp"
 
-template<typename ISubgoalsActivator, typename ILinkSrtGoalBatchParent,
-         typename IIterateSrtGoalBatch, typename IFlushSrtGoalBatch,
-         typename IComputeActiveGoalValue, typename ISetActiveGoalValue>
+template<typename IActivateSubgoalsAndCandidates, typename IGetRule,
+         typename IMakeGoalLineage, typename IComputeActiveGoalValue,
+         typename ISetActiveGoalValue>
 struct rp_fewer_candidate_srt_subgoals_activator {
     rp_fewer_candidate_srt_subgoals_activator(
-        ISubgoalsActivator&, ILinkSrtGoalBatchParent&, IIterateSrtGoalBatch&,
-        IFlushSrtGoalBatch&, IComputeActiveGoalValue&, ISetActiveGoalValue&);
+        IActivateSubgoalsAndCandidates&, IGetRule&, IMakeGoalLineage&,
+        IComputeActiveGoalValue&, ISetActiveGoalValue&);
     bool activate_subgoals_and_candidates(const resolution_lineage*);
 private:
-    ISubgoalsActivator& subgoals_activator_;
-    ILinkSrtGoalBatchParent& link_srt_goal_batch_parent_;
-    IIterateSrtGoalBatch& iterate_srt_goal_batch_;
-    IFlushSrtGoalBatch& flush_srt_goal_batch_;
+    IActivateSubgoalsAndCandidates& activate_subgoals_and_candidates_;
+    IGetRule& get_rule_;
+    IMakeGoalLineage& make_goal_lineage_;
     IComputeActiveGoalValue& compute_active_goal_value_;
     ISetActiveGoalValue& set_active_goal_value_;
 };
 
-template<typename ISA, typename ILSP, typename IISB, typename IFSGB,
-         typename ICAV, typename ISAGV>
-rp_fewer_candidate_srt_subgoals_activator<ISA, ILSP, IISB, IFSGB, ICAV, ISAGV>::
+template<typename IASAC, typename IGR, typename IMGL, typename ICAV, typename ISAGV>
+rp_fewer_candidate_srt_subgoals_activator<IASAC, IGR, IMGL, ICAV, ISAGV>::
 rp_fewer_candidate_srt_subgoals_activator(
-    ISA& subgoals_activator, ILSP& link_srt_goal_batch_parent,
-    IISB& iterate_srt_goal_batch, IFSGB& flush_srt_goal_batch,
-    ICAV& compute_active_goal_value, ISAGV& set_active_goal_value)
-    : subgoals_activator_(subgoals_activator)
-    , link_srt_goal_batch_parent_(link_srt_goal_batch_parent)
-    , iterate_srt_goal_batch_(iterate_srt_goal_batch)
-    , flush_srt_goal_batch_(flush_srt_goal_batch)
+    IASAC& activate_subgoals_and_candidates, IGR& get_rule,
+    IMGL& make_goal_lineage, ICAV& compute_active_goal_value,
+    ISAGV& set_active_goal_value)
+    : activate_subgoals_and_candidates_(activate_subgoals_and_candidates)
+    , get_rule_(get_rule)
+    , make_goal_lineage_(make_goal_lineage)
     , compute_active_goal_value_(compute_active_goal_value)
     , set_active_goal_value_(set_active_goal_value) {}
 
-template<typename ISA, typename ILSP, typename IISB, typename IFSGB,
-         typename ICAV, typename ISAGV>
-bool rp_fewer_candidate_srt_subgoals_activator<ISA, ILSP, IISB, IFSGB, ICAV, ISAGV>::
+template<typename IASAC, typename IGR, typename IMGL, typename ICAV, typename ISAGV>
+bool rp_fewer_candidate_srt_subgoals_activator<IASAC, IGR, IMGL, ICAV, ISAGV>::
 activate_subgoals_and_candidates(const resolution_lineage* rl) {
-    if (!subgoals_activator_.activate_subgoals_and_candidates(rl)) return false;
-    link_srt_goal_batch_parent_.link_srt_goal_batch_parent(rl->parent);
-    auto sm = iterate_srt_goal_batch_.iterate_srt_goal_batch();
-    while (!sm.done()) {
-        sm.resume();
-        if (sm.has_yield()) {
-            const goal_lineage* gl = sm.consume_yield();
-            set_active_goal_value_.set_active_goal_value(
-                gl, compute_active_goal_value_.compute_active_goal_value(gl));
-        }
+    if (!activate_subgoals_and_candidates_.activate_subgoals_and_candidates(rl))
+        return false;
+    const rule* r = get_rule_.get_rule(rl->idx);
+    for (subgoal_id body_idx = 0; body_idx < r->body.size(); ++body_idx) {
+        const goal_lineage* gl = make_goal_lineage_.make_goal_lineage(rl, body_idx);
+        set_active_goal_value_.set_active_goal_value(
+            gl, compute_active_goal_value_.compute_active_goal_value(gl));
     }
-    flush_srt_goal_batch_.flush_srt_goal_batch();
     return true;
 }
 

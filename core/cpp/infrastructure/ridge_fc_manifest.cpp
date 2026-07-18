@@ -64,10 +64,10 @@ ridge_fc_manifest::ridge_fc_manifest(
           rp_srt_active_goals_),
       subgoals_activator_(lineage_pool_, goal_activator_, database,
                           goal_candidates_activator_),
+      srt_subgoals_activator_(srt_active_goals_, srt_active_goals_, subgoals_activator_),
       rp_fewer_candidate_srt_subgoals_activator_(
-          subgoals_activator_, rp_srt_active_goals_, srt_active_goals_,
-          srt_active_goals_, rp_compute_fewer_candidate_goal_value_,
-          rp_srt_active_goals_),
+          srt_subgoals_activator_, database, lineage_pool_,
+          rp_compute_fewer_candidate_goal_value_, rp_srt_active_goals_),
       initial_goals_activator_(initial_goals, initial_goal_activator_,
                                make_initial_goal_lineage_, rp_fewer_candidate_goal_candidates_activator_),
       srt_initial_goals_activator_(srt_active_goals_, initial_goals_activator_),

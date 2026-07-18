@@ -69,6 +69,7 @@
 #include "infrastructure/rp_uniform_rule_rollout.hpp"
 #include "infrastructure/srt_goal_deactivator.hpp"
 #include "infrastructure/srt_initial_goals_activator.hpp"
+#include "infrastructure/srt_subgoals_activator.hpp"
 #include "infrastructure/subgoals_activator.hpp"
 #include "infrastructure/tear_down_sim.hpp"
 #include "infrastructure/elimination_backlog.hpp"
@@ -131,11 +132,12 @@ struct ridge_fc_manifest {
             rp_srt_active_goals_t>;
     using subgoals_activator_t         = subgoals_activator<lineage_pool, goal_activator_t,
                                         db, goal_candidates_activator_t>;
+    using srt_subgoals_activator_t      = srt_subgoals_activator<srt_active_goals, srt_active_goals,
+                                        subgoals_activator_t>;
     using rp_fewer_candidate_srt_subgoals_activator_t =
         rp_fewer_candidate_srt_subgoals_activator<
-            subgoals_activator_t, rp_srt_active_goals_t, srt_active_goals,
-            srt_active_goals, rp_compute_fewer_candidate_goal_value_t,
-            rp_srt_active_goals_t>;
+            srt_subgoals_activator_t, db, lineage_pool,
+            rp_compute_fewer_candidate_goal_value_t, rp_srt_active_goals_t>;
     using initial_goals_activator_t     = initial_goals_activator<initial_goal_exprs,
                                         initial_goal_activator_t, make_initial_goal_lineage_t,
                                         rp_fewer_candidate_goal_candidates_activator_t>;
@@ -228,6 +230,7 @@ struct ridge_fc_manifest {
     goal_candidates_activator_t     goal_candidates_activator_;
     rp_fewer_candidate_goal_candidates_activator_t rp_fewer_candidate_goal_candidates_activator_;
     subgoals_activator_t           subgoals_activator_;
+    srt_subgoals_activator_t        srt_subgoals_activator_;
     rp_fewer_candidate_srt_subgoals_activator_t rp_fewer_candidate_srt_subgoals_activator_;
     initial_goals_activator_t       initial_goals_activator_;
     srt_initial_goals_activator_t    srt_initial_goals_activator_;
