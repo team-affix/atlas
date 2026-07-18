@@ -1,8 +1,8 @@
-// compute_fewer_candidate_goal_value scorer.
+// rp_compute_fewer_candidate_goal_value scorer.
 
 #include <gtest/gtest.h>
 #include <gmock/gmock.h>
-#include "infrastructure/compute_fewer_candidate_goal_value.hpp"
+#include "infrastructure/rp_compute_fewer_candidate_goal_value.hpp"
 #include "infrastructure/ra_rule_id_set.hpp"
 #include "value_objects/lineage.hpp"
 
@@ -17,14 +17,14 @@ struct MockGetGoalCandidateRuleIds {
 
 }  // namespace
 
-struct ComputeFewerCandidateGoalValueTest : public ::testing::Test {
+struct RpComputeFewerCandidateGoalValueTest : public ::testing::Test {
     NiceMock<MockGetGoalCandidateRuleIds> get_ids;
-    compute_fewer_candidate_goal_value<MockGetGoalCandidateRuleIds> scorer{get_ids};
+    rp_compute_fewer_candidate_goal_value<MockGetGoalCandidateRuleIds> scorer{get_ids};
     ra_rule_id_set rules;
     goal_lineage gl{nullptr, 0};
 };
 
-TEST_F(ComputeFewerCandidateGoalValueTest, ReturnsNegativeCandidateCount) {
+TEST_F(RpComputeFewerCandidateGoalValueTest, ReturnsNegativeCandidateCount) {
     rules.insert(1);
     rules.insert(2);
     rules.insert(3);

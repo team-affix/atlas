@@ -1,8 +1,8 @@
-// fewer_candidate_srt_subgoals_activator: activate, link, set batch values, flush.
+// rp_fewer_candidate_srt_subgoals_activator: activate, link, set batch values, flush.
 
 #include <gtest/gtest.h>
 #include <gmock/gmock.h>
-#include "infrastructure/fewer_candidate_srt_subgoals_activator.hpp"
+#include "infrastructure/rp_fewer_candidate_srt_subgoals_activator.hpp"
 #include "infrastructure/srt_active_goals.hpp"
 #include "value_objects/lineage.hpp"
 
@@ -28,13 +28,13 @@ struct MockSetActiveGoalValue {
     MOCK_METHOD(void, set_active_goal_value, (const goal_lineage*, double));
 };
 
-using activator_t = fewer_candidate_srt_subgoals_activator<
+using activator_t = rp_fewer_candidate_srt_subgoals_activator<
     MockSubgoalsActivator, MockLinkSrtGoalBatchParent, srt_active_goals,
     srt_active_goals, MockComputeActiveGoalValue, MockSetActiveGoalValue>;
 
 }  // namespace
 
-struct FewerCandidateSrtSubgoalsActivatorTest : public ::testing::Test {
+struct RpFewerCandidateSrtSubgoalsActivatorTest : public ::testing::Test {
     StrictMock<MockSubgoalsActivator> subgoals;
     StrictMock<MockLinkSrtGoalBatchParent> link;
     srt_active_goals srt;
@@ -48,7 +48,7 @@ struct FewerCandidateSrtSubgoalsActivatorTest : public ::testing::Test {
     resolution_lineage rl{&parent, 7};
 };
 
-TEST_F(FewerCandidateSrtSubgoalsActivatorTest, SetsBatchAfterLinkBeforeFlush) {
+TEST_F(RpFewerCandidateSrtSubgoalsActivatorTest, SetsBatchAfterLinkBeforeFlush) {
     srt.insert_active_goal(&parent);
     srt.flush_srt_goal_batch();
     srt.insert_active_goal(&child0);
@@ -63,7 +63,7 @@ TEST_F(FewerCandidateSrtSubgoalsActivatorTest, SetsBatchAfterLinkBeforeFlush) {
     EXPECT_TRUE(activator.activate_subgoals_and_candidates(&rl));
 }
 
-TEST_F(FewerCandidateSrtSubgoalsActivatorTest, EmptyBatchSkipsSet) {
+TEST_F(RpFewerCandidateSrtSubgoalsActivatorTest, EmptyBatchSkipsSet) {
     srt.insert_active_goal(&parent);
     srt.flush_srt_goal_batch();
 
@@ -74,7 +74,7 @@ TEST_F(FewerCandidateSrtSubgoalsActivatorTest, EmptyBatchSkipsSet) {
     EXPECT_TRUE(activator.activate_subgoals_and_candidates(&rl));
 }
 
-TEST_F(FewerCandidateSrtSubgoalsActivatorTest, PropagatesInnerFalseWithoutLink) {
+TEST_F(RpFewerCandidateSrtSubgoalsActivatorTest, PropagatesInnerFalseWithoutLink) {
     EXPECT_CALL(subgoals, activate_subgoals_and_candidates(&rl)).WillOnce(Return(false));
     EXPECT_CALL(link, link_srt_goal_batch_parent).Times(0);
     EXPECT_CALL(set_value, set_active_goal_value).Times(0);

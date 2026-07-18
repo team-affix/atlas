@@ -1,5 +1,5 @@
-#ifndef HEURISTIC_ROLLOUT_HPP
-#define HEURISTIC_ROLLOUT_HPP
+#ifndef RP_HEURISTIC_ROLLOUT_HPP
+#define RP_HEURISTIC_ROLLOUT_HPP
 
 #include <cstddef>
 #include <variant>
@@ -10,8 +10,8 @@
 #include "debug_assert.hpp"
 
 template<typename IRolloutChooseGoal, typename IRolloutChooseRule>
-struct heuristic_rollout {
-    heuristic_rollout(IRolloutChooseGoal&, IRolloutChooseRule&);
+struct rp_heuristic_rollout {
+    rp_heuristic_rollout(IRolloutChooseGoal&, IRolloutChooseRule&);
 
     template<typename IGetChoiceCount, typename IGetChoiceAt>
     mcts_choice rollout_choose(const IGetChoiceCount& get_choice_count,
@@ -23,12 +23,12 @@ private:
 };
 
 template<typename IRCG, typename IRCR>
-heuristic_rollout<IRCG, IRCR>::heuristic_rollout(IRCG& goal, IRCR& rule)
+rp_heuristic_rollout<IRCG, IRCR>::rp_heuristic_rollout(IRCG& goal, IRCR& rule)
     : rollout_choose_goal_(goal), rollout_choose_rule_(rule) {}
 
 template<typename IRCG, typename IRCR>
 template<typename IGetChoiceCount, typename IGetChoiceAt>
-mcts_choice heuristic_rollout<IRCG, IRCR>::rollout_choose(
+mcts_choice rp_heuristic_rollout<IRCG, IRCR>::rollout_choose(
     const IGetChoiceCount& get_choice_count,
     const IGetChoiceAt& get_choice_at) {
     DEBUG_ASSERT(get_choice_count.size() > 0);

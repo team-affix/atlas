@@ -1,5 +1,5 @@
-#ifndef SRT_ACTIVE_GOALS_HEURISTICS_HPP
-#define SRT_ACTIVE_GOALS_HEURISTICS_HPP
+#ifndef RP_SRT_ACTIVE_GOALS_HPP
+#define RP_SRT_ACTIVE_GOALS_HPP
 
 #include <algorithm>
 #include <limits>
@@ -10,8 +10,8 @@
 template<typename IInsertActiveGoal, typename IClearActiveGoals,
          typename IGetParentGoal, typename IIterateChildGoals,
          typename ILinkSrtGoalBatchParent>
-struct srt_active_goals_heuristics {
-    srt_active_goals_heuristics(IInsertActiveGoal&, IClearActiveGoals&,
+struct rp_srt_active_goals {
+    rp_srt_active_goals(IInsertActiveGoal&, IClearActiveGoals&,
                                 IGetParentGoal&, IIterateChildGoals&,
                                 ILinkSrtGoalBatchParent&);
 
@@ -36,7 +36,7 @@ private:
 };
 
 template<typename IIAG, typename ICAG, typename IPG, typename IICG, typename ILSP>
-srt_active_goals_heuristics<IIAG, ICAG, IPG, IICG, ILSP>::srt_active_goals_heuristics(
+rp_srt_active_goals<IIAG, ICAG, IPG, IICG, ILSP>::rp_srt_active_goals(
     IIAG& insert_active_goal, ICAG& clear_active_goals,
     IPG& get_parent_goal, IICG& iterate_child_goals,
     ILSP& link_srt_goal_batch_parent)
@@ -47,7 +47,7 @@ srt_active_goals_heuristics<IIAG, ICAG, IPG, IICG, ILSP>::srt_active_goals_heuri
     , link_srt_goal_batch_parent_(link_srt_goal_batch_parent) {}
 
 template<typename IIAG, typename ICAG, typename IPG, typename IICG, typename ILSP>
-void srt_active_goals_heuristics<IIAG, ICAG, IPG, IICG, ILSP>::insert_active_goal(
+void rp_srt_active_goals<IIAG, ICAG, IPG, IICG, ILSP>::insert_active_goal(
     const goal_lineage* gl) {
     insert_active_goal_.insert_active_goal(gl);
     auto [_, inserted] = scores_.emplace(gl, 0.0);
@@ -55,7 +55,7 @@ void srt_active_goals_heuristics<IIAG, ICAG, IPG, IICG, ILSP>::insert_active_goa
 }
 
 template<typename IIAG, typename ICAG, typename IPG, typename IICG, typename ILSP>
-void srt_active_goals_heuristics<IIAG, ICAG, IPG, IICG, ILSP>::link_srt_goal_batch_parent(
+void rp_srt_active_goals<IIAG, ICAG, IPG, IICG, ILSP>::link_srt_goal_batch_parent(
     const goal_lineage* parent) {
     scores_.at(parent) = -std::numeric_limits<double>::infinity();
     percolate_from(get_parent_goal_.get_parent_goal(parent));
@@ -63,26 +63,26 @@ void srt_active_goals_heuristics<IIAG, ICAG, IPG, IICG, ILSP>::link_srt_goal_bat
 }
 
 template<typename IIAG, typename ICAG, typename IPG, typename IICG, typename ILSP>
-void srt_active_goals_heuristics<IIAG, ICAG, IPG, IICG, ILSP>::clear_active_goals() {
+void rp_srt_active_goals<IIAG, ICAG, IPG, IICG, ILSP>::clear_active_goals() {
     clear_active_goals_.clear_active_goals();
     scores_.clear();
 }
 
 template<typename IIAG, typename ICAG, typename IPG, typename IICG, typename ILSP>
-void srt_active_goals_heuristics<IIAG, ICAG, IPG, IICG, ILSP>::set_active_goal_value(
+void rp_srt_active_goals<IIAG, ICAG, IPG, IICG, ILSP>::set_active_goal_value(
     const goal_lineage* gl, double value) {
     scores_.at(gl) = value;
     percolate_from(get_parent_goal_.get_parent_goal(gl));
 }
 
 template<typename IIAG, typename ICAG, typename IPG, typename IICG, typename ILSP>
-double srt_active_goals_heuristics<IIAG, ICAG, IPG, IICG, ILSP>::get(
+double rp_srt_active_goals<IIAG, ICAG, IPG, IICG, ILSP>::get(
     const goal_lineage* gl) const {
     return scores_.at(gl);
 }
 
 template<typename IIAG, typename ICAG, typename IPG, typename IICG, typename ILSP>
-double srt_active_goals_heuristics<IIAG, ICAG, IPG, IICG, ILSP>::max_child_score(
+double rp_srt_active_goals<IIAG, ICAG, IPG, IICG, ILSP>::max_child_score(
     const goal_lineage* parent) const {
     double best = -std::numeric_limits<double>::infinity();
     auto sm = iterate_child_goals_.iterate_child_goals(parent);
@@ -95,7 +95,7 @@ double srt_active_goals_heuristics<IIAG, ICAG, IPG, IICG, ILSP>::max_child_score
 }
 
 template<typename IIAG, typename ICAG, typename IPG, typename IICG, typename ILSP>
-void srt_active_goals_heuristics<IIAG, ICAG, IPG, IICG, ILSP>::percolate_from(
+void rp_srt_active_goals<IIAG, ICAG, IPG, IICG, ILSP>::percolate_from(
     const goal_lineage* parent) {
     while (parent != nullptr) {
         const double new_val = max_child_score(parent);
