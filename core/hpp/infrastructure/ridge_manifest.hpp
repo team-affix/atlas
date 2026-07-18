@@ -64,10 +64,10 @@
 #include "infrastructure/srt_active_goals_heuristics.hpp"
 #include "infrastructure/fewer_candidate_goal_candidates_activator.hpp"
 #include "infrastructure/fewer_candidate_goal_rollout.hpp"
+#include "infrastructure/fewer_candidate_srt_subgoals_activator.hpp"
 #include "infrastructure/uniform_rule_rollout.hpp"
 #include "infrastructure/srt_goal_deactivator.hpp"
 #include "infrastructure/srt_initial_goals_activator.hpp"
-#include "infrastructure/srt_subgoals_activator.hpp"
 #include "infrastructure/subgoals_activator.hpp"
 #include "infrastructure/tear_down_sim.hpp"
 #include "infrastructure/elimination_backlog.hpp"
@@ -92,7 +92,8 @@ struct ridge_manifest {
     using compute_fewer_candidate_goal_value_t = compute_fewer_candidate_goal_value<goal_candidate_rules>;
     using srt_active_goals_heuristics_t = srt_active_goals_heuristics<
                                         srt_active_goals, srt_active_goals,
-                                        srt_active_goals, srt_active_goals>;
+                                        srt_active_goals, srt_active_goals,
+                                        srt_active_goals>;
     using goal_rollout_t               = fewer_candidate_goal_rollout<srt_active_goals_heuristics_t>;
     using rule_rollout_t               = uniform_rule_rollout<std::mt19937>;
     using mcts_rollout_t               = heuristic_rollout<goal_rollout_t, rule_rollout_t>;
@@ -124,13 +125,18 @@ struct ridge_manifest {
             goal_candidates_activator_t, compute_fewer_candidate_goal_value_t,
             srt_active_goals_heuristics_t>;
     using subgoals_activator_t         = subgoals_activator<lineage_pool, goal_activator_t,
-                                        db, fewer_candidate_goal_candidates_activator_t>;
-    using srt_subgoals_activator_t      = srt_subgoals_activator<srt_active_goals, srt_active_goals, subgoals_activator_t>;
+                                        db, goal_candidates_activator_t>;
+    using fewer_candidate_srt_subgoals_activator_t =
+        fewer_candidate_srt_subgoals_activator<
+            subgoals_activator_t, srt_active_goals_heuristics_t, srt_active_goals,
+            srt_active_goals, compute_fewer_candidate_goal_value_t,
+            srt_active_goals_heuristics_t>;
     using initial_goals_activator_t     = initial_goals_activator<initial_goal_exprs,
                                         initial_goal_activator_t, make_initial_goal_lineage_t,
                                         fewer_candidate_goal_candidates_activator_t>;
     using srt_initial_goals_activator_t  = srt_initial_goals_activator<srt_active_goals, initial_goals_activator_t>;
-    using resolver_t                  = resolver<srt_goal_deactivator_t, srt_subgoals_activator_t, goal_candidates_deactivator_t, chosen_goal_candidates>;
+    using resolver_t                  = resolver<srt_goal_deactivator_t, fewer_candidate_srt_subgoals_activator_t,
+                                        goal_candidates_deactivator_t, chosen_goal_candidates>;
     using set_up_sim_t      = set_up_sim<elimination_backlog>;
     using tear_down_sim_t      = tear_down_sim<elimination_backlog, unit_goals, decision_memory, resolution_memory,
                             goal_candidate_rules, goal_exprs, srt_active_goals_heuristics_t, candidate_frame_offsets,
@@ -216,7 +222,7 @@ struct ridge_manifest {
     goal_candidates_activator_t     goal_candidates_activator_;
     fewer_candidate_goal_candidates_activator_t fewer_candidate_goal_candidates_activator_;
     subgoals_activator_t           subgoals_activator_;
-    srt_subgoals_activator_t        srt_subgoals_activator_;
+    fewer_candidate_srt_subgoals_activator_t fewer_candidate_srt_subgoals_activator_;
     initial_goals_activator_t       initial_goals_activator_;
     srt_initial_goals_activator_t    srt_initial_goals_activator_;
     resolver_t                    resolver_;

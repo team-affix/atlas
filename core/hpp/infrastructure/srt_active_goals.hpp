@@ -18,6 +18,7 @@ struct srt_active_goals {
     const goal_lineage* get_parent_goal(const goal_lineage*) const;
     coroutine<const goal_lineage*, void> iterate_root_goals() const;
     coroutine<const goal_lineage*, void> iterate_child_goals(const goal_lineage*) const;
+    coroutine<const goal_lineage*, void> iterate_srt_goal_batch() const;
 private:
     series_reduced_tree<const goal_lineage*> tree_;
     std::set<const goal_lineage*> in_flight_;

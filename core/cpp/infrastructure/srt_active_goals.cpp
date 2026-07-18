@@ -45,3 +45,7 @@ coroutine<const goal_lineage*, void> srt_active_goals::iterate_root_goals() cons
 coroutine<const goal_lineage*, void> srt_active_goals::iterate_child_goals(const goal_lineage* gl) const {
     for (const goal_lineage* child : tree_.children(gl)) co_yield child;
 }
+
+coroutine<const goal_lineage*, void> srt_active_goals::iterate_srt_goal_batch() const {
+    for (const goal_lineage* gl : in_flight_) co_yield gl;
+}
