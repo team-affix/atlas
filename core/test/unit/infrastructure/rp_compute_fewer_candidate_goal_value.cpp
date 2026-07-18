@@ -24,6 +24,17 @@ struct RpComputeFewerCandidateGoalValueTest : public ::testing::Test {
     goal_lineage gl{nullptr, 0};
 };
 
+TEST_F(RpComputeFewerCandidateGoalValueTest, EmptyCandidateSetReturnsZero) {
+    EXPECT_CALL(get_ids, get(&gl)).WillOnce(ReturnRef(rules));
+    EXPECT_EQ(scorer.compute_active_goal_value(&gl), 0.0);
+}
+
+TEST_F(RpComputeFewerCandidateGoalValueTest, OneCandidateReturnsNegOne) {
+    rules.insert(1);
+    EXPECT_CALL(get_ids, get(&gl)).WillOnce(ReturnRef(rules));
+    EXPECT_EQ(scorer.compute_active_goal_value(&gl), -1.0);
+}
+
 TEST_F(RpComputeFewerCandidateGoalValueTest, ReturnsNegativeCandidateCount) {
     rules.insert(1);
     rules.insert(2);
