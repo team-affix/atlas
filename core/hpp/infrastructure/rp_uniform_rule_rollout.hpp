@@ -4,7 +4,7 @@
 #include <cstddef>
 #include <random>
 #include <vector>
-#include "value_objects/rule.hpp"
+#include "value_objects/lineage.hpp"
 
 template<typename IRndGen>
 struct rp_uniform_rule_rollout {
