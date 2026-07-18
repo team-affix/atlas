@@ -6,6 +6,7 @@
 #include "infrastructure/genius_command_handler.hpp"
 #include "infrastructure/horizon_command_handler.hpp"
 #include "infrastructure/ridge_command_handler.hpp"
+#include "infrastructure/ridge_fc_command_handler.hpp"
 
 #ifndef ATLAS_GIT_TAG
 #define ATLAS_GIT_TAG "unknown"
@@ -61,6 +62,33 @@ int main(int argc, char** argv) {
                                 ridge_opts.max_resolutions, ridge_opts.seed,
                                 ridge_opts.exploration_constant,
                                 ridge_opts.sim_progress_interval);
+        h();
+    });
+
+    struct {
+        std::string file;
+        std::string goals_str;
+        size_t max_resolutions       = 1000;
+        uint32_t seed                = 0;
+        double exploration_constant  = 15;
+        size_t sim_progress_interval = 1000;
+    } ridge_fc_opts;
+
+    auto* ridge_fc_sub = app.add_subcommand(
+        "ridge-fc",
+        "Run the ridge solver with fewer-candidate rollout (MCTS decisions + joint elimination)");
+    ridge_fc_sub->add_option("file", ridge_fc_opts.file, "CHC input file")->required();
+    ridge_fc_sub->add_option("-g,--goal", ridge_fc_opts.goals_str, "Goal body string, e.g. \"p(X), q(X)\"")->required();
+    ridge_fc_sub->add_option("--max-resolutions", ridge_fc_opts.max_resolutions, "Max resolutions");
+    ridge_fc_sub->add_option("--seed", ridge_fc_opts.seed, "RNG seed");
+    ridge_fc_sub->add_option("--exploration-constant", ridge_fc_opts.exploration_constant, "MCTS exploration constant");
+    ridge_fc_sub->add_option("--sim-progress-interval", ridge_fc_opts.sim_progress_interval,
+                          "Print sim progress every N sims (0 disables)");
+    ridge_fc_sub->callback([&]() {
+        ridge_fc_command_handler h(ridge_fc_opts.file, ridge_fc_opts.goals_str,
+                                   ridge_fc_opts.max_resolutions, ridge_fc_opts.seed,
+                                   ridge_fc_opts.exploration_constant,
+                                   ridge_fc_opts.sim_progress_interval);
         h();
     });
 

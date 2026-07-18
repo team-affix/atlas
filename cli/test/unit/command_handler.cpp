@@ -1,5 +1,5 @@
 // command_handler: parameterized tests for basic_command_handler, ridge_command_handler,
-// horizon_command_handler, genius_command_handler, and dbuct_ridge_command_handler.
+// ridge_fc_command_handler, horizon_command_handler, genius_command_handler, and dbuct_*.
 // Example DBs under cli/examples/.
 
 #include <sstream>
@@ -13,12 +13,15 @@
 #include "infrastructure/genius_command_handler.hpp"
 #include "infrastructure/horizon_command_handler.hpp"
 #include "infrastructure/ridge_command_handler.hpp"
+#include "infrastructure/ridge_fc_command_handler.hpp"
 
 using ::testing::Ge;
 using ::testing::HasSubstr;
 using ::testing::Not;
 
-enum class cli_solver_kind { basic, ridge, horizon, genius, dbuct_ridge, dbuct_horizon, dbuct_genius };
+enum class cli_solver_kind {
+    basic, ridge, ridge_fc, horizon, genius, dbuct_ridge, dbuct_horizon, dbuct_genius
+};
 
 struct CommandHandlerParamTest : public ::testing::TestWithParam<cli_solver_kind> {
     static constexpr size_t kMaxResolutions       = 1000;
@@ -29,13 +32,14 @@ struct CommandHandlerParamTest : public ::testing::TestWithParam<cli_solver_kind
 INSTANTIATE_TEST_SUITE_P(
     AllSolvers,
     CommandHandlerParamTest,
-    ::testing::Values(cli_solver_kind::basic, cli_solver_kind::ridge, cli_solver_kind::horizon,
-                      cli_solver_kind::genius, cli_solver_kind::dbuct_ridge, cli_solver_kind::dbuct_horizon,
-                      cli_solver_kind::dbuct_genius),
+    ::testing::Values(cli_solver_kind::basic, cli_solver_kind::ridge, cli_solver_kind::ridge_fc,
+                      cli_solver_kind::horizon, cli_solver_kind::genius, cli_solver_kind::dbuct_ridge,
+                      cli_solver_kind::dbuct_horizon, cli_solver_kind::dbuct_genius),
     [](const auto& info) {
         switch (info.param) {
             case cli_solver_kind::basic:         return "basic";
             case cli_solver_kind::ridge:         return "ridge";
+            case cli_solver_kind::ridge_fc:      return "ridge_fc";
             case cli_solver_kind::horizon:       return "horizon";
             case cli_solver_kind::genius:        return "genius";
             case cli_solver_kind::dbuct_ridge:   return "dbuct_ridge";
@@ -92,6 +96,11 @@ void construct_handler(const std::string& file, const std::string& goal, size_t 
                 file, goal, max_res, CommandHandlerParamTest::kSeed,
                 CommandHandlerParamTest::kExplorationConstant);
             break;
+        case cli_solver_kind::ridge_fc:
+            ridge_fc_command_handler(
+                file, goal, max_res, CommandHandlerParamTest::kSeed,
+                CommandHandlerParamTest::kExplorationConstant);
+            break;
         case cli_solver_kind::horizon:
             horizon_command_handler(
                 file, goal, max_res, CommandHandlerParamTest::kSeed,
@@ -138,6 +147,11 @@ std::string run_handler_capture(
             break;
         case cli_solver_kind::ridge:
             ridge_command_handler(
+                file, goal, max_resolutions, CommandHandlerParamTest::kSeed,
+                CommandHandlerParamTest::kExplorationConstant)();
+            break;
+        case cli_solver_kind::ridge_fc:
+            ridge_fc_command_handler(
                 file, goal, max_resolutions, CommandHandlerParamTest::kSeed,
                 CommandHandlerParamTest::kExplorationConstant)();
             break;
