@@ -42,6 +42,10 @@ coroutine<const goal_lineage*, void> two_children_sm(const goal_lineage* a,
     co_yield b;
 }
 
+coroutine<const goal_lineage*, void> one_child_sm(const goal_lineage* a) {
+    co_yield a;
+}
+
 }  // namespace
 
 using dbuct_rp_srt_t = dbuct_rp_srt_active_goals<
@@ -328,4 +332,163 @@ TEST_F(DbuctRpSrtFullyMockedTest, PopFrameRestoresPreLinkScore) {
 
     rp.pop_frame();
     EXPECT_EQ(rp.get(&p), 0.0);
+}
+
+TEST_F(DbuctRpSrtFullyMockedTest, InsertForwardsThenDefaultsScore) {
+    EXPECT_CALL(insert, insert_active_goal(&g));
+    EXPECT_CALL(link, link_srt_goal_batch_parent).Times(0);
+    rp.insert_active_goal(&g);
+    EXPECT_EQ(rp.get(&g), 0.0);
+}
+
+TEST_F(DbuctRpSrtFullyMockedTest, NestedFrameWithLinkThenAssigns) {
+    EXPECT_CALL(insert, insert_active_goal(&gp));
+    EXPECT_CALL(insert, insert_active_goal(&p));
+    EXPECT_CALL(insert, insert_active_goal(&s));
+    rp.insert_active_goal(&gp);
+    rp.insert_active_goal(&p);
+    rp.insert_active_goal(&s);
+
+    EXPECT_CALL(get_parent, get_parent_goal(&s)).WillOnce(Return(&gp));
+    EXPECT_CALL(iterate_children, iterate_child_goals(&gp))
+        .WillOnce(Return(ByMove(two_children_sm(&p, &s))));
+    rp.set_active_goal_value(&s, -5.0);
+    EXPECT_EQ(rp.get(&gp), 0.0);
+
+    rp.push_frame();
+    {
+        InSequence seq;
+        EXPECT_CALL(get_parent, get_parent_goal(&p)).WillOnce(Return(&gp));
+        EXPECT_CALL(iterate_children, iterate_child_goals(&gp))
+            .WillOnce(Return(ByMove(two_children_sm(&p, &s))));
+        EXPECT_CALL(get_parent, get_parent_goal(&gp)).WillOnce(Return(nullptr));
+        EXPECT_CALL(link, link_srt_goal_batch_parent(&p));
+    }
+    rp.link_srt_goal_batch_parent(&p);
+    EXPECT_EQ(rp.get(&p), kNegInf);
+    EXPECT_EQ(rp.get(&gp), -5.0);
+
+    EXPECT_CALL(get_parent, get_parent_goal(&s)).WillOnce(Return(&gp));
+    EXPECT_CALL(iterate_children, iterate_child_goals(&gp))
+        .WillOnce(Return(ByMove(two_children_sm(&p, &s))));
+    // max(-inf, -1) = -1; walk parent of GP.
+    EXPECT_CALL(get_parent, get_parent_goal(&gp)).WillOnce(Return(nullptr));
+    rp.set_active_goal_value(&s, -1.0);
+    EXPECT_EQ(rp.get(&gp), -1.0);
+
+    rp.pop_frame();
+    EXPECT_EQ(rp.get(&p), 0.0);
+    EXPECT_EQ(rp.get(&s), -5.0);
+    EXPECT_EQ(rp.get(&gp), 0.0);
+}
+
+TEST_F(DbuctRpSrtFullyMockedTest, LinkPercolatesThroughEmptyChildrenAsNegInf) {
+    EXPECT_CALL(insert, insert_active_goal(&gp));
+    EXPECT_CALL(insert, insert_active_goal(&p));
+    rp.insert_active_goal(&gp);
+    rp.insert_active_goal(&p);
+
+    // Seed GP from P=0 (only child).
+    EXPECT_CALL(get_parent, get_parent_goal(&p)).WillOnce(Return(&gp));
+    EXPECT_CALL(iterate_children, iterate_child_goals(&gp))
+        .WillOnce(Return(ByMove(one_child_sm(&p))));
+    // new_val 0 == GP → early exit.
+    rp.set_active_goal_value(&p, 0.0);
+
+    InSequence seq;
+    EXPECT_CALL(get_parent, get_parent_goal(&p)).WillOnce(Return(&gp));
+    EXPECT_CALL(iterate_children, iterate_child_goals(&gp))
+        .WillOnce(Return(ByMove(one_child_sm(&p))));
+    EXPECT_CALL(get_parent, get_parent_goal(&gp)).WillOnce(Return(nullptr));
+    EXPECT_CALL(link, link_srt_goal_batch_parent(&p));
+    rp.link_srt_goal_batch_parent(&p);
+    EXPECT_EQ(rp.get(&p), kNegInf);
+    EXPECT_EQ(rp.get(&gp), kNegInf);
+}
+
+TEST_F(DbuctRpSrtFullyMockedTest, PopEmptyFrameIsNoOp) {
+    EXPECT_CALL(insert, insert_active_goal(&g));
+    rp.insert_active_goal(&g);
+    rp.push_frame();
+    rp.pop_frame();
+    EXPECT_EQ(rp.get(&g), 0.0);
+}
+
+TEST_F(DbuctRpSrtActiveGoalsTest, MultiLevelSetPercolatesMax) {
+    goal_lineage root{nullptr, 10};
+    goal_lineage mid{nullptr, 11};
+    goal_lineage root_sib{nullptr, 12};
+    goal_lineage leaf0{nullptr, 13};
+    goal_lineage leaf1{nullptr, 14};
+
+    rp.insert_active_goal(&root);
+    srt.flush_srt_goal_batch();
+
+    rp.insert_active_goal(&mid);
+    rp.insert_active_goal(&root_sib);
+    rp.link_srt_goal_batch_parent(&root);
+    srt.flush_srt_goal_batch();
+
+    rp.insert_active_goal(&leaf0);
+    rp.insert_active_goal(&leaf1);
+    rp.link_srt_goal_batch_parent(&mid);
+    srt.flush_srt_goal_batch();
+
+    rp.set_active_goal_value(&root_sib, kNegInf);
+    rp.set_active_goal_value(&leaf0, -2.0);
+    rp.set_active_goal_value(&leaf1, -5.0);
+    EXPECT_EQ(rp.get(&mid), -2.0);
+    EXPECT_EQ(rp.get(&root), -2.0);
+
+    rp.set_active_goal_value(&leaf0, -8.0);
+    EXPECT_EQ(rp.get(&mid), -5.0);
+    EXPECT_EQ(rp.get(&root), -5.0);
+}
+
+TEST_F(DbuctRpSrtActiveGoalsTest, LinkNegInfLetsSiblingWinAtGrandparent) {
+    goal_lineage gp{nullptr, 20};
+    goal_lineage a{nullptr, 21};
+    goal_lineage b{nullptr, 22};
+
+    rp.insert_active_goal(&gp);
+    srt.flush_srt_goal_batch();
+    rp.insert_active_goal(&a);
+    rp.insert_active_goal(&b);
+    rp.link_srt_goal_batch_parent(&gp);
+    srt.flush_srt_goal_batch();
+
+    rp.set_active_goal_value(&a, -1.0);
+    rp.set_active_goal_value(&b, -4.0);
+    EXPECT_EQ(rp.get(&gp), -1.0);
+
+    rp.link_srt_goal_batch_parent(&a);
+    srt.flush_srt_goal_batch();
+    EXPECT_EQ(rp.get(&a), kNegInf);
+    EXPECT_EQ(rp.get(&gp), -4.0);
+}
+
+TEST_F(DbuctRpSrtActiveGoalsTest, FramePopUndoesMultiLevelPercolate) {
+    goal_lineage gp{nullptr, 30};
+    goal_lineage a{nullptr, 31};
+    goal_lineage b{nullptr, 32};
+
+    rp.insert_active_goal(&gp);
+    srt.flush_srt_goal_batch();
+    rp.insert_active_goal(&a);
+    rp.insert_active_goal(&b);
+    rp.link_srt_goal_batch_parent(&gp);
+    srt.flush_srt_goal_batch();
+    rp.set_active_goal_value(&a, -1.0);
+    rp.set_active_goal_value(&b, -4.0);
+    EXPECT_EQ(rp.get(&gp), -1.0);
+
+    rp.push_frame();
+    rp.link_srt_goal_batch_parent(&a);
+    srt.flush_srt_goal_batch();
+    EXPECT_EQ(rp.get(&a), kNegInf);
+    EXPECT_EQ(rp.get(&gp), -4.0);
+
+    rp.pop_frame();
+    EXPECT_EQ(rp.get(&a), -1.0);
+    EXPECT_EQ(rp.get(&gp), -1.0);
 }
