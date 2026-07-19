@@ -21,6 +21,7 @@
 #include "infrastructure/basic_runtime.hpp"
 #include "infrastructure/db.hpp"
 #include "infrastructure/dbuct_genius_runtime.hpp"
+#include "infrastructure/dbuct_genius_fc_runtime.hpp"
 #include "infrastructure/dbuct_horizon_runtime.hpp"
 #include "infrastructure/dbuct_horizon_fc_runtime.hpp"
 #include "infrastructure/dbuct_ridge_runtime.hpp"
@@ -28,6 +29,7 @@
 #include "infrastructure/expr_pool.hpp"
 #include "infrastructure/expr_printer.hpp"
 #include "infrastructure/genius_runtime.hpp"
+#include "infrastructure/genius_fc_runtime.hpp"
 #include "infrastructure/initial_goal_exprs.hpp"
 #include "infrastructure/ridge_runtime.hpp"
 #include "infrastructure/ridge_fc_runtime.hpp"
@@ -44,11 +46,11 @@ inline constexpr size_t kMaxResolutions = 32;
 inline constexpr uint32_t kSeed = 41;
 inline constexpr double kRidgeExplorationConstant = 1.414;
 
-enum class runtime_kind { basic, ridge, ridge_fc, horizon, horizon_fc, genius, dbuct_ridge, dbuct_ridge_fc, dbuct_horizon, dbuct_horizon_fc, dbuct_genius };
+enum class runtime_kind { basic, ridge, ridge_fc, horizon, horizon_fc, genius, genius_fc, dbuct_ridge, dbuct_ridge_fc, dbuct_horizon, dbuct_horizon_fc, dbuct_genius, dbuct_genius_fc };
 
 // Type-erased runtime reference for testing across all runtime types.
 struct runtime_ref {
-    using variant_t = std::variant<basic_runtime*, ridge_runtime*, ridge_fc_runtime*, horizon_runtime*, horizon_fc_runtime*, genius_runtime*, dbuct_ridge_runtime*, dbuct_ridge_fc_runtime*, dbuct_horizon_runtime*, dbuct_horizon_fc_runtime*, dbuct_genius_runtime*>;
+    using variant_t = std::variant<basic_runtime*, ridge_runtime*, ridge_fc_runtime*, horizon_runtime*, horizon_fc_runtime*, genius_runtime*, genius_fc_runtime*, dbuct_ridge_runtime*, dbuct_ridge_fc_runtime*, dbuct_horizon_runtime*, dbuct_horizon_fc_runtime*, dbuct_genius_runtime*, dbuct_genius_fc_runtime*>;
     explicit runtime_ref(variant_t v) : v_(v) {}
     bool next() { return std::visit([](auto* r) { return r->next(); }, v_); }
     bool solved() const { return std::visit([](const auto* r) { return r->solved(); }, v_); }
@@ -79,11 +81,13 @@ struct runtime_session_holder {
     std::optional<horizon_runtime> horizon;
     std::optional<horizon_fc_runtime> horizon_fc;
     std::optional<genius_runtime> genius;
+    std::optional<genius_fc_runtime> genius_fc;
     std::optional<dbuct_ridge_runtime> dbuct_ridge;
     std::optional<dbuct_ridge_fc_runtime> dbuct_ridge_fc;
     std::optional<dbuct_horizon_runtime> dbuct_horizon;
     std::optional<dbuct_horizon_fc_runtime> dbuct_horizon_fc;
     std::optional<dbuct_genius_runtime> dbuct_genius;
+    std::optional<dbuct_genius_fc_runtime> dbuct_genius_fc;
     std::optional<runtime_ref> ref;
 };
 
@@ -152,6 +156,17 @@ runtime_ref& make_runtime_session(
                 kRidgeExplorationConstant);
             holder.ref.emplace(runtime_ref::variant_t{&*holder.genius});
             return *holder.ref;
+        case runtime_kind::genius_fc:
+            holder.genius_fc.emplace(
+                database,
+                goals,
+                initial_frame_offset,
+                max_resolutions,
+                seed,
+                kRidgeExplorationConstant,
+                kRidgeExplorationConstant);
+            holder.ref.emplace(runtime_ref::variant_t{&*holder.genius_fc});
+            return *holder.ref;
         case runtime_kind::dbuct_ridge:
             holder.dbuct_ridge.emplace(
                 database,
@@ -202,6 +217,17 @@ runtime_ref& make_runtime_session(
                 kRidgeExplorationConstant,
                 kRidgeExplorationConstant);
             holder.ref.emplace(runtime_ref::variant_t{&*holder.dbuct_genius});
+            return *holder.ref;
+        case runtime_kind::dbuct_genius_fc:
+            holder.dbuct_genius_fc.emplace(
+                database,
+                goals,
+                initial_frame_offset,
+                max_resolutions,
+                seed,
+                kRidgeExplorationConstant,
+                kRidgeExplorationConstant);
+            holder.ref.emplace(runtime_ref::variant_t{&*holder.dbuct_genius_fc});
             return *holder.ref;
     }
     throw std::logic_error("unknown runtime_kind");
@@ -3159,10 +3185,12 @@ TEST_P(RuntimeParamTest, HorizonGeniusCgwAfterUnitSolution) {
     if (GetParam() != runtime_kind::horizon
         && GetParam() != runtime_kind::horizon_fc
         && GetParam() != runtime_kind::genius
+        && GetParam() != runtime_kind::genius_fc
         && GetParam() != runtime_kind::dbuct_horizon
         && GetParam() != runtime_kind::dbuct_horizon_fc
-        && GetParam() != runtime_kind::dbuct_genius)
-        GTEST_SKIP() << "cgw() is horizon*/genius/dbuct_horizon*/dbuct_genius only";
+        && GetParam() != runtime_kind::dbuct_genius
+        && GetParam() != runtime_kind::dbuct_genius_fc)
+        GTEST_SKIP() << "cgw() is horizon*/genius*/dbuct_horizon*/dbuct_genius* only";
 
     static constexpr size_t kInitialVarCount = 0;
     initial_goals.push(saved_expr_pool_.make_functor(holder_.functors.id("f"), {}));
@@ -3180,15 +3208,21 @@ TEST_P(RuntimeParamTest, HorizonGeniusCgwAfterUnitSolution) {
     } else if (GetParam() == runtime_kind::genius) {
         ASSERT_TRUE(holder_.genius.has_value());
         EXPECT_NEAR(holder_.genius->cgw(), 1.0, 1e-9);
+    } else if (GetParam() == runtime_kind::genius_fc) {
+        ASSERT_TRUE(holder_.genius_fc.has_value());
+        EXPECT_NEAR(holder_.genius_fc->cgw(), 1.0, 1e-9);
     } else if (GetParam() == runtime_kind::dbuct_horizon) {
         ASSERT_TRUE(holder_.dbuct_horizon.has_value());
         EXPECT_NEAR(holder_.dbuct_horizon->cgw(), 1.0, 1e-9);
     } else if (GetParam() == runtime_kind::dbuct_horizon_fc) {
         ASSERT_TRUE(holder_.dbuct_horizon_fc.has_value());
         EXPECT_NEAR(holder_.dbuct_horizon_fc->cgw(), 1.0, 1e-9);
-    } else {
+    } else if (GetParam() == runtime_kind::dbuct_genius) {
         ASSERT_TRUE(holder_.dbuct_genius.has_value());
         EXPECT_NEAR(holder_.dbuct_genius->cgw(), 1.0, 1e-9);
+    } else {
+        ASSERT_TRUE(holder_.dbuct_genius_fc.has_value());
+        EXPECT_NEAR(holder_.dbuct_genius_fc->cgw(), 1.0, 1e-9);
     }
 }
 
@@ -3196,10 +3230,11 @@ INSTANTIATE_TEST_SUITE_P(
     AllRuntimes,
     RuntimeParamTest,
     ::testing::Values(runtime_kind::basic, runtime_kind::ridge, runtime_kind::ridge_fc,
-                      runtime_kind::horizon, runtime_kind::horizon_fc, runtime_kind::genius,
+                      runtime_kind::horizon, runtime_kind::horizon_fc,
+                      runtime_kind::genius, runtime_kind::genius_fc,
                       runtime_kind::dbuct_ridge, runtime_kind::dbuct_ridge_fc,
                       runtime_kind::dbuct_horizon, runtime_kind::dbuct_horizon_fc,
-                      runtime_kind::dbuct_genius),
+                      runtime_kind::dbuct_genius, runtime_kind::dbuct_genius_fc),
     [](const ::testing::TestParamInfo<runtime_kind>& info) {
         switch (info.param) {
             case runtime_kind::basic:              return "basic";
@@ -3208,11 +3243,13 @@ INSTANTIATE_TEST_SUITE_P(
             case runtime_kind::horizon:            return "horizon";
             case runtime_kind::horizon_fc:         return "horizon_fc";
             case runtime_kind::genius:             return "genius";
+            case runtime_kind::genius_fc:          return "genius_fc";
             case runtime_kind::dbuct_ridge:        return "dbuct_ridge";
             case runtime_kind::dbuct_ridge_fc:     return "dbuct_ridge_fc";
             case runtime_kind::dbuct_horizon:      return "dbuct_horizon";
             case runtime_kind::dbuct_horizon_fc:   return "dbuct_horizon_fc";
             case runtime_kind::dbuct_genius:       return "dbuct_genius";
+            case runtime_kind::dbuct_genius_fc:    return "dbuct_genius_fc";
         }
         return "unknown";
     });
