@@ -14,6 +14,7 @@ struct dbuct_bind_map {
 
     void bind(uint32_t global_key, framed_expr value);
     framed_expr whnf(framed_expr fe);
+    void clear_bindings();
 
     void push_frame();
     void pop_frame();
@@ -63,6 +64,13 @@ framed_expr dbuct_bind_map<IGlobalize>::whnf(framed_expr fe) {
         it->second = resolved;
     }
     return resolved;
+}
+
+template<typename IGlobalize>
+void dbuct_bind_map<IGlobalize>::clear_bindings() {
+    bindings_.clear();
+    frames_.clear();
+    frames_.emplace_back();
 }
 
 template<typename IGlobalize>

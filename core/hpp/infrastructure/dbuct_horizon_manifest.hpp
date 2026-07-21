@@ -55,6 +55,7 @@
 #include "infrastructure/dbuct_avoidance_unit_boundary.hpp"
 #include "infrastructure/dbuct_bind_map.hpp"
 #include "infrastructure/dbuct_bind_map_factory.hpp"
+#include "infrastructure/pool_allocator.hpp"
 #include "infrastructure/dbuct_candidate_frame_offsets.hpp"
 #include "infrastructure/dbuct_cdcl_elimination_generator.hpp"
 #include "infrastructure/dbuct_chosen_goal_candidates.hpp"
@@ -91,6 +92,7 @@
 struct dbuct_horizon_manifest {
     using bind_map_t                = dbuct_bind_map<globalizer>;
     using bind_map_factory_t        = dbuct_bind_map_factory<globalizer>;
+    using local_bind_map_pool_t = pool_allocator<bind_map_t>;
     using goal_exprs_t              = dbuct_goal_exprs;
     using goal_candidate_rules_t    = dbuct_goal_candidate_rules;
     using srt_active_goals_t        = dbuct_srt_active_goals;
@@ -133,7 +135,9 @@ struct dbuct_horizon_manifest {
                     avoidance_unit_boundary_t, avoidance_unit_boundary_t,
                     avoidance_unit_boundary_t>;
     using mhu_t   = dbuct_mhu_elimination_generator<
-                    bind_map_t, bind_map_t, bind_map_t, bind_map_factory_t,
+                    bind_map_t, bind_map_t, bind_map_t,
+                    local_bind_map_pool_t, local_bind_map_pool_t, local_bind_map_pool_t,
+                    bind_map_factory_t,
                     unifier<globalizer, bind_map_t>, unifier_factory_t, lineage_pool,
                     expr_pool, goal_candidate_rules_t>;
     using hub_t   = dbuct_frame_hub<
@@ -232,6 +236,7 @@ struct dbuct_horizon_manifest {
     globalizer                    globalizer_;
     bind_map_t                    bind_map_;
     bind_map_factory_t            bind_map_factory_;
+    local_bind_map_pool_t         local_bind_map_pool_;
     unifier_factory_t             unifier_factory_;
     lineage_pool                  lineage_pool_;
     ra_rule_id_set_factory        ra_rule_id_set_factory_;

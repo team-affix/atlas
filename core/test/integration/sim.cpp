@@ -13,6 +13,7 @@
 #include "infrastructure/initial_goal_exprs.hpp"
 #include "infrastructure/bind_map.hpp"
 #include "infrastructure/bind_map_factory.hpp"
+#include "infrastructure/pool_allocator.hpp"
 #include "infrastructure/unifier_factory.hpp"
 #include "infrastructure/lineage_pool.hpp"
 #include "infrastructure/ra_active_goals.hpp"
@@ -67,8 +68,10 @@ namespace {
 
 using unifier_factory_t            = unifier_factory<globalizer, bind_map<globalizer>>;
 using cdcl_t                      = cdcl_elimination_generator<chosen_goal_candidates>;
+using local_bind_map_pool_t       = pool_allocator<bind_map<globalizer>>;
 using mhu_t                       = mhu_elimination_generator<
                                     bind_map<globalizer>, bind_map<globalizer>, bind_map<globalizer>,
+                                    local_bind_map_pool_t, local_bind_map_pool_t, local_bind_map_pool_t,
                                     bind_map_factory<globalizer>, unifier<globalizer, bind_map<globalizer>>,
                                     unifier_factory_t, lineage_pool, expr_pool, goal_candidate_rules>;
 using joint_t                     = joint_elimination_generator<cdcl_t, mhu_t>;
@@ -116,6 +119,7 @@ struct sim_stack {
     globalizer globalizer_;
     bind_map<globalizer> bind_map_{globalizer_};
     bind_map_factory<globalizer> bind_map_factory_{globalizer_};
+    local_bind_map_pool_t local_bind_map_pool_{};
     unifier_factory_t unifier_factory_{globalizer_};
     lineage_pool lineage_pool_;
     ra_rule_id_set_factory ra_rule_id_set_factory_;
@@ -165,8 +169,9 @@ struct sim_stack {
 
     sim_stack(db& database_in, initial_goal_exprs& initial_goals_in)
         : database_(database_in), initial_goals_(initial_goals_in) {
-        mhu_.emplace(bind_map_, bind_map_, lineage_pool_, expr_pool_, bind_map_factory_,
-                     unifier_factory_, goal_candidate_rules_);
+        mhu_.emplace(bind_map_, bind_map_, lineage_pool_, expr_pool_,
+                     local_bind_map_pool_, local_bind_map_pool_, local_bind_map_pool_,
+                     bind_map_factory_, unifier_factory_, goal_candidate_rules_);
         joint_.emplace(cdcl_, *mhu_);
         candidate_activator_.emplace(frame_allocator_, candidate_frame_offsets_, *mhu_,
                                      elimination_backlog_, goal_exprs_, database_,

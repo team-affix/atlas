@@ -7,6 +7,7 @@
 #include "infrastructure/mhu_elimination_generator.hpp"
 #include "infrastructure/bind_map.hpp"
 #include "infrastructure/bind_map_factory.hpp"
+#include "infrastructure/pool_allocator.hpp"
 #include "infrastructure/globalizer.hpp"
 #include "infrastructure/unifier_factory.hpp"
 #include "infrastructure/unifier.hpp"
@@ -31,8 +32,10 @@ struct MockGetGoalCandidateRuleIds {
     MOCK_METHOD(ra_rule_id_set&, get, (const goal_lineage*), (const));
 };
 
+using local_bind_map_pool_t = pool_allocator<bind_map<globalizer>>;
 using test_mhu_t = mhu_elimination_generator<
     bind_map<globalizer>, bind_map<globalizer>, bind_map<globalizer>,
+    local_bind_map_pool_t, local_bind_map_pool_t, local_bind_map_pool_t,
     bind_map_factory<globalizer>,
     unifier<globalizer, bind_map<globalizer>>, unifier_factory<globalizer, bind_map<globalizer>>,
     MockMakeResolutionLineage, MockMakeVar, MockGetGoalCandidateRuleIds>;
@@ -42,6 +45,7 @@ struct MhuEliminationGeneratorUnitTest : public ::testing::Test {
     globalizer g_;
     bind_map<globalizer> common{g_};
     bind_map_factory<globalizer> bmf{g_};
+    local_bind_map_pool_t pool;
     unifier_factory<globalizer, bind_map<globalizer>> uf{g_};
     testing::NiceMock<MockMakeResolutionLineage> mrl;
     testing::NiceMock<MockGetGoalCandidateRuleIds> gcri;
@@ -49,7 +53,7 @@ struct MhuEliminationGeneratorUnitTest : public ::testing::Test {
     ra_rule_id_set candidates;
     goal_lineage gl{nullptr, 0};
     resolution_lineage rl{&gl, 0};
-    test_mhu_t mhu{common, common, mrl, mv, bmf, uf, gcri};
+    test_mhu_t mhu{common, common, mrl, mv, pool, pool, pool, bmf, uf, gcri};
 
     expr goal{expr::var{0}};
     expr head_f{expr::functor{functors.id("f"), {}}};

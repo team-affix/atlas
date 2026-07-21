@@ -9,6 +9,7 @@
 #include <vector>
 #include "infrastructure/bind_map.hpp"
 #include "infrastructure/bind_map_factory.hpp"
+#include "infrastructure/pool_allocator.hpp"
 #include "infrastructure/candidate_activator.hpp"
 #include "infrastructure/candidate_deactivator.hpp"
 #include "infrastructure/candidate_frame_offsets.hpp"
@@ -83,10 +84,13 @@
 struct horizon_manifest {
     using bind_map_t        = bind_map<globalizer>;
     using bind_map_factory_t = bind_map_factory<globalizer>;
+    using local_bind_map_pool_t = pool_allocator<bind_map_t>;
     using unifier_factory_t = unifier_factory<globalizer, bind_map_t>;
     using cdcl_t  = cdcl_elimination_generator<chosen_goal_candidates>;
     using mhu_t   = mhu_elimination_generator<
-                    bind_map_t, bind_map_t, bind_map_t, bind_map_factory_t,
+                    bind_map_t, bind_map_t, bind_map_t,
+                    local_bind_map_pool_t, local_bind_map_pool_t, local_bind_map_pool_t,
+                    bind_map_factory_t,
                     unifier<globalizer, bind_map_t>, unifier_factory_t,
                     lineage_pool, expr_pool, goal_candidate_rules>;
     using joint_t = joint_elimination_generator<cdcl_t, mhu_t>;
@@ -176,6 +180,7 @@ struct horizon_manifest {
     globalizer              globalizer_;
     bind_map_t              bind_map_;
     bind_map_factory_t      bind_map_factory_;
+    local_bind_map_pool_t     local_bind_map_pool_;
     unifier_factory_t          unifier_factory_;
     lineage_pool            lineage_pool_;
     rule_id_set_factory     rule_id_set_factory_;

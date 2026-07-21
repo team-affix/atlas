@@ -14,6 +14,7 @@
 #include "infrastructure/mhu_elimination_generator.hpp"
 #include "infrastructure/bind_map.hpp"
 #include "infrastructure/bind_map_factory.hpp"
+#include "infrastructure/pool_allocator.hpp"
 #include "infrastructure/globalizer.hpp"
 #include "infrastructure/unifier_factory.hpp"
 #include "infrastructure/expr_pool.hpp"
@@ -24,8 +25,10 @@
 #include "functor_fixture.hpp"
 
 using test_unifier_factory_t = unifier_factory<globalizer, bind_map<globalizer>>;
+using local_bind_map_pool_t = pool_allocator<bind_map<globalizer>>;
 using test_mhu_t = mhu_elimination_generator<
     bind_map<globalizer>, bind_map<globalizer>, bind_map<globalizer>,
+    local_bind_map_pool_t, local_bind_map_pool_t, local_bind_map_pool_t,
     bind_map_factory<globalizer>, unifier<globalizer, bind_map<globalizer>>, test_unifier_factory_t,
     lineage_pool, expr_pool, goal_candidate_rules>;
 
@@ -72,6 +75,7 @@ struct MhuEliminationGeneratorIntegrationTest : public ::testing::Test {
     bind_map<globalizer> common{g_};
     lineage_pool lp;
     bind_map_factory<globalizer> bmf{g_};
+    local_bind_map_pool_t bind_map_pool;
     test_unifier_factory_t uf{g_};
     ra_rule_id_set_factory ra_rule_id_set_factory_;
     goal_candidate_rules ggcr{ra_rule_id_set_factory_};
@@ -80,7 +84,7 @@ struct MhuEliminationGeneratorIntegrationTest : public ::testing::Test {
 
     MhuEliminationGeneratorIntegrationTest() {
         pool.emplace();
-        mhu.emplace(common, common, lp, *pool, bmf, uf, ggcr);
+        mhu.emplace(common, common, lp, *pool, bind_map_pool, bind_map_pool, bind_map_pool, bmf, uf, ggcr);
     }
 
     size_t rules_for(const goal_lineage* gl) const { return ggcr.get(gl).size(); }

@@ -8,6 +8,7 @@
 #include "infrastructure/dbuct_mhu_elimination_generator.hpp"
 #include "infrastructure/dbuct_bind_map.hpp"
 #include "infrastructure/dbuct_bind_map_factory.hpp"
+#include "infrastructure/pool_allocator.hpp"
 #include "infrastructure/dbuct_goal_candidate_rules.hpp"
 #include "infrastructure/globalizer.hpp"
 #include "infrastructure/unifier_factory.hpp"
@@ -21,8 +22,10 @@
 using bind_map_t = dbuct_bind_map<globalizer>;
 using bind_map_factory_t = dbuct_bind_map_factory<globalizer>;
 using unifier_factory_t = unifier_factory<globalizer, bind_map_t>;
+using local_bind_map_pool_t = pool_allocator<bind_map_t>;
 using test_dbuct_mhu_t = dbuct_mhu_elimination_generator<
     bind_map_t, bind_map_t, bind_map_t,
+    local_bind_map_pool_t, local_bind_map_pool_t, local_bind_map_pool_t,
     bind_map_factory_t, unifier<globalizer, bind_map_t>, unifier_factory_t,
     lineage_pool, expr_pool, dbuct_goal_candidate_rules>;
 
@@ -50,6 +53,7 @@ struct DbuctMhuEliminationGeneratorIntegrationTest : public ::testing::Test {
     bind_map_t common{g_};
     lineage_pool lp;
     bind_map_factory_t bmf{g_};
+    local_bind_map_pool_t bind_map_pool;
     unifier_factory_t uf{g_};
     ra_rule_id_set_factory ra_factory;
     dbuct_goal_candidate_rules ggcr{ra_factory};
@@ -59,7 +63,7 @@ struct DbuctMhuEliminationGeneratorIntegrationTest : public ::testing::Test {
 
     DbuctMhuEliminationGeneratorIntegrationTest() {
         pool.emplace();
-        mhu.emplace(common, common, lp, *pool, bmf, uf, ggcr);
+        mhu.emplace(common, common, lp, *pool, bind_map_pool, bind_map_pool, bind_map_pool, bmf, uf, ggcr);
     }
 
     void ensure_goal_candidates(const goal_lineage* gl) {

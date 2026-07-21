@@ -35,3 +35,21 @@ TEST_F(DbuctBindMapTest, PopRevertsAssignAfterPathCompression) {
     EXPECT_EQ(map.whnf(query).skeleton, &var0);
     EXPECT_EQ(map.whnf({&var1, 0}).skeleton, &var1);
 }
+
+TEST_F(DbuctBindMapTest, ClearBindingsWipesBindings) {
+    map.bind(0u, {&func, 0});
+    map.clear_bindings();
+    EXPECT_EQ(map.whnf({&var0, 0}).skeleton, &var0);
+}
+
+TEST_F(DbuctBindMapTest, ClearBindingsResetsFramesLikeFreshMap) {
+    map.push_frame();
+    map.bind(0u, {&func, 0});
+    map.clear_bindings();
+    map.bind(0u, {&func, 0});
+    map.push_frame();
+    map.bind(1u, {&var0, 0});
+    map.pop_frame();
+    EXPECT_EQ(map.whnf({&var0, 0}).skeleton, &func);
+    EXPECT_EQ(map.whnf({&var1, 0}).skeleton, &var1);
+}
