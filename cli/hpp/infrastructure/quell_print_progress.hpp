@@ -1,12 +1,13 @@
 #ifndef QUELL_PRINT_PROGRESS_HPP
 #define QUELL_PRINT_PROGRESS_HPP
 
+#include <algorithm>
 #include <cstddef>
 #include <cstdio>
 #include <iomanip>
 #include <iostream>
+#include <limits>
 #include <sstream>
-#include <string>
 #include <unistd.h>
 
 template<typename IPrintProgress, typename IRuntime>
@@ -19,14 +20,14 @@ struct quell_print_progress {
 private:
     IPrintProgress&  base_;
     IRuntime*        runtime_;
-    size_t           previous_suffix_width_;
+    double           lowest_remaining_work_;
 };
 
 template<typename IPP, typename IRT>
 quell_print_progress<IPP, IRT>::quell_print_progress(IPP& base)
     : base_(base)
     , runtime_(nullptr)
-    , previous_suffix_width_(0)
+    , lowest_remaining_work_(std::numeric_limits<double>::infinity())
 {}
 
 template<typename IPP, typename IRT>
@@ -38,6 +39,8 @@ void quell_print_progress<IPP, IRT>::set_runtime(IRT& rt) {
 template<typename IPP, typename IRT>
 void quell_print_progress<IPP, IRT>::on_sim() {
     base_.on_sim();
+    lowest_remaining_work_ =
+        std::min(lowest_remaining_work_, runtime_->remaining_work());
 }
 
 template<typename IPP, typename IRT>
@@ -46,25 +49,18 @@ void quell_print_progress<IPP, IRT>::print() {
     std::ostringstream oss;
     oss << " | work " << std::fixed << std::setprecision(2)
         << runtime_->remaining_work()
+        << " | min work " << std::fixed << std::setprecision(2)
+        << lowest_remaining_work_
         << " | goals " << runtime_->remaining_active_goals();
-    const std::string suffix = oss.str();
-    if (isatty(fileno(stdout))) {
-        const std::string padding(
-            suffix.size() < previous_suffix_width_
-                ? previous_suffix_width_ - suffix.size()
-                : 0,
-            ' ');
-        std::cout << suffix << padding << std::flush;
-        previous_suffix_width_ = suffix.size();
-    } else {
-        std::cout << suffix << std::flush;
-    }
+    std::cout << oss.str();
+    if (isatty(fileno(stdout)))
+        std::cout << "\033[K";
+    std::cout << std::flush;
 }
 
 template<typename IPP, typename IRT>
 void quell_print_progress<IPP, IRT>::finish_line() {
     base_.finish_line();
-    previous_suffix_width_ = 0;
 }
 
 #endif

@@ -118,7 +118,7 @@ struct quell_manifest {
     using goal_candidates_activator_t   = goal_candidates_activator<querier_t, lineage_pool,
                                         candidate_activator_t, conflict_detector_t,
                                         unit_goal_detector_t, unit_goals>;
-    using quell_goal_activator_t      = quell_goal_activator<goal_activator_t, goal_depths, goal_depths, goal_work_values, goal_work_function>;
+    using quell_goal_activator_t      = quell_goal_activator<goal_activator_t, goal_depths, goal_depths, goal_work_values, goal_work_function, remaining_work>;
     using quell_goal_deactivator_t    = quell_goal_deactivator<srt_goal_deactivator_t, goal_depths, goal_work_values>;
     using quell_initial_goal_activator_t = quell_initial_goal_activator<initial_goal_activator_t,
                                         make_initial_goal_lineage_t, goal_depths, goal_work_values, goal_work_function, remaining_work>;
@@ -129,7 +129,7 @@ struct quell_manifest {
                                         quell_initial_goal_activator_t, make_initial_goal_lineage_t, goal_candidates_activator_t>;
     using srt_initial_goals_activator_t  = srt_initial_goals_activator<srt_active_goals, initial_goals_activator_t>;
     using resolver_t                  = resolver<quell_goal_deactivator_t, srt_subgoals_activator_t, goal_candidates_deactivator_t, chosen_goal_candidates>;
-    using quell_resolver_t           = quell_resolver<resolver_t, db, goal_work_values, goal_depths, goal_work_function, remaining_work, remaining_work>;
+    using quell_resolver_t           = quell_resolver<resolver_t, goal_work_values, remaining_work>;
     using set_up_sim_t      = set_up_sim<elimination_backlog>;
     using tear_down_sim_t      = tear_down_sim<elimination_backlog, unit_goals, decision_memory, resolution_memory,
                             goal_candidate_rules, goal_exprs, srt_active_goals, candidate_frame_offsets,

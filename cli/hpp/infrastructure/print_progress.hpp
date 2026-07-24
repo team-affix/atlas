@@ -99,7 +99,7 @@ void print_progress<IRuntime, IGTS>::print() {
                 ? previous_line_width_ - text.size()
                 : 0,
             ' ');
-        std::cout << '\r' << text << padding << std::flush;
+        std::cout << '\r' << text << padding << "\033[K" << std::flush;
         previous_line_width_ = text.size();
     } else {
         std::cout << '\n' << text << std::flush;

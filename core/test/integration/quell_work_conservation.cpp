@@ -11,7 +11,6 @@
 #include "infrastructure/quell_resolver.hpp"
 #include "infrastructure/remaining_work.hpp"
 #include "value_objects/expr.hpp"
-#include "value_objects/rule.hpp"
 
 using ::testing::NiceMock;
 using ::testing::Return;
@@ -30,10 +29,6 @@ struct MockResolver {
     MOCK_METHOD(bool, resolve, (const resolution_lineage*));
 };
 
-struct MockGetRule {
-    MOCK_METHOD(const rule*, get_rule, (rule_id), (const));
-};
-
 class QuellWorkConservationIntegrationTest : public ::testing::Test {
 protected:
     using make_initial_goal_lineage_t = make_initial_goal_lineage<lineage_pool>;
@@ -41,8 +36,7 @@ protected:
         MockInitialGoalActivator, make_initial_goal_lineage_t,
         goal_depths, goal_work_values, goal_work_function, remaining_work>;
     using quell_resolver_t = quell_resolver<
-        MockResolver, MockGetRule, goal_work_values, goal_depths, goal_work_function,
-        remaining_work, remaining_work>;
+        MockResolver, goal_work_values, remaining_work>;
 
     lineage_pool lineage_pool_;
     goal_depths goal_depths_;
@@ -52,23 +46,17 @@ protected:
     make_initial_goal_lineage_t make_initial_goal_lineage_{lineage_pool_};
     NiceMock<MockInitialGoalActivator> mock_initial;
     NiceMock<MockResolver> mock_resolver;
-    NiceMock<MockGetRule> get_rule;
 
     quell_initial_goal_activator_t quell_initial_goal_activator_{
         mock_initial, make_initial_goal_lineage_, goal_depths_, goal_work_values_,
         goal_work_function_, remaining_work_};
     quell_resolver_t quell_resolver_{
-        mock_resolver, get_rule, goal_work_values_, goal_depths_, goal_work_function_,
-        remaining_work_, remaining_work_};
-
-    expr head{expr::var{0}};
-    rule fact_rule{&head, {}};
+        mock_resolver, goal_work_values_, remaining_work_};
 
     double f0() const { return goal_work_function_.get(0); }
 };
 
 TEST_F(QuellWorkConservationIntegrationTest, TwoInitialGoalsThenFactResolvesConserveRemaining) {
-    ON_CALL(get_rule, get_rule).WillByDefault(Return(&fact_rule));
     ON_CALL(mock_resolver, resolve).WillByDefault(Return(true));
 
     quell_initial_goal_activator_.activate_initial_goal(0);

@@ -214,7 +214,7 @@ struct dbuct_quell_fc_manifest {
             goal_candidates_activator_t, rp_compute_fewer_candidate_goal_value_t,
             rp_srt_active_goals_t>;
     using quell_goal_activator_t      = quell_goal_activator<goal_activator_t, goal_depths_t, goal_depths_t,
-                                          goal_work_values_t, goal_work_function>;
+                                          goal_work_values_t, goal_work_function, remaining_work_t>;
     using quell_goal_deactivator_t    = quell_goal_deactivator<srt_goal_deactivator_t, goal_depths_t, goal_work_values_t>;
     using quell_initial_goal_activator_t = quell_initial_goal_activator<initial_goal_activator_t,
                                           make_initial_goal_lineage_t, goal_depths_t, goal_work_values_t,
@@ -233,8 +233,7 @@ struct dbuct_quell_fc_manifest {
     using srt_initial_goals_activator_t = srt_initial_goals_activator<srt_active_goals_t, initial_goals_activator_t>;
     using resolver_t                    = resolver<quell_goal_deactivator_t, rp_fewer_candidate_srt_subgoals_activator_t,
                                           goal_candidates_deactivator_t, chosen_goal_candidates_t>;
-    using quell_resolver_t            = quell_resolver<resolver_t, db, goal_work_values_t, goal_depths_t,
-                                          goal_work_function, remaining_work_t, remaining_work_t>;
+    using quell_resolver_t            = quell_resolver<resolver_t, goal_work_values_t, remaining_work_t>;
     using quell_reward_t              = quell_reward<remaining_work_t>;
 
     using dbuct_sim_t              = dbuct_sim<mcts_choice,

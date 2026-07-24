@@ -1,5 +1,5 @@
-// quell_goal_activator: delegates to goal_activator, then sets child depth = parent+1
-// and work = f(depth).
+// quell_goal_activator: delegates to goal_activator, then sets child depth =
+// parent+1, work = f(depth), and credits remaining_work.
 
 #include <gtest/gtest.h>
 #include <gmock/gmock.h>
@@ -31,11 +31,15 @@ struct MockGetGoalWork {
     MOCK_METHOD(double, get, (size_t), (const));
 };
 
+struct MockAddRemainingWork {
+    MOCK_METHOD(void, add, (double));
+};
+
 } // namespace
 
 using test_quell_goal_activator_t = quell_goal_activator<
     MockGoalActivator, MockGetGoalDepth, MockSetGoalDepth,
-    MockSetGoalWorkValue, MockGetGoalWork>;
+    MockSetGoalWorkValue, MockGetGoalWork, MockAddRemainingWork>;
 
 struct QuellGoalActivatorTest : public ::testing::Test {
     MockGoalActivator mock_goal_activator;
@@ -43,6 +47,7 @@ struct QuellGoalActivatorTest : public ::testing::Test {
     MockSetGoalDepth set_goal_depth;
     MockSetGoalWorkValue set_goal_work_value;
     MockGetGoalWork get_goal_work;
+    MockAddRemainingWork add_remaining_work;
 
     goal_lineage parent_gl{nullptr, 0};
     resolution_lineage rl{&parent_gl, 1};
@@ -54,10 +59,10 @@ struct QuellGoalActivatorTest : public ::testing::Test {
 
     test_quell_goal_activator_t activator{
         mock_goal_activator, get_goal_depth, set_goal_depth,
-        set_goal_work_value, get_goal_work};
+        set_goal_work_value, get_goal_work, add_remaining_work};
 };
 
-TEST_F(QuellGoalActivatorTest, ActivatesThenSetsChildDepthAndWork) {
+TEST_F(QuellGoalActivatorTest, ActivatesThenSetsChildDepthWorkAndCreditsRemaining) {
     EXPECT_CALL(get_goal_depth, get(&parent_gl))
         .Times(AtLeast(1)).WillRepeatedly(Return(kParentDepth));
     EXPECT_CALL(get_goal_work, get(kChildDepth))
@@ -66,5 +71,6 @@ TEST_F(QuellGoalActivatorTest, ActivatesThenSetsChildDepthAndWork) {
     EXPECT_CALL(mock_goal_activator, activate(&child_gl)).Times(1);
     EXPECT_CALL(set_goal_depth, set(&child_gl, kChildDepth)).Times(1);
     EXPECT_CALL(set_goal_work_value, set(&child_gl, kChildWork)).Times(1);
+    EXPECT_CALL(add_remaining_work, add(kChildWork)).Times(1);
     activator.activate(&child_gl);
 }
