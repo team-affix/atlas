@@ -38,6 +38,10 @@ double dbuct_quell_runtime::remaining_work() const {
     return manifest_.remaining_work_.get();
 }
 
+size_t dbuct_quell_runtime::remaining_active_goals() const {
+    return manifest_.srt_active_goals_.active_goals_size();
+}
+
 lemma dbuct_quell_runtime::derive_decision_lemma() const {
     return manifest_.decision_memory_.derive_decision_lemma();
 }

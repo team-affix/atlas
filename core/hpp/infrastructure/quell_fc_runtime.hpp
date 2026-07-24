@@ -23,6 +23,7 @@ struct quell_fc_runtime {
     size_t resolution_depth() const;
     size_t decision_depth() const;
     double remaining_work() const;
+    size_t remaining_active_goals() const;
     const expr* normalize(framed_expr);
     lemma derive_decision_lemma() const;
     lemma derive_resolution_lemma() const;

@@ -16,14 +16,12 @@ struct quell_print_progress {
 private:
     IPrintProgress&  base_;
     IRuntime*        runtime_;
-    double           ema_remaining_work_;
 };
 
 template<typename IPP, typename IRT>
 quell_print_progress<IPP, IRT>::quell_print_progress(IPP& base)
     : base_(base)
     , runtime_(nullptr)
-    , ema_remaining_work_(0.0)
 {}
 
 template<typename IPP, typename IRT>
@@ -35,14 +33,15 @@ void quell_print_progress<IPP, IRT>::set_runtime(IRT& rt) {
 template<typename IPP, typename IRT>
 void quell_print_progress<IPP, IRT>::on_sim() {
     base_.on_sim();
-    ema_remaining_work_ = 0.9 * ema_remaining_work_ + 0.1 * runtime_->remaining_work();
 }
 
 template<typename IPP, typename IRT>
 void quell_print_progress<IPP, IRT>::print() {
     base_.print();
     std::ostringstream oss;
-    oss << " | work " << std::fixed << std::setprecision(2) << ema_remaining_work_;
+    oss << " | work " << std::fixed << std::setprecision(2)
+        << runtime_->remaining_work()
+        << " | goals " << runtime_->remaining_active_goals();
     std::cout << oss.str() << std::flush;
 }
 

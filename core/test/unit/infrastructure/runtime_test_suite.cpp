@@ -3312,15 +3312,19 @@ TEST_P(RuntimeParamTest, QuellRemainingWorkAfterUnitSolution) {
     if (GetParam() == runtime_kind::quell) {
         ASSERT_TRUE(holder_.quell.has_value());
         EXPECT_NEAR(holder_.quell->remaining_work(), 0.0, 1e-9);
+        EXPECT_EQ(holder_.quell->remaining_active_goals(), 0u);
     } else if (GetParam() == runtime_kind::quell_fc) {
         ASSERT_TRUE(holder_.quell_fc.has_value());
         EXPECT_NEAR(holder_.quell_fc->remaining_work(), 0.0, 1e-9);
+        EXPECT_EQ(holder_.quell_fc->remaining_active_goals(), 0u);
     } else if (GetParam() == runtime_kind::dbuct_quell) {
         ASSERT_TRUE(holder_.dbuct_quell.has_value());
         EXPECT_NEAR(holder_.dbuct_quell->remaining_work(), 0.0, 1e-9);
+        EXPECT_EQ(holder_.dbuct_quell->remaining_active_goals(), 0u);
     } else {
         ASSERT_TRUE(holder_.dbuct_quell_fc.has_value());
         EXPECT_NEAR(holder_.dbuct_quell_fc->remaining_work(), 0.0, 1e-9);
+        EXPECT_EQ(holder_.dbuct_quell_fc->remaining_active_goals(), 0u);
     }
 }
 
