@@ -1,5 +1,6 @@
 // command_handler: parameterized tests for basic_command_handler, ridge_command_handler,
-// ridge_fc_command_handler, horizon_command_handler, genius_command_handler, and dbuct_*.
+// ridge_fc_command_handler, horizon_command_handler, genius_command_handler, quell_command_handler,
+// and dbuct_* (including quell-fc / dbuct-quell / dbuct-quell-fc).
 // Example DBs under cli/examples/.
 
 #include <sstream>
@@ -11,12 +12,16 @@
 #include "infrastructure/dbuct_genius_fc_command_handler.hpp"
 #include "infrastructure/dbuct_horizon_command_handler.hpp"
 #include "infrastructure/dbuct_horizon_fc_command_handler.hpp"
+#include "infrastructure/dbuct_quell_command_handler.hpp"
+#include "infrastructure/dbuct_quell_fc_command_handler.hpp"
 #include "infrastructure/dbuct_ridge_command_handler.hpp"
 #include "infrastructure/dbuct_ridge_fc_command_handler.hpp"
 #include "infrastructure/genius_command_handler.hpp"
 #include "infrastructure/genius_fc_command_handler.hpp"
 #include "infrastructure/horizon_command_handler.hpp"
 #include "infrastructure/horizon_fc_command_handler.hpp"
+#include "infrastructure/quell_command_handler.hpp"
+#include "infrastructure/quell_fc_command_handler.hpp"
 #include "infrastructure/ridge_command_handler.hpp"
 #include "infrastructure/ridge_fc_command_handler.hpp"
 
@@ -25,38 +30,50 @@ using ::testing::HasSubstr;
 using ::testing::Not;
 
 enum class cli_solver_kind {
-    basic, ridge, ridge_fc, horizon, horizon_fc, genius, genius_fc, dbuct_ridge, dbuct_ridge_fc,
-    dbuct_horizon, dbuct_horizon_fc, dbuct_genius, dbuct_genius_fc
+    basic,
+    ridge, ridge_fc, dbuct_ridge, dbuct_ridge_fc,
+    horizon, horizon_fc, dbuct_horizon, dbuct_horizon_fc,
+    quell, quell_fc, dbuct_quell, dbuct_quell_fc,
+    genius, genius_fc, dbuct_genius, dbuct_genius_fc
 };
 
 struct CommandHandlerParamTest : public ::testing::TestWithParam<cli_solver_kind> {
     static constexpr size_t kMaxResolutions       = 1000;
     static constexpr uint32_t kSeed               = 0;
     static constexpr double kExplorationConstant  = 1.414;
+    static constexpr double kWorkDecayK           = 0.2;
+    static constexpr double kWorkDecayJ           = 10.0;
 };
 
 INSTANTIATE_TEST_SUITE_P(
     AllSolvers,
     CommandHandlerParamTest,
-    ::testing::Values(cli_solver_kind::basic, cli_solver_kind::ridge, cli_solver_kind::ridge_fc,
-                      cli_solver_kind::horizon, cli_solver_kind::horizon_fc,
-                      cli_solver_kind::genius, cli_solver_kind::genius_fc,
+    ::testing::Values(cli_solver_kind::basic,
+                      cli_solver_kind::ridge, cli_solver_kind::ridge_fc,
                       cli_solver_kind::dbuct_ridge, cli_solver_kind::dbuct_ridge_fc,
+                      cli_solver_kind::horizon, cli_solver_kind::horizon_fc,
                       cli_solver_kind::dbuct_horizon, cli_solver_kind::dbuct_horizon_fc,
+                      cli_solver_kind::quell, cli_solver_kind::quell_fc,
+                      cli_solver_kind::dbuct_quell, cli_solver_kind::dbuct_quell_fc,
+                      cli_solver_kind::genius, cli_solver_kind::genius_fc,
                       cli_solver_kind::dbuct_genius, cli_solver_kind::dbuct_genius_fc),
     [](const auto& info) {
         switch (info.param) {
             case cli_solver_kind::basic:              return "basic";
             case cli_solver_kind::ridge:              return "ridge";
             case cli_solver_kind::ridge_fc:           return "ridge_fc";
-            case cli_solver_kind::horizon:            return "horizon";
-            case cli_solver_kind::horizon_fc:         return "horizon_fc";
-            case cli_solver_kind::genius:             return "genius";
-            case cli_solver_kind::genius_fc:          return "genius_fc";
             case cli_solver_kind::dbuct_ridge:        return "dbuct_ridge";
             case cli_solver_kind::dbuct_ridge_fc:     return "dbuct_ridge_fc";
+            case cli_solver_kind::horizon:            return "horizon";
+            case cli_solver_kind::horizon_fc:         return "horizon_fc";
             case cli_solver_kind::dbuct_horizon:      return "dbuct_horizon";
             case cli_solver_kind::dbuct_horizon_fc:   return "dbuct_horizon_fc";
+            case cli_solver_kind::quell:              return "quell";
+            case cli_solver_kind::quell_fc:           return "quell_fc";
+            case cli_solver_kind::dbuct_quell:        return "dbuct_quell";
+            case cli_solver_kind::dbuct_quell_fc:     return "dbuct_quell_fc";
+            case cli_solver_kind::genius:             return "genius";
+            case cli_solver_kind::genius_fc:          return "genius_fc";
             case cli_solver_kind::dbuct_genius:       return "dbuct_genius";
             case cli_solver_kind::dbuct_genius_fc:    return "dbuct_genius_fc";
         }
@@ -115,28 +132,6 @@ void construct_handler(const std::string& file, const std::string& goal, size_t 
                 file, goal, max_res, CommandHandlerParamTest::kSeed,
                 CommandHandlerParamTest::kExplorationConstant);
             break;
-        case cli_solver_kind::horizon:
-            horizon_command_handler(
-                file, goal, max_res, CommandHandlerParamTest::kSeed,
-                CommandHandlerParamTest::kExplorationConstant);
-            break;
-        case cli_solver_kind::horizon_fc:
-            horizon_fc_command_handler(
-                file, goal, max_res, CommandHandlerParamTest::kSeed,
-                CommandHandlerParamTest::kExplorationConstant);
-            break;
-        case cli_solver_kind::genius:
-            genius_command_handler(
-                file, goal, max_res, CommandHandlerParamTest::kSeed,
-                CommandHandlerParamTest::kExplorationConstant,
-                CommandHandlerParamTest::kExplorationConstant);
-            break;
-        case cli_solver_kind::genius_fc:
-            genius_fc_command_handler(
-                file, goal, max_res, CommandHandlerParamTest::kSeed,
-                CommandHandlerParamTest::kExplorationConstant,
-                CommandHandlerParamTest::kExplorationConstant);
-            break;
         case cli_solver_kind::dbuct_ridge:
             dbuct_ridge_command_handler(
                 file, goal, max_res, CommandHandlerParamTest::kSeed,
@@ -144,6 +139,16 @@ void construct_handler(const std::string& file, const std::string& goal, size_t 
             break;
         case cli_solver_kind::dbuct_ridge_fc:
             dbuct_ridge_fc_command_handler(
+                file, goal, max_res, CommandHandlerParamTest::kSeed,
+                CommandHandlerParamTest::kExplorationConstant);
+            break;
+        case cli_solver_kind::horizon:
+            horizon_command_handler(
+                file, goal, max_res, CommandHandlerParamTest::kSeed,
+                CommandHandlerParamTest::kExplorationConstant);
+            break;
+        case cli_solver_kind::horizon_fc:
+            horizon_fc_command_handler(
                 file, goal, max_res, CommandHandlerParamTest::kSeed,
                 CommandHandlerParamTest::kExplorationConstant);
             break;
@@ -155,6 +160,46 @@ void construct_handler(const std::string& file, const std::string& goal, size_t 
         case cli_solver_kind::dbuct_horizon_fc:
             dbuct_horizon_fc_command_handler(
                 file, goal, max_res, CommandHandlerParamTest::kSeed,
+                CommandHandlerParamTest::kExplorationConstant);
+            break;
+        case cli_solver_kind::quell:
+            quell_command_handler(
+                file, goal, max_res, CommandHandlerParamTest::kSeed,
+                CommandHandlerParamTest::kExplorationConstant,
+                CommandHandlerParamTest::kWorkDecayK,
+                CommandHandlerParamTest::kWorkDecayJ);
+            break;
+        case cli_solver_kind::quell_fc:
+            quell_fc_command_handler(
+                file, goal, max_res, CommandHandlerParamTest::kSeed,
+                CommandHandlerParamTest::kExplorationConstant,
+                CommandHandlerParamTest::kWorkDecayK,
+                CommandHandlerParamTest::kWorkDecayJ);
+            break;
+        case cli_solver_kind::dbuct_quell:
+            dbuct_quell_command_handler(
+                file, goal, max_res, CommandHandlerParamTest::kSeed,
+                CommandHandlerParamTest::kExplorationConstant,
+                CommandHandlerParamTest::kWorkDecayK,
+                CommandHandlerParamTest::kWorkDecayJ);
+            break;
+        case cli_solver_kind::dbuct_quell_fc:
+            dbuct_quell_fc_command_handler(
+                file, goal, max_res, CommandHandlerParamTest::kSeed,
+                CommandHandlerParamTest::kExplorationConstant,
+                CommandHandlerParamTest::kWorkDecayK,
+                CommandHandlerParamTest::kWorkDecayJ);
+            break;
+        case cli_solver_kind::genius:
+            genius_command_handler(
+                file, goal, max_res, CommandHandlerParamTest::kSeed,
+                CommandHandlerParamTest::kExplorationConstant,
+                CommandHandlerParamTest::kExplorationConstant);
+            break;
+        case cli_solver_kind::genius_fc:
+            genius_fc_command_handler(
+                file, goal, max_res, CommandHandlerParamTest::kSeed,
+                CommandHandlerParamTest::kExplorationConstant,
                 CommandHandlerParamTest::kExplorationConstant);
             break;
         case cli_solver_kind::dbuct_genius:
@@ -196,28 +241,6 @@ std::string run_handler_capture(
                 file, goal, max_resolutions, CommandHandlerParamTest::kSeed,
                 CommandHandlerParamTest::kExplorationConstant)();
             break;
-        case cli_solver_kind::horizon:
-            horizon_command_handler(
-                file, goal, max_resolutions, CommandHandlerParamTest::kSeed,
-                CommandHandlerParamTest::kExplorationConstant)();
-            break;
-        case cli_solver_kind::horizon_fc:
-            horizon_fc_command_handler(
-                file, goal, max_resolutions, CommandHandlerParamTest::kSeed,
-                CommandHandlerParamTest::kExplorationConstant)();
-            break;
-        case cli_solver_kind::genius:
-            genius_command_handler(
-                file, goal, max_resolutions, CommandHandlerParamTest::kSeed,
-                CommandHandlerParamTest::kExplorationConstant,
-                CommandHandlerParamTest::kExplorationConstant)();
-            break;
-        case cli_solver_kind::genius_fc:
-            genius_fc_command_handler(
-                file, goal, max_resolutions, CommandHandlerParamTest::kSeed,
-                CommandHandlerParamTest::kExplorationConstant,
-                CommandHandlerParamTest::kExplorationConstant)();
-            break;
         case cli_solver_kind::dbuct_ridge:
             dbuct_ridge_command_handler(
                 file, goal, max_resolutions, CommandHandlerParamTest::kSeed,
@@ -225,6 +248,16 @@ std::string run_handler_capture(
             break;
         case cli_solver_kind::dbuct_ridge_fc:
             dbuct_ridge_fc_command_handler(
+                file, goal, max_resolutions, CommandHandlerParamTest::kSeed,
+                CommandHandlerParamTest::kExplorationConstant)();
+            break;
+        case cli_solver_kind::horizon:
+            horizon_command_handler(
+                file, goal, max_resolutions, CommandHandlerParamTest::kSeed,
+                CommandHandlerParamTest::kExplorationConstant)();
+            break;
+        case cli_solver_kind::horizon_fc:
+            horizon_fc_command_handler(
                 file, goal, max_resolutions, CommandHandlerParamTest::kSeed,
                 CommandHandlerParamTest::kExplorationConstant)();
             break;
@@ -236,6 +269,46 @@ std::string run_handler_capture(
         case cli_solver_kind::dbuct_horizon_fc:
             dbuct_horizon_fc_command_handler(
                 file, goal, max_resolutions, CommandHandlerParamTest::kSeed,
+                CommandHandlerParamTest::kExplorationConstant)();
+            break;
+        case cli_solver_kind::quell:
+            quell_command_handler(
+                file, goal, max_resolutions, CommandHandlerParamTest::kSeed,
+                CommandHandlerParamTest::kExplorationConstant,
+                CommandHandlerParamTest::kWorkDecayK,
+                CommandHandlerParamTest::kWorkDecayJ)();
+            break;
+        case cli_solver_kind::quell_fc:
+            quell_fc_command_handler(
+                file, goal, max_resolutions, CommandHandlerParamTest::kSeed,
+                CommandHandlerParamTest::kExplorationConstant,
+                CommandHandlerParamTest::kWorkDecayK,
+                CommandHandlerParamTest::kWorkDecayJ)();
+            break;
+        case cli_solver_kind::dbuct_quell:
+            dbuct_quell_command_handler(
+                file, goal, max_resolutions, CommandHandlerParamTest::kSeed,
+                CommandHandlerParamTest::kExplorationConstant,
+                CommandHandlerParamTest::kWorkDecayK,
+                CommandHandlerParamTest::kWorkDecayJ)();
+            break;
+        case cli_solver_kind::dbuct_quell_fc:
+            dbuct_quell_fc_command_handler(
+                file, goal, max_resolutions, CommandHandlerParamTest::kSeed,
+                CommandHandlerParamTest::kExplorationConstant,
+                CommandHandlerParamTest::kWorkDecayK,
+                CommandHandlerParamTest::kWorkDecayJ)();
+            break;
+        case cli_solver_kind::genius:
+            genius_command_handler(
+                file, goal, max_resolutions, CommandHandlerParamTest::kSeed,
+                CommandHandlerParamTest::kExplorationConstant,
+                CommandHandlerParamTest::kExplorationConstant)();
+            break;
+        case cli_solver_kind::genius_fc:
+            genius_fc_command_handler(
+                file, goal, max_resolutions, CommandHandlerParamTest::kSeed,
+                CommandHandlerParamTest::kExplorationConstant,
                 CommandHandlerParamTest::kExplorationConstant)();
             break;
         case cli_solver_kind::dbuct_genius:

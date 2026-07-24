@@ -4,12 +4,16 @@
 #include "infrastructure/dbuct_genius_fc_command_handler.hpp"
 #include "infrastructure/dbuct_horizon_command_handler.hpp"
 #include "infrastructure/dbuct_horizon_fc_command_handler.hpp"
+#include "infrastructure/dbuct_quell_command_handler.hpp"
+#include "infrastructure/dbuct_quell_fc_command_handler.hpp"
 #include "infrastructure/dbuct_ridge_command_handler.hpp"
 #include "infrastructure/dbuct_ridge_fc_command_handler.hpp"
 #include "infrastructure/genius_command_handler.hpp"
 #include "infrastructure/genius_fc_command_handler.hpp"
 #include "infrastructure/horizon_command_handler.hpp"
 #include "infrastructure/horizon_fc_command_handler.hpp"
+#include "infrastructure/quell_command_handler.hpp"
+#include "infrastructure/quell_fc_command_handler.hpp"
 #include "infrastructure/ridge_command_handler.hpp"
 #include "infrastructure/ridge_fc_command_handler.hpp"
 
@@ -160,6 +164,58 @@ int main(int argc, char** argv) {
     struct {
         std::string file;
         std::string goals_str;
+        size_t max_resolutions       = 1000;
+        uint32_t seed                = 0;
+        double exploration_constant  = 2;
+        size_t sim_progress_interval = 1000;
+    } horizon_opts;
+
+    auto* horizon_sub = app.add_subcommand("horizon", "Run the horizon solver (MCTS + goal weights + joint elimination)");
+    horizon_sub->add_option("file", horizon_opts.file, "CHC input file")->required();
+    horizon_sub->add_option("-g,--goal", horizon_opts.goals_str, "Goal body string, e.g. \"p(X), q(X)\"")->required();
+    horizon_sub->add_option("--max-resolutions", horizon_opts.max_resolutions, "Max resolutions");
+    horizon_sub->add_option("--seed", horizon_opts.seed, "RNG seed");
+    horizon_sub->add_option("--exploration-constant", horizon_opts.exploration_constant, "MCTS exploration constant");
+    horizon_sub->add_option("--sim-progress-interval", horizon_opts.sim_progress_interval,
+                          "Print sim progress every N sims (0 disables)");
+    horizon_sub->callback([&]() {
+        horizon_command_handler h(horizon_opts.file, horizon_opts.goals_str,
+                                  horizon_opts.max_resolutions, horizon_opts.seed,
+                                  horizon_opts.exploration_constant,
+                                  horizon_opts.sim_progress_interval);
+        h();
+    });
+
+    struct {
+        std::string file;
+        std::string goals_str;
+        size_t max_resolutions       = 1000;
+        uint32_t seed                = 0;
+        double exploration_constant  = 2;
+        size_t sim_progress_interval = 1000;
+    } horizon_fc_opts;
+
+    auto* horizon_fc_sub = app.add_subcommand(
+        "horizon-fc",
+        "Run the horizon solver with fewer-candidate rollout (MCTS + goal weights + joint elimination)");
+    horizon_fc_sub->add_option("file", horizon_fc_opts.file, "CHC input file")->required();
+    horizon_fc_sub->add_option("-g,--goal", horizon_fc_opts.goals_str, "Goal body string, e.g. \"p(X), q(X)\"")->required();
+    horizon_fc_sub->add_option("--max-resolutions", horizon_fc_opts.max_resolutions, "Max resolutions");
+    horizon_fc_sub->add_option("--seed", horizon_fc_opts.seed, "RNG seed");
+    horizon_fc_sub->add_option("--exploration-constant", horizon_fc_opts.exploration_constant, "MCTS exploration constant");
+    horizon_fc_sub->add_option("--sim-progress-interval", horizon_fc_opts.sim_progress_interval,
+                          "Print sim progress every N sims (0 disables)");
+    horizon_fc_sub->callback([&]() {
+        horizon_fc_command_handler h(horizon_fc_opts.file, horizon_fc_opts.goals_str,
+                                     horizon_fc_opts.max_resolutions, horizon_fc_opts.seed,
+                                     horizon_fc_opts.exploration_constant,
+                                     horizon_fc_opts.sim_progress_interval);
+        h();
+    });
+
+    struct {
+        std::string file;
+        std::string goals_str;
         size_t max_resolutions        = 1000;
         uint32_t seed                 = 0;
         double exploration_constant   = 2;
@@ -214,6 +270,204 @@ int main(int argc, char** argv) {
                                            dbuct_horizon_fc_opts.exploration_constant,
                                            dbuct_horizon_fc_opts.grant_increment_interval,
                                            dbuct_horizon_fc_opts.sim_progress_interval);
+        h();
+    });
+
+    struct {
+        std::string file;
+        std::string goals_str;
+        size_t max_resolutions       = 1000;
+        uint32_t seed                = 0;
+        double exploration_constant  = 2;
+        double work_decay_k          = 0.2;
+        double work_decay_j          = 10.0;
+        size_t sim_progress_interval = 1000;
+    } quell_opts;
+
+    auto* quell_sub = app.add_subcommand("quell", "Run the quell solver (MCTS + goal work decay + joint elimination)");
+    quell_sub->add_option("file", quell_opts.file, "CHC input file")->required();
+    quell_sub->add_option("-g,--goal", quell_opts.goals_str, "Goal body string, e.g. \"p(X), q(X)\"")->required();
+    quell_sub->add_option("--max-resolutions", quell_opts.max_resolutions, "Max resolutions");
+    quell_sub->add_option("--seed", quell_opts.seed, "RNG seed");
+    quell_sub->add_option("--exploration-constant", quell_opts.exploration_constant, "MCTS exploration constant");
+    quell_sub->add_option("--work-decay-k", quell_opts.work_decay_k, "Goal work decay k");
+    quell_sub->add_option("--work-decay-j", quell_opts.work_decay_j, "Goal work decay j");
+    quell_sub->add_option("--sim-progress-interval", quell_opts.sim_progress_interval,
+                          "Print sim progress every N sims (0 disables)");
+    quell_sub->callback([&]() {
+        quell_command_handler h(quell_opts.file, quell_opts.goals_str,
+                                quell_opts.max_resolutions, quell_opts.seed,
+                                quell_opts.exploration_constant,
+                                quell_opts.work_decay_k,
+                                quell_opts.work_decay_j,
+                                quell_opts.sim_progress_interval);
+        h();
+    });
+
+    struct {
+        std::string file;
+        std::string goals_str;
+        size_t max_resolutions       = 1000;
+        uint32_t seed                = 0;
+        double exploration_constant  = 2;
+        double work_decay_k          = 0.2;
+        double work_decay_j          = 10.0;
+        size_t sim_progress_interval = 1000;
+    } quell_fc_opts;
+
+    auto* quell_fc_sub = app.add_subcommand(
+        "quell-fc",
+        "Run the quell solver with fewer-candidate rollout (MCTS + goal work decay + joint elimination)");
+    quell_fc_sub->add_option("file", quell_fc_opts.file, "CHC input file")->required();
+    quell_fc_sub->add_option("-g,--goal", quell_fc_opts.goals_str, "Goal body string, e.g. \"p(X), q(X)\"")->required();
+    quell_fc_sub->add_option("--max-resolutions", quell_fc_opts.max_resolutions, "Max resolutions");
+    quell_fc_sub->add_option("--seed", quell_fc_opts.seed, "RNG seed");
+    quell_fc_sub->add_option("--exploration-constant", quell_fc_opts.exploration_constant, "MCTS exploration constant");
+    quell_fc_sub->add_option("--work-decay-k", quell_fc_opts.work_decay_k, "Goal work decay k");
+    quell_fc_sub->add_option("--work-decay-j", quell_fc_opts.work_decay_j, "Goal work decay j");
+    quell_fc_sub->add_option("--sim-progress-interval", quell_fc_opts.sim_progress_interval,
+                          "Print sim progress every N sims (0 disables)");
+    quell_fc_sub->callback([&]() {
+        quell_fc_command_handler h(quell_fc_opts.file, quell_fc_opts.goals_str,
+                                   quell_fc_opts.max_resolutions, quell_fc_opts.seed,
+                                   quell_fc_opts.exploration_constant,
+                                   quell_fc_opts.work_decay_k,
+                                   quell_fc_opts.work_decay_j,
+                                   quell_fc_opts.sim_progress_interval);
+        h();
+    });
+
+    struct {
+        std::string file;
+        std::string goals_str;
+        size_t max_resolutions        = 1000;
+        uint32_t seed                 = 0;
+        double exploration_constant   = 2;
+        double work_decay_k           = 0.2;
+        double work_decay_j           = 10.0;
+        size_t grant_increment_interval = dbuct_quell_runtime::k_default_grant_increment_interval;
+        size_t sim_progress_interval  = 1000;
+    } dbuct_quell_opts;
+
+    auto* dbuct_quell_sub = app.add_subcommand("dbuct-quell", "Run the quell solver with delayed-backtracking UCT (camps deep in the search tree instead of restarting from the root each sim)");
+    dbuct_quell_sub->add_option("file", dbuct_quell_opts.file, "CHC input file")->required();
+    dbuct_quell_sub->add_option("-g,--goal", dbuct_quell_opts.goals_str, "Goal body string, e.g. \"p(X), q(X)\"")->required();
+    dbuct_quell_sub->add_option("--max-resolutions", dbuct_quell_opts.max_resolutions, "Max resolutions");
+    dbuct_quell_sub->add_option("--seed", dbuct_quell_opts.seed, "RNG seed");
+    dbuct_quell_sub->add_option("--exploration-constant", dbuct_quell_opts.exploration_constant, "MCTS exploration constant");
+    dbuct_quell_sub->add_option("--work-decay-k", dbuct_quell_opts.work_decay_k, "Goal work decay k");
+    dbuct_quell_sub->add_option("--work-decay-j", dbuct_quell_opts.work_decay_j, "Goal work decay j");
+    dbuct_quell_sub->add_option("--grant-increment-interval", dbuct_quell_opts.grant_increment_interval,
+                          "DBUCT per-node compute batch growth (larger camps longer before backtracking)");
+    dbuct_quell_sub->add_option("--sim-progress-interval", dbuct_quell_opts.sim_progress_interval,
+                          "Print sim progress every N sims (0 disables)");
+    dbuct_quell_sub->callback([&]() {
+        dbuct_quell_command_handler h(dbuct_quell_opts.file, dbuct_quell_opts.goals_str,
+                                      dbuct_quell_opts.max_resolutions, dbuct_quell_opts.seed,
+                                      dbuct_quell_opts.exploration_constant,
+                                      dbuct_quell_opts.work_decay_k,
+                                      dbuct_quell_opts.work_decay_j,
+                                      dbuct_quell_opts.grant_increment_interval,
+                                      dbuct_quell_opts.sim_progress_interval);
+        h();
+    });
+
+    struct {
+        std::string file;
+        std::string goals_str;
+        size_t max_resolutions        = 1000;
+        uint32_t seed                 = 0;
+        double exploration_constant   = 2;
+        double work_decay_k           = 0.2;
+        double work_decay_j           = 10.0;
+        size_t grant_increment_interval = dbuct_quell_fc_runtime::k_default_grant_increment_interval;
+        size_t sim_progress_interval  = 1000;
+    } dbuct_quell_fc_opts;
+
+    auto* dbuct_quell_fc_sub = app.add_subcommand(
+        "dbuct-quell-fc",
+        "Run the quell solver with delayed-backtracking UCT and fewer-candidate rollout");
+    dbuct_quell_fc_sub->add_option("file", dbuct_quell_fc_opts.file, "CHC input file")->required();
+    dbuct_quell_fc_sub->add_option("-g,--goal", dbuct_quell_fc_opts.goals_str, "Goal body string, e.g. \"p(X), q(X)\"")->required();
+    dbuct_quell_fc_sub->add_option("--max-resolutions", dbuct_quell_fc_opts.max_resolutions, "Max resolutions");
+    dbuct_quell_fc_sub->add_option("--seed", dbuct_quell_fc_opts.seed, "RNG seed");
+    dbuct_quell_fc_sub->add_option("--exploration-constant", dbuct_quell_fc_opts.exploration_constant, "MCTS exploration constant");
+    dbuct_quell_fc_sub->add_option("--work-decay-k", dbuct_quell_fc_opts.work_decay_k, "Goal work decay k");
+    dbuct_quell_fc_sub->add_option("--work-decay-j", dbuct_quell_fc_opts.work_decay_j, "Goal work decay j");
+    dbuct_quell_fc_sub->add_option("--grant-increment-interval", dbuct_quell_fc_opts.grant_increment_interval,
+                          "DBUCT per-node compute batch growth (larger camps longer before backtracking)");
+    dbuct_quell_fc_sub->add_option("--sim-progress-interval", dbuct_quell_fc_opts.sim_progress_interval,
+                          "Print sim progress every N sims (0 disables)");
+    dbuct_quell_fc_sub->callback([&]() {
+        dbuct_quell_fc_command_handler h(dbuct_quell_fc_opts.file, dbuct_quell_fc_opts.goals_str,
+                                         dbuct_quell_fc_opts.max_resolutions, dbuct_quell_fc_opts.seed,
+                                         dbuct_quell_fc_opts.exploration_constant,
+                                         dbuct_quell_fc_opts.work_decay_k,
+                                         dbuct_quell_fc_opts.work_decay_j,
+                                         dbuct_quell_fc_opts.grant_increment_interval,
+                                         dbuct_quell_fc_opts.sim_progress_interval);
+        h();
+    });
+
+    struct {
+        std::string file;
+        std::string goals_str;
+        size_t max_resolutions       = 1000;
+        uint32_t seed                = 0;
+        double ridge_exploration_constant = 15;
+        double horizon_exploration_constant = 2;
+        size_t sim_progress_interval = 1000;
+    } genius_opts;
+
+    auto* genius_sub = app.add_subcommand("genius", "Run the genius solver (MCTS + per-node reward: cgw for rule nodes, ridge for goal nodes)");
+    genius_sub->add_option("file", genius_opts.file, "CHC input file")->required();
+    genius_sub->add_option("-g,--goal", genius_opts.goals_str, "Goal body string, e.g. \"p(X), q(X)\"")->required();
+    genius_sub->add_option("--max-resolutions", genius_opts.max_resolutions, "Max resolutions");
+    genius_sub->add_option("--seed", genius_opts.seed, "RNG seed");
+    genius_sub->add_option("--ridge-exploration-constant", genius_opts.ridge_exploration_constant,
+                          "MCTS exploration constant for ridge (goal-nav) nodes");
+    genius_sub->add_option("--horizon-exploration-constant", genius_opts.horizon_exploration_constant,
+                          "MCTS exploration constant for horizon (rule-choice) nodes");
+    genius_sub->add_option("--sim-progress-interval", genius_opts.sim_progress_interval,
+                          "Print sim progress every N sims (0 disables)");
+    genius_sub->callback([&]() {
+        genius_command_handler h(genius_opts.file, genius_opts.goals_str,
+                                 genius_opts.max_resolutions, genius_opts.seed,
+                                 genius_opts.ridge_exploration_constant,
+                                 genius_opts.horizon_exploration_constant,
+                                 genius_opts.sim_progress_interval);
+        h();
+    });
+
+    struct {
+        std::string file;
+        std::string goals_str;
+        size_t max_resolutions       = 1000;
+        uint32_t seed                = 0;
+        double ridge_exploration_constant = 15;
+        double horizon_exploration_constant = 2;
+        size_t sim_progress_interval = 1000;
+    } genius_fc_opts;
+
+    auto* genius_fc_sub = app.add_subcommand(
+        "genius-fc",
+        "Run the genius solver with fewer-candidate rollout (MCTS + dual reward + joint elimination)");
+    genius_fc_sub->add_option("file", genius_fc_opts.file, "CHC input file")->required();
+    genius_fc_sub->add_option("-g,--goal", genius_fc_opts.goals_str, "Goal body string, e.g. \"p(X), q(X)\"")->required();
+    genius_fc_sub->add_option("--max-resolutions", genius_fc_opts.max_resolutions, "Max resolutions");
+    genius_fc_sub->add_option("--seed", genius_fc_opts.seed, "RNG seed");
+    genius_fc_sub->add_option("--ridge-exploration-constant", genius_fc_opts.ridge_exploration_constant,
+                          "MCTS exploration constant for ridge (goal-nav) nodes");
+    genius_fc_sub->add_option("--horizon-exploration-constant", genius_fc_opts.horizon_exploration_constant,
+                          "MCTS exploration constant for horizon (rule-choice) nodes");
+    genius_fc_sub->add_option("--sim-progress-interval", genius_fc_opts.sim_progress_interval,
+                          "Print sim progress every N sims (0 disables)");
+    genius_fc_sub->callback([&]() {
+        genius_fc_command_handler h(genius_fc_opts.file, genius_fc_opts.goals_str,
+                                    genius_fc_opts.max_resolutions, genius_fc_opts.seed,
+                                    genius_fc_opts.ridge_exploration_constant,
+                                    genius_fc_opts.horizon_exploration_constant,
+                                    genius_fc_opts.sim_progress_interval);
         h();
     });
 
@@ -287,119 +541,6 @@ int main(int argc, char** argv) {
         h();
     });
 
-    struct {
-        std::string file;
-        std::string goals_str;
-        size_t max_resolutions       = 1000;
-        uint32_t seed                = 0;
-        double exploration_constant  = 2;
-        size_t sim_progress_interval = 1000;
-    } horizon_opts;
-
-    auto* horizon_sub = app.add_subcommand("horizon", "Run the horizon solver (MCTS + goal weights + joint elimination)");
-    horizon_sub->add_option("file", horizon_opts.file, "CHC input file")->required();
-    horizon_sub->add_option("-g,--goal", horizon_opts.goals_str, "Goal body string, e.g. \"p(X), q(X)\"")->required();
-    horizon_sub->add_option("--max-resolutions", horizon_opts.max_resolutions, "Max resolutions");
-    horizon_sub->add_option("--seed", horizon_opts.seed, "RNG seed");
-    horizon_sub->add_option("--exploration-constant", horizon_opts.exploration_constant, "MCTS exploration constant");
-    horizon_sub->add_option("--sim-progress-interval", horizon_opts.sim_progress_interval,
-                          "Print sim progress every N sims (0 disables)");
-    horizon_sub->callback([&]() {
-        horizon_command_handler h(horizon_opts.file, horizon_opts.goals_str,
-                                  horizon_opts.max_resolutions, horizon_opts.seed,
-                                  horizon_opts.exploration_constant,
-                                  horizon_opts.sim_progress_interval);
-        h();
-    });
-
-    struct {
-        std::string file;
-        std::string goals_str;
-        size_t max_resolutions       = 1000;
-        uint32_t seed                = 0;
-        double exploration_constant  = 2;
-        size_t sim_progress_interval = 1000;
-    } horizon_fc_opts;
-
-    auto* horizon_fc_sub = app.add_subcommand(
-        "horizon-fc",
-        "Run the horizon solver with fewer-candidate rollout (MCTS + goal weights + joint elimination)");
-    horizon_fc_sub->add_option("file", horizon_fc_opts.file, "CHC input file")->required();
-    horizon_fc_sub->add_option("-g,--goal", horizon_fc_opts.goals_str, "Goal body string, e.g. \"p(X), q(X)\"")->required();
-    horizon_fc_sub->add_option("--max-resolutions", horizon_fc_opts.max_resolutions, "Max resolutions");
-    horizon_fc_sub->add_option("--seed", horizon_fc_opts.seed, "RNG seed");
-    horizon_fc_sub->add_option("--exploration-constant", horizon_fc_opts.exploration_constant, "MCTS exploration constant");
-    horizon_fc_sub->add_option("--sim-progress-interval", horizon_fc_opts.sim_progress_interval,
-                          "Print sim progress every N sims (0 disables)");
-    horizon_fc_sub->callback([&]() {
-        horizon_fc_command_handler h(horizon_fc_opts.file, horizon_fc_opts.goals_str,
-                                     horizon_fc_opts.max_resolutions, horizon_fc_opts.seed,
-                                     horizon_fc_opts.exploration_constant,
-                                     horizon_fc_opts.sim_progress_interval);
-        h();
-    });
-
-    struct {
-        std::string file;
-        std::string goals_str;
-        size_t max_resolutions       = 1000;
-        uint32_t seed                = 0;
-        double ridge_exploration_constant = 15;
-        double horizon_exploration_constant = 2;
-        size_t sim_progress_interval = 1000;
-    } genius_opts;
-
-    auto* genius_sub = app.add_subcommand("genius", "Run the genius solver (MCTS + per-node reward: cgw for rule nodes, ridge for goal nodes)");
-    genius_sub->add_option("file", genius_opts.file, "CHC input file")->required();
-    genius_sub->add_option("-g,--goal", genius_opts.goals_str, "Goal body string, e.g. \"p(X), q(X)\"")->required();
-    genius_sub->add_option("--max-resolutions", genius_opts.max_resolutions, "Max resolutions");
-    genius_sub->add_option("--seed", genius_opts.seed, "RNG seed");
-    genius_sub->add_option("--ridge-exploration-constant", genius_opts.ridge_exploration_constant,
-                          "MCTS exploration constant for ridge (goal-nav) nodes");
-    genius_sub->add_option("--horizon-exploration-constant", genius_opts.horizon_exploration_constant,
-                          "MCTS exploration constant for horizon (rule-choice) nodes");
-    genius_sub->add_option("--sim-progress-interval", genius_opts.sim_progress_interval,
-                          "Print sim progress every N sims (0 disables)");
-    genius_sub->callback([&]() {
-        genius_command_handler h(genius_opts.file, genius_opts.goals_str,
-                                 genius_opts.max_resolutions, genius_opts.seed,
-                                 genius_opts.ridge_exploration_constant,
-                                 genius_opts.horizon_exploration_constant,
-                                 genius_opts.sim_progress_interval);
-        h();
-    });
-
-    struct {
-        std::string file;
-        std::string goals_str;
-        size_t max_resolutions       = 1000;
-        uint32_t seed                = 0;
-        double ridge_exploration_constant = 15;
-        double horizon_exploration_constant = 2;
-        size_t sim_progress_interval = 1000;
-    } genius_fc_opts;
-
-    auto* genius_fc_sub = app.add_subcommand(
-        "genius-fc",
-        "Run the genius solver with fewer-candidate rollout (MCTS + dual reward + joint elimination)");
-    genius_fc_sub->add_option("file", genius_fc_opts.file, "CHC input file")->required();
-    genius_fc_sub->add_option("-g,--goal", genius_fc_opts.goals_str, "Goal body string, e.g. \"p(X), q(X)\"")->required();
-    genius_fc_sub->add_option("--max-resolutions", genius_fc_opts.max_resolutions, "Max resolutions");
-    genius_fc_sub->add_option("--seed", genius_fc_opts.seed, "RNG seed");
-    genius_fc_sub->add_option("--ridge-exploration-constant", genius_fc_opts.ridge_exploration_constant,
-                          "MCTS exploration constant for ridge (goal-nav) nodes");
-    genius_fc_sub->add_option("--horizon-exploration-constant", genius_fc_opts.horizon_exploration_constant,
-                          "MCTS exploration constant for horizon (rule-choice) nodes");
-    genius_fc_sub->add_option("--sim-progress-interval", genius_fc_opts.sim_progress_interval,
-                          "Print sim progress every N sims (0 disables)");
-    genius_fc_sub->callback([&]() {
-        genius_fc_command_handler h(genius_fc_opts.file, genius_fc_opts.goals_str,
-                                    genius_fc_opts.max_resolutions, genius_fc_opts.seed,
-                                    genius_fc_opts.ridge_exploration_constant,
-                                    genius_fc_opts.horizon_exploration_constant,
-                                    genius_fc_opts.sim_progress_interval);
-        h();
-    });
 
     CLI11_PARSE(app, argc, argv);
 }

@@ -31,6 +31,8 @@ Atlas exposes multiple solvers, each with different search strategies:
 |---|---|
 | `horizon` | Uses **CGW (Cumulative Grounded Weight)** as the MCTS reward. See [solvers.md](solvers.md). |
 | `ridge` | Certainty-based. Focuses on finding and eliminating shallow conflicts. See [solvers.md](solvers.md). |
+| `quell` | Minimizes remaining work `Σ f(depth)` with `f(l)=1+e^{-K(l-J)}`. See [solvers.md](solvers.md). |
+| `genius` | Dual ridge+horizon reward. See [solvers.md](solvers.md). |
 | `ridge-horizon` | *(planned)* Combines the strengths of both. |
 
 Both use **CDCL**. See [cdcl.md](cdcl.md) and [solvers.md](solvers.md).
