@@ -24,3 +24,13 @@ TEST_F(QuellRewardTest, ReturnsNegatedRemainingWork) {
     EXPECT_CALL(remaining_work, get()).Times(AtLeast(1)).WillRepeatedly(Return(kRemaining));
     EXPECT_DOUBLE_EQ(reward.compute_mcts_reward(), -kRemaining);
 }
+
+TEST_F(QuellRewardTest, NegativeRemainingWorkNegatesToPositiveReward) {
+    // dbuct_remaining_work is a signed balance and can overdraw below zero (see
+    // DbuctRemainingWorkTest.SubtractBelowZeroYieldsNegativeBalance). The reward
+    // must simply negate it -- clamping or taking an absolute value here would
+    // turn an accounting overdraft into the highest reward in the tree and steer
+    // the search straight at the broken branch.
+    EXPECT_CALL(remaining_work, get()).Times(AtLeast(1)).WillRepeatedly(Return(-kRemaining));
+    EXPECT_DOUBLE_EQ(reward.compute_mcts_reward(), kRemaining);
+}

@@ -14,9 +14,24 @@ struct DbuctGoalDepthsTest : public ::testing::Test {
     static constexpr size_t kDepth1 = 3;
 };
 
+TEST_F(DbuctGoalDepthsTest, GetOnUnknownGoalThrows) {
+    EXPECT_THROW(store.get(&gl0), std::out_of_range);
+}
+
 TEST_F(DbuctGoalDepthsTest, SetThenGetReturnsDepth) {
     store.set(&gl0, kDepth0);
     EXPECT_EQ(store.get(&gl0), kDepth0);
+}
+
+TEST_F(DbuctGoalDepthsTest, SecondSetThrows) {
+    // A silently accepted duplicate would log an insert action whose undo erases
+    // the entry the FIRST set created, losing a live goal's depth on pop.
+    store.set(&gl0, kDepth0);
+    EXPECT_THROW(store.set(&gl0, kDepth1), std::logic_error);
+}
+
+TEST_F(DbuctGoalDepthsTest, EraseOnUnknownGoalThrows) {
+    EXPECT_THROW(store.erase(&gl0), std::logic_error);
 }
 
 TEST_F(DbuctGoalDepthsTest, PopFrameUndoesSet) {
@@ -44,6 +59,19 @@ TEST_F(DbuctGoalDepthsTest, NestedFramesRestoreIndependently) {
     EXPECT_EQ(store.get(&gl0), kDepth0);
     EXPECT_EQ(store.get(&gl1), kDepth1);
     store.pop_frame();
+    EXPECT_EQ(store.get(&gl0), kDepth0);
+    EXPECT_THROW(store.get(&gl1), std::out_of_range);
+}
+
+TEST_F(DbuctGoalDepthsTest, MutationsInBaseFrameSurvivePushPopCycle) {
+    // A pop must only replay the actions logged since its matching push.
+    store.set(&gl0, kDepth0);
+    store.set(&gl1, kDepth1);
+    store.erase(&gl1);
+
+    store.push_frame();
+    store.pop_frame();
+
     EXPECT_EQ(store.get(&gl0), kDepth0);
     EXPECT_THROW(store.get(&gl1), std::out_of_range);
 }

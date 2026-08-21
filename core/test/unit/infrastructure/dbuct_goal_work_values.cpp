@@ -19,6 +19,17 @@ TEST_F(DbuctGoalWorkValuesTest, SetThenGetReturnsWork) {
     EXPECT_DOUBLE_EQ(store.get(&gl0), kWork0);
 }
 
+TEST_F(DbuctGoalWorkValuesTest, SecondSetThrows) {
+    // Same hazard as dbuct_goal_depths: a tolerated duplicate set logs an insert
+    // whose undo drops the original entry, silently zeroing a goal's work.
+    store.set(&gl0, kWork0);
+    EXPECT_THROW(store.set(&gl0, kWork1), std::logic_error);
+}
+
+TEST_F(DbuctGoalWorkValuesTest, EraseOnUnknownGoalThrows) {
+    EXPECT_THROW(store.erase(&gl0), std::logic_error);
+}
+
 TEST_F(DbuctGoalWorkValuesTest, PopFrameUndoesSet) {
     store.push_frame();
     store.set(&gl0, kWork0);

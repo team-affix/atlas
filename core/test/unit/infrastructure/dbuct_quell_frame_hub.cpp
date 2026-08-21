@@ -29,6 +29,10 @@ coroutine<const resolution_lineage*, void> empty_base_pop() {
     co_return;
 }
 
+coroutine<const resolution_lineage*, void> one_yield_base_pop(const resolution_lineage* rl) {
+    co_yield rl;
+}
+
 void drain(coroutine<const resolution_lineage*, void> sm) {
     while (!sm.done())
         sm.resume();
@@ -77,4 +81,27 @@ TEST_F(DbuctQuellFrameHubTest, PushThenPopUnwindsInReverseOrder) {
             .WillOnce(::testing::Return(::testing::ByMove(empty_base_pop())));
     }
     drain(hub.pop_solver_frame());
+}
+
+TEST_F(DbuctQuellFrameHubTest, PopForwardsBaseYields) {
+    // pop_solver_frame is a coroutine because the base hub emits the CDCL
+    // eliminations that unwinding armed. This wrapper adds quell frames around it
+    // and must pass those yields straight through: an elimination dropped here is
+    // never routed, so the solver goes on exploring a branch CDCL already refuted
+    // and does so silently. The RP hub covers this; quell did not.
+    resolution_lineage rl{nullptr, 0};
+
+    EXPECT_CALL(pop_remaining_work, pop_frame());
+    EXPECT_CALL(pop_goal_work_values, pop_frame());
+    EXPECT_CALL(pop_goal_depths, pop_frame());
+    EXPECT_CALL(pop_base, pop_solver_frame())
+        .WillOnce(::testing::Return(::testing::ByMove(one_yield_base_pop(&rl))));
+
+    auto sm = hub.pop_solver_frame();
+    ASSERT_FALSE(sm.done());
+    sm.resume();
+    ASSERT_TRUE(sm.has_yield());
+    EXPECT_EQ(sm.consume_yield(), &rl);
+    while (!sm.done())
+        sm.resume();
 }

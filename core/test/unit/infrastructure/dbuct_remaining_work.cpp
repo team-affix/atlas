@@ -47,3 +47,37 @@ TEST_F(DbuctRemainingWorkTest, GetAfterUndoRestored) {
     store.pop_frame();
     EXPECT_DOUBLE_EQ(store.get(), kWorkA);
 }
+
+TEST_F(DbuctRemainingWorkTest, SubtractBelowZeroYieldsNegativeBalance) {
+    // The register is a signed balance, not a clamped counter: quell_reward
+    // negates it, so clamping at zero would turn a work overdraft into a
+    // maximal reward and steer the search straight at the broken branch.
+    store.add(kWorkA);
+    store.subtract(kWorkA + kWorkB);
+    EXPECT_DOUBLE_EQ(store.get(), -kWorkB);
+
+    store.push_frame();
+    store.subtract(kWorkA);
+    EXPECT_DOUBLE_EQ(store.get(), -kWorkB - kWorkA);
+    store.pop_frame();
+    EXPECT_DOUBLE_EQ(store.get(), -kWorkB);
+}
+
+TEST_F(DbuctRemainingWorkTest, ThreeNestedFramesUndoInReverseOrder) {
+    store.add(kWorkA);
+
+    store.push_frame();
+    store.add(kWorkB);
+    store.push_frame();
+    store.subtract(kWorkA);
+    store.push_frame();
+    store.add(kWorkA + kWorkB);
+    EXPECT_DOUBLE_EQ(store.get(), 2.0 * kWorkB + kWorkA);
+
+    store.pop_frame();
+    EXPECT_DOUBLE_EQ(store.get(), kWorkB);
+    store.pop_frame();
+    EXPECT_DOUBLE_EQ(store.get(), kWorkA + kWorkB);
+    store.pop_frame();
+    EXPECT_DOUBLE_EQ(store.get(), kWorkA);
+}

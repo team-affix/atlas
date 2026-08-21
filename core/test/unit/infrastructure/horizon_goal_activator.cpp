@@ -40,7 +40,10 @@ struct HorizonGoalActivatorTest : public ::testing::Test {
     expr head{expr::var{0}};
     expr body0{expr::var{1}};
     expr body1{expr::var{2}};
+    expr body2{expr::var{3}};
+    rule one_body_rule{&head, {&body0}, 3};
     rule two_body_rule{&head, {&body0, &body1}, 3};
+    rule three_body_rule{&head, {&body0, &body1, &body2}, 3};
 
     static constexpr double kParentWeight = 1.0;
     static constexpr double kExpectedChildWeight = 0.5;
@@ -54,5 +57,23 @@ TEST_F(HorizonGoalActivatorTest, DelegatesThenSetsParentWeightDividedByBodySize)
     EXPECT_CALL(get_rule, get_rule(rl.idx)).WillOnce(Return(&two_body_rule));
     EXPECT_CALL(goal_weights, get(&parent_gl)).WillOnce(Return(kParentWeight));
     EXPECT_CALL(goal_weights, set(&child_gl, kExpectedChildWeight)).Times(1);
+    activator.activate(&child_gl);
+}
+
+TEST_F(HorizonGoalActivatorTest, SingletonBodyPassesFullParentWeightToChild) {
+    // g == 1 is the identity case: the chain of single-atom bodies that a linear
+    // proof walks must neither dilute nor amplify the root's weight.
+    EXPECT_CALL(get_rule, get_rule(rl.idx)).WillOnce(Return(&one_body_rule));
+    EXPECT_CALL(goal_weights, get(&parent_gl)).WillOnce(Return(kParentWeight));
+    EXPECT_CALL(goal_weights, set(&child_gl, kParentWeight)).Times(1);
+    activator.activate(&child_gl);
+}
+
+TEST_F(HorizonGoalActivatorTest, ThreeAtomBodySplitsParentWeightInThirds) {
+    // An odd split is where an integer division bug would hide: g is a size_t, so
+    // a missing cast to double would floor the quotient.
+    EXPECT_CALL(get_rule, get_rule(rl.idx)).WillOnce(Return(&three_body_rule));
+    EXPECT_CALL(goal_weights, get(&parent_gl)).WillOnce(Return(kParentWeight));
+    EXPECT_CALL(goal_weights, set(&child_gl, kParentWeight / 3.0)).Times(1);
     activator.activate(&child_gl);
 }

@@ -29,6 +29,12 @@ coroutine<const resolution_lineage*, void> empty_base_pop() {
     co_return;
 }
 
+coroutine<const resolution_lineage*, void> two_yield_base_pop(const resolution_lineage* a,
+                                                              const resolution_lineage* b) {
+    co_yield a;
+    co_yield b;
+}
+
 void drain(coroutine<const resolution_lineage*, void> sm) {
     while (!sm.done())
         sm.resume();
@@ -71,4 +77,31 @@ TEST_F(DbuctHorizonFrameHubTest, PushThenPopUnwindsInReverseOrder) {
             .WillOnce(::testing::Return(::testing::ByMove(empty_base_pop())));
     }
     drain(hub.pop_solver_frame());
+}
+
+TEST_F(DbuctHorizonFrameHubTest, PopForwardsMultipleBaseYields) {
+    // The base hub can emit several armed eliminations from one unwind, so the
+    // wrapper has to relay every one of them in order -- a loop that forwards only
+    // the first yield, or stops early, loses refutations without any error. Two
+    // yields is the smallest case that distinguishes relaying from returning once.
+    resolution_lineage a{nullptr, 0};
+    resolution_lineage b{nullptr, 1};
+
+    {
+        ::testing::InSequence seq;
+        EXPECT_CALL(pop_cgw, pop_frame());
+        EXPECT_CALL(pop_goal_weights, pop_frame());
+        EXPECT_CALL(pop_base, pop_solver_frame())
+            .WillOnce(::testing::Return(::testing::ByMove(two_yield_base_pop(&a, &b))));
+    }
+
+    auto sm = hub.pop_solver_frame();
+    sm.resume();
+    ASSERT_TRUE(sm.has_yield());
+    EXPECT_EQ(sm.consume_yield(), &a);
+    sm.resume();
+    ASSERT_TRUE(sm.has_yield());
+    EXPECT_EQ(sm.consume_yield(), &b);
+    while (!sm.done())
+        sm.resume();
 }
