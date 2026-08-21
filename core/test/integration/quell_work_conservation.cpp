@@ -1,5 +1,6 @@
 // Integration: remaining work conserved across quell initial activate + fact resolve.
 
+#include <stdexcept>
 #include <gtest/gtest.h>
 #include <gmock/gmock.h>
 #include "infrastructure/goal_depths.hpp"
@@ -8,6 +9,7 @@
 #include "infrastructure/lineage_pool.hpp"
 #include "infrastructure/make_initial_goal_lineage.hpp"
 #include "infrastructure/quell_goal_activator.hpp"
+#include "infrastructure/quell_goal_deactivator.hpp"
 #include "infrastructure/quell_initial_goal_activator.hpp"
 #include "infrastructure/quell_resolver.hpp"
 #include "infrastructure/remaining_work.hpp"
@@ -69,6 +71,16 @@ protected:
         MockDeactivateGoalCandidates, MockSetChosenGoalCandidate>;
     using quell_real_resolver_t = quell_resolver<
         inner_resolver_t, goal_work_values, remaining_work>;
+    // Same stack again, but with the real quell_goal_deactivator in the resolver's
+    // deactivation slot, so a successful resolve genuinely erases the parent's
+    // depth and work value from the shared stores the way production does.
+    using quell_goal_deactivator_t = quell_goal_deactivator<
+        MockGoalDeactivator, goal_depths, goal_work_values>;
+    using erasing_resolver_t = resolver<
+        quell_goal_deactivator_t, MockActivateSubgoalsAndCandidates,
+        MockDeactivateGoalCandidates, MockSetChosenGoalCandidate>;
+    using quell_erasing_resolver_t = quell_resolver<
+        erasing_resolver_t, goal_work_values, remaining_work>;
 
     lineage_pool lineage_pool_;
     goal_depths goal_depths_;
@@ -97,6 +109,14 @@ protected:
         mock_set_chosen};
     quell_real_resolver_t quell_real_resolver_{
         inner_resolver_, goal_work_values_, remaining_work_};
+    NiceMock<MockGoalDeactivator> mock_srt_goal_deactivator;
+    quell_goal_deactivator_t quell_goal_deactivator_{
+        mock_srt_goal_deactivator, goal_depths_, goal_work_values_};
+    erasing_resolver_t erasing_resolver_{
+        quell_goal_deactivator_, mock_activate_subgoals, mock_deactivate_candidates,
+        mock_set_chosen};
+    quell_erasing_resolver_t quell_erasing_resolver_{
+        erasing_resolver_, goal_work_values_, remaining_work_};
 
     double f(size_t depth) const { return goal_work_function_.get(depth); }
     double f0() const { return goal_work_function_.get(0); }
@@ -204,6 +224,63 @@ TEST_F(QuellWorkConservationIntegrationTest, FailedResolveLeavesRemainingWorkUnc
     EXPECT_NEAR(remaining_work_.get(), f0(), kWorkEpsilon);
     // The goal is still live, so its work value must still be readable.
     EXPECT_NEAR(goal_work_values_.get(root), f0(), kWorkEpsilon);
+}
+
+TEST_F(QuellWorkConservationIntegrationTest, ResolveDebitsParentWorkThoughDeactivationErasesIt) {
+    // quell_resolver reads the parent's work value BEFORE delegating, and that
+    // order is load-bearing: the resolve deactivates the parent through
+    // quell_goal_deactivator, which erases the entry, and goal_work_values::get is
+    // an at(). Reading afterwards would throw. The unit tests cannot see this --
+    // their mock returns the same number whenever it is asked -- so only the real
+    // deactivator sharing the real store pins it.
+    ON_CALL(mock_activate_subgoals, activate_subgoals_and_candidates)
+        .WillByDefault(Return(true));
+
+    quell_initial_goal_activator_.activate_initial_goal(0);
+    const goal_lineage* root = make_initial_goal_lineage_.make(0);
+    const resolution_lineage* rl = lineage_pool_.make_resolution_lineage(root, 0);
+    ASSERT_NEAR(remaining_work_.get(), f0(), kWorkEpsilon);
+
+    ASSERT_TRUE(quell_erasing_resolver_.resolve(rl));
+
+    EXPECT_THROW(goal_work_values_.get(root), std::out_of_range);
+    EXPECT_THROW(goal_depths_.get(root), std::out_of_range);
+    EXPECT_NEAR(remaining_work_.get(), 0.0, kWorkEpsilon);
+}
+
+TEST_F(QuellWorkConservationIntegrationTest, BranchingProofTelescopesRemainingWorkToZero) {
+    // f :- g, h.  g :- i.  i.  h.
+    //
+    // Credits and debits never cancel at a single step -- expanding f credits
+    // 2*f(1) while debiting f(0) -- so the accounting only balances across the
+    // whole proof. Every other end-to-end quell assertion proves a single ground
+    // fact, where the goal is credited and debited at depth 0 and no child is
+    // ever activated, leaving this cancellation unexercised.
+    ON_CALL(mock_activate_subgoals, activate_subgoals_and_candidates)
+        .WillByDefault(Return(true));
+
+    quell_initial_goal_activator_.activate_initial_goal(0);
+    const goal_lineage* f_goal = make_initial_goal_lineage_.make(0);
+
+    const resolution_lineage* f_rl = lineage_pool_.make_resolution_lineage(f_goal, 0);
+    const std::vector<const goal_lineage*> g_and_h = activate_children(f_rl, 2);
+    ASSERT_TRUE(quell_erasing_resolver_.resolve(f_rl));
+    EXPECT_NEAR(remaining_work_.get(), 2.0 * f(1), kWorkEpsilon);
+
+    const resolution_lineage* g_rl = lineage_pool_.make_resolution_lineage(g_and_h[0], 0);
+    const std::vector<const goal_lineage*> i_only = activate_children(g_rl, 1);
+    ASSERT_EQ(goal_depths_.get(i_only[0]), 2u);
+    ASSERT_TRUE(quell_erasing_resolver_.resolve(g_rl));
+    EXPECT_NEAR(remaining_work_.get(), f(1) + f(2), kWorkEpsilon);
+
+    // i and h are facts: an empty body credits nothing, so each only debits itself.
+    ASSERT_TRUE(quell_erasing_resolver_.resolve(
+        lineage_pool_.make_resolution_lineage(i_only[0], 0)));
+    EXPECT_NEAR(remaining_work_.get(), f(1), kWorkEpsilon);
+
+    ASSERT_TRUE(quell_erasing_resolver_.resolve(
+        lineage_pool_.make_resolution_lineage(g_and_h[1], 0)));
+    EXPECT_NEAR(remaining_work_.get(), 0.0, kWorkEpsilon);
 }
 
 }  // namespace

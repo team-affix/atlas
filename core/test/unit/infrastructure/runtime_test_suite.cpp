@@ -3328,6 +3328,60 @@ TEST_P(RuntimeParamTest, QuellRemainingWorkAfterUnitSolution) {
     }
 }
 
+TEST_P(RuntimeParamTest, QuellRemainingWorkAfterChainedProof) {
+    if (GetParam() != runtime_kind::quell
+        && GetParam() != runtime_kind::quell_fc
+        && GetParam() != runtime_kind::dbuct_quell
+        && GetParam() != runtime_kind::dbuct_quell_fc)
+        GTEST_SKIP() << "remaining_work() is quell*/dbuct_quell* only";
+
+    // Every other remaining_work assertion proves a single ground fact, so
+    // quell_goal_activator never runs and exactly one goal is ever credited and
+    // debited. This proof branches and recurses -- f at depth 0, g and h at
+    // depth 1, i at depth 2 -- so four goals are credited on activation and
+    // debited on resolution, and reaching zero means every one of them was
+    // matched. That is the leak check: a goal credited down a branch the solver
+    // abandons, or a parent debited twice, cannot show up in a one-fact proof.
+    //
+    // It does NOT pin the work VALUES: quell_resolver debits whatever
+    // quell_goal_activator stored for that goal, so the total cancels whatever
+    // depth was used. QuellWorkConservationIntegrationTest
+    // .BranchingProofTelescopesRemainingWorkToZero asserts the intermediate
+    // f(1)/f(2) amounts and is the test that catches a wrong depth.
+    static constexpr size_t kInitialVarCount = 0;
+    initial_goals.push(saved_expr_pool_.make_functor(holder_.functors.id("f"), {}));
+    database.push(rule{
+        saved_expr_pool_.make_functor(holder_.functors.id("f"), {}),
+        {saved_expr_pool_.make_functor(holder_.functors.id("g"), {}),
+         saved_expr_pool_.make_functor(holder_.functors.id("h"), {})}});
+    database.push(rule{
+        saved_expr_pool_.make_functor(holder_.functors.id("g"), {}),
+        {saved_expr_pool_.make_functor(holder_.functors.id("i"), {})}});
+    database.push(rule{saved_expr_pool_.make_functor(holder_.functors.id("i"), {}), {}});
+    database.push(rule{saved_expr_pool_.make_functor(holder_.functors.id("h"), {}), {}});
+
+    runtime_ref& session = make_session(kInitialVarCount);
+    ASSERT_TRUE(session.next());
+    ASSERT_TRUE(session.solved());
+    if (GetParam() == runtime_kind::quell) {
+        ASSERT_TRUE(holder_.quell.has_value());
+        EXPECT_NEAR(holder_.quell->remaining_work(), 0.0, 1e-9);
+        EXPECT_EQ(holder_.quell->remaining_active_goals(), 0u);
+    } else if (GetParam() == runtime_kind::quell_fc) {
+        ASSERT_TRUE(holder_.quell_fc.has_value());
+        EXPECT_NEAR(holder_.quell_fc->remaining_work(), 0.0, 1e-9);
+        EXPECT_EQ(holder_.quell_fc->remaining_active_goals(), 0u);
+    } else if (GetParam() == runtime_kind::dbuct_quell) {
+        ASSERT_TRUE(holder_.dbuct_quell.has_value());
+        EXPECT_NEAR(holder_.dbuct_quell->remaining_work(), 0.0, 1e-9);
+        EXPECT_EQ(holder_.dbuct_quell->remaining_active_goals(), 0u);
+    } else {
+        ASSERT_TRUE(holder_.dbuct_quell_fc.has_value());
+        EXPECT_NEAR(holder_.dbuct_quell_fc->remaining_work(), 0.0, 1e-9);
+        EXPECT_EQ(holder_.dbuct_quell_fc->remaining_active_goals(), 0u);
+    }
+}
+
 INSTANTIATE_TEST_SUITE_P(
     AllRuntimes,
     RuntimeParamTest,

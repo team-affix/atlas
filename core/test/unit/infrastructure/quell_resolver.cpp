@@ -46,6 +46,20 @@ TEST_F(QuellResolverTest, SuccessSubtractsParentWork) {
     EXPECT_TRUE(resolver_sut.resolve(&rl));
 }
 
+TEST_F(QuellResolverTest, ReadsParentWorkBeforeDelegating) {
+    // The delegate deactivates the parent, which erases its work value, so the
+    // read has to come first; afterwards there is nothing left to read. A mock
+    // answers the same either way, so the order is all this test can pin -- see
+    // QuellWorkConservationIntegrationTest.ResolveDebitsParentWorkThoughDeactivationErasesIt
+    // for the real store proving the consequence.
+    testing::InSequence seq;
+    EXPECT_CALL(get_goal_work_value, get(&parent_gl)).WillOnce(Return(kParentWork));
+    EXPECT_CALL(mock_resolver, resolve(&rl)).WillOnce(Return(true));
+    EXPECT_CALL(subtract_remaining_work, subtract(kParentWork)).Times(1);
+
+    EXPECT_TRUE(resolver_sut.resolve(&rl));
+}
+
 TEST_F(QuellResolverTest, ResolveFalseDoesNotSubtract) {
     EXPECT_CALL(get_goal_work_value, get(&parent_gl))
         .Times(AtLeast(1)).WillRepeatedly(Return(kParentWork));
