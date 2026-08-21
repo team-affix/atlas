@@ -4,7 +4,7 @@ You are auditing a CHC solver written in C++ for coverage gaps. Your job has two
 
 ━━━ MANDATORY FIRST STEP ━━━
 Before writing anything:
-1. Read ./docs/testing.md in full. All rules there are authoritative.
+1. Read cursor rules for testing in full. All rules there are authoritative.
 2. Read every existing test file. Build a mental map of what is already covered: which classes, which methods, which behaviors, which edge cases.
 3. Read every header and source file in ./core/. For each public method and each documented invariant, note whether it is covered, partially covered, or untested.
 4. Produce a coverage gap report (as a code comment block at the top of a new file called test_audit.md) listing:
