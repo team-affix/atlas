@@ -1,8 +1,11 @@
 // Integration: remaining work conserved across quell initial activate + fact resolve.
 
+#include <cmath>
 #include <stdexcept>
 #include <gtest/gtest.h>
 #include <gmock/gmock.h>
+#include "infrastructure/depth_tracking_quell_goal_activator.hpp"
+#include "infrastructure/depth_tracking_quell_initial_goal_activator.hpp"
 #include "infrastructure/goal_depths.hpp"
 #include "infrastructure/goal_work_function.hpp"
 #include "infrastructure/goal_work_values.hpp"
@@ -56,14 +59,19 @@ struct MockSetChosenGoalCandidate {
 class QuellWorkConservationIntegrationTest : public ::testing::Test {
 protected:
     using make_initial_goal_lineage_t = make_initial_goal_lineage<lineage_pool>;
+    using goal_work_function_t = goal_work_function<goal_depths>;
     using quell_initial_goal_activator_t = quell_initial_goal_activator<
         MockInitialGoalActivator, make_initial_goal_lineage_t,
-        goal_depths, goal_work_values, goal_work_function, remaining_work>;
+        goal_work_values, goal_work_function_t, remaining_work>;
+    using depth_tracking_quell_initial_goal_activator_t =
+        depth_tracking_quell_initial_goal_activator<
+            quell_initial_goal_activator_t, make_initial_goal_lineage_t, goal_depths>;
     using quell_resolver_t = quell_resolver<
         MockResolver, goal_work_values, remaining_work>;
     using quell_goal_activator_t = quell_goal_activator<
-        MockGoalActivator, goal_depths, goal_depths, goal_work_values,
-        goal_work_function, remaining_work>;
+        MockGoalActivator, goal_work_values, goal_work_function_t, remaining_work>;
+    using depth_tracking_quell_goal_activator_t = depth_tracking_quell_goal_activator<
+        quell_goal_activator_t, goal_depths, goal_depths>;
     // A real resolver with the real quell_goal_deactivator in its deactivation
     // slot, so a successful resolve genuinely erases the parent's depth and work
     // value from the shared stores the way production does.
@@ -79,7 +87,7 @@ protected:
     goal_depths goal_depths_;
     goal_work_values goal_work_values_;
     remaining_work remaining_work_;
-    goal_work_function goal_work_function_{kWorkDecayK, kWorkDecayJ};
+    goal_work_function_t goal_work_function_{goal_depths_, kWorkDecayK, kWorkDecayJ};
     make_initial_goal_lineage_t make_initial_goal_lineage_{lineage_pool_};
     NiceMock<MockInitialGoalActivator> mock_initial;
     NiceMock<MockResolver> mock_resolver;
@@ -89,13 +97,16 @@ protected:
     NiceMock<MockSetChosenGoalCandidate> mock_set_chosen;
 
     quell_initial_goal_activator_t quell_initial_goal_activator_{
-        mock_initial, make_initial_goal_lineage_, goal_depths_, goal_work_values_,
+        mock_initial, make_initial_goal_lineage_, goal_work_values_,
         goal_work_function_, remaining_work_};
+    depth_tracking_quell_initial_goal_activator_t depth_tracking_quell_initial_goal_activator_{
+        quell_initial_goal_activator_, make_initial_goal_lineage_, goal_depths_};
     quell_resolver_t quell_resolver_{
         mock_resolver, goal_work_values_, remaining_work_};
     quell_goal_activator_t quell_goal_activator_{
-        mock_goal_activator, goal_depths_, goal_depths_, goal_work_values_,
-        goal_work_function_, remaining_work_};
+        mock_goal_activator, goal_work_values_, goal_work_function_, remaining_work_};
+    depth_tracking_quell_goal_activator_t depth_tracking_quell_goal_activator_{
+        quell_goal_activator_, goal_depths_, goal_depths_};
     NiceMock<MockGoalDeactivator> mock_srt_goal_deactivator;
     quell_goal_deactivator_t quell_goal_deactivator_{
         mock_srt_goal_deactivator, goal_depths_, goal_work_values_};
@@ -105,8 +116,12 @@ protected:
     quell_erasing_resolver_t quell_erasing_resolver_{
         erasing_resolver_, goal_work_values_, remaining_work_};
 
-    double f(size_t depth) const { return goal_work_function_.get(depth); }
-    double f0() const { return goal_work_function_.get(0); }
+    // Closed form of the work function. The expected values deliberately do not
+    // come from the object under test, which would make the assertions circular.
+    static double f(size_t depth) {
+        return 1.0 + std::exp(-kWorkDecayK * (static_cast<double>(depth) - kWorkDecayJ));
+    }
+    static double f0() { return f(0); }
 
     // Activates the body goals of rl at depth(parent) + 1 the way
     // subgoals_activator does, and returns them.
@@ -116,7 +131,7 @@ protected:
         for (size_t i = 0; i < body_size; ++i) {
             const goal_lineage* child =
                 lineage_pool_.make_goal_lineage(rl, static_cast<subgoal_id>(i));
-            quell_goal_activator_.activate(child);
+            depth_tracking_quell_goal_activator_.activate(child);
             children.push_back(child);
         }
         return children;
@@ -133,8 +148,8 @@ protected:
 TEST_F(QuellWorkConservationIntegrationTest, TwoInitialGoalsThenFactResolvesConserveRemaining) {
     ON_CALL(mock_resolver, resolve).WillByDefault(Return(true));
 
-    quell_initial_goal_activator_.activate_initial_goal(0);
-    quell_initial_goal_activator_.activate_initial_goal(1);
+    depth_tracking_quell_initial_goal_activator_.activate_initial_goal(0);
+    depth_tracking_quell_initial_goal_activator_.activate_initial_goal(1);
     EXPECT_NEAR(remaining_work_.get(), 2.0 * f0(), kWorkEpsilon);
 
     const goal_lineage* gl0 = make_initial_goal_lineage_.make(0);
@@ -150,14 +165,15 @@ TEST_F(QuellWorkConservationIntegrationTest, TwoInitialGoalsThenFactResolvesCons
 }
 
 TEST_F(QuellWorkConservationIntegrationTest, ChildActivationAtDepthOneAddsWorkAtDepthOne) {
-    // quell_goal_activator is the only path that assigns a non-zero depth, and no
-    // conservation test has ever run it: everything so far stops at initial goals.
+    // depth_tracking_quell_goal_activator is the only path that assigns a non-zero
+    // depth, and no conservation test has ever run it: everything so far stops at
+    // initial goals.
     //
     // Only what each child is given is asserted here. remaining_work is not, since
     // between activating the children and resolving the parent both are counted,
     // and nothing in production reads the register in that window --
     // BranchingProofTelescopesRemainingWorkToZero covers the settled totals.
-    quell_initial_goal_activator_.activate_initial_goal(0);
+    depth_tracking_quell_initial_goal_activator_.activate_initial_goal(0);
     const goal_lineage* root = make_initial_goal_lineage_.make(0);
     const resolution_lineage* rl = lineage_pool_.make_resolution_lineage(root, 0);
 
@@ -175,8 +191,8 @@ TEST_F(QuellWorkConservationIntegrationTest, SumOfGoalWorkValuesEqualsRemainingW
     // here silently re-weights the entire MCTS search.
     ON_CALL(mock_resolver, resolve).WillByDefault(Return(true));
 
-    quell_initial_goal_activator_.activate_initial_goal(0);
-    quell_initial_goal_activator_.activate_initial_goal(1);
+    depth_tracking_quell_initial_goal_activator_.activate_initial_goal(0);
+    depth_tracking_quell_initial_goal_activator_.activate_initial_goal(1);
     const goal_lineage* root0 = make_initial_goal_lineage_.make(0);
     const goal_lineage* root1 = make_initial_goal_lineage_.make(1);
 
@@ -207,7 +223,7 @@ TEST_F(QuellWorkConservationIntegrationTest, ResolveDebitsParentWorkThoughDeacti
     ON_CALL(mock_activate_subgoals, activate_subgoals_and_candidates)
         .WillByDefault(Return(true));
 
-    quell_initial_goal_activator_.activate_initial_goal(0);
+    depth_tracking_quell_initial_goal_activator_.activate_initial_goal(0);
     const goal_lineage* root = make_initial_goal_lineage_.make(0);
     const resolution_lineage* rl = lineage_pool_.make_resolution_lineage(root, 0);
     ASSERT_NEAR(remaining_work_.get(), f0(), kWorkEpsilon);
@@ -230,7 +246,7 @@ TEST_F(QuellWorkConservationIntegrationTest, BranchingProofTelescopesRemainingWo
     ON_CALL(mock_activate_subgoals, activate_subgoals_and_candidates)
         .WillByDefault(Return(true));
 
-    quell_initial_goal_activator_.activate_initial_goal(0);
+    depth_tracking_quell_initial_goal_activator_.activate_initial_goal(0);
     const goal_lineage* f_goal = make_initial_goal_lineage_.make(0);
 
     const resolution_lineage* f_rl = lineage_pool_.make_resolution_lineage(f_goal, 0);

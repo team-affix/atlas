@@ -18,6 +18,8 @@
 #include "infrastructure/conflict_detector.hpp"
 #include "infrastructure/db.hpp"
 #include "infrastructure/decision_memory.hpp"
+#include "infrastructure/depth_tracking_quell_goal_activator.hpp"
+#include "infrastructure/depth_tracking_quell_initial_goal_activator.hpp"
 #include "infrastructure/elimination_backlog.hpp"
 #include "infrastructure/elimination_router.hpp"
 #include "infrastructure/expr_pool.hpp"
@@ -118,15 +120,20 @@ struct quell_manifest {
     using goal_candidates_activator_t   = goal_candidates_activator<querier_t, lineage_pool,
                                         candidate_activator_t, conflict_detector_t,
                                         unit_goal_detector_t, unit_goals>;
-    using quell_goal_activator_t      = quell_goal_activator<goal_activator_t, goal_depths, goal_depths, goal_work_values, goal_work_function, remaining_work>;
+    using goal_work_function_t        = goal_work_function<goal_depths>;
+    using quell_goal_activator_t      = quell_goal_activator<goal_activator_t, goal_work_values, goal_work_function_t, remaining_work>;
+    using depth_tracking_quell_goal_activator_t = depth_tracking_quell_goal_activator<
+                                        quell_goal_activator_t, goal_depths, goal_depths>;
     using quell_goal_deactivator_t    = quell_goal_deactivator<srt_goal_deactivator_t, goal_depths, goal_work_values>;
     using quell_initial_goal_activator_t = quell_initial_goal_activator<initial_goal_activator_t,
-                                        make_initial_goal_lineage_t, goal_depths, goal_work_values, goal_work_function, remaining_work>;
-    using subgoals_activator_t         = subgoals_activator<lineage_pool, quell_goal_activator_t,
+                                        make_initial_goal_lineage_t, goal_work_values, goal_work_function_t, remaining_work>;
+    using depth_tracking_quell_initial_goal_activator_t = depth_tracking_quell_initial_goal_activator<
+                                        quell_initial_goal_activator_t, make_initial_goal_lineage_t, goal_depths>;
+    using subgoals_activator_t         = subgoals_activator<lineage_pool, depth_tracking_quell_goal_activator_t,
                                         db, goal_candidates_activator_t>;
     using srt_subgoals_activator_t      = srt_subgoals_activator<srt_active_goals, srt_active_goals, subgoals_activator_t>;
     using initial_goals_activator_t     = initial_goals_activator<initial_goal_exprs,
-                                        quell_initial_goal_activator_t, make_initial_goal_lineage_t, goal_candidates_activator_t>;
+                                        depth_tracking_quell_initial_goal_activator_t, make_initial_goal_lineage_t, goal_candidates_activator_t>;
     using srt_initial_goals_activator_t  = srt_initial_goals_activator<srt_active_goals, initial_goals_activator_t>;
     using resolver_t                  = resolver<quell_goal_deactivator_t, srt_subgoals_activator_t, goal_candidates_deactivator_t, chosen_goal_candidates>;
     using quell_resolver_t           = quell_resolver<resolver_t, goal_work_values, remaining_work>;
@@ -194,7 +201,7 @@ struct quell_manifest {
     goal_depths             goal_depths_;
     goal_work_values        goal_work_values_;
     remaining_work          remaining_work_;
-    goal_work_function         goal_work_function_;
+    goal_work_function_t       goal_work_function_;
     goal_candidate_rules    goal_candidate_rules_;
     unit_goals              unit_goals_;
     decision_memory         decision_memory_;
@@ -213,6 +220,7 @@ struct quell_manifest {
     solution_detector_t            solution_detector_;
     goal_activator_t               goal_activator_;
     quell_goal_activator_t        quell_goal_activator_;
+    depth_tracking_quell_goal_activator_t depth_tracking_quell_goal_activator_;
     srt_goal_deactivator_t          srt_goal_deactivator_;
     quell_goal_deactivator_t      quell_goal_deactivator_;
     candidate_activator_t          candidate_activator_;
@@ -222,6 +230,7 @@ struct quell_manifest {
     make_initial_goal_lineage_t      make_initial_goal_lineage_;
     initial_goal_activator_t        initial_goal_activator_;
     quell_initial_goal_activator_t quell_initial_goal_activator_;
+    depth_tracking_quell_initial_goal_activator_t depth_tracking_quell_initial_goal_activator_;
     goal_candidates_deactivator_t   goal_candidates_deactivator_;
     goal_candidates_activator_t     goal_candidates_activator_;
     subgoals_activator_t           subgoals_activator_;

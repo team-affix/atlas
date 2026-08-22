@@ -92,10 +92,10 @@ TEST_F(QuellManifestIntegrationTest, InitialGoalActivationLeavesRemainingEqualTo
     const expr* goal = saved_expr_pool_.make_functor(functors.id("f"), {});
     initial_goals.push(goal);
     // No matching rule → candidates may fail; drive activator path via set_up +
-    // quell_initial_goal_activator alone without candidate activation.
+    // the depth-tracking initial goal activator alone without candidate activation.
     quell_manifest manifest = make_manifest();
     manifest.quell_set_up_sim_.set_up();
-    manifest.quell_initial_goal_activator_.activate_initial_goal(0);
+    manifest.depth_tracking_quell_initial_goal_activator_.activate_initial_goal(0);
     EXPECT_NEAR(manifest.remaining_work_.get(), work_at_depth(0), kWorkEpsilon);
     EXPECT_NEAR(manifest.goal_work_values_.get(manifest.make_initial_goal_lineage_.make(0)),
                 work_at_depth(0), kWorkEpsilon);
