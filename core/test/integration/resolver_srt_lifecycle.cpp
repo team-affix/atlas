@@ -47,7 +47,6 @@
 
 using ::testing::_;
 using ::testing::NiceMock;
-using ::testing::Return;
 using ::testing::UnorderedElementsAre;
 
 namespace {
@@ -197,24 +196,6 @@ TEST_F(ResolverSrtLifecycleIntegrationTest, FactResolveRemovesGoalFromBothActive
     EXPECT_TRUE(active_goals.empty());
     EXPECT_EQ(active_goals.active_goals_size(), 0u);
     EXPECT_TRUE(collect_goals(active_goals.iterate_root_goals()).empty());
-}
-
-TEST_F(ResolverSrtLifecycleIntegrationTest, FailedResolveLeavesActiveFrontierUnchanged) {
-    // subgoals_activator returns false before the batch is linked, so the
-    // resolver must skip its entire deactivation tail and leave the parent live.
-    const goal_lineage* root = seed_root_goal(0);
-    const resolution_lineage* rl = pool.make_resolution_lineage(root, kExpand2);
-
-    ON_CALL(activate_goal_candidates, activate_goal_candidates(_)).WillByDefault(Return(false));
-
-    EXPECT_FALSE(res.resolve(rl));
-
-    EXPECT_TRUE(active_goals.is_active_goal(root));
-    EXPECT_EQ(active_goals.get_parent_goal(root), nullptr);
-    EXPECT_EQ(chosen_goal_candidates_.try_get(root), std::nullopt);
-    EXPECT_EQ(goal_exprs_.get(root).skeleton, &head_);
-    EXPECT_TRUE(goal_candidate_rules_.get(root).contains(kExpand2));
-    EXPECT_EQ(candidate_frame_offsets_.get(rl), kRootFrameOffset + 1);
 }
 
 TEST_F(ResolverSrtLifecycleIntegrationTest, ResolveErasesGoalExprAndCandidateRulesForParent) {

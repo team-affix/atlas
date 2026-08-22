@@ -5,7 +5,7 @@
 #include <gmock/gmock.h>
 #include "infrastructure/tear_down_sim.hpp"
 
-using ::testing::InSequence;
+using ::testing::Expectation;
 using ::testing::NiceMock;
 
 namespace {
@@ -131,22 +131,23 @@ TEST_F(TearDownSimTest, ClearsEveryStoreExactlyOnce) {
 
 TEST_F(TearDownSimTest, PopsFrameBeforeClearingStores) {
     // The pop replays journaled undo actions against the stores it restores, so
-    // clearing first would leave those undos writing into emptied maps.
-    ::testing::InSequence seq;
-    EXPECT_CALL(pop_frame, pop_frame()).Times(1);
-    EXPECT_CALL(clear_unit_goals, clear()).Times(1);
-    EXPECT_CALL(clear_recorded_decisions, clear_recorded_decisions()).Times(1);
-    EXPECT_CALL(clear_recorded_resolutions, clear_recorded_resolutions()).Times(1);
-    EXPECT_CALL(clear_goal_candidate_rule_ids, clear_goal_candidate_rule_ids()).Times(1);
-    EXPECT_CALL(clear_goal_exprs, clear_goal_exprs()).Times(1);
-    EXPECT_CALL(clear_active_goals, clear_active_goals()).Times(1);
-    EXPECT_CALL(clear_candidate_frame_offsets, clear_candidate_frame_offsets()).Times(1);
-    EXPECT_CALL(clear_mhu_heads, clear_mhu_heads()).Times(1);
-    EXPECT_CALL(clear_bindings, clear_bindings()).Times(1);
-    EXPECT_CALL(frame_allocator, reset()).Times(1);
-    EXPECT_CALL(clean_up_cdcl, cleanup()).Times(1);
-    EXPECT_CALL(clear_chosen_goal_candidates, clear()).Times(1);
-    EXPECT_CALL(trim_unpinned_lineages, trim()).Times(1);
+    // clearing first would leave those undos writing into emptied maps. Only that
+    // one relationship is asserted: the order the clears run in among themselves
+    // is the source's business, not a contract.
+    Expectation pop = EXPECT_CALL(pop_frame, pop_frame()).Times(1);
+    EXPECT_CALL(clear_unit_goals, clear()).Times(1).After(pop);
+    EXPECT_CALL(clear_recorded_decisions, clear_recorded_decisions()).Times(1).After(pop);
+    EXPECT_CALL(clear_recorded_resolutions, clear_recorded_resolutions()).Times(1).After(pop);
+    EXPECT_CALL(clear_goal_candidate_rule_ids, clear_goal_candidate_rule_ids()).Times(1).After(pop);
+    EXPECT_CALL(clear_goal_exprs, clear_goal_exprs()).Times(1).After(pop);
+    EXPECT_CALL(clear_active_goals, clear_active_goals()).Times(1).After(pop);
+    EXPECT_CALL(clear_candidate_frame_offsets, clear_candidate_frame_offsets()).Times(1).After(pop);
+    EXPECT_CALL(clear_mhu_heads, clear_mhu_heads()).Times(1).After(pop);
+    EXPECT_CALL(clear_bindings, clear_bindings()).Times(1).After(pop);
+    EXPECT_CALL(frame_allocator, reset()).Times(1).After(pop);
+    EXPECT_CALL(clean_up_cdcl, cleanup()).Times(1).After(pop);
+    EXPECT_CALL(clear_chosen_goal_candidates, clear()).Times(1).After(pop);
+    EXPECT_CALL(trim_unpinned_lineages, trim()).Times(1).After(pop);
 
     sut.tear_down();
 }

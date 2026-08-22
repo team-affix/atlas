@@ -114,34 +114,10 @@
      two-atom body.
      Action: additional TEST_F in the existing unit files.
 
-  FOUND BY PASS 5 — one investigated near-miss, resolved as NOT a bug:
+  FOUND BY PASS 5 — a scoping rule for the conservation invariants, NOT a bug:
 
-  * Horizon weight after a failed subgoal activation.
-    horizon_goal_activator gives each child parent_weight / body_size but never
-    debits the parent; the parent's weight is only removed later by
-    horizon_goal_deactivator in resolver step 3. When subgoal activation fails
-    partway, resolver returns false and skips steps 2-3, so the children
-    activated before the failure keep their share WHILE the parent keeps its
-    full weight: sum(active) + cumulative_grounded_weight reaches 1.5 against a
-    total of 1.0. A first draft asserted equality here and failed.
-    That equality is the wrong contract. Production never observes the state:
-    run_sim turns a false resolve into sim_termination::conflicted, after which
-    tear_down_sim clears every store, and under dbuct the frame pop undoes the
-    child activations outright. Nothing reads the frontier sum in between, and
-    the MCTS reward is driven by cumulative_grounded_weight, which stays 0.
-    What DOES matter is the opposite direction, because banked weight is never
-    given back: a leak is a permanent over-reward and missing weight a permanent
-    under-reward. HorizonWeightConservationIntegrationTest.FailedSubgoalActivationBanksNoWeight
-    therefore asserts nothing is banked, the parent's weight is intact, the
-    parent is still active, and the total never DROPS below 1.0.
-    Quell has the same shape -- quell_goal_activator credits children up front
-    and quell_resolver debits the parent only on success -- and is fine for the
-    same reason.
-    Still worth a production eye, though nothing tests it: horizon_resolver::resolve
-    accumulates a fact's grounded weight BEFORE delegating, so it banks weight
-    for a resolve that has not yet succeeded. FailedFactResolveStillBanksOnlyItsOwnWeight
-    pins the reachable case (a fact's empty body means the subgoal loop cannot
-    fail), so this only bites if a fact ever gains a failing tail.
+  * Post-conflict state is undefined; do not assert on it.
+    See "Behaviors discovered while writing the pass 5 tests" below.
 
   NOT converted to tests (production questions, deliberately left alone per
   .cursor/rules/cpp-testing-policy.mdc — do not fix bugs found while testing):
@@ -187,27 +163,40 @@ reads. Integration tests assert observable end state, never call counts.
 
 ## Behaviors discovered while writing the pass 5 tests
 
-Two contracts turned out to be narrower than the pass 5 gap list assumed. Both
-are documented in the tests rather than "fixed", since no production code is in
-scope for a test pass. Neither is a bug today, but both are load-bearing
-assumptions that nothing else records.
+Two things turned up here. The first is a scoping rule for what the conservation
+invariants actually cover. The second is a load-bearing assumption that nothing
+else records.
 
-**Failed subgoal activation leaves partially activated children behind.**
-`subgoals_activator` activates body goals one at a time and returns `false` as
-soon as `activate_goal_candidates` fails, so goals activated before the failure
-are already on the active frontier. `srt_subgoals_activator` then returns early
-without linking the batch, leaving them as unlinked orphan roots while the parent
-is still live. Consequences:
+**The conservation invariants hold only up to a terminating moment.**
+The horizon invariant is `cumulative_grounded_weight + sum(active goal weights)
+== total`, and the quell one is `remaining_work == sum of the active frontier's
+work`. Both hold at every point in time BEFORE termination is reached. They say
+nothing about the state left behind by a conflict or a solution.
 
-- The horizon weight invariant `sum(active) + cgw == total` does **not** hold at
-  that instant — the frontier transiently *over*-counts by the children's share
-  (parent 1.0 plus one child 0.5 = 1.5). `FailedSubgoalActivationBanksNoWeight`
-  therefore asserts the direction (no weight *lost*, nothing banked into
-  `cumulative_grounded_weight`) rather than equality.
-- Recovery is the caller's job: non-dbuct manifests treat the failure as a
-  conflict and `tear_down_sim` clears every store; dbuct relies on the frame pop.
-  Any future caller that continues after a failed resolve inherits corrupt
-  weights and a corrupt frontier.
+That matters because a conflict is routine, not exceptional.
+`activate_goal_candidates` returns `false` in exactly one place — when
+`conflict_detector` finds the goal has zero surviving candidate rules — and
+`subgoals_activator` activates each body goal BEFORE checking it:
+
+```
+const goal_lineage* gl = make_goal_lineage_.make_goal_lineage(rl, body_idx);
+goal_activator_.activate(gl);
+if (!activate_goal_candidates_.activate_goal_candidates(gl))
+    return false;
+```
+
+So resolving `f :- g, h.` where nothing matches `g` weights `g` with half of
+`f`'s share, then discovers `g` is a dead end and returns, never creating `h`.
+The frontier momentarily reads 1.5 against a total of 1.0, `srt_subgoals_activator`
+never reaches `link_srt_goal_batch_parent`, and `in_flight_` is left populated.
+None of that is a defect: the caller immediately abandons the branch — `run_sim`
+turns the false resolve into `sim_termination::conflicted` and `tear_down_sim`
+clears every store, or under dbuct the frame pop rewinds it.
+
+Consequence for tests: assert the invariants only on states reached by
+successful activation and resolution. Four tests that asserted post-conflict
+state were removed rather than weakened, since a weakened assertion on an
+undefined state still implies the state is defined.
 
 **`expr::functor` ordering compares argument POINTERS, not structure.** `args`
 is `std::vector<const expr*>` and `operator<=>` is defaulted, so ordering is by

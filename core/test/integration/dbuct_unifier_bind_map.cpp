@@ -86,10 +86,11 @@ TEST_F(DbuctUnifierBindMapIntegrationTest, ChainedBindingWhnfRestoredAfterPop) {
     EXPECT_EQ(whnf(&var2), &var0);
 }
 
-TEST_F(DbuctUnifierBindMapIntegrationTest, OccursCheckFailureLeavesNoResidualBindings) {
-    // The first argument unifies and binds var1 before the second argument hits
-    // the occurs check, so the failed unification leaves a residual binding.
-    // Popping the frame is what production relies on to discard it.
+TEST_F(DbuctUnifierBindMapIntegrationTest, NothingIsBoundAfterPoppingAFailedOccursCheck) {
+    // A two-argument unification whose first argument succeeds and whose second
+    // fails the occurs check. All the caller is promised is that once the frame is
+    // popped nothing the attempt touched survives; whether the unifier unwound its
+    // own partial work or left it for the pop is not something to pin down here.
     expr h_var0{expr::functor{functors.id("h"), {&var0}}};
     expr lhs{expr::functor{functors.id("f"), {&var1, &var0}}};
     expr rhs{expr::functor{functors.id("f"), {&func_g, &h_var0}}};

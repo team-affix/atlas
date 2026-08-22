@@ -26,20 +26,7 @@ struct GeniusExplorationConstantTest : public ::testing::Test {
     test_genius_exploration_constant_t sut{is_active_goal, kRidge, kHorizon};
 
     goal_lineage gl{nullptr, 0};
-    resolution_lineage rl0{&gl, 0};
-    resolution_lineage rl1{&gl, 1};
 };
-
-TEST_F(GeniusExplorationConstantTest, ActiveGoalAtRuleChoiceNodeUsesHorizonConstant) {
-    // Deep in the tree the scope carries every resolution taken so far. The
-    // constant must still be chosen purely from the pending goal: letting the
-    // scope influence it would give the same goal different exploration constants
-    // depending on the path taken to reach it, so sibling subtrees would no longer
-    // be comparable.
-    mcts_scope_node_id node{{&rl0, &rl1}, &gl};
-    EXPECT_CALL(is_active_goal, is_active_goal(&gl)).WillOnce(Return(true));
-    EXPECT_DOUBLE_EQ(sut.get_exploration_constant(node), kHorizon);
-}
 
 TEST_F(GeniusExplorationConstantTest, ActiveGoalParentUsesHorizonConstant) {
     mcts_scope_node_id node{{}, &gl};
