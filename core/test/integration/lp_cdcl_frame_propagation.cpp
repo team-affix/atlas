@@ -27,7 +27,8 @@
 namespace {
 
 using recorder_t = resolution_recorder<decision_memory, resolution_memory>;
-using lp_recorder_t = lp_decision_recorder<recorder_t, lp_cdcl_elimination_generator>;
+using lp_recorder_t = lp_decision_recorder<recorder_t, lp_cdcl_elimination_generator,
+                                           lp_cdcl_elimination_generator>;
 
 std::vector<const resolution_lineage*> collect_elims(
     coroutine<const resolution_lineage*, void> sm) {
@@ -46,7 +47,7 @@ protected:
     decision_memory decisions;
     resolution_memory resolutions;
     recorder_t recorder{decisions, resolutions};
-    lp_recorder_t lp_recorder{recorder, cdcl};
+    lp_recorder_t lp_recorder{recorder, cdcl, cdcl};
 
     // One decision as run_sim performs it: record (which descends), then constrain.
     std::vector<const resolution_lineage*> decide(const resolution_lineage* rl) {
@@ -60,11 +61,17 @@ protected:
         return collect_elims(cdcl.constrain(rl));
     }
 
-    void end_sim() {
-        cdcl.learn();
+    void restart() {
         cdcl.cleanup();
         decisions.clear_recorded_decisions();
         resolutions.clear_recorded_resolutions();
+        cdcl.enter();
+        collect_elims(cdcl.flush());
+    }
+
+    void end_sim() {
+        cdcl.learn();
+        restart();
     }
 
     goal_lineage g0{nullptr, 0};
@@ -105,9 +112,10 @@ TEST_F(LpCdclFramePropagationIntegrationTest, SecondSimDownSamePrefixReusesTheCh
     decide(&g2_r0);
     end_sim();
 
-    // Sim 2: seed the cache into the {g0_r0} frame.
+    // Sim 2: seed the cache into the {g0_r0} frame. Do not learn -- the current
+    // frame is a prefix, not a new conflict.
     EXPECT_THAT(decide(&g0_r0), ::testing::IsEmpty());
-    end_sim();
+    restart();
 
     // Sim 3: the same edge has nothing left to send, but the child still holds
     // the copy already reduced by g0_r0.

@@ -86,7 +86,7 @@ ridge_lp_manifest::ridge_lp_manifest(
       mcts_decision_generator_(lineage_pool_, srt_active_goals_, srt_active_goals_,
                                srt_active_goals_, mcts_sim_, goal_candidate_rules_),
       resolution_recorder_(decision_memory_, resolution_memory_),
-      lp_decision_recorder_(resolution_recorder_, cdcl_),
+      lp_decision_recorder_(resolution_recorder_, cdcl_, cdcl_),
       run_sim_(srt_initial_goals_activator_, solution_detector_,
                conflict_detector_, unit_goal_detector_,
                unit_goals_, unit_goals_,
@@ -95,6 +95,6 @@ ridge_lp_manifest::ridge_lp_manifest(
                resolution_recorder_, resolution_memory_, max_resolutions),
       solver_(ridge_set_up_sim_, ridge_tear_down_sim_, run_sim_,
               decision_memory_, decision_memory_,
-              lineage_pool_, cdcl_, elimination_router_),
+              lineage_pool_, cdcl_, cdcl_, cdcl_, elimination_router_),
       normalizer_(globalizer_, expr_pool_, expr_pool_, bind_map_),
       driver_(solver_.solve()) {}

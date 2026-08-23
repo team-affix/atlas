@@ -8,9 +8,9 @@
 
 // A frame-local copy of an avoidance, already reduced for the frame that holds
 // it. No watcher positions: a frame watches every member, so reduction is
-// literal member erasure. An empty members vector is a tombstone -- a live entry
-// always has at least two members -- which keeps cache positions stable for the
-// child continuations that index into them.
+// literal member erasure. Members are never empty -- a one-member avoidance is
+// a forced elimination, and one that can no longer be violated is reported as
+// lp_avoidance_satisfied instead.
 struct lp_avoidance {
     avoidance_id id;
     std::vector<const resolution_lineage*> members;

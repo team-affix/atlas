@@ -153,14 +153,14 @@ struct ridge_lp_manifest {
     using mcts_decision_generator_t = mcts_decision_generator<lineage_pool, srt_active_goals,
                                     srt_active_goals, srt_active_goals, mcts_sim_t, goal_candidate_rules>;
     using resolution_recorder_t = resolution_recorder<decision_memory, resolution_memory>;
-    using lp_decision_recorder_t = lp_decision_recorder<resolution_recorder_t, cdcl_t>;
+    using lp_decision_recorder_t = lp_decision_recorder<resolution_recorder_t, cdcl_t, cdcl_t>;
     using run_sim_t        = run_sim<srt_initial_goals_activator_t, solution_detector_t, conflict_detector_t,
                             unit_goal_detector_t, unit_goals, unit_goals, mcts_decision_generator_t,
                             joint_t, elimination_router_t, resolver_t, get_unit_resolution_t,
                             lp_decision_recorder_t, resolution_recorder_t, resolution_memory>;
     using solver_t        = lp_solver<ridge_set_up_sim_t, ridge_tear_down_sim_t, run_sim_t,
                             decision_memory, decision_memory,
-                            lineage_pool, cdcl_t, elimination_router_t>;
+                            lineage_pool, cdcl_t, cdcl_t, cdcl_t, elimination_router_t>;
     using normalizer_t    = normalizer<globalizer, expr_pool, expr_pool, bind_map_t>;
 
     ridge_lp_manifest(
