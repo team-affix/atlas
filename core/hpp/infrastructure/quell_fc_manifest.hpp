@@ -53,7 +53,7 @@
 #include "infrastructure/mcts_root_tree_node.hpp"
 #include "infrastructure/tree_walker.hpp"
 #include "infrastructure/rp_heuristic_rollout.hpp"
-#include "infrastructure/atlas_uct_manifest.hpp"
+#include "infrastructure/fc_uct_manifest.hpp"
 #include "infrastructure/uniform_exploration_constant.hpp"
 #include "infrastructure/uniform_value_delta.hpp"
 #include "infrastructure/value_table.hpp"
@@ -176,12 +176,7 @@ struct quell_fc_manifest {
     using mcts_choices_t = std::vector<mcts_choice>;
     using mcts_visits_table_t = monte_carlo::visits_table<mcts_tree_node_id, std::unordered_map>;
     using mcts_value_table_t = monte_carlo::value_table<mcts_tree_node_id, double, std::unordered_map>;
-    using uct_t = atlas_uct_manifest<
-        mcts_tree_node_id, mcts_choice, double,
-        mcts_visits_table_t, mcts_visits_table_t,
-        mcts_value_table_t, mcts_value_table_t,
-        tree_walker, mcts_choices_t, mcts_choices_t,
-        mcts_rollout_t, exploration_constant_t, value_delta_t>;
+    using uct_t = fc_uct_manifest;
     using quell_tear_down_sim_t = quell_tear_down_sim<
         quell_reward_t, value_delta_t, typename uct_t::terminator_t,
         goal_depths, goal_work_values, remaining_work, tear_down_sim_t>;

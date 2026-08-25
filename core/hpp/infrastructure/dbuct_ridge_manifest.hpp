@@ -7,7 +7,7 @@
 #include <unordered_map>
 #include <vector>
 
-#include "infrastructure/dbuct_value_manifest.hpp"
+#include "infrastructure/dbuct_manifest.hpp"
 #include "infrastructure/value_table.hpp"
 #include "infrastructure/visits_table.hpp"
 
@@ -97,11 +97,7 @@ struct dbuct_ridge_manifest {
     using dbuct_choices_t          = std::vector<mcts_choice>;
     using dbuct_visits_table_t     = monte_carlo::visits_table<mcts_tree_node_id, std::unordered_map>;
     using dbuct_value_table_t      = monte_carlo::value_table<mcts_tree_node_id, double, std::unordered_map>;
-    using dbuct_t                  = monte_carlo::dbuct_value_manifest<
-                                         mcts_tree_node_id, mcts_choice, double,
-                                         dbuct_visits_table_t, dbuct_visits_table_t,
-                                         dbuct_value_table_t, dbuct_value_table_t,
-                                         tree_walker_t, dbuct_choices_t, dbuct_choices_t, std::mt19937>;
+    using dbuct_t                  = dbuct_manifest;
 
     using avoidance_unit_boundary_t = dbuct_avoidance_unit_boundary<
         nearest_decision_t, typename dbuct_t::frame_stack_t>;

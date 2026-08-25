@@ -7,7 +7,7 @@
 #include <unordered_map>
 #include <vector>
 
-#include "infrastructure/atlas_dbuct_manifest.hpp"
+#include "infrastructure/fc_dbuct_manifest.hpp"
 #include "infrastructure/value_table.hpp"
 #include "infrastructure/visits_table.hpp"
 
@@ -117,12 +117,7 @@ struct dbuct_ridge_fc_manifest {
     using dbuct_rollout_t          = rp_heuristic_rollout<goal_rollout_t, rule_rollout_t>;
     using value_delta_t            = monte_carlo::uniform_value_delta<double>;
     using exploration_constant_t   = monte_carlo::uniform_exploration_constant<double>;
-    using dbuct_t                  = atlas_dbuct_manifest<
-                                         mcts_tree_node_id, mcts_choice, double,
-                                         dbuct_visits_table_t, dbuct_visits_table_t,
-                                         dbuct_value_table_t, dbuct_value_table_t,
-                                         tree_walker_t, dbuct_choices_t, dbuct_choices_t,
-                                         dbuct_rollout_t, exploration_constant_t, value_delta_t>;
+    using dbuct_t                  = fc_dbuct_manifest;
 
     using avoidance_unit_boundary_t = dbuct_avoidance_unit_boundary<
         nearest_decision_t, typename dbuct_t::frame_stack_t>;

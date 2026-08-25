@@ -50,7 +50,7 @@
 #include "infrastructure/mcts_decision_generator.hpp"
 #include "infrastructure/mcts_root_scope_node.hpp"
 #include "infrastructure/scope_walker.hpp"
-#include "infrastructure/atlas_uct_manifest.hpp"
+#include "infrastructure/genius_uct_manifest.hpp"
 #include "infrastructure/random_rollout.hpp"
 #include "infrastructure/value_table.hpp"
 #include "infrastructure/visits_table.hpp"
@@ -142,12 +142,7 @@ struct genius_manifest {
     using mcts_rollout_t = monte_carlo::random_rollout<
         mcts_choice, std::mt19937, mcts_choices_t, mcts_choices_t>;
     using scope_walker_t = scope_walker<lineage_pool>;
-    using uct_t = atlas_uct_manifest<
-        mcts_scope_node_id, mcts_choice, double,
-        mcts_visits_table_t, mcts_visits_table_t,
-        mcts_value_table_t, mcts_value_table_t,
-        scope_walker_t, mcts_choices_t, mcts_choices_t,
-        mcts_rollout_t, exploration_constant_t, value_delta_t>;
+    using uct_t = genius_uct_manifest;
     using genius_tear_down_sim_t = genius_tear_down_sim<
         typename uct_t::terminator_t, goal_weights, cumulative_grounded_weight, tear_down_sim_t>;
     using mcts_decision_generator_t = mcts_decision_generator<lineage_pool, srt_active_goals,

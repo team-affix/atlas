@@ -7,7 +7,7 @@
 #include <random>
 #include <vector>
 
-#include "infrastructure/atlas_dbuct_manifest.hpp"
+#include "infrastructure/genius_dbuct_manifest.hpp"
 #include "infrastructure/random_rollout.hpp"
 #include "infrastructure/value_table.hpp"
 #include "infrastructure/visits_table.hpp"
@@ -117,12 +117,7 @@ struct dbuct_genius_manifest {
     using horizon_reward_t         = horizon_reward<cumulative_grounded_weight_t>;
     using value_delta_t            = genius_value_delta<ridge_reward_t, horizon_reward_t>;
     using exploration_constant_t   = genius_exploration_constant<srt_active_goals_t>;
-    using dbuct_t                  = atlas_dbuct_manifest<
-                                         mcts_scope_node_id, mcts_choice, double,
-                                         dbuct_visits_table_t, dbuct_visits_table_t,
-                                         dbuct_value_table_t, dbuct_value_table_t,
-                                         scope_walker_t, dbuct_choices_t, dbuct_choices_t,
-                                         dbuct_rollout_t, exploration_constant_t, value_delta_t>;
+    using dbuct_t                  = genius_dbuct_manifest;
 
     using avoidance_unit_boundary_t = dbuct_avoidance_unit_boundary<
         nearest_decision_t, typename dbuct_t::frame_stack_t>;
