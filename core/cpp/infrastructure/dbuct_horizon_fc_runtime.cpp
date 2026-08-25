@@ -7,9 +7,9 @@ dbuct_horizon_fc_runtime::dbuct_horizon_fc_runtime(
     size_t max_resolutions,
     uint32_t random_seed,
     double exploration_constant,
-    size_t grant_increment_interval)
+    double grant_k)
     : manifest_(database, goals, initial_frame_offset, max_resolutions,
-                random_seed, exploration_constant, grant_increment_interval) {}
+                random_seed, exploration_constant, grant_k) {}
 
 bool dbuct_horizon_fc_runtime::next() {
     return manifest_.driver_.next();

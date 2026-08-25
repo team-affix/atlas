@@ -70,21 +70,19 @@ TEST_F(HorizonManifestIntegrationTest, WiringHorizonRewardReturnsZeroInitially) 
     EXPECT_DOUBLE_EQ(manifest.horizon_reward_.compute_mcts_reward(), 0.0);
 }
 
-TEST_F(HorizonManifestIntegrationTest, WiringMctsSimDistinctFromOuterAndInnerLifecycle) {
+TEST_F(HorizonManifestIntegrationTest, WiringChooserDistinctFromOuterAndInnerLifecycle) {
     horizon_manifest manifest = make_manifest();
     EXPECT_NE(static_cast<void*>(&manifest.set_up_sim_),
-              static_cast<void*>(&manifest.mcts_sim_));
+              static_cast<void*>(&manifest.uct_.chooser));
     EXPECT_NE(static_cast<void*>(&manifest.tear_down_sim_),
-              static_cast<void*>(&manifest.mcts_sim_));
-    EXPECT_NE(static_cast<void*>(&manifest.horizon_set_up_sim_),
-              static_cast<void*>(&manifest.mcts_sim_));
+              static_cast<void*>(&manifest.uct_.chooser));
     EXPECT_NE(static_cast<void*>(&manifest.horizon_tear_down_sim_),
-              static_cast<void*>(&manifest.mcts_sim_));
+              static_cast<void*>(&manifest.uct_.chooser));
 }
 
 TEST_F(HorizonManifestIntegrationTest, SimLifecycleClearsCgwAfterEmptyRun) {
     horizon_manifest manifest = make_manifest();
-    manifest.horizon_set_up_sim_.set_up();
+    manifest.set_up_sim_.set_up();
     EXPECT_EQ(manifest.run_sim_.run(), sim_termination::solved);
     manifest.horizon_tear_down_sim_.tear_down();
     EXPECT_DOUBLE_EQ(manifest.cumulative_grounded_weight_.get(), 0.0);
@@ -114,13 +112,13 @@ TEST_F(HorizonManifestIntegrationTest, RuntimeCgwConservedThenClearedAcrossCycle
     database.push(rule{head, {}});
 
     horizon_manifest manifest = make_manifest();
-    manifest.horizon_set_up_sim_.set_up();
+    manifest.set_up_sim_.set_up();
     EXPECT_EQ(manifest.run_sim_.run(), sim_termination::solved);
     EXPECT_NEAR(manifest.cumulative_grounded_weight_.get(), kTotalWeight, kWeightEpsilon);
     manifest.horizon_tear_down_sim_.tear_down();
     EXPECT_DOUBLE_EQ(manifest.cumulative_grounded_weight_.get(), 0.0);
 
-    manifest.horizon_set_up_sim_.set_up();
+    manifest.set_up_sim_.set_up();
     EXPECT_EQ(manifest.run_sim_.run(), sim_termination::solved);
     EXPECT_NEAR(manifest.cumulative_grounded_weight_.get(), kTotalWeight, kWeightEpsilon);
     manifest.horizon_tear_down_sim_.tear_down();

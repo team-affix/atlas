@@ -62,7 +62,7 @@ namespace {
 
 // The MCTS frame depth is owned by the dbuct sim, outside this slice.
 struct MockGetMctsFrameDepth {
-    MOCK_METHOD(size_t, depth, (), (const));
+    MOCK_METHOD(size_t, size, (), (const));
 };
 
 using bind_map_t = dbuct_bind_map<globalizer>;
@@ -188,7 +188,7 @@ struct DbuctFrameHubRoundTripIntegrationTest : public ::testing::Test {
     expr func_g{expr::functor{functors.id("g"), {}}};
 
     void SetUp() override {
-        ON_CALL(get_mcts_frame_depth, depth())
+        ON_CALL(get_mcts_frame_depth, size())
             .WillByDefault(ReturnPointee(&mcts_frame_depth));
     }
 

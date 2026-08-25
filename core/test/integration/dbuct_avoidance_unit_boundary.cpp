@@ -11,7 +11,7 @@ namespace {
 
 struct fake_mcts_frame_depth {
     size_t depth_value;
-    size_t depth() const { return depth_value; }
+    size_t size() const { return depth_value; }
 };
 
 struct DbuctAvoidanceUnitBoundaryIntegrationTest : public ::testing::Test {

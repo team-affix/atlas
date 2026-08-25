@@ -29,7 +29,7 @@ using ::testing::ReturnPointee;
 namespace {
 
 struct MockGetMctsFrameDepth {
-    MOCK_METHOD(size_t, depth, (), (const));
+    MOCK_METHOD(size_t, size, (), (const));
 };
 
 using boundary_t =
@@ -63,7 +63,7 @@ struct DbuctResolutionRecorderIntegrationTest : public ::testing::Test {
     resolution_lineage u{&gu, 0};
 
     void SetUp() override {
-        ON_CALL(get_mcts_frame_depth, depth())
+        ON_CALL(get_mcts_frame_depth, size())
             .WillByDefault(ReturnPointee(&mcts_frame_depth));
     }
 

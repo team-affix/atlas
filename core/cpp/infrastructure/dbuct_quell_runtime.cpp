@@ -9,10 +9,10 @@ dbuct_quell_runtime::dbuct_quell_runtime(
     double exploration_constant,
     double work_decay_k,
     double work_decay_j,
-    size_t grant_increment_interval)
+    double grant_k)
     : manifest_(database, goals, initial_frame_offset, max_resolutions,
                 random_seed, exploration_constant, work_decay_k, work_decay_j,
-                grant_increment_interval) {}
+                grant_k) {}
 
 bool dbuct_quell_runtime::next() {
     return manifest_.driver_.next();

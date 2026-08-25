@@ -41,7 +41,6 @@
 #include "infrastructure/quell_initial_goal_activator.hpp"
 #include "infrastructure/quell_resolver.hpp"
 #include "infrastructure/quell_reward.hpp"
-#include "infrastructure/quell_set_up_sim.hpp"
 #include "infrastructure/quell_tear_down_sim.hpp"
 #include "infrastructure/initial_goal_activator.hpp"
 #include "infrastructure/initial_goal_exprs.hpp"
@@ -51,13 +50,10 @@
 #include "infrastructure/make_initial_goal_lineage.hpp"
 #include "infrastructure/mcts_decision_generator.hpp"
 #include "infrastructure/mcts_root_tree_node.hpp"
-#include "infrastructure/mcts_sim.hpp"
 #include "infrastructure/tree_walker.hpp"
-#include "uniform_exploration_constant.hpp"
-#include "uniform_value_delta.hpp"
-#include "random_rollout.hpp"
-#include "value_table.hpp"
-#include "visits_table.hpp"
+#include "infrastructure/uct_value_manifest.hpp"
+#include "infrastructure/value_table.hpp"
+#include "infrastructure/visits_table.hpp"
 #include "value_objects/mcts_choice.hpp"
 #include "value_objects/mcts_tree_node_id.hpp"
 #include "infrastructure/mhu_elimination_generator.hpp"
@@ -142,37 +138,25 @@ struct quell_manifest {
                             goal_candidate_rules, goal_exprs, srt_active_goals, candidate_frame_offsets,
                             mhu_t, bind_map_t, lineage_pool, frame_bump_allocator, cdcl_t, chosen_goal_candidates>;
     using quell_reward_t     = quell_reward<remaining_work>;
-    using value_delta_t    = monte_carlo::uniform_value_delta<double>;
-    using exploration_constant_t = monte_carlo::uniform_exploration_constant<double>;
     using mcts_choices_t = std::vector<mcts_choice>;
     using mcts_visits_table_t = monte_carlo::visits_table<mcts_tree_node_id, std::unordered_map>;
     using mcts_value_table_t = monte_carlo::value_table<mcts_tree_node_id, double, std::unordered_map>;
-    using mcts_rollout_t = monte_carlo::random_rollout<
-        mcts_choice, std::mt19937, mcts_choices_t, mcts_choices_t>;
-    using mcts_sim_t       = mcts_sim<
-        mcts_tree_node_id,
-        mcts_choice,
-        mcts_visits_table_t,
-        mcts_visits_table_t,
-        mcts_value_table_t,
-        mcts_value_table_t,
-        tree_walker,
-        mcts_rollout_t,
-        value_delta_t,
-        exploration_constant_t,
-        mcts_root_tree_node>;
-    using quell_set_up_sim_t = quell_set_up_sim<mcts_sim_t, set_up_sim_t>;
+    using uct_t = monte_carlo::uct_value_manifest<
+        mcts_tree_node_id, mcts_choice, double,
+        mcts_visits_table_t, mcts_visits_table_t,
+        mcts_value_table_t, mcts_value_table_t,
+        tree_walker, mcts_choices_t, mcts_choices_t, std::mt19937>;
     using quell_tear_down_sim_t = quell_tear_down_sim<
-        quell_reward_t, value_delta_t, mcts_sim_t,
+        quell_reward_t, typename uct_t::delta_t, typename uct_t::terminator_t,
         goal_depths, goal_work_values, remaining_work, tear_down_sim_t>;
     using mcts_decision_generator_t = mcts_decision_generator<lineage_pool, srt_active_goals,
-                                    srt_active_goals, srt_active_goals, mcts_sim_t, goal_candidate_rules>;
+                                    srt_active_goals, srt_active_goals, typename uct_t::chooser_t, goal_candidate_rules>;
     using resolution_recorder_t = resolution_recorder<decision_memory, resolution_memory>;
     using run_sim_t        = run_sim<srt_initial_goals_activator_t, solution_detector_t, conflict_detector_t,
                             unit_goal_detector_t, unit_goals, unit_goals, mcts_decision_generator_t,
                             joint_t, elimination_router_t, quell_resolver_t, get_unit_resolution_t,
                             resolution_recorder_t, resolution_recorder_t, resolution_memory>;
-    using solver_t        = solver<quell_set_up_sim_t, quell_tear_down_sim_t, run_sim_t,
+    using solver_t        = solver<set_up_sim_t, quell_tear_down_sim_t, run_sim_t,
                             decision_memory, decision_memory,
                             lineage_pool, cdcl_t, elimination_router_t>;
     using normalizer_t    = normalizer<globalizer, expr_pool, expr_pool, bind_map_t>;
@@ -242,16 +226,11 @@ struct quell_manifest {
     set_up_sim_t                    set_up_sim_;
     tear_down_sim_t                    tear_down_sim_;
     quell_reward_t               quell_reward_;
-    value_delta_t                  value_delta_;
     std::mt19937                rng_;
     mcts_visits_table_t            mcts_visits_table_;
     mcts_value_table_t             mcts_value_table_;
-    tree_walker                    tree_walker_;
-    mcts_rollout_t                 mcts_rollout_;
     mcts_root_tree_node            mcts_root_tree_node_;
-    exploration_constant_t         exploration_constant_;
-    mcts_sim_t                 mcts_sim_;
-    quell_set_up_sim_t           quell_set_up_sim_;
+    uct_t                      uct_;
     quell_tear_down_sim_t        quell_tear_down_sim_;
     mcts_decision_generator_t       mcts_decision_generator_;
     resolution_recorder_t            resolution_recorder_;

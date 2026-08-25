@@ -10,7 +10,7 @@
 
 // dbuct-genius-fc runtime — camping DBUCT with scope-keyed MCTS, dual rewards, FC rollout.
 struct dbuct_genius_fc_runtime {
-    static constexpr size_t k_default_grant_increment_interval = 4;
+    static constexpr double k_default_grant_k = 0.1;
 
     dbuct_genius_fc_runtime(
         db& database,
@@ -20,7 +20,7 @@ struct dbuct_genius_fc_runtime {
         uint32_t random_seed,
         double ridge_exploration_constant,
         double horizon_exploration_constant,
-        size_t grant_increment_interval = k_default_grant_increment_interval);
+        double grant_k = k_default_grant_k);
 
     bool next();
     bool solved() const;

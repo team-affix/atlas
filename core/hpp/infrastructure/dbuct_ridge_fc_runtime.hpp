@@ -9,10 +9,10 @@
 #include "value_objects/lemma.hpp"
 
 // dbuct_ridge_fc runtime — camping ridge + fewer-candidate RP. Same session API
-// as dbuct_ridge_runtime; grant_increment_interval controls DBUCT per-node
-// compute batch growth (larger ⇒ camps longer). Default matches shared harnesses.
+// as dbuct_ridge_runtime; grant_k is the visit-proportional grant
+// coefficient (grant(n) = 1 + k * visits(n)). Default matches shared harnesses.
 struct dbuct_ridge_fc_runtime {
-    static constexpr size_t k_default_grant_increment_interval = 4;
+    static constexpr double k_default_grant_k = 0.1;
 
     dbuct_ridge_fc_runtime(
         db& database,
@@ -21,7 +21,7 @@ struct dbuct_ridge_fc_runtime {
         size_t max_resolutions,
         uint32_t random_seed,
         double exploration_constant,
-        size_t grant_increment_interval = k_default_grant_increment_interval);
+        double grant_k = k_default_grant_k);
 
     bool next();
     bool solved() const;

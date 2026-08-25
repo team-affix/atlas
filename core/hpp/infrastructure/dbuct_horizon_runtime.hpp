@@ -10,7 +10,7 @@
 
 // dbuct-horizon runtime — camping DBUCT search with horizon (CGW) reward.
 struct dbuct_horizon_runtime {
-    static constexpr size_t k_default_grant_increment_interval = 4;
+    static constexpr double k_default_grant_k = 0.1;
 
     dbuct_horizon_runtime(
         db& database,
@@ -19,7 +19,7 @@ struct dbuct_horizon_runtime {
         size_t max_resolutions,
         uint32_t random_seed,
         double exploration_constant,
-        size_t grant_increment_interval = k_default_grant_increment_interval);
+        double grant_k = k_default_grant_k);
 
     bool next();
     bool solved() const;

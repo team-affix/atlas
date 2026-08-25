@@ -55,15 +55,16 @@ struct ScriptingMctsChoose {
     std::vector<std::vector<mcts_choice>> goal_rounds;
     std::vector<std::vector<mcts_choice>> candidate_rounds;
 
-    mcts_choice choose(const std::vector<mcts_choice>& choices) {
-        if (!choices.empty()) {
-            if (std::holds_alternative<const goal_lineage*>(choices.front()))
-                goal_rounds.push_back(choices);
+    mcts_choice choose(const std::vector<mcts_choice>& get_choice_count,
+                       const std::vector<mcts_choice>& get_choice_at) {
+        if (!get_choice_count.empty()) {
+            if (std::holds_alternative<const goal_lineage*>(get_choice_count.front()))
+                goal_rounds.push_back(get_choice_count);
             else
-                candidate_rounds.push_back(choices);
+                candidate_rounds.push_back(get_choice_count);
         }
         if (responses.empty())
-            return choices.front();
+            return get_choice_at.front();
         mcts_choice next = responses.front();
         responses.pop_front();
         return next;

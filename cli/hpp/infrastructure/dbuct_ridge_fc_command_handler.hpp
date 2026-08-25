@@ -36,7 +36,7 @@ struct dbuct_ridge_fc_command_handler {
         size_t max_resolutions,
         uint32_t seed,
         double exploration_constant = 15,
-        size_t grant_increment_interval = dbuct_ridge_fc_runtime::k_default_grant_increment_interval,
+        double grant_k = dbuct_ridge_fc_runtime::k_default_grant_k,
         size_t sim_progress_interval = 1000);
 
     void operator()();

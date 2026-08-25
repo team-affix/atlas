@@ -4,6 +4,6 @@ CompileFlags:
     - -I.
     - -Icore/hpp
     - -Icli/hpp
-    - -Imcts/include
+    - -Imcts/core/hpp
     - -Igoogletest/googletest/include
     - -Igoogletest/googlemock/include

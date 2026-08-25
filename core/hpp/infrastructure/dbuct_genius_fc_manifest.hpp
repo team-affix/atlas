@@ -7,11 +7,9 @@
 #include <random>
 #include <vector>
 
-#include "dbuct.hpp"
-#include "dispatches_table.hpp"
-#include "linear_batch_increment.hpp"
-#include "value_table.hpp"
-#include "visits_table.hpp"
+#include "infrastructure/atlas_dbuct_manifest.hpp"
+#include "infrastructure/value_table.hpp"
+#include "infrastructure/visits_table.hpp"
 
 #include "infrastructure/candidate_activator.hpp"
 #include "infrastructure/candidate_deactivator.hpp"
@@ -121,7 +119,6 @@ struct dbuct_genius_fc_manifest {
     using dbuct_choices_t          = std::vector<mcts_choice>;
     using dbuct_visits_table_t     = monte_carlo::visits_table<mcts_scope_node_id, std::map>;
     using dbuct_value_table_t      = monte_carlo::value_table<mcts_scope_node_id, double, std::map>;
-    using dbuct_dispatches_table_t = monte_carlo::dispatches_table<mcts_scope_node_id, std::map>;
     using rp_compute_fewer_candidate_goal_value_t =
         rp_compute_fewer_candidate_goal_value<goal_candidate_rules_t>;
     using rp_srt_active_goals_t = dbuct_rp_srt_active_goals<
@@ -129,22 +126,19 @@ struct dbuct_genius_fc_manifest {
     using goal_rollout_t           = rp_fewer_candidate_goal_rollout<rp_srt_active_goals_t>;
     using rule_rollout_t           = rp_uniform_rule_rollout<std::mt19937>;
     using dbuct_rollout_t          = rp_heuristic_rollout<goal_rollout_t, rule_rollout_t>;
-    using dbuct_batch_t            = monte_carlo::linear_batch_increment;
     using ridge_reward_t           = ridge_reward<decision_memory_t>;
     using horizon_reward_t         = horizon_reward<cumulative_grounded_weight_t>;
     using value_delta_t            = genius_value_delta<ridge_reward_t, horizon_reward_t>;
     using exploration_constant_t   = genius_exploration_constant<srt_active_goals_t>;
-    using dbuct_t                  = monte_carlo::dbuct<
+    using dbuct_t                  = atlas_dbuct_manifest<
                                          mcts_scope_node_id, mcts_choice, double,
-                                         dbuct_visits_table_t, dbuct_value_table_t,
-                                         dbuct_visits_table_t, dbuct_value_table_t,
-                                         dbuct_dispatches_table_t, dbuct_dispatches_table_t,
-                                         dbuct_batch_t, scope_walker_t,
-                                         dbuct_choices_t, dbuct_choices_t, dbuct_rollout_t,
-                                         value_delta_t, exploration_constant_t>;
+                                         dbuct_visits_table_t, dbuct_visits_table_t,
+                                         dbuct_value_table_t, dbuct_value_table_t,
+                                         scope_walker_t, dbuct_choices_t, dbuct_choices_t,
+                                         dbuct_rollout_t, exploration_constant_t, value_delta_t>;
 
     using avoidance_unit_boundary_t = dbuct_avoidance_unit_boundary<
-        nearest_decision_t, dbuct_t>;
+        nearest_decision_t, typename dbuct_t::frame_stack_t>;
     using solver_frame_depth_tracker_t = solver_frame_depth_tracker;
     using cdcl_t  = dbuct_cdcl_elimination_generator<
                     chosen_goal_candidates_t, avoidance_unit_boundary_t, decision_memory_t,
@@ -238,8 +232,10 @@ struct dbuct_genius_fc_manifest {
                                           solver_frame_depth_tracker_t,
                                           decision_memory_t,
                                           avoidance_unit_boundary_t, avoidance_unit_boundary_t,
-                                          dbuct_t, dbuct_t, dbuct_t, dbuct_t,
-                                          dbuct_t,
+                                          typename dbuct_t::frame_stack_t,
+                                          typename dbuct_t::value_stack_controller_t,
+                                          typename dbuct_t::chooser_t,
+                                          typename dbuct_t::terminator_t,
                                           check_mcts_choice_is_rule_choice>;
     using dbuct_genius_terminate_sim_t = dbuct_genius_terminate_sim<dbuct_sim_t>;
     using mcts_decision_generator_t     = mcts_decision_generator<lineage_pool,
@@ -264,7 +260,7 @@ struct dbuct_genius_fc_manifest {
         uint32_t random_seed,
         double ridge_exploration_constant,
         double horizon_exploration_constant,
-        size_t grant_increment_interval);
+        double grant_k);
 
     globalizer                    globalizer_;
     bind_map_t                    bind_map_;
@@ -295,8 +291,6 @@ struct dbuct_genius_fc_manifest {
     scope_walker_t                scope_walker_;
     dbuct_visits_table_t          dbuct_visits_table_;
     dbuct_value_table_t           dbuct_value_table_;
-    dbuct_dispatches_table_t      dbuct_dispatches_table_;
-    dbuct_batch_t                 dbuct_batch_;
     goal_rollout_t                goal_rollout_;
     rule_rollout_t                rule_rollout_;
     dbuct_rollout_t               dbuct_rollout_;

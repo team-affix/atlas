@@ -66,7 +66,7 @@ using ::testing::ReturnPointee;
 namespace {
 
 struct MockGetMctsFrameDepth {
-    MOCK_METHOD(size_t, depth, (), (const));
+    MOCK_METHOD(size_t, size, (), (const));
 };
 
 using bind_map_t = dbuct_bind_map<globalizer>;
@@ -195,7 +195,7 @@ struct DbuctRpRolloutCampingIntegrationTest : public ::testing::Test {
     rp_router_t rp_router{elimination_router_, compute_goal_value, rp_active_goals};
 
     void SetUp() override {
-        ON_CALL(get_mcts_frame_depth, depth())
+        ON_CALL(get_mcts_frame_depth, size())
             .WillByDefault(ReturnPointee(&mcts_frame_depth));
     }
 

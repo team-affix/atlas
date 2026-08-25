@@ -67,7 +67,7 @@ TEST_F(GeniusManifestIntegrationTest, SingleUnitSolutionMakesNoDecision) {
 TEST_F(GeniusManifestIntegrationTest, TrailDepthRestoresAfterEmptyRun) {
     genius_manifest m = make_manifest();
     const size_t depth_before = m.elimination_backlog_.depth();
-    m.genius_set_up_sim_.set_up();
+    m.set_up_sim_.set_up();
     EXPECT_EQ(m.run_sim_.run(), sim_termination::solved);
     m.genius_tear_down_sim_.tear_down();
     EXPECT_EQ(m.elimination_backlog_.depth(), depth_before);
@@ -77,7 +77,7 @@ TEST_F(GeniusManifestIntegrationTest, TearDownClearsDecisionMemoryAndCgw) {
     initial_goals.push(fun("f"));
     database.push(rule{fun("f"), {}});
     genius_manifest m = make_manifest();
-    m.genius_set_up_sim_.set_up();
+    m.set_up_sim_.set_up();
     EXPECT_EQ(m.run_sim_.run(), sim_termination::solved);
     EXPECT_GT(m.cumulative_grounded_weight_.get(), 0.0);
     m.genius_tear_down_sim_.tear_down();

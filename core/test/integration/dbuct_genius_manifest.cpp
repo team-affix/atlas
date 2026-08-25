@@ -58,7 +58,7 @@ protected:
     static constexpr size_t kMaxResolutions = 64;
     static constexpr uint32_t kSeed = 42;
     static constexpr double kExplorationConstant = 1.414;
-    static constexpr size_t kGrantInterval = 4;
+    static constexpr double kGrantK = 0.1;
     static constexpr size_t kTickCap = 4096;
 
     db database;
@@ -67,18 +67,18 @@ protected:
 
     dbuct_genius_manifest make_manifest(uint32_t initial_frame_offset = 0,
                                  size_t max_resolutions = kMaxResolutions,
-                                 size_t grant_interval = kGrantInterval) {
+                                 double grant_k = kGrantK) {
         return dbuct_genius_manifest{
             database, initial_goals, initial_frame_offset, max_resolutions, kSeed,
-            kExplorationConstant, kExplorationConstant, grant_interval};
+            kExplorationConstant, kExplorationConstant, grant_k};
     }
 
     dbuct_genius_runtime make_dbuct(uint32_t initial_var_count,
                              size_t max_resolutions = kMaxResolutions,
-                             size_t grant_interval = kGrantInterval) {
+                             double grant_k = kGrantK) {
         return dbuct_genius_runtime{database, initial_goals, initial_var_count,
                              max_resolutions, kSeed, kExplorationConstant,
-                             kExplorationConstant, grant_interval};
+                             kExplorationConstant, grant_k};
     }
 
     genius_runtime make_genius(uint32_t initial_var_count,
@@ -415,9 +415,9 @@ TEST_F(DbuctGeniusManifestIntegrationTest, RecursionEnumeratesOnlyWellFormedNats
 // ── Scenario 15: batch-increment knob tunes camping, not the solution set ─────
 
 TEST_F(DbuctGeniusManifestIntegrationTest, GrantIntervalDoesNotChangeSolutionSet) {
-    // grant_increment_interval controls how long DBUCT camps before backtracking
-    // (a very large value ⇒ near-UCT restart behaviour). It is a search-order
-    // knob only: completeness/soundness must be invariant to it.
+    // grant_k is the visit-proportional camping coefficient
+    // (grant(n) = 1 + k * visits(n)). It is a search-order knob only:
+    // completeness/soundness must be invariant to it.
     const expr* a = fun("a");
     const expr* b = fun("b");
     const expr* c = fun("c");
@@ -429,10 +429,10 @@ TEST_F(DbuctGeniusManifestIntegrationTest, GrantIntervalDoesNotChangeSolutionSet
     auto get = [&](auto& rt) {
         return solution{pool.import(rt.normalize({pool.make_var(0), 0}))};
     };
-    dbuct_genius_runtime small = make_dbuct(1, kMaxResolutions, /*grant_interval=*/1);
+    dbuct_genius_runtime small = make_dbuct(1, kMaxResolutions, /*grant_k=*/0.0);
     std::set<solution> got_small = collect_solutions(small, [&] { return get(small); }, kTickCap);
 
-    dbuct_genius_runtime large = make_dbuct(1, kMaxResolutions, /*grant_interval=*/1024);
+    dbuct_genius_runtime large = make_dbuct(1, kMaxResolutions, /*grant_k=*/0.0024);
     std::set<solution> got_large = collect_solutions(large, [&] { return get(large); }, kTickCap);
 
     EXPECT_EQ(got_small, got_large);

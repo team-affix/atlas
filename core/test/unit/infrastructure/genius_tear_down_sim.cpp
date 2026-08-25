@@ -1,11 +1,11 @@
-// genius_tear_down_sim: tears down MCTS while weights live, then clears and teardowns state.
+// genius_tear_down_sim: terminates MCTS while weights live, then clears and teardowns state.
 
 #include <gtest/gtest.h>
 #include <gmock/gmock.h>
 #include "infrastructure/genius_tear_down_sim.hpp"
 
-struct MockTearDownMcts {
-    MOCK_METHOD(void, tear_down, ());
+struct MockTerminate {
+    MOCK_METHOD(void, terminate, ());
 };
 
 struct MockGoalWeights {
@@ -21,20 +21,20 @@ struct MockTearDownSim {
 };
 
 using test_genius_tear_down_sim_t = genius_tear_down_sim<
-    MockTearDownMcts, MockGoalWeights, MockCumulativeGroundedWeight, MockTearDownSim>;
+    MockTerminate, MockGoalWeights, MockCumulativeGroundedWeight, MockTearDownSim>;
 
 struct GeniusTearDownSimTest : public ::testing::Test {
-    MockTearDownMcts tear_down_mcts;
+    MockTerminate terminate;
     MockGoalWeights goal_weights;
     MockCumulativeGroundedWeight cumulative_grounded_weight;
     MockTearDownSim mock_tear_down;
     test_genius_tear_down_sim_t tear_down{
-        tear_down_mcts, goal_weights, cumulative_grounded_weight, mock_tear_down};
+        terminate, goal_weights, cumulative_grounded_weight, mock_tear_down};
 };
 
-TEST_F(GeniusTearDownSimTest, TearsDownMctsBeforeClearingWeightsAndState) {
+TEST_F(GeniusTearDownSimTest, TerminatesBeforeClearingWeightsAndState) {
     testing::InSequence seq;
-    EXPECT_CALL(tear_down_mcts, tear_down()).Times(1);
+    EXPECT_CALL(terminate, terminate()).Times(1);
     EXPECT_CALL(goal_weights, clear_goal_weights()).Times(1);
     EXPECT_CALL(cumulative_grounded_weight, clear()).Times(1);
     EXPECT_CALL(mock_tear_down, tear_down()).Times(1);

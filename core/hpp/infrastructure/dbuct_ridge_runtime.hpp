@@ -9,11 +9,12 @@
 #include "value_objects/lemma.hpp"
 
 // ridge_dbuct runtime — same session API as ridge_runtime, backed by the
-// delayed-backtracking (camping) solver stack. grant_increment_interval controls
-// DBUCT's per-node compute batch growth (larger ⇒ camps longer); it defaults so
-// the constructor signature matches the other runtimes for shared harnesses.
+// delayed-backtracking (camping) solver stack. grant_k is the
+// visit-proportional grant coefficient (grant(n) = 1 + k * visits(n); larger
+// camps longer). It defaults so the constructor signature matches the other
+// runtimes for shared harnesses.
 struct dbuct_ridge_runtime {
-    static constexpr size_t k_default_grant_increment_interval = 4;
+    static constexpr double k_default_grant_k = 0.1;
 
     dbuct_ridge_runtime(
         db& database,
@@ -22,7 +23,7 @@ struct dbuct_ridge_runtime {
         size_t max_resolutions,
         uint32_t random_seed,
         double exploration_constant,
-        size_t grant_increment_interval = k_default_grant_increment_interval);
+        double grant_k = k_default_grant_k);
 
     bool next();
     bool solved() const;

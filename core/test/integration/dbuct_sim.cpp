@@ -1,5 +1,5 @@
 // Integration: dbuct_sim with a real frame hub + framed stores.
-// Mock only MCTS choose/terminate/depth/backstep and the rule-choice checker.
+// Mock only MCTS choose/terminate/size/backstep and the rule-choice checker.
 
 #include <deque>
 #include <gtest/gtest.h>
@@ -36,9 +36,8 @@ using ::testing::ReturnRef;
 namespace {
 
 struct MockMctsOps {
-    MOCK_METHOD(size_t, depth, (), (const));
+    MOCK_METHOD(size_t, size, (), (const));
     MOCK_METHOD(void, backstep, ());
-    MOCK_METHOD(bool, in_rollout, (), (const));
     MOCK_METHOD(mcts_choice, choose,
         (const std::vector<mcts_choice>&, const std::vector<mcts_choice>&));
     MOCK_METHOD(void, terminate, ());
@@ -102,7 +101,7 @@ using sim_t = dbuct_sim<
     solver_frame_depth_tracker,
     dbuct_decision_memory,
     boundary_t, boundary_t,
-    MockMctsOps, MockMctsOps, MockMctsOps, MockMctsOps, MockMctsOps,
+    MockMctsOps, MockMctsOps, MockMctsOps, MockMctsOps,
     MockCheckRuleChoice>;
 
 struct DbuctSimIntegrationTest : public ::testing::Test {
@@ -155,7 +154,7 @@ struct DbuctSimIntegrationTest : public ::testing::Test {
         , sim(hub, hub, solver_frame_depth_tracker_,
               decision_memory,
               avoidance_unit_boundary, avoidance_unit_boundary,
-              mcts, mcts, mcts, mcts, mcts,
+              mcts, mcts, mcts, mcts,
               check_rule_choice) {}
 };
 
@@ -166,11 +165,11 @@ TEST_F(DbuctSimIntegrationTest, RuleChoosePastUltimatePushesVisibleSolverFrame) 
     std::vector<mcts_choice> choices{chosen};
 
     EXPECT_CALL(mcts, choose(::testing::_, ::testing::_)).WillOnce(Return(chosen));
-    EXPECT_CALL(mcts, depth()).WillRepeatedly(Return(3));
+    EXPECT_CALL(mcts, size()).WillRepeatedly(Return(3));
     EXPECT_CALL(check_rule_choice, check_is_rule_choice(chosen)).WillOnce(Return(true));
 
     EXPECT_EQ(mhu.pushes, 0);
-    EXPECT_EQ(sim.choose(choices), chosen);
+    EXPECT_EQ(sim.choose(choices, choices), chosen);
     // Hub push fans out to framed stores (MHU/CDCL hooks observe it).
     EXPECT_EQ(mhu.pushes, 1);
     EXPECT_EQ(cdcl.pushes, 1);
@@ -187,12 +186,12 @@ TEST_F(DbuctSimIntegrationTest, TerminateRestoresStoresAndReturnsPopEliminations
     EXPECT_CALL(mcts, choose(::testing::_, ::testing::_)).WillOnce(Return(chosen));
     EXPECT_CALL(check_rule_choice, check_is_rule_choice(chosen)).WillOnce(Return(true));
     // choose at depth 3 (past ultimate 1) → push; log_decision at 4; terminate at 1.
-    EXPECT_CALL(mcts, depth())
+    EXPECT_CALL(mcts, size())
         .WillOnce(Return(3))
         .WillOnce(Return(4))
         .WillRepeatedly(Return(1));
 
-    EXPECT_EQ(sim.choose(choices), chosen);
+    EXPECT_EQ(sim.choose(choices, choices), chosen);
     goal_exprs.set(&gl, framed_expr{nullptr, 9});
     EXPECT_EQ(mhu.pushes, 1);
 
@@ -220,12 +219,12 @@ TEST_F(DbuctSimIntegrationTest, TerminateSingleCampRestoresTrackerAndDecisionMem
     EXPECT_CALL(mcts, choose(::testing::_, ::testing::_)).WillOnce(Return(chosen));
     EXPECT_CALL(check_rule_choice, check_is_rule_choice(chosen)).WillOnce(Return(true));
     // choose at 3 → push; record/log at 4; terminate with mcts at 1.
-    EXPECT_CALL(mcts, depth())
+    EXPECT_CALL(mcts, size())
         .WillOnce(Return(3))
         .WillOnce(Return(4))
         .WillRepeatedly(Return(1));
 
-    EXPECT_EQ(sim.choose(choices), chosen);
+    EXPECT_EQ(sim.choose(choices, choices), chosen);
     EXPECT_EQ(solver_frame_depth_tracker_.solver_frame_depth(), 2u);
 
     decision_memory.record_decision(&elim);
@@ -268,14 +267,14 @@ TEST_F(DbuctSimIntegrationTest, TerminateDoubleCampPopsTwiceAndRestoresTracker) 
         .WillOnce(Return(true))
         .WillOnce(Return(true));
     // choose1 at 3; log D1 at 3; choose2 at 5; log D2 at 5; terminate at 1.
-    EXPECT_CALL(mcts, depth())
+    EXPECT_CALL(mcts, size())
         .WillOnce(Return(3))
         .WillOnce(Return(3))
         .WillOnce(Return(5))
         .WillOnce(Return(5))
         .WillRepeatedly(Return(1));
 
-    EXPECT_EQ(sim.choose(choices1), c1);
+    EXPECT_EQ(sim.choose(choices1, choices1), c1);
     EXPECT_EQ(solver_frame_depth_tracker_.solver_frame_depth(), 2u);
     decision_memory.record_decision(&D1);
     avoidance_unit_boundary.log_decision(&D1);
@@ -284,7 +283,7 @@ TEST_F(DbuctSimIntegrationTest, TerminateDoubleCampPopsTwiceAndRestoresTracker) 
     EXPECT_EQ(solver_frame_depth_tracker_.solver_frame_depth(),
               decision_memory.count() + 1);
 
-    EXPECT_EQ(sim.choose(choices2), c2);
+    EXPECT_EQ(sim.choose(choices2, choices2), c2);
     EXPECT_EQ(solver_frame_depth_tracker_.solver_frame_depth(), 3u);
     decision_memory.record_decision(&D2);
     avoidance_unit_boundary.log_decision(&D2);

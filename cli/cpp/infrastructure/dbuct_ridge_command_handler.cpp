@@ -9,7 +9,7 @@ dbuct_ridge_command_handler::dbuct_ridge_command_handler(
     size_t max_resolutions,
     uint32_t seed,
     double exploration_constant,
-    size_t grant_increment_interval,
+    double grant_k,
     size_t sim_progress_interval)
     : parse_var_seq_(0),
       solve_timer_(clock_),
@@ -31,7 +31,7 @@ dbuct_ridge_command_handler::dbuct_ridge_command_handler(
 
     runtime_.emplace(
         database_, initial_goals_, initial_frame_offset, max_resolutions, seed,
-        exploration_constant, grant_increment_interval);
+        exploration_constant, grant_k);
     print_progress_.set_runtime(*runtime_);
 }
 

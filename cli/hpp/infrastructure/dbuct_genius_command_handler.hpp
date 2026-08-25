@@ -37,7 +37,7 @@ struct dbuct_genius_command_handler {
         uint32_t seed,
         double ridge_exploration_constant,
         double horizon_exploration_constant,
-        size_t grant_increment_interval = dbuct_genius_runtime::k_default_grant_increment_interval,
+        double grant_k = dbuct_genius_runtime::k_default_grant_k,
         size_t sim_progress_interval = 1000);
 
     void operator()();

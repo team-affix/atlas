@@ -6,7 +6,7 @@ MAKEFLAGS += -j$(shell nproc)
 
 CXX      = g++
 DEPFLAGS = -MMD -MP
-CXXFLAGS = -std=c++20 -I. -Icore/hpp -Icli/hpp -Imcts/include $(DEPFLAGS)
+CXXFLAGS = -std=c++20 -I. -Icore/hpp -Icli/hpp -Imcts/core/hpp $(DEPFLAGS)
 AR       = ar
 ARFLAGS  = rcs
 
@@ -73,11 +73,16 @@ ATLAS_PROFILE_BIN = build/atlas_profile
 
 # Core production: discovered at parse time (sources are always present).
 CORE_SRC = $(shell find core/cpp -name '*.cpp' | sort)
+MCTS_SRC = $(shell find mcts/core/cpp -name '*.cpp' | sort)
 
-CORE_OBJ            = $(patsubst core/cpp/%.cpp, build/obj/core/%.o,            $(CORE_SRC))
-CORE_DEBUG_OBJ      = $(patsubst core/cpp/%.cpp, build/obj/core_debug/%.o,      $(CORE_SRC))
-CORE_DEBUG_FAST_OBJ = $(patsubst core/cpp/%.cpp, build/obj/core_debug_fast/%.o, $(CORE_SRC))
-CORE_PROFILE_OBJ    = $(patsubst core/cpp/%.cpp, build/obj/core_profile/%.o, $(CORE_SRC))
+CORE_OBJ            = $(patsubst core/cpp/%.cpp, build/obj/core/%.o,            $(CORE_SRC)) \
+                      $(patsubst mcts/core/cpp/%.cpp, build/obj/core/mcts/%.o,            $(MCTS_SRC))
+CORE_DEBUG_OBJ      = $(patsubst core/cpp/%.cpp, build/obj/core_debug/%.o,      $(CORE_SRC)) \
+                      $(patsubst mcts/core/cpp/%.cpp, build/obj/core_debug/mcts/%.o,      $(MCTS_SRC))
+CORE_DEBUG_FAST_OBJ = $(patsubst core/cpp/%.cpp, build/obj/core_debug_fast/%.o, $(CORE_SRC)) \
+                      $(patsubst mcts/core/cpp/%.cpp, build/obj/core_debug_fast/mcts/%.o, $(MCTS_SRC))
+CORE_PROFILE_OBJ    = $(patsubst core/cpp/%.cpp, build/obj/core_profile/%.o, $(CORE_SRC)) \
+                      $(patsubst mcts/core/cpp/%.cpp, build/obj/core_profile/mcts/%.o, $(MCTS_SRC))
 
 # Core tests: same layout under build/obj/core_{debug,debug_fast}_test/.
 CORE_TEST_SRC = $(shell find core/test -name '*.cpp' | sort)
@@ -371,6 +376,22 @@ build/obj/core_debug_fast/%.o: core/cpp/%.cpp | build/obj/core_debug_fast
 	$(CXX) $(CXXFLAGS) $(DEBUG_FAST_CXXFLAGS) -c $< -o $@
 
 build/obj/core_profile/%.o: core/cpp/%.cpp | build/obj/core_profile
+	mkdir -p $(dir $@)
+	$(CXX) $(CXXFLAGS) $(PROFILE_CXXFLAGS) -c $< -o $@
+
+build/obj/core/mcts/%.o: mcts/core/cpp/%.cpp | build/obj/core
+	mkdir -p $(dir $@)
+	$(CXX) $(CXXFLAGS) $(RELEASE_CXXFLAGS) -c $< -o $@
+
+build/obj/core_debug/mcts/%.o: mcts/core/cpp/%.cpp | build/obj/core_debug
+	mkdir -p $(dir $@)
+	$(CXX) $(CXXFLAGS) $(DEBUG_CXXFLAGS) -c $< -o $@
+
+build/obj/core_debug_fast/mcts/%.o: mcts/core/cpp/%.cpp | build/obj/core_debug_fast
+	mkdir -p $(dir $@)
+	$(CXX) $(CXXFLAGS) $(DEBUG_FAST_CXXFLAGS) -c $< -o $@
+
+build/obj/core_profile/mcts/%.o: mcts/core/cpp/%.cpp | build/obj/core_profile
 	mkdir -p $(dir $@)
 	$(CXX) $(CXXFLAGS) $(PROFILE_CXXFLAGS) -c $< -o $@
 

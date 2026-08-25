@@ -11,7 +11,7 @@ dbuct_quell_command_handler::dbuct_quell_command_handler(
     double exploration_constant,
     double work_decay_k,
     double work_decay_j,
-    size_t grant_increment_interval,
+    double grant_k,
     size_t sim_progress_interval)
     : parse_var_seq_(0),
       solve_timer_(clock_),
@@ -34,7 +34,7 @@ dbuct_quell_command_handler::dbuct_quell_command_handler(
 
     runtime_.emplace(
         database_, initial_goals_, initial_frame_offset, max_resolutions, seed,
-        exploration_constant, work_decay_k, work_decay_j, grant_increment_interval);
+        exploration_constant, work_decay_k, work_decay_j, grant_k);
     print_progress_.set_runtime(*runtime_);
 }
 

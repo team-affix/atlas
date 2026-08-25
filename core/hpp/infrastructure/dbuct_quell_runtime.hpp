@@ -10,7 +10,7 @@
 
 // dbuct-quell runtime — camping DBUCT search with quell (remaining-work) reward.
 struct dbuct_quell_runtime {
-    static constexpr size_t k_default_grant_increment_interval = 4;
+    static constexpr double k_default_grant_k = 0.1;
 
     dbuct_quell_runtime(
         db& database,
@@ -21,7 +21,7 @@ struct dbuct_quell_runtime {
         double exploration_constant,
         double work_decay_k,
         double work_decay_j,
-        size_t grant_increment_interval = k_default_grant_increment_interval);
+        double grant_k = k_default_grant_k);
 
     bool next();
     bool solved() const;

@@ -53,7 +53,7 @@ using ::testing::ReturnPointee;
 namespace {
 
 struct MockGetMctsFrameDepth {
-    MOCK_METHOD(size_t, depth, (), (const));
+    MOCK_METHOD(size_t, size, (), (const));
 };
 
 using bind_map_t = dbuct_bind_map<globalizer>;
@@ -132,7 +132,7 @@ struct DbuctJointEliminationGeneratorIntegrationTest : public ::testing::Test {
     expr func_g{expr::functor{functors.id("g"), {}}};
 
     void SetUp() override {
-        ON_CALL(get_mcts_frame_depth, depth())
+        ON_CALL(get_mcts_frame_depth, size())
             .WillByDefault(ReturnPointee(&mcts_frame_depth));
         for (const goal_lineage* gl : {gl1, gl2, gl3}) {
             goal_candidate_rules.insert(gl);

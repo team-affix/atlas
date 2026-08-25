@@ -48,7 +48,7 @@ mcts_decision_generator<IMRL, IIRG, IIAG, IICG, IMC, IGCRI>::choose_goal() {
             if (!sm.has_yield()) continue;
             current.push_back(sm.consume_yield());
         }
-        mcts_choice choice = mcts_choose_.choose(current);
+        mcts_choice choice = mcts_choose_.choose(current, current);
         const goal_lineage* gl = std::get<const goal_lineage*>(choice);
         if (is_active_goal_.is_active_goal(gl)) return gl;
         current.clear();
@@ -68,7 +68,7 @@ rule_id mcts_decision_generator<IMRL, IIRG, IIAG, IICG, IMC, IGCRI>::choose_cand
         if (!sm.has_yield()) continue;
         candidates.push_back(sm.consume_yield());
     }
-    return std::get<rule_id>(mcts_choose_.choose(candidates));
+    return std::get<rule_id>(mcts_choose_.choose(candidates, candidates));
 }
 
 #endif

@@ -4,6 +4,6 @@ CompileFlags:
     - -I..
     - -Ihpp
     - -I../core/hpp
-    - -I../mcts/include
+    - -I../mcts/core/hpp
     - -I../googletest/googletest/include
     - -I../googletest/googlemock/include

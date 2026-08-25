@@ -8,10 +8,10 @@ dbuct_genius_runtime::dbuct_genius_runtime(
     uint32_t random_seed,
     double ridge_exploration_constant,
     double horizon_exploration_constant,
-    size_t grant_increment_interval)
+    double grant_k)
     : manifest_(database, goals, initial_frame_offset, max_resolutions,
                 random_seed, ridge_exploration_constant, horizon_exploration_constant,
-                grant_increment_interval) {}
+                grant_k) {}
 
 bool dbuct_genius_runtime::next() {
     return manifest_.driver_.next();

@@ -38,7 +38,7 @@ struct dbuct_horizon_command_handler {
         size_t max_resolutions,
         uint32_t seed,
         double exploration_constant = 2,
-        size_t grant_increment_interval = dbuct_horizon_runtime::k_default_grant_increment_interval,
+        double grant_k = dbuct_horizon_runtime::k_default_grant_k,
         size_t sim_progress_interval = 1000);
 
     void operator()();

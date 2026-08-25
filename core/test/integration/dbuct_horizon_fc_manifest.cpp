@@ -19,7 +19,7 @@ protected:
     static constexpr size_t kMaxResolutions = 64;
     static constexpr uint32_t kSeed = 42;
     static constexpr double kExplorationConstant = 1.414;
-    static constexpr size_t kGrantInterval = 4;
+    static constexpr double kGrantK = 0.1;
 
     db database;
     initial_goal_exprs initial_goals;
@@ -33,7 +33,7 @@ protected:
             max_resolutions,
             kSeed,
             kExplorationConstant,
-            kGrantInterval};
+            kGrantK};
     }
 };
 

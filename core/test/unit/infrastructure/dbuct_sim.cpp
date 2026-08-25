@@ -50,15 +50,11 @@ struct MockGetUltimateMctsFrameDepth {
 };
 
 struct MockGetMctsFrameDepth {
-    MOCK_METHOD(size_t, depth, (), (const));
+    MOCK_METHOD(size_t, size, (), (const));
 };
 
 struct MockBackstepMctsFrame {
     MOCK_METHOD(void, backstep, ());
-};
-
-struct MockInRollout {
-    MOCK_METHOD(bool, in_rollout, (), (const));
 };
 
 struct MockChoose {
@@ -78,7 +74,7 @@ using test_dbuct_sim_t = dbuct_sim<
     mcts_choice,
     MockPushSolverFrame, MockPopSolverFrame, MockGetSolverFrameDepth,
     MockGetDecisionCount, MockGetPenultimateMctsFrameDepth, MockGetUltimateMctsFrameDepth,
-    MockGetMctsFrameDepth, MockBackstepMctsFrame, MockInRollout,
+    MockGetMctsFrameDepth, MockBackstepMctsFrame,
     MockChoose, MockTerminate, MockCheckRuleChoice>;
 
 struct DbuctSimTest : public ::testing::Test {
@@ -90,7 +86,6 @@ struct DbuctSimTest : public ::testing::Test {
     NiceMock<MockGetUltimateMctsFrameDepth> get_ultimate;
     NiceMock<MockGetMctsFrameDepth> get_mcts_depth;
     NiceMock<MockBackstepMctsFrame> backstep;
-    NiceMock<MockInRollout> in_rollout;
     NiceMock<MockChoose> choose;
     NiceMock<MockTerminate> terminate;
     NiceMock<MockCheckRuleChoice> check_rule_choice;
@@ -98,7 +93,7 @@ struct DbuctSimTest : public ::testing::Test {
     test_dbuct_sim_t sim{
         push_solver_frame, pop_solver_frame, get_solver_frame_depth,
         get_decision_count, get_penultimate, get_ultimate,
-        get_mcts_depth, backstep, in_rollout,
+        get_mcts_depth, backstep,
         choose, terminate, check_rule_choice};
 
     goal_lineage gl{nullptr, 0};
@@ -114,52 +109,52 @@ TEST_F(DbuctSimTest, ChooseReturnsDelegatedChoice) {
     mcts_choice chosen = rule_id{7};
     std::vector<mcts_choice> choices{rule_id{7}, rule_id{8}};
     EXPECT_CALL(choose, choose(::testing::_, ::testing::_)).WillOnce(Return(chosen));
-    EXPECT_CALL(get_mcts_depth, depth()).WillOnce(Return(1));
+    EXPECT_CALL(get_mcts_depth, size()).WillOnce(Return(1));
     EXPECT_CALL(get_ultimate, get_ultimate_mcts_frame_depth()).WillOnce(Return(1));
 
-    EXPECT_EQ(sim.choose(choices), chosen);
+    EXPECT_EQ(sim.choose(choices, choices), chosen);
 }
 
 TEST_F(DbuctSimTest, ChoosePushesSolverFrameForRuleChoicePastUltimate) {
     mcts_choice chosen = rule_id{3};
     std::vector<mcts_choice> choices{chosen};
     EXPECT_CALL(choose, choose(::testing::_, ::testing::_)).WillOnce(Return(chosen));
-    EXPECT_CALL(get_mcts_depth, depth()).WillOnce(Return(3));
+    EXPECT_CALL(get_mcts_depth, size()).WillOnce(Return(3));
     EXPECT_CALL(get_ultimate, get_ultimate_mcts_frame_depth()).WillOnce(Return(1));
     EXPECT_CALL(check_rule_choice, check_is_rule_choice(chosen)).WillOnce(Return(true));
     EXPECT_CALL(push_solver_frame, push_solver_frame()).Times(1);
 
-    EXPECT_EQ(sim.choose(choices), chosen);
+    EXPECT_EQ(sim.choose(choices, choices), chosen);
 }
 
 TEST_F(DbuctSimTest, ChooseDoesNotPushWhenNotPastUltimate) {
     mcts_choice chosen = rule_id{3};
     std::vector<mcts_choice> choices{chosen};
     EXPECT_CALL(choose, choose(::testing::_, ::testing::_)).WillOnce(Return(chosen));
-    EXPECT_CALL(get_mcts_depth, depth()).WillOnce(Return(1));
+    EXPECT_CALL(get_mcts_depth, size()).WillOnce(Return(1));
     EXPECT_CALL(get_ultimate, get_ultimate_mcts_frame_depth()).WillOnce(Return(1));
     EXPECT_CALL(push_solver_frame, push_solver_frame()).Times(0);
 
-    EXPECT_EQ(sim.choose(choices), chosen);
+    EXPECT_EQ(sim.choose(choices, choices), chosen);
 }
 
 TEST_F(DbuctSimTest, ChooseDoesNotPushForNonRuleChoice) {
     mcts_choice chosen = &gl;
     std::vector<mcts_choice> choices{chosen};
     EXPECT_CALL(choose, choose(::testing::_, ::testing::_)).WillOnce(Return(chosen));
-    EXPECT_CALL(get_mcts_depth, depth()).WillOnce(Return(3));
+    EXPECT_CALL(get_mcts_depth, size()).WillOnce(Return(3));
     EXPECT_CALL(get_ultimate, get_ultimate_mcts_frame_depth()).WillOnce(Return(1));
     EXPECT_CALL(check_rule_choice, check_is_rule_choice(chosen)).WillOnce(Return(false));
     EXPECT_CALL(push_solver_frame, push_solver_frame()).Times(0);
 
-    EXPECT_EQ(sim.choose(choices), chosen);
+    EXPECT_EQ(sim.choose(choices, choices), chosen);
 }
 
 TEST_F(DbuctSimTest, TerminateEndsMctsAndReturnsSolverPopEliminations) {
     resolution_lineage rl{&gl, 0};
     EXPECT_CALL(terminate, terminate()).Times(1);
     // MCTS depth stays aligned at 1; ultimate starts deeper so one solver pop happens.
-    EXPECT_CALL(get_mcts_depth, depth()).WillRepeatedly(Return(1));
+    EXPECT_CALL(get_mcts_depth, size()).WillRepeatedly(Return(1));
     EXPECT_CALL(get_ultimate, get_ultimate_mcts_frame_depth())
         .WillOnce(Return(2))
         .WillRepeatedly(Return(1));
@@ -172,7 +167,7 @@ TEST_F(DbuctSimTest, TerminateEndsMctsAndReturnsSolverPopEliminations) {
 
 TEST_F(DbuctSimTest, TerminateWithNothingToAlignReturnsEmpty) {
     EXPECT_CALL(terminate, terminate()).Times(1);
-    EXPECT_CALL(get_mcts_depth, depth()).WillRepeatedly(Return(1));
+    EXPECT_CALL(get_mcts_depth, size()).WillRepeatedly(Return(1));
     EXPECT_CALL(get_ultimate, get_ultimate_mcts_frame_depth()).WillRepeatedly(Return(1));
     EXPECT_CALL(pop_solver_frame, pop_solver_frame()).Times(0);
     EXPECT_CALL(backstep, backstep()).Times(0);
@@ -184,14 +179,14 @@ TEST_F(DbuctSimTest, TerminateWithNothingToAlignReturnsEmpty) {
 // only the last pop's yields. Earlier pops may yield internally; the solver
 // never sees them from this terminate() call.
 //
-// With mcts.depth() pinned at 1, ultimate sequences 3 → 2 → 1 force exactly two
+// With mcts.size() pinned at 1, ultimate sequences 3 → 2 → 1 force exactly two
 // pops (loop: 3>1 pop, 2>1 pop, 1>1 exit), then a final ultimate read of 1.
 
 TEST_F(DbuctSimTest, TerminateMultiPopLastPopYieldWins) {
     resolution_lineage rl_a{&gl, 0};
     resolution_lineage rl_b{&gl, 1};
     EXPECT_CALL(terminate, terminate()).Times(1);
-    EXPECT_CALL(get_mcts_depth, depth()).WillRepeatedly(Return(1));
+    EXPECT_CALL(get_mcts_depth, size()).WillRepeatedly(Return(1));
     EXPECT_CALL(get_ultimate, get_ultimate_mcts_frame_depth())
         .WillOnce(Return(3))
         .WillOnce(Return(2))
@@ -208,7 +203,7 @@ TEST_F(DbuctSimTest, TerminateMultiPopLastPopYieldWins) {
 TEST_F(DbuctSimTest, TerminateMultiPopFirstYieldDiscardedWhenSecondEmpty) {
     resolution_lineage rl_a{&gl, 0};
     EXPECT_CALL(terminate, terminate()).Times(1);
-    EXPECT_CALL(get_mcts_depth, depth()).WillRepeatedly(Return(1));
+    EXPECT_CALL(get_mcts_depth, size()).WillRepeatedly(Return(1));
     EXPECT_CALL(get_ultimate, get_ultimate_mcts_frame_depth())
         .WillOnce(Return(3))
         .WillOnce(Return(2))
@@ -225,7 +220,7 @@ TEST_F(DbuctSimTest, TerminateMultiPopFirstYieldDiscardedWhenSecondEmpty) {
 TEST_F(DbuctSimTest, TerminateMultiPopSecondYieldReturnedWhenFirstEmpty) {
     resolution_lineage rl_b{&gl, 1};
     EXPECT_CALL(terminate, terminate()).Times(1);
-    EXPECT_CALL(get_mcts_depth, depth()).WillRepeatedly(Return(1));
+    EXPECT_CALL(get_mcts_depth, size()).WillRepeatedly(Return(1));
     EXPECT_CALL(get_ultimate, get_ultimate_mcts_frame_depth())
         .WillOnce(Return(3))
         .WillOnce(Return(2))
@@ -242,7 +237,7 @@ TEST_F(DbuctSimTest, TerminateMultiPopSecondYieldReturnedWhenFirstEmpty) {
 TEST_F(DbuctSimTest, TerminateMultiPopSameElimWhenBothPopYield) {
     resolution_lineage rl{&gl, 0};
     EXPECT_CALL(terminate, terminate()).Times(1);
-    EXPECT_CALL(get_mcts_depth, depth()).WillRepeatedly(Return(1));
+    EXPECT_CALL(get_mcts_depth, size()).WillRepeatedly(Return(1));
     EXPECT_CALL(get_ultimate, get_ultimate_mcts_frame_depth())
         .WillOnce(Return(3))
         .WillOnce(Return(2))

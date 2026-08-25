@@ -47,7 +47,7 @@ TEST_F(GeniusFcManifestIntegrationTest, InitialActivateSetsFewerCandidateScore) 
     database.push(rule{f_head1, {}});
 
     genius_fc_manifest manifest = make_manifest();
-    manifest.genius_set_up_sim_.set_up();
+    manifest.set_up_sim_.set_up();
     ASSERT_TRUE(manifest.srt_initial_goals_activator_.activate_initial_goals_and_candidates());
 
     ASSERT_EQ(manifest.srt_active_goals_.active_goals_size(), 1u);
@@ -67,7 +67,7 @@ TEST_F(GeniusFcManifestIntegrationTest, InitialActivateSetsFewerCandidateScore) 
 
 TEST_F(GeniusFcManifestIntegrationTest, TearDownClearsRpScores) {
     genius_fc_manifest manifest = make_manifest();
-    manifest.genius_set_up_sim_.set_up();
+    manifest.set_up_sim_.set_up();
     EXPECT_EQ(manifest.run_sim_.run(), sim_termination::solved);
 
     goal_lineage sentinel{nullptr, 99};

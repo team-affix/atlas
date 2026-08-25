@@ -67,21 +67,19 @@ TEST_F(QuellManifestIntegrationTest, WiringQuellRewardReturnsZeroInitially) {
     EXPECT_DOUBLE_EQ(manifest.quell_reward_.compute_mcts_reward(), 0.0);
 }
 
-TEST_F(QuellManifestIntegrationTest, WiringMctsSimDistinctFromOuterAndInnerLifecycle) {
+TEST_F(QuellManifestIntegrationTest, WiringChooserDistinctFromOuterAndInnerLifecycle) {
     quell_manifest manifest = make_manifest();
     EXPECT_NE(static_cast<void*>(&manifest.set_up_sim_),
-              static_cast<void*>(&manifest.mcts_sim_));
+              static_cast<void*>(&manifest.uct_.chooser));
     EXPECT_NE(static_cast<void*>(&manifest.tear_down_sim_),
-              static_cast<void*>(&manifest.mcts_sim_));
-    EXPECT_NE(static_cast<void*>(&manifest.quell_set_up_sim_),
-              static_cast<void*>(&manifest.mcts_sim_));
+              static_cast<void*>(&manifest.uct_.chooser));
     EXPECT_NE(static_cast<void*>(&manifest.quell_tear_down_sim_),
-              static_cast<void*>(&manifest.mcts_sim_));
+              static_cast<void*>(&manifest.uct_.chooser));
 }
 
 TEST_F(QuellManifestIntegrationTest, SimLifecycleClearsRemainingWorkAfterEmptyRun) {
     quell_manifest manifest = make_manifest();
-    manifest.quell_set_up_sim_.set_up();
+    manifest.set_up_sim_.set_up();
     EXPECT_EQ(manifest.run_sim_.run(), sim_termination::solved);
     manifest.quell_tear_down_sim_.tear_down();
     EXPECT_DOUBLE_EQ(manifest.remaining_work_.get(), 0.0);
@@ -94,7 +92,7 @@ TEST_F(QuellManifestIntegrationTest, InitialGoalActivationLeavesRemainingEqualTo
     // No matching rule → candidates may fail; drive activator path via set_up +
     // the depth-tracking initial goal activator alone without candidate activation.
     quell_manifest manifest = make_manifest();
-    manifest.quell_set_up_sim_.set_up();
+    manifest.set_up_sim_.set_up();
     manifest.depth_tracking_quell_initial_goal_activator_.activate_initial_goal(0);
     EXPECT_NEAR(manifest.remaining_work_.get(), work_at_depth(0), kWorkEpsilon);
     EXPECT_NEAR(manifest.goal_work_values_.get(manifest.make_initial_goal_lineage_.make(0)),
@@ -128,13 +126,13 @@ TEST_F(QuellManifestIntegrationTest, RuntimeRemainingClearedAcrossCycles) {
     database.push(rule{head, {}});
 
     quell_manifest manifest = make_manifest();
-    manifest.quell_set_up_sim_.set_up();
+    manifest.set_up_sim_.set_up();
     EXPECT_EQ(manifest.run_sim_.run(), sim_termination::solved);
     EXPECT_NEAR(manifest.remaining_work_.get(), 0.0, kWorkEpsilon);
     manifest.quell_tear_down_sim_.tear_down();
     EXPECT_DOUBLE_EQ(manifest.remaining_work_.get(), 0.0);
 
-    manifest.quell_set_up_sim_.set_up();
+    manifest.set_up_sim_.set_up();
     EXPECT_EQ(manifest.run_sim_.run(), sim_termination::solved);
     EXPECT_NEAR(manifest.remaining_work_.get(), 0.0, kWorkEpsilon);
     manifest.quell_tear_down_sim_.tear_down();

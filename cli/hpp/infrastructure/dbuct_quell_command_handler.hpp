@@ -40,7 +40,7 @@ struct dbuct_quell_command_handler {
         double exploration_constant = 2,
         double work_decay_k = 0.2,
         double work_decay_j = 10.0,
-        size_t grant_increment_interval = dbuct_quell_runtime::k_default_grant_increment_interval,
+        double grant_k = dbuct_quell_runtime::k_default_grant_k,
         size_t sim_progress_interval = 1000);
 
     void operator()();

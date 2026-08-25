@@ -7,11 +7,9 @@
 #include <unordered_map>
 #include <vector>
 
-#include "dbuct.hpp"
-#include "dispatches_table.hpp"
-#include "linear_batch_increment.hpp"
-#include "value_table.hpp"
-#include "visits_table.hpp"
+#include "infrastructure/atlas_dbuct_manifest.hpp"
+#include "infrastructure/value_table.hpp"
+#include "infrastructure/visits_table.hpp"
 
 #include "infrastructure/candidate_activator.hpp"
 #include "infrastructure/candidate_deactivator.hpp"
@@ -36,8 +34,8 @@
 #include "infrastructure/resolver.hpp"
 #include "infrastructure/ridge_reward.hpp"
 #include "infrastructure/run_sim.hpp"
-#include "uniform_exploration_constant.hpp"
-#include "uniform_value_delta.hpp"
+#include "infrastructure/uniform_exploration_constant.hpp"
+#include "infrastructure/uniform_value_delta.hpp"
 #include "infrastructure/solution_detector.hpp"
 #include "infrastructure/srt_goal_deactivator.hpp"
 #include "infrastructure/srt_initial_goals_activator.hpp"
@@ -110,7 +108,6 @@ struct dbuct_ridge_fc_manifest {
     using dbuct_choices_t          = std::vector<mcts_choice>;
     using dbuct_visits_table_t     = monte_carlo::visits_table<mcts_tree_node_id, std::unordered_map>;
     using dbuct_value_table_t      = monte_carlo::value_table<mcts_tree_node_id, double, std::unordered_map>;
-    using dbuct_dispatches_table_t = monte_carlo::dispatches_table<mcts_tree_node_id, std::unordered_map>;
     using rp_compute_fewer_candidate_goal_value_t =
         rp_compute_fewer_candidate_goal_value<goal_candidate_rules_t>;
     using rp_srt_active_goals_t = dbuct_rp_srt_active_goals<
@@ -118,20 +115,17 @@ struct dbuct_ridge_fc_manifest {
     using goal_rollout_t           = rp_fewer_candidate_goal_rollout<rp_srt_active_goals_t>;
     using rule_rollout_t           = rp_uniform_rule_rollout<std::mt19937>;
     using dbuct_rollout_t          = rp_heuristic_rollout<goal_rollout_t, rule_rollout_t>;
-    using dbuct_batch_t            = monte_carlo::linear_batch_increment;
     using value_delta_t            = monte_carlo::uniform_value_delta<double>;
     using exploration_constant_t   = monte_carlo::uniform_exploration_constant<double>;
-    using dbuct_t                  = monte_carlo::dbuct<
+    using dbuct_t                  = atlas_dbuct_manifest<
                                          mcts_tree_node_id, mcts_choice, double,
-                                         dbuct_visits_table_t, dbuct_value_table_t,
-                                         dbuct_visits_table_t, dbuct_value_table_t,
-                                         dbuct_dispatches_table_t, dbuct_dispatches_table_t,
-                                         dbuct_batch_t, tree_walker_t,
-                                         dbuct_choices_t, dbuct_choices_t, dbuct_rollout_t,
-                                         value_delta_t, exploration_constant_t>;
+                                         dbuct_visits_table_t, dbuct_visits_table_t,
+                                         dbuct_value_table_t, dbuct_value_table_t,
+                                         tree_walker_t, dbuct_choices_t, dbuct_choices_t,
+                                         dbuct_rollout_t, exploration_constant_t, value_delta_t>;
 
     using avoidance_unit_boundary_t = dbuct_avoidance_unit_boundary<
-        nearest_decision_t, dbuct_t>;
+        nearest_decision_t, typename dbuct_t::frame_stack_t>;
     using solver_frame_depth_tracker_t = solver_frame_depth_tracker;
     using cdcl_t  = dbuct_cdcl_elimination_generator<
                     chosen_goal_candidates_t, avoidance_unit_boundary_t, decision_memory_t,
@@ -217,8 +211,10 @@ struct dbuct_ridge_fc_manifest {
                                           solver_frame_depth_tracker_t,
                                           decision_memory_t,
                                           avoidance_unit_boundary_t, avoidance_unit_boundary_t,
-                                          dbuct_t, dbuct_t, dbuct_t, dbuct_t,
-                                          dbuct_t,
+                                          typename dbuct_t::frame_stack_t,
+                                          typename dbuct_t::value_stack_controller_t,
+                                          typename dbuct_t::chooser_t,
+                                          typename dbuct_t::terminator_t,
                                           check_mcts_choice_is_rule_choice>;
     using dbuct_ridge_terminate_sim_t = dbuct_ridge_terminate_sim<
                                           ridge_reward_t, value_delta_t, dbuct_sim_t>;
@@ -243,7 +239,7 @@ struct dbuct_ridge_fc_manifest {
         size_t max_resolutions,
         uint32_t random_seed,
         double exploration_constant,
-        size_t grant_increment_interval);
+        double grant_k);
 
     globalizer                    globalizer_;
     bind_map_t                    bind_map_;
@@ -271,8 +267,6 @@ struct dbuct_ridge_fc_manifest {
     tree_walker_t                 tree_walker_;
     dbuct_visits_table_t          dbuct_visits_table_;
     dbuct_value_table_t           dbuct_value_table_;
-    dbuct_dispatches_table_t      dbuct_dispatches_table_;
-    dbuct_batch_t                 dbuct_batch_;
     goal_rollout_t                goal_rollout_;
     rule_rollout_t                rule_rollout_;
     dbuct_rollout_t               dbuct_rollout_;
