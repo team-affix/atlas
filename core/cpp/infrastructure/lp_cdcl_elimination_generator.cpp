@@ -40,8 +40,11 @@ void lp_cdcl_elimination_generator::descend(const resolution_lineage* rl) {
     lp_decision_frame_id child_id = current_frame_id_;
     child_id.insert(rl);
 
-    lp_decision_frame& parent = *current_frame_;
-    lp_decision_frame& child = frames_[child_id];
+    // Insert the child first. frames_[] may rehash, which would dangle any
+    // pointer we already held into the table — including current_frame_.
+    frames_[child_id];
+    lp_decision_frame& parent = frames_.at(current_frame_id_);
+    lp_decision_frame& child = frames_.at(child_id);
 
     for (auto it = parent.change_log.lower_bound(parent.continuations[rl]);
          it != parent.change_log.end(); ++it)
@@ -169,10 +172,14 @@ coroutine<const resolution_lineage*, void> lp_cdcl_elimination_generator::flush(
 // by every decision above rl, so rl is the one new resolution to apply.
 coroutine<const resolution_lineage*, void>
 lp_cdcl_elimination_generator::constrain(const resolution_lineage* rl) {
+    // Same-parent leftovers are the resolver's: run_sim resolve() already
+    // deactivates every remaining candidate of rl->parent. Yielding one would
+    // unit-push that goal and then erase its rule bucket.
     std::vector<const resolution_lineage*> staged;
     staged.swap(pending_eliminations_);
     for (const resolution_lineage* elim : staged)
-        co_yield elim;
+        if (elim->parent != rl->parent)
+            co_yield elim;
 
     const auto watchers = current_frame_->watched_goals.find(rl->parent);
     if (watchers == current_frame_->watched_goals.end()) co_return;
@@ -207,7 +214,8 @@ lp_cdcl_elimination_generator::constrain(const resolution_lineage* rl) {
 
         unarm(id);
         adopt(std::move(reduced));
-        if (is_unit) co_yield survivor;
+        if (is_unit && survivor->parent != rl->parent)
+            co_yield survivor;
     }
 }
 

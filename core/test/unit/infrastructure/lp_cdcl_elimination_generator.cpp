@@ -8,6 +8,7 @@
 
 #include <gtest/gtest.h>
 #include <gmock/gmock.h>
+#include <deque>
 #include <vector>
 #include "infrastructure/coroutine.hpp"
 #include "infrastructure/lp_cdcl_elimination_generator.hpp"
@@ -70,6 +71,7 @@ protected:
     goal_lineage g4{nullptr, 4};
 
     resolution_lineage g0_r0{&g0, 0};
+    resolution_lineage g0_r2{&g0, 2};
     resolution_lineage g0_r9{&g0, 9};
     resolution_lineage g1_r1{&g1, 1};
     resolution_lineage g1_r9{&g1, 9};
@@ -167,6 +169,17 @@ TEST_F(LpCdclEliminationGeneratorTest, ForcedEliminationIsReemittedOnEveryVisit)
     enter_root();
     EXPECT_THAT(decide(&g0_r0), IsEmpty());
     EXPECT_THAT(decide(&g1_r1), ElementsAre(&g2_r2));
+}
+
+TEST_F(LpCdclEliminationGeneratorTest, ConstrainDoesNotYieldASiblingOfTheCurrentGoal) {
+    // A forced sibling of the decision being taken is already the resolver's
+    // job. Other-goal forced elims still re-emit on revisit.
+    learn_over({&g0_r2, &g1_r1});
+    EXPECT_THAT(decide(&g1_r1), ElementsAre(&g0_r2));
+    EXPECT_THAT(decide(&g0_r0), IsEmpty());
+    cdcl.cleanup();
+    enter_root();
+    EXPECT_THAT(decide(&g1_r1), ElementsAre(&g0_r2));
 }
 
 TEST_F(LpCdclEliminationGeneratorTest, TwoArrivalOrdersYieldOneElimination) {
@@ -355,6 +368,20 @@ TEST_F(LpCdclEliminationGeneratorTest, ForcedEliminationIsVisibleOnADifferentChi
     cdcl.descend(&g4_r4);
     cdcl.enter();
     EXPECT_THAT(flush(), ElementsAre(&g2_r2));
+}
+
+TEST_F(LpCdclEliminationGeneratorTest, ManyDistinctPrefixesStillReceiveTheLearnedAvoidance) {
+    learn_over({&g0_r0, &g1_r1});
+    std::deque<goal_lineage> goals;
+    std::deque<resolution_lineage> rls;
+    for (size_t i = 0; i < 256; ++i) {
+        goals.emplace_back(nullptr, i + 100);
+        rls.emplace_back(&goals.back(), 0);
+        cdcl.cleanup();
+        enter_root();
+        EXPECT_THAT(decide(&rls.back()), IsEmpty());
+        EXPECT_THAT(unit(&g0_r0), ElementsAre(&g1_r1));
+    }
 }
 
 TEST_F(LpCdclEliminationGeneratorTest, ParentSatisfactionRetractsAChildsForcedElimination) {

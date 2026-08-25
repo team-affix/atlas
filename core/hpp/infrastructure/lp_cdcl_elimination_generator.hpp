@@ -56,8 +56,7 @@ private:
     frames_t frames_;
     lp_decision_frame_id current_frame_id_;
     // Held alongside the id because hashing a frame id walks the whole decision
-    // set. Safe to cache: unordered_map only invalidates a reference when that
-    // element is erased, and frames are never erased.
+    // set. Re-acquired after every frames_ insert: a rehash invalidates it.
     lp_decision_frame* current_frame_;
     std::vector<const resolution_lineage*> pending_eliminations_;
     avoidance_id next_avoidance_id_;
