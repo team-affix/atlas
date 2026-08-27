@@ -32,17 +32,17 @@ struct ridge_bt_command_handler {
         const std::string& goals_str,
         size_t max_resolutions,
         uint32_t seed,
-        double exploration_constant = 15,
-        size_t sim_progress_interval = 1000);
+        double exploration_constant,
+        size_t sim_progress_interval);
 
     void operator()();
 
 private:
     var_names var_names_;
     functor_names functor_names_;
-    non_backtracking_var_sequencer parse_var_seq_{0};
+    non_backtracking_var_sequencer parse_var_seq_;
     std::map<std::string, uint32_t> functor_map_;
-    uint32_t next_functor_id_ = k_first_user_functor_id;
+    uint32_t next_functor_id_;
     std::optional<expr_pool> parse_pool_;
     std::optional<expr_printer> printer_;
     db database_;

@@ -11,8 +11,7 @@
 // ridge_dbuct runtime with binary-tree CDCL — same session API as ridge_runtime,
 // backed by the delayed-backtracking (camping) solver stack. grant_k is the
 // visit-proportional grant coefficient (grant(n) = 1 + k * visits(n); larger
-// camps longer). It defaults so the constructor signature matches the other
-// runtimes for shared harnesses.
+// camps longer).
 struct dbuct_ridge_bt_runtime {
     static constexpr double k_default_grant_k = 0.1;
 
@@ -23,7 +22,7 @@ struct dbuct_ridge_bt_runtime {
         size_t max_resolutions,
         uint32_t random_seed,
         double exploration_constant,
-        double grant_k = k_default_grant_k);
+        double grant_k);
 
     bool next();
     bool solved() const;

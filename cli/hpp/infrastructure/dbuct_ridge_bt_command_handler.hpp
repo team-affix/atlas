@@ -20,9 +20,6 @@
 #include "infrastructure/functor_names.hpp"
 #include "infrastructure/var_names.hpp"
 
-// CLI handler for the `dbuct-ridge-bt` command: parses the database and goals, wires
-// up a dbuct_ridge_bt_runtime (delayed-backtracking ridge with binary-tree CDCL),
-// and drives the shared solve loop that prints solutions and progress.
 struct dbuct_ridge_bt_command_handler {
     using SolveTimer     = solve_timer<steady_now>;
     using PrintBindings  = print_bindings<dbuct_ridge_bt_runtime, expr_printer>;
@@ -35,18 +32,18 @@ struct dbuct_ridge_bt_command_handler {
         const std::string& goals_str,
         size_t max_resolutions,
         uint32_t seed,
-        double exploration_constant = 15,
-        double grant_k = dbuct_ridge_bt_runtime::k_default_grant_k,
-        size_t sim_progress_interval = 1000);
+        double exploration_constant,
+        double grant_k,
+        size_t sim_progress_interval);
 
     void operator()();
 
 private:
     var_names var_names_;
     functor_names functor_names_;
-    non_backtracking_var_sequencer parse_var_seq_{0};
+    non_backtracking_var_sequencer parse_var_seq_;
     std::map<std::string, uint32_t> functor_map_;
-    uint32_t next_functor_id_ = k_first_user_functor_id;
+    uint32_t next_functor_id_;
     std::optional<expr_pool> parse_pool_;
     std::optional<expr_printer> printer_;
     db database_;

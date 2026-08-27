@@ -13,7 +13,6 @@
 
 #include <algorithm>
 #include <cstddef>
-#include <functional>
 #include <set>
 #include <variant>
 #include <vector>
@@ -36,10 +35,10 @@ using solution = std::vector<const expr*>;
 // Enumerate a runtime's solution set, importing each solution into a shared pool
 // so solutions from different runtimes are pointer-comparable. Bounded by
 // max_ticks so a satisfiable-but-non-refuting search cannot hang the suite.
-template<typename Runtime>
+template<typename Runtime, typename GetSolution>
 std::set<solution> collect_solutions(
     Runtime& rt,
-    const std::function<solution()>& get_solution,
+    GetSolution get_solution,
     size_t max_ticks) {
     std::set<solution> sols;
     for (size_t t = 0; t < max_ticks; ++t) {
@@ -49,6 +48,16 @@ std::set<solution> collect_solutions(
             sols.insert(get_solution());
     }
     return sols;
+}
+
+bool is_well_formed_nat(const expr* e, uint32_t z_id, uint32_t s_id) {
+    while (true) {
+        const auto* f = std::get_if<expr::functor>(&e->content);
+        if (!f) return false;
+        if (f->id == z_id) return f->args.empty();
+        if (f->id != s_id || f->args.size() != 1) return false;
+        e = f->args[0];
+    }
 }
 
 class DbuctRidgeBtManifestIntegrationTest : public ::testing::Test {
@@ -386,17 +395,8 @@ TEST_F(DbuctRidgeBtManifestIntegrationTest, RecursionEnumeratesOnlyWellFormedNat
     database.push(rule{fun("nat", {fun("z")}), {}});
     initial_goals.push(fun("nat", {pool.make_var(0)}));
 
-    const auto is_well_formed_nat = [&](const expr* e) {
-        const uint32_t z_id = functors.id("z");
-        const uint32_t s_id = functors.id("s");
-        while (true) {
-            const auto* f = std::get_if<expr::functor>(&e->content);
-            if (!f) return false;
-            if (f->id == z_id) return f->args.empty();
-            if (f->id != s_id || f->args.size() != 1) return false;
-            e = f->args[0];
-        }
-    };
+    const uint32_t z_id = functors.id("z");
+    const uint32_t s_id = functors.id("s");
 
     dbuct_ridge_bt_runtime d = make_dbuct(1, /*max_resolutions=*/8);
     std::set<solution> got = collect_solutions(
@@ -405,7 +405,7 @@ TEST_F(DbuctRidgeBtManifestIntegrationTest, RecursionEnumeratesOnlyWellFormedNat
 
     ASSERT_FALSE(got.empty());
     for (const solution& s : got)
-        EXPECT_TRUE(is_well_formed_nat(s.at(0))) << "enumerated a malformed nat term";
+        EXPECT_TRUE(is_well_formed_nat(s.at(0), z_id, s_id)) << "enumerated a malformed nat term";
     EXPECT_TRUE(got.count(solution{pool.import(fun("z"))}))
         << "shallowest solution nat(z) must be reachable";
 }

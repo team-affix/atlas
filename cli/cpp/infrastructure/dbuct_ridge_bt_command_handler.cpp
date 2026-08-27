@@ -12,6 +12,7 @@ dbuct_ridge_bt_command_handler::dbuct_ridge_bt_command_handler(
     double grant_k,
     size_t sim_progress_interval)
     : parse_var_seq_(0),
+      next_functor_id_(k_first_user_functor_id),
       solve_timer_(clock_),
       print_progress_(solve_timer_),
       solve_loop_(print_bindings_, print_progress_, solve_timer_, solve_timer_,
