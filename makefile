@@ -205,7 +205,7 @@ CLI_DEBUG_FAST_DEP = $(CLI_DEBUG_FAST_OBJ:.o=.d)
 # ==============================================================================
 
 .PHONY: all core core_debug core_debug_fast parser parser_debug parser_debug_fast \
-        cli cli_debug cli_debug_fast atlas atlas_profile clean
+        cli cli_debug cli_debug_fast atlas atlas_profile clean run_tests
 
 all: core core_debug core_debug_fast parser parser_debug parser_debug_fast \
      cli cli_debug cli_debug_fast atlas
@@ -278,6 +278,14 @@ atlas_profile: $(CORE_PROFILE_LIB)
 clean:
 	rm -rf build
 	rm -rf parser/generated
+
+run_tests: core_debug core_debug_fast parser_debug parser_debug_fast cli_debug cli_debug_fast
+	$(CORE_DEBUG_FAST_BIN)
+	$(PARSER_DEBUG_FAST_BIN)
+	$(CLI_DEBUG_FAST_BIN)
+	$(CORE_DEBUG_BIN)
+	$(PARSER_DEBUG_BIN)
+	$(CLI_DEBUG_BIN)
 
 # ==============================================================================
 # Library archive rules

@@ -31,6 +31,8 @@ Atlas exposes multiple solvers, each with different search strategies:
 |---|---|
 | `horizon` | Uses **CGW (Cumulative Grounded Weight)** as the MCTS reward. See [solvers.md](solvers.md). |
 | `ridge` | Certainty-based. Focuses on finding and eliminating shallow conflicts. See [solvers.md](solvers.md). |
+| `ridge-bt` | Ridge with binary-tree CDCL. See [cdcl-bt.md](cdcl-bt.md) and [solvers.md](solvers.md). |
+| `dbuct-ridge-bt` | Delayed-backtracking ridge with binary-tree CDCL. See [cdcl-bt.md](cdcl-bt.md) and [solvers.md](solvers.md). |
 | `quell` | Minimizes remaining work `Σ f(depth)` with `f(l)=1+e^{-K(l-J)}`. See [solvers.md](solvers.md). |
 | `genius` | Dual ridge+horizon reward. See [solvers.md](solvers.md). |
 | `ridge-horizon` | *(planned)* Combines the strengths of both. |
@@ -46,6 +48,7 @@ See [continuous-documentation.md](continuous-documentation.md) for guidelines on
 - [solving-loop.md](solving-loop.md) — The event-driven solving loop, unit/decided resolution, termination
 - [resolution.md](resolution.md) — Resolution mechanics, variable copying, goal weights
 - [cdcl.md](cdcl.md) — Trail, avoidances, lemmas
+- [cdcl-bt.md](cdcl-bt.md) — Binary-tree CDCL used by `ridge-bt` and `dbuct-ridge-bt`
 - [mhu.md](mhu.md) — Multi-head unification, common bind map, rebase and elimination
 - [lineage.md](lineage.md) — Lineage structure, lineage_pool, expr_pool
 - [events.md](events.md) — Event system, naming conventions, priority ordering

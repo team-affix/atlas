@@ -7,6 +7,7 @@
 #include "infrastructure/dbuct_quell_command_handler.hpp"
 #include "infrastructure/dbuct_quell_fc_command_handler.hpp"
 #include "infrastructure/dbuct_ridge_command_handler.hpp"
+#include "infrastructure/dbuct_ridge_bt_command_handler.hpp"
 #include "infrastructure/dbuct_ridge_fc_command_handler.hpp"
 #include "infrastructure/genius_command_handler.hpp"
 #include "infrastructure/genius_fc_command_handler.hpp"
@@ -15,6 +16,7 @@
 #include "infrastructure/quell_command_handler.hpp"
 #include "infrastructure/quell_fc_command_handler.hpp"
 #include "infrastructure/ridge_command_handler.hpp"
+#include "infrastructure/ridge_bt_command_handler.hpp"
 #include "infrastructure/ridge_fc_command_handler.hpp"
 
 #ifndef ATLAS_GIT_TAG
@@ -81,6 +83,33 @@ int main(int argc, char** argv) {
         uint32_t seed                = 0;
         double exploration_constant  = 15;
         size_t sim_progress_interval = 1000;
+    } ridge_bt_opts;
+
+    auto* ridge_bt_sub = app.add_subcommand(
+        "ridge-bt",
+        "Run the ridge solver with binary-tree CDCL");
+    ridge_bt_sub->add_option("file", ridge_bt_opts.file, "CHC input file")->required();
+    ridge_bt_sub->add_option("-g,--goal", ridge_bt_opts.goals_str, "Goal body string, e.g. \"p(X), q(X)\"")->required();
+    ridge_bt_sub->add_option("--max-resolutions", ridge_bt_opts.max_resolutions, "Max resolutions");
+    ridge_bt_sub->add_option("--seed", ridge_bt_opts.seed, "RNG seed");
+    ridge_bt_sub->add_option("--exploration-constant", ridge_bt_opts.exploration_constant, "MCTS exploration constant");
+    ridge_bt_sub->add_option("--sim-progress-interval", ridge_bt_opts.sim_progress_interval,
+                          "Print sim progress every N sims (0 disables)");
+    ridge_bt_sub->callback([&]() {
+        ridge_bt_command_handler h(ridge_bt_opts.file, ridge_bt_opts.goals_str,
+                                   ridge_bt_opts.max_resolutions, ridge_bt_opts.seed,
+                                   ridge_bt_opts.exploration_constant,
+                                   ridge_bt_opts.sim_progress_interval);
+        h();
+    });
+
+    struct {
+        std::string file;
+        std::string goals_str;
+        size_t max_resolutions       = 1000;
+        uint32_t seed                = 0;
+        double exploration_constant  = 15;
+        size_t sim_progress_interval = 1000;
     } ridge_fc_opts;
 
     auto* ridge_fc_sub = app.add_subcommand(
@@ -127,6 +156,37 @@ int main(int argc, char** argv) {
                                       dbuct_ridge_opts.exploration_constant,
                                       dbuct_ridge_opts.grant_k,
                                       dbuct_ridge_opts.sim_progress_interval);
+        h();
+    });
+
+    struct {
+        std::string file;
+        std::string goals_str;
+        size_t max_resolutions        = 1000;
+        uint32_t seed                 = 0;
+        double exploration_constant   = 15;
+        double grant_k = dbuct_ridge_bt_runtime::k_default_grant_k;
+        size_t sim_progress_interval  = 1000;
+    } dbuct_ridge_bt_opts;
+
+    auto* dbuct_ridge_bt_sub = app.add_subcommand(
+        "dbuct-ridge-bt",
+        "Run the ridge solver with delayed-backtracking UCT and binary-tree CDCL");
+    dbuct_ridge_bt_sub->add_option("file", dbuct_ridge_bt_opts.file, "CHC input file")->required();
+    dbuct_ridge_bt_sub->add_option("-g,--goal", dbuct_ridge_bt_opts.goals_str, "Goal body string, e.g. \"p(X), q(X)\"")->required();
+    dbuct_ridge_bt_sub->add_option("--max-resolutions", dbuct_ridge_bt_opts.max_resolutions, "Max resolutions");
+    dbuct_ridge_bt_sub->add_option("--seed", dbuct_ridge_bt_opts.seed, "RNG seed");
+    dbuct_ridge_bt_sub->add_option("--exploration-constant", dbuct_ridge_bt_opts.exploration_constant, "MCTS exploration constant");
+    dbuct_ridge_bt_sub->add_option("--grant-k", dbuct_ridge_bt_opts.grant_k,
+                          "DBUCT visit-proportional grant k (grant = 1 + k * visits; larger camps longer)");
+    dbuct_ridge_bt_sub->add_option("--sim-progress-interval", dbuct_ridge_bt_opts.sim_progress_interval,
+                          "Print sim progress every N sims (0 disables)");
+    dbuct_ridge_bt_sub->callback([&]() {
+        dbuct_ridge_bt_command_handler h(dbuct_ridge_bt_opts.file, dbuct_ridge_bt_opts.goals_str,
+                                         dbuct_ridge_bt_opts.max_resolutions, dbuct_ridge_bt_opts.seed,
+                                         dbuct_ridge_bt_opts.exploration_constant,
+                                         dbuct_ridge_bt_opts.grant_k,
+                                         dbuct_ridge_bt_opts.sim_progress_interval);
         h();
     });
 

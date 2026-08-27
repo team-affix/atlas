@@ -14,6 +14,14 @@ Certainty-based search. Has no notion of "closeness to a solution." Treats all r
 
 **Reasoning:** A conflict discovered after many decisions is deep in the search tree. The learned lemma, while valid, covers a very narrow slice of the space and will rarely fire again. A conflict discovered after *few* decisions (small decision set, reward closer to zero) generalises broadly and prunes a large portion of the search space. Ridge therefore steers MCTS toward decisions that tend to produce early, high-value conflicts.
 
+## Ridge-bt
+
+Same ridge reward and MCTS stack as `ridge`. CDCL is `bt_cdcl_elimination_generator` instead of `cdcl_elimination_generator`. See [cdcl-bt.md](cdcl-bt.md).
+
+## dbuct-ridge-bt
+
+Same delayed-backtracking ridge stack as `dbuct-ridge`. CDCL is `dbuct_bt_cdcl_elimination_generator` instead of `dbuct_cdcl_elimination_generator`. See [cdcl-bt.md](cdcl-bt.md).
+
 ## Quell
 
 MCTS-guided search that rewards **minimizing remaining work** rather than raw active-goal count.
