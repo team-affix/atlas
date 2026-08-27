@@ -27,12 +27,12 @@ bt_cdcl_elimination_generator::learn(const lemma& l) {
 
 coroutine<const resolution_lineage*, void>
 bt_cdcl_elimination_generator::constrain(const resolution_lineage* rl) {
-    std::vector<const resolution_lineage*> yields;
     const auto it = leaves_.find(rl);
-    if (it != leaves_.end())
-        visit_leaf(it->second, yields);
-    for (const resolution_lineage* y : yields)
-        co_yield y;
+    if (it == leaves_.end())
+        co_return;
+    auto coro = visit_leaf(it->second);
+    while (auto lineage = coro.next())
+        co_yield *lineage;
 }
 
 void bt_cdcl_elimination_generator::cleanup() {
@@ -82,44 +82,52 @@ bt_cdcl_elimination_generator::intern_members(
     return intern_pair(intern_members(members, begin, mid), intern_members(members, mid, end));
 }
 
-void bt_cdcl_elimination_generator::visit_leaf(
-    bt_cdcl_factor* f, std::vector<const resolution_lineage*>& yields) {
+coroutine<const resolution_lineage*, void>
+bt_cdcl_elimination_generator::visit_leaf(bt_cdcl_factor* f) {
     refresh(f);
     if (f->visited >= f->tuple_size)
-        return;
+        co_return;
     f->visited += 1;
-    propagate_visit(f, yields);
+    auto coro = propagate_visit(f);
+    while (auto lineage = coro.next())
+        co_yield *lineage;
 }
 
-void bt_cdcl_elimination_generator::propagate_visit(
-    bt_cdcl_factor* f, std::vector<const resolution_lineage*>& yields) {
-    try_fire(f, yields);
+coroutine<const resolution_lineage*, void>
+bt_cdcl_elimination_generator::propagate_visit(bt_cdcl_factor* f) {
+    auto self_fire = try_fire(f);
+    while (auto lineage = self_fire.next())
+        co_yield *lineage;
     for (bt_cdcl_factor* parent : f->parents) {
         if (visited(f) != f->tuple_size) {
-            try_fire(parent, yields);
+            auto parent_fire = try_fire(parent);
+            while (auto lineage = parent_fire.next())
+                co_yield *lineage;
             continue;
         }
         refresh(parent);
         if (parent->visited >= parent->tuple_size)
             continue;
         parent->visited += f->tuple_size;
-        propagate_visit(parent, yields);
+        auto prop = propagate_visit(parent);
+        while (auto lineage = prop.next())
+            co_yield *lineage;
     }
 }
 
-void bt_cdcl_elimination_generator::try_fire(
-    bt_cdcl_factor* f, std::vector<const resolution_lineage*>& yields) {
+coroutine<const resolution_lineage*, void>
+bt_cdcl_elimination_generator::try_fire(bt_cdcl_factor* f) {
     if (f->nand_multiplicity == 0)
-        return;
+        co_return;
     if (f->fired_generation == generation_)
-        return;
+        co_return;
     size_t count = 0;
     const resolution_lineage* remaining = find_unvisited_leaf(f, count);
     if (count != 1)
-        return;
-    for (size_t i = 0; i < f->nand_multiplicity; ++i)
-        yields.push_back(remaining);
+        co_return;
     f->fired_generation = generation_;
+    for (size_t i = 0; i < f->nand_multiplicity; ++i)
+        co_yield remaining;
 }
 
 const resolution_lineage*

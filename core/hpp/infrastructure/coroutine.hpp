@@ -3,6 +3,7 @@
 
 #include <coroutine>
 #include <exception>
+#include <optional>
 #include <stdexcept>
 #include <type_traits>
 #include <utility>
@@ -42,6 +43,7 @@ struct coroutine<Yield, Return> {
     bool done() const;
     bool has_yield() const;
     Yield consume_yield();
+    std::optional<Yield> next();
     Return result() const;
 
 private:
@@ -77,6 +79,7 @@ struct coroutine<Yield, void> {
     bool done() const;
     bool has_yield() const;
     Yield consume_yield();
+    std::optional<Yield> next();
 
 private:
     coroutine_ops<promise_type> ops_;
@@ -215,6 +218,17 @@ Yield coroutine<Yield, Return>::consume_yield() {
 
 template<typename Yield, typename Return>
     requires(!std::is_void_v<Yield> && !std::is_void_v<Return>)
+std::optional<Yield> coroutine<Yield, Return>::next() {
+    while (!done()) {
+        resume();
+        if (has_yield())
+            return consume_yield();
+    }
+    return std::nullopt;
+}
+
+template<typename Yield, typename Return>
+    requires(!std::is_void_v<Yield> && !std::is_void_v<Return>)
 Return coroutine<Yield, Return>::result() const {
     if (!done() || !ops_.promise_const().return_ready_)
         throw std::logic_error("coroutine::result before completion");
@@ -286,6 +300,17 @@ Yield coroutine<Yield, void>::consume_yield() {
     auto v = std::move(ops_.promise().yield_);
     ops_.promise().at_yield_ = false;
     return v;
+}
+
+template<typename Yield>
+    requires(!std::is_void_v<Yield>)
+std::optional<Yield> coroutine<Yield, void>::next() {
+    while (!done()) {
+        resume();
+        if (has_yield())
+            return consume_yield();
+    }
+    return std::nullopt;
 }
 
 template<typename Return>

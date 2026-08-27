@@ -245,3 +245,18 @@ TEST_F(BtCdclEliminationGeneratorUnitTest, ReduceToDuplicateAvoidanceYieldsFromE
     EXPECT_THAT(collect_elims(cdcl.constrain(&lin_0_0)), IsEmpty());
     EXPECT_THAT(collect_elims(cdcl.constrain(&lin_1_0)), ElementsAre(&lin_2_0, &lin_2_0));
 }
+
+TEST_F(BtCdclEliminationGeneratorUnitTest, AbandonedConstrainDoesNotRefireUntilCleanup) {
+    const lemma l = make_lemma({&lin_0_0, &lin_1_0});
+    EXPECT_EQ(cdcl.learn(l), std::nullopt);
+    EXPECT_EQ(cdcl.learn(l), std::nullopt);
+
+    auto sm = cdcl.constrain(&lin_0_0);
+    auto first = sm.next();
+    ASSERT_TRUE(first.has_value());
+    EXPECT_EQ(*first, &lin_1_0);
+
+    EXPECT_THAT(collect_elims(cdcl.constrain(&lin_0_0)), IsEmpty());
+    end_sim();
+    EXPECT_THAT(collect_elims(cdcl.constrain(&lin_0_0)), ElementsAre(&lin_1_0, &lin_1_0));
+}

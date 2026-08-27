@@ -254,4 +254,33 @@ TEST_F(DbuctBtCdclEliminationGeneratorUnitTest, LearnConsultsUnitBoundaryForEach
     (void)pop();
 }
 
+TEST_F(DbuctBtCdclEliminationGeneratorUnitTest, AbandonedConstrainDoesNotRefireOnSameFrame) {
+    sut.push_frame();
+    do_learn({&ult, &pen}, &ult, /*boundary=*/5);
+    do_learn({&ult, &pen}, &ult, /*boundary=*/5);
+    ASSERT_THAT(pop(), IsEmpty());
+
+    auto sm = sut.constrain(&ult);
+    auto first = sm.next();
+    ASSERT_TRUE(first.has_value());
+    EXPECT_EQ(*first, &pen);
+
+    EXPECT_THAT(constrain(&ult), IsEmpty());
+}
+
+TEST_F(DbuctBtCdclEliminationGeneratorUnitTest, AbandonedConstrainFireIsUndoneOnPop) {
+    sut.push_frame();
+    do_learn({&ult, &pen}, &ult, /*boundary=*/2);
+    ASSERT_THAT(pop(), IsEmpty());
+
+    sut.push_frame();
+    auto sm = sut.constrain(&ult);
+    auto first = sm.next();
+    ASSERT_TRUE(first.has_value());
+    EXPECT_EQ(*first, &pen);
+
+    ASSERT_THAT(pop(), IsEmpty());
+    EXPECT_THAT(constrain(&ult), ElementsAre(&pen));
+}
+
 }  // namespace

@@ -22,9 +22,9 @@ private:
     bt_cdcl_factor* intern_leaf(const resolution_lineage*);
     bt_cdcl_factor* intern_pair(bt_cdcl_factor*, bt_cdcl_factor*);
     bt_cdcl_factor* intern_members(const std::vector<const resolution_lineage*>&, size_t, size_t);
-    void visit_leaf(bt_cdcl_factor*, std::vector<const resolution_lineage*>&);
-    void propagate_visit(bt_cdcl_factor*, std::vector<const resolution_lineage*>&);
-    void try_fire(bt_cdcl_factor*, std::vector<const resolution_lineage*>&);
+    coroutine<const resolution_lineage*, void> visit_leaf(bt_cdcl_factor*);
+    coroutine<const resolution_lineage*, void> propagate_visit(bt_cdcl_factor*);
+    coroutine<const resolution_lineage*, void> try_fire(bt_cdcl_factor*);
     const resolution_lineage* find_unvisited_leaf(const bt_cdcl_factor*, size_t&) const;
     size_t visited(const bt_cdcl_factor*) const;
     void refresh(bt_cdcl_factor*);

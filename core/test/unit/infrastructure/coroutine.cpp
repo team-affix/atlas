@@ -4,6 +4,7 @@
 
 #include <gtest/gtest.h>
 #include <gmock/gmock.h>
+#include <optional>
 #include <stdexcept>
 #include <string>
 #include <vector>
@@ -33,6 +34,10 @@ coroutine<int, void> make_int_two_yields() {
     co_yield 1;
     co_yield 2;
     co_await std::suspend_always{};
+}
+
+coroutine<int, void> make_int_no_yields() {
+    co_return;
 }
 
 coroutine<int, void> make_int_five_yields() {
@@ -191,6 +196,22 @@ TEST_F(CoroutineTest, SuspendThenCompletes) {
     EXPECT_FALSE(sm.done());
     sm.resume();
     EXPECT_TRUE(sm.done());
+}
+
+TEST_F(CoroutineTest, NextYieldsThenNullopt) {
+    auto sm = make_int_two_yields();
+    auto first = sm.next();
+    ASSERT_TRUE(first.has_value());
+    EXPECT_EQ(*first, 1);
+    auto second = sm.next();
+    ASSERT_TRUE(second.has_value());
+    EXPECT_EQ(*second, 2);
+    EXPECT_EQ(sm.next(), std::nullopt);
+}
+
+TEST_F(CoroutineTest, NextOnEmptyCoroutineIsNullopt) {
+    auto sm = make_int_no_yields();
+    EXPECT_EQ(sm.next(), std::nullopt);
 }
 
 TEST_F(CoroutineTest, ResumeReturnsEachCoYield) {
