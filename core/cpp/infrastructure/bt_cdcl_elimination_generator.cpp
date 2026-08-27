@@ -71,14 +71,14 @@ bt_cdcl_elimination_generator::intern_pair(bt_cdcl_factor* left, bt_cdcl_factor*
 bt_cdcl_factor*
 bt_cdcl_elimination_generator::intern_members(
     const std::vector<const resolution_lineage*>& members, size_t begin, size_t end) {
-    const size_t count = end - begin;
-    DEBUG_ASSERT(count >= 1);
-    if (count == 1)
+    const size_t member_count = end - begin;
+    DEBUG_ASSERT(member_count >= 1);
+    if (member_count == 1)
         return intern_leaf(members.at(begin));
-    const bool odd = (count % 2) == 1;
-    if (odd)
+    const bool odd_count = (member_count % 2) == 1;
+    if (odd_count)
         return intern_pair(intern_members(members, begin, end - 1), intern_leaf(members.at(end - 1)));
-    const size_t mid = begin + count / 2;
+    const size_t mid = begin + member_count / 2;
     return intern_pair(intern_members(members, begin, mid), intern_members(members, mid, end));
 }
 

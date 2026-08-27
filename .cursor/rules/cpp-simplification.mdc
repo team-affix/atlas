@@ -75,9 +75,12 @@ Single-letter names (`n`, `i`, `k`, `t`) are only acceptable in genuine mathemat
 const size_t n = end - begin;
 if (n == 1) ...
 
-// GOOD
+// BAD: "count" of what?
 const size_t count = end - begin;
-if (count == 1) ...
+
+// GOOD: name says what is being counted
+const size_t member_count = end - begin;
+if (member_count == 1) ...
 ```
 
 ### Name non-obvious boolean conditions
