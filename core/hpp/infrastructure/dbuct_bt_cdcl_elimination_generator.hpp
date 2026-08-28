@@ -74,7 +74,7 @@ dbuct_bt_cdcl_elimination_generator(
     : nodes_()
     , leaves_()
     , pairs_()
-    , frame_stack_(std::deque<frame>{frame{}})
+    , frame_stack_(std::deque<frame>{frame{}}) // pre-seed with a root frame that is never popped
     , try_get_chosen_goal_candidate_(tgcc)
     , get_penultimate_mcts_frame_depth_(gpmfd)
     , derive_decision_lemma_(dl)
@@ -85,7 +85,9 @@ template<typename ITGCC, typename IGPMFD, typename IDL, typename IGUD, typename 
 void
 dbuct_bt_cdcl_elimination_generator<ITGCC, IGPMFD, IDL, IGUD, IGUMFD>::learn() {
     lemma l = derive_decision_lemma_.derive_decision_lemma();
+
     const auto& resolutions = l.get_resolutions();
+
     if (resolutions.empty())
         return;
 
@@ -97,12 +99,17 @@ dbuct_bt_cdcl_elimination_generator<ITGCC, IGPMFD, IDL, IGUD, IGUMFD>::learn() {
 
     const size_t unit_boundary =
         get_penultimate_mcts_frame_depth_.get_penultimate_mcts_frame_depth();
+
     const resolution_lineage* ultimate = get_ultimate_decision_.get_ultimate_decision();
 
     std::vector<const resolution_lineage*> members(resolutions.begin(), resolutions.end());
+
     std::sort(members.begin(), members.end(), resolution_lineage_ptr_less{});
+
     bt_cdcl_factor* root = intern_members(members, 0, members.size());
-    root->nand_multiplicity += 1;
+
+    ++root->nand_multiplicity; // the same subtree may be shared by multiple learned NANDs
+
     frame_stack_.top().raised_nands_.push_back(raised_nand{root, unit_boundary, ultimate});
 }
 
@@ -111,9 +118,12 @@ coroutine<const resolution_lineage*, void>
 dbuct_bt_cdcl_elimination_generator<ITGCC, IGPMFD, IDL, IGUD, IGUMFD>::constrain(
     const resolution_lineage* rl) {
     const auto it = leaves_.find(rl);
+
     if (it == leaves_.end())
         co_return;
+
     auto coro = visit_leaf(it->second);
+
     while (auto lineage = coro.next())
         co_yield *lineage;
 }
@@ -128,7 +138,9 @@ template<typename ITGCC, typename IGPMFD, typename IDL, typename IGUD, typename 
 coroutine<const resolution_lineage*, void>
 dbuct_bt_cdcl_elimination_generator<ITGCC, IGPMFD, IDL, IGUD, IGUMFD>::pop_frame() {
     auto current = std::move(frame_stack_.top());
+
     frame_stack_.pop();
+
     auto& parent = frame_stack_.top();
 
     for (auto it = current.actions_.rbegin(); it != current.actions_.rend(); ++it)
@@ -136,17 +148,26 @@ dbuct_bt_cdcl_elimination_generator<ITGCC, IGPMFD, IDL, IGUD, IGUMFD>::pop_frame
 
     const size_t ultimate_mcts =
         get_ultimate_mcts_frame_depth_.get_ultimate_mcts_frame_depth();
+
     for (auto& rn : current.raised_nands_) {
+        // null nand: unit lemma (single-resolution); past unit boundary: fires directly without re-constraining
         if (rn.nand == nullptr || ultimate_mcts >= rn.unit_boundary) {
             co_yield rn.ultimate;
+
             parent.raised_nands_.push_back(rn);
+
             continue;
         }
+
         rn.nand->armed = true;
+
         auto chosen_leaves = visit_chosen_leaves(rn.nand);
+
         while (auto lineage = chosen_leaves.next())
             co_yield *lineage;
+
         auto fire = try_fire(rn.nand);
+
         while (auto lineage = fire.next())
             co_yield *lineage;
     }
@@ -157,11 +178,16 @@ bt_cdcl_factor*
 dbuct_bt_cdcl_elimination_generator<ITGCC, IGPMFD, IDL, IGUD, IGUMFD>::intern_leaf(
     const resolution_lineage* rl) {
     const auto it = leaves_.find(rl);
+
     if (it != leaves_.end())
         return it->second;
+
     nodes_.emplace_back(1, nullptr, nullptr, rl);
+
     bt_cdcl_factor* f = &nodes_.back();
+
     leaves_.emplace(rl, f);
+
     return f;
 }
 
@@ -172,14 +198,18 @@ dbuct_bt_cdcl_elimination_generator<ITGCC, IGPMFD, IDL, IGUD, IGUMFD>::intern_pa
     const bt_cdcl_pair_key key{left, right};
 
     const auto it = pairs_.find(key);
+
     if (it != pairs_.end())
         return it->second;
 
     nodes_.emplace_back(left->tuple_size + right->tuple_size, left, right, nullptr);
+
     bt_cdcl_factor* f = &nodes_.back();
 
     left->parents.push_back(f);
+
     right->parents.push_back(f);
+
     pairs_.emplace(key, f);
 
     return f;
@@ -190,13 +220,20 @@ bt_cdcl_factor*
 dbuct_bt_cdcl_elimination_generator<ITGCC, IGPMFD, IDL, IGUD, IGUMFD>::intern_members(
     const std::vector<const resolution_lineage*>& members, size_t begin, size_t end) {
     const size_t member_count = end - begin;
+
     DEBUG_ASSERT(member_count >= 1);
+
     if (member_count == 1)
         return intern_leaf(members.at(begin));
+
     const bool odd_count = (member_count % 2) == 1;
+
+    // pair the odd remainder with a singleton to keep the tree balanced
     if (odd_count)
         return intern_pair(intern_members(members, begin, end - 1), intern_leaf(members.at(end - 1)));
+
     const size_t mid = begin + member_count / 2;
+
     return intern_pair(intern_members(members, begin, mid), intern_members(members, mid, end));
 }
 
@@ -206,9 +243,13 @@ dbuct_bt_cdcl_elimination_generator<ITGCC, IGPMFD, IDL, IGUD, IGUMFD>::visit_lea
     bt_cdcl_factor* f) {
     if (f->visited >= f->tuple_size)
         co_return;
-    f->visited += 1;
+
+    ++f->visited;
+
     log(bt_cdcl_visit_delta{f, 1});
+
     auto coro = propagate_visit(f);
+
     while (auto lineage = coro.next())
         co_yield *lineage;
 }
@@ -218,20 +259,29 @@ coroutine<const resolution_lineage*, void>
 dbuct_bt_cdcl_elimination_generator<ITGCC, IGPMFD, IDL, IGUD, IGUMFD>::propagate_visit(
     bt_cdcl_factor* f) {
     auto self_fire = try_fire(f);
+
     while (auto lineage = self_fire.next())
         co_yield *lineage;
+
     for (bt_cdcl_factor* parent : f->parents) {
         if (f->visited != f->tuple_size) {
             auto parent_fire = try_fire(parent);
+
             while (auto lineage = parent_fire.next())
                 co_yield *lineage;
+
             continue;
         }
+
         if (parent->visited >= parent->tuple_size)
             continue;
+
         parent->visited += f->tuple_size;
+
         log(bt_cdcl_visit_delta{parent, f->tuple_size});
+
         auto prop = propagate_visit(parent);
+
         while (auto lineage = prop.next())
             co_yield *lineage;
     }
@@ -242,17 +292,25 @@ coroutine<const resolution_lineage*, void>
 dbuct_bt_cdcl_elimination_generator<ITGCC, IGPMFD, IDL, IGUD, IGUMFD>::try_fire(
     bt_cdcl_factor* f) {
     if (!f->armed)
-        co_return;
+        co_return; // prevents firing during constrain(); only pop_frame arms a factor
+
     if (f->nand_multiplicity == 0)
         co_return;
+
     if (f->nand_fired)
         co_return;
+
     size_t count = 0;
+
     const resolution_lineage* remaining = find_unvisited_leaf(f, count);
+
     if (count != 1)
         co_return;
-    f->nand_fired = true;
+
+    f->nand_fired = true; // commit before yielding so abandonment can't leave the factor re-fireable
+
     log(bt_cdcl_nand_fired{f});
+
     for (size_t i = 0; i < f->nand_multiplicity; ++i)
         co_yield remaining;
 }
@@ -262,14 +320,19 @@ const resolution_lineage*
 dbuct_bt_cdcl_elimination_generator<ITGCC, IGPMFD, IDL, IGUD, IGUMFD>::find_unvisited_leaf(
     const bt_cdcl_factor* f, size_t& count) const {
     if (count > 1)
-        return nullptr;
+        return nullptr; // already know firing is impossible; prune the traversal
+
     if (f->left == nullptr) {
         if (f->visited == 0)
             ++count;
+
         return (count == 1) ? f->leaf_rl : nullptr;
     }
+
     const resolution_lineage* lu = find_unvisited_leaf(f->left, count);
+
     const resolution_lineage* ru = find_unvisited_leaf(f->right, count);
+
     return lu ? lu : ru;
 }
 
@@ -279,19 +342,29 @@ dbuct_bt_cdcl_elimination_generator<ITGCC, IGPMFD, IDL, IGUD, IGUMFD>::visit_cho
     bt_cdcl_factor* f) {
     if (f->left != nullptr) {
         auto left_coro = visit_chosen_leaves(f->left);
+
         while (auto lineage = left_coro.next())
             co_yield *lineage;
+
         auto right_coro = visit_chosen_leaves(f->right);
+
         while (auto lineage = right_coro.next())
             co_yield *lineage;
+
         co_return;
     }
+
     if (f->visited > 0)
         co_return;
+
     const auto chosen = try_get_chosen_goal_candidate_.try_get(f->leaf_rl->parent);
+
+    // only re-constrain the MCTS policy's chosen goal; DBUCT camps on a single path
     if (!chosen || *chosen != f->leaf_rl->idx)
         co_return;
+
     auto leaf_coro = visit_leaf(f);
+
     while (auto lineage = leaf_coro.next())
         co_yield *lineage;
 }
@@ -307,10 +380,14 @@ void dbuct_bt_cdcl_elimination_generator<ITGCC, IGPMFD, IDL, IGUD, IGUMFD>::undo
     const bt_cdcl_action& a) {
     if (const auto* d = std::get_if<bt_cdcl_visit_delta>(&a)) {
         DEBUG_ASSERT(d->node->visited >= d->amount);
+
         d->node->visited -= d->amount;
+
         return;
     }
+
     const auto& fired = std::get<bt_cdcl_nand_fired>(a);
+
     fired.node->nand_fired = false;
 }
 

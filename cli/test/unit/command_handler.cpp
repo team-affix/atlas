@@ -44,8 +44,10 @@ struct CommandHandlerParamTest : public ::testing::TestWithParam<cli_solver_kind
     static constexpr size_t kMaxResolutions       = 1000;
     static constexpr uint32_t kSeed               = 0;
     static constexpr double kExplorationConstant  = 1.414;
+    static constexpr double kGrantK               = 0.1;
     static constexpr double kWorkDecayK           = 0.2;
     static constexpr double kWorkDecayJ           = 10.0;
+    static constexpr size_t kSimProgressInterval  = 1000;
 };
 
 INSTANTIATE_TEST_SUITE_P(
@@ -135,7 +137,8 @@ void construct_handler(const std::string& file, const std::string& goal, size_t 
         case cli_solver_kind::ridge_bt:
             ridge_bt_command_handler(
                 file, goal, max_res, CommandHandlerParamTest::kSeed,
-                CommandHandlerParamTest::kExplorationConstant);
+                CommandHandlerParamTest::kExplorationConstant,
+                CommandHandlerParamTest::kSimProgressInterval);
             break;
         case cli_solver_kind::ridge_fc:
             ridge_fc_command_handler(
@@ -150,7 +153,9 @@ void construct_handler(const std::string& file, const std::string& goal, size_t 
         case cli_solver_kind::dbuct_ridge_bt:
             dbuct_ridge_bt_command_handler(
                 file, goal, max_res, CommandHandlerParamTest::kSeed,
-                CommandHandlerParamTest::kExplorationConstant);
+                CommandHandlerParamTest::kExplorationConstant,
+                CommandHandlerParamTest::kGrantK,
+                CommandHandlerParamTest::kSimProgressInterval);
             break;
         case cli_solver_kind::dbuct_ridge_fc:
             dbuct_ridge_fc_command_handler(
@@ -254,7 +259,8 @@ std::string run_handler_capture(
         case cli_solver_kind::ridge_bt:
             ridge_bt_command_handler(
                 file, goal, max_resolutions, CommandHandlerParamTest::kSeed,
-                CommandHandlerParamTest::kExplorationConstant)();
+                CommandHandlerParamTest::kExplorationConstant,
+                CommandHandlerParamTest::kSimProgressInterval)();
             break;
         case cli_solver_kind::ridge_fc:
             ridge_fc_command_handler(
@@ -269,7 +275,9 @@ std::string run_handler_capture(
         case cli_solver_kind::dbuct_ridge_bt:
             dbuct_ridge_bt_command_handler(
                 file, goal, max_resolutions, CommandHandlerParamTest::kSeed,
-                CommandHandlerParamTest::kExplorationConstant)();
+                CommandHandlerParamTest::kExplorationConstant,
+                CommandHandlerParamTest::kGrantK,
+                CommandHandlerParamTest::kSimProgressInterval)();
             break;
         case cli_solver_kind::dbuct_ridge_fc:
             dbuct_ridge_fc_command_handler(
