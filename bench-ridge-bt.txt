@@ -1,0 +1,96 @@
+10000 sims | res 32.6 | dec 8.0 | 1043 sims/s | 33981 res/s | TSS: 9.6s
+
+20000 sims | res 42.7 | dec 8.6 | 742 sims/s | 31731 res/s | TSS: 23.1s
+
+30000 sims | res 39.8 | dec 9.5 | 593 sims/s | 23620 res/s | TSS: 39.9s
+
+40000 sims | res 40.2 | dec 9.5 | 477 sims/s | 19207 res/s | TSS: 60.8s
+
+50000 sims | res 36.7 | dec 8.9 | 462 sims/s | 16973 res/s | TSS: 82.4s
+
+60000 sims | res 41.4 | dec 9.7 | 373 sims/s | 15483 res/s | TSS: 109.2s
+
+70000 sims | res 40.6 | dec 9.9 | 332 sims/s | 13509 res/s | TSS: 139.3s
+
+80000 sims | res 43.6 | dec 9.8 | 303 sims/s | 13219 res/s | TSS: 172.2s
+
+90000 sims | res 48.4 | dec 10.0 | 265 sims/s | 12840 res/s | TSS: 209.9s
+
+100000 sims | res 55.2 | dec 9.7 | 274 sims/s | 15138 res/s | TSS: 246.4s
+
+110000 sims | res 57.7 | dec 9.6 | 250 sims/s | 14455 res/s | TSS: 286.3s
+
+120000 sims | res 65.8 | dec 9.6 | 269 sims/s | 17757 res/s | TSS: 323.3s
+
+130000 sims | res 62.5 | dec 9.7 | 226 sims/s | 14137 res/s | TSS: 367.6s
+
+140000 sims | res 64.7 | dec 9.7 | 227 sims/s | 14699 res/s | TSS: 411.6s
+
+150000 sims | res 66.8 | dec 9.7 | 226 sims/s | 15164 res/s | TSS: 455.6s
+
+160000 sims | res 72.7 | dec 9.5 | 200 sims/s | 14559 res/s | TSS: 505.5s
+
+170000 sims | res 82.7 | dec 9.3 | 194 sims/s | 16063 res/s | TSS: 557.0s
+
+180000 sims | res 86.6 | dec 9.1 | 175 sims/s | 15229 res/s | TSS: 613.9s
+
+190000 sims | res 91.0 | dec 8.5 | 207 sims/s | 18882 res/s | TSS: 662.1s
+
+200000 sims | res 92.1 | dec 8.6 | 223 sims/s | 20567 res/s | TSS: 706.9s
+
+210000 sims | res 91.8 | dec 8.9 | 167 sims/s | 15370 res/s | TSS: 766.6s
+
+220000 sims | res 91.6 | dec 8.8 | 170 sims/s | 15648 res/s | TSS: 825.2s
+
+230000 sims | res 92.7 | dec 8.9 | 147 sims/s | 13713 res/s | TSS: 892.8s
+
+240000 sims | res 94.4 | dec 8.3 | 196 sims/s | 18540 res/s | TSS: 943.7s
+
+250000 sims | res 94.8 | dec 8.3 | 172 sims/s | 16383 res/s | TSS: 1001.6s
+
+260000 sims | res 91.4 | dec 9.4 | 129 sims/s | 11860 res/s | TSS: 1078.6s
+
+270000 sims | res 93.3 | dec 9.6 | 113 sims/s | 10610 res/s | TSS: 1166.6s
+
+280000 sims | res 90.0 | dec 8.6 | 132 sims/s | 11920 res/s | TSS: 1242.0s
+
+290000 sims | res 91.6 | dec 8.3 | 161 sims/s | 14802 res/s | TSS: 1303.9s
+
+300000 sims | res 89.8 | dec 8.9 | 155 sims/s | 13919 res/s | TSS: 1368.4s
+
+310000 sims | res 90.9 | dec 8.8 | 159 sims/s | 14529 res/s | TSS: 1430.9s
+
+320000 sims | res 90.9 | dec 8.8 | 159 sims/s | 14465 res/s | TSS: 1493.8s
+
+330000 sims | res 92.2 | dec 8.9 | 157 sims/s | 14493 res/s | TSS: 1557.4s
+
+340000 sims | res 91.4 | dec 9.3 | 115 sims/s | 10577 res/s | TSS: 1643.8s
+
+350000 sims | res 92.8 | dec 9.0 | 126 sims/s | 11700 res/s | TSS: 1723.1s
+
+360000 sims | res 93.3 | dec 9.7 | 99 sims/s | 9232 res/s | TSS: 1824.1s
+
+370000 sims | res 93.4 | dec 8.7 | 139 sims/s | 12988 res/s | TSS: 1896.0s
+
+380000 sims | res 95.7 | dec 7.5 | 213 sims/s | 20462 res/s | TSS: 1942.7s
+
+390000 sims | res 92.9 | dec 8.4 | 117 sims/s | 10885 res/s | TSS: 2028.1s
+
+400000 sims | res 91.7 | dec 9.4 | 88 sims/s | 8084 res/s | TSS: 2141.5s
+
+410000 sims | res 93.0 | dec 9.4 | 96 sims/s | 9019 res/s | TSS: 2244.7s
+
+420000 sims | res 91.8 | dec 9.6 | 78 sims/s | 7233 res/s | TSS: 2371.5s
+
+430000 sims | res 92.0 | dec 9.5 | 79 sims/s | 7340 res/s | TSS: 2496.9s
+
+440000 sims | res 92.0 | dec 9.1 | 87 sims/s | 8015 res/s | TSS: 2611.7s
+
+450000 sims | res 93.8 | dec 8.7 | 122 sims/s | 11515 res/s | TSS: 2693.1s
+
+460000 sims | res 93.9 | dec 8.9 | 86 sims/s | 8145 res/s | TSS: 2808.3s
+
+470000 sims | res 92.0 | dec 9.4 | 76 sims/s | 7078 res/s | TSS: 2938.3s
+
+480000 sims | res 94.7 | dec 8.9 | 73 sims/s | 6926 res/s | TSS: 3075.0s
+
