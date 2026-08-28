@@ -15,6 +15,7 @@
 #include "infrastructure/horizon_fc_command_handler.hpp"
 #include "infrastructure/quell_command_handler.hpp"
 #include "infrastructure/quell_fc_command_handler.hpp"
+#include "infrastructure/ridge_fgt_command_handler.hpp"
 #include "infrastructure/ridge_command_handler.hpp"
 #include "infrastructure/ridge_bt_command_handler.hpp"
 #include "infrastructure/ridge_fc_command_handler.hpp"
@@ -73,6 +74,37 @@ int main(int argc, char** argv) {
                                 ridge_opts.max_resolutions, ridge_opts.seed,
                                 ridge_opts.exploration_constant,
                                 ridge_opts.sim_progress_interval);
+        h();
+    });
+
+    struct {
+        std::string file;
+        std::string goals_str;
+        size_t max_resolutions       = 1000;
+        uint32_t seed                = 0;
+        double exploration_constant  = 15;
+        size_t sim_progress_interval = 1000;
+        size_t max_clauses           = 10000;
+    } ridge_fgt_opts;
+
+    auto* ridge_fgt_sub = app.add_subcommand(
+        "ridge-fgt",
+        "Run the ridge solver with forgetting CDCL (evicts least-recently-fired clauses when over --max-clauses)");
+    ridge_fgt_sub->add_option("file", ridge_fgt_opts.file, "CHC input file")->required();
+    ridge_fgt_sub->add_option("-g,--goal", ridge_fgt_opts.goals_str, "Goal body string, e.g. \"p(X), q(X)\"")->required();
+    ridge_fgt_sub->add_option("--max-resolutions", ridge_fgt_opts.max_resolutions, "Max resolutions");
+    ridge_fgt_sub->add_option("--seed", ridge_fgt_opts.seed, "RNG seed");
+    ridge_fgt_sub->add_option("--exploration-constant", ridge_fgt_opts.exploration_constant, "MCTS exploration constant");
+    ridge_fgt_sub->add_option("--sim-progress-interval", ridge_fgt_opts.sim_progress_interval,
+                          "Print sim progress every N sims (0 disables)");
+    ridge_fgt_sub->add_option("--max-clauses", ridge_fgt_opts.max_clauses,
+                          "Max live CDCL clauses; least-recently-fired are evicted when over limit");
+    ridge_fgt_sub->callback([&]() {
+        ridge_fgt_command_handler h(ridge_fgt_opts.file, ridge_fgt_opts.goals_str,
+                                    ridge_fgt_opts.max_resolutions, ridge_fgt_opts.seed,
+                                    ridge_fgt_opts.exploration_constant,
+                                    ridge_fgt_opts.sim_progress_interval,
+                                    ridge_fgt_opts.max_clauses);
         h();
     });
 
