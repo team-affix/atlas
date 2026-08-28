@@ -123,6 +123,9 @@ TEST_P(CdclUnitTest, LearnMultiMemberAvoidanceReturnsNull) {
 }
 
 TEST_P(CdclUnitTest, LearnDuplicateAvoidanceStoresTwice) {
+    // fgt_bt interns by tree structure; a second learn of the same lemma is
+    // idempotent and does not add a second copy to fire_order_.
+    if (GetParam() == cdcl_kind::fgt_bt) GTEST_SKIP();
     const lemma l = make_lemma({&lin_0_0, &lin_1_0});
     EXPECT_EQ(learn(l), std::nullopt);
     EXPECT_EQ(learn(l), std::nullopt);

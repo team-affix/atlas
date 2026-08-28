@@ -77,11 +77,11 @@ TEST_F(BtCdclEliminationGeneratorUnitTest, LearnMultiMemberAvoidanceReturnsNull)
     EXPECT_EQ(cdcl.learn(make_lemma({&lin_0_0, &lin_1_0})), std::nullopt);
 }
 
-TEST_F(BtCdclEliminationGeneratorUnitTest, LearnDuplicateAvoidanceYieldsTwice) {
+TEST_F(BtCdclEliminationGeneratorUnitTest, LearnDuplicateAvoidanceIsIdempotent) {
     const lemma l = make_lemma({&lin_0_0, &lin_1_0});
     EXPECT_EQ(cdcl.learn(l), std::nullopt);
     EXPECT_EQ(cdcl.learn(l), std::nullopt);
-    EXPECT_THAT(collect_elims(cdcl.constrain(&lin_0_0)), ElementsAre(&lin_1_0, &lin_1_0));
+    EXPECT_THAT(collect_elims(cdcl.constrain(&lin_0_0)), ElementsAre(&lin_1_0));
 }
 
 TEST_F(BtCdclEliminationGeneratorUnitTest, ConstrainWithNoLearnedAvoidancesYieldsNothing) {
@@ -247,9 +247,7 @@ TEST_F(BtCdclEliminationGeneratorUnitTest, ReduceToDuplicateAvoidanceYieldsFromE
 }
 
 TEST_F(BtCdclEliminationGeneratorUnitTest, AbandonedConstrainDoesNotRefireUntilCleanup) {
-    const lemma l = make_lemma({&lin_0_0, &lin_1_0});
-    EXPECT_EQ(cdcl.learn(l), std::nullopt);
-    EXPECT_EQ(cdcl.learn(l), std::nullopt);
+    cdcl.learn(make_lemma({&lin_0_0, &lin_1_0}));
 
     auto sm = cdcl.constrain(&lin_0_0);
     auto first = sm.next();
@@ -258,5 +256,5 @@ TEST_F(BtCdclEliminationGeneratorUnitTest, AbandonedConstrainDoesNotRefireUntilC
 
     EXPECT_THAT(collect_elims(cdcl.constrain(&lin_0_0)), IsEmpty());
     end_sim();
-    EXPECT_THAT(collect_elims(cdcl.constrain(&lin_0_0)), ElementsAre(&lin_1_0, &lin_1_0));
+    EXPECT_THAT(collect_elims(cdcl.constrain(&lin_0_0)), ElementsAre(&lin_1_0));
 }
