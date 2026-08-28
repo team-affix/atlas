@@ -12,7 +12,7 @@ bt_cdcl_factor::bt_cdcl_factor(
     , parents()
     , visited(0)
     , visited_generation(0)
-    , nand_multiplicity(0)
+    , is_avoidance(false)
     , fired_generation(0)
     , nand_fired(false)
     , armed(false) {}

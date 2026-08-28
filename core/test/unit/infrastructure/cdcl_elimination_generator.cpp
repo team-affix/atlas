@@ -1,13 +1,15 @@
 // cdcl_elimination_generator learns pairwise avoidance lemmas and yields eliminations
-// during constrain. Tests parameterize over base and fgt (SIZE_MAX capacity) to prove
-// both types satisfy the same contract.
+// during constrain. Tests parameterize over base, fgt (SIZE_MAX capacity), and fgt_bt
+// to prove all three types satisfy the same contract.
 
 #include <gtest/gtest.h>
 #include <gmock/gmock.h>
+#include <climits>
 #include <optional>
 #include <vector>
 #include "infrastructure/cdcl_elimination_generator.hpp"
 #include "infrastructure/fgt_cdcl_elimination_generator.hpp"
+#include "infrastructure/fgt_bt_cdcl_elimination_generator.hpp"
 #include "infrastructure/chosen_goal_candidates.hpp"
 #include "infrastructure/coroutine.hpp"
 
@@ -37,31 +39,46 @@ lemma make_lemma(std::initializer_list<const resolution_lineage*> rs) {
 
 } // namespace
 
-enum class cdcl_kind { base, fgt };
+enum class cdcl_kind { base, fgt, fgt_bt };
 
 struct CdclUnitTest : public ::testing::TestWithParam<cdcl_kind> {
     chosen_goal_candidates chosen;
-    std::optional<cdcl_elimination_generator<chosen_goal_candidates>> base_;
+    std::optional<cdcl_elimination_generator<chosen_goal_candidates>>     base_;
     std::optional<fgt_cdcl_elimination_generator<chosen_goal_candidates>> fgt_;
+    std::optional<fgt_bt_cdcl_elimination_generator>                      fgt_bt_;
 
     void SetUp() override {
-        if (GetParam() == cdcl_kind::base) base_.emplace(chosen);
-        else                               fgt_.emplace(chosen, SIZE_MAX);
+        switch (GetParam()) {
+            case cdcl_kind::base:   base_.emplace(chosen);          break;
+            case cdcl_kind::fgt:    fgt_.emplace(chosen, SIZE_MAX); break;
+            case cdcl_kind::fgt_bt: fgt_bt_.emplace(SIZE_MAX);      break;
+        }
     }
 
     std::optional<const resolution_lineage*> learn(const lemma& l) {
-        if (GetParam() == cdcl_kind::base) return base_->learn(l);
-        return fgt_->learn(l);
+        switch (GetParam()) {
+            case cdcl_kind::base:   return base_->learn(l);
+            case cdcl_kind::fgt:    return fgt_->learn(l);
+            case cdcl_kind::fgt_bt: return fgt_bt_->learn(l);
+        }
+        return std::nullopt;
     }
 
     coroutine<const resolution_lineage*, void> constrain(const resolution_lineage* rl) {
-        if (GetParam() == cdcl_kind::base) return base_->constrain(rl);
-        return fgt_->constrain(rl);
+        switch (GetParam()) {
+            case cdcl_kind::base:   return base_->constrain(rl);
+            case cdcl_kind::fgt:    return fgt_->constrain(rl);
+            case cdcl_kind::fgt_bt: return fgt_bt_->constrain(rl);
+        }
+        return base_->constrain(rl);
     }
 
     void end_sim() {
-        if (GetParam() == cdcl_kind::base) base_->cleanup();
-        else                               fgt_->cleanup();
+        switch (GetParam()) {
+            case cdcl_kind::base:   base_->cleanup();   break;
+            case cdcl_kind::fgt:    fgt_->cleanup();    break;
+            case cdcl_kind::fgt_bt: fgt_bt_->cleanup(); break;
+        }
         chosen.clear();
     }
 
@@ -87,11 +104,12 @@ struct CdclUnitTest : public ::testing::TestWithParam<cdcl_kind> {
 INSTANTIATE_TEST_SUITE_P(
     AllCdcl,
     CdclUnitTest,
-    ::testing::Values(cdcl_kind::base, cdcl_kind::fgt),
+    ::testing::Values(cdcl_kind::base, cdcl_kind::fgt, cdcl_kind::fgt_bt),
     [](const ::testing::TestParamInfo<cdcl_kind>& info) {
         switch (info.param) {
-            case cdcl_kind::base: return "base";
-            case cdcl_kind::fgt:  return "fgt";
+            case cdcl_kind::base:   return "base";
+            case cdcl_kind::fgt:    return "fgt";
+            case cdcl_kind::fgt_bt: return "fgt_bt";
         }
         return "unknown";
     });

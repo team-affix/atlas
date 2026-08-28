@@ -1,17 +1,21 @@
-#include "infrastructure/bt_cdcl_elimination_generator.hpp"
+#include "infrastructure/fgt_bt_cdcl_elimination_generator.hpp"
 
 #include <algorithm>
 #include "value_objects/resolution_lineage_ptr_less.hpp"
 #include "debug_assert.hpp"
 
-bt_cdcl_elimination_generator::bt_cdcl_elimination_generator()
+fgt_bt_cdcl_elimination_generator::fgt_bt_cdcl_elimination_generator(size_t max_clauses)
     : nodes_()
+    , node_iters_()
     , leaves_()
     , pairs_()
-    , generation_(1) {} // nodes default to visited_generation=0, so generation 1 makes every node appear stale on first touch
+    , generation_(1)
+    , fire_order_()
+    , fire_pos_()
+    , capacity_(max_clauses) {}
 
 std::optional<const resolution_lineage*>
-bt_cdcl_elimination_generator::learn(const lemma& l) {
+fgt_bt_cdcl_elimination_generator::learn(const lemma& l) {
     const auto& resolutions = l.get_resolutions();
 
     if (resolutions.empty())
@@ -26,13 +30,21 @@ bt_cdcl_elimination_generator::learn(const lemma& l) {
 
     bt_cdcl_factor* root = intern_members(members, 0, members.size());
 
+    const auto it = fire_pos_.find(root);
+    if (it != fire_pos_.end()) {
+        fire_order_.splice(fire_order_.end(), fire_order_, it->second);
+    } else {
+        fire_order_.push_back(root);
+        fire_pos_[root] = std::prev(fire_order_.end());
+    }
+
     root->is_avoidance = true;
 
     return std::nullopt;
 }
 
 coroutine<const resolution_lineage*, void>
-bt_cdcl_elimination_generator::constrain(const resolution_lineage* rl) {
+fgt_bt_cdcl_elimination_generator::constrain(const resolution_lineage* rl) {
     const auto it = leaves_.find(rl);
 
     if (it == leaves_.end())
@@ -44,12 +56,13 @@ bt_cdcl_elimination_generator::constrain(const resolution_lineage* rl) {
         co_yield *lineage;
 }
 
-void bt_cdcl_elimination_generator::cleanup() {
-    ++generation_; // O(1) invalidation; nodes lazily detect staleness in refresh()
+void fgt_bt_cdcl_elimination_generator::cleanup() {
+    ++generation_;
+    trim_to_capacity();
 }
 
 bt_cdcl_factor*
-bt_cdcl_elimination_generator::intern_leaf(const resolution_lineage* rl) {
+fgt_bt_cdcl_elimination_generator::intern_leaf(const resolution_lineage* rl) {
     const auto it = leaves_.find(rl);
 
     if (it != leaves_.end())
@@ -59,13 +72,14 @@ bt_cdcl_elimination_generator::intern_leaf(const resolution_lineage* rl) {
 
     bt_cdcl_factor* f = &nodes_.back();
 
+    node_iters_[f] = std::prev(nodes_.end());
     leaves_.emplace(rl, f);
 
     return f;
 }
 
 bt_cdcl_factor*
-bt_cdcl_elimination_generator::intern_pair(bt_cdcl_factor* left, bt_cdcl_factor* right) {
+fgt_bt_cdcl_elimination_generator::intern_pair(bt_cdcl_factor* left, bt_cdcl_factor* right) {
     const bt_cdcl_pair_key key{left, right};
 
     const auto it = pairs_.find(key);
@@ -77,17 +91,16 @@ bt_cdcl_elimination_generator::intern_pair(bt_cdcl_factor* left, bt_cdcl_factor*
 
     bt_cdcl_factor* f = &nodes_.back();
 
+    node_iters_[f] = std::prev(nodes_.end());
     left->parents.push_back(f);
-
     right->parents.push_back(f);
-
     pairs_.emplace(key, f);
 
     return f;
 }
 
 bt_cdcl_factor*
-bt_cdcl_elimination_generator::intern_members(
+fgt_bt_cdcl_elimination_generator::intern_members(
     const std::vector<const resolution_lineage*>& members, size_t begin, size_t end) {
     const size_t member_count = end - begin;
 
@@ -98,7 +111,6 @@ bt_cdcl_elimination_generator::intern_members(
 
     const bool odd_count = (member_count % 2) == 1;
 
-    // pair the odd remainder with a singleton rather than leaving it unbalanced
     if (odd_count)
         return intern_pair(intern_members(members, begin, end - 1), intern_leaf(members.at(end - 1)));
 
@@ -108,7 +120,7 @@ bt_cdcl_elimination_generator::intern_members(
 }
 
 coroutine<const resolution_lineage*, void>
-bt_cdcl_elimination_generator::visit_leaf(bt_cdcl_factor* f) {
+fgt_bt_cdcl_elimination_generator::visit_leaf(bt_cdcl_factor* f) {
     refresh(f);
 
     if (f->visited >= f->tuple_size)
@@ -123,7 +135,7 @@ bt_cdcl_elimination_generator::visit_leaf(bt_cdcl_factor* f) {
 }
 
 coroutine<const resolution_lineage*, void>
-bt_cdcl_elimination_generator::propagate_visit(bt_cdcl_factor* f) {
+fgt_bt_cdcl_elimination_generator::propagate_visit(bt_cdcl_factor* f) {
     auto self_fire = try_fire(f);
 
     while (auto lineage = self_fire.next())
@@ -154,7 +166,7 @@ bt_cdcl_elimination_generator::propagate_visit(bt_cdcl_factor* f) {
 }
 
 coroutine<const resolution_lineage*, void>
-bt_cdcl_elimination_generator::try_fire(bt_cdcl_factor* f) {
+fgt_bt_cdcl_elimination_generator::try_fire(bt_cdcl_factor* f) {
     if (!f->is_avoidance)
         co_return;
 
@@ -168,15 +180,19 @@ bt_cdcl_elimination_generator::try_fire(bt_cdcl_factor* f) {
     if (count != 1)
         co_return;
 
-    f->fired_generation = generation_; // commit before yielding so abandonment can't leave the factor re-fireable
+    f->fired_generation = generation_;
+
+    const auto it = fire_pos_.find(f);
+    if (it != fire_pos_.end())
+        fire_order_.splice(fire_order_.end(), fire_order_, it->second);
 
     co_yield remaining;
 }
 
 const resolution_lineage*
-bt_cdcl_elimination_generator::find_unvisited_leaf(const bt_cdcl_factor* f, size_t& count) const {
+fgt_bt_cdcl_elimination_generator::find_unvisited_leaf(const bt_cdcl_factor* f, size_t& count) const {
     if (count > 1)
-        return nullptr; // already know firing is impossible; prune the traversal
+        return nullptr;
 
     if (f->left == nullptr) {
         if (visited(f) < f->tuple_size)
@@ -192,18 +208,64 @@ bt_cdcl_elimination_generator::find_unvisited_leaf(const bt_cdcl_factor* f, size
     return lu ? lu : ru;
 }
 
-size_t bt_cdcl_elimination_generator::visited(const bt_cdcl_factor* f) const {
+size_t fgt_bt_cdcl_elimination_generator::visited(const bt_cdcl_factor* f) const {
     if (f->visited_generation != generation_)
         return 0;
 
     return f->visited;
 }
 
-void bt_cdcl_elimination_generator::refresh(bt_cdcl_factor* f) {
+void fgt_bt_cdcl_elimination_generator::refresh(bt_cdcl_factor* f) {
     if (f->visited_generation == generation_)
         return;
 
     f->visited_generation = generation_;
-
     f->visited = 0;
+}
+
+void fgt_bt_cdcl_elimination_generator::trim(bt_cdcl_factor* node) {
+    if (!node->parents.empty())
+        return;
+
+    if (node->is_avoidance)
+        return;
+
+    bt_cdcl_factor* left  = node->left;
+    bt_cdcl_factor* right = node->right;
+
+    if (left == nullptr) {
+        leaves_.erase(node->leaf_rl);
+    } else {
+        auto& lp = left->parents;
+        lp.erase(std::find(lp.begin(), lp.end(), node));
+
+        auto& rp = right->parents;
+        rp.erase(std::find(rp.begin(), rp.end(), node));
+
+        pairs_.erase(bt_cdcl_pair_key{left, right});
+    }
+
+    const auto nit = node_iters_.find(node);
+    nodes_.erase(nit->second);
+    node_iters_.erase(nit);
+
+    if (left != nullptr) {
+        trim(left);
+        trim(right);
+    }
+}
+
+void fgt_bt_cdcl_elimination_generator::evict_oldest() {
+    bt_cdcl_factor* root = fire_order_.front();
+
+    root->is_avoidance = false;
+    fire_pos_.erase(root);
+    fire_order_.pop_front();
+
+    trim(root);
+}
+
+void fgt_bt_cdcl_elimination_generator::trim_to_capacity() {
+    while (fire_order_.size() > capacity_)
+        evict_oldest();
 }

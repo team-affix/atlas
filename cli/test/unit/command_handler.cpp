@@ -1,7 +1,7 @@
 // command_handler: parameterized tests for basic_command_handler, ridge_command_handler,
-// ridge_bt_command_handler, ridge_fc_command_handler, horizon_command_handler,
-// genius_command_handler, quell_command_handler, dbuct_ridge_bt_command_handler,
-// and dbuct_* (including quell-fc / dbuct-quell / dbuct-quell-fc).
+// ridge_bt_command_handler, ridge_bt_fgt_command_handler, ridge_fc_command_handler,
+// horizon_command_handler, genius_command_handler, quell_command_handler,
+// dbuct_ridge_bt_command_handler, and dbuct_* (including quell-fc / dbuct-quell / dbuct-quell-fc).
 // Example DBs under cli/examples/.
 
 #include <sstream>
@@ -26,6 +26,7 @@
 #include "infrastructure/quell_fc_command_handler.hpp"
 #include "infrastructure/ridge_fgt_command_handler.hpp"
 #include "infrastructure/ridge_bt_command_handler.hpp"
+#include "infrastructure/ridge_bt_fgt_command_handler.hpp"
 #include "infrastructure/ridge_command_handler.hpp"
 #include "infrastructure/ridge_fc_command_handler.hpp"
 
@@ -35,7 +36,7 @@ using ::testing::Not;
 
 enum class cli_solver_kind {
     basic,
-    ridge, ridge_fgt, ridge_bt, ridge_fc, dbuct_ridge, dbuct_ridge_bt, dbuct_ridge_fc,
+    ridge, ridge_fgt, ridge_bt, ridge_bt_fgt, ridge_fc, dbuct_ridge, dbuct_ridge_bt, dbuct_ridge_fc,
     horizon, horizon_fc, dbuct_horizon, dbuct_horizon_fc,
     quell, quell_fc, dbuct_quell, dbuct_quell_fc,
     genius, genius_fc, dbuct_genius, dbuct_genius_fc
@@ -57,7 +58,7 @@ INSTANTIATE_TEST_SUITE_P(
     CommandHandlerParamTest,
     ::testing::Values(cli_solver_kind::basic,
                       cli_solver_kind::ridge, cli_solver_kind::ridge_fgt,
-                      cli_solver_kind::ridge_bt, cli_solver_kind::ridge_fc,
+                      cli_solver_kind::ridge_bt, cli_solver_kind::ridge_bt_fgt, cli_solver_kind::ridge_fc,
                       cli_solver_kind::dbuct_ridge, cli_solver_kind::dbuct_ridge_bt, cli_solver_kind::dbuct_ridge_fc,
                       cli_solver_kind::horizon, cli_solver_kind::horizon_fc,
                       cli_solver_kind::dbuct_horizon, cli_solver_kind::dbuct_horizon_fc,
@@ -71,6 +72,7 @@ INSTANTIATE_TEST_SUITE_P(
             case cli_solver_kind::ridge:              return "ridge";
             case cli_solver_kind::ridge_fgt:          return "ridge_fgt";
             case cli_solver_kind::ridge_bt:           return "ridge_bt";
+            case cli_solver_kind::ridge_bt_fgt:       return "ridge_bt_fgt";
             case cli_solver_kind::ridge_fc:           return "ridge_fc";
             case cli_solver_kind::dbuct_ridge:        return "dbuct_ridge";
             case cli_solver_kind::dbuct_ridge_bt:     return "dbuct_ridge_bt";
@@ -150,6 +152,13 @@ void construct_handler(const std::string& file, const std::string& goal, size_t 
                 file, goal, max_res, CommandHandlerParamTest::kSeed,
                 CommandHandlerParamTest::kExplorationConstant,
                 CommandHandlerParamTest::kSimProgressInterval);
+            break;
+        case cli_solver_kind::ridge_bt_fgt:
+            ridge_bt_fgt_command_handler(
+                file, goal, max_res, CommandHandlerParamTest::kSeed,
+                CommandHandlerParamTest::kExplorationConstant,
+                CommandHandlerParamTest::kSimProgressInterval,
+                CommandHandlerParamTest::kMaxClauses);
             break;
         case cli_solver_kind::ridge_fc:
             ridge_fc_command_handler(
@@ -279,6 +288,13 @@ std::string run_handler_capture(
                 file, goal, max_resolutions, CommandHandlerParamTest::kSeed,
                 CommandHandlerParamTest::kExplorationConstant,
                 CommandHandlerParamTest::kSimProgressInterval)();
+            break;
+        case cli_solver_kind::ridge_bt_fgt:
+            ridge_bt_fgt_command_handler(
+                file, goal, max_resolutions, CommandHandlerParamTest::kSeed,
+                CommandHandlerParamTest::kExplorationConstant,
+                CommandHandlerParamTest::kSimProgressInterval,
+                CommandHandlerParamTest::kMaxClauses)();
             break;
         case cli_solver_kind::ridge_fc:
             ridge_fc_command_handler(

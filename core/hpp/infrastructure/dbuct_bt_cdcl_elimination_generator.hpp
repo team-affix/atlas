@@ -108,7 +108,7 @@ dbuct_bt_cdcl_elimination_generator<ITGCC, IGPMFD, IDL, IGUD, IGUMFD>::learn() {
 
     bt_cdcl_factor* root = intern_members(members, 0, members.size());
 
-    ++root->nand_multiplicity; // the same subtree may be shared by multiple learned NANDs
+    root->is_avoidance = true;
 
     frame_stack_.top().raised_nands_.push_back(raised_nand{root, unit_boundary, ultimate});
 }
@@ -294,7 +294,7 @@ dbuct_bt_cdcl_elimination_generator<ITGCC, IGPMFD, IDL, IGUD, IGUMFD>::try_fire(
     if (!f->armed)
         co_return; // prevents firing during constrain(); only pop_frame arms a factor
 
-    if (f->nand_multiplicity == 0)
+    if (!f->is_avoidance)
         co_return;
 
     if (f->nand_fired)
@@ -311,8 +311,7 @@ dbuct_bt_cdcl_elimination_generator<ITGCC, IGPMFD, IDL, IGUD, IGUMFD>::try_fire(
 
     log(bt_cdcl_nand_fired{f});
 
-    for (size_t i = 0; i < f->nand_multiplicity; ++i)
-        co_yield remaining;
+    co_yield remaining;
 }
 
 template<typename ITGCC, typename IGPMFD, typename IDL, typename IGUD, typename IGUMFD>

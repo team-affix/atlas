@@ -18,7 +18,7 @@ struct bt_cdcl_factor {
     std::vector<bt_cdcl_factor*> parents;
     size_t visited;
     size_t visited_generation;
-    size_t nand_multiplicity;
+    bool is_avoidance;
     size_t fired_generation;
     bool nand_fired;
     bool armed;
