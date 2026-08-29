@@ -180,8 +180,7 @@ dbuct_fgt_cdcl_elimination_generator<ITGCC, IGUB, IDL, IGUD, IGPD, IGUMFD>::visi
     if (hit == av.members.size()) {
         watched_goals_[other_gl].erase(id);
         actions.emplace_back(avoidance_unwatch{id});
-        if (fire_pos_.count(id))
-            make_unevictable(id);
+        make_unevictable(id);
         return av.members.at(other_pos);
     }
 
