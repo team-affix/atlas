@@ -25,7 +25,7 @@ struct ridge_fc_command_handler {
     using PrintBindings  = print_bindings<ridge_fc_runtime, expr_printer>;
     using PrintProgress  = print_progress<ridge_fc_runtime, SolveTimer>;
     using SolveLoop      = solve_loop<ridge_fc_runtime, expr_printer, PrintBindings, PrintProgress,
-                                      SolveTimer, SolveTimer>;
+                                      PrintProgress, PrintProgress, SolveTimer, SolveTimer>;
 
     ridge_fc_command_handler(
         const std::string& file,

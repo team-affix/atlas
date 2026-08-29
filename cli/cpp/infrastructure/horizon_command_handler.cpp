@@ -14,7 +14,7 @@ horizon_command_handler::horizon_command_handler(
       solve_timer_(clock_),
       base_print_progress_(solve_timer_),
       print_progress_(base_print_progress_),
-      solve_loop_(print_bindings_, print_progress_, solve_timer_, solve_timer_,
+      solve_loop_(print_bindings_, print_progress_, print_progress_, print_progress_, solve_timer_, solve_timer_,
                   sim_progress_interval) {
     parse_pool_.emplace();
     printer_.emplace(std::cout, var_names_, functor_names_);

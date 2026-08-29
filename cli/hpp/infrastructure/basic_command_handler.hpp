@@ -25,7 +25,7 @@ struct basic_command_handler {
     using PrintBindings  = print_bindings<basic_runtime, expr_printer>;
     using PrintProgress  = print_progress<basic_runtime, SolveTimer>;
     using SolveLoop      = solve_loop<basic_runtime, expr_printer, PrintBindings, PrintProgress,
-                                      SolveTimer, SolveTimer>;
+                                      PrintProgress, PrintProgress, SolveTimer, SolveTimer>;
 
     basic_command_handler(
         const std::string& file,

@@ -30,7 +30,7 @@ struct dbuct_horizon_command_handler {
     using BasePP         = print_progress<dbuct_horizon_runtime, SolveTimer>;
     using PrintProgress  = horizon_print_progress<BasePP, dbuct_horizon_runtime>;
     using SolveLoop      = solve_loop<dbuct_horizon_runtime, expr_printer, PrintBindings, PrintProgress,
-                                      SolveTimer, SolveTimer>;
+                                      PrintProgress, PrintProgress, SolveTimer, SolveTimer>;
 
     dbuct_horizon_command_handler(
         const std::string& file,

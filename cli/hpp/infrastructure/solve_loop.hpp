@@ -10,55 +10,65 @@
 template<typename IRuntime,
          typename IExprPrinter,
          typename IPrintBindings,
-         typename IPrintProgress,
-         typename IPause,
-         typename IResume>
+         typename IOnSim,
+         typename IPrintStats,
+         typename IFinishPrintingLine,
+         typename IPauseTimer,
+         typename IResumeTimer>
 struct solve_loop {
-    solve_loop(IPrintBindings&, IPrintProgress&, IPause&, IResume&, size_t interval);
+    solve_loop(IPrintBindings&, IOnSim&, IPrintStats&, IFinishPrintingLine&,
+               IPauseTimer&, IResumeTimer&, size_t interval);
     void run(IRuntime&, IExprPrinter&, expr_pool&, const std::map<std::string, uint32_t>&);
 private:
     IPrintBindings& print_bindings_;
-    IPrintProgress& print_progress_;
-    IPause& pause_;
-    IResume& resume_;
+    IOnSim& on_sim_;
+    IPrintStats& print_stats_;
+    IFinishPrintingLine& finish_printing_line_;
+    IPauseTimer& pause_timer_;
+    IResumeTimer& resume_timer_;
     size_t sim_progress_interval_;
 };
 
-template<typename IR, typename IEP, typename IPB, typename IPP, typename IPa, typename IRe>
-solve_loop<IR, IEP, IPB, IPP, IPa, IRe>::solve_loop(
-    IPB& pb, IPP& pp, IPa& pause, IRe& resume, size_t interval)
+template<typename IR, typename IEP, typename IPB, typename IOS, typename IPS,
+         typename IFPL, typename IPT, typename IRT>
+solve_loop<IR, IEP, IPB, IOS, IPS, IFPL, IPT, IRT>::solve_loop(
+    IPB& pb, IOS& on_sim, IPS& print_stats, IFPL& finish_printing_line,
+    IPT& pause_timer, IRT& resume_timer, size_t interval)
     : print_bindings_(pb)
-    , print_progress_(pp)
-    , pause_(pause)
-    , resume_(resume)
+    , on_sim_(on_sim)
+    , print_stats_(print_stats)
+    , finish_printing_line_(finish_printing_line)
+    , pause_timer_(pause_timer)
+    , resume_timer_(resume_timer)
     , sim_progress_interval_(interval)
 {}
 
-template<typename IR, typename IEP, typename IPB, typename IPP, typename IPa, typename IRe>
-void solve_loop<IR, IEP, IPB, IPP, IPa, IRe>::run(
+template<typename IR, typename IEP, typename IPB, typename IOS, typename IPS,
+         typename IFPL, typename IPT, typename IRT>
+void solve_loop<IR, IEP, IPB, IOS, IPS, IFPL, IPT, IRT>::run(
     IR& runtime, IEP& printer, expr_pool& pool,
     const std::map<std::string, uint32_t>& var_name_to_idx) {
-    resume_.resume();
+    resume_timer_.resume();
     size_t total_sims = 0;
     while (runtime.next()) {
         ++total_sims;
         if (sim_progress_interval_ > 0) {
-            print_progress_.on_sim();
+            on_sim_.on_sim();
             if (total_sims % sim_progress_interval_ == 0)
-                print_progress_.print();
+                print_stats_.print();
         }
         if (!runtime.solved()) continue;
-        if (sim_progress_interval_ > 0) print_progress_.finish_line();
+        if (sim_progress_interval_ > 0) finish_printing_line_.finish_line();
         std::cout << "SOLVED\n";
         print_bindings_.print(runtime, printer, pool, var_name_to_idx);
         std::cout << "[press Enter for next solution]";
-        pause_.pause();
+        pause_timer_.pause();
         std::cin.get();
-        resume_.resume();
+        resume_timer_.resume();
     }
     if (sim_progress_interval_ > 0 && total_sims > 0) {
-        print_progress_.print();
-        print_progress_.finish_line();
+        print_stats_.print();
+        finish_printing_line_.finish_line();
     }
     std::cout << "REFUTED\n";
 }

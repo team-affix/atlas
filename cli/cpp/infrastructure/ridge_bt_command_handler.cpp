@@ -14,7 +14,7 @@ ridge_bt_command_handler::ridge_bt_command_handler(
       next_functor_id_(k_first_user_functor_id),
       solve_timer_(clock_),
       print_progress_(solve_timer_),
-      solve_loop_(print_bindings_, print_progress_, solve_timer_, solve_timer_,
+      solve_loop_(print_bindings_, print_progress_, print_progress_, print_progress_, solve_timer_, solve_timer_,
                   sim_progress_interval) {
     parse_pool_.emplace();
     printer_.emplace(std::cout, var_names_, functor_names_);

@@ -27,7 +27,7 @@ struct quell_command_handler {
     using BasePP        = print_progress<quell_runtime, SolveTimer>;
     using PP            = quell_print_progress<BasePP, quell_runtime>;
     using SolveLoop     = solve_loop<quell_runtime, expr_printer, PrintBindings, PP,
-                                     SolveTimer, SolveTimer>;
+                                     PP, PP, SolveTimer, SolveTimer>;
 
     quell_command_handler(
         const std::string& file,

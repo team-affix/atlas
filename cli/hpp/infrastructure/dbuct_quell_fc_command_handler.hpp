@@ -30,7 +30,7 @@ struct dbuct_quell_fc_command_handler {
     using BasePP         = print_progress<dbuct_quell_fc_runtime, SolveTimer>;
     using PrintProgress  = quell_print_progress<BasePP, dbuct_quell_fc_runtime>;
     using SolveLoop      = solve_loop<dbuct_quell_fc_runtime, expr_printer, PrintBindings, PrintProgress,
-                                      SolveTimer, SolveTimer>;
+                                      PrintProgress, PrintProgress, SolveTimer, SolveTimer>;
 
     dbuct_quell_fc_command_handler(
         const std::string& file,

@@ -28,7 +28,7 @@ struct dbuct_ridge_command_handler {
     using PrintBindings  = print_bindings<dbuct_ridge_runtime, expr_printer>;
     using PrintProgress  = print_progress<dbuct_ridge_runtime, SolveTimer>;
     using SolveLoop      = solve_loop<dbuct_ridge_runtime, expr_printer, PrintBindings, PrintProgress,
-                                      SolveTimer, SolveTimer>;
+                                      PrintProgress, PrintProgress, SolveTimer, SolveTimer>;
 
     dbuct_ridge_command_handler(
         const std::string& file,

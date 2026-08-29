@@ -27,7 +27,7 @@ struct horizon_command_handler {
     using BasePP        = print_progress<horizon_runtime, SolveTimer>;
     using PP            = horizon_print_progress<BasePP, horizon_runtime>;
     using SolveLoop     = solve_loop<horizon_runtime, expr_printer, PrintBindings, PP,
-                                     SolveTimer, SolveTimer>;
+                                     PP, PP, SolveTimer, SolveTimer>;
 
     horizon_command_handler(
         const std::string& file,

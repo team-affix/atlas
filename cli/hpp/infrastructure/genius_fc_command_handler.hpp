@@ -27,7 +27,7 @@ struct genius_fc_command_handler {
     using BasePP        = print_progress<genius_fc_runtime, SolveTimer>;
     using PP            = genius_print_progress<BasePP, genius_fc_runtime>;
     using SolveLoop     = solve_loop<genius_fc_runtime, expr_printer, PrintBindings, PP,
-                                     SolveTimer, SolveTimer>;
+                                     PP, PP, SolveTimer, SolveTimer>;
 
     genius_fc_command_handler(
         const std::string& file,

@@ -28,7 +28,7 @@ struct dbuct_genius_command_handler {
     using BasePP         = print_progress<dbuct_genius_runtime, SolveTimer>;
     using PrintProgress  = genius_print_progress<BasePP, dbuct_genius_runtime>;
     using SolveLoop      = solve_loop<dbuct_genius_runtime, expr_printer, PrintBindings, PrintProgress,
-                                      SolveTimer, SolveTimer>;
+                                      PrintProgress, PrintProgress, SolveTimer, SolveTimer>;
 
     dbuct_genius_command_handler(
         const std::string& file,
