@@ -6,6 +6,7 @@
 // solved() is only valid immediately after next() returned true.
 // Harness: enumerate_all_solutions, next_until_refuted — binding enumeration.
 
+#include <algorithm>
 #include <cstddef>
 #include <cstdint>
 #include <functional>
@@ -45,6 +46,7 @@
 #include "infrastructure/var_names.hpp"
 #include "value_objects/expr.hpp"
 #include "value_objects/lemma.hpp"
+#include "value_objects/lineage.hpp"
 #include "value_objects/sim_termination.hpp"
 #include "functor_fixture.hpp"
 
@@ -408,6 +410,33 @@ void next_until_refuted(
     }
 }
 
+// Canonical key matches seen_solutions: sorted interned pointers (unordered_set
+// iteration is not a key). Valid across ticks only while those lineages stay
+// pinned — fgt's repeat overlay pins on each novel solved yield.
+using resolution_lemma_key = std::vector<const resolution_lineage*>;
+
+resolution_lemma_key make_resolution_lemma_key(const lemma& l) {
+    resolution_lemma_key key(l.get_resolutions().begin(), l.get_resolutions().end());
+    std::sort(key.begin(), key.end());
+    return key;
+}
+
+void expect_each_solved_lemma_once(runtime_ref& session, size_t expected_solved) {
+    std::set<resolution_lemma_key> seen;
+    size_t solved_count = 0;
+    while (session.next()) {
+        if (!session.solved())
+            continue;
+        const bool inserted =
+            seen.insert(make_resolution_lemma_key(session.derive_resolution_lemma())).second;
+        EXPECT_TRUE(inserted) << "duplicate solved resolution lemma at solved tick "
+                              << solved_count;
+        ++solved_count;
+    }
+    EXPECT_EQ(solved_count, expected_solved);
+    EXPECT_EQ(seen.size(), expected_solved);
+}
+
 }  // namespace
 
 struct RuntimeTestBase {
@@ -438,6 +467,8 @@ struct RuntimeParamTest
             kSeed);
     }
 };
+
+struct FgtRuntimeParamTest : RuntimeParamTest {};
 
 // Tier A — session API smoke
 
@@ -1753,6 +1784,45 @@ TEST_P(RuntimeParamTest, EnumeratesManySharedVarGroundHeads) {
         ASSERT_EQ(*s[2], *pqr);
     }
     EXPECT_EQ(visited.size(), 5u);
+}
+
+TEST_P(FgtRuntimeParamTest, EachSolvedLemmaUniqueOnTwoGroundChoices) {
+    static constexpr size_t kInitialVarCount = 0;
+    initial_goals.push(saved_expr_pool_.make_functor(holder_.functors.id("f"), {}));
+    database.push(rule{saved_expr_pool_.make_functor(holder_.functors.id("f"), {}), {}});
+    database.push(rule{saved_expr_pool_.make_functor(holder_.functors.id("f"), {}), {}});
+
+    runtime_ref& session = make_session(kInitialVarCount);
+    expect_each_solved_lemma_once(session, 2);
+}
+
+TEST_P(FgtRuntimeParamTest, EachSolvedLemmaUniqueOnFourTwoGoalCombinations) {
+    static constexpr size_t kInitialVarCount = 0;
+    initial_goals.push(saved_expr_pool_.make_functor(holder_.functors.id("f"), {}));
+    initial_goals.push(saved_expr_pool_.make_functor(holder_.functors.id("g"), {}));
+    database.push(rule{saved_expr_pool_.make_functor(holder_.functors.id("f"), {}), {}});
+    database.push(rule{saved_expr_pool_.make_functor(holder_.functors.id("f"), {}), {}});
+    database.push(rule{saved_expr_pool_.make_functor(holder_.functors.id("g"), {}), {}});
+    database.push(rule{saved_expr_pool_.make_functor(holder_.functors.id("g"), {}), {}});
+
+    runtime_ref& session = make_session(kInitialVarCount);
+    expect_each_solved_lemma_once(session, 4);
+}
+
+TEST_P(FgtRuntimeParamTest, EachSolvedLemmaUniqueOnEightThreeGoalCombinations) {
+    static constexpr size_t kInitialVarCount = 0;
+    initial_goals.push(saved_expr_pool_.make_functor(holder_.functors.id("f"), {}));
+    initial_goals.push(saved_expr_pool_.make_functor(holder_.functors.id("g"), {}));
+    initial_goals.push(saved_expr_pool_.make_functor(holder_.functors.id("h"), {}));
+    database.push(rule{saved_expr_pool_.make_functor(holder_.functors.id("f"), {}), {}});
+    database.push(rule{saved_expr_pool_.make_functor(holder_.functors.id("f"), {}), {}});
+    database.push(rule{saved_expr_pool_.make_functor(holder_.functors.id("g"), {}), {}});
+    database.push(rule{saved_expr_pool_.make_functor(holder_.functors.id("g"), {}), {}});
+    database.push(rule{saved_expr_pool_.make_functor(holder_.functors.id("h"), {}), {}});
+    database.push(rule{saved_expr_pool_.make_functor(holder_.functors.id("h"), {}), {}});
+
+    runtime_ref& session = make_session(kInitialVarCount);
+    expect_each_solved_lemma_once(session, 8);
 }
 
 TEST_P(RuntimeParamTest, EnumeratesThreeGroundBranches) {
@@ -3444,5 +3514,17 @@ INSTANTIATE_TEST_SUITE_P(
             case runtime_kind::dbuct_genius:       return "dbuct_genius";
             case runtime_kind::dbuct_genius_fc:    return "dbuct_genius_fc";
         }
+        return "unknown";
+    });
+
+INSTANTIATE_TEST_SUITE_P(
+    FgtRuntimes,
+    FgtRuntimeParamTest,
+    ::testing::Values(runtime_kind::ridge_fgt, runtime_kind::dbuct_ridge_fgt),
+    [](const ::testing::TestParamInfo<runtime_kind>& info) {
+        if (info.param == runtime_kind::ridge_fgt)
+            return "ridge_fgt";
+        if (info.param == runtime_kind::dbuct_ridge_fgt)
+            return "dbuct_ridge_fgt";
         return "unknown";
     });

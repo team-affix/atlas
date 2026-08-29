@@ -48,10 +48,12 @@
 #include "infrastructure/resolution_memory.hpp"
 #include "infrastructure/resolution_recorder.hpp"
 #include "infrastructure/resolver.hpp"
+#include "infrastructure/repeat_solutions_filter.hpp"
 #include "infrastructure/ridge_reward.hpp"
 #include "infrastructure/ridge_tear_down_sim.hpp"
 #include "infrastructure/rule_id_set_factory.hpp"
 #include "infrastructure/run_sim.hpp"
+#include "infrastructure/seen_solutions.hpp"
 #include "infrastructure/set_up_sim.hpp"
 #include "infrastructure/solution_detector.hpp"
 #include "infrastructure/solver.hpp"
@@ -131,7 +133,9 @@ struct ridge_bt_fgt_manifest {
                             unit_goal_detector_t, unit_goals, unit_goals, mcts_decision_generator_t,
                             joint_t, elimination_router_t, resolver_t, get_unit_resolution_t,
                             resolution_recorder_t, resolution_recorder_t, resolution_memory>;
-    using solver_t        = solver<set_up_sim_t, ridge_tear_down_sim_t, run_sim_t,
+    using repeat_solutions_filter_t = repeat_solutions_filter<run_sim_t, resolution_memory,
+                            seen_solutions, seen_solutions, lineage_pool>;
+    using solver_t        = solver<set_up_sim_t, ridge_tear_down_sim_t, repeat_solutions_filter_t,
                             decision_memory, decision_memory,
                             lineage_pool, cdcl_t, elimination_router_t>;
     using normalizer_t    = normalizer<globalizer, expr_pool, expr_pool, bind_map_t>;
@@ -199,6 +203,8 @@ struct ridge_bt_fgt_manifest {
     mcts_decision_generator_t       mcts_decision_generator_;
     resolution_recorder_t            resolution_recorder_;
     run_sim_t                      run_sim_;
+    seen_solutions                 seen_solutions_;
+    repeat_solutions_filter_t      repeat_solutions_filter_;
     solver_t                      solver_;
     normalizer_t                  normalizer_;
     solver_driver                 driver_;

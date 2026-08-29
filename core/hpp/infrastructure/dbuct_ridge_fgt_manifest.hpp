@@ -31,8 +31,10 @@
 #include "infrastructure/mcts_decision_generator.hpp"
 #include "infrastructure/ra_rule_id_set_factory.hpp"
 #include "infrastructure/resolver.hpp"
+#include "infrastructure/repeat_solutions_filter.hpp"
 #include "infrastructure/ridge_reward.hpp"
 #include "infrastructure/run_sim.hpp"
+#include "infrastructure/seen_solutions.hpp"
 #include "infrastructure/solution_detector.hpp"
 #include "infrastructure/srt_goal_deactivator.hpp"
 #include "infrastructure/srt_initial_goals_activator.hpp"
@@ -184,7 +186,9 @@ struct dbuct_ridge_fgt_manifest {
                                           unit_goal_detector_t, unit_goals_t, unit_goals_t, mcts_decision_generator_t,
                                           dbuct_joint_t, elimination_router_t, resolver_t, get_unit_resolution_t,
                                           resolution_recorder_t, resolution_recorder_t, resolution_memory_t>;
-    using solver_t                      = dbuct_solver<srt_initial_goals_activator_t, run_sim_t, decision_memory_t,
+    using repeat_solutions_filter_t     = repeat_solutions_filter<run_sim_t, resolution_memory_t,
+                                          seen_solutions, seen_solutions, lineage_pool>;
+    using solver_t                      = dbuct_solver<srt_initial_goals_activator_t, repeat_solutions_filter_t, decision_memory_t,
                                           dbuct_ridge_terminate_sim_t, dbuct_sim_t, cdcl_t, mhu_t, elimination_router_t,
                                           conflict_detector_t, unit_goal_detector_t, unit_goals_t>;
     using normalizer_t                  = normalizer<globalizer, expr_pool, expr_pool, bind_map_t>;
@@ -257,6 +261,8 @@ struct dbuct_ridge_fgt_manifest {
     mcts_decision_generator_t     mcts_decision_generator_;
     dbuct_frontier_ready          frontier_ready_;
     run_sim_t                     run_sim_;
+    seen_solutions                seen_solutions_;
+    repeat_solutions_filter_t     repeat_solutions_filter_;
     solver_t                      solver_;
     normalizer_t                  normalizer_;
     solver_driver                 driver_;
