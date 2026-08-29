@@ -28,6 +28,7 @@
 #include "infrastructure/dbuct_quell_fc_runtime.hpp"
 #include "infrastructure/dbuct_ridge_runtime.hpp"
 #include "infrastructure/dbuct_ridge_fc_runtime.hpp"
+#include "infrastructure/dbuct_ridge_fgt_runtime.hpp"
 #include "infrastructure/expr_pool.hpp"
 #include "infrastructure/expr_printer.hpp"
 #include "infrastructure/genius_runtime.hpp"
@@ -56,7 +57,7 @@ inline constexpr double kQuellWorkDecayJ = 10.0;
 
 enum class runtime_kind {
     basic,
-    ridge, ridge_fgt, ridge_fc, dbuct_ridge, dbuct_ridge_fc,
+    ridge, ridge_fgt, ridge_fc, dbuct_ridge, dbuct_ridge_fc, dbuct_ridge_fgt,
     horizon, horizon_fc, dbuct_horizon, dbuct_horizon_fc,
     quell, quell_fc, dbuct_quell, dbuct_quell_fc,
     genius, genius_fc, dbuct_genius, dbuct_genius_fc
@@ -66,7 +67,7 @@ enum class runtime_kind {
 struct runtime_ref {
     using variant_t = std::variant<
         basic_runtime*,
-        ridge_runtime*, ridge_fgt_runtime*, ridge_fc_runtime*, dbuct_ridge_runtime*, dbuct_ridge_fc_runtime*,
+        ridge_runtime*, ridge_fgt_runtime*, ridge_fc_runtime*, dbuct_ridge_runtime*, dbuct_ridge_fc_runtime*, dbuct_ridge_fgt_runtime*,
         horizon_runtime*, horizon_fc_runtime*, dbuct_horizon_runtime*, dbuct_horizon_fc_runtime*,
         quell_runtime*, quell_fc_runtime*, dbuct_quell_runtime*, dbuct_quell_fc_runtime*,
         genius_runtime*, genius_fc_runtime*, dbuct_genius_runtime*, dbuct_genius_fc_runtime*>;
@@ -100,6 +101,7 @@ struct runtime_session_holder {
     std::optional<ridge_fc_runtime> ridge_fc;
     std::optional<dbuct_ridge_runtime> dbuct_ridge;
     std::optional<dbuct_ridge_fc_runtime> dbuct_ridge_fc;
+    std::optional<dbuct_ridge_fgt_runtime> dbuct_ridge_fgt;
     std::optional<horizon_runtime> horizon;
     std::optional<horizon_fc_runtime> horizon_fc;
     std::optional<dbuct_horizon_runtime> dbuct_horizon;
@@ -179,6 +181,18 @@ runtime_ref& make_runtime_session(
                 seed,
                 kRidgeExplorationConstant);
             holder.ref.emplace(runtime_ref::variant_t{&*holder.dbuct_ridge_fc});
+            return *holder.ref;
+        case runtime_kind::dbuct_ridge_fgt:
+            holder.dbuct_ridge_fgt.emplace(
+                database,
+                goals,
+                initial_frame_offset,
+                max_resolutions,
+                seed,
+                kRidgeExplorationConstant,
+                dbuct_ridge_fgt_runtime::k_default_grant_k,
+                kRidgeFgtCapacity);
+            holder.ref.emplace(runtime_ref::variant_t{&*holder.dbuct_ridge_fgt});
             return *holder.ref;
         case runtime_kind::horizon:
             holder.horizon.emplace(
@@ -3401,7 +3415,7 @@ INSTANTIATE_TEST_SUITE_P(
     RuntimeParamTest,
     ::testing::Values(runtime_kind::basic,
                       runtime_kind::ridge, runtime_kind::ridge_fgt, runtime_kind::ridge_fc,
-                      runtime_kind::dbuct_ridge, runtime_kind::dbuct_ridge_fc,
+                      runtime_kind::dbuct_ridge, runtime_kind::dbuct_ridge_fc, runtime_kind::dbuct_ridge_fgt,
                       runtime_kind::horizon, runtime_kind::horizon_fc,
                       runtime_kind::dbuct_horizon, runtime_kind::dbuct_horizon_fc,
                       runtime_kind::quell, runtime_kind::quell_fc,
@@ -3416,6 +3430,7 @@ INSTANTIATE_TEST_SUITE_P(
             case runtime_kind::ridge_fc:           return "ridge_fc";
             case runtime_kind::dbuct_ridge:        return "dbuct_ridge";
             case runtime_kind::dbuct_ridge_fc:     return "dbuct_ridge_fc";
+            case runtime_kind::dbuct_ridge_fgt:    return "dbuct_ridge_fgt";
             case runtime_kind::horizon:            return "horizon";
             case runtime_kind::horizon_fc:         return "horizon_fc";
             case runtime_kind::dbuct_horizon:      return "dbuct_horizon";

@@ -9,6 +9,7 @@
 #include "infrastructure/dbuct_ridge_command_handler.hpp"
 #include "infrastructure/dbuct_ridge_bt_command_handler.hpp"
 #include "infrastructure/dbuct_ridge_fc_command_handler.hpp"
+#include "infrastructure/dbuct_ridge_fgt_command_handler.hpp"
 #include "infrastructure/genius_command_handler.hpp"
 #include "infrastructure/genius_fc_command_handler.hpp"
 #include "infrastructure/horizon_command_handler.hpp"
@@ -251,6 +252,41 @@ int main(int argc, char** argv) {
                                          dbuct_ridge_bt_opts.exploration_constant,
                                          dbuct_ridge_bt_opts.grant_k,
                                          dbuct_ridge_bt_opts.sim_progress_interval);
+        h();
+    });
+
+    struct {
+        std::string file;
+        std::string goals_str;
+        size_t max_resolutions        = 1000;
+        uint32_t seed                 = 0;
+        double exploration_constant   = 15;
+        double grant_k = dbuct_ridge_fgt_runtime::k_default_grant_k;
+        size_t sim_progress_interval  = 1000;
+        size_t max_clauses            = dbuct_ridge_fgt_runtime::k_default_max_clauses;
+    } dbuct_ridge_fgt_opts;
+
+    auto* dbuct_ridge_fgt_sub = app.add_subcommand(
+        "dbuct-ridge-fgt",
+        "Run the ridge solver with delayed-backtracking UCT and forgetting CDCL (evicts least-recently-fired clauses when over --max-clauses)");
+    dbuct_ridge_fgt_sub->add_option("file", dbuct_ridge_fgt_opts.file, "CHC input file")->required();
+    dbuct_ridge_fgt_sub->add_option("-g,--goal", dbuct_ridge_fgt_opts.goals_str, "Goal body string, e.g. \"p(X), q(X)\"")->required();
+    dbuct_ridge_fgt_sub->add_option("--max-resolutions", dbuct_ridge_fgt_opts.max_resolutions, "Max resolutions");
+    dbuct_ridge_fgt_sub->add_option("--seed", dbuct_ridge_fgt_opts.seed, "RNG seed");
+    dbuct_ridge_fgt_sub->add_option("--exploration-constant", dbuct_ridge_fgt_opts.exploration_constant, "MCTS exploration constant");
+    dbuct_ridge_fgt_sub->add_option("--grant-k", dbuct_ridge_fgt_opts.grant_k,
+                          "DBUCT visit-proportional grant k (grant = 1 + k * visits; larger camps longer)");
+    dbuct_ridge_fgt_sub->add_option("--sim-progress-interval", dbuct_ridge_fgt_opts.sim_progress_interval,
+                          "Print sim progress every N sims (0 disables)");
+    dbuct_ridge_fgt_sub->add_option("--max-clauses", dbuct_ridge_fgt_opts.max_clauses,
+                          "Max live CDCL clauses in evictable pool; least-recently-used are evicted when over limit");
+    dbuct_ridge_fgt_sub->callback([&]() {
+        dbuct_ridge_fgt_command_handler h(dbuct_ridge_fgt_opts.file, dbuct_ridge_fgt_opts.goals_str,
+                                          dbuct_ridge_fgt_opts.max_resolutions, dbuct_ridge_fgt_opts.seed,
+                                          dbuct_ridge_fgt_opts.exploration_constant,
+                                          dbuct_ridge_fgt_opts.grant_k,
+                                          dbuct_ridge_fgt_opts.sim_progress_interval,
+                                          dbuct_ridge_fgt_opts.max_clauses);
         h();
     });
 
