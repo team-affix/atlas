@@ -12,11 +12,15 @@
 #include "infrastructure/quell_runtime.hpp"
 #include "infrastructure/initial_goal_exprs.hpp"
 #include "infrastructure/non_backtracking_var_sequencer.hpp"
+#include "infrastructure/pause_poller.hpp"
 #include "infrastructure/print_bindings.hpp"
 #include "infrastructure/quell_print_progress.hpp"
 #include "infrastructure/print_progress.hpp"
 #include "infrastructure/solve_loop.hpp"
 #include "infrastructure/solve_timer.hpp"
+#include "infrastructure/stdin_idle.hpp"
+#include "infrastructure/stdin_is_tty.hpp"
+#include "infrastructure/stdin_try_read_byte.hpp"
 #include "infrastructure/steady_now.hpp"
 #include "infrastructure/functor_names.hpp"
 #include "infrastructure/var_names.hpp"
@@ -26,8 +30,9 @@ struct quell_command_handler {
     using PrintBindings = print_bindings<quell_runtime, expr_printer>;
     using BasePP        = print_progress<quell_runtime, SolveTimer>;
     using PP            = quell_print_progress<BasePP, quell_runtime>;
+    using PausePoller   = pause_poller<PP, stdin_is_tty, stdin_try_read_byte, stdin_idle>;
     using SolveLoop     = solve_loop<quell_runtime, expr_printer, PrintBindings, PP,
-                                     PP, PP, SolveTimer, SolveTimer>;
+                                     PausePoller, PP, SolveTimer, SolveTimer>;
 
     quell_command_handler(
         const std::string& file,
@@ -58,6 +63,10 @@ private:
     PrintBindings print_bindings_;
     BasePP        base_print_progress_;
     PP            print_progress_;
+    stdin_is_tty is_tty_;
+    stdin_try_read_byte try_read_byte_;
+    stdin_idle idle_;
+    PausePoller pause_poller_;
     SolveLoop     solve_loop_;
 };
 

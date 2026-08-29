@@ -12,11 +12,15 @@
 #include "infrastructure/genius_runtime.hpp"
 #include "infrastructure/initial_goal_exprs.hpp"
 #include "infrastructure/non_backtracking_var_sequencer.hpp"
+#include "infrastructure/pause_poller.hpp"
 #include "infrastructure/print_bindings.hpp"
 #include "infrastructure/genius_print_progress.hpp"
 #include "infrastructure/print_progress.hpp"
 #include "infrastructure/solve_loop.hpp"
 #include "infrastructure/solve_timer.hpp"
+#include "infrastructure/stdin_idle.hpp"
+#include "infrastructure/stdin_is_tty.hpp"
+#include "infrastructure/stdin_try_read_byte.hpp"
 #include "infrastructure/steady_now.hpp"
 #include "infrastructure/functor_names.hpp"
 #include "infrastructure/var_names.hpp"
@@ -26,8 +30,9 @@ struct genius_command_handler {
     using PrintBindings = print_bindings<genius_runtime, expr_printer>;
     using BasePP        = print_progress<genius_runtime, SolveTimer>;
     using PP            = genius_print_progress<BasePP, genius_runtime>;
+    using PausePoller   = pause_poller<PP, stdin_is_tty, stdin_try_read_byte, stdin_idle>;
     using SolveLoop     = solve_loop<genius_runtime, expr_printer, PrintBindings, PP,
-                                     PP, PP, SolveTimer, SolveTimer>;
+                                     PausePoller, PP, SolveTimer, SolveTimer>;
 
     genius_command_handler(
         const std::string& file,
@@ -57,6 +62,10 @@ private:
     PrintBindings print_bindings_;
     BasePP        base_print_progress_;
     PP            print_progress_;
+    stdin_is_tty is_tty_;
+    stdin_try_read_byte try_read_byte_;
+    stdin_idle idle_;
+    PausePoller pause_poller_;
     SolveLoop     solve_loop_;
 };
 

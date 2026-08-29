@@ -12,10 +12,14 @@
 #include "infrastructure/initial_goal_exprs.hpp"
 #include "infrastructure/non_backtracking_var_sequencer.hpp"
 #include "infrastructure/dbuct_ridge_runtime.hpp"
+#include "infrastructure/pause_poller.hpp"
 #include "infrastructure/print_bindings.hpp"
 #include "infrastructure/print_progress.hpp"
 #include "infrastructure/solve_loop.hpp"
 #include "infrastructure/solve_timer.hpp"
+#include "infrastructure/stdin_idle.hpp"
+#include "infrastructure/stdin_is_tty.hpp"
+#include "infrastructure/stdin_try_read_byte.hpp"
 #include "infrastructure/steady_now.hpp"
 #include "infrastructure/functor_names.hpp"
 #include "infrastructure/var_names.hpp"
@@ -27,8 +31,9 @@ struct dbuct_ridge_command_handler {
     using SolveTimer     = solve_timer<steady_now>;
     using PrintBindings  = print_bindings<dbuct_ridge_runtime, expr_printer>;
     using PrintProgress  = print_progress<dbuct_ridge_runtime, SolveTimer>;
+    using PausePoller    = pause_poller<PrintProgress, stdin_is_tty, stdin_try_read_byte, stdin_idle>;
     using SolveLoop      = solve_loop<dbuct_ridge_runtime, expr_printer, PrintBindings, PrintProgress,
-                                      PrintProgress, PrintProgress, SolveTimer, SolveTimer>;
+                                      PausePoller, PrintProgress, SolveTimer, SolveTimer>;
 
     dbuct_ridge_command_handler(
         const std::string& file,
@@ -57,6 +62,10 @@ private:
     SolveTimer solve_timer_;
     PrintBindings print_bindings_;
     PrintProgress print_progress_;
+    stdin_is_tty is_tty_;
+    stdin_try_read_byte try_read_byte_;
+    stdin_idle idle_;
+    PausePoller pause_poller_;
     SolveLoop solve_loop_;
 };
 
