@@ -1,180 +1,208 @@
 // var_compactor: renumbers globalized variable indices to contiguous 0..K-1.
-// Uses real expr_pool as IMakeFunctor/IMakeVar (dumb allocator, no behavior
-// under test). The SUT is var_compactor.
+// SUT is var_compactor; IMakeFunctor and IMakeVar are GMock mocks.
 
 #include <unordered_map>
+#include <vector>
 #include <gtest/gtest.h>
-#include "infrastructure/expr_pool.hpp"
+#include <gmock/gmock.h>
 #include "infrastructure/var_compactor.hpp"
 #include "functor_fixture.hpp"
 
-using sut_t = var_compactor<expr_pool, expr_pool>;
+using ::testing::Return;
+
+struct MockMakeFunctor {
+    MOCK_METHOD(const expr*, make_functor, (uint32_t, std::vector<const expr*>));
+};
+
+struct MockMakeVar {
+    MOCK_METHOD(const expr*, make_var, (uint32_t));
+};
+
+using sut_t = var_compactor<MockMakeFunctor, MockMakeVar>;
 
 struct VarCompactorTest : public ::testing::Test {
-    test_functors functors;
-    expr_pool     pool;
-    sut_t         sut{pool, pool};
-
-    const expr* compact(const expr* e,
-                        std::unordered_map<uint32_t, uint32_t>& var_map,
-                        uint32_t& next_idx) {
-        return sut.compact_vars(e, var_map, next_idx);
-    }
-
-    static uint32_t var_index(const expr* e) {
-        return std::get<expr::var>(e->content).index;
-    }
-
-    static uint32_t functor_id(const expr* e) {
-        return std::get<expr::functor>(e->content).id;
-    }
+    test_functors                          functors;
+    MockMakeFunctor                        mock_make_functor;
+    MockMakeVar                            mock_make_var;
+    sut_t                                  sut{mock_make_functor, mock_make_var};
+    std::unordered_map<uint32_t, uint32_t> var_map;
+    uint32_t                               next_idx = 0;
 };
 
 // ---------------------------------------------------------------------------
-// Nullary functor — no variables; next_idx unchanged
+// Variable input — delegates the compacted index to make_var
 // ---------------------------------------------------------------------------
 
-TEST_F(VarCompactorTest, NullaryFunctorProducedUnchanged) {
-    const expr* f = pool.make_functor(functors.id("f"), {});
-    std::unordered_map<uint32_t, uint32_t> var_map;
-    uint32_t next_idx = 0;
+TEST_F(VarCompactorTest, VarAtHighIndexDelegatesZeroToMakeVar) {
+    expr raw{expr::var{42}};
+    expr result{expr::var{0}};
 
-    const expr* result = compact(f, var_map, next_idx);
+    EXPECT_CALL(mock_make_var, make_var(0u)).WillOnce(Return(&result));
 
-    EXPECT_EQ(functor_id(result), functors.id("f"));
-    EXPECT_TRUE(std::get<expr::functor>(result->content).args.empty());
+    const expr* out = sut.compact_vars(&raw, var_map, next_idx);
+
+    EXPECT_EQ(out, &result);
+    EXPECT_EQ(next_idx, 1u);
+}
+
+TEST_F(VarCompactorTest, VarAtIndexZeroDelegatesZeroToMakeVar) {
+    expr raw{expr::var{0}};
+    expr result{expr::var{0}};
+
+    EXPECT_CALL(mock_make_var, make_var(0u)).WillOnce(Return(&result));
+
+    sut.compact_vars(&raw, var_map, next_idx);
+
+    EXPECT_EQ(next_idx, 1u);
+}
+
+// ---------------------------------------------------------------------------
+// Nullary functor — delegates empty args to make_functor; make_var not called
+// ---------------------------------------------------------------------------
+
+TEST_F(VarCompactorTest, NullaryFunctorDelegatesEmptyArgsToMakeFunctor) {
+    expr raw{expr::functor{functors.id("f"), {}}};
+    expr result{expr::functor{functors.id("f"), {}}};
+
+    EXPECT_CALL(mock_make_functor,
+                make_functor(functors.id("f"), std::vector<const expr*>{}))
+        .WillOnce(Return(&result));
+
+    const expr* out = sut.compact_vars(&raw, var_map, next_idx);
+
+    EXPECT_EQ(out, &result);
     EXPECT_EQ(next_idx, 0u);
 }
 
 // ---------------------------------------------------------------------------
-// Single variable remapping
+// Functor with one var — calls make_var then passes result to make_functor
 // ---------------------------------------------------------------------------
 
-TEST_F(VarCompactorTest, VarAtIndexZeroMapsToZero) {
-    const expr* v = pool.make_var(0);
-    std::unordered_map<uint32_t, uint32_t> var_map;
-    uint32_t next_idx = 0;
+TEST_F(VarCompactorTest, FunctorWithVarPassesCompactedChildToMakeFunctor) {
+    expr v_raw{expr::var{5}};
+    expr raw{expr::functor{functors.id("f"), {&v_raw}}};
+    expr v_compact{expr::var{0}};
+    expr f_result{expr::functor{functors.id("f"), {&v_compact}}};
 
-    const expr* result = compact(v, var_map, next_idx);
+    EXPECT_CALL(mock_make_var, make_var(0u)).WillOnce(Return(&v_compact));
+    EXPECT_CALL(mock_make_functor,
+                make_functor(functors.id("f"), std::vector<const expr*>{&v_compact}))
+        .WillOnce(Return(&f_result));
 
-    EXPECT_EQ(var_index(result), 0u);
-    EXPECT_EQ(next_idx, 1u);
-}
+    const expr* out = sut.compact_vars(&raw, var_map, next_idx);
 
-TEST_F(VarCompactorTest, VarAtHighIndexRemappedToZero) {
-    const expr* v = pool.make_var(42);
-    std::unordered_map<uint32_t, uint32_t> var_map;
-    uint32_t next_idx = 0;
-
-    const expr* result = compact(v, var_map, next_idx);
-
-    EXPECT_EQ(var_index(result), 0u);
+    EXPECT_EQ(out, &f_result);
     EXPECT_EQ(next_idx, 1u);
 }
 
 // ---------------------------------------------------------------------------
-// Two distinct variables
+// Same var twice — make_var called twice with the same compacted index
 // ---------------------------------------------------------------------------
 
-TEST_F(VarCompactorTest, TwoDistinctVarsInOrderRemapped) {
-    expr raw{expr::functor{functors.id("f"), {pool.make_var(5), pool.make_var(10)}}};
-    std::unordered_map<uint32_t, uint32_t> var_map;
-    uint32_t next_idx = 0;
+TEST_F(VarCompactorTest, SameVarTwiceDelegatesSameIndexBothTimes) {
+    expr v_raw{expr::var{7}};
+    expr raw{expr::functor{functors.id("f"), {&v_raw, &v_raw}}};
+    expr r0{expr::var{0}};
+    expr r1{expr::var{0}};
+    expr f_result{expr::functor{functors.id("f"), {&r0, &r1}}};
 
-    const expr* result = compact(&raw, var_map, next_idx);
+    EXPECT_CALL(mock_make_var, make_var(0u))
+        .WillOnce(Return(&r0))
+        .WillOnce(Return(&r1));
+    EXPECT_CALL(mock_make_functor,
+                make_functor(functors.id("f"), std::vector<const expr*>{&r0, &r1}))
+        .WillOnce(Return(&f_result));
 
-    const auto& args = std::get<expr::functor>(result->content).args;
-    ASSERT_EQ(args.size(), 2u);
-    EXPECT_EQ(var_index(args[0]), 0u);
-    EXPECT_EQ(var_index(args[1]), 1u);
+    sut.compact_vars(&raw, var_map, next_idx);
+
+    EXPECT_EQ(next_idx, 1u);
+}
+
+// ---------------------------------------------------------------------------
+// Two distinct vars — delegated in first-appearance order (0, then 1)
+// ---------------------------------------------------------------------------
+
+TEST_F(VarCompactorTest, TwoDistinctVarsDelegateAscendingIndices) {
+    expr v5{expr::var{5}};
+    expr v10{expr::var{10}};
+    expr raw{expr::functor{functors.id("f"), {&v5, &v10}}};
+    expr r0{expr::var{0}};
+    expr r1{expr::var{1}};
+    expr f_result{expr::functor{functors.id("f"), {&r0, &r1}}};
+
+    EXPECT_CALL(mock_make_var, make_var(0u)).WillOnce(Return(&r0));
+    EXPECT_CALL(mock_make_var, make_var(1u)).WillOnce(Return(&r1));
+    EXPECT_CALL(mock_make_functor,
+                make_functor(functors.id("f"), std::vector<const expr*>{&r0, &r1}))
+        .WillOnce(Return(&f_result));
+
+    sut.compact_vars(&raw, var_map, next_idx);
+
     EXPECT_EQ(next_idx, 2u);
 }
 
-TEST_F(VarCompactorTest, VarOrderDrivenByFirstAppearance) {
-    // var(10) appears first so it gets 0; var(5) gets 1
-    expr raw{expr::functor{functors.id("f"), {pool.make_var(10), pool.make_var(5)}}};
-    std::unordered_map<uint32_t, uint32_t> var_map;
-    uint32_t next_idx = 0;
+TEST_F(VarCompactorTest, FirstAppearanceWinsRegardlessOfRawIndex) {
+    // var(10) appears first in args, so it gets compacted index 0; var(5) gets 1
+    expr v10{expr::var{10}};
+    expr v5{expr::var{5}};
+    expr raw{expr::functor{functors.id("f"), {&v10, &v5}}};
+    expr r0{expr::var{0}};
+    expr r1{expr::var{1}};
+    expr f_result{expr::functor{functors.id("f"), {&r0, &r1}}};
 
-    const expr* result = compact(&raw, var_map, next_idx);
+    EXPECT_CALL(mock_make_var, make_var(0u)).WillOnce(Return(&r0));
+    EXPECT_CALL(mock_make_var, make_var(1u)).WillOnce(Return(&r1));
+    EXPECT_CALL(mock_make_functor,
+                make_functor(functors.id("f"), std::vector<const expr*>{&r0, &r1}))
+        .WillOnce(Return(&f_result));
 
-    const auto& args = std::get<expr::functor>(result->content).args;
-    ASSERT_EQ(args.size(), 2u);
-    EXPECT_EQ(var_index(args[0]), 0u);
-    EXPECT_EQ(var_index(args[1]), 1u);
+    sut.compact_vars(&raw, var_map, next_idx);
+
     EXPECT_EQ(next_idx, 2u);
 }
 
 // ---------------------------------------------------------------------------
-// Same variable appearing twice — same compacted index both times
+// Shared var_map across two calls — same raw var produces same compacted index
 // ---------------------------------------------------------------------------
 
-TEST_F(VarCompactorTest, SameVarTwiceGivesSameIndex) {
-    expr raw{expr::functor{functors.id("f"), {pool.make_var(7), pool.make_var(7)}}};
-    std::unordered_map<uint32_t, uint32_t> var_map;
-    uint32_t next_idx = 0;
+TEST_F(VarCompactorTest, SharedVarMapYieldsSameIndexOnSecondCall) {
+    expr v_raw{expr::var{5}};
+    expr r0{expr::var{0}};
+    expr r1{expr::var{0}};
 
-    const expr* result = compact(&raw, var_map, next_idx);
+    EXPECT_CALL(mock_make_var, make_var(0u))
+        .WillOnce(Return(&r0))
+        .WillOnce(Return(&r1));
 
-    const auto& args = std::get<expr::functor>(result->content).args;
-    ASSERT_EQ(args.size(), 2u);
-    EXPECT_EQ(var_index(args[0]), 0u);
-    EXPECT_EQ(var_index(args[1]), 0u);
+    sut.compact_vars(&v_raw, var_map, next_idx);
+    sut.compact_vars(&v_raw, var_map, next_idx);
+
     EXPECT_EQ(next_idx, 1u);
 }
 
 // ---------------------------------------------------------------------------
-// Nested functor — compaction propagates through the tree
+// Nested functor — recursion is bottom-up; inner make calls precede outer
 // ---------------------------------------------------------------------------
 
-TEST_F(VarCompactorTest, NestedFunctorVarsPropagated) {
-    const expr* inner = pool.make_functor(functors.id("f"), {pool.make_var(9)});
-    const expr* outer_raw = pool.make_functor(functors.id("g"), {inner});
-    std::unordered_map<uint32_t, uint32_t> var_map;
-    uint32_t next_idx = 0;
+TEST_F(VarCompactorTest, NestedFunctorDelegatesBottomUp) {
+    expr v_raw{expr::var{9}};
+    expr inner_raw{expr::functor{functors.id("f"), {&v_raw}}};
+    expr outer_raw{expr::functor{functors.id("g"), {&inner_raw}}};
 
-    const expr* result = compact(outer_raw, var_map, next_idx);
+    expr v_compact{expr::var{0}};
+    expr inner_compact{expr::functor{functors.id("f"), {&v_compact}}};
+    expr outer_compact{expr::functor{functors.id("g"), {&inner_compact}}};
 
-    const auto& outer_args = std::get<expr::functor>(result->content).args;
-    ASSERT_EQ(outer_args.size(), 1u);
-    const auto& inner_args = std::get<expr::functor>(outer_args[0]->content).args;
-    ASSERT_EQ(inner_args.size(), 1u);
-    EXPECT_EQ(var_index(inner_args[0]), 0u);
+    EXPECT_CALL(mock_make_var, make_var(0u)).WillOnce(Return(&v_compact));
+    EXPECT_CALL(mock_make_functor,
+                make_functor(functors.id("f"), std::vector<const expr*>{&v_compact}))
+        .WillOnce(Return(&inner_compact));
+    EXPECT_CALL(mock_make_functor,
+                make_functor(functors.id("g"), std::vector<const expr*>{&inner_compact}))
+        .WillOnce(Return(&outer_compact));
+
+    const expr* out = sut.compact_vars(&outer_raw, var_map, next_idx);
+
+    EXPECT_EQ(out, &outer_compact);
     EXPECT_EQ(next_idx, 1u);
-}
-
-// ---------------------------------------------------------------------------
-// Shared map across two calls — same var seen again resolves consistently
-// ---------------------------------------------------------------------------
-
-TEST_F(VarCompactorTest, SharedMapAcrossMultipleCalls) {
-    const expr* v = pool.make_var(5);
-    std::unordered_map<uint32_t, uint32_t> var_map;
-    uint32_t next_idx = 0;
-
-    const expr* r1 = compact(v, var_map, next_idx);
-    const expr* r2 = compact(v, var_map, next_idx);
-
-    EXPECT_EQ(var_index(r1), 0u);
-    EXPECT_EQ(var_index(r2), 0u);
-    EXPECT_EQ(next_idx, 1u);
-}
-
-// ---------------------------------------------------------------------------
-// Fresh map — new compaction pass starts at 0 regardless of previous
-// ---------------------------------------------------------------------------
-
-TEST_F(VarCompactorTest, FreshMapStartsAgainAtZero) {
-    const expr* v = pool.make_var(5);
-
-    std::unordered_map<uint32_t, uint32_t> map1;
-    uint32_t idx1 = 0;
-    const expr* r1 = compact(v, map1, idx1);
-
-    std::unordered_map<uint32_t, uint32_t> map2;
-    uint32_t idx2 = 0;
-    const expr* r2 = compact(v, map2, idx2);
-
-    EXPECT_EQ(var_index(r1), 0u);
-    EXPECT_EQ(var_index(r2), 0u);
 }

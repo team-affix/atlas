@@ -48,7 +48,7 @@ static bool expr_eq(const expr* a, const expr* b) {
 // Fixture
 // ---------------------------------------------------------------------------
 
-struct RuleUnfolderTest : public ::testing::Test {
+struct RuleUnfolderManifestTest : public ::testing::Test {
     test_functors functors;
 
     // Ground atoms
@@ -103,7 +103,7 @@ struct RuleUnfolderTest : public ::testing::Test {
 // No match — body goal functor not in original db
 // ---------------------------------------------------------------------------
 
-TEST_F(RuleUnfolderTest, NoMatchErasesSubjectAndReturnsEmpty) {
+TEST_F(RuleUnfolderManifestTest, NoMatchErasesSubjectAndReturnsEmpty) {
     // original_db has only g, not f
     original_db.push(rule{&g_atom, {}, 0});
 
@@ -120,7 +120,7 @@ TEST_F(RuleUnfolderTest, NoMatchErasesSubjectAndReturnsEmpty) {
 // Single match — fact body goal unfolded away
 // ---------------------------------------------------------------------------
 
-TEST_F(RuleUnfolderTest, SingleMatchFactBodyGoalDisappearsFromNewRule) {
+TEST_F(RuleUnfolderManifestTest, SingleMatchFactBodyGoalDisappearsFromNewRule) {
     // original: f :-  (fact)
     original_db.push(rule{&f_atom, {}, 0});
 
@@ -142,7 +142,7 @@ TEST_F(RuleUnfolderTest, SingleMatchFactBodyGoalDisappearsFromNewRule) {
 // Multiple matches — one new rule per unifying original head
 // ---------------------------------------------------------------------------
 
-TEST_F(RuleUnfolderTest, TwoMatchesProduceTwoNewRules) {
+TEST_F(RuleUnfolderManifestTest, TwoMatchesProduceTwoNewRules) {
     // original: f(a) :-  and  f(b) :-
     original_db.push(rule{&f_a, {}, 0});
     original_db.push(rule{&f_b, {}, 0});
@@ -173,7 +173,7 @@ TEST_F(RuleUnfolderTest, TwoMatchesProduceTwoNewRules) {
 // Var body goal — triggers lookup of all original rules
 // ---------------------------------------------------------------------------
 
-TEST_F(RuleUnfolderTest, VarBodyGoalUnifiesWithAllOriginalRules) {
+TEST_F(RuleUnfolderManifestTest, VarBodyGoalUnifiesWithAllOriginalRules) {
     // original: f :-  and  g :-
     original_db.push(rule{&f_atom, {}, 0});
     original_db.push(rule{&g_atom, {}, 0});
@@ -195,7 +195,7 @@ TEST_F(RuleUnfolderTest, VarBodyGoalUnifiesWithAllOriginalRules) {
 // Substitution applied to head — bound vars replaced in result
 // ---------------------------------------------------------------------------
 
-TEST_F(RuleUnfolderTest, SubstitutionAppliedToHeadCorrectly) {
+TEST_F(RuleUnfolderManifestTest, SubstitutionAppliedToHeadCorrectly) {
     // original: f(a) :-
     original_db.push(rule{&f_a, {}, 0});
 
@@ -220,7 +220,7 @@ TEST_F(RuleUnfolderTest, SubstitutionAppliedToHeadCorrectly) {
 // Original rule body inlined — body goals inserted at unfolded position
 // ---------------------------------------------------------------------------
 
-TEST_F(RuleUnfolderTest, OriginalRuleBodyInlinedAtUnfoldedPosition) {
+TEST_F(RuleUnfolderManifestTest, OriginalRuleBodyInlinedAtUnfoldedPosition) {
     // original: f(Z) :- g(Z)  (var_count=1)
     original_db.push(rule{&f_var0, {&g_var0}, 1});
 
@@ -252,7 +252,7 @@ TEST_F(RuleUnfolderTest, OriginalRuleBodyInlinedAtUnfoldedPosition) {
 // Remaining subject body goals preserved around inlined original body
 // ---------------------------------------------------------------------------
 
-TEST_F(RuleUnfolderTest, RemainingSubjectBodyGoalsPreservedAroundUnfoldedGoal) {
+TEST_F(RuleUnfolderManifestTest, RemainingSubjectBodyGoalsPreservedAroundUnfoldedGoal) {
     // original: f(a) :-
     original_db.push(rule{&f_a, {}, 0});
 
@@ -277,7 +277,7 @@ TEST_F(RuleUnfolderTest, RemainingSubjectBodyGoalsPreservedAroundUnfoldedGoal) {
 // Unbound variables in head and non-unfolded body get fresh contiguous indices
 // ---------------------------------------------------------------------------
 
-TEST_F(RuleUnfolderTest, FreeVariablesRenumberedContiguously) {
+TEST_F(RuleUnfolderManifestTest, FreeVariablesRenumberedContiguously) {
     // original: f(a) :-
     original_db.push(rule{&f_a, {}, 0});
 
@@ -307,7 +307,7 @@ TEST_F(RuleUnfolderTest, FreeVariablesRenumberedContiguously) {
 // Base body var linked to subject var through unification
 // ---------------------------------------------------------------------------
 
-TEST_F(RuleUnfolderTest, BaseBodyVarLinkedToSubjectVar) {
+TEST_F(RuleUnfolderManifestTest, BaseBodyVarLinkedToSubjectVar) {
     // original: f(Z) :- g(Z)  (var_count=1)
     original_db.push(rule{&f_var0, {&g_var0}, 1});
 
@@ -344,7 +344,7 @@ TEST_F(RuleUnfolderTest, BaseBodyVarLinkedToSubjectVar) {
 // the produced rule would be h(V0,V1):-g(V0,V1) instead of h(V0,V1):-g(V1,V0).
 // ---------------------------------------------------------------------------
 
-TEST_F(RuleUnfolderTest, BaseBodySwappedArgsPreservesConnections) {
+TEST_F(RuleUnfolderManifestTest, BaseBodySwappedArgsPreservesConnections) {
     // original: f(var1, var0) :- g(var0, var1)  (head args reversed, var_count=2)
     // A=var0, B=var1 in original's namespace; head is f(B,A), body is g(A,B)
     original_db.push(rule{&f_var1_var0, {&g_var0_var1}, 2});
@@ -392,7 +392,7 @@ TEST_F(RuleUnfolderTest, BaseBodySwappedArgsPreservesConnections) {
 // Multiple base body goals all share the same variable
 // ---------------------------------------------------------------------------
 
-TEST_F(RuleUnfolderTest, TwoBaseBodyGoalsShareVar) {
+TEST_F(RuleUnfolderManifestTest, TwoBaseBodyGoalsShareVar) {
     // original: f(Z) :- g(Z), k(Z)  (var_count=1)
     original_db.push(rule{&f_var0, {&g_var0, &k_var0}, 1});
 
@@ -429,7 +429,7 @@ TEST_F(RuleUnfolderTest, TwoBaseBodyGoalsShareVar) {
 // Two base body goals, two distinct variables
 // ---------------------------------------------------------------------------
 
-TEST_F(RuleUnfolderTest, TwoBaseBodyGoalsTwoDistinctVars) {
+TEST_F(RuleUnfolderManifestTest, TwoBaseBodyGoalsTwoDistinctVars) {
     // original: f(A, B) :- g(A), h(B)  (var_count=2) — g(var0), h(var1) in head vars
     expr g_v0{expr::functor{functors.id("g"), {&var0}}};
     expr h_v1{expr::functor{functors.id("h"), {&var1}}};
@@ -474,7 +474,7 @@ TEST_F(RuleUnfolderTest, TwoBaseBodyGoalsTwoDistinctVars) {
 // Unfold at the first of three body goals
 // ---------------------------------------------------------------------------
 
-TEST_F(RuleUnfolderTest, UnfoldAtFirstOfThreeGoals) {
+TEST_F(RuleUnfolderManifestTest, UnfoldAtFirstOfThreeGoals) {
     // original: f(a) :-
     original_db.push(rule{&f_a, {}, 0});
 
@@ -499,7 +499,7 @@ TEST_F(RuleUnfolderTest, UnfoldAtFirstOfThreeGoals) {
 // Unfold at the last of three body goals
 // ---------------------------------------------------------------------------
 
-TEST_F(RuleUnfolderTest, UnfoldAtLastOfThreeGoals) {
+TEST_F(RuleUnfolderManifestTest, UnfoldAtLastOfThreeGoals) {
     // original: f(a) :-
     original_db.push(rule{&f_a, {}, 0});
 
@@ -523,7 +523,7 @@ TEST_F(RuleUnfolderTest, UnfoldAtLastOfThreeGoals) {
 // Unfold middle goal — base body inserted in place, before/after preserved
 // ---------------------------------------------------------------------------
 
-TEST_F(RuleUnfolderTest, UnfoldMiddleGoalWithBaseBodyInserted) {
+TEST_F(RuleUnfolderManifestTest, UnfoldMiddleGoalWithBaseBodyInserted) {
     // original: f(Z) :- g(Z)  (var_count=1)
     original_db.push(rule{&f_var0, {&g_var0}, 1});
 
@@ -561,7 +561,7 @@ TEST_F(RuleUnfolderTest, UnfoldMiddleGoalWithBaseBodyInserted) {
 // Three vars in subject, one bound → two survive, var_count = 2
 // ---------------------------------------------------------------------------
 
-TEST_F(RuleUnfolderTest, VarCountEqualsNumberOfDistinctFreeVars) {
+TEST_F(RuleUnfolderManifestTest, VarCountEqualsNumberOfDistinctFreeVars) {
     // original: f(a) :-
     original_db.push(rule{&f_a, {}, 0});
 
@@ -595,7 +595,7 @@ TEST_F(RuleUnfolderTest, VarCountEqualsNumberOfDistinctFreeVars) {
 // All vars bound → var_count = 0
 // ---------------------------------------------------------------------------
 
-TEST_F(RuleUnfolderTest, VarCountZeroWhenAllVarsBound) {
+TEST_F(RuleUnfolderManifestTest, VarCountZeroWhenAllVarsBound) {
     // original: f(a) :-
     original_db.push(rule{&f_a, {}, 0});
 
@@ -617,7 +617,7 @@ TEST_F(RuleUnfolderTest, VarCountZeroWhenAllVarsBound) {
 // Two matches → two produced rules each with var_count = 0
 // ---------------------------------------------------------------------------
 
-TEST_F(RuleUnfolderTest, VarCountZeroInEachOfTwoProducedRules) {
+TEST_F(RuleUnfolderManifestTest, VarCountZeroInEachOfTwoProducedRules) {
     original_db.push(rule{&f_a, {}, 0});
     original_db.push(rule{&f_b, {}, 0});
 
@@ -640,7 +640,7 @@ TEST_F(RuleUnfolderTest, VarCountZeroInEachOfTwoProducedRules) {
 // Ground body goal — only the matching original rule produces a new rule
 // ---------------------------------------------------------------------------
 
-TEST_F(RuleUnfolderTest, PartialMatchOnlyUnifyingCandidatesProduceRules) {
+TEST_F(RuleUnfolderManifestTest, PartialMatchOnlyUnifyingCandidatesProduceRules) {
     // original: f(a) :- and f(b) :-
     original_db.push(rule{&f_a, {}, 0});
     original_db.push(rule{&f_b, {}, 0});
@@ -663,7 +663,7 @@ TEST_F(RuleUnfolderTest, PartialMatchOnlyUnifyingCandidatesProduceRules) {
 // Variable body goal unifies with every original rule
 // ---------------------------------------------------------------------------
 
-TEST_F(RuleUnfolderTest, VarBodyGoalUnifiesWithEveryOriginalAndBindsHead) {
+TEST_F(RuleUnfolderManifestTest, VarBodyGoalUnifiesWithEveryOriginalAndBindsHead) {
     // original: f :- and g :-
     original_db.push(rule{&f_atom, {}, 0});
     original_db.push(rule{&g_atom, {}, 0});
@@ -700,7 +700,7 @@ TEST_F(RuleUnfolderTest, VarBodyGoalUnifiesWithEveryOriginalAndBindsHead) {
 // Ground subject, fact original → ground fact produced
 // ---------------------------------------------------------------------------
 
-TEST_F(RuleUnfolderTest, GroundSubjectWithFactOriginalProducesGroundFact) {
+TEST_F(RuleUnfolderManifestTest, GroundSubjectWithFactOriginalProducesGroundFact) {
     // original: f(a) :-
     original_db.push(rule{&f_a, {}, 0});
 
@@ -721,7 +721,7 @@ TEST_F(RuleUnfolderTest, GroundSubjectWithFactOriginalProducesGroundFact) {
 // Ground subject, original with body → body inlined verbatim
 // ---------------------------------------------------------------------------
 
-TEST_F(RuleUnfolderTest, GroundSubjectWithBodyOriginalInlinesBodyVerbatim) {
+TEST_F(RuleUnfolderManifestTest, GroundSubjectWithBodyOriginalInlinesBodyVerbatim) {
     // original: f :- g, k
     original_db.push(rule{&f_atom, {&g_atom, &k_atom}, 0});
 
@@ -748,7 +748,7 @@ TEST_F(RuleUnfolderTest, GroundSubjectWithBodyOriginalInlinesBodyVerbatim) {
 // Binding from the chosen goal propagates backward into before-goals
 // ---------------------------------------------------------------------------
 
-TEST_F(RuleUnfolderTest, SubjectVarBoundByChosenGoalPropagatestoBeforeGoal) {
+TEST_F(RuleUnfolderManifestTest, SubjectVarBoundByChosenGoalPropagatestoBeforeGoal) {
     // original: f(a) :-
     original_db.push(rule{&f_a, {}, 0});
 
@@ -773,7 +773,7 @@ TEST_F(RuleUnfolderTest, SubjectVarBoundByChosenGoalPropagatestoBeforeGoal) {
 // Binding from the chosen goal propagates forward into after-goals
 // ---------------------------------------------------------------------------
 
-TEST_F(RuleUnfolderTest, SubjectVarBoundByChosenGoalPropagatestoAfterGoal) {
+TEST_F(RuleUnfolderManifestTest, SubjectVarBoundByChosenGoalPropagatestoAfterGoal) {
     // original: f(a) :-
     original_db.push(rule{&f_a, {}, 0});
 
@@ -796,7 +796,7 @@ TEST_F(RuleUnfolderTest, SubjectVarBoundByChosenGoalPropagatestoAfterGoal) {
 // Binding propagates into head and both before- and after-goals simultaneously
 // ---------------------------------------------------------------------------
 
-TEST_F(RuleUnfolderTest, SubjectVarBoundPropagatesHeadAndBothSurroundingGoals) {
+TEST_F(RuleUnfolderManifestTest, SubjectVarBoundPropagatesHeadAndBothSurroundingGoals) {
     // original: f(a) :-
     original_db.push(rule{&f_a, {}, 0});
 
@@ -827,7 +827,7 @@ TEST_F(RuleUnfolderTest, SubjectVarBoundPropagatesHeadAndBothSurroundingGoals) {
 // Existential var in base body survives as a brand-new free var in produced rule
 // ---------------------------------------------------------------------------
 
-TEST_F(RuleUnfolderTest, BaseBodyExistentialVarSurvivesAsNewFreeVar) {
+TEST_F(RuleUnfolderManifestTest, BaseBodyExistentialVarSurvivesAsNewFreeVar) {
     // original: f(a) :- g(W)  (var_count=1, W only in body — existential)
     original_db.push(rule{&f_a, {&g_var0}, 1});
 
@@ -854,7 +854,7 @@ TEST_F(RuleUnfolderTest, BaseBodyExistentialVarSurvivesAsNewFreeVar) {
 // Existential base var shared across multiple base body goals
 // ---------------------------------------------------------------------------
 
-TEST_F(RuleUnfolderTest, BaseBodyExistentialVarSharedAcrossBaseGoals) {
+TEST_F(RuleUnfolderManifestTest, BaseBodyExistentialVarSharedAcrossBaseGoals) {
     // original: f(a) :- g(W), k(W)  (var_count=1, W existential, appears in both body goals)
     original_db.push(rule{&f_a, {&g_var0, &k_var0}, 1});
 
@@ -891,7 +891,7 @@ TEST_F(RuleUnfolderTest, BaseBodyExistentialVarSharedAcrossBaseGoals) {
 // Var connection preserved through nested functor in head and body
 // ---------------------------------------------------------------------------
 
-TEST_F(RuleUnfolderTest, NestedFunctorDeepVarConnectionPreserved) {
+TEST_F(RuleUnfolderManifestTest, NestedFunctorDeepVarConnectionPreserved) {
     // original: f(g(Z)) :- p(Z)  (var_count=1; Z buried inside g in the head)
     expr f_g_var0{expr::functor{functors.id("f"), {&g_var0}}};
     original_db.push(rule{&f_g_var0, {&p_var0}, 1});
@@ -923,7 +923,7 @@ TEST_F(RuleUnfolderTest, NestedFunctorDeepVarConnectionPreserved) {
 // I — Multiple matches, independent var compaction per produced rule
 // ===========================================================================
 
-TEST_F(RuleUnfolderTest, MultipleMatchesHaveIndependentVarCounts) {
+TEST_F(RuleUnfolderManifestTest, MultipleMatchesHaveIndependentVarCounts) {
     // original: f(a) :-  AND  f(Z) :- g(Z)  (two very different rules)
     original_db.push(rule{&f_a, {}, 0});
     original_db.push(rule{&f_var0, {&g_var0}, 1});
@@ -974,7 +974,7 @@ TEST_F(RuleUnfolderTest, MultipleMatchesHaveIndependentVarCounts) {
 // f(Z,Z) in base head forces both h(X,Y) args to collapse to the same var
 // ---------------------------------------------------------------------------
 
-TEST_F(RuleUnfolderTest, BaseHeadSameVarTwiceForcesSubjectVarsEqual) {
+TEST_F(RuleUnfolderManifestTest, BaseHeadSameVarTwiceForcesSubjectVarsEqual) {
     // original: f(Z, Z) :- g(Z)  (var_count=1; same var in both head args)
     original_db.push(rule{&f_var0_var0, {&g_var0}, 1});
 
@@ -1016,7 +1016,7 @@ TEST_F(RuleUnfolderTest, BaseHeadSameVarTwiceForcesSubjectVarsEqual) {
 // Var only in a before-goal (not in head or chosen goal) survives in result
 // ---------------------------------------------------------------------------
 
-TEST_F(RuleUnfolderTest, SubjectVarOnlyInBeforeGoalSurvives) {
+TEST_F(RuleUnfolderManifestTest, SubjectVarOnlyInBeforeGoalSurvives) {
     // original: f(a) :-
     original_db.push(rule{&f_a, {}, 0});
 
@@ -1043,7 +1043,7 @@ TEST_F(RuleUnfolderTest, SubjectVarOnlyInBeforeGoalSurvives) {
 // Var in head and both surrounding non-unfolded goals maps consistently
 // ---------------------------------------------------------------------------
 
-TEST_F(RuleUnfolderTest, SubjectVarInHeadAndNonUnfoldedGoalsGetsConsistentIndex) {
+TEST_F(RuleUnfolderManifestTest, SubjectVarInHeadAndNonUnfoldedGoalsGetsConsistentIndex) {
     // original: f(a) :-
     original_db.push(rule{&f_a, {}, 0});
 
@@ -1082,7 +1082,7 @@ TEST_F(RuleUnfolderTest, SubjectVarInHeadAndNonUnfoldedGoalsGetsConsistentIndex)
 // 4-arg functor: alternating ground/var args, all var connections preserved
 // ---------------------------------------------------------------------------
 
-TEST_F(RuleUnfolderTest, StressFourArgFunctor_AlternatingGroundAndVarArgs) {
+TEST_F(RuleUnfolderManifestTest, StressFourArgFunctor_AlternatingGroundAndVarArgs) {
     // original: f(a, X, b, Y) :- g(X, Y)  (var_count=2)
     // head: positions 0=a(ground), 1=X(var), 2=b(ground), 3=Y(var)
     expr f_a_v0_b_v1{expr::functor{functors.id("f"), {&a_atom, &var0, &b_atom, &var1}}};
@@ -1136,7 +1136,7 @@ TEST_F(RuleUnfolderTest, StressFourArgFunctor_AlternatingGroundAndVarArgs) {
 // Result: h(a, V0, V1) :- g(V0, V2), k(V1)  var_count=3
 // ---------------------------------------------------------------------------
 
-TEST_F(RuleUnfolderTest, StressFiveVariables_FiveDistinctRoles) {
+TEST_F(RuleUnfolderManifestTest, StressFiveVariables_FiveDistinctRoles) {
     // original: f(a, A) :- g(A, B)  (var_count=2; A=var0 in head+body, B=var1 existential)
     original_db.push(rule{&f_a_var0, {&g_var0_var1}, 2});
 
@@ -1191,7 +1191,7 @@ TEST_F(RuleUnfolderTest, StressFiveVariables_FiveDistinctRoles) {
 // Three-level deep nesting: f(g(h(X))) — var buried at the innermost level
 // ---------------------------------------------------------------------------
 
-TEST_F(RuleUnfolderTest, StressThreeLevelDeepNesting_VarAtInnermost) {
+TEST_F(RuleUnfolderManifestTest, StressThreeLevelDeepNesting_VarAtInnermost) {
     // original: f(g(h(Z))) :- p(Z)  (var_count=1; Z buried three functors deep)
     expr h_var0_inner{expr::functor{functors.id("h"), {&var0}}};
     expr g_h_var0{expr::functor{functors.id("g"), {&h_var0_inner}}};
@@ -1234,7 +1234,7 @@ TEST_F(RuleUnfolderTest, StressThreeLevelDeepNesting_VarAtInnermost) {
 // Candidate exists for the right functor but argument value mismatches
 // ---------------------------------------------------------------------------
 
-TEST_F(RuleUnfolderTest, RefutationCandidateExistsButUnificationFails) {
+TEST_F(RuleUnfolderManifestTest, RefutationCandidateExistsButUnificationFails) {
     // original: f(a) :-   (only one candidate, with concrete arg 'a')
     original_db.push(rule{&f_a, {}, 0});
 
@@ -1252,7 +1252,7 @@ TEST_F(RuleUnfolderTest, RefutationCandidateExistsButUnificationFails) {
 // Multiple candidates exist but every one fails unification (distinct grounds)
 // ---------------------------------------------------------------------------
 
-TEST_F(RuleUnfolderTest, RefutationAllThreeCandidatesFailUnification) {
+TEST_F(RuleUnfolderManifestTest, RefutationAllThreeCandidatesFailUnification) {
     // original: f(a) :-  f(b) :-  — two candidates, neither matches f(c)
     original_db.push(rule{&f_a, {}, 0});
     original_db.push(rule{&f_b, {}, 0});
@@ -1272,7 +1272,7 @@ TEST_F(RuleUnfolderTest, RefutationAllThreeCandidatesFailUnification) {
 // Nested-functor argument mismatch: functor id at inner level differs
 // ---------------------------------------------------------------------------
 
-TEST_F(RuleUnfolderTest, RefutationInnerFunctorMismatch) {
+TEST_F(RuleUnfolderManifestTest, RefutationInnerFunctorMismatch) {
     // original: f(g(a)) :-   (inner arg is g(a))
     expr f_g_a{expr::functor{functors.id("f"), {&g_a}}};
     original_db.push(rule{&f_g_a, {}, 0});
@@ -1297,7 +1297,7 @@ TEST_F(RuleUnfolderTest, RefutationInnerFunctorMismatch) {
 // Two back-to-back unfolds; second hits a dead end → propagates refutation
 // ---------------------------------------------------------------------------
 
-TEST_F(RuleUnfolderTest, SequentialUnfolds_SecondHitsDeadEnd) {
+TEST_F(RuleUnfolderManifestTest, SequentialUnfolds_SecondHitsDeadEnd) {
     // original: f(Z) :- g(Z)   (g is NOT in original — dead end)
     original_db.push(rule{&f_var0, {&g_var0}, 1});
 
@@ -1326,7 +1326,7 @@ TEST_F(RuleUnfolderTest, SequentialUnfolds_SecondHitsDeadEnd) {
 // Two sequential unfolds that chain all the way to a ground fact
 // ---------------------------------------------------------------------------
 
-TEST_F(RuleUnfolderTest, SequentialUnfolds_ChainToGroundFact) {
+TEST_F(RuleUnfolderManifestTest, SequentialUnfolds_ChainToGroundFact) {
     // original: f(Z) :- g(Z)  AND  g(a) :-
     original_db.push(rule{&f_var0, {&g_var0}, 1});
     original_db.push(rule{&g_a, {}, 0});
@@ -1356,7 +1356,7 @@ TEST_F(RuleUnfolderTest, SequentialUnfolds_ChainToGroundFact) {
 // Two independent subjects unfolded on the same manifest back-to-back
 // ---------------------------------------------------------------------------
 
-TEST_F(RuleUnfolderTest, SequentialUnfolds_TwoIndependentSubjects) {
+TEST_F(RuleUnfolderManifestTest, SequentialUnfolds_TwoIndependentSubjects) {
     // original: f(a) :-  AND  g(b) :-
     original_db.push(rule{&f_a, {}, 0});
     original_db.push(rule{&g_a, {}, 0});  // reuse g_a as a second fact
