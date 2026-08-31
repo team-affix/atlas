@@ -55,7 +55,7 @@ TEST_F(GeniusManifestIntegrationTest, VacuousSolvedThenExhausts) {
 
 TEST_F(GeniusManifestIntegrationTest, SingleUnitSolutionMakesNoDecision) {
     initial_goals.push(fun("f"));
-    database.push(rule{fun("f"), {}});
+    database.push(rule{fun("f"), {}, 0});
     genius_runtime rt = make_runtime();
     ASSERT_TRUE(rt.next());
     EXPECT_TRUE(rt.solved());
@@ -75,7 +75,7 @@ TEST_F(GeniusManifestIntegrationTest, TrailDepthRestoresAfterEmptyRun) {
 
 TEST_F(GeniusManifestIntegrationTest, TearDownClearsDecisionMemoryAndCgw) {
     initial_goals.push(fun("f"));
-    database.push(rule{fun("f"), {}});
+    database.push(rule{fun("f"), {}, 0});
     genius_manifest m = make_manifest();
     m.set_up_sim_.set_up();
     EXPECT_EQ(m.run_sim_.run(), sim_termination::solved);
@@ -89,8 +89,8 @@ TEST_F(GeniusManifestIntegrationTest, TearDownClearsDecisionMemoryAndCgw) {
 TEST_F(GeniusManifestIntegrationTest, FixedSeedPicksAmongCompetingFacts) {
     const expr* a = fun("a");
     const expr* b = fun("b");
-    database.push(rule{fun("f", {a}), {}});
-    database.push(rule{fun("f", {b}), {}});
+    database.push(rule{fun("f", {a}), {}, 0});
+    database.push(rule{fun("f", {b}), {}, 0});
     initial_goals.push(fun("f", {pool.make_var(0)}));
 
     genius_runtime rt = make_runtime(1);
@@ -103,7 +103,7 @@ TEST_F(GeniusManifestIntegrationTest, FixedSeedPicksAmongCompetingFacts) {
 
 TEST_F(GeniusManifestIntegrationTest, UnitSolutionGroundsFullCgwReward) {
     initial_goals.push(fun("f"));
-    database.push(rule{fun("f"), {}});
+    database.push(rule{fun("f"), {}, 0});
     genius_manifest m = make_manifest();
     auto sm = m.solver_.solve();
     sm.resume();
@@ -115,7 +115,7 @@ TEST_F(GeniusManifestIntegrationTest, UnitSolutionGroundsFullCgwReward) {
 
 TEST_F(GeniusManifestIntegrationTest, RuntimeCgwMatchesManifestAfterUnitSolve) {
     initial_goals.push(fun("f"));
-    database.push(rule{fun("f"), {}});
+    database.push(rule{fun("f"), {}, 0});
     genius_runtime rt = make_runtime();
     ASSERT_TRUE(rt.next());
     ASSERT_TRUE(rt.solved());

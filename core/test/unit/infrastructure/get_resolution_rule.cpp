@@ -19,7 +19,7 @@ struct GetResolutionRuleTest : public ::testing::Test {
     goal_lineage parent_gl{nullptr, 0};
     resolution_lineage rl{&parent_gl, kRule};
     expr head{expr::var{0}};
-    rule r{&head, {}};
+    rule r{&head, {}, 0};
 };
 
 TEST_F(GetResolutionRuleTest, DelegatesToRuleLookupByResolutionIdx) {

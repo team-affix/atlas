@@ -1,7 +1,9 @@
+#include <algorithm>
 #include <stdexcept>
 #include "infrastructure/db.hpp"
+#include "debug_assert.hpp"
 
-db::db() = default;
+db::db() : next_id_(0) {}
 
 rule_id db::push(rule r) {
     if (std::holds_alternative<expr::var>(r.head->content))
@@ -9,11 +11,20 @@ rule_id db::push(rule r) {
     if (r.var_count == 0)
         r.var_count = compute_var_count(r);
     const uint32_t functor_id = std::get<expr::functor>(r.head->content).id;
-    rule_id id = rules_.size();
-    rules_.push_back(std::move(r));
+    const rule_id id = next_id_++;
+    rules_.emplace(id, std::move(r));
     total_rule_set_.insert(id);
     functor_indexed_rule_sets_[functor_id].insert(id);
     return id;
+}
+
+void db::erase(rule_id id) {
+    auto it = rules_.find(id);
+    DEBUG_ASSERT(it != rules_.end());
+    const uint32_t functor_id = std::get<expr::functor>(it->second.head->content).id;
+    functor_indexed_rule_sets_[functor_id].erase(id);
+    total_rule_set_.erase(id);
+    rules_.erase(it);
 }
 
 const rule* db::get_rule(rule_id id) const {

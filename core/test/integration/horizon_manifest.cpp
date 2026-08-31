@@ -93,7 +93,7 @@ TEST_F(HorizonManifestIntegrationTest, SolverFindsSingleUnitSolutionWithFullCgw)
     const expr* goal = saved_expr_pool_.make_functor(functors.id("f"), {});
     const expr* head = saved_expr_pool_.make_functor(functors.id("f"), {});
     initial_goals.push(goal);
-    database.push(rule{head, {}});
+    database.push(rule{head, {}, 0});
 
     horizon_manifest manifest = make_manifest();
     auto sm = manifest.solver_.solve();
@@ -109,7 +109,7 @@ TEST_F(HorizonManifestIntegrationTest, RuntimeCgwConservedThenClearedAcrossCycle
     const expr* goal = saved_expr_pool_.make_functor(functors.id("f"), {});
     const expr* head = saved_expr_pool_.make_functor(functors.id("f"), {});
     initial_goals.push(goal);
-    database.push(rule{head, {}});
+    database.push(rule{head, {}, 0});
 
     horizon_manifest manifest = make_manifest();
     manifest.set_up_sim_.set_up();

@@ -55,7 +55,7 @@ struct RpFewerCandidateSrtSubgoalsActivatorTest : public ::testing::Test {
 };
 
 TEST_F(RpFewerCandidateSrtSubgoalsActivatorTest, ScoresEachBodyGoalAfterActivate) {
-    rule r{nullptr, {nullptr, nullptr}};
+    rule r{nullptr, {nullptr, nullptr}, 0};
 
     InSequence seq;
     EXPECT_CALL(activate, activate_subgoals_and_candidates(&rl)).WillOnce(Return(true));
@@ -71,7 +71,7 @@ TEST_F(RpFewerCandidateSrtSubgoalsActivatorTest, ScoresEachBodyGoalAfterActivate
 }
 
 TEST_F(RpFewerCandidateSrtSubgoalsActivatorTest, EmptyBodySkipsSet) {
-    rule r{nullptr, {}};
+    rule r{nullptr, {}, 0};
 
     InSequence seq;
     EXPECT_CALL(activate, activate_subgoals_and_candidates(&rl)).WillOnce(Return(true));

@@ -41,8 +41,8 @@ struct SubgoalsActivatorTest : public ::testing::Test {
     expr parent_goal{expr::var{0}};
     expr body_goal{expr::var{1}};
     expr head{expr::var{10}};
-    rule idx{&head, {&body_goal}};
-    rule empty_body_rule{&head, {}};
+    rule idx{&head, {&body_goal}, 0};
+    rule empty_body_rule{&head, {}, 0};
     goal_lineage parent_gl{nullptr, 0};
     goal_lineage body_gl{nullptr, kBodyIdx};
     resolution_lineage rl{&parent_gl, kRule};
@@ -65,7 +65,7 @@ TEST_F(SubgoalsActivatorTest, ConflictOnBodyGoalReturnsFalse) {
 TEST_F(SubgoalsActivatorTest, ActivatesEveryBodySubgoal) {
     expr body0{expr::var{1}};
     expr body1{expr::var{2}};
-    rule two_body{&head, {&body0, &body1}};
+    rule two_body{&head, {&body0, &body1}, 0};
     resolution_lineage rl_two{&parent_gl, kRule};
     goal_lineage body_gl0{&rl_two, 0};
     goal_lineage body_gl1{&rl_two, 1};

@@ -42,8 +42,8 @@ TEST_F(DbuctHorizonFcManifestIntegrationTest, InitialActivateSetsFewerCandidateS
     const expr* f_head0 = saved_expr_pool_.make_functor(functors.id("f"), {});
     const expr* f_head1 = saved_expr_pool_.make_functor(functors.id("f"), {});
     initial_goals.push(goal);
-    database.push(rule{f_head0, {}});
-    database.push(rule{f_head1, {}});
+    database.push(rule{f_head0, {}, 0});
+    database.push(rule{f_head1, {}, 0});
 
     dbuct_horizon_fc_manifest manifest = make_manifest();
     ASSERT_TRUE(manifest.srt_initial_goals_activator_.activate_initial_goals_and_candidates());

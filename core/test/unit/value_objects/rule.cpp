@@ -13,7 +13,7 @@ struct RuleTest : public ::testing::Test {
 };
 
 TEST_F(RuleTest, TwoArgConstructorSetsVarCountToZero) {
-    const rule r{&head, {&body0, &body1}};
+    const rule r{&head, {&body0, &body1}, 0};
 
     EXPECT_EQ(r.var_count, 0u);
     EXPECT_EQ(r.head, &head);

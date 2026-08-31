@@ -95,8 +95,8 @@ struct ResolverSrtLifecycleIntegrationTest : public ::testing::Test {
     expr head_{expr::var{0}};
     expr body0_{expr::var{1}};
     expr body1_{expr::var{2}};
-    rule fact_rule_{&head_, {}};
-    rule expand2_rule_{&head_, {&body0_, &body1_}};
+    rule fact_rule_{&head_, {}, 0};
+    rule expand2_rule_{&head_, {&body0_, &body1_}, 0};
     std::array<rule, 2> rule_table_{fact_rule_, expand2_rule_};
 
     NiceMock<MockGetRule> get_rule;

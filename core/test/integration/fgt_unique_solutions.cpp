@@ -69,22 +69,22 @@ struct FgtUniqueSolutionsTest : public ::testing::Test {
     void push_four_two_goal_combinations() {
         initial_goals.push(saved_expr_pool_.make_functor(functors.id("f"), {}));
         initial_goals.push(saved_expr_pool_.make_functor(functors.id("g"), {}));
-        database.push(rule{saved_expr_pool_.make_functor(functors.id("f"), {}), {}});
-        database.push(rule{saved_expr_pool_.make_functor(functors.id("f"), {}), {}});
-        database.push(rule{saved_expr_pool_.make_functor(functors.id("g"), {}), {}});
-        database.push(rule{saved_expr_pool_.make_functor(functors.id("g"), {}), {}});
+        database.push(rule{saved_expr_pool_.make_functor(functors.id("f"), {}), {}, 0});
+        database.push(rule{saved_expr_pool_.make_functor(functors.id("f"), {}), {}, 0});
+        database.push(rule{saved_expr_pool_.make_functor(functors.id("g"), {}), {}, 0});
+        database.push(rule{saved_expr_pool_.make_functor(functors.id("g"), {}), {}, 0});
     }
 
     void push_eight_three_goal_combinations() {
         initial_goals.push(saved_expr_pool_.make_functor(functors.id("f"), {}));
         initial_goals.push(saved_expr_pool_.make_functor(functors.id("g"), {}));
         initial_goals.push(saved_expr_pool_.make_functor(functors.id("h"), {}));
-        database.push(rule{saved_expr_pool_.make_functor(functors.id("f"), {}), {}});
-        database.push(rule{saved_expr_pool_.make_functor(functors.id("f"), {}), {}});
-        database.push(rule{saved_expr_pool_.make_functor(functors.id("g"), {}), {}});
-        database.push(rule{saved_expr_pool_.make_functor(functors.id("g"), {}), {}});
-        database.push(rule{saved_expr_pool_.make_functor(functors.id("h"), {}), {}});
-        database.push(rule{saved_expr_pool_.make_functor(functors.id("h"), {}), {}});
+        database.push(rule{saved_expr_pool_.make_functor(functors.id("f"), {}), {}, 0});
+        database.push(rule{saved_expr_pool_.make_functor(functors.id("f"), {}), {}, 0});
+        database.push(rule{saved_expr_pool_.make_functor(functors.id("g"), {}), {}, 0});
+        database.push(rule{saved_expr_pool_.make_functor(functors.id("g"), {}), {}, 0});
+        database.push(rule{saved_expr_pool_.make_functor(functors.id("h"), {}), {}, 0});
+        database.push(rule{saved_expr_pool_.make_functor(functors.id("h"), {}), {}, 0});
     }
 };
 

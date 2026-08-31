@@ -92,7 +92,7 @@ TEST_F(RpFewerCandidateResolveScoresIntegrationTest, TwoChildrenDifferentCandida
         {&c0, {0, 1}},
         {&c1, {0, 1, 2, 3, 4}},
     };
-    rule r{nullptr, {nullptr, nullptr}};
+    rule r{nullptr, {nullptr, nullptr}, 0};
 
     EXPECT_CALL(get_rule, get_rule(0)).WillOnce(Return(&r));
     EXPECT_CALL(make_lineage, make_goal_lineage(&rl, 0)).WillOnce(Return(&c0));
@@ -121,7 +121,7 @@ TEST_F(RpFewerCandidateResolveScoresIntegrationTest, FactEmptyBodyOnlyNegInfPerc
     rp.set_active_goal_value(&p, 0.0);
     EXPECT_EQ(rp.get(&gp), 0.0);
 
-    rule r{nullptr, {}};
+    rule r{nullptr, {}, 0};
     inner.children = {};
     EXPECT_CALL(get_rule, get_rule(0)).WillOnce(Return(&r));
 

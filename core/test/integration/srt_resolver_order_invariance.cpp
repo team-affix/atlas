@@ -400,10 +400,10 @@ struct SrtResolverOrderInvarianceIntegrationTest : public ::testing::Test {
     expr body0_{expr::var{1}};
     expr body1_{expr::var{2}};
     expr body2_{expr::var{3}};
-    rule ground_rule_{&head_, {}};
-    rule expand1_rule_{&head_, {&body0_}};
-    rule expand2_rule_{&head_, {&body0_, &body1_}};
-    rule expand3_rule_{&head_, {&body0_, &body1_, &body2_}};
+    rule ground_rule_{&head_, {}, 0};
+    rule expand1_rule_{&head_, {&body0_}, 0};
+    rule expand2_rule_{&head_, {&body0_, &body1_}, 0};
+    rule expand3_rule_{&head_, {&body0_, &body1_, &body2_}, 0};
     std::array<rule, 4> rule_table_{
         ground_rule_,
         expand1_rule_,

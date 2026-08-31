@@ -106,7 +106,7 @@ TEST_F(QuellManifestIntegrationTest, SolverFindsSingleUnitSolutionClearsRemainin
     const expr* goal = saved_expr_pool_.make_functor(functors.id("f"), {});
     const expr* head = saved_expr_pool_.make_functor(functors.id("f"), {});
     initial_goals.push(goal);
-    database.push(rule{head, {}});
+    database.push(rule{head, {}, 0});
 
     quell_manifest manifest = make_manifest();
     auto sm = manifest.solver_.solve();
@@ -123,7 +123,7 @@ TEST_F(QuellManifestIntegrationTest, RuntimeRemainingClearedAcrossCycles) {
     const expr* goal = saved_expr_pool_.make_functor(functors.id("f"), {});
     const expr* head = saved_expr_pool_.make_functor(functors.id("f"), {});
     initial_goals.push(goal);
-    database.push(rule{head, {}});
+    database.push(rule{head, {}, 0});
 
     quell_manifest manifest = make_manifest();
     manifest.set_up_sim_.set_up();

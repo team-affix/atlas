@@ -272,7 +272,7 @@ TEST_F(BasicManifestIntegrationTest, SimLifecycleTrailDepthRestoresAfterDepthExc
     const expr* f_head = saved_expr_pool_.make_functor(functors.id("f"), {});
     const expr* f_body = saved_expr_pool_.make_functor(functors.id("f"), {});
     initial_goals.push(goal);
-    database.push(rule{f_head, {f_body}});
+    database.push(rule{f_head, {f_body}, 0});
     static constexpr size_t kLowBudget = 4;
     basic_manifest manifest{database, initial_goals, kInitialFrameOffset, kLowBudget, kSeed};
     const size_t depth_before = manifest.elimination_backlog_.depth();
@@ -292,7 +292,7 @@ TEST_F(BasicManifestIntegrationTest, SimLifecycleClearsEphemeralStoresAfterSolve
     const expr* abc = saved_expr_pool_.make_functor(functors.id("abc"), {});
     const expr* _123 = saved_expr_pool_.make_functor(functors.id("123"), {});
     const expr* head = saved_expr_pool_.make_functor(functors.id("f"), {abc, _123});
-    database.push(rule{head, {}});
+    database.push(rule{head, {}, 0});
 
     basic_manifest manifest{database, initial_goals, kInitialFrameOffset, kMaxResolutions, kSeed};
     const uint32_t idx_test = manifest.frame_allocator_.bump(1);
@@ -324,7 +324,7 @@ TEST_F(BasicManifestIntegrationTest, SimLifecycleBaseFrameVarsSurviveTearDown) {
     const expr* abc = saved_expr_pool_.make_functor(functors.id("abc"), {});
     const expr* _123 = saved_expr_pool_.make_functor(functors.id("123"), {});
     const expr* head = saved_expr_pool_.make_functor(functors.id("f"), {abc, _123});
-    database.push(rule{head, {}});
+    database.push(rule{head, {}, 0});
 
     basic_manifest manifest{database, initial_goals, kInitialFrameOffset, kMaxResolutions, kSeed};
     const uint32_t idx_a = manifest.frame_allocator_.bump(1);
@@ -371,8 +371,8 @@ TEST_F(BasicManifestIntegrationTest, SimLifecycleExprPoolGrowthPersistsAfterTear
     const expr* cons_at = saved_expr_pool_.make_functor(functors.id("cons"), {rule_a, rule_t});
     const expr* head1 = saved_expr_pool_.make_functor(functors.id("make_list"), {suc_l, rule_a, cons_at});
     const expr* body1 = saved_expr_pool_.make_functor(functors.id("make_list"), {rule_l, rule_a, rule_t});
-    database.push(rule{head0, {}});
-    database.push(rule{head1, {body1}});
+    database.push(rule{head0, {}, 0});
+    database.push(rule{head1, {body1}, 0});
 
     basic_manifest manifest{database, initial_goals, kInitialFrameOffset, kMaxResolutions, kSeed};
     const size_t expr_before = manifest.expr_pool_.size();
@@ -402,7 +402,7 @@ TEST_F(BasicManifestIntegrationTest, SimMhuBindsThroughManifest) {
     const expr* abc = saved_expr_pool_.make_functor(functors.id("abc"), {});
     const expr* _123 = saved_expr_pool_.make_functor(functors.id("123"), {});
     const expr* head = saved_expr_pool_.make_functor(functors.id("f"), {abc, _123});
-    database.push(rule{head, {}});
+    database.push(rule{head, {}, 0});
 
     basic_manifest manifest{database, initial_goals, kInitialFrameOffset, kMaxResolutions, kSeed};
     const uint32_t idx_a = manifest.frame_allocator_.bump(1);
@@ -435,8 +435,8 @@ TEST_F(BasicManifestIntegrationTest, SimMhuDeactivationRemovesSiblingFromFrontie
     const expr* _123 = saved_expr_pool_.make_functor(functors.id("123"), {});
     const expr* head0 = saved_expr_pool_.make_functor(functors.id("f"), {abc, _123});
     const expr* head1 = saved_expr_pool_.make_functor(functors.id("f"), {def, _123});
-    database.push(rule{head0, {}});
-    database.push(rule{head1, {}});
+    database.push(rule{head0, {}, 0});
+    database.push(rule{head1, {}, 0});
 
     basic_manifest manifest{database, initial_goals, kInitialFrameOffset, kMaxResolutions, kSeed};
     const goal_lineage* gl = manifest.make_initial_goal_lineage_.make(0);
@@ -474,8 +474,8 @@ TEST_F(BasicManifestIntegrationTest, SimRandomDecisionGeneratorPicksBranchWithFi
     const expr* f_head0 = saved_expr_pool_.make_functor(functors.id("f"), {});
     const expr* f_head1 = saved_expr_pool_.make_functor(functors.id("f"), {});
     initial_goals.push(goal);
-    database.push(rule{f_head0, {}});
-    database.push(rule{f_head1, {}});
+    database.push(rule{f_head0, {}, 0});
+    database.push(rule{f_head1, {}, 0});
 
     basic_manifest manifest{database, initial_goals, kInitialFrameOffset, kMaxResolutions, kSeed};
     manifest.set_up_sim_.set_up();
@@ -500,7 +500,7 @@ TEST_F(BasicManifestIntegrationTest, BindingsBeforeTearDown) {
     const expr* abc = saved_expr_pool_.make_functor(functors.id("abc"), {});
     const expr* _123 = saved_expr_pool_.make_functor(functors.id("123"), {});
     const expr* head = saved_expr_pool_.make_functor(functors.id("f"), {abc, _123});
-    database.push(rule{head, {}});
+    database.push(rule{head, {}, 0});
 
     basic_manifest manifest{database, initial_goals, kInitialFrameOffset, kMaxResolutions, kSeed};
     normalizer<globalizer, expr_pool, expr_pool, bind_map<globalizer>> norm{manifest.globalizer_, manifest.expr_pool_, manifest.expr_pool_, manifest.bind_map_};
@@ -544,10 +544,10 @@ TEST_F(BasicManifestIntegrationTest, TickCdclAvoidancesPersistAcrossTearDown) {
     const expr* g_head3 = saved_expr_pool_.make_functor(functors.id("g"), {});
     initial_goals.push(goal_f);
     initial_goals.push(goal_g);
-    database.push(rule{f_head0, {}});
-    database.push(rule{f_head1, {}});
-    database.push(rule{g_head2, {}});
-    database.push(rule{g_head3, {}});
+    database.push(rule{f_head0, {}, 0});
+    database.push(rule{f_head1, {}, 0});
+    database.push(rule{g_head2, {}, 0});
+    database.push(rule{g_head3, {}, 0});
 
     basic_manifest manifest{database, initial_goals, kInitialFrameOffset, kMaxResolutions, kSeed};
     const goal_lineage* gl0 = manifest.make_initial_goal_lineage_.make(0);
@@ -586,8 +586,8 @@ TEST_F(BasicManifestIntegrationTest, TickBacklogsEliminationForInactiveGoal) {
     const expr* f_head0 = saved_expr_pool_.make_functor(functors.id("f"), {});
     const expr* f_head1 = saved_expr_pool_.make_functor(functors.id("f"), {});
     initial_goals.push(goal);
-    database.push(rule{f_head0, {}});
-    database.push(rule{f_head1, {}});
+    database.push(rule{f_head0, {}, 0});
+    database.push(rule{f_head1, {}, 0});
 
     basic_manifest manifest{database, initial_goals, kInitialFrameOffset, kMaxResolutions, kSeed};
     const goal_lineage* gl = manifest.make_initial_goal_lineage_.make(0);
@@ -624,9 +624,9 @@ TEST_F(BasicManifestIntegrationTest, BackloggedCandidateAlreadyDeactivatedOnReel
     const expr* g_head2 = saved_expr_pool_.make_functor(functors.id("g"), {});
     initial_goals.push(goal_f);
     initial_goals.push(goal_g);
-    database.push(rule{f_head0, {}});
-    database.push(rule{g_head1, {}});
-    database.push(rule{g_head2, {}});
+    database.push(rule{f_head0, {}, 0});
+    database.push(rule{g_head1, {}, 0});
+    database.push(rule{g_head2, {}, 0});
 
     basic_manifest manifest{database, initial_goals, kInitialFrameOffset, kMaxResolutions, kSeed};
     const goal_lineage* gl_f = manifest.make_initial_goal_lineage_.make(0);
@@ -663,10 +663,10 @@ TEST_F(BasicManifestIntegrationTest, TickDecisionLemmaLineagesPinnedBeforeTrim) 
     const expr* g_head3 = saved_expr_pool_.make_functor(functors.id("g"), {});
     initial_goals.push(goal_f);
     initial_goals.push(goal_g);
-    database.push(rule{f_head0, {}});
-    database.push(rule{f_head1, {}});
-    database.push(rule{g_head2, {}});
-    database.push(rule{g_head3, {}});
+    database.push(rule{f_head0, {}, 0});
+    database.push(rule{f_head1, {}, 0});
+    database.push(rule{g_head2, {}, 0});
+    database.push(rule{g_head3, {}, 0});
 
     basic_manifest manifest{database, initial_goals, kInitialFrameOffset, kMaxResolutions, kSeed};
     const goal_lineage* gl0 = manifest.make_initial_goal_lineage_.make(0);
@@ -705,8 +705,8 @@ TEST_F(BasicManifestIntegrationTest, TickSecondBranchDiffersOnDuplicateRuleProbl
     const expr* f_head0 = saved_expr_pool_.make_functor(functors.id("f"), {});
     const expr* f_head1 = saved_expr_pool_.make_functor(functors.id("f"), {});
     initial_goals.push(goal);
-    database.push(rule{f_head0, {}});
-    database.push(rule{f_head1, {}});
+    database.push(rule{f_head0, {}, 0});
+    database.push(rule{f_head1, {}, 0});
 
     static const std::set<rule_id> kBranches{rule_id{0}, rule_id{1}};
 
@@ -778,7 +778,7 @@ TEST_F(BasicManifestIntegrationTest, SolverFindsSingleUnitSolution) {
     const expr* goal = saved_expr_pool_.make_functor(functors.id("f"), {});
     const expr* head = saved_expr_pool_.make_functor(functors.id("f"), {});
     initial_goals.push(goal);
-    database.push(rule{head, {}});
+    database.push(rule{head, {}, 0});
 
     basic_manifest manifest{database, initial_goals, kInitialFrameOffset, kMaxResolutions, kSeed};
     auto sm = manifest.solver_.solve();
@@ -819,8 +819,8 @@ TEST_F(BasicManifestIntegrationTest, SolverEnumeratesTwoGroundChoiceSolutions) {
     const expr* f_head0 = saved_expr_pool_.make_functor(functors.id("f"), {});
     const expr* f_head1 = saved_expr_pool_.make_functor(functors.id("f"), {});
     initial_goals.push(goal);
-    database.push(rule{f_head0, {}});
-    database.push(rule{f_head1, {}});
+    database.push(rule{f_head0, {}, 0});
+    database.push(rule{f_head1, {}, 0});
 
     basic_manifest manifest{database, initial_goals, kInitialFrameOffset, kMaxResolutions, kSeed};
 
@@ -843,8 +843,8 @@ TEST_F(BasicManifestIntegrationTest, SolverRefutesAfterEnumeratingAllGroundBranc
     const expr* f_head0 = saved_expr_pool_.make_functor(functors.id("f"), {});
     const expr* f_head1 = saved_expr_pool_.make_functor(functors.id("f"), {});
     initial_goals.push(goal);
-    database.push(rule{f_head0, {}});
-    database.push(rule{f_head1, {}});
+    database.push(rule{f_head0, {}, 0});
+    database.push(rule{f_head1, {}, 0});
 
     basic_manifest manifest{database, initial_goals, kInitialFrameOffset, kMaxResolutions, kSeed};
 
@@ -871,8 +871,8 @@ TEST_F(BasicManifestIntegrationTest, SolverFindsClauseDerivedUnitSolution) {
     const expr* f_head = saved_expr_pool_.make_functor(functors.id("f"), {});
     const expr* g_body = saved_expr_pool_.make_functor(functors.id("g"), {rule_var});
     initial_goals.push(goal);
-    database.push(rule{f_head, {g_body}});
-    database.push(rule{g_fact, {}});
+    database.push(rule{f_head, {g_body}, 0});
+    database.push(rule{g_fact, {}, 0});
 
     basic_manifest manifest{database, initial_goals, kInitialFrameOffset, kMaxResolutions, kSeed};
     auto sm = manifest.solver_.solve();
@@ -901,9 +901,9 @@ TEST_F(BasicManifestIntegrationTest, SolverEnumeratesTwoChoiceClauseSolutions) {
     const expr* f_head = saved_expr_pool_.make_functor(functors.id("f"), {});
     const expr* g_body = saved_expr_pool_.make_functor(functors.id("g"), {rule_var});
     initial_goals.push(goal);
-    database.push(rule{f_head, {g_body}});
-    database.push(rule{g_fact0, {}});
-    database.push(rule{g_fact1, {}});
+    database.push(rule{f_head, {g_body}, 0});
+    database.push(rule{g_fact0, {}, 0});
+    database.push(rule{g_fact1, {}, 0});
 
     basic_manifest manifest{database, initial_goals, kInitialFrameOffset, kMaxResolutions, kSeed};
 
@@ -925,7 +925,7 @@ TEST_F(BasicManifestIntegrationTest, SolverFindsSolutionWithCorrectBindings) {
     const expr* abc = saved_expr_pool_.make_functor(functors.id("abc"), {});
     const expr* _123 = saved_expr_pool_.make_functor(functors.id("123"), {});
     const expr* head = saved_expr_pool_.make_functor(functors.id("f"), {abc, _123});
-    database.push(rule{head, {}});
+    database.push(rule{head, {}, 0});
 
     basic_manifest manifest{database, initial_goals, kInitialFrameOffset, kMaxResolutions, kSeed};
     normalizer<globalizer, expr_pool, expr_pool, bind_map<globalizer>> norm{manifest.globalizer_, manifest.expr_pool_, manifest.expr_pool_, manifest.bind_map_};
@@ -966,9 +966,9 @@ TEST_F(BasicManifestIntegrationTest, SolverFindsClauseBodyBindingSolution) {
     const expr* h_body = saved_expr_pool_.make_functor(functors.id("h"), {rule_var_b});
     const expr* g_head = saved_expr_pool_.make_functor(functors.id("g"), {abc});
     const expr* h_head = saved_expr_pool_.make_functor(functors.id("h"), {_123});
-    database.push(rule{f_head, {g_body, h_body}});
-    database.push(rule{g_head, {}});
-    database.push(rule{h_head, {}});
+    database.push(rule{f_head, {g_body, h_body}, 0});
+    database.push(rule{g_head, {}, 0});
+    database.push(rule{h_head, {}, 0});
 
     basic_manifest manifest{database, initial_goals, kInitialFrameOffset, kMaxResolutions, kSeed};
     normalizer<globalizer, expr_pool, expr_pool, bind_map<globalizer>> norm{manifest.globalizer_, manifest.expr_pool_, manifest.expr_pool_, manifest.bind_map_};
@@ -1001,8 +1001,8 @@ TEST_F(BasicManifestIntegrationTest, SolverEnumeratesTwoVarChoiceSolutions) {
     const expr* xyz = saved_expr_pool_.make_functor(functors.id("xyz"), {});
     const expr* head0 = saved_expr_pool_.make_functor(functors.id("f"), {abc});
     const expr* head1 = saved_expr_pool_.make_functor(functors.id("f"), {xyz});
-    database.push(rule{head0, {}});
-    database.push(rule{head1, {}});
+    database.push(rule{head0, {}, 0});
+    database.push(rule{head1, {}, 0});
 
     basic_manifest manifest{database, initial_goals, kInitialFrameOffset, kMaxResolutions, kSeed};
     normalizer<globalizer, expr_pool, expr_pool, bind_map<globalizer>> norm{manifest.globalizer_, manifest.expr_pool_, manifest.expr_pool_, manifest.bind_map_};
@@ -1035,8 +1035,8 @@ TEST_F(BasicManifestIntegrationTest, SolverRefutesAfterEnumeratingAllVarBranches
     const expr* xyz = saved_expr_pool_.make_functor(functors.id("xyz"), {});
     const expr* head0 = saved_expr_pool_.make_functor(functors.id("f"), {abc});
     const expr* head1 = saved_expr_pool_.make_functor(functors.id("f"), {xyz});
-    database.push(rule{head0, {}});
-    database.push(rule{head1, {}});
+    database.push(rule{head0, {}, 0});
+    database.push(rule{head1, {}, 0});
 
     basic_manifest manifest{database, initial_goals, kInitialFrameOffset, kMaxResolutions, kSeed};
     normalizer<globalizer, expr_pool, expr_pool, bind_map<globalizer>> norm{manifest.globalizer_, manifest.expr_pool_, manifest.expr_pool_, manifest.bind_map_};
@@ -1072,10 +1072,10 @@ TEST_F(BasicManifestIntegrationTest, SolverEnumeratesTwoGoalSharedVarSolutions) 
     const expr* f_head1 = saved_expr_pool_.make_functor(functors.id("f"), {xyz});
     const expr* g_head0 = saved_expr_pool_.make_functor(functors.id("g"), {abc});
     const expr* g_head1 = saved_expr_pool_.make_functor(functors.id("g"), {xyz});
-    database.push(rule{f_head0, {}});
-    database.push(rule{f_head1, {}});
-    database.push(rule{g_head0, {}});
-    database.push(rule{g_head1, {}});
+    database.push(rule{f_head0, {}, 0});
+    database.push(rule{f_head1, {}, 0});
+    database.push(rule{g_head0, {}, 0});
+    database.push(rule{g_head1, {}, 0});
 
     basic_manifest manifest{database, initial_goals, kInitialFrameOffset, kMaxResolutions, kSeed};
     normalizer<globalizer, expr_pool, expr_pool, bind_map<globalizer>> norm{manifest.globalizer_, manifest.expr_pool_, manifest.expr_pool_, manifest.bind_map_};
@@ -1112,9 +1112,9 @@ TEST_F(BasicManifestIntegrationTest, TickThreeGroundBranchesEnumerateDistinct) {
     const expr* f_head1 = saved_expr_pool_.make_functor(functors.id("f"), {});
     const expr* f_head2 = saved_expr_pool_.make_functor(functors.id("f"), {});
     initial_goals.push(goal);
-    database.push(rule{f_head0, {}});
-    database.push(rule{f_head1, {}});
-    database.push(rule{f_head2, {}});
+    database.push(rule{f_head0, {}, 0});
+    database.push(rule{f_head1, {}, 0});
+    database.push(rule{f_head2, {}, 0});
 
     basic_manifest manifest{database, initial_goals, kInitialFrameOffset, kMaxResolutions, kSeed};
 
@@ -1142,10 +1142,10 @@ TEST_F(BasicManifestIntegrationTest, SimLifecycleTwoSequentialDecisionsOnTwoGoal
     const expr* g_head3 = saved_expr_pool_.make_functor(functors.id("g"), {});
     initial_goals.push(goal_f);
     initial_goals.push(goal_g);
-    database.push(rule{f_head0, {}});
-    database.push(rule{f_head1, {}});
-    database.push(rule{g_head2, {}});
-    database.push(rule{g_head3, {}});
+    database.push(rule{f_head0, {}, 0});
+    database.push(rule{f_head1, {}, 0});
+    database.push(rule{g_head2, {}, 0});
+    database.push(rule{g_head3, {}, 0});
 
     basic_manifest manifest{database, initial_goals, kInitialFrameOffset, kMaxResolutions, kSeed};
     manifest.set_up_sim_.set_up();
@@ -1195,11 +1195,11 @@ TEST_F(BasicManifestIntegrationTest, SimLifecycleRecursiveClauseTreeSolvedWithou
     const expr* i_head = saved_expr_pool_.make_functor(functors.id("i"), {});
     const expr* j_head = saved_expr_pool_.make_functor(functors.id("j"), {});
     initial_goals.push(goal_f);
-    database.push(rule{f_head, {g_body, h_body}});
-    database.push(rule{g_head, {i_body, j_body}});
-    database.push(rule{h_head, {i_body, j_body}});
-    database.push(rule{i_head, {}});
-    database.push(rule{j_head, {}});
+    database.push(rule{f_head, {g_body, h_body}, 0});
+    database.push(rule{g_head, {i_body, j_body}, 0});
+    database.push(rule{h_head, {i_body, j_body}, 0});
+    database.push(rule{i_head, {}, 0});
+    database.push(rule{j_head, {}, 0});
 
     basic_manifest manifest{database, initial_goals, kInitialFrameOffset, kMaxResolutions, kSeed};
     manifest.set_up_sim_.set_up();
@@ -1225,10 +1225,10 @@ TEST_F(BasicManifestIntegrationTest, SimLifecycleCdclUnitElimForcesRemainingCand
     const expr* g_head1 = saved_expr_pool_.make_functor(functors.id("g"), {});
     initial_goals.push(goal_f);
     initial_goals.push(goal_g);
-    database.push(rule{f_head0, {}});
-    database.push(rule{f_head1, {}});
-    database.push(rule{g_head0, {}});
-    database.push(rule{g_head1, {}});
+    database.push(rule{f_head0, {}, 0});
+    database.push(rule{f_head1, {}, 0});
+    database.push(rule{g_head0, {}, 0});
+    database.push(rule{g_head1, {}, 0});
 
     basic_manifest manifest{database, initial_goals, kInitialFrameOffset, kMaxResolutions, kSeed};
     const goal_lineage* gl_f = manifest.make_initial_goal_lineage_.make(0);
@@ -1290,10 +1290,10 @@ TEST_F(BasicManifestIntegrationTest, SimLifecycleDecisionMemoryClearsEachTearDow
     const expr* g_head3 = saved_expr_pool_.make_functor(functors.id("g"), {});
     initial_goals.push(goal_f);
     initial_goals.push(goal_g);
-    database.push(rule{f_head0, {}});
-    database.push(rule{f_head1, {}});
-    database.push(rule{g_head2, {}});
-    database.push(rule{g_head3, {}});
+    database.push(rule{f_head0, {}, 0});
+    database.push(rule{f_head1, {}, 0});
+    database.push(rule{g_head2, {}, 0});
+    database.push(rule{g_head3, {}, 0});
 
     basic_manifest manifest{database, initial_goals, kInitialFrameOffset, kMaxResolutions, kSeed};
     const goal_lineage* gl0 = manifest.make_initial_goal_lineage_.make(0);
@@ -1337,10 +1337,10 @@ TEST_F(BasicManifestIntegrationTest, SolverEnumeratesFourTwoGoalGroundCombinatio
     const expr* g_head3 = saved_expr_pool_.make_functor(functors.id("g"), {});
     initial_goals.push(goal_f);
     initial_goals.push(goal_g);
-    database.push(rule{f_head0, {}});
-    database.push(rule{f_head1, {}});
-    database.push(rule{g_head2, {}});
-    database.push(rule{g_head3, {}});
+    database.push(rule{f_head0, {}, 0});
+    database.push(rule{f_head1, {}, 0});
+    database.push(rule{g_head2, {}, 0});
+    database.push(rule{g_head3, {}, 0});
 
     basic_manifest manifest{database, initial_goals, kInitialFrameOffset, kMaxResolutions, kSeed};
 
@@ -1386,12 +1386,12 @@ TEST_F(BasicManifestIntegrationTest, SolverEnumeratesEightThreeGoalGroundCombina
         seed_goals.push(goal_f);
         seed_goals.push(goal_g);
         seed_goals.push(goal_h);
-        seed_db.push(rule{f0, {}});
-        seed_db.push(rule{f1, {}});
-        seed_db.push(rule{g0, {}});
-        seed_db.push(rule{g1, {}});
-        seed_db.push(rule{h0, {}});
-        seed_db.push(rule{h1, {}});
+        seed_db.push(rule{f0, {}, 0});
+        seed_db.push(rule{f1, {}, 0});
+        seed_db.push(rule{g0, {}, 0});
+        seed_db.push(rule{g1, {}, 0});
+        seed_db.push(rule{h0, {}, 0});
+        seed_db.push(rule{h1, {}, 0});
 
         basic_manifest manifest{seed_db, seed_goals, kInitialFrameOffset, kMaxResolutions, seed};
 
@@ -1429,10 +1429,10 @@ TEST_F(BasicManifestIntegrationTest, SolverEnumeratesFourVarBindingSolutions) {
     const expr* head1 = saved_expr_pool_.make_functor(functors.id("f"), {xyz});
     const expr* head2 = saved_expr_pool_.make_functor(functors.id("f"), {def});
     const expr* head3 = saved_expr_pool_.make_functor(functors.id("f"), {ghi});
-    database.push(rule{head0, {}});
-    database.push(rule{head1, {}});
-    database.push(rule{head2, {}});
-    database.push(rule{head3, {}});
+    database.push(rule{head0, {}, 0});
+    database.push(rule{head1, {}, 0});
+    database.push(rule{head2, {}, 0});
+    database.push(rule{head3, {}, 0});
 
     basic_manifest manifest{database, initial_goals, kInitialFrameOffset, kMaxResolutions, kSeed};
     normalizer<globalizer, expr_pool, expr_pool, bind_map<globalizer>> norm{manifest.globalizer_, manifest.expr_pool_, manifest.expr_pool_, manifest.bind_map_};
@@ -1475,11 +1475,11 @@ TEST_F(BasicManifestIntegrationTest, SolverEnumeratesFourClauseBodyFactChoices) 
     const expr* f_head = saved_expr_pool_.make_functor(functors.id("f"), {});
     const expr* g_body = saved_expr_pool_.make_functor(functors.id("g"), {rule_var});
     initial_goals.push(goal);
-    database.push(rule{f_head, {g_body}});
-    database.push(rule{g_fact1, {}});
-    database.push(rule{g_fact2, {}});
-    database.push(rule{g_fact3, {}});
-    database.push(rule{g_fact4, {}});
+    database.push(rule{f_head, {g_body}, 0});
+    database.push(rule{g_fact1, {}, 0});
+    database.push(rule{g_fact2, {}, 0});
+    database.push(rule{g_fact3, {}, 0});
+    database.push(rule{g_fact4, {}, 0});
 
     basic_manifest manifest{database, initial_goals, kInitialFrameOffset, kMaxResolutions, kSeed};
 
@@ -1525,13 +1525,13 @@ TEST_F(BasicManifestIntegrationTest, SolverEnumeratesManySharedVarGroundHeads) {
         const expr* g_ghi = saved_expr_pool_.make_functor(functors.id("g"), {ghi, xyz, pqr});
         const expr* g_jkl = saved_expr_pool_.make_functor(functors.id("g"), {jkl, xyz, pqr});
         const expr* g_mno = saved_expr_pool_.make_functor(functors.id("g"), {mno, xyz, pqr});
-        seed_db.push(rule{f_head0, {}});
-        seed_db.push(rule{f_head1, {}});
-        seed_db.push(rule{g_abc, {}});
-        seed_db.push(rule{g_def, {}});
-        seed_db.push(rule{g_ghi, {}});
-        seed_db.push(rule{g_jkl, {}});
-        seed_db.push(rule{g_mno, {}});
+        seed_db.push(rule{f_head0, {}, 0});
+        seed_db.push(rule{f_head1, {}, 0});
+        seed_db.push(rule{g_abc, {}, 0});
+        seed_db.push(rule{g_def, {}, 0});
+        seed_db.push(rule{g_ghi, {}, 0});
+        seed_db.push(rule{g_jkl, {}, 0});
+        seed_db.push(rule{g_mno, {}, 0});
 
         basic_manifest manifest{seed_db, seed_goals, kInitialFrameOffset, kMaxResolutions, seed};
         const uint32_t idx_a = manifest.frame_allocator_.bump(1);
@@ -1558,13 +1558,13 @@ TEST_F(BasicManifestIntegrationTest, SolverEnumeratesManySharedVarGroundHeads) {
 
         db binding_db;
         initial_goal_exprs binding_goals;
-        binding_db.push(rule{f_head0, {}});
-        binding_db.push(rule{f_head1, {}});
-        binding_db.push(rule{g_abc, {}});
-        binding_db.push(rule{g_def, {}});
-        binding_db.push(rule{g_ghi, {}});
-        binding_db.push(rule{g_jkl, {}});
-        binding_db.push(rule{g_mno, {}});
+        binding_db.push(rule{f_head0, {}, 0});
+        binding_db.push(rule{f_head1, {}, 0});
+        binding_db.push(rule{g_abc, {}, 0});
+        binding_db.push(rule{g_def, {}, 0});
+        binding_db.push(rule{g_ghi, {}, 0});
+        binding_db.push(rule{g_jkl, {}, 0});
+        binding_db.push(rule{g_mno, {}, 0});
 
         basic_manifest binding_manifest{binding_db, binding_goals, kInitialFrameOffset, kMaxResolutions, seed};
         normalizer<globalizer, expr_pool, expr_pool, bind_map<globalizer>> binding_norm{binding_manifest.globalizer_, binding_manifest.expr_pool_, binding_manifest.expr_pool_, binding_manifest.bind_map_};
@@ -1636,8 +1636,8 @@ TEST_F(BasicManifestIntegrationTest, RefutesAfterCdclOnUnsatClauseBranches) {
     const expr* c = saved_expr_pool_.make_functor(functors.id("c"), {});
     const expr* a_head0 = saved_expr_pool_.make_functor(functors.id("a"), {});
     const expr* a_head1 = saved_expr_pool_.make_functor(functors.id("a"), {});
-    database.push(rule{a_head0, {b}});
-    database.push(rule{a_head1, {c}});
+    database.push(rule{a_head0, {b}, 0});
+    database.push(rule{a_head1, {c}, 0});
 
     const expr* goal = saved_expr_pool_.make_functor(functors.id("a"), {});
     initial_goals.push(goal);
@@ -1675,10 +1675,10 @@ TEST_F(BasicManifestIntegrationTest, FindsUniqueSharedVarConjunctionThenRefutes)
     const expr* is_a2 = saved_expr_pool_.make_functor(functors.id("is_a"), {two});
     const expr* is_b2 = saved_expr_pool_.make_functor(functors.id("is_b"), {two});
     const expr* is_b3 = saved_expr_pool_.make_functor(functors.id("is_b"), {three});
-    database.push(rule{is_a1, {}});
-    database.push(rule{is_a2, {}});
-    database.push(rule{is_b2, {}});
-    database.push(rule{is_b3, {}});
+    database.push(rule{is_a1, {}, 0});
+    database.push(rule{is_a2, {}, 0});
+    database.push(rule{is_b2, {}, 0});
+    database.push(rule{is_b3, {}, 0});
 
     basic_manifest manifest{database, initial_goals, kInitialFrameOffset, kMaxResolutions, kSeed};
     normalizer<globalizer, expr_pool, expr_pool, bind_map<globalizer>> norm{manifest.globalizer_, manifest.expr_pool_, manifest.expr_pool_, manifest.bind_map_};
@@ -1713,9 +1713,9 @@ TEST_F(BasicManifestIntegrationTest, EnumeratesTwoParentBindingsForAlice) {
     const expr* parent_bob_alice = saved_expr_pool_.make_functor(functors.id("parent"), {bob, alice});
     const expr* parent_carol_alice = saved_expr_pool_.make_functor(functors.id("parent"), {carol, alice});
     const expr* parent_dave_bob = saved_expr_pool_.make_functor(functors.id("parent"), {dave, bob});
-    database.push(rule{parent_bob_alice, {}});
-    database.push(rule{parent_carol_alice, {}});
-    database.push(rule{parent_dave_bob, {}});
+    database.push(rule{parent_bob_alice, {}, 0});
+    database.push(rule{parent_carol_alice, {}, 0});
+    database.push(rule{parent_dave_bob, {}, 0});
 
     basic_manifest manifest{database, initial_goals, kInitialFrameOffset, kMaxResolutions, kSeed};
     normalizer<globalizer, expr_pool, expr_pool, bind_map<globalizer>> norm{manifest.globalizer_, manifest.expr_pool_, manifest.expr_pool_, manifest.bind_map_};
@@ -1756,16 +1756,16 @@ TEST_F(BasicManifestIntegrationTest, EnumeratesPeanoLessThanSeven) {
 
     auto push_peano_lt_rules = [&]() {
         const expr* zero = saved_expr_pool_.make_functor(functors.id("zero"), {});
-        database.push(rule{saved_expr_pool_.make_functor(functors.id("nat"), {zero}), {}});
+        database.push(rule{saved_expr_pool_.make_functor(functors.id("nat"), {zero}), {}, 0});
 
         const expr* rv1 = saved_expr_pool_.make_var(0);
         const expr* suc_rv1 = saved_expr_pool_.make_functor(functors.id("suc"), {rv1});
-        database.push(rule{saved_expr_pool_.make_functor(functors.id("nat"), {suc_rv1}), {saved_expr_pool_.make_functor(functors.id("nat"), {rv1})}});
+        database.push(rule{saved_expr_pool_.make_functor(functors.id("nat"), {suc_rv1}), {saved_expr_pool_.make_functor(functors.id("nat"), {rv1})}, 0});
 
         const expr* rv2 = saved_expr_pool_.make_var(0);
         const expr* suc_rv2 = saved_expr_pool_.make_functor(functors.id("suc"), {rv2});
         database.push(rule{
-            saved_expr_pool_.make_functor(functors.id("lt"), {zero, suc_rv2}), {saved_expr_pool_.make_functor(functors.id("nat"), {rv2})}});
+            saved_expr_pool_.make_functor(functors.id("lt"), {zero, suc_rv2}), {saved_expr_pool_.make_functor(functors.id("nat"), {rv2})}, 0});
 
         const expr* rv3 = saved_expr_pool_.make_var(0);
         const expr* rv4 = saved_expr_pool_.make_var(1);
@@ -1773,7 +1773,7 @@ TEST_F(BasicManifestIntegrationTest, EnumeratesPeanoLessThanSeven) {
         const expr* suc_rv4 = saved_expr_pool_.make_functor(functors.id("suc"), {rv4});
         database.push(rule{
             saved_expr_pool_.make_functor(functors.id("lt"), {suc_rv3, suc_rv4}),
-            {saved_expr_pool_.make_functor(functors.id("lt"), {rv3, rv4})}});
+            {saved_expr_pool_.make_functor(functors.id("lt"), {rv3, rv4})}, 0});
     };
     push_peano_lt_rules();
 
@@ -1815,28 +1815,28 @@ TEST_F(BasicManifestIntegrationTest, EnumeratesSatPAndQOrR) {
     const expr* false_atom = saved_expr_pool_.make_functor(functors.id("false"), {});
     const expr* bool_true = saved_expr_pool_.make_functor(functors.id("bool"), {true_atom});
     const expr* bool_false = saved_expr_pool_.make_functor(functors.id("bool"), {false_atom});
-    database.push(rule{bool_true, {}});
-    database.push(rule{bool_false, {}});
+    database.push(rule{bool_true, {}, 0});
+    database.push(rule{bool_false, {}, 0});
 
     const expr* or_rv = saved_expr_pool_.make_var(0);
     const expr* or_true_x_true = saved_expr_pool_.make_functor(functors.id("or"), {true_atom, or_rv, true_atom});
     const expr* or_bool_body = saved_expr_pool_.make_functor(functors.id("bool"), {or_rv});
-    database.push(rule{or_true_x_true, {or_bool_body}});
+    database.push(rule{or_true_x_true, {or_bool_body}, 0});
 
     const expr* or_rv2 = saved_expr_pool_.make_var(0);
     const expr* or_false_x_x = saved_expr_pool_.make_functor(functors.id("or"), {false_atom, or_rv2, or_rv2});
     const expr* or_bool_body2 = saved_expr_pool_.make_functor(functors.id("bool"), {or_rv2});
-    database.push(rule{or_false_x_x, {or_bool_body2}});
+    database.push(rule{or_false_x_x, {or_bool_body2}, 0});
 
     const expr* and_rv = saved_expr_pool_.make_var(0);
     const expr* and_true_x_x = saved_expr_pool_.make_functor(functors.id("and"), {true_atom, and_rv, and_rv});
     const expr* and_bool_body = saved_expr_pool_.make_functor(functors.id("bool"), {and_rv});
-    database.push(rule{and_true_x_x, {and_bool_body}});
+    database.push(rule{and_true_x_x, {and_bool_body}, 0});
 
     const expr* and_rv2 = saved_expr_pool_.make_var(0);
     const expr* and_false_x_false = saved_expr_pool_.make_functor(functors.id("and"), {false_atom, and_rv2, false_atom});
     const expr* and_bool_body2 = saved_expr_pool_.make_functor(functors.id("bool"), {and_rv2});
-    database.push(rule{and_false_x_false, {and_bool_body2}});
+    database.push(rule{and_false_x_false, {and_bool_body2}, 0});
 
     basic_manifest manifest{database, initial_goals, kInitialFrameOffset, kMaxResolutions, kSeed};
     normalizer<globalizer, expr_pool, expr_pool, bind_map<globalizer>> norm{manifest.globalizer_, manifest.expr_pool_, manifest.expr_pool_, manifest.bind_map_};
@@ -1888,14 +1888,14 @@ TEST_F(BasicManifestIntegrationTest, EnumeratesTwoSatAssignmentsForImpliesQ) {
     const expr* or_t_f_t = saved_expr_pool_.make_functor(functors.id("or"), {true_atom, false_atom, true_atom});
     const expr* or_f_t_t = saved_expr_pool_.make_functor(functors.id("or"), {false_atom, true_atom, true_atom});
     const expr* or_f_f_f = saved_expr_pool_.make_functor(functors.id("or"), {false_atom, false_atom, false_atom});
-    database.push(rule{bool_true, {}});
-    database.push(rule{bool_false, {}});
-    database.push(rule{not_true_false, {}});
-    database.push(rule{not_false_true, {}});
-    database.push(rule{or_t_t_t, {}});
-    database.push(rule{or_t_f_t, {}});
-    database.push(rule{or_f_t_t, {}});
-    database.push(rule{or_f_f_f, {}});
+    database.push(rule{bool_true, {}, 0});
+    database.push(rule{bool_false, {}, 0});
+    database.push(rule{not_true_false, {}, 0});
+    database.push(rule{not_false_true, {}, 0});
+    database.push(rule{or_t_t_t, {}, 0});
+    database.push(rule{or_t_f_t, {}, 0});
+    database.push(rule{or_f_t_t, {}, 0});
+    database.push(rule{or_f_f_f, {}, 0});
 
     basic_manifest manifest{database, initial_goals, kInitialFrameOffset, kMaxResolutions, kSeed};
     normalizer<globalizer, expr_pool, expr_pool, bind_map<globalizer>> norm{manifest.globalizer_, manifest.expr_pool_, manifest.expr_pool_, manifest.bind_map_};
@@ -1951,10 +1951,10 @@ TEST_F(BasicManifestIntegrationTest, EnumeratesTwoPathTwoColorings) {
     const expr* color_blue = saved_expr_pool_.make_functor(functors.id("color"), {blue});
     const expr* diff_red_blue = saved_expr_pool_.make_functor(functors.id("diff"), {red, blue});
     const expr* diff_blue_red = saved_expr_pool_.make_functor(functors.id("diff"), {blue, red});
-    database.push(rule{color_red, {}});
-    database.push(rule{color_blue, {}});
-    database.push(rule{diff_red_blue, {}});
-    database.push(rule{diff_blue_red, {}});
+    database.push(rule{color_red, {}, 0});
+    database.push(rule{color_blue, {}, 0});
+    database.push(rule{diff_red_blue, {}, 0});
+    database.push(rule{diff_blue_red, {}, 0});
 
     basic_manifest manifest{database, initial_goals, kInitialFrameOffset, kMaxResolutions, kSeed};
     normalizer<globalizer, expr_pool, expr_pool, bind_map<globalizer>> norm{manifest.globalizer_, manifest.expr_pool_, manifest.expr_pool_, manifest.bind_map_};
@@ -2030,9 +2030,9 @@ TEST_F(BasicManifestIntegrationTest, EnumeratesK3ThreeColorings) {
         const expr* color_red = saved_expr_pool_.make_functor(functors.id("color"), {red});
         const expr* color_green = saved_expr_pool_.make_functor(functors.id("color"), {green});
         const expr* color_blue = saved_expr_pool_.make_functor(functors.id("color"), {blue});
-        seed_db.push(rule{color_red, {}});
-        seed_db.push(rule{color_green, {}});
-        seed_db.push(rule{color_blue, {}});
+        seed_db.push(rule{color_red, {}, 0});
+        seed_db.push(rule{color_green, {}, 0});
+        seed_db.push(rule{color_blue, {}, 0});
 
         const expr* diff_red_green = saved_expr_pool_.make_functor(functors.id("diff"), {red, green});
         const expr* diff_red_blue = saved_expr_pool_.make_functor(functors.id("diff"), {red, blue});
@@ -2040,12 +2040,12 @@ TEST_F(BasicManifestIntegrationTest, EnumeratesK3ThreeColorings) {
         const expr* diff_green_blue = saved_expr_pool_.make_functor(functors.id("diff"), {green, blue});
         const expr* diff_blue_red = saved_expr_pool_.make_functor(functors.id("diff"), {blue, red});
         const expr* diff_blue_green = saved_expr_pool_.make_functor(functors.id("diff"), {blue, green});
-        seed_db.push(rule{diff_red_green, {}});
-        seed_db.push(rule{diff_red_blue, {}});
-        seed_db.push(rule{diff_green_red, {}});
-        seed_db.push(rule{diff_green_blue, {}});
-        seed_db.push(rule{diff_blue_red, {}});
-        seed_db.push(rule{diff_blue_green, {}});
+        seed_db.push(rule{diff_red_green, {}, 0});
+        seed_db.push(rule{diff_red_blue, {}, 0});
+        seed_db.push(rule{diff_green_red, {}, 0});
+        seed_db.push(rule{diff_green_blue, {}, 0});
+        seed_db.push(rule{diff_blue_red, {}, 0});
+        seed_db.push(rule{diff_blue_green, {}, 0});
 
         basic_manifest manifest{seed_db, seed_goals, kInitialFrameOffset, 128, seed};
         normalizer<globalizer, expr_pool, expr_pool, bind_map<globalizer>> seed_norm{manifest.globalizer_, manifest.expr_pool_, manifest.expr_pool_, manifest.bind_map_};
@@ -2099,21 +2099,21 @@ TEST_F(BasicManifestIntegrationTest, EnumeratesK3TailFourNodeColorings) {
         const expr* color_red = saved_expr_pool_.make_functor(functors.id("color"), {red});
         const expr* color_green = saved_expr_pool_.make_functor(functors.id("color"), {green});
         const expr* color_blue = saved_expr_pool_.make_functor(functors.id("color"), {blue});
-        seed_db.push(rule{color_red, {}});
-        seed_db.push(rule{color_green, {}});
-        seed_db.push(rule{color_blue, {}});
+        seed_db.push(rule{color_red, {}, 0});
+        seed_db.push(rule{color_green, {}, 0});
+        seed_db.push(rule{color_blue, {}, 0});
         const expr* diff_rg = saved_expr_pool_.make_functor(functors.id("diff"), {red, green});
         const expr* diff_rb = saved_expr_pool_.make_functor(functors.id("diff"), {red, blue});
         const expr* diff_gr = saved_expr_pool_.make_functor(functors.id("diff"), {green, red});
         const expr* diff_gb = saved_expr_pool_.make_functor(functors.id("diff"), {green, blue});
         const expr* diff_br = saved_expr_pool_.make_functor(functors.id("diff"), {blue, red});
         const expr* diff_bg = saved_expr_pool_.make_functor(functors.id("diff"), {blue, green});
-        seed_db.push(rule{diff_rg, {}});
-        seed_db.push(rule{diff_rb, {}});
-        seed_db.push(rule{diff_gr, {}});
-        seed_db.push(rule{diff_gb, {}});
-        seed_db.push(rule{diff_br, {}});
-        seed_db.push(rule{diff_bg, {}});
+        seed_db.push(rule{diff_rg, {}, 0});
+        seed_db.push(rule{diff_rb, {}, 0});
+        seed_db.push(rule{diff_gr, {}, 0});
+        seed_db.push(rule{diff_gb, {}, 0});
+        seed_db.push(rule{diff_br, {}, 0});
+        seed_db.push(rule{diff_bg, {}, 0});
         basic_manifest manifest{seed_db, seed_goals, kInitialFrameOffset, 128, seed};
         normalizer<globalizer, expr_pool, expr_pool, bind_map<globalizer>> seed_norm{manifest.globalizer_, manifest.expr_pool_, manifest.expr_pool_, manifest.bind_map_};
         const uint32_t idx_a = manifest.frame_allocator_.bump(1);
@@ -2167,28 +2167,28 @@ TEST_F(BasicManifestIntegrationTest, EnumeratesFourVarSatThreeClauses) {
         const expr* bool_false = saved_expr_pool_.make_functor(functors.id("bool"), {false_atom});
         const expr* not_true_false = saved_expr_pool_.make_functor(functors.id("not"), {true_atom, false_atom});
         const expr* not_false_true = saved_expr_pool_.make_functor(functors.id("not"), {false_atom, true_atom});
-        seed_db.push(rule{bool_true, {}});
-        seed_db.push(rule{bool_false, {}});
-        seed_db.push(rule{not_true_false, {}});
-        seed_db.push(rule{not_false_true, {}});
+        seed_db.push(rule{bool_true, {}, 0});
+        seed_db.push(rule{bool_false, {}, 0});
+        seed_db.push(rule{not_true_false, {}, 0});
+        seed_db.push(rule{not_false_true, {}, 0});
 
         const expr* or_t_t_t = saved_expr_pool_.make_functor(functors.id("or"), {true_atom, true_atom, true_atom});
         const expr* or_t_f_t = saved_expr_pool_.make_functor(functors.id("or"), {true_atom, false_atom, true_atom});
         const expr* or_f_t_t = saved_expr_pool_.make_functor(functors.id("or"), {false_atom, true_atom, true_atom});
         const expr* or_f_f_f = saved_expr_pool_.make_functor(functors.id("or"), {false_atom, false_atom, false_atom});
-        seed_db.push(rule{or_t_t_t, {}});
-        seed_db.push(rule{or_t_f_t, {}});
-        seed_db.push(rule{or_f_t_t, {}});
-        seed_db.push(rule{or_f_f_f, {}});
+        seed_db.push(rule{or_t_t_t, {}, 0});
+        seed_db.push(rule{or_t_f_t, {}, 0});
+        seed_db.push(rule{or_f_t_t, {}, 0});
+        seed_db.push(rule{or_f_f_f, {}, 0});
 
         const expr* and_t_t_t = saved_expr_pool_.make_functor(functors.id("and"), {true_atom, true_atom, true_atom});
         const expr* and_t_f_f = saved_expr_pool_.make_functor(functors.id("and"), {true_atom, false_atom, false_atom});
         const expr* and_f_t_f = saved_expr_pool_.make_functor(functors.id("and"), {false_atom, true_atom, false_atom});
         const expr* and_f_f_f = saved_expr_pool_.make_functor(functors.id("and"), {false_atom, false_atom, false_atom});
-        seed_db.push(rule{and_t_t_t, {}});
-        seed_db.push(rule{and_t_f_f, {}});
-        seed_db.push(rule{and_f_t_f, {}});
-        seed_db.push(rule{and_f_f_f, {}});
+        seed_db.push(rule{and_t_t_t, {}, 0});
+        seed_db.push(rule{and_t_f_f, {}, 0});
+        seed_db.push(rule{and_f_t_f, {}, 0});
+        seed_db.push(rule{and_f_f_f, {}, 0});
 
         basic_manifest manifest{seed_db, seed_goals, kInitialFrameOffset, kSatBudget, seed};
         normalizer<globalizer, expr_pool, expr_pool, bind_map<globalizer>> seed_norm{manifest.globalizer_, manifest.expr_pool_, manifest.expr_pool_, manifest.bind_map_};
@@ -2267,18 +2267,18 @@ TEST_F(BasicManifestIntegrationTest, EnumeratesAddPairsSummingLessThanTen) {
     auto push_peano_add_lt_rules = [&]() {
         const expr* zero = saved_expr_pool_.make_functor(functors.id("zero"), {});
         const expr* nat_zero = saved_expr_pool_.make_functor(functors.id("nat"), {zero});
-        database.push(rule{nat_zero, {}});
+        database.push(rule{nat_zero, {}, 0});
 
         const expr* rv1 = saved_expr_pool_.make_var(0);
         const expr* suc_rv1 = saved_expr_pool_.make_functor(functors.id("suc"), {rv1});
         const expr* nat_suc = saved_expr_pool_.make_functor(functors.id("nat"), {suc_rv1});
         const expr* nat_rv1 = saved_expr_pool_.make_functor(functors.id("nat"), {rv1});
-        database.push(rule{nat_suc, {nat_rv1}});
+        database.push(rule{nat_suc, {nat_rv1}, 0});
 
         const expr* rv2 = saved_expr_pool_.make_var(0);
         const expr* add_zero_y_y = saved_expr_pool_.make_functor(functors.id("add"), {zero, rv2, rv2});
         const expr* nat_rv2 = saved_expr_pool_.make_functor(functors.id("nat"), {rv2});
-        database.push(rule{add_zero_y_y, {nat_rv2}});
+        database.push(rule{add_zero_y_y, {nat_rv2}, 0});
 
         const expr* rv3 = saved_expr_pool_.make_var(0);
         const expr* rv4 = saved_expr_pool_.make_var(1);
@@ -2287,13 +2287,13 @@ TEST_F(BasicManifestIntegrationTest, EnumeratesAddPairsSummingLessThanTen) {
         const expr* suc_rv5 = saved_expr_pool_.make_functor(functors.id("suc"), {rv5});
         const expr* add_suc = saved_expr_pool_.make_functor(functors.id("add"), {suc_rv3, rv4, suc_rv5});
         const expr* add_body = saved_expr_pool_.make_functor(functors.id("add"), {rv3, rv4, rv5});
-        database.push(rule{add_suc, {add_body}});
+        database.push(rule{add_suc, {add_body}, 0});
 
         const expr* rv6 = saved_expr_pool_.make_var(0);
         const expr* suc_rv6 = saved_expr_pool_.make_functor(functors.id("suc"), {rv6});
         const expr* lt_zero_suc = saved_expr_pool_.make_functor(functors.id("lt"), {zero, suc_rv6});
         const expr* nat_rv6 = saved_expr_pool_.make_functor(functors.id("nat"), {rv6});
-        database.push(rule{lt_zero_suc, {nat_rv6}});
+        database.push(rule{lt_zero_suc, {nat_rv6}, 0});
 
         const expr* rv7 = saved_expr_pool_.make_var(0);
         const expr* rv8 = saved_expr_pool_.make_var(1);
@@ -2301,7 +2301,7 @@ TEST_F(BasicManifestIntegrationTest, EnumeratesAddPairsSummingLessThanTen) {
         const expr* suc_rv8 = saved_expr_pool_.make_functor(functors.id("suc"), {rv8});
         const expr* lt_suc_suc = saved_expr_pool_.make_functor(functors.id("lt"), {suc_rv7, suc_rv8});
         const expr* lt_body = saved_expr_pool_.make_functor(functors.id("lt"), {rv7, rv8});
-        database.push(rule{lt_suc_suc, {lt_body}});
+        database.push(rule{lt_suc_suc, {lt_body}, 0});
     };
     push_peano_add_lt_rules();
 
@@ -2390,16 +2390,16 @@ TEST_F(BasicManifestIntegrationTest, EnumeratesAddPairsSummingExactlyTen) {
 
     auto push_peano_add_rules = [&]() {
         const expr* zero = saved_expr_pool_.make_functor(functors.id("zero"), {});
-        database.push(rule{saved_expr_pool_.make_functor(functors.id("nat"), {zero}), {}});
+        database.push(rule{saved_expr_pool_.make_functor(functors.id("nat"), {zero}), {}, 0});
 
         const expr* rv1 = saved_expr_pool_.make_var(0);
         const expr* suc_rv1 = saved_expr_pool_.make_functor(functors.id("suc"), {rv1});
         database.push(rule{
-            saved_expr_pool_.make_functor(functors.id("nat"), {suc_rv1}), {saved_expr_pool_.make_functor(functors.id("nat"), {rv1})}});
+            saved_expr_pool_.make_functor(functors.id("nat"), {suc_rv1}), {saved_expr_pool_.make_functor(functors.id("nat"), {rv1})}, 0});
 
         const expr* rv2 = saved_expr_pool_.make_var(0);
         const expr* add_zero_y_y = saved_expr_pool_.make_functor(functors.id("add"), {zero, rv2, rv2});
-        database.push(rule{add_zero_y_y, {saved_expr_pool_.make_functor(functors.id("nat"), {rv2})}});
+        database.push(rule{add_zero_y_y, {saved_expr_pool_.make_functor(functors.id("nat"), {rv2})}, 0});
 
         const expr* rv3 = saved_expr_pool_.make_var(0);
         const expr* rv4 = saved_expr_pool_.make_var(1);
@@ -2408,7 +2408,7 @@ TEST_F(BasicManifestIntegrationTest, EnumeratesAddPairsSummingExactlyTen) {
         const expr* suc_rv5 = saved_expr_pool_.make_functor(functors.id("suc"), {rv5});
         database.push(rule{
             saved_expr_pool_.make_functor(functors.id("add"), {suc_rv3, rv4, suc_rv5}),
-            {saved_expr_pool_.make_functor(functors.id("add"), {rv3, rv4, rv5})}});
+            {saved_expr_pool_.make_functor(functors.id("add"), {rv3, rv4, rv5})}, 0});
     };
     push_peano_add_rules();
 
@@ -2460,18 +2460,18 @@ TEST_F(BasicManifestIntegrationTest, EnumeratesMulPairsProductEight) {
 
     const expr* zero = saved_expr_pool_.make_functor(functors.id("zero"), {});
     const expr* nat_zero = saved_expr_pool_.make_functor(functors.id("nat"), {zero});
-    database.push(rule{nat_zero, {}});
+    database.push(rule{nat_zero, {}, 0});
 
     const expr* rv1 = saved_expr_pool_.make_var(0);
     const expr* suc_rv1 = saved_expr_pool_.make_functor(functors.id("suc"), {rv1});
     const expr* nat_suc = saved_expr_pool_.make_functor(functors.id("nat"), {suc_rv1});
     const expr* nat_rv1 = saved_expr_pool_.make_functor(functors.id("nat"), {rv1});
-    database.push(rule{nat_suc, {nat_rv1}});
+    database.push(rule{nat_suc, {nat_rv1}, 0});
 
     const expr* rv2 = saved_expr_pool_.make_var(0);
     const expr* add_zero_y_y = saved_expr_pool_.make_functor(functors.id("add"), {zero, rv2, rv2});
     const expr* nat_rv2 = saved_expr_pool_.make_functor(functors.id("nat"), {rv2});
-    database.push(rule{add_zero_y_y, {nat_rv2}});
+    database.push(rule{add_zero_y_y, {nat_rv2}, 0});
 
     const expr* rv3 = saved_expr_pool_.make_var(0);
     const expr* rv4 = saved_expr_pool_.make_var(1);
@@ -2480,12 +2480,12 @@ TEST_F(BasicManifestIntegrationTest, EnumeratesMulPairsProductEight) {
     const expr* suc_rv5 = saved_expr_pool_.make_functor(functors.id("suc"), {rv5});
     const expr* add_suc = saved_expr_pool_.make_functor(functors.id("add"), {suc_rv3, rv4, suc_rv5});
     const expr* add_body = saved_expr_pool_.make_functor(functors.id("add"), {rv3, rv4, rv5});
-    database.push(rule{add_suc, {add_body}});
+    database.push(rule{add_suc, {add_body}, 0});
 
     const expr* rv6 = saved_expr_pool_.make_var(0);
     const expr* mul_zero_y_zero = saved_expr_pool_.make_functor(functors.id("mul"), {zero, rv6, zero});
     const expr* nat_rv6 = saved_expr_pool_.make_functor(functors.id("nat"), {rv6});
-    database.push(rule{mul_zero_y_zero, {nat_rv6}});
+    database.push(rule{mul_zero_y_zero, {nat_rv6}, 0});
 
     const expr* rv7 = saved_expr_pool_.make_var(0);
     const expr* rv8 = saved_expr_pool_.make_var(1);
@@ -2495,7 +2495,7 @@ TEST_F(BasicManifestIntegrationTest, EnumeratesMulPairsProductEight) {
     const expr* mul_suc = saved_expr_pool_.make_functor(functors.id("mul"), {suc_rv7, rv8, rv9});
     const expr* mul_body = saved_expr_pool_.make_functor(functors.id("mul"), {rv7, rv8, rv10});
     const expr* add_body2 = saved_expr_pool_.make_functor(functors.id("add"), {rv10, rv8, rv9});
-    database.push(rule{mul_suc, {mul_body, add_body2}});
+    database.push(rule{mul_suc, {mul_body, add_body2}, 0});
 
     std::set<solution> expected = {
         {peano_saved(1), peano_saved(8)},
@@ -2545,18 +2545,18 @@ TEST_F(BasicManifestIntegrationTest, EnumeratesDualBoundedSharedXSums) {
 
     const expr* zero = saved_expr_pool_.make_functor(functors.id("zero"), {});
     const expr* nat_zero = saved_expr_pool_.make_functor(functors.id("nat"), {zero});
-    database.push(rule{nat_zero, {}});
+    database.push(rule{nat_zero, {}, 0});
 
     const expr* rv1 = saved_expr_pool_.make_var(0);
     const expr* suc_rv1 = saved_expr_pool_.make_functor(functors.id("suc"), {rv1});
     const expr* nat_suc = saved_expr_pool_.make_functor(functors.id("nat"), {suc_rv1});
     const expr* nat_rv1 = saved_expr_pool_.make_functor(functors.id("nat"), {rv1});
-    database.push(rule{nat_suc, {nat_rv1}});
+    database.push(rule{nat_suc, {nat_rv1}, 0});
 
     const expr* rv2 = saved_expr_pool_.make_var(0);
     const expr* add_zero_y_y = saved_expr_pool_.make_functor(functors.id("add"), {zero, rv2, rv2});
     const expr* nat_rv2 = saved_expr_pool_.make_functor(functors.id("nat"), {rv2});
-    database.push(rule{add_zero_y_y, {nat_rv2}});
+    database.push(rule{add_zero_y_y, {nat_rv2}, 0});
 
     const expr* rv3 = saved_expr_pool_.make_var(0);
     const expr* rv4 = saved_expr_pool_.make_var(1);
@@ -2565,13 +2565,13 @@ TEST_F(BasicManifestIntegrationTest, EnumeratesDualBoundedSharedXSums) {
     const expr* suc_rv5 = saved_expr_pool_.make_functor(functors.id("suc"), {rv5});
     const expr* add_suc = saved_expr_pool_.make_functor(functors.id("add"), {suc_rv3, rv4, suc_rv5});
     const expr* add_body = saved_expr_pool_.make_functor(functors.id("add"), {rv3, rv4, rv5});
-    database.push(rule{add_suc, {add_body}});
+    database.push(rule{add_suc, {add_body}, 0});
 
     const expr* rv6 = saved_expr_pool_.make_var(0);
     const expr* suc_rv6 = saved_expr_pool_.make_functor(functors.id("suc"), {rv6});
     const expr* lt_zero_suc = saved_expr_pool_.make_functor(functors.id("lt"), {zero, suc_rv6});
     const expr* nat_rv6 = saved_expr_pool_.make_functor(functors.id("nat"), {rv6});
-    database.push(rule{lt_zero_suc, {nat_rv6}});
+    database.push(rule{lt_zero_suc, {nat_rv6}, 0});
 
     const expr* rv7 = saved_expr_pool_.make_var(0);
     const expr* rv8 = saved_expr_pool_.make_var(1);
@@ -2579,7 +2579,7 @@ TEST_F(BasicManifestIntegrationTest, EnumeratesDualBoundedSharedXSums) {
     const expr* suc_rv8 = saved_expr_pool_.make_functor(functors.id("suc"), {rv8});
     const expr* lt_suc_suc = saved_expr_pool_.make_functor(functors.id("lt"), {suc_rv7, suc_rv8});
     const expr* lt_body = saved_expr_pool_.make_functor(functors.id("lt"), {rv7, rv8});
-    database.push(rule{lt_suc_suc, {lt_body}});
+    database.push(rule{lt_suc_suc, {lt_body}, 0});
 
     std::set<solution> expected;
     for (int x = 0; x < 4; ++x) {
@@ -2719,18 +2719,18 @@ TEST_F(BasicManifestIntegrationTest, EnumeratesCatalanTreesWithFiveNodes) {
 
     const expr* zero = saved_expr_pool_.make_functor(functors.id("zero"), {});
     const expr* nat_zero = saved_expr_pool_.make_functor(functors.id("nat"), {zero});
-    database.push(rule{nat_zero, {}});
+    database.push(rule{nat_zero, {}, 0});
 
     const expr* rv1 = saved_expr_pool_.make_var(0);
     const expr* suc_rv1 = saved_expr_pool_.make_functor(functors.id("suc"), {rv1});
     const expr* nat_suc = saved_expr_pool_.make_functor(functors.id("nat"), {suc_rv1});
     const expr* nat_rv1 = saved_expr_pool_.make_functor(functors.id("nat"), {rv1});
-    database.push(rule{nat_suc, {nat_rv1}});
+    database.push(rule{nat_suc, {nat_rv1}, 0});
 
     const expr* rv2 = saved_expr_pool_.make_var(0);
     const expr* add_zero_y_y = saved_expr_pool_.make_functor(functors.id("add"), {zero, rv2, rv2});
     const expr* nat_rv2 = saved_expr_pool_.make_functor(functors.id("nat"), {rv2});
-    database.push(rule{add_zero_y_y, {nat_rv2}});
+    database.push(rule{add_zero_y_y, {nat_rv2}, 0});
 
     const expr* rv3 = saved_expr_pool_.make_var(0);
     const expr* rv4 = saved_expr_pool_.make_var(1);
@@ -2739,11 +2739,11 @@ TEST_F(BasicManifestIntegrationTest, EnumeratesCatalanTreesWithFiveNodes) {
     const expr* suc_rv5 = saved_expr_pool_.make_functor(functors.id("suc"), {rv5});
     const expr* add_suc = saved_expr_pool_.make_functor(functors.id("add"), {suc_rv3, rv4, suc_rv5});
     const expr* add_body = saved_expr_pool_.make_functor(functors.id("add"), {rv3, rv4, rv5});
-    database.push(rule{add_suc, {add_body}});
+    database.push(rule{add_suc, {add_body}, 0});
 
     const expr* nil = saved_expr_pool_.make_functor(functors.id("nil"), {});
     const expr* wf_nil = saved_expr_pool_.make_functor(functors.id("wf"), {nil});
-    database.push(rule{wf_nil, {}});
+    database.push(rule{wf_nil, {}, 0});
 
     const expr* rv6 = saved_expr_pool_.make_var(0);
     const expr* rv7 = saved_expr_pool_.make_var(1);
@@ -2751,10 +2751,10 @@ TEST_F(BasicManifestIntegrationTest, EnumeratesCatalanTreesWithFiveNodes) {
     const expr* wf_bin = saved_expr_pool_.make_functor(functors.id("wf"), {bin_rv6_rv7});
     const expr* wf_left = saved_expr_pool_.make_functor(functors.id("wf"), {rv6});
     const expr* wf_right = saved_expr_pool_.make_functor(functors.id("wf"), {rv7});
-    database.push(rule{wf_bin, {wf_left, wf_right}});
+    database.push(rule{wf_bin, {wf_left, wf_right}, 0});
 
     const expr* nodes_nil_zero = saved_expr_pool_.make_functor(functors.id("nodes"), {nil, zero});
-    database.push(rule{nodes_nil_zero, {}});
+    database.push(rule{nodes_nil_zero, {}, 0});
 
     const expr* one = saved_expr_pool_.make_functor(functors.id("suc"), {zero});
     const expr* rv8 = saved_expr_pool_.make_var(0);
@@ -2769,7 +2769,7 @@ TEST_F(BasicManifestIntegrationTest, EnumeratesCatalanTreesWithFiveNodes) {
     const expr* nodes_right = saved_expr_pool_.make_functor(functors.id("nodes"), {rv9, rv12});
     const expr* add_sizes = saved_expr_pool_.make_functor(functors.id("add"), {rv11, rv12, rv13});
     const expr* add_one = saved_expr_pool_.make_functor(functors.id("add"), {one, rv13, rv10});
-    database.push(rule{nodes_head, {nodes_left, nodes_right, add_sizes, add_one}});
+    database.push(rule{nodes_head, {nodes_left, nodes_right, add_sizes, add_one}, 0});
 
     basic_manifest manifest{database, initial_goals, 1u, kCatalanBudget, kSeed};
     normalizer<globalizer, expr_pool, expr_pool, bind_map<globalizer>> norm{manifest.globalizer_, manifest.expr_pool_, manifest.expr_pool_, manifest.bind_map_};

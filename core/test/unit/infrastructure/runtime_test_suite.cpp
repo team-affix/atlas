@@ -493,7 +493,7 @@ TEST_P(RuntimeParamTest, NormalizeDelegatesToBindMap) {
     static constexpr size_t kInitialVarCount = 2;
     const expr* abc = saved_expr_pool_.make_functor(holder_.functors.id("abc"), {});
     const expr* _123 = saved_expr_pool_.make_functor(holder_.functors.id("123"), {});
-    database.push(rule{saved_expr_pool_.make_functor(holder_.functors.id("f"), {abc, _123}), {}});
+    database.push(rule{saved_expr_pool_.make_functor(holder_.functors.id("f"), {abc, _123}), {}, 0});
 
     constexpr uint32_t idx_a = 0;
     constexpr uint32_t idx_b = 1;
@@ -515,7 +515,7 @@ TEST_P(RuntimeParamTest, NormalizeDelegatesToBindMap) {
 TEST_P(RuntimeParamTest, ImportSurvivesNextTick) {
     static constexpr size_t kInitialVarCount = 1;
     const expr* abc = saved_expr_pool_.make_functor(holder_.functors.id("abc"), {});
-    database.push(rule{saved_expr_pool_.make_functor(holder_.functors.id("f"), {abc}), {}});
+    database.push(rule{saved_expr_pool_.make_functor(holder_.functors.id("f"), {abc}), {}, 0});
 
     constexpr uint32_t idx_a = 0;
     initial_goals.push(saved_expr_pool_.make_functor(holder_.functors.id("f"), {saved_expr_pool_.make_var(idx_a)}));
@@ -536,8 +536,8 @@ TEST_P(RuntimeParamTest, DeriveDecisionLemmaOnDemand) {
     const expr* head0 = saved_expr_pool_.make_functor(holder_.functors.id("f"), {});
     const expr* head1 = saved_expr_pool_.make_functor(holder_.functors.id("f"), {});
     initial_goals.push(goal);
-    database.push(rule{head0, {}});
-    database.push(rule{head1, {}});
+    database.push(rule{head0, {}, 0});
+    database.push(rule{head1, {}, 0});
 
     runtime_ref& session = make_session(kInitialVarCount);
     ASSERT_TRUE(session.next()) << "expected a tick";
@@ -550,7 +550,7 @@ TEST_P(RuntimeParamTest, DeriveResolutionLemmaOnDemand) {
     const expr* goal = saved_expr_pool_.make_functor(holder_.functors.id("f"), {});
     const expr* head = saved_expr_pool_.make_functor(holder_.functors.id("f"), {});
     initial_goals.push(goal);
-    database.push(rule{head, {}});
+    database.push(rule{head, {}, 0});
 
     runtime_ref& session = make_session(kInitialVarCount);
     ASSERT_TRUE(session.next()) << "expected a tick";
@@ -564,8 +564,8 @@ TEST_P(RuntimeParamTest, LemmaNotCachedAcrossTicks) {
     const expr* head0 = saved_expr_pool_.make_functor(holder_.functors.id("f"), {});
     const expr* head1 = saved_expr_pool_.make_functor(holder_.functors.id("f"), {});
     initial_goals.push(goal);
-    database.push(rule{head0, {}});
-    database.push(rule{head1, {}});
+    database.push(rule{head0, {}, 0});
+    database.push(rule{head1, {}, 0});
 
     runtime_ref& session = make_session(kInitialVarCount);
 
@@ -599,7 +599,7 @@ TEST_P(RuntimeParamTest, FindsSingleUnitSolution) {
     static constexpr size_t kInitialVarCount = 0;
     const expr* goal = saved_expr_pool_.make_functor(holder_.functors.id("f"), {});
     initial_goals.push(goal);
-    database.push(rule{saved_expr_pool_.make_functor(holder_.functors.id("f"), {}), {}});
+    database.push(rule{saved_expr_pool_.make_functor(holder_.functors.id("f"), {}), {}, 0});
 
     runtime_ref& session = make_session(kInitialVarCount);
     ASSERT_TRUE(session.next()) << "expected a tick";
@@ -622,8 +622,8 @@ TEST_P(RuntimeParamTest, FindsClauseDerivedUnitSolution) {
     static constexpr size_t kInitialVarCount = 0;
     const expr* g_body = saved_expr_pool_.make_functor(holder_.functors.id("g"), {});
     initial_goals.push(saved_expr_pool_.make_functor(holder_.functors.id("f"), {}));
-    database.push(rule{saved_expr_pool_.make_functor(holder_.functors.id("f"), {}), {g_body}});
-    database.push(rule{saved_expr_pool_.make_functor(holder_.functors.id("g"), {}), {}});
+    database.push(rule{saved_expr_pool_.make_functor(holder_.functors.id("f"), {}), {g_body}, 0});
+    database.push(rule{saved_expr_pool_.make_functor(holder_.functors.id("g"), {}), {}, 0});
 
     runtime_ref& session = make_session(kInitialVarCount);
     ASSERT_TRUE(session.next()) << "expected a tick";
@@ -636,7 +636,7 @@ TEST_P(RuntimeParamTest, FindsSolutionWithCorrectBindings) {
     static constexpr size_t kInitialVarCount = 2;
     const expr* abc = saved_expr_pool_.make_functor(holder_.functors.id("abc"), {});
     const expr* _123 = saved_expr_pool_.make_functor(holder_.functors.id("123"), {});
-    database.push(rule{saved_expr_pool_.make_functor(holder_.functors.id("f"), {abc, _123}), {}});
+    database.push(rule{saved_expr_pool_.make_functor(holder_.functors.id("f"), {abc, _123}), {}, 0});
 
     constexpr uint32_t idx_a = 0;
     constexpr uint32_t idx_b = 1;
@@ -663,9 +663,9 @@ TEST_P(RuntimeParamTest, FindsClauseBodyBindingSolution) {
     const expr* _123 = saved_expr_pool_.make_functor(holder_.functors.id("123"), {});
     database.push(rule{
         saved_expr_pool_.make_functor(holder_.functors.id("f"), {rule_var_a, rule_var_b}),
-        {saved_expr_pool_.make_functor(holder_.functors.id("g"), {rule_var_a}), saved_expr_pool_.make_functor(holder_.functors.id("h"), {rule_var_b})}});
-    database.push(rule{saved_expr_pool_.make_functor(holder_.functors.id("g"), {abc}), {}});
-    database.push(rule{saved_expr_pool_.make_functor(holder_.functors.id("h"), {_123}), {}});
+        {saved_expr_pool_.make_functor(holder_.functors.id("g"), {rule_var_a}), saved_expr_pool_.make_functor(holder_.functors.id("h"), {rule_var_b})}, 0});
+    database.push(rule{saved_expr_pool_.make_functor(holder_.functors.id("g"), {abc}), {}, 0});
+    database.push(rule{saved_expr_pool_.make_functor(holder_.functors.id("h"), {_123}), {}, 0});
 
     constexpr uint32_t idx_a = 0;
     constexpr uint32_t idx_b = 1;
@@ -688,8 +688,8 @@ TEST_P(RuntimeParamTest, RefutesAfterCdclOnUnsatClauseBranches) {
     static constexpr size_t kInitialVarCount = 0;
     const expr* b = saved_expr_pool_.make_functor(holder_.functors.id("b"), {});
     const expr* c = saved_expr_pool_.make_functor(holder_.functors.id("c"), {});
-    database.push(rule{saved_expr_pool_.make_functor(holder_.functors.id("a"), {}), {b}});
-    database.push(rule{saved_expr_pool_.make_functor(holder_.functors.id("a"), {}), {c}});
+    database.push(rule{saved_expr_pool_.make_functor(holder_.functors.id("a"), {}), {b}, 0});
+    database.push(rule{saved_expr_pool_.make_functor(holder_.functors.id("a"), {}), {c}, 0});
     initial_goals.push(saved_expr_pool_.make_functor(holder_.functors.id("a"), {}));
 
     runtime_ref& session = make_session(kInitialVarCount);
@@ -706,8 +706,8 @@ TEST_P(RuntimeParamTest, RefutesAfterCdclOnUnsatClauseBranches) {
 TEST_P(RuntimeParamTest, EnumeratesTwoGroundChoiceSolutions) {
     static constexpr size_t kInitialVarCount = 0;
     initial_goals.push(saved_expr_pool_.make_functor(holder_.functors.id("f"), {}));
-    database.push(rule{saved_expr_pool_.make_functor(holder_.functors.id("f"), {}), {}});
-    database.push(rule{saved_expr_pool_.make_functor(holder_.functors.id("f"), {}), {}});
+    database.push(rule{saved_expr_pool_.make_functor(holder_.functors.id("f"), {}), {}, 0});
+    database.push(rule{saved_expr_pool_.make_functor(holder_.functors.id("f"), {}), {}, 0});
 
     runtime_ref& session = make_session(kInitialVarCount);
     size_t count = 0;
@@ -721,8 +721,8 @@ TEST_P(RuntimeParamTest, EnumeratesTwoGroundChoiceSolutions) {
 TEST_P(RuntimeParamTest, RefutesAfterEnumeratingAllGroundBranches) {
     static constexpr size_t kInitialVarCount = 0;
     initial_goals.push(saved_expr_pool_.make_functor(holder_.functors.id("f"), {}));
-    database.push(rule{saved_expr_pool_.make_functor(holder_.functors.id("f"), {}), {}});
-    database.push(rule{saved_expr_pool_.make_functor(holder_.functors.id("f"), {}), {}});
+    database.push(rule{saved_expr_pool_.make_functor(holder_.functors.id("f"), {}), {}, 0});
+    database.push(rule{saved_expr_pool_.make_functor(holder_.functors.id("f"), {}), {}, 0});
 
     runtime_ref& session = make_session(kInitialVarCount);
     size_t count = 0;
@@ -737,8 +737,8 @@ TEST_P(RuntimeParamTest, EnumeratesTwoVarChoiceSolutions) {
     static constexpr size_t kInitialVarCount = 1;
     const expr* abc = saved_expr_pool_.make_functor(holder_.functors.id("abc"), {});
     const expr* xyz = saved_expr_pool_.make_functor(holder_.functors.id("xyz"), {});
-    database.push(rule{saved_expr_pool_.make_functor(holder_.functors.id("f"), {abc}), {}});
-    database.push(rule{saved_expr_pool_.make_functor(holder_.functors.id("f"), {xyz}), {}});
+    database.push(rule{saved_expr_pool_.make_functor(holder_.functors.id("f"), {abc}), {}, 0});
+    database.push(rule{saved_expr_pool_.make_functor(holder_.functors.id("f"), {xyz}), {}, 0});
 
     constexpr uint32_t idx_a = 0;
     initial_goals.push(saved_expr_pool_.make_functor(holder_.functors.id("f"), {saved_expr_pool_.make_var(idx_a)}));
@@ -758,8 +758,8 @@ TEST_P(RuntimeParamTest, RefutesAfterEnumeratingAllVarBranches) {
     static constexpr size_t kInitialVarCount = 1;
     const expr* abc = saved_expr_pool_.make_functor(holder_.functors.id("abc"), {});
     const expr* xyz = saved_expr_pool_.make_functor(holder_.functors.id("xyz"), {});
-    database.push(rule{saved_expr_pool_.make_functor(holder_.functors.id("f"), {abc}), {}});
-    database.push(rule{saved_expr_pool_.make_functor(holder_.functors.id("f"), {xyz}), {}});
+    database.push(rule{saved_expr_pool_.make_functor(holder_.functors.id("f"), {abc}), {}, 0});
+    database.push(rule{saved_expr_pool_.make_functor(holder_.functors.id("f"), {xyz}), {}, 0});
 
     constexpr uint32_t idx_a = 0;
     initial_goals.push(saved_expr_pool_.make_functor(holder_.functors.id("f"), {saved_expr_pool_.make_var(idx_a)}));
@@ -779,10 +779,10 @@ TEST_P(RuntimeParamTest, EnumeratesTwoGoalSharedVarSolutions) {
     static constexpr size_t kInitialVarCount = 1;
     const expr* abc = saved_expr_pool_.make_functor(holder_.functors.id("abc"), {});
     const expr* xyz = saved_expr_pool_.make_functor(holder_.functors.id("xyz"), {});
-    database.push(rule{saved_expr_pool_.make_functor(holder_.functors.id("f"), {abc}), {}});
-    database.push(rule{saved_expr_pool_.make_functor(holder_.functors.id("f"), {xyz}), {}});
-    database.push(rule{saved_expr_pool_.make_functor(holder_.functors.id("g"), {abc}), {}});
-    database.push(rule{saved_expr_pool_.make_functor(holder_.functors.id("g"), {xyz}), {}});
+    database.push(rule{saved_expr_pool_.make_functor(holder_.functors.id("f"), {abc}), {}, 0});
+    database.push(rule{saved_expr_pool_.make_functor(holder_.functors.id("f"), {xyz}), {}, 0});
+    database.push(rule{saved_expr_pool_.make_functor(holder_.functors.id("g"), {abc}), {}, 0});
+    database.push(rule{saved_expr_pool_.make_functor(holder_.functors.id("g"), {xyz}), {}, 0});
 
     constexpr uint32_t idx_a = 0;
     const expr* goal_var = saved_expr_pool_.make_var(idx_a);
@@ -806,10 +806,10 @@ TEST_P(RuntimeParamTest, EnumeratesFourVarBindingSolutions) {
     const expr* b = saved_expr_pool_.make_functor(holder_.functors.id("b"), {});
     const expr* c = saved_expr_pool_.make_functor(holder_.functors.id("c"), {});
     const expr* d = saved_expr_pool_.make_functor(holder_.functors.id("d"), {});
-    database.push(rule{saved_expr_pool_.make_functor(holder_.functors.id("f"), {a}), {}});
-    database.push(rule{saved_expr_pool_.make_functor(holder_.functors.id("f"), {b}), {}});
-    database.push(rule{saved_expr_pool_.make_functor(holder_.functors.id("f"), {c}), {}});
-    database.push(rule{saved_expr_pool_.make_functor(holder_.functors.id("f"), {d}), {}});
+    database.push(rule{saved_expr_pool_.make_functor(holder_.functors.id("f"), {a}), {}, 0});
+    database.push(rule{saved_expr_pool_.make_functor(holder_.functors.id("f"), {b}), {}, 0});
+    database.push(rule{saved_expr_pool_.make_functor(holder_.functors.id("f"), {c}), {}, 0});
+    database.push(rule{saved_expr_pool_.make_functor(holder_.functors.id("f"), {d}), {}, 0});
 
     constexpr uint32_t idx = 0;
     initial_goals.push(saved_expr_pool_.make_functor(holder_.functors.id("f"), {saved_expr_pool_.make_var(idx)}));
@@ -834,11 +834,11 @@ TEST_P(RuntimeParamTest, EnumeratesFourClauseBodyFactChoices) {
     const expr* d = saved_expr_pool_.make_functor(holder_.functors.id("d"), {});
     database.push(rule{
         saved_expr_pool_.make_functor(holder_.functors.id("f"), {}),
-        {saved_expr_pool_.make_functor(holder_.functors.id("g"), {rule_var})}});
-    database.push(rule{saved_expr_pool_.make_functor(holder_.functors.id("g"), {a}), {}});
-    database.push(rule{saved_expr_pool_.make_functor(holder_.functors.id("g"), {b}), {}});
-    database.push(rule{saved_expr_pool_.make_functor(holder_.functors.id("g"), {c}), {}});
-    database.push(rule{saved_expr_pool_.make_functor(holder_.functors.id("g"), {d}), {}});
+        {saved_expr_pool_.make_functor(holder_.functors.id("g"), {rule_var})}, 0});
+    database.push(rule{saved_expr_pool_.make_functor(holder_.functors.id("g"), {a}), {}, 0});
+    database.push(rule{saved_expr_pool_.make_functor(holder_.functors.id("g"), {b}), {}, 0});
+    database.push(rule{saved_expr_pool_.make_functor(holder_.functors.id("g"), {c}), {}, 0});
+    database.push(rule{saved_expr_pool_.make_functor(holder_.functors.id("g"), {d}), {}, 0});
     initial_goals.push(saved_expr_pool_.make_functor(holder_.functors.id("f"), {}));
 
     runtime_ref& session = make_session(kInitialVarCount);
@@ -857,10 +857,10 @@ TEST_P(RuntimeParamTest, FindsUniqueSharedVarConjunctionThenRefutes) {
     const expr* one = saved_expr_pool_.make_functor(holder_.functors.id("1"), {});
     const expr* two = saved_expr_pool_.make_functor(holder_.functors.id("2"), {});
     const expr* three = saved_expr_pool_.make_functor(holder_.functors.id("3"), {});
-    database.push(rule{saved_expr_pool_.make_functor(holder_.functors.id("is_a"), {one}), {}});
-    database.push(rule{saved_expr_pool_.make_functor(holder_.functors.id("is_a"), {two}), {}});
-    database.push(rule{saved_expr_pool_.make_functor(holder_.functors.id("is_b"), {two}), {}});
-    database.push(rule{saved_expr_pool_.make_functor(holder_.functors.id("is_b"), {three}), {}});
+    database.push(rule{saved_expr_pool_.make_functor(holder_.functors.id("is_a"), {one}), {}, 0});
+    database.push(rule{saved_expr_pool_.make_functor(holder_.functors.id("is_a"), {two}), {}, 0});
+    database.push(rule{saved_expr_pool_.make_functor(holder_.functors.id("is_b"), {two}), {}, 0});
+    database.push(rule{saved_expr_pool_.make_functor(holder_.functors.id("is_b"), {three}), {}, 0});
 
     constexpr uint32_t idx_x = 0;
     const expr* goal_var = saved_expr_pool_.make_var(idx_x);
@@ -893,7 +893,7 @@ TEST_P(RuntimeParamTest, ConflictedTickNotSolved) {
 TEST_P(RuntimeParamTest, SkippedLemmaCallsOnUnitTicks) {
     static constexpr size_t kInitialVarCount = 0;
     initial_goals.push(saved_expr_pool_.make_functor(holder_.functors.id("f"), {}));
-    database.push(rule{saved_expr_pool_.make_functor(holder_.functors.id("f"), {}), {}});
+    database.push(rule{saved_expr_pool_.make_functor(holder_.functors.id("f"), {}), {}, 0});
 
     runtime_ref& session = make_session(kInitialVarCount);
     ASSERT_TRUE(session.next()) << "expected a tick";
@@ -909,9 +909,9 @@ TEST_P(RuntimeParamTest, EnumeratesTwoParentBindingsForAlice) {
     const expr* carol = saved_expr_pool_.make_functor(holder_.functors.id("carol"), {});
     const expr* alice = saved_expr_pool_.make_functor(holder_.functors.id("alice"), {});
     const expr* dave = saved_expr_pool_.make_functor(holder_.functors.id("dave"), {});
-    database.push(rule{saved_expr_pool_.make_functor(holder_.functors.id("parent"), {bob, alice}), {}});
-    database.push(rule{saved_expr_pool_.make_functor(holder_.functors.id("parent"), {carol, alice}), {}});
-    database.push(rule{saved_expr_pool_.make_functor(holder_.functors.id("parent"), {dave, bob}), {}});
+    database.push(rule{saved_expr_pool_.make_functor(holder_.functors.id("parent"), {bob, alice}), {}, 0});
+    database.push(rule{saved_expr_pool_.make_functor(holder_.functors.id("parent"), {carol, alice}), {}, 0});
+    database.push(rule{saved_expr_pool_.make_functor(holder_.functors.id("parent"), {dave, bob}), {}, 0});
     constexpr uint32_t idx_x = 0;
     initial_goals.push(saved_expr_pool_.make_functor(holder_.functors.id("parent"), {
         saved_expr_pool_.make_var(idx_x),
@@ -941,23 +941,23 @@ TEST_P(RuntimeParamTest, EnumeratesPeanoLessThanSeven) {
     };
 
     const expr* zero = saved_expr_pool_.make_functor(holder_.functors.id("zero"), {});
-    database.push(rule{saved_expr_pool_.make_functor(holder_.functors.id("nat"), {zero}), {}});
+    database.push(rule{saved_expr_pool_.make_functor(holder_.functors.id("nat"), {zero}), {}, 0});
 
     const expr* rv1 = saved_expr_pool_.make_var(0);
     database.push(rule{
         saved_expr_pool_.make_functor(holder_.functors.id("nat"), {saved_expr_pool_.make_functor(holder_.functors.id("suc"), {rv1})}),
-        {saved_expr_pool_.make_functor(holder_.functors.id("nat"), {rv1})}});
+        {saved_expr_pool_.make_functor(holder_.functors.id("nat"), {rv1})}, 0});
 
     const expr* rv2 = saved_expr_pool_.make_var(0);
     database.push(rule{
         saved_expr_pool_.make_functor(holder_.functors.id("lt"), {zero, saved_expr_pool_.make_functor(holder_.functors.id("suc"), {rv2})}),
-        {saved_expr_pool_.make_functor(holder_.functors.id("nat"), {rv2})}});
+        {saved_expr_pool_.make_functor(holder_.functors.id("nat"), {rv2})}, 0});
 
     const expr* rv3 = saved_expr_pool_.make_var(0);
     const expr* rv4 = saved_expr_pool_.make_var(1);
     database.push(rule{
         saved_expr_pool_.make_functor(holder_.functors.id("lt"), {saved_expr_pool_.make_functor(holder_.functors.id("suc"), {rv3}), saved_expr_pool_.make_functor(holder_.functors.id("suc"), {rv4})}),
-        {saved_expr_pool_.make_functor(holder_.functors.id("lt"), {rv3, rv4})}});
+        {saved_expr_pool_.make_functor(holder_.functors.id("lt"), {rv3, rv4})}, 0});
 
     std::set<solution> expected;
     for (int n = 0; n < 7; ++n)
@@ -986,28 +986,28 @@ TEST_P(RuntimeParamTest, EnumeratesSatPAndQOrR) {
     static constexpr size_t kInitialVarCount = 4;
     const expr* true_atom = saved_expr_pool_.make_functor(holder_.functors.id("true"), {});
     const expr* false_atom = saved_expr_pool_.make_functor(holder_.functors.id("false"), {});
-    database.push(rule{saved_expr_pool_.make_functor(holder_.functors.id("bool"), {true_atom}), {}});
-    database.push(rule{saved_expr_pool_.make_functor(holder_.functors.id("bool"), {false_atom}), {}});
+    database.push(rule{saved_expr_pool_.make_functor(holder_.functors.id("bool"), {true_atom}), {}, 0});
+    database.push(rule{saved_expr_pool_.make_functor(holder_.functors.id("bool"), {false_atom}), {}, 0});
 
     const expr* or_rv = saved_expr_pool_.make_var(0);
     database.push(rule{
         saved_expr_pool_.make_functor(holder_.functors.id("or"), {true_atom, or_rv, true_atom}),
-        {saved_expr_pool_.make_functor(holder_.functors.id("bool"), {or_rv})}});
+        {saved_expr_pool_.make_functor(holder_.functors.id("bool"), {or_rv})}, 0});
 
     const expr* or_rv2 = saved_expr_pool_.make_var(0);
     database.push(rule{
         saved_expr_pool_.make_functor(holder_.functors.id("or"), {false_atom, or_rv2, or_rv2}),
-        {saved_expr_pool_.make_functor(holder_.functors.id("bool"), {or_rv2})}});
+        {saved_expr_pool_.make_functor(holder_.functors.id("bool"), {or_rv2})}, 0});
 
     const expr* and_rv = saved_expr_pool_.make_var(0);
     database.push(rule{
         saved_expr_pool_.make_functor(holder_.functors.id("and"), {true_atom, and_rv, and_rv}),
-        {saved_expr_pool_.make_functor(holder_.functors.id("bool"), {and_rv})}});
+        {saved_expr_pool_.make_functor(holder_.functors.id("bool"), {and_rv})}, 0});
 
     const expr* and_rv2 = saved_expr_pool_.make_var(0);
     database.push(rule{
         saved_expr_pool_.make_functor(holder_.functors.id("and"), {false_atom, and_rv2, false_atom}),
-        {saved_expr_pool_.make_functor(holder_.functors.id("bool"), {and_rv2})}});
+        {saved_expr_pool_.make_functor(holder_.functors.id("bool"), {and_rv2})}, 0});
     constexpr uint32_t idx_p = 0;
     constexpr uint32_t idx_q = 1;
     constexpr uint32_t idx_r = 2;
@@ -1045,14 +1045,14 @@ TEST_P(RuntimeParamTest, EnumeratesTwoSatAssignmentsForImpliesQ) {
     static constexpr size_t kInitialVarCount = 3;
     const expr* true_atom = saved_expr_pool_.make_functor(holder_.functors.id("true"), {});
     const expr* false_atom = saved_expr_pool_.make_functor(holder_.functors.id("false"), {});
-    database.push(rule{saved_expr_pool_.make_functor(holder_.functors.id("bool"), {true_atom}), {}});
-    database.push(rule{saved_expr_pool_.make_functor(holder_.functors.id("bool"), {false_atom}), {}});
-    database.push(rule{saved_expr_pool_.make_functor(holder_.functors.id("not"), {true_atom, false_atom}), {}});
-    database.push(rule{saved_expr_pool_.make_functor(holder_.functors.id("not"), {false_atom, true_atom}), {}});
-    database.push(rule{saved_expr_pool_.make_functor(holder_.functors.id("or"), {true_atom, true_atom, true_atom}), {}});
-    database.push(rule{saved_expr_pool_.make_functor(holder_.functors.id("or"), {true_atom, false_atom, true_atom}), {}});
-    database.push(rule{saved_expr_pool_.make_functor(holder_.functors.id("or"), {false_atom, true_atom, true_atom}), {}});
-    database.push(rule{saved_expr_pool_.make_functor(holder_.functors.id("or"), {false_atom, false_atom, false_atom}), {}});
+    database.push(rule{saved_expr_pool_.make_functor(holder_.functors.id("bool"), {true_atom}), {}, 0});
+    database.push(rule{saved_expr_pool_.make_functor(holder_.functors.id("bool"), {false_atom}), {}, 0});
+    database.push(rule{saved_expr_pool_.make_functor(holder_.functors.id("not"), {true_atom, false_atom}), {}, 0});
+    database.push(rule{saved_expr_pool_.make_functor(holder_.functors.id("not"), {false_atom, true_atom}), {}, 0});
+    database.push(rule{saved_expr_pool_.make_functor(holder_.functors.id("or"), {true_atom, true_atom, true_atom}), {}, 0});
+    database.push(rule{saved_expr_pool_.make_functor(holder_.functors.id("or"), {true_atom, false_atom, true_atom}), {}, 0});
+    database.push(rule{saved_expr_pool_.make_functor(holder_.functors.id("or"), {false_atom, true_atom, true_atom}), {}, 0});
+    database.push(rule{saved_expr_pool_.make_functor(holder_.functors.id("or"), {false_atom, false_atom, false_atom}), {}, 0});
     constexpr uint32_t idx_p = 0;
     constexpr uint32_t idx_q = 1;
     constexpr uint32_t idx_np = 2;
@@ -1097,10 +1097,10 @@ TEST_P(RuntimeParamTest, EnumeratesTwoPathTwoColorings) {
     static constexpr size_t kInitialVarCount = 3;
     const expr* red = saved_expr_pool_.make_functor(holder_.functors.id("red"), {});
     const expr* blue = saved_expr_pool_.make_functor(holder_.functors.id("blue"), {});
-    database.push(rule{saved_expr_pool_.make_functor(holder_.functors.id("color"), {red}), {}});
-    database.push(rule{saved_expr_pool_.make_functor(holder_.functors.id("color"), {blue}), {}});
-    database.push(rule{saved_expr_pool_.make_functor(holder_.functors.id("diff"), {red, blue}), {}});
-    database.push(rule{saved_expr_pool_.make_functor(holder_.functors.id("diff"), {blue, red}), {}});
+    database.push(rule{saved_expr_pool_.make_functor(holder_.functors.id("color"), {red}), {}, 0});
+    database.push(rule{saved_expr_pool_.make_functor(holder_.functors.id("color"), {blue}), {}, 0});
+    database.push(rule{saved_expr_pool_.make_functor(holder_.functors.id("diff"), {red, blue}), {}, 0});
+    database.push(rule{saved_expr_pool_.make_functor(holder_.functors.id("diff"), {blue, red}), {}, 0});
     constexpr uint32_t idx_a = 0;
     constexpr uint32_t idx_b = 1;
     constexpr uint32_t idx_c = 2;
@@ -1155,15 +1155,15 @@ TEST_P(RuntimeParamTest, EnumeratesK3ThreeColorings) {
     const expr* red = saved_expr_pool_.make_functor(holder_.functors.id("red"), {});
     const expr* green = saved_expr_pool_.make_functor(holder_.functors.id("green"), {});
     const expr* blue = saved_expr_pool_.make_functor(holder_.functors.id("blue"), {});
-    database.push(rule{saved_expr_pool_.make_functor(holder_.functors.id("color"), {red}), {}});
-    database.push(rule{saved_expr_pool_.make_functor(holder_.functors.id("color"), {green}), {}});
-    database.push(rule{saved_expr_pool_.make_functor(holder_.functors.id("color"), {blue}), {}});
-    database.push(rule{saved_expr_pool_.make_functor(holder_.functors.id("diff"), {red, green}), {}});
-    database.push(rule{saved_expr_pool_.make_functor(holder_.functors.id("diff"), {red, blue}), {}});
-    database.push(rule{saved_expr_pool_.make_functor(holder_.functors.id("diff"), {green, red}), {}});
-    database.push(rule{saved_expr_pool_.make_functor(holder_.functors.id("diff"), {green, blue}), {}});
-    database.push(rule{saved_expr_pool_.make_functor(holder_.functors.id("diff"), {blue, red}), {}});
-    database.push(rule{saved_expr_pool_.make_functor(holder_.functors.id("diff"), {blue, green}), {}});
+    database.push(rule{saved_expr_pool_.make_functor(holder_.functors.id("color"), {red}), {}, 0});
+    database.push(rule{saved_expr_pool_.make_functor(holder_.functors.id("color"), {green}), {}, 0});
+    database.push(rule{saved_expr_pool_.make_functor(holder_.functors.id("color"), {blue}), {}, 0});
+    database.push(rule{saved_expr_pool_.make_functor(holder_.functors.id("diff"), {red, green}), {}, 0});
+    database.push(rule{saved_expr_pool_.make_functor(holder_.functors.id("diff"), {red, blue}), {}, 0});
+    database.push(rule{saved_expr_pool_.make_functor(holder_.functors.id("diff"), {green, red}), {}, 0});
+    database.push(rule{saved_expr_pool_.make_functor(holder_.functors.id("diff"), {green, blue}), {}, 0});
+    database.push(rule{saved_expr_pool_.make_functor(holder_.functors.id("diff"), {blue, red}), {}, 0});
+    database.push(rule{saved_expr_pool_.make_functor(holder_.functors.id("diff"), {blue, green}), {}, 0});
     constexpr uint32_t idx_a = 0;
     constexpr uint32_t idx_b = 1;
     constexpr uint32_t idx_c = 2;
@@ -1204,15 +1204,15 @@ TEST_P(RuntimeParamTest, EnumeratesK3TailFourNodeColorings) {
     const expr* red = saved_expr_pool_.make_functor(holder_.functors.id("red"), {});
     const expr* green = saved_expr_pool_.make_functor(holder_.functors.id("green"), {});
     const expr* blue = saved_expr_pool_.make_functor(holder_.functors.id("blue"), {});
-    database.push(rule{saved_expr_pool_.make_functor(holder_.functors.id("color"), {red}), {}});
-    database.push(rule{saved_expr_pool_.make_functor(holder_.functors.id("color"), {green}), {}});
-    database.push(rule{saved_expr_pool_.make_functor(holder_.functors.id("color"), {blue}), {}});
-    database.push(rule{saved_expr_pool_.make_functor(holder_.functors.id("diff"), {red, green}), {}});
-    database.push(rule{saved_expr_pool_.make_functor(holder_.functors.id("diff"), {red, blue}), {}});
-    database.push(rule{saved_expr_pool_.make_functor(holder_.functors.id("diff"), {green, red}), {}});
-    database.push(rule{saved_expr_pool_.make_functor(holder_.functors.id("diff"), {green, blue}), {}});
-    database.push(rule{saved_expr_pool_.make_functor(holder_.functors.id("diff"), {blue, red}), {}});
-    database.push(rule{saved_expr_pool_.make_functor(holder_.functors.id("diff"), {blue, green}), {}});
+    database.push(rule{saved_expr_pool_.make_functor(holder_.functors.id("color"), {red}), {}, 0});
+    database.push(rule{saved_expr_pool_.make_functor(holder_.functors.id("color"), {green}), {}, 0});
+    database.push(rule{saved_expr_pool_.make_functor(holder_.functors.id("color"), {blue}), {}, 0});
+    database.push(rule{saved_expr_pool_.make_functor(holder_.functors.id("diff"), {red, green}), {}, 0});
+    database.push(rule{saved_expr_pool_.make_functor(holder_.functors.id("diff"), {red, blue}), {}, 0});
+    database.push(rule{saved_expr_pool_.make_functor(holder_.functors.id("diff"), {green, red}), {}, 0});
+    database.push(rule{saved_expr_pool_.make_functor(holder_.functors.id("diff"), {green, blue}), {}, 0});
+    database.push(rule{saved_expr_pool_.make_functor(holder_.functors.id("diff"), {blue, red}), {}, 0});
+    database.push(rule{saved_expr_pool_.make_functor(holder_.functors.id("diff"), {blue, green}), {}, 0});
     constexpr uint32_t idx_a = 0;
     constexpr uint32_t idx_b = 1;
     constexpr uint32_t idx_c = 2;
@@ -1260,18 +1260,18 @@ TEST_P(RuntimeParamTest, EnumeratesFourVarSatThreeClauses) {
 
     const expr* true_atom = saved_expr_pool_.make_functor(holder_.functors.id("true"), {});
     const expr* false_atom = saved_expr_pool_.make_functor(holder_.functors.id("false"), {});
-    database.push(rule{saved_expr_pool_.make_functor(holder_.functors.id("bool"), {true_atom}), {}});
-    database.push(rule{saved_expr_pool_.make_functor(holder_.functors.id("bool"), {false_atom}), {}});
-    database.push(rule{saved_expr_pool_.make_functor(holder_.functors.id("not"), {true_atom, false_atom}), {}});
-    database.push(rule{saved_expr_pool_.make_functor(holder_.functors.id("not"), {false_atom, true_atom}), {}});
-    database.push(rule{saved_expr_pool_.make_functor(holder_.functors.id("or"), {true_atom, true_atom, true_atom}), {}});
-    database.push(rule{saved_expr_pool_.make_functor(holder_.functors.id("or"), {true_atom, false_atom, true_atom}), {}});
-    database.push(rule{saved_expr_pool_.make_functor(holder_.functors.id("or"), {false_atom, true_atom, true_atom}), {}});
-    database.push(rule{saved_expr_pool_.make_functor(holder_.functors.id("or"), {false_atom, false_atom, false_atom}), {}});
-    database.push(rule{saved_expr_pool_.make_functor(holder_.functors.id("and"), {true_atom, true_atom, true_atom}), {}});
-    database.push(rule{saved_expr_pool_.make_functor(holder_.functors.id("and"), {true_atom, false_atom, false_atom}), {}});
-    database.push(rule{saved_expr_pool_.make_functor(holder_.functors.id("and"), {false_atom, true_atom, false_atom}), {}});
-    database.push(rule{saved_expr_pool_.make_functor(holder_.functors.id("and"), {false_atom, false_atom, false_atom}), {}});
+    database.push(rule{saved_expr_pool_.make_functor(holder_.functors.id("bool"), {true_atom}), {}, 0});
+    database.push(rule{saved_expr_pool_.make_functor(holder_.functors.id("bool"), {false_atom}), {}, 0});
+    database.push(rule{saved_expr_pool_.make_functor(holder_.functors.id("not"), {true_atom, false_atom}), {}, 0});
+    database.push(rule{saved_expr_pool_.make_functor(holder_.functors.id("not"), {false_atom, true_atom}), {}, 0});
+    database.push(rule{saved_expr_pool_.make_functor(holder_.functors.id("or"), {true_atom, true_atom, true_atom}), {}, 0});
+    database.push(rule{saved_expr_pool_.make_functor(holder_.functors.id("or"), {true_atom, false_atom, true_atom}), {}, 0});
+    database.push(rule{saved_expr_pool_.make_functor(holder_.functors.id("or"), {false_atom, true_atom, true_atom}), {}, 0});
+    database.push(rule{saved_expr_pool_.make_functor(holder_.functors.id("or"), {false_atom, false_atom, false_atom}), {}, 0});
+    database.push(rule{saved_expr_pool_.make_functor(holder_.functors.id("and"), {true_atom, true_atom, true_atom}), {}, 0});
+    database.push(rule{saved_expr_pool_.make_functor(holder_.functors.id("and"), {true_atom, false_atom, false_atom}), {}, 0});
+    database.push(rule{saved_expr_pool_.make_functor(holder_.functors.id("and"), {false_atom, true_atom, false_atom}), {}, 0});
+    database.push(rule{saved_expr_pool_.make_functor(holder_.functors.id("and"), {false_atom, false_atom, false_atom}), {}, 0});
     constexpr uint32_t idx_p = 0;
     constexpr uint32_t idx_q = 1;
     constexpr uint32_t idx_r = 2;
@@ -1349,35 +1349,35 @@ TEST_P(RuntimeParamTest, EnumeratesAddPairsSummingLessThanTen) {
     };
 
     const expr* zero = saved_expr_pool_.make_functor(holder_.functors.id("zero"), {});
-    database.push(rule{saved_expr_pool_.make_functor(holder_.functors.id("nat"), {zero}), {}});
+    database.push(rule{saved_expr_pool_.make_functor(holder_.functors.id("nat"), {zero}), {}, 0});
 
     const expr* rv1 = saved_expr_pool_.make_var(0);
     database.push(rule{
         saved_expr_pool_.make_functor(holder_.functors.id("nat"), {saved_expr_pool_.make_functor(holder_.functors.id("suc"), {rv1})}),
-        {saved_expr_pool_.make_functor(holder_.functors.id("nat"), {rv1})}});
+        {saved_expr_pool_.make_functor(holder_.functors.id("nat"), {rv1})}, 0});
 
     const expr* rv2 = saved_expr_pool_.make_var(0);
     database.push(rule{
         saved_expr_pool_.make_functor(holder_.functors.id("add"), {zero, rv2, rv2}),
-        {saved_expr_pool_.make_functor(holder_.functors.id("nat"), {rv2})}});
+        {saved_expr_pool_.make_functor(holder_.functors.id("nat"), {rv2})}, 0});
 
     const expr* rv3 = saved_expr_pool_.make_var(0);
     const expr* rv4 = saved_expr_pool_.make_var(1);
     const expr* rv5 = saved_expr_pool_.make_var(2);
     database.push(rule{
         saved_expr_pool_.make_functor(holder_.functors.id("add"), {saved_expr_pool_.make_functor(holder_.functors.id("suc"), {rv3}), rv4, saved_expr_pool_.make_functor(holder_.functors.id("suc"), {rv5})}),
-        {saved_expr_pool_.make_functor(holder_.functors.id("add"), {rv3, rv4, rv5})}});
+        {saved_expr_pool_.make_functor(holder_.functors.id("add"), {rv3, rv4, rv5})}, 0});
 
     const expr* rv6 = saved_expr_pool_.make_var(0);
     database.push(rule{
         saved_expr_pool_.make_functor(holder_.functors.id("lt"), {zero, saved_expr_pool_.make_functor(holder_.functors.id("suc"), {rv6})}),
-        {saved_expr_pool_.make_functor(holder_.functors.id("nat"), {rv6})}});
+        {saved_expr_pool_.make_functor(holder_.functors.id("nat"), {rv6})}, 0});
 
     const expr* rv7 = saved_expr_pool_.make_var(0);
     const expr* rv8 = saved_expr_pool_.make_var(1);
     database.push(rule{
         saved_expr_pool_.make_functor(holder_.functors.id("lt"), {saved_expr_pool_.make_functor(holder_.functors.id("suc"), {rv7}), saved_expr_pool_.make_functor(holder_.functors.id("suc"), {rv8})}),
-        {saved_expr_pool_.make_functor(holder_.functors.id("lt"), {rv7, rv8})}});
+        {saved_expr_pool_.make_functor(holder_.functors.id("lt"), {rv7, rv8})}, 0});
 
     std::set<solution> expected;
     for (int x = 0; x < 10; ++x) {
@@ -1423,24 +1423,24 @@ TEST_P(RuntimeParamTest, EnumeratesAddPairsSummingExactlyTen) {
     };
 
     const expr* zero = saved_expr_pool_.make_functor(holder_.functors.id("zero"), {});
-    database.push(rule{saved_expr_pool_.make_functor(holder_.functors.id("nat"), {zero}), {}});
+    database.push(rule{saved_expr_pool_.make_functor(holder_.functors.id("nat"), {zero}), {}, 0});
 
     const expr* rv1 = saved_expr_pool_.make_var(0);
     database.push(rule{
         saved_expr_pool_.make_functor(holder_.functors.id("nat"), {saved_expr_pool_.make_functor(holder_.functors.id("suc"), {rv1})}),
-        {saved_expr_pool_.make_functor(holder_.functors.id("nat"), {rv1})}});
+        {saved_expr_pool_.make_functor(holder_.functors.id("nat"), {rv1})}, 0});
 
     const expr* rv2 = saved_expr_pool_.make_var(0);
     database.push(rule{
         saved_expr_pool_.make_functor(holder_.functors.id("add"), {zero, rv2, rv2}),
-        {saved_expr_pool_.make_functor(holder_.functors.id("nat"), {rv2})}});
+        {saved_expr_pool_.make_functor(holder_.functors.id("nat"), {rv2})}, 0});
 
     const expr* rv3 = saved_expr_pool_.make_var(0);
     const expr* rv4 = saved_expr_pool_.make_var(1);
     const expr* rv5 = saved_expr_pool_.make_var(2);
     database.push(rule{
         saved_expr_pool_.make_functor(holder_.functors.id("add"), {saved_expr_pool_.make_functor(holder_.functors.id("suc"), {rv3}), rv4, saved_expr_pool_.make_functor(holder_.functors.id("suc"), {rv5})}),
-        {saved_expr_pool_.make_functor(holder_.functors.id("add"), {rv3, rv4, rv5})}});
+        {saved_expr_pool_.make_functor(holder_.functors.id("add"), {rv3, rv4, rv5})}, 0});
 
     std::set<solution> expected;
     for (int x = 0; x <= 10; ++x)
@@ -1481,29 +1481,29 @@ TEST_P(RuntimeParamTest, EnumeratesMulPairsProductEight) {
     };
 
     const expr* zero = saved_expr_pool_.make_functor(holder_.functors.id("zero"), {});
-    database.push(rule{saved_expr_pool_.make_functor(holder_.functors.id("nat"), {zero}), {}});
+    database.push(rule{saved_expr_pool_.make_functor(holder_.functors.id("nat"), {zero}), {}, 0});
 
     const expr* rv1 = saved_expr_pool_.make_var(0);
     database.push(rule{
         saved_expr_pool_.make_functor(holder_.functors.id("nat"), {saved_expr_pool_.make_functor(holder_.functors.id("suc"), {rv1})}),
-        {saved_expr_pool_.make_functor(holder_.functors.id("nat"), {rv1})}});
+        {saved_expr_pool_.make_functor(holder_.functors.id("nat"), {rv1})}, 0});
 
     const expr* rv2 = saved_expr_pool_.make_var(0);
     database.push(rule{
         saved_expr_pool_.make_functor(holder_.functors.id("add"), {zero, rv2, rv2}),
-        {saved_expr_pool_.make_functor(holder_.functors.id("nat"), {rv2})}});
+        {saved_expr_pool_.make_functor(holder_.functors.id("nat"), {rv2})}, 0});
 
     const expr* rv3 = saved_expr_pool_.make_var(0);
     const expr* rv4 = saved_expr_pool_.make_var(1);
     const expr* rv5 = saved_expr_pool_.make_var(2);
     database.push(rule{
         saved_expr_pool_.make_functor(holder_.functors.id("add"), {saved_expr_pool_.make_functor(holder_.functors.id("suc"), {rv3}), rv4, saved_expr_pool_.make_functor(holder_.functors.id("suc"), {rv5})}),
-        {saved_expr_pool_.make_functor(holder_.functors.id("add"), {rv3, rv4, rv5})}});
+        {saved_expr_pool_.make_functor(holder_.functors.id("add"), {rv3, rv4, rv5})}, 0});
 
     const expr* rv6 = saved_expr_pool_.make_var(0);
     database.push(rule{
         saved_expr_pool_.make_functor(holder_.functors.id("mul"), {zero, rv6, zero}),
-        {saved_expr_pool_.make_functor(holder_.functors.id("nat"), {rv6})}});
+        {saved_expr_pool_.make_functor(holder_.functors.id("nat"), {rv6})}, 0});
 
     const expr* rv7 = saved_expr_pool_.make_var(0);
     const expr* rv8 = saved_expr_pool_.make_var(1);
@@ -1512,7 +1512,7 @@ TEST_P(RuntimeParamTest, EnumeratesMulPairsProductEight) {
     database.push(rule{
         saved_expr_pool_.make_functor(holder_.functors.id("mul"), {saved_expr_pool_.make_functor(holder_.functors.id("suc"), {rv7}), rv8, rv9}),
         {saved_expr_pool_.make_functor(holder_.functors.id("mul"), {rv7, rv8, rv10}),
-            saved_expr_pool_.make_functor(holder_.functors.id("add"), {rv10, rv8, rv9})}});
+            saved_expr_pool_.make_functor(holder_.functors.id("add"), {rv10, rv8, rv9})}, 0});
 
     std::set<solution> expected = {
         {peano_saved(1), peano_saved(8)},
@@ -1554,35 +1554,35 @@ TEST_P(RuntimeParamTest, EnumeratesDualBoundedSharedXSums) {
     };
 
     const expr* zero = saved_expr_pool_.make_functor(holder_.functors.id("zero"), {});
-    database.push(rule{saved_expr_pool_.make_functor(holder_.functors.id("nat"), {zero}), {}});
+    database.push(rule{saved_expr_pool_.make_functor(holder_.functors.id("nat"), {zero}), {}, 0});
 
     const expr* rv1 = saved_expr_pool_.make_var(0);
     database.push(rule{
         saved_expr_pool_.make_functor(holder_.functors.id("nat"), {saved_expr_pool_.make_functor(holder_.functors.id("suc"), {rv1})}),
-        {saved_expr_pool_.make_functor(holder_.functors.id("nat"), {rv1})}});
+        {saved_expr_pool_.make_functor(holder_.functors.id("nat"), {rv1})}, 0});
 
     const expr* rv2 = saved_expr_pool_.make_var(0);
     database.push(rule{
         saved_expr_pool_.make_functor(holder_.functors.id("add"), {zero, rv2, rv2}),
-        {saved_expr_pool_.make_functor(holder_.functors.id("nat"), {rv2})}});
+        {saved_expr_pool_.make_functor(holder_.functors.id("nat"), {rv2})}, 0});
 
     const expr* rv3 = saved_expr_pool_.make_var(0);
     const expr* rv4 = saved_expr_pool_.make_var(1);
     const expr* rv5 = saved_expr_pool_.make_var(2);
     database.push(rule{
         saved_expr_pool_.make_functor(holder_.functors.id("add"), {saved_expr_pool_.make_functor(holder_.functors.id("suc"), {rv3}), rv4, saved_expr_pool_.make_functor(holder_.functors.id("suc"), {rv5})}),
-        {saved_expr_pool_.make_functor(holder_.functors.id("add"), {rv3, rv4, rv5})}});
+        {saved_expr_pool_.make_functor(holder_.functors.id("add"), {rv3, rv4, rv5})}, 0});
 
     const expr* rv6 = saved_expr_pool_.make_var(0);
     database.push(rule{
         saved_expr_pool_.make_functor(holder_.functors.id("lt"), {zero, saved_expr_pool_.make_functor(holder_.functors.id("suc"), {rv6})}),
-        {saved_expr_pool_.make_functor(holder_.functors.id("nat"), {rv6})}});
+        {saved_expr_pool_.make_functor(holder_.functors.id("nat"), {rv6})}, 0});
 
     const expr* rv7 = saved_expr_pool_.make_var(0);
     const expr* rv8 = saved_expr_pool_.make_var(1);
     database.push(rule{
         saved_expr_pool_.make_functor(holder_.functors.id("lt"), {saved_expr_pool_.make_functor(holder_.functors.id("suc"), {rv7}), saved_expr_pool_.make_functor(holder_.functors.id("suc"), {rv8})}),
-        {saved_expr_pool_.make_functor(holder_.functors.id("lt"), {rv7, rv8})}});
+        {saved_expr_pool_.make_functor(holder_.functors.id("lt"), {rv7, rv8})}, 0});
 
     std::set<solution> expected;
     for (int x = 0; x < 4; ++x) {
@@ -1637,35 +1637,35 @@ TEST_P(RuntimeParamTest, EnumeratesCatalanTreesWithFiveNodes) {
     static constexpr size_t kCatalanBudget = 70;
 
     const expr* zero = saved_expr_pool_.make_functor(holder_.functors.id("zero"), {});
-    database.push(rule{saved_expr_pool_.make_functor(holder_.functors.id("nat"), {zero}), {}});
+    database.push(rule{saved_expr_pool_.make_functor(holder_.functors.id("nat"), {zero}), {}, 0});
 
     const expr* rv1 = saved_expr_pool_.make_var(0);
     database.push(rule{
         saved_expr_pool_.make_functor(holder_.functors.id("nat"), {saved_expr_pool_.make_functor(holder_.functors.id("suc"), {rv1})}),
-        {saved_expr_pool_.make_functor(holder_.functors.id("nat"), {rv1})}});
+        {saved_expr_pool_.make_functor(holder_.functors.id("nat"), {rv1})}, 0});
 
     const expr* rv2 = saved_expr_pool_.make_var(0);
     database.push(rule{
         saved_expr_pool_.make_functor(holder_.functors.id("add"), {zero, rv2, rv2}),
-        {saved_expr_pool_.make_functor(holder_.functors.id("nat"), {rv2})}});
+        {saved_expr_pool_.make_functor(holder_.functors.id("nat"), {rv2})}, 0});
 
     const expr* rv3 = saved_expr_pool_.make_var(0);
     const expr* rv4 = saved_expr_pool_.make_var(1);
     const expr* rv5 = saved_expr_pool_.make_var(2);
     database.push(rule{
         saved_expr_pool_.make_functor(holder_.functors.id("add"), {saved_expr_pool_.make_functor(holder_.functors.id("suc"), {rv3}), rv4, saved_expr_pool_.make_functor(holder_.functors.id("suc"), {rv5})}),
-        {saved_expr_pool_.make_functor(holder_.functors.id("add"), {rv3, rv4, rv5})}});
+        {saved_expr_pool_.make_functor(holder_.functors.id("add"), {rv3, rv4, rv5})}, 0});
 
     const expr* nil = saved_expr_pool_.make_functor(holder_.functors.id("nil"), {});
-    database.push(rule{saved_expr_pool_.make_functor(holder_.functors.id("wf"), {nil}), {}});
+    database.push(rule{saved_expr_pool_.make_functor(holder_.functors.id("wf"), {nil}), {}, 0});
 
     const expr* rv6 = saved_expr_pool_.make_var(0);
     const expr* rv7 = saved_expr_pool_.make_var(1);
     database.push(rule{
         saved_expr_pool_.make_functor(holder_.functors.id("wf"), {saved_expr_pool_.make_functor(holder_.functors.id("bin"), {rv6, rv7})}),
-        {saved_expr_pool_.make_functor(holder_.functors.id("wf"), {rv6}), saved_expr_pool_.make_functor(holder_.functors.id("wf"), {rv7})}});
+        {saved_expr_pool_.make_functor(holder_.functors.id("wf"), {rv6}), saved_expr_pool_.make_functor(holder_.functors.id("wf"), {rv7})}, 0});
 
-    database.push(rule{saved_expr_pool_.make_functor(holder_.functors.id("nodes"), {nil, zero}), {}});
+    database.push(rule{saved_expr_pool_.make_functor(holder_.functors.id("nodes"), {nil, zero}), {}, 0});
 
     const expr* one = saved_expr_pool_.make_functor(holder_.functors.id("suc"), {zero});
     const expr* rv8 = saved_expr_pool_.make_var(0);
@@ -1679,7 +1679,7 @@ TEST_P(RuntimeParamTest, EnumeratesCatalanTreesWithFiveNodes) {
         {saved_expr_pool_.make_functor(holder_.functors.id("nodes"), {rv8, rv11}),
             saved_expr_pool_.make_functor(holder_.functors.id("nodes"), {rv9, rv12}),
             saved_expr_pool_.make_functor(holder_.functors.id("add"), {rv11, rv12, rv13}),
-            saved_expr_pool_.make_functor(holder_.functors.id("add"), {one, rv13, rv10})}});
+            saved_expr_pool_.make_functor(holder_.functors.id("add"), {one, rv13, rv10})}, 0});
 
     constexpr uint32_t idx_t = 0;
     const expr* five = saved_expr_pool_.make_functor(holder_.functors.id("zero"), {});
@@ -1706,10 +1706,10 @@ TEST_P(RuntimeParamTest, EnumeratesFourTwoGoalGroundCombinations) {
     static constexpr size_t kInitialVarCount = 0;
     initial_goals.push(saved_expr_pool_.make_functor(holder_.functors.id("f"), {}));
     initial_goals.push(saved_expr_pool_.make_functor(holder_.functors.id("g"), {}));
-    database.push(rule{saved_expr_pool_.make_functor(holder_.functors.id("f"), {}), {}});
-    database.push(rule{saved_expr_pool_.make_functor(holder_.functors.id("f"), {}), {}});
-    database.push(rule{saved_expr_pool_.make_functor(holder_.functors.id("g"), {}), {}});
-    database.push(rule{saved_expr_pool_.make_functor(holder_.functors.id("g"), {}), {}});
+    database.push(rule{saved_expr_pool_.make_functor(holder_.functors.id("f"), {}), {}, 0});
+    database.push(rule{saved_expr_pool_.make_functor(holder_.functors.id("f"), {}), {}, 0});
+    database.push(rule{saved_expr_pool_.make_functor(holder_.functors.id("g"), {}), {}, 0});
+    database.push(rule{saved_expr_pool_.make_functor(holder_.functors.id("g"), {}), {}, 0});
 
     runtime_ref& session = make_session(kInitialVarCount);
     size_t count = 0;
@@ -1725,12 +1725,12 @@ TEST_P(RuntimeParamTest, EnumeratesEightThreeGoalGroundCombinations) {
     initial_goals.push(saved_expr_pool_.make_functor(holder_.functors.id("f"), {}));
     initial_goals.push(saved_expr_pool_.make_functor(holder_.functors.id("g"), {}));
     initial_goals.push(saved_expr_pool_.make_functor(holder_.functors.id("h"), {}));
-    database.push(rule{saved_expr_pool_.make_functor(holder_.functors.id("f"), {}), {}});
-    database.push(rule{saved_expr_pool_.make_functor(holder_.functors.id("f"), {}), {}});
-    database.push(rule{saved_expr_pool_.make_functor(holder_.functors.id("g"), {}), {}});
-    database.push(rule{saved_expr_pool_.make_functor(holder_.functors.id("g"), {}), {}});
-    database.push(rule{saved_expr_pool_.make_functor(holder_.functors.id("h"), {}), {}});
-    database.push(rule{saved_expr_pool_.make_functor(holder_.functors.id("h"), {}), {}});
+    database.push(rule{saved_expr_pool_.make_functor(holder_.functors.id("f"), {}), {}, 0});
+    database.push(rule{saved_expr_pool_.make_functor(holder_.functors.id("f"), {}), {}, 0});
+    database.push(rule{saved_expr_pool_.make_functor(holder_.functors.id("g"), {}), {}, 0});
+    database.push(rule{saved_expr_pool_.make_functor(holder_.functors.id("g"), {}), {}, 0});
+    database.push(rule{saved_expr_pool_.make_functor(holder_.functors.id("h"), {}), {}, 0});
+    database.push(rule{saved_expr_pool_.make_functor(holder_.functors.id("h"), {}), {}, 0});
 
     runtime_ref& session = make_session(kInitialVarCount);
     size_t count = 0;
@@ -1750,13 +1750,13 @@ TEST_P(RuntimeParamTest, EnumeratesManySharedVarGroundHeads) {
     const expr* mno = saved_expr_pool_.make_functor(holder_.functors.id("mno"), {});
     const expr* pqr = saved_expr_pool_.make_functor(holder_.functors.id("pqr"), {});
     const expr* xyz = saved_expr_pool_.make_functor(holder_.functors.id("xyz"), {});
-    database.push(rule{saved_expr_pool_.make_functor(holder_.functors.id("f"), {}), {}});
-    database.push(rule{saved_expr_pool_.make_functor(holder_.functors.id("f"), {}), {}});
-    database.push(rule{saved_expr_pool_.make_functor(holder_.functors.id("g"), {abc, xyz, pqr}), {}});
-    database.push(rule{saved_expr_pool_.make_functor(holder_.functors.id("g"), {def, xyz, pqr}), {}});
-    database.push(rule{saved_expr_pool_.make_functor(holder_.functors.id("g"), {ghi, xyz, pqr}), {}});
-    database.push(rule{saved_expr_pool_.make_functor(holder_.functors.id("g"), {jkl, xyz, pqr}), {}});
-    database.push(rule{saved_expr_pool_.make_functor(holder_.functors.id("g"), {mno, xyz, pqr}), {}});
+    database.push(rule{saved_expr_pool_.make_functor(holder_.functors.id("f"), {}), {}, 0});
+    database.push(rule{saved_expr_pool_.make_functor(holder_.functors.id("f"), {}), {}, 0});
+    database.push(rule{saved_expr_pool_.make_functor(holder_.functors.id("g"), {abc, xyz, pqr}), {}, 0});
+    database.push(rule{saved_expr_pool_.make_functor(holder_.functors.id("g"), {def, xyz, pqr}), {}, 0});
+    database.push(rule{saved_expr_pool_.make_functor(holder_.functors.id("g"), {ghi, xyz, pqr}), {}, 0});
+    database.push(rule{saved_expr_pool_.make_functor(holder_.functors.id("g"), {jkl, xyz, pqr}), {}, 0});
+    database.push(rule{saved_expr_pool_.make_functor(holder_.functors.id("g"), {mno, xyz, pqr}), {}, 0});
     constexpr uint32_t idx_a = 0;
     constexpr uint32_t idx_b = 1;
     constexpr uint32_t idx_c = 2;
@@ -1789,8 +1789,8 @@ TEST_P(RuntimeParamTest, EnumeratesManySharedVarGroundHeads) {
 TEST_P(FgtRuntimeParamTest, EachSolvedLemmaUniqueOnTwoGroundChoices) {
     static constexpr size_t kInitialVarCount = 0;
     initial_goals.push(saved_expr_pool_.make_functor(holder_.functors.id("f"), {}));
-    database.push(rule{saved_expr_pool_.make_functor(holder_.functors.id("f"), {}), {}});
-    database.push(rule{saved_expr_pool_.make_functor(holder_.functors.id("f"), {}), {}});
+    database.push(rule{saved_expr_pool_.make_functor(holder_.functors.id("f"), {}), {}, 0});
+    database.push(rule{saved_expr_pool_.make_functor(holder_.functors.id("f"), {}), {}, 0});
 
     runtime_ref& session = make_session(kInitialVarCount);
     expect_each_solved_lemma_once(session, 2);
@@ -1800,10 +1800,10 @@ TEST_P(FgtRuntimeParamTest, EachSolvedLemmaUniqueOnFourTwoGoalCombinations) {
     static constexpr size_t kInitialVarCount = 0;
     initial_goals.push(saved_expr_pool_.make_functor(holder_.functors.id("f"), {}));
     initial_goals.push(saved_expr_pool_.make_functor(holder_.functors.id("g"), {}));
-    database.push(rule{saved_expr_pool_.make_functor(holder_.functors.id("f"), {}), {}});
-    database.push(rule{saved_expr_pool_.make_functor(holder_.functors.id("f"), {}), {}});
-    database.push(rule{saved_expr_pool_.make_functor(holder_.functors.id("g"), {}), {}});
-    database.push(rule{saved_expr_pool_.make_functor(holder_.functors.id("g"), {}), {}});
+    database.push(rule{saved_expr_pool_.make_functor(holder_.functors.id("f"), {}), {}, 0});
+    database.push(rule{saved_expr_pool_.make_functor(holder_.functors.id("f"), {}), {}, 0});
+    database.push(rule{saved_expr_pool_.make_functor(holder_.functors.id("g"), {}), {}, 0});
+    database.push(rule{saved_expr_pool_.make_functor(holder_.functors.id("g"), {}), {}, 0});
 
     runtime_ref& session = make_session(kInitialVarCount);
     expect_each_solved_lemma_once(session, 4);
@@ -1814,12 +1814,12 @@ TEST_P(FgtRuntimeParamTest, EachSolvedLemmaUniqueOnEightThreeGoalCombinations) {
     initial_goals.push(saved_expr_pool_.make_functor(holder_.functors.id("f"), {}));
     initial_goals.push(saved_expr_pool_.make_functor(holder_.functors.id("g"), {}));
     initial_goals.push(saved_expr_pool_.make_functor(holder_.functors.id("h"), {}));
-    database.push(rule{saved_expr_pool_.make_functor(holder_.functors.id("f"), {}), {}});
-    database.push(rule{saved_expr_pool_.make_functor(holder_.functors.id("f"), {}), {}});
-    database.push(rule{saved_expr_pool_.make_functor(holder_.functors.id("g"), {}), {}});
-    database.push(rule{saved_expr_pool_.make_functor(holder_.functors.id("g"), {}), {}});
-    database.push(rule{saved_expr_pool_.make_functor(holder_.functors.id("h"), {}), {}});
-    database.push(rule{saved_expr_pool_.make_functor(holder_.functors.id("h"), {}), {}});
+    database.push(rule{saved_expr_pool_.make_functor(holder_.functors.id("f"), {}), {}, 0});
+    database.push(rule{saved_expr_pool_.make_functor(holder_.functors.id("f"), {}), {}, 0});
+    database.push(rule{saved_expr_pool_.make_functor(holder_.functors.id("g"), {}), {}, 0});
+    database.push(rule{saved_expr_pool_.make_functor(holder_.functors.id("g"), {}), {}, 0});
+    database.push(rule{saved_expr_pool_.make_functor(holder_.functors.id("h"), {}), {}, 0});
+    database.push(rule{saved_expr_pool_.make_functor(holder_.functors.id("h"), {}), {}, 0});
 
     runtime_ref& session = make_session(kInitialVarCount);
     expect_each_solved_lemma_once(session, 8);
@@ -1828,9 +1828,9 @@ TEST_P(FgtRuntimeParamTest, EachSolvedLemmaUniqueOnEightThreeGoalCombinations) {
 TEST_P(RuntimeParamTest, EnumeratesThreeGroundBranches) {
     static constexpr size_t kInitialVarCount = 0;
     initial_goals.push(saved_expr_pool_.make_functor(holder_.functors.id("f"), {}));
-    database.push(rule{saved_expr_pool_.make_functor(holder_.functors.id("f"), {}), {}});
-    database.push(rule{saved_expr_pool_.make_functor(holder_.functors.id("f"), {}), {}});
-    database.push(rule{saved_expr_pool_.make_functor(holder_.functors.id("f"), {}), {}});
+    database.push(rule{saved_expr_pool_.make_functor(holder_.functors.id("f"), {}), {}, 0});
+    database.push(rule{saved_expr_pool_.make_functor(holder_.functors.id("f"), {}), {}, 0});
+    database.push(rule{saved_expr_pool_.make_functor(holder_.functors.id("f"), {}), {}, 0});
 
     runtime_ref& session = make_session(kInitialVarCount);
     size_t count = 0;
@@ -1847,17 +1847,17 @@ TEST_P(RuntimeParamTest, SolvesRecursiveClauseTreeWithoutBranching) {
     database.push(rule{saved_expr_pool_.make_functor(holder_.functors.id("f"), {}), {
         saved_expr_pool_.make_functor(holder_.functors.id("g"), {}),
         saved_expr_pool_.make_functor(holder_.functors.id("h"), {}),
-    }});
+    }, 0});
     database.push(rule{saved_expr_pool_.make_functor(holder_.functors.id("g"), {}), {
         saved_expr_pool_.make_functor(holder_.functors.id("i"), {}),
         saved_expr_pool_.make_functor(holder_.functors.id("j"), {}),
-    }});
+    }, 0});
     database.push(rule{saved_expr_pool_.make_functor(holder_.functors.id("h"), {}), {
         saved_expr_pool_.make_functor(holder_.functors.id("i"), {}),
         saved_expr_pool_.make_functor(holder_.functors.id("j"), {}),
-    }});
-    database.push(rule{saved_expr_pool_.make_functor(holder_.functors.id("i"), {}), {}});
-    database.push(rule{saved_expr_pool_.make_functor(holder_.functors.id("j"), {}), {}});
+    }, 0});
+    database.push(rule{saved_expr_pool_.make_functor(holder_.functors.id("i"), {}), {}, 0});
+    database.push(rule{saved_expr_pool_.make_functor(holder_.functors.id("j"), {}), {}, 0});
 
     runtime_ref& session = make_session(kInitialVarCount);
     size_t count = 0;
@@ -1874,9 +1874,9 @@ TEST_P(RuntimeParamTest, EnumeratesTransitiveReachFromA) {
     const expr* b = saved_expr_pool_.make_functor(holder_.functors.id("b"), {});
     const expr* c = saved_expr_pool_.make_functor(holder_.functors.id("c"), {});
     const expr* d = saved_expr_pool_.make_functor(holder_.functors.id("d"), {});
-    database.push(rule{saved_expr_pool_.make_functor(holder_.functors.id("reach"), {a, b}), {}});
-    database.push(rule{saved_expr_pool_.make_functor(holder_.functors.id("reach"), {a, c}), {}});
-    database.push(rule{saved_expr_pool_.make_functor(holder_.functors.id("reach"), {a, d}), {}});
+    database.push(rule{saved_expr_pool_.make_functor(holder_.functors.id("reach"), {a, b}), {}, 0});
+    database.push(rule{saved_expr_pool_.make_functor(holder_.functors.id("reach"), {a, c}), {}, 0});
+    database.push(rule{saved_expr_pool_.make_functor(holder_.functors.id("reach"), {a, d}), {}, 0});
 
     constexpr uint32_t idx_y = 0;
     initial_goals.push(saved_expr_pool_.make_functor(holder_.functors.id("reach"), {a, saved_expr_pool_.make_var(idx_y)}));
@@ -1904,30 +1904,30 @@ TEST_P(RuntimeParamTest, EnumeratesEvenPeanoLessThanEight) {
     };
 
     const expr* zero = saved_expr_pool_.make_functor(holder_.functors.id("zero"), {});
-    database.push(rule{saved_expr_pool_.make_functor(holder_.functors.id("nat"), {zero}), {}});
-    database.push(rule{saved_expr_pool_.make_functor(holder_.functors.id("even"), {zero}), {}});
+    database.push(rule{saved_expr_pool_.make_functor(holder_.functors.id("nat"), {zero}), {}, 0});
+    database.push(rule{saved_expr_pool_.make_functor(holder_.functors.id("even"), {zero}), {}, 0});
 
     const expr* rv1 = saved_expr_pool_.make_var(0);
     database.push(rule{
         saved_expr_pool_.make_functor(holder_.functors.id("nat"), {saved_expr_pool_.make_functor(holder_.functors.id("suc"), {rv1})}),
-        {saved_expr_pool_.make_functor(holder_.functors.id("nat"), {rv1})}});
+        {saved_expr_pool_.make_functor(holder_.functors.id("nat"), {rv1})}, 0});
 
     const expr* rv2 = saved_expr_pool_.make_var(0);
     const expr* suc_suc_rv2 = saved_expr_pool_.make_functor(holder_.functors.id("suc"), {saved_expr_pool_.make_functor(holder_.functors.id("suc"), {rv2})});
     database.push(rule{
         saved_expr_pool_.make_functor(holder_.functors.id("even"), {suc_suc_rv2}),
-        {saved_expr_pool_.make_functor(holder_.functors.id("even"), {rv2})}});
+        {saved_expr_pool_.make_functor(holder_.functors.id("even"), {rv2})}, 0});
 
     const expr* rv3 = saved_expr_pool_.make_var(0);
     database.push(rule{
         saved_expr_pool_.make_functor(holder_.functors.id("lt"), {zero, saved_expr_pool_.make_functor(holder_.functors.id("suc"), {rv3})}),
-        {saved_expr_pool_.make_functor(holder_.functors.id("nat"), {rv3})}});
+        {saved_expr_pool_.make_functor(holder_.functors.id("nat"), {rv3})}, 0});
 
     const expr* rv4 = saved_expr_pool_.make_var(0);
     const expr* rv5 = saved_expr_pool_.make_var(1);
     database.push(rule{
         saved_expr_pool_.make_functor(holder_.functors.id("lt"), {saved_expr_pool_.make_functor(holder_.functors.id("suc"), {rv4}), saved_expr_pool_.make_functor(holder_.functors.id("suc"), {rv5})}),
-        {saved_expr_pool_.make_functor(holder_.functors.id("lt"), {rv4, rv5})}});
+        {saved_expr_pool_.make_functor(holder_.functors.id("lt"), {rv4, rv5})}, 0});
 
     std::set<solution> expected{
         {peano_saved(0)},
@@ -1964,8 +1964,8 @@ TEST_P(RuntimeParamTest, EnumeratesListSplitsForThreeElementList) {
     const expr* list_a = saved_expr_pool_.make_functor(holder_.functors.id("cons"), {a, nil});
     const expr* list_b = saved_expr_pool_.make_functor(holder_.functors.id("cons"), {b, nil});
 
-    database.push(rule{saved_expr_pool_.make_functor(holder_.functors.id("append"), {nil, list_ab, list_ab}), {}});
-    database.push(rule{saved_expr_pool_.make_functor(holder_.functors.id("append"), {list_a, list_b, list_ab}), {}});
+    database.push(rule{saved_expr_pool_.make_functor(holder_.functors.id("append"), {nil, list_ab, list_ab}), {}, 0});
+    database.push(rule{saved_expr_pool_.make_functor(holder_.functors.id("append"), {list_a, list_b, list_ab}), {}, 0});
 
     constexpr uint32_t idx_l1 = 0;
     constexpr uint32_t idx_l2 = 1;
@@ -1994,9 +1994,9 @@ TEST_P(RuntimeParamTest, EnumeratesTwoChoiceClauseSolutions) {
     initial_goals.push(saved_expr_pool_.make_functor(holder_.functors.id("f"), {}));
     database.push(rule{
         saved_expr_pool_.make_functor(holder_.functors.id("f"), {}),
-        {saved_expr_pool_.make_functor(holder_.functors.id("g"), {rule_var})}});
-    database.push(rule{saved_expr_pool_.make_functor(holder_.functors.id("g"), {abc}), {}});
-    database.push(rule{saved_expr_pool_.make_functor(holder_.functors.id("g"), {xyz}), {}});
+        {saved_expr_pool_.make_functor(holder_.functors.id("g"), {rule_var})}, 0});
+    database.push(rule{saved_expr_pool_.make_functor(holder_.functors.id("g"), {abc}), {}, 0});
+    database.push(rule{saved_expr_pool_.make_functor(holder_.functors.id("g"), {xyz}), {}, 0});
 
     runtime_ref& session = make_session(kInitialVarCount);
     size_t count = 0;
@@ -2029,39 +2029,39 @@ TEST_P(RuntimeParamTest, EnumeratesCollatzOneStepPreimagesOfTen) {
     const expr* one = saved_expr_pool_.make_functor(holder_.functors.id("suc"), {zero});
     const expr* two = saved_expr_pool_.make_functor(holder_.functors.id("suc"), {one});
     const expr* three = saved_expr_pool_.make_functor(holder_.functors.id("suc"), {two});
-    database.push(rule{saved_expr_pool_.make_functor(holder_.functors.id("nat"), {zero}), {}});
-    database.push(rule{saved_expr_pool_.make_functor(holder_.functors.id("even"), {zero}), {}});
-    database.push(rule{saved_expr_pool_.make_functor(holder_.functors.id("odd"), {one}), {}});
+    database.push(rule{saved_expr_pool_.make_functor(holder_.functors.id("nat"), {zero}), {}, 0});
+    database.push(rule{saved_expr_pool_.make_functor(holder_.functors.id("even"), {zero}), {}, 0});
+    database.push(rule{saved_expr_pool_.make_functor(holder_.functors.id("odd"), {one}), {}, 0});
 
     const expr* rv1 = saved_expr_pool_.make_var(0);
     database.push(rule{
         saved_expr_pool_.make_functor(holder_.functors.id("nat"), {saved_expr_pool_.make_functor(holder_.functors.id("suc"), {rv1})}),
-        {saved_expr_pool_.make_functor(holder_.functors.id("nat"), {rv1})}});
+        {saved_expr_pool_.make_functor(holder_.functors.id("nat"), {rv1})}, 0});
     const expr* rv2 = saved_expr_pool_.make_var(0);
     const expr* suc_suc_rv2 = saved_expr_pool_.make_functor(holder_.functors.id("suc"), {saved_expr_pool_.make_functor(holder_.functors.id("suc"), {rv2})});
     database.push(rule{
         saved_expr_pool_.make_functor(holder_.functors.id("even"), {suc_suc_rv2}),
-        {saved_expr_pool_.make_functor(holder_.functors.id("even"), {rv2})}});
+        {saved_expr_pool_.make_functor(holder_.functors.id("even"), {rv2})}, 0});
     const expr* rv3 = saved_expr_pool_.make_var(0);
     database.push(rule{
         saved_expr_pool_.make_functor(holder_.functors.id("odd"), {saved_expr_pool_.make_functor(holder_.functors.id("suc"), {rv3})}),
-        {saved_expr_pool_.make_functor(holder_.functors.id("even"), {rv3})}});
+        {saved_expr_pool_.make_functor(holder_.functors.id("even"), {rv3})}, 0});
 
     const expr* rv4 = saved_expr_pool_.make_var(0);
     database.push(rule{
         saved_expr_pool_.make_functor(holder_.functors.id("add"), {zero, rv4, rv4}),
-        {saved_expr_pool_.make_functor(holder_.functors.id("nat"), {rv4})}});
+        {saved_expr_pool_.make_functor(holder_.functors.id("nat"), {rv4})}, 0});
     const expr* rv5 = saved_expr_pool_.make_var(0);
     const expr* rv6 = saved_expr_pool_.make_var(1);
     const expr* rv7 = saved_expr_pool_.make_var(2);
     database.push(rule{
         saved_expr_pool_.make_functor(holder_.functors.id("add"), {saved_expr_pool_.make_functor(holder_.functors.id("suc"), {rv5}), rv6, saved_expr_pool_.make_functor(holder_.functors.id("suc"), {rv7})}),
-        {saved_expr_pool_.make_functor(holder_.functors.id("add"), {rv5, rv6, rv7})}});
+        {saved_expr_pool_.make_functor(holder_.functors.id("add"), {rv5, rv6, rv7})}, 0});
 
     const expr* rv8 = saved_expr_pool_.make_var(0);
     database.push(rule{
         saved_expr_pool_.make_functor(holder_.functors.id("mul"), {zero, rv8, zero}),
-        {saved_expr_pool_.make_functor(holder_.functors.id("nat"), {rv8})}});
+        {saved_expr_pool_.make_functor(holder_.functors.id("nat"), {rv8})}, 0});
     const expr* rv9 = saved_expr_pool_.make_var(0);
     const expr* rv10 = saved_expr_pool_.make_var(1);
     const expr* rv11 = saved_expr_pool_.make_var(2);
@@ -2069,13 +2069,13 @@ TEST_P(RuntimeParamTest, EnumeratesCollatzOneStepPreimagesOfTen) {
     database.push(rule{
         saved_expr_pool_.make_functor(holder_.functors.id("mul"), {saved_expr_pool_.make_functor(holder_.functors.id("suc"), {rv9}), rv10, rv11}),
         {saved_expr_pool_.make_functor(holder_.functors.id("mul"), {rv9, rv10, rv11b}),
-            saved_expr_pool_.make_functor(holder_.functors.id("add"), {rv11b, rv10, rv11})}});
+            saved_expr_pool_.make_functor(holder_.functors.id("add"), {rv11b, rv10, rv11})}, 0});
 
     const expr* rv12 = saved_expr_pool_.make_var(0);
     const expr* rv13 = saved_expr_pool_.make_var(1);
     database.push(rule{
         saved_expr_pool_.make_functor(holder_.functors.id("step"), {rv12, rv13}),
-        {saved_expr_pool_.make_functor(holder_.functors.id("even"), {rv12}), saved_expr_pool_.make_functor(holder_.functors.id("add"), {rv13, rv13, rv12})}});
+        {saved_expr_pool_.make_functor(holder_.functors.id("even"), {rv12}), saved_expr_pool_.make_functor(holder_.functors.id("add"), {rv13, rv13, rv12})}, 0});
     const expr* rv14 = saved_expr_pool_.make_var(0);
     const expr* rv15 = saved_expr_pool_.make_var(1);
     const expr* rv16 = saved_expr_pool_.make_var(2);
@@ -2083,7 +2083,7 @@ TEST_P(RuntimeParamTest, EnumeratesCollatzOneStepPreimagesOfTen) {
         saved_expr_pool_.make_functor(holder_.functors.id("step"), {rv14, rv16}),
         {saved_expr_pool_.make_functor(holder_.functors.id("odd"), {rv14}),
             saved_expr_pool_.make_functor(holder_.functors.id("mul"), {three, rv14, rv15}),
-            saved_expr_pool_.make_functor(holder_.functors.id("add"), {rv15, one, rv16})}});
+            saved_expr_pool_.make_functor(holder_.functors.id("add"), {rv15, one, rv16})}, 0});
 
     const expr* ten = peano_saved(10);
     constexpr uint32_t idx_n = 0;
@@ -2121,25 +2121,25 @@ TEST_P(RuntimeParamTest, EnumeratesFibIndicesWithValueBelowFive) {
 
     const expr* zero = saved_expr_pool_.make_functor(holder_.functors.id("zero"), {});
     const expr* one = saved_expr_pool_.make_functor(holder_.functors.id("suc"), {zero});
-    database.push(rule{saved_expr_pool_.make_functor(holder_.functors.id("nat"), {zero}), {}});
-    database.push(rule{saved_expr_pool_.make_functor(holder_.functors.id("fib"), {zero, zero}), {}});
-    database.push(rule{saved_expr_pool_.make_functor(holder_.functors.id("fib"), {one, one}), {}});
+    database.push(rule{saved_expr_pool_.make_functor(holder_.functors.id("nat"), {zero}), {}, 0});
+    database.push(rule{saved_expr_pool_.make_functor(holder_.functors.id("fib"), {zero, zero}), {}, 0});
+    database.push(rule{saved_expr_pool_.make_functor(holder_.functors.id("fib"), {one, one}), {}, 0});
 
     const expr* rv1 = saved_expr_pool_.make_var(0);
     database.push(rule{
         saved_expr_pool_.make_functor(holder_.functors.id("nat"), {saved_expr_pool_.make_functor(holder_.functors.id("suc"), {rv1})}),
-        {saved_expr_pool_.make_functor(holder_.functors.id("nat"), {rv1})}});
+        {saved_expr_pool_.make_functor(holder_.functors.id("nat"), {rv1})}, 0});
 
     const expr* rv2 = saved_expr_pool_.make_var(0);
     database.push(rule{
         saved_expr_pool_.make_functor(holder_.functors.id("add"), {zero, rv2, rv2}),
-        {saved_expr_pool_.make_functor(holder_.functors.id("nat"), {rv2})}});
+        {saved_expr_pool_.make_functor(holder_.functors.id("nat"), {rv2})}, 0});
     const expr* rv3 = saved_expr_pool_.make_var(0);
     const expr* rv4 = saved_expr_pool_.make_var(1);
     const expr* rv5 = saved_expr_pool_.make_var(2);
     database.push(rule{
         saved_expr_pool_.make_functor(holder_.functors.id("add"), {saved_expr_pool_.make_functor(holder_.functors.id("suc"), {rv3}), rv4, saved_expr_pool_.make_functor(holder_.functors.id("suc"), {rv5})}),
-        {saved_expr_pool_.make_functor(holder_.functors.id("add"), {rv3, rv4, rv5})}});
+        {saved_expr_pool_.make_functor(holder_.functors.id("add"), {rv3, rv4, rv5})}, 0});
 
     const expr* rv6 = saved_expr_pool_.make_var(0);
     const expr* rv7 = saved_expr_pool_.make_var(1);
@@ -2150,17 +2150,17 @@ TEST_P(RuntimeParamTest, EnumeratesFibIndicesWithValueBelowFive) {
         saved_expr_pool_.make_functor(holder_.functors.id("fib"), {saved_expr_pool_.make_functor(holder_.functors.id("suc"), {suc_rv6}), rv9}),
         {saved_expr_pool_.make_functor(holder_.functors.id("fib"), {rv6, rv7}),
             saved_expr_pool_.make_functor(holder_.functors.id("fib"), {suc_rv6, rv8}),
-            saved_expr_pool_.make_functor(holder_.functors.id("add"), {rv7, rv8, rv9})}});
+            saved_expr_pool_.make_functor(holder_.functors.id("add"), {rv7, rv8, rv9})}, 0});
 
     const expr* rv10 = saved_expr_pool_.make_var(0);
     database.push(rule{
         saved_expr_pool_.make_functor(holder_.functors.id("lt"), {zero, saved_expr_pool_.make_functor(holder_.functors.id("suc"), {rv10})}),
-        {saved_expr_pool_.make_functor(holder_.functors.id("nat"), {rv10})}});
+        {saved_expr_pool_.make_functor(holder_.functors.id("nat"), {rv10})}, 0});
     const expr* rv11 = saved_expr_pool_.make_var(0);
     const expr* rv12 = saved_expr_pool_.make_var(1);
     database.push(rule{
         saved_expr_pool_.make_functor(holder_.functors.id("lt"), {saved_expr_pool_.make_functor(holder_.functors.id("suc"), {rv11}), saved_expr_pool_.make_functor(holder_.functors.id("suc"), {rv12})}),
-        {saved_expr_pool_.make_functor(holder_.functors.id("lt"), {rv11, rv12})}});
+        {saved_expr_pool_.make_functor(holder_.functors.id("lt"), {rv11, rv12})}, 0});
 
     std::set<solution> expected{
         {peano_saved(0)},
@@ -2208,28 +2208,28 @@ TEST_P(RuntimeParamTest, EnumeratesFactorPairsOfSix) {
     };
 
     const expr* zero = saved_expr_pool_.make_functor(holder_.functors.id("zero"), {});
-    database.push(rule{saved_expr_pool_.make_functor(holder_.functors.id("nat"), {zero}), {}});
+    database.push(rule{saved_expr_pool_.make_functor(holder_.functors.id("nat"), {zero}), {}, 0});
 
     const expr* rv1 = saved_expr_pool_.make_var(0);
     database.push(rule{
         saved_expr_pool_.make_functor(holder_.functors.id("nat"), {saved_expr_pool_.make_functor(holder_.functors.id("suc"), {rv1})}),
-        {saved_expr_pool_.make_functor(holder_.functors.id("nat"), {rv1})}});
+        {saved_expr_pool_.make_functor(holder_.functors.id("nat"), {rv1})}, 0});
 
     const expr* rv2 = saved_expr_pool_.make_var(0);
     database.push(rule{
         saved_expr_pool_.make_functor(holder_.functors.id("add"), {zero, rv2, rv2}),
-        {saved_expr_pool_.make_functor(holder_.functors.id("nat"), {rv2})}});
+        {saved_expr_pool_.make_functor(holder_.functors.id("nat"), {rv2})}, 0});
     const expr* rv3 = saved_expr_pool_.make_var(0);
     const expr* rv4 = saved_expr_pool_.make_var(1);
     const expr* rv5 = saved_expr_pool_.make_var(2);
     database.push(rule{
         saved_expr_pool_.make_functor(holder_.functors.id("add"), {saved_expr_pool_.make_functor(holder_.functors.id("suc"), {rv3}), rv4, saved_expr_pool_.make_functor(holder_.functors.id("suc"), {rv5})}),
-        {saved_expr_pool_.make_functor(holder_.functors.id("add"), {rv3, rv4, rv5})}});
+        {saved_expr_pool_.make_functor(holder_.functors.id("add"), {rv3, rv4, rv5})}, 0});
 
     const expr* rv6 = saved_expr_pool_.make_var(0);
     database.push(rule{
         saved_expr_pool_.make_functor(holder_.functors.id("mul"), {zero, rv6, zero}),
-        {saved_expr_pool_.make_functor(holder_.functors.id("nat"), {rv6})}});
+        {saved_expr_pool_.make_functor(holder_.functors.id("nat"), {rv6})}, 0});
     const expr* rv7 = saved_expr_pool_.make_var(0);
     const expr* rv8 = saved_expr_pool_.make_var(1);
     const expr* rv9 = saved_expr_pool_.make_var(2);
@@ -2237,7 +2237,7 @@ TEST_P(RuntimeParamTest, EnumeratesFactorPairsOfSix) {
     database.push(rule{
         saved_expr_pool_.make_functor(holder_.functors.id("mul"), {saved_expr_pool_.make_functor(holder_.functors.id("suc"), {rv7}), rv8, rv9}),
         {saved_expr_pool_.make_functor(holder_.functors.id("mul"), {rv7, rv8, rv10}),
-            saved_expr_pool_.make_functor(holder_.functors.id("add"), {rv10, rv8, rv9})}});
+            saved_expr_pool_.make_functor(holder_.functors.id("add"), {rv10, rv8, rv9})}, 0});
 
     std::set<solution> expected{
         {peano_saved(1), peano_saved(6)},
@@ -2285,33 +2285,33 @@ TEST_P(RuntimeParamTest, EnumeratesDistinctTwoPartPartitionsOfFive) {
     };
 
     const expr* zero = saved_expr_pool_.make_functor(holder_.functors.id("zero"), {});
-    database.push(rule{saved_expr_pool_.make_functor(holder_.functors.id("nat"), {zero}), {}});
+    database.push(rule{saved_expr_pool_.make_functor(holder_.functors.id("nat"), {zero}), {}, 0});
 
     const expr* rv1 = saved_expr_pool_.make_var(0);
     database.push(rule{
         saved_expr_pool_.make_functor(holder_.functors.id("nat"), {saved_expr_pool_.make_functor(holder_.functors.id("suc"), {rv1})}),
-        {saved_expr_pool_.make_functor(holder_.functors.id("nat"), {rv1})}});
+        {saved_expr_pool_.make_functor(holder_.functors.id("nat"), {rv1})}, 0});
 
     const expr* rv2 = saved_expr_pool_.make_var(0);
     database.push(rule{
         saved_expr_pool_.make_functor(holder_.functors.id("add"), {zero, rv2, rv2}),
-        {saved_expr_pool_.make_functor(holder_.functors.id("nat"), {rv2})}});
+        {saved_expr_pool_.make_functor(holder_.functors.id("nat"), {rv2})}, 0});
     const expr* rv3 = saved_expr_pool_.make_var(0);
     const expr* rv4 = saved_expr_pool_.make_var(1);
     const expr* rv5 = saved_expr_pool_.make_var(2);
     database.push(rule{
         saved_expr_pool_.make_functor(holder_.functors.id("add"), {saved_expr_pool_.make_functor(holder_.functors.id("suc"), {rv3}), rv4, saved_expr_pool_.make_functor(holder_.functors.id("suc"), {rv5})}),
-        {saved_expr_pool_.make_functor(holder_.functors.id("add"), {rv3, rv4, rv5})}});
+        {saved_expr_pool_.make_functor(holder_.functors.id("add"), {rv3, rv4, rv5})}, 0});
 
     const expr* rv6 = saved_expr_pool_.make_var(0);
     database.push(rule{
         saved_expr_pool_.make_functor(holder_.functors.id("lt"), {zero, saved_expr_pool_.make_functor(holder_.functors.id("suc"), {rv6})}),
-        {saved_expr_pool_.make_functor(holder_.functors.id("nat"), {rv6})}});
+        {saved_expr_pool_.make_functor(holder_.functors.id("nat"), {rv6})}, 0});
     const expr* rv7 = saved_expr_pool_.make_var(0);
     const expr* rv8 = saved_expr_pool_.make_var(1);
     database.push(rule{
         saved_expr_pool_.make_functor(holder_.functors.id("lt"), {saved_expr_pool_.make_functor(holder_.functors.id("suc"), {rv7}), saved_expr_pool_.make_functor(holder_.functors.id("suc"), {rv8})}),
-        {saved_expr_pool_.make_functor(holder_.functors.id("lt"), {rv7, rv8})}});
+        {saved_expr_pool_.make_functor(holder_.functors.id("lt"), {rv7, rv8})}, 0});
 
     const expr* rv9 = saved_expr_pool_.make_var(0);
     const expr* rv10 = saved_expr_pool_.make_var(1);
@@ -2320,7 +2320,7 @@ TEST_P(RuntimeParamTest, EnumeratesDistinctTwoPartPartitionsOfFive) {
         saved_expr_pool_.make_functor(holder_.functors.id("part"), {five, rv9, rv10}),
         {saved_expr_pool_.make_functor(holder_.functors.id("add"), {rv9, rv10, five}),
             saved_expr_pool_.make_functor(holder_.functors.id("lt"), {zero, rv9}),
-            saved_expr_pool_.make_functor(holder_.functors.id("lt"), {rv9, rv10})}});
+            saved_expr_pool_.make_functor(holder_.functors.id("lt"), {rv9, rv10})}, 0});
 
     constexpr uint32_t idx_a = 0;
     constexpr uint32_t idx_b = 1;
@@ -2359,28 +2359,28 @@ TEST_P(RuntimeParamTest, EnumeratesArithmeticProgressionsEndingAtFive) {
     };
 
     const expr* zero = saved_expr_pool_.make_functor(holder_.functors.id("zero"), {});
-    database.push(rule{saved_expr_pool_.make_functor(holder_.functors.id("nat"), {zero}), {}});
+    database.push(rule{saved_expr_pool_.make_functor(holder_.functors.id("nat"), {zero}), {}, 0});
 
     const expr* rv1 = saved_expr_pool_.make_var(0);
     database.push(rule{
         saved_expr_pool_.make_functor(holder_.functors.id("nat"), {saved_expr_pool_.make_functor(holder_.functors.id("suc"), {rv1})}),
-        {saved_expr_pool_.make_functor(holder_.functors.id("nat"), {rv1})}});
+        {saved_expr_pool_.make_functor(holder_.functors.id("nat"), {rv1})}, 0});
 
     const expr* rv2 = saved_expr_pool_.make_var(0);
     database.push(rule{
         saved_expr_pool_.make_functor(holder_.functors.id("add"), {zero, rv2, rv2}),
-        {saved_expr_pool_.make_functor(holder_.functors.id("nat"), {rv2})}});
+        {saved_expr_pool_.make_functor(holder_.functors.id("nat"), {rv2})}, 0});
     const expr* rv3 = saved_expr_pool_.make_var(0);
     const expr* rv4 = saved_expr_pool_.make_var(1);
     const expr* rv5 = saved_expr_pool_.make_var(2);
     database.push(rule{
         saved_expr_pool_.make_functor(holder_.functors.id("add"), {saved_expr_pool_.make_functor(holder_.functors.id("suc"), {rv3}), rv4, saved_expr_pool_.make_functor(holder_.functors.id("suc"), {rv5})}),
-        {saved_expr_pool_.make_functor(holder_.functors.id("add"), {rv3, rv4, rv5})}});
+        {saved_expr_pool_.make_functor(holder_.functors.id("add"), {rv3, rv4, rv5})}, 0});
 
     const expr* rv6 = saved_expr_pool_.make_var(0);
     database.push(rule{
         saved_expr_pool_.make_functor(holder_.functors.id("lt"), {zero, saved_expr_pool_.make_functor(holder_.functors.id("suc"), {rv6})}),
-        {saved_expr_pool_.make_functor(holder_.functors.id("nat"), {rv6})}});
+        {saved_expr_pool_.make_functor(holder_.functors.id("nat"), {rv6})}, 0});
 
     const expr* five = peano_saved(5);
     constexpr uint32_t idx_a = 0;
@@ -2430,53 +2430,53 @@ TEST_P(RuntimeParamTest, FindsGcdOfSixAndFourViaSubtraction) {
     };
 
     const expr* zero = saved_expr_pool_.make_functor(holder_.functors.id("zero"), {});
-    database.push(rule{saved_expr_pool_.make_functor(holder_.functors.id("nat"), {zero}), {}});
+    database.push(rule{saved_expr_pool_.make_functor(holder_.functors.id("nat"), {zero}), {}, 0});
 
     const expr* rv1 = saved_expr_pool_.make_var(0);
     database.push(rule{
         saved_expr_pool_.make_functor(holder_.functors.id("nat"), {saved_expr_pool_.make_functor(holder_.functors.id("suc"), {rv1})}),
-        {saved_expr_pool_.make_functor(holder_.functors.id("nat"), {rv1})}});
+        {saved_expr_pool_.make_functor(holder_.functors.id("nat"), {rv1})}, 0});
 
     const expr* rv2 = saved_expr_pool_.make_var(0);
     database.push(rule{
         saved_expr_pool_.make_functor(holder_.functors.id("add"), {zero, rv2, rv2}),
-        {saved_expr_pool_.make_functor(holder_.functors.id("nat"), {rv2})}});
+        {saved_expr_pool_.make_functor(holder_.functors.id("nat"), {rv2})}, 0});
     const expr* rv3 = saved_expr_pool_.make_var(0);
     const expr* rv4 = saved_expr_pool_.make_var(1);
     const expr* rv5 = saved_expr_pool_.make_var(2);
     database.push(rule{
         saved_expr_pool_.make_functor(holder_.functors.id("add"), {saved_expr_pool_.make_functor(holder_.functors.id("suc"), {rv3}), rv4, saved_expr_pool_.make_functor(holder_.functors.id("suc"), {rv5})}),
-        {saved_expr_pool_.make_functor(holder_.functors.id("add"), {rv3, rv4, rv5})}});
+        {saved_expr_pool_.make_functor(holder_.functors.id("add"), {rv3, rv4, rv5})}, 0});
 
     const expr* rv6 = saved_expr_pool_.make_var(0);
     database.push(rule{
         saved_expr_pool_.make_functor(holder_.functors.id("lt"), {zero, saved_expr_pool_.make_functor(holder_.functors.id("suc"), {rv6})}),
-        {saved_expr_pool_.make_functor(holder_.functors.id("nat"), {rv6})}});
+        {saved_expr_pool_.make_functor(holder_.functors.id("nat"), {rv6})}, 0});
     const expr* rv7 = saved_expr_pool_.make_var(0);
     const expr* rv8 = saved_expr_pool_.make_var(1);
     database.push(rule{
         saved_expr_pool_.make_functor(holder_.functors.id("lt"), {saved_expr_pool_.make_functor(holder_.functors.id("suc"), {rv7}), saved_expr_pool_.make_functor(holder_.functors.id("suc"), {rv8})}),
-        {saved_expr_pool_.make_functor(holder_.functors.id("lt"), {rv7, rv8})}});
+        {saved_expr_pool_.make_functor(holder_.functors.id("lt"), {rv7, rv8})}, 0});
 
     const expr* rv9 = saved_expr_pool_.make_var(0);
     database.push(rule{
         saved_expr_pool_.make_functor(holder_.functors.id("sub"), {rv9, zero, rv9}),
-        {saved_expr_pool_.make_functor(holder_.functors.id("nat"), {rv9})}});
+        {saved_expr_pool_.make_functor(holder_.functors.id("nat"), {rv9})}, 0});
     const expr* rv10 = saved_expr_pool_.make_var(0);
     const expr* rv11 = saved_expr_pool_.make_var(1);
     const expr* rv12 = saved_expr_pool_.make_var(2);
     database.push(rule{
         saved_expr_pool_.make_functor(holder_.functors.id("sub"), {saved_expr_pool_.make_functor(holder_.functors.id("suc"), {rv10}), saved_expr_pool_.make_functor(holder_.functors.id("suc"), {rv11}), rv12}),
-        {saved_expr_pool_.make_functor(holder_.functors.id("sub"), {rv10, rv11, rv12})}});
+        {saved_expr_pool_.make_functor(holder_.functors.id("sub"), {rv10, rv11, rv12})}, 0});
 
     const expr* rv13 = saved_expr_pool_.make_var(0);
     database.push(rule{
         saved_expr_pool_.make_functor(holder_.functors.id("gcd"), {rv13, zero, rv13}),
-        {saved_expr_pool_.make_functor(holder_.functors.id("nat"), {rv13})}});
+        {saved_expr_pool_.make_functor(holder_.functors.id("nat"), {rv13})}, 0});
     const expr* rv14 = saved_expr_pool_.make_var(0);
     database.push(rule{
         saved_expr_pool_.make_functor(holder_.functors.id("gcd"), {rv14, rv14, rv14}),
-        {saved_expr_pool_.make_functor(holder_.functors.id("nat"), {rv14})}});
+        {saved_expr_pool_.make_functor(holder_.functors.id("nat"), {rv14})}, 0});
     const expr* rv15 = saved_expr_pool_.make_var(0);
     const expr* rv16 = saved_expr_pool_.make_var(1);
     const expr* rv17 = saved_expr_pool_.make_var(2);
@@ -2485,7 +2485,7 @@ TEST_P(RuntimeParamTest, FindsGcdOfSixAndFourViaSubtraction) {
         saved_expr_pool_.make_functor(holder_.functors.id("gcd"), {rv15, rv16, rv18}),
         {saved_expr_pool_.make_functor(holder_.functors.id("lt"), {rv16, rv15}),
             saved_expr_pool_.make_functor(holder_.functors.id("sub"), {rv15, rv16, rv17}),
-            saved_expr_pool_.make_functor(holder_.functors.id("gcd"), {rv17, rv16, rv18})}});
+            saved_expr_pool_.make_functor(holder_.functors.id("gcd"), {rv17, rv16, rv18})}, 0});
     const expr* rv19 = saved_expr_pool_.make_var(0);
     const expr* rv20 = saved_expr_pool_.make_var(1);
     const expr* rv21 = saved_expr_pool_.make_var(2);
@@ -2494,7 +2494,7 @@ TEST_P(RuntimeParamTest, FindsGcdOfSixAndFourViaSubtraction) {
         saved_expr_pool_.make_functor(holder_.functors.id("gcd"), {rv19, rv20, rv22}),
         {saved_expr_pool_.make_functor(holder_.functors.id("lt"), {rv19, rv20}),
             saved_expr_pool_.make_functor(holder_.functors.id("sub"), {rv20, rv19, rv21}),
-            saved_expr_pool_.make_functor(holder_.functors.id("gcd"), {rv19, rv21, rv22})}});
+            saved_expr_pool_.make_functor(holder_.functors.id("gcd"), {rv19, rv21, rv22})}, 0});
 
     const expr* six = peano_saved(6);
     const expr* four = peano_saved(4);
@@ -2527,16 +2527,16 @@ TEST_P(RuntimeParamTest, EnumeratesTwoSubsetsOfFourElements) {
     const expr* b = saved_expr_pool_.make_functor(holder_.functors.id("b"), {});
     const expr* c = saved_expr_pool_.make_functor(holder_.functors.id("c"), {});
     const expr* d = saved_expr_pool_.make_functor(holder_.functors.id("d"), {});
-    database.push(rule{saved_expr_pool_.make_functor(holder_.functors.id("member"), {a}), {}});
-    database.push(rule{saved_expr_pool_.make_functor(holder_.functors.id("member"), {b}), {}});
-    database.push(rule{saved_expr_pool_.make_functor(holder_.functors.id("member"), {c}), {}});
-    database.push(rule{saved_expr_pool_.make_functor(holder_.functors.id("member"), {d}), {}});
-    database.push(rule{saved_expr_pool_.make_functor(holder_.functors.id("before"), {a, b}), {}});
-    database.push(rule{saved_expr_pool_.make_functor(holder_.functors.id("before"), {a, c}), {}});
-    database.push(rule{saved_expr_pool_.make_functor(holder_.functors.id("before"), {a, d}), {}});
-    database.push(rule{saved_expr_pool_.make_functor(holder_.functors.id("before"), {b, c}), {}});
-    database.push(rule{saved_expr_pool_.make_functor(holder_.functors.id("before"), {b, d}), {}});
-    database.push(rule{saved_expr_pool_.make_functor(holder_.functors.id("before"), {c, d}), {}});
+    database.push(rule{saved_expr_pool_.make_functor(holder_.functors.id("member"), {a}), {}, 0});
+    database.push(rule{saved_expr_pool_.make_functor(holder_.functors.id("member"), {b}), {}, 0});
+    database.push(rule{saved_expr_pool_.make_functor(holder_.functors.id("member"), {c}), {}, 0});
+    database.push(rule{saved_expr_pool_.make_functor(holder_.functors.id("member"), {d}), {}, 0});
+    database.push(rule{saved_expr_pool_.make_functor(holder_.functors.id("before"), {a, b}), {}, 0});
+    database.push(rule{saved_expr_pool_.make_functor(holder_.functors.id("before"), {a, c}), {}, 0});
+    database.push(rule{saved_expr_pool_.make_functor(holder_.functors.id("before"), {a, d}), {}, 0});
+    database.push(rule{saved_expr_pool_.make_functor(holder_.functors.id("before"), {b, c}), {}, 0});
+    database.push(rule{saved_expr_pool_.make_functor(holder_.functors.id("before"), {b, d}), {}, 0});
+    database.push(rule{saved_expr_pool_.make_functor(holder_.functors.id("before"), {c, d}), {}, 0});
 
     const expr* rv1 = saved_expr_pool_.make_var(0);
     const expr* rv2 = saved_expr_pool_.make_var(1);
@@ -2544,7 +2544,7 @@ TEST_P(RuntimeParamTest, EnumeratesTwoSubsetsOfFourElements) {
         saved_expr_pool_.make_functor(holder_.functors.id("pair"), {rv1, rv2}),
         {saved_expr_pool_.make_functor(holder_.functors.id("member"), {rv1}),
             saved_expr_pool_.make_functor(holder_.functors.id("member"), {rv2}),
-            saved_expr_pool_.make_functor(holder_.functors.id("before"), {rv1, rv2})}});
+            saved_expr_pool_.make_functor(holder_.functors.id("before"), {rv1, rv2})}, 0});
 
     constexpr uint32_t idx_x = 0;
     constexpr uint32_t idx_y = 1;
@@ -2585,8 +2585,8 @@ TEST_P(RuntimeParamTest, EnumeratesBalancedGrammarStringOfLengthFour) {
     const expr* a = saved_expr_pool_.make_functor(holder_.functors.id("a"), {});
     const expr* b = saved_expr_pool_.make_functor(holder_.functors.id("b"), {});
     const expr* nil = saved_expr_pool_.make_functor(holder_.functors.id("nil"), {});
-    database.push(rule{saved_expr_pool_.make_functor(holder_.functors.id("der"), {nil}), {}});
-    database.push(rule{saved_expr_pool_.make_functor(holder_.functors.id("len"), {nil, zero}), {}});
+    database.push(rule{saved_expr_pool_.make_functor(holder_.functors.id("der"), {nil}), {}, 0});
+    database.push(rule{saved_expr_pool_.make_functor(holder_.functors.id("len"), {nil, zero}), {}, 0});
 
     const expr* rv1 = saved_expr_pool_.make_var(0);
     const expr* rv2 = saved_expr_pool_.make_var(1);
@@ -2596,22 +2596,22 @@ TEST_P(RuntimeParamTest, EnumeratesBalancedGrammarStringOfLengthFour) {
     const expr* two = saved_expr_pool_.make_functor(holder_.functors.id("suc"), {one});
     database.push(rule{
         saved_expr_pool_.make_functor(holder_.functors.id("der"), {wrapped}),
-        {saved_expr_pool_.make_functor(holder_.functors.id("der"), {rv1})}});
+        {saved_expr_pool_.make_functor(holder_.functors.id("der"), {rv1})}, 0});
     database.push(rule{
         saved_expr_pool_.make_functor(holder_.functors.id("len"), {wrapped, rv3}),
         {saved_expr_pool_.make_functor(holder_.functors.id("len"), {rv1, rv2}),
-            saved_expr_pool_.make_functor(holder_.functors.id("add"), {rv2, two, rv3})}});
+            saved_expr_pool_.make_functor(holder_.functors.id("add"), {rv2, two, rv3})}, 0});
 
     const expr* rv4 = saved_expr_pool_.make_var(0);
     database.push(rule{
         saved_expr_pool_.make_functor(holder_.functors.id("add"), {zero, rv4, rv4}),
-        {}});
+        {}, 0});
     const expr* rv5 = saved_expr_pool_.make_var(0);
     const expr* rv6 = saved_expr_pool_.make_var(1);
     const expr* rv7 = saved_expr_pool_.make_var(2);
     database.push(rule{
         saved_expr_pool_.make_functor(holder_.functors.id("add"), {saved_expr_pool_.make_functor(holder_.functors.id("suc"), {rv5}), rv6, saved_expr_pool_.make_functor(holder_.functors.id("suc"), {rv7})}),
-        {saved_expr_pool_.make_functor(holder_.functors.id("add"), {rv5, rv6, rv7})}});
+        {saved_expr_pool_.make_functor(holder_.functors.id("add"), {rv5, rv6, rv7})}, 0});
 
     const expr* aabb = saved_expr_pool_.make_functor(holder_.functors.id("cons"), {
         a, saved_expr_pool_.make_functor(holder_.functors.id("cons"), {b, saved_expr_pool_.make_functor(holder_.functors.id("cons"), {a, saved_expr_pool_.make_functor(k_cons_functor_id, {b, nil})})})});
@@ -2654,10 +2654,10 @@ TEST_P(RuntimeParamTest, EnumeratesDepthTwoTermsOverTwoConstants) {
     const expr* b = saved_expr_pool_.make_functor(holder_.functors.id("b"), {});
     const expr* one = saved_expr_pool_.make_functor(holder_.functors.id("suc"), {zero});
     const expr* two = peano_saved(2);
-    database.push(rule{saved_expr_pool_.make_functor(holder_.functors.id("term"), {a}), {}});
-    database.push(rule{saved_expr_pool_.make_functor(holder_.functors.id("term"), {b}), {}});
-    database.push(rule{saved_expr_pool_.make_functor(holder_.functors.id("depth"), {a, zero}), {}});
-    database.push(rule{saved_expr_pool_.make_functor(holder_.functors.id("depth"), {b, zero}), {}});
+    database.push(rule{saved_expr_pool_.make_functor(holder_.functors.id("term"), {a}), {}, 0});
+    database.push(rule{saved_expr_pool_.make_functor(holder_.functors.id("term"), {b}), {}, 0});
+    database.push(rule{saved_expr_pool_.make_functor(holder_.functors.id("depth"), {a, zero}), {}, 0});
+    database.push(rule{saved_expr_pool_.make_functor(holder_.functors.id("depth"), {b, zero}), {}, 0});
 
     const expr* rv1 = saved_expr_pool_.make_var(0);
     const expr* rv2 = saved_expr_pool_.make_var(1);
@@ -2668,11 +2668,11 @@ TEST_P(RuntimeParamTest, EnumeratesDepthTwoTermsOverTwoConstants) {
         {saved_expr_pool_.make_functor(holder_.functors.id("term"), {rv1}),
             saved_expr_pool_.make_functor(holder_.functors.id("term"), {rv2}),
             saved_expr_pool_.make_functor(holder_.functors.id("depth"), {rv1, zero}),
-            saved_expr_pool_.make_functor(holder_.functors.id("depth"), {rv2, zero})}});
+            saved_expr_pool_.make_functor(holder_.functors.id("depth"), {rv2, zero})}, 0});
     database.push(rule{
         saved_expr_pool_.make_functor(holder_.functors.id("depth"), {apped, two}),
         {saved_expr_pool_.make_functor(holder_.functors.id("depth"), {rv1, zero}),
-            saved_expr_pool_.make_functor(holder_.functors.id("depth"), {rv2, zero})}});
+            saved_expr_pool_.make_functor(holder_.functors.id("depth"), {rv2, zero})}, 0});
 
     constexpr uint32_t idx_t = 0;
     initial_goals.push(saved_expr_pool_.make_functor(holder_.functors.id("term"), {saved_expr_pool_.make_var(idx_t)}));
@@ -2715,8 +2715,8 @@ TEST_P(RuntimeParamTest, FindsEvenParityListOfLengthFour) {
     const expr* a = saved_expr_pool_.make_functor(holder_.functors.id("a"), {});
     const expr* nil = saved_expr_pool_.make_functor(holder_.functors.id("nil"), {});
     const expr* one = saved_expr_pool_.make_functor(holder_.functors.id("suc"), {zero});
-    database.push(rule{saved_expr_pool_.make_functor(holder_.functors.id("evenlist"), {nil}), {}});
-    database.push(rule{saved_expr_pool_.make_functor(holder_.functors.id("len"), {nil, zero}), {}});
+    database.push(rule{saved_expr_pool_.make_functor(holder_.functors.id("evenlist"), {nil}), {}, 0});
+    database.push(rule{saved_expr_pool_.make_functor(holder_.functors.id("len"), {nil, zero}), {}, 0});
 
     const expr* rv1 = saved_expr_pool_.make_var(0);
     const expr* rv2 = saved_expr_pool_.make_var(1);
@@ -2724,25 +2724,25 @@ TEST_P(RuntimeParamTest, FindsEvenParityListOfLengthFour) {
     const expr* consed = saved_expr_pool_.make_functor(holder_.functors.id("cons"), {a, rv1});
     database.push(rule{
         saved_expr_pool_.make_functor(holder_.functors.id("oddlist"), {consed}),
-        {saved_expr_pool_.make_functor(holder_.functors.id("evenlist"), {rv1})}});
+        {saved_expr_pool_.make_functor(holder_.functors.id("evenlist"), {rv1})}, 0});
     database.push(rule{
         saved_expr_pool_.make_functor(holder_.functors.id("evenlist"), {consed}),
-        {saved_expr_pool_.make_functor(holder_.functors.id("oddlist"), {rv1})}});
+        {saved_expr_pool_.make_functor(holder_.functors.id("oddlist"), {rv1})}, 0});
     database.push(rule{
         saved_expr_pool_.make_functor(holder_.functors.id("len"), {consed, rv3}),
         {saved_expr_pool_.make_functor(holder_.functors.id("len"), {rv1, rv2}),
-            saved_expr_pool_.make_functor(holder_.functors.id("add"), {rv2, one, rv3})}});
+            saved_expr_pool_.make_functor(holder_.functors.id("add"), {rv2, one, rv3})}, 0});
 
     const expr* rv4 = saved_expr_pool_.make_var(0);
     database.push(rule{
         saved_expr_pool_.make_functor(holder_.functors.id("add"), {zero, rv4, rv4}),
-        {}});
+        {}, 0});
     const expr* rv5 = saved_expr_pool_.make_var(0);
     const expr* rv6 = saved_expr_pool_.make_var(1);
     const expr* rv7 = saved_expr_pool_.make_var(2);
     database.push(rule{
         saved_expr_pool_.make_functor(holder_.functors.id("add"), {saved_expr_pool_.make_functor(holder_.functors.id("suc"), {rv5}), rv6, saved_expr_pool_.make_functor(holder_.functors.id("suc"), {rv7})}),
-        {saved_expr_pool_.make_functor(holder_.functors.id("add"), {rv5, rv6, rv7})}});
+        {saved_expr_pool_.make_functor(holder_.functors.id("add"), {rv5, rv6, rv7})}, 0});
 
     const expr* list4 = saved_expr_pool_.make_functor(holder_.functors.id("cons"), {
         a, saved_expr_pool_.make_functor(holder_.functors.id("cons"), {
@@ -2785,33 +2785,33 @@ TEST_P(RuntimeParamTest, EnumeratesPeanoTriplesInsideTetrahedron) {
     };
 
     const expr* zero = saved_expr_pool_.make_functor(holder_.functors.id("zero"), {});
-    database.push(rule{saved_expr_pool_.make_functor(holder_.functors.id("nat"), {zero}), {}});
+    database.push(rule{saved_expr_pool_.make_functor(holder_.functors.id("nat"), {zero}), {}, 0});
 
     const expr* rv1 = saved_expr_pool_.make_var(0);
     database.push(rule{
         saved_expr_pool_.make_functor(holder_.functors.id("nat"), {saved_expr_pool_.make_functor(holder_.functors.id("suc"), {rv1})}),
-        {saved_expr_pool_.make_functor(holder_.functors.id("nat"), {rv1})}});
+        {saved_expr_pool_.make_functor(holder_.functors.id("nat"), {rv1})}, 0});
 
     const expr* rv2 = saved_expr_pool_.make_var(0);
     database.push(rule{
         saved_expr_pool_.make_functor(holder_.functors.id("add"), {zero, rv2, rv2}),
-        {saved_expr_pool_.make_functor(holder_.functors.id("nat"), {rv2})}});
+        {saved_expr_pool_.make_functor(holder_.functors.id("nat"), {rv2})}, 0});
     const expr* rv3 = saved_expr_pool_.make_var(0);
     const expr* rv4 = saved_expr_pool_.make_var(1);
     const expr* rv5 = saved_expr_pool_.make_var(2);
     database.push(rule{
         saved_expr_pool_.make_functor(holder_.functors.id("add"), {saved_expr_pool_.make_functor(holder_.functors.id("suc"), {rv3}), rv4, saved_expr_pool_.make_functor(holder_.functors.id("suc"), {rv5})}),
-        {saved_expr_pool_.make_functor(holder_.functors.id("add"), {rv3, rv4, rv5})}});
+        {saved_expr_pool_.make_functor(holder_.functors.id("add"), {rv3, rv4, rv5})}, 0});
 
     const expr* rv6 = saved_expr_pool_.make_var(0);
     database.push(rule{
         saved_expr_pool_.make_functor(holder_.functors.id("lt"), {zero, saved_expr_pool_.make_functor(holder_.functors.id("suc"), {rv6})}),
-        {saved_expr_pool_.make_functor(holder_.functors.id("nat"), {rv6})}});
+        {saved_expr_pool_.make_functor(holder_.functors.id("nat"), {rv6})}, 0});
     const expr* rv7 = saved_expr_pool_.make_var(0);
     const expr* rv8 = saved_expr_pool_.make_var(1);
     database.push(rule{
         saved_expr_pool_.make_functor(holder_.functors.id("lt"), {saved_expr_pool_.make_functor(holder_.functors.id("suc"), {rv7}), saved_expr_pool_.make_functor(holder_.functors.id("suc"), {rv8})}),
-        {saved_expr_pool_.make_functor(holder_.functors.id("lt"), {rv7, rv8})}});
+        {saved_expr_pool_.make_functor(holder_.functors.id("lt"), {rv7, rv8})}, 0});
 
     std::set<solution> expected;
     for (int x = 0; x < 9; ++x) {
@@ -2879,18 +2879,18 @@ TEST_P(RuntimeParamTest, EnumeratesLatticePathsFourByFour) {
     };
 
     const expr* zero = saved_expr_pool_.make_functor(holder_.functors.id("zero"), {});
-    database.push(rule{saved_expr_pool_.make_functor(holder_.functors.id("at"), {zero, zero}), {}});
+    database.push(rule{saved_expr_pool_.make_functor(holder_.functors.id("at"), {zero, zero}), {}, 0});
 
     const expr* rv1 = saved_expr_pool_.make_var(0);
     const expr* rv2 = saved_expr_pool_.make_var(1);
     database.push(rule{
         saved_expr_pool_.make_functor(holder_.functors.id("at"), {saved_expr_pool_.make_functor(holder_.functors.id("suc"), {rv1}), rv2}),
-        {saved_expr_pool_.make_functor(holder_.functors.id("at"), {rv1, rv2})}});
+        {saved_expr_pool_.make_functor(holder_.functors.id("at"), {rv1, rv2})}, 0});
     const expr* rv3 = saved_expr_pool_.make_var(0);
     const expr* rv4 = saved_expr_pool_.make_var(1);
     database.push(rule{
         saved_expr_pool_.make_functor(holder_.functors.id("at"), {rv3, saved_expr_pool_.make_functor(holder_.functors.id("suc"), {rv4})}),
-        {saved_expr_pool_.make_functor(holder_.functors.id("at"), {rv3, rv4})}});
+        {saved_expr_pool_.make_functor(holder_.functors.id("at"), {rv3, rv4})}, 0});
 
     const expr* four = peano_saved(4);
     initial_goals.push(saved_expr_pool_.make_functor(holder_.functors.id("at"), {four, four}));
@@ -2932,24 +2932,24 @@ TEST_P(RuntimeParamTest, EnumeratesOrderedCompositionsOfEight) {
     const expr* seven = peano_saved(7);
     const expr* eight = peano_saved(kCompositionSum);
     const expr* nil = saved_expr_pool_.make_functor(holder_.functors.id("nil"), {});
-    database.push(rule{saved_expr_pool_.make_functor(holder_.functors.id("nat"), {zero}), {}});
-    database.push(rule{saved_expr_pool_.make_functor(holder_.functors.id("compose"), {zero, nil}), {}});
+    database.push(rule{saved_expr_pool_.make_functor(holder_.functors.id("nat"), {zero}), {}, 0});
+    database.push(rule{saved_expr_pool_.make_functor(holder_.functors.id("compose"), {zero, nil}), {}, 0});
 
     const expr* rv1 = saved_expr_pool_.make_var(0);
     database.push(rule{
         saved_expr_pool_.make_functor(holder_.functors.id("nat"), {saved_expr_pool_.make_functor(holder_.functors.id("suc"), {rv1})}),
-        {saved_expr_pool_.make_functor(holder_.functors.id("nat"), {rv1})}});
+        {saved_expr_pool_.make_functor(holder_.functors.id("nat"), {rv1})}, 0});
 
     const expr* rv2 = saved_expr_pool_.make_var(0);
     database.push(rule{
         saved_expr_pool_.make_functor(holder_.functors.id("add"), {zero, rv2, rv2}),
-        {saved_expr_pool_.make_functor(holder_.functors.id("nat"), {rv2})}});
+        {saved_expr_pool_.make_functor(holder_.functors.id("nat"), {rv2})}, 0});
     const expr* rv3 = saved_expr_pool_.make_var(0);
     const expr* rv4 = saved_expr_pool_.make_var(1);
     const expr* rv5 = saved_expr_pool_.make_var(2);
     database.push(rule{
         saved_expr_pool_.make_functor(holder_.functors.id("add"), {saved_expr_pool_.make_functor(holder_.functors.id("suc"), {rv3}), rv4, saved_expr_pool_.make_functor(holder_.functors.id("suc"), {rv5})}),
-        {saved_expr_pool_.make_functor(holder_.functors.id("add"), {rv3, rv4, rv5})}});
+        {saved_expr_pool_.make_functor(holder_.functors.id("add"), {rv3, rv4, rv5})}, 0});
 
     const expr* rv6 = saved_expr_pool_.make_var(0);
     const expr* rv7 = saved_expr_pool_.make_var(1);
@@ -2957,56 +2957,56 @@ TEST_P(RuntimeParamTest, EnumeratesOrderedCompositionsOfEight) {
     database.push(rule{
         saved_expr_pool_.make_functor(holder_.functors.id("compose"), {rv6, saved_expr_pool_.make_functor(holder_.functors.id("cons"), {one, rv8})}),
         {saved_expr_pool_.make_functor(holder_.functors.id("add"), {one, rv7, rv6}),
-            saved_expr_pool_.make_functor(holder_.functors.id("compose"), {rv7, rv8})}});
+            saved_expr_pool_.make_functor(holder_.functors.id("compose"), {rv7, rv8})}, 0});
     const expr* rv9 = saved_expr_pool_.make_var(0);
     const expr* rv10 = saved_expr_pool_.make_var(1);
     const expr* rv11 = saved_expr_pool_.make_var(2);
     database.push(rule{
         saved_expr_pool_.make_functor(holder_.functors.id("compose"), {rv9, saved_expr_pool_.make_functor(holder_.functors.id("cons"), {two, rv11})}),
         {saved_expr_pool_.make_functor(holder_.functors.id("add"), {two, rv10, rv9}),
-            saved_expr_pool_.make_functor(holder_.functors.id("compose"), {rv10, rv11})}});
+            saved_expr_pool_.make_functor(holder_.functors.id("compose"), {rv10, rv11})}, 0});
     const expr* rv12 = saved_expr_pool_.make_var(0);
     const expr* rv13 = saved_expr_pool_.make_var(1);
     const expr* rv14 = saved_expr_pool_.make_var(2);
     database.push(rule{
         saved_expr_pool_.make_functor(holder_.functors.id("compose"), {rv12, saved_expr_pool_.make_functor(holder_.functors.id("cons"), {three, rv14})}),
         {saved_expr_pool_.make_functor(holder_.functors.id("add"), {three, rv13, rv12}),
-            saved_expr_pool_.make_functor(holder_.functors.id("compose"), {rv13, rv14})}});
+            saved_expr_pool_.make_functor(holder_.functors.id("compose"), {rv13, rv14})}, 0});
     const expr* rv15 = saved_expr_pool_.make_var(0);
     const expr* rv16 = saved_expr_pool_.make_var(1);
     const expr* rv17 = saved_expr_pool_.make_var(2);
     database.push(rule{
         saved_expr_pool_.make_functor(holder_.functors.id("compose"), {rv15, saved_expr_pool_.make_functor(holder_.functors.id("cons"), {four, rv17})}),
         {saved_expr_pool_.make_functor(holder_.functors.id("add"), {four, rv16, rv15}),
-            saved_expr_pool_.make_functor(holder_.functors.id("compose"), {rv16, rv17})}});
+            saved_expr_pool_.make_functor(holder_.functors.id("compose"), {rv16, rv17})}, 0});
     const expr* rv18 = saved_expr_pool_.make_var(0);
     const expr* rv19 = saved_expr_pool_.make_var(1);
     const expr* rv20 = saved_expr_pool_.make_var(2);
     database.push(rule{
         saved_expr_pool_.make_functor(holder_.functors.id("compose"), {rv18, saved_expr_pool_.make_functor(holder_.functors.id("cons"), {five, rv20})}),
         {saved_expr_pool_.make_functor(holder_.functors.id("add"), {five, rv19, rv18}),
-            saved_expr_pool_.make_functor(holder_.functors.id("compose"), {rv19, rv20})}});
+            saved_expr_pool_.make_functor(holder_.functors.id("compose"), {rv19, rv20})}, 0});
     const expr* rv21 = saved_expr_pool_.make_var(0);
     const expr* rv22 = saved_expr_pool_.make_var(1);
     const expr* rv23 = saved_expr_pool_.make_var(2);
     database.push(rule{
         saved_expr_pool_.make_functor(holder_.functors.id("compose"), {rv21, saved_expr_pool_.make_functor(holder_.functors.id("cons"), {six, rv23})}),
         {saved_expr_pool_.make_functor(holder_.functors.id("add"), {six, rv22, rv21}),
-            saved_expr_pool_.make_functor(holder_.functors.id("compose"), {rv22, rv23})}});
+            saved_expr_pool_.make_functor(holder_.functors.id("compose"), {rv22, rv23})}, 0});
     const expr* rv24 = saved_expr_pool_.make_var(0);
     const expr* rv25 = saved_expr_pool_.make_var(1);
     const expr* rv26 = saved_expr_pool_.make_var(2);
     database.push(rule{
         saved_expr_pool_.make_functor(holder_.functors.id("compose"), {rv24, saved_expr_pool_.make_functor(holder_.functors.id("cons"), {seven, rv26})}),
         {saved_expr_pool_.make_functor(holder_.functors.id("add"), {seven, rv25, rv24}),
-            saved_expr_pool_.make_functor(holder_.functors.id("compose"), {rv25, rv26})}});
+            saved_expr_pool_.make_functor(holder_.functors.id("compose"), {rv25, rv26})}, 0});
     const expr* rv27 = saved_expr_pool_.make_var(0);
     const expr* rv28 = saved_expr_pool_.make_var(1);
     const expr* rv29 = saved_expr_pool_.make_var(2);
     database.push(rule{
         saved_expr_pool_.make_functor(holder_.functors.id("compose"), {rv27, saved_expr_pool_.make_functor(holder_.functors.id("cons"), {eight, rv29})}),
         {saved_expr_pool_.make_functor(holder_.functors.id("add"), {eight, rv28, rv27}),
-            saved_expr_pool_.make_functor(holder_.functors.id("compose"), {rv28, rv29})}});
+            saved_expr_pool_.make_functor(holder_.functors.id("compose"), {rv28, rv29})}, 0});
 
     std::set<solution> expected;
     const expr* parts[] = {nullptr, one, two, three, four, five, six, seven, eight};
@@ -3060,19 +3060,19 @@ TEST_P(RuntimeParamTest, EnumeratesBinaryStringsNoConsecutiveOnesLengthTen) {
     const expr* nil = saved_expr_pool_.make_functor(holder_.functors.id("nil"), {});
     const expr* b0 = saved_expr_pool_.make_functor(holder_.functors.id("b0"), {});
     const expr* b1 = saved_expr_pool_.make_functor(holder_.functors.id("b1"), {});
-    database.push(rule{saved_expr_pool_.make_functor(holder_.functors.id("good"), {nil}), {}});
-    database.push(rule{saved_expr_pool_.make_functor(holder_.functors.id("len"), {nil, zero}), {}});
+    database.push(rule{saved_expr_pool_.make_functor(holder_.functors.id("good"), {nil}), {}, 0});
+    database.push(rule{saved_expr_pool_.make_functor(holder_.functors.id("len"), {nil, zero}), {}, 0});
 
     const expr* rv1 = saved_expr_pool_.make_var(0);
     database.push(rule{
         saved_expr_pool_.make_functor(holder_.functors.id("good"), {saved_expr_pool_.make_functor(holder_.functors.id("cons"), {b0, rv1})}),
-        {saved_expr_pool_.make_functor(holder_.functors.id("good"), {rv1})}});
+        {saved_expr_pool_.make_functor(holder_.functors.id("good"), {rv1})}, 0});
     const expr* rv2 = saved_expr_pool_.make_var(0);
     const expr* rv3 = saved_expr_pool_.make_var(1);
     database.push(rule{
         saved_expr_pool_.make_functor(holder_.functors.id("good"), {saved_expr_pool_.make_functor(holder_.functors.id("cons"), {b1, saved_expr_pool_.make_functor(holder_.functors.id("cons"), {b0, rv2})})}),
-        {saved_expr_pool_.make_functor(holder_.functors.id("good"), {rv2})}});
-    database.push(rule{saved_expr_pool_.make_functor(holder_.functors.id("good"), {saved_expr_pool_.make_functor(holder_.functors.id("cons"), {b1, nil})}), {}});
+        {saved_expr_pool_.make_functor(holder_.functors.id("good"), {rv2})}, 0});
+    database.push(rule{saved_expr_pool_.make_functor(holder_.functors.id("good"), {saved_expr_pool_.make_functor(holder_.functors.id("cons"), {b1, nil})}), {}, 0});
 
     const expr* rv4 = saved_expr_pool_.make_var(0);
     const expr* rv5 = saved_expr_pool_.make_var(1);
@@ -3080,7 +3080,7 @@ TEST_P(RuntimeParamTest, EnumeratesBinaryStringsNoConsecutiveOnesLengthTen) {
     const expr* rv7 = saved_expr_pool_.make_var(3);
     database.push(rule{
         saved_expr_pool_.make_functor(holder_.functors.id("len"), {saved_expr_pool_.make_functor(holder_.functors.id("cons"), {rv4, rv5}), saved_expr_pool_.make_functor(holder_.functors.id("suc"), {rv7})}),
-        {saved_expr_pool_.make_functor(holder_.functors.id("len"), {rv5, rv7})}});
+        {saved_expr_pool_.make_functor(holder_.functors.id("len"), {rv5, rv7})}, 0});
 
     const expr* ten = peano_saved(kStringLength);
     constexpr uint32_t idx_s = 0;
@@ -3138,24 +3138,24 @@ TEST_P(RuntimeParamTest, EnumeratesStaircasePathsOneOrTwoSummingToTen) {
     const expr* one = saved_expr_pool_.make_functor(holder_.functors.id("suc"), {zero});
     const expr* two = saved_expr_pool_.make_functor(holder_.functors.id("suc"), {one});
     const expr* nil = saved_expr_pool_.make_functor(holder_.functors.id("nil"), {});
-    database.push(rule{saved_expr_pool_.make_functor(holder_.functors.id("nat"), {zero}), {}});
-    database.push(rule{saved_expr_pool_.make_functor(holder_.functors.id("steps"), {zero, nil}), {}});
+    database.push(rule{saved_expr_pool_.make_functor(holder_.functors.id("nat"), {zero}), {}, 0});
+    database.push(rule{saved_expr_pool_.make_functor(holder_.functors.id("steps"), {zero, nil}), {}, 0});
 
     const expr* rv1 = saved_expr_pool_.make_var(0);
     database.push(rule{
         saved_expr_pool_.make_functor(holder_.functors.id("nat"), {saved_expr_pool_.make_functor(holder_.functors.id("suc"), {rv1})}),
-        {saved_expr_pool_.make_functor(holder_.functors.id("nat"), {rv1})}});
+        {saved_expr_pool_.make_functor(holder_.functors.id("nat"), {rv1})}, 0});
 
     const expr* rv2 = saved_expr_pool_.make_var(0);
     database.push(rule{
         saved_expr_pool_.make_functor(holder_.functors.id("add"), {zero, rv2, rv2}),
-        {saved_expr_pool_.make_functor(holder_.functors.id("nat"), {rv2})}});
+        {saved_expr_pool_.make_functor(holder_.functors.id("nat"), {rv2})}, 0});
     const expr* rv3 = saved_expr_pool_.make_var(0);
     const expr* rv4 = saved_expr_pool_.make_var(1);
     const expr* rv5 = saved_expr_pool_.make_var(2);
     database.push(rule{
         saved_expr_pool_.make_functor(holder_.functors.id("add"), {saved_expr_pool_.make_functor(holder_.functors.id("suc"), {rv3}), rv4, saved_expr_pool_.make_functor(holder_.functors.id("suc"), {rv5})}),
-        {saved_expr_pool_.make_functor(holder_.functors.id("add"), {rv3, rv4, rv5})}});
+        {saved_expr_pool_.make_functor(holder_.functors.id("add"), {rv3, rv4, rv5})}, 0});
 
     const expr* rv6 = saved_expr_pool_.make_var(0);
     const expr* rv7 = saved_expr_pool_.make_var(1);
@@ -3163,14 +3163,14 @@ TEST_P(RuntimeParamTest, EnumeratesStaircasePathsOneOrTwoSummingToTen) {
     database.push(rule{
         saved_expr_pool_.make_functor(holder_.functors.id("steps"), {rv6, saved_expr_pool_.make_functor(holder_.functors.id("cons"), {one, rv8})}),
         {saved_expr_pool_.make_functor(holder_.functors.id("add"), {one, rv7, rv6}),
-            saved_expr_pool_.make_functor(holder_.functors.id("steps"), {rv7, rv8})}});
+            saved_expr_pool_.make_functor(holder_.functors.id("steps"), {rv7, rv8})}, 0});
     const expr* rv9 = saved_expr_pool_.make_var(0);
     const expr* rv10 = saved_expr_pool_.make_var(1);
     const expr* rv11 = saved_expr_pool_.make_var(2);
     database.push(rule{
         saved_expr_pool_.make_functor(holder_.functors.id("steps"), {rv9, saved_expr_pool_.make_functor(holder_.functors.id("cons"), {two, rv11})}),
         {saved_expr_pool_.make_functor(holder_.functors.id("add"), {two, rv10, rv9}),
-            saved_expr_pool_.make_functor(holder_.functors.id("steps"), {rv10, rv11})}});
+            saved_expr_pool_.make_functor(holder_.functors.id("steps"), {rv10, rv11})}, 0});
 
     const expr* ten = peano_saved(kStaircaseHeight);
     constexpr uint32_t idx_p = 0;
@@ -3220,25 +3220,25 @@ TEST_P(RuntimeParamTest, EnumeratesFibIndexPairsWithSumBelowThirty) {
 
     const expr* zero = saved_expr_pool_.make_functor(holder_.functors.id("zero"), {});
     const expr* one = saved_expr_pool_.make_functor(holder_.functors.id("suc"), {zero});
-    database.push(rule{saved_expr_pool_.make_functor(holder_.functors.id("nat"), {zero}), {}});
-    database.push(rule{saved_expr_pool_.make_functor(holder_.functors.id("fib"), {zero, zero}), {}});
-    database.push(rule{saved_expr_pool_.make_functor(holder_.functors.id("fib"), {one, one}), {}});
+    database.push(rule{saved_expr_pool_.make_functor(holder_.functors.id("nat"), {zero}), {}, 0});
+    database.push(rule{saved_expr_pool_.make_functor(holder_.functors.id("fib"), {zero, zero}), {}, 0});
+    database.push(rule{saved_expr_pool_.make_functor(holder_.functors.id("fib"), {one, one}), {}, 0});
 
     const expr* rv1 = saved_expr_pool_.make_var(0);
     database.push(rule{
         saved_expr_pool_.make_functor(holder_.functors.id("nat"), {saved_expr_pool_.make_functor(holder_.functors.id("suc"), {rv1})}),
-        {saved_expr_pool_.make_functor(holder_.functors.id("nat"), {rv1})}});
+        {saved_expr_pool_.make_functor(holder_.functors.id("nat"), {rv1})}, 0});
 
     const expr* rv2 = saved_expr_pool_.make_var(0);
     database.push(rule{
         saved_expr_pool_.make_functor(holder_.functors.id("add"), {zero, rv2, rv2}),
-        {saved_expr_pool_.make_functor(holder_.functors.id("nat"), {rv2})}});
+        {saved_expr_pool_.make_functor(holder_.functors.id("nat"), {rv2})}, 0});
     const expr* rv3 = saved_expr_pool_.make_var(0);
     const expr* rv4 = saved_expr_pool_.make_var(1);
     const expr* rv5 = saved_expr_pool_.make_var(2);
     database.push(rule{
         saved_expr_pool_.make_functor(holder_.functors.id("add"), {saved_expr_pool_.make_functor(holder_.functors.id("suc"), {rv3}), rv4, saved_expr_pool_.make_functor(holder_.functors.id("suc"), {rv5})}),
-        {saved_expr_pool_.make_functor(holder_.functors.id("add"), {rv3, rv4, rv5})}});
+        {saved_expr_pool_.make_functor(holder_.functors.id("add"), {rv3, rv4, rv5})}, 0});
 
     const expr* rv6 = saved_expr_pool_.make_var(0);
     const expr* rv7 = saved_expr_pool_.make_var(1);
@@ -3249,17 +3249,17 @@ TEST_P(RuntimeParamTest, EnumeratesFibIndexPairsWithSumBelowThirty) {
         saved_expr_pool_.make_functor(holder_.functors.id("fib"), {saved_expr_pool_.make_functor(holder_.functors.id("suc"), {suc_rv6}), rv9}),
         {saved_expr_pool_.make_functor(holder_.functors.id("fib"), {rv6, rv7}),
             saved_expr_pool_.make_functor(holder_.functors.id("fib"), {suc_rv6, rv8}),
-            saved_expr_pool_.make_functor(holder_.functors.id("add"), {rv7, rv8, rv9})}});
+            saved_expr_pool_.make_functor(holder_.functors.id("add"), {rv7, rv8, rv9})}, 0});
 
     const expr* rv10 = saved_expr_pool_.make_var(0);
     database.push(rule{
         saved_expr_pool_.make_functor(holder_.functors.id("lt"), {zero, saved_expr_pool_.make_functor(holder_.functors.id("suc"), {rv10})}),
-        {saved_expr_pool_.make_functor(holder_.functors.id("nat"), {rv10})}});
+        {saved_expr_pool_.make_functor(holder_.functors.id("nat"), {rv10})}, 0});
     const expr* rv11 = saved_expr_pool_.make_var(0);
     const expr* rv12 = saved_expr_pool_.make_var(1);
     database.push(rule{
         saved_expr_pool_.make_functor(holder_.functors.id("lt"), {saved_expr_pool_.make_functor(holder_.functors.id("suc"), {rv11}), saved_expr_pool_.make_functor(holder_.functors.id("suc"), {rv12})}),
-        {saved_expr_pool_.make_functor(holder_.functors.id("lt"), {rv11, rv12})}});
+        {saved_expr_pool_.make_functor(holder_.functors.id("lt"), {rv11, rv12})}, 0});
 
     std::set<solution> expected;
     const auto fib_at = [&](int n) -> int {
@@ -3323,7 +3323,7 @@ TEST_P(RuntimeParamTest, EnumeratesFibIndexPairsWithSumBelowThirty) {
 TEST_P(RuntimeParamTest, FacadeDepthsAfterUnitSolution) {
     static constexpr size_t kInitialVarCount = 0;
     initial_goals.push(saved_expr_pool_.make_functor(holder_.functors.id("f"), {}));
-    database.push(rule{saved_expr_pool_.make_functor(holder_.functors.id("f"), {}), {}});
+    database.push(rule{saved_expr_pool_.make_functor(holder_.functors.id("f"), {}), {}, 0});
 
     runtime_ref& session = make_session(kInitialVarCount);
     ASSERT_TRUE(session.next());
@@ -3336,8 +3336,8 @@ TEST_P(RuntimeParamTest, FacadeDepthsAfterBranchingDecision) {
     static constexpr size_t kInitialVarCount = 1;
     const expr* a = saved_expr_pool_.make_functor(holder_.functors.id("a"), {});
     const expr* b = saved_expr_pool_.make_functor(holder_.functors.id("b"), {});
-    database.push(rule{saved_expr_pool_.make_functor(holder_.functors.id("f"), {a}), {}});
-    database.push(rule{saved_expr_pool_.make_functor(holder_.functors.id("f"), {b}), {}});
+    database.push(rule{saved_expr_pool_.make_functor(holder_.functors.id("f"), {a}), {}, 0});
+    database.push(rule{saved_expr_pool_.make_functor(holder_.functors.id("f"), {b}), {}, 0});
     initial_goals.push(saved_expr_pool_.make_functor(
         holder_.functors.id("f"), {saved_expr_pool_.make_var(0)}));
 
@@ -3361,7 +3361,7 @@ TEST_P(RuntimeParamTest, HorizonGeniusCgwAfterUnitSolution) {
 
     static constexpr size_t kInitialVarCount = 0;
     initial_goals.push(saved_expr_pool_.make_functor(holder_.functors.id("f"), {}));
-    database.push(rule{saved_expr_pool_.make_functor(holder_.functors.id("f"), {}), {}});
+    database.push(rule{saved_expr_pool_.make_functor(holder_.functors.id("f"), {}), {}, 0});
 
     runtime_ref& session = make_session(kInitialVarCount);
     ASSERT_TRUE(session.next());
@@ -3402,7 +3402,7 @@ TEST_P(RuntimeParamTest, QuellRemainingWorkAfterUnitSolution) {
 
     static constexpr size_t kInitialVarCount = 0;
     initial_goals.push(saved_expr_pool_.make_functor(holder_.functors.id("f"), {}));
-    database.push(rule{saved_expr_pool_.make_functor(holder_.functors.id("f"), {}), {}});
+    database.push(rule{saved_expr_pool_.make_functor(holder_.functors.id("f"), {}), {}, 0});
 
     runtime_ref& session = make_session(kInitialVarCount);
     ASSERT_TRUE(session.next());
@@ -3451,12 +3451,12 @@ TEST_P(RuntimeParamTest, QuellRemainingWorkAfterChainedProof) {
     database.push(rule{
         saved_expr_pool_.make_functor(holder_.functors.id("f"), {}),
         {saved_expr_pool_.make_functor(holder_.functors.id("g"), {}),
-         saved_expr_pool_.make_functor(holder_.functors.id("h"), {})}});
+         saved_expr_pool_.make_functor(holder_.functors.id("h"), {})}, 0});
     database.push(rule{
         saved_expr_pool_.make_functor(holder_.functors.id("g"), {}),
-        {saved_expr_pool_.make_functor(holder_.functors.id("i"), {})}});
-    database.push(rule{saved_expr_pool_.make_functor(holder_.functors.id("i"), {}), {}});
-    database.push(rule{saved_expr_pool_.make_functor(holder_.functors.id("h"), {}), {}});
+        {saved_expr_pool_.make_functor(holder_.functors.id("i"), {})}, 0});
+    database.push(rule{saved_expr_pool_.make_functor(holder_.functors.id("i"), {}), {}, 0});
+    database.push(rule{saved_expr_pool_.make_functor(holder_.functors.id("h"), {}), {}, 0});
 
     runtime_ref& session = make_session(kInitialVarCount);
     ASSERT_TRUE(session.next());

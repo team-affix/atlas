@@ -1,4 +1,4 @@
-// Goal database: vector-backed rules indexed by rule_id, with functor-indexed lookup buckets.
+// Goal database: map-backed rules indexed by rule_id, with functor-indexed lookup buckets.
 
 #include <gtest/gtest.h>
 #include <gmock/gmock.h>
@@ -13,8 +13,8 @@ struct DbTest : public ::testing::Test {
     expr g_head{expr::functor{functors.id("g"), {}}};
     expr var_head{expr::var{0}};
     rule f_rule{&f_head, {}, 1};
-    rule g_rule{&g_head, {}};
-    rule var_rule{&var_head, {}};
+    rule g_rule{&g_head, {}, 0};
+    rule var_rule{&var_head, {}, 0};
 };
 
 TEST_F(DbTest, DefaultDbLookupAllRulesEmpty) {
@@ -39,7 +39,7 @@ TEST_F(DbTest, LookupByFunctorReturnsMatchingRules) {
     db database;
     const rule_id f0 = database.push(f_rule);
     expr f_head2{expr::functor{functors.id("f"), {}}};
-    const rule_id f1 = database.push(rule{&f_head2, {}});
+    const rule_id f1 = database.push(rule{&f_head2, {}, 0});
     database.push(g_rule);
 
     std::vector<rule_id> ids;
@@ -86,4 +86,38 @@ TEST_F(DbTest, GetRuleIdOutOfRangeThrows) {
     db database;
     database.push(f_rule);
     EXPECT_THROW(database.get_rule(1), std::out_of_range);
+}
+
+TEST_F(DbTest, EraseRemovesRuleFromAllLookups) {
+    db database;
+    const rule_id fid = database.push(f_rule);
+    database.push(g_rule);
+
+    database.erase(fid);
+
+    EXPECT_FALSE(database.lookup_all_rules().contains(fid));
+    EXPECT_EQ(database.lookup_rule_by_outermost_functor(functors.id("f")).size(), 0u);
+    EXPECT_THROW(database.get_rule(fid), std::out_of_range);
+}
+
+TEST_F(DbTest, EraseDoesNotAffectOtherRules) {
+    db database;
+    const rule_id fid = database.push(f_rule);
+    const rule_id gid = database.push(g_rule);
+
+    database.erase(fid);
+
+    EXPECT_TRUE(database.lookup_all_rules().contains(gid));
+    EXPECT_EQ(database.lookup_rule_by_outermost_functor(functors.id("g")).size(), 1u);
+    EXPECT_EQ(*database.get_rule(gid), g_rule);
+}
+
+TEST_F(DbTest, PushAfterEraseAssignsNewId) {
+    db database;
+    const rule_id fid = database.push(f_rule);
+    database.erase(fid);
+
+    const rule_id fid2 = database.push(f_rule);
+    EXPECT_NE(fid2, fid);
+    EXPECT_EQ(*database.get_rule(fid2), f_rule);
 }

@@ -131,8 +131,8 @@ TEST_F(RidgeManifestIntegrationTest, SimMctsDecisionGeneratorRecordsDecisionWith
     const expr* f_head0 = saved_expr_pool_.make_functor(functors.id("f"), {});
     const expr* f_head1 = saved_expr_pool_.make_functor(functors.id("f"), {});
     initial_goals.push(goal);
-    database.push(rule{f_head0, {}});
-    database.push(rule{f_head1, {}});
+    database.push(rule{f_head0, {}, 0});
+    database.push(rule{f_head1, {}, 0});
 
     ridge_manifest manifest = make_manifest();
     manifest.set_up_sim_.set_up();
@@ -173,7 +173,7 @@ TEST_F(RidgeManifestIntegrationTest, SolverFindsSingleUnitSolution) {
     const expr* goal = saved_expr_pool_.make_functor(functors.id("f"), {});
     const expr* head = saved_expr_pool_.make_functor(functors.id("f"), {});
     initial_goals.push(goal);
-    database.push(rule{head, {}});
+    database.push(rule{head, {}, 0});
 
     ridge_manifest manifest = make_manifest();
     auto sm = manifest.solver_.solve();

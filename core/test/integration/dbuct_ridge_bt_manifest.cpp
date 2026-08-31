@@ -133,7 +133,7 @@ TEST_F(DbuctRidgeBtManifestIntegrationTest, RefutesWhenInitialGoalHasNoCandidate
 
 TEST_F(DbuctRidgeBtManifestIntegrationTest, SingleUnitSolutionMakesNoDecision) {
     initial_goals.push(fun("f"));
-    database.push(rule{fun("f"), {}});
+    database.push(rule{fun("f"), {}, 0});
     dbuct_ridge_bt_runtime rt = make_dbuct(0);
     ASSERT_TRUE(rt.next());
     EXPECT_TRUE(rt.solved());
@@ -143,8 +143,8 @@ TEST_F(DbuctRidgeBtManifestIntegrationTest, SingleUnitSolutionMakesNoDecision) {
 
 TEST_F(DbuctRidgeBtManifestIntegrationTest, ClauseDerivedUnitSolutionChainsSubgoals) {
     initial_goals.push(fun("f"));
-    database.push(rule{fun("f"), {fun("g")}});
-    database.push(rule{fun("g"), {}});
+    database.push(rule{fun("f"), {fun("g")}, 0});
+    database.push(rule{fun("g"), {}, 0});
     dbuct_ridge_bt_runtime rt = make_dbuct(0);
     ASSERT_TRUE(rt.next());
     EXPECT_TRUE(rt.solved());
@@ -157,7 +157,7 @@ TEST_F(DbuctRidgeBtManifestIntegrationTest, ClauseDerivedUnitSolutionChainsSubgo
 TEST_F(DbuctRidgeBtManifestIntegrationTest, GroundHeadBindingsAreCorrect) {
     const expr* abc = fun("abc");
     const expr* _123 = fun("123");
-    database.push(rule{fun("f", {abc, _123}), {}});
+    database.push(rule{fun("f", {abc, _123}), {}, 0});
     initial_goals.push(fun("f", {pool.make_var(0), pool.make_var(1)}));
 
     dbuct_ridge_bt_runtime rt = make_dbuct(2);
@@ -172,9 +172,9 @@ TEST_F(DbuctRidgeBtManifestIntegrationTest, ClauseBodyBindingsFlowThroughSubgoal
     const expr* vb = pool.make_var(1);
     const expr* abc = fun("abc");
     const expr* _123 = fun("123");
-    database.push(rule{fun("f", {va, vb}), {fun("g", {va}), fun("h", {vb})}});
-    database.push(rule{fun("g", {abc}), {}});
-    database.push(rule{fun("h", {_123}), {}});
+    database.push(rule{fun("f", {va, vb}), {fun("g", {va}), fun("h", {vb})}, 0});
+    database.push(rule{fun("g", {abc}), {}, 0});
+    database.push(rule{fun("h", {_123}), {}, 0});
     initial_goals.push(fun("f", {pool.make_var(0), pool.make_var(1)}));
 
     dbuct_ridge_bt_runtime rt = make_dbuct(2);
@@ -196,10 +196,10 @@ TEST_F(DbuctRidgeBtManifestIntegrationTest, SolverCampsBelowRootAcrossEpisodes) 
     const expr* b = fun("b");
     const expr* c = fun("c");
     const expr* d = fun("d");
-    database.push(rule{fun("f", {a}), {}});
-    database.push(rule{fun("f", {b}), {}});
-    database.push(rule{fun("f", {c}), {}});
-    database.push(rule{fun("f", {d}), {}});
+    database.push(rule{fun("f", {a}), {}, 0});
+    database.push(rule{fun("f", {b}), {}, 0});
+    database.push(rule{fun("f", {c}), {}, 0});
+    database.push(rule{fun("f", {d}), {}, 0});
     initial_goals.push(fun("f", {pool.make_var(0)}));
 
     dbuct_ridge_bt_manifest m = make_manifest(/*initial_frame_offset=*/1);
@@ -225,7 +225,7 @@ TEST_F(DbuctRidgeBtManifestIntegrationTest, SolverCampsBelowRootAcrossEpisodes) 
 TEST_F(DbuctRidgeBtManifestIntegrationTest, ParitySingleBindingSolution) {
     const expr* abc = fun("abc");
     const expr* _123 = fun("123");
-    database.push(rule{fun("f", {abc, _123}), {}});
+    database.push(rule{fun("f", {abc, _123}), {}, 0});
     initial_goals.push(fun("f", {pool.make_var(0), pool.make_var(1)}));
 
     auto get = [&](auto& rt) {
@@ -249,9 +249,9 @@ TEST_F(DbuctRidgeBtManifestIntegrationTest, ParityMultipleGroundFacts) {
     const expr* a = fun("a");
     const expr* b = fun("b");
     const expr* c = fun("c");
-    database.push(rule{fun("f", {a}), {}});
-    database.push(rule{fun("f", {b}), {}});
-    database.push(rule{fun("f", {c}), {}});
+    database.push(rule{fun("f", {a}), {}, 0});
+    database.push(rule{fun("f", {b}), {}, 0});
+    database.push(rule{fun("f", {c}), {}, 0});
     initial_goals.push(fun("f", {pool.make_var(0)}));
 
     auto get = [&](auto& rt) {
@@ -273,10 +273,10 @@ TEST_F(DbuctRidgeBtManifestIntegrationTest, ParityTwoGoalsCrossProduct) {
     // being snapshot/restored across camping backsteps.
     const expr* a = fun("a");
     const expr* b = fun("b");
-    database.push(rule{fun("f", {a}), {}});
-    database.push(rule{fun("f", {b}), {}});
-    database.push(rule{fun("g", {a}), {}});
-    database.push(rule{fun("g", {b}), {}});
+    database.push(rule{fun("f", {a}), {}, 0});
+    database.push(rule{fun("f", {b}), {}, 0});
+    database.push(rule{fun("g", {a}), {}, 0});
+    database.push(rule{fun("g", {b}), {}, 0});
     initial_goals.push(fun("f", {pool.make_var(0)}));
     initial_goals.push(fun("g", {pool.make_var(1)}));
 
@@ -304,10 +304,10 @@ TEST_F(DbuctRidgeBtManifestIntegrationTest, ParityConflictDrivenPruning) {
     const expr* b = fun("b");
     const expr* va = pool.make_var(0);
     // top(X) :- p(X), q(X).   p(a). p(b).   q(a).
-    database.push(rule{fun("top", {va}), {fun("p", {va}), fun("q", {va})}});
-    database.push(rule{fun("p", {a}), {}});
-    database.push(rule{fun("p", {b}), {}});
-    database.push(rule{fun("q", {a}), {}});
+    database.push(rule{fun("top", {va}), {fun("p", {va}), fun("q", {va})}, 0});
+    database.push(rule{fun("p", {a}), {}, 0});
+    database.push(rule{fun("p", {b}), {}, 0});
+    database.push(rule{fun("q", {a}), {}, 0});
     initial_goals.push(fun("top", {pool.make_var(0)}));
 
     auto get = [&](auto& rt) {
@@ -333,9 +333,9 @@ TEST_F(DbuctRidgeBtManifestIntegrationTest, BindingsRemainSoundAcrossEnumeration
     const expr* a = fun("a");
     const expr* b = fun("b");
     const expr* c = fun("c");
-    database.push(rule{fun("f", {a}), {}});
-    database.push(rule{fun("f", {b}), {}});
-    database.push(rule{fun("f", {c}), {}});
+    database.push(rule{fun("f", {a}), {}, 0});
+    database.push(rule{fun("f", {b}), {}, 0});
+    database.push(rule{fun("f", {c}), {}, 0});
     initial_goals.push(fun("f", {pool.make_var(0)}));
 
     std::set<const expr*> facts{pool.import(a), pool.import(b), pool.import(c)};
@@ -352,7 +352,7 @@ TEST_F(DbuctRidgeBtManifestIntegrationTest, BindingsRemainSoundAcrossEnumeration
 
 TEST_F(DbuctRidgeBtManifestIntegrationTest, ImportedSolutionSurvivesFurtherTicks) {
     const expr* abc = fun("abc");
-    database.push(rule{fun("f", {abc}), {}});
+    database.push(rule{fun("f", {abc}), {}, 0});
     initial_goals.push(fun("f", {pool.make_var(0)}));
 
     dbuct_ridge_bt_runtime d = make_dbuct(1);
@@ -370,8 +370,8 @@ TEST_F(DbuctRidgeBtManifestIntegrationTest, TightResolutionBudgetTerminatesGrace
     // left-recursive rule; a tiny per-episode resolution budget must bound each
     // episode and never crash the camping loop.
     const expr* va = pool.make_var(0);
-    database.push(rule{fun("nat", {fun("s", {va})}), {fun("nat", {va})}});
-    database.push(rule{fun("nat", {fun("z")}), {}});
+    database.push(rule{fun("nat", {fun("s", {va})}), {fun("nat", {va})}, 0});
+    database.push(rule{fun("nat", {fun("z")}), {}, 0});
     initial_goals.push(fun("nat", {pool.make_var(0)}));
 
     dbuct_ridge_bt_runtime d = make_dbuct(1, /*max_resolutions=*/4);
@@ -391,8 +391,8 @@ TEST_F(DbuctRidgeBtManifestIntegrationTest, RecursionEnumeratesOnlyWellFormedNat
     // must be a genuine natural: z, or s(...) nested finitely over z. A stale
     // binding leaking across a backstep would surface as a malformed term.
     const expr* va = pool.make_var(0);
-    database.push(rule{fun("nat", {fun("s", {va})}), {fun("nat", {va})}});
-    database.push(rule{fun("nat", {fun("z")}), {}});
+    database.push(rule{fun("nat", {fun("s", {va})}), {fun("nat", {va})}, 0});
+    database.push(rule{fun("nat", {fun("z")}), {}, 0});
     initial_goals.push(fun("nat", {pool.make_var(0)}));
 
     const uint32_t z_id = functors.id("z");
@@ -419,9 +419,9 @@ TEST_F(DbuctRidgeBtManifestIntegrationTest, GrantIntervalDoesNotChangeSolutionSe
     const expr* a = fun("a");
     const expr* b = fun("b");
     const expr* c = fun("c");
-    database.push(rule{fun("f", {a}), {}});
-    database.push(rule{fun("f", {b}), {}});
-    database.push(rule{fun("f", {c}), {}});
+    database.push(rule{fun("f", {a}), {}, 0});
+    database.push(rule{fun("f", {b}), {}, 0});
+    database.push(rule{fun("f", {c}), {}, 0});
     initial_goals.push(fun("f", {pool.make_var(0)}));
 
     auto get = [&](auto& rt) {
@@ -444,8 +444,8 @@ TEST_F(DbuctRidgeBtManifestIntegrationTest, RuntimeFacadeDepthsAfterBranchingDec
     // counts after a tick that must branch (multiple facts for one goal).
     const expr* a = fun("a");
     const expr* b = fun("b");
-    database.push(rule{fun("f", {a}), {}});
-    database.push(rule{fun("f", {b}), {}});
+    database.push(rule{fun("f", {a}), {}, 0});
+    database.push(rule{fun("f", {b}), {}, 0});
     initial_goals.push(fun("f", {pool.make_var(0)}));
 
     dbuct_ridge_bt_runtime rt = make_dbuct(1);
@@ -461,10 +461,10 @@ TEST_F(DbuctRidgeBtManifestIntegrationTest, DecisionCountConsistentAcrossManyTic
     // subset of the recorded resolutions (never referencing rolled-back state).
     const expr* a = fun("a");
     const expr* b = fun("b");
-    database.push(rule{fun("f", {a}), {}});
-    database.push(rule{fun("f", {b}), {}});
-    database.push(rule{fun("g", {a}), {}});
-    database.push(rule{fun("g", {b}), {}});
+    database.push(rule{fun("f", {a}), {}, 0});
+    database.push(rule{fun("f", {b}), {}, 0});
+    database.push(rule{fun("g", {a}), {}, 0});
+    database.push(rule{fun("g", {b}), {}, 0});
     initial_goals.push(fun("f", {pool.make_var(0)}));
     initial_goals.push(fun("g", {pool.make_var(1)}));
 

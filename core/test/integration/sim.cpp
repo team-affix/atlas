@@ -208,11 +208,11 @@ void chain_clause_db(test_functors& functors, db& database, std::vector<expr>& s
             expr::functor{functors.id(std::string(prefix) + std::to_string(i)), {&storage[x_idx]}});
         storage.emplace_back(
             expr::functor{functors.id(std::string(prefix) + std::to_string(i + 1)), {&storage[x_idx]}});
-        database.push(rule{&storage[storage.size() - 2], {&storage[storage.size() - 1]}});
+        database.push(rule{&storage[storage.size() - 2], {&storage[storage.size() - 1]}, 0});
     }
     storage.emplace_back(
         expr::functor{functors.id(std::string(prefix) + std::to_string(depth - 1)), {ground_atom}});
-    database.push(rule{&storage.back(), {}});
+    database.push(rule{&storage.back(), {}, 0});
 }
 
 }  // namespace
@@ -289,7 +289,7 @@ TEST_F(SimIntegrationTest, RunReturnsSolvedWhenUnitFactAppliesToInitialGoal) {
     expr goal{expr::functor{functors.id("f"), {}}};
     expr head{expr::functor{functors.id("f"), {}}};
     initial_goals.push(&goal);
-    database.push(rule{&head, {}});
+    database.push(rule{&head, {}, 0});
 
     EXPECT_CALL(stack.decision_generator, generate()).Times(0);
 
@@ -309,7 +309,7 @@ TEST_F(SimIntegrationTest, RunReturnsConflictedWhenDbRuleHeadFailsToUnifyWithGoa
     expr goal{expr::functor{functors.id("f"), {}}};
     expr head{expr::functor{functors.id("g"), {}}};
     initial_goals.push(&goal);
-    database.push(rule{&head, {}});
+    database.push(rule{&head, {}, 0});
 
     EXPECT_CALL(stack.decision_generator, generate()).Times(0);
 
@@ -331,8 +331,8 @@ TEST_F(SimIntegrationTest, RunReturnsSolvedWhenOnlyOneOfTwoDbRulesUnifiesWithGoa
     expr matching_head{expr::functor{functors.id("f"), {}}};
     expr mismatching_head{expr::functor{functors.id("g"), {}}};
     initial_goals.push(&goal);
-    database.push(rule{&matching_head, {}});
-    database.push(rule{&mismatching_head, {}});
+    database.push(rule{&matching_head, {}, 0});
+    database.push(rule{&mismatching_head, {}, 0});
 
     EXPECT_CALL(stack.decision_generator, generate()).Times(0);
 
@@ -355,8 +355,8 @@ TEST_F(SimIntegrationTest, RunReturnsSolvedAfterSingleDecisionWithTwoMatchingFac
     expr head0{expr::functor{functors.id("f"), {}}};
     expr head1{expr::functor{functors.id("f"), {}}};
     initial_goals.push(&goal);
-    database.push(rule{&head0, {}});
-    database.push(rule{&head1, {}});
+    database.push(rule{&head0, {}, 0});
+    database.push(rule{&head1, {}, 0});
 
     const goal_lineage* gl = stack.make_initial_goal_lineage_.make(0);
     const resolution_lineage* chosen =
@@ -382,8 +382,8 @@ TEST_F(SimIntegrationTest, RunReturnsSolvedViaClauseThenBodyFactWithoutDecisions
     expr g_body{expr::functor{functors.id("g"), {}}};
     expr g_head{expr::functor{functors.id("g"), {}}};
     initial_goals.push(&goal);
-    database.push(rule{&f_head, {&g_body}});
-    database.push(rule{&g_head, {}});
+    database.push(rule{&f_head, {&g_body}, 0});
+    database.push(rule{&g_head, {}, 0});
 
     EXPECT_CALL(stack.decision_generator, generate()).Times(0);
 
@@ -406,7 +406,7 @@ TEST_F(SimIntegrationTest, RunReturnsConflictedWhenSecondInitialGoalHasNoCandida
     expr f_head{expr::functor{functors.id("f"), {}}};
     initial_goals.push(&goal_f);
     initial_goals.push(&goal_g);
-    database.push(rule{&f_head, {}});
+    database.push(rule{&f_head, {}, 0});
 
     EXPECT_CALL(stack.decision_generator, generate()).Times(0);
 
@@ -431,8 +431,8 @@ TEST_F(SimIntegrationTest, RunReturnsSolvedWhenTwoInitialGoalsEachHaveMatchingFa
     expr g_head{expr::functor{functors.id("g"), {}}};
     initial_goals.push(&goal_f);
     initial_goals.push(&goal_g);
-    database.push(rule{&f_head, {}});
-    database.push(rule{&g_head, {}});
+    database.push(rule{&f_head, {}, 0});
+    database.push(rule{&g_head, {}, 0});
 
     EXPECT_CALL(stack.decision_generator, generate()).Times(0);
 
@@ -460,9 +460,9 @@ TEST_F(SimIntegrationTest, RunReturnsSolvedAfterOneDecisionWhenInitialGoalFHasTw
     expr g_head{expr::functor{functors.id("g"), {}}};
     initial_goals.push(&goal_f);
     initial_goals.push(&goal_g);
-    database.push(rule{&f_head0, {}});
-    database.push(rule{&f_head1, {}});
-    database.push(rule{&g_head, {}});
+    database.push(rule{&f_head0, {}, 0});
+    database.push(rule{&f_head1, {}, 0});
+    database.push(rule{&g_head, {}, 0});
 
     const goal_lineage* gl_f = stack.make_initial_goal_lineage_.make(0);
     const resolution_lineage* chosen =
@@ -490,8 +490,8 @@ TEST_F(SimIntegrationTest, RunReturnsConflictedWhenSecondInitialGoalLacksCandida
     expr f_head1{expr::functor{functors.id("f"), {}}};
     initial_goals.push(&goal_f);
     initial_goals.push(&goal_g);
-    database.push(rule{&f_head0, {}});
-    database.push(rule{&f_head1, {}});
+    database.push(rule{&f_head0, {}, 0});
+    database.push(rule{&f_head1, {}, 0});
 
     EXPECT_CALL(stack.decision_generator, generate()).Times(0);
 
@@ -514,8 +514,8 @@ TEST_F(SimIntegrationTest, RunReturnsSolvedWhenRuleZeroIsBackloggedBeforeRun) {
     expr f_head0{expr::functor{functors.id("f"), {}}};
     expr f_head1{expr::functor{functors.id("f"), {}}};
     initial_goals.push(&goal);
-    database.push(rule{&f_head0, {}});
-    database.push(rule{&f_head1, {}});
+    database.push(rule{&f_head0, {}, 0});
+    database.push(rule{&f_head1, {}, 0});
 
     auto& make_initial_goal_lineage =
         stack.make_initial_goal_lineage_;
@@ -565,10 +565,10 @@ TEST_F(SimIntegrationTest, RunReturnsSolvedAfterCdclAvoidanceForcesG1RuleThree) 
     expr g_head3{expr::functor{functors.id("g"), {}}};
     initial_goals.push(&goal_f);
     initial_goals.push(&goal_g);
-    database.push(rule{&f_head0, {}});
-    database.push(rule{&f_head1, {}});
-    database.push(rule{&g_head2, {}});
-    database.push(rule{&g_head3, {}});
+    database.push(rule{&f_head0, {}, 0});
+    database.push(rule{&f_head1, {}, 0});
+    database.push(rule{&g_head2, {}, 0});
+    database.push(rule{&g_head3, {}, 0});
 
     auto& make_initial_goal_lineage =
         stack.make_initial_goal_lineage_;
@@ -622,11 +622,11 @@ TEST_F(SimIntegrationTest, RunReturnsSolvedOnRecursiveClauseTreeWithoutDecisions
     expr i_head{expr::functor{functors.id("i"), {}}};
     expr j_head{expr::functor{functors.id("j"), {}}};
     initial_goals.push(&goal_f);
-    database.push(rule{&f_head, {&g_body, &h_body}});
-    database.push(rule{&g_head, {&i_body, &j_body}});
-    database.push(rule{&h_head, {&i_body, &j_body}});
-    database.push(rule{&i_head, {}});
-    database.push(rule{&j_head, {}});
+    database.push(rule{&f_head, {&g_body, &h_body}, 0});
+    database.push(rule{&g_head, {&i_body, &j_body}, 0});
+    database.push(rule{&h_head, {&i_body, &j_body}, 0});
+    database.push(rule{&i_head, {}, 0});
+    database.push(rule{&j_head, {}, 0});
 
     EXPECT_CALL(stack.decision_generator, generate()).Times(0);
 
@@ -669,13 +669,13 @@ TEST_F(SimIntegrationTest, RunReturnsSolvedAfterOneDecisionOnInitialGoalKWithTwo
     initial_goals.push(&goal_f);
     initial_goals.push(&goal_g);
     initial_goals.push(&goal_k);
-    database.push(rule{&f_head, {&g_body, &h_body}});
-    database.push(rule{&g_head, {&i_body, &j_body}});
-    database.push(rule{&h_head, {&i_body, &j_body}});
-    database.push(rule{&i_head, {}});
-    database.push(rule{&j_head, {}});
-    database.push(rule{&k_head0, {}});
-    database.push(rule{&k_head1, {}});
+    database.push(rule{&f_head, {&g_body, &h_body}, 0});
+    database.push(rule{&g_head, {&i_body, &j_body}, 0});
+    database.push(rule{&h_head, {&i_body, &j_body}, 0});
+    database.push(rule{&i_head, {}, 0});
+    database.push(rule{&j_head, {}, 0});
+    database.push(rule{&k_head0, {}, 0});
+    database.push(rule{&k_head1, {}, 0});
 
     auto& make_initial_goal_lineage =
         stack.make_initial_goal_lineage_;
@@ -705,7 +705,7 @@ TEST_F(SimIntegrationTest, RunReturnsSolvedAndBindsVarsViaMhuWhenFactUnifiesGoal
     expr abc{expr::functor{functors.id("abc"), {}}};
     expr _123{expr::functor{functors.id("123"), {}}};
     expr head{expr::functor{functors.id("f"), {&abc, &_123}}};
-    database.push(rule{&head, {}});
+    database.push(rule{&head, {}, 0});
 
     auto& bind_map = stack.bind_map_;
     auto& frame_alloc = stack.frame_allocator_;
@@ -750,9 +750,9 @@ TEST_F(SimIntegrationTest, RunReturnsSolvedViaClauseBodyFactsBindingVarsWithoutD
     expr h_body{expr::functor{functors.id("h"), {&rule_var_b}}};
     expr g_head{expr::functor{functors.id("g"), {&abc}}};
     expr h_head{expr::functor{functors.id("h"), {&_123}}};
-    database.push(rule{&f_head, {&g_body, &h_body}});
-    database.push(rule{&g_head, {}});
-    database.push(rule{&h_head, {}});
+    database.push(rule{&f_head, {&g_body, &h_body}, 0});
+    database.push(rule{&g_head, {}, 0});
+    database.push(rule{&h_head, {}, 0});
 
     auto& bind_map = stack.bind_map_;
     auto& frame_alloc = stack.frame_allocator_;
@@ -794,8 +794,8 @@ TEST_F(SimIntegrationTest, RunReturnsSolvedAfterDecisionBindingVarsFromChosenFac
     expr _456{expr::functor{functors.id("456"), {}}};
     expr head0{expr::functor{functors.id("f"), {&abc, &_123}}};
     expr head1{expr::functor{functors.id("f"), {&xyz, &_456}}};
-    database.push(rule{&head0, {}});
-    database.push(rule{&head1, {}});
+    database.push(rule{&head0, {}, 0});
+    database.push(rule{&head1, {}, 0});
 
     const goal_lineage* gl = stack.make_initial_goal_lineage_.make(0);
     const resolution_lineage* chosen =
@@ -838,8 +838,8 @@ TEST_F(SimIntegrationTest, RunReturnsSolvedWhenMhuRejectsInconsistentRuleWithout
     expr _123{expr::functor{functors.id("123"), {}}};
     expr head0{expr::functor{functors.id("f"), {&abc, &abc}}};
     expr head1{expr::functor{functors.id("f"), {&abc, &_123}}};
-    database.push(rule{&head0, {}});
-    database.push(rule{&head1, {}});
+    database.push(rule{&head0, {}, 0});
+    database.push(rule{&head1, {}, 0});
 
     auto& bind_map = stack.bind_map_;
     auto& frame_alloc = stack.frame_allocator_;
@@ -887,8 +887,8 @@ TEST_F(SimIntegrationTest, RunDeactivatesRuleOneWhenDecisionResolvesRuleZeroOnMh
     expr _123{expr::functor{functors.id("123"), {}}};
     expr head0{expr::functor{functors.id("f"), {&abc, &_123}}};
     expr head1{expr::functor{functors.id("f"), {&def, &_123}}};
-    database.push(rule{&head0, {}});
-    database.push(rule{&head1, {}});
+    database.push(rule{&head0, {}, 0});
+    database.push(rule{&head1, {}, 0});
 
     auto& make_initial_goal_lineage =
         stack.make_initial_goal_lineage_;
@@ -944,10 +944,10 @@ TEST_F(SimIntegrationTest, RunDeactivatesCrossGoalCandidateOnMhuIncompatibleHead
     expr head_f1{expr::functor{functors.id("f"), {&xyz}}};
     expr head_g2{expr::functor{functors.id("g"), {&def}}};
     expr head_g3{expr::functor{functors.id("g"), {&abc}}};
-    database.push(rule{&head_f0, {}});
-    database.push(rule{&head_f1, {}});
-    database.push(rule{&head_g2, {}});
-    database.push(rule{&head_g3, {}});
+    database.push(rule{&head_f0, {}, 0});
+    database.push(rule{&head_f1, {}, 0});
+    database.push(rule{&head_g2, {}, 0});
+    database.push(rule{&head_g3, {}, 0});
 
     auto& make_initial_goal_lineage =
         stack.make_initial_goal_lineage_;
@@ -986,7 +986,7 @@ TEST_F(SimIntegrationTest, RunReturnsSolvedBindingVarInNestedFunctorArgWithoutDe
     expr abc{expr::functor{functors.id("abc"), {}}};
     expr g_abc{expr::functor{functors.id("g"), {&abc}}};
     expr head{expr::functor{functors.id("f"), {&g_abc}}};
-    database.push(rule{&head, {}});
+    database.push(rule{&head, {}, 0});
 
     auto& bind_map = stack.bind_map_;
     auto& frame_alloc = stack.frame_allocator_;
@@ -1019,7 +1019,7 @@ TEST_F(SimIntegrationTest, RunReturnsSolvedBindingRemainingVarWhenGoalIsPartiall
     expr abc{expr::functor{functors.id("abc"), {}}};
     expr _123{expr::functor{functors.id("123"), {}}};
     expr head{expr::functor{functors.id("f"), {&abc, &_123}}};
-    database.push(rule{&head, {}});
+    database.push(rule{&head, {}, 0});
 
     auto& bind_map = stack.bind_map_;
     auto& frame_alloc = stack.frame_allocator_;
@@ -1057,8 +1057,8 @@ TEST_F(SimIntegrationTest, RunReturnsConflictedWhenClauseBodyGoalHasNoUnifyingFa
     expr g_body{expr::functor{functors.id("g"), {&rule_var_a}}};
     expr h_body{expr::functor{functors.id("h"), {&rule_var_b}}};
     expr g_head{expr::functor{functors.id("g"), {&abc}}};
-    database.push(rule{&f_head, {&g_body, &h_body}});
-    database.push(rule{&g_head, {}});
+    database.push(rule{&f_head, {&g_body, &h_body}, 0});
+    database.push(rule{&g_head, {}, 0});
 
     EXPECT_CALL(stack.decision_generator, generate()).Times(0);
 
@@ -1094,9 +1094,9 @@ TEST_F(SimIntegrationTest, RunReturnsConflictedWhenClauseBodyFactMismatchesGroun
     expr h_body{expr::functor{functors.id("h"), {&rule_var_b}}};
     expr g_head{expr::functor{functors.id("g"), {&abc}}};
     expr h_head{expr::functor{functors.id("h"), {&two_three_four}}};
-    database.push(rule{&f_head, {&g_body, &h_body}});
-    database.push(rule{&g_head, {}});
-    database.push(rule{&h_head, {}});
+    database.push(rule{&f_head, {&g_body, &h_body}, 0});
+    database.push(rule{&g_head, {}, 0});
+    database.push(rule{&h_head, {}, 0});
 
     EXPECT_CALL(stack.decision_generator, generate()).Times(0);
 
@@ -1133,10 +1133,10 @@ TEST_F(SimIntegrationTest, RunReturnsSolvedAfterDecisionOnBodyGoalWithTwoFacts) 
     expr g_head0{expr::functor{functors.id("g"), {&abc}}};
     expr g_head1{expr::functor{functors.id("g"), {&xyz}}};
     expr h_head{expr::functor{functors.id("h"), {&_123}}};
-    database.push(rule{&f_head, {&g_body, &h_body}});
-    database.push(rule{&g_head0, {}});
-    database.push(rule{&g_head1, {}});
-    database.push(rule{&h_head, {}});
+    database.push(rule{&f_head, {&g_body, &h_body}, 0});
+    database.push(rule{&g_head0, {}, 0});
+    database.push(rule{&g_head1, {}, 0});
+    database.push(rule{&h_head, {}, 0});
 
     auto& make_initial_goal_lineage =
         stack.make_initial_goal_lineage_;
@@ -1191,9 +1191,9 @@ TEST_F(SimIntegrationTest, RunReturnsSolvedWhenSharedVarLinksTwoGoalsWithoutDeci
     expr f_head{expr::functor{functors.id("f"), {&abc, &_123}}};
     expr g_head0{expr::functor{functors.id("g"), {&_456, &_789}}};
     expr g_head1{expr::functor{functors.id("g"), {&_123, &xyz}}};
-    database.push(rule{&f_head, {}});
-    database.push(rule{&g_head0, {}});
-    database.push(rule{&g_head1, {}});
+    database.push(rule{&f_head, {}, 0});
+    database.push(rule{&g_head0, {}, 0});
+    database.push(rule{&g_head1, {}, 0});
 
     auto& bind_map = stack.bind_map_;
     auto& frame_alloc = stack.frame_allocator_;
@@ -1244,10 +1244,10 @@ TEST_F(SimIntegrationTest, RunReturnsSolvedWhenCdclAndMhuReduceGoalGCandidatesWi
     expr g_head1{expr::functor{functors.id("g"), {&abc, &_xyz}}};
     expr g_head2{expr::functor{functors.id("g"), {&def, &_xyz}}};
     expr g_head3{expr::functor{functors.id("g"), {&ghi, &_jkl}}};
-    database.push(rule{&f_head, {}});
-    database.push(rule{&g_head1, {}});
-    database.push(rule{&g_head2, {}});
-    database.push(rule{&g_head3, {}});
+    database.push(rule{&f_head, {}, 0});
+    database.push(rule{&g_head1, {}, 0});
+    database.push(rule{&g_head2, {}, 0});
+    database.push(rule{&g_head3, {}, 0});
 
     auto& make_initial_goal_lineage =
         stack.make_initial_goal_lineage_;
@@ -1309,8 +1309,8 @@ TEST_F(SimIntegrationTest, RunReturnsSolvedBuildingListOfFiveAbcWithoutDecisions
     expr cons_at{expr::functor{functors.id("cons"), {&rule_a, &rule_t}}};
     expr head1{expr::functor{functors.id("make_list"), {&suc_l, &rule_a, &cons_at}}};
     expr body1{expr::functor{functors.id("make_list"), {&rule_l, &rule_a, &rule_t}}};
-    database.push(rule{&head0, {}});
-    database.push(rule{&head1, {&body1}});
+    database.push(rule{&head0, {}, 0});
+    database.push(rule{&head1, {&body1}, 0});
 
     auto& bind_map = stack.bind_map_;
     auto& frame_alloc = stack.frame_allocator_;
@@ -1377,10 +1377,10 @@ TEST_F(SimIntegrationTest, RunReturnsConflictedWhenCdclEliminationExhaustsSiblin
     expr g_head1{expr::functor{functors.id("g"), {}}};
     initial_goals.push(&goal_f);
     initial_goals.push(&goal_g);
-    database.push(rule{&f_head0, {}});
-    database.push(rule{&f_head1, {}});
-    database.push(rule{&g_head0, {}});
-    database.push(rule{&g_head1, {}});
+    database.push(rule{&f_head0, {}, 0});
+    database.push(rule{&f_head1, {}, 0});
+    database.push(rule{&g_head0, {}, 0});
+    database.push(rule{&g_head1, {}, 0});
 
     auto& make_initial_goal_lineage =
         stack.make_initial_goal_lineage_;
@@ -1428,7 +1428,7 @@ TEST_F(SimIntegrationTest, RunReturnsDepthExceededOnSelfRecursiveClause) {
     expr f_head{expr::functor{functors.id("f"), {}}};
     expr f_body{expr::functor{functors.id("f"), {}}};
     initial_goals.push(&goal);
-    database.push(rule{&f_head, {&f_body}});
+    database.push(rule{&f_head, {&f_body}, 0});
 
     static constexpr size_t kMaxResolutions = 4;
     EXPECT_CALL(stack.decision_generator, generate()).Times(0);
@@ -1460,10 +1460,10 @@ TEST_F(SimIntegrationTest, RunReturnsSolvedAfterTwoSequentialDecisions) {
     expr g_head1{expr::functor{functors.id("g"), {}}};
     initial_goals.push(&goal_f);
     initial_goals.push(&goal_g);
-    database.push(rule{&f_head0, {}});
-    database.push(rule{&f_head1, {}});
-    database.push(rule{&g_head0, {}});
-    database.push(rule{&g_head1, {}});
+    database.push(rule{&f_head0, {}, 0});
+    database.push(rule{&f_head1, {}, 0});
+    database.push(rule{&g_head0, {}, 0});
+    database.push(rule{&g_head1, {}, 0});
 
     auto& make_initial_goal_lineage =
         stack.make_initial_goal_lineage_;
@@ -1515,10 +1515,10 @@ TEST_F(SimIntegrationTest, RunReturnsSolvedWhenCdclUnitElimForcesRemainingCandid
     expr g_head1{expr::functor{functors.id("g"), {}}};
     initial_goals.push(&goal_f);
     initial_goals.push(&goal_g);
-    database.push(rule{&f_head0, {}});
-    database.push(rule{&f_head1, {}});
-    database.push(rule{&g_head0, {}});
-    database.push(rule{&g_head1, {}});
+    database.push(rule{&f_head0, {}, 0});
+    database.push(rule{&f_head1, {}, 0});
+    database.push(rule{&g_head0, {}, 0});
+    database.push(rule{&g_head1, {}, 0});
 
     auto& make_initial_goal_lineage =
         stack.make_initial_goal_lineage_;
@@ -1568,9 +1568,9 @@ TEST_F(SimIntegrationTest, RunReturnsConflictedAfterPartialProgressWhenDerivedGo
     expr h_body{expr::functor{functors.id("h"), {&rule_var_a}}};
     expr h_head{expr::functor{functors.id("h"), {&abc}}};
     expr g_head{expr::functor{functors.id("g"), {&xyz}}};
-    database.push(rule{&f_head, {&h_body}});
-    database.push(rule{&h_head, {}});
-    database.push(rule{&g_head, {}});
+    database.push(rule{&f_head, {&h_body}, 0});
+    database.push(rule{&h_head, {}, 0});
+    database.push(rule{&g_head, {}, 0});
 
     auto& frame_alloc = stack.frame_allocator_;
     auto& make_var = stack.expr_pool_;
@@ -1638,7 +1638,7 @@ TEST_F(SimIntegrationTest, TearDownLifecycleRestoresTrailDepthAfterDepthExceeded
   expr f_head{expr::functor{functors.id("f"), {}}};
   expr f_body{expr::functor{functors.id("f"), {}}};
   initial_goals.push(&goal);
-  database.push(rule{&f_head, {&f_body}});
+  database.push(rule{&f_head, {&f_body}, 0});
 
   static constexpr size_t kMaxResolutions = 4;
   const size_t depth_before = stack.elimination_backlog_.depth();
@@ -1657,7 +1657,7 @@ TEST_F(SimIntegrationTest, TearDownLifecycleClearsEphemeralStoresAfterSolvedRun)
   expr abc{expr::functor{functors.id("abc"), {}}};
   expr _123{expr::functor{functors.id("123"), {}}};
   expr head{expr::functor{functors.id("f"), {&abc, &_123}}};
-  database.push(rule{&head, {}});
+  database.push(rule{&head, {}, 0});
 
   auto& bind_map = stack.bind_map_;
   auto& frame_alloc = stack.frame_allocator_;
@@ -1697,8 +1697,8 @@ TEST_F(SimIntegrationTest, TearDownLifecycleRetainsInFrameExprPoolGrowth) {
   expr cons_at{expr::functor{functors.id("cons"), {&rule_a, &rule_t}}};
   expr head1{expr::functor{functors.id("make_list"), {&suc_l, &rule_a, &cons_at}}};
   expr body1{expr::functor{functors.id("make_list"), {&rule_l, &rule_a, &rule_t}}};
-  database.push(rule{&head0, {}});
-  database.push(rule{&head1, {&body1}});
+  database.push(rule{&head0, {}, 0});
+  database.push(rule{&head1, {&body1}, 0});
 
   auto& frame_alloc = stack.frame_allocator_;
   auto& make_var = stack.expr_pool_;
@@ -1733,8 +1733,8 @@ TEST_F(SimIntegrationTest, TearDownLifecycleResetsVarSequencerWhenIncrementedInF
   expr f_head{expr::functor{functors.id("f"), {&rule_var}}};
   expr g_body{expr::functor{functors.id("g"), {&rule_var}}};
   expr g_head{expr::functor{functors.id("g"), {&abc}}};
-  database.push(rule{&f_head, {&g_body}});
-  database.push(rule{&g_head, {}});
+  database.push(rule{&f_head, {&g_body}, 0});
+  database.push(rule{&g_head, {}, 0});
 
   auto& frame_alloc = stack.frame_allocator_;
   auto& make_var = stack.expr_pool_;
@@ -1766,10 +1766,10 @@ TEST_F(SimIntegrationTest, BaseFrameCdclLearnSurvivesLifecycleTearDown) {
   expr g_head3{expr::functor{functors.id("g"), {}}};
   initial_goals.push(&goal_f);
   initial_goals.push(&goal_g);
-  database.push(rule{&f_head0, {}});
-  database.push(rule{&f_head1, {}});
-  database.push(rule{&g_head2, {}});
-  database.push(rule{&g_head3, {}});
+  database.push(rule{&f_head0, {}, 0});
+  database.push(rule{&f_head1, {}, 0});
+  database.push(rule{&g_head2, {}, 0});
+  database.push(rule{&g_head3, {}, 0});
 
   auto& make_initial_goal_lineage =
       stack.make_initial_goal_lineage_;
@@ -1816,7 +1816,7 @@ TEST_F(SimIntegrationTest, IdenticalSimCycleLifecycleRunsCleanAfterTearDown) {
   expr abc{expr::functor{functors.id("abc"), {}}};
   expr _123{expr::functor{functors.id("123"), {}}};
   expr head{expr::functor{functors.id("f"), {&abc, &_123}}};
-  database.push(rule{&head, {}});
+  database.push(rule{&head, {}, 0});
 
   auto& bind_map = stack.bind_map_;
   auto& frame_alloc = stack.frame_allocator_;
@@ -1876,8 +1876,8 @@ TEST_F(SimIntegrationTest, RunReturnsSolvedStressListOfTwentyAbcWithoutDecisions
   expr cons_at{expr::functor{functors.id("cons"), {&rule_a, &rule_t}}};
   expr head1{expr::functor{functors.id("make_list"), {&suc_l, &rule_a, &cons_at}}};
   expr body1{expr::functor{functors.id("make_list"), {&rule_l, &rule_a, &rule_t}}};
-  database.push(rule{&head0, {}});
-  database.push(rule{&head1, {&body1}});
+  database.push(rule{&head0, {}, 0});
+  database.push(rule{&head1, {&body1}, 0});
 
   auto& bind_map = stack.bind_map_;
   auto& frame_alloc = stack.frame_allocator_;
@@ -1949,9 +1949,9 @@ TEST_F(SimIntegrationTest, RunReturnsSolvedStressEvenOddPeanoGoal) {
   expr even_head1{expr::functor{functors.id("even"), {&suc_x}}};
   expr odd_body{expr::functor{functors.id("odd"), {&rule_x}}};
   expr even_body{expr::functor{functors.id("even"), {&rule_x}}};
-  database.push(rule{&even_head0, {}});
-  database.push(rule{&odd_head, {&even_body}});
-  database.push(rule{&even_head1, {&odd_body}});
+  database.push(rule{&even_head0, {}, 0});
+  database.push(rule{&odd_head, {&even_body}, 0});
+  database.push(rule{&even_head1, {&odd_body}, 0});
 
   auto& make_functor = stack.expr_pool_;
 
@@ -1978,8 +1978,8 @@ TEST_F(SimIntegrationTest, RunReturnsSolvedStressDeepNestedFunctorTower) {
   expr unwrap_head{expr::functor{functors.id("unwrap"), {&suc_wrap}}};
   expr unwrap_body{expr::functor{functors.id("unwrap"), {&rule_x}}};
   expr unwrap_zero{expr::functor{functors.id("unwrap"), {&zero}}};
-  database.push(rule{&unwrap_head, {&unwrap_body}});
-  database.push(rule{&unwrap_zero, {}});
+  database.push(rule{&unwrap_head, {&unwrap_body}, 0});
+  database.push(rule{&unwrap_zero, {}, 0});
 
   auto& make_functor = stack.expr_pool_;
   auto& get_resolution_count =
@@ -2015,12 +2015,12 @@ TEST_F(SimIntegrationTest, RunReturnsSolvedStressLongSharedVarChainWithoutDecisi
   expr g3_head{expr::functor{functors.id("g3"), {&t3, &t4}}};
   expr g4_head{expr::functor{functors.id("g4"), {&t4, &t5}}};
   expr g5_head{expr::functor{functors.id("g5"), {&t5, &t6}}};
-  database.push(rule{&g0_head, {}});
-  database.push(rule{&g1_head, {}});
-  database.push(rule{&g2_head, {}});
-  database.push(rule{&g3_head, {}});
-  database.push(rule{&g4_head, {}});
-  database.push(rule{&g5_head, {}});
+  database.push(rule{&g0_head, {}, 0});
+  database.push(rule{&g1_head, {}, 0});
+  database.push(rule{&g2_head, {}, 0});
+  database.push(rule{&g3_head, {}, 0});
+  database.push(rule{&g4_head, {}, 0});
+  database.push(rule{&g5_head, {}, 0});
 
   auto& bind_map = stack.bind_map_;
   auto& frame_alloc = stack.frame_allocator_;
@@ -2053,9 +2053,9 @@ TEST_F(SimIntegrationTest, RunReturnsSolvedStressDiamondSharedVarWithoutDecision
   expr f_head{expr::functor{functors.id("f"), {&abc, &xyz}}};
   expr g_head{expr::functor{functors.id("g"), {&abc, &_123}}};
   expr h_head{expr::functor{functors.id("h"), {&_123, &xyz}}};
-  database.push(rule{&f_head, {}});
-  database.push(rule{&g_head, {}});
-  database.push(rule{&h_head, {}});
+  database.push(rule{&f_head, {}, 0});
+  database.push(rule{&g_head, {}, 0});
+  database.push(rule{&h_head, {}, 0});
 
   auto& bind_map = stack.bind_map_;
   auto& frame_alloc = stack.frame_allocator_;
@@ -2099,13 +2099,13 @@ TEST_F(SimIntegrationTest, RunReturnsSolvedStressWideClauseTreeWithoutDecisions)
   expr j_head{expr::functor{functors.id("j"), {}}};
   expr l_head{expr::functor{functors.id("l"), {}}};
   initial_goals.push(&goal_f);
-  database.push(rule{&f_head, {&g_body, &h_body}});
-  database.push(rule{&g_head, {&i_body, &j_body}});
-  database.push(rule{&h_head, {&i_body, &j_body}});
-  database.push(rule{&k_head, {&i_body, &j_body, &l_body}});
-  database.push(rule{&i_head, {}});
-  database.push(rule{&j_head, {}});
-  database.push(rule{&l_head, {}});
+  database.push(rule{&f_head, {&g_body, &h_body}, 0});
+  database.push(rule{&g_head, {&i_body, &j_body}, 0});
+  database.push(rule{&h_head, {&i_body, &j_body}, 0});
+  database.push(rule{&k_head, {&i_body, &j_body, &l_body}, 0});
+  database.push(rule{&i_head, {}, 0});
+  database.push(rule{&j_head, {}, 0});
+  database.push(rule{&l_head, {}, 0});
 
   auto& get_resolution_count =
       stack.resolution_memory_;
@@ -2137,14 +2137,14 @@ TEST_F(SimIntegrationTest, RunReturnsSolvedStressMultipleAvoidancesSeveralDecisi
   initial_goals.push(&goal_g);
   initial_goals.push(&goal_h);
   initial_goals.push(&goal_k);
-  database.push(rule{&f0, {}});
-  database.push(rule{&f1, {}});
-  database.push(rule{&g0, {}});
-  database.push(rule{&g1, {}});
-  database.push(rule{&h0, {}});
-  database.push(rule{&h1, {}});
-  database.push(rule{&k0, {}});
-  database.push(rule{&k1, {}});
+  database.push(rule{&f0, {}, 0});
+  database.push(rule{&f1, {}, 0});
+  database.push(rule{&g0, {}, 0});
+  database.push(rule{&g1, {}, 0});
+  database.push(rule{&h0, {}, 0});
+  database.push(rule{&h1, {}, 0});
+  database.push(rule{&k0, {}, 0});
+  database.push(rule{&k1, {}, 0});
 
   auto& make_initial_goal_lineage =
       stack.make_initial_goal_lineage_;
@@ -2198,14 +2198,14 @@ TEST_F(SimIntegrationTest, RunReturnsSolvedStressCdclMhuManyGroundHeadsOnSharedV
   expr g4{expr::functor{functors.id("g"), {&jkl, &_xyz, &pqr}}};
   expr g5{expr::functor{functors.id("g"), {&mno, &_xyz, &pqr}}};
   expr g_bad{expr::functor{functors.id("g"), {&ghi, &jkl, &stu}}};
-  database.push(rule{&f_head0, {}});
-  database.push(rule{&f_head1, {}});
-  database.push(rule{&g1, {}});
-  database.push(rule{&g2, {}});
-  database.push(rule{&g3, {}});
-  database.push(rule{&g4, {}});
-  database.push(rule{&g5, {}});
-  database.push(rule{&g_bad, {}});
+  database.push(rule{&f_head0, {}, 0});
+  database.push(rule{&f_head1, {}, 0});
+  database.push(rule{&g1, {}, 0});
+  database.push(rule{&g2, {}, 0});
+  database.push(rule{&g3, {}, 0});
+  database.push(rule{&g4, {}, 0});
+  database.push(rule{&g5, {}, 0});
+  database.push(rule{&g_bad, {}, 0});
 
   auto& make_initial_goal_lineage =
       stack.make_initial_goal_lineage_;

@@ -43,8 +43,8 @@ TEST_F(GeniusFcManifestIntegrationTest, InitialActivateSetsFewerCandidateScore) 
     const expr* f_head0 = saved_expr_pool_.make_functor(functors.id("f"), {});
     const expr* f_head1 = saved_expr_pool_.make_functor(functors.id("f"), {});
     initial_goals.push(goal);
-    database.push(rule{f_head0, {}});
-    database.push(rule{f_head1, {}});
+    database.push(rule{f_head0, {}, 0});
+    database.push(rule{f_head1, {}, 0});
 
     genius_fc_manifest manifest = make_manifest();
     manifest.set_up_sim_.set_up();

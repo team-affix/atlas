@@ -6,7 +6,6 @@
 #include "expr.hpp"
 
 struct rule {
-    rule(const expr* head, std::vector<const expr*> body);
     rule(const expr* head, std::vector<const expr*> body, uint32_t var_count);
     const expr* head;
     std::vector<const expr*> body;

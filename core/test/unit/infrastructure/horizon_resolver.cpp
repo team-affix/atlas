@@ -36,8 +36,8 @@ struct HorizonResolverTest : public ::testing::Test {
     resolution_lineage rl{&parent_gl, 0};
 
     expr head{expr::var{0}};
-    rule fact_rule{&head, {}};
-    rule clause_rule{&head, {&head}};
+    rule fact_rule{&head, {}, 0};
+    rule clause_rule{&head, {&head}, 0};
 
     static constexpr double kGoalWeight = 0.25;
 
