@@ -68,6 +68,7 @@
 #include "infrastructure/dbuct_goal_candidate_rules.hpp"
 #include "infrastructure/dbuct_goal_exprs.hpp"
 #include "infrastructure/dbuct_goal_weights.hpp"
+#include "infrastructure/expr_querier.hpp"
 #include "infrastructure/querier.hpp"
 #include "infrastructure/dbuct_horizon_frame_hub.hpp"
 #include "infrastructure/dbuct_joint_elimination_generator.hpp"
@@ -175,7 +176,8 @@ struct dbuct_genius_manifest {
                                           make_initial_goal_lineage_t, goal_exprs_t, goal_candidate_rules_t, srt_active_goals_t>;
     using goal_candidates_deactivator_t = goal_candidates_deactivator<goal_candidate_rules_t,
                                           lineage_pool, candidate_deactivator_t>;
-    using querier_t                     = querier<goal_exprs_t, db, db>;
+    using expr_querier_t = expr_querier<db, db>;
+    using querier_t                     = querier<goal_exprs_t, expr_querier_t>;
     using goal_candidates_activator_t   = goal_candidates_activator<querier_t, lineage_pool,
                                           candidate_activator_t, conflict_detector_t,
                                           unit_goal_detector_t, unit_goals_t>;
@@ -235,6 +237,7 @@ struct dbuct_genius_manifest {
     ra_rule_id_set_factory        ra_rule_id_set_factory_;
     srt_active_goals_t            srt_active_goals_;
     goal_exprs_t                  goal_exprs_;
+    expr_querier_t   expr_querier_;
     querier_t                     querier_;
     goal_weights_t                goal_weights_;
     cumulative_grounded_weight_t  cumulative_grounded_weight_;

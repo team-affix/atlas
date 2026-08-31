@@ -28,6 +28,7 @@
 #include "infrastructure/goal_candidates_deactivator.hpp"
 #include "infrastructure/goal_deactivator.hpp"
 #include "infrastructure/goal_exprs.hpp"
+#include "infrastructure/expr_querier.hpp"
 #include "infrastructure/querier.hpp"
 #include "infrastructure/initial_goal_activator.hpp"
 #include "infrastructure/initial_goal_exprs.hpp"
@@ -90,7 +91,8 @@ struct basic_manifest {
                                         make_initial_goal_lineage_t, goal_exprs, goal_candidate_rules, ra_active_goals>;
     using goal_candidates_deactivator_t = goal_candidates_deactivator<goal_candidate_rules,
                                         lineage_pool, candidate_deactivator_t>;
-    using querier_t                     = querier<goal_exprs, db, db>;
+    using expr_querier_t = expr_querier<db, db>;
+    using querier_t                     = querier<goal_exprs, expr_querier_t>;
     using goal_candidates_activator_t   = goal_candidates_activator<querier_t, lineage_pool,
                                         candidate_activator_t, conflict_detector_t,
                                         unit_goal_detector_t, unit_goals>;
@@ -132,6 +134,7 @@ struct basic_manifest {
     ra_rule_id_set_factory  ra_rule_id_set_factory_;
     ra_active_goals         ra_active_goals_;
     goal_exprs              goal_exprs_;
+    expr_querier_t   expr_querier_;
     querier_t               querier_;
     goal_candidate_rules    goal_candidate_rules_;
     unit_goals              unit_goals_;

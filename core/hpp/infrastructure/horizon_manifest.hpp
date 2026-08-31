@@ -31,6 +31,7 @@
 #include "infrastructure/goal_candidates_activator.hpp"
 #include "infrastructure/goal_candidates_deactivator.hpp"
 #include "infrastructure/goal_exprs.hpp"
+#include "infrastructure/expr_querier.hpp"
 #include "infrastructure/querier.hpp"
 #include "infrastructure/goal_weights.hpp"
 #include "infrastructure/horizon_goal_activator.hpp"
@@ -109,7 +110,8 @@ struct horizon_manifest {
                                         make_initial_goal_lineage_t, goal_exprs, goal_candidate_rules, srt_active_goals>;
     using goal_candidates_deactivator_t = goal_candidates_deactivator<goal_candidate_rules,
                                         lineage_pool, candidate_deactivator_t>;
-    using querier_t                     = querier<goal_exprs, db, db>;
+    using expr_querier_t = expr_querier<db, db>;
+    using querier_t                     = querier<goal_exprs, expr_querier_t>;
     using goal_candidates_activator_t   = goal_candidates_activator<querier_t, lineage_pool,
                                         candidate_activator_t, conflict_detector_t,
                                         unit_goal_detector_t, unit_goals>;
@@ -167,6 +169,7 @@ struct horizon_manifest {
     ra_rule_id_set_factory  ra_rule_id_set_factory_;
     srt_active_goals        srt_active_goals_;
     goal_exprs              goal_exprs_;
+    expr_querier_t   expr_querier_;
     querier_t               querier_;
     goal_weights            goal_weights_;
     cumulative_grounded_weight cumulative_grounded_weight_;

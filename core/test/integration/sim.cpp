@@ -45,6 +45,7 @@
 #include "infrastructure/make_initial_goal_lineage.hpp"
 #include "infrastructure/initial_goal_activator.hpp"
 #include "infrastructure/goal_candidates_activator.hpp"
+#include "infrastructure/expr_querier.hpp"
 #include "infrastructure/querier.hpp"
 #include "infrastructure/goal_candidates_deactivator.hpp"
 #include "infrastructure/subgoals_activator.hpp"
@@ -93,7 +94,8 @@ using initial_goal_activator_t      = initial_goal_activator<initial_goal_exprs,
                                     make_initial_goal_lineage_t, goal_exprs, goal_candidate_rules, ra_active_goals>;
 using goal_candidates_deactivator_t = goal_candidates_deactivator<goal_candidate_rules,
                                     lineage_pool, candidate_deactivator_t>;
-using querier_t                     = querier<goal_exprs, db, db>;
+using expr_querier_t                = expr_querier<db, db>;
+using querier_t                     = querier<goal_exprs, expr_querier_t>;
 using goal_candidates_activator_t   = goal_candidates_activator<querier_t, lineage_pool,
                                     candidate_activator_t, conflict_detector_t,
                                     unit_goal_detector_t, unit_goals>;
@@ -125,7 +127,8 @@ struct sim_stack {
     ra_rule_id_set_factory ra_rule_id_set_factory_;
     ra_active_goals ra_active_goals_;
     goal_exprs goal_exprs_;
-    querier_t querier_{goal_exprs_, database_, database_};
+    expr_querier_t expr_querier_{database_, database_};
+    querier_t querier_{goal_exprs_, expr_querier_};
     goal_candidate_rules goal_candidate_rules_{ra_rule_id_set_factory_};
     unit_goals unit_goals_;
     decision_memory decision_memory_;
