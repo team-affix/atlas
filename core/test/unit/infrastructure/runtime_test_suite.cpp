@@ -336,8 +336,10 @@ namespace {
 
 using solution = std::vector<const expr*>;
 
+using ep_t = expr_printer<var_names, functor_names>;
+
 void print_solution(
-    size_t solution_index, expr_printer& printer, const solution& s) {
+    size_t solution_index, ep_t& printer, const solution& s) {
     std::cout << "solution " << solution_index << '\n';
     for (const expr* e : s) {
         std::cout << "  ";
@@ -348,7 +350,7 @@ void print_solution(
 
 void enumerate_all_solutions(
     runtime_ref& session,
-    expr_printer& printer,
+    ep_t& printer,
     std::set<solution> expected,
     const std::function<solution()>& get_solution) {
     std::set<solution> visited;
@@ -380,7 +382,7 @@ void enumerate_all_solutions(
 
 void next_until_refuted(
     runtime_ref& session,
-    expr_printer& printer,
+    ep_t& printer,
     std::set<solution> expected,
     const std::function<solution()>& get_solution) {
     std::set<solution> visited;
@@ -445,7 +447,7 @@ struct RuntimeTestBase {
 
     var_names saved_var_names_;
     functor_names saved_functor_names_;
-    expr_printer saved_printer_{std::cout, saved_var_names_, saved_functor_names_};
+    ep_t saved_printer_{std::cout, saved_var_names_, saved_functor_names_};
     expr_pool saved_expr_pool_;
 };
 

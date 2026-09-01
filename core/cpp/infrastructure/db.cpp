@@ -35,6 +35,10 @@ rule_id_set& db::lookup_all_rules() {
     return total_rule_set_;
 }
 
+const rule_id_set& db::lookup_all_rules() const {
+    return total_rule_set_;
+}
+
 const rule_id_set& db::lookup_rule_by_outermost_functor(uint32_t functor_id) const {
     auto it = functor_indexed_rule_sets_.find(functor_id);
     if (it == functor_indexed_rule_sets_.end())

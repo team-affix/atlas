@@ -11,6 +11,7 @@ struct db {
     void erase(rule_id);
     const rule* get_rule(rule_id) const;
     rule_id_set& lookup_all_rules();
+    const rule_id_set& lookup_all_rules() const;
     const rule_id_set& lookup_rule_by_outermost_functor(uint32_t functor_id) const;
 private:
     static uint32_t max_var_count_in_expr(const expr* e);

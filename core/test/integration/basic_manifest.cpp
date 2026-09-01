@@ -41,10 +41,11 @@ namespace {
 // ---------------------------------------------------------------------------
 
 using solution = std::vector<const expr*>;
+using ep_t = expr_printer<var_names, functor_names>;
 
 void print_solution(
     size_t solution_index,
-    expr_printer& printer,
+    ep_t& printer,
     size_t iterations_since_last,
     decision_memory& decision_count,
     resolution_memory& resolution_count,
@@ -62,7 +63,7 @@ void print_solution(
 
 void enumerate_all_solutions(
     basic_manifest::solver_t& solver,
-    expr_printer& printer,
+    ep_t& printer,
     decision_memory& decision_count,
     resolution_memory& resolution_count,
     std::set<solution> expected,
@@ -98,7 +99,7 @@ void enumerate_all_solutions(
 
 void next_until_refuted(
     basic_manifest::solver_t& solver,
-    expr_printer& printer,
+    ep_t& printer,
     decision_memory& decision_count,
     resolution_memory& resolution_count,
     std::set<solution> expected,
@@ -183,7 +184,7 @@ void next_branch_until_refuted(
 // ---------------------------------------------------------------------------
 
 struct expr_printer_context {
-    expr_printer printer;
+    ep_t printer;
 
     explicit expr_printer_context(var_names& vn, functor_names& fn)
         : printer(std::cout, vn, fn) {}

@@ -12,7 +12,7 @@ struct ExprPrinterTest : public ::testing::Test {
     var_names vn;
     functor_names fn;
     std::ostringstream os;
-    expr_printer printer{os, vn, fn};
+    expr_printer<var_names, functor_names> printer{os, vn, fn};
 
     expr var0{expr::var{0}};
     expr atom_a{expr::functor{2, {}}};

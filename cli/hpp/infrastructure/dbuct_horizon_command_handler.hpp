@@ -29,12 +29,13 @@
 // up a dbuct_horizon_runtime (camping DBUCT + horizon reward), and drives the shared
 // solve loop that prints solutions and progress.
 struct dbuct_horizon_command_handler {
+    using printer_t = expr_printer<var_names, functor_names>;
     using SolveTimer     = solve_timer<steady_now>;
-    using PrintBindings  = print_bindings<dbuct_horizon_runtime, expr_printer>;
+    using PrintBindings  = print_bindings<dbuct_horizon_runtime, printer_t>;
     using BasePP         = print_progress<dbuct_horizon_runtime, SolveTimer>;
     using PrintProgress  = horizon_print_progress<BasePP, dbuct_horizon_runtime>;
     using PausePoller    = pause_poller<PrintProgress, stdin_is_tty, stdin_try_read_byte, stdin_idle>;
-    using SolveLoop      = solve_loop<dbuct_horizon_runtime, expr_printer, PrintBindings, PrintProgress,
+    using SolveLoop      = solve_loop<dbuct_horizon_runtime, printer_t, PrintBindings, PrintProgress,
                                       PausePoller, PrintProgress, SolveTimer, SolveTimer>;
 
     dbuct_horizon_command_handler(
@@ -55,7 +56,7 @@ private:
     std::map<std::string, uint32_t> functor_map_;
     uint32_t next_functor_id_ = k_first_user_functor_id;
     std::optional<expr_pool> parse_pool_;
-    std::optional<expr_printer> printer_;
+    std::optional<printer_t> printer_;
     db database_;
     initial_goal_exprs initial_goals_;
     std::map<std::string, uint32_t> var_name_to_idx_;

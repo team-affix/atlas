@@ -26,12 +26,13 @@
 #include "infrastructure/var_names.hpp"
 
 struct genius_fc_command_handler {
+    using printer_t = expr_printer<var_names, functor_names>;
     using SolveTimer    = solve_timer<steady_now>;
-    using PrintBindings = print_bindings<genius_fc_runtime, expr_printer>;
+    using PrintBindings = print_bindings<genius_fc_runtime, printer_t>;
     using BasePP        = print_progress<genius_fc_runtime, SolveTimer>;
     using PP            = genius_print_progress<BasePP, genius_fc_runtime>;
     using PausePoller   = pause_poller<PP, stdin_is_tty, stdin_try_read_byte, stdin_idle>;
-    using SolveLoop     = solve_loop<genius_fc_runtime, expr_printer, PrintBindings, PP,
+    using SolveLoop     = solve_loop<genius_fc_runtime, printer_t, PrintBindings, PP,
                                      PausePoller, PP, SolveTimer, SolveTimer>;
 
     genius_fc_command_handler(
@@ -52,7 +53,7 @@ private:
     std::map<std::string, uint32_t> functor_map_;
     uint32_t next_functor_id_ = k_first_user_functor_id;
     std::optional<expr_pool> parse_pool_;
-    std::optional<expr_printer> printer_;
+    std::optional<printer_t> printer_;
     db database_;
     initial_goal_exprs initial_goals_;
     std::map<std::string, uint32_t> var_name_to_idx_;
