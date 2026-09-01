@@ -1,0 +1,38 @@
+#ifndef DBUCT_PHOENIX_FC_RUNTIME_HPP
+#define DBUCT_PHOENIX_FC_RUNTIME_HPP
+
+#include <cstddef>
+#include <cstdint>
+#include "infrastructure/dbuct_phoenix_fc_manifest.hpp"
+#include "infrastructure/db.hpp"
+#include "infrastructure/initial_goal_exprs.hpp"
+#include "value_objects/lemma.hpp"
+
+// dbuct_phoenix_fc runtime — camping phoenix + fewer-candidate RP. Same session API
+// as dbuct_phoenix_runtime; grant_k is the visit-proportional grant
+// coefficient (grant(n) = 1 + k * visits(n)). Default matches shared harnesses.
+struct dbuct_phoenix_fc_runtime {
+    static constexpr double k_default_grant_k = 0.1;
+
+    dbuct_phoenix_fc_runtime(
+        db& database,
+        initial_goal_exprs& goals,
+        uint32_t initial_frame_offset,
+        size_t max_resolutions,
+        uint32_t random_seed,
+        double exploration_constant,
+        double grant_k = k_default_grant_k);
+
+    bool next();
+    bool solved() const;
+    const expr* normalize(framed_expr fe);
+    size_t resolution_depth() const;
+    size_t decision_depth() const;
+    lemma derive_decision_lemma() const;
+    lemma derive_resolution_lemma() const;
+
+private:
+    dbuct_phoenix_fc_manifest manifest_;
+};
+
+#endif

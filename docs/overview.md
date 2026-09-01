@@ -32,6 +32,9 @@ Atlas exposes multiple solvers, each with different search strategies:
 | `horizon` | Uses **CGW (Cumulative Grounded Weight)** as the MCTS reward. See [solvers.md](solvers.md). |
 | `ridge` | Certainty-based. Focuses on finding and eliminating shallow conflicts. See [solvers.md](solvers.md). |
 | `phoenix` | Ridge reward; UCB1 for goal choices, uniform random for rule choices. See [solvers.md](solvers.md). |
+| `phoenix-fc` | Phoenix with fewer-candidate rollout. See [solvers.md](solvers.md). |
+| `dbuct-phoenix` | Delayed-backtracking phoenix (camps instead of restarting each sim). See [solvers.md](solvers.md). |
+| `dbuct-phoenix-fc` | Camping phoenix with fewer-candidate rollout. See [solvers.md](solvers.md). |
 | `ridge-bt` | Ridge with binary-tree CDCL. See [cdcl-bt.md](cdcl-bt.md) and [solvers.md](solvers.md). |
 | `dbuct-ridge-bt` | Delayed-backtracking ridge with binary-tree CDCL. See [cdcl-bt.md](cdcl-bt.md) and [solvers.md](solvers.md). |
 | `quell` | Minimizes remaining work `Σ f(depth)` with `f(l)=1+e^{-K(l-J)}`. See [solvers.md](solvers.md). |

@@ -45,6 +45,8 @@ f(l) = 1 + exp(-K * (l - J))
 
 Same ridge reward (`-decision_count`) as `ridge`. Dual **chooser**, not dual reward: UCB1 over ridge-backed values for goal-selection nodes, uniform random for rule-selection nodes (no UCB1). Rollout is uniform random for both kinds.
 
+**Variants:** `phoenix`, `phoenix-fc` (fewer-candidate rollout), `dbuct-phoenix` (camping), `dbuct-phoenix-fc` (camping + fewer-candidate rollout). Camping uses `--exploration-constant` (default `15`) and `--grant-k` (default `0.1`). FC dual-chooser is policy-tree only; rollout stays fewer-candidate goals + uniform rules.
+
 ## Genius *(ridge + horizon)*
 
 Dual reward: horizon CGW at rule-scope nodes, ridge decision-count otherwise. See the genius manifests.
