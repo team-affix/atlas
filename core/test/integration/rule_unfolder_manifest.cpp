@@ -1384,3 +1384,238 @@ TEST_F(RuleUnfolderManifestTest, SequentialUnfolds_TwoIndependentSubjects) {
     EXPECT_FALSE(expanded_db.lookup_all_rules().contains(s1));
     EXPECT_FALSE(expanded_db.lookup_all_rules().contains(s2));
 }
+
+// ===========================================================================
+// O — Deep unfold chain: repeated unfolding of children until a ground fact
+// ===========================================================================
+
+// ---------------------------------------------------------------------------
+// Four-step chain: p(X):-a(X)  →  p(V0):-b(V0)  →  p(V0):-c(V0)
+//               →  p(V0):-d(V0)  →  p(sol):-
+//
+// Original DB: a(X):-b(X), b(X):-c(X), c(X):-d(X), d(sol):-
+// Each unfold replaces the single body goal with the next predicate in the
+// chain, until the fact d(sol):- grounds the head and yields a fact.
+// ---------------------------------------------------------------------------
+
+TEST_F(RuleUnfolderManifestTest, DeepChain_FourUnfoldsToGroundFact) {
+    expr sol{expr::functor{functors.id("sol"), {}}};
+
+    expr a_v0{expr::functor{functors.id("a"), {&var0}}};
+    expr b_v0{expr::functor{functors.id("b"), {&var0}}};
+    expr c_v0{expr::functor{functors.id("c"), {&var0}}};
+    expr d_v0{expr::functor{functors.id("d"), {&var0}}};
+    expr d_sol{expr::functor{functors.id("d"), {&sol}}};
+    expr p_sol{expr::functor{functors.id("p"), {&sol}}};
+
+    // original: a(X):-b(X), b(X):-c(X), c(X):-d(X), d(sol):-
+    original_db.push(rule{&a_v0, {&b_v0}, 1});
+    original_db.push(rule{&b_v0, {&c_v0}, 1});
+    original_db.push(rule{&c_v0, {&d_v0}, 1});
+    original_db.push(rule{&d_sol, {}, 0});
+
+    // expanded: same copies + subject p(X) :- a(X)
+    expanded_db.push(rule{&a_v0, {&b_v0}, 1});
+    expanded_db.push(rule{&b_v0, {&c_v0}, 1});
+    expanded_db.push(rule{&c_v0, {&d_v0}, 1});
+    expanded_db.push(rule{&d_sol, {}, 0});
+    const rule_id id0 = expanded_db.push(rule{&p_var0, {&a_v0}, 1});
+
+    // Round 1: p(X):-a(X)  →  p(V0):-b(V0)
+    const std::vector<rule_id> ids1 = manifest.unfold(id0, 0);
+    ASSERT_EQ(ids1.size(), 1u);
+    EXPECT_FALSE(expanded_db.lookup_all_rules().contains(id0));
+    {
+        const rule* r = expanded_db.get_rule(ids1[0]);
+        EXPECT_EQ(std::get<expr::functor>(r->body[0]->content).id, functors.id("b"));
+        EXPECT_EQ(r->var_count, 1u);
+        EXPECT_EQ(std::get<expr::functor>(r->head->content).id, functors.id("p"));
+    }
+
+    // Round 2: p(V0):-b(V0)  →  p(V0):-c(V0)
+    const std::vector<rule_id> ids2 = manifest.unfold(ids1[0], 0);
+    ASSERT_EQ(ids2.size(), 1u);
+    EXPECT_FALSE(expanded_db.lookup_all_rules().contains(ids1[0]));
+    {
+        const rule* r = expanded_db.get_rule(ids2[0]);
+        EXPECT_EQ(std::get<expr::functor>(r->body[0]->content).id, functors.id("c"));
+        EXPECT_EQ(r->var_count, 1u);
+    }
+
+    // Round 3: p(V0):-c(V0)  →  p(V0):-d(V0)
+    const std::vector<rule_id> ids3 = manifest.unfold(ids2[0], 0);
+    ASSERT_EQ(ids3.size(), 1u);
+    EXPECT_FALSE(expanded_db.lookup_all_rules().contains(ids2[0]));
+    {
+        const rule* r = expanded_db.get_rule(ids3[0]);
+        EXPECT_EQ(std::get<expr::functor>(r->body[0]->content).id, functors.id("d"));
+        EXPECT_EQ(r->var_count, 1u);
+    }
+
+    // Round 4: p(V0):-d(V0) unifies with d(sol):-  →  p(sol):-  (ground fact)
+    const std::vector<rule_id> ids4 = manifest.unfold(ids3[0], 0);
+    ASSERT_EQ(ids4.size(), 1u);
+    EXPECT_FALSE(expanded_db.lookup_all_rules().contains(ids3[0]));
+
+    const rule* final_rule = expanded_db.get_rule(ids4[0]);
+    EXPECT_TRUE(expr_eq(final_rule->head, &p_sol));
+    EXPECT_TRUE(final_rule->body.empty());
+    EXPECT_EQ(final_rule->var_count, 0u);
+}
+
+// ===========================================================================
+// P — Peano addition unfolded to ground facts for all pairs (N,M) in 0..10
+// ===========================================================================
+
+// ---------------------------------------------------------------------------
+// Original DB:
+//   add(zero, Y, Y) :-                            base case (var_count=1)
+//   add(suc(X), Y, suc(Z)) :- add(X, Y, Z)       inductive case (var_count=3)
+//
+// For each pair (N, M) we push a query rule  q(R) :- add(suc^N(zero), suc^M(zero), R)
+// and unfold it N+1 times:
+//   steps 0..N-1: inductive case peels one suc from the first arg
+//   step N:       base case fires, R resolves to suc^M(zero)
+//
+// Each unfold step produces exactly one child (the other candidate always
+// fails: base fails when first arg is suc(...); inductive fails when it is zero).
+// The final rule is a ground fact: q(suc^(N+M)(zero)) :-
+// ---------------------------------------------------------------------------
+
+TEST_F(RuleUnfolderManifestTest, PeanoAddition_AllPairsUpToTen_ProduceGroundFacts) {
+    const uint32_t zero_id = functors.id("zero");
+    const uint32_t suc_id  = functors.id("suc");
+    const uint32_t add_id  = functors.id("add");
+    const uint32_t q_id    = functors.id("q");
+
+    // Build suc^0(zero) through suc^20(zero) with stable addresses.
+    // suc_chain[k] = pointer to the expr for suc^k(zero).
+    // We need up to suc^20(zero) because max(N+M) = 10+10 = 20.
+    expr zero_e{expr::functor{zero_id, {}}};
+    std::vector<expr> suc_exprs;   // owns suc^1..suc^20; reserved so no reallocation
+    std::vector<const expr*> suc_chain; // suc_chain[k] = suc^k(zero)
+    suc_exprs.reserve(20);
+    suc_chain.reserve(21);
+    suc_chain.push_back(&zero_e);
+    for (int k = 0; k < 20; ++k) {
+        suc_exprs.push_back(expr{expr::functor{suc_id, {suc_chain.back()}}});
+        suc_chain.push_back(&suc_exprs.back());
+    }
+    // suc_chain[k] == suc^k(zero) for k = 0..20
+
+    // Original DB: add(zero, Y, Y) and add(suc(X), Y, suc(Z)) :- add(X, Y, Z)
+    expr add_zero_y_y{expr::functor{add_id, {suc_chain[0], &var0, &var0}}};
+    original_db.push(rule{&add_zero_y_y, {}, 1});
+
+    expr suc_var0_e{expr::functor{suc_id, {&var0}}};
+    expr suc_var2_e{expr::functor{suc_id, {&var2}}};
+    expr add_suc_x_y_suc_z{expr::functor{add_id, {&suc_var0_e, &var1, &suc_var2_e}}};
+    expr add_x_y_z{expr::functor{add_id, {&var0, &var1, &var2}}};
+    original_db.push(rule{&add_suc_x_y_suc_z, {&add_x_y_z}, 3});
+
+    // For each pair (N, M) in [0..10] x [0..10]:
+    //   push q(R) :- add(suc^N(zero), suc^M(zero), R)   and unfold N+1 times.
+    for (int n = 0; n <= 10; ++n) {
+        for (int m = 0; m <= 10; ++m) {
+            // These local exprs are alive throughout all N+1 unfold calls;
+            // after the first unfold the rule is erased so subsequent unfolds
+            // work on pool-backed exprs, not these stack objects.
+            expr q_r{expr::functor{q_id, {&var0}}};
+            expr add_n_m_r{expr::functor{add_id, {suc_chain[n], suc_chain[m], &var0}}};
+            rule_id current = expanded_db.push(rule{&q_r, {&add_n_m_r}, 1});
+
+            for (int step = 0; step <= n; ++step) {
+                const std::vector<rule_id> next_ids = manifest.unfold(current, 0);
+                ASSERT_EQ(next_ids.size(), 1u)
+                    << "n=" << n << " m=" << m << " step=" << step;
+                EXPECT_FALSE(expanded_db.lookup_all_rules().contains(current))
+                    << "n=" << n << " m=" << m << " step=" << step;
+                current = next_ids[0];
+            }
+
+            // Verify: q(suc^(N+M)(zero)) :- is a ground fact
+            const rule* result = expanded_db.get_rule(current);
+            EXPECT_TRUE(result->body.empty())   << "n=" << n << " m=" << m;
+            EXPECT_EQ(result->var_count, 0u)    << "n=" << n << " m=" << m;
+            expr expected{expr::functor{q_id, {suc_chain[n + m]}}};
+            EXPECT_TRUE(expr_eq(result->head, &expected)) << "n=" << n << " m=" << m;
+        }
+    }
+}
+
+// ===========================================================================
+// Q — Full-tree refutation: every leaf has no candidates, expanded DB empties
+// ===========================================================================
+
+// ---------------------------------------------------------------------------
+// Original DB forms a binary tree of depth 2:
+//
+//        a
+//       / \
+//      b   c
+//     / \ / \
+//    d  e f  g
+//
+//   a :- b.   a :- c.
+//   b :- d.   b :- e.
+//   c :- f.   c :- g.
+//
+// d, e, f, g have NO rules in the original DB (dead ends).
+//
+// Expanded DB starts with a single subject: s :- a.
+//
+// Unfolding breadth-first:
+//   s:-a  → {s:-b, s:-c}          (2 children from a's two clauses)
+//   s:-b  → {s:-d, s:-e}          (2 children from b's two clauses)
+//   s:-c  → {s:-f, s:-g}          (2 children from c's two clauses)
+//   s:-d  → {}  (d: no candidates, rule erased)
+//   s:-e  → {}  (e: no candidates, rule erased)
+//   s:-f  → {}  (f: no candidates, rule erased)
+//   s:-g  → {}  (g: no candidates, rule erased)
+//
+// After all 7 unfolds the expanded DB contains zero rules.
+// ---------------------------------------------------------------------------
+
+TEST_F(RuleUnfolderManifestTest, TreeRefutation_AllLeafsMissing_ExpandedDbEmpties) {
+    expr s_atom{expr::functor{functors.id("s"), {}}};
+    expr d_atom{expr::functor{functors.id("d"), {}}};
+    expr e_atom{expr::functor{functors.id("e"), {}}};
+    expr f_atom_2{expr::functor{functors.id("f"), {}}};
+    expr g_atom{expr::functor{functors.id("g"), {}}};
+
+    // Build the tree of rules in original DB (leaves d,e,f,g have none)
+    original_db.push(rule{&a_atom, {&b_atom}, 0});
+    original_db.push(rule{&a_atom, {&c_atom}, 0});
+    original_db.push(rule{&b_atom, {&d_atom}, 0});
+    original_db.push(rule{&b_atom, {&e_atom}, 0});
+    original_db.push(rule{&c_atom, {&f_atom_2}, 0});
+    original_db.push(rule{&c_atom, {&g_atom}, 0});
+
+    // Expanded DB starts with only the root subject: s :- a
+    const rule_id root = expanded_db.push(rule{&s_atom, {&a_atom}, 0});
+
+    // Level 0 → 1: unfold s:-a  →  {s:-b, s:-c}
+    const std::vector<rule_id> level1 = manifest.unfold(root, 0);
+    ASSERT_EQ(level1.size(), 2u);
+    EXPECT_FALSE(expanded_db.lookup_all_rules().contains(root));
+
+    // Level 1 → 2: unfold each level-1 rule  →  {s:-d, s:-e, s:-f, s:-g}
+    std::vector<rule_id> level2;
+    for (const rule_id rid : level1) {
+        const std::vector<rule_id> children = manifest.unfold(rid, 0);
+        EXPECT_EQ(children.size(), 2u);
+        EXPECT_FALSE(expanded_db.lookup_all_rules().contains(rid));
+        level2.insert(level2.end(), children.begin(), children.end());
+    }
+    ASSERT_EQ(level2.size(), 4u);
+
+    // Level 2 (leaves): each has no candidates  →  erased, 0 children
+    for (const rule_id rid : level2) {
+        const std::vector<rule_id> children = manifest.unfold(rid, 0);
+        EXPECT_TRUE(children.empty());
+        EXPECT_FALSE(expanded_db.lookup_all_rules().contains(rid));
+    }
+
+    // Expanded DB must now contain zero rules
+    EXPECT_TRUE(collect(expanded_db.lookup_all_rules()).empty());
+}
