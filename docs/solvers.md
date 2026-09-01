@@ -41,6 +41,10 @@ f(l) = 1 + exp(-K * (l - J))
 
 **Variants:** `quell`, `quell-fc`, `dbuct-quell`, `dbuct-quell-fc`.
 
+## Phoenix
+
+Same ridge reward (`-decision_count`) as `ridge`. Dual **chooser**, not dual reward: UCB1 over ridge-backed values for goal-selection nodes, uniform random for rule-selection nodes (no UCB1). Rollout is uniform random for both kinds.
+
 ## Genius *(ridge + horizon)*
 
 Dual reward: horizon CGW at rule-scope nodes, ridge decision-count otherwise. See the genius manifests.

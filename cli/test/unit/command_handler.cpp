@@ -23,6 +23,7 @@
 #include "infrastructure/genius_fc_command_handler.hpp"
 #include "infrastructure/horizon_command_handler.hpp"
 #include "infrastructure/horizon_fc_command_handler.hpp"
+#include "infrastructure/phoenix_command_handler.hpp"
 #include "infrastructure/quell_command_handler.hpp"
 #include "infrastructure/quell_fc_command_handler.hpp"
 #include "infrastructure/ridge_fgt_command_handler.hpp"
@@ -37,7 +38,7 @@ using ::testing::Not;
 
 enum class cli_solver_kind {
     basic,
-    ridge, ridge_fgt, ridge_bt, ridge_bt_fgt, ridge_fc,
+    ridge, ridge_fgt, ridge_bt, ridge_bt_fgt, ridge_fc, phoenix,
     dbuct_ridge, dbuct_ridge_bt, dbuct_ridge_fc, dbuct_ridge_fgt,
     horizon, horizon_fc, dbuct_horizon, dbuct_horizon_fc,
     quell, quell_fc, dbuct_quell, dbuct_quell_fc,
@@ -61,6 +62,7 @@ INSTANTIATE_TEST_SUITE_P(
     ::testing::Values(cli_solver_kind::basic,
                       cli_solver_kind::ridge, cli_solver_kind::ridge_fgt,
                       cli_solver_kind::ridge_bt, cli_solver_kind::ridge_bt_fgt, cli_solver_kind::ridge_fc,
+                      cli_solver_kind::phoenix,
                       cli_solver_kind::dbuct_ridge, cli_solver_kind::dbuct_ridge_bt, cli_solver_kind::dbuct_ridge_fc,
                       cli_solver_kind::dbuct_ridge_fgt,
                       cli_solver_kind::horizon, cli_solver_kind::horizon_fc,
@@ -77,6 +79,7 @@ INSTANTIATE_TEST_SUITE_P(
             case cli_solver_kind::ridge_bt:           return "ridge_bt";
             case cli_solver_kind::ridge_bt_fgt:       return "ridge_bt_fgt";
             case cli_solver_kind::ridge_fc:           return "ridge_fc";
+            case cli_solver_kind::phoenix:            return "phoenix";
             case cli_solver_kind::dbuct_ridge:        return "dbuct_ridge";
             case cli_solver_kind::dbuct_ridge_bt:     return "dbuct_ridge_bt";
             case cli_solver_kind::dbuct_ridge_fc:     return "dbuct_ridge_fc";
@@ -166,6 +169,11 @@ void construct_handler(const std::string& file, const std::string& goal, size_t 
             break;
         case cli_solver_kind::ridge_fc:
             ridge_fc_command_handler(
+                file, goal, max_res, CommandHandlerParamTest::kSeed,
+                CommandHandlerParamTest::kExplorationConstant);
+            break;
+        case cli_solver_kind::phoenix:
+            phoenix_command_handler(
                 file, goal, max_res, CommandHandlerParamTest::kSeed,
                 CommandHandlerParamTest::kExplorationConstant);
             break;
@@ -310,6 +318,11 @@ std::string run_handler_capture(
             break;
         case cli_solver_kind::ridge_fc:
             ridge_fc_command_handler(
+                file, goal, max_resolutions, CommandHandlerParamTest::kSeed,
+                CommandHandlerParamTest::kExplorationConstant)();
+            break;
+        case cli_solver_kind::phoenix:
+            phoenix_command_handler(
                 file, goal, max_resolutions, CommandHandlerParamTest::kSeed,
                 CommandHandlerParamTest::kExplorationConstant)();
             break;

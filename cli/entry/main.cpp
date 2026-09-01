@@ -18,6 +18,7 @@
 #include "infrastructure/quell_fc_command_handler.hpp"
 #include "infrastructure/ridge_fgt_command_handler.hpp"
 #include "infrastructure/ridge_command_handler.hpp"
+#include "infrastructure/phoenix_command_handler.hpp"
 #include "infrastructure/ridge_bt_command_handler.hpp"
 #include "infrastructure/ridge_bt_fgt_command_handler.hpp"
 #include "infrastructure/ridge_fc_command_handler.hpp"
@@ -76,6 +77,34 @@ int main(int argc, char** argv) {
                                 ridge_opts.max_resolutions, ridge_opts.seed,
                                 ridge_opts.exploration_constant,
                                 ridge_opts.sim_progress_interval);
+        h();
+    });
+
+    struct {
+        std::string file;
+        std::string goals_str;
+        size_t max_resolutions       = 1000;
+        uint32_t seed                = 0;
+        double exploration_constant  = 15;
+        size_t sim_progress_interval = 1000;
+    } phoenix_opts;
+
+    auto* phoenix_sub = app.add_subcommand(
+        "phoenix",
+        "Run the phoenix solver (ridge reward + UCB1 goal choices, uniform random rule choices)");
+    phoenix_sub->add_option("file", phoenix_opts.file, "CHC input file")->required();
+    phoenix_sub->add_option("-g,--goal", phoenix_opts.goals_str, "Goal body string, e.g. \"p(X), q(X)\"")->required();
+    phoenix_sub->add_option("--max-resolutions", phoenix_opts.max_resolutions, "Max resolutions");
+    phoenix_sub->add_option("--seed", phoenix_opts.seed, "RNG seed");
+    phoenix_sub->add_option("--exploration-constant", phoenix_opts.exploration_constant,
+                          "MCTS exploration constant for goal selection");
+    phoenix_sub->add_option("--sim-progress-interval", phoenix_opts.sim_progress_interval,
+                          "Print sim progress every N sims (0 disables)");
+    phoenix_sub->callback([&]() {
+        phoenix_command_handler h(phoenix_opts.file, phoenix_opts.goals_str,
+                                  phoenix_opts.max_resolutions, phoenix_opts.seed,
+                                  phoenix_opts.exploration_constant,
+                                  phoenix_opts.sim_progress_interval);
         h();
     });
 
