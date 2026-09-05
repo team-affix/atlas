@@ -24,6 +24,8 @@
 #include "infrastructure/db.hpp"
 #include "infrastructure/expr_pool.hpp"
 #include "infrastructure/expr_printer.hpp"
+#include "infrastructure/named_functor_printer.hpp"
+#include "infrastructure/named_var_printer.hpp"
 #include "infrastructure/initial_goal_exprs.hpp"
 #include "infrastructure/normalizer.hpp"
 #include "infrastructure/var_names.hpp"
@@ -41,7 +43,7 @@ namespace {
 // ---------------------------------------------------------------------------
 
 using solution = std::vector<const expr*>;
-using ep_t = expr_printer<var_names, functor_names>;
+using ep_t = expr_printer<named_var_printer<var_names>, named_functor_printer<functor_names>>;
 
 void print_solution(
     size_t solution_index,
@@ -184,10 +186,12 @@ void next_branch_until_refuted(
 // ---------------------------------------------------------------------------
 
 struct expr_printer_context {
+    named_var_printer<var_names> print_var;
+    named_functor_printer<functor_names> print_functor;
     ep_t printer;
 
     explicit expr_printer_context(var_names& vn, functor_names& fn)
-        : printer(std::cout, vn, fn) {}
+        : print_var(vn), print_functor(fn), printer(std::cout, print_var, print_functor) {}
 };
 
 struct BasicManifestIntegrationTest : public ::testing::Test {

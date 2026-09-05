@@ -21,6 +21,14 @@ Atlas reads Horn clause databases from `.chc` files. The format is closely model
 atlas horizon arithmetic/db.chc --goal "even(X), lt(X, suc(suc(suc(suc(suc(suc(zero)))))))"
 ```
 
+Unfold one derivation-DB rule against a basis DB. Default output is the original rule, a `---` separator, then each unfolded rule. `--print-db` prints the mutated derivation DB. `--overwrite` writes that DB back to the derivation file (after the file has been fully read, so it is safe in-place):
+
+```
+atlas unfold BASIS DERIVATION RULE_ID SUBGOAL_ID
+atlas unfold BASIS DERIVATION RULE_ID SUBGOAL_ID --print-db
+atlas unfold BASIS DERIVATION RULE_ID SUBGOAL_ID --overwrite
+```
+
 **Example domains covered by the bundled examples:** family trees, Peano arithmetic, list membership, graph reachability, binary trees, Boolean SAT, and expression synthesis.
 
 ## Solvers

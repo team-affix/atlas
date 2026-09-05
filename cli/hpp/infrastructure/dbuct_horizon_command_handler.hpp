@@ -9,6 +9,8 @@
 #include "infrastructure/db.hpp"
 #include "infrastructure/expr_pool.hpp"
 #include "infrastructure/expr_printer.hpp"
+#include "infrastructure/named_var_printer.hpp"
+#include "infrastructure/named_functor_printer.hpp"
 #include "infrastructure/initial_goal_exprs.hpp"
 #include "infrastructure/non_backtracking_var_sequencer.hpp"
 #include "infrastructure/dbuct_horizon_runtime.hpp"
@@ -29,7 +31,7 @@
 // up a dbuct_horizon_runtime (camping DBUCT + horizon reward), and drives the shared
 // solve loop that prints solutions and progress.
 struct dbuct_horizon_command_handler {
-    using printer_t = expr_printer<var_names, functor_names>;
+    using printer_t = expr_printer<named_var_printer<var_names>, named_functor_printer<functor_names>>;
     using SolveTimer     = solve_timer<steady_now>;
     using PrintBindings  = print_bindings<dbuct_horizon_runtime, printer_t>;
     using BasePP         = print_progress<dbuct_horizon_runtime, SolveTimer>;
@@ -51,7 +53,9 @@ struct dbuct_horizon_command_handler {
 
 private:
     var_names var_names_;
+    named_var_printer<var_names> print_var_;
     functor_names functor_names_;
+    named_functor_printer<functor_names> print_functor_;
     non_backtracking_var_sequencer parse_var_seq_{0};
     std::map<std::string, uint32_t> functor_map_;
     uint32_t next_functor_id_ = k_first_user_functor_id;

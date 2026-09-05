@@ -7,33 +7,31 @@
 #include "infrastructure/functor_names.hpp"
 #include "value_objects/expr.hpp"
 
-template<typename IVarNames, typename IFunctorNames>
+template<typename IPrintVar, typename IPrintFunctor>
 struct expr_printer {
-    expr_printer(std::ostream& os, IVarNames& vn, IFunctorNames& fn);
+    expr_printer(std::ostream& os, IPrintVar& print_var, IPrintFunctor& print_functor);
     void print(const expr*) const;
 private:
     std::ostream& os_;
-    IVarNames& var_names_;
-    IFunctorNames& functor_names_;
+    IPrintVar& print_var_;
+    IPrintFunctor& print_functor_;
 };
 
-template<typename IVarNames, typename IFunctorNames>
-expr_printer<IVarNames, IFunctorNames>::expr_printer(
-    std::ostream& os, IVarNames& vn, IFunctorNames& fn)
-    : os_(os), var_names_(vn), functor_names_(fn) {}
+template<typename IPrintVar, typename IPrintFunctor>
+expr_printer<IPrintVar, IPrintFunctor>::expr_printer(
+    std::ostream& os, IPrintVar& print_var, IPrintFunctor& print_functor)
+    : os_(os), print_var_(print_var), print_functor_(print_functor) {}
 
-template<typename IVarNames, typename IFunctorNames>
-void expr_printer<IVarNames, IFunctorNames>::print(const expr* e) const {
+template<typename IPrintVar, typename IPrintFunctor>
+void expr_printer<IPrintVar, IPrintFunctor>::print(const expr* e) const {
     if (const expr::var* v = std::get_if<expr::var>(&e->content)) {
-        if (var_names_.is_named(v->index)) os_ << var_names_.name(v->index);
-        else os_ << "?" << v->index;
+        print_var_.print(os_, v->index);
         return;
     }
     if (const expr::functor* f = std::get_if<expr::functor>(&e->content)) {
         if (f->args.empty()) {
             if (f->id == k_nil_functor_id) os_ << "[]";
-            else if (functor_names_.is_named(f->id)) os_ << functor_names_.name(f->id);
-            else os_ << "!" << f->id;
+            else print_functor_.print(os_, f->id);
             return;
         }
         if (f->id == k_cons_functor_id && f->args.size() == 2) {
@@ -49,8 +47,7 @@ void expr_printer<IVarNames, IFunctorNames>::print(const expr* e) const {
             }
             return;
         }
-        if (functor_names_.is_named(f->id)) os_ << functor_names_.name(f->id);
-        else os_ << "!" << f->id;
+        print_functor_.print(os_, f->id);
         os_ << "(";
         for (size_t i = 0; i < f->args.size(); ++i) {
             if (i > 0) os_ << ", ";

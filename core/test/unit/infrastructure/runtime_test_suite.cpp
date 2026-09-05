@@ -34,6 +34,8 @@
 #include "infrastructure/dbuct_ridge_fgt_runtime.hpp"
 #include "infrastructure/expr_pool.hpp"
 #include "infrastructure/expr_printer.hpp"
+#include "infrastructure/named_functor_printer.hpp"
+#include "infrastructure/named_var_printer.hpp"
 #include "infrastructure/genius_runtime.hpp"
 #include "infrastructure/genius_fc_runtime.hpp"
 #include "infrastructure/initial_goal_exprs.hpp"
@@ -387,7 +389,7 @@ namespace {
 
 using solution = std::vector<const expr*>;
 
-using ep_t = expr_printer<var_names, functor_names>;
+using ep_t = expr_printer<named_var_printer<var_names>, named_functor_printer<functor_names>>;
 
 void print_solution(
     size_t solution_index, ep_t& printer, const solution& s) {
@@ -497,8 +499,10 @@ struct RuntimeTestBase {
     initial_goal_exprs initial_goals;
 
     var_names saved_var_names_;
+    named_var_printer<var_names> saved_print_var_{saved_var_names_};
     functor_names saved_functor_names_;
-    ep_t saved_printer_{std::cout, saved_var_names_, saved_functor_names_};
+    named_functor_printer<functor_names> saved_print_functor_{saved_functor_names_};
+    ep_t saved_printer_{std::cout, saved_print_var_, saved_print_functor_};
     expr_pool saved_expr_pool_;
 };
 

@@ -25,6 +25,7 @@
 #include "infrastructure/ridge_bt_command_handler.hpp"
 #include "infrastructure/ridge_bt_fgt_command_handler.hpp"
 #include "infrastructure/ridge_fc_command_handler.hpp"
+#include "infrastructure/unfold_command_handler.hpp"
 
 #ifndef ATLAS_GIT_TAG
 #define ATLAS_GIT_TAG "unknown"
@@ -35,6 +36,38 @@ int main(int argc, char** argv) {
     app.name("atlas");
     app.set_version_flag("-v,--version", ATLAS_GIT_TAG);
     app.require_subcommand(1);
+
+    struct {
+        std::string basis;
+        std::string derivation;
+        size_t rule_id    = 0;
+        size_t subgoal_id = 0;
+        bool print_db     = false;
+        bool overwrite    = false;
+    } unfold_opts;
+
+    auto* unfold_sub = app.add_subcommand(
+        "unfold",
+        "Unfold one derivation-DB rule at a body index against the basis DB");
+    unfold_sub->add_option("basis", unfold_opts.basis, "Basis CHC file")->required();
+    unfold_sub->add_option("derivation", unfold_opts.derivation, "Derivation CHC file")->required();
+    unfold_sub->add_option("rule-id", unfold_opts.rule_id,
+                          "Rule id in the derivation DB (0-based file order)")->required();
+    unfold_sub->add_option("subgoal-id", unfold_opts.subgoal_id,
+                          "Body index in that rule")->required();
+    auto* print_db_flag = unfold_sub->add_flag(
+        "--print-db", unfold_opts.print_db,
+        "Print the entire mutated derivation DB instead of the original/unfolded rules");
+    auto* overwrite_flag = unfold_sub->add_flag(
+        "--overwrite", unfold_opts.overwrite,
+        "Write the mutated derivation DB back to the derivation file (no console output)");
+    print_db_flag->excludes(overwrite_flag);
+    unfold_sub->callback([&]() {
+        unfold_command_handler h(unfold_opts.basis, unfold_opts.derivation,
+                                 unfold_opts.rule_id, unfold_opts.subgoal_id,
+                                 unfold_opts.print_db, unfold_opts.overwrite);
+        h();
+    });
 
     struct {
         std::string file;

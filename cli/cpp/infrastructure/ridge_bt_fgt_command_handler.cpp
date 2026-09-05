@@ -11,7 +11,9 @@ ridge_bt_fgt_command_handler::ridge_bt_fgt_command_handler(
     double exploration_constant,
     size_t sim_progress_interval,
     size_t max_clauses)
-    : parse_var_seq_(0),
+    : print_var_(var_names_),
+      print_functor_(functor_names_),
+      parse_var_seq_(0),
       next_functor_id_(k_first_user_functor_id),
       solve_timer_(clock_),
       print_progress_(solve_timer_),
@@ -19,7 +21,7 @@ ridge_bt_fgt_command_handler::ridge_bt_fgt_command_handler(
       solve_loop_(print_bindings_, print_progress_, pause_poller_, print_progress_,
                   solve_timer_, solve_timer_, sim_progress_interval) {
     parse_pool_.emplace();
-    printer_.emplace(std::cout, var_names_, functor_names_);
+    printer_.emplace(std::cout, print_var_, print_functor_);
 
     import_database_from_file(
         file, *parse_pool_, *parse_pool_, database_, functor_map_, next_functor_id_);
