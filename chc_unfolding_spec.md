@@ -29,12 +29,14 @@ A node carries:
 
 | Field | Meaning |
 |-------|---------|
-| `body` | The full accumulated body of the rule at this node — for a root node, the axiom's original body; for a non-root node, the fully resolved body computed at creation time |
-| `status` | `fresh`, `suspended(goal_idx)`, `starved(goal_idx)`, or `exhausted` (see §3) |
+| `goal_idx` | The body-goal index committed to for unfolding; null if `fresh`, set once on first unfold and never changed thereafter |
+| `status` | `fresh`, `suspended`, `starved`, or `exhausted` (see §3) |
 | `outgoing_edges` | The list of edges to children |
 | `wait_set` | The set of suspended rules this node is waiting on (see §3); may be non-empty in both `suspended` and `starved` states |
 
-All nodes are the same type. There are no special root-node fields on the node itself.
+All nodes are the same type. There are no special root-node fields on the node itself. Nodes carry no `body` field — the full body is reconstructed by walking the path (see Path Reconstruction).
+
+`goal_idx` is a node-level field rather than part of the status, since it is set once and shared across all status transitions that follow. It is needed for path reconstruction even after the node becomes `exhausted`.
 
 A node with no outgoing edges is a **leaf**. This is an implicit property — there is no maintained leaf set. A node is a leaf simply because `outgoing_edges` is empty.
 
@@ -44,35 +46,38 @@ An edge carries the transformation from a parent node to its child node:
 
 | Field | Meaning |
 |-------|---------|
-| `bindings` | The substitution θ from unifying `parent.body[goal_idx]` with `nc`'s effective head |
+| `bindings` | The substitution θ from unifying `parent.body[parent.goal_idx]` with `nc`'s effective head |
+| `body_goal_additions` | θ applied to `nc`'s effective body — the goals that replace `parent.body[parent.goal_idx]` in the child's body |
 | `child` | The child node contained within this edge |
 
-`goal_idx` is not carried on the edge. All outgoing edges from a given parent share the same `goal_idx` (the body-goal is committed once and never changes), so the edge is the wrong place for it. It lives in the parent's `suspended` or `starved` status for as long as it is needed for unfolding decisions.
+`goal_idx` is not on the edge. All outgoing edges from a given parent share the same `goal_idx` (committed once on the parent node and never changed), so the edge is the wrong place for it. Ancestor goals are never copied onto descendant nodes or edges — they are implicit and reconstructed by walking the path.
 
 An edge owns and contains its child node. A node's children are reached through its outgoing edges, receiving both the transformation data and the child node as one unit.
 
 ### Path Reconstruction
 
-The **effective head** of any node `n` is recovered by walking the path of edges from the root down to `n` and composing bindings:
+Both the effective head and full body of any node `n` are recovered by walking the path from the root down to `n`.
 
-- Start with `root.head`; at each edge on the path, apply `edge.bindings`
+**Effective head**: start with `root.head`; at each edge, apply `edge.bindings`.
+
+**Full body**: start with `root.body`; at each edge, apply `edge.bindings` to the current body, remove the goal at `parent.goal_idx`, and insert `edge.body_goal_additions` in its place.
+
+`parent.goal_idx` is always available at each step because `goal_idx` is a node-level field set on commitment and retained through all subsequent status transitions including `exhausted`.
 
 This walk costs roughly the same as unification would, since each edge typically binds at least one variable.
-
-The **full body** of any node `n` is stored directly on `n` — it is materialized at the time the node is created (see §6 Step 4). No path walk is needed to recover it. The head uses the delta/compose approach; the body does not.
 
 ---
 
 ## 3. Node Status
 
-| Status | Outgoing edges | Additional state | Meaning |
-|--------|---------------|-----------------|---------|
-| `fresh` | 0 | — | Leaf; no unfolding decision made; all body-goal candidate sets are live and receiving updates |
-| `suspended` | ≥ 1 | `goal_idx` | Unfolding in progress; candidate set `C(r, goal_idx)` is severed and non-empty; outgoing edges represent already-consumed candidates; wait set may also be non-empty |
-| `starved` | ≥ 0 | `goal_idx` | Candidate set is empty but wait set is non-empty; no candidates to consume right now; transitions back to `suspended` when a dependency link delivers a new candidate |
-| `exhausted` | ≥ 0 | — | Candidate set empty and wait set empty; permanently done as a subject of unfolding |
+| Status | Outgoing edges | Meaning |
+|--------|---------------|---------|
+| `fresh` | 0 | Leaf; no unfolding decision made; all body-goal candidate sets are live and receiving updates |
+| `suspended` | ≥ 1 | Unfolding in progress; candidate set `C(r, goal_idx)` is severed and non-empty; outgoing edges represent already-consumed candidates; wait set may also be non-empty |
+| `starved` | ≥ 0 | Candidate set is empty but wait set is non-empty; no candidates to consume right now; transitions back to `suspended` when a dependency link delivers a new candidate |
+| `exhausted` | ≥ 0 | Candidate set empty and wait set empty; permanently done as a subject of unfolding |
 
-`starved` is the conjunction of: no candidates currently available AND at least one wait set entry. A `suspended` rule can have a non-empty wait set simultaneously with a non-empty candidate set — it is only `starved` once the candidate set empties while wait entries remain.
+`goal_idx` is a node-level field (not part of the status), set once at the `fresh → suspended` transition and unchanged thereafter. `starved` is the conjunction of: no candidates currently available AND at least one wait set entry. A `suspended` rule can have a non-empty wait set simultaneously with a non-empty candidate set — it is only `starved` once the candidate set empties while wait entries remain.
 
 **Facts** (rules with no body goals) are `exhausted` immediately on load — there is no body-goal to commit to and no candidates can ever exist. They are permanent leaves and valid targets.
 
@@ -161,9 +166,10 @@ This **always succeeds**. The candidacy check found a unifying leaf in `nc`'s su
 Create a new edge `e'` and child node `n'`:
 
 ```
-e'.bindings  = θ
+e'.bindings             = θ
+e'.body_goal_additions  = θ( nc.effective_body )
 
-n'.body      = θ( r.body[0..g-1] )  ++  θ( nc.body )  ++  θ( r.body[g+1..] )
+n'.goal_idx  = null
 n'.status    = fresh
 
 e'.child     = n'
@@ -171,7 +177,7 @@ e'.child     = n'
 
 Append `e'` to `r.outgoing_edges`.
 
-`g` comes from `r`'s `suspended` status. `r.body` and `nc.body` are read directly from the nodes (fully materialized). The full body is computed once and stored on `n'`; no reconstruction walk is needed later.
+`g = r.goal_idx`. `nc.effective_body` is obtained by path reconstruction on `nc` (walk from nc's root, applying bindings and splicing additions). The ancestor body goals of `r` are never copied — they remain implicit and are recovered by path reconstruction when needed.
 
 The effective head of `n'` (recovered by composing bindings from root to `n'`):
 
