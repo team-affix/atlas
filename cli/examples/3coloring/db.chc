@@ -26,5 +26,13 @@ eq(X,X).
 %   atlas horizon 3coloring/db.chc --goal "color(CA), color(CB), color(CC), neq(CA, CB), neq(CB, CC)"
 % Expected solutions: 12 (each endpoint has 3 choices, middle is constrained by both).
 %
-% Larger example — 144-node Origami Sonobe graph (288 edges):
-%   atlas horizon 3coloring/db.chc --goal "$(cat 3coloring/sonobe144.goal)"
+% Origami Sonobe graphs (from YMONGUCHI/Origami-Sonobe-Graph-Coloring):
+%    3-node   ( 3 edges):  atlas horizon 3coloring/db.chc --goal "$(cat 3coloring/sonobe3.goal)"
+%   12-node  (24 edges):  atlas horizon 3coloring/db.chc --goal "$(cat 3coloring/sonobe12.goal)"
+%   30-node  (60 edges):  atlas horizon 3coloring/db.chc --goal "$(cat 3coloring/sonobe30.goal)"
+%   36-node  (72 edges):  atlas horizon 3coloring/db.chc --goal "$(cat 3coloring/sonobe36.goal)"
+%   48-node  (96 edges):  atlas horizon 3coloring/db.chc --goal "$(cat 3coloring/sonobe48.goal)"
+%   54-node (108 edges):  atlas horizon 3coloring/db.chc --goal "$(cat 3coloring/sonobe54.goal)"
+%   90-node (180 edges):  atlas horizon 3coloring/db.chc --goal "$(cat 3coloring/sonobe90.goal)"
+%  108-node (216 edges):  atlas horizon 3coloring/db.chc --goal "$(cat 3coloring/sonobe108.goal)"
+%  144-node (288 edges):  atlas horizon 3coloring/db.chc --goal "$(cat 3coloring/sonobe144.goal)"
