@@ -1,0 +1,30 @@
+% 3-Coloring
+%
+% Generic 3-coloring infrastructure. The color domain and distinctness
+% relation are defined here; graph topology is expressed directly in the
+% query goal as neq constraints on adjacent vertices.
+
+% === Colors ===
+color(r).
+color(g).
+color(b).
+
+% Pairs of distinct colors
+neq(r, g).  neq(g, r).
+neq(r, b).  neq(b, r).
+neq(g, b).  neq(b, g).
+
+edge(X, Y) :- neq(X, Y).
+
+eq(X,X).
+
+% Example: 3-color a triangle (vertices a, b, c — all mutually adjacent):
+%   atlas horizon 3coloring/db.chc --goal "color(CA), color(CB), color(CC), neq(CA, CB), neq(CB, CC), neq(CA, CC)"
+% Expected solutions: the 6 permutations of {r, g, b} across the three vertices.
+%
+% Example: 3-color a path a -- b -- c (only adjacent pairs constrained):
+%   atlas horizon 3coloring/db.chc --goal "color(CA), color(CB), color(CC), neq(CA, CB), neq(CB, CC)"
+% Expected solutions: 12 (each endpoint has 3 choices, middle is constrained by both).
+%
+% Larger example — 144-node Origami Sonobe graph (288 edges):
+%   atlas horizon 3coloring/db.chc --goal "$(cat 3coloring/sonobe144.goal)"
