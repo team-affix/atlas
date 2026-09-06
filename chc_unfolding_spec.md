@@ -104,7 +104,11 @@ When `r` commits to unfolding at `g`, `r.status.candidate_sets[g]` becomes `r.st
 
 As entries are consumed, root references may be **refined** — replaced by references to specific descendant nodes to track candidacy at finer granularity (see §6, Step 7). Candidate entries are therefore node references in general, not necessarily root references.
 
-**Leaf expansion propagation:** a candidate set entry is only valid while the referenced node is a leaf — leaves are the most-specialized points in a subtree and serve as the existence witnesses for candidacy. When a leaf node `n` gains its first child (because `n` itself becomes the subject of an unfold step), `n` is no longer a leaf and all candidate set entries pointing to it are stale. At that moment, every `(h, g_h)` in `n.candidate_existence_watchers` must have its `n` entry refined: `n` is removed and replaced by the new children of `n` that pass the candidacy check for `h.body[g_h]`. To support this, `pre_unfold` and `mid_unfold` both carry `candidate_existence_watchers` — the reverse index of which rules currently hold this node as a candidate entry. The set is populated when an entry is added to a candidate set. It is preserved through the `pre_unfold → mid_unfold` transition (Step 1 commits but creates no children yet, so the node is still a leaf) and fired and cleared in Step 4 when the first child appears. `post_unfold` nodes never gain children and therefore never need it.
+**Leaf expansion propagation:** a candidate set entry is only valid while the referenced node is a leaf — leaves are the most-specialized points in a subtree and serve as the existence witnesses for candidacy. When a leaf node `n` gains its first child (because `n` itself becomes the subject of an unfold step), `n` is no longer a leaf and all candidate set entries pointing to it are stale. At that moment, every `(h, g_h)` in `n.status.candidate_existence_watchers` must have its `n` entry refined: `n` is removed and replaced by the new children of `n` that pass the candidacy check for `h.body[g_h]`.
+
+**Refutation propagation:** a node `n` may be refuted — proved to never yield a valid derivation. When this happens, `n` is removed from the tree. Every `(h, g_h)` in `n.status.candidate_existence_watchers` must have `n` removed from `h`'s candidate set outright (no replacement). If that removal empties `h`'s candidate set while its wait set is also empty, `h` transitions to `post_unfold` (or the starved condition if the wait set is non-empty). Refutation also propagates upward through the tree: if all leaves in a node `p`'s subtree are refuted, `p` itself is transitively refuted.
+
+Both mechanisms use the same reverse index. `pre_unfold` and `mid_unfold` both carry `candidate_existence_watchers`. The set is populated when an entry is added to a candidate set. It is preserved through the `pre_unfold → mid_unfold` transition (Step 1 commits but creates no children yet, so the node is still a leaf) and fired and cleared in Step 4 when the first child appears, or immediately on refutation. `post_unfold` nodes never gain children and therefore do not need it.
 
 Whether consumption is implemented as direct erasure from `candidate_set` or as a "covered" label on entries is an open implementation choice. The semantics are the same either way.
 
@@ -254,3 +258,27 @@ This is an identity, not just a bound. Remainders are never materialized as new 
 | `nc` is `post_unfold` | Valid target; effective head and body intact via path reconstruction; unfolding proceeds normally |
 | `nc` is a fact (`added_body_goals` empty) | Valid target; `n'.added_body_goals` is empty; the child's effective body has one fewer goal than `r`'s |
 | All children of a node become covered | That node becomes transitively covered; its slot in any candidate set that referenced it is removed/refined |
+| A node is refuted | Removed from the tree; all `candidate_existence_watchers` entries notified and the node's slot removed from those candidate sets; if any rule's candidate set thereby empties, it transitions to `post_unfold` or the starved condition accordingly; refutation propagates upward if all leaves in a parent's subtree are refuted |
+
+---
+
+## 10. Architectural Boundary
+
+The iterative database is a **passive data structure**, not a reactive system. It does not loop, schedule, or call itself. All decisions (which rule to unfold, which body goal, which candidate) are supplied by an external caller.
+
+**Interface:** the database exposes a single mutating operation:
+
+```
+unfold(subject_rule_id, body_goal_idx, candidate_rule_id) → stream<observation>
+```
+
+**Observations** streamed out as side-effects of the operation include any forced states that arise as a result of the step — specifically:
+
+| Observation | Meaning |
+|-------------|---------|
+| `unit(rule_id, goal_idx)` | A `pre_unfold` rule now has exactly one candidate for `goal_idx` and an empty wait set — the next unfold at this goal is forced |
+| `null(rule_id, goal_idx)` | A `pre_unfold` rule now has zero candidates for `goal_idx` and an empty wait set — this rule is forced to refute at this goal |
+
+These conditions can arise at any point during the operation: at commit (Step 1), from leaf expansion (Step 4) updating other rules' candidate sets, from dependency links firing, or from refutation propagation. The database detects and reports them; it does not act on them.
+
+The **external system** — not specified here — consumes the observation stream and decides when and whether to enact the forced unfolds by issuing further calls. This separation keeps the database's scope strictly bounded to state maintenance and change detection.
