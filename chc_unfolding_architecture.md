@@ -37,19 +37,27 @@ All types are prefixed `pud_`.
 | `pud_node_id` | Opaque `uint32_t` identifying any node in the multitree (roots and derived nodes) |
 | `pud_root_id` | Lighter opaque ID addressing only axiom roots; separate type from `pud_node_id` since the ID logic and indexing for roots is distinct |
 | `pud_body_goal_idx` | Typed `uint32_t` alias for a body-goal position within a node's effective body |
+| `pud_goal_id` | Globally unique identifier for a `(introducing_node, position_in_added_body_goals)` pair — used to address per-goal candidacy binding tables and the goal-watch registry |
 | `pud_observation` | Variant: `unit(pud_node_id, pud_body_goal_idx)` or `null(pud_node_id, pud_body_goal_idx)` |
 | `pud_candidate_ref` | A `pud_node_id` used as an entry in a candidate set |
+| `query_index` | A globally unique `uint32_t` issued by the global query counter; identifies a variable scope. Never reused. See `pud-candidacy-checks.md` §3b |
+| `query_var` | `{ var_index: uint32_t, query_index }` — a specific variable within a specific scope; the key type for all `fp_bind_map` instances in PUD |
+| `query_expr` | `{ expr_skeleton: const expr*, query_index }` — a term interpreted within a scope; the value type for all `fp_bind_map` instances in PUD; replaces `framed_expr` |
 
 ---
 
 ## Root Index: `pud`
 
-A non-templated type that manages the axiom root layer of the multitree. Knows about roots by their own lighter `pud_root_id`, and maps each to its corresponding `pud_node_id` in the node store.
+A non-templated type that manages the single database tree. The tree has one fixed
+super-root (head = `var(0)`); axiom rules are its direct children. `pud` maps each
+axiom's lighter `pud_root_id` to its corresponding `pud_node_id` in the node store.
 
 **Public surface:**
-- `add_root(head, body) → pud_root_id` — registers an axiom root; allocates its node in `pud_node_store` and returns the root-level ID
-- `get_root(pud_root_id) → pud_node&` — returns the root node for a given root ID
-- `iterate_roots()` — iterates all `pud_root_id`s; the only bulk-iteration operation exposed
+- `add_root(head, body) → pud_root_id` — registers an axiom rule as a child of the super-root; allocates its node in `pud_node_store` with `added_unifications = { var(0) = head }`
+- `get_root(pud_root_id) → pud_node&` — returns the axiom node for a given root ID
+
+`iterate_roots()` is removed: the single-tree design requires no bulk root iteration.
+The candidacy traversal starts from the super-root and descends uniformly.
 
 ---
 
@@ -65,6 +73,34 @@ Because nodes are stored in a flat map by ID (stable on insert), injection by re
 
 ---
 
+## Fully Persistent Bind Map: `fp_bind_map`
+
+`fp_bind_map` is a generic, reusable type that is not specific to PUD. It lives at `core/hpp/infrastructure/fp_bind_map.hpp`.
+
+It implements tree-shaped binding environments with multiple simultaneously-active branches, using:
+- **Euler-tour interval labeling** (Dietz–Sleator order maintenance): each node is assigned `open` / `close` labels at creation time in O(1) amortized; `u` is an ancestor of `v` iff `open(u) < open(v) < close(u)`.
+- **Per-variable predecessor timelines**: when a variable `x` is bound to term `t` at node `n`, two events are recorded — value `t` at `open(n)` and the prior shadowed value at `close(n)`. A lookup for `x` at any node `v` is a single predecessor query for `open(v)` in `x`'s timeline.
+
+This gives O(1) amortized record, O(log log n) lookup (or O(log k) where `k` is the number of times that variable was bound), and O(1) space per binding — no quadratic blowup from storing full bind maps at every node.
+
+**Key / value types:** `query_var` as key, `query_expr` as value (see Value Objects above).
+
+**Public surface:** `record(open, close, query_var, query_expr)`, `query(open, query_var) → query_expr`
+
+---
+
+## Binding Tables in PUD
+
+PUD uses `fp_bind_map` in two roles:
+
+**Base bind map** — one instance, shared across the entire multitree. When node `n` is created, its `added_unifications` are solved in the context of its ancestors' bindings (queried from this map at `n`'s parent labels) and the resulting concrete variable bindings are recorded at `open(n)` / `close(n)`. Used for path reconstruction (effective head and body) and for the unfold operation itself — verifying that `r.body[g]` unifies with `nc`'s effective head.
+
+**Per-goal bind maps** — one `fp_bind_map` instance per tracked goal (keyed by `pud_goal_id`). Each stores only the additional bindings introduced when a candidacy check for that goal descends through a node, layered on top of the base map (goal-specific bindings shadow base bindings). Populated lazily — only when a candidacy check for the corresponding goal actually visits a node. Backtracking on failed candidacy branches requires no explicit undo: each branch's events are scoped to their Euler-tour interval and become invisible outside it.
+
+Allocation and lifecycle of per-goal maps is an open implementation question (pre-allocated map keyed by `pud_goal_id` vs. on-demand creation at first candidacy check).
+
+---
+
 ## Infrastructure Components
 
 Each component has exactly one job. Where possible, a single concrete object can satisfy multiple template slots.
@@ -73,7 +109,7 @@ Each component has exactly one job. Where possible, a single concrete object can
 
 ### `pud_path_walker`
 
-**Job:** given a `pud_node_id`, yields the sequence of nodes from the root ancestor down to the target (or from target up to root — direction TBD at implementation time). Provides the raw sequence of `(added_bindings, added_body_goals, unfold_body_goal_idx)` needed for path reconstruction.
+**Job:** given a `pud_node_id`, yields the sequence of nodes from the root ancestor down to the target (or from target up to root — direction TBD at implementation time). Provides the raw sequence of `(added_unifications, added_body_goals, unfold_body_goal_idx)` needed for path reconstruction.
 
 **Injects:** `IGetNode` (for parent traversal)
 
@@ -83,19 +119,19 @@ Each component has exactly one job. Where possible, a single concrete object can
 
 ### `pud_head_reconstructor`
 
-**Job:** computes the effective head of any node by starting with `var(0)` and composing `added_bindings` at each step down the path from root to target.
+**Job:** computes the effective head of any node by querying `var(0)` from the base binding table at the target node's Euler-tour labels (a single predecessor lookup returns the most recent binding of `var(0)` on the path root → target).
 
-**Injects:** `IWalkPath`
+**Injects:** `IQueryBaseBindMap`
 
-**Called by:** `pud_candidacy_checker`, `pud_resolver`
+**Called by:** `pud_resolver`
 
 ---
 
 ### `pud_body_reconstructor`
 
-**Job:** computes the effective body of any node by walking its path, starting from the root's `added_body_goals` and at each subsequent step applying `added_bindings`, removing the goal at `parent.unfold_body_goal_idx`, and splicing in `node.added_body_goals`.
+**Job:** computes the effective body of any node by walking its path, starting from the root's `added_body_goals` and at each subsequent step removing the goal at `parent.unfold_body_goal_idx`, splicing in `node.added_body_goals`, then resolving variables in the running goal list via the base binding table at that node's labels.
 
-**Injects:** `IWalkPath`
+**Injects:** `IWalkPath`, `IQueryBaseBindMap`
 
 **Called by:** `pud_resolver`
 
@@ -103,29 +139,61 @@ Each component has exactly one job. Where possible, a single concrete object can
 
 ### `pud_candidacy_checker`
 
-**Job:** answers "does any leaf in this node's subtree unify with goal `g`?" using the top-down, depth-first, early-pruning traversal described in §5 of the spec. Takes a `const node&` directly — no node lookup by ID is needed since the caller already has the node in hand and children are accessible directly from the node.
+**Job:** answers "does any leaf in this node's subtree unify with goal `g` (identified by `pud_goal_id`)?" using the top-down, depth-first, early-pruning traversal described in §5 of the spec. Takes a `const node&` directly.
 
-The traversal never reconstructs a full effective head. Instead it applies each node's `added_bindings` incrementally into a **backtrackable bind map** as it descends. If unification fails at any level, that branch is pruned and the bindings added at that level are undone via the trail before trying siblings. A leaf is found when the accumulated bindings are consistent with `g` all the way down to a node with no children.
+The traversal uses the **per-goal candidacy binding table** for `g`. At each node `n` visited, it checks whether `g`'s table already covers `n` (lazy propagation from a prior check). If not, it solves `n.added_unifications` in the combined context of the base binding table and `g`'s table at the parent's labels, records the new bindings in `g`'s table at `open(n)` / `close(n)`, then attempts unification with `g`. If unification fails, the subtree is pruned (descendants are strictly more specialized and cannot succeed). If it succeeds and `n` is a leaf, the check returns true. If it succeeds and `n` is internal, the traversal recurses into children.
 
-Applies the treat-as-leaf rule when the traversal reaches the subject node `r` itself: does not recurse into `r`'s children, treating `r` as the deepest point regardless of its actual status.
+Because the per-goal table is fully persistent, backtracking on failed branches requires no explicit undo — the table retains prior state through its predecessor timeline. Each branch's entries are scoped to their Euler-tour interval and become invisible outside of it.
 
-This deep traversal is **only used when choosing or validating `nc`** — it is never invoked during candidate set initialization, which uses a shallow root-head check instead.
+Applies the treat-as-leaf rule when the traversal reaches the subject node `r` itself: does not recurse into `r`'s children.
 
-**Injects:** `IUnify` (against the accumulated bind map state at each level), `IGlobalize`
+This deep traversal is **only used when choosing or validating `nc`** — never during candidate set initialization, which uses a shallow root-head check.
 
-**Owns:** a `dbuct_bind_map` (the existing backtrackable bind map). The traversal calls `push_frame()` before descending into a subtree and `pop_frame()` on backtrack, which undoes all bindings added during that branch.
+**Injects:** `IUnify`, `IQueryBaseBindMap`, `IExtendGoalBindMap`
 
 **Called by:** `pud_candidate_set_admitter` (for dependency-link candidates), `pud_existence_notifier` (to check the new child against watchers on leaf expansion)
 
 ---
 
-### `pud_candidate_set_initializer`
+### `pud_goal_watch_registry`
 
-**Job:** populates the `candidate_sets` of a newly created `pre_unfold` node `n'` (Step 4). Iterates all roots via `iterate_roots()`; for each root and each of `n'`'s body goals, performs a **shallow head unification check** — does the root's head unify with the body goal? If yes, the root reference is added to `n'.candidate_sets[g]` and the root is registered in `n'.status.candidate_existence_watchers`. No deep tree traversal is performed here; the root reference represents the whole tree as a source of candidates.
+**Job:** the global store of watch sets. Maintains a map from `pud_goal_id` to a
+fixed-capacity set of ≤2 `pud_node_id` witnesses. Is the single source of truth for
+whether a body-goal currently has 0, 1, or ≥2 known candidate witnesses in the whole DB.
 
-When a new axiom root is added at load time the same shallow check runs in reverse: for each existing `pre_unfold` node, each body goal is tested against the new root's head, and the root is admitted if it passes.
+**Public surface:**
+- `add_watch(pud_goal_id, pud_node_id)` — inserts a witness; errors if already at capacity 2
+- `remove_watch(pud_goal_id, pud_node_id)` — removes a witness; returns the new watch count
+- `watch_count(pud_goal_id) → uint8_t` — returns 0, 1, or 2
+- `delete_goal(pud_goal_id)` — removes the entire entry (called at commit time for other goals)
 
-**Injects:** `IIterateRoots`, `IUnify`, `IAdmitCandidate`
+**Does not** store per-rule information. Two rules with different `pud_goal_id`s have
+independent entries even if their goals are structurally identical.
+
+**Injects:** nothing (pure data store)
+
+**Called by:** `pud_watch_set_initializer`, `pud_existence_notifier`, `pud_unit_null_detector`, `pud_commit`
+
+---
+
+### `pud_watch_set_initializer`
+
+**Job:** populates the global watch set for each body-goal `g` of a newly created
+`pre_unfold` node `n'` (Step 4). For each body goal `g` of `n'`, allocates a fresh
+`pud_goal_id`, then performs a **depth-first candidacy traversal** of the database tree
+(excluding `n'`'s own subtree, by the treat-as-leaf rule), seeking at most 2 unifying
+leaves. Each found leaf witness `w` is registered in `pud_goal_watch_registry` under
+`g`'s `pud_goal_id`, and `g`'s `pud_goal_id` is added to `w.candidate_existence_watchers`.
+The traversal stops as soon as 2 witnesses are in hand. If fewer than 2 are found, the
+appropriate `unit` or `null` observation is emitted immediately.
+
+When a new axiom node is added at load time the same mechanism runs in the other
+direction: a rescan is triggered for every `pre_unfold` node whose watch set for any
+body goal is below 2, checking whether the new axiom node is a valid replacement witness.
+
+See `pud-candidacy-checks.md` §5 for the full specification.
+
+**Injects:** `IUnify`, `IGetNode`, `IUpdateWatchRegistry`, `IEmitObservation`
 
 **Called by:** `pud_unfolder` (after Step 4) and at load time (`add_root`)
 
@@ -133,18 +201,22 @@ When a new axiom root is added at load time the same shallow check runs in rever
 
 ### `pud_candidate_set_admitter`
 
-**Job:** given a candidate node and a `(rule, goal_idx)` pair, runs the candidacy check and — if passing — inserts the candidate reference into the rule's candidate set (either `pre_unfold.candidate_sets[g]` or `mid_unfold.candidate_set`) and registers the rule in the candidate node's `candidate_existence_watchers`.
+**Job:** given a candidate node and a `(rule, goal_idx)` pair, runs the candidacy check
+and — if passing — inserts the candidate reference into the rule's candidate set
+(`mid_unfold.candidate_set`) and registers the rule in the candidate node's
+`candidate_existence_watchers`. This component handles the `mid_unfold` case; watch-set
+admission for `pre_unfold` nodes is handled by `pud_watch_set_initializer`.
 
 **Injects:** `ICheckCandidacy`, `IGetNode`
 
-**Called by:** `pud_candidate_set_initializer`, `pud_wait_set_manager` (when a dependency link fires)
+**Called by:** `pud_wait_set_manager` (when a dependency link fires)
 
 ---
 
 ### `pud_existence_notifier`
 
 **Job:** fires `candidate_existence_watchers` in two cases:
-- **Leaf expansion (Step 4):** when node `r` gains its first child `n'`, for every `(h, g_h)` in `r.status.candidate_existence_watchers`, remove `r`'s entry from `h`'s candidate set and offer `n'` as a replacement via `pud_candidate_set_admitter`. Clear `r.status.candidate_existence_watchers`.
+- **Leaf expansion (Step 4):** when node `r` gains its first child `n'`, for every `pud_goal_id g` in `r.candidate_existence_watchers`, remove `r` from `g`'s watch set in the registry and scan `r`'s new subtree for a replacement witness. Clear `r.candidate_existence_watchers`.
 - **Refutation:** when a node is refuted, for every watcher, remove the entry outright. Clear the watchers.
 
 **Injects:** `IGetNode`, `IAdmitCandidate`, `IRemoveFromCandidateSet`
@@ -167,7 +239,7 @@ When a new axiom root is added at load time the same shallow check runs in rever
 
 ### `pud_commit`
 
-**Job:** transitions a `pre_unfold` node to `mid_unfold` at the chosen `goal_idx` (Step 1). Moves `candidate_sets[goal_idx]` into `candidate_set`; discards other per-goal sets; carries `candidate_existence_watchers` across. Detects and returns the post-commit condition: normal, null (candidate set and wait set both empty → immediately transition to `post_unfold`), or starved (candidate set empty, wait set non-empty).
+**Job:** transitions a `pre_unfold` node to `mid_unfold` at the chosen `goal_idx` (Step 1). Seeds `candidate_set` from `watches[goal_idx]` (≤2 witnesses); discards watch sets for other body goals; carries `candidate_existence_watchers` across. Detects and returns the post-commit condition: normal, null (candidate set and wait set both empty → immediately transition to `post_unfold`), or starved (candidate set empty, wait set non-empty).
 
 **Injects:** `IGetNode`, `ITransitionToPostUnfold`
 
@@ -177,9 +249,14 @@ When a new axiom root is added at load time the same shallow check runs in rever
 
 ### `pud_resolver`
 
-**Job:** executes Steps 2–4 of the atomic unfold: rename `nc`'s variables apart (fresh frame offset), unify `r`'s committed body goal with `nc`'s effective head (always succeeds), then create and return a new child node `n'` with the resulting `added_bindings` and `added_body_goals` (unifier applied to `nc`'s effective body). Inserts `n'` into `r.children` keyed by `nc`'s node ID.
+**Job:** executes Steps 2–4 of the atomic unfold: allocate a fresh `query_index` for `nc`'s variables (rename apart), unify `r`'s committed body goal with `nc`'s effective head (always succeeds — see spec §6 Step 3), then create a new child node `n'`:
+- `n'.added_unifications` = the unification equations from Step 3, expressed as `query_expr` pairs using `nc`'s fresh `query_index`
+- `n'.added_body_goals` = terms from `nc`'s effective body that replace `r.body[g]`
+- `n'.status` = `pre_unfold`; `n'.children` = `{}`
 
-**Injects:** `IGetNode`, `IReconstructHead`, `IReconstructBody`, `IGlobalize`, `IUnify`, `INormalizeExpr`, `IPushNode`
+Assigns Euler-tour labels `open(n')` / `close(n')`. Solves `n'.added_unifications` in the combined context of the base binding table and the per-goal bind map at `r`'s labels (accepting the candidate's accumulated binding environment), and records the concrete bindings in the base binding table at `n'`'s labels. Inserts `n'` into `r.children` keyed by `nc`'s node ID.
+
+**Injects:** `IGetNode`, `IReconstructHead`, `IReconstructBody`, `IAllocateQueryIndex`, `IUnify`, `INormalizeExpr`, `IPushNode`, `IAssignLabels`, `IExtendBaseBindMap`, `IQueryGoalBindMap`
 
 **Called by:** `pud_unfolder` (Step 4)
 
@@ -197,15 +274,21 @@ When a new axiom root is added at load time the same shallow check runs in rever
 
 ### `pud_unit_null_detector`
 
-**Job:** after any mutation that changes a `pre_unfold` or `mid_unfold` node's candidate set, inspects the affected candidate sets and emits a `pud_observation` if the condition is met:
-- `unit` — exactly 1 candidate, empty wait set, for any body goal of a `pre_unfold` node
-- `null` — 0 candidates, empty wait set, for any body goal of a `pre_unfold` node
+**Job:** after any mutation that changes a node's watch set (`pre_unfold`) or candidate
+set (`mid_unfold`), inspects the affected set and emits a `pud_observation` when:
+- `unit` — watch set size == 1 (exactly one witness known), for any body goal of a `pre_unfold` node
+- `null` — watch set size == 0 (no witnesses), for any body goal of a `pre_unfold` node
 
-This component is called at every point in the unfold operation where candidate sets are mutated (after Step 1, after Step 4's watcher notifications, after Step 4's dependency link firings, after Step 7's consumption/refinement, after Step 9 cascade).
+Also fires on `mid_unfold` candidate set transitions (0 or 1 entries with empty wait set).
+
+Called at every mutation point: after watch-set population (Step 4 / `add_root`), after
+watch invalidation rescans, after Step 1 commit, and after Step 9 cascade.
+
+See `pud-candidacy-checks.md` §8 for the full list of detection points.
 
 **Injects:** `IGetNode`, `IEmitObservation`
 
-**Called by:** `pud_unfolder` at each mutation point
+**Called by:** `pud_unfolder`, `pud_watch_set_initializer`, `pud_existence_notifier` at each mutation point
 
 ---
 
@@ -240,10 +323,10 @@ coroutine<pud_observation, void> unfold(pud_node_id subject_id,
 
 The composition root. Owns all component instances by value (following the existing manifest pattern). Wires them together via references. Exposes:
 - `unfold(subject_id, goal_idx, candidate_id)` — delegates to `pud_unfolder`
-- `add_root(head, body)` — delegates to `pud` + `pud_candidate_set_initializer`
+- `add_root(head, body)` — delegates to `pud` + `pud_watch_set_initializer`
 - `refute(node_id)` — delegates to `pud_refutation_handler`
 
-Constructed with any external collaborators it cannot own (e.g., `expr_pool`, `globalizer`) injected by reference.
+Constructed with any external collaborators it cannot own (e.g., `expr_pool`) injected by reference.
 
 ---
 
@@ -251,26 +334,26 @@ Constructed with any external collaborators it cannot own (e.g., `expr_pool`, `g
 
 ```
 pud_manifest
- ├─ pud                            (root index: add_root, get_root, iterate_roots)
+ ├─ pud                            (single-tree root index: add_root, get_root)
  ├─ pud_node_store                 (node storage: push_node, get_node)
- ├─ expr_pool / globalizer         (injected from outside; reused from existing infra)
+ ├─ expr_pool                       (injected from outside; reused from existing infra)
+ ├─ pud_query_counter              (global query_index allocator; owns the monotonic counter)
  ├─ pud_path_walker                (← pud_node_store)
  ├─ pud_head_reconstructor         (← pud_path_walker)
  ├─ pud_body_reconstructor         (← pud_path_walker)
- ├─ pud_candidacy_checker          (← unifier, globalizer; owns dbuct_bind_map)
+ ├─ pud_candidacy_checker          (← unifier, pud_query_counter; owns per-goal fp_bind_maps)
  ├─ pud_candidate_set_admitter     (← pud_candidacy_checker, pud_node_store)
- ├─ pud_candidate_set_initializer  (← pud[iterate_roots, get_root], pud_node_store,
- │                                      unifier, pud_candidate_set_admitter)
- ├─ pud_existence_notifier         (← pud_node_store, pud_candidate_set_admitter)
+ ├─ pud_goal_watch_registry          (watch sets keyed by pud_goal_id)
+ ├─ pud_watch_set_initializer      (← pud_node_store, unifier, pud_goal_watch_registry, pud_unit_null_detector)
  ├─ pud_wait_set_manager           (← pud_node_store, pud_path_walker, pud_candidate_set_admitter)
  ├─ pud_resolver                   (← pud_node_store, pud_head_reconstructor, pud_body_reconstructor,
- │                                      globalizer, unifier, normalizer, expr_pool)
+ │                                      pud_query_counter, unifier, normalizer, expr_pool)
  ├─ pud_commit                     (← pud_node_store, pud_post_unfold_propagator)
  ├─ pud_post_unfold_propagator     (← pud_node_store)
  ├─ pud_unit_null_detector         (← pud_node_store)
  ├─ pud_refutation_handler         (← pud_node_store, pud_existence_notifier, pud_unit_null_detector)
  └─ pud_unfolder                   (← pud_commit, pud_resolver, pud_wait_set_manager,
-                                        pud_existence_notifier, pud_candidate_set_initializer,
+                                        pud_existence_notifier, pud_watch_set_initializer,
                                         pud_post_unfold_propagator, pud_unit_null_detector)
 ```
 
@@ -280,5 +363,5 @@ pud_manifest
 
 - **Observation stream mechanism:** `coroutine<pud_observation, void>` fits the existing coroutine pattern; `pud_unit_null_detector` calls `co_yield` through an injected `IEmitObservation` slot that the coroutine frame provides.
 - **Candidate set backing:** whether each candidate set is a `std::unordered_set<pud_node_id>` or a "covered" label overlay is an implementation choice deferred to the concrete type.
-- **Frame offset management for rename-apart (Step 2):** the existing `globalizer` + frame offset convention can be reused directly; `pud_node_store` can track the next available frame base.
-- **`pud_node` internal representation:** whether the per-status fields (`candidate_sets`, `wait_set`, etc.) are stored as a `std::variant` or as a tagged union with direct fields is a concrete implementation decision.
+- **Global query counter:** a single program-wide monotonically-increasing `uint32_t` counter issues all `query_index` values — for new DB nodes at creation time, for candidacy query head-slot bindings, and for each DB node visited during a candidacy traversal (rename-apart, Step 2). The counter is owned by the manifest or a dedicated `pud_query_counter` component and injected via `IAllocateQueryIndex` wherever a fresh `query_index` is needed. It never resets.
+- **`pud_node` internal representation:** whether the per-status fields (`watches`, `wait_set`, etc.) are stored as a `std::variant` or as a tagged union with direct fields is a concrete implementation decision.
