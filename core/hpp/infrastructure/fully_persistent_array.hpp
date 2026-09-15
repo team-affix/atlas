@@ -1,5 +1,5 @@
-#ifndef FP_BIND_MAP_HPP
-#define FP_BIND_MAP_HPP
+#ifndef FULLY_PERSISTENT_ARRAY_HPP
+#define FULLY_PERSISTENT_ARRAY_HPP
 
 #include <map>
 #include <optional>
@@ -7,7 +7,8 @@
 #include "value_objects/om_label.hpp"
 #include "value_objects/framed_expr.hpp"
 
-// fp_bind_map: a fully persistent bind map for tree-shaped binding environments.
+// fully_persistent_array: a fully persistent array for tree-shaped version
+// histories, indexed by a uint32_t key and Om-tour position.
 //
 // Each call to record(open, close, var_id, value) writes two events into the
 // per-variable timeline:
@@ -21,8 +22,8 @@
 // om_label's operator< reads the current rank through a pointer, remaining
 // valid through order_maintenance relabeling.
 
-struct fp_bind_map {
-    fp_bind_map();
+struct fully_persistent_array {
+    fully_persistent_array();
     void record(om_label open, om_label close, uint32_t var_id, framed_expr value);
     std::optional<framed_expr> query(om_label open_label, uint32_t var_id) const;
 private:

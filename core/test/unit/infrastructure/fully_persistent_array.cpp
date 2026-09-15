@@ -1,7 +1,7 @@
 #include <gtest/gtest.h>
 #include <deque>
 #include <vector>
-#include "infrastructure/fp_bind_map.hpp"
+#include "infrastructure/fully_persistent_array.hpp"
 #include "infrastructure/order_maintenance.hpp"
 #include "value_objects/expr.hpp"
 #include "value_objects/framed_expr.hpp"
@@ -42,8 +42,8 @@ bool same_value(const std::optional<framed_expr>& result, const framed_expr& exp
 // Fixture
 // ---------------------------------------------------------------------------
 
-struct FpBindMapTest : public ::testing::Test {
-    FpBindMapTest()
+struct FullyPersistentArrayTest : public ::testing::Test {
+    FullyPersistentArrayTest()
         : root_(om_.allocate_root())
         , a_(om_.allocate_child_of(root_))
         , b_(om_.allocate_child_of(a_))
@@ -57,7 +57,7 @@ struct FpBindMapTest : public ::testing::Test {
         , val5_(make_framed(5)) {}
 
     order_maintenance om_;
-    fp_bind_map bm_;
+    fully_persistent_array bm_;
     om_interval root_;
     om_interval a_;
     om_interval b_;
@@ -81,11 +81,11 @@ struct FpBindMapTest : public ::testing::Test {
 // would fail if query() crashes or returns garbage on an empty map.
 // ---------------------------------------------------------------------------
 
-TEST_F(FpBindMapTest, EmptyMapReturnsNullopt) {
+TEST_F(FullyPersistentArrayTest, EmptyMapReturnsNullopt) {
     EXPECT_FALSE(bm_.query(root_.open, k_var_x).has_value());
 }
 
-TEST_F(FpBindMapTest, UnrecordedVarReturnsNullopt) {
+TEST_F(FullyPersistentArrayTest, UnrecordedVarReturnsNullopt) {
     bm_.record(root_.open, root_.close, k_var_x, val1_);
     EXPECT_FALSE(bm_.query(root_.open, k_var_y).has_value());
 }
@@ -95,22 +95,22 @@ TEST_F(FpBindMapTest, UnrecordedVarReturnsNullopt) {
 // Catch bug: query searches wrong direction (successor instead of predecessor).
 // ---------------------------------------------------------------------------
 
-TEST_F(FpBindMapTest, QueryAtRecordingNodeReturnsValue) {
+TEST_F(FullyPersistentArrayTest, QueryAtRecordingNodeReturnsValue) {
     bm_.record(root_.open, root_.close, k_var_x, val1_);
     EXPECT_TRUE(same_value(bm_.query(root_.open, k_var_x), val1_));
 }
 
-TEST_F(FpBindMapTest, ChildInheritsAncestorBinding) {
+TEST_F(FullyPersistentArrayTest, ChildInheritsAncestorBinding) {
     bm_.record(root_.open, root_.close, k_var_x, val1_);
     EXPECT_TRUE(same_value(bm_.query(a_.open, k_var_x), val1_));
 }
 
-TEST_F(FpBindMapTest, GrandchildInheritsGrandparentBinding) {
+TEST_F(FullyPersistentArrayTest, GrandchildInheritsGrandparentBinding) {
     bm_.record(root_.open, root_.close, k_var_x, val1_);
     EXPECT_TRUE(same_value(bm_.query(b_.open, k_var_x), val1_));
 }
 
-TEST_F(FpBindMapTest, StarTreeAllDescendantsInheritRoot) {
+TEST_F(FullyPersistentArrayTest, StarTreeAllDescendantsInheritRoot) {
     bm_.record(root_.open, root_.close, k_var_x, val1_);
     EXPECT_TRUE(same_value(bm_.query(a_.open, k_var_x), val1_));
     EXPECT_TRUE(same_value(bm_.query(b_.open, k_var_x), val1_));
@@ -124,19 +124,19 @@ TEST_F(FpBindMapTest, StarTreeAllDescendantsInheritRoot) {
 // locally, or close event is missing/wrong.
 // ---------------------------------------------------------------------------
 
-TEST_F(FpBindMapTest, ChildRebindingHidesParent) {
+TEST_F(FullyPersistentArrayTest, ChildRebindingHidesParent) {
     bm_.record(root_.open, root_.close, k_var_x, val1_);
     bm_.record(a_.open,    a_.close,    k_var_x, val2_);
     EXPECT_TRUE(same_value(bm_.query(a_.open, k_var_x), val2_));
 }
 
-TEST_F(FpBindMapTest, ParentUnaffectedByChildRebinding) {
+TEST_F(FullyPersistentArrayTest, ParentUnaffectedByChildRebinding) {
     bm_.record(root_.open, root_.close, k_var_x, val1_);
     bm_.record(a_.open,    a_.close,    k_var_x, val2_);
     EXPECT_TRUE(same_value(bm_.query(root_.open, k_var_x), val1_));
 }
 
-TEST_F(FpBindMapTest, SiblingAfterRebindingChildSeesParent) {
+TEST_F(FullyPersistentArrayTest, SiblingAfterRebindingChildSeesParent) {
     // C is a sibling of A.  Without the close event at A.close, the
     // predecessor of C.open would be A's binding, which is wrong.
     bm_.record(root_.open, root_.close, k_var_x, val1_);
@@ -144,7 +144,7 @@ TEST_F(FpBindMapTest, SiblingAfterRebindingChildSeesParent) {
     EXPECT_TRUE(same_value(bm_.query(c_.open, k_var_x), val1_));
 }
 
-TEST_F(FpBindMapTest, GrandchildRebindingChain) {
+TEST_F(FullyPersistentArrayTest, GrandchildRebindingChain) {
     bm_.record(root_.open, root_.close, k_var_x, val1_);
     bm_.record(a_.open,    a_.close,    k_var_x, val2_);
     bm_.record(b_.open,    b_.close,    k_var_x, val3_);
@@ -159,30 +159,30 @@ TEST_F(FpBindMapTest, GrandchildRebindingChain) {
 // should not see.
 // ---------------------------------------------------------------------------
 
-TEST_F(FpBindMapTest, LeftSubtreeBindingInvisibleToRightSibling) {
+TEST_F(FullyPersistentArrayTest, LeftSubtreeBindingInvisibleToRightSibling) {
     // Only A binds x; root never does. C should see nullopt.
     bm_.record(a_.open, a_.close, k_var_x, val2_);
     EXPECT_FALSE(bm_.query(c_.open, k_var_x).has_value());
 }
 
-TEST_F(FpBindMapTest, RightSubtreeBindingInvisibleToLeftSibling) {
+TEST_F(FullyPersistentArrayTest, RightSubtreeBindingInvisibleToLeftSibling) {
     bm_.record(c_.open, c_.close, k_var_x, val5_);
     EXPECT_FALSE(bm_.query(a_.open, k_var_x).has_value());
 }
 
-TEST_F(FpBindMapTest, DeepLeftSubtreeInvisibleToRightSibling) {
+TEST_F(FullyPersistentArrayTest, DeepLeftSubtreeInvisibleToRightSibling) {
     // B is deep inside A; C is A's sibling. C must not see B's binding.
     bm_.record(b_.open, b_.close, k_var_x, val3_);
     EXPECT_FALSE(bm_.query(c_.open, k_var_x).has_value());
 }
 
-TEST_F(FpBindMapTest, DeepRightSubtreeInvisibleToLeftSibling) {
+TEST_F(FullyPersistentArrayTest, DeepRightSubtreeInvisibleToLeftSibling) {
     // D is deep inside C; A is C's sibling. A must not see D's binding.
     bm_.record(d_.open, d_.close, k_var_x, val4_);
     EXPECT_FALSE(bm_.query(a_.open, k_var_x).has_value());
 }
 
-TEST_F(FpBindMapTest, DeepLeftSubtreeInvisibleToDeepRightSubtree) {
+TEST_F(FullyPersistentArrayTest, DeepLeftSubtreeInvisibleToDeepRightSubtree) {
     // B (in A's subtree) and D (in C's subtree) are in separate branches.
     bm_.record(b_.open, b_.close, k_var_x, val3_);
     EXPECT_FALSE(bm_.query(d_.open, k_var_x).has_value());
@@ -193,14 +193,14 @@ TEST_F(FpBindMapTest, DeepLeftSubtreeInvisibleToDeepRightSubtree) {
 // Catch bug: timelines for different variables interfere with each other.
 // ---------------------------------------------------------------------------
 
-TEST_F(FpBindMapTest, TwoVarsBoundAtSameNodeBothVisible) {
+TEST_F(FullyPersistentArrayTest, TwoVarsBoundAtSameNodeBothVisible) {
     bm_.record(root_.open, root_.close, k_var_x, val1_);
     bm_.record(root_.open, root_.close, k_var_y, val2_);
     EXPECT_TRUE(same_value(bm_.query(b_.open, k_var_x), val1_));
     EXPECT_TRUE(same_value(bm_.query(b_.open, k_var_y), val2_));
 }
 
-TEST_F(FpBindMapTest, IndependentVarsDontCrossContaminate) {
+TEST_F(FullyPersistentArrayTest, IndependentVarsDontCrossContaminate) {
     bm_.record(root_.open, root_.close, k_var_x, val1_);
     bm_.record(a_.open,    a_.close,    k_var_y, val2_);
     // B (inside A) sees both.
@@ -211,7 +211,7 @@ TEST_F(FpBindMapTest, IndependentVarsDontCrossContaminate) {
     EXPECT_FALSE(bm_.query(c_.open, k_var_y).has_value());
 }
 
-TEST_F(FpBindMapTest, RebindingOneVarLeavesOtherUntouched) {
+TEST_F(FullyPersistentArrayTest, RebindingOneVarLeavesOtherUntouched) {
     bm_.record(root_.open, root_.close, k_var_x, val1_);
     bm_.record(root_.open, root_.close, k_var_y, val2_);
     bm_.record(a_.open,    a_.close,    k_var_x, val3_);
@@ -228,14 +228,14 @@ TEST_F(FpBindMapTest, RebindingOneVarLeavesOtherUntouched) {
 // Catch bug: close event not recorded, or recorded with wrong prior value.
 // ---------------------------------------------------------------------------
 
-TEST_F(FpBindMapTest, CloseEventRestorationAfterSubtree) {
+TEST_F(FullyPersistentArrayTest, CloseEventRestorationAfterSubtree) {
     // After A's interval, C should see root's value, not A's.
     bm_.record(root_.open, root_.close, k_var_x, val1_);
     bm_.record(a_.open,    a_.close,    k_var_x, val2_);
     EXPECT_TRUE(same_value(bm_.query(c_.open, k_var_x), val1_));
 }
 
-TEST_F(FpBindMapTest, LinearChainEachLevelSeesOwnBinding) {
+TEST_F(FullyPersistentArrayTest, LinearChainEachLevelSeesOwnBinding) {
     bm_.record(root_.open, root_.close, k_var_x, val1_);
     bm_.record(a_.open,    a_.close,    k_var_x, val2_);
     bm_.record(b_.open,    b_.close,    k_var_x, val3_);
@@ -246,7 +246,7 @@ TEST_F(FpBindMapTest, LinearChainEachLevelSeesOwnBinding) {
     EXPECT_TRUE(same_value(bm_.query(c_.open, k_var_x), val1_));
 }
 
-TEST_F(FpBindMapTest, NestedRebindRestoresCorrectlyAtOuterSibling) {
+TEST_F(FullyPersistentArrayTest, NestedRebindRestoresCorrectlyAtOuterSibling) {
     // D is inside C; A is a sibling of C. A must not see C's or D's binding.
     bm_.record(root_.open, root_.close, k_var_x, val1_);
     bm_.record(c_.open,    c_.close,    k_var_x, val2_);
@@ -260,20 +260,20 @@ TEST_F(FpBindMapTest, NestedRebindRestoresCorrectlyAtOuterSibling) {
 // previously unbound, causing the sibling to see a phantom binding.
 // ---------------------------------------------------------------------------
 
-TEST_F(FpBindMapTest, VarBoundOnlyInSiblingAppearsUnboundElsewhere) {
+TEST_F(FullyPersistentArrayTest, VarBoundOnlyInSiblingAppearsUnboundElsewhere) {
     // Only A binds x; root has no x. C should see nullopt.
     bm_.record(a_.open, a_.close, k_var_x, val2_);
     EXPECT_FALSE(bm_.query(c_.open, k_var_x).has_value());
 }
 
-TEST_F(FpBindMapTest, CloseEventExplicitlyRestoresNullopt) {
+TEST_F(FullyPersistentArrayTest, CloseEventExplicitlyRestoresNullopt) {
     // Root does not bind x; A does.  After A's close, C queries and should
     // get nullopt — the close event at A.close must restore nullopt.
     bm_.record(a_.open, a_.close, k_var_x, val2_);
     EXPECT_FALSE(bm_.query(c_.open, k_var_x).has_value());
 }
 
-TEST_F(FpBindMapTest, VarBoundInDeepSiblingSubtreeRestoresNulloptOutside) {
+TEST_F(FullyPersistentArrayTest, VarBoundInDeepSiblingSubtreeRestoresNulloptOutside) {
     // B (inside A) binds x; root and A don't. D (inside C) queries — nullopt.
     bm_.record(b_.open, b_.close, k_var_x, val3_);
     EXPECT_FALSE(bm_.query(d_.open, k_var_x).has_value());
@@ -285,18 +285,18 @@ TEST_F(FpBindMapTest, VarBoundInDeepSiblingSubtreeRestoresNulloptOutside) {
 // instead of (upper_bound then --).
 // ---------------------------------------------------------------------------
 
-TEST_F(FpBindMapTest, QueryAtExactOpenLabelReturnsOwnValue) {
+TEST_F(FullyPersistentArrayTest, QueryAtExactOpenLabelReturnsOwnValue) {
     bm_.record(a_.open, a_.close, k_var_x, val2_);
     EXPECT_TRUE(same_value(bm_.query(a_.open, k_var_x), val2_));
 }
 
-TEST_F(FpBindMapTest, QueryBeforeAOpenReturnsNullopt) {
+TEST_F(FullyPersistentArrayTest, QueryBeforeAOpenReturnsNullopt) {
     // A binds x; querying at root.open (before A's interval) → nullopt.
     bm_.record(a_.open, a_.close, k_var_x, val2_);
     EXPECT_FALSE(bm_.query(root_.open, k_var_x).has_value());
 }
 
-TEST_F(FpBindMapTest, QueryBeforeAOpenReturnsParentValue) {
+TEST_F(FullyPersistentArrayTest, QueryBeforeAOpenReturnsParentValue) {
     // Root binds x; A rebinds x.  Querying at root.open (before A's interval)
     // → root's value, not A's.
     bm_.record(root_.open, root_.close, k_var_x, val1_);
@@ -304,7 +304,7 @@ TEST_F(FpBindMapTest, QueryBeforeAOpenReturnsParentValue) {
     EXPECT_TRUE(same_value(bm_.query(root_.open, k_var_x), val1_));
 }
 
-TEST_F(FpBindMapTest, QueryAtCloseEventPositionReturnsRestoredValue) {
+TEST_F(FullyPersistentArrayTest, QueryAtCloseEventPositionReturnsRestoredValue) {
     // The close event at A.close stores val1 (root's value).
     // Querying exactly at A.close should return val1.
     bm_.record(root_.open, root_.close, k_var_x, val1_);
@@ -317,7 +317,7 @@ TEST_F(FpBindMapTest, QueryAtCloseEventPositionReturnsRestoredValue) {
 // A single bug in record or query will cause at least one assertion to fail.
 // ---------------------------------------------------------------------------
 
-TEST_F(FpBindMapTest, FullTreeInvariantCheck) {
+TEST_F(FullyPersistentArrayTest, FullTreeInvariantCheck) {
     // Bindings:
     //   root: x=val1, y=val2
     //   A:    x=val3
@@ -364,7 +364,7 @@ TEST_F(FpBindMapTest, FullTreeInvariantCheck) {
 // separate sibling records interact incorrectly on the same timeline.
 // ---------------------------------------------------------------------------
 
-TEST_F(FpBindMapTest, TwoSiblingsBindSameVarBothIsolated) {
+TEST_F(FullyPersistentArrayTest, TwoSiblingsBindSameVarBothIsolated) {
     // A:x=val2, C:x=val5 — root never binds x.
     bm_.record(a_.open, a_.close, k_var_x, val2_);
     bm_.record(c_.open, c_.close, k_var_x, val5_);
@@ -384,7 +384,7 @@ TEST_F(FpBindMapTest, TwoSiblingsBindSameVarBothIsolated) {
 // Catch bug: a record at a deep node somehow propagates upward in the timeline.
 // ---------------------------------------------------------------------------
 
-TEST_F(FpBindMapTest, RecordAtLeafOnlyAncestorsReturnNullopt) {
+TEST_F(FullyPersistentArrayTest, RecordAtLeafOnlyAncestorsReturnNullopt) {
     // Only B is recorded; root, A, C, D are never recorded.
     bm_.record(b_.open, b_.close, k_var_x, val3_);
     EXPECT_FALSE(bm_.query(root_.open, k_var_x).has_value());
@@ -400,7 +400,7 @@ TEST_F(FpBindMapTest, RecordAtLeafOnlyAncestorsReturnNullopt) {
 // ignores frame_offset.
 // ---------------------------------------------------------------------------
 
-TEST_F(FpBindMapTest, FrameOffsetPreservedInQuery) {
+TEST_F(FullyPersistentArrayTest, FrameOffsetPreservedInQuery) {
     const framed_expr with_offset = make_framed(99, 42);
     bm_.record(root_.open, root_.close, k_var_x, with_offset);
     const auto result = bm_.query(b_.open, k_var_x);
@@ -409,7 +409,7 @@ TEST_F(FpBindMapTest, FrameOffsetPreservedInQuery) {
     EXPECT_EQ(result->skeleton, with_offset.skeleton);
 }
 
-TEST_F(FpBindMapTest, ZeroFrameOffsetDistinctFromNonZero) {
+TEST_F(FullyPersistentArrayTest, ZeroFrameOffsetDistinctFromNonZero) {
     const framed_expr offset_zero    = make_framed(10, 0);
     const framed_expr offset_nonzero = make_framed(10, 7);
     EXPECT_NE(offset_zero, offset_nonzero);
@@ -427,7 +427,7 @@ TEST_F(FpBindMapTest, ZeroFrameOffsetDistinctFromNonZero) {
 // collision or capacity issue that silently drops some variables.
 // ---------------------------------------------------------------------------
 
-TEST_F(FpBindMapTest, ManyVarsAtRootAllVisibleAtDeepDescendant) {
+TEST_F(FullyPersistentArrayTest, ManyVarsAtRootAllVisibleAtDeepDescendant) {
     constexpr int k_var_count = 20;
     std::vector<framed_expr> expected;
     expected.reserve(k_var_count);
@@ -451,7 +451,7 @@ TEST_F(FpBindMapTest, ManyVarsAtRootAllVisibleAtDeepDescendant) {
 // of A's close event when querying positions between sibling intervals.
 // ---------------------------------------------------------------------------
 
-TEST_F(FpBindMapTest, QueryBetweenSiblingIntervalsMidpoint) {
+TEST_F(FullyPersistentArrayTest, QueryBetweenSiblingIntervalsMidpoint) {
     // probe_.open is strictly between A.close and C.open.
     // The predecessor in x's timeline is A's close event → val1.
     bm_.record(root_.open, root_.close, k_var_x, val1_);
@@ -464,7 +464,7 @@ TEST_F(FpBindMapTest, QueryBetweenSiblingIntervalsMidpoint) {
 // must win (the first is overwritten).
 // ---------------------------------------------------------------------------
 
-TEST_F(FpBindMapTest, DoubleRecordSameNodeSameVar) {
+TEST_F(FullyPersistentArrayTest, DoubleRecordSameNodeSameVar) {
     bm_.record(root_.open, root_.close, k_var_x, val1_);
     bm_.record(a_.open,    a_.close,    k_var_x, val2_);
     // Overwrite A's record with val3.
@@ -483,7 +483,7 @@ TEST_F(FpBindMapTest, DoubleRecordSameNodeSameVar) {
 // prior value instead of the actual ancestor's value for A's close event).
 // ---------------------------------------------------------------------------
 
-TEST_F(FpBindMapTest, ThreeLevelCloseChainRestoresCorrectly) {
+TEST_F(FullyPersistentArrayTest, ThreeLevelCloseChainRestoresCorrectly) {
     bm_.record(root_.open, root_.close, k_var_x, val1_);
     bm_.record(a_.open,    a_.close,    k_var_x, val2_);
     bm_.record(b_.open,    b_.close,    k_var_x, val3_);
@@ -501,7 +501,7 @@ TEST_F(FpBindMapTest, ThreeLevelCloseChainRestoresCorrectly) {
 // the smallest key (lower_bound returns begin(), then -- underflows).
 // ---------------------------------------------------------------------------
 
-TEST_F(FpBindMapTest, QueryAtRootOpenReturnsRootBinding) {
+TEST_F(FullyPersistentArrayTest, QueryAtRootOpenReturnsRootBinding) {
     bm_.record(root_.open, root_.close, k_var_x, val1_);
     EXPECT_TRUE(same_value(bm_.query(root_.open, k_var_x), val1_));
 }
@@ -512,7 +512,7 @@ TEST_F(FpBindMapTest, QueryAtRootOpenReturnsRootBinding) {
 // Catch bug: out-of-bounds in the timeline map causes a crash or wrong value.
 // ---------------------------------------------------------------------------
 
-TEST_F(FpBindMapTest, QueryAtRootCloseReturnsNullopt) {
+TEST_F(FullyPersistentArrayTest, QueryAtRootCloseReturnsNullopt) {
     bm_.record(root_.open, root_.close, k_var_x, val1_);
     // The close event at root_.close stores nullopt (prior was unbound).
     EXPECT_FALSE(bm_.query(root_.close, k_var_x).has_value());
@@ -524,7 +524,7 @@ TEST_F(FpBindMapTest, QueryAtRootCloseReturnsNullopt) {
 // Catches bugs in the predecessor search when several levels lack a binding.
 // ---------------------------------------------------------------------------
 
-TEST_F(FpBindMapTest, AlternatingLevelBindingsOddLevelsInherit) {
+TEST_F(FullyPersistentArrayTest, AlternatingLevelBindingsOddLevelsInherit) {
     // 5-level linear chain using extra allocations from the fixture's om_.
     // probe_after_l2 sits inside L1's interval but after L2 — used to verify
     // that L0's value is restored once L2's interval ends.
@@ -535,7 +535,7 @@ TEST_F(FpBindMapTest, AlternatingLevelBindingsOddLevelsInherit) {
     const om_interval l4             = om_.allocate_child_of(l3);
     const om_interval probe_after_l2 = om_.allocate_child_of(l1);
 
-    fp_bind_map bm;
+    fully_persistent_array bm;
     bm.record(l0.open, l0.close, k_var_x, val1_);  // L0: x = val1
     bm.record(l2.open, l2.close, k_var_x, val2_);  // L2: x = val2
     bm.record(l4.open, l4.close, k_var_x, val3_);  // L4: x = val3
@@ -563,7 +563,7 @@ TEST_F(FpBindMapTest, AlternatingLevelBindingsOddLevelsInherit) {
 // another variable's timeline.
 // ---------------------------------------------------------------------------
 
-TEST_F(FpBindMapTest, TenLevelChainFiveVarsBoundAtDifferentLevels) {
+TEST_F(FullyPersistentArrayTest, TenLevelChainFiveVarsBoundAtDifferentLevels) {
     constexpr int k_levels = 10;
     constexpr int k_vars   = 5;
 
@@ -579,7 +579,7 @@ TEST_F(FpBindMapTest, TenLevelChainFiveVarsBoundAtDifferentLevels) {
         make_framed(6), make_framed(7), make_framed(8), make_framed(9), make_framed(10)
     };
 
-    fp_bind_map bm;
+    fully_persistent_array bm;
     // Bind var_idx at level (var_idx * 2): levels 0, 2, 4, 6, 8.
     for (int var_idx = 0; var_idx < k_vars; ++var_idx) {
         const int bound_level = var_idx * 2;

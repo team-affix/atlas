@@ -4,18 +4,18 @@
 #include <random>
 #include <unordered_map>
 #include <vector>
-#include "infrastructure/fp_bind_map.hpp"
+#include "infrastructure/fully_persistent_array.hpp"
 #include "infrastructure/order_maintenance.hpp"
 #include "value_objects/expr.hpp"
 #include "value_objects/framed_expr.hpp"
 
 // ---------------------------------------------------------------------------
-// Integration tests: real order_maintenance + real fp_bind_map
+// Integration tests: real order_maintenance + real fully_persistent_array
 //
 // Unit tests for each component hand-craft or mock the other's
 // responsibilities.  These tests verify that the two components compose
 // correctly — in particular that om_label objects produced by
-// order_maintenance work correctly as fp_bind_map keys even after
+// order_maintenance work correctly as fully_persistent_array keys even after
 // order_maintenance has performed internal relabeling.
 // ---------------------------------------------------------------------------
 
@@ -39,9 +39,9 @@ bool same_value(const std::optional<framed_expr>& result, const framed_expr& exp
 // Fixture
 // ---------------------------------------------------------------------------
 
-struct FpBindMapIntegrationTest : public ::testing::Test {
+struct FullyPersistentArrayIntegrationTest : public ::testing::Test {
     order_maintenance om_;
-    fp_bind_map bm_;
+    fully_persistent_array bm_;
 
     const framed_expr val1_ = make_framed(101);
     const framed_expr val2_ = make_framed(102);
@@ -57,7 +57,7 @@ struct FpBindMapIntegrationTest : public ::testing::Test {
 // Basic correctness with real OM labels
 // ---------------------------------------------------------------------------
 
-TEST_F(FpBindMapIntegrationTest, RealLabelsInheritanceWorks) {
+TEST_F(FullyPersistentArrayIntegrationTest, RealLabelsInheritanceWorks) {
     const om_interval root  = om_.allocate_root();
     const om_interval child = om_.allocate_child_of(root);
 
@@ -65,7 +65,7 @@ TEST_F(FpBindMapIntegrationTest, RealLabelsInheritanceWorks) {
     EXPECT_TRUE(same_value(bm_.query(child.open, k_var_x), val1_));
 }
 
-TEST_F(FpBindMapIntegrationTest, RealLabelsSiblingIsolation) {
+TEST_F(FullyPersistentArrayIntegrationTest, RealLabelsSiblingIsolation) {
     const om_interval root    = om_.allocate_root();
     const om_interval child_a = om_.allocate_child_of(root);
     const om_interval child_b = om_.allocate_child_of(root);
@@ -74,7 +74,7 @@ TEST_F(FpBindMapIntegrationTest, RealLabelsSiblingIsolation) {
     EXPECT_FALSE(bm_.query(child_b.open, k_var_x).has_value());
 }
 
-TEST_F(FpBindMapIntegrationTest, RealLabelsRebindingAndRestoration) {
+TEST_F(FullyPersistentArrayIntegrationTest, RealLabelsRebindingAndRestoration) {
     const om_interval root    = om_.allocate_root();
     const om_interval child   = om_.allocate_child_of(root);
     const om_interval sibling = om_.allocate_child_of(root);
@@ -87,7 +87,7 @@ TEST_F(FpBindMapIntegrationTest, RealLabelsRebindingAndRestoration) {
     EXPECT_TRUE(same_value(bm_.query(root.open,     k_var_x), val1_));
 }
 
-TEST_F(FpBindMapIntegrationTest, RealLabelsGrandchildInheritance) {
+TEST_F(FullyPersistentArrayIntegrationTest, RealLabelsGrandchildInheritance) {
     const om_interval root       = om_.allocate_root();
     const om_interval child      = om_.allocate_child_of(root);
     const om_interval grandchild = om_.allocate_child_of(child);
@@ -96,7 +96,7 @@ TEST_F(FpBindMapIntegrationTest, RealLabelsGrandchildInheritance) {
     EXPECT_TRUE(same_value(bm_.query(grandchild.open, k_var_x), val1_));
 }
 
-TEST_F(FpBindMapIntegrationTest, RealLabelsMultipleVariables) {
+TEST_F(FullyPersistentArrayIntegrationTest, RealLabelsMultipleVariables) {
     const om_interval root  = om_.allocate_root();
     const om_interval child = om_.allocate_child_of(root);
 
@@ -112,12 +112,13 @@ TEST_F(FpBindMapIntegrationTest, RealLabelsMultipleVariables) {
 // Relabeling correctness end-to-end
 //
 // These tests allocate enough nodes to trigger relabeling inside
-// order_maintenance, then verify that fp_bind_map still returns correct
-// results.  A stale-key bug (fp_bind_map's std::map holding an old rank
-// value while the om_label now reads a new rank) would surface here.
+// order_maintenance, then verify that fully_persistent_array still returns
+// correct results.  A stale-key bug (fully_persistent_array's std::map
+// holding an old rank value while the om_label now reads a new rank) would
+// surface here.
 // ---------------------------------------------------------------------------
 
-TEST_F(FpBindMapIntegrationTest, ManyChildrenThenQueryAll) {
+TEST_F(FullyPersistentArrayIntegrationTest, ManyChildrenThenQueryAll) {
     // Allocate 200 children (triggers relabeling), record a unique binding on
     // each, then verify each sees only its own value (not a sibling's).
     const om_interval root = om_.allocate_root();
@@ -141,7 +142,7 @@ TEST_F(FpBindMapIntegrationTest, ManyChildrenThenQueryAll) {
     }
 }
 
-TEST_F(FpBindMapIntegrationTest, DeepChainRecordAndQuery) {
+TEST_F(FullyPersistentArrayIntegrationTest, DeepChainRecordAndQuery) {
     // Allocate a 200-deep chain; record at root only; query at every depth.
     constexpr int k_depth = 200;
     std::vector<om_interval> levels;
@@ -158,7 +159,7 @@ TEST_F(FpBindMapIntegrationTest, DeepChainRecordAndQuery) {
     }
 }
 
-TEST_F(FpBindMapIntegrationTest, InterleavedAllocAndRecord) {
+TEST_F(FullyPersistentArrayIntegrationTest, InterleavedAllocAndRecord) {
     // Alternate between allocating a new sibling and recording a binding on an
     // existing node.  Verifies that relabeling triggered mid-sequence does not
     // corrupt bindings recorded before the relabeling.
@@ -199,7 +200,7 @@ TEST_F(FpBindMapIntegrationTest, InterleavedAllocAndRecord) {
     }
 }
 
-TEST_F(FpBindMapIntegrationTest, RelabelingDoesNotCorruptPriorRecords) {
+TEST_F(FullyPersistentArrayIntegrationTest, RelabelingDoesNotCorruptPriorRecords) {
     // Record bindings on a small tree, then force relabeling by adding many
     // siblings, then re-verify all prior bindings are still correct.
     const om_interval root    = om_.allocate_root();
@@ -221,14 +222,14 @@ TEST_F(FpBindMapIntegrationTest, RelabelingDoesNotCorruptPriorRecords) {
 }
 
 // ---------------------------------------------------------------------------
-// Two fp_bind_map instances sharing one order_maintenance: records in one
-// must not appear when querying the other.
+// Two fully_persistent_array instances sharing one order_maintenance: records
+// in one must not appear when querying the other.
 // This mirrors the PUD usage where there is one base bind map plus one per-goal
 // bind map, all sharing the same om_interval labels.
 // ---------------------------------------------------------------------------
 
-TEST_F(FpBindMapIntegrationTest, TwoFpBindMapsShareOrderMaintenance) {
-    fp_bind_map bm2_;  // second bind map, same om_
+TEST_F(FullyPersistentArrayIntegrationTest, TwoFullyPersistentArraysShareOrderMaintenance) {
+    fully_persistent_array bm2_;  // second array, same om_
 
     const om_interval root  = om_.allocate_root();
     const om_interval child = om_.allocate_child_of(root);
@@ -249,10 +250,10 @@ TEST_F(FpBindMapIntegrationTest, TwoFpBindMapsShareOrderMaintenance) {
 // ---------------------------------------------------------------------------
 // After relabeling in one root's subtree, queries in the other root's subtree
 // must still return correct results — the stale-key bug would manifest here
-// if relabeling changes ranks that fp_bind_map has stored as map keys.
+// if relabeling changes ranks that fully_persistent_array has stored as map keys.
 // ---------------------------------------------------------------------------
 
-TEST_F(FpBindMapIntegrationTest, CrossSubtreeIsolationAfterRelabeling) {
+TEST_F(FullyPersistentArrayIntegrationTest, CrossSubtreeIsolationAfterRelabeling) {
     const om_interval root_a = om_.allocate_root();
     const om_interval root_b = om_.allocate_root();
 
@@ -274,10 +275,10 @@ TEST_F(FpBindMapIntegrationTest, CrossSubtreeIsolationAfterRelabeling) {
 // After relabeling, each level must see its own binding and the sibling of
 // the chain's first node must see only the root's binding.
 // Catch bug: relabeling shuffles ranks in a way that predecessor searches
-// in fp_bind_map now find the wrong timeline entry.
+// in fully_persistent_array now find the wrong timeline entry.
 // ---------------------------------------------------------------------------
 
-TEST_F(FpBindMapIntegrationTest, DeepChainEachLevelRebindsSameVar) {
+TEST_F(FullyPersistentArrayIntegrationTest, DeepChainEachLevelRebindsSameVar) {
     constexpr int k_depth = 50;
     std::vector<om_interval> levels;
     std::vector<framed_expr> level_values;
@@ -314,7 +315,7 @@ TEST_F(FpBindMapIntegrationTest, DeepChainEachLevelRebindsSameVar) {
 // could corrupt the other root's labels).
 // ---------------------------------------------------------------------------
 
-TEST_F(FpBindMapIntegrationTest, InterleavedAllocationsFromTwoRoots) {
+TEST_F(FullyPersistentArrayIntegrationTest, InterleavedAllocationsFromTwoRoots) {
     const om_interval root_a = om_.allocate_root();
     const om_interval root_b = om_.allocate_root();
 
@@ -353,17 +354,18 @@ TEST_F(FpBindMapIntegrationTest, InterleavedAllocationsFromTwoRoots) {
 // RNG-based end-to-end property test (seed 42).
 //
 // Builds a random 100-node tree using real order_maintenance, records random
-// bindings for 5 variables in a real fp_bind_map, then for every (node, var)
-// pair verifies the query result against an expected value computed by walking
-// up the parent chain — the simplest possible correct implementation.
+// bindings for 5 variables in a real fully_persistent_array, then for every
+// (node, var) pair verifies the query result against an expected value
+// computed by walking up the parent chain — the simplest possible correct
+// implementation.
 //
 // This is the most comprehensive single test: it simultaneously checks OM
-// label validity, fp_bind_map predecessor logic, close-event restoration,
-// sibling isolation, and multi-variable independence, all under arbitrary
-// tree shapes and relabeling triggers.
+// label validity, fully_persistent_array predecessor logic, close-event
+// restoration, sibling isolation, and multi-variable independence, all under
+// arbitrary tree shapes and relabeling triggers.
 // ---------------------------------------------------------------------------
 
-TEST_F(FpBindMapIntegrationTest, RandomTreeRandomBindingsEndToEnd) {
+TEST_F(FullyPersistentArrayIntegrationTest, RandomTreeRandomBindingsEndToEnd) {
     std::mt19937 rng(42);
 
     constexpr int k_node_count = 100;
@@ -440,7 +442,7 @@ TEST_F(FpBindMapIntegrationTest, RandomTreeRandomBindingsEndToEnd) {
 }
 
 // Second RNG seed — different tree topology and binding density.
-TEST_F(FpBindMapIntegrationTest, RandomTreeAlternateSeedEndToEnd) {
+TEST_F(FullyPersistentArrayIntegrationTest, RandomTreeAlternateSeedEndToEnd) {
     std::mt19937 rng(271828);
 
     constexpr int k_node_count = 120;
@@ -513,7 +515,7 @@ TEST_F(FpBindMapIntegrationTest, RandomTreeAlternateSeedEndToEnd) {
 // must see only its own binding and not any sibling's.
 // ---------------------------------------------------------------------------
 
-TEST_F(FpBindMapIntegrationTest, StarTreeWithManyUniqueBindings) {
+TEST_F(FullyPersistentArrayIntegrationTest, StarTreeWithManyUniqueBindings) {
     const om_interval root = om_.allocate_root();
     constexpr int k_count = 100;
 
@@ -540,12 +542,12 @@ TEST_F(FpBindMapIntegrationTest, StarTreeWithManyUniqueBindings) {
 }
 
 // ---------------------------------------------------------------------------
-// 500-deep chain in fp_bind_map: each level rebinds the same variable.
-// After multiple relabeling rounds, every level must still see its own value,
-// and a sibling added after the chain sees only the root's value.
+// 500-deep chain in fully_persistent_array: each level rebinds the same
+// variable.  After multiple relabeling rounds, every level must still see its
+// own value, and a sibling added after the chain sees only the root's value.
 // ---------------------------------------------------------------------------
 
-TEST_F(FpBindMapIntegrationTest, VeryDeepChainMultipleRelabelings) {
+TEST_F(FullyPersistentArrayIntegrationTest, VeryDeepChainMultipleRelabelings) {
     constexpr int k_depth = 500;
     std::vector<om_interval> levels;
     std::vector<framed_expr> level_values;

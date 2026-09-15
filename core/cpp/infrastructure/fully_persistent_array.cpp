@@ -1,9 +1,9 @@
-#include "infrastructure/fp_bind_map.hpp"
+#include "infrastructure/fully_persistent_array.hpp"
 
-fp_bind_map::fp_bind_map() {}
+fully_persistent_array::fully_persistent_array() {}
 
-void fp_bind_map::record(om_label open, om_label close,
-                         uint32_t var_id, framed_expr value) {
+void fully_persistent_array::record(om_label open, om_label close,
+                                    uint32_t var_id, framed_expr value) {
     timeline_t& timeline = timelines_[var_id];
 
     // Find the value that was in effect just before open — this is what close
@@ -19,8 +19,8 @@ void fp_bind_map::record(om_label open, om_label close,
     timeline[close] = prior_value;
 }
 
-std::optional<framed_expr> fp_bind_map::query(om_label open_label,
-                                               uint32_t var_id) const {
+std::optional<framed_expr> fully_persistent_array::query(om_label open_label,
+                                                          uint32_t var_id) const {
     const auto tl_it = timelines_.find(var_id);
     if (tl_it == timelines_.end())
         return std::nullopt;
