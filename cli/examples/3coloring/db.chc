@@ -26,7 +26,11 @@ eq(X,X).
 %   atlas horizon 3coloring/db.chc --goal "color(CA), color(CB), color(CC), neq(CA, CB), neq(CB, CC)"
 % Expected solutions: 12 (each endpoint has 3 choices, middle is constrained by both).
 %
-% Origami Sonobe graphs (from YMONGUCHI/Origami-Sonobe-Graph-Coloring):
+% Origami Sonobe graphs (from https://github.com/YMONGUCHI/Origami-Sonobe-Graph-Coloring):
+%   Graphs extracted from:
+%     https://github.com/YMONGUCHI/Origami-Sonobe-Graph-Coloring/blob/main/wolfram/Origami-SonobeShape.nb
+%     https://github.com/YMONGUCHI/Origami-Sonobe-Graph-Coloring/blob/main/wolfram/Origami-SonobeShape_Tutte.nb
+%
 %    3-node   ( 3 edges):  atlas horizon 3coloring/db.chc --goal "$(cat 3coloring/sonobe3.goal)"
 %   12-node  (24 edges):  atlas horizon 3coloring/db.chc --goal "$(cat 3coloring/sonobe12.goal)"
 %   30-node  (60 edges):  atlas horizon 3coloring/db.chc --goal "$(cat 3coloring/sonobe30.goal)"

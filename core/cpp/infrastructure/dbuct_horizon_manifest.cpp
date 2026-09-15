@@ -57,7 +57,7 @@ dbuct_horizon_manifest::dbuct_horizon_manifest(
       cdcl_(chosen_goal_candidates_, avoidance_unit_boundary_, decision_memory_,
             avoidance_unit_boundary_, avoidance_unit_boundary_,
             avoidance_unit_boundary_),
-      mhu_(bind_map_, bind_map_, lineage_pool_, expr_pool_,
+      mhu_(bind_map_, bind_map_, lineage_pool_, expr_pool_, globalizer_,
            local_bind_map_pool_, local_bind_map_pool_, local_bind_map_pool_,
            bind_map_factory_, unifier_factory_, goal_candidate_rules_),
       hub_(solver_frame_depth_tracker_, solver_frame_depth_tracker_,

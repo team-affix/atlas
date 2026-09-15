@@ -38,7 +38,7 @@ using test_mhu_t = mhu_elimination_generator<
     local_bind_map_pool_t, local_bind_map_pool_t, local_bind_map_pool_t,
     bind_map_factory<globalizer>,
     unifier<globalizer, bind_map<globalizer>>, unifier_factory<globalizer, bind_map<globalizer>>,
-    MockMakeResolutionLineage, MockMakeVar, MockGetGoalCandidateRuleIds>;
+    MockMakeResolutionLineage, MockMakeVar, globalizer, MockGetGoalCandidateRuleIds>;
 
 struct MhuEliminationGeneratorUnitTest : public ::testing::Test {
     test_functors functors;
@@ -53,7 +53,7 @@ struct MhuEliminationGeneratorUnitTest : public ::testing::Test {
     ra_rule_id_set candidates;
     goal_lineage gl{nullptr, 0};
     resolution_lineage rl{&gl, 0};
-    test_mhu_t mhu{common, common, mrl, mv, pool, pool, pool, bmf, uf, gcri};
+    test_mhu_t mhu{common, common, mrl, mv, g_, pool, pool, pool, bmf, uf, gcri};
 
     expr goal{expr::var{0}};
     expr head_f{expr::functor{functors.id("f"), {}}};

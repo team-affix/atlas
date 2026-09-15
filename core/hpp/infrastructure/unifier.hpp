@@ -34,25 +34,14 @@ coroutine<uint32_t, bool> unifier<IGlobalize, IBindMap>::unify(framed_expr lhs, 
     if (lv && rv && lv_global == rv_global)
         co_return true;
 
-    if (lv && rv) {
-        const auto [young_global, target] = lv_global > rv_global
-            ? std::pair{lv_global, rhs}
-            : std::pair{rv_global, lhs};
+    if (lv || rv) {
+        const bool lhs_is_youngest = lv && (!rv || lv_global > rv_global);
+        const uint32_t young_global = lhs_is_youngest ? lv_global : rv_global;
+        const framed_expr target = lhs_is_youngest ? rhs : lhs;
         if (occurs_check(young_global, target))
             co_return false;
-        co_yield lv_global;
-        co_yield rv_global;
         bind_map_->bind(young_global, target);
-        co_return true;
-    }
-
-    if (lv || rv) {
-        const uint32_t var_global = lv ? lv_global : rv_global;
-        const framed_expr other = lv ? rhs : lhs;
-        if (occurs_check(var_global, other))
-            co_return false;
-        co_yield var_global;
-        bind_map_->bind(var_global, other);
+        co_yield young_global;
         co_return true;
     }
 

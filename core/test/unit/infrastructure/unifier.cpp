@@ -84,7 +84,7 @@ TEST_F(UnifierTest, UnifyVarLhsVarRhsBindsHigherIndexToLower) {
     EXPECT_CALL(bm, bind(1u, framed_expr{&var0, 0}));
 
     EXPECT_TRUE(run_unify(u, &var0, &var1, vars_touched));
-    EXPECT_THAT(vars_touched, UnorderedElementsAre(0u, 1u));
+    EXPECT_THAT(vars_touched, UnorderedElementsAre(1u));
 }
 
 TEST_F(UnifierTest, UnifyVarRhsVarLhsBindsHigherIndexToLower) {
@@ -93,7 +93,7 @@ TEST_F(UnifierTest, UnifyVarRhsVarLhsBindsHigherIndexToLower) {
     EXPECT_CALL(bm, bind(1u, framed_expr{&var0, 0}));
 
     EXPECT_TRUE(run_unify(u, &var1, &var0, vars_touched));
-    EXPECT_THAT(vars_touched, UnorderedElementsAre(0u, 1u));
+    EXPECT_THAT(vars_touched, UnorderedElementsAre(1u));
 }
 
 // ---------------------------------------------------------------------------
@@ -374,7 +374,7 @@ TEST_F(UnifierTest, UnifyAfterWhnfBothResolveToVarsBindsRepresentatives) {
     EXPECT_CALL(bm, bind(2u, framed_expr{&var1, 0}));
 
     EXPECT_TRUE(run_unify(u, &var0, &var1, vars_touched));
-    EXPECT_THAT(vars_touched, UnorderedElementsAre(1u, 2u));
+    EXPECT_THAT(vars_touched, UnorderedElementsAre(2u));
 }
 
 TEST_F(UnifierTest, UnifyAfterWhnfVarResolvesToVarFunctorBindsRepresentative) {

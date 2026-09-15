@@ -74,7 +74,7 @@ using mhu_t                       = mhu_elimination_generator<
                                     bind_map<globalizer>, bind_map<globalizer>, bind_map<globalizer>,
                                     local_bind_map_pool_t, local_bind_map_pool_t, local_bind_map_pool_t,
                                     bind_map_factory<globalizer>, unifier<globalizer, bind_map<globalizer>>,
-                                    unifier_factory_t, lineage_pool, expr_pool, goal_candidate_rules>;
+                                    unifier_factory_t, lineage_pool, expr_pool, globalizer, goal_candidate_rules>;
 using joint_t                     = joint_elimination_generator<cdcl_t, mhu_t>;
 using get_resolution_rule_t         = get_resolution_rule<db>;
 using conflict_detector_t          = conflict_detector<goal_candidate_rules>;
@@ -172,7 +172,7 @@ struct sim_stack {
 
     sim_stack(db& database_in, initial_goal_exprs& initial_goals_in)
         : database_(database_in), initial_goals_(initial_goals_in) {
-        mhu_.emplace(bind_map_, bind_map_, lineage_pool_, expr_pool_,
+        mhu_.emplace(bind_map_, bind_map_, lineage_pool_, expr_pool_, globalizer_,
                      local_bind_map_pool_, local_bind_map_pool_, local_bind_map_pool_,
                      bind_map_factory_, unifier_factory_, goal_candidate_rules_);
         joint_.emplace(cdcl_, *mhu_);

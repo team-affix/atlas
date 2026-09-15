@@ -27,7 +27,7 @@ using test_dbuct_mhu_t = dbuct_mhu_elimination_generator<
     bind_map_t, bind_map_t, bind_map_t,
     local_bind_map_pool_t, local_bind_map_pool_t, local_bind_map_pool_t,
     bind_map_factory_t, unifier<globalizer, bind_map_t>, unifier_factory_t,
-    lineage_pool, expr_pool, dbuct_goal_candidate_rules>;
+    lineage_pool, expr_pool, globalizer, dbuct_goal_candidate_rules>;
 
 using ::testing::ElementsAre;
 using ::testing::IsEmpty;
@@ -63,7 +63,7 @@ struct DbuctMhuEliminationGeneratorIntegrationTest : public ::testing::Test {
 
     DbuctMhuEliminationGeneratorIntegrationTest() {
         pool.emplace();
-        mhu.emplace(common, common, lp, *pool, bind_map_pool, bind_map_pool, bind_map_pool, bmf, uf, ggcr);
+        mhu.emplace(common, common, lp, *pool, g_, bind_map_pool, bind_map_pool, bind_map_pool, bmf, uf, ggcr);
     }
 
     void ensure_goal_candidates(const goal_lineage* gl) {

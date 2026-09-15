@@ -126,7 +126,7 @@ struct dbuct_quell_manifest {
                     local_bind_map_pool_t, local_bind_map_pool_t, local_bind_map_pool_t,
                     bind_map_factory_t,
                     unifier<globalizer, bind_map_t>, unifier_factory_t, lineage_pool,
-                    expr_pool, goal_candidate_rules_t>;
+                    expr_pool, globalizer, goal_candidate_rules_t>;
     using hub_t   = dbuct_frame_hub<
                     solver_frame_depth_tracker_t, solver_frame_depth_tracker_t,
                     goal_exprs_t, goal_exprs_t,

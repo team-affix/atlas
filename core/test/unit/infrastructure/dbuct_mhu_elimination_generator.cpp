@@ -60,7 +60,7 @@ using test_dbuct_mhu_t = dbuct_mhu_elimination_generator<
     bind_map_t, bind_map_t, bind_map_t,
     local_bind_map_pool_t, local_bind_map_pool_t, local_bind_map_pool_t,
     bind_map_factory_t, unifier_t, unifier_factory_t,
-    MockMakeResolutionLineage, MockMakeVar, MockGetGoalCandidateRuleIds>;
+    MockMakeResolutionLineage, MockMakeVar, globalizer, MockGetGoalCandidateRuleIds>;
 
 struct DbuctMhuEliminationGeneratorUnitTest : public ::testing::Test {
     test_functors functors;
@@ -75,7 +75,7 @@ struct DbuctMhuEliminationGeneratorUnitTest : public ::testing::Test {
     ra_rule_id_set candidates;
     goal_lineage gl{nullptr, 0};
     resolution_lineage rl{&gl, 0};
-    test_dbuct_mhu_t mhu{common, common, mrl, mv, pool, pool, pool, bmf, uf, gcri};
+    test_dbuct_mhu_t mhu{common, common, mrl, mv, g_, pool, pool, pool, bmf, uf, gcri};
 
     expr goal{expr::var{0}};
     expr head_f{expr::functor{functors.id("f"), {}}};

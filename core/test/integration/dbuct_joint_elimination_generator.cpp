@@ -68,7 +68,7 @@ using mhu_t = dbuct_mhu_elimination_generator<
     bind_map_t, bind_map_t, bind_map_t,
     local_bind_map_pool_t, local_bind_map_pool_t, local_bind_map_pool_t,
     bind_map_factory_t, unifier_t, unifier_factory_t,
-    lineage_pool, expr_pool, dbuct_goal_candidate_rules>;
+    lineage_pool, expr_pool, globalizer, dbuct_goal_candidate_rules>;
 
 using cdcl_t = dbuct_cdcl_elimination_generator<
     dbuct_chosen_goal_candidates, boundary_t, dbuct_decision_memory,
@@ -111,7 +111,7 @@ struct DbuctJointEliminationGeneratorIntegrationTest : public ::testing::Test {
     dbuct_nearest_decision nearest_decision;
     boundary_t avoidance_unit_boundary{nearest_decision, get_mcts_frame_depth};
 
-    mhu_t mhu{bind_map, bind_map, lineage_pool_, expr_pool_,
+    mhu_t mhu{bind_map, bind_map, lineage_pool_, expr_pool_, g,
               bind_map_pool, bind_map_pool, bind_map_pool,
               bind_map_factory, unifier_factory_, goal_candidate_rules};
     cdcl_t cdcl{chosen_goal_candidates, avoidance_unit_boundary, decision_memory,

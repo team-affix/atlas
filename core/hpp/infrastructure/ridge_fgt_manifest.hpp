@@ -83,7 +83,7 @@ struct ridge_fgt_manifest {
                     local_bind_map_pool_t, local_bind_map_pool_t, local_bind_map_pool_t,
                     bind_map_factory_t,
                     unifier<globalizer, bind_map_t>, unifier_factory_t,
-                    lineage_pool, expr_pool, goal_candidate_rules>;
+                    lineage_pool, expr_pool, globalizer, goal_candidate_rules>;
     using joint_t = joint_elimination_generator<cdcl_t, mhu_t>;
 
     using get_resolution_rule_t         = get_resolution_rule<db>;
