@@ -2,6 +2,7 @@
 #include <gmock/gmock.h>
 #include <deque>
 #include <optional>
+#include <stdexcept>
 #include "infrastructure/hierarchical_bind_map.hpp"
 #include "value_objects/expr.hpp"
 #include "value_objects/framed_expr.hpp"
@@ -95,6 +96,9 @@ struct HierarchicalBindMapTest : public ::testing::Test {
 // bind() — delegation tests
 // Verify that bind() passes the map's own open/close labels and the caller's
 // key/value to record_fp_.record(), unchanged.
+// NiceMock handles the new query_fp_.query() call from the not-already-bound
+// assert by returning nullopt (default for optional), so these tests are
+// unaffected.
 // ---------------------------------------------------------------------------
 
 TEST_F(HierarchicalBindMapTest, BindDelegatesToRecordWithConstructionLabels) {
@@ -123,44 +127,63 @@ TEST_F(HierarchicalBindMapTest, MultipleBindsEachDelegateSeparately) {
 }
 
 // ---------------------------------------------------------------------------
-// whnf() on a functor — must return immediately, touching neither globalize
-// nor query_fp_.
+// bind() — safety assert: double-bind throws in debug builds.
+// Catch bug: bind() does not check whether the variable is already bound.
+// ---------------------------------------------------------------------------
+
+TEST_F(HierarchicalBindMapTest, BindThrowsIfVariableAlreadyBound) {
+    EXPECT_CALL(query_mock_, query(SameLabel(open_), k_key_0))
+        .WillOnce(::testing::Return(std::optional<framed_expr>(functor_fe_)));
+    EXPECT_THROW(hbm_.bind(k_key_0, functor_fe_), std::logic_error);
+}
+
+// ---------------------------------------------------------------------------
+// whnf() on a functor — must return immediately, touching neither globalize,
+// query_fp_, nor record_fp_.
 // Catch bug: whnf falls through to the var branch for non-vars.
 // ---------------------------------------------------------------------------
 
 TEST_F(HierarchicalBindMapTest, WhnfOnFunctorReturnsFunctorUnchanged) {
     EXPECT_CALL(globalizer_, globalize(::testing::_, ::testing::_)).Times(0);
     EXPECT_CALL(query_mock_, query(::testing::_, ::testing::_)).Times(0);
+    EXPECT_CALL(record_mock_, record(::testing::_, ::testing::_,
+                                     ::testing::_, ::testing::_)).Times(0);
 
     const framed_expr result = hbm_.whnf(functor_fe_);
     EXPECT_EQ(result, functor_fe_);
 }
 
 // ---------------------------------------------------------------------------
-// whnf() on an unbound variable — query returns nullopt, so the original
-// var framed_expr is returned as-is.
-// Catch bug: whnf returns a default-constructed framed_expr on nullopt.
+// whnf() on an unbound variable — query returns nullopt, returns original fe,
+// no compression record.
+// Catch bug: whnf returns a default-constructed framed_expr on nullopt, or
+// calls record even when the variable is unbound.
 // ---------------------------------------------------------------------------
 
 TEST_F(HierarchicalBindMapTest, WhnfOnUnboundVarReturnsOriginalFe) {
-    // var0_fe_: var_index=0, frame_offset=5 → global_key=k_key_0
     EXPECT_CALL(globalizer_, globalize(5u, 0u)).WillOnce(::testing::Return(k_key_0));
     EXPECT_CALL(query_mock_, query(SameLabel(open_), k_key_0))
         .WillOnce(::testing::Return(std::optional<framed_expr>(std::nullopt)));
+    EXPECT_CALL(record_mock_, record(::testing::_, ::testing::_,
+                                     ::testing::_, ::testing::_)).Times(0);
 
     const framed_expr result = hbm_.whnf(var0_fe_);
     EXPECT_EQ(result, var0_fe_);
 }
 
 // ---------------------------------------------------------------------------
-// whnf() single-hop: var → functor.
-// Catch bug: whnf discards the resolved value and returns the input instead.
+// whnf() single-hop: var0 → functor.
+// Compression: record(open_, close_, k_key_0, functor_fe_) is called.
+// Catch bug: whnf discards the resolved value, or omits the compression record.
 // ---------------------------------------------------------------------------
 
 TEST_F(HierarchicalBindMapTest, WhnfSingleHopVarToFunctorReturnsFunctor) {
     EXPECT_CALL(globalizer_, globalize(5u, 0u)).WillOnce(::testing::Return(k_key_0));
     EXPECT_CALL(query_mock_, query(SameLabel(open_), k_key_0))
         .WillOnce(::testing::Return(std::optional<framed_expr>(functor_fe_)));
+    EXPECT_CALL(record_mock_,
+                record(SameLabel(open_), SameLabel(close_), k_key_0, functor_fe_))
+        .Times(1);
 
     const framed_expr result = hbm_.whnf(var0_fe_);
     EXPECT_EQ(result, functor_fe_);
@@ -168,42 +191,48 @@ TEST_F(HierarchicalBindMapTest, WhnfSingleHopVarToFunctorReturnsFunctor) {
 
 // ---------------------------------------------------------------------------
 // whnf() multi-hop: var0 → var1 → functor.
-// Verifies that the recursive call correctly re-enters whnf on the
-// intermediate result, resolving the full chain.
-// Catch bug: whnf only follows one hop and returns a var when it should
-// keep resolving.
+// Compression fires twice: inner call compresses var1 → functor, then outer
+// call compresses var0 → functor.
+// Catch bug: whnf only follows one hop, or compresses only the outermost hop.
 // ---------------------------------------------------------------------------
 
 TEST_F(HierarchicalBindMapTest, WhnfMultiHopFollowsChainToFunctor) {
-    // hop 1: var0 (frame=5, idx=0) → global k_key_0 → resolves to var1_fe_
-    // hop 2: var1 (frame=7, idx=1) → global k_key_1 → resolves to functor_fe_
     EXPECT_CALL(globalizer_, globalize(5u, 0u)).WillOnce(::testing::Return(k_key_0));
     EXPECT_CALL(globalizer_, globalize(7u, 1u)).WillOnce(::testing::Return(k_key_1));
     EXPECT_CALL(query_mock_, query(SameLabel(open_), k_key_0))
         .WillOnce(::testing::Return(std::optional<framed_expr>(var1_fe_)));
     EXPECT_CALL(query_mock_, query(SameLabel(open_), k_key_1))
         .WillOnce(::testing::Return(std::optional<framed_expr>(functor_fe_)));
+    EXPECT_CALL(record_mock_,
+                record(SameLabel(open_), SameLabel(close_), k_key_1, functor_fe_))
+        .Times(1);
+    EXPECT_CALL(record_mock_,
+                record(SameLabel(open_), SameLabel(close_), k_key_0, functor_fe_))
+        .Times(1);
 
     const framed_expr result = hbm_.whnf(var0_fe_);
     EXPECT_EQ(result, functor_fe_);
 }
 
 // ---------------------------------------------------------------------------
-// whnf() on an unbound var1 directly: single lookup, returns var1_fe_.
-// Catch bug: whnf keeps looping past the nullopt and crashes or returns wrong.
+// whnf() on an unbound var1 directly: single lookup, no compression record.
 // ---------------------------------------------------------------------------
 
 TEST_F(HierarchicalBindMapTest, WhnfMultiHopEndsAtUnboundVar) {
-    // whnf(var1_fe_) directly: var1 (frame=7, idx=1) → k_key_1 → nullopt.
     EXPECT_CALL(globalizer_, globalize(7u, 1u)).WillOnce(::testing::Return(k_key_1));
     EXPECT_CALL(query_mock_, query(SameLabel(open_), k_key_1))
         .WillOnce(::testing::Return(std::optional<framed_expr>(std::nullopt)));
+    EXPECT_CALL(record_mock_, record(::testing::_, ::testing::_,
+                                     ::testing::_, ::testing::_)).Times(0);
 
     const framed_expr result = hbm_.whnf(var1_fe_);
     EXPECT_EQ(result, var1_fe_);
 }
 
-// whnf(var0_fe_) where var0→var1 and var1 is unbound: result is var1_fe_.
+// var0 → var1, var1 unbound: result is var1_fe_.
+// var0 → var1, var1 unbound: inner whnf(var1) returns early (nullopt, no record).
+// Outer: resolved = var1_fe_, record(k_key_0, var1_fe_) fires unconditionally.
+// Catch bug: whnf skips compression when chain ends at an unbound var.
 TEST_F(HierarchicalBindMapTest, WhnfChainEndingInUnboundVarReturnsLastVar) {
     EXPECT_CALL(globalizer_, globalize(5u, 0u)).WillOnce(::testing::Return(k_key_0));
     EXPECT_CALL(globalizer_, globalize(7u, 1u)).WillOnce(::testing::Return(k_key_1));
@@ -211,14 +240,60 @@ TEST_F(HierarchicalBindMapTest, WhnfChainEndingInUnboundVarReturnsLastVar) {
         .WillOnce(::testing::Return(std::optional<framed_expr>(var1_fe_)));
     EXPECT_CALL(query_mock_, query(SameLabel(open_), k_key_1))
         .WillOnce(::testing::Return(std::optional<framed_expr>(std::nullopt)));
+    EXPECT_CALL(record_mock_,
+                record(SameLabel(open_), SameLabel(close_), k_key_0, var1_fe_))
+        .Times(1);
 
     const framed_expr result = hbm_.whnf(var0_fe_);
     EXPECT_EQ(result, var1_fe_);
 }
 
 // ---------------------------------------------------------------------------
+// whnf() path compression eliminates chain on second call.
+//
+// First whnf(var0): two hops (var0 → var1 → functor), compression fires.
+// Second whnf(var0): one hop (var0 → functor directly from compressed entry).
+//
+// The Times(1) constraints on globalize(7u,1u) and query(k_key_1) prove the
+// second call never traverses the chain to var1.
+// Catch bug: compression record is written but does not actually shorten the
+// next lookup (wrong key, wrong value, or wrong interval recorded).
+// ---------------------------------------------------------------------------
+
+TEST_F(HierarchicalBindMapTest, WhnfCompressionEliminatesChainOnSecondCall) {
+    EXPECT_CALL(globalizer_, globalize(5u, 0u))
+        .WillOnce(::testing::Return(k_key_0))
+        .WillOnce(::testing::Return(k_key_0));
+    EXPECT_CALL(globalizer_, globalize(7u, 1u))
+        .Times(1)
+        .WillOnce(::testing::Return(k_key_1));
+    EXPECT_CALL(query_mock_, query(SameLabel(open_), k_key_0))
+        .WillOnce(::testing::Return(std::optional<framed_expr>(var1_fe_)))
+        .WillOnce(::testing::Return(std::optional<framed_expr>(functor_fe_)));
+    EXPECT_CALL(query_mock_, query(SameLabel(open_), k_key_1))
+        .Times(1)
+        .WillOnce(::testing::Return(std::optional<framed_expr>(functor_fe_)));
+    // First call: var0→var1→functor. Inner whnf(functor) fires record(k_key_1).
+    //             Outer fires record(k_key_0).
+    // Second call: var0→functor (compressed). whnf(functor) is immediate; fires record(k_key_0) again.
+    // Total: record(k_key_1) × 1, record(k_key_0) × 2.
+    // Times(1) on globalize(7u,1u) and query(k_key_1) proves second call skipped the chain.
+    EXPECT_CALL(record_mock_,
+                record(SameLabel(open_), SameLabel(close_), k_key_1, functor_fe_))
+        .Times(1);
+    EXPECT_CALL(record_mock_,
+                record(SameLabel(open_), SameLabel(close_), k_key_0, functor_fe_))
+        .Times(2);
+
+    const framed_expr first  = hbm_.whnf(var0_fe_);
+    const framed_expr second = hbm_.whnf(var0_fe_);
+    EXPECT_EQ(first,  functor_fe_);
+    EXPECT_EQ(second, functor_fe_);
+}
+
+// ---------------------------------------------------------------------------
 // Two hierarchical_bind_maps over the same underlying array but different
-// node intervals: each must query at its own open label.
+// node intervals: each must query and compress at its own open/close labels.
 // Catch bug: label stored by value but silently shared/aliased.
 // ---------------------------------------------------------------------------
 
@@ -233,17 +308,22 @@ TEST_F(HierarchicalBindMapTest, TwoMapsWithDifferentLabelsQueryAtOwnLabel) {
     ::testing::NiceMock<MockQueryFPArrayBinding>   qry2;
     test_hbm_t other_hbm(glob2, rec2, qry2, other_open, other_close);
 
-    // hbm_ queries at open_; other_hbm queries at other_open.
     const framed_expr result_a = make_functor_fe(77);
     const framed_expr result_b = make_functor_fe(88);
 
     EXPECT_CALL(globalizer_, globalize(5u, 0u)).WillOnce(::testing::Return(k_key_0));
     EXPECT_CALL(query_mock_,  query(SameLabel(open_),       k_key_0))
         .WillOnce(::testing::Return(std::optional<framed_expr>(result_a)));
+    EXPECT_CALL(record_mock_,
+                record(SameLabel(open_), SameLabel(close_), k_key_0, result_a))
+        .Times(1);
 
     EXPECT_CALL(glob2, globalize(5u, 0u)).WillOnce(::testing::Return(k_key_0));
     EXPECT_CALL(qry2,  query(SameLabel(other_open), k_key_0))
         .WillOnce(::testing::Return(std::optional<framed_expr>(result_b)));
+    EXPECT_CALL(rec2,
+                record(SameLabel(other_open), SameLabel(other_close), k_key_0, result_b))
+        .Times(1);
 
     EXPECT_EQ(hbm_.whnf(var0_fe_),       result_a);
     EXPECT_EQ(other_hbm.whnf(var0_fe_),  result_b);

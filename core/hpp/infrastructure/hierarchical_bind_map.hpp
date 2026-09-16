@@ -5,6 +5,7 @@
 #include "value_objects/framed_expr.hpp"
 #include "value_objects/expr.hpp"
 #include "value_objects/om_label.hpp"
+#include "debug_assert.hpp"
 
 // hierarchical_bind_map: a node-scoped view over a fully_persistent_array that
 // exposes the bind()/whnf() interface expected by the unifier.
@@ -14,12 +15,14 @@
 //
 // bind(global_key, value)
 //   Records a binding in the underlying array for this node's interval.
-//   Delegates directly to IRecordFPArrayBinding::record.
+//   Asserts the variable is not already bound (double-bind is a bug) and,
+//   when value is a variable, that it is older than global_key (youngest-wins).
 //
 // whnf(fe)
 //   Resolves fe to weak head normal form by following variable chains via
-//   IQueryFPArrayBinding::query at this node's open label.  No path
-//   compression: the persistent array is append-only after record().
+//   IQueryFPArrayBinding::query at this node's open label.  After resolving,
+//   compresses the chain by re-recording the root value directly
+//   (record_fp_.record), so subsequent calls skip intermediate hops.
 //
 // Template parameters — one per invoked method:
 //   IGlobalize            — globalize(frame_offset, var_index) → uint32_t
@@ -59,6 +62,12 @@ hierarchical_bind_map(IGlobalize& g,
 template<typename IGlobalize, typename IRecordFPArrayBinding, typename IQueryFPArrayBinding>
 void hierarchical_bind_map<IGlobalize, IRecordFPArrayBinding, IQueryFPArrayBinding>::
 bind(uint32_t global_key, framed_expr value) {
+    DEBUG_ASSERT(
+        !std::holds_alternative<expr::var>(value.skeleton->content)
+        || global_key > globalizer_.globalize(
+               value.frame_offset,
+               std::get<expr::var>(value.skeleton->content).index));
+    DEBUG_ASSERT(!query_fp_.query(open_, global_key).has_value());
     record_fp_.record(open_, close_, global_key, value);
 }
 
@@ -72,7 +81,9 @@ whnf(framed_expr fe) {
     const std::optional<framed_expr> result = query_fp_.query(open_, global_key);
     if (!result)
         return fe;
-    return whnf(*result);
+    framed_expr resolved = whnf(*result);
+    record_fp_.record(open_, close_, global_key, resolved);
+    return resolved;
 }
 
 #endif
