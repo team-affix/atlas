@@ -61,7 +61,7 @@ TEST_F(FullyPersistentArrayIntegrationTest, RealLabelsInheritanceWorks) {
     const om_interval root  = om_.allocate_root();
     const om_interval child = om_.allocate_child_of(root);
 
-    bm_.record(root.open, root.close, k_var_x, val1_);
+    bm_.record(root, k_var_x, val1_);
     EXPECT_TRUE(same_value(bm_.query(child.open, k_var_x), val1_));
 }
 
@@ -70,7 +70,7 @@ TEST_F(FullyPersistentArrayIntegrationTest, RealLabelsSiblingIsolation) {
     const om_interval child_a = om_.allocate_child_of(root);
     const om_interval child_b = om_.allocate_child_of(root);
 
-    bm_.record(child_a.open, child_a.close, k_var_x, val2_);
+    bm_.record(child_a, k_var_x, val2_);
     EXPECT_FALSE(bm_.query(child_b.open, k_var_x).has_value());
 }
 
@@ -79,8 +79,8 @@ TEST_F(FullyPersistentArrayIntegrationTest, RealLabelsRebindingAndRestoration) {
     const om_interval child   = om_.allocate_child_of(root);
     const om_interval sibling = om_.allocate_child_of(root);
 
-    bm_.record(root.open,  root.close,  k_var_x, val1_);
-    bm_.record(child.open, child.close, k_var_x, val2_);
+    bm_.record(root, k_var_x, val1_);
+    bm_.record(child, k_var_x, val2_);
 
     EXPECT_TRUE(same_value(bm_.query(child.open,   k_var_x), val2_));
     EXPECT_TRUE(same_value(bm_.query(sibling.open,  k_var_x), val1_));
@@ -92,7 +92,7 @@ TEST_F(FullyPersistentArrayIntegrationTest, RealLabelsGrandchildInheritance) {
     const om_interval child      = om_.allocate_child_of(root);
     const om_interval grandchild = om_.allocate_child_of(child);
 
-    bm_.record(root.open, root.close, k_var_x, val1_);
+    bm_.record(root, k_var_x, val1_);
     EXPECT_TRUE(same_value(bm_.query(grandchild.open, k_var_x), val1_));
 }
 
@@ -100,8 +100,8 @@ TEST_F(FullyPersistentArrayIntegrationTest, RealLabelsMultipleVariables) {
     const om_interval root  = om_.allocate_root();
     const om_interval child = om_.allocate_child_of(root);
 
-    bm_.record(root.open,  root.close,  k_var_x, val1_);
-    bm_.record(child.open, child.close, k_var_y, val2_);
+    bm_.record(root, k_var_x, val1_);
+    bm_.record(child, k_var_y, val2_);
 
     EXPECT_TRUE(same_value(bm_.query(child.open, k_var_x), val1_));
     EXPECT_TRUE(same_value(bm_.query(child.open, k_var_y), val2_));
@@ -131,7 +131,7 @@ TEST_F(FullyPersistentArrayIntegrationTest, ManyChildrenThenQueryAll) {
     for (int child_idx = 0; child_idx < k_count; ++child_idx) {
         children.push_back(om_.allocate_child_of(root));
         values.push_back(make_framed(static_cast<uint32_t>(200 + child_idx)));
-        bm_.record(children[child_idx].open, children[child_idx].close,
+        bm_.record(children[child_idx],
                    k_var_x, values[child_idx]);
     }
 
@@ -151,7 +151,7 @@ TEST_F(FullyPersistentArrayIntegrationTest, DeepChainRecordAndQuery) {
     for (int depth = 1; depth < k_depth; ++depth)
         levels.push_back(om_.allocate_child_of(levels[depth - 1]));
 
-    bm_.record(levels[0].open, levels[0].close, k_var_x, val1_);
+    bm_.record(levels[0], k_var_x, val1_);
 
     for (int depth = 0; depth < k_depth; ++depth) {
         EXPECT_TRUE(same_value(bm_.query(levels[depth].open, k_var_x), val1_))
@@ -164,7 +164,7 @@ TEST_F(FullyPersistentArrayIntegrationTest, InterleavedAllocAndRecord) {
     // existing node.  Verifies that relabeling triggered mid-sequence does not
     // corrupt bindings recorded before the relabeling.
     const om_interval root = om_.allocate_root();
-    bm_.record(root.open, root.close, k_var_x, val1_);
+    bm_.record(root, k_var_x, val1_);
 
     constexpr int k_rounds = 100;
     std::vector<om_interval> children;
@@ -175,7 +175,7 @@ TEST_F(FullyPersistentArrayIntegrationTest, InterleavedAllocAndRecord) {
     for (int round = 0; round < k_rounds; ++round) {
         children.push_back(om_.allocate_child_of(root));
         child_values.push_back(make_framed(static_cast<uint32_t>(300 + round)));
-        bm_.record(children[round].open, children[round].close,
+        bm_.record(children[round],
                    k_var_y, child_values[round]);
     }
 
@@ -207,9 +207,9 @@ TEST_F(FullyPersistentArrayIntegrationTest, RelabelingDoesNotCorruptPriorRecords
     const om_interval child_a = om_.allocate_child_of(root);
     const om_interval child_b = om_.allocate_child_of(root);
 
-    bm_.record(root.open,    root.close,    k_var_x, val1_);
-    bm_.record(child_a.open, child_a.close, k_var_x, val2_);
-    bm_.record(child_b.open, child_b.close, k_var_x, val3_);
+    bm_.record(root, k_var_x, val1_);
+    bm_.record(child_a, k_var_x, val2_);
+    bm_.record(child_b, k_var_x, val3_);
 
     // Force relabeling.
     for (int sibling_idx = 0; sibling_idx < 200; ++sibling_idx)
@@ -235,8 +235,8 @@ TEST_F(FullyPersistentArrayIntegrationTest, TwoFullyPersistentArraysShareOrderMa
     const om_interval child = om_.allocate_child_of(root);
 
     // Record x in bm_ and y in bm2_ (using the same interval labels).
-    bm_.record(root.open, root.close, k_var_x, val1_);
-    bm2_.record(root.open, root.close, k_var_y, val2_);
+    bm_.record(root, k_var_x, val1_);
+    bm2_.record(root, k_var_y, val2_);
 
     // bm_ sees x but not y.
     EXPECT_TRUE( same_value(bm_.query(child.open, k_var_x), val1_));
@@ -257,7 +257,7 @@ TEST_F(FullyPersistentArrayIntegrationTest, CrossSubtreeIsolationAfterRelabeling
     const om_interval root_a = om_.allocate_root();
     const om_interval root_b = om_.allocate_root();
 
-    bm_.record(root_b.open, root_b.close, k_var_x, val3_);
+    bm_.record(root_b, k_var_x, val3_);
 
     // Force relabeling inside root_a.
     constexpr int k_count = 200;
@@ -287,12 +287,12 @@ TEST_F(FullyPersistentArrayIntegrationTest, DeepChainEachLevelRebindsSameVar) {
 
     levels.push_back(om_.allocate_root());
     level_values.push_back(make_framed(500));
-    bm_.record(levels[0].open, levels[0].close, k_var_x, level_values[0]);
+    bm_.record(levels[0], k_var_x, level_values[0]);
 
     for (int depth = 1; depth <= k_depth; ++depth) {
         levels.push_back(om_.allocate_child_of(levels[depth - 1]));
         level_values.push_back(make_framed(static_cast<uint32_t>(500 + depth)));
-        bm_.record(levels[depth].open, levels[depth].close,
+        bm_.record(levels[depth],
                    k_var_x, level_values[depth]);
     }
 
@@ -319,8 +319,8 @@ TEST_F(FullyPersistentArrayIntegrationTest, InterleavedAllocationsFromTwoRoots) 
     const om_interval root_a = om_.allocate_root();
     const om_interval root_b = om_.allocate_root();
 
-    bm_.record(root_a.open, root_a.close, k_var_x, val1_);
-    bm_.record(root_b.open, root_b.close, k_var_y, val2_);
+    bm_.record(root_a, k_var_x, val1_);
+    bm_.record(root_b, k_var_y, val2_);
 
     constexpr int k_rounds = 50;
     std::vector<om_interval> children_a;
@@ -403,8 +403,7 @@ TEST_F(FullyPersistentArrayIntegrationTest, RandomTreeRandomBindingsEndToEnd) {
                 expr_store.push_back(expr{expr::functor{next_functor_id++, {}}});
                 const framed_expr fe{&expr_store.back(), 0};
                 bindings[node_idx][static_cast<uint32_t>(var_idx)] = fe;
-                bm_.record(intervals[node_idx].open,
-                           intervals[node_idx].close,
+                bm_.record(intervals[node_idx],
                            static_cast<uint32_t>(var_idx), fe);
             }
         }
@@ -477,8 +476,7 @@ TEST_F(FullyPersistentArrayIntegrationTest, RandomTreeAlternateSeedEndToEnd) {
                 expr_store.push_back(expr{expr::functor{next_functor_id++, {}}});
                 const framed_expr fe{&expr_store.back(), 0};
                 bindings[node_idx][static_cast<uint32_t>(var_idx)] = fe;
-                bm_.record(intervals[node_idx].open,
-                           intervals[node_idx].close,
+                bm_.record(intervals[node_idx],
                            static_cast<uint32_t>(var_idx), fe);
             }
         }
@@ -527,7 +525,7 @@ TEST_F(FullyPersistentArrayIntegrationTest, StarTreeWithManyUniqueBindings) {
     for (int child_idx = 0; child_idx < k_count; ++child_idx) {
         children.push_back(om_.allocate_child_of(root));
         child_bindings.push_back(make_framed(static_cast<uint32_t>(3000 + child_idx)));
-        bm_.record(children[child_idx].open, children[child_idx].close,
+        bm_.record(children[child_idx],
                    k_var_x, child_bindings[child_idx]);
     }
 
@@ -556,12 +554,12 @@ TEST_F(FullyPersistentArrayIntegrationTest, VeryDeepChainMultipleRelabelings) {
 
     levels.push_back(om_.allocate_root());
     level_values.push_back(make_framed(4000));
-    bm_.record(levels[0].open, levels[0].close, k_var_x, level_values[0]);
+    bm_.record(levels[0], k_var_x, level_values[0]);
 
     for (int depth = 1; depth < k_depth; ++depth) {
         levels.push_back(om_.allocate_child_of(levels[depth - 1]));
         level_values.push_back(make_framed(static_cast<uint32_t>(4000 + depth)));
-        bm_.record(levels[depth].open, levels[depth].close,
+        bm_.record(levels[depth],
                    k_var_x, level_values[depth]);
     }
 

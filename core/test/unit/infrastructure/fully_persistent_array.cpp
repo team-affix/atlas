@@ -86,7 +86,7 @@ TEST_F(FullyPersistentArrayTest, EmptyMapReturnsNullopt) {
 }
 
 TEST_F(FullyPersistentArrayTest, UnrecordedVarReturnsNullopt) {
-    bm_.record(root_.open, root_.close, k_var_x, val1_);
+    bm_.record(root_, k_var_x, val1_);
     EXPECT_FALSE(bm_.query(root_.open, k_var_y).has_value());
 }
 
@@ -96,22 +96,22 @@ TEST_F(FullyPersistentArrayTest, UnrecordedVarReturnsNullopt) {
 // ---------------------------------------------------------------------------
 
 TEST_F(FullyPersistentArrayTest, QueryAtRecordingNodeReturnsValue) {
-    bm_.record(root_.open, root_.close, k_var_x, val1_);
+    bm_.record(root_, k_var_x, val1_);
     EXPECT_TRUE(same_value(bm_.query(root_.open, k_var_x), val1_));
 }
 
 TEST_F(FullyPersistentArrayTest, ChildInheritsAncestorBinding) {
-    bm_.record(root_.open, root_.close, k_var_x, val1_);
+    bm_.record(root_, k_var_x, val1_);
     EXPECT_TRUE(same_value(bm_.query(a_.open, k_var_x), val1_));
 }
 
 TEST_F(FullyPersistentArrayTest, GrandchildInheritsGrandparentBinding) {
-    bm_.record(root_.open, root_.close, k_var_x, val1_);
+    bm_.record(root_, k_var_x, val1_);
     EXPECT_TRUE(same_value(bm_.query(b_.open, k_var_x), val1_));
 }
 
 TEST_F(FullyPersistentArrayTest, StarTreeAllDescendantsInheritRoot) {
-    bm_.record(root_.open, root_.close, k_var_x, val1_);
+    bm_.record(root_, k_var_x, val1_);
     EXPECT_TRUE(same_value(bm_.query(a_.open, k_var_x), val1_));
     EXPECT_TRUE(same_value(bm_.query(b_.open, k_var_x), val1_));
     EXPECT_TRUE(same_value(bm_.query(c_.open, k_var_x), val1_));
@@ -125,29 +125,29 @@ TEST_F(FullyPersistentArrayTest, StarTreeAllDescendantsInheritRoot) {
 // ---------------------------------------------------------------------------
 
 TEST_F(FullyPersistentArrayTest, ChildRebindingHidesParent) {
-    bm_.record(root_.open, root_.close, k_var_x, val1_);
-    bm_.record(a_.open,    a_.close,    k_var_x, val2_);
+    bm_.record(root_, k_var_x, val1_);
+    bm_.record(a_, k_var_x, val2_);
     EXPECT_TRUE(same_value(bm_.query(a_.open, k_var_x), val2_));
 }
 
 TEST_F(FullyPersistentArrayTest, ParentUnaffectedByChildRebinding) {
-    bm_.record(root_.open, root_.close, k_var_x, val1_);
-    bm_.record(a_.open,    a_.close,    k_var_x, val2_);
+    bm_.record(root_, k_var_x, val1_);
+    bm_.record(a_, k_var_x, val2_);
     EXPECT_TRUE(same_value(bm_.query(root_.open, k_var_x), val1_));
 }
 
 TEST_F(FullyPersistentArrayTest, SiblingAfterRebindingChildSeesParent) {
     // C is a sibling of A.  Without the close event at A.close, the
     // predecessor of C.open would be A's binding, which is wrong.
-    bm_.record(root_.open, root_.close, k_var_x, val1_);
-    bm_.record(a_.open,    a_.close,    k_var_x, val2_);
+    bm_.record(root_, k_var_x, val1_);
+    bm_.record(a_, k_var_x, val2_);
     EXPECT_TRUE(same_value(bm_.query(c_.open, k_var_x), val1_));
 }
 
 TEST_F(FullyPersistentArrayTest, GrandchildRebindingChain) {
-    bm_.record(root_.open, root_.close, k_var_x, val1_);
-    bm_.record(a_.open,    a_.close,    k_var_x, val2_);
-    bm_.record(b_.open,    b_.close,    k_var_x, val3_);
+    bm_.record(root_, k_var_x, val1_);
+    bm_.record(a_, k_var_x, val2_);
+    bm_.record(b_, k_var_x, val3_);
     EXPECT_TRUE(same_value(bm_.query(root_.open, k_var_x), val1_));
     EXPECT_TRUE(same_value(bm_.query(a_.open,    k_var_x), val2_));
     EXPECT_TRUE(same_value(bm_.query(b_.open,    k_var_x), val3_));
@@ -161,30 +161,30 @@ TEST_F(FullyPersistentArrayTest, GrandchildRebindingChain) {
 
 TEST_F(FullyPersistentArrayTest, LeftSubtreeBindingInvisibleToRightSibling) {
     // Only A binds x; root never does. C should see nullopt.
-    bm_.record(a_.open, a_.close, k_var_x, val2_);
+    bm_.record(a_, k_var_x, val2_);
     EXPECT_FALSE(bm_.query(c_.open, k_var_x).has_value());
 }
 
 TEST_F(FullyPersistentArrayTest, RightSubtreeBindingInvisibleToLeftSibling) {
-    bm_.record(c_.open, c_.close, k_var_x, val5_);
+    bm_.record(c_, k_var_x, val5_);
     EXPECT_FALSE(bm_.query(a_.open, k_var_x).has_value());
 }
 
 TEST_F(FullyPersistentArrayTest, DeepLeftSubtreeInvisibleToRightSibling) {
     // B is deep inside A; C is A's sibling. C must not see B's binding.
-    bm_.record(b_.open, b_.close, k_var_x, val3_);
+    bm_.record(b_, k_var_x, val3_);
     EXPECT_FALSE(bm_.query(c_.open, k_var_x).has_value());
 }
 
 TEST_F(FullyPersistentArrayTest, DeepRightSubtreeInvisibleToLeftSibling) {
     // D is deep inside C; A is C's sibling. A must not see D's binding.
-    bm_.record(d_.open, d_.close, k_var_x, val4_);
+    bm_.record(d_, k_var_x, val4_);
     EXPECT_FALSE(bm_.query(a_.open, k_var_x).has_value());
 }
 
 TEST_F(FullyPersistentArrayTest, DeepLeftSubtreeInvisibleToDeepRightSubtree) {
     // B (in A's subtree) and D (in C's subtree) are in separate branches.
-    bm_.record(b_.open, b_.close, k_var_x, val3_);
+    bm_.record(b_, k_var_x, val3_);
     EXPECT_FALSE(bm_.query(d_.open, k_var_x).has_value());
 }
 
@@ -194,15 +194,15 @@ TEST_F(FullyPersistentArrayTest, DeepLeftSubtreeInvisibleToDeepRightSubtree) {
 // ---------------------------------------------------------------------------
 
 TEST_F(FullyPersistentArrayTest, TwoVarsBoundAtSameNodeBothVisible) {
-    bm_.record(root_.open, root_.close, k_var_x, val1_);
-    bm_.record(root_.open, root_.close, k_var_y, val2_);
+    bm_.record(root_, k_var_x, val1_);
+    bm_.record(root_, k_var_y, val2_);
     EXPECT_TRUE(same_value(bm_.query(b_.open, k_var_x), val1_));
     EXPECT_TRUE(same_value(bm_.query(b_.open, k_var_y), val2_));
 }
 
 TEST_F(FullyPersistentArrayTest, IndependentVarsDontCrossContaminate) {
-    bm_.record(root_.open, root_.close, k_var_x, val1_);
-    bm_.record(a_.open,    a_.close,    k_var_y, val2_);
+    bm_.record(root_, k_var_x, val1_);
+    bm_.record(a_, k_var_y, val2_);
     // B (inside A) sees both.
     EXPECT_TRUE(same_value(bm_.query(b_.open, k_var_x), val1_));
     EXPECT_TRUE(same_value(bm_.query(b_.open, k_var_y), val2_));
@@ -212,9 +212,9 @@ TEST_F(FullyPersistentArrayTest, IndependentVarsDontCrossContaminate) {
 }
 
 TEST_F(FullyPersistentArrayTest, RebindingOneVarLeavesOtherUntouched) {
-    bm_.record(root_.open, root_.close, k_var_x, val1_);
-    bm_.record(root_.open, root_.close, k_var_y, val2_);
-    bm_.record(a_.open,    a_.close,    k_var_x, val3_);
+    bm_.record(root_, k_var_x, val1_);
+    bm_.record(root_, k_var_y, val2_);
+    bm_.record(a_, k_var_x, val3_);
     // A sees rebinding of x, original y.
     EXPECT_TRUE(same_value(bm_.query(a_.open, k_var_x), val3_));
     EXPECT_TRUE(same_value(bm_.query(a_.open, k_var_y), val2_));
@@ -230,15 +230,15 @@ TEST_F(FullyPersistentArrayTest, RebindingOneVarLeavesOtherUntouched) {
 
 TEST_F(FullyPersistentArrayTest, CloseEventRestorationAfterSubtree) {
     // After A's interval, C should see root's value, not A's.
-    bm_.record(root_.open, root_.close, k_var_x, val1_);
-    bm_.record(a_.open,    a_.close,    k_var_x, val2_);
+    bm_.record(root_, k_var_x, val1_);
+    bm_.record(a_, k_var_x, val2_);
     EXPECT_TRUE(same_value(bm_.query(c_.open, k_var_x), val1_));
 }
 
 TEST_F(FullyPersistentArrayTest, LinearChainEachLevelSeesOwnBinding) {
-    bm_.record(root_.open, root_.close, k_var_x, val1_);
-    bm_.record(a_.open,    a_.close,    k_var_x, val2_);
-    bm_.record(b_.open,    b_.close,    k_var_x, val3_);
+    bm_.record(root_, k_var_x, val1_);
+    bm_.record(a_, k_var_x, val2_);
+    bm_.record(b_, k_var_x, val3_);
     EXPECT_TRUE(same_value(bm_.query(root_.open, k_var_x), val1_));
     EXPECT_TRUE(same_value(bm_.query(a_.open,    k_var_x), val2_));
     EXPECT_TRUE(same_value(bm_.query(b_.open,    k_var_x), val3_));
@@ -248,9 +248,9 @@ TEST_F(FullyPersistentArrayTest, LinearChainEachLevelSeesOwnBinding) {
 
 TEST_F(FullyPersistentArrayTest, NestedRebindRestoresCorrectlyAtOuterSibling) {
     // D is inside C; A is a sibling of C. A must not see C's or D's binding.
-    bm_.record(root_.open, root_.close, k_var_x, val1_);
-    bm_.record(c_.open,    c_.close,    k_var_x, val2_);
-    bm_.record(d_.open,    d_.close,    k_var_x, val3_);
+    bm_.record(root_, k_var_x, val1_);
+    bm_.record(c_, k_var_x, val2_);
+    bm_.record(d_, k_var_x, val3_);
     EXPECT_TRUE(same_value(bm_.query(a_.open, k_var_x), val1_));
 }
 
@@ -262,20 +262,20 @@ TEST_F(FullyPersistentArrayTest, NestedRebindRestoresCorrectlyAtOuterSibling) {
 
 TEST_F(FullyPersistentArrayTest, VarBoundOnlyInSiblingAppearsUnboundElsewhere) {
     // Only A binds x; root has no x. C should see nullopt.
-    bm_.record(a_.open, a_.close, k_var_x, val2_);
+    bm_.record(a_, k_var_x, val2_);
     EXPECT_FALSE(bm_.query(c_.open, k_var_x).has_value());
 }
 
 TEST_F(FullyPersistentArrayTest, CloseEventExplicitlyRestoresNullopt) {
     // Root does not bind x; A does.  After A's close, C queries and should
     // get nullopt — the close event at A.close must restore nullopt.
-    bm_.record(a_.open, a_.close, k_var_x, val2_);
+    bm_.record(a_, k_var_x, val2_);
     EXPECT_FALSE(bm_.query(c_.open, k_var_x).has_value());
 }
 
 TEST_F(FullyPersistentArrayTest, VarBoundInDeepSiblingSubtreeRestoresNulloptOutside) {
     // B (inside A) binds x; root and A don't. D (inside C) queries — nullopt.
-    bm_.record(b_.open, b_.close, k_var_x, val3_);
+    bm_.record(b_, k_var_x, val3_);
     EXPECT_FALSE(bm_.query(d_.open, k_var_x).has_value());
 }
 
@@ -286,29 +286,29 @@ TEST_F(FullyPersistentArrayTest, VarBoundInDeepSiblingSubtreeRestoresNulloptOuts
 // ---------------------------------------------------------------------------
 
 TEST_F(FullyPersistentArrayTest, QueryAtExactOpenLabelReturnsOwnValue) {
-    bm_.record(a_.open, a_.close, k_var_x, val2_);
+    bm_.record(a_, k_var_x, val2_);
     EXPECT_TRUE(same_value(bm_.query(a_.open, k_var_x), val2_));
 }
 
 TEST_F(FullyPersistentArrayTest, QueryBeforeAOpenReturnsNullopt) {
     // A binds x; querying at root.open (before A's interval) → nullopt.
-    bm_.record(a_.open, a_.close, k_var_x, val2_);
+    bm_.record(a_, k_var_x, val2_);
     EXPECT_FALSE(bm_.query(root_.open, k_var_x).has_value());
 }
 
 TEST_F(FullyPersistentArrayTest, QueryBeforeAOpenReturnsParentValue) {
     // Root binds x; A rebinds x.  Querying at root.open (before A's interval)
     // → root's value, not A's.
-    bm_.record(root_.open, root_.close, k_var_x, val1_);
-    bm_.record(a_.open,    a_.close,    k_var_x, val2_);
+    bm_.record(root_, k_var_x, val1_);
+    bm_.record(a_, k_var_x, val2_);
     EXPECT_TRUE(same_value(bm_.query(root_.open, k_var_x), val1_));
 }
 
 TEST_F(FullyPersistentArrayTest, QueryAtCloseEventPositionReturnsRestoredValue) {
     // The close event at A.close stores val1 (root's value).
     // Querying exactly at A.close should return val1.
-    bm_.record(root_.open, root_.close, k_var_x, val1_);
-    bm_.record(a_.open,    a_.close,    k_var_x, val2_);
+    bm_.record(root_, k_var_x, val1_);
+    bm_.record(a_, k_var_x, val2_);
     EXPECT_TRUE(same_value(bm_.query(a_.close, k_var_x), val1_));
 }
 
@@ -324,11 +324,11 @@ TEST_F(FullyPersistentArrayTest, FullTreeInvariantCheck) {
     //   B:    y=val4
     //   C:    (nothing)
     //   D:    x=val5
-    bm_.record(root_.open, root_.close, k_var_x, val1_);
-    bm_.record(root_.open, root_.close, k_var_y, val2_);
-    bm_.record(a_.open,    a_.close,    k_var_x, val3_);
-    bm_.record(b_.open,    b_.close,    k_var_y, val4_);
-    bm_.record(d_.open,    d_.close,    k_var_x, val5_);
+    bm_.record(root_, k_var_x, val1_);
+    bm_.record(root_, k_var_y, val2_);
+    bm_.record(a_, k_var_x, val3_);
+    bm_.record(b_, k_var_y, val4_);
+    bm_.record(d_, k_var_x, val5_);
 
     // root: sees its own x and y
     EXPECT_TRUE(same_value(bm_.query(root_.open, k_var_x), val1_));
@@ -366,8 +366,8 @@ TEST_F(FullyPersistentArrayTest, FullTreeInvariantCheck) {
 
 TEST_F(FullyPersistentArrayTest, TwoSiblingsBindSameVarBothIsolated) {
     // A:x=val2, C:x=val5 — root never binds x.
-    bm_.record(a_.open, a_.close, k_var_x, val2_);
-    bm_.record(c_.open, c_.close, k_var_x, val5_);
+    bm_.record(a_, k_var_x, val2_);
+    bm_.record(c_, k_var_x, val5_);
     // B (inside A) should see A's value.
     EXPECT_TRUE(same_value(bm_.query(b_.open, k_var_x), val2_));
     // D (inside C) should see C's value.
@@ -386,7 +386,7 @@ TEST_F(FullyPersistentArrayTest, TwoSiblingsBindSameVarBothIsolated) {
 
 TEST_F(FullyPersistentArrayTest, RecordAtLeafOnlyAncestorsReturnNullopt) {
     // Only B is recorded; root, A, C, D are never recorded.
-    bm_.record(b_.open, b_.close, k_var_x, val3_);
+    bm_.record(b_, k_var_x, val3_);
     EXPECT_FALSE(bm_.query(root_.open, k_var_x).has_value());
     EXPECT_FALSE(bm_.query(a_.open,    k_var_x).has_value());
     EXPECT_TRUE( same_value(bm_.query(b_.open,  k_var_x), val3_));
@@ -402,7 +402,7 @@ TEST_F(FullyPersistentArrayTest, RecordAtLeafOnlyAncestorsReturnNullopt) {
 
 TEST_F(FullyPersistentArrayTest, FrameOffsetPreservedInQuery) {
     const framed_expr with_offset = make_framed(99, 42);
-    bm_.record(root_.open, root_.close, k_var_x, with_offset);
+    bm_.record(root_, k_var_x, with_offset);
     const auto result = bm_.query(b_.open, k_var_x);
     ASSERT_TRUE(result.has_value());
     EXPECT_EQ(result->frame_offset, 42u);
@@ -413,8 +413,8 @@ TEST_F(FullyPersistentArrayTest, ZeroFrameOffsetDistinctFromNonZero) {
     const framed_expr offset_zero    = make_framed(10, 0);
     const framed_expr offset_nonzero = make_framed(10, 7);
     EXPECT_NE(offset_zero, offset_nonzero);
-    bm_.record(root_.open, root_.close, k_var_x, offset_zero);
-    bm_.record(a_.open,    a_.close,    k_var_x, offset_nonzero);
+    bm_.record(root_, k_var_x, offset_zero);
+    bm_.record(a_, k_var_x, offset_nonzero);
     // B (inside A) should see offset_nonzero.
     EXPECT_TRUE(same_value(bm_.query(b_.open, k_var_x), offset_nonzero));
     // C (sibling of A) should see offset_zero (restored by A's close).
@@ -434,7 +434,7 @@ TEST_F(FullyPersistentArrayTest, ManyVarsAtRootAllVisibleAtDeepDescendant) {
     for (int var_idx = 0; var_idx < k_var_count; ++var_idx) {
         const framed_expr value = make_framed(static_cast<uint32_t>(100 + var_idx));
         expected.push_back(value);
-        bm_.record(root_.open, root_.close,
+        bm_.record(root_,
                    static_cast<uint32_t>(1000 + var_idx), value);
     }
     for (int var_idx = 0; var_idx < k_var_count; ++var_idx) {
@@ -454,8 +454,8 @@ TEST_F(FullyPersistentArrayTest, ManyVarsAtRootAllVisibleAtDeepDescendant) {
 TEST_F(FullyPersistentArrayTest, QueryBetweenSiblingIntervalsMidpoint) {
     // probe_.open is strictly between A.close and C.open.
     // The predecessor in x's timeline is A's close event → val1.
-    bm_.record(root_.open, root_.close, k_var_x, val1_);
-    bm_.record(a_.open,    a_.close,    k_var_x, val2_);
+    bm_.record(root_, k_var_x, val1_);
+    bm_.record(a_, k_var_x, val2_);
     EXPECT_TRUE(same_value(bm_.query(probe_.open, k_var_x), val1_));
 }
 
@@ -465,10 +465,10 @@ TEST_F(FullyPersistentArrayTest, QueryBetweenSiblingIntervalsMidpoint) {
 // ---------------------------------------------------------------------------
 
 TEST_F(FullyPersistentArrayTest, DoubleRecordSameNodeSameVar) {
-    bm_.record(root_.open, root_.close, k_var_x, val1_);
-    bm_.record(a_.open,    a_.close,    k_var_x, val2_);
+    bm_.record(root_, k_var_x, val1_);
+    bm_.record(a_, k_var_x, val2_);
     // Overwrite A's record with val3.
-    bm_.record(a_.open, a_.close, k_var_x, val3_);
+    bm_.record(a_, k_var_x, val3_);
     // B (inside A) should see val3.
     EXPECT_TRUE(same_value(bm_.query(b_.open, k_var_x), val3_));
     // C (sibling of A) should see root's value.
@@ -484,9 +484,9 @@ TEST_F(FullyPersistentArrayTest, DoubleRecordSameNodeSameVar) {
 // ---------------------------------------------------------------------------
 
 TEST_F(FullyPersistentArrayTest, ThreeLevelCloseChainRestoresCorrectly) {
-    bm_.record(root_.open, root_.close, k_var_x, val1_);
-    bm_.record(a_.open,    a_.close,    k_var_x, val2_);
-    bm_.record(b_.open,    b_.close,    k_var_x, val3_);
+    bm_.record(root_, k_var_x, val1_);
+    bm_.record(a_, k_var_x, val2_);
+    bm_.record(b_, k_var_x, val3_);
     // A's close must restore val1 (root's value), not val2 (A's value).
     EXPECT_TRUE(same_value(bm_.query(a_.close, k_var_x), val1_));
     // B's close must restore val2 (A's value), not val1 (root's value).
@@ -502,7 +502,7 @@ TEST_F(FullyPersistentArrayTest, ThreeLevelCloseChainRestoresCorrectly) {
 // ---------------------------------------------------------------------------
 
 TEST_F(FullyPersistentArrayTest, QueryAtRootOpenReturnsRootBinding) {
-    bm_.record(root_.open, root_.close, k_var_x, val1_);
+    bm_.record(root_, k_var_x, val1_);
     EXPECT_TRUE(same_value(bm_.query(root_.open, k_var_x), val1_));
 }
 
@@ -513,7 +513,7 @@ TEST_F(FullyPersistentArrayTest, QueryAtRootOpenReturnsRootBinding) {
 // ---------------------------------------------------------------------------
 
 TEST_F(FullyPersistentArrayTest, QueryAtRootCloseReturnsNullopt) {
-    bm_.record(root_.open, root_.close, k_var_x, val1_);
+    bm_.record(root_, k_var_x, val1_);
     // The close event at root_.close stores nullopt (prior was unbound).
     EXPECT_FALSE(bm_.query(root_.close, k_var_x).has_value());
 }
@@ -536,9 +536,9 @@ TEST_F(FullyPersistentArrayTest, AlternatingLevelBindingsOddLevelsInherit) {
     const om_interval probe_after_l2 = om_.allocate_child_of(l1);
 
     fully_persistent_array bm;
-    bm.record(l0.open, l0.close, k_var_x, val1_);  // L0: x = val1
-    bm.record(l2.open, l2.close, k_var_x, val2_);  // L2: x = val2
-    bm.record(l4.open, l4.close, k_var_x, val3_);  // L4: x = val3
+    bm.record(l0, k_var_x, val1_);  // L0: x = val1
+    bm.record(l2, k_var_x, val2_);  // L2: x = val2
+    bm.record(l4, k_var_x, val3_);  // L4: x = val3
 
     // L0: own binding.
     EXPECT_TRUE(same_value(bm.query(l0.open, k_var_x), val1_));
@@ -583,7 +583,7 @@ TEST_F(FullyPersistentArrayTest, TenLevelChainFiveVarsBoundAtDifferentLevels) {
     // Bind var_idx at level (var_idx * 2): levels 0, 2, 4, 6, 8.
     for (int var_idx = 0; var_idx < k_vars; ++var_idx) {
         const int bound_level = var_idx * 2;
-        bm.record(levels[bound_level].open, levels[bound_level].close,
+        bm.record(levels[bound_level],
                   static_cast<uint32_t>(var_idx), level_vals[bound_level]);
     }
 
