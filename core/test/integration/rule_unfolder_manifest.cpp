@@ -585,10 +585,11 @@ TEST_F(RuleUnfolderManifestTest, VarCountEqualsNumberOfDistinctFreeVars) {
     EXPECT_TRUE(std::holds_alternative<expr::var>(head_f.args[1]->content));
     EXPECT_TRUE(std::holds_alternative<expr::var>(head_f.args[2]->content));
 
-    // Y and Z must have distinct var indices
+    // Y and Z must be compacted to contiguous leftover indices 0, 1
     const uint32_t iy = std::get<expr::var>(head_f.args[1]->content).index;
     const uint32_t iz = std::get<expr::var>(head_f.args[2]->content).index;
-    EXPECT_NE(iy, iz);
+    EXPECT_EQ(iy, 0u);
+    EXPECT_EQ(iz, 1u);
 }
 
 // ---------------------------------------------------------------------------

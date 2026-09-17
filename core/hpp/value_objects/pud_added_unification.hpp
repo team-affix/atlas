@@ -1,11 +1,11 @@
 #ifndef PUD_ADDED_UNIFICATION_HPP
 #define PUD_ADDED_UNIFICATION_HPP
 
-#include "framed_expr.hpp"
+#include "value_objects/expr.hpp"
 
 struct pud_added_unification {
     uint32_t global_var_id;
-    framed_expr value;
+    const expr* value;
 };
 
 #endif

@@ -1,4 +1,5 @@
 #include "infrastructure/horizon_fc_runtime.hpp"
+#include <unordered_map>
 
 horizon_fc_runtime::horizon_fc_runtime(
     db& database,
@@ -18,7 +19,8 @@ bool horizon_fc_runtime::solved() const {
 }
 
 const expr* horizon_fc_runtime::normalize(framed_expr fe) {
-    return manifest_.normalizer_.normalize(fe);
+    std::unordered_map<uint32_t, uint32_t> translation;
+    return manifest_.normalizer_.normalize(fe, 0, translation);
 }
 
 size_t horizon_fc_runtime::resolution_depth() const {

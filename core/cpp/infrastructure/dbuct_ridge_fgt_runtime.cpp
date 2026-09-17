@@ -1,4 +1,5 @@
 #include "infrastructure/dbuct_ridge_fgt_runtime.hpp"
+#include <unordered_map>
 
 dbuct_ridge_fgt_runtime::dbuct_ridge_fgt_runtime(
     db& database,
@@ -21,7 +22,8 @@ bool dbuct_ridge_fgt_runtime::solved() const {
 }
 
 const expr* dbuct_ridge_fgt_runtime::normalize(framed_expr fe) {
-    return manifest_.normalizer_.normalize(fe);
+    std::unordered_map<uint32_t, uint32_t> translation;
+    return manifest_.normalizer_.normalize(fe, 0, translation);
 }
 
 size_t dbuct_ridge_fgt_runtime::resolution_depth() const {

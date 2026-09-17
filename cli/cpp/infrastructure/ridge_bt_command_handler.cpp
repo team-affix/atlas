@@ -10,7 +10,7 @@ ridge_bt_command_handler::ridge_bt_command_handler(
     uint32_t seed,
     double exploration_constant,
     size_t sim_progress_interval)
-    : print_var_(var_names_),
+    : print_var_(),
       print_functor_(functor_names_),
       parse_var_seq_(0),
       next_functor_id_(k_first_user_functor_id),

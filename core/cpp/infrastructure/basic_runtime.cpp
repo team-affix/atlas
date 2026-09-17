@@ -1,4 +1,5 @@
 #include "infrastructure/basic_runtime.hpp"
+#include <unordered_map>
 
 basic_runtime::basic_runtime(
     db& database,
@@ -17,7 +18,8 @@ bool basic_runtime::solved() const {
 }
 
 const expr* basic_runtime::normalize(framed_expr fe) {
-    return manifest_.normalizer_.normalize(fe);
+    std::unordered_map<uint32_t, uint32_t> translation;
+    return manifest_.normalizer_.normalize(fe, 0, translation);
 }
 
 size_t basic_runtime::resolution_depth() const {

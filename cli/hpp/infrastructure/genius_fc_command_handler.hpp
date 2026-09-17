@@ -9,7 +9,7 @@
 #include "infrastructure/db.hpp"
 #include "infrastructure/expr_pool.hpp"
 #include "infrastructure/expr_printer.hpp"
-#include "infrastructure/named_var_printer.hpp"
+#include "infrastructure/id_var_printer.hpp"
 #include "infrastructure/named_functor_printer.hpp"
 #include "infrastructure/genius_fc_runtime.hpp"
 #include "infrastructure/initial_goal_exprs.hpp"
@@ -28,7 +28,7 @@
 #include "infrastructure/var_names.hpp"
 
 struct genius_fc_command_handler {
-    using printer_t = expr_printer<named_var_printer<var_names>, named_functor_printer<functor_names>>;
+    using printer_t = expr_printer<id_var_printer, named_functor_printer<functor_names>>;
     using SolveTimer    = solve_timer<steady_now>;
     using PrintBindings = print_bindings<genius_fc_runtime, printer_t>;
     using BasePP        = print_progress<genius_fc_runtime, SolveTimer>;
@@ -50,7 +50,7 @@ struct genius_fc_command_handler {
 
 private:
     var_names var_names_;
-    named_var_printer<var_names> print_var_;
+    id_var_printer print_var_;
     functor_names functor_names_;
     named_functor_printer<functor_names> print_functor_;
     non_backtracking_var_sequencer parse_var_seq_{0};

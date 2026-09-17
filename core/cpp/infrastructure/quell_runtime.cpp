@@ -1,4 +1,5 @@
 #include "infrastructure/quell_runtime.hpp"
+#include <unordered_map>
 
 quell_runtime::quell_runtime(
     db& database,
@@ -21,7 +22,8 @@ bool quell_runtime::solved() const {
 }
 
 const expr* quell_runtime::normalize(framed_expr fe) {
-    return manifest_.normalizer_.normalize(fe);
+    std::unordered_map<uint32_t, uint32_t> translation;
+    return manifest_.normalizer_.normalize(fe, 0, translation);
 }
 
 size_t quell_runtime::resolution_depth() const {

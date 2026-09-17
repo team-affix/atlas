@@ -5,6 +5,7 @@
 #include <gmock/gmock.h>
 #include <optional>
 #include <string>
+#include <unordered_map>
 #include <vector>
 #include "infrastructure/set_up_sim.hpp"
 #include "infrastructure/tear_down_sim.hpp"
@@ -66,6 +67,13 @@ struct MockGenerateDecision {
 };
 
 namespace {
+
+template<typename Normalizer>
+const expr* normalize0(Normalizer& n, framed_expr fe) {
+    std::unordered_map<uint32_t, uint32_t> translation;
+    return n.normalize(fe, 0, translation);
+}
+
 
 using unifier_factory_t            = unifier_factory<globalizer, bind_map<globalizer>>;
 using cdcl_t                      = cdcl_elimination_generator<chosen_goal_candidates>;
@@ -1337,18 +1345,18 @@ TEST_F(SimIntegrationTest, RunReturnsSolvedBuildingListOfFiveAbcWithoutDecisions
     EXPECT_EQ(simulation.run(), sim_termination::solved);
 
     normalizer<globalizer, expr_pool, expr_pool, decltype(stack.bind_map_)> norm{stack.globalizer_, stack.expr_pool_, stack.expr_pool_, stack.bind_map_};
-    const expr* tail = norm.normalize({var_r, 0});
+    const expr* tail = normalize0(norm, {var_r, 0});
     for (int i = 0; i < kListLength; ++i) {
         const expr::functor& cell = std::get<expr::functor>(tail->content);
         ASSERT_EQ(cell.id, functors.id("cons"));
         ASSERT_EQ(cell.args.size(), 2u);
         const expr::functor& head =
-            std::get<expr::functor>(norm.normalize({cell.args[0], 0})->content);
+            std::get<expr::functor>(normalize0(norm, {cell.args[0], 0})->content);
         EXPECT_EQ(head.id, functors.id("abc"));
         EXPECT_TRUE(head.args.empty());
-        tail = norm.normalize({cell.args[1], 0});
+        tail = normalize0(norm, {cell.args[1], 0});
     }
-    const expr::functor& nil_tail = std::get<expr::functor>(norm.normalize({tail, 0})->content);
+    const expr::functor& nil_tail = std::get<expr::functor>(normalize0(norm, {tail, 0})->content);
     EXPECT_EQ(nil_tail.id, functors.id("nil"));
     EXPECT_TRUE(nil_tail.args.empty());
 
@@ -1902,18 +1910,18 @@ TEST_F(SimIntegrationTest, RunReturnsSolvedStressListOfTwentyAbcWithoutDecisions
   EXPECT_EQ(simulation.run(), sim_termination::solved);
 
   normalizer<globalizer, expr_pool, expr_pool, decltype(stack.bind_map_)> norm{stack.globalizer_, stack.expr_pool_, stack.expr_pool_, stack.bind_map_};
-  const expr* tail = norm.normalize({var_r, 0});
+  const expr* tail = normalize0(norm, {var_r, 0});
   for (int i = 0; i < kListLength; ++i) {
     const expr::functor& cell = std::get<expr::functor>(tail->content);
     ASSERT_EQ(cell.id, k_cons_functor_id);
     ASSERT_EQ(cell.args.size(), 2u);
     const expr::functor& head_cell =
-        std::get<expr::functor>(norm.normalize({cell.args[0], 0})->content);
+        std::get<expr::functor>(normalize0(norm, {cell.args[0], 0})->content);
     EXPECT_EQ(head_cell.id, functors.id("abc"));
     EXPECT_TRUE(head_cell.args.empty());
-    tail = norm.normalize({cell.args[1], 0});
+    tail = normalize0(norm, {cell.args[1], 0});
   }
-  const expr::functor& nil_tail = std::get<expr::functor>(norm.normalize({tail, 0})->content);
+  const expr::functor& nil_tail = std::get<expr::functor>(normalize0(norm, {tail, 0})->content);
   EXPECT_EQ(nil_tail.id, functors.id("nil"));
   EXPECT_TRUE(nil_tail.args.empty());
   simulation.tear_down();

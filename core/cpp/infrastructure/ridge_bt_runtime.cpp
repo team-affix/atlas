@@ -1,4 +1,5 @@
 #include "infrastructure/ridge_bt_runtime.hpp"
+#include <unordered_map>
 
 ridge_bt_runtime::ridge_bt_runtime(
     db& database,
@@ -18,7 +19,8 @@ bool ridge_bt_runtime::solved() const {
 }
 
 const expr* ridge_bt_runtime::normalize(framed_expr fe) {
-    return manifest_.normalizer_.normalize(fe);
+    std::unordered_map<uint32_t, uint32_t> translation;
+    return manifest_.normalizer_.normalize(fe, 0, translation);
 }
 
 size_t ridge_bt_runtime::resolution_depth() const {

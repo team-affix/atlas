@@ -12,7 +12,7 @@ dbuct_ridge_fgt_command_handler::dbuct_ridge_fgt_command_handler(
     double grant_k,
     size_t sim_progress_interval,
     size_t max_clauses)
-    : print_var_(var_names_),
+    : print_var_(),
       print_functor_(functor_names_),
       parse_var_seq_(0),
       next_functor_id_(k_first_user_functor_id),

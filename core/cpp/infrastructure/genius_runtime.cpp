@@ -1,4 +1,5 @@
 #include "infrastructure/genius_runtime.hpp"
+#include <unordered_map>
 
 genius_runtime::genius_runtime(
     db& database,
@@ -20,7 +21,8 @@ bool genius_runtime::solved() const {
 }
 
 const expr* genius_runtime::normalize(framed_expr fe) {
-    return manifest_.normalizer_.normalize(fe);
+    std::unordered_map<uint32_t, uint32_t> translation;
+    return manifest_.normalizer_.normalize(fe, 0, translation);
 }
 
 size_t genius_runtime::resolution_depth() const {

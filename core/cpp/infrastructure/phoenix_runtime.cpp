@@ -1,4 +1,5 @@
 #include "infrastructure/phoenix_runtime.hpp"
+#include <unordered_map>
 
 phoenix_runtime::phoenix_runtime(
     db& database,
@@ -18,7 +19,8 @@ bool phoenix_runtime::solved() const {
 }
 
 const expr* phoenix_runtime::normalize(framed_expr fe) {
-    return manifest_.normalizer_.normalize(fe);
+    std::unordered_map<uint32_t, uint32_t> translation;
+    return manifest_.normalizer_.normalize(fe, 0, translation);
 }
 
 size_t phoenix_runtime::resolution_depth() const {

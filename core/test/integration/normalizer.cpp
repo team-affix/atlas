@@ -1,5 +1,6 @@
 #include <gtest/gtest.h>
 #include <optional>
+#include <unordered_map>
 #include "infrastructure/normalizer.hpp"
 #include "infrastructure/globalizer.hpp"
 #include "infrastructure/expr_pool.hpp"
@@ -25,12 +26,19 @@ protected:
     expr var0{expr::var{0}};
     expr var1{expr::var{1}};
     expr var2{expr::var{2}};
+    expr var4{expr::var{4}};
+    expr var5{expr::var{5}};
 
     const expr* pool_f() { return pool->make_functor(functors.id("f"), {}); }
     const expr* pool_g() { return pool->make_functor(functors.id("g"), {}); }
 
+    const expr* normalize_at(const expr* e, uint32_t cutoff) {
+        std::unordered_map<uint32_t, uint32_t> translation;
+        return norm->normalize({e, 0}, cutoff, translation);
+    }
+
     // Normalize with global frame (initial goals live at offset 0).
-    const expr* norm0(const expr* e) { return norm->normalize({e, 0}); }
+    const expr* norm0(const expr* e) { return normalize_at(e, 0); }
 };
 
 // ---------------------------------------------------------------------------
@@ -47,6 +55,12 @@ TEST_F(NormalizerIntegrationTest, NormalizeBoundVarReturnsWhnfRepresentative) {
     const expr* f = pool_f();
     bm->bind(0, {f, 0});
     EXPECT_EQ(norm0(&var0), f);
+}
+
+TEST_F(NormalizerIntegrationTest, CutoffZeroStillWhnfsBindings) {
+    const expr* f = pool_f();
+    bm->bind(0, {f, 0});
+    EXPECT_EQ(normalize_at(&var0, 0), f);
 }
 
 // ---------------------------------------------------------------------------
@@ -121,4 +135,89 @@ TEST_F(NormalizerIntegrationTest, NormalizeIdempotentOnAlreadyNormalized) {
     expr raw{expr::functor{functors.id("f"), {}}};
     const expr* p1 = norm0(&raw);
     EXPECT_EQ(norm0(p1), p1);
+}
+
+// ---------------------------------------------------------------------------
+// Cutoff remapping
+// ---------------------------------------------------------------------------
+
+TEST_F(NormalizerIntegrationTest, CutoffKeepsLowVarsAndRemapsHighInEncounterOrder) {
+    const expr* v0 = pool->make_var(0);
+    const expr* v1 = pool->make_var(1);
+    const expr* v4 = pool->make_var(4);
+    const expr* v5 = pool->make_var(5);
+    const expr* inner_g = pool->make_functor(functors.id("g"), {v0, v1});
+    const expr* inner_h = pool->make_functor(functors.id("h"), {v4, v5});
+    const expr* raw = pool->make_functor(functors.id("f"), {inner_g, inner_h});
+
+    std::unordered_map<uint32_t, uint32_t> translation;
+    const expr* p = norm->normalize({raw, 0}, 2, translation);
+    const expr::functor& outer = std::get<expr::functor>(p->content);
+    const expr::functor& g = std::get<expr::functor>(outer.args[0]->content);
+    const expr::functor& h = std::get<expr::functor>(outer.args[1]->content);
+    EXPECT_EQ(std::get<expr::var>(g.args[0]->content).index, 0u);
+    EXPECT_EQ(std::get<expr::var>(g.args[1]->content).index, 1u);
+    EXPECT_EQ(std::get<expr::var>(h.args[0]->content).index, 2u);
+    EXPECT_EQ(std::get<expr::var>(h.args[1]->content).index, 3u);
+}
+
+TEST_F(NormalizerIntegrationTest, FrozenVarBelowCutoffSkipsBinding) {
+    const expr* f = pool_f();
+    bm->bind(0, {f, 0});
+    const expr* p = normalize_at(&var0, 1);
+    ASSERT_TRUE(std::holds_alternative<expr::var>(p->content));
+    EXPECT_EQ(std::get<expr::var>(p->content).index, 0u);
+}
+
+TEST_F(NormalizerIntegrationTest, SharedTranslationReusesLeftoverIndex) {
+    expr raw{expr::functor{functors.id("f"), {&var4, &var4}}};
+    std::unordered_map<uint32_t, uint32_t> translation;
+    const expr* p = norm->normalize({&raw, 0}, 2, translation);
+    const expr::functor& out = std::get<expr::functor>(p->content);
+    ASSERT_EQ(out.args.size(), 2u);
+    EXPECT_EQ(std::get<expr::var>(out.args[0]->content).index, 2u);
+    EXPECT_EQ(std::get<expr::var>(out.args[1]->content).index, 2u);
+}
+
+TEST_F(NormalizerIntegrationTest, HighVarThatWhnfsToFrozenVarIsEmittedUnremapped) {
+    bm->bind(4, {&var0, 0});
+    std::unordered_map<uint32_t, uint32_t> translation;
+    const expr* p = norm->normalize({&var4, 0}, 2, translation);
+    ASSERT_TRUE(std::holds_alternative<expr::var>(p->content));
+    EXPECT_EQ(std::get<expr::var>(p->content).index, 0u);
+    EXPECT_TRUE(translation.empty());
+}
+
+TEST_F(NormalizerIntegrationTest, HighVarThatWhnfsToFunctorNormalizesArgs) {
+    expr f_var0{expr::functor{functors.id("f"), {&var0}}};
+    bm->bind(4, {&f_var0, 0});
+    std::unordered_map<uint32_t, uint32_t> translation;
+    const expr* p = norm->normalize({&var4, 0}, 2, translation);
+    const expr::functor& out = std::get<expr::functor>(p->content);
+    EXPECT_EQ(out.id, functors.id("f"));
+    ASSERT_EQ(out.args.size(), 1u);
+    EXPECT_EQ(std::get<expr::var>(out.args[0]->content).index, 0u);
+}
+
+TEST_F(NormalizerIntegrationTest, CutoffZeroCompactsLeftoverVars) {
+    expr raw{expr::functor{functors.id("f"), {&var4, &var5}}};
+    const expr* p = norm0(&raw);
+    const expr::functor& out = std::get<expr::functor>(p->content);
+    EXPECT_EQ(std::get<expr::var>(out.args[0]->content).index, 0u);
+    EXPECT_EQ(std::get<expr::var>(out.args[1]->content).index, 1u);
+}
+
+TEST_F(NormalizerIntegrationTest, IdempotentAfterCutoffRemap) {
+    const expr* v0 = pool->make_var(0);
+    const expr* v1 = pool->make_var(1);
+    const expr* v4 = pool->make_var(4);
+    const expr* v5 = pool->make_var(5);
+    const expr* inner_g = pool->make_functor(functors.id("g"), {v0, v1});
+    const expr* inner_h = pool->make_functor(functors.id("h"), {v4, v5});
+    const expr* raw = pool->make_functor(functors.id("f"), {inner_g, inner_h});
+    std::unordered_map<uint32_t, uint32_t> translation;
+    const expr* p1 = norm->normalize({raw, 0}, 2, translation);
+    std::unordered_map<uint32_t, uint32_t> again;
+    const expr* p2 = norm->normalize({p1, 0}, 2, again);
+    EXPECT_EQ(p1, p2);
 }

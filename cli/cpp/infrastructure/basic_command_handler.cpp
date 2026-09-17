@@ -9,7 +9,7 @@ basic_command_handler::basic_command_handler(
     size_t max_resolutions,
     uint32_t seed,
     size_t sim_progress_interval)
-    : print_var_(var_names_),
+    : print_var_(),
       print_functor_(functor_names_),
       parse_var_seq_(0),
       solve_timer_(clock_),

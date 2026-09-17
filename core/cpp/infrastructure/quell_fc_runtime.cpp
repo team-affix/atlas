@@ -1,4 +1,5 @@
 #include "infrastructure/quell_fc_runtime.hpp"
+#include <unordered_map>
 
 quell_fc_runtime::quell_fc_runtime(
     db& database,
@@ -21,7 +22,8 @@ bool quell_fc_runtime::solved() const {
 }
 
 const expr* quell_fc_runtime::normalize(framed_expr fe) {
-    return manifest_.normalizer_.normalize(fe);
+    std::unordered_map<uint32_t, uint32_t> translation;
+    return manifest_.normalizer_.normalize(fe, 0, translation);
 }
 
 size_t quell_fc_runtime::resolution_depth() const {
