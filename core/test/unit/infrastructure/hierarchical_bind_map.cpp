@@ -8,10 +8,6 @@
 #include "value_objects/framed_expr.hpp"
 #include "value_objects/om_interval.hpp"
 
-// ---------------------------------------------------------------------------
-// Mocks
-// ---------------------------------------------------------------------------
-
 struct MockGlobalize {
     MOCK_METHOD(uint32_t, globalize, (uint32_t frame_offset, uint32_t var_index), ());
 };
@@ -31,10 +27,6 @@ using test_hbm_t = hierarchical_bind_map<
     ::testing::NiceMock<MockRecordFPArrayBinding>,
     ::testing::NiceMock<MockQueryFPArrayBinding>>;
 
-// ---------------------------------------------------------------------------
-// Helpers
-// ---------------------------------------------------------------------------
-
 namespace {
 
 framed_expr make_functor_fe(uint32_t functor_id, uint32_t frame_offset = 0) {
@@ -49,7 +41,6 @@ framed_expr make_var_fe(uint32_t var_index, uint32_t frame_offset) {
     return framed_expr{&exprs.back(), frame_offset};
 }
 
-// Matches an om_label by identity of its rank pointer.
 ::testing::Matcher<om_label> SameLabel(const om_label& expected) {
     return ::testing::Property(&om_label::rank_ptr, expected.rank_ptr());
 }
@@ -60,15 +51,7 @@ framed_expr make_var_fe(uint32_t var_index, uint32_t frame_offset) {
         ::testing::Field(&om_interval::close, SameLabel(expected.close)));
 }
 
-} // namespace
-
-// ---------------------------------------------------------------------------
-// Fixture
-//
-// open_rank_ / close_rank_ are stable uint64_t members whose addresses are
-// used to construct the om_interval.  The hbm_ member is constructed last
-// (declared last) so all injected references are already valid.
-// ---------------------------------------------------------------------------
+}
 
 struct HierarchicalBindMapTest : public ::testing::Test {
     HierarchicalBindMapTest()
@@ -96,15 +79,6 @@ struct HierarchicalBindMapTest : public ::testing::Test {
     static constexpr uint32_t k_key_1 = 101;
 };
 
-// ---------------------------------------------------------------------------
-// bind() — delegation tests
-// Verify that bind() passes the map's own interval and the caller's
-// key/value to record_fp_.record(), unchanged.
-// NiceMock handles the new query_fp_.query() call from the not-already-bound
-// assert by returning nullopt (default for optional), so these tests are
-// unaffected.
-// ---------------------------------------------------------------------------
-
 TEST_F(HierarchicalBindMapTest, BindDelegatesToRecordWithConstructionLabels) {
     EXPECT_CALL(record_mock_,
                 record(SameInterval(interval_), k_key_0, functor_fe_))
@@ -130,22 +104,11 @@ TEST_F(HierarchicalBindMapTest, MultipleBindsEachDelegateSeparately) {
     hbm_.bind(k_key_1, var0_fe_);
 }
 
-// ---------------------------------------------------------------------------
-// bind() — safety assert: double-bind throws in debug builds.
-// Catch bug: bind() does not check whether the variable is already bound.
-// ---------------------------------------------------------------------------
-
 TEST_F(HierarchicalBindMapTest, BindThrowsIfVariableAlreadyBound) {
     EXPECT_CALL(query_mock_, query(SameLabel(interval_.open), k_key_0))
         .WillOnce(::testing::Return(std::optional<framed_expr>(functor_fe_)));
     EXPECT_THROW(hbm_.bind(k_key_0, functor_fe_), std::logic_error);
 }
-
-// ---------------------------------------------------------------------------
-// whnf() on a functor — must return immediately, touching neither globalize,
-// query_fp_, nor record_fp_.
-// Catch bug: whnf falls through to the var branch for non-vars.
-// ---------------------------------------------------------------------------
 
 TEST_F(HierarchicalBindMapTest, WhnfOnFunctorReturnsFunctorUnchanged) {
     EXPECT_CALL(globalizer_, globalize(::testing::_, ::testing::_)).Times(0);
@@ -156,13 +119,6 @@ TEST_F(HierarchicalBindMapTest, WhnfOnFunctorReturnsFunctorUnchanged) {
     const framed_expr result = hbm_.whnf(functor_fe_);
     EXPECT_EQ(result, functor_fe_);
 }
-
-// ---------------------------------------------------------------------------
-// whnf() on an unbound variable — query returns nullopt, returns original fe,
-// no compression record.
-// Catch bug: whnf returns a default-constructed framed_expr on nullopt, or
-// calls record even when the variable is unbound.
-// ---------------------------------------------------------------------------
 
 TEST_F(HierarchicalBindMapTest, WhnfOnUnboundVarReturnsOriginalFe) {
     EXPECT_CALL(globalizer_, globalize(5u, 0u)).WillOnce(::testing::Return(k_key_0));
@@ -175,12 +131,6 @@ TEST_F(HierarchicalBindMapTest, WhnfOnUnboundVarReturnsOriginalFe) {
     EXPECT_EQ(result, var0_fe_);
 }
 
-// ---------------------------------------------------------------------------
-// whnf() single-hop: var0 → functor.
-// Compression: record(interval_, k_key_0, functor_fe_) is called.
-// Catch bug: whnf discards the resolved value, or omits the compression record.
-// ---------------------------------------------------------------------------
-
 TEST_F(HierarchicalBindMapTest, WhnfSingleHopVarToFunctorReturnsFunctor) {
     EXPECT_CALL(globalizer_, globalize(5u, 0u)).WillOnce(::testing::Return(k_key_0));
     EXPECT_CALL(query_mock_, query(SameLabel(interval_.open), k_key_0))
@@ -192,13 +142,6 @@ TEST_F(HierarchicalBindMapTest, WhnfSingleHopVarToFunctorReturnsFunctor) {
     const framed_expr result = hbm_.whnf(var0_fe_);
     EXPECT_EQ(result, functor_fe_);
 }
-
-// ---------------------------------------------------------------------------
-// whnf() multi-hop: var0 → var1 → functor.
-// Compression fires twice: inner call compresses var1 → functor, then outer
-// call compresses var0 → functor.
-// Catch bug: whnf only follows one hop, or compresses only the outermost hop.
-// ---------------------------------------------------------------------------
 
 TEST_F(HierarchicalBindMapTest, WhnfMultiHopFollowsChainToFunctor) {
     EXPECT_CALL(globalizer_, globalize(5u, 0u)).WillOnce(::testing::Return(k_key_0));
@@ -218,10 +161,6 @@ TEST_F(HierarchicalBindMapTest, WhnfMultiHopFollowsChainToFunctor) {
     EXPECT_EQ(result, functor_fe_);
 }
 
-// ---------------------------------------------------------------------------
-// whnf() on an unbound var1 directly: single lookup, no compression record.
-// ---------------------------------------------------------------------------
-
 TEST_F(HierarchicalBindMapTest, WhnfMultiHopEndsAtUnboundVar) {
     EXPECT_CALL(globalizer_, globalize(7u, 1u)).WillOnce(::testing::Return(k_key_1));
     EXPECT_CALL(query_mock_, query(SameLabel(interval_.open), k_key_1))
@@ -233,10 +172,6 @@ TEST_F(HierarchicalBindMapTest, WhnfMultiHopEndsAtUnboundVar) {
     EXPECT_EQ(result, var1_fe_);
 }
 
-// var0 → var1, var1 unbound: result is var1_fe_.
-// var0 → var1, var1 unbound: inner whnf(var1) returns early (nullopt, no record).
-// Outer: resolved = var1_fe_, record(k_key_0, var1_fe_) fires unconditionally.
-// Catch bug: whnf skips compression when chain ends at an unbound var.
 TEST_F(HierarchicalBindMapTest, WhnfChainEndingInUnboundVarReturnsLastVar) {
     EXPECT_CALL(globalizer_, globalize(5u, 0u)).WillOnce(::testing::Return(k_key_0));
     EXPECT_CALL(globalizer_, globalize(7u, 1u)).WillOnce(::testing::Return(k_key_1));
@@ -252,18 +187,6 @@ TEST_F(HierarchicalBindMapTest, WhnfChainEndingInUnboundVarReturnsLastVar) {
     EXPECT_EQ(result, var1_fe_);
 }
 
-// ---------------------------------------------------------------------------
-// whnf() path compression eliminates chain on second call.
-//
-// First whnf(var0): two hops (var0 → var1 → functor), compression fires.
-// Second whnf(var0): one hop (var0 → functor directly from compressed entry).
-//
-// The Times(1) constraints on globalize(7u,1u) and query(k_key_1) prove the
-// second call never traverses the chain to var1.
-// Catch bug: compression record is written but does not actually shorten the
-// next lookup (wrong key, wrong value, or wrong interval recorded).
-// ---------------------------------------------------------------------------
-
 TEST_F(HierarchicalBindMapTest, WhnfCompressionEliminatesChainOnSecondCall) {
     EXPECT_CALL(globalizer_, globalize(5u, 0u))
         .WillOnce(::testing::Return(k_key_0))
@@ -277,11 +200,7 @@ TEST_F(HierarchicalBindMapTest, WhnfCompressionEliminatesChainOnSecondCall) {
     EXPECT_CALL(query_mock_, query(SameLabel(interval_.open), k_key_1))
         .Times(1)
         .WillOnce(::testing::Return(std::optional<framed_expr>(functor_fe_)));
-    // First call: var0→var1→functor. Inner whnf(functor) fires record(k_key_1).
-    //             Outer fires record(k_key_0).
-    // Second call: var0→functor (compressed). whnf(functor) is immediate; fires record(k_key_0) again.
-    // Total: record(k_key_1) × 1, record(k_key_0) × 2.
-    // Times(1) on globalize(7u,1u) and query(k_key_1) proves second call skipped the chain.
+
     EXPECT_CALL(record_mock_,
                 record(SameInterval(interval_), k_key_1, functor_fe_))
         .Times(1);
@@ -294,12 +213,6 @@ TEST_F(HierarchicalBindMapTest, WhnfCompressionEliminatesChainOnSecondCall) {
     EXPECT_EQ(first,  functor_fe_);
     EXPECT_EQ(second, functor_fe_);
 }
-
-// ---------------------------------------------------------------------------
-// Two hierarchical_bind_maps over the same underlying array but different
-// node intervals: each must query and compress at its own open/close labels.
-// Catch bug: label stored by value but silently shared/aliased.
-// ---------------------------------------------------------------------------
 
 TEST_F(HierarchicalBindMapTest, TwoMapsWithDifferentLabelsQueryAtOwnLabel) {
     uint64_t other_open_rank  = 50;

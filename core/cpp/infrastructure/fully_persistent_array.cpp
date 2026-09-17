@@ -6,8 +6,6 @@ void fully_persistent_array::record(om_interval interval,
                                     uint32_t var_id, framed_expr value) {
     timeline_t& timeline = timelines_[var_id];
 
-    // Find the value that was in effect just before open — this is what close
-    // must restore so that nodes outside this interval are unaffected.
     std::optional<framed_expr> prior_value = std::nullopt;
     auto it = timeline.lower_bound(interval.open);
     if (it != timeline.begin()) {
@@ -27,7 +25,6 @@ std::optional<framed_expr> fully_persistent_array::query(om_label open_label,
 
     const timeline_t& timeline = tl_it->second;
 
-    // Predecessor-or-equal: largest key <= open_label.
     auto it = timeline.upper_bound(open_label);
     if (it == timeline.begin())
         return std::nullopt;
