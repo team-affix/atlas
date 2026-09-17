@@ -4,7 +4,7 @@
 #include "value_objects/expr.hpp"
 
 struct pud_added_unification {
-    uint32_t global_var_id;
+    uint32_t var_idx;
     const expr* value;
 };
 
