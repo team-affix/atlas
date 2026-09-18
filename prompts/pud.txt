@@ -1,0 +1,63 @@
+okay so we are developing something called the PUD system (progressive unfolding database).
+
+the idea is as follows:
+
+there are many roots (axioms from the initial db)
+
+and then each root has a tree under it which define the rules which have been expanded out to.
+
+the idea is as follows:
+
+
+at any given point in time, we are monitoring the leaf nodes of the PUD.
+
+we want to know, at all times, whether any goal of any leaf node in the PUD goes either UNIT or NULL. we want to REACTIVELY detect this, so when it happens, there is effectively some work done to signal to the people who care that the body goal is unit or null.
+
+we want to get maximum benefit from having the unfold frontier (leaf nodes) while still not suffering from the exponential time blowup of eager inference-on-inference unfolding (where the number of inferences in the db increases each unfold, and the number of NEW INFERENCES PER UNFOLD increases proportionally to the number of inferences total (exponential)).
+
+To get benefit from both, we do "conservative unfolding". This is where we unfold a rule over the set of shallowest nodes which cause candidacy to branch further (choice points). In other words, we do the following:
+
+suppose we have axioms a0, a1.
+
+we have a query q.
+
+We do the following starting at each axiom and continuing down the tree:
+
+at each node n, we determine if there is a "unit step" or refutation from the current node. That is, we determine if there is ONLY ONE possible branch (edge) from n that has at least 1 candidate. If so, we step down that branch eagerly. Then, we repeat the question starting from the node down that branch, call it n'. We also keep exploring until we find that at least 2 of the outgoing edges at node n have leaf candidates under them. At that point, we know that if we were to unfold the rule whos body goal was the query, we would unfold against n, however specialized it may be. So basically, we continue eagerly unit-propagating the search down until we know we have a branching point (choice point). That is when we stop propagating downward.
+
+Note that the invariant we want to preserve is this:
+
+"At any point in time, we maintain, for each body goal of each leaf rule, a 'candidate set', which is the set of propagated-til-choice candidates for that goal." Effectively, it means that it is the set of nodes (which will always be size <= # of axioms) which are the most-specialized candidates without choice.
+
+Not sure what to name this concept of "most specialized candidates without choice". But I think about it as just early unit-propagating down to give our unfold the most information possible.
+
+Similarly, it is possible during this algorithm to determine that there are actually no leaf candidates anywhere under an axiom. at which point, we refute the axiom in terms of candidacy for the query given.
+
+We use a fully persistent array and hierarchical bind map for the PUD.
+
+we do not actually store a whole rule at every node in the PUD. instead, we just store `added_unifications` and `added_body_goals`. The idea being that added_unifications is also how we specify the root axiom heads. There is a variable which is implicitly used by the whole DB, called var(0). which is better known as the "Head Var". The axiom nodes have as an added unification, something like: var(0) = head(X, Y) where head(X,Y) is the head of the axiom rule.
+
+also, the axioms introduce the original rule body in added_body_goals.
+
+each specialization of that rule (unfold output) just specifies added unifications beyond that of the parent node and all ancestor nodes, since that is all that an unfold can do (specialize the parent head and introduce more body goals). Implictly, by nature of the fact that each intermediary node stores which body goal was unfolded over to produce the children, we know that body goal is no longer considered present at the descendent nodes. So everything going into defining a rule at some node comes from the ancestor nodes and the current node's deltas effectively.
+
+similarly, we use hierarchical bindings thru the fully persistent array data structure which supports the hierarchical bind map. Thus child nodes inherit the bindings introduced at the parent node and all ancestor nodes above.
+
+When starting a lazy query of a body goal b, we actually do the whole query inside of the binding interval of the rule which has b in its body, this way vars employed in the query can have their actual meanings looked up during the query.
+
+When dispatching a lazy query of b, we make a note of the frame offset of the database that we are querying into. The frame offset will be equal to the LVC (lineage var count) at the node owning b. NOTE: I do not believe I mean by that the node INTRODUCING b. Instead, lazy queries only exist in terms of the body goals of the leaf rules in the database since they are the most specialized. But anyway yes, the LVC(n) is a definition of the number of contiguous vars used in the lineage up until node n.
+
+During the query, we keep track of what caller representatives changed at every given point in the query. When finally accepting the unfold over those candidates, we store (in the resulting expanded child nodes) added_unification entries (one for each caller rep that changed). We specifically store rep : (normalize of rep with cutoff == LVC) to partially normalize and get all contiguous remainder variables out. Then, we update the LVC at each child node to be equal to the parent's LVC + the translation map size (since there will only be one entry per new remainder var coming from the callee environment, and they will all be made contiguous w.r.t. the old LVC, meaning the new child LVC can be used as the new frame offset when we query body goals from them as well).
+
+NOTE: the binding environment of the candidate is NOT preserved after accepting the candidate to unfold over. instead, we just compute the added_unifications while in that environment, and we normalize the rhs of the added unifications while in that environment. we also normalize the "added body goals" which came from the query, while in that environment.
+
+An invariant:
+We want, in our database, at any point in time, to have ONLY un-framed expressions (const expr*) and variable indices which are global (un-framed as well). ONLY WHEN QUERYING do we construct the framed expressions on the fly with frame offset == LVC of the caller, to then do things like unification.
+
+I believe that each node won't store an interval. the reason is this: when querying into a node, the node will have a DIFFERENT interval as it pertains to the query, since the interval of the node will need to be within the interval of the caller (leaf node) to have the binding environment of the caller in-scope...
+
+Note that we have only one FPA for everything since the caller's bindings must be visible during the query, thus the query's binding intervals must be INSIDE that of the caller which means that we have one FPA.
+
+Something else to note is that we have 2 different concepts of unit propagation. One I will refer to temporarily as Unit Prop A which is when UNDER A SPECIFIC ROOT (axiom), we have only one outgoing edge that has at least one candidate for the given query. When this happens, we advance the query forward automatically. NOTE: WE DO NOT ACTUALLY APPLY THE UNFOLD YET. The second type of unit prop is when there is only one remaining axiom under which a fully advanced query has candidates. In this case (Unit Prop B), we ACTUALLY CAN AFFORD to apply the unfold automatically, since it will not cause the database to grow in number of leaf rules. Perhaps we call "Unit Prop A" "Query Advancing" and B "Unit Propagation".
+
+We want to consider what happens with the queries attached to the body goals of a rule r when r is unfolded into child rules. Sometimes, the query does not change whatsoever if the vars in the goal are not affected at all by the unfold... other times they are... I mean we have a few options, one is to take all body goals of the unfolded rule and throw away their queries, and restart at the unfolded binding contexts (child nodes' body goals). Another is to try to keep the original body goals queries going but somehow "fork" them? not sure how that would work. An adjacent thing to note is that, when starting a query for the body goals of the children, our fully advanced query from our original rule's body goals can serve as the starting point for the offspring's queries since advancing a query generally only happens when all but one outgoing edge in the search is refuted. And we know that no matter how many bindings we ADD, it can never cause things which failed to unify in the past to NOW UNIFY. In other words, if it was refuted in the past (causing us to advance our query with less specialized body goal), we can be confident that starting our query for the child rule's body goal at that same advanced position should be sufficient as well. We also know that all rules that we tried to match as candidates that failed to match for the old body goal will still fail, so maybe we can do something where our offspring's query can be some sort of a continuation of the original body goal's query.
