@@ -63,3 +63,116 @@ Something else to note is that we have 2 different concepts of unit propagation.
 We want to consider what happens with the queries attached to the body goals of a rule r when r is unfolded into child rules. Sometimes, the query does not change whatsoever if the vars in the goal are not affected at all by the unfold... other times they are... I mean we have a few options, one is to take all body goals of the unfolded rule and throw away their queries, and restart at the unfolded binding contexts (child nodes' body goals). Another is to try to keep the original body goals queries going but somehow "fork" them? not sure how that would work. An adjacent thing to note is that, when starting a query for the body goals of the children, our fully advanced query from our original rule's body goals can serve as the starting point for the offspring's queries since advancing a query generally only happens when all but one outgoing edge in the search is refuted. And we know that no matter how many bindings we ADD, it can never cause things which failed to unify in the past to NOW UNIFY. In other words, if it was refuted in the past (causing us to advance our query with less specialized body goal), we can be confident that starting our query for the child rule's body goal at that same advanced position should be sufficient as well. We also know that all rules that we tried to match as candidates that failed to match for the old body goal will still fail, so maybe we can do something where our offspring's query can be some sort of a continuation of the original body goal's query.
 
 Another thing to note is: due to the mechanism where we advance a query until a choice point, we pretty much know that under any axiom, we will only ever have at most one node which is the current "unfold candidate" and is the only candidate in the fully advanced query. This means that a single query may have at any point in time at most n candidates where n is the number of axioms in the database. This also leads me to believe that we can somehow store, for a given query, the current candidate (maybe not fully advanced yet). This may be a pointer into a node in a query tree? Not sure yet.
+
+
+I suppose for a single query frontier (candidate) (under one axiom) we can store something quite small like:
+1. callee ID
+2. pointer to callee node in PUD(?)
+3. pointer to callee node in query tree(?)
+4. touched caller reps
+5. added body goals
+
+
+
+we have an analogy.
+
+in the other solvers, we have a concept of "active goals" which are really leaves in a series reduced tree as well (see srt_active_goals).
+
+Similarly, in that setting, we also have something called the goal_candidates. These are sort of like persistent things that we eliminate over time, and only once there is a single candidate for any given goal, we unit propagate that goal (unit resolve it).
+
+NOTE that the machinery which yields eliminations however is a COMPLETELY DIFFERENT infra. In fact there are 2: MHU and CDCL elimination generators.
+
+so really, we might want to mimic that here.
+
+I do believe that for a given goal in our PUD system, we can also have a flat list of "candidates". This is due to how our candidate advancing (query advancing) system works. Call this infra `pud_goal_candidates`. Then, we will have another infra which acts on these candidates. This separates state from behavior.
+
+Note that for our candidates, there is more that can happen than simple elimination (refutation). We can also, after updating the database, induce query advancing due to other leaf witnesses for the query being ruled out.
+
+I would, at this time, like to clear up confusion about how I have used the word candidate in the past and what I will use moving forward. In the past, I used the word "candidate" just to mean any rule in the DB whos head unifies with the query. but now, I will change that to "witness", as "candidate" serves a specific meaning, being specifically the most unit-advanced part of the query under a given axiom until a choice point is reached (point where multiple outgoing edges have leaf witnesses).
+
+
+
+To think about how the chain reaction will work, it is useful to think about what the catalysts are (what the initial changes are to the DB that could cause certain things to occur):
+
+Rule Unfolding is our only real action at the outermost level. Any time that a rule unfolds in our database, and that rule served as a leaf witness for any candidates, we must revisit those candidates' queries, and recognize that since that witness is NO LONGER A LEAF, we must eagerly propagate the witness search downward to the new children of the old witness, until we find a replacement leaf witness. I think of this as though we are doing effectively a depth-first search for a leaf witness, and if any CURRENT LEAF WITNESS is unfolded, it is NO LONGER A LEAF. Therefore we revisit it, and RESUME depth-first search from that point. NOTE: depth-first search should follow a deterministic traversal order, so as to make it obvious what parts of the database have already been explored and ruled out in terms of witnesshood. Also note: we do NOT HAVE TO reach the leaves to refute witnesshood. This is because, when traversing down the tree (deeper), it just specializes the heads of rules MORE. This means that if any intermediary node's head could not unify with our query, that all of the heads BENEATH IT also will not be able to. 
+
+NOTE: when unfolding a rule r and it causes it to simply refute (disappear), this is one way that a leaf witness could become a refuted witness, but actually it is NOT the only way. We could unfold r into, let's just say a few children, but EACH CHILD instantiates a variable in the head of r such that our original query which used r as a leaf witness, when resuming unto the children, may realize that whatever instantiated functors were in the query may not line up with the heads of the new child leaves, which could also refute witnesshood of all children under r.
+
+Another note: When witnesshood gets violated by the witness unfolidng AND when continuing the DFS for a leaf witness down from it, and none of its children are viable, we have a situation where we will need to continue DFS beyond just the witness's children and so there is a chance that DFS could rule out all other leaf witnesses under the outgoing edge from the candidate, meaning that there is a CHANCE (not guaranteed if there are more outgoing edges unexplored) that this could cause us to query-advance our candidate (once there is provably only one outgoing edge which has any witnesses). This means that our entire query-advancing system and witness search system must be resumable (reactive).
+
+
+
+
+THE QUERY BIFURCATION PROBLEM:
+
+When we unfold a rule, what happens to candidates using that rule as a leaf witness is already mostly figured out. But what happens to THAT RULE'S body goals' candidates? Do we repeat the query for each body goal in the unfolded rule at the child binding context? because some variables could surely be instantiated further causing the candidate queries to get advanced further. The only thing I worry about here is that we don't want to waste effort and we know that body goals are sort of "residual" in the sense that they are inherited from the ancestors, not introduced at every node. And so my gut tells me that there is some chance that we can (at least sometimes) inherit the body goals AND the queries of the ancestor's body goal directly, without needing to spawn another query. This is for efficiency that I think to do this.
+
+NOTE: it is not just when a representative for a var inside a body goal changes that we trigger re-evaluation of the query. This is because, if a rep changes and the whole body goal becomes something which still has the same shape with respect to itself only (disregarding OTHER body goals since they are not even taken into account in a single-body-goal query), then the query need not refire.
+
+Discovery: suppose we have a body goal like g(X, Y) .  suppose in the rule's environment with this body goal, we incur a unification which is something like X = Z (another variable). it turns out that g(X, Y) is still structurally identical to g(X, Y) was before that unification was added. Think about the concept of =@= in swi-prolog. It determines structural equivalence. On the other hand, if we were to unify X = Y in the rule's environment, then g(X, Y) becomes structurally different from what it used to be in the parent frame.
+
+Not entirely sure how to detect reactively when a body goal needs to get a new query... and also, not entirely sure how much work needs to be done for a bifurcated query. I mean, one thing to note is that ALL OF THE candidate search and witness search done already does not need to be repeated by a specialized (descendent) query. This is because, all of the rules traversed over by the less-specialized query failed to produce witnesses of the LESS SPECIALIZED QUERY. And therefore, making them more specialized will not somehow make those rules produce valid witnesses now. In fact, the only thing that can change in specialization is that a previous witness is NO LONGER a valid witness. Maybe, we just do something simple like the following: ALWAYS BIFURCATE. Basically, when unfolding a rule, none of the body goals of the original rule have queries going anymore. Instead, all of the new children spawn in queries for each subgoal that they have (doing O(n) work for n = number of body goals in the child). And they simply "resume" from the point in DFS given by the stack of the inherited body goal's query (demonstrating the aforementioned fact about specialization). This may immediately hault (in the case that the current assignment of witnesses is still valid) or it will not (in the case that the unfold produced, for the children, a difference in the body goals that would change the witness set). This is unfortunate as the number of body goals has the potential to grow linearly with depth of the rule's derivation making each subsequent unfold slower and slower. Then again, it does seem to be the case that if we really do have a duplicate query for a bunch of the nodes in the database, that it is provably and definitely wasteful. It is for this reason, an excellent candidate for compute savings. Another thing which should be noted is interesting which is the fact that if we have an original rule which has some body goal b with query q(b) attached to it, and then we unfold that rule into two or more, one of them actually does change the form of that body goal and needs a new query and the rest don't, that the original query q(b) will cover both the original node n where b was introduced, and all nodes below it, but if the descendent rule also introduces a new query for the body goal b in its new binding environment, then technically that goal is covered doubly by queries to some degree. The less-specialized query AND the more specialized one. maybe we should, to resolve this double-coverage, propagate the ownership of that query one level down at the children of the original owner of b. Ehh.... not too sure about this. propagating ownership of the query around might be pretty complex actually and still not resolve the issue which could lead to subsequent propagations. How about this: every leaf rule has an effective body with some body goals. Each leaf rule tracks, for each body goal, what query cares about it...? By pointer, so multiple rules can have, in their body goals, the a shared query. this effectively eagerly distributes (incurring O(n) work for n body goals) but a tiny coefficient on n in practice... This still leaves open the question of how to detect when a body goal needs a new query. Maybe its something to do with when the representative in a body goal gets bound to something that is in-scope of that body goal (bound to a functor, or another representative mentioned in that body goal).
+
+QUERY BIFURCATION DECISION:
+
+Always fork. Queries live only on leaves. When a leaf unfolds, its queries die with it. Each child gets a fresh query for every leftover body goal and a fresh query for every newly added body goal. For a leftover goal we copy the interned pud_rule_id*s (cursor, current witnesses, edge roots that bound those searches) from the parent query — that part is O(1), since the candidate set size is bounded by the number of axioms. We do not inherit the parent’s bind-map recordings. The child’s query is a new search nested in the child’s om_interval, so every ancestor added_unification on the path to a copied witness must be applied again under that interval to see whether the witness still unifies. Copying a query is therefore O(depth) per leftover body goal (direct path replay, not a search of the rest of the DB). If the old witnesses still match, the query suspends there; if specialization killed them, candidate/witness search resumes from those ids. New body goals start candidate search from scratch. No shared query objects, no =@= inherit, no pointer-sharing, no user sets. Search and apply use the same environment: the leaf. We considered inheriting the search object when a leftover goal’s shape did not change, to avoid the path replay; even a cheap shape test still leaves you with overlay/ownership questions, and a rebase is mandatory whenever the shape did change. For now the extra machinery is not worth it.
+
+
+QUERY RESUMING:
+
+First a note: A candidate can have 2 witnesses (1 down 2 of the outgoing edges) at which we prove that it is a choice point, OR a candidate can actually be ITS OWN witness (in the case that it is a leaf node, and we advanced the query all the way down to it). Maybe we can call these two cases: choice-point or self-witness. In the choice-point candidate case, we expect to have at any point in time, 2 stacks of node ids for resumable DFS. When doing DFS from a given stack, we try to descend further first, and if not possible, we ascend (remembering what the previous child node was before popping from the stack) and then descend down the next child in id-sort-order (children should probably be stored in a map, not unordered_map from the parent).
+
+Also please note: we have a few conflated concepts here. We have "witness search", which is the process for searching for a witness UNDER A SPECIFIC OUTGOING EDGE OF THE CURRENT CANDIDATE. If witness search comes back failed, then we move onto the next outgoing edge in id-sort-order. But remember that when we "resume" a query, we really resume just from a specific witness. This is going to be the witness which was just unfolded. Then, there is the larger concept of query advancing. I think we might refer to the query advancing algorithm as just "candidate search" since that's really what we are doing. OR we could call it "choice point search". But the problem there is that we could fail to find a choice point and still find a valid candidate in the self-witness case, invalidating that name. so "candidate search" is the right word.
+
+NOTES ON VOCABULARY: A "witness" is a LEAF RULE that a query can unify with the head of. If there is an intermediary rule (non-leaf) that matches the same criterion, it is NOT a witness due to it being a non-leaf. A "candidate" is THE MOST SPECIALIZED rule which we can advance a given query to.
+
+So really, when we "resume" witness search due to a witness being invalidated (made non-leaf), we also have the potential for that witness search to fail to find a witness (which again, is under just one of the outgoing edges of the prospective candidate). So at that point, we would want to start searching for a witness under a different, unexplored outgoing edge under the prospective candidate to determine if it is a choice point or not. This means that when a witness is invalidated, we sort of need to resume CANDIDATE SEARCH, not just witness search... not sure what that really means but yeah. Not sure if that will actually boil away when turning these ideas into code, which I have a feeling it may.
+
+In fact, maybe what we do is this. We consider the reactive system to behave in a multilayered fashion. The bottom level of the reaction is when a witness is invalidated, we resume witness search (scanning for a new replacement witness). IF we cannot find a replacement witness, we consider this to be ANOTHER reactive update which makes a call to the prospective candidate which owned that witness to attempt to find a replacement edge which has witnesses. Due to the fact that we already have 2 algo names, we can refer to the second reaction as "candidate invalidation". So two events in our system are: "witness invalidation" and "candidate invalidation", following after "witness search" and "candidate search".
+
+witness search is resumable, and candidate search is resumable. witness invalidation triggers witness search. candidate invalidation triggers candidate search. NOTE: candidates can be re-validated if they switch to a new outgoing edge which it turns out has another witness under it. At that point it is provably a valid choice point once again. Or another thing that could happen is that if we are unable to find another validating witness for the candidate, then we advance down the outgoing edge which DOES still have a valid witness. And resume candidate search there. We could eventually find another choice point OR a self-witnessing candidate.
+
+
+
+
+
+
+
+QUESTIONS:
+
+IS THERE A "QUERY TREE?": No. each query stores a linear container of C (C <= # axioms) entries, where each entry is a candidate. A candiate stores just some cursors describing what the candidate is in the tree, and what its witnesses are in the tree (if it is NOT a self-witness, otherwise the cursor to the candidate itself serves as the witness path).
+
+HOW MANY TREES ARE THERE?: One. The PUD is the only tree in this system that has to be managed manually. There may be maps and things which are abstracted B-trees but the only manual trees are the PUD.
+
+HOW ARE THE `om_interval`s accessed?: Given a pud node id, there will be several lookup maps which return to you the om_interval for that node, in a specific context. The standard (root) context has an om_interval for each node, but then when querying into the tree, each node also has a totally different om_interval pertaining to that query. We likely will have a storage infrastructure specifically allowing quick lookup of an om_interval given a query root (source pud_node_id* of the rule who owns the body goal where the query is attached) and a second pud_node_id* for the target node. This should be used when doing witness search, since we will know the id of each witness as we go and thus can quickly recover what the om_interval is, as well as recover the bindings for that environment.
+
+WHAT IS STORED IN A CANDIDATE?: 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
