@@ -32,14 +32,11 @@ struct pud_unify_head {
                    IMakeVar& make_var,
                    IMakeFunctor& make_functor);
     bool unify_head(pud_query& query, const pud_rule_id* node);
-    bool unify(pud_query& query, framed_expr leftover_body);
-    framed_expr whnf(pud_query& query, framed_expr fe);
     bool unify_callee(pud_query& query,
                       const pud_rule_id* callee,
                       std::vector<uint32_t>& touched_reps,
                       om_interval& env);
-    const expr* normalize(pud_query& query,
-                          om_interval interval,
+    const expr* normalize(om_interval interval,
                           framed_expr fe,
                           uint32_t cutoff,
                           std::unordered_map<uint32_t, uint32_t>& translation);
@@ -49,8 +46,11 @@ private:
     using unifier_t = unifier<IGlobalize, bind_map_t>;
     using normalizer_t = normalizer<IGlobalize, IMakeFunctor, IMakeVar, bind_map_t>;
 
+    std::vector<const pud_rule_id*> path_to_root(const pud_rule_id* node);
     void replay_raw(om_interval interval, const pud_rule_id* node, uint32_t frame_offset);
     void replay_reinit(pud_query& query, const pud_rule_id* node);
+    bool unify(pud_query& query, framed_expr leftover_body);
+    framed_expr whnf(pud_query& query, framed_expr fe);
     bool drain_unify(unifier_t& task_owner,
                      framed_expr lhs,
                      framed_expr rhs,
@@ -88,14 +88,23 @@ pud_unify_head<IACI, ITP, IGN, IRB, IQB, IG, IMV, IMF>::pud_unify_head(
 
 template<typename IACI, typename ITP, typename IGN, typename IRB, typename IQB,
          typename IG, typename IMV, typename IMF>
-void pud_unify_head<IACI, ITP, IGN, IRB, IQB, IG, IMV, IMF>::replay_raw(
-        om_interval interval, const pud_rule_id* node, uint32_t frame_offset) {
+std::vector<const pud_rule_id*>
+pud_unify_head<IACI, ITP, IGN, IRB, IQB, IG, IMV, IMF>::path_to_root(
+        const pud_rule_id* node) {
     std::vector<const pud_rule_id*> path;
     const pud_rule_id* walk = node;
     while (walk != nullptr) {
         path.push_back(walk);
         walk = try_parent_.try_parent(walk);
     }
+    return path;
+}
+
+template<typename IACI, typename ITP, typename IGN, typename IRB, typename IQB,
+         typename IG, typename IMV, typename IMF>
+void pud_unify_head<IACI, ITP, IGN, IRB, IQB, IG, IMV, IMF>::replay_raw(
+        om_interval interval, const pud_rule_id* node, uint32_t frame_offset) {
+    const std::vector<const pud_rule_id*> path = path_to_root(node);
     for (auto it = path.rbegin(); it != path.rend(); ++it) {
         const pud_db_node& db_node = get_node_.get_node(*it);
         for (const pud_added_unification& added : db_node.added_unifications)
@@ -108,12 +117,7 @@ template<typename IACI, typename ITP, typename IGN, typename IRB, typename IQB,
          typename IG, typename IMV, typename IMF>
 void pud_unify_head<IACI, ITP, IGN, IRB, IQB, IG, IMV, IMF>::replay_reinit(
         pud_query& query, const pud_rule_id* node) {
-    std::vector<const pud_rule_id*> path;
-    const pud_rule_id* walk = node;
-    while (walk != nullptr) {
-        path.push_back(walk);
-        walk = try_parent_.try_parent(walk);
-    }
+    const std::vector<const pud_rule_id*> path = path_to_root(node);
     for (auto it = path.rbegin(); it != path.rend(); ++it) {
         const pud_db_node& db_node = get_node_.get_node(*it);
         for (const pud_added_unification& added : db_node.added_unifications) {
@@ -195,12 +199,10 @@ bool pud_unify_head<IACI, ITP, IGN, IRB, IQB, IG, IMV, IMF>::unify_callee(
 template<typename IACI, typename ITP, typename IGN, typename IRB, typename IQB,
          typename IG, typename IMV, typename IMF>
 const expr* pud_unify_head<IACI, ITP, IGN, IRB, IQB, IG, IMV, IMF>::normalize(
-        pud_query& query,
         om_interval interval,
         framed_expr fe,
         uint32_t cutoff,
         std::unordered_map<uint32_t, uint32_t>& translation) {
-    (void)query;
     bind_map_t bm(globalize_, record_binding_, query_binding_, interval);
     normalizer_t n(globalize_, make_functor_, make_var_, bm);
     return n.normalize(fe, cutoff, translation);

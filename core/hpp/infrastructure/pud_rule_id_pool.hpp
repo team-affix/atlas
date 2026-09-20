@@ -11,7 +11,6 @@ struct pud_rule_id_pool {
     const pud_rule_id* make_inference(const pud_rule_id* caller,
                                       size_t call_site,
                                       const pud_rule_id* callee);
-    size_t size() const;
 private:
     const pud_rule_id* intern(pud_rule_id&&);
     std::unordered_set<pud_rule_id, pud_rule_id_hash> ids_;

@@ -14,13 +14,13 @@
 template<typename IResumeWitnessSearch,
          typename IIsLeaf,
          typename IOrderedChildren,
-         typename IParent,
+         typename ITryParent,
          typename IUnifyHead>
 struct pud_candidate_search {
     pud_candidate_search(IResumeWitnessSearch& resume_witness_search,
                          IIsLeaf& is_leaf,
                          IOrderedChildren& ordered_children,
-                         IParent& parent,
+                         ITryParent& try_parent,
                          IUnifyHead& unify_head);
     pud_candidate_search_result resume(pud_query& query, pud_candidate_search_context& context);
 private:
@@ -32,25 +32,25 @@ private:
     IResumeWitnessSearch& resume_witness_search_;
     IIsLeaf& is_leaf_;
     IOrderedChildren& ordered_children_;
-    IParent& parent_;
+    ITryParent& try_parent_;
     IUnifyHead& unify_head_;
 };
 
-template<typename IRWS, typename IIL, typename IOC, typename IP, typename IUH>
-pud_candidate_search<IRWS, IIL, IOC, IP, IUH>::pud_candidate_search(
+template<typename IRWS, typename IIL, typename IOC, typename ITP, typename IUH>
+pud_candidate_search<IRWS, IIL, IOC, ITP, IUH>::pud_candidate_search(
         IRWS& resume_witness_search,
         IIL& is_leaf,
         IOC& ordered_children,
-        IP& parent,
+        ITP& try_parent,
         IUH& unify_head)
     : resume_witness_search_(resume_witness_search)
     , is_leaf_(is_leaf)
     , ordered_children_(ordered_children)
-    , parent_(parent)
+    , try_parent_(try_parent)
     , unify_head_(unify_head) {}
 
-template<typename IRWS, typename IIL, typename IOC, typename IP, typename IUH>
-bool pud_candidate_search<IRWS, IIL, IOC, IP, IUH>::already_has_edge(
+template<typename IRWS, typename IIL, typename IOC, typename ITP, typename IUH>
+bool pud_candidate_search<IRWS, IIL, IOC, ITP, IUH>::already_has_edge(
         const pud_candidate_search_context& context,
         const pud_rule_id* edge_root) const {
     for (const pud_witness_search_context& edge : context.live_edges) {
@@ -60,8 +60,8 @@ bool pud_candidate_search<IRWS, IIL, IOC, IP, IUH>::already_has_edge(
     return false;
 }
 
-template<typename IRWS, typename IIL, typename IOC, typename IP, typename IUH>
-void pud_candidate_search<IRWS, IIL, IOC, IP, IUH>::query_advance(
+template<typename IRWS, typename IIL, typename IOC, typename ITP, typename IUH>
+void pud_candidate_search<IRWS, IIL, IOC, ITP, IUH>::query_advance(
         pud_candidate_search_context& context) {
     DEBUG_ASSERT(context.live_edges.size() == 1);
     const pud_rule_id* next_cursor = context.live_edges[0].edge_root;
@@ -71,7 +71,8 @@ void pud_candidate_search<IRWS, IIL, IOC, IP, IUH>::query_advance(
         return;
     const pud_rule_id* walk = context.live_edges[0].current;
     while (walk != context.cursor) {
-        const pud_rule_id* parent = parent_.parent(walk);
+        const pud_rule_id* parent = try_parent_.try_parent(walk);
+        DEBUG_ASSERT(parent != nullptr);
         if (parent == context.cursor) {
             context.live_edges[0].edge_root = walk;
             return;
@@ -80,8 +81,8 @@ void pud_candidate_search<IRWS, IIL, IOC, IP, IUH>::query_advance(
     }
 }
 
-template<typename IRWS, typename IIL, typename IOC, typename IP, typename IUH>
-void pud_candidate_search<IRWS, IIL, IOC, IP, IUH>::fill_live_edges(
+template<typename IRWS, typename IIL, typename IOC, typename ITP, typename IUH>
+void pud_candidate_search<IRWS, IIL, IOC, ITP, IUH>::fill_live_edges(
         pud_query& query, pud_candidate_search_context& context) {
     const std::vector<const pud_rule_id*> children =
         ordered_children_.ordered_children(context.cursor);
@@ -98,8 +99,8 @@ void pud_candidate_search<IRWS, IIL, IOC, IP, IUH>::fill_live_edges(
     }
 }
 
-template<typename IRWS, typename IIL, typename IOC, typename IP, typename IUH>
-pud_candidate_search_result pud_candidate_search<IRWS, IIL, IOC, IP, IUH>::resume(
+template<typename IRWS, typename IIL, typename IOC, typename ITP, typename IUH>
+pud_candidate_search_result pud_candidate_search<IRWS, IIL, IOC, ITP, IUH>::resume(
         pud_query& query, pud_candidate_search_context& context) {
     while (true) {
         if (context.live_edges.size() >= 2)

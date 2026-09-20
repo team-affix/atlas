@@ -1,6 +1,5 @@
 // pud_forest: axiom forest with interned ids, ordered children, nested OM intervals.
 
-#include <algorithm>
 #include <gtest/gtest.h>
 #include <gmock/gmock.h>
 #include <variant>
@@ -8,7 +7,7 @@
 #include "infrastructure/pud_forest.hpp"
 #include "value_objects/expr.hpp"
 #include "value_objects/om_interval.hpp"
-#include "value_objects/pud_db_node.hpp"
+#include "value_objects/pud_added_unification.hpp"
 #include "value_objects/pud_rule_id.hpp"
 
 using ::testing::NiceMock;
@@ -56,15 +55,6 @@ struct PudForestTest : public ::testing::Test {
         , inference_{pud_rule_id::inference{&axiom0_, 0, &axiom0_}}
         , forest_(make_axiom_, make_inference_, allocate_root_, allocate_child_) {}
 
-    pud_db_node make_payload() {
-        return pud_db_node{root_interval_a_, {}, {&q_}, 1};
-    }
-
-    bool contains_id(const std::vector<const pud_rule_id*>& ids,
-                     const pud_rule_id* id) const {
-        return std::find(ids.begin(), ids.end(), id) != ids.end();
-    }
-
     uint64_t root_open_a_;
     uint64_t root_close_a_;
     uint64_t root_open_b_;
@@ -87,14 +77,12 @@ struct PudForestTest : public ::testing::Test {
     test_forest_t forest_;
 };
 
-TEST_F(PudForestTest, AddAxiomInternsStoresAsRootAndLeaf) {
+TEST_F(PudForestTest, AddAxiomInternsStoresAsLeaf) {
     EXPECT_CALL(make_axiom_, make_axiom(0)).WillOnce(Return(&axiom0_));
     EXPECT_CALL(allocate_root_, allocate_root()).WillOnce(Return(root_interval_a_));
 
-    const pud_rule_id* id = forest_.add_axiom(0, make_payload());
+    const pud_rule_id* id = forest_.add_axiom(0, {}, {&q_}, 1);
     EXPECT_EQ(id, &axiom0_);
-    EXPECT_TRUE(contains_id(forest_.ordered_roots(), id));
-    EXPECT_TRUE(contains_id(forest_.ordered_leaves(), id));
     EXPECT_TRUE(forest_.is_leaf(id));
     EXPECT_EQ(forest_.try_parent(id), nullptr);
     EXPECT_EQ(forest_.get_node(id).lvc, 1u);
@@ -102,41 +90,38 @@ TEST_F(PudForestTest, AddAxiomInternsStoresAsRootAndLeaf) {
     EXPECT_EQ(forest_.get_node(id).interval.open.rank_ptr(), root_interval_a_.open.rank_ptr());
 }
 
-TEST_F(PudForestTest, TwoAxiomsAreIndependentRoots) {
+TEST_F(PudForestTest, TwoAxiomsAreIndependentLeaves) {
     EXPECT_CALL(make_axiom_, make_axiom(0)).WillOnce(Return(&axiom0_));
     EXPECT_CALL(make_axiom_, make_axiom(1)).WillOnce(Return(&axiom1_));
     EXPECT_CALL(allocate_root_, allocate_root())
         .WillOnce(Return(root_interval_a_))
         .WillOnce(Return(root_interval_b_));
 
-    const pud_rule_id* a0 = forest_.add_axiom(0, make_payload());
-    const pud_rule_id* a1 = forest_.add_axiom(1, make_payload());
-    EXPECT_TRUE(contains_id(forest_.ordered_roots(), a0));
-    EXPECT_TRUE(contains_id(forest_.ordered_roots(), a1));
-    EXPECT_EQ(forest_.ordered_roots().size(), 2u);
-    EXPECT_EQ(forest_.ordered_leaves().size(), 2u);
+    const pud_rule_id* a0 = forest_.add_axiom(0, {}, {&q_}, 1);
+    const pud_rule_id* a1 = forest_.add_axiom(1, {}, {&q_}, 1);
+    EXPECT_TRUE(forest_.is_leaf(a0));
+    EXPECT_TRUE(forest_.is_leaf(a1));
+    EXPECT_EQ(forest_.try_parent(a0), nullptr);
+    EXPECT_EQ(forest_.try_parent(a1), nullptr);
 }
 
 TEST_F(PudForestTest, LinkChildrenMakesParentNonLeafAndNestsChildInterval) {
     EXPECT_CALL(make_axiom_, make_axiom(0)).WillOnce(Return(&axiom0_));
     EXPECT_CALL(make_inference_, make_inference(&axiom0_, 0, &axiom0_))
         .WillOnce(Return(&inference_));
-    EXPECT_CALL(allocate_root_, allocate_root())
-        .WillOnce(Return(root_interval_a_))
-        .WillOnce(Return(root_interval_b_));
+    EXPECT_CALL(allocate_root_, allocate_root()).WillOnce(Return(root_interval_a_));
     EXPECT_CALL(allocate_child_, allocate_child_of(_))
         .WillOnce(Return(child_interval_));
 
-    const pud_rule_id* parent = forest_.add_axiom(0, make_payload());
+    const pud_rule_id* parent = forest_.add_axiom(0, {}, {&q_}, 1);
     const pud_rule_id* child =
-        forest_.add_inference(parent, 0, parent, make_payload());
+        forest_.add_inference(parent, 0, parent, {}, {&q_}, 1);
+    EXPECT_FALSE(forest_.is_leaf(child));
     forest_.link_children(parent, {child});
 
     EXPECT_FALSE(forest_.is_leaf(parent));
     EXPECT_TRUE(forest_.is_leaf(child));
-    EXPECT_FALSE(contains_id(forest_.ordered_roots(), child));
-    EXPECT_TRUE(contains_id(forest_.ordered_roots(), parent));
-    EXPECT_EQ(forest_.parent(child), parent);
+    EXPECT_EQ(forest_.try_parent(child), parent);
     EXPECT_EQ(forest_.ordered_children(parent),
               (std::vector<const pud_rule_id*>{child}));
     EXPECT_EQ(forest_.get_node(child).interval.open.rank_ptr(),
@@ -153,19 +138,16 @@ TEST_F(PudForestTest, LinkChildrenOrdersByRuleIdNotPointer) {
         .WillOnce(Return(&inf_low));
     EXPECT_CALL(make_inference_, make_inference(&axiom0_, 1, &axiom1_))
         .WillOnce(Return(&inf_high));
-    EXPECT_CALL(allocate_root_, allocate_root())
-        .WillOnce(Return(root_interval_a_))
-        .WillOnce(Return(root_interval_b_))
-        .WillOnce(Return(root_interval_b_));
+    EXPECT_CALL(allocate_root_, allocate_root()).WillOnce(Return(root_interval_a_));
     EXPECT_CALL(allocate_child_, allocate_child_of(_))
         .WillOnce(Return(child_interval_))
         .WillOnce(Return(child_interval_));
 
-    const pud_rule_id* parent = forest_.add_axiom(0, make_payload());
+    const pud_rule_id* parent = forest_.add_axiom(0, {}, {&q_}, 1);
     const pud_rule_id* high =
-        forest_.add_inference(parent, 1, &axiom1_, make_payload());
+        forest_.add_inference(parent, 1, &axiom1_, {}, {&q_}, 1);
     const pud_rule_id* low =
-        forest_.add_inference(parent, 0, &axiom1_, make_payload());
+        forest_.add_inference(parent, 0, &axiom1_, {}, {&q_}, 1);
     forest_.link_children(parent, {high, low});
 
     const std::vector<const pud_rule_id*> ordered = forest_.ordered_children(parent);
@@ -178,15 +160,13 @@ TEST_F(PudForestTest, SelfCalleeInferenceIsAllowedAsChild) {
     EXPECT_CALL(make_axiom_, make_axiom(0)).WillOnce(Return(&axiom0_));
     EXPECT_CALL(make_inference_, make_inference(&axiom0_, 0, &axiom0_))
         .WillOnce(Return(&inference_));
-    EXPECT_CALL(allocate_root_, allocate_root())
-        .WillOnce(Return(root_interval_a_))
-        .WillOnce(Return(root_interval_b_));
+    EXPECT_CALL(allocate_root_, allocate_root()).WillOnce(Return(root_interval_a_));
     EXPECT_CALL(allocate_child_, allocate_child_of(_))
         .WillOnce(Return(child_interval_));
 
-    const pud_rule_id* parent = forest_.add_axiom(0, make_payload());
+    const pud_rule_id* parent = forest_.add_axiom(0, {}, {&q_}, 1);
     const pud_rule_id* self_child =
-        forest_.add_inference(parent, 0, parent, make_payload());
+        forest_.add_inference(parent, 0, parent, {}, {&q_}, 1);
     forest_.link_children(parent, {self_child});
     EXPECT_EQ(std::get<pud_rule_id::inference>(self_child->content).callee, parent);
     EXPECT_EQ(forest_.ordered_children(parent),
@@ -197,8 +177,7 @@ TEST_F(PudForestTest, EffectiveBodyIsAxiomBodyAtARoot) {
     EXPECT_CALL(make_axiom_, make_axiom(0)).WillOnce(Return(&axiom0_));
     EXPECT_CALL(allocate_root_, allocate_root()).WillOnce(Return(root_interval_a_));
 
-    pud_db_node node{root_interval_a_, {}, {&q_, &r_}, 1};
-    const pud_rule_id* axiom = forest_.add_axiom(0, node);
+    const pud_rule_id* axiom = forest_.add_axiom(0, {}, {&q_, &r_}, 1);
     EXPECT_EQ(forest_.effective_body(axiom), (std::vector<const expr*>{&q_, &r_}));
 }
 
@@ -206,16 +185,23 @@ TEST_F(PudForestTest, EffectiveBodyDropsUnfoldedCallSiteAndAppendsAddedGoals) {
     EXPECT_CALL(make_axiom_, make_axiom(0)).WillOnce(Return(&axiom0_));
     EXPECT_CALL(make_inference_, make_inference(&axiom0_, 0, &axiom0_))
         .WillOnce(Return(&inference_));
-    EXPECT_CALL(allocate_root_, allocate_root())
-        .WillOnce(Return(root_interval_a_))
-        .WillOnce(Return(root_interval_b_));
+    EXPECT_CALL(allocate_root_, allocate_root()).WillOnce(Return(root_interval_a_));
     EXPECT_CALL(allocate_child_, allocate_child_of(_))
         .WillOnce(Return(child_interval_));
 
-    pud_db_node parent_node{root_interval_a_, {}, {&q_, &r_}, 1};
-    pud_db_node child_node{root_interval_b_, {}, {&s_}, 1};
-    const pud_rule_id* parent = forest_.add_axiom(0, parent_node);
-    const pud_rule_id* child = forest_.add_inference(parent, 0, parent, child_node);
+    const pud_rule_id* parent = forest_.add_axiom(0, {}, {&q_, &r_}, 1);
+    const pud_rule_id* child = forest_.add_inference(parent, 0, parent, {}, {&s_}, 1);
     forest_.link_children(parent, {child});
     EXPECT_EQ(forest_.effective_body(child), (std::vector<const expr*>{&r_, &s_}));
+}
+
+TEST_F(PudForestTest, AddInferenceDoesNotAllocateARootInterval) {
+    EXPECT_CALL(make_axiom_, make_axiom(0)).WillOnce(Return(&axiom0_));
+    EXPECT_CALL(make_inference_, make_inference(&axiom0_, 0, &axiom0_))
+        .WillOnce(Return(&inference_));
+    EXPECT_CALL(allocate_root_, allocate_root()).WillOnce(Return(root_interval_a_));
+    EXPECT_CALL(allocate_child_, allocate_child_of(_)).Times(0);
+
+    const pud_rule_id* parent = forest_.add_axiom(0, {}, {&q_}, 1);
+    forest_.add_inference(parent, 0, parent, {}, {&q_}, 1);
 }

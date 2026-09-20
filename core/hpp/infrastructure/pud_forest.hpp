@@ -1,8 +1,8 @@
 #ifndef PUD_FOREST_HPP
 #define PUD_FOREST_HPP
 
-#include <algorithm>
 #include <cstddef>
+#include <cstdint>
 #include <set>
 #include <unordered_map>
 #include <unordered_set>
@@ -11,6 +11,8 @@
 #include <vector>
 #include "value_objects/expr.hpp"
 #include "value_objects/om_interval.hpp"
+#include "value_objects/om_label.hpp"
+#include "value_objects/pud_added_unification.hpp"
 #include "value_objects/pud_db_node.hpp"
 #include "value_objects/pud_rule_id.hpp"
 #include "debug_assert.hpp"
@@ -25,18 +27,20 @@ struct pud_forest {
                IAllocateRootInterval& allocate_root_interval,
                IAllocateChildInterval& allocate_child_interval);
 
-    const pud_rule_id* add_axiom(size_t entry_idx, pud_db_node node);
+    const pud_rule_id* add_axiom(size_t entry_idx,
+                                 std::vector<pud_added_unification> added_unifications,
+                                 std::vector<const expr*> added_body_goals,
+                                 uint32_t lvc);
     const pud_rule_id* add_inference(const pud_rule_id* caller,
                                      size_t call_site,
                                      const pud_rule_id* callee,
-                                     pud_db_node node);
+                                     std::vector<pud_added_unification> added_unifications,
+                                     std::vector<const expr*> added_body_goals,
+                                     uint32_t lvc);
     void link_children(const pud_rule_id* parent,
                        const std::vector<const pud_rule_id*>& children);
 
-    std::vector<const pud_rule_id*> ordered_roots() const;
-    std::vector<const pud_rule_id*> ordered_leaves() const;
     std::vector<const pud_rule_id*> ordered_children(const pud_rule_id* parent) const;
-    const pud_rule_id* parent(const pud_rule_id* child) const;
     const pud_rule_id* try_parent(const pud_rule_id* child) const;
     const pud_db_node& get_node(const pud_rule_id* id) const;
     bool is_leaf(const pud_rule_id* id) const;
@@ -51,9 +55,12 @@ private:
     using parent_map_t = std::unordered_map<const pud_rule_id*, const pud_rule_id*>;
     using set_t = std::unordered_set<const pud_rule_id*>;
 
-    void insert_isolated(const pud_rule_id* id, pud_db_node node);
+    void store_node(const pud_rule_id* id,
+                    om_interval interval,
+                    std::vector<pud_added_unification> added_unifications,
+                    std::vector<const expr*> added_body_goals,
+                    uint32_t lvc);
     void link(const pud_rule_id* parent, child_set_t children);
-    std::vector<const pud_rule_id*> ordered_ids(const set_t& ids) const;
 
     IMakeAxiom& make_axiom_;
     IMakeInference& make_inference_;
@@ -62,7 +69,6 @@ private:
     map_t by_id_;
     children_map_t children_;
     parent_map_t parents_;
-    set_t roots_;
     set_t leaves_;
 };
 
@@ -85,24 +91,36 @@ pud_forest<IMA, IMI, IARI, IACI>::pud_forest(IMA& make_axiom,
     , by_id_()
     , children_()
     , parents_()
-    , roots_()
     , leaves_() {}
 
 template<typename IMA, typename IMI, typename IARI, typename IACI>
-void pud_forest<IMA, IMI, IARI, IACI>::insert_isolated(const pud_rule_id* id,
-                                                      pud_db_node node) {
+void pud_forest<IMA, IMI, IARI, IACI>::store_node(
+        const pud_rule_id* id,
+        om_interval interval,
+        std::vector<pud_added_unification> added_unifications,
+        std::vector<const expr*> added_body_goals,
+        uint32_t lvc) {
     DEBUG_ASSERT(!by_id_.contains(id));
-    node.interval = allocate_root_interval_.allocate_root();
-    by_id_.emplace(id, node);
-    roots_.insert(id);
-    leaves_.insert(id);
+    by_id_.emplace(id, pud_db_node{
+        interval,
+        std::move(added_unifications),
+        std::move(added_body_goals),
+        lvc});
 }
 
 template<typename IMA, typename IMI, typename IARI, typename IACI>
-const pud_rule_id* pud_forest<IMA, IMI, IARI, IACI>::add_axiom(size_t entry_idx,
-                                                              pud_db_node node) {
+const pud_rule_id* pud_forest<IMA, IMI, IARI, IACI>::add_axiom(
+        size_t entry_idx,
+        std::vector<pud_added_unification> added_unifications,
+        std::vector<const expr*> added_body_goals,
+        uint32_t lvc) {
     const pud_rule_id* id = make_axiom_.make_axiom(entry_idx);
-    insert_isolated(id, std::move(node));
+    store_node(id,
+               allocate_root_interval_.allocate_root(),
+               std::move(added_unifications),
+               std::move(added_body_goals),
+               lvc);
+    leaves_.insert(id);
     return id;
 }
 
@@ -111,9 +129,15 @@ const pud_rule_id* pud_forest<IMA, IMI, IARI, IACI>::add_inference(
         const pud_rule_id* caller,
         size_t call_site,
         const pud_rule_id* callee,
-        pud_db_node node) {
+        std::vector<pud_added_unification> added_unifications,
+        std::vector<const expr*> added_body_goals,
+        uint32_t lvc) {
     const pud_rule_id* id = make_inference_.make_inference(caller, call_site, callee);
-    insert_isolated(id, std::move(node));
+    store_node(id,
+               om_interval{om_label(nullptr), om_label(nullptr)},
+               std::move(added_unifications),
+               std::move(added_body_goals),
+               lvc);
     return id;
 }
 
@@ -123,7 +147,8 @@ void pud_forest<IMA, IMI, IARI, IACI>::link(const pud_rule_id* parent,
     DEBUG_ASSERT(leaves_.contains(parent));
     DEBUG_ASSERT(!children.empty());
     for (const pud_rule_id* child : children) {
-        DEBUG_ASSERT(roots_.contains(child));
+        DEBUG_ASSERT(by_id_.contains(child));
+        DEBUG_ASSERT(!parents_.contains(child));
         DEBUG_ASSERT(child != parent);
     }
 
@@ -134,7 +159,7 @@ void pud_forest<IMA, IMI, IARI, IACI>::link(const pud_rule_id* parent,
             allocate_child_interval_.allocate_child_of(parent_interval);
         child_set.insert(child);
         parents_.emplace(child, parent);
-        roots_.erase(child);
+        leaves_.insert(child);
     }
     leaves_.erase(parent);
 }
@@ -150,35 +175,12 @@ void pud_forest<IMA, IMI, IARI, IACI>::link_children(
 }
 
 template<typename IMA, typename IMI, typename IARI, typename IACI>
-std::vector<const pud_rule_id*> pud_forest<IMA, IMI, IARI, IACI>::ordered_ids(
-        const set_t& ids) const {
-    std::vector<const pud_rule_id*> out(ids.begin(), ids.end());
-    std::sort(out.begin(), out.end(), rule_id_less{});
-    return out;
-}
-
-template<typename IMA, typename IMI, typename IARI, typename IACI>
-std::vector<const pud_rule_id*> pud_forest<IMA, IMI, IARI, IACI>::ordered_roots() const {
-    return ordered_ids(roots_);
-}
-
-template<typename IMA, typename IMI, typename IARI, typename IACI>
-std::vector<const pud_rule_id*> pud_forest<IMA, IMI, IARI, IACI>::ordered_leaves() const {
-    return ordered_ids(leaves_);
-}
-
-template<typename IMA, typename IMI, typename IARI, typename IACI>
 std::vector<const pud_rule_id*>
 pud_forest<IMA, IMI, IARI, IACI>::ordered_children(const pud_rule_id* parent) const {
     auto it = children_.find(parent);
     if (it == children_.end())
         return {};
     return std::vector<const pud_rule_id*>(it->second.begin(), it->second.end());
-}
-
-template<typename IMA, typename IMI, typename IARI, typename IACI>
-const pud_rule_id* pud_forest<IMA, IMI, IARI, IACI>::parent(const pud_rule_id* child) const {
-    return parents_.at(child);
 }
 
 template<typename IMA, typename IMI, typename IARI, typename IACI>

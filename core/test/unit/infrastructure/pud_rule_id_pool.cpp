@@ -94,16 +94,12 @@ TEST_F(PudRuleIdPoolTest, InferenceCanUseAnotherInferenceAsCaller) {
     EXPECT_EQ(inf1_body.callee, axiom0);
 }
 
-TEST_F(PudRuleIdPoolTest, SizeCountsDistinctInternedIds) {
-    EXPECT_EQ(pool.size(), 0u);
+TEST_F(PudRuleIdPoolTest, RepeatedInternOfTheSameTripleDoesNotCreateANewId) {
     const pud_rule_id* axiom0 = pool.make_axiom(0);
     pool.make_axiom(0);
-    EXPECT_EQ(pool.size(), 1u);
     const pud_rule_id* axiom1 = pool.make_axiom(1);
-    EXPECT_EQ(pool.size(), 2u);
-    pool.make_inference(axiom0, 0, axiom1);
-    pool.make_inference(axiom0, 0, axiom1);
-    EXPECT_EQ(pool.size(), 3u);
+    const pud_rule_id* inf = pool.make_inference(axiom0, 0, axiom1);
+    EXPECT_EQ(pool.make_inference(axiom0, 0, axiom1), inf);
 }
 
 TEST_F(PudRuleIdPoolTest, InternedAxiomHoldsEntryIdx) {
@@ -201,23 +197,20 @@ TEST_F(PudRuleIdPoolTest, ReinternAfterOtherInsertsReturnsSamePointer) {
     EXPECT_EQ(pool.make_inference(axiom0, 0, axiom1), inf);
 }
 
-TEST_F(PudRuleIdPoolTest, SizeUnchangedWhenNullCallerRejected) {
+TEST_F(PudRuleIdPoolTest, NullCallerDoesNotIntern) {
     const pud_rule_id* callee = pool.make_axiom(0);
-    const size_t before = pool.size();
     EXPECT_THROW(pool.make_inference(nullptr, 0, callee), std::logic_error);
-    EXPECT_EQ(pool.size(), before);
+    EXPECT_EQ(pool.make_axiom(0), callee);
 }
 
-TEST_F(PudRuleIdPoolTest, SizeUnchangedWhenNullCalleeRejected) {
+TEST_F(PudRuleIdPoolTest, NullCalleeDoesNotIntern) {
     const pud_rule_id* caller = pool.make_axiom(0);
-    const size_t before = pool.size();
     EXPECT_THROW(pool.make_inference(caller, 0, nullptr), std::logic_error);
-    EXPECT_EQ(pool.size(), before);
+    EXPECT_EQ(pool.make_axiom(0), caller);
 }
 
 TEST_F(PudRuleIdPoolTest, BothNullCallerAndCalleeThrows) {
     EXPECT_THROW(pool.make_inference(nullptr, 0, nullptr), std::logic_error);
-    EXPECT_EQ(pool.size(), 0u);
 }
 
 TEST_F(PudRuleIdPoolTest, LargeEntryIdxInterns) {

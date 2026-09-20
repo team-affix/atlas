@@ -26,8 +26,8 @@ struct MockOrderedChildren {
     MOCK_METHOD(std::vector<const pud_rule_id*>, ordered_children, (const pud_rule_id*), ());
 };
 
-struct MockParent {
-    MOCK_METHOD(const pud_rule_id*, parent, (const pud_rule_id*), ());
+struct MockTryParent {
+    MOCK_METHOD(const pud_rule_id*, try_parent, (const pud_rule_id*), ());
 };
 
 struct MockUnifyHead {
@@ -36,7 +36,7 @@ struct MockUnifyHead {
 
 using test_search_t = pud_witness_search<NiceMock<MockIsLeaf>,
                                          NiceMock<MockOrderedChildren>,
-                                         NiceMock<MockParent>,
+                                         NiceMock<MockTryParent>,
                                          NiceMock<MockUnifyHead>>;
 
 struct PudWitnessSearchTest : public ::testing::Test {
@@ -50,7 +50,7 @@ struct PudWitnessSearchTest : public ::testing::Test {
         , c1_{pud_rule_id::inference{&a0_, 1, &a0_}}
         , g0_{pud_rule_id::inference{&c0_, 0, &a0_}}
         , query_{interval_, &body_, {}, 1}
-        , search_(is_leaf_, children_, parent_, unify_) {}
+        , search_(is_leaf_, children_, try_parent_, unify_) {}
 
     uint64_t open_;
     uint64_t close_;
@@ -63,7 +63,7 @@ struct PudWitnessSearchTest : public ::testing::Test {
     pud_query query_;
     NiceMock<MockIsLeaf> is_leaf_;
     NiceMock<MockOrderedChildren> children_;
-    NiceMock<MockParent> parent_;
+    NiceMock<MockTryParent> try_parent_;
     NiceMock<MockUnifyHead> unify_;
     test_search_t search_;
 };
@@ -105,7 +105,7 @@ TEST_F(PudWitnessSearchTest, TriesNextSiblingInIdOrderAfterFailedChild) {
     EXPECT_CALL(is_leaf_, is_leaf(&c1_)).WillRepeatedly(Return(true));
     EXPECT_CALL(unify_, unify_head(_, &c0_)).WillRepeatedly(Return(false));
     EXPECT_CALL(unify_, unify_head(_, &c1_)).WillRepeatedly(Return(true));
-    EXPECT_CALL(parent_, parent(&c0_)).WillRepeatedly(Return(&a0_));
+    EXPECT_CALL(try_parent_, try_parent(&c0_)).WillRepeatedly(Return(&a0_));
     EXPECT_CALL(children_, ordered_children(&a0_))
         .WillRepeatedly(Return(std::vector<const pud_rule_id*>{&c0_, &c1_}));
     const pud_witness_search_result result = search_.resume(query_, ctx);
@@ -117,7 +117,7 @@ TEST_F(PudWitnessSearchTest, StopsAtEdgeRootAndFailsWhenNoSiblingWorks) {
     pud_witness_search_context ctx{&c0_, &g0_};
     EXPECT_CALL(is_leaf_, is_leaf(&g0_)).WillRepeatedly(Return(true));
     EXPECT_CALL(unify_, unify_head(_, &g0_)).WillRepeatedly(Return(false));
-    EXPECT_CALL(parent_, parent(&g0_)).WillRepeatedly(Return(&c0_));
+    EXPECT_CALL(try_parent_, try_parent(&g0_)).WillRepeatedly(Return(&c0_));
     EXPECT_CALL(children_, ordered_children(&c0_))
         .WillRepeatedly(Return(std::vector<const pud_rule_id*>{&g0_}));
     const pud_witness_search_result result = search_.resume(query_, ctx);

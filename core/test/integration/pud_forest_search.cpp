@@ -14,7 +14,6 @@
 #include "value_objects/expr.hpp"
 #include "value_objects/pud_candidate_search_context.hpp"
 #include "value_objects/pud_candidate_search_result.hpp"
-#include "value_objects/pud_db_node.hpp"
 #include "value_objects/pud_query.hpp"
 #include "value_objects/pud_witness_search_context.hpp"
 #include "value_objects/pud_witness_search_result.hpp"
@@ -30,17 +29,11 @@ using candidate_search_t = pud_candidate_search<
 
 struct PudForestSearchIntegrationTest : public ::testing::Test {
     PudForestSearchIntegrationTest()
-        : dummy_open_(0)
-        , dummy_close_(1)
-        , dummy_{om_label(&dummy_open_), om_label(&dummy_close_)}
-        , forest_(pool_, pool_, om_, om_)
+        : forest_(pool_, pool_, om_, om_)
         , unify_head_(om_, forest_, forest_, fpa_, fpa_, glob_, exprs_, exprs_)
         , witness_(forest_, forest_, forest_, unify_head_)
         , candidate_(witness_, forest_, forest_, forest_, unify_head_) {}
 
-    uint64_t dummy_open_;
-    uint64_t dummy_close_;
-    om_interval dummy_;
     pud_rule_id_pool pool_;
     order_maintenance om_;
     fully_persistent_array fpa_;
@@ -54,7 +47,7 @@ struct PudForestSearchIntegrationTest : public ::testing::Test {
 
 TEST_F(PudForestSearchIntegrationTest, WitnessSearchFindsUnifyingAxiomLeaf) {
     const expr* pred = exprs_.make_functor(4, {});
-    const pud_rule_id* axiom = forest_.add_axiom(0, pud_db_node{dummy_, {{0, pred}}, {}, 1});
+    const pud_rule_id* axiom = forest_.add_axiom(0, {{0, pred}}, {}, 1);
     pud_query query{
         om_.allocate_child_of(forest_.get_node(axiom).interval),
         pred,
@@ -68,7 +61,7 @@ TEST_F(PudForestSearchIntegrationTest, WitnessSearchFindsUnifyingAxiomLeaf) {
 
 TEST_F(PudForestSearchIntegrationTest, CandidateSearchSelfWitnessesMatchingLeaf) {
     const expr* pred = exprs_.make_functor(5, {});
-    const pud_rule_id* axiom = forest_.add_axiom(0, pud_db_node{dummy_, {{0, pred}}, {}, 1});
+    const pud_rule_id* axiom = forest_.add_axiom(0, {{0, pred}}, {}, 1);
     pud_query query{
         om_.allocate_child_of(forest_.get_node(axiom).interval),
         pred,
@@ -82,7 +75,7 @@ TEST_F(PudForestSearchIntegrationTest, CandidateSearchSelfWitnessesMatchingLeaf)
 TEST_F(PudForestSearchIntegrationTest, CandidateSearchRefutesAxiomWhenHeadDoesNotUnify) {
     const expr* head = exprs_.make_functor(6, {});
     const expr* body = exprs_.make_functor(7, {});
-    const pud_rule_id* axiom = forest_.add_axiom(0, pud_db_node{dummy_, {{0, head}}, {body}, 1});
+    const pud_rule_id* axiom = forest_.add_axiom(0, {{0, head}}, {body}, 1);
     pud_query query{
         om_.allocate_child_of(forest_.get_node(axiom).interval),
         body,

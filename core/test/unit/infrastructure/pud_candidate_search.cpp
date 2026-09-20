@@ -30,8 +30,8 @@ struct MockOrderedChildren {
     MOCK_METHOD(std::vector<const pud_rule_id*>, ordered_children, (const pud_rule_id*), ());
 };
 
-struct MockParent {
-    MOCK_METHOD(const pud_rule_id*, parent, (const pud_rule_id*), ());
+struct MockTryParent {
+    MOCK_METHOD(const pud_rule_id*, try_parent, (const pud_rule_id*), ());
 };
 
 struct MockUnifyHead {
@@ -41,7 +41,7 @@ struct MockUnifyHead {
 using test_search_t = pud_candidate_search<NiceMock<MockResumeWitnessSearch>,
                                            NiceMock<MockIsLeaf>,
                                            NiceMock<MockOrderedChildren>,
-                                           NiceMock<MockParent>,
+                                           NiceMock<MockTryParent>,
                                            NiceMock<MockUnifyHead>>;
 
 struct PudCandidateSearchTest : public ::testing::Test {
@@ -54,7 +54,7 @@ struct PudCandidateSearchTest : public ::testing::Test {
         , c0_{pud_rule_id::inference{&a0_, 0, &a0_}}
         , c1_{pud_rule_id::inference{&a0_, 1, &a0_}}
         , query_{interval_, &body_, {}, 1}
-        , search_(witness_, is_leaf_, children_, parent_, unify_) {}
+        , search_(witness_, is_leaf_, children_, try_parent_, unify_) {}
 
     uint64_t open_;
     uint64_t close_;
@@ -67,7 +67,7 @@ struct PudCandidateSearchTest : public ::testing::Test {
     NiceMock<MockResumeWitnessSearch> witness_;
     NiceMock<MockIsLeaf> is_leaf_;
     NiceMock<MockOrderedChildren> children_;
-    NiceMock<MockParent> parent_;
+    NiceMock<MockTryParent> try_parent_;
     NiceMock<MockUnifyHead> unify_;
     test_search_t search_;
 };

@@ -70,9 +70,7 @@ TEST_F(PudManifestIntegrationTest, UnfoldOfWitnessAdvancesOtherQueryWithoutNeste
     pud_query* a0_query = m_.queries_.get(a0)[0];
     EXPECT_FALSE(a0_query->axiom_contexts.empty());
 
-    const size_t leaf_count_before = m_.forest_.ordered_leaves().size();
     drain(m_.unfolder_.unfold(a1, 0));
-    EXPECT_EQ(m_.forest_.ordered_leaves().size(), leaf_count_before);
     EXPECT_FALSE(m_.forest_.is_leaf(a1));
     ASSERT_EQ(m_.forest_.ordered_children(a1).size(), 1u);
     const pud_rule_id* child = m_.forest_.ordered_children(a1)[0];

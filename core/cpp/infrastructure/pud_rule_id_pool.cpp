@@ -12,10 +12,6 @@ const pud_rule_id* pud_rule_id_pool::make_inference(const pud_rule_id* caller,
     return intern(pud_rule_id{pud_rule_id::inference{caller, call_site, callee}});
 }
 
-size_t pud_rule_id_pool::size() const {
-    return ids_.size();
-}
-
 const pud_rule_id* pud_rule_id_pool::intern(pud_rule_id&& id) {
     return &*ids_.insert(std::move(id)).first;
 }

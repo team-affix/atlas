@@ -11,7 +11,6 @@
 #include "infrastructure/pud_unify_head.hpp"
 #include "value_objects/expr.hpp"
 #include "value_objects/framed_expr.hpp"
-#include "value_objects/pud_db_node.hpp"
 #include "value_objects/pud_query.hpp"
 
 using forest_t = pud_forest<pud_rule_id_pool, pud_rule_id_pool, order_maintenance, order_maintenance>;
@@ -22,15 +21,9 @@ using unify_head_t = pud_unify_head<
 
 struct PudReinitBindMapIntegrationTest : public ::testing::Test {
     PudReinitBindMapIntegrationTest()
-        : dummy_open_(0)
-        , dummy_close_(1)
-        , dummy_{om_label(&dummy_open_), om_label(&dummy_close_)}
-        , forest_(pool_, pool_, om_, om_)
+        : forest_(pool_, pool_, om_, om_)
         , unify_head_(om_, forest_, forest_, fpa_, fpa_, glob_, exprs_, exprs_) {}
 
-    uint64_t dummy_open_;
-    uint64_t dummy_close_;
-    om_interval dummy_;
     pud_rule_id_pool pool_;
     order_maintenance om_;
     fully_persistent_array fpa_;
@@ -42,9 +35,8 @@ struct PudReinitBindMapIntegrationTest : public ::testing::Test {
 
 TEST_F(PudReinitBindMapIntegrationTest, PathReplayIsVisibleInChildQueryInterval) {
     const expr* head = exprs_.make_functor(3, {});
-    const pud_rule_id* axiom = forest_.add_axiom(0, pud_db_node{dummy_, {{0, head}}, {}, 1});
-    const pud_rule_id* child = forest_.add_inference(
-        axiom, 0, axiom, pud_db_node{dummy_, {}, {}, 1});
+    const pud_rule_id* axiom = forest_.add_axiom(0, {{0, head}}, {}, 1);
+    const pud_rule_id* child = forest_.add_inference(axiom, 0, axiom, {}, {}, 1);
     forest_.link_children(axiom, {child});
 
     pud_query query{
