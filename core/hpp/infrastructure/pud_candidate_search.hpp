@@ -5,6 +5,7 @@
 #include <vector>
 #include "value_objects/pud_candidate_search_context.hpp"
 #include "value_objects/pud_candidate_search_result.hpp"
+#include "value_objects/pud_query.hpp"
 #include "value_objects/pud_rule_id.hpp"
 #include "value_objects/pud_witness_search_context.hpp"
 #include "value_objects/pud_witness_search_result.hpp"
@@ -21,12 +22,12 @@ struct pud_candidate_search {
                          IOrderedChildren& ordered_children,
                          IParent& parent,
                          IUnifyHead& unify_head);
-    pud_candidate_search_result resume(pud_candidate_search_context& context);
+    pud_candidate_search_result resume(pud_query& query, pud_candidate_search_context& context);
 private:
     bool already_has_edge(const pud_candidate_search_context& context,
                           const pud_rule_id* edge_root) const;
     void query_advance(pud_candidate_search_context& context);
-    void fill_live_edges(pud_candidate_search_context& context);
+    void fill_live_edges(pud_query& query, pud_candidate_search_context& context);
 
     IResumeWitnessSearch& resume_witness_search_;
     IIsLeaf& is_leaf_;
@@ -81,7 +82,7 @@ void pud_candidate_search<IRWS, IIL, IOC, IP, IUH>::query_advance(
 
 template<typename IRWS, typename IIL, typename IOC, typename IP, typename IUH>
 void pud_candidate_search<IRWS, IIL, IOC, IP, IUH>::fill_live_edges(
-        pud_candidate_search_context& context) {
+        pud_query& query, pud_candidate_search_context& context) {
     const std::vector<const pud_rule_id*> children =
         ordered_children_.ordered_children(context.cursor);
     for (const pud_rule_id* child : children) {
@@ -90,7 +91,7 @@ void pud_candidate_search<IRWS, IIL, IOC, IP, IUH>::fill_live_edges(
         if (already_has_edge(context, child))
             continue;
         pud_witness_search_context edge{child, child};
-        const pud_witness_search_result result = resume_witness_search_.resume(edge);
+        const pud_witness_search_result result = resume_witness_search_.resume(query, edge);
         if (std::holds_alternative<pud_witness_search_result::failed>(result.content))
             continue;
         context.live_edges.push_back(edge);
@@ -99,14 +100,14 @@ void pud_candidate_search<IRWS, IIL, IOC, IP, IUH>::fill_live_edges(
 
 template<typename IRWS, typename IIL, typename IOC, typename IP, typename IUH>
 pud_candidate_search_result pud_candidate_search<IRWS, IIL, IOC, IP, IUH>::resume(
-        pud_candidate_search_context& context) {
+        pud_query& query, pud_candidate_search_context& context) {
     while (true) {
         if (context.live_edges.size() >= 2)
             return pud_candidate_search_result{pud_candidate_search_result::choice_point{}};
-        if (is_leaf_.is_leaf(context.cursor) && unify_head_.unify_head(context.cursor))
+        if (is_leaf_.is_leaf(context.cursor) && unify_head_.unify_head(query, context.cursor))
             return pud_candidate_search_result{pud_candidate_search_result::self_witness{}};
 
-        fill_live_edges(context);
+        fill_live_edges(query, context);
 
         if (context.live_edges.size() >= 2)
             return pud_candidate_search_result{pud_candidate_search_result::choice_point{}};

@@ -6,7 +6,7 @@
 #include "infrastructure/fully_persistent_array.hpp"
 #include "infrastructure/globalizer.hpp"
 #include "infrastructure/order_maintenance.hpp"
-#include "infrastructure/pud.hpp"
+#include "infrastructure/pud_forest.hpp"
 #include "infrastructure/pud_candidate_search.hpp"
 #include "infrastructure/pud_rule_id_pool.hpp"
 #include "infrastructure/pud_unify_head.hpp"
@@ -19,7 +19,7 @@
 #include "value_objects/pud_witness_search_context.hpp"
 #include "value_objects/pud_witness_search_result.hpp"
 
-using forest_t = pud<pud_rule_id_pool, pud_rule_id_pool, order_maintenance, order_maintenance>;
+using forest_t = pud_forest<pud_rule_id_pool, pud_rule_id_pool, order_maintenance, order_maintenance>;
 using unify_head_t = pud_unify_head<
     order_maintenance, forest_t, forest_t,
     fully_persistent_array, fully_persistent_array,
@@ -58,10 +58,10 @@ TEST_F(PudForestSearchIntegrationTest, WitnessSearchFindsUnifyingAxiomLeaf) {
     pud_query query{
         om_.allocate_child_of(forest_.get_node(axiom).interval),
         pred,
-        {}};
-    unify_head_.bind_query(query, 1);
+        {},
+        1};
     pud_witness_search_context ctx{axiom, axiom};
-    const pud_witness_search_result result = witness_.resume(ctx);
+    const pud_witness_search_result result = witness_.resume(query, ctx);
     EXPECT_TRUE(std::holds_alternative<pud_witness_search_result::found>(result.content));
     EXPECT_EQ(ctx.current, axiom);
 }
@@ -72,10 +72,10 @@ TEST_F(PudForestSearchIntegrationTest, CandidateSearchSelfWitnessesMatchingLeaf)
     pud_query query{
         om_.allocate_child_of(forest_.get_node(axiom).interval),
         pred,
-        {}};
-    unify_head_.bind_query(query, 1);
+        {},
+        1};
     pud_candidate_search_context ctx{axiom, {}};
-    const pud_candidate_search_result result = candidate_.resume(ctx);
+    const pud_candidate_search_result result = candidate_.resume(query, ctx);
     EXPECT_TRUE(std::holds_alternative<pud_candidate_search_result::self_witness>(result.content));
 }
 
@@ -86,9 +86,9 @@ TEST_F(PudForestSearchIntegrationTest, CandidateSearchRefutesAxiomWhenHeadDoesNo
     pud_query query{
         om_.allocate_child_of(forest_.get_node(axiom).interval),
         body,
-        {}};
-    unify_head_.bind_query(query, 1);
+        {},
+        1};
     pud_candidate_search_context ctx{axiom, {}};
-    const pud_candidate_search_result result = candidate_.resume(ctx);
+    const pud_candidate_search_result result = candidate_.resume(query, ctx);
     EXPECT_TRUE(std::holds_alternative<pud_candidate_search_result::axiom_refuted>(result.content));
 }

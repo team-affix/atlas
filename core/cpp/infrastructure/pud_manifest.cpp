@@ -7,20 +7,13 @@ pud_manifest::pud_manifest()
     , globalizer_()
     , exprs_()
     , forest_(pool_, pool_, om_, om_)
-    , leaf_queries_()
-    , watchers_()
     , unify_head_(om_, forest_, forest_, fpa_, fpa_, globalizer_, exprs_, exprs_)
     , witness_search_(forest_, forest_, forest_, unify_head_)
     , candidate_search_(witness_search_, forest_, forest_, forest_, unify_head_)
-    , reinit_(forest_, forest_, fpa_, unify_head_, unify_head_)
-    , router_(watchers_, witness_search_, candidate_search_, unify_head_)
-    , unfolder_(forest_, unify_head_, unify_head_, unify_head_, exprs_,
-                forest_, forest_, om_,
-                leaf_queries_, leaf_queries_, leaf_queries_,
-                reinit_, candidate_search_,
+    , queries_(forest_, om_, forest_, forest_,
+               unify_head_, candidate_search_, witness_search_)
+    , unfolder_(forest_, unify_head_, unify_head_, exprs_,
                 forest_, forest_, forest_,
-                router_, watchers_, watchers_)
-    , axiom_adder_(forest_, forest_, om_,
-                   leaf_queries_, leaf_queries_,
-                   unify_head_, reinit_, candidate_search_,
-                   forest_, forest_, watchers_) {}
+                queries_, queries_, queries_, queries_,
+                candidate_search_, queries_)
+    , axiom_adder_(forest_, queries_, queries_) {}
