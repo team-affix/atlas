@@ -2,6 +2,7 @@
 
 #include <gtest/gtest.h>
 #include <gmock/gmock.h>
+#include <vector>
 #include "infrastructure/pud.hpp"
 #include "value_objects/expr.hpp"
 #include "value_objects/om_interval.hpp"
@@ -158,6 +159,37 @@ TEST_F(PudTest, ChildrenAreOrderedByRuleIdNotPointer) {
     EXPECT_EQ(*it, low);
     ++it;
     EXPECT_EQ(*it, high);
+}
+
+TEST_F(PudTest, LinkChildrenMatchesLinkOrderByRuleId) {
+    pud_rule_id inf_low{pud_rule_id::inference{&axiom0_, 0, &axiom1_}};
+    pud_rule_id inf_high{pud_rule_id::inference{&axiom0_, 1, &axiom1_}};
+    EXPECT_LT(inf_low, inf_high);
+
+    EXPECT_CALL(make_axiom_, make_axiom(0)).WillOnce(Return(&axiom0_));
+    EXPECT_CALL(make_inference_, make_inference(&axiom0_, 0, &axiom1_))
+        .WillOnce(Return(&inf_low));
+    EXPECT_CALL(make_inference_, make_inference(&axiom0_, 1, &axiom1_))
+        .WillOnce(Return(&inf_high));
+    EXPECT_CALL(allocate_root_, allocate_root())
+        .WillOnce(Return(root_interval_a_))
+        .WillOnce(Return(root_interval_b_))
+        .WillOnce(Return(root_interval_b_));
+    EXPECT_CALL(allocate_child_, allocate_child_of(_))
+        .WillOnce(Return(child_interval_))
+        .WillOnce(Return(child_interval_));
+
+    const pud_rule_id* parent = forest_.add_axiom(0, make_payload());
+    const pud_rule_id* high =
+        forest_.add_inference(parent, 1, &axiom1_, make_payload());
+    const pud_rule_id* low =
+        forest_.add_inference(parent, 0, &axiom1_, make_payload());
+    forest_.link_children(parent, std::vector<const pud_rule_id*>{high, low});
+
+    const std::vector<const pud_rule_id*> ordered = forest_.ordered_children(parent);
+    ASSERT_EQ(ordered.size(), 2u);
+    EXPECT_EQ(ordered[0], low);
+    EXPECT_EQ(ordered[1], high);
 }
 
 TEST_F(PudTest, UnlinkRestoresChildAsRootAndParentAsLeafWhenLastChild) {

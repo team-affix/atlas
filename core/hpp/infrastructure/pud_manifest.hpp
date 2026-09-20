@@ -6,6 +6,7 @@
 #include "infrastructure/globalizer.hpp"
 #include "infrastructure/order_maintenance.hpp"
 #include "infrastructure/pud.hpp"
+#include "infrastructure/pud_axiom_adder.hpp"
 #include "infrastructure/pud_candidate_search.hpp"
 #include "infrastructure/pud_invalidation_router.hpp"
 #include "infrastructure/pud_leaf_queries.hpp"
@@ -38,6 +39,11 @@ struct pud_manifest {
         reinit_t, candidate_search_t,
         forest_t, forest_t, forest_t,
         router_t, pud_witness_watchers, pud_witness_watchers>;
+    using axiom_adder_t = pud_axiom_adder<
+        forest_t, forest_t, order_maintenance,
+        pud_leaf_queries, pud_leaf_queries,
+        unify_head_t, reinit_t, candidate_search_t,
+        forest_t, forest_t, pud_witness_watchers>;
 
     pud_manifest();
 
@@ -55,6 +61,7 @@ struct pud_manifest {
     reinit_t reinit_;
     router_t router_;
     unfolder_t unfolder_;
+    axiom_adder_t axiom_adder_;
 };
 
 #endif

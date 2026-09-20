@@ -19,4 +19,8 @@ pud_manifest::pud_manifest()
                 leaf_queries_, leaf_queries_, leaf_queries_,
                 reinit_, candidate_search_,
                 forest_, forest_, forest_,
-                router_, watchers_, watchers_) {}
+                router_, watchers_, watchers_)
+    , axiom_adder_(forest_, forest_, om_,
+                   leaf_queries_, leaf_queries_,
+                   unify_head_, reinit_, candidate_search_,
+                   forest_, forest_, watchers_) {}

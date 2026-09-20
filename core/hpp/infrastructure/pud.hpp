@@ -35,6 +35,8 @@ struct pud {
     void insert(const pud_rule_id* id, pud_db_node node);
     void link(const pud_rule_id* parent, child_set_t children);
     void link_child(const pud_rule_id* parent, const pud_rule_id* child);
+    void link_children(const pud_rule_id* parent,
+                       const std::vector<const pud_rule_id*>& children);
     void unlink(const pud_rule_id* child);
     void erase(const pud_rule_id* id);
 
@@ -147,6 +149,16 @@ template<typename IMA, typename IMI, typename IARI, typename IACI>
 void pud<IMA, IMI, IARI, IACI>::link_child(const pud_rule_id* parent,
                                           const pud_rule_id* child) {
     link(parent, child_set_t{child});
+}
+
+template<typename IMA, typename IMI, typename IARI, typename IACI>
+void pud<IMA, IMI, IARI, IACI>::link_children(
+        const pud_rule_id* parent,
+        const std::vector<const pud_rule_id*>& children) {
+    child_set_t child_set;
+    for (const pud_rule_id* child : children)
+        child_set.insert(child);
+    link(parent, std::move(child_set));
 }
 
 template<typename IMA, typename IMI, typename IARI, typename IACI>
