@@ -67,8 +67,10 @@ void pud_candidate_search<IRWS, IIL, IOC, ITP, IUH>::query_advance(
     const pud_rule_id* next_cursor = context.live_edges[0].edge_root;
     DEBUG_ASSERT(next_cursor != context.cursor);
     context.cursor = next_cursor;
-    if (context.live_edges[0].current == context.cursor)
+    if (context.live_edges[0].current == context.cursor) {
+        context.live_edges.clear();
         return;
+    }
     const pud_rule_id* walk = context.live_edges[0].current;
     while (walk != context.cursor) {
         const pud_rule_id* parent = try_parent_.try_parent(walk);

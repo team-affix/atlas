@@ -214,10 +214,9 @@ TEST_F(PudCandidateSearchTest, ResumeTwiceOnChoicePointStaysChoicePoint) {
 }
 
 TEST_F(PudCandidateSearchTest, StressUnaryChainAdvance) {
-    // Unary descent must walk a spine of live edges to the leaf. If resume
-    // returns choice_point after the first step, query_advance left a stale
-    // edge whose edge_root is the new cursor and fill_live_edges treated the
-    // next child as a second choice.
+    // Unary descent must walk a spine of live edges to the leaf. After each
+    // advance onto the witness itself, that edge is consumed so the next
+    // fill_live_edges sees an empty set, not a stale self-edge plus the child.
     constexpr int k_depth = 16;
     std::vector<pud_rule_id> nodes;
     nodes.reserve(static_cast<size_t>(k_depth));
@@ -251,6 +250,7 @@ TEST_F(PudCandidateSearchTest, StressUnaryChainAdvance) {
     const pud_candidate_search_result result = search_.resume(query_, ctx);
     EXPECT_TRUE(std::holds_alternative<pud_candidate_search_result::self_witness>(result.content));
     EXPECT_EQ(ctx.cursor, &nodes.back());
+    EXPECT_TRUE(ctx.live_edges.empty());
 }
 
 TEST_F(PudCandidateSearchTest, FuzzResumeOnFixedMockDag) {
