@@ -41,11 +41,16 @@ struct MockResumeWitnessSearch {
     MOCK_METHOD(void, resume, (pud_witness_search_context&), ());
 };
 
+struct MockStartQuery {
+    MOCK_METHOD(void, start, (const pud_rule_id*, size_t, const expr*, uint32_t), ());
+};
+
 using test_queries_t = pud_queries<
     NiceMock<MockGetAddedBodyGoals>,
     NiceMock<MockGetLvc>,
     NiceMock<MockResumeCandidateSearch>,
-    NiceMock<MockResumeWitnessSearch>>;
+    NiceMock<MockResumeWitnessSearch>,
+    NiceMock<MockStartQuery>>;
 
 struct PudQueriesTest : public ::testing::Test {
     PudQueriesTest()
@@ -60,7 +65,7 @@ struct PudQueriesTest : public ::testing::Test {
         , empty_goals_{}
         , child_goals_{&leftover_}
         , drain_goals_{&body_}
-        , queries_(get_added_body_goals_, get_lvc_, candidate_, witness_) {
+        , queries_(get_added_body_goals_, get_lvc_, candidate_, witness_, start_query_) {
         ON_CALL(get_added_body_goals_, get(&axiom_)).WillByDefault(ReturnRef(axiom_goals_));
         ON_CALL(get_added_body_goals_, get(&other_)).WillByDefault(ReturnRef(empty_goals_));
         ON_CALL(get_added_body_goals_, get(&drain_)).WillByDefault(ReturnRef(drain_goals_));
@@ -98,8 +103,27 @@ struct PudQueriesTest : public ::testing::Test {
     NiceMock<MockGetLvc> get_lvc_;
     NiceMock<MockResumeCandidateSearch> candidate_;
     NiceMock<MockResumeWitnessSearch> witness_;
+    NiceMock<MockStartQuery> start_query_;
     test_queries_t queries_;
 };
+
+TEST_F(PudQueriesTest, StartsQueryRootOnInstall) {
+    EXPECT_CALL(start_query_, start(&axiom_, 0, &body_, 1));
+    queries_.adopt_axiom(&axiom_);
+    ctx_at(&axiom_, 0);
+}
+
+TEST_F(PudQueriesTest, StartsLeftoverAndNewGoalQueryRootsOnFork) {
+    expr child_goal{expr::var{2}};
+    std::vector<const expr*> child_with_goal{&child_goal};
+    ON_CALL(get_added_body_goals_, get(&axiom_)).WillByDefault(ReturnRef(two_goals_));
+    ON_CALL(get_added_body_goals_, get(&child_)).WillByDefault(ReturnRef(child_with_goal));
+    queries_.adopt_axiom(&axiom_);
+    ctx_at(&axiom_, 0);
+    EXPECT_CALL(start_query_, start(&child_, 0, &leftover_, 2));
+    EXPECT_CALL(start_query_, start(&child_, 1, &child_goal, 2));
+    queries_.replace_unfolded(&axiom_, 0, {&child_});
+}
 
 TEST_F(PudQueriesTest, AdoptAxiomStoresOneQueryPerBodyGoal) {
     queries_.adopt_axiom(&axiom_);

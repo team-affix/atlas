@@ -100,11 +100,14 @@ struct PudWitnessSearchTest : public ::testing::Test {
         : body_{expr::functor{1, {}}}
         , mismatch_{expr::functor{2, {}}}
         , var0_{expr::var{0}}
+        , var1_{expr::var{1}}
+        , const_a_{expr::functor{3, {}}}
         , query_leaf_{pud_rule_id::axiom{99}}
         , a0_{pud_rule_id::axiom{0}}
         , c0_{pud_rule_id::inference{&a0_, 0, &a0_}}
         , c1_{pud_rule_id::inference{&a0_, 1, &a0_}}
         , g0_{pud_rule_id::inference{&c0_, 0, &a0_}}
+        , k_query_{pud_rule_id::inference{&query_leaf_, 0, nullptr}}
         , k_a0_{pud_rule_id::inference{&query_leaf_, 0, &a0_}}
         , k_c0_{pud_rule_id::inference{&query_leaf_, 0, &c0_}}
         , k_c1_{pud_rule_id::inference{&query_leaf_, 0, &c1_}}
@@ -112,6 +115,7 @@ struct PudWitnessSearchTest : public ::testing::Test {
         , match_unifs_{{0, &body_}}
         , mismatch_unifs_{{0, &mismatch_}}
         , empty_unifs_{}
+        , extra_vars_{}
         , query_open_(1)
         , query_close_(2)
         , search_(children_, get_parent_, make_inference_,
@@ -119,9 +123,11 @@ struct PudWitnessSearchTest : public ::testing::Test {
                   get_unifs_, record_, query_binding_, globalize_, make_var_,
                   store_added_caller_reps_) {
         intervals_.insert_or_assign(
-            &query_leaf_, om_interval{om_label(&query_open_), om_label(&query_close_)});
+            &k_query_, om_interval{om_label(&query_open_), om_label(&query_close_)});
         ON_CALL(make_inference_, make_inference(_, _, _))
             .WillByDefault([this](const pud_rule_id*, size_t, const pud_rule_id* node) {
+                if (node == nullptr)
+                    return static_cast<const pud_rule_id*>(&k_query_);
                 return key_for(node);
             });
         ON_CALL(contains_, contains(_))
@@ -133,7 +139,7 @@ struct PudWitnessSearchTest : public ::testing::Test {
                 auto it = intervals_.find(id);
                 if (it != intervals_.end())
                     return it->second;
-                    return intervals_.at(&query_leaf_);
+                return intervals_.at(&k_query_);
             });
         ON_CALL(store_interval_, store(_, _))
             .WillByDefault([this](const pud_rule_id* id, om_interval interval) {
@@ -163,20 +169,40 @@ struct PudWitnessSearchTest : public ::testing::Test {
             .WillByDefault([this](om_label open, uint32_t var_id)
                     -> std::optional<framed_expr> {
                 auto interval_it = recorded_.find(open.rank_ptr());
-                if (interval_it == recorded_.end())
+                if (interval_it != recorded_.end()) {
+                    auto var_it = interval_it->second.find(var_id);
+                    if (var_it != interval_it->second.end())
+                        return var_it->second;
+                }
+                auto query_it = recorded_.find(&query_open_);
+                if (query_it == recorded_.end())
                     return std::nullopt;
-                auto var_it = interval_it->second.find(var_id);
-                if (var_it == interval_it->second.end())
+                auto var_it = query_it->second.find(var_id);
+                if (var_it == query_it->second.end())
                     return std::nullopt;
                 return var_it->second;
             });
         ON_CALL(globalize_, globalize(_, _))
             .WillByDefault([](uint32_t offset, uint32_t idx) { return offset + idx; });
-        ON_CALL(make_var_, make_var(0)).WillByDefault(Return(&var0_));
+        ON_CALL(make_var_, make_var(_))
+            .WillByDefault([this](uint32_t idx) -> const expr* {
+                if (idx == 0)
+                    return &var0_;
+                if (idx == 1)
+                    return &var1_;
+                extra_vars_.push_back(expr{expr::var{idx}});
+                return &extra_vars_.back();
+            });
         ON_CALL(get_parent_, get(&a0_)).WillByDefault(Return(nullptr));
         ON_CALL(get_parent_, get(&c0_)).WillByDefault(Return(&a0_));
         ON_CALL(get_parent_, get(&c1_)).WillByDefault(Return(&a0_));
         ON_CALL(get_parent_, get(&g0_)).WillByDefault(Return(&c0_));
+        bind_hole(&body_, 1);
+    }
+
+    void bind_hole(const expr* body, uint32_t frame_offset) {
+        recorded_[&query_open_].clear();
+        recorded_[&query_open_][frame_offset] = framed_expr{body, 0};
     }
 
     const pud_rule_id* key_for(const pud_rule_id* node) const {
@@ -199,11 +225,14 @@ struct PudWitnessSearchTest : public ::testing::Test {
     expr body_;
     expr mismatch_;
     expr var0_;
+    expr var1_;
+    expr const_a_;
     pud_rule_id query_leaf_;
     pud_rule_id a0_;
     pud_rule_id c0_;
     pud_rule_id c1_;
     pud_rule_id g0_;
+    pud_rule_id k_query_;
     pud_rule_id k_a0_;
     pud_rule_id k_c0_;
     pud_rule_id k_c1_;
@@ -211,6 +240,7 @@ struct PudWitnessSearchTest : public ::testing::Test {
     std::vector<pud_added_unification> match_unifs_;
     std::vector<pud_added_unification> mismatch_unifs_;
     std::vector<pud_added_unification> empty_unifs_;
+    std::deque<expr> extra_vars_;
     std::unordered_set<const pud_rule_id*> fail_nodes_;
     std::unordered_set<const pud_rule_id*> stored_;
     std::unordered_map<const pud_rule_id*, om_interval> intervals_;
@@ -400,16 +430,17 @@ TEST_F(PudWitnessSearchTest, FuzzResumeOnFixedMockTree) {
 }
 
 TEST_F(PudWitnessSearchTest, StoresCallerRepsBelowLvc) {
-    expr caller_var{expr::var{0}};
+    expr caller_var{expr::var{1}};
+    bind_hole(&caller_var, 2);
     pud_witness_search_context ctx{
-        &query_leaf_, 0, &caller_var, 1, &a0_, &a0_};
+        &query_leaf_, 0, &caller_var, 2, &a0_, &a0_};
     EXPECT_CALL(children_, get(&a0_)).WillRepeatedly(Return(std::nullopt));
     std::vector<uint32_t> stored;
     EXPECT_CALL(store_added_caller_reps_, store(&k_a0_, _))
         .WillOnce(SaveArg<1>(&stored));
     search_.resume(ctx);
     EXPECT_EQ(ctx.current, &a0_);
-    EXPECT_EQ(stored, (std::vector<uint32_t>{0}));
+    EXPECT_EQ(stored, (std::vector<uint32_t>{1}));
 }
 
 TEST_F(PudWitnessSearchTest, DropsCalleeYieldsAtOrAboveLvc) {
@@ -423,6 +454,55 @@ TEST_F(PudWitnessSearchTest, DropsCalleeYieldsAtOrAboveLvc) {
     EXPECT_TRUE(stored.empty());
 }
 
+TEST_F(PudWitnessSearchTest, ReplaysSnapshotLiftedToLvcNotCallerKey) {
+    std::vector<pud_added_unification> unifs{{1, &const_a_}};
+    ON_CALL(get_unifs_, get(&a0_)).WillByDefault(ReturnRef(unifs));
+    pud_witness_search_context ctx{
+        &query_leaf_, 0, &body_, 4, &a0_, &a0_};
+    EXPECT_CALL(children_, get(&a0_)).WillRepeatedly(Return(std::nullopt));
+    search_.resume(ctx);
+    EXPECT_EQ(ctx.current, &a0_);
+    const om_interval stored = intervals_.at(&k_a0_);
+    const auto& by_var = recorded_[stored.open.rank_ptr()];
+    EXPECT_FALSE(by_var.contains(1u));
+    ASSERT_TRUE(by_var.contains(5u));
+    EXPECT_EQ(by_var.at(5u).skeleton, &const_a_);
+    EXPECT_EQ(by_var.at(5u).frame_offset, 4u);
+}
+
+TEST_F(PudWitnessSearchTest, QueryVsHeadWithRuleVarOneSucceeds) {
+    expr q_x{expr::functor{1, {&var1_}}};
+    expr q_a{expr::functor{1, {&const_a_}}};
+    std::vector<pud_added_unification> unifs{{0, &q_x}};
+    ON_CALL(get_unifs_, get(&a0_)).WillByDefault(ReturnRef(unifs));
+    bind_hole(&q_a, 4);
+    pud_witness_search_context ctx{
+        &query_leaf_, 0, &q_a, 4, &a0_, &a0_};
+    EXPECT_CALL(children_, get(&a0_)).WillRepeatedly(Return(std::nullopt));
+    search_.resume(ctx);
+    EXPECT_EQ(ctx.current, &a0_);
+}
+
+TEST_F(PudWitnessSearchTest, InferenceMismatchPrunesLikeAxiom) {
+    fail_nodes_.insert(&c0_);
+    pud_witness_search_context ctx = make_edge(&a0_, &c0_);
+    EXPECT_CALL(children_, get(&c0_)).WillRepeatedly(Return(std::nullopt));
+    EXPECT_CALL(children_, get(&c1_)).WillRepeatedly(Return(std::nullopt));
+    EXPECT_CALL(children_, get(&a0_)).WillRepeatedly(Return(children_set_t{&c0_, &c1_}));
+    search_.resume(ctx);
+    EXPECT_EQ(ctx.current, &c1_);
+}
+
+TEST_F(PudWitnessSearchTest, ParentUnifyFailureDoesNotEnterChild) {
+    fail_nodes_.insert(&a0_);
+    pud_witness_search_context ctx = make_edge(&a0_, &c0_);
+    EXPECT_CALL(children_, get(&c0_)).WillRepeatedly(Return(std::nullopt));
+    EXPECT_CALL(children_, get(&a0_)).WillRepeatedly(Return(children_set_t{&c0_}));
+    search_.resume(ctx);
+    EXPECT_EQ(ctx.current, nullptr);
+    EXPECT_FALSE(stored_.contains(&k_c0_));
+}
+
 TEST_F(PudWitnessSearchTest, RecordsCalleeHeadAtLvcNotCallerZero) {
     pud_witness_search_context ctx = make_edge(&a0_, &a0_);
     EXPECT_CALL(children_, get(&a0_)).WillRepeatedly(Return(std::nullopt));
@@ -430,4 +510,6 @@ TEST_F(PudWitnessSearchTest, RecordsCalleeHeadAtLvcNotCallerZero) {
     const om_interval stored = intervals_.at(&k_a0_);
     const auto& by_var = recorded_[stored.open.rank_ptr()];
     EXPECT_FALSE(by_var.contains(0u));
+    ASSERT_TRUE(by_var.contains(1u));
+    EXPECT_EQ(by_var.at(1u).skeleton, &body_);
 }

@@ -14,6 +14,7 @@
 #include "functor_fixture.hpp"
 #include "infrastructure/coroutine.hpp"
 #include "infrastructure/pud_manifest.hpp"
+#include "value_objects/om_interval.hpp"
 #include "value_objects/pud_added_unification.hpp"
 #include "value_objects/pud_candidate_search_context.hpp"
 #include "value_objects/pud_forced_unfold.hpp"
@@ -82,6 +83,28 @@ TEST_F(PudManifestIntegrationTest, UnfoldForksLeftoverQueryOntoTheChild) {
     const pud_rule_id* child = *m_.children_.get(a0)->begin();
     EXPECT_FALSE(m_.children_.get(child).has_value());
     EXPECT_EQ(m_.queries_.unfold_site(child, 0).body_goal, r);
+}
+
+TEST_F(PudManifestIntegrationTest, HoleLivesOnQueryInternAndIsVisibleFromSearch) {
+    const expr* p = pred("p");
+    const pud_rule_id* caller = add_axiom(p, {p});
+    const pud_rule_id* fact = add_axiom(p, {});
+    m_.queries_.unfold_site(caller, 0);
+    const pud_rule_id* query_key = m_.pool_.make_inference(caller, 0, nullptr);
+    ASSERT_TRUE(m_.node_interval_.contains(query_key));
+    const om_interval query_interval = m_.node_interval_.get(query_key);
+    const uint32_t hole = m_.globalizer_.globalize(m_.lvc_.get(caller), 0);
+    ASSERT_TRUE(m_.fpa_.query(query_interval.open, hole).has_value());
+    EXPECT_EQ(m_.fpa_.query(query_interval.open, hole)->skeleton,
+              m_.added_body_goals_.get(caller)[0]);
+    EXPECT_EQ(m_.fpa_.query(query_interval.open, hole)->frame_offset, 0u);
+
+    const pud_rule_id* search_key = m_.pool_.make_inference(caller, 0, fact);
+    ASSERT_TRUE(m_.node_interval_.contains(search_key));
+    const om_interval search_interval = m_.node_interval_.get(search_key);
+    ASSERT_TRUE(m_.fpa_.query(search_interval.open, hole).has_value());
+    EXPECT_EQ(m_.fpa_.query(search_interval.open, hole)->skeleton,
+              m_.added_body_goals_.get(caller)[0]);
 }
 
 TEST_F(PudManifestIntegrationTest, UnfoldOfWitnessAdvancesOtherQueryWithoutNestedUnfold) {
@@ -405,11 +428,12 @@ TEST_F(PudManifestIntegrationTest, LeftoverSharedVarMatchesOnlyBoundFact) {
         m_.added_unifications_.get(child);
     bool saw_x_to_a = false;
     for (const pud_added_unification& unif : first_added) {
-        if (unif.var_idx == 0 && unif.value == a)
+        if (unif.var_idx == 1 && unif.value == a)
             saw_x_to_a = true;
     }
     EXPECT_TRUE(saw_x_to_a);
-    EXPECT_EQ(m_.queries_.unfold_site(child, 0).body_goal, r_x);
+    EXPECT_EQ(m_.queries_.unfold_site(child, 0).body_goal,
+              m_.added_body_goals_.get(caller)[1]);
     ASSERT_EQ(m_.queries_.unfold_site(child, 0).live.size(), 1u);
 
     const unfold_out second = drain(m_.unfolder_.unfold(child, 0));
@@ -435,8 +459,8 @@ TEST_F(PudManifestIntegrationTest, CalleeRepeatedVarIdentifiesCallerVars) {
         m_.added_unifications_.get(out.children[0]);
     bool saw_caller_ident = false;
     for (const pud_added_unification& unif : added) {
-        EXPECT_LT(unif.var_idx, 2u);
-        if (unif.var_idx == 1)
+        EXPECT_LT(unif.var_idx, m_.lvc_.get(caller));
+        if (unif.var_idx == 2)
             saw_caller_ident = true;
     }
     EXPECT_TRUE(saw_caller_ident);

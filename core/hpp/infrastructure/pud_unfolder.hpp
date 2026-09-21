@@ -160,11 +160,19 @@ materialize_child(pud_candidate_search_context& ctx,
         const pud_rule_id* interned = make_inference_.make_inference(
             leaf, body_goal_idx, ancestors[idx - 1]);
         const std::vector<uint32_t>& delta = get_added_caller_reps_.get(interned);
-        caller_reps.insert(caller_reps.end(), delta.begin(), delta.end());
+        for (uint32_t rep : delta) {
+            if (rep == 0)
+                continue;
+            caller_reps.push_back(rep);
+        }
     }
     const std::vector<uint32_t>& cursor_delta = get_added_caller_reps_.get(id);
-    caller_reps.insert(caller_reps.end(), cursor_delta.begin(), cursor_delta.end());
-    for (uint32_t rep = 0; rep < parent_lvc; ++rep) {
+    for (uint32_t rep : cursor_delta) {
+        if (rep == 0)
+            continue;
+        caller_reps.push_back(rep);
+    }
+    for (uint32_t rep = 1; rep < parent_lvc; ++rep) {
         bool already_listed = false;
         for (uint32_t existing : caller_reps) {
             if (existing != rep)

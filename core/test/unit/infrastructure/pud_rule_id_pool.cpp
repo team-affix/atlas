@@ -63,9 +63,19 @@ TEST_F(PudRuleIdPoolTest, NullCallerThrows) {
     EXPECT_THROW(pool.make_inference(nullptr, 0, callee), std::logic_error);
 }
 
-TEST_F(PudRuleIdPoolTest, NullCalleeThrows) {
+TEST_F(PudRuleIdPoolTest, NullCalleeInternsAsQueryRoot) {
     const pud_rule_id* caller = pool.make_axiom(0);
-    EXPECT_THROW(pool.make_inference(caller, 0, nullptr), std::logic_error);
+    const pud_rule_id* callee = pool.make_axiom(1);
+    const pud_rule_id* query = pool.make_inference(caller, 0, nullptr);
+    EXPECT_EQ(pool.make_inference(caller, 0, nullptr), query);
+    EXPECT_NE(query, pool.make_inference(caller, 0, callee));
+    EXPECT_EQ(std::get<pud_rule_id::inference>(query->content).callee, nullptr);
+}
+
+TEST_F(PudRuleIdPoolTest, DistinctCallSitesWithNullCalleeReturnDifferentPointers) {
+    const pud_rule_id* caller = pool.make_axiom(0);
+    EXPECT_NE(pool.make_inference(caller, 0, nullptr),
+              pool.make_inference(caller, 1, nullptr));
 }
 
 // ---------------------------------------------------------------------------
@@ -207,10 +217,11 @@ TEST_F(PudRuleIdPoolTest, NullCallerDoesNotIntern) {
     EXPECT_EQ(pool.make_axiom(0), callee);
 }
 
-TEST_F(PudRuleIdPoolTest, NullCalleeDoesNotIntern) {
+TEST_F(PudRuleIdPoolTest, NullCalleeInternDoesNotDisplaceCallerAxiom) {
     const pud_rule_id* caller = pool.make_axiom(0);
-    EXPECT_THROW(pool.make_inference(caller, 0, nullptr), std::logic_error);
+    const pud_rule_id* query = pool.make_inference(caller, 0, nullptr);
     EXPECT_EQ(pool.make_axiom(0), caller);
+    EXPECT_EQ(pool.make_inference(caller, 0, nullptr), query);
 }
 
 TEST_F(PudRuleIdPoolTest, BothNullCallerAndCalleeThrows) {

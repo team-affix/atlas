@@ -56,8 +56,6 @@ private:
                      framed_expr rhs,
                      uint32_t cutoff,
                      std::vector<uint32_t>* added_caller_reps);
-    const expr* unify_rhs(const pud_rule_id* node);
-    uint32_t unify_rhs_frame(const pud_rule_id* node, uint32_t query_lvc);
 
     IGetChildren& get_children_;
     IGetParent& get_parent_;
@@ -122,6 +120,8 @@ drain_unify(unifier_t& task_owner,
         const uint32_t rep = task.consume_yield();
         if (added_caller_reps == nullptr)
             continue;
+        if (rep == 0)
+            continue;
         if (rep >= cutoff)
             continue;
         added_caller_reps->push_back(rep);
@@ -132,84 +132,45 @@ drain_unify(unifier_t& task_owner,
 template<typename IGC, typename IGP, typename IMI, typename ICI, typename IGI,
          typename ISI, typename IACI, typename IGAU, typename IRB, typename IQB,
          typename IG, typename IMV, typename ISACR>
-const expr* pud_witness_search<IGC, IGP, IMI, ICI, IGI, ISI, IACI, IGAU, IRB, IQB, IG, IMV, ISACR>::
-unify_rhs(const pud_rule_id* node) {
-    for (const pud_added_unification& added : get_added_unifications_.get(node)) {
-        if (added.var_idx != 0)
-            continue;
-        return added.value;
-    }
-    return make_var_.make_var(0);
-}
-
-template<typename IGC, typename IGP, typename IMI, typename ICI, typename IGI,
-         typename ISI, typename IACI, typename IGAU, typename IRB, typename IQB,
-         typename IG, typename IMV, typename ISACR>
-uint32_t pud_witness_search<IGC, IGP, IMI, ICI, IGI, ISI, IACI, IGAU, IRB, IQB, IG, IMV, ISACR>::
-unify_rhs_frame(const pud_rule_id* node, uint32_t query_lvc) {
-    if (get_parent_.get(node) == nullptr)
-        return query_lvc;
-    for (const pud_added_unification& added : get_added_unifications_.get(node)) {
-        if (added.var_idx != 0)
-            continue;
-        return 0;
-    }
-    return query_lvc;
-}
-
-template<typename IGC, typename IGP, typename IMI, typename ICI, typename IGI,
-         typename ISI, typename IACI, typename IGAU, typename IRB, typename IQB,
-         typename IG, typename IMV, typename ISACR>
 bool pud_witness_search<IGC, IGP, IMI, ICI, IGI, ISI, IACI, IGAU, IRB, IQB, IG, IMV, ISACR>::
 try_enter(pud_witness_search_context& context, const pud_rule_id* node) {
     const pud_rule_id* key = make_inference_.make_inference(
         context.query_leaf, context.body_goal_idx, node);
-    if (contains_interval_.contains(key)) {
-        const om_interval interval = get_interval_.get(key);
-        bind_map_t bm(globalize_, record_binding_, query_binding_, interval);
-        unifier_t task_owner(globalize_, &bm);
-        const uint32_t rhs_frame = unify_rhs_frame(node, context.frame_offset);
-        return drain_unify(
-            task_owner,
-            framed_expr{context.body_goal, 0},
-            framed_expr{unify_rhs(node), rhs_frame},
-            context.frame_offset,
-            nullptr);
-    }
-    const pud_rule_id* forest_parent = get_parent_.get(node);
-    if (forest_parent != nullptr)
-        try_enter(context, forest_parent);
-    const pud_rule_id* parent_key = forest_parent != nullptr
-        ? make_inference_.make_inference(
-              context.query_leaf, context.body_goal_idx, forest_parent)
-        : context.query_leaf;
-    const om_interval interval = allocate_child_interval_.allocate_child_of(
-        get_interval_.get(parent_key));
-    bool skipped_head = false;
-    for (const pud_added_unification& added : get_added_unifications_.get(node)) {
-        if (!skipped_head && added.var_idx == 0) {
-            skipped_head = true;
-            continue;
+    const bool first_visit = !contains_interval_.contains(key);
+    if (first_visit) {
+        const pud_rule_id* forest_parent = get_parent_.get(node);
+        if (forest_parent != nullptr) {
+            if (!try_enter(context, forest_parent))
+                return false;
         }
-        skipped_head = true;
-        record_binding_.record(
-            interval,
-            added.var_idx,
-            framed_expr{added.value, 0});
+        const pud_rule_id* parent_key = make_inference_.make_inference(
+            context.query_leaf, context.body_goal_idx, forest_parent);
+        store_interval_.store(
+            key,
+            allocate_child_interval_.allocate_child_of(
+                get_interval_.get(parent_key)));
     }
-    store_interval_.store(key, interval);
+    const om_interval interval = get_interval_.get(key);
     bind_map_t bm(globalize_, record_binding_, query_binding_, interval);
     unifier_t task_owner(globalize_, &bm);
-    const uint32_t rhs_frame = unify_rhs_frame(node, context.frame_offset);
     std::vector<uint32_t> added_caller_reps;
-    const bool ok = drain_unify(
-        task_owner,
-        framed_expr{context.body_goal, 0},
-        framed_expr{unify_rhs(node), rhs_frame},
-        context.frame_offset,
-        &added_caller_reps);
-    store_added_caller_reps_.store(key, std::move(added_caller_reps));
-    return ok;
+    std::vector<uint32_t>* yield_dst = first_visit ? &added_caller_reps : nullptr;
+    for (const pud_added_unification& added : get_added_unifications_.get(node)) {
+        const bool ok = drain_unify(
+            task_owner,
+            framed_expr{make_var_.make_var(added.var_idx), context.frame_offset},
+            framed_expr{added.value, context.frame_offset},
+            context.frame_offset,
+            yield_dst);
+        if (ok)
+            continue;
+        if (first_visit)
+            store_added_caller_reps_.store(key, std::move(added_caller_reps));
+        return false;
+    }
+    if (first_visit)
+        store_added_caller_reps_.store(key, std::move(added_caller_reps));
+    return true;
 }
 
 template<typename IGC, typename IGP, typename IMI, typename ICI, typename IGI,

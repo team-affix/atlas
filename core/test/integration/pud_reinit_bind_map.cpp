@@ -13,6 +13,7 @@
 #include "infrastructure/pud_node_interval.hpp"
 #include "infrastructure/pud_node_parent.hpp"
 #include "infrastructure/pud_node_added_touched_caller_reps.hpp"
+#include "infrastructure/pud_query_starter.hpp"
 #include "infrastructure/pud_rule_id_pool.hpp"
 #include "infrastructure/pud_witness_search.hpp"
 #include "value_objects/expr.hpp"
@@ -27,13 +28,18 @@ using witness_search_t = pud_witness_search<
     order_maintenance, pud_node_added_unifications,
     fully_persistent_array, fully_persistent_array,
     globalizer, expr_pool, pud_node_added_touched_caller_reps>;
+using query_starter_t = pud_query_starter<
+    pud_rule_id_pool, pud_node_interval, order_maintenance, pud_node_interval,
+    globalizer, fully_persistent_array, fully_persistent_array>;
 
 struct PudReinitBindMapIntegrationTest : public ::testing::Test {
     PudReinitBindMapIntegrationTest()
         : witness_(children_, parent_, pool_,
                    node_interval_, node_interval_, node_interval_,
                    om_, added_unifications_,
-                   fpa_, fpa_, glob_, exprs_, added_caller_reps_) {}
+                   fpa_, fpa_, glob_, exprs_, added_caller_reps_)
+        , starter_(pool_, node_interval_, om_, node_interval_,
+                   glob_, fpa_, fpa_) {}
 
     const pud_rule_id* add_axiom(size_t entry_idx,
                                  std::vector<pud_added_unification> unifs) {
@@ -60,6 +66,13 @@ struct PudReinitBindMapIntegrationTest : public ::testing::Test {
             parent_.store(child, parent);
     }
 
+    void start_query(const pud_rule_id* leaf,
+                     size_t body_goal_idx,
+                     const expr* body_goal,
+                     uint32_t frame_offset) {
+        starter_.start(leaf, body_goal_idx, body_goal, frame_offset);
+    }
+
     pud_rule_id_pool pool_;
     order_maintenance om_;
     fully_persistent_array fpa_;
@@ -71,6 +84,7 @@ struct PudReinitBindMapIntegrationTest : public ::testing::Test {
     pud_node_interval node_interval_;
     pud_node_added_touched_caller_reps added_caller_reps_;
     witness_search_t witness_;
+    query_starter_t starter_;
 };
 
 TEST_F(PudReinitBindMapIntegrationTest, DescendStoresIntervalAndRecordsHead) {
@@ -80,22 +94,27 @@ TEST_F(PudReinitBindMapIntegrationTest, DescendStoresIntervalAndRecordsHead) {
     store_children_of(axiom, {child});
 
     pud_witness_search_context ctx{axiom, 0, head, 1, axiom, axiom};
+    start_query(axiom, 0, head, 1);
     witness_.resume(ctx);
     EXPECT_EQ(ctx.current, child);
     const pud_rule_id* key = pool_.make_inference(axiom, 0, child);
     const om_interval stored = node_interval_.get(key);
     EXPECT_FALSE(fpa_.query(stored.open, 0).has_value());
+    ASSERT_TRUE(fpa_.query(stored.open, 1).has_value());
+    EXPECT_EQ(fpa_.query(stored.open, 1)->skeleton, head);
 }
 
 TEST_F(PudReinitBindMapIntegrationTest, OverwriteAfterUnfoldDropsSearchBinds) {
     const expr* head = exprs_.make_functor(4, {});
     const pud_rule_id* axiom = add_axiom(0, {{0, head}});
     pud_witness_search_context ctx{axiom, 0, head, 1, axiom, axiom};
+    start_query(axiom, 0, head, 1);
     witness_.resume(ctx);
     EXPECT_EQ(ctx.current, axiom);
     const pud_rule_id* key = pool_.make_inference(axiom, 0, axiom);
     const om_interval search_interval = node_interval_.get(key);
     EXPECT_FALSE(fpa_.query(search_interval.open, 0).has_value());
+    ASSERT_TRUE(fpa_.query(search_interval.open, 1).has_value());
 
     const om_interval clean = om_.allocate_child_of(node_interval_.get(axiom));
     node_interval_.store(key, clean);
@@ -114,6 +133,7 @@ TEST_F(PudReinitBindMapIntegrationTest, FailedMidPathDoesNotEnterLaterNode) {
     const pud_rule_id* leaf = add_inference(mid, 0, axiom, {{1, r}});
     store_children_of(mid, {leaf});
     pud_witness_search_context ctx{axiom, 0, p, 1, axiom, axiom};
+    start_query(axiom, 0, p, 1);
     witness_.resume(ctx);
     EXPECT_EQ(ctx.current, nullptr);
     const pud_rule_id* leaf_key = pool_.make_inference(axiom, 0, leaf);
@@ -124,10 +144,31 @@ TEST_F(PudReinitBindMapIntegrationTest, CalleeHeadLivesAtLvcCallerZeroUntouched)
     const expr* head = exprs_.make_functor(3, {});
     const pud_rule_id* axiom = add_axiom(0, {{0, head}});
     pud_witness_search_context ctx{axiom, 0, head, 1, axiom, axiom};
+    start_query(axiom, 0, head, 1);
     witness_.resume(ctx);
     const pud_rule_id* key = pool_.make_inference(axiom, 0, axiom);
     const om_interval stored = node_interval_.get(key);
     EXPECT_FALSE(fpa_.query(stored.open, 0).has_value());
+    ASSERT_TRUE(fpa_.query(stored.open, 1).has_value());
+    EXPECT_EQ(fpa_.query(stored.open, 1)->skeleton, head);
+}
+
+TEST_F(PudReinitBindMapIntegrationTest, InferenceSnapshotBindsAtQueryLvcNotCallerKey) {
+    const expr* head = exprs_.make_functor(8, {});
+    const expr* a = exprs_.make_functor(9, {});
+    const pud_rule_id* axiom = add_axiom(0, {{0, head}});
+    const pud_rule_id* inf = add_inference(axiom, 0, axiom, {{0, head}, {1, a}});
+    store_children_of(axiom, {inf});
+    pud_witness_search_context ctx{axiom, 0, head, 4, axiom, axiom};
+    start_query(axiom, 0, head, 4);
+    witness_.resume(ctx);
+    EXPECT_EQ(ctx.current, inf);
+    const pud_rule_id* key = pool_.make_inference(axiom, 0, inf);
+    const om_interval stored = node_interval_.get(key);
+    EXPECT_FALSE(fpa_.query(stored.open, 1).has_value());
+    ASSERT_TRUE(fpa_.query(stored.open, 5).has_value());
+    EXPECT_EQ(fpa_.query(stored.open, 5)->skeleton, a);
+    EXPECT_EQ(fpa_.query(stored.open, 5)->frame_offset, 4u);
 }
 
 TEST_F(PudReinitBindMapIntegrationTest, FirstVisitStoresDeltaOnEveryAncestor) {
@@ -138,6 +179,7 @@ TEST_F(PudReinitBindMapIntegrationTest, FirstVisitStoresDeltaOnEveryAncestor) {
     const pud_rule_id* leaf = add_inference(mid, 0, axiom, {{0, p}});
     store_children_of(mid, {leaf});
     pud_witness_search_context ctx{axiom, 0, p, 1, axiom, axiom};
+    start_query(axiom, 0, p, 1);
     witness_.resume(ctx);
     EXPECT_EQ(ctx.current, leaf);
     EXPECT_NO_THROW(added_caller_reps_.get(pool_.make_inference(axiom, 0, axiom)));
