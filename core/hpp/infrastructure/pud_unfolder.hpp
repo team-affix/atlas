@@ -2,6 +2,7 @@
 #define PUD_UNFOLDER_HPP
 
 #include <cstddef>
+#include <cstdint>
 #include <unordered_map>
 #include <utility>
 #include <vector>
@@ -10,33 +11,37 @@
 #include "value_objects/om_interval.hpp"
 #include "value_objects/pud_added_unification.hpp"
 #include "value_objects/pud_candidate_search_context.hpp"
-#include "value_objects/pud_db_node.hpp"
 #include "value_objects/pud_forced_unfold.hpp"
 #include "value_objects/pud_query.hpp"
 #include "value_objects/pud_rule_id.hpp"
+#include "value_objects/pud_unfold_site.hpp"
 #include "debug_assert.hpp"
 
-template<typename IGetNode,
+template<typename IUnfoldSite,
          typename IUnifyCallee,
          typename INormalize,
          typename IMakeVar,
-         typename IAddInference,
+         typename IGetLvc,
+         typename IMakeInference,
+         typename IStoreAddedUnifications,
+         typename IStoreAddedBodyGoals,
+         typename IStoreLvc,
          typename ILinkChildren,
-         typename ILiveCallees,
-         typename IGetLeafQueries,
-         typename IReplaceUnfolded,
-         typename ITakeForcedUnfolds>
+         typename IBindChildInterval,
+         typename IReplaceUnfolded>
 struct pud_unfolder {
-    pud_unfolder(IGetNode& get_node,
+    pud_unfolder(IUnfoldSite& unfold_site,
                  IUnifyCallee& unify_callee,
                  INormalize& normalize,
                  IMakeVar& make_var,
-                 IAddInference& add_inference,
+                 IGetLvc& get_lvc,
+                 IMakeInference& make_inference,
+                 IStoreAddedUnifications& store_added_unifications,
+                 IStoreAddedBodyGoals& store_added_body_goals,
+                 IStoreLvc& store_lvc,
                  ILinkChildren& link_children,
-                 ILiveCallees& live_callees,
-                 IGetLeafQueries& get_leaf_queries,
-                 IReplaceUnfolded& replace_unfolded,
-                 ITakeForcedUnfolds& take_forced_unfolds);
+                 IBindChildInterval& bind_child_interval,
+                 IReplaceUnfolded& replace_unfolded);
     coroutine<pud_forced_unfold, std::vector<const pud_rule_id*>> unfold(
         const pud_rule_id* leaf,
         size_t body_goal_idx);
@@ -47,46 +52,54 @@ private:
                                          const pud_rule_id* callee,
                                          uint32_t parent_lvc);
 
-    IGetNode& get_node_;
+    IUnfoldSite& unfold_site_;
     IUnifyCallee& unify_callee_;
     INormalize& normalize_;
     IMakeVar& make_var_;
-    IAddInference& add_inference_;
+    IGetLvc& get_lvc_;
+    IMakeInference& make_inference_;
+    IStoreAddedUnifications& store_added_unifications_;
+    IStoreAddedBodyGoals& store_added_body_goals_;
+    IStoreLvc& store_lvc_;
     ILinkChildren& link_children_;
-    ILiveCallees& live_callees_;
-    IGetLeafQueries& get_leaf_queries_;
+    IBindChildInterval& bind_child_interval_;
     IReplaceUnfolded& replace_unfolded_;
-    ITakeForcedUnfolds& take_forced_unfolds_;
 };
 
-template<typename IGN, typename IUC, typename IN, typename IMV, typename IAI,
-         typename ILC, typename ILV, typename IGLQ, typename IRU, typename ITFU>
-pud_unfolder<IGN, IUC, IN, IMV, IAI, ILC, ILV, IGLQ, IRU, ITFU>::
-pud_unfolder(IGN& get_node,
+template<typename IUS, typename IUC, typename IN, typename IMV, typename IGL,
+         typename IMI, typename ISAU, typename ISABG, typename ISL,
+         typename ILC, typename IBCI, typename IRU>
+pud_unfolder<IUS, IUC, IN, IMV, IGL, IMI, ISAU, ISABG, ISL, ILC, IBCI, IRU>::
+pud_unfolder(IUS& unfold_site,
              IUC& unify_callee,
              IN& normalize,
              IMV& make_var,
-             IAI& add_inference,
+             IGL& get_lvc,
+             IMI& make_inference,
+             ISAU& store_added_unifications,
+             ISABG& store_added_body_goals,
+             ISL& store_lvc,
              ILC& link_children,
-             ILV& live_callees,
-             IGLQ& get_leaf_queries,
-             IRU& replace_unfolded,
-             ITFU& take_forced_unfolds)
-    : get_node_(get_node)
+             IBCI& bind_child_interval,
+             IRU& replace_unfolded)
+    : unfold_site_(unfold_site)
     , unify_callee_(unify_callee)
     , normalize_(normalize)
     , make_var_(make_var)
-    , add_inference_(add_inference)
+    , get_lvc_(get_lvc)
+    , make_inference_(make_inference)
+    , store_added_unifications_(store_added_unifications)
+    , store_added_body_goals_(store_added_body_goals)
+    , store_lvc_(store_lvc)
     , link_children_(link_children)
-    , live_callees_(live_callees)
-    , get_leaf_queries_(get_leaf_queries)
-    , replace_unfolded_(replace_unfolded)
-    , take_forced_unfolds_(take_forced_unfolds) {}
+    , bind_child_interval_(bind_child_interval)
+    , replace_unfolded_(replace_unfolded) {}
 
-template<typename IGN, typename IUC, typename IN, typename IMV, typename IAI,
-         typename ILC, typename ILV, typename IGLQ, typename IRU, typename ITFU>
+template<typename IUS, typename IUC, typename IN, typename IMV, typename IGL,
+         typename IMI, typename ISAU, typename ISABG, typename ISL,
+         typename ILC, typename IBCI, typename IRU>
 const pud_rule_id*
-pud_unfolder<IGN, IUC, IN, IMV, IAI, ILC, ILV, IGLQ, IRU, ITFU>::
+pud_unfolder<IUS, IUC, IN, IMV, IGL, IMI, ISAU, ISABG, ISL, ILC, IBCI, IRU>::
 materialize_child(pud_query& parent_query,
                   const pud_rule_id* leaf,
                   size_t body_goal_idx,
@@ -125,36 +138,34 @@ materialize_child(pud_query& parent_query,
     const uint32_t child_lvc = parent_lvc
         + static_cast<uint32_t>(translation.size());
 
-    return add_inference_.add_inference(
-        leaf, body_goal_idx, callee,
-        std::move(added_unifications),
-        std::move(added_body_goals),
-        child_lvc);
+    const pud_rule_id* id = make_inference_.make_inference(leaf, body_goal_idx, callee);
+    store_added_unifications_.store(id, std::move(added_unifications));
+    store_added_body_goals_.store(id, std::move(added_body_goals));
+    store_lvc_.store(id, child_lvc);
+    return id;
 }
 
-template<typename IGN, typename IUC, typename IN, typename IMV, typename IAI,
-         typename ILC, typename ILV, typename IGLQ, typename IRU, typename ITFU>
+template<typename IUS, typename IUC, typename IN, typename IMV, typename IGL,
+         typename IMI, typename ISAU, typename ISABG, typename ISL,
+         typename ILC, typename IBCI, typename IRU>
 coroutine<pud_forced_unfold, std::vector<const pud_rule_id*>>
-pud_unfolder<IGN, IUC, IN, IMV, IAI, ILC, ILV, IGLQ, IRU, ITFU>::
+pud_unfolder<IUS, IUC, IN, IMV, IGL, IMI, ISAU, ISABG, ISL, ILC, IBCI, IRU>::
 unfold(const pud_rule_id* leaf, size_t body_goal_idx) {
-    const pud_db_node& parent_node = get_node_.get_node(leaf);
-    const uint32_t parent_lvc = parent_node.lvc;
-    const std::vector<const pud_rule_id*> callees =
-        live_callees_.live_callees(leaf, body_goal_idx);
-    DEBUG_ASSERT(!callees.empty());
-    const std::vector<pud_query*>& parent_queries = get_leaf_queries_.get(leaf);
-    DEBUG_ASSERT(body_goal_idx < parent_queries.size());
-    pud_query* parent_query = parent_queries[body_goal_idx];
+    const pud_unfold_site site = unfold_site_.unfold_site(leaf, body_goal_idx);
+    DEBUG_ASSERT(!site.callees.empty());
+    DEBUG_ASSERT(site.query != nullptr);
+    const uint32_t parent_lvc = get_lvc_.get(leaf);
 
     std::vector<const pud_rule_id*> children;
-    for (const pud_rule_id* callee : callees)
+    for (const pud_rule_id* callee : site.callees)
         children.push_back(materialize_child(
-            *parent_query, leaf, body_goal_idx, callee, parent_lvc));
+            *site.query, leaf, body_goal_idx, callee, parent_lvc));
 
     link_children_.link_children(leaf, children);
-    replace_unfolded_.replace_unfolded(leaf, body_goal_idx, children);
-
-    const std::vector<pud_forced_unfold> yields = take_forced_unfolds_.take_forced_unfolds();
+    for (const pud_rule_id* child : children)
+        bind_child_interval_.bind_child(child, leaf);
+    const std::vector<pud_forced_unfold> yields =
+        replace_unfolded_.replace_unfolded(leaf, body_goal_idx, children);
     for (const pud_forced_unfold& yield : yields)
         co_yield yield;
     co_return children;

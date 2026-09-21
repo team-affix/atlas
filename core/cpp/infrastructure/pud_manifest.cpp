@@ -6,13 +6,21 @@ pud_manifest::pud_manifest()
     , fpa_()
     , globalizer_()
     , exprs_()
-    , forest_(pool_, pool_, om_, om_)
-    , unify_head_(om_, forest_, forest_, fpa_, fpa_, globalizer_, exprs_, exprs_)
-    , witness_search_(forest_, forest_, forest_, unify_head_)
-    , candidate_search_(witness_search_, forest_, forest_, forest_, unify_head_, forest_)
-    , queries_(forest_, forest_, om_, unify_head_, unify_head_,
+    , added_unifications_()
+    , added_body_goals_()
+    , lvc_()
+    , children_()
+    , base_interval_(om_, om_)
+    , unify_head_(om_, children_, added_unifications_, fpa_, fpa_,
+                  globalizer_, exprs_, exprs_)
+    , witness_search_(children_, children_, children_, unify_head_)
+    , candidate_search_(witness_search_, children_, children_, children_,
+                        unify_head_, added_body_goals_)
+    , queries_(added_body_goals_, lvc_, base_interval_, om_, unify_head_,
                candidate_search_, witness_search_)
-    , unfolder_(forest_, unify_head_, unify_head_, exprs_,
-                forest_, forest_,
-                queries_, queries_, queries_, queries_)
-    , axiom_adder_(forest_, queries_) {}
+    , unfolder_(queries_, unify_head_, unify_head_, exprs_,
+                lvc_, pool_,
+                added_unifications_, added_body_goals_, lvc_,
+                children_, base_interval_, queries_)
+    , axiom_adder_(pool_, added_unifications_, added_body_goals_, lvc_,
+                   children_, base_interval_, queries_) {}

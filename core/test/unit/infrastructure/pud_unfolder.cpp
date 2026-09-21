@@ -1,4 +1,4 @@
-// pud_unfolder: materialize + link; yields whatever queries report.
+// pud_unfolder: unfold_site, materialize stores, link, bind_child, replace_unfolded.
 
 #include <gtest/gtest.h>
 #include <gmock/gmock.h>
@@ -13,22 +13,21 @@
 #include "value_objects/om_interval.hpp"
 #include "value_objects/pud_added_unification.hpp"
 #include "value_objects/pud_candidate_search_context.hpp"
-#include "value_objects/pud_db_node.hpp"
 #include "value_objects/pud_forced_unfold.hpp"
 #include "value_objects/pud_query.hpp"
 #include "value_objects/pud_rule_id.hpp"
+#include "value_objects/pud_unfold_site.hpp"
 
 using ::testing::DoAll;
 using ::testing::ElementsAre;
 using ::testing::InSequence;
 using ::testing::NiceMock;
 using ::testing::Return;
-using ::testing::ReturnRef;
 using ::testing::SaveArg;
 using ::testing::_;
 
-struct MockGetNode {
-    MOCK_METHOD(const pud_db_node&, get_node, (const pud_rule_id*), ());
+struct MockUnfoldSite {
+    MOCK_METHOD(pud_unfold_site, unfold_site, (const pud_rule_id*, size_t), ());
 };
 
 struct MockUnifyCallee {
@@ -46,12 +45,25 @@ struct MockMakeVar {
     MOCK_METHOD(const expr*, make_var, (uint32_t), ());
 };
 
-struct MockAddInference {
-    MOCK_METHOD(const pud_rule_id*, add_inference,
-                (const pud_rule_id*, size_t, const pud_rule_id*,
-                 (std::vector<pud_added_unification>),
-                 (std::vector<const expr*>),
-                 uint32_t), ());
+struct MockGetLvc {
+    MOCK_METHOD(uint32_t, get, (const pud_rule_id*), ());
+};
+
+struct MockMakeInference {
+    MOCK_METHOD(const pud_rule_id*, make_inference,
+                (const pud_rule_id*, size_t, const pud_rule_id*), ());
+};
+
+struct MockStoreAddedUnifications {
+    MOCK_METHOD(void, store, (const pud_rule_id*, (std::vector<pud_added_unification>)), ());
+};
+
+struct MockStoreAddedBodyGoals {
+    MOCK_METHOD(void, store, (const pud_rule_id*, (std::vector<const expr*>)), ());
+};
+
+struct MockStoreLvc {
+    MOCK_METHOD(void, store, (const pud_rule_id*, uint32_t), ());
 };
 
 struct MockLinkChildren {
@@ -59,35 +71,28 @@ struct MockLinkChildren {
                 (const pud_rule_id*, (const std::vector<const pud_rule_id*>&)), ());
 };
 
-struct MockLiveCallees {
-    MOCK_METHOD((std::vector<const pud_rule_id*>), live_callees,
-                (const pud_rule_id*, size_t), ());
-};
-
-struct MockGetLeafQueries {
-    MOCK_METHOD(const std::vector<pud_query*>&, get, (const pud_rule_id*), ());
+struct MockBindChildInterval {
+    MOCK_METHOD(void, bind_child, (const pud_rule_id*, const pud_rule_id*), ());
 };
 
 struct MockReplaceUnfolded {
-    MOCK_METHOD(void, replace_unfolded,
+    MOCK_METHOD((std::vector<pud_forced_unfold>), replace_unfolded,
                 (const pud_rule_id*, size_t, (const std::vector<const pud_rule_id*>&)), ());
 };
 
-struct MockTakeForcedUnfolds {
-    MOCK_METHOD((std::vector<pud_forced_unfold>), take_forced_unfolds, (), ());
-};
-
 using test_unfolder_t = pud_unfolder<
-    NiceMock<MockGetNode>,
+    NiceMock<MockUnfoldSite>,
     NiceMock<MockUnifyCallee>,
     NiceMock<MockNormalize>,
     NiceMock<MockMakeVar>,
-    NiceMock<MockAddInference>,
+    NiceMock<MockGetLvc>,
+    NiceMock<MockMakeInference>,
+    NiceMock<MockStoreAddedUnifications>,
+    NiceMock<MockStoreAddedBodyGoals>,
+    NiceMock<MockStoreLvc>,
     NiceMock<MockLinkChildren>,
-    NiceMock<MockLiveCallees>,
-    NiceMock<MockGetLeafQueries>,
-    NiceMock<MockReplaceUnfolded>,
-    NiceMock<MockTakeForcedUnfolds>>;
+    NiceMock<MockBindChildInterval>,
+    NiceMock<MockReplaceUnfolded>>;
 
 struct PudUnfolderTest : public ::testing::Test {
     PudUnfolderTest()
@@ -102,22 +107,19 @@ struct PudUnfolderTest : public ::testing::Test {
         , child_{pud_rule_id::inference{&leaf_, 0, &leaf_}}
         , child_a_{pud_rule_id::inference{&leaf_, 0, &callee_a_}}
         , child_b_{pud_rule_id::inference{&leaf_, 0, &callee_b_}}
-        , parent_node_{{}, {&body_}, 1}
         , parent_query_{interval_, &body_, {pud_candidate_search_context{&leaf_, {}, {&body_}}}, 1}
-        , parent_query_ptrs_{&parent_query_}
-        , unfolder_(get_node_, unify_callee_, normalize_, make_var_,
-                    add_inference_, link_children_,
-                    live_callees_, get_queries_, replace_unfolded_,
-                    take_forced_) {
-        ON_CALL(get_node_, get_node(&leaf_)).WillByDefault(ReturnRef(parent_node_));
-        ON_CALL(get_queries_, get(&leaf_)).WillByDefault(ReturnRef(parent_query_ptrs_));
-        ON_CALL(live_callees_, live_callees(&leaf_, 0)).WillByDefault(
-            Return(std::vector<const pud_rule_id*>{&leaf_}));
+        , site_{&parent_query_, {&leaf_}}
+        , unfolder_(unfold_site_, unify_callee_, normalize_, make_var_,
+                    get_lvc_, make_inference_,
+                    store_unifs_, store_goals_, store_lvc_,
+                    link_children_, bind_child_, replace_unfolded_) {
+        ON_CALL(unfold_site_, unfold_site(&leaf_, 0)).WillByDefault(Return(site_));
+        ON_CALL(get_lvc_, get(&leaf_)).WillByDefault(Return(1u));
         ON_CALL(unify_callee_, unify_callee(_, _, _, _)).WillByDefault(Return(true));
         ON_CALL(make_var_, make_var(_)).WillByDefault(Return(&var0_));
         ON_CALL(normalize_, normalize(_, _, _, _)).WillByDefault(Return(&body_));
-        ON_CALL(add_inference_, add_inference(_, _, _, _, _, _)).WillByDefault(Return(&child_));
-        ON_CALL(take_forced_, take_forced_unfolds()).WillByDefault(
+        ON_CALL(make_inference_, make_inference(_, _, _)).WillByDefault(Return(&child_));
+        ON_CALL(replace_unfolded_, replace_unfolded(_, _, _)).WillByDefault(
             Return(std::vector<pud_forced_unfold>{
                 pud_forced_unfold{pud_forced_unfold::unit{&child_, 0}}}));
     }
@@ -150,26 +152,28 @@ struct PudUnfolderTest : public ::testing::Test {
     pud_rule_id child_;
     pud_rule_id child_a_;
     pud_rule_id child_b_;
-    pud_db_node parent_node_;
     pud_query parent_query_;
-    std::vector<pud_query*> parent_query_ptrs_;
-    NiceMock<MockGetNode> get_node_;
+    pud_unfold_site site_;
+    NiceMock<MockUnfoldSite> unfold_site_;
     NiceMock<MockUnifyCallee> unify_callee_;
     NiceMock<MockNormalize> normalize_;
     NiceMock<MockMakeVar> make_var_;
-    NiceMock<MockAddInference> add_inference_;
+    NiceMock<MockGetLvc> get_lvc_;
+    NiceMock<MockMakeInference> make_inference_;
+    NiceMock<MockStoreAddedUnifications> store_unifs_;
+    NiceMock<MockStoreAddedBodyGoals> store_goals_;
+    NiceMock<MockStoreLvc> store_lvc_;
     NiceMock<MockLinkChildren> link_children_;
-    NiceMock<MockLiveCallees> live_callees_;
-    NiceMock<MockGetLeafQueries> get_queries_;
+    NiceMock<MockBindChildInterval> bind_child_;
     NiceMock<MockReplaceUnfolded> replace_unfolded_;
-    NiceMock<MockTakeForcedUnfolds> take_forced_;
     test_unfolder_t unfolder_;
 };
 
 TEST_F(PudUnfolderTest, UnfoldLinksChildRewritesQueriesAndYieldsUnit) {
-    EXPECT_CALL(add_inference_, add_inference(&leaf_, 0, &leaf_, _, _, _))
+    EXPECT_CALL(make_inference_, make_inference(&leaf_, 0, &leaf_))
         .WillOnce(Return(&child_));
     EXPECT_CALL(link_children_, link_children(&leaf_, ElementsAre(&child_)));
+    EXPECT_CALL(bind_child_, bind_child(&child_, &leaf_));
     EXPECT_CALL(replace_unfolded_, replace_unfolded(&leaf_, 0, ElementsAre(&child_)));
 
     const unfold_out out = drain(unfolder_.unfold(&leaf_, 0));
@@ -182,7 +186,7 @@ TEST_F(PudUnfolderTest, UnfoldLinksChildRewritesQueriesAndYieldsUnit) {
 }
 
 TEST_F(PudUnfolderTest, UnfoldYieldsWhatQueriesReport) {
-    ON_CALL(take_forced_, take_forced_unfolds()).WillByDefault(
+    ON_CALL(replace_unfolded_, replace_unfolded(_, _, _)).WillByDefault(
         Return(std::vector<pud_forced_unfold>{
             pud_forced_unfold{pud_forced_unfold::refuted{&child_}}}));
     const unfold_out out = drain(unfolder_.unfold(&leaf_, 0));
@@ -192,7 +196,7 @@ TEST_F(PudUnfolderTest, UnfoldYieldsWhatQueriesReport) {
 }
 
 TEST_F(PudUnfolderTest, LiveCursorIsTheCalleePassedToInference) {
-    EXPECT_CALL(add_inference_, add_inference(&leaf_, 0, &leaf_, _, _, _))
+    EXPECT_CALL(make_inference_, make_inference(&leaf_, 0, &leaf_))
         .WillOnce(Return(&child_));
     drain(unfolder_.unfold(&leaf_, 0));
 }
@@ -201,19 +205,21 @@ TEST_F(PudUnfolderTest, UnfoldCreatesOneChildPerLiveCandidate) {
     parent_query_.axiom_contexts = {
         pud_candidate_search_context{&callee_a_, {}, {&body_}},
         pud_candidate_search_context{&callee_b_, {}, {&body_}}};
-    ON_CALL(live_callees_, live_callees(&leaf_, 0)).WillByDefault(
-        Return(std::vector<const pud_rule_id*>{&callee_a_, &callee_b_}));
-    ON_CALL(take_forced_, take_forced_unfolds()).WillByDefault(
+    site_.callees = {&callee_a_, &callee_b_};
+    ON_CALL(unfold_site_, unfold_site(&leaf_, 0)).WillByDefault(Return(site_));
+    ON_CALL(replace_unfolded_, replace_unfolded(_, _, _)).WillByDefault(
         Return(std::vector<pud_forced_unfold>{}));
 
     {
         InSequence seq;
-        EXPECT_CALL(add_inference_, add_inference(&leaf_, 0, &callee_a_, _, _, _))
+        EXPECT_CALL(make_inference_, make_inference(&leaf_, 0, &callee_a_))
             .WillOnce(Return(&child_a_));
-        EXPECT_CALL(add_inference_, add_inference(&leaf_, 0, &callee_b_, _, _, _))
+        EXPECT_CALL(make_inference_, make_inference(&leaf_, 0, &callee_b_))
             .WillOnce(Return(&child_b_));
         EXPECT_CALL(link_children_,
                     link_children(&leaf_, ElementsAre(&child_a_, &child_b_)));
+        EXPECT_CALL(bind_child_, bind_child(&child_a_, &leaf_));
+        EXPECT_CALL(bind_child_, bind_child(&child_b_, &leaf_));
         EXPECT_CALL(replace_unfolded_,
                     replace_unfolded(&leaf_, 0, ElementsAre(&child_a_, &child_b_)));
     }
@@ -237,46 +243,49 @@ TEST_F(PudUnfolderTest, MaterializePassesTouchedRepsAsAddedUnificationsAndLiftsL
         });
     std::vector<pud_added_unification> unifs;
     uint32_t child_lvc = 0;
-    EXPECT_CALL(add_inference_, add_inference(&leaf_, 0, &leaf_, _, _, _))
-        .WillOnce(DoAll(SaveArg<3>(&unifs), SaveArg<5>(&child_lvc), Return(&child_)));
+    EXPECT_CALL(make_inference_, make_inference(&leaf_, 0, &leaf_))
+        .WillOnce(Return(&child_));
+    EXPECT_CALL(store_unifs_, store(&child_, _))
+        .WillOnce(SaveArg<1>(&unifs));
+    EXPECT_CALL(store_lvc_, store(&child_, _))
+        .WillOnce(SaveArg<1>(&child_lvc));
     drain(unfolder_.unfold(&leaf_, 0));
     ASSERT_EQ(unifs.size(), 2u);
     EXPECT_EQ(unifs[0].var_idx, 3u);
     EXPECT_EQ(unifs[1].var_idx, 5u);
-    EXPECT_EQ(child_lvc, parent_node_.lvc + 3u);
+    EXPECT_EQ(child_lvc, 1u + 3u);
 }
 
 TEST_F(PudUnfolderTest, MaterializeEmptyCandidateGoalsPassesEmptyGoals) {
     parent_query_.axiom_contexts = {
         pud_candidate_search_context{&leaf_, {}, {}}};
     std::vector<const expr*> goals;
-    EXPECT_CALL(add_inference_, add_inference(&leaf_, 0, &leaf_, _, _, _))
-        .WillOnce(DoAll(SaveArg<4>(&goals), Return(&child_)));
+    EXPECT_CALL(make_inference_, make_inference(&leaf_, 0, &leaf_))
+        .WillOnce(Return(&child_));
+    EXPECT_CALL(store_goals_, store(&child_, _))
+        .WillOnce(SaveArg<1>(&goals));
     drain(unfolder_.unfold(&leaf_, 0));
     EXPECT_TRUE(goals.empty());
 }
 
 TEST_F(PudUnfolderTest, UnfoldUsesNonzeroBodyGoalIdx) {
-    pud_query extra{interval_, &body_, {pud_candidate_search_context{&leaf_, {}, {&body_}}}, 1};
-    std::vector<pud_query*> two_queries{&parent_query_, &extra};
-    ON_CALL(get_queries_, get(&leaf_)).WillByDefault(ReturnRef(two_queries));
-    ON_CALL(live_callees_, live_callees(&leaf_, 1)).WillByDefault(
-        Return(std::vector<const pud_rule_id*>{&leaf_}));
-    EXPECT_CALL(add_inference_, add_inference(&leaf_, 1, &leaf_, _, _, _))
+    pud_unfold_site site1{&parent_query_, {&leaf_}};
+    ON_CALL(unfold_site_, unfold_site(&leaf_, 1)).WillByDefault(Return(site1));
+    EXPECT_CALL(make_inference_, make_inference(&leaf_, 1, &leaf_))
         .WillOnce(Return(&child_));
     EXPECT_CALL(replace_unfolded_, replace_unfolded(&leaf_, 1, ElementsAre(&child_)));
     drain(unfolder_.unfold(&leaf_, 1));
 }
 
 TEST_F(PudUnfolderTest, UnfoldYieldsNothingWhenQueriesReportEmpty) {
-    ON_CALL(take_forced_, take_forced_unfolds()).WillByDefault(
+    ON_CALL(replace_unfolded_, replace_unfolded(_, _, _)).WillByDefault(
         Return(std::vector<pud_forced_unfold>{}));
     const unfold_out out = drain(unfolder_.unfold(&leaf_, 0));
     EXPECT_TRUE(out.yields.empty());
 }
 
 TEST_F(PudUnfolderTest, UnfoldYieldsMultipleForcedUnfoldsInOrder) {
-    ON_CALL(take_forced_, take_forced_unfolds()).WillByDefault(
+    ON_CALL(replace_unfolded_, replace_unfolded(_, _, _)).WillByDefault(
         Return(std::vector<pud_forced_unfold>{
             pud_forced_unfold{pud_forced_unfold::unit{&child_a_, 0}},
             pud_forced_unfold{pud_forced_unfold::refuted{&child_b_}}}));
@@ -288,14 +297,14 @@ TEST_F(PudUnfolderTest, UnfoldYieldsMultipleForcedUnfoldsInOrder) {
     EXPECT_EQ(std::get<pud_forced_unfold::refuted>(out.yields[1].content).leaf, &child_b_);
 }
 
-TEST_F(PudUnfolderTest, UnfoldSequenceIsMaterializeThenLinkThenReplaceThenTake) {
+TEST_F(PudUnfolderTest, UnfoldSequenceIsMaterializeThenLinkThenBindThenReplace) {
     for (int step = 0; step < 3; ++step) {
         InSequence seq;
-        EXPECT_CALL(add_inference_, add_inference(&leaf_, 0, &leaf_, _, _, _))
+        EXPECT_CALL(make_inference_, make_inference(&leaf_, 0, &leaf_))
             .WillOnce(Return(&child_));
         EXPECT_CALL(link_children_, link_children(&leaf_, ElementsAre(&child_)));
-        EXPECT_CALL(replace_unfolded_, replace_unfolded(&leaf_, 0, ElementsAre(&child_)));
-        EXPECT_CALL(take_forced_, take_forced_unfolds())
+        EXPECT_CALL(bind_child_, bind_child(&child_, &leaf_));
+        EXPECT_CALL(replace_unfolded_, replace_unfolded(&leaf_, 0, ElementsAre(&child_)))
             .WillOnce(Return(std::vector<pud_forced_unfold>{}));
         drain(unfolder_.unfold(&leaf_, 0));
     }
@@ -317,22 +326,27 @@ TEST_F(PudUnfolderTest, StressManyCallees) {
         callee_ptrs.push_back(&callees[static_cast<size_t>(idx)]);
         child_ptrs.push_back(&children[static_cast<size_t>(idx)]);
     }
-    ON_CALL(live_callees_, live_callees(&leaf_, 0)).WillByDefault(Return(callee_ptrs));
+    site_.callees = callee_ptrs;
+    ON_CALL(unfold_site_, unfold_site(&leaf_, 0)).WillByDefault(Return(site_));
     parent_query_.axiom_contexts.clear();
     for (int idx = 0; idx < 24; ++idx) {
         parent_query_.axiom_contexts.push_back(
             pud_candidate_search_context{callee_ptrs[static_cast<size_t>(idx)], {}, {&body_}});
     }
-    ON_CALL(take_forced_, take_forced_unfolds()).WillByDefault(
+    ON_CALL(replace_unfolded_, replace_unfolded(_, _, _)).WillByDefault(
         Return(std::vector<pud_forced_unfold>{}));
     {
         InSequence seq;
         for (int idx = 0; idx < 24; ++idx) {
-            EXPECT_CALL(add_inference_,
-                        add_inference(&leaf_, 0, callee_ptrs[static_cast<size_t>(idx)], _, _, _))
+            EXPECT_CALL(make_inference_,
+                        make_inference(&leaf_, 0, callee_ptrs[static_cast<size_t>(idx)]))
                 .WillOnce(Return(child_ptrs[static_cast<size_t>(idx)]));
         }
         EXPECT_CALL(link_children_, link_children(&leaf_, child_ptrs));
+        for (int idx = 0; idx < 24; ++idx) {
+            EXPECT_CALL(bind_child_,
+                        bind_child(child_ptrs[static_cast<size_t>(idx)], &leaf_));
+        }
         EXPECT_CALL(replace_unfolded_, replace_unfolded(&leaf_, 0, child_ptrs));
     }
     const unfold_out out = drain(unfolder_.unfold(&leaf_, 0));
@@ -362,7 +376,8 @@ TEST_F(PudUnfolderTest, FuzzUnfold) {
             callee_ptrs.push_back(&callees[static_cast<size_t>(idx)]);
             child_ptrs.push_back(&children[static_cast<size_t>(idx)]);
         }
-        ON_CALL(live_callees_, live_callees(&leaf_, 0)).WillByDefault(Return(callee_ptrs));
+        site_.callees = callee_ptrs;
+        ON_CALL(unfold_site_, unfold_site(&leaf_, 0)).WillByDefault(Return(site_));
         parent_query_.axiom_contexts.clear();
         for (int idx = 0; idx < count; ++idx) {
             parent_query_.axiom_contexts.push_back(
@@ -374,13 +389,10 @@ TEST_F(PudUnfolderTest, FuzzUnfold) {
             yields.push_back(pud_forced_unfold{pud_forced_unfold::unit{&child_, 0}});
         if (kind == 2)
             yields.push_back(pud_forced_unfold{pud_forced_unfold::refuted{&child_}});
-        ON_CALL(take_forced_, take_forced_unfolds()).WillByDefault(Return(yields));
+        ON_CALL(replace_unfolded_, replace_unfolded(_, _, _)).WillByDefault(Return(yields));
         int infer_idx = 0;
-        ON_CALL(add_inference_, add_inference(_, _, _, _, _, _)).WillByDefault(
-            [&](const pud_rule_id*, size_t, const pud_rule_id*,
-                std::vector<pud_added_unification>,
-                std::vector<const expr*>,
-                uint32_t) {
+        ON_CALL(make_inference_, make_inference(_, _, _)).WillByDefault(
+            [&](const pud_rule_id*, size_t, const pud_rule_id*) {
                 const pud_rule_id* out = child_ptrs[static_cast<size_t>(infer_idx)];
                 ++infer_idx;
                 return out;
@@ -394,6 +406,7 @@ TEST_F(PudUnfolderTest, FuzzUnfold) {
         ON_CALL(replace_unfolded_, replace_unfolded(_, _, _)).WillByDefault(
             [&](const pud_rule_id*, size_t, const std::vector<const pud_rule_id*>& kids) {
                 replaced = kids;
+                return yields;
             });
         const unfold_out out = drain(unfolder_.unfold(&leaf_, 0));
         EXPECT_EQ(out.children.size(), callee_ptrs.size())

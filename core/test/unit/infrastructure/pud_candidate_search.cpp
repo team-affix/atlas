@@ -11,7 +11,6 @@
 #include "value_objects/om_interval.hpp"
 #include "value_objects/pud_candidate_search_context.hpp"
 #include "value_objects/pud_candidate_search_result.hpp"
-#include "value_objects/pud_db_node.hpp"
 #include "value_objects/pud_query.hpp"
 #include "value_objects/pud_rule_id.hpp"
 #include "value_objects/pud_witness_search_context.hpp"
@@ -34,24 +33,24 @@ struct MockOrderedChildren {
     MOCK_METHOD(std::vector<const pud_rule_id*>, ordered_children, (const pud_rule_id*), ());
 };
 
-struct MockTryParent {
-    MOCK_METHOD(const pud_rule_id*, try_parent, (const pud_rule_id*), ());
+struct MockFindParent {
+    MOCK_METHOD(const pud_rule_id*, find_parent, (const pud_rule_id*), ());
 };
 
 struct MockUnifyHead {
     MOCK_METHOD(bool, unify_head, (pud_query&, const pud_rule_id*), ());
 };
 
-struct MockGetNode {
-    MOCK_METHOD(const pud_db_node&, get_node, (const pud_rule_id*), ());
+struct MockGetAddedBodyGoals {
+    MOCK_METHOD(const std::vector<const expr*>&, get, (const pud_rule_id*), ());
 };
 
 using test_search_t = pud_candidate_search<NiceMock<MockResumeWitnessSearch>,
                                            NiceMock<MockIsLeaf>,
                                            NiceMock<MockOrderedChildren>,
-                                           NiceMock<MockTryParent>,
+                                           NiceMock<MockFindParent>,
                                            NiceMock<MockUnifyHead>,
-                                           NiceMock<MockGetNode>>;
+                                           NiceMock<MockGetAddedBodyGoals>>;
 
 struct PudCandidateSearchTest : public ::testing::Test {
     PudCandidateSearchTest()
@@ -63,10 +62,10 @@ struct PudCandidateSearchTest : public ::testing::Test {
         , c0_{pud_rule_id::inference{&a0_, 0, &a0_}}
         , c1_{pud_rule_id::inference{&a0_, 1, &a0_}}
         , dummy_{expr::var{9}}
-        , advance_node_{{}, {&dummy_}, 1}
+        , advance_goals_{&dummy_}
         , query_{interval_, &body_, {}, 1}
-        , search_(witness_, is_leaf_, children_, try_parent_, unify_, get_node_) {
-        ON_CALL(get_node_, get_node(_)).WillByDefault(ReturnRef(advance_node_));
+        , search_(witness_, is_leaf_, children_, find_parent_, unify_, get_added_body_goals_) {
+        ON_CALL(get_added_body_goals_, get(_)).WillByDefault(ReturnRef(advance_goals_));
     }
 
     uint64_t open_;
@@ -77,14 +76,14 @@ struct PudCandidateSearchTest : public ::testing::Test {
     pud_rule_id c0_;
     pud_rule_id c1_;
     expr dummy_;
-    pud_db_node advance_node_;
+    std::vector<const expr*> advance_goals_;
     pud_query query_;
     NiceMock<MockResumeWitnessSearch> witness_;
     NiceMock<MockIsLeaf> is_leaf_;
     NiceMock<MockOrderedChildren> children_;
-    NiceMock<MockTryParent> try_parent_;
+    NiceMock<MockFindParent> find_parent_;
     NiceMock<MockUnifyHead> unify_;
-    NiceMock<MockGetNode> get_node_;
+    NiceMock<MockGetAddedBodyGoals> get_added_body_goals_;
     test_search_t search_;
 };
 
@@ -144,8 +143,8 @@ TEST_F(PudCandidateSearchTest, OneLiveEdgeQueryAdvancesThenSelfWitnesses) {
 TEST_F(PudCandidateSearchTest, QueryAdvanceRewritesAddedBodyGoalsViaCallSite) {
     expr leftover{expr::var{2}};
     expr added{expr::var{3}};
-    pud_db_node child_node{{}, {&added}, 1};
-    ON_CALL(get_node_, get_node(&c0_)).WillByDefault(ReturnRef(child_node));
+    std::vector<const expr*> child_goals{&added};
+    ON_CALL(get_added_body_goals_, get(&c0_)).WillByDefault(ReturnRef(child_goals));
     pud_candidate_search_context ctx{&a0_, {}, {&body_, &leftover}};
     EXPECT_CALL(is_leaf_, is_leaf(&a0_)).WillRepeatedly(Return(false));
     EXPECT_CALL(is_leaf_, is_leaf(&c0_)).WillRepeatedly(Return(true));
@@ -200,7 +199,7 @@ TEST_F(PudCandidateSearchTest, QueryAdvanceRewritesEdgeRootWhenCurrentIsDeeper) 
     EXPECT_CALL(unify_, unify_head(_, &c0_)).WillRepeatedly(Return(true));
     EXPECT_CALL(children_, ordered_children(&a0_))
         .WillRepeatedly(Return(std::vector<const pud_rule_id*>{&c0_}));
-    EXPECT_CALL(try_parent_, try_parent(&g0)).WillRepeatedly(Return(&c0_));
+    EXPECT_CALL(find_parent_, find_parent(&g0)).WillRepeatedly(Return(&c0_));
     const pud_candidate_search_result result = search_.resume(query_, ctx);
     EXPECT_TRUE(std::holds_alternative<pud_candidate_search_result::self_witness>(result.content));
     EXPECT_EQ(ctx.cursor, &c0_);
@@ -310,7 +309,7 @@ TEST_F(PudCandidateSearchTest, FuzzResumeOnFixedMockDag) {
             return std::vector<const pud_rule_id*>{&g1};
         return std::vector<const pud_rule_id*>{};
     });
-    ON_CALL(try_parent_, try_parent(_)).WillByDefault([&](const pud_rule_id* node) -> const pud_rule_id* {
+    ON_CALL(find_parent_, find_parent(_)).WillByDefault([&](const pud_rule_id* node) -> const pud_rule_id* {
         if (node == &g0)
             return &c0_;
         if (node == &g1)

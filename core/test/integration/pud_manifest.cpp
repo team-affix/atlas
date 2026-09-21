@@ -5,6 +5,7 @@
 #include <random>
 #include <sstream>
 #include <stdexcept>
+#include <unordered_map>
 #include <unordered_set>
 #include <variant>
 #include <vector>
@@ -12,7 +13,6 @@
 #include "infrastructure/coroutine.hpp"
 #include "infrastructure/pud_manifest.hpp"
 #include "value_objects/pud_added_unification.hpp"
-#include "value_objects/pud_db_node.hpp"
 #include "value_objects/pud_forced_unfold.hpp"
 #include "value_objects/pud_query.hpp"
 #include "value_objects/pud_rule_id.hpp"
@@ -46,11 +46,9 @@ struct PudManifestIntegrationTest : public ::testing::Test {
 
     void expect_query_leaf_invariant(const std::vector<const pud_rule_id*>& known) {
         for (const pud_rule_id* id : known) {
-            if (m_.forest_.is_leaf(id)) {
-                EXPECT_NO_THROW(m_.queries_.get(id));
+            if (m_.children_.is_leaf(id))
                 continue;
-            }
-            EXPECT_THROW(m_.queries_.get(id), std::out_of_range);
+            EXPECT_THROW(m_.queries_.unfold_site(id, 0), std::out_of_range);
         }
     }
 
@@ -67,13 +65,11 @@ TEST_F(PudManifestIntegrationTest, UnfoldForksLeftoverQueryOntoTheChild) {
 
     drain(m_.unfolder_.unfold(a0, 0));
 
-    EXPECT_FALSE(m_.forest_.is_leaf(a0));
-    ASSERT_EQ(m_.forest_.ordered_children(a0).size(), 1u);
-    const pud_rule_id* child = m_.forest_.ordered_children(a0)[0];
-    EXPECT_TRUE(m_.forest_.is_leaf(child));
-    const std::vector<pud_query*>& child_queries = m_.queries_.get(child);
-    ASSERT_EQ(child_queries.size(), 1u);
-    EXPECT_EQ(child_queries[0]->body_goal, r);
+    EXPECT_FALSE(m_.children_.is_leaf(a0));
+    ASSERT_EQ(m_.children_.ordered_children(a0).size(), 1u);
+    const pud_rule_id* child = m_.children_.ordered_children(a0)[0];
+    EXPECT_TRUE(m_.children_.is_leaf(child));
+    EXPECT_EQ(m_.queries_.unfold_site(child, 0).query->body_goal, r);
 }
 
 TEST_F(PudManifestIntegrationTest, UnfoldOfWitnessAdvancesOtherQueryWithoutNestedUnfold) {
@@ -84,15 +80,15 @@ TEST_F(PudManifestIntegrationTest, UnfoldOfWitnessAdvancesOtherQueryWithoutNeste
     const pud_rule_id* a1 = add_axiom(q, {t});
     add_axiom(t, {});
 
-    pud_query* a0_query = m_.queries_.get(a0)[0];
+    pud_query* a0_query = m_.queries_.unfold_site(a0, 0).query;
     EXPECT_FALSE(a0_query->axiom_contexts.empty());
 
     drain(m_.unfolder_.unfold(a1, 0));
-    EXPECT_FALSE(m_.forest_.is_leaf(a1));
-    ASSERT_EQ(m_.forest_.ordered_children(a1).size(), 1u);
-    const pud_rule_id* child = m_.forest_.ordered_children(a1)[0];
-    EXPECT_TRUE(m_.forest_.is_leaf(child));
-    EXPECT_TRUE(m_.forest_.is_leaf(a0));
+    EXPECT_FALSE(m_.children_.is_leaf(a1));
+    ASSERT_EQ(m_.children_.ordered_children(a1).size(), 1u);
+    const pud_rule_id* child = m_.children_.ordered_children(a1)[0];
+    EXPECT_TRUE(m_.children_.is_leaf(child));
+    EXPECT_TRUE(m_.children_.is_leaf(a0));
 }
 
 TEST_F(PudManifestIntegrationTest, SelfUnfoldInternsInferenceWithSelfCallee) {
@@ -101,8 +97,8 @@ TEST_F(PudManifestIntegrationTest, SelfUnfoldInternsInferenceWithSelfCallee) {
 
     drain(m_.unfolder_.unfold(leaf, 0));
 
-    ASSERT_EQ(m_.forest_.ordered_children(leaf).size(), 1u);
-    const pud_rule_id* child = m_.forest_.ordered_children(leaf)[0];
+    ASSERT_EQ(m_.children_.ordered_children(leaf).size(), 1u);
+    const pud_rule_id* child = m_.children_.ordered_children(leaf)[0];
     const pud_rule_id::inference& inf = std::get<pud_rule_id::inference>(child->content);
     EXPECT_EQ(inf.caller, leaf);
     EXPECT_EQ(inf.callee, leaf);
@@ -124,7 +120,7 @@ TEST_F(PudManifestIntegrationTest, ZeroCandidatesYieldsRefutedForTheChild) {
             continue;
         saw_refuted = true;
         EXPECT_EQ(std::get<pud_forced_unfold::refuted>(yield.content).leaf,
-                  m_.forest_.ordered_children(a0)[0]);
+                  m_.children_.ordered_children(a0)[0]);
     }
     EXPECT_TRUE(saw_refuted);
 }
@@ -138,8 +134,8 @@ TEST_F(PudManifestIntegrationTest, UnitYieldDoesNotUnfoldTheUnitLeaf) {
     add_axiom(s, {});
 
     const unfold_out out = drain(m_.unfolder_.unfold(a0, 0));
-    const pud_rule_id* child = m_.forest_.ordered_children(a0)[0];
-    EXPECT_TRUE(m_.forest_.is_leaf(child));
+    const pud_rule_id* child = m_.children_.ordered_children(a0)[0];
+    EXPECT_TRUE(m_.children_.is_leaf(child));
 
     bool saw_child_unit = false;
     for (const pud_forced_unfold& yield : out.yields) {
@@ -150,7 +146,7 @@ TEST_F(PudManifestIntegrationTest, UnitYieldDoesNotUnfoldTheUnitLeaf) {
         saw_child_unit = true;
     }
     EXPECT_TRUE(saw_child_unit);
-    EXPECT_TRUE(m_.forest_.is_leaf(child));
+    EXPECT_TRUE(m_.children_.is_leaf(child));
 }
 
 TEST_F(PudManifestIntegrationTest, UnfoldFansOutOneChildPerMatchingAxiom) {
@@ -163,7 +159,7 @@ TEST_F(PudManifestIntegrationTest, UnfoldFansOutOneChildPerMatchingAxiom) {
 
     const unfold_out out = drain(m_.unfolder_.unfold(a0, 0));
 
-    EXPECT_FALSE(m_.forest_.is_leaf(a0));
+    EXPECT_FALSE(m_.children_.is_leaf(a0));
     ASSERT_EQ(out.children.size(), 2u);
     const pud_rule_id::inference& inf0 =
         std::get<pud_rule_id::inference>(out.children[0]->content);
@@ -173,10 +169,8 @@ TEST_F(PudManifestIntegrationTest, UnfoldFansOutOneChildPerMatchingAxiom) {
     EXPECT_TRUE(inf1.callee == a1 || inf1.callee == a2);
     EXPECT_NE(inf0.callee, inf1.callee);
     for (const pud_rule_id* child : out.children) {
-        EXPECT_TRUE(m_.forest_.is_leaf(child));
-        const std::vector<pud_query*>& child_queries = m_.queries_.get(child);
-        ASSERT_EQ(child_queries.size(), 1u);
-        EXPECT_EQ(child_queries[0]->body_goal, r);
+        EXPECT_TRUE(m_.children_.is_leaf(child));
+        EXPECT_EQ(m_.queries_.unfold_site(child, 0).query->body_goal, r);
     }
 }
 
@@ -190,8 +184,8 @@ TEST_F(PudManifestIntegrationTest, UnfoldUsesChoicePointCursorNotLeafWitness) {
     add_axiom(t, {});
 
     drain(m_.unfolder_.unfold(a1, 0));
-    ASSERT_EQ(m_.forest_.ordered_children(a1).size(), 2u);
-    EXPECT_TRUE(m_.forest_.is_leaf(a0));
+    ASSERT_EQ(m_.children_.ordered_children(a1).size(), 2u);
+    EXPECT_TRUE(m_.children_.is_leaf(a0));
 
     const unfold_out out = drain(m_.unfolder_.unfold(a0, 0));
 
@@ -211,7 +205,7 @@ TEST_F(PudManifestIntegrationTest, AddAxiomAfterExistingLeafPatchesThatLeafQuery
 
     const unfold_out out = drain(m_.unfolder_.unfold(a0, 0));
     ASSERT_EQ(out.children.size(), 1u);
-    EXPECT_TRUE(m_.forest_.is_leaf(out.children[0]));
+    EXPECT_TRUE(m_.children_.is_leaf(out.children[0]));
 }
 
 TEST_F(PudManifestIntegrationTest, LateAxiomAppearsOnExistingLeafContexts) {
@@ -220,7 +214,8 @@ TEST_F(PudManifestIntegrationTest, LateAxiomAppearsOnExistingLeafContexts) {
     const pud_rule_id* a0 = add_axiom(p, {q});
     const pud_rule_id* a1 = add_axiom(q, {});
     bool found = false;
-    for (const pud_candidate_search_context& ctx : m_.queries_.get(a0)[0]->axiom_contexts) {
+    for (const pud_candidate_search_context& ctx :
+            m_.queries_.unfold_site(a0, 0).query->axiom_contexts) {
         if (ctx.cursor != a1)
             continue;
         found = true;
@@ -237,10 +232,9 @@ TEST_F(PudManifestIntegrationTest, UnfoldSecondGoalKeepsFirstLeftover) {
     const pud_rule_id* a0 = add_axiom(p, {q, r});
     add_axiom(r, {});
     drain(m_.unfolder_.unfold(a0, 1));
-    ASSERT_EQ(m_.forest_.ordered_children(a0).size(), 1u);
-    const pud_rule_id* child = m_.forest_.ordered_children(a0)[0];
-    ASSERT_EQ(m_.queries_.get(child).size(), 1u);
-    EXPECT_EQ(m_.queries_.get(child)[0]->body_goal, q);
+    ASSERT_EQ(m_.children_.ordered_children(a0).size(), 1u);
+    const pud_rule_id* child = m_.children_.ordered_children(a0)[0];
+    EXPECT_EQ(m_.queries_.unfold_site(child, 0).query->body_goal, q);
 }
 
 TEST_F(PudManifestIntegrationTest, NestedUnfoldCascadeOnUnitYields) {
@@ -251,13 +245,12 @@ TEST_F(PudManifestIntegrationTest, NestedUnfoldCascadeOnUnitYields) {
     add_axiom(q, {r});
     add_axiom(r, {});
     drain(m_.unfolder_.unfold(a0, 0));
-    ASSERT_EQ(m_.forest_.ordered_children(a0).size(), 1u);
-    const pud_rule_id* child = m_.forest_.ordered_children(a0)[0];
-    ASSERT_TRUE(m_.forest_.is_leaf(child));
-    ASSERT_FALSE(m_.queries_.get(child).empty());
-    ASSERT_FALSE(m_.queries_.live_callees(child, 0).empty());
+    ASSERT_EQ(m_.children_.ordered_children(a0).size(), 1u);
+    const pud_rule_id* child = m_.children_.ordered_children(a0)[0];
+    ASSERT_TRUE(m_.children_.is_leaf(child));
+    ASSERT_FALSE(m_.queries_.unfold_site(child, 0).callees.empty());
     drain(m_.unfolder_.unfold(child, 0));
-    EXPECT_FALSE(m_.forest_.ordered_children(child).empty());
+    EXPECT_FALSE(m_.children_.ordered_children(child).empty());
 }
 
 TEST_F(PudManifestIntegrationTest, VarHeadUnifyAndNormalizeOnUnfold) {
@@ -270,13 +263,16 @@ TEST_F(PudManifestIntegrationTest, VarHeadUnifyAndNormalizeOnUnfold) {
     m_.axiom_adder_.add_axiom(rule{q_a, {}, 1});
     const unfold_out out = drain(m_.unfolder_.unfold(a0, 0));
     ASSERT_EQ(out.children.size(), 1u);
-    const pud_db_node& child = m_.forest_.get_node(out.children[0]);
+    const std::vector<pud_added_unification>& added =
+        m_.added_unifications_.get(out.children[0]);
+    const std::vector<const expr*>& child_goals =
+        m_.added_body_goals_.get(out.children[0]);
     bool saw_a = false;
-    for (const pud_added_unification& added : child.added_unifications) {
-        if (added.value == a)
+    for (const pud_added_unification& unif : added) {
+        if (unif.value == a)
             saw_a = true;
     }
-    for (const expr* goal : child.added_body_goals) {
+    for (const expr* goal : child_goals) {
         if (goal == a || goal == q_a)
             saw_a = true;
     }
@@ -298,7 +294,8 @@ TEST_F(PudManifestIntegrationTest, LoadThenUnfoldNeverOrphansQueries) {
     const unfold_out first = drain(m_.unfolder_.unfold(known[1], 0));
     known.insert(known.end(), first.children.begin(), first.children.end());
     expect_query_leaf_invariant(known);
-    if (m_.forest_.is_leaf(known[0]) && !m_.queries_.live_callees(known[0], 0).empty()) {
+    if (m_.children_.is_leaf(known[0])
+            && !m_.queries_.unfold_site(known[0], 0).callees.empty()) {
         const unfold_out second = drain(m_.unfolder_.unfold(known[0], 0));
         known.insert(known.end(), second.children.begin(), second.children.end());
     }
@@ -314,8 +311,8 @@ TEST_F(PudManifestIntegrationTest, StressManyFactsFanout) {
     const unfold_out out = drain(m_.unfolder_.unfold(a0, 0));
     ASSERT_EQ(out.children.size(), 40u);
     for (const pud_rule_id* child : out.children) {
-        EXPECT_TRUE(m_.forest_.is_leaf(child));
-        EXPECT_TRUE(m_.queries_.get(child).empty());
+        EXPECT_TRUE(m_.children_.is_leaf(child));
+        EXPECT_TRUE(m_.added_body_goals_.get(child).empty());
     }
 }
 
@@ -328,15 +325,18 @@ TEST_F(PudManifestIntegrationTest, FuzzAddAxiomThenUnfold) {
     std::ostringstream log;
     std::vector<const pud_rule_id*> known;
     std::vector<const pud_rule_id*> owned;
+    std::unordered_map<const pud_rule_id*, size_t> query_count;
     for (int step = 0; step < 12; ++step) {
         const expr* head = preds[pred_dist(rng)];
         std::vector<const expr*> body;
         const int len = body_len(rng);
         for (int idx = 0; idx < len; ++idx)
             body.push_back(preds[pred_dist(rng)]);
+        const size_t n_queries = body.size();
         const pud_rule_id* id = add_axiom(head, std::move(body));
         known.push_back(id);
         owned.push_back(id);
+        query_count[id] = n_queries;
         log << "add ";
     }
     expect_query_leaf_invariant(known);
@@ -344,26 +344,29 @@ TEST_F(PudManifestIntegrationTest, FuzzAddAxiomThenUnfold) {
         log << step << ' ';
         std::vector<const pud_rule_id*> unfoldable;
         for (const pud_rule_id* leaf : owned) {
-            if (!m_.forest_.is_leaf(leaf))
+            if (!m_.children_.is_leaf(leaf))
                 continue;
-            const std::vector<pud_query*>& qs = m_.queries_.get(leaf);
-            if (qs.empty())
+            if (query_count[leaf] == 0)
                 continue;
             unfoldable.push_back(leaf);
         }
         if (unfoldable.empty())
             break;
         const pud_rule_id* leaf = unfoldable[rng() % unfoldable.size()];
-        const std::vector<pud_query*>& qs = m_.queries_.get(leaf);
-        const size_t idx = rng() % qs.size();
-        const std::vector<const pud_rule_id*> callees = m_.queries_.live_callees(leaf, idx);
+        const size_t idx = rng() % query_count[leaf];
+        const std::vector<const pud_rule_id*> callees =
+            m_.queries_.unfold_site(leaf, idx).callees;
         if (callees.empty() || callees.size() > 4)
             continue;
+        const size_t parent_queries = query_count[leaf];
         const unfold_out out = drain(m_.unfolder_.unfold(leaf, idx));
         owned.erase(std::remove(owned.begin(), owned.end(), leaf), owned.end());
+        query_count.erase(leaf);
         for (const pud_rule_id* child : out.children) {
             known.push_back(child);
             owned.push_back(child);
+            query_count[child] = parent_queries - 1
+                + m_.added_body_goals_.get(child).size();
         }
         expect_query_leaf_invariant(known);
     }

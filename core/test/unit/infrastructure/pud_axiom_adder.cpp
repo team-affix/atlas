@@ -1,4 +1,4 @@
-// pud_axiom_adder: packs a rule, inserts it, adopts queries.
+// pud_axiom_adder: make, store unifications/body/lvc, add_root, bind_root, adopt.
 
 #include <gtest/gtest.h>
 #include <gmock/gmock.h>
@@ -17,12 +17,28 @@ using ::testing::Return;
 using ::testing::SaveArg;
 using ::testing::_;
 
-struct MockAddAxiom {
-    MOCK_METHOD(const pud_rule_id*, add_axiom,
-                (size_t,
-                 (std::vector<pud_added_unification>),
-                 (std::vector<const expr*>),
-                 uint32_t), ());
+struct MockMakeAxiom {
+    MOCK_METHOD(const pud_rule_id*, make_axiom, (size_t), ());
+};
+
+struct MockStoreAddedUnifications {
+    MOCK_METHOD(void, store, (const pud_rule_id*, (std::vector<pud_added_unification>)), ());
+};
+
+struct MockStoreAddedBodyGoals {
+    MOCK_METHOD(void, store, (const pud_rule_id*, (std::vector<const expr*>)), ());
+};
+
+struct MockStoreLvc {
+    MOCK_METHOD(void, store, (const pud_rule_id*, uint32_t), ());
+};
+
+struct MockAddRoot {
+    MOCK_METHOD(void, add_root, (const pud_rule_id*), ());
+};
+
+struct MockBindRootInterval {
+    MOCK_METHOD(void, bind_root, (const pud_rule_id*), ());
 };
 
 struct MockAdoptAxiom {
@@ -30,7 +46,12 @@ struct MockAdoptAxiom {
 };
 
 using test_adder_t = pud_axiom_adder<
-    NiceMock<MockAddAxiom>,
+    NiceMock<MockMakeAxiom>,
+    NiceMock<MockStoreAddedUnifications>,
+    NiceMock<MockStoreAddedBodyGoals>,
+    NiceMock<MockStoreLvc>,
+    NiceMock<MockAddRoot>,
+    NiceMock<MockBindRootInterval>,
     NiceMock<MockAdoptAxiom>>;
 
 struct PudAxiomAdderTest : public ::testing::Test {
@@ -39,16 +60,22 @@ struct PudAxiomAdderTest : public ::testing::Test {
         , body_{expr::functor{2, {}}}
         , axiom0_{pud_rule_id::axiom{0}}
         , axiom1_{pud_rule_id::axiom{1}}
-        , adder_(add_axiom_, adopt_) {
-        ON_CALL(add_axiom_, add_axiom(0, _, _, _)).WillByDefault(Return(&axiom0_));
-        ON_CALL(add_axiom_, add_axiom(1, _, _, _)).WillByDefault(Return(&axiom1_));
+        , adder_(make_axiom_, store_unifs_, store_goals_, store_lvc_,
+                 add_root_, bind_root_, adopt_) {
+        ON_CALL(make_axiom_, make_axiom(0)).WillByDefault(Return(&axiom0_));
+        ON_CALL(make_axiom_, make_axiom(1)).WillByDefault(Return(&axiom1_));
     }
 
     expr head_;
     expr body_;
     pud_rule_id axiom0_;
     pud_rule_id axiom1_;
-    NiceMock<MockAddAxiom> add_axiom_;
+    NiceMock<MockMakeAxiom> make_axiom_;
+    NiceMock<MockStoreAddedUnifications> store_unifs_;
+    NiceMock<MockStoreAddedBodyGoals> store_goals_;
+    NiceMock<MockStoreLvc> store_lvc_;
+    NiceMock<MockAddRoot> add_root_;
+    NiceMock<MockBindRootInterval> bind_root_;
     NiceMock<MockAdoptAxiom> adopt_;
     test_adder_t adder_;
 };
@@ -57,11 +84,15 @@ TEST_F(PudAxiomAdderTest, AddAxiomPacksHeadBodyAndLvcAndReturnsId) {
     std::vector<pud_added_unification> packed_unifs;
     std::vector<const expr*> packed_body;
     uint32_t packed_lvc = 0;
-    EXPECT_CALL(add_axiom_, add_axiom(0, _, _, _))
-        .WillOnce(DoAll(SaveArg<1>(&packed_unifs),
-                        SaveArg<2>(&packed_body),
-                        SaveArg<3>(&packed_lvc),
-                        Return(&axiom0_)));
+    EXPECT_CALL(make_axiom_, make_axiom(0)).WillOnce(Return(&axiom0_));
+    EXPECT_CALL(store_unifs_, store(&axiom0_, _))
+        .WillOnce(SaveArg<1>(&packed_unifs));
+    EXPECT_CALL(store_goals_, store(&axiom0_, _))
+        .WillOnce(SaveArg<1>(&packed_body));
+    EXPECT_CALL(store_lvc_, store(&axiom0_, _))
+        .WillOnce(SaveArg<1>(&packed_lvc));
+    EXPECT_CALL(add_root_, add_root(&axiom0_));
+    EXPECT_CALL(bind_root_, bind_root(&axiom0_));
     EXPECT_CALL(adopt_, adopt_axiom(&axiom0_));
 
     const pud_rule_id* id = adder_.add_axiom(rule{&head_, {&body_}, 3});
@@ -75,8 +106,8 @@ TEST_F(PudAxiomAdderTest, AddAxiomPacksHeadBodyAndLvcAndReturnsId) {
 }
 
 TEST_F(PudAxiomAdderTest, EntryIdxIncrementsOnEachAdd) {
-    EXPECT_CALL(add_axiom_, add_axiom(0, _, _, _)).WillOnce(Return(&axiom0_));
-    EXPECT_CALL(add_axiom_, add_axiom(1, _, _, _)).WillOnce(Return(&axiom1_));
+    EXPECT_CALL(make_axiom_, make_axiom(0)).WillOnce(Return(&axiom0_));
+    EXPECT_CALL(make_axiom_, make_axiom(1)).WillOnce(Return(&axiom1_));
     EXPECT_CALL(adopt_, adopt_axiom(_)).Times(2);
 
     EXPECT_EQ(adder_.add_axiom(rule{&head_, {&body_}, 1}), &axiom0_);
@@ -85,16 +116,18 @@ TEST_F(PudAxiomAdderTest, EntryIdxIncrementsOnEachAdd) {
 
 TEST_F(PudAxiomAdderTest, EmptyBodyPacksEmptyGoalVector) {
     std::vector<const expr*> packed_body;
-    EXPECT_CALL(add_axiom_, add_axiom(0, _, _, _))
-        .WillOnce(DoAll(SaveArg<2>(&packed_body), Return(&axiom0_)));
+    EXPECT_CALL(make_axiom_, make_axiom(0)).WillOnce(Return(&axiom0_));
+    EXPECT_CALL(store_goals_, store(&axiom0_, _))
+        .WillOnce(SaveArg<1>(&packed_body));
     adder_.add_axiom(rule{&head_, {}, 2});
     EXPECT_TRUE(packed_body.empty());
 }
 
 TEST_F(PudAxiomAdderTest, ZeroVarCountPackedAsLvc) {
     uint32_t packed_lvc = 1;
-    EXPECT_CALL(add_axiom_, add_axiom(0, _, _, _))
-        .WillOnce(DoAll(SaveArg<3>(&packed_lvc), Return(&axiom0_)));
+    EXPECT_CALL(make_axiom_, make_axiom(0)).WillOnce(Return(&axiom0_));
+    EXPECT_CALL(store_lvc_, store(&axiom0_, _))
+        .WillOnce(SaveArg<1>(&packed_lvc));
     adder_.add_axiom(rule{&head_, {&body_}, 0});
     EXPECT_EQ(packed_lvc, 0u);
 }
@@ -105,7 +138,7 @@ TEST_F(PudAxiomAdderTest, EntryIdxIsMonotonicAcrossManyAdds) {
     for (int idx = 0; idx < 20; ++idx)
         ids.push_back(pud_rule_id{pud_rule_id::axiom{static_cast<size_t>(idx)}});
     for (int idx = 0; idx < 20; ++idx) {
-        EXPECT_CALL(add_axiom_, add_axiom(static_cast<size_t>(idx), _, _, _))
+        EXPECT_CALL(make_axiom_, make_axiom(static_cast<size_t>(idx)))
             .WillOnce(Return(&ids[static_cast<size_t>(idx)]));
         EXPECT_CALL(adopt_, adopt_axiom(&ids[static_cast<size_t>(idx)]));
     }
@@ -128,9 +161,12 @@ TEST_F(PudAxiomAdderTest, FuzzAddAxiom) {
         log << step << ':' << len << ',' << lvc << ' ';
         std::vector<const expr*> packed_body;
         uint32_t packed_lvc = 99;
-        EXPECT_CALL(add_axiom_, add_axiom(static_cast<size_t>(step), _, _, _))
-            .WillOnce(DoAll(SaveArg<2>(&packed_body), SaveArg<3>(&packed_lvc),
-                            Return(&ids.back())));
+        EXPECT_CALL(make_axiom_, make_axiom(static_cast<size_t>(step)))
+            .WillOnce(Return(&ids.back()));
+        EXPECT_CALL(store_goals_, store(&ids.back(), _))
+            .WillOnce(SaveArg<1>(&packed_body));
+        EXPECT_CALL(store_lvc_, store(&ids.back(), _))
+            .WillOnce(SaveArg<1>(&packed_lvc));
         EXPECT_CALL(adopt_, adopt_axiom(&ids.back()));
         std::vector<const expr*> body(static_cast<size_t>(len), &body_);
         adder_.add_axiom(rule{&head_, body, lvc});
