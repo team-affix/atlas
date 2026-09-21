@@ -3,6 +3,9 @@
 #include <gtest/gtest.h>
 #include <gmock/gmock.h>
 #include <optional>
+#include <random>
+#include <sstream>
+#include <unordered_map>
 #include <vector>
 #include "infrastructure/pud_unify_head.hpp"
 #include "value_objects/expr.hpp"
@@ -15,6 +18,7 @@
 using ::testing::NiceMock;
 using ::testing::Return;
 using ::testing::ReturnRef;
+using ::testing::IsEmpty;
 using ::testing::_;
 
 struct MockAllocateChildInterval {
@@ -138,4 +142,132 @@ TEST_F(PudUnifyHeadTest, ReinitRecordsEachNodeOnAThreeNodeChain) {
     EXPECT_CALL(record_, record(_, 1, _)).Times(::testing::AtLeast(1));
     EXPECT_CALL(record_, record(_, 2, _)).Times(::testing::AtLeast(1));
     unify_head_.reinit(query_);
+}
+
+TEST_F(PudUnifyHeadTest, UnifyCalleeWritesEnvAndCollectsTouchedReps) {
+    ON_CALL(query_binding_, query(_, _)).WillByDefault(Return(std::nullopt));
+    om_interval env{om_label(&open_), om_label(&close_)};
+    std::vector<uint32_t> touched_reps;
+    EXPECT_CALL(allocate_, allocate_child_of(_)).WillOnce(Return(nested_));
+    EXPECT_TRUE(unify_head_.unify_callee(query_, &axiom_, touched_reps, env));
+    EXPECT_EQ(env.open.rank_ptr(), nested_.open.rank_ptr());
+    EXPECT_EQ(env.close.rank_ptr(), nested_.close.rank_ptr());
+    EXPECT_FALSE(touched_reps.empty());
+}
+
+TEST_F(PudUnifyHeadTest, UnifyCalleeFailsWhenHeadDiffers) {
+    expr other{expr::functor{8, {}}};
+    ON_CALL(query_binding_, query(_, 0)).WillByDefault(Return(framed_expr{&other, 0}));
+    om_interval env{om_label(&open_), om_label(&close_)};
+    std::vector<uint32_t> touched_reps;
+    EXPECT_CALL(allocate_, allocate_child_of(_)).WillOnce(Return(nested_));
+    EXPECT_FALSE(unify_head_.unify_callee(query_, &axiom_, touched_reps, env));
+    EXPECT_EQ(env.open.rank_ptr(), nested_.open.rank_ptr());
+}
+
+TEST_F(PudUnifyHeadTest, NormalizeGroundFunctorRoundTrips) {
+    EXPECT_CALL(make_functor_, make_functor(7, IsEmpty()))
+        .WillOnce(Return(&pred_));
+    std::unordered_map<uint32_t, uint32_t> translation;
+    EXPECT_EQ(unify_head_.normalize(interval_, framed_expr{&pred_, 0}, 0, translation),
+              &pred_);
+    EXPECT_TRUE(translation.empty());
+}
+
+TEST_F(PudUnifyHeadTest, NormalizeGrowsTranslationForLiftedVars) {
+    expr lifted{expr::var{0}};
+    ON_CALL(query_binding_, query(_, _)).WillByDefault(Return(std::nullopt));
+    ON_CALL(make_var_, make_var(1)).WillByDefault(Return(&lifted));
+    std::unordered_map<uint32_t, uint32_t> translation;
+    const expr* out = unify_head_.normalize(
+        interval_, framed_expr{&var0_, 1}, 1, translation);
+    EXPECT_EQ(out, &lifted);
+    ASSERT_EQ(translation.size(), 1u);
+    EXPECT_EQ(translation.at(1), 1u);
+}
+
+TEST_F(PudUnifyHeadTest, ReinitEmptyContextsIsNoOp) {
+    query_.axiom_contexts.clear();
+    EXPECT_CALL(get_node_, get_node(_)).Times(0);
+    EXPECT_CALL(record_, record(_, _, _)).Times(0);
+    unify_head_.reinit(query_);
+}
+
+TEST_F(PudUnifyHeadTest, ReinitReplaysLiveEdgeCurrents) {
+    query_.axiom_contexts = {pud_candidate_search_context{
+        &axiom_,
+        {pud_witness_search_context{&leaf_, &leaf_}}}};
+    query_.frame_offset = 3;
+    EXPECT_CALL(try_parent_, try_parent(&leaf_)).WillRepeatedly(Return(&mid_));
+    EXPECT_CALL(try_parent_, try_parent(&mid_)).WillRepeatedly(Return(&axiom_));
+    EXPECT_CALL(try_parent_, try_parent(&axiom_)).WillRepeatedly(Return(nullptr));
+    EXPECT_CALL(record_, record(_, 0, _)).Times(::testing::AtLeast(1));
+    EXPECT_CALL(record_, record(_, 1, _)).Times(::testing::AtLeast(1));
+    EXPECT_CALL(record_, record(_, 2, _)).Times(::testing::AtLeast(1));
+    unify_head_.reinit(query_);
+}
+
+TEST_F(PudUnifyHeadTest, ReinitStopsRecordingAfterFailedMidUnify) {
+    expr other{expr::functor{8, {}}};
+    query_.axiom_contexts = {pud_candidate_search_context{&leaf_, {}}};
+    query_.frame_offset = 3;
+    EXPECT_CALL(try_parent_, try_parent(&leaf_)).WillRepeatedly(Return(&mid_));
+    EXPECT_CALL(try_parent_, try_parent(&mid_)).WillRepeatedly(Return(&axiom_));
+    EXPECT_CALL(try_parent_, try_parent(&axiom_)).WillRepeatedly(Return(nullptr));
+    int unify_queries = 0;
+    ON_CALL(query_binding_, query(_, 0)).WillByDefault(
+        [this, &other, &unify_queries](om_label, uint32_t) {
+            ++unify_queries;
+            if (unify_queries >= 2)
+                return std::optional<framed_expr>{framed_expr{&other, 0}};
+            return std::optional<framed_expr>{framed_expr{&pred_, 0}};
+        });
+    EXPECT_CALL(record_, record(_, 0, _)).Times(::testing::AtLeast(1));
+    EXPECT_CALL(record_, record(_, 1, _)).Times(::testing::AtLeast(1));
+    EXPECT_CALL(record_, record(_, 2, _)).Times(0);
+    unify_head_.reinit(query_);
+}
+
+TEST_F(PudUnifyHeadTest, RepeatedUnifyHeadAllocatesFreshChildIntervals) {
+    EXPECT_CALL(allocate_, allocate_child_of(_))
+        .Times(5)
+        .WillRepeatedly(Return(nested_));
+    for (int step = 0; step < 5; ++step)
+        EXPECT_TRUE(unify_head_.unify_head(query_, &axiom_));
+}
+
+TEST_F(PudUnifyHeadTest, FuzzUnifyHeadAndReinit) {
+    constexpr uint32_t k_seed = 42;
+    std::mt19937 rng{k_seed};
+    std::uniform_int_distribution<int> op_dist(0, 3);
+    std::ostringstream log;
+    query_.axiom_contexts = {pud_candidate_search_context{&axiom_, {}}};
+    ON_CALL(make_functor_, make_functor(_, _)).WillByDefault(Return(&pred_));
+    ON_CALL(make_var_, make_var(_)).WillByDefault(Return(&var0_));
+    for (int step = 0; step < 64; ++step) {
+        const int op = op_dist(rng);
+        log << step << ':' << op << ' ';
+        switch (op) {
+        case 0:
+            unify_head_.unify_head(query_, &axiom_);
+            break;
+        case 1: {
+            om_interval env{interval_};
+            std::vector<uint32_t> touched;
+            unify_head_.unify_callee(query_, &axiom_, touched, env);
+            break;
+        }
+        case 2: {
+            std::unordered_map<uint32_t, uint32_t> translation;
+            unify_head_.normalize(interval_, framed_expr{&pred_, 0}, 0, translation);
+            break;
+        }
+        case 3:
+            unify_head_.reinit(query_);
+            break;
+        }
+    }
+    EXPECT_CALL(record_, record(_, 0, _)).Times(::testing::AtLeast(1));
+    unify_head_.reinit(query_);
+    EXPECT_FALSE(log.str().empty()) << "seed " << k_seed;
 }
