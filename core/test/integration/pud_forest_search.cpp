@@ -26,14 +26,14 @@ using unify_head_t = pud_unify_head<
     globalizer, expr_pool, expr_pool>;
 using witness_search_t = pud_witness_search<forest_t, forest_t, forest_t, unify_head_t>;
 using candidate_search_t = pud_candidate_search<
-    witness_search_t, forest_t, forest_t, forest_t, unify_head_t>;
+    witness_search_t, forest_t, forest_t, forest_t, unify_head_t, forest_t>;
 
 struct PudForestSearchIntegrationTest : public ::testing::Test {
     PudForestSearchIntegrationTest()
         : forest_(pool_, pool_, om_, om_)
         , unify_head_(om_, forest_, forest_, fpa_, fpa_, glob_, exprs_, exprs_)
         , witness_(forest_, forest_, forest_, unify_head_)
-        , candidate_(witness_, forest_, forest_, forest_, unify_head_) {}
+        , candidate_(witness_, forest_, forest_, forest_, unify_head_, forest_) {}
 
     pud_rule_id_pool pool_;
     order_maintenance om_;
@@ -50,7 +50,7 @@ TEST_F(PudForestSearchIntegrationTest, WitnessSearchFindsUnifyingAxiomLeaf) {
     const expr* pred = exprs_.make_functor(4, {});
     const pud_rule_id* axiom = forest_.add_axiom(0, {{0, pred}}, {}, 1);
     pud_query query{
-        om_.allocate_child_of(forest_.get_node(axiom).interval),
+        om_.allocate_child_of(forest_.root_interval(axiom)),
         pred,
         {},
         1};
@@ -64,11 +64,11 @@ TEST_F(PudForestSearchIntegrationTest, CandidateSearchSelfWitnessesMatchingLeaf)
     const expr* pred = exprs_.make_functor(5, {});
     const pud_rule_id* axiom = forest_.add_axiom(0, {{0, pred}}, {}, 1);
     pud_query query{
-        om_.allocate_child_of(forest_.get_node(axiom).interval),
+        om_.allocate_child_of(forest_.root_interval(axiom)),
         pred,
         {},
         1};
-    pud_candidate_search_context ctx{axiom, {}};
+    pud_candidate_search_context ctx{axiom, {}, forest_.get_node(axiom).added_body_goals};
     const pud_candidate_search_result result = candidate_.resume(query, ctx);
     EXPECT_TRUE(std::holds_alternative<pud_candidate_search_result::self_witness>(result.content));
 }
@@ -78,11 +78,11 @@ TEST_F(PudForestSearchIntegrationTest, CandidateSearchRefutesAxiomWhenHeadDoesNo
     const expr* body = exprs_.make_functor(7, {});
     const pud_rule_id* axiom = forest_.add_axiom(0, {{0, head}}, {body}, 1);
     pud_query query{
-        om_.allocate_child_of(forest_.get_node(axiom).interval),
+        om_.allocate_child_of(forest_.root_interval(axiom)),
         body,
         {},
         1};
-    pud_candidate_search_context ctx{axiom, {}};
+    pud_candidate_search_context ctx{axiom, {}, forest_.get_node(axiom).added_body_goals};
     const pud_candidate_search_result result = candidate_.resume(query, ctx);
     EXPECT_TRUE(std::holds_alternative<pud_candidate_search_result::axiom_refuted>(result.content));
 }
@@ -95,7 +95,7 @@ TEST_F(PudForestSearchIntegrationTest, WitnessSearchFindsGrandchildUnderLinkedFo
     const pud_rule_id* grand = forest_.add_inference(child, 0, axiom, {{0, pred}}, {}, 1);
     forest_.link_children(child, {grand});
     pud_query query{
-        om_.allocate_child_of(forest_.get_node(grand).interval),
+        om_.allocate_child_of(forest_.root_interval(grand)),
         pred,
         {},
         1};
@@ -112,11 +112,11 @@ TEST_F(PudForestSearchIntegrationTest, CandidateSearchChoicePointOnTwoLinkedChil
     const pud_rule_id* c1 = forest_.add_inference(axiom, 1, axiom, {{0, pred}}, {}, 1);
     forest_.link_children(axiom, {c0, c1});
     pud_query query{
-        om_.allocate_child_of(forest_.get_node(axiom).interval),
+        om_.allocate_child_of(forest_.root_interval(axiom)),
         pred,
         {},
         1};
-    pud_candidate_search_context ctx{axiom, {}};
+    pud_candidate_search_context ctx{axiom, {}, forest_.get_node(axiom).added_body_goals};
     const pud_candidate_search_result result = candidate_.resume(query, ctx);
     EXPECT_TRUE(std::holds_alternative<pud_candidate_search_result::choice_point>(result.content));
     EXPECT_EQ(ctx.live_edges.size(), 2u);
@@ -130,11 +130,11 @@ TEST_F(PudForestSearchIntegrationTest, CandidateSearchAdvancesWhenWitnessCurrent
     const pud_rule_id* grand = forest_.add_inference(child, 0, axiom, {{0, pred}}, {}, 1);
     forest_.link_children(child, {grand});
     pud_query query{
-        om_.allocate_child_of(forest_.get_node(axiom).interval),
+        om_.allocate_child_of(forest_.root_interval(axiom)),
         pred,
         {},
         1};
-    pud_candidate_search_context ctx{axiom, {}};
+    pud_candidate_search_context ctx{axiom, {}, forest_.get_node(axiom).added_body_goals};
     const pud_candidate_search_result result = candidate_.resume(query, ctx);
     EXPECT_TRUE(std::holds_alternative<pud_candidate_search_result::self_witness>(result.content));
     EXPECT_EQ(ctx.cursor, grand);

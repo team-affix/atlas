@@ -24,13 +24,13 @@ struct pud_manifest {
     using witness_search_t = pud_witness_search<
         forest_t, forest_t, forest_t, unify_head_t>;
     using candidate_search_t = pud_candidate_search<
-        witness_search_t, forest_t, forest_t, forest_t, unify_head_t>;
+        witness_search_t, forest_t, forest_t, forest_t, unify_head_t, forest_t>;
     using queries_t = pud_queries<
-        forest_t, order_maintenance,
-        unify_head_t, candidate_search_t, witness_search_t>;
+        forest_t, forest_t, order_maintenance,
+        unify_head_t, unify_head_t, candidate_search_t, witness_search_t>;
     using unfolder_t = pud_unfolder<
         forest_t, unify_head_t, unify_head_t, expr_pool,
-        forest_t, forest_t, forest_t,
+        forest_t, forest_t,
         queries_t, queries_t, queries_t, queries_t>;
     using axiom_adder_t = pud_axiom_adder<forest_t, queries_t>;
 

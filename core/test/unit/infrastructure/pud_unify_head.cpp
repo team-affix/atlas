@@ -76,9 +76,9 @@ struct PudUnifyHeadTest : public ::testing::Test {
         , axiom_{pud_rule_id::axiom{0}}
         , mid_{pud_rule_id::inference{&axiom_, 0, &axiom_}}
         , leaf_{pud_rule_id::inference{&mid_, 0, &axiom_}}
-        , node_{interval_, {{0, &pred_}}, {}, 1}
-        , node_mid_{interval_, {{1, &pred_}}, {}, 2}
-        , node_leaf_{interval_, {{2, &pred_}}, {}, 3}
+        , node_{{{0, &pred_}}, {}, 1}
+        , node_mid_{{{1, &pred_}}, {}, 2}
+        , node_leaf_{{{2, &pred_}}, {}, 3}
         , query_{interval_, &pred_, {pud_candidate_search_context{&axiom_, {}}}, 1}
         , unify_head_(allocate_, try_parent_, get_node_, record_, query_binding_,
                       globalize_, make_var_, make_functor_) {
@@ -207,31 +207,22 @@ TEST_F(PudUnifyHeadTest, ReinitReplaysLiveEdgeCurrents) {
     unify_head_.reinit(query_);
 }
 
-TEST_F(PudUnifyHeadTest, ReinitStopsRecordingAfterFailedMidUnify) {
-    expr other{expr::functor{8, {}}};
+TEST_F(PudUnifyHeadTest, ReinitEnsureRecordsFullPathWithoutUnifying) {
     query_.axiom_contexts = {pud_candidate_search_context{&leaf_, {}}};
     query_.frame_offset = 3;
     EXPECT_CALL(try_parent_, try_parent(&leaf_)).WillRepeatedly(Return(&mid_));
     EXPECT_CALL(try_parent_, try_parent(&mid_)).WillRepeatedly(Return(&axiom_));
     EXPECT_CALL(try_parent_, try_parent(&axiom_)).WillRepeatedly(Return(nullptr));
-    int unify_queries = 0;
-    ON_CALL(query_binding_, query(_, 0)).WillByDefault(
-        [this, &other, &unify_queries](om_label, uint32_t) {
-            ++unify_queries;
-            if (unify_queries >= 2)
-                return std::optional<framed_expr>{framed_expr{&other, 0}};
-            return std::optional<framed_expr>{framed_expr{&pred_, 0}};
-        });
     EXPECT_CALL(record_, record(_, 0, _)).Times(::testing::AtLeast(1));
     EXPECT_CALL(record_, record(_, 1, _)).Times(::testing::AtLeast(1));
-    EXPECT_CALL(record_, record(_, 2, _)).Times(0);
+    EXPECT_CALL(record_, record(_, 2, _)).Times(::testing::AtLeast(1));
     unify_head_.reinit(query_);
 }
 
-TEST_F(PudUnifyHeadTest, RepeatedUnifyHeadAllocatesFreshChildIntervals) {
+TEST_F(PudUnifyHeadTest, RepeatedUnifyHeadReusesCachedChildInterval) {
     EXPECT_CALL(allocate_, allocate_child_of(_))
-        .Times(5)
-        .WillRepeatedly(Return(nested_));
+        .Times(1)
+        .WillOnce(Return(nested_));
     for (int step = 0; step < 5; ++step)
         EXPECT_TRUE(unify_head_.unify_head(query_, &axiom_));
 }
@@ -267,6 +258,7 @@ TEST_F(PudUnifyHeadTest, FuzzUnifyHeadAndReinit) {
             break;
         }
     }
+    unify_head_.drop_query(&query_);
     EXPECT_CALL(record_, record(_, 0, _)).Times(::testing::AtLeast(1));
     unify_head_.reinit(query_);
     EXPECT_FALSE(log.str().empty()) << "seed " << k_seed;

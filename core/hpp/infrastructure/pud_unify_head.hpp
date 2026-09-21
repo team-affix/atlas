@@ -41,16 +41,24 @@ struct pud_unify_head {
                           uint32_t cutoff,
                           std::unordered_map<uint32_t, uint32_t>& translation);
     void reinit(pud_query& query);
+    void drop_query(pud_query* query);
 private:
     using bind_map_t = hierarchical_bind_map<IGlobalize, IRecordBinding, IQueryBinding>;
     using unifier_t = unifier<IGlobalize, bind_map_t>;
     using normalizer_t = normalizer<IGlobalize, IMakeFunctor, IMakeVar, bind_map_t>;
 
-    std::vector<const pud_rule_id*> path_to_root(const pud_rule_id* node);
-    void replay_raw(om_interval interval, const pud_rule_id* node, uint32_t frame_offset);
-    void replay_reinit(pud_query& query, const pud_rule_id* node);
-    bool unify(pud_query& query, framed_expr leftover_body);
-    framed_expr whnf(pud_query& query, framed_expr fe);
+    struct env_row {
+        om_interval interval;
+        std::vector<uint32_t> touched_reps;
+        enum class unify_state { pending, ok, failed };
+        unify_state state;
+    };
+    using node_env_map_t = std::unordered_map<const pud_rule_id*, env_row>;
+    using query_env_map_t = std::unordered_map<const pud_query*, node_env_map_t>;
+
+    om_interval ensure(pud_query& query, const pud_rule_id* node);
+    env_row& row_for(pud_query& query, const pud_rule_id* node);
+    bool try_unify_row(pud_query& query, env_row& row);
     bool drain_unify(unifier_t& task_owner,
                      framed_expr lhs,
                      framed_expr rhs,
@@ -64,6 +72,7 @@ private:
     IGlobalize& globalize_;
     IMakeVar& make_var_;
     IMakeFunctor& make_functor_;
+    query_env_map_t envs_;
 };
 
 template<typename IACI, typename ITP, typename IGN, typename IRB, typename IQB,
@@ -84,50 +93,40 @@ pud_unify_head<IACI, ITP, IGN, IRB, IQB, IG, IMV, IMF>::pud_unify_head(
     , query_binding_(query_binding)
     , globalize_(globalize)
     , make_var_(make_var)
-    , make_functor_(make_functor) {}
+    , make_functor_(make_functor)
+    , envs_() {}
 
 template<typename IACI, typename ITP, typename IGN, typename IRB, typename IQB,
          typename IG, typename IMV, typename IMF>
-std::vector<const pud_rule_id*>
-pud_unify_head<IACI, ITP, IGN, IRB, IQB, IG, IMV, IMF>::path_to_root(
-        const pud_rule_id* node) {
-    std::vector<const pud_rule_id*> path;
-    const pud_rule_id* walk = node;
-    while (walk != nullptr) {
-        path.push_back(walk);
-        walk = try_parent_.try_parent(walk);
-    }
-    return path;
-}
-
-template<typename IACI, typename ITP, typename IGN, typename IRB, typename IQB,
-         typename IG, typename IMV, typename IMF>
-void pud_unify_head<IACI, ITP, IGN, IRB, IQB, IG, IMV, IMF>::replay_raw(
-        om_interval interval, const pud_rule_id* node, uint32_t frame_offset) {
-    const std::vector<const pud_rule_id*> path = path_to_root(node);
-    for (auto it = path.rbegin(); it != path.rend(); ++it) {
-        const pud_db_node& db_node = get_node_.get_node(*it);
-        for (const pud_added_unification& added : db_node.added_unifications)
-            record_binding_.record(interval, added.var_idx,
-                                   framed_expr{added.value, frame_offset});
-    }
-}
-
-template<typename IACI, typename ITP, typename IGN, typename IRB, typename IQB,
-         typename IG, typename IMV, typename IMF>
-void pud_unify_head<IACI, ITP, IGN, IRB, IQB, IG, IMV, IMF>::replay_reinit(
+om_interval pud_unify_head<IACI, ITP, IGN, IRB, IQB, IG, IMV, IMF>::ensure(
         pud_query& query, const pud_rule_id* node) {
-    const std::vector<const pud_rule_id*> path = path_to_root(node);
-    for (auto it = path.rbegin(); it != path.rend(); ++it) {
-        const pud_db_node& db_node = get_node_.get_node(*it);
-        for (const pud_added_unification& added : db_node.added_unifications) {
-            const framed_expr value =
-                whnf(query, framed_expr{added.value, query.frame_offset});
-            record_binding_.record(query.interval, added.var_idx, value);
-        }
-        if (!unify(query, framed_expr{query.body_goal, query.frame_offset}))
-            return;
-    }
+    node_env_map_t& by_node = envs_[&query];
+    auto it = by_node.find(node);
+    if (it != by_node.end())
+        return it->second.interval;
+    const pud_rule_id* parent = try_parent_.try_parent(node);
+    const om_interval parent_env = parent != nullptr
+        ? ensure(query, parent)
+        : query.interval;
+    const om_interval env = allocate_child_interval_.allocate_child_of(parent_env);
+    const pud_db_node& db_node = get_node_.get_node(node);
+    for (const pud_added_unification& added : db_node.added_unifications)
+        record_binding_.record(env, added.var_idx,
+                               framed_expr{added.value, query.frame_offset});
+    by_node.emplace(node, env_row{
+        env,
+        {},
+        env_row::unify_state::pending});
+    return env;
+}
+
+template<typename IACI, typename ITP, typename IGN, typename IRB, typename IQB,
+         typename IG, typename IMV, typename IMF>
+typename pud_unify_head<IACI, ITP, IGN, IRB, IQB, IG, IMV, IMF>::env_row&
+pud_unify_head<IACI, ITP, IGN, IRB, IQB, IG, IMV, IMF>::row_for(
+        pud_query& query, const pud_rule_id* node) {
+    ensure(query, node);
+    return envs_[&query].at(node);
 }
 
 template<typename IACI, typename ITP, typename IGN, typename IRB, typename IQB,
@@ -151,33 +150,29 @@ bool pud_unify_head<IACI, ITP, IGN, IRB, IQB, IG, IMV, IMF>::drain_unify(
 
 template<typename IACI, typename ITP, typename IGN, typename IRB, typename IQB,
          typename IG, typename IMV, typename IMF>
-bool pud_unify_head<IACI, ITP, IGN, IRB, IQB, IG, IMV, IMF>::unify_head(
-        pud_query& query, const pud_rule_id* node) {
-    const om_interval nested = allocate_child_interval_.allocate_child_of(query.interval);
-    replay_raw(nested, node, query.frame_offset);
-    bind_map_t bm(globalize_, record_binding_, query_binding_, nested);
+bool pud_unify_head<IACI, ITP, IGN, IRB, IQB, IG, IMV, IMF>::try_unify_row(
+        pud_query& query, env_row& row) {
+    if (row.state == env_row::unify_state::ok)
+        return true;
+    if (row.state == env_row::unify_state::failed)
+        return false;
+    bind_map_t bm(globalize_, record_binding_, query_binding_, row.interval);
     unifier_t u(globalize_, &bm);
     const framed_expr body{query.body_goal, query.frame_offset};
     const framed_expr head{make_var_.make_var(0), 0};
-    return drain_unify(u, body, head, nullptr);
+    const bool ok = drain_unify(u, body, head, &row.touched_reps);
+    if (ok)
+        row.state = env_row::unify_state::ok;
+    else
+        row.state = env_row::unify_state::failed;
+    return ok;
 }
 
 template<typename IACI, typename ITP, typename IGN, typename IRB, typename IQB,
          typename IG, typename IMV, typename IMF>
-bool pud_unify_head<IACI, ITP, IGN, IRB, IQB, IG, IMV, IMF>::unify(
-        pud_query& query, framed_expr leftover_body) {
-    bind_map_t bm(globalize_, record_binding_, query_binding_, query.interval);
-    unifier_t u(globalize_, &bm);
-    const framed_expr head{make_var_.make_var(0), 0};
-    return drain_unify(u, leftover_body, head, nullptr);
-}
-
-template<typename IACI, typename ITP, typename IGN, typename IRB, typename IQB,
-         typename IG, typename IMV, typename IMF>
-framed_expr pud_unify_head<IACI, ITP, IGN, IRB, IQB, IG, IMV, IMF>::whnf(
-        pud_query& query, framed_expr fe) {
-    bind_map_t bm(globalize_, record_binding_, query_binding_, query.interval);
-    return bm.whnf(fe);
+bool pud_unify_head<IACI, ITP, IGN, IRB, IQB, IG, IMV, IMF>::unify_head(
+        pud_query& query, const pud_rule_id* node) {
+    return try_unify_row(query, row_for(query, node));
 }
 
 template<typename IACI, typename ITP, typename IGN, typename IRB, typename IQB,
@@ -187,13 +182,12 @@ bool pud_unify_head<IACI, ITP, IGN, IRB, IQB, IG, IMV, IMF>::unify_callee(
         const pud_rule_id* callee,
         std::vector<uint32_t>& touched_reps,
         om_interval& env) {
-    env = allocate_child_interval_.allocate_child_of(query.interval);
-    replay_raw(env, callee, query.frame_offset);
-    bind_map_t bm(globalize_, record_binding_, query_binding_, env);
-    unifier_t u(globalize_, &bm);
-    const framed_expr body{query.body_goal, query.frame_offset};
-    const framed_expr head{make_var_.make_var(0), 0};
-    return drain_unify(u, body, head, &touched_reps);
+    env_row& row = row_for(query, callee);
+    const bool ok = try_unify_row(query, row);
+    env = row.interval;
+    if (ok)
+        touched_reps = row.touched_reps;
+    return ok;
 }
 
 template<typename IACI, typename ITP, typename IGN, typename IRB, typename IQB,
@@ -211,11 +205,17 @@ const expr* pud_unify_head<IACI, ITP, IGN, IRB, IQB, IG, IMV, IMF>::normalize(
 template<typename IACI, typename ITP, typename IGN, typename IRB, typename IQB,
          typename IG, typename IMV, typename IMF>
 void pud_unify_head<IACI, ITP, IGN, IRB, IQB, IG, IMV, IMF>::reinit(pud_query& query) {
-    for (pud_candidate_search_context& axiom_ctx : query.axiom_contexts) {
-        replay_reinit(query, axiom_ctx.cursor);
+    for (const pud_candidate_search_context& axiom_ctx : query.axiom_contexts) {
+        ensure(query, axiom_ctx.cursor);
         for (const pud_witness_search_context& edge : axiom_ctx.live_edges)
-            replay_reinit(query, edge.current);
+            ensure(query, edge.current);
     }
+}
+
+template<typename IACI, typename ITP, typename IGN, typename IRB, typename IQB,
+         typename IG, typename IMV, typename IMF>
+void pud_unify_head<IACI, ITP, IGN, IRB, IQB, IG, IMV, IMF>::drop_query(pud_query* query) {
+    envs_.erase(query);
 }
 
 #endif

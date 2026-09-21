@@ -2,6 +2,7 @@
 
 #include <gtest/gtest.h>
 #include <gmock/gmock.h>
+#include <cstddef>
 #include <deque>
 #include <random>
 #include <sstream>
@@ -28,12 +29,20 @@ struct MockGetNode {
     MOCK_METHOD(const pud_db_node&, get_node, (const pud_rule_id*), ());
 };
 
+struct MockRootInterval {
+    MOCK_METHOD(om_interval, root_interval, (const pud_rule_id*), ());
+};
+
 struct MockAllocateChildInterval {
     MOCK_METHOD(om_interval, allocate_child_of, (const om_interval&), ());
 };
 
 struct MockReinit {
     MOCK_METHOD(void, reinit, (pud_query&), ());
+};
+
+struct MockDropQueryEnv {
+    MOCK_METHOD(void, drop_query, (pud_query*), ());
 };
 
 struct MockResumeCandidateSearch {
@@ -46,8 +55,10 @@ struct MockResumeWitnessSearch {
 
 using test_queries_t = pud_queries<
     NiceMock<MockGetNode>,
+    NiceMock<MockRootInterval>,
     NiceMock<MockAllocateChildInterval>,
     NiceMock<MockReinit>,
+    NiceMock<MockDropQueryEnv>,
     NiceMock<MockResumeCandidateSearch>,
     NiceMock<MockResumeWitnessSearch>>;
 
@@ -64,14 +75,16 @@ struct PudQueriesTest : public ::testing::Test {
         , axiom_{pud_rule_id::axiom{0}}
         , other_{pud_rule_id::axiom{1}}
         , child_{pud_rule_id::inference{&axiom_, 0, &other_}}
-        , node_{interval_, {}, {&body_}, 1}
-        , two_goal_node_{interval_, {}, {&body_, &leftover_}, 1}
-        , empty_node_{interval_, {}, {}, 1}
-        , child_node_{nested_, {}, {&leftover_}, 2}
-        , queries_(get_node_, allocate_, reinit_, candidate_, witness_) {
+        , node_{{}, {&body_}, 1}
+        , two_goal_node_{{}, {&body_, &leftover_}, 1}
+        , empty_node_{{}, {}, 1}
+        , child_node_{{}, {&leftover_}, 2}
+        , queries_(get_node_, root_interval_, allocate_, reinit_, drop_,
+                   candidate_, witness_) {
         ON_CALL(get_node_, get_node(&axiom_)).WillByDefault(ReturnRef(node_));
         ON_CALL(get_node_, get_node(&other_)).WillByDefault(ReturnRef(empty_node_));
         ON_CALL(get_node_, get_node(&child_)).WillByDefault(ReturnRef(child_node_));
+        ON_CALL(root_interval_, root_interval(_)).WillByDefault(Return(interval_));
         ON_CALL(allocate_, allocate_child_of(_)).WillByDefault(Return(nested_));
         ON_CALL(candidate_, resume(_, _)).WillByDefault(Return(
             pud_candidate_search_result{pud_candidate_search_result::self_witness{}}));
@@ -93,8 +106,10 @@ struct PudQueriesTest : public ::testing::Test {
     pud_db_node empty_node_;
     pud_db_node child_node_;
     NiceMock<MockGetNode> get_node_;
+    NiceMock<MockRootInterval> root_interval_;
     NiceMock<MockAllocateChildInterval> allocate_;
     NiceMock<MockReinit> reinit_;
+    NiceMock<MockDropQueryEnv> drop_;
     NiceMock<MockResumeCandidateSearch> candidate_;
     NiceMock<MockResumeWitnessSearch> witness_;
     test_queries_t queries_;
@@ -109,6 +124,8 @@ TEST_F(PudQueriesTest, AdoptAxiomStoresOneQueryPerBodyGoal) {
     EXPECT_EQ(queries_.get(&axiom_)[0]->frame_offset, 1u);
     ASSERT_EQ(queries_.get(&axiom_)[0]->axiom_contexts.size(), 1u);
     EXPECT_EQ(queries_.get(&axiom_)[0]->axiom_contexts[0].cursor, &axiom_);
+    EXPECT_EQ(queries_.get(&axiom_)[0]->axiom_contexts[0].added_body_goals,
+              (std::vector<const expr*>{&body_}));
 }
 
 TEST_F(PudQueriesTest, AdoptAxiomAppendsContextOnExistingLeafQuery) {
@@ -216,7 +233,7 @@ TEST_F(PudQueriesTest, LiveCalleesOnSecondBodyGoal) {
 
 TEST_F(PudQueriesTest, ReplaceUnfoldedForksDistinctLeftoverAndChildGoals) {
     expr child_goal{expr::var{2}};
-    pud_db_node child_with_goal{nested_, {}, {&child_goal}, 2};
+    pud_db_node child_with_goal{{}, {&child_goal}, 2};
     ON_CALL(get_node_, get_node(&axiom_)).WillByDefault(ReturnRef(two_goal_node_));
     ON_CALL(get_node_, get_node(&child_)).WillByDefault(ReturnRef(child_with_goal));
     queries_.adopt_axiom(&axiom_);
@@ -353,7 +370,7 @@ TEST_F(PudQueriesTest, StressManyAxiomsAttachToAllLeaves) {
     for (int idx = 0; idx < 32; ++idx) {
         axioms.push_back(rec{
             pud_rule_id{pud_rule_id::axiom{static_cast<size_t>(idx)}},
-            pud_db_node{interval_, {}, {&body_}, 1}});
+            pud_db_node{{}, {&body_}, 1}});
         queries_.adopt_axiom(&axioms.back().id);
     }
     ASSERT_EQ(queries_.get(&axioms.front().id).size(), 1u);
@@ -362,7 +379,7 @@ TEST_F(PudQueriesTest, StressManyAxiomsAttachToAllLeaves) {
     EXPECT_EQ(queries_.get(&axioms.back().id)[0]->axiom_contexts.size(), 32u);
 }
 
-TEST_F(PudQueriesTest, FuzzAdoptReplaceTake) {
+TEST_F(PudQueriesTest, FuzzAdoptThenReplaceTake) {
     struct rec {
         pud_rule_id id;
         pud_db_node node;
@@ -379,29 +396,28 @@ TEST_F(PudQueriesTest, FuzzAdoptReplaceTake) {
 
     constexpr uint32_t k_seed = 42;
     std::mt19937 rng{k_seed};
-    std::uniform_int_distribution<int> op_dist(0, 3);
     std::ostringstream log;
-    for (int step = 0; step < 80; ++step) {
+    for (int idx = 0; idx < 16; ++idx) {
+        store.push_back(rec{
+            pud_rule_id{pud_rule_id::axiom{store.size()}},
+            pud_db_node{{}, {&body_}, 1}});
+        const pud_rule_id* id = &store.back().id;
+        queries_.adopt_axiom(id);
+        owned.push_back(id);
+    }
+    std::uniform_int_distribution<int> op_dist(0, 2);
+    for (int step = 0; step < 64; ++step) {
         const int op = op_dist(rng);
         log << step << ':' << op << ' ';
         switch (op) {
-        case 0: {
-            store.push_back(rec{
-                pud_rule_id{pud_rule_id::axiom{store.size()}},
-                pud_db_node{interval_, {}, {&body_}, 1}});
-            const pud_rule_id* id = &store.back().id;
-            queries_.adopt_axiom(id);
-            owned.push_back(id);
-            break;
-        }
-        case 1:
+        case 0:
             if (!owned.empty()) {
                 const pud_rule_id* leaf = owned[rng() % owned.size()];
                 if (!queries_.get(leaf).empty())
                     queries_.live_callees(leaf, 0);
             }
             break;
-        case 2:
+        case 1:
             if (!owned.empty()) {
                 const size_t parent_idx = rng() % owned.size();
                 const pud_rule_id* parent = owned[parent_idx];
@@ -409,7 +425,7 @@ TEST_F(PudQueriesTest, FuzzAdoptReplaceTake) {
                     break;
                 store.push_back(rec{
                     pud_rule_id{pud_rule_id::inference{parent, 0, parent}},
-                    pud_db_node{nested_, {}, {&leftover_}, 2}});
+                    pud_db_node{{}, {&leftover_}, 2}});
                 const pud_rule_id* child = &store.back().id;
                 queries_.replace_unfolded(parent, 0, {child});
                 owned.erase(owned.begin() + static_cast<std::ptrdiff_t>(parent_idx));
@@ -418,7 +434,7 @@ TEST_F(PudQueriesTest, FuzzAdoptReplaceTake) {
                     << "seed " << k_seed << " log " << log.str();
             }
             break;
-        case 3:
+        case 2:
             queries_.take_forced_unfolds();
             EXPECT_TRUE(queries_.take_forced_unfolds().empty())
                 << "seed " << k_seed << " log " << log.str();

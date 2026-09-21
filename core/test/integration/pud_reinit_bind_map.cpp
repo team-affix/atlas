@@ -35,20 +35,22 @@ struct PudReinitBindMapIntegrationTest : public ::testing::Test {
     unify_head_t unify_head_;
 };
 
-TEST_F(PudReinitBindMapIntegrationTest, PathReplayIsVisibleInChildQueryInterval) {
+TEST_F(PudReinitBindMapIntegrationTest, PathReplayIsVisibleInQueryNodeInterval) {
     const expr* head = exprs_.make_functor(3, {});
     const pud_rule_id* axiom = forest_.add_axiom(0, {{0, head}}, {}, 1);
     const pud_rule_id* child = forest_.add_inference(axiom, 0, axiom, {}, {}, 1);
     forest_.link_children(axiom, {child});
 
     pud_query query{
-        om_.allocate_child_of(forest_.get_node(child).interval),
+        om_.allocate_child_of(forest_.root_interval(child)),
         head,
         {pud_candidate_search_context{child, {}}},
         1};
     unify_head_.reinit(query);
-
-    const std::optional<framed_expr> found = fpa_.query(query.interval.open, 0);
+    std::vector<uint32_t> touched_reps;
+    om_interval env = query.interval;
+    EXPECT_TRUE(unify_head_.unify_callee(query, child, touched_reps, env));
+    const std::optional<framed_expr> found = fpa_.query(env.open, 0);
     ASSERT_TRUE(found.has_value());
     EXPECT_EQ(found->skeleton, head);
 }
@@ -57,7 +59,7 @@ TEST_F(PudReinitBindMapIntegrationTest, UnifyCalleeBindingsVisibleInEnvInterval)
     const expr* head = exprs_.make_functor(4, {});
     const pud_rule_id* axiom = forest_.add_axiom(0, {{0, head}}, {}, 1);
     pud_query query{
-        om_.allocate_child_of(forest_.get_node(axiom).interval),
+        om_.allocate_child_of(forest_.root_interval(axiom)),
         head,
         {},
         1};
@@ -79,7 +81,7 @@ TEST_F(PudReinitBindMapIntegrationTest, ReinitFailedMidPathDoesNotBindLaterNode)
     const pud_rule_id* leaf = forest_.add_inference(mid, 0, axiom, {{1, r}}, {}, 1);
     forest_.link_children(mid, {leaf});
     pud_query query{
-        om_.allocate_child_of(forest_.get_node(leaf).interval),
+        om_.allocate_child_of(forest_.root_interval(leaf)),
         p,
         {pud_candidate_search_context{leaf, {}}},
         1};
