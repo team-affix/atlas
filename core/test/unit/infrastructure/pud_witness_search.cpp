@@ -2,16 +2,16 @@
 
 #include <gtest/gtest.h>
 #include <gmock/gmock.h>
+#include <optional>
 #include <random>
+#include <set>
 #include <sstream>
-#include <stdexcept>
 #include <unordered_map>
 #include <variant>
 #include <vector>
 #include "infrastructure/pud_witness_search.hpp"
 #include "value_objects/expr.hpp"
 #include "value_objects/om_interval.hpp"
-#include "value_objects/pud_query.hpp"
 #include "value_objects/pud_rule_id.hpp"
 #include "value_objects/pud_witness_search_context.hpp"
 #include "value_objects/pud_witness_search_result.hpp"
@@ -20,25 +20,23 @@ using ::testing::NiceMock;
 using ::testing::Return;
 using ::testing::_;
 
-struct MockIsLeaf {
-    MOCK_METHOD(bool, is_leaf, (const pud_rule_id*), ());
+using children_set_t = std::set<const pud_rule_id*>;
+using children_opt_t = std::optional<children_set_t>;
+
+struct MockGetChildren {
+    MOCK_METHOD(children_opt_t, get, (const pud_rule_id*), ());
 };
 
-struct MockOrderedChildren {
-    MOCK_METHOD(std::vector<const pud_rule_id*>, ordered_children, (const pud_rule_id*), ());
-};
-
-struct MockFindParent {
-    MOCK_METHOD(const pud_rule_id*, find_parent, (const pud_rule_id*), ());
+struct MockGetParent {
+    MOCK_METHOD(const pud_rule_id*, get, (const pud_rule_id*), ());
 };
 
 struct MockUnifyHead {
-    MOCK_METHOD(bool, unify_head, (pud_query&, const pud_rule_id*), ());
+    MOCK_METHOD(bool, unify_head, (pud_witness_search_context&, const pud_rule_id*), ());
 };
 
-using test_search_t = pud_witness_search<NiceMock<MockIsLeaf>,
-                                         NiceMock<MockOrderedChildren>,
-                                         NiceMock<MockFindParent>,
+using test_search_t = pud_witness_search<NiceMock<MockGetChildren>,
+                                         NiceMock<MockGetParent>,
                                          NiceMock<MockUnifyHead>>;
 
 struct PudWitnessSearchTest : public ::testing::Test {
@@ -51,8 +49,12 @@ struct PudWitnessSearchTest : public ::testing::Test {
         , c0_{pud_rule_id::inference{&a0_, 0, &a0_}}
         , c1_{pud_rule_id::inference{&a0_, 1, &a0_}}
         , g0_{pud_rule_id::inference{&c0_, 0, &a0_}}
-        , query_{interval_, &body_, {}, 1}
-        , search_(is_leaf_, children_, find_parent_, unify_) {}
+        , search_(children_, get_parent_, unify_) {}
+
+    pud_witness_search_context make_edge(const pud_rule_id* edge_root,
+                                         const pud_rule_id* current) {
+        return pud_witness_search_context{interval_, &body_, 1, edge_root, current};
+    }
 
     uint64_t open_;
     uint64_t close_;
@@ -62,134 +64,118 @@ struct PudWitnessSearchTest : public ::testing::Test {
     pud_rule_id c0_;
     pud_rule_id c1_;
     pud_rule_id g0_;
-    pud_query query_;
-    NiceMock<MockIsLeaf> is_leaf_;
-    NiceMock<MockOrderedChildren> children_;
-    NiceMock<MockFindParent> find_parent_;
+    NiceMock<MockGetChildren> children_;
+    NiceMock<MockGetParent> get_parent_;
     NiceMock<MockUnifyHead> unify_;
     test_search_t search_;
 };
 
 TEST_F(PudWitnessSearchTest, AcceptsCurrentIfItIsUnifyingLeaf) {
-    pud_witness_search_context ctx{&a0_, &a0_};
-    EXPECT_CALL(is_leaf_, is_leaf(&a0_)).WillRepeatedly(Return(true));
+    pud_witness_search_context ctx = make_edge(&a0_, &a0_);
+    EXPECT_CALL(children_, get(&a0_)).WillRepeatedly(Return(std::nullopt));
     EXPECT_CALL(unify_, unify_head(_, &a0_)).WillRepeatedly(Return(true));
-    const pud_witness_search_result result = search_.resume(query_, ctx);
+    const pud_witness_search_result result = search_.resume(ctx);
     EXPECT_TRUE(std::holds_alternative<pud_witness_search_result::found>(result.content));
     EXPECT_EQ(ctx.current, &a0_);
 }
 
 TEST_F(PudWitnessSearchTest, DescendsIntoChildrenWhenCurrentIsNoLongerALeaf) {
-    pud_witness_search_context ctx{&a0_, &a0_};
-    EXPECT_CALL(is_leaf_, is_leaf(&a0_)).WillRepeatedly(Return(false));
-    EXPECT_CALL(is_leaf_, is_leaf(&c0_)).WillRepeatedly(Return(true));
+    pud_witness_search_context ctx = make_edge(&a0_, &a0_);
+    EXPECT_CALL(children_, get(&a0_)).WillRepeatedly(Return(children_set_t{&c0_}));
+    EXPECT_CALL(children_, get(&c0_)).WillRepeatedly(Return(std::nullopt));
     EXPECT_CALL(unify_, unify_head(_, &a0_)).WillRepeatedly(Return(true));
     EXPECT_CALL(unify_, unify_head(_, &c0_)).WillRepeatedly(Return(true));
-    EXPECT_CALL(children_, ordered_children(&a0_))
-        .WillRepeatedly(Return(std::vector<const pud_rule_id*>{&c0_}));
-    const pud_witness_search_result result = search_.resume(query_, ctx);
+    const pud_witness_search_result result = search_.resume(ctx);
     EXPECT_TRUE(std::holds_alternative<pud_witness_search_result::found>(result.content));
     EXPECT_EQ(ctx.current, &c0_);
 }
 
 TEST_F(PudWitnessSearchTest, PrunesSubtreeWhenUnifyFails) {
-    pud_witness_search_context ctx{&a0_, &a0_};
-    EXPECT_CALL(is_leaf_, is_leaf(&a0_)).WillRepeatedly(Return(false));
+    pud_witness_search_context ctx = make_edge(&a0_, &a0_);
+    EXPECT_CALL(children_, get(&a0_)).WillRepeatedly(Return(children_set_t{&c0_}));
     EXPECT_CALL(unify_, unify_head(_, &a0_)).WillRepeatedly(Return(false));
-    EXPECT_CALL(children_, ordered_children(_)).Times(0);
-    const pud_witness_search_result result = search_.resume(query_, ctx);
+    const pud_witness_search_result result = search_.resume(ctx);
     EXPECT_TRUE(std::holds_alternative<pud_witness_search_result::failed>(result.content));
 }
 
 TEST_F(PudWitnessSearchTest, TriesNextSiblingInIdOrderAfterFailedChild) {
-    pud_witness_search_context ctx{&a0_, &c0_};
-    EXPECT_CALL(is_leaf_, is_leaf(&c0_)).WillRepeatedly(Return(true));
-    EXPECT_CALL(is_leaf_, is_leaf(&c1_)).WillRepeatedly(Return(true));
+    pud_witness_search_context ctx = make_edge(&a0_, &c0_);
+    EXPECT_CALL(children_, get(&c0_)).WillRepeatedly(Return(std::nullopt));
+    EXPECT_CALL(children_, get(&c1_)).WillRepeatedly(Return(std::nullopt));
+    EXPECT_CALL(children_, get(&a0_)).WillRepeatedly(Return(children_set_t{&c0_, &c1_}));
     EXPECT_CALL(unify_, unify_head(_, &c0_)).WillRepeatedly(Return(false));
     EXPECT_CALL(unify_, unify_head(_, &c1_)).WillRepeatedly(Return(true));
-    EXPECT_CALL(find_parent_, find_parent(&c0_)).WillRepeatedly(Return(&a0_));
-    EXPECT_CALL(children_, ordered_children(&a0_))
-        .WillRepeatedly(Return(std::vector<const pud_rule_id*>{&c0_, &c1_}));
-    const pud_witness_search_result result = search_.resume(query_, ctx);
+    EXPECT_CALL(get_parent_, get(&c0_)).WillRepeatedly(Return(&a0_));
+    const pud_witness_search_result result = search_.resume(ctx);
     EXPECT_TRUE(std::holds_alternative<pud_witness_search_result::found>(result.content));
     EXPECT_EQ(ctx.current, &c1_);
 }
 
 TEST_F(PudWitnessSearchTest, StopsAtEdgeRootAndFailsWhenNoSiblingWorks) {
-    pud_witness_search_context ctx{&c0_, &g0_};
-    EXPECT_CALL(is_leaf_, is_leaf(&g0_)).WillRepeatedly(Return(true));
+    pud_witness_search_context ctx = make_edge(&c0_, &g0_);
+    EXPECT_CALL(children_, get(&g0_)).WillRepeatedly(Return(std::nullopt));
     EXPECT_CALL(unify_, unify_head(_, &g0_)).WillRepeatedly(Return(false));
-    EXPECT_CALL(find_parent_, find_parent(&g0_)).WillRepeatedly(Return(&c0_));
-    EXPECT_CALL(children_, ordered_children(&c0_))
-        .WillRepeatedly(Return(std::vector<const pud_rule_id*>{&g0_}));
-    const pud_witness_search_result result = search_.resume(query_, ctx);
+    EXPECT_CALL(get_parent_, get(&g0_)).WillRepeatedly(Return(&c0_));
+    EXPECT_CALL(children_, get(&c0_)).WillRepeatedly(Return(children_set_t{&g0_}));
+    const pud_witness_search_result result = search_.resume(ctx);
     EXPECT_TRUE(std::holds_alternative<pud_witness_search_result::failed>(result.content));
 }
 
 TEST_F(PudWitnessSearchTest, SelfNodeMayBeAWitness) {
-    pud_witness_search_context ctx{&a0_, &a0_};
-    EXPECT_CALL(is_leaf_, is_leaf(&a0_)).WillRepeatedly(Return(true));
+    pud_witness_search_context ctx = make_edge(&a0_, &a0_);
+    EXPECT_CALL(children_, get(&a0_)).WillRepeatedly(Return(std::nullopt));
     EXPECT_CALL(unify_, unify_head(_, &a0_)).WillRepeatedly(Return(true));
-    const pud_witness_search_result result = search_.resume(query_, ctx);
+    const pud_witness_search_result result = search_.resume(ctx);
     EXPECT_TRUE(std::holds_alternative<pud_witness_search_result::found>(result.content));
 }
 
 TEST_F(PudWitnessSearchTest, DescendsTwoLevelsToGrandchild) {
-    pud_witness_search_context ctx{&a0_, &a0_};
-    EXPECT_CALL(is_leaf_, is_leaf(&a0_)).WillRepeatedly(Return(false));
-    EXPECT_CALL(is_leaf_, is_leaf(&c0_)).WillRepeatedly(Return(false));
-    EXPECT_CALL(is_leaf_, is_leaf(&g0_)).WillRepeatedly(Return(true));
+    pud_witness_search_context ctx = make_edge(&a0_, &a0_);
+    EXPECT_CALL(children_, get(&a0_)).WillRepeatedly(Return(children_set_t{&c0_}));
+    EXPECT_CALL(children_, get(&c0_)).WillRepeatedly(Return(children_set_t{&g0_}));
+    EXPECT_CALL(children_, get(&g0_)).WillRepeatedly(Return(std::nullopt));
     EXPECT_CALL(unify_, unify_head(_, _)).WillRepeatedly(Return(true));
-    EXPECT_CALL(children_, ordered_children(&a0_))
-        .WillRepeatedly(Return(std::vector<const pud_rule_id*>{&c0_}));
-    EXPECT_CALL(children_, ordered_children(&c0_))
-        .WillRepeatedly(Return(std::vector<const pud_rule_id*>{&g0_}));
-    const pud_witness_search_result result = search_.resume(query_, ctx);
+    const pud_witness_search_result result = search_.resume(ctx);
     EXPECT_TRUE(std::holds_alternative<pud_witness_search_result::found>(result.content));
     EXPECT_EQ(ctx.current, &g0_);
 }
 
 TEST_F(PudWitnessSearchTest, InternalUnifyWithNoUnifyingChildFailsThenTriesSibling) {
-    pud_witness_search_context ctx{&a0_, &c0_};
-    EXPECT_CALL(is_leaf_, is_leaf(&c0_)).WillRepeatedly(Return(false));
-    EXPECT_CALL(is_leaf_, is_leaf(&g0_)).WillRepeatedly(Return(true));
-    EXPECT_CALL(is_leaf_, is_leaf(&c1_)).WillRepeatedly(Return(true));
+    pud_witness_search_context ctx = make_edge(&a0_, &c0_);
+    EXPECT_CALL(children_, get(&c0_)).WillRepeatedly(Return(children_set_t{&g0_}));
+    EXPECT_CALL(children_, get(&g0_)).WillRepeatedly(Return(std::nullopt));
+    EXPECT_CALL(children_, get(&c1_)).WillRepeatedly(Return(std::nullopt));
+    EXPECT_CALL(children_, get(&a0_)).WillRepeatedly(Return(children_set_t{&c0_, &c1_}));
     EXPECT_CALL(unify_, unify_head(_, &c0_)).WillRepeatedly(Return(true));
     EXPECT_CALL(unify_, unify_head(_, &g0_)).WillRepeatedly(Return(false));
     EXPECT_CALL(unify_, unify_head(_, &c1_)).WillRepeatedly(Return(true));
-    EXPECT_CALL(find_parent_, find_parent(&c0_)).WillRepeatedly(Return(&a0_));
-    EXPECT_CALL(children_, ordered_children(&c0_))
-        .WillRepeatedly(Return(std::vector<const pud_rule_id*>{&g0_}));
-    EXPECT_CALL(children_, ordered_children(&a0_))
-        .WillRepeatedly(Return(std::vector<const pud_rule_id*>{&c0_, &c1_}));
-    const pud_witness_search_result result = search_.resume(query_, ctx);
+    EXPECT_CALL(get_parent_, get(&c0_)).WillRepeatedly(Return(&a0_));
+    const pud_witness_search_result result = search_.resume(ctx);
     EXPECT_TRUE(std::holds_alternative<pud_witness_search_result::found>(result.content));
     EXPECT_EQ(ctx.current, &c1_);
 }
 
 TEST_F(PudWitnessSearchTest, ClimbsTwoParentsToReachUncle) {
-    pud_witness_search_context ctx{&a0_, &g0_};
-    EXPECT_CALL(is_leaf_, is_leaf(&g0_)).WillRepeatedly(Return(true));
-    EXPECT_CALL(is_leaf_, is_leaf(&c1_)).WillRepeatedly(Return(true));
+    pud_witness_search_context ctx = make_edge(&a0_, &g0_);
+    EXPECT_CALL(children_, get(&g0_)).WillRepeatedly(Return(std::nullopt));
+    EXPECT_CALL(children_, get(&c1_)).WillRepeatedly(Return(std::nullopt));
     EXPECT_CALL(unify_, unify_head(_, &g0_)).WillRepeatedly(Return(false));
     EXPECT_CALL(unify_, unify_head(_, &c1_)).WillRepeatedly(Return(true));
-    EXPECT_CALL(find_parent_, find_parent(&g0_)).WillRepeatedly(Return(&c0_));
-    EXPECT_CALL(find_parent_, find_parent(&c0_)).WillRepeatedly(Return(&a0_));
-    EXPECT_CALL(children_, ordered_children(&c0_))
-        .WillRepeatedly(Return(std::vector<const pud_rule_id*>{&g0_}));
-    EXPECT_CALL(children_, ordered_children(&a0_))
-        .WillRepeatedly(Return(std::vector<const pud_rule_id*>{&c0_, &c1_}));
-    const pud_witness_search_result result = search_.resume(query_, ctx);
+    EXPECT_CALL(get_parent_, get(&g0_)).WillRepeatedly(Return(&c0_));
+    EXPECT_CALL(get_parent_, get(&c0_)).WillRepeatedly(Return(&a0_));
+    EXPECT_CALL(children_, get(&c0_)).WillRepeatedly(Return(children_set_t{&g0_}));
+    EXPECT_CALL(children_, get(&a0_)).WillRepeatedly(Return(children_set_t{&c0_, &c1_}));
+    const pud_witness_search_result result = search_.resume(ctx);
     EXPECT_TRUE(std::holds_alternative<pud_witness_search_result::found>(result.content));
     EXPECT_EQ(ctx.current, &c1_);
 }
 
 TEST_F(PudWitnessSearchTest, ResumeFoundKeepsAcceptableCurrent) {
-    pud_witness_search_context ctx{&a0_, &a0_};
-    EXPECT_CALL(is_leaf_, is_leaf(&a0_)).WillRepeatedly(Return(true));
+    pud_witness_search_context ctx = make_edge(&a0_, &a0_);
+    EXPECT_CALL(children_, get(&a0_)).WillRepeatedly(Return(std::nullopt));
     EXPECT_CALL(unify_, unify_head(_, &a0_)).WillRepeatedly(Return(true));
     for (int step = 0; step < 8; ++step) {
-        const pud_witness_search_result result = search_.resume(query_, ctx);
+        const pud_witness_search_result result = search_.resume(ctx);
         EXPECT_TRUE(std::holds_alternative<pud_witness_search_result::found>(result.content));
         EXPECT_EQ(ctx.current, &a0_);
     }
@@ -200,39 +186,38 @@ TEST_F(PudWitnessSearchTest, StressWideSiblingScan) {
     siblings.reserve(32);
     for (int idx = 0; idx < 32; ++idx)
         siblings.push_back(pud_rule_id{pud_rule_id::inference{&a0_, static_cast<size_t>(idx), &a0_}});
-    std::vector<const pud_rule_id*> sibling_ptrs;
-    sibling_ptrs.reserve(siblings.size());
+    children_set_t sibling_set;
     for (const pud_rule_id& sibling : siblings)
-        sibling_ptrs.push_back(&sibling);
+        sibling_set.insert(&sibling);
 
-    EXPECT_CALL(is_leaf_, is_leaf(_)).WillRepeatedly(
-        [this](const pud_rule_id* node) { return node != &a0_; });
+    EXPECT_CALL(children_, get(_)).WillRepeatedly(
+        [this, sibling_set](const pud_rule_id* node) -> children_opt_t {
+            if (node == &a0_)
+                return sibling_set;
+            return std::nullopt;
+        });
     EXPECT_CALL(unify_, unify_head(_, _)).WillRepeatedly(
-        [this, &siblings](pud_query&, const pud_rule_id* node) {
+        [this, &siblings](pud_witness_search_context&, const pud_rule_id* node) {
             return node == &a0_ || node == &siblings.back();
         });
-    EXPECT_CALL(children_, ordered_children(&a0_)).WillRepeatedly(Return(sibling_ptrs));
-    pud_witness_search_context ctx{&a0_, &a0_};
-    const pud_witness_search_result result = search_.resume(query_, ctx);
+    pud_witness_search_context ctx = make_edge(&a0_, &a0_);
+    const pud_witness_search_result result = search_.resume(ctx);
     EXPECT_TRUE(std::holds_alternative<pud_witness_search_result::found>(result.content));
     EXPECT_EQ(ctx.current, &siblings.back());
 }
 
 TEST_F(PudWitnessSearchTest, FuzzResumeOnFixedMockTree) {
-    ON_CALL(is_leaf_, is_leaf(_)).WillByDefault([&](const pud_rule_id* node) {
+    ON_CALL(unify_, unify_head(_, _)).WillByDefault([&](pud_witness_search_context&, const pud_rule_id* node) {
         return node == &g0_ || node == &c1_;
     });
-    ON_CALL(unify_, unify_head(_, _)).WillByDefault([&](pud_query&, const pud_rule_id* node) {
-        return node == &g0_ || node == &c1_;
-    });
-    ON_CALL(children_, ordered_children(_)).WillByDefault([&](const pud_rule_id* node) {
+    ON_CALL(children_, get(_)).WillByDefault([&](const pud_rule_id* node) -> children_opt_t {
         if (node == &a0_)
-            return std::vector<const pud_rule_id*>{&c0_, &c1_};
+            return children_set_t{&c0_, &c1_};
         if (node == &c0_)
-            return std::vector<const pud_rule_id*>{&g0_};
-        return std::vector<const pud_rule_id*>{};
+            return children_set_t{&g0_};
+        return std::nullopt;
     });
-    ON_CALL(find_parent_, find_parent(_)).WillByDefault([&](const pud_rule_id* node) -> const pud_rule_id* {
+    ON_CALL(get_parent_, get(_)).WillByDefault([&](const pud_rule_id* node) -> const pud_rule_id* {
         if (node == &g0_)
             return &c0_;
         if (node == &c0_ || node == &c1_)
@@ -251,8 +236,8 @@ TEST_F(PudWitnessSearchTest, FuzzResumeOnFixedMockTree) {
     for (int step = 0; step < 80; ++step) {
         const auto [edge_root, current] = legal[pick(rng)];
         log << step << ':' << edge_root << ',' << current << ' ';
-        pud_witness_search_context ctx{edge_root, current};
-        const pud_witness_search_result result = search_.resume(query_, ctx);
+        pud_witness_search_context ctx = make_edge(edge_root, current);
+        const pud_witness_search_result result = search_.resume(ctx);
         const bool found =
             std::holds_alternative<pud_witness_search_result::found>(result.content);
         const bool failed =

@@ -1,83 +1,79 @@
 #ifndef PUD_WITNESS_SEARCH_HPP
 #define PUD_WITNESS_SEARCH_HPP
 
-#include <vector>
-#include "value_objects/pud_query.hpp"
+#include <optional>
+#include <set>
 #include "value_objects/pud_rule_id.hpp"
 #include "value_objects/pud_witness_search_context.hpp"
 #include "value_objects/pud_witness_search_result.hpp"
 #include "debug_assert.hpp"
 
-template<typename IIsLeaf, typename IOrderedChildren, typename IFindParent, typename IUnifyHead>
+template<typename IGetChildren, typename IGetParent, typename IUnifyHead>
 struct pud_witness_search {
-    pud_witness_search(IIsLeaf& is_leaf,
-                       IOrderedChildren& ordered_children,
-                       IFindParent& find_parent,
+    pud_witness_search(IGetChildren& get_children,
+                       IGetParent& get_parent,
                        IUnifyHead& unify_head);
-    pud_witness_search_result resume(pud_query& query, pud_witness_search_context& context);
+    pud_witness_search_result resume(pud_witness_search_context& context);
 private:
-    bool is_acceptable_witness(pud_query& query, const pud_rule_id* node) const;
-    bool try_subtree(pud_query& query, pud_witness_search_context& context, const pud_rule_id* node);
-    bool try_next_siblings(pud_query& query,
-                           pud_witness_search_context& context,
-                           const pud_rule_id* node);
+    bool is_acceptable_witness(pud_witness_search_context& context,
+                               const pud_rule_id* node) const;
+    bool try_subtree(pud_witness_search_context& context, const pud_rule_id* node);
+    bool try_next_siblings(pud_witness_search_context& context, const pud_rule_id* node);
 
-    IIsLeaf& is_leaf_;
-    IOrderedChildren& ordered_children_;
-    IFindParent& find_parent_;
+    IGetChildren& get_children_;
+    IGetParent& get_parent_;
     IUnifyHead& unify_head_;
 };
 
-template<typename IIL, typename IOC, typename IFP, typename IUH>
-pud_witness_search<IIL, IOC, IFP, IUH>::pud_witness_search(IIL& is_leaf,
-                                                          IOC& ordered_children,
-                                                          IFP& find_parent,
-                                                          IUH& unify_head)
-    : is_leaf_(is_leaf)
-    , ordered_children_(ordered_children)
-    , find_parent_(find_parent)
+template<typename IGC, typename IGP, typename IUH>
+pud_witness_search<IGC, IGP, IUH>::pud_witness_search(IGC& get_children,
+                                                     IGP& get_parent,
+                                                     IUH& unify_head)
+    : get_children_(get_children)
+    , get_parent_(get_parent)
     , unify_head_(unify_head) {}
 
-template<typename IIL, typename IOC, typename IFP, typename IUH>
-bool pud_witness_search<IIL, IOC, IFP, IUH>::is_acceptable_witness(
-        pud_query& query, const pud_rule_id* node) const {
-    return is_leaf_.is_leaf(node) && unify_head_.unify_head(query, node);
+template<typename IGC, typename IGP, typename IUH>
+bool pud_witness_search<IGC, IGP, IUH>::is_acceptable_witness(
+        pud_witness_search_context& context, const pud_rule_id* node) const {
+    return !get_children_.get(node).has_value() && unify_head_.unify_head(context, node);
 }
 
-template<typename IIL, typename IOC, typename IFP, typename IUH>
-bool pud_witness_search<IIL, IOC, IFP, IUH>::try_subtree(
-        pud_query& query, pud_witness_search_context& context, const pud_rule_id* node) {
-    if (!unify_head_.unify_head(query, node))
+template<typename IGC, typename IGP, typename IUH>
+bool pud_witness_search<IGC, IGP, IUH>::try_subtree(
+        pud_witness_search_context& context, const pud_rule_id* node) {
+    if (!unify_head_.unify_head(context, node))
         return false;
-    if (is_leaf_.is_leaf(node)) {
+    const std::optional<std::set<const pud_rule_id*>> children = get_children_.get(node);
+    if (!children.has_value()) {
         context.current = node;
         return true;
     }
-    const std::vector<const pud_rule_id*> children = ordered_children_.ordered_children(node);
-    for (const pud_rule_id* child : children) {
-        if (try_subtree(query, context, child))
+    for (const pud_rule_id* child : *children) {
+        if (try_subtree(context, child))
             return true;
     }
     return false;
 }
 
-template<typename IIL, typename IOC, typename IFP, typename IUH>
-bool pud_witness_search<IIL, IOC, IFP, IUH>::try_next_siblings(
-        pud_query& query, pud_witness_search_context& context, const pud_rule_id* node) {
+template<typename IGC, typename IGP, typename IUH>
+bool pud_witness_search<IGC, IGP, IUH>::try_next_siblings(
+        pud_witness_search_context& context, const pud_rule_id* node) {
     const pud_rule_id* walk = node;
     while (walk != context.edge_root) {
-        const pud_rule_id* parent = find_parent_.find_parent(walk);
+        const pud_rule_id* parent = get_parent_.get(walk);
         DEBUG_ASSERT(parent != nullptr);
-        const std::vector<const pud_rule_id*> siblings =
-            ordered_children_.ordered_children(parent);
+        const std::optional<std::set<const pud_rule_id*>> siblings =
+            get_children_.get(parent);
+        DEBUG_ASSERT(siblings.has_value());
         bool past_walk = false;
-        for (const pud_rule_id* sibling : siblings) {
+        for (const pud_rule_id* sibling : *siblings) {
             if (!past_walk) {
                 if (sibling == walk)
                     past_walk = true;
                 continue;
             }
-            if (try_subtree(query, context, sibling))
+            if (try_subtree(context, sibling))
                 return true;
         }
         walk = parent;
@@ -85,16 +81,16 @@ bool pud_witness_search<IIL, IOC, IFP, IUH>::try_next_siblings(
     return false;
 }
 
-template<typename IIL, typename IOC, typename IFP, typename IUH>
-pud_witness_search_result pud_witness_search<IIL, IOC, IFP, IUH>::resume(
-        pud_query& query, pud_witness_search_context& context) {
-    if (is_acceptable_witness(query, context.current))
+template<typename IGC, typename IGP, typename IUH>
+pud_witness_search_result pud_witness_search<IGC, IGP, IUH>::resume(
+        pud_witness_search_context& context) {
+    if (is_acceptable_witness(context, context.current))
         return pud_witness_search_result{pud_witness_search_result::found{}};
 
-    if (try_subtree(query, context, context.current))
+    if (try_subtree(context, context.current))
         return pud_witness_search_result{pud_witness_search_result::found{}};
 
-    if (try_next_siblings(query, context, context.current))
+    if (try_next_siblings(context, context.current))
         return pud_witness_search_result{pud_witness_search_result::found{}};
 
     return pud_witness_search_result{pud_witness_search_result::failed{}};

@@ -3,12 +3,12 @@
 
 #include <compare>
 #include <vector>
-#include "value_objects/pud_query.hpp"
-#include "value_objects/pud_rule_id.hpp"
+#include "value_objects/expr.hpp"
+#include "value_objects/pud_candidate_search_context.hpp"
 
 struct pud_unfold_site {
-    pud_query* query;
-    std::vector<const pud_rule_id*> callees;
+    const expr* body_goal;
+    std::vector<pud_candidate_search_context*> live;
     auto operator<=>(const pud_unfold_site&) const = default;
 };
 

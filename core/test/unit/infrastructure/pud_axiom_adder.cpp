@@ -1,4 +1,4 @@
-// pud_axiom_adder: make, store unifications/body/lvc, add_root, allocate+store interval, adopt.
+// pud_axiom_adder: make, store unifications/body/lvc, store null parent, allocate+store interval, adopt.
 
 #include <gtest/gtest.h>
 #include <gmock/gmock.h>
@@ -34,8 +34,8 @@ struct MockStoreLvc {
     MOCK_METHOD(void, store, (const pud_rule_id*, uint32_t), ());
 };
 
-struct MockAddRoot {
-    MOCK_METHOD(void, add_root, (const pud_rule_id*), ());
+struct MockStoreParent {
+    MOCK_METHOD(void, store, (const pud_rule_id*, const pud_rule_id*), ());
 };
 
 struct MockAllocateRootInterval {
@@ -55,7 +55,7 @@ using test_adder_t = pud_axiom_adder<
     NiceMock<MockStoreAddedUnifications>,
     NiceMock<MockStoreAddedBodyGoals>,
     NiceMock<MockStoreLvc>,
-    NiceMock<MockAddRoot>,
+    NiceMock<MockStoreParent>,
     NiceMock<MockAllocateRootInterval>,
     NiceMock<MockStoreBaseInterval>,
     NiceMock<MockAdoptAxiom>>;
@@ -70,7 +70,7 @@ struct PudAxiomAdderTest : public ::testing::Test {
         , close_(40)
         , root_interval_{om_label(&open_), om_label(&close_)}
         , adder_(make_axiom_, store_unifs_, store_goals_, store_lvc_,
-                 add_root_, allocate_root_, store_interval_, adopt_) {
+                 store_parent_, allocate_root_, store_interval_, adopt_) {
         ON_CALL(make_axiom_, make_axiom(0)).WillByDefault(Return(&axiom0_));
         ON_CALL(make_axiom_, make_axiom(1)).WillByDefault(Return(&axiom1_));
         ON_CALL(allocate_root_, allocate_root()).WillByDefault(Return(root_interval_));
@@ -87,7 +87,7 @@ struct PudAxiomAdderTest : public ::testing::Test {
     NiceMock<MockStoreAddedUnifications> store_unifs_;
     NiceMock<MockStoreAddedBodyGoals> store_goals_;
     NiceMock<MockStoreLvc> store_lvc_;
-    NiceMock<MockAddRoot> add_root_;
+    NiceMock<MockStoreParent> store_parent_;
     NiceMock<MockAllocateRootInterval> allocate_root_;
     NiceMock<MockStoreBaseInterval> store_interval_;
     NiceMock<MockAdoptAxiom> adopt_;
@@ -105,7 +105,7 @@ TEST_F(PudAxiomAdderTest, AddAxiomPacksHeadBodyAndLvcAndReturnsId) {
         .WillOnce(SaveArg<1>(&packed_body));
     EXPECT_CALL(store_lvc_, store(&axiom0_, _))
         .WillOnce(SaveArg<1>(&packed_lvc));
-    EXPECT_CALL(add_root_, add_root(&axiom0_));
+    EXPECT_CALL(store_parent_, store(&axiom0_, nullptr));
     EXPECT_CALL(allocate_root_, allocate_root()).WillOnce(Return(root_interval_));
     EXPECT_CALL(store_interval_, store(&axiom0_, _));
     EXPECT_CALL(adopt_, adopt_axiom(&axiom0_));
