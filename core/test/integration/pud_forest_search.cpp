@@ -15,7 +15,7 @@
 #include "infrastructure/pud_node_interval.hpp"
 #include "infrastructure/pud_node_lvc.hpp"
 #include "infrastructure/pud_node_parent.hpp"
-#include "infrastructure/pud_node_touched_reps.hpp"
+#include "infrastructure/pud_node_added_touched_caller_reps.hpp"
 #include "infrastructure/pud_rule_id_pool.hpp"
 #include "infrastructure/pud_witness_search.hpp"
 #include "value_objects/expr.hpp"
@@ -28,7 +28,7 @@ using witness_search_t = pud_witness_search<
     pud_node_interval, pud_node_interval, pud_node_interval,
     order_maintenance, pud_node_added_unifications,
     fully_persistent_array, fully_persistent_array,
-    globalizer, expr_pool, pud_node_touched_reps>;
+    globalizer, expr_pool, pud_node_added_touched_caller_reps>;
 using candidate_search_t = pud_candidate_search<
     witness_search_t, pud_node_children, pud_node_parent,
     pud_node_added_body_goals>;
@@ -38,7 +38,7 @@ struct PudForestSearchIntegrationTest : public ::testing::Test {
         : witness_(children_, parent_, pool_,
                    node_interval_, node_interval_, node_interval_,
                    om_, added_unifications_,
-                   fpa_, fpa_, glob_, exprs_, touched_reps_)
+                   fpa_, fpa_, glob_, exprs_, added_caller_reps_)
         , candidate_(witness_, children_, parent_, added_body_goals_) {}
 
     const pud_rule_id* add_axiom(size_t entry_idx,
@@ -85,7 +85,7 @@ struct PudForestSearchIntegrationTest : public ::testing::Test {
     pud_node_children children_;
     pud_node_parent parent_;
     pud_node_interval node_interval_;
-    pud_node_touched_reps touched_reps_;
+    pud_node_added_touched_caller_reps added_caller_reps_;
     witness_search_t witness_;
     candidate_search_t candidate_;
 };

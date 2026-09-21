@@ -21,6 +21,7 @@
 using ::testing::NiceMock;
 using ::testing::Return;
 using ::testing::ReturnRef;
+using ::testing::SaveArg;
 using ::testing::_;
 
 using children_set_t = std::set<const pud_rule_id*>;
@@ -75,7 +76,7 @@ struct MockMakeVar {
     MOCK_METHOD(const expr*, make_var, (uint32_t), ());
 };
 
-struct MockStoreTouchedReps {
+struct MockStoreAddedCallerReps {
     MOCK_METHOD(void, store, (const pud_rule_id*, (std::vector<uint32_t>)), ());
 };
 
@@ -92,7 +93,7 @@ using test_search_t = pud_witness_search<
     NiceMock<MockQueryBinding>,
     NiceMock<MockGlobalize>,
     NiceMock<MockMakeVar>,
-    NiceMock<MockStoreTouchedReps>>;
+    NiceMock<MockStoreAddedCallerReps>>;
 
 struct PudWitnessSearchTest : public ::testing::Test {
     PudWitnessSearchTest()
@@ -116,7 +117,7 @@ struct PudWitnessSearchTest : public ::testing::Test {
         , search_(children_, get_parent_, make_inference_,
                   contains_, get_interval_, store_interval_, allocate_,
                   get_unifs_, record_, query_binding_, globalize_, make_var_,
-                  store_touched_) {
+                  store_added_caller_reps_) {
         intervals_.insert_or_assign(
             &query_leaf_, om_interval{om_label(&query_open_), om_label(&query_close_)});
         ON_CALL(make_inference_, make_inference(_, _, _))
@@ -170,7 +171,7 @@ struct PudWitnessSearchTest : public ::testing::Test {
                 return var_it->second;
             });
         ON_CALL(globalize_, globalize(_, _))
-            .WillByDefault([](uint32_t, uint32_t idx) { return idx; });
+            .WillByDefault([](uint32_t offset, uint32_t idx) { return offset + idx; });
         ON_CALL(make_var_, make_var(0)).WillByDefault(Return(&var0_));
         ON_CALL(get_parent_, get(&a0_)).WillByDefault(Return(nullptr));
         ON_CALL(get_parent_, get(&c0_)).WillByDefault(Return(&a0_));
@@ -229,7 +230,7 @@ struct PudWitnessSearchTest : public ::testing::Test {
     NiceMock<MockQueryBinding> query_binding_;
     NiceMock<MockGlobalize> globalize_;
     NiceMock<MockMakeVar> make_var_;
-    NiceMock<MockStoreTouchedReps> store_touched_;
+    NiceMock<MockStoreAddedCallerReps> store_added_caller_reps_;
     test_search_t search_;
 };
 
@@ -396,4 +397,37 @@ TEST_F(PudWitnessSearchTest, FuzzResumeOnFixedMockTree) {
         }
         EXPECT_EQ(ctx.search_root, search_root) << "seed " << k_seed << " log " << log.str();
     }
+}
+
+TEST_F(PudWitnessSearchTest, StoresCallerRepsBelowLvc) {
+    expr caller_var{expr::var{0}};
+    pud_witness_search_context ctx{
+        &query_leaf_, 0, &caller_var, 1, &a0_, &a0_};
+    EXPECT_CALL(children_, get(&a0_)).WillRepeatedly(Return(std::nullopt));
+    std::vector<uint32_t> stored;
+    EXPECT_CALL(store_added_caller_reps_, store(&k_a0_, _))
+        .WillOnce(SaveArg<1>(&stored));
+    search_.resume(ctx);
+    EXPECT_EQ(ctx.current, &a0_);
+    EXPECT_EQ(stored, (std::vector<uint32_t>{0}));
+}
+
+TEST_F(PudWitnessSearchTest, DropsCalleeYieldsAtOrAboveLvc) {
+    pud_witness_search_context ctx = make_edge(&a0_, &a0_);
+    EXPECT_CALL(children_, get(&a0_)).WillRepeatedly(Return(std::nullopt));
+    std::vector<uint32_t> stored;
+    EXPECT_CALL(store_added_caller_reps_, store(&k_a0_, _))
+        .WillOnce(SaveArg<1>(&stored));
+    search_.resume(ctx);
+    EXPECT_EQ(ctx.current, &a0_);
+    EXPECT_TRUE(stored.empty());
+}
+
+TEST_F(PudWitnessSearchTest, RecordsCalleeHeadAtLvcNotCallerZero) {
+    pud_witness_search_context ctx = make_edge(&a0_, &a0_);
+    EXPECT_CALL(children_, get(&a0_)).WillRepeatedly(Return(std::nullopt));
+    search_.resume(ctx);
+    const om_interval stored = intervals_.at(&k_a0_);
+    const auto& by_var = recorded_[stored.open.rank_ptr()];
+    EXPECT_FALSE(by_var.contains(0u));
 }

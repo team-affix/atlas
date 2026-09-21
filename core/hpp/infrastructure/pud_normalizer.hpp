@@ -22,6 +22,7 @@ struct pud_normalizer {
                    IMakeVar& make_var,
                    IMakeFunctor& make_functor);
     void set_normalization_environment(om_interval interval, uint32_t cutoff);
+    framed_expr whnf(framed_expr fe);
     const expr* normalize(framed_expr fe,
                           std::unordered_map<uint32_t, uint32_t>& translation);
 private:
@@ -62,6 +63,12 @@ void pud_normalizer<IG, IRB, IQB, IMV, IMF>::set_normalization_environment(
     bind_map_.emplace(globalize_, record_binding_, query_binding_, interval);
     normalizer_.emplace(globalize_, make_functor_, make_var_, *bind_map_);
     cutoff_ = cutoff;
+}
+
+template<typename IG, typename IRB, typename IQB, typename IMV, typename IMF>
+framed_expr pud_normalizer<IG, IRB, IQB, IMV, IMF>::whnf(framed_expr fe) {
+    DEBUG_ASSERT(bind_map_.has_value());
+    return bind_map_->whnf(fe);
 }
 
 template<typename IG, typename IRB, typename IQB, typename IMV, typename IMF>

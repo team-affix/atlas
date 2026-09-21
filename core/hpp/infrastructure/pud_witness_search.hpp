@@ -26,7 +26,7 @@ template<typename IGetChildren,
          typename IQueryBinding,
          typename IGlobalize,
          typename IMakeVar,
-         typename IStoreTouchedReps>
+         typename IStoreAddedCallerReps>
 struct pud_witness_search {
     pud_witness_search(IGetChildren& get_children,
                        IGetParent& get_parent,
@@ -40,7 +40,7 @@ struct pud_witness_search {
                        IQueryBinding& query_binding,
                        IGlobalize& globalize,
                        IMakeVar& make_var,
-                       IStoreTouchedReps& store_touched_reps);
+                       IStoreAddedCallerReps& store_added_caller_reps);
     void resume(pud_witness_search_context& context);
 private:
     using bind_map_t = hierarchical_bind_map<IGlobalize, IRecordBinding, IQueryBinding>;
@@ -54,7 +54,10 @@ private:
     bool drain_unify(unifier_t& task_owner,
                      framed_expr lhs,
                      framed_expr rhs,
-                     std::vector<uint32_t>* touched_reps);
+                     uint32_t cutoff,
+                     std::vector<uint32_t>* added_caller_reps);
+    const expr* unify_rhs(const pud_rule_id* node);
+    uint32_t unify_rhs_frame(const pud_rule_id* node, uint32_t query_lvc);
 
     IGetChildren& get_children_;
     IGetParent& get_parent_;
@@ -68,13 +71,13 @@ private:
     IQueryBinding& query_binding_;
     IGlobalize& globalize_;
     IMakeVar& make_var_;
-    IStoreTouchedReps& store_touched_reps_;
+    IStoreAddedCallerReps& store_added_caller_reps_;
 };
 
 template<typename IGC, typename IGP, typename IMI, typename ICI, typename IGI,
          typename ISI, typename IACI, typename IGAU, typename IRB, typename IQB,
-         typename IG, typename IMV, typename ISTR>
-pud_witness_search<IGC, IGP, IMI, ICI, IGI, ISI, IACI, IGAU, IRB, IQB, IG, IMV, ISTR>::
+         typename IG, typename IMV, typename ISACR>
+pud_witness_search<IGC, IGP, IMI, ICI, IGI, ISI, IACI, IGAU, IRB, IQB, IG, IMV, ISACR>::
 pud_witness_search(IGC& get_children,
                    IGP& get_parent,
                    IMI& make_inference,
@@ -87,7 +90,7 @@ pud_witness_search(IGC& get_children,
                    IQB& query_binding,
                    IG& globalize,
                    IMV& make_var,
-                   ISTR& store_touched_reps)
+                   ISACR& store_added_caller_reps)
     : get_children_(get_children)
     , get_parent_(get_parent)
     , make_inference_(make_inference)
@@ -100,32 +103,64 @@ pud_witness_search(IGC& get_children,
     , query_binding_(query_binding)
     , globalize_(globalize)
     , make_var_(make_var)
-    , store_touched_reps_(store_touched_reps) {}
+    , store_added_caller_reps_(store_added_caller_reps) {}
 
 template<typename IGC, typename IGP, typename IMI, typename ICI, typename IGI,
          typename ISI, typename IACI, typename IGAU, typename IRB, typename IQB,
-         typename IG, typename IMV, typename ISTR>
-bool pud_witness_search<IGC, IGP, IMI, ICI, IGI, ISI, IACI, IGAU, IRB, IQB, IG, IMV, ISTR>::
+         typename IG, typename IMV, typename ISACR>
+bool pud_witness_search<IGC, IGP, IMI, ICI, IGI, ISI, IACI, IGAU, IRB, IQB, IG, IMV, ISACR>::
 drain_unify(unifier_t& task_owner,
             framed_expr lhs,
             framed_expr rhs,
-            std::vector<uint32_t>* touched_reps) {
+            uint32_t cutoff,
+            std::vector<uint32_t>* added_caller_reps) {
     auto task = task_owner.unify(lhs, rhs);
     while (!task.done()) {
         task.resume();
         if (!task.has_yield())
             continue;
         const uint32_t rep = task.consume_yield();
-        if (touched_reps != nullptr)
-            touched_reps->push_back(rep);
+        if (added_caller_reps == nullptr)
+            continue;
+        if (rep >= cutoff)
+            continue;
+        added_caller_reps->push_back(rep);
     }
     return task.result();
 }
 
 template<typename IGC, typename IGP, typename IMI, typename ICI, typename IGI,
          typename ISI, typename IACI, typename IGAU, typename IRB, typename IQB,
-         typename IG, typename IMV, typename ISTR>
-bool pud_witness_search<IGC, IGP, IMI, ICI, IGI, ISI, IACI, IGAU, IRB, IQB, IG, IMV, ISTR>::
+         typename IG, typename IMV, typename ISACR>
+const expr* pud_witness_search<IGC, IGP, IMI, ICI, IGI, ISI, IACI, IGAU, IRB, IQB, IG, IMV, ISACR>::
+unify_rhs(const pud_rule_id* node) {
+    for (const pud_added_unification& added : get_added_unifications_.get(node)) {
+        if (added.var_idx != 0)
+            continue;
+        return added.value;
+    }
+    return make_var_.make_var(0);
+}
+
+template<typename IGC, typename IGP, typename IMI, typename ICI, typename IGI,
+         typename ISI, typename IACI, typename IGAU, typename IRB, typename IQB,
+         typename IG, typename IMV, typename ISACR>
+uint32_t pud_witness_search<IGC, IGP, IMI, ICI, IGI, ISI, IACI, IGAU, IRB, IQB, IG, IMV, ISACR>::
+unify_rhs_frame(const pud_rule_id* node, uint32_t query_lvc) {
+    if (get_parent_.get(node) == nullptr)
+        return query_lvc;
+    for (const pud_added_unification& added : get_added_unifications_.get(node)) {
+        if (added.var_idx != 0)
+            continue;
+        return 0;
+    }
+    return query_lvc;
+}
+
+template<typename IGC, typename IGP, typename IMI, typename ICI, typename IGI,
+         typename ISI, typename IACI, typename IGAU, typename IRB, typename IQB,
+         typename IG, typename IMV, typename ISACR>
+bool pud_witness_search<IGC, IGP, IMI, ICI, IGI, ISI, IACI, IGAU, IRB, IQB, IG, IMV, ISACR>::
 try_enter(pud_witness_search_context& context, const pud_rule_id* node) {
     const pud_rule_id* key = make_inference_.make_inference(
         context.query_leaf, context.body_goal_idx, node);
@@ -133,10 +168,12 @@ try_enter(pud_witness_search_context& context, const pud_rule_id* node) {
         const om_interval interval = get_interval_.get(key);
         bind_map_t bm(globalize_, record_binding_, query_binding_, interval);
         unifier_t task_owner(globalize_, &bm);
+        const uint32_t rhs_frame = unify_rhs_frame(node, context.frame_offset);
         return drain_unify(
             task_owner,
-            framed_expr{context.body_goal, context.frame_offset},
-            framed_expr{make_var_.make_var(0), 0},
+            framed_expr{context.body_goal, 0},
+            framed_expr{unify_rhs(node), rhs_frame},
+            context.frame_offset,
             nullptr);
     }
     const pud_rule_id* forest_parent = get_parent_.get(node);
@@ -148,31 +185,37 @@ try_enter(pud_witness_search_context& context, const pud_rule_id* node) {
         : context.query_leaf;
     const om_interval interval = allocate_child_interval_.allocate_child_of(
         get_interval_.get(parent_key));
+    bool skipped_head = false;
     for (const pud_added_unification& added : get_added_unifications_.get(node)) {
+        if (!skipped_head && added.var_idx == 0) {
+            skipped_head = true;
+            continue;
+        }
+        skipped_head = true;
         record_binding_.record(
             interval,
             added.var_idx,
-            framed_expr{added.value, context.frame_offset});
+            framed_expr{added.value, 0});
     }
     store_interval_.store(key, interval);
     bind_map_t bm(globalize_, record_binding_, query_binding_, interval);
     unifier_t task_owner(globalize_, &bm);
-    std::vector<uint32_t> touched_reps;
+    const uint32_t rhs_frame = unify_rhs_frame(node, context.frame_offset);
+    std::vector<uint32_t> added_caller_reps;
     const bool ok = drain_unify(
         task_owner,
-        framed_expr{context.body_goal, context.frame_offset},
-        framed_expr{make_var_.make_var(0), 0},
-        &touched_reps);
-    if (!ok)
-        return false;
-    store_touched_reps_.store(key, std::move(touched_reps));
-    return true;
+        framed_expr{context.body_goal, 0},
+        framed_expr{unify_rhs(node), rhs_frame},
+        context.frame_offset,
+        &added_caller_reps);
+    store_added_caller_reps_.store(key, std::move(added_caller_reps));
+    return ok;
 }
 
 template<typename IGC, typename IGP, typename IMI, typename ICI, typename IGI,
          typename ISI, typename IACI, typename IGAU, typename IRB, typename IQB,
-         typename IG, typename IMV, typename ISTR>
-bool pud_witness_search<IGC, IGP, IMI, ICI, IGI, ISI, IACI, IGAU, IRB, IQB, IG, IMV, ISTR>::
+         typename IG, typename IMV, typename ISACR>
+bool pud_witness_search<IGC, IGP, IMI, ICI, IGI, ISI, IACI, IGAU, IRB, IQB, IG, IMV, ISACR>::
 is_acceptable_witness(pud_witness_search_context& context, const pud_rule_id* node) {
     if (get_children_.get(node).has_value())
         return false;
@@ -181,8 +224,8 @@ is_acceptable_witness(pud_witness_search_context& context, const pud_rule_id* no
 
 template<typename IGC, typename IGP, typename IMI, typename ICI, typename IGI,
          typename ISI, typename IACI, typename IGAU, typename IRB, typename IQB,
-         typename IG, typename IMV, typename ISTR>
-bool pud_witness_search<IGC, IGP, IMI, ICI, IGI, ISI, IACI, IGAU, IRB, IQB, IG, IMV, ISTR>::
+         typename IG, typename IMV, typename ISACR>
+bool pud_witness_search<IGC, IGP, IMI, ICI, IGI, ISI, IACI, IGAU, IRB, IQB, IG, IMV, ISACR>::
 try_subtree(pud_witness_search_context& context, const pud_rule_id* node) {
     if (!try_enter(context, node))
         return false;
@@ -200,8 +243,8 @@ try_subtree(pud_witness_search_context& context, const pud_rule_id* node) {
 
 template<typename IGC, typename IGP, typename IMI, typename ICI, typename IGI,
          typename ISI, typename IACI, typename IGAU, typename IRB, typename IQB,
-         typename IG, typename IMV, typename ISTR>
-bool pud_witness_search<IGC, IGP, IMI, ICI, IGI, ISI, IACI, IGAU, IRB, IQB, IG, IMV, ISTR>::
+         typename IG, typename IMV, typename ISACR>
+bool pud_witness_search<IGC, IGP, IMI, ICI, IGI, ISI, IACI, IGAU, IRB, IQB, IG, IMV, ISACR>::
 try_next_siblings(pud_witness_search_context& context, const pud_rule_id* node) {
     const pud_rule_id* walk = node;
     while (walk != context.search_root) {
@@ -227,8 +270,8 @@ try_next_siblings(pud_witness_search_context& context, const pud_rule_id* node) 
 
 template<typename IGC, typename IGP, typename IMI, typename ICI, typename IGI,
          typename ISI, typename IACI, typename IGAU, typename IRB, typename IQB,
-         typename IG, typename IMV, typename ISTR>
-void pud_witness_search<IGC, IGP, IMI, ICI, IGI, ISI, IACI, IGAU, IRB, IQB, IG, IMV, ISTR>::
+         typename IG, typename IMV, typename ISACR>
+void pud_witness_search<IGC, IGP, IMI, ICI, IGI, ISI, IACI, IGAU, IRB, IQB, IG, IMV, ISACR>::
 resume(pud_witness_search_context& context) {
     if (context.current == nullptr)
         return;
