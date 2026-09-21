@@ -1,8 +1,8 @@
 // Integration: witness search + candidate search on the per-node tables.
 
 #include <gtest/gtest.h>
+#include <optional>
 #include <set>
-#include <variant>
 #include <vector>
 #include "infrastructure/expr_pool.hpp"
 #include "infrastructure/fully_persistent_array.hpp"
@@ -21,9 +21,7 @@
 #include "value_objects/expr.hpp"
 #include "value_objects/pud_added_unification.hpp"
 #include "value_objects/pud_candidate_search_context.hpp"
-#include "value_objects/pud_candidate_search_result.hpp"
 #include "value_objects/pud_witness_search_context.hpp"
-#include "value_objects/pud_witness_search_result.hpp"
 
 using unify_head_t = pud_unify_head<
     order_maintenance, pud_node_parent, pud_node_added_unifications,
@@ -100,8 +98,7 @@ TEST_F(PudForestSearchIntegrationTest, WitnessSearchFindsUnifyingAxiomLeaf) {
         1,
         axiom,
         axiom};
-    const pud_witness_search_result result = witness_.resume(ctx);
-    EXPECT_TRUE(std::holds_alternative<pud_witness_search_result::found>(result.content));
+    witness_.resume(ctx);
     EXPECT_EQ(ctx.current, axiom);
 }
 
@@ -113,10 +110,11 @@ TEST_F(PudForestSearchIntegrationTest, CandidateSearchSelfWitnessesMatchingLeaf)
         pred,
         1,
         axiom,
-        {},
+        std::nullopt,
         added_body_goals_.get(axiom)};
-    const pud_candidate_search_result result = candidate_.resume(ctx);
-    EXPECT_TRUE(std::holds_alternative<pud_candidate_search_result::self_witness>(result.content));
+    candidate_.resume(ctx);
+    EXPECT_EQ(ctx.cursor, axiom);
+    EXPECT_FALSE(ctx.witnesses.has_value());
 }
 
 TEST_F(PudForestSearchIntegrationTest, CandidateSearchRefutesAxiomWhenHeadDoesNotUnify) {
@@ -128,10 +126,10 @@ TEST_F(PudForestSearchIntegrationTest, CandidateSearchRefutesAxiomWhenHeadDoesNo
         body,
         1,
         axiom,
-        {},
+        std::nullopt,
         added_body_goals_.get(axiom)};
-    const pud_candidate_search_result result = candidate_.resume(ctx);
-    EXPECT_TRUE(std::holds_alternative<pud_candidate_search_result::axiom_refuted>(result.content));
+    candidate_.resume(ctx);
+    EXPECT_EQ(ctx.cursor, nullptr);
 }
 
 TEST_F(PudForestSearchIntegrationTest, WitnessSearchFindsGrandchildUnderLinkedForest) {
@@ -149,8 +147,7 @@ TEST_F(PudForestSearchIntegrationTest, WitnessSearchFindsGrandchildUnderLinkedFo
         1,
         axiom,
         axiom};
-    const pud_witness_search_result result = witness_.resume(ctx);
-    EXPECT_TRUE(std::holds_alternative<pud_witness_search_result::found>(result.content));
+    witness_.resume(ctx);
     EXPECT_EQ(ctx.current, grand);
 }
 
@@ -167,11 +164,12 @@ TEST_F(PudForestSearchIntegrationTest, CandidateSearchChoicePointOnTwoLinkedChil
         pred,
         1,
         axiom,
-        {},
+        std::nullopt,
         added_body_goals_.get(axiom)};
-    const pud_candidate_search_result result = candidate_.resume(ctx);
-    EXPECT_TRUE(std::holds_alternative<pud_candidate_search_result::choice_point>(result.content));
-    EXPECT_EQ(ctx.live_edges.size(), 2u);
+    candidate_.resume(ctx);
+    ASSERT_TRUE(ctx.witnesses.has_value());
+    EXPECT_NE(ctx.witnesses->a.current, nullptr);
+    EXPECT_NE(ctx.witnesses->b.current, nullptr);
 }
 
 TEST_F(PudForestSearchIntegrationTest, CandidateSearchAdvancesWhenWitnessCurrentIsDeeper) {
@@ -188,9 +186,9 @@ TEST_F(PudForestSearchIntegrationTest, CandidateSearchAdvancesWhenWitnessCurrent
         pred,
         1,
         axiom,
-        {},
+        std::nullopt,
         added_body_goals_.get(axiom)};
-    const pud_candidate_search_result result = candidate_.resume(ctx);
-    EXPECT_TRUE(std::holds_alternative<pud_candidate_search_result::self_witness>(result.content));
+    candidate_.resume(ctx);
     EXPECT_EQ(ctx.cursor, grand);
+    EXPECT_FALSE(ctx.witnesses.has_value());
 }

@@ -5,7 +5,6 @@
 #include <set>
 #include "value_objects/pud_rule_id.hpp"
 #include "value_objects/pud_witness_search_context.hpp"
-#include "value_objects/pud_witness_search_result.hpp"
 #include "debug_assert.hpp"
 
 template<typename IGetChildren, typename IGetParent, typename IUnifyHead>
@@ -13,7 +12,7 @@ struct pud_witness_search {
     pud_witness_search(IGetChildren& get_children,
                        IGetParent& get_parent,
                        IUnifyHead& unify_head);
-    pud_witness_search_result resume(pud_witness_search_context& context);
+    void resume(pud_witness_search_context& context);
 private:
     bool is_acceptable_witness(pud_witness_search_context& context,
                                const pud_rule_id* node) const;
@@ -60,7 +59,7 @@ template<typename IGC, typename IGP, typename IUH>
 bool pud_witness_search<IGC, IGP, IUH>::try_next_siblings(
         pud_witness_search_context& context, const pud_rule_id* node) {
     const pud_rule_id* walk = node;
-    while (walk != context.edge_root) {
+    while (walk != context.search_root) {
         const pud_rule_id* parent = get_parent_.get(walk);
         DEBUG_ASSERT(parent != nullptr);
         const std::optional<std::set<const pud_rule_id*>> siblings =
@@ -82,18 +81,16 @@ bool pud_witness_search<IGC, IGP, IUH>::try_next_siblings(
 }
 
 template<typename IGC, typename IGP, typename IUH>
-pud_witness_search_result pud_witness_search<IGC, IGP, IUH>::resume(
-        pud_witness_search_context& context) {
+void pud_witness_search<IGC, IGP, IUH>::resume(pud_witness_search_context& context) {
+    if (context.current == nullptr)
+        return;
     if (is_acceptable_witness(context, context.current))
-        return pud_witness_search_result{pud_witness_search_result::found{}};
-
+        return;
     if (try_subtree(context, context.current))
-        return pud_witness_search_result{pud_witness_search_result::found{}};
-
+        return;
     if (try_next_siblings(context, context.current))
-        return pud_witness_search_result{pud_witness_search_result::found{}};
-
-    return pud_witness_search_result{pud_witness_search_result::failed{}};
+        return;
+    context.current = nullptr;
 }
 
 #endif

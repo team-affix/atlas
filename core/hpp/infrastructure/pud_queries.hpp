@@ -4,20 +4,18 @@
 #include <algorithm>
 #include <cstdint>
 #include <memory>
+#include <optional>
 #include <unordered_map>
 #include <unordered_set>
 #include <utility>
-#include <variant>
 #include <vector>
 #include "value_objects/expr.hpp"
 #include "value_objects/om_interval.hpp"
 #include "value_objects/pud_candidate_search_context.hpp"
-#include "value_objects/pud_candidate_search_result.hpp"
 #include "value_objects/pud_forced_unfold.hpp"
 #include "value_objects/pud_rule_id.hpp"
 #include "value_objects/pud_unfold_site.hpp"
 #include "value_objects/pud_witness_search_context.hpp"
-#include "value_objects/pud_witness_search_result.hpp"
 #include "debug_assert.hpp"
 
 template<typename IGetAddedBodyGoals,
@@ -141,7 +139,7 @@ pud_queries<IGABG, IGL, IGBI, IACI, IDE, IRCS, IRWS>::root_group(
             body_goal,
             frame_offset,
             axiom,
-            {},
+            std::nullopt,
             get_added_body_goals_.get(axiom)});
     }
     return group;
@@ -187,12 +185,16 @@ template<typename IGABG, typename IGL, typename IGBI, typename IACI, typename ID
          typename IRCS, typename IRWS>
 void pud_queries<IGABG, IGL, IGBI, IACI, IDE, IRCS, IRWS>::watch_context(
         pud_candidate_search_context& ctx) {
-    if (ctx.live_edges.empty()) {
-        watch(ctx.cursor, &ctx);
+    if (ctx.witnesses.has_value()) {
+        DEBUG_ASSERT(ctx.witnesses->a.current != nullptr);
+        DEBUG_ASSERT(ctx.witnesses->b.current != nullptr);
+        watch(ctx.witnesses->a.current, &ctx);
+        watch(ctx.witnesses->b.current, &ctx);
         return;
     }
-    for (const pud_witness_search_context& edge : ctx.live_edges)
-        watch(edge.current, &ctx);
+    if (ctx.cursor == nullptr)
+        return;
+    watch(ctx.cursor, &ctx);
 }
 
 template<typename IGABG, typename IGL, typename IGBI, typename IACI, typename IDE,
@@ -337,27 +339,21 @@ template<typename IGABG, typename IGL, typename IGBI, typename IACI, typename ID
          typename IRCS, typename IRWS>
 void pud_queries<IGABG, IGL, IGBI, IACI, IDE, IRCS, IRWS>::resume_dead_witness(
         pud_candidate_search_context& ctx, const pud_rule_id* node) {
-    if (ctx.cursor == node && ctx.live_edges.empty()) {
+    if (!ctx.witnesses.has_value()) {
+        if (ctx.cursor == node)
+            resume_candidate_search_.resume(ctx);
+        return;
+    }
+    pud_witness_search_context* side = nullptr;
+    if (ctx.witnesses->a.current == node)
+        side = &ctx.witnesses->a;
+    else if (ctx.witnesses->b.current == node)
+        side = &ctx.witnesses->b;
+    if (side == nullptr)
+        return;
+    resume_witness_search_.resume(*side);
+    if (side->current == nullptr)
         resume_candidate_search_.resume(ctx);
-        return;
-    }
-    bool lost_edge = false;
-    for (pud_witness_search_context& edge : ctx.live_edges) {
-        if (edge.current != node)
-            continue;
-        const pud_witness_search_result result = resume_witness_search_.resume(edge);
-        if (std::holds_alternative<pud_witness_search_result::failed>(result.content))
-            lost_edge = true;
-    }
-    if (!lost_edge)
-        return;
-    std::vector<pud_witness_search_context> kept;
-    for (const pud_witness_search_context& edge : ctx.live_edges) {
-        if (edge.current != node)
-            kept.push_back(edge);
-    }
-    ctx.live_edges = kept;
-    resume_candidate_search_.resume(ctx);
 }
 
 template<typename IGABG, typename IGL, typename IGBI, typename IACI, typename IDE,
@@ -395,10 +391,8 @@ std::vector<pud_candidate_search_context*>
 pud_queries<IGABG, IGL, IGBI, IACI, IDE, IRCS, IRWS>::live_contexts(group_ptrs_t& group) {
     std::vector<pud_candidate_search_context*> live;
     for (pud_candidate_search_context* ctx : group) {
-        const pud_candidate_search_result result =
-            resume_candidate_search_.resume(*ctx);
-        if (std::holds_alternative<pud_candidate_search_result::axiom_refuted>(
-                result.content))
+        resume_candidate_search_.resume(*ctx);
+        if (ctx->cursor == nullptr)
             continue;
         live.push_back(ctx);
     }

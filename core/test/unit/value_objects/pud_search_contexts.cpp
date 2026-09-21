@@ -1,15 +1,14 @@
-// pud_witness_search_context / result and candidate counterparts: public data + <=>.
+// pud_witness_search_context, pud_witness_pair, and candidate counterparts: public data + <=>.
 
 #include <gtest/gtest.h>
-#include <variant>
+#include <optional>
 #include "value_objects/expr.hpp"
 #include "value_objects/om_interval.hpp"
 #include "value_objects/pud_candidate_search_context.hpp"
-#include "value_objects/pud_candidate_search_result.hpp"
 #include "value_objects/pud_forced_unfold.hpp"
 #include "value_objects/pud_rule_id.hpp"
+#include "value_objects/pud_witness_pair.hpp"
 #include "value_objects/pud_witness_search_context.hpp"
-#include "value_objects/pud_witness_search_result.hpp"
 
 struct PudSearchValueObjectsTest : public ::testing::Test {
     PudSearchValueObjectsTest()
@@ -26,25 +25,17 @@ struct PudSearchValueObjectsTest : public ::testing::Test {
     pud_rule_id axiom_;
 };
 
-TEST_F(PudSearchValueObjectsTest, WitnessContextOrdersByEdgeThenCurrent) {
+TEST_F(PudSearchValueObjectsTest, WitnessContextOrdersBySearchRootThenCurrent) {
     const pud_witness_search_context left{interval_, &body_, 0, &axiom_, &axiom_};
     const pud_witness_search_context right{interval_, &body_, 0, &axiom_, &axiom_};
     EXPECT_EQ(left, right);
 }
 
-TEST_F(PudSearchValueObjectsTest, WitnessResultFoundDiffersFromFailed) {
-    const pud_witness_search_result found{pud_witness_search_result::found{}};
-    const pud_witness_search_result failed{pud_witness_search_result::failed{}};
-    EXPECT_NE(found, failed);
-    EXPECT_TRUE(std::holds_alternative<pud_witness_search_result::found>(found.content));
-}
-
-TEST_F(PudSearchValueObjectsTest, CandidateResultAlternativesAreDistinct) {
-    const pud_candidate_search_result choice{pud_candidate_search_result::choice_point{}};
-    const pud_candidate_search_result self{pud_candidate_search_result::self_witness{}};
-    const pud_candidate_search_result dead{pud_candidate_search_result::axiom_refuted{}};
-    EXPECT_NE(choice, self);
-    EXPECT_NE(self, dead);
+TEST_F(PudSearchValueObjectsTest, WitnessPairOrdersByBothSides) {
+    const pud_witness_search_context edge{interval_, &body_, 0, &axiom_, &axiom_};
+    const pud_witness_pair left{edge, edge};
+    const pud_witness_pair right{edge, edge};
+    EXPECT_EQ(left, right);
 }
 
 TEST_F(PudSearchValueObjectsTest, ForcedUnfoldUnitAndRefutedAreDistinct) {
@@ -53,14 +44,16 @@ TEST_F(PudSearchValueObjectsTest, ForcedUnfoldUnitAndRefutedAreDistinct) {
     EXPECT_NE(unit, refuted);
 }
 
-TEST_F(PudSearchValueObjectsTest, CandidateContextHoldsLiveEdges) {
+TEST_F(PudSearchValueObjectsTest, CandidateContextHoldsOptionalWitnessPair) {
+    const pud_witness_search_context edge{interval_, &body_, 0, &axiom_, &axiom_};
     pud_candidate_search_context ctx{
         interval_,
         &body_,
         0,
         &axiom_,
-        {{interval_, &body_, 0, &axiom_, &axiom_}},
+        pud_witness_pair{edge, edge},
         {}};
-    EXPECT_EQ(ctx.live_edges.size(), 1u);
+    ASSERT_TRUE(ctx.witnesses.has_value());
+    EXPECT_EQ(ctx.witnesses->a.search_root, &axiom_);
     EXPECT_EQ(ctx.cursor, &axiom_);
 }

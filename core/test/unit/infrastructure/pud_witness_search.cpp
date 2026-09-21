@@ -1,4 +1,4 @@
-// pud_witness_search: accept-first resume; DFS descend then next sibling; stop at edge_root.
+// pud_witness_search: accept-first resume; DFS descend then next sibling; stop at search_root.
 
 #include <gtest/gtest.h>
 #include <gmock/gmock.h>
@@ -7,14 +7,12 @@
 #include <set>
 #include <sstream>
 #include <unordered_map>
-#include <variant>
 #include <vector>
 #include "infrastructure/pud_witness_search.hpp"
 #include "value_objects/expr.hpp"
 #include "value_objects/om_interval.hpp"
 #include "value_objects/pud_rule_id.hpp"
 #include "value_objects/pud_witness_search_context.hpp"
-#include "value_objects/pud_witness_search_result.hpp"
 
 using ::testing::NiceMock;
 using ::testing::Return;
@@ -51,9 +49,9 @@ struct PudWitnessSearchTest : public ::testing::Test {
         , g0_{pud_rule_id::inference{&c0_, 0, &a0_}}
         , search_(children_, get_parent_, unify_) {}
 
-    pud_witness_search_context make_edge(const pud_rule_id* edge_root,
+    pud_witness_search_context make_edge(const pud_rule_id* search_root,
                                          const pud_rule_id* current) {
-        return pud_witness_search_context{interval_, &body_, 1, edge_root, current};
+        return pud_witness_search_context{interval_, &body_, 1, search_root, current};
     }
 
     uint64_t open_;
@@ -74,8 +72,7 @@ TEST_F(PudWitnessSearchTest, AcceptsCurrentIfItIsUnifyingLeaf) {
     pud_witness_search_context ctx = make_edge(&a0_, &a0_);
     EXPECT_CALL(children_, get(&a0_)).WillRepeatedly(Return(std::nullopt));
     EXPECT_CALL(unify_, unify_head(_, &a0_)).WillRepeatedly(Return(true));
-    const pud_witness_search_result result = search_.resume(ctx);
-    EXPECT_TRUE(std::holds_alternative<pud_witness_search_result::found>(result.content));
+    search_.resume(ctx);
     EXPECT_EQ(ctx.current, &a0_);
 }
 
@@ -85,8 +82,7 @@ TEST_F(PudWitnessSearchTest, DescendsIntoChildrenWhenCurrentIsNoLongerALeaf) {
     EXPECT_CALL(children_, get(&c0_)).WillRepeatedly(Return(std::nullopt));
     EXPECT_CALL(unify_, unify_head(_, &a0_)).WillRepeatedly(Return(true));
     EXPECT_CALL(unify_, unify_head(_, &c0_)).WillRepeatedly(Return(true));
-    const pud_witness_search_result result = search_.resume(ctx);
-    EXPECT_TRUE(std::holds_alternative<pud_witness_search_result::found>(result.content));
+    search_.resume(ctx);
     EXPECT_EQ(ctx.current, &c0_);
 }
 
@@ -94,8 +90,9 @@ TEST_F(PudWitnessSearchTest, PrunesSubtreeWhenUnifyFails) {
     pud_witness_search_context ctx = make_edge(&a0_, &a0_);
     EXPECT_CALL(children_, get(&a0_)).WillRepeatedly(Return(children_set_t{&c0_}));
     EXPECT_CALL(unify_, unify_head(_, &a0_)).WillRepeatedly(Return(false));
-    const pud_witness_search_result result = search_.resume(ctx);
-    EXPECT_TRUE(std::holds_alternative<pud_witness_search_result::failed>(result.content));
+    search_.resume(ctx);
+    EXPECT_EQ(ctx.current, nullptr);
+    EXPECT_EQ(ctx.search_root, &a0_);
 }
 
 TEST_F(PudWitnessSearchTest, TriesNextSiblingInIdOrderAfterFailedChild) {
@@ -106,27 +103,36 @@ TEST_F(PudWitnessSearchTest, TriesNextSiblingInIdOrderAfterFailedChild) {
     EXPECT_CALL(unify_, unify_head(_, &c0_)).WillRepeatedly(Return(false));
     EXPECT_CALL(unify_, unify_head(_, &c1_)).WillRepeatedly(Return(true));
     EXPECT_CALL(get_parent_, get(&c0_)).WillRepeatedly(Return(&a0_));
-    const pud_witness_search_result result = search_.resume(ctx);
-    EXPECT_TRUE(std::holds_alternative<pud_witness_search_result::found>(result.content));
+    search_.resume(ctx);
     EXPECT_EQ(ctx.current, &c1_);
 }
 
-TEST_F(PudWitnessSearchTest, StopsAtEdgeRootAndFailsWhenNoSiblingWorks) {
+TEST_F(PudWitnessSearchTest, StopsAtSearchRootAndFailsWhenNoSiblingWorks) {
     pud_witness_search_context ctx = make_edge(&c0_, &g0_);
     EXPECT_CALL(children_, get(&g0_)).WillRepeatedly(Return(std::nullopt));
     EXPECT_CALL(unify_, unify_head(_, &g0_)).WillRepeatedly(Return(false));
     EXPECT_CALL(get_parent_, get(&g0_)).WillRepeatedly(Return(&c0_));
     EXPECT_CALL(children_, get(&c0_)).WillRepeatedly(Return(children_set_t{&g0_}));
-    const pud_witness_search_result result = search_.resume(ctx);
-    EXPECT_TRUE(std::holds_alternative<pud_witness_search_result::failed>(result.content));
+    search_.resume(ctx);
+    EXPECT_EQ(ctx.current, nullptr);
+    EXPECT_EQ(ctx.search_root, &c0_);
+}
+
+TEST_F(PudWitnessSearchTest, NullCurrentIsANoOp) {
+    pud_witness_search_context ctx = make_edge(&a0_, nullptr);
+    EXPECT_CALL(children_, get(_)).Times(0);
+    EXPECT_CALL(unify_, unify_head(_, _)).Times(0);
+    search_.resume(ctx);
+    EXPECT_EQ(ctx.current, nullptr);
+    EXPECT_EQ(ctx.search_root, &a0_);
 }
 
 TEST_F(PudWitnessSearchTest, SelfNodeMayBeAWitness) {
     pud_witness_search_context ctx = make_edge(&a0_, &a0_);
     EXPECT_CALL(children_, get(&a0_)).WillRepeatedly(Return(std::nullopt));
     EXPECT_CALL(unify_, unify_head(_, &a0_)).WillRepeatedly(Return(true));
-    const pud_witness_search_result result = search_.resume(ctx);
-    EXPECT_TRUE(std::holds_alternative<pud_witness_search_result::found>(result.content));
+    search_.resume(ctx);
+    EXPECT_EQ(ctx.current, &a0_);
 }
 
 TEST_F(PudWitnessSearchTest, DescendsTwoLevelsToGrandchild) {
@@ -135,8 +141,7 @@ TEST_F(PudWitnessSearchTest, DescendsTwoLevelsToGrandchild) {
     EXPECT_CALL(children_, get(&c0_)).WillRepeatedly(Return(children_set_t{&g0_}));
     EXPECT_CALL(children_, get(&g0_)).WillRepeatedly(Return(std::nullopt));
     EXPECT_CALL(unify_, unify_head(_, _)).WillRepeatedly(Return(true));
-    const pud_witness_search_result result = search_.resume(ctx);
-    EXPECT_TRUE(std::holds_alternative<pud_witness_search_result::found>(result.content));
+    search_.resume(ctx);
     EXPECT_EQ(ctx.current, &g0_);
 }
 
@@ -150,8 +155,7 @@ TEST_F(PudWitnessSearchTest, InternalUnifyWithNoUnifyingChildFailsThenTriesSibli
     EXPECT_CALL(unify_, unify_head(_, &g0_)).WillRepeatedly(Return(false));
     EXPECT_CALL(unify_, unify_head(_, &c1_)).WillRepeatedly(Return(true));
     EXPECT_CALL(get_parent_, get(&c0_)).WillRepeatedly(Return(&a0_));
-    const pud_witness_search_result result = search_.resume(ctx);
-    EXPECT_TRUE(std::holds_alternative<pud_witness_search_result::found>(result.content));
+    search_.resume(ctx);
     EXPECT_EQ(ctx.current, &c1_);
 }
 
@@ -165,8 +169,7 @@ TEST_F(PudWitnessSearchTest, ClimbsTwoParentsToReachUncle) {
     EXPECT_CALL(get_parent_, get(&c0_)).WillRepeatedly(Return(&a0_));
     EXPECT_CALL(children_, get(&c0_)).WillRepeatedly(Return(children_set_t{&g0_}));
     EXPECT_CALL(children_, get(&a0_)).WillRepeatedly(Return(children_set_t{&c0_, &c1_}));
-    const pud_witness_search_result result = search_.resume(ctx);
-    EXPECT_TRUE(std::holds_alternative<pud_witness_search_result::found>(result.content));
+    search_.resume(ctx);
     EXPECT_EQ(ctx.current, &c1_);
 }
 
@@ -175,8 +178,7 @@ TEST_F(PudWitnessSearchTest, ResumeFoundKeepsAcceptableCurrent) {
     EXPECT_CALL(children_, get(&a0_)).WillRepeatedly(Return(std::nullopt));
     EXPECT_CALL(unify_, unify_head(_, &a0_)).WillRepeatedly(Return(true));
     for (int step = 0; step < 8; ++step) {
-        const pud_witness_search_result result = search_.resume(ctx);
-        EXPECT_TRUE(std::holds_alternative<pud_witness_search_result::found>(result.content));
+        search_.resume(ctx);
         EXPECT_EQ(ctx.current, &a0_);
     }
 }
@@ -201,8 +203,7 @@ TEST_F(PudWitnessSearchTest, StressWideSiblingScan) {
             return node == &a0_ || node == &siblings.back();
         });
     pud_witness_search_context ctx = make_edge(&a0_, &a0_);
-    const pud_witness_search_result result = search_.resume(ctx);
-    EXPECT_TRUE(std::holds_alternative<pud_witness_search_result::found>(result.content));
+    search_.resume(ctx);
     EXPECT_EQ(ctx.current, &siblings.back());
 }
 
@@ -234,20 +235,14 @@ TEST_F(PudWitnessSearchTest, FuzzResumeOnFixedMockTree) {
     std::uniform_int_distribution<size_t> pick(0, legal.size() - 1);
     std::ostringstream log;
     for (int step = 0; step < 80; ++step) {
-        const auto [edge_root, current] = legal[pick(rng)];
-        log << step << ':' << edge_root << ',' << current << ' ';
-        pud_witness_search_context ctx = make_edge(edge_root, current);
-        const pud_witness_search_result result = search_.resume(ctx);
-        const bool found =
-            std::holds_alternative<pud_witness_search_result::found>(result.content);
-        const bool failed =
-            std::holds_alternative<pud_witness_search_result::failed>(result.content);
-        EXPECT_TRUE(found || failed) << "seed " << k_seed << " log " << log.str();
-        if (found) {
+        const auto [search_root, current] = legal[pick(rng)];
+        log << step << ':' << search_root << ',' << current << ' ';
+        pud_witness_search_context ctx = make_edge(search_root, current);
+        search_.resume(ctx);
+        if (ctx.current != nullptr) {
             EXPECT_TRUE(ctx.current == &g0_ || ctx.current == &c1_)
                 << "seed " << k_seed << " log " << log.str();
         }
-        if (failed)
-            EXPECT_EQ(ctx.edge_root, edge_root) << "seed " << k_seed << " log " << log.str();
+        EXPECT_EQ(ctx.search_root, search_root) << "seed " << k_seed << " log " << log.str();
     }
 }

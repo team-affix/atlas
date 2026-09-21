@@ -15,12 +15,11 @@
 #include "value_objects/expr.hpp"
 #include "value_objects/om_interval.hpp"
 #include "value_objects/pud_candidate_search_context.hpp"
-#include "value_objects/pud_candidate_search_result.hpp"
 #include "value_objects/pud_forced_unfold.hpp"
 #include "value_objects/pud_rule_id.hpp"
 #include "value_objects/pud_unfold_site.hpp"
+#include "value_objects/pud_witness_pair.hpp"
 #include "value_objects/pud_witness_search_context.hpp"
-#include "value_objects/pud_witness_search_result.hpp"
 
 using ::testing::NiceMock;
 using ::testing::Return;
@@ -48,11 +47,11 @@ struct MockDropEnv {
 };
 
 struct MockResumeCandidateSearch {
-    MOCK_METHOD(pud_candidate_search_result, resume, (pud_candidate_search_context&), ());
+    MOCK_METHOD(void, resume, (pud_candidate_search_context&), ());
 };
 
 struct MockResumeWitnessSearch {
-    MOCK_METHOD(pud_witness_search_result, resume, (pud_witness_search_context&), ());
+    MOCK_METHOD(void, resume, (pud_witness_search_context&), ());
 };
 
 using test_queries_t = pud_queries<
@@ -95,8 +94,6 @@ struct PudQueriesTest : public ::testing::Test {
         ON_CALL(get_lvc_, get(&child_)).WillByDefault(Return(2u));
         ON_CALL(get_base_interval_, get(_)).WillByDefault(Return(interval_));
         ON_CALL(allocate_, allocate_child_of(_)).WillByDefault(Return(nested_));
-        ON_CALL(candidate_, resume(_)).WillByDefault(Return(
-            pud_candidate_search_result{pud_candidate_search_result::self_witness{}}));
     }
 
     std::vector<pud_candidate_search_context*> group_at(const pud_rule_id* leaf, size_t idx) {
@@ -160,10 +157,7 @@ TEST_F(PudQueriesTest, ReplaceUnfoldedYieldsUnitThenDoesNotRepeat) {
     ON_CALL(candidate_, resume(_)).WillByDefault(
         [this](pud_candidate_search_context& ctx) {
             if (ctx.cursor == &drain_)
-                return pud_candidate_search_result{
-                    pud_candidate_search_result::axiom_refuted{}};
-            return pud_candidate_search_result{
-                pud_candidate_search_result::self_witness{}};
+                ctx.cursor = nullptr;
         });
     queries_.adopt_axiom(&drain_);
     queries_.adopt_axiom(&axiom_);
@@ -189,8 +183,10 @@ TEST_F(PudQueriesTest, ReplaceUnfoldedYieldsUnitThenDoesNotRepeat) {
 }
 
 TEST_F(PudQueriesTest, ReplaceUnfoldedYieldsRefutedWhenZeroLiveCursors) {
-    ON_CALL(candidate_, resume(_)).WillByDefault(Return(
-        pud_candidate_search_result{pud_candidate_search_result::axiom_refuted{}}));
+    ON_CALL(candidate_, resume(_)).WillByDefault(
+        [](pud_candidate_search_context& ctx) {
+            ctx.cursor = nullptr;
+        });
     queries_.adopt_axiom(&drain_);
     queries_.adopt_axiom(&axiom_);
     const std::vector<pud_forced_unfold> yields = drain_forced();
@@ -211,10 +207,7 @@ TEST_F(PudQueriesTest, UnfoldSiteSkipsRefutedCursors) {
     ON_CALL(candidate_, resume(_)).WillByDefault(
         [this](pud_candidate_search_context& ctx) {
             if (ctx.cursor == &other_)
-                return pud_candidate_search_result{
-                    pud_candidate_search_result::axiom_refuted{}};
-            return pud_candidate_search_result{
-                pud_candidate_search_result::self_witness{}};
+                ctx.cursor = nullptr;
         });
     ASSERT_EQ(queries_.unfold_site(&axiom_, 0).live.size(), 1u);
     EXPECT_EQ(queries_.unfold_site(&axiom_, 0).live[0]->cursor, &axiom_);
@@ -226,11 +219,10 @@ TEST_F(PudQueriesTest, ReplaceUnfoldedResumesWatchersOfTheDeadLeaf) {
     ON_CALL(candidate_, resume(_)).WillByDefault(
         [this](pud_candidate_search_context& ctx) {
             if (ctx.cursor != &axiom_)
-                return pud_candidate_search_result{
-                    pud_candidate_search_result::self_witness{}};
-            ctx.live_edges = {{nested_, &body_, 1, &other_, &other_}};
-            return pud_candidate_search_result{
-                pud_candidate_search_result::choice_point{}};
+                return;
+            ctx.witnesses = pud_witness_pair{
+                {nested_, &body_, 1, &other_, &other_},
+                {nested_, &body_, 1, &axiom_, &axiom_}};
         });
     queries_.adopt_axiom(&axiom_);
     queries_.adopt_axiom(&other_);
@@ -316,28 +308,32 @@ TEST_F(PudQueriesTest, ResumeDeadWitnessDropsFailedEdgesThenResumesCandidate) {
     ON_CALL(candidate_, resume(_)).WillByDefault(
         [this, &other_is_live](pud_candidate_search_context& ctx) {
             if (ctx.cursor != &axiom_)
-                return pud_candidate_search_result{
-                    pud_candidate_search_result::self_witness{}};
-            if (other_is_live)
-                ctx.live_edges = {{nested_, &body_, 1, &other_, &other_}};
-            return pud_candidate_search_result{
-                pud_candidate_search_result::choice_point{}};
+                return;
+            if (other_is_live) {
+                ctx.witnesses = pud_witness_pair{
+                    {nested_, &body_, 1, &other_, &other_},
+                    {nested_, &body_, 1, &axiom_, &axiom_}};
+                return;
+            }
+            ctx.witnesses.reset();
         });
-    ON_CALL(witness_, resume(_)).WillByDefault(Return(
-        pud_witness_search_result{pud_witness_search_result::failed{}}));
+    ON_CALL(witness_, resume(_)).WillByDefault(
+        [](pud_witness_search_context& edge) {
+            edge.current = nullptr;
+        });
     queries_.adopt_axiom(&axiom_);
     queries_.adopt_axiom(&other_);
     other_is_live = false;
     EXPECT_CALL(candidate_, resume(_)).Times(::testing::AtLeast(1));
     queries_.replace_unfolded(&other_, 0, {&child_});
-    bool saw_dropped = false;
+    bool saw_other = false;
     for (pud_candidate_search_context* ctx : group_at(&axiom_, 0)) {
-        for (const pud_witness_search_context& edge : ctx->live_edges) {
-            if (edge.current == &other_)
-                saw_dropped = true;
-        }
+        if (!ctx->witnesses.has_value())
+            continue;
+        if (ctx->witnesses->a.current == &other_ || ctx->witnesses->b.current == &other_)
+            saw_other = true;
     }
-    EXPECT_FALSE(saw_dropped);
+    EXPECT_FALSE(saw_other);
 }
 
 TEST_F(PudQueriesTest, ReplaceUnfoldedRefuteShortCircuitsLaterUnits) {
@@ -345,10 +341,7 @@ TEST_F(PudQueriesTest, ReplaceUnfoldedRefuteShortCircuitsLaterUnits) {
     ON_CALL(candidate_, resume(_)).WillByDefault(
         [this](pud_candidate_search_context& ctx) {
             if (ctx.body_goal == &body_)
-                return pud_candidate_search_result{
-                    pud_candidate_search_result::axiom_refuted{}};
-            return pud_candidate_search_result{
-                pud_candidate_search_result::self_witness{}};
+                ctx.cursor = nullptr;
         });
     queries_.adopt_axiom(&drain_);
     queries_.adopt_axiom(&axiom_);
@@ -372,10 +365,7 @@ TEST_F(PudQueriesTest, ReplaceUnfoldedEmitsUnitPerUnaryGoal) {
     ON_CALL(candidate_, resume(_)).WillByDefault(
         [this](pud_candidate_search_context& ctx) {
             if (ctx.cursor == &drain_)
-                return pud_candidate_search_result{
-                    pud_candidate_search_result::axiom_refuted{}};
-            return pud_candidate_search_result{
-                pud_candidate_search_result::self_witness{}};
+                ctx.cursor = nullptr;
         });
     queries_.adopt_axiom(&drain_);
     queries_.adopt_axiom(&axiom_);
@@ -398,11 +388,8 @@ TEST_F(PudQueriesTest, ReplaceUnfoldedOrdersDirtyLeavesByRuleId) {
     ON_CALL(get_added_body_goals_, get(&other_)).WillByDefault(ReturnRef(axiom_goals_));
     ON_CALL(candidate_, resume(_)).WillByDefault(
         [this](pud_candidate_search_context& ctx) {
-            if (ctx.cursor == &drain_)
-                return pud_candidate_search_result{
-                    pud_candidate_search_result::self_witness{}};
-            return pud_candidate_search_result{
-                pud_candidate_search_result::axiom_refuted{}};
+            if (ctx.cursor != &drain_)
+                ctx.cursor = nullptr;
         });
     queries_.adopt_axiom(&drain_);
     queries_.adopt_axiom(&other_);

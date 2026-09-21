@@ -11,7 +11,7 @@ struct pud_witness_search_context {
     om_interval interval;
     const expr* body_goal;
     uint32_t frame_offset;
-    const pud_rule_id* edge_root;
+    const pud_rule_id* search_root;
     const pud_rule_id* current;
     auto operator<=>(const pud_witness_search_context&) const = default;
 };
