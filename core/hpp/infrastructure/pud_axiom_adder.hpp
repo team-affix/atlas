@@ -13,7 +13,7 @@ template<typename IMakeAxiom,
          typename IStoreLvc,
          typename IStoreParent,
          typename IAllocateRootInterval,
-         typename IStoreBaseInterval,
+         typename IStoreInterval,
          typename IAdoptAxiom>
 struct pud_axiom_adder {
     pud_axiom_adder(IMakeAxiom& make_axiom,
@@ -22,7 +22,7 @@ struct pud_axiom_adder {
                     IStoreLvc& store_lvc,
                     IStoreParent& store_parent,
                     IAllocateRootInterval& allocate_root_interval,
-                    IStoreBaseInterval& store_base_interval,
+                    IStoreInterval& store_interval,
                     IAdoptAxiom& adopt_axiom);
     const pud_rule_id* add_axiom(const rule& axiom);
 private:
@@ -32,21 +32,21 @@ private:
     IStoreLvc& store_lvc_;
     IStoreParent& store_parent_;
     IAllocateRootInterval& allocate_root_interval_;
-    IStoreBaseInterval& store_base_interval_;
+    IStoreInterval& store_interval_;
     IAdoptAxiom& adopt_axiom_;
     size_t next_entry_idx_;
 };
 
 template<typename IMA, typename ISAU, typename ISABG, typename ISL,
-         typename ISP, typename IARI, typename ISBI, typename IAO>
-pud_axiom_adder<IMA, ISAU, ISABG, ISL, ISP, IARI, ISBI, IAO>::pud_axiom_adder(
+         typename ISP, typename IARI, typename ISI, typename IAO>
+pud_axiom_adder<IMA, ISAU, ISABG, ISL, ISP, IARI, ISI, IAO>::pud_axiom_adder(
         IMA& make_axiom,
         ISAU& store_added_unifications,
         ISABG& store_added_body_goals,
         ISL& store_lvc,
         ISP& store_parent,
         IARI& allocate_root_interval,
-        ISBI& store_base_interval,
+        ISI& store_interval,
         IAO& adopt_axiom)
     : make_axiom_(make_axiom)
     , store_added_unifications_(store_added_unifications)
@@ -54,13 +54,13 @@ pud_axiom_adder<IMA, ISAU, ISABG, ISL, ISP, IARI, ISBI, IAO>::pud_axiom_adder(
     , store_lvc_(store_lvc)
     , store_parent_(store_parent)
     , allocate_root_interval_(allocate_root_interval)
-    , store_base_interval_(store_base_interval)
+    , store_interval_(store_interval)
     , adopt_axiom_(adopt_axiom)
     , next_entry_idx_(0) {}
 
 template<typename IMA, typename ISAU, typename ISABG, typename ISL,
-         typename ISP, typename IARI, typename ISBI, typename IAO>
-const pud_rule_id* pud_axiom_adder<IMA, ISAU, ISABG, ISL, ISP, IARI, ISBI, IAO>::add_axiom(
+         typename ISP, typename IARI, typename ISI, typename IAO>
+const pud_rule_id* pud_axiom_adder<IMA, ISAU, ISABG, ISL, ISP, IARI, ISI, IAO>::add_axiom(
         const rule& axiom) {
     const pud_rule_id* id = make_axiom_.make_axiom(next_entry_idx_);
     ++next_entry_idx_;
@@ -68,7 +68,7 @@ const pud_rule_id* pud_axiom_adder<IMA, ISAU, ISABG, ISL, ISP, IARI, ISBI, IAO>:
     store_added_body_goals_.store(id, axiom.body);
     store_lvc_.store(id, axiom.var_count);
     store_parent_.store(id, nullptr);
-    store_base_interval_.store(id, allocate_root_interval_.allocate_root());
+    store_interval_.store(id, allocate_root_interval_.allocate_root());
     adopt_axiom_.adopt_axiom(id);
     return id;
 }

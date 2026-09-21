@@ -42,7 +42,7 @@ struct MockAllocateRootInterval {
     MOCK_METHOD(om_interval, allocate_root, (), ());
 };
 
-struct MockStoreBaseInterval {
+struct MockStoreInterval {
     MOCK_METHOD(void, store, (const pud_rule_id*, om_interval), ());
 };
 
@@ -57,7 +57,7 @@ using test_adder_t = pud_axiom_adder<
     NiceMock<MockStoreLvc>,
     NiceMock<MockStoreParent>,
     NiceMock<MockAllocateRootInterval>,
-    NiceMock<MockStoreBaseInterval>,
+    NiceMock<MockStoreInterval>,
     NiceMock<MockAdoptAxiom>>;
 
 struct PudAxiomAdderTest : public ::testing::Test {
@@ -89,7 +89,7 @@ struct PudAxiomAdderTest : public ::testing::Test {
     NiceMock<MockStoreLvc> store_lvc_;
     NiceMock<MockStoreParent> store_parent_;
     NiceMock<MockAllocateRootInterval> allocate_root_;
-    NiceMock<MockStoreBaseInterval> store_interval_;
+    NiceMock<MockStoreInterval> store_interval_;
     NiceMock<MockAdoptAxiom> adopt_;
     test_adder_t adder_;
 };

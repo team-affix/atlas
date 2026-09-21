@@ -11,18 +11,22 @@ pud_manifest::pud_manifest()
     , lvc_()
     , children_()
     , parent_()
-    , base_interval_()
-    , unify_head_(om_, parent_, added_unifications_, fpa_, fpa_,
-                  globalizer_, exprs_, exprs_)
-    , witness_search_(children_, parent_, unify_head_)
+    , node_interval_()
+    , touched_reps_()
+    , pud_normalizer_(globalizer_, fpa_, fpa_, exprs_, exprs_)
+    , witness_search_(children_, parent_, pool_,
+                      node_interval_, node_interval_, node_interval_,
+                      om_, added_unifications_,
+                      fpa_, fpa_,
+                      globalizer_, exprs_, touched_reps_)
     , candidate_search_(witness_search_, children_, parent_,
-                        unify_head_, added_body_goals_)
-    , queries_(added_body_goals_, lvc_, base_interval_, om_, unify_head_,
+                        added_body_goals_)
+    , queries_(added_body_goals_, lvc_,
                candidate_search_, witness_search_)
-    , unfolder_(queries_, unify_head_, unify_head_, exprs_,
+    , unfolder_(queries_, pud_normalizer_, pud_normalizer_, exprs_,
                 lvc_, pool_,
                 added_unifications_, added_body_goals_, lvc_,
-                children_, parent_, base_interval_, om_,
-                base_interval_, queries_)
+                children_, parent_, node_interval_, om_,
+                node_interval_, touched_reps_, queries_)
     , axiom_adder_(pool_, added_unifications_, added_body_goals_, lvc_,
-                   parent_, om_, base_interval_, queries_) {}
+                   parent_, om_, node_interval_, queries_) {}

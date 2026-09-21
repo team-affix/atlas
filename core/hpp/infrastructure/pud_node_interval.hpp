@@ -1,15 +1,15 @@
-#ifndef PUD_NODE_BASE_INTERVAL_HPP
-#define PUD_NODE_BASE_INTERVAL_HPP
+#ifndef PUD_NODE_INTERVAL_HPP
+#define PUD_NODE_INTERVAL_HPP
 
 #include <unordered_map>
 #include "value_objects/om_interval.hpp"
 #include "value_objects/pud_rule_id.hpp"
-#include "debug_assert.hpp"
 
-struct pud_node_base_interval {
-    pud_node_base_interval();
+struct pud_node_interval {
+    pud_node_interval();
     void store(const pud_rule_id* id, om_interval interval);
     const om_interval& get(const pud_rule_id* id) const;
+    bool contains(const pud_rule_id* id) const;
 private:
     using map_t = std::unordered_map<const pud_rule_id*, om_interval>;
 

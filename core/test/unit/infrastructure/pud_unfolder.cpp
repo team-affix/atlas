@@ -9,6 +9,7 @@
 #include <variant>
 #include <vector>
 #include "infrastructure/pud_unfolder.hpp"
+#include "infrastructure/coroutine.hpp"
 #include "value_objects/expr.hpp"
 #include "value_objects/framed_expr.hpp"
 #include "value_objects/om_interval.hpp"
@@ -31,15 +32,13 @@ struct MockUnfoldSite {
     MOCK_METHOD(pud_unfold_site, unfold_site, (const pud_rule_id*, size_t), ());
 };
 
-struct MockUnifyCallee {
-    MOCK_METHOD(bool, unify_callee,
-                (pud_candidate_search_context&, const pud_rule_id*, (std::vector<uint32_t>&), om_interval&), ());
+struct MockSetNormEnv {
+    MOCK_METHOD(void, set_normalization_environment, (om_interval, uint32_t), ());
 };
 
 struct MockNormalize {
     MOCK_METHOD(const expr*, normalize,
-                (om_interval, framed_expr, uint32_t,
-                 (std::unordered_map<uint32_t, uint32_t>&)), ());
+                (framed_expr, (std::unordered_map<uint32_t, uint32_t>&)), ());
 };
 
 struct MockMakeVar {
@@ -75,7 +74,7 @@ struct MockStoreParent {
     MOCK_METHOD(void, store, (const pud_rule_id*, const pud_rule_id*), ());
 };
 
-struct MockGetBaseInterval {
+struct MockGetInterval {
     MOCK_METHOD(const om_interval&, get, (const pud_rule_id*), ());
 };
 
@@ -83,8 +82,12 @@ struct MockAllocateChildInterval {
     MOCK_METHOD(om_interval, allocate_child_of, (const om_interval&), ());
 };
 
-struct MockStoreBaseInterval {
+struct MockStoreInterval {
     MOCK_METHOD(void, store, (const pud_rule_id*, om_interval), ());
+};
+
+struct MockGetTouchedReps {
+    MOCK_METHOD(const std::vector<uint32_t>&, get, (const pud_rule_id*), ());
 };
 
 struct MockReplaceUnfolded {
@@ -94,7 +97,7 @@ struct MockReplaceUnfolded {
 
 using test_unfolder_t = pud_unfolder<
     NiceMock<MockUnfoldSite>,
-    NiceMock<MockUnifyCallee>,
+    NiceMock<MockSetNormEnv>,
     NiceMock<MockNormalize>,
     NiceMock<MockMakeVar>,
     NiceMock<MockGetLvc>,
@@ -104,9 +107,10 @@ using test_unfolder_t = pud_unfolder<
     NiceMock<MockStoreLvc>,
     NiceMock<MockStoreChildren>,
     NiceMock<MockStoreParent>,
-    NiceMock<MockGetBaseInterval>,
+    NiceMock<MockGetInterval>,
     NiceMock<MockAllocateChildInterval>,
-    NiceMock<MockStoreBaseInterval>,
+    NiceMock<MockStoreInterval>,
+    NiceMock<MockGetTouchedReps>,
     NiceMock<MockReplaceUnfolded>>;
 
 struct PudUnfolderTest : public ::testing::Test {
@@ -125,20 +129,21 @@ struct PudUnfolderTest : public ::testing::Test {
         , child_{pud_rule_id::inference{&leaf_, 0, &leaf_}}
         , child_a_{pud_rule_id::inference{&leaf_, 0, &callee_a_}}
         , child_b_{pud_rule_id::inference{&leaf_, 0, &callee_b_}}
-        , live_ctx_{interval_, &body_, 1, &leaf_, {}, {&body_}}
+        , live_ctx_{&leaf_, 0, &body_, 1, &leaf_, {}, {&body_}}
         , site_{&body_, {&live_ctx_}}
-        , unfolder_(unfold_site_, unify_callee_, normalize_, make_var_,
+        , empty_touched_{}
+        , unfolder_(unfold_site_, set_norm_env_, normalize_, make_var_,
                     get_lvc_, make_inference_,
                     store_unifs_, store_goals_, store_lvc_,
-                    store_children_, store_parent_, get_base_interval_, allocate_child_,
-                    store_interval_, replace_unfolded_) {
+                    store_children_, store_parent_, get_interval_, allocate_child_,
+                    store_interval_, get_touched_, replace_unfolded_) {
         ON_CALL(unfold_site_, unfold_site(&leaf_, 0)).WillByDefault(Return(site_));
         ON_CALL(get_lvc_, get(&leaf_)).WillByDefault(Return(1u));
-        ON_CALL(get_base_interval_, get(&leaf_)).WillByDefault(ReturnRef(interval_));
+        ON_CALL(get_interval_, get(_)).WillByDefault(ReturnRef(interval_));
         ON_CALL(allocate_child_, allocate_child_of(_)).WillByDefault(Return(nested_));
-        ON_CALL(unify_callee_, unify_callee(_, _, _, _)).WillByDefault(Return(true));
+        ON_CALL(get_touched_, get(_)).WillByDefault(ReturnRef(empty_touched_));
         ON_CALL(make_var_, make_var(_)).WillByDefault(Return(&var0_));
-        ON_CALL(normalize_, normalize(_, _, _, _)).WillByDefault(Return(&body_));
+        ON_CALL(normalize_, normalize(_, _)).WillByDefault(Return(&body_));
         ON_CALL(make_inference_, make_inference(_, _, _)).WillByDefault(Return(&child_));
         ON_CALL(replace_unfolded_, replace_unfolded(_, _, _)).WillByDefault(
             Return(std::vector<pud_forced_unfold>{
@@ -178,8 +183,9 @@ struct PudUnfolderTest : public ::testing::Test {
     pud_rule_id child_b_;
     pud_candidate_search_context live_ctx_;
     pud_unfold_site site_;
+    std::vector<uint32_t> empty_touched_;
     NiceMock<MockUnfoldSite> unfold_site_;
-    NiceMock<MockUnifyCallee> unify_callee_;
+    NiceMock<MockSetNormEnv> set_norm_env_;
     NiceMock<MockNormalize> normalize_;
     NiceMock<MockMakeVar> make_var_;
     NiceMock<MockGetLvc> get_lvc_;
@@ -189,9 +195,10 @@ struct PudUnfolderTest : public ::testing::Test {
     NiceMock<MockStoreLvc> store_lvc_;
     NiceMock<MockStoreChildren> store_children_;
     NiceMock<MockStoreParent> store_parent_;
-    NiceMock<MockGetBaseInterval> get_base_interval_;
+    NiceMock<MockGetInterval> get_interval_;
     NiceMock<MockAllocateChildInterval> allocate_child_;
-    NiceMock<MockStoreBaseInterval> store_interval_;
+    NiceMock<MockStoreInterval> store_interval_;
+    NiceMock<MockGetTouchedReps> get_touched_;
     NiceMock<MockReplaceUnfolded> replace_unfolded_;
     test_unfolder_t unfolder_;
 };
@@ -199,9 +206,9 @@ struct PudUnfolderTest : public ::testing::Test {
 TEST_F(PudUnfolderTest, UnfoldLinksChildRewritesQueriesAndYieldsUnit) {
     EXPECT_CALL(make_inference_, make_inference(&leaf_, 0, &leaf_))
         .WillOnce(Return(&child_));
+    EXPECT_CALL(store_interval_, store(&child_, _));
     EXPECT_CALL(store_children_, store(&leaf_, std::set<const pud_rule_id*>{&child_}));
     EXPECT_CALL(store_parent_, store(&child_, &leaf_));
-    EXPECT_CALL(store_interval_, store(&child_, _));
     EXPECT_CALL(replace_unfolded_, replace_unfolded(&leaf_, 0, ElementsAre(&child_)));
 
     const unfold_out out = drain(unfolder_.unfold(&leaf_, 0));
@@ -230,8 +237,8 @@ TEST_F(PudUnfolderTest, LiveCursorIsTheCalleePassedToInference) {
 }
 
 TEST_F(PudUnfolderTest, UnfoldCreatesOneChildPerLiveCandidate) {
-    pud_candidate_search_context ctx_a{interval_, &body_, 1, &callee_a_, {}, {&body_}};
-    pud_candidate_search_context ctx_b{interval_, &body_, 1, &callee_b_, {}, {&body_}};
+    pud_candidate_search_context ctx_a{&leaf_, 0, &body_, 1, &callee_a_, {}, {&body_}};
+    pud_candidate_search_context ctx_b{&leaf_, 0, &body_, 1, &callee_b_, {}, {&body_}};
     site_.live = {&ctx_a, &ctx_b};
     ON_CALL(unfold_site_, unfold_site(&leaf_, 0)).WillByDefault(Return(site_));
     ON_CALL(replace_unfolded_, replace_unfolded(_, _, _)).WillByDefault(
@@ -241,14 +248,14 @@ TEST_F(PudUnfolderTest, UnfoldCreatesOneChildPerLiveCandidate) {
         InSequence seq;
         EXPECT_CALL(make_inference_, make_inference(&leaf_, 0, &callee_a_))
             .WillOnce(Return(&child_a_));
+        EXPECT_CALL(store_interval_, store(&child_a_, _));
         EXPECT_CALL(make_inference_, make_inference(&leaf_, 0, &callee_b_))
             .WillOnce(Return(&child_b_));
+        EXPECT_CALL(store_interval_, store(&child_b_, _));
         EXPECT_CALL(store_children_,
                     store(&leaf_, std::set<const pud_rule_id*>{&child_a_, &child_b_}));
         EXPECT_CALL(store_parent_, store(&child_a_, &leaf_));
-        EXPECT_CALL(store_interval_, store(&child_a_, _));
         EXPECT_CALL(store_parent_, store(&child_b_, &leaf_));
-        EXPECT_CALL(store_interval_, store(&child_b_, _));
         EXPECT_CALL(replace_unfolded_,
                     replace_unfolded(&leaf_, 0, ElementsAre(&child_a_, &child_b_)));
     }
@@ -258,14 +265,10 @@ TEST_F(PudUnfolderTest, UnfoldCreatesOneChildPerLiveCandidate) {
 }
 
 TEST_F(PudUnfolderTest, MaterializePassesTouchedRepsAsAddedUnificationsAndLiftsLvc) {
-    ON_CALL(unify_callee_, unify_callee(_, _, _, _)).WillByDefault(
-        [](pud_candidate_search_context&, const pud_rule_id*, std::vector<uint32_t>& reps, om_interval&) {
-            reps = {3, 5};
-            return true;
-        });
-    ON_CALL(normalize_, normalize(_, _, _, _)).WillByDefault(
-        [](om_interval, framed_expr, uint32_t,
-           std::unordered_map<uint32_t, uint32_t>& translation) {
+    std::vector<uint32_t> touched{3, 5};
+    ON_CALL(get_touched_, get(_)).WillByDefault(ReturnRef(touched));
+    ON_CALL(normalize_, normalize(_, _)).WillByDefault(
+        [](framed_expr, std::unordered_map<uint32_t, uint32_t>& translation) {
             const uint32_t key = static_cast<uint32_t>(translation.size());
             translation.emplace(key, key);
             return nullptr;
@@ -330,9 +333,9 @@ TEST_F(PudUnfolderTest, UnfoldSequenceIsMaterializeThenStoreThenReplace) {
         InSequence seq;
         EXPECT_CALL(make_inference_, make_inference(&leaf_, 0, &leaf_))
             .WillOnce(Return(&child_));
+        EXPECT_CALL(store_interval_, store(&child_, _));
         EXPECT_CALL(store_children_, store(&leaf_, std::set<const pud_rule_id*>{&child_}));
         EXPECT_CALL(store_parent_, store(&child_, &leaf_));
-        EXPECT_CALL(store_interval_, store(&child_, _));
         EXPECT_CALL(replace_unfolded_, replace_unfolded(&leaf_, 0, ElementsAre(&child_)))
             .WillOnce(Return(std::vector<pud_forced_unfold>{}));
         drain(unfolder_.unfold(&leaf_, 0));
@@ -359,7 +362,7 @@ TEST_F(PudUnfolderTest, StressManyCallees) {
     ctxs.reserve(24);
     for (int idx = 0; idx < 24; ++idx) {
         ctxs.push_back(pud_candidate_search_context{
-            interval_, &body_, 1, callee_ptrs[static_cast<size_t>(idx)], {}, {&body_}});
+            &leaf_, 0, &body_, 1, callee_ptrs[static_cast<size_t>(idx)], {}, {&body_}});
     }
     site_.live.clear();
     for (int idx = 0; idx < 24; ++idx)
@@ -373,14 +376,14 @@ TEST_F(PudUnfolderTest, StressManyCallees) {
             EXPECT_CALL(make_inference_,
                         make_inference(&leaf_, 0, callee_ptrs[static_cast<size_t>(idx)]))
                 .WillOnce(Return(child_ptrs[static_cast<size_t>(idx)]));
+            EXPECT_CALL(store_interval_,
+                        store(child_ptrs[static_cast<size_t>(idx)], _));
         }
         EXPECT_CALL(store_children_, store(&leaf_, std::set<const pud_rule_id*>(
             child_ptrs.begin(), child_ptrs.end())));
         for (int idx = 0; idx < 24; ++idx) {
             EXPECT_CALL(store_parent_,
                         store(child_ptrs[static_cast<size_t>(idx)], &leaf_));
-            EXPECT_CALL(store_interval_,
-                        store(child_ptrs[static_cast<size_t>(idx)], _));
         }
         EXPECT_CALL(replace_unfolded_, replace_unfolded(&leaf_, 0, child_ptrs));
     }
@@ -415,7 +418,7 @@ TEST_F(PudUnfolderTest, FuzzUnfold) {
         ctxs.reserve(static_cast<size_t>(count));
         for (int idx = 0; idx < count; ++idx) {
             ctxs.push_back(pud_candidate_search_context{
-                interval_, &body_, 1, callee_ptrs[static_cast<size_t>(idx)], {}, {&body_}});
+                &leaf_, 0, &body_, 1, callee_ptrs[static_cast<size_t>(idx)], {}, {&body_}});
         }
         site_.live.clear();
         for (int idx = 0; idx < count; ++idx)

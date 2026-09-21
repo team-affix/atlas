@@ -13,7 +13,6 @@
 #include <vector>
 #include "infrastructure/pud_queries.hpp"
 #include "value_objects/expr.hpp"
-#include "value_objects/om_interval.hpp"
 #include "value_objects/pud_candidate_search_context.hpp"
 #include "value_objects/pud_forced_unfold.hpp"
 #include "value_objects/pud_rule_id.hpp"
@@ -34,18 +33,6 @@ struct MockGetLvc {
     MOCK_METHOD(uint32_t, get, (const pud_rule_id*), ());
 };
 
-struct MockGetBaseInterval {
-    MOCK_METHOD(om_interval, get, (const pud_rule_id*), ());
-};
-
-struct MockAllocateChildInterval {
-    MOCK_METHOD(om_interval, allocate_child_of, (const om_interval&), ());
-};
-
-struct MockDropEnv {
-    MOCK_METHOD(void, drop_env, (om_interval), ());
-};
-
 struct MockResumeCandidateSearch {
     MOCK_METHOD(void, resume, (pud_candidate_search_context&), ());
 };
@@ -57,21 +44,12 @@ struct MockResumeWitnessSearch {
 using test_queries_t = pud_queries<
     NiceMock<MockGetAddedBodyGoals>,
     NiceMock<MockGetLvc>,
-    NiceMock<MockGetBaseInterval>,
-    NiceMock<MockAllocateChildInterval>,
-    NiceMock<MockDropEnv>,
     NiceMock<MockResumeCandidateSearch>,
     NiceMock<MockResumeWitnessSearch>>;
 
 struct PudQueriesTest : public ::testing::Test {
     PudQueriesTest()
-        : open_(1)
-        , close_(2)
-        , nested_open_(3)
-        , nested_close_(4)
-        , interval_{om_label(&open_), om_label(&close_)}
-        , nested_{om_label(&nested_open_), om_label(&nested_close_)}
-        , body_{expr::var{0}}
+        : body_{expr::var{0}}
         , leftover_{expr::var{1}}
         , axiom_{pud_rule_id::axiom{0}}
         , other_{pud_rule_id::axiom{1}}
@@ -82,8 +60,7 @@ struct PudQueriesTest : public ::testing::Test {
         , empty_goals_{}
         , child_goals_{&leftover_}
         , drain_goals_{&body_}
-        , queries_(get_added_body_goals_, get_lvc_, get_base_interval_, allocate_,
-                   drop_, candidate_, witness_) {
+        , queries_(get_added_body_goals_, get_lvc_, candidate_, witness_) {
         ON_CALL(get_added_body_goals_, get(&axiom_)).WillByDefault(ReturnRef(axiom_goals_));
         ON_CALL(get_added_body_goals_, get(&other_)).WillByDefault(ReturnRef(empty_goals_));
         ON_CALL(get_added_body_goals_, get(&drain_)).WillByDefault(ReturnRef(drain_goals_));
@@ -92,8 +69,6 @@ struct PudQueriesTest : public ::testing::Test {
         ON_CALL(get_lvc_, get(&other_)).WillByDefault(Return(1u));
         ON_CALL(get_lvc_, get(&drain_)).WillByDefault(Return(1u));
         ON_CALL(get_lvc_, get(&child_)).WillByDefault(Return(2u));
-        ON_CALL(get_base_interval_, get(_)).WillByDefault(Return(interval_));
-        ON_CALL(allocate_, allocate_child_of(_)).WillByDefault(Return(nested_));
     }
 
     std::vector<pud_candidate_search_context*> group_at(const pud_rule_id* leaf, size_t idx) {
@@ -108,12 +83,6 @@ struct PudQueriesTest : public ::testing::Test {
         return queries_.replace_unfolded(&drain_, 0, {&child_});
     }
 
-    uint64_t open_;
-    uint64_t close_;
-    uint64_t nested_open_;
-    uint64_t nested_close_;
-    om_interval interval_;
-    om_interval nested_;
     expr body_;
     expr leftover_;
     pud_rule_id axiom_;
@@ -127,9 +96,6 @@ struct PudQueriesTest : public ::testing::Test {
     std::vector<const expr*> drain_goals_;
     NiceMock<MockGetAddedBodyGoals> get_added_body_goals_;
     NiceMock<MockGetLvc> get_lvc_;
-    NiceMock<MockGetBaseInterval> get_base_interval_;
-    NiceMock<MockAllocateChildInterval> allocate_;
-    NiceMock<MockDropEnv> drop_;
     NiceMock<MockResumeCandidateSearch> candidate_;
     NiceMock<MockResumeWitnessSearch> witness_;
     test_queries_t queries_;
@@ -138,6 +104,8 @@ struct PudQueriesTest : public ::testing::Test {
 TEST_F(PudQueriesTest, AdoptAxiomStoresOneQueryPerBodyGoal) {
     queries_.adopt_axiom(&axiom_);
     pud_candidate_search_context* ctx = ctx_at(&axiom_, 0);
+    EXPECT_EQ(ctx->query_leaf, &axiom_);
+    EXPECT_EQ(ctx->body_goal_idx, 0u);
     EXPECT_EQ(ctx->body_goal, &body_);
     EXPECT_EQ(ctx->frame_offset, 1u);
     ASSERT_EQ(group_at(&axiom_, 0).size(), 1u);
@@ -221,8 +189,8 @@ TEST_F(PudQueriesTest, ReplaceUnfoldedResumesWatchersOfTheDeadLeaf) {
             if (ctx.cursor != &axiom_)
                 return;
             ctx.witnesses = pud_witness_pair{
-                {nested_, &body_, 1, &other_, &other_},
-                {nested_, &body_, 1, &axiom_, &axiom_}};
+                {&axiom_, 0, &body_, 1, &other_, &other_},
+                {&axiom_, 0, &body_, 1, &axiom_, &axiom_}};
         });
     queries_.adopt_axiom(&axiom_);
     queries_.adopt_axiom(&other_);
@@ -236,6 +204,9 @@ TEST_F(PudQueriesTest, ReplaceUnfoldedClearsParentAndForksLeftoverOntoChild) {
     queries_.replace_unfolded(&axiom_, 0, {&child_});
     EXPECT_THROW(queries_.unfold_site(&axiom_, 0), std::out_of_range);
     EXPECT_EQ(ctx_at(&child_, 0)->body_goal, &leftover_);
+    EXPECT_EQ(ctx_at(&child_, 0)->query_leaf, &child_);
+    EXPECT_EQ(ctx_at(&child_, 0)->body_goal_idx, 0u);
+    EXPECT_EQ(ctx_at(&child_, 0)->frame_offset, 2u);
     EXPECT_EQ(ctx_at(&child_, 1)->body_goal, &leftover_);
 }
 
@@ -311,8 +282,8 @@ TEST_F(PudQueriesTest, ResumeDeadWitnessDropsFailedEdgesThenResumesCandidate) {
                 return;
             if (other_is_live) {
                 ctx.witnesses = pud_witness_pair{
-                    {nested_, &body_, 1, &other_, &other_},
-                    {nested_, &body_, 1, &axiom_, &axiom_}};
+                    {&axiom_, 0, &body_, 1, &other_, &other_},
+                    {&axiom_, 0, &body_, 1, &axiom_, &axiom_}};
                 return;
             }
             ctx.witnesses.reset();
