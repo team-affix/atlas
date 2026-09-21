@@ -1,4 +1,4 @@
-// pud_unfolder: unfold_site, materialize stores, link, bind_child, replace_unfolded.
+// pud_unfolder: unfold_site, materialize stores, link, store child interval, replace_unfolded.
 
 #include <gtest/gtest.h>
 #include <gmock/gmock.h>
@@ -23,6 +23,7 @@ using ::testing::ElementsAre;
 using ::testing::InSequence;
 using ::testing::NiceMock;
 using ::testing::Return;
+using ::testing::ReturnRef;
 using ::testing::SaveArg;
 using ::testing::_;
 
@@ -71,8 +72,16 @@ struct MockLinkChildren {
                 (const pud_rule_id*, (const std::vector<const pud_rule_id*>&)), ());
 };
 
-struct MockBindChildInterval {
-    MOCK_METHOD(void, bind_child, (const pud_rule_id*, const pud_rule_id*), ());
+struct MockGetBaseInterval {
+    MOCK_METHOD(const om_interval&, get, (const pud_rule_id*), ());
+};
+
+struct MockAllocateChildInterval {
+    MOCK_METHOD(om_interval, allocate_child_of, (const om_interval&), ());
+};
+
+struct MockStoreBaseInterval {
+    MOCK_METHOD(void, store, (const pud_rule_id*, om_interval), ());
 };
 
 struct MockReplaceUnfolded {
@@ -91,14 +100,19 @@ using test_unfolder_t = pud_unfolder<
     NiceMock<MockStoreAddedBodyGoals>,
     NiceMock<MockStoreLvc>,
     NiceMock<MockLinkChildren>,
-    NiceMock<MockBindChildInterval>,
+    NiceMock<MockGetBaseInterval>,
+    NiceMock<MockAllocateChildInterval>,
+    NiceMock<MockStoreBaseInterval>,
     NiceMock<MockReplaceUnfolded>>;
 
 struct PudUnfolderTest : public ::testing::Test {
     PudUnfolderTest()
         : open_(10)
         , close_(40)
+        , nested_open_(15)
+        , nested_close_(20)
         , interval_{om_label(&open_), om_label(&close_)}
+        , nested_{om_label(&nested_open_), om_label(&nested_close_)}
         , body_{expr::functor{1, {}}}
         , var0_{expr::var{0}}
         , leaf_{pud_rule_id::axiom{0}}
@@ -112,9 +126,12 @@ struct PudUnfolderTest : public ::testing::Test {
         , unfolder_(unfold_site_, unify_callee_, normalize_, make_var_,
                     get_lvc_, make_inference_,
                     store_unifs_, store_goals_, store_lvc_,
-                    link_children_, bind_child_, replace_unfolded_) {
+                    link_children_, get_base_interval_, allocate_child_,
+                    store_interval_, replace_unfolded_) {
         ON_CALL(unfold_site_, unfold_site(&leaf_, 0)).WillByDefault(Return(site_));
         ON_CALL(get_lvc_, get(&leaf_)).WillByDefault(Return(1u));
+        ON_CALL(get_base_interval_, get(&leaf_)).WillByDefault(ReturnRef(interval_));
+        ON_CALL(allocate_child_, allocate_child_of(_)).WillByDefault(Return(nested_));
         ON_CALL(unify_callee_, unify_callee(_, _, _, _)).WillByDefault(Return(true));
         ON_CALL(make_var_, make_var(_)).WillByDefault(Return(&var0_));
         ON_CALL(normalize_, normalize(_, _, _, _)).WillByDefault(Return(&body_));
@@ -143,7 +160,10 @@ struct PudUnfolderTest : public ::testing::Test {
 
     uint64_t open_;
     uint64_t close_;
+    uint64_t nested_open_;
+    uint64_t nested_close_;
     om_interval interval_;
+    om_interval nested_;
     expr body_;
     expr var0_;
     pud_rule_id leaf_;
@@ -164,7 +184,9 @@ struct PudUnfolderTest : public ::testing::Test {
     NiceMock<MockStoreAddedBodyGoals> store_goals_;
     NiceMock<MockStoreLvc> store_lvc_;
     NiceMock<MockLinkChildren> link_children_;
-    NiceMock<MockBindChildInterval> bind_child_;
+    NiceMock<MockGetBaseInterval> get_base_interval_;
+    NiceMock<MockAllocateChildInterval> allocate_child_;
+    NiceMock<MockStoreBaseInterval> store_interval_;
     NiceMock<MockReplaceUnfolded> replace_unfolded_;
     test_unfolder_t unfolder_;
 };
@@ -173,7 +195,7 @@ TEST_F(PudUnfolderTest, UnfoldLinksChildRewritesQueriesAndYieldsUnit) {
     EXPECT_CALL(make_inference_, make_inference(&leaf_, 0, &leaf_))
         .WillOnce(Return(&child_));
     EXPECT_CALL(link_children_, link_children(&leaf_, ElementsAre(&child_)));
-    EXPECT_CALL(bind_child_, bind_child(&child_, &leaf_));
+    EXPECT_CALL(store_interval_, store(&child_, _));
     EXPECT_CALL(replace_unfolded_, replace_unfolded(&leaf_, 0, ElementsAre(&child_)));
 
     const unfold_out out = drain(unfolder_.unfold(&leaf_, 0));
@@ -218,8 +240,8 @@ TEST_F(PudUnfolderTest, UnfoldCreatesOneChildPerLiveCandidate) {
             .WillOnce(Return(&child_b_));
         EXPECT_CALL(link_children_,
                     link_children(&leaf_, ElementsAre(&child_a_, &child_b_)));
-        EXPECT_CALL(bind_child_, bind_child(&child_a_, &leaf_));
-        EXPECT_CALL(bind_child_, bind_child(&child_b_, &leaf_));
+        EXPECT_CALL(store_interval_, store(&child_a_, _));
+        EXPECT_CALL(store_interval_, store(&child_b_, _));
         EXPECT_CALL(replace_unfolded_,
                     replace_unfolded(&leaf_, 0, ElementsAre(&child_a_, &child_b_)));
     }
@@ -297,13 +319,13 @@ TEST_F(PudUnfolderTest, UnfoldYieldsMultipleForcedUnfoldsInOrder) {
     EXPECT_EQ(std::get<pud_forced_unfold::refuted>(out.yields[1].content).leaf, &child_b_);
 }
 
-TEST_F(PudUnfolderTest, UnfoldSequenceIsMaterializeThenLinkThenBindThenReplace) {
+TEST_F(PudUnfolderTest, UnfoldSequenceIsMaterializeThenLinkThenStoreThenReplace) {
     for (int step = 0; step < 3; ++step) {
         InSequence seq;
         EXPECT_CALL(make_inference_, make_inference(&leaf_, 0, &leaf_))
             .WillOnce(Return(&child_));
         EXPECT_CALL(link_children_, link_children(&leaf_, ElementsAre(&child_)));
-        EXPECT_CALL(bind_child_, bind_child(&child_, &leaf_));
+        EXPECT_CALL(store_interval_, store(&child_, _));
         EXPECT_CALL(replace_unfolded_, replace_unfolded(&leaf_, 0, ElementsAre(&child_)))
             .WillOnce(Return(std::vector<pud_forced_unfold>{}));
         drain(unfolder_.unfold(&leaf_, 0));
@@ -344,8 +366,8 @@ TEST_F(PudUnfolderTest, StressManyCallees) {
         }
         EXPECT_CALL(link_children_, link_children(&leaf_, child_ptrs));
         for (int idx = 0; idx < 24; ++idx) {
-            EXPECT_CALL(bind_child_,
-                        bind_child(child_ptrs[static_cast<size_t>(idx)], &leaf_));
+            EXPECT_CALL(store_interval_,
+                        store(child_ptrs[static_cast<size_t>(idx)], _));
         }
         EXPECT_CALL(replace_unfolded_, replace_unfolded(&leaf_, 0, child_ptrs));
     }

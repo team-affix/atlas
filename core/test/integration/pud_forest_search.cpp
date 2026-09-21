@@ -24,7 +24,6 @@
 #include "value_objects/pud_witness_search_context.hpp"
 #include "value_objects/pud_witness_search_result.hpp"
 
-using base_interval_t = pud_node_base_interval<order_maintenance, order_maintenance>;
 using unify_head_t = pud_unify_head<
     order_maintenance, pud_node_children, pud_node_added_unifications,
     fully_persistent_array, fully_persistent_array,
@@ -37,8 +36,7 @@ using candidate_search_t = pud_candidate_search<
 
 struct PudForestSearchIntegrationTest : public ::testing::Test {
     PudForestSearchIntegrationTest()
-        : base_interval_(om_, om_)
-        , unify_head_(om_, children_, added_unifications_, fpa_, fpa_, glob_, exprs_, exprs_)
+        : unify_head_(om_, children_, added_unifications_, fpa_, fpa_, glob_, exprs_, exprs_)
         , witness_(children_, children_, children_, unify_head_)
         , candidate_(witness_, children_, children_, children_, unify_head_,
                      added_body_goals_) {}
@@ -52,7 +50,7 @@ struct PudForestSearchIntegrationTest : public ::testing::Test {
         added_body_goals_.store(id, std::move(body));
         lvc_.store(id, lvc);
         children_.add_root(id);
-        base_interval_.bind_root(id);
+        base_interval_.store(id, om_.allocate_root());
         return id;
     }
 
@@ -78,7 +76,7 @@ struct PudForestSearchIntegrationTest : public ::testing::Test {
     pud_node_added_body_goals added_body_goals_;
     pud_node_lvc lvc_;
     pud_node_children children_;
-    base_interval_t base_interval_;
+    pud_node_base_interval base_interval_;
     unify_head_t unify_head_;
     witness_search_t witness_;
     candidate_search_t candidate_;
@@ -130,10 +128,10 @@ TEST_F(PudForestSearchIntegrationTest, WitnessSearchFindsGrandchildUnderLinkedFo
     const pud_rule_id* axiom = add_axiom(0, {{0, pred}}, {pred}, 1);
     const pud_rule_id* child = add_inference(axiom, 0, axiom, {{0, pred}}, {pred}, 1);
     children_.link_children(axiom, {child});
-    base_interval_.bind_child(child, axiom);
+    base_interval_.store(child, om_.allocate_child_of(base_interval_.get(axiom)));
     const pud_rule_id* grand = add_inference(child, 0, axiom, {{0, pred}}, {}, 1);
     children_.link_children(child, {grand});
-    base_interval_.bind_child(grand, child);
+    base_interval_.store(grand, om_.allocate_child_of(base_interval_.get(child)));
     pud_query query{
         om_.allocate_child_of(base_interval_.get(grand)),
         pred,
@@ -151,8 +149,8 @@ TEST_F(PudForestSearchIntegrationTest, CandidateSearchChoicePointOnTwoLinkedChil
     const pud_rule_id* c0 = add_inference(axiom, 0, axiom, {{0, pred}}, {}, 1);
     const pud_rule_id* c1 = add_inference(axiom, 1, axiom, {{0, pred}}, {}, 1);
     children_.link_children(axiom, {c0, c1});
-    base_interval_.bind_child(c0, axiom);
-    base_interval_.bind_child(c1, axiom);
+    base_interval_.store(c0, om_.allocate_child_of(base_interval_.get(axiom)));
+    base_interval_.store(c1, om_.allocate_child_of(base_interval_.get(axiom)));
     pud_query query{
         om_.allocate_child_of(base_interval_.get(axiom)),
         pred,
@@ -169,10 +167,10 @@ TEST_F(PudForestSearchIntegrationTest, CandidateSearchAdvancesWhenWitnessCurrent
     const pud_rule_id* axiom = add_axiom(0, {{0, pred}}, {pred}, 1);
     const pud_rule_id* child = add_inference(axiom, 0, axiom, {{0, pred}}, {pred}, 1);
     children_.link_children(axiom, {child});
-    base_interval_.bind_child(child, axiom);
+    base_interval_.store(child, om_.allocate_child_of(base_interval_.get(axiom)));
     const pud_rule_id* grand = add_inference(child, 0, axiom, {{0, pred}}, {}, 1);
     children_.link_children(child, {grand});
-    base_interval_.bind_child(grand, child);
+    base_interval_.store(grand, om_.allocate_child_of(base_interval_.get(child)));
     pud_query query{
         om_.allocate_child_of(base_interval_.get(axiom)),
         pred,

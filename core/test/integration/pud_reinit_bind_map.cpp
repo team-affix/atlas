@@ -19,7 +19,6 @@
 #include "value_objects/pud_candidate_search_context.hpp"
 #include "value_objects/pud_query.hpp"
 
-using base_interval_t = pud_node_base_interval<order_maintenance, order_maintenance>;
 using unify_head_t = pud_unify_head<
     order_maintenance, pud_node_children, pud_node_added_unifications,
     fully_persistent_array, fully_persistent_array,
@@ -27,15 +26,14 @@ using unify_head_t = pud_unify_head<
 
 struct PudReinitBindMapIntegrationTest : public ::testing::Test {
     PudReinitBindMapIntegrationTest()
-        : base_interval_(om_, om_)
-        , unify_head_(om_, children_, added_unifications_, fpa_, fpa_, glob_, exprs_, exprs_) {}
+        : unify_head_(om_, children_, added_unifications_, fpa_, fpa_, glob_, exprs_, exprs_) {}
 
     const pud_rule_id* add_axiom(size_t entry_idx,
                                  std::vector<pud_added_unification> unifs) {
         const pud_rule_id* id = pool_.make_axiom(entry_idx);
         added_unifications_.store(id, std::move(unifs));
         children_.add_root(id);
-        base_interval_.bind_root(id);
+        base_interval_.store(id, om_.allocate_root());
         return id;
     }
 
@@ -55,7 +53,7 @@ struct PudReinitBindMapIntegrationTest : public ::testing::Test {
     expr_pool exprs_;
     pud_node_added_unifications added_unifications_;
     pud_node_children children_;
-    base_interval_t base_interval_;
+    pud_node_base_interval base_interval_;
     unify_head_t unify_head_;
 };
 
@@ -64,7 +62,7 @@ TEST_F(PudReinitBindMapIntegrationTest, PathReplayIsVisibleInQueryNodeInterval) 
     const pud_rule_id* axiom = add_axiom(0, {{0, head}});
     const pud_rule_id* child = add_inference(axiom, 0, axiom, {});
     children_.link_children(axiom, {child});
-    base_interval_.bind_child(child, axiom);
+    base_interval_.store(child, om_.allocate_child_of(base_interval_.get(axiom)));
 
     pud_query query{
         om_.allocate_child_of(base_interval_.get(child)),
@@ -102,10 +100,10 @@ TEST_F(PudReinitBindMapIntegrationTest, EnsureFailedMidPathDoesNotBindLaterNode)
     const pud_rule_id* axiom = add_axiom(0, {{0, p}});
     const pud_rule_id* mid = add_inference(axiom, 0, axiom, {{0, q}});
     children_.link_children(axiom, {mid});
-    base_interval_.bind_child(mid, axiom);
+    base_interval_.store(mid, om_.allocate_child_of(base_interval_.get(axiom)));
     const pud_rule_id* leaf = add_inference(mid, 0, axiom, {{1, r}});
     children_.link_children(mid, {leaf});
-    base_interval_.bind_child(leaf, mid);
+    base_interval_.store(leaf, om_.allocate_child_of(base_interval_.get(mid)));
     pud_query query{
         om_.allocate_child_of(base_interval_.get(leaf)),
         p,

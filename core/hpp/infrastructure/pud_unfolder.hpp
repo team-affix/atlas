@@ -27,7 +27,9 @@ template<typename IUnfoldSite,
          typename IStoreAddedBodyGoals,
          typename IStoreLvc,
          typename ILinkChildren,
-         typename IBindChildInterval,
+         typename IGetBaseInterval,
+         typename IAllocateChildInterval,
+         typename IStoreBaseInterval,
          typename IReplaceUnfolded>
 struct pud_unfolder {
     pud_unfolder(IUnfoldSite& unfold_site,
@@ -40,7 +42,9 @@ struct pud_unfolder {
                  IStoreAddedBodyGoals& store_added_body_goals,
                  IStoreLvc& store_lvc,
                  ILinkChildren& link_children,
-                 IBindChildInterval& bind_child_interval,
+                 IGetBaseInterval& get_base_interval,
+                 IAllocateChildInterval& allocate_child_interval,
+                 IStoreBaseInterval& store_base_interval,
                  IReplaceUnfolded& replace_unfolded);
     coroutine<pud_forced_unfold, std::vector<const pud_rule_id*>> unfold(
         const pud_rule_id* leaf,
@@ -62,14 +66,16 @@ private:
     IStoreAddedBodyGoals& store_added_body_goals_;
     IStoreLvc& store_lvc_;
     ILinkChildren& link_children_;
-    IBindChildInterval& bind_child_interval_;
+    IGetBaseInterval& get_base_interval_;
+    IAllocateChildInterval& allocate_child_interval_;
+    IStoreBaseInterval& store_base_interval_;
     IReplaceUnfolded& replace_unfolded_;
 };
 
 template<typename IUS, typename IUC, typename IN, typename IMV, typename IGL,
          typename IMI, typename ISAU, typename ISABG, typename ISL,
-         typename ILC, typename IBCI, typename IRU>
-pud_unfolder<IUS, IUC, IN, IMV, IGL, IMI, ISAU, ISABG, ISL, ILC, IBCI, IRU>::
+         typename ILC, typename IGBI, typename IACI, typename ISBI, typename IRU>
+pud_unfolder<IUS, IUC, IN, IMV, IGL, IMI, ISAU, ISABG, ISL, ILC, IGBI, IACI, ISBI, IRU>::
 pud_unfolder(IUS& unfold_site,
              IUC& unify_callee,
              IN& normalize,
@@ -80,7 +86,9 @@ pud_unfolder(IUS& unfold_site,
              ISABG& store_added_body_goals,
              ISL& store_lvc,
              ILC& link_children,
-             IBCI& bind_child_interval,
+             IGBI& get_base_interval,
+             IACI& allocate_child_interval,
+             ISBI& store_base_interval,
              IRU& replace_unfolded)
     : unfold_site_(unfold_site)
     , unify_callee_(unify_callee)
@@ -92,14 +100,16 @@ pud_unfolder(IUS& unfold_site,
     , store_added_body_goals_(store_added_body_goals)
     , store_lvc_(store_lvc)
     , link_children_(link_children)
-    , bind_child_interval_(bind_child_interval)
+    , get_base_interval_(get_base_interval)
+    , allocate_child_interval_(allocate_child_interval)
+    , store_base_interval_(store_base_interval)
     , replace_unfolded_(replace_unfolded) {}
 
 template<typename IUS, typename IUC, typename IN, typename IMV, typename IGL,
          typename IMI, typename ISAU, typename ISABG, typename ISL,
-         typename ILC, typename IBCI, typename IRU>
+         typename ILC, typename IGBI, typename IACI, typename ISBI, typename IRU>
 const pud_rule_id*
-pud_unfolder<IUS, IUC, IN, IMV, IGL, IMI, ISAU, ISABG, ISL, ILC, IBCI, IRU>::
+pud_unfolder<IUS, IUC, IN, IMV, IGL, IMI, ISAU, ISABG, ISL, ILC, IGBI, IACI, ISBI, IRU>::
 materialize_child(pud_query& parent_query,
                   const pud_rule_id* leaf,
                   size_t body_goal_idx,
@@ -147,9 +157,9 @@ materialize_child(pud_query& parent_query,
 
 template<typename IUS, typename IUC, typename IN, typename IMV, typename IGL,
          typename IMI, typename ISAU, typename ISABG, typename ISL,
-         typename ILC, typename IBCI, typename IRU>
+         typename ILC, typename IGBI, typename IACI, typename ISBI, typename IRU>
 coroutine<pud_forced_unfold, std::vector<const pud_rule_id*>>
-pud_unfolder<IUS, IUC, IN, IMV, IGL, IMI, ISAU, ISABG, ISL, ILC, IBCI, IRU>::
+pud_unfolder<IUS, IUC, IN, IMV, IGL, IMI, ISAU, ISABG, ISL, ILC, IGBI, IACI, ISBI, IRU>::
 unfold(const pud_rule_id* leaf, size_t body_goal_idx) {
     const pud_unfold_site site = unfold_site_.unfold_site(leaf, body_goal_idx);
     DEBUG_ASSERT(!site.callees.empty());
@@ -163,7 +173,9 @@ unfold(const pud_rule_id* leaf, size_t body_goal_idx) {
 
     link_children_.link_children(leaf, children);
     for (const pud_rule_id* child : children)
-        bind_child_interval_.bind_child(child, leaf);
+        store_base_interval_.store(
+            child,
+            allocate_child_interval_.allocate_child_of(get_base_interval_.get(leaf)));
     const std::vector<pud_forced_unfold> yields =
         replace_unfolded_.replace_unfolded(leaf, body_goal_idx, children);
     for (const pud_forced_unfold& yield : yields)

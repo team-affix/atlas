@@ -1,4 +1,4 @@
-// pud_axiom_adder: make, store unifications/body/lvc, add_root, bind_root, adopt.
+// pud_axiom_adder: make, store unifications/body/lvc, add_root, allocate+store interval, adopt.
 
 #include <gtest/gtest.h>
 #include <gmock/gmock.h>
@@ -7,6 +7,7 @@
 #include <vector>
 #include "infrastructure/pud_axiom_adder.hpp"
 #include "value_objects/expr.hpp"
+#include "value_objects/om_interval.hpp"
 #include "value_objects/pud_added_unification.hpp"
 #include "value_objects/pud_rule_id.hpp"
 #include "value_objects/rule.hpp"
@@ -37,8 +38,12 @@ struct MockAddRoot {
     MOCK_METHOD(void, add_root, (const pud_rule_id*), ());
 };
 
-struct MockBindRootInterval {
-    MOCK_METHOD(void, bind_root, (const pud_rule_id*), ());
+struct MockAllocateRootInterval {
+    MOCK_METHOD(om_interval, allocate_root, (), ());
+};
+
+struct MockStoreBaseInterval {
+    MOCK_METHOD(void, store, (const pud_rule_id*, om_interval), ());
 };
 
 struct MockAdoptAxiom {
@@ -51,7 +56,8 @@ using test_adder_t = pud_axiom_adder<
     NiceMock<MockStoreAddedBodyGoals>,
     NiceMock<MockStoreLvc>,
     NiceMock<MockAddRoot>,
-    NiceMock<MockBindRootInterval>,
+    NiceMock<MockAllocateRootInterval>,
+    NiceMock<MockStoreBaseInterval>,
     NiceMock<MockAdoptAxiom>>;
 
 struct PudAxiomAdderTest : public ::testing::Test {
@@ -60,22 +66,30 @@ struct PudAxiomAdderTest : public ::testing::Test {
         , body_{expr::functor{2, {}}}
         , axiom0_{pud_rule_id::axiom{0}}
         , axiom1_{pud_rule_id::axiom{1}}
+        , open_(10)
+        , close_(40)
+        , root_interval_{om_label(&open_), om_label(&close_)}
         , adder_(make_axiom_, store_unifs_, store_goals_, store_lvc_,
-                 add_root_, bind_root_, adopt_) {
+                 add_root_, allocate_root_, store_interval_, adopt_) {
         ON_CALL(make_axiom_, make_axiom(0)).WillByDefault(Return(&axiom0_));
         ON_CALL(make_axiom_, make_axiom(1)).WillByDefault(Return(&axiom1_));
+        ON_CALL(allocate_root_, allocate_root()).WillByDefault(Return(root_interval_));
     }
 
     expr head_;
     expr body_;
     pud_rule_id axiom0_;
     pud_rule_id axiom1_;
+    uint64_t open_;
+    uint64_t close_;
+    om_interval root_interval_;
     NiceMock<MockMakeAxiom> make_axiom_;
     NiceMock<MockStoreAddedUnifications> store_unifs_;
     NiceMock<MockStoreAddedBodyGoals> store_goals_;
     NiceMock<MockStoreLvc> store_lvc_;
     NiceMock<MockAddRoot> add_root_;
-    NiceMock<MockBindRootInterval> bind_root_;
+    NiceMock<MockAllocateRootInterval> allocate_root_;
+    NiceMock<MockStoreBaseInterval> store_interval_;
     NiceMock<MockAdoptAxiom> adopt_;
     test_adder_t adder_;
 };
@@ -92,7 +106,8 @@ TEST_F(PudAxiomAdderTest, AddAxiomPacksHeadBodyAndLvcAndReturnsId) {
     EXPECT_CALL(store_lvc_, store(&axiom0_, _))
         .WillOnce(SaveArg<1>(&packed_lvc));
     EXPECT_CALL(add_root_, add_root(&axiom0_));
-    EXPECT_CALL(bind_root_, bind_root(&axiom0_));
+    EXPECT_CALL(allocate_root_, allocate_root()).WillOnce(Return(root_interval_));
+    EXPECT_CALL(store_interval_, store(&axiom0_, _));
     EXPECT_CALL(adopt_, adopt_axiom(&axiom0_));
 
     const pud_rule_id* id = adder_.add_axiom(rule{&head_, {&body_}, 3});
