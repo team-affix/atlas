@@ -13,11 +13,13 @@
 #include "debug_assert.hpp"
 
 template<typename IResumeWitnessSearch,
+         typename ITryEnter,
          typename IGetChildren,
          typename IGetParent,
          typename IGetAddedBodyGoals>
 struct pud_candidate_search {
     pud_candidate_search(IResumeWitnessSearch& resume_witness_search,
+                         ITryEnter& try_enter,
                          IGetChildren& get_children,
                          IGetParent& get_parent,
                          IGetAddedBodyGoals& get_added_body_goals);
@@ -32,25 +34,28 @@ private:
     void advance(pud_candidate_search_context& context);
 
     IResumeWitnessSearch& resume_witness_search_;
+    ITryEnter& try_enter_;
     IGetChildren& get_children_;
     IGetParent& get_parent_;
     IGetAddedBodyGoals& get_added_body_goals_;
 };
 
-template<typename IRWS, typename IGC, typename IGP, typename IGABG>
-pud_candidate_search<IRWS, IGC, IGP, IGABG>::pud_candidate_search(
+template<typename IRWS, typename ITE, typename IGC, typename IGP, typename IGABG>
+pud_candidate_search<IRWS, ITE, IGC, IGP, IGABG>::pud_candidate_search(
         IRWS& resume_witness_search,
+        ITE& try_enter,
         IGC& get_children,
         IGP& get_parent,
         IGABG& get_added_body_goals)
     : resume_witness_search_(resume_witness_search)
+    , try_enter_(try_enter)
     , get_children_(get_children)
     , get_parent_(get_parent)
     , get_added_body_goals_(get_added_body_goals) {}
 
-template<typename IRWS, typename IGC, typename IGP, typename IGABG>
+template<typename IRWS, typename ITE, typename IGC, typename IGP, typename IGABG>
 pud_witness_search_context
-pud_candidate_search<IRWS, IGC, IGP, IGABG>::make_edge(
+pud_candidate_search<IRWS, ITE, IGC, IGP, IGABG>::make_edge(
         const pud_candidate_search_context& context,
         const pud_rule_id* search_root,
         const pud_rule_id* current) const {
@@ -63,8 +68,8 @@ pud_candidate_search<IRWS, IGC, IGP, IGABG>::make_edge(
         current};
 }
 
-template<typename IRWS, typename IGC, typename IGP, typename IGABG>
-void pud_candidate_search<IRWS, IGC, IGP, IGABG>::advance(
+template<typename IRWS, typename ITE, typename IGC, typename IGP, typename IGABG>
+void pud_candidate_search<IRWS, ITE, IGC, IGP, IGABG>::advance(
         pud_candidate_search_context& context) {
     DEBUG_ASSERT(context.witnesses.has_value());
     pud_witness_pair& pair = *context.witnesses;
@@ -105,8 +110,8 @@ void pud_candidate_search<IRWS, IGC, IGP, IGABG>::advance(
     }
 }
 
-template<typename IRWS, typename IGC, typename IGP, typename IGABG>
-void pud_candidate_search<IRWS, IGC, IGP, IGABG>::resume(
+template<typename IRWS, typename ITE, typename IGC, typename IGP, typename IGABG>
+void pud_candidate_search<IRWS, ITE, IGC, IGP, IGABG>::resume(
         pud_candidate_search_context& context) {
     while (true) {
         if (context.cursor == nullptr)
@@ -124,6 +129,14 @@ void pud_candidate_search<IRWS, IGC, IGP, IGABG>::resume(
             resume_witness_search_.resume(self);
             if (self.current == nullptr)
                 context.cursor = nullptr;
+            return;
+        }
+
+        pud_witness_search_context cursor_edge =
+            make_edge(context, context.cursor, context.cursor);
+        if (!try_enter_.try_enter(cursor_edge, context.cursor)) {
+            context.witnesses.reset();
+            context.cursor = nullptr;
             return;
         }
 

@@ -4,6 +4,7 @@
 #include <gmock/gmock.h>
 #include <cstddef>
 #include <deque>
+#include <optional>
 #include <random>
 #include <sstream>
 #include <stdexcept>
@@ -45,12 +46,24 @@ struct MockStartQuery {
     MOCK_METHOD(void, start, (const pud_rule_id*, size_t, const expr*, uint32_t), ());
 };
 
+struct MockRebaseCandidate {
+    MOCK_METHOD((std::optional<pud_candidate_search_context>), rebase,
+                (const pud_rule_id*,
+                 size_t,
+                 const expr*,
+                 uint32_t,
+                 const pud_rule_id*,
+                 const std::optional<pud_witness_pair>&,
+                 (const std::vector<const expr*>&)), ());
+};
+
 using test_queries_t = pud_queries<
     NiceMock<MockGetAddedBodyGoals>,
     NiceMock<MockGetLvc>,
     NiceMock<MockResumeCandidateSearch>,
     NiceMock<MockResumeWitnessSearch>,
-    NiceMock<MockStartQuery>>;
+    NiceMock<MockStartQuery>,
+    NiceMock<MockRebaseCandidate>>;
 
 struct PudQueriesTest : public ::testing::Test {
     PudQueriesTest()
@@ -65,7 +78,8 @@ struct PudQueriesTest : public ::testing::Test {
         , empty_goals_{}
         , child_goals_{&leftover_}
         , drain_goals_{&body_}
-        , queries_(get_added_body_goals_, get_lvc_, candidate_, witness_, start_query_) {
+        , queries_(get_added_body_goals_, get_lvc_, candidate_, witness_,
+                   start_query_, rebase_) {
         ON_CALL(get_added_body_goals_, get(&axiom_)).WillByDefault(ReturnRef(axiom_goals_));
         ON_CALL(get_added_body_goals_, get(&other_)).WillByDefault(ReturnRef(empty_goals_));
         ON_CALL(get_added_body_goals_, get(&drain_)).WillByDefault(ReturnRef(drain_goals_));
@@ -74,6 +88,28 @@ struct PudQueriesTest : public ::testing::Test {
         ON_CALL(get_lvc_, get(&other_)).WillByDefault(Return(1u));
         ON_CALL(get_lvc_, get(&drain_)).WillByDefault(Return(1u));
         ON_CALL(get_lvc_, get(&child_)).WillByDefault(Return(2u));
+        ON_CALL(rebase_, rebase(_, _, _, _, _, _, _))
+            .WillByDefault([](const pud_rule_id* leaf,
+                              size_t idx,
+                              const expr* body,
+                              uint32_t lvc,
+                              const pud_rule_id* cursor,
+                              const std::optional<pud_witness_pair>& pins,
+                              const std::vector<const expr*>& goals) {
+                std::optional<pud_witness_pair> retargeted = pins;
+                if (retargeted.has_value()) {
+                    retargeted->a.query_leaf = leaf;
+                    retargeted->a.body_goal_idx = idx;
+                    retargeted->a.body_goal = body;
+                    retargeted->a.frame_offset = lvc;
+                    retargeted->b.query_leaf = leaf;
+                    retargeted->b.body_goal_idx = idx;
+                    retargeted->b.body_goal = body;
+                    retargeted->b.frame_offset = lvc;
+                }
+                return pud_candidate_search_context{
+                    leaf, idx, body, lvc, cursor, retargeted, goals};
+            });
     }
 
     std::vector<pud_candidate_search_context*> group_at(const pud_rule_id* leaf, size_t idx) {
@@ -104,6 +140,7 @@ struct PudQueriesTest : public ::testing::Test {
     NiceMock<MockResumeCandidateSearch> candidate_;
     NiceMock<MockResumeWitnessSearch> witness_;
     NiceMock<MockStartQuery> start_query_;
+    NiceMock<MockRebaseCandidate> rebase_;
     test_queries_t queries_;
 };
 
@@ -122,6 +159,15 @@ TEST_F(PudQueriesTest, StartsLeftoverAndNewGoalQueryRootsOnFork) {
     ctx_at(&axiom_, 0);
     EXPECT_CALL(start_query_, start(&child_, 0, &leftover_, 2));
     EXPECT_CALL(start_query_, start(&child_, 1, &child_goal, 2));
+    queries_.replace_unfolded(&axiom_, 0, {&child_});
+}
+
+TEST_F(PudQueriesTest, ForkRebasesLeftoverContexts) {
+    ON_CALL(get_added_body_goals_, get(&axiom_)).WillByDefault(ReturnRef(two_goals_));
+    queries_.adopt_axiom(&axiom_);
+    ctx_at(&axiom_, 0);
+    EXPECT_CALL(rebase_, rebase(&child_, 0, &leftover_, 2, _, _, _))
+        .Times(::testing::AtLeast(1));
     queries_.replace_unfolded(&axiom_, 0, {&child_});
 }
 

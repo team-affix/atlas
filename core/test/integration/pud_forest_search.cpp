@@ -31,7 +31,7 @@ using witness_search_t = pud_witness_search<
     fully_persistent_array, fully_persistent_array,
     globalizer, expr_pool, pud_node_added_touched_caller_reps>;
 using candidate_search_t = pud_candidate_search<
-    witness_search_t, pud_node_children, pud_node_parent,
+    witness_search_t, witness_search_t, pud_node_children, pud_node_parent,
     pud_node_added_body_goals>;
 using query_starter_t = pud_query_starter<
     pud_rule_id_pool, pud_node_interval, order_maintenance, pud_node_interval,
@@ -43,7 +43,7 @@ struct PudForestSearchIntegrationTest : public ::testing::Test {
                    node_interval_, node_interval_, node_interval_,
                    om_, added_unifications_,
                    fpa_, fpa_, glob_, exprs_, added_caller_reps_)
-        , candidate_(witness_, children_, parent_, added_body_goals_)
+        , candidate_(witness_, witness_, children_, parent_, added_body_goals_)
         , starter_(pool_, node_interval_, om_, node_interval_,
                    glob_, fpa_, fpa_) {}
 

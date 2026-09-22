@@ -6,6 +6,7 @@
 #include "infrastructure/globalizer.hpp"
 #include "infrastructure/order_maintenance.hpp"
 #include "infrastructure/pud_axiom_adder.hpp"
+#include "infrastructure/pud_candidate_rebaser.hpp"
 #include "infrastructure/pud_candidate_search.hpp"
 #include "infrastructure/pud_node_added_body_goals.hpp"
 #include "infrastructure/pud_node_added_touched_caller_reps.hpp"
@@ -15,6 +16,7 @@
 #include "infrastructure/pud_node_lvc.hpp"
 #include "infrastructure/pud_node_parent.hpp"
 #include "infrastructure/pud_normalizer.hpp"
+#include "infrastructure/pud_path_enter.hpp"
 #include "infrastructure/pud_queries.hpp"
 #include "infrastructure/pud_query_starter.hpp"
 #include "infrastructure/pud_rule_id_pool.hpp"
@@ -32,14 +34,17 @@ struct pud_manifest {
         fully_persistent_array, fully_persistent_array,
         globalizer, expr_pool, pud_node_added_touched_caller_reps>;
     using candidate_search_t = pud_candidate_search<
-        witness_search_t, pud_node_children, pud_node_parent,
+        witness_search_t, witness_search_t, pud_node_children, pud_node_parent,
         pud_node_added_body_goals>;
     using query_starter_t = pud_query_starter<
         pud_rule_id_pool, pud_node_interval, order_maintenance, pud_node_interval,
         globalizer, fully_persistent_array, fully_persistent_array>;
+    using path_enter_t = pud_path_enter<witness_search_t, pud_node_parent>;
+    using candidate_rebaser_t = pud_candidate_rebaser<
+        path_enter_t, witness_search_t, candidate_search_t, pud_node_parent>;
     using queries_t = pud_queries<
         pud_node_added_body_goals, pud_node_lvc,
-        candidate_search_t, witness_search_t, query_starter_t>;
+        candidate_search_t, witness_search_t, query_starter_t, candidate_rebaser_t>;
     using unfolder_t = pud_unfolder<
         queries_t, normalizer_t, normalizer_t, normalizer_t, expr_pool,
         pud_node_lvc, pud_rule_id_pool,
@@ -70,6 +75,8 @@ struct pud_manifest {
     witness_search_t witness_search_;
     candidate_search_t candidate_search_;
     query_starter_t query_starter_;
+    path_enter_t path_enter_;
+    candidate_rebaser_t candidate_rebaser_;
     queries_t queries_;
     unfolder_t unfolder_;
     axiom_adder_t axiom_adder_;

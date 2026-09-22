@@ -42,11 +42,11 @@ struct pud_witness_search {
                        IMakeVar& make_var,
                        IStoreAddedCallerReps& store_added_caller_reps);
     void resume(pud_witness_search_context& context);
+    bool try_enter(pud_witness_search_context& context, const pud_rule_id* node);
 private:
     using bind_map_t = hierarchical_bind_map<IGlobalize, IRecordBinding, IQueryBinding>;
     using unifier_t = unifier<IGlobalize, bind_map_t>;
 
-    bool try_enter(pud_witness_search_context& context, const pud_rule_id* node);
     bool try_subtree(pud_witness_search_context& context, const pud_rule_id* node);
 
     IGetChildren& get_children_;
@@ -162,34 +162,12 @@ void pud_witness_search<IGC, IGP, IMI, ICI, IGI, ISI, IACI, IGAU, IRB, IQB, IG, 
 resume(pud_witness_search_context& context) {
     if (context.current == nullptr)
         return;
-    std::vector<const pud_rule_id*> chain;
-    for (const pud_rule_id* node = context.current; node != nullptr;
-            node = get_parent_.get(node))
-        chain.push_back(node);
-    const pud_rule_id* from = context.current;
-    bool path_ok = true;
-    for (size_t idx = chain.size(); idx > 0; --idx) {
-        if (try_enter(context, chain[idx - 1]))
-            continue;
-        from = chain[idx - 1];
-        path_ok = false;
-        break;
-    }
-    if (!path_ok) {
-        const pud_rule_id* ancestor = get_parent_.get(context.search_root);
-        while (ancestor != nullptr) {
-            if (ancestor == from) {
-                context.current = nullptr;
-                return;
-            }
-            ancestor = get_parent_.get(ancestor);
-        }
-    } else if (!get_children_.get(context.current).has_value()) {
+    if (!get_children_.get(context.current).has_value()
+            && try_enter(context, context.current))
         return;
-    } else if (try_subtree(context, from)) {
+    if (try_subtree(context, context.current))
         return;
-    }
-    const pud_rule_id* walk = from;
+    const pud_rule_id* walk = context.current;
     while (walk != context.search_root) {
         const pud_rule_id* parent = get_parent_.get(walk);
         DEBUG_ASSERT(parent != nullptr);

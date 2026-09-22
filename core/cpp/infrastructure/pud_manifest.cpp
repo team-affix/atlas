@@ -19,12 +19,14 @@ pud_manifest::pud_manifest()
                       om_, added_unifications_,
                       fpa_, fpa_,
                       globalizer_, exprs_, added_caller_reps_)
-    , candidate_search_(witness_search_, children_, parent_,
+    , candidate_search_(witness_search_, witness_search_, children_, parent_,
                         added_body_goals_)
     , query_starter_(pool_, node_interval_, om_, node_interval_,
                      globalizer_, fpa_, fpa_)
+    , path_enter_(witness_search_, parent_)
+    , candidate_rebaser_(path_enter_, witness_search_, candidate_search_, parent_)
     , queries_(added_body_goals_, lvc_,
-               candidate_search_, witness_search_, query_starter_)
+               candidate_search_, witness_search_, query_starter_, candidate_rebaser_)
     , unfolder_(queries_, pud_normalizer_, pud_normalizer_, pud_normalizer_,
                 exprs_, lvc_, pool_,
                 added_unifications_, added_unifications_, added_body_goals_, lvc_,

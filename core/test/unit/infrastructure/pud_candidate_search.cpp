@@ -27,6 +27,10 @@ struct MockResumeWitnessSearch {
     MOCK_METHOD(void, resume, (pud_witness_search_context&), ());
 };
 
+struct MockTryEnter {
+    MOCK_METHOD(bool, try_enter, (pud_witness_search_context&, const pud_rule_id*), ());
+};
+
 struct MockGetChildren {
     MOCK_METHOD(children_opt_t, get, (const pud_rule_id*), ());
 };
@@ -40,6 +44,7 @@ struct MockGetAddedBodyGoals {
 };
 
 using test_search_t = pud_candidate_search<NiceMock<MockResumeWitnessSearch>,
+                                           NiceMock<MockTryEnter>,
                                            NiceMock<MockGetChildren>,
                                            NiceMock<MockGetParent>,
                                            NiceMock<MockGetAddedBodyGoals>>;
@@ -55,8 +60,9 @@ struct PudCandidateSearchTest : public ::testing::Test {
         , c1_{pud_rule_id::inference{&a0_, 1, &a0_}}
         , dummy_{expr::var{9}}
         , advance_goals_{&dummy_}
-        , search_(witness_, children_, get_parent_, get_added_body_goals_) {
+        , search_(witness_, try_enter_, children_, get_parent_, get_added_body_goals_) {
         ON_CALL(get_added_body_goals_, get(_)).WillByDefault(ReturnRef(advance_goals_));
+        ON_CALL(try_enter_, try_enter(_, _)).WillByDefault(Return(true));
     }
 
     uint64_t open_;
@@ -107,6 +113,7 @@ struct PudCandidateSearchTest : public ::testing::Test {
     }
 
     NiceMock<MockResumeWitnessSearch> witness_;
+    NiceMock<MockTryEnter> try_enter_;
     NiceMock<MockGetChildren> children_;
     NiceMock<MockGetParent> get_parent_;
     NiceMock<MockGetAddedBodyGoals> get_added_body_goals_;
@@ -130,6 +137,15 @@ TEST_F(PudCandidateSearchTest, AcceptsSelfWitnessingLeafCursor) {
     });
     search_.resume(ctx);
     expect_self(ctx);
+}
+
+TEST_F(PudCandidateSearchTest, CursorUnifyFailureRefutes) {
+    pud_candidate_search_context ctx = make_ctx(&a0_, std::nullopt, {});
+    EXPECT_CALL(children_, get(&a0_)).WillRepeatedly(Return(children_set_t{&c0_, &c1_}));
+    EXPECT_CALL(try_enter_, try_enter(_, &a0_)).WillOnce(Return(false));
+    EXPECT_CALL(witness_, resume(_)).Times(0);
+    search_.resume(ctx);
+    expect_refuted(ctx);
 }
 
 TEST_F(PudCandidateSearchTest, TwoLiveOutgoingEdgesAreAChoicePoint) {

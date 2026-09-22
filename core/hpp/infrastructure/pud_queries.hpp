@@ -21,13 +21,15 @@ template<typename IGetAddedBodyGoals,
          typename IGetLvc,
          typename IResumeCandidateSearch,
          typename IResumeWitnessSearch,
-         typename IStartQuery>
+         typename IStartQuery,
+         typename IRebaseCandidate>
 struct pud_queries {
     pud_queries(IGetAddedBodyGoals& get_added_body_goals,
                 IGetLvc& get_lvc,
                 IResumeCandidateSearch& resume_candidate_search,
                 IResumeWitnessSearch& resume_witness_search,
-                IStartQuery& start_query);
+                IStartQuery& start_query,
+                IRebaseCandidate& rebase_candidate);
     void adopt_axiom(const pud_rule_id* axiom);
     pud_unfold_site unfold_site(const pud_rule_id* leaf, size_t body_goal_idx);
     std::vector<pud_forced_unfold> replace_unfolded(const pud_rule_id* leaf,
@@ -76,6 +78,7 @@ private:
     IResumeCandidateSearch& resume_candidate_search_;
     IResumeWitnessSearch& resume_witness_search_;
     IStartQuery& start_query_;
+    IRebaseCandidate& rebase_candidate_;
     std::vector<const pud_rule_id*> axioms_;
     std::unordered_map<const pud_rule_id*, groups_t> owned_;
     std::unordered_map<const pud_rule_id*, groups_ptrs_t> ptrs_;
@@ -86,24 +89,26 @@ private:
     bool booted_;
 };
 
-template<typename IGABG, typename IGL, typename IRCS, typename IRWS, typename ISTQ>
-bool pud_queries<IGABG, IGL, IRCS, IRWS, ISTQ>::rule_id_less::operator()(
+template<typename IGABG, typename IGL, typename IRCS, typename IRWS, typename ISTQ, typename IRBC>
+bool pud_queries<IGABG, IGL, IRCS, IRWS, ISTQ, IRBC>::rule_id_less::operator()(
         const pud_rule_id* a, const pud_rule_id* b) const {
     return *a < *b;
 }
 
-template<typename IGABG, typename IGL, typename IRCS, typename IRWS, typename ISTQ>
-pud_queries<IGABG, IGL, IRCS, IRWS, ISTQ>::pud_queries(
+template<typename IGABG, typename IGL, typename IRCS, typename IRWS, typename ISTQ, typename IRBC>
+pud_queries<IGABG, IGL, IRCS, IRWS, ISTQ, IRBC>::pud_queries(
         IGABG& get_added_body_goals,
         IGL& get_lvc,
         IRCS& resume_candidate_search,
         IRWS& resume_witness_search,
-        ISTQ& start_query)
+        ISTQ& start_query,
+        IRBC& rebase_candidate)
     : get_added_body_goals_(get_added_body_goals)
     , get_lvc_(get_lvc)
     , resume_candidate_search_(resume_candidate_search)
     , resume_witness_search_(resume_witness_search)
     , start_query_(start_query)
+    , rebase_candidate_(rebase_candidate)
     , axioms_()
     , owned_()
     , ptrs_()
@@ -113,9 +118,9 @@ pud_queries<IGABG, IGL, IRCS, IRWS, ISTQ>::pud_queries(
     , dirty_leaves_()
     , booted_(false) {}
 
-template<typename IGABG, typename IGL, typename IRCS, typename IRWS, typename ISTQ>
-typename pud_queries<IGABG, IGL, IRCS, IRWS, ISTQ>::group_values_t
-pud_queries<IGABG, IGL, IRCS, IRWS, ISTQ>::root_group(
+template<typename IGABG, typename IGL, typename IRCS, typename IRWS, typename ISTQ, typename IRBC>
+typename pud_queries<IGABG, IGL, IRCS, IRWS, ISTQ, IRBC>::group_values_t
+pud_queries<IGABG, IGL, IRCS, IRWS, ISTQ, IRBC>::root_group(
         const pud_rule_id* query_leaf,
         size_t body_goal_idx,
         const expr* body_goal,
@@ -135,8 +140,8 @@ pud_queries<IGABG, IGL, IRCS, IRWS, ISTQ>::root_group(
     return group;
 }
 
-template<typename IGABG, typename IGL, typename IRCS, typename IRWS, typename ISTQ>
-void pud_queries<IGABG, IGL, IRCS, IRWS, ISTQ>::replace_owned(
+template<typename IGABG, typename IGL, typename IRCS, typename IRWS, typename ISTQ, typename IRBC>
+void pud_queries<IGABG, IGL, IRCS, IRWS, ISTQ, IRBC>::replace_owned(
         const pud_rule_id* leaf, groups_values_t groups) {
     DEBUG_ASSERT(!owned_.contains(leaf));
     groups_t owned;
@@ -162,15 +167,15 @@ void pud_queries<IGABG, IGL, IRCS, IRWS, ISTQ>::replace_owned(
     ptrs_[leaf] = std::move(ptrs);
 }
 
-template<typename IGABG, typename IGL, typename IRCS, typename IRWS, typename ISTQ>
-void pud_queries<IGABG, IGL, IRCS, IRWS, ISTQ>::watch(
+template<typename IGABG, typename IGL, typename IRCS, typename IRWS, typename ISTQ, typename IRBC>
+void pud_queries<IGABG, IGL, IRCS, IRWS, ISTQ, IRBC>::watch(
         const pud_rule_id* witness, pud_candidate_search_context* ctx) {
     by_witness_[witness].insert(ctx);
     by_context_[ctx].insert(witness);
 }
 
-template<typename IGABG, typename IGL, typename IRCS, typename IRWS, typename ISTQ>
-void pud_queries<IGABG, IGL, IRCS, IRWS, ISTQ>::watch_context(
+template<typename IGABG, typename IGL, typename IRCS, typename IRWS, typename ISTQ, typename IRBC>
+void pud_queries<IGABG, IGL, IRCS, IRWS, ISTQ, IRBC>::watch_context(
         pud_candidate_search_context& ctx) {
     if (ctx.witnesses.has_value()) {
         DEBUG_ASSERT(ctx.witnesses->a.current != nullptr);
@@ -184,8 +189,8 @@ void pud_queries<IGABG, IGL, IRCS, IRWS, ISTQ>::watch_context(
     watch(ctx.cursor, &ctx);
 }
 
-template<typename IGABG, typename IGL, typename IRCS, typename IRWS, typename ISTQ>
-void pud_queries<IGABG, IGL, IRCS, IRWS, ISTQ>::unwatch_context(
+template<typename IGABG, typename IGL, typename IRCS, typename IRWS, typename ISTQ, typename IRBC>
+void pud_queries<IGABG, IGL, IRCS, IRWS, ISTQ, IRBC>::unwatch_context(
         pud_candidate_search_context* ctx) {
     auto ctx_it = by_context_.find(ctx);
     if (ctx_it == by_context_.end())
@@ -202,19 +207,19 @@ void pud_queries<IGABG, IGL, IRCS, IRWS, ISTQ>::unwatch_context(
     }
 }
 
-template<typename IGABG, typename IGL, typename IRCS, typename IRWS, typename ISTQ>
-void pud_queries<IGABG, IGL, IRCS, IRWS, ISTQ>::resume_context(
+template<typename IGABG, typename IGL, typename IRCS, typename IRWS, typename ISTQ, typename IRBC>
+void pud_queries<IGABG, IGL, IRCS, IRWS, ISTQ, IRBC>::resume_context(
         pud_candidate_search_context& ctx) {
     resume_candidate_search_.resume(ctx);
 }
 
-template<typename IGABG, typename IGL, typename IRCS, typename IRWS, typename ISTQ>
-void pud_queries<IGABG, IGL, IRCS, IRWS, ISTQ>::mark_dirty(const pud_rule_id* leaf) {
+template<typename IGABG, typename IGL, typename IRCS, typename IRWS, typename ISTQ, typename IRBC>
+void pud_queries<IGABG, IGL, IRCS, IRWS, ISTQ, IRBC>::mark_dirty(const pud_rule_id* leaf) {
     dirty_leaves_.insert(leaf);
 }
 
-template<typename IGABG, typename IGL, typename IRCS, typename IRWS, typename ISTQ>
-void pud_queries<IGABG, IGL, IRCS, IRWS, ISTQ>::commit_groups(
+template<typename IGABG, typename IGL, typename IRCS, typename IRWS, typename ISTQ, typename IRBC>
+void pud_queries<IGABG, IGL, IRCS, IRWS, ISTQ, IRBC>::commit_groups(
         const pud_rule_id* leaf, groups_values_t groups) {
     replace_owned(leaf, std::move(groups));
     for (group_ptrs_t& group : ptrs_.at(leaf)) {
@@ -226,8 +231,8 @@ void pud_queries<IGABG, IGL, IRCS, IRWS, ISTQ>::commit_groups(
     mark_dirty(leaf);
 }
 
-template<typename IGABG, typename IGL, typename IRCS, typename IRWS, typename ISTQ>
-void pud_queries<IGABG, IGL, IRCS, IRWS, ISTQ>::install(const pud_rule_id* leaf) {
+template<typename IGABG, typename IGL, typename IRCS, typename IRWS, typename ISTQ, typename IRBC>
+void pud_queries<IGABG, IGL, IRCS, IRWS, ISTQ, IRBC>::install(const pud_rule_id* leaf) {
     const uint32_t frame_offset = get_lvc_.get(leaf);
     groups_values_t groups;
     size_t body_goal_idx = 0;
@@ -238,29 +243,29 @@ void pud_queries<IGABG, IGL, IRCS, IRWS, ISTQ>::install(const pud_rule_id* leaf)
     commit_groups(leaf, std::move(groups));
 }
 
-template<typename IGABG, typename IGL, typename IRCS, typename IRWS, typename ISTQ>
-void pud_queries<IGABG, IGL, IRCS, IRWS, ISTQ>::boot() {
+template<typename IGABG, typename IGL, typename IRCS, typename IRWS, typename ISTQ, typename IRBC>
+void pud_queries<IGABG, IGL, IRCS, IRWS, ISTQ, IRBC>::boot() {
     for (const pud_rule_id* axiom : axioms_)
         install(axiom);
 }
 
-template<typename IGABG, typename IGL, typename IRCS, typename IRWS, typename ISTQ>
-void pud_queries<IGABG, IGL, IRCS, IRWS, ISTQ>::ensure_booted() {
+template<typename IGABG, typename IGL, typename IRCS, typename IRWS, typename ISTQ, typename IRBC>
+void pud_queries<IGABG, IGL, IRCS, IRWS, ISTQ, IRBC>::ensure_booted() {
     if (booted_)
         return;
     booted_ = true;
     boot();
 }
 
-template<typename IGABG, typename IGL, typename IRCS, typename IRWS, typename ISTQ>
-void pud_queries<IGABG, IGL, IRCS, IRWS, ISTQ>::adopt_axiom(
+template<typename IGABG, typename IGL, typename IRCS, typename IRWS, typename ISTQ, typename IRBC>
+void pud_queries<IGABG, IGL, IRCS, IRWS, ISTQ, IRBC>::adopt_axiom(
         const pud_rule_id* axiom) {
     DEBUG_ASSERT(!booted_);
     axioms_.push_back(axiom);
 }
 
-template<typename IGABG, typename IGL, typename IRCS, typename IRWS, typename ISTQ>
-void pud_queries<IGABG, IGL, IRCS, IRWS, ISTQ>::fork_child(
+template<typename IGABG, typename IGL, typename IRCS, typename IRWS, typename ISTQ, typename IRBC>
+void pud_queries<IGABG, IGL, IRCS, IRWS, ISTQ, IRBC>::fork_child(
         const pud_rule_id* child,
         const groups_values_t& leftover_templates) {
     const uint32_t child_lvc = get_lvc_.get(child);
@@ -272,19 +277,29 @@ void pud_queries<IGABG, IGL, IRCS, IRWS, ISTQ>::fork_child(
                 child, body_goal_idx, leftover.front().body_goal, child_lvc);
         }
         group_values_t forked;
-        for (pud_candidate_search_context ctx : leftover) {
-            ctx.query_leaf = child;
-            ctx.body_goal_idx = body_goal_idx;
-            ctx.frame_offset = child_lvc;
-            if (ctx.witnesses.has_value()) {
-                ctx.witnesses->a.query_leaf = child;
-                ctx.witnesses->a.body_goal_idx = body_goal_idx;
-                ctx.witnesses->a.frame_offset = child_lvc;
-                ctx.witnesses->b.query_leaf = child;
-                ctx.witnesses->b.body_goal_idx = body_goal_idx;
-                ctx.witnesses->b.frame_offset = child_lvc;
-            }
-            forked.push_back(std::move(ctx));
+        for (const pud_candidate_search_context& ctx : leftover) {
+            std::optional<pud_candidate_search_context> rebased =
+                rebase_candidate_.rebase(
+                    child,
+                    body_goal_idx,
+                    ctx.body_goal,
+                    child_lvc,
+                    ctx.cursor,
+                    ctx.witnesses,
+                    ctx.added_body_goals);
+            if (!rebased.has_value())
+                continue;
+            forked.push_back(std::move(*rebased));
+        }
+        if (forked.empty() && !leftover.empty()) {
+            forked.push_back(pud_candidate_search_context{
+                child,
+                body_goal_idx,
+                leftover.front().body_goal,
+                child_lvc,
+                nullptr,
+                std::nullopt,
+                std::vector<const expr*>{}});
         }
         child_groups.push_back(std::move(forked));
         ++body_goal_idx;
@@ -296,8 +311,8 @@ void pud_queries<IGABG, IGL, IRCS, IRWS, ISTQ>::fork_child(
     commit_groups(child, std::move(child_groups));
 }
 
-template<typename IGABG, typename IGL, typename IRCS, typename IRWS, typename ISTQ>
-void pud_queries<IGABG, IGL, IRCS, IRWS, ISTQ>::clear(const pud_rule_id* leaf) {
+template<typename IGABG, typename IGL, typename IRCS, typename IRWS, typename ISTQ, typename IRBC>
+void pud_queries<IGABG, IGL, IRCS, IRWS, ISTQ, IRBC>::clear(const pud_rule_id* leaf) {
     auto ptrs_it = ptrs_.find(leaf);
     if (ptrs_it != ptrs_.end()) {
         for (group_ptrs_t& group : ptrs_it->second) {
@@ -312,15 +327,15 @@ void pud_queries<IGABG, IGL, IRCS, IRWS, ISTQ>::clear(const pud_rule_id* leaf) {
     dirty_leaves_.erase(leaf);
 }
 
-template<typename IGABG, typename IGL, typename IRCS, typename IRWS, typename ISTQ>
-const typename pud_queries<IGABG, IGL, IRCS, IRWS, ISTQ>::groups_ptrs_t&
-pud_queries<IGABG, IGL, IRCS, IRWS, ISTQ>::get(const pud_rule_id* leaf) {
+template<typename IGABG, typename IGL, typename IRCS, typename IRWS, typename ISTQ, typename IRBC>
+const typename pud_queries<IGABG, IGL, IRCS, IRWS, ISTQ, IRBC>::groups_ptrs_t&
+pud_queries<IGABG, IGL, IRCS, IRWS, ISTQ, IRBC>::get(const pud_rule_id* leaf) {
     ensure_booted();
     return ptrs_.at(leaf);
 }
 
-template<typename IGABG, typename IGL, typename IRCS, typename IRWS, typename ISTQ>
-void pud_queries<IGABG, IGL, IRCS, IRWS, ISTQ>::resume_dead_witness(
+template<typename IGABG, typename IGL, typename IRCS, typename IRWS, typename ISTQ, typename IRBC>
+void pud_queries<IGABG, IGL, IRCS, IRWS, ISTQ, IRBC>::resume_dead_witness(
         pud_candidate_search_context& ctx, const pud_rule_id* node) {
     if (!ctx.witnesses.has_value()) {
         if (ctx.cursor == node)
@@ -339,8 +354,8 @@ void pud_queries<IGABG, IGL, IRCS, IRWS, ISTQ>::resume_dead_witness(
         resume_candidate_search_.resume(ctx);
 }
 
-template<typename IGABG, typename IGL, typename IRCS, typename IRWS, typename ISTQ>
-void pud_queries<IGABG, IGL, IRCS, IRWS, ISTQ>::invalidate_leaf(
+template<typename IGABG, typename IGL, typename IRCS, typename IRWS, typename ISTQ, typename IRBC>
+void pud_queries<IGABG, IGL, IRCS, IRWS, ISTQ, IRBC>::invalidate_leaf(
         const pud_rule_id* node) {
     auto witness_it = by_witness_.find(node);
     if (witness_it == by_witness_.end())
@@ -357,18 +372,18 @@ void pud_queries<IGABG, IGL, IRCS, IRWS, ISTQ>::invalidate_leaf(
     }
 }
 
-template<typename IGABG, typename IGL, typename IRCS, typename IRWS, typename ISTQ>
+template<typename IGABG, typename IGL, typename IRCS, typename IRWS, typename ISTQ, typename IRBC>
 std::vector<const pud_rule_id*>
-pud_queries<IGABG, IGL, IRCS, IRWS, ISTQ>::take_dirty_leaves() {
+pud_queries<IGABG, IGL, IRCS, IRWS, ISTQ, IRBC>::take_dirty_leaves() {
     std::vector<const pud_rule_id*> out(dirty_leaves_.begin(), dirty_leaves_.end());
     std::sort(out.begin(), out.end(), rule_id_less{});
     dirty_leaves_.clear();
     return out;
 }
 
-template<typename IGABG, typename IGL, typename IRCS, typename IRWS, typename ISTQ>
+template<typename IGABG, typename IGL, typename IRCS, typename IRWS, typename ISTQ, typename IRBC>
 std::vector<pud_candidate_search_context*>
-pud_queries<IGABG, IGL, IRCS, IRWS, ISTQ>::live_contexts(group_ptrs_t& group) {
+pud_queries<IGABG, IGL, IRCS, IRWS, ISTQ, IRBC>::live_contexts(group_ptrs_t& group) {
     std::vector<pud_candidate_search_context*> live;
     for (pud_candidate_search_context* ctx : group) {
         resume_candidate_search_.resume(*ctx);
@@ -379,20 +394,21 @@ pud_queries<IGABG, IGL, IRCS, IRWS, ISTQ>::live_contexts(group_ptrs_t& group) {
     return live;
 }
 
-template<typename IGABG, typename IGL, typename IRCS, typename IRWS, typename ISTQ>
+template<typename IGABG, typename IGL, typename IRCS, typename IRWS, typename ISTQ, typename IRBC>
 pud_unfold_site
-pud_queries<IGABG, IGL, IRCS, IRWS, ISTQ>::unfold_site(
+pud_queries<IGABG, IGL, IRCS, IRWS, ISTQ, IRBC>::unfold_site(
         const pud_rule_id* leaf, size_t body_goal_idx) {
     const groups_ptrs_t& groups = get(leaf);
     DEBUG_ASSERT(body_goal_idx < groups.size());
     group_ptrs_t group = groups[body_goal_idx];
-    DEBUG_ASSERT(!group.empty());
+    if (group.empty())
+        return pud_unfold_site{nullptr, {}};
     return pud_unfold_site{group[0]->body_goal, live_contexts(group)};
 }
 
-template<typename IGABG, typename IGL, typename IRCS, typename IRWS, typename ISTQ>
+template<typename IGABG, typename IGL, typename IRCS, typename IRWS, typename ISTQ, typename IRBC>
 std::vector<pud_forced_unfold>
-pud_queries<IGABG, IGL, IRCS, IRWS, ISTQ>::replace_unfolded(
+pud_queries<IGABG, IGL, IRCS, IRWS, ISTQ, IRBC>::replace_unfolded(
         const pud_rule_id* leaf,
         size_t body_goal_idx,
         const std::vector<const pud_rule_id*>& children) {
@@ -414,9 +430,9 @@ pud_queries<IGABG, IGL, IRCS, IRWS, ISTQ>::replace_unfolded(
     return take_forced_unfolds();
 }
 
-template<typename IGABG, typename IGL, typename IRCS, typename IRWS, typename ISTQ>
+template<typename IGABG, typename IGL, typename IRCS, typename IRWS, typename ISTQ, typename IRBC>
 std::vector<pud_forced_unfold>
-pud_queries<IGABG, IGL, IRCS, IRWS, ISTQ>::take_forced_unfolds() {
+pud_queries<IGABG, IGL, IRCS, IRWS, ISTQ, IRBC>::take_forced_unfolds() {
     ensure_booted();
     std::vector<pud_forced_unfold> yields;
     const std::vector<const pud_rule_id*> dirty = take_dirty_leaves();
