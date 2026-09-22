@@ -53,10 +53,13 @@ private:
     void boot();
     void install(const pud_rule_id* leaf);
     void fork_child(const pud_rule_id* child,
-                    const groups_values_t& leftover_templates);
+                    const groups_values_t& leftover_templates,
+                    const std::vector<const expr*>& leftover_goals);
     void clear(const pud_rule_id* leaf);
     void invalidate_leaf(const pud_rule_id* node);
-    void commit_groups(const pud_rule_id* leaf, groups_values_t groups);
+    void commit_groups(const pud_rule_id* leaf,
+                       groups_values_t groups,
+                       std::vector<const expr*> query_goals);
     void replace_owned(const pud_rule_id* leaf, groups_values_t groups);
     void resume_context(pud_candidate_search_context& ctx);
     void watch_context(pud_candidate_search_context& ctx);
@@ -82,6 +85,7 @@ private:
     std::vector<const pud_rule_id*> axioms_;
     std::unordered_map<const pud_rule_id*, groups_t> owned_;
     std::unordered_map<const pud_rule_id*, groups_ptrs_t> ptrs_;
+    std::unordered_map<const pud_rule_id*, std::vector<const expr*>> query_goals_;
     std::unordered_map<pud_candidate_search_context*, const pud_rule_id*> context_leaf_;
     std::unordered_map<const pud_rule_id*, context_set_t> by_witness_;
     std::unordered_map<pud_candidate_search_context*, witness_set_t> by_context_;
@@ -112,6 +116,7 @@ pud_queries<IGABG, IGL, IRCS, IRWS, ISTQ, IRBC>::pud_queries(
     , axioms_()
     , owned_()
     , ptrs_()
+    , query_goals_()
     , context_leaf_()
     , by_witness_()
     , by_context_()
@@ -131,11 +136,9 @@ pud_queries<IGABG, IGL, IRCS, IRWS, ISTQ, IRBC>::root_group(
         group.push_back(pud_candidate_search_context{
             query_leaf,
             body_goal_idx,
-            body_goal,
             frame_offset,
             axiom,
-            std::nullopt,
-            get_added_body_goals_.get(axiom)});
+            std::nullopt});
     }
     return group;
 }
@@ -220,8 +223,12 @@ void pud_queries<IGABG, IGL, IRCS, IRWS, ISTQ, IRBC>::mark_dirty(const pud_rule_
 
 template<typename IGABG, typename IGL, typename IRCS, typename IRWS, typename ISTQ, typename IRBC>
 void pud_queries<IGABG, IGL, IRCS, IRWS, ISTQ, IRBC>::commit_groups(
-        const pud_rule_id* leaf, groups_values_t groups) {
+        const pud_rule_id* leaf,
+        groups_values_t groups,
+        std::vector<const expr*> query_goals) {
+    DEBUG_ASSERT(groups.size() == query_goals.size());
     replace_owned(leaf, std::move(groups));
+    query_goals_[leaf] = std::move(query_goals);
     for (group_ptrs_t& group : ptrs_.at(leaf)) {
         for (pud_candidate_search_context* ctx : group) {
             resume_context(*ctx);
@@ -235,12 +242,14 @@ template<typename IGABG, typename IGL, typename IRCS, typename IRWS, typename IS
 void pud_queries<IGABG, IGL, IRCS, IRWS, ISTQ, IRBC>::install(const pud_rule_id* leaf) {
     const uint32_t frame_offset = get_lvc_.get(leaf);
     groups_values_t groups;
+    std::vector<const expr*> query_goals;
     size_t body_goal_idx = 0;
     for (const expr* goal : get_added_body_goals_.get(leaf)) {
         groups.push_back(root_group(leaf, body_goal_idx, goal, frame_offset));
+        query_goals.push_back(goal);
         ++body_goal_idx;
     }
-    commit_groups(leaf, std::move(groups));
+    commit_groups(leaf, std::move(groups), std::move(query_goals));
 }
 
 template<typename IGABG, typename IGL, typename IRCS, typename IRWS, typename ISTQ, typename IRBC>
@@ -267,26 +276,28 @@ void pud_queries<IGABG, IGL, IRCS, IRWS, ISTQ, IRBC>::adopt_axiom(
 template<typename IGABG, typename IGL, typename IRCS, typename IRWS, typename ISTQ, typename IRBC>
 void pud_queries<IGABG, IGL, IRCS, IRWS, ISTQ, IRBC>::fork_child(
         const pud_rule_id* child,
-        const groups_values_t& leftover_templates) {
+        const groups_values_t& leftover_templates,
+        const std::vector<const expr*>& leftover_goals) {
+    DEBUG_ASSERT(leftover_templates.size() == leftover_goals.size());
     const uint32_t child_lvc = get_lvc_.get(child);
     groups_values_t child_groups;
+    std::vector<const expr*> child_goals;
     size_t body_goal_idx = 0;
-    for (const group_values_t& leftover : leftover_templates) {
-        if (!leftover.empty()) {
-            start_query_.start(
-                child, body_goal_idx, leftover.front().body_goal, child_lvc);
-        }
+    for (size_t leftover_idx = 0; leftover_idx < leftover_templates.size();
+            ++leftover_idx) {
+        const group_values_t& leftover = leftover_templates[leftover_idx];
+        const expr* leftover_goal = leftover_goals[leftover_idx];
+        if (!leftover.empty())
+            start_query_.start(child, body_goal_idx, leftover_goal, child_lvc);
         group_values_t forked;
         for (const pud_candidate_search_context& ctx : leftover) {
             std::optional<pud_candidate_search_context> rebased =
                 rebase_candidate_.rebase(
                     child,
                     body_goal_idx,
-                    ctx.body_goal,
                     child_lvc,
                     ctx.cursor,
-                    ctx.witnesses,
-                    ctx.added_body_goals);
+                    ctx.witnesses);
             if (!rebased.has_value())
                 continue;
             forked.push_back(std::move(*rebased));
@@ -295,20 +306,20 @@ void pud_queries<IGABG, IGL, IRCS, IRWS, ISTQ, IRBC>::fork_child(
             forked.push_back(pud_candidate_search_context{
                 child,
                 body_goal_idx,
-                leftover.front().body_goal,
                 child_lvc,
                 nullptr,
-                std::nullopt,
-                std::vector<const expr*>{}});
+                std::nullopt});
         }
         child_groups.push_back(std::move(forked));
+        child_goals.push_back(leftover_goal);
         ++body_goal_idx;
     }
     for (const expr* goal : get_added_body_goals_.get(child)) {
         child_groups.push_back(root_group(child, body_goal_idx, goal, child_lvc));
+        child_goals.push_back(goal);
         ++body_goal_idx;
     }
-    commit_groups(child, std::move(child_groups));
+    commit_groups(child, std::move(child_groups), std::move(child_goals));
 }
 
 template<typename IGABG, typename IGL, typename IRCS, typename IRWS, typename ISTQ, typename IRBC>
@@ -324,6 +335,7 @@ void pud_queries<IGABG, IGL, IRCS, IRWS, ISTQ, IRBC>::clear(const pud_rule_id* l
     }
     owned_.erase(leaf);
     ptrs_.erase(leaf);
+    query_goals_.erase(leaf);
     dirty_leaves_.erase(leaf);
 }
 
@@ -403,7 +415,8 @@ pud_queries<IGABG, IGL, IRCS, IRWS, ISTQ, IRBC>::unfold_site(
     group_ptrs_t group = groups[body_goal_idx];
     if (group.empty())
         return pud_unfold_site{nullptr, {}};
-    return pud_unfold_site{group[0]->body_goal, live_contexts(group)};
+    return pud_unfold_site{
+        query_goals_.at(leaf)[body_goal_idx], live_contexts(group)};
 }
 
 template<typename IGABG, typename IGL, typename IRCS, typename IRWS, typename ISTQ, typename IRBC>
@@ -414,7 +427,9 @@ pud_queries<IGABG, IGL, IRCS, IRWS, ISTQ, IRBC>::replace_unfolded(
         const std::vector<const pud_rule_id*>& children) {
     const groups_ptrs_t& parent_groups = get(leaf);
     DEBUG_ASSERT(body_goal_idx < parent_groups.size());
+    const std::vector<const expr*>& parent_goals = query_goals_.at(leaf);
     groups_values_t leftover_templates;
+    std::vector<const expr*> leftover_goals;
     for (size_t idx = 0; idx < parent_groups.size(); ++idx) {
         if (idx == body_goal_idx)
             continue;
@@ -422,10 +437,11 @@ pud_queries<IGABG, IGL, IRCS, IRWS, ISTQ, IRBC>::replace_unfolded(
         for (pud_candidate_search_context* ctx : parent_groups[idx])
             copied.push_back(*ctx);
         leftover_templates.push_back(std::move(copied));
+        leftover_goals.push_back(parent_goals[idx]);
     }
     clear(leaf);
     for (const pud_rule_id* child : children)
-        fork_child(child, leftover_templates);
+        fork_child(child, leftover_templates, leftover_goals);
     invalidate_leaf(leaf);
     return take_forced_unfolds();
 }

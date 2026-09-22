@@ -93,7 +93,7 @@ TEST_F(PudReinitBindMapIntegrationTest, DescendStoresIntervalAndRecordsHead) {
     const pud_rule_id* child = add_inference(axiom, 0, axiom, {});
     store_children_of(axiom, {child});
 
-    pud_witness_search_context ctx{axiom, 0, head, 1, axiom, axiom};
+    pud_witness_search_context ctx{axiom, 0, 1, axiom, axiom};
     start_query(axiom, 0, head, 1);
     witness_.resume(ctx);
     EXPECT_EQ(ctx.current, child);
@@ -107,7 +107,7 @@ TEST_F(PudReinitBindMapIntegrationTest, DescendStoresIntervalAndRecordsHead) {
 TEST_F(PudReinitBindMapIntegrationTest, OverwriteAfterUnfoldDropsSearchBinds) {
     const expr* head = exprs_.make_functor(4, {});
     const pud_rule_id* axiom = add_axiom(0, {{0, head}});
-    pud_witness_search_context ctx{axiom, 0, head, 1, axiom, axiom};
+    pud_witness_search_context ctx{axiom, 0, 1, axiom, axiom};
     start_query(axiom, 0, head, 1);
     witness_.resume(ctx);
     EXPECT_EQ(ctx.current, axiom);
@@ -132,7 +132,7 @@ TEST_F(PudReinitBindMapIntegrationTest, FailedMidPathDoesNotEnterLaterNode) {
     store_children_of(axiom, {mid});
     const pud_rule_id* leaf = add_inference(mid, 0, axiom, {{1, r}});
     store_children_of(mid, {leaf});
-    pud_witness_search_context ctx{axiom, 0, p, 1, axiom, axiom};
+    pud_witness_search_context ctx{axiom, 0, 1, axiom, axiom};
     start_query(axiom, 0, p, 1);
     witness_.resume(ctx);
     EXPECT_EQ(ctx.current, nullptr);
@@ -143,7 +143,7 @@ TEST_F(PudReinitBindMapIntegrationTest, FailedMidPathDoesNotEnterLaterNode) {
 TEST_F(PudReinitBindMapIntegrationTest, CalleeHeadLivesAtLvcCallerZeroUntouched) {
     const expr* head = exprs_.make_functor(3, {});
     const pud_rule_id* axiom = add_axiom(0, {{0, head}});
-    pud_witness_search_context ctx{axiom, 0, head, 1, axiom, axiom};
+    pud_witness_search_context ctx{axiom, 0, 1, axiom, axiom};
     start_query(axiom, 0, head, 1);
     witness_.resume(ctx);
     const pud_rule_id* key = pool_.make_inference(axiom, 0, axiom);
@@ -159,7 +159,7 @@ TEST_F(PudReinitBindMapIntegrationTest, InferenceSnapshotBindsAtQueryLvcNotCalle
     const pud_rule_id* axiom = add_axiom(0, {{0, head}});
     const pud_rule_id* inf = add_inference(axiom, 0, axiom, {{0, head}, {1, a}});
     store_children_of(axiom, {inf});
-    pud_witness_search_context ctx{axiom, 0, head, 4, axiom, axiom};
+    pud_witness_search_context ctx{axiom, 0, 4, axiom, axiom};
     start_query(axiom, 0, head, 4);
     witness_.resume(ctx);
     EXPECT_EQ(ctx.current, inf);
@@ -178,7 +178,7 @@ TEST_F(PudReinitBindMapIntegrationTest, FirstVisitStoresDeltaOnEveryAncestor) {
     store_children_of(axiom, {mid});
     const pud_rule_id* leaf = add_inference(mid, 0, axiom, {{0, p}});
     store_children_of(mid, {leaf});
-    pud_witness_search_context ctx{axiom, 0, p, 1, axiom, axiom};
+    pud_witness_search_context ctx{axiom, 0, 1, axiom, axiom};
     start_query(axiom, 0, p, 1);
     witness_.resume(ctx);
     EXPECT_EQ(ctx.current, leaf);

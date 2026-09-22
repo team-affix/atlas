@@ -50,11 +50,9 @@ struct MockRebaseCandidate {
     MOCK_METHOD((std::optional<pud_candidate_search_context>), rebase,
                 (const pud_rule_id*,
                  size_t,
-                 const expr*,
                  uint32_t,
                  const pud_rule_id*,
-                 const std::optional<pud_witness_pair>&,
-                 (const std::vector<const expr*>&)), ());
+                 const std::optional<pud_witness_pair>&), ());
 };
 
 using test_queries_t = pud_queries<
@@ -88,27 +86,23 @@ struct PudQueriesTest : public ::testing::Test {
         ON_CALL(get_lvc_, get(&other_)).WillByDefault(Return(1u));
         ON_CALL(get_lvc_, get(&drain_)).WillByDefault(Return(1u));
         ON_CALL(get_lvc_, get(&child_)).WillByDefault(Return(2u));
-        ON_CALL(rebase_, rebase(_, _, _, _, _, _, _))
+        ON_CALL(rebase_, rebase(_, _, _, _, _))
             .WillByDefault([](const pud_rule_id* leaf,
                               size_t idx,
-                              const expr* body,
                               uint32_t lvc,
                               const pud_rule_id* cursor,
-                              const std::optional<pud_witness_pair>& pins,
-                              const std::vector<const expr*>& goals) {
+                              const std::optional<pud_witness_pair>& pins) {
                 std::optional<pud_witness_pair> retargeted = pins;
                 if (retargeted.has_value()) {
                     retargeted->a.query_leaf = leaf;
                     retargeted->a.body_goal_idx = idx;
-                    retargeted->a.body_goal = body;
                     retargeted->a.frame_offset = lvc;
                     retargeted->b.query_leaf = leaf;
                     retargeted->b.body_goal_idx = idx;
-                    retargeted->b.body_goal = body;
                     retargeted->b.frame_offset = lvc;
                 }
                 return pud_candidate_search_context{
-                    leaf, idx, body, lvc, cursor, retargeted, goals};
+                    leaf, idx, lvc, cursor, retargeted};
             });
     }
 
@@ -166,7 +160,7 @@ TEST_F(PudQueriesTest, ForkRebasesLeftoverContexts) {
     ON_CALL(get_added_body_goals_, get(&axiom_)).WillByDefault(ReturnRef(two_goals_));
     queries_.adopt_axiom(&axiom_);
     ctx_at(&axiom_, 0);
-    EXPECT_CALL(rebase_, rebase(&child_, 0, &leftover_, 2, _, _, _))
+    EXPECT_CALL(rebase_, rebase(&child_, 0, 2, _, _))
         .Times(::testing::AtLeast(1));
     queries_.replace_unfolded(&axiom_, 0, {&child_});
 }
@@ -176,12 +170,10 @@ TEST_F(PudQueriesTest, AdoptAxiomStoresOneQueryPerBodyGoal) {
     pud_candidate_search_context* ctx = ctx_at(&axiom_, 0);
     EXPECT_EQ(ctx->query_leaf, &axiom_);
     EXPECT_EQ(ctx->body_goal_idx, 0u);
-    EXPECT_EQ(ctx->body_goal, &body_);
+    EXPECT_EQ(queries_.unfold_site(&axiom_, 0).body_goal, &body_);
     EXPECT_EQ(ctx->frame_offset, 1u);
     ASSERT_EQ(group_at(&axiom_, 0).size(), 1u);
     EXPECT_EQ(ctx->cursor, &axiom_);
-    EXPECT_EQ(ctx->added_body_goals,
-              (std::vector<const expr*>{&body_}));
 }
 
 TEST_F(PudQueriesTest, AdoptAxiomAppendsContextOnExistingLeafQuery) {
@@ -259,8 +251,8 @@ TEST_F(PudQueriesTest, ReplaceUnfoldedResumesWatchersOfTheDeadLeaf) {
             if (ctx.cursor != &axiom_)
                 return;
             ctx.witnesses = pud_witness_pair{
-                {&axiom_, 0, &body_, 1, &other_, &other_},
-                {&axiom_, 0, &body_, 1, &axiom_, &axiom_}};
+                {&axiom_, 0, 1, &other_, &other_},
+                {&axiom_, 0, 1, &axiom_, &axiom_}};
         });
     queries_.adopt_axiom(&axiom_);
     queries_.adopt_axiom(&other_);
@@ -273,11 +265,11 @@ TEST_F(PudQueriesTest, ReplaceUnfoldedClearsParentAndForksLeftoverOntoChild) {
     queries_.adopt_axiom(&axiom_);
     queries_.replace_unfolded(&axiom_, 0, {&child_});
     EXPECT_THROW(queries_.unfold_site(&axiom_, 0), std::out_of_range);
-    EXPECT_EQ(ctx_at(&child_, 0)->body_goal, &leftover_);
+    EXPECT_EQ(queries_.unfold_site(&child_, 0).body_goal, &leftover_);
     EXPECT_EQ(ctx_at(&child_, 0)->query_leaf, &child_);
     EXPECT_EQ(ctx_at(&child_, 0)->body_goal_idx, 0u);
     EXPECT_EQ(ctx_at(&child_, 0)->frame_offset, 2u);
-    EXPECT_EQ(ctx_at(&child_, 1)->body_goal, &leftover_);
+    EXPECT_EQ(queries_.unfold_site(&child_, 1).body_goal, &leftover_);
 }
 
 TEST_F(PudQueriesTest, AdoptEmptyBodyInstallsNoQueries) {
@@ -296,8 +288,8 @@ TEST_F(PudQueriesTest, AdoptEmptyBodyInstallsNoQueries) {
 TEST_F(PudQueriesTest, AdoptMultiGoalInstallsOneQueryPerGoal) {
     ON_CALL(get_added_body_goals_, get(&axiom_)).WillByDefault(ReturnRef(two_goals_));
     queries_.adopt_axiom(&axiom_);
-    EXPECT_EQ(ctx_at(&axiom_, 0)->body_goal, &body_);
-    EXPECT_EQ(ctx_at(&axiom_, 1)->body_goal, &leftover_);
+    EXPECT_EQ(queries_.unfold_site(&axiom_, 0).body_goal, &body_);
+    EXPECT_EQ(queries_.unfold_site(&axiom_, 1).body_goal, &leftover_);
 }
 
 TEST_F(PudQueriesTest, AdoptSecondAxiomQueryRootContextsIncludePriors) {
@@ -323,8 +315,8 @@ TEST_F(PudQueriesTest, ReplaceUnfoldedForksDistinctLeftoverAndChildGoals) {
     ON_CALL(get_added_body_goals_, get(&child_)).WillByDefault(ReturnRef(child_with_goal));
     queries_.adopt_axiom(&axiom_);
     queries_.replace_unfolded(&axiom_, 0, {&child_});
-    EXPECT_EQ(ctx_at(&child_, 0)->body_goal, &leftover_);
-    EXPECT_EQ(ctx_at(&child_, 1)->body_goal, &child_goal);
+    EXPECT_EQ(queries_.unfold_site(&child_, 0).body_goal, &leftover_);
+    EXPECT_EQ(queries_.unfold_site(&child_, 1).body_goal, &child_goal);
 }
 
 TEST_F(PudQueriesTest, ReplaceUnfoldedWithEmptyChildrenClearsParent) {
@@ -352,8 +344,8 @@ TEST_F(PudQueriesTest, ResumeDeadWitnessDropsFailedEdgesThenResumesCandidate) {
                 return;
             if (other_is_live) {
                 ctx.witnesses = pud_witness_pair{
-                    {&axiom_, 0, &body_, 1, &other_, &other_},
-                    {&axiom_, 0, &body_, 1, &axiom_, &axiom_}};
+                    {&axiom_, 0, 1, &other_, &other_},
+                    {&axiom_, 0, 1, &axiom_, &axiom_}};
                 return;
             }
             ctx.witnesses.reset();
@@ -380,8 +372,8 @@ TEST_F(PudQueriesTest, ResumeDeadWitnessDropsFailedEdgesThenResumesCandidate) {
 TEST_F(PudQueriesTest, ReplaceUnfoldedRefuteShortCircuitsLaterUnits) {
     ON_CALL(get_added_body_goals_, get(&axiom_)).WillByDefault(ReturnRef(two_goals_));
     ON_CALL(candidate_, resume(_)).WillByDefault(
-        [this](pud_candidate_search_context& ctx) {
-            if (ctx.body_goal == &body_)
+        [](pud_candidate_search_context& ctx) {
+            if (ctx.body_goal_idx == 0)
                 ctx.cursor = nullptr;
         });
     queries_.adopt_axiom(&drain_);

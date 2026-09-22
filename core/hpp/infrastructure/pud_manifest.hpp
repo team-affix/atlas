@@ -34,8 +34,7 @@ struct pud_manifest {
         fully_persistent_array, fully_persistent_array,
         globalizer, expr_pool, pud_node_added_touched_caller_reps>;
     using candidate_search_t = pud_candidate_search<
-        witness_search_t, witness_search_t, pud_node_children, pud_node_parent,
-        pud_node_added_body_goals>;
+        witness_search_t, witness_search_t, pud_node_children, pud_node_parent>;
     using query_starter_t = pud_query_starter<
         pud_rule_id_pool, pud_node_interval, order_maintenance, pud_node_interval,
         globalizer, fully_persistent_array, fully_persistent_array>;
@@ -48,7 +47,8 @@ struct pud_manifest {
     using unfolder_t = pud_unfolder<
         queries_t, normalizer_t, normalizer_t, normalizer_t, expr_pool,
         pud_node_lvc, pud_rule_id_pool,
-        pud_node_added_unifications, pud_node_added_unifications, pud_node_added_body_goals, pud_node_lvc,
+        pud_node_added_unifications, pud_node_added_unifications,
+        pud_node_added_body_goals, pud_node_added_body_goals, pud_node_lvc,
         pud_node_children, pud_node_parent, pud_node_parent, pud_node_interval,
         order_maintenance, pud_node_interval, fully_persistent_array,
         pud_node_added_touched_caller_reps, queries_t>;

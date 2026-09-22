@@ -37,7 +37,7 @@ const pud_rule_id* pud_path_enter<ITE, IGP>::enter_to(
             node = get_parent_.get(node))
         chain.push_back(node);
     pud_witness_search_context context{
-        query_leaf, body_goal_idx, nullptr, frame_offset, dest, dest};
+        query_leaf, body_goal_idx, frame_offset, dest, dest};
     const pud_rule_id* last = nullptr;
     for (size_t idx = chain.size(); idx > 0; --idx) {
         if (!try_enter_.try_enter(context, chain[idx - 1]))

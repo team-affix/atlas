@@ -4,8 +4,6 @@
 #include <cstddef>
 #include <cstdint>
 #include <optional>
-#include <vector>
-#include "value_objects/expr.hpp"
 #include "value_objects/pud_candidate_search_context.hpp"
 #include "value_objects/pud_rule_id.hpp"
 #include "value_objects/pud_witness_pair.hpp"
@@ -24,18 +22,15 @@ struct pud_candidate_rebaser {
     std::optional<pud_candidate_search_context> rebase(
         const pud_rule_id* query_leaf,
         size_t body_goal_idx,
-        const expr* body_goal,
         uint32_t frame_offset,
         const pud_rule_id* cursor,
-        const std::optional<pud_witness_pair>& pins,
-        const std::vector<const expr*>& added_body_goals);
+        const std::optional<pud_witness_pair>& pins);
 private:
     const pud_rule_id* failed_child(const pud_rule_id* last,
                                     const pud_rule_id* dest) const;
     void retarget_side(pud_witness_search_context& side,
                        const pud_rule_id* query_leaf,
                        size_t body_goal_idx,
-                       const expr* body_goal,
                        uint32_t frame_offset) const;
 
     IEnterPath& enter_path_;
@@ -60,11 +55,9 @@ void pud_candidate_rebaser<IEP, IRWS, IRCS, IGP>::retarget_side(
         pud_witness_search_context& side,
         const pud_rule_id* query_leaf,
         size_t body_goal_idx,
-        const expr* body_goal,
         uint32_t frame_offset) const {
     side.query_leaf = query_leaf;
     side.body_goal_idx = body_goal_idx;
-    side.body_goal = body_goal;
     side.frame_offset = frame_offset;
 }
 
@@ -90,11 +83,9 @@ std::optional<pud_candidate_search_context>
 pud_candidate_rebaser<IEP, IRWS, IRCS, IGP>::rebase(
         const pud_rule_id* query_leaf,
         size_t body_goal_idx,
-        const expr* body_goal,
         uint32_t frame_offset,
         const pud_rule_id* cursor,
-        const std::optional<pud_witness_pair>& pins,
-        const std::vector<const expr*>& added_body_goals) {
+        const std::optional<pud_witness_pair>& pins) {
     if (cursor == nullptr)
         return std::nullopt;
     const pud_rule_id* spine = enter_path_.enter_to(
@@ -103,8 +94,8 @@ pud_candidate_rebaser<IEP, IRWS, IRCS, IGP>::rebase(
         return std::nullopt;
     std::optional<pud_witness_pair> witnesses = pins;
     if (witnesses.has_value()) {
-        retarget_side(witnesses->a, query_leaf, body_goal_idx, body_goal, frame_offset);
-        retarget_side(witnesses->b, query_leaf, body_goal_idx, body_goal, frame_offset);
+        retarget_side(witnesses->a, query_leaf, body_goal_idx, frame_offset);
+        retarget_side(witnesses->b, query_leaf, body_goal_idx, frame_offset);
         if (witnesses->a.current != nullptr) {
             const pud_rule_id* last = enter_path_.enter_to(
                 query_leaf, body_goal_idx, frame_offset, witnesses->a.current);
@@ -123,11 +114,9 @@ pud_candidate_rebaser<IEP, IRWS, IRCS, IGP>::rebase(
     pud_candidate_search_context context{
         query_leaf,
         body_goal_idx,
-        body_goal,
         frame_offset,
         cursor,
-        std::move(witnesses),
-        added_body_goals};
+        std::move(witnesses)};
     if (context.witnesses.has_value()) {
         resume_witness_search_.resume(context.witnesses->a);
         resume_witness_search_.resume(context.witnesses->b);

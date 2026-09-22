@@ -1,11 +1,8 @@
 #ifndef PUD_CANDIDATE_SEARCH_HPP
 #define PUD_CANDIDATE_SEARCH_HPP
 
-#include <cstddef>
 #include <optional>
 #include <set>
-#include <variant>
-#include <vector>
 #include "value_objects/pud_candidate_search_context.hpp"
 #include "value_objects/pud_rule_id.hpp"
 #include "value_objects/pud_witness_pair.hpp"
@@ -15,14 +12,12 @@
 template<typename IResumeWitnessSearch,
          typename ITryEnter,
          typename IGetChildren,
-         typename IGetParent,
-         typename IGetAddedBodyGoals>
+         typename IGetParent>
 struct pud_candidate_search {
     pud_candidate_search(IResumeWitnessSearch& resume_witness_search,
                          ITryEnter& try_enter,
                          IGetChildren& get_children,
-                         IGetParent& get_parent,
-                         IGetAddedBodyGoals& get_added_body_goals);
+                         IGetParent& get_parent);
     void resume(pud_candidate_search_context& context);
 private:
     using children_set_t = std::set<const pud_rule_id*>;
@@ -37,39 +32,35 @@ private:
     ITryEnter& try_enter_;
     IGetChildren& get_children_;
     IGetParent& get_parent_;
-    IGetAddedBodyGoals& get_added_body_goals_;
 };
 
-template<typename IRWS, typename ITE, typename IGC, typename IGP, typename IGABG>
-pud_candidate_search<IRWS, ITE, IGC, IGP, IGABG>::pud_candidate_search(
+template<typename IRWS, typename ITE, typename IGC, typename IGP>
+pud_candidate_search<IRWS, ITE, IGC, IGP>::pud_candidate_search(
         IRWS& resume_witness_search,
         ITE& try_enter,
         IGC& get_children,
-        IGP& get_parent,
-        IGABG& get_added_body_goals)
+        IGP& get_parent)
     : resume_witness_search_(resume_witness_search)
     , try_enter_(try_enter)
     , get_children_(get_children)
-    , get_parent_(get_parent)
-    , get_added_body_goals_(get_added_body_goals) {}
+    , get_parent_(get_parent) {}
 
-template<typename IRWS, typename ITE, typename IGC, typename IGP, typename IGABG>
+template<typename IRWS, typename ITE, typename IGC, typename IGP>
 pud_witness_search_context
-pud_candidate_search<IRWS, ITE, IGC, IGP, IGABG>::make_edge(
+pud_candidate_search<IRWS, ITE, IGC, IGP>::make_edge(
         const pud_candidate_search_context& context,
         const pud_rule_id* search_root,
         const pud_rule_id* current) const {
     return pud_witness_search_context{
         context.query_leaf,
         context.body_goal_idx,
-        context.body_goal,
         context.frame_offset,
         search_root,
         current};
 }
 
-template<typename IRWS, typename ITE, typename IGC, typename IGP, typename IGABG>
-void pud_candidate_search<IRWS, ITE, IGC, IGP, IGABG>::advance(
+template<typename IRWS, typename ITE, typename IGC, typename IGP>
+void pud_candidate_search<IRWS, ITE, IGC, IGP>::advance(
         pud_candidate_search_context& context) {
     DEBUG_ASSERT(context.witnesses.has_value());
     pud_witness_pair& pair = *context.witnesses;
@@ -81,16 +72,6 @@ void pud_candidate_search<IRWS, ITE, IGC, IGP, IGABG>::advance(
     const pud_rule_id* next_cursor = survivor.search_root;
     DEBUG_ASSERT(next_cursor != nullptr);
     DEBUG_ASSERT(next_cursor != context.cursor);
-    DEBUG_ASSERT(std::holds_alternative<pud_rule_id::inference>(next_cursor->content));
-    const pud_rule_id::inference& inf = std::get<pud_rule_id::inference>(next_cursor->content);
-    DEBUG_ASSERT(inf.call_site < context.added_body_goals.size());
-    context.added_body_goals.erase(
-        context.added_body_goals.begin() + static_cast<std::ptrdiff_t>(inf.call_site));
-    const std::vector<const expr*>& next_goals = get_added_body_goals_.get(next_cursor);
-    context.added_body_goals.insert(
-        context.added_body_goals.end(),
-        next_goals.begin(),
-        next_goals.end());
     context.cursor = next_cursor;
     dead.search_root = nullptr;
     dead.current = nullptr;
@@ -110,8 +91,8 @@ void pud_candidate_search<IRWS, ITE, IGC, IGP, IGABG>::advance(
     }
 }
 
-template<typename IRWS, typename ITE, typename IGC, typename IGP, typename IGABG>
-void pud_candidate_search<IRWS, ITE, IGC, IGP, IGABG>::resume(
+template<typename IRWS, typename ITE, typename IGC, typename IGP>
+void pud_candidate_search<IRWS, ITE, IGC, IGP>::resume(
         pud_candidate_search_context& context) {
     while (true) {
         if (context.cursor == nullptr)

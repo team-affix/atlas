@@ -19,8 +19,7 @@ pud_manifest::pud_manifest()
                       om_, added_unifications_,
                       fpa_, fpa_,
                       globalizer_, exprs_, added_caller_reps_)
-    , candidate_search_(witness_search_, witness_search_, children_, parent_,
-                        added_body_goals_)
+    , candidate_search_(witness_search_, witness_search_, children_, parent_)
     , query_starter_(pool_, node_interval_, om_, node_interval_,
                      globalizer_, fpa_, fpa_)
     , path_enter_(witness_search_, parent_)
@@ -29,7 +28,8 @@ pud_manifest::pud_manifest()
                candidate_search_, witness_search_, query_starter_, candidate_rebaser_)
     , unfolder_(queries_, pud_normalizer_, pud_normalizer_, pud_normalizer_,
                 exprs_, lvc_, pool_,
-                added_unifications_, added_unifications_, added_body_goals_, lvc_,
+                added_unifications_, added_unifications_,
+                added_body_goals_, added_body_goals_, lvc_,
                 children_, parent_, parent_, node_interval_, om_,
                 node_interval_, fpa_, added_caller_reps_, queries_)
     , axiom_adder_(pool_, added_unifications_, added_body_goals_, lvc_,

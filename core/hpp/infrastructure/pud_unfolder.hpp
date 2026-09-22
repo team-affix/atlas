@@ -6,8 +6,10 @@
 #include <set>
 #include <unordered_map>
 #include <utility>
+#include <variant>
 #include <vector>
 #include "infrastructure/coroutine.hpp"
+#include "value_objects/expr.hpp"
 #include "value_objects/framed_expr.hpp"
 #include "value_objects/om_interval.hpp"
 #include "value_objects/pud_added_unification.hpp"
@@ -26,6 +28,7 @@ template<typename IUnfoldSite,
          typename IMakeInference,
          typename IStoreAddedUnifications,
          typename IGetAddedUnifications,
+         typename IGetAddedBodyGoals,
          typename IStoreAddedBodyGoals,
          typename IStoreLvc,
          typename IStoreChildren,
@@ -47,6 +50,7 @@ struct pud_unfolder {
                  IMakeInference& make_inference,
                  IStoreAddedUnifications& store_added_unifications,
                  IGetAddedUnifications& get_added_unifications,
+                 IGetAddedBodyGoals& get_added_body_goals,
                  IStoreAddedBodyGoals& store_added_body_goals,
                  IStoreLvc& store_lvc,
                  IStoreChildren& store_children,
@@ -66,6 +70,7 @@ private:
                                          const pud_rule_id* leaf,
                                          size_t body_goal_idx,
                                          uint32_t parent_lvc);
+    std::vector<const expr*> collect_added_body_goals(const pud_rule_id* dest);
 
     IUnfoldSite& unfold_site_;
     ISetNormEnv& set_norm_env_;
@@ -76,6 +81,7 @@ private:
     IMakeInference& make_inference_;
     IStoreAddedUnifications& store_added_unifications_;
     IGetAddedUnifications& get_added_unifications_;
+    IGetAddedBodyGoals& get_added_body_goals_;
     IStoreAddedBodyGoals& store_added_body_goals_;
     IStoreLvc& store_lvc_;
     IStoreChildren& store_children_;
@@ -90,10 +96,10 @@ private:
 };
 
 template<typename IUS, typename ISNE, typename IN, typename IW, typename IMV,
-         typename IGL, typename IMI, typename ISAU, typename IGAU, typename ISABG, typename ISL,
-         typename ISC, typename ISP, typename IGP, typename IGI, typename IACI,
+         typename IGL, typename IMI, typename ISAU, typename IGAU, typename IGABG, typename ISABG,
+         typename ISL, typename ISC, typename ISP, typename IGP, typename IGI, typename IACI,
          typename ISI, typename IRB, typename IGACR, typename IRU>
-pud_unfolder<IUS, ISNE, IN, IW, IMV, IGL, IMI, ISAU, IGAU, ISABG, ISL, ISC, ISP, IGP,
+pud_unfolder<IUS, ISNE, IN, IW, IMV, IGL, IMI, ISAU, IGAU, IGABG, ISABG, ISL, ISC, ISP, IGP,
              IGI, IACI, ISI, IRB, IGACR, IRU>::
 pud_unfolder(IUS& unfold_site,
              ISNE& set_norm_env,
@@ -104,6 +110,7 @@ pud_unfolder(IUS& unfold_site,
              IMI& make_inference,
              ISAU& store_added_unifications,
              IGAU& get_added_unifications,
+             IGABG& get_added_body_goals,
              ISABG& store_added_body_goals,
              ISL& store_lvc,
              ISC& store_children,
@@ -124,6 +131,7 @@ pud_unfolder(IUS& unfold_site,
     , make_inference_(make_inference)
     , store_added_unifications_(store_added_unifications)
     , get_added_unifications_(get_added_unifications)
+    , get_added_body_goals_(get_added_body_goals)
     , store_added_body_goals_(store_added_body_goals)
     , store_lvc_(store_lvc)
     , store_children_(store_children)
@@ -137,11 +145,40 @@ pud_unfolder(IUS& unfold_site,
     , replace_unfolded_(replace_unfolded) {}
 
 template<typename IUS, typename ISNE, typename IN, typename IW, typename IMV,
-         typename IGL, typename IMI, typename ISAU, typename IGAU, typename ISABG, typename ISL,
-         typename ISC, typename ISP, typename IGP, typename IGI, typename IACI,
+         typename IGL, typename IMI, typename ISAU, typename IGAU, typename IGABG, typename ISABG,
+         typename ISL, typename ISC, typename ISP, typename IGP, typename IGI, typename IACI,
+         typename ISI, typename IRB, typename IGACR, typename IRU>
+std::vector<const expr*>
+pud_unfolder<IUS, ISNE, IN, IW, IMV, IGL, IMI, ISAU, IGAU, IGABG, ISABG, ISL, ISC, ISP, IGP,
+             IGI, IACI, ISI, IRB, IGACR, IRU>::
+collect_added_body_goals(const pud_rule_id* dest) {
+    DEBUG_ASSERT(dest != nullptr);
+    std::vector<const pud_rule_id*> chain;
+    for (const pud_rule_id* node = dest; node != nullptr;
+            node = get_parent_.get(node))
+        chain.push_back(node);
+    std::vector<const expr*> remaining;
+    for (size_t idx = chain.size(); idx > 0; --idx) {
+        const pud_rule_id* node = chain[idx - 1];
+        if (std::holds_alternative<pud_rule_id::inference>(node->content)) {
+            const pud_rule_id::inference& inf =
+                std::get<pud_rule_id::inference>(node->content);
+            DEBUG_ASSERT(inf.call_site < remaining.size());
+            remaining.erase(
+                remaining.begin() + static_cast<std::ptrdiff_t>(inf.call_site));
+        }
+        const std::vector<const expr*>& added = get_added_body_goals_.get(node);
+        remaining.insert(remaining.end(), added.begin(), added.end());
+    }
+    return remaining;
+}
+
+template<typename IUS, typename ISNE, typename IN, typename IW, typename IMV,
+         typename IGL, typename IMI, typename ISAU, typename IGAU, typename IGABG, typename ISABG,
+         typename ISL, typename ISC, typename ISP, typename IGP, typename IGI, typename IACI,
          typename ISI, typename IRB, typename IGACR, typename IRU>
 const pud_rule_id*
-pud_unfolder<IUS, ISNE, IN, IW, IMV, IGL, IMI, ISAU, IGAU, ISABG, ISL, ISC, ISP, IGP,
+pud_unfolder<IUS, ISNE, IN, IW, IMV, IGL, IMI, ISAU, IGAU, IGABG, ISABG, ISL, ISC, ISP, IGP,
              IGI, IACI, ISI, IRB, IGACR, IRU>::
 materialize_child(pud_candidate_search_context& ctx,
                   const pud_rule_id* leaf,
@@ -205,7 +242,7 @@ materialize_child(pud_candidate_search_context& ctx,
     const expr* spec_head = normalize_.normalize(reduced_head, translation);
 
     std::vector<const expr*> added_body_goals;
-    for (const expr* goal : ctx.added_body_goals) {
+    for (const expr* goal : collect_added_body_goals(ctx.cursor)) {
         added_body_goals.push_back(normalize_.normalize(
             framed_expr{goal, parent_lvc}, translation));
     }
@@ -230,11 +267,11 @@ materialize_child(pud_candidate_search_context& ctx,
 }
 
 template<typename IUS, typename ISNE, typename IN, typename IW, typename IMV,
-         typename IGL, typename IMI, typename ISAU, typename IGAU, typename ISABG, typename ISL,
-         typename ISC, typename ISP, typename IGP, typename IGI, typename IACI,
+         typename IGL, typename IMI, typename ISAU, typename IGAU, typename IGABG, typename ISABG,
+         typename ISL, typename ISC, typename ISP, typename IGP, typename IGI, typename IACI,
          typename ISI, typename IRB, typename IGACR, typename IRU>
 coroutine<pud_forced_unfold, std::vector<const pud_rule_id*>>
-pud_unfolder<IUS, ISNE, IN, IW, IMV, IGL, IMI, ISAU, IGAU, ISABG, ISL, ISC, ISP, IGP,
+pud_unfolder<IUS, ISNE, IN, IW, IMV, IGL, IMI, ISAU, IGAU, IGABG, ISABG, ISL, ISC, ISP, IGP,
              IGI, IACI, ISI, IRB, IGACR, IRU>::
 unfold(const pud_rule_id* leaf, size_t body_goal_idx) {
     const pud_unfold_site site = unfold_site_.unfold_site(leaf, body_goal_idx);

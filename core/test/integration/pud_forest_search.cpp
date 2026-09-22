@@ -31,8 +31,7 @@ using witness_search_t = pud_witness_search<
     fully_persistent_array, fully_persistent_array,
     globalizer, expr_pool, pud_node_added_touched_caller_reps>;
 using candidate_search_t = pud_candidate_search<
-    witness_search_t, witness_search_t, pud_node_children, pud_node_parent,
-    pud_node_added_body_goals>;
+    witness_search_t, witness_search_t, pud_node_children, pud_node_parent>;
 using query_starter_t = pud_query_starter<
     pud_rule_id_pool, pud_node_interval, order_maintenance, pud_node_interval,
     globalizer, fully_persistent_array, fully_persistent_array>;
@@ -43,7 +42,7 @@ struct PudForestSearchIntegrationTest : public ::testing::Test {
                    node_interval_, node_interval_, node_interval_,
                    om_, added_unifications_,
                    fpa_, fpa_, glob_, exprs_, added_caller_reps_)
-        , candidate_(witness_, witness_, children_, parent_, added_body_goals_)
+        , candidate_(witness_, witness_, children_, parent_)
         , starter_(pool_, node_interval_, om_, node_interval_,
                    glob_, fpa_, fpa_) {}
 
@@ -107,7 +106,7 @@ struct PudForestSearchIntegrationTest : public ::testing::Test {
 TEST_F(PudForestSearchIntegrationTest, WitnessSearchFindsUnifyingAxiomLeaf) {
     const expr* pred = exprs_.make_functor(4, {});
     const pud_rule_id* axiom = add_axiom(0, {{0, pred}}, {}, 1);
-    pud_witness_search_context ctx{axiom, 0, pred, 1, axiom, axiom};
+    pud_witness_search_context ctx{axiom, 0, 1, axiom, axiom};
     start_query(axiom, 0, pred, 1);
     witness_.resume(ctx);
     EXPECT_EQ(ctx.current, axiom);
@@ -117,7 +116,7 @@ TEST_F(PudForestSearchIntegrationTest, CandidateSearchSelfWitnessesMatchingLeaf)
     const expr* pred = exprs_.make_functor(5, {});
     const pud_rule_id* axiom = add_axiom(0, {{0, pred}}, {}, 1);
     pud_candidate_search_context ctx{
-        axiom, 0, pred, 1, axiom, std::nullopt, added_body_goals_.get(axiom)};
+        axiom, 0, 1, axiom, std::nullopt};
     start_query(axiom, 0, pred, 1);
     candidate_.resume(ctx);
     EXPECT_EQ(ctx.cursor, axiom);
@@ -129,7 +128,7 @@ TEST_F(PudForestSearchIntegrationTest, CandidateSearchRefutesAxiomWhenHeadDoesNo
     const expr* body = exprs_.make_functor(7, {});
     const pud_rule_id* axiom = add_axiom(0, {{0, head}}, {body}, 1);
     pud_candidate_search_context ctx{
-        axiom, 0, body, 1, axiom, std::nullopt, added_body_goals_.get(axiom)};
+        axiom, 0, 1, axiom, std::nullopt};
     start_query(axiom, 0, body, 1);
     candidate_.resume(ctx);
     EXPECT_EQ(ctx.cursor, nullptr);
@@ -142,7 +141,7 @@ TEST_F(PudForestSearchIntegrationTest, WitnessSearchFindsGrandchildUnderLinkedFo
     store_children_of(axiom, {child});
     const pud_rule_id* grand = add_inference(child, 0, axiom, {{0, pred}}, {}, 1);
     store_children_of(child, {grand});
-    pud_witness_search_context ctx{axiom, 0, pred, 1, axiom, axiom};
+    pud_witness_search_context ctx{axiom, 0, 1, axiom, axiom};
     start_query(axiom, 0, pred, 1);
     witness_.resume(ctx);
     EXPECT_EQ(ctx.current, grand);
@@ -155,7 +154,7 @@ TEST_F(PudForestSearchIntegrationTest, CandidateSearchChoicePointOnTwoLinkedChil
     const pud_rule_id* c1 = add_inference(axiom, 1, axiom, {{0, pred}}, {}, 1);
     store_children_of(axiom, {c0, c1});
     pud_candidate_search_context ctx{
-        axiom, 0, pred, 1, axiom, std::nullopt, added_body_goals_.get(axiom)};
+        axiom, 0, 1, axiom, std::nullopt};
     start_query(axiom, 0, pred, 1);
     candidate_.resume(ctx);
     ASSERT_TRUE(ctx.witnesses.has_value());
@@ -171,7 +170,7 @@ TEST_F(PudForestSearchIntegrationTest, CandidateSearchAdvancesWhenWitnessCurrent
     const pud_rule_id* grand = add_inference(child, 0, axiom, {{0, pred}}, {}, 1);
     store_children_of(child, {grand});
     pud_candidate_search_context ctx{
-        axiom, 0, pred, 1, axiom, std::nullopt, added_body_goals_.get(axiom)};
+        axiom, 0, 1, axiom, std::nullopt};
     start_query(axiom, 0, pred, 1);
     candidate_.resume(ctx);
     EXPECT_EQ(ctx.cursor, grand);

@@ -229,7 +229,7 @@ struct PudWitnessSearchTest : public ::testing::Test {
 
     pud_witness_search_context make_edge(const pud_rule_id* search_root,
                                          const pud_rule_id* current) {
-        return pud_witness_search_context{&query_leaf_, 0, &body_, 1, search_root, current};
+        return pud_witness_search_context{&query_leaf_, 0, 1, search_root, current};
     }
 
     expr body_;
@@ -445,7 +445,7 @@ TEST_F(PudWitnessSearchTest, StoresCallerRepsBelowLvc) {
     expr caller_var{expr::var{1}};
     bind_hole(&caller_var, 2);
     pud_witness_search_context ctx{
-        &query_leaf_, 0, &caller_var, 2, &a0_, &a0_};
+        &query_leaf_, 0, 2, &a0_, &a0_};
     EXPECT_CALL(children_, get(&a0_)).WillRepeatedly(Return(std::nullopt));
     std::vector<uint32_t> stored;
     EXPECT_CALL(store_added_caller_reps_, store(&k_a0_, _))
@@ -470,7 +470,7 @@ TEST_F(PudWitnessSearchTest, ReplaysSnapshotLiftedToLvcNotCallerKey) {
     std::vector<pud_added_unification> unifs{{1, &const_a_}};
     ON_CALL(get_unifs_, get(&a0_)).WillByDefault(ReturnRef(unifs));
     pud_witness_search_context ctx{
-        &query_leaf_, 0, &body_, 4, &a0_, &a0_};
+        &query_leaf_, 0, 4, &a0_, &a0_};
     EXPECT_CALL(children_, get(&a0_)).WillRepeatedly(Return(std::nullopt));
     search_.resume(ctx);
     EXPECT_EQ(ctx.current, &a0_);
@@ -489,7 +489,7 @@ TEST_F(PudWitnessSearchTest, QueryVsHeadWithRuleVarOneSucceeds) {
     ON_CALL(get_unifs_, get(&a0_)).WillByDefault(ReturnRef(unifs));
     bind_hole(&q_a, 4);
     pud_witness_search_context ctx{
-        &query_leaf_, 0, &q_a, 4, &a0_, &a0_};
+        &query_leaf_, 0, 4, &a0_, &a0_};
     EXPECT_CALL(children_, get(&a0_)).WillRepeatedly(Return(std::nullopt));
     search_.resume(ctx);
     EXPECT_EQ(ctx.current, &a0_);

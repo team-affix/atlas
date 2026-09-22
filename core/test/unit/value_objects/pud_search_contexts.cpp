@@ -2,7 +2,6 @@
 
 #include <gtest/gtest.h>
 #include <optional>
-#include "value_objects/expr.hpp"
 #include "value_objects/pud_candidate_search_context.hpp"
 #include "value_objects/pud_forced_unfold.hpp"
 #include "value_objects/pud_rule_id.hpp"
@@ -11,23 +10,21 @@
 
 struct PudSearchValueObjectsTest : public ::testing::Test {
     PudSearchValueObjectsTest()
-        : body_{expr::var{0}}
-        , leaf_{pud_rule_id::axiom{1}}
+        : leaf_{pud_rule_id::axiom{1}}
         , axiom_{pud_rule_id::axiom{0}} {}
 
-    expr body_;
     pud_rule_id leaf_;
     pud_rule_id axiom_;
 };
 
 TEST_F(PudSearchValueObjectsTest, WitnessContextOrdersBySearchRootThenCurrent) {
-    const pud_witness_search_context left{&leaf_, 0, &body_, 0, &axiom_, &axiom_};
-    const pud_witness_search_context right{&leaf_, 0, &body_, 0, &axiom_, &axiom_};
+    const pud_witness_search_context left{&leaf_, 0, 0, &axiom_, &axiom_};
+    const pud_witness_search_context right{&leaf_, 0, 0, &axiom_, &axiom_};
     EXPECT_EQ(left, right);
 }
 
 TEST_F(PudSearchValueObjectsTest, WitnessPairOrdersByBothSides) {
-    const pud_witness_search_context edge{&leaf_, 0, &body_, 0, &axiom_, &axiom_};
+    const pud_witness_search_context edge{&leaf_, 0, 0, &axiom_, &axiom_};
     const pud_witness_pair left{edge, edge};
     const pud_witness_pair right{edge, edge};
     EXPECT_EQ(left, right);
@@ -40,15 +37,13 @@ TEST_F(PudSearchValueObjectsTest, ForcedUnfoldUnitAndRefutedAreDistinct) {
 }
 
 TEST_F(PudSearchValueObjectsTest, CandidateContextHoldsOptionalWitnessPair) {
-    const pud_witness_search_context edge{&leaf_, 0, &body_, 0, &axiom_, &axiom_};
+    const pud_witness_search_context edge{&leaf_, 0, 0, &axiom_, &axiom_};
     pud_candidate_search_context ctx{
         &leaf_,
         0,
-        &body_,
         0,
         &axiom_,
-        pud_witness_pair{edge, edge},
-        {}};
+        pud_witness_pair{edge, edge}};
     ASSERT_TRUE(ctx.witnesses.has_value());
     EXPECT_EQ(ctx.witnesses->a.search_root, &axiom_);
     EXPECT_EQ(ctx.cursor, &axiom_);

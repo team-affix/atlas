@@ -66,6 +66,10 @@ struct MockGetAddedUnifications {
     MOCK_METHOD(const std::vector<pud_added_unification>&, get, (const pud_rule_id*), ());
 };
 
+struct MockGetAddedBodyGoals {
+    MOCK_METHOD(const std::vector<const expr*>&, get, (const pud_rule_id*), ());
+};
+
 struct MockStoreAddedBodyGoals {
     MOCK_METHOD(void, store, (const pud_rule_id*, (std::vector<const expr*>)), ());
 };
@@ -121,6 +125,7 @@ using test_unfolder_t = pud_unfolder<
     NiceMock<MockMakeInference>,
     NiceMock<MockStoreAddedUnifications>,
     NiceMock<MockGetAddedUnifications>,
+    NiceMock<MockGetAddedBodyGoals>,
     NiceMock<MockStoreAddedBodyGoals>,
     NiceMock<MockStoreLvc>,
     NiceMock<MockStoreChildren>,
@@ -149,13 +154,15 @@ struct PudUnfolderTest : public ::testing::Test {
         , child_{pud_rule_id::inference{&leaf_, 0, &leaf_}}
         , child_a_{pud_rule_id::inference{&leaf_, 0, &callee_a_}}
         , child_b_{pud_rule_id::inference{&leaf_, 0, &callee_b_}}
-        , live_ctx_{&leaf_, 0, &body_, 1, &leaf_, {}, {&body_}}
+        , live_ctx_{&leaf_, 0, 1, &leaf_, {}}
         , site_{&body_, {&live_ctx_}}
         , empty_caller_reps_{}
         , leaf_unifs_{{0, &body_}}
+        , leaf_goals_{&body_}
+        , empty_goals_{}
         , unfolder_(unfold_site_, set_norm_env_, normalize_, whnf_, make_var_,
                     get_lvc_, make_inference_,
-                    store_unifs_, get_unifs_, store_goals_, store_lvc_,
+                    store_unifs_, get_unifs_, get_goals_, store_goals_, store_lvc_,
                     store_children_, store_parent_, get_parent_, get_interval_,
                     allocate_child_, store_interval_, record_binding_,
                     get_caller_reps_, replace_unfolded_) {
@@ -165,6 +172,7 @@ struct PudUnfolderTest : public ::testing::Test {
         ON_CALL(allocate_child_, allocate_child_of(_)).WillByDefault(Return(nested_));
         ON_CALL(get_caller_reps_, get(_)).WillByDefault(ReturnRef(empty_caller_reps_));
         ON_CALL(get_unifs_, get(_)).WillByDefault(ReturnRef(leaf_unifs_));
+        ON_CALL(get_goals_, get(_)).WillByDefault(ReturnRef(leaf_goals_));
         ON_CALL(get_parent_, get(_)).WillByDefault(Return(nullptr));
         ON_CALL(whnf_, whnf(_)).WillByDefault([](framed_expr fe) { return fe; });
         ON_CALL(make_var_, make_var(_)).WillByDefault(Return(&var0_));
@@ -210,6 +218,8 @@ struct PudUnfolderTest : public ::testing::Test {
     pud_unfold_site site_;
     std::vector<uint32_t> empty_caller_reps_;
     std::vector<pud_added_unification> leaf_unifs_;
+    std::vector<const expr*> leaf_goals_;
+    std::vector<const expr*> empty_goals_;
     NiceMock<MockUnfoldSite> unfold_site_;
     NiceMock<MockSetNormEnv> set_norm_env_;
     NiceMock<MockNormalize> normalize_;
@@ -219,6 +229,7 @@ struct PudUnfolderTest : public ::testing::Test {
     NiceMock<MockMakeInference> make_inference_;
     NiceMock<MockStoreAddedUnifications> store_unifs_;
     NiceMock<MockGetAddedUnifications> get_unifs_;
+    NiceMock<MockGetAddedBodyGoals> get_goals_;
     NiceMock<MockStoreAddedBodyGoals> store_goals_;
     NiceMock<MockStoreLvc> store_lvc_;
     NiceMock<MockStoreChildren> store_children_;
@@ -267,8 +278,8 @@ TEST_F(PudUnfolderTest, LiveCursorIsTheCalleePassedToInference) {
 }
 
 TEST_F(PudUnfolderTest, UnfoldCreatesOneChildPerLiveCandidate) {
-    pud_candidate_search_context ctx_a{&leaf_, 0, &body_, 1, &callee_a_, {}, {&body_}};
-    pud_candidate_search_context ctx_b{&leaf_, 0, &body_, 1, &callee_b_, {}, {&body_}};
+    pud_candidate_search_context ctx_a{&leaf_, 0, 1, &callee_a_, {}};
+    pud_candidate_search_context ctx_b{&leaf_, 0, 1, &callee_b_, {}};
     site_.live = {&ctx_a, &ctx_b};
     ON_CALL(unfold_site_, unfold_site(&leaf_, 0)).WillByDefault(Return(site_));
     ON_CALL(replace_unfolded_, replace_unfolded(_, _, _)).WillByDefault(
@@ -346,7 +357,7 @@ TEST_F(PudUnfolderTest, MaterializeConcatenatesAncestorThenCursorCallerReps) {
 }
 
 TEST_F(PudUnfolderTest, MaterializeEmptyCandidateGoalsPassesEmptyGoals) {
-    live_ctx_.added_body_goals = {};
+    ON_CALL(get_goals_, get(&leaf_)).WillByDefault(ReturnRef(empty_goals_));
     std::vector<const expr*> goals;
     EXPECT_CALL(make_inference_, make_inference(&leaf_, 0, &leaf_))
         .WillOnce(Return(&child_));
@@ -354,6 +365,33 @@ TEST_F(PudUnfolderTest, MaterializeEmptyCandidateGoalsPassesEmptyGoals) {
         .WillOnce(SaveArg<1>(&goals));
     drain(unfolder_.unfold(&leaf_, 0));
     EXPECT_TRUE(goals.empty());
+}
+
+TEST_F(PudUnfolderTest, CollectAddedBodyGoalsErasesCallSiteThenAppends) {
+    expr leftover{expr::var{2}};
+    expr added{expr::var{3}};
+    pud_rule_id forest_axiom{pud_rule_id::axiom{10}};
+    pud_rule_id forest_child{pud_rule_id::inference{&forest_axiom, 0, &forest_axiom}};
+    std::vector<const expr*> axiom_goals{&body_, &leftover};
+    std::vector<const expr*> child_goals{&added};
+    live_ctx_.cursor = &forest_child;
+    ON_CALL(get_parent_, get(&forest_child)).WillByDefault(Return(&forest_axiom));
+    ON_CALL(get_goals_, get(&forest_axiom)).WillByDefault(ReturnRef(axiom_goals));
+    ON_CALL(get_goals_, get(&forest_child)).WillByDefault(ReturnRef(child_goals));
+    ON_CALL(normalize_, normalize(_, _)).WillByDefault(
+        [](framed_expr fe, std::unordered_map<uint32_t, uint32_t>&) {
+            return fe.skeleton;
+        });
+    std::vector<const expr*> goals;
+    pud_rule_id interned_parent{pud_rule_id::inference{&leaf_, 0, &forest_axiom}};
+    EXPECT_CALL(make_inference_, make_inference(&leaf_, 0, &forest_child))
+        .WillRepeatedly(Return(&child_));
+    EXPECT_CALL(make_inference_, make_inference(&leaf_, 0, &forest_axiom))
+        .WillRepeatedly(Return(&interned_parent));
+    EXPECT_CALL(store_goals_, store(&child_, _))
+        .WillOnce(SaveArg<1>(&goals));
+    drain(unfolder_.unfold(&leaf_, 0));
+    EXPECT_EQ(goals, (std::vector<const expr*>{&leftover, &added}));
 }
 
 TEST_F(PudUnfolderTest, UnfoldUsesNonzeroBodyGoalIdx) {
@@ -419,7 +457,7 @@ TEST_F(PudUnfolderTest, StressManyCallees) {
     ctxs.reserve(24);
     for (int idx = 0; idx < 24; ++idx) {
         ctxs.push_back(pud_candidate_search_context{
-            &leaf_, 0, &body_, 1, callee_ptrs[static_cast<size_t>(idx)], {}, {&body_}});
+            &leaf_, 0, 1, callee_ptrs[static_cast<size_t>(idx)], {}});
     }
     site_.live.clear();
     for (int idx = 0; idx < 24; ++idx)
@@ -475,7 +513,7 @@ TEST_F(PudUnfolderTest, FuzzUnfold) {
         ctxs.reserve(static_cast<size_t>(count));
         for (int idx = 0; idx < count; ++idx) {
             ctxs.push_back(pud_candidate_search_context{
-                &leaf_, 0, &body_, 1, callee_ptrs[static_cast<size_t>(idx)], {}, {&body_}});
+                &leaf_, 0, 1, callee_ptrs[static_cast<size_t>(idx)], {}});
         }
         site_.live.clear();
         for (int idx = 0; idx < count; ++idx)
