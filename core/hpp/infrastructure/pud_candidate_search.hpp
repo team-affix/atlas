@@ -25,19 +25,11 @@ struct pud_candidate_search {
 private:
     using children_set_t = std::set<const pud_rule_id*>;
 
-    bool both_live(const pud_witness_pair& pair) const;
-    std::size_t live_count(const pud_witness_pair& pair) const;
-    pud_witness_search_context& live_side(pud_witness_pair& pair);
-    pud_witness_search_context& dead_side(pud_witness_pair& pair);
-    children_set_t::const_iterator frontier(
-        const children_set_t& children, const pud_witness_pair& pair) const;
     pud_witness_search_context make_edge(
         const pud_candidate_search_context& context,
         const pud_rule_id* search_root,
         const pud_rule_id* current) const;
-    void try_fill(pud_candidate_search_context& context, const children_set_t& children);
     void advance(pud_candidate_search_context& context);
-    void refute(pud_candidate_search_context& context);
 
     IResumeWitnessSearch& resume_witness_search_;
     IGetChildren& get_children_;
@@ -57,39 +49,6 @@ pud_candidate_search<IRWS, IGC, IGP, IGABG>::pud_candidate_search(
     , get_added_body_goals_(get_added_body_goals) {}
 
 template<typename IRWS, typename IGC, typename IGP, typename IGABG>
-bool pud_candidate_search<IRWS, IGC, IGP, IGABG>::both_live(
-        const pud_witness_pair& pair) const {
-    return pair.a.current != nullptr && pair.b.current != nullptr;
-}
-
-template<typename IRWS, typename IGC, typename IGP, typename IGABG>
-std::size_t pud_candidate_search<IRWS, IGC, IGP, IGABG>::live_count(
-        const pud_witness_pair& pair) const {
-    std::size_t count = 0;
-    if (pair.a.current != nullptr)
-        ++count;
-    if (pair.b.current != nullptr)
-        ++count;
-    return count;
-}
-
-template<typename IRWS, typename IGC, typename IGP, typename IGABG>
-pud_witness_search_context&
-pud_candidate_search<IRWS, IGC, IGP, IGABG>::live_side(pud_witness_pair& pair) {
-    if (pair.a.current != nullptr)
-        return pair.a;
-    return pair.b;
-}
-
-template<typename IRWS, typename IGC, typename IGP, typename IGABG>
-pud_witness_search_context&
-pud_candidate_search<IRWS, IGC, IGP, IGABG>::dead_side(pud_witness_pair& pair) {
-    if (pair.a.current == nullptr)
-        return pair.a;
-    return pair.b;
-}
-
-template<typename IRWS, typename IGC, typename IGP, typename IGABG>
 pud_witness_search_context
 pud_candidate_search<IRWS, IGC, IGP, IGABG>::make_edge(
         const pud_candidate_search_context& context,
@@ -105,48 +64,15 @@ pud_candidate_search<IRWS, IGC, IGP, IGABG>::make_edge(
 }
 
 template<typename IRWS, typename IGC, typename IGP, typename IGABG>
-typename pud_candidate_search<IRWS, IGC, IGP, IGABG>::children_set_t::const_iterator
-pud_candidate_search<IRWS, IGC, IGP, IGABG>::frontier(
-        const children_set_t& children, const pud_witness_pair& pair) const {
-    const pud_rule_id* rightmost = nullptr;
-    if (pair.a.search_root != nullptr)
-        rightmost = pair.a.search_root;
-    if (pair.b.search_root != nullptr) {
-        if (rightmost == nullptr || pair.b.search_root > rightmost)
-            rightmost = pair.b.search_root;
-    }
-    if (rightmost == nullptr)
-        return children.begin();
-    return children.upper_bound(rightmost);
-}
-
-template<typename IRWS, typename IGC, typename IGP, typename IGABG>
-void pud_candidate_search<IRWS, IGC, IGP, IGABG>::try_fill(
-        pud_candidate_search_context& context, const children_set_t& children) {
-    if (!context.witnesses.has_value())
-        context.witnesses = pud_witness_pair{
-            make_edge(context, nullptr, nullptr),
-            make_edge(context, nullptr, nullptr)};
-    pud_witness_pair& pair = *context.witnesses;
-    for (auto it = frontier(children, pair); it != children.end(); ++it) {
-        if (both_live(pair))
-            return;
-        pud_witness_search_context edge = make_edge(context, *it, *it);
-        resume_witness_search_.resume(edge);
-        if (edge.current == nullptr)
-            continue;
-        dead_side(pair) = edge;
-    }
-}
-
-template<typename IRWS, typename IGC, typename IGP, typename IGABG>
 void pud_candidate_search<IRWS, IGC, IGP, IGABG>::advance(
         pud_candidate_search_context& context) {
     DEBUG_ASSERT(context.witnesses.has_value());
     pud_witness_pair& pair = *context.witnesses;
-    DEBUG_ASSERT(live_count(pair) == 1);
-    pud_witness_search_context& survivor = live_side(pair);
-    pud_witness_search_context& dead = dead_side(pair);
+    const bool a_live = pair.a.current != nullptr;
+    const bool b_live = pair.b.current != nullptr;
+    DEBUG_ASSERT(a_live != b_live);
+    pud_witness_search_context& survivor = a_live ? pair.a : pair.b;
+    pud_witness_search_context& dead = a_live ? pair.b : pair.a;
     const pud_rule_id* next_cursor = survivor.search_root;
     DEBUG_ASSERT(next_cursor != nullptr);
     DEBUG_ASSERT(next_cursor != context.cursor);
@@ -180,19 +106,14 @@ void pud_candidate_search<IRWS, IGC, IGP, IGABG>::advance(
 }
 
 template<typename IRWS, typename IGC, typename IGP, typename IGABG>
-void pud_candidate_search<IRWS, IGC, IGP, IGABG>::refute(
-        pud_candidate_search_context& context) {
-    context.witnesses.reset();
-    context.cursor = nullptr;
-}
-
-template<typename IRWS, typename IGC, typename IGP, typename IGABG>
 void pud_candidate_search<IRWS, IGC, IGP, IGABG>::resume(
         pud_candidate_search_context& context) {
     while (true) {
         if (context.cursor == nullptr)
             return;
-        if (context.witnesses.has_value() && both_live(*context.witnesses))
+        if (context.witnesses.has_value()
+                && context.witnesses->a.current != nullptr
+                && context.witnesses->b.current != nullptr)
             return;
 
         const std::optional<children_set_t> children = get_children_.get(context.cursor);
@@ -206,14 +127,44 @@ void pud_candidate_search<IRWS, IGC, IGP, IGABG>::resume(
             return;
         }
 
-        try_fill(context, *children);
-        if (both_live(*context.witnesses))
+        if (!context.witnesses.has_value())
+            context.witnesses = pud_witness_pair{
+                make_edge(context, nullptr, nullptr),
+                make_edge(context, nullptr, nullptr)};
+        pud_witness_pair& pair = *context.witnesses;
+        const pud_rule_id* rightmost = nullptr;
+        if (pair.a.search_root != nullptr)
+            rightmost = pair.a.search_root;
+        if (pair.b.search_root != nullptr) {
+            if (rightmost == nullptr || pair.b.search_root > rightmost)
+                rightmost = pair.b.search_root;
+        }
+        for (children_set_t::const_iterator it = rightmost == nullptr
+                 ? children->begin()
+                 : children->upper_bound(rightmost);
+             it != children->end(); ++it) {
+            if (pair.a.current != nullptr && pair.b.current != nullptr)
+                return;
+            pud_witness_search_context edge = make_edge(context, *it, *it);
+            resume_witness_search_.resume(edge);
+            if (edge.current == nullptr)
+                continue;
+            if (pair.a.current == nullptr) {
+                pair.a = edge;
+                continue;
+            }
+            pair.b = edge;
+        }
+        if (pair.a.current != nullptr && pair.b.current != nullptr)
             return;
-        if (live_count(*context.witnesses) == 1) {
+        const bool one_live =
+            (pair.a.current != nullptr) != (pair.b.current != nullptr);
+        if (one_live) {
             advance(context);
             continue;
         }
-        refute(context);
+        context.witnesses.reset();
+        context.cursor = nullptr;
         return;
     }
 }

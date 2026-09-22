@@ -47,15 +47,7 @@ private:
     using unifier_t = unifier<IGlobalize, bind_map_t>;
 
     bool try_enter(pud_witness_search_context& context, const pud_rule_id* node);
-    bool is_acceptable_witness(pud_witness_search_context& context,
-                               const pud_rule_id* node);
     bool try_subtree(pud_witness_search_context& context, const pud_rule_id* node);
-    bool try_next_siblings(pud_witness_search_context& context, const pud_rule_id* node);
-    bool drain_unify(unifier_t& task_owner,
-                     framed_expr lhs,
-                     framed_expr rhs,
-                     uint32_t cutoff,
-                     std::vector<uint32_t>* added_caller_reps);
 
     IGetChildren& get_children_;
     IGetParent& get_parent_;
@@ -107,80 +99,41 @@ template<typename IGC, typename IGP, typename IMI, typename ICI, typename IGI,
          typename ISI, typename IACI, typename IGAU, typename IRB, typename IQB,
          typename IG, typename IMV, typename ISACR>
 bool pud_witness_search<IGC, IGP, IMI, ICI, IGI, ISI, IACI, IGAU, IRB, IQB, IG, IMV, ISACR>::
-drain_unify(unifier_t& task_owner,
-            framed_expr lhs,
-            framed_expr rhs,
-            uint32_t cutoff,
-            std::vector<uint32_t>* added_caller_reps) {
-    auto task = task_owner.unify(lhs, rhs);
-    while (!task.done()) {
-        task.resume();
-        if (!task.has_yield())
-            continue;
-        const uint32_t rep = task.consume_yield();
-        if (added_caller_reps == nullptr)
-            continue;
-        if (rep == 0)
-            continue;
-        if (rep >= cutoff)
-            continue;
-        added_caller_reps->push_back(rep);
-    }
-    return task.result();
-}
-
-template<typename IGC, typename IGP, typename IMI, typename ICI, typename IGI,
-         typename ISI, typename IACI, typename IGAU, typename IRB, typename IQB,
-         typename IG, typename IMV, typename ISACR>
-bool pud_witness_search<IGC, IGP, IMI, ICI, IGI, ISI, IACI, IGAU, IRB, IQB, IG, IMV, ISACR>::
 try_enter(pud_witness_search_context& context, const pud_rule_id* node) {
     const pud_rule_id* key = make_inference_.make_inference(
         context.query_leaf, context.body_goal_idx, node);
-    const bool first_visit = !contains_interval_.contains(key);
-    if (first_visit) {
-        const pud_rule_id* forest_parent = get_parent_.get(node);
-        if (forest_parent != nullptr) {
-            if (!try_enter(context, forest_parent))
-                return false;
-        }
-        const pud_rule_id* parent_key = make_inference_.make_inference(
-            context.query_leaf, context.body_goal_idx, forest_parent);
-        store_interval_.store(
-            key,
-            allocate_child_interval_.allocate_child_of(
-                get_interval_.get(parent_key)));
-    }
-    const om_interval interval = get_interval_.get(key);
+    if (contains_interval_.contains(key))
+        return true;
+    const pud_rule_id* forest_parent = get_parent_.get(node);
+    const pud_rule_id* parent_key = make_inference_.make_inference(
+        context.query_leaf, context.body_goal_idx, forest_parent);
+    const om_interval interval = allocate_child_interval_.allocate_child_of(
+        get_interval_.get(parent_key));
     bind_map_t bm(globalize_, record_binding_, query_binding_, interval);
     unifier_t task_owner(globalize_, &bm);
     std::vector<uint32_t> added_caller_reps;
-    std::vector<uint32_t>* yield_dst = first_visit ? &added_caller_reps : nullptr;
     for (const pud_added_unification& added : get_added_unifications_.get(node)) {
-        const bool ok = drain_unify(
-            task_owner,
+        auto task = task_owner.unify(
             framed_expr{make_var_.make_var(added.var_idx), context.frame_offset},
-            framed_expr{added.value, context.frame_offset},
-            context.frame_offset,
-            yield_dst);
-        if (ok)
+            framed_expr{added.value, context.frame_offset});
+        while (!task.done()) {
+            task.resume();
+            if (!task.has_yield())
+                continue;
+            const uint32_t rep = task.consume_yield();
+            if (rep == 0)
+                continue;
+            if (rep >= context.frame_offset)
+                continue;
+            added_caller_reps.push_back(rep);
+        }
+        if (task.result())
             continue;
-        if (first_visit)
-            store_added_caller_reps_.store(key, std::move(added_caller_reps));
         return false;
     }
-    if (first_visit)
-        store_added_caller_reps_.store(key, std::move(added_caller_reps));
+    store_interval_.store(key, interval);
+    store_added_caller_reps_.store(key, std::move(added_caller_reps));
     return true;
-}
-
-template<typename IGC, typename IGP, typename IMI, typename ICI, typename IGI,
-         typename ISI, typename IACI, typename IGAU, typename IRB, typename IQB,
-         typename IG, typename IMV, typename ISACR>
-bool pud_witness_search<IGC, IGP, IMI, ICI, IGI, ISI, IACI, IGAU, IRB, IQB, IG, IMV, ISACR>::
-is_acceptable_witness(pud_witness_search_context& context, const pud_rule_id* node) {
-    if (get_children_.get(node).has_value())
-        return false;
-    return try_enter(context, node);
 }
 
 template<typename IGC, typename IGP, typename IMI, typename ICI, typename IGI,
@@ -205,9 +158,38 @@ try_subtree(pud_witness_search_context& context, const pud_rule_id* node) {
 template<typename IGC, typename IGP, typename IMI, typename ICI, typename IGI,
          typename ISI, typename IACI, typename IGAU, typename IRB, typename IQB,
          typename IG, typename IMV, typename ISACR>
-bool pud_witness_search<IGC, IGP, IMI, ICI, IGI, ISI, IACI, IGAU, IRB, IQB, IG, IMV, ISACR>::
-try_next_siblings(pud_witness_search_context& context, const pud_rule_id* node) {
-    const pud_rule_id* walk = node;
+void pud_witness_search<IGC, IGP, IMI, ICI, IGI, ISI, IACI, IGAU, IRB, IQB, IG, IMV, ISACR>::
+resume(pud_witness_search_context& context) {
+    if (context.current == nullptr)
+        return;
+    std::vector<const pud_rule_id*> chain;
+    for (const pud_rule_id* node = context.current; node != nullptr;
+            node = get_parent_.get(node))
+        chain.push_back(node);
+    const pud_rule_id* from = context.current;
+    bool path_ok = true;
+    for (size_t idx = chain.size(); idx > 0; --idx) {
+        if (try_enter(context, chain[idx - 1]))
+            continue;
+        from = chain[idx - 1];
+        path_ok = false;
+        break;
+    }
+    if (!path_ok) {
+        const pud_rule_id* ancestor = get_parent_.get(context.search_root);
+        while (ancestor != nullptr) {
+            if (ancestor == from) {
+                context.current = nullptr;
+                return;
+            }
+            ancestor = get_parent_.get(ancestor);
+        }
+    } else if (!get_children_.get(context.current).has_value()) {
+        return;
+    } else if (try_subtree(context, from)) {
+        return;
+    }
+    const pud_rule_id* walk = from;
     while (walk != context.search_root) {
         const pud_rule_id* parent = get_parent_.get(walk);
         DEBUG_ASSERT(parent != nullptr);
@@ -222,26 +204,10 @@ try_next_siblings(pud_witness_search_context& context, const pud_rule_id* node) 
                 continue;
             }
             if (try_subtree(context, sibling))
-                return true;
+                return;
         }
         walk = parent;
     }
-    return false;
-}
-
-template<typename IGC, typename IGP, typename IMI, typename ICI, typename IGI,
-         typename ISI, typename IACI, typename IGAU, typename IRB, typename IQB,
-         typename IG, typename IMV, typename ISACR>
-void pud_witness_search<IGC, IGP, IMI, ICI, IGI, ISI, IACI, IGAU, IRB, IQB, IG, IMV, ISACR>::
-resume(pud_witness_search_context& context) {
-    if (context.current == nullptr)
-        return;
-    if (is_acceptable_witness(context, context.current))
-        return;
-    if (try_subtree(context, context.current))
-        return;
-    if (try_next_siblings(context, context.current))
-        return;
     context.current = nullptr;
 }
 

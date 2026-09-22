@@ -217,6 +217,16 @@ struct PudWitnessSearchTest : public ::testing::Test {
         return node;
     }
 
+    void pre_store(const pud_rule_id* node) {
+        const pud_rule_id* key = key_for(node);
+        ranks_.push_back(ranks_.size());
+        ranks_.push_back(ranks_.size());
+        intervals_.insert_or_assign(key, om_interval{
+            om_label(&ranks_[ranks_.size() - 2]),
+            om_label(&ranks_[ranks_.size() - 1])});
+        stored_.insert(key);
+    }
+
     pud_witness_search_context make_edge(const pud_rule_id* search_root,
                                          const pud_rule_id* current) {
         return pud_witness_search_context{&query_leaf_, 0, &body_, 1, search_root, current};
@@ -290,7 +300,7 @@ TEST_F(PudWitnessSearchTest, PrunesSubtreeWhenUnifyFails) {
 
 TEST_F(PudWitnessSearchTest, TriesNextSiblingInIdOrderAfterFailedChild) {
     fail_nodes_.insert(&c0_);
-    pud_witness_search_context ctx = make_edge(&a0_, &c0_);
+    pud_witness_search_context ctx = make_edge(&a0_, &a0_);
     EXPECT_CALL(children_, get(&c0_)).WillRepeatedly(Return(std::nullopt));
     EXPECT_CALL(children_, get(&c1_)).WillRepeatedly(Return(std::nullopt));
     EXPECT_CALL(children_, get(&a0_)).WillRepeatedly(Return(children_set_t{&c0_, &c1_}));
@@ -300,7 +310,7 @@ TEST_F(PudWitnessSearchTest, TriesNextSiblingInIdOrderAfterFailedChild) {
 
 TEST_F(PudWitnessSearchTest, StopsAtSearchRootAndFailsWhenNoSiblingWorks) {
     fail_nodes_.insert(&g0_);
-    pud_witness_search_context ctx = make_edge(&c0_, &g0_);
+    pud_witness_search_context ctx = make_edge(&c0_, &c0_);
     EXPECT_CALL(children_, get(&g0_)).WillRepeatedly(Return(std::nullopt));
     EXPECT_CALL(children_, get(&c0_)).WillRepeatedly(Return(children_set_t{&g0_}));
     search_.resume(ctx);
@@ -335,7 +345,7 @@ TEST_F(PudWitnessSearchTest, DescendsTwoLevelsToGrandchild) {
 
 TEST_F(PudWitnessSearchTest, InternalUnifyWithNoUnifyingChildFailsThenTriesSibling) {
     fail_nodes_.insert(&g0_);
-    pud_witness_search_context ctx = make_edge(&a0_, &c0_);
+    pud_witness_search_context ctx = make_edge(&a0_, &a0_);
     EXPECT_CALL(children_, get(&c0_)).WillRepeatedly(Return(children_set_t{&g0_}));
     EXPECT_CALL(children_, get(&g0_)).WillRepeatedly(Return(std::nullopt));
     EXPECT_CALL(children_, get(&c1_)).WillRepeatedly(Return(std::nullopt));
@@ -346,6 +356,8 @@ TEST_F(PudWitnessSearchTest, InternalUnifyWithNoUnifyingChildFailsThenTriesSibli
 
 TEST_F(PudWitnessSearchTest, ClimbsTwoParentsToReachUncle) {
     fail_nodes_.insert(&g0_);
+    pre_store(&a0_);
+    pre_store(&c0_);
     pud_witness_search_context ctx = make_edge(&a0_, &g0_);
     EXPECT_CALL(children_, get(&g0_)).WillRepeatedly(Return(std::nullopt));
     EXPECT_CALL(children_, get(&c1_)).WillRepeatedly(Return(std::nullopt));
@@ -485,7 +497,7 @@ TEST_F(PudWitnessSearchTest, QueryVsHeadWithRuleVarOneSucceeds) {
 
 TEST_F(PudWitnessSearchTest, InferenceMismatchPrunesLikeAxiom) {
     fail_nodes_.insert(&c0_);
-    pud_witness_search_context ctx = make_edge(&a0_, &c0_);
+    pud_witness_search_context ctx = make_edge(&a0_, &a0_);
     EXPECT_CALL(children_, get(&c0_)).WillRepeatedly(Return(std::nullopt));
     EXPECT_CALL(children_, get(&c1_)).WillRepeatedly(Return(std::nullopt));
     EXPECT_CALL(children_, get(&a0_)).WillRepeatedly(Return(children_set_t{&c0_, &c1_}));
@@ -495,7 +507,7 @@ TEST_F(PudWitnessSearchTest, InferenceMismatchPrunesLikeAxiom) {
 
 TEST_F(PudWitnessSearchTest, ParentUnifyFailureDoesNotEnterChild) {
     fail_nodes_.insert(&a0_);
-    pud_witness_search_context ctx = make_edge(&a0_, &c0_);
+    pud_witness_search_context ctx = make_edge(&a0_, &a0_);
     EXPECT_CALL(children_, get(&c0_)).WillRepeatedly(Return(std::nullopt));
     EXPECT_CALL(children_, get(&a0_)).WillRepeatedly(Return(children_set_t{&c0_}));
     search_.resume(ctx);
