@@ -2,191 +2,111 @@
 #define PUD_WITNESS_SEARCH_HPP
 
 #include <cstdint>
-#include <optional>
-#include <set>
+#include <stack>
 #include <vector>
-#include "infrastructure/hierarchical_bind_map.hpp"
-#include "infrastructure/unifier.hpp"
+#include <optional>
+#include <algorithm>
 #include "value_objects/framed_expr.hpp"
 #include "value_objects/om_interval.hpp"
-#include "value_objects/pud_added_unification.hpp"
-#include "value_objects/pud_rule_id.hpp"
-#include "value_objects/pud_witness_search_context.hpp"
-#include "debug_assert.hpp"
+#include "value_objects/pud_query_id.hpp"
 
-template<typename IGetChildren,
-         typename IGetParent,
-         typename IMakeInference,
-         typename IContainsInterval,
-         typename IGetInterval,
-         typename IStoreInterval,
-         typename IAllocateChildInterval,
-         typename IGetAddedUnifications,
-         typename IRecordBinding,
-         typename IQueryBinding,
-         typename IGlobalize,
-         typename IMakeVar,
-         typename IStoreAddedCallerReps>
+template<
+    typename Node,
+    typename IAllocateChildInterval,
+    typename ISetActiveBindingInterval,
+    typename IMakeVar,
+    typename IUnify>
 struct pud_witness_search {
-    pud_witness_search(IGetChildren& get_children,
-                       IGetParent& get_parent,
-                       IMakeInference& make_inference,
-                       IContainsInterval& contains_interval,
-                       IGetInterval& get_interval,
-                       IStoreInterval& store_interval,
-                       IAllocateChildInterval& allocate_child_interval,
-                       IGetAddedUnifications& get_added_unifications,
-                       IRecordBinding& record_binding,
-                       IQueryBinding& query_binding,
-                       IGlobalize& globalize,
-                       IMakeVar& make_var,
-                       IStoreAddedCallerReps& store_added_caller_reps);
-    void resume(pud_witness_search_context& context);
-    bool try_enter(pud_witness_search_context& context, const pud_rule_id* node);
+    pud_witness_search(
+        IAllocateChildInterval& allocate_child_interval,
+        ISetActiveBindingInterval& set_active_binding_interval,
+        IMakeVar& make_var,
+        IUnify& unify,
+        uint32_t frame_offset,
+        const Node& search_root,
+        om_interval search_root_interval);
+    bool resume();
 private:
-    using bind_map_t = hierarchical_bind_map<IGlobalize, IRecordBinding, IQueryBinding>;
-    using unifier_t = unifier<IGlobalize, bind_map_t>;
+    struct frame {
+        const pud_rule_id* callee;
+        om_interval        interval;
+    };
 
-    bool try_subtree(pud_witness_search_context& context, const pud_rule_id* node);
+    bool enter_any();
+    bool try_enter(const Node& node, om_interval interval);
 
-    IGetChildren& get_children_;
-    IGetParent& get_parent_;
-    IMakeInference& make_inference_;
-    IContainsInterval& contains_interval_;
-    IGetInterval& get_interval_;
-    IStoreInterval& store_interval_;
     IAllocateChildInterval& allocate_child_interval_;
-    IGetAddedUnifications& get_added_unifications_;
-    IRecordBinding& record_binding_;
-    IQueryBinding& query_binding_;
-    IGlobalize& globalize_;
+    ISetActiveBindingInterval& set_active_binding_interval_;
     IMakeVar& make_var_;
-    IStoreAddedCallerReps& store_added_caller_reps_;
+    IUnify& unify_;
+
+    const Node* current_;
+    om_interval current_interval_;
+    uint32_t frame_offset_;
+    std::stack<frame> frame_stack_;
 };
 
-template<typename IGC, typename IGP, typename IMI, typename ICI, typename IGI,
-         typename ISI, typename IACI, typename IGAU, typename IRB, typename IQB,
-         typename IG, typename IMV, typename ISACR>
-pud_witness_search<IGC, IGP, IMI, ICI, IGI, ISI, IACI, IGAU, IRB, IQB, IG, IMV, ISACR>::
-pud_witness_search(IGC& get_children,
-                   IGP& get_parent,
-                   IMI& make_inference,
-                   ICI& contains_interval,
-                   IGI& get_interval,
-                   ISI& store_interval,
-                   IACI& allocate_child_interval,
-                   IGAU& get_added_unifications,
-                   IRB& record_binding,
-                   IQB& query_binding,
-                   IG& globalize,
-                   IMV& make_var,
-                   ISACR& store_added_caller_reps)
-    : get_children_(get_children)
-    , get_parent_(get_parent)
-    , make_inference_(make_inference)
-    , contains_interval_(contains_interval)
-    , get_interval_(get_interval)
-    , store_interval_(store_interval)
-    , allocate_child_interval_(allocate_child_interval)
-    , get_added_unifications_(get_added_unifications)
-    , record_binding_(record_binding)
-    , query_binding_(query_binding)
-    , globalize_(globalize)
-    , make_var_(make_var)
-    , store_added_caller_reps_(store_added_caller_reps) {}
+template<typename N, typename IACI, typename ISABI, typename IMV, typename IU>
+pud_witness_search<N, IACI, ISABI, IMV, IU>::pud_witness_search(
+    IACI& allocate_child_interval,
+    ISABI& set_active_binding_interval,
+    IMV& make_var,
+    IU& unify,
+    uint32_t frame_offset,
+    const N& search_root,
+    om_interval search_root_interval)
+    : allocate_child_interval_(allocate_child_interval),
+    set_active_binding_interval_(set_active_binding_interval),
+    make_var_(make_var),
+    unify_(unify),
+    current_(&search_root),
+    current_interval_(search_root_interval),
+    frame_offset_(frame_offset) {}
 
-template<typename IGC, typename IGP, typename IMI, typename ICI, typename IGI,
-         typename ISI, typename IACI, typename IGAU, typename IRB, typename IQB,
-         typename IG, typename IMV, typename ISACR>
-bool pud_witness_search<IGC, IGP, IMI, ICI, IGI, ISI, IACI, IGAU, IRB, IQB, IG, IMV, ISACR>::
-try_enter(pud_witness_search_context& context, const pud_rule_id* node) {
-    const pud_rule_id* key = make_inference_.make_inference(
-        context.query_leaf, context.body_goal_idx, node);
-    if (contains_interval_.contains(key))
-        return true;
-    const pud_rule_id* forest_parent = get_parent_.get(node);
-    const pud_rule_id* parent_key = make_inference_.make_inference(
-        context.query_leaf, context.body_goal_idx, forest_parent);
-    const om_interval interval = allocate_child_interval_.allocate_child_of(
-        get_interval_.get(parent_key));
-    bind_map_t bm(globalize_, record_binding_, query_binding_, interval);
-    unifier_t task_owner(globalize_, &bm);
-    std::vector<uint32_t> added_caller_reps;
-    for (const pud_added_unification& added : get_added_unifications_.get(node)) {
-        auto task = task_owner.unify(
-            framed_expr{make_var_.make_var(added.var_idx), context.frame_offset},
-            framed_expr{added.value, context.frame_offset});
-        while (!task.done()) {
-            task.resume();
-            if (!task.has_yield())
-                continue;
-            const uint32_t rep = task.consume_yield();
-            if (rep == 0)
-                continue;
-            if (rep >= context.frame_offset)
-                continue;
-            added_caller_reps.push_back(rep);
-        }
-        if (task.result())
-            continue;
-        return false;
-    }
-    store_interval_.store(key, interval);
-    store_added_caller_reps_.store(key, std::move(added_caller_reps));
-    return true;
+template<typename N, typename IACI, typename ISABI, typename IMV, typename IU>
+bool pud_witness_search<N, IACI, ISABI, IMV, IU>::resume() {
+    do {
+        const N& node = *current_;
+
+        if (!node.children.has_value())
+            return true; // leaf reached
+        
+        for (const auto& child : node.children.value())
+            frame_stack_.push(frame{child, allocate_child_interval_.allocate_child_of(current_interval_)});
+
+    } while(enter_any());
+
+    return false;
 }
 
-template<typename IGC, typename IGP, typename IMI, typename ICI, typename IGI,
-         typename ISI, typename IACI, typename IGAU, typename IRB, typename IQB,
-         typename IG, typename IMV, typename ISACR>
-bool pud_witness_search<IGC, IGP, IMI, ICI, IGI, ISI, IACI, IGAU, IRB, IQB, IG, IMV, ISACR>::
-try_subtree(pud_witness_search_context& context, const pud_rule_id* node) {
-    if (!try_enter(context, node))
-        return false;
-    const std::optional<std::set<const pud_rule_id*>> children = get_children_.get(node);
-    if (!children.has_value()) {
-        context.current = node;
-        return true;
-    }
-    for (const pud_rule_id* child : *children) {
-        if (try_subtree(context, child))
+template<typename N, typename IACI, typename ISABI, typename IMV, typename IU>
+bool pud_witness_search<N, IACI, ISABI, IMV, IU>::enter_any() {
+    while (!frame_stack_.empty()) {
+        frame top_frame = frame_stack_.top();
+        frame_stack_.pop();
+        if (try_enter(*top_frame.callee, top_frame.interval))
             return true;
     }
     return false;
 }
 
-template<typename IGC, typename IGP, typename IMI, typename ICI, typename IGI,
-         typename ISI, typename IACI, typename IGAU, typename IRB, typename IQB,
-         typename IG, typename IMV, typename ISACR>
-void pud_witness_search<IGC, IGP, IMI, ICI, IGI, ISI, IACI, IGAU, IRB, IQB, IG, IMV, ISACR>::
-resume(pud_witness_search_context& context) {
-    if (context.current == nullptr)
-        return;
-    if (!get_children_.get(context.current).has_value()
-            && try_enter(context, context.current))
-        return;
-    if (try_subtree(context, context.current))
-        return;
-    const pud_rule_id* walk = context.current;
-    while (walk != context.search_root) {
-        const pud_rule_id* parent = get_parent_.get(walk);
-        DEBUG_ASSERT(parent != nullptr);
-        const std::optional<std::set<const pud_rule_id*>> siblings =
-            get_children_.get(parent);
-        DEBUG_ASSERT(siblings.has_value());
-        bool past_walk = false;
-        for (const pud_rule_id* sibling : *siblings) {
-            if (!past_walk) {
-                if (sibling == walk)
-                    past_walk = true;
-                continue;
-            }
-            if (try_subtree(context, sibling))
-                return;
-        }
-        walk = parent;
-    }
-    context.current = nullptr;
+
+template<typename N, typename IACI, typename ISABI, typename IMV, typename IU>
+bool pud_witness_search<N, IACI, ISABI, IMV, IU>::try_enter(const N& node, om_interval interval) {
+    set_active_binding_interval_.set(interval);
+    bool result = std::all_of(
+        node.added_unifications.begin(),
+        node.added_unifications.end(),
+        [this](const auto& added_unification) {
+            framed_expr lhs{make_var_.make_var(added_unification.var_idx), frame_offset_};
+            framed_expr rhs{added_unification.value, frame_offset_};
+            return unify_.unify(lhs, rhs);
+        });
+    if (!result)
+        return false;
+    current_ = &node;
+    current_interval_ = interval;
+    return true;
 }
 
 #endif

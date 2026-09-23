@@ -43,7 +43,7 @@ private:
     IAdoptAxiom& adopt_axiom_;
     ISetNormEnv& set_norm_env_;
     INormalize& normalize_;
-    size_t next_entry_idx_;
+    size_t next_axiom_idx_;
 };
 
 template<typename IMA, typename ISAU, typename ISABG, typename ISL,
@@ -70,27 +70,32 @@ pud_axiom_adder<IMA, ISAU, ISABG, ISL, ISP, IARI, ISI, IAO, ISNE, IN>::pud_axiom
     , adopt_axiom_(adopt_axiom)
     , set_norm_env_(set_norm_env)
     , normalize_(normalize)
-    , next_entry_idx_(0) {}
+    , next_axiom_idx_(0) {}
 
 template<typename IMA, typename ISAU, typename ISABG, typename ISL,
          typename ISP, typename IARI, typename ISI, typename IAO,
          typename ISNE, typename IN>
 const pud_rule_id* pud_axiom_adder<IMA, ISAU, ISABG, ISL, ISP, IARI, ISI, IAO, ISNE, IN>::add_axiom(
-        const rule& axiom) {
-    const pud_rule_id* id = make_axiom_.make_axiom(next_entry_idx_);
-    ++next_entry_idx_;
+        const rule& r) {
+    const pud_rule_id* id = make_axiom_.make_axiom(next_axiom_idx_++);
+    
     const om_interval interval = allocate_root_interval_.allocate_root();
+    
     set_norm_env_.set_normalization_environment(interval, 1);
+
+    // bump all var indices by 1 to make way for the head var (var0)
     std::unordered_map<uint32_t, uint32_t> translation;
     const expr* shifted_head = normalize_.normalize(
-        framed_expr{axiom.head, 1}, translation);
+        framed_expr{r.head, 1}, translation);
     std::vector<const expr*> shifted_body;
-    shifted_body.reserve(axiom.body.size());
-    for (const expr* goal : axiom.body) {
+    shifted_body.reserve(r.body.size());
+    for (const expr* goal : r.body) {
         shifted_body.push_back(normalize_.normalize(
             framed_expr{goal, 1}, translation));
     }
+
     const uint32_t lvc = 1 + static_cast<uint32_t>(translation.size());
+
     store_added_unifications_.store(id, {{0, shifted_head}});
     store_added_body_goals_.store(id, std::move(shifted_body));
     store_lvc_.store(id, lvc);
