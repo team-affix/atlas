@@ -35,6 +35,8 @@ pud_node_enterer<N, ISABI, IU, IMV>::pud_node_enterer(
 
 template<typename N, typename ISABI, typename IU, typename IMV>
 bool pud_node_enterer<N, ISABI, IU, IMV>::enter(const N& node, om_interval interval, uint32_t frame_offset) {
+    if (node.refuted)
+        return false;
     set_active_binding_interval_.set(interval);
     return std::all_of(
         node.added_unifications.begin(),
