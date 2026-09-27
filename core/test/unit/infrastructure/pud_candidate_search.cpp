@@ -10,7 +10,7 @@
 #include "infrastructure/pud_candidate_search.hpp"
 #include "value_objects/om_interval.hpp"
 #include "value_objects/pud_candidate_search_context.hpp"
-#include "value_objects/pud_rule_id.hpp"
+#include "value_objects/pud_lineage.hpp"
 #include "value_objects/pud_witness_pair.hpp"
 #include "value_objects/pud_witness_search_context.hpp"
 
@@ -18,7 +18,7 @@ using ::testing::NiceMock;
 using ::testing::Return;
 using ::testing::_;
 
-using children_set_t = std::set<const pud_rule_id*>;
+using children_set_t = std::set<const pud_lineage*>;
 using children_opt_t = std::optional<children_set_t>;
 
 struct MockResumeWitnessSearch {
@@ -26,15 +26,15 @@ struct MockResumeWitnessSearch {
 };
 
 struct MockTryEnter {
-    MOCK_METHOD(bool, try_enter, (pud_witness_search_context&, const pud_rule_id*), ());
+    MOCK_METHOD(bool, try_enter, (pud_witness_search_context&, const pud_lineage*), ());
 };
 
 struct MockGetChildren {
-    MOCK_METHOD(children_opt_t, get, (const pud_rule_id*), ());
+    MOCK_METHOD(children_opt_t, get, (const pud_lineage*), ());
 };
 
 struct MockGetParent {
-    MOCK_METHOD(const pud_rule_id*, get, (const pud_rule_id*), ());
+    MOCK_METHOD(const pud_lineage*, get, (const pud_lineage*), ());
 };
 
 using test_search_t = pud_candidate_search<NiceMock<MockResumeWitnessSearch>,
@@ -47,9 +47,9 @@ struct PudCandidateSearchTest : public ::testing::Test {
         : open_(1)
         , close_(2)
         , interval_{om_label(&open_), om_label(&close_)}
-        , a0_{pud_rule_id::axiom{0}}
-        , c0_{pud_rule_id::inference{&a0_, 0, &a0_}}
-        , c1_{pud_rule_id::inference{&a0_, 1, &a0_}}
+        , a0_{pud_lineage::axiom{0}}
+        , c0_{pud_lineage::inference{&a0_, 0, &a0_}}
+        , c1_{pud_lineage::inference{&a0_, 1, &a0_}}
         , search_(witness_, try_enter_, children_, get_parent_) {
         ON_CALL(try_enter_, try_enter(_, _)).WillByDefault(Return(true));
     }
@@ -57,12 +57,12 @@ struct PudCandidateSearchTest : public ::testing::Test {
     uint64_t open_;
     uint64_t close_;
     om_interval interval_;
-    pud_rule_id a0_;
-    pud_rule_id c0_;
-    pud_rule_id c1_;
+    pud_lineage a0_;
+    pud_lineage c0_;
+    pud_lineage c1_;
 
-    pud_witness_search_context make_edge(const pud_rule_id* search_root,
-                                         const pud_rule_id* current) {
+    pud_witness_search_context make_edge(const pud_lineage* search_root,
+                                         const pud_lineage* current) {
         return pud_witness_search_context{&a0_, 0, 1, search_root, current};
     }
 
@@ -72,7 +72,7 @@ struct PudCandidateSearchTest : public ::testing::Test {
     }
 
     pud_candidate_search_context make_ctx(
-            const pud_rule_id* cursor,
+            const pud_lineage* cursor,
             std::optional<pud_witness_pair> witnesses) {
         return pud_candidate_search_context{
             &a0_, 0, 1, cursor, std::move(witnesses)};
@@ -177,9 +177,9 @@ TEST_F(PudCandidateSearchTest, AfterOneLiveEdgeFailsScansRemainingOutgoingEdges)
         make_pair(make_edge(&c0_, &c0_), make_edge(nullptr, nullptr)));
     const children_set_t kids{&c0_, &c1_};
     auto it = kids.begin();
-    const pud_rule_id* left = *it;
+    const pud_lineage* left = *it;
     ++it;
-    const pud_rule_id* right = *it;
+    const pud_lineage* right = *it;
     ctx.witnesses = make_pair(make_edge(left, left), make_edge(nullptr, nullptr));
     EXPECT_CALL(children_, get(&a0_)).WillRepeatedly(Return(kids));
     EXPECT_CALL(witness_, resume(_)).WillOnce([right](pud_witness_search_context& edge) {
@@ -191,14 +191,14 @@ TEST_F(PudCandidateSearchTest, AfterOneLiveEdgeFailsScansRemainingOutgoingEdges)
 }
 
 TEST_F(PudCandidateSearchTest, LeftDiesFillsFromSuccessorOfRightmostRoot) {
-    pud_rule_id c2{pud_rule_id::inference{&a0_, 2, &a0_}};
+    pud_lineage c2{pud_lineage::inference{&a0_, 2, &a0_}};
     const children_set_t kids{&c0_, &c1_, &c2};
     auto it = kids.begin();
-    const pud_rule_id* left = *it;
+    const pud_lineage* left = *it;
     ++it;
-    const pud_rule_id* mid = *it;
+    const pud_lineage* mid = *it;
     ++it;
-    const pud_rule_id* right = *it;
+    const pud_lineage* right = *it;
     pud_candidate_search_context ctx = make_ctx(
         &a0_,
         make_pair(make_edge(left, nullptr), make_edge(mid, mid)));
@@ -214,14 +214,14 @@ TEST_F(PudCandidateSearchTest, LeftDiesFillsFromSuccessorOfRightmostRoot) {
 }
 
 TEST_F(PudCandidateSearchTest, RightDiesFillsFromSuccessorOfDeadRoot) {
-    pud_rule_id c2{pud_rule_id::inference{&a0_, 2, &a0_}};
+    pud_lineage c2{pud_lineage::inference{&a0_, 2, &a0_}};
     const children_set_t kids{&c0_, &c1_, &c2};
     auto it = kids.begin();
-    const pud_rule_id* left = *it;
+    const pud_lineage* left = *it;
     ++it;
-    const pud_rule_id* mid = *it;
+    const pud_lineage* mid = *it;
     ++it;
-    const pud_rule_id* right = *it;
+    const pud_lineage* right = *it;
     pud_candidate_search_context ctx = make_ctx(
         &a0_,
         make_pair(make_edge(left, left), make_edge(mid, nullptr)));
@@ -237,13 +237,13 @@ TEST_F(PudCandidateSearchTest, RightDiesFillsFromSuccessorOfDeadRoot) {
 }
 
 TEST_F(PudCandidateSearchTest, AfterAdvanceDeadRootIsNullAndFillStartsRightOfSurvivor) {
-    pud_rule_id g0{pud_rule_id::inference{&c0_, 0, &a0_}};
-    pud_rule_id g1{pud_rule_id::inference{&c0_, 1, &a0_}};
+    pud_lineage g0{pud_lineage::inference{&c0_, 0, &a0_}};
+    pud_lineage g1{pud_lineage::inference{&c0_, 1, &a0_}};
     const children_set_t grands{&g0, &g1};
     auto git = grands.begin();
-    const pud_rule_id* left_g = *git;
+    const pud_lineage* left_g = *git;
     ++git;
-    const pud_rule_id* right_g = *git;
+    const pud_lineage* right_g = *git;
     pud_candidate_search_context ctx = make_ctx(
         &a0_,
         make_pair(make_edge(&c0_, left_g), make_edge(&c1_, nullptr)));
@@ -281,7 +281,7 @@ TEST_F(PudCandidateSearchTest, CurrentEqualsCursorAfterRebaseClearsThePair) {
 }
 
 TEST_F(PudCandidateSearchTest, FillLiveEdgesStopsAtTwoOfThreeChildren) {
-    pud_rule_id c2{pud_rule_id::inference{&a0_, 2, &a0_}};
+    pud_lineage c2{pud_lineage::inference{&a0_, 2, &a0_}};
     pud_candidate_search_context ctx = make_ctx(&a0_, std::nullopt);
     const children_set_t kids{&c0_, &c1_, &c2};
     EXPECT_CALL(children_, get(&a0_)).WillRepeatedly(Return(kids));
@@ -321,15 +321,15 @@ TEST_F(PudCandidateSearchTest, ResumeTwiceOnChoicePointStaysChoicePoint) {
 
 TEST_F(PudCandidateSearchTest, StressUnaryChainAdvance) {
     constexpr int k_depth = 16;
-    std::vector<pud_rule_id> nodes;
+    std::vector<pud_lineage> nodes;
     nodes.reserve(static_cast<size_t>(k_depth));
-    nodes.push_back(pud_rule_id{pud_rule_id::axiom{0}});
+    nodes.push_back(pud_lineage{pud_lineage::axiom{0}});
     for (int idx = 1; idx < k_depth; ++idx)
-        nodes.push_back(pud_rule_id{
-            pud_rule_id::inference{&nodes[0], 0, &nodes[0]}});
+        nodes.push_back(pud_lineage{
+            pud_lineage::inference{&nodes[0], 0, &nodes[0]}});
 
     ON_CALL(children_, get(_)).WillByDefault(
-        [&nodes](const pud_rule_id* node) -> children_opt_t {
+        [&nodes](const pud_lineage* node) -> children_opt_t {
             for (int idx = 0; idx + 1 < k_depth; ++idx) {
                 if (node != &nodes[static_cast<size_t>(idx)])
                     continue;
@@ -349,10 +349,10 @@ TEST_F(PudCandidateSearchTest, StressUnaryChainAdvance) {
 }
 
 TEST_F(PudCandidateSearchTest, FuzzResumeOnFixedMockDag) {
-    pud_rule_id c2{pud_rule_id::inference{&a0_, 2, &a0_}};
-    pud_rule_id g0{pud_rule_id::inference{&c0_, 0, &a0_}};
-    pud_rule_id g1{pud_rule_id::inference{&c1_, 0, &a0_}};
-    ON_CALL(children_, get(_)).WillByDefault([&](const pud_rule_id* node) -> children_opt_t {
+    pud_lineage c2{pud_lineage::inference{&a0_, 2, &a0_}};
+    pud_lineage g0{pud_lineage::inference{&c0_, 0, &a0_}};
+    pud_lineage g1{pud_lineage::inference{&c1_, 0, &a0_}};
+    ON_CALL(children_, get(_)).WillByDefault([&](const pud_lineage* node) -> children_opt_t {
         if (node == &a0_)
             return children_set_t{&c0_, &c1_, &c2};
         if (node == &c0_)
@@ -361,7 +361,7 @@ TEST_F(PudCandidateSearchTest, FuzzResumeOnFixedMockDag) {
             return children_set_t{&g1};
         return std::nullopt;
     });
-    ON_CALL(get_parent_, get(_)).WillByDefault([&](const pud_rule_id* node) -> const pud_rule_id* {
+    ON_CALL(get_parent_, get(_)).WillByDefault([&](const pud_lineage* node) -> const pud_lineage* {
         if (node == &g0)
             return &c0_;
         if (node == &g1)

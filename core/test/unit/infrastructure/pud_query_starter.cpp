@@ -7,7 +7,7 @@
 #include "value_objects/expr.hpp"
 #include "value_objects/framed_expr.hpp"
 #include "value_objects/om_interval.hpp"
-#include "value_objects/pud_rule_id.hpp"
+#include "value_objects/pud_lineage.hpp"
 
 using ::testing::NiceMock;
 using ::testing::Return;
@@ -15,12 +15,12 @@ using ::testing::ReturnRef;
 using ::testing::_;
 
 struct MockMakeInference {
-    MOCK_METHOD(const pud_rule_id*, make_inference,
-                (const pud_rule_id*, size_t, const pud_rule_id*), ());
+    MOCK_METHOD(const pud_lineage*, make_inference,
+                (const pud_lineage*, size_t, const pud_lineage*), ());
 };
 
 struct MockGetInterval {
-    MOCK_METHOD(const om_interval&, get, (const pud_rule_id*), ());
+    MOCK_METHOD(const om_interval&, get, (const pud_lineage*), ());
 };
 
 struct MockAllocateChildInterval {
@@ -28,7 +28,7 @@ struct MockAllocateChildInterval {
 };
 
 struct MockStoreInterval {
-    MOCK_METHOD(void, store, (const pud_rule_id*, om_interval), ());
+    MOCK_METHOD(void, store, (const pud_lineage*, om_interval), ());
 };
 
 struct MockGlobalize {
@@ -55,8 +55,8 @@ using test_starter_t = pud_query_starter<
 struct PudQueryStarterTest : public ::testing::Test {
     PudQueryStarterTest()
         : body_{expr::functor{1, {}}}
-        , leaf_{pud_rule_id::axiom{0}}
-        , query_key_{pud_rule_id::inference{&leaf_, 0, nullptr}}
+        , leaf_{pud_lineage::axiom{0}}
+        , query_key_{pud_lineage::inference{&leaf_, 0, nullptr}}
         , forest_open_(10)
         , forest_close_(40)
         , query_open_(20)
@@ -76,8 +76,8 @@ struct PudQueryStarterTest : public ::testing::Test {
     }
 
     expr body_;
-    pud_rule_id leaf_;
-    pud_rule_id query_key_;
+    pud_lineage leaf_;
+    pud_lineage query_key_;
     uint64_t forest_open_;
     uint64_t forest_close_;
     uint64_t query_open_;

@@ -5,16 +5,16 @@
 #include "infrastructure/pud_node_added_unifications.hpp"
 #include "value_objects/expr.hpp"
 #include "value_objects/pud_added_unification.hpp"
-#include "value_objects/pud_rule_id.hpp"
+#include "value_objects/pud_lineage.hpp"
 
 struct PudNodeAddedUnificationsTest : public ::testing::Test {
     PudNodeAddedUnificationsTest()
         : pred_{expr::functor{1, {}}}
-        , axiom_{pud_rule_id::axiom{0}}
+        , axiom_{pud_lineage::axiom{0}}
         , unifs_() {}
 
     expr pred_;
-    pud_rule_id axiom_;
+    pud_lineage axiom_;
     pud_node_added_unifications unifs_;
 };
 

@@ -7,7 +7,7 @@
 #include "value_objects/framed_expr.hpp"
 #include "value_objects/om_interval.hpp"
 #include "value_objects/pud_added_unification.hpp"
-#include "value_objects/pud_rule_id.hpp"
+#include "value_objects/pud_lineage.hpp"
 #include "value_objects/rule.hpp"
 
 template<typename IMakeAxiom,
@@ -31,7 +31,7 @@ struct pud_axiom_adder {
                     IAdoptAxiom& adopt_axiom,
                     ISetNormEnv& set_norm_env,
                     INormalize& normalize);
-    const pud_rule_id* add_axiom(const rule& axiom);
+    const pud_lineage* add_axiom(const rule& axiom);
 private:
     IMakeAxiom& make_axiom_;
     IStoreAddedUnifications& store_added_unifications_;
@@ -75,9 +75,9 @@ pud_axiom_adder<IMA, ISAU, ISABG, ISL, ISP, IARI, ISI, IAO, ISNE, IN>::pud_axiom
 template<typename IMA, typename ISAU, typename ISABG, typename ISL,
          typename ISP, typename IARI, typename ISI, typename IAO,
          typename ISNE, typename IN>
-const pud_rule_id* pud_axiom_adder<IMA, ISAU, ISABG, ISL, ISP, IARI, ISI, IAO, ISNE, IN>::add_axiom(
+const pud_lineage* pud_axiom_adder<IMA, ISAU, ISABG, ISL, ISP, IARI, ISI, IAO, ISNE, IN>::add_axiom(
         const rule& r) {
-    const pud_rule_id* id = make_axiom_.make_axiom(next_axiom_idx_++);
+    const pud_lineage* id = make_axiom_.make_axiom(next_axiom_idx_++);
     
     const om_interval interval = allocate_root_interval_.allocate_root();
     

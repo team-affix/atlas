@@ -4,17 +4,17 @@
 #include <optional>
 #include "value_objects/pud_candidate_search_context.hpp"
 #include "value_objects/pud_forced_unfold.hpp"
-#include "value_objects/pud_rule_id.hpp"
+#include "value_objects/pud_lineage.hpp"
 #include "value_objects/pud_witness_pair.hpp"
 #include "value_objects/pud_witness_search_context.hpp"
 
 struct PudSearchValueObjectsTest : public ::testing::Test {
     PudSearchValueObjectsTest()
-        : leaf_{pud_rule_id::axiom{1}}
-        , axiom_{pud_rule_id::axiom{0}} {}
+        : leaf_{pud_lineage::axiom{1}}
+        , axiom_{pud_lineage::axiom{0}} {}
 
-    pud_rule_id leaf_;
-    pud_rule_id axiom_;
+    pud_lineage leaf_;
+    pud_lineage axiom_;
 };
 
 TEST_F(PudSearchValueObjectsTest, WitnessContextOrdersBySearchRootThenCurrent) {

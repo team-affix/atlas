@@ -16,7 +16,7 @@
 #include "value_objects/pud_added_unification.hpp"
 #include "value_objects/pud_candidate_search_context.hpp"
 #include "value_objects/pud_forced_unfold.hpp"
-#include "value_objects/pud_rule_id.hpp"
+#include "value_objects/pud_lineage.hpp"
 #include "value_objects/pud_unfold_site.hpp"
 
 using ::testing::DoAll;
@@ -29,7 +29,7 @@ using ::testing::SaveArg;
 using ::testing::_;
 
 struct MockUnfoldSite {
-    MOCK_METHOD(pud_unfold_site, unfold_site, (const pud_rule_id*, size_t), ());
+    MOCK_METHOD(pud_unfold_site, unfold_site, (const pud_lineage*, size_t), ());
 };
 
 struct MockSetNormEnv {
@@ -50,48 +50,48 @@ struct MockMakeVar {
 };
 
 struct MockGetLvc {
-    MOCK_METHOD(uint32_t, get, (const pud_rule_id*), ());
+    MOCK_METHOD(uint32_t, get, (const pud_lineage*), ());
 };
 
 struct MockMakeInference {
-    MOCK_METHOD(const pud_rule_id*, make_inference,
-                (const pud_rule_id*, size_t, const pud_rule_id*), ());
+    MOCK_METHOD(const pud_lineage*, make_inference,
+                (const pud_lineage*, size_t, const pud_lineage*), ());
 };
 
 struct MockStoreAddedUnifications {
-    MOCK_METHOD(void, store, (const pud_rule_id*, (std::vector<pud_added_unification>)), ());
+    MOCK_METHOD(void, store, (const pud_lineage*, (std::vector<pud_added_unification>)), ());
 };
 
 struct MockGetAddedUnifications {
-    MOCK_METHOD(const std::vector<pud_added_unification>&, get, (const pud_rule_id*), ());
+    MOCK_METHOD(const std::vector<pud_added_unification>&, get, (const pud_lineage*), ());
 };
 
 struct MockGetAddedBodyGoals {
-    MOCK_METHOD(const std::vector<const expr*>&, get, (const pud_rule_id*), ());
+    MOCK_METHOD(const std::vector<const expr*>&, get, (const pud_lineage*), ());
 };
 
 struct MockStoreAddedBodyGoals {
-    MOCK_METHOD(void, store, (const pud_rule_id*, (std::vector<const expr*>)), ());
+    MOCK_METHOD(void, store, (const pud_lineage*, (std::vector<const expr*>)), ());
 };
 
 struct MockStoreLvc {
-    MOCK_METHOD(void, store, (const pud_rule_id*, uint32_t), ());
+    MOCK_METHOD(void, store, (const pud_lineage*, uint32_t), ());
 };
 
 struct MockStoreChildren {
-    MOCK_METHOD(void, store, (const pud_rule_id*, (std::set<const pud_rule_id*>)), ());
+    MOCK_METHOD(void, store, (const pud_lineage*, (std::set<const pud_lineage*>)), ());
 };
 
 struct MockStoreParent {
-    MOCK_METHOD(void, store, (const pud_rule_id*, const pud_rule_id*), ());
+    MOCK_METHOD(void, store, (const pud_lineage*, const pud_lineage*), ());
 };
 
 struct MockGetParent {
-    MOCK_METHOD(const pud_rule_id*, get, (const pud_rule_id*), ());
+    MOCK_METHOD(const pud_lineage*, get, (const pud_lineage*), ());
 };
 
 struct MockGetInterval {
-    MOCK_METHOD(const om_interval&, get, (const pud_rule_id*), ());
+    MOCK_METHOD(const om_interval&, get, (const pud_lineage*), ());
 };
 
 struct MockAllocateChildInterval {
@@ -99,7 +99,7 @@ struct MockAllocateChildInterval {
 };
 
 struct MockStoreInterval {
-    MOCK_METHOD(void, store, (const pud_rule_id*, om_interval), ());
+    MOCK_METHOD(void, store, (const pud_lineage*, om_interval), ());
 };
 
 struct MockRecordBinding {
@@ -107,12 +107,12 @@ struct MockRecordBinding {
 };
 
 struct MockGetAddedCallerReps {
-    MOCK_METHOD(const std::vector<uint32_t>&, get, (const pud_rule_id*), ());
+    MOCK_METHOD(const std::vector<uint32_t>&, get, (const pud_lineage*), ());
 };
 
 struct MockReplaceUnfolded {
     MOCK_METHOD((std::vector<pud_forced_unfold>), replace_unfolded,
-                (const pud_rule_id*, size_t, (const std::vector<const pud_rule_id*>&)), ());
+                (const pud_lineage*, size_t, (const std::vector<const pud_lineage*>&)), ());
 };
 
 using test_unfolder_t = pud_unfolder<
@@ -148,12 +148,12 @@ struct PudUnfolderTest : public ::testing::Test {
         , nested_{om_label(&nested_open_), om_label(&nested_close_)}
         , body_{expr::functor{1, {}}}
         , var0_{expr::var{0}}
-        , leaf_{pud_rule_id::axiom{0}}
-        , callee_a_{pud_rule_id::axiom{1}}
-        , callee_b_{pud_rule_id::axiom{2}}
-        , child_{pud_rule_id::inference{&leaf_, 0, &leaf_}}
-        , child_a_{pud_rule_id::inference{&leaf_, 0, &callee_a_}}
-        , child_b_{pud_rule_id::inference{&leaf_, 0, &callee_b_}}
+        , leaf_{pud_lineage::axiom{0}}
+        , callee_a_{pud_lineage::axiom{1}}
+        , callee_b_{pud_lineage::axiom{2}}
+        , child_{pud_lineage::inference{&leaf_, 0, &leaf_}}
+        , child_a_{pud_lineage::inference{&leaf_, 0, &callee_a_}}
+        , child_b_{pud_lineage::inference{&leaf_, 0, &callee_b_}}
         , live_ctx_{&leaf_, 0, 1, &leaf_, {}}
         , site_{&body_, {&live_ctx_}}
         , empty_caller_reps_{}
@@ -185,11 +185,11 @@ struct PudUnfolderTest : public ::testing::Test {
 
     struct unfold_out {
         std::vector<pud_forced_unfold> yields;
-        std::vector<const pud_rule_id*> children;
+        std::vector<const pud_lineage*> children;
     };
 
     unfold_out drain(
-            coroutine<pud_forced_unfold, std::vector<const pud_rule_id*>> task) {
+            coroutine<pud_forced_unfold, std::vector<const pud_lineage*>> task) {
         unfold_out out;
         while (!task.done()) {
             task.resume();
@@ -208,12 +208,12 @@ struct PudUnfolderTest : public ::testing::Test {
     om_interval nested_;
     expr body_;
     expr var0_;
-    pud_rule_id leaf_;
-    pud_rule_id callee_a_;
-    pud_rule_id callee_b_;
-    pud_rule_id child_;
-    pud_rule_id child_a_;
-    pud_rule_id child_b_;
+    pud_lineage leaf_;
+    pud_lineage callee_a_;
+    pud_lineage callee_b_;
+    pud_lineage child_;
+    pud_lineage child_a_;
+    pud_lineage child_b_;
     pud_candidate_search_context live_ctx_;
     pud_unfold_site site_;
     std::vector<uint32_t> empty_caller_reps_;
@@ -248,7 +248,7 @@ TEST_F(PudUnfolderTest, UnfoldLinksChildRewritesQueriesAndYieldsUnit) {
     EXPECT_CALL(make_inference_, make_inference(&leaf_, 0, &leaf_))
         .WillOnce(Return(&child_));
     EXPECT_CALL(store_interval_, store(&child_, _));
-    EXPECT_CALL(store_children_, store(&leaf_, std::set<const pud_rule_id*>{&child_}));
+    EXPECT_CALL(store_children_, store(&leaf_, std::set<const pud_lineage*>{&child_}));
     EXPECT_CALL(store_parent_, store(&child_, &leaf_));
     EXPECT_CALL(replace_unfolded_, replace_unfolded(&leaf_, 0, ElementsAre(&child_)));
 
@@ -294,7 +294,7 @@ TEST_F(PudUnfolderTest, UnfoldCreatesOneChildPerLiveCandidate) {
             .WillOnce(Return(&child_b_));
         EXPECT_CALL(store_interval_, store(&child_b_, _));
         EXPECT_CALL(store_children_,
-                    store(&leaf_, std::set<const pud_rule_id*>{&child_a_, &child_b_}));
+                    store(&leaf_, std::set<const pud_lineage*>{&child_a_, &child_b_}));
         EXPECT_CALL(store_parent_, store(&child_a_, &leaf_));
         EXPECT_CALL(store_parent_, store(&child_b_, &leaf_));
         EXPECT_CALL(replace_unfolded_,
@@ -331,8 +331,8 @@ TEST_F(PudUnfolderTest, MaterializePassesTouchedRepsAsAddedUnificationsAndLiftsL
 }
 
 TEST_F(PudUnfolderTest, MaterializeConcatenatesAncestorThenCursorCallerReps) {
-    pud_rule_id forest_parent{pud_rule_id::axiom{7}};
-    pud_rule_id interned_parent{pud_rule_id::inference{&leaf_, 0, &forest_parent}};
+    pud_lineage forest_parent{pud_lineage::axiom{7}};
+    pud_lineage interned_parent{pud_lineage::inference{&leaf_, 0, &forest_parent}};
     live_ctx_.cursor = &callee_a_;
     ON_CALL(get_parent_, get(&callee_a_)).WillByDefault(Return(&forest_parent));
     ON_CALL(get_parent_, get(&forest_parent)).WillByDefault(Return(nullptr));
@@ -370,8 +370,8 @@ TEST_F(PudUnfolderTest, MaterializeEmptyCandidateGoalsPassesEmptyGoals) {
 TEST_F(PudUnfolderTest, CollectAddedBodyGoalsErasesCallSiteThenAppends) {
     expr leftover{expr::var{2}};
     expr added{expr::var{3}};
-    pud_rule_id forest_axiom{pud_rule_id::axiom{10}};
-    pud_rule_id forest_child{pud_rule_id::inference{&forest_axiom, 0, &forest_axiom}};
+    pud_lineage forest_axiom{pud_lineage::axiom{10}};
+    pud_lineage forest_child{pud_lineage::inference{&forest_axiom, 0, &forest_axiom}};
     std::vector<const expr*> axiom_goals{&body_, &leftover};
     std::vector<const expr*> child_goals{&added};
     live_ctx_.cursor = &forest_child;
@@ -383,7 +383,7 @@ TEST_F(PudUnfolderTest, CollectAddedBodyGoalsErasesCallSiteThenAppends) {
             return fe.skeleton;
         });
     std::vector<const expr*> goals;
-    pud_rule_id interned_parent{pud_rule_id::inference{&leaf_, 0, &forest_axiom}};
+    pud_lineage interned_parent{pud_lineage::inference{&leaf_, 0, &forest_axiom}};
     EXPECT_CALL(make_inference_, make_inference(&leaf_, 0, &forest_child))
         .WillRepeatedly(Return(&child_));
     EXPECT_CALL(make_inference_, make_inference(&leaf_, 0, &forest_axiom))
@@ -429,7 +429,7 @@ TEST_F(PudUnfolderTest, UnfoldSequenceIsMaterializeThenStoreThenReplace) {
         EXPECT_CALL(make_inference_, make_inference(&leaf_, 0, &leaf_))
             .WillOnce(Return(&child_));
         EXPECT_CALL(store_interval_, store(&child_, _));
-        EXPECT_CALL(store_children_, store(&leaf_, std::set<const pud_rule_id*>{&child_}));
+        EXPECT_CALL(store_children_, store(&leaf_, std::set<const pud_lineage*>{&child_}));
         EXPECT_CALL(store_parent_, store(&child_, &leaf_));
         EXPECT_CALL(replace_unfolded_, replace_unfolded(&leaf_, 0, ElementsAre(&child_)))
             .WillOnce(Return(std::vector<pud_forced_unfold>{}));
@@ -438,17 +438,17 @@ TEST_F(PudUnfolderTest, UnfoldSequenceIsMaterializeThenStoreThenReplace) {
 }
 
 TEST_F(PudUnfolderTest, StressManyCallees) {
-    std::vector<pud_rule_id> callees;
-    std::vector<pud_rule_id> children;
+    std::vector<pud_lineage> callees;
+    std::vector<pud_lineage> children;
     callees.reserve(24);
     children.reserve(24);
     for (int idx = 0; idx < 24; ++idx) {
-        callees.push_back(pud_rule_id{pud_rule_id::axiom{static_cast<size_t>(idx + 10)}});
-        children.push_back(pud_rule_id{pud_rule_id::inference{
+        callees.push_back(pud_lineage{pud_lineage::axiom{static_cast<size_t>(idx + 10)}});
+        children.push_back(pud_lineage{pud_lineage::inference{
             &leaf_, 0, &callees.back()}});
     }
-    std::vector<const pud_rule_id*> callee_ptrs;
-    std::vector<const pud_rule_id*> child_ptrs;
+    std::vector<const pud_lineage*> callee_ptrs;
+    std::vector<const pud_lineage*> child_ptrs;
     for (int idx = 0; idx < 24; ++idx) {
         callee_ptrs.push_back(&callees[static_cast<size_t>(idx)]);
         child_ptrs.push_back(&children[static_cast<size_t>(idx)]);
@@ -474,7 +474,7 @@ TEST_F(PudUnfolderTest, StressManyCallees) {
             EXPECT_CALL(store_interval_,
                         store(child_ptrs[static_cast<size_t>(idx)], _));
         }
-        EXPECT_CALL(store_children_, store(&leaf_, std::set<const pud_rule_id*>(
+        EXPECT_CALL(store_children_, store(&leaf_, std::set<const pud_lineage*>(
             child_ptrs.begin(), child_ptrs.end())));
         for (int idx = 0; idx < 24; ++idx) {
             EXPECT_CALL(store_parent_,
@@ -492,19 +492,19 @@ TEST_F(PudUnfolderTest, FuzzUnfold) {
     std::uniform_int_distribution<int> callee_count(1, 4);
     std::uniform_int_distribution<int> yield_kind(0, 2);
     std::ostringstream log;
-    std::vector<pud_rule_id> callees;
-    std::vector<pud_rule_id> children;
+    std::vector<pud_lineage> callees;
+    std::vector<pud_lineage> children;
     callees.reserve(16);
     children.reserve(16);
     for (int idx = 0; idx < 16; ++idx) {
-        callees.push_back(pud_rule_id{pud_rule_id::axiom{static_cast<size_t>(idx + 20)}});
-        children.push_back(pud_rule_id{pud_rule_id::inference{&leaf_, 0, &callees.back()}});
+        callees.push_back(pud_lineage{pud_lineage::axiom{static_cast<size_t>(idx + 20)}});
+        children.push_back(pud_lineage{pud_lineage::inference{&leaf_, 0, &callees.back()}});
     }
     for (int step = 0; step < 40; ++step) {
         const int count = callee_count(rng);
         log << step << ':' << count << ' ';
-        std::vector<const pud_rule_id*> callee_ptrs;
-        std::vector<const pud_rule_id*> child_ptrs;
+        std::vector<const pud_lineage*> callee_ptrs;
+        std::vector<const pud_lineage*> child_ptrs;
         for (int idx = 0; idx < count; ++idx) {
             callee_ptrs.push_back(&callees[static_cast<size_t>(idx)]);
             child_ptrs.push_back(&children[static_cast<size_t>(idx)]);
@@ -528,26 +528,26 @@ TEST_F(PudUnfolderTest, FuzzUnfold) {
         ON_CALL(replace_unfolded_, replace_unfolded(_, _, _)).WillByDefault(Return(yields));
         int infer_idx = 0;
         ON_CALL(make_inference_, make_inference(_, _, _)).WillByDefault(
-            [&](const pud_rule_id*, size_t, const pud_rule_id*) {
-                const pud_rule_id* out = child_ptrs[static_cast<size_t>(infer_idx)];
+            [&](const pud_lineage*, size_t, const pud_lineage*) {
+                const pud_lineage* out = child_ptrs[static_cast<size_t>(infer_idx)];
                 ++infer_idx;
                 return out;
             });
-        std::set<const pud_rule_id*> stored;
-        std::vector<const pud_rule_id*> replaced;
+        std::set<const pud_lineage*> stored;
+        std::vector<const pud_lineage*> replaced;
         ON_CALL(store_children_, store(_, _)).WillByDefault(
-            [&](const pud_rule_id*, std::set<const pud_rule_id*> kids) {
+            [&](const pud_lineage*, std::set<const pud_lineage*> kids) {
                 stored = std::move(kids);
             });
         ON_CALL(replace_unfolded_, replace_unfolded(_, _, _)).WillByDefault(
-            [&](const pud_rule_id*, size_t, const std::vector<const pud_rule_id*>& kids) {
+            [&](const pud_lineage*, size_t, const std::vector<const pud_lineage*>& kids) {
                 replaced = kids;
                 return yields;
             });
         const unfold_out out = drain(unfolder_.unfold(&leaf_, 0));
         EXPECT_EQ(out.children.size(), callee_ptrs.size())
             << "seed " << k_seed << " log " << log.str();
-        EXPECT_EQ(stored, std::set<const pud_rule_id*>(
+        EXPECT_EQ(stored, std::set<const pud_lineage*>(
             out.children.begin(), out.children.end()))
             << "seed " << k_seed << " log " << log.str();
         EXPECT_EQ(replaced, out.children) << "seed " << k_seed << " log " << log.str();

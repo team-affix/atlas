@@ -5,7 +5,7 @@
 #include <optional>
 #include <unordered_map>
 #include "value_objects/pud_query_node.hpp"
-#include "value_objects/pud_rule_id.hpp"
+#include "value_objects/pud_lineage.hpp"
 #include "value_objects/framed_expr.hpp"
 
 template<
@@ -37,7 +37,7 @@ struct pud_query_propagator {
         IRecordFPArrayBinding& record_fp,
         IQueryFPArrayBinding& query_fp);
     query_node_handle root();
-    std::optional<query_node_handle> child(query_node_handle current, const pud_rule_id* child_callee);
+    std::optional<query_node_handle> child(query_node_handle current, const pud_lineage* child_callee);
     query_node_handle open_query(query_node_handle caller, const expr* query);
     const pud_node* close_query(query_node_handle query);
 private:
@@ -122,7 +122,7 @@ template<
     typename IG,
     typename IRFAB,
     typename IQFAB>
-std::optional<typename pud_query_propagator<BM, U, S, N, IGNC, IMN, IAR, IAC, IMV, IG, IRFAB, IQFAB>::query_node_handle> pud_query_propagator<BM, U, S, N, IGNC, IMN, IAR, IAC, IMV, IG, IRFAB, IQFAB>::child(query_node_handle current, const pud_rule_id* child_callee) {
+std::optional<typename pud_query_propagator<BM, U, S, N, IGNC, IMN, IAR, IAC, IMV, IG, IRFAB, IQFAB>::query_node_handle> pud_query_propagator<BM, U, S, N, IGNC, IMN, IAR, IAC, IMV, IG, IRFAB, IQFAB>::child(query_node_handle current, const pud_lineage* child_callee) {
     const pud_node* current_node = current.query_node->node;
     const auto& children = get_node_children_.get(current_node);
     const pud_node* child_node = children.at(child_callee);

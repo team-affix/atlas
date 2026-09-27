@@ -14,7 +14,7 @@
 #include "infrastructure/pud_node_parent.hpp"
 #include "infrastructure/pud_node_added_touched_caller_reps.hpp"
 #include "infrastructure/pud_query_starter.hpp"
-#include "infrastructure/pud_rule_id_pool.hpp"
+#include "infrastructure/pud_lineage_pool.hpp"
 #include "infrastructure/pud_witness_search.hpp"
 #include "value_objects/expr.hpp"
 #include "value_objects/framed_expr.hpp"
@@ -23,57 +23,57 @@
 #include "value_objects/pud_witness_search_context.hpp"
 
 using witness_search_t = pud_witness_search<
-    pud_node_children, pud_node_parent, pud_rule_id_pool,
+    pud_node_children, pud_node_parent, pud_lineage_pool,
     pud_node_interval, pud_node_interval, pud_node_interval,
     order_maintenance, pud_node_added_unifications,
     fully_persistent_array, fully_persistent_array,
     globalizer, expr_pool, pud_node_added_touched_caller_reps>;
 using query_starter_t = pud_query_starter<
-    pud_rule_id_pool, pud_node_interval, order_maintenance, pud_node_interval,
+    pud_lineage_pool, pud_node_interval, order_maintenance, pud_node_interval,
     globalizer, fully_persistent_array, fully_persistent_array>;
 
 struct PudReinitBindMapIntegrationTest : public ::testing::Test {
     PudReinitBindMapIntegrationTest()
-        : witness_(children_, parent_, pool_,
+        : witness_(children_, parent_, lineage_pool_,
                    node_interval_, node_interval_, node_interval_,
                    om_, added_unifications_,
                    fpa_, fpa_, glob_, exprs_, added_caller_reps_)
-        , starter_(pool_, node_interval_, om_, node_interval_,
+        , starter_(lineage_pool_, node_interval_, om_, node_interval_,
                    glob_, fpa_, fpa_) {}
 
-    const pud_rule_id* add_axiom(size_t entry_idx,
+    const pud_lineage* add_axiom(size_t entry_idx,
                                  std::vector<pud_added_unification> unifs) {
-        const pud_rule_id* id = pool_.make_axiom(entry_idx);
+        const pud_lineage* id = lineage_pool_.make_axiom(entry_idx);
         added_unifications_.store(id, std::move(unifs));
         parent_.store(id, nullptr);
         node_interval_.store(id, om_.allocate_root());
         return id;
     }
 
-    const pud_rule_id* add_inference(const pud_rule_id* caller,
+    const pud_lineage* add_inference(const pud_lineage* caller,
                                      size_t call_site,
-                                     const pud_rule_id* callee,
+                                     const pud_lineage* callee,
                                      std::vector<pud_added_unification> unifs) {
-        const pud_rule_id* id = pool_.make_inference(caller, call_site, callee);
+        const pud_lineage* id = lineage_pool_.make_inference(caller, call_site, callee);
         added_unifications_.store(id, std::move(unifs));
         return id;
     }
 
-    void store_children_of(const pud_rule_id* parent,
-                           std::initializer_list<const pud_rule_id*> kids) {
-        children_.store(parent, std::set<const pud_rule_id*>{kids});
-        for (const pud_rule_id* child : kids)
+    void store_children_of(const pud_lineage* parent,
+                           std::initializer_list<const pud_lineage*> kids) {
+        children_.store(parent, std::set<const pud_lineage*>{kids});
+        for (const pud_lineage* child : kids)
             parent_.store(child, parent);
     }
 
-    void start_query(const pud_rule_id* leaf,
+    void start_query(const pud_lineage* leaf,
                      size_t body_goal_idx,
                      const expr* body_goal,
                      uint32_t frame_offset) {
         starter_.start(leaf, body_goal_idx, body_goal, frame_offset);
     }
 
-    pud_rule_id_pool pool_;
+    pud_lineage_pool lineage_pool_;
     order_maintenance om_;
     fully_persistent_array fpa_;
     globalizer glob_;
@@ -89,15 +89,15 @@ struct PudReinitBindMapIntegrationTest : public ::testing::Test {
 
 TEST_F(PudReinitBindMapIntegrationTest, DescendStoresIntervalAndRecordsHead) {
     const expr* head = exprs_.make_functor(3, {});
-    const pud_rule_id* axiom = add_axiom(0, {{0, head}});
-    const pud_rule_id* child = add_inference(axiom, 0, axiom, {});
+    const pud_lineage* axiom = add_axiom(0, {{0, head}});
+    const pud_lineage* child = add_inference(axiom, 0, axiom, {});
     store_children_of(axiom, {child});
 
     pud_witness_search_context ctx{axiom, 0, 1, axiom, axiom};
     start_query(axiom, 0, head, 1);
     witness_.resume(ctx);
     EXPECT_EQ(ctx.current, child);
-    const pud_rule_id* key = pool_.make_inference(axiom, 0, child);
+    const pud_lineage* key = lineage_pool_.make_inference(axiom, 0, child);
     const om_interval stored = node_interval_.get(key);
     EXPECT_FALSE(fpa_.query(stored.open, 0).has_value());
     ASSERT_TRUE(fpa_.query(stored.open, 1).has_value());
@@ -106,12 +106,12 @@ TEST_F(PudReinitBindMapIntegrationTest, DescendStoresIntervalAndRecordsHead) {
 
 TEST_F(PudReinitBindMapIntegrationTest, OverwriteAfterUnfoldDropsSearchBinds) {
     const expr* head = exprs_.make_functor(4, {});
-    const pud_rule_id* axiom = add_axiom(0, {{0, head}});
+    const pud_lineage* axiom = add_axiom(0, {{0, head}});
     pud_witness_search_context ctx{axiom, 0, 1, axiom, axiom};
     start_query(axiom, 0, head, 1);
     witness_.resume(ctx);
     EXPECT_EQ(ctx.current, axiom);
-    const pud_rule_id* key = pool_.make_inference(axiom, 0, axiom);
+    const pud_lineage* key = lineage_pool_.make_inference(axiom, 0, axiom);
     const om_interval search_interval = node_interval_.get(key);
     EXPECT_FALSE(fpa_.query(search_interval.open, 0).has_value());
     ASSERT_TRUE(fpa_.query(search_interval.open, 1).has_value());
@@ -127,26 +127,26 @@ TEST_F(PudReinitBindMapIntegrationTest, FailedMidPathDoesNotEnterLaterNode) {
     const expr* p = exprs_.make_functor(5, {});
     const expr* q = exprs_.make_functor(6, {});
     const expr* r = exprs_.make_functor(7, {});
-    const pud_rule_id* axiom = add_axiom(0, {{0, p}});
-    const pud_rule_id* mid = add_inference(axiom, 0, axiom, {{0, q}});
+    const pud_lineage* axiom = add_axiom(0, {{0, p}});
+    const pud_lineage* mid = add_inference(axiom, 0, axiom, {{0, q}});
     store_children_of(axiom, {mid});
-    const pud_rule_id* leaf = add_inference(mid, 0, axiom, {{1, r}});
+    const pud_lineage* leaf = add_inference(mid, 0, axiom, {{1, r}});
     store_children_of(mid, {leaf});
     pud_witness_search_context ctx{axiom, 0, 1, axiom, axiom};
     start_query(axiom, 0, p, 1);
     witness_.resume(ctx);
     EXPECT_EQ(ctx.current, nullptr);
-    const pud_rule_id* leaf_key = pool_.make_inference(axiom, 0, leaf);
+    const pud_lineage* leaf_key = lineage_pool_.make_inference(axiom, 0, leaf);
     EXPECT_FALSE(node_interval_.contains(leaf_key));
 }
 
 TEST_F(PudReinitBindMapIntegrationTest, CalleeHeadLivesAtLvcCallerZeroUntouched) {
     const expr* head = exprs_.make_functor(3, {});
-    const pud_rule_id* axiom = add_axiom(0, {{0, head}});
+    const pud_lineage* axiom = add_axiom(0, {{0, head}});
     pud_witness_search_context ctx{axiom, 0, 1, axiom, axiom};
     start_query(axiom, 0, head, 1);
     witness_.resume(ctx);
-    const pud_rule_id* key = pool_.make_inference(axiom, 0, axiom);
+    const pud_lineage* key = lineage_pool_.make_inference(axiom, 0, axiom);
     const om_interval stored = node_interval_.get(key);
     EXPECT_FALSE(fpa_.query(stored.open, 0).has_value());
     ASSERT_TRUE(fpa_.query(stored.open, 1).has_value());
@@ -156,14 +156,14 @@ TEST_F(PudReinitBindMapIntegrationTest, CalleeHeadLivesAtLvcCallerZeroUntouched)
 TEST_F(PudReinitBindMapIntegrationTest, InferenceSnapshotBindsAtQueryLvcNotCallerKey) {
     const expr* head = exprs_.make_functor(8, {});
     const expr* a = exprs_.make_functor(9, {});
-    const pud_rule_id* axiom = add_axiom(0, {{0, head}});
-    const pud_rule_id* inf = add_inference(axiom, 0, axiom, {{0, head}, {1, a}});
+    const pud_lineage* axiom = add_axiom(0, {{0, head}});
+    const pud_lineage* inf = add_inference(axiom, 0, axiom, {{0, head}, {1, a}});
     store_children_of(axiom, {inf});
     pud_witness_search_context ctx{axiom, 0, 4, axiom, axiom};
     start_query(axiom, 0, head, 4);
     witness_.resume(ctx);
     EXPECT_EQ(ctx.current, inf);
-    const pud_rule_id* key = pool_.make_inference(axiom, 0, inf);
+    const pud_lineage* key = lineage_pool_.make_inference(axiom, 0, inf);
     const om_interval stored = node_interval_.get(key);
     EXPECT_FALSE(fpa_.query(stored.open, 1).has_value());
     ASSERT_TRUE(fpa_.query(stored.open, 5).has_value());
@@ -173,16 +173,16 @@ TEST_F(PudReinitBindMapIntegrationTest, InferenceSnapshotBindsAtQueryLvcNotCalle
 
 TEST_F(PudReinitBindMapIntegrationTest, FirstVisitStoresDeltaOnEveryAncestor) {
     const expr* p = exprs_.make_functor(5, {});
-    const pud_rule_id* axiom = add_axiom(0, {{0, p}});
-    const pud_rule_id* mid = add_inference(axiom, 0, axiom, {{0, p}});
+    const pud_lineage* axiom = add_axiom(0, {{0, p}});
+    const pud_lineage* mid = add_inference(axiom, 0, axiom, {{0, p}});
     store_children_of(axiom, {mid});
-    const pud_rule_id* leaf = add_inference(mid, 0, axiom, {{0, p}});
+    const pud_lineage* leaf = add_inference(mid, 0, axiom, {{0, p}});
     store_children_of(mid, {leaf});
     pud_witness_search_context ctx{axiom, 0, 1, axiom, axiom};
     start_query(axiom, 0, p, 1);
     witness_.resume(ctx);
     EXPECT_EQ(ctx.current, leaf);
-    EXPECT_NO_THROW(added_caller_reps_.get(pool_.make_inference(axiom, 0, axiom)));
-    EXPECT_NO_THROW(added_caller_reps_.get(pool_.make_inference(axiom, 0, mid)));
-    EXPECT_NO_THROW(added_caller_reps_.get(pool_.make_inference(axiom, 0, leaf)));
+    EXPECT_NO_THROW(added_caller_reps_.get(lineage_pool_.make_inference(axiom, 0, axiom)));
+    EXPECT_NO_THROW(added_caller_reps_.get(lineage_pool_.make_inference(axiom, 0, mid)));
+    EXPECT_NO_THROW(added_caller_reps_.get(lineage_pool_.make_inference(axiom, 0, leaf)));
 }

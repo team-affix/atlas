@@ -11,7 +11,7 @@
 #include "value_objects/framed_expr.hpp"
 #include "value_objects/om_interval.hpp"
 #include "value_objects/pud_added_unification.hpp"
-#include "value_objects/pud_rule_id.hpp"
+#include "value_objects/pud_lineage.hpp"
 #include "value_objects/rule.hpp"
 
 using ::testing::NiceMock;
@@ -20,23 +20,23 @@ using ::testing::SaveArg;
 using ::testing::_;
 
 struct MockMakeAxiom {
-    MOCK_METHOD(const pud_rule_id*, make_axiom, (size_t), ());
+    MOCK_METHOD(const pud_lineage*, make_axiom, (size_t), ());
 };
 
 struct MockStoreAddedUnifications {
-    MOCK_METHOD(void, store, (const pud_rule_id*, (std::vector<pud_added_unification>)), ());
+    MOCK_METHOD(void, store, (const pud_lineage*, (std::vector<pud_added_unification>)), ());
 };
 
 struct MockStoreAddedBodyGoals {
-    MOCK_METHOD(void, store, (const pud_rule_id*, (std::vector<const expr*>)), ());
+    MOCK_METHOD(void, store, (const pud_lineage*, (std::vector<const expr*>)), ());
 };
 
 struct MockStoreLvc {
-    MOCK_METHOD(void, store, (const pud_rule_id*, uint32_t), ());
+    MOCK_METHOD(void, store, (const pud_lineage*, uint32_t), ());
 };
 
 struct MockStoreParent {
-    MOCK_METHOD(void, store, (const pud_rule_id*, const pud_rule_id*), ());
+    MOCK_METHOD(void, store, (const pud_lineage*, const pud_lineage*), ());
 };
 
 struct MockAllocateRootInterval {
@@ -44,11 +44,11 @@ struct MockAllocateRootInterval {
 };
 
 struct MockStoreInterval {
-    MOCK_METHOD(void, store, (const pud_rule_id*, om_interval), ());
+    MOCK_METHOD(void, store, (const pud_lineage*, om_interval), ());
 };
 
 struct MockAdoptAxiom {
-    MOCK_METHOD(void, adopt_axiom, (const pud_rule_id*), ());
+    MOCK_METHOD(void, adopt_axiom, (const pud_lineage*), ());
 };
 
 struct MockSetNormEnv {
@@ -78,8 +78,8 @@ struct PudAxiomAdderTest : public ::testing::Test {
         , body_{expr::functor{2, {}}}
         , shifted_head_{expr::functor{11, {}}}
         , shifted_body_{expr::functor{12, {}}}
-        , axiom0_{pud_rule_id::axiom{0}}
-        , axiom1_{pud_rule_id::axiom{1}}
+        , axiom0_{pud_lineage::axiom{0}}
+        , axiom1_{pud_lineage::axiom{1}}
         , open_(10)
         , close_(40)
         , root_interval_{om_label(&open_), om_label(&close_)}
@@ -99,8 +99,8 @@ struct PudAxiomAdderTest : public ::testing::Test {
     expr body_;
     expr shifted_head_;
     expr shifted_body_;
-    pud_rule_id axiom0_;
-    pud_rule_id axiom1_;
+    pud_lineage axiom0_;
+    pud_lineage axiom1_;
     uint64_t open_;
     uint64_t close_;
     om_interval root_interval_;
@@ -134,7 +134,7 @@ TEST_F(PudAxiomAdderTest, AddAxiomPacksHeadBodyAndLvcAndReturnsId) {
     EXPECT_CALL(store_interval_, store(&axiom0_, root_interval_));
     EXPECT_CALL(adopt_, adopt_axiom(&axiom0_));
 
-    const pud_rule_id* id = adder_.add_axiom(rule{&head_, {&body_}, 3});
+    const pud_lineage* id = adder_.add_axiom(rule{&head_, {&body_}, 3});
     EXPECT_EQ(id, &axiom0_);
     ASSERT_EQ(packed_unifs.size(), 1u);
     EXPECT_EQ(packed_unifs[0].var_idx, 0u);
@@ -217,10 +217,10 @@ TEST_F(PudAxiomAdderTest, GroundAxiomStoresLvcOne) {
 }
 
 TEST_F(PudAxiomAdderTest, EntryIdxIsMonotonicAcrossManyAdds) {
-    std::vector<pud_rule_id> ids;
+    std::vector<pud_lineage> ids;
     ids.reserve(20);
     for (int idx = 0; idx < 20; ++idx)
-        ids.push_back(pud_rule_id{pud_rule_id::axiom{static_cast<size_t>(idx)}});
+        ids.push_back(pud_lineage{pud_lineage::axiom{static_cast<size_t>(idx)}});
     for (int idx = 0; idx < 20; ++idx) {
         EXPECT_CALL(make_axiom_, make_axiom(static_cast<size_t>(idx)))
             .WillOnce(Return(&ids[static_cast<size_t>(idx)]));
@@ -236,10 +236,10 @@ TEST_F(PudAxiomAdderTest, FuzzAddAxiom) {
     std::uniform_int_distribution<int> body_len(0, 4);
     std::uniform_int_distribution<uint32_t> var_count(0, 8);
     std::ostringstream log;
-    std::vector<pud_rule_id> ids;
+    std::vector<pud_lineage> ids;
     ids.reserve(40);
     for (int step = 0; step < 40; ++step) {
-        ids.push_back(pud_rule_id{pud_rule_id::axiom{static_cast<size_t>(step)}});
+        ids.push_back(pud_lineage{pud_lineage::axiom{static_cast<size_t>(step)}});
         const int len = body_len(rng);
         const uint32_t user_var_count = var_count(rng);
         log << step << ':' << len << ',' << user_var_count << ' ';

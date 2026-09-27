@@ -15,7 +15,7 @@
 #include "value_objects/framed_expr.hpp"
 #include "value_objects/om_interval.hpp"
 #include "value_objects/pud_added_unification.hpp"
-#include "value_objects/pud_rule_id.hpp"
+#include "value_objects/pud_lineage.hpp"
 #include "value_objects/pud_witness_search_context.hpp"
 
 using ::testing::NiceMock;
@@ -24,32 +24,32 @@ using ::testing::ReturnRef;
 using ::testing::SaveArg;
 using ::testing::_;
 
-using children_set_t = std::set<const pud_rule_id*>;
+using children_set_t = std::set<const pud_lineage*>;
 using children_opt_t = std::optional<children_set_t>;
 
 struct MockGetChildren {
-    MOCK_METHOD(children_opt_t, get, (const pud_rule_id*), ());
+    MOCK_METHOD(children_opt_t, get, (const pud_lineage*), ());
 };
 
 struct MockGetParent {
-    MOCK_METHOD(const pud_rule_id*, get, (const pud_rule_id*), ());
+    MOCK_METHOD(const pud_lineage*, get, (const pud_lineage*), ());
 };
 
 struct MockMakeInference {
-    MOCK_METHOD(const pud_rule_id*, make_inference,
-                (const pud_rule_id*, size_t, const pud_rule_id*), ());
+    MOCK_METHOD(const pud_lineage*, make_inference,
+                (const pud_lineage*, size_t, const pud_lineage*), ());
 };
 
 struct MockContainsInterval {
-    MOCK_METHOD(bool, contains, (const pud_rule_id*), ());
+    MOCK_METHOD(bool, contains, (const pud_lineage*), ());
 };
 
 struct MockGetInterval {
-    MOCK_METHOD(const om_interval&, get, (const pud_rule_id*), ());
+    MOCK_METHOD(const om_interval&, get, (const pud_lineage*), ());
 };
 
 struct MockStoreInterval {
-    MOCK_METHOD(void, store, (const pud_rule_id*, om_interval), ());
+    MOCK_METHOD(void, store, (const pud_lineage*, om_interval), ());
 };
 
 struct MockAllocateChildInterval {
@@ -57,7 +57,7 @@ struct MockAllocateChildInterval {
 };
 
 struct MockGetAddedUnifications {
-    MOCK_METHOD(const std::vector<pud_added_unification>&, get, (const pud_rule_id*), ());
+    MOCK_METHOD(const std::vector<pud_added_unification>&, get, (const pud_lineage*), ());
 };
 
 struct MockRecordBinding {
@@ -77,7 +77,7 @@ struct MockMakeVar {
 };
 
 struct MockStoreAddedCallerReps {
-    MOCK_METHOD(void, store, (const pud_rule_id*, (std::vector<uint32_t>)), ());
+    MOCK_METHOD(void, store, (const pud_lineage*, (std::vector<uint32_t>)), ());
 };
 
 using test_search_t = pud_witness_search<
@@ -102,16 +102,16 @@ struct PudWitnessSearchTest : public ::testing::Test {
         , var0_{expr::var{0}}
         , var1_{expr::var{1}}
         , const_a_{expr::functor{3, {}}}
-        , query_leaf_{pud_rule_id::axiom{99}}
-        , a0_{pud_rule_id::axiom{0}}
-        , c0_{pud_rule_id::inference{&a0_, 0, &a0_}}
-        , c1_{pud_rule_id::inference{&a0_, 1, &a0_}}
-        , g0_{pud_rule_id::inference{&c0_, 0, &a0_}}
-        , k_query_{pud_rule_id::inference{&query_leaf_, 0, nullptr}}
-        , k_a0_{pud_rule_id::inference{&query_leaf_, 0, &a0_}}
-        , k_c0_{pud_rule_id::inference{&query_leaf_, 0, &c0_}}
-        , k_c1_{pud_rule_id::inference{&query_leaf_, 0, &c1_}}
-        , k_g0_{pud_rule_id::inference{&query_leaf_, 0, &g0_}}
+        , query_leaf_{pud_lineage::axiom{99}}
+        , a0_{pud_lineage::axiom{0}}
+        , c0_{pud_lineage::inference{&a0_, 0, &a0_}}
+        , c1_{pud_lineage::inference{&a0_, 1, &a0_}}
+        , g0_{pud_lineage::inference{&c0_, 0, &a0_}}
+        , k_query_{pud_lineage::inference{&query_leaf_, 0, nullptr}}
+        , k_a0_{pud_lineage::inference{&query_leaf_, 0, &a0_}}
+        , k_c0_{pud_lineage::inference{&query_leaf_, 0, &c0_}}
+        , k_c1_{pud_lineage::inference{&query_leaf_, 0, &c1_}}
+        , k_g0_{pud_lineage::inference{&query_leaf_, 0, &g0_}}
         , match_unifs_{{0, &body_}}
         , mismatch_unifs_{{0, &mismatch_}}
         , empty_unifs_{}
@@ -125,24 +125,24 @@ struct PudWitnessSearchTest : public ::testing::Test {
         intervals_.insert_or_assign(
             &k_query_, om_interval{om_label(&query_open_), om_label(&query_close_)});
         ON_CALL(make_inference_, make_inference(_, _, _))
-            .WillByDefault([this](const pud_rule_id*, size_t, const pud_rule_id* node) {
+            .WillByDefault([this](const pud_lineage*, size_t, const pud_lineage* node) {
                 if (node == nullptr)
-                    return static_cast<const pud_rule_id*>(&k_query_);
+                    return static_cast<const pud_lineage*>(&k_query_);
                 return key_for(node);
             });
         ON_CALL(contains_, contains(_))
-            .WillByDefault([this](const pud_rule_id* id) {
+            .WillByDefault([this](const pud_lineage* id) {
                 return stored_.contains(id);
             });
         ON_CALL(get_interval_, get(_))
-            .WillByDefault([this](const pud_rule_id* id) -> const om_interval& {
+            .WillByDefault([this](const pud_lineage* id) -> const om_interval& {
                 auto it = intervals_.find(id);
                 if (it != intervals_.end())
                     return it->second;
                 return intervals_.at(&k_query_);
             });
         ON_CALL(store_interval_, store(_, _))
-            .WillByDefault([this](const pud_rule_id* id, om_interval interval) {
+            .WillByDefault([this](const pud_lineage* id, om_interval interval) {
                 stored_.insert(id);
                 intervals_.insert_or_assign(id, interval);
             });
@@ -155,7 +155,7 @@ struct PudWitnessSearchTest : public ::testing::Test {
                     om_label(&ranks_[ranks_.size() - 1])};
             });
         ON_CALL(get_unifs_, get(_))
-            .WillByDefault([this](const pud_rule_id* node)
+            .WillByDefault([this](const pud_lineage* node)
                     -> const std::vector<pud_added_unification>& {
                 if (fail_nodes_.contains(node))
                     return mismatch_unifs_;
@@ -205,7 +205,7 @@ struct PudWitnessSearchTest : public ::testing::Test {
         recorded_[&query_open_][frame_offset] = framed_expr{body, 0};
     }
 
-    const pud_rule_id* key_for(const pud_rule_id* node) const {
+    const pud_lineage* key_for(const pud_lineage* node) const {
         if (node == &a0_)
             return &k_a0_;
         if (node == &c0_)
@@ -217,8 +217,8 @@ struct PudWitnessSearchTest : public ::testing::Test {
         return node;
     }
 
-    void pre_store(const pud_rule_id* node) {
-        const pud_rule_id* key = key_for(node);
+    void pre_store(const pud_lineage* node) {
+        const pud_lineage* key = key_for(node);
         ranks_.push_back(ranks_.size());
         ranks_.push_back(ranks_.size());
         intervals_.insert_or_assign(key, om_interval{
@@ -227,8 +227,8 @@ struct PudWitnessSearchTest : public ::testing::Test {
         stored_.insert(key);
     }
 
-    pud_witness_search_context make_edge(const pud_rule_id* search_root,
-                                         const pud_rule_id* current) {
+    pud_witness_search_context make_edge(const pud_lineage* search_root,
+                                         const pud_lineage* current) {
         return pud_witness_search_context{&query_leaf_, 0, 1, search_root, current};
     }
 
@@ -237,23 +237,23 @@ struct PudWitnessSearchTest : public ::testing::Test {
     expr var0_;
     expr var1_;
     expr const_a_;
-    pud_rule_id query_leaf_;
-    pud_rule_id a0_;
-    pud_rule_id c0_;
-    pud_rule_id c1_;
-    pud_rule_id g0_;
-    pud_rule_id k_query_;
-    pud_rule_id k_a0_;
-    pud_rule_id k_c0_;
-    pud_rule_id k_c1_;
-    pud_rule_id k_g0_;
+    pud_lineage query_leaf_;
+    pud_lineage a0_;
+    pud_lineage c0_;
+    pud_lineage c1_;
+    pud_lineage g0_;
+    pud_lineage k_query_;
+    pud_lineage k_a0_;
+    pud_lineage k_c0_;
+    pud_lineage k_c1_;
+    pud_lineage k_g0_;
     std::vector<pud_added_unification> match_unifs_;
     std::vector<pud_added_unification> mismatch_unifs_;
     std::vector<pud_added_unification> empty_unifs_;
     std::deque<expr> extra_vars_;
-    std::unordered_set<const pud_rule_id*> fail_nodes_;
-    std::unordered_set<const pud_rule_id*> stored_;
-    std::unordered_map<const pud_rule_id*, om_interval> intervals_;
+    std::unordered_set<const pud_lineage*> fail_nodes_;
+    std::unordered_set<const pud_lineage*> stored_;
+    std::unordered_map<const pud_lineage*, om_interval> intervals_;
     std::unordered_map<const uint64_t*, std::unordered_map<uint32_t, framed_expr>> recorded_;
     std::deque<uint64_t> ranks_;
     uint64_t query_open_;
@@ -378,25 +378,25 @@ TEST_F(PudWitnessSearchTest, ResumeFoundKeepsAcceptableCurrent) {
 }
 
 TEST_F(PudWitnessSearchTest, StressWideSiblingScan) {
-    std::vector<pud_rule_id> siblings;
+    std::vector<pud_lineage> siblings;
     siblings.reserve(32);
     for (int idx = 0; idx < 32; ++idx)
-        siblings.push_back(pud_rule_id{pud_rule_id::inference{&a0_, static_cast<size_t>(idx), &a0_}});
+        siblings.push_back(pud_lineage{pud_lineage::inference{&a0_, static_cast<size_t>(idx), &a0_}});
     children_set_t sibling_set;
-    for (const pud_rule_id& sibling : siblings)
+    for (const pud_lineage& sibling : siblings)
         sibling_set.insert(&sibling);
 
     EXPECT_CALL(children_, get(_))
-        .WillRepeatedly([this, sibling_set](const pud_rule_id* node) -> children_opt_t {
+        .WillRepeatedly([this, sibling_set](const pud_lineage* node) -> children_opt_t {
             if (node == &a0_)
                 return sibling_set;
             return std::nullopt;
         });
     ON_CALL(get_parent_, get(_))
-        .WillByDefault([this, &siblings](const pud_rule_id* node) -> const pud_rule_id* {
+        .WillByDefault([this, &siblings](const pud_lineage* node) -> const pud_lineage* {
             if (node == &a0_)
                 return nullptr;
-            for (const pud_rule_id& sibling : siblings) {
+            for (const pud_lineage& sibling : siblings) {
                 if (node == &sibling)
                     return &a0_;
             }
@@ -412,7 +412,7 @@ TEST_F(PudWitnessSearchTest, StressWideSiblingScan) {
 TEST_F(PudWitnessSearchTest, FuzzResumeOnFixedMockTree) {
     fail_nodes_.insert(&a0_);
     fail_nodes_.insert(&c0_);
-    ON_CALL(children_, get(_)).WillByDefault([&](const pud_rule_id* node) -> children_opt_t {
+    ON_CALL(children_, get(_)).WillByDefault([&](const pud_lineage* node) -> children_opt_t {
         if (node == &a0_)
             return children_set_t{&c0_, &c1_};
         if (node == &c0_)
@@ -420,7 +420,7 @@ TEST_F(PudWitnessSearchTest, FuzzResumeOnFixedMockTree) {
         return std::nullopt;
     });
 
-    const std::vector<std::pair<const pud_rule_id*, const pud_rule_id*>> legal = {
+    const std::vector<std::pair<const pud_lineage*, const pud_lineage*>> legal = {
         {&a0_, &a0_}, {&a0_, &c0_}, {&a0_, &c1_}, {&a0_, &g0_},
         {&c0_, &c0_}, {&c0_, &g0_}, {&c1_, &c1_}, {&g0_, &g0_},
     };

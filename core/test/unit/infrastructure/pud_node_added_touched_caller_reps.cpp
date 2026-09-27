@@ -4,14 +4,14 @@
 #include <stdexcept>
 #include <vector>
 #include "infrastructure/pud_node_added_touched_caller_reps.hpp"
-#include "value_objects/pud_rule_id.hpp"
+#include "value_objects/pud_lineage.hpp"
 
 struct PudNodeAddedTouchedCallerRepsTest : public ::testing::Test {
     PudNodeAddedTouchedCallerRepsTest()
-        : axiom_{pud_rule_id::axiom{0}}
+        : axiom_{pud_lineage::axiom{0}}
         , reps_() {}
 
-    pud_rule_id axiom_;
+    pud_lineage axiom_;
     pud_node_added_touched_caller_reps reps_;
 };
 

@@ -4,7 +4,7 @@
 #include <gmock/gmock.h>
 #include <vector>
 #include "infrastructure/pud_path_enter.hpp"
-#include "value_objects/pud_rule_id.hpp"
+#include "value_objects/pud_lineage.hpp"
 #include "value_objects/pud_witness_search_context.hpp"
 
 using ::testing::InSequence;
@@ -13,21 +13,21 @@ using ::testing::Return;
 using ::testing::_;
 
 struct MockTryEnter {
-    MOCK_METHOD(bool, try_enter, (pud_witness_search_context&, const pud_rule_id*), ());
+    MOCK_METHOD(bool, try_enter, (pud_witness_search_context&, const pud_lineage*), ());
 };
 
 struct MockGetParent {
-    MOCK_METHOD(const pud_rule_id*, get, (const pud_rule_id*), ());
+    MOCK_METHOD(const pud_lineage*, get, (const pud_lineage*), ());
 };
 
 using test_enter_t = pud_path_enter<NiceMock<MockTryEnter>, NiceMock<MockGetParent>>;
 
 struct PudPathEnterTest : public ::testing::Test {
     PudPathEnterTest()
-        : query_leaf_{pud_rule_id::axiom{99}}
-        , a0_{pud_rule_id::axiom{0}}
-        , c0_{pud_rule_id::inference{&a0_, 0, &a0_}}
-        , g0_{pud_rule_id::inference{&c0_, 0, &a0_}}
+        : query_leaf_{pud_lineage::axiom{99}}
+        , a0_{pud_lineage::axiom{0}}
+        , c0_{pud_lineage::inference{&a0_, 0, &a0_}}
+        , g0_{pud_lineage::inference{&c0_, 0, &a0_}}
         , enter_(try_enter_, get_parent_) {
         ON_CALL(get_parent_, get(&a0_)).WillByDefault(Return(nullptr));
         ON_CALL(get_parent_, get(&c0_)).WillByDefault(Return(&a0_));
@@ -35,10 +35,10 @@ struct PudPathEnterTest : public ::testing::Test {
         ON_CALL(try_enter_, try_enter(_, _)).WillByDefault(Return(true));
     }
 
-    pud_rule_id query_leaf_;
-    pud_rule_id a0_;
-    pud_rule_id c0_;
-    pud_rule_id g0_;
+    pud_lineage query_leaf_;
+    pud_lineage a0_;
+    pud_lineage c0_;
+    pud_lineage g0_;
     NiceMock<MockTryEnter> try_enter_;
     NiceMock<MockGetParent> get_parent_;
     test_enter_t enter_;

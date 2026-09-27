@@ -16,7 +16,7 @@
 #include "value_objects/expr.hpp"
 #include "value_objects/pud_candidate_search_context.hpp"
 #include "value_objects/pud_forced_unfold.hpp"
-#include "value_objects/pud_rule_id.hpp"
+#include "value_objects/pud_lineage.hpp"
 #include "value_objects/pud_unfold_site.hpp"
 #include "value_objects/pud_witness_pair.hpp"
 #include "value_objects/pud_witness_search_context.hpp"
@@ -27,11 +27,11 @@ using ::testing::ReturnRef;
 using ::testing::_;
 
 struct MockGetAddedBodyGoals {
-    MOCK_METHOD(const std::vector<const expr*>&, get, (const pud_rule_id*), ());
+    MOCK_METHOD(const std::vector<const expr*>&, get, (const pud_lineage*), ());
 };
 
 struct MockGetLvc {
-    MOCK_METHOD(uint32_t, get, (const pud_rule_id*), ());
+    MOCK_METHOD(uint32_t, get, (const pud_lineage*), ());
 };
 
 struct MockResumeCandidateSearch {
@@ -43,15 +43,15 @@ struct MockResumeWitnessSearch {
 };
 
 struct MockStartQuery {
-    MOCK_METHOD(void, start, (const pud_rule_id*, size_t, const expr*, uint32_t), ());
+    MOCK_METHOD(void, start, (const pud_lineage*, size_t, const expr*, uint32_t), ());
 };
 
 struct MockRebaseCandidate {
     MOCK_METHOD((std::optional<pud_candidate_search_context>), rebase,
-                (const pud_rule_id*,
+                (const pud_lineage*,
                  size_t,
                  uint32_t,
-                 const pud_rule_id*,
+                 const pud_lineage*,
                  const std::optional<pud_witness_pair>&), ());
 };
 
@@ -67,10 +67,10 @@ struct PudQueriesTest : public ::testing::Test {
     PudQueriesTest()
         : body_{expr::var{0}}
         , leftover_{expr::var{1}}
-        , axiom_{pud_rule_id::axiom{0}}
-        , other_{pud_rule_id::axiom{1}}
-        , drain_{pud_rule_id::axiom{2}}
-        , child_{pud_rule_id::inference{&axiom_, 0, &other_}}
+        , axiom_{pud_lineage::axiom{0}}
+        , other_{pud_lineage::axiom{1}}
+        , drain_{pud_lineage::axiom{2}}
+        , child_{pud_lineage::inference{&axiom_, 0, &other_}}
         , axiom_goals_{&body_}
         , two_goals_{&body_, &leftover_}
         , empty_goals_{}
@@ -87,10 +87,10 @@ struct PudQueriesTest : public ::testing::Test {
         ON_CALL(get_lvc_, get(&drain_)).WillByDefault(Return(1u));
         ON_CALL(get_lvc_, get(&child_)).WillByDefault(Return(2u));
         ON_CALL(rebase_, rebase(_, _, _, _, _))
-            .WillByDefault([](const pud_rule_id* leaf,
+            .WillByDefault([](const pud_lineage* leaf,
                               size_t idx,
                               uint32_t lvc,
-                              const pud_rule_id* cursor,
+                              const pud_lineage* cursor,
                               const std::optional<pud_witness_pair>& pins) {
                 std::optional<pud_witness_pair> retargeted = pins;
                 if (retargeted.has_value()) {
@@ -106,11 +106,11 @@ struct PudQueriesTest : public ::testing::Test {
             });
     }
 
-    std::vector<pud_candidate_search_context*> group_at(const pud_rule_id* leaf, size_t idx) {
+    std::vector<pud_candidate_search_context*> group_at(const pud_lineage* leaf, size_t idx) {
         return queries_.unfold_site(leaf, idx).live;
     }
 
-    pud_candidate_search_context* ctx_at(const pud_rule_id* leaf, size_t idx) {
+    pud_candidate_search_context* ctx_at(const pud_lineage* leaf, size_t idx) {
         return group_at(leaf, idx).at(0);
     }
 
@@ -120,10 +120,10 @@ struct PudQueriesTest : public ::testing::Test {
 
     expr body_;
     expr leftover_;
-    pud_rule_id axiom_;
-    pud_rule_id other_;
-    pud_rule_id drain_;
-    pud_rule_id child_;
+    pud_lineage axiom_;
+    pud_lineage other_;
+    pud_lineage drain_;
+    pud_lineage child_;
     std::vector<const expr*> axiom_goals_;
     std::vector<const expr*> two_goals_;
     std::vector<const expr*> empty_goals_;
@@ -417,7 +417,7 @@ TEST_F(PudQueriesTest, ReplaceUnfoldedEmitsUnitPerUnaryGoal) {
     EXPECT_EQ(axiom_unit_idxs[1], 1u);
 }
 
-TEST_F(PudQueriesTest, ReplaceUnfoldedOrdersDirtyLeavesByRuleId) {
+TEST_F(PudQueriesTest, ReplaceUnfoldedOrdersDirtyLeavesByLineage) {
     ON_CALL(get_added_body_goals_, get(&other_)).WillByDefault(ReturnRef(axiom_goals_));
     ON_CALL(candidate_, resume(_)).WillByDefault(
         [this](pud_candidate_search_context& ctx) {
@@ -428,11 +428,11 @@ TEST_F(PudQueriesTest, ReplaceUnfoldedOrdersDirtyLeavesByRuleId) {
     queries_.adopt_axiom(&other_);
     queries_.adopt_axiom(&axiom_);
     const std::vector<pud_forced_unfold> yields = drain_forced();
-    std::vector<const pud_rule_id*> unit_leaves;
+    std::vector<const pud_lineage*> unit_leaves;
     for (const pud_forced_unfold& yield : yields) {
         if (!std::holds_alternative<pud_forced_unfold::unit>(yield.content))
             continue;
-        const pud_rule_id* leaf = std::get<pud_forced_unfold::unit>(yield.content).leaf;
+        const pud_lineage* leaf = std::get<pud_forced_unfold::unit>(yield.content).leaf;
         if (leaf == &axiom_ || leaf == &other_)
             unit_leaves.push_back(leaf);
     }
@@ -455,12 +455,12 @@ TEST_F(PudQueriesTest, WatchUnwatchAcrossAdoptReplace) {
 
 TEST_F(PudQueriesTest, StressManyAxiomsAttachToAllLeaves) {
     struct rec {
-        pud_rule_id id;
+        pud_lineage id;
         std::vector<const expr*> goals;
     };
     std::deque<rec> axioms;
     ON_CALL(get_added_body_goals_, get(_)).WillByDefault(
-        [&](const pud_rule_id* id) -> const std::vector<const expr*>& {
+        [&](const pud_lineage* id) -> const std::vector<const expr*>& {
             for (const rec& entry : axioms) {
                 if (&entry.id == id)
                     return entry.goals;
@@ -470,7 +470,7 @@ TEST_F(PudQueriesTest, StressManyAxiomsAttachToAllLeaves) {
     ON_CALL(get_lvc_, get(_)).WillByDefault(Return(1u));
     for (int idx = 0; idx < 32; ++idx) {
         axioms.push_back(rec{
-            pud_rule_id{pud_rule_id::axiom{static_cast<size_t>(idx)}},
+            pud_lineage{pud_lineage::axiom{static_cast<size_t>(idx)}},
             {&body_}});
         queries_.adopt_axiom(&axioms.back().id);
     }
@@ -480,14 +480,14 @@ TEST_F(PudQueriesTest, StressManyAxiomsAttachToAllLeaves) {
 
 TEST_F(PudQueriesTest, FuzzAdoptThenReplaceUnfoldSite) {
     struct rec {
-        pud_rule_id id;
+        pud_lineage id;
         std::vector<const expr*> goals;
         uint32_t lvc;
     };
     std::deque<rec> store;
-    std::vector<const pud_rule_id*> owned;
+    std::vector<const pud_lineage*> owned;
     ON_CALL(get_added_body_goals_, get(_)).WillByDefault(
-        [&](const pud_rule_id* id) -> const std::vector<const expr*>& {
+        [&](const pud_lineage* id) -> const std::vector<const expr*>& {
             for (const rec& entry : store) {
                 if (&entry.id == id)
                     return entry.goals;
@@ -495,7 +495,7 @@ TEST_F(PudQueriesTest, FuzzAdoptThenReplaceUnfoldSite) {
             return axiom_goals_;
         });
     ON_CALL(get_lvc_, get(_)).WillByDefault(
-        [&](const pud_rule_id* id) {
+        [&](const pud_lineage* id) {
             for (const rec& entry : store) {
                 if (&entry.id == id)
                     return entry.lvc;
@@ -508,10 +508,10 @@ TEST_F(PudQueriesTest, FuzzAdoptThenReplaceUnfoldSite) {
     std::ostringstream log;
     for (int idx = 0; idx < 16; ++idx) {
         store.push_back(rec{
-            pud_rule_id{pud_rule_id::axiom{store.size()}},
+            pud_lineage{pud_lineage::axiom{store.size()}},
             {&body_},
             1});
-        const pud_rule_id* id = &store.back().id;
+        const pud_lineage* id = &store.back().id;
         queries_.adopt_axiom(id);
         owned.push_back(id);
     }
@@ -522,19 +522,19 @@ TEST_F(PudQueriesTest, FuzzAdoptThenReplaceUnfoldSite) {
         switch (op) {
         case 0:
             if (!owned.empty()) {
-                const pud_rule_id* leaf = owned[rng() % owned.size()];
+                const pud_lineage* leaf = owned[rng() % owned.size()];
                 queries_.unfold_site(leaf, 0);
             }
             break;
         case 1:
             if (!owned.empty()) {
                 const size_t parent_idx = rng() % owned.size();
-                const pud_rule_id* parent = owned[parent_idx];
+                const pud_lineage* parent = owned[parent_idx];
                 store.push_back(rec{
-                    pud_rule_id{pud_rule_id::inference{parent, 0, parent}},
+                    pud_lineage{pud_lineage::inference{parent, 0, parent}},
                     {&leftover_},
                     2});
-                const pud_rule_id* child = &store.back().id;
+                const pud_lineage* child = &store.back().id;
                 queries_.replace_unfolded(parent, 0, {child});
                 owned.erase(owned.begin() + static_cast<std::ptrdiff_t>(parent_idx));
                 owned.push_back(child);
@@ -543,7 +543,7 @@ TEST_F(PudQueriesTest, FuzzAdoptThenReplaceUnfoldSite) {
             }
             break;
         }
-        for (const pud_rule_id* leaf : owned)
+        for (const pud_lineage* leaf : owned)
             EXPECT_NO_THROW(queries_.unfold_site(leaf, 0))
                 << "seed " << k_seed << " log " << log.str();
     }

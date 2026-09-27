@@ -3,16 +3,16 @@
 #include <gtest/gtest.h>
 #include <stdexcept>
 #include "infrastructure/pud_node_parent.hpp"
-#include "value_objects/pud_rule_id.hpp"
+#include "value_objects/pud_lineage.hpp"
 
 struct PudNodeParentTest : public ::testing::Test {
     PudNodeParentTest()
-        : axiom_{pud_rule_id::axiom{0}}
-        , child_{pud_rule_id::inference{&axiom_, 0, &axiom_}}
+        : axiom_{pud_lineage::axiom{0}}
+        , child_{pud_lineage::inference{&axiom_, 0, &axiom_}}
         , parents_() {}
 
-    pud_rule_id axiom_;
-    pud_rule_id child_;
+    pud_lineage axiom_;
+    pud_lineage child_;
     pud_node_parent parents_;
 };
 

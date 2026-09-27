@@ -4,7 +4,7 @@
 #include <stdexcept>
 #include "infrastructure/pud_node_interval.hpp"
 #include "value_objects/om_interval.hpp"
-#include "value_objects/pud_rule_id.hpp"
+#include "value_objects/pud_lineage.hpp"
 
 struct PudNodeIntervalTest : public ::testing::Test {
     PudNodeIntervalTest()
@@ -14,7 +14,7 @@ struct PudNodeIntervalTest : public ::testing::Test {
         , close_b_(20)
         , interval_a_{om_label(&open_a_), om_label(&close_a_)}
         , interval_b_{om_label(&open_b_), om_label(&close_b_)}
-        , axiom_{pud_rule_id::axiom{0}}
+        , axiom_{pud_lineage::axiom{0}}
         , intervals_() {}
 
     uint64_t open_a_;
@@ -23,7 +23,7 @@ struct PudNodeIntervalTest : public ::testing::Test {
     uint64_t close_b_;
     om_interval interval_a_;
     om_interval interval_b_;
-    pud_rule_id axiom_;
+    pud_lineage axiom_;
     pud_node_interval intervals_;
 };
 

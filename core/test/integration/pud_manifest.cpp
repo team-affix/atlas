@@ -18,7 +18,7 @@
 #include "value_objects/pud_added_unification.hpp"
 #include "value_objects/pud_candidate_search_context.hpp"
 #include "value_objects/pud_forced_unfold.hpp"
-#include "value_objects/pud_rule_id.hpp"
+#include "value_objects/pud_lineage.hpp"
 #include "value_objects/rule.hpp"
 
 struct PudManifestIntegrationTest : public ::testing::Test {
@@ -30,11 +30,11 @@ struct PudManifestIntegrationTest : public ::testing::Test {
         return m_.exprs_.make_functor(functors_.id(name), std::move(args));
     }
 
-    const pud_rule_id* add_axiom(const expr* head, std::vector<const expr*> body) {
+    const pud_lineage* add_axiom(const expr* head, std::vector<const expr*> body) {
         return m_.axiom_adder_.add_axiom(rule{head, std::move(body), 1});
     }
 
-    const pud_rule_id* add_rule(const expr* head,
+    const pud_lineage* add_rule(const expr* head,
                                 std::vector<const expr*> body,
                                 uint32_t var_count) {
         return m_.axiom_adder_.add_axiom(rule{head, std::move(body), var_count});
@@ -42,11 +42,11 @@ struct PudManifestIntegrationTest : public ::testing::Test {
 
     struct unfold_out {
         std::vector<pud_forced_unfold> yields;
-        std::vector<const pud_rule_id*> children;
+        std::vector<const pud_lineage*> children;
     };
 
     unfold_out drain(
-            coroutine<pud_forced_unfold, std::vector<const pud_rule_id*>> task) {
+            coroutine<pud_forced_unfold, std::vector<const pud_lineage*>> task) {
         unfold_out out;
         while (!task.done()) {
             task.resume();
@@ -57,8 +57,8 @@ struct PudManifestIntegrationTest : public ::testing::Test {
         return out;
     }
 
-    void expect_query_leaf_invariant(const std::vector<const pud_rule_id*>& known) {
-        for (const pud_rule_id* id : known) {
+    void expect_query_leaf_invariant(const std::vector<const pud_lineage*>& known) {
+        for (const pud_lineage* id : known) {
             if (!m_.children_.get(id).has_value())
                 continue;
             EXPECT_THROW(m_.queries_.unfold_site(id, 0), std::out_of_range);
@@ -73,24 +73,24 @@ TEST_F(PudManifestIntegrationTest, UnfoldForksLeftoverQueryOntoTheChild) {
     const expr* p = pred("p");
     const expr* q = pred("q");
     const expr* r = pred("r");
-    const pud_rule_id* a0 = add_axiom(p, {q, r});
+    const pud_lineage* a0 = add_axiom(p, {q, r});
     add_axiom(q, {});
 
     drain(m_.unfolder_.unfold(a0, 0));
 
     EXPECT_TRUE(m_.children_.get(a0).has_value());
     ASSERT_EQ(m_.children_.get(a0)->size(), 1u);
-    const pud_rule_id* child = *m_.children_.get(a0)->begin();
+    const pud_lineage* child = *m_.children_.get(a0)->begin();
     EXPECT_FALSE(m_.children_.get(child).has_value());
     EXPECT_EQ(m_.queries_.unfold_site(child, 0).body_goal, r);
 }
 
 TEST_F(PudManifestIntegrationTest, HoleLivesOnQueryInternAndIsVisibleFromSearch) {
     const expr* p = pred("p");
-    const pud_rule_id* caller = add_axiom(p, {p});
-    const pud_rule_id* fact = add_axiom(p, {});
+    const pud_lineage* caller = add_axiom(p, {p});
+    const pud_lineage* fact = add_axiom(p, {});
     m_.queries_.unfold_site(caller, 0);
-    const pud_rule_id* query_key = m_.pool_.make_inference(caller, 0, nullptr);
+    const pud_lineage* query_key = m_.lineage_pool_.make_inference(caller, 0, nullptr);
     ASSERT_TRUE(m_.node_interval_.contains(query_key));
     const om_interval query_interval = m_.node_interval_.get(query_key);
     const uint32_t hole = m_.globalizer_.globalize(m_.lvc_.get(caller), 0);
@@ -99,7 +99,7 @@ TEST_F(PudManifestIntegrationTest, HoleLivesOnQueryInternAndIsVisibleFromSearch)
               m_.added_body_goals_.get(caller)[0]);
     EXPECT_EQ(m_.fpa_.query(query_interval.open, hole)->frame_offset, 0u);
 
-    const pud_rule_id* search_key = m_.pool_.make_inference(caller, 0, fact);
+    const pud_lineage* search_key = m_.lineage_pool_.make_inference(caller, 0, fact);
     ASSERT_TRUE(m_.node_interval_.contains(search_key));
     const om_interval search_interval = m_.node_interval_.get(search_key);
     ASSERT_TRUE(m_.fpa_.query(search_interval.open, hole).has_value());
@@ -111,8 +111,8 @@ TEST_F(PudManifestIntegrationTest, UnfoldOfWitnessAdvancesOtherQueryWithoutNeste
     const expr* p = pred("p");
     const expr* q = pred("q");
     const expr* t = pred("t");
-    const pud_rule_id* a0 = add_axiom(p, {q});
-    const pud_rule_id* a1 = add_axiom(q, {t});
+    const pud_lineage* a0 = add_axiom(p, {q});
+    const pud_lineage* a1 = add_axiom(q, {t});
     add_axiom(t, {});
 
     EXPECT_FALSE(m_.queries_.unfold_site(a0, 0).live.empty());
@@ -120,20 +120,20 @@ TEST_F(PudManifestIntegrationTest, UnfoldOfWitnessAdvancesOtherQueryWithoutNeste
     drain(m_.unfolder_.unfold(a1, 0));
     EXPECT_TRUE(m_.children_.get(a1).has_value());
     ASSERT_EQ(m_.children_.get(a1)->size(), 1u);
-    const pud_rule_id* child = *m_.children_.get(a1)->begin();
+    const pud_lineage* child = *m_.children_.get(a1)->begin();
     EXPECT_FALSE(m_.children_.get(child).has_value());
     EXPECT_FALSE(m_.children_.get(a0).has_value());
 }
 
 TEST_F(PudManifestIntegrationTest, SelfUnfoldInternsInferenceWithSelfCallee) {
     const expr* p = pred("p");
-    const pud_rule_id* leaf = add_axiom(p, {p});
+    const pud_lineage* leaf = add_axiom(p, {p});
 
     drain(m_.unfolder_.unfold(leaf, 0));
 
     ASSERT_EQ(m_.children_.get(leaf)->size(), 1u);
-    const pud_rule_id* child = *m_.children_.get(leaf)->begin();
-    const pud_rule_id::inference& inf = std::get<pud_rule_id::inference>(child->content);
+    const pud_lineage* child = *m_.children_.get(leaf)->begin();
+    const pud_lineage::inference& inf = std::get<pud_lineage::inference>(child->content);
     EXPECT_EQ(inf.caller, leaf);
     EXPECT_EQ(inf.callee, leaf);
     EXPECT_EQ(inf.call_site, 0u);
@@ -143,7 +143,7 @@ TEST_F(PudManifestIntegrationTest, ZeroCandidatesYieldsRefutedForTheChild) {
     const expr* p = pred("p");
     const expr* q = pred("q");
     const expr* r = pred("r");
-    const pud_rule_id* a0 = add_axiom(p, {q, r});
+    const pud_lineage* a0 = add_axiom(p, {q, r});
     add_axiom(q, {});
 
     const unfold_out out = drain(m_.unfolder_.unfold(a0, 0));
@@ -163,12 +163,12 @@ TEST_F(PudManifestIntegrationTest, UnitYieldDoesNotUnfoldTheUnitLeaf) {
     const expr* p = pred("p");
     const expr* q = pred("q");
     const expr* s = pred("s");
-    const pud_rule_id* a0 = add_axiom(p, {q});
+    const pud_lineage* a0 = add_axiom(p, {q});
     add_axiom(q, {s});
     add_axiom(s, {});
 
     const unfold_out out = drain(m_.unfolder_.unfold(a0, 0));
-    const pud_rule_id* child = *m_.children_.get(a0)->begin();
+    const pud_lineage* child = *m_.children_.get(a0)->begin();
     EXPECT_FALSE(m_.children_.get(child).has_value());
 
     bool saw_child_unit = false;
@@ -187,22 +187,22 @@ TEST_F(PudManifestIntegrationTest, UnfoldFansOutOneChildPerMatchingAxiom) {
     const expr* p = pred("p");
     const expr* q = pred("q");
     const expr* r = pred("r");
-    const pud_rule_id* a0 = add_axiom(p, {q, r});
-    const pud_rule_id* a1 = add_axiom(q, {});
-    const pud_rule_id* a2 = add_axiom(q, {});
+    const pud_lineage* a0 = add_axiom(p, {q, r});
+    const pud_lineage* a1 = add_axiom(q, {});
+    const pud_lineage* a2 = add_axiom(q, {});
 
     const unfold_out out = drain(m_.unfolder_.unfold(a0, 0));
 
     EXPECT_TRUE(m_.children_.get(a0).has_value());
     ASSERT_EQ(out.children.size(), 2u);
-    const pud_rule_id::inference& inf0 =
-        std::get<pud_rule_id::inference>(out.children[0]->content);
-    const pud_rule_id::inference& inf1 =
-        std::get<pud_rule_id::inference>(out.children[1]->content);
+    const pud_lineage::inference& inf0 =
+        std::get<pud_lineage::inference>(out.children[0]->content);
+    const pud_lineage::inference& inf1 =
+        std::get<pud_lineage::inference>(out.children[1]->content);
     EXPECT_TRUE(inf0.callee == a1 || inf0.callee == a2);
     EXPECT_TRUE(inf1.callee == a1 || inf1.callee == a2);
     EXPECT_NE(inf0.callee, inf1.callee);
-    for (const pud_rule_id* child : out.children) {
+    for (const pud_lineage* child : out.children) {
         EXPECT_FALSE(m_.children_.get(child).has_value());
         EXPECT_EQ(m_.queries_.unfold_site(child, 0).body_goal, r);
     }
@@ -212,8 +212,8 @@ TEST_F(PudManifestIntegrationTest, UnfoldUsesChoicePointCursorNotLeafWitness) {
     const expr* p = pred("p");
     const expr* q = pred("q");
     const expr* t = pred("t");
-    const pud_rule_id* a0 = add_axiom(p, {q});
-    const pud_rule_id* a1 = add_axiom(q, {t});
+    const pud_lineage* a0 = add_axiom(p, {q});
+    const pud_lineage* a1 = add_axiom(q, {t});
     add_axiom(t, {});
     add_axiom(t, {});
 
@@ -224,8 +224,8 @@ TEST_F(PudManifestIntegrationTest, UnfoldUsesChoicePointCursorNotLeafWitness) {
     const unfold_out out = drain(m_.unfolder_.unfold(a0, 0));
 
     ASSERT_EQ(out.children.size(), 1u);
-    const pud_rule_id::inference& inf =
-        std::get<pud_rule_id::inference>(out.children[0]->content);
+    const pud_lineage::inference& inf =
+        std::get<pud_lineage::inference>(out.children[0]->content);
     EXPECT_EQ(inf.callee, a1);
     EXPECT_EQ(inf.caller, a0);
     EXPECT_EQ(inf.call_site, 0u);
@@ -234,7 +234,7 @@ TEST_F(PudManifestIntegrationTest, UnfoldUsesChoicePointCursorNotLeafWitness) {
 TEST_F(PudManifestIntegrationTest, AddAxiomAfterExistingLeafPatchesThatLeafQuery) {
     const expr* p = pred("p");
     const expr* q = pred("q");
-    const pud_rule_id* a0 = add_axiom(p, {q});
+    const pud_lineage* a0 = add_axiom(p, {q});
     add_axiom(q, {});
 
     const unfold_out out = drain(m_.unfolder_.unfold(a0, 0));
@@ -245,8 +245,8 @@ TEST_F(PudManifestIntegrationTest, AddAxiomAfterExistingLeafPatchesThatLeafQuery
 TEST_F(PudManifestIntegrationTest, LateAxiomAppearsOnExistingLeafContexts) {
     const expr* p = pred("p");
     const expr* q = pred("q");
-    const pud_rule_id* a0 = add_axiom(p, {q});
-    const pud_rule_id* a1 = add_axiom(q, {});
+    const pud_lineage* a0 = add_axiom(p, {q});
+    const pud_lineage* a1 = add_axiom(q, {});
     bool found = false;
     for (pud_candidate_search_context* ctx : m_.queries_.unfold_site(a0, 0).live) {
         if (ctx->cursor != a1)
@@ -262,11 +262,11 @@ TEST_F(PudManifestIntegrationTest, UnfoldSecondGoalKeepsFirstLeftover) {
     const expr* p = pred("p");
     const expr* q = pred("q");
     const expr* r = pred("r");
-    const pud_rule_id* a0 = add_axiom(p, {q, r});
+    const pud_lineage* a0 = add_axiom(p, {q, r});
     add_axiom(r, {});
     drain(m_.unfolder_.unfold(a0, 1));
     ASSERT_EQ(m_.children_.get(a0)->size(), 1u);
-    const pud_rule_id* child = *m_.children_.get(a0)->begin();
+    const pud_lineage* child = *m_.children_.get(a0)->begin();
     EXPECT_EQ(m_.queries_.unfold_site(child, 0).body_goal, q);
 }
 
@@ -274,12 +274,12 @@ TEST_F(PudManifestIntegrationTest, NestedUnfoldCascadeOnUnitYields) {
     const expr* p = pred("p");
     const expr* q = pred("q");
     const expr* r = pred("r");
-    const pud_rule_id* a0 = add_axiom(p, {q});
+    const pud_lineage* a0 = add_axiom(p, {q});
     add_axiom(q, {r});
     add_axiom(r, {});
     drain(m_.unfolder_.unfold(a0, 0));
     ASSERT_EQ(m_.children_.get(a0)->size(), 1u);
-    const pud_rule_id* child = *m_.children_.get(a0)->begin();
+    const pud_lineage* child = *m_.children_.get(a0)->begin();
     ASSERT_FALSE(m_.children_.get(child).has_value());
     ASSERT_FALSE(m_.queries_.unfold_site(child, 0).live.empty());
     drain(m_.unfolder_.unfold(child, 0));
@@ -292,7 +292,7 @@ TEST_F(PudManifestIntegrationTest, VarHeadUnifyAndNormalizeOnUnfold) {
     const expr* p = m_.exprs_.make_functor(functors_.id("p"), {x});
     const expr* q_x = m_.exprs_.make_functor(functors_.id("q"), {x});
     const expr* q_a = m_.exprs_.make_functor(functors_.id("q"), {a});
-    const pud_rule_id* a0 = m_.axiom_adder_.add_axiom(rule{p, {q_x}, 1});
+    const pud_lineage* a0 = m_.axiom_adder_.add_axiom(rule{p, {q_x}, 1});
     m_.axiom_adder_.add_axiom(rule{q_a, {}, 1});
     const unfold_out out = drain(m_.unfolder_.unfold(a0, 0));
     ASSERT_EQ(out.children.size(), 1u);
@@ -317,7 +317,7 @@ TEST_F(PudManifestIntegrationTest, LoadThenUnfoldNeverOrphansQueries) {
     const expr* q = pred("q");
     const expr* r = pred("r");
     const expr* s = pred("s");
-    std::vector<const pud_rule_id*> known;
+    std::vector<const pud_lineage*> known;
     known.push_back(add_axiom(p, {q}));
     known.push_back(add_axiom(q, {r}));
     known.push_back(add_axiom(r, {}));
@@ -338,12 +338,12 @@ TEST_F(PudManifestIntegrationTest, LoadThenUnfoldNeverOrphansQueries) {
 TEST_F(PudManifestIntegrationTest, StressManyFactsFanout) {
     const expr* p = pred("p");
     const expr* q = pred("q");
-    const pud_rule_id* a0 = add_axiom(p, {q});
+    const pud_lineage* a0 = add_axiom(p, {q});
     for (int idx = 0; idx < 40; ++idx)
         add_axiom(q, {});
     const unfold_out out = drain(m_.unfolder_.unfold(a0, 0));
     ASSERT_EQ(out.children.size(), 40u);
-    for (const pud_rule_id* child : out.children) {
+    for (const pud_lineage* child : out.children) {
         EXPECT_FALSE(m_.children_.get(child).has_value());
         EXPECT_TRUE(m_.added_body_goals_.get(child).empty());
     }
@@ -356,9 +356,9 @@ TEST_F(PudManifestIntegrationTest, FuzzAddAxiomThenUnfold) {
     std::uniform_int_distribution<int> pred_dist(0, 3);
     std::uniform_int_distribution<int> body_len(0, 2);
     std::ostringstream log;
-    std::vector<const pud_rule_id*> known;
-    std::vector<const pud_rule_id*> owned;
-    std::unordered_map<const pud_rule_id*, size_t> query_count;
+    std::vector<const pud_lineage*> known;
+    std::vector<const pud_lineage*> owned;
+    std::unordered_map<const pud_lineage*, size_t> query_count;
     for (int step = 0; step < 12; ++step) {
         const expr* head = preds[pred_dist(rng)];
         std::vector<const expr*> body;
@@ -366,7 +366,7 @@ TEST_F(PudManifestIntegrationTest, FuzzAddAxiomThenUnfold) {
         for (int idx = 0; idx < len; ++idx)
             body.push_back(preds[pred_dist(rng)]);
         const size_t n_queries = body.size();
-        const pud_rule_id* id = add_axiom(head, std::move(body));
+        const pud_lineage* id = add_axiom(head, std::move(body));
         known.push_back(id);
         owned.push_back(id);
         query_count[id] = n_queries;
@@ -375,8 +375,8 @@ TEST_F(PudManifestIntegrationTest, FuzzAddAxiomThenUnfold) {
     expect_query_leaf_invariant(known);
     for (int step = 0; step < 12; ++step) {
         log << step << ' ';
-        std::vector<const pud_rule_id*> unfoldable;
-        for (const pud_rule_id* leaf : owned) {
+        std::vector<const pud_lineage*> unfoldable;
+        for (const pud_lineage* leaf : owned) {
             if (m_.children_.get(leaf).has_value())
                 continue;
             if (query_count[leaf] == 0)
@@ -385,7 +385,7 @@ TEST_F(PudManifestIntegrationTest, FuzzAddAxiomThenUnfold) {
         }
         if (unfoldable.empty())
             break;
-        const pud_rule_id* leaf = unfoldable[rng() % unfoldable.size()];
+        const pud_lineage* leaf = unfoldable[rng() % unfoldable.size()];
         const size_t idx = rng() % query_count[leaf];
         const std::vector<pud_candidate_search_context*> live =
             m_.queries_.unfold_site(leaf, idx).live;
@@ -395,7 +395,7 @@ TEST_F(PudManifestIntegrationTest, FuzzAddAxiomThenUnfold) {
         const unfold_out out = drain(m_.unfolder_.unfold(leaf, idx));
         owned.erase(std::remove(owned.begin(), owned.end(), leaf), owned.end());
         query_count.erase(leaf);
-        for (const pud_rule_id* child : out.children) {
+        for (const pud_lineage* child : out.children) {
             known.push_back(child);
             owned.push_back(child);
             query_count[child] = parent_queries - 1
@@ -416,14 +416,14 @@ TEST_F(PudManifestIntegrationTest, LeftoverSharedVarMatchesOnlyBoundFact) {
     const expr* q_a = fn("q", {a});
     const expr* r_a = fn("r", {a});
     const expr* r_b = fn("r", {b});
-    const pud_rule_id* caller = add_rule(p_x, {q_x, r_x}, 1);
+    const pud_lineage* caller = add_rule(p_x, {q_x, r_x}, 1);
     add_rule(q_a, {}, 1);
-    const pud_rule_id* r_a_ax = add_rule(r_a, {}, 1);
+    const pud_lineage* r_a_ax = add_rule(r_a, {}, 1);
     add_rule(r_b, {}, 1);
 
     const unfold_out first = drain(m_.unfolder_.unfold(caller, 0));
     ASSERT_EQ(first.children.size(), 1u);
-    const pud_rule_id* child = first.children[0];
+    const pud_lineage* child = first.children[0];
     const std::vector<pud_added_unification>& first_added =
         m_.added_unifications_.get(child);
     bool saw_x_to_a = false;
@@ -438,8 +438,8 @@ TEST_F(PudManifestIntegrationTest, LeftoverSharedVarMatchesOnlyBoundFact) {
 
     const unfold_out second = drain(m_.unfolder_.unfold(child, 0));
     ASSERT_EQ(second.children.size(), 1u);
-    const pud_rule_id::inference& inf =
-        std::get<pud_rule_id::inference>(second.children[0]->content);
+    const pud_lineage::inference& inf =
+        std::get<pud_lineage::inference>(second.children[0]->content);
     EXPECT_EQ(inf.callee, r_a_ax);
 }
 
@@ -450,7 +450,7 @@ TEST_F(PudManifestIntegrationTest, CalleeRepeatedVarIdentifiesCallerVars) {
     const expr* p_xy = fn("p", {x, y});
     const expr* q_xy = fn("q", {x, y});
     const expr* q_aa = fn("q", {a, a});
-    const pud_rule_id* caller = add_rule(p_xy, {q_xy}, 2);
+    const pud_lineage* caller = add_rule(p_xy, {q_xy}, 2);
     add_rule(q_aa, {}, 1);
 
     const unfold_out out = drain(m_.unfolder_.unfold(caller, 0));
@@ -475,14 +475,14 @@ TEST_F(PudManifestIntegrationTest, NonRecursiveChainUnfoldsInSeriesToFact) {
     const expr* r_x = fn("r", {x});
     const expr* r_a = fn("r", {a});
     const expr* s_b = fn("s", {b});
-    const pud_rule_id* p_ax = add_rule(p_x, {q_x}, 1);
+    const pud_lineage* p_ax = add_rule(p_x, {q_x}, 1);
     add_rule(q_x, {r_x}, 1);
     add_rule(r_a, {}, 1);
     add_rule(s_b, {}, 1);
 
     const unfold_out first = drain(m_.unfolder_.unfold(p_ax, 0));
     ASSERT_EQ(first.children.size(), 1u);
-    const pud_rule_id* child = first.children[0];
+    const pud_lineage* child = first.children[0];
     ASSERT_FALSE(m_.queries_.unfold_site(child, 0).live.empty());
     const unfold_out second = drain(m_.unfolder_.unfold(child, 0));
     ASSERT_EQ(second.children.size(), 1u);
@@ -505,13 +505,13 @@ TEST_F(PudManifestIntegrationTest, ThreeStepChainDoesNotUnifyWrongPredicate) {
     const expr* r_x = fn("r", {x});
     const expr* r_a = fn("r", {a});
     const expr* t_c = fn("t", {c});
-    const pud_rule_id* p_ax = add_rule(p_x, {q_x}, 1);
+    const pud_lineage* p_ax = add_rule(p_x, {q_x}, 1);
     add_rule(q_x, {r_x}, 1);
     add_rule(r_a, {}, 1);
     add_rule(t_c, {}, 1);
 
     const unfold_out first = drain(m_.unfolder_.unfold(p_ax, 0));
-    const pud_rule_id* child = first.children[0];
+    const pud_lineage* child = first.children[0];
     const unfold_out second = drain(m_.unfolder_.unfold(child, 0));
     ASSERT_EQ(second.children.size(), 1u);
     for (const pud_added_unification& unif :
@@ -527,16 +527,16 @@ TEST_F(PudManifestIntegrationTest, UnfoldNonRootCursorConcatenatesPathDeltas) {
     const expr* q_x = fn("q", {x});
     const expr* r_x = fn("r", {x});
     const expr* r_a = fn("r", {a});
-    const pud_rule_id* p_ax = add_rule(p_x, {q_x}, 1);
-    const pud_rule_id* q_ax = add_rule(q_x, {r_x}, 1);
+    const pud_lineage* p_ax = add_rule(p_x, {q_x}, 1);
+    const pud_lineage* q_ax = add_rule(q_x, {r_x}, 1);
     add_rule(r_a, {}, 1);
 
     const unfold_out q_out = drain(m_.unfolder_.unfold(q_ax, 0));
     ASSERT_EQ(q_out.children.size(), 1u);
     const unfold_out p_out = drain(m_.unfolder_.unfold(p_ax, 0));
     ASSERT_EQ(p_out.children.size(), 1u);
-    const pud_rule_id::inference& inf =
-        std::get<pud_rule_id::inference>(p_out.children[0]->content);
+    const pud_lineage::inference& inf =
+        std::get<pud_lineage::inference>(p_out.children[0]->content);
     EXPECT_EQ(inf.callee, q_out.children[0]);
     bool saw_a = false;
     for (const pud_added_unification& unif :
@@ -556,14 +556,14 @@ TEST_F(PudManifestIntegrationTest, NatRecursionDoesNotSmashCalleeVarZeroIntoCall
     const expr* nat_s_x = fn("nat", {s_x});
     const expr* nat_x = fn("nat", {x});
     add_rule(nat_z, {}, 1);
-    const pud_rule_id* succ = add_rule(nat_s_x, {nat_x}, 1);
+    const pud_lineage* succ = add_rule(nat_s_x, {nat_x}, 1);
 
     const unfold_out first = drain(m_.unfolder_.unfold(succ, 0));
     ASSERT_EQ(first.children.size(), 2u);
-    const pud_rule_id* rec = nullptr;
-    for (const pud_rule_id* child : first.children) {
-        const pud_rule_id::inference& inf =
-            std::get<pud_rule_id::inference>(child->content);
+    const pud_lineage* rec = nullptr;
+    for (const pud_lineage* child : first.children) {
+        const pud_lineage::inference& inf =
+            std::get<pud_lineage::inference>(child->content);
         if (inf.callee != succ)
             continue;
         rec = child;
@@ -575,7 +575,7 @@ TEST_F(PudManifestIntegrationTest, NatRecursionDoesNotSmashCalleeVarZeroIntoCall
     ASSERT_FALSE(m_.queries_.unfold_site(rec, 0).live.empty());
     const unfold_out second = drain(m_.unfolder_.unfold(rec, 0));
     ASSERT_FALSE(second.children.empty());
-    for (const pud_rule_id* grand : second.children) {
+    for (const pud_lineage* grand : second.children) {
         for (const pud_added_unification& unif : m_.added_unifications_.get(grand))
             EXPECT_LT(unif.var_idx, m_.lvc_.get(rec));
     }
@@ -591,14 +591,14 @@ TEST_F(PudManifestIntegrationTest, EvenOddMutualRecursionKeepsDistinctHeads) {
     const expr* even_x = fn("even", {x});
     const expr* odd_x = fn("odd", {x});
     add_rule(even_z, {}, 1);
-    const pud_rule_id* even_succ = add_rule(even_s_x, {odd_x}, 1);
+    const pud_lineage* even_succ = add_rule(even_s_x, {odd_x}, 1);
     add_rule(odd_s_x, {even_x}, 1);
 
     const unfold_out first = drain(m_.unfolder_.unfold(even_succ, 0));
     ASSERT_FALSE(first.children.empty());
-    for (const pud_rule_id* child : first.children) {
-        const pud_rule_id::inference& inf =
-            std::get<pud_rule_id::inference>(child->content);
+    for (const pud_lineage* child : first.children) {
+        const pud_lineage::inference& inf =
+            std::get<pud_lineage::inference>(child->content);
         const expr* callee_head = m_.added_unifications_.get(inf.callee)[0].value;
         EXPECT_NE(callee_head, even_s_x);
         for (const pud_added_unification& unif : m_.added_unifications_.get(child))
@@ -614,14 +614,14 @@ TEST_F(PudManifestIntegrationTest, SelfUnfoldDeepensSuccessorPeel) {
     const expr* p_s_x = fn("p", {s_x});
     const expr* p_x = fn("p", {x});
     add_rule(p_z, {}, 1);
-    const pud_rule_id* succ = add_rule(p_s_x, {p_x}, 1);
+    const pud_lineage* succ = add_rule(p_s_x, {p_x}, 1);
 
     const unfold_out first = drain(m_.unfolder_.unfold(succ, 0));
     ASSERT_EQ(first.children.size(), 2u);
-    const pud_rule_id* rec = nullptr;
-    for (const pud_rule_id* child : first.children) {
-        const pud_rule_id::inference& inf =
-            std::get<pud_rule_id::inference>(child->content);
+    const pud_lineage* rec = nullptr;
+    for (const pud_lineage* child : first.children) {
+        const pud_lineage::inference& inf =
+            std::get<pud_lineage::inference>(child->content);
         if (inf.callee != succ)
             continue;
         rec = child;
@@ -641,7 +641,7 @@ TEST_F(PudManifestIntegrationTest, SelfUnfoldDeepensSuccessorPeel) {
     const unfold_out second = drain(m_.unfolder_.unfold(rec, 0));
     ASSERT_FALSE(second.children.empty());
     bool saw_s_on_grand = false;
-    for (const pud_rule_id* grand : second.children) {
+    for (const pud_lineage* grand : second.children) {
         for (const pud_added_unification& unif : m_.added_unifications_.get(grand)) {
             EXPECT_LT(unif.var_idx, m_.lvc_.get(rec));
             const expr::functor* f = std::get_if<expr::functor>(&unif.value->content);
@@ -663,14 +663,14 @@ TEST_F(PudManifestIntegrationTest, FanOutIgnoresNonUnifyingHead) {
     const expr* q_a = fn("q", {a});
     const expr* q_b = fn("q", {b});
     const expr* r_c = fn("r", {c});
-    const pud_rule_id* caller = add_rule(p_x, {q_x}, 1);
+    const pud_lineage* caller = add_rule(p_x, {q_x}, 1);
     add_rule(q_a, {}, 1);
     add_rule(q_b, {}, 1);
     add_rule(r_c, {}, 1);
 
     const unfold_out out = drain(m_.unfolder_.unfold(caller, 0));
     ASSERT_EQ(out.children.size(), 2u);
-    for (const pud_rule_id* child : out.children) {
+    for (const pud_lineage* child : out.children) {
         for (const pud_added_unification& unif : m_.added_unifications_.get(child))
             EXPECT_NE(unif.value, c);
     }
@@ -685,15 +685,15 @@ TEST_F(PudManifestIntegrationTest, FanOutAfterPriorUnfoldKeepsCallerVarZero) {
     const expr* r_x = fn("r", {x});
     const expr* r_a = fn("r", {a});
     const expr* r_b = fn("r", {b});
-    const pud_rule_id* q_ax = add_rule(q_x, {r_x}, 1);
+    const pud_lineage* q_ax = add_rule(q_x, {r_x}, 1);
     add_rule(r_a, {}, 1);
     add_rule(r_b, {}, 1);
-    const pud_rule_id* p_ax = add_rule(p_x, {q_x}, 1);
+    const pud_lineage* p_ax = add_rule(p_x, {q_x}, 1);
 
     drain(m_.unfolder_.unfold(q_ax, 0));
     const unfold_out out = drain(m_.unfolder_.unfold(p_ax, 0));
     ASSERT_FALSE(out.children.empty());
-    for (const pud_rule_id* child : out.children) {
+    for (const pud_lineage* child : out.children) {
         for (const pud_added_unification& unif : m_.added_unifications_.get(child))
             EXPECT_LT(unif.var_idx, m_.lvc_.get(p_ax));
     }
@@ -707,7 +707,7 @@ TEST_F(PudManifestIntegrationTest, ChoicePointCursorWithVarBody) {
     const expr* q_x = fn("q", {x});
     const expr* q_a = fn("q", {a});
     const expr* q_b = fn("q", {b});
-    const pud_rule_id* caller = add_rule(p_x, {q_x}, 1);
+    const pud_lineage* caller = add_rule(p_x, {q_x}, 1);
     add_rule(q_a, {}, 1);
     add_rule(q_b, {}, 1);
 
@@ -721,7 +721,7 @@ TEST_F(PudManifestIntegrationTest, DifferentHeadStaysRefuted) {
     const expr* p_x = fn("p", {x});
     const expr* q_x = fn("q", {x});
     const expr* r_a = fn("r", {a});
-    const pud_rule_id* caller = add_rule(p_x, {q_x}, 1);
+    const pud_lineage* caller = add_rule(p_x, {q_x}, 1);
     add_rule(r_a, {}, 1);
 
     EXPECT_TRUE(m_.queries_.unfold_site(caller, 0).live.empty());
@@ -732,10 +732,10 @@ TEST_F(PudManifestIntegrationTest, RecursionWithoutBaseDoesNotSpuriousSucceed) {
     const expr* s_x = fn("s", {x});
     const expr* p_s_x = fn("p", {s_x});
     const expr* p_x = fn("p", {x});
-    const pud_rule_id* succ = add_rule(p_s_x, {p_x}, 1);
+    const pud_lineage* succ = add_rule(p_s_x, {p_x}, 1);
 
     const unfold_out out = drain(m_.unfolder_.unfold(succ, 0));
     ASSERT_EQ(out.children.size(), 1u);
-    const pud_rule_id* child = out.children[0];
-    EXPECT_EQ(std::get<pud_rule_id::inference>(child->content).callee, succ);
+    const pud_lineage* child = out.children[0];
+    EXPECT_EQ(std::get<pud_lineage::inference>(child->content).callee, succ);
 }

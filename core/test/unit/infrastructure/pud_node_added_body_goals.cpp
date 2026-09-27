@@ -4,16 +4,16 @@
 #include <stdexcept>
 #include "infrastructure/pud_node_added_body_goals.hpp"
 #include "value_objects/expr.hpp"
-#include "value_objects/pud_rule_id.hpp"
+#include "value_objects/pud_lineage.hpp"
 
 struct PudNodeAddedBodyGoalsTest : public ::testing::Test {
     PudNodeAddedBodyGoalsTest()
         : body_{expr::functor{1, {}}}
-        , axiom_{pud_rule_id::axiom{0}}
+        , axiom_{pud_lineage::axiom{0}}
         , goals_() {}
 
     expr body_;
-    pud_rule_id axiom_;
+    pud_lineage axiom_;
     pud_node_added_body_goals goals_;
 };
 

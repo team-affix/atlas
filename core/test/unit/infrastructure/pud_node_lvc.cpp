@@ -3,14 +3,14 @@
 #include <gtest/gtest.h>
 #include <stdexcept>
 #include "infrastructure/pud_node_lvc.hpp"
-#include "value_objects/pud_rule_id.hpp"
+#include "value_objects/pud_lineage.hpp"
 
 struct PudNodeLvcTest : public ::testing::Test {
     PudNodeLvcTest()
-        : axiom_{pud_rule_id::axiom{0}}
+        : axiom_{pud_lineage::axiom{0}}
         , lvc_() {}
 
-    pud_rule_id axiom_;
+    pud_lineage axiom_;
     pud_node_lvc lvc_;
 };
 

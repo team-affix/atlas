@@ -5,7 +5,7 @@
 #include <optional>
 #include "infrastructure/pud_candidate_rebaser.hpp"
 #include "value_objects/pud_candidate_search_context.hpp"
-#include "value_objects/pud_rule_id.hpp"
+#include "value_objects/pud_lineage.hpp"
 #include "value_objects/pud_witness_pair.hpp"
 #include "value_objects/pud_witness_search_context.hpp"
 
@@ -14,8 +14,8 @@ using ::testing::Return;
 using ::testing::_;
 
 struct MockEnterPath {
-    MOCK_METHOD(const pud_rule_id*, enter_to,
-                (const pud_rule_id*, size_t, uint32_t, const pud_rule_id*), ());
+    MOCK_METHOD(const pud_lineage*, enter_to,
+                (const pud_lineage*, size_t, uint32_t, const pud_lineage*), ());
 };
 
 struct MockResumeWitnessSearch {
@@ -27,7 +27,7 @@ struct MockResumeCandidateSearch {
 };
 
 struct MockGetParent {
-    MOCK_METHOD(const pud_rule_id*, get, (const pud_rule_id*), ());
+    MOCK_METHOD(const pud_lineage*, get, (const pud_lineage*), ());
 };
 
 using test_rebaser_t = pud_candidate_rebaser<
@@ -38,18 +38,18 @@ using test_rebaser_t = pud_candidate_rebaser<
 
 struct PudCandidateRebaserTest : public ::testing::Test {
     PudCandidateRebaserTest()
-        : leaf_{pud_rule_id::axiom{99}}
-        , a0_{pud_rule_id::axiom{0}}
-        , c0_{pud_rule_id::inference{&a0_, 0, &a0_}}
-        , c1_{pud_rule_id::inference{&a0_, 1, &a0_}}
-        , g0_{pud_rule_id::inference{&c0_, 0, &a0_}}
+        : leaf_{pud_lineage::axiom{99}}
+        , a0_{pud_lineage::axiom{0}}
+        , c0_{pud_lineage::inference{&a0_, 0, &a0_}}
+        , c1_{pud_lineage::inference{&a0_, 1, &a0_}}
+        , g0_{pud_lineage::inference{&c0_, 0, &a0_}}
         , rebaser_(enter_path_, witness_, candidate_, get_parent_) {
         ON_CALL(get_parent_, get(&a0_)).WillByDefault(Return(nullptr));
         ON_CALL(get_parent_, get(&c0_)).WillByDefault(Return(&a0_));
         ON_CALL(get_parent_, get(&c1_)).WillByDefault(Return(&a0_));
         ON_CALL(get_parent_, get(&g0_)).WillByDefault(Return(&c0_));
         ON_CALL(enter_path_, enter_to(_, _, _, _))
-            .WillByDefault([](const pud_rule_id*, size_t, uint32_t, const pud_rule_id* dest) {
+            .WillByDefault([](const pud_lineage*, size_t, uint32_t, const pud_lineage* dest) {
                 return dest;
             });
         ON_CALL(witness_, resume(_)).WillByDefault([](pud_witness_search_context& side) {
@@ -59,16 +59,16 @@ struct PudCandidateRebaserTest : public ::testing::Test {
         ON_CALL(candidate_, resume(_)).WillByDefault([](pud_candidate_search_context&) {});
     }
 
-    pud_witness_search_context make_pin(const pud_rule_id* search_root,
-                                        const pud_rule_id* current) {
+    pud_witness_search_context make_pin(const pud_lineage* search_root,
+                                        const pud_lineage* current) {
         return pud_witness_search_context{&a0_, 0, 1, search_root, current};
     }
 
-    pud_rule_id leaf_;
-    pud_rule_id a0_;
-    pud_rule_id c0_;
-    pud_rule_id c1_;
-    pud_rule_id g0_;
+    pud_lineage leaf_;
+    pud_lineage a0_;
+    pud_lineage c0_;
+    pud_lineage c1_;
+    pud_lineage g0_;
     NiceMock<MockEnterPath> enter_path_;
     NiceMock<MockResumeWitnessSearch> witness_;
     NiceMock<MockResumeCandidateSearch> candidate_;

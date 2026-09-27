@@ -8,6 +8,7 @@
 #include "infrastructure/pud_axiom_adder.hpp"
 #include "infrastructure/pud_candidate_rebaser.hpp"
 #include "infrastructure/pud_candidate_search.hpp"
+#include "infrastructure/pud_lineage_pool.hpp"
 #include "infrastructure/pud_node_added_body_goals.hpp"
 #include "infrastructure/pud_node_added_touched_caller_reps.hpp"
 #include "infrastructure/pud_node_added_unifications.hpp"
@@ -19,7 +20,6 @@
 #include "infrastructure/pud_path_enter.hpp"
 #include "infrastructure/pud_queries.hpp"
 #include "infrastructure/pud_query_starter.hpp"
-#include "infrastructure/pud_rule_id_pool.hpp"
 #include "infrastructure/pud_unfolder.hpp"
 #include "infrastructure/pud_witness_search.hpp"
 
@@ -28,7 +28,7 @@ struct pud_manifest {
         globalizer, fully_persistent_array, fully_persistent_array,
         expr_pool, expr_pool>;
     using witness_search_t = pud_witness_search<
-        pud_node_children, pud_node_parent, pud_rule_id_pool,
+        pud_node_children, pud_node_parent, pud_lineage_pool,
         pud_node_interval, pud_node_interval, pud_node_interval,
         order_maintenance, pud_node_added_unifications,
         fully_persistent_array, fully_persistent_array,
@@ -36,7 +36,7 @@ struct pud_manifest {
     using candidate_search_t = pud_candidate_search<
         witness_search_t, witness_search_t, pud_node_children, pud_node_parent>;
     using query_starter_t = pud_query_starter<
-        pud_rule_id_pool, pud_node_interval, order_maintenance, pud_node_interval,
+        pud_lineage_pool, pud_node_interval, order_maintenance, pud_node_interval,
         globalizer, fully_persistent_array, fully_persistent_array>;
     using path_enter_t = pud_path_enter<witness_search_t, pud_node_parent>;
     using candidate_rebaser_t = pud_candidate_rebaser<
@@ -46,20 +46,20 @@ struct pud_manifest {
         candidate_search_t, witness_search_t, query_starter_t, candidate_rebaser_t>;
     using unfolder_t = pud_unfolder<
         queries_t, normalizer_t, normalizer_t, normalizer_t, expr_pool,
-        pud_node_lvc, pud_rule_id_pool,
+        pud_node_lvc, pud_lineage_pool,
         pud_node_added_unifications, pud_node_added_unifications,
         pud_node_added_body_goals, pud_node_added_body_goals, pud_node_lvc,
         pud_node_children, pud_node_parent, pud_node_parent, pud_node_interval,
         order_maintenance, pud_node_interval, fully_persistent_array,
         pud_node_added_touched_caller_reps, queries_t>;
     using axiom_adder_t = pud_axiom_adder<
-        pud_rule_id_pool, pud_node_added_unifications, pud_node_added_body_goals,
+        pud_lineage_pool, pud_node_added_unifications, pud_node_added_body_goals,
         pud_node_lvc, pud_node_parent, order_maintenance,
         pud_node_interval, queries_t, normalizer_t, normalizer_t>;
 
     pud_manifest();
 
-    pud_rule_id_pool pool_;
+    pud_lineage_pool lineage_pool_;
     order_maintenance om_;
     fully_persistent_array fpa_;
     globalizer globalizer_;
