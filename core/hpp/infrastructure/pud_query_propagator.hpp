@@ -3,6 +3,7 @@
 
 #include <memory>
 #include <optional>
+#include <unordered_map>
 #include "value_objects/pud_query_node.hpp"
 #include "value_objects/pud_rule_id.hpp"
 #include "value_objects/framed_expr.hpp"
@@ -36,7 +37,7 @@ struct pud_query_propagator {
     query_node_handle root();
     std::optional<query_node_handle> child(query_node_handle current, const pud_rule_id* child_callee);
     query_node_handle open_query(query_node_handle caller, const expr* query);
-    pud_node close_query(query_node_handle query);
+    const pud_node close_query(query_node_handle query);
 private:
     IGetNodeChildren& get_node_children_;
     IAllocateRootInterval& allocate_root_interval_;
@@ -162,13 +163,14 @@ template<
     typename U,
     typename S,
     typename N,
+    typename IGNC,
     typename IAR,
     typename IAC,
     typename IMV,
     typename IG,
     typename IRFAB,
     typename IQFAB>
-typename pud_query_propagator<BM, U, S, N, IAR, IAC, IMV, IG, IRFAB, IQFAB>::query_node_handle pud_query_propagator<BM, U, S, N, IAR, IAC, IMV, IG, IRFAB, IQFAB>::open_query(typename pud_query_propagator<BM, U, S, N, IAR, IAC, IMV, IG, IRFAB, IQFAB>::query_node_handle caller, const expr* query_expr) {
+typename pud_query_propagator<BM, U, S, N, IGNC, IAR, IAC, IMV, IG, IRFAB, IQFAB>::query_node_handle pud_query_propagator<BM, U, S, N, IGNC, IAR, IAC, IMV, IG, IRFAB, IQFAB>::open_query(typename pud_query_propagator<BM, U, S, N, IGNC, IAR, IAC, IMV, IG, IRFAB, IQFAB>::query_node_handle caller, const expr* query_expr) {
     uint32_t caller_frame_offset = caller.query_node->frame_offset;
     uint32_t caller_lvc = caller.query_node->lvc;
     om_interval caller_interval = caller.query_node->interval;
@@ -208,13 +210,14 @@ template<
     typename U,
     typename S,
     typename N,
+    typename IGNC,
     typename IAR,
     typename IAC,
     typename IMV,
     typename IG,
     typename IRFAB,
     typename IQFAB>
-pud_node pud_query_propagator<BM, U, S, N, IAR, IAC, IMV, IG, IRFAB, IQFAB>::close_query(typename pud_query_propagator<BM, U, S, N, IAR, IAC, IMV, IG, IRFAB, IQFAB>::query_node_handle current) {
+const pud_node pud_query_propagator<BM, U, S, N, IGNC, IAR, IAC, IMV, IG, IRFAB, IQFAB>::close_query(typename pud_query_propagator<BM, U, S, N, IGNC, IAR, IAC, IMV, IG, IRFAB, IQFAB>::query_node_handle current) {
     // 1. extract relevant fields
     uint32_t frame_offset = current.query_node->frame_offset;
     om_interval interval = current.query_node->interval;
@@ -260,8 +263,7 @@ pud_node pud_query_propagator<BM, U, S, N, IAR, IAC, IMV, IG, IRFAB, IQFAB>::clo
     return pud_node{
         .added_specializations = added_specializations,
         .added_body_goals = added_body_goals,
-        .added_var_count = added_var_count,
-        .children = {}
+        .added_var_count = added_var_count
     };
 }
 
