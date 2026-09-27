@@ -5,6 +5,7 @@
 #include <optional>
 #include "value_objects/pud_query_node.hpp"
 #include "value_objects/pud_rule_id.hpp"
+#include "value_objects/framed_expr.hpp"
 
 template<
     typename BindMap,
@@ -29,8 +30,7 @@ struct pud_query_propagator {
         IMakeVar& make_var,
         IGlobalize& globalize,
         IRecordFPArrayBinding& record_fp,
-        IQueryFPArrayBinding& query_fp,
-        const pud_node& root);
+        IQueryFPArrayBinding& query_fp);
     query_node_handle root();
     std::optional<query_node_handle> child(query_node_handle current, const pud_rule_id* child_callee);
     query_node_handle open_query(query_node_handle caller, const expr* query);
@@ -42,8 +42,6 @@ private:
     IGlobalize& globalize_;
     IRecordFPArrayBinding& record_fp_;
     IQueryFPArrayBinding& query_fp_;
-
-    const pud_node& root_;
 };
 
 template<
@@ -63,15 +61,14 @@ pud_query_propagator<BM, U, S, N, IAR, IAC, IMV, IG, IRFAB, IQFAB>::pud_query_pr
     IMV& make_var,
     IG& globalize,
     IRFAB& record_fp,
-    IQFAB& query_fp,
-    const pud_node& root) :
+    IQFAB& query_fp) :
     allocate_root_interval_(allocate_root_interval),
     allocate_child_interval_(allocate_child_interval),
     make_var_(make_var),
     globalize_(globalize),
     record_fp_(record_fp),
-    query_fp_(query_fp),
-    root_(root) {}
+    query_fp_(query_fp)
+    {}
 
 template<
     typename BM,
@@ -88,12 +85,13 @@ pud_query_propagator<BM, U, S, N, IAR, IAC, IMV, IG, IRFAB, IQFAB>::query_node_h
     return query_node_handle{
         std::make_shared<pud_query_node>(
             pud_query_node{
-                0,
-                &root_,
-                {},
-                std::shared_ptr<pud_query_node>{},
-                allocate_root_interval_.allocate_root()
-                })};
+                .frame_offset = 0,
+                .node = nullptr,
+                .touched_caller_reps = {},
+                .parent = std::shared_ptr<pud_query_node>{},
+                .interval = allocate_root_interval_.allocate_root(),
+                .lvc = 0
+            })};
 }
 
 template<
@@ -133,18 +131,111 @@ std::optional<typename pud_query_propagator<BM, U, S, N, IAR, IAC, IMV, IG, IRFA
     }
 
     // at this point, traversal has succeeded
+
+    uint32_t lvc = current.query_node->lvc;
     
     auto new_query_node = std::make_shared<pud_query_node>(
         pud_query_node{
-            frame_offset,
-            child_node,
-            touched_caller_reps,
-            current.query_node,
-            child_interval
+            .frame_offset = frame_offset,
+            .node = child_node,
+            .touched_caller_reps = touched_caller_reps,
+            .parent = current.query_node,
+            .interval = child_interval,
+            .lvc = lvc + child_node->added_var_count
         }
     );
 
     return query_node_handle{new_query_node};
+}
+
+template<
+    typename BM,
+    typename U,
+    typename S,
+    typename N,
+    typename IAR,
+    typename IAC,
+    typename IMV,
+    typename IG,
+    typename IRFAB,
+    typename IQFAB>
+typename pud_query_propagator<BM, U, S, N, IAR, IAC, IMV, IG, IRFAB, IQFAB>::query_node_handle pud_query_propagator<BM, U, S, N, IAR, IAC, IMV, IG, IRFAB, IQFAB>::open_query(typename pud_query_propagator<BM, U, S, N, IAR, IAC, IMV, IG, IRFAB, IQFAB>::query_node_handle caller, const expr* query_expr) {
+    uint32_t caller_frame_offset = caller.query_node->frame_offset;
+    uint32_t caller_lvc = caller.query_node->lvc;
+    om_interval caller_interval = caller.query_node->interval;
+
+    om_interval query_interval = allocate_child_interval_.allocate_child_of(caller_interval);
+
+    uint32_t query_frame_offset = caller_frame_offset + caller_lvc;
+    
+    BM bind_map{globalize_, record_fp_, query_fp_, query_interval};
+
+    // get the root head var (var0@cutoff)
+
+    uint32_t query_head_var = globalize_.globalize(query_frame_offset, 0);
+
+    // seed the bind map with the query expression
+    bind_map.bind(
+        query_head_var,
+        framed_expr{
+            query_expr,
+            caller_frame_offset});
+
+    auto new_query_node = std::make_shared<pud_query_node>(
+        pud_query_node{
+            .frame_offset = query_frame_offset,
+            .node = nullptr,
+            .touched_caller_reps = {},
+            .parent = caller.query_node,
+            .interval = query_interval,
+            .lvc = 0
+        });
+    
+    return query_node_handle{new_query_node};
+}
+
+template<
+    typename BM,
+    typename U,
+    typename S,
+    typename N,
+    typename IAR,
+    typename IAC,
+    typename IMV,
+    typename IG,
+    typename IRFAB,
+    typename IQFAB>
+pud_node pud_query_propagator<BM, U, S, N, IAR, IAC, IMV, IG, IRFAB, IQFAB>::close_query(typename pud_query_propagator<BM, U, S, N, IAR, IAC, IMV, IG, IRFAB, IQFAB>::query_node_handle current) {
+    // 1. extract relevant fields
+    uint32_t frame_offset = current.query_node->frame_offset;
+    om_interval interval = current.query_node->interval;
+    
+    // 1.5. create bind map, and normalizer
+    BM bind_map{globalize_, record_fp_, query_fp_, interval};
+    N normalizer{make_var_, bind_map};
+
+    // 1.75. initialize translation map
+    std::unordered_map<uint32_t, uint32_t> translation_map;
+    
+    // 2. aggregate all added specializations from touched caller reps in lineage
+    std::vector<pud_specialization> added_specializations;
+
+    for (const pud_query_node* node = current.query_node.get(); node != nullptr; node = node->parent.get()) {
+        for (uint32_t touched_caller_rep : node->touched_caller_reps) {
+            //     2a. for each touched caller rep, normalize it with cutoff == frame_offset of query.
+            //         keep rolling map for translating additional vars to contiguous indices
+            auto var = make_var_.make_var(touched_caller_rep);
+            auto normalized = normalizer.normalize(var, frame_offset, translation_map);
+            added_specializations.push_back(pud_specialization{
+                .var_idx = touched_caller_rep,
+                .value = normalized
+            });
+        }
+    }
+    // 3. aggregate all added body goals from lineage
+    //     3a. for each added body goal, normalize it with same instructions as before (same map)
+    // 4. added_var_count is just the size of the translation map (one entry per new var)
+    // 5. children of new node is empty (leaf)
 }
 
 #endif

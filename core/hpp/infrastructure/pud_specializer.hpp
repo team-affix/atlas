@@ -19,7 +19,7 @@ private:
 template<typename IMakeVar, typename IUnify>
 coroutine<uint32_t, bool> pud_specializer<IMakeVar, IUnify>::specialize(uint32_t frame_offset, pud_specialization specialization) {
     // frame the lhs and rhs with same frame offset
-    framed_expr lhs{make_var_.make_var(specialization.global_var_idx), frame_offset};
+    framed_expr lhs{make_var_.make_var(specialization.var_idx), frame_offset};
     framed_expr rhs{specialization.value, frame_offset};
     // unify the lhs and rhs
     auto sm = unify_.unify(lhs, rhs);

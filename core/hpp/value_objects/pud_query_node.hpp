@@ -13,6 +13,7 @@ struct pud_query_node {
     std::vector<uint32_t> touched_caller_reps;
     std::shared_ptr<pud_query_node> parent;
     om_interval interval;
+    uint32_t lvc;
 };
 
 #endif

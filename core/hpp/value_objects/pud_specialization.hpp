@@ -4,7 +4,7 @@
 #include "expr.hpp"
 
 struct pud_specialization {
-    uint32_t global_var_idx;
+    uint32_t var_idx;
     const expr* value;
 };
 
