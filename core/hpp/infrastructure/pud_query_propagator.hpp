@@ -119,12 +119,32 @@ std::optional<typename pud_query_propagator<BM, U, S, N, IAR, IAC, IMV, IG, IRFA
     S specializer{make_var_, unifier};
 
     uint32_t frame_offset = current.query_node->frame_offset;
+    
+    std::vector<uint32_t> touched_caller_reps;
+
+    // try to traverse to child
 
     for (pud_specialization spec : child_node->added_specializations) {
-        if (!specializer.specialize(current.query_node->frame_offset, spec))
+        auto sm = specializer.specialize(frame_offset, spec);
+        while (auto touched_rep = sm.next())
+            touched_caller_reps.push_back(*touched_rep);
+        if (!sm.result())
             return std::nullopt; // can't traverse to child
     }
+
+    // at this point, traversal has succeeded
     
+    auto new_query_node = std::make_shared<pud_query_node>(
+        pud_query_node{
+            frame_offset,
+            child_node,
+            touched_caller_reps,
+            current.query_node,
+            child_interval
+        }
+    );
+
+    return query_node_handle{new_query_node};
 }
 
 #endif
