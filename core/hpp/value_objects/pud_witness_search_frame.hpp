@@ -6,10 +6,11 @@
 
 template<typename QueryNodeHandle, typename NodeChildren>
 struct pud_witness_search_frame {
-    QueryNodeHandle handle;
     const pud_node* node;
+    QueryNodeHandle handle;
     const pud_lineage* lineage;
     typename NodeChildren::const_iterator next_child_it;
+    typename NodeChildren::const_iterator end_child_it;
 };
 
 #endif
