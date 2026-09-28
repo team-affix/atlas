@@ -10,13 +10,15 @@ template<
     typename ICheckNodeLeaf,
     typename IGetNodeChildren,
     typename IPropagateQueryNodeHandle,
-    typename IMakeInferenceLineage>
+    typename IMakeInferenceLineage,
+    typename IGetCallSiteIdx>
 struct pud_witness_search_head {
     pud_witness_search_head(
         ICheckNodeLeaf& check_node_leaf,
         IGetNodeChildren& get_node_children,
         IPropagateQueryNodeHandle& propagate_query_node_handle,
         IMakeInferenceLineage& make_inference_lineage,
+        IGetCallSiteIdx& get_call_site_idx,
         WitnessSearchFrame search_root_frame);
     WitnessSearchFrame advance_root();
     bool resume();
@@ -25,35 +27,38 @@ private:
     IGetNodeChildren& get_node_children_;
     IPropagateQueryNodeHandle& propagate_query_node_handle_;
     IMakeInferenceLineage& make_inference_lineage_;
+    IGetCallSiteIdx& get_call_site_idx_;
 
     std::deque<WitnessSearchFrame> frame_stack_;
     bool descending_;
 };
 
-template<typename WSF, typename ICNL, typename IGCN, typename IPQN, typename IML>
-pud_witness_search_head<WSF, ICNL, IGCN, IPQN, IML>::pud_witness_search_head(
+template<typename WSF, typename ICNL, typename IGCN, typename IPQN, typename IML, typename IGCSI>
+pud_witness_search_head<WSF, ICNL, IGCN, IPQN, IML, IGCSI>::pud_witness_search_head(
     ICNL& check_node_leaf,
     IGCN& get_node_children,
     IPQN& propagate_query_node_handle,
     IML& make_inference_lineage,
+    IGCSI& get_call_site_idx,
     WSF search_root_frame) :
     check_node_leaf_(check_node_leaf),
     get_node_children_(get_node_children),
     propagate_query_node_handle_(propagate_query_node_handle),
     make_inference_lineage_(make_inference_lineage),
+    get_call_site_idx_(get_call_site_idx),
     frame_stack_({search_root_frame}),
     descending_(true)
 {}
 
-template<typename WSF, typename ICNL, typename IGCN, typename IPQN, typename IML>
-WSF pud_witness_search_head<WSF, ICNL, IGCN, IPQN, IML>::advance_root() {
+template<typename WSF, typename ICNL, typename IGCN, typename IPQN, typename IML, typename IGCSI>
+WSF pud_witness_search_head<WSF, ICNL, IGCN, IPQN, IML, IGCSI>::advance_root() {
     WSF root_frame = frame_stack_.front();
     frame_stack_.pop_front();
     return root_frame;
 }
 
-template<typename WSF, typename ICNL, typename IGCN, typename IPQN, typename IML>
-bool pud_witness_search_head<WSF, ICNL, IGCN, IPQN, IML>::resume() {
+template<typename WSF, typename ICNL, typename IGCN, typename IPQN, typename IML, typename IGCSI>
+bool pud_witness_search_head<WSF, ICNL, IGCN, IPQN, IML, IGCSI>::resume() {
     // basic idea:
     //     at any point in time, if the current frame is a leaf, we are done.
     //     while not leaf, get children. initialize the iterator to begin of the children.
@@ -80,26 +85,32 @@ bool pud_witness_search_head<WSF, ICNL, IGCN, IPQN, IML>::resume() {
             continue;
         }
 
+        // see if we can propagate the query to the next child
         auto next_child_it = current_frame.next_child_it++;
         auto child_node = next_child_it.value;
-        auto child_query_handle = propagate_query_node_handle_.propagate(current_frame.handle, child_node);
-        auto child_lineage = make_inference_lineage_.make_inference(current_frame.lineage, child_node);
+        auto child_optional_handle = propagate_query_node_handle_.propagate(current_frame.handle, child_node);
 
+        // if failed to propagate, skip the child
+        if (!child_optional_handle.has_value())
+            continue;
+        
+        // compute the child lineage
+        auto child_callee_lineage = next_child_it.key;
+        auto child_call_site_idx = get_call_site_idx_.get(child_node);
+        auto child_lineage = make_inference_lineage_.make_inference(current_frame.lineage, child_call_site_idx, child_callee_lineage);
+
+        // create child frame
         WSF new_frame = {
-            
-            current_node,
-            current_frame.lineage,
-            next_child_it,
-            current_frame.end_child_it
+            .node = child_node,
+            .handle = child_optional_handle.value(),
+            .lineage = child_lineage,
         };
 
         frame_stack_.push_back(new_frame);
         descending_ = true;
-        
     }
 
     return false;
-
 }
 
 #endif
