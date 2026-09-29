@@ -24,7 +24,7 @@ struct pud_mhws {
         IGetCallSiteIdx& get_call_site_idx);
     std::optional<pud_mhws_head_id> try_add_head(QueryPosition search_root_position);
     void remove_head(pud_mhws_head_id head_id);
-    void invalidate_leaf(const pud_node* node);
+    std::vector<pud_mhws_head_id> invalidate_leaf(const pud_node* node);
 private:
     using head_type = pud_witness_search_head<
         QueryPosition,
@@ -40,10 +40,8 @@ private:
     IPropagateQueryNodeHandle& propagate_query_node_handle_;
     IGetCallSiteIdx& get_call_site_idx_;
 
-    using map_t = std::unordered_map<pud_mhws_head_id, head_type>;
-
     pud_mhws_head_id next_head_id_;
-    map_t heads_;
+    std::unordered_map<pud_mhws_head_id, head_type> heads_;
     std::unordered_map<pud_mhws_head_id, const pud_node*> head_to_witness_;
     std::unordered_map<const pud_node*, std::unordered_set<pud_mhws_head_id>> witness_to_heads_;
 };
@@ -99,6 +97,30 @@ std::optional<pud_mhws_head_id> pud_mhws<QP, CI, ICNL, IGNC, IPQN, IGCSI>::try_a
     witness_to_heads_[witness].insert(next_head_id_);
     
     return next_head_id_++;
+}
+
+template<
+    typename QP,
+    typename CI,
+    typename ICNL,
+    typename IGNC,
+    typename IPQN,
+    typename IGCSI>
+void pud_mhws<QP, CI, ICNL, IGNC, IPQN, IGCSI>::remove_head(pud_mhws_head_id head_id) {
+
+    if (!heads_.contains(head_id))
+        return;
+    
+    const pud_node* witness = head_to_witness_.at(head_id);
+
+    auto& head_ids = witness_to_heads_.at(witness);
+    head_ids.erase(head_id);
+
+    if (head_ids.empty())
+        witness_to_heads_.erase(witness);
+
+    head_to_witness_.erase(head_id);
+    heads_.erase(head_id);
 }
 
 #endif
