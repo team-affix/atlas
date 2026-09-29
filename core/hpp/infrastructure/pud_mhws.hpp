@@ -4,6 +4,8 @@
 #include <optional>
 #include <unordered_map>
 #include <unordered_set>
+#include <utility>
+#include "debug_assert.hpp"
 #include "infrastructure/pud_witness_search_head.hpp"
 #include "value_objects/pud_mhws_head_id.hpp"
 
@@ -38,10 +40,65 @@ private:
     IPropagateQueryNodeHandle& propagate_query_node_handle_;
     IGetCallSiteIdx& get_call_site_idx_;
 
+    using map_t = std::unordered_map<pud_mhws_head_id, head_type>;
+
     pud_mhws_head_id next_head_id_;
-    std::unordered_map<pud_mhws_head_id, head_type> heads_;
+    map_t heads_;
     std::unordered_map<pud_mhws_head_id, const pud_node*> head_to_witness_;
     std::unordered_map<const pud_node*, std::unordered_set<pud_mhws_head_id>> witness_to_heads_;
 };
+
+template<
+    typename QP,
+    typename CI,
+    typename ICNL,
+    typename IGNC,
+    typename IPQN,
+    typename IGCSI>
+pud_mhws<QP, CI, ICNL, IGNC, IPQN, IGCSI>::pud_mhws(
+    ICNL& check_node_leaf,
+    IGNC& get_node_children,
+    IPQN& propagate_query_node_handle,
+    IGCSI& get_call_site_idx)
+    : check_node_leaf_(check_node_leaf)
+    , get_node_children_(get_node_children)
+    , propagate_query_node_handle_(propagate_query_node_handle)
+    , get_call_site_idx_(get_call_site_idx)
+    , next_head_id_(0) {}
+
+template<
+    typename QP,
+    typename CI,
+    typename ICNL,
+    typename IGNC,
+    typename IPQN,
+    typename IGCSI>
+std::optional<pud_mhws_head_id> pud_mhws<QP, CI, ICNL, IGNC, IPQN, IGCSI>::try_add_head(
+    QP search_root_position) {
+    auto [head_it, head_inserted] = heads_.emplace(
+        next_head_id_,
+        head_type{
+            check_node_leaf_,
+            get_node_children_,
+            propagate_query_node_handle_,
+            get_call_site_idx_,
+            std::move(search_root_position)}).first;
+
+    DEBUG_ASSERT(head_inserted);
+
+    head_type& head = head_it->second;
+
+    const pud_node* witness = head.resume();
+
+    if (witness == nullptr) {
+        heads_.erase(head_it);
+        return std::nullopt;
+    }
+    
+    head_to_witness_.insert({next_head_id_, witness});
+    witness_to_heads_[witness].insert(next_head_id_);
+    
+    return next_head_id_++;
+}
 
 #endif
