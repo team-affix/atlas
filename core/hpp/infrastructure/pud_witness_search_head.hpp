@@ -96,14 +96,12 @@ bool pud_witness_search_head<WSF, ICNL, IGCN, IPQN, IML, IGCSI>::resume() {
         
         // compute the child lineage
         auto child_callee_lineage = next_child_it.key;
-        auto child_call_site_idx = get_call_site_idx_.get(child_node);
-        auto child_lineage = make_inference_lineage_.make_inference(current_frame.lineage, child_call_site_idx, child_callee_lineage);
 
         // create child frame
         WSF new_frame = {
             .node = child_node,
             .handle = child_optional_handle.value(),
-            .lineage = child_lineage,
+            .callee_lineage = child_callee_lineage,
         };
 
         frame_stack_.push_back(new_frame);

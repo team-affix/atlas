@@ -8,7 +8,7 @@ template<typename QueryNodeHandle, typename NodeChildren>
 struct pud_witness_search_frame {
     const pud_node* node;
     QueryNodeHandle handle;
-    const pud_lineage* lineage;
+    const pud_lineage* callee_lineage;
     typename NodeChildren::const_iterator next_child_it;
     typename NodeChildren::const_iterator end_child_it;
 };
