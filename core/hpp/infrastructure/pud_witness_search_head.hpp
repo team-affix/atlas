@@ -2,11 +2,12 @@
 #define PUD_WITNESS_SEARCH_HEAD_HPP
 
 #include <deque>
-#include "value_objects/pud_witness_search_frame.hpp"
+#include "value_objects/pud_query_position.hpp"
 #include "value_objects/pud_node.hpp"
 
 template<
-    typename WitnessSearchFrame,
+    typename QueryPosition,
+    typename ChildIterator,
     typename ICheckNodeLeaf,
     typename IGetNodeChildren,
     typename IPropagateQueryNodeHandle,
@@ -19,55 +20,63 @@ struct pud_witness_search_head {
         IPropagateQueryNodeHandle& propagate_query_node_handle,
         IMakeInferenceLineage& make_inference_lineage,
         IGetCallSiteIdx& get_call_site_idx,
-        WitnessSearchFrame search_root_frame);
-    WitnessSearchFrame advance_root();
+        QueryPosition search_root_position);
+    QueryPosition advance_root();
     bool resume();
 private:
+    struct frame {
+        QueryPosition position;
+        ChildIterator next_child_it;
+        ChildIterator end_child_it;
+    };
+
     ICheckNodeLeaf& check_node_leaf_;
     IGetNodeChildren& get_node_children_;
     IPropagateQueryNodeHandle& propagate_query_node_handle_;
     IMakeInferenceLineage& make_inference_lineage_;
     IGetCallSiteIdx& get_call_site_idx_;
 
-    std::deque<WitnessSearchFrame> frame_stack_;
+    std::deque<frame> frame_stack_;
     bool descending_;
 };
 
-template<typename WSF, typename ICNL, typename IGCN, typename IPQN, typename IML, typename IGCSI>
-pud_witness_search_head<WSF, ICNL, IGCN, IPQN, IML, IGCSI>::pud_witness_search_head(
+template<typename QP, typename CI, typename ICNL, typename IGCN, typename IPQN, typename IML, typename IGCSI>
+pud_witness_search_head<QP, CI, ICNL, IGCN, IPQN, IML, IGCSI>::pud_witness_search_head(
     ICNL& check_node_leaf,
     IGCN& get_node_children,
     IPQN& propagate_query_node_handle,
     IML& make_inference_lineage,
     IGCSI& get_call_site_idx,
-    WSF search_root_frame) :
+    QP search_root_position) :
     check_node_leaf_(check_node_leaf),
     get_node_children_(get_node_children),
     propagate_query_node_handle_(propagate_query_node_handle),
     make_inference_lineage_(make_inference_lineage),
     get_call_site_idx_(get_call_site_idx),
-    frame_stack_({search_root_frame}),
+    frame_stack_({search_root_position}),
     descending_(true)
 {}
 
-template<typename WSF, typename ICNL, typename IGCN, typename IPQN, typename IML, typename IGCSI>
-WSF pud_witness_search_head<WSF, ICNL, IGCN, IPQN, IML, IGCSI>::advance_root() {
-    WSF root_frame = frame_stack_.front();
+template<typename QP, typename CI, typename ICNL, typename IGCN, typename IPQN, typename IML, typename IGCSI>
+QP pud_witness_search_head<QP, CI, ICNL, IGCN, IPQN, IML, IGCSI>::advance_root() {
+    QP root_position = frame_stack_.front();
     frame_stack_.pop_front();
-    return root_frame;
+    return root_position;
 }
 
-template<typename WSF, typename ICNL, typename IGCN, typename IPQN, typename IML, typename IGCSI>
-bool pud_witness_search_head<WSF, ICNL, IGCN, IPQN, IML, IGCSI>::resume() {
+template<typename QP, typename CI, typename ICNL, typename IGCN, typename IPQN, typename IML, typename IGCSI>
+bool pud_witness_search_head<QP, CI, ICNL, IGCN, IPQN, IML, IGCSI>::resume() {
     // basic idea:
     //     at any point in time, if the current frame is a leaf, we are done.
     //     while not leaf, get children. initialize the iterator to begin of the children.
     
     while (!frame_stack_.empty()) {
         // get children of current frame
-        WSF current_frame = frame_stack_.back();
+        frame& current_frame = frame_stack_.back();
+
+        const QP& current_position = current_frame.position;
         
-        const pud_node* current_node = current_frame.node;
+        const pud_node* current_node = current_position.node;
         
         if (check_node_leaf_.check_leaf(current_node))
             return true;
@@ -95,13 +104,17 @@ bool pud_witness_search_head<WSF, ICNL, IGCN, IPQN, IML, IGCSI>::resume() {
             continue;
         
         // compute the child lineage
+        auto current_call_site_idx = get_call_site_idx_.get(current_node);
         auto child_callee_lineage = next_child_it.key;
+        auto child_lineage = make_inference_lineage_.make_inference(current_position.lineage, current_call_site_idx, child_callee_lineage);
 
         // create child frame
-        WSF new_frame = {
-            .node = child_node,
-            .handle = child_optional_handle.value(),
-            .callee_lineage = child_callee_lineage,
+        frame new_frame = {
+            .position = {
+                .node = child_node,
+                .lineage = child_lineage,
+                .handle = child_optional_handle.value(),
+            },
         };
 
         frame_stack_.push_back(new_frame);
