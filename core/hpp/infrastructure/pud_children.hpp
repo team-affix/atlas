@@ -2,15 +2,14 @@
 #define PUD_CHILDREN_HPP
 
 #include <unordered_map>
-#include "value_objects/pud_lineage.hpp"
+#include <vector>
 #include "value_objects/pud_node.hpp"
 
 struct pud_children {
-    using children_map = std::unordered_map<const pud_lineage*, const pud_node*>;
-    children_map get(const pud_node* node) const;
-    void store(const pud_node* node, children_map children);
+    const std::vector<const pud_node*>& get(const pud_node* node) const;
+    void store(const pud_node* node, const std::vector<const pud_node*>& children);
 private:
-    std::unordered_map<const pud_node*, children_map> children_links_;
+    std::unordered_map<const pud_node*, std::vector<const pud_node*>> children_links_;
 };
 
 #endif
