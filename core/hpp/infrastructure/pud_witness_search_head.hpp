@@ -19,7 +19,7 @@ struct pud_witness_search_head {
         IGetCallSiteIdx& get_call_site_idx,
         QueryPosition search_root_position);
     QueryPosition advance_root();
-    bool resume();
+    const pud_node* resume();
 private:
     struct frame {
         QueryPosition position;
@@ -59,7 +59,7 @@ QP pud_witness_search_head<QP, CI, ICNL, IGCN, IPQN, IGCSI>::advance_root() {
 }
 
 template<typename QP, typename CI, typename ICNL, typename IGCN, typename IPQN, typename IGCSI>
-bool pud_witness_search_head<QP, CI, ICNL, IGCN, IPQN, IGCSI>::resume() {
+const pud_node* pud_witness_search_head<QP, CI, ICNL, IGCN, IPQN, IGCSI>::resume() {
     // basic idea:
     //     at any point in time, if the current frame is a leaf, we are done.
     //     while not leaf, get children. initialize the iterator to begin of the children.
@@ -73,7 +73,7 @@ bool pud_witness_search_head<QP, CI, ICNL, IGCN, IPQN, IGCSI>::resume() {
         const pud_node* current_node = current_position.node;
         
         if (check_node_leaf_.check_leaf(current_node))
-            return true;
+            return current_node;
 
         if (descending_) {
             auto children = get_node_children_.get(current_node);
@@ -108,7 +108,7 @@ bool pud_witness_search_head<QP, CI, ICNL, IGCN, IPQN, IGCSI>::resume() {
         descending_ = true;
     }
 
-    return false;
+    return nullptr;
 }
 
 #endif

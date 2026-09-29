@@ -5,9 +5,14 @@
 
 template<typename QueryPosition>
 struct pud_candidate_search_head {
-    pud_candidate_search_head(QueryPosition search_root_position);
-    QueryPosition advance_root();
+    pud_candidate_search_head(
+        QueryPosition search_root_position);
+    QueryPosition accept();
     bool resume();
+private:
+    QueryPosition search_root_position_;
+    
+    
 };
 
 #endif
