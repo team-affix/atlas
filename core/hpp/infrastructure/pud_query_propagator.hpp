@@ -5,7 +5,6 @@
 #include <optional>
 #include <unordered_map>
 #include "value_objects/pud_query_node.hpp"
-#include "value_objects/pud_lineage.hpp"
 #include "value_objects/framed_expr.hpp"
 
 template<
@@ -20,7 +19,8 @@ template<
     typename IMakeVar,
     typename IGlobalize,
     typename IRecordFPArrayBinding,
-    typename IQueryFPArrayBinding>
+    typename IQueryFPArrayBinding,
+    typename IGetNodeRefuted>
 struct pud_query_propagator {
     struct query_node_handle {
     private:
@@ -35,7 +35,8 @@ struct pud_query_propagator {
         IMakeVar& make_var,
         IGlobalize& globalize,
         IRecordFPArrayBinding& record_fp,
-        IQueryFPArrayBinding& query_fp);
+        IQueryFPArrayBinding& query_fp,
+        IGetNodeRefuted& get_node_refuted);
     query_node_handle root();
     std::optional<query_node_handle> propagate(query_node_handle current, const pud_node* child_node);
     query_node_handle open_query(query_node_handle caller, const expr* query);
@@ -49,6 +50,7 @@ private:
     IGlobalize& globalize_;
     IRecordFPArrayBinding& record_fp_;
     IQueryFPArrayBinding& query_fp_;
+    IGetNodeRefuted& get_node_refuted_;
 };
 
 template<
@@ -63,8 +65,9 @@ template<
     typename IMV,
     typename IG,
     typename IRFAB,
-    typename IQFAB>
-pud_query_propagator<BM, U, S, N, IGNP, IMN, IAR, IAC, IMV, IG, IRFAB, IQFAB>::pud_query_propagator(
+    typename IQFAB,
+    typename IGNR>
+pud_query_propagator<BM, U, S, N, IGNP, IMN, IAR, IAC, IMV, IG, IRFAB, IQFAB, IGNR>::pud_query_propagator(
     IGNP& get_node_parent,
     IMN& make_node,
     IAR& allocate_root_interval,
@@ -72,7 +75,8 @@ pud_query_propagator<BM, U, S, N, IGNP, IMN, IAR, IAC, IMV, IG, IRFAB, IQFAB>::p
     IMV& make_var,
     IG& globalize,
     IRFAB& record_fp,
-    IQFAB& query_fp) :
+    IQFAB& query_fp,
+    IGNR& get_node_refuted) :
     get_node_parent_(get_node_parent),
     make_node_(make_node),
     allocate_root_interval_(allocate_root_interval),
@@ -80,7 +84,8 @@ pud_query_propagator<BM, U, S, N, IGNP, IMN, IAR, IAC, IMV, IG, IRFAB, IQFAB>::p
     make_var_(make_var),
     globalize_(globalize),
     record_fp_(record_fp),
-    query_fp_(query_fp)
+    query_fp_(query_fp),
+    get_node_refuted_(get_node_refuted)
     {}
 
 template<
@@ -95,8 +100,9 @@ template<
     typename IMV,
     typename IG,
     typename IRFAB,
-    typename IQFAB>
-pud_query_propagator<BM, U, S, N, IGNP, IMN, IAR, IAC, IMV, IG, IRFAB, IQFAB>::query_node_handle pud_query_propagator<BM, U, S, N, IGNP, IMN, IAR, IAC, IMV, IG, IRFAB, IQFAB>::root() {
+    typename IQFAB,
+    typename IGNR>
+pud_query_propagator<BM, U, S, N, IGNP, IMN, IAR, IAC, IMV, IG, IRFAB, IQFAB, IGNR>::query_node_handle pud_query_propagator<BM, U, S, N, IGNP, IMN, IAR, IAC, IMV, IG, IRFAB, IQFAB, IGNR>::root() {
     return query_node_handle{
         std::make_shared<pud_query_node>(
             pud_query_node{
@@ -121,10 +127,15 @@ template<
     typename IMV,
     typename IG,
     typename IRFAB,
-    typename IQFAB>
-std::optional<typename pud_query_propagator<BM, U, S, N, IGNP, IMN, IAR, IAC, IMV, IG, IRFAB, IQFAB>::query_node_handle> pud_query_propagator<BM, U, S, N, IGNP, IMN, IAR, IAC, IMV, IG, IRFAB, IQFAB>::propagate(query_node_handle current, const pud_node* child_node) {
+    typename IQFAB,
+    typename IGNR>
+std::optional<typename pud_query_propagator<BM, U, S, N, IGNP, IMN, IAR, IAC, IMV, IG, IRFAB, IQFAB, IGNR>::query_node_handle> pud_query_propagator<BM, U, S, N, IGNP, IMN, IAR, IAC, IMV, IG, IRFAB, IQFAB, IGNR>::propagate(query_node_handle current, const pud_node* child_node) {
     const pud_node* current_node = current.query_node->node;
 
+    // if the child node is refuted, can't traverse to it
+    if (get_node_refuted_.get(child_node))
+        return std::nullopt;
+    
     // make sure descent is continuous
     DEBUG_ASSERT(get_node_parent_.get(child_node) == current_node);
 
@@ -179,8 +190,9 @@ template<
     typename IMV,
     typename IG,
     typename IRFAB,
-    typename IQFAB>
-typename pud_query_propagator<BM, U, S, N, IGNP, IMN, IAR, IAC, IMV, IG, IRFAB, IQFAB>::query_node_handle pud_query_propagator<BM, U, S, N, IGNP, IMN, IAR, IAC, IMV, IG, IRFAB, IQFAB>::open_query(typename pud_query_propagator<BM, U, S, N, IGNP, IMN, IAR, IAC, IMV, IG, IRFAB, IQFAB>::query_node_handle caller, const expr* query_expr) {
+    typename IQFAB,
+    typename IGNR>
+typename pud_query_propagator<BM, U, S, N, IGNP, IMN, IAR, IAC, IMV, IG, IRFAB, IQFAB, IGNR>::query_node_handle pud_query_propagator<BM, U, S, N, IGNP, IMN, IAR, IAC, IMV, IG, IRFAB, IQFAB, IGNR>::open_query(typename pud_query_propagator<BM, U, S, N, IGNP, IMN, IAR, IAC, IMV, IG, IRFAB, IQFAB, IGNR>::query_node_handle caller, const expr* query_expr) {
     uint32_t caller_frame_offset = caller.query_node->frame_offset;
     uint32_t caller_lvc = caller.query_node->lvc;
     om_interval caller_interval = caller.query_node->interval;
@@ -227,8 +239,9 @@ template<
     typename IMV,
     typename IG,
     typename IRFAB,
-    typename IQFAB>
-const pud_node* pud_query_propagator<BM, U, S, N, IGNP, IMN, IAR, IAC, IMV, IG, IRFAB, IQFAB>::close_query(typename pud_query_propagator<BM, U, S, N, IGNP, IMN, IAR, IAC, IMV, IG, IRFAB, IQFAB>::query_node_handle current) {
+    typename IQFAB,
+    typename IGNR>
+const pud_node* pud_query_propagator<BM, U, S, N, IGNP, IMN, IAR, IAC, IMV, IG, IRFAB, IQFAB, IGNR>::close_query(typename pud_query_propagator<BM, U, S, N, IGNP, IMN, IAR, IAC, IMV, IG, IRFAB, IQFAB, IGNR>::query_node_handle current) {
     // 1. extract relevant fields
     uint32_t frame_offset = current.query_node->frame_offset;
     om_interval interval = current.query_node->interval;
