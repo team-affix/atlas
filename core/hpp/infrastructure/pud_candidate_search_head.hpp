@@ -7,7 +7,8 @@
 
 template<
     typename QueryHandle,
-    typename ChildIterator, 
+    typename ChildIterator,
+    typename ITryAddHead,
     typename IAdvanceWitnessSearchHead,
     typename IForkWitnessSearchHead,
     typename IGetNodeIsLeaf,
@@ -15,6 +16,7 @@ template<
     typename IPropagateQueryHandle>
 struct pud_candidate_search_head {
     pud_candidate_search_head(
+        ITryAddHead& try_add_head,
         IAdvanceWitnessSearchHead& advance_witness_search_head,
         IForkWitnessSearchHead& fork_witness_search_head,
         IGetNodeIsLeaf& get_node_is_leaf,
@@ -33,6 +35,10 @@ private:
         ChildIterator end_witness_root_;
     };
 
+    std::optional<pud_mhws_head_id> try_replace_witness();
+    void advance(pud_mhws_head_id survivor_id);
+
+    ITryAddHead& try_add_head_;
     IAdvanceWitnessSearchHead& advance_witness_search_head_;
     IForkWitnessSearchHead& fork_witness_search_head_;
     IGetNodeIsLeaf& get_node_is_leaf_;
@@ -44,14 +50,16 @@ private:
     std::optional<choice_point_context> choice_point_context_;
 };
 
-template<typename QH, typename CI, typename IAWSH, typename IFWSH, typename IGNL, typename IGC, typename IPQH>
-pud_candidate_search_head<QH, CI, IAWSH, IFWSH, IGNL, IGC, IPQH>::pud_candidate_search_head(
+template<typename QH, typename CI, typename ITAH, typename IAWSH, typename IFWSH, typename IGNL, typename IGC, typename IPQH>
+pud_candidate_search_head<QH, CI, ITAH, IAWSH, IFWSH, IGNL, IGC, IPQH>::pud_candidate_search_head(
+    ITAH& try_add_head,
     IAWSH& advance_witness_search_head,
     IFWSH& fork_witness_search_head,
     IGNL& get_node_is_leaf,
     IGC& get_children,
     IPQH& propagate_query_handle,
     pud_query_position<QH> search_root_position) :
+    try_add_head_(try_add_head),
     advance_witness_search_head_(advance_witness_search_head),
     fork_witness_search_head_(fork_witness_search_head),
     get_node_is_leaf_(get_node_is_leaf),
@@ -61,10 +69,11 @@ pud_candidate_search_head<QH, CI, IAWSH, IFWSH, IGNL, IGC, IPQH>::pud_candidate_
     current_query_handle_(search_root_position.query_handle) {
 }
 
-template<typename QH, typename CI, typename IAWSH, typename IFWSH, typename IGNL, typename IGC, typename IPQH>
-pud_candidate_search_head<QH, CI, IAWSH, IFWSH, IGNL, IGC, IPQH>::pud_candidate_search_head(
+template<typename QH, typename CI, typename ITAH, typename IAWSH, typename IFWSH, typename IGNL, typename IGC, typename IPQH>
+pud_candidate_search_head<QH, CI, ITAH, IAWSH, IFWSH, IGNL, IGC, IPQH>::pud_candidate_search_head(
     const pud_candidate_search_head& other,
     QH new_query_handle) :
+    try_add_head_(other.try_add_head_),
     advance_witness_search_head_(other.advance_witness_search_head_),
     fork_witness_search_head_(other.fork_witness_search_head_),
     get_node_is_leaf_(other.get_node_is_leaf_),
@@ -124,8 +133,8 @@ pud_candidate_search_head<QH, CI, IAWSH, IFWSH, IGNL, IGC, IPQH>::pud_candidate_
     };
 }
 
-template<typename QH, typename CI, typename IAWSH, typename IFWSH, typename IGNL, typename IGC, typename IPQH>
-std::optional<pud_query_position<QH>> pud_candidate_search_head<QH, CI, IAWSH, IFWSH, IGNL, IGC, IPQH>::resume() {
+template<typename QH, typename CI, typename ITAH, typename IAWSH, typename IFWSH, typename IGNL, typename IGC, typename IPQH>
+std::optional<pud_query_position<QH>> pud_candidate_search_head<QH, CI, ITAH, IAWSH, IFWSH, IGNL, IGC, IPQH>::resume() {
     // there are three possible starting states:
     // 1. no witnesses found yet
     // 2. self-witness situation
@@ -160,6 +169,52 @@ std::optional<pud_query_position<QH>> pud_candidate_search_head<QH, CI, IAWSH, I
         
     }
         
+}
+
+template<typename QH, typename CI, typename ITAH, typename IAWSH, typename IFWSH, typename IGNL, typename IGC, typename IPQH>
+std::optional<pud_mhws_head_id> pud_candidate_search_head<QH, CI, ITAH, IAWSH, IFWSH, IGNL, IGC, IPQH>::try_replace_witness() {
+    // scan for replacement starting from next_witness_root_
+
+    auto& next_witness_root = choice_point_context_->next_witness_root_;
+    auto end_witness_root = choice_point_context_->end_witness_root_;
+
+    while (next_witness_root != end_witness_root) {
+
+        const pud_node* witness_search_root = *(next_witness_root++);
+
+        auto optional_new_query_handle = propagate_query_handle_.propagate(current_query_handle_, witness_search_root);
+
+        if (!optional_new_query_handle.has_value())
+            continue;
+
+        auto search_root_position = pud_query_position<QH>{
+            .handle = optional_new_query_handle.value(),
+            .node = witness_search_root,
+        };
+
+        auto optional_new_head_id = try_add_head_.try_add_head(search_root_position);
+
+        if (optional_new_head_id.has_value())
+            return optional_new_head_id.value();
+    }
+
+    return std::nullopt;
+}
+
+template<typename QH, typename CI, typename ITAH, typename IAWSH, typename IFWSH, typename IGNL, typename IGC, typename IPQH>
+void pud_candidate_search_head<QH, CI, ITAH, IAWSH, IFWSH, IGNL, IGC, IPQH>::advance(pud_mhws_head_id survivor_id) {
+    // advance toward the surviving witness search
+    
+    pud_query_position<QH> new_position = advance_witness_search_head_.advance(survivor_id);
+
+    // update our position
+    node_path_.push_back(new_position.node);
+    current_query_handle_ = new_position.handle;
+
+    // update our choice point context
+    choice_point_context_->next_witness_root_ = ;
+    choice_point_context_->end_witness_root_ = ;
+    
 }
 
 #endif
