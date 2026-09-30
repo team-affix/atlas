@@ -127,21 +127,24 @@ template<
     typename IPQN,
     typename IGCSI>
 std::vector<pud_mhws_head_id> pud_mhws<QP, CI, ICNL, IGNC, IPQN, IGCSI>::invalidate_leaf(const pud_node* node) {
-    const auto& head_ids = witness_to_heads_.at(node);
+    auto head_ids = unlink_witness(node);
 
-    std::vector<pud_mhws_head_id> to_relink;
-    std::vector<pud_mhws_head_id> to_remove;
+    std::vector<pud_mhws_head_id> result;
 
-    for (const auto& head_id : head_ids) {
+    for (pud_mhws_head_id head_id : head_ids) {
         auto& head = heads_.at(head_id);
         const pud_node* new_witness = head.resume();
-        if (new_witness == nullptr) {
-            to_remove.push_back(head_id);
+
+        if (new_witness != nullptr) {
+            link(head_id, new_witness);
             continue;
         }
-        to_relink.push_back(head_id);
+        
+        heads_.erase(head_id);
+        result.push_back(head_id);
     }
-    
+
+    return std::move(result);
 }
 
 template<
