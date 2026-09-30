@@ -9,12 +9,14 @@ template<
     typename QueryHandle,
     typename ChildIterator, 
     typename IAdvanceWitnessSearchHead,
+    typename IForkWitnessSearchHead,
     typename IGetNodeIsLeaf,
     typename IGetChildren,
     typename IPropagateQueryHandle>
 struct pud_candidate_search_head {
     pud_candidate_search_head(
         IAdvanceWitnessSearchHead& advance_witness_search_head,
+        IForkWitnessSearchHead& fork_witness_search_head,
         IGetNodeIsLeaf& get_node_is_leaf,
         IGetChildren& get_children,
         IPropagateQueryHandle& propagate_query_handle,
@@ -32,6 +34,7 @@ private:
     };
 
     IAdvanceWitnessSearchHead& advance_witness_search_head_;
+    IForkWitnessSearchHead& fork_witness_search_head_;
     IGetNodeIsLeaf& get_node_is_leaf_;
     IGetChildren& get_children_;
     IPropagateQueryHandle& propagate_query_handle_;
@@ -41,14 +44,16 @@ private:
     std::optional<choice_point_context> choice_point_context_;
 };
 
-template<typename QH, typename CI, typename IAWSH, typename IGNL, typename IGC, typename IPQH>
-pud_candidate_search_head<QH, CI, IAWSH, IGNL, IGC, IPQH>::pud_candidate_search_head(
+template<typename QH, typename CI, typename IAWSH, typename IFWSH, typename IGNL, typename IGC, typename IPQH>
+pud_candidate_search_head<QH, CI, IAWSH, IFWSH, IGNL, IGC, IPQH>::pud_candidate_search_head(
     IAWSH& advance_witness_search_head,
+    IFWSH& fork_witness_search_head,
     IGNL& get_node_is_leaf,
     IGC& get_children,
     IPQH& propagate_query_handle,
     pud_query_position<QH> search_root_position) :
     advance_witness_search_head_(advance_witness_search_head),
+    fork_witness_search_head_(fork_witness_search_head),
     get_node_is_leaf_(get_node_is_leaf),
     get_children_(get_children),
     propagate_query_handle_(propagate_query_handle),
@@ -56,11 +61,12 @@ pud_candidate_search_head<QH, CI, IAWSH, IGNL, IGC, IPQH>::pud_candidate_search_
     current_query_handle_(search_root_position.query_handle) {
 }
 
-template<typename QH, typename CI, typename IAWSH, typename IGNL, typename IGC, typename IPQH>
-pud_candidate_search_head<QH, CI, IAWSH, IGNL, IGC, IPQH>::pud_candidate_search_head(
+template<typename QH, typename CI, typename IAWSH, typename IFWSH, typename IGNL, typename IGC, typename IPQH>
+pud_candidate_search_head<QH, CI, IAWSH, IFWSH, IGNL, IGC, IPQH>::pud_candidate_search_head(
     const pud_candidate_search_head& other,
     QH new_query_handle) :
     advance_witness_search_head_(other.advance_witness_search_head_),
+    fork_witness_search_head_(other.fork_witness_search_head_),
     get_node_is_leaf_(other.get_node_is_leaf_),
     get_children_(other.get_children_),
     propagate_query_handle_(other.propagate_query_handle_) {
@@ -93,13 +99,33 @@ pud_candidate_search_head<QH, CI, IAWSH, IGNL, IGC, IPQH>::pud_candidate_search_
     // if the other head was a self-witness, we are done
     if (!other.choice_point_context_.has_value())
         return;
+
+    // we are a choice-point
     
-    // fork witness searches
+    const auto& other_witness_search_a = other.choice_point_context_->witness_search_a_;
+    const auto& other_witness_search_b = other.choice_point_context_->witness_search_b_;
     
+    std::optional<pud_mhws_head_id> forked_witness_a;
+    std::optional<pud_mhws_head_id> forked_witness_b;
+
+    if (other_witness_search_a.has_value())
+        forked_witness_a = fork_witness_search_head_.try_fork_head(other_witness_search_a.value(), current_query_handle);
+    if (other_witness_search_b.has_value())
+        forked_witness_b = fork_witness_search_head_.try_fork_head(other_witness_search_b.value(), current_query_handle);
+    
+    auto other_next_witness_root = other.choice_point_context_->next_witness_root_;
+    auto other_end_witness_root = other.choice_point_context_->end_witness_root_;
+        
+    choice_point_context_ = {
+        .witness_search_a_ = forked_witness_a,
+        .witness_search_b_ = forked_witness_b,
+        .next_witness_root_ = other_next_witness_root,
+        .end_witness_root_ = other_end_witness_root,
+    };
 }
 
-template<typename QH, typename CI, typename IAWSH, typename IGNL, typename IGC, typename IPQH>
-std::optional<pud_query_position<QH>> pud_candidate_search_head<QH, CI, IAWSH, IGNL, IGC, IPQH>::resume() {
+template<typename QH, typename CI, typename IAWSH, typename IFWSH, typename IGNL, typename IGC, typename IPQH>
+std::optional<pud_query_position<QH>> pud_candidate_search_head<QH, CI, IAWSH, IFWSH, IGNL, IGC, IPQH>::resume() {
     // there are three possible starting states:
     // 1. no witnesses found yet
     // 2. self-witness situation
