@@ -26,6 +26,7 @@ struct pud_mhws {
     std::optional<pud_mhws_head_id> try_add_head(QueryPosition search_root_position);
     void remove_head(pud_mhws_head_id head_id);
     std::vector<pud_mhws_head_id> invalidate_leaf(const pud_node* node);
+    QueryPosition advance_head(pud_mhws_head_id head_id);
 private:
     using head_type = pud_witness_search_head<
         QueryPosition,
@@ -145,6 +146,18 @@ std::vector<pud_mhws_head_id> pud_mhws<QP, CI, ICNL, IGNC, IPQN, IGCSI>::invalid
     }
 
     return std::move(result);
+}
+
+template<
+    typename QP,
+    typename CI,
+    typename ICNL,
+    typename IGNC,
+    typename IPQN,
+    typename IGCSI>
+QP pud_mhws<QP, CI, ICNL, IGNC, IPQN, IGCSI>::advance_head(pud_mhws_head_id head_id) {
+    auto& head = heads_.at(head_id);
+    return head.advance();
 }
 
 template<
