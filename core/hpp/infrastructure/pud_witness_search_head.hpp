@@ -4,6 +4,7 @@
 #include <deque>
 #include <optional>
 #include "value_objects/pud_node.hpp"
+#include "value_objects/pud_query_frame.hpp"
 #include "value_objects/pud_query_position.hpp"
 
 template<
@@ -23,14 +24,10 @@ struct pud_witness_search_head {
     pud_witness_search_head(
         const pud_witness_search_head& other,
         QueryHandle search_root_handle);
-    std::pair<pud_query_position<QueryHandle>, bool> advance_root();
+    std::pair<pud_query_frame<QueryHandle, ChildIterator>, bool> advance_root();
     std::optional<const pud_node*> resume();
 private:
-    struct frame {
-        pud_query_position<QueryHandle> position;
-        ChildIterator next_child_it;
-        ChildIterator end_child_it;
-    };
+    using frame = pud_query_frame<QueryHandle, ChildIterator>;
 
     ICheckNodeLeaf& check_node_leaf_;
     IGetNodeChildren& get_node_children_;
@@ -98,11 +95,12 @@ pud_witness_search_head<QH, CI, ICNL, IGCN, IPQN, IGCSI>::pud_witness_search_hea
 }
 
 template<typename QH, typename CI, typename ICNL, typename IGCN, typename IPQN, typename IGCSI>
-std::pair<pud_query_position<QH>, bool> pud_witness_search_head<QH, CI, ICNL, IGCN, IPQN, IGCSI>::advance_root() {
-    pud_query_position<QH> root_position = frame_stack_.front();
+std::pair<pud_query_frame<QH, CI>, bool> pud_witness_search_head<QH, CI, ICNL, IGCN, IPQN, IGCSI>::advance_root() {
+    pud_query_frame<QH, CI> root_frame = frame_stack_.front();
     frame_stack_.pop_front();
-    return {root_position, frame_stack_.empty()};
+    return {root_frame, frame_stack_.empty()};
 }
+
 template<typename QH, typename CI, typename ICNL, typename IGCN, typename IPQN, typename IGCSI>
 std::optional<const pud_node*> pud_witness_search_head<QH, CI, ICNL, IGCN, IPQN, IGCSI>::resume() {
     // basic idea:

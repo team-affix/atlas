@@ -11,7 +11,7 @@ template<
     typename ITryAddHead,
     typename IAdvanceWitnessSearchHead,
     typename IForkWitnessSearchHead,
-    typename IGetNodeIsLeaf,
+    typename ICheckNodeLeaf,
     typename IGetChildren,
     typename IPropagateQueryHandle>
 struct pud_candidate_search_head {
@@ -19,14 +19,15 @@ struct pud_candidate_search_head {
         ITryAddHead& try_add_head,
         IAdvanceWitnessSearchHead& advance_witness_search_head,
         IForkWitnessSearchHead& fork_witness_search_head,
-        IGetNodeIsLeaf& get_node_is_leaf,
+        ICheckNodeLeaf& check_node_leaf,
         IGetChildren& get_children,
         IPropagateQueryHandle& propagate_query_handle,
         pud_query_position<QueryHandle> search_root_position);
     pud_candidate_search_head(
         const pud_candidate_search_head& other,
         QueryHandle new_query_handle);
-        std::optional<pud_query_position<QueryHandle>> resume();
+    std::optional<pud_query_position<QueryHandle>> resume();
+    void witness_refuted(pud_mhws_head_id witness_id);
 private:
     struct choice_point_context {
         std::optional<pud_mhws_head_id> witness_search_a_;
@@ -41,7 +42,7 @@ private:
     ITryAddHead& try_add_head_;
     IAdvanceWitnessSearchHead& advance_witness_search_head_;
     IForkWitnessSearchHead& fork_witness_search_head_;
-    IGetNodeIsLeaf& get_node_is_leaf_;
+    ICheckNodeLeaf& check_node_leaf_;
     IGetChildren& get_children_;
     IPropagateQueryHandle& propagate_query_handle_;
 
@@ -50,33 +51,33 @@ private:
     std::optional<choice_point_context> choice_point_context_;
 };
 
-template<typename QH, typename CI, typename ITAH, typename IAWSH, typename IFWSH, typename IGNL, typename IGC, typename IPQH>
-pud_candidate_search_head<QH, CI, ITAH, IAWSH, IFWSH, IGNL, IGC, IPQH>::pud_candidate_search_head(
+template<typename QH, typename CI, typename ITAH, typename IAWSH, typename IFWSH, typename ICNL, typename IGC, typename IPQH>
+pud_candidate_search_head<QH, CI, ITAH, IAWSH, IFWSH, ICNL, IGC, IPQH>::pud_candidate_search_head(
     ITAH& try_add_head,
     IAWSH& advance_witness_search_head,
     IFWSH& fork_witness_search_head,
-    IGNL& get_node_is_leaf,
+    ICNL& check_node_leaf,
     IGC& get_children,
     IPQH& propagate_query_handle,
     pud_query_position<QH> search_root_position) :
     try_add_head_(try_add_head),
     advance_witness_search_head_(advance_witness_search_head),
     fork_witness_search_head_(fork_witness_search_head),
-    get_node_is_leaf_(get_node_is_leaf),
+    check_node_leaf_(check_node_leaf),
     get_children_(get_children),
     propagate_query_handle_(propagate_query_handle),
     node_path_({search_root_position.node}),
     current_query_handle_(search_root_position.query_handle) {
 }
 
-template<typename QH, typename CI, typename ITAH, typename IAWSH, typename IFWSH, typename IGNL, typename IGC, typename IPQH>
-pud_candidate_search_head<QH, CI, ITAH, IAWSH, IFWSH, IGNL, IGC, IPQH>::pud_candidate_search_head(
+template<typename QH, typename CI, typename ITAH, typename IAWSH, typename IFWSH, typename ICNL, typename IGC, typename IPQH>
+pud_candidate_search_head<QH, CI, ITAH, IAWSH, IFWSH, ICNL, IGC, IPQH>::pud_candidate_search_head(
     const pud_candidate_search_head& other,
     QH new_query_handle) :
     try_add_head_(other.try_add_head_),
     advance_witness_search_head_(other.advance_witness_search_head_),
     fork_witness_search_head_(other.fork_witness_search_head_),
-    get_node_is_leaf_(other.get_node_is_leaf_),
+    check_node_leaf_(other.check_node_leaf_),
     get_children_(other.get_children_),
     propagate_query_handle_(other.propagate_query_handle_) {
 
@@ -133,8 +134,8 @@ pud_candidate_search_head<QH, CI, ITAH, IAWSH, IFWSH, IGNL, IGC, IPQH>::pud_cand
     };
 }
 
-template<typename QH, typename CI, typename ITAH, typename IAWSH, typename IFWSH, typename IGNL, typename IGC, typename IPQH>
-std::optional<pud_query_position<QH>> pud_candidate_search_head<QH, CI, ITAH, IAWSH, IFWSH, IGNL, IGC, IPQH>::resume() {
+template<typename QH, typename CI, typename ITAH, typename IAWSH, typename IFWSH, typename ICNL, typename IGC, typename IPQH>
+std::optional<pud_query_position<QH>> pud_candidate_search_head<QH, CI, ITAH, IAWSH, IFWSH, ICNL, IGC, IPQH>::resume() {
     // there are three possible starting states:
     // 1. no witnesses found yet
     // 2. self-witness situation
@@ -146,7 +147,12 @@ std::optional<pud_query_position<QH>> pud_candidate_search_head<QH, CI, ITAH, IA
     // check if we are at a leaf node
     
     
-    // if we are currently a choice-point, try to resume both witness searches.
+    // if we are currently a choice-point, ~~try to resume both witness searches.~~
+    //     EDIT: we don't resume them manually. this is because, everything is reactive.
+    //           If a witness search is refuted, we get notified and update accordingly.
+    //           If we need to find a replacement, we do so and eagerly determine whether
+    //           it was successful. The invariant we are using is: if a witness search is not
+    //           nullopt, then it is valid and pointing to a valid witness.
     //     any witness search which fails to find a solution is marked as such and
     //     we resume from next_witness_root_ searching for replacements.
     
@@ -155,24 +161,77 @@ std::optional<pud_query_position<QH>> pud_candidate_search_head<QH, CI, ITAH, IA
     
     // if we cannot find two witnesses, we advance toward the surviving witness search
 
-    const auto& current_position = position_stack_.back();
+    while (true) {
+
+        const auto& current_node = node_path_.back();
+        
+        // if we are already at a leaf node, we are done. we are a self-witness
+        if (check_node_leaf_.check_leaf(current_node)) {
+            choice_point_context_ = std::nullopt;
+            return pud_query_position<QH>{
+                .handle = current_query_handle_,
+                .node = current_node,
+            };
+        }
     
-    // if we are already at a leaf node, we are done. we are a self-witness
-    if (get_node_is_leaf_.get(current_position.node)) {
-        choice_point_context_ = std::nullopt;
-        return current_position;
+        // from this point on, we are not a self-witness
+    
+        if (!choice_point_context_.has_value()) {
+            const auto& children = get_children_.get(current_node);
+            choice_point_context_ = {
+                .witness_search_a_ = std::nullopt,
+                .witness_search_b_ = std::nullopt,
+                .next_witness_root_ = children.begin(),
+                .end_witness_root_ = children.end(),
+            };
+        }
+    
+        auto& witness_a = choice_point_context_->witness_search_a_;
+        auto& witness_b = choice_point_context_->witness_search_b_;
+    
+        // try to find replacement witnesses if missing
+        if (!witness_a.has_value())
+            witness_a = try_replace_witness();
+        if (!witness_b.has_value())
+            witness_b = try_replace_witness();
+    
+        // if both witnesses exist, we are done (valid choice point)
+        if (witness_a.has_value() && witness_b.has_value())
+            return pud_query_position<QH>{
+                .handle = current_query_handle_,
+                .node = current_node,
+            };
+        
+        // if both witnesses are missing, we are refuted
+        if (!witness_a.has_value() && !witness_b.has_value())
+            return std::nullopt;
+    
+        // if only A exists, we advance toward it
+        if (witness_a.has_value() && !witness_b.has_value())
+            advance(witness_a.value());
+    
+        // if only B exists, we advance toward it
+        if (!witness_a.has_value() && witness_b.has_value())
+            advance(witness_b.value());
     }
 
-    // from this point on, we are not a self-witness
-    if (!choice_point_context_.has_value()) {
-        const auto& children = get_children_.get(current_position_.node);
-        
-    }
-        
+    return std::nullopt;
 }
 
-template<typename QH, typename CI, typename ITAH, typename IAWSH, typename IFWSH, typename IGNL, typename IGC, typename IPQH>
-std::optional<pud_mhws_head_id> pud_candidate_search_head<QH, CI, ITAH, IAWSH, IFWSH, IGNL, IGC, IPQH>::try_replace_witness() {
+template<typename QH, typename CI, typename ITAH, typename IAWSH, typename IFWSH, typename ICNL, typename IGC, typename IPQH>
+void pud_candidate_search_head<QH, CI, ITAH, IAWSH, IFWSH, ICNL, IGC, IPQH>::witness_refuted(pud_mhws_head_id witness_id) {
+    // invalidate the witness
+    auto& witness_a = choice_point_context_->witness_search_a_;
+    auto& witness_b = choice_point_context_->witness_search_b_;
+
+    if (witness_a.has_value() && witness_a.value() == witness_id)
+        witness_a = std::nullopt;
+    else
+        witness_b = std::nullopt;
+}
+
+template<typename QH, typename CI, typename ITAH, typename IAWSH, typename IFWSH, typename ICNL, typename IGC, typename IPQH>
+std::optional<pud_mhws_head_id> pud_candidate_search_head<QH, CI, ITAH, IAWSH, IFWSH, ICNL, IGC, IPQH>::try_replace_witness() {
     // scan for replacement starting from next_witness_root_
 
     auto& next_witness_root = choice_point_context_->next_witness_root_;
@@ -201,20 +260,19 @@ std::optional<pud_mhws_head_id> pud_candidate_search_head<QH, CI, ITAH, IAWSH, I
     return std::nullopt;
 }
 
-template<typename QH, typename CI, typename ITAH, typename IAWSH, typename IFWSH, typename IGNL, typename IGC, typename IPQH>
-void pud_candidate_search_head<QH, CI, ITAH, IAWSH, IFWSH, IGNL, IGC, IPQH>::advance(pud_mhws_head_id survivor_id) {
+template<typename QH, typename CI, typename ITAH, typename IAWSH, typename IFWSH, typename ICNL, typename IGC, typename IPQH>
+void pud_candidate_search_head<QH, CI, ITAH, IAWSH, IFWSH, ICNL, IGC, IPQH>::advance(pud_mhws_head_id survivor_id) {
     // advance toward the surviving witness search
     
-    pud_query_position<QH> new_position = advance_witness_search_head_.advance(survivor_id);
+    pud_query_frame<QH, CI> witness_root_frame = advance_witness_search_head_.advance(survivor_id);
 
     // update our position
-    node_path_.push_back(new_position.node);
-    current_query_handle_ = new_position.handle;
+    node_path_.push_back(witness_root_frame.position.node);
+    current_query_handle_ = witness_root_frame.position.handle;
 
     // update our choice point context
-    choice_point_context_->next_witness_root_ = ;
-    choice_point_context_->end_witness_root_ = ;
-    
+    choice_point_context_->next_witness_root_ = witness_root_frame.next_child_it;
+    choice_point_context_->end_witness_root_ = witness_root_frame.end_child_it;
 }
 
 #endif

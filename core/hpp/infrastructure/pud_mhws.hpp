@@ -9,6 +9,7 @@
 #include "debug_assert.hpp"
 #include "infrastructure/pud_witness_search_head.hpp"
 #include "value_objects/pud_mhws_head_id.hpp"
+#include "value_objects/pud_query_frame.hpp"
 
 template<
     typename QueryHandle,
@@ -26,7 +27,7 @@ struct pud_mhws {
     std::optional<pud_mhws_head_id> try_add_head(pud_query_position<QueryHandle> search_root_position);
     void remove_head(pud_mhws_head_id head_id);
     std::vector<pud_mhws_head_id> invalidate_leaf(const pud_node* node);
-    pud_query_position<QueryHandle> advance_head(pud_mhws_head_id head_id);
+    pud_query_frame<QueryHandle, ChildIterator> advance_head(pud_mhws_head_id head_id);
     std::optional<pud_mhws_head_id> try_fork_head(pud_mhws_head_id head_id, QueryHandle new_query_handle);
 private:
     using head_type = pud_witness_search_head<
@@ -156,16 +157,16 @@ template<
     typename IGNC,
     typename IPQN,
     typename IGCSI>
-pud_query_position<QH> pud_mhws<QH, CI, ICNL, IGNC, IPQN, IGCSI>::advance_head(pud_mhws_head_id head_id) {
+pud_query_frame<QH, CI> pud_mhws<QH, CI, ICNL, IGNC, IPQN, IGCSI>::advance_head(pud_mhws_head_id head_id) {
     auto& head = heads_.at(head_id);
-    auto [new_position, dead_head] = head.advance_root();
+    auto [root_frame, dead_head] = head.advance_root();
 
     if (dead_head) {
         heads_.erase(head_id);
         unlink_head(head_id);
     }
-    
-    return new_position;
+
+    return root_frame;
 }
 
 template<
