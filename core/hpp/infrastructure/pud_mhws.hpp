@@ -5,6 +5,7 @@
 #include <unordered_map>
 #include <unordered_set>
 #include <utility>
+#include <vector>
 #include "debug_assert.hpp"
 #include "infrastructure/pud_witness_search_head.hpp"
 #include "value_objects/pud_mhws_head_id.hpp"
@@ -34,6 +35,10 @@ private:
         IPropagateQueryNodeHandle,
         IGetCallSiteIdx
     >;
+
+    void link(pud_mhws_head_id head_id, const pud_node* witness);
+    const pud_node* unlink_head(pud_mhws_head_id head_id);
+    std::vector<pud_mhws_head_id> unlink_witness(const pud_node* witness);
 
     ICheckNodeLeaf& check_node_leaf_;
     IGetNodeChildren& get_node_children_;
@@ -122,5 +127,65 @@ void pud_mhws<QP, CI, ICNL, IGNC, IPQN, IGCSI>::remove_head(pud_mhws_head_id hea
     head_to_witness_.erase(head_id);
     heads_.erase(head_id);
 }
+
+template<
+    typename QP,
+    typename CI,
+    typename ICNL,
+    typename IGNC,
+    typename IPQN,
+    typename IGCSI>
+std::vector<pud_mhws_head_id> pud_mhws<QP, CI, ICNL, IGNC, IPQN, IGCSI>::invalidate_leaf(const pud_node* node) {
+    const auto& head_ids = witness_to_heads_.at(node);
+
+    std::vector<pud_mhws_head_id> to_relink;
+    std::vector<pud_mhws_head_id> to_remove;
+
+    for (const auto& head_id : head_ids) {
+        auto& head = heads_.at(head_id);
+        const pud_node* new_witness = head.resume();
+        if (new_witness == nullptr) {
+            to_remove.push_back(head_id);
+            continue;
+        }
+        to_relink.push_back(head_id);
+    }
+    
+}
+
+template<
+    typename QP,
+    typename CI,
+    typename ICNL,
+    typename IGNC,
+    typename IPQN,
+    typename IGCSI>
+void pud_mhws<QP, CI, ICNL, IGNC, IPQN, IGCSI>::link(pud_mhws_head_id head_id, const pud_node* witness) {
+    head_to_witness_.insert({next_head_id_, witness});
+    witness_to_heads_[witness].insert(next_head_id_);
+}
+
+template<
+    typename QP,
+    typename CI,
+    typename ICNL,
+    typename IGNC,
+    typename IPQN,
+    typename IGCSI>
+const pud_node* pud_mhws<QP, CI, ICNL, IGNC, IPQN, IGCSI>::unlink_head(pud_mhws_head_id head_id) {
+
+}
+
+template<
+    typename QP,
+    typename CI,
+    typename ICNL,
+    typename IGNC,
+    typename IPQN,
+    typename IGCSI>
+std::vector<pud_mhws_head_id> pud_mhws<QP, CI, ICNL, IGNC, IPQN, IGCSI>::unlink_witness(const pud_node* witness) {
+
+}
+
 
 #endif
