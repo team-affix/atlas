@@ -38,7 +38,7 @@ private:
 
     void link(pud_mhws_head_id head_id, const pud_node* witness);
     const pud_node* unlink_head(pud_mhws_head_id head_id);
-    std::vector<pud_mhws_head_id> unlink_witness(const pud_node* witness);
+    std::unordered_set<pud_mhws_head_id> unlink_witness(const pud_node* witness);
 
     ICheckNodeLeaf& check_node_leaf_;
     IGetNodeChildren& get_node_children_;
@@ -98,8 +98,7 @@ std::optional<pud_mhws_head_id> pud_mhws<QP, CI, ICNL, IGNC, IPQN, IGCSI>::try_a
         return std::nullopt;
     }
     
-    head_to_witness_.insert({next_head_id_, witness});
-    witness_to_heads_[witness].insert(next_head_id_);
+    link(next_head_id_, witness);
     
     return next_head_id_++;
 }
@@ -112,20 +111,12 @@ template<
     typename IPQN,
     typename IGCSI>
 void pud_mhws<QP, CI, ICNL, IGNC, IPQN, IGCSI>::remove_head(pud_mhws_head_id head_id) {
-
     if (!heads_.contains(head_id))
         return;
-    
-    const pud_node* witness = head_to_witness_.at(head_id);
 
-    auto& head_ids = witness_to_heads_.at(witness);
-    head_ids.erase(head_id);
-
-    if (head_ids.empty())
-        witness_to_heads_.erase(witness);
-
-    head_to_witness_.erase(head_id);
     heads_.erase(head_id);
+    
+    unlink_head(head_id);
 }
 
 template<
@@ -173,7 +164,17 @@ template<
     typename IPQN,
     typename IGCSI>
 const pud_node* pud_mhws<QP, CI, ICNL, IGNC, IPQN, IGCSI>::unlink_head(pud_mhws_head_id head_id) {
+    auto extracted = head_to_witness_.extract(head_id);
 
+    const pud_node* witness = extracted.mapped();
+
+    auto& head_ids = witness_to_heads_.at(witness);
+    head_ids.erase(head_id);
+
+    if (head_ids.empty())
+        witness_to_heads_.erase(witness);
+
+    return witness;
 }
 
 template<
@@ -183,9 +184,14 @@ template<
     typename IGNC,
     typename IPQN,
     typename IGCSI>
-std::vector<pud_mhws_head_id> pud_mhws<QP, CI, ICNL, IGNC, IPQN, IGCSI>::unlink_witness(const pud_node* witness) {
+std::unordered_set<pud_mhws_head_id> pud_mhws<QP, CI, ICNL, IGNC, IPQN, IGCSI>::unlink_witness(const pud_node* witness) {
+    auto extracted = witness_to_heads_.extract(witness);
 
+    for (pud_mhws_head_id head_id : extracted.mapped()) {
+        head_to_witness_.erase(head_id);
+    }
+
+    return std::move(extracted.mapped());
 }
-
 
 #endif
