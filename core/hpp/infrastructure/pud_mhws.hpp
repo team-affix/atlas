@@ -11,7 +11,7 @@
 #include "value_objects/pud_mhws_head_id.hpp"
 
 template<
-    typename QueryPosition,
+    typename QueryHandle,
     typename ChildIterator,
     typename ICheckNodeLeaf,
     typename IGetNodeChildren,
@@ -23,13 +23,14 @@ struct pud_mhws {
         IGetNodeChildren& get_node_children,
         IPropagateQueryNodeHandle& propagate_query_node_handle,
         IGetCallSiteIdx& get_call_site_idx);
-    std::optional<pud_mhws_head_id> try_add_head(QueryPosition search_root_position);
+    std::optional<pud_mhws_head_id> try_add_head(pud_query_position<QueryHandle> search_root_position);
     void remove_head(pud_mhws_head_id head_id);
     std::vector<pud_mhws_head_id> invalidate_leaf(const pud_node* node);
-    QueryPosition advance_head(pud_mhws_head_id head_id);
+    pud_query_position<QueryHandle> advance_head(pud_mhws_head_id head_id);
+    std::optional<pud_mhws_head_id> try_fork_head(pud_mhws_head_id head_id, QueryHandle new_query_handle);
 private:
     using head_type = pud_witness_search_head<
-        QueryPosition,
+        QueryHandle,
         ChildIterator,
         ICheckNodeLeaf,
         IGetNodeChildren,
@@ -53,13 +54,13 @@ private:
 };
 
 template<
-    typename QP,
+    typename QH,
     typename CI,
     typename ICNL,
     typename IGNC,
     typename IPQN,
     typename IGCSI>
-pud_mhws<QP, CI, ICNL, IGNC, IPQN, IGCSI>::pud_mhws(
+pud_mhws<QH, CI, ICNL, IGNC, IPQN, IGCSI>::pud_mhws(
     ICNL& check_node_leaf,
     IGNC& get_node_children,
     IPQN& propagate_query_node_handle,
@@ -71,14 +72,14 @@ pud_mhws<QP, CI, ICNL, IGNC, IPQN, IGCSI>::pud_mhws(
     , next_head_id_(0) {}
 
 template<
-    typename QP,
+    typename QH,
     typename CI,
     typename ICNL,
     typename IGNC,
     typename IPQN,
     typename IGCSI>
-std::optional<pud_mhws_head_id> pud_mhws<QP, CI, ICNL, IGNC, IPQN, IGCSI>::try_add_head(
-    QP search_root_position) {
+std::optional<pud_mhws_head_id> pud_mhws<QH, CI, ICNL, IGNC, IPQN, IGCSI>::try_add_head(
+    pud_query_position<QH> search_root_position) {
     auto [head_it, head_inserted] = heads_.emplace(
         next_head_id_,
         head_type{
@@ -92,26 +93,26 @@ std::optional<pud_mhws_head_id> pud_mhws<QP, CI, ICNL, IGNC, IPQN, IGCSI>::try_a
 
     head_type& head = head_it->second;
 
-    const pud_node* witness = head.resume();
+    std::optional<const pud_node*> witness = head.resume();
 
-    if (witness == nullptr) {
+    if (!witness.has_value()) {
         heads_.erase(head_it);
         return std::nullopt;
     }
     
-    link(next_head_id_, witness);
+    link(next_head_id_, witness.value());
     
     return next_head_id_++;
 }
 
 template<
-    typename QP,
+    typename QH,
     typename CI,
     typename ICNL,
     typename IGNC,
     typename IPQN,
     typename IGCSI>
-void pud_mhws<QP, CI, ICNL, IGNC, IPQN, IGCSI>::remove_head(pud_mhws_head_id head_id) {
+void pud_mhws<QH, CI, ICNL, IGNC, IPQN, IGCSI>::remove_head(pud_mhws_head_id head_id) {
     if (!heads_.contains(head_id))
         return;
 
@@ -121,13 +122,13 @@ void pud_mhws<QP, CI, ICNL, IGNC, IPQN, IGCSI>::remove_head(pud_mhws_head_id hea
 }
 
 template<
-    typename QP,
+    typename QH,
     typename CI,
     typename ICNL,
     typename IGNC,
     typename IPQN,
     typename IGCSI>
-std::vector<pud_mhws_head_id> pud_mhws<QP, CI, ICNL, IGNC, IPQN, IGCSI>::invalidate_leaf(const pud_node* node) {
+std::vector<pud_mhws_head_id> pud_mhws<QH, CI, ICNL, IGNC, IPQN, IGCSI>::invalidate_leaf(const pud_node* node) {
     auto head_ids = unlink_witness(node);
 
     std::vector<pud_mhws_head_id> result;
@@ -149,37 +150,44 @@ std::vector<pud_mhws_head_id> pud_mhws<QP, CI, ICNL, IGNC, IPQN, IGCSI>::invalid
 }
 
 template<
-    typename QP,
+    typename QH,
     typename CI,
     typename ICNL,
     typename IGNC,
     typename IPQN,
     typename IGCSI>
-QP pud_mhws<QP, CI, ICNL, IGNC, IPQN, IGCSI>::advance_head(pud_mhws_head_id head_id) {
+pud_query_position<QH> pud_mhws<QH, CI, ICNL, IGNC, IPQN, IGCSI>::advance_head(pud_mhws_head_id head_id) {
     auto& head = heads_.at(head_id);
-    return head.advance();
+    auto [new_position, dead_head] = head.advance_root();
+
+    if (dead_head) {
+        heads_.erase(head_id);
+        unlink_head(head_id);
+    }
+    
+    return new_position;
 }
 
 template<
-    typename QP,
+    typename QH,
     typename CI,
     typename ICNL,
     typename IGNC,
     typename IPQN,
     typename IGCSI>
-void pud_mhws<QP, CI, ICNL, IGNC, IPQN, IGCSI>::link(pud_mhws_head_id head_id, const pud_node* witness) {
+void pud_mhws<QH, CI, ICNL, IGNC, IPQN, IGCSI>::link(pud_mhws_head_id head_id, const pud_node* witness) {
     head_to_witness_.insert({next_head_id_, witness});
     witness_to_heads_[witness].insert(next_head_id_);
 }
 
 template<
-    typename QP,
+    typename QH,
     typename CI,
     typename ICNL,
     typename IGNC,
     typename IPQN,
     typename IGCSI>
-const pud_node* pud_mhws<QP, CI, ICNL, IGNC, IPQN, IGCSI>::unlink_head(pud_mhws_head_id head_id) {
+const pud_node* pud_mhws<QH, CI, ICNL, IGNC, IPQN, IGCSI>::unlink_head(pud_mhws_head_id head_id) {
     auto extracted = head_to_witness_.extract(head_id);
 
     const pud_node* witness = extracted.mapped();
@@ -194,13 +202,13 @@ const pud_node* pud_mhws<QP, CI, ICNL, IGNC, IPQN, IGCSI>::unlink_head(pud_mhws_
 }
 
 template<
-    typename QP,
+    typename QH,
     typename CI,
     typename ICNL,
     typename IGNC,
     typename IPQN,
     typename IGCSI>
-std::unordered_set<pud_mhws_head_id> pud_mhws<QP, CI, ICNL, IGNC, IPQN, IGCSI>::unlink_witness(const pud_node* witness) {
+std::unordered_set<pud_mhws_head_id> pud_mhws<QH, CI, ICNL, IGNC, IPQN, IGCSI>::unlink_witness(const pud_node* witness) {
     auto extracted = witness_to_heads_.extract(witness);
 
     for (pud_mhws_head_id head_id : extracted.mapped()) {
@@ -208,6 +216,41 @@ std::unordered_set<pud_mhws_head_id> pud_mhws<QP, CI, ICNL, IGNC, IPQN, IGCSI>::
     }
 
     return std::move(extracted.mapped());
+}
+
+template<
+    typename QH,
+    typename CI,
+    typename ICNL,
+    typename IGNC,
+    typename IPQN,
+    typename IGCSI>
+std::optional<pud_mhws_head_id> pud_mhws<QH, CI, ICNL, IGNC, IPQN, IGCSI>::try_fork_head(pud_mhws_head_id head_id, QH new_query_handle) {
+    auto& old_head = heads_.at(head_id);
+
+    auto [new_head_it, new_head_inserted] = heads_.emplace(
+        {
+            next_head_id_,
+            head_type{
+                old_head,
+                new_query_handle
+            }
+        });
+
+    DEBUG_ASSERT(new_head_inserted);
+
+    head_type& new_head = new_head_it->second;
+
+    std::optional<const pud_node*> new_witness = new_head.resume();
+
+    if (!new_witness.has_value()) {
+        heads_.erase(new_head_it);
+        return std::nullopt;
+    }
+    
+    link(next_head_id_, new_witness.value());
+
+    return next_head_id_++;
 }
 
 #endif

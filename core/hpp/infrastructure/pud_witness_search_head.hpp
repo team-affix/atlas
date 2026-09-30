@@ -23,7 +23,7 @@ struct pud_witness_search_head {
     pud_witness_search_head(
         const pud_witness_search_head& other,
         QueryHandle search_root_handle);
-    pud_query_position<QueryHandle> advance_root();
+    std::pair<pud_query_position<QueryHandle>, bool> advance_root();
     std::optional<const pud_node*> resume();
 private:
     struct frame {
@@ -98,10 +98,10 @@ pud_witness_search_head<QH, CI, ICNL, IGCN, IPQN, IGCSI>::pud_witness_search_hea
 }
 
 template<typename QH, typename CI, typename ICNL, typename IGCN, typename IPQN, typename IGCSI>
-pud_query_position<QH> pud_witness_search_head<QH, CI, ICNL, IGCN, IPQN, IGCSI>::advance_root() {
+std::pair<pud_query_position<QH>, bool> pud_witness_search_head<QH, CI, ICNL, IGCN, IPQN, IGCSI>::advance_root() {
     pud_query_position<QH> root_position = frame_stack_.front();
     frame_stack_.pop_front();
-    return root_position;
+    return {root_position, frame_stack_.empty()};
 }
 template<typename QH, typename CI, typename ICNL, typename IGCN, typename IPQN, typename IGCSI>
 std::optional<const pud_node*> pud_witness_search_head<QH, CI, ICNL, IGCN, IPQN, IGCSI>::resume() {
