@@ -18,7 +18,7 @@
 #include "value_objects/pud_forced_unfold.hpp"
 #include "value_objects/pud_lineage.hpp"
 #include "value_objects/pud_unfold_site.hpp"
-#include "value_objects/pud_witness_pair.hpp"
+#include "value_objects/pud_candidate_choice_point.hpp"
 #include "value_objects/pud_witness_search_context.hpp"
 
 using ::testing::NiceMock;
@@ -52,7 +52,7 @@ struct MockRebaseCandidate {
                  size_t,
                  uint32_t,
                  const pud_lineage*,
-                 const std::optional<pud_witness_pair>&), ());
+                 const std::optional<pud_candidate_choice_point>&), ());
 };
 
 using test_queries_t = pud_queries<
@@ -91,8 +91,8 @@ struct PudQueriesTest : public ::testing::Test {
                               size_t idx,
                               uint32_t lvc,
                               const pud_lineage* cursor,
-                              const std::optional<pud_witness_pair>& pins) {
-                std::optional<pud_witness_pair> retargeted = pins;
+                              const std::optional<pud_candidate_choice_point>& pins) {
+                std::optional<pud_candidate_choice_point> retargeted = pins;
                 if (retargeted.has_value()) {
                     retargeted->a.query_leaf = leaf;
                     retargeted->a.body_goal_idx = idx;
@@ -250,7 +250,7 @@ TEST_F(PudQueriesTest, ReplaceUnfoldedResumesWatchersOfTheDeadLeaf) {
         [this](pud_candidate_search_context& ctx) {
             if (ctx.cursor != &axiom_)
                 return;
-            ctx.witnesses = pud_witness_pair{
+            ctx.witnesses = pud_candidate_choice_point{
                 {&axiom_, 0, 1, &other_, &other_},
                 {&axiom_, 0, 1, &axiom_, &axiom_}};
         });
@@ -343,7 +343,7 @@ TEST_F(PudQueriesTest, ResumeDeadWitnessDropsFailedEdgesThenResumesCandidate) {
             if (ctx.cursor != &axiom_)
                 return;
             if (other_is_live) {
-                ctx.witnesses = pud_witness_pair{
+                ctx.witnesses = pud_candidate_choice_point{
                     {&axiom_, 0, 1, &other_, &other_},
                     {&axiom_, 0, 1, &axiom_, &axiom_}};
                 return;

@@ -1,11 +1,11 @@
-// pud_witness_search_context, pud_witness_pair, and candidate counterparts: public data + <=>.
+// pud_witness_search_context, pud_candidate_choice_point, and candidate counterparts: public data + <=>.
 
 #include <gtest/gtest.h>
 #include <optional>
 #include "value_objects/pud_candidate_search_context.hpp"
 #include "value_objects/pud_forced_unfold.hpp"
 #include "value_objects/pud_lineage.hpp"
-#include "value_objects/pud_witness_pair.hpp"
+#include "value_objects/pud_candidate_choice_point.hpp"
 #include "value_objects/pud_witness_search_context.hpp"
 
 struct PudSearchValueObjectsTest : public ::testing::Test {
@@ -25,8 +25,8 @@ TEST_F(PudSearchValueObjectsTest, WitnessContextOrdersBySearchRootThenCurrent) {
 
 TEST_F(PudSearchValueObjectsTest, WitnessPairOrdersByBothSides) {
     const pud_witness_search_context edge{&leaf_, 0, 0, &axiom_, &axiom_};
-    const pud_witness_pair left{edge, edge};
-    const pud_witness_pair right{edge, edge};
+    const pud_candidate_choice_point left{edge, edge};
+    const pud_candidate_choice_point right{edge, edge};
     EXPECT_EQ(left, right);
 }
 
@@ -43,7 +43,7 @@ TEST_F(PudSearchValueObjectsTest, CandidateContextHoldsOptionalWitnessPair) {
         0,
         0,
         &axiom_,
-        pud_witness_pair{edge, edge}};
+        pud_candidate_choice_point{edge, edge}};
     ASSERT_TRUE(ctx.witnesses.has_value());
     EXPECT_EQ(ctx.witnesses->a.search_root, &axiom_);
     EXPECT_EQ(ctx.cursor, &axiom_);

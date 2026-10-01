@@ -2,8 +2,13 @@
 #define PUD_CANDIDATE_SEARCH_HEAD_HPP
 
 #include <optional>
-#include "infrastructure/pud_mhws.hpp"
+#include <deque>
+#include "value_objects/pud_candidate_resume_context.hpp"
+#include "value_objects/pud_query_position.hpp"
 #include "value_objects/pud_mhws_head_id.hpp"
+#include "value_objects/pud_candidate_choice_point.hpp"
+#include "value_objects/pud_candidate_self_witness.hpp"
+#include "value_objects/pud_query_frame.hpp"
 
 template<
     typename QueryHandle,
@@ -26,7 +31,7 @@ struct pud_candidate_search_head {
     pud_candidate_search_head(
         const pud_candidate_search_head& other,
         QueryHandle new_query_handle);
-    std::optional<pud_query_position<QueryHandle>> resume();
+    std::optional<pud_candidate_resume_context<QueryHandle>> resume();
     void witness_refuted(pud_mhws_head_id witness_id);
 private:
     struct choice_point_context {
@@ -135,7 +140,7 @@ pud_candidate_search_head<QH, CI, ITAH, IAWSH, IFWSH, ICNL, IGC, IPQH>::pud_cand
 }
 
 template<typename QH, typename CI, typename ITAH, typename IAWSH, typename IFWSH, typename ICNL, typename IGC, typename IPQH>
-std::optional<pud_query_position<QH>> pud_candidate_search_head<QH, CI, ITAH, IAWSH, IFWSH, ICNL, IGC, IPQH>::resume() {
+std::optional<pud_candidate_resume_context<QH>> pud_candidate_search_head<QH, CI, ITAH, IAWSH, IFWSH, ICNL, IGC, IPQH>::resume() {
     // there are three possible starting states:
     // 1. no witnesses found yet
     // 2. self-witness situation
@@ -168,9 +173,11 @@ std::optional<pud_query_position<QH>> pud_candidate_search_head<QH, CI, ITAH, IA
         // if we are already at a leaf node, we are done. we are a self-witness
         if (check_node_leaf_.check_leaf(current_node)) {
             choice_point_context_ = std::nullopt;
-            return pud_query_position<QH>{
-                .handle = current_query_handle_,
-                .node = current_node,
+            return pud_candidate_resume_context<QH>{
+                .justification = pud_candidate_self_witness{
+                    .node = current_node,
+                },
+                .query_handle = current_query_handle_,
             };
         }
     
@@ -197,9 +204,12 @@ std::optional<pud_query_position<QH>> pud_candidate_search_head<QH, CI, ITAH, IA
     
         // if both witnesses exist, we are done (valid choice point)
         if (witness_a.has_value() && witness_b.has_value())
-            return pud_query_position<QH>{
-                .handle = current_query_handle_,
-                .node = current_node,
+            return pud_candidate_resume_context<QH>{
+                .justification = pud_candidate_choice_point{
+                    .witness_a = witness_a.value(),
+                    .witness_b = witness_b.value(),
+                },
+                .query_handle = current_query_handle_,
             };
         
         // if both witnesses are missing, we are refuted

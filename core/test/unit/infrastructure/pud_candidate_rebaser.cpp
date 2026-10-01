@@ -6,7 +6,7 @@
 #include "infrastructure/pud_candidate_rebaser.hpp"
 #include "value_objects/pud_candidate_search_context.hpp"
 #include "value_objects/pud_lineage.hpp"
-#include "value_objects/pud_witness_pair.hpp"
+#include "value_objects/pud_candidate_choice_point.hpp"
 #include "value_objects/pud_witness_search_context.hpp"
 
 using ::testing::NiceMock;
@@ -106,7 +106,7 @@ TEST_F(PudCandidateRebaserTest, SelfWitnessAfterSpineCallsCandidateResume) {
 }
 
 TEST_F(PudCandidateRebaserTest, KeptPinsStayLive) {
-    pud_witness_pair pins{make_pin(&c0_, &c0_), make_pin(&c1_, &c1_)};
+    pud_candidate_choice_point pins{make_pin(&c0_, &c0_), make_pin(&c1_, &c1_)};
     EXPECT_CALL(enter_path_, enter_to(&leaf_, 0, 2, &a0_)).WillOnce(Return(&a0_));
     EXPECT_CALL(enter_path_, enter_to(&leaf_, 0, 2, &c0_)).WillOnce(Return(&c0_));
     EXPECT_CALL(enter_path_, enter_to(&leaf_, 0, 2, &c1_)).WillOnce(Return(&c1_));
@@ -119,7 +119,7 @@ TEST_F(PudCandidateRebaserTest, KeptPinsStayLive) {
 }
 
 TEST_F(PudCandidateRebaserTest, ShortPinResumesFromFailedChild) {
-    pud_witness_pair pins{make_pin(&c0_, &g0_), make_pin(&c1_, &c1_)};
+    pud_candidate_choice_point pins{make_pin(&c0_, &g0_), make_pin(&c1_, &c1_)};
     EXPECT_CALL(enter_path_, enter_to(&leaf_, 0, 2, &a0_)).WillOnce(Return(&a0_));
     EXPECT_CALL(enter_path_, enter_to(&leaf_, 0, 2, &g0_)).WillOnce(Return(&c0_));
     EXPECT_CALL(enter_path_, enter_to(&leaf_, 0, 2, &c1_)).WillOnce(Return(&c1_));
@@ -144,7 +144,7 @@ TEST_F(PudCandidateRebaserTest, ShortPinResumesFromFailedChild) {
 }
 
 TEST_F(PudCandidateRebaserTest, CandidateRefuteAfterPinsIsNullopt) {
-    pud_witness_pair pins{make_pin(&c0_, &c0_), make_pin(&c1_, &c1_)};
+    pud_candidate_choice_point pins{make_pin(&c0_, &c0_), make_pin(&c1_, &c1_)};
     EXPECT_CALL(candidate_, resume(_)).WillOnce([](pud_candidate_search_context& ctx) {
         ctx.cursor = nullptr;
         ctx.witnesses.reset();

@@ -11,7 +11,7 @@
 #include "value_objects/om_interval.hpp"
 #include "value_objects/pud_candidate_search_context.hpp"
 #include "value_objects/pud_lineage.hpp"
-#include "value_objects/pud_witness_pair.hpp"
+#include "value_objects/pud_candidate_choice_point.hpp"
 #include "value_objects/pud_witness_search_context.hpp"
 
 using ::testing::NiceMock;
@@ -66,14 +66,14 @@ struct PudCandidateSearchTest : public ::testing::Test {
         return pud_witness_search_context{&a0_, 0, 1, search_root, current};
     }
 
-    pud_witness_pair make_pair(pud_witness_search_context a,
+    pud_candidate_choice_point make_pair(pud_witness_search_context a,
                                pud_witness_search_context b) {
-        return pud_witness_pair{std::move(a), std::move(b)};
+        return pud_candidate_choice_point{std::move(a), std::move(b)};
     }
 
     pud_candidate_search_context make_ctx(
             const pud_lineage* cursor,
-            std::optional<pud_witness_pair> witnesses) {
+            std::optional<pud_candidate_choice_point> witnesses) {
         return pud_candidate_search_context{
             &a0_, 0, 1, cursor, std::move(witnesses)};
     }
