@@ -57,7 +57,7 @@ private:
 
     void link(pud_mhcs_head_id head_id, pud_candidate_justification justification);
     pud_candidate_justification unlink_head(pud_mhcs_head_id head_id);
-    std::unordered_set<pud_mhcs_head_id> unlink_justification(pud_candidate_justification justification);
+    std::unordered_set<pud_mhcs_head_id> unlink_self_witnesses(const pud_node* node);
 
     pud_mhcs_head_id next_head_id_;
     
@@ -129,8 +129,6 @@ std::optional<pud_mhcs_head_id> pud_mhcs<QH, CI, ITAH, IAWSH, IFWSH, ICNL, IGC, 
 
     head_to_query_handle_.insert({next_head_id_, context.query_handle});
 
-    head_to_justification_.insert({next_head_id_, context.justification});
-
     link(next_head_id_, context.justification);
 
     return next_head_id_++;
@@ -164,7 +162,7 @@ template<
     typename IGC,
     typename IPQH>
 std::vector<pud_mhcs_head_id> pud_mhcs<QH, CI, ITAH, IAWSH, IFWSH, ICNL, IGC, IPQH>::invalidate_leaf(const pud_node* node) {
-    auto head_ids = unlink_justification(pud_candidate_self_witness{.node = node});
+    auto head_ids = unlink_self_witnesses(node);
 
     std::vector<pud_mhcs_head_id> result;
 
@@ -180,8 +178,7 @@ std::vector<pud_mhcs_head_id> pud_mhcs<QH, CI, ITAH, IAWSH, IFWSH, ICNL, IGC, IP
         }
 
         const pud_candidate_resume_context<QH>& context = resume_context.value();
-        head_to_query_handle_.insert_or_assign(head_id, context.query_handle);
-        head_to_justification_.insert({head_id, context.justification});
+        head_to_query_handle_.at(head_id) = context.query_handle;
         link(head_id, context.justification);
     }
 
@@ -217,8 +214,7 @@ std::optional<pud_mhcs_head_id> pud_mhcs<QH, CI, ITAH, IAWSH, IFWSH, ICNL, IGC, 
     }
 
     const pud_candidate_resume_context<QH>& context = resume_context.value();
-    head_to_query_handle_.insert_or_assign(head_id, context.query_handle);
-    head_to_justification_.insert({head_id, context.justification});
+    head_to_query_handle_.at(head_id) = context.query_handle;
     link(head_id, context.justification);
 
     return std::nullopt;
@@ -256,7 +252,6 @@ std::optional<pud_mhcs_head_id> pud_mhcs<QH, CI, ITAH, IAWSH, IFWSH, ICNL, IGC, 
     const pud_candidate_resume_context<QH>& context = resume_context.value();
 
     head_to_query_handle_.insert({next_head_id_, context.query_handle});
-    head_to_justification_.insert({next_head_id_, context.justification});
     link(next_head_id_, context.justification);
 
     return next_head_id_++;
@@ -272,6 +267,8 @@ template<
     typename IGC,
     typename IPQH>
 void pud_mhcs<QH, CI, ITAH, IAWSH, IFWSH, ICNL, IGC, IPQH>::link(pud_mhcs_head_id head_id, pud_candidate_justification justification) {
+    head_to_justification_.insert({head_id, justification});
+
     if (auto choice_point = std::get_if<pud_candidate_choice_point>(&justification)) {
         witness_head_to_head_.insert({choice_point->witness_a, head_id});
         witness_head_to_head_.insert({choice_point->witness_b, head_id});
@@ -323,21 +320,8 @@ template<
     typename ICNL,
     typename IGC,
     typename IPQH>
-std::unordered_set<pud_mhcs_head_id> pud_mhcs<QH, CI, ITAH, IAWSH, IFWSH, ICNL, IGC, IPQH>::unlink_justification(pud_candidate_justification justification) {
-    if (auto choice_point = std::get_if<pud_candidate_choice_point>(&justification)) {
-        pud_mhcs_head_id head_id = witness_head_to_head_.at(choice_point->witness_a);
-
-        witness_head_to_head_.erase(choice_point->witness_a);
-        witness_head_to_head_.erase(choice_point->witness_b);
-
-        head_to_justification_.erase(head_id);
-
-        return {head_id};
-    }
-
-    const pud_candidate_self_witness& self_witness = std::get<pud_candidate_self_witness>(justification);
-
-    auto extracted = leaf_to_heads_.extract(self_witness.node);
+std::unordered_set<pud_mhcs_head_id> pud_mhcs<QH, CI, ITAH, IAWSH, IFWSH, ICNL, IGC, IPQH>::unlink_self_witnesses(const pud_node* node) {
+    auto extracted = leaf_to_heads_.extract(node);
 
     for (pud_mhcs_head_id head_id : extracted.mapped())
         head_to_justification_.erase(head_id);
