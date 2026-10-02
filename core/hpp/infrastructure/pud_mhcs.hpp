@@ -1,9 +1,10 @@
-#ifndef PUDC_MHCS_HPP
-#define PUDC_MHCS_HPP
+#ifndef PUD_MHCS_HPP
+#define PUD_MHCS_HPP
 
 #include <optional>
 #include <utility>
 #include <variant>
+#include <vector>
 #include <unordered_set>
 #include <unordered_map>
 #include "infrastructure/pud_candidate_search_head.hpp"
@@ -24,10 +25,17 @@ template<
     typename IGetChildren,
     typename IPropagateQueryHandle>
 struct pud_mhcs {
+    pud_mhcs(
+        ITryAddHead& try_add_head,
+        IAdvanceWitnessSearchHead& advance_witness_search_head,
+        IForkWitnessSearchHead& fork_witness_search_head,
+        ICheckNodeLeaf& check_node_leaf,
+        IGetChildren& get_children,
+        IPropagateQueryHandle& propagate_query_handle);
     std::optional<pud_mhcs_head_id> try_add_head(pud_query_position<QueryHandle> search_root_position);
     void remove_head(pud_mhcs_head_id head_id);
     std::vector<pud_mhcs_head_id> invalidate_leaf(const pud_node* node);
-    void witness_refuted(pud_mhws_head_id witness_head_id);
+    std::optional<pud_mhcs_head_id> witness_refuted(pud_mhws_head_id witness_head_id);
     std::optional<pud_mhcs_head_id> try_fork_head(pud_mhcs_head_id head_id, QueryHandle new_query_handle);
 private:
     using head_type = pud_candidate_search_head<
@@ -60,6 +68,30 @@ private:
     std::unordered_map<pud_mhws_head_id, pud_mhcs_head_id> witness_head_to_head_;
     std::unordered_map<const pud_node*, std::unordered_set<pud_mhcs_head_id>> leaf_to_heads_;
 };
+
+template<
+    typename QH,
+    typename CI,
+    typename ITAH,
+    typename IAWSH,
+    typename IFWSH,
+    typename ICNL,
+    typename IGC,
+    typename IPQH>
+pud_mhcs<QH, CI, ITAH, IAWSH, IFWSH, ICNL, IGC, IPQH>::pud_mhcs(
+    ITAH& try_add_head,
+    IAWSH& advance_witness_search_head,
+    IFWSH& fork_witness_search_head,
+    ICNL& check_node_leaf,
+    IGC& get_children,
+    IPQH& propagate_query_handle)
+    : try_add_head_(try_add_head)
+    , advance_witness_search_head_(advance_witness_search_head)
+    , fork_witness_search_head_(fork_witness_search_head)
+    , check_node_leaf_(check_node_leaf)
+    , get_children_(get_children)
+    , propagate_query_handle_(propagate_query_handle)
+    , next_head_id_(0) {}
 
 template<
     typename QH,
@@ -114,6 +146,12 @@ template<
     typename IGC,
     typename IPQH>
 void pud_mhcs<QH, CI, ITAH, IAWSH, IFWSH, ICNL, IGC, IPQH>::remove_head(pud_mhcs_head_id head_id) {
+    if (!heads_.contains(head_id))
+        return;
+
+    heads_.erase(head_id);
+    head_to_query_handle_.erase(head_id);
+    unlink_head(head_id);
 }
 
 template<
@@ -126,6 +164,28 @@ template<
     typename IGC,
     typename IPQH>
 std::vector<pud_mhcs_head_id> pud_mhcs<QH, CI, ITAH, IAWSH, IFWSH, ICNL, IGC, IPQH>::invalidate_leaf(const pud_node* node) {
+    auto head_ids = unlink_justification(pud_candidate_self_witness{.node = node});
+
+    std::vector<pud_mhcs_head_id> result;
+
+    for (pud_mhcs_head_id head_id : head_ids) {
+        head_type& head = heads_.at(head_id);
+        std::optional<pud_candidate_resume_context<QH>> resume_context = head.resume();
+
+        if (!resume_context.has_value()) {
+            heads_.erase(head_id);
+            head_to_query_handle_.erase(head_id);
+            result.push_back(head_id);
+            continue;
+        }
+
+        const pud_candidate_resume_context<QH>& context = resume_context.value();
+        head_to_query_handle_.insert_or_assign(head_id, context.query_handle);
+        head_to_justification_.insert({head_id, context.justification});
+        link(head_id, context.justification);
+    }
+
+    return std::move(result);
 }
 
 template<
@@ -137,7 +197,31 @@ template<
     typename ICNL,
     typename IGC,
     typename IPQH>
-void pud_mhcs<QH, CI, ITAH, IAWSH, IFWSH, ICNL, IGC, IPQH>::witness_refuted(pud_mhws_head_id witness_head_id) {
+std::optional<pud_mhcs_head_id> pud_mhcs<QH, CI, ITAH, IAWSH, IFWSH, ICNL, IGC, IPQH>::witness_refuted(pud_mhws_head_id witness_head_id) {
+    if (!witness_head_to_head_.contains(witness_head_id))
+        return std::nullopt;
+
+    pud_mhcs_head_id head_id = witness_head_to_head_.at(witness_head_id);
+
+    unlink_head(head_id);
+
+    head_type& head = heads_.at(head_id);
+    head.witness_refuted(witness_head_id);
+
+    std::optional<pud_candidate_resume_context<QH>> resume_context = head.resume();
+
+    if (!resume_context.has_value()) {
+        heads_.erase(head_id);
+        head_to_query_handle_.erase(head_id);
+        return head_id;
+    }
+
+    const pud_candidate_resume_context<QH>& context = resume_context.value();
+    head_to_query_handle_.insert_or_assign(head_id, context.query_handle);
+    head_to_justification_.insert({head_id, context.justification});
+    link(head_id, context.justification);
+
+    return std::nullopt;
 }
 
 template<
@@ -150,6 +234,32 @@ template<
     typename IGC,
     typename IPQH>
 std::optional<pud_mhcs_head_id> pud_mhcs<QH, CI, ITAH, IAWSH, IFWSH, ICNL, IGC, IPQH>::try_fork_head(pud_mhcs_head_id head_id, QH new_query_handle) {
+    head_type& old_head = heads_.at(head_id);
+
+    auto [new_head_it, new_head_inserted] = heads_.emplace(
+        next_head_id_,
+        head_type{
+            old_head,
+            new_query_handle});
+
+    DEBUG_ASSERT(new_head_inserted);
+
+    head_type& new_head = new_head_it->second;
+
+    std::optional<pud_candidate_resume_context<QH>> resume_context = new_head.resume();
+
+    if (!resume_context.has_value()) {
+        heads_.erase(new_head_it);
+        return std::nullopt;
+    }
+
+    const pud_candidate_resume_context<QH>& context = resume_context.value();
+
+    head_to_query_handle_.insert({next_head_id_, context.query_handle});
+    head_to_justification_.insert({next_head_id_, context.justification});
+    link(next_head_id_, context.justification);
+
+    return next_head_id_++;
 }
 
 template<
