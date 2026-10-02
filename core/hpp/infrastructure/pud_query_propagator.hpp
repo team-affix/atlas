@@ -293,7 +293,13 @@ const pud_node* pud_query_propagator<BM, U, S, N, IGNP, IMN, IAR, IAC, IMV, IG, 
                 .value = normalized
             });
         }
-        for (const expr* body_goal : node->node->added_body_goals) {
+        
+        const pud_node* pnode = node->node;
+
+        if (pnode == nullptr)
+            continue;
+
+        for (const expr* body_goal : pnode->added_body_goals) {
             //     2b. for each added body goal, normalize it with same instructions as before (same map)
             framed_expr body_goal_framed{body_goal, frame_offset};
             auto normalized = normalizer.normalize(body_goal_framed, frame_offset, translation_map);
