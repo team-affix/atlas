@@ -16,6 +16,7 @@
 
 template<
     typename QueryHandle,
+    typename Head,
     typename IMakeHead,
     typename IForkHead>
 struct pud_mhcs {
@@ -26,8 +27,6 @@ struct pud_mhcs {
     std::optional<pud_mhcs_head_id> witness_refuted(pud_mhws_head_id witness_head_id);
     std::optional<pud_mhcs_head_id> try_fork_head(pud_mhcs_head_id head_id, QueryHandle new_query_handle);
 private:
-    using head_type = decltype(std::declval<IMakeHead&>().make(
-        std::declval<pud_query_position<QueryHandle>>()));
     IMakeHead& make_head_;
     IForkHead& fork_head_;
 
@@ -37,7 +36,7 @@ private:
 
     pud_mhcs_head_id next_head_id_;
     
-    std::unordered_map<pud_mhcs_head_id, head_type> heads_;
+    std::unordered_map<pud_mhcs_head_id, Head> heads_;
     std::unordered_map<pud_mhcs_head_id, QueryHandle> head_to_query_handle_;
 
     std::unordered_map<pud_mhcs_head_id, pud_candidate_justification> head_to_justification_;
@@ -47,25 +46,27 @@ private:
 
 template<
     typename QH,
+    typename Head,
     typename IMakeHead,
     typename IForkHead>
-pud_mhcs<QH, IMakeHead, IForkHead>::pud_mhcs(IMakeHead& make_head, IForkHead& fork_head)
+pud_mhcs<QH, Head, IMakeHead, IForkHead>::pud_mhcs(IMakeHead& make_head, IForkHead& fork_head)
     : make_head_(make_head)
     , fork_head_(fork_head)
     , next_head_id_(0) {}
 
 template<
     typename QH,
+    typename Head,
     typename IMakeHead,
     typename IForkHead>
-std::optional<pud_mhcs_head_id> pud_mhcs<QH, IMakeHead, IForkHead>::try_add_head(pud_query_position<QH> search_root_position) {
+std::optional<pud_mhcs_head_id> pud_mhcs<QH, Head, IMakeHead, IForkHead>::try_add_head(pud_query_position<QH> search_root_position) {
     auto [head_it, head_inserted] = heads_.emplace(
         next_head_id_,
         make_head_.make(std::move(search_root_position)));
 
     DEBUG_ASSERT(head_inserted);
 
-    head_type& head = head_it->second;
+    Head& head = head_it->second;
 
     std::optional<pud_candidate_resume_context<QH>> resume_context = head.resume();
 
@@ -85,9 +86,10 @@ std::optional<pud_mhcs_head_id> pud_mhcs<QH, IMakeHead, IForkHead>::try_add_head
 
 template<
     typename QH,
+    typename Head,
     typename IMakeHead,
     typename IForkHead>
-void pud_mhcs<QH, IMakeHead, IForkHead>::remove_head(pud_mhcs_head_id head_id) {
+void pud_mhcs<QH, Head, IMakeHead, IForkHead>::remove_head(pud_mhcs_head_id head_id) {
     if (!heads_.contains(head_id))
         return;
 
@@ -98,15 +100,16 @@ void pud_mhcs<QH, IMakeHead, IForkHead>::remove_head(pud_mhcs_head_id head_id) {
 
 template<
     typename QH,
+    typename Head,
     typename IMakeHead,
     typename IForkHead>
-std::vector<pud_mhcs_head_id> pud_mhcs<QH, IMakeHead, IForkHead>::invalidate_leaf(const pud_node* node) {
+std::vector<pud_mhcs_head_id> pud_mhcs<QH, Head, IMakeHead, IForkHead>::invalidate_leaf(const pud_node* node) {
     auto head_ids = unlink_self_witnesses(node);
 
     std::vector<pud_mhcs_head_id> result;
 
     for (pud_mhcs_head_id head_id : head_ids) {
-        head_type& head = heads_.at(head_id);
+        Head& head = heads_.at(head_id);
         std::optional<pud_candidate_resume_context<QH>> resume_context = head.resume();
 
         if (!resume_context.has_value()) {
@@ -126,9 +129,10 @@ std::vector<pud_mhcs_head_id> pud_mhcs<QH, IMakeHead, IForkHead>::invalidate_lea
 
 template<
     typename QH,
+    typename Head,
     typename IMakeHead,
     typename IForkHead>
-std::optional<pud_mhcs_head_id> pud_mhcs<QH, IMakeHead, IForkHead>::witness_refuted(pud_mhws_head_id witness_head_id) {
+std::optional<pud_mhcs_head_id> pud_mhcs<QH, Head, IMakeHead, IForkHead>::witness_refuted(pud_mhws_head_id witness_head_id) {
     if (!witness_head_to_head_.contains(witness_head_id))
         return std::nullopt;
 
@@ -136,7 +140,7 @@ std::optional<pud_mhcs_head_id> pud_mhcs<QH, IMakeHead, IForkHead>::witness_refu
 
     unlink_head(head_id);
 
-    head_type& head = heads_.at(head_id);
+    Head& head = heads_.at(head_id);
     head.witness_refuted(witness_head_id);
 
     std::optional<pud_candidate_resume_context<QH>> resume_context = head.resume();
@@ -156,10 +160,11 @@ std::optional<pud_mhcs_head_id> pud_mhcs<QH, IMakeHead, IForkHead>::witness_refu
 
 template<
     typename QH,
+    typename Head,
     typename IMakeHead,
     typename IForkHead>
-std::optional<pud_mhcs_head_id> pud_mhcs<QH, IMakeHead, IForkHead>::try_fork_head(pud_mhcs_head_id head_id, QH new_query_handle) {
-    head_type& old_head = heads_.at(head_id);
+std::optional<pud_mhcs_head_id> pud_mhcs<QH, Head, IMakeHead, IForkHead>::try_fork_head(pud_mhcs_head_id head_id, QH new_query_handle) {
+    Head& old_head = heads_.at(head_id);
 
     auto [new_head_it, new_head_inserted] = heads_.emplace(
         next_head_id_,
@@ -167,7 +172,7 @@ std::optional<pud_mhcs_head_id> pud_mhcs<QH, IMakeHead, IForkHead>::try_fork_hea
 
     DEBUG_ASSERT(new_head_inserted);
 
-    head_type& new_head = new_head_it->second;
+    Head& new_head = new_head_it->second;
 
     std::optional<pud_candidate_resume_context<QH>> resume_context = new_head.resume();
 
@@ -186,9 +191,10 @@ std::optional<pud_mhcs_head_id> pud_mhcs<QH, IMakeHead, IForkHead>::try_fork_hea
 
 template<
     typename QH,
+    typename Head,
     typename IMakeHead,
     typename IForkHead>
-void pud_mhcs<QH, IMakeHead, IForkHead>::link(pud_mhcs_head_id head_id, pud_candidate_justification justification) {
+void pud_mhcs<QH, Head, IMakeHead, IForkHead>::link(pud_mhcs_head_id head_id, pud_candidate_justification justification) {
     head_to_justification_.insert({head_id, justification});
 
     if (auto choice_point = std::get_if<pud_candidate_choice_point>(&justification)) {
@@ -204,9 +210,10 @@ void pud_mhcs<QH, IMakeHead, IForkHead>::link(pud_mhcs_head_id head_id, pud_cand
 
 template<
     typename QH,
+    typename Head,
     typename IMakeHead,
     typename IForkHead>
-pud_candidate_justification pud_mhcs<QH, IMakeHead, IForkHead>::unlink_head(pud_mhcs_head_id head_id) {
+pud_candidate_justification pud_mhcs<QH, Head, IMakeHead, IForkHead>::unlink_head(pud_mhcs_head_id head_id) {
     auto extracted = head_to_justification_.extract(head_id);
 
     pud_candidate_justification justification = std::move(extracted.mapped());
@@ -230,9 +237,10 @@ pud_candidate_justification pud_mhcs<QH, IMakeHead, IForkHead>::unlink_head(pud_
 
 template<
     typename QH,
+    typename Head,
     typename IMakeHead,
     typename IForkHead>
-std::unordered_set<pud_mhcs_head_id> pud_mhcs<QH, IMakeHead, IForkHead>::unlink_self_witnesses(const pud_node* node) {
+std::unordered_set<pud_mhcs_head_id> pud_mhcs<QH, Head, IMakeHead, IForkHead>::unlink_self_witnesses(const pud_node* node) {
     auto extracted = leaf_to_heads_.extract(node);
 
     for (pud_mhcs_head_id head_id : extracted.mapped())
