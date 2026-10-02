@@ -1,5 +1,5 @@
-#ifndef WITNESS_SEARCH_HEAD_FACTORY_HPP
-#define WITNESS_SEARCH_HEAD_FACTORY_HPP
+#ifndef PUD_WITNESS_SEARCH_HEAD_FACTORY_HPP
+#define PUD_WITNESS_SEARCH_HEAD_FACTORY_HPP
 
 #include <utility>
 #include "infrastructure/pud_witness_search_head.hpp"
@@ -11,7 +11,7 @@ template<
     typename IGetNodeChildren,
     typename IPropagateQueryNodeHandle,
     typename IGetCallSiteIdx>
-struct witness_search_head_factory {
+struct pud_witness_search_head_factory {
     using head_type = pud_witness_search_head<
         QueryHandle,
         ChildIterator,
@@ -20,7 +20,7 @@ struct witness_search_head_factory {
         IPropagateQueryNodeHandle,
         IGetCallSiteIdx>;
 
-    witness_search_head_factory(
+    pud_witness_search_head_factory(
         ICheckNodeLeaf& check_node_leaf,
         IGetNodeChildren& get_node_children,
         IPropagateQueryNodeHandle& propagate_query_node_handle,
@@ -40,7 +40,7 @@ template<
     typename IGNC,
     typename IPQN,
     typename IGCSI>
-witness_search_head_factory<QH, CI, ICNL, IGNC, IPQN, IGCSI>::witness_search_head_factory(
+pud_witness_search_head_factory<QH, CI, ICNL, IGNC, IPQN, IGCSI>::pud_witness_search_head_factory(
     ICNL& check_node_leaf,
     IGNC& get_node_children,
     IPQN& propagate_query_node_handle,
@@ -57,8 +57,8 @@ template<
     typename IGNC,
     typename IPQN,
     typename IGCSI>
-typename witness_search_head_factory<QH, CI, ICNL, IGNC, IPQN, IGCSI>::head_type
-witness_search_head_factory<QH, CI, ICNL, IGNC, IPQN, IGCSI>::make(pud_query_position<QH> search_root_position) const {
+typename pud_witness_search_head_factory<QH, CI, ICNL, IGNC, IPQN, IGCSI>::head_type
+pud_witness_search_head_factory<QH, CI, ICNL, IGNC, IPQN, IGCSI>::make(pud_query_position<QH> search_root_position) const {
     return head_type{
         check_node_leaf_,
         get_node_children_,

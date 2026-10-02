@@ -1,5 +1,5 @@
-#ifndef CANDIDATE_SEARCH_HEAD_FACTORY_HPP
-#define CANDIDATE_SEARCH_HEAD_FACTORY_HPP
+#ifndef PUD_CANDIDATE_SEARCH_HEAD_FACTORY_HPP
+#define PUD_CANDIDATE_SEARCH_HEAD_FACTORY_HPP
 
 #include <utility>
 #include "infrastructure/pud_candidate_search_head.hpp"
@@ -13,7 +13,7 @@ template<
     typename ICheckNodeLeaf,
     typename IGetChildren,
     typename IPropagateQueryHandle>
-struct candidate_search_head_factory {
+struct pud_candidate_search_head_factory {
     using head_type = pud_candidate_search_head<
         QueryHandle,
         ChildIterator,
@@ -24,7 +24,7 @@ struct candidate_search_head_factory {
         IGetChildren,
         IPropagateQueryHandle>;
 
-    candidate_search_head_factory(
+    pud_candidate_search_head_factory(
         ITryAddHead& try_add_head,
         IAdvanceWitnessSearchHead& advance_witness_search_head,
         IForkWitnessSearchHead& fork_witness_search_head,
@@ -50,7 +50,7 @@ template<
     typename ICNL,
     typename IGC,
     typename IPQH>
-candidate_search_head_factory<QH, CI, ITAH, IAWSH, IFWSH, ICNL, IGC, IPQH>::candidate_search_head_factory(
+pud_candidate_search_head_factory<QH, CI, ITAH, IAWSH, IFWSH, ICNL, IGC, IPQH>::pud_candidate_search_head_factory(
     ITAH& try_add_head,
     IAWSH& advance_witness_search_head,
     IFWSH& fork_witness_search_head,
@@ -73,8 +73,8 @@ template<
     typename ICNL,
     typename IGC,
     typename IPQH>
-typename candidate_search_head_factory<QH, CI, ITAH, IAWSH, IFWSH, ICNL, IGC, IPQH>::head_type
-candidate_search_head_factory<QH, CI, ITAH, IAWSH, IFWSH, ICNL, IGC, IPQH>::make(pud_query_position<QH> search_root_position) const {
+typename pud_candidate_search_head_factory<QH, CI, ITAH, IAWSH, IFWSH, ICNL, IGC, IPQH>::head_type
+pud_candidate_search_head_factory<QH, CI, ITAH, IAWSH, IFWSH, ICNL, IGC, IPQH>::make(pud_query_position<QH> search_root_position) const {
     return head_type{
         try_add_head_,
         advance_witness_search_head_,
