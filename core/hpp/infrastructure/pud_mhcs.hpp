@@ -172,17 +172,17 @@ std::vector<pud_mhcs_head_id> pud_mhcs<QH, CI, ITAH, IAWSH, IFWSH, ICNL, IGC, IP
         head_type& head = heads_.at(head_id);
         std::optional<pud_candidate_resume_context<QH>> resume_context = head.resume();
 
-        if (resume_context.has_value()) {
-            const pud_candidate_resume_context<QH>& context = resume_context.value();
-            head_to_query_handle_.insert_or_assign(head_id, context.query_handle);
-            head_to_justification_.insert({head_id, context.justification});
-            link(head_id, context.justification);
+        if (!resume_context.has_value()) {
+            heads_.erase(head_id);
+            head_to_query_handle_.erase(head_id);
+            result.push_back(head_id);
             continue;
         }
 
-        heads_.erase(head_id);
-        head_to_query_handle_.erase(head_id);
-        result.push_back(head_id);
+        const pud_candidate_resume_context<QH>& context = resume_context.value();
+        head_to_query_handle_.insert_or_assign(head_id, context.query_handle);
+        head_to_justification_.insert({head_id, context.justification});
+        link(head_id, context.justification);
     }
 
     return std::move(result);
