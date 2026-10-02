@@ -78,7 +78,7 @@ struct PudMhcsSearchIntegrationTest : public ::testing::Test {
     }
 };
 
-TEST_F(PudMhcsSearchIntegrationTest, OneChildIsNotAChoicePoint) {
+TEST_F(PudMhcsSearchIntegrationTest, SingleWitnessIsNotAChoicePoint) {
     sequences[&root] = {&only};
     sequences[&only] = {};
     EXPECT_CALL(leaves, check_leaf(&only)).WillRepeatedly(Return(true));

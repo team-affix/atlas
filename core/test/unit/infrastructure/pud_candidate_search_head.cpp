@@ -70,14 +70,14 @@ struct PudCandidateSearchHeadTest : public ::testing::Test {
     }
 };
 
-TEST_F(PudCandidateSearchHeadTest, NoChildHasAWitness) {
+TEST_F(PudCandidateSearchHeadTest, NoEdgeYieldsAWitness) {
     sequences[&root] = {&a, &b};
     EXPECT_CALL(try_add, try_add_head(_)).WillRepeatedly(Return(std::nullopt));
     auto head = make_head(&root, 1);
     EXPECT_FALSE(head.resume().has_value());
 }
 
-TEST_F(PudCandidateSearchHeadTest, FirstChildSkippedNextTwoFormChoicePoint) {
+TEST_F(PudCandidateSearchHeadTest, FirstEdgeMissesThenTwoWitnessesFormChoicePoint) {
     sequences[&root] = {&a, &b, &c};
     EXPECT_CALL(try_add, try_add_head(_))
         .WillOnce(Return(std::nullopt))
@@ -106,12 +106,13 @@ TEST_F(PudCandidateSearchHeadTest, ThirdWitnessIsNotPartOfTheChoicePoint) {
     EXPECT_EQ(choice->witness_b, 11u);
 }
 
-TEST_F(PudCandidateSearchHeadTest, OnlyWitnessThatIsALeafIsASelfWitness) {
+TEST_F(PudCandidateSearchHeadTest, SingleWitnessCausesAdvancementToSelfWitness) {
     sequences[&root] = {&a, &b};
     sequences[&b] = {};
     EXPECT_CALL(try_add, try_add_head(_))
         .WillOnce(Return(std::nullopt))
         .WillOnce(Return(pud_mhws_head_id{10}));
+    EXPECT_CALL(leaves, check_leaf(&root)).WillRepeatedly(Return(false));
     EXPECT_CALL(leaves, check_leaf(&b)).WillRepeatedly(Return(true));
     pud_query_frame<int, child_iter> frame{
         .position = pud_query_position<int>{.handle = 8, .node = &b},
@@ -127,13 +128,12 @@ TEST_F(PudCandidateSearchHeadTest, OnlyWitnessThatIsALeafIsASelfWitness) {
     EXPECT_EQ(found->query_handle, 8);
 }
 
-TEST_F(PudCandidateSearchHeadTest, SingleChildChoicePointUsesThatChildsChildren) {
+TEST_F(PudCandidateSearchHeadTest, SingleWitnessCausesAdvancementToChoicePoint) {
     sequences[&root] = {&a};
     sequences[&a] = {&a1, &a2};
     EXPECT_CALL(try_add, try_add_head(_))
         .WillOnce(Return(pud_mhws_head_id{4}))
-        .WillOnce(Return(pud_mhws_head_id{20}))
-        .WillOnce(Return(pud_mhws_head_id{21}));
+        .WillOnce(Return(pud_mhws_head_id{20}));
     pud_query_frame<int, child_iter> frame{
         .position = pud_query_position<int>{.handle = 6, .node = &a},
         .next_child_it = sequences[&a].begin(),
@@ -144,11 +144,11 @@ TEST_F(PudCandidateSearchHeadTest, SingleChildChoicePointUsesThatChildsChildren)
     ASSERT_TRUE(found.has_value());
     auto* choice = std::get_if<pud_candidate_choice_point>(&found->justification);
     ASSERT_NE(choice, nullptr);
-    EXPECT_EQ(choice->witness_a, 20u);
-    EXPECT_EQ(choice->witness_b, 21u);
+    EXPECT_EQ(choice->witness_a, 4u);
+    EXPECT_EQ(choice->witness_b, 20u);
 }
 
-TEST_F(PudCandidateSearchHeadTest, RefuteOneWitnessAndLaterSiblingReplacesIt) {
+TEST_F(PudCandidateSearchHeadTest, RefutedWitnessIsReplacedByALaterEdge) {
     sequences[&root] = {&a, &b, &c};
     EXPECT_CALL(try_add, try_add_head(_))
         .WillOnce(Return(pud_mhws_head_id{10}))
@@ -166,7 +166,7 @@ TEST_F(PudCandidateSearchHeadTest, RefuteOneWitnessAndLaterSiblingReplacesIt) {
     EXPECT_EQ(choice->witness_b, 11u);
 }
 
-TEST_F(PudCandidateSearchHeadTest, RefuteOneWitnessAndSurvivorLeadsToALeaf) {
+TEST_F(PudCandidateSearchHeadTest, RefutedWitnessCausesAdvancementToSelfWitness) {
     sequences[&root] = {&a, &b};
     sequences[&b] = {};
     EXPECT_CALL(try_add, try_add_head(_))
@@ -174,6 +174,7 @@ TEST_F(PudCandidateSearchHeadTest, RefuteOneWitnessAndSurvivorLeadsToALeaf) {
         .WillOnce(Return(pud_mhws_head_id{11}));
     auto head = make_head(&root, 1);
     ASSERT_TRUE(head.resume().has_value());
+    EXPECT_CALL(leaves, check_leaf(&root)).WillRepeatedly(Return(false));
     EXPECT_CALL(leaves, check_leaf(&b)).WillRepeatedly(Return(true));
     pud_query_frame<int, child_iter> frame{
         .position = pud_query_position<int>{.handle = 9, .node = &b},
@@ -221,7 +222,7 @@ TEST_F(PudCandidateSearchHeadTest, LeafRootIsASelfWitness) {
     EXPECT_EQ(found->query_handle, 7);
 }
 
-TEST_F(PudCandidateSearchHeadTest, TwoChildrenAreAChoicePoint) {
+TEST_F(PudCandidateSearchHeadTest, TwoWitnessesFormAChoicePoint) {
     sequences[&root] = {&a, &b};
     EXPECT_CALL(try_add, try_add_head(_))
         .WillOnce(Return(pud_mhws_head_id{10}))
