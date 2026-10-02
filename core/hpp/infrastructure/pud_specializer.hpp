@@ -17,6 +17,11 @@ private:
 };
 
 template<typename IMakeVar, typename IUnify>
+pud_specializer<IMakeVar, IUnify>::pud_specializer(IMakeVar& make_var, IUnify& unify)
+    : make_var_(make_var)
+    , unify_(unify) {}
+
+template<typename IMakeVar, typename IUnify>
 coroutine<uint32_t, bool> pud_specializer<IMakeVar, IUnify>::specialize(uint32_t frame_offset, pud_specialization specialization) {
     // frame the lhs and rhs with same frame offset
     framed_expr lhs{make_var_.make_var(specialization.var_idx), frame_offset};

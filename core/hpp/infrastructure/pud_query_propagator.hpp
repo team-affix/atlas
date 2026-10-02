@@ -6,6 +6,7 @@
 #include <unordered_map>
 #include "value_objects/pud_query_node.hpp"
 #include "value_objects/framed_expr.hpp"
+#include "debug_assert.hpp"
 
 template<
     typename BindMap,
@@ -20,10 +21,11 @@ template<
     typename IGlobalize,
     typename IRecordFPArrayBinding,
     typename IQueryFPArrayBinding,
-    typename IGetNodeRefuted>
+    typename ICheckNodeRefuted>
 struct pud_query_propagator {
     struct query_node_handle {
     private:
+        query_node_handle(std::shared_ptr<pud_query_node> node);
         std::shared_ptr<pud_query_node> query_node;
         friend struct pud_query_propagator;
     };
@@ -36,7 +38,7 @@ struct pud_query_propagator {
         IGlobalize& globalize,
         IRecordFPArrayBinding& record_fp,
         IQueryFPArrayBinding& query_fp,
-        IGetNodeRefuted& get_node_refuted);
+        ICheckNodeRefuted& check_node_refuted);
     query_node_handle root();
     std::optional<query_node_handle> propagate(query_node_handle current, const pud_node* child_node);
     query_node_handle open_query(query_node_handle caller, const expr* query);
@@ -50,8 +52,26 @@ private:
     IGlobalize& globalize_;
     IRecordFPArrayBinding& record_fp_;
     IQueryFPArrayBinding& query_fp_;
-    IGetNodeRefuted& get_node_refuted_;
+    ICheckNodeRefuted& check_node_refuted_;
 };
+
+template<
+    typename BM,
+    typename U,
+    typename S,
+    typename N,
+    typename IGNP,
+    typename IMN,
+    typename IAR,
+    typename IAC,
+    typename IMV,
+    typename IG,
+    typename IRFAB,
+    typename IQFAB,
+    typename IGNR>
+pud_query_propagator<BM, U, S, N, IGNP, IMN, IAR, IAC, IMV, IG, IRFAB, IQFAB, IGNR>::query_node_handle::query_node_handle(
+    std::shared_ptr<pud_query_node> node)
+    : query_node(std::move(node)) {}
 
 template<
     typename BM,
@@ -76,7 +96,7 @@ pud_query_propagator<BM, U, S, N, IGNP, IMN, IAR, IAC, IMV, IG, IRFAB, IQFAB, IG
     IG& globalize,
     IRFAB& record_fp,
     IQFAB& query_fp,
-    IGNR& get_node_refuted) :
+    IGNR& check_node_refuted) :
     get_node_parent_(get_node_parent),
     make_node_(make_node),
     allocate_root_interval_(allocate_root_interval),
@@ -85,7 +105,7 @@ pud_query_propagator<BM, U, S, N, IGNP, IMN, IAR, IAC, IMV, IG, IRFAB, IQFAB, IG
     globalize_(globalize),
     record_fp_(record_fp),
     query_fp_(query_fp),
-    get_node_refuted_(get_node_refuted)
+    check_node_refuted_(check_node_refuted)
     {}
 
 template<
@@ -133,7 +153,7 @@ std::optional<typename pud_query_propagator<BM, U, S, N, IGNP, IMN, IAR, IAC, IM
     const pud_node* current_node = current.query_node->node;
 
     // if the child node is refuted, can't traverse to it
-    if (get_node_refuted_.get(child_node))
+    if (check_node_refuted_.check_refuted(child_node))
         return std::nullopt;
     
     // make sure descent is continuous
@@ -248,7 +268,7 @@ const pud_node* pud_query_propagator<BM, U, S, N, IGNP, IMN, IAR, IAC, IMV, IG, 
     
     // 1.5. create bind map, and normalizer
     BM bind_map{globalize_, record_fp_, query_fp_, interval};
-    N normalizer{make_var_, bind_map};
+    N normalizer{globalize_, make_var_, make_var_, bind_map};
 
     // 1.75. initialize translation map
     std::unordered_map<uint32_t, uint32_t> translation_map;

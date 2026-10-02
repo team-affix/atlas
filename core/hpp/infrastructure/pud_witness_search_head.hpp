@@ -49,7 +49,7 @@ pud_witness_search_head<QH, CI, ICNL, IGCN, IPQN, IGCSI>::pud_witness_search_hea
     get_node_children_(get_node_children),
     propagate_query_node_handle_(propagate_query_node_handle),
     get_call_site_idx_(get_call_site_idx),
-    frame_stack_({search_root_position}),
+    frame_stack_({frame{.position = search_root_position}}),
     descending_(true)
 {}
 
@@ -133,7 +133,7 @@ std::optional<const pud_node*> pud_witness_search_head<QH, CI, ICNL, IGCN, IPQN,
 
         // see if we can propagate the query to the next child
         auto child_node = *(current_frame.next_child_it++);
-        auto child_optional_query_node_handle = propagate_query_node_handle_.propagate(current_frame.handle, child_node);
+        auto child_optional_query_node_handle = propagate_query_node_handle_.propagate(current_frame.position.handle, child_node);
 
         // if failed to propagate, skip the child
         if (!child_optional_query_node_handle.has_value())
@@ -142,8 +142,8 @@ std::optional<const pud_node*> pud_witness_search_head<QH, CI, ICNL, IGCN, IPQN,
         // create child frame
         frame new_frame = {
             .position = {
-                .node = child_node,
                 .handle = child_optional_query_node_handle.value(),
+                .node = child_node,
             },
         };
 

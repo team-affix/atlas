@@ -72,7 +72,7 @@ pud_candidate_search_head<QH, CI, ITAH, IAWSH, IFWSH, ICNL, IGC, IPQH>::pud_cand
     get_children_(get_children),
     propagate_query_handle_(propagate_query_handle),
     node_path_({search_root_position.node}),
-    current_query_handle_(search_root_position.query_handle) {
+    current_query_handle_(search_root_position.handle) {
 }
 
 template<typename QH, typename CI, typename ITAH, typename IAWSH, typename IFWSH, typename ICNL, typename IGC, typename IPQH>
@@ -274,7 +274,7 @@ template<typename QH, typename CI, typename ITAH, typename IAWSH, typename IFWSH
 void pud_candidate_search_head<QH, CI, ITAH, IAWSH, IFWSH, ICNL, IGC, IPQH>::advance(pud_mhws_head_id survivor_id) {
     // advance toward the surviving witness search
     
-    pud_query_frame<QH, CI> witness_root_frame = advance_witness_search_head_.advance(survivor_id);
+    pud_query_frame<QH, CI> witness_root_frame = advance_witness_search_head_.advance_head(survivor_id);
 
     // update our position
     node_path_.push_back(witness_root_frame.position.node);

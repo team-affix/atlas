@@ -104,15 +104,15 @@ std::vector<pud_mhws_head_id> pud_mhws<QH, CI, Head, IMakeHead, IForkHead>::inva
 
     for (pud_mhws_head_id head_id : head_ids) {
         auto& head = heads_.at(head_id);
-        const pud_node* new_witness = head.resume();
+        std::optional<const pud_node*> new_witness = head.resume();
 
-        if (new_witness != nullptr) {
-            link(head_id, new_witness);
+        if (!new_witness.has_value()) {
+            heads_.erase(head_id);
+            result.push_back(head_id);
             continue;
         }
-        
-        heads_.erase(head_id);
-        result.push_back(head_id);
+
+        link(head_id, new_witness.value());
     }
 
     return std::move(result);
