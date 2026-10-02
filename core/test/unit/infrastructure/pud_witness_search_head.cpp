@@ -116,6 +116,9 @@ TEST_F(PudWitnessSearchHeadTest, DeadSubtreeReturnsParentsNextChild) {
     sequences[&root] = {&left, &right};
     sequences[&left] = {&left_1, &left_2};
     sequences[&left_1] = {&deep_a, &deep_b};
+    EXPECT_CALL(leaves, check_leaf(&root)).WillRepeatedly(Return(false));
+    EXPECT_CALL(leaves, check_leaf(&left)).WillRepeatedly(Return(false));
+    EXPECT_CALL(leaves, check_leaf(&left_1)).WillRepeatedly(Return(false));
     EXPECT_CALL(leaves, check_leaf(&left_2)).WillRepeatedly(Return(true));
     EXPECT_CALL(propagate, propagate(_, &left)).WillOnce(Return(2));
     EXPECT_CALL(propagate, propagate(_, &left_1)).WillOnce(Return(3));
@@ -132,6 +135,9 @@ TEST_F(PudWitnessSearchHeadTest, DeepLeafBeforeShallowSibling) {
     sequences[&root] = {&left, &right};
     sequences[&left] = {&left_1, &left_2};
     sequences[&left_1] = {&deep_a, &deep_leaf};
+    EXPECT_CALL(leaves, check_leaf(&root)).WillRepeatedly(Return(false));
+    EXPECT_CALL(leaves, check_leaf(&left)).WillRepeatedly(Return(false));
+    EXPECT_CALL(leaves, check_leaf(&left_1)).WillRepeatedly(Return(false));
     EXPECT_CALL(leaves, check_leaf(&deep_leaf)).WillRepeatedly(Return(true));
     EXPECT_CALL(propagate, propagate(_, &left)).WillOnce(Return(2));
     EXPECT_CALL(propagate, propagate(_, &left_1)).WillOnce(Return(3));
@@ -148,6 +154,10 @@ TEST_F(PudWitnessSearchHeadTest, WideNodeThenDeepLeaf) {
     sequences[&wide_3] = {&deep_a};
     sequences[&deep_a] = {&deep_b};
     sequences[&deep_b] = {&deep_leaf};
+    EXPECT_CALL(leaves, check_leaf(&root)).WillRepeatedly(Return(false));
+    EXPECT_CALL(leaves, check_leaf(&wide_3)).WillRepeatedly(Return(false));
+    EXPECT_CALL(leaves, check_leaf(&deep_a)).WillRepeatedly(Return(false));
+    EXPECT_CALL(leaves, check_leaf(&deep_b)).WillRepeatedly(Return(false));
     EXPECT_CALL(leaves, check_leaf(&deep_leaf)).WillRepeatedly(Return(true));
     EXPECT_CALL(propagate, propagate(_, &wide_0)).WillOnce(Return(std::nullopt));
     EXPECT_CALL(propagate, propagate(_, &wide_1)).WillOnce(Return(std::nullopt));
@@ -168,6 +178,11 @@ TEST_F(PudWitnessSearchHeadTest, DeepBranchDiesAndOtherBranchLeafIsFound) {
     sequences[&left_1] = {&deep_a};
     sequences[&deep_a] = {&deep_b};
     sequences[&right] = {&deep_leaf};
+    EXPECT_CALL(leaves, check_leaf(&root)).WillRepeatedly(Return(false));
+    EXPECT_CALL(leaves, check_leaf(&left)).WillRepeatedly(Return(false));
+    EXPECT_CALL(leaves, check_leaf(&left_1)).WillRepeatedly(Return(false));
+    EXPECT_CALL(leaves, check_leaf(&deep_a)).WillRepeatedly(Return(false));
+    EXPECT_CALL(leaves, check_leaf(&right)).WillRepeatedly(Return(false));
     EXPECT_CALL(leaves, check_leaf(&deep_leaf)).WillRepeatedly(Return(true));
     EXPECT_CALL(propagate, propagate(_, &left)).WillOnce(Return(2));
     EXPECT_CALL(propagate, propagate(_, &left_1)).WillOnce(Return(3));
@@ -184,6 +199,8 @@ TEST_F(PudWitnessSearchHeadTest, DeepBranchDiesAndOtherBranchLeafIsFound) {
 TEST_F(PudWitnessSearchHeadTest, AdvanceRootKeepsRootIterators) {
     sequences[&root] = {&left, &right};
     sequences[&left] = {&deep_leaf};
+    EXPECT_CALL(leaves, check_leaf(&root)).WillRepeatedly(Return(false));
+    EXPECT_CALL(leaves, check_leaf(&left)).WillRepeatedly(Return(false));
     EXPECT_CALL(leaves, check_leaf(&deep_leaf)).WillRepeatedly(Return(true));
     EXPECT_CALL(propagate, propagate(_, &left)).WillOnce(Return(2));
     EXPECT_CALL(propagate, propagate(_, &deep_leaf)).WillOnce(Return(3));
@@ -199,6 +216,8 @@ TEST_F(PudWitnessSearchHeadTest, AdvanceRootKeepsRootIterators) {
 TEST_F(PudWitnessSearchHeadTest, ForkThatCannotEnterDeepestContinuesParentChildren) {
     sequences[&root] = {&left};
     sequences[&left] = {&left_1, &left_2};
+    EXPECT_CALL(leaves, check_leaf(&root)).WillRepeatedly(Return(false));
+    EXPECT_CALL(leaves, check_leaf(&left)).WillRepeatedly(Return(false));
     EXPECT_CALL(leaves, check_leaf(&left_1)).WillRepeatedly(Return(true));
     EXPECT_CALL(leaves, check_leaf(&left_2)).WillRepeatedly(Return(true));
     EXPECT_CALL(propagate, propagate(_, &left)).WillOnce(Return(2));
@@ -236,6 +255,9 @@ TEST_F(PudWitnessSearchHeadTest, ChainOfFourReachesTheLeaf) {
     sequences[&root] = {&left};
     sequences[&left] = {&left_1};
     sequences[&left_1] = {&deep_leaf};
+    EXPECT_CALL(leaves, check_leaf(&root)).WillRepeatedly(Return(false));
+    EXPECT_CALL(leaves, check_leaf(&left)).WillRepeatedly(Return(false));
+    EXPECT_CALL(leaves, check_leaf(&left_1)).WillRepeatedly(Return(false));
     EXPECT_CALL(leaves, check_leaf(&deep_leaf)).WillRepeatedly(Return(true));
     EXPECT_CALL(propagate, propagate(_, &left)).WillOnce(Return(2));
     EXPECT_CALL(propagate, propagate(_, &left_1)).WillOnce(Return(3));

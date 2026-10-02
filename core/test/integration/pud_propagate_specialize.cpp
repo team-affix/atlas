@@ -177,7 +177,6 @@ TEST_F(PudPropagateSpecializeIntegrationTest, RepBelowTheOffsetIsTheChildsTouche
     with_live_vars.added_var_count = 5;
     pud_node child{};
     child.added_specializations.push_back(pud_specialization{.var_idx = 1, .value = &spec_value});
-    EXPECT_CALL(parent, get(&child)).WillRepeatedly(Return(&with_live_vars));
     EXPECT_CALL(unify_log, unify(_, _)).WillOnce(Return(::testing::ByMove(scripted_unify({3, 5}, true))));
     auto root = propagator.root();
     auto at_live = propagator.propagate(root, &with_live_vars);

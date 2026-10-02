@@ -56,6 +56,7 @@ struct PudWitnessChildrenIntegrationTest : public ::testing::Test {
 
 TEST_F(PudWitnessChildrenIntegrationTest, DescendedChildStaysAfterOtherNodesAreStored) {
     children.store(&root, {&left, &right});
+    EXPECT_CALL(leaves, check_leaf(&root)).WillRepeatedly(Return(false));
     EXPECT_CALL(leaves, check_leaf(&left)).WillRepeatedly(Return(true));
     auto head = make_head(&root);
     ASSERT_EQ(head.resume().value_or(nullptr), &left);
@@ -78,9 +79,15 @@ TEST_F(PudWitnessChildrenIntegrationTest, DeadSubtreeReturnsParentsNextChildNotT
     children.store(&root, {&left, &right});
     children.store(&left, {&left_dead, &left_leaf});
     children.store(&left_dead, {&dead_child});
+    EXPECT_CALL(leaves, check_leaf(&root)).WillRepeatedly(Return(false));
+    EXPECT_CALL(leaves, check_leaf(&left)).WillRepeatedly(Return(false));
+    EXPECT_CALL(leaves, check_leaf(&left_dead)).WillRepeatedly(Return(false));
     EXPECT_CALL(leaves, check_leaf(&left_leaf)).WillRepeatedly(Return(true));
     EXPECT_CALL(leaves, check_leaf(&right)).WillRepeatedly(Return(true));
+    EXPECT_CALL(propagate, propagate(_, &left)).WillOnce(Return(2));
+    EXPECT_CALL(propagate, propagate(_, &left_dead)).WillOnce(Return(2));
     EXPECT_CALL(propagate, propagate(_, &dead_child)).WillRepeatedly(Return(std::nullopt));
+    EXPECT_CALL(propagate, propagate(_, &left_leaf)).WillOnce(Return(2));
     auto head = make_head(&root);
     auto found = head.resume();
     ASSERT_TRUE(found.has_value());
@@ -91,6 +98,9 @@ TEST_F(PudWitnessChildrenIntegrationTest, BranchOfDepthFourReachesTheLeaf) {
     children.store(&root, {&depth1});
     children.store(&depth1, {&depth2});
     children.store(&depth2, {&depth3});
+    EXPECT_CALL(leaves, check_leaf(&root)).WillRepeatedly(Return(false));
+    EXPECT_CALL(leaves, check_leaf(&depth1)).WillRepeatedly(Return(false));
+    EXPECT_CALL(leaves, check_leaf(&depth2)).WillRepeatedly(Return(false));
     EXPECT_CALL(leaves, check_leaf(&depth3)).WillRepeatedly(Return(true));
     auto head = make_head(&root);
     auto found = head.resume();
