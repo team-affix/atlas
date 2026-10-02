@@ -87,6 +87,19 @@ TEST_F(PudWitnessSearchHeadTest, NoLeafIsReachable) {
     EXPECT_FALSE(head.resume().has_value());
 }
 
+TEST_F(PudWitnessSearchHeadTest, FirstChildRefusedAndSiblingIsTheLeaf) {
+    sequences[&root] = {&left, &right};
+    EXPECT_CALL(leaves, check_leaf(&root)).WillRepeatedly(Return(false));
+    EXPECT_CALL(leaves, check_leaf(&right)).WillRepeatedly(Return(true));
+    EXPECT_CALL(propagate, propagate(_, _))
+        .WillOnce(Return(std::nullopt))
+        .WillOnce(Return(2));
+    auto head = make_head(&root, 0);
+    auto found = head.resume();
+    ASSERT_TRUE(found.has_value());
+    EXPECT_EQ(*found, &right);
+}
+
 TEST_F(PudWitnessSearchHeadTest, LaterSiblingIsTheLeaf) {
     sequences[&root] = {&left, &right};
     EXPECT_CALL(leaves, check_leaf(&root)).WillRepeatedly(Return(false));

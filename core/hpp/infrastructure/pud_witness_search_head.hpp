@@ -119,7 +119,7 @@ std::optional<const pud_node*> pud_witness_search_head<QH, CI, ICNL, IGCN, IPQN,
             return current_node;
 
         if (descending_) {
-            auto children = get_node_children_.get(current_node);
+            const auto& children = get_node_children_.get(current_node);
             current_frame.next_child_it = children.begin();
             current_frame.end_child_it = children.end();
         }
@@ -136,8 +136,10 @@ std::optional<const pud_node*> pud_witness_search_head<QH, CI, ICNL, IGCN, IPQN,
         auto child_optional_query_node_handle = propagate_query_node_handle_.propagate(current_frame.position.handle, child_node);
 
         // if failed to propagate, skip the child
-        if (!child_optional_query_node_handle.has_value())
+        if (!child_optional_query_node_handle.has_value()) {
+            descending_ = false;
             continue;
+        }
         
         // create child frame
         frame new_frame = {
