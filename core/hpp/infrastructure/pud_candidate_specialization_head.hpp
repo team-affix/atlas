@@ -244,11 +244,12 @@ void pud_candidate_specialization_head<QH, NI, ITAH, IAWSH, IFWSH, ICNL, IGC, IP
 }
 
 template<typename QH, typename NI, typename ITAH, typename IAWSH, typename IFWSH, typename ICNL, typename IGC, typename IPQH>
-std::optional<pud_candidate_specialization_head::witness> pud_candidate_specialization_head<QH, NI, ITAH, IAWSH, IFWSH, ICNL, IGC, IPQH>::try_replace_witness() {
+std::optional<typename pud_candidate_specialization_head<QH, NI, ITAH, IAWSH, IFWSH, ICNL, IGC, IPQH>::witness>
+pud_candidate_specialization_head<QH, NI, ITAH, IAWSH, IFWSH, ICNL, IGC, IPQH>::try_replace_witness() {
     // scan for replacement starting from next_witness_root_
 
     auto& next_witness_root = witness_scan_->next_witness_root_it;
-    auto end_witness_root = witness_scan_->end_witness_root_it;
+    auto& end_witness_root = witness_scan_->end_witness_root_it;
 
     auto optional_new_head_id = try_add_head_.try_add_head(current_handle_, next_witness_root, end_witness_root);
     
