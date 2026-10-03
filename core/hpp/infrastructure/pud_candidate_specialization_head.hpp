@@ -276,7 +276,7 @@ void pud_candidate_specialization_head<QH, NI, ITAH, IAWSH, IFWSH, ICNL, IGC, IP
     pud_witness_advance_result<QH, NI> ar = advance_witness_search_head_.advance_head(survivor.id);
 
     // update our position
-    node_path_.push_back(ar.root_handle.node());
+    node_path_.push_back(survivor.handle.node());
     current_handle_ = survivor.handle;
     survivor.handle = ar.root_handle;
 
