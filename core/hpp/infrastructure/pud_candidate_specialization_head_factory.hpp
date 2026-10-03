@@ -31,7 +31,7 @@ struct pud_candidate_specialization_head_factory {
         ICheckNodeLeaf& check_node_leaf,
         IGetChildren& get_children,
         IPropagateQueryHandle& propagate_query_handle);
-    head_type make(pud_query_position<QueryHandle> search_root_position) const;
+    head_type make(QueryHandle search_root_handle) const;
 private:
     ITryAddHead& try_add_head_;
     IAdvanceWitnessSearchHead& advance_witness_search_head_;
@@ -74,7 +74,7 @@ template<
     typename IGC,
     typename IPQH>
 typename pud_candidate_specialization_head_factory<QH, CI, ITAH, IAWSH, IFWSH, ICNL, IGC, IPQH>::head_type
-pud_candidate_specialization_head_factory<QH, CI, ITAH, IAWSH, IFWSH, ICNL, IGC, IPQH>::make(pud_query_position<QH> search_root_position) const {
+pud_candidate_specialization_head_factory<QH, CI, ITAH, IAWSH, IFWSH, ICNL, IGC, IPQH>::make(QH search_root_handle) const {
     return head_type{
         try_add_head_,
         advance_witness_search_head_,
@@ -82,7 +82,7 @@ pud_candidate_specialization_head_factory<QH, CI, ITAH, IAWSH, IFWSH, ICNL, IGC,
         check_node_leaf_,
         get_children_,
         propagate_query_handle_,
-        std::move(search_root_position)};
+        std::move(search_root_handle)};
 }
 
 #endif

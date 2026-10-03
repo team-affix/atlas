@@ -23,7 +23,7 @@ struct pud_candidate_specialization_head_forker {
         IGetChildren,
         IPropagateQueryHandle>;
 
-    head_type fork(const head_type& other, QueryHandle new_query_handle) const;
+    head_type fork(const head_type& other, QueryHandle search_root_handle) const;
 };
 
 template<
@@ -36,8 +36,8 @@ template<
     typename IGC,
     typename IPQH>
 typename pud_candidate_specialization_head_forker<QH, CI, ITAH, IAWSH, IFWSH, ICNL, IGC, IPQH>::head_type
-pud_candidate_specialization_head_forker<QH, CI, ITAH, IAWSH, IFWSH, ICNL, IGC, IPQH>::fork(const head_type& other, QH new_query_handle) const {
-    return head_type{other, new_query_handle};
+pud_candidate_specialization_head_forker<QH, CI, ITAH, IAWSH, IFWSH, ICNL, IGC, IPQH>::fork(const head_type& other, QH search_root_handle) const {
+    return head_type{other, search_root_handle};
 }
 
 #endif

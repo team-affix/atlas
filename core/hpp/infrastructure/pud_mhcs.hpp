@@ -9,7 +9,6 @@
 #include <unordered_map>
 #include "value_objects/pud_candidate_justification.hpp"
 #include "value_objects/pud_candidate_resume_context.hpp"
-#include "value_objects/pud_query_position.hpp"
 #include "value_objects/pud_mhcs_head_id.hpp"
 #include "value_objects/pud_mhws_head_id.hpp"
 #include "debug_assert.hpp"
@@ -21,7 +20,7 @@ template<
     typename IForkHead>
 struct pud_mhcs {
     pud_mhcs(IMakeHead& make_head, IForkHead& fork_head);
-    std::optional<pud_mhcs_head_id> try_add_head(pud_query_position<QueryHandle> search_root_position);
+    std::optional<pud_mhcs_head_id> try_add_head(QueryHandle search_root_handle);
     void remove_head(pud_mhcs_head_id head_id);
     std::vector<pud_mhcs_head_id> invalidate_leaf(const pud_node* node);
     std::optional<pud_mhcs_head_id> witness_refuted(pud_mhws_head_id witness_head_id);
@@ -59,10 +58,10 @@ template<
     typename Head,
     typename IMakeHead,
     typename IForkHead>
-std::optional<pud_mhcs_head_id> pud_mhcs<QH, Head, IMakeHead, IForkHead>::try_add_head(pud_query_position<QH> search_root_position) {
+std::optional<pud_mhcs_head_id> pud_mhcs<QH, Head, IMakeHead, IForkHead>::try_add_head(QH search_root_handle) {
     auto [head_it, head_inserted] = heads_.emplace(
         next_head_id_,
-        make_head_.make(std::move(search_root_position)));
+        make_head_.make(std::move(search_root_handle)));
 
     DEBUG_ASSERT(head_inserted);
 

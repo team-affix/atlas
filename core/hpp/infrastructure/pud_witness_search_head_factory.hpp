@@ -6,7 +6,7 @@
 
 template<
     typename QueryHandle,
-    typename ChildIterator,
+    typename NodeIterator,
     typename ICheckNodeLeaf,
     typename IGetNodeChildren,
     typename IPropagateQueryNodeHandle,
@@ -14,7 +14,7 @@ template<
 struct pud_witness_search_head_factory {
     using head_type = pud_witness_search_head<
         QueryHandle,
-        ChildIterator,
+        NodeIterator,
         ICheckNodeLeaf,
         IGetNodeChildren,
         IPropagateQueryNodeHandle,
@@ -25,7 +25,7 @@ struct pud_witness_search_head_factory {
         IGetNodeChildren& get_node_children,
         IPropagateQueryNodeHandle& propagate_query_node_handle,
         IGetCallSiteIdx& get_call_site_idx);
-    head_type make(pud_query_position<QueryHandle> search_root_position) const;
+    head_type make(QueryHandle caller_handle, NodeIterator next_root_it, NodeIterator end_root_it) const;
 private:
     ICheckNodeLeaf& check_node_leaf_;
     IGetNodeChildren& get_node_children_;
@@ -35,12 +35,12 @@ private:
 
 template<
     typename QH,
-    typename CI,
+    typename NI,
     typename ICNL,
     typename IGNC,
     typename IPQN,
     typename IGCSI>
-pud_witness_search_head_factory<QH, CI, ICNL, IGNC, IPQN, IGCSI>::pud_witness_search_head_factory(
+pud_witness_search_head_factory<QH, NI, ICNL, IGNC, IPQN, IGCSI>::pud_witness_search_head_factory(
     ICNL& check_node_leaf,
     IGNC& get_node_children,
     IPQN& propagate_query_node_handle,
@@ -52,19 +52,21 @@ pud_witness_search_head_factory<QH, CI, ICNL, IGNC, IPQN, IGCSI>::pud_witness_se
 
 template<
     typename QH,
-    typename CI,
+    typename NI,
     typename ICNL,
     typename IGNC,
     typename IPQN,
     typename IGCSI>
-typename pud_witness_search_head_factory<QH, CI, ICNL, IGNC, IPQN, IGCSI>::head_type
-pud_witness_search_head_factory<QH, CI, ICNL, IGNC, IPQN, IGCSI>::make(pud_query_position<QH> search_root_position) const {
+typename pud_witness_search_head_factory<QH, NI, ICNL, IGNC, IPQN, IGCSI>::head_type
+pud_witness_search_head_factory<QH, NI, ICNL, IGNC, IPQN, IGCSI>::make(QH caller_handle, NI next_root_it, NI end_root_it) const {
     return head_type{
         check_node_leaf_,
         get_node_children_,
         propagate_query_node_handle_,
         get_call_site_idx_,
-        std::move(search_root_position)};
+        std::move(caller_handle),
+        std::move(next_root_it),
+        std::move(end_root_it)};
 }
 
 #endif

@@ -19,7 +19,7 @@ struct pud_witness_search_head_forker {
         IPropagateQueryNodeHandle,
         IGetCallSiteIdx>;
 
-    head_type fork(const head_type& other, QueryHandle new_query_handle) const;
+    head_type fork(const head_type& other, QueryHandle caller_handle) const;
 };
 
 template<
@@ -30,8 +30,8 @@ template<
     typename IPQN,
     typename IGCSI>
 typename pud_witness_search_head_forker<QH, CI, ICNL, IGNC, IPQN, IGCSI>::head_type
-pud_witness_search_head_forker<QH, CI, ICNL, IGNC, IPQN, IGCSI>::fork(const head_type& other, QH new_query_handle) const {
-    return head_type{other, new_query_handle};
+pud_witness_search_head_forker<QH, CI, ICNL, IGNC, IPQN, IGCSI>::fork(const head_type& other, QH caller_handle) const {
+    return head_type{other, caller_handle};
 }
 
 #endif
