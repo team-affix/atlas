@@ -24,6 +24,7 @@ template<
     typename ICheckNodeRefuted>
 struct pud_query_propagator {
     struct query_node_handle {
+        const pud_node* node() const;
     private:
         query_node_handle(std::shared_ptr<pud_query_node> node);
         std::shared_ptr<pud_query_node> query_node;
@@ -72,6 +73,24 @@ template<
 pud_query_propagator<BM, U, S, N, IGNP, IMN, IAR, IAC, IMV, IG, IRFAB, IQFAB, IGNR>::query_node_handle::query_node_handle(
     std::shared_ptr<pud_query_node> node)
     : query_node(std::move(node)) {}
+
+template<
+    typename BM,
+    typename U,
+    typename S,
+    typename N,
+    typename IGNP,
+    typename IMN,
+    typename IAR,
+    typename IAC,
+    typename IMV,
+    typename IG,
+    typename IRFAB,
+    typename IQFAB,
+    typename IGNR>
+const pud_node* pud_query_propagator<BM, U, S, N, IGNP, IMN, IAR, IAC, IMV, IG, IRFAB, IQFAB, IGNR>::query_node_handle::node() const {
+    return query_node->node;
+}
 
 template<
     typename BM,
@@ -293,7 +312,7 @@ const pud_node* pud_query_propagator<BM, U, S, N, IGNP, IMN, IAR, IAC, IMV, IG, 
                 .value = normalized
             });
         }
-        
+
         const pud_node* pnode = node->node;
 
         if (pnode == nullptr)
