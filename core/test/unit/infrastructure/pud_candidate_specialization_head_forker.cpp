@@ -1,7 +1,7 @@
 #include <optional>
 #include <gtest/gtest.h>
 #include <gmock/gmock.h>
-#include "infrastructure/pud_candidate_search_head_forker.hpp"
+#include "infrastructure/pud_candidate_specialization_head_forker.hpp"
 
 using ::testing::_;
 using ::testing::NiceMock;
@@ -28,17 +28,17 @@ struct MockPropagate {
     MOCK_METHOD(std::optional<int>, propagate, (int, const pud_node*));
 };
 
-using test_head_t = pud_candidate_search_head<
+using test_head_t = pud_candidate_specialization_head<
     int, child_iter, MockTryAdd, MockAdvance, MockForkWitness, MockLeaf, MockChildren, MockPropagate>;
 
-struct PudCandidateSearchHeadForkerTest : public ::testing::Test {
+struct PudCandidateSpecializationHeadForkerTest : public ::testing::Test {
     NiceMock<MockTryAdd> try_add;
     NiceMock<MockAdvance> advance;
     NiceMock<MockForkWitness> fork_witness;
     NiceMock<MockLeaf> leaves;
     NiceMock<MockChildren> children;
     NiceMock<MockPropagate> propagate;
-    pud_candidate_search_head_forker<
+    pud_candidate_specialization_head_forker<
         int, child_iter, MockTryAdd, MockAdvance, MockForkWitness, MockLeaf, MockChildren, MockPropagate> forker;
     pud_node root{};
 
@@ -49,7 +49,7 @@ struct PudCandidateSearchHeadForkerTest : public ::testing::Test {
     }
 };
 
-TEST_F(PudCandidateSearchHeadForkerTest, ForkThatCannotFollowHasNoJustification) {
+TEST_F(PudCandidateSpecializationHeadForkerTest, ForkThatCannotFollowHasNoJustification) {
     EXPECT_CALL(leaves, check_leaf(&root)).WillRepeatedly(Return(true));
     auto head = make_head();
     ASSERT_TRUE(head.resume().has_value());
@@ -58,7 +58,7 @@ TEST_F(PudCandidateSearchHeadForkerTest, ForkThatCannotFollowHasNoJustification)
     EXPECT_FALSE(forked.resume().has_value());
 }
 
-TEST_F(PudCandidateSearchHeadForkerTest, ForkOfLeafIsSelfWitnessUnderNewHandle) {
+TEST_F(PudCandidateSpecializationHeadForkerTest, ForkOfLeafIsSelfWitnessUnderNewHandle) {
     EXPECT_CALL(leaves, check_leaf(&root)).WillRepeatedly(Return(true));
     auto head = make_head();
     EXPECT_CALL(propagate, propagate(50, &root)).WillOnce(Return(60));

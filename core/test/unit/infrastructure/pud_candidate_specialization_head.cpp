@@ -3,7 +3,7 @@
 #include <vector>
 #include <gtest/gtest.h>
 #include <gmock/gmock.h>
-#include "infrastructure/pud_candidate_search_head.hpp"
+#include "infrastructure/pud_candidate_specialization_head.hpp"
 
 using ::testing::_;
 using ::testing::NiceMock;
@@ -35,10 +35,10 @@ struct MockPropagate {
     MOCK_METHOD(std::optional<int>, propagate, (int, const pud_node*));
 };
 
-using test_candidate_head_t = pud_candidate_search_head<
+using test_candidate_head_t = pud_candidate_specialization_head<
     int, child_iter, MockTryAdd, MockAdvance, MockForkWitness, MockLeaf, MockChildren, MockPropagate>;
 
-struct PudCandidateSearchHeadTest : public ::testing::Test {
+struct PudCandidateSpecializationHeadTest : public ::testing::Test {
     NiceMock<MockTryAdd> try_add;
     NiceMock<MockAdvance> advance;
     NiceMock<MockForkWitness> fork_witness;
@@ -70,14 +70,14 @@ struct PudCandidateSearchHeadTest : public ::testing::Test {
     }
 };
 
-TEST_F(PudCandidateSearchHeadTest, NoEdgeYieldsAWitness) {
+TEST_F(PudCandidateSpecializationHeadTest, NoEdgeYieldsAWitness) {
     sequences[&root] = {&a, &b};
     EXPECT_CALL(try_add, try_add_head(_)).WillRepeatedly(Return(std::nullopt));
     auto head = make_head(&root, 1);
     EXPECT_FALSE(head.resume().has_value());
 }
 
-TEST_F(PudCandidateSearchHeadTest, FirstEdgeMissesThenTwoWitnessesFormChoicePoint) {
+TEST_F(PudCandidateSpecializationHeadTest, FirstEdgeMissesThenTwoWitnessesFormChoicePoint) {
     sequences[&root] = {&a, &b, &c};
     EXPECT_CALL(try_add, try_add_head(_))
         .WillOnce(Return(std::nullopt))
@@ -92,7 +92,7 @@ TEST_F(PudCandidateSearchHeadTest, FirstEdgeMissesThenTwoWitnessesFormChoicePoin
     EXPECT_EQ(choice->witness_b, 11u);
 }
 
-TEST_F(PudCandidateSearchHeadTest, ThirdWitnessIsNotPartOfTheChoicePoint) {
+TEST_F(PudCandidateSpecializationHeadTest, ThirdWitnessIsNotPartOfTheChoicePoint) {
     sequences[&root] = {&a, &b, &c};
     EXPECT_CALL(try_add, try_add_head(_))
         .WillOnce(Return(pud_mhws_head_id{10}))
@@ -106,7 +106,7 @@ TEST_F(PudCandidateSearchHeadTest, ThirdWitnessIsNotPartOfTheChoicePoint) {
     EXPECT_EQ(choice->witness_b, 11u);
 }
 
-TEST_F(PudCandidateSearchHeadTest, SingleWitnessCausesAdvancementToSelfWitness) {
+TEST_F(PudCandidateSpecializationHeadTest, SingleWitnessCausesAdvancementToSelfWitness) {
     sequences[&root] = {&a, &b};
     sequences[&b] = {};
     EXPECT_CALL(try_add, try_add_head(_))
@@ -128,7 +128,7 @@ TEST_F(PudCandidateSearchHeadTest, SingleWitnessCausesAdvancementToSelfWitness) 
     EXPECT_EQ(found->query_handle, 8);
 }
 
-TEST_F(PudCandidateSearchHeadTest, SingleWitnessCausesAdvancementToChoicePoint) {
+TEST_F(PudCandidateSpecializationHeadTest, SingleWitnessCausesAdvancementToChoicePoint) {
     sequences[&root] = {&a};
     sequences[&a] = {&a1, &a2};
     EXPECT_CALL(try_add, try_add_head(_))
@@ -148,7 +148,7 @@ TEST_F(PudCandidateSearchHeadTest, SingleWitnessCausesAdvancementToChoicePoint) 
     EXPECT_EQ(choice->witness_b, 20u);
 }
 
-TEST_F(PudCandidateSearchHeadTest, RefutedWitnessIsReplacedByALaterEdge) {
+TEST_F(PudCandidateSpecializationHeadTest, RefutedWitnessIsReplacedByALaterEdge) {
     sequences[&root] = {&a, &b, &c};
     EXPECT_CALL(try_add, try_add_head(_))
         .WillOnce(Return(pud_mhws_head_id{10}))
@@ -166,7 +166,7 @@ TEST_F(PudCandidateSearchHeadTest, RefutedWitnessIsReplacedByALaterEdge) {
     EXPECT_EQ(choice->witness_b, 11u);
 }
 
-TEST_F(PudCandidateSearchHeadTest, RefutedWitnessCausesAdvancementToSelfWitness) {
+TEST_F(PudCandidateSpecializationHeadTest, RefutedWitnessCausesAdvancementToSelfWitness) {
     sequences[&root] = {&a, &b};
     sequences[&b] = {};
     EXPECT_CALL(try_add, try_add_head(_))
@@ -189,7 +189,7 @@ TEST_F(PudCandidateSearchHeadTest, RefutedWitnessCausesAdvancementToSelfWitness)
     EXPECT_EQ(self->node, &b);
 }
 
-TEST_F(PudCandidateSearchHeadTest, RefuteBothWitnessesWithNothingLeft) {
+TEST_F(PudCandidateSpecializationHeadTest, RefuteBothWitnessesWithNothingLeft) {
     sequences[&root] = {&a, &b};
     EXPECT_CALL(try_add, try_add_head(_))
         .WillOnce(Return(pud_mhws_head_id{10}))
@@ -202,7 +202,7 @@ TEST_F(PudCandidateSearchHeadTest, RefuteBothWitnessesWithNothingLeft) {
     EXPECT_FALSE(head.resume().has_value());
 }
 
-TEST_F(PudCandidateSearchHeadTest, ForkThatCannotFollowThePathHasNoJustification) {
+TEST_F(PudCandidateSpecializationHeadTest, ForkThatCannotFollowThePathHasNoJustification) {
     EXPECT_CALL(leaves, check_leaf(&root)).WillRepeatedly(Return(true));
     auto head = make_head(&root, 1);
     ASSERT_TRUE(head.resume().has_value());
@@ -211,7 +211,7 @@ TEST_F(PudCandidateSearchHeadTest, ForkThatCannotFollowThePathHasNoJustification
     EXPECT_FALSE(forked.resume().has_value());
 }
 
-TEST_F(PudCandidateSearchHeadTest, LeafRootIsASelfWitness) {
+TEST_F(PudCandidateSpecializationHeadTest, LeafRootIsASelfWitness) {
     EXPECT_CALL(leaves, check_leaf(&root)).WillRepeatedly(Return(true));
     auto head = make_head(&root, 7);
     auto found = head.resume();
@@ -222,7 +222,7 @@ TEST_F(PudCandidateSearchHeadTest, LeafRootIsASelfWitness) {
     EXPECT_EQ(found->query_handle, 7);
 }
 
-TEST_F(PudCandidateSearchHeadTest, TwoWitnessesFormAChoicePoint) {
+TEST_F(PudCandidateSpecializationHeadTest, TwoWitnessesFormAChoicePoint) {
     sequences[&root] = {&a, &b};
     EXPECT_CALL(try_add, try_add_head(_))
         .WillOnce(Return(pud_mhws_head_id{10}))

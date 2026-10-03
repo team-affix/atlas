@@ -1,7 +1,7 @@
-#ifndef PUD_CANDIDATE_SEARCH_HEAD_FORKER_HPP
-#define PUD_CANDIDATE_SEARCH_HEAD_FORKER_HPP
+#ifndef PUD_CANDIDATE_SPECIALIZATION_HEAD_FORKER_HPP
+#define PUD_CANDIDATE_SPECIALIZATION_HEAD_FORKER_HPP
 
-#include "infrastructure/pud_candidate_search_head.hpp"
+#include "infrastructure/pud_candidate_specialization_head.hpp"
 
 template<
     typename QueryHandle,
@@ -12,8 +12,8 @@ template<
     typename ICheckNodeLeaf,
     typename IGetChildren,
     typename IPropagateQueryHandle>
-struct pud_candidate_search_head_forker {
-    using head_type = pud_candidate_search_head<
+struct pud_candidate_specialization_head_forker {
+    using head_type = pud_candidate_specialization_head<
         QueryHandle,
         ChildIterator,
         ITryAddHead,
@@ -35,8 +35,8 @@ template<
     typename ICNL,
     typename IGC,
     typename IPQH>
-typename pud_candidate_search_head_forker<QH, CI, ITAH, IAWSH, IFWSH, ICNL, IGC, IPQH>::head_type
-pud_candidate_search_head_forker<QH, CI, ITAH, IAWSH, IFWSH, ICNL, IGC, IPQH>::fork(const head_type& other, QH new_query_handle) const {
+typename pud_candidate_specialization_head_forker<QH, CI, ITAH, IAWSH, IFWSH, ICNL, IGC, IPQH>::head_type
+pud_candidate_specialization_head_forker<QH, CI, ITAH, IAWSH, IFWSH, ICNL, IGC, IPQH>::fork(const head_type& other, QH new_query_handle) const {
     return head_type{other, new_query_handle};
 }
 

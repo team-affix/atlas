@@ -2,7 +2,7 @@
 #include <vector>
 #include <gtest/gtest.h>
 #include <gmock/gmock.h>
-#include "infrastructure/pud_candidate_search_head_factory.hpp"
+#include "infrastructure/pud_candidate_specialization_head_factory.hpp"
 
 using ::testing::_;
 using ::testing::NiceMock;
@@ -30,10 +30,10 @@ struct MockPropagate {
     MOCK_METHOD(std::optional<int>, propagate, (int, const pud_node*));
 };
 
-using test_factory_t = pud_candidate_search_head_factory<
+using test_factory_t = pud_candidate_specialization_head_factory<
     int, child_iter, MockTryAdd, MockAdvance, MockForkWitness, MockLeaf, MockChildren, MockPropagate>;
 
-struct PudCandidateSearchHeadFactoryTest : public ::testing::Test {
+struct PudCandidateSpecializationHeadFactoryTest : public ::testing::Test {
     NiceMock<MockTryAdd> try_add;
     NiceMock<MockAdvance> advance;
     NiceMock<MockForkWitness> fork_witness;
@@ -46,7 +46,7 @@ struct PudCandidateSearchHeadFactoryTest : public ::testing::Test {
     std::vector<const pud_node*> root_children{&child};
 };
 
-TEST_F(PudCandidateSearchHeadFactoryTest, NoWitnessMeansNoJustification) {
+TEST_F(PudCandidateSpecializationHeadFactoryTest, NoWitnessMeansNoJustification) {
     EXPECT_CALL(leaves, check_leaf(&root)).WillRepeatedly(Return(false));
     EXPECT_CALL(children, get(&root)).WillRepeatedly(ReturnRef(root_children));
     EXPECT_CALL(propagate, propagate(_, _)).WillRepeatedly(Return(2));
@@ -55,7 +55,7 @@ TEST_F(PudCandidateSearchHeadFactoryTest, NoWitnessMeansNoJustification) {
     EXPECT_FALSE(head.resume().has_value());
 }
 
-TEST_F(PudCandidateSearchHeadFactoryTest, LeafRootIsASelfWitness) {
+TEST_F(PudCandidateSpecializationHeadFactoryTest, LeafRootIsASelfWitness) {
     EXPECT_CALL(leaves, check_leaf(&root)).WillRepeatedly(Return(true));
     auto head = factory.make(pud_query_position<int>{.handle = 1, .node = &root});
     auto found = head.resume();

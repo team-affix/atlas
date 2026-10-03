@@ -3,8 +3,8 @@
 #include <vector>
 #include <gtest/gtest.h>
 #include <gmock/gmock.h>
-#include "infrastructure/pud_candidate_search_head_factory.hpp"
-#include "infrastructure/pud_candidate_search_head_forker.hpp"
+#include "infrastructure/pud_candidate_specialization_head_factory.hpp"
+#include "infrastructure/pud_candidate_specialization_head_forker.hpp"
 #include "infrastructure/pud_mhcs.hpp"
 #include "infrastructure/pud_mhws.hpp"
 #include "infrastructure/pud_witness_search_head_factory.hpp"
@@ -40,11 +40,11 @@ using witness_forker_t = pud_witness_search_head_forker<
     int, child_iter, MockCheckLeaf, MockGetChildren, MockPropagate, MockCallSite>;
 using mhws_t = pud_mhws<int, child_iter, witness_head_t, witness_factory_t, witness_forker_t>;
 
-using candidate_head_t = pud_candidate_search_head<
+using candidate_head_t = pud_candidate_specialization_head<
     int, child_iter, mhws_t, mhws_t, mhws_t, MockCheckLeaf, MockGetChildren, MockPropagate>;
-using candidate_factory_t = pud_candidate_search_head_factory<
+using candidate_factory_t = pud_candidate_specialization_head_factory<
     int, child_iter, mhws_t, mhws_t, mhws_t, MockCheckLeaf, MockGetChildren, MockPropagate>;
-using candidate_forker_t = pud_candidate_search_head_forker<
+using candidate_forker_t = pud_candidate_specialization_head_forker<
     int, child_iter, mhws_t, mhws_t, mhws_t, MockCheckLeaf, MockGetChildren, MockPropagate>;
 using mhcs_t = pud_mhcs<int, candidate_head_t, candidate_factory_t, candidate_forker_t>;
 
