@@ -15,13 +15,11 @@ template<typename IGetParentNode>
 struct structure_watcher {
     structure_watcher(IGetParentNode& get_parent);
     void watch(const pud_node* node, watcher_head_id head, const std::vector<uint32_t>& reps);
-    std::vector<watcher_head_id> note_var_bind(const pud_node* node,
-                                               uint32_t bound, uint32_t target);
-    std::vector<watcher_head_id> note_functor_bind(const pud_node* node,
-                                                   uint32_t bound,
-                                                   const std::vector<uint32_t>& introduced_reps);
+    std::vector<watcher_head_id> note_var_bind(const pud_node* node, uint32_t bound, uint32_t target);
+    std::vector<watcher_head_id> note_functor_bind(const pud_node* node, uint32_t bound, const std::vector<uint32_t>& introduced_reps);
     std::vector<watcher_head_id> heads_of(const pud_node* node, uint32_t rep) const;
     std::vector<uint32_t> reps_of(const pud_node* node, watcher_head_id head) const;
+
 private:
     using head_set_t = immer::set<watcher_head_id>;
     using rep_set_t  = immer::set<uint32_t>;
@@ -32,7 +30,6 @@ private:
     };
 
     node_state current_or_inherited(const pud_node* node) const;
-
     head_set_t heads_in(const node_state& s, uint32_t rep) const;
     rep_set_t  reps_in(const node_state& s, watcher_head_id head) const;
 
