@@ -14,6 +14,12 @@ using ::testing::ReturnRef;
 
 using child_iter = std::vector<const pud_node*>::const_iterator;
 
+struct handle_t {
+    const pud_node* node_ptr;
+    const pud_node* node() const { return node_ptr; }
+    bool operator==(const handle_t&) const = default;
+};
+
 struct MockCheckLeaf {
     MOCK_METHOD(bool, check_leaf, (const pud_node*));
 };
@@ -23,7 +29,7 @@ struct MockGetChildren {
 };
 
 struct MockPropagate {
-    MOCK_METHOD(std::optional<int>, propagate, (int, const pud_node*));
+    MOCK_METHOD(std::optional<handle_t>, propagate, (handle_t, const pud_node*));
 };
 
 struct MockCallSite {
@@ -31,12 +37,12 @@ struct MockCallSite {
 };
 
 using head_t = pud_witness_search_head<
-    int, child_iter, MockCheckLeaf, MockGetChildren, MockPropagate, MockCallSite>;
+    handle_t, child_iter, MockCheckLeaf, MockGetChildren, MockPropagate, MockCallSite>;
 using factory_t = pud_witness_search_head_factory<
-    int, child_iter, MockCheckLeaf, MockGetChildren, MockPropagate, MockCallSite>;
+    handle_t, child_iter, MockCheckLeaf, MockGetChildren, MockPropagate, MockCallSite>;
 using forker_t = pud_witness_search_head_forker<
-    int, child_iter, MockCheckLeaf, MockGetChildren, MockPropagate, MockCallSite>;
-using mhws_t = pud_mhws<int, child_iter, head_t, factory_t, forker_t>;
+    handle_t, child_iter, MockCheckLeaf, MockGetChildren, MockPropagate, MockCallSite>;
+using mhws_t = pud_mhws<handle_t, child_iter, head_t, factory_t, forker_t>;
 
 struct PudMhwsSearchIntegrationTest : public ::testing::Test {
     NiceMock<MockCheckLeaf> leaves;
@@ -57,20 +63,23 @@ struct PudMhwsSearchIntegrationTest : public ::testing::Test {
     pud_node deep2{};
     pud_node deep3{};
     pud_node sibling_leaf{};
+    pud_node fork_caller{};
 
     void SetUp() override {
         ON_CALL(leaves, check_leaf(_)).WillByDefault(Return(false));
         ON_CALL(children, get(_)).WillByDefault([&](const pud_node* node) -> const std::vector<const pud_node*>& {
             return sequences.at(node);
         });
-        ON_CALL(propagate, propagate(_, _)).WillByDefault(Return(2));
+        ON_CALL(propagate, propagate(_, _)).WillByDefault([](handle_t, const pud_node* child) {
+            return std::optional<handle_t>{handle_t{child}};
+        });
     }
 };
 
 TEST_F(PudMhwsSearchIntegrationTest, NoReachableLeafIsNotRemembered) {
     sequences[&root] = {&left, &right};
     EXPECT_CALL(propagate, propagate(_, _)).WillRepeatedly(Return(std::nullopt));
-    EXPECT_FALSE(searches.try_add_head(pud_query_position<int>{.handle = 1, .node = &root}).has_value());
+    EXPECT_FALSE(searches.try_add_head(handle_t{&root}).has_value());
     EXPECT_TRUE(searches.invalidate_leaf(&root).empty());
 }
 
@@ -81,7 +90,7 @@ TEST_F(PudMhwsSearchIntegrationTest, InvalidateOfDeepWitnessWithADeadSiblingSubt
     sequences[&deep1] = {};
     EXPECT_CALL(leaves, check_leaf(&leaf)).WillRepeatedly(Return(true));
     EXPECT_CALL(propagate, propagate(_, &deep1)).WillRepeatedly(Return(std::nullopt));
-    auto id = searches.try_add_head(pud_query_position<int>{.handle = 1, .node = &root});
+    auto id = searches.try_add_head(handle_t{&root});
     ASSERT_TRUE(id.has_value());
     EXPECT_CALL(leaves, check_leaf(&leaf)).WillRepeatedly(Return(false));
     EXPECT_CALL(propagate, propagate(_, _)).WillRepeatedly(Return(std::nullopt));
@@ -98,10 +107,10 @@ TEST_F(PudMhwsSearchIntegrationTest, ForkThatCannotEnterTheDeepestNodeIsNotRemem
     sequences[&deep1] = {&deep2};
     sequences[&deep2] = {&deep3};
     EXPECT_CALL(leaves, check_leaf(&deep3)).WillRepeatedly(Return(true));
-    auto id = searches.try_add_head(pud_query_position<int>{.handle = 1, .node = &root});
+    auto id = searches.try_add_head(handle_t{&root});
     ASSERT_TRUE(id.has_value());
-    EXPECT_CALL(propagate, propagate(9, &deep3)).WillOnce(Return(std::nullopt));
-    EXPECT_FALSE(searches.try_fork_head(*id, 9).has_value());
+    EXPECT_CALL(propagate, propagate(_, &deep3)).WillOnce(Return(std::nullopt));
+    EXPECT_FALSE(searches.try_fork_head(*id, handle_t{&fork_caller}).has_value());
     EXPECT_TRUE(searches.invalidate_leaf(&deep2).empty());
     auto original = searches.invalidate_leaf(&deep3);
     ASSERT_EQ(original.size(), 1u);
@@ -114,7 +123,7 @@ TEST_F(PudMhwsSearchIntegrationTest, DepthFourLeafMovesToTheOtherLeafUnderTheSam
     sequences[&deep2] = {&leaf, &sibling_leaf};
     EXPECT_CALL(leaves, check_leaf(&leaf)).WillRepeatedly(Return(true));
     EXPECT_CALL(leaves, check_leaf(&sibling_leaf)).WillRepeatedly(Return(true));
-    auto id = searches.try_add_head(pud_query_position<int>{.handle = 1, .node = &root});
+    auto id = searches.try_add_head(handle_t{&root});
     ASSERT_TRUE(id.has_value());
     EXPECT_CALL(leaves, check_leaf(&leaf)).WillRepeatedly(Return(false));
     EXPECT_TRUE(searches.invalidate_leaf(&leaf).empty());
