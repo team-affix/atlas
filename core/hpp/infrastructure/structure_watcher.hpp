@@ -3,8 +3,8 @@
 
 #include <cstdint>
 #include <vector>
+#include <immer/set.hpp>
 #include "infrastructure/fully_persistent_array.hpp"
-#include "infrastructure/incremental_set.hpp"
 #include "value_objects/om_interval.hpp"
 #include "value_objects/om_label.hpp"
 
@@ -21,8 +21,8 @@ struct structure_watcher {
     std::vector<watcher_head_id> heads_of(om_label open, uint32_t rep) const;
     std::vector<uint32_t> reps_of(om_label open, watcher_head_id head) const;
 private:
-    using head_set_t = incremental_set<watcher_head_id>;
-    using rep_set_t  = incremental_set<uint32_t>;
+    using head_set_t = immer::set<watcher_head_id>;
+    using rep_set_t  = immer::set<uint32_t>;
 
     head_set_t query_heads(om_label open, uint32_t rep) const;
     rep_set_t  query_reps(om_label open, watcher_head_id head) const;

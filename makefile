@@ -6,7 +6,7 @@ MAKEFLAGS += -j$(shell nproc)
 
 CXX      = g++
 DEPFLAGS = -MMD -MP
-CXXFLAGS = -std=c++20 -I. -Icore/hpp -Icli/hpp -Imcts/core/hpp $(DEPFLAGS)
+CXXFLAGS = -std=c++20 -I. -Icore/hpp -Icli/hpp -Imcts/core/hpp -Iimmer $(DEPFLAGS)
 AR       = ar
 ARFLAGS  = rcs
 

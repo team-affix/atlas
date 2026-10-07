@@ -46,7 +46,7 @@ structure_watcher::note_var_bind(om_interval interval,
 
     for (watcher_head_id head : bound_heads) {
         rep_set_t head_reps = query_reps(interval.open, head);
-        const bool collapse = head_reps.contains(target);
+        const bool collapse = head_reps.count(target) != 0;
 
         head_reps = head_reps.erase(bound);
         if (!collapse)
