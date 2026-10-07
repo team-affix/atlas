@@ -25,7 +25,7 @@ bool same_value(const std::optional<framed_expr>& result, const framed_expr& exp
 
 struct FullyPersistentArrayIntegrationTest : public ::testing::Test {
     order_maintenance om_;
-    fully_persistent_array bm_;
+    fully_persistent_array<uint32_t, framed_expr> bm_;
 
     const framed_expr val1_ = make_framed(101);
     const framed_expr val2_ = make_framed(102);
@@ -182,7 +182,7 @@ TEST_F(FullyPersistentArrayIntegrationTest, RelabelingDoesNotCorruptPriorRecords
 }
 
 TEST_F(FullyPersistentArrayIntegrationTest, TwoFullyPersistentArraysShareOrderMaintenance) {
-    fully_persistent_array bm2_;
+    fully_persistent_array<uint32_t, framed_expr> bm2_;
 
     const om_interval root  = om_.allocate_root();
     const om_interval child = om_.allocate_child_of(root);

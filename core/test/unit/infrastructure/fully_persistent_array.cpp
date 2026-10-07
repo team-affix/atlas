@@ -35,7 +35,7 @@ struct FullyPersistentArrayTest : public ::testing::Test {
         , val5_(make_framed(5)) {}
 
     order_maintenance om_;
-    fully_persistent_array bm_;
+    fully_persistent_array<uint32_t, framed_expr> bm_;
     om_interval root_;
     om_interval a_;
     om_interval b_;
@@ -385,7 +385,7 @@ TEST_F(FullyPersistentArrayTest, AlternatingLevelBindingsOddLevelsInherit) {
     const om_interval l4             = om_.allocate_child_of(l3);
     const om_interval probe_after_l2 = om_.allocate_child_of(l1);
 
-    fully_persistent_array bm;
+    fully_persistent_array<uint32_t, framed_expr> bm;
     bm.record(l0, k_var_x, val1_);
     bm.record(l2, k_var_x, val2_);
     bm.record(l4, k_var_x, val3_);
@@ -419,7 +419,7 @@ TEST_F(FullyPersistentArrayTest, TenLevelChainFiveVarsBoundAtDifferentLevels) {
         make_framed(6), make_framed(7), make_framed(8), make_framed(9), make_framed(10)
     };
 
-    fully_persistent_array bm;
+    fully_persistent_array<uint32_t, framed_expr> bm;
 
     for (int var_idx = 0; var_idx < k_vars; ++var_idx) {
         const int bound_level = var_idx * 2;
@@ -442,4 +442,21 @@ TEST_F(FullyPersistentArrayTest, TenLevelChainFiveVarsBoundAtDifferentLevels) {
             }
         }
     }
+}
+
+TEST(FullyPersistentArrayIntInstantiationTest, InheritanceAndIsolationWithIntKeyValue) {
+    order_maintenance om;
+    fully_persistent_array<int, int> fpa;
+
+    const om_interval root    = om.allocate_root();
+    const om_interval child_a = om.allocate_child_of(root);
+    const om_interval child_b = om.allocate_child_of(root);
+
+    fpa.record(root, 1, 100);
+    fpa.record(child_a, 1, 200);
+
+    EXPECT_EQ(fpa.query(root.open,    1), 100);
+    EXPECT_EQ(fpa.query(child_a.open, 1), 200);
+    EXPECT_EQ(fpa.query(child_b.open, 1), 100);
+    EXPECT_FALSE(fpa.query(root.open, 2).has_value());
 }

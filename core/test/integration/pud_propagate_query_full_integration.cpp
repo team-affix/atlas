@@ -17,7 +17,7 @@
 #include "infrastructure/unifier.hpp"
 
 struct PudPropagateQueryFullIntegrationTest : public ::testing::Test {
-    using bind_map_t = hierarchical_bind_map<globalizer, fully_persistent_array, fully_persistent_array>;
+    using bind_map_t = hierarchical_bind_map<globalizer, fully_persistent_array<uint32_t, framed_expr>, fully_persistent_array<uint32_t, framed_expr>>;
     using unifier_t = unifier<globalizer, bind_map_t>;
     using specializer_t = pud_specializer<expr_pool, unifier_t>;
     using normalizer_t = normalizer<globalizer, expr_pool, expr_pool, bind_map_t>;
@@ -32,8 +32,8 @@ struct PudPropagateQueryFullIntegrationTest : public ::testing::Test {
         order_maintenance,
         expr_pool,
         globalizer,
-        fully_persistent_array,
-        fully_persistent_array,
+        fully_persistent_array<uint32_t, framed_expr>,
+        fully_persistent_array<uint32_t, framed_expr>,
         pud_refuted_nodes>;
     using handle = propagator_t::query_node_handle;
 
@@ -41,7 +41,7 @@ struct PudPropagateQueryFullIntegrationTest : public ::testing::Test {
     expr_pool exprs;
     globalizer globalize;
     order_maintenance order;
-    fully_persistent_array bindings;
+    fully_persistent_array<uint32_t, framed_expr> bindings;
     pud_node_pool pool;
     pud_parents parents;
     pud_refuted_nodes refuted;
