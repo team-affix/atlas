@@ -158,7 +158,7 @@ std::optional<const pud_node*> pud_witness_search_head<QH, NI, ICNL, IGCN, IPQN,
 
         // handle leaf check / children initialization
 
-        const QH& current_handle = current_frame.handle;
+        const QH& current_handle = optional_current_handle.value();
         
         const pud_node* current_node = current_handle.node();
         

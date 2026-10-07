@@ -15,6 +15,12 @@ struct incremental_set {
         std::shared_ptr<const node> right;
     };
     struct const_iterator {
+        using difference_type   = std::ptrdiff_t;
+        using value_type        = Key;
+        using pointer           = const Key*;
+        using reference         = const Key&;
+        using iterator_category = std::forward_iterator_tag;
+
         const Key& operator*() const;
         const_iterator& operator++();
         bool operator==(const const_iterator& other) const;
