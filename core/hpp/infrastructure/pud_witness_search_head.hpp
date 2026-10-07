@@ -68,7 +68,8 @@ pud_witness_search_head<QH, CI, ICNL, IGCN, IPQN, IGCSI>::pud_witness_search_hea
     get_node_children_(other.get_node_children_),
     propagate_query_node_handle_(other.propagate_query_node_handle_),
     get_call_site_idx_(other.get_call_site_idx_),
-    search_root_handle_(search_root_handle)
+    search_root_handle_(search_root_handle),
+    descending_(true)
 {
     // walk our frame stack using the new query handle
     // if we cannot proceed, don't search. just leave the current stack
@@ -79,28 +80,23 @@ pud_witness_search_head<QH, CI, ICNL, IGCN, IPQN, IGCSI>::pud_witness_search_hea
         
         // it will always have a value if we are forking it
         const QH& other_handle = other_frame.handle.value();
-        
+
         // propagate the query to the current node
-        auto optional_current_handle = propagate_query_node_handle_.propagate(
-            parent_handle, other_handle.node());e
-
-        if (!optional_current_handle.has_value())
-            break;
-
         frame new_frame = {
-            .handle = optional_current_handle.value(),
+            .handle = propagate_query_node_handle_.propagate(
+                parent_handle, other_handle.node()),
             .parent_handle = parent_handle,
             .next_sibling_it = other_frame.next_sibling_it,
             .end_sibling_it = other_frame.end_sibling_it,
         };
-
-        frame_stack_.push_back(new_frame);
         
-        parent_handle = optional_current_handle.value();
-    }
+        frame_stack_.push_back(new_frame);
 
-    // if we forked all the frames, we are still descending (did not hit conflict)
-    descending_ = frame_stack_.size() == other.frame_stack_.size();
+        if (!new_frame.handle.has_value())
+            break; // leaving descending_ true is fine since handle will be null and will try to be replaced by siblings
+    
+        parent_handle = new_frame.handle.value();
+    }
 }
 
 template<typename QH, typename NI, typename ICNL, typename IGCN, typename IPQN, typename IGCSI>
@@ -125,6 +121,27 @@ std::optional<pud_witness_advance_result<QH, NI>> pud_witness_search_head<QH, NI
 
 template<typename QH, typename NI, typename ICNL, typename IGCN, typename IPQN, typename IGCSI>
 std::optional<const pud_node*> pud_witness_search_head<QH, NI, ICNL, IGCN, IPQN, IGCSI>::resume() {
+    // handle leaf search root
+    if (frame_stack_.empty()) {
+
+        if (!descending_)
+            return std::nullopt;
+        
+        if (check_node_leaf_.check_leaf(search_root_handle_.node()))
+            return search_root_handle_.node();
+
+        const auto& children = get_node_children_.get(search_root_handle_.node());
+
+        frame new_frame = {
+            .handle = std::nullopt,
+            .parent_handle = search_root_handle_,
+            .next_sibling_it = children.begin(),
+            .end_sibling_it = children.end(),
+        };
+
+        frame_stack_.push_back(new_frame);
+    }
+    
     // basic idea:
     //     at any point in time, if the current frame is a leaf, we are done.
     //     while not leaf, get children. initialize the iterator to begin of the children.
@@ -147,6 +164,7 @@ std::optional<const pud_node*> pud_witness_search_head<QH, NI, ICNL, IGCN, IPQN,
 
             if (!current_frame.handle.has_value()) {
                 frame_stack_.pop_back();
+                descending_ = false;
                 continue;
             }
                 
@@ -178,7 +196,6 @@ std::optional<const pud_node*> pud_witness_search_head<QH, NI, ICNL, IGCN, IPQN,
 
     return std::nullopt;
 }
-
 
 template<typename QH, typename NI, typename ICNL, typename IGCN, typename IPQN, typename IGCSI>
 std::optional<QH> pud_witness_search_head<QH, NI, ICNL, IGCN, IPQN, IGCSI>::try_replace_sibling(const QH& parent_handle, NI& next_sibling_it, NI end_sibling_it) {
