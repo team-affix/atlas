@@ -20,7 +20,7 @@ struct incremental_set {
         const_iterator& operator++();
         bool operator==(const const_iterator& other) const;
         bool operator!=(const const_iterator& other) const;
-        explicit const_iterator(const node* root);
+        const_iterator(const node* root);
     private:
         void push_left(const node* n);
 
