@@ -4,6 +4,7 @@
 #include <memory>
 #include <optional>
 #include <unordered_map>
+#include <immer/map_transient.hpp>
 #include "value_objects/pud_query_node.hpp"
 #include "value_objects/framed_expr.hpp"
 #include "debug_assert.hpp"
@@ -15,12 +16,8 @@ template<
     typename Normalizer,
     typename IGetNodeParent,
     typename IMakeNode,
-    typename IAllocateRootInterval,
-    typename IAllocateChildInterval,
     typename IMakeVar,
     typename IGlobalize,
-    typename IRecordFPArrayBinding,
-    typename IQueryFPArrayBinding,
     typename ICheckNodeRefuted>
 struct pud_query_propagator {
     struct query_node_handle {
@@ -33,12 +30,8 @@ struct pud_query_propagator {
     pud_query_propagator(
         IGetNodeParent& get_node_parent,
         IMakeNode& make_node,
-        IAllocateRootInterval& allocate_root_interval,
-        IAllocateChildInterval& allocate_child_interval,
         IMakeVar& make_var,
         IGlobalize& globalize,
-        IRecordFPArrayBinding& record_fp,
-        IQueryFPArrayBinding& query_fp,
         ICheckNodeRefuted& check_node_refuted);
     query_node_handle root();
     std::optional<query_node_handle> propagate(query_node_handle current, const pud_node* child_node);
@@ -47,101 +40,41 @@ struct pud_query_propagator {
 private:
     IGetNodeParent& get_node_parent_;
     IMakeNode& make_node_;
-    IAllocateRootInterval& allocate_root_interval_;
-    IAllocateChildInterval& allocate_child_interval_;
     IMakeVar& make_var_;
     IGlobalize& globalize_;
-    IRecordFPArrayBinding& record_fp_;
-    IQueryFPArrayBinding& query_fp_;
     ICheckNodeRefuted& check_node_refuted_;
 };
 
-template<
-    typename BM,
-    typename U,
-    typename S,
-    typename N,
-    typename IGNP,
-    typename IMN,
-    typename IAR,
-    typename IAC,
-    typename IMV,
-    typename IG,
-    typename IRFAB,
-    typename IQFAB,
-    typename IGNR>
-pud_query_propagator<BM, U, S, N, IGNP, IMN, IAR, IAC, IMV, IG, IRFAB, IQFAB, IGNR>::query_node_handle::query_node_handle(
+template<typename BM, typename U, typename S, typename N,
+         typename IGNP, typename IMN, typename IMV, typename IG, typename IGNR>
+pud_query_propagator<BM, U, S, N, IGNP, IMN, IMV, IG, IGNR>::query_node_handle::query_node_handle(
     std::shared_ptr<pud_query_node> node)
     : query_node(std::move(node)) {}
 
-template<
-    typename BM,
-    typename U,
-    typename S,
-    typename N,
-    typename IGNP,
-    typename IMN,
-    typename IAR,
-    typename IAC,
-    typename IMV,
-    typename IG,
-    typename IRFAB,
-    typename IQFAB,
-    typename IGNR>
-const pud_node* pud_query_propagator<BM, U, S, N, IGNP, IMN, IAR, IAC, IMV, IG, IRFAB, IQFAB, IGNR>::query_node_handle::node() const {
+template<typename BM, typename U, typename S, typename N,
+         typename IGNP, typename IMN, typename IMV, typename IG, typename IGNR>
+const pud_node* pud_query_propagator<BM, U, S, N, IGNP, IMN, IMV, IG, IGNR>::query_node_handle::node() const {
     return query_node->node;
 }
 
-template<
-    typename BM,
-    typename U,
-    typename S,
-    typename N,
-    typename IGNP,
-    typename IMN,
-    typename IAR,
-    typename IAC,
-    typename IMV,
-    typename IG,
-    typename IRFAB,
-    typename IQFAB,
-    typename IGNR>
-pud_query_propagator<BM, U, S, N, IGNP, IMN, IAR, IAC, IMV, IG, IRFAB, IQFAB, IGNR>::pud_query_propagator(
+template<typename BM, typename U, typename S, typename N,
+         typename IGNP, typename IMN, typename IMV, typename IG, typename IGNR>
+pud_query_propagator<BM, U, S, N, IGNP, IMN, IMV, IG, IGNR>::pud_query_propagator(
     IGNP& get_node_parent,
     IMN& make_node,
-    IAR& allocate_root_interval,
-    IAC& allocate_child_interval,
     IMV& make_var,
     IG& globalize,
-    IRFAB& record_fp,
-    IQFAB& query_fp,
-    IGNR& check_node_refuted) :
-    get_node_parent_(get_node_parent),
-    make_node_(make_node),
-    allocate_root_interval_(allocate_root_interval),
-    allocate_child_interval_(allocate_child_interval),
-    make_var_(make_var),
-    globalize_(globalize),
-    record_fp_(record_fp),
-    query_fp_(query_fp),
-    check_node_refuted_(check_node_refuted)
-    {}
+    IGNR& check_node_refuted)
+    : get_node_parent_(get_node_parent)
+    , make_node_(make_node)
+    , make_var_(make_var)
+    , globalize_(globalize)
+    , check_node_refuted_(check_node_refuted) {}
 
-template<
-    typename BM,
-    typename U,
-    typename S,
-    typename N,
-    typename IGNP,
-    typename IMN,
-    typename IAR,
-    typename IAC,
-    typename IMV,
-    typename IG,
-    typename IRFAB,
-    typename IQFAB,
-    typename IGNR>
-pud_query_propagator<BM, U, S, N, IGNP, IMN, IAR, IAC, IMV, IG, IRFAB, IQFAB, IGNR>::query_node_handle pud_query_propagator<BM, U, S, N, IGNP, IMN, IAR, IAC, IMV, IG, IRFAB, IQFAB, IGNR>::root() {
+template<typename BM, typename U, typename S, typename N,
+         typename IGNP, typename IMN, typename IMV, typename IG, typename IGNR>
+typename pud_query_propagator<BM, U, S, N, IGNP, IMN, IMV, IG, IGNR>::query_node_handle
+pud_query_propagator<BM, U, S, N, IGNP, IMN, IMV, IG, IGNR>::root() {
     return query_node_handle{
         std::make_shared<pud_query_node>(
             pud_query_node{
@@ -149,67 +82,50 @@ pud_query_propagator<BM, U, S, N, IGNP, IMN, IAR, IAC, IMV, IG, IRFAB, IQFAB, IG
                 .node = nullptr,
                 .touched_caller_reps = {},
                 .parent = std::shared_ptr<pud_query_node>{},
-                .interval = allocate_root_interval_.allocate_root(),
+                .bindings = {},
                 .lvc = 0
             })};
 }
 
-template<
-    typename BM,
-    typename U,
-    typename S,
-    typename N,
-    typename IGNP,
-    typename IMN,
-    typename IAR,
-    typename IAC,
-    typename IMV,
-    typename IG,
-    typename IRFAB,
-    typename IQFAB,
-    typename IGNR>
-std::optional<typename pud_query_propagator<BM, U, S, N, IGNP, IMN, IAR, IAC, IMV, IG, IRFAB, IQFAB, IGNR>::query_node_handle> pud_query_propagator<BM, U, S, N, IGNP, IMN, IAR, IAC, IMV, IG, IRFAB, IQFAB, IGNR>::propagate(query_node_handle current, const pud_node* child_node) {
+template<typename BM, typename U, typename S, typename N,
+         typename IGNP, typename IMN, typename IMV, typename IG, typename IGNR>
+std::optional<typename pud_query_propagator<BM, U, S, N, IGNP, IMN, IMV, IG, IGNR>::query_node_handle>
+pud_query_propagator<BM, U, S, N, IGNP, IMN, IMV, IG, IGNR>::propagate(query_node_handle current, const pud_node* child_node) {
     const pud_node* current_node = current.query_node->node;
 
-    // if the child node is refuted, can't traverse to it
     if (check_node_refuted_.check_refuted(child_node))
         return std::nullopt;
-    
-    // make sure descent is continuous
+
     DEBUG_ASSERT(get_node_parent_.get(child_node) == current_node);
 
-    om_interval current_interval = current.query_node->interval;
-    om_interval child_interval = allocate_child_interval_.allocate_child_of(current_interval);
-
-    BM bind_map{globalize_, record_fp_, query_fp_, child_interval};
+    auto transient = current.query_node->bindings.transient();
+    BM bind_map{globalize_, transient};
     U unifier{globalize_, &bind_map};
     S specializer{make_var_, unifier};
 
     uint32_t frame_offset = current.query_node->frame_offset;
-    
-    std::vector<uint32_t> touched_caller_reps;
 
-    // try to traverse to child
+    std::vector<uint32_t> touched_caller_reps;
 
     for (pud_specialization spec : child_node->added_specializations) {
         auto sm = specializer.specialize(frame_offset, spec);
         while (auto touched_rep = sm.next())
             touched_caller_reps.push_back(*touched_rep);
         if (!sm.result())
-            return std::nullopt; // can't traverse to child
+            return std::nullopt;
     }
 
-    // at this point, traversal has succeeded
+    immer::map<uint32_t, framed_expr> child_bindings = std::move(transient).persistent();
 
     uint32_t lvc = current.query_node->lvc;
-    
+
     auto new_query_node = std::make_shared<pud_query_node>(
         pud_query_node{
             .frame_offset = frame_offset,
             .node = child_node,
             .touched_caller_reps = touched_caller_reps,
             .parent = current.query_node,
-            .interval = child_interval,
+            .bindings = std::move(child_bindings),
             .lvc = lvc + child_node->added_var_count
         }
     );
@@ -217,41 +133,27 @@ std::optional<typename pud_query_propagator<BM, U, S, N, IGNP, IMN, IAR, IAC, IM
     return query_node_handle{new_query_node};
 }
 
-template<
-    typename BM,
-    typename U,
-    typename S,
-    typename N,
-    typename IGNP,
-    typename IMN,
-    typename IAR,
-    typename IAC,
-    typename IMV,
-    typename IG,
-    typename IRFAB,
-    typename IQFAB,
-    typename IGNR>
-typename pud_query_propagator<BM, U, S, N, IGNP, IMN, IAR, IAC, IMV, IG, IRFAB, IQFAB, IGNR>::query_node_handle pud_query_propagator<BM, U, S, N, IGNP, IMN, IAR, IAC, IMV, IG, IRFAB, IQFAB, IGNR>::open_query(typename pud_query_propagator<BM, U, S, N, IGNP, IMN, IAR, IAC, IMV, IG, IRFAB, IQFAB, IGNR>::query_node_handle caller, const expr* query_expr) {
+template<typename BM, typename U, typename S, typename N,
+         typename IGNP, typename IMN, typename IMV, typename IG, typename IGNR>
+typename pud_query_propagator<BM, U, S, N, IGNP, IMN, IMV, IG, IGNR>::query_node_handle
+pud_query_propagator<BM, U, S, N, IGNP, IMN, IMV, IG, IGNR>::open_query(query_node_handle caller, const expr* query_expr) {
     uint32_t caller_frame_offset = caller.query_node->frame_offset;
     uint32_t caller_lvc = caller.query_node->lvc;
-    om_interval caller_interval = caller.query_node->interval;
-
-    om_interval query_interval = allocate_child_interval_.allocate_child_of(caller_interval);
 
     uint32_t query_frame_offset = caller_frame_offset + caller_lvc;
-    
-    BM bind_map{globalize_, record_fp_, query_fp_, query_interval};
 
-    // get the root head var (var0@cutoff)
+    auto transient = caller.query_node->bindings.transient();
+    BM bind_map{globalize_, transient};
 
     uint32_t query_head_var = globalize_.globalize(query_frame_offset, 0);
 
-    // seed the bind map with the query expression
     bind_map.bind(
         query_head_var,
         framed_expr{
             query_expr,
             caller_frame_offset});
+
+    immer::map<uint32_t, framed_expr> query_bindings = std::move(transient).persistent();
 
     auto new_query_node = std::make_shared<pud_query_node>(
         pud_query_node{
@@ -259,53 +161,31 @@ typename pud_query_propagator<BM, U, S, N, IGNP, IMN, IAR, IAC, IMV, IG, IRFAB, 
             .node = nullptr,
             .touched_caller_reps = {},
             .parent = caller.query_node,
-            .interval = query_interval,
+            .bindings = std::move(query_bindings),
             .lvc = 0
         });
-    
+
     return query_node_handle{new_query_node};
 }
 
-template<
-    typename BM,
-    typename U,
-    typename S,
-    typename N,
-    typename IGNP,
-    typename IMN,
-    typename IAR,
-    typename IAC,
-    typename IMV,
-    typename IG,
-    typename IRFAB,
-    typename IQFAB,
-    typename IGNR>
-const pud_node* pud_query_propagator<BM, U, S, N, IGNP, IMN, IAR, IAC, IMV, IG, IRFAB, IQFAB, IGNR>::close_query(typename pud_query_propagator<BM, U, S, N, IGNP, IMN, IAR, IAC, IMV, IG, IRFAB, IQFAB, IGNR>::query_node_handle current) {
-    // 1. extract relevant fields
+template<typename BM, typename U, typename S, typename N,
+         typename IGNP, typename IMN, typename IMV, typename IG, typename IGNR>
+const pud_node* pud_query_propagator<BM, U, S, N, IGNP, IMN, IMV, IG, IGNR>::close_query(query_node_handle current) {
     uint32_t frame_offset = current.query_node->frame_offset;
-    om_interval interval = current.query_node->interval;
-    
-    // 1.5. create bind map, and normalizer
-    BM bind_map{globalize_, record_fp_, query_fp_, interval};
+
+    auto transient = current.query_node->bindings.transient();
+    BM bind_map{globalize_, transient};
     N normalizer{globalize_, make_var_, make_var_, bind_map};
 
-    // 1.75. initialize translation map
     std::unordered_map<uint32_t, uint32_t> translation_map;
-    
-    // 2. aggregate all added specializations, body goals from lineage
+
     std::vector<pud_specialization> added_specializations;
     std::vector<const expr*> added_body_goals;
 
-    // this iterates points in the lineage of the query
     for (const pud_query_node* node = current.query_node.get(); node != nullptr; node = node->parent.get()) {
         for (uint32_t touched_caller_rep : node->touched_caller_reps) {
-            //     2a. for each touched caller rep, normalize it with cutoff == frame_offset of query.
-            //         keep rolling map for translating additional vars to contiguous indices
             auto var = make_var_.make_var(touched_caller_rep);
-            framed_expr var_framed{var, 0}; // always frame 0
-                                            // since these were sourced from unify() yields
-                                            // which are already globalized w.r.t.
-                                            // the binding environment
+            framed_expr var_framed{var, 0};
             auto normalized = normalizer.normalize(var_framed, frame_offset, translation_map);
             added_specializations.push_back(pud_specialization{
                 .var_idx = touched_caller_rep,
@@ -319,16 +199,14 @@ const pud_node* pud_query_propagator<BM, U, S, N, IGNP, IMN, IAR, IAC, IMV, IG, 
             continue;
 
         for (const expr* body_goal : pnode->added_body_goals) {
-            //     2b. for each added body goal, normalize it with same instructions as before (same map)
             framed_expr body_goal_framed{body_goal, frame_offset};
             auto normalized = normalizer.normalize(body_goal_framed, frame_offset, translation_map);
             added_body_goals.push_back(normalized);
         }
     }
-    // 3. added_var_count is just the size of the translation map (one entry per new var)
+
     uint32_t added_var_count = translation_map.size();
 
-    // 4. create new node
     return make_node_.make(
         added_specializations,
         added_body_goals,

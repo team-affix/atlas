@@ -4,22 +4,17 @@
 #include <vector>
 #include <gtest/gtest.h>
 #include <gmock/gmock.h>
+#include <immer/map.hpp>
+#include <immer/map_transient.hpp>
 #include "infrastructure/coroutine.hpp"
 #include "infrastructure/pud_query_propagator.hpp"
 #include "infrastructure/pud_specializer.hpp"
-#include "value_objects/om_interval.hpp"
 
 using ::testing::_;
 using ::testing::NiceMock;
 using ::testing::Return;
 
 namespace {
-
-uint64_t rank_storage[8] = {1, 2, 3, 4, 5, 6, 7, 8};
-
-om_interval interval_of(uint64_t* open, uint64_t* close) {
-    return om_interval{om_label{open}, om_label{close}};
-}
 
 coroutine<uint32_t, bool> scripted_unify(std::vector<uint32_t> reps, bool ok) {
     for (uint32_t rep : reps)
@@ -47,29 +42,13 @@ struct MockMakeVar {
     MOCK_METHOD(const expr*, make_var, (uint32_t));
 };
 
-struct MockAllocateRoot {
-    MOCK_METHOD(om_interval, allocate_root, ());
-};
-
-struct MockAllocateChild {
-    MOCK_METHOD(om_interval, allocate_child_of, (om_interval));
-};
-
-struct MockRecord {
-    void record(om_interval, uint32_t, framed_expr) {}
-};
-
-struct MockQueryFp {
-    std::optional<framed_expr> query(om_label, uint32_t) { return std::nullopt; }
-};
-
 struct UnifyLog {
     MOCK_METHOD((coroutine<uint32_t, bool>), unify, (framed_expr, framed_expr));
 };
 
 struct MockBindMap {
-    template<typename G, typename R, typename Q>
-    MockBindMap(G&, R&, Q&, om_interval) {}
+    template<typename G>
+    MockBindMap(G&, immer::map<uint32_t, framed_expr>::transient_type&) {}
     void bind(uint32_t, framed_expr) {}
     framed_expr whnf(framed_expr value) { return value; }
 };
@@ -99,39 +78,26 @@ using propagator_t = pud_query_propagator<
     MockNormalizer,
     MockParent,
     MockMakeNode,
-    MockAllocateRoot,
-    MockAllocateChild,
     MockMakeVar,
     MockGlobalize,
-    MockRecord,
-    MockQueryFp,
     MockRefuted>;
 
 } // namespace
 
 struct PudPropagateSpecializeIntegrationTest : public ::testing::Test {
-    NiceMock<MockParent> parent;
+    NiceMock<MockParent>   parent;
     NiceMock<MockMakeNode> make_node;
-    NiceMock<MockAllocateRoot> allocate_root;
-    NiceMock<MockAllocateChild> allocate_child;
-    NiceMock<MockMakeVar> make_var;
+    NiceMock<MockMakeVar>  make_var;
     NiceMock<MockGlobalize> globalize;
-    MockRecord record;
-    MockQueryFp query_fp;
-    NiceMock<MockRefuted> refuted;
-    NiceMock<UnifyLog> unify_log;
-    propagator_t propagator{
-        parent, make_node, allocate_root, allocate_child, make_var, globalize, record, query_fp, refuted};
-    om_interval root_interval = interval_of(&rank_storage[0], &rank_storage[1]);
-    om_interval child_interval = interval_of(&rank_storage[2], &rank_storage[3]);
+    NiceMock<MockRefuted>  refuted;
+    NiceMock<UnifyLog>     unify_log;
+    propagator_t propagator{parent, make_node, make_var, globalize, refuted};
     expr var_expr{expr::var{0}};
     expr spec_value{expr::var{3}};
     pud_node made{};
 
     void SetUp() override {
         MockUnifier::log = &unify_log;
-        ON_CALL(allocate_root, allocate_root()).WillByDefault(Return(root_interval));
-        ON_CALL(allocate_child, allocate_child_of(_)).WillByDefault(Return(child_interval));
         ON_CALL(refuted, check_refuted(_)).WillByDefault(Return(false));
         ON_CALL(parent, get(_)).WillByDefault(Return(nullptr));
         ON_CALL(make_var, make_var(_)).WillByDefault(Return(&var_expr));

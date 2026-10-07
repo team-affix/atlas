@@ -4,11 +4,10 @@
 #include <gtest/gtest.h>
 #include "functor_fixture.hpp"
 #include "infrastructure/expr_pool.hpp"
-#include "infrastructure/fully_persistent_array.hpp"
 #include "infrastructure/globalizer.hpp"
+#include <immer/map_transient.hpp>
 #include "infrastructure/hierarchical_bind_map.hpp"
 #include "infrastructure/normalizer.hpp"
-#include "infrastructure/order_maintenance.hpp"
 #include "infrastructure/pud_node_pool.hpp"
 #include "infrastructure/pud_parents.hpp"
 #include "infrastructure/pud_query_propagator.hpp"
@@ -17,7 +16,9 @@
 #include "infrastructure/unifier.hpp"
 
 struct PudPropagateQueryFullIntegrationTest : public ::testing::Test {
-    using bind_map_t = hierarchical_bind_map<globalizer, fully_persistent_array<uint32_t, framed_expr>, fully_persistent_array<uint32_t, framed_expr>>;
+    using bind_map_t = hierarchical_bind_map<
+        globalizer,
+        immer::map<uint32_t, framed_expr>::transient_type>;
     using unifier_t = unifier<globalizer, bind_map_t>;
     using specializer_t = pud_specializer<expr_pool, unifier_t>;
     using normalizer_t = normalizer<globalizer, expr_pool, expr_pool, bind_map_t>;
@@ -28,27 +29,21 @@ struct PudPropagateQueryFullIntegrationTest : public ::testing::Test {
         normalizer_t,
         pud_parents,
         pud_node_pool,
-        order_maintenance,
-        order_maintenance,
         expr_pool,
         globalizer,
-        fully_persistent_array<uint32_t, framed_expr>,
-        fully_persistent_array<uint32_t, framed_expr>,
         pud_refuted_nodes>;
     using handle = propagator_t::query_node_handle;
 
     test_functors functors;
     expr_pool exprs;
     globalizer globalize;
-    order_maintenance order;
-    fully_persistent_array<uint32_t, framed_expr> bindings;
     pud_node_pool pool;
     pud_parents parents;
     pud_refuted_nodes refuted;
     propagator_t propagator;
 
     PudPropagateQueryFullIntegrationTest()
-        : propagator(parents, pool, order, order, exprs, globalize, bindings, bindings, refuted) {}
+        : propagator(parents, pool, exprs, globalize, refuted) {}
 
     const expr* var(uint32_t index) {
         return exprs.make_var(index);
