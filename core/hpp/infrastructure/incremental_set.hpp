@@ -9,49 +9,39 @@
 
 template<typename Key>
 struct incremental_set {
-private:
-    struct node;
-public:
-    incremental_set();
-    incremental_set insert(Key key) const;
-    incremental_set erase(Key key) const;
-    bool contains(Key key) const;
-    struct const_iterator {
-        const Key& operator*() const;
-        const_iterator& operator++();
-        bool operator==(const const_iterator& other) const;
-        bool operator!=(const const_iterator& other) const;
-    private:
-        explicit const_iterator(const node* root);
-        void push_left(const node* n);
-        std::vector<const node*> stack_;
-        friend struct incremental_set;
-    };
-    const_iterator begin() const;
-    const_iterator end() const;
-private:
     struct node {
         Key key;
         uint32_t priority;
         const node* left;
         const node* right;
     };
+    struct const_iterator {
+        const Key& operator*() const;
+        const_iterator& operator++();
+        bool operator==(const const_iterator& other) const;
+        bool operator!=(const const_iterator& other) const;
+        explicit const_iterator(const node* root);
+    private:
+        void push_left(const node* n);
 
+        std::vector<const node*> stack_;
+    };
+
+    incremental_set();
+    incremental_set insert(Key key) const;
+    incremental_set erase(Key key) const;
+    bool contains(Key key) const;
+    const_iterator begin() const;
+    const_iterator end() const;
+    
+private:
     using pool_t = std::deque<node>;
 
-    static uint32_t priority_of(const Key& key) {
-        return static_cast<uint32_t>(std::hash<Key>{}(key) * 2654435761u);
-    }
-
-    static const node* treap_insert(const node* n, const Key& key, uint32_t pri,
-                                    std::shared_ptr<pool_t>& pool);
-    static const node* treap_erase(const node* n, const Key& key,
-                                   std::shared_ptr<pool_t>& pool);
-    static const node* treap_merge(const node* left, const node* right,
-                                   std::shared_ptr<pool_t>& pool);
-    static const node* copy_with(const node* n, const node* left, const node* right,
-                                 std::shared_ptr<pool_t>& pool);
-
+    static uint32_t priority_of(const Key& key);
+    static const node* treap_insert(const node* n, const Key& key, uint32_t pri, std::shared_ptr<pool_t>& pool);
+    static const node* treap_erase(const node* n, const Key& key, std::shared_ptr<pool_t>& pool);
+    static const node* treap_merge(const node* left, const node* right, std::shared_ptr<pool_t>& pool);
+    static const node* copy_with(const node* n, const node* left, const node* right, std::shared_ptr<pool_t>& pool);
     explicit incremental_set(std::shared_ptr<pool_t> pool, const node* root);
 
     std::shared_ptr<pool_t> pool_;
@@ -65,6 +55,11 @@ incremental_set<Key>::incremental_set()
 template<typename Key>
 incremental_set<Key>::incremental_set(std::shared_ptr<pool_t> pool, const node* root)
     : pool_(std::move(pool)), root_(root) {}
+
+template<typename Key>
+uint32_t incremental_set<Key>::priority_of(const Key& key) {
+    return static_cast<uint32_t>(std::hash<Key>{}(key) * 2654435761u);
+}
 
 template<typename Key>
 const typename incremental_set<Key>::node*
