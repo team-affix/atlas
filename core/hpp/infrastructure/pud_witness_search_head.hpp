@@ -5,6 +5,7 @@
 #include <optional>
 #include "value_objects/pud_node.hpp"
 #include "value_objects/pud_witness_advance_result.hpp"
+#include "debug_assert.hpp"
 
 template<
     typename QueryHandle,
@@ -77,10 +78,8 @@ pud_witness_search_head<QH, CI, ICNL, IGCN, IPQN, IGCSI>::pud_witness_search_hea
     
     for (const auto& other_frame : other.frame_stack_) {
         
-        // it will always have a value if we are forking it
+        DEBUG_ASSERT(other_frame.handle.has_value());
         const QH& other_handle = other_frame.handle.value();
-
-        // propagate the query to the current node
         frame new_frame = {
             .handle = propagate_query_node_handle_.propagate(
                 parent_handle, other_handle.node()),
@@ -107,6 +106,7 @@ std::optional<pud_witness_advance_result<QH, NI>> pud_witness_search_head<QH, NI
 
     frame_stack_.pop_front();
 
+    DEBUG_ASSERT(first_stack_frame.handle.has_value());
     pud_witness_advance_result<QH, NI> result = {
         .root_handle = first_stack_frame.handle.value(),
         .root_next_sibling_it = first_stack_frame.next_sibling_it,

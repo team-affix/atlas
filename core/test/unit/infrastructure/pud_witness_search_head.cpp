@@ -8,7 +8,6 @@
 using ::testing::_;
 using ::testing::NiceMock;
 using ::testing::Return;
-using ::testing::ReturnRef;
 
 using child_iter = std::vector<const pud_node*>::const_iterator;
 
@@ -216,6 +215,34 @@ TEST_F(PudWitnessSearchHeadTest, AdvanceReturnsFirstChildHandleAndRootSiblingIte
     EXPECT_EQ(result->root_end_sibling_it, sequences[&root].end());
 }
 
+TEST_F(PudWitnessSearchHeadTest, AdvanceThenResumeFindsLeafInRemainingFrame) {
+    sequences[&root] = {&left, &right};
+    sequences[&left] = {&deep_leaf};
+    EXPECT_CALL(leaves, check_leaf(&root)).WillRepeatedly(Return(false));
+    EXPECT_CALL(leaves, check_leaf(&left)).WillRepeatedly(Return(false));
+    EXPECT_CALL(leaves, check_leaf(&deep_leaf)).WillRepeatedly(Return(true));
+    EXPECT_CALL(propagate, propagate(_, &left)).WillOnce(Return(std::optional<handle_t>{handle_t{&left}}));
+    EXPECT_CALL(propagate, propagate(_, &deep_leaf)).WillOnce(Return(std::optional<handle_t>{handle_t{&deep_leaf}}));
+    auto head = make_head(&root);
+    ASSERT_EQ(head.resume().value_or(nullptr), &deep_leaf);
+    auto advanced = head.advance();
+    ASSERT_TRUE(advanced.has_value());
+    EXPECT_EQ(advanced->root_handle.node(), &left);
+    // resume from the remaining frame — deep_leaf is still the active leaf
+    EXPECT_EQ(head.resume().value_or(nullptr), &deep_leaf);
+}
+
+TEST_F(PudWitnessSearchHeadTest, AdvanceAfterExhaustedSearchReturnsNullopt) {
+    sequences[&root] = {&left};
+    sequences[&left] = {};
+    EXPECT_CALL(leaves, check_leaf(&root)).WillRepeatedly(Return(false));
+    EXPECT_CALL(leaves, check_leaf(&left)).WillRepeatedly(Return(false));
+    EXPECT_CALL(propagate, propagate(_, &left)).WillOnce(Return(std::nullopt));
+    auto head = make_head(&root);
+    ASSERT_FALSE(head.resume().has_value());
+    EXPECT_FALSE(head.advance().has_value());
+}
+
 TEST_F(PudWitnessSearchHeadTest, ForkThatCannotEnterDeepestContinuesParentChildren) {
     sequences[&root] = {&left};
     sequences[&left] = {&left_1, &left_2};
@@ -227,8 +254,9 @@ TEST_F(PudWitnessSearchHeadTest, ForkThatCannotEnterDeepestContinuesParentChildr
     EXPECT_CALL(propagate, propagate(_, &left_1)).WillOnce(Return(std::optional<handle_t>{handle_t{&left_1}}));
     auto head = make_head(&root);
     ASSERT_EQ(head.resume().value_or(nullptr), &left_1);
-    EXPECT_CALL(propagate, propagate(handle_t{&caller}, &root)).WillOnce(Return(std::optional<handle_t>{handle_t{&root}}));
-    EXPECT_CALL(propagate, propagate(handle_t{&root}, &left)).WillOnce(Return(std::optional<handle_t>{handle_t{&left}}));
+    // search_root_handle IS the root-level handle, so the fork starts propagating
+    // from it directly to the first child in each frame — no separate root step
+    EXPECT_CALL(propagate, propagate(handle_t{&caller}, &left)).WillOnce(Return(std::optional<handle_t>{handle_t{&left}}));
     EXPECT_CALL(propagate, propagate(handle_t{&left}, &left_1)).WillOnce(Return(std::nullopt));
     EXPECT_CALL(propagate, propagate(handle_t{&left}, &left_2)).WillOnce(Return(std::optional<handle_t>{handle_t{&left_2}}));
     test_witness_head_t forked{head, handle_t{&caller}};
@@ -237,11 +265,15 @@ TEST_F(PudWitnessSearchHeadTest, ForkThatCannotEnterDeepestContinuesParentChildr
     EXPECT_EQ(*found, &left_2);
 }
 
-TEST_F(PudWitnessSearchHeadTest, ForkThatCannotEnterRootHasNoLeaf) {
-    EXPECT_CALL(leaves, check_leaf(&root)).WillRepeatedly(Return(true));
+TEST_F(PudWitnessSearchHeadTest, ForkThatCannotEnterAnyChildHasNoLeaf) {
+    sequences[&root] = {&left};
+    EXPECT_CALL(leaves, check_leaf(&root)).WillRepeatedly(Return(false));
+    EXPECT_CALL(leaves, check_leaf(&left)).WillRepeatedly(Return(true));
+    EXPECT_CALL(propagate, propagate(_, &left)).WillOnce(Return(std::optional<handle_t>{handle_t{&left}}));
     auto head = make_head(&root);
-    ASSERT_EQ(head.resume().value_or(nullptr), &root);
-    EXPECT_CALL(propagate, propagate(handle_t{&caller}, &root)).WillOnce(Return(std::nullopt));
+    ASSERT_EQ(head.resume().value_or(nullptr), &left);
+    // fork's propagate refuses to enter left — no siblings remain, so no leaf
+    EXPECT_CALL(propagate, propagate(handle_t{&caller}, &left)).WillOnce(Return(std::nullopt));
     test_witness_head_t forked{head, handle_t{&caller}};
     EXPECT_FALSE(forked.resume().has_value());
 }
