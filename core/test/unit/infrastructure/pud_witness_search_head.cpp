@@ -302,3 +302,58 @@ TEST_F(PudWitnessSearchHeadTest, ChainOfFourReachesTheLeaf) {
     ASSERT_TRUE(found.has_value());
     EXPECT_EQ(*found, &deep_leaf);
 }
+
+// Stress: leaf gets expanded between two resume() calls (no advance).
+// resume() must continue seamlessly into the newly-available children.
+TEST_F(PudWitnessSearchHeadTest, ExpandedLeafResumedFindsDeepChild) {
+    sequences[&root]   = {&left};
+    sequences[&left]   = {&left_1};
+    sequences[&left_1] = {&deep_a, &deep_b};
+    EXPECT_CALL(leaves, check_leaf(&left_1))
+        .WillOnce(Return(true))          // first resume: left_1 looks like a leaf
+        .WillRepeatedly(Return(false));  // expansion: left_1 now has children
+    EXPECT_CALL(leaves, check_leaf(&deep_a)).WillRepeatedly(Return(true));
+    auto head = make_head(&root);
+    ASSERT_EQ(head.resume().value_or(nullptr), &left_1);
+    // left_1 expanded — next resume descends into its children
+    EXPECT_EQ(head.resume().value_or(nullptr), &deep_a);
+}
+
+// Stress: same expansion scenario but with advance() between the two resume() calls.
+// advance() shifts the search root to left; resume() then descends into left_1's children.
+TEST_F(PudWitnessSearchHeadTest, ExpandedLeafAfterAdvanceResumedFindsDeepChild) {
+    sequences[&root]   = {&left};
+    sequences[&left]   = {&left_1};
+    sequences[&left_1] = {&deep_a, &deep_b};
+    EXPECT_CALL(leaves, check_leaf(&left_1))
+        .WillOnce(Return(true))
+        .WillRepeatedly(Return(false));
+    EXPECT_CALL(leaves, check_leaf(&deep_a)).WillRepeatedly(Return(true));
+    auto head = make_head(&root);
+    ASSERT_EQ(head.resume().value_or(nullptr), &left_1);
+    auto advanced = head.advance();
+    ASSERT_TRUE(advanced.has_value());
+    ASSERT_EQ(advanced->root_handle.node(), &left);
+    EXPECT_EQ(head.resume().value_or(nullptr), &deep_a);
+}
+
+// Stress: leaf expanded, but all new children are refused by propagate.
+// The search must backtrack all the way and find the next sibling of the expanded node.
+TEST_F(PudWitnessSearchHeadTest, ExpandedLeafWithDeadChildrenBacktracksToSibling) {
+    sequences[&root]   = {&left};
+    sequences[&left]   = {&left_1, &left_2};
+    sequences[&left_1] = {&deep_a, &deep_b};
+    EXPECT_CALL(leaves, check_leaf(&left_1))
+        .WillOnce(Return(true))
+        .WillRepeatedly(Return(false));
+    EXPECT_CALL(leaves, check_leaf(&left_2)).WillRepeatedly(Return(true));
+    EXPECT_CALL(propagate, propagate(_, &deep_a)).WillRepeatedly(Return(std::nullopt));
+    EXPECT_CALL(propagate, propagate(_, &deep_b)).WillRepeatedly(Return(std::nullopt));
+    auto head = make_head(&root);
+    ASSERT_EQ(head.resume().value_or(nullptr), &left_1);
+    auto advanced = head.advance();
+    ASSERT_TRUE(advanced.has_value());
+    ASSERT_EQ(advanced->root_handle.node(), &left);
+    // expanded left_1's children are all dead — resume backtracks to left_2
+    EXPECT_EQ(head.resume().value_or(nullptr), &left_2);
+}
