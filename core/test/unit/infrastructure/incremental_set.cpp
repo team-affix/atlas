@@ -1,9 +1,26 @@
 #include <gtest/gtest.h>
 #include <algorithm>
+#include <cmath>
 #include <random>
 #include <set>
 #include <vector>
 #include "infrastructure/incremental_set.hpp"
+
+// Instrumented key: counts operator== and operator< calls so tests can
+// verify that contains() traverses O(log n) nodes rather than O(n).
+static int g_cmp_count = 0;
+
+struct cmp_key {
+    uint32_t value;
+    bool operator==(const cmp_key& o) const { ++g_cmp_count; return value == o.value; }
+    bool operator<(const cmp_key& o)  const { ++g_cmp_count; return value < o.value;  }
+};
+
+namespace std {
+template<> struct hash<cmp_key> {
+    size_t operator()(const cmp_key& k) const { return std::hash<uint32_t>{}(k.value); }
+};
+} // namespace std
 
 namespace {
 
@@ -843,4 +860,378 @@ TEST_F(IncrementalSetTest, IteratorStressRandomOpsMatchStdSetOrder) {
         const std::vector<uint32_t> result(oracle.begin(), oracle.end());
         ASSERT_EQ(collect(s), result) << "mismatch at step " << step;
     }
+}
+
+// ---------------------------------------------------------------------------
+// Two independent iterators from the same set
+// ---------------------------------------------------------------------------
+
+TEST_F(IncrementalSetTest, TwoIteratorsFromSameBeginAreIndependent) {
+    const set_u32 s = set_u32{}.insert(1u).insert(2u).insert(3u);
+    auto it1 = s.begin();
+    auto it2 = s.begin();
+
+    EXPECT_EQ(*it1, 1u);
+    EXPECT_EQ(*it2, 1u);
+    ++it1;
+    EXPECT_EQ(*it1, 2u);
+    EXPECT_EQ(*it2, 1u); // it2 unmoved
+    ++it1;
+    ++it2;
+    EXPECT_EQ(*it1, 3u);
+    EXPECT_EQ(*it2, 2u);
+}
+
+TEST_F(IncrementalSetTest, TwoIteratorsWalkFullSetIndependently) {
+    const set_u32 s = set_u32{}.insert(10u).insert(20u).insert(30u).insert(40u);
+    std::vector<uint32_t> run1;
+    std::vector<uint32_t> run2;
+
+    auto it = s.begin();
+    while (it != s.end()) { run1.push_back(*it); ++it; }
+
+    for (uint32_t key : s) run2.push_back(key);
+
+    EXPECT_EQ(run1, run2);
+    EXPECT_EQ(run1, (std::vector<uint32_t>{10u, 20u, 30u, 40u}));
+}
+
+// ---------------------------------------------------------------------------
+// Copy constructor preserves iteration
+// ---------------------------------------------------------------------------
+
+TEST_F(IncrementalSetTest, CopiedSetIteratesIdenticallyToOriginal) {
+    const set_u32 original = set_u32{}.insert(5u).insert(2u).insert(8u).insert(1u);
+    const set_u32 copy = original;
+    EXPECT_EQ(collect(copy), collect(original));
+}
+
+TEST_F(IncrementalSetTest, CopyAndOriginalIterateCorrectlyAfterIndependentMutation) {
+    const set_u32 base = set_u32{}.insert(10u).insert(20u).insert(30u);
+    set_u32 a = base;
+    set_u32 b = base;
+    a = a.insert(5u).erase(20u);
+    b = b.insert(40u).erase(10u);
+
+    EXPECT_EQ(collect(a), (std::vector<uint32_t>{5u, 10u, 30u}));
+    EXPECT_EQ(collect(b), (std::vector<uint32_t>{20u, 30u, 40u}));
+    EXPECT_EQ(collect(base), (std::vector<uint32_t>{10u, 20u, 30u}));
+}
+
+// ---------------------------------------------------------------------------
+// Erase absent from single-element set: iteration
+// ---------------------------------------------------------------------------
+
+TEST_F(IncrementalSetTest, EraseAbsentFromSingleElementSetIteratesOriginalElement) {
+    const set_u32 s = set_u32{}.insert(42u).erase(99u);
+    EXPECT_EQ(collect(s), (std::vector<uint32_t>{42u}));
+}
+
+TEST_F(IncrementalSetTest, DoubleEraseKeyThenIterationIsEmpty) {
+    const set_u32 s = set_u32{}.insert(42u).erase(42u).erase(42u);
+    EXPECT_TRUE(collect(s).empty());
+    EXPECT_EQ(s.begin(), s.end());
+}
+
+// ---------------------------------------------------------------------------
+// Keys near UINT32_MAX in sorted iteration
+// ---------------------------------------------------------------------------
+
+TEST_F(IncrementalSetTest, KeysNearMaxUint32IteratedInSortedOrder) {
+    constexpr uint32_t k_max = 0xffffffffu;
+    const set_u32 s = set_u32{}
+        .insert(k_max).insert(k_max - 1u).insert(k_max - 2u)
+        .insert(k_max - 3u).insert(k_max - 4u);
+    const std::vector<uint32_t> expected{
+        k_max - 4u, k_max - 3u, k_max - 2u, k_max - 1u, k_max};
+    EXPECT_EQ(collect(s), expected);
+}
+
+TEST_F(IncrementalSetTest, MixedSmallAndLargeKeysIteratedInSortedOrder) {
+    const set_u32 s = set_u32{}
+        .insert(0u).insert(0xffffffffu)
+        .insert(1u).insert(0xfffffffeu)
+        .insert(2u).insert(0xfffffffdu);
+    const std::vector<uint32_t> expected{
+        0u, 1u, 2u, 0xfffffffdu, 0xfffffffeu, 0xffffffffu};
+    EXPECT_EQ(collect(s), expected);
+}
+
+// ---------------------------------------------------------------------------
+// STL algorithms work via const_iterator
+// ---------------------------------------------------------------------------
+
+TEST_F(IncrementalSetTest, StdFindLocatesExistingKey) {
+    const set_u32 s = set_u32{}.insert(3u).insert(7u).insert(11u);
+    const auto found = std::find(s.begin(), s.end(), 7u);
+    ASSERT_NE(found, s.end());
+    EXPECT_EQ(*found, 7u);
+}
+
+TEST_F(IncrementalSetTest, StdFindReturnsEndForAbsentKey) {
+    const set_u32 s = set_u32{}.insert(3u).insert(7u).insert(11u);
+    EXPECT_EQ(std::find(s.begin(), s.end(), 99u), s.end());
+}
+
+TEST_F(IncrementalSetTest, StdCountMatchesMembership) {
+    const set_u32 s = set_u32{}.insert(3u).insert(7u).insert(11u);
+    EXPECT_EQ(std::count(s.begin(), s.end(), 7u), 1);
+    EXPECT_EQ(std::count(s.begin(), s.end(), 99u), 0);
+}
+
+// ---------------------------------------------------------------------------
+// Iteration and contains agree on every element
+// ---------------------------------------------------------------------------
+
+TEST_F(IncrementalSetTest, IterationAndContainsAgreeOnEveryElement) {
+    constexpr uint32_t k_key_range = 50u;
+    set_u32 s;
+    std::set<uint32_t> oracle;
+
+    std::mt19937 rng(11111u);
+    std::uniform_int_distribution<uint32_t> pick_key(0u, k_key_range - 1u);
+    for (int i = 0; i < 200; ++i) {
+        const uint32_t key = pick_key(rng);
+        s = s.insert(key);
+        oracle.insert(key);
+    }
+
+    // every key from iteration must pass contains
+    for (uint32_t key : s)
+        EXPECT_TRUE(s.contains(key)) << "key " << key << " in iteration but not contains";
+
+    // every key in range must agree between oracle and contains
+    for (uint32_t k = 0; k < k_key_range; ++k)
+        EXPECT_EQ(s.contains(k), oracle.count(k) > 0) << "key " << k;
+}
+
+// ---------------------------------------------------------------------------
+// Empty set via various paths
+// ---------------------------------------------------------------------------
+
+TEST_F(IncrementalSetTest, EraseAbsentFromEmptySetIterationStaysEmpty) {
+    const set_u32 s = set_u32{}.erase(5u).erase(10u).erase(0u);
+    EXPECT_EQ(s.begin(), s.end());
+    EXPECT_TRUE(collect(s).empty());
+}
+
+TEST_F(IncrementalSetTest, FullRoundTripInsertAllEraseAllIterationEmpty) {
+    constexpr uint32_t k_n = 20u;
+    set_u32 s;
+    for (uint32_t i = 0; i < k_n; ++i) s = s.insert(i);
+    for (uint32_t i = 0; i < k_n; ++i) s = s.erase(i);
+    EXPECT_EQ(s.begin(), s.end());
+    EXPECT_TRUE(collect(s).empty());
+}
+
+// ---------------------------------------------------------------------------
+// Linear version chain: all 50 sets live and iterable
+// ---------------------------------------------------------------------------
+
+TEST_F(IncrementalSetTest, LinearVersionChainAllSetsIterateCorrectly) {
+    constexpr int k_versions = 50;
+    constexpr uint32_t k_key_range = 30u;
+
+    std::mt19937 rng(22222u);
+    std::uniform_int_distribution<uint32_t> pick_key(0u, k_key_range - 1u);
+    std::uniform_int_distribution<int>      pick_op(0, 1);
+
+    std::vector<set_u32>           versions;
+    std::vector<std::set<uint32_t>> oracles;
+    versions.reserve(k_versions);
+    oracles.reserve(k_versions);
+
+    set_u32 s;
+    std::set<uint32_t> oracle;
+    for (int v = 0; v < k_versions; ++v) {
+        const uint32_t key = pick_key(rng);
+        if (pick_op(rng) == 0) { s = s.insert(key); oracle.insert(key); }
+        else                   { s = s.erase(key);  oracle.erase(key);  }
+        versions.push_back(s);
+        oracles.push_back(oracle);
+    }
+
+    for (int v = 0; v < k_versions; ++v) {
+        const std::vector<uint32_t> expected(oracles[v].begin(), oracles[v].end());
+        ASSERT_EQ(collect(versions[v]), expected) << "version " << v;
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Stress: large key set (500 keys) full iteration oracle
+// ---------------------------------------------------------------------------
+
+TEST_F(IncrementalSetTest, StressLargeSetIterationMatchesStdSet) {
+    constexpr uint32_t k_n    = 500u;
+    constexpr uint32_t k_seed = 33333u;
+
+    std::mt19937 rng(k_seed);
+    std::uniform_int_distribution<uint32_t> pick_key(0u, k_n * 2u - 1u);
+
+    set_u32 s;
+    std::set<uint32_t> oracle;
+    for (uint32_t i = 0; i < k_n; ++i) {
+        const uint32_t key = pick_key(rng);
+        s = s.insert(key);
+        oracle.insert(key);
+    }
+
+    const std::vector<uint32_t> expected(oracle.begin(), oracle.end());
+    EXPECT_EQ(collect(s), expected);
+}
+
+// ---------------------------------------------------------------------------
+// Stress: 20 branches from one parent, each with random mutations
+// ---------------------------------------------------------------------------
+
+TEST_F(IncrementalSetTest, StressManyBranchesIterationCorrect) {
+    constexpr int k_branches   = 20;
+    constexpr int k_ops        = 50;
+    constexpr uint32_t k_key_range = 100u;
+    constexpr uint32_t k_seed  = 44444u;
+
+    std::mt19937 rng(k_seed);
+    std::uniform_int_distribution<uint32_t> pick_key(0u, k_key_range - 1u);
+    std::uniform_int_distribution<int>      pick_op(0, 1);
+
+    // build a shared base
+    set_u32 base;
+    std::set<uint32_t> base_oracle;
+    for (int i = 0; i < 30; ++i) {
+        const uint32_t key = pick_key(rng);
+        base = base.insert(key);
+        base_oracle.insert(key);
+    }
+
+    std::vector<set_u32>           branches(k_branches, base);
+    std::vector<std::set<uint32_t>> branch_oracles(k_branches, base_oracle);
+
+    for (int b = 0; b < k_branches; ++b) {
+        for (int op = 0; op < k_ops; ++op) {
+            const uint32_t key = pick_key(rng);
+            if (pick_op(rng) == 0) {
+                branches[b] = branches[b].insert(key);
+                branch_oracles[b].insert(key);
+            } else {
+                branches[b] = branches[b].erase(key);
+                branch_oracles[b].erase(key);
+            }
+        }
+    }
+
+    for (int b = 0; b < k_branches; ++b) {
+        const std::vector<uint32_t> expected(
+            branch_oracles[b].begin(), branch_oracles[b].end());
+        ASSERT_EQ(collect(branches[b]), expected) << "branch " << b;
+    }
+
+    // base set must be unchanged
+    const std::vector<uint32_t> base_expected(base_oracle.begin(), base_oracle.end());
+    EXPECT_EQ(collect(base), base_expected);
+}
+
+// ---------------------------------------------------------------------------
+// Stress: retained snapshots verified via iteration (not just contains)
+// ---------------------------------------------------------------------------
+
+TEST_F(IncrementalSetTest, StressRetainedSnapshotsIterationCorrect) {
+    constexpr int k_ops        = 3000;
+    constexpr uint32_t k_key_range = 300u;
+    constexpr uint32_t k_seed  = 55555u;
+
+    std::mt19937 rng(k_seed);
+    std::uniform_int_distribution<uint32_t> pick_key(0u, k_key_range - 1u);
+    std::uniform_int_distribution<int>      pick_op(0, 1);
+
+    std::vector<set_u32>           snapshots;
+    std::vector<std::set<uint32_t>> snapshot_oracles;
+
+    set_u32 s;
+    std::set<uint32_t> oracle;
+    for (int step = 0; step < k_ops; ++step) {
+        const uint32_t key = pick_key(rng);
+        if (pick_op(rng) == 0) { s = s.insert(key); oracle.insert(key); }
+        else                   { s = s.erase(key);  oracle.erase(key);  }
+        if (step % 15 == 14) {
+            snapshots.push_back(s);
+            snapshot_oracles.push_back(oracle);
+        }
+    }
+
+    for (size_t i = 0; i < snapshots.size(); ++i) {
+        const std::vector<uint32_t> expected(
+            snapshot_oracles[i].begin(), snapshot_oracles[i].end());
+        ASSERT_EQ(collect(snapshots[i]), expected) << "snapshot " << i;
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Degenerate insertion order: ascending 0..100 must stay O(log n) depth
+// ---------------------------------------------------------------------------
+
+// Without priority-based rotations, inserting keys in ascending order
+// produces a right-spine tree of depth 101 (plain BST worst case).
+// The treap must rotate keys with higher priorities toward the root so
+// that contains() requires at most O(log n) comparisons regardless of
+// insertion order.
+//
+// We bound each contains() call to at most 4*log2(n)+2 comparisons.
+// A degenerate tree would need up to 2*n comparisons for the deepest key;
+// a balanced treap needs ~2*log2(n).
+
+TEST_F(IncrementalSetTest, AscendingInsertContainsInLogComparisons) {
+    using set_c = incremental_set<cmp_key>;
+    constexpr int k_n = 1'000'000;
+
+    set_c s;
+    for (int i = 0; i < k_n; ++i) {
+        g_cmp_count = 0;
+        s = s.insert({static_cast<uint32_t>(i)});
+    }
+
+    // log2(1M) ≈ 20. Bound: 4 * log2(n) + 2 ≈ 82.
+    // A degenerate right-spine tree (no rotations) would need ~2M comparisons
+    // for the shallowest key and ~2 for the deepest — average ~1M. Bound is ~0.000082M.
+    const int comparison_bound = static_cast<int>(4.0 * std::log2(k_n)) + 2;
+
+    // Sample 1000 evenly-spaced keys — no need to check all 1M.
+    const int sample_step = k_n / 1000;
+    for (int i = 0; i < k_n; i += sample_step) {
+        g_cmp_count = 0;
+        EXPECT_TRUE(s.contains({static_cast<uint32_t>(i)}));
+        EXPECT_LE(g_cmp_count, comparison_bound)
+            << "key " << i << " took " << g_cmp_count
+            << " comparisons (bound " << comparison_bound
+            << "); degenerate tree would need ~" << 2 * (i + 1);
+    }
+}
+
+TEST_F(IncrementalSetTest, AscendingInsertSameDepthAsShuffledInsert) {
+    using set_c = incremental_set<cmp_key>;
+    constexpr int k_n = 1'000'000;
+
+    set_c asc;
+    for (int i = 0; i < k_n; ++i) asc = asc.insert({static_cast<uint32_t>(i)});
+
+    std::vector<uint32_t> keys(k_n);
+    for (int i = 0; i < k_n; ++i) keys[i] = static_cast<uint32_t>(i);
+    std::mt19937 rng(99999u);
+    std::shuffle(keys.begin(), keys.end(), rng);
+    set_c shuffled;
+    for (uint32_t k : keys) shuffled = shuffled.insert({k});
+
+    // Sample 1000 lookups. Because the treap shape depends only on key
+    // priorities (hash of value, not insertion order), both sets must produce
+    // identical comparison counts for every lookup.
+    const int sample_step = k_n / 1000;
+    int asc_total = 0;
+    int shuffled_total = 0;
+    for (int i = 0; i < k_n; i += sample_step) {
+        g_cmp_count = 0; asc.contains({static_cast<uint32_t>(i)});      asc_total += g_cmp_count;
+        g_cmp_count = 0; shuffled.contains({static_cast<uint32_t>(i)}); shuffled_total += g_cmp_count;
+    }
+
+    EXPECT_EQ(asc_total, shuffled_total)
+        << "ascending total=" << asc_total << ", shuffled total=" << shuffled_total
+        << " — must be equal since treap shape depends only on key priorities, not insertion order";
 }
