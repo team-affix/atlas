@@ -8,7 +8,7 @@
 #include <immer/map.hpp>
 #include <immer/map_transient.hpp>
 #include "infrastructure/coroutine.hpp"
-#include "infrastructure/pud_query_propagator.hpp"
+#include "infrastructure/pud_descender.hpp"
 #include "infrastructure/pud_specializer.hpp"
 
 using ::testing::_;
@@ -84,7 +84,7 @@ struct MockIterateRoots {
     }
 };
 
-using propagator_t = pud_query_propagator<
+using propagator_t = pud_descender<
     MockBindMap,
     MockUnifier,
     pud_specializer<MockMakeVar, MockUnifier>,
@@ -127,8 +127,8 @@ TEST_F(PudPropagateSpecializeIntegrationTest, RepAtTheFrameOffsetIsNotATouchedCa
     pud_node child{};
     child.added_specializations.push_back(pud_specialization{.var_idx = 0, .value = &spec_value});
     EXPECT_CALL(unify_log, unify(_, _)).WillOnce(Return(::testing::ByMove(scripted_unify({0}, true))));
-    auto root = propagator.roots()[0];
-    auto at_child = propagator.propagate(root, &child);
+    auto root = propagator.descent_roots()[0];
+    auto at_child = propagator.descend(root, &child);
     ASSERT_TRUE(at_child.has_value());
     EXPECT_CALL(make_node, make(_, _, _)).WillOnce([&](std::vector<pud_specialization> specs, std::vector<const expr*> goals, uint32_t) {
         EXPECT_TRUE(specs.empty());
@@ -142,8 +142,8 @@ TEST_F(PudPropagateSpecializeIntegrationTest, UnifyFailureIsNotEntered) {
     pud_node child{};
     child.added_specializations.push_back(pud_specialization{.var_idx = 0, .value = &spec_value});
     EXPECT_CALL(unify_log, unify(_, _)).WillOnce(Return(::testing::ByMove(scripted_unify({}, false))));
-    auto root = propagator.roots()[0];
-    EXPECT_FALSE(propagator.propagate(root, &child).has_value());
+    auto root = propagator.descent_roots()[0];
+    EXPECT_FALSE(propagator.descend(root, &child).has_value());
 }
 
 TEST_F(PudPropagateSpecializeIntegrationTest, CloseOfNeverPropagatedHandleHasNoBodyGoals) {
@@ -153,7 +153,7 @@ TEST_F(PudPropagateSpecializeIntegrationTest, CloseOfNeverPropagatedHandleHasNoB
         EXPECT_EQ(vars, 0u);
         return &made;
     });
-    EXPECT_EQ(propagator.close_query(propagator.roots()[0]), &made);
+    EXPECT_EQ(propagator.close_query(propagator.descent_roots()[0]), &made);
 }
 
 TEST_F(PudPropagateSpecializeIntegrationTest, RepBelowTheOffsetIsTheChildsTouchedCallerRep) {
@@ -164,11 +164,11 @@ TEST_F(PudPropagateSpecializeIntegrationTest, RepBelowTheOffsetIsTheChildsTouche
     // root.lvc=1, with_live_vars.added_var_count=5 → at_live.lvc=6 → query_frame_offset=6
     // scripted_unify yields rep 3 (< 6, is caller rep) and rep 6 (= 6, is not a caller rep)
     EXPECT_CALL(unify_log, unify(_, _)).WillOnce(Return(::testing::ByMove(scripted_unify({3, 6}, true))));
-    auto root = propagator.roots()[0];
-    auto at_live = propagator.propagate(root, &with_live_vars);
+    auto root = propagator.descent_roots()[0];
+    auto at_live = propagator.descend(root, &with_live_vars);
     ASSERT_TRUE(at_live.has_value());
     auto opened = propagator.open_query(*at_live, &spec_value)[0];
-    auto at_child = propagator.propagate(opened, &child);
+    auto at_child = propagator.descend(opened, &child);
     ASSERT_TRUE(at_child.has_value());
     EXPECT_CALL(make_node, make(_, _, _)).WillOnce([&](std::vector<pud_specialization> specs, std::vector<const expr*>, uint32_t) {
         EXPECT_EQ(specs.size(), 1u);

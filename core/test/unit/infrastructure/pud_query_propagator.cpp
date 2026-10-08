@@ -8,7 +8,7 @@
 #include <immer/map.hpp>
 #include <immer/map_transient.hpp>
 #include "infrastructure/coroutine.hpp"
-#include "infrastructure/pud_query_propagator.hpp"
+#include "infrastructure/pud_descender.hpp"
 
 using ::testing::_;
 using ::testing::NiceMock;
@@ -106,7 +106,7 @@ struct MockIterateRoots {
     }
 };
 
-using test_propagator_t = pud_query_propagator<
+using test_propagator_t = pud_descender<
     MockBindMap,
     MockUnifier,
     MockSpecializer,
@@ -157,25 +157,25 @@ struct PudQueryPropagatorTest : public ::testing::Test {
 };
 
 TEST_F(PudQueryPropagatorTest, OpenQueryFromRootGlobalizesVar0AtFrame1) {
-    // roots()[0] has lvc=1 (implicit head var), so query_frame_offset = 0+1 = 1
+    // descent_roots()[0] has lvc=1 (implicit head var), so query_frame_offset = 0+1 = 1
     EXPECT_CALL(globalize, globalize(1u, 0u)).WillOnce(Return(11u));
     EXPECT_CALL(bind_log, bind(11u, &query_expr, 0u));
-    auto root = propagator.roots()[0];
+    auto root = propagator.descent_roots()[0];
     propagator.open_query(root, &query_expr)[0];
 }
 
 TEST_F(PudQueryPropagatorTest, RefutedChildIsNotEntered) {
     pud_node child{};
     EXPECT_CALL(refuted, check_refuted(&child)).WillOnce(Return(true));
-    auto root = propagator.roots()[0];
-    EXPECT_FALSE(propagator.propagate(root, &child).has_value());
+    auto root = propagator.descent_roots()[0];
+    EXPECT_FALSE(propagator.descend(root, &child).has_value());
 }
 
 TEST_F(PudQueryPropagatorTest, ChildWithNoSpecializationsIsEntered) {
     pud_node child{};
     EXPECT_CALL(parent, get(&child)).WillOnce(Return(&g_dummy_root));
-    auto root = propagator.roots()[0];
-    EXPECT_TRUE(propagator.propagate(root, &child).has_value());
+    auto root = propagator.descent_roots()[0];
+    EXPECT_TRUE(propagator.descend(root, &child).has_value());
 }
 
 TEST_F(PudQueryPropagatorTest, OneSpecializationSucceeds) {
@@ -183,8 +183,8 @@ TEST_F(PudQueryPropagatorTest, OneSpecializationSucceeds) {
     child.added_specializations.push_back(pud_specialization{.var_idx = 1, .value = &spec_value});
     EXPECT_CALL(parent, get(&child)).WillOnce(Return(&g_dummy_root));
     EXPECT_CALL(spec_log, specialize(0u, 1u, &spec_value)).WillOnce(Return(SpecScript{{}, true}));
-    auto root = propagator.roots()[0];
-    EXPECT_TRUE(propagator.propagate(root, &child).has_value());
+    auto root = propagator.descent_roots()[0];
+    EXPECT_TRUE(propagator.descend(root, &child).has_value());
 }
 
 TEST_F(PudQueryPropagatorTest, SeveralSpecializationsSucceed) {
@@ -194,8 +194,8 @@ TEST_F(PudQueryPropagatorTest, SeveralSpecializationsSucceed) {
     EXPECT_CALL(parent, get(&child)).WillOnce(Return(&g_dummy_root));
     EXPECT_CALL(spec_log, specialize(0u, 1u, &spec_value)).WillOnce(Return(SpecScript{{}, true}));
     EXPECT_CALL(spec_log, specialize(0u, 2u, &goal_a)).WillOnce(Return(SpecScript{{}, true}));
-    auto root = propagator.roots()[0];
-    EXPECT_TRUE(propagator.propagate(root, &child).has_value());
+    auto root = propagator.descent_roots()[0];
+    EXPECT_TRUE(propagator.descend(root, &child).has_value());
 }
 
 TEST_F(PudQueryPropagatorTest, FailingSpecializationIsNotEntered) {
@@ -205,8 +205,8 @@ TEST_F(PudQueryPropagatorTest, FailingSpecializationIsNotEntered) {
     EXPECT_CALL(parent, get(&child)).WillOnce(Return(&g_dummy_root));
     EXPECT_CALL(spec_log, specialize(0u, 1u, &spec_value)).WillOnce(Return(SpecScript{{7}, true}));
     EXPECT_CALL(spec_log, specialize(0u, 2u, &goal_a)).WillOnce(Return(SpecScript{{}, false}));
-    auto root = propagator.roots()[0];
-    EXPECT_FALSE(propagator.propagate(root, &child).has_value());
+    auto root = propagator.descent_roots()[0];
+    EXPECT_FALSE(propagator.descend(root, &child).has_value());
 }
 
 TEST_F(PudQueryPropagatorTest, BodyGoalCountDoesNotRejectChild) {
@@ -216,18 +216,18 @@ TEST_F(PudQueryPropagatorTest, BodyGoalCountDoesNotRejectChild) {
     pud_node several{};
     several.added_body_goals = {&goal_a, &goal_b, &goal_c};
     EXPECT_CALL(parent, get(_)).WillRepeatedly(Return(&g_dummy_root));
-    auto root = propagator.roots()[0];
-    EXPECT_TRUE(propagator.propagate(root, &none).has_value());
-    EXPECT_TRUE(propagator.propagate(root, &one).has_value());
-    EXPECT_TRUE(propagator.propagate(root, &several).has_value());
+    auto root = propagator.descent_roots()[0];
+    EXPECT_TRUE(propagator.descend(root, &none).has_value());
+    EXPECT_TRUE(propagator.descend(root, &one).has_value());
+    EXPECT_TRUE(propagator.descend(root, &several).has_value());
 }
 
 TEST_F(PudQueryPropagatorTest, OpenQueryAfterPropagateUsesCallerFramePlusLiveVars) {
     pud_node child{};
     child.added_var_count = 4;
     EXPECT_CALL(parent, get(&child)).WillOnce(Return(&g_dummy_root));
-    auto root = propagator.roots()[0];
-    auto at_child = propagator.propagate(root, &child);
+    auto root = propagator.descent_roots()[0];
+    auto at_child = propagator.descend(root, &child);
     ASSERT_TRUE(at_child.has_value());
     // root.lvc = 1, child.added_var_count = 4 → at_child.lvc = 5 → query_frame_offset = 5
     EXPECT_CALL(globalize, globalize(5u, 0u)).WillOnce(Return(20u));
@@ -238,9 +238,9 @@ TEST_F(PudQueryPropagatorTest, OpenQueryAfterPropagateUsesCallerFramePlusLiveVar
 TEST_F(PudQueryPropagatorTest, OpenQueryHandleCanBePropagated) {
     pud_node child{};
     EXPECT_CALL(parent, get(&child)).WillOnce(Return(&g_dummy_root));
-    auto root = propagator.roots()[0];
+    auto root = propagator.descent_roots()[0];
     auto query = propagator.open_query(root, &query_expr)[0];
-    EXPECT_TRUE(propagator.propagate(query, &child).has_value());
+    EXPECT_TRUE(propagator.descend(query, &child).has_value());
 }
 
 TEST_F(PudQueryPropagatorTest, CloseNeverPropagatedRootHasNoGoalsOrSpecs) {
@@ -249,7 +249,7 @@ TEST_F(PudQueryPropagatorTest, CloseNeverPropagatedRootHasNoGoalsOrSpecs) {
         EXPECT_TRUE(goals.empty());
         return &made;
     });
-    auto root = propagator.roots()[0];
+    auto root = propagator.descent_roots()[0];
     propagator.close_query(root);
 }
 
@@ -259,7 +259,7 @@ TEST_F(PudQueryPropagatorTest, CloseOpenQueryWithoutPropagateHasNoGoalsOrSpecs) 
         EXPECT_TRUE(goals.empty());
         return &made;
     });
-    auto root = propagator.roots()[0];
+    auto root = propagator.descent_roots()[0];
     auto query = propagator.open_query(root, &query_expr)[0];
     propagator.close_query(query);
 }
@@ -276,8 +276,8 @@ TEST_F(PudQueryPropagatorTest, CloseOneStepReceivesThatStepsGoalsAndReps) {
         EXPECT_FALSE(goals.empty());
         return &made;
     });
-    auto root = propagator.roots()[0];
-    auto at_step = propagator.propagate(root, &step);
+    auto root = propagator.descent_roots()[0];
+    auto at_step = propagator.descend(root, &step);
     ASSERT_TRUE(at_step.has_value());
     propagator.close_query(*at_step);
 }
@@ -308,12 +308,12 @@ TEST_F(PudQueryPropagatorTest, CloseThreeStepsAccountsForEveryStep) {
         EXPECT_EQ(var_count, 7u);
         return &made;
     });
-    auto root = propagator.roots()[0];
-    auto at_a = propagator.propagate(root, &step_a);
+    auto root = propagator.descent_roots()[0];
+    auto at_a = propagator.descend(root, &step_a);
     ASSERT_TRUE(at_a.has_value());
-    auto at_b = propagator.propagate(*at_a, &step_b);
+    auto at_b = propagator.descend(*at_a, &step_b);
     ASSERT_TRUE(at_b.has_value());
-    auto at_c = propagator.propagate(*at_b, &step_c);
+    auto at_c = propagator.descend(*at_b, &step_c);
     ASSERT_TRUE(at_c.has_value());
     propagator.close_query(*at_c);
 }
@@ -324,8 +324,8 @@ TEST_F(PudQueryPropagatorTest, CloseVarCountZeroWhenNothingIsNormalizedIntoANewV
     EXPECT_CALL(parent, get(&step)).WillOnce(Return(&g_dummy_root));
     EXPECT_CALL(norm_log, normalize(_, _, _, _)).WillOnce(Return(&norm_a));
     EXPECT_CALL(make_node, make(_, _, 0u)).WillOnce(Return(&made));
-    auto root = propagator.roots()[0];
-    auto at_step = propagator.propagate(root, &step);
+    auto root = propagator.descent_roots()[0];
+    auto at_step = propagator.descend(root, &step);
     ASSERT_TRUE(at_step.has_value());
     EXPECT_EQ(propagator.close_query(*at_step), &made);
 }
@@ -336,8 +336,8 @@ TEST_F(PudQueryPropagatorTest, HappyOpenQueryAfterZeroAddedVars) {
     child.added_specializations.push_back(pud_specialization{.var_idx = 1, .value = &spec_value});
     EXPECT_CALL(parent, get(&child)).WillOnce(Return(&g_dummy_root));
     EXPECT_CALL(spec_log, specialize(0u, 1u, &spec_value)).WillOnce(Return(SpecScript{{}, true}));
-    auto root = propagator.roots()[0];
-    auto at_child = propagator.propagate(root, &child);
+    auto root = propagator.descent_roots()[0];
+    auto at_child = propagator.descend(root, &child);
     ASSERT_TRUE(at_child.has_value());
     // root.lvc=1 + child.added_var_count=0 = at_child.lvc=1 → query_frame_offset=1
     EXPECT_CALL(globalize, globalize(1u, 0u)).WillOnce(Return(1u));

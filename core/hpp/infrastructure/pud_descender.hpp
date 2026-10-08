@@ -1,5 +1,5 @@
-#ifndef PUD_QUERY_PROPAGATOR_HPP
-#define PUD_QUERY_PROPAGATOR_HPP
+#ifndef PUD_DESCENDER_HPP
+#define PUD_DESCENDER_HPP
 
 #include <optional>
 #include <unordered_map>
@@ -10,7 +10,7 @@
 #include <immer/set_transient.hpp>
 #include "infrastructure/coroutine.hpp"
 #include "value_objects/body_goal_id.hpp"
-#include "value_objects/pud_query_handle.hpp"
+#include "value_objects/pud_descent.hpp"
 #include "value_objects/framed_expr.hpp"
 #include "debug_assert.hpp"
 
@@ -26,8 +26,8 @@ template<
     typename ICheckNodeRefuted,
     typename IGetCallSite,
     typename IIterateRoots>
-struct pud_query_propagator {
-    pud_query_propagator(
+struct pud_descender {
+    pud_descender(
         IGetNodeParent& get_node_parent,
         IMakeNode& make_node,
         IMakeVar& make_var,
@@ -35,10 +35,10 @@ struct pud_query_propagator {
         ICheckNodeRefuted& check_node_refuted,
         IGetCallSite& get_call_site,
         IIterateRoots& iterate_roots);
-    std::vector<pud_query_handle> roots();
-    std::optional<pud_query_handle> propagate(pud_query_handle current, const pud_node* child_node);
-    std::vector<pud_query_handle> open_query(pud_query_handle caller, const expr* query);
-    const pud_node* close_query(pud_query_handle query);
+    std::vector<pud_descent> descent_roots();
+    std::optional<pud_descent> descend(pud_descent current, const pud_node* child_node);
+    std::vector<pud_descent> open_query(pud_descent caller, const expr* query);
+    const pud_node* close_query(pud_descent query);
 private:
     IGetNodeParent& get_node_parent_;
     IMakeNode& make_node_;
@@ -52,7 +52,7 @@ private:
 template<typename BM, typename U, typename S, typename N,
          typename IGNP, typename IMN, typename IMV, typename IG, typename IGNR,
          typename IGCS, typename IIR>
-pud_query_propagator<BM, U, S, N, IGNP, IMN, IMV, IG, IGNR, IGCS, IIR>::pud_query_propagator(
+pud_descender<BM, U, S, N, IGNP, IMN, IMV, IG, IGNR, IGCS, IIR>::pud_descender(
     IGNP& get_node_parent,
     IMN& make_node,
     IMV& make_var,
@@ -71,9 +71,9 @@ pud_query_propagator<BM, U, S, N, IGNP, IMN, IMV, IG, IGNR, IGCS, IIR>::pud_quer
 template<typename BM, typename U, typename S, typename N,
          typename IGNP, typename IMN, typename IMV, typename IG, typename IGNR,
          typename IGCS, typename IIR>
-std::vector<pud_query_handle>
-pud_query_propagator<BM, U, S, N, IGNP, IMN, IMV, IG, IGNR, IGCS, IIR>::roots() {
-    std::vector<pud_query_handle> handles;
+std::vector<pud_descent>
+pud_descender<BM, U, S, N, IGNP, IMN, IMV, IG, IGNR, IGCS, IIR>::descent_roots() {
+    std::vector<pud_descent> handles;
     auto co = iterate_roots_.iterate_roots();
     while (auto opt = co.next()) {
         const pud_node* r = opt.value();
@@ -85,7 +85,7 @@ pud_query_propagator<BM, U, S, N, IGNP, IMN, IMV, IG, IGNR, IGCS, IIR>::roots() 
         size_t bgc = 0;
         for (const expr* goal : r->added_body_goals)
             body_goals_transient.set(bgc++, goal);
-        handles.push_back(pud_query_handle{
+        handles.push_back(pud_descent{
             .frame_offset        = 0,
             .lvc                 = 1 + r->added_var_count,
             .bgc                 = bgc,
@@ -101,8 +101,8 @@ pud_query_propagator<BM, U, S, N, IGNP, IMN, IMV, IG, IGNR, IGCS, IIR>::roots() 
 template<typename BM, typename U, typename S, typename N,
          typename IGNP, typename IMN, typename IMV, typename IG, typename IGNR,
          typename IGCS, typename IIR>
-std::optional<pud_query_handle>
-pud_query_propagator<BM, U, S, N, IGNP, IMN, IMV, IG, IGNR, IGCS, IIR>::propagate(pud_query_handle current, const pud_node* child_node) {
+std::optional<pud_descent>
+pud_descender<BM, U, S, N, IGNP, IMN, IMV, IG, IGNR, IGCS, IIR>::descend(pud_descent current, const pud_node* child_node) {
     DEBUG_ASSERT(get_node_parent_.get(child_node) == current.node);
 
     if (check_node_refuted_.check_refuted(child_node))
@@ -128,7 +128,7 @@ pud_query_propagator<BM, U, S, N, IGNP, IMN, IMV, IG, IGNR, IGCS, IIR>::propagat
     for (const expr* goal : child_node->added_body_goals)
         body_goals_transient.set(child_bgc++, goal);
 
-    return pud_query_handle{
+    return pud_descent{
         .frame_offset        = current.frame_offset,
         .lvc                 = current.lvc + child_node->added_var_count,
         .bgc                 = child_bgc,
@@ -142,8 +142,8 @@ pud_query_propagator<BM, U, S, N, IGNP, IMN, IMV, IG, IGNR, IGCS, IIR>::propagat
 template<typename BM, typename U, typename S, typename N,
          typename IGNP, typename IMN, typename IMV, typename IG, typename IGNR,
          typename IGCS, typename IIR>
-std::vector<pud_query_handle>
-pud_query_propagator<BM, U, S, N, IGNP, IMN, IMV, IG, IGNR, IGCS, IIR>::open_query(pud_query_handle caller, const expr* query_expr) {
+std::vector<pud_descent>
+pud_descender<BM, U, S, N, IGNP, IMN, IMV, IG, IGNR, IGCS, IIR>::open_query(pud_descent caller, const expr* query_expr) {
     uint32_t query_frame_offset = caller.frame_offset + caller.lvc;
 
     auto transient = caller.bindings.transient();
@@ -156,7 +156,7 @@ pud_query_propagator<BM, U, S, N, IGNP, IMN, IMV, IG, IGNR, IGCS, IIR>::open_que
 
     immer::map<uint32_t, framed_expr> query_bindings = std::move(transient).persistent();
 
-    std::vector<pud_query_handle> handles;
+    std::vector<pud_descent> handles;
     auto co = iterate_roots_.iterate_roots();
     while (auto opt = co.next()) {
         const pud_node* r = opt.value();
@@ -168,7 +168,7 @@ pud_query_propagator<BM, U, S, N, IGNP, IMN, IMV, IG, IGNR, IGCS, IIR>::open_que
         size_t bgc = 0;
         for (const expr* goal : r->added_body_goals)
             body_goals_transient.set(bgc++, goal);
-        handles.push_back(pud_query_handle{
+        handles.push_back(pud_descent{
             .frame_offset        = query_frame_offset,
             .lvc                 = r->added_var_count,
             .bgc                 = bgc,
@@ -184,7 +184,7 @@ pud_query_propagator<BM, U, S, N, IGNP, IMN, IMV, IG, IGNR, IGCS, IIR>::open_que
 template<typename BM, typename U, typename S, typename N,
          typename IGNP, typename IMN, typename IMV, typename IG, typename IGNR,
          typename IGCS, typename IIR>
-const pud_node* pud_query_propagator<BM, U, S, N, IGNP, IMN, IMV, IG, IGNR, IGCS, IIR>::close_query(pud_query_handle current) {
+const pud_node* pud_descender<BM, U, S, N, IGNP, IMN, IMV, IG, IGNR, IGCS, IIR>::close_query(pud_descent current) {
     auto transient = current.bindings.transient();
     BM bind_map{globalize_, transient};
     N normalizer{globalize_, make_var_, make_var_, bind_map};
