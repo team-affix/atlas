@@ -1,19 +1,33 @@
 #include <cstdint>
+#include <limits>
 #include <optional>
+#include <unordered_set>
 #include <vector>
 #include <gtest/gtest.h>
 #include "functor_fixture.hpp"
+#include "infrastructure/coroutine.hpp"
 #include "infrastructure/expr_pool.hpp"
 #include "infrastructure/globalizer.hpp"
 #include <immer/map_transient.hpp>
 #include "infrastructure/hierarchical_bind_map.hpp"
 #include "infrastructure/normalizer.hpp"
+#include "infrastructure/pud_call_sites.hpp"
 #include "infrastructure/pud_node_pool.hpp"
 #include "infrastructure/pud_parents.hpp"
 #include "infrastructure/pud_query_propagator.hpp"
 #include "infrastructure/pud_refuted_nodes.hpp"
 #include "infrastructure/pud_specializer.hpp"
 #include "infrastructure/unifier.hpp"
+
+struct test_root_nodes {
+    coroutine<const pud_node*, void> iterate_roots() {
+        for (const pud_node* r : roots_)
+            co_yield r;
+    }
+    void register_root(const pud_node* r) { roots_.push_back(r); }
+private:
+    std::vector<const pud_node*> roots_;
+};
 
 struct PudPropagateQueryFullIntegrationTest : public ::testing::Test {
     using bind_map_t = hierarchical_bind_map<
@@ -31,7 +45,9 @@ struct PudPropagateQueryFullIntegrationTest : public ::testing::Test {
         pud_node_pool,
         expr_pool,
         globalizer,
-        pud_refuted_nodes>;
+        pud_refuted_nodes,
+        pud_call_sites,
+        test_root_nodes>;
     using handle = propagator_t::query_node_handle;
 
     test_functors functors;
@@ -40,10 +56,18 @@ struct PudPropagateQueryFullIntegrationTest : public ::testing::Test {
     pud_node_pool pool;
     pud_parents parents;
     pud_refuted_nodes refuted;
+    pud_call_sites call_sites;
+    test_root_nodes root_nodes_;
+    std::unordered_set<const pud_node*> call_site_registered_;
+    const pud_node* anchor_;
     propagator_t propagator;
 
     PudPropagateQueryFullIntegrationTest()
-        : propagator(parents, pool, exprs, globalize, refuted) {}
+        : propagator(parents, pool, exprs, globalize, refuted, call_sites, root_nodes_) {
+        anchor_ = pool.make({}, {}, 0);
+        parents.store(anchor_, nullptr);
+        root_nodes_.register_root(anchor_);
+    }
 
     const expr* var(uint32_t index) {
         return exprs.make_var(index);
@@ -60,8 +84,16 @@ struct PudPropagateQueryFullIntegrationTest : public ::testing::Test {
         return pool.make(std::move(specs), std::move(goals), var_count);
     }
 
-    void link(const pud_node* child, const pud_node* parent) {
-        parents.store(child, parent);
+    void link(const pud_node* child, const pud_node* parent_arg) {
+        const pud_node* actual_parent = (parent_arg == nullptr) ? anchor_ : parent_arg;
+        parents.store(child, actual_parent);
+        if (call_site_registered_.insert(actual_parent).second)
+            call_sites.store(actual_parent, std::numeric_limits<size_t>::max());
+    }
+
+    void with_call_site(const pud_node* node, size_t id) {
+        if (call_site_registered_.insert(node).second)
+            call_sites.store(node, id);
     }
 
     pud_specialization binds(uint32_t var_idx, const expr* value) {
@@ -90,8 +122,7 @@ TEST_F(PudPropagateQueryFullIntegrationTest, SpecMismatchOnOpenedQueryRefusesPro
     const expr* g = func("g", {});
     const pud_node* a = make_node({binds(0, g)}, {}, 0);
     link(a, nullptr);
-    handle root = propagator.root();
-    auto opened = propagator.open_query(root, f);
+    auto opened = propagator.open_query(propagator.roots()[0], f)[0];
     EXPECT_FALSE(propagator.propagate(opened, a).has_value());
 }
 
@@ -102,8 +133,20 @@ TEST_F(PudPropagateQueryFullIntegrationTest, PropagatingToNonChildThrows) {
     link(a, nullptr);
     link(b, a);
     link(c, b);
-    handle root = propagator.root();
+    handle root = propagator.roots()[0];
     EXPECT_THROW(propagator.propagate(root, c), std::logic_error);
+}
+
+TEST_F(PudPropagateQueryFullIntegrationTest, PropagatingDiscontiguouslyThrows) {
+    const pud_node* a = make_node({}, {}, 0);
+    const pud_node* b = make_node({}, {}, 0);
+    const pud_node* c = make_node({}, {}, 0);
+    link(a, nullptr);
+    link(b, a);
+    link(c, b);
+    auto at_a = propagator.propagate(propagator.roots()[0], a);
+    ASSERT_TRUE(at_a.has_value());
+    EXPECT_THROW(propagator.propagate(*at_a, c), std::logic_error);
 }
 
 TEST_F(PudPropagateQueryFullIntegrationTest, RefutedNodeIsRefused) {
@@ -111,7 +154,7 @@ TEST_F(PudPropagateQueryFullIntegrationTest, RefutedNodeIsRefused) {
     const pud_node* a = make_node({}, {goal_a}, 0);
     link(a, nullptr);
     refuted.set_refuted(a);
-    EXPECT_FALSE(propagator.propagate(propagator.root(), a).has_value());
+    EXPECT_FALSE(propagator.propagate(propagator.roots()[0], a).has_value());
 }
 
 TEST_F(PudPropagateQueryFullIntegrationTest, ConflictingSpecOnAlreadyBoundVarRefusesNode) {
@@ -119,14 +162,14 @@ TEST_F(PudPropagateQueryFullIntegrationTest, ConflictingSpecOnAlreadyBoundVarRef
     const expr* g = func("g", {});
     const pud_node* a = make_node({binds(0, f), binds(0, g)}, {}, 0);
     link(a, nullptr);
-    EXPECT_FALSE(propagator.propagate(propagator.root(), a).has_value());
+    EXPECT_FALSE(propagator.propagate(propagator.roots()[0], a).has_value());
 }
 
 TEST_F(PudPropagateQueryFullIntegrationTest, CircularSpecRefusesNode) {
     const expr* loop = func("f", {var(0)});
     const pud_node* a = make_node({binds(0, loop)}, {}, 0);
     link(a, nullptr);
-    EXPECT_FALSE(propagator.propagate(propagator.root(), a).has_value());
+    EXPECT_FALSE(propagator.propagate(propagator.roots()[0], a).has_value());
 }
 
 TEST_F(PudPropagateQueryFullIntegrationTest, NestedSpecMismatchRefusesChild) {
@@ -138,7 +181,7 @@ TEST_F(PudPropagateQueryFullIntegrationTest, NestedSpecMismatchRefusesChild) {
     const pud_node* b = make_node({binds(0, outer_h)}, {}, 0);
     link(a, nullptr);
     link(b, a);
-    auto at_a = propagator.propagate(propagator.root(), a);
+    auto at_a = propagator.propagate(propagator.roots()[0], a);
     ASSERT_TRUE(at_a.has_value());
     EXPECT_FALSE(propagator.propagate(*at_a, b).has_value());
 }
@@ -152,7 +195,7 @@ TEST_F(PudPropagateQueryFullIntegrationTest, ChildMismatchExcludesItFromClose) {
     const pud_node* b = make_node({binds(0, g)}, {goal_b}, 0);
     link(a, nullptr);
     link(b, a);
-    auto opened = propagator.open_query(propagator.root(), var(0));
+    auto opened = propagator.open_query(propagator.roots()[0], var(0))[0];
     auto at_a = propagator.propagate(opened, a);
     ASSERT_TRUE(at_a.has_value());
     EXPECT_FALSE(propagator.propagate(*at_a, b).has_value());
@@ -174,7 +217,7 @@ TEST_F(PudPropagateQueryFullIntegrationTest, SecondChildMismatchExcludesItFromCl
     link(a, nullptr);
     link(b, a);
     link(c, b);
-    auto at_a = propagator.propagate(propagator.root(), a);
+    auto at_a = propagator.propagate(propagator.roots()[0], a);
     ASSERT_TRUE(at_a.has_value());
     auto at_b = propagator.propagate(*at_a, b);
     ASSERT_TRUE(at_b.has_value());
@@ -194,7 +237,7 @@ TEST_F(PudPropagateQueryFullIntegrationTest, RefutedNodeRefusedEvenWithMatchingS
     link(a, nullptr);
     link(b, a);
     refuted.set_refuted(b);
-    auto at_a = propagator.propagate(propagator.root(), a);
+    auto at_a = propagator.propagate(propagator.roots()[0], a);
     ASSERT_TRUE(at_a.has_value());
     EXPECT_FALSE(propagator.propagate(*at_a, b).has_value());
     const pud_node* closed = propagator.close_query(*at_a);
@@ -217,7 +260,7 @@ TEST_F(PudPropagateQueryFullIntegrationTest, MismatchAtThirdNodePreventsEntryToF
     link(b, a);
     link(c, b);
     link(d, c);
-    auto at_a = propagator.propagate(propagator.root(), a);
+    auto at_a = propagator.propagate(propagator.roots()[0], a);
     ASSERT_TRUE(at_a.has_value());
     auto at_b = propagator.propagate(*at_a, b);
     ASSERT_TRUE(at_b.has_value());
@@ -236,7 +279,7 @@ TEST_F(PudPropagateQueryFullIntegrationTest, NodeRefutedAfterParentEnteredIsStil
     const pud_node* b = make_node({}, {goal_b}, 0);
     link(a, nullptr);
     link(b, a);
-    auto at_a = propagator.propagate(propagator.root(), a);
+    auto at_a = propagator.propagate(propagator.roots()[0], a);
     ASSERT_TRUE(at_a.has_value());
     refuted.set_refuted(b);
     EXPECT_FALSE(propagator.propagate(*at_a, b).has_value());
@@ -252,8 +295,7 @@ TEST_F(PudPropagateQueryFullIntegrationTest, MismatchedSiblingRefusedMatchingSib
     const pud_node* right = make_node({binds(0, f)}, {goal_r}, 0);
     link(left, nullptr);
     link(right, nullptr);
-    handle root = propagator.root();
-    auto opened = propagator.open_query(root, f);
+    auto opened = propagator.open_query(propagator.roots()[0], f)[0];
     EXPECT_FALSE(propagator.propagate(opened, left).has_value());
     auto at_r = propagator.propagate(opened, right);
     ASSERT_TRUE(at_r.has_value());
@@ -271,9 +313,8 @@ TEST_F(PudPropagateQueryFullIntegrationTest, RefutedSiblingDoesNotBlockMatchingS
     link(left, nullptr);
     link(right, nullptr);
     refuted.set_refuted(left);
-    handle root = propagator.root();
-    EXPECT_FALSE(propagator.propagate(root, left).has_value());
-    auto at_r = propagator.propagate(root, right);
+    EXPECT_FALSE(propagator.propagate(propagator.roots()[0], left).has_value());
+    auto at_r = propagator.propagate(propagator.roots()[0], right);
     ASSERT_TRUE(at_r.has_value());
     EXPECT_FALSE(has_goal(propagator.close_query(*at_r), goal_l));
 }
@@ -287,7 +328,7 @@ TEST_F(PudPropagateQueryFullIntegrationTest, SiblingWalksHaveIndependentBindings
     const pud_node* right = make_node({binds(0, h)}, {goal_r}, 0);
     link(left, nullptr);
     link(right, nullptr);
-    auto opened = propagator.open_query(propagator.root(), var(0));
+    auto opened = propagator.open_query(propagator.roots()[0], var(0))[0];
     auto at_l = propagator.propagate(opened, left);
     ASSERT_TRUE(at_l.has_value());
     auto at_r = propagator.propagate(opened, right);
@@ -319,7 +360,7 @@ TEST_F(PudPropagateQueryFullIntegrationTest, OnlyCompatibleSpecChildEnters) {
     link(third, a);
     link(fourth, a);
     refuted.set_refuted(first);
-    auto at_a = propagator.propagate(propagator.root(), a);
+    auto at_a = propagator.propagate(propagator.roots()[0], a);
     ASSERT_TRUE(at_a.has_value());
     EXPECT_FALSE(propagator.propagate(*at_a, first).has_value());
     EXPECT_FALSE(propagator.propagate(*at_a, second).has_value());
@@ -346,7 +387,7 @@ TEST_F(PudPropagateQueryFullIntegrationTest, MismatchedChildRefusedEmptySpecChil
     link(a, nullptr);
     link(a1, a);
     link(a2, a);
-    auto at_a = propagator.propagate(propagator.root(), a);
+    auto at_a = propagator.propagate(propagator.roots()[0], a);
     ASSERT_TRUE(at_a.has_value());
     EXPECT_FALSE(propagator.propagate(*at_a, a1).has_value());
     auto at_a2 = propagator.propagate(*at_a, a2);
@@ -372,7 +413,7 @@ TEST_F(PudPropagateQueryFullIntegrationTest, IndependentRootsHaveIsolatedWalks) 
     link(l1, left);
     link(l2, l1);
     link(right, nullptr);
-    handle root = propagator.root();
+    handle root = propagator.roots()[0];
     auto at_l = propagator.propagate(root, left);
     ASSERT_TRUE(at_l.has_value());
     auto at_l1 = propagator.propagate(*at_l, l1);
@@ -395,7 +436,7 @@ TEST_F(PudPropagateQueryFullIntegrationTest, OpenedQueryMismatchRefusesPropagati
     const expr* g = func("g", {});
     const pud_node* a = make_node({binds(0, g)}, {}, 0);
     link(a, nullptr);
-    auto opened = propagator.open_query(propagator.root(), f);
+    auto opened = propagator.open_query(propagator.roots()[0], f)[0];
     EXPECT_FALSE(propagator.propagate(opened, a).has_value());
 }
 
@@ -408,7 +449,7 @@ TEST_F(PudPropagateQueryFullIntegrationTest, RefusedSiblingDoesNotAffectMatching
     const pud_node* ok = make_node({binds(0, f)}, {goal_ok}, 0);
     link(bad, nullptr);
     link(ok, nullptr);
-    auto opened = propagator.open_query(propagator.root(), f);
+    auto opened = propagator.open_query(propagator.roots()[0], f)[0];
     EXPECT_FALSE(propagator.propagate(opened, bad).has_value());
     auto at_ok = propagator.propagate(opened, ok);
     ASSERT_TRUE(at_ok.has_value());
@@ -421,7 +462,7 @@ TEST_F(PudPropagateQueryFullIntegrationTest, NodeWithNoSpecsIsAlwaysEntered) {
     const expr* goal_a = func("goal-a", {});
     const pud_node* a = make_node({}, {goal_a}, 0);
     link(a, nullptr);
-    auto at_a = propagator.propagate(propagator.root(), a);
+    auto at_a = propagator.propagate(propagator.roots()[0], a);
     ASSERT_TRUE(at_a.has_value());
     EXPECT_TRUE(has_goal(propagator.close_query(*at_a), goal_a));
 }
@@ -431,7 +472,7 @@ TEST_F(PudPropagateQueryFullIntegrationTest, AllSpecsMatchEntersNode) {
     const expr* g = func("g", {});
     const pud_node* a = make_node({binds(0, f), binds(1, g)}, {}, 0);
     link(a, nullptr);
-    auto opened = propagator.open_query(propagator.root(), var(0));
+    auto opened = propagator.open_query(propagator.roots()[0], var(0))[0];
     auto at_a = propagator.propagate(opened, a);
     ASSERT_TRUE(at_a.has_value());
     const pud_node* closed = propagator.close_query(*at_a);
@@ -442,7 +483,7 @@ TEST_F(PudPropagateQueryFullIntegrationTest, VarToVarSpecIsEntered) {
     const expr* goal_a = func("goal-a", {});
     const pud_node* a = make_node({binds(0, var(1))}, {goal_a}, 0);
     link(a, nullptr);
-    auto at_a = propagator.propagate(propagator.root(), a);
+    auto at_a = propagator.propagate(propagator.roots()[0], a);
     ASSERT_TRUE(at_a.has_value());
     EXPECT_TRUE(has_goal(propagator.close_query(*at_a), goal_a));
 }
@@ -455,7 +496,7 @@ TEST_F(PudPropagateQueryFullIntegrationTest, ConsistentNestedSpecAcrossTwoNodesE
     const pud_node* b = make_node({binds(0, outer)}, {goal_b}, 0);
     link(a, nullptr);
     link(b, a);
-    auto opened = propagator.open_query(propagator.root(), var(0));
+    auto opened = propagator.open_query(propagator.roots()[0], var(0))[0];
     auto at_a = propagator.propagate(opened, a);
     ASSERT_TRUE(at_a.has_value());
     auto at_b = propagator.propagate(*at_a, b);
@@ -472,7 +513,7 @@ TEST_F(PudPropagateQueryFullIntegrationTest, GoallessNodeSpecAppearsInClose) {
     const pud_node* b = make_node({}, {goal_b}, 0);
     link(a, nullptr);
     link(b, a);
-    auto opened = propagator.open_query(propagator.root(), var(0));
+    auto opened = propagator.open_query(propagator.roots()[0], var(0))[0];
     auto at_a = propagator.propagate(opened, a);
     ASSERT_TRUE(at_a.has_value());
     auto at_b = propagator.propagate(*at_a, b);
@@ -489,7 +530,7 @@ TEST_F(PudPropagateQueryFullIntegrationTest, SpeclessNodeGoalAppearsInClose) {
     const pud_node* b = make_node({binds(0, f)}, {}, 0);
     link(a, nullptr);
     link(b, a);
-    auto opened = propagator.open_query(propagator.root(), var(0));
+    auto opened = propagator.open_query(propagator.roots()[0], var(0))[0];
     auto at_a = propagator.propagate(opened, a);
     ASSERT_TRUE(at_a.has_value());
     auto at_b = propagator.propagate(*at_a, b);
@@ -509,7 +550,7 @@ TEST_F(PudPropagateQueryFullIntegrationTest, EmptyMiddleNodePreservesEndpointCon
     link(a, nullptr);
     link(b, a);
     link(c, b);
-    auto opened = propagator.open_query(propagator.root(), var(0));
+    auto opened = propagator.open_query(propagator.roots()[0], var(0))[0];
     auto at_a = propagator.propagate(opened, a);
     ASSERT_TRUE(at_a.has_value());
     auto at_b = propagator.propagate(*at_a, b);
@@ -536,7 +577,7 @@ TEST_F(PudPropagateQueryFullIntegrationTest, SpecsAndGoalsFromAllNodesAccumulate
     link(a, nullptr);
     link(b, a);
     link(c, b);
-    auto opened = propagator.open_query(propagator.root(), var(0));
+    auto opened = propagator.open_query(propagator.roots()[0], var(0))[0];
     auto at_a = propagator.propagate(opened, a);
     ASSERT_TRUE(at_a.has_value());
     auto at_b = propagator.propagate(*at_a, b);
@@ -562,7 +603,7 @@ TEST_F(PudPropagateQueryFullIntegrationTest, AlternatingSpecsAndGoalsAllAccumula
     link(a, nullptr);
     link(b, a);
     link(c, b);
-    auto opened = propagator.open_query(propagator.root(), var(0));
+    auto opened = propagator.open_query(propagator.roots()[0], var(0))[0];
     auto at_a = propagator.propagate(opened, a);
     ASSERT_TRUE(at_a.has_value());
     auto at_b = propagator.propagate(*at_a, b);
@@ -584,7 +625,7 @@ TEST_F(PudPropagateQueryFullIntegrationTest, GoalVarResolvesToBoundTermFromAnces
     link(a, nullptr);
     link(b, a);
     link(c, b);
-    auto at_a = propagator.propagate(propagator.root(), a);
+    auto at_a = propagator.propagate(propagator.roots()[0], a);
     ASSERT_TRUE(at_a.has_value());
     auto at_b = propagator.propagate(*at_a, b);
     ASSERT_TRUE(at_b.has_value());
@@ -601,7 +642,7 @@ TEST_F(PudPropagateQueryFullIntegrationTest, GoalVarFollowsChainOfBindings) {
     link(a, nullptr);
     link(b, a);
     link(c, b);
-    auto at_a = propagator.propagate(propagator.root(), a);
+    auto at_a = propagator.propagate(propagator.roots()[0], a);
     ASSERT_TRUE(at_a.has_value());
     auto at_b = propagator.propagate(*at_a, b);
     ASSERT_TRUE(at_b.has_value());
@@ -621,7 +662,7 @@ TEST_F(PudPropagateQueryFullIntegrationTest, GoalFunctorArgsNormalizedFromPathBi
     link(a, nullptr);
     link(b, a);
     link(c, b);
-    auto at_a = propagator.propagate(propagator.root(), a);
+    auto at_a = propagator.propagate(propagator.roots()[0], a);
     ASSERT_TRUE(at_a.has_value());
     auto at_b = propagator.propagate(*at_a, b);
     ASSERT_TRUE(at_b.has_value());
@@ -644,7 +685,7 @@ TEST_F(PudPropagateQueryFullIntegrationTest, RedundantSpecOnAlreadyBoundVarSucce
     link(b, a);
     link(c, b);
     link(d, c);
-    auto opened = propagator.open_query(propagator.root(), var(0));
+    auto opened = propagator.open_query(propagator.roots()[0], var(0))[0];
     auto at_a = propagator.propagate(opened, a);
     ASSERT_TRUE(at_a.has_value());
     auto at_b = propagator.propagate(*at_a, b);
@@ -677,7 +718,7 @@ TEST_F(PudPropagateQueryFullIntegrationTest, CloseContainsOnlyGoalsOnChosenPath)
     link(a2, a);
     link(b, nullptr);
     link(b1, b);
-    auto at_a = propagator.propagate(propagator.root(), a);
+    auto at_a = propagator.propagate(propagator.roots()[0], a);
     ASSERT_TRUE(at_a.has_value());
     auto at_a2 = propagator.propagate(*at_a, a2);
     ASSERT_TRUE(at_a2.has_value());
@@ -704,7 +745,7 @@ TEST_F(PudPropagateQueryFullIntegrationTest, ParallelWalksHaveIsolatedBindings) 
     link(a1, a);
     link(b, nullptr);
     link(b1, b);
-    auto opened = propagator.open_query(propagator.root(), var(0));
+    auto opened = propagator.open_query(propagator.roots()[0], var(0))[0];
     auto at_a = propagator.propagate(opened, a);
     ASSERT_TRUE(at_a.has_value());
     auto at_a1 = propagator.propagate(*at_a, a1);
@@ -738,7 +779,7 @@ TEST_F(PudPropagateQueryFullIntegrationTest, WalkDoesNotInheritCousinBranchBindi
     link(a1, a);
     link(b, nullptr);
     link(b1, b);
-    handle root = propagator.root();
+    handle root = propagator.roots()[0];
     auto at_a = propagator.propagate(root, a);
     ASSERT_TRUE(at_a.has_value());
     ASSERT_TRUE(propagator.propagate(*at_a, a1).has_value());
@@ -768,16 +809,16 @@ TEST_F(PudPropagateQueryFullIntegrationTest, EachChildCloseContainsParentAndOwnG
     link(c1, a);
     link(c2, a);
     link(c5, a);
-    auto at_a0 = propagator.propagate(propagator.root(), a);
+    auto at_a0 = propagator.propagate(propagator.roots()[0], a);
     ASSERT_TRUE(at_a0.has_value());
     auto at_0 = propagator.propagate(*at_a0, c0);
-    auto at_a1 = propagator.propagate(propagator.root(), a);
+    auto at_a1 = propagator.propagate(propagator.roots()[0], a);
     ASSERT_TRUE(at_a1.has_value());
     auto at_1 = propagator.propagate(*at_a1, c1);
-    auto at_a2 = propagator.propagate(propagator.root(), a);
+    auto at_a2 = propagator.propagate(propagator.roots()[0], a);
     ASSERT_TRUE(at_a2.has_value());
     auto at_2 = propagator.propagate(*at_a2, c2);
-    auto at_a5 = propagator.propagate(propagator.root(), a);
+    auto at_a5 = propagator.propagate(propagator.roots()[0], a);
     ASSERT_TRUE(at_a5.has_value());
     auto at_5 = propagator.propagate(*at_a5, c5);
     ASSERT_TRUE(at_0.has_value());
@@ -793,9 +834,11 @@ TEST_F(PudPropagateQueryFullIntegrationTest, EachChildCloseContainsParentAndOwnG
     EXPECT_TRUE(has_goal(closed_1, goal_a));
     EXPECT_TRUE(has_goal(closed_1, goal_1));
     EXPECT_FALSE(has_goal(closed_1, goal_2a));
+    EXPECT_TRUE(has_goal(closed_2, goal_a));
     EXPECT_TRUE(has_goal(closed_2, goal_2a));
     EXPECT_TRUE(has_goal(closed_2, goal_2b));
     EXPECT_FALSE(has_goal(closed_2, goal_5a));
+    EXPECT_TRUE(has_goal(closed_5, goal_a));
     EXPECT_TRUE(has_goal(closed_5, goal_5a));
     EXPECT_TRUE(has_goal(closed_5, goal_5e));
     EXPECT_FALSE(has_goal(closed_5, goal_1));
@@ -817,7 +860,7 @@ TEST_F(PudPropagateQueryFullIntegrationTest, RedundantSpecOnBoundVarSucceedsAndS
     link(l1, left);
     link(l2, l1);
     link(right, nullptr);
-    auto opened = propagator.open_query(propagator.root(), var(0));
+    auto opened = propagator.open_query(propagator.roots()[0], var(0))[0];
     auto at_l = propagator.propagate(opened, left);
     ASSERT_TRUE(at_l.has_value());
     auto at_l1 = propagator.propagate(*at_l, l1);
@@ -849,7 +892,7 @@ TEST_F(PudPropagateQueryFullIntegrationTest, TwoWalksFromSameNodeCloseToTheirOwn
     link(a1, a);
     link(a1a, a1);
     link(a2, a);
-    handle root = propagator.root();
+    handle root = propagator.roots()[0];
     auto at_a = propagator.propagate(root, a);
     ASSERT_TRUE(at_a.has_value());
     auto at_a1 = propagator.propagate(*at_a, a1);
@@ -889,7 +932,7 @@ TEST_F(PudPropagateQueryFullIntegrationTest, BindingOnOneBranchNotVisibleOnUnrel
     link(b, nullptr);
     link(b1, b);
     link(b2, b1);
-    auto opened = propagator.open_query(propagator.root(), var(0));
+    auto opened = propagator.open_query(propagator.roots()[0], var(0))[0];
     auto at_a = propagator.propagate(opened, a);
     ASSERT_TRUE(at_a.has_value());
     auto at_a1 = propagator.propagate(*at_a, a1);
@@ -922,7 +965,7 @@ TEST_F(PudPropagateQueryFullIntegrationTest, SameVarBindsDifferentTermsOnSeparat
     const pud_node* right = make_node({binds(0, g)}, {goal_r}, 0);
     link(left, nullptr);
     link(right, nullptr);
-    auto opened = propagator.open_query(propagator.root(), var(0));
+    auto opened = propagator.open_query(propagator.roots()[0], var(0))[0];
     auto at_l = propagator.propagate(opened, left);
     ASSERT_TRUE(at_l.has_value());
     auto at_r = propagator.propagate(opened, right);
@@ -952,7 +995,7 @@ TEST_F(PudPropagateQueryFullIntegrationTest, SiblingClosesHaveIndependentGoalCou
     link(left, nullptr);
     link(right, nullptr);
     link(middle, nullptr);
-    handle root = propagator.root();
+    handle root = propagator.roots()[0];
     auto at_l = propagator.propagate(root, left);
     auto at_r = propagator.propagate(root, right);
     auto at_m = propagator.propagate(root, middle);
@@ -978,7 +1021,7 @@ TEST_F(PudPropagateQueryFullIntegrationTest, TwoHandlesFromRootCloseIndependentl
     const pud_node* right = make_node({}, {goal_r}, 0);
     link(left, nullptr);
     link(right, nullptr);
-    handle root = propagator.root();
+    handle root = propagator.roots()[0];
     auto at_l = propagator.propagate(root, left);
     auto at_r = propagator.propagate(root, right);
     ASSERT_TRUE(at_l.has_value());
@@ -996,9 +1039,9 @@ TEST_F(PudPropagateQueryFullIntegrationTest, OpenQueryResetsToTreeRoot) {
     const pud_node* child = make_node({}, {}, 0);
     link(a, nullptr);
     link(child, a);
-    auto at_a = propagator.propagate(propagator.root(), a);
+    auto at_a = propagator.propagate(propagator.roots()[0], a);
     ASSERT_TRUE(at_a.has_value());
-    auto opened = propagator.open_query(*at_a, func("q", {}));
+    auto opened = propagator.open_query(*at_a, func("q", {}))[0];
     EXPECT_THROW(propagator.propagate(opened, child), std::logic_error);
 }
 
@@ -1007,7 +1050,7 @@ TEST_F(PudPropagateQueryFullIntegrationTest, SharedNewVarCountedOnceAcrossMultip
     const pud_node* b = make_node({}, {var(2)}, 0);
     link(a, nullptr);
     link(b, a);
-    auto at_a = propagator.propagate(propagator.root(), a);
+    auto at_a = propagator.propagate(propagator.roots()[0], a);
     ASSERT_TRUE(at_a.has_value());
     auto at_b = propagator.propagate(*at_a, b);
     ASSERT_TRUE(at_b.has_value());
@@ -1020,7 +1063,7 @@ TEST_F(PudPropagateQueryFullIntegrationTest, SharedNewVarCountedOnceAcrossMultip
 TEST_F(PudPropagateQueryFullIntegrationTest, TwoDistinctUnboundVarsEachCountedOnce) {
     const pud_node* a = make_node({}, {var(2), var(4)}, 0);
     link(a, nullptr);
-    auto at_a = propagator.propagate(propagator.root(), a);
+    auto at_a = propagator.propagate(propagator.roots()[0], a);
     ASSERT_TRUE(at_a.has_value());
     const pud_node* closed = propagator.close_query(*at_a);
     EXPECT_EQ(closed->added_var_count, 2u);
@@ -1039,7 +1082,7 @@ TEST_F(PudPropagateQueryFullIntegrationTest, WalkAfterOpenQueryMatchesQueryTerm)
     link(a, nullptr);
     link(b, a);
     link(c, b);
-    auto opened = propagator.open_query(propagator.root(), f);
+    auto opened = propagator.open_query(propagator.roots()[0], f)[0];
     auto at_a = propagator.propagate(opened, a);
     ASSERT_TRUE(at_a.has_value());
     auto at_b = propagator.propagate(*at_a, b);
@@ -1062,7 +1105,7 @@ TEST_F(PudPropagateQueryFullIntegrationTest, OpenVarQueryAcceptsAllNodesRegardle
     link(a, nullptr);
     link(b, a);
     link(c, b);
-    auto opened = propagator.open_query(propagator.root(), var(0));
+    auto opened = propagator.open_query(propagator.roots()[0], var(0))[0];
     auto at_a = propagator.propagate(opened, a);
     ASSERT_TRUE(at_a.has_value());
     auto at_b = propagator.propagate(*at_a, b);
@@ -1087,7 +1130,7 @@ TEST_F(PudPropagateQueryFullIntegrationTest, OpenNestedFunctorQueryMatchesConsis
     link(a, nullptr);
     link(b, a);
     link(c, b);
-    auto opened = propagator.open_query(propagator.root(), query);
+    auto opened = propagator.open_query(propagator.roots()[0], query)[0];
     auto at_a = propagator.propagate(opened, a);
     ASSERT_TRUE(at_a.has_value());
     auto at_b = propagator.propagate(*at_a, b);
@@ -1105,9 +1148,9 @@ TEST_F(PudPropagateQueryFullIntegrationTest, OpenQueryFromDeepPositionAlsoResets
     const pud_node* a1 = make_node({}, {}, 0);
     link(a, nullptr);
     link(a1, a);
-    auto at_a = propagator.propagate(propagator.root(), a);
+    auto at_a = propagator.propagate(propagator.roots()[0], a);
     ASSERT_TRUE(at_a.has_value());
-    auto opened = propagator.open_query(*at_a, func("q", {}));
+    auto opened = propagator.open_query(*at_a, func("q", {}))[0];
     EXPECT_THROW(propagator.propagate(opened, a1), std::logic_error);
 }
 
@@ -1126,9 +1169,9 @@ TEST_F(PudPropagateQueryFullIntegrationTest, TwoQueriesFromRootWalkIndependently
     link(l1, left);
     link(right, nullptr);
     link(r1, right);
-    handle root = propagator.root();
-    auto query_l = propagator.open_query(root, var(0));
-    auto query_r = propagator.open_query(root, var(0));
+    handle root = propagator.roots()[0];
+    auto query_l = propagator.open_query(root, var(0))[0];
+    auto query_r = propagator.open_query(root, var(0))[0];
     auto at_l = propagator.propagate(query_l, left);
     ASSERT_TRUE(at_l.has_value());
     auto at_l1 = propagator.propagate(*at_l, l1);
@@ -1155,14 +1198,14 @@ TEST_F(PudPropagateQueryFullIntegrationTest, TwoQueriesFromRootWalkIndependently
 TEST_F(PudPropagateQueryFullIntegrationTest, OpenQueryClosedImmediatelyIsEmpty) {
     const expr* f = func("f", {});
     const expr* goal_a = func("goal-a", {});
-    auto empty = propagator.open_query(propagator.root(), f);
+    auto empty = propagator.open_query(propagator.roots()[0], f)[0];
     const pud_node* closed_empty = propagator.close_query(empty);
     EXPECT_TRUE(closed_empty->added_body_goals.empty());
     EXPECT_TRUE(closed_empty->added_specializations.empty());
     EXPECT_EQ(closed_empty->added_var_count, 0u);
     const pud_node* a = make_node({binds(0, f)}, {goal_a}, 0);
     link(a, nullptr);
-    auto fresh = propagator.open_query(propagator.root(), f);
+    auto fresh = propagator.open_query(propagator.roots()[0], f)[0];
     auto at_a = propagator.propagate(fresh, a);
     ASSERT_TRUE(at_a.has_value());
     const pud_node* closed = propagator.close_query(*at_a);
@@ -1177,7 +1220,7 @@ TEST_F(PudPropagateQueryFullIntegrationTest, CloseAtFirstNodeOmitsDescendantGoal
     const pud_node* b = make_node({}, {goal_b}, 0);
     link(a, nullptr);
     link(b, a);
-    auto at_a = propagator.propagate(propagator.root(), a);
+    auto at_a = propagator.propagate(propagator.roots()[0], a);
     ASSERT_TRUE(at_a.has_value());
     EXPECT_FALSE(has_goal(propagator.close_query(*at_a), goal_b));
     EXPECT_TRUE(has_goal(propagator.close_query(*at_a), goal_a));
@@ -1190,10 +1233,10 @@ TEST_F(PudPropagateQueryFullIntegrationTest, SubsequentQueryDoesNotInheritPriorQ
     const pud_node* right = make_node({binds(0, g)}, {}, 0);
     link(left, nullptr);
     link(right, nullptr);
-    handle root = propagator.root();
-    auto first = propagator.open_query(root, f);
+    handle root = propagator.roots()[0];
+    auto first = propagator.open_query(root, f)[0];
     ASSERT_TRUE(propagator.propagate(first, left).has_value());
-    auto second = propagator.open_query(root, g);
+    auto second = propagator.open_query(root, g)[0];
     auto at_r = propagator.propagate(second, right);
     ASSERT_TRUE(at_r.has_value());
     EXPECT_FALSE(has_value(propagator.close_query(*at_r), f));
@@ -1210,7 +1253,7 @@ TEST_F(PudPropagateQueryFullIntegrationTest, MiddleNodeWithNoSpecPassesThroughWa
     link(a, nullptr);
     link(b, a);
     link(c, b);
-    auto at_a = propagator.propagate(propagator.root(), a);
+    auto at_a = propagator.propagate(propagator.roots()[0], a);
     ASSERT_TRUE(at_a.has_value());
     auto at_b = propagator.propagate(*at_a, b);
     ASSERT_TRUE(at_b.has_value());
@@ -1233,7 +1276,7 @@ TEST_F(PudPropagateQueryFullIntegrationTest, ConsistentSpecOnAllNodesWalksFullCh
     link(a, nullptr);
     link(b, a);
     link(c, b);
-    auto opened = propagator.open_query(propagator.root(), var(0));
+    auto opened = propagator.open_query(propagator.roots()[0], var(0))[0];
     auto at_a = propagator.propagate(opened, a);
     ASSERT_TRUE(at_a.has_value());
     auto at_b = propagator.propagate(*at_a, b);
@@ -1257,8 +1300,8 @@ TEST_F(PudPropagateQueryFullIntegrationTest, ForkedWalksFromOpenQueryCloseToThei
     link(left, nullptr);
     link(l1, left);
     link(right, nullptr);
-    handle root = propagator.root();
-    auto opened = propagator.open_query(root, func("q", {}));
+    handle root = propagator.roots()[0];
+    auto opened = propagator.open_query(root, func("q", {}))[0];
     auto at_l = propagator.propagate(opened, left);
     ASSERT_TRUE(at_l.has_value());
     auto at_l1 = propagator.propagate(*at_l, l1);
@@ -1282,12 +1325,98 @@ TEST_F(PudPropagateQueryFullIntegrationTest, CallerChainGoalsNotIncludedInQueryC
     const pud_node* query_r = make_node({}, {goal_query}, 0);
     link(caller_r, nullptr);
     link(query_r, nullptr);
-    auto at_caller = propagator.propagate(propagator.root(), caller_r);
+    auto at_caller = propagator.propagate(propagator.roots()[0], caller_r);
     ASSERT_TRUE(at_caller.has_value());
-    auto opened = propagator.open_query(*at_caller, func("q", {}));
+    auto opened = propagator.open_query(*at_caller, func("q", {}))[0];
     auto at_query = propagator.propagate(opened, query_r);
     ASSERT_TRUE(at_query.has_value());
     const pud_node* closed = propagator.close_query(*at_query);
     EXPECT_TRUE(has_goal(closed, goal_query));
     EXPECT_FALSE(has_goal(closed, goal_caller));
+}
+
+// --- new tests for persistent state / erasure ---
+
+TEST_F(PudPropagateQueryFullIntegrationTest, RootsYieldsOneHandlePerRegisteredRoot) {
+    const pud_node* r1 = pool.make({}, {}, 0);
+    const pud_node* r2 = pool.make({}, {}, 0);
+    parents.store(r1, nullptr);
+    parents.store(r2, nullptr);
+    root_nodes_.register_root(r1);
+    root_nodes_.register_root(r2);
+    // anchor + r1 + r2 = 3 roots
+    EXPECT_EQ(propagator.roots().size(), 3u);
+}
+
+TEST_F(PudPropagateQueryFullIntegrationTest, PropagateErasesExpandedBodyGoalFromPending) {
+    const expr* goal_expanded = func("goal-expanded", {});
+    const expr* goal_child = func("goal-child", {});
+    const pud_node* parent_node = make_node({}, {goal_expanded}, 0);
+    const pud_node* child_node = make_node({}, {goal_child}, 0);
+    link(parent_node, nullptr);
+    with_call_site(parent_node, 0);
+    link(child_node, parent_node);
+    auto at_parent = propagator.propagate(propagator.roots()[0], parent_node);
+    ASSERT_TRUE(at_parent.has_value());
+    auto at_child = propagator.propagate(*at_parent, child_node);
+    ASSERT_TRUE(at_child.has_value());
+    const pud_node* closed = propagator.close_query(*at_child);
+    EXPECT_FALSE(has_goal(closed, goal_expanded));
+    EXPECT_TRUE(has_goal(closed, goal_child));
+    EXPECT_EQ(closed->added_body_goals.size(), 1u);
+}
+
+TEST_F(PudPropagateQueryFullIntegrationTest, SiblingWalksEraseGoalsIndependently) {
+    const expr* goal_parent = func("goal-parent", {});
+    const expr* goal_left = func("goal-left", {});
+    const expr* goal_right = func("goal-right", {});
+    const pud_node* parent_node = make_node({}, {goal_parent}, 0);
+    const pud_node* left_child = make_node({}, {goal_left}, 0);
+    const pud_node* right_child = make_node({}, {goal_right}, 0);
+    link(parent_node, nullptr);
+    with_call_site(parent_node, 0);
+    link(left_child, parent_node);
+    link(right_child, parent_node);
+    handle root = propagator.roots()[0];
+    auto at_parent_l = propagator.propagate(root, parent_node);
+    ASSERT_TRUE(at_parent_l.has_value());
+    auto at_left = propagator.propagate(*at_parent_l, left_child);
+    ASSERT_TRUE(at_left.has_value());
+    auto at_parent_r = propagator.propagate(root, parent_node);
+    ASSERT_TRUE(at_parent_r.has_value());
+    auto at_right = propagator.propagate(*at_parent_r, right_child);
+    ASSERT_TRUE(at_right.has_value());
+    const pud_node* closed_l = propagator.close_query(*at_left);
+    const pud_node* closed_r = propagator.close_query(*at_right);
+    EXPECT_FALSE(has_goal(closed_l, goal_parent));
+    EXPECT_TRUE(has_goal(closed_l, goal_left));
+    EXPECT_FALSE(has_goal(closed_l, goal_right));
+    EXPECT_FALSE(has_goal(closed_r, goal_parent));
+    EXPECT_TRUE(has_goal(closed_r, goal_right));
+    EXPECT_FALSE(has_goal(closed_r, goal_left));
+}
+
+TEST_F(PudPropagateQueryFullIntegrationTest, ChildGoalsAccumulateAfterErasure) {
+    const expr* goal_root = func("goal-root", {});
+    const expr* goal_mid = func("goal-mid", {});
+    const expr* goal_leaf = func("goal-leaf", {});
+    const pud_node* root_node = make_node({}, {goal_root}, 0);
+    const pud_node* mid_node = make_node({}, {goal_mid}, 0);
+    const pud_node* leaf_node = make_node({}, {goal_leaf}, 0);
+    link(root_node, nullptr);
+    with_call_site(root_node, 0);
+    link(mid_node, root_node);
+    with_call_site(mid_node, 1);
+    link(leaf_node, mid_node);
+    auto at_root = propagator.propagate(propagator.roots()[0], root_node);
+    ASSERT_TRUE(at_root.has_value());
+    auto at_mid = propagator.propagate(*at_root, mid_node);
+    ASSERT_TRUE(at_mid.has_value());
+    auto at_leaf = propagator.propagate(*at_mid, leaf_node);
+    ASSERT_TRUE(at_leaf.has_value());
+    const pud_node* closed = propagator.close_query(*at_leaf);
+    EXPECT_FALSE(has_goal(closed, goal_root));
+    EXPECT_FALSE(has_goal(closed, goal_mid));
+    EXPECT_TRUE(has_goal(closed, goal_leaf));
+    EXPECT_EQ(closed->added_body_goals.size(), 1u);
 }
