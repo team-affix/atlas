@@ -350,3 +350,36 @@ TEST_F(PudWitnessSearchHeadTest, ExpandedLeafWithDeadChildrenBacktracksToSibling
     // expanded left_1's children are all dead — resume backtracks to left_2
     EXPECT_EQ(head.resume().value(), left_2);
 }
+
+// ── Edge: root has no children ────────────────────────────────────────────────
+
+TEST_F(PudWitnessSearchHeadTest, RootWithNoChildrenHasNoLeaf) {
+    sequences[root] = {};
+    auto head = make_head(root);
+    EXPECT_FALSE(head.resume().has_value());
+}
+
+// ── Edge: advance() when root was itself a leaf (frame stack stays empty) ─────
+
+// After resume() returns the root leaf, the frame stack is empty because
+// resume() returned before pushing any children frame. advance() must return
+// nullopt immediately rather than attempting to pop a nonexistent frame.
+TEST_F(PudWitnessSearchHeadTest, AdvanceOnLeafRootReturnsNullopt) {
+    EXPECT_CALL(leaves, check_leaf(root)).WillRepeatedly(Return(true));
+    auto head = make_head(root);
+    ASSERT_EQ(head.resume().value(), root);
+    EXPECT_FALSE(head.advance().has_value());
+}
+
+// ── Idempotence: resume() twice without advance() returns the same leaf ───────
+
+// The frame that tracks the current descent is not consumed by resume(), so
+// calling resume() again without advance() must yield the same leaf node.
+TEST_F(PudWitnessSearchHeadTest, ResumeIsIdempotentAfterFindingLeaf) {
+    sequences[root] = {left};
+    EXPECT_CALL(leaves, check_leaf(root)).WillRepeatedly(Return(false));
+    EXPECT_CALL(leaves, check_leaf(left)).WillRepeatedly(Return(true));
+    auto head = make_head(root);
+    EXPECT_EQ(head.resume().value(), left);
+    EXPECT_EQ(head.resume().value(), left);
+}

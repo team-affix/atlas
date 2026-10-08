@@ -1,4 +1,5 @@
 #include <optional>
+#include <stdexcept>
 #include <unordered_map>
 #include <vector>
 #include <gtest/gtest.h>
@@ -320,4 +321,120 @@ TEST_F(PudCandidateSpecializationHeadTest, ForkOfChoicePointForksWitnesses) {
     ASSERT_NE(cp, nullptr);
     EXPECT_EQ(cp->witness_a, 100u);
     EXPECT_EQ(cp->witness_b, 101u);
+}
+
+// ── witness_b refuted (not witness_a) — the else branch ──────────────────────
+
+// witness_refuted() has two branches: the if checks witness_a, the else
+// clears witness_b. The existing "NoReplacement" test only exercises the
+// if branch (refutes a). This test refutes b so the else branch is reached.
+TEST_F(PudCandidateSpecializationHeadTest, WitnessBRefutedAAdvancesToSelfWitness) {
+    sequences[root] = {a, b};
+    EXPECT_CALL(try_add, try_add_head(descent_t{a})).WillOnce(Return(pud_mhws_head_id{10}));
+    EXPECT_CALL(try_add, try_add_head(descent_t{b})).WillOnce(Return(pud_mhws_head_id{11}));
+    auto head = make_head(root);
+    ASSERT_TRUE(head.resume().has_value());
+    // refute b (id 11); a (id 10) is the sole surviving witness
+    ON_CALL(leaves, check_leaf(a)).WillByDefault(Return(true));
+    advance_result_t ar{
+        .root_descent         = descent_t{a},
+        .root_next_sibling_it = sequences[root].end(),
+        .root_end_sibling_it  = sequences[root].end()};
+    EXPECT_CALL(advance_head, advance_head(10u)).WillOnce(Return(ar));
+    head.witness_refuted(11);
+    auto next = head.resume();
+    ASSERT_TRUE(next.has_value());
+    const auto* self = std::get_if<pud_candidate_self_witness>(&next->justification);
+    ASSERT_NE(self, nullptr);
+    EXPECT_EQ(self->node, a);
+}
+
+// ── witness_refuted for a witness this head does not own ─────────────────────
+
+TEST_F(PudCandidateSpecializationHeadTest, WitnessRefutedForUnownedWitnessAsserts) {
+    sequences[root] = {a, b};
+    EXPECT_CALL(try_add, try_add_head(descent_t{a})).WillOnce(Return(pud_mhws_head_id{10}));
+    EXPECT_CALL(try_add, try_add_head(descent_t{b})).WillOnce(Return(pud_mhws_head_id{11}));
+    auto head = make_head(root);
+    ASSERT_TRUE(head.resume().has_value());
+    // head owns witnesses 10 and 11 only
+    EXPECT_THROW(head.witness_refuted(99), std::logic_error);
+}
+
+// A self-witness head has no witness scan at all, so it owns no witnesses.
+TEST_F(PudCandidateSpecializationHeadTest, WitnessRefutedOnSelfWitnessHeadAsserts) {
+    EXPECT_CALL(leaves, check_leaf(root)).WillRepeatedly(Return(true));
+    auto head = make_head(root);
+    ASSERT_TRUE(head.resume().has_value());
+    EXPECT_THROW(head.witness_refuted(10), std::logic_error);
+}
+
+// witness_a was already refuted; refuting it again must not be silently accepted.
+TEST_F(PudCandidateSpecializationHeadTest, WitnessRefutedTwiceAsserts) {
+    sequences[root] = {a, b};
+    EXPECT_CALL(try_add, try_add_head(descent_t{a})).WillOnce(Return(pud_mhws_head_id{10}));
+    EXPECT_CALL(try_add, try_add_head(descent_t{b})).WillOnce(Return(pud_mhws_head_id{11}));
+    auto head = make_head(root);
+    ASSERT_TRUE(head.resume().has_value());
+    head.witness_refuted(10);
+    EXPECT_THROW(head.witness_refuted(10), std::logic_error);
+}
+
+// ── Fork where one witness cannot be re-forked ────────────────────────────────
+
+// try_fork_head() returns nullopt for witness_a; witness_b succeeds. The forked
+// head must advance toward the sole surviving witness (b) and produce a result.
+TEST_F(PudCandidateSpecializationHeadTest, ForkWhereWitnessACannotBeForkededAdvancesToB) {
+    sequences[root] = {a, b};
+    EXPECT_CALL(try_add, try_add_head(descent_t{a})).WillOnce(Return(pud_mhws_head_id{10}));
+    EXPECT_CALL(try_add, try_add_head(descent_t{b})).WillOnce(Return(pud_mhws_head_id{11}));
+    auto head = make_head(root);
+    ASSERT_TRUE(head.resume().has_value());
+    EXPECT_CALL(descend, descend(descent_t{99}, a)).WillOnce(Return(descent_t{22}));
+    EXPECT_CALL(descend, descend(descent_t{99}, b)).WillOnce(Return(descent_t{33}));
+    EXPECT_CALL(fork_witness, try_fork_head(10u, descent_t{22})).WillOnce(Return(std::nullopt));
+    EXPECT_CALL(fork_witness, try_fork_head(11u, descent_t{33})).WillOnce(Return(pud_mhws_head_id{101}));
+    test_head_t forked{head, descent_t{99}};
+    // forked has witness_a=nullopt, witness_b={101, descent_t{33}}; advance exhausts it
+    EXPECT_CALL(advance_head, advance_head(101u)).WillOnce(Return(std::nullopt));
+    ON_CALL(leaves, check_leaf(pud_node_id{33})).WillByDefault(Return(true));
+    auto found = forked.resume();
+    ASSERT_TRUE(found.has_value());
+    const auto* self = std::get_if<pud_candidate_self_witness>(&found->justification);
+    ASSERT_NE(self, nullptr);
+    EXPECT_EQ(self->node, pud_node_id{33});
+}
+
+// ── Resume idempotence ────────────────────────────────────────────────────────
+
+// resume() must not consume its own result: calling it twice in a row without
+// any intervening advance()/witness_refuted() must yield the same context.
+
+TEST_F(PudCandidateSpecializationHeadTest, SelfWitnessResumeIsIdempotent) {
+    EXPECT_CALL(leaves, check_leaf(root)).WillRepeatedly(Return(true));
+    auto head = make_head(root);
+    auto first  = head.resume();
+    auto second = head.resume();
+    ASSERT_TRUE(first.has_value());
+    ASSERT_TRUE(second.has_value());
+    EXPECT_EQ(std::get<pud_candidate_self_witness>(first->justification).node,
+              std::get<pud_candidate_self_witness>(second->justification).node);
+    EXPECT_EQ(first->descent, second->descent);
+}
+
+TEST_F(PudCandidateSpecializationHeadTest, ChoicePointResumeIsIdempotent) {
+    sequences[root] = {a, b};
+    EXPECT_CALL(try_add, try_add_head(descent_t{a})).WillOnce(Return(pud_mhws_head_id{10}));
+    EXPECT_CALL(try_add, try_add_head(descent_t{b})).WillOnce(Return(pud_mhws_head_id{11}));
+    auto head = make_head(root);
+    auto first  = head.resume();
+    auto second = head.resume();  // must NOT call try_add_head again
+    ASSERT_TRUE(first.has_value());
+    ASSERT_TRUE(second.has_value());
+    const auto* cp1 = std::get_if<pud_candidate_choice_point>(&first->justification);
+    const auto* cp2 = std::get_if<pud_candidate_choice_point>(&second->justification);
+    ASSERT_NE(cp1, nullptr);
+    ASSERT_NE(cp2, nullptr);
+    EXPECT_EQ(cp1->witness_a, cp2->witness_a);
+    EXPECT_EQ(cp1->witness_b, cp2->witness_b);
 }
