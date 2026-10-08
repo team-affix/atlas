@@ -25,8 +25,8 @@ struct MockGetChildren {
     MOCK_METHOD((const std::vector<pud_node_id>&), get, (pud_node_id));
 };
 
-struct MockPropagate {
-    MOCK_METHOD(std::optional<handle_t>, propagate, (handle_t, pud_node_id));
+struct MockDescend {
+    MOCK_METHOD(std::optional<handle_t>, descend, (handle_t, pud_node_id));
 };
 
 struct MockCallSite {
@@ -38,13 +38,13 @@ using test_witness_head_t = pud_witness_search_head<
     child_iter,
     MockCheckLeaf,
     MockGetChildren,
-    MockPropagate,
+    MockDescend,
     MockCallSite>;
 
 struct PudWitnessSearchHeadTest : public ::testing::Test {
     NiceMock<MockCheckLeaf> leaves;
     NiceMock<MockGetChildren> children;
-    NiceMock<MockPropagate> propagate;
+    NiceMock<MockDescend> descend;
     NiceMock<MockCallSite> call_sites;
     pud_node_id root    = 1;
     pud_node_id left    = 2;
@@ -59,12 +59,11 @@ struct PudWitnessSearchHeadTest : public ::testing::Test {
     pud_node_id wide_1  = 11;
     pud_node_id wide_2  = 12;
     pud_node_id wide_3  = 13;
-    pud_node_id caller  = 14;
     std::unordered_map<pud_node_id, std::vector<pud_node_id>> sequences;
 
     test_witness_head_t make_head(pud_node_id node) {
         return test_witness_head_t{
-            leaves, children, propagate, call_sites,
+            leaves, children, descend, call_sites,
             handle_t{node}};
     }
 
@@ -73,7 +72,7 @@ struct PudWitnessSearchHeadTest : public ::testing::Test {
         ON_CALL(children, get(_)).WillByDefault([&](pud_node_id id) -> const std::vector<pud_node_id>& {
             return sequences.at(id);
         });
-        ON_CALL(propagate, propagate(_, _)).WillByDefault([](handle_t, pud_node_id child) {
+        ON_CALL(descend, descend(_, _)).WillByDefault([](handle_t, pud_node_id child) {
             return std::optional<handle_t>{handle_t{child}};
         });
     }
@@ -84,7 +83,7 @@ TEST_F(PudWitnessSearchHeadTest, NoLeafIsReachable) {
     sequences[left] = {};
     EXPECT_CALL(leaves, check_leaf(root)).WillRepeatedly(Return(false));
     EXPECT_CALL(leaves, check_leaf(left)).WillRepeatedly(Return(false));
-    EXPECT_CALL(propagate, propagate(_, left)).WillRepeatedly(Return(std::nullopt));
+    EXPECT_CALL(descend, descend(_, left)).WillRepeatedly(Return(std::nullopt));
     auto head = make_head(root);
     EXPECT_FALSE(head.resume().has_value());
 }
@@ -93,7 +92,7 @@ TEST_F(PudWitnessSearchHeadTest, FirstChildRefusedAndSiblingIsTheLeaf) {
     sequences[root] = {left, right};
     EXPECT_CALL(leaves, check_leaf(root)).WillRepeatedly(Return(false));
     EXPECT_CALL(leaves, check_leaf(right)).WillRepeatedly(Return(true));
-    EXPECT_CALL(propagate, propagate(_, _))
+    EXPECT_CALL(descend, descend(_, _))
         .WillOnce(Return(std::nullopt))
         .WillOnce(Return(std::optional<handle_t>{handle_t{right}}));
     auto head = make_head(root);
@@ -106,8 +105,8 @@ TEST_F(PudWitnessSearchHeadTest, LaterSiblingIsTheLeaf) {
     sequences[root] = {left, right};
     EXPECT_CALL(leaves, check_leaf(root)).WillRepeatedly(Return(false));
     EXPECT_CALL(leaves, check_leaf(right)).WillRepeatedly(Return(true));
-    EXPECT_CALL(propagate, propagate(_, left)).WillOnce(Return(std::nullopt));
-    EXPECT_CALL(propagate, propagate(_, right)).WillOnce(Return(std::optional<handle_t>{handle_t{right}}));
+    EXPECT_CALL(descend, descend(_, left)).WillOnce(Return(std::nullopt));
+    EXPECT_CALL(descend, descend(_, right)).WillOnce(Return(std::optional<handle_t>{handle_t{right}}));
     auto head = make_head(root);
     auto found = head.resume();
     ASSERT_TRUE(found.has_value());
@@ -122,11 +121,11 @@ TEST_F(PudWitnessSearchHeadTest, DeadSubtreeReturnsParentsNextChild) {
     EXPECT_CALL(leaves, check_leaf(left)).WillRepeatedly(Return(false));
     EXPECT_CALL(leaves, check_leaf(left_1)).WillRepeatedly(Return(false));
     EXPECT_CALL(leaves, check_leaf(left_2)).WillRepeatedly(Return(true));
-    EXPECT_CALL(propagate, propagate(_, left)).WillOnce(Return(std::optional<handle_t>{handle_t{left}}));
-    EXPECT_CALL(propagate, propagate(_, left_1)).WillOnce(Return(std::optional<handle_t>{handle_t{left_1}}));
-    EXPECT_CALL(propagate, propagate(_, deep_a)).WillOnce(Return(std::nullopt));
-    EXPECT_CALL(propagate, propagate(_, deep_b)).WillOnce(Return(std::nullopt));
-    EXPECT_CALL(propagate, propagate(_, left_2)).WillOnce(Return(std::optional<handle_t>{handle_t{left_2}}));
+    EXPECT_CALL(descend, descend(_, left)).WillOnce(Return(std::optional<handle_t>{handle_t{left}}));
+    EXPECT_CALL(descend, descend(_, left_1)).WillOnce(Return(std::optional<handle_t>{handle_t{left_1}}));
+    EXPECT_CALL(descend, descend(_, deep_a)).WillOnce(Return(std::nullopt));
+    EXPECT_CALL(descend, descend(_, deep_b)).WillOnce(Return(std::nullopt));
+    EXPECT_CALL(descend, descend(_, left_2)).WillOnce(Return(std::optional<handle_t>{handle_t{left_2}}));
     auto head = make_head(root);
     auto found = head.resume();
     ASSERT_TRUE(found.has_value());
@@ -141,10 +140,10 @@ TEST_F(PudWitnessSearchHeadTest, DeepLeafBeforeShallowSibling) {
     EXPECT_CALL(leaves, check_leaf(left)).WillRepeatedly(Return(false));
     EXPECT_CALL(leaves, check_leaf(left_1)).WillRepeatedly(Return(false));
     EXPECT_CALL(leaves, check_leaf(deep_leaf)).WillRepeatedly(Return(true));
-    EXPECT_CALL(propagate, propagate(_, left)).WillOnce(Return(std::optional<handle_t>{handle_t{left}}));
-    EXPECT_CALL(propagate, propagate(_, left_1)).WillOnce(Return(std::optional<handle_t>{handle_t{left_1}}));
-    EXPECT_CALL(propagate, propagate(_, deep_a)).WillOnce(Return(std::nullopt));
-    EXPECT_CALL(propagate, propagate(_, deep_leaf)).WillOnce(Return(std::optional<handle_t>{handle_t{deep_leaf}}));
+    EXPECT_CALL(descend, descend(_, left)).WillOnce(Return(std::optional<handle_t>{handle_t{left}}));
+    EXPECT_CALL(descend, descend(_, left_1)).WillOnce(Return(std::optional<handle_t>{handle_t{left_1}}));
+    EXPECT_CALL(descend, descend(_, deep_a)).WillOnce(Return(std::nullopt));
+    EXPECT_CALL(descend, descend(_, deep_leaf)).WillOnce(Return(std::optional<handle_t>{handle_t{deep_leaf}}));
     auto head = make_head(root);
     auto found = head.resume();
     ASSERT_TRUE(found.has_value());
@@ -161,13 +160,13 @@ TEST_F(PudWitnessSearchHeadTest, WideNodeThenDeepLeaf) {
     EXPECT_CALL(leaves, check_leaf(deep_a)).WillRepeatedly(Return(false));
     EXPECT_CALL(leaves, check_leaf(deep_b)).WillRepeatedly(Return(false));
     EXPECT_CALL(leaves, check_leaf(deep_leaf)).WillRepeatedly(Return(true));
-    EXPECT_CALL(propagate, propagate(_, wide_0)).WillOnce(Return(std::nullopt));
-    EXPECT_CALL(propagate, propagate(_, wide_1)).WillOnce(Return(std::nullopt));
-    EXPECT_CALL(propagate, propagate(_, wide_2)).WillOnce(Return(std::nullopt));
-    EXPECT_CALL(propagate, propagate(_, wide_3)).WillOnce(Return(std::optional<handle_t>{handle_t{wide_3}}));
-    EXPECT_CALL(propagate, propagate(_, deep_a)).WillOnce(Return(std::optional<handle_t>{handle_t{deep_a}}));
-    EXPECT_CALL(propagate, propagate(_, deep_b)).WillOnce(Return(std::optional<handle_t>{handle_t{deep_b}}));
-    EXPECT_CALL(propagate, propagate(_, deep_leaf)).WillOnce(Return(std::optional<handle_t>{handle_t{deep_leaf}}));
+    EXPECT_CALL(descend, descend(_, wide_0)).WillOnce(Return(std::nullopt));
+    EXPECT_CALL(descend, descend(_, wide_1)).WillOnce(Return(std::nullopt));
+    EXPECT_CALL(descend, descend(_, wide_2)).WillOnce(Return(std::nullopt));
+    EXPECT_CALL(descend, descend(_, wide_3)).WillOnce(Return(std::optional<handle_t>{handle_t{wide_3}}));
+    EXPECT_CALL(descend, descend(_, deep_a)).WillOnce(Return(std::optional<handle_t>{handle_t{deep_a}}));
+    EXPECT_CALL(descend, descend(_, deep_b)).WillOnce(Return(std::optional<handle_t>{handle_t{deep_b}}));
+    EXPECT_CALL(descend, descend(_, deep_leaf)).WillOnce(Return(std::optional<handle_t>{handle_t{deep_leaf}}));
     auto head = make_head(root);
     auto found = head.resume();
     ASSERT_TRUE(found.has_value());
@@ -186,12 +185,12 @@ TEST_F(PudWitnessSearchHeadTest, DeepBranchDiesAndOtherBranchLeafIsFound) {
     EXPECT_CALL(leaves, check_leaf(deep_a)).WillRepeatedly(Return(false));
     EXPECT_CALL(leaves, check_leaf(right)).WillRepeatedly(Return(false));
     EXPECT_CALL(leaves, check_leaf(deep_leaf)).WillRepeatedly(Return(true));
-    EXPECT_CALL(propagate, propagate(_, left)).WillOnce(Return(std::optional<handle_t>{handle_t{left}}));
-    EXPECT_CALL(propagate, propagate(_, left_1)).WillOnce(Return(std::optional<handle_t>{handle_t{left_1}}));
-    EXPECT_CALL(propagate, propagate(_, deep_a)).WillOnce(Return(std::optional<handle_t>{handle_t{deep_a}}));
-    EXPECT_CALL(propagate, propagate(_, deep_b)).WillOnce(Return(std::nullopt));
-    EXPECT_CALL(propagate, propagate(_, right)).WillOnce(Return(std::optional<handle_t>{handle_t{right}}));
-    EXPECT_CALL(propagate, propagate(_, deep_leaf)).WillOnce(Return(std::optional<handle_t>{handle_t{deep_leaf}}));
+    EXPECT_CALL(descend, descend(_, left)).WillOnce(Return(std::optional<handle_t>{handle_t{left}}));
+    EXPECT_CALL(descend, descend(_, left_1)).WillOnce(Return(std::optional<handle_t>{handle_t{left_1}}));
+    EXPECT_CALL(descend, descend(_, deep_a)).WillOnce(Return(std::optional<handle_t>{handle_t{deep_a}}));
+    EXPECT_CALL(descend, descend(_, deep_b)).WillOnce(Return(std::nullopt));
+    EXPECT_CALL(descend, descend(_, right)).WillOnce(Return(std::optional<handle_t>{handle_t{right}}));
+    EXPECT_CALL(descend, descend(_, deep_leaf)).WillOnce(Return(std::optional<handle_t>{handle_t{deep_leaf}}));
     auto head = make_head(root);
     auto found = head.resume();
     ASSERT_TRUE(found.has_value());
@@ -204,8 +203,8 @@ TEST_F(PudWitnessSearchHeadTest, AdvanceReturnsFirstChildHandleAndRootSiblingIte
     EXPECT_CALL(leaves, check_leaf(root)).WillRepeatedly(Return(false));
     EXPECT_CALL(leaves, check_leaf(left)).WillRepeatedly(Return(false));
     EXPECT_CALL(leaves, check_leaf(deep_leaf)).WillRepeatedly(Return(true));
-    EXPECT_CALL(propagate, propagate(_, left)).WillOnce(Return(std::optional<handle_t>{handle_t{left}}));
-    EXPECT_CALL(propagate, propagate(_, deep_leaf)).WillOnce(Return(std::optional<handle_t>{handle_t{deep_leaf}}));
+    EXPECT_CALL(descend, descend(_, left)).WillOnce(Return(std::optional<handle_t>{handle_t{left}}));
+    EXPECT_CALL(descend, descend(_, deep_leaf)).WillOnce(Return(std::optional<handle_t>{handle_t{deep_leaf}}));
     auto head = make_head(root);
     ASSERT_TRUE(head.resume().has_value());
     auto result = head.advance();
@@ -221,15 +220,15 @@ TEST_F(PudWitnessSearchHeadTest, AdvanceThenResumeFindsLeafInRemainingFrame) {
     EXPECT_CALL(leaves, check_leaf(root)).WillRepeatedly(Return(false));
     EXPECT_CALL(leaves, check_leaf(left)).WillRepeatedly(Return(false));
     EXPECT_CALL(leaves, check_leaf(deep_leaf)).WillRepeatedly(Return(true));
-    EXPECT_CALL(propagate, propagate(_, left)).WillOnce(Return(std::optional<handle_t>{handle_t{left}}));
-    EXPECT_CALL(propagate, propagate(_, deep_leaf)).WillOnce(Return(std::optional<handle_t>{handle_t{deep_leaf}}));
+    EXPECT_CALL(descend, descend(_, left)).WillOnce(Return(std::optional<handle_t>{handle_t{left}}));
+    EXPECT_CALL(descend, descend(_, deep_leaf)).WillOnce(Return(std::optional<handle_t>{handle_t{deep_leaf}}));
     auto head = make_head(root);
-    ASSERT_EQ(head.resume().value_or(pud_node_id{0}), deep_leaf);
+    ASSERT_EQ(head.resume().value(), deep_leaf);
     auto advanced = head.advance();
     ASSERT_TRUE(advanced.has_value());
     EXPECT_EQ(advanced->root_handle.node(), left);
     // resume from the remaining frame — deep_leaf is still the active leaf
-    EXPECT_EQ(head.resume().value_or(pud_node_id{0}), deep_leaf);
+    EXPECT_EQ(head.resume().value(), deep_leaf);
 }
 
 TEST_F(PudWitnessSearchHeadTest, AdvanceAfterExhaustedSearchReturnsNullopt) {
@@ -237,7 +236,7 @@ TEST_F(PudWitnessSearchHeadTest, AdvanceAfterExhaustedSearchReturnsNullopt) {
     sequences[left] = {};
     EXPECT_CALL(leaves, check_leaf(root)).WillRepeatedly(Return(false));
     EXPECT_CALL(leaves, check_leaf(left)).WillRepeatedly(Return(false));
-    EXPECT_CALL(propagate, propagate(_, left)).WillOnce(Return(std::nullopt));
+    EXPECT_CALL(descend, descend(_, left)).WillOnce(Return(std::nullopt));
     auto head = make_head(root);
     ASSERT_FALSE(head.resume().has_value());
     EXPECT_FALSE(head.advance().has_value());
@@ -250,14 +249,14 @@ TEST_F(PudWitnessSearchHeadTest, ForkThatCannotEnterDeepestContinuesParentChildr
     EXPECT_CALL(leaves, check_leaf(left)).WillRepeatedly(Return(false));
     EXPECT_CALL(leaves, check_leaf(left_1)).WillRepeatedly(Return(true));
     EXPECT_CALL(leaves, check_leaf(left_2)).WillRepeatedly(Return(true));
-    EXPECT_CALL(propagate, propagate(_, left)).WillOnce(Return(std::optional<handle_t>{handle_t{left}}));
-    EXPECT_CALL(propagate, propagate(_, left_1)).WillOnce(Return(std::optional<handle_t>{handle_t{left_1}}));
+    EXPECT_CALL(descend, descend(_, left)).WillOnce(Return(std::optional<handle_t>{handle_t{left}}));
+    EXPECT_CALL(descend, descend(_, left_1)).WillOnce(Return(std::optional<handle_t>{handle_t{left_1}}));
     auto head = make_head(root);
-    ASSERT_EQ(head.resume().value_or(pud_node_id{0}), left_1);
-    EXPECT_CALL(propagate, propagate(handle_t{caller}, left)).WillOnce(Return(std::optional<handle_t>{handle_t{left}}));
-    EXPECT_CALL(propagate, propagate(handle_t{left}, left_1)).WillOnce(Return(std::nullopt));
-    EXPECT_CALL(propagate, propagate(handle_t{left}, left_2)).WillOnce(Return(std::optional<handle_t>{handle_t{left_2}}));
-    test_witness_head_t forked{head, handle_t{caller}};
+    ASSERT_EQ(head.resume().value(), left_1);
+    EXPECT_CALL(descend, descend(handle_t{root}, left)).WillOnce(Return(std::optional<handle_t>{handle_t{left}}));
+    EXPECT_CALL(descend, descend(handle_t{left}, left_1)).WillOnce(Return(std::nullopt));
+    EXPECT_CALL(descend, descend(handle_t{left}, left_2)).WillOnce(Return(std::optional<handle_t>{handle_t{left_2}}));
+    test_witness_head_t forked{head, handle_t{root}};
     auto found = forked.resume();
     ASSERT_TRUE(found.has_value());
     EXPECT_EQ(*found, left_2);
@@ -267,12 +266,12 @@ TEST_F(PudWitnessSearchHeadTest, ForkThatCannotEnterAnyChildHasNoLeaf) {
     sequences[root] = {left};
     EXPECT_CALL(leaves, check_leaf(root)).WillRepeatedly(Return(false));
     EXPECT_CALL(leaves, check_leaf(left)).WillRepeatedly(Return(true));
-    EXPECT_CALL(propagate, propagate(_, left)).WillOnce(Return(std::optional<handle_t>{handle_t{left}}));
+    EXPECT_CALL(descend, descend(_, left)).WillOnce(Return(std::optional<handle_t>{handle_t{left}}));
     auto head = make_head(root);
-    ASSERT_EQ(head.resume().value_or(pud_node_id{0}), left);
-    // fork's propagate refuses to enter left — no siblings remain, so no leaf
-    EXPECT_CALL(propagate, propagate(handle_t{caller}, left)).WillOnce(Return(std::nullopt));
-    test_witness_head_t forked{head, handle_t{caller}};
+    ASSERT_EQ(head.resume().value(), left);
+    // fork's descend refuses to enter left — no siblings remain, so no leaf
+    EXPECT_CALL(descend, descend(handle_t{root}, left)).WillOnce(Return(std::nullopt));
+    test_witness_head_t forked{head, handle_t{root}};
     EXPECT_FALSE(forked.resume().has_value());
 }
 
@@ -292,9 +291,9 @@ TEST_F(PudWitnessSearchHeadTest, ChainOfFourReachesTheLeaf) {
     EXPECT_CALL(leaves, check_leaf(left)).WillRepeatedly(Return(false));
     EXPECT_CALL(leaves, check_leaf(left_1)).WillRepeatedly(Return(false));
     EXPECT_CALL(leaves, check_leaf(deep_leaf)).WillRepeatedly(Return(true));
-    EXPECT_CALL(propagate, propagate(_, left)).WillOnce(Return(std::optional<handle_t>{handle_t{left}}));
-    EXPECT_CALL(propagate, propagate(_, left_1)).WillOnce(Return(std::optional<handle_t>{handle_t{left_1}}));
-    EXPECT_CALL(propagate, propagate(_, deep_leaf)).WillOnce(Return(std::optional<handle_t>{handle_t{deep_leaf}}));
+    EXPECT_CALL(descend, descend(_, left)).WillOnce(Return(std::optional<handle_t>{handle_t{left}}));
+    EXPECT_CALL(descend, descend(_, left_1)).WillOnce(Return(std::optional<handle_t>{handle_t{left_1}}));
+    EXPECT_CALL(descend, descend(_, deep_leaf)).WillOnce(Return(std::optional<handle_t>{handle_t{deep_leaf}}));
     auto head = make_head(root);
     auto found = head.resume();
     ASSERT_TRUE(found.has_value());
@@ -311,9 +310,9 @@ TEST_F(PudWitnessSearchHeadTest, ExpandedLeafResumedFindsDeepChild) {
         .WillRepeatedly(Return(false));
     EXPECT_CALL(leaves, check_leaf(deep_a)).WillRepeatedly(Return(true));
     auto head = make_head(root);
-    ASSERT_EQ(head.resume().value_or(pud_node_id{0}), left_1);
+    ASSERT_EQ(head.resume().value(), left_1);
     // left_1 expanded — next resume descends into its children
-    EXPECT_EQ(head.resume().value_or(pud_node_id{0}), deep_a);
+    EXPECT_EQ(head.resume().value(), deep_a);
 }
 
 TEST_F(PudWitnessSearchHeadTest, ExpandedLeafAfterAdvanceResumedFindsDeepChild) {
@@ -326,11 +325,11 @@ TEST_F(PudWitnessSearchHeadTest, ExpandedLeafAfterAdvanceResumedFindsDeepChild) 
         .WillRepeatedly(Return(false));
     EXPECT_CALL(leaves, check_leaf(deep_a)).WillRepeatedly(Return(true));
     auto head = make_head(root);
-    ASSERT_EQ(head.resume().value_or(pud_node_id{0}), left_1);
+    ASSERT_EQ(head.resume().value(), left_1);
     auto advanced = head.advance();
     ASSERT_TRUE(advanced.has_value());
     ASSERT_EQ(advanced->root_handle.node(), left);
-    EXPECT_EQ(head.resume().value_or(pud_node_id{0}), deep_a);
+    EXPECT_EQ(head.resume().value(), deep_a);
 }
 
 TEST_F(PudWitnessSearchHeadTest, ExpandedLeafWithDeadChildrenBacktracksToSibling) {
@@ -342,13 +341,13 @@ TEST_F(PudWitnessSearchHeadTest, ExpandedLeafWithDeadChildrenBacktracksToSibling
         .WillOnce(Return(true))
         .WillRepeatedly(Return(false));
     EXPECT_CALL(leaves, check_leaf(left_2)).WillRepeatedly(Return(true));
-    ON_CALL(propagate, propagate(_, deep_a)).WillByDefault(Return(std::nullopt));
-    ON_CALL(propagate, propagate(_, deep_b)).WillByDefault(Return(std::nullopt));
+    ON_CALL(descend, descend(_, deep_a)).WillByDefault(Return(std::nullopt));
+    ON_CALL(descend, descend(_, deep_b)).WillByDefault(Return(std::nullopt));
     auto head = make_head(root);
-    ASSERT_EQ(head.resume().value_or(pud_node_id{0}), left_1);
+    ASSERT_EQ(head.resume().value(), left_1);
     auto advanced = head.advance();
     ASSERT_TRUE(advanced.has_value());
     ASSERT_EQ(advanced->root_handle.node(), left);
     // expanded left_1's children are all dead — resume backtracks to left_2
-    EXPECT_EQ(head.resume().value_or(pud_node_id{0}), left_2);
+    EXPECT_EQ(head.resume().value(), left_2);
 }

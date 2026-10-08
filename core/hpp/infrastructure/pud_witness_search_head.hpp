@@ -12,13 +12,13 @@ template<
     typename NodeIterator,
     typename ICheckNodeLeaf,
     typename IGetNodeChildren,
-    typename IPropagateQueryNodeHandle,
+    typename IDescendQueryNodeHandle,
     typename IGetCallSiteIdx>
 struct pud_witness_search_head {
     pud_witness_search_head(
         ICheckNodeLeaf& check_node_leaf,
         IGetNodeChildren& get_node_children,
-        IPropagateQueryNodeHandle& propagate_query_node_handle,
+        IDescendQueryNodeHandle& descend_query_node_handle,
         IGetCallSiteIdx& get_call_site_idx,
         QueryHandle search_root_handle);
     pud_witness_search_head(
@@ -40,34 +40,34 @@ private:
 
     ICheckNodeLeaf& check_node_leaf_;
     IGetNodeChildren& get_node_children_;
-    IPropagateQueryNodeHandle& propagate_query_node_handle_;
+    IDescendQueryNodeHandle& descend_query_node_handle_;
     IGetCallSiteIdx& get_call_site_idx_;
 
     QueryHandle search_root_handle_;
     std::deque<frame> frame_stack_;
 };
 
-template<typename QH, typename NI, typename ICNL, typename IGCN, typename IPQN, typename IGCSI>
-pud_witness_search_head<QH, NI, ICNL, IGCN, IPQN, IGCSI>::pud_witness_search_head(
+template<typename QH, typename NI, typename ICNL, typename IGCN, typename IDQN, typename IGCSI>
+pud_witness_search_head<QH, NI, ICNL, IGCN, IDQN, IGCSI>::pud_witness_search_head(
     ICNL& check_node_leaf,
     IGCN& get_node_children,
-    IPQN& propagate_query_node_handle,
+    IDQN& descend_query_node_handle,
     IGCSI& get_call_site_idx,
     QH search_root_handle) :
     check_node_leaf_(check_node_leaf),
     get_node_children_(get_node_children),
-    propagate_query_node_handle_(propagate_query_node_handle),
+    descend_query_node_handle_(descend_query_node_handle),
     get_call_site_idx_(get_call_site_idx),
     search_root_handle_(search_root_handle)
 {}
 
-template<typename QH, typename CI, typename ICNL, typename IGCN, typename IPQN, typename IGCSI>
-pud_witness_search_head<QH, CI, ICNL, IGCN, IPQN, IGCSI>::pud_witness_search_head(
+template<typename QH, typename CI, typename ICNL, typename IGCN, typename IDQN, typename IGCSI>
+pud_witness_search_head<QH, CI, ICNL, IGCN, IDQN, IGCSI>::pud_witness_search_head(
     const pud_witness_search_head& other,
     QH search_root_handle) :
     check_node_leaf_(other.check_node_leaf_),
     get_node_children_(other.get_node_children_),
-    propagate_query_node_handle_(other.propagate_query_node_handle_),
+    descend_query_node_handle_(other.descend_query_node_handle_),
     get_call_site_idx_(other.get_call_site_idx_),
     search_root_handle_(search_root_handle)
 {
@@ -83,7 +83,7 @@ pud_witness_search_head<QH, CI, ICNL, IGCN, IPQN, IGCSI>::pud_witness_search_hea
         const QH& other_handle = other_frame.handle.value();
 
         frame new_frame = {
-            .handle = propagate_query_node_handle_.propagate(
+            .handle = descend_query_node_handle_.descend(
                 parent_handle, other_handle.node()),
             .parent_handle = parent_handle,
             .next_sibling_it = other_frame.next_sibling_it,
@@ -99,8 +99,8 @@ pud_witness_search_head<QH, CI, ICNL, IGCN, IPQN, IGCSI>::pud_witness_search_hea
     }
 }
 
-template<typename QH, typename NI, typename ICNL, typename IGCN, typename IPQN, typename IGCSI>
-std::optional<pud_witness_advance_result<QH, NI>> pud_witness_search_head<QH, NI, ICNL, IGCN, IPQN, IGCSI>::advance() {
+template<typename QH, typename NI, typename ICNL, typename IGCN, typename IDQN, typename IGCSI>
+std::optional<pud_witness_advance_result<QH, NI>> pud_witness_search_head<QH, NI, ICNL, IGCN, IDQN, IGCSI>::advance() {
     if (frame_stack_.empty())
         return std::nullopt;
 
@@ -109,7 +109,7 @@ std::optional<pud_witness_advance_result<QH, NI>> pud_witness_search_head<QH, NI
     frame_stack_.pop_front();
 
     DEBUG_ASSERT(first_stack_frame.handle.has_value());
-    
+
     pud_witness_advance_result<QH, NI> result = {
         .root_handle = first_stack_frame.handle.value(),
         .root_next_sibling_it = first_stack_frame.next_sibling_it,
@@ -121,8 +121,8 @@ std::optional<pud_witness_advance_result<QH, NI>> pud_witness_search_head<QH, NI
     return result;
 }
 
-template<typename QH, typename NI, typename ICNL, typename IGCN, typename IPQN, typename IGCSI>
-std::optional<pud_node_id> pud_witness_search_head<QH, NI, ICNL, IGCN, IPQN, IGCSI>::resume() {
+template<typename QH, typename NI, typename ICNL, typename IGCN, typename IDQN, typename IGCSI>
+std::optional<pud_node_id> pud_witness_search_head<QH, NI, ICNL, IGCN, IDQN, IGCSI>::resume() {
     // handle empty stack
     if (frame_stack_.empty()) {
         if (check_node_leaf_.check_leaf(search_root_handle_.node()))
@@ -176,11 +176,11 @@ std::optional<pud_node_id> pud_witness_search_head<QH, NI, ICNL, IGCN, IPQN, IGC
     return std::nullopt;
 }
 
-template<typename QH, typename NI, typename ICNL, typename IGCN, typename IPQN, typename IGCSI>
-std::optional<QH> pud_witness_search_head<QH, NI, ICNL, IGCN, IPQN, IGCSI>::try_replace_sibling(const QH& parent_handle, NI& next_sibling_it, NI end_sibling_it) {
+template<typename QH, typename NI, typename ICNL, typename IGCN, typename IDQN, typename IGCSI>
+std::optional<QH> pud_witness_search_head<QH, NI, ICNL, IGCN, IDQN, IGCSI>::try_replace_sibling(const QH& parent_handle, NI& next_sibling_it, NI end_sibling_it) {
     while (next_sibling_it != end_sibling_it) {
         if (auto next_sibling_handle =
-            propagate_query_node_handle_.propagate(
+            descend_query_node_handle_.descend(
                 parent_handle, *(next_sibling_it++))) {
             return next_sibling_handle;
         }
@@ -188,8 +188,8 @@ std::optional<QH> pud_witness_search_head<QH, NI, ICNL, IGCN, IPQN, IGCSI>::try_
     return std::nullopt;
 }
 
-template<typename QH, typename NI, typename ICNL, typename IGCN, typename IPQN, typename IGCSI>
-void pud_witness_search_head<QH, NI, ICNL, IGCN, IPQN, IGCSI>::descend(QH parent_handle, NI next_sibling_it, NI end_sibling_it) {
+template<typename QH, typename NI, typename ICNL, typename IGCN, typename IDQN, typename IGCSI>
+void pud_witness_search_head<QH, NI, ICNL, IGCN, IDQN, IGCSI>::descend(QH parent_handle, NI next_sibling_it, NI end_sibling_it) {
     frame_stack_.push_back({
         .handle = std::nullopt,
         .parent_handle = parent_handle,
@@ -198,8 +198,8 @@ void pud_witness_search_head<QH, NI, ICNL, IGCN, IPQN, IGCSI>::descend(QH parent
     });
 }
 
-template<typename QH, typename NI, typename ICNL, typename IGCN, typename IPQN, typename IGCSI>
-void pud_witness_search_head<QH, NI, ICNL, IGCN, IPQN, IGCSI>::ascend() {
+template<typename QH, typename NI, typename ICNL, typename IGCN, typename IDQN, typename IGCSI>
+void pud_witness_search_head<QH, NI, ICNL, IGCN, IDQN, IGCSI>::ascend() {
     frame_stack_.pop_back();
     if (!frame_stack_.empty())
         frame_stack_.back().handle = std::nullopt;

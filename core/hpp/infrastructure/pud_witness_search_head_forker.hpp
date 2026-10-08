@@ -8,7 +8,7 @@ template<
     typename ChildIterator,
     typename ICheckNodeLeaf,
     typename IGetNodeChildren,
-    typename IPropagateQueryNodeHandle,
+    typename IDescendQueryNodeHandle,
     typename IGetCallSiteIdx>
 struct pud_witness_search_head_forker {
     using head_type = pud_witness_search_head<
@@ -16,7 +16,7 @@ struct pud_witness_search_head_forker {
         ChildIterator,
         ICheckNodeLeaf,
         IGetNodeChildren,
-        IPropagateQueryNodeHandle,
+        IDescendQueryNodeHandle,
         IGetCallSiteIdx>;
 
     head_type fork(const head_type& other, QueryHandle search_root_handle) const;
@@ -27,10 +27,10 @@ template<
     typename CI,
     typename ICNL,
     typename IGNC,
-    typename IPQN,
+    typename IDQN,
     typename IGCSI>
-typename pud_witness_search_head_forker<QH, CI, ICNL, IGNC, IPQN, IGCSI>::head_type
-pud_witness_search_head_forker<QH, CI, ICNL, IGNC, IPQN, IGCSI>::fork(const head_type& other, QH search_root_handle) const {
+typename pud_witness_search_head_forker<QH, CI, ICNL, IGNC, IDQN, IGCSI>::head_type
+pud_witness_search_head_forker<QH, CI, ICNL, IGNC, IDQN, IGCSI>::fork(const head_type& other, QH search_root_handle) const {
     return head_type{other, search_root_handle};
 }
 

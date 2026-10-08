@@ -28,25 +28,25 @@ struct MockGetChildren {
     MOCK_METHOD((const std::vector<pud_node_id>&), get, (pud_node_id));
 };
 
-struct MockPropagate {
-    MOCK_METHOD(std::optional<handle_t>, propagate, (handle_t, pud_node_id));
+struct MockDescend {
+    MOCK_METHOD(std::optional<handle_t>, descend, (handle_t, pud_node_id));
 };
 
 struct MockCallSite {
     MOCK_METHOD(size_t, get, (pud_node_id));
 };
 
-using head_t    = pud_witness_search_head<handle_t, child_iter, MockCheckLeaf, MockGetChildren, MockPropagate, MockCallSite>;
-using factory_t = pud_witness_search_head_factory<handle_t, child_iter, MockCheckLeaf, MockGetChildren, MockPropagate, MockCallSite>;
-using forker_t  = pud_witness_search_head_forker<handle_t, child_iter, MockCheckLeaf, MockGetChildren, MockPropagate, MockCallSite>;
+using head_t    = pud_witness_search_head<handle_t, child_iter, MockCheckLeaf, MockGetChildren, MockDescend, MockCallSite>;
+using factory_t = pud_witness_search_head_factory<handle_t, child_iter, MockCheckLeaf, MockGetChildren, MockDescend, MockCallSite>;
+using forker_t  = pud_witness_search_head_forker<handle_t, child_iter, MockCheckLeaf, MockGetChildren, MockDescend, MockCallSite>;
 using mhws_t    = pud_mhws<handle_t, child_iter, head_t, factory_t, forker_t>;
 
 struct PudMhwsSearchIntegrationTest : public ::testing::Test {
     NiceMock<MockCheckLeaf>  leaves;
     NiceMock<MockGetChildren> children;
-    NiceMock<MockPropagate>  propagate;
+    NiceMock<MockDescend>  descend;
     NiceMock<MockCallSite>   call_sites;
-    factory_t factory{leaves, children, propagate, call_sites};
+    factory_t factory{leaves, children, descend, call_sites};
     forker_t  forker;
     mhws_t    searches{factory, forker};
     std::unordered_map<pud_node_id, std::vector<pud_node_id>> sequences;
@@ -67,7 +67,7 @@ struct PudMhwsSearchIntegrationTest : public ::testing::Test {
         ON_CALL(children, get(_)).WillByDefault([&](pud_node_id id) -> const std::vector<pud_node_id>& {
             return sequences.at(id);
         });
-        ON_CALL(propagate, propagate(_, _)).WillByDefault([](handle_t, pud_node_id child) {
+        ON_CALL(descend, descend(_, _)).WillByDefault([](handle_t, pud_node_id child) {
             return std::optional<handle_t>{handle_t{child}};
         });
     }
@@ -77,7 +77,7 @@ TEST_F(PudMhwsSearchIntegrationTest, AllPropagationsBlockedReturnsNoHead) {
     sequences[root] = {left, right};
     sequences[left] = {};
     sequences[right] = {};
-    EXPECT_CALL(propagate, propagate(_, _)).WillRepeatedly(Return(std::nullopt));
+    EXPECT_CALL(descend, descend(_, _)).WillRepeatedly(Return(std::nullopt));
     EXPECT_FALSE(searches.try_add_head(handle_t{root}).has_value());
 }
 
@@ -89,13 +89,13 @@ TEST_F(PudMhwsSearchIntegrationTest, InvalidateOfWitnessWithDeadSiblingSubtreeMo
     sequences[leaf]  = {};
     sequences[right] = {};
     ON_CALL(leaves, check_leaf(leaf)).WillByDefault(Return(true));
-    ON_CALL(propagate, propagate(_, deep1)).WillByDefault(Return(std::nullopt));
+    ON_CALL(descend, descend(_, deep1)).WillByDefault(Return(std::nullopt));
     auto id = searches.try_add_head(handle_t{root});
     ASSERT_TRUE(id.has_value());
 
     // leaf is no longer a leaf, and nothing else is reachable (all propagations now return nullopt)
     ON_CALL(leaves, check_leaf(leaf)).WillByDefault(Return(false));
-    ON_CALL(propagate, propagate(_, _)).WillByDefault(Return(std::nullopt));
+    ON_CALL(descend, descend(_, _)).WillByDefault(Return(std::nullopt));
     auto gone = searches.invalidate_leaf(leaf);
     ASSERT_EQ(gone.size(), 1u);
     EXPECT_EQ(gone[0], *id);
@@ -123,7 +123,7 @@ TEST_F(PudMhwsSearchIntegrationTest, ForkThatCannotEnterDeepestNodeReturnsNoFork
     auto id = searches.try_add_head(handle_t{root});
     ASSERT_TRUE(id.has_value());
 
-    ON_CALL(propagate, propagate(_, deep3)).WillByDefault(Return(std::nullopt));
+    ON_CALL(descend, descend(_, deep3)).WillByDefault(Return(std::nullopt));
     EXPECT_FALSE(searches.try_fork_head(*id, handle_t{fork_caller}).has_value());
 
     // original head still points to deep3; invalidate it (deep3 no longer a leaf)

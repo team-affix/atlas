@@ -23,22 +23,22 @@ struct MockCheckLeaf {
 struct MockGetChildren {
     MOCK_METHOD((const std::vector<pud_node_id>&), get, (pud_node_id));
 };
-struct MockPropagate {
-    MOCK_METHOD(std::optional<handle_t>, propagate, (handle_t, pud_node_id));
+struct MockDescend {
+    MOCK_METHOD(std::optional<handle_t>, descend, (handle_t, pud_node_id));
 };
 struct MockCallSite {
     MOCK_METHOD(size_t, get, (pud_node_id));
 };
 
 using test_factory_t = pud_witness_search_head_factory<
-    handle_t, child_iter, MockCheckLeaf, MockGetChildren, MockPropagate, MockCallSite>;
+    handle_t, child_iter, MockCheckLeaf, MockGetChildren, MockDescend, MockCallSite>;
 
 struct PudWitnessSearchHeadFactoryTest : public ::testing::Test {
     NiceMock<MockCheckLeaf> leaves;
     NiceMock<MockGetChildren> children;
-    NiceMock<MockPropagate> propagate;
+    NiceMock<MockDescend> descend;
     NiceMock<MockCallSite> call_sites;
-    test_factory_t factory{leaves, children, propagate, call_sites};
+    test_factory_t factory{leaves, children, descend, call_sites};
     pud_node_id root = 1;
     pud_node_id child = 2;
     pud_node_id grand = 3;
@@ -53,7 +53,7 @@ TEST_F(PudWitnessSearchHeadFactoryTest, NoLeafIsReachable) {
     EXPECT_CALL(children, get(root)).WillRepeatedly(ReturnRef(root_children));
     EXPECT_CALL(children, get(child)).WillRepeatedly(ReturnRef(child_children));
     EXPECT_CALL(children, get(grand)).WillRepeatedly(ReturnRef(grand_children));
-    EXPECT_CALL(propagate, propagate(_, _)).WillRepeatedly(Return(std::nullopt));
+    EXPECT_CALL(descend, descend(_, _)).WillRepeatedly(Return(std::nullopt));
     auto head = factory.make(handle_t{root});
     EXPECT_FALSE(head.resume().has_value());
 }
