@@ -18,6 +18,7 @@
 #include "infrastructure/pud_refuted_nodes.hpp"
 #include "infrastructure/pud_specializer.hpp"
 #include "infrastructure/unifier.hpp"
+#include "value_objects/pud_query_handle.hpp"
 
 struct test_root_nodes {
     coroutine<const pud_node*, void> iterate_roots() {
@@ -48,7 +49,7 @@ struct PudPropagateQueryFullIntegrationTest : public ::testing::Test {
         pud_refuted_nodes,
         pud_call_sites,
         test_root_nodes>;
-    using handle = propagator_t::query_node_handle;
+    using handle = pud_query_handle;
 
     test_functors functors;
     expr_pool exprs;
