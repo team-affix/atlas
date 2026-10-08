@@ -75,12 +75,6 @@ struct MockCallSite {
 
 const pud_node_id g_spec_dummy_root_id = pud_node_id{0};
 
-struct MockIterateRoots {
-    coroutine<pud_node_id, void> iterate_roots() {
-        co_yield g_spec_dummy_root_id;
-    }
-};
-
 struct MockGetAddedSpecializations {
     MOCK_METHOD((const std::vector<pud_specialization>&), get, (pud_node_id));
 };
@@ -107,7 +101,6 @@ using propagator_t = pud_descender<
     MockGlobalize,
     MockRefuted,
     MockCallSite,
-    MockIterateRoots,
     MockGetAddedSpecializations,
     MockGetAddedBodyGoals,
     MockGetAddedVarCount,
@@ -122,13 +115,12 @@ struct PudPropagateSpecializeIntegrationTest : public ::testing::Test {
     NiceMock<MockRefuted>               refuted;
     NiceMock<UnifyLog>                  unify_log;
     MockCallSite                        call_site;
-    MockIterateRoots                    iter_roots;
     NiceMock<MockGetAddedSpecializations> get_added_specs;
     NiceMock<MockGetAddedBodyGoals>     get_added_body_goals;
     NiceMock<MockGetAddedVarCount>      get_added_var_count;
     NiceMock<MockGetAxiomHead>          get_axiom_head;
 
-    propagator_t propagator{make_node, make_var, globalize, refuted, call_site, iter_roots,
+    propagator_t propagator{make_node, make_var, globalize, refuted, call_site,
                              get_added_specs, get_added_body_goals, get_added_var_count, get_axiom_head};
 
     expr var_expr{expr::var{0}};
@@ -164,7 +156,7 @@ const std::vector<const expr*>        PudPropagateSpecializeIntegrationTest::emp
 TEST_F(PudPropagateSpecializeIntegrationTest, RepAtTheFrameOffsetIsNotATouchedCallerRep) {
     ON_CALL(get_added_specs, get(child_id)).WillByDefault(ReturnRef(child_spec_var0_only));
     EXPECT_CALL(unify_log, unify(_, _)).WillOnce(Return(::testing::ByMove(scripted_unify({0}, true))));
-    auto root     = propagator.descent_roots()[0];
+    auto root     = propagator.descent_root(g_spec_dummy_root_id);
     auto at_child = propagator.descend(root, child_id);
     ASSERT_TRUE(at_child.has_value());
     EXPECT_CALL(make_node, make(_, _, _)).WillOnce([&](std::vector<pud_specialization> specs,
@@ -180,7 +172,7 @@ TEST_F(PudPropagateSpecializeIntegrationTest, RepAtTheFrameOffsetIsNotATouchedCa
 TEST_F(PudPropagateSpecializeIntegrationTest, UnifyFailureIsNotEntered) {
     ON_CALL(get_added_specs, get(child_id)).WillByDefault(ReturnRef(child_spec_var0_only));
     EXPECT_CALL(unify_log, unify(_, _)).WillOnce(Return(::testing::ByMove(scripted_unify({}, false))));
-    auto root = propagator.descent_roots()[0];
+    auto root = propagator.descent_root(g_spec_dummy_root_id);
     EXPECT_FALSE(propagator.descend(root, child_id).has_value());
 }
 
@@ -193,7 +185,7 @@ TEST_F(PudPropagateSpecializeIntegrationTest, CloseOfNeverPropagatedHandleHasNoB
         EXPECT_EQ(vars, 0u);
         return made_id;
     });
-    EXPECT_EQ(propagator.close_query(propagator.descent_roots()[0]), made_id);
+    EXPECT_EQ(propagator.close_query(propagator.descent_root(g_spec_dummy_root_id)), made_id);
 }
 
 TEST_F(PudPropagateSpecializeIntegrationTest, RepBelowTheOffsetIsTheChildsTouchedCallerRep) {
@@ -205,10 +197,10 @@ TEST_F(PudPropagateSpecializeIntegrationTest, RepBelowTheOffsetIsTheChildsTouche
     EXPECT_CALL(unify_log, unify(_, _))
         .WillOnce(Return(::testing::ByMove(scripted_unify({3, 5}, true))))
         .WillOnce(Return(::testing::ByMove(scripted_unify({}, true))));
-    auto root         = propagator.descent_roots()[0];
+    auto root         = propagator.descent_root(g_spec_dummy_root_id);
     auto at_live      = propagator.descend(root, with_live_vars_id);
     ASSERT_TRUE(at_live.has_value());
-    auto opened       = propagator.open_query(*at_live, &spec_value)[0];
+    auto opened       = propagator.open_query(*at_live, &spec_value, g_spec_dummy_root_id).value();
     auto at_child     = propagator.descend(opened, child_id);
     ASSERT_TRUE(at_child.has_value());
     EXPECT_CALL(make_node, make(_, _, _)).WillOnce([&](std::vector<pud_specialization> specs,
