@@ -176,12 +176,15 @@ template<
     typename IForkHead>
 std::unordered_set<pud_mhws_head_id> pud_mhws<QH, NI, Head, IMakeHead, IForkHead>::unlink_witness(pud_node_id witness) {
     auto extracted = witness_to_heads_.extract(witness);
+    if (extracted.empty())
+        return {};
 
-    for (pud_mhws_head_id head_id : extracted.mapped()) {
+    auto& head_ids = extracted.mapped();
+    for (pud_mhws_head_id head_id : head_ids) {
         head_to_witness_.erase(head_id);
     }
 
-    return std::move(extracted.mapped());
+    return std::move(head_ids);
 }
 
 template<
