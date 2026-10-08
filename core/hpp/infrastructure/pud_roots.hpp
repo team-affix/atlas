@@ -3,13 +3,13 @@
 
 #include <vector>
 #include "infrastructure/coroutine.hpp"
-#include "value_objects/pud_node.hpp"
+#include "value_objects/pud_node_id.hpp"
 
 struct pud_roots {
-    coroutine<const pud_node*, void> iterate_roots();
-    void register_root(const pud_node* root);
+    coroutine<pud_node_id, void> iterate_roots();
+    void register_root(pud_node_id root);
 private:
-    std::vector<const pud_node*> roots_;
+    std::vector<pud_node_id> roots_;
 };
 
 #endif

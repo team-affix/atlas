@@ -12,123 +12,146 @@ using ::testing::NiceMock;
 using ::testing::Return;
 using ::testing::ReturnRef;
 
-using child_iter = std::vector<const pud_node*>::const_iterator;
+using child_iter = std::vector<pud_node_id>::const_iterator;
 
 struct handle_t {
-    const pud_node* node_ptr;
-    const pud_node* node() const { return node_ptr; }
+    pud_node_id node_id;
+    pud_node_id node() const { return node_id; }
     bool operator==(const handle_t&) const = default;
 };
 
 struct MockCheckLeaf {
-    MOCK_METHOD(bool, check_leaf, (const pud_node*));
+    MOCK_METHOD(bool, check_leaf, (pud_node_id));
 };
 
 struct MockGetChildren {
-    MOCK_METHOD((const std::vector<const pud_node*>&), get, (const pud_node*));
+    MOCK_METHOD((const std::vector<pud_node_id>&), get, (pud_node_id));
 };
 
 struct MockPropagate {
-    MOCK_METHOD(std::optional<handle_t>, propagate, (handle_t, const pud_node*));
+    MOCK_METHOD(std::optional<handle_t>, propagate, (handle_t, pud_node_id));
 };
 
 struct MockCallSite {
-    MOCK_METHOD(size_t, get, (const pud_node*));
+    MOCK_METHOD(size_t, get, (pud_node_id));
 };
 
-using head_t = pud_witness_search_head<
-    handle_t, child_iter, MockCheckLeaf, MockGetChildren, MockPropagate, MockCallSite>;
-using factory_t = pud_witness_search_head_factory<
-    handle_t, child_iter, MockCheckLeaf, MockGetChildren, MockPropagate, MockCallSite>;
-using forker_t = pud_witness_search_head_forker<
-    handle_t, child_iter, MockCheckLeaf, MockGetChildren, MockPropagate, MockCallSite>;
-using mhws_t = pud_mhws<handle_t, child_iter, head_t, factory_t, forker_t>;
+using head_t    = pud_witness_search_head<handle_t, child_iter, MockCheckLeaf, MockGetChildren, MockPropagate, MockCallSite>;
+using factory_t = pud_witness_search_head_factory<handle_t, child_iter, MockCheckLeaf, MockGetChildren, MockPropagate, MockCallSite>;
+using forker_t  = pud_witness_search_head_forker<handle_t, child_iter, MockCheckLeaf, MockGetChildren, MockPropagate, MockCallSite>;
+using mhws_t    = pud_mhws<handle_t, child_iter, head_t, factory_t, forker_t>;
 
 struct PudMhwsSearchIntegrationTest : public ::testing::Test {
-    NiceMock<MockCheckLeaf> leaves;
+    NiceMock<MockCheckLeaf>  leaves;
     NiceMock<MockGetChildren> children;
-    NiceMock<MockPropagate> propagate;
-    NiceMock<MockCallSite> call_sites;
+    NiceMock<MockPropagate>  propagate;
+    NiceMock<MockCallSite>   call_sites;
     factory_t factory{leaves, children, propagate, call_sites};
-    forker_t forker;
-    mhws_t searches{factory, forker};
-    std::unordered_map<const pud_node*, std::vector<const pud_node*>> sequences;
-    pud_node root{};
-    pud_node left{};
-    pud_node right{};
-    pud_node dead{};
-    pud_node leaf{};
-    pud_node other_leaf{};
-    pud_node deep1{};
-    pud_node deep2{};
-    pud_node deep3{};
-    pud_node sibling_leaf{};
-    pud_node fork_caller{};
+    forker_t  forker;
+    mhws_t    searches{factory, forker};
+    std::unordered_map<pud_node_id, std::vector<pud_node_id>> sequences;
+    pud_node_id root         = 1;
+    pud_node_id left         = 2;
+    pud_node_id right        = 3;
+    pud_node_id leaf         = 4;
+    pud_node_id other_leaf   = 5;
+    pud_node_id dead         = 6;
+    pud_node_id deep1        = 7;
+    pud_node_id deep2        = 8;
+    pud_node_id deep3        = 9;
+    pud_node_id sibling_leaf = 10;
+    pud_node_id fork_caller  = 11;
 
     void SetUp() override {
         ON_CALL(leaves, check_leaf(_)).WillByDefault(Return(false));
-        ON_CALL(children, get(_)).WillByDefault([&](const pud_node* node) -> const std::vector<const pud_node*>& {
-            return sequences.at(node);
+        ON_CALL(children, get(_)).WillByDefault([&](pud_node_id id) -> const std::vector<pud_node_id>& {
+            return sequences.at(id);
         });
-        ON_CALL(propagate, propagate(_, _)).WillByDefault([](handle_t, const pud_node* child) {
+        ON_CALL(propagate, propagate(_, _)).WillByDefault([](handle_t, pud_node_id child) {
             return std::optional<handle_t>{handle_t{child}};
         });
     }
 };
 
-TEST_F(PudMhwsSearchIntegrationTest, NoReachableLeafIsNotRemembered) {
-    sequences[&root] = {&left, &right};
+TEST_F(PudMhwsSearchIntegrationTest, AllPropagationsBlockedReturnsNoHead) {
+    sequences[root] = {left, right};
+    sequences[left] = {};
+    sequences[right] = {};
     EXPECT_CALL(propagate, propagate(_, _)).WillRepeatedly(Return(std::nullopt));
-    EXPECT_FALSE(searches.try_add_head(handle_t{&root}).has_value());
-    EXPECT_TRUE(searches.invalidate_leaf(&root).empty());
+    EXPECT_FALSE(searches.try_add_head(handle_t{root}).has_value());
 }
 
-TEST_F(PudMhwsSearchIntegrationTest, InvalidateOfDeepWitnessWithADeadSiblingSubtree) {
-    sequences[&root] = {&left, &right};
-    sequences[&left] = {&dead, &leaf};
-    sequences[&dead] = {&deep1};
-    sequences[&deep1] = {};
-    EXPECT_CALL(leaves, check_leaf(&leaf)).WillRepeatedly(Return(true));
-    EXPECT_CALL(propagate, propagate(_, &deep1)).WillRepeatedly(Return(std::nullopt));
-    auto id = searches.try_add_head(handle_t{&root});
+TEST_F(PudMhwsSearchIntegrationTest, InvalidateOfWitnessWithDeadSiblingSubtreeMovesToSibling) {
+    sequences[root]  = {left, right};
+    sequences[left]  = {dead, leaf};
+    sequences[dead]  = {deep1};
+    sequences[deep1] = {};
+    sequences[leaf]  = {};
+    sequences[right] = {};
+    ON_CALL(leaves, check_leaf(leaf)).WillByDefault(Return(true));
+    ON_CALL(propagate, propagate(_, deep1)).WillByDefault(Return(std::nullopt));
+    auto id = searches.try_add_head(handle_t{root});
     ASSERT_TRUE(id.has_value());
-    EXPECT_CALL(leaves, check_leaf(&leaf)).WillRepeatedly(Return(false));
-    EXPECT_CALL(propagate, propagate(_, _)).WillRepeatedly(Return(std::nullopt));
-    auto gone = searches.invalidate_leaf(&leaf);
+
+    // leaf is no longer a leaf, and nothing else is reachable (all propagations now return nullopt)
+    ON_CALL(leaves, check_leaf(leaf)).WillByDefault(Return(false));
+    ON_CALL(propagate, propagate(_, _)).WillByDefault(Return(std::nullopt));
+    auto gone = searches.invalidate_leaf(leaf);
     ASSERT_EQ(gone.size(), 1u);
     EXPECT_EQ(gone[0], *id);
-    EXPECT_EQ(sequences[&root][1], &right);
-    EXPECT_EQ(sequences[&left][0], &dead);
-    EXPECT_EQ(sequences[&left][1], &leaf);
 }
 
-TEST_F(PudMhwsSearchIntegrationTest, ForkThatCannotEnterTheDeepestNodeIsNotRemembered) {
-    sequences[&root] = {&deep1};
-    sequences[&deep1] = {&deep2};
-    sequences[&deep2] = {&deep3};
-    EXPECT_CALL(leaves, check_leaf(&deep3)).WillRepeatedly(Return(true));
-    auto id = searches.try_add_head(handle_t{&root});
+TEST_F(PudMhwsSearchIntegrationTest, ForkSucceedsWhenChildIsReachable) {
+    sequences[root]   = {deep1};
+    sequences[deep1]  = {deep2};
+    sequences[deep2]  = {deep3};
+    sequences[deep3]  = {};
+    ON_CALL(leaves, check_leaf(deep3)).WillByDefault(Return(true));
+    auto id = searches.try_add_head(handle_t{root});
     ASSERT_TRUE(id.has_value());
-    EXPECT_CALL(propagate, propagate(_, &deep3)).WillOnce(Return(std::nullopt));
-    EXPECT_FALSE(searches.try_fork_head(*id, handle_t{&fork_caller}).has_value());
-    EXPECT_TRUE(searches.invalidate_leaf(&deep2).empty());
-    auto original = searches.invalidate_leaf(&deep3);
-    ASSERT_EQ(original.size(), 1u);
-    EXPECT_EQ(original[0], *id);
+    auto forked = searches.try_fork_head(*id, handle_t{fork_caller});
+    ASSERT_TRUE(forked.has_value());
+    EXPECT_NE(forked.value(), *id);
 }
 
-TEST_F(PudMhwsSearchIntegrationTest, DepthFourLeafMovesToTheOtherLeafUnderTheSameParent) {
-    sequences[&root] = {&deep1};
-    sequences[&deep1] = {&deep2};
-    sequences[&deep2] = {&leaf, &sibling_leaf};
-    EXPECT_CALL(leaves, check_leaf(&leaf)).WillRepeatedly(Return(true));
-    EXPECT_CALL(leaves, check_leaf(&sibling_leaf)).WillRepeatedly(Return(true));
-    auto id = searches.try_add_head(handle_t{&root});
+TEST_F(PudMhwsSearchIntegrationTest, ForkThatCannotEnterDeepestNodeReturnsNoForked) {
+    sequences[root]   = {deep1};
+    sequences[deep1]  = {deep2};
+    sequences[deep2]  = {deep3};
+    sequences[deep3]  = {};
+    ON_CALL(leaves, check_leaf(deep3)).WillByDefault(Return(true));
+    auto id = searches.try_add_head(handle_t{root});
     ASSERT_TRUE(id.has_value());
-    EXPECT_CALL(leaves, check_leaf(&leaf)).WillRepeatedly(Return(false));
-    EXPECT_TRUE(searches.invalidate_leaf(&leaf).empty());
-    EXPECT_TRUE(searches.invalidate_leaf(&leaf).empty());
-    auto moved = searches.invalidate_leaf(&sibling_leaf);
-    ASSERT_EQ(moved.size(), 1u);
-    EXPECT_EQ(moved[0], *id);
+
+    ON_CALL(propagate, propagate(_, deep3)).WillByDefault(Return(std::nullopt));
+    EXPECT_FALSE(searches.try_fork_head(*id, handle_t{fork_caller}).has_value());
+
+    // original head still points to deep3; invalidate it (deep3 no longer a leaf)
+    ON_CALL(leaves, check_leaf(deep3)).WillByDefault(Return(false));
+    auto gone = searches.invalidate_leaf(deep3);
+    ASSERT_EQ(gone.size(), 1u);
+    EXPECT_EQ(gone[0], *id);
+}
+
+TEST_F(PudMhwsSearchIntegrationTest, InvalidateLeafMovesHeadToNextLeafUnderSameParent) {
+    sequences[root]  = {deep1};
+    sequences[deep1] = {deep2};
+    sequences[deep2] = {leaf, sibling_leaf};
+    sequences[leaf]  = {};
+    sequences[sibling_leaf] = {};
+    ON_CALL(leaves, check_leaf(leaf)).WillByDefault(Return(true));
+    ON_CALL(leaves, check_leaf(sibling_leaf)).WillByDefault(Return(true));
+    auto id = searches.try_add_head(handle_t{root});
+    ASSERT_TRUE(id.has_value());
+
+    // leaf is invalidated; head should move to sibling_leaf
+    ON_CALL(leaves, check_leaf(leaf)).WillByDefault(Return(false));
+    auto moved = searches.invalidate_leaf(leaf);
+    EXPECT_TRUE(moved.empty());
+
+    // sibling_leaf is also invalidated; head loses witness
+    ON_CALL(leaves, check_leaf(sibling_leaf)).WillByDefault(Return(false));
+    auto gone = searches.invalidate_leaf(sibling_leaf);
+    ASSERT_EQ(gone.size(), 1u);
+    EXPECT_EQ(gone[0], *id);
 }

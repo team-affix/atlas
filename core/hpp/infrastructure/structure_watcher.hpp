@@ -7,18 +7,18 @@
 #include <vector>
 #include <immer/map.hpp>
 #include <immer/set.hpp>
-#include "value_objects/pud_node.hpp"
+#include "value_objects/pud_node_id.hpp"
 
 using watcher_head_id = uint32_t;
 
 template<typename IGetParentNode>
 struct structure_watcher {
     structure_watcher(IGetParentNode& get_parent);
-    void watch(const pud_node* node, watcher_head_id head, const std::vector<uint32_t>& reps);
-    std::vector<watcher_head_id> note_var_bind(const pud_node* node, uint32_t bound, uint32_t target);
-    std::vector<watcher_head_id> note_functor_bind(const pud_node* node, uint32_t bound, const std::vector<uint32_t>& introduced_reps);
-    std::vector<watcher_head_id> heads_of(const pud_node* node, uint32_t rep) const;
-    std::vector<uint32_t> reps_of(const pud_node* node, watcher_head_id head) const;
+    void watch(pud_node_id node, watcher_head_id head, const std::vector<uint32_t>& reps);
+    std::vector<watcher_head_id> note_var_bind(pud_node_id node, uint32_t bound, uint32_t target);
+    std::vector<watcher_head_id> note_functor_bind(pud_node_id node, uint32_t bound, const std::vector<uint32_t>& introduced_reps);
+    std::vector<watcher_head_id> heads_of(pud_node_id node, uint32_t rep) const;
+    std::vector<uint32_t> reps_of(pud_node_id node, watcher_head_id head) const;
 
 private:
     using head_set_t = immer::set<watcher_head_id>;
@@ -29,12 +29,12 @@ private:
         immer::map<watcher_head_id, rep_set_t>  heads_to_reps;
     };
 
-    node_state current_or_inherited(const pud_node* node) const;
+    node_state current_or_inherited(pud_node_id node) const;
     head_set_t heads_in(const node_state& s, uint32_t rep) const;
     rep_set_t  reps_in(const node_state& s, watcher_head_id head) const;
 
     IGetParentNode& get_parent_;
-    std::unordered_map<const pud_node*, node_state> states_;
+    std::unordered_map<pud_node_id, node_state> states_;
 };
 
 template<typename IGetParentNode>
@@ -44,13 +44,16 @@ structure_watcher<IGetParentNode>::structure_watcher(IGetParentNode& get_parent)
 
 template<typename IGetParentNode>
 typename structure_watcher<IGetParentNode>::node_state
-structure_watcher<IGetParentNode>::current_or_inherited(const pud_node* node) const {
-    const pud_node* cur = node;
-    while (cur != nullptr) {
+structure_watcher<IGetParentNode>::current_or_inherited(pud_node_id node) const {
+    pud_node_id cur = node;
+    while (true) {
         const auto it = states_.find(cur);
         if (it != states_.end())
             return it->second;
-        cur = get_parent_.get(cur);
+        const auto parent = get_parent_.get(cur);
+        if (!parent.has_value())
+            break;
+        cur = parent.value();
     }
     return node_state{};
 }
@@ -70,7 +73,7 @@ structure_watcher<IGetParentNode>::reps_in(const node_state& s, watcher_head_id 
 }
 
 template<typename IGetParentNode>
-void structure_watcher<IGetParentNode>::watch(const pud_node* node,
+void structure_watcher<IGetParentNode>::watch(pud_node_id node,
                                               watcher_head_id head,
                                               const std::vector<uint32_t>& reps) {
     node_state s = current_or_inherited(node);
@@ -91,7 +94,7 @@ void structure_watcher<IGetParentNode>::watch(const pud_node* node,
 
 template<typename IGetParentNode>
 std::vector<watcher_head_id>
-structure_watcher<IGetParentNode>::note_var_bind(const pud_node* node,
+structure_watcher<IGetParentNode>::note_var_bind(pud_node_id node,
                                                  uint32_t bound, uint32_t target) {
     node_state s = current_or_inherited(node);
 
@@ -129,7 +132,7 @@ structure_watcher<IGetParentNode>::note_var_bind(const pud_node* node,
 
 template<typename IGetParentNode>
 std::vector<watcher_head_id>
-structure_watcher<IGetParentNode>::note_functor_bind(const pud_node* node,
+structure_watcher<IGetParentNode>::note_functor_bind(pud_node_id node,
                                                      uint32_t bound,
                                                      const std::vector<uint32_t>& introduced_reps) {
     node_state s = current_or_inherited(node);
@@ -165,7 +168,7 @@ structure_watcher<IGetParentNode>::note_functor_bind(const pud_node* node,
 
 template<typename IGetParentNode>
 std::vector<watcher_head_id>
-structure_watcher<IGetParentNode>::heads_of(const pud_node* node, uint32_t rep) const {
+structure_watcher<IGetParentNode>::heads_of(pud_node_id node, uint32_t rep) const {
     const node_state s = current_or_inherited(node);
     const auto* found = s.reps_to_heads.find(rep);
     std::vector<watcher_head_id> result;
@@ -177,7 +180,7 @@ structure_watcher<IGetParentNode>::heads_of(const pud_node* node, uint32_t rep) 
 
 template<typename IGetParentNode>
 std::vector<uint32_t>
-structure_watcher<IGetParentNode>::reps_of(const pud_node* node, watcher_head_id head) const {
+structure_watcher<IGetParentNode>::reps_of(pud_node_id node, watcher_head_id head) const {
     const node_state s = current_or_inherited(node);
     const auto* found = s.heads_to_reps.find(head);
     std::vector<uint32_t> result;

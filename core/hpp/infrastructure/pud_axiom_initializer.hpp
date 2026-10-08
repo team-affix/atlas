@@ -2,56 +2,51 @@
 #define PUD_AXIOM_INITIALIZER_HPP
 
 #include <vector>
-#include <unordered_map>
 #include "value_objects/rule.hpp"
-#include "value_objects/pud_node.hpp"
-#include "value_objects/pud_specialization.hpp"
-#include "value_objects/framed_expr.hpp"
+#include "value_objects/pud_node_id.hpp"
 
-template<typename IMakeNode, typename ILiftExpr>
+template<typename IGetNextNodeID,
+         typename IStoreHead,
+         typename IStoreBodyGoals,
+         typename IStoreVarCount,
+         typename IRegisterRoot>
 struct pud_axiom_initializer {
-    pud_axiom_initializer(IMakeNode& make_node, ILiftExpr& lift_expr);
-    const pud_node* initialize_axiom(const rule& axiom);
+    pud_axiom_initializer(IGetNextNodeID& get_next_node_id,
+                          IStoreHead& store_head,
+                          IStoreBodyGoals& store_body_goals,
+                          IStoreVarCount& store_var_count,
+                          IRegisterRoot& register_root);
+    pud_node_id initialize_axiom(const rule& axiom);
 private:
-    IMakeNode& make_node_;
-    ILiftExpr& lift_expr_;
-
-    std::vector<const pud_node*> axioms_;
+    IGetNextNodeID& get_next_node_id_;
+    IStoreHead& store_head_;
+    IStoreBodyGoals& store_body_goals_;
+    IStoreVarCount& store_var_count_;
+    IRegisterRoot& register_root_;
 };
 
-template<typename IMN, typename ILE>
-pud_axiom_initializer<IMN, ILE>::pud_axiom_initializer(IMN& make_node, ILE& lift_expr)
-    : make_node_(make_node)
-    , lift_expr_(lift_expr)
-{
-}
+template<typename IGNID, typename ISH, typename ISBG, typename ISVC, typename IRR>
+pud_axiom_initializer<IGNID, ISH, ISBG, ISVC, IRR>::pud_axiom_initializer(
+    IGNID& get_next_node_id,
+    ISH& store_head,
+    ISBG& store_body_goals,
+    ISVC& store_var_count,
+    IRR& register_root)
+    : get_next_node_id_(get_next_node_id)
+    , store_head_(store_head)
+    , store_body_goals_(store_body_goals)
+    , store_var_count_(store_var_count)
+    , register_root_(register_root)
+{}
 
-template<typename IMN, typename ILE>
-const pud_node* pud_axiom_initializer<IMN, ILE>::initialize_axiom(const rule& axiom) {
-
-    // var 0 is the whole head. therefore if the axiom mentioned var 0,
-    // it would be a self-reference. We thus need to bump all var indices by 1.
-
-    const expr* shifted_head = lift_expr_.lift(axiom.head, 1);
-
-    pud_specialization axiom_head_specialization {
-        .var_idx = 0,
-        .value = shifted_head,
-    };
-
-    std::vector<const expr*> shifted_body_goals;
-
-    for (const expr* body_goal : axiom.body) {
-        const expr* shifted_body_goal = lift_expr_.lift(body_goal, 1);
-        shifted_body_goals.push_back(shifted_body_goal);
-    }
-
-    uint32_t var_count = 1 + axiom.var_count;
-
-    return make_node_.make(
-        {axiom_head_specialization},
-        shifted_body_goals,
-        var_count);
+template<typename IGNID, typename ISH, typename ISBG, typename ISVC, typename IRR>
+pud_node_id pud_axiom_initializer<IGNID, ISH, ISBG, ISVC, IRR>::initialize_axiom(const rule& axiom) {
+    const pud_node_id id = get_next_node_id_.next();
+    store_head_.store(id, axiom.head);
+    store_body_goals_.store(id, std::vector<const expr*>(axiom.body.begin(), axiom.body.end()));
+    store_var_count_.store(id, axiom.var_count);
+    register_root_.register_root(id);
+    return id;
 }
 
 #endif

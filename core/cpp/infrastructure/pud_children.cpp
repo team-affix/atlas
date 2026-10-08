@@ -1,11 +1,16 @@
 #include "infrastructure/pud_children.hpp"
 #include "debug_assert.hpp"
 
-const std::vector<const pud_node*>& pud_children::get(const pud_node* node) const {
-    return children_links_.at(node);
+const std::vector<pud_node_id> pud_children::empty_{};
+
+const std::vector<pud_node_id>& pud_children::get(pud_node_id id) const {
+    const auto it = children_links_.find(id);
+    if (it == children_links_.end())
+        return empty_;
+    return it->second;
 }
 
-void pud_children::store(const pud_node* node, const std::vector<const pud_node*>& children) {
-    auto [_, success] = children_links_.insert({node, children});
-    DEBUG_ASSERT(success);
+void pud_children::store(pud_node_id id, std::vector<pud_node_id> children) {
+    auto [_, inserted] = children_links_.insert({id, std::move(children)});
+    DEBUG_ASSERT(inserted);
 }

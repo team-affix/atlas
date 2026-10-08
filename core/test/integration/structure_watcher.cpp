@@ -2,13 +2,13 @@
 #include <algorithm>
 #include <deque>
 #include <map>
+#include <optional>
 #include <random>
 #include <set>
 #include <string>
 #include <unordered_map>
 #include <vector>
 #include "infrastructure/structure_watcher.hpp"
-#include "value_objects/pud_node.hpp"
 
 namespace {
 
@@ -22,18 +22,20 @@ std::vector<uint32_t> sorted_reps(std::vector<uint32_t> v) {
     return v;
 }
 
-// Minimal get_parent that is backed by a user-managed map.
+// Minimal get_parent backed by a user-managed map.
+// Returns nullopt for unknown nodes (root nodes).
 struct TestGetParent {
-    std::unordered_map<const pud_node*, const pud_node*> parent_map;
-    const pud_node* get(const pud_node* node) const {
-        if (node == nullptr) return nullptr;
-        const auto it = parent_map.find(node);
-        return it != parent_map.end() ? it->second : nullptr;
+    std::unordered_map<pud_node_id, pud_node_id> parent_map;
+    std::optional<pud_node_id> get(pud_node_id id) const {
+        const auto it = parent_map.find(id);
+        if (it == parent_map.end())
+            return std::nullopt;
+        return it->second;
     }
 };
 
 void check_mirror(const structure_watcher<TestGetParent>& sw,
-                  const pud_node* node,
+                  pud_node_id node,
                   const std::vector<uint32_t>& all_reps,
                   const std::vector<watcher_head_id>& all_heads) {
     for (uint32_t rep : all_reps) {
@@ -57,16 +59,16 @@ void check_mirror(const structure_watcher<TestGetParent>& sw,
 } // namespace
 
 struct StructureWatcherTest : public ::testing::Test {
-    std::deque<pud_node> node_store_;
+    pud_node_id next_id_ = 1;
     TestGetParent get_parent_;
     structure_watcher<TestGetParent> sw_{get_parent_};
 
-    // Allocate a node with a given parent (nullptr = root).
-    const pud_node* alloc(const pud_node* parent) {
-        node_store_.push_back(pud_node{});
-        const pud_node* node = &node_store_.back();
-        get_parent_.parent_map[node] = parent;
-        return node;
+    // Allocate a node with a given parent (0 = root, no parent).
+    pud_node_id alloc(pud_node_id parent) {
+        pud_node_id id = next_id_++;
+        if (parent != 0)
+            get_parent_.parent_map[id] = parent;
+        return id;
     }
 };
 
@@ -75,20 +77,20 @@ struct StructureWatcherTest : public ::testing::Test {
 // ---------------------------------------------------------------------------
 
 TEST_F(StructureWatcherTest, EmptyWatcherHeadsOfAndRepsOfAreEmpty) {
-    const pud_node* root = alloc(nullptr);
+    pud_node_id root = alloc(0);
     EXPECT_TRUE(sw_.heads_of(root, 0u).empty());
     EXPECT_TRUE(sw_.reps_of(root, 0u).empty());
 }
 
 TEST_F(StructureWatcherTest, NoteVarBindOnUnwatchedRepReturnsEmpty) {
-    const pud_node* root = alloc(nullptr);
+    pud_node_id root = alloc(0);
     EXPECT_TRUE(sw_.note_var_bind(root, 1u, 2u).empty());
     EXPECT_TRUE(sw_.heads_of(root, 1u).empty());
     EXPECT_TRUE(sw_.heads_of(root, 2u).empty());
 }
 
 TEST_F(StructureWatcherTest, NoteFunctorBindOnUnwatchedRepReturnsEmpty) {
-    const pud_node* root = alloc(nullptr);
+    pud_node_id root = alloc(0);
     EXPECT_TRUE(sw_.note_functor_bind(root, 1u, {2u, 3u}).empty());
 }
 
@@ -97,21 +99,21 @@ TEST_F(StructureWatcherTest, NoteFunctorBindOnUnwatchedRepReturnsEmpty) {
 // ---------------------------------------------------------------------------
 
 TEST_F(StructureWatcherTest, WatchEmptyRepList) {
-    const pud_node* root = alloc(nullptr);
+    pud_node_id root = alloc(0);
     sw_.watch(root, 0u, {});
     EXPECT_TRUE(sw_.reps_of(root, 0u).empty());
     EXPECT_TRUE(sw_.heads_of(root, 99u).empty());
 }
 
 TEST_F(StructureWatcherTest, WatchOneRep) {
-    const pud_node* root = alloc(nullptr);
+    pud_node_id root = alloc(0);
     sw_.watch(root, 1u, {10u});
     EXPECT_EQ(sw_.reps_of(root, 1u), std::vector<uint32_t>{10u});
     EXPECT_EQ(sw_.heads_of(root, 10u), std::vector<watcher_head_id>{1u});
 }
 
 TEST_F(StructureWatcherTest, WatchManyRepsIncludingZeroAndLargeId) {
-    const pud_node* root = alloc(nullptr);
+    pud_node_id root = alloc(0);
     sw_.watch(root, 5u, {0u, 100u, 0xffffffffu});
     const auto reps = sw_.reps_of(root, 5u);
     EXPECT_EQ(reps, (std::vector<uint32_t>{0u, 100u, 0xffffffffu}));
@@ -121,14 +123,14 @@ TEST_F(StructureWatcherTest, WatchManyRepsIncludingZeroAndLargeId) {
 }
 
 TEST_F(StructureWatcherTest, DuplicateRepsInWatchCollapseToOne) {
-    const pud_node* root = alloc(nullptr);
+    pud_node_id root = alloc(0);
     sw_.watch(root, 1u, {7u, 7u, 7u});
     EXPECT_EQ(sw_.reps_of(root, 1u), std::vector<uint32_t>{7u});
     EXPECT_EQ(sw_.heads_of(root, 7u), std::vector<watcher_head_id>{1u});
 }
 
 TEST_F(StructureWatcherTest, TwoHeadsSameRep) {
-    const pud_node* root = alloc(nullptr);
+    pud_node_id root = alloc(0);
     sw_.watch(root, 1u, {5u});
     sw_.watch(root, 2u, {5u});
     const auto heads = sorted_heads(sw_.heads_of(root, 5u));
@@ -138,7 +140,7 @@ TEST_F(StructureWatcherTest, TwoHeadsSameRep) {
 }
 
 TEST_F(StructureWatcherTest, TwoHeadsDisjointReps) {
-    const pud_node* root = alloc(nullptr);
+    pud_node_id root = alloc(0);
     sw_.watch(root, 1u, {10u});
     sw_.watch(root, 2u, {20u});
     EXPECT_EQ(sw_.heads_of(root, 10u), std::vector<watcher_head_id>{1u});
@@ -147,7 +149,7 @@ TEST_F(StructureWatcherTest, TwoHeadsDisjointReps) {
 }
 
 TEST_F(StructureWatcherTest, TwoHeadsOverlappingReps) {
-    const pud_node* root = alloc(nullptr);
+    pud_node_id root = alloc(0);
     sw_.watch(root, 1u, {10u, 20u});
     sw_.watch(root, 2u, {20u, 30u});
     const auto h10 = sorted_heads(sw_.heads_of(root, 10u));
@@ -163,34 +165,34 @@ TEST_F(StructureWatcherTest, TwoHeadsOverlappingReps) {
 // ---------------------------------------------------------------------------
 
 TEST_F(StructureWatcherTest, ChildInheritsParentWatch) {
-    const pud_node* root  = alloc(nullptr);
-    const pud_node* child = alloc(root);
+    pud_node_id root  = alloc(0);
+    pud_node_id child = alloc(root);
     sw_.watch(root, 1u, {5u});
     EXPECT_EQ(sw_.heads_of(child, 5u), std::vector<watcher_head_id>{1u});
     EXPECT_EQ(sw_.reps_of(child, 1u),  std::vector<uint32_t>{5u});
 }
 
 TEST_F(StructureWatcherTest, SiblingDoesNotInheritOtherSiblingWatch) {
-    const pud_node* root      = alloc(nullptr);
-    const pud_node* sibling_a = alloc(root);
-    const pud_node* sibling_b = alloc(root);
+    pud_node_id root      = alloc(0);
+    pud_node_id sibling_a = alloc(root);
+    pud_node_id sibling_b = alloc(root);
     sw_.watch(sibling_a, 1u, {5u});
     EXPECT_TRUE(sw_.heads_of(sibling_b, 5u).empty());
     EXPECT_TRUE(sw_.reps_of(sibling_b, 1u).empty());
 }
 
 TEST_F(StructureWatcherTest, GrandchildInheritsChain) {
-    const pud_node* root  = alloc(nullptr);
-    const pud_node* child = alloc(root);
-    const pud_node* grand = alloc(child);
+    pud_node_id root  = alloc(0);
+    pud_node_id child = alloc(root);
+    pud_node_id grand = alloc(child);
     sw_.watch(root, 1u, {5u});
     EXPECT_EQ(sw_.heads_of(grand, 5u), std::vector<watcher_head_id>{1u});
 }
 
 TEST_F(StructureWatcherTest, HeadWatchedOnChildInvisibleToParentAndSibling) {
-    const pud_node* root    = alloc(nullptr);
-    const pud_node* child   = alloc(root);
-    const pud_node* sibling = alloc(root);
+    pud_node_id root    = alloc(0);
+    pud_node_id child   = alloc(root);
+    pud_node_id sibling = alloc(root);
     sw_.watch(child, 1u, {5u});
     EXPECT_TRUE(sw_.heads_of(root,    5u).empty());
     EXPECT_TRUE(sw_.heads_of(sibling, 5u).empty());
@@ -198,8 +200,8 @@ TEST_F(StructureWatcherTest, HeadWatchedOnChildInvisibleToParentAndSibling) {
 }
 
 TEST_F(StructureWatcherTest, SeveralWatchesOnSameNodeAllVisible) {
-    const pud_node* root  = alloc(nullptr);
-    const pud_node* child = alloc(root);
+    pud_node_id root  = alloc(0);
+    pud_node_id child = alloc(root);
     sw_.watch(child, 1u, {5u});
     sw_.watch(child, 2u, {6u});
     sw_.watch(child, 3u, {5u, 6u});
@@ -215,8 +217,8 @@ TEST_F(StructureWatcherTest, SeveralWatchesOnSameNodeAllVisible) {
 // ---------------------------------------------------------------------------
 
 TEST_F(StructureWatcherTest, VarBindEveryHeadAlreadyContainsTarget) {
-    const pud_node* root  = alloc(nullptr);
-    const pud_node* child = alloc(root);
+    pud_node_id root  = alloc(0);
+    pud_node_id child = alloc(root);
     sw_.watch(root, 1u, {10u, 20u});
     sw_.watch(root, 2u, {10u, 20u});
     const auto changed = sorted_heads(sw_.note_var_bind(child, 10u, 20u));
@@ -231,8 +233,8 @@ TEST_F(StructureWatcherTest, VarBindEveryHeadAlreadyContainsTarget) {
 }
 
 TEST_F(StructureWatcherTest, VarBindNoHeadContainsTarget) {
-    const pud_node* root  = alloc(nullptr);
-    const pud_node* child = alloc(root);
+    pud_node_id root  = alloc(0);
+    pud_node_id child = alloc(root);
     sw_.watch(root, 1u, {10u});
     sw_.watch(root, 2u, {10u});
     const auto changed = sw_.note_var_bind(child, 10u, 30u);
@@ -245,8 +247,8 @@ TEST_F(StructureWatcherTest, VarBindNoHeadContainsTarget) {
 }
 
 TEST_F(StructureWatcherTest, VarBindMixedHeads) {
-    const pud_node* root  = alloc(nullptr);
-    const pud_node* child = alloc(root);
+    pud_node_id root  = alloc(0);
+    pud_node_id child = alloc(root);
     const uint32_t bound  = 10u;
     const uint32_t target = 20u;
     sw_.watch(root, 1u, {bound, target});
@@ -263,8 +265,8 @@ TEST_F(StructureWatcherTest, VarBindMixedHeads) {
 }
 
 TEST_F(StructureWatcherTest, FrontierMoveOntoRepAlreadyWatchedByOtherHead) {
-    const pud_node* root  = alloc(nullptr);
-    const pud_node* child = alloc(root);
+    pud_node_id root  = alloc(0);
+    pud_node_id child = alloc(root);
     sw_.watch(root, 1u, {10u});
     sw_.watch(root, 2u, {20u});
     const auto changed = sw_.note_var_bind(child, 10u, 20u);
@@ -275,8 +277,8 @@ TEST_F(StructureWatcherTest, FrontierMoveOntoRepAlreadyWatchedByOtherHead) {
 }
 
 TEST_F(StructureWatcherTest, CollapseTargetIsOnlyOtherRepHeadBecomesMonotone) {
-    const pud_node* root  = alloc(nullptr);
-    const pud_node* child = alloc(root);
+    pud_node_id root  = alloc(0);
+    pud_node_id child = alloc(root);
     sw_.watch(root, 1u, {10u, 20u});
     const auto changed = sorted_heads(sw_.note_var_bind(child, 10u, 20u));
     EXPECT_EQ(changed, std::vector<watcher_head_id>{1u});
@@ -284,8 +286,8 @@ TEST_F(StructureWatcherTest, CollapseTargetIsOnlyOtherRepHeadBecomesMonotone) {
 }
 
 TEST_F(StructureWatcherTest, CollapseHeadHasOtherRepsTheyStay) {
-    const pud_node* root  = alloc(nullptr);
-    const pud_node* child = alloc(root);
+    pud_node_id root  = alloc(0);
+    pud_node_id child = alloc(root);
     sw_.watch(root, 1u, {10u, 20u, 30u});
     const auto changed = sorted_heads(sw_.note_var_bind(child, 10u, 20u));
     EXPECT_EQ(changed, std::vector<watcher_head_id>{1u});
@@ -294,8 +296,8 @@ TEST_F(StructureWatcherTest, CollapseHeadHasOtherRepsTheyStay) {
 }
 
 TEST_F(StructureWatcherTest, TwoVarBindsSameNodeSecondSeesFirst) {
-    const pud_node* root  = alloc(nullptr);
-    const pud_node* child = alloc(root);
+    pud_node_id root  = alloc(0);
+    pud_node_id child = alloc(root);
     sw_.watch(root, 1u, {10u, 30u});
     const auto changed1 = sorted_heads(sw_.note_var_bind(child, 10u, 20u));
     EXPECT_TRUE(changed1.empty());
@@ -304,9 +306,9 @@ TEST_F(StructureWatcherTest, TwoVarBindsSameNodeSecondSeesFirst) {
 }
 
 TEST_F(StructureWatcherTest, ChainOfFrontierMovesDownSpine) {
-    const pud_node* root = alloc(nullptr);
+    pud_node_id root = alloc(0);
     sw_.watch(root, 1u, {0u});
-    std::vector<const pud_node*> levels{root};
+    std::vector<pud_node_id> levels{root};
     for (int i = 0; i < 10; ++i)
         levels.push_back(alloc(levels.back()));
 
@@ -325,8 +327,8 @@ TEST_F(StructureWatcherTest, ChainOfFrontierMovesDownSpine) {
 }
 
 TEST_F(StructureWatcherTest, ParentUnchangedAfterChildBind) {
-    const pud_node* root  = alloc(nullptr);
-    const pud_node* child = alloc(root);
+    pud_node_id root  = alloc(0);
+    pud_node_id child = alloc(root);
     sw_.watch(root, 1u, {10u, 20u});
     sw_.note_var_bind(child, 10u, 20u);
     const auto parent_reps = sorted_reps(sw_.reps_of(root, 1u));
@@ -336,9 +338,9 @@ TEST_F(StructureWatcherTest, ParentUnchangedAfterChildBind) {
 }
 
 TEST_F(StructureWatcherTest, SiblingUnaffectedByOtherSiblingBind) {
-    const pud_node* root  = alloc(nullptr);
-    const pud_node* sib_a = alloc(root);
-    const pud_node* sib_b = alloc(root);
+    pud_node_id root  = alloc(0);
+    pud_node_id sib_a = alloc(root);
+    pud_node_id sib_b = alloc(root);
     sw_.watch(root, 1u, {10u, 20u});
     sw_.note_var_bind(sib_a, 10u, 20u);
     const auto b_reps = sorted_reps(sw_.reps_of(sib_b, 1u));
@@ -350,8 +352,8 @@ TEST_F(StructureWatcherTest, SiblingUnaffectedByOtherSiblingBind) {
 // ---------------------------------------------------------------------------
 
 TEST_F(StructureWatcherTest, FunctorBindNoIntroducedReps) {
-    const pud_node* root  = alloc(nullptr);
-    const pud_node* child = alloc(root);
+    pud_node_id root  = alloc(0);
+    pud_node_id child = alloc(root);
     sw_.watch(root, 1u, {5u});
     sw_.watch(root, 2u, {5u, 6u});
     const auto changed = sorted_heads(sw_.note_functor_bind(child, 5u, {}));
@@ -363,8 +365,8 @@ TEST_F(StructureWatcherTest, FunctorBindNoIntroducedReps) {
 }
 
 TEST_F(StructureWatcherTest, FunctorBindAllIntroducedRepsAlreadyInHead) {
-    const pud_node* root  = alloc(nullptr);
-    const pud_node* child = alloc(root);
+    pud_node_id root  = alloc(0);
+    pud_node_id child = alloc(root);
     sw_.watch(root, 1u, {5u, 10u, 20u});
     const auto changed = sorted_heads(sw_.note_functor_bind(child, 5u, {10u, 20u}));
     EXPECT_EQ(changed, std::vector<watcher_head_id>{1u});
@@ -373,8 +375,8 @@ TEST_F(StructureWatcherTest, FunctorBindAllIntroducedRepsAlreadyInHead) {
 }
 
 TEST_F(StructureWatcherTest, FunctorBindAllIntroducedRepsNew) {
-    const pud_node* root  = alloc(nullptr);
-    const pud_node* child = alloc(root);
+    pud_node_id root  = alloc(0);
+    pud_node_id child = alloc(root);
     sw_.watch(root, 1u, {5u});
     const auto changed = sorted_heads(sw_.note_functor_bind(child, 5u, {10u, 20u}));
     EXPECT_EQ(changed, std::vector<watcher_head_id>{1u});
@@ -385,8 +387,8 @@ TEST_F(StructureWatcherTest, FunctorBindAllIntroducedRepsNew) {
 }
 
 TEST_F(StructureWatcherTest, FunctorBindOnlySomeHeadsWatchedBound) {
-    const pud_node* root  = alloc(nullptr);
-    const pud_node* child = alloc(root);
+    pud_node_id root  = alloc(0);
+    pud_node_id child = alloc(root);
     sw_.watch(root, 1u, {5u});
     sw_.watch(root, 2u, {6u});
     const auto changed = sorted_heads(sw_.note_functor_bind(child, 5u, {10u}));
@@ -395,9 +397,9 @@ TEST_F(StructureWatcherTest, FunctorBindOnlySomeHeadsWatchedBound) {
 }
 
 TEST_F(StructureWatcherTest, FunctorBindThenChildVarBind) {
-    const pud_node* root  = alloc(nullptr);
-    const pud_node* child = alloc(root);
-    const pud_node* grand = alloc(child);
+    pud_node_id root  = alloc(0);
+    pud_node_id child = alloc(root);
+    pud_node_id grand = alloc(child);
     sw_.watch(root, 1u, {5u});
     sw_.note_functor_bind(child, 5u, {10u, 20u});
     EXPECT_EQ(sorted_reps(sw_.reps_of(child, 1u)),
@@ -410,8 +412,8 @@ TEST_F(StructureWatcherTest, FunctorBindThenChildVarBind) {
 }
 
 TEST_F(StructureWatcherTest, FunctorBindExistingRepForOtherHeadNoDuplicate) {
-    const pud_node* root  = alloc(nullptr);
-    const pud_node* child = alloc(root);
+    pud_node_id root  = alloc(0);
+    pud_node_id child = alloc(root);
     sw_.watch(root, 1u, {5u});
     sw_.watch(root, 2u, {10u});
     sw_.note_functor_bind(child, 5u, {10u});
@@ -425,10 +427,10 @@ TEST_F(StructureWatcherTest, FunctorBindExistingRepForOtherHeadNoDuplicate) {
 // ---------------------------------------------------------------------------
 
 TEST_F(StructureWatcherTest, TenLevelSpineRepsAtEachLevel) {
-    const pud_node* root = alloc(nullptr);
+    pud_node_id root = alloc(0);
     sw_.watch(root, 1u, {0u});
 
-    std::vector<const pud_node*> levels{root};
+    std::vector<pud_node_id> levels{root};
     for (int i = 0; i < 10; ++i)
         levels.push_back(alloc(levels.back()));
 
@@ -447,11 +449,11 @@ TEST_F(StructureWatcherTest, TenLevelSpineRepsAtEachLevel) {
 }
 
 TEST_F(StructureWatcherTest, BushOfSiblingsSeeOwnBindOnly) {
-    const pud_node* root = alloc(nullptr);
+    pud_node_id root = alloc(0);
     sw_.watch(root, 1u, {10u, 20u});
     sw_.watch(root, 2u, {30u, 40u});
 
-    std::vector<const pud_node*> siblings;
+    std::vector<pud_node_id> siblings;
     for (int i = 0; i < 5; ++i)
         siblings.push_back(alloc(root));
 
@@ -558,9 +560,8 @@ TEST_F(StructureWatcherTest, StressRandomOpsAgainstShadow) {
 
     std::mt19937 rng(k_seed);
 
-    const pud_node* iv = alloc(nullptr);
+    pud_node_id iv = alloc(0);
     shadow_state shadow;
-    // Reuse sw_ from fixture (which has no state yet).
 
     std::uniform_int_distribution<uint32_t> pick_rep(0u, static_cast<uint32_t>(k_rep_pool - 1));
     std::uniform_int_distribution<uint32_t> pick_head(0u, static_cast<uint32_t>(k_head_pool - 1));

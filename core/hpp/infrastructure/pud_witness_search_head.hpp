@@ -3,7 +3,7 @@
 
 #include <deque>
 #include <optional>
-#include "value_objects/pud_node.hpp"
+#include "value_objects/pud_node_id.hpp"
 #include "value_objects/pud_witness_advance_result.hpp"
 #include "debug_assert.hpp"
 
@@ -25,7 +25,7 @@ struct pud_witness_search_head {
         const pud_witness_search_head& other,
         QueryHandle search_root_handle);
     std::optional<pud_witness_advance_result<QueryHandle, NodeIterator>> advance();
-    std::optional<const pud_node*> resume();
+    std::optional<pud_node_id> resume();
 private:
     struct frame {
         std::optional<QueryHandle> handle;
@@ -119,7 +119,7 @@ std::optional<pud_witness_advance_result<QH, NI>> pud_witness_search_head<QH, NI
 }
 
 template<typename QH, typename NI, typename ICNL, typename IGCN, typename IPQN, typename IGCSI>
-std::optional<const pud_node*> pud_witness_search_head<QH, NI, ICNL, IGCN, IPQN, IGCSI>::resume() {
+std::optional<pud_node_id> pud_witness_search_head<QH, NI, ICNL, IGCN, IPQN, IGCSI>::resume() {
     // handle empty stack
     if (frame_stack_.empty()) {
         if (check_node_leaf_.check_leaf(search_root_handle_.node()))
@@ -160,7 +160,7 @@ std::optional<const pud_node*> pud_witness_search_head<QH, NI, ICNL, IGCN, IPQN,
 
         const QH& current_handle = optional_current_handle.value();
         
-        const pud_node* current_node = current_handle.node();
+        pud_node_id current_node = current_handle.node();
         
         if (check_node_leaf_.check_leaf(current_node))
             return current_node;

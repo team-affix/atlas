@@ -11,6 +11,7 @@
 #include "infrastructure/coroutine.hpp"
 #include "value_objects/body_goal_id.hpp"
 #include "value_objects/pud_descent.hpp"
+#include "value_objects/pud_specialization.hpp"
 #include "value_objects/framed_expr.hpp"
 #include "debug_assert.hpp"
 
@@ -19,79 +20,94 @@ template<
     typename Unifier,
     typename Specializer,
     typename Normalizer,
-    typename IGetNodeParent,
     typename IMakeNode,
     typename IMakeVar,
     typename IGlobalize,
     typename ICheckNodeRefuted,
     typename IGetCallSite,
-    typename IIterateRoots>
+    typename IIterateRoots,
+    typename IGetAddedSpecializations,
+    typename IGetAddedBodyGoals,
+    typename IGetAddedVarCount,
+    typename IGetAxiomHead>
 struct pud_descender {
     pud_descender(
-        IGetNodeParent& get_node_parent,
         IMakeNode& make_node,
         IMakeVar& make_var,
         IGlobalize& globalize,
         ICheckNodeRefuted& check_node_refuted,
         IGetCallSite& get_call_site,
-        IIterateRoots& iterate_roots);
+        IIterateRoots& iterate_roots,
+        IGetAddedSpecializations& get_added_specializations,
+        IGetAddedBodyGoals& get_added_body_goals,
+        IGetAddedVarCount& get_added_var_count,
+        IGetAxiomHead& get_axiom_head);
+
     std::vector<pud_descent> descent_roots();
-    std::optional<pud_descent> descend(pud_descent current, const pud_node* child_node);
+    std::optional<pud_descent> descend(pud_descent current, pud_node_id child_node_id);
     std::vector<pud_descent> open_query(pud_descent caller, const expr* query);
-    const pud_node* close_query(pud_descent query);
+    pud_node_id close_query(pud_descent query);
 private:
-    IGetNodeParent& get_node_parent_;
     IMakeNode& make_node_;
     IMakeVar& make_var_;
     IGlobalize& globalize_;
     ICheckNodeRefuted& check_node_refuted_;
     IGetCallSite& get_call_site_;
     IIterateRoots& iterate_roots_;
+    IGetAddedSpecializations& get_added_specializations_;
+    IGetAddedBodyGoals& get_added_body_goals_;
+    IGetAddedVarCount& get_added_var_count_;
+    IGetAxiomHead& get_axiom_head_;
 };
 
 template<typename BM, typename U, typename S, typename N,
-         typename IGNP, typename IMN, typename IMV, typename IG, typename IGNR,
-         typename IGCS, typename IIR>
-pud_descender<BM, U, S, N, IGNP, IMN, IMV, IG, IGNR, IGCS, IIR>::pud_descender(
-    IGNP& get_node_parent,
+         typename IMN, typename IMV, typename IG, typename IGNR,
+         typename IGCS, typename IIR,
+         typename IGAS, typename IGABG, typename IGAVC, typename IGAH>
+pud_descender<BM, U, S, N, IMN, IMV, IG, IGNR, IGCS, IIR, IGAS, IGABG, IGAVC, IGAH>::pud_descender(
     IMN& make_node,
     IMV& make_var,
     IG& globalize,
     IGNR& check_node_refuted,
     IGCS& get_call_site,
-    IIR& iterate_roots)
-    : get_node_parent_(get_node_parent)
-    , make_node_(make_node)
+    IIR& iterate_roots,
+    IGAS& get_added_specializations,
+    IGABG& get_added_body_goals,
+    IGAVC& get_added_var_count,
+    IGAH& get_axiom_head)
+    : make_node_(make_node)
     , make_var_(make_var)
     , globalize_(globalize)
     , check_node_refuted_(check_node_refuted)
     , get_call_site_(get_call_site)
-    , iterate_roots_(iterate_roots) {}
+    , iterate_roots_(iterate_roots)
+    , get_added_specializations_(get_added_specializations)
+    , get_added_body_goals_(get_added_body_goals)
+    , get_added_var_count_(get_added_var_count)
+    , get_axiom_head_(get_axiom_head) {}
 
 template<typename BM, typename U, typename S, typename N,
-         typename IGNP, typename IMN, typename IMV, typename IG, typename IGNR,
-         typename IGCS, typename IIR>
+         typename IMN, typename IMV, typename IG, typename IGNR,
+         typename IGCS, typename IIR,
+         typename IGAS, typename IGABG, typename IGAVC, typename IGAH>
 std::vector<pud_descent>
-pud_descender<BM, U, S, N, IGNP, IMN, IMV, IG, IGNR, IGCS, IIR>::descent_roots() {
+pud_descender<BM, U, S, N, IMN, IMV, IG, IGNR, IGCS, IIR, IGAS, IGABG, IGAVC, IGAH>::descent_roots() {
     std::vector<pud_descent> handles;
     auto co = iterate_roots_.iterate_roots();
     while (auto opt = co.next()) {
-        const pud_node* r = opt.value();
-        auto bindings_transient = immer::map<uint32_t, framed_expr>{}.transient();
-        BM bind_map{globalize_, bindings_transient};
-        for (pud_specialization spec : r->added_specializations)
-            bind_map.bind(globalize_.globalize(0, spec.var_idx), framed_expr{spec.value, 0});
+        pud_node_id root_id = opt.value();
+        const uint32_t root_var_count = get_added_var_count_.get(root_id);
         auto body_goals_transient = immer::map<body_goal_id, const expr*>{}.transient();
         size_t bgc = 0;
-        for (const expr* goal : r->added_body_goals)
+        for (const expr* goal : get_added_body_goals_.get(root_id))
             body_goals_transient.set(bgc++, goal);
         handles.push_back(pud_descent{
             .frame_offset        = 0,
-            .lvc                 = 1 + r->added_var_count,
+            .lvc                 = root_var_count,
             .bgc                 = bgc,
-            .node                = r,
+            .node                = root_id,
             .touched_caller_reps = {},
-            .bindings            = std::move(bindings_transient).persistent(),
+            .bindings            = {},
             .pending_body_goals  = std::move(body_goals_transient).persistent()
         });
     }
@@ -99,22 +115,23 @@ pud_descender<BM, U, S, N, IGNP, IMN, IMV, IG, IGNR, IGCS, IIR>::descent_roots()
 }
 
 template<typename BM, typename U, typename S, typename N,
-         typename IGNP, typename IMN, typename IMV, typename IG, typename IGNR,
-         typename IGCS, typename IIR>
+         typename IMN, typename IMV, typename IG, typename IGNR,
+         typename IGCS, typename IIR,
+         typename IGAS, typename IGABG, typename IGAVC, typename IGAH>
 std::optional<pud_descent>
-pud_descender<BM, U, S, N, IGNP, IMN, IMV, IG, IGNR, IGCS, IIR>::descend(pud_descent current, const pud_node* child_node) {
-    DEBUG_ASSERT(get_node_parent_.get(child_node) == current.node);
+pud_descender<BM, U, S, N, IMN, IMV, IG, IGNR, IGCS, IIR, IGAS, IGABG, IGAVC, IGAH>::descend(
+    pud_descent current, pud_node_id child_node_id) {
 
-    if (check_node_refuted_.check_refuted(child_node))
+    if (check_node_refuted_.check_refuted(child_node_id))
         return std::nullopt;
 
-    auto transient = current.bindings.transient();
-    BM bind_map{globalize_, transient};
+    auto bindings_transient = current.bindings.transient();
+    BM bind_map{globalize_, bindings_transient};
     U unifier{globalize_, &bind_map};
     S specializer{make_var_, unifier};
 
     auto touched_transient = current.touched_caller_reps.transient();
-    for (pud_specialization spec : child_node->added_specializations) {
+    for (pud_specialization spec : get_added_specializations_.get(child_node_id)) {
         auto sm = specializer.specialize(current.frame_offset, spec);
         while (auto rep = sm.next())
             touched_transient.insert(*rep);
@@ -125,56 +142,71 @@ pud_descender<BM, U, S, N, IGNP, IMN, IMV, IG, IGNR, IGCS, IIR>::descend(pud_des
     auto body_goals_transient = current.pending_body_goals.transient();
     body_goals_transient.erase(get_call_site_.get(current.node));
     size_t child_bgc = current.bgc;
-    for (const expr* goal : child_node->added_body_goals)
+    for (const expr* goal : get_added_body_goals_.get(child_node_id))
         body_goals_transient.set(child_bgc++, goal);
 
     return pud_descent{
         .frame_offset        = current.frame_offset,
-        .lvc                 = current.lvc + child_node->added_var_count,
+        .lvc                 = current.lvc + get_added_var_count_.get(child_node_id),
         .bgc                 = child_bgc,
-        .node                = child_node,
+        .node                = child_node_id,
         .touched_caller_reps = std::move(touched_transient).persistent(),
-        .bindings            = std::move(transient).persistent(),
+        .bindings            = std::move(bindings_transient).persistent(),
         .pending_body_goals  = std::move(body_goals_transient).persistent()
     };
 }
 
 template<typename BM, typename U, typename S, typename N,
-         typename IGNP, typename IMN, typename IMV, typename IG, typename IGNR,
-         typename IGCS, typename IIR>
+         typename IMN, typename IMV, typename IG, typename IGNR,
+         typename IGCS, typename IIR,
+         typename IGAS, typename IGABG, typename IGAVC, typename IGAH>
 std::vector<pud_descent>
-pud_descender<BM, U, S, N, IGNP, IMN, IMV, IG, IGNR, IGCS, IIR>::open_query(pud_descent caller, const expr* query_expr) {
-    uint32_t query_frame_offset = caller.frame_offset + caller.lvc;
+pud_descender<BM, U, S, N, IMN, IMV, IG, IGNR, IGCS, IIR, IGAS, IGABG, IGAVC, IGAH>::open_query(
+    pud_descent caller, const expr* query_expr) {
 
-    auto transient = caller.bindings.transient();
-    BM bind_map{globalize_, transient};
-
-    uint32_t query_head_var = globalize_.globalize(query_frame_offset, 0);
-    bind_map.bind(
-        query_head_var,
-        framed_expr{query_expr, caller.frame_offset});
-
-    immer::map<uint32_t, framed_expr> query_bindings = std::move(transient).persistent();
+    const uint32_t query_frame_offset = caller.frame_offset + caller.lvc;
 
     std::vector<pud_descent> handles;
     auto co = iterate_roots_.iterate_roots();
     while (auto opt = co.next()) {
-        const pud_node* r = opt.value();
-        auto bindings_transient = query_bindings.transient();
-        BM root_bind_map{globalize_, bindings_transient};
-        for (pud_specialization spec : r->added_specializations)
-            root_bind_map.bind(globalize_.globalize(query_frame_offset, spec.var_idx), framed_expr{spec.value, query_frame_offset});
+        pud_node_id root_id = opt.value();
+        const expr* axiom_head = get_axiom_head_.get(root_id);
+        const uint32_t root_var_count = get_added_var_count_.get(root_id);
+
+        // Introduce a fresh anchor var (just beyond the axiom's var range) that
+        // links the query expression to the axiom head via the specializer.
+        const uint32_t anchor_var_idx = root_var_count;
+        const uint32_t anchor_var_global = globalize_.globalize(query_frame_offset, anchor_var_idx);
+
+        auto transient = caller.bindings.transient();
+        BM bind_map{globalize_, transient};
+        bind_map.bind(anchor_var_global, framed_expr{query_expr, caller.frame_offset});
+
+        U unifier{globalize_, &bind_map};
+        S specializer{make_var_, unifier};
+
+        auto touched_transient = immer::set<uint32_t>{}.transient();
+        auto sm = specializer.specialize(query_frame_offset, pud_specialization{
+            .var_idx = anchor_var_idx,
+            .value   = axiom_head
+        });
+        while (auto rep = sm.next())
+            touched_transient.insert(*rep);
+        if (!sm.result())
+            continue;
+
         auto body_goals_transient = immer::map<body_goal_id, const expr*>{}.transient();
         size_t bgc = 0;
-        for (const expr* goal : r->added_body_goals)
+        for (const expr* goal : get_added_body_goals_.get(root_id))
             body_goals_transient.set(bgc++, goal);
+
         handles.push_back(pud_descent{
             .frame_offset        = query_frame_offset,
-            .lvc                 = r->added_var_count,
+            .lvc                 = root_var_count + 1,
             .bgc                 = bgc,
-            .node                = r,
-            .touched_caller_reps = {},
-            .bindings            = std::move(bindings_transient).persistent(),
+            .node                = root_id,
+            .touched_caller_reps = std::move(touched_transient).persistent(),
+            .bindings            = std::move(transient).persistent(),
             .pending_body_goals  = std::move(body_goals_transient).persistent()
         });
     }
@@ -182,9 +214,13 @@ pud_descender<BM, U, S, N, IGNP, IMN, IMV, IG, IGNR, IGCS, IIR>::open_query(pud_
 }
 
 template<typename BM, typename U, typename S, typename N,
-         typename IGNP, typename IMN, typename IMV, typename IG, typename IGNR,
-         typename IGCS, typename IIR>
-const pud_node* pud_descender<BM, U, S, N, IGNP, IMN, IMV, IG, IGNR, IGCS, IIR>::close_query(pud_descent current) {
+         typename IMN, typename IMV, typename IG, typename IGNR,
+         typename IGCS, typename IIR,
+         typename IGAS, typename IGABG, typename IGAVC, typename IGAH>
+pud_node_id
+pud_descender<BM, U, S, N, IMN, IMV, IG, IGNR, IGCS, IIR, IGAS, IGABG, IGAVC, IGAH>::close_query(
+    pud_descent current) {
+
     auto transient = current.bindings.transient();
     BM bind_map{globalize_, transient};
     N normalizer{globalize_, make_var_, make_var_, bind_map};
@@ -207,7 +243,7 @@ const pud_node* pud_descender<BM, U, S, N, IGNP, IMN, IMV, IG, IGNR, IGCS, IIR>:
             normalizer.normalize({goal, current.frame_offset}, current.frame_offset, translation_map));
     }
 
-    uint32_t added_var_count = translation_map.size();
+    const uint32_t added_var_count = static_cast<uint32_t>(translation_map.size());
 
     return make_node_.make(
         added_specializations,

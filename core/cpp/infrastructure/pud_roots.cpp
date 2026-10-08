@@ -1,12 +1,10 @@
 #include "infrastructure/pud_roots.hpp"
-#include "debug_assert.hpp"
 
-coroutine<const pud_node*, void> pud_roots::iterate_roots() {
-    for (const pud_node* root : roots_)
+coroutine<pud_node_id, void> pud_roots::iterate_roots() {
+    for (pud_node_id root : roots_)
         co_yield root;
 }
 
-void pud_roots::register_root(const pud_node* root) {
-    DEBUG_ASSERT(root != nullptr);
+void pud_roots::register_root(pud_node_id root) {
     roots_.push_back(root);
 }

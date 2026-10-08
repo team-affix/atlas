@@ -54,7 +54,7 @@ private:
     IGetChildren& get_children_;
     IPropagateQueryHandle& propagate_query_handle_;
 
-    std::vector<const pud_node*> node_path_;
+    std::vector<pud_node_id> node_path_;
     QueryHandle                 current_handle_;
     std::optional<witness_scan> witness_scan_;
     bool node_path_truncated_;
@@ -169,7 +169,7 @@ std::optional<pud_candidate_resume_context<QH>> pud_candidate_specialization_hea
     
     while (true) {
 
-        const pud_node* current_node = current_handle_.node();
+        const pud_node_id current_node = current_handle_.node();
         
         // if we are already at a leaf node, we are done. we are a self-witness
         if (check_node_leaf_.check_leaf(current_node)) {

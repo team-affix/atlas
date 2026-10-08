@@ -1,55 +1,72 @@
 #include <vector>
 #include <gtest/gtest.h>
-#include <gmock/gmock.h>
+#include "infrastructure/coroutine.hpp"
 #include "infrastructure/pud_axiom_initializer.hpp"
-#include "infrastructure/pud_node_pool.hpp"
+#include "infrastructure/pud_node_added_body_goals.hpp"
+#include "infrastructure/pud_node_added_var_count.hpp"
+#include "infrastructure/pud_node_heads.hpp"
+#include "infrastructure/pud_node_id_sequencer.hpp"
+#include "infrastructure/pud_roots.hpp"
 #include "value_objects/rule.hpp"
 
-using ::testing::Return;
-
-struct MockLiftExpr {
-    MOCK_METHOD(const expr*, lift, (const expr*, uint32_t));
-};
-
 struct PudAxiomNodeIntegrationTest : public ::testing::Test {
-    pud_node_pool pool;
-    MockLiftExpr lift;
-    pud_axiom_initializer<pud_node_pool, MockLiftExpr> initializer{pool, lift};
-    expr head{expr::var{0}};
+    pud_node_id_sequencer sequencer;
+    pud_node_heads heads;
+    pud_node_added_body_goals body_goals;
+    pud_node_added_var_count var_counts;
+    pud_roots roots;
+    pud_axiom_initializer<pud_node_id_sequencer, pud_node_heads, pud_node_added_body_goals,
+                          pud_node_added_var_count, pud_roots>
+        initializer{sequencer, heads, body_goals, var_counts, roots};
+    expr head_expr{expr::var{0}};
     expr body_a{expr::var{1}};
     expr body_b{expr::var{2}};
-    expr lifted_head{expr::var{10}};
-    expr lifted_a{expr::var{11}};
-    expr lifted_b{expr::var{12}};
 };
 
-TEST_F(PudAxiomNodeIntegrationTest, EmptyBodyVarCountIsOneMoreAndOnlySpecIsVar0) {
-    EXPECT_CALL(lift, lift(&head, 1u)).WillOnce(Return(&lifted_head));
-    const pud_node* node = initializer.initialize_axiom(rule(&head, {}, 4));
-    ASSERT_EQ(node->added_specializations.size(), 1u);
-    EXPECT_EQ(node->added_specializations[0].var_idx, 0u);
-    EXPECT_EQ(node->added_specializations[0].value, &lifted_head);
-    EXPECT_TRUE(node->added_body_goals.empty());
-    EXPECT_EQ(node->added_var_count, 5u);
+TEST_F(PudAxiomNodeIntegrationTest, InitializeAxiomStoresHeadDirectly) {
+    const pud_node_id id = initializer.initialize_axiom(rule(&head_expr, {}, 4));
+    EXPECT_EQ(heads.get(id), &head_expr);
+    EXPECT_EQ(var_counts.get(id), 4u);
+    EXPECT_TRUE(body_goals.get(id).empty());
 }
 
 TEST_F(PudAxiomNodeIntegrationTest, PayloadStillReadsBackAfterASecondAxiom) {
-    EXPECT_CALL(lift, lift(&head, 1u)).WillOnce(Return(&lifted_head)).WillOnce(Return(&lifted_a));
-    const pud_node* first = initializer.initialize_axiom(rule(&head, {}, 1));
-    initializer.initialize_axiom(rule(&head, {}, 2));
-    ASSERT_EQ(first->added_specializations.size(), 1u);
-    EXPECT_EQ(first->added_specializations[0].value, &lifted_head);
-    EXPECT_EQ(first->added_var_count, 2u);
+    const pud_node_id first = initializer.initialize_axiom(rule(&head_expr, {}, 1));
+    initializer.initialize_axiom(rule(&head_expr, {}, 2));
+    EXPECT_EQ(heads.get(first), &head_expr);
+    EXPECT_EQ(var_counts.get(first), 1u);
 }
 
 TEST_F(PudAxiomNodeIntegrationTest, HeadAndTwoBodyGoalsLandInOrder) {
-    EXPECT_CALL(lift, lift(&head, 1u)).WillOnce(Return(&lifted_head));
-    EXPECT_CALL(lift, lift(&body_a, 1u)).WillOnce(Return(&lifted_a));
-    EXPECT_CALL(lift, lift(&body_b, 1u)).WillOnce(Return(&lifted_b));
-    const pud_node* node = initializer.initialize_axiom(rule(&head, {&body_a, &body_b}, 0));
-    ASSERT_EQ(node->added_specializations.size(), 1u);
-    EXPECT_EQ(node->added_specializations[0].value, &lifted_head);
-    ASSERT_EQ(node->added_body_goals.size(), 2u);
-    EXPECT_EQ(node->added_body_goals[0], &lifted_a);
-    EXPECT_EQ(node->added_body_goals[1], &lifted_b);
+    const pud_node_id id = initializer.initialize_axiom(rule(&head_expr, {&body_a, &body_b}, 0));
+    EXPECT_EQ(heads.get(id), &head_expr);
+    const auto& goals = body_goals.get(id);
+    ASSERT_EQ(goals.size(), 2u);
+    EXPECT_EQ(goals[0], &body_a);
+    EXPECT_EQ(goals[1], &body_b);
+}
+
+TEST_F(PudAxiomNodeIntegrationTest, InitializeAxiomRegistersRoot) {
+    const pud_node_id id = initializer.initialize_axiom(rule(&head_expr, {}, 0));
+    auto co = roots.iterate_roots();
+    const auto first = co.next();
+    ASSERT_TRUE(first.has_value());
+    EXPECT_EQ(first.value(), id);
+}
+
+TEST_F(PudAxiomNodeIntegrationTest, TwoAxiomsRegisteredAsRoots) {
+    const pud_node_id first_id = initializer.initialize_axiom(rule(&head_expr, {}, 0));
+    const pud_node_id second_id = initializer.initialize_axiom(rule(&head_expr, {}, 0));
+    auto co = roots.iterate_roots();
+    const auto a = co.next();
+    const auto b = co.next();
+    ASSERT_TRUE(a.has_value());
+    ASSERT_TRUE(b.has_value());
+    EXPECT_EQ(a.value(), first_id);
+    EXPECT_EQ(b.value(), second_id);
+}
+
+TEST_F(PudAxiomNodeIntegrationTest, VarCountStoredExactly) {
+    const pud_node_id id = initializer.initialize_axiom(rule(&head_expr, {}, 7));
+    EXPECT_EQ(var_counts.get(id), 7u);
 }

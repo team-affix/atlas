@@ -8,7 +8,7 @@
 #include <vector>
 #include "value_objects/pud_mhws_head_id.hpp"
 #include "value_objects/pud_witness_advance_result.hpp"
-#include "value_objects/pud_node.hpp"
+#include "value_objects/pud_node_id.hpp"
 #include "debug_assert.hpp"
 
 template<
@@ -21,21 +21,21 @@ struct pud_mhws {
     pud_mhws(IMakeHead& make_head, IForkHead& fork_head);
     std::optional<pud_mhws_head_id> try_add_head(QueryHandle search_root_handle);
     void remove_head(pud_mhws_head_id head_id);
-    std::vector<pud_mhws_head_id> invalidate_leaf(const pud_node* node);
+    std::vector<pud_mhws_head_id> invalidate_leaf(pud_node_id node);
     std::optional<pud_witness_advance_result<QueryHandle, NodeIterator>> advance_head(pud_mhws_head_id head_id);
     std::optional<pud_mhws_head_id> try_fork_head(pud_mhws_head_id head_id, QueryHandle search_root_handle);
 private:
-    void link(pud_mhws_head_id head_id, const pud_node* witness);
-    const pud_node* unlink_head(pud_mhws_head_id head_id);
-    std::unordered_set<pud_mhws_head_id> unlink_witness(const pud_node* witness);
+    void link(pud_mhws_head_id head_id, pud_node_id witness);
+    pud_node_id unlink_head(pud_mhws_head_id head_id);
+    std::unordered_set<pud_mhws_head_id> unlink_witness(pud_node_id witness);
 
     IMakeHead& make_head_;
     IForkHead& fork_head_;
 
     pud_mhws_head_id next_head_id_;
     std::unordered_map<pud_mhws_head_id, Head> heads_;
-    std::unordered_map<pud_mhws_head_id, const pud_node*> head_to_witness_;
-    std::unordered_map<const pud_node*, std::unordered_set<pud_mhws_head_id>> witness_to_heads_;
+    std::unordered_map<pud_mhws_head_id, pud_node_id> head_to_witness_;
+    std::unordered_map<pud_node_id, std::unordered_set<pud_mhws_head_id>> witness_to_heads_;
 };
 
 template<
@@ -66,7 +66,7 @@ std::optional<pud_mhws_head_id> pud_mhws<QH, NI, Head, IMakeHead, IForkHead>::tr
 
     Head& head = head_it->second;
 
-    std::optional<const pud_node*> witness = head.resume();
+    std::optional<pud_node_id> witness = head.resume();
 
     if (!witness.has_value()) {
         heads_.erase(head_it);
@@ -99,14 +99,14 @@ template<
     typename Head,
     typename IMakeHead,
     typename IForkHead>
-std::vector<pud_mhws_head_id> pud_mhws<QH, NI, Head, IMakeHead, IForkHead>::invalidate_leaf(const pud_node* node) {
+std::vector<pud_mhws_head_id> pud_mhws<QH, NI, Head, IMakeHead, IForkHead>::invalidate_leaf(pud_node_id node) {
     auto head_ids = unlink_witness(node);
 
     std::vector<pud_mhws_head_id> result;
 
     for (pud_mhws_head_id head_id : head_ids) {
         auto& head = heads_.at(head_id);
-        std::optional<const pud_node*> new_witness = head.resume();
+        std::optional<pud_node_id> new_witness = head.resume();
 
         if (!new_witness.has_value()) {
             heads_.erase(head_id);
@@ -143,7 +143,7 @@ template<
     typename Head,
     typename IMakeHead,
     typename IForkHead>
-void pud_mhws<QH, NI, Head, IMakeHead, IForkHead>::link(pud_mhws_head_id head_id, const pud_node* witness) {
+void pud_mhws<QH, NI, Head, IMakeHead, IForkHead>::link(pud_mhws_head_id head_id, pud_node_id witness) {
     head_to_witness_.insert({head_id, witness});
     witness_to_heads_[witness].insert(head_id);
 }
@@ -154,10 +154,10 @@ template<
     typename Head,
     typename IMakeHead,
     typename IForkHead>
-const pud_node* pud_mhws<QH, NI, Head, IMakeHead, IForkHead>::unlink_head(pud_mhws_head_id head_id) {
+pud_node_id pud_mhws<QH, NI, Head, IMakeHead, IForkHead>::unlink_head(pud_mhws_head_id head_id) {
     auto extracted = head_to_witness_.extract(head_id);
 
-    const pud_node* witness = extracted.mapped();
+    pud_node_id witness = extracted.mapped();
 
     auto& head_ids = witness_to_heads_.at(witness);
     head_ids.erase(head_id);
@@ -174,7 +174,7 @@ template<
     typename Head,
     typename IMakeHead,
     typename IForkHead>
-std::unordered_set<pud_mhws_head_id> pud_mhws<QH, NI, Head, IMakeHead, IForkHead>::unlink_witness(const pud_node* witness) {
+std::unordered_set<pud_mhws_head_id> pud_mhws<QH, NI, Head, IMakeHead, IForkHead>::unlink_witness(pud_node_id witness) {
     auto extracted = witness_to_heads_.extract(witness);
 
     for (pud_mhws_head_id head_id : extracted.mapped()) {
@@ -201,7 +201,7 @@ std::optional<pud_mhws_head_id> pud_mhws<QH, NI, Head, IMakeHead, IForkHead>::tr
 
     Head& new_head = new_head_it->second;
 
-    std::optional<const pud_node*> new_witness = new_head.resume();
+    std::optional<pud_node_id> new_witness = new_head.resume();
 
     if (!new_witness.has_value()) {
         heads_.erase(new_head_it);

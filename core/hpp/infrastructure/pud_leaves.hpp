@@ -2,14 +2,14 @@
 #define PUD_LEAVES_HPP
 
 #include <unordered_set>
-#include "value_objects/pud_node.hpp"
+#include "value_objects/pud_node_id.hpp"
 
 struct pud_leaves {
-    bool check_leaf(const pud_node* node) const;
-    void set_leaf(const pud_node* node);
-    void unset_leaf(const pud_node* node);
+    bool check_leaf(pud_node_id id) const;
+    void set_leaf(pud_node_id id);
+    void unset_leaf(pud_node_id id);
 private:
-    std::unordered_set<const pud_node*> leaves_;
+    std::unordered_set<pud_node_id> leaves_;
 };
 
 #endif

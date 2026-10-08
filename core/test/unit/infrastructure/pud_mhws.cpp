@@ -10,13 +10,13 @@ using ::testing::Return;
 namespace {
 
 struct HeadOps {
-    MOCK_METHOD((std::optional<const pud_node*>), resume, ());
+    MOCK_METHOD((std::optional<pud_node_id>), resume, ());
     MOCK_METHOD((std::optional<pud_witness_advance_result<int, int>>), advance, ());
 };
 
 struct MockHead {
     static HeadOps* ops;
-    std::optional<const pud_node*> resume() const { return ops->resume(); }
+    std::optional<pud_node_id> resume() const { return ops->resume(); }
     std::optional<pud_witness_advance_result<int, int>> advance() { return ops->advance(); }
 };
 
@@ -37,8 +37,8 @@ struct PudMhwsTest : public ::testing::Test {
     MockMakeHead make_head;
     MockForkHead fork_head;
     test_mhws_t mhws{make_head, fork_head};
-    pud_node leaf_a{};
-    pud_node leaf_b{};
+    pud_node_id leaf_a = 1;
+    pud_node_id leaf_b = 2;
 
     void SetUp() override {
         MockHead::ops = &ops;
@@ -50,56 +50,56 @@ struct PudMhwsTest : public ::testing::Test {
 TEST_F(PudMhwsTest, AddThatFindsNoLeafIsNotRemembered) {
     EXPECT_CALL(ops, resume()).WillOnce(Return(std::nullopt));
     EXPECT_FALSE(mhws.try_add_head(1).has_value());
-    EXPECT_TRUE(mhws.invalidate_leaf(&leaf_a).empty());
+    EXPECT_TRUE(mhws.invalidate_leaf(leaf_a).empty());
 }
 
 TEST_F(PudMhwsTest, RemoveOfUnknownIdLeavesALiveSearch) {
-    EXPECT_CALL(ops, resume()).WillOnce(Return(&leaf_a)).WillOnce(Return(std::nullopt));
+    EXPECT_CALL(ops, resume()).WillOnce(Return(leaf_a)).WillOnce(Return(std::nullopt));
     auto id = mhws.try_add_head(1);
     ASSERT_TRUE(id.has_value());
     mhws.remove_head(*id + 100);
-    auto gone = mhws.invalidate_leaf(&leaf_a);
+    auto gone = mhws.invalidate_leaf(leaf_a);
     ASSERT_EQ(gone.size(), 1u);
     EXPECT_EQ(gone[0], *id);
 }
 
 TEST_F(PudMhwsTest, InvalidateOfUnoccupiedLeafIsEmpty) {
-    EXPECT_TRUE(mhws.invalidate_leaf(&leaf_a).empty());
+    EXPECT_TRUE(mhws.invalidate_leaf(leaf_a).empty());
 }
 
 TEST_F(PudMhwsTest, ForkThatFindsNoLeafIsNotRemembered) {
-    EXPECT_CALL(ops, resume()).WillOnce(Return(&leaf_a)).WillOnce(Return(std::nullopt));
+    EXPECT_CALL(ops, resume()).WillOnce(Return(leaf_a)).WillOnce(Return(std::nullopt));
     auto id = mhws.try_add_head(1);
     ASSERT_TRUE(id.has_value());
     EXPECT_FALSE(mhws.try_fork_head(*id, 2).has_value());
-    EXPECT_TRUE(mhws.invalidate_leaf(&leaf_b).empty());
+    EXPECT_TRUE(mhws.invalidate_leaf(leaf_b).empty());
 }
 
 TEST_F(PudMhwsTest, InvalidateMovesSearchOntoTheNewLeaf) {
     EXPECT_CALL(ops, resume())
-        .WillOnce(Return(&leaf_a))
-        .WillOnce(Return(&leaf_b))
+        .WillOnce(Return(leaf_a))
+        .WillOnce(Return(leaf_b))
         .WillOnce(Return(std::nullopt));
     auto id = mhws.try_add_head(1);
     ASSERT_TRUE(id.has_value());
-    EXPECT_TRUE(mhws.invalidate_leaf(&leaf_a).empty());
-    auto found = mhws.invalidate_leaf(&leaf_b);
+    EXPECT_TRUE(mhws.invalidate_leaf(leaf_a).empty());
+    auto found = mhws.invalidate_leaf(leaf_b);
     ASSERT_EQ(found.size(), 1u);
     EXPECT_EQ(found[0], *id);
-    EXPECT_TRUE(mhws.invalidate_leaf(&leaf_a).empty());
+    EXPECT_TRUE(mhws.invalidate_leaf(leaf_a).empty());
 }
 
 TEST_F(PudMhwsTest, InvalidateOfALeafWithNoNewLeafReturnsThatId) {
-    EXPECT_CALL(ops, resume()).WillOnce(Return(&leaf_a)).WillOnce(Return(std::nullopt));
+    EXPECT_CALL(ops, resume()).WillOnce(Return(leaf_a)).WillOnce(Return(std::nullopt));
     auto id = mhws.try_add_head(1);
     ASSERT_TRUE(id.has_value());
-    auto gone = mhws.invalidate_leaf(&leaf_a);
+    auto gone = mhws.invalidate_leaf(leaf_a);
     ASSERT_EQ(gone.size(), 1u);
     EXPECT_EQ(gone[0], *id);
 }
 
 TEST_F(PudMhwsTest, AdvanceWithResultLeavesHeadLinked) {
-    EXPECT_CALL(ops, resume()).WillOnce(Return(&leaf_a));
+    EXPECT_CALL(ops, resume()).WillOnce(Return(leaf_a));
     auto id = mhws.try_add_head(1);
     ASSERT_TRUE(id.has_value());
 
@@ -109,13 +109,13 @@ TEST_F(PudMhwsTest, AdvanceWithResultLeavesHeadLinked) {
     ASSERT_TRUE(result.has_value());
 
     EXPECT_CALL(ops, resume()).WillOnce(Return(std::nullopt));
-    auto gone = mhws.invalidate_leaf(&leaf_a);
+    auto gone = mhws.invalidate_leaf(leaf_a);
     ASSERT_EQ(gone.size(), 1u);
     EXPECT_EQ(gone[0], *id);
 }
 
 TEST_F(PudMhwsTest, AdvanceWithNulloptRemovesHead) {
-    EXPECT_CALL(ops, resume()).WillOnce(Return(&leaf_a));
+    EXPECT_CALL(ops, resume()).WillOnce(Return(leaf_a));
     auto id = mhws.try_add_head(1);
     ASSERT_TRUE(id.has_value());
 
@@ -123,7 +123,7 @@ TEST_F(PudMhwsTest, AdvanceWithNulloptRemovesHead) {
     auto result = mhws.advance_head(*id);
     EXPECT_FALSE(result.has_value());
 
-    EXPECT_TRUE(mhws.invalidate_leaf(&leaf_a).empty());
+    EXPECT_TRUE(mhws.invalidate_leaf(leaf_a).empty());
 }
 
 } // namespace

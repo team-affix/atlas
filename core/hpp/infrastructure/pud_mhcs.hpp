@@ -11,6 +11,7 @@
 #include "value_objects/pud_candidate_resume_context.hpp"
 #include "value_objects/pud_mhcs_head_id.hpp"
 #include "value_objects/pud_mhws_head_id.hpp"
+#include "value_objects/pud_node_id.hpp"
 #include "debug_assert.hpp"
 
 template<
@@ -22,7 +23,7 @@ struct pud_mhcs {
     pud_mhcs(IMakeHead& make_head, IForkHead& fork_head);
     std::optional<pud_mhcs_head_id> try_add_head(QueryHandle search_root_handle);
     void remove_head(pud_mhcs_head_id head_id);
-    std::vector<pud_mhcs_head_id> invalidate_leaf(const pud_node* node);
+    std::vector<pud_mhcs_head_id> invalidate_leaf(pud_node_id node);
     std::optional<pud_mhcs_head_id> witness_refuted(pud_mhws_head_id witness_head_id);
     std::optional<pud_mhcs_head_id> try_fork_head(pud_mhcs_head_id head_id, QueryHandle new_query_handle);
 private:
@@ -31,7 +32,7 @@ private:
 
     void link(pud_mhcs_head_id head_id, pud_candidate_justification justification);
     pud_candidate_justification unlink_head(pud_mhcs_head_id head_id);
-    std::unordered_set<pud_mhcs_head_id> unlink_self_witnesses(const pud_node* node);
+    std::unordered_set<pud_mhcs_head_id> unlink_self_witnesses(pud_node_id node);
 
     pud_mhcs_head_id next_head_id_;
     
@@ -40,7 +41,7 @@ private:
 
     std::unordered_map<pud_mhcs_head_id, pud_candidate_justification> head_to_justification_;
     std::unordered_map<pud_mhws_head_id, pud_mhcs_head_id> witness_head_to_head_;
-    std::unordered_map<const pud_node*, std::unordered_set<pud_mhcs_head_id>> leaf_to_heads_;
+    std::unordered_map<pud_node_id, std::unordered_set<pud_mhcs_head_id>> leaf_to_heads_;
 };
 
 template<
@@ -102,7 +103,7 @@ template<
     typename Head,
     typename IMakeHead,
     typename IForkHead>
-std::vector<pud_mhcs_head_id> pud_mhcs<QH, Head, IMakeHead, IForkHead>::invalidate_leaf(const pud_node* node) {
+std::vector<pud_mhcs_head_id> pud_mhcs<QH, Head, IMakeHead, IForkHead>::invalidate_leaf(pud_node_id node) {
     auto head_ids = unlink_self_witnesses(node);
 
     std::vector<pud_mhcs_head_id> result;
@@ -239,7 +240,7 @@ template<
     typename Head,
     typename IMakeHead,
     typename IForkHead>
-std::unordered_set<pud_mhcs_head_id> pud_mhcs<QH, Head, IMakeHead, IForkHead>::unlink_self_witnesses(const pud_node* node) {
+std::unordered_set<pud_mhcs_head_id> pud_mhcs<QH, Head, IMakeHead, IForkHead>::unlink_self_witnesses(pud_node_id node) {
     auto extracted = leaf_to_heads_.extract(node);
 
     for (pud_mhcs_head_id head_id : extracted.mapped())
