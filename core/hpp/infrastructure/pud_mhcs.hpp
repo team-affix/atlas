@@ -243,6 +243,9 @@ template<
 std::unordered_set<pud_mhcs_head_id> pud_mhcs<QH, Head, IMakeHead, IForkHead>::unlink_self_witnesses(pud_node_id node) {
     auto extracted = leaf_to_heads_.extract(node);
 
+    if (extracted.empty())
+        return {};
+    
     for (pud_mhcs_head_id head_id : extracted.mapped())
         head_to_justification_.erase(head_id);
 

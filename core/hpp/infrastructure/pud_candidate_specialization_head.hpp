@@ -91,18 +91,18 @@ pud_candidate_specialization_head<QH, NI, ITAH, IAWSH, IFWSH, ICNL, IGC, IDESC>:
     descend_(other.descend_),
     node_path_truncated_(false) {
 
-    QH current_query_handle = specialization_root_handle;
+    current_handle_ = specialization_root_handle;
     
     // walk our frame stack using the new query handle
     for (const auto& node : other.node_path_) {
-        auto optional_new_query_handle = descend_.descend(current_query_handle, node);
+        auto optional_new_query_handle = descend_.descend(current_handle_, node);
 
         if (!optional_new_query_handle.has_value())
             break;
 
         node_path_.push_back(node);
 
-        current_query_handle = optional_new_query_handle.value();
+        current_handle_ = optional_new_query_handle.value();
     }
 
     if (node_path_.size() != other.node_path_.size()) {
@@ -127,7 +127,7 @@ pud_candidate_specialization_head<QH, NI, ITAH, IAWSH, IFWSH, ICNL, IGC, IDESC>:
         const witness& wn = other_witness_search_a.value();
         
         // step in direction of witness A
-        auto optional_search_root = descend_.descend(current_query_handle, wn.handle.node);
+        auto optional_search_root = descend_.descend(current_handle_, wn.handle.node);
 
         if (optional_search_root.has_value())
             forked_witness_a = fork_witness_search_head_.try_fork_head(wn.id, optional_search_root.value());
@@ -136,7 +136,7 @@ pud_candidate_specialization_head<QH, NI, ITAH, IAWSH, IFWSH, ICNL, IGC, IDESC>:
         const witness& wn = other_witness_search_b.value();
         
         // step in direction of witness B
-        auto optional_search_root = descend_.descend(current_query_handle, wn.handle.node);
+        auto optional_search_root = descend_.descend(current_handle_, wn.handle.node);
 
         if (optional_search_root.has_value())
             forked_witness_b = fork_witness_search_head_.try_fork_head(wn.id, optional_search_root.value());
@@ -198,7 +198,7 @@ std::optional<pud_candidate_resume_context<QH>> pud_candidate_specialization_hea
             };
         }
     
-        // from this point on, we are not a self-witness
+        // from this point on, we are not at a leaf node.
     
         if (!witness_scan_.has_value()) {
             const auto& children = get_children_.get(current_node);
@@ -270,8 +270,8 @@ pud_candidate_specialization_head<QH, NI, ITAH, IAWSH, IFWSH, ICNL, IGC, IDESC>:
     auto& next_witness_root = witness_scan_->next_witness_root_it;
     auto& end_witness_root = witness_scan_->end_witness_root_it;
 
-    for (; next_witness_root != end_witness_root; ++next_witness_root) {
-        QH search_root_handle = descend_.descend(current_handle_, next_witness_root->handle.node).value();
+    while (next_witness_root != end_witness_root) {
+        QH search_root_handle = descend_.descend(current_handle_, (next_witness_root++)->handle.node).value();
     
         auto optional_new_head_id = try_add_head_.try_add_head(search_root_handle);
         
@@ -295,14 +295,15 @@ void pud_candidate_specialization_head<QH, NI, ITAH, IAWSH, IFWSH, ICNL, IGC, ID
     // update our position
     node_path_.push_back(survivor.handle.node());
     current_handle_ = survivor.handle;
-    survivor.handle = ar->root_handle;
-    
     if (!ar.has_value()) {
         // we advanced onto a leaf. there are no children to initialize the
         //     witness scan with.
         witness_scan_ = std::nullopt;
         return;
     }
+
+    // update the survivor's handle to the new root
+    survivor.handle = ar->root_handle;
 
     // update our witness scan
     witness_scan_->next_witness_root_it = ar->root_next_sibling_it;
