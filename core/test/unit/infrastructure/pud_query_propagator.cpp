@@ -11,7 +11,9 @@
 #include "infrastructure/pud_descender.hpp"
 
 using ::testing::_;
+using ::testing::IsEmpty;
 using ::testing::NiceMock;
+using ::testing::Not;
 using ::testing::Return;
 
 namespace {
@@ -29,8 +31,20 @@ struct MockRefuted {
     MOCK_METHOD(bool, check_refuted, (pud_node_id));
 };
 
-struct MockMakeNode {
-    MOCK_METHOD(pud_node_id, make, (std::vector<pud_specialization>, std::vector<const expr*>, uint32_t));
+struct MockNextNodeId {
+    MOCK_METHOD(pud_node_id, next, ());
+};
+
+struct MockStoreAddedSpecializations {
+    MOCK_METHOD(void, store, (pud_node_id, (std::vector<pud_specialization>)));
+};
+
+struct MockStoreAddedBodyGoals {
+    MOCK_METHOD(void, store, (pud_node_id, (std::vector<const expr*>)));
+};
+
+struct MockStoreAddedVarCount {
+    MOCK_METHOD(void, store, (pud_node_id, uint32_t));
 };
 
 struct MockMakeVar {
@@ -127,7 +141,7 @@ using test_propagator_t = pud_descender<
     MockUnifier,
     MockSpecializer,
     MockNormalizer,
-    MockMakeNode,
+    MockNextNodeId,
     MockMakeVar,
     MockGlobalize,
     MockRefuted,
@@ -135,12 +149,15 @@ using test_propagator_t = pud_descender<
     MockGetAddedSpecializations,
     MockGetAddedBodyGoals,
     MockGetAddedVarCount,
-    MockGetAxiomHead>;
+    MockGetAxiomHead,
+    MockStoreAddedSpecializations,
+    MockStoreAddedBodyGoals,
+    MockStoreAddedVarCount>;
 
 } // namespace
 
 struct PudQueryPropagatorTest : public ::testing::Test {
-    NiceMock<MockMakeNode>  make_node;
+    NiceMock<MockNextNodeId>  next_node_id;
     NiceMock<MockMakeVar>   make_var;
     NiceMock<MockGlobalize> globalize;
     NiceMock<MockRefuted>   refuted;
@@ -153,9 +170,13 @@ struct PudQueryPropagatorTest : public ::testing::Test {
     MockGetAddedBodyGoals   get_body_goals;
     MockGetAddedVarCount    get_var_count;
     MockGetAxiomHead        get_axiom_head;
+    NiceMock<MockStoreAddedSpecializations> store_specs;
+    NiceMock<MockStoreAddedBodyGoals>       store_goals;
+    NiceMock<MockStoreAddedVarCount>        store_var_count;
     test_propagator_t propagator{
-        make_node, make_var, globalize, refuted, call_site,
-        get_specs, get_body_goals, get_var_count, get_axiom_head};
+        next_node_id, make_var, globalize, refuted, call_site,
+        get_specs, get_body_goals, get_var_count, get_axiom_head,
+        store_specs, store_goals, store_var_count};
     expr query_expr{expr::var{1}};
     expr goal_a{expr::var{2}};
     expr goal_b{expr::var{3}};
@@ -178,6 +199,7 @@ struct PudQueryPropagatorTest : public ::testing::Test {
         ON_CALL(refuted, check_refuted(_)).WillByDefault(Return(false));
         ON_CALL(spec_log, specialize(_, _, _)).WillByDefault(Return(SpecScript{}));
         ON_CALL(norm_log, normalize(_, _, _, _)).WillByDefault(Return(&norm_a));
+        ON_CALL(next_node_id, next()).WillByDefault(Return(made_id));
     }
 };
 
@@ -269,22 +291,18 @@ TEST_F(PudQueryPropagatorTest, OpenQueryHandleCanBePropagated) {
 }
 
 TEST_F(PudQueryPropagatorTest, CloseNeverPropagatedRootHasNoGoalsOrSpecs) {
-    EXPECT_CALL(make_node, make(_, _, 0u)).WillOnce([&](std::vector<pud_specialization> specs, std::vector<const expr*> goals, uint32_t) -> pud_node_id {
-        EXPECT_TRUE(specs.empty());
-        EXPECT_TRUE(goals.empty());
-        return made_id;
-    });
+    EXPECT_CALL(store_specs,     store(made_id, IsEmpty()));
+    EXPECT_CALL(store_goals,     store(made_id, IsEmpty()));
+    EXPECT_CALL(store_var_count, store(made_id, 0u));
     auto root = propagator.descent_root(g_dummy_root_id);
     propagator.close_query(root);
 }
 
 TEST_F(PudQueryPropagatorTest, CloseOpenQueryWithoutPropagateHasNoGoalsOrSpecs) {
     EXPECT_CALL(spec_log, specialize(_, _, _)).WillRepeatedly(Return(SpecScript{}));
-    EXPECT_CALL(make_node, make(_, _, 0u)).WillOnce([&](std::vector<pud_specialization> specs, std::vector<const expr*> goals, uint32_t) -> pud_node_id {
-        EXPECT_TRUE(specs.empty());
-        EXPECT_TRUE(goals.empty());
-        return made_id;
-    });
+    EXPECT_CALL(store_specs,     store(made_id, IsEmpty()));
+    EXPECT_CALL(store_goals,     store(made_id, IsEmpty()));
+    EXPECT_CALL(store_var_count, store(made_id, 0u));
     auto root = propagator.descent_root(g_dummy_root_id);
     auto query = propagator.open_query(root, &query_expr, g_dummy_root_id).value();
     propagator.close_query(query);
@@ -296,11 +314,8 @@ TEST_F(PudQueryPropagatorTest, CloseOneStepReceivesThatStepsGoalsAndReps) {
     get_specs.specs = {{.var_idx = 1, .value = &spec_value}};
     EXPECT_CALL(spec_log, specialize(0u, 1u, &spec_value)).WillOnce(Return(SpecScript{{3}, true}));
     EXPECT_CALL(norm_log, normalize(_, _, _, _)).WillRepeatedly(Return(&norm_a));
-    EXPECT_CALL(make_node, make(_, _, _)).WillOnce([&](std::vector<pud_specialization> specs, std::vector<const expr*> goals, uint32_t) -> pud_node_id {
-        EXPECT_FALSE(specs.empty());
-        EXPECT_FALSE(goals.empty());
-        return made_id;
-    });
+    EXPECT_CALL(store_specs,  store(made_id, Not(IsEmpty())));
+    EXPECT_CALL(store_goals,  store(made_id, Not(IsEmpty())));
     auto root = propagator.descent_root(g_dummy_root_id);
     auto at_step = propagator.descend(root, step);
     ASSERT_TRUE(at_step.has_value());
@@ -312,7 +327,7 @@ TEST_F(PudQueryPropagatorTest, CloseVarCountZeroWhenNothingIsNormalizedIntoANewV
     get_body_goals.goals = {&goal_a};
     get_specs.specs.clear();
     EXPECT_CALL(norm_log, normalize(_, _, _, _)).WillRepeatedly(Return(&norm_a));
-    EXPECT_CALL(make_node, make(_, _, 0u)).WillOnce(Return(made_id));
+    EXPECT_CALL(store_var_count, store(made_id, 0u));
     auto root = propagator.descent_root(g_dummy_root_id);
     auto at_step = propagator.descend(root, step);
     ASSERT_TRUE(at_step.has_value());

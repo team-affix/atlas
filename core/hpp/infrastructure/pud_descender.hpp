@@ -20,7 +20,7 @@ template<
     typename Unifier,
     typename Specializer,
     typename Normalizer,
-    typename IMakeNode,
+    typename INextNodeId,
     typename IMakeVar,
     typename IGlobalize,
     typename ICheckNodeRefuted,
@@ -28,10 +28,13 @@ template<
     typename IGetAddedSpecializations,
     typename IGetAddedBodyGoals,
     typename IGetAddedVarCount,
-    typename IGetAxiomHead>
+    typename IGetAxiomHead,
+    typename IStoreAddedSpecializations,
+    typename IStoreAddedBodyGoals,
+    typename IStoreAddedVarCount>
 struct pud_descender {
     pud_descender(
-        IMakeNode& make_node,
+        INextNodeId& next_node_id,
         IMakeVar& make_var,
         IGlobalize& globalize,
         ICheckNodeRefuted& check_node_refuted,
@@ -39,14 +42,17 @@ struct pud_descender {
         IGetAddedSpecializations& get_added_specializations,
         IGetAddedBodyGoals& get_added_body_goals,
         IGetAddedVarCount& get_added_var_count,
-        IGetAxiomHead& get_axiom_head);
+        IGetAxiomHead& get_axiom_head,
+        IStoreAddedSpecializations& store_added_specializations,
+        IStoreAddedBodyGoals& store_added_body_goals,
+        IStoreAddedVarCount& store_added_var_count);
 
     pud_descent descent_root(pud_node_id root_id);
     std::optional<pud_descent> descend(pud_descent current, pud_node_id child_node_id);
     std::optional<pud_descent> open_query(pud_descent caller, const expr* query_expr, pud_node_id root_id);
     pud_node_id close_query(pud_descent query);
 private:
-    IMakeNode& make_node_;
+    INextNodeId& next_node_id_;
     IMakeVar& make_var_;
     IGlobalize& globalize_;
     ICheckNodeRefuted& check_node_refuted_;
@@ -55,14 +61,18 @@ private:
     IGetAddedBodyGoals& get_added_body_goals_;
     IGetAddedVarCount& get_added_var_count_;
     IGetAxiomHead& get_axiom_head_;
+    IStoreAddedSpecializations& store_added_specializations_;
+    IStoreAddedBodyGoals& store_added_body_goals_;
+    IStoreAddedVarCount& store_added_var_count_;
 };
 
 template<typename BM, typename U, typename S, typename N,
-         typename IMN, typename IMV, typename IG, typename IGNR,
+         typename INNI, typename IMV, typename IG, typename IGNR,
          typename IGCS,
-         typename IGAS, typename IGABG, typename IGAVC, typename IGAH>
-pud_descender<BM, U, S, N, IMN, IMV, IG, IGNR, IGCS, IGAS, IGABG, IGAVC, IGAH>::pud_descender(
-    IMN& make_node,
+         typename IGAS, typename IGABG, typename IGAVC, typename IGAH,
+         typename ISAS, typename ISABG, typename ISAVC>
+pud_descender<BM, U, S, N, INNI, IMV, IG, IGNR, IGCS, IGAS, IGABG, IGAVC, IGAH, ISAS, ISABG, ISAVC>::pud_descender(
+    INNI& next_node_id,
     IMV& make_var,
     IG& globalize,
     IGNR& check_node_refuted,
@@ -70,8 +80,11 @@ pud_descender<BM, U, S, N, IMN, IMV, IG, IGNR, IGCS, IGAS, IGABG, IGAVC, IGAH>::
     IGAS& get_added_specializations,
     IGABG& get_added_body_goals,
     IGAVC& get_added_var_count,
-    IGAH& get_axiom_head)
-    : make_node_(make_node)
+    IGAH& get_axiom_head,
+    ISAS& store_added_specializations,
+    ISABG& store_added_body_goals,
+    ISAVC& store_added_var_count)
+    : next_node_id_(next_node_id)
     , make_var_(make_var)
     , globalize_(globalize)
     , check_node_refuted_(check_node_refuted)
@@ -79,14 +92,18 @@ pud_descender<BM, U, S, N, IMN, IMV, IG, IGNR, IGCS, IGAS, IGABG, IGAVC, IGAH>::
     , get_added_specializations_(get_added_specializations)
     , get_added_body_goals_(get_added_body_goals)
     , get_added_var_count_(get_added_var_count)
-    , get_axiom_head_(get_axiom_head) {}
+    , get_axiom_head_(get_axiom_head)
+    , store_added_specializations_(store_added_specializations)
+    , store_added_body_goals_(store_added_body_goals)
+    , store_added_var_count_(store_added_var_count) {}
 
 template<typename BM, typename U, typename S, typename N,
-         typename IMN, typename IMV, typename IG, typename IGNR,
+         typename INNI, typename IMV, typename IG, typename IGNR,
          typename IGCS,
-         typename IGAS, typename IGABG, typename IGAVC, typename IGAH>
+         typename IGAS, typename IGABG, typename IGAVC, typename IGAH,
+         typename ISAS, typename ISABG, typename ISAVC>
 pud_descent
-pud_descender<BM, U, S, N, IMN, IMV, IG, IGNR, IGCS, IGAS, IGABG, IGAVC, IGAH>::descent_root(
+pud_descender<BM, U, S, N, INNI, IMV, IG, IGNR, IGCS, IGAS, IGABG, IGAVC, IGAH, ISAS, ISABG, ISAVC>::descent_root(
     pud_node_id root_id) {
     const uint32_t root_var_count = get_added_var_count_.get(root_id);
     auto body_goals_transient = immer::map<body_goal_id, const expr*>{}.transient();
@@ -105,11 +122,12 @@ pud_descender<BM, U, S, N, IMN, IMV, IG, IGNR, IGCS, IGAS, IGABG, IGAVC, IGAH>::
 }
 
 template<typename BM, typename U, typename S, typename N,
-         typename IMN, typename IMV, typename IG, typename IGNR,
+         typename INNI, typename IMV, typename IG, typename IGNR,
          typename IGCS,
-         typename IGAS, typename IGABG, typename IGAVC, typename IGAH>
+         typename IGAS, typename IGABG, typename IGAVC, typename IGAH,
+         typename ISAS, typename ISABG, typename ISAVC>
 std::optional<pud_descent>
-pud_descender<BM, U, S, N, IMN, IMV, IG, IGNR, IGCS, IGAS, IGABG, IGAVC, IGAH>::descend(
+pud_descender<BM, U, S, N, INNI, IMV, IG, IGNR, IGCS, IGAS, IGABG, IGAVC, IGAH, ISAS, ISABG, ISAVC>::descend(
     pud_descent current, pud_node_id child_node_id) {
 
     if (check_node_refuted_.check_refuted(child_node_id))
@@ -147,11 +165,12 @@ pud_descender<BM, U, S, N, IMN, IMV, IG, IGNR, IGCS, IGAS, IGABG, IGAVC, IGAH>::
 }
 
 template<typename BM, typename U, typename S, typename N,
-         typename IMN, typename IMV, typename IG, typename IGNR,
+         typename INNI, typename IMV, typename IG, typename IGNR,
          typename IGCS,
-         typename IGAS, typename IGABG, typename IGAVC, typename IGAH>
+         typename IGAS, typename IGABG, typename IGAVC, typename IGAH,
+         typename ISAS, typename ISABG, typename ISAVC>
 std::optional<pud_descent>
-pud_descender<BM, U, S, N, IMN, IMV, IG, IGNR, IGCS, IGAS, IGABG, IGAVC, IGAH>::open_query(
+pud_descender<BM, U, S, N, INNI, IMV, IG, IGNR, IGCS, IGAS, IGABG, IGAVC, IGAH, ISAS, ISABG, ISAVC>::open_query(
     pud_descent caller, const expr* query_expr, pud_node_id root_id) {
 
     const uint32_t query_frame_offset = caller.frame_offset + caller.lvc;
@@ -197,11 +216,12 @@ pud_descender<BM, U, S, N, IMN, IMV, IG, IGNR, IGCS, IGAS, IGABG, IGAVC, IGAH>::
 }
 
 template<typename BM, typename U, typename S, typename N,
-         typename IMN, typename IMV, typename IG, typename IGNR,
+         typename INNI, typename IMV, typename IG, typename IGNR,
          typename IGCS,
-         typename IGAS, typename IGABG, typename IGAVC, typename IGAH>
+         typename IGAS, typename IGABG, typename IGAVC, typename IGAH,
+         typename ISAS, typename ISABG, typename ISAVC>
 pud_node_id
-pud_descender<BM, U, S, N, IMN, IMV, IG, IGNR, IGCS, IGAS, IGABG, IGAVC, IGAH>::close_query(
+pud_descender<BM, U, S, N, INNI, IMV, IG, IGNR, IGCS, IGAS, IGABG, IGAVC, IGAH, ISAS, ISABG, ISAVC>::close_query(
     pud_descent current) {
 
     auto transient = current.bindings.transient();
@@ -227,12 +247,13 @@ pud_descender<BM, U, S, N, IMN, IMV, IG, IGNR, IGCS, IGAS, IGABG, IGAVC, IGAH>::
     }
 
     const uint32_t added_var_count = static_cast<uint32_t>(translation_map.size());
+    const pud_node_id node_id = next_node_id_.next();
 
-    return make_node_.make(
-        added_specializations,
-        added_body_goals,
-        added_var_count
-    );
+    store_added_specializations_.store(node_id, std::move(added_specializations));
+    store_added_body_goals_.store(node_id, std::move(added_body_goals));
+    store_added_var_count_.store(node_id, added_var_count);
+
+    return node_id;
 }
 
 #endif

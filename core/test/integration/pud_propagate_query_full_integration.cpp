@@ -23,33 +23,6 @@
 #include "infrastructure/unifier.hpp"
 #include "value_objects/pud_descent.hpp"
 
-namespace {
-
-struct test_make_node {
-    test_make_node(pud_node_id_sequencer& seq,
-                   pud_node_added_specializations& specs,
-                   pud_node_added_body_goals& goals,
-                   pud_node_added_var_count& var_counts)
-        : seq_(seq), specs_(specs), goals_(goals), var_counts_(var_counts) {}
-
-    pud_node_id make(std::vector<pud_specialization> specs,
-                     std::vector<const expr*> goals,
-                     uint32_t var_count) {
-        const pud_node_id id = seq_.next();
-        specs_.store(id, std::move(specs));
-        goals_.store(id, std::move(goals));
-        var_counts_.store(id, var_count);
-        return id;
-    }
-private:
-    pud_node_id_sequencer&          seq_;
-    pud_node_added_specializations& specs_;
-    pud_node_added_body_goals&      goals_;
-    pud_node_added_var_count&       var_counts_;
-};
-
-} // namespace
-
 struct PudPropagateQueryFullIntegrationTest : public ::testing::Test {
     using bind_map_t    = hierarchical_bind_map<globalizer, immer::map<uint32_t, framed_expr>::transient_type>;
     using unifier_t     = unifier<globalizer, bind_map_t>;
@@ -60,7 +33,7 @@ struct PudPropagateQueryFullIntegrationTest : public ::testing::Test {
         unifier_t,
         specializer_t,
         normalizer_t,
-        test_make_node,
+        pud_node_id_sequencer,
         expr_pool,
         globalizer,
         pud_refuted_nodes,
@@ -68,7 +41,10 @@ struct PudPropagateQueryFullIntegrationTest : public ::testing::Test {
         pud_node_added_specializations,
         pud_node_added_body_goals,
         pud_node_added_var_count,
-        pud_node_heads>;
+        pud_node_heads,
+        pud_node_added_specializations,
+        pud_node_added_body_goals,
+        pud_node_added_var_count>;
     using handle = pud_descent;
 
     test_functors                  functors;
@@ -81,14 +57,14 @@ struct PudPropagateQueryFullIntegrationTest : public ::testing::Test {
     pud_node_heads                 node_heads_;
     pud_refuted_nodes              refuted;
     pud_call_sites                 call_sites;
-    test_make_node                 node_factory_{sequencer_, node_specs_, node_goals_, node_var_counts_};
     std::unordered_set<pud_node_id> call_site_registered_;
     pud_node_id                    anchor_id_;
     propagator_t                   propagator;
 
     PudPropagateQueryFullIntegrationTest()
-        : propagator(node_factory_, exprs, globalize, refuted, call_sites,
-                     node_specs_, node_goals_, node_var_counts_, node_heads_) {
+        : propagator(sequencer_, exprs, globalize, refuted, call_sites,
+                     node_specs_, node_goals_, node_var_counts_, node_heads_,
+                     node_specs_, node_goals_, node_var_counts_) {
         anchor_id_ = sequencer_.next();
         // Anchor needs var_count=2 so that query_frame_offset=2 when open_query
         // is called from descent_root(anchor_id_). With frame_offset=0 and lvc=2,

@@ -12,6 +12,9 @@
 #include "infrastructure/pud_specializer.hpp"
 
 using ::testing::_;
+using ::testing::ElementsAre;
+using ::testing::Field;
+using ::testing::IsEmpty;
 using ::testing::NiceMock;
 using ::testing::Return;
 using ::testing::ReturnRef;
@@ -32,8 +35,20 @@ struct MockRefuted {
     MOCK_METHOD(bool, check_refuted, (pud_node_id));
 };
 
-struct MockMakeNode {
-    MOCK_METHOD(pud_node_id, make, (std::vector<pud_specialization>, std::vector<const expr*>, uint32_t));
+struct MockNextNodeId {
+    MOCK_METHOD(pud_node_id, next, ());
+};
+
+struct MockStoreAddedSpecializations {
+    MOCK_METHOD(void, store, (pud_node_id, (std::vector<pud_specialization>)));
+};
+
+struct MockStoreAddedBodyGoals {
+    MOCK_METHOD(void, store, (pud_node_id, (std::vector<const expr*>)));
+};
+
+struct MockStoreAddedVarCount {
+    MOCK_METHOD(void, store, (pud_node_id, uint32_t));
 };
 
 struct MockMakeVar {
@@ -96,7 +111,7 @@ using propagator_t = pud_descender<
     MockUnifier,
     pud_specializer<MockMakeVar, MockUnifier>,
     MockNormalizer,
-    MockMakeNode,
+    MockNextNodeId,
     MockMakeVar,
     MockGlobalize,
     MockRefuted,
@@ -104,12 +119,15 @@ using propagator_t = pud_descender<
     MockGetAddedSpecializations,
     MockGetAddedBodyGoals,
     MockGetAddedVarCount,
-    MockGetAxiomHead>;
+    MockGetAxiomHead,
+    MockStoreAddedSpecializations,
+    MockStoreAddedBodyGoals,
+    MockStoreAddedVarCount>;
 
 } // namespace
 
 struct PudPropagateSpecializeIntegrationTest : public ::testing::Test {
-    NiceMock<MockMakeNode>              make_node;
+    NiceMock<MockNextNodeId>            next_node_id;
     NiceMock<MockMakeVar>               make_var;
     NiceMock<MockGlobalize>             globalize;
     NiceMock<MockRefuted>               refuted;
@@ -119,9 +137,13 @@ struct PudPropagateSpecializeIntegrationTest : public ::testing::Test {
     NiceMock<MockGetAddedBodyGoals>     get_added_body_goals;
     NiceMock<MockGetAddedVarCount>      get_added_var_count;
     NiceMock<MockGetAxiomHead>          get_axiom_head;
+    NiceMock<MockStoreAddedSpecializations> store_specs;
+    NiceMock<MockStoreAddedBodyGoals>       store_goals;
+    NiceMock<MockStoreAddedVarCount>        store_var_count;
 
-    propagator_t propagator{make_node, make_var, globalize, refuted, call_site,
-                             get_added_specs, get_added_body_goals, get_added_var_count, get_axiom_head};
+    propagator_t propagator{next_node_id, make_var, globalize, refuted, call_site,
+                             get_added_specs, get_added_body_goals, get_added_var_count, get_axiom_head,
+                             store_specs, store_goals, store_var_count};
 
     expr var_expr{expr::var{0}};
     expr spec_value{expr::var{3}};
@@ -142,7 +164,7 @@ struct PudPropagateSpecializeIntegrationTest : public ::testing::Test {
         MockUnifier::log = &unify_log;
         ON_CALL(refuted,              check_refuted(_)).WillByDefault(Return(false));
         ON_CALL(make_var,             make_var(_)).WillByDefault(Return(&var_expr));
-        ON_CALL(make_node,            make(_, _, _)).WillByDefault(Return(made_id));
+        ON_CALL(next_node_id,         next()).WillByDefault(Return(made_id));
         ON_CALL(get_added_var_count,  get(_)).WillByDefault(Return(0u));
         ON_CALL(get_added_specs,      get(_)).WillByDefault(ReturnRef(empty_spec_vec));
         ON_CALL(get_added_body_goals, get(_)).WillByDefault(ReturnRef(empty_goal_vec));
@@ -159,13 +181,8 @@ TEST_F(PudPropagateSpecializeIntegrationTest, RepAtTheFrameOffsetIsNotATouchedCa
     auto root     = propagator.descent_root(g_spec_dummy_root_id);
     auto at_child = propagator.descend(root, child_id);
     ASSERT_TRUE(at_child.has_value());
-    EXPECT_CALL(make_node, make(_, _, _)).WillOnce([&](std::vector<pud_specialization> specs,
-                                                        std::vector<const expr*> goals,
-                                                        uint32_t) {
-        EXPECT_TRUE(specs.empty());
-        EXPECT_TRUE(goals.empty());
-        return made_id;
-    });
+    EXPECT_CALL(store_specs, store(made_id, IsEmpty()));
+    EXPECT_CALL(store_goals, store(made_id, IsEmpty()));
     propagator.close_query(*at_child);
 }
 
@@ -177,14 +194,9 @@ TEST_F(PudPropagateSpecializeIntegrationTest, UnifyFailureIsNotEntered) {
 }
 
 TEST_F(PudPropagateSpecializeIntegrationTest, CloseOfNeverPropagatedHandleHasNoBodyGoals) {
-    EXPECT_CALL(make_node, make(_, _, _)).WillOnce([&](std::vector<pud_specialization> specs,
-                                                        std::vector<const expr*> goals,
-                                                        uint32_t vars) {
-        EXPECT_TRUE(specs.empty());
-        EXPECT_TRUE(goals.empty());
-        EXPECT_EQ(vars, 0u);
-        return made_id;
-    });
+    EXPECT_CALL(store_specs,     store(made_id, IsEmpty()));
+    EXPECT_CALL(store_goals,     store(made_id, IsEmpty()));
+    EXPECT_CALL(store_var_count, store(made_id, 0u));
     EXPECT_EQ(propagator.close_query(propagator.descent_root(g_spec_dummy_root_id)), made_id);
 }
 
@@ -203,13 +215,7 @@ TEST_F(PudPropagateSpecializeIntegrationTest, RepBelowTheOffsetIsTheChildsTouche
     auto opened       = propagator.open_query(*at_live, &spec_value, g_spec_dummy_root_id).value();
     auto at_child     = propagator.descend(opened, child_id);
     ASSERT_TRUE(at_child.has_value());
-    EXPECT_CALL(make_node, make(_, _, _)).WillOnce([&](std::vector<pud_specialization> specs,
-                                                        std::vector<const expr*>,
-                                                        uint32_t) {
-        EXPECT_EQ(specs.size(), 1u);
-        if (!specs.empty())
-            EXPECT_EQ(specs[0].var_idx, 3u);
-        return made_id;
-    });
+    EXPECT_CALL(store_specs, store(made_id,
+        ElementsAre(Field(&pud_specialization::var_idx, 3u))));
     propagator.close_query(*at_child);
 }
