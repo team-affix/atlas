@@ -103,7 +103,7 @@ TEST_F(PudMhwsTest, AdvanceWithResultLeavesHeadLinked) {
     auto id = mhws.try_add_head(1);
     ASSERT_TRUE(id.has_value());
 
-    pud_witness_advance_result<int, int> peel{.root_handle = 2, .root_next_sibling_it = 0, .root_end_sibling_it = 0};
+    pud_witness_advance_result<int, int> peel{.root_descent = 2, .root_next_sibling_it = 0, .root_end_sibling_it = 0};
     EXPECT_CALL(ops, advance()).WillOnce(Return(std::optional<pud_witness_advance_result<int, int>>{peel}));
     auto result = mhws.advance_head(*id);
     ASSERT_TRUE(result.has_value());

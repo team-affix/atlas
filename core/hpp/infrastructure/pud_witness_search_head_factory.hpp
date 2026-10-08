@@ -5,66 +5,66 @@
 #include "infrastructure/pud_witness_search_head.hpp"
 
 template<
-    typename QueryHandle,
+    typename Descent,
     typename NodeIterator,
     typename ICheckNodeLeaf,
     typename IGetNodeChildren,
-    typename IDescendQueryNodeHandle,
+    typename IDescend,
     typename IGetCallSiteIdx>
 struct pud_witness_search_head_factory {
     using head_type = pud_witness_search_head<
-        QueryHandle,
+        Descent,
         NodeIterator,
         ICheckNodeLeaf,
         IGetNodeChildren,
-        IDescendQueryNodeHandle,
+        IDescend,
         IGetCallSiteIdx>;
 
     pud_witness_search_head_factory(
         ICheckNodeLeaf& check_node_leaf,
         IGetNodeChildren& get_node_children,
-        IDescendQueryNodeHandle& descend_query_node_handle,
+        IDescend& descend,
         IGetCallSiteIdx& get_call_site_idx);
-    head_type make(QueryHandle search_root_handle) const;
+    head_type make(Descent search_root_descent) const;
 private:
     ICheckNodeLeaf& check_node_leaf_;
     IGetNodeChildren& get_node_children_;
-    IDescendQueryNodeHandle& descend_query_node_handle_;
+    IDescend& descend_;
     IGetCallSiteIdx& get_call_site_idx_;
 };
 
 template<
-    typename QH,
+    typename D,
     typename NI,
     typename ICNL,
     typename IGNC,
-    typename IDQN,
+    typename IDESC,
     typename IGCSI>
-pud_witness_search_head_factory<QH, NI, ICNL, IGNC, IDQN, IGCSI>::pud_witness_search_head_factory(
+pud_witness_search_head_factory<D, NI, ICNL, IGNC, IDESC, IGCSI>::pud_witness_search_head_factory(
     ICNL& check_node_leaf,
     IGNC& get_node_children,
-    IDQN& descend_query_node_handle,
+    IDESC& descend,
     IGCSI& get_call_site_idx)
     : check_node_leaf_(check_node_leaf)
     , get_node_children_(get_node_children)
-    , descend_query_node_handle_(descend_query_node_handle)
+    , descend_(descend)
     , get_call_site_idx_(get_call_site_idx) {}
 
 template<
-    typename QH,
+    typename D,
     typename NI,
     typename ICNL,
     typename IGNC,
-    typename IDQN,
+    typename IDESC,
     typename IGCSI>
-typename pud_witness_search_head_factory<QH, NI, ICNL, IGNC, IDQN, IGCSI>::head_type
-pud_witness_search_head_factory<QH, NI, ICNL, IGNC, IDQN, IGCSI>::make(QH search_root_handle) const {
+typename pud_witness_search_head_factory<D, NI, ICNL, IGNC, IDESC, IGCSI>::head_type
+pud_witness_search_head_factory<D, NI, ICNL, IGNC, IDESC, IGCSI>::make(D search_root_descent) const {
     return head_type{
         check_node_leaf_,
         get_node_children_,
-        descend_query_node_handle_,
+        descend_,
         get_call_site_idx_,
-        std::move(search_root_handle)};
+        std::move(search_root_descent)};
 }
 
 #endif

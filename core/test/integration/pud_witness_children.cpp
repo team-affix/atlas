@@ -11,10 +11,9 @@ using ::testing::Return;
 
 using child_iter = std::vector<pud_node_id>::const_iterator;
 
-struct handle_t {
-    pud_node_id node_id;
-    pud_node_id node() const { return node_id; }
-    bool operator==(const handle_t&) const = default;
+struct descent_t {
+    pud_node_id node;
+    bool operator==(const descent_t&) const = default;
 };
 
 struct MockCheckLeaf {
@@ -22,7 +21,7 @@ struct MockCheckLeaf {
 };
 
 struct MockDescend {
-    MOCK_METHOD(std::optional<handle_t>, descend, (handle_t, pud_node_id));
+    MOCK_METHOD(std::optional<descent_t>, descend, (descent_t, pud_node_id));
 };
 
 struct MockCallSite {
@@ -30,7 +29,7 @@ struct MockCallSite {
 };
 
 using test_head_t = pud_witness_search_head<
-    handle_t, child_iter, MockCheckLeaf, pud_children, MockDescend, MockCallSite>;
+    descent_t, child_iter, MockCheckLeaf, pud_children, MockDescend, MockCallSite>;
 
 struct PudWitnessChildrenIntegrationTest : public ::testing::Test {
     NiceMock<MockCheckLeaf> leaves;
@@ -51,13 +50,13 @@ struct PudWitnessChildrenIntegrationTest : public ::testing::Test {
     test_head_t make_head(pud_node_id node) {
         return test_head_t{
             leaves, children, descend, call_sites,
-            handle_t{node}};
+            descent_t{node}};
     }
 
     void SetUp() override {
         ON_CALL(leaves, check_leaf(_)).WillByDefault(Return(false));
-        ON_CALL(descend, descend(_, _)).WillByDefault([](handle_t, pud_node_id child) {
-            return std::optional<handle_t>{handle_t{child}};
+        ON_CALL(descend, descend(_, _)).WillByDefault([](descent_t, pud_node_id child) {
+            return std::optional<descent_t>{descent_t{child}};
         });
     }
 };
@@ -71,7 +70,7 @@ TEST_F(PudWitnessChildrenIntegrationTest, DescendedChildStaysAfterOtherNodesAreS
     children.store(extra, {depth1});
     auto result = head.advance();
     ASSERT_TRUE(result.has_value());
-    EXPECT_EQ(result->root_handle.node(), left);
+    EXPECT_EQ(result->root_descent.node, left);
     EXPECT_NE(result->root_next_sibling_it, result->root_end_sibling_it);
     EXPECT_EQ(*result->root_next_sibling_it, right);
 }
@@ -92,10 +91,10 @@ TEST_F(PudWitnessChildrenIntegrationTest, DeadSubtreeReturnsParentsNextChildNotT
     EXPECT_CALL(leaves, check_leaf(left_dead)).WillRepeatedly(Return(false));
     EXPECT_CALL(leaves, check_leaf(left_leaf)).WillRepeatedly(Return(true));
     EXPECT_CALL(leaves, check_leaf(right)).WillRepeatedly(Return(true));
-    EXPECT_CALL(descend, descend(_, left)).WillOnce(Return(std::optional<handle_t>{handle_t{left}}));
-    EXPECT_CALL(descend, descend(_, left_dead)).WillOnce(Return(std::optional<handle_t>{handle_t{left_dead}}));
+    EXPECT_CALL(descend, descend(_, left)).WillOnce(Return(std::optional<descent_t>{descent_t{left}}));
+    EXPECT_CALL(descend, descend(_, left_dead)).WillOnce(Return(std::optional<descent_t>{descent_t{left_dead}}));
     EXPECT_CALL(descend, descend(_, dead_child)).WillRepeatedly(Return(std::nullopt));
-    EXPECT_CALL(descend, descend(_, left_leaf)).WillOnce(Return(std::optional<handle_t>{handle_t{left_leaf}}));
+    EXPECT_CALL(descend, descend(_, left_leaf)).WillOnce(Return(std::optional<descent_t>{descent_t{left_leaf}}));
     auto head = make_head(root);
     auto found = head.resume();
     ASSERT_TRUE(found.has_value());

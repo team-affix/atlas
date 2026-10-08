@@ -4,40 +4,40 @@
 #include "infrastructure/pud_candidate_specialization_head.hpp"
 
 template<
-    typename QueryHandle,
+    typename Descent,
     typename ChildIterator,
     typename ITryAddHead,
     typename IAdvanceWitnessSearchHead,
     typename IForkWitnessSearchHead,
     typename ICheckNodeLeaf,
     typename IGetChildren,
-    typename IPropagateQueryHandle>
+    typename IPropagateDescent>
 struct pud_candidate_specialization_head_forker {
     using head_type = pud_candidate_specialization_head<
-        QueryHandle,
+        Descent,
         ChildIterator,
         ITryAddHead,
         IAdvanceWitnessSearchHead,
         IForkWitnessSearchHead,
         ICheckNodeLeaf,
         IGetChildren,
-        IPropagateQueryHandle>;
+        IPropagateDescent>;
 
-    head_type fork(const head_type& other, QueryHandle search_root_handle) const;
+    head_type fork(const head_type& other, Descent search_root_descent) const;
 };
 
 template<
-    typename QH,
+    typename D,
     typename CI,
     typename ITAH,
     typename IAWSH,
     typename IFWSH,
     typename ICNL,
     typename IGC,
-    typename IPQH>
-typename pud_candidate_specialization_head_forker<QH, CI, ITAH, IAWSH, IFWSH, ICNL, IGC, IPQH>::head_type
-pud_candidate_specialization_head_forker<QH, CI, ITAH, IAWSH, IFWSH, ICNL, IGC, IPQH>::fork(const head_type& other, QH search_root_handle) const {
-    return head_type{other, search_root_handle};
+    typename IDESC>
+typename pud_candidate_specialization_head_forker<D, CI, ITAH, IAWSH, IFWSH, ICNL, IGC, IDESC>::head_type
+pud_candidate_specialization_head_forker<D, CI, ITAH, IAWSH, IFWSH, ICNL, IGC, IDESC>::fork(const head_type& other, D search_root_descent) const {
+    return head_type{other, search_root_descent};
 }
 
 #endif

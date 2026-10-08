@@ -73,8 +73,8 @@ struct PudMhcsSearchIntegrationTest : public ::testing::Test {
         ON_CALL(children, get(_)).WillByDefault([&](const pud_node* node) -> const std::vector<const pud_node*>& {
             return sequences.at(node);
         });
-        ON_CALL(propagate, propagate(_, _)).WillByDefault([](int handle, const pud_node*) {
-            return std::optional<int>{handle + 1};
+        ON_CALL(propagate, propagate(_, _)).WillByDefault([](int descent, const pud_node*) {
+            return std::optional<int>{descent + 1};
         });
     }
 };

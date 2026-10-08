@@ -43,12 +43,12 @@ struct PudMhcsTest : public ::testing::Test {
 
     pud_candidate_resume_context<int> self_of(pud_node_id node) {
         return {.justification = pud_candidate_self_witness{.node = node},
-                .query_handle  = 7};
+                .descent  = 7};
     }
 
     pud_candidate_resume_context<int> choice_of(pud_mhws_head_id wa, pud_mhws_head_id wb) {
         return {.justification = pud_candidate_choice_point{.witness_a = wa, .witness_b = wb},
-                .query_handle  = 7};
+                .descent  = 7};
     }
 
     void SetUp() override {

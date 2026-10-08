@@ -193,7 +193,7 @@ TEST_F(PudPropagateSpecializeIntegrationTest, UnifyFailureIsNotEntered) {
     EXPECT_FALSE(propagator.descend(root, child_id).has_value());
 }
 
-TEST_F(PudPropagateSpecializeIntegrationTest, CloseOfNeverPropagatedHandleHasNoBodyGoals) {
+TEST_F(PudPropagateSpecializeIntegrationTest, CloseOfNeverPropagatedDescentHasNoBodyGoals) {
     EXPECT_CALL(store_specs,     store(made_id, IsEmpty()));
     EXPECT_CALL(store_goals,     store(made_id, IsEmpty()));
     EXPECT_CALL(store_var_count, store(made_id, 0u));

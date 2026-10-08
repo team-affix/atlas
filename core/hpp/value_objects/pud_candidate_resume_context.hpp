@@ -3,10 +3,10 @@
 
 #include "value_objects/pud_candidate_justification.hpp"
 
-template<typename QueryHandle>
+template<typename Descent>
 struct pud_candidate_resume_context {
     pud_candidate_justification justification;
-    QueryHandle query_handle;
+    Descent descent;
 };
 
 #endif

@@ -282,7 +282,7 @@ TEST_F(PudQueryPropagatorTest, OpenQueryAfterPropagateUsesCallerFramePlusLiveVar
     propagator.open_query(*at_child, &query_expr, g_dummy_root_id);
 }
 
-TEST_F(PudQueryPropagatorTest, OpenQueryHandleCanBePropagated) {
+TEST_F(PudQueryPropagatorTest, OpenQueryDescentCanBePropagated) {
     pud_node_id child = 5;
     EXPECT_CALL(spec_log, specialize(_, 1u, &g_dummy_head)).WillOnce(Return(SpecScript{}));
     auto root = propagator.descent_root(g_dummy_root_id);

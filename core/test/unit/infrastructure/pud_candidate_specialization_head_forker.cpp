@@ -59,7 +59,7 @@ TEST_F(PudCandidateSpecializationHeadForkerTest, ForkThatCannotFollowHasNoJustif
     EXPECT_FALSE(forked.resume().has_value());
 }
 
-TEST_F(PudCandidateSpecializationHeadForkerTest, ForkOfLeafIsSelfWitnessUnderNewHandle) {
+TEST_F(PudCandidateSpecializationHeadForkerTest, ForkOfLeafIsSelfWitnessUnderNewDescent) {
     EXPECT_CALL(leaves, check_leaf(&root)).WillRepeatedly(Return(true));
     auto head = make_head();
     EXPECT_CALL(propagate, propagate(50, &root)).WillOnce(Return(60));
@@ -69,6 +69,6 @@ TEST_F(PudCandidateSpecializationHeadForkerTest, ForkOfLeafIsSelfWitnessUnderNew
     auto* self = std::get_if<pud_candidate_self_witness>(&found->justification);
     ASSERT_NE(self, nullptr);
     EXPECT_EQ(self->node, &root);
-    EXPECT_EQ(found->query_handle, 60);
+    EXPECT_EQ(found->descent, 60);
 }
 #endif

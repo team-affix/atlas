@@ -45,7 +45,7 @@ struct PudPropagateQueryFullIntegrationTest : public ::testing::Test {
         pud_node_added_specializations,
         pud_node_added_body_goals,
         pud_node_added_var_count>;
-    using handle = pud_descent;
+    using descent_t = pud_descent;
 
     test_functors                  functors;
     expr_pool                      exprs;
@@ -398,7 +398,7 @@ TEST_F(PudPropagateQueryFullIntegrationTest, IndependentRootsHaveIsolatedWalks) 
     link(l1,    left);
     link(l2,    l1);
     link(right, anchor_id_);
-    handle root = propagator.descent_root(anchor_id_);
+    descent_t root = propagator.descent_root(anchor_id_);
     auto at_l = propagator.descend(root, left);
     ASSERT_TRUE(at_l.has_value());
     auto at_l1 = propagator.descend(*at_l, l1);
@@ -764,7 +764,7 @@ TEST_F(PudPropagateQueryFullIntegrationTest, WalkDoesNotInheritCousinBranchBindi
     link(a1, a);
     link(b,  anchor_id_);
     link(b1, b);
-    handle root = propagator.descent_root(anchor_id_);
+    descent_t root = propagator.descent_root(anchor_id_);
     auto at_a = propagator.descend(root, a);
     ASSERT_TRUE(at_a.has_value());
     ASSERT_TRUE(propagator.descend(*at_a, a1).has_value());
@@ -876,7 +876,7 @@ TEST_F(PudPropagateQueryFullIntegrationTest, TwoWalksFromSameNodeCloseToTheirOwn
     link(a1,  a);
     link(a1a, a1);
     link(a2,  a);
-    handle root = propagator.descent_root(anchor_id_);
+    descent_t root = propagator.descent_root(anchor_id_);
     auto at_a = propagator.descend(root, a);
     ASSERT_TRUE(at_a.has_value());
     auto at_a1 = propagator.descend(*at_a, a1);
@@ -979,7 +979,7 @@ TEST_F(PudPropagateQueryFullIntegrationTest, SiblingClosesHaveIndependentGoalCou
     link(left,   anchor_id_);
     link(right,  anchor_id_);
     link(middle, anchor_id_);
-    handle root = propagator.descent_root(anchor_id_);
+    descent_t root = propagator.descent_root(anchor_id_);
     auto at_l = propagator.descend(root, left);
     auto at_r = propagator.descend(root, right);
     auto at_m = propagator.descend(root, middle);
@@ -998,14 +998,14 @@ TEST_F(PudPropagateQueryFullIntegrationTest, SiblingClosesHaveIndependentGoalCou
     EXPECT_TRUE(node_goals_.get(closed_m).empty());
 }
 
-TEST_F(PudPropagateQueryFullIntegrationTest, TwoHandlesFromRootCloseIndependently) {
+TEST_F(PudPropagateQueryFullIntegrationTest, TwoDescentsFromRootCloseIndependently) {
     const expr* goal_l = func("goal-l", {});
     const expr* goal_r = func("goal-r", {});
     const pud_node_id left  = make_node({}, {goal_l}, 0);
     const pud_node_id right = make_node({}, {goal_r}, 0);
     link(left,  anchor_id_);
     link(right, anchor_id_);
-    handle root = propagator.descent_root(anchor_id_);
+    descent_t root = propagator.descent_root(anchor_id_);
     auto at_l = propagator.descend(root, left);
     auto at_r = propagator.descend(root, right);
     ASSERT_TRUE(at_l.has_value());
@@ -1131,7 +1131,7 @@ TEST_F(PudPropagateQueryFullIntegrationTest, TwoQueriesFromRootWalkIndependently
     link(l1,    left);
     link(right, anchor_id_);
     link(r1,    right);
-    handle root = propagator.descent_root(anchor_id_);
+    descent_t root = propagator.descent_root(anchor_id_);
     auto query_l = propagator.open_query(root, var(0), anchor_id_).value();
     auto query_r = propagator.open_query(root, var(0), anchor_id_).value();
     auto at_l = propagator.descend(query_l, left);
@@ -1195,7 +1195,7 @@ TEST_F(PudPropagateQueryFullIntegrationTest, SubsequentQueryDoesNotInheritPriorQ
     const pud_node_id right = make_node({binds(0, g)}, {}, 0);
     link(left,  anchor_id_);
     link(right, anchor_id_);
-    handle root = propagator.descent_root(anchor_id_);
+    descent_t root = propagator.descent_root(anchor_id_);
     auto first = propagator.open_query(root, f, anchor_id_).value();
     ASSERT_TRUE(propagator.descend(first, left).has_value());
     auto second = propagator.open_query(root, g, anchor_id_).value();
@@ -1262,7 +1262,7 @@ TEST_F(PudPropagateQueryFullIntegrationTest, ForkedWalksFromOpenQueryCloseToThei
     link(left,  anchor_id_);
     link(l1,    left);
     link(right, anchor_id_);
-    handle root = propagator.descent_root(anchor_id_);
+    descent_t root = propagator.descent_root(anchor_id_);
     auto opened = propagator.open_query(root, func("q", {}), anchor_id_).value();
     auto at_l = propagator.descend(opened, left);
     ASSERT_TRUE(at_l.has_value());
@@ -1326,7 +1326,7 @@ TEST_F(PudPropagateQueryFullIntegrationTest, SiblingWalksEraseGoalsIndependently
     with_call_site(parent_node, 0);
     link(left_child,   parent_node);
     link(right_child,  parent_node);
-    handle root = propagator.descent_root(anchor_id_);
+    descent_t root = propagator.descent_root(anchor_id_);
     auto at_parent_l = propagator.descend(root, parent_node);
     ASSERT_TRUE(at_parent_l.has_value());
     auto at_left = propagator.descend(*at_parent_l, left_child);
