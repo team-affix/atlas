@@ -188,6 +188,7 @@ TEST_F(PudMhcsTest, ChoicePointWitnessRefutedHeadNotified) {
     auto result = mhcs.witness_refuted(3);
     EXPECT_FALSE(result.has_value());  // head survived with new context
     // new witnesses 5 and 4 must be registered
+    EXPECT_CALL(ops, witness_refuted(5u));
     EXPECT_CALL(ops, resume()).WillOnce(Return(std::nullopt));
     auto lost = mhcs.witness_refuted(5);
     ASSERT_TRUE(lost.has_value());

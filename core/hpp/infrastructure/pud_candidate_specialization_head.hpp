@@ -8,6 +8,7 @@
 #include "value_objects/pud_candidate_choice_point.hpp"
 #include "value_objects/pud_candidate_self_witness.hpp"
 #include "value_objects/pud_witness_advance_result.hpp"
+#include "debug_assert.hpp"
 
 template<
     typename QueryHandle,
@@ -120,36 +121,39 @@ pud_candidate_specialization_head<QH, NI, ITAH, IAWSH, IFWSH, ICNL, IGC, IDESC>:
     const auto& other_witness_search_a = other.witness_scan_->witness_a;
     const auto& other_witness_search_b = other.witness_scan_->witness_b;
     
-    std::optional<pud_mhws_head_id> forked_witness_a;
-    std::optional<pud_mhws_head_id> forked_witness_b;
+    std::optional<witness> new_witness_a;
+    std::optional<witness> new_witness_b;
 
     if (other_witness_search_a.has_value()) {
         const witness& wn = other_witness_search_a.value();
-        
+
         // step in direction of witness A
         auto optional_search_root = descend_.descend(current_handle_, wn.handle.node);
 
-        if (optional_search_root.has_value())
-            forked_witness_a = fork_witness_search_head_.try_fork_head(wn.id, optional_search_root.value());
+        if (optional_search_root.has_value()) {
+            auto opt_id = fork_witness_search_head_.try_fork_head(wn.id, optional_search_root.value());
+            if (opt_id.has_value())
+                new_witness_a = witness{ .id = opt_id.value(), .handle = optional_search_root.value() };
+        }
     }
     if (other_witness_search_b.has_value()) {
         const witness& wn = other_witness_search_b.value();
-        
+
         // step in direction of witness B
         auto optional_search_root = descend_.descend(current_handle_, wn.handle.node);
 
-        if (optional_search_root.has_value())
-            forked_witness_b = fork_witness_search_head_.try_fork_head(wn.id, optional_search_root.value());
+        if (optional_search_root.has_value()) {
+            auto opt_id = fork_witness_search_head_.try_fork_head(wn.id, optional_search_root.value());
+            if (opt_id.has_value())
+                new_witness_b = witness{ .id = opt_id.value(), .handle = optional_search_root.value() };
+        }
     }
-    
-    auto other_next_witness_root = other.witness_scan_->next_witness_root_it;
-    auto other_end_witness_root = other.witness_scan_->end_witness_root_it;
-        
+
     witness_scan_ = {
-        .witness_search_a_ = forked_witness_a,
-        .witness_search_b_ = forked_witness_b,
-        .next_witness_root_ = other_next_witness_root,
-        .end_witness_root_ = other_end_witness_root,
+        .witness_a          = new_witness_a,
+        .witness_b          = new_witness_b,
+        .next_witness_root_it = other.witness_scan_->next_witness_root_it,
+        .end_witness_root_it  = other.witness_scan_->end_witness_root_it,
     };
 }
 
@@ -185,7 +189,7 @@ std::optional<pud_candidate_resume_context<QH>> pud_candidate_specialization_hea
     
     while (true) {
 
-        const pud_node_id current_node = current_handle_.node();
+        const pud_node_id current_node = current_handle_.node;
         
         // if we are already at a leaf node, we are done. we are a self-witness
         if (check_node_leaf_.check_leaf(current_node)) {
@@ -238,7 +242,7 @@ std::optional<pud_candidate_resume_context<QH>> pud_candidate_specialization_hea
             advance(witness_a.value());
     
         // if only B exists, we advance toward it
-        if (!witness_a.has_value() && witness_b.has_value())
+        else if (!witness_a.has_value() && witness_b.has_value())
             advance(witness_b.value());
     }
 
@@ -253,11 +257,11 @@ void pud_candidate_specialization_head<QH, NI, ITAH, IAWSH, IFWSH, ICNL, IGC, ID
     auto& witness_a = witness_scan_->witness_a;
     auto& witness_b = witness_scan_->witness_b;
 
-    if (witness_a.has_value() && witness_a.value() == witness_id)
+    if (witness_a.has_value() && witness_a.value().id == witness_id)
         witness_a = std::nullopt;
     else {
         // wasn't the first guy, so it SHOULD be the second
-        DEBUG_ASSERT(witness_b.has_value() && witness_b.value() == witness_id);
+        DEBUG_ASSERT(witness_b.has_value() && witness_b.value().id == witness_id);
         witness_b = std::nullopt;
     }
 }
@@ -271,7 +275,12 @@ pud_candidate_specialization_head<QH, NI, ITAH, IAWSH, IFWSH, ICNL, IGC, IDESC>:
     auto& end_witness_root = witness_scan_->end_witness_root_it;
 
     while (next_witness_root != end_witness_root) {
-        QH search_root_handle = descend_.descend(current_handle_, (next_witness_root++)->handle.node).value();
+        std::optional<QH> optional_search_root_handle = descend_.descend(current_handle_, *next_witness_root++);
+
+        if (!optional_search_root_handle.has_value())
+            continue;
+
+        const QH& search_root_handle = optional_search_root_handle.value();
     
         auto optional_new_head_id = try_add_head_.try_add_head(search_root_handle);
         
@@ -293,7 +302,7 @@ void pud_candidate_specialization_head<QH, NI, ITAH, IAWSH, IFWSH, ICNL, IGC, ID
     std::optional<pud_witness_advance_result<QH, NI>> ar = advance_witness_search_head_.advance_head(survivor.id);
     
     // update our position
-    node_path_.push_back(survivor.handle.node());
+    node_path_.push_back(survivor.handle.node);
     current_handle_ = survivor.handle;
     if (!ar.has_value()) {
         // we advanced onto a leaf. there are no children to initialize the

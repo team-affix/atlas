@@ -12,8 +12,7 @@ using ::testing::Return;
 using child_iter = std::vector<pud_node_id>::const_iterator;
 
 struct handle_t {
-    pud_node_id node_id;
-    pud_node_id node() const { return node_id; }
+    pud_node_id node;
     bool operator==(const handle_t&) const = default;
 };
 
@@ -141,7 +140,7 @@ TEST_F(PudCandidateSpecializationHeadTest, FirstChildBlockedNextTwoFormChoicePoi
 // verifies no .value() crash (B7)
 TEST_F(PudCandidateSpecializationHeadTest, UnreachableChildSkippedAndNextTwoFormChoicePoint) {
     sequences[root] = {a, b, c};
-    EXPECT_CALL(descend, descend(handle_t{root}, a)).WillRepeatedly(Return(std::nullopt));
+    ON_CALL(descend, descend(handle_t{root}, a)).WillByDefault(Return(std::nullopt));
     EXPECT_CALL(try_add, try_add_head(handle_t{b})).WillOnce(Return(pud_mhws_head_id{10}));
     EXPECT_CALL(try_add, try_add_head(handle_t{c})).WillOnce(Return(pud_mhws_head_id{11}));
     auto head = make_head(root);
@@ -161,7 +160,7 @@ TEST_F(PudCandidateSpecializationHeadTest, SingleWitnessAdvancesToSelfWitness) {
     // a has no leaf, b does
     EXPECT_CALL(try_add, try_add_head(handle_t{a})).WillOnce(Return(std::nullopt));
     EXPECT_CALL(try_add, try_add_head(handle_t{b})).WillOnce(Return(pud_mhws_head_id{10}));
-    EXPECT_CALL(leaves, check_leaf(b)).WillRepeatedly(Return(true));
+    ON_CALL(leaves, check_leaf(b)).WillByDefault(Return(true));
     advance_result_t ar{
         .root_handle          = handle_t{b},
         .root_next_sibling_it = sequences[root].end(),
@@ -239,7 +238,7 @@ TEST_F(PudCandidateSpecializationHeadTest, WitnessRefutedNoReplacementAdvancesTo
     EXPECT_CALL(try_add, try_add_head(handle_t{b})).WillOnce(Return(pud_mhws_head_id{11}));
     auto head = make_head(root);
     ASSERT_TRUE(head.resume().has_value());
-    EXPECT_CALL(leaves, check_leaf(b)).WillRepeatedly(Return(true));
+    ON_CALL(leaves, check_leaf(b)).WillByDefault(Return(true));
     advance_result_t ar{
         .root_handle          = handle_t{b},
         .root_next_sibling_it = sequences[root].end(),
@@ -257,7 +256,6 @@ TEST_F(PudCandidateSpecializationHeadTest, BothWitnessesRefutedYieldsNullopt) {
     sequences[root] = {a, b};
     EXPECT_CALL(try_add, try_add_head(handle_t{a})).WillOnce(Return(pud_mhws_head_id{10}));
     EXPECT_CALL(try_add, try_add_head(handle_t{b})).WillOnce(Return(pud_mhws_head_id{11}));
-    EXPECT_CALL(try_add, try_add_head(_)).WillRepeatedly(Return(std::nullopt));
     auto head = make_head(root);
     ASSERT_TRUE(head.resume().has_value());
     head.witness_refuted(10);
@@ -267,23 +265,31 @@ TEST_F(PudCandidateSpecializationHeadTest, BothWitnessesRefutedYieldsNullopt) {
 
 // ── Copy ctor (fork) ──────────────────────────────────────────────────────────
 
-// New query handle cannot descend into the path at all → no justification
+// New query handle cannot descend into the path → truncated → no justification
 TEST_F(PudCandidateSpecializationHeadTest, ForkCannotFollowPathYieldsNullopt) {
-    EXPECT_CALL(leaves, check_leaf(root)).WillRepeatedly(Return(true));
+    // build a head that advanced to a self-witness at b; node_path_ = [b]
+    sequences[root] = {a, b};
+    EXPECT_CALL(try_add, try_add_head(handle_t{a})).WillOnce(Return(std::nullopt));
+    EXPECT_CALL(try_add, try_add_head(handle_t{b})).WillOnce(Return(pud_mhws_head_id{10}));
+    EXPECT_CALL(advance_head, advance_head(10u)).WillOnce(Return(std::nullopt));
+    ON_CALL(leaves, check_leaf(b)).WillByDefault(Return(true));
     auto head = make_head(root);
     ASSERT_TRUE(head.resume().has_value());
-    EXPECT_CALL(descend, descend(handle_t{50}, root)).WillOnce(Return(std::nullopt));
+    // fork: new handle 50 cannot descend into b → path truncated → nullopt
+    EXPECT_CALL(descend, descend(handle_t{50}, b)).WillOnce(Return(std::nullopt));
     test_head_t forked{head, handle_t{50}};
     EXPECT_FALSE(forked.resume().has_value());
 }
 
 // Fork of a self-witness: no path to replay, current_handle_ must be the new root
-// (B9: copy ctor never sets current_handle_, so it stays handle_t{0})
+// (B10: copy ctor never sets current_handle_, so it stays handle_t{0})
 TEST_F(PudCandidateSpecializationHeadTest, ForkOfSelfWitnessHasCorrectHandle) {
-    EXPECT_CALL(leaves, check_leaf(root)).WillRepeatedly(Return(true));
+    ON_CALL(leaves, check_leaf(root)).WillByDefault(Return(true));
     auto head = make_head(root);
     ASSERT_TRUE(head.resume().has_value());
-    // node_path_ is empty for a self-witness; copy ctor loop has zero iterations
+    // node_path_ is empty for a self-witness; copy ctor loop has zero iterations;
+    // current_handle_ must be set to the fork root, not default-constructed handle_t{}
+    ON_CALL(leaves, check_leaf(pud_node_id{99})).WillByDefault(Return(true));
     test_head_t forked{head, handle_t{99}};
     auto found = forked.resume();
     ASSERT_TRUE(found.has_value());
@@ -291,7 +297,8 @@ TEST_F(PudCandidateSpecializationHeadTest, ForkOfSelfWitnessHasCorrectHandle) {
     EXPECT_EQ(found->query_handle, handle_t{99});
     const auto* self = std::get_if<pud_candidate_self_witness>(&found->justification);
     ASSERT_NE(self, nullptr);
-    EXPECT_EQ(self->node, root);
+    // forked head is at node 99 (current_handle_.node), so self-witness is at 99
+    EXPECT_EQ(self->node, pud_node_id{99});
 }
 
 // Fork of a choice-point: both witnesses must be forked with the new root
