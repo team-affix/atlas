@@ -83,7 +83,7 @@ pud_query_propagator<BM, U, S, N, IGNP, IMN, IMV, IG, IGNR>::root() {
                 .touched_caller_reps = {},
                 .parent = std::shared_ptr<pud_query_node>{},
                 .bindings = {},
-                .lvc = 0
+                .lvc = 1
             })};
 }
 
@@ -182,23 +182,19 @@ const pud_node* pud_query_propagator<BM, U, S, N, IGNP, IMN, IMV, IG, IGNR>::clo
     std::vector<pud_specialization> added_specializations;
     std::vector<const expr*> added_body_goals;
 
-    for (const pud_query_node* node = current.query_node.get(); node != nullptr; node = node->parent.get()) {
+    for (const pud_query_node* node = current.query_node.get(); node != nullptr && node->node != nullptr; node = node->parent.get()) {
         for (uint32_t touched_caller_rep : node->touched_caller_reps) {
             auto var = make_var_.make_var(touched_caller_rep);
             framed_expr var_framed{var, 0};
-            auto normalized = normalizer.normalize(var_framed, frame_offset, translation_map);
+            framed_expr value = bind_map.whnf(var_framed);
+            auto normalized = normalizer.normalize(value, frame_offset, translation_map);
             added_specializations.push_back(pud_specialization{
                 .var_idx = touched_caller_rep,
                 .value = normalized
             });
         }
 
-        const pud_node* pnode = node->node;
-
-        if (pnode == nullptr)
-            continue;
-
-        for (const expr* body_goal : pnode->added_body_goals) {
+        for (const expr* body_goal : node->node->added_body_goals) {
             framed_expr body_goal_framed{body_goal, frame_offset};
             auto normalized = normalizer.normalize(body_goal_framed, frame_offset, translation_map);
             added_body_goals.push_back(normalized);
