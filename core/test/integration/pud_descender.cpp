@@ -1215,6 +1215,66 @@ TEST_F(PudDescenderIntegrationTest, PeanoAddFiftyPlusZeroResolvesOnOneZeroStep) 
     EXPECT_EQ(normalize_local_var(*at_child, 0), nat(50));
 }
 
+TEST_F(PudDescenderIntegrationTest, NatInductiveGoalOpensZeroAndSuccWithDistinctCloses) {
+    const pud_node_id nat_zero = register_axiom(
+        functor("nat", {functor("z", {})}),
+        {},
+        0);
+    const pud_node_id nat_succ = register_axiom(
+        functor("nat", {functor("s", {var(0)})}),
+        {functor("nat", {var(0)})},
+        1);
+    const pud_node_id inductive = register_axiom(
+        functor("inductive", {var(0)}),
+        {functor("nat", {var(0)})},
+        1);
+    pud_descent at_inductive = descender_.descent_root(inductive);
+    const expr* nat_goal = *at_inductive.pending_body_goals.find(0);
+
+    std::optional<pud_descent> opened_zero =
+        descender_.open_query(at_inductive, nat_goal, nat_zero);
+    ASSERT_TRUE(opened_zero.has_value());
+    EXPECT_EQ(opened_zero->frame_offset, 1u);
+    EXPECT_EQ(opened_zero->lvc, 0u);
+    const pud_node_id zero_child = descender_.close_query(*opened_zero);
+    ASSERT_EQ(node_specs_.get(zero_child).size(), 1u);
+    EXPECT_EQ(node_specs_.get(zero_child)[0].var_idx, 0u);
+    EXPECT_EQ(node_specs_.get(zero_child)[0].value, functor("z", {}));
+    EXPECT_TRUE(node_body_goals_.get(zero_child).empty());
+    EXPECT_EQ(node_var_counts_.get(zero_child), 0u);
+
+    std::optional<pud_descent> opened_succ =
+        descender_.open_query(at_inductive, nat_goal, nat_succ);
+    ASSERT_TRUE(opened_succ.has_value());
+    EXPECT_EQ(opened_succ->frame_offset, 1u);
+    EXPECT_EQ(opened_succ->lvc, 1u);
+    const pud_node_id succ_child = descender_.close_query(*opened_succ);
+    EXPECT_NE(zero_child, succ_child);
+    const expr* expected_succ_spec = functor("s", {var(1)});
+    const expr* expected_recursive_nat = functor("nat", {var(1)});
+    ASSERT_EQ(node_specs_.get(succ_child).size(), 1u);
+    EXPECT_EQ(node_specs_.get(succ_child)[0].var_idx, 0u);
+    EXPECT_EQ(node_specs_.get(succ_child)[0].value, expected_succ_spec);
+    EXPECT_EQ(node_var_counts_.get(succ_child), 1u);
+    ASSERT_EQ(node_body_goals_.get(succ_child).size(), 1u);
+    EXPECT_EQ(node_body_goals_.get(succ_child)[0], expected_recursive_nat);
+
+    call_sites_.store(at_inductive.node, 0);
+    const body_goal_id resolved_at_inductive = call_sites_.get(at_inductive.node);
+    std::optional<pud_descent> at_zero_branch = descender_.descend(at_inductive, zero_child);
+    ASSERT_TRUE(at_zero_branch.has_value());
+    EXPECT_EQ(at_zero_branch->pending_body_goals.count(resolved_at_inductive), 0u);
+    EXPECT_EQ(normalize_local_var(*at_zero_branch, 0), nat(0));
+
+    std::optional<pud_descent> at_succ_branch = descender_.descend(at_inductive, succ_child);
+    ASSERT_TRUE(at_succ_branch.has_value());
+    EXPECT_EQ(at_succ_branch->pending_body_goals.count(resolved_at_inductive), 0u);
+    EXPECT_EQ(at_succ_branch->lvc, 2u);
+    const expr* deferred_nat = *at_succ_branch->pending_body_goals.find(1);
+    EXPECT_EQ(deferred_nat, functor("nat", {var(1)}));
+    EXPECT_EQ(normalize_local_var(*at_succ_branch, 0), functor("s", {var(1)}));
+}
+
 TEST_F(PudDescenderIntegrationTest, ForkedDescentsFromSharedPrefixStayIndependent) {
     const pud_node_id main_id = register_axiom(
         functor("grandparent", {var(0), var(1)}),
