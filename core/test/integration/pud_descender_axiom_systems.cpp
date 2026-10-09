@@ -3,13 +3,13 @@
 #include <vector>
 #include <gtest/gtest.h>
 #include <gmock/gmock.h>
-#include "pud_system_fixture.hpp"
+#include "pud_descender_system_fixture.hpp"
 
 using ::testing::ElementsAre;
 using ::testing::IsEmpty;
 using ::testing::UnorderedElementsAre;
 
-struct PudDescenderAxiomSystemsIntegrationTest : public PudSystemFixture {
+struct PudDescenderAxiomSystemsIntegrationTest : public PudDescenderSystemFixture {
     pud_node_id parent_fact(const expr* parent_name, const expr* child_name) {
         return axiom(fn("parent", {parent_name, child_name}), {}, 0);
     }

@@ -6,12 +6,12 @@
 #include <vector>
 #include <gtest/gtest.h>
 #include <gmock/gmock.h>
-#include "pud_system_fixture.hpp"
+#include "pud_descender_system_fixture.hpp"
 
 using ::testing::Eq;
 using ::testing::Ge;
 
-struct PudDescenderLargeSystemsIntegrationTest : public PudSystemFixture {
+struct PudDescenderLargeSystemsIntegrationTest : public PudDescenderSystemFixture {
     pud_node_id add_zero() {
         return axiom(fn("add", {var(0), fn("z", {}), var(0)}), {}, 1);
     }

@@ -1,5 +1,5 @@
-#ifndef PUD_SYSTEM_FIXTURE_HPP
-#define PUD_SYSTEM_FIXTURE_HPP
+#ifndef PUD_DESCENDER_SYSTEM_FIXTURE_HPP
+#define PUD_DESCENDER_SYSTEM_FIXTURE_HPP
 
 #include <algorithm>
 #include <cstdint>
@@ -38,7 +38,7 @@
 #include "value_objects/pud_descent.hpp"
 #include "value_objects/rule.hpp"
 
-struct PudSystemFixture : public ::testing::Test {
+struct PudDescenderSystemFixture : public ::testing::Test {
     using bind_map_t    = hierarchical_bind_map<globalizer, immer::map<uint32_t, framed_expr>::transient_type>;
     using unifier_t     = unifier<globalizer, bind_map_t>;
     using specializer_t = pud_specializer<expr_pool, unifier_t>;
@@ -85,7 +85,7 @@ struct PudSystemFixture : public ::testing::Test {
     descender_t                    descender_;
     initializer_t                  axiom_initializer_;
 
-    PudSystemFixture()
+    PudDescenderSystemFixture()
         : descender_(sequencer_, exprs, globalize, refuted_, call_sites_,
                      node_specs_, node_goals_, node_var_counts_, node_heads_,
                      node_specs_, node_goals_, node_var_counts_)

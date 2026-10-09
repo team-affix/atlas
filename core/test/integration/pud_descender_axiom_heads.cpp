@@ -3,12 +3,12 @@
 #include <vector>
 #include <gtest/gtest.h>
 #include <gmock/gmock.h>
-#include "pud_system_fixture.hpp"
+#include "pud_descender_system_fixture.hpp"
 
 using ::testing::ElementsAre;
 using ::testing::IsEmpty;
 
-struct PudDescenderAxiomHeadsIntegrationTest : public PudSystemFixture {};
+struct PudDescenderAxiomHeadsIntegrationTest : public PudDescenderSystemFixture {};
 
 TEST_F(PudDescenderAxiomHeadsIntegrationTest, AtomHeadMatchingAtomQueryClosesToEmptyNode) {
     const pud_node_id root = axiom(fn("a", {}), {}, 0);
