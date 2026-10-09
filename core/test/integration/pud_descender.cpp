@@ -282,8 +282,10 @@ TEST_F(PudDescenderIntegrationTest, GrandparentChainResolvesTwoParentGoals) {
     call_sites_.store(at_main.node, 0);
     leaves_.set_leaf(first_child);
 
+    const body_goal_id resolved_at_main = call_sites_.get(at_main.node);
     std::optional<pud_descent> at_first = descender_.descend(at_main, first_child);
     ASSERT_TRUE(at_first.has_value());
+    EXPECT_EQ(at_first->pending_body_goals.count(resolved_at_main), 0u);
     const expr* second_goal = *at_first->pending_body_goals.find(1);
     std::optional<pud_descent> opened_second =
         descender_.open_query(*at_first, second_goal, parent_bob_ann);
@@ -296,9 +298,10 @@ TEST_F(PudDescenderIntegrationTest, GrandparentChainResolvesTwoParentGoals) {
     leaves_.unset_leaf(at_first->node);
     leaves_.set_leaf(second_child);
 
-    std::optional<pud_descent> at_second =
-        descender_.descend(*descender_.descend(at_main, first_child), second_child);
+    const body_goal_id resolved_at_first = call_sites_.get(at_first->node);
+    std::optional<pud_descent> at_second = descender_.descend(*at_first, second_child);
     ASSERT_TRUE(at_second.has_value());
+    EXPECT_EQ(at_second->pending_body_goals.count(resolved_at_first), 0u);
     EXPECT_TRUE(at_second->pending_body_goals.empty());
     EXPECT_EQ(normalize_local_var(*at_second, 1), functor("ann", {}));
 }
@@ -462,8 +465,11 @@ TEST_F(PudDescenderIntegrationTest, RefutedSiblingDoesNotBlockReachableBranch) {
     children_.store(root, std::vector<pud_node_id>{bad, good});
     call_sites_.store(root, std::numeric_limits<size_t>::max());
     refuted_.set_refuted(bad);
-    std::optional<pud_descent> at_good = descender_.descend(descender_.descent_root(root), good);
+    pud_descent at_root = descender_.descent_root(root);
+    const body_goal_id resolved_at_root = call_sites_.get(root);
+    std::optional<pud_descent> at_good = descender_.descend(at_root, good);
     ASSERT_TRUE(at_good.has_value());
+    EXPECT_EQ(at_good->pending_body_goals.count(resolved_at_root), 0u);
     ASSERT_EQ(node_body_goals_.get(good).size(), 1u);
     EXPECT_EQ(node_body_goals_.get(good)[0], functor("g", {}));
 }
@@ -508,8 +514,11 @@ TEST_F(PudDescenderIntegrationTest, StoredSpecializationsReplayOnDescend) {
     node_var_counts_.store(heavy, spec_count);
     children_.store(root, {heavy});
     call_sites_.store(root, std::numeric_limits<size_t>::max());
-    std::optional<pud_descent> at_heavy = descender_.descend(descender_.descent_root(root), heavy);
+    pud_descent at_root = descender_.descent_root(root);
+    const body_goal_id resolved_at_root = call_sites_.get(root);
+    std::optional<pud_descent> at_heavy = descender_.descend(at_root, heavy);
     ASSERT_TRUE(at_heavy.has_value());
+    EXPECT_EQ(at_heavy->pending_body_goals.count(resolved_at_root), 0u);
     EXPECT_EQ(at_heavy->lvc, spec_count);
     EXPECT_EQ(normalize_local_var(*at_heavy, 0), functor("v0", {}));
     EXPECT_EQ(
@@ -535,8 +544,10 @@ TEST_F(PudDescenderIntegrationTest, MainGoalResolvesPeanoAddZeroOnLargeLiteral) 
     const pud_node_id child = descender_.close_query(*opened);
     children_.store(at_main.node, {child});
     call_sites_.store(at_main.node, 0);
+    const body_goal_id resolved_at_main = call_sites_.get(at_main.node);
     std::optional<pud_descent> at_child = descender_.descend(at_main, child);
     ASSERT_TRUE(at_child.has_value());
+    EXPECT_EQ(at_child->pending_body_goals.count(resolved_at_main), 0u);
     EXPECT_EQ(normalize_local_var(*at_child, 0), nat(50));
 }
 
@@ -575,8 +586,14 @@ TEST_F(PudDescenderIntegrationTest, TwoChildrenUnderSameParentStayIndependent) {
     node_var_counts_.store(right, 0);
     children_.store(root, std::vector<pud_node_id>{left, right});
     call_sites_.store(root, std::numeric_limits<size_t>::max());
-    ASSERT_TRUE(descender_.descend(descender_.descent_root(root), left).has_value());
-    ASSERT_TRUE(descender_.descend(descender_.descent_root(root), right).has_value());
+    pud_descent at_root = descender_.descent_root(root);
+    const body_goal_id resolved_at_root = call_sites_.get(root);
+    std::optional<pud_descent> at_left = descender_.descend(at_root, left);
+    ASSERT_TRUE(at_left.has_value());
+    EXPECT_EQ(at_left->pending_body_goals.count(resolved_at_root), 0u);
+    std::optional<pud_descent> at_right = descender_.descend(at_root, right);
+    ASSERT_TRUE(at_right.has_value());
+    EXPECT_EQ(at_right->pending_body_goals.count(resolved_at_root), 0u);
     EXPECT_EQ(node_body_goals_.get(left)[0], functor("left", {}));
     EXPECT_EQ(node_body_goals_.get(right)[0], functor("right", {}));
 }
@@ -736,8 +753,10 @@ TEST_F(PudDescenderIntegrationTest, SecondGrandparentGoalBindsAfterFirstChildRep
     const pud_node_id first_child = descender_.close_query(*opened_first);
     children_.store(at_main.node, {first_child});
     call_sites_.store(at_main.node, 0);
+    const body_goal_id resolved_at_main = call_sites_.get(at_main.node);
     std::optional<pud_descent> at_first = descender_.descend(at_main, first_child);
     ASSERT_TRUE(at_first.has_value());
+    EXPECT_EQ(at_first->pending_body_goals.count(resolved_at_main), 0u);
     const expr* second_goal = *at_first->pending_body_goals.find(1);
     std::optional<pud_descent> opened_second =
         descender_.open_query(*at_first, second_goal, parent_bob_ann);
@@ -789,6 +808,103 @@ TEST_F(PudDescenderIntegrationTest, PeanoAddTwoOnesOpensOneRecursiveStep) {
     const pud_node_id closed = descender_.close_query(*opened);
     ASSERT_EQ(node_body_goals_.get(closed).size(), 1u);
     EXPECT_EQ(node_var_counts_.get(closed), 1u);
+}
+
+TEST_F(PudDescenderIntegrationTest, PeanoAddOnePlusOneResolvesViaSuccThenZero) {
+    const expr* add_body = functor("add", {var(0), var(1), var(2)});
+    const pud_node_id add_zero = register_axiom(
+        functor("add", {var(0), functor("z", {}), var(0)}),
+        {},
+        1);
+    const pud_node_id add_succ = register_axiom(
+        functor("add", {var(0), functor("s", {var(1)}), functor("s", {var(2)})}),
+        {add_body},
+        3);
+    const pud_node_id main_id = register_axiom(
+        functor("main", {var(0)}),
+        {functor("add", {nat(1), nat(1), var(0)})},
+        1);
+    pud_descent at_main = descender_.descent_root(main_id);
+    const expr* goal = *at_main.pending_body_goals.find(0);
+    std::optional<pud_descent> opened_succ = descender_.open_query(at_main, goal, add_succ);
+    ASSERT_TRUE(opened_succ.has_value());
+    EXPECT_EQ(opened_succ->frame_offset, 1u);
+    EXPECT_EQ(opened_succ->lvc, 3u);
+    const pud_node_id succ_child = descender_.close_query(*opened_succ);
+    call_sites_.store(at_main.node, 0);
+    const body_goal_id resolved_at_main = call_sites_.get(at_main.node);
+    std::optional<pud_descent> after_succ = descender_.descend(at_main, succ_child);
+    ASSERT_TRUE(after_succ.has_value());
+    EXPECT_EQ(after_succ->pending_body_goals.count(resolved_at_main), 0u);
+    const expr* zero_goal = *after_succ->pending_body_goals.find(1);
+    std::optional<pud_descent> opened_zero = descender_.open_query(*after_succ, zero_goal, add_zero);
+    ASSERT_TRUE(opened_zero.has_value());
+    EXPECT_EQ(opened_zero->frame_offset, 2u);
+    EXPECT_EQ(opened_zero->lvc, 1u);
+    const pud_node_id zero_child = descender_.close_query(*opened_zero);
+    ASSERT_EQ(node_specs_.get(zero_child).size(), 1u);
+    EXPECT_EQ(node_specs_.get(zero_child)[0].var_idx, 1u);
+    EXPECT_EQ(node_specs_.get(zero_child)[0].value, functor("s", {functor("z", {})}));
+    call_sites_.store(after_succ->node, 1);
+    const body_goal_id resolved_after_succ = call_sites_.get(after_succ->node);
+    std::optional<pud_descent> at_end = descender_.descend(*after_succ, zero_child);
+    ASSERT_TRUE(at_end.has_value());
+    EXPECT_EQ(at_end->pending_body_goals.count(resolved_after_succ), 0u);
+    EXPECT_EQ(normalize_local_var(*at_end, 1), nat(1));
+}
+
+TEST_F(PudDescenderIntegrationTest, PeanoAddTwoPlusTwoViaSuccChain) {
+    const expr* add_body = functor("add", {var(0), var(1), var(2)});
+    const pud_node_id add_zero = register_axiom(
+        functor("add", {var(0), functor("z", {}), var(0)}),
+        {},
+        1);
+    const pud_node_id add_succ = register_axiom(
+        functor("add", {var(0), functor("s", {var(1)}), functor("s", {var(2)})}),
+        {add_body},
+        3);
+    const pud_node_id main_id = register_axiom(
+        functor("main", {var(0)}),
+        {functor("add", {nat(2), nat(2), var(0)})},
+        1);
+    pud_descent at_main = descender_.descent_root(main_id);
+    const expr* goal = *at_main.pending_body_goals.find(0);
+    std::optional<pud_descent> opened_first = descender_.open_query(at_main, goal, add_succ);
+    ASSERT_TRUE(opened_first.has_value());
+    EXPECT_EQ(opened_first->frame_offset, 1u);
+    EXPECT_EQ(opened_first->lvc, 3u);
+    const pud_node_id first_child = descender_.close_query(*opened_first);
+    call_sites_.store(at_main.node, 0);
+    const body_goal_id resolved_at_main = call_sites_.get(at_main.node);
+    std::optional<pud_descent> at_first = descender_.descend(at_main, first_child);
+    ASSERT_TRUE(at_first.has_value());
+    EXPECT_EQ(at_first->pending_body_goals.count(resolved_at_main), 0u);
+    const expr* second_goal = *at_first->pending_body_goals.find(1);
+    std::optional<pud_descent> opened_second = descender_.open_query(*at_first, second_goal, add_succ);
+    ASSERT_TRUE(opened_second.has_value());
+    EXPECT_EQ(opened_second->frame_offset, 2u);
+    EXPECT_EQ(opened_second->lvc, 3u);
+    const pud_node_id second_child = descender_.close_query(*opened_second);
+    call_sites_.store(at_first->node, 1);
+    const body_goal_id resolved_at_first = call_sites_.get(at_first->node);
+    std::optional<pud_descent> at_second = descender_.descend(*at_first, second_child);
+    ASSERT_TRUE(at_second.has_value());
+    EXPECT_EQ(at_second->pending_body_goals.count(resolved_at_first), 0u);
+    const expr* third_goal = *at_second->pending_body_goals.find(2);
+    std::optional<pud_descent> opened_zero = descender_.open_query(*at_second, third_goal, add_zero);
+    ASSERT_TRUE(opened_zero.has_value());
+    EXPECT_EQ(opened_zero->frame_offset, 3u);
+    EXPECT_EQ(opened_zero->lvc, 1u);
+    const pud_node_id zero_child = descender_.close_query(*opened_zero);
+    ASSERT_EQ(node_specs_.get(zero_child).size(), 1u);
+    EXPECT_EQ(node_specs_.get(zero_child)[0].var_idx, 2u);
+    EXPECT_EQ(node_specs_.get(zero_child)[0].value, nat(2));
+    call_sites_.store(at_second->node, 2);
+    const body_goal_id resolved_at_second = call_sites_.get(at_second->node);
+    std::optional<pud_descent> at_end = descender_.descend(*at_second, zero_child);
+    ASSERT_TRUE(at_end.has_value());
+    EXPECT_EQ(at_end->pending_body_goals.count(resolved_at_second), 0u);
+    EXPECT_EQ(normalize_local_var(*at_end, 2), nat(2));
 }
 
 TEST_F(PudDescenderIntegrationTest, LeqSuccessorOnLeftDoesNotMatchEitherAxiom) {
@@ -927,8 +1043,10 @@ TEST_F(PudDescenderIntegrationTest, DescendFailsWhenReplayedSpecContradictsBindi
     node_var_counts_.store(bad, 0);
     children_.store(good_child, {bad});
     call_sites_.store(good_child, std::numeric_limits<size_t>::max());
+    const body_goal_id resolved_at_main = call_sites_.get(at_main.node);
     std::optional<pud_descent> at_good = descender_.descend(at_main, good_child);
     ASSERT_TRUE(at_good.has_value());
+    EXPECT_EQ(at_good->pending_body_goals.count(resolved_at_main), 0u);
     EXPECT_FALSE(descender_.descend(*at_good, bad).has_value());
 }
 
@@ -1017,8 +1135,11 @@ TEST_F(PudDescenderIntegrationTest, ManyClosedSpecsReplayOnDescend) {
     node_var_counts_.store(heavy, spec_count);
     children_.store(root, {heavy});
     call_sites_.store(root, std::numeric_limits<size_t>::max());
-    std::optional<pud_descent> at_heavy = descender_.descend(descender_.descent_root(root), heavy);
+    pud_descent at_root = descender_.descent_root(root);
+    const body_goal_id resolved_at_root = call_sites_.get(root);
+    std::optional<pud_descent> at_heavy = descender_.descend(at_root, heavy);
     ASSERT_TRUE(at_heavy.has_value());
+    EXPECT_EQ(at_heavy->pending_body_goals.count(resolved_at_root), 0u);
     EXPECT_EQ(at_heavy->lvc, spec_count);
     for (uint32_t spec_index = 0; spec_index < spec_count; ++spec_index) {
         std::string label = "v" + std::to_string(spec_index);
@@ -1087,8 +1208,10 @@ TEST_F(PudDescenderIntegrationTest, PeanoAddFiftyPlusZeroResolvesOnOneZeroStep) 
     EXPECT_EQ(opened->lvc, 1u);
     const pud_node_id child = descender_.close_query(*opened);
     call_sites_.store(at_main.node, 0);
+    const body_goal_id resolved_at_main = call_sites_.get(at_main.node);
     std::optional<pud_descent> at_child = descender_.descend(at_main, child);
     ASSERT_TRUE(at_child.has_value());
+    EXPECT_EQ(at_child->pending_body_goals.count(resolved_at_main), 0u);
     EXPECT_EQ(normalize_local_var(*at_child, 0), nat(50));
 }
 
