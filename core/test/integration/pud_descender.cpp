@@ -31,6 +31,7 @@
 #include "infrastructure/unifier.hpp"
 #include "value_objects/body_goal_id.hpp"
 #include "value_objects/pud_descent.hpp"
+#include "value_objects/pud_specialization.hpp"
 #include "value_objects/rule.hpp"
 
 using ::testing::ElementsAre;
@@ -578,4 +579,547 @@ TEST_F(PudDescenderIntegrationTest, TwoChildrenUnderSameParentStayIndependent) {
     ASSERT_TRUE(descender_.descend(descender_.descent_root(root), right).has_value());
     EXPECT_EQ(node_body_goals_.get(left)[0], functor("left", {}));
     EXPECT_EQ(node_body_goals_.get(right)[0], functor("right", {}));
+}
+
+TEST_F(PudDescenderIntegrationTest, FactQueryWithTwoCallerVarsNeedsNoCallerSpecs) {
+    const pud_node_id parent_axiom = register_axiom(
+        functor("parent", {var(0), var(1)}),
+        {},
+        2);
+    pud_descent at_root = descender_.descent_root(parent_axiom);
+    std::optional<pud_descent> opened = descender_.open_query(
+        at_root,
+        functor("parent", {var(0), var(1)}),
+        parent_axiom);
+    ASSERT_TRUE(opened.has_value());
+    EXPECT_EQ(opened->frame_offset, 2u);
+    EXPECT_EQ(opened->lvc, 2u);
+    const pud_node_id closed = descender_.close_query(*opened);
+    EXPECT_TRUE(node_specs_.get(closed).empty());
+    EXPECT_EQ(node_var_counts_.get(closed), 0u);
+}
+
+TEST_F(PudDescenderIntegrationTest, QueryFrameOffsetFollowsCallerLiveVarCount) {
+    const pud_node_id narrow = register_axiom(functor("q", {}), {}, 0);
+    pud_descent at_narrow = descender_.descent_root(narrow);
+    std::optional<pud_descent> at_zero = descender_.open_query(at_narrow, functor("q", {}), narrow);
+    ASSERT_TRUE(at_zero.has_value());
+    EXPECT_EQ(at_zero->frame_offset, 0u);
+    EXPECT_EQ(at_zero->lvc, 0u);
+
+    const pud_node_id wide = register_axiom(functor("q", {}), {}, 5);
+    pud_descent at_wide = descender_.descent_root(wide);
+    std::optional<pud_descent> at_five = descender_.open_query(at_wide, functor("q", {}), wide);
+    ASSERT_TRUE(at_five.has_value());
+    EXPECT_EQ(at_five->frame_offset, 5u);
+    EXPECT_EQ(at_five->lvc, 5u);
+}
+
+TEST_F(PudDescenderIntegrationTest, VarHeadUnifiesWithGroundQueryWithoutCallerSpecs) {
+    const pud_node_id root = register_axiom(var(0), {}, 1);
+    pud_descent at_root = descender_.descent_root(root);
+    std::optional<pud_descent> opened = descender_.open_query(at_root, functor("q", {}), root);
+    ASSERT_TRUE(opened.has_value());
+    EXPECT_EQ(opened->frame_offset, 1u);
+    EXPECT_EQ(opened->lvc, 1u);
+    const pud_node_id closed = descender_.close_query(*opened);
+    EXPECT_TRUE(node_specs_.get(closed).empty());
+    EXPECT_EQ(node_var_counts_.get(closed), 0u);
+}
+
+TEST_F(PudDescenderIntegrationTest, ListShapedQueryUnifiesWithVarHead) {
+    const expr* ground_list = list({functor("a", {})});
+    const pud_node_id root = register_axiom(var(0), {}, 1);
+    pud_descent at_root = descender_.descent_root(root);
+    std::optional<pud_descent> opened = descender_.open_query(at_root, ground_list, root);
+    ASSERT_TRUE(opened.has_value());
+    EXPECT_EQ(opened->frame_offset, 1u);
+    EXPECT_EQ(opened->lvc, 1u);
+    const pud_node_id closed = descender_.close_query(*opened);
+    EXPECT_TRUE(node_specs_.get(closed).empty());
+}
+
+TEST_F(PudDescenderIntegrationTest, GroundListQueryUnifiesWithSameHead) {
+    const expr* ground_list = list({functor("a", {}), functor("b", {})});
+    const pud_node_id root = register_axiom(functor("same", {var(0)}), {}, 1);
+    pud_descent at_root = descender_.descent_root(root);
+    std::optional<pud_descent> opened =
+        descender_.open_query(at_root, functor("same", {ground_list}), root);
+    ASSERT_TRUE(opened.has_value());
+    EXPECT_EQ(opened->frame_offset, 1u);
+    EXPECT_EQ(opened->lvc, 1u);
+}
+
+TEST_F(PudDescenderIntegrationTest, RootIdSelectsAxiomHeadForUnification) {
+    const pud_node_id accepts = register_axiom(functor("f", {}), {}, 0);
+    const pud_node_id rejects = register_axiom(functor("g", {}), {}, 0);
+    pud_descent at_accepts = descender_.descent_root(accepts);
+    pud_descent at_rejects = descender_.descent_root(rejects);
+    std::optional<pud_descent> opened =
+        descender_.open_query(at_accepts, functor("f", {}), accepts);
+    ASSERT_TRUE(opened.has_value());
+    EXPECT_EQ(opened->frame_offset, 0u);
+    EXPECT_EQ(opened->lvc, 0u);
+    EXPECT_FALSE(descender_.open_query(at_rejects, functor("f", {}), rejects).has_value());
+}
+
+TEST_F(PudDescenderIntegrationTest, FailedOpenDoesNotConsumeNextNodeId) {
+    const pud_node_id main_id = register_axiom(
+        functor("grandparent", {var(0), var(1)}),
+        {functor("parent", {functor("tom", {}), functor("bob", {})})},
+        3);
+    const pud_node_id wrong_fact = register_axiom(
+        functor("parent", {functor("x", {}), functor("y", {})}),
+        {},
+        0);
+    pud_descent at_main = descender_.descent_root(main_id);
+    const expr* goal = *at_main.pending_body_goals.find(0);
+    const pud_node_id next_before = sequencer_.peek();
+    EXPECT_FALSE(descender_.open_query(at_main, goal, wrong_fact).has_value());
+    EXPECT_EQ(sequencer_.peek(), next_before);
+}
+
+TEST_F(PudDescenderIntegrationTest, TwoFactChoicesFromSameGoalStayIndependent) {
+    const pud_node_id main_id = register_axiom(
+        functor("grandparent", {var(0), var(1)}),
+        {functor("parent", {var(0), var(2)}), functor("parent", {var(2), var(1)})},
+        3);
+    const pud_node_id parent_tom_bob = register_axiom(
+        functor("parent", {functor("tom", {}), functor("bob", {})}),
+        {},
+        0);
+    const pud_node_id parent_x_y = register_axiom(
+        functor("parent", {functor("x", {}), functor("y", {})}),
+        {},
+        0);
+    pud_descent at_main = descender_.descent_root(main_id);
+    const expr* goal = *at_main.pending_body_goals.find(0);
+    std::optional<pud_descent> opened_tom =
+        descender_.open_query(at_main, goal, parent_tom_bob);
+    ASSERT_TRUE(opened_tom.has_value());
+    EXPECT_EQ(opened_tom->frame_offset, 3u);
+    EXPECT_EQ(opened_tom->lvc, 0u);
+    const pud_node_id tom_child = descender_.close_query(*opened_tom);
+    ASSERT_EQ(node_specs_.get(tom_child).size(), 2u);
+    EXPECT_EQ(node_specs_.get(tom_child)[0].value, functor("tom", {}));
+    EXPECT_EQ(node_specs_.get(tom_child)[1].value, functor("bob", {}));
+    std::optional<pud_descent> opened_x = descender_.open_query(at_main, goal, parent_x_y);
+    ASSERT_TRUE(opened_x.has_value());
+    EXPECT_EQ(opened_x->frame_offset, 3u);
+    EXPECT_EQ(opened_x->lvc, 0u);
+    const pud_node_id x_child = descender_.close_query(*opened_x);
+    EXPECT_NE(tom_child, x_child);
+    EXPECT_EQ(node_specs_.get(x_child)[0].value, functor("x", {}));
+    EXPECT_EQ(node_specs_.get(x_child)[1].value, functor("y", {}));
+}
+
+TEST_F(PudDescenderIntegrationTest, SecondGrandparentGoalBindsAfterFirstChildReplay) {
+    const pud_node_id main_id = register_axiom(
+        functor("grandparent", {var(0), var(1)}),
+        {functor("parent", {var(0), var(2)}), functor("parent", {var(2), var(1)})},
+        3);
+    const pud_node_id parent_tom_bob = register_axiom(
+        functor("parent", {functor("tom", {}), functor("bob", {})}),
+        {},
+        0);
+    const pud_node_id parent_bob_ann = register_axiom(
+        functor("parent", {functor("bob", {}), functor("ann", {})}),
+        {},
+        0);
+    pud_descent at_main = descender_.descent_root(main_id);
+    const expr* first_goal = *at_main.pending_body_goals.find(0);
+    std::optional<pud_descent> opened_first =
+        descender_.open_query(at_main, first_goal, parent_tom_bob);
+    ASSERT_TRUE(opened_first.has_value());
+    EXPECT_EQ(opened_first->frame_offset, 3u);
+    EXPECT_EQ(opened_first->lvc, 0u);
+    const pud_node_id first_child = descender_.close_query(*opened_first);
+    children_.store(at_main.node, {first_child});
+    call_sites_.store(at_main.node, 0);
+    std::optional<pud_descent> at_first = descender_.descend(at_main, first_child);
+    ASSERT_TRUE(at_first.has_value());
+    const expr* second_goal = *at_first->pending_body_goals.find(1);
+    std::optional<pud_descent> opened_second =
+        descender_.open_query(*at_first, second_goal, parent_bob_ann);
+    ASSERT_TRUE(opened_second.has_value());
+    EXPECT_EQ(opened_second->frame_offset, 3u);
+    EXPECT_EQ(opened_second->lvc, 0u);
+    const pud_node_id second_child = descender_.close_query(*opened_second);
+    ASSERT_EQ(node_specs_.get(second_child).size(), 1u);
+    EXPECT_EQ(node_specs_.get(second_child)[0].var_idx, 1u);
+    EXPECT_EQ(node_specs_.get(second_child)[0].value, functor("ann", {}));
+}
+
+TEST_F(PudDescenderIntegrationTest, CloseQueryTwiceYieldsDistinctIdsWithSameSpecs) {
+    const pud_node_id main_id = register_axiom(
+        functor("main", {var(0), var(1), var(2)}),
+        {functor("parent", {var(0), var(2)})},
+        3);
+    const pud_node_id fact = register_axiom(
+        functor("parent", {functor("tom", {}), functor("bob", {})}),
+        {},
+        0);
+    pud_descent at_main = descender_.descent_root(main_id);
+    const expr* goal = *at_main.pending_body_goals.find(0);
+    std::optional<pud_descent> opened = descender_.open_query(at_main, goal, fact);
+    ASSERT_TRUE(opened.has_value());
+    EXPECT_EQ(opened->frame_offset, 3u);
+    EXPECT_EQ(opened->lvc, 0u);
+    const pud_node_id first = descender_.close_query(*opened);
+    const pud_node_id second = descender_.close_query(*opened);
+    EXPECT_NE(first, second);
+    ASSERT_EQ(node_specs_.get(first).size(), 2u);
+    ASSERT_EQ(node_specs_.get(second).size(), 2u);
+    EXPECT_EQ(node_specs_.get(first)[0].value, node_specs_.get(second)[0].value);
+    EXPECT_EQ(node_specs_.get(first)[1].value, node_specs_.get(second)[1].value);
+}
+
+TEST_F(PudDescenderIntegrationTest, PeanoAddTwoOnesOpensOneRecursiveStep) {
+    const expr* recursive_goal = functor("add", {var(0), var(1), var(2)});
+    const pud_node_id add_succ = register_axiom(
+        functor("add", {var(0), functor("s", {var(1)}), functor("s", {var(2)})}),
+        {recursive_goal},
+        3);
+    pud_descent at_root = descender_.descent_root(add_succ);
+    std::optional<pud_descent> opened =
+        descender_.open_query(at_root, functor("add", {nat(1), nat(1), var(0)}), add_succ);
+    ASSERT_TRUE(opened.has_value());
+    EXPECT_EQ(opened->frame_offset, 3u);
+    EXPECT_EQ(opened->lvc, 3u);
+    const pud_node_id closed = descender_.close_query(*opened);
+    ASSERT_EQ(node_body_goals_.get(closed).size(), 1u);
+    EXPECT_EQ(node_var_counts_.get(closed), 1u);
+}
+
+TEST_F(PudDescenderIntegrationTest, LeqSuccessorOnLeftDoesNotMatchEitherAxiom) {
+    const pud_node_id leq_zero = register_axiom(
+        functor("leq", {functor("z", {}), var(0)}),
+        {},
+        1);
+    const expr* leq_body = functor("leq", {var(0), var(1)});
+    const pud_node_id leq_succ = register_axiom(
+        functor("leq", {functor("s", {var(0)}), functor("s", {var(1)})}),
+        {leq_body},
+        2);
+    const pud_node_id main_id = register_axiom(
+        functor("main", {}),
+        {functor("leq", {functor("s", {functor("z", {})}), functor("z", {})})},
+        0);
+    pud_descent at_main = descender_.descent_root(main_id);
+    const expr* goal = *at_main.pending_body_goals.find(0);
+    EXPECT_FALSE(descender_.open_query(at_main, goal, leq_zero).has_value());
+    EXPECT_FALSE(descender_.open_query(at_main, goal, leq_succ).has_value());
+}
+
+TEST_F(PudDescenderIntegrationTest, PeanoAddBackwardQueryBindsBothOperands) {
+    const pud_node_id add_zero = register_axiom(
+        functor("add", {var(0), functor("z", {}), var(0)}),
+        {},
+        1);
+    pud_descent at_root = descender_.descent_root(add_zero);
+    std::optional<pud_descent> opened = descender_.open_query(
+        at_root,
+        functor("add", {var(0), var(1), functor("z", {})}),
+        add_zero);
+    ASSERT_TRUE(opened.has_value());
+    EXPECT_EQ(opened->frame_offset, 1u);
+    EXPECT_EQ(opened->lvc, 1u);
+    const pud_node_id closed = descender_.close_query(*opened);
+    ASSERT_EQ(node_specs_.get(closed).size(), 1u);
+    EXPECT_FALSE(node_specs_.get(closed).empty());
+}
+
+TEST_F(PudDescenderIntegrationTest, PeanoAddFullyUnboundQueryKeepsRecursiveBodyGoal) {
+    const expr* recursive_goal = functor("add", {var(0), var(1), var(2)});
+    const pud_node_id add_succ = register_axiom(
+        functor("add", {var(0), functor("s", {var(1)}), functor("s", {var(2)})}),
+        {recursive_goal},
+        3);
+    pud_descent at_root = descender_.descent_root(add_succ);
+    std::optional<pud_descent> opened =
+        descender_.open_query(at_root, functor("add", {var(0), var(1), var(2)}), add_succ);
+    ASSERT_TRUE(opened.has_value());
+    EXPECT_EQ(opened->frame_offset, 3u);
+    EXPECT_EQ(opened->lvc, 3u);
+    const pud_node_id closed = descender_.close_query(*opened);
+    ASSERT_EQ(node_body_goals_.get(closed).size(), 1u);
+}
+
+TEST_F(PudDescenderIntegrationTest, AppendTwoCellLeftListOpensConsStep) {
+    const expr* recursive_goal = functor("append", {var(1), var(2), var(3)});
+    const pud_node_id append_cons = register_axiom(
+        functor("append", {cons(var(0), var(1)), var(2), cons(var(0), var(3))}),
+        {recursive_goal},
+        4);
+    pud_descent at_root = descender_.descent_root(append_cons);
+    std::optional<pud_descent> opened = descender_.open_query(
+        at_root,
+        functor("append", {list({functor("a", {}), functor("b", {})}), list({functor("c", {})}), var(0)}),
+        append_cons);
+    ASSERT_TRUE(opened.has_value());
+    EXPECT_EQ(opened->frame_offset, 4u);
+    EXPECT_EQ(opened->lvc, 4u);
+    const pud_node_id closed = descender_.close_query(*opened);
+    ASSERT_EQ(node_specs_.get(closed).size(), 1u);
+    EXPECT_EQ(node_specs_.get(closed)[0].value, cons(functor("a", {}), var(4)));
+}
+
+TEST_F(PudDescenderIntegrationTest, AppendBackwardQueryDefersRecursiveGoal) {
+    const expr* recursive_goal = functor("append", {var(1), var(2), var(3)});
+    const pud_node_id append_cons = register_axiom(
+        functor("append", {cons(var(0), var(1)), var(2), cons(var(0), var(3))}),
+        {recursive_goal},
+        4);
+    const expr* target = list({functor("a", {}), functor("b", {}), functor("c", {})});
+    pud_descent at_root = descender_.descent_root(append_cons);
+    std::optional<pud_descent> opened = descender_.open_query(
+        at_root,
+        functor("append", {var(0), var(1), target}),
+        append_cons);
+    ASSERT_TRUE(opened.has_value());
+    EXPECT_EQ(opened->frame_offset, 4u);
+    EXPECT_EQ(opened->lvc, 4u);
+    const pud_node_id closed = descender_.close_query(*opened);
+    ASSERT_EQ(node_body_goals_.get(closed).size(), 1u);
+    EXPECT_EQ(node_var_counts_.get(closed), 1u);
+}
+
+TEST_F(PudDescenderIntegrationTest, AppendSharedListArgumentUnifies) {
+    const expr* recursive_goal = functor("append", {var(1), var(2), var(3)});
+    const pud_node_id append_cons = register_axiom(
+        functor("append", {cons(var(0), var(1)), var(2), cons(var(0), var(3))}),
+        {recursive_goal},
+        4);
+    const expr* shared = list({functor("a", {}), functor("a", {})});
+    pud_descent at_root = descender_.descent_root(append_cons);
+    std::optional<pud_descent> opened = descender_.open_query(
+        at_root,
+        functor("append", {var(0), var(0), shared}),
+        append_cons);
+    ASSERT_TRUE(opened.has_value());
+    EXPECT_EQ(opened->frame_offset, 4u);
+    EXPECT_EQ(opened->lvc, 4u);
+    const pud_node_id closed = descender_.close_query(*opened);
+    EXPECT_FALSE(node_specs_.get(closed).empty());
+}
+
+TEST_F(PudDescenderIntegrationTest, DescendFailsWhenReplayedSpecContradictsBinding) {
+    const expr* recursive_goal = functor("append", {var(1), var(2), var(3)});
+    const pud_node_id append_cons = register_axiom(
+        functor("append", {cons(var(0), var(1)), var(2), cons(var(0), var(3))}),
+        {recursive_goal},
+        4);
+    const pud_node_id main_id = register_axiom(
+        functor("main", {var(0)}),
+        {functor("append", {list({functor("a", {})}), list({functor("b", {})}), var(0)})},
+        1);
+    pud_descent at_main = descender_.descent_root(main_id);
+    const expr* goal = *at_main.pending_body_goals.find(0);
+    std::optional<pud_descent> opened = descender_.open_query(at_main, goal, append_cons);
+    ASSERT_TRUE(opened.has_value());
+    EXPECT_EQ(opened->frame_offset, 1u);
+    EXPECT_EQ(opened->lvc, 4u);
+    const pud_node_id good_child = descender_.close_query(*opened);
+    call_sites_.store(at_main.node, 0);
+    const pud_node_id bad = sequencer_.next();
+    node_specs_.store(bad, {pud_specialization{.var_idx = 0, .value = functor("x", {})}});
+    node_body_goals_.store(bad, {});
+    node_var_counts_.store(bad, 0);
+    children_.store(good_child, {bad});
+    call_sites_.store(good_child, std::numeric_limits<size_t>::max());
+    std::optional<pud_descent> at_good = descender_.descend(at_main, good_child);
+    ASSERT_TRUE(at_good.has_value());
+    EXPECT_FALSE(descender_.descend(*at_good, bad).has_value());
+}
+
+TEST_F(PudDescenderIntegrationTest, MemberHeadBindsMatchingElement) {
+    const pud_node_id member_head = register_axiom(
+        functor("member", {var(0), cons(var(0), var(1))}),
+        {},
+        2);
+    pud_descent at_root = descender_.descent_root(member_head);
+    std::optional<pud_descent> opened = descender_.open_query(
+        at_root,
+        functor("member", {functor("a", {}), list({functor("a", {}), functor("b", {})})}),
+        member_head);
+    ASSERT_TRUE(opened.has_value());
+    EXPECT_EQ(opened->frame_offset, 2u);
+    EXPECT_EQ(opened->lvc, 2u);
+    EXPECT_EQ(normalize_local_var(*opened, 0), functor("a", {}));
+}
+
+TEST_F(PudDescenderIntegrationTest, MemberTailDefersSearchToRecursiveGoal) {
+    const expr* recursive_goal = functor("member", {var(0), var(1)});
+    const pud_node_id member_tail = register_axiom(
+        functor("member", {var(0), cons(var(2), var(1))}),
+        {recursive_goal},
+        3);
+    pud_descent at_root = descender_.descent_root(member_tail);
+    std::optional<pud_descent> opened = descender_.open_query(
+        at_root,
+        functor("member", {functor("b", {}), list({functor("a", {}), functor("b", {})})}),
+        member_tail);
+    ASSERT_TRUE(opened.has_value());
+    EXPECT_EQ(opened->frame_offset, 3u);
+    EXPECT_EQ(opened->lvc, 3u);
+    const pud_node_id closed = descender_.close_query(*opened);
+    ASSERT_EQ(node_body_goals_.get(closed).size(), 1u);
+}
+
+TEST_F(PudDescenderIntegrationTest, LengthConsBackwardQueryDefersRecursiveLength) {
+    const expr* recursive_goal = functor("length", {var(1), var(2)});
+    const pud_node_id length_cons = register_axiom(
+        functor("length", {cons(var(0), var(1)), functor("s", {var(2)})}),
+        {recursive_goal},
+        3);
+    pud_descent at_root = descender_.descent_root(length_cons);
+    std::optional<pud_descent> opened =
+        descender_.open_query(at_root, functor("length", {var(0), functor("s", {functor("z", {})})}), length_cons);
+    ASSERT_TRUE(opened.has_value());
+    EXPECT_EQ(opened->frame_offset, 3u);
+    EXPECT_EQ(opened->lvc, 3u);
+    const pud_node_id closed = descender_.close_query(*opened);
+    ASSERT_EQ(node_body_goals_.get(closed).size(), 1u);
+    EXPECT_EQ(node_var_counts_.get(closed), 2u);
+}
+
+TEST_F(PudDescenderIntegrationTest, LengthOfThreeElementListOpensConsHead) {
+    const expr* recursive_goal = functor("length", {var(1), var(2)});
+    const pud_node_id length_cons = register_axiom(
+        functor("length", {cons(var(0), var(1)), functor("s", {var(2)})}),
+        {recursive_goal},
+        3);
+    pud_descent at_root = descender_.descent_root(length_cons);
+    std::optional<pud_descent> opened = descender_.open_query(
+        at_root,
+        functor("length", {list({functor("a", {}), functor("b", {}), functor("c", {})}), var(0)}),
+        length_cons);
+    ASSERT_TRUE(opened.has_value());
+    EXPECT_EQ(opened->frame_offset, 3u);
+    EXPECT_EQ(opened->lvc, 3u);
+    const pud_node_id closed = descender_.close_query(*opened);
+    ASSERT_EQ(node_body_goals_.get(closed).size(), 1u);
+    EXPECT_EQ(node_var_counts_.get(closed), 1u);
+}
+
+TEST_F(PudDescenderIntegrationTest, ManyClosedSpecsReplayOnDescend) {
+    const uint32_t spec_count = 200;
+    std::vector<pud_specialization> specs;
+    for (uint32_t spec_index = 0; spec_index < spec_count; ++spec_index) {
+        std::string label = "v" + std::to_string(spec_index);
+        specs.push_back(
+            pud_specialization{.var_idx = spec_index, .value = functor(label.c_str(), {})});
+    }
+    const pud_node_id root = register_axiom(functor("main", {}), {}, 0);
+    const pud_node_id heavy = sequencer_.next();
+    node_specs_.store(heavy, std::move(specs));
+    node_body_goals_.store(heavy, {});
+    node_var_counts_.store(heavy, spec_count);
+    children_.store(root, {heavy});
+    call_sites_.store(root, std::numeric_limits<size_t>::max());
+    std::optional<pud_descent> at_heavy = descender_.descend(descender_.descent_root(root), heavy);
+    ASSERT_TRUE(at_heavy.has_value());
+    EXPECT_EQ(at_heavy->lvc, spec_count);
+    for (uint32_t spec_index = 0; spec_index < spec_count; ++spec_index) {
+        std::string label = "v" + std::to_string(spec_index);
+        EXPECT_EQ(normalize_local_var(*at_heavy, spec_index), functor(label.c_str(), {}));
+    }
+}
+
+TEST_F(PudDescenderIntegrationTest, AppendLongListsOpenConsHead) {
+    const expr* recursive_goal = functor("append", {var(1), var(2), var(3)});
+    const pud_node_id append_cons = register_axiom(
+        functor("append", {cons(var(0), var(1)), var(2), cons(var(0), var(3))}),
+        {recursive_goal},
+        4);
+    std::vector<const expr*> left_elems;
+    std::vector<const expr*> right_elems;
+    for (uint32_t idx = 0; idx < 10; ++idx) {
+        left_elems.push_back(functor(("l" + std::to_string(idx)).c_str(), {}));
+        right_elems.push_back(functor(("r" + std::to_string(idx)).c_str(), {}));
+    }
+    pud_descent at_root = descender_.descent_root(append_cons);
+    std::optional<pud_descent> opened = descender_.open_query(
+        at_root,
+        functor("append", {list(left_elems), list(right_elems), var(0)}),
+        append_cons);
+    ASSERT_TRUE(opened.has_value());
+    EXPECT_EQ(opened->frame_offset, 4u);
+    EXPECT_EQ(opened->lvc, 4u);
+    const pud_node_id closed = descender_.close_query(*opened);
+    EXPECT_FALSE(node_specs_.get(closed).empty());
+    ASSERT_EQ(node_body_goals_.get(closed).size(), 1u);
+}
+
+TEST_F(PudDescenderIntegrationTest, ReverseTenElementsDefersRecursiveRevGoal) {
+    const expr* recursive_goal = functor("rev", {var(1), cons(var(0), var(2)), var(3)});
+    const pud_node_id rev_cons = register_axiom(
+        functor("rev", {cons(var(0), var(1)), var(2), var(3)}),
+        {recursive_goal},
+        4);
+    std::vector<const expr*> elems;
+    for (uint32_t idx = 0; idx < 10; ++idx)
+        elems.push_back(functor(("e" + std::to_string(idx)).c_str(), {}));
+    pud_descent at_root = descender_.descent_root(rev_cons);
+    std::optional<pud_descent> opened =
+        descender_.open_query(at_root, functor("rev", {list(elems), list({}), var(0)}), rev_cons);
+    ASSERT_TRUE(opened.has_value());
+    EXPECT_EQ(opened->frame_offset, 4u);
+    EXPECT_EQ(opened->lvc, 4u);
+    const pud_node_id closed = descender_.close_query(*opened);
+    ASSERT_EQ(node_body_goals_.get(closed).size(), 1u);
+}
+
+TEST_F(PudDescenderIntegrationTest, PeanoAddFiftyPlusZeroResolvesOnOneZeroStep) {
+    const pud_node_id add_zero = register_axiom(
+        functor("add", {var(0), functor("z", {}), var(0)}),
+        {},
+        1);
+    const pud_node_id main_id = register_axiom(
+        functor("main", {var(0)}),
+        {functor("add", {nat(50), functor("z", {}), var(0)})},
+        1);
+    pud_descent at_main = descender_.descent_root(main_id);
+    const expr* goal = *at_main.pending_body_goals.find(0);
+    std::optional<pud_descent> opened = descender_.open_query(at_main, goal, add_zero);
+    ASSERT_TRUE(opened.has_value());
+    EXPECT_EQ(opened->frame_offset, 1u);
+    EXPECT_EQ(opened->lvc, 1u);
+    const pud_node_id child = descender_.close_query(*opened);
+    call_sites_.store(at_main.node, 0);
+    std::optional<pud_descent> at_child = descender_.descend(at_main, child);
+    ASSERT_TRUE(at_child.has_value());
+    EXPECT_EQ(normalize_local_var(*at_child, 0), nat(50));
+}
+
+TEST_F(PudDescenderIntegrationTest, ForkedDescentsFromSharedPrefixStayIndependent) {
+    const pud_node_id main_id = register_axiom(
+        functor("grandparent", {var(0), var(1)}),
+        {functor("parent", {var(0), var(2)}), functor("parent", {var(2), var(1)})},
+        3);
+    const pud_node_id parent_tom_bob = register_axiom(
+        functor("parent", {functor("tom", {}), functor("bob", {})}),
+        {},
+        0);
+    const pud_node_id parent_tom_x = register_axiom(
+        functor("parent", {functor("tom", {}), functor("x", {})}),
+        {},
+        0);
+    pud_descent at_main = descender_.descent_root(main_id);
+    const expr* goal = *at_main.pending_body_goals.find(0);
+    std::optional<pud_descent> opened_bob =
+        descender_.open_query(at_main, goal, parent_tom_bob);
+    ASSERT_TRUE(opened_bob.has_value());
+    EXPECT_EQ(opened_bob->frame_offset, 3u);
+    EXPECT_EQ(opened_bob->lvc, 0u);
+    const pud_node_id child_bob = descender_.close_query(*opened_bob);
+    std::optional<pud_descent> opened_x =
+        descender_.open_query(at_main, goal, parent_tom_x);
+    ASSERT_TRUE(opened_x.has_value());
+    EXPECT_EQ(opened_x->frame_offset, 3u);
+    EXPECT_EQ(opened_x->lvc, 0u);
+    const pud_node_id child_x = descender_.close_query(*opened_x);
+    EXPECT_NE(child_bob, child_x);
+    EXPECT_EQ(node_specs_.get(child_bob)[1].value, functor("bob", {}));
+    EXPECT_EQ(node_specs_.get(child_x)[1].value, functor("x", {}));
 }
