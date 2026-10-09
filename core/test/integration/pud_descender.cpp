@@ -133,6 +133,8 @@ TEST_F(PudDescenderIntegrationTest, GroundHeadUnifiesWithMatchingQuery) {
     pud_descent at_root = descender_.descent_root(root);
     std::optional<pud_descent> opened = descender_.open_query(at_root, functor("a", {}), root);
     ASSERT_TRUE(opened.has_value());
+    EXPECT_EQ(opened->frame_offset, 0u);
+    EXPECT_EQ(opened->lvc, 0u);
     const pud_node_id closed = descender_.close_query(*opened);
     EXPECT_TRUE(node_body_goals_.get(closed).empty());
     EXPECT_TRUE(node_specs_.get(closed).empty());
@@ -150,6 +152,8 @@ TEST_F(PudDescenderIntegrationTest, GroundHeadBindsQueryVariable) {
     pud_descent at_root = descender_.descent_root(root);
     std::optional<pud_descent> opened = descender_.open_query(at_root, var(0), root);
     ASSERT_TRUE(opened.has_value());
+    EXPECT_EQ(opened->frame_offset, 1u);
+    EXPECT_EQ(opened->lvc, 1u);
     const pud_node_id closed = descender_.close_query(*opened);
     ASSERT_EQ(node_specs_.get(closed).size(), 1u);
     EXPECT_EQ(node_specs_.get(closed)[0].var_idx, 0u);
@@ -164,19 +168,24 @@ TEST_F(PudDescenderIntegrationTest, FunctorOrArityMismatchRejectsQuery) {
 }
 
 TEST_F(PudDescenderIntegrationTest, OpenQueryHonorsCallerFrameAndRootHead) {
-    const pud_node_id root = register_axiom(functor("f", {var(0), var(1), var(2)}), {}, 3);
-    pud_descent caller = descender_.descent_root(root);
-    caller.lvc = 4;
-    std::optional<pud_descent> opened =
-        descender_.open_query(caller, functor("f", {functor("a", {}), var(0), var(1)}), root);
+    const pud_node_id caller_root = register_axiom(
+        functor("caller", {var(0), var(1), var(2), var(3)}),
+        {},
+        4);
+    const pud_node_id f_axiom = register_axiom(functor("f", {var(0), var(1), var(2)}), {}, 3);
+    pud_descent caller = descender_.descent_root(caller_root);
+    std::optional<pud_descent> opened = descender_.open_query(
+        caller,
+        functor("f", {functor("a", {}), var(0), var(1)}),
+        f_axiom);
     ASSERT_TRUE(opened.has_value());
     EXPECT_EQ(opened->frame_offset, 4u);
     EXPECT_EQ(opened->lvc, 3u);
-    EXPECT_EQ(opened->node, root);
+    EXPECT_EQ(opened->node, f_axiom);
 
-    const pud_node_id other_root = register_axiom(functor("g", {}), {}, 0);
-    pud_descent at_other = descender_.descent_root(other_root);
-    EXPECT_FALSE(descender_.open_query(at_other, functor("f", {}), other_root).has_value());
+    const pud_node_id g_axiom = register_axiom(functor("g", {}), {}, 0);
+    pud_descent at_g = descender_.descent_root(g_axiom);
+    EXPECT_FALSE(descender_.open_query(at_g, functor("f", {}), g_axiom).has_value());
 }
 
 TEST_F(PudDescenderIntegrationTest, RepeatedHeadVariableForcesAgreement) {
@@ -185,6 +194,8 @@ TEST_F(PudDescenderIntegrationTest, RepeatedHeadVariableForcesAgreement) {
     std::optional<pud_descent> opened =
         descender_.open_query(at_root, functor("eq", {functor("a", {}), var(0)}), root);
     ASSERT_TRUE(opened.has_value());
+    EXPECT_EQ(opened->frame_offset, 1u);
+    EXPECT_EQ(opened->lvc, 1u);
     const pud_node_id closed = descender_.close_query(*opened);
     ASSERT_EQ(node_specs_.get(closed).size(), 1u);
     EXPECT_EQ(node_specs_.get(closed)[0].value, functor("a", {}));
@@ -201,6 +212,8 @@ TEST_F(PudDescenderIntegrationTest, NestedHeadUnifiesDeepStructure) {
         functor("pair", {functor("left", {functor("x", {})}), var(0)}),
         root);
     ASSERT_TRUE(opened.has_value());
+    EXPECT_EQ(opened->frame_offset, 2u);
+    EXPECT_EQ(opened->lvc, 2u);
     EXPECT_EQ(normalize_local_var(*opened, 0), functor("x", {}));
 }
 
@@ -217,6 +230,8 @@ TEST_F(PudDescenderIntegrationTest, NestedQueryFromRuleBodySurfacesCallerBinding
     const expr* goal = *at_main.pending_body_goals.find(0);
     std::optional<pud_descent> opened = descender_.open_query(at_main, goal, fact);
     ASSERT_TRUE(opened.has_value());
+    EXPECT_EQ(opened->frame_offset, 3u);
+    EXPECT_EQ(opened->lvc, 0u);
     const pud_node_id closed = descender_.close_query(*opened);
     ASSERT_EQ(node_specs_.get(closed).size(), 2u);
     EXPECT_EQ(node_specs_.get(closed)[0].value, functor("tom", {}));
@@ -233,6 +248,8 @@ TEST_F(PudDescenderIntegrationTest, OpenedDescentKeepsAxiomBodyGoals) {
     std::optional<pud_descent> opened =
         descender_.open_query(at_root, functor("main", {functor("x", {})}), root);
     ASSERT_TRUE(opened.has_value());
+    EXPECT_EQ(opened->frame_offset, 1u);
+    EXPECT_EQ(opened->lvc, 1u);
     EXPECT_EQ(opened->pending_body_goals.size(), 2u);
     EXPECT_EQ(*opened->pending_body_goals.find(0), goal_a);
     EXPECT_EQ(*opened->pending_body_goals.find(1), goal_b);
@@ -257,6 +274,8 @@ TEST_F(PudDescenderIntegrationTest, GrandparentChainResolvesTwoParentGoals) {
     std::optional<pud_descent> opened_first =
         descender_.open_query(at_main, first_goal, parent_tom_bob);
     ASSERT_TRUE(opened_first.has_value());
+    EXPECT_EQ(opened_first->frame_offset, 3u);
+    EXPECT_EQ(opened_first->lvc, 0u);
     const pud_node_id first_child = descender_.close_query(*opened_first);
     children_.store(at_main.node, {first_child});
     call_sites_.store(at_main.node, 0);
@@ -268,6 +287,8 @@ TEST_F(PudDescenderIntegrationTest, GrandparentChainResolvesTwoParentGoals) {
     std::optional<pud_descent> opened_second =
         descender_.open_query(*at_first, second_goal, parent_bob_ann);
     ASSERT_TRUE(opened_second.has_value());
+    EXPECT_EQ(opened_second->frame_offset, 3u);
+    EXPECT_EQ(opened_second->lvc, 0u);
     const pud_node_id second_child = descender_.close_query(*opened_second);
     children_.store(at_first->node, {second_child});
     call_sites_.store(at_first->node, 1);
@@ -284,7 +305,7 @@ TEST_F(PudDescenderIntegrationTest, GrandparentChainResolvesTwoParentGoals) {
 TEST_F(PudDescenderIntegrationTest, ParentFactWithWrongGroundNamesDoesNotOpen) {
     const pud_node_id main_id = register_axiom(
         functor("grandparent", {var(0), var(1)}),
-        {functor("parent", {var(0), var(2)})},
+        {functor("parent", {functor("tom", {}), functor("bob", {})})},
         3);
     const pud_node_id wrong_fact = register_axiom(
         functor("parent", {functor("x", {}), functor("y", {})}),
@@ -292,9 +313,7 @@ TEST_F(PudDescenderIntegrationTest, ParentFactWithWrongGroundNamesDoesNotOpen) {
         0);
     pud_descent at_main = descender_.descent_root(main_id);
     const expr* goal = *at_main.pending_body_goals.find(0);
-    EXPECT_FALSE(
-        descender_.open_query(at_main, functor("parent", {functor("tom", {}), functor("bob", {})}), wrong_fact)
-            .has_value());
+    EXPECT_FALSE(descender_.open_query(at_main, goal, wrong_fact).has_value());
 }
 
 TEST_F(PudDescenderIntegrationTest, PeanoAddZeroBindsResult) {
@@ -306,6 +325,8 @@ TEST_F(PudDescenderIntegrationTest, PeanoAddZeroBindsResult) {
     std::optional<pud_descent> opened =
         descender_.open_query(at_root, functor("add", {nat(2), functor("z", {}), var(0)}), add_zero);
     ASSERT_TRUE(opened.has_value());
+    EXPECT_EQ(opened->frame_offset, 1u);
+    EXPECT_EQ(opened->lvc, 1u);
     const pud_node_id closed = descender_.close_query(*opened);
     ASSERT_EQ(node_specs_.get(closed).size(), 1u);
     EXPECT_EQ(node_specs_.get(closed)[0].value, nat(2));
@@ -323,14 +344,11 @@ TEST_F(PudDescenderIntegrationTest, PeanoAddSuccDefersToRecursiveCall) {
         functor("add", {functor("a", {}), functor("s", {functor("b", {})}), var(0)}),
         add_succ);
     ASSERT_TRUE(opened.has_value());
-    auto bindings_transient = opened->bindings.transient();
-    bind_map_t bind_map{globalize, bindings_transient};
-    normalizer_t normalizer{globalize, exprs, exprs, bind_map};
-    std::unordered_map<uint32_t, uint32_t> translation;
-    framed_expr caller_result{exprs.make_var(0), 0};
-    const expr* expected_spec_value =
-        normalizer.normalize(bind_map.whnf(caller_result), opened->frame_offset, translation);
+    EXPECT_EQ(opened->frame_offset, 3u);
+    EXPECT_EQ(opened->lvc, 3u);
     const pud_node_id closed = descender_.close_query(*opened);
+    // Query frame is 3; output is s(?3) and the deferred add uses the same ?3.
+    const expr* expected_spec_value = functor("s", {var(3)});
     const expr* expected_body_goal =
         functor("add", {functor("a", {}), functor("b", {}), var(3)});
     ASSERT_EQ(node_specs_.get(closed).size(), 1u);
@@ -352,6 +370,8 @@ TEST_F(PudDescenderIntegrationTest, AppendNilCopiesRightList) {
         functor("append", {list({}), list({functor("a", {})}), var(0)}),
         append_nil);
     ASSERT_TRUE(opened.has_value());
+    EXPECT_EQ(opened->frame_offset, 1u);
+    EXPECT_EQ(opened->lvc, 1u);
     const pud_node_id closed = descender_.close_query(*opened);
     ASSERT_EQ(node_specs_.get(closed).size(), 1u);
     EXPECT_EQ(node_specs_.get(closed)[0].value, list({functor("a", {})}));
@@ -369,7 +389,10 @@ TEST_F(PudDescenderIntegrationTest, AppendConsPeelsHeadAndDefersTail) {
         functor("append", {list({functor("a", {})}), list({functor("b", {})}), var(0)}),
         append_cons);
     ASSERT_TRUE(opened.has_value());
+    EXPECT_EQ(opened->frame_offset, 4u);
+    EXPECT_EQ(opened->lvc, 4u);
     const pud_node_id closed = descender_.close_query(*opened);
+    // Query frame is 4; normalized spec tail and recursive append goal use local ?4.
     const expr* expected_tail = var(4);
     const expr* expected_head_cell = cons(functor("a", {}), expected_tail);
     const expr* expected_body_goal =
@@ -393,6 +416,8 @@ TEST_F(PudDescenderIntegrationTest, MemberOnNonEmptyListBindsTailPointer) {
         functor("member", {functor("a", {}), list({functor("a", {}), functor("b", {})})}),
         member_head);
     ASSERT_TRUE(opened.has_value());
+    EXPECT_EQ(opened->frame_offset, 2u);
+    EXPECT_EQ(opened->lvc, 2u);
     EXPECT_EQ(normalize_local_var(*opened, 1), list({functor("b", {})}));
 }
 
@@ -405,6 +430,8 @@ TEST_F(PudDescenderIntegrationTest, LengthOfEmptyListIsZero) {
     std::optional<pud_descent> opened =
         descender_.open_query(at_root, functor("length", {list({}), functor("z", {})}), length_nil);
     ASSERT_TRUE(opened.has_value());
+    EXPECT_EQ(opened->frame_offset, 0u);
+    EXPECT_EQ(opened->lvc, 0u);
     const pud_node_id closed = descender_.close_query(*opened);
     EXPECT_TRUE(node_specs_.get(closed).empty());
 }
@@ -453,6 +480,8 @@ TEST_F(PudDescenderIntegrationTest, GoalExpansionUpdatesChildrenLeavesAndCallSit
     const expr* goal = *at_main.pending_body_goals.find(0);
     std::optional<pud_descent> opened = descender_.open_query(at_main, goal, fact);
     ASSERT_TRUE(opened.has_value());
+    EXPECT_EQ(opened->frame_offset, 3u);
+    EXPECT_EQ(opened->lvc, 0u);
     const pud_node_id child = descender_.close_query(*opened);
     children_.store(at_main.node, {child});
     call_sites_.store(at_main.node, 0);
@@ -500,6 +529,8 @@ TEST_F(PudDescenderIntegrationTest, MainGoalResolvesPeanoAddZeroOnLargeLiteral) 
     const expr* goal = *at_main.pending_body_goals.find(0);
     std::optional<pud_descent> opened = descender_.open_query(at_main, goal, add_zero);
     ASSERT_TRUE(opened.has_value());
+    EXPECT_EQ(opened->frame_offset, 1u);
+    EXPECT_EQ(opened->lvc, 1u);
     const pud_node_id child = descender_.close_query(*opened);
     children_.store(at_main.node, {child});
     call_sites_.store(at_main.node, 0);
@@ -520,8 +551,12 @@ TEST_F(PudDescenderIntegrationTest, ManyGroundFactRootsDisambiguateQueries) {
         uint32_t match_count = 0;
         for (const pud_node_id fact_root : fact_roots) {
             pud_descent at_root = descender_.descent_root(fact_root);
-            if (descender_.open_query(at_root, query, fact_root).has_value())
-                ++match_count;
+            std::optional<pud_descent> opened = descender_.open_query(at_root, query, fact_root);
+            if (!opened.has_value())
+                continue;
+            EXPECT_EQ(opened->frame_offset, 0u);
+            EXPECT_EQ(opened->lvc, 0u);
+            ++match_count;
         }
         EXPECT_EQ(match_count, 1u);
     }
