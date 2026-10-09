@@ -177,25 +177,23 @@ pud_descender<BM, U, S, N, INNI, IMV, IG, IGNR, IGCS, IGAS, IGABG, IGAVC, IGAH, 
     const expr* axiom_head = get_axiom_head_.get(root_id);
     const uint32_t root_var_count = get_added_var_count_.get(root_id);
 
-    // Introduce a fresh anchor var (just beyond the axiom's var range) that
-    // links the query expression to the axiom head via the specializer.
-    const uint32_t anchor_var_idx = root_var_count;
-    const uint32_t anchor_var_global = globalize_.globalize(query_frame_offset, anchor_var_idx);
-
     auto transient = caller.bindings.transient();
     BM bind_map{globalize_, transient};
-    bind_map.bind(anchor_var_global, framed_expr{query_expr, caller.frame_offset});
-
     U unifier{globalize_, &bind_map};
-    S specializer{make_var_, unifier};
 
+    // unify the query (in the caller's frame) with the head of the axiom at
+    // the root (in the new query frame)
     auto touched_transient = immer::set<uint32_t>{}.transient();
-    auto sm = specializer.specialize(query_frame_offset, pud_specialization{
-        .var_idx = anchor_var_idx,
-        .value   = axiom_head
-    });
-    while (auto rep = sm.next())
+    auto sm = unifier.unify(
+        framed_expr{query_expr, caller.frame_offset},
+        framed_expr{axiom_head, query_frame_offset});
+    while (auto rep = sm.next()) {
+        // only record vars from the caller env that became specialized
+        const bool is_caller_rep = *rep < query_frame_offset;
+        if (!is_caller_rep)
+            continue;
         touched_transient.insert(*rep);
+    }
     if (!sm.result())
         return std::nullopt;
 
@@ -206,7 +204,7 @@ pud_descender<BM, U, S, N, INNI, IMV, IG, IGNR, IGCS, IGAS, IGABG, IGAVC, IGAH, 
 
     return pud_descent{
         .frame_offset        = query_frame_offset,
-        .lvc                 = root_var_count + 1,
+        .lvc                 = root_var_count,
         .bgc                 = bgc,
         .node                = root_id,
         .touched_caller_reps = std::move(touched_transient).persistent(),

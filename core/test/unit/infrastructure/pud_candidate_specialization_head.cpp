@@ -64,6 +64,30 @@ struct PudCandidateSpecializationHeadTest : public ::testing::Test {
             descent_t{node}};
     }
 
+    // root -> a -> b -> {c, a1}. Advances twice, so node_path_ is [a, b] and the
+    // head is a choice point at b with witnesses 10 (root c) and 20 (root a1).
+    test_head_t make_deep_choice_point_head() {
+        sequences[root] = {a};
+        sequences[a]    = {b};
+        sequences[b]    = {c, a1};
+        advance_result_t first_step{
+            .root_descent         = descent_t{b},
+            .root_next_sibling_it = sequences[a].end(),
+            .root_end_sibling_it  = sequences[a].end()};
+        advance_result_t second_step{
+            .root_descent         = descent_t{c},
+            .root_next_sibling_it = sequences[b].begin() + 1,
+            .root_end_sibling_it  = sequences[b].end()};
+        EXPECT_CALL(try_add, try_add_head(descent_t{a})).WillOnce(Return(pud_mhws_head_id{10}));
+        EXPECT_CALL(try_add, try_add_head(descent_t{a1})).WillOnce(Return(pud_mhws_head_id{20}));
+        EXPECT_CALL(advance_head, advance_head(10u))
+            .WillOnce(Return(first_step))
+            .WillOnce(Return(second_step));
+        test_head_t head = make_head(root);
+        EXPECT_TRUE(head.resume().has_value());
+        return head;
+    }
+
     void SetUp() override {
         ON_CALL(leaves, check_leaf(_)).WillByDefault(Return(false));
         ON_CALL(children, get(_)).WillByDefault(
@@ -155,18 +179,16 @@ TEST_F(PudCandidateSpecializationHeadTest, UnreachableChildSkippedAndNextTwoForm
 
 // ── Single witness: advance ───────────────────────────────────────────────────
 
-// One surviving witness; advance_head returns a result → self-witness at that leaf
+// One surviving witness whose search root b is itself a leaf. A witness search
+// head rooted at a leaf has nothing to step into, so advance_head returns
+// nullopt and the head ends as a self-witness at b.
 TEST_F(PudCandidateSpecializationHeadTest, SingleWitnessAdvancesToSelfWitness) {
     sequences[root] = {a, b};
     // a has no leaf, b does
     EXPECT_CALL(try_add, try_add_head(descent_t{a})).WillOnce(Return(std::nullopt));
     EXPECT_CALL(try_add, try_add_head(descent_t{b})).WillOnce(Return(pud_mhws_head_id{10}));
     ON_CALL(leaves, check_leaf(b)).WillByDefault(Return(true));
-    advance_result_t ar{
-        .root_descent          = descent_t{b},
-        .root_next_sibling_it = sequences[root].end(),
-        .root_end_sibling_it  = sequences[root].end()};
-    EXPECT_CALL(advance_head, advance_head(10u)).WillOnce(Return(ar));
+    EXPECT_CALL(advance_head, advance_head(10u)).WillOnce(Return(std::nullopt));
     auto head = make_head(root);
     auto found = head.resume();
     ASSERT_TRUE(found.has_value());
@@ -175,17 +197,19 @@ TEST_F(PudCandidateSpecializationHeadTest, SingleWitnessAdvancesToSelfWitness) {
     EXPECT_EQ(self->node, b);
 }
 
-// One surviving witness; advance_head result exposes siblings → choice point
+// One surviving witness rooted at a. Advancing steps the witness one level
+// down to a's child a1, and hands back the siblings of a1 (just a2). The head
+// moves to a and finds its second witness among those siblings.
 TEST_F(PudCandidateSpecializationHeadTest, SingleWitnessAdvancesToChoicePoint) {
     sequences[root] = {a};
     sequences[a] = {a1, a2};
     EXPECT_CALL(try_add, try_add_head(descent_t{a})).WillOnce(Return(pud_mhws_head_id{4}));
     advance_result_t ar{
-        .root_descent          = descent_t{a},
-        .root_next_sibling_it = sequences[a].begin(),
+        .root_descent          = descent_t{a1},
+        .root_next_sibling_it = sequences[a].begin() + 1,
         .root_end_sibling_it  = sequences[a].end()};
     EXPECT_CALL(advance_head, advance_head(4u)).WillOnce(Return(ar));
-    EXPECT_CALL(try_add, try_add_head(descent_t{a1})).WillOnce(Return(pud_mhws_head_id{20}));
+    EXPECT_CALL(try_add, try_add_head(descent_t{a2})).WillOnce(Return(pud_mhws_head_id{20}));
     auto head = make_head(root);
     auto found = head.resume();
     ASSERT_TRUE(found.has_value());
@@ -240,11 +264,8 @@ TEST_F(PudCandidateSpecializationHeadTest, WitnessRefutedNoReplacementAdvancesTo
     auto head = make_head(root);
     ASSERT_TRUE(head.resume().has_value());
     ON_CALL(leaves, check_leaf(b)).WillByDefault(Return(true));
-    advance_result_t ar{
-        .root_descent          = descent_t{b},
-        .root_next_sibling_it = sequences[root].end(),
-        .root_end_sibling_it  = sequences[root].end()};
-    EXPECT_CALL(advance_head, advance_head(11u)).WillOnce(Return(ar));
+    // b is a leaf, so its witness search head has nothing to step into
+    EXPECT_CALL(advance_head, advance_head(11u)).WillOnce(Return(std::nullopt));
     head.witness_refuted(10);  // a gone; b is the survivor
     auto next = head.resume();
     ASSERT_TRUE(next.has_value());
@@ -336,11 +357,8 @@ TEST_F(PudCandidateSpecializationHeadTest, WitnessBRefutedAAdvancesToSelfWitness
     ASSERT_TRUE(head.resume().has_value());
     // refute b (id 11); a (id 10) is the sole surviving witness
     ON_CALL(leaves, check_leaf(a)).WillByDefault(Return(true));
-    advance_result_t ar{
-        .root_descent         = descent_t{a},
-        .root_next_sibling_it = sequences[root].end(),
-        .root_end_sibling_it  = sequences[root].end()};
-    EXPECT_CALL(advance_head, advance_head(10u)).WillOnce(Return(ar));
+    // a is a leaf, so its witness search head has nothing to step into
+    EXPECT_CALL(advance_head, advance_head(10u)).WillOnce(Return(std::nullopt));
     head.witness_refuted(11);
     auto next = head.resume();
     ASSERT_TRUE(next.has_value());
@@ -403,6 +421,145 @@ TEST_F(PudCandidateSpecializationHeadTest, ForkWhereWitnessACannotBeForkededAdva
     const auto* self = std::get_if<pud_candidate_self_witness>(&found->justification);
     ASSERT_NE(self, nullptr);
     EXPECT_EQ(self->node, pud_node_id{33});
+}
+
+// The witness root itself cannot be descended into by the new query (as opposed
+// to try_fork_head failing): that witness is dropped without ever being forked.
+TEST_F(PudCandidateSpecializationHeadTest, ForkWhereWitnessRootCannotBeDescendedDropsThatWitness) {
+    sequences[root] = {a, b};
+    EXPECT_CALL(try_add, try_add_head(descent_t{a})).WillOnce(Return(pud_mhws_head_id{10}));
+    EXPECT_CALL(try_add, try_add_head(descent_t{b})).WillOnce(Return(pud_mhws_head_id{11}));
+    auto head = make_head(root);
+    ASSERT_TRUE(head.resume().has_value());
+    EXPECT_CALL(descend, descend(descent_t{99}, a)).WillOnce(Return(std::nullopt));
+    EXPECT_CALL(descend, descend(descent_t{99}, b)).WillOnce(Return(descent_t{33}));
+    // witness 10 must never be forked: any other try_fork_head call is unexpected
+    EXPECT_CALL(fork_witness, try_fork_head(11u, descent_t{33})).WillOnce(Return(pud_mhws_head_id{101}));
+    test_head_t forked{head, descent_t{99}};
+    EXPECT_CALL(advance_head, advance_head(101u)).WillOnce(Return(std::nullopt));
+    ON_CALL(leaves, check_leaf(pud_node_id{33})).WillByDefault(Return(true));
+    auto found = forked.resume();
+    ASSERT_TRUE(found.has_value());
+    const auto* self = std::get_if<pud_candidate_self_witness>(&found->justification);
+    ASSERT_NE(self, nullptr);
+    EXPECT_EQ(self->node, pud_node_id{33});
+}
+
+// witness_a was refuted before the fork: only witness_b is carried over.
+TEST_F(PudCandidateSpecializationHeadTest, ForkOfHeadWithOnlyWitnessBForksOnlyWitnessB) {
+    sequences[root] = {a, b};
+    EXPECT_CALL(try_add, try_add_head(descent_t{a})).WillOnce(Return(pud_mhws_head_id{10}));
+    EXPECT_CALL(try_add, try_add_head(descent_t{b})).WillOnce(Return(pud_mhws_head_id{11}));
+    auto head = make_head(root);
+    ASSERT_TRUE(head.resume().has_value());
+    head.witness_refuted(10);
+    // descend(99, a) and try_fork_head(10, _) are unexpected calls
+    EXPECT_CALL(descend, descend(descent_t{99}, b)).WillOnce(Return(descent_t{33}));
+    EXPECT_CALL(fork_witness, try_fork_head(11u, descent_t{33})).WillOnce(Return(pud_mhws_head_id{101}));
+    test_head_t forked{head, descent_t{99}};
+    EXPECT_CALL(advance_head, advance_head(101u)).WillOnce(Return(std::nullopt));
+    ON_CALL(leaves, check_leaf(pud_node_id{33})).WillByDefault(Return(true));
+    auto found = forked.resume();
+    ASSERT_TRUE(found.has_value());
+    const auto* self = std::get_if<pud_candidate_self_witness>(&found->justification);
+    ASSERT_NE(self, nullptr);
+    EXPECT_EQ(self->node, pud_node_id{33});
+}
+
+// Neither witness survives the fork, but unscanned siblings remain: the fork
+// must carry the scan position over and search them from the NEW root descent.
+TEST_F(PudCandidateSpecializationHeadTest, ForkWhereBothWitnessesFailReplacesFromRemainingSiblings) {
+    pud_node_id d = 7;
+    sequences[root] = {a, b, c, d};
+    EXPECT_CALL(try_add, try_add_head(descent_t{a})).WillOnce(Return(pud_mhws_head_id{10}));
+    EXPECT_CALL(try_add, try_add_head(descent_t{b})).WillOnce(Return(pud_mhws_head_id{11}));
+    auto head = make_head(root);
+    ASSERT_TRUE(head.resume().has_value());
+    EXPECT_CALL(descend, descend(descent_t{99}, a)).WillOnce(Return(descent_t{22}));
+    EXPECT_CALL(descend, descend(descent_t{99}, b)).WillOnce(Return(descent_t{33}));
+    EXPECT_CALL(fork_witness, try_fork_head(10u, descent_t{22})).WillOnce(Return(std::nullopt));
+    EXPECT_CALL(fork_witness, try_fork_head(11u, descent_t{33})).WillOnce(Return(std::nullopt));
+    EXPECT_CALL(descend, descend(descent_t{99}, c)).WillOnce(Return(descent_t{44}));
+    EXPECT_CALL(descend, descend(descent_t{99}, d)).WillOnce(Return(descent_t{55}));
+    EXPECT_CALL(try_add, try_add_head(descent_t{44})).WillOnce(Return(pud_mhws_head_id{12}));
+    EXPECT_CALL(try_add, try_add_head(descent_t{55})).WillOnce(Return(pud_mhws_head_id{13}));
+    test_head_t forked{head, descent_t{99}};
+    auto found = forked.resume();
+    ASSERT_TRUE(found.has_value());
+    const auto* cp = std::get_if<pud_candidate_choice_point>(&found->justification);
+    ASSERT_NE(cp, nullptr);
+    EXPECT_EQ(cp->witness_a, 12u);
+    EXPECT_EQ(cp->witness_b, 13u);
+    EXPECT_EQ(found->descent, descent_t{99});
+}
+
+TEST_F(PudCandidateSpecializationHeadTest, ForkWhereBothWitnessesFailAndNoSiblingsRemainYieldsNullopt) {
+    sequences[root] = {a, b};
+    EXPECT_CALL(try_add, try_add_head(descent_t{a})).WillOnce(Return(pud_mhws_head_id{10}));
+    EXPECT_CALL(try_add, try_add_head(descent_t{b})).WillOnce(Return(pud_mhws_head_id{11}));
+    auto head = make_head(root);
+    ASSERT_TRUE(head.resume().has_value());
+    ON_CALL(fork_witness, try_fork_head(_, _)).WillByDefault(Return(std::nullopt));
+    test_head_t forked{head, descent_t{99}};
+    EXPECT_FALSE(forked.resume().has_value());
+}
+
+// ── Position tracking across advances ────────────────────────────────────────
+
+// After advancing to a, replacement witnesses must be searched among a's
+// children descending from a's descent, not from the original root's.
+TEST_F(PudCandidateSpecializationHeadTest, ReplacementAfterAdvanceDescendsFromAdvancedPosition) {
+    sequences[root] = {a};
+    sequences[a]    = {a1, a2};
+    advance_result_t step{
+        .root_descent         = descent_t{a1},
+        .root_next_sibling_it = sequences[a].begin() + 1,
+        .root_end_sibling_it  = sequences[a].end()};
+    EXPECT_CALL(descend, descend(descent_t{root}, a)).WillOnce(Return(descent_t{a}));
+    EXPECT_CALL(descend, descend(descent_t{a}, a2)).WillOnce(Return(descent_t{a2}));
+    EXPECT_CALL(try_add, try_add_head(descent_t{a})).WillOnce(Return(pud_mhws_head_id{4}));
+    EXPECT_CALL(try_add, try_add_head(descent_t{a2})).WillOnce(Return(pud_mhws_head_id{20}));
+    EXPECT_CALL(advance_head, advance_head(4u)).WillOnce(Return(step));
+    auto head = make_head(root);
+    auto found = head.resume();
+    ASSERT_TRUE(found.has_value());
+    const auto* cp = std::get_if<pud_candidate_choice_point>(&found->justification);
+    ASSERT_NE(cp, nullptr);
+    EXPECT_EQ(cp->witness_a, 4u);
+    EXPECT_EQ(cp->witness_b, 20u);
+    EXPECT_EQ(found->descent, descent_t{a});
+}
+
+// ── Fork of a head that advanced more than one level ─────────────────────────
+
+// Each path step must be replayed from the descent produced by the previous
+// step, and the witnesses are forked from the final replayed descent.
+TEST_F(PudCandidateSpecializationHeadTest, ForkOfDeepPathReplaysEachStepFromThePreviousDescent) {
+    auto head = make_deep_choice_point_head();
+    EXPECT_CALL(descend, descend(descent_t{99}, a)).WillOnce(Return(descent_t{61}));
+    EXPECT_CALL(descend, descend(descent_t{61}, b)).WillOnce(Return(descent_t{62}));
+    EXPECT_CALL(descend, descend(descent_t{62}, c)).WillOnce(Return(descent_t{63}));
+    EXPECT_CALL(descend, descend(descent_t{62}, a1)).WillOnce(Return(descent_t{64}));
+    EXPECT_CALL(fork_witness, try_fork_head(10u, descent_t{63})).WillOnce(Return(pud_mhws_head_id{100}));
+    EXPECT_CALL(fork_witness, try_fork_head(20u, descent_t{64})).WillOnce(Return(pud_mhws_head_id{101}));
+    test_head_t forked{head, descent_t{99}};
+    auto found = forked.resume();
+    ASSERT_TRUE(found.has_value());
+    const auto* cp = std::get_if<pud_candidate_choice_point>(&found->justification);
+    ASSERT_NE(cp, nullptr);
+    EXPECT_EQ(cp->witness_a, 100u);
+    EXPECT_EQ(cp->witness_b, 101u);
+    EXPECT_EQ(found->descent, descent_t{62});
+}
+
+// The conflict is on the SECOND path step, after the first already succeeded.
+TEST_F(PudCandidateSpecializationHeadTest, ForkBlockedMidPathYieldsNulloptAndForksNoWitnesses) {
+    auto head = make_deep_choice_point_head();
+    EXPECT_CALL(descend, descend(descent_t{99}, a)).WillOnce(Return(descent_t{61}));
+    EXPECT_CALL(descend, descend(descent_t{61}, b)).WillOnce(Return(std::nullopt));
+    EXPECT_CALL(fork_witness, try_fork_head(_, _)).Times(0);
+    test_head_t forked{head, descent_t{99}};
+    EXPECT_FALSE(forked.resume().has_value());
 }
 
 // ── Resume idempotence ────────────────────────────────────────────────────────

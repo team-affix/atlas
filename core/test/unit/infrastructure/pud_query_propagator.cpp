@@ -15,6 +15,7 @@ using ::testing::IsEmpty;
 using ::testing::NiceMock;
 using ::testing::Not;
 using ::testing::Return;
+using ::testing::SizeIs;
 
 namespace {
 
@@ -67,9 +68,22 @@ struct MockBindMap {
 
 BindLog* MockBindMap::log = nullptr;
 
+struct UnifyLog {
+    MOCK_METHOD(SpecScript, unify, (const expr*, uint32_t, const expr*, uint32_t));
+};
+
 struct MockUnifier {
     MockUnifier(MockGlobalize&, MockBindMap*) {}
+    coroutine<uint32_t, bool> unify(framed_expr lhs, framed_expr rhs) {
+        SpecScript script = log->unify(lhs.skeleton, lhs.frame_offset, rhs.skeleton, rhs.frame_offset);
+        for (uint32_t rep : script.reps)
+            co_yield rep;
+        co_return script.ok;
+    }
+    static UnifyLog* log;
 };
+
+UnifyLog* MockUnifier::log = nullptr;
 
 struct SpecLog {
     MOCK_METHOD(SpecScript, specialize, (uint32_t, uint32_t, const expr*));
@@ -163,6 +177,7 @@ struct PudQueryPropagatorTest : public ::testing::Test {
     NiceMock<MockRefuted>   refuted;
     NiceMock<BindLog>       bind_log;
     NiceMock<SpecLog>       spec_log;
+    NiceMock<UnifyLog>      unify_log;
     NiceMock<NormLog>       norm_log;
     NiceMock<MockGetAddedVarCountLog> var_count_log;
     MockCallSite            call_site;
@@ -190,6 +205,7 @@ struct PudQueryPropagatorTest : public ::testing::Test {
     void SetUp() override {
         MockBindMap::log = &bind_log;
         MockSpecializer::log = &spec_log;
+        MockUnifier::log = &unify_log;
         MockNormalizer::log = &norm_log;
         MockGetAddedVarCount::log = &var_count_log;
         // root has var_count=1 (one var for the root)
@@ -198,18 +214,42 @@ struct PudQueryPropagatorTest : public ::testing::Test {
         ON_CALL(globalize, globalize(_, _)).WillByDefault(Return(0u));
         ON_CALL(refuted, check_refuted(_)).WillByDefault(Return(false));
         ON_CALL(spec_log, specialize(_, _, _)).WillByDefault(Return(SpecScript{}));
+        ON_CALL(unify_log, unify(_, _, _, _)).WillByDefault(Return(SpecScript{}));
         ON_CALL(norm_log, normalize(_, _, _, _)).WillByDefault(Return(&norm_a));
         ON_CALL(next_node_id, next()).WillByDefault(Return(made_id));
     }
 };
 
-TEST_F(PudQueryPropagatorTest, OpenQueryFromRootBindsAnchorVarToQueryExpr) {
-    // root var_count=1, so query_frame_offset = 0+1 = 1
-    // anchor_var_idx = 1 (= var_count), so globalize(1, 1) is called for bind
-    EXPECT_CALL(globalize, globalize(1u, 1u)).WillRepeatedly(Return(11u));
-    EXPECT_CALL(bind_log, bind(11u, &query_expr, 0u));
-    EXPECT_CALL(spec_log, specialize(1u, 1u, &g_dummy_head)).WillOnce(Return(SpecScript{}));
-    propagator.open_query(propagator.descent_root(g_dummy_root_id), &query_expr, g_dummy_root_id);
+TEST_F(PudQueryPropagatorTest, OpenQueryFromRootUnifiesQueryWithAxiomHead) {
+    // root var_count=1, so query_frame_offset = 0+1 = 1.
+    // The query lives in the caller's frame (0), the axiom head in the new query frame (1).
+    EXPECT_CALL(unify_log, unify(&query_expr, 0u, &g_dummy_head, 1u)).WillOnce(Return(SpecScript{}));
+    // the query is unified with the head directly: nothing is bound up front
+    EXPECT_CALL(bind_log, bind(_, _, _)).Times(0);
+    EXPECT_TRUE(propagator.open_query(propagator.descent_root(g_dummy_root_id), &query_expr, g_dummy_root_id).has_value());
+}
+
+TEST_F(PudQueryPropagatorTest, OpenQueryDescentIsAtAxiomRootWithOnlyTheAxiomsVars) {
+    auto root = propagator.descent_root(g_dummy_root_id);
+    auto query = propagator.open_query(root, &query_expr, g_dummy_root_id).value();
+    EXPECT_EQ(query.node, g_dummy_root_id);
+    EXPECT_EQ(query.frame_offset, root.frame_offset + root.lvc);
+    // g_dummy_root_id has var_count=1; no extra var is introduced for the query
+    EXPECT_EQ(query.lvc, 1u);
+}
+
+TEST_F(PudQueryPropagatorTest, OpenQueryThatFailsToUnifyWithAxiomHeadYieldsNullopt) {
+    EXPECT_CALL(unify_log, unify(&query_expr, 0u, &g_dummy_head, 1u)).WillOnce(Return(SpecScript{{}, false}));
+    EXPECT_FALSE(propagator.open_query(propagator.descent_root(g_dummy_root_id), &query_expr, g_dummy_root_id).has_value());
+}
+
+// query_frame_offset = 1: rep 0 is in the caller's env, rep 5 is a var of the new query frame
+TEST_F(PudQueryPropagatorTest, OpenQueryOnlyRecordsCallerRepsThatUnifyTouched) {
+    EXPECT_CALL(unify_log, unify(_, _, _, _)).WillOnce(Return(SpecScript{{0, 5}, true}));
+    EXPECT_CALL(store_specs, store(made_id, SizeIs(1)));
+    auto root = propagator.descent_root(g_dummy_root_id);
+    auto query = propagator.open_query(root, &query_expr, g_dummy_root_id).value();
+    propagator.close_query(query);
 }
 
 TEST_F(PudQueryPropagatorTest, RefutedChildIsNotEntered) {
@@ -275,16 +315,12 @@ TEST_F(PudQueryPropagatorTest, OpenQueryAfterPropagateUsesCallerFramePlusLiveVar
     auto at_child = propagator.descend(root, child);
     ASSERT_TRUE(at_child.has_value());
     // root.lvc=1, child.var_count=4 → at_child.lvc=5 → query_frame_offset=5
-    // anchor_var_idx=1 (root var_count), globalize(5, 1)
-    EXPECT_CALL(globalize, globalize(5u, 1u)).WillRepeatedly(Return(20u));
-    EXPECT_CALL(bind_log, bind(20u, &query_expr, 0u));
-    EXPECT_CALL(spec_log, specialize(5u, 1u, &g_dummy_head)).WillOnce(Return(SpecScript{}));
+    EXPECT_CALL(unify_log, unify(&query_expr, 0u, &g_dummy_head, 5u)).WillOnce(Return(SpecScript{}));
     propagator.open_query(*at_child, &query_expr, g_dummy_root_id);
 }
 
 TEST_F(PudQueryPropagatorTest, OpenQueryDescentCanBePropagated) {
     pud_node_id child = 5;
-    EXPECT_CALL(spec_log, specialize(_, 1u, &g_dummy_head)).WillOnce(Return(SpecScript{}));
     auto root = propagator.descent_root(g_dummy_root_id);
     auto query = propagator.open_query(root, &query_expr, g_dummy_root_id).value();
     EXPECT_TRUE(propagator.descend(query, child).has_value());
@@ -299,7 +335,6 @@ TEST_F(PudQueryPropagatorTest, CloseNeverPropagatedRootHasNoGoalsOrSpecs) {
 }
 
 TEST_F(PudQueryPropagatorTest, CloseOpenQueryWithoutPropagateHasNoGoalsOrSpecs) {
-    EXPECT_CALL(spec_log, specialize(_, _, _)).WillRepeatedly(Return(SpecScript{}));
     EXPECT_CALL(store_specs,     store(made_id, IsEmpty()));
     EXPECT_CALL(store_goals,     store(made_id, IsEmpty()));
     EXPECT_CALL(store_var_count, store(made_id, 0u));

@@ -66,12 +66,11 @@ struct PudPropagateQueryFullIntegrationTest : public ::testing::Test {
                      node_specs_, node_goals_, node_var_counts_, node_heads_,
                      node_specs_, node_goals_, node_var_counts_) {
         anchor_id_ = sequencer_.next();
-        // Anchor needs var_count=2 so that query_frame_offset=2 when open_query
-        // is called from descent_root(anchor_id_). With frame_offset=0 and lvc=2,
-        // query_frame_offset=2 and anchor_var_global=4 > 0 (query var global key),
-        // satisfying the bind ordering constraint. var(0) in the query frame (global 2)
-        // is linked to the caller var via the specialize chain; var(1) (global 3) stays
-        // independent, so specs on child nodes can freely bind it.
+        // This root axiom has var_count=2 and head var(0), so open_query from
+        // descent_root(anchor_id_) puts the query frame at offset 2. The query (in
+        // frame 0) is unified directly with the head: var(0) in the query frame
+        // (global 2) gets bound to the query. var(1) (global 3) stays independent,
+        // so specs on child nodes can freely bind it.
         node_var_counts_.store(anchor_id_, 2u);
         node_goals_.store(anchor_id_, {});
         node_heads_.store(anchor_id_, exprs.make_var(0));
