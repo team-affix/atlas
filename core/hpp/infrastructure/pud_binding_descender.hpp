@@ -36,7 +36,7 @@ pud_binding_descent pud_binding_descender<IGetNodeAddedSpecializations>::descent
 template<typename IGetNodeAddedSpecializations>
 pud_binding_descent pud_binding_descender<IGetNodeAddedSpecializations>::descend(const pud_binding_descent& descent, pud_node_id child) {
     auto new_bindings_transient = descent.bindings.transient();
-    const auto& specializations = get_node_added_specializations_(child);
+    const auto& specializations = get_node_added_specializations_.get(child);
     for (const pud_specialization& specialization : specializations) {
         new_bindings_transient.insert({
             specialization.var_idx, 
