@@ -104,8 +104,8 @@ UBS_BIND_MAP_TEMPLATE
 void UBS_BIND_MAP::equate(uint32_t var_a, uint32_t var_b) {
     uint32_t root_a = find(var_a);
     uint32_t root_b = find(var_b);
-    if (root_a == root_b)
-        return;
+    
+    DEBUG_ASSERT(root_a != root_b);
 
     const uint32_t rep_a = rep(root_a);
     const uint32_t rep_b = rep(root_b);
