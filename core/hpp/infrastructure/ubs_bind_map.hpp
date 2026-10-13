@@ -1,11 +1,11 @@
 #ifndef UBS_BIND_MAP_HPP
 #define UBS_BIND_MAP_HPP
 
-#include <cassert>
 #include <cstdint>
 #include <utility>
 #include <variant>
 #include "value_objects/expr.hpp"
+#include "debug_assert.hpp"
 
 // Union-find over global variable indices: union by size, no path compression.
 // parent: var -> var, links only ever connect variables to variables.
@@ -42,7 +42,7 @@ struct ubs_bind_map {
 
 private:
     uint32_t find(uint32_t var);
-    uint32_t rep(uint32_t root); // asserts the class is unbound
+    uint32_t rep(uint32_t root); // DEBUG_ASSERT: class is unbound
 
     IMakeVar& make_var_;
     IGetParent& get_parent_;
@@ -87,9 +87,9 @@ uint32_t UBS_BIND_MAP::rep(uint32_t root) {
     const expr* const* value = get_value_.get_value(root);
     if (!value)
         return root;
-    const expr::var* var = std::get_if<expr::var>(&(*value)->content);
-    assert(var && "class must be unbound");
-    return var->index;
+    const expr::var* rep_var = std::get_if<expr::var>(&(*value)->content);
+    DEBUG_ASSERT(rep_var != nullptr);
+    return rep_var->index;
 }
 
 UBS_BIND_MAP_TEMPLATE
@@ -124,10 +124,9 @@ void UBS_BIND_MAP::equate(uint32_t var_a, uint32_t var_b) {
 
 UBS_BIND_MAP_TEMPLATE
 void UBS_BIND_MAP::instantiate(uint32_t var, const expr* functor) {
-    assert(std::holds_alternative<expr::functor>(functor->content)
-           && "instantiate: value must be a functor");
+    DEBUG_ASSERT(std::holds_alternative<expr::functor>(functor->content));
     const uint32_t root = find(var);
-    rep(root); // asserts the class is unbound
+    rep(root);
     set_value_.set_value(root, functor);
 }
 

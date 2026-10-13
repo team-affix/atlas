@@ -3,6 +3,7 @@
 #include <cstdint>
 #include <deque>
 #include <random>
+#include <stdexcept>
 #include <unordered_map>
 #include <vector>
 #include <gtest/gtest.h>
@@ -174,10 +175,21 @@ TEST_F(UbsBindMapTest, EquateRandomMergesShareOverallMinimum) {
         EXPECT_EQ(ubs_rep_index(store.resolve(var)), 0u);
 }
 
-#if !defined(NDEBUG)
-TEST_F(UbsBindMapTest, EquateIntoBoundClassAborts) {
+#ifdef DEBUG
+TEST_F(UbsBindMapTest, EquateIntoBoundClassThrows) {
     store.instantiate(0u, functor_node(1u));
-    EXPECT_DEATH(store.equate(0u, 1u), ".*");
+    EXPECT_THROW(store.equate(0u, 1u), std::logic_error);
+}
+
+TEST_F(UbsBindMapTest, EquateWithBoundSideThrows) {
+    store.instantiate(2u, functor_node(1u));
+    EXPECT_THROW(store.equate(0u, 2u), std::logic_error);
+}
+
+TEST_F(UbsBindMapTest, EquateMemberOfBoundClassThrows) {
+    store.equate(0u, 1u);
+    store.instantiate(0u, functor_node(1u));
+    EXPECT_THROW(store.equate(1u, 2u), std::logic_error);
 }
 #endif
 
@@ -198,14 +210,20 @@ TEST_F(UbsBindMapTest, InstantiateThroughNonRootWritesAtRootOnly) {
     EXPECT_EQ(values.map.count(3u), 0u);
 }
 
-#if !defined(NDEBUG)
-TEST_F(UbsBindMapTest, InstantiateBoundClassAborts) {
+#ifdef DEBUG
+TEST_F(UbsBindMapTest, InstantiateBoundClassThrows) {
     store.instantiate(1u, functor_node(9u));
-    EXPECT_DEATH(store.instantiate(1u, functor_node(1u)), ".*");
+    EXPECT_THROW(store.instantiate(1u, functor_node(1u)), std::logic_error);
 }
 
-TEST_F(UbsBindMapTest, InstantiateVariableNodeAborts) {
-    EXPECT_DEATH(store.instantiate(2u, var_node(0u)), ".*");
+TEST_F(UbsBindMapTest, InstantiateMergedBoundClassThrows) {
+    store.equate(0u, 1u);
+    store.instantiate(0u, functor_node(9u));
+    EXPECT_THROW(store.instantiate(1u, functor_node(1u)), std::logic_error);
+}
+
+TEST_F(UbsBindMapTest, InstantiateVariableNodeThrows) {
+    EXPECT_THROW(store.instantiate(2u, var_node(0u)), std::logic_error);
 }
 #endif
 

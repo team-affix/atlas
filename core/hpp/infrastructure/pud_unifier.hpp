@@ -26,7 +26,7 @@ struct unifier {
 
 private:
     // Whether a variable with this global index occurs in the normalized term.
-    bool occurs(uint32_t var_index, const expr* term);
+    bool occurs(uint32_t var_index, const expr* normalized);
 
     IGlobalize& globalize_;
     INormalize& normalize_;
@@ -101,11 +101,11 @@ bool UNIFIER::unify(framed_expr lhs, framed_expr rhs) {
 }
 
 UNIFIER_TEMPLATE
-bool UNIFIER::occurs(uint32_t var_index, const expr* term) {
-    if (const expr::var* var = std::get_if<expr::var>(&term->content)) {
+bool UNIFIER::occurs(uint32_t var_index, const expr* normalized) {
+    if (const expr::var* var = std::get_if<expr::var>(&normalized->content)) {
         return var->index == var_index;
     }
-    const expr::functor& functor = std::get<expr::functor>(term->content);
+    const expr::functor& functor = std::get<expr::functor>(normalized->content);
     for (const expr* arg : functor.args)
         if (occurs(var_index, arg))
             return true;
