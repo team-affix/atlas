@@ -1,5 +1,6 @@
 #include <algorithm>
 #include <cmath>
+#include <cstdint>
 #include <deque>
 #include <random>
 #include <unordered_map>
@@ -253,4 +254,158 @@ TEST_F(UbsBindMapTest, StaleNonRootMetadataIgnored) {
     sizes.map[3u] = 999u;
     values.map[3u] = var_node(888u);
     EXPECT_EQ(ubs_rep_index(store.resolve(3u)), 3u);
+}
+
+TEST_F(UbsBindMapTest, ResolveIndexZeroUsesMakeVarNotOffByOne) {
+    const expr* zero = var_node(0u);
+    EXPECT_CALL(make_var, make(0u)).WillOnce(testing::Return(zero));
+    EXPECT_EQ(store.resolve(0u), zero);
+    EXPECT_EQ(parents.map.count(0u), 0u);
+}
+
+TEST_F(UbsBindMapTest, ResolveHugeFreshIndexDelegatesToMakeVar) {
+    const uint32_t huge = UINT32_MAX;
+    const expr* node = var_node(huge);
+    EXPECT_CALL(make_var, make(huge)).WillOnce(testing::Return(node));
+    EXPECT_EQ(store.resolve(huge), node);
+}
+
+TEST_F(UbsBindMapTest, MergedNeverBoundStillResolvesToVarNotFunctor) {
+    store.equate(2u, 5u);
+    const expr* rep = store.resolve(2u);
+    EXPECT_TRUE(std::holds_alternative<expr::var>(rep->content));
+    EXPECT_EQ(ubs_rep_index(rep), 2u);
+}
+
+TEST_F(UbsBindMapTest, EquateSingletonIntoLargeClassGrowsSizeByOne) {
+    build_class_of_three(store);
+    const uint32_t large_root = ubs_find_root(parents, 10u);
+    const uint32_t size_before = sizes.map.at(large_root);
+    store.equate(10u, 50u);
+    EXPECT_EQ(ubs_find_root(parents, 50u), large_root);
+    EXPECT_EQ(sizes.map.at(large_root), size_before + 1u);
+}
+
+TEST_F(UbsBindMapTest, EquateTwoSizeTwoClassesYieldsSizeFour) {
+    store.equate(0u, 1u);
+    store.equate(2u, 3u);
+    store.equate(0u, 2u);
+    const uint32_t root = ubs_find_root(parents, 0u);
+    EXPECT_EQ(sizes.map.at(root), 4u);
+    EXPECT_EQ(parents.map.count(root), 0u);
+}
+
+TEST_F(UbsBindMapTest, EquateWhenLosingRootIsSmallerIndexRepresentative) {
+    store.equate(1u, 0u);
+    store.equate(2u, 3u);
+    store.equate(3u, 1u);
+    EXPECT_EQ(ubs_rep_index(store.resolve(2u)), 0u);
+}
+
+TEST_F(UbsBindMapTest, EquateWhenBothRepsEqualTheirRoots) {
+    store.equate(4u, 9u);
+    const uint32_t root = ubs_find_root(parents, 4u);
+    EXPECT_EQ(ubs_rep_index(store.resolve(9u)), 4u);
+    const expr* stored = values.map.at(root);
+    EXPECT_EQ(ubs_rep_index(stored), 4u);
+}
+
+TEST_F(UbsBindMapTest, EquateWhenMinIndexDeepInChain) {
+    store.equate(8u, 7u);
+    store.equate(7u, 6u);
+    store.equate(6u, 5u);
+    EXPECT_EQ(ubs_rep_index(store.resolve(8u)), 5u);
+}
+
+TEST_F(UbsBindMapTest, EquateChainIncreasingIndexKeepsFirstRepresentative) {
+    for (uint32_t next = 1u; next < 8u; ++next)
+        store.equate(0u, next);
+    for (uint32_t member = 0u; member < 8u; ++member)
+        EXPECT_EQ(ubs_rep_index(store.resolve(member)), 0u);
+}
+
+TEST_F(UbsBindMapTest, EquateChainDecreasingIndexTracksNewestMinimum) {
+    store.equate(5u, 4u);
+    EXPECT_EQ(ubs_rep_index(store.resolve(5u)), 4u);
+    store.equate(4u, 3u);
+    EXPECT_EQ(ubs_rep_index(store.resolve(5u)), 3u);
+    store.equate(3u, 2u);
+    EXPECT_EQ(ubs_rep_index(store.resolve(4u)), 2u);
+    store.equate(2u, 1u);
+    EXPECT_EQ(ubs_rep_index(store.resolve(3u)), 1u);
+    store.equate(1u, 0u);
+    EXPECT_EQ(ubs_rep_index(store.resolve(2u)), 0u);
+}
+
+TEST_F(UbsBindMapTest, EquateSamePairManyTimesChangesSizeOnlyOnce) {
+    const ubs_map_snapshot before = snapshot();
+    store.equate(1u, 2u);
+    const ubs_map_snapshot after_first = snapshot();
+    EXPECT_NE(before.parents, after_first.parents);
+    for (int repeat = 0; repeat < 20; ++repeat)
+        store.equate(1u, 2u);
+    EXPECT_TRUE(ubs_snapshots_equal(after_first, snapshot()));
+}
+
+TEST_F(UbsBindMapTest, EquateAbThenBaDoesNotDoubleClassSize) {
+    store.equate(1u, 2u);
+    const ubs_map_snapshot after_ab = snapshot();
+    store.equate(2u, 1u);
+    EXPECT_TRUE(ubs_snapshots_equal(after_ab, snapshot()));
+    const uint32_t root = ubs_find_root(parents, 1u);
+    EXPECT_EQ(sizes.map.at(root), 2u);
+}
+
+TEST_F(UbsBindMapTest, EquateTwoClassesWithCallerVarsKeepsSmallerCaller) {
+    store.equate(4u, 7u);
+    store.equate(3u, 9u);
+    store.equate(4u, 3u);
+    EXPECT_EQ(ubs_rep_index(store.resolve(7u)), 3u);
+    EXPECT_EQ(ubs_rep_index(store.resolve(9u)), 3u);
+}
+
+TEST_F(UbsBindMapTest, EquateMergeWritesNoParentForSurvivor) {
+    const size_t parents_before = parents.map.size();
+    store.equate(10u, 2u);
+    const uint32_t survivor = ubs_find_root(parents, 10u);
+    EXPECT_EQ(parents.map.count(survivor), 0u);
+    EXPECT_EQ(parents.map.size(), parents_before + 1u);
+}
+
+TEST_F(UbsBindMapTest, EquateMergeWritesExactlyOneParentEntry) {
+    const ubs_map_snapshot before = snapshot();
+    store.equate(6u, 11u);
+    const ubs_map_snapshot after = snapshot();
+    EXPECT_EQ(after.parents.size(), before.parents.size() + 1u);
+}
+
+TEST_F(UbsBindMapTest, InstantiateZeroArityFunctor) {
+    const expr* constant = functor_node(0u);
+    store.instantiate(3u, constant);
+    EXPECT_EQ(store.resolve(3u), constant);
+}
+
+TEST_F(UbsBindMapTest, InstantiateDeepNestedStoresExactPointer) {
+    const expr* inner = functor_node(1u);
+    owned_exprs.push_back(expr{expr::functor{2u, {inner}}});
+    const expr* outer = &owned_exprs.back();
+    store.instantiate(0u, outer);
+    EXPECT_EQ(store.resolve(0u), outer);
+}
+
+TEST_F(UbsBindMapTest, InstantiateSingletonWritesNoParentOrSize) {
+    const ubs_map_snapshot before = snapshot();
+    store.instantiate(4u, functor_node(5u));
+    const ubs_map_snapshot after = snapshot();
+    EXPECT_EQ(after.parents, before.parents);
+    EXPECT_EQ(after.sizes, before.sizes);
+    EXPECT_EQ(after.values.size(), before.values.size() + 1u);
+}
+
+TEST_F(UbsBindMapTest, InstantiateMergedClassLeavesStaleSizeUntouched) {
+    store.equate(1u, 2u);
+    const uint32_t root = ubs_find_root(parents, 1u);
+    const uint32_t size_before = sizes.map.at(root);
+    store.instantiate(2u, functor_node(8u));
+    EXPECT_EQ(sizes.map.at(root), size_before);
 }
