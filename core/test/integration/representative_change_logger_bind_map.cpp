@@ -109,6 +109,8 @@ TEST_F(RepChangeLoggerBindMapIntegrationTest, InstantiateLogsRepresentativeAndBi
 }
 
 #ifdef DEBUG
+// Same-class equate is not a supported "no log" case: callers must not equate two
+// variables already in one class. The bind map rejects it; the logger does not swallow it.
 TEST_F(RepChangeLoggerBindMapIntegrationTest, SameRootEquateTripsBindMapAssertion) {
     stack.rep_logger.equate(2u, 5u);
     const size_t before = stack.sink.changed_reps.size();

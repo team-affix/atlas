@@ -35,19 +35,24 @@ TEST_F(RepChangeLoggerUnifierIntegrationTest, FreshVariableWithFunctorLogsVariab
     EXPECT_EQ(stack.sink.changed_reps, std::vector<uint32_t>({2u}));
 }
 
-TEST_F(RepChangeLoggerUnifierIntegrationTest, TwoIdenticalGroundTermsLogNothing) {
+// Below: empty changed_rep sinks mean the unifier never called equate/instantiate.
+// That is not "the logger ignores same-class equate" — same-class equate through the
+// bind map is a contract violation (see bind-map integration). These tests assert the
+// unifier only mutates when a binding would actually change state.
+
+TEST_F(RepChangeLoggerUnifierIntegrationTest, UnifierSkipsMutatorOnIdenticalGroundTerms) {
     const expr* ground = atom("a");
     EXPECT_TRUE(stack.pud_unifier.unify(pud_fe(ground, 0), pud_fe(ground, 0)));
     EXPECT_TRUE(stack.sink.changed_reps.empty());
 }
 
-TEST_F(RepChangeLoggerUnifierIntegrationTest, TermWithItselfLogsNothing) {
+TEST_F(RepChangeLoggerUnifierIntegrationTest, UnifierSkipsMutatorOnTermUnifyWithItself) {
     const expr* fx = stack.bind_backing.pool.make_functor(functors.id("f"), {v(0)});
     EXPECT_TRUE(stack.pud_unifier.unify(pud_fe(fx, 0), pud_fe(fx, 0)));
     EXPECT_TRUE(stack.sink.changed_reps.empty());
 }
 
-TEST_F(RepChangeLoggerUnifierIntegrationTest, TopLevelFunctorMismatchLogsNothing) {
+TEST_F(RepChangeLoggerUnifierIntegrationTest, UnifierSkipsMutatorOnTopLevelFunctorMismatch) {
     EXPECT_FALSE(stack.pud_unifier.unify(pud_fe(atom("a"), 0), pud_fe(atom("b"), 0)));
     EXPECT_TRUE(stack.sink.changed_reps.empty());
 }
@@ -75,14 +80,14 @@ TEST_F(RepChangeLoggerUnifierIntegrationTest, AfterCallee105MergedWithCaller3Bin
     EXPECT_EQ(stack.sink.changed_reps, std::vector<uint32_t>({3u}));
 }
 
-TEST_F(RepChangeLoggerUnifierIntegrationTest, TwoMembersOfSameClassLogNothing) {
+TEST_F(RepChangeLoggerUnifierIntegrationTest, UnifierSkipsMutatorWhenMergedVarsResolveToSameSkeleton) {
     stack.bind_map.equate(1u, 2u);
     stack.sink.clear();
     EXPECT_TRUE(stack.pud_unifier.unify(pud_fe(v(1), 0), pud_fe(v(2), 0)));
     EXPECT_TRUE(stack.sink.changed_reps.empty());
 }
 
-TEST_F(RepChangeLoggerUnifierIntegrationTest, DuplicateArgumentsInFunctorLogOnce) {
+TEST_F(RepChangeLoggerUnifierIntegrationTest, UnifierMutatesOnceForDuplicateFunctorArguments) {
     const uint32_t pid = functors.id("p");
     const expr* left = stack.bind_backing.pool.make_functor(pid, {v(0), v(0)});
     const expr* right = stack.bind_backing.pool.make_functor(pid, {atom("a"), atom("a")});
@@ -90,7 +95,7 @@ TEST_F(RepChangeLoggerUnifierIntegrationTest, DuplicateArgumentsInFunctorLogOnce
     EXPECT_EQ(stack.sink.changed_reps, std::vector<uint32_t>({0u}));
 }
 
-TEST_F(RepChangeLoggerUnifierIntegrationTest, SwappedPairArgumentsLogSingleEntry) {
+TEST_F(RepChangeLoggerUnifierIntegrationTest, UnifierMutatesOnceForSwappedPairAfterFirstMerge) {
     const uint32_t pid = functors.id("p");
     const expr* left = stack.bind_backing.pool.make_functor(pid, {v(0), v(1)});
     const expr* right = stack.bind_backing.pool.make_functor(pid, {v(1), v(0)});
@@ -98,7 +103,7 @@ TEST_F(RepChangeLoggerUnifierIntegrationTest, SwappedPairArgumentsLogSingleEntry
     EXPECT_EQ(stack.sink.changed_reps.size(), 1u);
 }
 
-TEST_F(RepChangeLoggerUnifierIntegrationTest, BoundVariableEqualFunctorLogsNothing) {
+TEST_F(RepChangeLoggerUnifierIntegrationTest, UnifierSkipsMutatorWhenVariableAlreadyBoundToRhs) {
     const expr* ground = atom("a");
     stack.bind_map.instantiate(2u, ground);
     stack.sink.clear();
@@ -106,7 +111,7 @@ TEST_F(RepChangeLoggerUnifierIntegrationTest, BoundVariableEqualFunctorLogsNothi
     EXPECT_TRUE(stack.sink.changed_reps.empty());
 }
 
-TEST_F(RepChangeLoggerUnifierIntegrationTest, TwoVariablesBoundToSameFunctorLogNothing) {
+TEST_F(RepChangeLoggerUnifierIntegrationTest, UnifierSkipsMutatorWhenBothVariablesShareBinding) {
     const expr* ground = atom("a");
     stack.bind_map.instantiate(1u, ground);
     stack.bind_map.instantiate(4u, ground);
@@ -115,7 +120,7 @@ TEST_F(RepChangeLoggerUnifierIntegrationTest, TwoVariablesBoundToSameFunctorLogN
     EXPECT_TRUE(stack.sink.changed_reps.empty());
 }
 
-TEST_F(RepChangeLoggerUnifierIntegrationTest, OccursCheckFailureLogsNothingForFailingBinding) {
+TEST_F(RepChangeLoggerUnifierIntegrationTest, UnifierSkipsMutatorOnOccursCheckFailure) {
     const expr* loop = stack.bind_backing.pool.make_functor(functors.id("l"), {v(0)});
     EXPECT_FALSE(stack.pud_unifier.unify(pud_fe(v(0), 0), pud_fe(loop, 0)));
     EXPECT_TRUE(stack.sink.changed_reps.empty());
