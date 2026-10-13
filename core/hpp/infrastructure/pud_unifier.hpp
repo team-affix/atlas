@@ -25,8 +25,8 @@ struct unifier {
     bool unify(framed_expr lhs, framed_expr rhs);
 
 private:
-    // Whether the hash-consed var occurs in the normalized term.
-    bool occurs(const expr* var, const expr* term);
+    // Whether a variable with this global index occurs in the normalized term.
+    bool occurs(uint32_t var_index, const expr* term);
 
     IGlobalize& globalize_;
     INormalize& normalize_;
@@ -75,14 +75,14 @@ bool UNIFIER::unify(framed_expr lhs, framed_expr rhs) {
     }
     if (lhs_var) {
         const expr* value = normalize_.normalize(rhs);
-        if (occurs(lhs.skeleton, value))
+        if (occurs(lhs_var->index, value))
             return false;
         instantiate_.instantiate(lhs_var->index, value);
         return true;
     }
     if (rhs_var) {
         const expr* value = normalize_.normalize(lhs);
-        if (occurs(rhs.skeleton, value))
+        if (occurs(rhs_var->index, value))
             return false;
         instantiate_.instantiate(rhs_var->index, value);
         return true;
@@ -101,13 +101,14 @@ bool UNIFIER::unify(framed_expr lhs, framed_expr rhs) {
 }
 
 UNIFIER_TEMPLATE
-bool UNIFIER::occurs(const expr* var, const expr* term) {
-    if (term == var)
-        return true;
-    if (const expr::functor* functor = std::get_if<expr::functor>(&term->content))
-        for (const expr* arg : functor->args)
-            if (occurs(var, arg))
-                return true;
+bool UNIFIER::occurs(uint32_t var_index, const expr* term) {
+    if (const expr::var* var = std::get_if<expr::var>(&term->content)) {
+        return var->index == var_index;
+    }
+    const expr::functor& functor = std::get<expr::functor>(term->content);
+    for (const expr* arg : functor.args)
+        if (occurs(var_index, arg))
+            return true;
     return false;
 }
 
