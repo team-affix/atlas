@@ -35,7 +35,7 @@ struct ubs_bind_map {
 
     // Any variable. Bound class: its functor. Unbound class: its rep var.
     const expr* resolve(uint32_t var);
-    // Any two variables. Precondition: both classes unbound.
+    // Any two variables in different unbound classes. Precondition: roots differ.
     void equate(uint32_t var_a, uint32_t var_b);
     // Any variable. Preconditions: its class is unbound; functor is a functor.
     void instantiate(uint32_t var, const expr* functor);

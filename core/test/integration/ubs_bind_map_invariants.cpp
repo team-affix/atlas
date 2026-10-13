@@ -96,6 +96,8 @@ TEST_F(UbsBindMapInvariantsIntegrationTest, RandomEquateAndInstantiateRespectRef
         const bool right_unbound = std::holds_alternative<expr::var>(right_resolved->content);
         if (!left_unbound || !right_unbound)
             continue;
+        if (classes.same_class(left, right))
+            continue;
 
         stack.bind_map.equate(left, right);
         classes.equate(left, right);

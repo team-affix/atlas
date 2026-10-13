@@ -109,15 +109,16 @@ TEST_F(UbsBindMapTest, EquateFreshVarsResolveToSmallerIndex) {
     EXPECT_EQ(ubs_rep_index(store.resolve(2u)), 2u);
 }
 
-TEST_F(UbsBindMapTest, EquateSameVarOrSameClassMembersIsNoOp) {
-    const ubs_map_snapshot before = snapshot();
-    store.equate(8u, 8u);
-    EXPECT_TRUE(ubs_snapshots_equal(before, snapshot()));
-    store.equate(0u, 1u);
-    const ubs_map_snapshot after_merge = snapshot();
-    store.equate(1u, 0u);
-    EXPECT_TRUE(ubs_snapshots_equal(after_merge, snapshot()));
+#ifdef DEBUG
+TEST_F(UbsBindMapTest, EquateSameVarThrows) {
+    EXPECT_THROW(store.equate(8u, 8u), std::logic_error);
 }
+
+TEST_F(UbsBindMapTest, EquateSameClassMembersThrows) {
+    store.equate(0u, 1u);
+    EXPECT_THROW(store.equate(1u, 0u), std::logic_error);
+}
+#endif
 
 TEST_F(UbsBindMapTest, EquateArgumentOrderIsIrrelevant) {
     ::testing::NiceMock<MockMakeVar> make_var_ab;
@@ -255,8 +256,13 @@ TEST_F(UbsBindMapTest, UnionBySizeAdversarialOrdersStayShallow) {
 
 TEST_F(UbsBindMapTest, UnionBySizeNoCyclesAndChainsStayInClass) {
     std::mt19937 rng(42);
-    for (int round = 0; round < 50; ++round)
-        store.equate(static_cast<uint32_t>(rng() % 20u), static_cast<uint32_t>(rng() % 20u));
+    for (int round = 0; round < 50; ++round) {
+        const uint32_t left = static_cast<uint32_t>(rng() % 20u);
+        const uint32_t right = static_cast<uint32_t>(rng() % 20u);
+        if (ubs_find_root(parents, left) == ubs_find_root(parents, right))
+            continue;
+        store.equate(left, right);
+    }
     for (uint32_t var = 0; var < 20u; ++var) {
         const expr* rep = store.resolve(var);
         uint32_t walk = var;
@@ -360,19 +366,23 @@ TEST_F(UbsBindMapTest, EquateSamePairManyTimesChangesSizeOnlyOnce) {
     store.equate(1u, 2u);
     const ubs_map_snapshot after_first = snapshot();
     EXPECT_NE(before.parents, after_first.parents);
+#ifdef DEBUG
     for (int repeat = 0; repeat < 20; ++repeat)
-        store.equate(1u, 2u);
+        EXPECT_THROW(store.equate(1u, 2u), std::logic_error);
+#endif
     EXPECT_TRUE(ubs_snapshots_equal(after_first, snapshot()));
 }
 
-TEST_F(UbsBindMapTest, EquateAbThenBaDoesNotDoubleClassSize) {
+#ifdef DEBUG
+TEST_F(UbsBindMapTest, EquateReverseOrderAfterMergeThrows) {
     store.equate(1u, 2u);
     const ubs_map_snapshot after_ab = snapshot();
-    store.equate(2u, 1u);
+    EXPECT_THROW(store.equate(2u, 1u), std::logic_error);
     EXPECT_TRUE(ubs_snapshots_equal(after_ab, snapshot()));
     const uint32_t root = ubs_find_root(parents, 1u);
     EXPECT_EQ(sizes.map.at(root), 2u);
 }
+#endif
 
 TEST_F(UbsBindMapTest, EquateTwoClassesWithCallerVarsKeepsSmallerCaller) {
     store.equate(4u, 7u);
