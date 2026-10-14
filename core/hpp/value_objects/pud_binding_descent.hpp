@@ -1,11 +1,11 @@
 #ifndef PUD_BINDING_DESCENT_HPP
 #define PUD_BINDING_DESCENT_HPP
 
-#include "immer/map.hpp"
-#include "value_objects/framed_expr.hpp"
+#include "value_objects/pud_ubs_state.hpp"
 
 struct pud_binding_descent {
-    immer::map<uint32_t, framed_expr> bindings;
+    pud_ubs_state ubs_state;
+    auto operator<=>(const pud_binding_descent&) const = default;
 };
 
 #endif
