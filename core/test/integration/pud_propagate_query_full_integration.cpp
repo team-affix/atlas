@@ -8,32 +8,26 @@
 #include "infrastructure/coroutine.hpp"
 #include "infrastructure/expr_pool.hpp"
 #include "infrastructure/globalizer.hpp"
-#include <immer/map_transient.hpp>
-#include "infrastructure/hierarchical_bind_map.hpp"
-#include "infrastructure/normalizer.hpp"
+#include "infrastructure/expr_pool_ubs_factories.hpp"
 #include "infrastructure/pud_call_sites.hpp"
 #include "infrastructure/pud_descender.hpp"
+#include "infrastructure/ubs_transient_bind_map_data.hpp"
 #include "infrastructure/pud_node_added_body_goals.hpp"
 #include "infrastructure/pud_node_added_specializations.hpp"
 #include "infrastructure/pud_node_added_var_count.hpp"
 #include "infrastructure/pud_node_heads.hpp"
 #include "infrastructure/pud_node_id_sequencer.hpp"
 #include "infrastructure/pud_refuted_nodes.hpp"
-#include "infrastructure/pud_specializer.hpp"
-#include "infrastructure/unifier.hpp"
 #include "value_objects/pud_descent.hpp"
 
 struct PudPropagateQueryFullIntegrationTest : public ::testing::Test {
-    using bind_map_t    = hierarchical_bind_map<globalizer, immer::map<uint32_t, framed_expr>::transient_type>;
-    using unifier_t     = unifier<globalizer, bind_map_t>;
-    using specializer_t = pud_specializer<expr_pool, unifier_t>;
-    using normalizer_t  = normalizer<globalizer, expr_pool, expr_pool, bind_map_t>;
+    using bind_map_t    = ubs_transient_bind_map<expr_pool_ubs_var_factory, expr_pool_ubs_functor_factory>;
     using propagator_t  = pud_descender<
         bind_map_t,
-        unifier_t,
-        specializer_t,
-        normalizer_t,
+        expr_pool_ubs_var_factory,
+        expr_pool_ubs_functor_factory,
         pud_node_id_sequencer,
+        expr_pool,
         expr_pool,
         globalizer,
         pud_refuted_nodes,
@@ -59,10 +53,12 @@ struct PudPropagateQueryFullIntegrationTest : public ::testing::Test {
     pud_call_sites                 call_sites;
     std::unordered_set<pud_node_id> call_site_registered_;
     pud_node_id                    anchor_id_;
+    expr_pool_ubs_var_factory      ubs_var_factory_{exprs};
+    expr_pool_ubs_functor_factory  ubs_functor_factory_{exprs};
     propagator_t                   propagator;
 
     PudPropagateQueryFullIntegrationTest()
-        : propagator(sequencer_, exprs, globalize, refuted, call_sites,
+        : propagator(sequencer_, ubs_var_factory_, ubs_functor_factory_, exprs, exprs, globalize, refuted, call_sites,
                      node_specs_, node_goals_, node_var_counts_, node_heads_,
                      node_specs_, node_goals_, node_var_counts_) {
         anchor_id_ = sequencer_.next();

@@ -92,19 +92,19 @@ struct pud_logged_unifier_bind_map_stack {
     global_normalizer<globalizer, pud_pool_make_functor, ubs_bind_map_expr_pool_backing::bind_map_t> normalizer{
         globalize, bind_backing.make_functor, bind_map};
 
-    using pud_unifier_t = unifier<
+    using pud_unifier_t = pud_unifier<
         globalizer,
         global_normalizer<globalizer, pud_pool_make_functor, ubs_bind_map_expr_pool_backing::bind_map_t>,
         ubs_bind_map_expr_pool_backing::bind_map_t,
         logged_equate_instantiate_gate<rep_logger_t>,
         logged_equate_instantiate_gate<rep_logger_t>>;
 
-    pud_unifier_t pud_unifier;
+    pud_unifier_t framed_unifier;
 
     pud_logged_unifier_bind_map_stack()
         : rep_logger(bind_map, bind_map, sink)
         , bind_gate(rep_logger, sink)
-        , pud_unifier(globalize, normalizer, bind_map, bind_gate, bind_gate) {}
+        , framed_unifier(globalize, normalizer, bind_map, bind_gate, bind_gate) {}
 };
 
 inline uint32_t logged_global_rep_index(

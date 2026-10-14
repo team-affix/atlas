@@ -5,10 +5,11 @@
 #include <vector>
 #include <gtest/gtest.h>
 #include <gmock/gmock.h>
-#include <immer/map.hpp>
-#include <immer/map_transient.hpp>
-#include "infrastructure/coroutine.hpp"
+#include "infrastructure/expr_pool.hpp"
+#include "infrastructure/expr_pool_ubs_factories.hpp"
+#include "infrastructure/globalizer.hpp"
 #include "infrastructure/pud_descender.hpp"
+#include "infrastructure/ubs_transient_bind_map_data.hpp"
 
 using ::testing::_;
 using ::testing::IsEmpty;
@@ -18,15 +19,6 @@ using ::testing::Return;
 using ::testing::SizeIs;
 
 namespace {
-
-struct SpecScript {
-    std::vector<uint32_t> reps;
-    bool ok = true;
-};
-
-struct MockGlobalize {
-    MOCK_METHOD(uint32_t, globalize, (uint32_t, uint32_t));
-};
 
 struct MockRefuted {
     MOCK_METHOD(bool, check_refuted, (pud_node_id));
@@ -48,83 +40,11 @@ struct MockStoreAddedVarCount {
     MOCK_METHOD(void, store, (pud_node_id, uint32_t));
 };
 
-struct MockMakeVar {
-    MOCK_METHOD(const expr*, make_var, (uint32_t));
-};
-
-struct BindLog {
-    MOCK_METHOD(void, bind, (uint32_t, const expr*, uint32_t));
-};
-
-struct MockBindMap {
-    template<typename G>
-    MockBindMap(G&, immer::map<uint32_t, framed_expr>::transient_type&) {}
-    void bind(uint32_t key, framed_expr value) {
-        log->bind(key, value.skeleton, value.frame_offset);
-    }
-    framed_expr whnf(framed_expr fe) { return fe; }
-    static BindLog* log;
-};
-
-BindLog* MockBindMap::log = nullptr;
-
-struct UnifyLog {
-    MOCK_METHOD(SpecScript, unify, (const expr*, uint32_t, const expr*, uint32_t));
-};
-
-struct MockUnifier {
-    MockUnifier(MockGlobalize&, MockBindMap*) {}
-    coroutine<uint32_t, bool> unify(framed_expr lhs, framed_expr rhs) {
-        SpecScript script = log->unify(lhs.skeleton, lhs.frame_offset, rhs.skeleton, rhs.frame_offset);
-        for (uint32_t rep : script.reps)
-            co_yield rep;
-        co_return script.ok;
-    }
-    static UnifyLog* log;
-};
-
-UnifyLog* MockUnifier::log = nullptr;
-
-struct SpecLog {
-    MOCK_METHOD(SpecScript, specialize, (uint32_t, uint32_t, const expr*));
-};
-
-struct MockSpecializer {
-    template<typename MV, typename U>
-    MockSpecializer(MV&, U&) {}
-    coroutine<uint32_t, bool> specialize(uint32_t frame_offset, pud_specialization specialization) {
-        SpecScript script = log->specialize(frame_offset, specialization.var_idx, specialization.value);
-        for (uint32_t rep : script.reps)
-            co_yield rep;
-        co_return script.ok;
-    }
-    static SpecLog* log;
-};
-
-SpecLog* MockSpecializer::log = nullptr;
-
-struct NormLog {
-    MOCK_METHOD(const expr*, normalize, (const expr*, uint32_t, uint32_t, (std::unordered_map<uint32_t, uint32_t>*)));
-};
-
-struct MockNormalizer {
-    template<typename G, typename MF, typename MV, typename BM>
-    MockNormalizer(G&, MF&, MV&, BM&) {}
-    const expr* normalize(framed_expr value, uint32_t cutoff, std::unordered_map<uint32_t, uint32_t>& translation) {
-        return log->normalize(value.skeleton, value.frame_offset, cutoff, &translation);
-    }
-    static NormLog* log;
-};
-
-NormLog* MockNormalizer::log = nullptr;
-
 struct MockCallSite {
     size_t get(pud_node_id) const { return std::numeric_limits<size_t>::max(); }
 };
 
-// Dummy root: var_count=1, head=something, no body goals
 const pud_node_id g_dummy_root_id = 0;
-expr g_dummy_head{expr::var{99}};
 
 struct MockGetAddedSpecializations {
     std::vector<pud_specialization> specs;
@@ -147,17 +67,20 @@ struct MockGetAddedVarCount {
 MockGetAddedVarCountLog* MockGetAddedVarCount::log = nullptr;
 
 struct MockGetAxiomHead {
-    const expr* get(pud_node_id) const { return &g_dummy_head; }
+    const expr* head;
+    const expr* get(pud_node_id) const { return head; }
 };
 
+using bind_map_t = ubs_transient_bind_map<expr_pool_ubs_var_factory, expr_pool_ubs_functor_factory>;
+
 using test_propagator_t = pud_descender<
-    MockBindMap,
-    MockUnifier,
-    MockSpecializer,
-    MockNormalizer,
+    bind_map_t,
+    expr_pool_ubs_var_factory,
+    expr_pool_ubs_functor_factory,
     MockNextNodeId,
-    MockMakeVar,
-    MockGlobalize,
+    expr_pool,
+    expr_pool,
+    globalizer,
     MockRefuted,
     MockCallSite,
     MockGetAddedSpecializations,
@@ -171,197 +94,178 @@ using test_propagator_t = pud_descender<
 } // namespace
 
 struct PudQueryPropagatorTest : public ::testing::Test {
-    NiceMock<MockNextNodeId>  next_node_id;
-    NiceMock<MockMakeVar>   make_var;
-    NiceMock<MockGlobalize> globalize;
-    NiceMock<MockRefuted>   refuted;
-    NiceMock<BindLog>       bind_log;
-    NiceMock<SpecLog>       spec_log;
-    NiceMock<UnifyLog>      unify_log;
-    NiceMock<NormLog>       norm_log;
+    expr_pool pool;
+    globalizer globalize;
+    expr_pool_ubs_var_factory ubs_var_factory{pool};
+    expr_pool_ubs_functor_factory ubs_functor_factory{pool};
+    NiceMock<MockNextNodeId> next_node_id;
+    NiceMock<MockRefuted> refuted;
     NiceMock<MockGetAddedVarCountLog> var_count_log;
-    MockCallSite            call_site;
+    MockCallSite call_site;
     MockGetAddedSpecializations get_specs;
-    MockGetAddedBodyGoals   get_body_goals;
-    MockGetAddedVarCount    get_var_count;
-    MockGetAxiomHead        get_axiom_head;
+    MockGetAddedBodyGoals get_body_goals;
+    MockGetAddedVarCount get_var_count;
+    MockGetAxiomHead get_axiom_head;
     NiceMock<MockStoreAddedSpecializations> store_specs;
-    NiceMock<MockStoreAddedBodyGoals>       store_goals;
-    NiceMock<MockStoreAddedVarCount>        store_var_count;
+    NiceMock<MockStoreAddedBodyGoals> store_goals;
+    NiceMock<MockStoreAddedVarCount> store_var_count;
     test_propagator_t propagator{
-        next_node_id, make_var, globalize, refuted, call_site,
+        next_node_id, ubs_var_factory, ubs_functor_factory, pool, pool, globalize, refuted, call_site,
         get_specs, get_body_goals, get_var_count, get_axiom_head,
         store_specs, store_goals, store_var_count};
-    expr query_expr{expr::var{1}};
-    expr goal_a{expr::var{2}};
-    expr goal_b{expr::var{3}};
-    expr goal_c{expr::var{4}};
-    expr spec_value{expr::var{5}};
-    expr norm_a{expr::var{6}};
-    expr norm_b{expr::var{7}};
-    expr norm_c{expr::var{8}};
-    pud_node_id made_id = 99;
+    const expr* query_expr;
+    const expr* axiom_head;
+    const expr* goal_a;
+    const expr* goal_b;
+    const expr* goal_c;
+    const expr* spec_value;
+    const expr* atom_a;
+    pud_node_id made_id = pud_node_id{99};
 
     void SetUp() override {
-        MockBindMap::log = &bind_log;
-        MockSpecializer::log = &spec_log;
-        MockUnifier::log = &unify_log;
-        MockNormalizer::log = &norm_log;
         MockGetAddedVarCount::log = &var_count_log;
-        // root has var_count=1 (one var for the root)
+        query_expr = pool.make_var(0u);
+        axiom_head = pool.make_var(0u);
+        get_axiom_head.head = axiom_head;
+        goal_a = pool.make_var(10u);
+        goal_b = pool.make_var(11u);
+        goal_c = pool.make_var(12u);
+        spec_value = pool.make_functor(1u, {});
+        atom_a = pool.make_functor(2u, {});
         ON_CALL(var_count_log, get(_)).WillByDefault(Return(0u));
         ON_CALL(var_count_log, get(g_dummy_root_id)).WillByDefault(Return(1u));
-        ON_CALL(globalize, globalize(_, _)).WillByDefault(Return(0u));
         ON_CALL(refuted, check_refuted(_)).WillByDefault(Return(false));
-        ON_CALL(spec_log, specialize(_, _, _)).WillByDefault(Return(SpecScript{}));
-        ON_CALL(unify_log, unify(_, _, _, _)).WillByDefault(Return(SpecScript{}));
-        ON_CALL(norm_log, normalize(_, _, _, _)).WillByDefault(Return(&norm_a));
         ON_CALL(next_node_id, next()).WillByDefault(Return(made_id));
     }
 };
 
 TEST_F(PudQueryPropagatorTest, OpenQueryFromRootUnifiesQueryWithAxiomHead) {
-    // root var_count=1, so query_frame_offset = 0+1 = 1.
-    // The query lives in the caller's frame (0), the axiom head in the new query frame (1).
-    EXPECT_CALL(unify_log, unify(&query_expr, 0u, &g_dummy_head, 1u)).WillOnce(Return(SpecScript{}));
-    // the query is unified with the head directly: nothing is bound up front
-    EXPECT_CALL(bind_log, bind(_, _, _)).Times(0);
-    EXPECT_TRUE(propagator.open_query(propagator.descent_root(g_dummy_root_id), &query_expr, g_dummy_root_id).has_value());
+    EXPECT_TRUE(propagator.open_query(propagator.descent_root(g_dummy_root_id), query_expr, g_dummy_root_id).has_value());
 }
 
 TEST_F(PudQueryPropagatorTest, OpenQueryDescentIsAtAxiomRootWithOnlyTheAxiomsVars) {
     auto root = propagator.descent_root(g_dummy_root_id);
-    auto query = propagator.open_query(root, &query_expr, g_dummy_root_id).value();
+    auto query = propagator.open_query(root, query_expr, g_dummy_root_id).value();
     EXPECT_EQ(query.node, g_dummy_root_id);
     EXPECT_EQ(query.frame_offset, root.frame_offset + root.lvc);
-    // g_dummy_root_id has var_count=1; no extra var is introduced for the query
     EXPECT_EQ(query.lvc, 1u);
 }
 
 TEST_F(PudQueryPropagatorTest, OpenQueryThatFailsToUnifyWithAxiomHeadYieldsNullopt) {
-    EXPECT_CALL(unify_log, unify(&query_expr, 0u, &g_dummy_head, 1u)).WillOnce(Return(SpecScript{{}, false}));
-    EXPECT_FALSE(propagator.open_query(propagator.descent_root(g_dummy_root_id), &query_expr, g_dummy_root_id).has_value());
+    get_axiom_head.head = pool.make_functor(99u, {});
+    const expr* ground_query = pool.make_functor(1u, {});
+    EXPECT_FALSE(propagator.open_query(propagator.descent_root(g_dummy_root_id), ground_query, g_dummy_root_id).has_value());
 }
 
-// query_frame_offset = 1: rep 0 is in the caller's env, rep 5 is a var of the new query frame
 TEST_F(PudQueryPropagatorTest, OpenQueryOnlyRecordsCallerRepsThatUnifyTouched) {
-    EXPECT_CALL(unify_log, unify(_, _, _, _)).WillOnce(Return(SpecScript{{0, 5}, true}));
-    EXPECT_CALL(store_specs, store(made_id, SizeIs(1)));
+    get_axiom_head.head = pool.make_functor(1u, {});
     auto root = propagator.descent_root(g_dummy_root_id);
-    auto query = propagator.open_query(root, &query_expr, g_dummy_root_id).value();
+    auto query = propagator.open_query(root, query_expr, g_dummy_root_id).value();
+    EXPECT_CALL(store_specs, store(made_id, SizeIs(1)));
     propagator.close_query(query);
 }
 
 TEST_F(PudQueryPropagatorTest, RefutedChildIsNotEntered) {
-    pud_node_id child = 5;
+    pud_node_id child = pud_node_id{5};
     EXPECT_CALL(refuted, check_refuted(child)).WillOnce(Return(true));
     auto root = propagator.descent_root(g_dummy_root_id);
     EXPECT_FALSE(propagator.descend(root, child).has_value());
 }
 
 TEST_F(PudQueryPropagatorTest, ChildWithNoSpecializationsIsEntered) {
-    pud_node_id child = 5;
+    pud_node_id child = pud_node_id{5};
     auto root = propagator.descent_root(g_dummy_root_id);
     EXPECT_TRUE(propagator.descend(root, child).has_value());
 }
 
 TEST_F(PudQueryPropagatorTest, OneSpecializationSucceeds) {
-    pud_node_id child = 5;
-    get_specs.specs = {{.var_idx = 1, .value = &spec_value}};
-    EXPECT_CALL(spec_log, specialize(0u, 1u, &spec_value)).WillOnce(Return(SpecScript{{}, true}));
+    pud_node_id child = pud_node_id{5};
+    get_specs.specs = {{.var_idx = 0u, .value = spec_value}};
     auto root = propagator.descent_root(g_dummy_root_id);
     EXPECT_TRUE(propagator.descend(root, child).has_value());
 }
 
 TEST_F(PudQueryPropagatorTest, SeveralSpecializationsSucceed) {
-    pud_node_id child = 5;
+    pud_node_id child = pud_node_id{5};
     get_specs.specs = {
-        {.var_idx = 1, .value = &spec_value},
-        {.var_idx = 2, .value = &goal_a}
-    };
-    EXPECT_CALL(spec_log, specialize(0u, 1u, &spec_value)).WillOnce(Return(SpecScript{{}, true}));
-    EXPECT_CALL(spec_log, specialize(0u, 2u, &goal_a)).WillOnce(Return(SpecScript{{}, true}));
+        {.var_idx = 0u, .value = spec_value},
+        {.var_idx = 0u, .value = spec_value}};
     auto root = propagator.descent_root(g_dummy_root_id);
     EXPECT_TRUE(propagator.descend(root, child).has_value());
 }
 
 TEST_F(PudQueryPropagatorTest, FailingSpecializationIsNotEntered) {
-    pud_node_id child = 5;
+    pud_node_id child = pud_node_id{5};
+    const expr* cyclic = pool.make_functor(3u, {pool.make_var(0u)});
     get_specs.specs = {
-        {.var_idx = 1, .value = &spec_value},
-        {.var_idx = 2, .value = &goal_a}
-    };
-    EXPECT_CALL(spec_log, specialize(0u, 1u, &spec_value)).WillOnce(Return(SpecScript{{7}, true}));
-    EXPECT_CALL(spec_log, specialize(0u, 2u, &goal_a)).WillOnce(Return(SpecScript{{}, false}));
+        {.var_idx = 0u, .value = spec_value},
+        {.var_idx = 0u, .value = cyclic}};
     auto root = propagator.descent_root(g_dummy_root_id);
     EXPECT_FALSE(propagator.descend(root, child).has_value());
 }
 
 TEST_F(PudQueryPropagatorTest, BodyGoalCountDoesNotRejectChild) {
-    pud_node_id none = 5, one = 6, several = 7;
-    // goals are looked up per node — use empty by default
+    pud_node_id none = pud_node_id{5};
+    pud_node_id one = pud_node_id{6};
+    pud_node_id several = pud_node_id{7};
     auto root = propagator.descent_root(g_dummy_root_id);
     EXPECT_TRUE(propagator.descend(root, none).has_value());
-    get_body_goals.goals = {&goal_a};
+    get_body_goals.goals = {goal_a};
     EXPECT_TRUE(propagator.descend(root, one).has_value());
-    get_body_goals.goals = {&goal_a, &goal_b, &goal_c};
+    get_body_goals.goals = {goal_a, goal_b, goal_c};
     EXPECT_TRUE(propagator.descend(root, several).has_value());
 }
 
 TEST_F(PudQueryPropagatorTest, OpenQueryAfterPropagateUsesCallerFramePlusLiveVars) {
-    pud_node_id child = 5;
+    pud_node_id child = pud_node_id{5};
     ON_CALL(var_count_log, get(child)).WillByDefault(Return(4u));
     auto root = propagator.descent_root(g_dummy_root_id);
     auto at_child = propagator.descend(root, child);
     ASSERT_TRUE(at_child.has_value());
-    // root.lvc=1, child.var_count=4 → at_child.lvc=5 → query_frame_offset=5
-    EXPECT_CALL(unify_log, unify(&query_expr, 0u, &g_dummy_head, 5u)).WillOnce(Return(SpecScript{}));
-    propagator.open_query(*at_child, &query_expr, g_dummy_root_id);
+    EXPECT_TRUE(propagator.open_query(*at_child, query_expr, g_dummy_root_id).has_value());
 }
 
 TEST_F(PudQueryPropagatorTest, OpenQueryDescentCanBePropagated) {
-    pud_node_id child = 5;
+    pud_node_id child = pud_node_id{5};
     auto root = propagator.descent_root(g_dummy_root_id);
-    auto query = propagator.open_query(root, &query_expr, g_dummy_root_id).value();
+    auto query = propagator.open_query(root, query_expr, g_dummy_root_id).value();
     EXPECT_TRUE(propagator.descend(query, child).has_value());
 }
 
 TEST_F(PudQueryPropagatorTest, CloseNeverPropagatedRootHasNoGoalsOrSpecs) {
-    EXPECT_CALL(store_specs,     store(made_id, IsEmpty()));
-    EXPECT_CALL(store_goals,     store(made_id, IsEmpty()));
+    EXPECT_CALL(store_specs, store(made_id, IsEmpty()));
+    EXPECT_CALL(store_goals, store(made_id, IsEmpty()));
     EXPECT_CALL(store_var_count, store(made_id, 0u));
     auto root = propagator.descent_root(g_dummy_root_id);
     propagator.close_query(root);
 }
 
 TEST_F(PudQueryPropagatorTest, CloseOpenQueryWithoutPropagateHasNoGoalsOrSpecs) {
-    EXPECT_CALL(store_specs,     store(made_id, IsEmpty()));
-    EXPECT_CALL(store_goals,     store(made_id, IsEmpty()));
+    EXPECT_CALL(store_specs, store(made_id, IsEmpty()));
+    EXPECT_CALL(store_goals, store(made_id, IsEmpty()));
     EXPECT_CALL(store_var_count, store(made_id, 0u));
     auto root = propagator.descent_root(g_dummy_root_id);
-    auto query = propagator.open_query(root, &query_expr, g_dummy_root_id).value();
+    auto query = propagator.open_query(root, query_expr, g_dummy_root_id).value();
     propagator.close_query(query);
 }
 
 TEST_F(PudQueryPropagatorTest, CloseOneStepReceivesThatStepsGoalsAndReps) {
-    pud_node_id step = 5;
-    get_body_goals.goals = {&goal_a};
-    get_specs.specs = {{.var_idx = 1, .value = &spec_value}};
-    EXPECT_CALL(spec_log, specialize(0u, 1u, &spec_value)).WillOnce(Return(SpecScript{{3}, true}));
-    EXPECT_CALL(norm_log, normalize(_, _, _, _)).WillRepeatedly(Return(&norm_a));
-    EXPECT_CALL(store_specs,  store(made_id, Not(IsEmpty())));
-    EXPECT_CALL(store_goals,  store(made_id, Not(IsEmpty())));
+    get_axiom_head.head = pool.make_functor(1u, {});
     auto root = propagator.descent_root(g_dummy_root_id);
-    auto at_step = propagator.descend(root, step);
+    auto query = propagator.open_query(root, query_expr, g_dummy_root_id).value();
+    get_body_goals.goals = {goal_a};
+    pud_node_id step = pud_node_id{5};
+    auto at_step = propagator.descend(query, step);
     ASSERT_TRUE(at_step.has_value());
+    EXPECT_CALL(store_specs, store(made_id, Not(IsEmpty())));
+    EXPECT_CALL(store_goals, store(made_id, Not(IsEmpty())));
     propagator.close_query(*at_step);
 }
 
 TEST_F(PudQueryPropagatorTest, CloseVarCountZeroWhenNothingIsNormalizedIntoANewVar) {
-    pud_node_id step = 5;
-    get_body_goals.goals = {&goal_a};
+    pud_node_id step = pud_node_id{5};
+    get_body_goals.goals = {spec_value};
     get_specs.specs.clear();
-    EXPECT_CALL(norm_log, normalize(_, _, _, _)).WillRepeatedly(Return(&norm_a));
     EXPECT_CALL(store_var_count, store(made_id, 0u));
     auto root = propagator.descent_root(g_dummy_root_id);
     auto at_step = propagator.descend(root, step);

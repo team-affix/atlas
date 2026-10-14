@@ -7,7 +7,7 @@
 #include <immer/set.hpp>
 #include "value_objects/pud_node_id.hpp"
 #include "value_objects/body_goal_id.hpp"
-#include "value_objects/framed_expr.hpp"
+#include "value_objects/pud_ubs_state.hpp"
 
 struct pud_descent {
     uint32_t frame_offset;
@@ -15,7 +15,7 @@ struct pud_descent {
     size_t bgc;
     pud_node_id node;
     immer::set<uint32_t> touched_caller_reps;
-    immer::map<uint32_t, framed_expr> bindings;
+    pud_ubs_state ubs_state;
     immer::map<body_goal_id, const expr*> pending_body_goals;
     auto operator<=>(const pud_descent&) const = default;
 };

@@ -27,21 +27,21 @@ struct MockInstantiate {
     MOCK_METHOD(void, instantiate, (uint32_t, uint32_t, (const std::vector<const expr*>&)));
 };
 
-using test_unifier_t = unifier<
+using test_unifier_t = pud_unifier<
     ::testing::NiceMock<MockGlobalize>,
     ::testing::NiceMock<MockNormalize>,
     ::testing::NiceMock<MockResolve>,
     ::testing::NiceMock<MockEquate>,
     ::testing::NiceMock<MockInstantiate>>;
 
-using unifier_no_instantiate_t = unifier<
+using unifier_no_instantiate_t = pud_unifier<
     ::testing::NiceMock<MockGlobalize>,
     ::testing::NiceMock<MockNormalize>,
     ::testing::NiceMock<MockResolve>,
     ::testing::NiceMock<MockEquate>,
     ::testing::StrictMock<MockInstantiate>>;
 
-using unifier_no_bind_ops_t = unifier<
+using unifier_no_bind_ops_t = pud_unifier<
     ::testing::NiceMock<MockGlobalize>,
     ::testing::NiceMock<MockNormalize>,
     ::testing::NiceMock<MockResolve>,
@@ -117,7 +117,7 @@ TEST_F(PudUnifierTest, StructurallyEqualGroundTermsNeedNoBindOps) {
     const expr* other_atom = terms.functor(10u, {});
     ::testing::StrictMock<MockEquate> strict_equate;
     ::testing::StrictMock<MockInstantiate> strict_instantiate;
-    using strict_unifier_t = unifier<
+    using strict_unifier_t = pud_unifier<
         ::testing::NiceMock<MockGlobalize>,
         ::testing::NiceMock<MockNormalize>,
         ::testing::NiceMock<MockResolve>,
@@ -132,7 +132,7 @@ TEST_F(PudUnifierTest, SameResolvedVarIndexSkipsEquate) {
     ON_CALL(resolve, resolve(testing::_)).WillByDefault(testing::Return(shared_rep));
     ::testing::StrictMock<MockEquate> strict_equate;
     ::testing::StrictMock<MockInstantiate> strict_instantiate;
-    using strict_unifier_t = unifier<
+    using strict_unifier_t = pud_unifier<
         ::testing::NiceMock<MockGlobalize>,
         ::testing::NiceMock<MockNormalize>,
         ::testing::NiceMock<MockResolve>,
@@ -232,7 +232,7 @@ TEST_F(PudUnifierTest, VarVarBothOrdersEquateSameIndices) {
     EXPECT_TRUE(reverse.unify({var1, 0u}, {var0, 0u}));
 }
 
-using strict_unifier_t = unifier<
+using strict_unifier_t = pud_unifier<
     ::testing::StrictMock<MockGlobalize>,
     ::testing::StrictMock<MockNormalize>,
     ::testing::StrictMock<MockResolve>,

@@ -15,8 +15,8 @@ template<
     typename IResolve,
     typename IEquate,
     typename IInstantiate>
-struct unifier {
-    unifier(
+struct pud_unifier {
+    pud_unifier(
         IGlobalize& globalize,
         INormalize& normalize,
         IResolve& resolve,
@@ -35,13 +35,13 @@ private:
     IInstantiate& instantiate_;
 };
 
-#define UNIFIER_TEMPLATE                                                         \
+#define PUD_UNIFIER_TEMPLATE                                                     \
     template<typename IGlobalize, typename INormalize, typename IResolve,           \
              typename IEquate, typename IInstantiate>
-#define UNIFIER unifier<IGlobalize, INormalize, IResolve, IEquate, IInstantiate>
+#define PUD_UNIFIER pud_unifier<IGlobalize, INormalize, IResolve, IEquate, IInstantiate>
 
-UNIFIER_TEMPLATE
-UNIFIER::unifier(
+PUD_UNIFIER_TEMPLATE
+PUD_UNIFIER::pud_unifier(
     IGlobalize& globalize,
     INormalize& normalize,
     IResolve& resolve,
@@ -53,8 +53,8 @@ UNIFIER::unifier(
     , equate_(equate)
     , instantiate_(instantiate) {}
 
-UNIFIER_TEMPLATE
-bool UNIFIER::unify(framed_expr lhs, framed_expr rhs) {
+PUD_UNIFIER_TEMPLATE
+bool PUD_UNIFIER::unify(framed_expr lhs, framed_expr rhs) {
     // Replace each variable with its class's value: a functor, or the rep var.
     // Values are in global indices, so they carry offset 0.
     if (const expr::var* var = std::get_if<expr::var>(&lhs.skeleton->content))
@@ -104,8 +104,8 @@ bool UNIFIER::unify(framed_expr lhs, framed_expr rhs) {
     return true;
 }
 
-UNIFIER_TEMPLATE
-bool UNIFIER::occurs(uint32_t var_index, const expr* normalized) {
+PUD_UNIFIER_TEMPLATE
+bool PUD_UNIFIER::occurs(uint32_t var_index, const expr* normalized) {
     if (const expr::var* var = std::get_if<expr::var>(&normalized->content)) {
         return var->index == var_index;
     }
@@ -116,7 +116,7 @@ bool UNIFIER::occurs(uint32_t var_index, const expr* normalized) {
     return false;
 }
 
-#undef UNIFIER
-#undef UNIFIER_TEMPLATE
+#undef PUD_UNIFIER
+#undef PUD_UNIFIER_TEMPLATE
 
 #endif

@@ -108,14 +108,14 @@ struct pud_unifier_bind_map_stack {
     global_normalizer<globalizer, pud_pool_make_functor, ubs_bind_map_expr_pool_backing::bind_map_t> normalizer{
         globalize, bind_backing.make_functor, bind_map};
 
-    using pud_unifier_t = unifier<
+    using pud_unifier_t = pud_unifier<
         globalizer,
         global_normalizer<globalizer, pud_pool_make_functor, ubs_bind_map_expr_pool_backing::bind_map_t>,
         ubs_bind_map_expr_pool_backing::bind_map_t,
         ubs_bind_map_expr_pool_backing::bind_map_t,
         ubs_bind_map_expr_pool_backing::bind_map_t>;
 
-    pud_unifier_t pud_unifier{globalize, normalizer, bind_map, bind_map, bind_map};
+    pud_unifier_t framed_unifier{globalize, normalizer, bind_map, bind_map, bind_map};
 };
 
 inline framed_expr pud_fe(const expr* skeleton, uint32_t frame_offset) {

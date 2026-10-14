@@ -26,12 +26,12 @@ struct RepChangeLoggerUnifierIntegrationTest : public ::testing::Test {
 } // namespace
 
 TEST_F(RepChangeLoggerUnifierIntegrationTest, TwoFreshVariablesLogLargerIndex) {
-    EXPECT_TRUE(stack.pud_unifier.unify(pud_fe(v(0), 0), pud_fe(v(3), 0)));
+    EXPECT_TRUE(stack.framed_unifier.unify(pud_fe(v(0), 0), pud_fe(v(3), 0)));
     EXPECT_EQ(stack.sink.changed_reps, std::vector<uint32_t>({3u}));
 }
 
 TEST_F(RepChangeLoggerUnifierIntegrationTest, FreshVariableWithFunctorLogsVariable) {
-    EXPECT_TRUE(stack.pud_unifier.unify(pud_fe(v(2), 0), pud_fe(atom("a"), 0)));
+    EXPECT_TRUE(stack.framed_unifier.unify(pud_fe(v(2), 0), pud_fe(atom("a"), 0)));
     EXPECT_EQ(stack.sink.changed_reps, std::vector<uint32_t>({2u}));
 }
 
@@ -42,25 +42,25 @@ TEST_F(RepChangeLoggerUnifierIntegrationTest, FreshVariableWithFunctorLogsVariab
 
 TEST_F(RepChangeLoggerUnifierIntegrationTest, UnifierSkipsMutatorOnIdenticalGroundTerms) {
     const expr* ground = atom("a");
-    EXPECT_TRUE(stack.pud_unifier.unify(pud_fe(ground, 0), pud_fe(ground, 0)));
+    EXPECT_TRUE(stack.framed_unifier.unify(pud_fe(ground, 0), pud_fe(ground, 0)));
     EXPECT_TRUE(stack.sink.changed_reps.empty());
 }
 
 TEST_F(RepChangeLoggerUnifierIntegrationTest, UnifierSkipsMutatorOnTermUnifyWithItself) {
     const expr* fx = stack.bind_backing.pool.make_functor(functors.id("f"), {v(0)});
-    EXPECT_TRUE(stack.pud_unifier.unify(pud_fe(fx, 0), pud_fe(fx, 0)));
+    EXPECT_TRUE(stack.framed_unifier.unify(pud_fe(fx, 0), pud_fe(fx, 0)));
     EXPECT_TRUE(stack.sink.changed_reps.empty());
 }
 
 TEST_F(RepChangeLoggerUnifierIntegrationTest, UnifierSkipsMutatorOnTopLevelFunctorMismatch) {
-    EXPECT_FALSE(stack.pud_unifier.unify(pud_fe(atom("a"), 0), pud_fe(atom("b"), 0)));
+    EXPECT_FALSE(stack.framed_unifier.unify(pud_fe(atom("a"), 0), pud_fe(atom("b"), 0)));
     EXPECT_TRUE(stack.sink.changed_reps.empty());
 }
 
 TEST_F(RepChangeLoggerUnifierIntegrationTest, NonRepresentativeMemberWithFunctorLogsClassRepresentative) {
     stack.bind_map.equate(4u, 6u);
     stack.sink.clear();
-    EXPECT_TRUE(stack.pud_unifier.unify(pud_fe(v(6), 0), pud_fe(atom("a"), 0)));
+    EXPECT_TRUE(stack.framed_unifier.unify(pud_fe(v(6), 0), pud_fe(atom("a"), 0)));
     EXPECT_EQ(stack.sink.changed_reps, std::vector<uint32_t>({4u}));
 }
 
@@ -68,7 +68,7 @@ TEST_F(RepChangeLoggerUnifierIntegrationTest, TwoNonRepresentativeMembersLogLarg
     stack.bind_map.equate(2u, 5u);
     stack.bind_map.equate(7u, 9u);
     stack.sink.clear();
-    EXPECT_TRUE(stack.pud_unifier.unify(pud_fe(v(5), 0), pud_fe(v(9), 0)));
+    EXPECT_TRUE(stack.framed_unifier.unify(pud_fe(v(5), 0), pud_fe(v(9), 0)));
     EXPECT_EQ(stack.sink.changed_reps, std::vector<uint32_t>({7u}));
 }
 
@@ -76,14 +76,14 @@ TEST_F(RepChangeLoggerUnifierIntegrationTest, AfterCallee105MergedWithCaller3Bin
     stack.rep_logger.equate(106u, 105u);
     stack.rep_logger.equate(105u, 3u);
     stack.sink.clear();
-    EXPECT_TRUE(stack.pud_unifier.unify(pud_fe(stack.bind_backing.pool.make_var(106u), 0), pud_fe(atom("a"), 0)));
+    EXPECT_TRUE(stack.framed_unifier.unify(pud_fe(stack.bind_backing.pool.make_var(106u), 0), pud_fe(atom("a"), 0)));
     EXPECT_EQ(stack.sink.changed_reps, std::vector<uint32_t>({3u}));
 }
 
 TEST_F(RepChangeLoggerUnifierIntegrationTest, UnifierSkipsMutatorWhenMergedVarsResolveToSameSkeleton) {
     stack.bind_map.equate(1u, 2u);
     stack.sink.clear();
-    EXPECT_TRUE(stack.pud_unifier.unify(pud_fe(v(1), 0), pud_fe(v(2), 0)));
+    EXPECT_TRUE(stack.framed_unifier.unify(pud_fe(v(1), 0), pud_fe(v(2), 0)));
     EXPECT_TRUE(stack.sink.changed_reps.empty());
 }
 
@@ -91,7 +91,7 @@ TEST_F(RepChangeLoggerUnifierIntegrationTest, UnifierMutatesOnceForDuplicateFunc
     const uint32_t pid = functors.id("p");
     const expr* left = stack.bind_backing.pool.make_functor(pid, {v(0), v(0)});
     const expr* right = stack.bind_backing.pool.make_functor(pid, {atom("a"), atom("a")});
-    EXPECT_TRUE(stack.pud_unifier.unify(pud_fe(left, 0), pud_fe(right, 0)));
+    EXPECT_TRUE(stack.framed_unifier.unify(pud_fe(left, 0), pud_fe(right, 0)));
     EXPECT_EQ(stack.sink.changed_reps, std::vector<uint32_t>({0u}));
 }
 
@@ -99,7 +99,7 @@ TEST_F(RepChangeLoggerUnifierIntegrationTest, UnifierMutatesOnceForSwappedPairAf
     const uint32_t pid = functors.id("p");
     const expr* left = stack.bind_backing.pool.make_functor(pid, {v(0), v(1)});
     const expr* right = stack.bind_backing.pool.make_functor(pid, {v(1), v(0)});
-    EXPECT_TRUE(stack.pud_unifier.unify(pud_fe(left, 0), pud_fe(right, 0)));
+    EXPECT_TRUE(stack.framed_unifier.unify(pud_fe(left, 0), pud_fe(right, 0)));
     EXPECT_EQ(stack.sink.changed_reps.size(), 1u);
 }
 
@@ -107,7 +107,7 @@ TEST_F(RepChangeLoggerUnifierIntegrationTest, UnifierSkipsMutatorWhenVariableAlr
     const expr* ground = atom("a");
     stack.bind_map.instantiate(2u, functors.id("a"), {});
     stack.sink.clear();
-    EXPECT_TRUE(stack.pud_unifier.unify(pud_fe(v(2), 0), pud_fe(ground, 0)));
+    EXPECT_TRUE(stack.framed_unifier.unify(pud_fe(v(2), 0), pud_fe(ground, 0)));
     EXPECT_TRUE(stack.sink.changed_reps.empty());
 }
 
@@ -116,13 +116,13 @@ TEST_F(RepChangeLoggerUnifierIntegrationTest, UnifierSkipsMutatorWhenBothVariabl
     stack.bind_map.instantiate(1u, functors.id("a"), {});
     stack.bind_map.instantiate(4u, functors.id("a"), {});
     stack.sink.clear();
-    EXPECT_TRUE(stack.pud_unifier.unify(pud_fe(v(1), 0), pud_fe(v(4), 0)));
+    EXPECT_TRUE(stack.framed_unifier.unify(pud_fe(v(1), 0), pud_fe(v(4), 0)));
     EXPECT_TRUE(stack.sink.changed_reps.empty());
 }
 
 TEST_F(RepChangeLoggerUnifierIntegrationTest, UnifierSkipsMutatorOnOccursCheckFailure) {
     const expr* loop = stack.bind_backing.pool.make_functor(functors.id("l"), {v(0)});
-    EXPECT_FALSE(stack.pud_unifier.unify(pud_fe(v(0), 0), pud_fe(loop, 0)));
+    EXPECT_FALSE(stack.framed_unifier.unify(pud_fe(v(0), 0), pud_fe(loop, 0)));
     EXPECT_TRUE(stack.sink.changed_reps.empty());
 }
 
@@ -130,7 +130,7 @@ TEST_F(RepChangeLoggerUnifierIntegrationTest, PartialSuccessBeforeFailureKeepsEa
     const uint32_t pid = functors.id("p");
     const expr* left = stack.bind_backing.pool.make_functor(pid, {v(0), atom("a")});
     const expr* right = stack.bind_backing.pool.make_functor(pid, {atom("b"), atom("c")});
-    EXPECT_FALSE(stack.pud_unifier.unify(pud_fe(left, 0), pud_fe(right, 0)));
+    EXPECT_FALSE(stack.framed_unifier.unify(pud_fe(left, 0), pud_fe(right, 0)));
     EXPECT_EQ(stack.sink.changed_reps, std::vector<uint32_t>({0u}));
 }
 
@@ -140,13 +140,13 @@ TEST_F(RepChangeLoggerUnifierIntegrationTest, DeepNestedFailureLogsOnlyBindingsB
         nest, {v(0), atom("a")});
     const expr* deep_right = stack.bind_backing.pool.make_functor(
         nest, {atom("b"), atom("c")});
-    EXPECT_FALSE(stack.pud_unifier.unify(pud_fe(deep_left, 0), pud_fe(deep_right, 0)));
+    EXPECT_FALSE(stack.framed_unifier.unify(pud_fe(deep_left, 0), pud_fe(deep_right, 0)));
     EXPECT_EQ(stack.sink.changed_reps, std::vector<uint32_t>({0u}));
 }
 
 TEST_F(RepChangeLoggerUnifierIntegrationTest, SameLocalDifferentOffsetsLogDifferentRepresentatives) {
-    EXPECT_TRUE(stack.pud_unifier.unify(pud_fe(v(0), 0), pud_fe(v(0), 1)));
-    EXPECT_TRUE(stack.pud_unifier.unify(pud_fe(v(0), 2), pud_fe(v(0), 3)));
+    EXPECT_TRUE(stack.framed_unifier.unify(pud_fe(v(0), 0), pud_fe(v(0), 1)));
+    EXPECT_TRUE(stack.framed_unifier.unify(pud_fe(v(0), 2), pud_fe(v(0), 3)));
     const uint32_t logged_first = gkey(stack.globalize, 1, 0);
     const uint32_t logged_second = gkey(stack.globalize, 3, 0);
     EXPECT_EQ(stack.sink.changed_reps, std::vector<uint32_t>({logged_first, logged_second}));
@@ -155,17 +155,17 @@ TEST_F(RepChangeLoggerUnifierIntegrationTest, SameLocalDifferentOffsetsLogDiffer
 
 TEST_F(RepChangeLoggerUnifierIntegrationTest, SameSkeletonDifferentFramesLogsLargerGlobal) {
     const expr* fx = stack.bind_backing.pool.make_functor(functors.id("f"), {v(0)});
-    EXPECT_TRUE(stack.pud_unifier.unify(pud_fe(fx, 0), pud_fe(fx, 10)));
+    EXPECT_TRUE(stack.framed_unifier.unify(pud_fe(fx, 0), pud_fe(fx, 10)));
     EXPECT_EQ(stack.sink.changed_reps, std::vector<uint32_t>({10u}));
 }
 
 TEST_F(RepChangeLoggerUnifierIntegrationTest, CallerCalleeMergeLogsCalleeRepresentative) {
     const uint32_t callee_rep = gkey(stack.globalize, 0, 2);
-    EXPECT_TRUE(stack.pud_unifier.unify(pud_fe(v(0), 1), pud_fe(v(2), 0)));
+    EXPECT_TRUE(stack.framed_unifier.unify(pud_fe(v(0), 1), pud_fe(v(2), 0)));
     EXPECT_EQ(stack.sink.changed_reps, std::vector<uint32_t>({callee_rep}));
     pud_logged_unifier_bind_map_stack reversed;
     const uint32_t callee_rep_reversed = gkey(reversed.globalize, 0, 2);
-    EXPECT_TRUE(reversed.pud_unifier.unify(pud_fe(reversed.bind_backing.pool.make_var(2u), 0),
+    EXPECT_TRUE(reversed.framed_unifier.unify(pud_fe(reversed.bind_backing.pool.make_var(2u), 0),
         pud_fe(reversed.bind_backing.pool.make_var(0u), 1)));
     EXPECT_EQ(reversed.sink.changed_reps, std::vector<uint32_t>({callee_rep_reversed}));
 }
@@ -174,7 +174,7 @@ TEST_F(RepChangeLoggerUnifierIntegrationTest, ReplayFromLogMatchesOriginalResolv
     const uint32_t pid = functors.id("pair");
     const expr* left = stack.bind_backing.pool.make_functor(pid, {v(0), v(1)});
     const expr* right = stack.bind_backing.pool.make_functor(pid, {atom("a"), v(2)});
-    EXPECT_TRUE(stack.pud_unifier.unify(pud_fe(left, 0), pud_fe(right, 0)));
+    EXPECT_TRUE(stack.framed_unifier.unify(pud_fe(left, 0), pud_fe(right, 0)));
     const rep_change_trace full = trace_from_sink(stack.sink);
     logged_ubs_bind_map_stack replay;
     replay_rep_changes(replay, stack.bind_map, full);
@@ -182,8 +182,8 @@ TEST_F(RepChangeLoggerUnifierIntegrationTest, ReplayFromLogMatchesOriginalResolv
 }
 
 TEST_F(RepChangeLoggerUnifierIntegrationTest, ReplayAfterMergeThenInstantiate) {
-    EXPECT_TRUE(stack.pud_unifier.unify(pud_fe(v(0), 0), pud_fe(v(4), 0)));
-    EXPECT_TRUE(stack.pud_unifier.unify(pud_fe(v(0), 0), pud_fe(atom("a"), 0)));
+    EXPECT_TRUE(stack.framed_unifier.unify(pud_fe(v(0), 0), pud_fe(v(4), 0)));
+    EXPECT_TRUE(stack.framed_unifier.unify(pud_fe(v(0), 0), pud_fe(atom("a"), 0)));
     const rep_change_trace full = trace_from_sink(stack.sink);
     logged_ubs_bind_map_stack replay;
     replay_rep_changes(replay, stack.bind_map, full);
@@ -191,8 +191,8 @@ TEST_F(RepChangeLoggerUnifierIntegrationTest, ReplayAfterMergeThenInstantiate) {
 }
 
 TEST_F(RepChangeLoggerUnifierIntegrationTest, ReplayWhenRepresentativeLaterStopsBeingRepresentative) {
-    EXPECT_TRUE(stack.pud_unifier.unify(pud_fe(v(0), 0), pud_fe(v(5), 0)));
-    EXPECT_TRUE(stack.pud_unifier.unify(pud_fe(v(0), 0), pud_fe(v(2), 0)));
+    EXPECT_TRUE(stack.framed_unifier.unify(pud_fe(v(0), 0), pud_fe(v(5), 0)));
+    EXPECT_TRUE(stack.framed_unifier.unify(pud_fe(v(0), 0), pud_fe(v(2), 0)));
     const rep_change_trace full = trace_from_sink(stack.sink);
     logged_ubs_bind_map_stack replay;
     replay_rep_changes(replay, stack.bind_map, full);
@@ -200,9 +200,9 @@ TEST_F(RepChangeLoggerUnifierIntegrationTest, ReplayWhenRepresentativeLaterStops
 }
 
 TEST_F(RepChangeLoggerUnifierIntegrationTest, DedupedReplayMatchesFullReplay) {
-    EXPECT_TRUE(stack.pud_unifier.unify(pud_fe(v(0), 0), pud_fe(v(3), 0)));
-    EXPECT_TRUE(stack.pud_unifier.unify(pud_fe(v(0), 0), pud_fe(v(2), 0)));
-    EXPECT_TRUE(stack.pud_unifier.unify(pud_fe(v(0), 0), pud_fe(atom("z"), 0)));
+    EXPECT_TRUE(stack.framed_unifier.unify(pud_fe(v(0), 0), pud_fe(v(3), 0)));
+    EXPECT_TRUE(stack.framed_unifier.unify(pud_fe(v(0), 0), pud_fe(v(2), 0)));
+    EXPECT_TRUE(stack.framed_unifier.unify(pud_fe(v(0), 0), pud_fe(atom("z"), 0)));
     const rep_change_trace full = trace_from_sink(stack.sink);
     const rep_change_trace deduped = dedupe_rep_change_trace(full);
     logged_ubs_bind_map_stack full_replay;
@@ -213,9 +213,9 @@ TEST_F(RepChangeLoggerUnifierIntegrationTest, DedupedReplayMatchesFullReplay) {
 }
 
 TEST_F(RepChangeLoggerUnifierIntegrationTest, ReplaySegmentReproducesOnlyThatSegmentsChanges) {
-    EXPECT_TRUE(stack.pud_unifier.unify(pud_fe(v(0), 0), pud_fe(v(1), 0)));
+    EXPECT_TRUE(stack.framed_unifier.unify(pud_fe(v(0), 0), pud_fe(v(1), 0)));
     const rep_change_trace first = trace_from_sink(stack.sink);
-    EXPECT_TRUE(stack.pud_unifier.unify(pud_fe(v(2), 0), pud_fe(atom("a"), 0)));
+    EXPECT_TRUE(stack.framed_unifier.unify(pud_fe(v(2), 0), pud_fe(atom("a"), 0)));
     logged_ubs_bind_map_stack baseline;
     baseline.rep_logger.equate(0u, 1u);
     logged_ubs_bind_map_stack segment_replay;
@@ -225,16 +225,16 @@ TEST_F(RepChangeLoggerUnifierIntegrationTest, ReplaySegmentReproducesOnlyThatSeg
 }
 
 TEST_F(RepChangeLoggerUnifierIntegrationTest, ClearingSinkBetweenUnifiesKeepsOnlySecondCall) {
-    EXPECT_TRUE(stack.pud_unifier.unify(pud_fe(v(0), 0), pud_fe(v(1), 0)));
+    EXPECT_TRUE(stack.framed_unifier.unify(pud_fe(v(0), 0), pud_fe(v(1), 0)));
     stack.sink.clear();
-    EXPECT_TRUE(stack.pud_unifier.unify(pud_fe(v(2), 0), pud_fe(atom("a"), 0)));
+    EXPECT_TRUE(stack.framed_unifier.unify(pud_fe(v(2), 0), pud_fe(atom("a"), 0)));
     EXPECT_EQ(stack.sink.changed_reps, std::vector<uint32_t>({2u}));
 }
 
 TEST_F(RepChangeLoggerUnifierIntegrationTest, IndependentSinksDoNotMix) {
     pud_logged_unifier_bind_map_stack other;
-    EXPECT_TRUE(stack.pud_unifier.unify(pud_fe(v(0), 0), pud_fe(v(1), 0)));
-    EXPECT_TRUE(other.pud_unifier.unify(pud_fe(other.bind_backing.pool.make_var(2u), 0),
+    EXPECT_TRUE(stack.framed_unifier.unify(pud_fe(v(0), 0), pud_fe(v(1), 0)));
+    EXPECT_TRUE(other.framed_unifier.unify(pud_fe(other.bind_backing.pool.make_var(2u), 0),
         pud_fe(other.bind_backing.pool.make_functor(functors.id("a"), {}), 0)));
     EXPECT_EQ(stack.sink.changed_reps, std::vector<uint32_t>({1u}));
     EXPECT_EQ(other.sink.changed_reps, std::vector<uint32_t>({2u}));
@@ -255,7 +255,7 @@ TEST_F(RepChangeLoggerUnifierIntegrationTest, RandomUnifyLogsPreCallRepresentati
         for (uint32_t var = 0; var < 8u; ++var)
             resolve_before.push_back(trial_stack.bind_map.resolve(var));
         const size_t log_start = trial_stack.sink.changed_reps.size();
-        trial_stack.pud_unifier.unify(pud_fe(left, 0), pud_fe(right, 0));
+        trial_stack.framed_unifier.unify(pud_fe(left, 0), pud_fe(right, 0));
         for (size_t entry = log_start; entry < trial_stack.sink.changed_reps.size(); ++entry) {
             const uint32_t logged = trial_stack.sink.changed_reps[entry];
             EXPECT_NE(resolve_before[logged], trial_stack.bind_map.resolve(logged));
@@ -285,7 +285,7 @@ TEST_F(RepChangeLoggerUnifierIntegrationTest, RandomSequencesReplayMatchOriginal
             const expr* left = trial_stack.bind_backing.pool.make_functor(pid, {trial_stack.bind_backing.pool.make_var(left_var)});
             const expr* right = trial_stack.bind_backing.pool.make_functor(
                 pid, {trial_stack.bind_backing.pool.make_var(right_var)});
-            trial_stack.pud_unifier.unify(pud_fe(left, 0), pud_fe(right, 0));
+            trial_stack.framed_unifier.unify(pud_fe(left, 0), pud_fe(right, 0));
         }
         const rep_change_trace full = trace_from_sink(trial_stack.sink);
         logged_ubs_bind_map_stack replay;
