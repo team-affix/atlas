@@ -10,7 +10,7 @@
 // Union-find over global variable indices: union by size, no path compression.
 // parent: var -> var, links only ever connect variables to variables.
 // size:   root -> class size. No entry = 1.
-// value:  root -> hash-consed expr in global indices: a functor (class bound)
+// value:  root -> expr in global indices: a functor (class bound)
 //         or the rep var (class unbound; rep = minimum index in the class).
 //         No entry = unbound, rep is the root.
 // Entries at non-roots are stale and never read, so nothing is ever erased.

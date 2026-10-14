@@ -34,6 +34,20 @@ using test_unifier_t = unifier<
     ::testing::NiceMock<MockEquate>,
     ::testing::NiceMock<MockInstantiate>>;
 
+using unifier_no_instantiate_t = unifier<
+    ::testing::NiceMock<MockGlobalize>,
+    ::testing::NiceMock<MockNormalize>,
+    ::testing::NiceMock<MockResolve>,
+    ::testing::NiceMock<MockEquate>,
+    ::testing::StrictMock<MockInstantiate>>;
+
+using unifier_no_bind_ops_t = unifier<
+    ::testing::NiceMock<MockGlobalize>,
+    ::testing::NiceMock<MockNormalize>,
+    ::testing::NiceMock<MockResolve>,
+    ::testing::StrictMock<MockEquate>,
+    ::testing::StrictMock<MockInstantiate>>;
+
 struct expr_fixture {
     std::deque<expr> owned;
 
@@ -48,10 +62,37 @@ struct expr_fixture {
     }
 };
 
+struct frame_plus_local_globalize {
+    uint32_t globalize(uint32_t frame_offset, uint32_t local_index) {
+        return frame_offset + local_index;
+    }
+};
+
+struct global_index_var_resolve {
+    expr_fixture& terms_;
+
+    const expr* resolve(uint32_t global_index) {
+        return terms_.var(global_index);
+    }
+};
+
+void stub_globalize_and_resolve(
+    MockGlobalize& globalize,
+    frame_plus_local_globalize& globalize_stub,
+    MockResolve& resolve,
+    global_index_var_resolve& resolve_stub) {
+    ON_CALL(globalize, globalize(testing::_, testing::_))
+        .WillByDefault(testing::Invoke(&globalize_stub, &frame_plus_local_globalize::globalize));
+    ON_CALL(resolve, resolve(testing::_))
+        .WillByDefault(testing::Invoke(&resolve_stub, &global_index_var_resolve::resolve));
+}
+
 } // namespace
 
 struct PudUnifierTest : public ::testing::Test {
     expr_fixture terms;
+    frame_plus_local_globalize globalize_stub;
+    global_index_var_resolve resolve_stub{terms};
     ::testing::NiceMock<MockGlobalize> globalize;
     ::testing::NiceMock<MockNormalize> normalize;
     ::testing::NiceMock<MockResolve> resolve;
@@ -66,9 +107,14 @@ struct PudUnifierTest : public ::testing::Test {
     const expr* f0{terms.functor(1u, {var0})};
     const expr* g0{terms.functor(2u, {})};
     const expr* f2{terms.functor(1u, {var0, var1})};
+
+    void SetUp() override {
+        stub_globalize_and_resolve(globalize, globalize_stub, resolve, resolve_stub);
+    }
 };
 
-TEST_F(PudUnifierTest, PointerEqualityShortCircuitNeedsNoBindOps) {
+TEST_F(PudUnifierTest, StructurallyEqualGroundTermsNeedNoBindOps) {
+    const expr* other_atom = terms.functor(10u, {});
     ::testing::StrictMock<MockEquate> strict_equate;
     ::testing::StrictMock<MockInstantiate> strict_instantiate;
     using strict_unifier_t = unifier<
@@ -78,32 +124,41 @@ TEST_F(PudUnifierTest, PointerEqualityShortCircuitNeedsNoBindOps) {
         ::testing::StrictMock<MockEquate>,
         ::testing::StrictMock<MockInstantiate>>;
     strict_unifier_t strict_unifier{globalize, normalize, resolve, strict_equate, strict_instantiate};
-    EXPECT_TRUE(strict_unifier.unify({atom, 0u}, {atom, 0u}));
+    EXPECT_TRUE(strict_unifier.unify({atom, 0u}, {other_atom, 0u}));
+}
+
+TEST_F(PudUnifierTest, SameResolvedVarIndexSkipsEquate) {
+    const expr* shared_rep = terms.var(3u);
+    ON_CALL(resolve, resolve(testing::_)).WillByDefault(testing::Return(shared_rep));
+    ::testing::StrictMock<MockEquate> strict_equate;
+    ::testing::StrictMock<MockInstantiate> strict_instantiate;
+    using strict_unifier_t = unifier<
+        ::testing::NiceMock<MockGlobalize>,
+        ::testing::NiceMock<MockNormalize>,
+        ::testing::NiceMock<MockResolve>,
+        ::testing::StrictMock<MockEquate>,
+        ::testing::StrictMock<MockInstantiate>>;
+    strict_unifier_t strict_unifier{globalize, normalize, resolve, strict_equate, strict_instantiate};
+    EXPECT_TRUE(strict_unifier.unify({var0, 0u}, {var1, 0u}));
 }
 
 TEST_F(PudUnifierTest, UnifyTwoVarsEquatesIndices) {
-    EXPECT_CALL(globalize, globalize(0u, 0u)).WillOnce(testing::Return(0u));
-    EXPECT_CALL(globalize, globalize(0u, 1u)).WillOnce(testing::Return(1u));
-    EXPECT_CALL(resolve, resolve(0u)).WillOnce(testing::Return(var0));
-    EXPECT_CALL(resolve, resolve(1u)).WillOnce(testing::Return(var1));
     EXPECT_CALL(equate, equate(0u, 1u));
     EXPECT_TRUE(sut.unify({var0, 0u}, {var1, 0u}));
 }
 
 TEST_F(PudUnifierTest, UnifyVarWithFunctorNormalizesThenInstantiates) {
-    EXPECT_CALL(globalize, globalize(0u, 2u)).WillOnce(testing::Return(2u));
-    EXPECT_CALL(resolve, resolve(2u)).WillOnce(testing::Return(var2));
-    EXPECT_CALL(normalize, normalize(testing::_)).WillOnce(testing::Return(atom));
+    ON_CALL(normalize, normalize(testing::_)).WillByDefault(testing::Return(atom));
     EXPECT_CALL(instantiate, instantiate(2u, atom));
     EXPECT_TRUE(sut.unify({var2, 0u}, {atom, 0u}));
 }
 
 TEST_F(PudUnifierTest, OccursCheckRejectsBinding) {
     const expr* cyclic = terms.functor(1u, {var0});
-    EXPECT_CALL(globalize, globalize(0u, 0u)).WillOnce(testing::Return(0u));
-    EXPECT_CALL(resolve, resolve(0u)).WillOnce(testing::Return(var0));
-    EXPECT_CALL(normalize, normalize(testing::_)).WillOnce(testing::Return(cyclic));
-    EXPECT_FALSE(sut.unify({var0, 0u}, {cyclic, 0u}));
+    ON_CALL(normalize, normalize(testing::_)).WillByDefault(testing::Return(cyclic));
+    ::testing::StrictMock<MockInstantiate> strict_instantiate;
+    unifier_no_instantiate_t strict_sut{globalize, normalize, resolve, equate, strict_instantiate};
+    EXPECT_FALSE(strict_sut.unify({var0, 0u}, {cyclic, 0u}));
 }
 
 TEST_F(PudUnifierTest, MismatchedFunctorIdsFail) {
@@ -116,6 +171,8 @@ TEST_F(PudUnifierTest, MismatchedArityFails) {
 
 struct PudUnifierNestedTest : public ::testing::Test {
     expr_fixture terms;
+    frame_plus_local_globalize globalize_stub;
+    global_index_var_resolve resolve_stub{terms};
     ::testing::NiceMock<MockGlobalize> globalize;
     ::testing::NiceMock<MockNormalize> normalize;
     ::testing::NiceMock<MockResolve> resolve;
@@ -127,6 +184,10 @@ struct PudUnifierNestedTest : public ::testing::Test {
     const expr* inner_good{terms.functor(6u, {terms.var(0u)})};
     const expr* outer_l{terms.functor(4u, {inner_bad})};
     const expr* outer_r{terms.functor(4u, {inner_good})};
+
+    void SetUp() override {
+        stub_globalize_and_resolve(globalize, globalize_stub, resolve, resolve_stub);
+    }
 };
 
 TEST_F(PudUnifierNestedTest, DeepMismatchFails) {
@@ -138,6 +199,10 @@ TEST_F(PudUnifierTest, VarLeftFunctorRightMirrorsFunctorLeftVarRight) {
     ::testing::NiceMock<MockGlobalize> g_right;
     ::testing::NiceMock<MockNormalize> n_left;
     ::testing::NiceMock<MockNormalize> n_right;
+    frame_plus_local_globalize g_left_stub;
+    frame_plus_local_globalize g_right_stub;
+    global_index_var_resolve r_left_stub{terms};
+    global_index_var_resolve r_right_stub{terms};
     ::testing::NiceMock<MockResolve> r_left;
     ::testing::NiceMock<MockResolve> r_right;
     ::testing::NiceMock<MockEquate> e_left;
@@ -146,15 +211,11 @@ TEST_F(PudUnifierTest, VarLeftFunctorRightMirrorsFunctorLeftVarRight) {
     ::testing::NiceMock<MockInstantiate> i_right;
     test_unifier_t left_unifier{g_left, n_left, r_left, e_left, i_left};
     test_unifier_t right_unifier{g_right, n_right, r_right, e_right, i_right};
-
-    EXPECT_CALL(g_left, globalize(0u, 2u)).WillOnce(testing::Return(2u));
-    EXPECT_CALL(r_left, resolve(2u)).WillOnce(testing::Return(var2));
-    EXPECT_CALL(n_left, normalize(testing::_)).WillOnce(testing::Return(atom));
+    stub_globalize_and_resolve(g_left, g_left_stub, r_left, r_left_stub);
+    stub_globalize_and_resolve(g_right, g_right_stub, r_right, r_right_stub);
+    ON_CALL(n_left, normalize(testing::_)).WillByDefault(testing::Return(atom));
+    ON_CALL(n_right, normalize(testing::_)).WillByDefault(testing::Return(atom));
     EXPECT_CALL(i_left, instantiate(2u, atom));
-
-    EXPECT_CALL(g_right, globalize(0u, 2u)).WillOnce(testing::Return(2u));
-    EXPECT_CALL(r_right, resolve(2u)).WillOnce(testing::Return(var2));
-    EXPECT_CALL(n_right, normalize(testing::_)).WillOnce(testing::Return(atom));
     EXPECT_CALL(i_right, instantiate(2u, atom));
 
     EXPECT_TRUE(left_unifier.unify({var2, 0u}, {atom, 0u}));
@@ -162,19 +223,11 @@ TEST_F(PudUnifierTest, VarLeftFunctorRightMirrorsFunctorLeftVarRight) {
 }
 
 TEST_F(PudUnifierTest, VarVarBothOrdersEquateSameIndices) {
-    EXPECT_CALL(globalize, globalize(0u, 0u)).WillOnce(testing::Return(0u));
-    EXPECT_CALL(globalize, globalize(0u, 1u)).WillOnce(testing::Return(1u));
-    EXPECT_CALL(resolve, resolve(0u)).WillOnce(testing::Return(var0));
-    EXPECT_CALL(resolve, resolve(1u)).WillOnce(testing::Return(var1));
     EXPECT_CALL(equate, equate(0u, 1u));
     EXPECT_TRUE(sut.unify({var0, 0u}, {var1, 0u}));
 
     ::testing::NiceMock<MockEquate> equate_ba;
     test_unifier_t reverse{globalize, normalize, resolve, equate_ba, instantiate};
-    EXPECT_CALL(globalize, globalize(0u, 1u)).WillOnce(testing::Return(1u));
-    EXPECT_CALL(globalize, globalize(0u, 0u)).WillOnce(testing::Return(0u));
-    EXPECT_CALL(resolve, resolve(1u)).WillOnce(testing::Return(var1));
-    EXPECT_CALL(resolve, resolve(0u)).WillOnce(testing::Return(var0));
     EXPECT_CALL(equate_ba, equate(1u, 0u));
     EXPECT_TRUE(reverse.unify({var1, 0u}, {var0, 0u}));
 }
@@ -209,6 +262,7 @@ TEST_F(PudUnifierTest, MismatchedArityPerformsNoBindOps) {
 }
 
 TEST_F(PudUnifierTest, ZeroAritySameIdSucceedsWithoutBindOps) {
+    const expr* other_atom = terms.functor(10u, {});
     ::testing::StrictMock<MockGlobalize> strict_globalize;
     ::testing::StrictMock<MockNormalize> strict_normalize;
     ::testing::StrictMock<MockResolve> strict_resolve;
@@ -216,7 +270,7 @@ TEST_F(PudUnifierTest, ZeroAritySameIdSucceedsWithoutBindOps) {
     ::testing::StrictMock<MockInstantiate> strict_instantiate;
     strict_unifier_t strict{
         strict_globalize, strict_normalize, strict_resolve, strict_equate, strict_instantiate};
-    EXPECT_TRUE(strict.unify({atom, 0u}, {atom, 0u}));
+    EXPECT_TRUE(strict.unify({atom, 0u}, {other_atom, 0u}));
 }
 
 TEST_F(PudUnifierTest, ZeroArityDifferentIdFailsWithoutBindOps) {
@@ -233,76 +287,45 @@ TEST_F(PudUnifierTest, ZeroArityDifferentIdFailsWithoutBindOps) {
 
 TEST_F(PudUnifierTest, BoundVarIdenticalFunctorSucceedsWithoutInstantiate) {
     const expr* bound = terms.functor(10u, {});
-    ::testing::StrictMock<MockGlobalize> strict_globalize;
-    ::testing::StrictMock<MockNormalize> strict_normalize;
-    ::testing::StrictMock<MockResolve> strict_resolve;
-    ::testing::StrictMock<MockEquate> strict_equate;
+    ON_CALL(resolve, resolve(testing::_)).WillByDefault(testing::Return(bound));
     ::testing::StrictMock<MockInstantiate> strict_instantiate;
-    strict_unifier_t strict{
-        strict_globalize, strict_normalize, strict_resolve, strict_equate, strict_instantiate};
-    EXPECT_CALL(strict_globalize, globalize(0u, 0u)).WillOnce(testing::Return(0u));
-    EXPECT_CALL(strict_resolve, resolve(0u)).WillOnce(testing::Return(bound));
-    EXPECT_TRUE(strict.unify({var0, 0u}, {bound, 0u}));
+    unifier_no_instantiate_t strict_sut{globalize, normalize, resolve, equate, strict_instantiate};
+    EXPECT_TRUE(strict_sut.unify({var0, 0u}, {bound, 0u}));
 }
 
 TEST_F(PudUnifierTest, TwoVarsBoundToSamePointerShortCircuits) {
     const expr* bound = terms.functor(10u, {});
-    ::testing::StrictMock<MockGlobalize> strict_globalize;
-    ::testing::StrictMock<MockNormalize> strict_normalize;
-    ::testing::StrictMock<MockResolve> strict_resolve;
+    ON_CALL(resolve, resolve(testing::_)).WillByDefault(testing::Return(bound));
     ::testing::StrictMock<MockEquate> strict_equate;
     ::testing::StrictMock<MockInstantiate> strict_instantiate;
-    strict_unifier_t strict{
-        strict_globalize, strict_normalize, strict_resolve, strict_equate, strict_instantiate};
-    EXPECT_CALL(strict_globalize, globalize(0u, 0u)).WillOnce(testing::Return(0u));
-    EXPECT_CALL(strict_globalize, globalize(0u, 1u)).WillOnce(testing::Return(1u));
-    EXPECT_CALL(strict_resolve, resolve(0u)).WillOnce(testing::Return(bound));
-    EXPECT_CALL(strict_resolve, resolve(1u)).WillOnce(testing::Return(bound));
-    EXPECT_TRUE(strict.unify({var0, 0u}, {var1, 0u}));
+    unifier_no_bind_ops_t strict_sut{globalize, normalize, resolve, strict_equate, strict_instantiate};
+    EXPECT_TRUE(strict_sut.unify({var0, 0u}, {var1, 0u}));
 }
 
 TEST_F(PudUnifierTest, OccursDeepCycleRejectsBinding) {
     const expr* h = terms.functor(3u, {terms.var(0u)});
     const expr* g = terms.functor(2u, {h});
     const expr* f = terms.functor(1u, {g});
-    ::testing::StrictMock<MockGlobalize> strict_globalize;
-    ::testing::StrictMock<MockNormalize> strict_normalize;
-    ::testing::StrictMock<MockResolve> strict_resolve;
-    ::testing::StrictMock<MockEquate> strict_equate;
+    ON_CALL(normalize, normalize(testing::_)).WillByDefault(testing::Return(f));
     ::testing::StrictMock<MockInstantiate> strict_instantiate;
-    strict_unifier_t strict{
-        strict_globalize, strict_normalize, strict_resolve, strict_equate, strict_instantiate};
-    EXPECT_CALL(strict_globalize, globalize(0u, 0u)).WillOnce(testing::Return(0u));
-    EXPECT_CALL(strict_resolve, resolve(0u)).WillOnce(testing::Return(var0));
-    EXPECT_CALL(strict_normalize, normalize(testing::_)).WillOnce(testing::Return(f));
-    EXPECT_FALSE(strict.unify({var0, 0u}, {f, 0u}));
+    unifier_no_instantiate_t strict_sut{globalize, normalize, resolve, equate, strict_instantiate};
+    EXPECT_FALSE(strict_sut.unify({var0, 0u}, {f, 0u}));
 }
 
 TEST_F(PudUnifierTest, FailedOccursPerformsNoInstantiate) {
     const expr* cyclic = terms.functor(1u, {var0});
-    ::testing::StrictMock<MockGlobalize> strict_globalize;
-    ::testing::StrictMock<MockNormalize> strict_normalize;
-    ::testing::StrictMock<MockResolve> strict_resolve;
-    ::testing::StrictMock<MockEquate> strict_equate;
+    ON_CALL(normalize, normalize(testing::_)).WillByDefault(testing::Return(cyclic));
     ::testing::StrictMock<MockInstantiate> strict_instantiate;
-    strict_unifier_t strict{
-        strict_globalize, strict_normalize, strict_resolve, strict_equate, strict_instantiate};
-    EXPECT_CALL(strict_globalize, globalize(0u, 0u)).WillOnce(testing::Return(0u));
-    EXPECT_CALL(strict_resolve, resolve(0u)).WillOnce(testing::Return(var0));
-    EXPECT_CALL(strict_normalize, normalize(testing::_)).WillOnce(testing::Return(cyclic));
-    EXPECT_FALSE(strict.unify({var0, 0u}, {cyclic, 0u}));
+    unifier_no_instantiate_t strict_sut{globalize, normalize, resolve, equate, strict_instantiate};
+    EXPECT_FALSE(strict_sut.unify({var0, 0u}, {cyclic, 0u}));
 }
 
 TEST_F(PudUnifierTest, AfterFailedOccursLegalBindingStillWorks) {
     const expr* cyclic = terms.functor(1u, {var0});
-    EXPECT_CALL(globalize, globalize(0u, 0u)).WillOnce(testing::Return(0u));
-    EXPECT_CALL(resolve, resolve(0u)).WillOnce(testing::Return(var0));
-    EXPECT_CALL(normalize, normalize(testing::_)).WillOnce(testing::Return(cyclic));
+    ON_CALL(normalize, normalize(testing::_)).WillByDefault(testing::Return(cyclic));
     EXPECT_FALSE(sut.unify({var0, 0u}, {cyclic, 0u}));
 
-    EXPECT_CALL(globalize, globalize(0u, 0u)).WillOnce(testing::Return(0u));
-    EXPECT_CALL(resolve, resolve(0u)).WillOnce(testing::Return(var0));
-    EXPECT_CALL(normalize, normalize(testing::_)).WillOnce(testing::Return(atom));
+    ON_CALL(normalize, normalize(testing::_)).WillByDefault(testing::Return(atom));
     EXPECT_CALL(instantiate, instantiate(0u, atom));
     EXPECT_TRUE(sut.unify({var0, 0u}, {atom, 0u}));
 }

@@ -50,11 +50,14 @@ bool naive_unify(
     if (const expr::var* var = std::get_if<expr::var>(&rhs.skeleton->content))
         rhs = {stack.bind_map.resolve(gkey(stack.globalize, rhs.frame_offset, var->index)), 0u};
 
-    if (lhs.skeleton == rhs.skeleton && lhs.frame_offset == rhs.frame_offset)
-        return true;
-
     const expr::var* lhs_var = std::get_if<expr::var>(&lhs.skeleton->content);
     const expr::var* rhs_var = std::get_if<expr::var>(&rhs.skeleton->content);
+
+    const uint32_t lhs_global = lhs_var ? gkey(stack.globalize, lhs.frame_offset, lhs_var->index) : 0;
+    const uint32_t rhs_global = rhs_var ? gkey(stack.globalize, rhs.frame_offset, rhs_var->index) : 0;
+
+    if (lhs_var && rhs_var && lhs_global == rhs_global)
+        return true;
 
     if (lhs_var && rhs_var) {
         state.subst[lhs_var->index] = rhs.skeleton;
