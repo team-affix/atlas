@@ -8,8 +8,8 @@
 #include "infrastructure/expr_pool.hpp"
 #include "infrastructure/expr_pool_ubs_factories.hpp"
 #include "infrastructure/globalizer.hpp"
-#include "infrastructure/pud_descender.hpp"
-#include "infrastructure/ubs_transient_bind_map_data.hpp"
+#include "infrastructure/pud_descender_bind_factories.hpp"
+#include "pud_descender_test_types.hpp"
 
 using ::testing::_;
 using ::testing::ElementsAre;
@@ -67,16 +67,16 @@ struct MockGetAxiomHead {
     MOCK_METHOD(const expr*, get, (pud_node_id));
 };
 
-using bind_map_t = ubs_transient_bind_map<expr_pool_ubs_var_factory, expr_pool_ubs_functor_factory>;
-
-using propagator_t = pud_descender<
-    bind_map_t,
-    expr_pool_ubs_var_factory,
-    expr_pool_ubs_functor_factory,
-    MockNextNodeId,
-    expr_pool,
-    expr_pool,
+using bind_factories_t = pud_descender_bind_factories<
+    pud_descender_test_bind_map_t,
     globalizer,
+    expr_pool_ubs_functor_factory,
+    expr_pool,
+    expr_pool>;
+
+using propagator_t = pud_descender_test_t<
+    bind_factories_t,
+    MockNextNodeId,
     MockRefuted,
     MockCallSite,
     MockGetAddedSpecializations,
@@ -104,9 +104,11 @@ struct PudPropagateSpecializeIntegrationTest : public ::testing::Test {
     NiceMock<MockStoreAddedSpecializations> store_specs;
     NiceMock<MockStoreAddedBodyGoals> store_goals;
     NiceMock<MockStoreAddedVarCount> store_var_count;
+    bind_factories_t bind_factories{globalize, ubs_functor_factory, pool, pool};
 
     propagator_t propagator{
-        next_node_id, ubs_var_factory, ubs_functor_factory, pool, pool, globalize, refuted, call_site,
+        next_node_id, bind_factories, bind_factories, bind_factories, bind_factories, bind_factories,
+        ubs_var_factory, ubs_functor_factory, pool, pool, globalize, refuted, call_site,
         get_added_specs, get_added_body_goals, get_added_var_count, get_axiom_head,
         store_specs, store_goals, store_var_count};
 

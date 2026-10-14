@@ -6,7 +6,7 @@
 #include "pud_unifier_bind_map_stack.hpp"
 #include "ubs_bind_map_test_maps.hpp"
 
-#include "infrastructure/ubs_transient_bind_map_data.hpp"
+#include "infrastructure/pud_transient_ubs_state.hpp"
 #include "infrastructure/expr_pool_ubs_factories.hpp"
 
 namespace {
@@ -35,8 +35,8 @@ TEST(UbsBindMapImmerIntegrationTest, EquateAndInstantiateOnTransientMapsWithPool
     expr_pool pool;
     expr_pool_ubs_var_factory vars{pool};
     expr_pool_ubs_functor_factory make_functor{pool};
-    ubs_transient_bind_map_data bind_data;
-    auto store = bind_data.make_bind_map(vars, make_functor);
+    pud_transient_ubs_state transient_ubs_state;
+    auto store = transient_ubs_state.make_bind_map(vars, make_functor);
 
     const expr* bound = pool.make_functor(11u, {});
     store.equate(0u, 1u);

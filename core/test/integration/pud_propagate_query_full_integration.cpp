@@ -10,8 +10,9 @@
 #include "infrastructure/globalizer.hpp"
 #include "infrastructure/expr_pool_ubs_factories.hpp"
 #include "infrastructure/pud_call_sites.hpp"
+#include "infrastructure/pud_descender_bind_factories.hpp"
 #include "infrastructure/pud_descender.hpp"
-#include "infrastructure/ubs_transient_bind_map_data.hpp"
+#include "pud_descender_test_types.hpp"
 #include "infrastructure/pud_node_added_body_goals.hpp"
 #include "infrastructure/pud_node_added_specializations.hpp"
 #include "infrastructure/pud_node_added_var_count.hpp"
@@ -21,15 +22,15 @@
 #include "value_objects/pud_descent.hpp"
 
 struct PudPropagateQueryFullIntegrationTest : public ::testing::Test {
-    using bind_map_t    = ubs_transient_bind_map<expr_pool_ubs_var_factory, expr_pool_ubs_functor_factory>;
-    using propagator_t  = pud_descender<
-        bind_map_t,
-        expr_pool_ubs_var_factory,
-        expr_pool_ubs_functor_factory,
-        pud_node_id_sequencer,
-        expr_pool,
-        expr_pool,
+    using bind_factories_t = pud_descender_bind_factories<
+        pud_descender_test_bind_map_t,
         globalizer,
+        expr_pool_ubs_functor_factory,
+        expr_pool,
+        expr_pool>;
+    using propagator_t = pud_descender_test_t<
+        bind_factories_t,
+        pud_node_id_sequencer,
         pud_refuted_nodes,
         pud_call_sites,
         pud_node_added_specializations,
@@ -55,10 +56,12 @@ struct PudPropagateQueryFullIntegrationTest : public ::testing::Test {
     pud_node_id                    anchor_id_;
     expr_pool_ubs_var_factory      ubs_var_factory_{exprs};
     expr_pool_ubs_functor_factory  ubs_functor_factory_{exprs};
+    bind_factories_t               bind_factories_{globalize, ubs_functor_factory_, exprs, exprs};
     propagator_t                   propagator;
 
     PudPropagateQueryFullIntegrationTest()
-        : propagator(sequencer_, ubs_var_factory_, ubs_functor_factory_, exprs, exprs, globalize, refuted, call_sites,
+        : propagator(sequencer_, bind_factories_, bind_factories_, bind_factories_, bind_factories_, bind_factories_,
+                     ubs_var_factory_, ubs_functor_factory_, exprs, exprs, globalize, refuted, call_sites,
                      node_specs_, node_goals_, node_var_counts_, node_heads_,
                      node_specs_, node_goals_, node_var_counts_) {
         anchor_id_ = sequencer_.next();

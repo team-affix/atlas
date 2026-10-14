@@ -13,13 +13,13 @@
 #include "infrastructure/expr_pool.hpp"
 #include "infrastructure/expr_pool_ubs_factories.hpp"
 #include "infrastructure/globalizer.hpp"
-#include "infrastructure/normalizer.hpp"
-#include "infrastructure/pud_whnf.hpp"
 #include "infrastructure/pud_axiom_initializer.hpp"
-#include "infrastructure/ubs_transient_bind_map_data.hpp"
+#include "infrastructure/pud_transient_ubs_state.hpp"
 #include "infrastructure/pud_call_sites.hpp"
 #include "infrastructure/pud_children.hpp"
+#include "infrastructure/pud_descender_bind_factories.hpp"
 #include "infrastructure/pud_descender.hpp"
+#include "pud_descender_test_types.hpp"
 #include "infrastructure/pud_leaves.hpp"
 #include "infrastructure/pud_node_added_body_goals.hpp"
 #include "infrastructure/pud_node_added_specializations.hpp"
@@ -36,15 +36,15 @@
 
 using ::testing::ElementsAre;
 struct PudDescenderIntegrationTest : public ::testing::Test {
-    using bind_map_t    = ubs_transient_bind_map<expr_pool_ubs_var_factory, expr_pool_ubs_functor_factory>;
-    using descender_t   = pud_descender<
-        bind_map_t,
-        expr_pool_ubs_var_factory,
-        expr_pool_ubs_functor_factory,
-        pud_node_id_sequencer,
-        expr_pool,
-        expr_pool,
+    using bind_factories_t = pud_descender_bind_factories<
+        pud_descender_test_bind_map_t,
         globalizer,
+        expr_pool_ubs_functor_factory,
+        expr_pool,
+        expr_pool>;
+    using descender_t = pud_descender_test_t<
+        bind_factories_t,
+        pud_node_id_sequencer,
         pud_refuted_nodes,
         pud_call_sites,
         pud_node_added_specializations,
@@ -76,11 +76,13 @@ struct PudDescenderIntegrationTest : public ::testing::Test {
     pud_leaves                     leaves_;
     expr_pool_ubs_var_factory      ubs_var_factory_{exprs};
     expr_pool_ubs_functor_factory  ubs_functor_factory_{exprs};
+    bind_factories_t               bind_factories_{globalize, ubs_functor_factory_, exprs, exprs};
     descender_t                    descender_;
     initializer_t                  axiom_initializer_;
 
     PudDescenderIntegrationTest()
-        : descender_(sequencer_, ubs_var_factory_, ubs_functor_factory_, exprs, exprs, globalize, refuted_, call_sites_,
+        : descender_(sequencer_, bind_factories_, bind_factories_, bind_factories_, bind_factories_, bind_factories_,
+                     ubs_var_factory_, ubs_functor_factory_, exprs, exprs, globalize, refuted_, call_sites_,
                      node_specs_, node_body_goals_, node_var_counts_, node_heads_,
                      node_specs_, node_body_goals_, node_var_counts_)
         , axiom_initializer_(sequencer_, node_heads_, node_body_goals_, node_var_counts_, roots_) {}
@@ -117,11 +119,12 @@ struct PudDescenderIntegrationTest : public ::testing::Test {
 
     const expr* normalize_local_var(const pud_descent& descent, uint32_t local_var_index) {
         const uint32_t global_key = globalize.globalize(descent.frame_offset, local_var_index);
-        ubs_transient_bind_map_data bind_data{descent.ubs_state};
-        bind_map_t bind_map = bind_data.make_bind_map(ubs_var_factory_, ubs_functor_factory_);
-        pud_whnf<globalizer, bind_map_t> export_whnf{globalize, bind_map};
-        normalizer<globalizer, expr_pool, expr_pool, pud_whnf<globalizer, bind_map_t>> export_normalizer{
-            globalize, exprs, exprs, export_whnf};
+        pud_transient_ubs_state transient_ubs_state{descent.ubs_state};
+        pud_descender_test_bind_map_t bind_map =
+            transient_ubs_state.make_bind_map(ubs_var_factory_, ubs_functor_factory_);
+        bind_factories_t::whnf_t whnf = bind_factories_.make_whnf(bind_map);
+        bind_factories_t::export_normalizer_t export_normalizer =
+            bind_factories_.make_export_normalizer(bind_map, whnf);
         const uint32_t cutoff = descent.frame_offset + descent.lvc;
         std::unordered_map<uint32_t, uint32_t> translation;
         const expr* resolved = bind_map.resolve(global_key);

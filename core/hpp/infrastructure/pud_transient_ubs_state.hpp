@@ -1,5 +1,5 @@
-#ifndef UBS_TRANSIENT_BIND_MAP_DATA_HPP
-#define UBS_TRANSIENT_BIND_MAP_DATA_HPP
+#ifndef PUD_TRANSIENT_UBS_STATE_HPP
+#define PUD_TRANSIENT_UBS_STATE_HPP
 
 #include <cstdint>
 #include <immer/map.hpp>
@@ -8,9 +8,9 @@
 #include "value_objects/expr.hpp"
 #include "value_objects/pud_ubs_state.hpp"
 
-struct ubs_transient_bind_map_data {
-    ubs_transient_bind_map_data();
-    ubs_transient_bind_map_data(const pud_ubs_state& state);
+struct pud_transient_ubs_state {
+    pud_transient_ubs_state();
+    pud_transient_ubs_state(const pud_ubs_state& state);
 
     const uint32_t* get_parent(uint32_t var) const;
     void set_parent(uint32_t child, uint32_t parent);
@@ -29,12 +29,12 @@ struct ubs_transient_bind_map_data {
     ubs_bind_map<
         IMakeVar,
         IMakeFunctor,
-        ubs_transient_bind_map_data,
-        ubs_transient_bind_map_data,
-        ubs_transient_bind_map_data,
-        ubs_transient_bind_map_data,
-        ubs_transient_bind_map_data,
-        ubs_transient_bind_map_data>
+        pud_transient_ubs_state,
+        pud_transient_ubs_state,
+        pud_transient_ubs_state,
+        pud_transient_ubs_state,
+        pud_transient_ubs_state,
+        pud_transient_ubs_state>
     make_bind_map(IMakeVar& make_var, IMakeFunctor& make_functor);
 
 private:
@@ -47,16 +47,16 @@ template<typename IMakeVar, typename IMakeFunctor>
 using ubs_transient_bind_map = ubs_bind_map<
     IMakeVar,
     IMakeFunctor,
-    ubs_transient_bind_map_data,
-    ubs_transient_bind_map_data,
-    ubs_transient_bind_map_data,
-    ubs_transient_bind_map_data,
-    ubs_transient_bind_map_data,
-    ubs_transient_bind_map_data>;
+    pud_transient_ubs_state,
+    pud_transient_ubs_state,
+    pud_transient_ubs_state,
+    pud_transient_ubs_state,
+    pud_transient_ubs_state,
+    pud_transient_ubs_state>;
 
 template<typename IMakeVar, typename IMakeFunctor>
 ubs_transient_bind_map<IMakeVar, IMakeFunctor>
-ubs_transient_bind_map_data::make_bind_map(IMakeVar& make_var, IMakeFunctor& make_functor) {
+pud_transient_ubs_state::make_bind_map(IMakeVar& make_var, IMakeFunctor& make_functor) {
     return ubs_transient_bind_map<IMakeVar, IMakeFunctor>{
         make_var,
         make_functor,
