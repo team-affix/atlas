@@ -117,4 +117,24 @@ inline ubs_map_snapshot snapshot_bind_backing(const ubs_bind_map_expr_pool_backi
     return ubs_map_snapshot{backing.parents, backing.sizes, backing.values};
 }
 
+inline bool pud_expr_bindings_equal(const expr* left, const expr* right) {
+    if (left == right)
+        return true;
+    if (left->content.index() != right->content.index())
+        return false;
+    if (const expr::var* left_var = std::get_if<expr::var>(&left->content)) {
+        const expr::var* right_var = std::get_if<expr::var>(&right->content);
+        return left_var->index == right_var->index;
+    }
+    const expr::functor& left_functor = std::get<expr::functor>(left->content);
+    const expr::functor& right_functor = std::get<expr::functor>(right->content);
+    if (left_functor.id != right_functor.id || left_functor.args.size() != right_functor.args.size())
+        return false;
+    for (size_t arg = 0; arg < left_functor.args.size(); ++arg) {
+        if (!pud_expr_bindings_equal(left_functor.args[arg], right_functor.args[arg]))
+            return false;
+    }
+    return true;
+}
+
 #endif
