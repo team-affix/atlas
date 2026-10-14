@@ -21,8 +21,6 @@ struct pud_binding_descender {
         pud_node_id child);
 
 private:
-    void apply_specialization(BindMap& bind_map, const pud_specialization& specialization);
-
     IGetNodeAddedSpecializations& get_node_added_specializations_;
     IMakeUbsVar& make_ubs_var_;
     IMakeUbsFunctor& make_ubs_functor_;
@@ -55,21 +53,15 @@ pud_binding_descent PUD_BINDING_DESCENDER::descend(
     pud_node_id child) {
     pud_transient_ubs_state transient_ubs_state{descent.ubs_state};
     BindMap bind_map = transient_ubs_state.make_bind_map(make_ubs_var_, make_ubs_functor_);
-    for (const pud_specialization& specialization : get_node_added_specializations_.get(child))
-        apply_specialization(bind_map, specialization);
-    return pud_binding_descent{.ubs_state = transient_ubs_state.to_persistent_state()};
-}
-
-PUD_BINDING_DESCENDER_TEMPLATE
-void PUD_BINDING_DESCENDER::apply_specialization(
-    BindMap& bind_map,
-    const pud_specialization& specialization) {
-    if (const expr::var* var = std::get_if<expr::var>(&specialization.value->content)) {
-        bind_map.equate(specialization.var_idx, var->index);
-        return;
+    for (const pud_specialization& specialization : get_node_added_specializations_.get(child)) {
+        if (const expr::var* var = std::get_if<expr::var>(&specialization.value->content)) {
+            bind_map.equate(specialization.var_idx, var->index);
+            continue;
+        }
+        const expr::functor& functor = std::get<expr::functor>(specialization.value->content);
+        bind_map.instantiate(specialization.var_idx, functor.id, functor.args);
     }
-    const expr::functor& functor = std::get<expr::functor>(specialization.value->content);
-    bind_map.instantiate(specialization.var_idx, functor.id, functor.args);
+    return pud_binding_descent{.ubs_state = transient_ubs_state.to_persistent_state()};
 }
 
 #undef PUD_BINDING_DESCENDER

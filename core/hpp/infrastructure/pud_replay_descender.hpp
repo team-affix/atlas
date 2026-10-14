@@ -70,7 +70,7 @@ pud_replay_descent PUD_REPLAY_DESCENDER::root_descent(
     uint32_t frame_offset) {
     return pud_replay_descent{
         .frame_offset = frame_offset,
-        .ubs_state    = caller_ubs_state,
+        .ubs_state = caller_ubs_state,
     };
 }
 
@@ -94,7 +94,7 @@ std::optional<pud_replay_descent> PUD_REPLAY_DESCENDER::descend(
 
     return pud_replay_descent{
         .frame_offset = frame_offset,
-        .ubs_state    = transient_ubs_state.to_persistent_state(),
+        .ubs_state = transient_ubs_state.to_persistent_state(),
     };
 }
 

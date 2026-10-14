@@ -53,8 +53,8 @@ pud_body_goal_expr_descent pud_body_goal_expr_descender<IGetNodeAddedBodyGoals, 
     body_goal_id next_body_goal_id = 0;
     add_body_goals(body_goal_exprs_transient, body_goals, next_body_goal_id);
     return pud_body_goal_expr_descent{
-        .body_goal_exprs    = std::move(body_goal_exprs_transient).persistent(),
-        .next_body_goal_id  = next_body_goal_id,
+        .body_goal_exprs = std::move(body_goal_exprs_transient).persistent(),
+        .next_body_goal_id = next_body_goal_id,
     };
 }
 
@@ -70,8 +70,8 @@ pud_body_goal_expr_descent pud_body_goal_expr_descender<IGetNodeAddedBodyGoals, 
     body_goal_id next_body_goal_id = descent.next_body_goal_id;
     add_body_goals(body_goal_exprs_transient, body_goals, next_body_goal_id);
     return pud_body_goal_expr_descent{
-        .body_goal_exprs    = std::move(body_goal_exprs_transient).persistent(),
-        .next_body_goal_id  = next_body_goal_id,
+        .body_goal_exprs = std::move(body_goal_exprs_transient).persistent(),
+        .next_body_goal_id = next_body_goal_id,
     };
 }
 

@@ -1,6 +1,7 @@
 #ifndef PUD_BODY_GOAL_PQ_DESCENDER_HPP
 #define PUD_BODY_GOAL_PQ_DESCENDER_HPP
 
+#include <cstddef>
 #include <vector>
 #include <immer/map_transient.hpp>
 #include "value_objects/expr.hpp"
@@ -21,7 +22,7 @@ struct pud_body_goal_pq_descender {
 private:
     void add_body_goals(
         immer::map<body_goal_id, immer::box<persistent_query>>::transient_type& body_goal_pqs_transient,
-        const std::vector<const expr*>& body_goals,
+        size_t body_goal_count,
         body_goal_id& next_body_goal_id);
 
     IGetNodeAddedBodyGoals& get_node_added_body_goals_;
@@ -38,10 +39,9 @@ pud_body_goal_pq_descender<IGetNodeAddedBodyGoals, IGetCallSite>::pud_body_goal_
 template<typename IGetNodeAddedBodyGoals, typename IGetCallSite>
 void pud_body_goal_pq_descender<IGetNodeAddedBodyGoals, IGetCallSite>::add_body_goals(
     immer::map<body_goal_id, immer::box<persistent_query>>::transient_type& body_goal_pqs_transient,
-    const std::vector<const expr*>& body_goals,
+    size_t body_goal_count,
     body_goal_id& next_body_goal_id) {
-    for (const expr* goal : body_goals) {
-        (void)goal;
+    for (size_t body_goal_index = 0; body_goal_index < body_goal_count; ++body_goal_index) {
         body_goal_pqs_transient.set(next_body_goal_id, immer::box<persistent_query>{});
         ++next_body_goal_id;
     }
@@ -53,10 +53,10 @@ pud_body_goal_pq_descent pud_body_goal_pq_descender<IGetNodeAddedBodyGoals, IGet
     const std::vector<const expr*>& body_goals = get_node_added_body_goals_.get(root);
     auto body_goal_pqs_transient = immer::map<body_goal_id, immer::box<persistent_query>>{}.transient();
     body_goal_id next_body_goal_id = 0;
-    add_body_goals(body_goal_pqs_transient, body_goals, next_body_goal_id);
+    add_body_goals(body_goal_pqs_transient, body_goals.size(), next_body_goal_id);
     return pud_body_goal_pq_descent{
-        .body_goal_pqs       = std::move(body_goal_pqs_transient).persistent(),
-        .next_body_goal_id   = next_body_goal_id,
+        .body_goal_pqs = std::move(body_goal_pqs_transient).persistent(),
+        .next_body_goal_id = next_body_goal_id,
     };
 }
 
@@ -70,10 +70,10 @@ pud_body_goal_pq_descent pud_body_goal_pq_descender<IGetNodeAddedBodyGoals, IGet
     const body_goal_id call_site = get_call_site_.get(parent);
     body_goal_pqs_transient.erase(call_site);
     body_goal_id next_body_goal_id = descent.next_body_goal_id;
-    add_body_goals(body_goal_pqs_transient, body_goals, next_body_goal_id);
+    add_body_goals(body_goal_pqs_transient, body_goals.size(), next_body_goal_id);
     return pud_body_goal_pq_descent{
-        .body_goal_pqs       = std::move(body_goal_pqs_transient).persistent(),
-        .next_body_goal_id   = next_body_goal_id,
+        .body_goal_pqs = std::move(body_goal_pqs_transient).persistent(),
+        .next_body_goal_id = next_body_goal_id,
     };
 }
 

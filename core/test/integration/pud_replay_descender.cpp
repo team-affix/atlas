@@ -1,12 +1,14 @@
 #include <cstdint>
 #include <optional>
 #include <string>
+#include <variant>
 #include <vector>
 #include <gtest/gtest.h>
 #include "functor_fixture.hpp"
 #include "infrastructure/expr_pool.hpp"
 #include "infrastructure/expr_pool_ubs_factories.hpp"
 #include "infrastructure/globalizer.hpp"
+#include "infrastructure/pud_binding_descender.hpp"
 #include "infrastructure/pud_node_added_specializations.hpp"
 #include "infrastructure/pud_replay_bind_factories.hpp"
 #include "infrastructure/pud_replay_descender.hpp"
@@ -17,6 +19,11 @@
 struct PudReplayDescenderIntegrationTest : public ::testing::Test {
     using bind_map_t = ubs_transient_bind_map<expr_pool_ubs_var_factory, expr_pool_ubs_functor_factory>;
     using bind_factories_t = pud_replay_bind_factories<bind_map_t, globalizer, expr_pool_ubs_functor_factory>;
+    using binding_descender_t = pud_binding_descender<
+        bind_map_t,
+        pud_node_added_specializations,
+        expr_pool_ubs_var_factory,
+        expr_pool_ubs_functor_factory>;
     using replay_descender_t = pud_replay_descender<
         bind_map_t,
         bind_factories_t::normalizer_t,
@@ -34,6 +41,7 @@ struct PudReplayDescenderIntegrationTest : public ::testing::Test {
     expr_pool_ubs_functor_factory ubs_functor_factory_{exprs};
     bind_factories_t              bind_factories_{globalize, ubs_functor_factory_};
     pud_node_added_specializations node_specs_;
+    binding_descender_t           binding_{node_specs_, ubs_var_factory_, ubs_functor_factory_};
     replay_descender_t            replay_{ubs_var_factory_, ubs_functor_factory_, exprs, bind_factories_,
         bind_factories_, node_specs_};
 
@@ -57,11 +65,15 @@ struct PudReplayDescenderIntegrationTest : public ::testing::Test {
         return replay_.root_descent(transient.to_persistent_state(), frame_offset);
     }
 
-    const expr* resolve_local(const pud_replay_descent& descent, uint32_t local_var_index) {
-        const uint32_t global_key = globalize.globalize(descent.frame_offset, local_var_index);
+    const expr* resolve_global(const pud_replay_descent& descent, uint32_t global_var_index) {
         pud_transient_ubs_state transient{descent.ubs_state};
         bind_map_t bind_map = transient.make_bind_map(ubs_var_factory_, ubs_functor_factory_);
-        return bind_map.resolve(global_key);
+        return bind_map.resolve(global_var_index);
+    }
+
+    const expr* resolve_local(const pud_replay_descent& descent, uint32_t local_var_index) {
+        const uint32_t global_key = globalize.globalize(descent.frame_offset, local_var_index);
+        return resolve_global(descent, global_key);
     }
 
     const expr* resolve_at_frame(
@@ -69,9 +81,14 @@ struct PudReplayDescenderIntegrationTest : public ::testing::Test {
         uint32_t frame_offset,
         uint32_t local_var_index) {
         const uint32_t global_key = globalize.globalize(frame_offset, local_var_index);
-        pud_transient_ubs_state transient{descent.ubs_state};
-        bind_map_t bind_map = transient.make_bind_map(ubs_var_factory_, ubs_functor_factory_);
-        return bind_map.resolve(global_key);
+        return resolve_global(descent, global_key);
+    }
+
+    void expect_unbound_global(const pud_replay_descent& descent, uint32_t global_var_index) {
+        const expr* resolved = resolve_global(descent, global_var_index);
+        const expr::var* rep_var = std::get_if<expr::var>(&resolved->content);
+        ASSERT_NE(rep_var, nullptr);
+        EXPECT_EQ(rep_var->index, global_var_index);
     }
 };
 
@@ -79,7 +96,10 @@ TEST_F(PudReplayDescenderIntegrationTest, SpecsReplayLiftedToFrameOffset) {
     const pud_node_id root = 0;
     const pud_node_id child = 1;
     const uint32_t frame_offset = 3;
-    node_specs_.store(child, {pud_specialization{.var_idx = 2, .value = functor("a", {})}});
+    node_specs_.store(child, {
+        pud_specialization{.var_idx = 0, .value = functor("a", {})},
+        pud_specialization{.var_idx = 1, .value = functor("b", {})},
+    });
     const expr* head = functor("main", {var(0), var(1), var(2)});
     std::optional<pud_replay_descent> opened = open({}, head, head, frame_offset);
     ASSERT_TRUE(opened.has_value());
@@ -87,19 +107,55 @@ TEST_F(PudReplayDescenderIntegrationTest, SpecsReplayLiftedToFrameOffset) {
     std::optional<pud_replay_descent> at_child = replay_.descend(*opened, root, child);
     ASSERT_TRUE(at_child.has_value());
     EXPECT_EQ(at_child->frame_offset, frame_offset);
-    EXPECT_EQ(resolve_local(*at_child, 2), functor("a", {}));
-    EXPECT_EQ(resolve_at_frame(*at_child, 0u, 2), functor("a", {}));
+    EXPECT_EQ(resolve_local(*at_child, 0), functor("a", {}));
+    EXPECT_EQ(resolve_local(*at_child, 1), functor("b", {}));
+    EXPECT_EQ(resolve_at_frame(*at_child, 0u, 0), functor("a", {}));
+    EXPECT_EQ(resolve_at_frame(*at_child, 0u, 1), functor("b", {}));
 }
 
 TEST_F(PudReplayDescenderIntegrationTest, DifferentFrameOffsetsStayIndependent) {
+    const pud_node_id root = 0;
+    const pud_node_id child = 1;
+    node_specs_.store(child, {pud_specialization{.var_idx = 0, .value = functor("a", {})}});
     const expr* head = var(0);
     std::optional<pud_replay_descent> at_one = open({}, var(0), head, 1u);
     std::optional<pud_replay_descent> at_five = open({}, var(0), head, 5u);
     ASSERT_TRUE(at_one.has_value());
     ASSERT_TRUE(at_five.has_value());
-    EXPECT_EQ(at_one->frame_offset, 1u);
-    EXPECT_EQ(at_five->frame_offset, 5u);
-    EXPECT_NE(at_one->ubs_state, at_five->ubs_state);
+    std::optional<pud_replay_descent> child_one = replay_.descend(*at_one, root, child);
+    std::optional<pud_replay_descent> child_five = replay_.descend(*at_five, root, child);
+    ASSERT_TRUE(child_one.has_value());
+    ASSERT_TRUE(child_five.has_value());
+    EXPECT_EQ(resolve_global(*child_one, 1u), functor("a", {}));
+    EXPECT_EQ(resolve_global(*child_five, 5u), functor("a", {}));
+    expect_unbound_global(*child_one, 5u);
+    expect_unbound_global(*child_five, 1u);
+}
+
+TEST_F(PudReplayDescenderIntegrationTest, OpeningFlowFromBindingDescenderState) {
+    const pud_node_id binding_root = 10;
+    const pud_node_id binding_child = 11;
+    const pud_node_id replay_root = 0;
+    const pud_node_id agree_child = 1;
+    const pud_node_id contradict_child = 2;
+    const uint32_t frame_offset = 1u;
+
+    node_specs_.store(binding_child, {pud_specialization{.var_idx = 0, .value = functor("a", {})}});
+    pud_binding_descent at_binding_root = binding_.root_descent(binding_root);
+    pud_binding_descent caller_binding =
+        binding_.descend(at_binding_root, binding_root, binding_child);
+
+    const expr* head = var(0);
+    const expr* query = var(0);
+    std::optional<pud_replay_descent> opened =
+        open(caller_binding.ubs_state, query, head, frame_offset);
+    ASSERT_TRUE(opened.has_value());
+
+    node_specs_.store(agree_child, {pud_specialization{.var_idx = 0, .value = functor("a", {})}});
+    EXPECT_TRUE(replay_.descend(*opened, replay_root, agree_child).has_value());
+
+    node_specs_.store(contradict_child, {pud_specialization{.var_idx = 0, .value = functor("b", {})}});
+    EXPECT_FALSE(replay_.descend(*opened, replay_root, contradict_child).has_value());
 }
 
 TEST_F(PudReplayDescenderIntegrationTest, ContradictsInheritedCallerBindingRefutes) {

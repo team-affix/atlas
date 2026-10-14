@@ -60,11 +60,12 @@ TEST_F(PudBindingDescenderIntegrationTest, MultiLevelChainResolves) {
     const pud_node_id root = 0;
     const pud_node_id mid = 1;
     const pud_node_id leaf = 2;
-    node_specs_.store(mid, {pud_specialization{.var_idx = 0, .value = functor("a", {})}});
-    node_specs_.store(leaf, {pud_specialization{.var_idx = 1, .value = functor("a", {})}});
+    node_specs_.store(mid, {pud_specialization{.var_idx = 1, .value = var(0)}});
+    node_specs_.store(leaf, {pud_specialization{.var_idx = 0, .value = functor("a", {})}});
     pud_binding_descent at_root = descender_.root_descent(root);
     pud_binding_descent at_mid = descender_.descend(at_root, root, mid);
     pud_binding_descent at_leaf = descender_.descend(at_mid, mid, leaf);
+    EXPECT_EQ(resolve(at_leaf, 0), functor("a", {}));
     EXPECT_EQ(resolve(at_leaf, 1), functor("a", {}));
 }
 

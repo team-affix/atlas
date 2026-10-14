@@ -2,6 +2,8 @@
 #include <gmock/gmock.h>
 #include "infrastructure/pud_lvc_descender.hpp"
 
+namespace {
+
 struct MockGetNodeAddedVarCount {
     MOCK_METHOD(uint32_t, get, (pud_node_id));
 };
@@ -25,4 +27,6 @@ TEST_F(PudLvcDescenderTest, DescendAccumulatesChildVarCount) {
     EXPECT_CALL(get_var_count, get(child)).WillOnce(::testing::Return(2));
     pud_lvc_descent at_child = descender.descend(at_parent, parent, child);
     EXPECT_EQ(at_child.lvc, 7u);
+}
+
 }
