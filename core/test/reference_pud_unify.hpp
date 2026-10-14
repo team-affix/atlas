@@ -44,14 +44,16 @@ inline bool reference_pud_unify_terms(
         const expr* value = stack.normalizer.normalize(rhs);
         if (reference_pud_occurs(lhs_var->index, value))
             return false;
-        stack.bind_map.instantiate(lhs_var->index, value);
+        const expr::functor& bound_functor = std::get<expr::functor>(value->content);
+        stack.bind_map.instantiate(lhs_var->index, bound_functor.id, bound_functor.args);
         return true;
     }
     if (rhs_var) {
         const expr* value = stack.normalizer.normalize(lhs);
         if (reference_pud_occurs(rhs_var->index, value))
             return false;
-        stack.bind_map.instantiate(rhs_var->index, value);
+        const expr::functor& bound_functor = std::get<expr::functor>(value->content);
+        stack.bind_map.instantiate(rhs_var->index, bound_functor.id, bound_functor.args);
         return true;
     }
 

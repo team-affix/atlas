@@ -17,8 +17,13 @@ struct MockMakeVar {
     MOCK_METHOD(const expr*, make, (uint32_t));
 };
 
+struct MockMakeFunctor {
+    MOCK_METHOD(const expr*, make, (uint32_t, (const std::vector<const expr*>&)));
+};
+
 using test_ubs_bind_map_t = ubs_bind_map<
     MockMakeVar,
+    MockMakeFunctor,
     ubs_std_parent_map,
     ubs_std_parent_map,
     ubs_std_size_map,
@@ -28,10 +33,12 @@ using test_ubs_bind_map_t = ubs_bind_map<
 
 struct UbsBindMapTest : public ::testing::Test {
     ::testing::NiceMock<MockMakeVar> make_var;
+    ::testing::NiceMock<MockMakeFunctor> make_functor;
     ubs_std_parent_map parents;
     ubs_std_size_map sizes;
     ubs_std_value_map values;
-    test_ubs_bind_map_t store{make_var, parents, parents, sizes, sizes, values, values};
+    test_ubs_bind_map_t store{
+        make_var, make_functor, parents, parents, sizes, sizes, values, values};
 
     std::deque<expr> owned_exprs;
     std::unordered_map<uint32_t, const expr*> vars_by_index;
@@ -51,8 +58,15 @@ struct UbsBindMapTest : public ::testing::Test {
         return &owned_exprs.back();
     }
 
+    const expr* make_functor_stub(uint32_t id, const std::vector<const expr*>& args) {
+        owned_exprs.push_back(expr{expr::functor{id, args}});
+        return &owned_exprs.back();
+    }
+
     void SetUp() override {
         ON_CALL(make_var, make(testing::_)).WillByDefault(testing::Invoke(this, &UbsBindMapTest::var_node));
+        ON_CALL(make_functor, make(testing::_, testing::_))
+            .WillByDefault(testing::Invoke(this, &UbsBindMapTest::make_functor_stub));
     }
 
     ubs_map_snapshot snapshot() const {
@@ -91,7 +105,8 @@ TEST_F(UbsBindMapTest, ResolveDeepChainMatchesRoot) {
 TEST_F(UbsBindMapTest, ResolveBoundClassSharesStoredPointer) {
     const expr* bound = functor_node(42u);
     store.equate(0u, 1u);
-    store.instantiate(0u, bound);
+    EXPECT_CALL(make_functor, make(42u, testing::_)).WillOnce(testing::Return(bound));
+    store.instantiate(0u, 42u, {});
     EXPECT_EQ(store.resolve(0u), bound);
     EXPECT_EQ(store.resolve(1u), bound);
 }
@@ -133,8 +148,16 @@ TEST_F(UbsBindMapTest, EquateArgumentOrderIsIrrelevant) {
     ubs_std_size_map sizes_ba;
     ubs_std_value_map values_ab;
     ubs_std_value_map values_ba;
-    test_ubs_bind_map_t store_ab{make_var_ab, parents_ab, parents_ab, sizes_ab, sizes_ab, values_ab, values_ab};
-    test_ubs_bind_map_t store_ba{make_var_ba, parents_ba, parents_ba, sizes_ba, sizes_ba, values_ba, values_ba};
+    ::testing::NiceMock<MockMakeFunctor> make_functor_ab;
+    ::testing::NiceMock<MockMakeFunctor> make_functor_ba;
+    ON_CALL(make_functor_ab, make(testing::_, testing::_))
+        .WillByDefault(testing::Invoke(self_ab, &UbsBindMapTest::make_functor_stub));
+    ON_CALL(make_functor_ba, make(testing::_, testing::_))
+        .WillByDefault(testing::Invoke(self_ba, &UbsBindMapTest::make_functor_stub));
+    test_ubs_bind_map_t store_ab{
+        make_var_ab, make_functor_ab, parents_ab, parents_ab, sizes_ab, sizes_ab, values_ab, values_ab};
+    test_ubs_bind_map_t store_ba{
+        make_var_ba, make_functor_ba, parents_ba, parents_ba, sizes_ba, sizes_ba, values_ba, values_ba};
     store_ab.equate(4u, 9u);
     store_ba.equate(9u, 4u);
     EXPECT_EQ(ubs_rep_index(store_ab.resolve(4u)), ubs_rep_index(store_ba.resolve(4u)));
@@ -178,18 +201,18 @@ TEST_F(UbsBindMapTest, EquateRandomMergesShareOverallMinimum) {
 
 #ifdef DEBUG
 TEST_F(UbsBindMapTest, EquateIntoBoundClassThrows) {
-    store.instantiate(0u, functor_node(1u));
+    store.instantiate(0u, 1u, {});
     EXPECT_THROW(store.equate(0u, 1u), std::logic_error);
 }
 
 TEST_F(UbsBindMapTest, EquateWithBoundSideThrows) {
-    store.instantiate(2u, functor_node(1u));
+    store.instantiate(2u, 1u, {});
     EXPECT_THROW(store.equate(0u, 2u), std::logic_error);
 }
 
 TEST_F(UbsBindMapTest, EquateMemberOfBoundClassThrows) {
     store.equate(0u, 1u);
-    store.instantiate(0u, functor_node(1u));
+    store.instantiate(0u, 1u, {});
     EXPECT_THROW(store.equate(1u, 2u), std::logic_error);
 }
 #endif
@@ -198,14 +221,16 @@ TEST_F(UbsBindMapTest, InstantiateAnyMemberBindsWholeClass) {
     store.equate(0u, 1u);
     store.equate(1u, 2u);
     const expr* bound = functor_node(1u);
-    store.instantiate(2u, bound);
+    EXPECT_CALL(make_functor, make(1u, testing::_)).WillOnce(testing::Return(bound));
+    store.instantiate(2u, 1u, {});
     EXPECT_EQ(store.resolve(0u), bound);
 }
 
 TEST_F(UbsBindMapTest, InstantiateThroughNonRootWritesAtRootOnly) {
     store.equate(5u, 3u);
     const expr* bound = functor_node(9u);
-    store.instantiate(3u, bound);
+    EXPECT_CALL(make_functor, make(9u, testing::_)).WillOnce(testing::Return(bound));
+    store.instantiate(3u, 9u, {});
     const uint32_t root = ubs_find_root(parents, 3u);
     EXPECT_EQ(values.map.at(root), bound);
     EXPECT_EQ(values.map.count(3u), 0u);
@@ -213,18 +238,14 @@ TEST_F(UbsBindMapTest, InstantiateThroughNonRootWritesAtRootOnly) {
 
 #ifdef DEBUG
 TEST_F(UbsBindMapTest, InstantiateBoundClassThrows) {
-    store.instantiate(1u, functor_node(9u));
-    EXPECT_THROW(store.instantiate(1u, functor_node(1u)), std::logic_error);
+    store.instantiate(1u, 9u, {});
+    EXPECT_THROW(store.instantiate(1u, 1u, {}), std::logic_error);
 }
 
 TEST_F(UbsBindMapTest, InstantiateMergedBoundClassThrows) {
     store.equate(0u, 1u);
-    store.instantiate(0u, functor_node(9u));
-    EXPECT_THROW(store.instantiate(1u, functor_node(1u)), std::logic_error);
-}
-
-TEST_F(UbsBindMapTest, InstantiateVariableNodeThrows) {
-    EXPECT_THROW(store.instantiate(2u, var_node(0u)), std::logic_error);
+    store.instantiate(0u, 9u, {});
+    EXPECT_THROW(store.instantiate(1u, 1u, {}), std::logic_error);
 }
 #endif
 
@@ -409,21 +430,25 @@ TEST_F(UbsBindMapTest, EquateMergeWritesExactlyOneParentEntry) {
 
 TEST_F(UbsBindMapTest, InstantiateZeroArityFunctor) {
     const expr* constant = functor_node(0u);
-    store.instantiate(3u, constant);
+    EXPECT_CALL(make_functor, make(0u, testing::_)).WillOnce(testing::Return(constant));
+    store.instantiate(3u, 0u, {});
     EXPECT_EQ(store.resolve(3u), constant);
 }
 
 TEST_F(UbsBindMapTest, InstantiateDeepNestedStoresExactPointer) {
     const expr* inner = functor_node(1u);
-    owned_exprs.push_back(expr{expr::functor{2u, {inner}}});
-    const expr* outer = &owned_exprs.back();
-    store.instantiate(0u, outer);
-    EXPECT_EQ(store.resolve(0u), outer);
+    std::vector<const expr*> args{inner};
+    store.instantiate(0u, 2u, args);
+    const expr* resolved = store.resolve(0u);
+    const expr::functor& stored = std::get<expr::functor>(resolved->content);
+    EXPECT_EQ(stored.id, 2u);
+    EXPECT_EQ(stored.args.size(), 1u);
+    EXPECT_EQ(stored.args[0], inner);
 }
 
 TEST_F(UbsBindMapTest, InstantiateSingletonWritesNoParentOrSize) {
     const ubs_map_snapshot before = snapshot();
-    store.instantiate(4u, functor_node(5u));
+    store.instantiate(4u, 5u, {});
     const ubs_map_snapshot after = snapshot();
     EXPECT_EQ(after.parents, before.parents);
     EXPECT_EQ(after.sizes, before.sizes);
@@ -434,6 +459,6 @@ TEST_F(UbsBindMapTest, InstantiateMergedClassLeavesStaleSizeUntouched) {
     store.equate(1u, 2u);
     const uint32_t root = ubs_find_root(parents, 1u);
     const uint32_t size_before = sizes.map.at(root);
-    store.instantiate(2u, functor_node(8u));
+    store.instantiate(2u, 8u, {});
     EXPECT_EQ(sizes.map.at(root), size_before);
 }

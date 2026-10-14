@@ -79,14 +79,16 @@ bool UNIFIER::unify(framed_expr lhs, framed_expr rhs) {
         const expr* value = normalize_.normalize(rhs);
         if (occurs(lhs_var->index, value))
             return false;
-        instantiate_.instantiate(lhs_var->index, value);
+        const expr::functor& bound_functor = std::get<expr::functor>(value->content);
+        instantiate_.instantiate(lhs_var->index, bound_functor.id, bound_functor.args);
         return true;
     }
     if (rhs_var) {
         const expr* value = normalize_.normalize(lhs);
         if (occurs(rhs_var->index, value))
             return false;
-        instantiate_.instantiate(rhs_var->index, value);
+        const expr::functor& bound_functor = std::get<expr::functor>(value->content);
+        instantiate_.instantiate(rhs_var->index, bound_functor.id, bound_functor.args);
         return true;
     }
 

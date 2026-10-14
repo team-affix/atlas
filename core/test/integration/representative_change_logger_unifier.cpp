@@ -105,7 +105,7 @@ TEST_F(RepChangeLoggerUnifierIntegrationTest, UnifierMutatesOnceForSwappedPairAf
 
 TEST_F(RepChangeLoggerUnifierIntegrationTest, UnifierSkipsMutatorWhenVariableAlreadyBoundToRhs) {
     const expr* ground = atom("a");
-    stack.bind_map.instantiate(2u, ground);
+    stack.bind_map.instantiate(2u, functors.id("a"), {});
     stack.sink.clear();
     EXPECT_TRUE(stack.pud_unifier.unify(pud_fe(v(2), 0), pud_fe(ground, 0)));
     EXPECT_TRUE(stack.sink.changed_reps.empty());
@@ -113,8 +113,8 @@ TEST_F(RepChangeLoggerUnifierIntegrationTest, UnifierSkipsMutatorWhenVariableAlr
 
 TEST_F(RepChangeLoggerUnifierIntegrationTest, UnifierSkipsMutatorWhenBothVariablesShareBinding) {
     const expr* ground = atom("a");
-    stack.bind_map.instantiate(1u, ground);
-    stack.bind_map.instantiate(4u, ground);
+    stack.bind_map.instantiate(1u, functors.id("a"), {});
+    stack.bind_map.instantiate(4u, functors.id("a"), {});
     stack.sink.clear();
     EXPECT_TRUE(stack.pud_unifier.unify(pud_fe(v(1), 0), pud_fe(v(4), 0)));
     EXPECT_TRUE(stack.sink.changed_reps.empty());

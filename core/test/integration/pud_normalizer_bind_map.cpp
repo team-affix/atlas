@@ -11,7 +11,7 @@ struct PudNormalizerBindMapIntegrationTest : public ::testing::Test {
 
 TEST_F(PudNormalizerBindMapIntegrationTest, BoundFunctorNormalizesInnerVariables) {
     const expr* y = stack.bind_backing.pool.make_var(1u);
-    stack.bind_map.instantiate(1u, stack.bind_backing.pool.make_functor(functors.id("a"), {}));
+    stack.bind_map.instantiate(1u, functors.id("a"), {});
     const expr* fx = stack.bind_backing.pool.make_functor(functors.id("wrap"), {y});
     const expr* expected = stack.bind_backing.pool.make_functor(
         functors.id("wrap"), {stack.bind_backing.pool.make_functor(functors.id("a"), {})});
@@ -48,7 +48,7 @@ TEST_F(PudNormalizerBindMapIntegrationTest, BindingAfterTermBuiltIsVisibleOnNorm
     const expr* y = stack.bind_backing.pool.make_var(1u);
     const expr* fx = stack.bind_backing.pool.make_functor(functors.id("wrap"), {y});
     const expr* before = stack.normalizer.normalize(pud_fe(fx, 0));
-    stack.bind_map.instantiate(1u, stack.bind_backing.pool.make_functor(functors.id("a"), {}));
+    stack.bind_map.instantiate(1u, functors.id("a"), {});
     const expr* after = stack.normalizer.normalize(pud_fe(fx, 0));
     EXPECT_NE(before, after);
     const expr* expected = stack.bind_backing.pool.make_functor(
@@ -59,7 +59,7 @@ TEST_F(PudNormalizerBindMapIntegrationTest, BindingAfterTermBuiltIsVisibleOnNorm
 TEST_F(PudNormalizerBindMapIntegrationTest, UnrelatedBindingDoesNotChangeFramedTermNormalize) {
     const expr* term = stack.bind_backing.pool.make_functor(functors.id("f"), {stack.bind_backing.pool.make_var(0u)});
     const expr* first = stack.normalizer.normalize(pud_fe(term, 0));
-    stack.bind_map.instantiate(9u, stack.bind_backing.pool.make_functor(functors.id("z"), {}));
+    stack.bind_map.instantiate(9u, functors.id("z"), {});
     const expr* second = stack.normalizer.normalize(pud_fe(term, 0));
     EXPECT_EQ(first, second);
 }

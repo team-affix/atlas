@@ -14,7 +14,7 @@ struct MockEquate {
 };
 
 struct MockInstantiate {
-    MOCK_METHOD(void, instantiate, (uint32_t, const expr*), ());
+    MOCK_METHOD(void, instantiate, (uint32_t, uint32_t, (const std::vector<const expr*>&)), ());
 };
 
 struct MockPushBackChangedRep {
@@ -59,11 +59,11 @@ TEST_F(RepresentativeChangeLoggerTest, EquateForwardsArgumentsInOrder) {
     logger.equate(3u, 7u);
 }
 
-TEST_F(RepresentativeChangeLoggerTest, InstantiateForwardsRepAndFunctorPointer) {
-    const expr* functor = functor_node();
-    EXPECT_CALL(instantiate, instantiate(5u, functor)).Times(1);
+TEST_F(RepresentativeChangeLoggerTest, InstantiateForwardsRepFunctorIdAndArgs) {
+    std::vector<const expr*> args;
+    EXPECT_CALL(instantiate, instantiate(5u, 1u, testing::Ref(args))).Times(1);
     EXPECT_CALL(push_back, push_back(5u)).Times(1);
-    logger.instantiate(5u, functor);
+    logger.instantiate(5u, 1u, args);
 }
 
 TEST_F(RepresentativeChangeLoggerTest, EquateDoesNotCallInstantiate) {
@@ -77,10 +77,10 @@ TEST_F(RepresentativeChangeLoggerTest, EquateDoesNotCallInstantiate) {
 TEST_F(RepresentativeChangeLoggerTest, InstantiateDoesNotCallEquate) {
     ::testing::StrictMock<MockEquate> strict_equate;
     test_rep_change_logger_t strict_logger{strict_equate, instantiate, push_back};
-    const expr* functor = functor_node();
-    EXPECT_CALL(instantiate, instantiate(4u, functor));
+    std::vector<const expr*> args;
+    EXPECT_CALL(instantiate, instantiate(4u, 1u, testing::Ref(args)));
     EXPECT_CALL(push_back, push_back(4u));
-    strict_logger.instantiate(4u, functor);
+    strict_logger.instantiate(4u, 1u, args);
 }
 
 TEST_F(RepresentativeChangeLoggerTest, ForwardingHappensBeforePushBack) {
@@ -97,12 +97,12 @@ TEST_F(RepresentativeChangeLoggerTest, ForwardingHappensBeforePushBack) {
 
 TEST_F(RepresentativeChangeLoggerTest, InstantiateForwardingHappensBeforePushBack) {
     three_phase_recorder recorder;
-    const expr* functor = functor_node();
-    EXPECT_CALL(instantiate, instantiate(9u, functor))
+    std::vector<const expr*> args;
+    EXPECT_CALL(instantiate, instantiate(9u, 1u, testing::Ref(args)))
         .WillOnce(testing::Invoke(&recorder, &three_phase_recorder::on_instantiate));
     EXPECT_CALL(push_back, push_back(9u))
         .WillOnce(testing::Invoke(&recorder, &three_phase_recorder::on_push));
-    logger.instantiate(9u, functor);
+    logger.instantiate(9u, 1u, args);
     EXPECT_EQ(recorder.phases.size(), 2u);
     EXPECT_EQ(recorder.phases[0], 1);
     EXPECT_EQ(recorder.phases[1], 2);
@@ -129,19 +129,19 @@ TEST_F(RepresentativeChangeLoggerTest, EquateNearUint32MaxPushesLargerWithoutOve
 }
 
 TEST_F(RepresentativeChangeLoggerTest, InstantiateZeroPushesZero) {
-    const expr* functor = functor_node();
-    EXPECT_CALL(instantiate, instantiate(0u, functor));
+    std::vector<const expr*> args;
+    EXPECT_CALL(instantiate, instantiate(0u, 1u, testing::Ref(args)));
     EXPECT_CALL(push_back, push_back(0u));
-    logger.instantiate(0u, functor);
+    logger.instantiate(0u, 1u, args);
 }
 
 TEST_F(RepresentativeChangeLoggerTest, EachCallPushesExactlyOnce) {
-    const expr* functor = functor_node();
+    std::vector<const expr*> args;
     EXPECT_CALL(equate, equate(testing::_, testing::_)).Times(2);
-    EXPECT_CALL(instantiate, instantiate(testing::_, functor)).Times(1);
+    EXPECT_CALL(instantiate, instantiate(testing::_, 1u, testing::Ref(args))).Times(1);
     EXPECT_CALL(push_back, push_back(testing::_)).Times(3);
     logger.equate(1u, 2u);
-    logger.instantiate(5u, functor);
+    logger.instantiate(5u, 1u, args);
     logger.equate(4u, 8u);
 }
 
@@ -150,10 +150,10 @@ TEST_F(RepresentativeChangeLoggerTest, MixedSequencePushesInCallOrder) {
     ON_CALL(push_back, push_back(testing::_))
         .WillByDefault(testing::Invoke(&pushed, &rep_collector::collect));
     EXPECT_CALL(equate, equate(testing::_, testing::_)).Times(2);
-    EXPECT_CALL(instantiate, instantiate(testing::_, testing::_)).Times(1);
-    const expr* functor = functor_node();
+    EXPECT_CALL(instantiate, instantiate(testing::_, testing::_, testing::_)).Times(1);
+    std::vector<const expr*> args;
     logger.equate(1u, 5u);
-    logger.instantiate(3u, functor);
+    logger.instantiate(3u, 1u, args);
     logger.equate(2u, 4u);
     EXPECT_EQ(pushed.values, std::vector<uint32_t>({5u, 3u, 4u}));
 }
@@ -176,10 +176,11 @@ TEST_F(RepresentativeChangeLoggerTest, EquateThrowSkipsPush) {
 }
 
 TEST_F(RepresentativeChangeLoggerTest, InstantiateThrowSkipsPush) {
-    const expr* functor = functor_node();
-    EXPECT_CALL(instantiate, instantiate(1u, functor)).WillOnce(testing::Throw(std::runtime_error("fail")));
+    std::vector<const expr*> args;
+    EXPECT_CALL(instantiate, instantiate(1u, 1u, testing::Ref(args)))
+        .WillOnce(testing::Throw(std::runtime_error("fail")));
     EXPECT_CALL(push_back, push_back(testing::_)).Times(0);
-    EXPECT_THROW(logger.instantiate(1u, functor), std::runtime_error);
+    EXPECT_THROW(logger.instantiate(1u, 1u, args), std::runtime_error);
 }
 
 TEST_F(RepresentativeChangeLoggerTest, SeparateSinksDoNotShareEntries) {
@@ -223,7 +224,7 @@ struct equate_only {
 };
 
 struct instantiate_only {
-    void instantiate(uint32_t, const expr*) {}
+    void instantiate(uint32_t, uint32_t, const std::vector<const expr*>&) {}
 };
 
 TEST(RepresentativeChangeLoggerCompileTest, LoggerDoesNotRequireReadCapabilitiesOnDependencies) {

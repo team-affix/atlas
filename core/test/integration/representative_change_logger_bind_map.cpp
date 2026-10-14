@@ -94,7 +94,7 @@ TEST_F(RepChangeLoggerBindMapIntegrationTest, InstantiateThroughNonRepresentativ
     stack.sink.clear();
     const uint32_t rep_before = logged_global_rep_index(stack.bind_map, 8u);
     const expr* ground = atom();
-    stack.rep_logger.instantiate(8u, ground);
+    stack.rep_logger.instantiate(8u, 100u, {});
     EXPECT_EQ(rep_before, 6u);
     EXPECT_EQ(stack.sink.changed_reps, std::vector<uint32_t>({8u}));
     EXPECT_EQ(stack.bind_map.resolve(8u), ground);
@@ -103,7 +103,7 @@ TEST_F(RepChangeLoggerBindMapIntegrationTest, InstantiateThroughNonRepresentativ
 
 TEST_F(RepChangeLoggerBindMapIntegrationTest, InstantiateLogsRepresentativeAndBindsFunctor) {
     const expr* ground = atom();
-    stack.rep_logger.instantiate(5u, ground);
+    stack.rep_logger.instantiate(5u, 100u, {});
     EXPECT_EQ(stack.sink.changed_reps, std::vector<uint32_t>({5u}));
     EXPECT_EQ(stack.bind_map.resolve(5u), ground);
 }

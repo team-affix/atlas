@@ -3,7 +3,7 @@
 
 #include <cstdint>
 #include <utility>
-#include <variant>
+#include <vector>
 #include "value_objects/expr.hpp"
 #include "debug_assert.hpp"
 
@@ -14,9 +14,9 @@
 //         or the rep var (class unbound; rep = minimum index in the class).
 //         No entry = unbound, rep is the root.
 // Entries at non-roots are stale and never read, so nothing is ever erased.
-// The bind map stores values as given; normalizing them is the caller's job.
 template<
     typename IMakeVar,
+    typename IMakeFunctor,
     typename IGetParent,
     typename ISetParent,
     typename IGetSize,
@@ -26,6 +26,7 @@ template<
 struct ubs_bind_map {
     ubs_bind_map(
         IMakeVar& make_var,
+        IMakeFunctor& make_functor,
         IGetParent& get_parent,
         ISetParent& set_parent,
         IGetSize& get_size,
@@ -37,14 +38,15 @@ struct ubs_bind_map {
     const expr* resolve(uint32_t var);
     // Any two variables in different unbound classes. Precondition: roots differ.
     void equate(uint32_t var_a, uint32_t var_b);
-    // Any variable. Preconditions: its class is unbound; functor is a functor.
-    void instantiate(uint32_t var, const expr* functor);
+    // Any variable. Preconditions: its class is unbound; args are normalized (global indices).
+    void instantiate(uint32_t var, uint32_t functor_id, const std::vector<const expr*>& args);
 
 private:
     uint32_t find(uint32_t var);
     uint32_t rep(uint32_t root); // DEBUG_ASSERT: class is unbound
 
     IMakeVar& make_var_;
+    IMakeFunctor& make_functor_;
     IGetParent& get_parent_;
     ISetParent& set_parent_;
     IGetSize& get_size_;
@@ -54,13 +56,14 @@ private:
 };
 
 #define UBS_BIND_MAP_TEMPLATE                                                        \
-    template<typename IMakeVar, typename IGetParent, typename ISetParent,           \
+    template<typename IMakeVar, typename IMakeFunctor, typename IGetParent, typename ISetParent, \
              typename IGetSize, typename ISetSize, typename IGetValue, typename ISetValue>
-#define UBS_BIND_MAP ubs_bind_map<IMakeVar, IGetParent, ISetParent, IGetSize, ISetSize, IGetValue, ISetValue>
+#define UBS_BIND_MAP ubs_bind_map<IMakeVar, IMakeFunctor, IGetParent, ISetParent, IGetSize, ISetSize, IGetValue, ISetValue>
 
 UBS_BIND_MAP_TEMPLATE
 UBS_BIND_MAP::ubs_bind_map(
     IMakeVar& make_var,
+    IMakeFunctor& make_functor,
     IGetParent& get_parent,
     ISetParent& set_parent,
     IGetSize& get_size,
@@ -68,6 +71,7 @@ UBS_BIND_MAP::ubs_bind_map(
     IGetValue& get_value,
     ISetValue& set_value)
     : make_var_(make_var)
+    , make_functor_(make_functor)
     , get_parent_(get_parent)
     , set_parent_(set_parent)
     , get_size_(get_size)
@@ -104,7 +108,7 @@ UBS_BIND_MAP_TEMPLATE
 void UBS_BIND_MAP::equate(uint32_t var_a, uint32_t var_b) {
     uint32_t root_a = find(var_a);
     uint32_t root_b = find(var_b);
-    
+
     DEBUG_ASSERT(root_a != root_b);
 
     const uint32_t rep_a = rep(root_a);
@@ -123,11 +127,14 @@ void UBS_BIND_MAP::equate(uint32_t var_a, uint32_t var_b) {
 }
 
 UBS_BIND_MAP_TEMPLATE
-void UBS_BIND_MAP::instantiate(uint32_t var, const expr* functor) {
-    DEBUG_ASSERT(std::holds_alternative<expr::functor>(functor->content));
+void UBS_BIND_MAP::instantiate(
+    uint32_t var,
+    uint32_t functor_id,
+    const std::vector<const expr*>& args) {
     const uint32_t root = find(var);
     rep(root);
-    set_value_.set_value(root, functor);
+    const expr* bound = make_functor_.make(functor_id, args);
+    set_value_.set_value(root, bound);
 }
 
 #undef UBS_BIND_MAP

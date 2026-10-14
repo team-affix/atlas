@@ -68,9 +68,9 @@ struct logged_equate_instantiate_gate {
         rep_logger_.equate(rep_a, rep_b);
     }
 
-    void instantiate(uint32_t rep, const expr* functor) {
+    void instantiate(uint32_t rep, uint32_t functor_id, const std::vector<const expr*>& args) {
         sink_.mark_next_instantiate();
-        rep_logger_.instantiate(rep, functor);
+        rep_logger_.instantiate(rep, functor_id, args);
     }
 
 private:
@@ -89,9 +89,8 @@ struct pud_logged_unifier_bind_map_stack {
         traced_changed_rep_sink>;
     rep_logger_t rep_logger;
     logged_equate_instantiate_gate<rep_logger_t> bind_gate;
-    pud_pool_make_functor make_functor{bind_backing.pool};
     global_normalizer<globalizer, pud_pool_make_functor, ubs_bind_map_expr_pool_backing::bind_map_t> normalizer{
-        globalize, make_functor, bind_map};
+        globalize, bind_backing.make_functor, bind_map};
 
     using pud_unifier_t = unifier<
         globalizer,
@@ -178,7 +177,8 @@ inline void replay_rep_changes(
         const uint32_t rep = trace.reps[step];
         const expr* final_value = original_bind_map.resolve(rep);
         if (std::holds_alternative<expr::functor>(final_value->content)) {
-            fresh.rep_logger.instantiate(rep, final_value);
+            const expr::functor& bound_functor = std::get<expr::functor>(final_value->content);
+            fresh.rep_logger.instantiate(rep, bound_functor.id, bound_functor.args);
             continue;
         }
         const uint32_t merged_to = ubs_rep_index(final_value);

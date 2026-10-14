@@ -60,7 +60,7 @@ TEST_F(UbsBindMapIntegrationTest, ResolveUsesExprPoolHashConsForIsolatedVar) {
 TEST_F(UbsBindMapIntegrationTest, EquateAndInstantiateShareCanonicalPointers) {
     const expr* bound = backing.pool.make_functor(11u, {});
     store.equate(0u, 1u);
-    store.instantiate(0u, bound);
+    store.instantiate(0u, 11u, {});
     EXPECT_EQ(store.resolve(1u), bound);
     EXPECT_EQ(store.resolve(0u), backing.pool.make_functor(11u, {}));
 }
@@ -76,17 +76,21 @@ TEST(UbsBindMapImmerIntegrationTest, EquateAndInstantiateOnTransientMapsWithPool
     immer_size_map size_access{sizes};
     immer_value_map value_access{values};
 
+    pud_pool_make_functor make_functor{pool};
+
     ubs_bind_map<
         ubs_pool_var_factory,
+        pud_pool_make_functor,
         immer_parent_map,
         immer_parent_map,
         immer_size_map,
         immer_size_map,
         immer_value_map,
-        immer_value_map> store{vars, parent_access, parent_access, size_access, size_access, value_access, value_access};
+        immer_value_map> store{
+        vars, make_functor, parent_access, parent_access, size_access, size_access, value_access, value_access};
 
     const expr* bound = pool.make_functor(11u, {});
     store.equate(0u, 1u);
-    store.instantiate(0u, bound);
+    store.instantiate(0u, 11u, {});
     EXPECT_EQ(store.resolve(1u), bound);
 }

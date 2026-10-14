@@ -110,7 +110,7 @@ TEST_F(PudUnifierExtendedIntegrationTest, BoundVarStructurallyEqualDifferentFram
     pud_unifier_bind_map_stack s;
     const expr* a0 = s.bind_backing.pool.make_functor(functors.id("a"), {});
     const expr* wrapped = s.bind_backing.pool.make_functor(functors.id("w"), {a0});
-    s.bind_map.instantiate(0u, wrapped);
+    s.bind_map.instantiate(0u, functors.id("w"), {a0});
     const expr* wrap_rhs = s.bind_backing.pool.make_functor(functors.id("w"), {s.bind_backing.pool.make_var(1u)});
     EXPECT_TRUE(s.pud_unifier.unify(
         pud_fe(s.bind_backing.pool.make_var(0u), 0), pud_fe(wrap_rhs, 0)));
@@ -119,8 +119,8 @@ TEST_F(PudUnifierExtendedIntegrationTest, BoundVarStructurallyEqualDifferentFram
 
 TEST_F(PudUnifierExtendedIntegrationTest, BoundVarWithDifferentBoundFunctorFails) {
     pud_unifier_bind_map_stack s;
-    s.bind_map.instantiate(0u, s.bind_backing.pool.make_functor(functors.id("a"), {}));
-    s.bind_map.instantiate(1u, s.bind_backing.pool.make_functor(functors.id("b"), {}));
+    s.bind_map.instantiate(0u, functors.id("a"), {});
+    s.bind_map.instantiate(1u, functors.id("b"), {});
     EXPECT_FALSE(s.pud_unifier.unify(
         pud_fe(s.bind_backing.pool.make_var(0u), 0),
         pud_fe(s.bind_backing.pool.make_var(1u), 0)));
@@ -129,7 +129,7 @@ TEST_F(PudUnifierExtendedIntegrationTest, BoundVarWithDifferentBoundFunctorFails
 TEST_F(PudUnifierExtendedIntegrationTest, BoundVarDiffersOnlyInNestedVarBindsNested) {
     pud_unifier_bind_map_stack s;
     const expr* a_atom = s.bind_backing.pool.make_functor(functors.id("a"), {});
-    s.bind_map.instantiate(0u, s.bind_backing.pool.make_functor(functors.id("w"), {a_atom}));
+    s.bind_map.instantiate(0u, functors.id("w"), {a_atom});
     const expr* rhs = s.bind_backing.pool.make_functor(functors.id("w"), {s.bind_backing.pool.make_var(1u)});
     EXPECT_TRUE(s.pud_unifier.unify(
         pud_fe(s.bind_backing.pool.make_var(0u), 0), pud_fe(rhs, 0)));
@@ -139,7 +139,7 @@ TEST_F(PudUnifierExtendedIntegrationTest, BoundVarDiffersOnlyInNestedVarBindsNes
 TEST_F(PudUnifierExtendedIntegrationTest, BoundVarWithUnboundVarBindsUnboundClass) {
     pud_unifier_bind_map_stack s;
     const expr* ground = s.bind_backing.pool.make_functor(functors.id("g"), {});
-    s.bind_map.instantiate(0u, ground);
+    s.bind_map.instantiate(0u, functors.id("g"), {});
     EXPECT_TRUE(s.pud_unifier.unify(
         pud_fe(s.bind_backing.pool.make_var(0u), 0),
         pud_fe(s.bind_backing.pool.make_var(1u), 0)));

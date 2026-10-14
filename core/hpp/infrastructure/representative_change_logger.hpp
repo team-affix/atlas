@@ -2,6 +2,7 @@
 #define REPRESENTATIVE_CHANGE_LOGGER_HPP
 
 #include <cstdint>
+#include <vector>
 #include "value_objects/expr.hpp"
 
 template<typename IEquate, typename IInstantiate, typename IPushBackChangedRep>
@@ -12,7 +13,7 @@ struct representative_change_logger {
         IPushBackChangedRep& push_back_changed_rep);
 
     void equate(uint32_t rep_a, uint32_t rep_b);
-    void instantiate(uint32_t rep, const expr* functor);
+    void instantiate(uint32_t rep, uint32_t functor_id, const std::vector<const expr*>& args);
 
 private:
     IEquate& equate_;
@@ -39,8 +40,10 @@ void representative_change_logger<IEquate, IInstantiate, IPushBackChangedRep>::e
 
 template<typename IEquate, typename IInstantiate, typename IPushBackChangedRep>
 void representative_change_logger<IEquate, IInstantiate, IPushBackChangedRep>::instantiate(
-    uint32_t rep, const expr* functor) {
-    instantiate_.instantiate(rep, functor);
+    uint32_t rep,
+    uint32_t functor_id,
+    const std::vector<const expr*>& args) {
+    instantiate_.instantiate(rep, functor_id, args);
     push_back_changed_rep_.push_back(rep);
 }
 

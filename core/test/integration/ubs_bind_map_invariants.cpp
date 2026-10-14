@@ -40,7 +40,7 @@ TEST_F(UbsBindMapInvariantsIntegrationTest, ResolveAfterInstantiateOnDifferentMe
     for (uint32_t member = 1u; member < 20u; ++member)
         stack.bind_map.equate(0u, member);
     const expr* bound = stack.bind_backing.pool.make_functor(42u, {});
-    stack.bind_map.instantiate(17u, bound);
+    stack.bind_map.instantiate(17u, 42u, {});
     const expr* via_root = stack.bind_map.resolve(0u);
     const expr* via_member = stack.bind_map.resolve(17u);
     EXPECT_EQ(via_root, bound);
@@ -52,7 +52,7 @@ TEST_F(UbsBindMapInvariantsIntegrationTest, InstantiateThenResolveHundredMembers
     for (uint32_t member = 1u; member < 100u; ++member)
         stack.bind_map.equate(0u, member);
     const expr* bound = stack.bind_backing.pool.make_functor(7u, {});
-    stack.bind_map.instantiate(50u, bound);
+    stack.bind_map.instantiate(50u, 7u, {});
     for (uint32_t member = 0u; member < 100u; ++member)
         EXPECT_EQ(stack.bind_map.resolve(member), bound);
 }
@@ -62,7 +62,7 @@ TEST_F(UbsBindMapInvariantsIntegrationTest, InstantiateWhenRepIsCallerVarBindsCa
     const uint32_t callee = stack.globalize.globalize(0u, 3u);
     stack.bind_map.equate(caller, callee);
     const expr* ground = stack.bind_backing.pool.make_functor(11u, {});
-    stack.bind_map.instantiate(callee, ground);
+    stack.bind_map.instantiate(callee, 11u, {});
     EXPECT_EQ(stack.bind_map.resolve(caller), ground);
     EXPECT_EQ(stack.bind_map.resolve(callee), ground);
 }
@@ -84,9 +84,9 @@ TEST_F(UbsBindMapInvariantsIntegrationTest, RandomEquateAndInstantiateRespectRef
             const bool unbound = std::holds_alternative<expr::var>(resolved->content);
             if (!unbound)
                 continue;
-            const expr* ground = stack.bind_backing.pool.make_functor(
-                100u + static_cast<uint32_t>(step % 50u), {});
-            stack.bind_map.instantiate(left, ground);
+            const uint32_t functor_id = 100u + static_cast<uint32_t>(step % 50u);
+            stack.bind_backing.pool.make_functor(functor_id, {});
+            stack.bind_map.instantiate(left, functor_id, {});
             continue;
         }
 

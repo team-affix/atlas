@@ -183,9 +183,9 @@ TEST_F(PudUnifierBindMapIntegrationTest, EqualBoundFunctorsUnifyDifferentOnesFai
     const expr* bound_a = merged.bind_backing.pool.make_functor(functors.id("a"), {});
     const expr* bound_b = merged.bind_backing.pool.make_functor(functors.id("b"), {});
     merged.bind_map.equate(0u, 1u);
-    merged.bind_map.instantiate(0u, bound_a);
+    merged.bind_map.instantiate(0u, functors.id("a"), {});
     EXPECT_TRUE(merged.pud_unifier.unify(fe(merged.bind_backing.pool.make_var(0u), 0), fe(merged.bind_backing.pool.make_var(1u), 0)));
-    merged.bind_map.instantiate(2u, bound_b);
+    merged.bind_map.instantiate(2u, functors.id("b"), {});
     EXPECT_FALSE(merged.pud_unifier.unify(fe(merged.bind_backing.pool.make_var(0u), 0), fe(merged.bind_backing.pool.make_var(2u), 0)));
 }
 
@@ -193,7 +193,7 @@ TEST_F(PudUnifierBindMapIntegrationTest, StoredValueIsFullyNormalized) {
     pud_unifier_bind_map_stack s;
     const expr* y = s.bind_backing.pool.make_var(1u);
     const expr* a_atom = s.bind_backing.pool.make_functor(functors.id("a"), {});
-    s.bind_map.instantiate(1u, a_atom);
+    s.bind_map.instantiate(1u, functors.id("a"), {});
     const expr* fx = s.bind_backing.pool.make_functor(functors.id("wrap"), {y});
     EXPECT_TRUE(s.pud_unifier.unify(fe(s.bind_backing.pool.make_var(0u), 0), fe(fx, 0)));
     const expr* expected = s.normalizer.normalize(fe(fx, 0));

@@ -30,6 +30,7 @@ struct pud_pool_make_functor {
 struct ubs_bind_map_expr_pool_backing {
     expr_pool pool;
     ubs_pool_var_factory vars{pool};
+    pud_pool_make_functor make_functor{pool};
     std::unordered_map<uint32_t, uint32_t> parents;
     std::unordered_map<uint32_t, uint32_t> sizes;
     std::unordered_map<uint32_t, const expr*> values;
@@ -79,6 +80,7 @@ struct ubs_bind_map_expr_pool_backing {
 
     using bind_map_t = ubs_bind_map<
         ubs_pool_var_factory,
+        pud_pool_make_functor,
         parent_map,
         parent_map,
         size_map,
@@ -87,7 +89,15 @@ struct ubs_bind_map_expr_pool_backing {
         value_map>;
 
     bind_map_t make_bind_map() {
-        return bind_map_t{vars, parent_access, parent_access, size_access, size_access, value_access, value_access};
+        return bind_map_t{
+            vars,
+            make_functor,
+            parent_access,
+            parent_access,
+            size_access,
+            size_access,
+            value_access,
+            value_access};
     }
 };
 
@@ -95,9 +105,8 @@ struct pud_unifier_bind_map_stack {
     globalizer globalize;
     ubs_bind_map_expr_pool_backing bind_backing;
     ubs_bind_map_expr_pool_backing::bind_map_t bind_map{bind_backing.make_bind_map()};
-    pud_pool_make_functor make_functor{bind_backing.pool};
     global_normalizer<globalizer, pud_pool_make_functor, ubs_bind_map_expr_pool_backing::bind_map_t> normalizer{
-        globalize, make_functor, bind_map};
+        globalize, bind_backing.make_functor, bind_map};
 
     using pud_unifier_t = unifier<
         globalizer,

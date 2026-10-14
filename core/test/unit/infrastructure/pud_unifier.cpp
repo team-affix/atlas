@@ -24,7 +24,7 @@ struct MockEquate {
 };
 
 struct MockInstantiate {
-    MOCK_METHOD(void, instantiate, (uint32_t, const expr*));
+    MOCK_METHOD(void, instantiate, (uint32_t, uint32_t, (const std::vector<const expr*>&)));
 };
 
 using test_unifier_t = unifier<
@@ -149,7 +149,7 @@ TEST_F(PudUnifierTest, UnifyTwoVarsEquatesIndices) {
 
 TEST_F(PudUnifierTest, UnifyVarWithFunctorNormalizesThenInstantiates) {
     ON_CALL(normalize, normalize(testing::_)).WillByDefault(testing::Return(atom));
-    EXPECT_CALL(instantiate, instantiate(2u, atom));
+    EXPECT_CALL(instantiate, instantiate(2u, 10u, testing::_));
     EXPECT_TRUE(sut.unify({var2, 0u}, {atom, 0u}));
 }
 
@@ -215,8 +215,8 @@ TEST_F(PudUnifierTest, VarLeftFunctorRightMirrorsFunctorLeftVarRight) {
     stub_globalize_and_resolve(g_right, g_right_stub, r_right, r_right_stub);
     ON_CALL(n_left, normalize(testing::_)).WillByDefault(testing::Return(atom));
     ON_CALL(n_right, normalize(testing::_)).WillByDefault(testing::Return(atom));
-    EXPECT_CALL(i_left, instantiate(2u, atom));
-    EXPECT_CALL(i_right, instantiate(2u, atom));
+    EXPECT_CALL(i_left, instantiate(2u, 10u, testing::_));
+    EXPECT_CALL(i_right, instantiate(2u, 10u, testing::_));
 
     EXPECT_TRUE(left_unifier.unify({var2, 0u}, {atom, 0u}));
     EXPECT_TRUE(right_unifier.unify({atom, 0u}, {var2, 0u}));
@@ -326,6 +326,6 @@ TEST_F(PudUnifierTest, AfterFailedOccursLegalBindingStillWorks) {
     EXPECT_FALSE(sut.unify({var0, 0u}, {cyclic, 0u}));
 
     ON_CALL(normalize, normalize(testing::_)).WillByDefault(testing::Return(atom));
-    EXPECT_CALL(instantiate, instantiate(0u, atom));
+    EXPECT_CALL(instantiate, instantiate(0u, 10u, testing::_));
     EXPECT_TRUE(sut.unify({var0, 0u}, {atom, 0u}));
 }
