@@ -7,7 +7,6 @@
 
 struct pud_body_goal_expr_descent {
     immer::map<body_goal_id, const expr*> body_goal_exprs;
-    body_goal_id next_body_goal_id;
     auto operator<=>(const pud_body_goal_expr_descent&) const = default;
 };
 

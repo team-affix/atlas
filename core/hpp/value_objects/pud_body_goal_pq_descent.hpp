@@ -8,7 +8,6 @@
 
 struct pud_body_goal_pq_descent {
     immer::map<body_goal_id, immer::box<persistent_query>> body_goal_pqs;
-    body_goal_id next_body_goal_id;
     auto operator<=>(const pud_body_goal_pq_descent&) const = default;
 };
 
