@@ -86,6 +86,7 @@ TEST_F(PudBodyGoalPqDescenderTest, ForkedSiblingDescentsStayIndependent) {
     pud_body_goal_pq_descent at_right = descender.descend(at_parent, parent, right);
     EXPECT_EQ(at_left.body_goal_pqs.size(), 1u);
     EXPECT_EQ(at_right.body_goal_pqs.size(), 1u);
+    EXPECT_NE(&at_left.body_goal_pqs.find(1)->get(), &at_right.body_goal_pqs.find(1)->get());
 }
 
 }

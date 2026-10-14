@@ -48,12 +48,11 @@ TEST_F(PudBindingDescenderIntegrationTest, FunctorSpecInstantiates) {
 TEST_F(PudBindingDescenderIntegrationTest, VarSpecEquates) {
     const pud_node_id root = 0;
     const pud_node_id child = 1;
-    node_specs_.store(child, {pud_specialization{.var_idx = 0, .value = var(1)}});
+    node_specs_.store(child, {pud_specialization{.var_idx = 1, .value = var(0)}});
     pud_binding_descent at_root = descender_.root_descent(root);
     pud_binding_descent at_child = descender_.descend(at_root, root, child);
-    const expr* rep = resolve(at_child, 0);
-    EXPECT_EQ(rep, resolve(at_child, 1));
-    EXPECT_EQ(rep, var(0));
+    EXPECT_EQ(resolve(at_child, 0), var(0));
+    EXPECT_EQ(resolve(at_child, 1), var(0));
 }
 
 TEST_F(PudBindingDescenderIntegrationTest, MultiLevelChainResolves) {

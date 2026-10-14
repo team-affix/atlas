@@ -25,7 +25,7 @@ pud_lvc_descender<IGetNodeAddedVarCount>::pud_lvc_descender(
 template<typename IGetNodeAddedVarCount>
 pud_lvc_descent pud_lvc_descender<IGetNodeAddedVarCount>::root_descent(pud_node_id root) {
     const uint32_t var_count = get_node_added_var_count_.get(root);
-    return pud_lvc_descent{var_count};
+    return pud_lvc_descent{.lvc = var_count};
 }
 
 template<typename IGetNodeAddedVarCount>
@@ -34,7 +34,7 @@ pud_lvc_descent pud_lvc_descender<IGetNodeAddedVarCount>::descend(
     pud_node_id parent,
     pud_node_id child) {
     const uint32_t var_count = get_node_added_var_count_.get(child);
-    return pud_lvc_descent{descent.lvc + var_count};
+    return pud_lvc_descent{.lvc = descent.lvc + var_count};
 }
 
 #endif
