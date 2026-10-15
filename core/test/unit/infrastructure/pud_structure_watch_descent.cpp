@@ -4,6 +4,7 @@
 #include <gmock/gmock.h>
 #include "infrastructure/pud_structure_watch_descent.hpp"
 
+using ::testing::_;
 using ::testing::ElementsAre;
 using ::testing::IsEmpty;
 using ::testing::NiceMock;
@@ -25,6 +26,7 @@ struct PudStructureWatchDescentTest : public ::testing::Test {
     std::vector<pud_specialization> child_specs;
     std::vector<pud_specialization> grandchild_specs;
     std::vector<pud_specialization> sibling_specs;
+    std::vector<pud_specialization> no_specs;
     pud_node_id child = 1;
     pud_node_id grandchild = 2;
     pud_node_id sibling = 3;
@@ -33,6 +35,7 @@ struct PudStructureWatchDescentTest : public ::testing::Test {
     uint32_t a = 102;
 
     void SetUp() override {
+        ON_CALL(get_specs, get(_)).WillByDefault(ReturnRef(no_specs));
         ON_CALL(get_specs, get(child)).WillByDefault(ReturnRef(child_specs));
         ON_CALL(get_specs, get(grandchild)).WillByDefault(ReturnRef(grandchild_specs));
         ON_CALL(get_specs, get(sibling)).WillByDefault(ReturnRef(sibling_specs));
@@ -391,6 +394,271 @@ TEST_F(PudStructureWatchDescentTest, DescentIsAssignable) {
     current = current.descend(child, {}, {}).child_descent;
     grandchild_specs = {rep_instantiated(1, functor(a, {}))};
     EXPECT_THAT(changes_at(current, grandchild), ElementsAre(1u));
+}
+
+TEST_F(PudStructureWatchDescentTest, CopiedDescentsAreIndependent) {
+    test_descent_t original = at_root({var(0), var(1)});
+    test_descent_t copy = original;
+    child_specs = {rep_instantiated(0, functor(a, {}))};
+    copy = copy.descend(child, {1}, {}).child_descent;
+    sibling_specs = {rep_instantiated(1, functor(a, {}))};
+    EXPECT_THAT(changes_at(original, sibling), ElementsAre(1u));
+    EXPECT_THAT(changes_at(copy, sibling), IsEmpty());
+}
+
+TEST_F(PudStructureWatchDescentTest, UnwatchInAChildLeavesTheParentWatching) {
+    test_descent_t parent = at_root({var(0)});
+    parent.descend(child, {0}, {});
+    sibling_specs = {rep_instantiated(0, functor(a, {}))};
+    EXPECT_THAT(changes_at(parent, sibling), ElementsAre(0u));
+}
+
+// ── ordering ─────────────────────────────────────────────────────────────────
+
+TEST_F(PudStructureWatchDescentTest, ChangesFollowTheSpecializationOrder) {
+    child_specs = {
+        rep_instantiated(2, functor(a, {})),
+        rep_instantiated(0, functor(a, {})),
+        rep_instantiated(1, functor(a, {})),
+    };
+    EXPECT_THAT(changes_at(at_root({var(0), var(1), var(2)}), child), ElementsAre(2u, 0u, 1u));
+}
+
+TEST_F(PudStructureWatchDescentTest, RepeatedHeadKeepsItsFirstPosition) {
+    child_specs = {
+        rep_instantiated(0, functor(a, {})),
+        rep_instantiated(1, functor(a, {})),
+        rep_instantiated(2, functor(a, {})),
+    };
+    test_descent_t root = at_root({functor(f, {var(0), var(2)}), var(1)});
+    EXPECT_THAT(changes_at(root, child), ElementsAre(0u, 1u));
+}
+
+TEST_F(PudStructureWatchDescentTest, CollapseReportedAtTheSpecializationThatCausesIt) {
+    child_specs = {
+        rep_instantiated(3, functor(a, {})),
+        rep_updated(1, 0),
+    };
+    test_descent_t root = at_root({functor(f, {var(0), var(1)}), var(3)});
+    EXPECT_THAT(changes_at(root, child), ElementsAre(1u, 0u));
+}
+
+// ── unwatch corner cases ─────────────────────────────────────────────────────
+
+TEST_F(PudStructureWatchDescentTest, UnwatchingTheSameIdTwiceIsHarmless) {
+    child_specs = {rep_instantiated(0, functor(a, {}))};
+    result_t result = at_root({var(0), var(0)}).descend(child, {0, 0}, {var(5)});
+    EXPECT_THAT(result.structure_changes, ElementsAre(1u));
+    EXPECT_THAT(result.added_head_ids, ElementsAre(2u));
+}
+
+TEST_F(PudStructureWatchDescentTest, UnwatchingAFutureIdDoesNotAffectTheHeadThatLaterGetsIt) {
+    result_t at_child = at_root({var(0)}).descend(child, {3}, {var(1), var(2), var(3)});
+    ASSERT_THAT(at_child.added_head_ids, ElementsAre(1u, 2u, 3u));
+    grandchild_specs = {rep_instantiated(3, functor(a, {}))};
+    EXPECT_THAT(changes_at(at_child.child_descent, grandchild), ElementsAre(3u));
+}
+
+TEST_F(PudStructureWatchDescentTest, UnwatchingEveryHeadLeavesNothingToChange) {
+    result_t at_child = at_root({var(0), functor(f, {var(0), var(1)}), var(2)}).descend(child, {0, 1, 2}, {});
+    grandchild_specs = {rep_instantiated(0, functor(a, {})), rep_updated(2, 1)};
+    EXPECT_THAT(changes_at(at_child.child_descent, grandchild), IsEmpty());
+}
+
+TEST_F(PudStructureWatchDescentTest, UnwatchingAGroundHeadIsHarmless) {
+    result_t result = at_root({functor(f, {functor(a, {})}), var(0)}).descend(child, {0}, {var(1)});
+    EXPECT_THAT(result.added_head_ids, ElementsAre(2u));
+    grandchild_specs = {rep_instantiated(0, functor(a, {}))};
+    EXPECT_THAT(changes_at(result.child_descent, grandchild), ElementsAre(1u));
+}
+
+TEST_F(PudStructureWatchDescentTest, RewatchingAnUnwatchedRepWorks) {
+    result_t at_child = at_root({var(0)}).descend(child, {0}, {});
+    result_t at_grandchild = at_child.child_descent.descend(grandchild, {}, {functor(f, {var(0)})});
+    sibling_specs = {rep_instantiated(0, functor(a, {}))};
+    EXPECT_THAT(changes_at(at_grandchild.child_descent, sibling), ElementsAre(1u));
+}
+
+TEST_F(PudStructureWatchDescentTest, UnwatchingAHeadThatWasMovedToTheSurvivingRepForgetsIt) {
+    child_specs = {rep_updated(4, 1)};
+    result_t at_child = at_root({var(4), var(1)}).descend(child, {}, {});
+    result_t at_grandchild = at_child.child_descent.descend(grandchild, {0}, {});
+    sibling_specs = {rep_instantiated(1, functor(a, {}))};
+    EXPECT_THAT(changes_at(at_grandchild.child_descent, sibling), ElementsAre(1u));
+}
+
+TEST_F(PudStructureWatchDescentTest, UnwatchingAHeadThatGainedIntroducedRepsForgetsThemToo) {
+    child_specs = {rep_instantiated(0, functor(g, {var(5), var(6)}))};
+    result_t at_child = at_root({var(0), var(6)}).descend(child, {}, {});
+    result_t at_grandchild = at_child.child_descent.descend(grandchild, {0}, {});
+    sibling_specs = {rep_instantiated(5, functor(a, {})), rep_instantiated(6, functor(a, {}))};
+    EXPECT_THAT(changes_at(at_grandchild.child_descent, sibling), ElementsAre(1u));
+}
+
+// ── watch corner cases ───────────────────────────────────────────────────────
+
+TEST_F(PudStructureWatchDescentTest, WatchingTheSameExpressionTwiceGivesTwoHeads) {
+    const expr* watched = functor(f, {var(0)});
+    result_t at_child = at_root({}).descend(child, {}, {watched, watched});
+    ASSERT_THAT(at_child.added_head_ids, ElementsAre(0u, 1u));
+    grandchild_specs = {rep_instantiated(0, functor(a, {}))};
+    EXPECT_THAT(changes_at(at_child.child_descent, grandchild), UnorderedElementsAre(0u, 1u));
+}
+
+TEST_F(PudStructureWatchDescentTest, RootWatchingTheSameExpressionTwiceGivesTwoHeads) {
+    const expr* watched = functor(f, {var(0), var(1)});
+    child_specs = {rep_updated(1, 0)};
+    EXPECT_THAT(changes_at(at_root({watched, watched}), child), UnorderedElementsAre(0u, 1u));
+}
+
+TEST_F(PudStructureWatchDescentTest, WatchingAfterACollapseStartsFromTheCollapsedStructure) {
+    child_specs = {rep_updated(1, 0)};
+    result_t at_child = at_root({functor(f, {var(0), var(1)})}).descend(child, {}, {functor(g, {var(0), var(0)})});
+    grandchild_specs = {rep_updated(2, 0)};
+    EXPECT_THAT(changes_at(at_child.child_descent, grandchild), IsEmpty());
+}
+
+TEST_F(PudStructureWatchDescentTest, WatchingOnlyAtADeepLevelWorks) {
+    test_descent_t at = at_root({});
+    for (pud_node_id level_node = 10; level_node < 20; ++level_node)
+        at = at.descend(level_node, {}, {}).child_descent;
+    result_t deep = at.descend(child, {}, {var(9)});
+    ASSERT_THAT(deep.added_head_ids, ElementsAre(0u));
+    grandchild_specs = {rep_instantiated(9, functor(a, {}))};
+    EXPECT_THAT(changes_at(deep.child_descent, grandchild), ElementsAre(0u));
+}
+
+// ── interaction between heads ────────────────────────────────────────────────
+
+TEST_F(PudStructureWatchDescentTest, OneRepUpdateCollapsesEveryHeadContainingBothReps) {
+    child_specs = {rep_updated(1, 0)};
+    test_descent_t root = at_root({functor(f, {var(0), var(1)}), functor(g, {var(1), var(0)})});
+    EXPECT_THAT(changes_at(root, child), UnorderedElementsAre(0u, 1u));
+}
+
+TEST_F(PudStructureWatchDescentTest, ThreeWayMergeCollapsesTwice) {
+    child_specs = {rep_updated(1, 0)};
+    result_t at_child = at_root({functor(f, {var(0), var(1), var(2)})}).descend(child, {}, {});
+    ASSERT_THAT(at_child.structure_changes, ElementsAre(0u));
+    grandchild_specs = {rep_updated(2, 0)};
+    EXPECT_THAT(changes_at(at_child.child_descent, grandchild), ElementsAre(0u));
+}
+
+TEST_F(PudStructureWatchDescentTest, InstantiatingIntoAnotherHeadsRepLeavesThatHeadAlone) {
+    child_specs = {rep_instantiated(0, functor(g, {var(5)}))};
+    result_t at_child = at_root({var(0), var(5)}).descend(child, {}, {});
+    EXPECT_THAT(at_child.structure_changes, ElementsAre(0u));
+    grandchild_specs = {rep_instantiated(5, functor(a, {}))};
+    EXPECT_THAT(changes_at(at_child.child_descent, grandchild), UnorderedElementsAre(0u, 1u));
+}
+
+TEST_F(PudStructureWatchDescentTest, IntroducedRepThatMeetsAnExistingRepCollapsesLater) {
+    child_specs = {rep_instantiated(0, functor(g, {var(2)}))};
+    result_t at_child = at_root({functor(f, {var(0), var(1)})}).descend(child, {}, {});
+    grandchild_specs = {rep_updated(2, 1)};
+    EXPECT_THAT(changes_at(at_child.child_descent, grandchild), ElementsAre(0u));
+}
+
+TEST_F(PudStructureWatchDescentTest, RenamingChainWithoutCollapseNeverReports) {
+    child_specs = {rep_updated(5, 4), rep_updated(4, 3), rep_updated(3, 2)};
+    result_t at_child = at_root({functor(f, {var(5), var(0)})}).descend(child, {}, {});
+    EXPECT_THAT(at_child.structure_changes, IsEmpty());
+    grandchild_specs = {rep_instantiated(2, functor(a, {}))};
+    EXPECT_THAT(changes_at(at_child.child_descent, grandchild), ElementsAre(0u));
+}
+
+TEST_F(PudStructureWatchDescentTest, RepUpdateOfAnUnseenSurvivingRepCreatesItsEntry) {
+    child_specs = {rep_updated(3, 7)};
+    result_t at_child = at_root({var(3)}).descend(child, {}, {});
+    grandchild_specs = {rep_updated(7, 0)};
+    result_t at_grandchild = at_child.child_descent.descend(grandchild, {}, {});
+    EXPECT_THAT(at_grandchild.structure_changes, IsEmpty());
+    sibling_specs = {rep_instantiated(0, functor(a, {}))};
+    EXPECT_THAT(changes_at(at_grandchild.child_descent, sibling), ElementsAre(0u));
+}
+
+// ── stress ───────────────────────────────────────────────────────────────────
+
+TEST_F(PudStructureWatchDescentTest, ManyHeadsOnDistinctRepsAreReportedInSpecializationOrder) {
+    const uint32_t head_count = 2000;
+    std::vector<const expr*> watched;
+    std::vector<pud_mhsw_head_id> expected;
+    for (uint32_t index = 0; index < head_count; ++index) {
+        watched.push_back(var(index));
+        child_specs.push_back(rep_instantiated(head_count - 1 - index, functor(a, {})));
+        expected.push_back(head_count - 1 - index);
+    }
+    EXPECT_EQ(changes_at(at_root(watched), child), expected);
+}
+
+TEST_F(PudStructureWatchDescentTest, ManyHeadsOnOneRepAreEachReportedOnce) {
+    const uint32_t head_count = 2000;
+    std::vector<const expr*> watched(head_count, var(0));
+    child_specs = {rep_instantiated(0, functor(a, {})), rep_instantiated(0, functor(a, {}))};
+    std::vector<pud_mhsw_head_id> changes = changes_at(at_root(watched), child);
+    std::sort(changes.begin(), changes.end());
+    ASSERT_EQ(changes.size(), head_count);
+    for (uint32_t index = 0; index < head_count; ++index)
+        EXPECT_EQ(changes.at(index), index);
+}
+
+TEST_F(PudStructureWatchDescentTest, LongRenamingChainAtOneNodeCollapsesOnlyAtTheEnd) {
+    const uint32_t chain_length = 1500;
+    for (uint32_t rep = chain_length; rep > 1; --rep)
+        child_specs.push_back(rep_updated(rep, rep - 1));
+    result_t at_child = at_root({functor(f, {var(0), var(chain_length)})}).descend(child, {}, {});
+    EXPECT_THAT(at_child.structure_changes, IsEmpty());
+    grandchild_specs = {rep_updated(1, 0)};
+    EXPECT_THAT(changes_at(at_child.child_descent, grandchild), ElementsAre(0u));
+}
+
+TEST_F(PudStructureWatchDescentTest, LongRenamingChainAcrossLevelsCollapsesOnlyAtTheEnd) {
+    const uint32_t chain_length = 500;
+    std::vector<std::vector<pud_specialization>> level_specs(chain_length);
+    test_descent_t at = at_root({functor(f, {var(0), var(chain_length)})});
+    for (uint32_t step = 0; step < chain_length; ++step) {
+        const uint32_t demoted = chain_length - step;
+        const pud_node_id level_node = 100 + step;
+        level_specs.at(step) = {rep_updated(demoted, demoted - 1)};
+        ON_CALL(get_specs, get(level_node)).WillByDefault(ReturnRef(level_specs.at(step)));
+        result_t result = at.descend(level_node, {}, {});
+        const bool last_step = step + 1 == chain_length;
+        if (last_step) {
+            EXPECT_THAT(result.structure_changes, ElementsAre(0u));
+        } else {
+            EXPECT_THAT(result.structure_changes, IsEmpty()) << "step " << step;
+        }
+        at = result.child_descent;
+    }
+}
+
+TEST_F(PudStructureWatchDescentTest, DeepPathWithRollingWatchAndUnwatch) {
+    const uint32_t depth = 1000;
+    test_descent_t at = at_root({var(0)});
+    for (uint32_t step = 1; step <= depth; ++step) {
+        result_t result = at.descend(10000 + step, {step - 1}, {var(step)});
+        ASSERT_THAT(result.added_head_ids, ElementsAre(step));
+        at = result.child_descent;
+    }
+    grandchild_specs = {};
+    for (uint32_t rep = 0; rep <= depth; ++rep)
+        grandchild_specs.push_back(rep_instantiated(rep, functor(a, {})));
+    EXPECT_THAT(changes_at(at, grandchild), ElementsAre(depth));
+}
+
+TEST_F(PudStructureWatchDescentTest, WideBranchingFromOneParentStaysIndependent) {
+    const uint32_t branch_count = 300;
+    std::vector<const expr*> watched;
+    for (uint32_t index = 0; index < branch_count; ++index)
+        watched.push_back(var(index));
+    test_descent_t parent = at_root(watched);
+    std::vector<std::vector<pud_specialization>> branch_specs(branch_count);
+    for (uint32_t branch = 0; branch < branch_count; ++branch) {
+        const pud_node_id branch_node = 1000 + branch;
+        branch_specs.at(branch) = {rep_instantiated(branch, functor(a, {}))};
+        ON_CALL(get_specs, get(branch_node)).WillByDefault(ReturnRef(branch_specs.at(branch)));
+        EXPECT_THAT(changes_at(parent, branch_node), ElementsAre(branch));
+    }
 }
 
 }  // namespace
