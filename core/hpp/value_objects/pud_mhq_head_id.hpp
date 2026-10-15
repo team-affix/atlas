@@ -1,5 +1,5 @@
-#ifndef PUD_MQH_HEAD_ID_HPP
-#define PUD_MQH_HEAD_ID_HPP
+#ifndef PUD_MHQ_HEAD_ID_HPP
+#define PUD_MHQ_HEAD_ID_HPP
 
 #include <cstddef>
 
