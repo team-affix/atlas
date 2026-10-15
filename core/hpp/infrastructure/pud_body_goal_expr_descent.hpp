@@ -23,10 +23,10 @@ struct pud_body_goal_expr_descent {
 private:
     using map_t = immer::map<body_goal_id, const expr*>;
 
-    static void add_body_goals(
+    void add_body_goals(
         map_t::transient_type& body_goal_exprs_transient,
         const std::vector<const expr*>& body_goals,
-        body_goal_id next_body_goal_id);
+        body_goal_id next_body_goal_id) const;
 
     IGetNodeAddedBodyGoals* get_node_added_body_goals_;
     IGetCallSite* get_call_site_;
@@ -73,7 +73,7 @@ PUD_BODY_GOAL_EXPR_DESCENT_TEMPLATE
 void PUD_BODY_GOAL_EXPR_DESCENT::add_body_goals(
     map_t::transient_type& body_goal_exprs_transient,
     const std::vector<const expr*>& body_goals,
-    body_goal_id next_body_goal_id) {
+    body_goal_id next_body_goal_id) const {
     for (size_t body_goal_index = 0; body_goal_index < body_goals.size(); ++body_goal_index)
         body_goal_exprs_transient.set(next_body_goal_id + body_goal_index, body_goals.at(body_goal_index));
 }
