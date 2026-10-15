@@ -16,7 +16,7 @@ struct MockTryAdd {
 struct MockAdvance {
     MOCK_METHOD((pud_query_frame<int, child_iter>), advance_head, (pud_mhws_head_id));
 };
-struct MockForkWitness {
+struct MockTryForkWitness {
     MOCK_METHOD(std::optional<pud_mhws_head_id>, try_fork_head, (pud_mhws_head_id, int));
 };
 struct MockLeaf {
@@ -30,17 +30,17 @@ struct MockPropagate {
 };
 
 using test_head_t = pud_candidate_specialization_head<
-    int, child_iter, MockTryAdd, MockAdvance, MockForkWitness, MockLeaf, MockChildren, MockPropagate>;
+    int, child_iter, MockTryAdd, MockAdvance, MockTryForkWitness, MockLeaf, MockChildren, MockPropagate>;
 
 struct PudCandidateSpecializationHeadForkerTest : public ::testing::Test {
     NiceMock<MockTryAdd> try_add;
     NiceMock<MockAdvance> advance;
-    NiceMock<MockForkWitness> fork_witness;
+    NiceMock<MockTryForkWitness> fork_witness;
     NiceMock<MockLeaf> leaves;
     NiceMock<MockChildren> children;
     NiceMock<MockPropagate> propagate;
     pud_candidate_specialization_head_forker<
-        int, child_iter, MockTryAdd, MockAdvance, MockForkWitness, MockLeaf, MockChildren, MockPropagate> forker;
+        int, child_iter, MockTryAdd, MockAdvance, MockTryForkWitness, MockLeaf, MockChildren, MockPropagate> forker;
     pud_node root{};
 
     test_head_t make_head() {
