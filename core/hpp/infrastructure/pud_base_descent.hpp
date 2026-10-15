@@ -21,7 +21,6 @@ struct pud_base_descent {
     pud_base_descent descend(pud_node_id parent, pud_node_id child) const;
     const BindingDescent& binding() const;
     const LvcDescent& lvc() const;
-    const NextBodyGoalIdDescent& next_body_goal_id() const;
     const BodyGoalExprDescent& body_goal_expr() const;
     const BodyGoalPqDescent& body_goal_pq() const;
 private:
@@ -72,11 +71,6 @@ const BindingDescent& PUD_BASE_DESCENT::binding() const {
 PUD_BASE_DESCENT_TEMPLATE
 const LvcDescent& PUD_BASE_DESCENT::lvc() const {
     return lvc_;
-}
-
-PUD_BASE_DESCENT_TEMPLATE
-const NextBodyGoalIdDescent& PUD_BASE_DESCENT::next_body_goal_id() const {
-    return next_body_goal_id_;
 }
 
 PUD_BASE_DESCENT_TEMPLATE

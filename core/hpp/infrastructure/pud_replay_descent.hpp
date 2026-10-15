@@ -75,9 +75,9 @@ std::optional<PUD_REPLAY_DESCENT> PUD_REPLAY_DESCENT::descend(pud_node_id child)
     BindMap bind_map = transient_ubs_state.make_bind_map(*make_ubs_var_, *make_ubs_functor_);
     Normalizer normalizer = make_normalizer_->make_normalizer(bind_map);
     Unifier unifier = make_unifier_->make_unifier(bind_map, normalizer);
-    for (const pud_specialization& spec : get_node_added_specializations_->get(child)) {
-        framed_expr lhs{make_var_->make_var(spec.var_idx), frame_offset_};
-        framed_expr rhs{spec.value, frame_offset_};
+    for (const pud_specialization& specialization : get_node_added_specializations_->get(child)) {
+        framed_expr lhs{make_var_->make_var(specialization.var_idx), frame_offset_};
+        framed_expr rhs{specialization.value, frame_offset_};
         if (!unifier.unify(lhs, rhs))
             return std::nullopt;
     }

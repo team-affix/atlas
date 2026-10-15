@@ -21,16 +21,11 @@ struct pud_body_goal_expr_descent {
         pud_node_id child) const;
     const immer::map<body_goal_id, const expr*>& body_goal_exprs() const;
 private:
-    using map_t = immer::map<body_goal_id, const expr*>;
-
-    void add_body_goals(
-        map_t::transient_type& body_goal_exprs_transient,
-        const std::vector<const expr*>& body_goals,
-        body_goal_id next_body_goal_id) const;
+    void add_body_goals(pud_node_id node, body_goal_id first_body_goal_id);
 
     IGetNodeAddedBodyGoals* get_node_added_body_goals_;
     IGetCallSite* get_call_site_;
-    map_t body_goal_exprs_;
+    immer::map<body_goal_id, const expr*> body_goal_exprs_;
 };
 
 #define PUD_BODY_GOAL_EXPR_DESCENT_TEMPLATE                                                \
@@ -46,9 +41,7 @@ PUD_BODY_GOAL_EXPR_DESCENT::pud_body_goal_expr_descent(
     : get_node_added_body_goals_(&get_node_added_body_goals)
     , get_call_site_(&get_call_site)
     , body_goal_exprs_() {
-    auto body_goal_exprs_transient = body_goal_exprs_.transient();
-    add_body_goals(body_goal_exprs_transient, get_node_added_body_goals_->get(root), 0);
-    body_goal_exprs_ = std::move(body_goal_exprs_transient).persistent();
+    add_body_goals(root, 0);
 }
 
 PUD_BODY_GOAL_EXPR_DESCENT_TEMPLATE
@@ -56,11 +49,9 @@ PUD_BODY_GOAL_EXPR_DESCENT PUD_BODY_GOAL_EXPR_DESCENT::descend(
     body_goal_id next_body_goal_id,
     pud_node_id parent,
     pud_node_id child) const {
-    auto body_goal_exprs_transient = body_goal_exprs_.transient();
-    body_goal_exprs_transient.erase(get_call_site_->get(parent));
-    add_body_goals(body_goal_exprs_transient, get_node_added_body_goals_->get(child), next_body_goal_id);
     PUD_BODY_GOAL_EXPR_DESCENT result = *this;
-    result.body_goal_exprs_ = std::move(body_goal_exprs_transient).persistent();
+    result.body_goal_exprs_ = result.body_goal_exprs_.erase(get_call_site_->get(parent));
+    result.add_body_goals(child, next_body_goal_id);
     return result;
 }
 
@@ -70,12 +61,12 @@ const immer::map<body_goal_id, const expr*>& PUD_BODY_GOAL_EXPR_DESCENT::body_go
 }
 
 PUD_BODY_GOAL_EXPR_DESCENT_TEMPLATE
-void PUD_BODY_GOAL_EXPR_DESCENT::add_body_goals(
-    map_t::transient_type& body_goal_exprs_transient,
-    const std::vector<const expr*>& body_goals,
-    body_goal_id next_body_goal_id) const {
+void PUD_BODY_GOAL_EXPR_DESCENT::add_body_goals(pud_node_id node, body_goal_id first_body_goal_id) {
+    const std::vector<const expr*>& body_goals = get_node_added_body_goals_->get(node);
+    auto body_goal_exprs_transient = body_goal_exprs_.transient();
     for (size_t body_goal_index = 0; body_goal_index < body_goals.size(); ++body_goal_index)
-        body_goal_exprs_transient.set(next_body_goal_id + body_goal_index, body_goals.at(body_goal_index));
+        body_goal_exprs_transient.set(first_body_goal_id + body_goal_index, body_goals.at(body_goal_index));
+    body_goal_exprs_ = std::move(body_goal_exprs_transient).persistent();
 }
 
 #undef PUD_BODY_GOAL_EXPR_DESCENT

@@ -23,16 +23,11 @@ struct pud_body_goal_pq_descent {
         pud_node_id child) const;
     const immer::map<body_goal_id, immer::box<persistent_query>>& body_goal_pqs() const;
 private:
-    using map_t = immer::map<body_goal_id, immer::box<persistent_query>>;
-
-    void add_body_goals(
-        map_t::transient_type& body_goal_pqs_transient,
-        const std::vector<const expr*>& body_goals,
-        body_goal_id next_body_goal_id) const;
+    void add_body_goals(pud_node_id node, body_goal_id first_body_goal_id);
 
     IGetNodeAddedBodyGoals* get_node_added_body_goals_;
     IGetCallSite* get_call_site_;
-    map_t body_goal_pqs_;
+    immer::map<body_goal_id, immer::box<persistent_query>> body_goal_pqs_;
 };
 
 #define PUD_BODY_GOAL_PQ_DESCENT_TEMPLATE                                                  \
@@ -48,9 +43,7 @@ PUD_BODY_GOAL_PQ_DESCENT::pud_body_goal_pq_descent(
     : get_node_added_body_goals_(&get_node_added_body_goals)
     , get_call_site_(&get_call_site)
     , body_goal_pqs_() {
-    auto body_goal_pqs_transient = body_goal_pqs_.transient();
-    add_body_goals(body_goal_pqs_transient, get_node_added_body_goals_->get(root), 0);
-    body_goal_pqs_ = std::move(body_goal_pqs_transient).persistent();
+    add_body_goals(root, 0);
 }
 
 PUD_BODY_GOAL_PQ_DESCENT_TEMPLATE
@@ -58,11 +51,9 @@ PUD_BODY_GOAL_PQ_DESCENT PUD_BODY_GOAL_PQ_DESCENT::descend(
     body_goal_id next_body_goal_id,
     pud_node_id parent,
     pud_node_id child) const {
-    auto body_goal_pqs_transient = body_goal_pqs_.transient();
-    body_goal_pqs_transient.erase(get_call_site_->get(parent));
-    add_body_goals(body_goal_pqs_transient, get_node_added_body_goals_->get(child), next_body_goal_id);
     PUD_BODY_GOAL_PQ_DESCENT result = *this;
-    result.body_goal_pqs_ = std::move(body_goal_pqs_transient).persistent();
+    result.body_goal_pqs_ = result.body_goal_pqs_.erase(get_call_site_->get(parent));
+    result.add_body_goals(child, next_body_goal_id);
     return result;
 }
 
@@ -72,12 +63,12 @@ const immer::map<body_goal_id, immer::box<persistent_query>>& PUD_BODY_GOAL_PQ_D
 }
 
 PUD_BODY_GOAL_PQ_DESCENT_TEMPLATE
-void PUD_BODY_GOAL_PQ_DESCENT::add_body_goals(
-    map_t::transient_type& body_goal_pqs_transient,
-    const std::vector<const expr*>& body_goals,
-    body_goal_id next_body_goal_id) const {
+void PUD_BODY_GOAL_PQ_DESCENT::add_body_goals(pud_node_id node, body_goal_id first_body_goal_id) {
+    const std::vector<const expr*>& body_goals = get_node_added_body_goals_->get(node);
+    auto body_goal_pqs_transient = body_goal_pqs_.transient();
     for (size_t body_goal_index = 0; body_goal_index < body_goals.size(); ++body_goal_index)
-        body_goal_pqs_transient.set(next_body_goal_id + body_goal_index, immer::box<persistent_query>{});
+        body_goal_pqs_transient.set(first_body_goal_id + body_goal_index, immer::box<persistent_query>{});
+    body_goal_pqs_ = std::move(body_goal_pqs_transient).persistent();
 }
 
 #undef PUD_BODY_GOAL_PQ_DESCENT

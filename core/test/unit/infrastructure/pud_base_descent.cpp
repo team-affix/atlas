@@ -86,7 +86,6 @@ struct PudBaseDescentTest : public ::testing::Test {
 TEST_F(PudBaseDescentTest, ConstructorKeepsEachRootSubDescent) {
     EXPECT_EQ(at_parent.binding().tag, 10);
     EXPECT_EQ(at_parent.lvc().tag, 20);
-    EXPECT_EQ(at_parent.next_body_goal_id().next_body_goal_id(), 4u);
     EXPECT_EQ(at_parent.body_goal_expr().tag, 40);
     EXPECT_EQ(at_parent.body_goal_pq().tag, 50);
 }
@@ -100,7 +99,6 @@ TEST_F(PudBaseDescentTest, DescendForwardsTheChildToEverySubDescent) {
     test_descent_t at_child = at_parent.descend(parent, child);
     EXPECT_EQ(at_child.binding().tag, 11);
     EXPECT_EQ(at_child.lvc().tag, 21);
-    EXPECT_EQ(at_child.next_body_goal_id().next_body_goal_id(), 7u);
     EXPECT_EQ(at_child.body_goal_expr().tag, 41);
     EXPECT_EQ(at_child.body_goal_pq().tag, 51);
 }
@@ -119,9 +117,12 @@ TEST_F(PudBaseDescentTest, ExprAndPqGetTheParentNode) {
 }
 
 TEST_F(PudBaseDescentTest, DescendLeavesParentUntouched) {
+    EXPECT_CALL(ops, descend_next_body_goal_id(4, child)).WillOnce(Return(7));
     at_parent.descend(parent, child);
     EXPECT_EQ(at_parent.binding().tag, 10);
-    EXPECT_EQ(at_parent.next_body_goal_id().next_body_goal_id(), 4u);
+    EXPECT_CALL(ops, descend_next_body_goal_id(4, sibling)).WillOnce(Return(9));
+    EXPECT_CALL(ops, descend_body_goal_expr(_, 4u, parent, sibling)).WillOnce(Return(0));
+    at_parent.descend(parent, sibling);
 }
 
 TEST_F(PudBaseDescentTest, SiblingsDescendFromTheSameParentState) {
