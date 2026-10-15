@@ -96,15 +96,15 @@ pud_base_descent PUD_BASE_DESCENDER::descend(
     const pud_base_descent& descent,
     pud_node_id parent,
     pud_node_id child) {
-    const body_goal_id first_body_goal_id = descent.next_body_goal_id.next_body_goal_id;
+    const body_goal_id next_body_goal_id = descent.next_body_goal_id.next_body_goal_id;
     return pud_base_descent{
-        .binding = descend_binding_.descend(descent.binding, parent, child),
-        .lvc = descend_lvc_.descend(descent.lvc, parent, child),
-        .next_body_goal_id = descend_next_body_goal_id_.descend(descent.next_body_goal_id, parent, child),
+        .binding = descend_binding_.descend(descent.binding, child),
+        .lvc = descend_lvc_.descend(descent.lvc, child),
+        .next_body_goal_id = descend_next_body_goal_id_.descend(descent.next_body_goal_id, child),
         .body_goal_expr = descend_body_goal_expr_.descend(
-            descent.body_goal_expr, first_body_goal_id, parent, child),
+            descent.body_goal_expr, next_body_goal_id, parent, child),
         .body_goal_pq = descend_body_goal_pq_.descend(
-            descent.body_goal_pq, first_body_goal_id, parent, child),
+            descent.body_goal_pq, next_body_goal_id, parent, child),
     };
 }
 

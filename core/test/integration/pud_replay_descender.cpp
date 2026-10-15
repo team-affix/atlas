@@ -93,7 +93,6 @@ struct PudReplayDescenderIntegrationTest : public ::testing::Test {
 };
 
 TEST_F(PudReplayDescenderIntegrationTest, SpecsReplayLiftedToFrameOffset) {
-    const pud_node_id root = 0;
     const pud_node_id child = 1;
     const uint32_t frame_offset = 3;
     node_specs_.store(child, {
@@ -104,7 +103,7 @@ TEST_F(PudReplayDescenderIntegrationTest, SpecsReplayLiftedToFrameOffset) {
     std::optional<pud_replay_descent> opened = open({}, head, head, frame_offset);
     ASSERT_TRUE(opened.has_value());
     EXPECT_EQ(opened->frame_offset, frame_offset);
-    std::optional<pud_replay_descent> at_child = replay_.descend(*opened, root, child);
+    std::optional<pud_replay_descent> at_child = replay_.descend(*opened, child);
     ASSERT_TRUE(at_child.has_value());
     EXPECT_EQ(at_child->frame_offset, frame_offset);
     EXPECT_EQ(resolve_local(*at_child, 0), functor("a", {}));
@@ -114,7 +113,6 @@ TEST_F(PudReplayDescenderIntegrationTest, SpecsReplayLiftedToFrameOffset) {
 }
 
 TEST_F(PudReplayDescenderIntegrationTest, DifferentFrameOffsetsStayIndependent) {
-    const pud_node_id root = 0;
     const pud_node_id child = 1;
     node_specs_.store(child, {pud_specialization{.var_idx = 0, .value = functor("a", {})}});
     const expr* head = var(0);
@@ -122,8 +120,8 @@ TEST_F(PudReplayDescenderIntegrationTest, DifferentFrameOffsetsStayIndependent) 
     std::optional<pud_replay_descent> at_five = open({}, var(0), head, 5u);
     ASSERT_TRUE(at_one.has_value());
     ASSERT_TRUE(at_five.has_value());
-    std::optional<pud_replay_descent> child_one = replay_.descend(*at_one, root, child);
-    std::optional<pud_replay_descent> child_five = replay_.descend(*at_five, root, child);
+    std::optional<pud_replay_descent> child_one = replay_.descend(*at_one, child);
+    std::optional<pud_replay_descent> child_five = replay_.descend(*at_five, child);
     ASSERT_TRUE(child_one.has_value());
     ASSERT_TRUE(child_five.has_value());
     EXPECT_EQ(resolve_global(*child_one, 1u), functor("a", {}));
@@ -135,7 +133,6 @@ TEST_F(PudReplayDescenderIntegrationTest, DifferentFrameOffsetsStayIndependent) 
 TEST_F(PudReplayDescenderIntegrationTest, OpeningFlowFromBindingDescenderState) {
     const pud_node_id binding_root = 10;
     const pud_node_id binding_child = 11;
-    const pud_node_id replay_root = 0;
     const pud_node_id agree_child = 1;
     const pud_node_id contradict_child = 2;
     const uint32_t frame_offset = 1u;
@@ -143,7 +140,7 @@ TEST_F(PudReplayDescenderIntegrationTest, OpeningFlowFromBindingDescenderState) 
     node_specs_.store(binding_child, {pud_specialization{.var_idx = 0, .value = functor("a", {})}});
     pud_binding_descent at_binding_root = binding_.root_descent(binding_root);
     pud_binding_descent caller_binding =
-        binding_.descend(at_binding_root, binding_root, binding_child);
+        binding_.descend(at_binding_root, binding_child);
 
     const expr* head = var(0);
     const expr* query = var(0);
@@ -152,34 +149,32 @@ TEST_F(PudReplayDescenderIntegrationTest, OpeningFlowFromBindingDescenderState) 
     ASSERT_TRUE(opened.has_value());
 
     node_specs_.store(agree_child, {pud_specialization{.var_idx = 0, .value = functor("a", {})}});
-    EXPECT_TRUE(replay_.descend(*opened, replay_root, agree_child).has_value());
+    EXPECT_TRUE(replay_.descend(*opened, agree_child).has_value());
 
     node_specs_.store(contradict_child, {pud_specialization{.var_idx = 0, .value = functor("b", {})}});
-    EXPECT_FALSE(replay_.descend(*opened, replay_root, contradict_child).has_value());
+    EXPECT_FALSE(replay_.descend(*opened, contradict_child).has_value());
 }
 
 TEST_F(PudReplayDescenderIntegrationTest, ContradictsInheritedCallerBindingRefutes) {
-    const pud_node_id root = 0;
     const pud_node_id child = 1;
     const uint32_t frame_offset = 1;
     node_specs_.store(child, {pud_specialization{.var_idx = 0, .value = functor("b", {})}});
     const expr* head = var(0);
     std::optional<pud_replay_descent> opened = open({}, functor("a", {}), head, frame_offset);
     ASSERT_TRUE(opened.has_value());
-    EXPECT_FALSE(replay_.descend(*opened, root, child).has_value());
+    EXPECT_FALSE(replay_.descend(*opened, child).has_value());
 }
 
 TEST_F(PudReplayDescenderIntegrationTest, ContradictsEarlierReplayedSpecRefutes) {
-    const pud_node_id root = 0;
     const pud_node_id good_child = 1;
     const pud_node_id bad_child = 2;
     node_specs_.store(good_child, {pud_specialization{.var_idx = 0, .value = functor("a", {})}});
     node_specs_.store(bad_child, {pud_specialization{.var_idx = 0, .value = functor("x", {})}});
     std::optional<pud_replay_descent> opened = open({}, functor("main", {}), functor("main", {}), 0u);
     ASSERT_TRUE(opened.has_value());
-    std::optional<pud_replay_descent> at_good = replay_.descend(*opened, root, good_child);
+    std::optional<pud_replay_descent> at_good = replay_.descend(*opened, good_child);
     ASSERT_TRUE(at_good.has_value());
-    EXPECT_FALSE(replay_.descend(*at_good, good_child, bad_child).has_value());
+    EXPECT_FALSE(replay_.descend(*at_good, bad_child).has_value());
 }
 
 TEST_F(PudReplayDescenderIntegrationTest, ManySpecsReplay) {
@@ -190,12 +185,11 @@ TEST_F(PudReplayDescenderIntegrationTest, ManySpecsReplay) {
         specs.push_back(
             pud_specialization{.var_idx = spec_index, .value = functor(label.c_str(), {})});
     }
-    const pud_node_id root = 0;
     const pud_node_id child = 1;
     node_specs_.store(child, std::move(specs));
     std::optional<pud_replay_descent> opened = open({}, functor("main", {}), functor("main", {}), 0u);
     ASSERT_TRUE(opened.has_value());
-    std::optional<pud_replay_descent> at_child = replay_.descend(*opened, root, child);
+    std::optional<pud_replay_descent> at_child = replay_.descend(*opened, child);
     ASSERT_TRUE(at_child.has_value());
     for (uint32_t spec_index = 0; spec_index < spec_count; ++spec_index) {
         std::string label = "v" + std::to_string(spec_index);
@@ -204,7 +198,6 @@ TEST_F(PudReplayDescenderIntegrationTest, ManySpecsReplay) {
 }
 
 TEST_F(PudReplayDescenderIntegrationTest, ForkedDescentsFromSharedPrefixStayIndependent) {
-    const pud_node_id root = 0;
     const pud_node_id bob_child = 1;
     const pud_node_id x_child = 2;
     const uint32_t frame_offset = 3;
@@ -220,8 +213,8 @@ TEST_F(PudReplayDescenderIntegrationTest, ForkedDescentsFromSharedPrefixStayInde
     const expr* query = functor("parent", {var(0), var(2)});
     std::optional<pud_replay_descent> opened = open({}, query, head, frame_offset);
     ASSERT_TRUE(opened.has_value());
-    std::optional<pud_replay_descent> at_bob = replay_.descend(*opened, root, bob_child);
-    std::optional<pud_replay_descent> at_x = replay_.descend(*opened, root, x_child);
+    std::optional<pud_replay_descent> at_bob = replay_.descend(*opened, bob_child);
+    std::optional<pud_replay_descent> at_x = replay_.descend(*opened, x_child);
     ASSERT_TRUE(at_bob.has_value());
     ASSERT_TRUE(at_x.has_value());
     EXPECT_EQ(resolve_local(*at_bob, 1), functor("bob", {}));
@@ -229,7 +222,6 @@ TEST_F(PudReplayDescenderIntegrationTest, ForkedDescentsFromSharedPrefixStayInde
 }
 
 TEST_F(PudReplayDescenderIntegrationTest, CallerVarThroughHeadBindingSeesCalleeFunctor) {
-    const pud_node_id root = 0;
     const pud_node_id child = 1;
     const uint32_t frame_offset = 3;
     node_specs_.store(child, {
@@ -240,7 +232,7 @@ TEST_F(PudReplayDescenderIntegrationTest, CallerVarThroughHeadBindingSeesCalleeF
     const expr* query = functor("parent", {var(0), var(2)});
     std::optional<pud_replay_descent> opened = open({}, query, head, frame_offset);
     ASSERT_TRUE(opened.has_value());
-    std::optional<pud_replay_descent> at_child = replay_.descend(*opened, root, child);
+    std::optional<pud_replay_descent> at_child = replay_.descend(*opened, child);
     ASSERT_TRUE(at_child.has_value());
     EXPECT_EQ(resolve_at_frame(*at_child, 0u, 2), functor("bob", {}));
 }

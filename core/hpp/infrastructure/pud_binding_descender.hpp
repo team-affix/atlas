@@ -17,7 +17,6 @@ struct pud_binding_descender {
     pud_binding_descent root_descent(pud_node_id root);
     pud_binding_descent descend(
         const pud_binding_descent& descent,
-        pud_node_id parent,
         pud_node_id child);
 
 private:
@@ -49,7 +48,6 @@ pud_binding_descent PUD_BINDING_DESCENDER::root_descent(pud_node_id root) {
 PUD_BINDING_DESCENDER_TEMPLATE
 pud_binding_descent PUD_BINDING_DESCENDER::descend(
     const pud_binding_descent& descent,
-    pud_node_id parent,
     pud_node_id child) {
     pud_transient_ubs_state transient_ubs_state{descent.ubs_state};
     BindMap bind_map = transient_ubs_state.make_bind_map(make_ubs_var_, make_ubs_functor_);

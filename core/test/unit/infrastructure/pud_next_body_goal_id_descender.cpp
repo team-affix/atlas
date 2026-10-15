@@ -31,12 +31,11 @@ TEST_F(PudNextBodyGoalIdDescenderTest, RootDescentCountsRootBodyGoals) {
 }
 
 TEST_F(PudNextBodyGoalIdDescenderTest, DescendAdvancesByChildBodyGoals) {
-    const pud_node_id parent = 1;
     const pud_node_id child = 2;
     pud_next_body_goal_id_descent at_parent{.next_body_goal_id = 5};
     const std::vector<const expr*> child_goals{goal("c0"), goal("c1"), goal("c2")};
     EXPECT_CALL(get_body_goals, get(child)).WillOnce(::testing::ReturnRef(child_goals));
-    pud_next_body_goal_id_descent at_child = descender.descend(at_parent, parent, child);
+    pud_next_body_goal_id_descent at_child = descender.descend(at_parent, child);
     EXPECT_EQ(at_child.next_body_goal_id, 8u);
 }
 

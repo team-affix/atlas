@@ -41,7 +41,7 @@ TEST_F(PudBindingDescenderIntegrationTest, FunctorSpecInstantiates) {
     const pud_node_id child = 1;
     node_specs_.store(child, {pud_specialization{.var_idx = 0, .value = functor("a", {})}});
     pud_binding_descent at_root = descender_.root_descent(root);
-    pud_binding_descent at_child = descender_.descend(at_root, root, child);
+    pud_binding_descent at_child = descender_.descend(at_root, child);
     EXPECT_EQ(resolve(at_child, 0), functor("a", {}));
 }
 
@@ -50,7 +50,7 @@ TEST_F(PudBindingDescenderIntegrationTest, VarSpecEquates) {
     const pud_node_id child = 1;
     node_specs_.store(child, {pud_specialization{.var_idx = 1, .value = var(0)}});
     pud_binding_descent at_root = descender_.root_descent(root);
-    pud_binding_descent at_child = descender_.descend(at_root, root, child);
+    pud_binding_descent at_child = descender_.descend(at_root, child);
     EXPECT_EQ(resolve(at_child, 0), var(0));
     EXPECT_EQ(resolve(at_child, 1), var(0));
 }
@@ -62,8 +62,8 @@ TEST_F(PudBindingDescenderIntegrationTest, MultiLevelChainResolves) {
     node_specs_.store(mid, {pud_specialization{.var_idx = 1, .value = var(0)}});
     node_specs_.store(leaf, {pud_specialization{.var_idx = 0, .value = functor("a", {})}});
     pud_binding_descent at_root = descender_.root_descent(root);
-    pud_binding_descent at_mid = descender_.descend(at_root, root, mid);
-    pud_binding_descent at_leaf = descender_.descend(at_mid, mid, leaf);
+    pud_binding_descent at_mid = descender_.descend(at_root, mid);
+    pud_binding_descent at_leaf = descender_.descend(at_mid, leaf);
     EXPECT_EQ(resolve(at_leaf, 0), functor("a", {}));
     EXPECT_EQ(resolve(at_leaf, 1), functor("a", {}));
 }
@@ -74,6 +74,6 @@ TEST_F(PudBindingDescenderIntegrationTest, ParentDescentUnchangedByChild) {
     node_specs_.store(child, {pud_specialization{.var_idx = 0, .value = functor("a", {})}});
     pud_binding_descent at_root = descender_.root_descent(root);
     pud_binding_descent at_root_copy = at_root;
-    descender_.descend(at_root, root, child);
+    descender_.descend(at_root, child);
     EXPECT_EQ(at_root.ubs_state, at_root_copy.ubs_state);
 }

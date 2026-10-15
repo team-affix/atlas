@@ -21,11 +21,10 @@ TEST_F(PudLvcDescenderTest, RootDescentUsesRootVarCount) {
 }
 
 TEST_F(PudLvcDescenderTest, DescendAccumulatesChildVarCount) {
-    const pud_node_id parent = 1;
     const pud_node_id child = 2;
     pud_lvc_descent at_parent{.lvc = 5};
     EXPECT_CALL(get_var_count, get(child)).WillOnce(::testing::Return(2));
-    pud_lvc_descent at_child = descender.descend(at_parent, parent, child);
+    pud_lvc_descent at_child = descender.descend(at_parent, child);
     EXPECT_EQ(at_child.lvc, 7u);
 }
 

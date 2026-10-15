@@ -10,7 +10,6 @@ struct pud_next_body_goal_id_descender {
     pud_next_body_goal_id_descent root_descent(pud_node_id root);
     pud_next_body_goal_id_descent descend(
         const pud_next_body_goal_id_descent& descent,
-        pud_node_id parent,
         pud_node_id child);
 
 private:
@@ -32,7 +31,6 @@ pud_next_body_goal_id_descent pud_next_body_goal_id_descender<IGetNodeAddedBodyG
 template<typename IGetNodeAddedBodyGoals>
 pud_next_body_goal_id_descent pud_next_body_goal_id_descender<IGetNodeAddedBodyGoals>::descend(
     const pud_next_body_goal_id_descent& descent,
-    pud_node_id parent,
     pud_node_id child) {
     const body_goal_id body_goal_count = get_node_added_body_goals_.get(child).size();
     return pud_next_body_goal_id_descent{.next_body_goal_id = descent.next_body_goal_id + body_goal_count};

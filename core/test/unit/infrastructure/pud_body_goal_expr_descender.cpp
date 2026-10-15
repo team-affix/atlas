@@ -42,10 +42,10 @@ TEST_F(PudBodyGoalExprDescenderTest, RootDescentAssignsIdsFromZero) {
     EXPECT_EQ(*descent.body_goal_exprs.find(1), goal_b);
 }
 
-TEST_F(PudBodyGoalExprDescenderTest, DescendErasesParentCallSiteAndAddsChildGoalsFromFirstId) {
+TEST_F(PudBodyGoalExprDescenderTest, DescendErasesParentCallSiteAndAddsChildGoalsFromNextId) {
     const pud_node_id parent = 10;
     const pud_node_id child = 11;
-    const body_goal_id first_body_goal_id = 5;
+    const body_goal_id next_body_goal_id = 5;
     const expr* kept = goal("kept");
     const expr* added_a = goal("added_a");
     const expr* added_b = goal("added_b");
@@ -55,7 +55,7 @@ TEST_F(PudBodyGoalExprDescenderTest, DescendErasesParentCallSiteAndAddsChildGoal
     const std::vector<const expr*> child_goals{added_a, added_b};
     EXPECT_CALL(get_call_site, get(parent)).WillOnce(::testing::Return(0));
     EXPECT_CALL(get_body_goals, get(child)).WillOnce(::testing::ReturnRef(child_goals));
-    pud_body_goal_expr_descent at_child = descender.descend(at_parent, first_body_goal_id, parent, child);
+    pud_body_goal_expr_descent at_child = descender.descend(at_parent, next_body_goal_id, parent, child);
     EXPECT_EQ(at_child.body_goal_exprs.size(), 3u);
     EXPECT_EQ(at_child.body_goal_exprs.count(0), 0u);
     EXPECT_EQ(*at_child.body_goal_exprs.find(1), kept);
@@ -67,7 +67,7 @@ TEST_F(PudBodyGoalExprDescenderTest, ForkedSiblingDescentsStayIndependent) {
     const pud_node_id parent = 1;
     const pud_node_id left = 2;
     const pud_node_id right = 3;
-    const body_goal_id first_body_goal_id = 1;
+    const body_goal_id next_body_goal_id = 1;
     const expr* left_goal = goal("left");
     const expr* right_goal = goal("right");
     pud_body_goal_expr_descent at_parent{
@@ -77,9 +77,9 @@ TEST_F(PudBodyGoalExprDescenderTest, ForkedSiblingDescentsStayIndependent) {
     const std::vector<const expr*> right_goals{right_goal};
     EXPECT_CALL(get_call_site, get(parent)).WillRepeatedly(::testing::Return(0));
     EXPECT_CALL(get_body_goals, get(left)).WillOnce(::testing::ReturnRef(left_goals));
-    pud_body_goal_expr_descent at_left = descender.descend(at_parent, first_body_goal_id, parent, left);
+    pud_body_goal_expr_descent at_left = descender.descend(at_parent, next_body_goal_id, parent, left);
     EXPECT_CALL(get_body_goals, get(right)).WillOnce(::testing::ReturnRef(right_goals));
-    pud_body_goal_expr_descent at_right = descender.descend(at_parent, first_body_goal_id, parent, right);
+    pud_body_goal_expr_descent at_right = descender.descend(at_parent, next_body_goal_id, parent, right);
     EXPECT_EQ(at_left.body_goal_exprs.size(), 1u);
     EXPECT_EQ(at_right.body_goal_exprs.size(), 1u);
     EXPECT_EQ(*at_left.body_goal_exprs.find(1), left_goal);

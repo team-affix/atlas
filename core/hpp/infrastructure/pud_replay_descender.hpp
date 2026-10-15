@@ -29,7 +29,6 @@ struct pud_replay_descender {
     pud_replay_descent root_descent(const pud_ubs_state& caller_ubs_state, uint32_t frame_offset);
     std::optional<pud_replay_descent> descend(
         const pud_replay_descent& descent,
-        pud_node_id parent,
         pud_node_id child);
 
 private:
@@ -77,7 +76,6 @@ pud_replay_descent PUD_REPLAY_DESCENDER::root_descent(
 PUD_REPLAY_DESCENDER_TEMPLATE
 std::optional<pud_replay_descent> PUD_REPLAY_DESCENDER::descend(
     const pud_replay_descent& descent,
-    pud_node_id parent,
     pud_node_id child) {
     pud_transient_ubs_state transient_ubs_state{descent.ubs_state};
     BindMap bind_map = transient_ubs_state.make_bind_map(make_ubs_var_, make_ubs_functor_);

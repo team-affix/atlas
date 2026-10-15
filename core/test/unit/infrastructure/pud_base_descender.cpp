@@ -12,18 +12,18 @@ using ::testing::SizeIs;
 
 struct MockBindingDescend {
     MOCK_METHOD(pud_binding_descent, root_descent, (pud_node_id));
-    MOCK_METHOD(pud_binding_descent, descend, (const pud_binding_descent&, pud_node_id, pud_node_id));
+    MOCK_METHOD(pud_binding_descent, descend, (const pud_binding_descent&, pud_node_id));
 };
 
 struct MockLvcDescend {
     MOCK_METHOD(pud_lvc_descent, root_descent, (pud_node_id));
-    MOCK_METHOD(pud_lvc_descent, descend, (const pud_lvc_descent&, pud_node_id, pud_node_id));
+    MOCK_METHOD(pud_lvc_descent, descend, (const pud_lvc_descent&, pud_node_id));
 };
 
 struct MockNextBodyGoalIdDescend {
     MOCK_METHOD(pud_next_body_goal_id_descent, root_descent, (pud_node_id));
     MOCK_METHOD(pud_next_body_goal_id_descent, descend,
-        (const pud_next_body_goal_id_descent&, pud_node_id, pud_node_id));
+        (const pud_next_body_goal_id_descent&, pud_node_id));
 };
 
 struct MockBodyGoalExprDescend {
@@ -93,7 +93,7 @@ TEST_F(PudBaseDescenderTest, RootDescentCombinesEachRootDescent) {
     EXPECT_EQ(descent.body_goal_pq.body_goal_pqs.size(), 2u);
 }
 
-TEST_F(PudBaseDescenderTest, DescendForwardsEachSubDescentWithParentAndChild) {
+TEST_F(PudBaseDescenderTest, DescendForwardsEachSubDescentWithNodesItNeeds) {
     const pud_node_id parent = 1;
     const pud_node_id child = 2;
     const pud_base_descent at_parent{
@@ -104,13 +104,12 @@ TEST_F(PudBaseDescenderTest, DescendForwardsEachSubDescentWithParentAndChild) {
         .body_goal_pq = body_goal_pq_descent(1),
     };
 
-    EXPECT_CALL(binding, descend(Field(&pud_binding_descent::ubs_state, binding_descent(1).ubs_state),
-                                 parent, child))
+    EXPECT_CALL(binding, descend(Field(&pud_binding_descent::ubs_state, binding_descent(1).ubs_state), child))
         .WillOnce(Return(binding_descent(5)));
-    EXPECT_CALL(lvc, descend(Field(&pud_lvc_descent::lvc, 3u), parent, child))
+    EXPECT_CALL(lvc, descend(Field(&pud_lvc_descent::lvc, 3u), child))
         .WillOnce(Return(pud_lvc_descent{.lvc = 6}));
     EXPECT_CALL(next_body_goal_id,
-                descend(Field(&pud_next_body_goal_id_descent::next_body_goal_id, 4u), parent, child))
+                descend(Field(&pud_next_body_goal_id_descent::next_body_goal_id, 4u), child))
         .WillOnce(Return(pud_next_body_goal_id_descent{.next_body_goal_id = 7}));
     EXPECT_CALL(body_goal_expr,
                 descend(Field(&pud_body_goal_expr_descent::body_goal_exprs, SizeIs(1)), 4u, parent, child))
