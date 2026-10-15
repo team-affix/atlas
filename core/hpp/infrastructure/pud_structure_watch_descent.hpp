@@ -1,0 +1,204 @@
+#ifndef PUD_STRUCTURE_WATCH_DESCENT_HPP
+#define PUD_STRUCTURE_WATCH_DESCENT_HPP
+
+#include <cstdint>
+#include <unordered_set>
+#include <variant>
+#include <vector>
+#include <immer/map.hpp>
+#include <immer/set.hpp>
+#include "value_objects/expr.hpp"
+#include "value_objects/pud_mhsw_head_id.hpp"
+#include "value_objects/pud_node_id.hpp"
+#include "value_objects/pud_specialization.hpp"
+
+template<typename IGetNodeAddedSpecializations>
+struct pud_structure_watch_descent {
+    struct descend_result {
+        std::vector<pud_mhsw_head_id> structure_changes;
+        std::vector<pud_mhsw_head_id> added_head_ids;
+        pud_structure_watch_descent child_descent;
+    };
+
+    pud_structure_watch_descent(
+        IGetNodeAddedSpecializations& get_node_added_specializations,
+        const std::vector<const expr*>& watched);
+    descend_result descend(
+        pud_node_id child,
+        const std::vector<pud_mhsw_head_id>& unwatch,
+        const std::vector<const expr*>& watch) const;
+private:
+    using head_set_t = immer::set<pud_mhsw_head_id>;
+    using rep_set_t = immer::set<uint32_t>;
+
+    pud_mhsw_head_id watch(const expr* watched);
+    void unwatch(pud_mhsw_head_id head_id);
+    std::vector<pud_mhsw_head_id> propagate_rep_updated(uint32_t demoted_rep, uint32_t surviving_rep);
+    std::vector<pud_mhsw_head_id> propagate_rep_instantiated(uint32_t rep, const expr* value);
+    static void visit_reps(const expr* visited, rep_set_t& reps);
+    head_set_t find_heads(uint32_t rep) const;
+    rep_set_t find_reps(pud_mhsw_head_id head_id) const;
+    void link(uint32_t rep, pud_mhsw_head_id head_id);
+    void unlink(uint32_t rep, pud_mhsw_head_id head_id);
+
+    IGetNodeAddedSpecializations* get_node_added_specializations_;
+    pud_mhsw_head_id next_head_id_;
+    immer::map<uint32_t, head_set_t> rep_to_heads_;
+    immer::map<pud_mhsw_head_id, rep_set_t> head_to_reps_;
+};
+
+#define PUD_STRUCTURE_WATCH_DESCENT_TEMPLATE                                               \
+    template<typename IGetNodeAddedSpecializations>
+#define PUD_STRUCTURE_WATCH_DESCENT                                                        \
+    pud_structure_watch_descent<IGetNodeAddedSpecializations>
+
+PUD_STRUCTURE_WATCH_DESCENT_TEMPLATE
+PUD_STRUCTURE_WATCH_DESCENT::pud_structure_watch_descent(
+    IGetNodeAddedSpecializations& get_node_added_specializations,
+    const std::vector<const expr*>& watched)
+    : get_node_added_specializations_(&get_node_added_specializations)
+    , next_head_id_(0)
+    , rep_to_heads_()
+    , head_to_reps_() {
+    for (const expr* watched_expr : watched)
+        watch(watched_expr);
+}
+
+PUD_STRUCTURE_WATCH_DESCENT_TEMPLATE
+typename PUD_STRUCTURE_WATCH_DESCENT::descend_result PUD_STRUCTURE_WATCH_DESCENT::descend(
+    pud_node_id child,
+    const std::vector<pud_mhsw_head_id>& unwatch,
+    const std::vector<const expr*>& watch) const {
+    PUD_STRUCTURE_WATCH_DESCENT child_descent = *this;
+    for (pud_mhsw_head_id head_id : unwatch)
+        child_descent.unwatch(head_id);
+
+    std::vector<pud_mhsw_head_id> structure_changes;
+    std::unordered_set<pud_mhsw_head_id> changed_once;
+    for (const pud_specialization& specialization : get_node_added_specializations_->get(child)) {
+        const expr::var* surviving = std::get_if<expr::var>(&specialization.value->content);
+        const std::vector<pud_mhsw_head_id> changed = surviving
+            ? child_descent.propagate_rep_updated(specialization.var_idx, surviving->index)
+            : child_descent.propagate_rep_instantiated(specialization.var_idx, specialization.value);
+        for (pud_mhsw_head_id head_id : changed) {
+            const bool first_change = changed_once.insert(head_id).second;
+            if (!first_change)
+                continue;
+            structure_changes.push_back(head_id);
+        }
+    }
+
+    std::vector<pud_mhsw_head_id> added_head_ids;
+    added_head_ids.reserve(watch.size());
+    for (const expr* watched_expr : watch)
+        added_head_ids.push_back(child_descent.watch(watched_expr));
+
+    return descend_result{
+        .structure_changes = structure_changes,
+        .added_head_ids = added_head_ids,
+        .child_descent = child_descent,
+    };
+}
+
+PUD_STRUCTURE_WATCH_DESCENT_TEMPLATE
+pud_mhsw_head_id PUD_STRUCTURE_WATCH_DESCENT::watch(const expr* watched) {
+    rep_set_t reps;
+    visit_reps(watched, reps);
+    const pud_mhsw_head_id head_id = next_head_id_++;
+    head_to_reps_ = head_to_reps_.set(head_id, reps);
+    for (uint32_t rep : reps)
+        link(rep, head_id);
+    return head_id;
+}
+
+PUD_STRUCTURE_WATCH_DESCENT_TEMPLATE
+void PUD_STRUCTURE_WATCH_DESCENT::unwatch(pud_mhsw_head_id head_id) {
+    for (uint32_t rep : find_reps(head_id))
+        unlink(rep, head_id);
+    head_to_reps_ = head_to_reps_.erase(head_id);
+}
+
+PUD_STRUCTURE_WATCH_DESCENT_TEMPLATE
+std::vector<pud_mhsw_head_id> PUD_STRUCTURE_WATCH_DESCENT::propagate_rep_updated(
+    uint32_t demoted_rep,
+    uint32_t surviving_rep) {
+    std::vector<pud_mhsw_head_id> changed;
+    for (pud_mhsw_head_id head_id : find_heads(demoted_rep)) {
+        const rep_set_t reps = find_reps(head_id);
+        const bool collapsed = reps.count(surviving_rep) != 0;
+        head_to_reps_ = head_to_reps_.set(head_id, reps.erase(demoted_rep).insert(surviving_rep));
+        link(surviving_rep, head_id);
+        if (!collapsed)
+            continue;
+        changed.push_back(head_id);
+    }
+    rep_to_heads_ = rep_to_heads_.erase(demoted_rep);
+    return changed;
+}
+
+PUD_STRUCTURE_WATCH_DESCENT_TEMPLATE
+std::vector<pud_mhsw_head_id> PUD_STRUCTURE_WATCH_DESCENT::propagate_rep_instantiated(
+    uint32_t rep,
+    const expr* value) {
+    rep_set_t introduced_reps;
+    visit_reps(value, introduced_reps);
+    std::vector<pud_mhsw_head_id> changed;
+    for (pud_mhsw_head_id head_id : find_heads(rep)) {
+        rep_set_t reps = find_reps(head_id).erase(rep);
+        for (uint32_t introduced_rep : introduced_reps) {
+            reps = reps.insert(introduced_rep);
+            link(introduced_rep, head_id);
+        }
+        head_to_reps_ = head_to_reps_.set(head_id, reps);
+        changed.push_back(head_id);
+    }
+    rep_to_heads_ = rep_to_heads_.erase(rep);
+    return changed;
+}
+
+PUD_STRUCTURE_WATCH_DESCENT_TEMPLATE
+void PUD_STRUCTURE_WATCH_DESCENT::visit_reps(const expr* visited, rep_set_t& reps) {
+    if (const expr::var* var = std::get_if<expr::var>(&visited->content)) {
+        reps = reps.insert(var->index);
+        return;
+    }
+    for (const expr* arg : std::get<expr::functor>(visited->content).args)
+        visit_reps(arg, reps);
+}
+
+PUD_STRUCTURE_WATCH_DESCENT_TEMPLATE
+typename PUD_STRUCTURE_WATCH_DESCENT::head_set_t PUD_STRUCTURE_WATCH_DESCENT::find_heads(uint32_t rep) const {
+    const head_set_t* heads = rep_to_heads_.find(rep);
+    if (!heads)
+        return {};
+    return *heads;
+}
+
+PUD_STRUCTURE_WATCH_DESCENT_TEMPLATE
+typename PUD_STRUCTURE_WATCH_DESCENT::rep_set_t PUD_STRUCTURE_WATCH_DESCENT::find_reps(
+    pud_mhsw_head_id head_id) const {
+    const rep_set_t* reps = head_to_reps_.find(head_id);
+    if (!reps)
+        return {};
+    return *reps;
+}
+
+PUD_STRUCTURE_WATCH_DESCENT_TEMPLATE
+void PUD_STRUCTURE_WATCH_DESCENT::link(uint32_t rep, pud_mhsw_head_id head_id) {
+    rep_to_heads_ = rep_to_heads_.set(rep, find_heads(rep).insert(head_id));
+}
+
+PUD_STRUCTURE_WATCH_DESCENT_TEMPLATE
+void PUD_STRUCTURE_WATCH_DESCENT::unlink(uint32_t rep, pud_mhsw_head_id head_id) {
+    const head_set_t heads = find_heads(rep).erase(head_id);
+    if (heads.empty()) {
+        rep_to_heads_ = rep_to_heads_.erase(rep);
+        return;
+    }
+    rep_to_heads_ = rep_to_heads_.set(rep, heads);
+}
+
+#undef PUD_STRUCTURE_WATCH_DESCENT
+#undef PUD_STRUCTURE_WATCH_DESCENT_TEMPLATE
+
+#endif
