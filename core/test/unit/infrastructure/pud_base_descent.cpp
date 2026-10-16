@@ -138,6 +138,54 @@ TEST_F(PudBaseDescentTest, SiblingsDescendFromTheSameParentState) {
     EXPECT_EQ(at_sibling.body_goal_expr().tag, 42);
 }
 
+TEST_F(PudBaseDescentTest, ConstructorDescendsNothing) {
+    ::testing::StrictMock<SubDescentOps> strict_ops;
+    sub_descent_ops = &strict_ops;
+    test_descent_t descent{
+        MockBindingDescent{1},
+        MockLvcDescent{2},
+        MockNextBodyGoalIdDescent{3},
+        MockBodyGoalExprDescent{4},
+        MockBodyGoalPqDescent{5},
+    };
+    EXPECT_EQ(descent.binding().tag, 1);
+    sub_descent_ops = &ops;
+}
+
+TEST_F(PudBaseDescentTest, DescendCallsEverySubDescentExactlyOnce) {
+    ::testing::StrictMock<SubDescentOps> strict_ops;
+    sub_descent_ops = &strict_ops;
+    EXPECT_CALL(strict_ops, descend_binding(10, child)).WillOnce(Return(0));
+    EXPECT_CALL(strict_ops, descend_lvc(20, child)).WillOnce(Return(0));
+    EXPECT_CALL(strict_ops, descend_next_body_goal_id(4, child)).WillOnce(Return(0));
+    EXPECT_CALL(strict_ops, descend_body_goal_expr(40, 4u, parent, child)).WillOnce(Return(0));
+    EXPECT_CALL(strict_ops, descend_body_goal_pq(50, 4u, parent, child)).WillOnce(Return(0));
+    at_parent.descend(parent, child);
+    sub_descent_ops = &ops;
+}
+
+TEST_F(PudBaseDescentTest, NextBodyGoalIdIsThreadedThroughEveryLevel) {
+    const pud_node_id grandchild = 4;
+    const pud_node_id great_grandchild = 5;
+    EXPECT_CALL(ops, descend_next_body_goal_id(4, child)).WillOnce(Return(6));
+    EXPECT_CALL(ops, descend_next_body_goal_id(6, grandchild)).WillOnce(Return(6));
+    EXPECT_CALL(ops, descend_next_body_goal_id(6, great_grandchild)).WillOnce(Return(11));
+    EXPECT_CALL(ops, descend_body_goal_expr(_, 4u, parent, child)).WillOnce(Return(0));
+    EXPECT_CALL(ops, descend_body_goal_expr(_, 6u, child, grandchild)).WillOnce(Return(0));
+    EXPECT_CALL(ops, descend_body_goal_expr(_, 6u, grandchild, great_grandchild)).WillOnce(Return(0));
+    EXPECT_CALL(ops, descend_body_goal_pq(_, 4u, parent, child)).WillOnce(Return(0));
+    EXPECT_CALL(ops, descend_body_goal_pq(_, 6u, child, grandchild)).WillOnce(Return(0));
+    EXPECT_CALL(ops, descend_body_goal_pq(_, 6u, grandchild, great_grandchild)).WillOnce(Return(0));
+    at_parent.descend(parent, child).descend(child, grandchild).descend(grandchild, great_grandchild);
+}
+
+TEST_F(PudBaseDescentTest, DescentIsAssignable) {
+    EXPECT_CALL(ops, descend_binding(10, child)).WillOnce(Return(11));
+    test_descent_t current = at_parent;
+    current = current.descend(parent, child);
+    EXPECT_EQ(current.binding().tag, 11);
+}
+
 TEST_F(PudBaseDescentTest, GrandchildUsesTheChildsNextBodyGoalId) {
     EXPECT_CALL(ops, descend_next_body_goal_id(4, child)).WillOnce(Return(7));
     test_descent_t at_child = at_parent.descend(parent, child);

@@ -70,6 +70,40 @@ TEST_F(PudNextBodyGoalIdDescentTest, DescendLeavesParentUntouched) {
     EXPECT_EQ(at_root.next_body_goal_id(), 1u);
 }
 
+TEST_F(PudNextBodyGoalIdDescentTest, DescendQueriesOnlyTheChild) {
+    ::testing::StrictMock<MockGetNodeAddedBodyGoals> strict_get_body_goals;
+    const std::vector<const expr*> root_goals{goal("r0")};
+    const std::vector<const expr*> child_goals{goal("c0"), goal("c1")};
+    EXPECT_CALL(strict_get_body_goals, get(root)).WillOnce(ReturnRef(root_goals));
+    test_descent_t at_root{strict_get_body_goals, root};
+    EXPECT_CALL(strict_get_body_goals, get(child)).WillOnce(ReturnRef(child_goals));
+    EXPECT_EQ(at_root.descend(child).next_body_goal_id(), 3u);
+}
+
+TEST_F(PudNextBodyGoalIdDescentTest, DeepChainAdvancesByEveryLevel) {
+    const uint32_t depth = 500;
+    const std::vector<const expr*> two_goals{goal("a0"), goal("a1")};
+    EXPECT_CALL(get_body_goals, get(root)).WillOnce(ReturnRef(no_goals));
+    test_descent_t at{get_body_goals, root};
+    for (uint32_t level = 1; level <= depth; ++level) {
+        const pud_node_id level_node = 100 + level;
+        const bool fact = level % 3 == 0;
+        EXPECT_CALL(get_body_goals, get(level_node)).WillOnce(ReturnRef(fact ? no_goals : two_goals));
+        at = at.descend(level_node);
+    }
+    EXPECT_EQ(at.next_body_goal_id(), 2u * (depth - depth / 3));
+}
+
+TEST_F(PudNextBodyGoalIdDescentTest, DescentIsAssignable) {
+    const std::vector<const expr*> root_goals{goal("r0")};
+    const std::vector<const expr*> child_goals{goal("c0")};
+    EXPECT_CALL(get_body_goals, get(root)).WillOnce(ReturnRef(root_goals));
+    EXPECT_CALL(get_body_goals, get(child)).WillOnce(ReturnRef(child_goals));
+    test_descent_t current{get_body_goals, root};
+    current = current.descend(child);
+    EXPECT_EQ(current.next_body_goal_id(), 2u);
+}
+
 TEST_F(PudNextBodyGoalIdDescentTest, SiblingsDescendIndependently) {
     const std::vector<const expr*> root_goals{goal("r0")};
     const std::vector<const expr*> child_goals{goal("c0")};

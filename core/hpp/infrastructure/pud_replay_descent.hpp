@@ -13,17 +13,15 @@ template<
     typename BindMap,
     typename Normalizer,
     typename Unifier,
-    typename IMakeUbsVar,
-    typename IMakeUbsFunctor,
     typename IMakeVar,
+    typename IMakeFunctor,
     typename IMakeNormalizer,
     typename IMakeUnifier,
     typename IGetNodeAddedSpecializations>
 struct pud_replay_descent {
     pud_replay_descent(
-        IMakeUbsVar& make_ubs_var,
-        IMakeUbsFunctor& make_ubs_functor,
         IMakeVar& make_var,
+        IMakeFunctor& make_functor,
         IMakeNormalizer& make_normalizer,
         IMakeUnifier& make_unifier,
         IGetNodeAddedSpecializations& get_node_added_specializations,
@@ -32,9 +30,8 @@ struct pud_replay_descent {
     std::optional<pud_replay_descent> descend(pud_node_id child) const;
     const pud_ubs_state& ubs_state() const;
 private:
-    IMakeUbsVar* make_ubs_var_;
-    IMakeUbsFunctor* make_ubs_functor_;
     IMakeVar* make_var_;
+    IMakeFunctor* make_functor_;
     IMakeNormalizer* make_normalizer_;
     IMakeUnifier* make_unifier_;
     IGetNodeAddedSpecializations* get_node_added_specializations_;
@@ -42,27 +39,25 @@ private:
     pud_ubs_state ubs_state_;
 };
 
-#define PUD_REPLAY_DESCENT_TEMPLATE                                                       \
-    template<typename BindMap, typename Normalizer, typename Unifier, typename IMakeUbsVar, \
-             typename IMakeUbsFunctor, typename IMakeVar, typename IMakeNormalizer,         \
-             typename IMakeUnifier, typename IGetNodeAddedSpecializations>
-#define PUD_REPLAY_DESCENT                                                                \
-    pud_replay_descent<BindMap, Normalizer, Unifier, IMakeUbsVar, IMakeUbsFunctor,        \
-        IMakeVar, IMakeNormalizer, IMakeUnifier, IGetNodeAddedSpecializations>
+#define PUD_REPLAY_DESCENT_TEMPLATE                                                        \
+    template<typename BindMap, typename Normalizer, typename Unifier, typename IMakeVar,    \
+             typename IMakeFunctor, typename IMakeNormalizer, typename IMakeUnifier,         \
+             typename IGetNodeAddedSpecializations>
+#define PUD_REPLAY_DESCENT                                                                 \
+    pud_replay_descent<BindMap, Normalizer, Unifier, IMakeVar, IMakeFunctor,               \
+        IMakeNormalizer, IMakeUnifier, IGetNodeAddedSpecializations>
 
 PUD_REPLAY_DESCENT_TEMPLATE
 PUD_REPLAY_DESCENT::pud_replay_descent(
-    IMakeUbsVar& make_ubs_var,
-    IMakeUbsFunctor& make_ubs_functor,
     IMakeVar& make_var,
+    IMakeFunctor& make_functor,
     IMakeNormalizer& make_normalizer,
     IMakeUnifier& make_unifier,
     IGetNodeAddedSpecializations& get_node_added_specializations,
     const pud_ubs_state& caller_ubs_state,
     uint32_t frame_offset)
-    : make_ubs_var_(&make_ubs_var)
-    , make_ubs_functor_(&make_ubs_functor)
-    , make_var_(&make_var)
+    : make_var_(&make_var)
+    , make_functor_(&make_functor)
     , make_normalizer_(&make_normalizer)
     , make_unifier_(&make_unifier)
     , get_node_added_specializations_(&get_node_added_specializations)
@@ -72,9 +67,9 @@ PUD_REPLAY_DESCENT::pud_replay_descent(
 PUD_REPLAY_DESCENT_TEMPLATE
 std::optional<PUD_REPLAY_DESCENT> PUD_REPLAY_DESCENT::descend(pud_node_id child) const {
     pud_transient_ubs_state transient_ubs_state{ubs_state_};
-    BindMap bind_map = transient_ubs_state.make_bind_map(*make_ubs_var_, *make_ubs_functor_);
-    Normalizer normalizer = make_normalizer_->make_normalizer(bind_map);
-    Unifier unifier = make_unifier_->make_unifier(bind_map, normalizer);
+    BindMap bind_map = transient_ubs_state.make_bind_map(*make_var_, *make_functor_);
+    Normalizer normalizer = make_normalizer_->make(bind_map);
+    Unifier unifier = make_unifier_->make(normalizer, bind_map);
     for (const pud_specialization& specialization : get_node_added_specializations_->get(child)) {
         framed_expr lhs{make_var_->make_var(specialization.var_idx), frame_offset_};
         framed_expr rhs{specialization.value, frame_offset_};

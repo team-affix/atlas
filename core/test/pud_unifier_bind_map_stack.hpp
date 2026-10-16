@@ -11,26 +11,8 @@
 #include "ubs_bind_map_test_maps.hpp"
 #include "value_objects/framed_expr.hpp"
 
-struct ubs_pool_var_factory {
-    expr_pool& pool_;
-
-    const expr* make(uint32_t global_index) {
-        return pool_.make_var(global_index);
-    }
-};
-
-struct pud_pool_make_functor {
-    expr_pool& pool_;
-
-    const expr* make(uint32_t id, const std::vector<const expr*>& args) {
-        return pool_.make_functor(id, args);
-    }
-};
-
 struct ubs_bind_map_expr_pool_backing {
     expr_pool pool;
-    ubs_pool_var_factory vars{pool};
-    pud_pool_make_functor make_functor{pool};
     std::unordered_map<uint32_t, uint32_t> parents;
     std::unordered_map<uint32_t, uint32_t> sizes;
     std::unordered_map<uint32_t, const expr*> values;
@@ -79,8 +61,8 @@ struct ubs_bind_map_expr_pool_backing {
     value_map value_access{values};
 
     using bind_map_t = ubs_bind_map<
-        ubs_pool_var_factory,
-        pud_pool_make_functor,
+        expr_pool,
+        expr_pool,
         parent_map,
         parent_map,
         size_map,
@@ -90,8 +72,8 @@ struct ubs_bind_map_expr_pool_backing {
 
     bind_map_t make_bind_map() {
         return bind_map_t{
-            vars,
-            make_functor,
+            pool,
+            pool,
             parent_access,
             parent_access,
             size_access,
@@ -105,12 +87,12 @@ struct pud_unifier_bind_map_stack {
     globalizer globalize;
     ubs_bind_map_expr_pool_backing bind_backing;
     ubs_bind_map_expr_pool_backing::bind_map_t bind_map{bind_backing.make_bind_map()};
-    global_normalizer<globalizer, pud_pool_make_functor, ubs_bind_map_expr_pool_backing::bind_map_t> normalizer{
-        globalize, bind_backing.make_functor, bind_map};
+    global_normalizer<globalizer, expr_pool, ubs_bind_map_expr_pool_backing::bind_map_t> normalizer{
+        globalize, bind_backing.pool, bind_map};
 
     using pud_unifier_t = pud_unifier<
         globalizer,
-        global_normalizer<globalizer, pud_pool_make_functor, ubs_bind_map_expr_pool_backing::bind_map_t>,
+        global_normalizer<globalizer, expr_pool, ubs_bind_map_expr_pool_backing::bind_map_t>,
         ubs_bind_map_expr_pool_backing::bind_map_t,
         ubs_bind_map_expr_pool_backing::bind_map_t,
         ubs_bind_map_expr_pool_backing::bind_map_t>;

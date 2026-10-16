@@ -14,11 +14,11 @@
 namespace {
 
 struct MockMakeVar {
-    MOCK_METHOD(const expr*, make, (uint32_t));
+    MOCK_METHOD(const expr*, make_var, (uint32_t));
 };
 
 struct MockMakeFunctor {
-    MOCK_METHOD(const expr*, make, (uint32_t, (const std::vector<const expr*>&)));
+    MOCK_METHOD(const expr*, make_functor, (uint32_t, (const std::vector<const expr*>&)));
 };
 
 using test_ubs_bind_map_t = ubs_bind_map<
@@ -64,8 +64,8 @@ struct UbsBindMapTest : public ::testing::Test {
     }
 
     void SetUp() override {
-        ON_CALL(make_var, make(testing::_)).WillByDefault(testing::Invoke(this, &UbsBindMapTest::var_node));
-        ON_CALL(make_functor, make(testing::_, testing::_))
+        ON_CALL(make_var, make_var(testing::_)).WillByDefault(testing::Invoke(this, &UbsBindMapTest::var_node));
+        ON_CALL(make_functor, make_functor(testing::_, testing::_))
             .WillByDefault(testing::Invoke(this, &UbsBindMapTest::make_functor_stub));
     }
 
@@ -83,7 +83,7 @@ void build_class_of_three(test_ubs_bind_map_t& store) {
 
 TEST_F(UbsBindMapTest, ResolveIsolatedVarDelegatesToMakeVar) {
     const expr* expected = var_node(7u);
-    EXPECT_CALL(make_var, make(7u)).WillOnce(testing::Return(expected));
+    EXPECT_CALL(make_var, make_var(7u)).WillOnce(testing::Return(expected));
     EXPECT_EQ(store.resolve(7u), expected);
 }
 
@@ -105,7 +105,7 @@ TEST_F(UbsBindMapTest, ResolveDeepChainMatchesRoot) {
 TEST_F(UbsBindMapTest, ResolveBoundClassSharesStoredPointer) {
     const expr* bound = functor_node(42u);
     store.equate(0u, 1u);
-    EXPECT_CALL(make_functor, make(42u, testing::_)).WillOnce(testing::Return(bound));
+    EXPECT_CALL(make_functor, make_functor(42u, testing::_)).WillOnce(testing::Return(bound));
     store.instantiate(0u, 42u, {});
     EXPECT_EQ(store.resolve(0u), bound);
     EXPECT_EQ(store.resolve(1u), bound);
@@ -113,7 +113,7 @@ TEST_F(UbsBindMapTest, ResolveBoundClassSharesStoredPointer) {
 
 TEST_F(UbsBindMapTest, ResolveDoesNotMutateMaps) {
     const ubs_map_snapshot before = snapshot();
-    EXPECT_CALL(make_var, make(4u)).WillOnce(testing::Return(var_node(4u)));
+    EXPECT_CALL(make_var, make_var(4u)).WillOnce(testing::Return(var_node(4u)));
     store.resolve(4u);
     EXPECT_TRUE(ubs_snapshots_equal(before, snapshot()));
 }
@@ -140,8 +140,8 @@ TEST_F(UbsBindMapTest, EquateArgumentOrderIsIrrelevant) {
     ::testing::NiceMock<MockMakeVar> make_var_ba;
     UbsBindMapTest* self_ab = this;
     UbsBindMapTest* self_ba = this;
-    ON_CALL(make_var_ab, make(testing::_)).WillByDefault(testing::Invoke(self_ab, &UbsBindMapTest::var_node));
-    ON_CALL(make_var_ba, make(testing::_)).WillByDefault(testing::Invoke(self_ba, &UbsBindMapTest::var_node));
+    ON_CALL(make_var_ab, make_var(testing::_)).WillByDefault(testing::Invoke(self_ab, &UbsBindMapTest::var_node));
+    ON_CALL(make_var_ba, make_var(testing::_)).WillByDefault(testing::Invoke(self_ba, &UbsBindMapTest::var_node));
     ubs_std_parent_map parents_ab;
     ubs_std_parent_map parents_ba;
     ubs_std_size_map sizes_ab;
@@ -150,9 +150,9 @@ TEST_F(UbsBindMapTest, EquateArgumentOrderIsIrrelevant) {
     ubs_std_value_map values_ba;
     ::testing::NiceMock<MockMakeFunctor> make_functor_ab;
     ::testing::NiceMock<MockMakeFunctor> make_functor_ba;
-    ON_CALL(make_functor_ab, make(testing::_, testing::_))
+    ON_CALL(make_functor_ab, make_functor(testing::_, testing::_))
         .WillByDefault(testing::Invoke(self_ab, &UbsBindMapTest::make_functor_stub));
-    ON_CALL(make_functor_ba, make(testing::_, testing::_))
+    ON_CALL(make_functor_ba, make_functor(testing::_, testing::_))
         .WillByDefault(testing::Invoke(self_ba, &UbsBindMapTest::make_functor_stub));
     test_ubs_bind_map_t store_ab{
         make_var_ab, make_functor_ab, parents_ab, parents_ab, sizes_ab, sizes_ab, values_ab, values_ab};
@@ -221,7 +221,7 @@ TEST_F(UbsBindMapTest, InstantiateAnyMemberBindsWholeClass) {
     store.equate(0u, 1u);
     store.equate(1u, 2u);
     const expr* bound = functor_node(1u);
-    EXPECT_CALL(make_functor, make(1u, testing::_)).WillOnce(testing::Return(bound));
+    EXPECT_CALL(make_functor, make_functor(1u, testing::_)).WillOnce(testing::Return(bound));
     store.instantiate(2u, 1u, {});
     EXPECT_EQ(store.resolve(0u), bound);
 }
@@ -229,7 +229,7 @@ TEST_F(UbsBindMapTest, InstantiateAnyMemberBindsWholeClass) {
 TEST_F(UbsBindMapTest, InstantiateThroughNonRootWritesAtRootOnly) {
     store.equate(5u, 3u);
     const expr* bound = functor_node(9u);
-    EXPECT_CALL(make_functor, make(9u, testing::_)).WillOnce(testing::Return(bound));
+    EXPECT_CALL(make_functor, make_functor(9u, testing::_)).WillOnce(testing::Return(bound));
     store.instantiate(3u, 9u, {});
     const uint32_t root = ubs_find_root(parents, 3u);
     EXPECT_EQ(values.map.at(root), bound);
@@ -303,7 +303,7 @@ TEST_F(UbsBindMapTest, StaleNonRootMetadataIgnored) {
 
 TEST_F(UbsBindMapTest, ResolveIndexZeroUsesMakeVarNotOffByOne) {
     const expr* zero = var_node(0u);
-    EXPECT_CALL(make_var, make(0u)).WillOnce(testing::Return(zero));
+    EXPECT_CALL(make_var, make_var(0u)).WillOnce(testing::Return(zero));
     EXPECT_EQ(store.resolve(0u), zero);
     EXPECT_EQ(parents.map.count(0u), 0u);
 }
@@ -311,7 +311,7 @@ TEST_F(UbsBindMapTest, ResolveIndexZeroUsesMakeVarNotOffByOne) {
 TEST_F(UbsBindMapTest, ResolveHugeFreshIndexDelegatesToMakeVar) {
     const uint32_t huge = UINT32_MAX;
     const expr* node = var_node(huge);
-    EXPECT_CALL(make_var, make(huge)).WillOnce(testing::Return(node));
+    EXPECT_CALL(make_var, make_var(huge)).WillOnce(testing::Return(node));
     EXPECT_EQ(store.resolve(huge), node);
 }
 
@@ -430,7 +430,7 @@ TEST_F(UbsBindMapTest, EquateMergeWritesExactlyOneParentEntry) {
 
 TEST_F(UbsBindMapTest, InstantiateZeroArityFunctor) {
     const expr* constant = functor_node(0u);
-    EXPECT_CALL(make_functor, make(0u, testing::_)).WillOnce(testing::Return(constant));
+    EXPECT_CALL(make_functor, make_functor(0u, testing::_)).WillOnce(testing::Return(constant));
     store.instantiate(3u, 0u, {});
     EXPECT_EQ(store.resolve(3u), constant);
 }

@@ -58,6 +58,48 @@ TEST_F(PudLvcDescentTest, SiblingsDescendIndependently) {
     EXPECT_EQ(at_root.descend(sibling).lvc(), 11u);
 }
 
+TEST_F(PudLvcDescentTest, RootQueriesOnlyTheRoot) {
+    ::testing::StrictMock<MockGetNodeAddedVarCount> strict_get_var_count;
+    EXPECT_CALL(strict_get_var_count, get(root)).WillOnce(Return(4));
+    test_descent_t descent{strict_get_var_count, root};
+    EXPECT_EQ(descent.lvc(), 4u);
+}
+
+TEST_F(PudLvcDescentTest, DescendQueriesOnlyTheChild) {
+    ::testing::StrictMock<MockGetNodeAddedVarCount> strict_get_var_count;
+    EXPECT_CALL(strict_get_var_count, get(root)).WillOnce(Return(4));
+    test_descent_t at_root{strict_get_var_count, root};
+    EXPECT_CALL(strict_get_var_count, get(child)).WillOnce(Return(1));
+    EXPECT_EQ(at_root.descend(child).lvc(), 5u);
+}
+
+TEST_F(PudLvcDescentTest, RootWithNoVarsStartsAtZero) {
+    EXPECT_CALL(get_var_count, get(root)).WillOnce(Return(0));
+    EXPECT_EQ((test_descent_t{get_var_count, root}).lvc(), 0u);
+}
+
+TEST_F(PudLvcDescentTest, ChildWithNoVarsKeepsTheCount) {
+    EXPECT_CALL(get_var_count, get(root)).WillOnce(Return(6));
+    EXPECT_CALL(get_var_count, get(child)).WillOnce(Return(0));
+    test_descent_t at_root{get_var_count, root};
+    EXPECT_EQ(at_root.descend(child).lvc(), 6u);
+}
+
+TEST_F(PudLvcDescentTest, DeepChainAccumulatesEveryLevel) {
+    const uint32_t depth = 1000;
+    EXPECT_CALL(get_var_count, get(root)).WillOnce(Return(2));
+    test_descent_t at{get_var_count, root};
+    for (uint32_t level = 1; level <= depth; ++level) {
+        const pud_node_id level_node = 100 + level;
+        EXPECT_CALL(get_var_count, get(level_node)).WillOnce(Return(level % 4));
+        at = at.descend(level_node);
+    }
+    uint32_t expected = 2;
+    for (uint32_t level = 1; level <= depth; ++level)
+        expected += level % 4;
+    EXPECT_EQ(at.lvc(), expected);
+}
+
 TEST_F(PudLvcDescentTest, DescentIsAssignable) {
     EXPECT_CALL(get_var_count, get(root)).WillOnce(Return(1));
     EXPECT_CALL(get_var_count, get(child)).WillOnce(Return(2));

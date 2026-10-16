@@ -37,7 +37,7 @@ const expr* global_normalizer<IGlobalize, IMakeFunctor, IResolve>::normalize(fra
     std::vector<const expr*> args;
     for (const expr* arg : functor.args)
         args.push_back(normalize({arg, fe.frame_offset}));
-    return make_functor_.make(functor.id, args);
+    return make_functor_.make_functor(functor.id, args);
 }
 
 #endif

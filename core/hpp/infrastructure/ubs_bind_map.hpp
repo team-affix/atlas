@@ -101,7 +101,7 @@ const expr* UBS_BIND_MAP::resolve(uint32_t var) {
     const uint32_t root = find(var);
     if (const expr* const* value = get_value_.get_value(root))
         return *value;
-    return make_var_.make(root);
+    return make_var_.make_var(root);
 }
 
 UBS_BIND_MAP_TEMPLATE
@@ -123,7 +123,7 @@ void UBS_BIND_MAP::equate(uint32_t var_a, uint32_t var_b) {
 
     set_parent_.set_parent(root_b, root_a);
     set_size_.set_size(root_a, size_a + size_b);
-    set_value_.set_value(root_a, make_var_.make(rep_a < rep_b ? rep_a : rep_b));
+    set_value_.set_value(root_a, make_var_.make_var(rep_a < rep_b ? rep_a : rep_b));
 }
 
 UBS_BIND_MAP_TEMPLATE
@@ -133,7 +133,7 @@ void UBS_BIND_MAP::instantiate(
     const std::vector<const expr*>& args) {
     const uint32_t root = find(var);
     rep(root);
-    const expr* bound = make_functor_.make(functor_id, args);
+    const expr* bound = make_functor_.make_functor(functor_id, args);
     set_value_.set_value(root, bound);
 }
 

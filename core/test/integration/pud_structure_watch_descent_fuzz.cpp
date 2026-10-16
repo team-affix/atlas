@@ -9,7 +9,6 @@
 #include <gtest/gtest.h>
 #include "functor_fixture.hpp"
 #include "infrastructure/expr_pool.hpp"
-#include "infrastructure/expr_pool_ubs_factories.hpp"
 #include "infrastructure/pud_binding_descent.hpp"
 #include "infrastructure/pud_node_added_specializations.hpp"
 #include "infrastructure/pud_structure_watch_descent.hpp"
@@ -20,12 +19,12 @@
 // canonical form differs, where the canonical form resolves every variable through the real
 // bind map and numbers representatives by first occurrence.
 struct PudStructureWatchDescentFuzzTest : public ::testing::Test {
-    using bind_map_t = ubs_transient_bind_map<expr_pool_ubs_var_factory, expr_pool_ubs_functor_factory>;
+    using bind_map_t = ubs_transient_bind_map<expr_pool, expr_pool>;
     using binding_descent_t = pud_binding_descent<
         bind_map_t,
         pud_node_added_specializations,
-        expr_pool_ubs_var_factory,
-        expr_pool_ubs_functor_factory>;
+        expr_pool,
+        expr_pool>;
     using watch_descent_t = pud_structure_watch_descent<pud_node_added_specializations>;
 
     struct level {
@@ -41,8 +40,6 @@ struct PudStructureWatchDescentFuzzTest : public ::testing::Test {
 
     test_functors                  functors;
     expr_pool                      exprs;
-    expr_pool_ubs_var_factory      ubs_var_factory_{exprs};
-    expr_pool_ubs_functor_factory  ubs_functor_factory_{exprs};
     pud_node_added_specializations node_specs_;
     std::mt19937                   rng{0};
     pud_node_id                    next_node_id = 1;
@@ -88,7 +85,7 @@ struct PudStructureWatchDescentFuzzTest : public ::testing::Test {
 
     std::vector<pud_specialization> random_specializations(const binding_descent_t& parent) {
         pud_transient_ubs_state scratch{parent.ubs_state()};
-        bind_map_t bind_map = scratch.make_bind_map(ubs_var_factory_, ubs_functor_factory_);
+        bind_map_t bind_map = scratch.make_bind_map(exprs, exprs);
         std::vector<pud_specialization> specializations;
         const uint32_t count = pick(4);
         for (uint32_t spec_index = 0; spec_index < count; ++spec_index) {
@@ -145,7 +142,7 @@ struct PudStructureWatchDescentFuzzTest : public ::testing::Test {
 
     std::vector<uint32_t> canonical(const binding_descent_t& at, const expr* watched) {
         pud_transient_ubs_state transient{at.ubs_state()};
-        bind_map_t bind_map = transient.make_bind_map(ubs_var_factory_, ubs_functor_factory_);
+        bind_map_t bind_map = transient.make_bind_map(exprs, exprs);
         std::unordered_map<uint32_t, uint32_t> numbering;
         std::vector<uint32_t> tokens;
         visit_canonical(bind_map, watched, numbering, tokens);
@@ -154,7 +151,7 @@ struct PudStructureWatchDescentFuzzTest : public ::testing::Test {
 
     std::vector<const expr*> random_watch_list(const binding_descent_t& at) {
         pud_transient_ubs_state transient{at.ubs_state()};
-        bind_map_t bind_map = transient.make_bind_map(ubs_var_factory_, ubs_functor_factory_);
+        bind_map_t bind_map = transient.make_bind_map(exprs, exprs);
         const std::vector<uint32_t> reps = unbound_reps(bind_map);
         std::vector<const expr*> watched;
         const uint32_t count = pick(4);
@@ -165,7 +162,7 @@ struct PudStructureWatchDescentFuzzTest : public ::testing::Test {
 
     level make_root() {
         level root{
-            .binding = binding_descent_t{node_specs_, ubs_var_factory_, ubs_functor_factory_},
+            .binding = binding_descent_t{node_specs_, exprs, exprs},
             .watch = watch_descent_t{node_specs_, {}},
             .live_heads = {},
             .next_head_id = 0,
