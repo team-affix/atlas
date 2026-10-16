@@ -12,7 +12,8 @@ using ::testing::UnorderedElementsAre;
 namespace {
 
 struct descent_t {
-    pud_node_id node;
+    pud_node_id at;
+    pud_node_id node() const { return at; }
     bool operator==(const descent_t&) const = default;
 };
 

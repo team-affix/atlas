@@ -12,10 +12,14 @@ using ::testing::NiceMock;
 using ::testing::Return;
 using ::testing::ReturnRef;
 
+namespace {
+
 using child_iter = std::vector<pud_node_id>::const_iterator;
 
 struct descent_t {
-    pud_node_id node;
+    pud_node_id at;
+    pud_node_id node() const { return at; }
+    std::optional<descent_t> descend(pud_node_id child) const;
     bool operator==(const descent_t&) const = default;
 };
 
@@ -35,13 +39,19 @@ struct MockDescend {
     MOCK_METHOD(std::optional<descent_t>, descend, (descent_t, pud_node_id));
 };
 
+MockDescend* descend_ops = nullptr;
+
+std::optional<descent_t> descent_t::descend(pud_node_id child) const {
+    return descend_ops->descend(*this, child);
+}
+
 struct MockCallSite {
     MOCK_METHOD(size_t, get, (pud_node_id));
 };
 
-using head_t    = pud_witness_search_head<descent_t, child_iter, MockCheckLeaf, MockCheckRefuted, MockGetChildren, MockDescend, MockCallSite>;
-using factory_t = pud_witness_search_head_factory<descent_t, child_iter, MockCheckLeaf, MockCheckRefuted, MockGetChildren, MockDescend, MockCallSite>;
-using forker_t  = pud_witness_search_head_forker<descent_t, child_iter, MockCheckLeaf, MockCheckRefuted, MockGetChildren, MockDescend, MockCallSite>;
+using head_t    = pud_witness_search_head<descent_t, child_iter, MockCheckLeaf, MockCheckRefuted, MockGetChildren, MockCallSite>;
+using factory_t = pud_witness_search_head_factory<descent_t, child_iter, MockCheckLeaf, MockCheckRefuted, MockGetChildren, MockCallSite>;
+using forker_t  = pud_witness_search_head_forker<descent_t, child_iter, MockCheckLeaf, MockCheckRefuted, MockGetChildren, MockCallSite>;
 using mhws_t    = pud_mhws<descent_t, child_iter, head_t, factory_t, forker_t>;
 
 struct PudMhwsSearchIntegrationTest : public ::testing::Test {
@@ -50,7 +60,7 @@ struct PudMhwsSearchIntegrationTest : public ::testing::Test {
     NiceMock<MockGetChildren> children;
     NiceMock<MockDescend>  descend;
     NiceMock<MockCallSite>   call_sites;
-    factory_t factory{leaves, refuted_nodes, children, descend, call_sites};
+    factory_t factory{leaves, refuted_nodes, children, call_sites};
     forker_t  forker;
     mhws_t    searches{factory, forker};
     std::unordered_map<pud_node_id, std::vector<pud_node_id>> sequences;
@@ -67,6 +77,7 @@ struct PudMhwsSearchIntegrationTest : public ::testing::Test {
     pud_node_id fork_caller  = 11;
 
     void SetUp() override {
+        descend_ops = &descend;
         ON_CALL(leaves, check_leaf(_)).WillByDefault(Return(false));
         ON_CALL(children, get(_)).WillByDefault([&](pud_node_id id) -> const std::vector<pud_node_id>& {
             return sequences.at(id);
@@ -159,3 +170,5 @@ TEST_F(PudMhwsSearchIntegrationTest, InvalidateLeafMovesHeadToNextLeafUnderSameP
     ASSERT_EQ(gone.size(), 1u);
     EXPECT_EQ(gone[0], *id);
 }
+
+}  // namespace

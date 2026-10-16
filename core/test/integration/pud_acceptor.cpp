@@ -10,7 +10,6 @@
 #include "infrastructure/pud_node_added_substitutions.hpp"
 #include "infrastructure/pud_node_heads.hpp"
 #include "infrastructure/pud_node_parents.hpp"
-#include "infrastructure/pud_node_path_finder.hpp"
 #include "infrastructure/pud_normalizer_factory.hpp"
 #include "infrastructure/pud_open_body_goal_finder.hpp"
 #include "infrastructure/pud_root_nodes.hpp"
@@ -29,10 +28,9 @@ struct PudAcceptorIntegrationTest : public ::testing::Test {
     using logger_t = representative_change_logger<bind_map_t, bind_map_t, std::vector<uint32_t>>;
     using unifier_t = pud_unifier<globalizer, normalizer_t, bind_map_t, logger_t, logger_t>;
     using translating_normalizer_t = pud_translating_normalizer<globalizer, expr_pool, expr_pool, bind_map_t>;
-    using path_finder_t = pud_node_path_finder<pud_root_nodes, pud_node_parents>;
     using open_goal_finder_t = pud_open_body_goal_finder<pud_node_added_body_goals, pud_call_sites>;
     using acceptor_t = pud_acceptor<
-        bind_map_t, normalizer_t, unifier_t, logger_t, translating_normalizer_t, path_finder_t,
+        bind_map_t, normalizer_t, unifier_t, logger_t, translating_normalizer_t,
         open_goal_finder_t, pud_node_heads, pud_node_added_substitutions, globalizer, expr_pool,
         expr_pool, normalizer_factory_t>;
 
@@ -46,10 +44,9 @@ struct PudAcceptorIntegrationTest : public ::testing::Test {
     pud_node_added_substitutions substitutions;
     pud_call_sites call_sites;
     normalizer_factory_t normalizer_factory{globalize, exprs};
-    path_finder_t path_finder{roots, parents};
     open_goal_finder_t open_goal_finder{body_goals, call_sites};
     acceptor_t acceptor{
-        path_finder, open_goal_finder, heads, substitutions, globalize, exprs, exprs, normalizer_factory};
+        open_goal_finder, heads, substitutions, globalize, exprs, exprs, normalizer_factory};
     pud_ubs_state empty_state;
     pud_node_id next_node = 1;
 
@@ -91,7 +88,7 @@ struct PudAcceptorIntegrationTest : public ::testing::Test {
 
 TEST_F(PudAcceptorIntegrationTest, FactCandidateInstantiatesTheGoalsVariable) {
     const pud_node_id fact = root(functor("color", {atom("red")}), {});
-    const pud_child_delta delta = acceptor.accept(empty_state, 1, functor("color", {var(0)}), fact);
+    const pud_child_delta delta = acceptor.accept(empty_state, 1, functor("color", {var(0)}), {fact});
     EXPECT_THAT(delta.substitutions, ElementsAre(pud_substitution{.var_idx = 0, .value = atom("red")}));
     EXPECT_THAT(delta.body_goals, IsEmpty());
     EXPECT_EQ(delta.var_count, 0u);
@@ -99,7 +96,7 @@ TEST_F(PudAcceptorIntegrationTest, FactCandidateInstantiatesTheGoalsVariable) {
 
 TEST_F(PudAcceptorIntegrationTest, GroundGoalAgainstAMatchingFactNeedsNoSubstitution) {
     const pud_node_id fact = root(functor("color", {atom("red")}), {});
-    const pud_child_delta delta = acceptor.accept(empty_state, 0, functor("color", {atom("red")}), fact);
+    const pud_child_delta delta = acceptor.accept(empty_state, 0, functor("color", {atom("red")}), {fact});
     EXPECT_THAT(delta.substitutions, IsEmpty());
     EXPECT_THAT(delta.body_goals, IsEmpty());
     EXPECT_EQ(delta.var_count, 0u);
@@ -107,7 +104,7 @@ TEST_F(PudAcceptorIntegrationTest, GroundGoalAgainstAMatchingFactNeedsNoSubstitu
 
 TEST_F(PudAcceptorIntegrationTest, RuleCandidateAddsItsBodyOverFreshVariables) {
     const pud_node_id rule_root = root(functor("nat", {functor("s", {var(0)})}), {functor("nat", {var(0)})});
-    const pud_child_delta delta = acceptor.accept(empty_state, 1, functor("nat", {var(0)}), rule_root);
+    const pud_child_delta delta = acceptor.accept(empty_state, 1, functor("nat", {var(0)}), {rule_root});
     EXPECT_THAT(delta.substitutions, ElementsAre(pud_substitution{.var_idx = 0, .value = functor("s", {var(1)})}));
     EXPECT_THAT(delta.body_goals, ElementsAre(functor("nat", {var(1)})));
     EXPECT_EQ(delta.var_count, 1u);
@@ -117,7 +114,7 @@ TEST_F(PudAcceptorIntegrationTest, FreshVariablesAreNumberedFromTheAcceptorsVari
     const pud_node_id rule_root = root(
         functor("p", {functor("f", {var(0), var(1)})}),
         {functor("q", {var(1), var(0)})});
-    const pud_child_delta delta = acceptor.accept(empty_state, 5, functor("p", {var(0)}), rule_root);
+    const pud_child_delta delta = acceptor.accept(empty_state, 5, functor("p", {var(0)}), {rule_root});
     EXPECT_THAT(delta.substitutions, ElementsAre(pud_substitution{.var_idx = 0, .value = functor("f", {var(5), var(6)})}));
     EXPECT_THAT(delta.body_goals, ElementsAre(functor("q", {var(6), var(5)})));
     EXPECT_EQ(delta.var_count, 2u);
@@ -125,7 +122,7 @@ TEST_F(PudAcceptorIntegrationTest, FreshVariablesAreNumberedFromTheAcceptorsVari
 
 TEST_F(PudAcceptorIntegrationTest, CandidateVariableBoundToTheGoalIsSubstitutedAway) {
     const pud_node_id rule_root = root(functor("p", {var(0)}), {functor("q", {var(0)})});
-    const pud_child_delta delta = acceptor.accept(empty_state, 0, functor("p", {atom("a")}), rule_root);
+    const pud_child_delta delta = acceptor.accept(empty_state, 0, functor("p", {atom("a")}), {rule_root});
     EXPECT_THAT(delta.substitutions, IsEmpty());
     EXPECT_THAT(delta.body_goals, ElementsAre(functor("q", {atom("a")})));
     EXPECT_EQ(delta.var_count, 0u);
@@ -133,7 +130,7 @@ TEST_F(PudAcceptorIntegrationTest, CandidateVariableBoundToTheGoalIsSubstitutedA
 
 TEST_F(PudAcceptorIntegrationTest, AcceptorVariablesMergedByTheCandidateBecomeAVariableSubstitution) {
     const pud_node_id same = root(functor("eq", {var(0), var(0)}), {});
-    const pud_child_delta delta = acceptor.accept(empty_state, 2, functor("eq", {var(0), var(1)}), same);
+    const pud_child_delta delta = acceptor.accept(empty_state, 2, functor("eq", {var(0), var(1)}), {same});
     EXPECT_THAT(delta.substitutions, ElementsAre(pud_substitution{.var_idx = 1, .value = var(0)}));
     EXPECT_EQ(delta.var_count, 0u);
 }
@@ -141,13 +138,13 @@ TEST_F(PudAcceptorIntegrationTest, AcceptorVariablesMergedByTheCandidateBecomeAV
 TEST_F(PudAcceptorIntegrationTest, AcceptorsBindingsAreRespected) {
     const pud_node_id same = root(functor("eq", {var(0), var(0)}), {});
     const pud_child_delta delta = acceptor.accept(
-        bound(0, atom("a")), 2, functor("eq", {var(0), var(1)}), same);
+        bound(0, atom("a")), 2, functor("eq", {var(0), var(1)}), {same});
     EXPECT_THAT(delta.substitutions, ElementsAre(pud_substitution{.var_idx = 1, .value = atom("a")}));
 }
 
 TEST_F(PudAcceptorIntegrationTest, UntouchedAcceptorVariablesAreNotSubstituted) {
     const pud_node_id fact = root(functor("p", {atom("a")}), {});
-    const pud_child_delta delta = acceptor.accept(empty_state, 3, functor("p", {var(2)}), fact);
+    const pud_child_delta delta = acceptor.accept(empty_state, 3, functor("p", {var(2)}), {fact});
     EXPECT_THAT(delta.substitutions, ElementsAre(pud_substitution{.var_idx = 2, .value = atom("a")}));
 }
 
@@ -156,7 +153,7 @@ TEST_F(PudAcceptorIntegrationTest, CandidateDeepInATreeReplaysItsWholePath) {
     const pud_node_id rule_root = root(functor("nat", {functor("s", {var(0)})}), {functor("nat", {var(0)})});
     const pud_node_id deeper = child(
         rule_root, 0, {pud_substitution{.var_idx = 0, .value = functor("s", {var(1)})}}, {functor("nat", {var(1)})});
-    const pud_child_delta delta = acceptor.accept(empty_state, 1, functor("nat", {var(0)}), deeper);
+    const pud_child_delta delta = acceptor.accept(empty_state, 1, functor("nat", {var(0)}), {rule_root, deeper});
     EXPECT_THAT(
         delta.substitutions,
         ElementsAre(pud_substitution{.var_idx = 0, .value = functor("s", {functor("s", {var(1)})})}));
@@ -169,7 +166,7 @@ TEST_F(PudAcceptorIntegrationTest, CandidatesClosedCallSiteIsNotAddedAsABodyGoal
         functor("p", {var(0)}),
         {functor("q", {var(0)}), functor("r", {var(0)})});
     const pud_node_id deeper = child(rule_root, 0, {pud_substitution{.var_idx = 0, .value = atom("a")}}, {});
-    const pud_child_delta delta = acceptor.accept(empty_state, 0, functor("p", {atom("a")}), deeper);
+    const pud_child_delta delta = acceptor.accept(empty_state, 0, functor("p", {atom("a")}), {rule_root, deeper});
     EXPECT_THAT(delta.body_goals, ElementsAre(functor("r", {atom("a")})));
 }
 
@@ -178,7 +175,7 @@ TEST_F(PudAcceptorIntegrationTest, SharedFreshVariablesAreTranslatedConsistently
         functor("p", {var(0), var(1)}),
         {functor("q", {var(1)}), functor("r", {var(1), var(0)})});
     const pud_child_delta delta = acceptor.accept(
-        empty_state, 1, functor("p", {var(0), functor("g", {var(0)})}), rule_root);
+        empty_state, 1, functor("p", {var(0), functor("g", {var(0)})}), {rule_root});
     EXPECT_THAT(delta.substitutions, IsEmpty());
     EXPECT_THAT(
         delta.body_goals,

@@ -9,10 +9,14 @@ using ::testing::_;
 using ::testing::NiceMock;
 using ::testing::Return;
 
+namespace {
+
 using child_iter = std::vector<pud_node_id>::const_iterator;
 
 struct descent_t {
-    pud_node_id node;
+    pud_node_id at;
+    pud_node_id node() const { return at; }
+    std::optional<descent_t> descend(pud_node_id child) const;
     bool operator==(const descent_t&) const = default;
 };
 
@@ -32,6 +36,12 @@ struct MockDescend {
     MOCK_METHOD(std::optional<descent_t>, descend, (descent_t, pud_node_id));
 };
 
+MockDescend* descend_ops = nullptr;
+
+std::optional<descent_t> descent_t::descend(pud_node_id child) const {
+    return descend_ops->descend(*this, child);
+}
+
 struct MockCallSite {
     MOCK_METHOD(size_t, get, (pud_node_id));
 };
@@ -42,7 +52,6 @@ using test_witness_head_t = pud_witness_search_head<
     MockCheckLeaf,
     MockCheckRefuted,
     MockGetChildren,
-    MockDescend,
     MockCallSite>;
 
 struct PudWitnessSearchHeadTest : public ::testing::Test {
@@ -68,11 +77,12 @@ struct PudWitnessSearchHeadTest : public ::testing::Test {
 
     test_witness_head_t make_head(pud_node_id node) {
         return test_witness_head_t{
-            leaves, refuted_nodes, children, descend, call_sites,
+            leaves, refuted_nodes, children, call_sites,
             descent_t{node}};
     }
 
     void SetUp() override {
+        descend_ops = &descend;
         ON_CALL(leaves, check_leaf(_)).WillByDefault(Return(false));
         ON_CALL(children, get(_)).WillByDefault([&](pud_node_id id) -> const std::vector<pud_node_id>& {
             return sequences.at(id);
@@ -214,7 +224,7 @@ TEST_F(PudWitnessSearchHeadTest, AdvanceReturnsFirstChildHandleAndRootSiblingIte
     ASSERT_TRUE(head.resume().has_value());
     auto result = head.advance();
     ASSERT_TRUE(result.has_value());
-    EXPECT_EQ(result->root_descent.node, left);
+    EXPECT_EQ(result->root_descent.node(), left);
     EXPECT_EQ(*result->root_next_sibling_it, right);
     EXPECT_EQ(result->root_end_sibling_it, sequences[root].end());
 }
@@ -231,7 +241,7 @@ TEST_F(PudWitnessSearchHeadTest, AdvanceThenResumeFindsLeafInRemainingFrame) {
     ASSERT_EQ(head.resume().value(), deep_leaf);
     auto advanced = head.advance();
     ASSERT_TRUE(advanced.has_value());
-    EXPECT_EQ(advanced->root_descent.node, left);
+    EXPECT_EQ(advanced->root_descent.node(), left);
     // resume from the remaining frame — deep_leaf is still the active leaf
     EXPECT_EQ(head.resume().value(), deep_leaf);
 }
@@ -333,7 +343,7 @@ TEST_F(PudWitnessSearchHeadTest, ExpandedLeafAfterAdvanceResumedFindsDeepChild) 
     ASSERT_EQ(head.resume().value(), left_1);
     auto advanced = head.advance();
     ASSERT_TRUE(advanced.has_value());
-    ASSERT_EQ(advanced->root_descent.node, left);
+    ASSERT_EQ(advanced->root_descent.node(), left);
     EXPECT_EQ(head.resume().value(), deep_a);
 }
 
@@ -352,7 +362,7 @@ TEST_F(PudWitnessSearchHeadTest, ExpandedLeafWithDeadChildrenBacktracksToSibling
     ASSERT_EQ(head.resume().value(), left_1);
     auto advanced = head.advance();
     ASSERT_TRUE(advanced.has_value());
-    ASSERT_EQ(advanced->root_descent.node, left);
+    ASSERT_EQ(advanced->root_descent.node(), left);
     // expanded left_1's children are all dead — resume backtracks to left_2
     EXPECT_EQ(head.resume().value(), left_2);
 }
@@ -483,3 +493,5 @@ TEST_F(PudWitnessSearchHeadTest, ForkedHeadSkipsRefutedNodesOnItsCopiedPath) {
     test_witness_head_t forked{head, descent_t{root}};
     EXPECT_EQ(forked.resume().value(), right);
 }
+
+}  // namespace

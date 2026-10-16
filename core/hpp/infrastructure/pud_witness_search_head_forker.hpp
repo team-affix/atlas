@@ -9,7 +9,6 @@ template<
     typename ICheckNodeLeaf,
     typename ICheckNodeRefuted,
     typename IGetNodeChildren,
-    typename IDescend,
     typename IGetCallSiteIdx>
 struct pud_witness_search_head_forker {
     using head_type = pud_witness_search_head<
@@ -18,7 +17,6 @@ struct pud_witness_search_head_forker {
         ICheckNodeLeaf,
         ICheckNodeRefuted,
         IGetNodeChildren,
-        IDescend,
         IGetCallSiteIdx>;
 
     head_type fork(const head_type& other, Descent search_root_descent) const;
@@ -30,10 +28,9 @@ template<
     typename ICNL,
     typename ICNR,
     typename IGNC,
-    typename IDQN,
     typename IGCSI>
-typename pud_witness_search_head_forker<D, CI, ICNL, ICNR, IGNC, IDQN, IGCSI>::head_type
-pud_witness_search_head_forker<D, CI, ICNL, ICNR, IGNC, IDQN, IGCSI>::fork(const head_type& other, D search_root_descent) const {
+typename pud_witness_search_head_forker<D, CI, ICNL, ICNR, IGNC, IGCSI>::head_type
+pud_witness_search_head_forker<D, CI, ICNL, ICNR, IGNC, IGCSI>::fork(const head_type& other, D search_root_descent) const {
     return head_type{other, search_root_descent};
 }
 

@@ -7,7 +7,6 @@
 #include "value_objects/expr.hpp"
 #include "value_objects/framed_expr.hpp"
 #include "value_objects/pud_node_id.hpp"
-#include "value_objects/pud_query_descent.hpp"
 #include "value_objects/pud_ubs_state.hpp"
 
 // Resolves a caller's goal (frame 0) against every root's head lifted to the frame offset,
@@ -33,7 +32,7 @@ struct pud_query_opener {
         IMakeNormalizer& make_normalizer,
         IMakeUnifier& make_unifier,
         IGetNodeAddedSubstitutions& get_node_added_substitutions);
-    std::vector<pud_query_descent<ReplayDescent>> open(
+    std::vector<ReplayDescent> open(
         const pud_ubs_state& caller_ubs_state,
         const expr* goal,
         uint32_t frame_offset);
@@ -74,11 +73,11 @@ PUD_QUERY_OPENER::pud_query_opener(
     , get_node_added_substitutions_(get_node_added_substitutions) {}
 
 PUD_QUERY_OPENER_TEMPLATE
-std::vector<pud_query_descent<ReplayDescent>> PUD_QUERY_OPENER::open(
+std::vector<ReplayDescent> PUD_QUERY_OPENER::open(
     const pud_ubs_state& caller_ubs_state,
     const expr* goal,
     uint32_t frame_offset) {
-    std::vector<pud_query_descent<ReplayDescent>> root_descents;
+    std::vector<ReplayDescent> root_descents;
     for (pud_node_id root : get_roots_.get()) {
         pud_transient_ubs_state transient_ubs_state{caller_ubs_state};
         BindMap bind_map = transient_ubs_state.make_bind_map(make_var_, make_functor_);
@@ -86,17 +85,15 @@ std::vector<pud_query_descent<ReplayDescent>> PUD_QUERY_OPENER::open(
         Unifier unifier = make_unifier_.make(normalizer, bind_map);
         if (!unifier.unify(framed_expr{goal, 0}, framed_expr{get_node_head_.get(root), frame_offset}))
             continue;
-        root_descents.push_back(pud_query_descent<ReplayDescent>{
+        root_descents.push_back(ReplayDescent{
+            make_var_,
+            make_functor_,
+            make_normalizer_,
+            make_unifier_,
+            get_node_added_substitutions_,
             root,
-            ReplayDescent{
-                make_var_,
-                make_functor_,
-                make_normalizer_,
-                make_unifier_,
-                get_node_added_substitutions_,
-                transient_ubs_state.to_persistent_state(),
-                frame_offset},
-        });
+            transient_ubs_state.to_persistent_state(),
+            frame_offset});
     }
     return root_descents;
 }

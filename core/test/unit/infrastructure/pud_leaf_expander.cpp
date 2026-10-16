@@ -6,7 +6,6 @@
 #include <gmock/gmock.h>
 #include <immer/map.hpp>
 #include "infrastructure/pud_leaf_expander.hpp"
-#include "value_objects/pud_query_descent.hpp"
 #include "value_objects/pud_ubs_state.hpp"
 
 using ::testing::_;
@@ -69,11 +68,11 @@ struct MockGetNodeDescent {
 struct MockGetQueryCandidates {
     MOCK_METHOD(const std::unordered_set<pud_mhcs_head_id>&, get_candidates, (pud_mhq_head_id));
 };
-struct MockGetCandidateDescent {
-    MOCK_METHOD(const pud_query_descent<int>&, get_descent, (pud_mhcs_head_id));
+struct MockGetCandidatePath {
+    MOCK_METHOD(std::vector<pud_node_id>, get_path, (pud_mhcs_head_id));
 };
 struct MockAcceptCandidate {
-    MOCK_METHOD(pud_child_delta, accept, (const pud_ubs_state&, uint32_t, const expr*, pud_node_id));
+    MOCK_METHOD(pud_child_delta, accept, (const pud_ubs_state&, uint32_t, const expr*, const std::vector<pud_node_id>&));
 };
 struct MockMakeChild {
     MOCK_METHOD(pud_node_id, make, (pud_node_id, const pud_child_delta&));
@@ -113,7 +112,7 @@ struct MockEraseNodeDescent {
 };
 
 using test_expander_t = pud_leaf_expander<
-    NiceMock<MockGetNodeDescent>, NiceMock<MockGetQueryCandidates>, NiceMock<MockGetCandidateDescent>,
+    NiceMock<MockGetNodeDescent>, NiceMock<MockGetQueryCandidates>, NiceMock<MockGetCandidatePath>,
     NiceMock<MockAcceptCandidate>, NiceMock<MockMakeChild>, NiceMock<MockStoreCallSite>,
     NiceMock<MockStoreChildren>, NiceMock<MockUnsetLeaf>, NiceMock<MockStoreLiveChildCount>,
     NiceMock<MockPropagateRefutation>, NiceMock<MockInvalidateLeaves>, NiceMock<MockGetQueryHeadNode>,
@@ -125,12 +124,12 @@ const expr* expr_at(uintptr_t address) {
 }
 
 // Leaf 1 (descent 10) is expanded at goal 2, whose query head 40 has candidates 31 and 30,
-// positioned at nodes 70 and 60. Children are made as nodes 100, 101 with descents 1000+.
+// at the ends of paths {50, 70} and {50, 60}. Children are made as nodes 100, 101 with descents 1000+.
 struct PudLeafExpanderTest : public ::testing::Test {
     NiceMock<DescentOps> ops;
     NiceMock<MockGetNodeDescent> get_descent;
     NiceMock<MockGetQueryCandidates> query_candidates;
-    NiceMock<MockGetCandidateDescent> candidate_descents;
+    NiceMock<MockGetCandidatePath> candidate_paths;
     NiceMock<MockAcceptCandidate> acceptor;
     NiceMock<MockMakeChild> child_maker;
     NiceMock<MockStoreCallSite> call_sites;
@@ -145,7 +144,7 @@ struct PudLeafExpanderTest : public ::testing::Test {
     NiceMock<MockStoreNodeDescent> store_descent;
     NiceMock<MockEraseNodeDescent> erase_descent;
     test_expander_t expander{
-        get_descent, query_candidates, candidate_descents, acceptor, child_maker, call_sites,
+        get_descent, query_candidates, candidate_paths, acceptor, child_maker, call_sites,
         children, leaves, live_child_counts, propagator, invalidator, head_nodes, refuter,
         refuted_nodes, store_descent, erase_descent};
 
@@ -155,8 +154,8 @@ struct PudLeafExpanderTest : public ::testing::Test {
     pud_ubs_state leaf_ubs_state;
     body_goal_exprs_t leaf_goals = body_goal_exprs_t{}.set(2, expr_at(0x20)).set(3, expr_at(0x30));
     std::unordered_set<pud_mhcs_head_id> candidates{31, 30};
-    pud_query_descent<int> candidate_30{.node = 60, .replay = 0};
-    pud_query_descent<int> candidate_31{.node = 70, .replay = 0};
+    std::vector<pud_node_id> path_30{50, 60};
+    std::vector<pud_node_id> path_31{50, 70};
     std::vector<body_goal_id> no_refuted_goals;
     std::vector<body_goal_id> one_refuted_goal{4};
     pud_child_delta delta_60{.substitutions = {}, .body_goals = {}, .var_count = 1};
@@ -176,10 +175,10 @@ struct PudLeafExpanderTest : public ::testing::Test {
             return static_cast<int>(1000 + child);
         });
         ON_CALL(query_candidates, get_candidates(40)).WillByDefault(ReturnRef(candidates));
-        ON_CALL(candidate_descents, get_descent(30)).WillByDefault(ReturnRef(candidate_30));
-        ON_CALL(candidate_descents, get_descent(31)).WillByDefault(ReturnRef(candidate_31));
-        ON_CALL(acceptor, accept(_, _, _, 60)).WillByDefault(Return(delta_60));
-        ON_CALL(acceptor, accept(_, _, _, 70)).WillByDefault(Return(delta_70));
+        ON_CALL(candidate_paths, get_path(30)).WillByDefault(Return(path_30));
+        ON_CALL(candidate_paths, get_path(31)).WillByDefault(Return(path_31));
+        ON_CALL(acceptor, accept(_, _, _, path_30)).WillByDefault(Return(delta_60));
+        ON_CALL(acceptor, accept(_, _, _, path_31)).WillByDefault(Return(delta_70));
         ON_CALL(child_maker, make(_, _)).WillByDefault([&](pud_node_id, const pud_child_delta&) {
             return next_child++;
         });
@@ -191,8 +190,8 @@ struct PudLeafExpanderTest : public ::testing::Test {
 // ---------- children ----------
 
 TEST_F(PudLeafExpanderTest, EveryCandidateIsAcceptedInTheLeafsEnvironment) {
-    EXPECT_CALL(acceptor, accept(Ref(leaf_ubs_state), 5u, expr_at(0x20), 60u)).WillOnce(Return(delta_60));
-    EXPECT_CALL(acceptor, accept(Ref(leaf_ubs_state), 5u, expr_at(0x20), 70u)).WillOnce(Return(delta_70));
+    EXPECT_CALL(acceptor, accept(Ref(leaf_ubs_state), 5u, expr_at(0x20), path_30)).WillOnce(Return(delta_60));
+    EXPECT_CALL(acceptor, accept(Ref(leaf_ubs_state), 5u, expr_at(0x20), path_31)).WillOnce(Return(delta_70));
     expander.expand(leaf, goal);
 }
 

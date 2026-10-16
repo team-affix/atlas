@@ -13,14 +13,12 @@ template<
     typename ICheckNodeLeaf,
     typename ICheckNodeRefuted,
     typename IGetNodeChildren,
-    typename IDescend,
     typename IGetCallSiteIdx>
 struct pud_witness_search_head {
     pud_witness_search_head(
         ICheckNodeLeaf& check_node_leaf,
         ICheckNodeRefuted& check_node_refuted,
         IGetNodeChildren& get_node_children,
-        IDescend& descend,
         IGetCallSiteIdx& get_call_site_idx,
         Descent search_root_descent);
     pud_witness_search_head(
@@ -43,37 +41,33 @@ private:
     ICheckNodeLeaf& check_node_leaf_;
     ICheckNodeRefuted& check_node_refuted_;
     IGetNodeChildren& get_node_children_;
-    IDescend& descend_;
     IGetCallSiteIdx& get_call_site_idx_;
 
     Descent search_root_descent_;
     std::deque<frame> frame_stack_;
 };
 
-template<typename D, typename NI, typename ICNL, typename ICNR, typename IGCN, typename IDESC, typename IGCSI>
-pud_witness_search_head<D, NI, ICNL, ICNR, IGCN, IDESC, IGCSI>::pud_witness_search_head(
+template<typename D, typename NI, typename ICNL, typename ICNR, typename IGCN, typename IGCSI>
+pud_witness_search_head<D, NI, ICNL, ICNR, IGCN, IGCSI>::pud_witness_search_head(
     ICNL& check_node_leaf,
     ICNR& check_node_refuted,
     IGCN& get_node_children,
-    IDESC& descend,
     IGCSI& get_call_site_idx,
     D search_root_descent) :
     check_node_leaf_(check_node_leaf),
     check_node_refuted_(check_node_refuted),
     get_node_children_(get_node_children),
-    descend_(descend),
     get_call_site_idx_(get_call_site_idx),
     search_root_descent_(search_root_descent)
 {}
 
-template<typename D, typename CI, typename ICNL, typename ICNR, typename IGCN, typename IDESC, typename IGCSI>
-pud_witness_search_head<D, CI, ICNL, ICNR, IGCN, IDESC, IGCSI>::pud_witness_search_head(
+template<typename D, typename CI, typename ICNL, typename ICNR, typename IGCN, typename IGCSI>
+pud_witness_search_head<D, CI, ICNL, ICNR, IGCN, IGCSI>::pud_witness_search_head(
     const pud_witness_search_head& other,
     D search_root_descent) :
     check_node_leaf_(other.check_node_leaf_),
     check_node_refuted_(other.check_node_refuted_),
     get_node_children_(other.get_node_children_),
-    descend_(other.descend_),
     get_call_site_idx_(other.get_call_site_idx_),
     search_root_descent_(search_root_descent)
 {
@@ -89,8 +83,7 @@ pud_witness_search_head<D, CI, ICNL, ICNR, IGCN, IDESC, IGCSI>::pud_witness_sear
         const D& other_descent = other_frame.descent.value();
 
         frame new_frame = {
-            .descent = descend_.descend(
-                parent_descent, other_descent.node),
+            .descent = parent_descent.descend(other_descent.node()),
             .parent_descent = parent_descent,
             .next_sibling_it = other_frame.next_sibling_it,
             .end_sibling_it = other_frame.end_sibling_it,
@@ -105,8 +98,8 @@ pud_witness_search_head<D, CI, ICNL, ICNR, IGCN, IDESC, IGCSI>::pud_witness_sear
     }
 }
 
-template<typename D, typename NI, typename ICNL, typename ICNR, typename IGCN, typename IDESC, typename IGCSI>
-std::optional<pud_witness_advance_result<D, NI>> pud_witness_search_head<D, NI, ICNL, ICNR, IGCN, IDESC, IGCSI>::advance() {
+template<typename D, typename NI, typename ICNL, typename ICNR, typename IGCN, typename IGCSI>
+std::optional<pud_witness_advance_result<D, NI>> pud_witness_search_head<D, NI, ICNL, ICNR, IGCN, IGCSI>::advance() {
     if (frame_stack_.empty())
         return std::nullopt;
 
@@ -127,17 +120,17 @@ std::optional<pud_witness_advance_result<D, NI>> pud_witness_search_head<D, NI, 
     return result;
 }
 
-template<typename D, typename NI, typename ICNL, typename ICNR, typename IGCN, typename IDESC, typename IGCSI>
-std::optional<pud_node_id> pud_witness_search_head<D, NI, ICNL, ICNR, IGCN, IDESC, IGCSI>::resume() {
+template<typename D, typename NI, typename ICNL, typename ICNR, typename IGCN, typename IGCSI>
+std::optional<pud_node_id> pud_witness_search_head<D, NI, ICNL, ICNR, IGCN, IGCSI>::resume() {
     // handle empty stack
     if (frame_stack_.empty()) {
-        if (check_node_refuted_.check_refuted(search_root_descent_.node))
+        if (check_node_refuted_.check_refuted(search_root_descent_.node()))
             return std::nullopt;
 
-        if (check_node_leaf_.check_leaf(search_root_descent_.node))
-            return search_root_descent_.node;
+        if (check_node_leaf_.check_leaf(search_root_descent_.node()))
+            return search_root_descent_.node();
 
-        const auto& children = get_node_children_.get(search_root_descent_.node);
+        const auto& children = get_node_children_.get(search_root_descent_.node());
 
         descend(search_root_descent_, children.begin(), children.end());
     }
@@ -172,7 +165,7 @@ std::optional<pud_node_id> pud_witness_search_head<D, NI, ICNL, ICNR, IGCN, IDES
 
         const D& current_descent = optional_current_descent.value();
         
-        pud_node_id current_node = current_descent.node;
+        pud_node_id current_node = current_descent.node();
         
         if (check_node_refuted_.check_refuted(current_node)) {
             current_frame.descent = std::nullopt;
@@ -190,20 +183,18 @@ std::optional<pud_node_id> pud_witness_search_head<D, NI, ICNL, ICNR, IGCN, IDES
     return std::nullopt;
 }
 
-template<typename D, typename NI, typename ICNL, typename ICNR, typename IGCN, typename IDESC, typename IGCSI>
-std::optional<D> pud_witness_search_head<D, NI, ICNL, ICNR, IGCN, IDESC, IGCSI>::try_replace_sibling(const D& parent_descent, NI& next_sibling_it, NI end_sibling_it) {
+template<typename D, typename NI, typename ICNL, typename ICNR, typename IGCN, typename IGCSI>
+std::optional<D> pud_witness_search_head<D, NI, ICNL, ICNR, IGCN, IGCSI>::try_replace_sibling(const D& parent_descent, NI& next_sibling_it, NI end_sibling_it) {
     while (next_sibling_it != end_sibling_it) {
-        if (auto next_sibling_descent =
-            descend_.descend(
-                parent_descent, *(next_sibling_it++))) {
+        if (auto next_sibling_descent = parent_descent.descend(*(next_sibling_it++))) {
             return next_sibling_descent;
         }
     }
     return std::nullopt;
 }
 
-template<typename D, typename NI, typename ICNL, typename ICNR, typename IGCN, typename IDESC, typename IGCSI>
-void pud_witness_search_head<D, NI, ICNL, ICNR, IGCN, IDESC, IGCSI>::descend(D parent_descent, NI next_sibling_it, NI end_sibling_it) {
+template<typename D, typename NI, typename ICNL, typename ICNR, typename IGCN, typename IGCSI>
+void pud_witness_search_head<D, NI, ICNL, ICNR, IGCN, IGCSI>::descend(D parent_descent, NI next_sibling_it, NI end_sibling_it) {
     frame_stack_.push_back({
         .descent = std::nullopt,
         .parent_descent = parent_descent,
@@ -212,8 +203,8 @@ void pud_witness_search_head<D, NI, ICNL, ICNR, IGCN, IDESC, IGCSI>::descend(D p
     });
 }
 
-template<typename D, typename NI, typename ICNL, typename ICNR, typename IGCN, typename IDESC, typename IGCSI>
-void pud_witness_search_head<D, NI, ICNL, ICNR, IGCN, IDESC, IGCSI>::ascend() {
+template<typename D, typename NI, typename ICNL, typename ICNR, typename IGCN, typename IGCSI>
+void pud_witness_search_head<D, NI, ICNL, ICNR, IGCN, IGCSI>::ascend() {
     frame_stack_.pop_back();
     if (!frame_stack_.empty())
         frame_stack_.back().descent = std::nullopt;

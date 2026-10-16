@@ -14,7 +14,8 @@ using ::testing::Return;
 namespace {
 
 struct descent_t {
-    pud_node_id node;
+    pud_node_id at;
+    pud_node_id node() const { return at; }
     int version;
     bool operator==(const descent_t&) const = default;
 };
@@ -198,9 +199,9 @@ TEST_F(PudMhqQueryHeadIntegrationTest, ForkSkipsCandidatesRefutedBeforeTheFork) 
 
 TEST_F(PudMhqQueryHeadIntegrationTest, ForkPassesSpecializedDescents) {
     add_three_live();
-    const descent_t specialized_a{axiom_a.node, 5};
-    const descent_t specialized_b{axiom_b.node, 5};
-    const descent_t specialized_c{axiom_c.node, 5};
+    const descent_t specialized_a{axiom_a.node(), 5};
+    const descent_t specialized_b{axiom_b.node(), 5};
+    const descent_t specialized_c{axiom_c.node(), 5};
     expect_fork(10, specialized_a, 110);
     expect_fork(20, specialized_b, 120);
     expect_fork(30, specialized_c, 130);

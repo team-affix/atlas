@@ -9,10 +9,14 @@ using ::testing::NiceMock;
 using ::testing::Return;
 using ::testing::ReturnRef;
 
+namespace {
+
 using child_iter = std::vector<pud_node_id>::const_iterator;
 
 struct descent_t {
-    pud_node_id node;
+    pud_node_id at;
+    pud_node_id node() const { return at; }
+    std::optional<descent_t> descend(pud_node_id child) const;
     bool operator==(const descent_t&) const = default;
 };
 
@@ -29,20 +33,27 @@ struct MockGetChildren {
 struct MockDescend {
     MOCK_METHOD(std::optional<descent_t>, descend, (descent_t, pud_node_id));
 };
+
+MockDescend* descend_ops = nullptr;
+
+std::optional<descent_t> descent_t::descend(pud_node_id child) const {
+    return descend_ops->descend(*this, child);
+}
 struct MockCallSite {
     MOCK_METHOD(size_t, get, (pud_node_id));
 };
 
 using test_head_t = pud_witness_search_head<
-    descent_t, child_iter, MockCheckLeaf, MockCheckRefuted, MockGetChildren, MockDescend, MockCallSite>;
+    descent_t, child_iter, MockCheckLeaf, MockCheckRefuted, MockGetChildren, MockCallSite>;
 
 struct PudWitnessSearchHeadForkerTest : public ::testing::Test {
+    void SetUp() override { descend_ops = &descend; }
     NiceMock<MockCheckLeaf> leaves;
     NiceMock<MockCheckRefuted> refuted_nodes;
     NiceMock<MockGetChildren> children;
     NiceMock<MockDescend> descend;
     NiceMock<MockCallSite> call_sites;
-    pud_witness_search_head_forker<descent_t, child_iter, MockCheckLeaf, MockCheckRefuted, MockGetChildren, MockDescend, MockCallSite> forker;
+    pud_witness_search_head_forker<descent_t, child_iter, MockCheckLeaf, MockCheckRefuted, MockGetChildren, MockCallSite> forker;
     pud_node_id root = 1;
     pud_node_id parent_node = 2;
     pud_node_id leaf = 3;
@@ -52,7 +63,7 @@ struct PudWitnessSearchHeadForkerTest : public ::testing::Test {
 
     test_head_t make_head(pud_node_id node) {
         return test_head_t{
-            leaves, refuted_nodes, children, descend, call_sites,
+            leaves, refuted_nodes, children, call_sites,
             descent_t{node}};
     }
 };
@@ -85,3 +96,5 @@ TEST_F(PudWitnessSearchHeadForkerTest, ForkOfALeafReportsThatLeaf) {
     ASSERT_TRUE(found.has_value());
     EXPECT_EQ(*found, root);
 }
+
+}  // namespace

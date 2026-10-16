@@ -46,6 +46,8 @@ struct PudReplayDescentIntegrationTest : public ::testing::Test {
         return exprs.make_functor(functors.id(name), std::move(args));
     }
 
+    const pud_node_id root = 0;
+
     std::optional<replay_descent_t> open(
         const pud_ubs_state& caller_state,
         const expr* query_expr,
@@ -63,6 +65,7 @@ struct PudReplayDescentIntegrationTest : public ::testing::Test {
             normalizer_factory_,
             unifier_factory_,
             node_specs_,
+            root,
             transient.to_persistent_state(),
             frame_offset};
     }
@@ -342,4 +345,28 @@ TEST_F(PudReplayDescentIntegrationTest, ParentUnchangedByChild) {
     ASSERT_TRUE(at_child.has_value());
     EXPECT_EQ(resolve_at_frame(*at_child, 2u, 0), functor("a", {}));
     EXPECT_EQ(resolve_at_frame(*opened, 2u, 0), var(0));
+}
+
+TEST_F(PudReplayDescentIntegrationTest, OpenedReplayIsAtTheRoot) {
+    const expr* head = functor("main", {var(0)});
+    std::optional<replay_descent_t> opened = open({}, head, head, 0);
+    ASSERT_TRUE(opened.has_value());
+    EXPECT_EQ(opened->node(), root);
+}
+
+TEST_F(PudReplayDescentIntegrationTest, DescendedReplayIsAtTheChildAndTheParentStays) {
+    const pud_node_id child = 1;
+    const pud_node_id grandchild = 2;
+    node_specs_.store(child, {});
+    node_specs_.store(grandchild, {});
+    const expr* head = functor("main", {var(0)});
+    std::optional<replay_descent_t> opened = open({}, head, head, 0);
+    ASSERT_TRUE(opened.has_value());
+    std::optional<replay_descent_t> at_child = opened->descend(child);
+    ASSERT_TRUE(at_child.has_value());
+    std::optional<replay_descent_t> at_grandchild = at_child->descend(grandchild);
+    ASSERT_TRUE(at_grandchild.has_value());
+    EXPECT_EQ(at_child->node(), child);
+    EXPECT_EQ(at_grandchild->node(), grandchild);
+    EXPECT_EQ(opened->node(), root);
 }

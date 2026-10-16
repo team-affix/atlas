@@ -37,11 +37,9 @@
 #include "infrastructure/pud_node_id_sequencer.hpp"
 #include "infrastructure/pud_node_live_child_counts.hpp"
 #include "infrastructure/pud_node_parents.hpp"
-#include "infrastructure/pud_node_path_finder.hpp"
 #include "infrastructure/pud_node_refuter.hpp"
 #include "infrastructure/pud_normalizer_factory.hpp"
 #include "infrastructure/pud_open_body_goal_finder.hpp"
-#include "infrastructure/pud_query_descender.hpp"
 #include "infrastructure/pud_query_head.hpp"
 #include "infrastructure/pud_query_head_factory.hpp"
 #include "infrastructure/pud_query_head_forker.hpp"
@@ -62,7 +60,6 @@
 #include "infrastructure/pud_witness_search_head.hpp"
 #include "infrastructure/pud_witness_search_head_factory.hpp"
 #include "infrastructure/pud_witness_search_head_forker.hpp"
-#include "value_objects/pud_query_descent.hpp"
 
 struct pud_manifest {
     using child_iter_t = std::vector<pud_node_id>::const_iterator;
@@ -82,39 +79,37 @@ struct pud_manifest {
     using replay_descent_t = pud_replay_descent<
         bind_map_t, normalizer_t, unifier_t, expr_pool, expr_pool,
         normalizer_factory_t, unifier_factory_t, pud_node_added_substitutions>;
-    using query_descent_t = pud_query_descent<replay_descent_t>;
-    using query_descender_t = pud_query_descender<replay_descent_t>;
 
     using witness_search_head_t = pud_witness_search_head<
-        query_descent_t, child_iter_t, pud_leaf_nodes, refuted_node_checker_t, pud_children,
-        query_descender_t, pud_call_sites>;
+        replay_descent_t, child_iter_t, pud_leaf_nodes, refuted_node_checker_t, pud_children,
+        pud_call_sites>;
     using witness_search_head_factory_t = pud_witness_search_head_factory<
-        query_descent_t, child_iter_t, pud_leaf_nodes, refuted_node_checker_t, pud_children,
-        query_descender_t, pud_call_sites>;
+        replay_descent_t, child_iter_t, pud_leaf_nodes, refuted_node_checker_t, pud_children,
+        pud_call_sites>;
     using witness_search_head_forker_t = pud_witness_search_head_forker<
-        query_descent_t, child_iter_t, pud_leaf_nodes, refuted_node_checker_t, pud_children,
-        query_descender_t, pud_call_sites>;
+        replay_descent_t, child_iter_t, pud_leaf_nodes, refuted_node_checker_t, pud_children,
+        pud_call_sites>;
     using mhws_t = pud_mhws<
-        query_descent_t, child_iter_t, witness_search_head_t,
+        replay_descent_t, child_iter_t, witness_search_head_t,
         witness_search_head_factory_t, witness_search_head_forker_t>;
 
     using candidate_specialization_head_t = pud_candidate_specialization_head<
-        query_descent_t, child_iter_t, mhws_t, mhws_t, mhws_t,
-        pud_leaf_nodes, refuted_node_checker_t, pud_children, query_descender_t>;
+        replay_descent_t, child_iter_t, mhws_t, mhws_t, mhws_t,
+        pud_leaf_nodes, refuted_node_checker_t, pud_children>;
     using candidate_specialization_head_factory_t = pud_candidate_specialization_head_factory<
-        query_descent_t, child_iter_t, mhws_t, mhws_t, mhws_t,
-        pud_leaf_nodes, refuted_node_checker_t, pud_children, query_descender_t>;
+        replay_descent_t, child_iter_t, mhws_t, mhws_t, mhws_t,
+        pud_leaf_nodes, refuted_node_checker_t, pud_children>;
     using candidate_specialization_head_forker_t = pud_candidate_specialization_head_forker<
-        query_descent_t, child_iter_t, mhws_t, mhws_t, mhws_t,
-        pud_leaf_nodes, refuted_node_checker_t, pud_children, query_descender_t>;
+        replay_descent_t, child_iter_t, mhws_t, mhws_t, mhws_t,
+        pud_leaf_nodes, refuted_node_checker_t, pud_children>;
     using mhcs_t = pud_mhcs<
-        query_descent_t, candidate_specialization_head_t,
+        replay_descent_t, candidate_specialization_head_t,
         candidate_specialization_head_factory_t, candidate_specialization_head_forker_t, mhws_t>;
 
-    using query_head_t = pud_query_head<query_descent_t, mhcs_t, mhcs_t>;
-    using query_head_factory_t = pud_query_head_factory<query_descent_t, mhcs_t, mhcs_t>;
-    using query_head_forker_t = pud_query_head_forker<query_descent_t, mhcs_t, mhcs_t>;
-    using mhq_t = pud_mhq<query_descent_t, query_head_t, query_head_factory_t, query_head_forker_t, mhcs_t>;
+    using query_head_t = pud_query_head<replay_descent_t, mhcs_t, mhcs_t>;
+    using query_head_factory_t = pud_query_head_factory<replay_descent_t, mhcs_t, mhcs_t>;
+    using query_head_forker_t = pud_query_head_forker<replay_descent_t, mhcs_t, mhcs_t>;
+    using mhq_t = pud_mhq<replay_descent_t, query_head_t, query_head_factory_t, query_head_forker_t, mhcs_t>;
 
     using query_opener_t = pud_query_opener<
         replay_descent_t, bind_map_t, normalizer_t, unifier_t, pud_root_nodes, pud_node_heads,
@@ -138,11 +133,10 @@ struct pud_manifest {
         pud_node_added_body_goals, pud_call_sites, query_opener_t, mhq_t, mhq_t, mhq_t,
         pud_query_head_nodes>;
 
-    using node_path_finder_t = pud_node_path_finder<pud_root_nodes, pud_node_parents>;
     using open_body_goal_finder_t = pud_open_body_goal_finder<pud_node_added_body_goals, pud_call_sites>;
     using acceptor_t = pud_acceptor<
         bind_map_t, normalizer_t, logging_unifier_t, logger_t, translating_normalizer_t,
-        node_path_finder_t, open_body_goal_finder_t, pud_node_heads, pud_node_added_substitutions,
+        open_body_goal_finder_t, pud_node_heads, pud_node_added_substitutions,
         globalizer, expr_pool, expr_pool, normalizer_factory_t>;
     using child_maker_t = pud_child_maker<
         pud_node_id_sequencer, pud_node_added_substitutions, pud_node_added_body_goals,
@@ -190,7 +184,6 @@ struct pud_manifest {
 
     normalizer_factory_t                    normalizer_factory_;
     unifier_factory_t                       unifier_factory_;
-    query_descender_t                       query_descender_;
 
     witness_search_head_factory_t           witness_search_head_factory_;
     witness_search_head_forker_t            witness_search_head_forker_;
@@ -206,7 +199,6 @@ struct pud_manifest {
     node_descents_t                         node_descents_;
     root_descent_maker_t                    root_descent_maker_;
 
-    node_path_finder_t                      node_path_finder_;
     open_body_goal_finder_t                 open_body_goal_finder_;
     acceptor_t                              acceptor_;
     child_maker_t                           child_maker_;

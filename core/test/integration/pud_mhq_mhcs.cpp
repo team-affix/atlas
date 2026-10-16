@@ -17,7 +17,8 @@ using ::testing::UnorderedElementsAre;
 namespace {
 
 struct descent_t {
-    pud_node_id node;
+    pud_node_id at;
+    pud_node_id node() const { return at; }
     int version;
     bool operator==(const descent_t&) const = default;
 };
@@ -204,8 +205,8 @@ TEST_F(PudMhqMhcsIntegrationTest, ChoicePointThatRecoversKeepsQueryLive) {
 
 TEST_F(PudMhqMhcsIntegrationTest, ForkForksEveryCandidateSpecialization) {
     add_two_self_witnessed();
-    const descent_t specialized_a{axiom_a.node, 4};
-    const descent_t specialized_b{axiom_b.node, 4};
+    const descent_t specialized_a{axiom_a.node(), 4};
+    const descent_t specialized_b{axiom_b.node(), 4};
     EXPECT_CALL(fork_candidate, fork(_, specialized_a)).WillOnce(Return(MockCandidateHead{}));
     EXPECT_CALL(fork_candidate, fork(_, specialized_b)).WillOnce(Return(MockCandidateHead{}));
     EXPECT_CALL(ops, resume())

@@ -25,9 +25,11 @@ struct pud_replay_descent {
         IMakeNormalizer& make_normalizer,
         IMakeUnifier& make_unifier,
         IGetNodeAddedSubstitutions& get_node_added_substitutions,
+        pud_node_id root,
         const pud_ubs_state& caller_ubs_state,
         uint32_t frame_offset);
     std::optional<pud_replay_descent> descend(pud_node_id child) const;
+    pud_node_id node() const;
     const pud_ubs_state& ubs_state() const;
 private:
     IMakeVar* make_var_;
@@ -35,6 +37,7 @@ private:
     IMakeNormalizer* make_normalizer_;
     IMakeUnifier* make_unifier_;
     IGetNodeAddedSubstitutions* get_node_added_substitutions_;
+    pud_node_id node_;
     uint32_t frame_offset_;
     pud_ubs_state ubs_state_;
 };
@@ -54,6 +57,7 @@ PUD_REPLAY_DESCENT::pud_replay_descent(
     IMakeNormalizer& make_normalizer,
     IMakeUnifier& make_unifier,
     IGetNodeAddedSubstitutions& get_node_added_substitutions,
+    pud_node_id root,
     const pud_ubs_state& caller_ubs_state,
     uint32_t frame_offset)
     : make_var_(&make_var)
@@ -61,6 +65,7 @@ PUD_REPLAY_DESCENT::pud_replay_descent(
     , make_normalizer_(&make_normalizer)
     , make_unifier_(&make_unifier)
     , get_node_added_substitutions_(&get_node_added_substitutions)
+    , node_(root)
     , frame_offset_(frame_offset)
     , ubs_state_(caller_ubs_state) {}
 
@@ -77,8 +82,14 @@ std::optional<PUD_REPLAY_DESCENT> PUD_REPLAY_DESCENT::descend(pud_node_id child)
             return std::nullopt;
     }
     PUD_REPLAY_DESCENT result = *this;
+    result.node_ = child;
     result.ubs_state_ = transient_ubs_state.to_persistent_state();
     return result;
+}
+
+PUD_REPLAY_DESCENT_TEMPLATE
+pud_node_id PUD_REPLAY_DESCENT::node() const {
+    return node_;
 }
 
 PUD_REPLAY_DESCENT_TEMPLATE

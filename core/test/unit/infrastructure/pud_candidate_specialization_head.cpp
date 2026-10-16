@@ -10,10 +10,14 @@ using ::testing::_;
 using ::testing::NiceMock;
 using ::testing::Return;
 
+namespace {
+
 using child_iter = std::vector<pud_node_id>::const_iterator;
 
 struct descent_t {
-    pud_node_id node;
+    pud_node_id at;
+    pud_node_id node() const { return at; }
+    std::optional<descent_t> descend(pud_node_id child) const;
     bool operator==(const descent_t&) const = default;
 };
 
@@ -42,10 +46,16 @@ struct MockDescend {
     MOCK_METHOD(std::optional<descent_t>, descend, (descent_t, pud_node_id));
 };
 
+MockDescend* descend_ops = nullptr;
+
+std::optional<descent_t> descent_t::descend(pud_node_id child) const {
+    return descend_ops->descend(*this, child);
+}
+
 using test_head_t = pud_candidate_specialization_head<
     descent_t, child_iter,
     MockTryAddHead, MockAdvanceHead, MockTryForkWitnessHead,
-    MockCheckLeaf, MockCheckRefuted, MockGetChildren, MockDescend>;
+    MockCheckLeaf, MockCheckRefuted, MockGetChildren>;
 
 struct PudCandidateSpecializationHeadTest : public ::testing::Test {
     NiceMock<MockTryAddHead>    try_add;
@@ -65,7 +75,7 @@ struct PudCandidateSpecializationHeadTest : public ::testing::Test {
 
     test_head_t make_head(pud_node_id node) {
         return test_head_t{
-            try_add, advance_head, fork_witness, leaves, refuted_nodes, children, descend,
+            try_add, advance_head, fork_witness, leaves, refuted_nodes, children,
             descent_t{node}};
     }
 
@@ -94,6 +104,7 @@ struct PudCandidateSpecializationHeadTest : public ::testing::Test {
     }
 
     void SetUp() override {
+        descend_ops = &descend;
         ON_CALL(leaves, check_leaf(_)).WillByDefault(Return(false));
         ON_CALL(children, get(_)).WillByDefault(
             [&](pud_node_id id) -> const std::vector<pud_node_id>& {
@@ -651,3 +662,5 @@ TEST_F(PudCandidateSpecializationHeadTest, ForkedHeadAtARefutedNodeIsRefuted) {
     test_head_t forked{head, descent_t{root}};
     EXPECT_FALSE(forked.resume().has_value());
 }
+
+}  // namespace

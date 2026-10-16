@@ -14,8 +14,8 @@
 #include "value_objects/pud_ubs_state.hpp"
 #include "debug_assert.hpp"
 
-// Resolves the acceptor's call site goal against a candidate: the candidate's root head and
-// path substitutions are replayed at the acceptor's variable count, and the acceptor
+// Resolves the acceptor's call site goal against a candidate, given by its root-first path: the
+// candidate's root head and path substitutions are replayed at the acceptor's variable count, and the acceptor
 // representatives this touches become the child's substitutions. Everything the child stores
 // is fully normalized in the child's environment, its fresh variables numbered from the
 // acceptor's variable count.
@@ -25,7 +25,6 @@ template<
     typename Unifier,
     typename Logger,
     typename TranslatingNormalizer,
-    typename IFindNodePath,
     typename IFindOpenBodyGoals,
     typename IGetNodeHead,
     typename IGetNodeAddedSubstitutions,
@@ -35,7 +34,6 @@ template<
     typename IMakeNormalizer>
 struct pud_acceptor {
     pud_acceptor(
-        IFindNodePath& find_node_path,
         IFindOpenBodyGoals& find_open_body_goals,
         IGetNodeHead& get_node_head,
         IGetNodeAddedSubstitutions& get_node_added_substitutions,
@@ -47,9 +45,8 @@ struct pud_acceptor {
         const pud_ubs_state& acceptor_ubs_state,
         uint32_t acceptor_lvc,
         const expr* call_site_goal,
-        pud_node_id candidate);
+        const std::vector<pud_node_id>& candidate_path);
 private:
-    IFindNodePath& find_node_path_;
     IFindOpenBodyGoals& find_open_body_goals_;
     IGetNodeHead& get_node_head_;
     IGetNodeAddedSubstitutions& get_node_added_substitutions_;
@@ -61,18 +58,17 @@ private:
 
 #define PUD_ACCEPTOR_TEMPLATE                                                              \
     template<typename BindMap, typename Normalizer, typename Unifier, typename Logger,     \
-             typename TranslatingNormalizer, typename IFindNodePath,                       \
-             typename IFindOpenBodyGoals, typename IGetNodeHead,                           \
+             typename TranslatingNormalizer, typename IFindOpenBodyGoals,                  \
+             typename IGetNodeHead,                                                         \
              typename IGetNodeAddedSubstitutions, typename IGlobalize, typename IMakeVar,  \
              typename IMakeFunctor, typename IMakeNormalizer>
 #define PUD_ACCEPTOR                                                                       \
     pud_acceptor<BindMap, Normalizer, Unifier, Logger, TranslatingNormalizer,              \
-        IFindNodePath, IFindOpenBodyGoals, IGetNodeHead, IGetNodeAddedSubstitutions,       \
+        IFindOpenBodyGoals, IGetNodeHead, IGetNodeAddedSubstitutions,       \
         IGlobalize, IMakeVar, IMakeFunctor, IMakeNormalizer>
 
 PUD_ACCEPTOR_TEMPLATE
 PUD_ACCEPTOR::pud_acceptor(
-    IFindNodePath& find_node_path,
     IFindOpenBodyGoals& find_open_body_goals,
     IGetNodeHead& get_node_head,
     IGetNodeAddedSubstitutions& get_node_added_substitutions,
@@ -80,8 +76,7 @@ PUD_ACCEPTOR::pud_acceptor(
     IMakeVar& make_var,
     IMakeFunctor& make_functor,
     IMakeNormalizer& make_normalizer)
-    : find_node_path_(find_node_path)
-    , find_open_body_goals_(find_open_body_goals)
+    : find_open_body_goals_(find_open_body_goals)
     , get_node_head_(get_node_head)
     , get_node_added_substitutions_(get_node_added_substitutions)
     , globalize_(globalize)
@@ -94,9 +89,8 @@ pud_child_delta PUD_ACCEPTOR::accept(
     const pud_ubs_state& acceptor_ubs_state,
     uint32_t acceptor_lvc,
     const expr* call_site_goal,
-    pud_node_id candidate) {
-    const std::vector<pud_node_id> path = find_node_path_.find_path(candidate);
-    const std::vector<const expr*> open_body_goals = find_open_body_goals_.find_open_body_goals(path);
+    const std::vector<pud_node_id>& candidate_path) {
+    const std::vector<const expr*> open_body_goals = find_open_body_goals_.find_open_body_goals(candidate_path);
 
     pud_transient_ubs_state transient_ubs_state{acceptor_ubs_state};
     BindMap bind_map = transient_ubs_state.make_bind_map(make_var_, make_functor_);
@@ -107,10 +101,10 @@ pud_child_delta PUD_ACCEPTOR::accept(
 
     const bool resolved = unifier.unify(
         framed_expr{call_site_goal, 0},
-        framed_expr{get_node_head_.get(path.front()), acceptor_lvc});
+        framed_expr{get_node_head_.get(candidate_path.front()), acceptor_lvc});
     DEBUG_ASSERT(resolved);
-    for (size_t path_index = 1; path_index < path.size(); ++path_index) {
-        for (const pud_substitution& substitution : get_node_added_substitutions_.get(path.at(path_index))) {
+    for (size_t path_index = 1; path_index < candidate_path.size(); ++path_index) {
+        for (const pud_substitution& substitution : get_node_added_substitutions_.get(candidate_path.at(path_index))) {
             const bool replayed = unifier.unify(
                 framed_expr{make_var_.make_var(substitution.var_idx), acceptor_lvc},
                 framed_expr{substitution.value, acceptor_lvc});

@@ -9,10 +9,14 @@ using ::testing::NiceMock;
 using ::testing::Return;
 using ::testing::ReturnRef;
 
+namespace {
+
 using child_iter = std::vector<pud_node_id>::const_iterator;
 
 struct descent_t {
-    pud_node_id node;
+    pud_node_id at;
+    pud_node_id node() const { return at; }
+    std::optional<descent_t> descend(pud_node_id child) const;
     bool operator==(const descent_t&) const = default;
 };
 
@@ -29,20 +33,27 @@ struct MockGetChildren {
 struct MockDescend {
     MOCK_METHOD(std::optional<descent_t>, descend, (descent_t, pud_node_id));
 };
+
+MockDescend* descend_ops = nullptr;
+
+std::optional<descent_t> descent_t::descend(pud_node_id child) const {
+    return descend_ops->descend(*this, child);
+}
 struct MockCallSite {
     MOCK_METHOD(size_t, get, (pud_node_id));
 };
 
 using test_factory_t = pud_witness_search_head_factory<
-    descent_t, child_iter, MockCheckLeaf, MockCheckRefuted, MockGetChildren, MockDescend, MockCallSite>;
+    descent_t, child_iter, MockCheckLeaf, MockCheckRefuted, MockGetChildren, MockCallSite>;
 
 struct PudWitnessSearchHeadFactoryTest : public ::testing::Test {
+    void SetUp() override { descend_ops = &descend; }
     NiceMock<MockCheckLeaf> leaves;
     NiceMock<MockCheckRefuted> refuted_nodes;
     NiceMock<MockGetChildren> children;
     NiceMock<MockDescend> descend;
     NiceMock<MockCallSite> call_sites;
-    test_factory_t factory{leaves, refuted_nodes, children, descend, call_sites};
+    test_factory_t factory{leaves, refuted_nodes, children, call_sites};
     pud_node_id root = 1;
     pud_node_id child = 2;
     pud_node_id grand = 3;
@@ -69,3 +80,5 @@ TEST_F(PudWitnessSearchHeadFactoryTest, LeafRootIsThatNode) {
     ASSERT_TRUE(found.has_value());
     EXPECT_EQ(*found, root);
 }
+
+}  // namespace

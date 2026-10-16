@@ -27,7 +27,7 @@ struct pud_mhcs {
     std::vector<pud_mhcs_head_id> invalidate_leaf(pud_node_id node);
     std::vector<pud_mhcs_head_id> witnesses_refuted(const std::vector<pud_mhws_head_id>& witness_head_ids);
     std::optional<pud_mhcs_head_id> try_fork_head(pud_mhcs_head_id head_id, Descent new_root_descent);
-    const Descent& get_descent(pud_mhcs_head_id head_id) const;
+    std::vector<pud_node_id> get_path(pud_mhcs_head_id head_id) const;
 private:
     IMakeHead& make_head_;
     IForkHead& fork_head_;
@@ -219,8 +219,8 @@ template<
     typename IMakeHead,
     typename IForkHead,
     typename IRemoveWitnessHead>
-const D& pud_mhcs<D, Head, IMakeHead, IForkHead, IRemoveWitnessHead>::get_descent(pud_mhcs_head_id head_id) const {
-    return head_to_descent_.at(head_id);
+std::vector<pud_node_id> pud_mhcs<D, Head, IMakeHead, IForkHead, IRemoveWitnessHead>::get_path(pud_mhcs_head_id head_id) const {
+    return heads_.at(head_id).path();
 }
 
 template<

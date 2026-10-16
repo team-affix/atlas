@@ -54,7 +54,7 @@ PUD_QUERY_HEAD::pud_query_head(
             try_add_candidate_specialization_head_.try_add_head(root_descent);
         if (!candidate_id.has_value())
             continue;
-        link(root_descent.node, candidate_id.value());
+        link(root_descent.node(), candidate_id.value());
     }
 }
 
@@ -65,14 +65,14 @@ PUD_QUERY_HEAD::pud_query_head(
     : try_add_candidate_specialization_head_(other.try_add_candidate_specialization_head_)
     , try_fork_candidate_specialization_head_(other.try_fork_candidate_specialization_head_) {
     for (const ReplayDescent& root_descent : root_descents) {
-        auto other_candidate_it = other.root_to_candidate_.find(root_descent.node);
+        auto other_candidate_it = other.root_to_candidate_.find(root_descent.node());
         if (other_candidate_it == other.root_to_candidate_.end())
             continue;
         std::optional<pud_mhcs_head_id> candidate_id =
             try_fork_candidate_specialization_head_.try_fork_head(other_candidate_it->second, root_descent);
         if (!candidate_id.has_value())
             continue;
-        link(root_descent.node, candidate_id.value());
+        link(root_descent.node(), candidate_id.value());
     }
 }
 

@@ -19,10 +19,14 @@ using ::testing::_;
 using ::testing::NiceMock;
 using ::testing::UnorderedElementsAre;
 
+namespace {
+
 using child_iter = std::vector<pud_node_id>::const_iterator;
 
 struct descent_t {
-    pud_node_id node;
+    pud_node_id at;
+    pud_node_id node() const { return at; }
+    std::optional<descent_t> descend(pud_node_id child) const;
     bool operator==(const descent_t&) const = default;
 };
 
@@ -42,16 +46,22 @@ struct MockDescend {
     MOCK_METHOD(std::optional<descent_t>, descend, (descent_t, pud_node_id));
 };
 
+MockDescend* descend_ops = nullptr;
+
+std::optional<descent_t> descent_t::descend(pud_node_id child) const {
+    return descend_ops->descend(*this, child);
+}
+
 struct MockCallSite {
     MOCK_METHOD(size_t, get, (pud_node_id));
 };
 
-using witness_head_t    = pud_witness_search_head<descent_t, child_iter, MockCheckLeaf, MockCheckRefuted, MockGetChildren, MockDescend, MockCallSite>;
-using witness_factory_t = pud_witness_search_head_factory<descent_t, child_iter, MockCheckLeaf, MockCheckRefuted, MockGetChildren, MockDescend, MockCallSite>;
-using witness_forker_t  = pud_witness_search_head_forker<descent_t, child_iter, MockCheckLeaf, MockCheckRefuted, MockGetChildren, MockDescend, MockCallSite>;
+using witness_head_t    = pud_witness_search_head<descent_t, child_iter, MockCheckLeaf, MockCheckRefuted, MockGetChildren, MockCallSite>;
+using witness_factory_t = pud_witness_search_head_factory<descent_t, child_iter, MockCheckLeaf, MockCheckRefuted, MockGetChildren, MockCallSite>;
+using witness_forker_t  = pud_witness_search_head_forker<descent_t, child_iter, MockCheckLeaf, MockCheckRefuted, MockGetChildren, MockCallSite>;
 using mhws_t            = pud_mhws<descent_t, child_iter, witness_head_t, witness_factory_t, witness_forker_t>;
 using candidate_head_t  = pud_candidate_specialization_head<
-    descent_t, child_iter, mhws_t, mhws_t, mhws_t, MockCheckLeaf, MockCheckRefuted, MockGetChildren, MockDescend>;
+    descent_t, child_iter, mhws_t, mhws_t, mhws_t, MockCheckLeaf, MockCheckRefuted, MockGetChildren>;
 
 using optional_context_t = std::optional<pud_candidate_resume_context<descent_t>>;
 
@@ -84,7 +94,7 @@ struct PudCandidateSpecializationHeadSearchIntegrationTest : public ::testing::T
     NiceMock<MockGetChildren> children;
     NiceMock<MockDescend>     descend;
     NiceMock<MockCallSite>    call_sites;
-    witness_factory_t witness_factory{leaves, refuted_nodes, children, descend, call_sites};
+    witness_factory_t witness_factory{leaves, refuted_nodes, children, call_sites};
     witness_forker_t  witness_forker;
     mhws_t            witnesses{witness_factory, witness_forker};
     std::unordered_map<pud_node_id, std::vector<pud_node_id>> sequences;
@@ -99,6 +109,7 @@ struct PudCandidateSpecializationHeadSearchIntegrationTest : public ::testing::T
     pud_node_id right_2 = 7;
 
     void SetUp() override {
+        descend_ops = &descend;
         ON_CALL(leaves, check_leaf(_)).WillByDefault([&](pud_node_id node) {
             return live_leaves.contains(node);
         });
@@ -114,7 +125,7 @@ struct PudCandidateSpecializationHeadSearchIntegrationTest : public ::testing::T
 
     candidate_head_t make_head(pud_node_id node) {
         return candidate_head_t{
-            witnesses, witnesses, witnesses, leaves, refuted_nodes, children, descend,
+            witnesses, witnesses, witnesses, leaves, refuted_nodes, children,
             descent_t{node}};
     }
 
@@ -182,7 +193,7 @@ struct PudCandidateSpecializationHeadSearchIntegrationTest : public ::testing::T
             ADD_FAILURE() << "expected a justification at node " << expected.node;
             return;
         }
-        EXPECT_EQ(actual->descent.node, expected.node);
+        EXPECT_EQ(actual->descent.node(), expected.node);
         const auto* self = std::get_if<pud_candidate_self_witness>(&actual->justification);
         const auto* choice = std::get_if<pud_candidate_choice_point>(&actual->justification);
         if (expected.kind == outcome_kind::self_witness) {
@@ -598,3 +609,5 @@ INSTANTIATE_TEST_SUITE_P(
     Seeds,
     PudCandidateSpecializationHeadRandomTreeIntegrationTest,
     ::testing::Range(0u, k_random_tree_count));
+
+}  // namespace

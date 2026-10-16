@@ -14,7 +14,8 @@ using ::testing::UnorderedElementsAre;
 namespace {
 
 struct descent_t {
-    pud_node_id node;
+    pud_node_id at;
+    pud_node_id node() const { return at; }
     int version;
     bool operator==(const descent_t&) const = default;
 };
@@ -251,7 +252,7 @@ TEST_F(PudQueryHeadTest, ForkPassesTheNewDescentNotTheParentDescent) {
     EXPECT_CALL(try_add, try_add_head(axiom_a)).WillOnce(Return(candidate_a));
     auto parent = make_head({axiom_a});
 
-    const descent_t specialized_a{axiom_a.node, 7};
+    const descent_t specialized_a{axiom_a.node(), 7};
     EXPECT_CALL(try_fork, try_fork_head(candidate_a, specialized_a)).WillOnce(Return(forked_a));
     test_query_head_t child{parent, {specialized_a}};
     EXPECT_THAT(child.resume().candidate_ids, UnorderedElementsAre(forked_a));

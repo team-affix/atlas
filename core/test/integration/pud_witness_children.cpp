@@ -9,10 +9,14 @@ using ::testing::_;
 using ::testing::NiceMock;
 using ::testing::Return;
 
+namespace {
+
 using child_iter = std::vector<pud_node_id>::const_iterator;
 
 struct descent_t {
-    pud_node_id node;
+    pud_node_id at;
+    pud_node_id node() const { return at; }
+    std::optional<descent_t> descend(pud_node_id child) const;
     bool operator==(const descent_t&) const = default;
 };
 
@@ -28,12 +32,18 @@ struct MockDescend {
     MOCK_METHOD(std::optional<descent_t>, descend, (descent_t, pud_node_id));
 };
 
+MockDescend* descend_ops = nullptr;
+
+std::optional<descent_t> descent_t::descend(pud_node_id child) const {
+    return descend_ops->descend(*this, child);
+}
+
 struct MockCallSite {
     MOCK_METHOD(size_t, get, (pud_node_id));
 };
 
 using test_head_t = pud_witness_search_head<
-    descent_t, child_iter, MockCheckLeaf, MockCheckRefuted, pud_children, MockDescend, MockCallSite>;
+    descent_t, child_iter, MockCheckLeaf, MockCheckRefuted, pud_children, MockCallSite>;
 
 struct PudWitnessChildrenIntegrationTest : public ::testing::Test {
     NiceMock<MockCheckLeaf> leaves;
@@ -54,11 +64,12 @@ struct PudWitnessChildrenIntegrationTest : public ::testing::Test {
 
     test_head_t make_head(pud_node_id node) {
         return test_head_t{
-            leaves, refuted_nodes, children, descend, call_sites,
+            leaves, refuted_nodes, children, call_sites,
             descent_t{node}};
     }
 
     void SetUp() override {
+        descend_ops = &descend;
         ON_CALL(leaves, check_leaf(_)).WillByDefault(Return(false));
         ON_CALL(descend, descend(_, _)).WillByDefault([](descent_t, pud_node_id child) {
             return std::optional<descent_t>{descent_t{child}};
@@ -75,7 +86,7 @@ TEST_F(PudWitnessChildrenIntegrationTest, DescendedChildStaysAfterOtherNodesAreS
     children.store(extra, {depth1});
     auto result = head.advance();
     ASSERT_TRUE(result.has_value());
-    EXPECT_EQ(result->root_descent.node, left);
+    EXPECT_EQ(result->root_descent.node(), left);
     EXPECT_NE(result->root_next_sibling_it, result->root_end_sibling_it);
     EXPECT_EQ(*result->root_next_sibling_it, right);
 }
@@ -119,3 +130,5 @@ TEST_F(PudWitnessChildrenIntegrationTest, BranchOfDepthFourReachesTheLeaf) {
     ASSERT_TRUE(found.has_value());
     EXPECT_EQ(*found, depth3);
 }
+
+}  // namespace

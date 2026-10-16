@@ -19,7 +19,7 @@
 template<
     typename IGetNodeDescent,
     typename IGetQueryCandidates,
-    typename IGetCandidateDescent,
+    typename IGetCandidatePath,
     typename IAcceptCandidate,
     typename IMakeChild,
     typename IStoreCallSite,
@@ -37,7 +37,7 @@ struct pud_leaf_expander {
     pud_leaf_expander(
         IGetNodeDescent& get_node_descent,
         IGetQueryCandidates& get_query_candidates,
-        IGetCandidateDescent& get_candidate_descent,
+        IGetCandidatePath& get_candidate_path,
         IAcceptCandidate& accept_candidate,
         IMakeChild& make_child,
         IStoreCallSite& store_call_site,
@@ -55,7 +55,7 @@ struct pud_leaf_expander {
 private:
     IGetNodeDescent& get_node_descent_;
     IGetQueryCandidates& get_query_candidates_;
-    IGetCandidateDescent& get_candidate_descent_;
+    IGetCandidatePath& get_candidate_path_;
     IAcceptCandidate& accept_candidate_;
     IMakeChild& make_child_;
     IStoreCallSite& store_call_site_;
@@ -73,14 +73,14 @@ private:
 
 #define PUD_LEAF_EXPANDER_TEMPLATE                                                         \
     template<typename IGetNodeDescent, typename IGetQueryCandidates,                       \
-             typename IGetCandidateDescent, typename IAcceptCandidate, typename IMakeChild, \
+             typename IGetCandidatePath, typename IAcceptCandidate, typename IMakeChild, \
              typename IStoreCallSite, typename IStoreChildren, typename IUnsetLeaf,         \
              typename IStoreLiveChildCount, typename IPropagateRefutation,                  \
              typename IInvalidateLeaves, typename IGetQueryHeadNode, typename IRefuteNode,  \
              typename ICheckNodeRefuted, typename IStoreNodeDescent,                        \
              typename IEraseNodeDescent>
 #define PUD_LEAF_EXPANDER                                                                  \
-    pud_leaf_expander<IGetNodeDescent, IGetQueryCandidates, IGetCandidateDescent,          \
+    pud_leaf_expander<IGetNodeDescent, IGetQueryCandidates, IGetCandidatePath,          \
         IAcceptCandidate, IMakeChild, IStoreCallSite, IStoreChildren, IUnsetLeaf,          \
         IStoreLiveChildCount, IPropagateRefutation, IInvalidateLeaves, IGetQueryHeadNode,  \
         IRefuteNode, ICheckNodeRefuted, IStoreNodeDescent, IEraseNodeDescent>
@@ -89,7 +89,7 @@ PUD_LEAF_EXPANDER_TEMPLATE
 PUD_LEAF_EXPANDER::pud_leaf_expander(
     IGetNodeDescent& get_node_descent,
     IGetQueryCandidates& get_query_candidates,
-    IGetCandidateDescent& get_candidate_descent,
+    IGetCandidatePath& get_candidate_path,
     IAcceptCandidate& accept_candidate,
     IMakeChild& make_child,
     IStoreCallSite& store_call_site,
@@ -105,7 +105,7 @@ PUD_LEAF_EXPANDER::pud_leaf_expander(
     IEraseNodeDescent& erase_node_descent)
     : get_node_descent_(get_node_descent)
     , get_query_candidates_(get_query_candidates)
-    , get_candidate_descent_(get_candidate_descent)
+    , get_candidate_path_(get_candidate_path)
     , accept_candidate_(accept_candidate)
     , make_child_(make_child)
     , store_call_site_(store_call_site)
@@ -136,7 +136,7 @@ void PUD_LEAF_EXPANDER::expand(pud_node_id leaf, body_goal_id goal) {
             leaf_descent.binding().ubs_state(),
             leaf_descent.lvc().lvc(),
             goal_expr,
-            get_candidate_descent_.get_descent(candidate).node);
+            get_candidate_path_.get_path(candidate));
         children.push_back(make_child_.make(leaf, delta));
     }
 

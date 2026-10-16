@@ -19,12 +19,11 @@ pud_manifest::pud_manifest()
       refuted_node_checker_(leaf_nodes_, refuted_leaves_, node_live_child_counts_),
       normalizer_factory_(globalizer_, expr_pool_),
       unifier_factory_(globalizer_),
-      query_descender_(),
-      witness_search_head_factory_(leaf_nodes_, refuted_node_checker_, children_, query_descender_, call_sites_),
+      witness_search_head_factory_(leaf_nodes_, refuted_node_checker_, children_, call_sites_),
       witness_search_head_forker_(),
       mhws_(witness_search_head_factory_, witness_search_head_forker_),
       candidate_specialization_head_factory_(
-          mhws_, mhws_, mhws_, leaf_nodes_, refuted_node_checker_, children_, query_descender_),
+          mhws_, mhws_, mhws_, leaf_nodes_, refuted_node_checker_, children_),
       candidate_specialization_head_forker_(),
       mhcs_(candidate_specialization_head_factory_, candidate_specialization_head_forker_, mhws_),
       query_head_factory_(mhcs_, mhcs_),
@@ -37,10 +36,9 @@ pud_manifest::pud_manifest()
       root_descent_maker_(
           node_added_substitutions_, expr_pool_, expr_pool_, node_added_var_count_,
           node_added_body_goals_, call_sites_, query_opener_, mhq_, mhq_, mhq_, query_head_nodes_),
-      node_path_finder_(root_nodes_, node_parents_),
       open_body_goal_finder_(node_added_body_goals_, call_sites_),
       acceptor_(
-          node_path_finder_, open_body_goal_finder_, node_heads_, node_added_substitutions_,
+          open_body_goal_finder_, node_heads_, node_added_substitutions_,
           globalizer_, expr_pool_, expr_pool_, normalizer_factory_),
       child_maker_(
           node_id_sequencer_, node_added_substitutions_, node_added_body_goals_,

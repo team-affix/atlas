@@ -18,8 +18,7 @@ template<
     typename ITryForkWitnessSearchHead,
     typename ICheckNodeLeaf,
     typename ICheckNodeRefuted,
-    typename IGetChildren,
-    typename IDescend>
+    typename IGetChildren>
 struct pud_candidate_specialization_head {
     pud_candidate_specialization_head(
         ITryAddHead& try_add_head,
@@ -28,12 +27,12 @@ struct pud_candidate_specialization_head {
         ICheckNodeLeaf& check_node_leaf,
         ICheckNodeRefuted& check_node_refuted,
         IGetChildren& get_children,
-        IDescend& descend,
         Descent specialization_root_descent);
     pud_candidate_specialization_head(
         const pud_candidate_specialization_head& other,
         Descent specialization_root_descent);
     std::optional<pud_candidate_resume_context<Descent>> resume();
+    std::vector<pud_node_id> path() const;
     void witness_refuted(pud_mhws_head_id witness_id);
 private:
     struct witness {
@@ -56,23 +55,22 @@ private:
     ICheckNodeLeaf& check_node_leaf_;
     ICheckNodeRefuted& check_node_refuted_;
     IGetChildren& get_children_;
-    IDescend& descend_;
 
+    pud_node_id root_;
     std::vector<pud_node_id> node_path_;
     Descent                 current_descent_;
     std::optional<witness_scan> witness_scan_;
     bool node_path_truncated_;
 };
 
-template<typename D, typename NI, typename ITAH, typename IAWSH, typename ITFWSH, typename ICNL, typename ICNR, typename IGC, typename IDESC>
-pud_candidate_specialization_head<D, NI, ITAH, IAWSH, ITFWSH, ICNL, ICNR, IGC, IDESC>::pud_candidate_specialization_head(
+template<typename D, typename NI, typename ITAH, typename IAWSH, typename ITFWSH, typename ICNL, typename ICNR, typename IGC>
+pud_candidate_specialization_head<D, NI, ITAH, IAWSH, ITFWSH, ICNL, ICNR, IGC>::pud_candidate_specialization_head(
     ITAH& try_add_head,
     IAWSH& advance_witness_search_head,
     ITFWSH& try_fork_witness_search_head,
     ICNL& check_node_leaf,
     ICNR& check_node_refuted,
     IGC& get_children,
-    IDESC& descend,
     D specialization_root_descent) :
     try_add_head_(try_add_head),
     advance_witness_search_head_(advance_witness_search_head),
@@ -80,13 +78,13 @@ pud_candidate_specialization_head<D, NI, ITAH, IAWSH, ITFWSH, ICNL, ICNR, IGC, I
     check_node_leaf_(check_node_leaf),
     check_node_refuted_(check_node_refuted),
     get_children_(get_children),
-    descend_(descend),
+    root_(specialization_root_descent.node()),
     current_descent_(specialization_root_descent),
     node_path_truncated_(false) {
 }
 
-template<typename D, typename NI, typename ITAH, typename IAWSH, typename ITFWSH, typename ICNL, typename ICNR, typename IGC, typename IDESC>
-pud_candidate_specialization_head<D, NI, ITAH, IAWSH, ITFWSH, ICNL, ICNR, IGC, IDESC>::pud_candidate_specialization_head(
+template<typename D, typename NI, typename ITAH, typename IAWSH, typename ITFWSH, typename ICNL, typename ICNR, typename IGC>
+pud_candidate_specialization_head<D, NI, ITAH, IAWSH, ITFWSH, ICNL, ICNR, IGC>::pud_candidate_specialization_head(
     const pud_candidate_specialization_head& other,
     D specialization_root_descent) :
     try_add_head_(other.try_add_head_),
@@ -95,14 +93,14 @@ pud_candidate_specialization_head<D, NI, ITAH, IAWSH, ITFWSH, ICNL, ICNR, IGC, I
     check_node_leaf_(other.check_node_leaf_),
     check_node_refuted_(other.check_node_refuted_),
     get_children_(other.get_children_),
-    descend_(other.descend_),
+    root_(specialization_root_descent.node()),
     current_descent_(specialization_root_descent),
     node_path_truncated_(false) {
 
 
     // walk our frame stack using the new root descent
     for (const auto& node : other.node_path_) {
-        auto optional_new_descent = descend_.descend(current_descent_, node);
+        auto optional_new_descent = current_descent_.descend(node);
 
         if (!optional_new_descent.has_value())
             break;
@@ -134,7 +132,7 @@ pud_candidate_specialization_head<D, NI, ITAH, IAWSH, ITFWSH, ICNL, ICNR, IGC, I
         const witness& wn = other_witness_search_a.value();
 
         // step in direction of witness A
-        auto optional_search_root_descent = descend_.descend(current_descent_, wn.descent.node);
+        auto optional_search_root_descent = current_descent_.descend(wn.descent.node());
 
         if (optional_search_root_descent.has_value()) {
             auto opt_id = try_fork_witness_search_head_.try_fork_head(wn.id, optional_search_root_descent.value());
@@ -146,7 +144,7 @@ pud_candidate_specialization_head<D, NI, ITAH, IAWSH, ITFWSH, ICNL, ICNR, IGC, I
         const witness& wn = other_witness_search_b.value();
 
         // step in direction of witness B
-        auto optional_search_root_descent = descend_.descend(current_descent_, wn.descent.node);
+        auto optional_search_root_descent = current_descent_.descend(wn.descent.node());
 
         if (optional_search_root_descent.has_value()) {
             auto opt_id = try_fork_witness_search_head_.try_fork_head(wn.id, optional_search_root_descent.value());
@@ -163,8 +161,8 @@ pud_candidate_specialization_head<D, NI, ITAH, IAWSH, ITFWSH, ICNL, ICNR, IGC, I
     };
 }
 
-template<typename D, typename NI, typename ITAH, typename IAWSH, typename ITFWSH, typename ICNL, typename ICNR, typename IGC, typename IDESC>
-std::optional<pud_candidate_resume_context<D>> pud_candidate_specialization_head<D, NI, ITAH, IAWSH, ITFWSH, ICNL, ICNR, IGC, IDESC>::resume() {
+template<typename D, typename NI, typename ITAH, typename IAWSH, typename ITFWSH, typename ICNL, typename ICNR, typename IGC>
+std::optional<pud_candidate_resume_context<D>> pud_candidate_specialization_head<D, NI, ITAH, IAWSH, ITFWSH, ICNL, ICNR, IGC>::resume() {
     // there are three possible starting states:
     // 1. no witnesses found yet
     // 2. self-witness situation
@@ -195,7 +193,7 @@ std::optional<pud_candidate_resume_context<D>> pud_candidate_specialization_head
     
     while (true) {
 
-        const pud_node_id current_node = current_descent_.node;
+        const pud_node_id current_node = current_descent_.node();
 
         if (check_node_refuted_.check_refuted(current_node))
             return std::nullopt;
@@ -258,8 +256,16 @@ std::optional<pud_candidate_resume_context<D>> pud_candidate_specialization_head
     return std::nullopt;
 }
 
-template<typename D, typename NI, typename ITAH, typename IAWSH, typename ITFWSH, typename ICNL, typename ICNR, typename IGC, typename IDESC>
-void pud_candidate_specialization_head<D, NI, ITAH, IAWSH, ITFWSH, ICNL, ICNR, IGC, IDESC>::witness_refuted(pud_mhws_head_id witness_id) {
+// Root first, the candidate's current node last.
+template<typename D, typename NI, typename ITAH, typename IAWSH, typename ITFWSH, typename ICNL, typename ICNR, typename IGC>
+std::vector<pud_node_id> pud_candidate_specialization_head<D, NI, ITAH, IAWSH, ITFWSH, ICNL, ICNR, IGC>::path() const {
+    std::vector<pud_node_id> path{root_};
+    path.insert(path.end(), node_path_.begin(), node_path_.end());
+    return path;
+}
+
+template<typename D, typename NI, typename ITAH, typename IAWSH, typename ITFWSH, typename ICNL, typename ICNR, typename IGC>
+void pud_candidate_specialization_head<D, NI, ITAH, IAWSH, ITFWSH, ICNL, ICNR, IGC>::witness_refuted(pud_mhws_head_id witness_id) {
     DEBUG_ASSERT(witness_scan_.has_value());
     
     // invalidate the witness
@@ -275,16 +281,16 @@ void pud_candidate_specialization_head<D, NI, ITAH, IAWSH, ITFWSH, ICNL, ICNR, I
     }
 }
 
-template<typename D, typename NI, typename ITAH, typename IAWSH, typename ITFWSH, typename ICNL, typename ICNR, typename IGC, typename IDESC>
-std::optional<typename pud_candidate_specialization_head<D, NI, ITAH, IAWSH, ITFWSH, ICNL, ICNR, IGC, IDESC>::witness>
-pud_candidate_specialization_head<D, NI, ITAH, IAWSH, ITFWSH, ICNL, ICNR, IGC, IDESC>::try_replace_witness() {
+template<typename D, typename NI, typename ITAH, typename IAWSH, typename ITFWSH, typename ICNL, typename ICNR, typename IGC>
+std::optional<typename pud_candidate_specialization_head<D, NI, ITAH, IAWSH, ITFWSH, ICNL, ICNR, IGC>::witness>
+pud_candidate_specialization_head<D, NI, ITAH, IAWSH, ITFWSH, ICNL, ICNR, IGC>::try_replace_witness() {
     // scan for replacement starting from next_witness_root_
 
     auto& next_witness_root = witness_scan_->next_witness_root_it;
     auto& end_witness_root = witness_scan_->end_witness_root_it;
 
     while (next_witness_root != end_witness_root) {
-        std::optional<D> optional_search_root_descent = descend_.descend(current_descent_, *next_witness_root++);
+        std::optional<D> optional_search_root_descent = current_descent_.descend(*next_witness_root++);
 
         if (!optional_search_root_descent.has_value())
             continue;
@@ -305,13 +311,13 @@ pud_candidate_specialization_head<D, NI, ITAH, IAWSH, ITFWSH, ICNL, ICNR, IGC, I
     return std::nullopt;
 }
 
-template<typename D, typename NI, typename ITAH, typename IAWSH, typename ITFWSH, typename ICNL, typename ICNR, typename IGC, typename IDESC>
-void pud_candidate_specialization_head<D, NI, ITAH, IAWSH, ITFWSH, ICNL, ICNR, IGC, IDESC>::advance(witness& survivor) {
+template<typename D, typename NI, typename ITAH, typename IAWSH, typename ITFWSH, typename ICNL, typename ICNR, typename IGC>
+void pud_candidate_specialization_head<D, NI, ITAH, IAWSH, ITFWSH, ICNL, ICNR, IGC>::advance(witness& survivor) {
     // advance toward the surviving witness search
     std::optional<pud_witness_advance_result<D, NI>> ar = advance_witness_search_head_.advance_head(survivor.id);
     
     // update our position
-    node_path_.push_back(survivor.descent.node);
+    node_path_.push_back(survivor.descent.node());
     current_descent_ = survivor.descent;
     if (!ar.has_value()) {
         // we advanced onto a leaf. there are no children to initialize the

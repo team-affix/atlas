@@ -58,10 +58,10 @@ struct PudQueryOpenerIntegrationTest : public ::testing::Test {
         return normalizer.normalize(framed_expr{var(index), 0});
     }
 
-    std::vector<pud_node_id> nodes_of(const std::vector<pud_query_descent<replay_descent_t>>& opened) {
+    std::vector<pud_node_id> nodes_of(const std::vector<replay_descent_t>& opened) {
         std::vector<pud_node_id> nodes;
-        for (const auto& root_descent : opened)
-            nodes.push_back(root_descent.node);
+        for (const replay_descent_t& root_descent : opened)
+            nodes.push_back(root_descent.node());
         return nodes;
     }
 };
@@ -78,8 +78,8 @@ TEST_F(PudQueryOpenerIntegrationTest, EachOpenedReplayHoldsItsResolution) {
     root(functor("color", {atom("blue")}));
     const auto opened = opener.open(empty_state, functor("color", {var(0)}), 1);
     ASSERT_EQ(opened.size(), 2u);
-    EXPECT_EQ(resolve(opened.at(0).replay.ubs_state(), 0), atom("red"));
-    EXPECT_EQ(resolve(opened.at(1).replay.ubs_state(), 0), atom("blue"));
+    EXPECT_EQ(resolve(opened.at(0).ubs_state(), 0), atom("red"));
+    EXPECT_EQ(resolve(opened.at(1).ubs_state(), 0), atom("blue"));
 }
 
 TEST_F(PudQueryOpenerIntegrationTest, CallersBindingsAreRespected) {
@@ -96,7 +96,7 @@ TEST_F(PudQueryOpenerIntegrationTest, RootHeadIsLiftedToTheFrameOffset) {
     root(functor("nat", {functor("s", {var(0)})}));
     const auto opened = opener.open(empty_state, functor("nat", {var(0)}), 3);
     ASSERT_EQ(opened.size(), 1u);
-    EXPECT_EQ(resolve(opened.at(0).replay.ubs_state(), 0), functor("s", {var(3)}));
+    EXPECT_EQ(resolve(opened.at(0).ubs_state(), 0), functor("s", {var(3)}));
 }
 
 TEST_F(PudQueryOpenerIntegrationTest, NoRootResolvesTheGoal) {

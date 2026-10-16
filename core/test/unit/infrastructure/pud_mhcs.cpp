@@ -14,12 +14,14 @@ namespace {
 struct HeadOps {
     MOCK_METHOD((std::optional<pud_candidate_resume_context<int>>), resume, ());
     MOCK_METHOD(void, witness_refuted, (pud_mhws_head_id));
+    MOCK_METHOD(std::vector<pud_node_id>, path, (), (const));
 };
 
 struct MockHead {
     static HeadOps* ops;
     std::optional<pud_candidate_resume_context<int>> resume() { return ops->resume(); }
     void witness_refuted(pud_mhws_head_id id) { ops->witness_refuted(id); }
+    std::vector<pud_node_id> path() const { return ops->path(); }
 };
 
 HeadOps* MockHead::ops = nullptr;
@@ -316,19 +318,14 @@ TEST_F(PudMhcsTest, RemovingAnUnknownHeadRemovesNoWitnessHeads) {
     mhcs.remove_head(17);
 }
 
-// ── get_descent ───────────────────────────────────────────────────────────────
+// ── get_path ──────────────────────────────────────────────────────────────────
 
-TEST_F(PudMhcsTest, DescentIsTheOneFromTheLatestResume) {
-    EXPECT_CALL(ops, resume())
-        .WillOnce(Return(pud_candidate_resume_context<int>{
-            .justification = pud_candidate_self_witness{.node = leaf}, .descent = 11}))
-        .WillOnce(Return(pud_candidate_resume_context<int>{
-            .justification = pud_candidate_self_witness{.node = other}, .descent = 12}));
+TEST_F(PudMhcsTest, PathIsTheCandidateHeadsPath) {
+    EXPECT_CALL(ops, resume()).WillOnce(Return(self_of(leaf)));
     auto id = mhcs.try_add_head(1);
     ASSERT_TRUE(id.has_value());
-    EXPECT_EQ(mhcs.get_descent(*id), 11);
-    mhcs.invalidate_leaf(leaf);
-    EXPECT_EQ(mhcs.get_descent(*id), 12);
+    EXPECT_CALL(ops, path()).WillOnce(Return(std::vector<pud_node_id>{5, 6, leaf}));
+    EXPECT_EQ(mhcs.get_path(*id), (std::vector<pud_node_id>{5, 6, leaf}));
 }
 
 } // namespace
