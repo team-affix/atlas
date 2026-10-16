@@ -19,6 +19,10 @@ struct descent_t {
 struct MockCheckLeaf {
     MOCK_METHOD(bool, check_leaf, (pud_node_id));
 };
+
+struct MockCheckRefuted {
+    MOCK_METHOD(bool, check_refuted, (pud_node_id));
+};
 struct MockGetChildren {
     MOCK_METHOD((const std::vector<pud_node_id>&), get, (pud_node_id));
 };
@@ -30,14 +34,15 @@ struct MockCallSite {
 };
 
 using test_head_t = pud_witness_search_head<
-    descent_t, child_iter, MockCheckLeaf, MockGetChildren, MockDescend, MockCallSite>;
+    descent_t, child_iter, MockCheckLeaf, MockCheckRefuted, MockGetChildren, MockDescend, MockCallSite>;
 
 struct PudWitnessSearchHeadForkerTest : public ::testing::Test {
     NiceMock<MockCheckLeaf> leaves;
+    NiceMock<MockCheckRefuted> refuted_nodes;
     NiceMock<MockGetChildren> children;
     NiceMock<MockDescend> descend;
     NiceMock<MockCallSite> call_sites;
-    pud_witness_search_head_forker<descent_t, child_iter, MockCheckLeaf, MockGetChildren, MockDescend, MockCallSite> forker;
+    pud_witness_search_head_forker<descent_t, child_iter, MockCheckLeaf, MockCheckRefuted, MockGetChildren, MockDescend, MockCallSite> forker;
     pud_node_id root = 1;
     pud_node_id parent_node = 2;
     pud_node_id leaf = 3;
@@ -47,7 +52,7 @@ struct PudWitnessSearchHeadForkerTest : public ::testing::Test {
 
     test_head_t make_head(pud_node_id node) {
         return test_head_t{
-            leaves, children, descend, call_sites,
+            leaves, refuted_nodes, children, descend, call_sites,
             descent_t{node}};
     }
 };

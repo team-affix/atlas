@@ -11,6 +11,7 @@ template<
     typename IAdvanceWitnessSearchHead,
     typename ITryForkWitnessSearchHead,
     typename ICheckNodeLeaf,
+    typename ICheckNodeRefuted,
     typename IGetChildren,
     typename IPropagateDescent>
 struct pud_candidate_specialization_head_factory {
@@ -21,6 +22,7 @@ struct pud_candidate_specialization_head_factory {
         IAdvanceWitnessSearchHead,
         ITryForkWitnessSearchHead,
         ICheckNodeLeaf,
+        ICheckNodeRefuted,
         IGetChildren,
         IPropagateDescent>;
 
@@ -29,6 +31,7 @@ struct pud_candidate_specialization_head_factory {
         IAdvanceWitnessSearchHead& advance_witness_search_head,
         ITryForkWitnessSearchHead& try_fork_witness_search_head,
         ICheckNodeLeaf& check_node_leaf,
+        ICheckNodeRefuted& check_node_refuted,
         IGetChildren& get_children,
         IPropagateDescent& descend);
     head_type make(Descent search_root_descent) const;
@@ -37,6 +40,7 @@ private:
     IAdvanceWitnessSearchHead& advance_witness_search_head_;
     ITryForkWitnessSearchHead& try_fork_witness_search_head_;
     ICheckNodeLeaf& check_node_leaf_;
+    ICheckNodeRefuted& check_node_refuted_;
     IGetChildren& get_children_;
     IPropagateDescent& descend_;
 };
@@ -48,19 +52,22 @@ template<
     typename IAWSH,
     typename ITFWSH,
     typename ICNL,
+    typename ICNR,
     typename IGC,
     typename IDESC>
-pud_candidate_specialization_head_factory<D, CI, ITAH, IAWSH, ITFWSH, ICNL, IGC, IDESC>::pud_candidate_specialization_head_factory(
+pud_candidate_specialization_head_factory<D, CI, ITAH, IAWSH, ITFWSH, ICNL, ICNR, IGC, IDESC>::pud_candidate_specialization_head_factory(
     ITAH& try_add_head,
     IAWSH& advance_witness_search_head,
     ITFWSH& try_fork_witness_search_head,
     ICNL& check_node_leaf,
+    ICNR& check_node_refuted,
     IGC& get_children,
     IDESC& descend)
     : try_add_head_(try_add_head)
     , advance_witness_search_head_(advance_witness_search_head)
     , try_fork_witness_search_head_(try_fork_witness_search_head)
     , check_node_leaf_(check_node_leaf)
+    , check_node_refuted_(check_node_refuted)
     , get_children_(get_children)
     , descend_(descend) {}
 
@@ -71,15 +78,17 @@ template<
     typename IAWSH,
     typename ITFWSH,
     typename ICNL,
+    typename ICNR,
     typename IGC,
     typename IDESC>
-typename pud_candidate_specialization_head_factory<D, CI, ITAH, IAWSH, ITFWSH, ICNL, IGC, IDESC>::head_type
-pud_candidate_specialization_head_factory<D, CI, ITAH, IAWSH, ITFWSH, ICNL, IGC, IDESC>::make(D search_root_descent) const {
+typename pud_candidate_specialization_head_factory<D, CI, ITAH, IAWSH, ITFWSH, ICNL, ICNR, IGC, IDESC>::head_type
+pud_candidate_specialization_head_factory<D, CI, ITAH, IAWSH, ITFWSH, ICNL, ICNR, IGC, IDESC>::make(D search_root_descent) const {
     return head_type{
         try_add_head_,
         advance_witness_search_head_,
         try_fork_witness_search_head_,
         check_node_leaf_,
+        check_node_refuted_,
         get_children_,
         descend_,
         std::move(search_root_descent)};

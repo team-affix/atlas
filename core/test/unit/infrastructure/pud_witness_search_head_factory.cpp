@@ -19,6 +19,10 @@ struct descent_t {
 struct MockCheckLeaf {
     MOCK_METHOD(bool, check_leaf, (pud_node_id));
 };
+
+struct MockCheckRefuted {
+    MOCK_METHOD(bool, check_refuted, (pud_node_id));
+};
 struct MockGetChildren {
     MOCK_METHOD((const std::vector<pud_node_id>&), get, (pud_node_id));
 };
@@ -30,14 +34,15 @@ struct MockCallSite {
 };
 
 using test_factory_t = pud_witness_search_head_factory<
-    descent_t, child_iter, MockCheckLeaf, MockGetChildren, MockDescend, MockCallSite>;
+    descent_t, child_iter, MockCheckLeaf, MockCheckRefuted, MockGetChildren, MockDescend, MockCallSite>;
 
 struct PudWitnessSearchHeadFactoryTest : public ::testing::Test {
     NiceMock<MockCheckLeaf> leaves;
+    NiceMock<MockCheckRefuted> refuted_nodes;
     NiceMock<MockGetChildren> children;
     NiceMock<MockDescend> descend;
     NiceMock<MockCallSite> call_sites;
-    test_factory_t factory{leaves, children, descend, call_sites};
+    test_factory_t factory{leaves, refuted_nodes, children, descend, call_sites};
     pud_node_id root = 1;
     pud_node_id child = 2;
     pud_node_id grand = 3;

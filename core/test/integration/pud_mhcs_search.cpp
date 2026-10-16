@@ -21,6 +21,10 @@ struct MockCheckLeaf {
     MOCK_METHOD(bool, check_leaf, (const pud_node*));
 };
 
+struct MockCheckRefuted {
+    MOCK_METHOD(bool, check_refuted, (pud_node_id));
+};
+
 struct MockGetChildren {
     MOCK_METHOD((const std::vector<const pud_node*>&), get, (const pud_node*));
 };
@@ -34,30 +38,31 @@ struct MockCallSite {
 };
 
 using witness_head_t = pud_witness_search_head<
-    int, child_iter, MockCheckLeaf, MockGetChildren, MockPropagate, MockCallSite>;
+    int, child_iter, MockCheckLeaf, MockCheckRefuted, MockGetChildren, MockPropagate, MockCallSite>;
 using witness_factory_t = pud_witness_search_head_factory<
-    int, child_iter, MockCheckLeaf, MockGetChildren, MockPropagate, MockCallSite>;
+    int, child_iter, MockCheckLeaf, MockCheckRefuted, MockGetChildren, MockPropagate, MockCallSite>;
 using witness_forker_t = pud_witness_search_head_forker<
-    int, child_iter, MockCheckLeaf, MockGetChildren, MockPropagate, MockCallSite>;
+    int, child_iter, MockCheckLeaf, MockCheckRefuted, MockGetChildren, MockPropagate, MockCallSite>;
 using mhws_t = pud_mhws<int, child_iter, witness_head_t, witness_factory_t, witness_forker_t>;
 
 using candidate_head_t = pud_candidate_specialization_head<
-    int, child_iter, mhws_t, mhws_t, mhws_t, MockCheckLeaf, MockGetChildren, MockPropagate>;
+    int, child_iter, mhws_t, mhws_t, mhws_t, MockCheckLeaf, MockCheckRefuted, MockGetChildren, MockPropagate>;
 using candidate_factory_t = pud_candidate_specialization_head_factory<
-    int, child_iter, mhws_t, mhws_t, mhws_t, MockCheckLeaf, MockGetChildren, MockPropagate>;
+    int, child_iter, mhws_t, mhws_t, mhws_t, MockCheckLeaf, MockCheckRefuted, MockGetChildren, MockPropagate>;
 using candidate_forker_t = pud_candidate_specialization_head_forker<
-    int, child_iter, mhws_t, mhws_t, mhws_t, MockCheckLeaf, MockGetChildren, MockPropagate>;
+    int, child_iter, mhws_t, mhws_t, mhws_t, MockCheckLeaf, MockCheckRefuted, MockGetChildren, MockPropagate>;
 using mhcs_t = pud_mhcs<int, candidate_head_t, candidate_factory_t, candidate_forker_t>;
 
 struct PudMhcsSearchIntegrationTest : public ::testing::Test {
     NiceMock<MockCheckLeaf> leaves;
+    NiceMock<MockCheckRefuted> refuted_nodes;
     NiceMock<MockGetChildren> children;
     NiceMock<MockPropagate> propagate;
     NiceMock<MockCallSite> call_sites;
-    witness_factory_t witness_factory{leaves, children, propagate, call_sites};
+    witness_factory_t witness_factory{leaves, refuted_nodes, children, propagate, call_sites};
     witness_forker_t witness_forker;
     mhws_t witnesses{witness_factory, witness_forker};
-    candidate_factory_t candidate_factory{witnesses, witnesses, witnesses, leaves, children, propagate};
+    candidate_factory_t candidate_factory{witnesses, witnesses, witnesses, leaves, refuted_nodes, children, propagate};
     candidate_forker_t candidate_forker;
     mhcs_t candidates{candidate_factory, candidate_forker};
     std::unordered_map<const pud_node*, std::vector<const pud_node*>> sequences;

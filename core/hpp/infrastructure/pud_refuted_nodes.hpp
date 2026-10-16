@@ -6,7 +6,7 @@
 
 struct pud_refuted_nodes {
     bool check_refuted(pud_node_id id) const;
-    void set_refuted(pud_node_id id);
+    void mark_refuted(pud_node_id id);
 private:
     std::unordered_set<pud_node_id> refuted_;
 };

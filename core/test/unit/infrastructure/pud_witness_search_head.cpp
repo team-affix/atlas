@@ -20,6 +20,10 @@ struct MockCheckLeaf {
     MOCK_METHOD(bool, check_leaf, (pud_node_id));
 };
 
+struct MockCheckRefuted {
+    MOCK_METHOD(bool, check_refuted, (pud_node_id));
+};
+
 struct MockGetChildren {
     MOCK_METHOD((const std::vector<pud_node_id>&), get, (pud_node_id));
 };
@@ -36,12 +40,14 @@ using test_witness_head_t = pud_witness_search_head<
     descent_t,
     child_iter,
     MockCheckLeaf,
+    MockCheckRefuted,
     MockGetChildren,
     MockDescend,
     MockCallSite>;
 
 struct PudWitnessSearchHeadTest : public ::testing::Test {
     NiceMock<MockCheckLeaf> leaves;
+    NiceMock<MockCheckRefuted> refuted_nodes;
     NiceMock<MockGetChildren> children;
     NiceMock<MockDescend> descend;
     NiceMock<MockCallSite> call_sites;
@@ -62,7 +68,7 @@ struct PudWitnessSearchHeadTest : public ::testing::Test {
 
     test_witness_head_t make_head(pud_node_id node) {
         return test_witness_head_t{
-            leaves, children, descend, call_sites,
+            leaves, refuted_nodes, children, descend, call_sites,
             descent_t{node}};
     }
 
@@ -382,4 +388,98 @@ TEST_F(PudWitnessSearchHeadTest, ResumeIsIdempotentAfterFindingLeaf) {
     auto head = make_head(root);
     EXPECT_EQ(head.resume().value(), left);
     EXPECT_EQ(head.resume().value(), left);
+}
+
+// ── Refuted nodes ─────────────────────────────────────────────────────────────
+
+TEST_F(PudWitnessSearchHeadTest, RefutedLeafRootIsNotAWitness) {
+    ON_CALL(leaves, check_leaf(root)).WillByDefault(Return(true));
+    ON_CALL(refuted_nodes, check_refuted(root)).WillByDefault(Return(true));
+    auto head = make_head(root);
+    EXPECT_FALSE(head.resume().has_value());
+}
+
+TEST_F(PudWitnessSearchHeadTest, RefutedSearchRootFindsNothingBelowIt) {
+    sequences[root] = {left};
+    ON_CALL(leaves, check_leaf(left)).WillByDefault(Return(true));
+    ON_CALL(refuted_nodes, check_refuted(root)).WillByDefault(Return(true));
+    auto head = make_head(root);
+    EXPECT_FALSE(head.resume().has_value());
+}
+
+TEST_F(PudWitnessSearchHeadTest, RefutedLeafIsSkippedForItsSibling) {
+    sequences[root] = {left, right};
+    ON_CALL(leaves, check_leaf(left)).WillByDefault(Return(true));
+    ON_CALL(leaves, check_leaf(right)).WillByDefault(Return(true));
+    ON_CALL(refuted_nodes, check_refuted(left)).WillByDefault(Return(true));
+    auto head = make_head(root);
+    EXPECT_EQ(head.resume().value(), right);
+}
+
+TEST_F(PudWitnessSearchHeadTest, RefutedInteriorNodeHidesItsLeaves) {
+    sequences[root] = {left, right};
+    sequences[left] = {left_1, left_2};
+    ON_CALL(leaves, check_leaf(left_1)).WillByDefault(Return(true));
+    ON_CALL(leaves, check_leaf(left_2)).WillByDefault(Return(true));
+    ON_CALL(leaves, check_leaf(right)).WillByDefault(Return(true));
+    ON_CALL(refuted_nodes, check_refuted(left)).WillByDefault(Return(true));
+    auto head = make_head(root);
+    EXPECT_EQ(head.resume().value(), right);
+}
+
+TEST_F(PudWitnessSearchHeadTest, RefutedInteriorNodeIsNeverExpanded) {
+    sequences[root] = {left, right};
+    ON_CALL(leaves, check_leaf(right)).WillByDefault(Return(true));
+    ON_CALL(refuted_nodes, check_refuted(left)).WillByDefault(Return(true));
+    EXPECT_CALL(children, get(_)).Times(::testing::AnyNumber());
+    EXPECT_CALL(children, get(left)).Times(0);
+    auto head = make_head(root);
+    EXPECT_EQ(head.resume().value(), right);
+}
+
+TEST_F(PudWitnessSearchHeadTest, EveryLeafRefutedFindsNothing) {
+    sequences[root] = {left, right};
+    ON_CALL(leaves, check_leaf(left)).WillByDefault(Return(true));
+    ON_CALL(leaves, check_leaf(right)).WillByDefault(Return(true));
+    ON_CALL(refuted_nodes, check_refuted(left)).WillByDefault(Return(true));
+    ON_CALL(refuted_nodes, check_refuted(right)).WillByDefault(Return(true));
+    auto head = make_head(root);
+    EXPECT_FALSE(head.resume().has_value());
+}
+
+TEST_F(PudWitnessSearchHeadTest, WitnessRefutedAfterBeingFoundMovesToTheNextLeaf) {
+    sequences[root] = {left, right};
+    ON_CALL(leaves, check_leaf(left)).WillByDefault(Return(true));
+    ON_CALL(leaves, check_leaf(right)).WillByDefault(Return(true));
+    auto head = make_head(root);
+    ASSERT_EQ(head.resume().value(), left);
+    ON_CALL(refuted_nodes, check_refuted(left)).WillByDefault(Return(true));
+    EXPECT_EQ(head.resume().value(), right);
+}
+
+TEST_F(PudWitnessSearchHeadTest, RefutedSubtreeAroundTheWitnessIsLeftWhole) {
+    sequences[root]   = {left, right};
+    sequences[left]   = {left_1, left_2};
+    ON_CALL(leaves, check_leaf(left_1)).WillByDefault(Return(true));
+    ON_CALL(leaves, check_leaf(left_2)).WillByDefault(Return(true));
+    ON_CALL(leaves, check_leaf(right)).WillByDefault(Return(true));
+    auto head = make_head(root);
+    ASSERT_EQ(head.resume().value(), left_1);
+    ON_CALL(refuted_nodes, check_refuted(left)).WillByDefault(Return(true));
+    ON_CALL(refuted_nodes, check_refuted(left_1)).WillByDefault(Return(true));
+    ON_CALL(refuted_nodes, check_refuted(left_2)).WillByDefault(Return(true));
+    EXPECT_EQ(head.resume().value(), right);
+}
+
+TEST_F(PudWitnessSearchHeadTest, ForkedHeadSkipsRefutedNodesOnItsCopiedPath) {
+    sequences[root] = {left, right};
+    sequences[left] = {left_1};
+    ON_CALL(leaves, check_leaf(left_1)).WillByDefault(Return(true));
+    ON_CALL(leaves, check_leaf(right)).WillByDefault(Return(true));
+    auto head = make_head(root);
+    ASSERT_EQ(head.resume().value(), left_1);
+    ON_CALL(refuted_nodes, check_refuted(left)).WillByDefault(Return(true));
+    ON_CALL(refuted_nodes, check_refuted(left_1)).WillByDefault(Return(true));
+    test_witness_head_t forked{head, descent_t{root}};
+    EXPECT_EQ(forked.resume().value(), right);
 }

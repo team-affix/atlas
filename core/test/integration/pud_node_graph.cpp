@@ -22,7 +22,7 @@ TEST_F(PudNodeGraphIntegrationTest, StoredFactsStillReadBackAfterMoreNodesAreMad
     children.store(node, {child});
     leaves.set_leaf(node);
     call_sites.store(node, 4);
-    refuted.set_refuted(node);
+    refuted.mark_refuted(node);
 
     make();
     make();
@@ -45,7 +45,7 @@ TEST_F(PudNodeGraphIntegrationTest, UnsetLeafLeavesCallSiteAndRefutedMark) {
     const pud_node_id node = make();
     call_sites.store(node, 2);
     leaves.set_leaf(node);
-    refuted.set_refuted(node);
+    refuted.mark_refuted(node);
 
     leaves.unset_leaf(node);
 

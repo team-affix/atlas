@@ -10,6 +10,7 @@ template<
     typename IAdvanceWitnessSearchHead,
     typename ITryForkWitnessSearchHead,
     typename ICheckNodeLeaf,
+    typename ICheckNodeRefuted,
     typename IGetChildren,
     typename IPropagateDescent>
 struct pud_candidate_specialization_head_forker {
@@ -20,6 +21,7 @@ struct pud_candidate_specialization_head_forker {
         IAdvanceWitnessSearchHead,
         ITryForkWitnessSearchHead,
         ICheckNodeLeaf,
+        ICheckNodeRefuted,
         IGetChildren,
         IPropagateDescent>;
 
@@ -33,10 +35,11 @@ template<
     typename IAWSH,
     typename ITFWSH,
     typename ICNL,
+    typename ICNR,
     typename IGC,
     typename IDESC>
-typename pud_candidate_specialization_head_forker<D, CI, ITAH, IAWSH, ITFWSH, ICNL, IGC, IDESC>::head_type
-pud_candidate_specialization_head_forker<D, CI, ITAH, IAWSH, ITFWSH, ICNL, IGC, IDESC>::fork(const head_type& other, D search_root_descent) const {
+typename pud_candidate_specialization_head_forker<D, CI, ITAH, IAWSH, ITFWSH, ICNL, ICNR, IGC, IDESC>::head_type
+pud_candidate_specialization_head_forker<D, CI, ITAH, IAWSH, ITFWSH, ICNL, ICNR, IGC, IDESC>::fork(const head_type& other, D search_root_descent) const {
     return head_type{other, search_root_descent};
 }
 

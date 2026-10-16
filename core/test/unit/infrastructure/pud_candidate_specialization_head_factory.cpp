@@ -24,6 +24,10 @@ struct MockTryForkWitness {
 struct MockLeaf {
     MOCK_METHOD(bool, check_leaf, (const pud_node*));
 };
+
+struct MockCheckRefuted {
+    MOCK_METHOD(bool, check_refuted, (pud_node_id));
+};
 struct MockChildren {
     MOCK_METHOD((const std::vector<const pud_node*>&), get, (const pud_node*));
 };
@@ -32,16 +36,17 @@ struct MockPropagate {
 };
 
 using test_factory_t = pud_candidate_specialization_head_factory<
-    int, child_iter, MockTryAdd, MockAdvance, MockTryForkWitness, MockLeaf, MockChildren, MockPropagate>;
+    int, child_iter, MockTryAdd, MockAdvance, MockTryForkWitness, MockLeaf, MockCheckRefuted, MockChildren, MockPropagate>;
 
 struct PudCandidateSpecializationHeadFactoryTest : public ::testing::Test {
     NiceMock<MockTryAdd> try_add;
     NiceMock<MockAdvance> advance;
     NiceMock<MockTryForkWitness> fork_witness;
     NiceMock<MockLeaf> leaves;
+    NiceMock<MockCheckRefuted> refuted_nodes;
     NiceMock<MockChildren> children;
     NiceMock<MockPropagate> propagate;
-    test_factory_t factory{try_add, advance, fork_witness, leaves, children, propagate};
+    test_factory_t factory{try_add, advance, fork_witness, leaves, refuted_nodes, children, propagate};
     pud_node root{};
     pud_node child{};
     std::vector<const pud_node*> root_children{&child};

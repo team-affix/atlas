@@ -20,6 +20,10 @@ struct MockCheckLeaf {
     MOCK_METHOD(bool, check_leaf, (pud_node_id));
 };
 
+struct MockCheckRefuted {
+    MOCK_METHOD(bool, check_refuted, (pud_node_id));
+};
+
 struct MockDescend {
     MOCK_METHOD(std::optional<descent_t>, descend, (descent_t, pud_node_id));
 };
@@ -29,10 +33,11 @@ struct MockCallSite {
 };
 
 using test_head_t = pud_witness_search_head<
-    descent_t, child_iter, MockCheckLeaf, pud_children, MockDescend, MockCallSite>;
+    descent_t, child_iter, MockCheckLeaf, MockCheckRefuted, pud_children, MockDescend, MockCallSite>;
 
 struct PudWitnessChildrenIntegrationTest : public ::testing::Test {
     NiceMock<MockCheckLeaf> leaves;
+    NiceMock<MockCheckRefuted> refuted_nodes;
     pud_children children;
     NiceMock<MockDescend> descend;
     NiceMock<MockCallSite> call_sites;
@@ -49,7 +54,7 @@ struct PudWitnessChildrenIntegrationTest : public ::testing::Test {
 
     test_head_t make_head(pud_node_id node) {
         return test_head_t{
-            leaves, children, descend, call_sites,
+            leaves, refuted_nodes, children, descend, call_sites,
             descent_t{node}};
     }
 

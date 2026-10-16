@@ -23,6 +23,10 @@ struct MockCheckLeaf {
     MOCK_METHOD(bool, check_leaf, (pud_node_id));
 };
 
+struct MockCheckRefuted {
+    MOCK_METHOD(bool, check_refuted, (pud_node_id));
+};
+
 struct MockGetChildren {
     MOCK_METHOD((const std::vector<pud_node_id>&), get, (pud_node_id));
 };
@@ -35,17 +39,18 @@ struct MockCallSite {
     MOCK_METHOD(size_t, get, (pud_node_id));
 };
 
-using head_t    = pud_witness_search_head<descent_t, child_iter, MockCheckLeaf, MockGetChildren, MockDescend, MockCallSite>;
-using factory_t = pud_witness_search_head_factory<descent_t, child_iter, MockCheckLeaf, MockGetChildren, MockDescend, MockCallSite>;
-using forker_t  = pud_witness_search_head_forker<descent_t, child_iter, MockCheckLeaf, MockGetChildren, MockDescend, MockCallSite>;
+using head_t    = pud_witness_search_head<descent_t, child_iter, MockCheckLeaf, MockCheckRefuted, MockGetChildren, MockDescend, MockCallSite>;
+using factory_t = pud_witness_search_head_factory<descent_t, child_iter, MockCheckLeaf, MockCheckRefuted, MockGetChildren, MockDescend, MockCallSite>;
+using forker_t  = pud_witness_search_head_forker<descent_t, child_iter, MockCheckLeaf, MockCheckRefuted, MockGetChildren, MockDescend, MockCallSite>;
 using mhws_t    = pud_mhws<descent_t, child_iter, head_t, factory_t, forker_t>;
 
 struct PudMhwsSearchIntegrationTest : public ::testing::Test {
     NiceMock<MockCheckLeaf>  leaves;
+    NiceMock<MockCheckRefuted> refuted_nodes;
     NiceMock<MockGetChildren> children;
     NiceMock<MockDescend>  descend;
     NiceMock<MockCallSite>   call_sites;
-    factory_t factory{leaves, children, descend, call_sites};
+    factory_t factory{leaves, refuted_nodes, children, descend, call_sites};
     forker_t  forker;
     mhws_t    searches{factory, forker};
     std::unordered_map<pud_node_id, std::vector<pud_node_id>> sequences;

@@ -31,6 +31,10 @@ struct MockTryForkWitnessHead {
 struct MockCheckLeaf {
     MOCK_METHOD(bool, check_leaf, (pud_node_id));
 };
+
+struct MockCheckRefuted {
+    MOCK_METHOD(bool, check_refuted, (pud_node_id));
+};
 struct MockGetChildren {
     MOCK_METHOD((const std::vector<pud_node_id>&), get, (pud_node_id));
 };
@@ -41,13 +45,14 @@ struct MockDescend {
 using test_head_t = pud_candidate_specialization_head<
     descent_t, child_iter,
     MockTryAddHead, MockAdvanceHead, MockTryForkWitnessHead,
-    MockCheckLeaf, MockGetChildren, MockDescend>;
+    MockCheckLeaf, MockCheckRefuted, MockGetChildren, MockDescend>;
 
 struct PudCandidateSpecializationHeadTest : public ::testing::Test {
     NiceMock<MockTryAddHead>    try_add;
     NiceMock<MockAdvanceHead>   advance_head;
     NiceMock<MockTryForkWitnessHead> fork_witness;
     NiceMock<MockCheckLeaf>     leaves;
+    NiceMock<MockCheckRefuted> refuted_nodes;
     NiceMock<MockGetChildren>   children;
     NiceMock<MockDescend>       descend;
     pud_node_id root = 1;
@@ -60,7 +65,7 @@ struct PudCandidateSpecializationHeadTest : public ::testing::Test {
 
     test_head_t make_head(pud_node_id node) {
         return test_head_t{
-            try_add, advance_head, fork_witness, leaves, children, descend,
+            try_add, advance_head, fork_witness, leaves, refuted_nodes, children, descend,
             descent_t{node}};
     }
 
@@ -594,4 +599,55 @@ TEST_F(PudCandidateSpecializationHeadTest, ChoicePointResumeIsIdempotent) {
     ASSERT_NE(cp2, nullptr);
     EXPECT_EQ(cp1->witness_a, cp2->witness_a);
     EXPECT_EQ(cp1->witness_b, cp2->witness_b);
+}
+
+// ── Refuted nodes ─────────────────────────────────────────────────────────────
+
+TEST_F(PudCandidateSpecializationHeadTest, RefutedLeafRootIsNotASelfWitness) {
+    ON_CALL(leaves, check_leaf(root)).WillByDefault(Return(true));
+    ON_CALL(refuted_nodes, check_refuted(root)).WillByDefault(Return(true));
+    auto head = make_head(root);
+    EXPECT_FALSE(head.resume().has_value());
+}
+
+TEST_F(PudCandidateSpecializationHeadTest, RefutedRootSearchesForNoWitnesses) {
+    sequences[root] = {a, b};
+    ON_CALL(refuted_nodes, check_refuted(root)).WillByDefault(Return(true));
+    EXPECT_CALL(try_add, try_add_head(_)).Times(0);
+    auto head = make_head(root);
+    EXPECT_FALSE(head.resume().has_value());
+}
+
+TEST_F(PudCandidateSpecializationHeadTest, SelfWitnessRefutedLaterIsNoLongerJustified) {
+    ON_CALL(leaves, check_leaf(root)).WillByDefault(Return(true));
+    auto head = make_head(root);
+    ASSERT_TRUE(head.resume().has_value());
+    ON_CALL(refuted_nodes, check_refuted(root)).WillByDefault(Return(true));
+    EXPECT_FALSE(head.resume().has_value());
+}
+
+TEST_F(PudCandidateSpecializationHeadTest, AdvancingOntoARefutedNodeRefutesTheHead) {
+    sequences[root] = {a, b};
+    EXPECT_CALL(try_add, try_add_head(descent_t{a})).WillOnce(Return(pud_mhws_head_id{10}));
+    EXPECT_CALL(try_add, try_add_head(descent_t{b})).WillOnce(Return(std::nullopt));
+    EXPECT_CALL(advance_head, advance_head(10u)).WillOnce(Return(std::nullopt));
+    ON_CALL(refuted_nodes, check_refuted(a)).WillByDefault(Return(true));
+    auto head = make_head(root);
+    EXPECT_FALSE(head.resume().has_value());
+}
+
+TEST_F(PudCandidateSpecializationHeadTest, DeepChoicePointUnderARefutedNodeIsRefuted) {
+    test_head_t head = make_deep_choice_point_head();
+    ON_CALL(refuted_nodes, check_refuted(b)).WillByDefault(Return(true));
+    head.witness_refuted(10);
+    EXPECT_FALSE(head.resume().has_value());
+}
+
+TEST_F(PudCandidateSpecializationHeadTest, ForkedHeadAtARefutedNodeIsRefuted) {
+    ON_CALL(leaves, check_leaf(root)).WillByDefault(Return(true));
+    auto head = make_head(root);
+    ASSERT_TRUE(head.resume().has_value());
+    ON_CALL(refuted_nodes, check_refuted(root)).WillByDefault(Return(true));
+    test_head_t forked{head, descent_t{root}};
+    EXPECT_FALSE(forked.resume().has_value());
 }

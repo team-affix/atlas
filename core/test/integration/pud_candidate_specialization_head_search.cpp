@@ -30,6 +30,10 @@ struct MockCheckLeaf {
     MOCK_METHOD(bool, check_leaf, (pud_node_id));
 };
 
+struct MockCheckRefuted {
+    MOCK_METHOD(bool, check_refuted, (pud_node_id));
+};
+
 struct MockGetChildren {
     MOCK_METHOD((const std::vector<pud_node_id>&), get, (pud_node_id));
 };
@@ -42,12 +46,12 @@ struct MockCallSite {
     MOCK_METHOD(size_t, get, (pud_node_id));
 };
 
-using witness_head_t    = pud_witness_search_head<descent_t, child_iter, MockCheckLeaf, MockGetChildren, MockDescend, MockCallSite>;
-using witness_factory_t = pud_witness_search_head_factory<descent_t, child_iter, MockCheckLeaf, MockGetChildren, MockDescend, MockCallSite>;
-using witness_forker_t  = pud_witness_search_head_forker<descent_t, child_iter, MockCheckLeaf, MockGetChildren, MockDescend, MockCallSite>;
+using witness_head_t    = pud_witness_search_head<descent_t, child_iter, MockCheckLeaf, MockCheckRefuted, MockGetChildren, MockDescend, MockCallSite>;
+using witness_factory_t = pud_witness_search_head_factory<descent_t, child_iter, MockCheckLeaf, MockCheckRefuted, MockGetChildren, MockDescend, MockCallSite>;
+using witness_forker_t  = pud_witness_search_head_forker<descent_t, child_iter, MockCheckLeaf, MockCheckRefuted, MockGetChildren, MockDescend, MockCallSite>;
 using mhws_t            = pud_mhws<descent_t, child_iter, witness_head_t, witness_factory_t, witness_forker_t>;
 using candidate_head_t  = pud_candidate_specialization_head<
-    descent_t, child_iter, mhws_t, mhws_t, mhws_t, MockCheckLeaf, MockGetChildren, MockDescend>;
+    descent_t, child_iter, mhws_t, mhws_t, mhws_t, MockCheckLeaf, MockCheckRefuted, MockGetChildren, MockDescend>;
 
 using optional_context_t = std::optional<pud_candidate_resume_context<descent_t>>;
 
@@ -76,10 +80,11 @@ constexpr uint32_t k_random_tree_max_depth = 12;
 
 struct PudCandidateSpecializationHeadSearchIntegrationTest : public ::testing::Test {
     NiceMock<MockCheckLeaf>   leaves;
+    NiceMock<MockCheckRefuted> refuted_nodes;
     NiceMock<MockGetChildren> children;
     NiceMock<MockDescend>     descend;
     NiceMock<MockCallSite>    call_sites;
-    witness_factory_t witness_factory{leaves, children, descend, call_sites};
+    witness_factory_t witness_factory{leaves, refuted_nodes, children, descend, call_sites};
     witness_forker_t  witness_forker;
     mhws_t            witnesses{witness_factory, witness_forker};
     std::unordered_map<pud_node_id, std::vector<pud_node_id>> sequences;
@@ -109,7 +114,7 @@ struct PudCandidateSpecializationHeadSearchIntegrationTest : public ::testing::T
 
     candidate_head_t make_head(pud_node_id node) {
         return candidate_head_t{
-            witnesses, witnesses, witnesses, leaves, children, descend,
+            witnesses, witnesses, witnesses, leaves, refuted_nodes, children, descend,
             descent_t{node}};
     }
 
