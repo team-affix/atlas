@@ -8,6 +8,7 @@
 #include "value_objects/pud_forced_query_propagation.hpp"
 #include "value_objects/pud_forced_unfold_reason.hpp"
 #include "value_objects/pud_mhcs_head_id.hpp"
+#include "value_objects/pud_mhq_head_admission.hpp"
 #include "value_objects/pud_mhq_head_id.hpp"
 #include "value_objects/pud_query_resume_context.hpp"
 #include "debug_assert.hpp"
@@ -19,12 +20,12 @@ template<
     typename IForkHead>
 struct pud_mhq {
     pud_mhq(IMakeHead& make_head, IForkHead& fork_head);
-    std::optional<pud_forced_query_propagation> try_add_head(const std::vector<ReplayDescent>& root_descents);
+    pud_mhq_head_admission try_add_head(const std::vector<ReplayDescent>& root_descents);
     void remove_head(pud_mhq_head_id head_id);
     std::optional<pud_forced_query_propagation> candidate_specialization_refuted(pud_mhcs_head_id candidate_head_id);
-    std::optional<pud_forced_query_propagation> try_fork_head(pud_mhq_head_id head_id, const std::vector<ReplayDescent>& root_descents);
+    pud_mhq_head_admission try_fork_head(pud_mhq_head_id head_id, const std::vector<ReplayDescent>& root_descents);
 private:
-    std::optional<pud_forced_query_propagation> try_keep_head(
+    pud_mhq_head_admission try_keep_head(
         pud_mhq_head_id head_id,
         const pud_query_resume_context& context);
     void link(pud_mhq_head_id head_id, const std::vector<pud_mhcs_head_id>& candidate_ids);
@@ -50,7 +51,7 @@ PUD_MHQ::pud_mhq(IMakeHead& make_head, IForkHead& fork_head)
     , next_head_id_(0) {}
 
 PUD_MHQ_TEMPLATE
-std::optional<pud_forced_query_propagation> PUD_MHQ::try_add_head(
+pud_mhq_head_admission PUD_MHQ::try_add_head(
     const std::vector<ReplayDescent>& root_descents) {
     const pud_mhq_head_id head_id = next_head_id_++;
     auto [head_it, head_inserted] = heads_.emplace(head_id, make_head_.make(root_descents));
@@ -91,7 +92,7 @@ std::optional<pud_forced_query_propagation> PUD_MHQ::candidate_specialization_re
 }
 
 PUD_MHQ_TEMPLATE
-std::optional<pud_forced_query_propagation> PUD_MHQ::try_fork_head(
+pud_mhq_head_admission PUD_MHQ::try_fork_head(
     pud_mhq_head_id head_id,
     const std::vector<ReplayDescent>& root_descents) {
     const Head& old_head = heads_.at(head_id);
@@ -104,18 +105,18 @@ std::optional<pud_forced_query_propagation> PUD_MHQ::try_fork_head(
 }
 
 PUD_MHQ_TEMPLATE
-std::optional<pud_forced_query_propagation> PUD_MHQ::try_keep_head(
+pud_mhq_head_admission PUD_MHQ::try_keep_head(
     pud_mhq_head_id head_id,
     const pud_query_resume_context& context) {
     const bool refuted = context.forced_unfold_reason == pud_forced_unfold_reason::refuted;
     if (refuted) {
         heads_.erase(head_id);
-        return pud_refuted_query{.head_id = head_id};
+        return pud_mhq_head_admission{.head_id = head_id, .forced_propagation = pud_refuted_query{.head_id = head_id}};
     }
     link(head_id, context.candidate_ids);
     if (!context.forced_unfold_reason.has_value())
-        return std::nullopt;
-    return pud_unit_query{.head_id = head_id};
+        return pud_mhq_head_admission{.head_id = head_id, .forced_propagation = std::nullopt};
+    return pud_mhq_head_admission{.head_id = head_id, .forced_propagation = pud_unit_query{.head_id = head_id}};
 }
 
 PUD_MHQ_TEMPLATE

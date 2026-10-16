@@ -3,21 +3,21 @@
 #include <gmock/gmock.h>
 #include "functor_fixture.hpp"
 #include "infrastructure/expr_pool.hpp"
-#include "infrastructure/pud_node_added_specializations.hpp"
+#include "infrastructure/pud_node_added_substitutions.hpp"
 #include "infrastructure/pud_structure_watch_descent.hpp"
-#include "value_objects/pud_specialization.hpp"
+#include "value_objects/pud_substitution.hpp"
 
 using ::testing::ElementsAre;
 using ::testing::IsEmpty;
 using ::testing::UnorderedElementsAre;
 
 struct PudStructureWatchDescentIntegrationTest : public ::testing::Test {
-    using watch_descent_t = pud_structure_watch_descent<pud_node_added_specializations>;
+    using watch_descent_t = pud_structure_watch_descent<pud_node_added_substitutions>;
     using result_t = watch_descent_t::descend_result;
 
     test_functors                  functors;
     expr_pool                      exprs;
-    pud_node_added_specializations node_specs_;
+    pud_node_added_substitutions node_specs_;
     pud_node_id child = 1;
     pud_node_id grandchild = 2;
     pud_node_id sibling = 3;
@@ -29,12 +29,12 @@ struct PudStructureWatchDescentIntegrationTest : public ::testing::Test {
         return exprs.make_functor(functors.id(name), std::move(args));
     }
 
-    pud_specialization rep_instantiated(uint32_t rep, const expr* value) {
-        return pud_specialization{.var_idx = rep, .value = value};
+    pud_substitution rep_instantiated(uint32_t rep, const expr* value) {
+        return pud_substitution{.var_idx = rep, .value = value};
     }
 
-    pud_specialization rep_updated(uint32_t demoted_rep, uint32_t surviving_rep) {
-        return pud_specialization{.var_idx = demoted_rep, .value = var(surviving_rep)};
+    pud_substitution rep_updated(uint32_t demoted_rep, uint32_t surviving_rep) {
+        return pud_substitution{.var_idx = demoted_rep, .value = var(surviving_rep)};
     }
 
     watch_descent_t at_root(const std::vector<const expr*>& watched) {
@@ -145,7 +145,7 @@ TEST_F(PudStructureWatchDescentIntegrationTest, WatchUnwatchAcrossThreeLevels) {
     EXPECT_THAT(changes_at(at_grandchild.child_descent, great_grandchild), UnorderedElementsAre(0u, 2u, 3u));
 }
 
-// ── many specializations at one node ─────────────────────────────────────────
+// ── many substitutions at one node ─────────────────────────────────────────
 
 TEST_F(PudStructureWatchDescentIntegrationTest, UnrelatedBindingsLeaveStructureAlone) {
     node_specs_.store(child, {
@@ -192,7 +192,7 @@ TEST_F(PudStructureWatchDescentIntegrationTest, ChangeInOneBranchDoesNotLeakInto
     EXPECT_THAT(changes_at(at_sibling.child_descent, grandchild), ElementsAre(0u));
 }
 
-TEST_F(PudStructureWatchDescentIntegrationTest, ChangesFollowTheStoredSpecializationOrder) {
+TEST_F(PudStructureWatchDescentIntegrationTest, ChangesFollowTheStoredSubstitutionOrder) {
     node_specs_.store(child, {
         rep_instantiated(2, functor("a", {})),
         rep_updated(1, 0),

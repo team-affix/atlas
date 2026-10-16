@@ -10,9 +10,9 @@
 #include "value_objects/expr.hpp"
 #include "value_objects/pud_mhsw_head_id.hpp"
 #include "value_objects/pud_node_id.hpp"
-#include "value_objects/pud_specialization.hpp"
+#include "value_objects/pud_substitution.hpp"
 
-template<typename IGetNodeAddedSpecializations>
+template<typename IGetNodeAddedSubstitutions>
 struct pud_structure_watch_descent {
     struct descend_result {
         std::vector<pud_mhsw_head_id> structure_changes;
@@ -21,7 +21,7 @@ struct pud_structure_watch_descent {
     };
 
     pud_structure_watch_descent(
-        IGetNodeAddedSpecializations& get_node_added_specializations,
+        IGetNodeAddedSubstitutions& get_node_added_substitutions,
         const std::vector<const expr*>& watched);
     descend_result descend(
         pud_node_id child,
@@ -37,22 +37,22 @@ private:
     std::vector<pud_mhsw_head_id> propagate_rep_instantiated(uint32_t rep, const expr* value);
     void visit_reps(const expr* visited, rep_set_t& reps) const;
 
-    IGetNodeAddedSpecializations* get_node_added_specializations_;
+    IGetNodeAddedSubstitutions* get_node_added_substitutions_;
     pud_mhsw_head_id next_head_id_;
     immer::map<uint32_t, head_set_t> rep_to_heads_;
     immer::map<pud_mhsw_head_id, rep_set_t> head_to_reps_;
 };
 
 #define PUD_STRUCTURE_WATCH_DESCENT_TEMPLATE                                               \
-    template<typename IGetNodeAddedSpecializations>
+    template<typename IGetNodeAddedSubstitutions>
 #define PUD_STRUCTURE_WATCH_DESCENT                                                        \
-    pud_structure_watch_descent<IGetNodeAddedSpecializations>
+    pud_structure_watch_descent<IGetNodeAddedSubstitutions>
 
 PUD_STRUCTURE_WATCH_DESCENT_TEMPLATE
 PUD_STRUCTURE_WATCH_DESCENT::pud_structure_watch_descent(
-    IGetNodeAddedSpecializations& get_node_added_specializations,
+    IGetNodeAddedSubstitutions& get_node_added_substitutions,
     const std::vector<const expr*>& watched)
-    : get_node_added_specializations_(&get_node_added_specializations)
+    : get_node_added_substitutions_(&get_node_added_substitutions)
     , next_head_id_(0)
     , rep_to_heads_()
     , head_to_reps_() {
@@ -71,11 +71,11 @@ typename PUD_STRUCTURE_WATCH_DESCENT::descend_result PUD_STRUCTURE_WATCH_DESCENT
 
     std::vector<pud_mhsw_head_id> structure_changes;
     std::unordered_set<pud_mhsw_head_id> changed_once;
-    for (const pud_specialization& specialization : get_node_added_specializations_->get(child)) {
-        const expr::var* surviving = std::get_if<expr::var>(&specialization.value->content);
+    for (const pud_substitution& substitution : get_node_added_substitutions_->get(child)) {
+        const expr::var* surviving = std::get_if<expr::var>(&substitution.value->content);
         const std::vector<pud_mhsw_head_id> changed = surviving
-            ? child_descent.propagate_rep_updated(specialization.var_idx, surviving->index)
-            : child_descent.propagate_rep_instantiated(specialization.var_idx, specialization.value);
+            ? child_descent.propagate_rep_updated(substitution.var_idx, surviving->index)
+            : child_descent.propagate_rep_instantiated(substitution.var_idx, substitution.value);
         for (pud_mhsw_head_id head_id : changed) {
             const bool first_change = changed_once.insert(head_id).second;
             if (!first_change)

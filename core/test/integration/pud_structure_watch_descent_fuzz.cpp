@@ -10,10 +10,10 @@
 #include "functor_fixture.hpp"
 #include "infrastructure/expr_pool.hpp"
 #include "infrastructure/pud_binding_descent.hpp"
-#include "infrastructure/pud_node_added_specializations.hpp"
+#include "infrastructure/pud_node_added_substitutions.hpp"
 #include "infrastructure/pud_structure_watch_descent.hpp"
 #include "infrastructure/pud_transient_ubs_state.hpp"
-#include "value_objects/pud_specialization.hpp"
+#include "value_objects/pud_substitution.hpp"
 
 // Oracle: a watched expression's structure changes between parent and child exactly when its
 // canonical form differs, where the canonical form resolves every variable through the real
@@ -22,10 +22,10 @@ struct PudStructureWatchDescentFuzzTest : public ::testing::Test {
     using bind_map_t = ubs_transient_bind_map<expr_pool, expr_pool>;
     using binding_descent_t = pud_binding_descent<
         bind_map_t,
-        pud_node_added_specializations,
+        pud_node_added_substitutions,
         expr_pool,
         expr_pool>;
-    using watch_descent_t = pud_structure_watch_descent<pud_node_added_specializations>;
+    using watch_descent_t = pud_structure_watch_descent<pud_node_added_substitutions>;
 
     struct level {
         binding_descent_t binding;
@@ -40,7 +40,7 @@ struct PudStructureWatchDescentFuzzTest : public ::testing::Test {
 
     test_functors                  functors;
     expr_pool                      exprs;
-    pud_node_added_specializations node_specs_;
+    pud_node_added_substitutions node_specs_;
     std::mt19937                   rng{0};
     pud_node_id                    next_node_id = 1;
     uint32_t                       checked_nodes = 0;
@@ -83,12 +83,12 @@ struct PudStructureWatchDescentFuzzTest : public ::testing::Test {
         return exprs.make_functor(functors.id(names[pick(3)]), args);
     }
 
-    std::vector<pud_specialization> random_specializations(const binding_descent_t& parent) {
+    std::vector<pud_substitution> random_substitutions(const binding_descent_t& parent) {
         pud_transient_ubs_state scratch{parent.ubs_state()};
         bind_map_t bind_map = scratch.make_bind_map(exprs, exprs);
-        std::vector<pud_specialization> specializations;
+        std::vector<pud_substitution> substitutions;
         const uint32_t count = pick(4);
-        for (uint32_t spec_index = 0; spec_index < count; ++spec_index) {
+        for (uint32_t substitution_index = 0; substitution_index < count; ++substitution_index) {
             const std::vector<uint32_t> reps = unbound_reps(bind_map);
             if (reps.empty())
                 break;
@@ -99,7 +99,7 @@ struct PudStructureWatchDescentFuzzTest : public ::testing::Test {
                     second = reps.at(pick(reps.size()));
                 const uint32_t demoted = std::max(first, second);
                 const uint32_t surviving = std::min(first, second);
-                specializations.push_back({.var_idx = demoted, .value = exprs.make_var(surviving)});
+                substitutions.push_back({.var_idx = demoted, .value = exprs.make_var(surviving)});
                 bind_map.equate(demoted, surviving);
                 continue;
             }
@@ -112,10 +112,10 @@ struct PudStructureWatchDescentFuzzTest : public ::testing::Test {
             if (std::holds_alternative<expr::var>(value->content))
                 value = exprs.make_functor(functors.id("w"), {value});
             const expr::functor& functor = std::get<expr::functor>(value->content);
-            specializations.push_back({.var_idx = rep, .value = value});
+            substitutions.push_back({.var_idx = rep, .value = value});
             bind_map.instantiate(rep, functor.id, functor.args);
         }
-        return specializations;
+        return substitutions;
     }
 
     void visit_canonical(
@@ -177,7 +177,7 @@ struct PudStructureWatchDescentFuzzTest : public ::testing::Test {
 
     level descend_and_check(const level& parent) {
         const pud_node_id child = next_node_id++;
-        node_specs_.store(child, random_specializations(parent.binding));
+        node_specs_.store(child, random_substitutions(parent.binding));
         const binding_descent_t child_binding = parent.binding.descend(child);
 
         std::map<pud_mhsw_head_id, const expr*> live_heads = parent.live_heads;

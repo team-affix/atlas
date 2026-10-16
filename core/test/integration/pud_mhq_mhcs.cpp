@@ -105,7 +105,7 @@ struct PudMhqMhcsIntegrationTest : public ::testing::Test {
         EXPECT_CALL(ops, resume())
             .WillOnce(Return(self_at(leaf_a, axiom_a)))
             .WillOnce(Return(self_at(leaf_b, axiom_b)));
-        ASSERT_EQ(mhq.try_add_head(two_axioms), std::nullopt);
+        ASSERT_EQ(mhq.try_add_head(two_axioms).forced_propagation, std::nullopt);
     }
 };
 
@@ -121,14 +121,14 @@ TEST_F(PudMhqMhcsIntegrationTest, UnjustifiedAxiomIsDeadAtAdd) {
     EXPECT_CALL(ops, resume())
         .WillOnce(Return(self_at(leaf_a, axiom_a)))
         .WillOnce(Return(std::nullopt));
-    EXPECT_EQ(mhq.try_add_head(two_axioms), unit_query(first_query));
+    EXPECT_EQ(mhq.try_add_head(two_axioms).forced_propagation, unit_query(first_query));
 }
 
 TEST_F(PudMhqMhcsIntegrationTest, NoJustifiedAxiomIsRefutedAtAdd) {
     EXPECT_CALL(ops, resume())
         .WillOnce(Return(std::nullopt))
         .WillOnce(Return(std::nullopt));
-    EXPECT_EQ(mhq.try_add_head(two_axioms), refuted_query(first_query));
+    EXPECT_EQ(mhq.try_add_head(two_axioms).forced_propagation, refuted_query(first_query));
 }
 
 // ── leaf invalidation ────────────────────────────────────────────────────────
@@ -170,7 +170,7 @@ TEST_F(PudMhqMhcsIntegrationTest, ChoicePointCollapseMakesQueryUnit) {
     EXPECT_CALL(ops, resume())
         .WillOnce(Return(choice_between(7, 8, axiom_a)))
         .WillOnce(Return(self_at(leaf_b, axiom_b)));
-    ASSERT_EQ(mhq.try_add_head(two_axioms), std::nullopt);
+    ASSERT_EQ(mhq.try_add_head(two_axioms).forced_propagation, std::nullopt);
 
     EXPECT_CALL(ops, witness_refuted(7u));
     EXPECT_CALL(ops, resume()).WillOnce(Return(std::nullopt));
@@ -183,7 +183,7 @@ TEST_F(PudMhqMhcsIntegrationTest, ChoicePointThatRecoversKeepsQueryLive) {
     EXPECT_CALL(ops, resume())
         .WillOnce(Return(choice_between(7, 8, axiom_a)))
         .WillOnce(Return(self_at(leaf_b, axiom_b)));
-    ASSERT_EQ(mhq.try_add_head(two_axioms), std::nullopt);
+    ASSERT_EQ(mhq.try_add_head(two_axioms).forced_propagation, std::nullopt);
 
     EXPECT_CALL(ops, resume()).WillOnce(Return(choice_between(9, 8, axiom_a)));
     EXPECT_FALSE(mhcs.witness_refuted(7).has_value());
@@ -205,7 +205,7 @@ TEST_F(PudMhqMhcsIntegrationTest, ForkForksEveryCandidateSpecialization) {
     EXPECT_CALL(ops, resume())
         .WillOnce(Return(self_at(leaf_a, specialized_a)))
         .WillOnce(Return(self_at(leaf_b, specialized_b)));
-    EXPECT_EQ(mhq.try_fork_head(first_query, {specialized_a, specialized_b}), std::nullopt);
+    EXPECT_EQ(mhq.try_fork_head(first_query, {specialized_a, specialized_b}).forced_propagation, std::nullopt);
 }
 
 TEST_F(PudMhqMhcsIntegrationTest, SharedLeafInvalidationReachesParentAndChild) {
@@ -213,7 +213,7 @@ TEST_F(PudMhqMhcsIntegrationTest, SharedLeafInvalidationReachesParentAndChild) {
     EXPECT_CALL(ops, resume())
         .WillOnce(Return(self_at(leaf_a, axiom_a)))
         .WillOnce(Return(self_at(leaf_b, axiom_b)));
-    ASSERT_EQ(mhq.try_fork_head(first_query, two_axioms), std::nullopt);
+    ASSERT_EQ(mhq.try_fork_head(first_query, two_axioms).forced_propagation, std::nullopt);
 
     EXPECT_CALL(ops, resume())
         .WillOnce(Return(std::nullopt))
@@ -227,7 +227,7 @@ TEST_F(PudMhqMhcsIntegrationTest, ForkWhoseCandidateCannotForkIsUnit) {
     EXPECT_CALL(ops, resume())
         .WillOnce(Return(self_at(leaf_a, axiom_a)))
         .WillOnce(Return(std::nullopt));
-    EXPECT_EQ(mhq.try_fork_head(first_query, two_axioms), unit_query(second_query));
+    EXPECT_EQ(mhq.try_fork_head(first_query, two_axioms).forced_propagation, unit_query(second_query));
 }
 
 TEST_F(PudMhqMhcsIntegrationTest, ForkWhoseCandidatesAllFailIsRefutedAndParentSurvives) {
@@ -235,7 +235,7 @@ TEST_F(PudMhqMhcsIntegrationTest, ForkWhoseCandidatesAllFailIsRefutedAndParentSu
     EXPECT_CALL(ops, resume())
         .WillOnce(Return(std::nullopt))
         .WillOnce(Return(std::nullopt));
-    EXPECT_EQ(mhq.try_fork_head(first_query, two_axioms), refuted_query(second_query));
+    EXPECT_EQ(mhq.try_fork_head(first_query, two_axioms).forced_propagation, refuted_query(second_query));
 
     EXPECT_CALL(ops, resume()).WillOnce(Return(std::nullopt));
     EXPECT_THAT(invalidate(leaf_a), UnorderedElementsAre(unit_query(first_query)));
@@ -249,7 +249,7 @@ TEST_F(PudMhqMhcsIntegrationTest, ForkSkipsAxiomsAlreadyDeadInParent) {
     EXPECT_CALL(fork_candidate, fork(_, axiom_a)).Times(0);
     EXPECT_CALL(fork_candidate, fork(_, axiom_b)).WillOnce(Return(MockCandidateHead{}));
     EXPECT_CALL(ops, resume()).WillOnce(Return(self_at(leaf_b, axiom_b)));
-    EXPECT_EQ(mhq.try_fork_head(first_query, two_axioms), unit_query(second_query));
+    EXPECT_EQ(mhq.try_fork_head(first_query, two_axioms).forced_propagation, unit_query(second_query));
 }
 
 // ── removing ─────────────────────────────────────────────────────────────────

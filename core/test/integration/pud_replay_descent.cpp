@@ -8,13 +8,13 @@
 #include "infrastructure/expr_pool.hpp"
 #include "infrastructure/globalizer.hpp"
 #include "infrastructure/pud_binding_descent.hpp"
-#include "infrastructure/pud_node_added_specializations.hpp"
+#include "infrastructure/pud_node_added_substitutions.hpp"
 #include "infrastructure/pud_normalizer_factory.hpp"
 #include "infrastructure/pud_replay_descent.hpp"
 #include "infrastructure/pud_transient_ubs_state.hpp"
 #include "infrastructure/pud_unifier_factory.hpp"
 #include "value_objects/framed_expr.hpp"
-#include "value_objects/pud_specialization.hpp"
+#include "value_objects/pud_substitution.hpp"
 
 struct PudReplayDescentIntegrationTest : public ::testing::Test {
     using bind_map_t = ubs_transient_bind_map<expr_pool, expr_pool>;
@@ -22,7 +22,7 @@ struct PudReplayDescentIntegrationTest : public ::testing::Test {
     using normalizer_t = normalizer_factory_t::normalizer_t;
     using unifier_factory_t = pud_unifier_factory<globalizer, normalizer_t, bind_map_t>;
     using unifier_t = unifier_factory_t::unifier_t;
-    using binding_descent_t = pud_binding_descent<bind_map_t, pud_node_added_specializations, expr_pool, expr_pool>;
+    using binding_descent_t = pud_binding_descent<bind_map_t, pud_node_added_substitutions, expr_pool, expr_pool>;
     using replay_descent_t = pud_replay_descent<
         bind_map_t,
         normalizer_t,
@@ -31,14 +31,14 @@ struct PudReplayDescentIntegrationTest : public ::testing::Test {
         expr_pool,
         normalizer_factory_t,
         unifier_factory_t,
-        pud_node_added_specializations>;
+        pud_node_added_substitutions>;
 
     test_functors                  functors;
     expr_pool                      exprs;
     globalizer                     globalize;
     normalizer_factory_t           normalizer_factory_{globalize, exprs};
     unifier_factory_t              unifier_factory_{globalize};
-    pud_node_added_specializations node_specs_;
+    pud_node_added_substitutions node_specs_;
 
     const expr* var(uint32_t index) { return exprs.make_var(index); }
 
@@ -89,8 +89,8 @@ TEST_F(PudReplayDescentIntegrationTest, SpecsReplayLiftedToFrameOffset) {
     const pud_node_id child = 1;
     const uint32_t frame_offset = 3;
     node_specs_.store(child, {
-        pud_specialization{.var_idx = 0, .value = functor("a", {})},
-        pud_specialization{.var_idx = 1, .value = functor("b", {})},
+        pud_substitution{.var_idx = 0, .value = functor("a", {})},
+        pud_substitution{.var_idx = 1, .value = functor("b", {})},
     });
     const expr* head = functor("main", {var(0), var(1), var(2)});
     std::optional<replay_descent_t> opened = open({}, head, head, frame_offset);
@@ -105,7 +105,7 @@ TEST_F(PudReplayDescentIntegrationTest, SpecsReplayLiftedToFrameOffset) {
 
 TEST_F(PudReplayDescentIntegrationTest, DifferentFrameOffsetsStayIndependent) {
     const pud_node_id child = 1;
-    node_specs_.store(child, {pud_specialization{.var_idx = 0, .value = functor("a", {})}});
+    node_specs_.store(child, {pud_substitution{.var_idx = 0, .value = functor("a", {})}});
     const expr* head = var(0);
     std::optional<replay_descent_t> at_one = open({}, var(0), head, 1u);
     std::optional<replay_descent_t> at_five = open({}, var(0), head, 5u);
@@ -127,23 +127,23 @@ TEST_F(PudReplayDescentIntegrationTest, OpeningFlowFromBindingDescentState) {
     const pud_node_id contradict_child = 2;
     const uint32_t frame_offset = 1u;
 
-    node_specs_.store(binding_child, {pud_specialization{.var_idx = 0, .value = functor("a", {})}});
+    node_specs_.store(binding_child, {pud_substitution{.var_idx = 0, .value = functor("a", {})}});
     binding_descent_t caller_binding =
         binding_descent_t{node_specs_, exprs, exprs}.descend(binding_child);
 
     std::optional<replay_descent_t> opened = open(caller_binding.ubs_state(), var(0), var(0), frame_offset);
     ASSERT_TRUE(opened.has_value());
 
-    node_specs_.store(agree_child, {pud_specialization{.var_idx = 0, .value = functor("a", {})}});
+    node_specs_.store(agree_child, {pud_substitution{.var_idx = 0, .value = functor("a", {})}});
     EXPECT_TRUE(opened->descend(agree_child).has_value());
 
-    node_specs_.store(contradict_child, {pud_specialization{.var_idx = 0, .value = functor("b", {})}});
+    node_specs_.store(contradict_child, {pud_substitution{.var_idx = 0, .value = functor("b", {})}});
     EXPECT_FALSE(opened->descend(contradict_child).has_value());
 }
 
 TEST_F(PudReplayDescentIntegrationTest, ContradictsInheritedCallerBindingRefutes) {
     const pud_node_id child = 1;
-    node_specs_.store(child, {pud_specialization{.var_idx = 0, .value = functor("b", {})}});
+    node_specs_.store(child, {pud_substitution{.var_idx = 0, .value = functor("b", {})}});
     std::optional<replay_descent_t> opened = open({}, functor("a", {}), var(0), 1);
     ASSERT_TRUE(opened.has_value());
     EXPECT_FALSE(opened->descend(child).has_value());
@@ -152,8 +152,8 @@ TEST_F(PudReplayDescentIntegrationTest, ContradictsInheritedCallerBindingRefutes
 TEST_F(PudReplayDescentIntegrationTest, ContradictsEarlierReplayedSpecRefutes) {
     const pud_node_id good_child = 1;
     const pud_node_id bad_child = 2;
-    node_specs_.store(good_child, {pud_specialization{.var_idx = 0, .value = functor("a", {})}});
-    node_specs_.store(bad_child, {pud_specialization{.var_idx = 0, .value = functor("x", {})}});
+    node_specs_.store(good_child, {pud_substitution{.var_idx = 0, .value = functor("a", {})}});
+    node_specs_.store(bad_child, {pud_substitution{.var_idx = 0, .value = functor("x", {})}});
     std::optional<replay_descent_t> opened = open({}, functor("main", {}), functor("main", {}), 0u);
     ASSERT_TRUE(opened.has_value());
     std::optional<replay_descent_t> at_good = opened->descend(good_child);
@@ -162,21 +162,21 @@ TEST_F(PudReplayDescentIntegrationTest, ContradictsEarlierReplayedSpecRefutes) {
 }
 
 TEST_F(PudReplayDescentIntegrationTest, ManySpecsReplay) {
-    const uint32_t spec_count = 200;
-    std::vector<pud_specialization> specs;
-    for (uint32_t spec_index = 0; spec_index < spec_count; ++spec_index) {
-        std::string label = "v" + std::to_string(spec_index);
-        specs.push_back(pud_specialization{.var_idx = spec_index, .value = functor(label.c_str(), {})});
+    const uint32_t substitution_count = 200;
+    std::vector<pud_substitution> substitutions;
+    for (uint32_t substitution_index = 0; substitution_index < substitution_count; ++substitution_index) {
+        std::string label = "v" + std::to_string(substitution_index);
+        substitutions.push_back(pud_substitution{.var_idx = substitution_index, .value = functor(label.c_str(), {})});
     }
     const pud_node_id child = 1;
-    node_specs_.store(child, std::move(specs));
+    node_specs_.store(child, std::move(substitutions));
     std::optional<replay_descent_t> opened = open({}, functor("main", {}), functor("main", {}), 0u);
     ASSERT_TRUE(opened.has_value());
     std::optional<replay_descent_t> at_child = opened->descend(child);
     ASSERT_TRUE(at_child.has_value());
-    for (uint32_t spec_index = 0; spec_index < spec_count; ++spec_index) {
-        std::string label = "v" + std::to_string(spec_index);
-        EXPECT_EQ(resolve_at_frame(*at_child, 0u, spec_index), functor(label.c_str(), {}));
+    for (uint32_t substitution_index = 0; substitution_index < substitution_count; ++substitution_index) {
+        std::string label = "v" + std::to_string(substitution_index);
+        EXPECT_EQ(resolve_at_frame(*at_child, 0u, substitution_index), functor(label.c_str(), {}));
     }
 }
 
@@ -185,12 +185,12 @@ TEST_F(PudReplayDescentIntegrationTest, ForkedDescentsFromSharedPrefixStayIndepe
     const pud_node_id x_child = 2;
     const uint32_t frame_offset = 3;
     node_specs_.store(bob_child, {
-        pud_specialization{.var_idx = 0, .value = functor("tom", {})},
-        pud_specialization{.var_idx = 1, .value = functor("bob", {})},
+        pud_substitution{.var_idx = 0, .value = functor("tom", {})},
+        pud_substitution{.var_idx = 1, .value = functor("bob", {})},
     });
     node_specs_.store(x_child, {
-        pud_specialization{.var_idx = 0, .value = functor("tom", {})},
-        pud_specialization{.var_idx = 1, .value = functor("x", {})},
+        pud_substitution{.var_idx = 0, .value = functor("tom", {})},
+        pud_substitution{.var_idx = 1, .value = functor("x", {})},
     });
     const expr* head = functor("parent", {var(0), var(1)});
     const expr* query = functor("parent", {var(0), var(2)});
@@ -208,8 +208,8 @@ TEST_F(PudReplayDescentIntegrationTest, CallerVarThroughHeadBindingSeesCalleeFun
     const pud_node_id child = 1;
     const uint32_t frame_offset = 3;
     node_specs_.store(child, {
-        pud_specialization{.var_idx = 0, .value = functor("tom", {})},
-        pud_specialization{.var_idx = 1, .value = functor("bob", {})},
+        pud_substitution{.var_idx = 0, .value = functor("tom", {})},
+        pud_substitution{.var_idx = 1, .value = functor("bob", {})},
     });
     const expr* head = functor("parent", {var(0), var(1)});
     const expr* query = functor("parent", {var(0), var(2)});
@@ -223,7 +223,7 @@ TEST_F(PudReplayDescentIntegrationTest, CallerVarThroughHeadBindingSeesCalleeFun
 TEST_F(PudReplayDescentIntegrationTest, VarSpecEquatesCalleeVarsAtTheFrameOffset) {
     const pud_node_id child = 1;
     const uint32_t frame_offset = 3;
-    node_specs_.store(child, {pud_specialization{.var_idx = 1, .value = var(0)}});
+    node_specs_.store(child, {pud_substitution{.var_idx = 1, .value = var(0)}});
     std::optional<replay_descent_t> opened = open({}, functor("p", {}), functor("p", {}), frame_offset);
     ASSERT_TRUE(opened.has_value());
     std::optional<replay_descent_t> at_child = opened->descend(child);
@@ -238,8 +238,8 @@ TEST_F(PudReplayDescentIntegrationTest, SpecValueVarsAreLiftedToTheFrameOffset) 
     const pud_node_id child = 1;
     const pud_node_id grandchild = 2;
     const uint32_t frame_offset = 2;
-    node_specs_.store(child, {pud_specialization{.var_idx = 0, .value = functor("f", {var(1)})}});
-    node_specs_.store(grandchild, {pud_specialization{.var_idx = 1, .value = functor("b", {})}});
+    node_specs_.store(child, {pud_substitution{.var_idx = 0, .value = functor("f", {var(1)})}});
+    node_specs_.store(grandchild, {pud_substitution{.var_idx = 1, .value = functor("b", {})}});
     std::optional<replay_descent_t> opened = open({}, functor("p", {}), functor("p", {}), frame_offset);
     ASSERT_TRUE(opened.has_value());
     std::optional<replay_descent_t> at_child = opened->descend(child);
@@ -254,8 +254,8 @@ TEST_F(PudReplayDescentIntegrationTest, SpecValueVarsAreLiftedToTheFrameOffset) 
 TEST_F(PudReplayDescentIntegrationTest, SiblingStillDescendsAfterARefutedChild) {
     const pud_node_id bad_child = 1;
     const pud_node_id good_child = 2;
-    node_specs_.store(bad_child, {pud_specialization{.var_idx = 0, .value = functor("b", {})}});
-    node_specs_.store(good_child, {pud_specialization{.var_idx = 0, .value = functor("a", {})}});
+    node_specs_.store(bad_child, {pud_substitution{.var_idx = 0, .value = functor("b", {})}});
+    node_specs_.store(good_child, {pud_substitution{.var_idx = 0, .value = functor("a", {})}});
     std::optional<replay_descent_t> opened = open({}, functor("a", {}), var(0), 1);
     ASSERT_TRUE(opened.has_value());
     ASSERT_FALSE(opened->descend(bad_child).has_value());
@@ -276,9 +276,9 @@ TEST_F(PudReplayDescentIntegrationTest, NodeWithNoSpecsKeepsTheBindings) {
 
 TEST_F(PudReplayDescentIntegrationTest, ThreeLevelReplayAccumulates) {
     const uint32_t frame_offset = 5;
-    node_specs_.store(1, {pud_specialization{.var_idx = 0, .value = functor("f", {var(1)})}});
-    node_specs_.store(2, {pud_specialization{.var_idx = 1, .value = functor("g", {var(2)})}});
-    node_specs_.store(3, {pud_specialization{.var_idx = 2, .value = functor("c", {})}});
+    node_specs_.store(1, {pud_substitution{.var_idx = 0, .value = functor("f", {var(1)})}});
+    node_specs_.store(2, {pud_substitution{.var_idx = 1, .value = functor("g", {var(2)})}});
+    node_specs_.store(3, {pud_substitution{.var_idx = 2, .value = functor("c", {})}});
     std::optional<replay_descent_t> at = open({}, functor("p", {}), functor("p", {}), frame_offset);
     for (pud_node_id level_node = 1; level_node <= 3; ++level_node) {
         ASSERT_TRUE(at.has_value()) << "level " << level_node;
@@ -294,10 +294,10 @@ TEST_F(PudReplayDescentIntegrationTest, ThreeLevelReplayAccumulates) {
 
 TEST_F(PudReplayDescentIntegrationTest, RefutationDeepInTheChainLeavesEarlierLevelsUsable) {
     const uint32_t frame_offset = 1;
-    node_specs_.store(1, {pud_specialization{.var_idx = 0, .value = functor("a", {})}});
-    node_specs_.store(2, {pud_specialization{.var_idx = 1, .value = var(0)}});
-    node_specs_.store(3, {pud_specialization{.var_idx = 1, .value = functor("b", {})}});
-    node_specs_.store(4, {pud_specialization{.var_idx = 1, .value = functor("a", {})}});
+    node_specs_.store(1, {pud_substitution{.var_idx = 0, .value = functor("a", {})}});
+    node_specs_.store(2, {pud_substitution{.var_idx = 1, .value = var(0)}});
+    node_specs_.store(3, {pud_substitution{.var_idx = 1, .value = functor("b", {})}});
+    node_specs_.store(4, {pud_substitution{.var_idx = 1, .value = functor("a", {})}});
     std::optional<replay_descent_t> opened = open({}, functor("p", {}), functor("p", {}), frame_offset);
     ASSERT_TRUE(opened.has_value());
     std::optional<replay_descent_t> at_two = opened->descend(1);
@@ -310,12 +310,12 @@ TEST_F(PudReplayDescentIntegrationTest, RefutationDeepInTheChainLeavesEarlierLev
 
 TEST_F(PudReplayDescentIntegrationTest, AgreesWithTheBindingDescentAtFrameZero) {
     node_specs_.store(1, {
-        pud_specialization{.var_idx = 2, .value = var(0)},
-        pud_specialization{.var_idx = 1, .value = functor("f", {var(3)})},
+        pud_substitution{.var_idx = 2, .value = var(0)},
+        pud_substitution{.var_idx = 1, .value = functor("f", {var(3)})},
     });
     node_specs_.store(2, {
-        pud_specialization{.var_idx = 3, .value = functor("c", {})},
-        pud_specialization{.var_idx = 4, .value = var(2)},
+        pud_substitution{.var_idx = 3, .value = functor("c", {})},
+        pud_substitution{.var_idx = 4, .value = var(2)},
     });
     binding_descent_t binding = binding_descent_t{node_specs_, exprs, exprs}
         .descend(1)
@@ -335,7 +335,7 @@ TEST_F(PudReplayDescentIntegrationTest, AgreesWithTheBindingDescentAtFrameZero) 
 
 TEST_F(PudReplayDescentIntegrationTest, ParentUnchangedByChild) {
     const pud_node_id child = 1;
-    node_specs_.store(child, {pud_specialization{.var_idx = 0, .value = functor("a", {})}});
+    node_specs_.store(child, {pud_substitution{.var_idx = 0, .value = functor("a", {})}});
     std::optional<replay_descent_t> opened = open({}, var(0), var(0), 2u);
     ASSERT_TRUE(opened.has_value());
     std::optional<replay_descent_t> at_child = opened->descend(child);

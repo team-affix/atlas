@@ -72,7 +72,7 @@ struct PudMhqQueryHeadIntegrationTest : public ::testing::Test {
         expect_add(axiom_a, 10);
         expect_add(axiom_b, 20);
         expect_add(axiom_c, 30);
-        ASSERT_EQ(mhq.try_add_head(three_axioms), std::nullopt);
+        ASSERT_EQ(mhq.try_add_head(three_axioms).forced_propagation, std::nullopt);
     }
 };
 
@@ -96,18 +96,18 @@ TEST_F(PudMhqQueryHeadIntegrationTest, AddWithOneLiveAxiomIsUnitImmediately) {
     expect_add(axiom_a, std::nullopt);
     expect_add(axiom_b, 20);
     expect_add(axiom_c, std::nullopt);
-    EXPECT_EQ(mhq.try_add_head(three_axioms), unit_query(first_id));
+    EXPECT_EQ(mhq.try_add_head(three_axioms).forced_propagation, unit_query(first_id));
     EXPECT_EQ(mhq.candidate_specialization_refuted(20), refuted_query(first_id));
 }
 
 TEST_F(PudMhqQueryHeadIntegrationTest, AddWithNoLiveAxiomIsRefutedImmediately) {
     expect_add(axiom_a, std::nullopt);
     expect_add(axiom_b, std::nullopt);
-    EXPECT_EQ(mhq.try_add_head(two_axioms), refuted_query(first_id));
+    EXPECT_EQ(mhq.try_add_head(two_axioms).forced_propagation, refuted_query(first_id));
 }
 
 TEST_F(PudMhqQueryHeadIntegrationTest, AddWithNoAxiomsIsRefutedImmediately) {
-    EXPECT_EQ(mhq.try_add_head({}), refuted_query(first_id));
+    EXPECT_EQ(mhq.try_add_head({}).forced_propagation, refuted_query(first_id));
 }
 
 TEST_F(PudMhqQueryHeadIntegrationTest, RefutedQueryIgnoresFurtherRefutations) {
@@ -179,7 +179,7 @@ TEST_F(PudMhqQueryHeadIntegrationTest, ForkForksEveryLiveCandidate) {
     expect_fork(10, axiom_a, 110);
     expect_fork(20, axiom_b, 120);
     expect_fork(30, axiom_c, 130);
-    EXPECT_EQ(mhq.try_fork_head(first_id, three_axioms), std::nullopt);
+    EXPECT_EQ(mhq.try_fork_head(first_id, three_axioms).forced_propagation, std::nullopt);
 }
 
 TEST_F(PudMhqQueryHeadIntegrationTest, ForkSkipsCandidatesRefutedBeforeTheFork) {
@@ -188,7 +188,7 @@ TEST_F(PudMhqQueryHeadIntegrationTest, ForkSkipsCandidatesRefutedBeforeTheFork) 
     expect_fork(10, axiom_a, 110);
     expect_fork(30, axiom_c, 130);
     EXPECT_CALL(try_fork, try_fork_head(20, _)).Times(0);
-    EXPECT_EQ(mhq.try_fork_head(first_id, three_axioms), std::nullopt);
+    EXPECT_EQ(mhq.try_fork_head(first_id, three_axioms).forced_propagation, std::nullopt);
 }
 
 TEST_F(PudMhqQueryHeadIntegrationTest, ForkPassesSpecializedDescents) {
@@ -207,7 +207,7 @@ TEST_F(PudMhqQueryHeadIntegrationTest, ForkThatKeepsOneCandidateIsUnit) {
     expect_fork(10, axiom_a, std::nullopt);
     expect_fork(20, axiom_b, 120);
     expect_fork(30, axiom_c, std::nullopt);
-    EXPECT_EQ(mhq.try_fork_head(first_id, three_axioms), unit_query(second_id));
+    EXPECT_EQ(mhq.try_fork_head(first_id, three_axioms).forced_propagation, unit_query(second_id));
     EXPECT_EQ(mhq.candidate_specialization_refuted(120), refuted_query(second_id));
 }
 
@@ -216,7 +216,7 @@ TEST_F(PudMhqQueryHeadIntegrationTest, ForkThatKeepsNoCandidateIsRefutedAndParen
     expect_fork(10, axiom_a, std::nullopt);
     expect_fork(20, axiom_b, std::nullopt);
     expect_fork(30, axiom_c, std::nullopt);
-    EXPECT_EQ(mhq.try_fork_head(first_id, three_axioms), refuted_query(second_id));
+    EXPECT_EQ(mhq.try_fork_head(first_id, three_axioms).forced_propagation, refuted_query(second_id));
 
     EXPECT_EQ(mhq.candidate_specialization_refuted(10), std::nullopt);
     EXPECT_EQ(mhq.candidate_specialization_refuted(20), unit_query(first_id));
@@ -286,7 +286,7 @@ TEST_F(PudMhqQueryHeadIntegrationTest, ForkOfForkRoutesToTheGrandchild) {
     mhq.try_fork_head(first_id, two_axioms);
     expect_fork(110, axiom_a, 210);
     expect_fork(120, axiom_b, 220);
-    EXPECT_EQ(mhq.try_fork_head(second_id, two_axioms), std::nullopt);
+    EXPECT_EQ(mhq.try_fork_head(second_id, two_axioms).forced_propagation, std::nullopt);
 
     EXPECT_EQ(mhq.candidate_specialization_refuted(210), unit_query(third_id));
     EXPECT_EQ(mhq.candidate_specialization_refuted(110), unit_query(second_id));
@@ -301,16 +301,16 @@ TEST_F(PudMhqQueryHeadIntegrationTest, ForkOfUnitQueryForksOnlyItsLastCandidate)
     expect_fork(20, axiom_b, 120);
     EXPECT_CALL(try_fork, try_fork_head(10, _)).Times(0);
     EXPECT_CALL(try_fork, try_fork_head(30, _)).Times(0);
-    EXPECT_EQ(mhq.try_fork_head(first_id, three_axioms), unit_query(second_id));
+    EXPECT_EQ(mhq.try_fork_head(first_id, three_axioms).forced_propagation, unit_query(second_id));
 }
 
 TEST_F(PudMhqQueryHeadIntegrationTest, HeadIdsAreSequentialAcrossAddsAndForks) {
     expect_add(axiom_a, 10);
-    EXPECT_EQ(mhq.try_add_head({axiom_a}), unit_query(first_id));
+    EXPECT_EQ(mhq.try_add_head({axiom_a}).forced_propagation, unit_query(first_id));
     expect_fork(10, axiom_a, 110);
-    EXPECT_EQ(mhq.try_fork_head(first_id, {axiom_a}), unit_query(second_id));
+    EXPECT_EQ(mhq.try_fork_head(first_id, {axiom_a}).forced_propagation, unit_query(second_id));
     EXPECT_CALL(try_add, try_add_head(axiom_a)).WillOnce(Return(11));
-    EXPECT_EQ(mhq.try_add_head({axiom_a}), unit_query(third_id));
+    EXPECT_EQ(mhq.try_add_head({axiom_a}).forced_propagation, unit_query(third_id));
 }
 
 }  // namespace
