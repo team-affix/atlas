@@ -1,5 +1,6 @@
 #include <algorithm>
 #include <optional>
+#include <stdexcept>
 #include <vector>
 #include <gtest/gtest.h>
 #include <gmock/gmock.h>
@@ -422,4 +423,158 @@ TEST_F(PudManifestLemmaIntegrationTest, RefutingTheRuleTreesRecursiveBranchKeeps
     EXPECT_TRUE(refuted(recursive));
     EXPECT_FALSE(refuted(nat_rule));
     EXPECT_TRUE(solvable(functor("nat", {peano(1)})));
+}
+
+// ---------- query lifetime: a query lives exactly as long as some leaf mentions it ----------
+
+struct PudManifestQueryLifetimeIntegrationTest : public PudManifestIntegrationTest {
+    pud_mhq_head_id query_of(pud_node_id leaf, body_goal_id goal) {
+        return manifest.node_descents_.get(leaf).body_goal_pq().find_query_head(goal).value();
+    }
+
+    bool alive(pud_mhq_head_id head) {
+        try {
+            manifest.mhq_.get_candidates(head);
+            return true;
+        } catch (const std::out_of_range&) {
+            return false;
+        }
+    }
+
+    std::vector<pud_node_id> children_of(pud_node_id node) {
+        return manifest.children_.get(node);
+    }
+};
+
+TEST_F(PudManifestQueryLifetimeIntegrationTest, RootsQueriesLiveWhileTheRootIsALeaf) {
+    add_colors();
+    const pud_node_id query = start_query(atom("q"), {functor("color", {var(0)}), functor("warm", {var(1)})}, 2);
+    EXPECT_TRUE(alive(query_of(query, 0)));
+    EXPECT_TRUE(alive(query_of(query, 1)));
+}
+
+TEST_F(PudManifestQueryLifetimeIntegrationTest, ExpandedLeafKeepsNoStoredDescent) {
+    add_colors();
+    const pud_node_id query = start_query(atom("q"), {functor("color", {var(0)})}, 1);
+    manifest.leaf_expander_.expand(query, 0);
+    EXPECT_THROW(manifest.node_descents_.get(query), std::out_of_range);
+    for (pud_node_id child : children_of(query))
+        EXPECT_NO_THROW(manifest.node_descents_.get(child));
+}
+
+TEST_F(PudManifestQueryLifetimeIntegrationTest, ExpandedGoalsQueryIsRemovedOnceNoLeafMentionsIt) {
+    add_colors();
+    const pud_node_id query = start_query(atom("q"), {functor("color", {var(0)})}, 1);
+    const pud_mhq_head_id expanded = query_of(query, 0);
+    manifest.leaf_expander_.expand(query, 0);
+    EXPECT_FALSE(alive(expanded));
+}
+
+TEST_F(PudManifestQueryLifetimeIntegrationTest, UnchangedGoalsQueryIsSharedByEveryChild) {
+    add_colors();
+    const pud_node_id query = start_query(atom("q"), {functor("color", {var(0)}), functor("warm", {var(1)})}, 2);
+    const pud_mhq_head_id shared = query_of(query, 1);
+    manifest.leaf_expander_.expand(query, 0);
+    ASSERT_EQ(children_of(query).size(), 2u);
+    for (pud_node_id child : children_of(query))
+        EXPECT_EQ(query_of(child, 1), shared);
+    EXPECT_TRUE(alive(shared));
+}
+
+TEST_F(PudManifestQueryLifetimeIntegrationTest, SharedQuerySurvivesUntilItsLastLeafIsRefuted) {
+    add_colors();
+    const pud_node_id query = start_query(atom("q"), {functor("color", {var(0)}), functor("warm", {var(1)})}, 2);
+    const pud_mhq_head_id shared = query_of(query, 1);
+    manifest.leaf_expander_.expand(query, 0);
+    const std::vector<pud_node_id> children = children_of(query);
+    ASSERT_EQ(children.size(), 2u);
+    manifest.node_refuter_.refute(children.at(0));
+    EXPECT_TRUE(alive(shared));
+    manifest.node_refuter_.refute(children.at(1));
+    EXPECT_FALSE(alive(shared));
+}
+
+TEST_F(PudManifestQueryLifetimeIntegrationTest, SharedQuerySurvivesUntilItsLastLeafIsExpandedPastIt) {
+    add_colors();
+    const pud_node_id query = start_query(atom("q"), {functor("color", {var(0)}), functor("warm", {var(1)})}, 2);
+    const pud_mhq_head_id shared = query_of(query, 1);
+    manifest.leaf_expander_.expand(query, 0);
+    const std::vector<pud_node_id> children = children_of(query);
+    ASSERT_EQ(children.size(), 2u);
+    manifest.leaf_expander_.expand(children.at(0), 1);
+    EXPECT_TRUE(alive(shared));
+    manifest.leaf_expander_.expand(children.at(1), 1);
+    EXPECT_FALSE(alive(shared));
+}
+
+TEST_F(PudManifestQueryLifetimeIntegrationTest, ForkedQueryReplacesTheParentsQueryForEveryChild) {
+    add_colors();
+    const pud_node_id query = start_query(
+        functor("q", {var(0)}), {functor("color", {var(0)}), functor("warm", {var(0)})}, 1);
+    const pud_mhq_head_id parents_query = query_of(query, 1);
+    manifest.leaf_expander_.expand(query, 0);
+    EXPECT_FALSE(alive(parents_query));
+    for (pud_node_id child : children_of(query)) {
+        if (refuted(child))
+            continue;
+        const pud_mhq_head_id forked = query_of(child, 1);
+        EXPECT_NE(forked, parents_query);
+        EXPECT_TRUE(alive(forked));
+    }
+}
+
+TEST_F(PudManifestQueryLifetimeIntegrationTest, RefutedChildsForkedQueryIsRemoved) {
+    add_colors();
+    const pud_node_id query = start_query(
+        functor("q", {var(0)}), {functor("color", {var(0)}), functor("warm", {var(0)})}, 1);
+    manifest.leaf_expander_.expand(query, 0);
+    const std::vector<pud_node_id> children = children_of(query);
+    ASSERT_EQ(children.size(), 2u);
+    pud_node_id live_child = children.at(0);
+    for (pud_node_id child : children) {
+        if (!refuted(child))
+            live_child = child;
+    }
+    const pud_mhq_head_id forked = query_of(live_child, 1);
+    manifest.node_refuter_.refute(live_child);
+    EXPECT_FALSE(alive(forked));
+}
+
+TEST_F(PudManifestQueryLifetimeIntegrationTest, RefutingTheRootRemovesEveryQuery) {
+    add_colors();
+    const pud_node_id query = start_query(atom("q"), {functor("color", {var(0)}), functor("warm", {var(1)})}, 2);
+    const pud_mhq_head_id colors = query_of(query, 0);
+    const pud_mhq_head_id warmth = query_of(query, 1);
+    manifest.node_refuter_.refute(query);
+    EXPECT_FALSE(alive(colors));
+    EXPECT_FALSE(alive(warmth));
+}
+
+TEST_F(PudManifestQueryLifetimeIntegrationTest, NewGoalsQueryLivesWithTheChildThatAddedIt) {
+    add_nat();
+    const pud_node_id query = start_query(atom("q"), {functor("nat", {var(0)})}, 1);
+    manifest.leaf_expander_.expand(query, 0);
+    pud_node_id recursive = 0;
+    for (pud_node_id child : children_of(query)) {
+        if (!manifest.node_descents_.get(child).body_goal_expr().body_goal_exprs().empty())
+            recursive = child;
+    }
+    ASSERT_NE(recursive, 0u);
+    const pud_mhq_head_id added = query_of(recursive, 1);
+    EXPECT_EQ(manifest.query_head_nodes_.get(added), recursive);
+    EXPECT_TRUE(alive(added));
+    manifest.node_refuter_.refute(recursive);
+    EXPECT_FALSE(alive(added));
+}
+
+TEST_F(PudManifestQueryLifetimeIntegrationTest, SolvingLeavesOnlyTheFrontiersQueriesAlive) {
+    add_nat();
+    const pud_node_id query = start_query(functor("q", {var(0)}), {functor("nat", {var(0)})}, 1);
+    const pud_mhq_head_id root_query = query_of(query, 0);
+    ASSERT_TRUE(manifest.solver_.solve(query, 20).has_value());
+    EXPECT_FALSE(alive(root_query));
+    for (pud_node_id leaf : manifest.live_leaf_finder_.find_live_leaves(query)) {
+        for (const auto& [goal, goal_expr] : manifest.node_descents_.get(leaf).body_goal_expr().body_goal_exprs())
+            EXPECT_TRUE(alive(query_of(leaf, goal)));
+    }
 }
