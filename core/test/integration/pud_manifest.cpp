@@ -1,4 +1,5 @@
 #include <algorithm>
+#include <map>
 #include <optional>
 #include <stdexcept>
 #include <vector>
@@ -6,6 +7,7 @@
 #include <gmock/gmock.h>
 #include "functor_fixture.hpp"
 #include "infrastructure/pud_manifest.hpp"
+#include "value_objects/pud_solver_step.hpp"
 #include "value_objects/rule.hpp"
 
 using ::testing::ElementsAre;
@@ -15,6 +17,7 @@ using ::testing::UnorderedElementsAre;
 struct PudManifestIntegrationTest : public ::testing::Test {
     pud_manifest manifest;
     test_functors functors;
+    std::map<pud_node_id, coroutine<pud_solver_step, void>> searches;
 
     const expr* var(uint32_t index) { return manifest.expr_pool_.make_var(index); }
 
@@ -60,14 +63,35 @@ struct PudManifestIntegrationTest : public ::testing::Test {
         return normalizer.normalize(framed_expr{manifest.node_heads_.get(query_root), 0});
     }
 
-    std::vector<const expr*> enumerate(pud_node_id query_root, size_t max_answers, size_t max_expansions) {
+    coroutine<pud_solver_step, void>& search_of(pud_node_id query_root) {
+        auto found = searches.find(query_root);
+        if (found == searches.end())
+            found = searches.emplace(query_root, manifest.solver_.solve(query_root)).first;
+        return found->second;
+    }
+
+    std::optional<pud_node_id> next_solution(pud_node_id query_root, size_t max_steps) {
+        coroutine<pud_solver_step, void>& search = search_of(query_root);
+        for (size_t resumed = 0; resumed < max_steps; ++resumed) {
+            search.resume();
+            if (!search.has_yield())
+                return std::nullopt;
+            const pud_solver_step step = search.consume_yield();
+            if (const pud_solution* solution = std::get_if<pud_solution>(&step))
+                return solution->leaf;
+        }
+        return std::nullopt;
+    }
+
+    bool exhausted(pud_node_id query_root) { return search_of(query_root).done(); }
+
+    std::vector<const expr*> enumerate(pud_node_id query_root, size_t max_answers, size_t max_steps) {
         std::vector<const expr*> answers;
         while (answers.size() < max_answers) {
-            const std::optional<pud_node_id> solution = manifest.solver_.solve(query_root, max_expansions);
+            const std::optional<pud_node_id> solution = next_solution(query_root, max_steps);
             if (!solution.has_value())
                 break;
             answers.push_back(answer(query_root, solution.value()));
-            manifest.node_refuter_.refute(solution.value());
         }
         return answers;
     }
@@ -126,19 +150,19 @@ TEST_F(PudManifestIntegrationTest, QueryVariableIsBoundByEachMatchingFact) {
     EXPECT_THAT(
         enumerate(query, 10, 50),
         UnorderedElementsAre(functor("q", {atom("red")}), functor("q", {atom("blue")})));
-    EXPECT_TRUE(refuted(query));
+    EXPECT_TRUE(exhausted(query));
 }
 
 TEST_F(PudManifestIntegrationTest, QueryWithNoMatchingAxiomIsRefutedAtStart) {
     add_colors();
     const pud_node_id query = start_query(atom("q"), {functor("color", {atom("green")})}, 0);
     EXPECT_TRUE(refuted(query));
-    EXPECT_FALSE(manifest.solver_.solve(query, 50).has_value());
+    EXPECT_FALSE(next_solution(query, 50).has_value());
 }
 
 TEST_F(PudManifestIntegrationTest, QueryWithNoBodyGoalsIsItsOwnSolution) {
     const pud_node_id query = start_query(atom("q"), {}, 0);
-    EXPECT_EQ(manifest.solver_.solve(query, 0), query);
+    EXPECT_EQ(next_solution(query, 1), query);
 }
 
 TEST_F(PudManifestIntegrationTest, ConjunctionKeepsOnlyBindingsThatSatisfyEveryGoal) {
@@ -148,7 +172,7 @@ TEST_F(PudManifestIntegrationTest, ConjunctionKeepsOnlyBindingsThatSatisfyEveryG
         {functor("color", {var(0)}), functor("warm", {var(0)})},
         1);
     EXPECT_THAT(enumerate(query, 10, 50), ElementsAre(functor("q", {atom("red")})));
-    EXPECT_TRUE(refuted(query));
+    EXPECT_TRUE(exhausted(query));
 }
 
 TEST_F(PudManifestIntegrationTest, ConjunctionWithNoCommonBindingIsRefuted) {
@@ -182,7 +206,7 @@ TEST_F(PudManifestIntegrationTest, GroundNaturalNumberIsChecked) {
     add_nat();
     const pud_node_id query = start_query(atom("q"), {functor("nat", {peano(3)})}, 0);
     EXPECT_THAT(enumerate(query, 10, 100), ElementsAre(atom("q")));
-    EXPECT_TRUE(refuted(query));
+    EXPECT_TRUE(exhausted(query));
 }
 
 TEST_F(PudManifestIntegrationTest, NonNaturalIsRefutedAfterUnfolding) {
@@ -199,7 +223,7 @@ TEST_F(PudManifestIntegrationTest, AppendBuildsTheConcatenation) {
         {functor("app", {list({atom("a")}), list({atom("b"), atom("c")}), var(0)})},
         1);
     EXPECT_THAT(enumerate(query, 10, 100), ElementsAre(functor("q", {list({atom("a"), atom("b"), atom("c")})})));
-    EXPECT_TRUE(refuted(query));
+    EXPECT_TRUE(exhausted(query));
 }
 
 TEST_F(PudManifestIntegrationTest, AppendSplitsAListEveryWay) {
@@ -214,7 +238,7 @@ TEST_F(PudManifestIntegrationTest, AppendSplitsAListEveryWay) {
             functor("q", {list({}), list({atom("a"), atom("b")})}),
             functor("q", {list({atom("a")}), list({atom("b")})}),
             functor("q", {list({atom("a"), atom("b")}), list({})})));
-    EXPECT_TRUE(refuted(query));
+    EXPECT_TRUE(exhausted(query));
 }
 
 TEST_F(PudManifestIntegrationTest, MemberFindsEveryElementInOrder) {
@@ -226,7 +250,7 @@ TEST_F(PudManifestIntegrationTest, MemberFindsEveryElementInOrder) {
     EXPECT_THAT(
         enumerate(query, 10, 100),
         ElementsAre(functor("q", {atom("a")}), functor("q", {atom("b")}), functor("q", {atom("c")})));
-    EXPECT_TRUE(refuted(query));
+    EXPECT_TRUE(exhausted(query));
 }
 
 TEST_F(PudManifestIntegrationTest, PeanoAdditionIsInverted) {
@@ -241,7 +265,7 @@ TEST_F(PudManifestIntegrationTest, PeanoAdditionIsInverted) {
             functor("q", {peano(0), peano(2)}),
             functor("q", {peano(1), peano(1)}),
             functor("q", {peano(2), peano(0)})));
-    EXPECT_TRUE(refuted(query));
+    EXPECT_TRUE(exhausted(query));
 }
 
 TEST_F(PudManifestIntegrationTest, TransitiveClosureTerminatesOnAFiniteGraph) {
@@ -256,7 +280,7 @@ TEST_F(PudManifestIntegrationTest, TransitiveClosureTerminatesOnAFiniteGraph) {
     EXPECT_THAT(
         enumerate(query, 10, 200),
         UnorderedElementsAre(functor("q", {atom("b")}), functor("q", {atom("c")})));
-    EXPECT_TRUE(refuted(query));
+    EXPECT_TRUE(exhausted(query));
 }
 
 TEST_F(PudManifestIntegrationTest, SharedVariablesAcrossGoalsAreRespected) {
@@ -270,7 +294,7 @@ TEST_F(PudManifestIntegrationTest, SharedVariablesAcrossGoalsAreRespected) {
         },
         1);
     EXPECT_THAT(enumerate(query, 10, 200), ElementsAre(functor("q", {atom("b")})));
-    EXPECT_TRUE(refuted(query));
+    EXPECT_TRUE(exhausted(query));
 }
 
 // ---------- budget and tree state ----------
@@ -278,20 +302,20 @@ TEST_F(PudManifestIntegrationTest, SharedVariablesAcrossGoalsAreRespected) {
 TEST_F(PudManifestIntegrationTest, ExhaustedBudgetLeavesTheQueryLive) {
     add_nat();
     const pud_node_id query = start_query(atom("q"), {functor("nat", {peano(5)})}, 0);
-    EXPECT_FALSE(manifest.solver_.solve(query, 2).has_value());
+    EXPECT_FALSE(next_solution(query, 2).has_value());
     EXPECT_FALSE(refuted(query));
-    EXPECT_TRUE(manifest.solver_.solve(query, 100).has_value());
+    EXPECT_TRUE(next_solution(query, 100).has_value());
 }
 
 TEST_F(PudManifestIntegrationTest, RefutingOneSolutionKeepsTheOthers) {
     add_colors();
     const pud_node_id query = start_query(functor("q", {var(0)}), {functor("color", {var(0)})}, 1);
-    const std::optional<pud_node_id> first = manifest.solver_.solve(query, 50);
+    const std::optional<pud_node_id> first = next_solution(query, 50);
     ASSERT_TRUE(first.has_value());
     manifest.node_refuter_.refute(first.value());
     EXPECT_TRUE(refuted(first.value()));
     EXPECT_FALSE(refuted(query));
-    const std::optional<pud_node_id> second = manifest.solver_.solve(query, 50);
+    const std::optional<pud_node_id> second = next_solution(query, 50);
     ASSERT_TRUE(second.has_value());
     EXPECT_NE(second.value(), first.value());
 }
@@ -309,7 +333,7 @@ TEST_F(PudManifestIntegrationTest, TwoQueriesShareTheDatabase) {
 TEST_F(PudManifestIntegrationTest, SolutionLeafHasNoOpenGoals) {
     add_nat();
     const pud_node_id query = start_query(functor("q", {var(0)}), {functor("nat", {var(0)})}, 1);
-    const std::optional<pud_node_id> solution = manifest.solver_.solve(query, 50);
+    const std::optional<pud_node_id> solution = next_solution(query, 50);
     ASSERT_TRUE(solution.has_value());
     EXPECT_TRUE(manifest.node_descents_.get(solution.value()).body_goal_expr().body_goal_exprs().empty());
     EXPECT_TRUE(manifest.leaf_nodes_.check_leaf(solution.value()));
@@ -363,7 +387,7 @@ struct PudManifestLemmaIntegrationTest : public PudManifestIntegrationTest {
 
     bool solvable(const expr* goal) {
         const pud_node_id query = start_query(atom("q"), {goal}, 0);
-        return manifest.solver_.solve(query, 200).has_value();
+        return next_solution(query, 200).has_value();
     }
 };
 
@@ -388,7 +412,7 @@ TEST_F(PudManifestLemmaIntegrationTest, NonNumbersAreStillRefutedOnceTheRuleTree
     add_nat_tracked();
     grow_nat_rule(3);
     const pud_node_id query = start_query(atom("q"), {functor("nat", {peano_on(2, "bad")})}, 0);
-    EXPECT_FALSE(manifest.solver_.solve(query, 200).has_value());
+    EXPECT_FALSE(next_solution(query, 200).has_value());
     EXPECT_TRUE(refuted(query));
 }
 
@@ -413,7 +437,7 @@ TEST_F(PudManifestLemmaIntegrationTest, DeepLemmaResolvesALargeNumberInFewExpans
     add_nat_tracked();
     grow_nat_rule(6);
     const pud_node_id query = start_query(atom("q"), {functor("nat", {peano(6)})}, 0);
-    EXPECT_TRUE(manifest.solver_.solve(query, 3).has_value());
+    EXPECT_TRUE(next_solution(query, 3).has_value());
 }
 
 TEST_F(PudManifestLemmaIntegrationTest, RefutingTheRuleTreesRecursiveBranchKeepsQueriesCorrect) {
@@ -571,7 +595,7 @@ TEST_F(PudManifestQueryLifetimeIntegrationTest, SolvingLeavesOnlyTheFrontiersQue
     add_nat();
     const pud_node_id query = start_query(functor("q", {var(0)}), {functor("nat", {var(0)})}, 1);
     const pud_mhq_head_id root_query = query_of(query, 0);
-    ASSERT_TRUE(manifest.solver_.solve(query, 20).has_value());
+    ASSERT_TRUE(next_solution(query, 20).has_value());
     EXPECT_FALSE(alive(root_query));
     for (pud_node_id leaf : manifest.live_leaf_finder_.find_live_leaves(query)) {
         for (const auto& [goal, goal_expr] : manifest.node_descents_.get(leaf).body_goal_expr().body_goal_exprs())

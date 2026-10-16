@@ -87,7 +87,7 @@ pud_node_id build_query_as_lemma(pud_manifest_harness& h) {
     h.add_colors();
     const pud_node_id first = h.start_query(
         h.functor("warmcolor", {h.var(0)}), {h.functor("color", {h.var(0)}), h.functor("warm", {h.var(0)})}, 1);
-    h.manifest.solver_.solve(first, 2);
+    h.next_solution(first, 2);
     return h.start_query(h.functor("q", {h.var(0)}), {h.functor("warmcolor", {h.var(0)})}, 1);
 }
 
@@ -110,33 +110,30 @@ pud_node_id build_random_recursive(pud_manifest_harness& h) {
     return load_datalog(h, generate_datalog(11, true));
 }
 
-// Solutions are refuted to enumerate the next one, except in trees that are their own lemma
-// source: there a refuted solution would wrongly remove a derivation the tree still relies on.
 struct scenario {
     std::string name;
     build_t build;
     size_t steps;
-    bool refute_solutions;
 };
 
 const std::vector<scenario>& corpus() {
     static const std::vector<scenario> scenarios{
-        {"colors_conjunction", build_colors_conjunction, 60, true},
-        {"colors_independent", build_colors_independent, 60, true},
-        {"nat_enumeration", build_nat_enumeration, 120, true},
-        {"nat_ground", build_nat_ground, 60, true},
-        {"append_split", build_append_split, 90, true},
-        {"member", build_member, 90, true},
-        {"peano_add", build_peano_add, 90, true},
-        {"graph", build_graph, 90, true},
-        {"cross_goal_merge", build_cross_goal_merge, 90, true},
-        {"self_candidate", build_self_candidate, 90, false},
-        {"grown_lemma", build_grown_lemma, 90, true},
-        {"occurs_check", build_occurs_check, 30, true},
-        {"query_as_lemma", build_query_as_lemma, 60, true},
-        {"shared_deep", build_shared_deep, 60, true},
-        {"random_nonrecursive", build_random_nonrecursive, 120, true},
-        {"random_recursive", build_random_recursive, 120, true},
+        {"colors_conjunction", build_colors_conjunction, 60},
+        {"colors_independent", build_colors_independent, 60},
+        {"nat_enumeration", build_nat_enumeration, 120},
+        {"nat_ground", build_nat_ground, 60},
+        {"append_split", build_append_split, 90},
+        {"member", build_member, 90},
+        {"peano_add", build_peano_add, 90},
+        {"graph", build_graph, 90},
+        {"cross_goal_merge", build_cross_goal_merge, 90},
+        {"self_candidate", build_self_candidate, 90},
+        {"grown_lemma", build_grown_lemma, 90},
+        {"occurs_check", build_occurs_check, 30},
+        {"query_as_lemma", build_query_as_lemma, 60},
+        {"shared_deep", build_shared_deep, 60},
+        {"random_nonrecursive", build_random_nonrecursive, 120},
+        {"random_recursive", build_random_recursive, 120},
     };
     return scenarios;
 }
@@ -149,14 +146,8 @@ void sweep(check_t check) {
         std::vector<const expr*> answers;
         ((*harness).*check)();
         for (size_t step = 0; step < each.steps; ++step) {
-            if (!each.refute_solutions && !answers.empty())
+            if (!harness->step(query, answers))
                 break;
-            if (!each.refute_solutions) {
-                if (harness->manifest.solver_.solve(query, 1).has_value())
-                    answers.push_back(harness->atom("found"));
-            } else if (!harness->step(query, answers)) {
-                break;
-            }
             SCOPED_TRACE("step " + std::to_string(step));
             ((*harness).*check)();
             if (::testing::Test::HasFailure())

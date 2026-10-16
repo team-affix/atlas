@@ -159,12 +159,17 @@ std::vector<pud_mhsw_head_id> PUD_STRUCTURE_WATCH_DESCENT::propagate_rep_instant
 
 PUD_STRUCTURE_WATCH_DESCENT_TEMPLATE
 void PUD_STRUCTURE_WATCH_DESCENT::visit_reps(const expr* visited, rep_set_t& reps) const {
-    if (const expr::var* var = std::get_if<expr::var>(&visited->content)) {
-        reps = reps.insert(var->index);
-        return;
+    std::vector<const expr*> pending{visited};
+    while (!pending.empty()) {
+        const expr* next = pending.back();
+        pending.pop_back();
+        if (const expr::var* var = std::get_if<expr::var>(&next->content)) {
+            reps = reps.insert(var->index);
+            continue;
+        }
+        for (const expr* arg : std::get<expr::functor>(next->content).args)
+            pending.push_back(arg);
     }
-    for (const expr* arg : std::get<expr::functor>(visited->content).args)
-        visit_reps(arg, reps);
 }
 
 #undef PUD_STRUCTURE_WATCH_DESCENT

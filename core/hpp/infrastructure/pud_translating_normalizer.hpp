@@ -10,6 +10,7 @@
 
 // Fully normalizes a framed expression; representatives at or above fresh_offset are renamed
 // densely from fresh_offset in the order they are first met, shared through translation.
+// Iterative, so term depth is bounded by memory rather than by the call stack.
 template<typename IGlobalize, typename IMakeFunctor, typename IMakeVar, typename IResolve>
 struct pud_translating_normalizer {
     pud_translating_normalizer(
@@ -22,6 +23,17 @@ struct pud_translating_normalizer {
         uint32_t fresh_offset,
         std::unordered_map<uint32_t, uint32_t>& translation);
 private:
+    struct frame {
+        framed_expr functor;
+        std::vector<const expr*> args;
+    };
+
+    const expr* enter(
+        framed_expr framed,
+        uint32_t fresh_offset,
+        std::unordered_map<uint32_t, uint32_t>& translation,
+        std::vector<frame>& pending);
+
     IGlobalize& globalize_;
     IMakeFunctor& make_functor_;
     IMakeVar& make_var_;
@@ -49,6 +61,33 @@ const expr* PUD_TRANSLATING_NORMALIZER::normalize(
     framed_expr framed,
     uint32_t fresh_offset,
     std::unordered_map<uint32_t, uint32_t>& translation) {
+    std::vector<frame> pending;
+    const expr* finished = enter(framed, fresh_offset, translation, pending);
+    while (!pending.empty()) {
+        frame& top = pending.back();
+        if (finished) {
+            top.args.push_back(finished);
+            finished = nullptr;
+        }
+        const expr::functor& functor = std::get<expr::functor>(top.functor.skeleton->content);
+        if (top.args.size() == functor.args.size()) {
+            finished = make_functor_.make_functor(functor.id, top.args);
+            pending.pop_back();
+            continue;
+        }
+        const framed_expr next_arg{functor.args.at(top.args.size()), top.functor.frame_offset};
+        finished = enter(next_arg, fresh_offset, translation, pending);
+    }
+    return finished;
+}
+
+// A resolved variable is returned (renamed if fresh); a functor is pushed and nullptr returned.
+PUD_TRANSLATING_NORMALIZER_TEMPLATE
+const expr* PUD_TRANSLATING_NORMALIZER::enter(
+    framed_expr framed,
+    uint32_t fresh_offset,
+    std::unordered_map<uint32_t, uint32_t>& translation,
+    std::vector<frame>& pending) {
     if (const expr::var* var = std::get_if<expr::var>(&framed.skeleton->content)) {
         const expr* value = resolve_.resolve(globalize_.globalize(framed.frame_offset, var->index));
         if (const expr::var* rep = std::get_if<expr::var>(&value->content)) {
@@ -61,12 +100,8 @@ const expr* PUD_TRANSLATING_NORMALIZER::normalize(
         }
         framed = framed_expr{value, 0};
     }
-    const expr::functor& functor = std::get<expr::functor>(framed.skeleton->content);
-    std::vector<const expr*> args;
-    args.reserve(functor.args.size());
-    for (const expr* arg : functor.args)
-        args.push_back(normalize(framed_expr{arg, framed.frame_offset}, fresh_offset, translation));
-    return make_functor_.make_functor(functor.id, args);
+    pending.push_back(frame{framed, {}});
+    return nullptr;
 }
 
 #undef PUD_TRANSLATING_NORMALIZER

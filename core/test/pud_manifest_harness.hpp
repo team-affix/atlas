@@ -2,6 +2,7 @@
 #define PUD_MANIFEST_HARNESS_HPP
 
 #include <algorithm>
+#include <map>
 #include <cstdint>
 #include <optional>
 #include <set>
@@ -13,6 +14,7 @@
 #include <gtest/gtest.h>
 #include "functor_fixture.hpp"
 #include "infrastructure/pud_manifest.hpp"
+#include "value_objects/pud_solver_step.hpp"
 #include "value_objects/rule.hpp"
 
 // A manifest plus everything a test needs to build programs, drive the solver and audit every
@@ -21,6 +23,7 @@ struct pud_manifest_harness {
     pud_manifest manifest;
     test_functors functors;
     std::vector<pud_node_id> started_roots;
+    std::map<pud_node_id, coroutine<pud_solver_step, void>> searches;
 
     // ---------- building ----------
 
@@ -126,31 +129,53 @@ struct pud_manifest_harness {
 
     // ---------- solving ----------
 
+    coroutine<pud_solver_step, void>& search_of(pud_node_id query_root) {
+        auto found = searches.find(query_root);
+        if (found == searches.end())
+            found = searches.emplace(query_root, manifest.solver_.solve(query_root)).first;
+        return found->second;
+    }
+
+    // Resumes the query's search for at most max_steps steps, stopping at the next solution.
+    std::optional<pud_node_id> next_solution(pud_node_id query_root, size_t max_steps) {
+        coroutine<pud_solver_step, void>& search = search_of(query_root);
+        for (size_t resumed = 0; resumed < max_steps; ++resumed) {
+            search.resume();
+            if (!search.has_yield())
+                return std::nullopt;
+            const pud_solver_step step = search.consume_yield();
+            if (const pud_solution* solution = std::get_if<pud_solution>(&step))
+                return solution->leaf;
+        }
+        return std::nullopt;
+    }
+
+    bool exhausted(pud_node_id query_root) { return search_of(query_root).done(); }
+
     const expr* answer(pud_node_id query_root, pud_node_id solution) {
         return normalize_in(env_at_leaf(solution), manifest.node_heads_.get(query_root));
     }
 
-    std::vector<const expr*> enumerate(pud_node_id query_root, size_t max_answers, size_t max_expansions) {
+    std::vector<const expr*> enumerate(pud_node_id query_root, size_t max_answers, size_t max_steps) {
         std::vector<const expr*> answers;
         while (answers.size() < max_answers) {
-            const std::optional<pud_node_id> solution = manifest.solver_.solve(query_root, max_expansions);
+            const std::optional<pud_node_id> solution = next_solution(query_root, max_steps);
             if (!solution.has_value())
                 break;
             answers.push_back(answer(query_root, solution.value()));
-            manifest.node_refuter_.refute(solution.value());
         }
         return answers;
     }
 
-    // One solver step: at most one expansion; a solution found is recorded and refuted.
+    // One step of the query's search; a solution it yields is recorded. False once the search ended.
     bool step(pud_node_id query_root, std::vector<const expr*>& answers) {
-        if (refuted(query_root))
+        coroutine<pud_solver_step, void>& search = search_of(query_root);
+        search.resume();
+        if (!search.has_yield())
             return false;
-        const std::optional<pud_node_id> solution = manifest.solver_.solve(query_root, 1);
-        if (solution.has_value()) {
-            answers.push_back(answer(query_root, solution.value()));
-            manifest.node_refuter_.refute(solution.value());
-        }
+        const pud_solver_step step = search.consume_yield();
+        if (const pud_solution* solution = std::get_if<pud_solution>(&step))
+            answers.push_back(answer(query_root, solution->leaf));
         return true;
     }
 
@@ -284,18 +309,19 @@ struct pud_manifest_harness {
         return normalizer.normalize(framed_expr{skeleton, 0});
     }
 
-    static void collect_vars(const expr* skeleton, std::vector<uint32_t>& vars) {
-        if (const expr::var* variable = std::get_if<expr::var>(&skeleton->content)) {
-            vars.push_back(variable->index);
-            return;
-        }
-        for (const expr* arg : std::get<expr::functor>(skeleton->content).args)
-            collect_vars(arg, vars);
-    }
-
     static std::vector<uint32_t> vars_in(const expr* skeleton) {
         std::vector<uint32_t> vars;
-        collect_vars(skeleton, vars);
+        std::vector<const expr*> pending{skeleton};
+        while (!pending.empty()) {
+            const expr* next = pending.back();
+            pending.pop_back();
+            if (const expr::var* variable = std::get_if<expr::var>(&next->content)) {
+                vars.push_back(variable->index);
+                continue;
+            }
+            for (const expr* arg : std::get<expr::functor>(next->content).args)
+                pending.push_back(arg);
+        }
         return vars;
     }
 

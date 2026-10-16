@@ -66,7 +66,7 @@ TEST(PudManifestOracleTest, EnumerationIsCompleteForFiniteSearchSpaces) {
         auto harness = std::make_unique<pud_manifest_harness>();
         const pud_node_id query = load_datalog(*harness, program);
         const std::vector<const expr*> answers = harness->enumerate(query, 5000, 20000);
-        EXPECT_TRUE(harness->refuted(query)) << "a finite search space must end refuted";
+        EXPECT_TRUE(harness->exhausted(query)) << "a finite search space must end exhausted";
         EXPECT_EQ(read_answers(*harness, answers).size(), datalog_answers(program).size());
     }
 }
@@ -84,8 +84,8 @@ TEST(PudManifestOracleTest, EveryAnswerIsEntailed) {
         const std::set<std::vector<int>> expected = datalog_answers(program);
         for (const std::vector<int>& found : read_answers(*harness, answers))
             EXPECT_TRUE(expected.contains(found)) << "unentailed answer " << describe({found});
-        if (harness->refuted(query))
-            EXPECT_EQ(read_answers(*harness, answers), expected) << "a refuted recursive query must be complete";
+        if (harness->exhausted(query))
+            EXPECT_EQ(read_answers(*harness, answers), expected) << "an exhausted recursive query must be complete";
         answers_checked += answers.size();
     }
     EXPECT_GE(answers_checked, 150u) << "the random corpus is too easy to be meaningful";
@@ -105,7 +105,7 @@ TEST(PudManifestOracleTest, EnumerationProducesNoDuplicates) {
         const std::vector<const expr*> answers = harness.enumerate(query, 100, 500);
         EXPECT_EQ(answers.size(), 5u);
         EXPECT_FALSE(has_duplicates(answers));
-        EXPECT_TRUE(harness.refuted(query));
+        EXPECT_TRUE(harness.exhausted(query));
     }
     {
         pud_manifest_harness harness;
@@ -183,7 +183,7 @@ TEST(PudManifestOracleTest, GrownRuleTreesLeaveFlatAnswersUnchanged) {
         harness->check_all();
         const std::vector<const expr*> answers = harness->enumerate(query, 5000, 20000);
         EXPECT_EQ(read_answers(*harness, answers), datalog_answers(program));
-        EXPECT_TRUE(harness->refuted(query));
+        EXPECT_TRUE(harness->exhausted(query));
         harness->check_all();
         if (::testing::Test::HasFailure())
             return;
@@ -200,7 +200,7 @@ TEST(PudManifestOracleTest, GrownRuleTreesKeepRecursiveAnswersSound) {
         const std::set<std::vector<int>> expected = datalog_answers(program);
         for (const std::vector<int>& found : read_answers(*harness, answers))
             EXPECT_TRUE(expected.contains(found)) << "unentailed answer " << describe({found});
-        if (harness->refuted(query))
+        if (harness->exhausted(query))
             EXPECT_EQ(read_answers(*harness, answers), expected);
         harness->check_all();
         if (::testing::Test::HasFailure())
