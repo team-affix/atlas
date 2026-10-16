@@ -20,6 +20,8 @@
 // A manifest plus everything a test needs to build programs, drive the solver and audit every
 // public store against the invariants the PUD relies on.
 struct pud_manifest_harness {
+    pud_manifest_harness(uint32_t random_seed) : manifest(random_seed) {}
+
     pud_manifest manifest;
     test_functors functors;
     std::vector<pud_node_id> started_roots;

@@ -13,7 +13,7 @@ using ::testing::IsEmpty;
 using ::testing::UnorderedElementsAre;
 
 struct PudManifestScenarioTest : public ::testing::Test {
-    pud_manifest_harness h;
+    pud_manifest_harness h{0};
 
     const expr* q(std::vector<const expr*> args) { return h.functor("q", std::move(args)); }
 
@@ -182,7 +182,7 @@ TEST_F(PudManifestScenarioTest, CandidatesMoveDeeperWhenAnAxiomTreeGrows) {
 }
 
 TEST_F(PudManifestScenarioTest, LemmaPathReplayMatchesFlatResolution) {
-    pud_manifest_harness flat;
+    pud_manifest_harness flat{0};
     flat.add_nat();
     const pud_node_id rule = h.add_nat();
     h.start_tree(rule);
@@ -447,7 +447,7 @@ TEST_F(PudManifestScenarioTest, VeryDeepGoalIsWatchedAndForked) {
 
 TEST_F(PudManifestScenarioTest, ManifestDestroyedMidSolveIsClean) {
     for (size_t round = 0; round < 25; ++round) {
-        auto harness = std::make_unique<pud_manifest_harness>();
+        auto harness = std::make_unique<pud_manifest_harness>(static_cast<uint32_t>(round));
         harness->add_nat();
         harness->add_append();
         const pud_node_id numbers = harness->start_query(
@@ -518,8 +518,8 @@ TEST_F(PudManifestScenarioTest, SingleCandidateGoalIsReportedUnit) {
 }
 
 TEST_F(PudManifestScenarioTest, BudgetedSolveResumesWhereItStopped) {
-    pud_manifest_harness whole;
-    pud_manifest_harness stepped;
+    pud_manifest_harness whole{0};
+    pud_manifest_harness stepped{0};
     whole.add_nat();
     stepped.add_nat();
     const pud_node_id whole_query = whole.start_query(whole.atom("q"), {whole.functor("nat", {whole.peano(6)})}, 0);

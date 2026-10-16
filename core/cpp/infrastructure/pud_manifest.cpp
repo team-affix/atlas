@@ -1,6 +1,6 @@
 #include "infrastructure/pud_manifest.hpp"
 
-pud_manifest::pud_manifest()
+pud_manifest::pud_manifest(uint32_t random_seed)
     : expr_pool_(),
       globalizer_(),
       node_id_sequencer_(),
@@ -53,9 +53,13 @@ pud_manifest::pud_manifest()
           node_descents_, mhq_, mhcs_, acceptor_, child_maker_, call_sites_, children_,
           leaf_nodes_, node_live_child_counts_, refutation_propagator_, leaf_invalidator_,
           query_head_nodes_, node_refuter_, refuted_node_checker_, node_descents_, node_descents_),
+      rng_(random_seed),
+      oldest_rule_chooser_(),
+      random_subgoal_chooser_(node_descents_, rng_),
+      decision_generator_(oldest_rule_chooser_, random_subgoal_chooser_),
       solver_(
-          live_leaf_finder_, node_descents_, leaf_expander_, root_descent_maker_, node_descents_,
-          node_refuter_),
+          live_leaf_finder_, node_descents_, decision_generator_, leaf_expander_,
+          root_descent_maker_, node_descents_, node_refuter_),
       axiom_initializer_(
           node_id_sequencer_, node_heads_, node_added_body_goals_, node_added_var_count_,
           root_nodes_, leaf_nodes_) {}

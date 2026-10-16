@@ -15,7 +15,7 @@ using ::testing::IsEmpty;
 using ::testing::UnorderedElementsAre;
 
 struct PudManifestIntegrationTest : public ::testing::Test {
-    pud_manifest manifest;
+    pud_manifest manifest{0};
     test_functors functors;
     std::map<pud_node_id, coroutine<pud_solver_step, void>> searches;
 

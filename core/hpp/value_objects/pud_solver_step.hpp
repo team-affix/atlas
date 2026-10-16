@@ -2,9 +2,9 @@
 #define PUD_SOLVER_STEP_HPP
 
 #include <variant>
+#include "value_objects/pud_decision.hpp"
 #include "value_objects/pud_solution.hpp"
-#include "value_objects/pud_unfolded.hpp"
 
-using pud_solver_step = std::variant<pud_unfolded, pud_solution>;
+using pud_solver_step = std::variant<pud_decision, pud_solution>;
 
 #endif

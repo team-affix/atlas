@@ -138,20 +138,23 @@ const std::vector<scenario>& corpus() {
     return scenarios;
 }
 
+// Every scenario runs under several random seeds, so the subgoal chooser takes different paths.
 void sweep(check_t check) {
-    for (const scenario& each : corpus()) {
-        SCOPED_TRACE(each.name);
-        auto harness = std::make_unique<pud_manifest_harness>();
-        const pud_node_id query = each.build(*harness);
-        std::vector<const expr*> answers;
-        ((*harness).*check)();
-        for (size_t step = 0; step < each.steps; ++step) {
-            if (!harness->step(query, answers))
-                break;
-            SCOPED_TRACE("step " + std::to_string(step));
+    for (uint32_t random_seed = 0; random_seed < 4; ++random_seed) {
+        for (const scenario& each : corpus()) {
+            SCOPED_TRACE(each.name + " seed " + std::to_string(random_seed));
+            auto harness = std::make_unique<pud_manifest_harness>(random_seed);
+            const pud_node_id query = each.build(*harness);
+            std::vector<const expr*> answers;
             ((*harness).*check)();
-            if (::testing::Test::HasFailure())
-                return;
+            for (size_t step = 0; step < each.steps; ++step) {
+                if (!harness->step(query, answers))
+                    break;
+                SCOPED_TRACE("step " + std::to_string(step));
+                ((*harness).*check)();
+                if (::testing::Test::HasFailure())
+                    return;
+            }
         }
     }
 }
@@ -222,7 +225,7 @@ TEST(PudManifestInvariantsTest, RandomProgramsKeepInvariants) {
     for (unsigned seed = 100; seed < 200; ++seed) {
         for (bool recursive : {false, true}) {
             SCOPED_TRACE("seed " + std::to_string(seed) + (recursive ? " recursive" : " flat"));
-            auto harness = std::make_unique<pud_manifest_harness>();
+            auto harness = std::make_unique<pud_manifest_harness>(seed);
             const pud_node_id query = load_datalog(*harness, generate_datalog(seed, recursive));
             std::vector<const expr*> answers;
             harness->check_all();
@@ -238,7 +241,7 @@ TEST(PudManifestInvariantsTest, RandomProgramsKeepInvariants) {
 }
 
 TEST(PudManifestInvariantsTest, DeepRecursionStaysConsistent) {
-    auto harness = std::make_unique<pud_manifest_harness>();
+    auto harness = std::make_unique<pud_manifest_harness>(0);
     const pud_node_id query = build_nat_enumeration(*harness);
     std::vector<const expr*> answers;
     for (size_t step = 0; step < 150; ++step) {

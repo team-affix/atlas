@@ -46,7 +46,7 @@ TEST(PudManifestOracleTest, DatalogAnswersMatchABottomUpFixpoint) {
     for (unsigned seed = 0; seed < 200; ++seed) {
         SCOPED_TRACE("seed " + std::to_string(seed));
         const datalog_program program = generate_datalog(seed, false);
-        auto harness = std::make_unique<pud_manifest_harness>();
+        auto harness = std::make_unique<pud_manifest_harness>(seed);
         const pud_node_id query = load_datalog(*harness, program);
         const std::vector<const expr*> answers = harness->enumerate(query, 5000, 20000);
         const std::set<std::vector<int>> expected = datalog_answers(program);
@@ -63,7 +63,7 @@ TEST(PudManifestOracleTest, EnumerationIsCompleteForFiniteSearchSpaces) {
     for (unsigned seed = 1000; seed < 1200; ++seed) {
         SCOPED_TRACE("seed " + std::to_string(seed));
         const datalog_program program = generate_datalog(seed, false);
-        auto harness = std::make_unique<pud_manifest_harness>();
+        auto harness = std::make_unique<pud_manifest_harness>(seed);
         const pud_node_id query = load_datalog(*harness, program);
         const std::vector<const expr*> answers = harness->enumerate(query, 5000, 20000);
         EXPECT_TRUE(harness->exhausted(query)) << "a finite search space must end exhausted";
@@ -78,7 +78,7 @@ TEST(PudManifestOracleTest, EveryAnswerIsEntailed) {
     for (unsigned seed = 2000; seed < 2200; ++seed) {
         SCOPED_TRACE("seed " + std::to_string(seed));
         const datalog_program program = generate_datalog(seed, true);
-        auto harness = std::make_unique<pud_manifest_harness>();
+        auto harness = std::make_unique<pud_manifest_harness>(seed);
         const pud_node_id query = load_datalog(*harness, program);
         const std::vector<const expr*> answers = harness->enumerate(query, 40, 400);
         const std::set<std::vector<int>> expected = datalog_answers(program);
@@ -95,7 +95,7 @@ TEST(PudManifestOracleTest, EveryAnswerIsEntailed) {
 
 TEST(PudManifestOracleTest, EnumerationProducesNoDuplicates) {
     {
-        pud_manifest_harness harness;
+        pud_manifest_harness harness{0};
         harness.add_append();
         const pud_node_id query = harness.start_query(
             harness.functor("q", {harness.var(0), harness.var(1)}),
@@ -108,7 +108,7 @@ TEST(PudManifestOracleTest, EnumerationProducesNoDuplicates) {
         EXPECT_TRUE(harness.exhausted(query));
     }
     {
-        pud_manifest_harness harness;
+        pud_manifest_harness harness{0};
         harness.add_member();
         const pud_node_id query = harness.start_query(
             harness.functor("q", {harness.var(0)}),
@@ -120,7 +120,7 @@ TEST(PudManifestOracleTest, EnumerationProducesNoDuplicates) {
         EXPECT_FALSE(has_duplicates(answers));
     }
     {
-        pud_manifest_harness harness;
+        pud_manifest_harness harness{0};
         harness.add_peano_add();
         const pud_node_id query = harness.start_query(
             harness.functor("q", {harness.var(0), harness.var(1)}),
@@ -131,7 +131,7 @@ TEST(PudManifestOracleTest, EnumerationProducesNoDuplicates) {
         EXPECT_FALSE(has_duplicates(answers));
     }
     {
-        pud_manifest_harness harness;
+        pud_manifest_harness harness{0};
         harness.add_nat();
         const pud_node_id query = harness.start_query(
             harness.functor("q", {harness.var(0)}), {harness.functor("nat", {harness.var(0)})}, 1);
@@ -178,7 +178,7 @@ TEST(PudManifestOracleTest, GrownRuleTreesLeaveFlatAnswersUnchanged) {
     for (unsigned seed = 3000; seed < 3150; ++seed) {
         SCOPED_TRACE("seed " + std::to_string(seed));
         const datalog_program program = generate_datalog(seed, false);
-        auto harness = std::make_unique<pud_manifest_harness>();
+        auto harness = std::make_unique<pud_manifest_harness>(seed);
         const pud_node_id query = load_datalog_with_grown_rules(*harness, program, 2);
         harness->check_all();
         const std::vector<const expr*> answers = harness->enumerate(query, 5000, 20000);
@@ -194,7 +194,7 @@ TEST(PudManifestOracleTest, GrownRuleTreesKeepRecursiveAnswersSound) {
     for (unsigned seed = 4000; seed < 4150; ++seed) {
         SCOPED_TRACE("seed " + std::to_string(seed));
         const datalog_program program = generate_datalog(seed, true);
-        auto harness = std::make_unique<pud_manifest_harness>();
+        auto harness = std::make_unique<pud_manifest_harness>(seed);
         const pud_node_id query = load_datalog_with_grown_rules(*harness, program, 2);
         const std::vector<const expr*> answers = harness->enumerate(query, 40, 400);
         const std::set<std::vector<int>> expected = datalog_answers(program);

@@ -44,6 +44,9 @@ struct MockFindLiveLeaves {
 struct MockGetNodeDescent {
     MOCK_METHOD(const MockDescent&, get, (pud_node_id));
 };
+struct MockGenerateDecision {
+    MOCK_METHOD(pud_decision, generate, (const std::vector<pud_node_id>&));
+};
 struct MockExpandLeaf {
     MOCK_METHOD(void, expand, (pud_node_id, body_goal_id));
 };
@@ -58,8 +61,9 @@ struct MockRefuteNode {
 };
 
 using test_solver_t = pud_solver<
-    NiceMock<MockFindLiveLeaves>, NiceMock<MockGetNodeDescent>, NiceMock<MockExpandLeaf>,
-    NiceMock<MockMakeRootDescent>, NiceMock<MockStoreNodeDescent>, NiceMock<MockRefuteNode>>;
+    NiceMock<MockFindLiveLeaves>, NiceMock<MockGetNodeDescent>, NiceMock<MockGenerateDecision>,
+    NiceMock<MockExpandLeaf>, NiceMock<MockMakeRootDescent>, NiceMock<MockStoreNodeDescent>,
+    NiceMock<MockRefuteNode>>;
 
 const expr* expr_at(uintptr_t address) {
     return reinterpret_cast<const expr*>(address);
@@ -69,11 +73,12 @@ struct PudSolverTest : public ::testing::Test {
     NiceMock<DescentOps> ops;
     NiceMock<MockFindLiveLeaves> live_leaves;
     NiceMock<MockGetNodeDescent> descents;
+    NiceMock<MockGenerateDecision> decisions;
     NiceMock<MockExpandLeaf> expander;
     NiceMock<MockMakeRootDescent> root_maker;
     NiceMock<MockStoreNodeDescent> store_descent;
     NiceMock<MockRefuteNode> refuter;
-    test_solver_t solver{live_leaves, descents, expander, root_maker, store_descent, refuter};
+    test_solver_t solver{live_leaves, descents, decisions, expander, root_maker, store_descent, refuter};
     pud_node_id root = 1;
     std::unordered_map<pud_node_id, MockDescent> descent_of;
     std::unordered_map<int, body_goal_exprs_t> goals_of;
@@ -96,6 +101,9 @@ struct PudSolverTest : public ::testing::Test {
         });
         ON_CALL(ops, refuted_goals(_)).WillByDefault(ReturnRef(no_refuted_goals));
         ON_CALL(root_maker, make(_)).WillByDefault(Return(MockDescent{0}));
+        ON_CALL(decisions, generate(_)).WillByDefault([](const std::vector<pud_node_id>& open_leaves) {
+            return pud_decision{open_leaves.front(), 0};
+        });
     }
 
     void TearDown() override { descent_ops = nullptr; }
@@ -132,15 +140,19 @@ TEST_F(PudSolverTest, NothingHappensBeforeTheFirstResume) {
 
 TEST_F(PudSolverTest, RefutedTreeEndsTheSearchWithoutYielding) {
     EXPECT_CALL(live_leaves, find_live_leaves(root)).WillOnce(Return(std::vector<pud_node_id>{}));
+    EXPECT_CALL(decisions, generate(_)).Times(0);
     auto search = solver.solve(root);
     search.resume();
     EXPECT_FALSE(search.has_yield());
     EXPECT_TRUE(search.done());
 }
 
+// ---------- solutions ----------
+
 TEST_F(PudSolverTest, LeafWithNoOpenGoalsIsYieldedAsASolution) {
     give_leaf(4, {});
     ON_CALL(live_leaves, find_live_leaves(root)).WillByDefault(Return(std::vector<pud_node_id>{4}));
+    EXPECT_CALL(decisions, generate(_)).Times(0);
     EXPECT_CALL(expander, expand(_, _)).Times(0);
     auto search = solver.solve(root);
     search.resume();
@@ -160,16 +172,25 @@ TEST_F(PudSolverTest, SolutionIsYieldedOnlyOnce) {
     EXPECT_TRUE(search.done());
 }
 
-TEST_F(PudSolverTest, YieldedSolutionsAreSkippedForTheNextOldestLeaf) {
+TEST_F(PudSolverTest, SolutionsAreYieldedBeforeAnyDecision) {
+    give_leaf(4, body_goal_exprs_t{}.set(0, expr_at(0x10)));
+    give_leaf(9, {});
+    ON_CALL(live_leaves, find_live_leaves(root)).WillByDefault(Return(std::vector<pud_node_id>{4, 9}));
+    EXPECT_CALL(decisions, generate(_)).Times(0);
+    auto search = solver.solve(root);
+    search.resume();
+    EXPECT_EQ(search.consume_yield(), pud_solver_step{pud_solution{9}});
+}
+
+TEST_F(PudSolverTest, OldestUnyieldedSolutionComesFirst) {
     give_leaf(4, {});
-    give_leaf(5, body_goal_exprs_t{}.set(1, expr_at(0x10)));
-    ON_CALL(live_leaves, find_live_leaves(root)).WillByDefault(Return(std::vector<pud_node_id>{5, 4}));
+    give_leaf(9, {});
+    ON_CALL(live_leaves, find_live_leaves(root)).WillByDefault(Return(std::vector<pud_node_id>{9, 4}));
     auto search = solver.solve(root);
     search.resume();
     EXPECT_EQ(search.consume_yield(), pud_solver_step{pud_solution{4}});
-    EXPECT_CALL(expander, expand(5u, 1u));
     search.resume();
-    EXPECT_EQ(search.consume_yield(), (pud_solver_step{pud_unfolded{5, 1}}));
+    EXPECT_EQ(search.consume_yield(), pud_solver_step{pud_solution{9}});
 }
 
 TEST_F(PudSolverTest, YieldedSolutionsAreNeverRefuted) {
@@ -182,33 +203,64 @@ TEST_F(PudSolverTest, YieldedSolutionsAreNeverRefuted) {
     search.resume();
 }
 
-TEST_F(PudSolverTest, OldestLeafIsTheOneConsidered) {
+TEST_F(PudSolverTest, IndependentSearchesKeepTheirOwnYieldedSolutions) {
     give_leaf(4, {});
-    give_leaf(9, body_goal_exprs_t{}.set(0, expr_at(0x10)));
-    ON_CALL(live_leaves, find_live_leaves(root)).WillByDefault(Return(std::vector<pud_node_id>{9, 4}));
-    auto search = solver.solve(root);
-    search.resume();
-    EXPECT_EQ(search.consume_yield(), pud_solver_step{pud_solution{4}});
-}
-
-TEST_F(PudSolverTest, OldestLeafIsUnfoldedAtItsFirstOpenGoal) {
-    give_leaf(4, body_goal_exprs_t{}.set(7, expr_at(0x10)).set(3, expr_at(0x20)).set(5, expr_at(0x30)));
     ON_CALL(live_leaves, find_live_leaves(root)).WillByDefault(Return(std::vector<pud_node_id>{4}));
-    EXPECT_CALL(expander, expand(4u, 3u));
-    auto search = solver.solve(root);
-    search.resume();
-    EXPECT_EQ(search.consume_yield(), (pud_solver_step{pud_unfolded{4, 3}}));
+    auto first = solver.solve(root);
+    first.resume();
+    first.consume_yield();
+    auto second = solver.solve(root);
+    second.resume();
+    ASSERT_TRUE(second.has_yield());
+    EXPECT_EQ(second.consume_yield(), pud_solver_step{pud_solution{4}});
 }
 
-TEST_F(PudSolverTest, EachResumeUnfoldsExactlyOnce) {
+// ---------- decisions ----------
+
+TEST_F(PudSolverTest, OpenLeavesAreOfferedToTheDecisionGenerator) {
+    give_leaf(4, body_goal_exprs_t{}.set(0, expr_at(0x10)));
+    give_leaf(5, {});
+    give_leaf(9, body_goal_exprs_t{}.set(2, expr_at(0x20)));
+    ON_CALL(live_leaves, find_live_leaves(root)).WillByDefault(Return(std::vector<pud_node_id>{9, 5, 4}));
+    auto search = solver.solve(root);
+    search.resume();
+    search.consume_yield();
+    EXPECT_CALL(decisions, generate(::testing::UnorderedElementsAre(4u, 9u))).WillOnce(Return(pud_decision{9, 2}));
+    search.resume();
+}
+
+TEST_F(PudSolverTest, DecisionIsUnfoldedAndYielded) {
+    give_leaf(4, body_goal_exprs_t{}.set(7, expr_at(0x10)).set(3, expr_at(0x20)));
+    ON_CALL(live_leaves, find_live_leaves(root)).WillByDefault(Return(std::vector<pud_node_id>{4}));
+    EXPECT_CALL(decisions, generate(::testing::ElementsAre(4u))).WillOnce(Return(pud_decision{4, 7}));
+    EXPECT_CALL(expander, expand(4u, 7u));
+    auto search = solver.solve(root);
+    search.resume();
+    EXPECT_EQ(search.consume_yield(), (pud_solver_step{pud_decision{4, 7}}));
+}
+
+TEST_F(PudSolverTest, DecisionIsUnfoldedBeforeItIsYielded) {
+    give_leaf(4, body_goal_exprs_t{}.set(0, expr_at(0x10)));
+    ON_CALL(live_leaves, find_live_leaves(root)).WillByDefault(Return(std::vector<pud_node_id>{4}));
+    InSequence in_order;
+    EXPECT_CALL(decisions, generate(_)).WillOnce(Return(pud_decision{4, 0}));
+    EXPECT_CALL(expander, expand(4u, 0u));
+    auto search = solver.solve(root);
+    search.resume();
+    EXPECT_TRUE(search.has_yield());
+}
+
+TEST_F(PudSolverTest, EachResumeMakesExactlyOneDecision) {
     give_leaf(4, body_goal_exprs_t{}.set(0, expr_at(0x10)));
     ON_CALL(live_leaves, find_live_leaves(root)).WillByDefault(Return(std::vector<pud_node_id>{4}));
     auto search = solver.solve(root);
     for (int resume = 1; resume <= 3; ++resume) {
+        EXPECT_CALL(decisions, generate(_)).Times(1);
         EXPECT_CALL(expander, expand(4u, 0u)).Times(1);
         search.resume();
         ASSERT_TRUE(search.has_yield());
         search.consume_yield();
+        ::testing::Mock::VerifyAndClearExpectations(&decisions);
         ::testing::Mock::VerifyAndClearExpectations(&expander);
     }
 }
@@ -225,18 +277,6 @@ TEST_F(PudSolverTest, TreeRefutedMidwayEndsTheSearch) {
     search.consume_yield();
     search.resume();
     EXPECT_TRUE(search.done());
-}
-
-TEST_F(PudSolverTest, IndependentSearchesKeepTheirOwnYieldedSolutions) {
-    give_leaf(4, {});
-    ON_CALL(live_leaves, find_live_leaves(root)).WillByDefault(Return(std::vector<pud_node_id>{4}));
-    auto first = solver.solve(root);
-    first.resume();
-    first.consume_yield();
-    auto second = solver.solve(root);
-    second.resume();
-    ASSERT_TRUE(second.has_yield());
-    EXPECT_EQ(second.consume_yield(), pud_solver_step{pud_solution{4}});
 }
 
 }  // namespace

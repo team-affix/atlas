@@ -2,6 +2,7 @@
 #define PUD_MANIFEST_HPP
 
 #include <cstdint>
+#include <random>
 #include <vector>
 
 #include "infrastructure/expr_pool.hpp"
@@ -20,6 +21,7 @@
 #include "infrastructure/pud_candidate_specialization_head_forker.hpp"
 #include "infrastructure/pud_child_maker.hpp"
 #include "infrastructure/pud_children.hpp"
+#include "infrastructure/pud_decision_generator.hpp"
 #include "infrastructure/pud_leaf_expander.hpp"
 #include "infrastructure/pud_leaf_invalidator.hpp"
 #include "infrastructure/pud_leaf_nodes.hpp"
@@ -39,12 +41,14 @@
 #include "infrastructure/pud_node_parents.hpp"
 #include "infrastructure/pud_node_refuter.hpp"
 #include "infrastructure/pud_normalizer_factory.hpp"
+#include "infrastructure/pud_oldest_rule_chooser.hpp"
 #include "infrastructure/pud_open_body_goal_finder.hpp"
 #include "infrastructure/pud_query_head.hpp"
 #include "infrastructure/pud_query_head_factory.hpp"
 #include "infrastructure/pud_query_head_forker.hpp"
 #include "infrastructure/pud_query_head_nodes.hpp"
 #include "infrastructure/pud_query_opener.hpp"
+#include "infrastructure/pud_random_subgoal_chooser.hpp"
 #include "infrastructure/pud_refutation_propagator.hpp"
 #include "infrastructure/pud_refuted_leaves.hpp"
 #include "infrastructure/pud_refuted_node_checker.hpp"
@@ -155,14 +159,16 @@ struct pud_manifest {
         pud_leaf_nodes, pud_node_live_child_counts, refutation_propagator_t, leaf_invalidator_t,
         pud_query_head_nodes, node_refuter_t, refuted_node_checker_t, node_descents_t,
         node_descents_t>;
+    using random_subgoal_chooser_t = pud_random_subgoal_chooser<node_descents_t>;
+    using decision_generator_t = pud_decision_generator<pud_oldest_rule_chooser, random_subgoal_chooser_t>;
     using solver_t = pud_solver<
-        live_leaf_finder_t, node_descents_t, leaf_expander_t, root_descent_maker_t,
-        node_descents_t, node_refuter_t>;
+        live_leaf_finder_t, node_descents_t, decision_generator_t, leaf_expander_t,
+        root_descent_maker_t, node_descents_t, node_refuter_t>;
     using axiom_initializer_t = pud_axiom_initializer<
         pud_node_id_sequencer, pud_node_heads, pud_node_added_body_goals, pud_node_added_var_count,
         pud_root_nodes, pud_leaf_nodes>;
 
-    pud_manifest();
+    pud_manifest(uint32_t random_seed);
 
     expr_pool                               expr_pool_;
     globalizer                              globalizer_;
@@ -209,6 +215,10 @@ struct pud_manifest {
     node_refuter_t                          node_refuter_;
 
     leaf_expander_t                         leaf_expander_;
+    std::mt19937                            rng_;
+    pud_oldest_rule_chooser                 oldest_rule_chooser_;
+    random_subgoal_chooser_t                random_subgoal_chooser_;
+    decision_generator_t                    decision_generator_;
     solver_t                                solver_;
     axiom_initializer_t                     axiom_initializer_;
 };
