@@ -2,14 +2,14 @@
 #include <gtest/gtest.h>
 #include "infrastructure/pud_call_sites.hpp"
 #include "infrastructure/pud_children.hpp"
-#include "infrastructure/pud_leaves.hpp"
+#include "infrastructure/pud_leaf_nodes.hpp"
 #include "infrastructure/pud_node_id_sequencer.hpp"
 #include "infrastructure/pud_refuted_nodes.hpp"
 
 struct PudNodeGraphIntegrationTest : public ::testing::Test {
     pud_node_id_sequencer seq;
     pud_children children;
-    pud_leaves leaves;
+    pud_leaf_nodes leaves;
     pud_call_sites call_sites;
     pud_refuted_nodes refuted;
 
