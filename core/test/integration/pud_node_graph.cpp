@@ -4,14 +4,12 @@
 #include "infrastructure/pud_children.hpp"
 #include "infrastructure/pud_leaf_nodes.hpp"
 #include "infrastructure/pud_node_id_sequencer.hpp"
-#include "infrastructure/pud_refuted_nodes.hpp"
 
 struct PudNodeGraphIntegrationTest : public ::testing::Test {
     pud_node_id_sequencer seq;
     pud_children children;
     pud_leaf_nodes leaves;
     pud_call_sites call_sites;
-    pud_refuted_nodes refuted;
 
     pud_node_id make() { return seq.next(); }
 };
@@ -22,7 +20,6 @@ TEST_F(PudNodeGraphIntegrationTest, StoredFactsStillReadBackAfterMoreNodesAreMad
     children.store(node, {child});
     leaves.set_leaf(node);
     call_sites.store(node, 4);
-    refuted.mark_refuted(node);
 
     make();
     make();
@@ -31,7 +28,6 @@ TEST_F(PudNodeGraphIntegrationTest, StoredFactsStillReadBackAfterMoreNodesAreMad
     EXPECT_EQ(children.get(node)[0], child);
     EXPECT_TRUE(leaves.check_leaf(node));
     EXPECT_EQ(call_sites.get(node), 4u);
-    EXPECT_TRUE(refuted.check_refuted(node));
 }
 
 TEST_F(PudNodeGraphIntegrationTest, StoredEmptyChildListReadsBackEmpty) {
@@ -41,17 +37,15 @@ TEST_F(PudNodeGraphIntegrationTest, StoredEmptyChildListReadsBackEmpty) {
     EXPECT_TRUE(children.get(node).empty());
 }
 
-TEST_F(PudNodeGraphIntegrationTest, UnsetLeafLeavesCallSiteAndRefutedMark) {
+TEST_F(PudNodeGraphIntegrationTest, UnsetLeafLeavesCallSite) {
     const pud_node_id node = make();
     call_sites.store(node, 2);
     leaves.set_leaf(node);
-    refuted.mark_refuted(node);
 
     leaves.unset_leaf(node);
 
     EXPECT_FALSE(leaves.check_leaf(node));
     EXPECT_EQ(call_sites.get(node), 2u);
-    EXPECT_TRUE(refuted.check_refuted(node));
 }
 
 TEST_F(PudNodeGraphIntegrationTest, OneNodeIsALeafWithCallSiteAndTwoChildren) {
@@ -67,5 +61,4 @@ TEST_F(PudNodeGraphIntegrationTest, OneNodeIsALeafWithCallSiteAndTwoChildren) {
     ASSERT_EQ(children.get(node).size(), 2u);
     EXPECT_EQ(children.get(node)[0], left);
     EXPECT_EQ(children.get(node)[1], right);
-    EXPECT_FALSE(refuted.check_refuted(node));
 }

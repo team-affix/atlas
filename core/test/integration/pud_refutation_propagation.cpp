@@ -4,11 +4,12 @@
 #include <gmock/gmock.h>
 #include "infrastructure/pud_children.hpp"
 #include "infrastructure/pud_leaf_nodes.hpp"
+#include "infrastructure/pud_live_leaf_finder.hpp"
 #include "infrastructure/pud_mhws.hpp"
+#include "infrastructure/pud_node_live_child_counts.hpp"
 #include "infrastructure/pud_node_parents.hpp"
 #include "infrastructure/pud_refutation_propagator.hpp"
-#include "infrastructure/pud_refuted_leaf_recorder.hpp"
-#include "infrastructure/pud_refuted_nodes.hpp"
+#include "infrastructure/pud_refuted_node_checker.hpp"
 #include "infrastructure/pud_root_nodes.hpp"
 #include "infrastructure/pud_witness_search_head.hpp"
 #include "infrastructure/pud_witness_search_head_factory.hpp"
@@ -36,35 +37,37 @@ struct MockCallSite {
     MOCK_METHOD(size_t, get, (pud_node_id));
 };
 
+using checker_t = pud_refuted_node_checker<pud_node_live_child_counts>;
 using head_t = pud_witness_search_head<
-    descent_t, child_iter, pud_leaf_nodes, pud_refuted_nodes, pud_children, NiceMock<MockDescend>, NiceMock<MockCallSite>>;
+    descent_t, child_iter, pud_leaf_nodes, checker_t, pud_children, NiceMock<MockDescend>, NiceMock<MockCallSite>>;
 using factory_t = pud_witness_search_head_factory<
-    descent_t, child_iter, pud_leaf_nodes, pud_refuted_nodes, pud_children, NiceMock<MockDescend>, NiceMock<MockCallSite>>;
+    descent_t, child_iter, pud_leaf_nodes, checker_t, pud_children, NiceMock<MockDescend>, NiceMock<MockCallSite>>;
 using forker_t = pud_witness_search_head_forker<
-    descent_t, child_iter, pud_leaf_nodes, pud_refuted_nodes, pud_children, NiceMock<MockDescend>, NiceMock<MockCallSite>>;
+    descent_t, child_iter, pud_leaf_nodes, checker_t, pud_children, NiceMock<MockDescend>, NiceMock<MockCallSite>>;
 using mhws_t = pud_mhws<descent_t, child_iter, head_t, factory_t, forker_t>;
-using recorder_t = pud_refuted_leaf_recorder<pud_refuted_nodes, pud_leaf_nodes>;
-using propagator_t = pud_refutation_propagator<pud_refuted_nodes, recorder_t, pud_children, pud_node_parents, pud_root_nodes>;
+using finder_t = pud_live_leaf_finder<checker_t, pud_leaf_nodes, pud_children>;
+using propagator_t = pud_refutation_propagator<pud_node_live_child_counts, pud_root_nodes, pud_node_parents>;
 
 }  // namespace
 
-// root -> {refuted_root, other}; refuted_root -> {leaf_a, middle}; middle -> {leaf_b, leaf_c};
+// root -> {subtree, other}; subtree -> {leaf_a, middle}; middle -> {leaf_b, leaf_c};
 // other -> {leaf_d}.
 struct PudRefutationPropagationIntegrationTest : public ::testing::Test {
     pud_leaf_nodes leaves;
-    pud_refuted_nodes refuted_nodes;
     pud_children children;
     pud_node_parents parents;
     pud_root_nodes root_nodes;
+    pud_node_live_child_counts live_child_counts;
+    checker_t refuted_nodes{live_child_counts};
     NiceMock<MockDescend> descend;
     NiceMock<MockCallSite> call_sites;
     factory_t factory{leaves, refuted_nodes, children, descend, call_sites};
     forker_t forker;
     mhws_t searches{factory, forker};
-    recorder_t recorder{refuted_nodes, leaves};
-    propagator_t propagator{refuted_nodes, recorder, children, parents, root_nodes};
+    finder_t finder{refuted_nodes, leaves, children};
+    propagator_t propagator{live_child_counts, root_nodes, parents};
     pud_node_id root = 1;
-    pud_node_id refuted_root = 2;
+    pud_node_id subtree = 2;
     pud_node_id other = 3;
     pud_node_id leaf_a = 4;
     pud_node_id middle = 5;
@@ -73,9 +76,15 @@ struct PudRefutationPropagationIntegrationTest : public ::testing::Test {
     pud_node_id leaf_d = 8;
 
     void link(pud_node_id parent, std::vector<pud_node_id> node_children) {
+        live_child_counts.store(parent, node_children.size());
         for (pud_node_id child : node_children)
             parents.store(child, parent);
         children.store(parent, std::move(node_children));
+    }
+
+    void make_leaf(pud_node_id leaf) {
+        leaves.set_leaf(leaf);
+        live_child_counts.store(leaf, 1);
     }
 
     void SetUp() override {
@@ -83,20 +92,22 @@ struct PudRefutationPropagationIntegrationTest : public ::testing::Test {
             return std::optional<descent_t>{descent_t{child}};
         });
         root_nodes.mark_root(root);
-        link(root, {refuted_root, other});
-        link(refuted_root, {leaf_a, middle});
+        link(root, {subtree, other});
+        link(subtree, {leaf_a, middle});
         link(middle, {leaf_b, leaf_c});
         link(other, {leaf_d});
-        leaves.set_leaf(leaf_a);
-        leaves.set_leaf(leaf_b);
-        leaves.set_leaf(leaf_c);
-        leaves.set_leaf(leaf_d);
+        make_leaf(leaf_a);
+        make_leaf(leaf_b);
+        make_leaf(leaf_c);
+        make_leaf(leaf_d);
     }
 
     std::vector<pud_mhws_head_id> refute_and_invalidate(pud_node_id node) {
-        propagator.refute(node);
+        const std::vector<pud_node_id> live_leaves = finder.find_live_leaves(node);
+        for (pud_node_id leaf : live_leaves)
+            propagator.refute(leaf);
         std::vector<pud_mhws_head_id> exhausted;
-        for (pud_node_id leaf : recorder.take_refuted_leaves()) {
+        for (pud_node_id leaf : live_leaves) {
             const std::vector<pud_mhws_head_id> leaf_exhausted = searches.invalidate_leaf(leaf);
             exhausted.insert(exhausted.end(), leaf_exhausted.begin(), leaf_exhausted.end());
         }
@@ -104,30 +115,29 @@ struct PudRefutationPropagationIntegrationTest : public ::testing::Test {
     }
 };
 
-// ---------- marking ----------
+// ---------- refuting ----------
 
-TEST_F(PudRefutationPropagationIntegrationTest, RefutingMarksTheWholeSubtreeAndNothingElse) {
-    propagator.refute(refuted_root);
-    EXPECT_TRUE(refuted_nodes.check_refuted(refuted_root));
-    EXPECT_TRUE(refuted_nodes.check_refuted(leaf_a));
-    EXPECT_TRUE(refuted_nodes.check_refuted(middle));
-    EXPECT_TRUE(refuted_nodes.check_refuted(leaf_b));
-    EXPECT_TRUE(refuted_nodes.check_refuted(leaf_c));
-    EXPECT_FALSE(refuted_nodes.check_refuted(root));
-    EXPECT_FALSE(refuted_nodes.check_refuted(other));
-    EXPECT_FALSE(refuted_nodes.check_refuted(leaf_d));
+TEST_F(PudRefutationPropagationIntegrationTest, NothingIsRefutedInitially) {
+    for (pud_node_id node : {root, subtree, other, leaf_a, middle, leaf_b, leaf_c, leaf_d})
+        EXPECT_FALSE(refuted_nodes.check_refuted(node));
 }
 
-TEST_F(PudRefutationPropagationIntegrationTest, RecorderCollectsTheSubtreesLeaves) {
-    propagator.refute(refuted_root);
-    EXPECT_THAT(recorder.take_refuted_leaves(), UnorderedElementsAre(leaf_a, leaf_b, leaf_c));
+TEST_F(PudRefutationPropagationIntegrationTest, RefutingASubtreesLeavesRefutesTheWholeSubtreeAndNothingElse) {
+    refute_and_invalidate(subtree);
+    for (pud_node_id node : {subtree, leaf_a, middle, leaf_b, leaf_c})
+        EXPECT_TRUE(refuted_nodes.check_refuted(node));
+    for (pud_node_id node : {root, other, leaf_d})
+        EXPECT_FALSE(refuted_nodes.check_refuted(node));
 }
 
-TEST_F(PudRefutationPropagationIntegrationTest, RefutingTwiceRecordsNothingTheSecondTime) {
-    propagator.refute(refuted_root);
-    recorder.take_refuted_leaves();
-    propagator.refute(refuted_root);
-    EXPECT_THAT(recorder.take_refuted_leaves(), IsEmpty());
+TEST_F(PudRefutationPropagationIntegrationTest, FinderReturnsTheSubtreesLiveLeaves) {
+    EXPECT_THAT(finder.find_live_leaves(subtree), UnorderedElementsAre(leaf_a, leaf_b, leaf_c));
+}
+
+TEST_F(PudRefutationPropagationIntegrationTest, RefutedSubtreeHasNoLiveLeavesLeft) {
+    refute_and_invalidate(subtree);
+    EXPECT_THAT(finder.find_live_leaves(subtree), IsEmpty());
+    EXPECT_THAT(finder.find_live_leaves(root), UnorderedElementsAre(leaf_d));
 }
 
 TEST_F(PudRefutationPropagationIntegrationTest, LastLiveLeafRefutesItsAncestorsUpToALiveSibling) {
@@ -135,71 +145,72 @@ TEST_F(PudRefutationPropagationIntegrationTest, LastLiveLeafRefutesItsAncestorsU
     EXPECT_FALSE(refuted_nodes.check_refuted(middle));
     propagator.refute(leaf_c);
     EXPECT_TRUE(refuted_nodes.check_refuted(middle));
-    EXPECT_FALSE(refuted_nodes.check_refuted(refuted_root));
+    EXPECT_FALSE(refuted_nodes.check_refuted(subtree));
     propagator.refute(leaf_a);
-    EXPECT_TRUE(refuted_nodes.check_refuted(refuted_root));
+    EXPECT_TRUE(refuted_nodes.check_refuted(subtree));
     EXPECT_FALSE(refuted_nodes.check_refuted(root));
 }
 
 TEST_F(PudRefutationPropagationIntegrationTest, RefutingEverySubtreeRefutesTheRoot) {
-    propagator.refute(refuted_root);
+    refute_and_invalidate(subtree);
     propagator.refute(leaf_d);
     EXPECT_TRUE(refuted_nodes.check_refuted(other));
     EXPECT_TRUE(refuted_nodes.check_refuted(root));
 }
 
-TEST_F(PudRefutationPropagationIntegrationTest, AncestorsRefutedByClimbingAreNotRecordedAsLeaves) {
-    propagator.refute(leaf_d);
-    EXPECT_THAT(recorder.take_refuted_leaves(), UnorderedElementsAre(leaf_d));
-    EXPECT_TRUE(refuted_nodes.check_refuted(other));
+TEST_F(PudRefutationPropagationIntegrationTest, RefutingAPartlyRefutedSubtreeOnlyRefutesItsLiveLeaves) {
+    propagator.refute(leaf_b);
+    EXPECT_THAT(finder.find_live_leaves(subtree), UnorderedElementsAre(leaf_a, leaf_c));
+    refute_and_invalidate(subtree);
+    EXPECT_TRUE(refuted_nodes.check_refuted(subtree));
+    EXPECT_FALSE(refuted_nodes.check_refuted(root));
 }
 
 // ---------- witness searches ----------
 
 TEST_F(PudRefutationPropagationIntegrationTest, SearchesRootedInsideTheSubtreeRunOut) {
-    const pud_mhws_head_id at_refuted_root = searches.try_add_head(descent_t{refuted_root}).value();
+    const pud_mhws_head_id at_subtree = searches.try_add_head(descent_t{subtree}).value();
     const pud_mhws_head_id at_middle = searches.try_add_head(descent_t{middle}).value();
-    EXPECT_THAT(refute_and_invalidate(refuted_root), UnorderedElementsAre(at_refuted_root, at_middle));
+    EXPECT_THAT(refute_and_invalidate(subtree), UnorderedElementsAre(at_subtree, at_middle));
 }
 
 TEST_F(PudRefutationPropagationIntegrationTest, SearchAboveTheSubtreeMovesToALiveLeafOutsideIt) {
     const pud_mhws_head_id at_root = searches.try_add_head(descent_t{root}).value();
-    EXPECT_THAT(refute_and_invalidate(refuted_root), IsEmpty());
-    EXPECT_THAT(refute_and_invalidate(leaf_d), UnorderedElementsAre(at_root));
+    EXPECT_THAT(refute_and_invalidate(subtree), IsEmpty());
+    EXPECT_THAT(refute_and_invalidate(other), UnorderedElementsAre(at_root));
 }
 
 TEST_F(PudRefutationPropagationIntegrationTest, SearchOutsideTheSubtreeIsUntouched) {
     const pud_mhws_head_id at_other = searches.try_add_head(descent_t{other}).value();
-    EXPECT_THAT(refute_and_invalidate(refuted_root), IsEmpty());
-    EXPECT_THAT(refute_and_invalidate(leaf_d), UnorderedElementsAre(at_other));
+    EXPECT_THAT(refute_and_invalidate(subtree), IsEmpty());
+    EXPECT_THAT(refute_and_invalidate(other), UnorderedElementsAre(at_other));
 }
 
 TEST_F(PudRefutationPropagationIntegrationTest, NewSearchInsideTheRefutedSubtreeFindsNothing) {
-    refute_and_invalidate(refuted_root);
-    EXPECT_FALSE(searches.try_add_head(descent_t{refuted_root}).has_value());
+    refute_and_invalidate(subtree);
+    EXPECT_FALSE(searches.try_add_head(descent_t{subtree}).has_value());
     EXPECT_FALSE(searches.try_add_head(descent_t{middle}).has_value());
     EXPECT_FALSE(searches.try_add_head(descent_t{leaf_b}).has_value());
 }
 
 TEST_F(PudRefutationPropagationIntegrationTest, NewSearchAboveTheRefutedSubtreeFindsTheLiveLeaf) {
-    refute_and_invalidate(refuted_root);
+    refute_and_invalidate(subtree);
     const pud_mhws_head_id at_root = searches.try_add_head(descent_t{root}).value();
-    EXPECT_THAT(refute_and_invalidate(leaf_d), UnorderedElementsAre(at_root));
+    EXPECT_THAT(refute_and_invalidate(other), UnorderedElementsAre(at_root));
 }
 
-TEST_F(PudRefutationPropagationIntegrationTest, ForkedSearchSkipsTheRefutedSubtree) {
+TEST_F(PudRefutationPropagationIntegrationTest, ForkedSearchSkipsARefutedSubtreeBeforeItsLeavesAreInvalidated) {
     const pud_mhws_head_id at_root = searches.try_add_head(descent_t{root}).value();
-    propagator.refute(refuted_root);
-    recorder.take_refuted_leaves();
+    for (pud_node_id leaf : finder.find_live_leaves(subtree))
+        propagator.refute(leaf);
     const pud_mhws_head_id forked = searches.try_fork_head(at_root, descent_t{root}).value();
-    EXPECT_THAT(refute_and_invalidate(leaf_d), UnorderedElementsAre(forked));
+    EXPECT_THAT(refute_and_invalidate(other), UnorderedElementsAre(forked));
 }
 
-TEST_F(PudRefutationPropagationIntegrationTest, ClimbingToTheRootExhaustsEverySearch) {
+TEST_F(PudRefutationPropagationIntegrationTest, RefutingTheRootExhaustsEverySearch) {
     const pud_mhws_head_id at_root = searches.try_add_head(descent_t{root}).value();
     const pud_mhws_head_id at_middle = searches.try_add_head(descent_t{middle}).value();
     const pud_mhws_head_id at_other = searches.try_add_head(descent_t{other}).value();
-    EXPECT_THAT(refute_and_invalidate(refuted_root), UnorderedElementsAre(at_middle));
-    EXPECT_THAT(refute_and_invalidate(leaf_d), UnorderedElementsAre(at_root, at_other));
+    EXPECT_THAT(refute_and_invalidate(root), UnorderedElementsAre(at_root, at_middle, at_other));
     EXPECT_TRUE(refuted_nodes.check_refuted(root));
 }
