@@ -6,7 +6,8 @@ size_t pud_node_live_child_counts::get(pud_node_id id) const {
 }
 
 void pud_node_live_child_counts::store(pud_node_id id, size_t live_child_count) {
-    live_child_counts_.insert_or_assign(id, live_child_count);
+    auto [_, inserted] = live_child_counts_.insert({id, live_child_count});
+    DEBUG_ASSERT(inserted);
 }
 
 size_t pud_node_live_child_counts::decrement(pud_node_id id) {

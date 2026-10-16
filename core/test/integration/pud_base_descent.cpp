@@ -15,6 +15,7 @@
 #include "infrastructure/pud_node_added_body_goals.hpp"
 #include "infrastructure/pud_node_added_substitutions.hpp"
 #include "infrastructure/pud_node_added_var_count.hpp"
+#include "infrastructure/pud_query_head_nodes.hpp"
 #include "infrastructure/pud_structure_watch_descent.hpp"
 #include "infrastructure/pud_transient_ubs_state.hpp"
 #include "value_objects/pud_substitution.hpp"
@@ -68,7 +69,8 @@ struct PudBaseDescentIntegrationTest : public ::testing::Test {
         NiceMock<MockTryAddQueryHead>,
         NiceMock<MockTryForkQueryHead>,
         NiceMock<MockRemoveQueryHead>,
-        pud_call_sites>;
+        pud_call_sites,
+        pud_query_head_nodes>;
     using base_descent_t = pud_base_descent<
         binding_descent_t,
         lvc_descent_t,
@@ -83,6 +85,8 @@ struct PudBaseDescentIntegrationTest : public ::testing::Test {
     pud_node_added_var_count       var_counts;
     pud_node_added_body_goals      body_goals;
     pud_call_sites                 call_sites;
+    pud_query_head_nodes           query_head_nodes;
+    pud_mhq_head_id                next_unique_head_id = 1000;
     NiceMock<MockOpenQuery>        open_query;
     NiceMock<MockTryAddQueryHead>  try_add_query_head;
     NiceMock<MockTryForkQueryHead> try_fork_query_head;
@@ -122,6 +126,12 @@ struct PudBaseDescentIntegrationTest : public ::testing::Test {
     }
 
     void SetUp() override {
+        ON_CALL(try_add_query_head, try_add_head(_)).WillByDefault([&](const std::vector<int>&) {
+            return live(next_unique_head_id++);
+        });
+        ON_CALL(try_fork_query_head, try_fork_head(_, _)).WillByDefault([&](pud_mhq_head_id, const std::vector<int>&) {
+            return live(next_unique_head_id++);
+        });
         // root: p(X0), q(X1, X2); children expand p(X0).
         store_node(root, 3, {p0, q12}, {});
         call_sites.store(root, 0);
@@ -159,6 +169,8 @@ struct PudBaseDescentIntegrationTest : public ::testing::Test {
                 try_fork_query_head,
                 remove_query_head,
                 call_sites,
+                query_head_nodes,
+                root,
                 immer::map<body_goal_id, const expr*>{}.set(0, p0).set(1, q12),
                 pud_ubs_state{},
                 3,
@@ -300,7 +312,9 @@ TEST_F(PudBaseDescentIntegrationTest, ForkedHeadIsRemovedWithItsDescentOnly) {
 TEST_F(PudBaseDescentIntegrationTest, DeepChainForksOnlyTheSurvivingGoal) {
     const uint32_t depth = 100;
     base_descent_t at = make_live_root();
-    EXPECT_CALL(try_add_query_head, try_add_head(_)).Times(depth).WillRepeatedly(Return(live(500)));
+    EXPECT_CALL(try_add_query_head, try_add_head(_)).Times(depth).WillRepeatedly([&](const std::vector<int>&) {
+        return live(next_unique_head_id++);
+    });
     EXPECT_CALL(try_fork_query_head, try_fork_head(_, _)).Times(0);
     pud_node_id parent_node = root;
     for (uint32_t level = 0; level < depth; ++level) {
@@ -315,4 +329,18 @@ TEST_F(PudBaseDescentIntegrationTest, DeepChainForksOnlyTheSurvivingGoal) {
     store_node(last, 0, {}, {pud_substitution{.var_idx = 1, .value = atom("a")}});
     EXPECT_CALL(try_fork_query_head, try_fork_head(101u, _)).WillOnce(Return(live(600)));
     at.descend(parent_node, last);
+}
+
+TEST_F(PudBaseDescentIntegrationTest, QueriesAreRecordedAtTheNodeThatOpenedOrForkedThem) {
+    base_descent_t at_root = make_live_root();
+    EXPECT_EQ(query_head_nodes.get(100), root);
+    EXPECT_EQ(query_head_nodes.get(101), root);
+    base_descent_t at_child = at_root.descend(root, child);
+    EXPECT_EQ(query_head_nodes.get(at_child.body_goal_pq().find_query_head(2).value()), child);
+    EXPECT_EQ(at_child.body_goal_pq().find_query_head(1), 101u);
+    base_descent_t at_nephew = at_child.descend(child, nephew);
+    const pud_mhq_head_id forked = at_nephew.body_goal_pq().find_query_head(1).value();
+    EXPECT_NE(forked, 101u);
+    EXPECT_EQ(query_head_nodes.get(forked), nephew);
+    EXPECT_EQ(query_head_nodes.get(at_nephew.body_goal_pq().find_query_head(3).value()), nephew);
 }

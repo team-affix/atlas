@@ -30,14 +30,19 @@ struct MockMakeHead {
 struct MockForkHead {
     MOCK_METHOD(MockHead, fork, (const MockHead&, int));
 };
+struct MockRemoveWitnessHead {
+    MOCK_METHOD(void, remove_head, (pud_mhws_head_id));
+};
 
-using test_mhcs_t = pud_mhcs<int, MockHead, MockMakeHead, MockForkHead>;
+using test_mhcs_t = pud_mhcs<int, MockHead, MockMakeHead, MockForkHead, NiceMock<MockRemoveWitnessHead>>;
+using head_ids = std::vector<pud_mhcs_head_id>;
 
 struct PudMhcsTest : public ::testing::Test {
     HeadOps           ops;
     NiceMock<MockMakeHead> make_head;
     NiceMock<MockForkHead> fork_head;
-    test_mhcs_t       mhcs{make_head, fork_head};
+    NiceMock<MockRemoveWitnessHead> remove_witness_head;
+    test_mhcs_t       mhcs{make_head, fork_head, remove_witness_head};
     pud_node_id       leaf  = 1;
     pud_node_id       other = 2;
 
@@ -106,8 +111,7 @@ TEST_F(PudMhcsTest, RemoveChoicePointUnlinksWitnesses) {
     ASSERT_TRUE(id.has_value());
     mhcs.remove_head(*id);
     // witnesses 3 and 4 must no longer map to anything
-    EXPECT_FALSE(mhcs.witness_refuted(3).has_value());
-    EXPECT_FALSE(mhcs.witness_refuted(4).has_value());
+    EXPECT_TRUE(mhcs.witnesses_refuted({3, 4}).empty());
 }
 
 // ── invalidate_leaf ───────────────────────────────────────────────────────────
@@ -153,9 +157,7 @@ TEST_F(PudMhcsTest, SelfWitnessInvalidatedHeadFindsChoicePoint) {
     EXPECT_TRUE(gone.empty());
     // now a choice-point: its witnesses must be registered
     EXPECT_CALL(ops, resume()).WillOnce(Return(std::nullopt));
-    auto result = mhcs.witness_refuted(10);
-    ASSERT_TRUE(result.has_value());
-    EXPECT_EQ(*result, *id);
+    EXPECT_EQ(mhcs.witnesses_refuted({10}), head_ids{*id});
 }
 
 TEST_F(PudMhcsTest, TwoSelfWitnessesOnSameLeafBothNotified) {
@@ -175,7 +177,7 @@ TEST_F(PudMhcsTest, TwoSelfWitnessesOnSameLeafBothNotified) {
 // ── witness_refuted ───────────────────────────────────────────────────────────
 
 TEST_F(PudMhcsTest, RefuteOfUnknownWitnessReturnsNullopt) {
-    EXPECT_FALSE(mhcs.witness_refuted(42).has_value());
+    EXPECT_TRUE(mhcs.witnesses_refuted({42}).empty());
 }
 
 TEST_F(PudMhcsTest, ChoicePointWitnessRefutedHeadNotified) {
@@ -185,14 +187,11 @@ TEST_F(PudMhcsTest, ChoicePointWitnessRefutedHeadNotified) {
     auto id = mhcs.try_add_head(1);
     ASSERT_TRUE(id.has_value());
     EXPECT_CALL(ops, witness_refuted(3u));
-    auto result = mhcs.witness_refuted(3);
-    EXPECT_FALSE(result.has_value());  // head survived with new context
+    EXPECT_TRUE(mhcs.witnesses_refuted({3}).empty());  // head survived with new context
     // new witnesses 5 and 4 must be registered
     EXPECT_CALL(ops, witness_refuted(5u));
     EXPECT_CALL(ops, resume()).WillOnce(Return(std::nullopt));
-    auto lost = mhcs.witness_refuted(5);
-    ASSERT_TRUE(lost.has_value());
-    EXPECT_EQ(*lost, *id);
+    EXPECT_EQ(mhcs.witnesses_refuted({5}), head_ids{*id});
 }
 
 TEST_F(PudMhcsTest, ChoicePointBothWitnessesRefutedHeadGone) {
@@ -201,11 +200,9 @@ TEST_F(PudMhcsTest, ChoicePointBothWitnessesRefutedHeadGone) {
         .WillOnce(Return(std::nullopt));
     auto id = mhcs.try_add_head(1);
     ASSERT_TRUE(id.has_value());
-    auto lost = mhcs.witness_refuted(3);
-    ASSERT_TRUE(lost.has_value());
-    EXPECT_EQ(*lost, *id);
+    EXPECT_EQ(mhcs.witnesses_refuted({3}), head_ids{*id});
     // witness 4 was unlinked when head was destroyed; refuting it is a noop
-    EXPECT_FALSE(mhcs.witness_refuted(4).has_value());
+    EXPECT_TRUE(mhcs.witnesses_refuted({4}).empty());
 }
 
 // After witness_refuted triggers a resume that re-uses the surviving witness,
@@ -216,12 +213,10 @@ TEST_F(PudMhcsTest, SurvivingWitnessReregisteredAfterRefute) {
         .WillOnce(Return(choice_of(5, 4)));  // 4 survives, 5 is new
     auto id = mhcs.try_add_head(1);
     ASSERT_TRUE(id.has_value());
-    mhcs.witness_refuted(3);
+    mhcs.witnesses_refuted({3});
     // witness 4 should still be registered and route to the same head
     EXPECT_CALL(ops, resume()).WillOnce(Return(std::nullopt));
-    auto lost = mhcs.witness_refuted(4);
-    ASSERT_TRUE(lost.has_value());
-    EXPECT_EQ(*lost, *id);
+    EXPECT_EQ(mhcs.witnesses_refuted({4}), head_ids{*id});
 }
 
 // ── try_fork_head ─────────────────────────────────────────────────────────────
@@ -249,6 +244,91 @@ TEST_F(PudMhcsTest, ForkWithJustificationAddsNewHead) {
     auto gone = mhcs.invalidate_leaf(other);
     ASSERT_EQ(gone.size(), 1u);
     EXPECT_EQ(gone[0], *forked);
+}
+
+// ── witnesses_refuted batches ─────────────────────────────────────────────────
+
+TEST_F(PudMhcsTest, BothWitnessesRefutedTogetherResumeTheHeadOnce) {
+    EXPECT_CALL(ops, resume())
+        .WillOnce(Return(choice_of(3, 4)))
+        .WillOnce(Return(std::nullopt));
+    auto id = mhcs.try_add_head(1);
+    ASSERT_TRUE(id.has_value());
+    EXPECT_CALL(ops, witness_refuted(3u));
+    EXPECT_CALL(ops, witness_refuted(4u));
+    EXPECT_EQ(mhcs.witnesses_refuted({3, 4}), head_ids{*id});
+}
+
+TEST_F(PudMhcsTest, HeadLearnsOfEveryRefutedWitnessBeforeItResumes) {
+    EXPECT_CALL(ops, resume()).WillOnce(Return(choice_of(3, 4)));
+    auto id = mhcs.try_add_head(1);
+    ASSERT_TRUE(id.has_value());
+    ::testing::InSequence in_order;
+    EXPECT_CALL(ops, witness_refuted(3u));
+    EXPECT_CALL(ops, witness_refuted(4u));
+    EXPECT_CALL(ops, resume()).WillOnce(Return(choice_of(5, 6)));
+    EXPECT_TRUE(mhcs.witnesses_refuted({3, 4}).empty());
+}
+
+TEST_F(PudMhcsTest, WitnessesOfDifferentHeadsAreRoutedToEach) {
+    EXPECT_CALL(ops, resume())
+        .WillOnce(Return(choice_of(3, 4)))
+        .WillOnce(Return(choice_of(5, 6)))
+        .WillOnce(Return(std::nullopt))
+        .WillOnce(Return(std::nullopt));
+    auto first = mhcs.try_add_head(1);
+    auto second = mhcs.try_add_head(2);
+    ASSERT_TRUE(first.has_value());
+    ASSERT_TRUE(second.has_value());
+    EXPECT_THAT(mhcs.witnesses_refuted({3, 5}), ::testing::UnorderedElementsAre(*first, *second));
+}
+
+TEST_F(PudMhcsTest, UnknownWitnessesInABatchAreSkipped) {
+    EXPECT_CALL(ops, resume())
+        .WillOnce(Return(choice_of(3, 4)))
+        .WillOnce(Return(std::nullopt));
+    auto id = mhcs.try_add_head(1);
+    ASSERT_TRUE(id.has_value());
+    EXPECT_EQ(mhcs.witnesses_refuted({42, 3, 43}), head_ids{*id});
+}
+
+// ── remove_head releases witnesses ────────────────────────────────────────────
+
+TEST_F(PudMhcsTest, RemovingAChoicePointRemovesBothWitnessHeads) {
+    EXPECT_CALL(ops, resume()).WillOnce(Return(choice_of(3, 4)));
+    auto id = mhcs.try_add_head(1);
+    ASSERT_TRUE(id.has_value());
+    EXPECT_CALL(remove_witness_head, remove_head(3u));
+    EXPECT_CALL(remove_witness_head, remove_head(4u));
+    mhcs.remove_head(*id);
+}
+
+TEST_F(PudMhcsTest, RemovingASelfWitnessRemovesNoWitnessHeads) {
+    EXPECT_CALL(ops, resume()).WillOnce(Return(self_of(leaf)));
+    auto id = mhcs.try_add_head(1);
+    ASSERT_TRUE(id.has_value());
+    EXPECT_CALL(remove_witness_head, remove_head(_)).Times(0);
+    mhcs.remove_head(*id);
+}
+
+TEST_F(PudMhcsTest, RemovingAnUnknownHeadRemovesNoWitnessHeads) {
+    EXPECT_CALL(remove_witness_head, remove_head(_)).Times(0);
+    mhcs.remove_head(17);
+}
+
+// ── get_descent ───────────────────────────────────────────────────────────────
+
+TEST_F(PudMhcsTest, DescentIsTheOneFromTheLatestResume) {
+    EXPECT_CALL(ops, resume())
+        .WillOnce(Return(pud_candidate_resume_context<int>{
+            .justification = pud_candidate_self_witness{.node = leaf}, .descent = 11}))
+        .WillOnce(Return(pud_candidate_resume_context<int>{
+            .justification = pud_candidate_self_witness{.node = other}, .descent = 12}));
+    auto id = mhcs.try_add_head(1);
+    ASSERT_TRUE(id.has_value());
+    EXPECT_EQ(mhcs.get_descent(*id), 11);
+    mhcs.invalidate_leaf(leaf);
+    EXPECT_EQ(mhcs.get_descent(*id), 12);
 }
 
 } // namespace

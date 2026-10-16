@@ -18,17 +18,20 @@ template<
     typename Descent,
     typename Head,
     typename IMakeHead,
-    typename IForkHead>
+    typename IForkHead,
+    typename IRemoveWitnessHead>
 struct pud_mhcs {
-    pud_mhcs(IMakeHead& make_head, IForkHead& fork_head);
+    pud_mhcs(IMakeHead& make_head, IForkHead& fork_head, IRemoveWitnessHead& remove_witness_head);
     std::optional<pud_mhcs_head_id> try_add_head(Descent search_root_descent);
     void remove_head(pud_mhcs_head_id head_id);
     std::vector<pud_mhcs_head_id> invalidate_leaf(pud_node_id node);
-    std::optional<pud_mhcs_head_id> witness_refuted(pud_mhws_head_id witness_head_id);
+    std::vector<pud_mhcs_head_id> witnesses_refuted(const std::vector<pud_mhws_head_id>& witness_head_ids);
     std::optional<pud_mhcs_head_id> try_fork_head(pud_mhcs_head_id head_id, Descent new_root_descent);
+    const Descent& get_descent(pud_mhcs_head_id head_id) const;
 private:
     IMakeHead& make_head_;
     IForkHead& fork_head_;
+    IRemoveWitnessHead& remove_witness_head_;
 
     void link(pud_mhcs_head_id head_id, pud_candidate_justification justification);
     pud_candidate_justification unlink_head(pud_mhcs_head_id head_id);
@@ -48,18 +51,21 @@ template<
     typename D,
     typename Head,
     typename IMakeHead,
-    typename IForkHead>
-pud_mhcs<D, Head, IMakeHead, IForkHead>::pud_mhcs(IMakeHead& make_head, IForkHead& fork_head)
+    typename IForkHead,
+    typename IRemoveWitnessHead>
+pud_mhcs<D, Head, IMakeHead, IForkHead, IRemoveWitnessHead>::pud_mhcs(IMakeHead& make_head, IForkHead& fork_head, IRemoveWitnessHead& remove_witness_head)
     : make_head_(make_head)
     , fork_head_(fork_head)
+    , remove_witness_head_(remove_witness_head)
     , next_head_id_(0) {}
 
 template<
     typename D,
     typename Head,
     typename IMakeHead,
-    typename IForkHead>
-std::optional<pud_mhcs_head_id> pud_mhcs<D, Head, IMakeHead, IForkHead>::try_add_head(D search_root_descent) {
+    typename IForkHead,
+    typename IRemoveWitnessHead>
+std::optional<pud_mhcs_head_id> pud_mhcs<D, Head, IMakeHead, IForkHead, IRemoveWitnessHead>::try_add_head(D search_root_descent) {
     auto [head_it, head_inserted] = heads_.emplace(
         next_head_id_,
         make_head_.make(std::move(search_root_descent)));
@@ -88,22 +94,29 @@ template<
     typename D,
     typename Head,
     typename IMakeHead,
-    typename IForkHead>
-void pud_mhcs<D, Head, IMakeHead, IForkHead>::remove_head(pud_mhcs_head_id head_id) {
+    typename IForkHead,
+    typename IRemoveWitnessHead>
+void pud_mhcs<D, Head, IMakeHead, IForkHead, IRemoveWitnessHead>::remove_head(pud_mhcs_head_id head_id) {
     if (!heads_.contains(head_id))
         return;
 
     heads_.erase(head_id);
     head_to_descent_.erase(head_id);
-    unlink_head(head_id);
+    const pud_candidate_justification justification = unlink_head(head_id);
+    const pud_candidate_choice_point* choice_point = std::get_if<pud_candidate_choice_point>(&justification);
+    if (!choice_point)
+        return;
+    remove_witness_head_.remove_head(choice_point->witness_a);
+    remove_witness_head_.remove_head(choice_point->witness_b);
 }
 
 template<
     typename D,
     typename Head,
     typename IMakeHead,
-    typename IForkHead>
-std::vector<pud_mhcs_head_id> pud_mhcs<D, Head, IMakeHead, IForkHead>::invalidate_leaf(pud_node_id node) {
+    typename IForkHead,
+    typename IRemoveWitnessHead>
+std::vector<pud_mhcs_head_id> pud_mhcs<D, Head, IMakeHead, IForkHead, IRemoveWitnessHead>::invalidate_leaf(pud_node_id node) {
     auto head_ids = unlink_self_witnesses(node);
 
     std::vector<pud_mhcs_head_id> result;
@@ -131,39 +144,50 @@ template<
     typename D,
     typename Head,
     typename IMakeHead,
-    typename IForkHead>
-std::optional<pud_mhcs_head_id> pud_mhcs<D, Head, IMakeHead, IForkHead>::witness_refuted(pud_mhws_head_id witness_head_id) {
-    if (!witness_head_to_head_.contains(witness_head_id))
-        return std::nullopt;
-
-    pud_mhcs_head_id head_id = witness_head_to_head_.at(witness_head_id);
-
-    unlink_head(head_id);
-
-    Head& head = heads_.at(head_id);
-    head.witness_refuted(witness_head_id);
-
-    std::optional<pud_candidate_resume_context<D>> resume_context = head.resume();
-
-    if (!resume_context.has_value()) {
-        heads_.erase(head_id);
-        head_to_descent_.erase(head_id);
-        return head_id;
+    typename IForkHead,
+    typename IRemoveWitnessHead>
+std::vector<pud_mhcs_head_id> pud_mhcs<D, Head, IMakeHead, IForkHead, IRemoveWitnessHead>::witnesses_refuted(
+    const std::vector<pud_mhws_head_id>& witness_head_ids) {
+    std::vector<std::pair<pud_mhcs_head_id, pud_mhws_head_id>> refutations;
+    for (pud_mhws_head_id witness_head_id : witness_head_ids) {
+        auto witness_it = witness_head_to_head_.find(witness_head_id);
+        if (witness_it == witness_head_to_head_.end())
+            continue;
+        refutations.emplace_back(witness_it->second, witness_head_id);
     }
 
-    const pud_candidate_resume_context<D>& context = resume_context.value();
-    head_to_descent_.at(head_id) = context.descent;
-    link(head_id, context.justification);
+    std::vector<pud_mhcs_head_id> affected;
+    for (const auto& [head_id, witness_head_id] : refutations) {
+        if (head_to_justification_.contains(head_id)) {
+            unlink_head(head_id);
+            affected.push_back(head_id);
+        }
+        heads_.at(head_id).witness_refuted(witness_head_id);
+    }
 
-    return std::nullopt;
+    std::vector<pud_mhcs_head_id> result;
+    for (pud_mhcs_head_id head_id : affected) {
+        std::optional<pud_candidate_resume_context<D>> resume_context = heads_.at(head_id).resume();
+        if (!resume_context.has_value()) {
+            heads_.erase(head_id);
+            head_to_descent_.erase(head_id);
+            result.push_back(head_id);
+            continue;
+        }
+        const pud_candidate_resume_context<D>& context = resume_context.value();
+        head_to_descent_.at(head_id) = context.descent;
+        link(head_id, context.justification);
+    }
+    return result;
 }
 
 template<
     typename D,
     typename Head,
     typename IMakeHead,
-    typename IForkHead>
-std::optional<pud_mhcs_head_id> pud_mhcs<D, Head, IMakeHead, IForkHead>::try_fork_head(pud_mhcs_head_id head_id, D new_root_descent) {
+    typename IForkHead,
+    typename IRemoveWitnessHead>
+std::optional<pud_mhcs_head_id> pud_mhcs<D, Head, IMakeHead, IForkHead, IRemoveWitnessHead>::try_fork_head(pud_mhcs_head_id head_id, D new_root_descent) {
     Head& old_head = heads_.at(head_id);
 
     auto [new_head_it, new_head_inserted] = heads_.emplace(
@@ -193,8 +217,19 @@ template<
     typename D,
     typename Head,
     typename IMakeHead,
-    typename IForkHead>
-void pud_mhcs<D, Head, IMakeHead, IForkHead>::link(pud_mhcs_head_id head_id, pud_candidate_justification justification) {
+    typename IForkHead,
+    typename IRemoveWitnessHead>
+const D& pud_mhcs<D, Head, IMakeHead, IForkHead, IRemoveWitnessHead>::get_descent(pud_mhcs_head_id head_id) const {
+    return head_to_descent_.at(head_id);
+}
+
+template<
+    typename D,
+    typename Head,
+    typename IMakeHead,
+    typename IForkHead,
+    typename IRemoveWitnessHead>
+void pud_mhcs<D, Head, IMakeHead, IForkHead, IRemoveWitnessHead>::link(pud_mhcs_head_id head_id, pud_candidate_justification justification) {
     head_to_justification_.insert({head_id, justification});
 
     if (auto choice_point = std::get_if<pud_candidate_choice_point>(&justification)) {
@@ -212,8 +247,9 @@ template<
     typename D,
     typename Head,
     typename IMakeHead,
-    typename IForkHead>
-pud_candidate_justification pud_mhcs<D, Head, IMakeHead, IForkHead>::unlink_head(pud_mhcs_head_id head_id) {
+    typename IForkHead,
+    typename IRemoveWitnessHead>
+pud_candidate_justification pud_mhcs<D, Head, IMakeHead, IForkHead, IRemoveWitnessHead>::unlink_head(pud_mhcs_head_id head_id) {
     auto extracted = head_to_justification_.extract(head_id);
 
     pud_candidate_justification justification = std::move(extracted.mapped());
@@ -239,8 +275,9 @@ template<
     typename D,
     typename Head,
     typename IMakeHead,
-    typename IForkHead>
-std::unordered_set<pud_mhcs_head_id> pud_mhcs<D, Head, IMakeHead, IForkHead>::unlink_self_witnesses(pud_node_id node) {
+    typename IForkHead,
+    typename IRemoveWitnessHead>
+std::unordered_set<pud_mhcs_head_id> pud_mhcs<D, Head, IMakeHead, IForkHead, IRemoveWitnessHead>::unlink_self_witnesses(pud_node_id node) {
     auto extracted = leaf_to_heads_.extract(node);
 
     if (extracted.empty())

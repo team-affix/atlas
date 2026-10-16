@@ -26,7 +26,8 @@ template<
     typename ITryAddQueryHead,
     typename ITryForkQueryHead,
     typename IRemoveQueryHead,
-    typename IGetCallSite>
+    typename IGetCallSite,
+    typename IStoreQueryHeadNode>
 struct pud_body_goal_pq_descent {
     pud_body_goal_pq_descent(
         IOpenQuery& open_query,
@@ -34,6 +35,8 @@ struct pud_body_goal_pq_descent {
         ITryForkQueryHead& try_fork_query_head,
         IRemoveQueryHead& remove_query_head,
         IGetCallSite& get_call_site,
+        IStoreQueryHeadNode& store_query_head_node,
+        pud_node_id root,
         const immer::map<body_goal_id, const expr*>& root_body_goal_exprs,
         const pud_ubs_state& root_ubs_state,
         uint32_t root_frame_offset,
@@ -41,12 +44,14 @@ struct pud_body_goal_pq_descent {
     pud_body_goal_pq_descent descend(
         body_goal_id next_body_goal_id,
         pud_node_id parent,
+        pud_node_id child,
         const pud_ubs_state& child_ubs_state,
         uint32_t child_frame_offset,
         const immer::map<body_goal_id, const expr*>& child_body_goal_exprs,
         const std::vector<pud_mhsw_head_id>& structure_changes,
         const std::vector<pud_mhsw_head_id>& added_watch_head_ids) const;
     pud_mhsw_head_id find_call_site_watch_head_id(pud_node_id parent) const;
+    std::optional<pud_mhq_head_id> find_query_head(body_goal_id goal) const;
     const std::vector<body_goal_id>& unit_goals() const;
     const std::vector<body_goal_id>& refuted_goals() const;
 private:
@@ -54,18 +59,21 @@ private:
 
     void open(
         body_goal_id goal,
+        pud_node_id node,
         const expr* goal_expr,
         const pud_ubs_state& ubs_state,
         uint32_t frame_offset,
         pud_mhsw_head_id watch_head_id);
     void fork(
         body_goal_id goal,
+        pud_node_id node,
         const expr* goal_expr,
         const pud_ubs_state& ubs_state,
         uint32_t frame_offset);
     void close(body_goal_id goal);
     void record(
         body_goal_id goal,
+        pud_node_id node,
         pud_mhq_head_id head_id,
         const std::optional<pud_forced_query_propagation>& forced_propagation);
 
@@ -74,6 +82,7 @@ private:
     ITryForkQueryHead* try_fork_query_head_;
     IRemoveQueryHead* remove_query_head_;
     IGetCallSite* get_call_site_;
+    IStoreQueryHeadNode* store_query_head_node_;
     immer::map<body_goal_id, immer::box<owner_t>> body_goal_queries_;
     immer::map<body_goal_id, pud_mhsw_head_id> body_goal_to_watch_head_;
     immer::map<pud_mhsw_head_id, body_goal_id> watch_head_to_body_goal_;
@@ -83,10 +92,10 @@ private:
 
 #define PUD_BODY_GOAL_PQ_DESCENT_TEMPLATE                                                  \
     template<typename IOpenQuery, typename ITryAddQueryHead, typename ITryForkQueryHead,   \
-             typename IRemoveQueryHead, typename IGetCallSite>
+             typename IRemoveQueryHead, typename IGetCallSite, typename IStoreQueryHeadNode>
 #define PUD_BODY_GOAL_PQ_DESCENT                                                           \
     pud_body_goal_pq_descent<IOpenQuery, ITryAddQueryHead, ITryForkQueryHead,              \
-        IRemoveQueryHead, IGetCallSite>
+        IRemoveQueryHead, IGetCallSite, IStoreQueryHeadNode>
 
 PUD_BODY_GOAL_PQ_DESCENT_TEMPLATE
 PUD_BODY_GOAL_PQ_DESCENT::pud_body_goal_pq_descent(
@@ -95,6 +104,8 @@ PUD_BODY_GOAL_PQ_DESCENT::pud_body_goal_pq_descent(
     ITryForkQueryHead& try_fork_query_head,
     IRemoveQueryHead& remove_query_head,
     IGetCallSite& get_call_site,
+    IStoreQueryHeadNode& store_query_head_node,
+    pud_node_id root,
     const immer::map<body_goal_id, const expr*>& root_body_goal_exprs,
     const pud_ubs_state& root_ubs_state,
     uint32_t root_frame_offset,
@@ -104,19 +115,21 @@ PUD_BODY_GOAL_PQ_DESCENT::pud_body_goal_pq_descent(
     , try_fork_query_head_(&try_fork_query_head)
     , remove_query_head_(&remove_query_head)
     , get_call_site_(&get_call_site)
+    , store_query_head_node_(&store_query_head_node)
     , body_goal_queries_()
     , body_goal_to_watch_head_()
     , watch_head_to_body_goal_()
     , unit_goals_()
     , refuted_goals_() {
     for (body_goal_id goal = 0; goal < root_watch_head_ids.size(); ++goal)
-        open(goal, root_body_goal_exprs.at(goal), root_ubs_state, root_frame_offset, root_watch_head_ids.at(goal));
+        open(goal, root, root_body_goal_exprs.at(goal), root_ubs_state, root_frame_offset, root_watch_head_ids.at(goal));
 }
 
 PUD_BODY_GOAL_PQ_DESCENT_TEMPLATE
 PUD_BODY_GOAL_PQ_DESCENT PUD_BODY_GOAL_PQ_DESCENT::descend(
     body_goal_id next_body_goal_id,
     pud_node_id parent,
+    pud_node_id child,
     const pud_ubs_state& child_ubs_state,
     uint32_t child_frame_offset,
     const immer::map<body_goal_id, const expr*>& child_body_goal_exprs,
@@ -131,13 +144,14 @@ PUD_BODY_GOAL_PQ_DESCENT PUD_BODY_GOAL_PQ_DESCENT::descend(
         const body_goal_id* goal = result.watch_head_to_body_goal_.find(watch_head_id);
         if (!goal)
             continue;
-        result.fork(*goal, child_body_goal_exprs.at(*goal), child_ubs_state, child_frame_offset);
+        result.fork(*goal, child, child_body_goal_exprs.at(*goal), child_ubs_state, child_frame_offset);
     }
 
     for (size_t added_index = 0; added_index < added_watch_head_ids.size(); ++added_index) {
         const body_goal_id goal = next_body_goal_id + added_index;
         result.open(
             goal,
+            child,
             child_body_goal_exprs.at(goal),
             child_ubs_state,
             child_frame_offset,
@@ -154,6 +168,14 @@ pud_mhsw_head_id PUD_BODY_GOAL_PQ_DESCENT::find_call_site_watch_head_id(pud_node
 }
 
 PUD_BODY_GOAL_PQ_DESCENT_TEMPLATE
+std::optional<pud_mhq_head_id> PUD_BODY_GOAL_PQ_DESCENT::find_query_head(body_goal_id goal) const {
+    const immer::box<owner_t>* query = body_goal_queries_.find(goal);
+    if (!query)
+        return std::nullopt;
+    return query->get().head_id();
+}
+
+PUD_BODY_GOAL_PQ_DESCENT_TEMPLATE
 const std::vector<body_goal_id>& PUD_BODY_GOAL_PQ_DESCENT::unit_goals() const {
     return unit_goals_;
 }
@@ -166,6 +188,7 @@ const std::vector<body_goal_id>& PUD_BODY_GOAL_PQ_DESCENT::refuted_goals() const
 PUD_BODY_GOAL_PQ_DESCENT_TEMPLATE
 void PUD_BODY_GOAL_PQ_DESCENT::open(
     body_goal_id goal,
+    pud_node_id node,
     const expr* goal_expr,
     const pud_ubs_state& ubs_state,
     uint32_t frame_offset,
@@ -173,12 +196,13 @@ void PUD_BODY_GOAL_PQ_DESCENT::open(
     body_goal_to_watch_head_ = body_goal_to_watch_head_.set(goal, watch_head_id);
     watch_head_to_body_goal_ = watch_head_to_body_goal_.set(watch_head_id, goal);
     const auto added = try_add_query_head_->try_add_head(open_query_->open(ubs_state, goal_expr, frame_offset));
-    record(goal, added.head_id, added.forced_propagation);
+    record(goal, node, added.head_id, added.forced_propagation);
 }
 
 PUD_BODY_GOAL_PQ_DESCENT_TEMPLATE
 void PUD_BODY_GOAL_PQ_DESCENT::fork(
     body_goal_id goal,
+    pud_node_id node,
     const expr* goal_expr,
     const pud_ubs_state& ubs_state,
     uint32_t frame_offset) {
@@ -188,7 +212,7 @@ void PUD_BODY_GOAL_PQ_DESCENT::fork(
     const auto forked = try_fork_query_head_->try_fork_head(
         parent_query->get().head_id(),
         open_query_->open(ubs_state, goal_expr, frame_offset));
-    record(goal, forked.head_id, forked.forced_propagation);
+    record(goal, node, forked.head_id, forked.forced_propagation);
 }
 
 PUD_BODY_GOAL_PQ_DESCENT_TEMPLATE
@@ -204,6 +228,7 @@ void PUD_BODY_GOAL_PQ_DESCENT::close(body_goal_id goal) {
 PUD_BODY_GOAL_PQ_DESCENT_TEMPLATE
 void PUD_BODY_GOAL_PQ_DESCENT::record(
     body_goal_id goal,
+    pud_node_id node,
     pud_mhq_head_id head_id,
     const std::optional<pud_forced_query_propagation>& forced_propagation) {
     const bool refuted =
@@ -214,6 +239,7 @@ void PUD_BODY_GOAL_PQ_DESCENT::record(
         return;
     }
     body_goal_queries_ = body_goal_queries_.set(goal, immer::box<owner_t>{*remove_query_head_, head_id});
+    store_query_head_node_->store(head_id, node);
     if (!forced_propagation.has_value())
         return;
     unit_goals_.push_back(goal);

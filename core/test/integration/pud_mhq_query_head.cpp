@@ -33,7 +33,11 @@ using query_head_factory_t = pud_query_head_factory<
     descent_t, MockTryAddCandidateSpecializationHead, MockTryForkCandidateSpecializationHead>;
 using query_head_forker_t = pud_query_head_forker<
     descent_t, MockTryAddCandidateSpecializationHead, MockTryForkCandidateSpecializationHead>;
-using mhq_t = pud_mhq<descent_t, query_head_t, query_head_factory_t, query_head_forker_t>;
+struct MockRemoveCandidateHead {
+    MOCK_METHOD(void, remove_head, (pud_mhcs_head_id));
+};
+
+using mhq_t = pud_mhq<descent_t, query_head_t, query_head_factory_t, query_head_forker_t, ::testing::NiceMock<MockRemoveCandidateHead>>;
 
 using propagation_t = std::optional<pud_forced_query_propagation>;
 
@@ -42,7 +46,8 @@ struct PudMhqQueryHeadIntegrationTest : public ::testing::Test {
     NiceMock<MockTryForkCandidateSpecializationHead> try_fork;
     query_head_factory_t factory{try_add, try_fork};
     query_head_forker_t forker;
-    mhq_t mhq{factory, forker};
+    ::testing::NiceMock<MockRemoveCandidateHead> remove_candidate_head;
+    mhq_t mhq{factory, forker, remove_candidate_head};
     descent_t axiom_a{1, 0};
     descent_t axiom_b{2, 0};
     descent_t axiom_c{3, 0};

@@ -51,7 +51,7 @@ using candidate_factory_t = pud_candidate_specialization_head_factory<
     int, child_iter, mhws_t, mhws_t, mhws_t, MockCheckLeaf, MockCheckRefuted, MockGetChildren, MockPropagate>;
 using candidate_forker_t = pud_candidate_specialization_head_forker<
     int, child_iter, mhws_t, mhws_t, mhws_t, MockCheckLeaf, MockCheckRefuted, MockGetChildren, MockPropagate>;
-using mhcs_t = pud_mhcs<int, candidate_head_t, candidate_factory_t, candidate_forker_t>;
+using mhcs_t = pud_mhcs<int, candidate_head_t, candidate_factory_t, candidate_forker_t, mhws_t>;
 
 struct PudMhcsSearchIntegrationTest : public ::testing::Test {
     NiceMock<MockCheckLeaf> leaves;
@@ -64,7 +64,7 @@ struct PudMhcsSearchIntegrationTest : public ::testing::Test {
     mhws_t witnesses{witness_factory, witness_forker};
     candidate_factory_t candidate_factory{witnesses, witnesses, witnesses, leaves, refuted_nodes, children, propagate};
     candidate_forker_t candidate_forker;
-    mhcs_t candidates{candidate_factory, candidate_forker};
+    mhcs_t candidates{candidate_factory, candidate_forker, witnesses};
     std::unordered_map<const pud_node*, std::vector<const pud_node*>> sequences;
     pud_node root{};
     pud_node only{};
@@ -94,7 +94,7 @@ TEST_F(PudMhcsSearchIntegrationTest, SingleWitnessIsNotAChoicePoint) {
     ASSERT_EQ(gone.size(), 1u);
     EXPECT_EQ(gone[0], *id);
     pud_mhws_head_id absent = 99;
-    EXPECT_FALSE(candidates.witness_refuted(absent).has_value());
+    EXPECT_TRUE(candidates.witnesses_refuted({absent}).empty());
 }
 
 TEST_F(PudMhcsSearchIntegrationTest, RefutingOneWitnessWithNoReplacementDropsTheOther) {
@@ -109,12 +109,10 @@ TEST_F(PudMhcsSearchIntegrationTest, RefutingOneWitnessWithNoReplacementDropsThe
     EXPECT_CALL(propagate, propagate(_, _)).WillRepeatedly(Return(std::nullopt));
     auto dropped = witnesses.invalidate_leaf(&left);
     ASSERT_EQ(dropped.size(), 1u);
-    auto lost = candidates.witness_refuted(dropped[0]);
-    ASSERT_TRUE(lost.has_value());
-    EXPECT_EQ(*lost, *id);
+    EXPECT_EQ(candidates.witnesses_refuted(dropped), std::vector<pud_mhcs_head_id>{*id});
     auto other = witnesses.invalidate_leaf(&right);
     ASSERT_EQ(other.size(), 1u);
-    EXPECT_FALSE(candidates.witness_refuted(other[0]).has_value());
+    EXPECT_TRUE(candidates.witnesses_refuted(other).empty());
 }
 
 TEST_F(PudMhcsSearchIntegrationTest, TwoSelfWitnessesOnlyTheOneWithoutANewJustificationFails) {

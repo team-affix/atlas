@@ -43,6 +43,7 @@ struct SubDescentOps {
         (int,
          body_goal_id,
          pud_node_id,
+         pud_node_id,
          const pud_ubs_state&,
          uint32_t,
          const body_goal_exprs_t&,
@@ -113,6 +114,7 @@ struct MockBodyGoalPqDescent {
     MockBodyGoalPqDescent descend(
         body_goal_id next_body_goal_id,
         pud_node_id parent,
+        pud_node_id child,
         const pud_ubs_state& child_ubs_state,
         uint32_t child_frame_offset,
         const body_goal_exprs_t& child_body_goal_exprs,
@@ -122,6 +124,7 @@ struct MockBodyGoalPqDescent {
             tag,
             next_body_goal_id,
             parent,
+            child,
             child_ubs_state,
             child_frame_offset,
             child_body_goal_exprs,
@@ -188,7 +191,7 @@ TEST_F(PudBaseDescentTest, DescendForwardsTheChildToEverySubDescent) {
     EXPECT_CALL(ops, descend_next_body_goal_id(4, child)).WillOnce(Return(4));
     EXPECT_CALL(ops, descend_body_goal_expr(40, _, _, child)).WillOnce(Return(41));
     EXPECT_CALL(ops, descend_structure_watch(60, child, _, _)).WillOnce(Return(watch_result_t{{}, {}, 61}));
-    EXPECT_CALL(ops, descend_body_goal_pq(50, _, _, _, _, _, _, _)).WillOnce(Return(51));
+    EXPECT_CALL(ops, descend_body_goal_pq(50, _, _, _, _, _, _, _, _)).WillOnce(Return(51));
     test_descent_t at_child = at_parent.descend(parent, child);
     EXPECT_EQ(at_child.binding().tag, 11);
     EXPECT_EQ(at_child.lvc().tag, 21);
@@ -199,14 +202,14 @@ TEST_F(PudBaseDescentTest, DescendForwardsTheChildToEverySubDescent) {
 TEST_F(PudBaseDescentTest, ExprAndPqGetTheParentsNextBodyGoalId) {
     EXPECT_CALL(ops, descend_next_body_goal_id(4, child)).WillOnce(Return(7));
     EXPECT_CALL(ops, descend_body_goal_expr(_, 4u, _, _)).WillOnce(Return(41));
-    EXPECT_CALL(ops, descend_body_goal_pq(_, 4u, _, _, _, _, _, _)).WillOnce(Return(51));
+    EXPECT_CALL(ops, descend_body_goal_pq(_, 4u, _, _, _, _, _, _, _)).WillOnce(Return(51));
     child_body_goal_exprs = child_body_goal_exprs.set(6, fake_expr(0x60));
     at_parent.descend(parent, child);
 }
 
 TEST_F(PudBaseDescentTest, ExprAndPqGetTheParentNode) {
     EXPECT_CALL(ops, descend_body_goal_expr(_, _, parent, child)).WillOnce(Return(41));
-    EXPECT_CALL(ops, descend_body_goal_pq(_, _, parent, _, _, _, _, _)).WillOnce(Return(51));
+    EXPECT_CALL(ops, descend_body_goal_pq(_, _, parent, _, _, _, _, _, _)).WillOnce(Return(51));
     at_parent.descend(parent, child);
 }
 
@@ -238,14 +241,14 @@ TEST_F(PudBaseDescentTest, PqGetsTheChildsEnvironment) {
     EXPECT_CALL(ops, lvc(21)).WillOnce(Return(9));
     EXPECT_CALL(ops, descend_body_goal_expr(40, _, _, _)).WillOnce(Return(41));
     EXPECT_CALL(ops, body_goal_exprs(41)).WillRepeatedly(ReturnRef(child_body_goal_exprs));
-    EXPECT_CALL(ops, descend_body_goal_pq(_, _, _, Ref(child_ubs_state), 9u, Ref(child_body_goal_exprs), _, _))
+    EXPECT_CALL(ops, descend_body_goal_pq(_, _, _, _, Ref(child_ubs_state), 9u, Ref(child_body_goal_exprs), _, _))
         .WillOnce(Return(51));
     at_parent.descend(parent, child);
 }
 
 TEST_F(PudBaseDescentTest, PqGetsTheStructureWatchResults) {
     EXPECT_CALL(ops, descend_structure_watch(_, _, _, _)).WillOnce(Return(watch_result_t{{1, 2}, {3}, 61}));
-    EXPECT_CALL(ops, descend_body_goal_pq(_, _, _, _, _, _, ElementsAre(1u, 2u), ElementsAre(3u))).WillOnce(Return(51));
+    EXPECT_CALL(ops, descend_body_goal_pq(_, _, _, _, _, _, _, ElementsAre(1u, 2u), ElementsAre(3u))).WillOnce(Return(51));
     at_parent.descend(parent, child);
 }
 
@@ -257,9 +260,9 @@ TEST_F(PudBaseDescentTest, ChildKeepsTheStructureWatchsChildDescent) {
 }
 
 TEST_F(PudBaseDescentTest, GrandchildUnwatchesTheChildsCallSiteGoal) {
-    EXPECT_CALL(ops, descend_body_goal_pq(50, _, _, _, _, _, _, _)).WillOnce(Return(51));
+    EXPECT_CALL(ops, descend_body_goal_pq(50, _, _, _, _, _, _, _, _)).WillOnce(Return(51));
     test_descent_t at_child = at_parent.descend(parent, child);
-    EXPECT_CALL(ops, descend_body_goal_pq(51, _, _, _, _, _, _, _)).WillOnce(Return(52));
+    EXPECT_CALL(ops, descend_body_goal_pq(51, _, _, _, _, _, _, _, _)).WillOnce(Return(52));
     EXPECT_CALL(ops, find_call_site_watch_head_id(51, child)).WillOnce(Return(13));
     EXPECT_CALL(ops, descend_structure_watch(_, sibling, ElementsAre(13u), _)).WillOnce(Return(watch_result_t{}));
     at_child.descend(child, sibling);
@@ -281,7 +284,7 @@ TEST_F(PudBaseDescentTest, DescendLeavesParentUntouched) {
 TEST_F(PudBaseDescentTest, SiblingsDescendFromTheSameParentState) {
     EXPECT_CALL(ops, descend_binding(10, child)).WillOnce(Return(11));
     EXPECT_CALL(ops, descend_binding(10, sibling)).WillOnce(Return(12));
-    EXPECT_CALL(ops, descend_body_goal_pq(50, _, _, _, _, _, _, _)).WillOnce(Return(51)).WillOnce(Return(52));
+    EXPECT_CALL(ops, descend_body_goal_pq(50, _, _, _, _, _, _, _, _)).WillOnce(Return(51)).WillOnce(Return(52));
     test_descent_t at_child = at_parent.descend(parent, child);
     test_descent_t at_sibling = at_parent.descend(parent, sibling);
     EXPECT_EQ(at_child.binding().tag, 11);
@@ -317,7 +320,7 @@ TEST_F(PudBaseDescentTest, DescendCallsEverySubDescentExactlyOnce) {
     EXPECT_CALL(strict_ops, ubs_state(11)).WillOnce(ReturnRef(child_ubs_state));
     EXPECT_CALL(strict_ops, lvc(21)).WillOnce(Return(0));
     EXPECT_CALL(strict_ops, body_goal_exprs(41)).WillOnce(ReturnRef(child_body_goal_exprs));
-    EXPECT_CALL(strict_ops, descend_body_goal_pq(50, 4u, parent, _, _, _, _, _)).WillOnce(Return(51));
+    EXPECT_CALL(strict_ops, descend_body_goal_pq(50, 4u, parent, _, _, _, _, _, _)).WillOnce(Return(51));
     at_parent.descend(parent, child);
     sub_descent_ops = &ops;
 }
@@ -331,9 +334,9 @@ TEST_F(PudBaseDescentTest, NextBodyGoalIdIsThreadedThroughEveryLevel) {
     EXPECT_CALL(ops, descend_body_goal_expr(_, 4u, parent, child)).WillOnce(Return(0));
     EXPECT_CALL(ops, descend_body_goal_expr(_, 6u, child, grandchild)).WillOnce(Return(0));
     EXPECT_CALL(ops, descend_body_goal_expr(_, 6u, grandchild, great_grandchild)).WillOnce(Return(0));
-    EXPECT_CALL(ops, descend_body_goal_pq(_, 4u, parent, _, _, _, _, _)).WillOnce(Return(0));
-    EXPECT_CALL(ops, descend_body_goal_pq(_, 6u, child, _, _, _, _, _)).WillOnce(Return(0));
-    EXPECT_CALL(ops, descend_body_goal_pq(_, 6u, grandchild, _, _, _, _, _)).WillOnce(Return(0));
+    EXPECT_CALL(ops, descend_body_goal_pq(_, 4u, parent, _, _, _, _, _, _)).WillOnce(Return(0));
+    EXPECT_CALL(ops, descend_body_goal_pq(_, 6u, child, _, _, _, _, _, _)).WillOnce(Return(0));
+    EXPECT_CALL(ops, descend_body_goal_pq(_, 6u, grandchild, _, _, _, _, _, _)).WillOnce(Return(0));
     at_parent.descend(parent, child).descend(child, grandchild).descend(grandchild, great_grandchild);
 }
 
@@ -342,6 +345,11 @@ TEST_F(PudBaseDescentTest, DescentIsAssignable) {
     test_descent_t current = at_parent;
     current = current.descend(parent, child);
     EXPECT_EQ(current.binding().tag, 11);
+}
+
+TEST_F(PudBaseDescentTest, PqGetsTheChildNode) {
+    EXPECT_CALL(ops, descend_body_goal_pq(_, _, parent, child, _, _, _, _, _)).WillOnce(Return(51));
+    at_parent.descend(parent, child);
 }
 
 }  // namespace

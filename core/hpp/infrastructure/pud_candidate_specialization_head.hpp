@@ -96,10 +96,10 @@ pud_candidate_specialization_head<D, NI, ITAH, IAWSH, ITFWSH, ICNL, ICNR, IGC, I
     check_node_refuted_(other.check_node_refuted_),
     get_children_(other.get_children_),
     descend_(other.descend_),
+    current_descent_(specialization_root_descent),
     node_path_truncated_(false) {
 
-    current_descent_ = specialization_root_descent;
-    
+
     // walk our frame stack using the new root descent
     for (const auto& node : other.node_path_) {
         auto optional_new_descent = descend_.descend(current_descent_, node);

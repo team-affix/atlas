@@ -1,0 +1,107 @@
+#ifndef PUD_QUERY_OPENER_HPP
+#define PUD_QUERY_OPENER_HPP
+
+#include <cstdint>
+#include <vector>
+#include "infrastructure/pud_transient_ubs_state.hpp"
+#include "value_objects/expr.hpp"
+#include "value_objects/framed_expr.hpp"
+#include "value_objects/pud_node_id.hpp"
+#include "value_objects/pud_query_descent.hpp"
+#include "value_objects/pud_ubs_state.hpp"
+
+// Resolves a caller's goal (frame 0) against every root's head lifted to the frame offset,
+// and starts a replay at each root it resolves against.
+template<
+    typename ReplayDescent,
+    typename BindMap,
+    typename Normalizer,
+    typename Unifier,
+    typename IGetRoots,
+    typename IGetNodeHead,
+    typename IMakeVar,
+    typename IMakeFunctor,
+    typename IMakeNormalizer,
+    typename IMakeUnifier,
+    typename IGetNodeAddedSubstitutions>
+struct pud_query_opener {
+    pud_query_opener(
+        IGetRoots& get_roots,
+        IGetNodeHead& get_node_head,
+        IMakeVar& make_var,
+        IMakeFunctor& make_functor,
+        IMakeNormalizer& make_normalizer,
+        IMakeUnifier& make_unifier,
+        IGetNodeAddedSubstitutions& get_node_added_substitutions);
+    std::vector<pud_query_descent<ReplayDescent>> open(
+        const pud_ubs_state& caller_ubs_state,
+        const expr* goal,
+        uint32_t frame_offset);
+private:
+    IGetRoots& get_roots_;
+    IGetNodeHead& get_node_head_;
+    IMakeVar& make_var_;
+    IMakeFunctor& make_functor_;
+    IMakeNormalizer& make_normalizer_;
+    IMakeUnifier& make_unifier_;
+    IGetNodeAddedSubstitutions& get_node_added_substitutions_;
+};
+
+#define PUD_QUERY_OPENER_TEMPLATE                                                          \
+    template<typename ReplayDescent, typename BindMap, typename Normalizer, typename Unifier, \
+             typename IGetRoots, typename IGetNodeHead, typename IMakeVar,                  \
+             typename IMakeFunctor, typename IMakeNormalizer, typename IMakeUnifier,         \
+             typename IGetNodeAddedSubstitutions>
+#define PUD_QUERY_OPENER                                                                   \
+    pud_query_opener<ReplayDescent, BindMap, Normalizer, Unifier, IGetRoots, IGetNodeHead, \
+        IMakeVar, IMakeFunctor, IMakeNormalizer, IMakeUnifier, IGetNodeAddedSubstitutions>
+
+PUD_QUERY_OPENER_TEMPLATE
+PUD_QUERY_OPENER::pud_query_opener(
+    IGetRoots& get_roots,
+    IGetNodeHead& get_node_head,
+    IMakeVar& make_var,
+    IMakeFunctor& make_functor,
+    IMakeNormalizer& make_normalizer,
+    IMakeUnifier& make_unifier,
+    IGetNodeAddedSubstitutions& get_node_added_substitutions)
+    : get_roots_(get_roots)
+    , get_node_head_(get_node_head)
+    , make_var_(make_var)
+    , make_functor_(make_functor)
+    , make_normalizer_(make_normalizer)
+    , make_unifier_(make_unifier)
+    , get_node_added_substitutions_(get_node_added_substitutions) {}
+
+PUD_QUERY_OPENER_TEMPLATE
+std::vector<pud_query_descent<ReplayDescent>> PUD_QUERY_OPENER::open(
+    const pud_ubs_state& caller_ubs_state,
+    const expr* goal,
+    uint32_t frame_offset) {
+    std::vector<pud_query_descent<ReplayDescent>> root_descents;
+    for (pud_node_id root : get_roots_.get()) {
+        pud_transient_ubs_state transient_ubs_state{caller_ubs_state};
+        BindMap bind_map = transient_ubs_state.make_bind_map(make_var_, make_functor_);
+        Normalizer normalizer = make_normalizer_.make(bind_map);
+        Unifier unifier = make_unifier_.make(normalizer, bind_map);
+        if (!unifier.unify(framed_expr{goal, 0}, framed_expr{get_node_head_.get(root), frame_offset}))
+            continue;
+        root_descents.push_back(pud_query_descent<ReplayDescent>{
+            root,
+            ReplayDescent{
+                make_var_,
+                make_functor_,
+                make_normalizer_,
+                make_unifier_,
+                get_node_added_substitutions_,
+                transient_ubs_state.to_persistent_state(),
+                frame_offset},
+        });
+    }
+    return root_descents;
+}
+
+#undef PUD_QUERY_OPENER
+#undef PUD_QUERY_OPENER_TEMPLATE
+
+#endif

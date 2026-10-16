@@ -5,7 +5,7 @@
 #include <unordered_map>
 #include "value_objects/pud_node_id.hpp"
 
-// A live leaf counts itself (1); an interior node counts its live children.
+// Only interior nodes have an entry; it is stored once, when the node gets its children.
 struct pud_node_live_child_counts {
     size_t get(pud_node_id id) const;
     void store(pud_node_id id, size_t live_child_count);

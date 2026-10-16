@@ -9,6 +9,7 @@
 #include "infrastructure/pud_query_head_forker.hpp"
 
 using ::testing::_;
+using ::testing::IsEmpty;
 using ::testing::NiceMock;
 using ::testing::Return;
 using ::testing::UnorderedElementsAre;
@@ -44,11 +45,15 @@ struct MockForkCandidateHead {
     MOCK_METHOD(MockCandidateHead, fork, (const MockCandidateHead&, descent_t));
 };
 
-using mhcs_t = pud_mhcs<descent_t, MockCandidateHead, MockMakeCandidateHead, MockForkCandidateHead>;
+struct MockRemoveWitnessHead {
+    MOCK_METHOD(void, remove_head, (pud_mhws_head_id));
+};
+
+using mhcs_t = pud_mhcs<descent_t, MockCandidateHead, MockMakeCandidateHead, MockForkCandidateHead, NiceMock<MockRemoveWitnessHead>>;
 using query_head_t = pud_query_head<descent_t, mhcs_t, mhcs_t>;
 using query_head_factory_t = pud_query_head_factory<descent_t, mhcs_t, mhcs_t>;
 using query_head_forker_t = pud_query_head_forker<descent_t, mhcs_t, mhcs_t>;
-using mhq_t = pud_mhq<descent_t, query_head_t, query_head_factory_t, query_head_forker_t>;
+using mhq_t = pud_mhq<descent_t, query_head_t, query_head_factory_t, query_head_forker_t, mhcs_t>;
 
 using propagation_t = std::optional<pud_forced_query_propagation>;
 
@@ -56,10 +61,11 @@ struct PudMhqMhcsIntegrationTest : public ::testing::Test {
     NiceMock<CandidateHeadOps> ops;
     NiceMock<MockMakeCandidateHead> make_candidate;
     NiceMock<MockForkCandidateHead> fork_candidate;
-    mhcs_t mhcs{make_candidate, fork_candidate};
+    NiceMock<MockRemoveWitnessHead> remove_witness_head;
+    mhcs_t mhcs{make_candidate, fork_candidate, remove_witness_head};
     query_head_factory_t query_factory{mhcs, mhcs};
     query_head_forker_t query_forker;
-    mhq_t mhq{query_factory, query_forker};
+    mhq_t mhq{query_factory, query_forker, mhcs};
     descent_t axiom_a{1, 0};
     descent_t axiom_b{2, 0};
     std::vector<descent_t> two_axioms{axiom_a, axiom_b};
@@ -174,9 +180,9 @@ TEST_F(PudMhqMhcsIntegrationTest, ChoicePointCollapseMakesQueryUnit) {
 
     EXPECT_CALL(ops, witness_refuted(7u));
     EXPECT_CALL(ops, resume()).WillOnce(Return(std::nullopt));
-    std::optional<pud_mhcs_head_id> lost = mhcs.witness_refuted(7);
-    ASSERT_TRUE(lost.has_value());
-    EXPECT_EQ(mhq.candidate_specialization_refuted(lost.value()), unit_query(first_query));
+    std::vector<pud_mhcs_head_id> lost = mhcs.witnesses_refuted({7});
+    ASSERT_EQ(lost.size(), 1u);
+    EXPECT_EQ(mhq.candidate_specialization_refuted(lost.front()), unit_query(first_query));
 }
 
 TEST_F(PudMhqMhcsIntegrationTest, ChoicePointThatRecoversKeepsQueryLive) {
@@ -186,12 +192,12 @@ TEST_F(PudMhqMhcsIntegrationTest, ChoicePointThatRecoversKeepsQueryLive) {
     ASSERT_EQ(mhq.try_add_head(two_axioms).forced_propagation, std::nullopt);
 
     EXPECT_CALL(ops, resume()).WillOnce(Return(choice_between(9, 8, axiom_a)));
-    EXPECT_FALSE(mhcs.witness_refuted(7).has_value());
+    EXPECT_TRUE(mhcs.witnesses_refuted({7}).empty());
 
     EXPECT_CALL(ops, resume()).WillOnce(Return(std::nullopt));
-    std::optional<pud_mhcs_head_id> lost = mhcs.witness_refuted(9);
-    ASSERT_TRUE(lost.has_value());
-    EXPECT_EQ(mhq.candidate_specialization_refuted(lost.value()), unit_query(first_query));
+    std::vector<pud_mhcs_head_id> lost = mhcs.witnesses_refuted({9});
+    ASSERT_EQ(lost.size(), 1u);
+    EXPECT_EQ(mhq.candidate_specialization_refuted(lost.front()), unit_query(first_query));
 }
 
 // ── forking ──────────────────────────────────────────────────────────────────
@@ -254,11 +260,12 @@ TEST_F(PudMhqMhcsIntegrationTest, ForkSkipsAxiomsAlreadyDeadInParent) {
 
 // ── removing ─────────────────────────────────────────────────────────────────
 
-TEST_F(PudMhqMhcsIntegrationTest, RemovedQueryIgnoresCandidateRefutations) {
+TEST_F(PudMhqMhcsIntegrationTest, RemovedQueryRemovesItsCandidateHeads) {
     add_two_self_witnessed();
     mhq.remove_head(first_query);
-    EXPECT_CALL(ops, resume()).WillOnce(Return(std::nullopt));
-    EXPECT_THAT(invalidate(leaf_a), UnorderedElementsAre(std::nullopt));
+    EXPECT_CALL(ops, resume()).Times(0);
+    EXPECT_THAT(invalidate(leaf_a), IsEmpty());
+    EXPECT_THAT(invalidate(leaf_b), IsEmpty());
 }
 
 TEST_F(PudMhqMhcsIntegrationTest, RemovedChildLeavesParentReachable) {
@@ -269,11 +276,8 @@ TEST_F(PudMhqMhcsIntegrationTest, RemovedChildLeavesParentReachable) {
     mhq.try_fork_head(first_query, two_axioms);
     mhq.remove_head(second_query);
 
-    EXPECT_CALL(ops, resume())
-        .WillOnce(Return(std::nullopt))
-        .WillOnce(Return(std::nullopt));
-    EXPECT_THAT(invalidate(leaf_a),
-        UnorderedElementsAre(unit_query(first_query), std::nullopt));
+    EXPECT_CALL(ops, resume()).WillOnce(Return(std::nullopt));
+    EXPECT_THAT(invalidate(leaf_a), UnorderedElementsAre(unit_query(first_query)));
 }
 
 }  // namespace

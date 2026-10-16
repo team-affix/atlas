@@ -3,42 +3,45 @@
 
 #include "value_objects/pud_node_id.hpp"
 
-// refute() takes a live leaf. Each ancestor whose last live child dies is refuted in turn.
+// refute() takes a node that has just died. Each ancestor whose last live child dies dies in turn.
 template<
-    typename IDecrementLiveChildCount,
     typename ICheckNodeRoot,
-    typename IGetNodeParent>
+    typename IGetNodeParent,
+    typename IDecrementLiveChildCount>
 struct pud_refutation_propagator {
     pud_refutation_propagator(
-        IDecrementLiveChildCount& decrement_live_child_count,
         ICheckNodeRoot& check_node_root,
-        IGetNodeParent& get_node_parent);
-    void refute(pud_node_id leaf);
+        IGetNodeParent& get_node_parent,
+        IDecrementLiveChildCount& decrement_live_child_count);
+    void refute(pud_node_id dead_node);
 private:
-    IDecrementLiveChildCount& decrement_live_child_count_;
     ICheckNodeRoot& check_node_root_;
     IGetNodeParent& get_node_parent_;
+    IDecrementLiveChildCount& decrement_live_child_count_;
 };
 
 #define PUD_REFUTATION_PROPAGATOR_TEMPLATE                                                 \
-    template<typename IDecrementLiveChildCount, typename ICheckNodeRoot, typename IGetNodeParent>
+    template<typename ICheckNodeRoot, typename IGetNodeParent, typename IDecrementLiveChildCount>
 #define PUD_REFUTATION_PROPAGATOR                                                          \
-    pud_refutation_propagator<IDecrementLiveChildCount, ICheckNodeRoot, IGetNodeParent>
+    pud_refutation_propagator<ICheckNodeRoot, IGetNodeParent, IDecrementLiveChildCount>
 
 PUD_REFUTATION_PROPAGATOR_TEMPLATE
 PUD_REFUTATION_PROPAGATOR::pud_refutation_propagator(
-    IDecrementLiveChildCount& decrement_live_child_count,
     ICheckNodeRoot& check_node_root,
-    IGetNodeParent& get_node_parent)
-    : decrement_live_child_count_(decrement_live_child_count)
-    , check_node_root_(check_node_root)
-    , get_node_parent_(get_node_parent) {}
+    IGetNodeParent& get_node_parent,
+    IDecrementLiveChildCount& decrement_live_child_count)
+    : check_node_root_(check_node_root)
+    , get_node_parent_(get_node_parent)
+    , decrement_live_child_count_(decrement_live_child_count) {}
 
 PUD_REFUTATION_PROPAGATOR_TEMPLATE
-void PUD_REFUTATION_PROPAGATOR::refute(pud_node_id leaf) {
-    pud_node_id refuted = leaf;
-    while (decrement_live_child_count_.decrement(refuted) == 0 && !check_node_root_.check_root(refuted))
-        refuted = get_node_parent_.get(refuted);
+void PUD_REFUTATION_PROPAGATOR::refute(pud_node_id dead_node) {
+    pud_node_id dead = dead_node;
+    while (!check_node_root_.check_root(dead)) {
+        dead = get_node_parent_.get(dead);
+        if (decrement_live_child_count_.decrement(dead) > 0)
+            return;
+    }
 }
 
 #undef PUD_REFUTATION_PROPAGATOR

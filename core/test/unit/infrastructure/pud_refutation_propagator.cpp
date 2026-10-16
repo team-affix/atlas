@@ -12,10 +12,6 @@ using ::testing::NiceMock;
 
 namespace {
 
-struct MockDecrementLiveChildCount {
-    MOCK_METHOD(size_t, decrement, (pud_node_id));
-};
-
 struct MockCheckRoot {
     MOCK_METHOD(bool, check_root, (pud_node_id));
 };
@@ -24,17 +20,21 @@ struct MockGetParent {
     MOCK_METHOD(pud_node_id, get, (pud_node_id));
 };
 
-using test_propagator_t = pud_refutation_propagator<
-    NiceMock<MockDecrementLiveChildCount>,
-    NiceMock<MockCheckRoot>,
-    NiceMock<MockGetParent>>;
+struct MockDecrementLiveChildCount {
+    MOCK_METHOD(size_t, decrement, (pud_node_id));
+};
 
-// root -> {a, b}; a -> {a1, a2}; b -> {b1}
+using test_propagator_t = pud_refutation_propagator<
+    NiceMock<MockCheckRoot>,
+    NiceMock<MockGetParent>,
+    NiceMock<MockDecrementLiveChildCount>>;
+
+// root -> {a, b}; a -> {a1, a2}; b -> {b1}. Only interior nodes have live child counts.
 struct PudRefutationPropagatorTest : public ::testing::Test {
-    NiceMock<MockDecrementLiveChildCount> live_child_counts;
     NiceMock<MockCheckRoot> roots;
     NiceMock<MockGetParent> parents;
-    test_propagator_t propagator{live_child_counts, roots, parents};
+    NiceMock<MockDecrementLiveChildCount> live_child_counts;
+    test_propagator_t propagator{roots, parents, live_child_counts};
     std::unordered_map<pud_node_id, size_t> count_of;
     std::unordered_map<pud_node_id, pud_node_id> parent_of;
     std::unordered_set<pud_node_id> root_nodes;
@@ -47,10 +47,8 @@ struct PudRefutationPropagatorTest : public ::testing::Test {
 
     void link(pud_node_id parent, std::vector<pud_node_id> node_children) {
         count_of[parent] = node_children.size();
-        for (pud_node_id child : node_children) {
+        for (pud_node_id child : node_children)
             parent_of[child] = parent;
-            count_of.try_emplace(child, 1);
-        }
     }
 
     void SetUp() override {
@@ -69,36 +67,47 @@ struct PudRefutationPropagatorTest : public ::testing::Test {
         });
     }
 
-    bool refuted(pud_node_id node) {
+    bool dead(pud_node_id node) {
         return count_of.at(node) == 0;
     }
 };
 
-TEST_F(PudRefutationPropagatorTest, LeafWithALiveSiblingRefutesOnlyItself) {
+TEST_F(PudRefutationPropagatorTest, DeadNodeIsNeverDecrementedItself) {
+    EXPECT_CALL(live_child_counts, decrement(_)).Times(AnyNumber());
+    EXPECT_CALL(live_child_counts, decrement(a1)).Times(0);
     propagator.refute(a1);
-    EXPECT_TRUE(refuted(a1));
+}
+
+TEST_F(PudRefutationPropagatorTest, DeadLeafWithALiveSiblingOnlyDecrementsItsParent) {
+    propagator.refute(a1);
     EXPECT_EQ(count_of.at(a), 1u);
     EXPECT_EQ(count_of.at(root), 2u);
 }
 
-TEST_F(PudRefutationPropagatorTest, LastLiveSiblingRefutesTheParent) {
+TEST_F(PudRefutationPropagatorTest, LastLiveSiblingKillsTheParent) {
     propagator.refute(a1);
     propagator.refute(a2);
-    EXPECT_TRUE(refuted(a));
+    EXPECT_TRUE(dead(a));
     EXPECT_EQ(count_of.at(root), 1u);
 }
 
-TEST_F(PudRefutationPropagatorTest, OnlyChildRefutesItsParent) {
+TEST_F(PudRefutationPropagatorTest, OnlyChildKillsItsParent) {
     propagator.refute(b1);
-    EXPECT_TRUE(refuted(b));
+    EXPECT_TRUE(dead(b));
     EXPECT_EQ(count_of.at(root), 1u);
 }
 
-TEST_F(PudRefutationPropagatorTest, RefutationClimbsToTheRootOnceEveryLeafIsRefuted) {
+TEST_F(PudRefutationPropagatorTest, DeathClimbsToTheRootOnceEveryLeafIsDead) {
     propagator.refute(a1);
     propagator.refute(a2);
     propagator.refute(b1);
-    EXPECT_TRUE(refuted(root));
+    EXPECT_TRUE(dead(root));
+}
+
+TEST_F(PudRefutationPropagatorTest, DeadInteriorNodeDecrementsItsParent) {
+    count_of[a] = 0;
+    propagator.refute(a);
+    EXPECT_EQ(count_of.at(root), 1u);
 }
 
 TEST_F(PudRefutationPropagatorTest, ClimbStopsAtTheFirstAncestorWithALiveChild) {
@@ -106,27 +115,19 @@ TEST_F(PudRefutationPropagatorTest, ClimbStopsAtTheFirstAncestorWithALiveChild) 
     EXPECT_CALL(parents, get(root)).Times(0);
     propagator.refute(a1);
     propagator.refute(a2);
-    EXPECT_FALSE(refuted(root));
+    EXPECT_FALSE(dead(root));
 }
 
-TEST_F(PudRefutationPropagatorTest, LeafWithALiveSiblingNeverLooksAtItsParentsParent) {
-    EXPECT_CALL(parents, get(_)).Times(AnyNumber());
-    EXPECT_CALL(parents, get(a)).Times(0);
-    propagator.refute(a1);
-}
-
-TEST_F(PudRefutationPropagatorTest, RefutedRootStopsTheClimb) {
-    count_of = {{root, 1}};
+TEST_F(PudRefutationPropagatorTest, DeadRootLooksUpNothing) {
     EXPECT_CALL(parents, get(_)).Times(0);
+    EXPECT_CALL(live_child_counts, decrement(_)).Times(0);
     propagator.refute(root);
-    EXPECT_TRUE(refuted(root));
 }
 
-TEST_F(PudRefutationPropagatorTest, EachLevelIsDecrementedOnceInClimbingOrder) {
+TEST_F(PudRefutationPropagatorTest, EachAncestorIsDecrementedOnceInClimbingOrder) {
     propagator.refute(a1);
     propagator.refute(b1);
     InSequence in_order;
-    EXPECT_CALL(live_child_counts, decrement(a2));
     EXPECT_CALL(live_child_counts, decrement(a));
     EXPECT_CALL(live_child_counts, decrement(root));
     propagator.refute(a2);
@@ -140,11 +141,11 @@ TEST_F(PudRefutationPropagatorTest, DeepChainCollapsesToTheRootFromItsOnlyLeaf) 
     for (pud_node_id level = 0; level < depth; ++level)
         link(100 + level, {100 + level + 1});
     propagator.refute(100 + depth);
-    for (pud_node_id level = 0; level <= depth; ++level)
-        EXPECT_TRUE(refuted(100 + level));
+    for (pud_node_id level = 0; level < depth; ++level)
+        EXPECT_TRUE(dead(100 + level));
 }
 
-TEST_F(PudRefutationPropagatorTest, WideSiblingSetRefutesTheParentOnlyAtTheLastChild) {
+TEST_F(PudRefutationPropagatorTest, WideSiblingSetKillsTheParentOnlyAtTheLastChild) {
     const pud_node_id width = 100;
     std::vector<pud_node_id> wide_children;
     for (pud_node_id column = 0; column < width; ++column)
@@ -152,12 +153,12 @@ TEST_F(PudRefutationPropagatorTest, WideSiblingSetRefutesTheParentOnlyAtTheLastC
     link(b1, wide_children);
     for (pud_node_id column = 0; column + 1 < width; ++column) {
         propagator.refute(1000 + column);
-        EXPECT_FALSE(refuted(b1));
+        EXPECT_FALSE(dead(b1));
     }
     propagator.refute(1000 + width - 1);
-    EXPECT_TRUE(refuted(b1));
-    EXPECT_TRUE(refuted(b));
-    EXPECT_FALSE(refuted(root));
+    EXPECT_TRUE(dead(b1));
+    EXPECT_TRUE(dead(b));
+    EXPECT_FALSE(dead(root));
 }
 
 }  // namespace

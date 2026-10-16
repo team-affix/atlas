@@ -17,22 +17,25 @@ template<
     typename ReplayDescent,
     typename Head,
     typename IMakeHead,
-    typename IForkHead>
+    typename IForkHead,
+    typename IRemoveCandidateHead>
 struct pud_mhq {
-    pud_mhq(IMakeHead& make_head, IForkHead& fork_head);
+    pud_mhq(IMakeHead& make_head, IForkHead& fork_head, IRemoveCandidateHead& remove_candidate_head);
     pud_mhq_head_admission try_add_head(const std::vector<ReplayDescent>& root_descents);
     void remove_head(pud_mhq_head_id head_id);
     std::optional<pud_forced_query_propagation> candidate_specialization_refuted(pud_mhcs_head_id candidate_head_id);
     pud_mhq_head_admission try_fork_head(pud_mhq_head_id head_id, const std::vector<ReplayDescent>& root_descents);
+    const std::unordered_set<pud_mhcs_head_id>& get_candidates(pud_mhq_head_id head_id) const;
 private:
     pud_mhq_head_admission try_keep_head(
         pud_mhq_head_id head_id,
         const pud_query_resume_context& context);
     void link(pud_mhq_head_id head_id, const std::vector<pud_mhcs_head_id>& candidate_ids);
-    void unlink_head(pud_mhq_head_id head_id);
+    std::unordered_set<pud_mhcs_head_id> unlink_head(pud_mhq_head_id head_id);
 
     IMakeHead& make_head_;
     IForkHead& fork_head_;
+    IRemoveCandidateHead& remove_candidate_head_;
 
     pud_mhq_head_id next_head_id_;
     std::unordered_map<pud_mhq_head_id, Head> heads_;
@@ -41,13 +44,15 @@ private:
 };
 
 #define PUD_MHQ_TEMPLATE                                                                   \
-    template<typename ReplayDescent, typename Head, typename IMakeHead, typename IForkHead>
-#define PUD_MHQ pud_mhq<ReplayDescent, Head, IMakeHead, IForkHead>
+    template<typename ReplayDescent, typename Head, typename IMakeHead, typename IForkHead,  \
+             typename IRemoveCandidateHead>
+#define PUD_MHQ pud_mhq<ReplayDescent, Head, IMakeHead, IForkHead, IRemoveCandidateHead>
 
 PUD_MHQ_TEMPLATE
-PUD_MHQ::pud_mhq(IMakeHead& make_head, IForkHead& fork_head)
+PUD_MHQ::pud_mhq(IMakeHead& make_head, IForkHead& fork_head, IRemoveCandidateHead& remove_candidate_head)
     : make_head_(make_head)
     , fork_head_(fork_head)
+    , remove_candidate_head_(remove_candidate_head)
     , next_head_id_(0) {}
 
 PUD_MHQ_TEMPLATE
@@ -63,8 +68,10 @@ PUD_MHQ_TEMPLATE
 void PUD_MHQ::remove_head(pud_mhq_head_id head_id) {
     if (!heads_.contains(head_id))
         return;
-    unlink_head(head_id);
+    const std::unordered_set<pud_mhcs_head_id> candidate_ids = unlink_head(head_id);
     heads_.erase(head_id);
+    for (pud_mhcs_head_id candidate_id : candidate_ids)
+        remove_candidate_head_.remove_head(candidate_id);
 }
 
 PUD_MHQ_TEMPLATE
@@ -130,10 +137,18 @@ void PUD_MHQ::link(pud_mhq_head_id head_id, const std::vector<pud_mhcs_head_id>&
 }
 
 PUD_MHQ_TEMPLATE
-void PUD_MHQ::unlink_head(pud_mhq_head_id head_id) {
+std::unordered_set<pud_mhcs_head_id> PUD_MHQ::unlink_head(pud_mhq_head_id head_id) {
     auto extracted = head_to_candidates_.extract(head_id);
+    if (extracted.empty())
+        return {};
     for (pud_mhcs_head_id candidate_id : extracted.mapped())
         candidate_to_head_.erase(candidate_id);
+    return std::move(extracted.mapped());
+}
+
+PUD_MHQ_TEMPLATE
+const std::unordered_set<pud_mhcs_head_id>& PUD_MHQ::get_candidates(pud_mhq_head_id head_id) const {
+    return head_to_candidates_.at(head_id);
 }
 
 #undef PUD_MHQ

@@ -75,6 +75,7 @@ PUD_BASE_DESCENT PUD_BASE_DESCENT::descend(pud_node_id parent, pud_node_id child
     BodyGoalPqDescent child_body_goal_pq = body_goal_pq_.descend(
         next_body_goal_id,
         parent,
+        child,
         child_binding.ubs_state(),
         child_lvc.lvc(),
         child_body_goal_expr.body_goal_exprs(),

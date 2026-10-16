@@ -38,10 +38,9 @@ TEST_F(PudNodeLiveChildCountsTest, DecrementingAnUnstoredNodeThrows) {
     EXPECT_THROW(counts.decrement(node), std::out_of_range);
 }
 
-TEST_F(PudNodeLiveChildCountsTest, StoringAgainReplacesTheCount) {
+TEST_F(PudNodeLiveChildCountsTest, SecondStoreOfSameNodeThrows) {
     counts.store(node, 1);
-    counts.store(node, 4);
-    EXPECT_EQ(counts.get(node), 4u);
+    EXPECT_THROW(counts.store(node, 4), std::logic_error);
 }
 
 TEST_F(PudNodeLiveChildCountsTest, NodesKeepTheirOwnCounts) {
