@@ -44,7 +44,7 @@ private:
 };
 
 template<typename IMakeVar, typename IMakeFunctor>
-using ubs_transient_bind_map = ubs_bind_map<
+ubs_bind_map<
     IMakeVar,
     IMakeFunctor,
     pud_transient_ubs_state,
@@ -52,12 +52,17 @@ using ubs_transient_bind_map = ubs_bind_map<
     pud_transient_ubs_state,
     pud_transient_ubs_state,
     pud_transient_ubs_state,
-    pud_transient_ubs_state>;
-
-template<typename IMakeVar, typename IMakeFunctor>
-ubs_transient_bind_map<IMakeVar, IMakeFunctor>
+    pud_transient_ubs_state>
 pud_transient_ubs_state::make_bind_map(IMakeVar& make_var, IMakeFunctor& make_functor) {
-    return ubs_transient_bind_map<IMakeVar, IMakeFunctor>{
+    return ubs_bind_map<
+        IMakeVar,
+        IMakeFunctor,
+        pud_transient_ubs_state,
+        pud_transient_ubs_state,
+        pud_transient_ubs_state,
+        pud_transient_ubs_state,
+        pud_transient_ubs_state,
+        pud_transient_ubs_state>{
         make_var,
         make_functor,
         *this,

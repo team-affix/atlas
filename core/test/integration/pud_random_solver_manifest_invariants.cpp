@@ -3,7 +3,7 @@
 #include <vector>
 #include <gtest/gtest.h>
 #include "pud_datalog_oracle.hpp"
-#include "pud_random_solver_manifest_harness.hpp"
+#include "pud_solver_manifest_harness.hpp"
 
 namespace {
 

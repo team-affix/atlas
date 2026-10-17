@@ -2,11 +2,12 @@
 #define PUD_CANDIDATE_SPECIALIZATION_HEAD_FACTORY_HPP
 
 #include <utility>
-#include "infrastructure/pud_candidate_specialization_head.hpp"
 
+// Makes candidate specialization heads of the given type, which must be constructible from the witness
+// search capabilities, the leaf, refutation and children checks, and a specialization root descent.
 template<
+    typename Head,
     typename Descent,
-    typename NodeIterator,
     typename ITryAddHead,
     typename IAdvanceWitnessSearchHead,
     typename ITryForkWitnessSearchHead,
@@ -15,17 +16,6 @@ template<
     typename ICheckNodeRefuted,
     typename IGetChildren>
 struct pud_candidate_specialization_head_factory {
-    using head_type = pud_candidate_specialization_head<
-        Descent,
-        NodeIterator,
-        ITryAddHead,
-        IAdvanceWitnessSearchHead,
-        ITryForkWitnessSearchHead,
-        IRemoveWitnessSearchHead,
-        ICheckNodeLeaf,
-        ICheckNodeRefuted,
-        IGetChildren>;
-
     pud_candidate_specialization_head_factory(
         ITryAddHead& try_add_head,
         IAdvanceWitnessSearchHead& advance_witness_search_head,
@@ -34,7 +24,7 @@ struct pud_candidate_specialization_head_factory {
         ICheckNodeLeaf& check_node_leaf,
         ICheckNodeRefuted& check_node_refuted,
         IGetChildren& get_children);
-    head_type make(Descent search_root_descent) const;
+    Head make(Descent search_root_descent) const;
 private:
     ITryAddHead& try_add_head_;
     IAdvanceWitnessSearchHead& advance_witness_search_head_;
@@ -46,12 +36,12 @@ private:
 };
 
 #define PUD_CANDIDATE_SPECIALIZATION_HEAD_FACTORY_TEMPLATE                                 \
-    template<typename Descent, typename NodeIterator, typename ITryAddHead,                \
+    template<typename Head, typename Descent, typename ITryAddHead,                        \
              typename IAdvanceWitnessSearchHead, typename ITryForkWitnessSearchHead,       \
              typename IRemoveWitnessSearchHead, typename ICheckNodeLeaf,                   \
              typename ICheckNodeRefuted, typename IGetChildren>
 #define PUD_CANDIDATE_SPECIALIZATION_HEAD_FACTORY                                          \
-    pud_candidate_specialization_head_factory<Descent, NodeIterator, ITryAddHead,          \
+    pud_candidate_specialization_head_factory<Head, Descent, ITryAddHead,                  \
         IAdvanceWitnessSearchHead, ITryForkWitnessSearchHead, IRemoveWitnessSearchHead,    \
         ICheckNodeLeaf, ICheckNodeRefuted, IGetChildren>
 
@@ -73,9 +63,8 @@ PUD_CANDIDATE_SPECIALIZATION_HEAD_FACTORY::pud_candidate_specialization_head_fac
     , get_children_(get_children) {}
 
 PUD_CANDIDATE_SPECIALIZATION_HEAD_FACTORY_TEMPLATE
-typename PUD_CANDIDATE_SPECIALIZATION_HEAD_FACTORY::head_type
-PUD_CANDIDATE_SPECIALIZATION_HEAD_FACTORY::make(Descent search_root_descent) const {
-    return head_type{
+Head PUD_CANDIDATE_SPECIALIZATION_HEAD_FACTORY::make(Descent search_root_descent) const {
+    return Head{
         try_add_head_,
         advance_witness_search_head_,
         try_fork_witness_search_head_,

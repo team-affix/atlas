@@ -1,29 +1,15 @@
 #ifndef PUD_WITNESS_SEARCH_HEAD_FORKER_HPP
 #define PUD_WITNESS_SEARCH_HEAD_FORKER_HPP
 
-#include "infrastructure/pud_witness_search_head.hpp"
-
-template<
-    typename Descent,
-    typename NodeIterator,
-    typename ICheckNodeLeaf,
-    typename ICheckNodeRefuted,
-    typename IGetNodeChildren>
+// Forks witness search heads of the given type onto a new search root descent.
+template<typename Head, typename Descent>
 struct pud_witness_search_head_forker {
-    using head_type = pud_witness_search_head<
-        Descent,
-        NodeIterator,
-        ICheckNodeLeaf,
-        ICheckNodeRefuted,
-        IGetNodeChildren>;
-
-    head_type fork(const head_type& other, Descent search_root_descent) const;
+    Head fork(const Head& other, Descent search_root_descent) const;
 };
 
-template<typename D, typename NI, typename ICNL, typename ICNR, typename IGNC>
-typename pud_witness_search_head_forker<D, NI, ICNL, ICNR, IGNC>::head_type
-pud_witness_search_head_forker<D, NI, ICNL, ICNR, IGNC>::fork(const head_type& other, D search_root_descent) const {
-    return head_type{other, search_root_descent};
+template<typename H, typename D>
+H pud_witness_search_head_forker<H, D>::fork(const H& other, D search_root_descent) const {
+    return H{other, search_root_descent};
 }
 
 #endif

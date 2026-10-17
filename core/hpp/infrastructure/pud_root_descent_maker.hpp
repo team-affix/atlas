@@ -26,7 +26,8 @@ template<
     typename ITryAddQueryHead,
     typename ITryForkQueryHead,
     typename IRemoveQueryHead,
-    typename IStoreQueryHeadNode>
+    typename IStoreQueryHeadNode,
+    typename IMarkQueryForked>
 struct pud_root_descent_maker {
     pud_root_descent_maker(
         IGetNodeAddedSubstitutions& get_node_added_substitutions,
@@ -39,7 +40,8 @@ struct pud_root_descent_maker {
         ITryAddQueryHead& try_add_query_head,
         ITryForkQueryHead& try_fork_query_head,
         IRemoveQueryHead& remove_query_head,
-        IStoreQueryHeadNode& store_query_head_node);
+        IStoreQueryHeadNode& store_query_head_node,
+        IMarkQueryForked& mark_query_forked);
     BaseDescent make(pud_node_id root);
 private:
     IGetNodeAddedSubstitutions& get_node_added_substitutions_;
@@ -53,6 +55,7 @@ private:
     ITryForkQueryHead& try_fork_query_head_;
     IRemoveQueryHead& remove_query_head_;
     IStoreQueryHeadNode& store_query_head_node_;
+    IMarkQueryForked& mark_query_forked_;
 };
 
 #define PUD_ROOT_DESCENT_MAKER_TEMPLATE                                                    \
@@ -63,13 +66,13 @@ private:
              typename IGetNodeAddedVarCount, typename IGetNodeAddedBodyGoals,               \
              typename IGetCallSite, typename IOpenQuery, typename ITryAddQueryHead,         \
              typename ITryForkQueryHead, typename IRemoveQueryHead,                         \
-             typename IStoreQueryHeadNode>
+             typename IStoreQueryHeadNode, typename IMarkQueryForked>
 #define PUD_ROOT_DESCENT_MAKER                                                             \
     pud_root_descent_maker<BaseDescent, BindingDescent, LvcDescent, NextBodyGoalIdDescent, \
         BodyGoalExprDescent, StructureWatchDescent, BodyGoalPqDescent,                     \
         IGetNodeAddedSubstitutions, IMakeVar, IMakeFunctor, IGetNodeAddedVarCount,          \
         IGetNodeAddedBodyGoals, IGetCallSite, IOpenQuery, ITryAddQueryHead,                 \
-        ITryForkQueryHead, IRemoveQueryHead, IStoreQueryHeadNode>
+        ITryForkQueryHead, IRemoveQueryHead, IStoreQueryHeadNode, IMarkQueryForked>
 
 PUD_ROOT_DESCENT_MAKER_TEMPLATE
 PUD_ROOT_DESCENT_MAKER::pud_root_descent_maker(
@@ -83,7 +86,8 @@ PUD_ROOT_DESCENT_MAKER::pud_root_descent_maker(
     ITryAddQueryHead& try_add_query_head,
     ITryForkQueryHead& try_fork_query_head,
     IRemoveQueryHead& remove_query_head,
-    IStoreQueryHeadNode& store_query_head_node)
+    IStoreQueryHeadNode& store_query_head_node,
+    IMarkQueryForked& mark_query_forked)
     : get_node_added_substitutions_(get_node_added_substitutions)
     , make_var_(make_var)
     , make_functor_(make_functor)
@@ -94,7 +98,8 @@ PUD_ROOT_DESCENT_MAKER::pud_root_descent_maker(
     , try_add_query_head_(try_add_query_head)
     , try_fork_query_head_(try_fork_query_head)
     , remove_query_head_(remove_query_head)
-    , store_query_head_node_(store_query_head_node) {}
+    , store_query_head_node_(store_query_head_node)
+    , mark_query_forked_(mark_query_forked) {}
 
 PUD_ROOT_DESCENT_MAKER_TEMPLATE
 BaseDescent PUD_ROOT_DESCENT_MAKER::make(pud_node_id root) {
@@ -117,6 +122,7 @@ BaseDescent PUD_ROOT_DESCENT_MAKER::make(pud_node_id root) {
             remove_query_head_,
             get_call_site_,
             store_query_head_node_,
+            mark_query_forked_,
             root,
             body_goal_expr.body_goal_exprs(),
             pud_ubs_state{},

@@ -7,6 +7,8 @@
 #include "infrastructure/pud_query_head.hpp"
 #include "infrastructure/pud_query_head_factory.hpp"
 #include "infrastructure/pud_query_head_forker.hpp"
+#include "infrastructure/pud_candidate_specialization_head.hpp"
+#include "infrastructure/pud_witness_search_head.hpp"
 
 using ::testing::_;
 using ::testing::IsEmpty;
@@ -52,8 +54,8 @@ struct MockRemoveWitnessHead {
 
 using mhcs_t = pud_mhcs<descent_t, MockCandidateHead, MockMakeCandidateHead, MockForkCandidateHead, NiceMock<MockRemoveWitnessHead>>;
 using query_head_t = pud_query_head<descent_t, mhcs_t, mhcs_t>;
-using query_head_factory_t = pud_query_head_factory<descent_t, mhcs_t, mhcs_t>;
-using query_head_forker_t = pud_query_head_forker<descent_t, mhcs_t, mhcs_t>;
+using query_head_factory_t = pud_query_head_factory<query_head_t, descent_t, mhcs_t, mhcs_t>;
+using query_head_forker_t = pud_query_head_forker<query_head_t, descent_t>;
 using mhq_t = pud_mhq<descent_t, query_head_t, query_head_factory_t, query_head_forker_t, mhcs_t>;
 
 using propagation_t = std::optional<pud_forced_query_propagation>;

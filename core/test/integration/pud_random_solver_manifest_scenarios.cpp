@@ -6,7 +6,7 @@
 #include <vector>
 #include <gtest/gtest.h>
 #include <gmock/gmock.h>
-#include "pud_random_solver_manifest_harness.hpp"
+#include "pud_solver_manifest_harness.hpp"
 
 using ::testing::ElementsAre;
 using ::testing::IsEmpty;
@@ -675,4 +675,19 @@ TEST_F(PudRandomSolverManifestScenarioTest, NoSolutionQueryEndsBothExhaustedAndR
     EXPECT_THAT(h.enumerate(conjecture, 10, 50), IsEmpty());
     EXPECT_TRUE(h.exhausted(conjecture));
     EXPECT_TRUE(h.refuted(conjecture));
+}
+
+// ---------- forks are recorded where they happen ----------
+
+TEST_F(PudRandomSolverManifestScenarioTest, ForkOfAQueryIsRecordedAtTheChild) {
+    h.add_colors();
+    const pud_node_id conjecture = h.start_conjecture(
+        q({h.var(0)}), {h.functor("color", {h.var(0)}), h.functor("warm", {h.var(0)})}, 1);
+    const pud_mhq_head_id color_query = h.query_of(conjecture, 0).value();
+    h.manifest.unfolder_.unfold(conjecture, 1);
+    ASSERT_EQ(h.children_of(conjecture).size(), 1u);
+    const pud_node_id child = h.children_of(conjecture).front();
+    EXPECT_TRUE(h.manifest.query_forks_.check_query_forked(child, color_query));
+    EXPECT_NE(h.query_of(child, 0).value(), color_query);
+    h.check_all();
 }

@@ -15,6 +15,7 @@
 #include "infrastructure/pud_node_added_body_goals.hpp"
 #include "infrastructure/pud_node_added_substitutions.hpp"
 #include "infrastructure/pud_node_added_var_count.hpp"
+#include "infrastructure/pud_query_forks.hpp"
 #include "infrastructure/pud_query_head_nodes.hpp"
 #include "infrastructure/pud_structure_watch_descent.hpp"
 #include "infrastructure/pud_transient_ubs_state.hpp"
@@ -58,7 +59,9 @@ pud_mhq_head_admission refuted(pud_mhq_head_id head_id) {
 }  // namespace
 
 struct PudBaseDescentIntegrationTest : public ::testing::Test {
-    using bind_map_t = ubs_transient_bind_map<expr_pool, expr_pool>;
+    using bind_map_t = ubs_bind_map<
+        expr_pool, expr_pool, pud_transient_ubs_state, pud_transient_ubs_state, pud_transient_ubs_state,
+        pud_transient_ubs_state, pud_transient_ubs_state, pud_transient_ubs_state>;
     using binding_descent_t = pud_binding_descent<bind_map_t, pud_node_added_substitutions, expr_pool, expr_pool>;
     using lvc_descent_t = pud_lvc_descent<pud_node_added_var_count>;
     using next_body_goal_id_descent_t = pud_next_body_goal_id_descent<pud_node_added_body_goals>;
@@ -70,7 +73,8 @@ struct PudBaseDescentIntegrationTest : public ::testing::Test {
         NiceMock<MockTryForkQueryHead>,
         NiceMock<MockRemoveQueryHead>,
         pud_call_sites,
-        pud_query_head_nodes>;
+        pud_query_head_nodes,
+        pud_query_forks>;
     using base_descent_t = pud_base_descent<
         binding_descent_t,
         lvc_descent_t,
@@ -86,6 +90,7 @@ struct PudBaseDescentIntegrationTest : public ::testing::Test {
     pud_node_added_body_goals      body_goals;
     pud_call_sites                 call_sites;
     pud_query_head_nodes           query_head_nodes;
+    pud_query_forks                query_forks;
     pud_mhq_head_id                next_unique_head_id = 1000;
     NiceMock<MockOpenQuery>        open_query;
     NiceMock<MockTryAddQueryHead>  try_add_query_head;
@@ -170,6 +175,7 @@ struct PudBaseDescentIntegrationTest : public ::testing::Test {
                 remove_query_head,
                 call_sites,
                 query_head_nodes,
+                query_forks,
                 root,
                 immer::map<body_goal_id, const expr*>{}.set(0, p0).set(1, q12),
                 pud_ubs_state{},

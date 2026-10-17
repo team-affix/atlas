@@ -6,7 +6,7 @@
 #include <set>
 #include <string>
 #include <vector>
-#include "pud_random_solver_manifest_harness.hpp"
+#include "pud_solver_manifest_harness.hpp"
 
 // Small random function-free programs over a three-constant domain, and their least model.
 // An argument >= 0 is a constant; an argument < 0 is the variable -(argument + 1).

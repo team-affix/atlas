@@ -1,5 +1,5 @@
-#ifndef PUD_RANDOM_SOLVER_MANIFEST_HARNESS_HPP
-#define PUD_RANDOM_SOLVER_MANIFEST_HARNESS_HPP
+#ifndef PUD_SOLVER_MANIFEST_HARNESS_HPP
+#define PUD_SOLVER_MANIFEST_HARNESS_HPP
 
 #include <algorithm>
 #include <map>
@@ -14,19 +14,21 @@
 #include <gtest/gtest.h>
 #include "functor_fixture.hpp"
 #include "infrastructure/pud_random_solver_manifest.hpp"
-#include "value_objects/pud_decision.hpp"
+#include "infrastructure/pud_random_unit_solver_manifest.hpp"
+#include "value_objects/pud_unfold.hpp"
 #include "value_objects/rule.hpp"
 
 // A manifest plus everything a test needs to build programs, drive the solver and audit every
 // public store against the invariants the PUD relies on.
-struct pud_random_solver_manifest_harness {
-    pud_random_solver_manifest_harness(uint32_t random_seed) : manifest(random_seed) {}
+template<typename Manifest>
+struct pud_solver_manifest_harness {
+    pud_solver_manifest_harness(uint32_t random_seed) : manifest(random_seed) {}
 
-    pud_random_solver_manifest manifest;
+    Manifest manifest;
     test_functors functors;
     std::vector<pud_node_id> started_roots;
     std::map<pud_node_id, const expr*> answer_templates;
-    std::optional<coroutine<pud_decision, void>> unfolding;
+    std::optional<coroutine<pud_unfold, void>> unfolding;
     std::map<pud_node_id, std::set<pud_node_id>> reported_solutions;
 
     // ---------- building ----------
@@ -144,7 +146,7 @@ struct pud_random_solver_manifest_harness {
 
     // The unfold loop ends once no conjecture leaf is open; a conjecture started afterwards needs a
     // fresh drive.
-    coroutine<pud_decision, void>& unfold_loop() {
+    coroutine<pud_unfold, void>& unfold_loop() {
         run_base_descent();
         const bool ended = !unfolding.has_value() || unfolding->done();
         if (ended)
@@ -154,7 +156,7 @@ struct pud_random_solver_manifest_harness {
 
     // One unfold of an open conjecture leaf. False once none is open.
     bool unfold_conjectures_once() {
-        coroutine<pud_decision, void>& running = unfold_loop();
+        coroutine<pud_unfold, void>& running = unfold_loop();
         running.resume();
         if (!running.has_yield())
             return false;
@@ -607,5 +609,8 @@ struct pud_random_solver_manifest_harness {
         check_every_candidate_is_acceptable_at_every_leaf_holding_the_query();
     }
 };
+
+using pud_random_solver_manifest_harness = pud_solver_manifest_harness<pud_random_solver_manifest>;
+using pud_random_unit_solver_manifest_harness = pud_solver_manifest_harness<pud_random_unit_solver_manifest>;
 
 #endif

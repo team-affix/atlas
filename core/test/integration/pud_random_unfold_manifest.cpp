@@ -46,16 +46,16 @@ struct unfold_program_builder {
     }
 };
 
-std::vector<pud_decision> unfold_steps(pud_random_unfold_manifest& manifest, size_t steps) {
-    std::vector<pud_decision> decisions;
-    coroutine<pud_decision, void> unfolding = manifest.unfold_loop_.drive_unfold_loop();
+std::vector<pud_unfold> unfold_steps(pud_random_unfold_manifest& manifest, size_t steps) {
+    std::vector<pud_unfold> unfolds;
+    coroutine<pud_unfold, void> unfolding = manifest.unfold_loop_.drive_unfold_loop();
     for (size_t step = 0; step < steps; ++step) {
         unfolding.resume();
         if (!unfolding.has_yield())
             break;
-        decisions.push_back(unfolding.consume_yield());
+        unfolds.push_back(unfolding.consume_yield());
     }
-    return decisions;
+    return unfolds;
 }
 
 }  // namespace
@@ -99,25 +99,25 @@ TEST_F(PudRandomUnfoldManifestIntegrationTest, RuleWhoseGoalHasNoCandidatesIsRef
 TEST_F(PudRandomUnfoldManifestIntegrationTest, FiniteDatabaseUnfoldsUntilNothingIsOpen) {
     program.add_colors();
     program.run_base_descent();
-    const std::vector<pud_decision> decisions = unfold_steps(manifest, 100);
-    EXPECT_LT(decisions.size(), 100u);
+    const std::vector<pud_unfold> unfolds = unfold_steps(manifest, 100);
+    EXPECT_LT(unfolds.size(), 100u);
     EXPECT_THAT(manifest.open_leaves_.get(), IsEmpty());
     check_open_leaves();
 }
 
-TEST_F(PudRandomUnfoldManifestIntegrationTest, EveryDecisionUnfoldsAnOpenLeafOverOneOfItsOpenGoals) {
+TEST_F(PudRandomUnfoldManifestIntegrationTest, EveryUnfoldIsOfAnOpenLeafOverOneOfItsOpenGoals) {
     program.add_colors();
     program.add_nat();
     program.run_base_descent();
-    coroutine<pud_decision, void> unfolding = manifest.unfold_loop_.drive_unfold_loop();
+    coroutine<pud_unfold, void> unfolding = manifest.unfold_loop_.drive_unfold_loop();
     for (int step = 0; step < 40; ++step) {
         const std::set<pud_node_id> open_before = manifest.open_leaves_.get();
         unfolding.resume();
         ASSERT_TRUE(unfolding.has_yield());
-        const pud_decision decision = unfolding.consume_yield();
-        EXPECT_TRUE(open_before.contains(decision.leaf)) << decision.leaf;
-        EXPECT_FALSE(manifest.leaf_nodes_.check_leaf(decision.leaf)) << decision.leaf;
-        EXPECT_EQ(manifest.call_sites_.get(decision.leaf), decision.goal);
+        const pud_unfold next = unfolding.consume_yield();
+        EXPECT_TRUE(open_before.contains(next.leaf)) << next.leaf;
+        EXPECT_FALSE(manifest.leaf_nodes_.check_leaf(next.leaf)) << next.leaf;
+        EXPECT_EQ(manifest.call_sites_.get(next.leaf), next.goal);
         check_open_leaves();
     }
 }
@@ -127,8 +127,8 @@ TEST_F(PudRandomUnfoldManifestIntegrationTest, UnfoldingReachesEveryAxiomTree) {
     program.add_nat();
     program.run_base_descent();
     std::set<pud_node_id> unfolded;
-    for (const pud_decision& decision : unfold_steps(manifest, 60))
-        unfolded.insert(decision.leaf);
+    for (const pud_unfold& next : unfold_steps(manifest, 60))
+        unfolded.insert(next.leaf);
     EXPECT_TRUE(unfolded.contains(3)) << "warmcolor tree never unfolded";
     EXPECT_TRUE(unfolded.contains(5)) << "nat tree never unfolded";
 }
@@ -142,4 +142,13 @@ TEST_F(PudRandomUnfoldManifestIntegrationTest, SameSeedUnfoldsTheSameWay) {
         builder->run_base_descent();
     }
     EXPECT_EQ(unfold_steps(manifest, 30), unfold_steps(again, 30));
+}
+
+TEST_F(PudRandomUnfoldManifestIntegrationTest, DecisionsAloneDriveTheLoop) {
+    program.add_colors();
+    program.run_base_descent();
+    const std::set<pud_node_id> open_before = manifest.open_leaves_.get();
+    const std::vector<pud_unfold> unfolds = unfold_steps(manifest, 1);
+    ASSERT_EQ(unfolds.size(), 1u);
+    EXPECT_TRUE(open_before.contains(unfolds.front().leaf));
 }

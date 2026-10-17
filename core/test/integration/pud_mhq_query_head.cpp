@@ -31,9 +31,8 @@ struct MockTryForkCandidateSpecializationHead {
 using query_head_t = pud_query_head<
     descent_t, MockTryAddCandidateSpecializationHead, MockTryForkCandidateSpecializationHead>;
 using query_head_factory_t = pud_query_head_factory<
-    descent_t, MockTryAddCandidateSpecializationHead, MockTryForkCandidateSpecializationHead>;
-using query_head_forker_t = pud_query_head_forker<
-    descent_t, MockTryAddCandidateSpecializationHead, MockTryForkCandidateSpecializationHead>;
+    query_head_t, descent_t, MockTryAddCandidateSpecializationHead, MockTryForkCandidateSpecializationHead>;
+using query_head_forker_t = pud_query_head_forker<query_head_t, descent_t>;
 struct MockRemoveCandidateHead {
     MOCK_METHOD(void, remove_head, (pud_mhcs_head_id));
 };

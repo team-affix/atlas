@@ -17,7 +17,9 @@
 #include "value_objects/pud_substitution.hpp"
 
 struct PudReplayDescentIntegrationTest : public ::testing::Test {
-    using bind_map_t = ubs_transient_bind_map<expr_pool, expr_pool>;
+    using bind_map_t = ubs_bind_map<
+        expr_pool, expr_pool, pud_transient_ubs_state, pud_transient_ubs_state, pud_transient_ubs_state,
+        pud_transient_ubs_state, pud_transient_ubs_state, pud_transient_ubs_state>;
     using normalizer_factory_t = pud_normalizer_factory<globalizer, expr_pool, bind_map_t>;
     using normalizer_t = normalizer_factory_t::normalizer_t;
     using unifier_factory_t = pud_unifier_factory<globalizer, normalizer_t, bind_map_t>;

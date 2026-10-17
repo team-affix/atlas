@@ -3,6 +3,7 @@
 #include <gtest/gtest.h>
 #include <gmock/gmock.h>
 #include "infrastructure/pud_query_head_forker.hpp"
+#include "infrastructure/pud_query_head.hpp"
 
 using ::testing::NiceMock;
 using ::testing::Return;
@@ -26,10 +27,11 @@ struct MockTryForkCandidateSpecializationHead {
     MOCK_METHOD((std::optional<pud_mhcs_head_id>), try_fork_head, (pud_mhcs_head_id, descent_t));
 };
 
-using test_forker_t = pud_query_head_forker<
+using test_head_t = pud_query_head<
     descent_t,
     MockTryAddCandidateSpecializationHead,
     MockTryForkCandidateSpecializationHead>;
+using test_forker_t = pud_query_head_forker<test_head_t, descent_t>;
 
 struct PudQueryHeadForkerTest : public ::testing::Test {
     NiceMock<MockTryAddCandidateSpecializationHead> try_add;
@@ -42,10 +44,10 @@ struct PudQueryHeadForkerTest : public ::testing::Test {
     pud_mhcs_head_id forked_a = 110;
     pud_mhcs_head_id forked_b = 120;
 
-    test_forker_t::head_type make_parent() {
+    test_head_t make_parent() {
         EXPECT_CALL(try_add, try_add_head(axiom_a)).WillOnce(Return(candidate_a));
         EXPECT_CALL(try_add, try_add_head(axiom_b)).WillOnce(Return(candidate_b));
-        return test_forker_t::head_type{try_add, try_fork, {axiom_a, axiom_b}};
+        return test_head_t{try_add, try_fork, {axiom_a, axiom_b}};
     }
 };
 
@@ -86,9 +88,10 @@ TEST_F(PudQueryHeadForkerTest, ForkReportsUnitWhenOneSurvives) {
 TEST_F(PudQueryHeadForkerTest, ForkNeverAdds) {
     StrictMock<MockTryAddCandidateSpecializationHead> strict_try_add;
     EXPECT_CALL(strict_try_add, try_add_head(axiom_a)).WillOnce(Return(candidate_a));
-    pud_query_head_forker<descent_t, StrictMock<MockTryAddCandidateSpecializationHead>,
-        MockTryForkCandidateSpecializationHead> strict_forker;
-    decltype(strict_forker)::head_type parent{strict_try_add, try_fork, {axiom_a}};
+    using strict_head_t = pud_query_head<
+        descent_t, StrictMock<MockTryAddCandidateSpecializationHead>, MockTryForkCandidateSpecializationHead>;
+    pud_query_head_forker<strict_head_t, descent_t> strict_forker;
+    strict_head_t parent{strict_try_add, try_fork, {axiom_a}};
     EXPECT_CALL(try_fork, try_fork_head(candidate_a, axiom_a)).WillOnce(Return(forked_a));
     strict_forker.fork(parent, {axiom_a, axiom_b});
 }

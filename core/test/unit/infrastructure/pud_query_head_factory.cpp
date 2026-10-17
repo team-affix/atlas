@@ -3,6 +3,7 @@
 #include <gtest/gtest.h>
 #include <gmock/gmock.h>
 #include "infrastructure/pud_query_head_factory.hpp"
+#include "infrastructure/pud_query_head.hpp"
 
 using ::testing::NiceMock;
 using ::testing::Return;
@@ -25,7 +26,12 @@ struct MockTryForkCandidateSpecializationHead {
     MOCK_METHOD((std::optional<pud_mhcs_head_id>), try_fork_head, (pud_mhcs_head_id, descent_t));
 };
 
+using test_head_t = pud_query_head<
+    descent_t,
+    MockTryAddCandidateSpecializationHead,
+    MockTryForkCandidateSpecializationHead>;
 using test_factory_t = pud_query_head_factory<
+    test_head_t,
     descent_t,
     MockTryAddCandidateSpecializationHead,
     MockTryForkCandidateSpecializationHead>;
@@ -81,13 +87,15 @@ TEST_F(PudQueryHeadFactoryTest, MadeHeadForksThroughTheInjectedForker) {
     EXPECT_CALL(try_add, try_add_head(axiom_a)).WillOnce(Return(candidate_a));
     auto parent = factory.make({axiom_a});
     EXPECT_CALL(try_fork, try_fork_head(candidate_a, axiom_a)).WillOnce(Return(110));
-    test_factory_t::head_type child{parent, {axiom_a}};
+    test_head_t child{parent, {axiom_a}};
     EXPECT_THAT(child.resume().candidate_ids, UnorderedElementsAre(110));
 }
 
 TEST_F(PudQueryHeadFactoryTest, MakeNeverForks) {
     StrictMock<MockTryForkCandidateSpecializationHead> strict_try_fork;
-    pud_query_head_factory<descent_t, MockTryAddCandidateSpecializationHead,
+    using strict_head_t = pud_query_head<
+        descent_t, MockTryAddCandidateSpecializationHead, StrictMock<MockTryForkCandidateSpecializationHead>>;
+    pud_query_head_factory<strict_head_t, descent_t, MockTryAddCandidateSpecializationHead,
         StrictMock<MockTryForkCandidateSpecializationHead>> strict_factory{try_add, strict_try_fork};
     EXPECT_CALL(try_add, try_add_head(axiom_a)).WillOnce(Return(candidate_a));
     strict_factory.make({axiom_a});

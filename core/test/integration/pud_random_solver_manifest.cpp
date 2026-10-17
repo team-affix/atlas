@@ -8,7 +8,7 @@
 #include <gmock/gmock.h>
 #include "functor_fixture.hpp"
 #include "infrastructure/pud_random_solver_manifest.hpp"
-#include "value_objects/pud_decision.hpp"
+#include "value_objects/pud_unfold.hpp"
 #include "value_objects/rule.hpp"
 
 using ::testing::ElementsAre;
@@ -18,7 +18,7 @@ using ::testing::UnorderedElementsAre;
 struct PudRandomSolverManifestIntegrationTest : public ::testing::Test {
     pud_random_solver_manifest manifest{0};
     test_functors functors;
-    std::optional<coroutine<pud_decision, void>> unfolding;
+    std::optional<coroutine<pud_unfold, void>> unfolding;
     std::map<pud_node_id, std::set<pud_node_id>> reported_solutions;
     std::set<pud_node_id> started_roots;
     std::map<pud_node_id, const expr*> answer_templates;

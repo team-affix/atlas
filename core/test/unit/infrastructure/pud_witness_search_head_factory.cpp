@@ -3,6 +3,7 @@
 #include <gtest/gtest.h>
 #include <gmock/gmock.h>
 #include "infrastructure/pud_witness_search_head_factory.hpp"
+#include "infrastructure/pud_witness_search_head.hpp"
 
 using ::testing::_;
 using ::testing::NiceMock;
@@ -39,8 +40,10 @@ MockDescend* descend_ops = nullptr;
 std::optional<descent_t> descent_t::descend(pud_node_id child) const {
     return descend_ops->descend(*this, child);
 }
-using test_factory_t = pud_witness_search_head_factory<
+using test_head_t = pud_witness_search_head<
     descent_t, child_iter, MockCheckLeaf, MockCheckRefuted, MockGetChildren>;
+using test_factory_t = pud_witness_search_head_factory<
+    test_head_t, descent_t, MockCheckLeaf, MockCheckRefuted, MockGetChildren>;
 
 struct PudWitnessSearchHeadFactoryTest : public ::testing::Test {
     void SetUp() override { descend_ops = &descend; }

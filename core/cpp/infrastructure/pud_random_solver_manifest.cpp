@@ -18,6 +18,7 @@ pud_random_solver_manifest::pud_random_solver_manifest(uint32_t random_seed)
       refuted_leaves_(),
       node_live_child_counts_(),
       query_head_nodes_(),
+      query_forks_(),
       refuted_node_checker_(leaf_nodes_, refuted_leaves_, node_live_child_counts_),
       open_conjecture_leaves_(open_leaves_, open_leaves_, root_nodes_, axioms_, node_parents_),
       normalizer_factory_(globalizer_, expr_pool_),
@@ -38,7 +39,8 @@ pud_random_solver_manifest::pud_random_solver_manifest(uint32_t random_seed)
       node_descents_(),
       root_descent_maker_(
           node_added_substitutions_, expr_pool_, expr_pool_, node_added_var_count_,
-          node_added_body_goals_, call_sites_, query_opener_, mhq_, mhq_, mhq_, query_head_nodes_),
+          node_added_body_goals_, call_sites_, query_opener_, mhq_, mhq_, mhq_, query_head_nodes_,
+          query_forks_),
       open_body_goal_finder_(node_added_body_goals_, call_sites_),
       acceptor_(
           open_body_goal_finder_, node_heads_, node_added_substitutions_,
@@ -65,7 +67,8 @@ pud_random_solver_manifest::pud_random_solver_manifest(uint32_t random_seed)
       random_rule_chooser_(rng_),
       random_subgoal_chooser_(node_descents_, rng_),
       decision_generator_(random_rule_chooser_, random_subgoal_chooser_),
-      unfold_loop_(open_conjecture_leaves_, decision_generator_, unfolder_),
+      next_decided_unfold_(decision_generator_),
+      unfold_loop_(open_conjecture_leaves_, next_decided_unfold_, unfolder_),
       axiom_initializer_(
           node_id_sequencer_, node_heads_, node_added_body_goals_, node_added_var_count_,
           root_nodes_, leaf_nodes_, axioms_),

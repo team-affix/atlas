@@ -14,6 +14,7 @@
 #include "infrastructure/pud_mhws.hpp"
 #include "infrastructure/pud_witness_search_head_factory.hpp"
 #include "infrastructure/pud_witness_search_head_forker.hpp"
+#include "infrastructure/pud_witness_search_head.hpp"
 
 using ::testing::_;
 using ::testing::NiceMock;
@@ -53,8 +54,8 @@ std::optional<descent_t> descent_t::descend(pud_node_id child) const {
 }
 
 using witness_head_t    = pud_witness_search_head<descent_t, child_iter, MockCheckLeaf, MockCheckRefuted, MockGetChildren>;
-using witness_factory_t = pud_witness_search_head_factory<descent_t, child_iter, MockCheckLeaf, MockCheckRefuted, MockGetChildren>;
-using witness_forker_t  = pud_witness_search_head_forker<descent_t, child_iter, MockCheckLeaf, MockCheckRefuted, MockGetChildren>;
+using witness_factory_t = pud_witness_search_head_factory<witness_head_t, descent_t, MockCheckLeaf, MockCheckRefuted, MockGetChildren>;
+using witness_forker_t  = pud_witness_search_head_forker<witness_head_t, descent_t>;
 using mhws_t            = pud_mhws<descent_t, child_iter, witness_head_t, witness_factory_t, witness_forker_t>;
 using candidate_head_t  = pud_candidate_specialization_head<
     descent_t, child_iter, mhws_t, mhws_t, mhws_t, mhws_t, MockCheckLeaf, MockCheckRefuted, MockGetChildren>;

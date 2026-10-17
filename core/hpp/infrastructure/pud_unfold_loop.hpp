@@ -2,38 +2,38 @@
 #define PUD_UNFOLD_LOOP_HPP
 
 #include "infrastructure/coroutine.hpp"
-#include "value_objects/pud_decision.hpp"
+#include "value_objects/pud_unfold.hpp"
 
-// Unfolds one decision per resume: the injected decision generator chooses one of the injected open
-// leaves and one of its goals, and that leaf is unfolded. The loop ends once no leaf is open.
-template<typename IGetOpenLeaves, typename IGenerateDecision, typename IUnfold>
+// Unfolds once per resume: the injected next-unfold chooses one of the injected open leaves and one of
+// its goals, and that leaf is unfolded. The loop ends once no leaf is open.
+template<typename IGetOpenLeaves, typename IGetNextUnfold, typename IUnfold>
 struct pud_unfold_loop {
     pud_unfold_loop(
         IGetOpenLeaves& get_open_leaves,
-        IGenerateDecision& generate_decision,
+        IGetNextUnfold& get_next_unfold,
         IUnfold& unfold);
-    coroutine<pud_decision, void> drive_unfold_loop();
+    coroutine<pud_unfold, void> drive_unfold_loop();
 private:
     IGetOpenLeaves& get_open_leaves_;
-    IGenerateDecision& generate_decision_;
+    IGetNextUnfold& get_next_unfold_;
     IUnfold& unfold_;
 };
 
-template<typename IGOL, typename IGD, typename IU>
-pud_unfold_loop<IGOL, IGD, IU>::pud_unfold_loop(
+template<typename IGOL, typename IGNU, typename IU>
+pud_unfold_loop<IGOL, IGNU, IU>::pud_unfold_loop(
     IGOL& get_open_leaves,
-    IGD& generate_decision,
+    IGNU& get_next_unfold,
     IU& unfold)
     : get_open_leaves_(get_open_leaves)
-    , generate_decision_(generate_decision)
+    , get_next_unfold_(get_next_unfold)
     , unfold_(unfold) {}
 
-template<typename IGOL, typename IGD, typename IU>
-coroutine<pud_decision, void> pud_unfold_loop<IGOL, IGD, IU>::drive_unfold_loop() {
+template<typename IGOL, typename IGNU, typename IU>
+coroutine<pud_unfold, void> pud_unfold_loop<IGOL, IGNU, IU>::drive_unfold_loop() {
     while (!get_open_leaves_.get().empty()) {
-        const pud_decision decision = generate_decision_.generate(get_open_leaves_.get());
-        unfold_.unfold(decision.leaf, decision.goal);
-        co_yield decision;
+        const pud_unfold next = get_next_unfold_.get_next_unfold(get_open_leaves_.get());
+        unfold_.unfold(next.leaf, next.goal);
+        co_yield next;
     }
 }
 

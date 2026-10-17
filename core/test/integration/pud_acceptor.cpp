@@ -22,7 +22,9 @@ using ::testing::ElementsAre;
 using ::testing::IsEmpty;
 
 struct PudAcceptorIntegrationTest : public ::testing::Test {
-    using bind_map_t = ubs_transient_bind_map<expr_pool, expr_pool>;
+    using bind_map_t = ubs_bind_map<
+        expr_pool, expr_pool, pud_transient_ubs_state, pud_transient_ubs_state, pud_transient_ubs_state,
+        pud_transient_ubs_state, pud_transient_ubs_state, pud_transient_ubs_state>;
     using normalizer_factory_t = pud_normalizer_factory<globalizer, expr_pool, bind_map_t>;
     using normalizer_t = normalizer_factory_t::normalizer_t;
     using logger_t = representative_change_logger<bind_map_t, bind_map_t, std::vector<uint32_t>>;

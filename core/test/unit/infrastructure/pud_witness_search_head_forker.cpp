@@ -3,6 +3,7 @@
 #include <gtest/gtest.h>
 #include <gmock/gmock.h>
 #include "infrastructure/pud_witness_search_head_forker.hpp"
+#include "infrastructure/pud_witness_search_head.hpp"
 
 using ::testing::_;
 using ::testing::NiceMock;
@@ -48,7 +49,7 @@ struct PudWitnessSearchHeadForkerTest : public ::testing::Test {
     NiceMock<MockCheckRefuted> refuted_nodes;
     NiceMock<MockGetChildren> children;
     NiceMock<MockDescend> descend;
-    pud_witness_search_head_forker<descent_t, child_iter, MockCheckLeaf, MockCheckRefuted, MockGetChildren> forker;
+    pud_witness_search_head_forker<test_head_t, descent_t> forker;
     pud_node_id root = 1;
     pud_node_id parent_node = 2;
     pud_node_id leaf = 3;

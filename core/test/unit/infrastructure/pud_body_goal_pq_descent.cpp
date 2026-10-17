@@ -41,13 +41,18 @@ struct MockStoreQueryHeadNode {
     MOCK_METHOD(void, store, (pud_mhq_head_id, pud_node_id));
 };
 
+struct MockMarkQueryForked {
+    MOCK_METHOD(void, mark_query_forked, (pud_node_id, pud_mhq_head_id));
+};
+
 using test_descent_t = pud_body_goal_pq_descent<
     NiceMock<MockOpenQuery>,
     NiceMock<MockTryAddQueryHead>,
     NiceMock<MockTryForkQueryHead>,
     NiceMock<MockRemoveQueryHead>,
     NiceMock<MockGetCallSite>,
-    NiceMock<MockStoreQueryHeadNode>>;
+    NiceMock<MockStoreQueryHeadNode>,
+    NiceMock<MockMarkQueryForked>>;
 
 pud_mhq_head_admission live(pud_mhq_head_id head_id) {
     return {head_id, std::nullopt};
@@ -70,6 +75,7 @@ struct PudBodyGoalPqDescentTest : public ::testing::Test {
     NiceMock<MockRemoveQueryHead> remove_query_head;
     NiceMock<MockGetCallSite> get_call_site;
     NiceMock<MockStoreQueryHeadNode> store_query_head_node;
+    NiceMock<MockMarkQueryForked> mark_query_forked;
     pud_node_id root = 0;
     pud_node_id child = 1;
     pud_node_id grandchild = 2;
@@ -110,6 +116,7 @@ struct PudBodyGoalPqDescentTest : public ::testing::Test {
             remove_query_head,
             get_call_site,
             store_query_head_node,
+            mark_query_forked,
             root,
             root_exprs,
             root_ubs_state,
@@ -165,6 +172,7 @@ TEST_F(PudBodyGoalPqDescentTest, RootOpensEveryRootGoalInTheRootEnvironment) {
         remove_query_head,
         get_call_site,
         store_query_head_node,
+        mark_query_forked,
         root,
         root_exprs,
         root_ubs_state,
@@ -183,6 +191,7 @@ TEST_F(PudBodyGoalPqDescentTest, RootWithNoGoalsOpensNothing) {
         remove_query_head,
         get_call_site,
         store_query_head_node,
+        mark_query_forked,
         root,
         {},
         root_ubs_state,
@@ -536,6 +545,65 @@ TEST_F(PudBodyGoalPqDescentTest, FindQueryHeadSeesTheForkNotTheParent) {
     test_descent_t at_child = descend_to_child(at_root, {11}, {});
     EXPECT_EQ(at_child.find_query_head(1), 200u);
     EXPECT_EQ(at_root.find_query_head(1), 101u);
+}
+
+TEST_F(PudBodyGoalPqDescentTest, FindGoalReturnsTheGoalHoldingTheHead) {
+    test_descent_t at_root = make_live_root();
+    EXPECT_EQ(at_root.find_goal(100), 0u);
+    EXPECT_EQ(at_root.find_goal(102), 2u);
+}
+
+TEST_F(PudBodyGoalPqDescentTest, FindGoalOfAnUnheldHeadIsEmpty) {
+    test_descent_t at_root = make_live_root();
+    EXPECT_FALSE(at_root.find_goal(999).has_value());
+}
+
+TEST_F(PudBodyGoalPqDescentTest, FindGoalOfARefutedGoalsHeadIsEmpty) {
+    test_descent_t at_root = make_root(live(100), live(101), refuted(102));
+    EXPECT_FALSE(at_root.find_goal(102).has_value());
+}
+
+TEST_F(PudBodyGoalPqDescentTest, FindGoalSeesTheForkNotTheParentsHead) {
+    test_descent_t at_root = make_live_root();
+    EXPECT_CALL(try_fork_query_head, try_fork_head(101u, _)).WillOnce(Return(live(200)));
+    test_descent_t at_child = descend_to_child(at_root, {11}, {});
+    EXPECT_EQ(at_child.find_goal(200), 1u);
+    EXPECT_FALSE(at_child.find_goal(101).has_value());
+    EXPECT_EQ(at_root.find_goal(101), 1u);
+}
+
+TEST_F(PudBodyGoalPqDescentTest, FindGoalOfAClosedGoalsHeadIsEmpty) {
+    test_descent_t at_child = descend_to_child(make_live_root(), {}, {});
+    EXPECT_FALSE(at_child.find_goal(100).has_value());
+    EXPECT_EQ(at_child.find_goal(101), 1u);
+}
+
+TEST_F(PudBodyGoalPqDescentTest, ForkIsRecordedAtTheChildForTheParentsHead) {
+    test_descent_t at_root = make_live_root();
+    EXPECT_CALL(mark_query_forked, mark_query_forked(child, 101u));
+    EXPECT_CALL(try_fork_query_head, try_fork_head(101u, _)).WillOnce(Return(live(200)));
+    descend_to_child(at_root, {11}, {});
+}
+
+TEST_F(PudBodyGoalPqDescentTest, ForkIsRecordedBeforeTheForkedHeadIsAdmitted) {
+    test_descent_t at_root = make_live_root();
+    InSequence in_order;
+    EXPECT_CALL(mark_query_forked, mark_query_forked(child, 101u));
+    EXPECT_CALL(try_fork_query_head, try_fork_head(101u, _)).WillOnce(Return(live(200)));
+    descend_to_child(at_root, {11}, {});
+}
+
+TEST_F(PudBodyGoalPqDescentTest, RefutedForkIsStillRecorded) {
+    test_descent_t at_root = make_live_root();
+    EXPECT_CALL(mark_query_forked, mark_query_forked(child, 101u));
+    EXPECT_CALL(try_fork_query_head, try_fork_head(101u, _)).WillOnce(Return(refuted(200)));
+    descend_to_child(at_root, {11}, {});
+}
+
+TEST_F(PudBodyGoalPqDescentTest, SharedAndNewQueriesRecordNoFork) {
+    test_descent_t at_root = make_live_root();
+    EXPECT_CALL(mark_query_forked, mark_query_forked(_, _)).Times(0);
+    descend_to_child(at_root, {}, {});
 }
 
 }  // namespace

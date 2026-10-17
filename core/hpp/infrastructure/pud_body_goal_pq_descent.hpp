@@ -19,15 +19,16 @@
 
 // Each live body goal owns one MHQ query. A child shares its parent's query for every goal
 // whose structure did not change, forks the query of every goal whose structure changed, and
-// opens a fresh query for every goal it adds. Unit and refuted goals are those forced on the
-// step that produced this descent.
+// opens a fresh query for every goal it adds; every fork is recorded at the child it happened
+// at. Unit and refuted goals are those forced on the step that produced this descent.
 template<
     typename IOpenQuery,
     typename ITryAddQueryHead,
     typename ITryForkQueryHead,
     typename IRemoveQueryHead,
     typename IGetCallSite,
-    typename IStoreQueryHeadNode>
+    typename IStoreQueryHeadNode,
+    typename IMarkQueryForked>
 struct pud_body_goal_pq_descent {
     pud_body_goal_pq_descent(
         IOpenQuery& open_query,
@@ -36,6 +37,7 @@ struct pud_body_goal_pq_descent {
         IRemoveQueryHead& remove_query_head,
         IGetCallSite& get_call_site,
         IStoreQueryHeadNode& store_query_head_node,
+        IMarkQueryForked& mark_query_forked,
         pud_node_id root,
         const immer::map<body_goal_id, const expr*>& root_body_goal_exprs,
         const pud_ubs_state& root_ubs_state,
@@ -52,6 +54,7 @@ struct pud_body_goal_pq_descent {
         const std::vector<pud_watch_head_id>& added_watch_head_ids) const;
     pud_watch_head_id find_call_site_watch_head_id(pud_node_id parent) const;
     std::optional<pud_mhq_head_id> find_query_head(body_goal_id goal) const;
+    std::optional<body_goal_id> find_goal(pud_mhq_head_id head_id) const;
     const std::vector<body_goal_id>& unit_goals() const;
     const std::vector<body_goal_id>& refuted_goals() const;
 private:
@@ -84,6 +87,7 @@ private:
     IRemoveQueryHead* remove_query_head_;
     IGetCallSite* get_call_site_;
     IStoreQueryHeadNode* store_query_head_node_;
+    IMarkQueryForked* mark_query_forked_;
     immer::map<body_goal_id, immer::box<owner_t>> body_goal_queries_;
     immer::map<body_goal_id, pud_watch_head_id> body_goal_to_watch_head_;
     immer::map<pud_watch_head_id, body_goal_id> watch_head_to_body_goal_;
@@ -93,10 +97,11 @@ private:
 
 #define PUD_BODY_GOAL_PQ_DESCENT_TEMPLATE                                                  \
     template<typename IOpenQuery, typename ITryAddQueryHead, typename ITryForkQueryHead,   \
-             typename IRemoveQueryHead, typename IGetCallSite, typename IStoreQueryHeadNode>
+             typename IRemoveQueryHead, typename IGetCallSite, typename IStoreQueryHeadNode,  \
+             typename IMarkQueryForked>
 #define PUD_BODY_GOAL_PQ_DESCENT                                                           \
     pud_body_goal_pq_descent<IOpenQuery, ITryAddQueryHead, ITryForkQueryHead,              \
-        IRemoveQueryHead, IGetCallSite, IStoreQueryHeadNode>
+        IRemoveQueryHead, IGetCallSite, IStoreQueryHeadNode, IMarkQueryForked>
 
 PUD_BODY_GOAL_PQ_DESCENT_TEMPLATE
 PUD_BODY_GOAL_PQ_DESCENT::pud_body_goal_pq_descent(
@@ -106,6 +111,7 @@ PUD_BODY_GOAL_PQ_DESCENT::pud_body_goal_pq_descent(
     IRemoveQueryHead& remove_query_head,
     IGetCallSite& get_call_site,
     IStoreQueryHeadNode& store_query_head_node,
+    IMarkQueryForked& mark_query_forked,
     pud_node_id root,
     const immer::map<body_goal_id, const expr*>& root_body_goal_exprs,
     const pud_ubs_state& root_ubs_state,
@@ -117,6 +123,7 @@ PUD_BODY_GOAL_PQ_DESCENT::pud_body_goal_pq_descent(
     , remove_query_head_(&remove_query_head)
     , get_call_site_(&get_call_site)
     , store_query_head_node_(&store_query_head_node)
+    , mark_query_forked_(&mark_query_forked)
     , body_goal_queries_()
     , body_goal_to_watch_head_()
     , watch_head_to_body_goal_()
@@ -177,6 +184,15 @@ std::optional<pud_mhq_head_id> PUD_BODY_GOAL_PQ_DESCENT::find_query_head(body_go
 }
 
 PUD_BODY_GOAL_PQ_DESCENT_TEMPLATE
+std::optional<body_goal_id> PUD_BODY_GOAL_PQ_DESCENT::find_goal(pud_mhq_head_id head_id) const {
+    for (const auto& [goal, query] : body_goal_queries_) {
+        if (query.get().head_id() == head_id)
+            return goal;
+    }
+    return std::nullopt;
+}
+
+PUD_BODY_GOAL_PQ_DESCENT_TEMPLATE
 const std::vector<body_goal_id>& PUD_BODY_GOAL_PQ_DESCENT::unit_goals() const {
     return unit_goals_;
 }
@@ -210,6 +226,7 @@ void PUD_BODY_GOAL_PQ_DESCENT::fork(
     const immer::box<owner_t>* parent_query = body_goal_queries_.find(goal);
     if (!parent_query)
         return;
+    mark_query_forked_->mark_query_forked(node, parent_query->get().head_id());
     const auto forked = try_fork_query_head_->try_fork_head(
         parent_query->get().head_id(),
         open_query_->open(ubs_state, goal_expr, frame_offset));

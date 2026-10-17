@@ -19,7 +19,9 @@
 // canonical form differs, where the canonical form resolves every variable through the real
 // bind map and numbers representatives by first occurrence.
 struct PudStructureWatchDescentFuzzTest : public ::testing::Test {
-    using bind_map_t = ubs_transient_bind_map<expr_pool, expr_pool>;
+    using bind_map_t = ubs_bind_map<
+        expr_pool, expr_pool, pud_transient_ubs_state, pud_transient_ubs_state, pud_transient_ubs_state,
+        pud_transient_ubs_state, pud_transient_ubs_state, pud_transient_ubs_state>;
     using binding_descent_t = pud_binding_descent<
         bind_map_t,
         pud_node_added_substitutions,

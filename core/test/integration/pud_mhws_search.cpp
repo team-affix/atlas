@@ -6,6 +6,7 @@
 #include "infrastructure/pud_mhws.hpp"
 #include "infrastructure/pud_witness_search_head_factory.hpp"
 #include "infrastructure/pud_witness_search_head_forker.hpp"
+#include "infrastructure/pud_witness_search_head.hpp"
 
 using ::testing::_;
 using ::testing::NiceMock;
@@ -46,8 +47,8 @@ std::optional<descent_t> descent_t::descend(pud_node_id child) const {
 }
 
 using head_t    = pud_witness_search_head<descent_t, child_iter, MockCheckLeaf, MockCheckRefuted, MockGetChildren>;
-using factory_t = pud_witness_search_head_factory<descent_t, child_iter, MockCheckLeaf, MockCheckRefuted, MockGetChildren>;
-using forker_t  = pud_witness_search_head_forker<descent_t, child_iter, MockCheckLeaf, MockCheckRefuted, MockGetChildren>;
+using factory_t = pud_witness_search_head_factory<head_t, descent_t, MockCheckLeaf, MockCheckRefuted, MockGetChildren>;
+using forker_t  = pud_witness_search_head_forker<head_t, descent_t>;
 using mhws_t    = pud_mhws<descent_t, child_iter, head_t, factory_t, forker_t>;
 
 struct PudMhwsSearchIntegrationTest : public ::testing::Test {
