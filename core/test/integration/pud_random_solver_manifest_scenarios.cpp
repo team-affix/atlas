@@ -42,7 +42,7 @@ struct PudRandomSolverManifestScenarioTest : public ::testing::Test {
         const pud_node_id p_rule = h.axiom(h.functor("p", {h.var(0)}), {h.functor("r", {h.var(0)})}, 1);
         h.axiom(h.functor("r", {h.atom("a")}), {}, 0);
         h.run_base_descent();
-        h.manifest.leaf_expander_.expand(p_rule, 0);
+        h.manifest.unfolder_.unfold(p_rule, 0);
         EXPECT_EQ(h.children_of(p_rule).size(), 1u);
         return h.children_of(p_rule).front();
     }
@@ -60,13 +60,13 @@ TEST_F(PudRandomSolverManifestScenarioTest, AcceptingASharedQueryAtADeepDescenda
     const pud_mhq_head_id shared = h.query_of(conjecture, 3).value();
     pud_node_id frontier = conjecture;
     for (body_goal_id goal = 0; goal < 3; ++goal) {
-        h.manifest.leaf_expander_.expand(frontier, goal);
+        h.manifest.unfolder_.unfold(frontier, goal);
         ASSERT_EQ(h.children_of(frontier).size(), 1u);
         frontier = h.children_of(frontier).front();
         EXPECT_EQ(h.query_of(frontier, 3), shared);
     }
     EXPECT_EQ(h.manifest.query_head_nodes_.get(shared), conjecture);
-    EXPECT_NO_THROW(h.manifest.leaf_expander_.expand(frontier, 3));
+    EXPECT_NO_THROW(h.manifest.unfolder_.unfold(frontier, 3));
     EXPECT_EQ(h.children_of(frontier).size(), 2u);
     h.check_all();
     EXPECT_THAT(h.enumerate(conjecture, 10, 50), UnorderedElementsAre(q({h.atom("red")}), q({h.atom("blue")})));
@@ -96,7 +96,7 @@ TEST_F(PudRandomSolverManifestScenarioTest, RenameOnlyStepsDoNotForkButStayCorre
         2);
     const pud_mhq_head_id first_color = h.query_of(conjecture, 1).value();
     const pud_mhq_head_id second_color = h.query_of(conjecture, 2).value();
-    h.manifest.leaf_expander_.expand(conjecture, 0);
+    h.manifest.unfolder_.unfold(conjecture, 0);
     ASSERT_EQ(h.children_of(conjecture).size(), 1u);
     const pud_node_id merged = h.children_of(conjecture).front();
     EXPECT_EQ(h.query_of(merged, 1), first_color);
@@ -114,7 +114,7 @@ TEST_F(PudRandomSolverManifestScenarioTest, ForkedQueriesOnlyListCandidatesThatS
     h.add_colors();
     const pud_node_id conjecture = h.start_conjecture(
         q({h.var(0)}), {h.functor("color", {h.var(0)}), h.functor("warm", {h.var(0)})}, 1);
-    h.manifest.leaf_expander_.expand(conjecture, 0);
+    h.manifest.unfolder_.unfold(conjecture, 0);
     size_t live_children = 0;
     for (pud_node_id child : h.children_of(conjecture)) {
         if (h.refuted(child))
@@ -149,7 +149,7 @@ TEST_F(PudRandomSolverManifestScenarioTest, ExpandingTheLeafThatIsItsOwnGoalsCan
     const pud_node_id rule = h.axiom(
         h.functor("nat", {h.functor("s", {h.var(0)})}), {h.functor("nat", {h.var(0)})}, 1);
     h.run_base_descent();
-    EXPECT_NO_THROW(h.manifest.leaf_expander_.expand(rule, 0));
+    EXPECT_NO_THROW(h.manifest.unfolder_.unfold(rule, 0));
     EXPECT_EQ(h.children_of(rule).size(), 2u);
     h.check_all();
     for (uint32_t count = 1; count <= 6; ++count)
@@ -294,7 +294,7 @@ TEST_F(PudRandomSolverManifestScenarioTest, AllChildrenRefutedOnArrivalRefuteThe
     const pud_node_id conjecture = h.start_conjecture(
         h.atom("q"), {h.functor("color", {h.var(0)}), h.functor("cold", {h.var(0)})}, 1);
     ASSERT_FALSE(h.refuted(conjecture));
-    h.manifest.leaf_expander_.expand(conjecture, 0);
+    h.manifest.unfolder_.unfold(conjecture, 0);
     EXPECT_EQ(h.children_of(conjecture).size(), 2u);
     for (pud_node_id child : h.children_of(conjecture))
         EXPECT_TRUE(h.refuted(child));
@@ -318,7 +318,7 @@ TEST_F(PudRandomSolverManifestScenarioTest, CascadeCrossesTrees) {
 TEST_F(PudRandomSolverManifestScenarioTest, RefutingAnAlreadyRefutedNodeIsANoop) {
     h.add_colors();
     const pud_node_id conjecture = h.start_conjecture(q({h.var(0)}), {h.functor("color", {h.var(0)})}, 1);
-    h.manifest.leaf_expander_.expand(conjecture, 0);
+    h.manifest.unfolder_.unfold(conjecture, 0);
     const pud_node_id child = h.children_of(conjecture).front();
     h.manifest.node_refuter_.refute(child);
     EXPECT_NO_THROW(h.manifest.node_refuter_.refute(child));
@@ -365,7 +365,7 @@ TEST_F(PudRandomSolverManifestScenarioTest, RepeatedVariablesInHeadsAreRespected
 TEST_F(PudRandomSolverManifestScenarioTest, GroundGoalsNeedNoSubstitutions) {
     h.add_colors();
     const pud_node_id conjecture = h.start_conjecture(h.atom("q"), {h.functor("color", {h.atom("red")})}, 0);
-    h.manifest.leaf_expander_.expand(conjecture, 0);
+    h.manifest.unfolder_.unfold(conjecture, 0);
     ASSERT_EQ(h.children_of(conjecture).size(), 1u);
     const pud_node_id child = h.children_of(conjecture).front();
     EXPECT_THAT(h.manifest.node_added_substitutions_.get(child), IsEmpty());
@@ -495,7 +495,7 @@ TEST_F(PudRandomSolverManifestScenarioTest, VeryDeepGoalIsWatchedAndForked) {
     const pud_node_id conjecture = h.start_conjecture(
         q({h.var(0)}), {h.functor("color", {h.var(0)}), h.functor("deepwarm", {chain})}, 1);
     const pud_mhq_head_id before_binding = h.query_of(conjecture, 1).value();
-    h.manifest.leaf_expander_.expand(conjecture, 0);
+    h.manifest.unfolder_.unfold(conjecture, 0);
     size_t live_children = 0;
     for (pud_node_id child : h.children_of(conjecture)) {
         if (h.refuted(child))

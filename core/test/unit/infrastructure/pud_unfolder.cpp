@@ -5,7 +5,7 @@
 #include <gtest/gtest.h>
 #include <gmock/gmock.h>
 #include <immer/map.hpp>
-#include "infrastructure/pud_leaf_expander.hpp"
+#include "infrastructure/pud_unfolder.hpp"
 #include "value_objects/pud_ubs_state.hpp"
 
 using ::testing::_;
@@ -117,7 +117,7 @@ struct MockEraseNodeDescent {
     MOCK_METHOD(void, erase, (pud_node_id));
 };
 
-using test_expander_t = pud_leaf_expander<
+using test_unfolder_t = pud_unfolder<
     NiceMock<MockGetNodeDescent>, NiceMock<MockGetQueryCandidates>, NiceMock<MockGetCandidatePath>,
     NiceMock<MockAcceptCandidate>, NiceMock<MockMakeChild>, NiceMock<MockStoreCallSite>,
     NiceMock<MockStoreChildren>, NiceMock<MockUnsetLeaf>, NiceMock<MockMarkLeafClosed>,
@@ -132,7 +132,7 @@ const expr* expr_at(uintptr_t address) {
 
 // Leaf 1 (descent 10) is expanded at goal 2, whose query head 40 has candidates 31 and 30,
 // at the ends of paths {50, 70} and {50, 60}. Children are made as nodes 100, 101 with descents 1000+.
-struct PudLeafExpanderTest : public ::testing::Test {
+struct PudUnfolderTest : public ::testing::Test {
     NiceMock<DescentOps> ops;
     NiceMock<MockGetNodeDescent> get_descent;
     NiceMock<MockGetQueryCandidates> query_candidates;
@@ -152,7 +152,7 @@ struct PudLeafExpanderTest : public ::testing::Test {
     NiceMock<MockStoreNodeDescent> store_descent;
     NiceMock<MockMarkLeafOpen> open_leaf;
     NiceMock<MockEraseNodeDescent> erase_descent;
-    test_expander_t expander{
+    test_unfolder_t unfolder{
         get_descent, query_candidates, candidate_paths, acceptor, child_maker, call_sites,
         children, leaves, close_leaf, live_child_counts, propagator, invalidator, head_nodes,
         refuter, refuted_nodes, store_descent, open_leaf, erase_descent};
@@ -199,155 +199,155 @@ struct PudLeafExpanderTest : public ::testing::Test {
 
 // ---------- children ----------
 
-TEST_F(PudLeafExpanderTest, EveryCandidateIsAcceptedInTheLeafsEnvironment) {
+TEST_F(PudUnfolderTest, EveryCandidateIsAcceptedInTheLeafsEnvironment) {
     EXPECT_CALL(acceptor, accept(Ref(leaf_ubs_state), 5u, expr_at(0x20), path_30)).WillOnce(Return(delta_60));
     EXPECT_CALL(acceptor, accept(Ref(leaf_ubs_state), 5u, expr_at(0x20), path_31)).WillOnce(Return(delta_70));
-    expander.expand(leaf, goal);
+    unfolder.unfold(leaf, goal);
 }
 
-TEST_F(PudLeafExpanderTest, EachAcceptedDeltaBecomesAChildOfTheLeaf) {
+TEST_F(PudUnfolderTest, EachAcceptedDeltaBecomesAChildOfTheLeaf) {
     InSequence in_order;
     EXPECT_CALL(child_maker, make(leaf, delta_60)).WillOnce(Return(100));
     EXPECT_CALL(child_maker, make(leaf, delta_70)).WillOnce(Return(101));
-    expander.expand(leaf, goal);
+    unfolder.unfold(leaf, goal);
 }
 
-TEST_F(PudLeafExpanderTest, LeafRecordsItsCallSiteChildrenAndLiveChildCount) {
+TEST_F(PudUnfolderTest, LeafRecordsItsCallSiteChildrenAndLiveChildCount) {
     EXPECT_CALL(call_sites, store(leaf, goal));
     EXPECT_CALL(children, store(leaf, ElementsAre(100u, 101u)));
     EXPECT_CALL(live_child_counts, store(leaf, 2u));
     EXPECT_CALL(leaves, unset_leaf(leaf));
-    expander.expand(leaf, goal);
+    unfolder.unfold(leaf, goal);
 }
 
-TEST_F(PudLeafExpanderTest, LeafStopsBeingALeafBeforeAnyChildDescentOpensQueries) {
+TEST_F(PudUnfolderTest, LeafStopsBeingALeafBeforeAnyChildDescentOpensQueries) {
     InSequence in_order;
     EXPECT_CALL(leaves, unset_leaf(leaf));
     EXPECT_CALL(invalidator, invalidate(ElementsAre(leaf)));
     EXPECT_CALL(ops, descend(10, leaf, _)).Times(2);
-    expander.expand(leaf, goal);
+    unfolder.unfold(leaf, goal);
 }
 
-TEST_F(PudLeafExpanderTest, EveryLiveChildGetsItsOwnDescent) {
+TEST_F(PudUnfolderTest, EveryLiveChildGetsItsOwnDescent) {
     EXPECT_CALL(ops, descend(10, leaf, 100u)).WillOnce(Return(1100));
     EXPECT_CALL(ops, descend(10, leaf, 101u)).WillOnce(Return(1101));
     EXPECT_CALL(store_descent, store(100u, _));
     EXPECT_CALL(store_descent, store(101u, _));
-    expander.expand(leaf, goal);
+    unfolder.unfold(leaf, goal);
 }
 
-TEST_F(PudLeafExpanderTest, ChildRefutedDuringInvalidationGetsNoDescent) {
+TEST_F(PudUnfolderTest, ChildRefutedDuringInvalidationGetsNoDescent) {
     ON_CALL(refuted_nodes, check_refuted(100u)).WillByDefault(Return(true));
     EXPECT_CALL(ops, descend(_, _, _)).Times(::testing::AnyNumber());
     EXPECT_CALL(ops, descend(_, _, 100u)).Times(0);
     EXPECT_CALL(store_descent, store(100u, _)).Times(0);
     EXPECT_CALL(store_descent, store(101u, _));
-    expander.expand(leaf, goal);
+    unfolder.unfold(leaf, goal);
 }
 
-TEST_F(PudLeafExpanderTest, LeafsDescentIsReleasedAfterItsChildrenAreStored) {
+TEST_F(PudUnfolderTest, LeafsDescentIsReleasedAfterItsChildrenAreStored) {
     InSequence in_order;
     EXPECT_CALL(store_descent, store(100u, _));
     EXPECT_CALL(store_descent, store(101u, _));
     EXPECT_CALL(erase_descent, erase(leaf));
-    expander.expand(leaf, goal);
+    unfolder.unfold(leaf, goal);
 }
 
-TEST_F(PudLeafExpanderTest, ChildArrivingWithARefutedGoalIsRefutedAfterItIsStored) {
+TEST_F(PudUnfolderTest, ChildArrivingWithARefutedGoalIsRefutedAfterItIsStored) {
     ON_CALL(ops, refuted_goals(1101)).WillByDefault(ReturnRef(one_refuted_goal));
     EXPECT_CALL(store_descent, store(100u, _));
     InSequence in_order;
     EXPECT_CALL(store_descent, store(101u, _));
     EXPECT_CALL(erase_descent, erase(leaf));
     EXPECT_CALL(refuter, refute(101u));
-    expander.expand(leaf, goal);
+    unfolder.unfold(leaf, goal);
 }
 
-TEST_F(PudLeafExpanderTest, ChildrenWithoutRefutedGoalsAreNotRefuted) {
+TEST_F(PudUnfolderTest, ChildrenWithoutRefutedGoalsAreNotRefuted) {
     EXPECT_CALL(refuter, refute(_)).Times(0);
-    expander.expand(leaf, goal);
+    unfolder.unfold(leaf, goal);
 }
 
 // ---------- no candidates ----------
 
-TEST_F(PudLeafExpanderTest, LeafWithNoCandidatesDiesWithNoChildren) {
+TEST_F(PudUnfolderTest, LeafWithNoCandidatesDiesWithNoChildren) {
     candidates.clear();
     EXPECT_CALL(children, store(leaf, ElementsAre()));
     EXPECT_CALL(live_child_counts, store(leaf, 0u));
     EXPECT_CALL(propagator, refute(leaf));
     EXPECT_CALL(store_descent, store(_, _)).Times(0);
-    expander.expand(leaf, goal);
+    unfolder.unfold(leaf, goal);
 }
 
-TEST_F(PudLeafExpanderTest, LeafWithCandidatesDoesNotDie) {
+TEST_F(PudUnfolderTest, LeafWithCandidatesDoesNotDie) {
     EXPECT_CALL(propagator, refute(_)).Times(0);
-    expander.expand(leaf, goal);
+    unfolder.unfold(leaf, goal);
 }
 
 // ---------- invalidation ----------
 
-TEST_F(PudLeafExpanderTest, RefutedQueryFromInvalidationRefutesItsOpeningNode) {
+TEST_F(PudUnfolderTest, RefutedQueryFromInvalidationRefutesItsOpeningNode) {
     EXPECT_CALL(invalidator, invalidate(ElementsAre(leaf)))
         .WillOnce(Return(std::vector<pud_forced_query_propagation>{pud_refuted_query{.head_id = 50}}));
     EXPECT_CALL(head_nodes, get(50u)).WillOnce(Return(9));
     EXPECT_CALL(refuter, refute(9u));
-    expander.expand(leaf, goal);
+    unfolder.unfold(leaf, goal);
 }
 
-TEST_F(PudLeafExpanderTest, UnitQueryFromInvalidationRefutesNothing) {
+TEST_F(PudUnfolderTest, UnitQueryFromInvalidationRefutesNothing) {
     EXPECT_CALL(invalidator, invalidate(ElementsAre(leaf)))
         .WillOnce(Return(std::vector<pud_forced_query_propagation>{pud_unit_query{.head_id = 50}}));
     EXPECT_CALL(head_nodes, get(_)).Times(0);
     EXPECT_CALL(refuter, refute(_)).Times(0);
-    expander.expand(leaf, goal);
+    unfolder.unfold(leaf, goal);
 }
 
 }  // namespace
 
 // ---------- open leaves ----------
 
-TEST_F(PudLeafExpanderTest, ExpandedLeafIsClosedWhenItStopsBeingALeaf) {
+TEST_F(PudUnfolderTest, ExpandedLeafIsClosedWhenItStopsBeingALeaf) {
     InSequence in_order;
     EXPECT_CALL(leaves, unset_leaf(leaf));
     EXPECT_CALL(close_leaf, mark_leaf_closed(leaf));
     EXPECT_CALL(open_leaf, mark_leaf_open(_)).Times(::testing::AnyNumber());
-    expander.expand(leaf, goal);
+    unfolder.unfold(leaf, goal);
 }
 
-TEST_F(PudLeafExpanderTest, ChildrenWithOpenGoalsBecomeOpenAfterTheirDescentsAreStored) {
+TEST_F(PudUnfolderTest, ChildrenWithOpenGoalsBecomeOpenAfterTheirDescentsAreStored) {
     InSequence in_order;
     EXPECT_CALL(store_descent, store(100, _));
     EXPECT_CALL(open_leaf, mark_leaf_open(100));
     EXPECT_CALL(store_descent, store(101, _));
     EXPECT_CALL(open_leaf, mark_leaf_open(101));
-    expander.expand(leaf, goal);
+    unfolder.unfold(leaf, goal);
 }
 
-TEST_F(PudLeafExpanderTest, ChildWithoutOpenGoalsStaysClosed) {
+TEST_F(PudUnfolderTest, ChildWithoutOpenGoalsStaysClosed) {
     ON_CALL(ops, body_goal_exprs(1101)).WillByDefault(ReturnRef(no_goals));
     EXPECT_CALL(open_leaf, mark_leaf_open(100));
     EXPECT_CALL(open_leaf, mark_leaf_open(101)).Times(0);
-    expander.expand(leaf, goal);
+    unfolder.unfold(leaf, goal);
 }
 
-TEST_F(PudLeafExpanderTest, ChildWithARefutedGoalIsRefutedNotOpened) {
+TEST_F(PudUnfolderTest, ChildWithARefutedGoalIsRefutedNotOpened) {
     ON_CALL(ops, refuted_goals(1101)).WillByDefault(ReturnRef(one_refuted_goal));
     EXPECT_CALL(open_leaf, mark_leaf_open(100));
     EXPECT_CALL(open_leaf, mark_leaf_open(101)).Times(0);
     EXPECT_CALL(refuter, refute(101));
-    expander.expand(leaf, goal);
+    unfolder.unfold(leaf, goal);
 }
 
-TEST_F(PudLeafExpanderTest, AlreadyRefutedChildIsNeverOpened) {
+TEST_F(PudUnfolderTest, AlreadyRefutedChildIsNeverOpened) {
     ON_CALL(refuted_nodes, check_refuted(100)).WillByDefault(Return(true));
     EXPECT_CALL(open_leaf, mark_leaf_open(100)).Times(0);
     EXPECT_CALL(open_leaf, mark_leaf_open(101));
-    expander.expand(leaf, goal);
+    unfolder.unfold(leaf, goal);
 }
 
-TEST_F(PudLeafExpanderTest, LeafWithoutCandidatesIsClosedAndOpensNothing) {
+TEST_F(PudUnfolderTest, LeafWithoutCandidatesIsClosedAndOpensNothing) {
     candidates.clear();
     EXPECT_CALL(close_leaf, mark_leaf_closed(leaf));
     EXPECT_CALL(open_leaf, mark_leaf_open(_)).Times(0);
-    expander.expand(leaf, goal);
+    unfolder.unfold(leaf, goal);
 }

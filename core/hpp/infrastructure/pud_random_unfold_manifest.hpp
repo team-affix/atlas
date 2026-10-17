@@ -25,7 +25,7 @@
 #include "infrastructure/pud_children.hpp"
 #include "infrastructure/pud_decision_generator.hpp"
 #include "infrastructure/pud_leaf_activator.hpp"
-#include "infrastructure/pud_leaf_expander.hpp"
+#include "infrastructure/pud_unfolder.hpp"
 #include "infrastructure/pud_leaf_invalidator.hpp"
 #include "infrastructure/pud_leaf_nodes.hpp"
 #include "infrastructure/pud_live_leaf_finder.hpp"
@@ -160,7 +160,7 @@ struct pud_random_unfold_manifest {
         live_leaf_finder_t, pud_refuted_leaves, pud_open_leaves, pud_open_leaves,
         refutation_propagator_t, node_descents_t, leaf_invalidator_t, pud_query_head_nodes>;
 
-    using leaf_expander_t = pud_leaf_expander<
+    using unfolder_t = pud_unfolder<
         node_descents_t, mhq_t, mhcs_t, acceptor_t, child_maker_t, pud_call_sites, pud_children,
         pud_leaf_nodes, pud_open_leaves, pud_node_live_child_counts, refutation_propagator_t,
         leaf_invalidator_t, pud_query_head_nodes, node_refuter_t, refuted_node_checker_t,
@@ -171,7 +171,7 @@ struct pud_random_unfold_manifest {
         pud_children, leaf_activator_t, node_refuter_t>;
     using random_subgoal_chooser_t = pud_random_subgoal_chooser<node_descents_t>;
     using decision_generator_t = pud_decision_generator<pud_random_rule_chooser, random_subgoal_chooser_t>;
-    using unfold_loop_t = pud_unfold_loop<pud_open_leaves, decision_generator_t, leaf_expander_t>;
+    using unfold_loop_t = pud_unfold_loop<pud_open_leaves, decision_generator_t, unfolder_t>;
     using axiom_initializer_t = pud_axiom_initializer<
         pud_node_id_sequencer, pud_node_heads, pud_node_added_body_goals, pud_node_added_var_count,
         pud_root_nodes, pud_leaf_nodes, pud_axioms>;
@@ -224,7 +224,7 @@ struct pud_random_unfold_manifest {
     leaf_invalidator_t                      leaf_invalidator_;
     node_refuter_t                          node_refuter_;
 
-    leaf_expander_t                         leaf_expander_;
+    unfolder_t                         unfolder_;
     leaf_activator_t                        leaf_activator_;
     base_descent_runner_t                   base_descent_runner_;
     std::mt19937                            rng_;

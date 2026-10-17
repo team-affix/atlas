@@ -51,7 +51,7 @@ pud_random_unfold_manifest::pud_random_unfold_manifest(uint32_t random_seed)
       node_refuter_(
           live_leaf_finder_, refuted_leaves_, open_leaves_, open_leaves_, refutation_propagator_,
           node_descents_, leaf_invalidator_, query_head_nodes_),
-      leaf_expander_(
+      unfolder_(
           node_descents_, mhq_, mhcs_, acceptor_, child_maker_, call_sites_, children_,
           leaf_nodes_, open_leaves_, node_live_child_counts_, refutation_propagator_,
           leaf_invalidator_, query_head_nodes_, node_refuter_, refuted_node_checker_,
@@ -64,7 +64,7 @@ pud_random_unfold_manifest::pud_random_unfold_manifest(uint32_t random_seed)
       random_rule_chooser_(rng_),
       random_subgoal_chooser_(node_descents_, rng_),
       decision_generator_(random_rule_chooser_, random_subgoal_chooser_),
-      unfold_loop_(open_leaves_, decision_generator_, leaf_expander_),
+      unfold_loop_(open_leaves_, decision_generator_, unfolder_),
       axiom_initializer_(
           node_id_sequencer_, node_heads_, node_added_body_goals_, node_added_var_count_,
           root_nodes_, leaf_nodes_, axioms_) {}

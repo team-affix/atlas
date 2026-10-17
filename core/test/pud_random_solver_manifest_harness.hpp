@@ -126,7 +126,7 @@ struct pud_random_solver_manifest_harness {
     pud_node_id grow_along_open_goals(pud_node_id root, uint32_t depth) {
         pud_node_id frontier = root;
         for (uint32_t level = 0; level < depth; ++level) {
-            manifest.leaf_expander_.expand(frontier, first_open_goal(frontier));
+            manifest.unfolder_.unfold(frontier, first_open_goal(frontier));
             std::optional<pud_node_id> next;
             for (pud_node_id child : children_of(frontier)) {
                 if (refuted(child) || open_goals(child).empty())
@@ -171,7 +171,7 @@ struct pud_random_solver_manifest_harness {
         for (pud_node_id leaf_node : manifest.open_leaves_.get()) {
             if (root_of(leaf_node) != root)
                 continue;
-            manifest.leaf_expander_.expand(leaf_node, first_open_goal(leaf_node));
+            manifest.unfolder_.unfold(leaf_node, first_open_goal(leaf_node));
             return true;
         }
         return false;

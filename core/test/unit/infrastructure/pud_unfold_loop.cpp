@@ -17,19 +17,19 @@ struct MockGetOpenLeaves {
 struct MockGenerateDecision {
     MOCK_METHOD(pud_decision, generate, (const std::set<pud_node_id>&));
 };
-struct MockExpandLeaf {
-    MOCK_METHOD(void, expand, (pud_node_id, body_goal_id));
+struct MockUnfold {
+    MOCK_METHOD(void, unfold, (pud_node_id, body_goal_id));
 };
 
 using test_unfold_loop_t = pud_unfold_loop<
-    NiceMock<MockGetOpenLeaves>, NiceMock<MockGenerateDecision>, NiceMock<MockExpandLeaf>>;
+    NiceMock<MockGetOpenLeaves>, NiceMock<MockGenerateDecision>, NiceMock<MockUnfold>>;
 
 // The open set is a real std::set the tests edit; expanding a leaf closes it unless a test says otherwise.
 struct PudUnfoldLoopTest : public ::testing::Test {
     NiceMock<MockGetOpenLeaves> open_leaves;
     NiceMock<MockGenerateDecision> decisions;
-    NiceMock<MockExpandLeaf> expander;
-    test_unfold_loop_t unfold_loop{open_leaves, decisions, expander};
+    NiceMock<MockUnfold> unfolder;
+    test_unfold_loop_t unfold_loop{open_leaves, decisions, unfolder};
     std::set<pud_node_id> open;
 
     void SetUp() override {
@@ -37,7 +37,7 @@ struct PudUnfoldLoopTest : public ::testing::Test {
         ON_CALL(decisions, generate(_)).WillByDefault([](const std::set<pud_node_id>& leaves) {
             return pud_decision{*leaves.begin(), 0};
         });
-        ON_CALL(expander, expand(_, _)).WillByDefault([this](pud_node_id leaf, body_goal_id) {
+        ON_CALL(unfolder, unfold(_, _)).WillByDefault([this](pud_node_id leaf, body_goal_id) {
             open.erase(leaf);
         });
     }
@@ -48,7 +48,7 @@ struct PudUnfoldLoopTest : public ::testing::Test {
 TEST_F(PudUnfoldLoopTest, NothingHappensBeforeTheFirstResume) {
     open = {4};
     EXPECT_CALL(decisions, generate(_)).Times(0);
-    EXPECT_CALL(expander, expand(_, _)).Times(0);
+    EXPECT_CALL(unfolder, unfold(_, _)).Times(0);
     coroutine<pud_decision, void> unfolding = unfold_loop.drive_unfold_loop();
 }
 
@@ -70,7 +70,7 @@ TEST_F(PudUnfoldLoopTest, EveryOpenLeafIsOfferedToTheDecisionGenerator) {
 TEST_F(PudUnfoldLoopTest, DecisionIsExpandedAndThenYielded) {
     open = {4, 9};
     ON_CALL(decisions, generate(_)).WillByDefault(Return(pud_decision{9, 3}));
-    EXPECT_CALL(expander, expand(9, 3));
+    EXPECT_CALL(unfolder, unfold(9, 3));
     coroutine<pud_decision, void> unfolding = unfold_loop.drive_unfold_loop();
     unfolding.resume();
     ASSERT_TRUE(unfolding.has_yield());
@@ -81,7 +81,7 @@ TEST_F(PudUnfoldLoopTest, DecisionIsGeneratedBeforeItIsExpanded) {
     open = {4};
     InSequence in_order;
     EXPECT_CALL(decisions, generate(_)).WillOnce(Return(pud_decision{4, 0}));
-    EXPECT_CALL(expander, expand(4, 0));
+    EXPECT_CALL(unfolder, unfold(4, 0));
     coroutine<pud_decision, void> unfolding = unfold_loop.drive_unfold_loop();
     unfolding.resume();
 }
@@ -89,16 +89,16 @@ TEST_F(PudUnfoldLoopTest, DecisionIsGeneratedBeforeItIsExpanded) {
 TEST_F(PudUnfoldLoopTest, EachResumeMakesExactlyOneDecision) {
     open = {4, 9, 12};
     coroutine<pud_decision, void> unfolding = unfold_loop.drive_unfold_loop();
-    EXPECT_CALL(expander, expand(4, 0));
+    EXPECT_CALL(unfolder, unfold(4, 0));
     unfolding.resume();
-    ::testing::Mock::VerifyAndClearExpectations(&expander);
-    EXPECT_CALL(expander, expand(9, 0));
+    ::testing::Mock::VerifyAndClearExpectations(&unfolder);
+    EXPECT_CALL(unfolder, unfold(9, 0));
     unfolding.resume();
 }
 
 TEST_F(PudUnfoldLoopTest, LeavesOpenedByAnExpansionAreOfferedNext) {
     open = {4};
-    ON_CALL(expander, expand(4, _)).WillByDefault([this](pud_node_id, body_goal_id) {
+    ON_CALL(unfolder, unfold(4, _)).WillByDefault([this](pud_node_id, body_goal_id) {
         open.erase(4);
         open.insert({20, 21});
     });
@@ -123,7 +123,7 @@ TEST_F(PudUnfoldLoopTest, SearchEndsOnceTheLastOpenLeafIsExpanded) {
 
 TEST_F(PudUnfoldLoopTest, ExpansionThatKeepsTheLeafOpenOffersItAgain) {
     open = {4};
-    ON_CALL(expander, expand(_, _)).WillByDefault([](pud_node_id, body_goal_id) {});
+    ON_CALL(unfolder, unfold(_, _)).WillByDefault([](pud_node_id, body_goal_id) {});
     coroutine<pud_decision, void> unfolding = unfold_loop.drive_unfold_loop();
     for (int round = 0; round < 3; ++round) {
         unfolding.resume();
