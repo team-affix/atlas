@@ -65,9 +65,9 @@ struct pud_manifest_harness {
         started_roots.push_back(root);
     }
 
-    // The solver query itself is headless; answer_template only tells the test how to read answers.
-    pud_node_id start_query(const expr* answer_template, std::vector<const expr*> goals, uint32_t var_count) {
-        const pud_node_id root = manifest.solver_query_initializer_.initialize_query(goals, var_count);
+    // The conjecture itself is headless; answer_template only tells the test how to read answers.
+    pud_node_id start_conjecture(const expr* answer_template, std::vector<const expr*> goals, uint32_t var_count) {
+        const pud_node_id root = manifest.conjecture_initializer_.initialize_conjecture(goals, var_count);
         answer_templates.emplace(root, answer_template);
         start_tree(root);
         return root;
@@ -136,16 +136,16 @@ struct pud_manifest_harness {
 
     // ---------- solving ----------
 
-    coroutine<pud_solver_step, void>& search_of(pud_node_id query_root) {
-        auto found = searches.find(query_root);
+    coroutine<pud_solver_step, void>& search_of(pud_node_id root) {
+        auto found = searches.find(root);
         if (found == searches.end())
-            found = searches.emplace(query_root, manifest.solver_.solve(query_root)).first;
+            found = searches.emplace(root, manifest.solver_.solve(root)).first;
         return found->second;
     }
 
-    // Resumes the query's search for at most max_steps steps, stopping at the next solution.
-    std::optional<pud_node_id> next_solution(pud_node_id query_root, size_t max_steps) {
-        coroutine<pud_solver_step, void>& search = search_of(query_root);
+    // Resumes the root's search for at most max_steps steps, stopping at the next solution.
+    std::optional<pud_node_id> next_solution(pud_node_id root, size_t max_steps) {
+        coroutine<pud_solver_step, void>& search = search_of(root);
         for (size_t resumed = 0; resumed < max_steps; ++resumed) {
             search.resume();
             if (!search.has_yield())
@@ -157,32 +157,32 @@ struct pud_manifest_harness {
         return std::nullopt;
     }
 
-    bool exhausted(pud_node_id query_root) { return search_of(query_root).done(); }
+    bool exhausted(pud_node_id root) { return search_of(root).done(); }
 
-    const expr* answer(pud_node_id query_root, pud_node_id solution) {
-        return normalize_in(env_at_leaf(solution), answer_templates.at(query_root));
+    const expr* answer(pud_node_id root, pud_node_id solution) {
+        return normalize_in(env_at_leaf(solution), answer_templates.at(root));
     }
 
-    std::vector<const expr*> enumerate(pud_node_id query_root, size_t max_answers, size_t max_steps) {
+    std::vector<const expr*> enumerate(pud_node_id root, size_t max_answers, size_t max_steps) {
         std::vector<const expr*> answers;
         while (answers.size() < max_answers) {
-            const std::optional<pud_node_id> solution = next_solution(query_root, max_steps);
+            const std::optional<pud_node_id> solution = next_solution(root, max_steps);
             if (!solution.has_value())
                 break;
-            answers.push_back(answer(query_root, solution.value()));
+            answers.push_back(answer(root, solution.value()));
         }
         return answers;
     }
 
-    // One step of the query's search; a solution it yields is recorded. False once the search ended.
-    bool step(pud_node_id query_root, std::vector<const expr*>& answers) {
-        coroutine<pud_solver_step, void>& search = search_of(query_root);
+    // One step of the root's search; a solution it yields is recorded. False once the search ended.
+    bool step(pud_node_id root, std::vector<const expr*>& answers) {
+        coroutine<pud_solver_step, void>& search = search_of(root);
         search.resume();
         if (!search.has_yield())
             return false;
         const pud_solver_step step = search.consume_yield();
         if (const pud_solution* solution = std::get_if<pud_solution>(&step))
-            answers.push_back(answer(query_root, solution->leaf));
+            answers.push_back(answer(root, solution->leaf));
         return true;
     }
 

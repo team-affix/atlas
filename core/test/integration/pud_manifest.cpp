@@ -50,31 +50,31 @@ struct PudManifestIntegrationTest : public ::testing::Test {
         return manifest.axiom_initializer_.initialize_axiom(rule(head, std::move(body), var_count));
     }
 
-    // The solver query itself is headless; answer_template only tells the test how to read answers.
-    pud_node_id start_query(const expr* answer_template, std::vector<const expr*> goals, uint32_t var_count) {
-        const pud_node_id query_root = manifest.solver_query_initializer_.initialize_query(goals, var_count);
-        answer_templates.emplace(query_root, answer_template);
-        manifest.solver_.start(query_root);
-        return query_root;
+    // The conjecture itself is headless; answer_template only tells the test how to read answers.
+    pud_node_id start_conjecture(const expr* answer_template, std::vector<const expr*> goals, uint32_t var_count) {
+        const pud_node_id root = manifest.conjecture_initializer_.initialize_conjecture(goals, var_count);
+        answer_templates.emplace(root, answer_template);
+        manifest.solver_.start(root);
+        return root;
     }
 
-    const expr* answer(pud_node_id query_root, pud_node_id solution) {
+    const expr* answer(pud_node_id root, pud_node_id solution) {
         pud_transient_ubs_state transient_ubs_state{
             manifest.node_descents_.get(solution).binding().ubs_state()};
         auto bind_map = transient_ubs_state.make_bind_map(manifest.expr_pool_, manifest.expr_pool_);
         auto normalizer = manifest.normalizer_factory_.make(bind_map);
-        return normalizer.normalize(framed_expr{answer_templates.at(query_root), 0});
+        return normalizer.normalize(framed_expr{answer_templates.at(root), 0});
     }
 
-    coroutine<pud_solver_step, void>& search_of(pud_node_id query_root) {
-        auto found = searches.find(query_root);
+    coroutine<pud_solver_step, void>& search_of(pud_node_id root) {
+        auto found = searches.find(root);
         if (found == searches.end())
-            found = searches.emplace(query_root, manifest.solver_.solve(query_root)).first;
+            found = searches.emplace(root, manifest.solver_.solve(root)).first;
         return found->second;
     }
 
-    std::optional<pud_node_id> next_solution(pud_node_id query_root, size_t max_steps) {
-        coroutine<pud_solver_step, void>& search = search_of(query_root);
+    std::optional<pud_node_id> next_solution(pud_node_id root, size_t max_steps) {
+        coroutine<pud_solver_step, void>& search = search_of(root);
         for (size_t resumed = 0; resumed < max_steps; ++resumed) {
             search.resume();
             if (!search.has_yield())
@@ -86,15 +86,15 @@ struct PudManifestIntegrationTest : public ::testing::Test {
         return std::nullopt;
     }
 
-    bool exhausted(pud_node_id query_root) { return search_of(query_root).done(); }
+    bool exhausted(pud_node_id root) { return search_of(root).done(); }
 
-    std::vector<const expr*> enumerate(pud_node_id query_root, size_t max_answers, size_t max_steps) {
+    std::vector<const expr*> enumerate(pud_node_id root, size_t max_answers, size_t max_steps) {
         std::vector<const expr*> answers;
         while (answers.size() < max_answers) {
-            const std::optional<pud_node_id> solution = next_solution(query_root, max_steps);
+            const std::optional<pud_node_id> solution = next_solution(root, max_steps);
             if (!solution.has_value())
                 break;
-            answers.push_back(answer(query_root, solution.value()));
+            answers.push_back(answer(root, solution.value()));
         }
         return answers;
     }
@@ -143,132 +143,132 @@ struct PudManifestIntegrationTest : public ::testing::Test {
 
 TEST_F(PudManifestIntegrationTest, GroundQueryAgainstAFactIsSolved) {
     add_colors();
-    const pud_node_id query = start_query(atom("q"), {functor("color", {atom("red")})}, 0);
-    EXPECT_THAT(enumerate(query, 10, 50), ElementsAre(atom("q")));
+    const pud_node_id conjecture = start_conjecture(atom("q"), {functor("color", {atom("red")})}, 0);
+    EXPECT_THAT(enumerate(conjecture, 10, 50), ElementsAre(atom("q")));
 }
 
 TEST_F(PudManifestIntegrationTest, QueryVariableIsBoundByEachMatchingFact) {
     add_colors();
-    const pud_node_id query = start_query(functor("q", {var(0)}), {functor("color", {var(0)})}, 1);
+    const pud_node_id conjecture = start_conjecture(functor("q", {var(0)}), {functor("color", {var(0)})}, 1);
     EXPECT_THAT(
-        enumerate(query, 10, 50),
+        enumerate(conjecture, 10, 50),
         UnorderedElementsAre(functor("q", {atom("red")}), functor("q", {atom("blue")})));
-    EXPECT_TRUE(exhausted(query));
+    EXPECT_TRUE(exhausted(conjecture));
 }
 
 TEST_F(PudManifestIntegrationTest, QueryWithNoMatchingAxiomIsRefutedAtStart) {
     add_colors();
-    const pud_node_id query = start_query(atom("q"), {functor("color", {atom("green")})}, 0);
-    EXPECT_TRUE(refuted(query));
-    EXPECT_FALSE(next_solution(query, 50).has_value());
+    const pud_node_id conjecture = start_conjecture(atom("q"), {functor("color", {atom("green")})}, 0);
+    EXPECT_TRUE(refuted(conjecture));
+    EXPECT_FALSE(next_solution(conjecture, 50).has_value());
 }
 
 TEST_F(PudManifestIntegrationTest, QueryWithNoBodyGoalsIsItsOwnSolution) {
-    const pud_node_id query = start_query(atom("q"), {}, 0);
-    EXPECT_EQ(next_solution(query, 1), query);
+    const pud_node_id conjecture = start_conjecture(atom("q"), {}, 0);
+    EXPECT_EQ(next_solution(conjecture, 1), conjecture);
 }
 
 TEST_F(PudManifestIntegrationTest, ConjunctionKeepsOnlyBindingsThatSatisfyEveryGoal) {
     add_colors();
-    const pud_node_id query = start_query(
+    const pud_node_id conjecture = start_conjecture(
         functor("q", {var(0)}),
         {functor("color", {var(0)}), functor("warm", {var(0)})},
         1);
-    EXPECT_THAT(enumerate(query, 10, 50), ElementsAre(functor("q", {atom("red")})));
-    EXPECT_TRUE(exhausted(query));
+    EXPECT_THAT(enumerate(conjecture, 10, 50), ElementsAre(functor("q", {atom("red")})));
+    EXPECT_TRUE(exhausted(conjecture));
 }
 
 TEST_F(PudManifestIntegrationTest, ConjunctionWithNoCommonBindingIsRefuted) {
     add_colors();
     axiom(functor("cold", {atom("blue")}), {}, 0);
-    const pud_node_id query = start_query(
+    const pud_node_id conjecture = start_conjecture(
         atom("q"),
         {functor("warm", {var(0)}), functor("cold", {var(0)})},
         1);
-    EXPECT_THAT(enumerate(query, 10, 50), IsEmpty());
-    EXPECT_TRUE(refuted(query));
+    EXPECT_THAT(enumerate(conjecture, 10, 50), IsEmpty());
+    EXPECT_TRUE(refuted(conjecture));
 }
 
 // ---------- recursion ----------
 
 TEST_F(PudManifestIntegrationTest, NaturalNumbersAreEnumeratedInOrder) {
     add_nat();
-    const pud_node_id query = start_query(functor("q", {var(0)}), {functor("nat", {var(0)})}, 1);
+    const pud_node_id conjecture = start_conjecture(functor("q", {var(0)}), {functor("nat", {var(0)})}, 1);
     EXPECT_THAT(
-        enumerate(query, 5, 100),
+        enumerate(conjecture, 5, 100),
         ElementsAre(
             functor("q", {peano(0)}),
             functor("q", {peano(1)}),
             functor("q", {peano(2)}),
             functor("q", {peano(3)}),
             functor("q", {peano(4)})));
-    EXPECT_FALSE(refuted(query));
+    EXPECT_FALSE(refuted(conjecture));
 }
 
 TEST_F(PudManifestIntegrationTest, GroundNaturalNumberIsChecked) {
     add_nat();
-    const pud_node_id query = start_query(atom("q"), {functor("nat", {peano(3)})}, 0);
-    EXPECT_THAT(enumerate(query, 10, 100), ElementsAre(atom("q")));
-    EXPECT_TRUE(exhausted(query));
+    const pud_node_id conjecture = start_conjecture(atom("q"), {functor("nat", {peano(3)})}, 0);
+    EXPECT_THAT(enumerate(conjecture, 10, 100), ElementsAre(atom("q")));
+    EXPECT_TRUE(exhausted(conjecture));
 }
 
 TEST_F(PudManifestIntegrationTest, NonNaturalIsRefutedAfterUnfolding) {
     add_nat();
-    const pud_node_id query = start_query(atom("q"), {functor("nat", {functor("s", {atom("bad")})})}, 0);
-    EXPECT_THAT(enumerate(query, 10, 100), IsEmpty());
-    EXPECT_TRUE(refuted(query));
+    const pud_node_id conjecture = start_conjecture(atom("q"), {functor("nat", {functor("s", {atom("bad")})})}, 0);
+    EXPECT_THAT(enumerate(conjecture, 10, 100), IsEmpty());
+    EXPECT_TRUE(refuted(conjecture));
 }
 
 TEST_F(PudManifestIntegrationTest, AppendBuildsTheConcatenation) {
     add_append();
-    const pud_node_id query = start_query(
+    const pud_node_id conjecture = start_conjecture(
         functor("q", {var(0)}),
         {functor("app", {list({atom("a")}), list({atom("b"), atom("c")}), var(0)})},
         1);
-    EXPECT_THAT(enumerate(query, 10, 100), ElementsAre(functor("q", {list({atom("a"), atom("b"), atom("c")})})));
-    EXPECT_TRUE(exhausted(query));
+    EXPECT_THAT(enumerate(conjecture, 10, 100), ElementsAre(functor("q", {list({atom("a"), atom("b"), atom("c")})})));
+    EXPECT_TRUE(exhausted(conjecture));
 }
 
 TEST_F(PudManifestIntegrationTest, AppendSplitsAListEveryWay) {
     add_append();
-    const pud_node_id query = start_query(
+    const pud_node_id conjecture = start_conjecture(
         functor("q", {var(0), var(1)}),
         {functor("app", {var(0), var(1), list({atom("a"), atom("b")})})},
         2);
     EXPECT_THAT(
-        enumerate(query, 10, 100),
+        enumerate(conjecture, 10, 100),
         UnorderedElementsAre(
             functor("q", {list({}), list({atom("a"), atom("b")})}),
             functor("q", {list({atom("a")}), list({atom("b")})}),
             functor("q", {list({atom("a"), atom("b")}), list({})})));
-    EXPECT_TRUE(exhausted(query));
+    EXPECT_TRUE(exhausted(conjecture));
 }
 
 TEST_F(PudManifestIntegrationTest, MemberFindsEveryElementInOrder) {
     add_member();
-    const pud_node_id query = start_query(
+    const pud_node_id conjecture = start_conjecture(
         functor("q", {var(0)}),
         {functor("mem", {var(0), list({atom("a"), atom("b"), atom("c")})})},
         1);
     EXPECT_THAT(
-        enumerate(query, 10, 100),
+        enumerate(conjecture, 10, 100),
         ElementsAre(functor("q", {atom("a")}), functor("q", {atom("b")}), functor("q", {atom("c")})));
-    EXPECT_TRUE(exhausted(query));
+    EXPECT_TRUE(exhausted(conjecture));
 }
 
 TEST_F(PudManifestIntegrationTest, PeanoAdditionIsInverted) {
     add_peano_add();
-    const pud_node_id query = start_query(
+    const pud_node_id conjecture = start_conjecture(
         functor("q", {var(0), var(1)}),
         {functor("add", {var(0), var(1), peano(2)})},
         2);
     EXPECT_THAT(
-        enumerate(query, 10, 100),
+        enumerate(conjecture, 10, 100),
         UnorderedElementsAre(
             functor("q", {peano(0), peano(2)}),
             functor("q", {peano(1), peano(1)}),
             functor("q", {peano(2), peano(0)})));
-    EXPECT_TRUE(exhausted(query));
+    EXPECT_TRUE(exhausted(conjecture));
 }
 
 TEST_F(PudManifestIntegrationTest, TransitiveClosureTerminatesOnAFiniteGraph) {
@@ -279,64 +279,64 @@ TEST_F(PudManifestIntegrationTest, TransitiveClosureTerminatesOnAFiniteGraph) {
         functor("anc", {var(0), var(1)}),
         {functor("parent", {var(0), var(2)}), functor("anc", {var(2), var(1)})},
         3);
-    const pud_node_id query = start_query(functor("q", {var(0)}), {functor("anc", {atom("a"), var(0)})}, 1);
+    const pud_node_id conjecture = start_conjecture(functor("q", {var(0)}), {functor("anc", {atom("a"), var(0)})}, 1);
     EXPECT_THAT(
-        enumerate(query, 10, 200),
+        enumerate(conjecture, 10, 200),
         UnorderedElementsAre(functor("q", {atom("b")}), functor("q", {atom("c")})));
-    EXPECT_TRUE(exhausted(query));
+    EXPECT_TRUE(exhausted(conjecture));
 }
 
 TEST_F(PudManifestIntegrationTest, SharedVariablesAcrossGoalsAreRespected) {
     add_append();
     add_member();
-    const pud_node_id query = start_query(
+    const pud_node_id conjecture = start_conjecture(
         functor("q", {var(0)}),
         {
             functor("mem", {var(0), list({atom("a"), atom("b"), atom("c")})}),
             functor("app", {list({atom("x")}), list({var(0)}), list({atom("x"), atom("b")})}),
         },
         1);
-    EXPECT_THAT(enumerate(query, 10, 200), ElementsAre(functor("q", {atom("b")})));
-    EXPECT_TRUE(exhausted(query));
+    EXPECT_THAT(enumerate(conjecture, 10, 200), ElementsAre(functor("q", {atom("b")})));
+    EXPECT_TRUE(exhausted(conjecture));
 }
 
 // ---------- budget and tree state ----------
 
 TEST_F(PudManifestIntegrationTest, ExhaustedBudgetLeavesTheQueryLive) {
     add_nat();
-    const pud_node_id query = start_query(atom("q"), {functor("nat", {peano(5)})}, 0);
-    EXPECT_FALSE(next_solution(query, 2).has_value());
-    EXPECT_FALSE(refuted(query));
-    EXPECT_TRUE(next_solution(query, 100).has_value());
+    const pud_node_id conjecture = start_conjecture(atom("q"), {functor("nat", {peano(5)})}, 0);
+    EXPECT_FALSE(next_solution(conjecture, 2).has_value());
+    EXPECT_FALSE(refuted(conjecture));
+    EXPECT_TRUE(next_solution(conjecture, 100).has_value());
 }
 
 TEST_F(PudManifestIntegrationTest, RefutingOneSolutionKeepsTheOthers) {
     add_colors();
-    const pud_node_id query = start_query(functor("q", {var(0)}), {functor("color", {var(0)})}, 1);
-    const std::optional<pud_node_id> first = next_solution(query, 50);
+    const pud_node_id conjecture = start_conjecture(functor("q", {var(0)}), {functor("color", {var(0)})}, 1);
+    const std::optional<pud_node_id> first = next_solution(conjecture, 50);
     ASSERT_TRUE(first.has_value());
     manifest.node_refuter_.refute(first.value());
     EXPECT_TRUE(refuted(first.value()));
-    EXPECT_FALSE(refuted(query));
-    const std::optional<pud_node_id> second = next_solution(query, 50);
+    EXPECT_FALSE(refuted(conjecture));
+    const std::optional<pud_node_id> second = next_solution(conjecture, 50);
     ASSERT_TRUE(second.has_value());
     EXPECT_NE(second.value(), first.value());
 }
 
 TEST_F(PudManifestIntegrationTest, TwoQueriesShareTheDatabase) {
     add_colors();
-    const pud_node_id warm_query = start_query(functor("w", {var(0)}), {functor("warm", {var(0)})}, 1);
-    const pud_node_id color_query = start_query(functor("c", {var(0)}), {functor("color", {var(0)})}, 1);
-    EXPECT_THAT(enumerate(warm_query, 10, 50), ElementsAre(functor("w", {atom("red")})));
+    const pud_node_id warm_conjecture = start_conjecture(functor("w", {var(0)}), {functor("warm", {var(0)})}, 1);
+    const pud_node_id color_conjecture = start_conjecture(functor("c", {var(0)}), {functor("color", {var(0)})}, 1);
+    EXPECT_THAT(enumerate(warm_conjecture, 10, 50), ElementsAre(functor("w", {atom("red")})));
     EXPECT_THAT(
-        enumerate(color_query, 10, 50),
+        enumerate(color_conjecture, 10, 50),
         UnorderedElementsAre(functor("c", {atom("red")}), functor("c", {atom("blue")})));
 }
 
 TEST_F(PudManifestIntegrationTest, SolutionLeafHasNoOpenGoals) {
     add_nat();
-    const pud_node_id query = start_query(functor("q", {var(0)}), {functor("nat", {var(0)})}, 1);
-    const std::optional<pud_node_id> solution = next_solution(query, 50);
+    const pud_node_id conjecture = start_conjecture(functor("q", {var(0)}), {functor("nat", {var(0)})}, 1);
+    const std::optional<pud_node_id> solution = next_solution(conjecture, 50);
     ASSERT_TRUE(solution.has_value());
     EXPECT_TRUE(manifest.node_descents_.get(solution.value()).body_goal_expr().body_goal_exprs().empty());
     EXPECT_TRUE(manifest.leaf_nodes_.check_leaf(solution.value()));
@@ -344,8 +344,8 @@ TEST_F(PudManifestIntegrationTest, SolutionLeafHasNoOpenGoals) {
 
 TEST_F(PudManifestIntegrationTest, ManyNaturalNumbersStayCorrect) {
     add_nat();
-    const pud_node_id query = start_query(functor("q", {var(0)}), {functor("nat", {var(0)})}, 1);
-    const std::vector<const expr*> answers = enumerate(query, 12, 500);
+    const pud_node_id conjecture = start_conjecture(functor("q", {var(0)}), {functor("nat", {var(0)})}, 1);
+    const std::vector<const expr*> answers = enumerate(conjecture, 12, 500);
     ASSERT_EQ(answers.size(), 12u);
     for (uint32_t count = 0; count < 12; ++count)
         EXPECT_EQ(answers.at(count), functor("q", {peano(count)}));
@@ -389,8 +389,8 @@ struct PudManifestLemmaIntegrationTest : public PudManifestIntegrationTest {
     }
 
     bool solvable(const expr* goal) {
-        const pud_node_id query = start_query(atom("q"), {goal}, 0);
-        return next_solution(query, 200).has_value();
+        const pud_node_id conjecture = start_conjecture(atom("q"), {goal}, 0);
+        return next_solution(conjecture, 200).has_value();
     }
 };
 
@@ -414,16 +414,16 @@ TEST_F(PudManifestLemmaIntegrationTest, GroundNumbersAreStillSolvedOnceTheRuleTr
 TEST_F(PudManifestLemmaIntegrationTest, NonNumbersAreStillRefutedOnceTheRuleTreeHasGrown) {
     add_nat_tracked();
     grow_nat_rule(3);
-    const pud_node_id query = start_query(atom("q"), {functor("nat", {peano_on(2, "bad")})}, 0);
-    EXPECT_FALSE(next_solution(query, 200).has_value());
-    EXPECT_TRUE(refuted(query));
+    const pud_node_id conjecture = start_conjecture(atom("q"), {functor("nat", {peano_on(2, "bad")})}, 0);
+    EXPECT_FALSE(next_solution(conjecture, 200).has_value());
+    EXPECT_TRUE(refuted(conjecture));
 }
 
 TEST_F(PudManifestLemmaIntegrationTest, EnumerationIsUnchangedByGrowingTheRuleTree) {
     add_nat_tracked();
     grow_nat_rule(2);
-    const pud_node_id query = start_query(functor("q", {var(0)}), {functor("nat", {var(0)})}, 1);
-    const std::vector<const expr*> answers = enumerate(query, 6, 300);
+    const pud_node_id conjecture = start_conjecture(functor("q", {var(0)}), {functor("nat", {var(0)})}, 1);
+    const std::vector<const expr*> answers = enumerate(conjecture, 6, 300);
     ASSERT_EQ(answers.size(), 6u);
     for (const expr* found : answers) {
         bool is_number = false;
@@ -439,8 +439,8 @@ TEST_F(PudManifestLemmaIntegrationTest, EnumerationIsUnchangedByGrowingTheRuleTr
 TEST_F(PudManifestLemmaIntegrationTest, DeepLemmaResolvesALargeNumberInFewExpansions) {
     add_nat_tracked();
     grow_nat_rule(6);
-    const pud_node_id query = start_query(atom("q"), {functor("nat", {peano(6)})}, 0);
-    EXPECT_TRUE(next_solution(query, 3).has_value());
+    const pud_node_id conjecture = start_conjecture(atom("q"), {functor("nat", {peano(6)})}, 0);
+    EXPECT_TRUE(next_solution(conjecture, 3).has_value());
 }
 
 TEST_F(PudManifestLemmaIntegrationTest, RefutingTheRuleTreesRecursiveBranchKeepsQueriesCorrect) {
@@ -475,45 +475,45 @@ struct PudManifestQueryLifetimeIntegrationTest : public PudManifestIntegrationTe
 
 TEST_F(PudManifestQueryLifetimeIntegrationTest, RootsQueriesLiveWhileTheRootIsALeaf) {
     add_colors();
-    const pud_node_id query = start_query(atom("q"), {functor("color", {var(0)}), functor("warm", {var(1)})}, 2);
-    EXPECT_TRUE(alive(query_of(query, 0)));
-    EXPECT_TRUE(alive(query_of(query, 1)));
+    const pud_node_id conjecture = start_conjecture(atom("q"), {functor("color", {var(0)}), functor("warm", {var(1)})}, 2);
+    EXPECT_TRUE(alive(query_of(conjecture, 0)));
+    EXPECT_TRUE(alive(query_of(conjecture, 1)));
 }
 
 TEST_F(PudManifestQueryLifetimeIntegrationTest, ExpandedLeafKeepsNoStoredDescent) {
     add_colors();
-    const pud_node_id query = start_query(atom("q"), {functor("color", {var(0)})}, 1);
-    manifest.leaf_expander_.expand(query, 0);
-    EXPECT_THROW(manifest.node_descents_.get(query), std::out_of_range);
-    for (pud_node_id child : children_of(query))
+    const pud_node_id conjecture = start_conjecture(atom("q"), {functor("color", {var(0)})}, 1);
+    manifest.leaf_expander_.expand(conjecture, 0);
+    EXPECT_THROW(manifest.node_descents_.get(conjecture), std::out_of_range);
+    for (pud_node_id child : children_of(conjecture))
         EXPECT_NO_THROW(manifest.node_descents_.get(child));
 }
 
 TEST_F(PudManifestQueryLifetimeIntegrationTest, ExpandedGoalsQueryIsRemovedOnceNoLeafMentionsIt) {
     add_colors();
-    const pud_node_id query = start_query(atom("q"), {functor("color", {var(0)})}, 1);
-    const pud_mhq_head_id expanded = query_of(query, 0);
-    manifest.leaf_expander_.expand(query, 0);
+    const pud_node_id conjecture = start_conjecture(atom("q"), {functor("color", {var(0)})}, 1);
+    const pud_mhq_head_id expanded = query_of(conjecture, 0);
+    manifest.leaf_expander_.expand(conjecture, 0);
     EXPECT_FALSE(alive(expanded));
 }
 
 TEST_F(PudManifestQueryLifetimeIntegrationTest, UnchangedGoalsQueryIsSharedByEveryChild) {
     add_colors();
-    const pud_node_id query = start_query(atom("q"), {functor("color", {var(0)}), functor("warm", {var(1)})}, 2);
-    const pud_mhq_head_id shared = query_of(query, 1);
-    manifest.leaf_expander_.expand(query, 0);
-    ASSERT_EQ(children_of(query).size(), 2u);
-    for (pud_node_id child : children_of(query))
+    const pud_node_id conjecture = start_conjecture(atom("q"), {functor("color", {var(0)}), functor("warm", {var(1)})}, 2);
+    const pud_mhq_head_id shared = query_of(conjecture, 1);
+    manifest.leaf_expander_.expand(conjecture, 0);
+    ASSERT_EQ(children_of(conjecture).size(), 2u);
+    for (pud_node_id child : children_of(conjecture))
         EXPECT_EQ(query_of(child, 1), shared);
     EXPECT_TRUE(alive(shared));
 }
 
 TEST_F(PudManifestQueryLifetimeIntegrationTest, SharedQuerySurvivesUntilItsLastLeafIsRefuted) {
     add_colors();
-    const pud_node_id query = start_query(atom("q"), {functor("color", {var(0)}), functor("warm", {var(1)})}, 2);
-    const pud_mhq_head_id shared = query_of(query, 1);
-    manifest.leaf_expander_.expand(query, 0);
-    const std::vector<pud_node_id> children = children_of(query);
+    const pud_node_id conjecture = start_conjecture(atom("q"), {functor("color", {var(0)}), functor("warm", {var(1)})}, 2);
+    const pud_mhq_head_id shared = query_of(conjecture, 1);
+    manifest.leaf_expander_.expand(conjecture, 0);
+    const std::vector<pud_node_id> children = children_of(conjecture);
     ASSERT_EQ(children.size(), 2u);
     manifest.node_refuter_.refute(children.at(0));
     EXPECT_TRUE(alive(shared));
@@ -523,10 +523,10 @@ TEST_F(PudManifestQueryLifetimeIntegrationTest, SharedQuerySurvivesUntilItsLastL
 
 TEST_F(PudManifestQueryLifetimeIntegrationTest, SharedQuerySurvivesUntilItsLastLeafIsExpandedPastIt) {
     add_colors();
-    const pud_node_id query = start_query(atom("q"), {functor("color", {var(0)}), functor("warm", {var(1)})}, 2);
-    const pud_mhq_head_id shared = query_of(query, 1);
-    manifest.leaf_expander_.expand(query, 0);
-    const std::vector<pud_node_id> children = children_of(query);
+    const pud_node_id conjecture = start_conjecture(atom("q"), {functor("color", {var(0)}), functor("warm", {var(1)})}, 2);
+    const pud_mhq_head_id shared = query_of(conjecture, 1);
+    manifest.leaf_expander_.expand(conjecture, 0);
+    const std::vector<pud_node_id> children = children_of(conjecture);
     ASSERT_EQ(children.size(), 2u);
     manifest.leaf_expander_.expand(children.at(0), 1);
     EXPECT_TRUE(alive(shared));
@@ -536,12 +536,12 @@ TEST_F(PudManifestQueryLifetimeIntegrationTest, SharedQuerySurvivesUntilItsLastL
 
 TEST_F(PudManifestQueryLifetimeIntegrationTest, ForkedQueryReplacesTheParentsQueryForEveryChild) {
     add_colors();
-    const pud_node_id query = start_query(
+    const pud_node_id conjecture = start_conjecture(
         functor("q", {var(0)}), {functor("color", {var(0)}), functor("warm", {var(0)})}, 1);
-    const pud_mhq_head_id parents_query = query_of(query, 1);
-    manifest.leaf_expander_.expand(query, 0);
+    const pud_mhq_head_id parents_query = query_of(conjecture, 1);
+    manifest.leaf_expander_.expand(conjecture, 0);
     EXPECT_FALSE(alive(parents_query));
-    for (pud_node_id child : children_of(query)) {
+    for (pud_node_id child : children_of(conjecture)) {
         if (refuted(child))
             continue;
         const pud_mhq_head_id forked = query_of(child, 1);
@@ -552,10 +552,10 @@ TEST_F(PudManifestQueryLifetimeIntegrationTest, ForkedQueryReplacesTheParentsQue
 
 TEST_F(PudManifestQueryLifetimeIntegrationTest, RefutedChildsForkedQueryIsRemoved) {
     add_colors();
-    const pud_node_id query = start_query(
+    const pud_node_id conjecture = start_conjecture(
         functor("q", {var(0)}), {functor("color", {var(0)}), functor("warm", {var(0)})}, 1);
-    manifest.leaf_expander_.expand(query, 0);
-    const std::vector<pud_node_id> children = children_of(query);
+    manifest.leaf_expander_.expand(conjecture, 0);
+    const std::vector<pud_node_id> children = children_of(conjecture);
     ASSERT_EQ(children.size(), 2u);
     pud_node_id live_child = children.at(0);
     for (pud_node_id child : children) {
@@ -569,20 +569,20 @@ TEST_F(PudManifestQueryLifetimeIntegrationTest, RefutedChildsForkedQueryIsRemove
 
 TEST_F(PudManifestQueryLifetimeIntegrationTest, RefutingTheRootRemovesEveryQuery) {
     add_colors();
-    const pud_node_id query = start_query(atom("q"), {functor("color", {var(0)}), functor("warm", {var(1)})}, 2);
-    const pud_mhq_head_id colors = query_of(query, 0);
-    const pud_mhq_head_id warmth = query_of(query, 1);
-    manifest.node_refuter_.refute(query);
+    const pud_node_id conjecture = start_conjecture(atom("q"), {functor("color", {var(0)}), functor("warm", {var(1)})}, 2);
+    const pud_mhq_head_id colors = query_of(conjecture, 0);
+    const pud_mhq_head_id warmth = query_of(conjecture, 1);
+    manifest.node_refuter_.refute(conjecture);
     EXPECT_FALSE(alive(colors));
     EXPECT_FALSE(alive(warmth));
 }
 
 TEST_F(PudManifestQueryLifetimeIntegrationTest, NewGoalsQueryLivesWithTheChildThatAddedIt) {
     add_nat();
-    const pud_node_id query = start_query(atom("q"), {functor("nat", {var(0)})}, 1);
-    manifest.leaf_expander_.expand(query, 0);
+    const pud_node_id conjecture = start_conjecture(atom("q"), {functor("nat", {var(0)})}, 1);
+    manifest.leaf_expander_.expand(conjecture, 0);
     pud_node_id recursive = 0;
-    for (pud_node_id child : children_of(query)) {
+    for (pud_node_id child : children_of(conjecture)) {
         if (!manifest.node_descents_.get(child).body_goal_expr().body_goal_exprs().empty())
             recursive = child;
     }
@@ -596,11 +596,11 @@ TEST_F(PudManifestQueryLifetimeIntegrationTest, NewGoalsQueryLivesWithTheChildTh
 
 TEST_F(PudManifestQueryLifetimeIntegrationTest, SolvingLeavesOnlyTheFrontiersQueriesAlive) {
     add_nat();
-    const pud_node_id query = start_query(functor("q", {var(0)}), {functor("nat", {var(0)})}, 1);
-    const pud_mhq_head_id root_query = query_of(query, 0);
-    ASSERT_TRUE(next_solution(query, 20).has_value());
+    const pud_node_id conjecture = start_conjecture(functor("q", {var(0)}), {functor("nat", {var(0)})}, 1);
+    const pud_mhq_head_id root_query = query_of(conjecture, 0);
+    ASSERT_TRUE(next_solution(conjecture, 20).has_value());
     EXPECT_FALSE(alive(root_query));
-    for (pud_node_id leaf : manifest.live_leaf_finder_.find_live_leaves(query)) {
+    for (pud_node_id leaf : manifest.live_leaf_finder_.find_live_leaves(conjecture)) {
         for (const auto& [goal, goal_expr] : manifest.node_descents_.get(leaf).body_goal_expr().body_goal_exprs())
             EXPECT_TRUE(alive(query_of(leaf, goal)));
     }

@@ -25,8 +25,8 @@ struct datalog_program {
     std::vector<int> arities;
     std::vector<datalog_atom> facts;
     std::vector<datalog_rule> rules;
-    datalog_atom query;
-    int query_var_count;
+    datalog_atom conjecture;
+    int conjecture_var_count;
 };
 
 constexpr int k_datalog_constants = 3;
@@ -78,15 +78,15 @@ inline datalog_program generate_datalog(unsigned seed, bool recursive) {
             program.rules.push_back(rule);
         }
     }
-    const int query_predicate = datalog_pick(rng, 5);
-    program.query = datalog_atom{query_predicate, {}};
-    program.query_var_count = 0;
-    for (int slot = 0; slot < program.arities.at(query_predicate); ++slot) {
+    const int conjecture_predicate = datalog_pick(rng, 5);
+    program.conjecture = datalog_atom{conjecture_predicate, {}};
+    program.conjecture_var_count = 0;
+    for (int slot = 0; slot < program.arities.at(conjecture_predicate); ++slot) {
         if (datalog_pick(rng, 3) == 0) {
-            program.query.args.push_back(datalog_pick(rng, k_datalog_constants));
+            program.conjecture.args.push_back(datalog_pick(rng, k_datalog_constants));
             continue;
         }
-        program.query.args.push_back(datalog_var(program.query_var_count++));
+        program.conjecture.args.push_back(datalog_var(program.conjecture_var_count++));
     }
     return program;
 }
@@ -134,9 +134,9 @@ inline std::set<datalog_fact> datalog_least_model(const datalog_program& program
 inline std::set<std::vector<int>> datalog_answers(const datalog_program& program) {
     const std::set<datalog_fact> model = datalog_least_model(program);
     std::set<std::vector<int>> answers;
-    std::vector<int> assignment(program.query_var_count, 0);
+    std::vector<int> assignment(program.conjecture_var_count, 0);
     do {
-        if (model.contains({program.query.predicate, datalog_instantiate(program.query.args, assignment)}))
+        if (model.contains({program.conjecture.predicate, datalog_instantiate(program.conjecture.args, assignment)}))
             answers.insert(assignment);
     } while (datalog_next_assignment(assignment));
     return answers;
@@ -149,7 +149,7 @@ inline const expr* datalog_expr(pud_manifest_harness& harness, const datalog_ato
     return harness.functor("p" + std::to_string(atom.predicate), args);
 }
 
-// Loads the program as axioms and starts its query; returns the query root.
+// Loads the program as axioms and starts its conjecture; returns the conjecture root.
 inline pud_node_id load_datalog(pud_manifest_harness& harness, const datalog_program& program) {
     for (const datalog_atom& fact : program.facts)
         harness.axiom(datalog_expr(harness, fact), {}, 0);
@@ -160,12 +160,12 @@ inline pud_node_id load_datalog(pud_manifest_harness& harness, const datalog_pro
         harness.axiom(datalog_expr(harness, rule.head), body, static_cast<uint32_t>(rule.var_count));
     }
     std::vector<const expr*> answer_args;
-    for (int index = 0; index < program.query_var_count; ++index)
+    for (int index = 0; index < program.conjecture_var_count; ++index)
         answer_args.push_back(harness.var(index));
-    return harness.start_query(
+    return harness.start_conjecture(
         harness.functor("ans", answer_args),
-        {datalog_expr(harness, program.query)},
-        static_cast<uint32_t>(program.query_var_count));
+        {datalog_expr(harness, program.conjecture)},
+        static_cast<uint32_t>(program.conjecture_var_count));
 }
 
 // Reads an answer back into constant indices; nullopt if it is not ground over the domain.

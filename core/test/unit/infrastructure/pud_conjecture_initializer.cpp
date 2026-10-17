@@ -1,7 +1,7 @@
 #include <vector>
 #include <gtest/gtest.h>
 #include <gmock/gmock.h>
-#include "infrastructure/pud_solver_query_initializer.hpp"
+#include "infrastructure/pud_conjecture_initializer.hpp"
 
 using ::testing::_;
 using ::testing::InSequence;
@@ -30,14 +30,14 @@ struct MockSetLeaf {
     MOCK_METHOD(void, set_leaf, (pud_node_id));
 };
 
-using test_initializer_t = pud_solver_query_initializer<
+using test_initializer_t = pud_conjecture_initializer<
     StrictMock<MockGetNextNodeID>,
     StrictMock<MockStoreBodyGoals>,
     StrictMock<MockStoreVarCount>,
     StrictMock<MockMarkRoot>,
     StrictMock<MockSetLeaf>>;
 
-struct PudSolverQueryInitializerTest : public ::testing::Test {
+struct PudConjectureInitializerTest : public ::testing::Test {
     StrictMock<MockGetNextNodeID> get_next_id;
     StrictMock<MockStoreBodyGoals> store_body_goals;
     StrictMock<MockStoreVarCount> store_var_count;
@@ -50,30 +50,30 @@ struct PudSolverQueryInitializerTest : public ::testing::Test {
 
 }  // namespace
 
-TEST_F(PudSolverQueryInitializerTest, GoalsAndVarCountAreStoredOnARootLeaf) {
+TEST_F(PudConjectureInitializerTest, GoalsAndVarCountAreStoredOnARootLeaf) {
     EXPECT_CALL(get_next_id, next()).WillOnce(Return(pud_node_id{4}));
     EXPECT_CALL(store_body_goals, store(pud_node_id{4}, std::vector<const expr*>{&goal_a, &goal_b}));
     EXPECT_CALL(store_var_count, store(pud_node_id{4}, 3u));
     EXPECT_CALL(mark_root, mark_root(pud_node_id{4}));
     EXPECT_CALL(set_leaf, set_leaf(pud_node_id{4}));
-    initializer.initialize_query({&goal_a, &goal_b}, 3);
+    initializer.initialize_conjecture({&goal_a, &goal_b}, 3);
 }
 
-TEST_F(PudSolverQueryInitializerTest, InitializeQueryReturnsAssignedId) {
+TEST_F(PudConjectureInitializerTest, InitializeConjectureReturnsAssignedId) {
     EXPECT_CALL(get_next_id, next()).WillOnce(Return(pud_node_id{42}));
     EXPECT_CALL(store_body_goals, store(_, _));
     EXPECT_CALL(store_var_count, store(_, _));
     EXPECT_CALL(mark_root, mark_root(_));
     EXPECT_CALL(set_leaf, set_leaf(_));
-    EXPECT_EQ(initializer.initialize_query({}, 0), pud_node_id{42});
+    EXPECT_EQ(initializer.initialize_conjecture({}, 0), pud_node_id{42});
 }
 
-TEST_F(PudSolverQueryInitializerTest, QueryBecomesARootLeafAfterItsDataIsStored) {
+TEST_F(PudConjectureInitializerTest, ConjectureBecomesARootLeafAfterItsDataIsStored) {
     InSequence in_order;
     EXPECT_CALL(get_next_id, next()).WillOnce(Return(pud_node_id{3}));
     EXPECT_CALL(store_body_goals, store(pud_node_id{3}, _));
     EXPECT_CALL(store_var_count, store(pud_node_id{3}, _));
     EXPECT_CALL(mark_root, mark_root(pud_node_id{3}));
     EXPECT_CALL(set_leaf, set_leaf(pud_node_id{3}));
-    initializer.initialize_query({&goal_a}, 1);
+    initializer.initialize_conjecture({&goal_a}, 1);
 }

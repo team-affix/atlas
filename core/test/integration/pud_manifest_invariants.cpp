@@ -12,27 +12,27 @@ using build_t = pud_node_id (*)(pud_manifest_harness&);
 
 pud_node_id build_colors_conjunction(pud_manifest_harness& h) {
     h.add_colors();
-    return h.start_query(h.functor("q", {h.var(0)}), {h.functor("color", {h.var(0)}), h.functor("warm", {h.var(0)})}, 1);
+    return h.start_conjecture(h.functor("q", {h.var(0)}), {h.functor("color", {h.var(0)}), h.functor("warm", {h.var(0)})}, 1);
 }
 
 pud_node_id build_colors_independent(pud_manifest_harness& h) {
     h.add_colors();
-    return h.start_query(h.atom("q"), {h.functor("color", {h.var(0)}), h.functor("warm", {h.var(1)})}, 2);
+    return h.start_conjecture(h.atom("q"), {h.functor("color", {h.var(0)}), h.functor("warm", {h.var(1)})}, 2);
 }
 
 pud_node_id build_nat_enumeration(pud_manifest_harness& h) {
     h.add_nat();
-    return h.start_query(h.functor("q", {h.var(0)}), {h.functor("nat", {h.var(0)})}, 1);
+    return h.start_conjecture(h.functor("q", {h.var(0)}), {h.functor("nat", {h.var(0)})}, 1);
 }
 
 pud_node_id build_nat_ground(pud_manifest_harness& h) {
     h.add_nat();
-    return h.start_query(h.atom("q"), {h.functor("nat", {h.peano(4)})}, 0);
+    return h.start_conjecture(h.atom("q"), {h.functor("nat", {h.peano(4)})}, 0);
 }
 
 pud_node_id build_append_split(pud_manifest_harness& h) {
     h.add_append();
-    return h.start_query(
+    return h.start_conjecture(
         h.functor("q", {h.var(0), h.var(1)}),
         {h.functor("app", {h.var(0), h.var(1), h.list({h.atom("a"), h.atom("b"), h.atom("c")})})},
         2);
@@ -40,7 +40,7 @@ pud_node_id build_append_split(pud_manifest_harness& h) {
 
 pud_node_id build_member(pud_manifest_harness& h) {
     h.add_member();
-    return h.start_query(
+    return h.start_conjecture(
         h.functor("q", {h.var(0)}),
         {h.functor("mem", {h.var(0), h.list({h.atom("a"), h.atom("b"), h.atom("c")})})},
         1);
@@ -48,18 +48,18 @@ pud_node_id build_member(pud_manifest_harness& h) {
 
 pud_node_id build_peano_add(pud_manifest_harness& h) {
     h.add_peano_add();
-    return h.start_query(h.functor("q", {h.var(0), h.var(1)}), {h.functor("add", {h.var(0), h.var(1), h.peano(3)})}, 2);
+    return h.start_conjecture(h.functor("q", {h.var(0), h.var(1)}), {h.functor("add", {h.var(0), h.var(1), h.peano(3)})}, 2);
 }
 
 pud_node_id build_graph(pud_manifest_harness& h) {
     h.add_graph();
-    return h.start_query(h.functor("q", {h.var(0)}), {h.functor("anc", {h.atom("a"), h.var(0)})}, 1);
+    return h.start_conjecture(h.functor("q", {h.var(0)}), {h.functor("anc", {h.atom("a"), h.var(0)})}, 1);
 }
 
 pud_node_id build_cross_goal_merge(pud_manifest_harness& h) {
     h.add_colors();
     h.axiom(h.functor("eq", {h.var(0), h.var(0)}), {}, 1);
-    return h.start_query(
+    return h.start_conjecture(
         h.functor("q", {h.var(0), h.var(1)}),
         {h.functor("eq", {h.var(0), h.var(1)}), h.functor("color", {h.var(0)}), h.functor("color", {h.var(1)})},
         2);
@@ -67,28 +67,28 @@ pud_node_id build_cross_goal_merge(pud_manifest_harness& h) {
 
 pud_node_id build_self_candidate(pud_manifest_harness& h) {
     h.axiom(h.functor("nat", {h.atom("z")}), {}, 0);
-    return h.start_query(h.functor("nat", {h.functor("s", {h.var(0)})}), {h.functor("nat", {h.var(0)})}, 1);
+    return h.start_conjecture(h.functor("nat", {h.functor("s", {h.var(0)})}), {h.functor("nat", {h.var(0)})}, 1);
 }
 
 pud_node_id build_grown_lemma(pud_manifest_harness& h) {
     const pud_node_id rule = h.add_nat();
     h.start_tree(rule);
     h.grow_along_open_goals(rule, 3);
-    return h.start_query(h.functor("q", {h.var(0)}), {h.functor("nat", {h.var(0)})}, 1);
+    return h.start_conjecture(h.functor("q", {h.var(0)}), {h.functor("nat", {h.var(0)})}, 1);
 }
 
 pud_node_id build_occurs_check(pud_manifest_harness& h) {
     h.add_colors();
     h.axiom(h.functor("eq", {h.var(0), h.var(0)}), {}, 1);
-    return h.start_query(h.atom("q"), {h.functor("eq", {h.var(0), h.functor("f", {h.var(0)})}), h.functor("color", {h.var(0)})}, 1);
+    return h.start_conjecture(h.atom("q"), {h.functor("eq", {h.var(0), h.functor("f", {h.var(0)})}), h.functor("color", {h.var(0)})}, 1);
 }
 
 pud_node_id build_query_as_lemma(pud_manifest_harness& h) {
     h.add_colors();
-    const pud_node_id first = h.start_query(
+    const pud_node_id first = h.start_conjecture(
         h.functor("warmcolor", {h.var(0)}), {h.functor("color", {h.var(0)}), h.functor("warm", {h.var(0)})}, 1);
     h.next_solution(first, 2);
-    return h.start_query(h.functor("q", {h.var(0)}), {h.functor("warmcolor", {h.var(0)})}, 1);
+    return h.start_conjecture(h.functor("q", {h.var(0)}), {h.functor("warmcolor", {h.var(0)})}, 1);
 }
 
 pud_node_id build_shared_deep(pud_manifest_harness& h) {
@@ -96,7 +96,7 @@ pud_node_id build_shared_deep(pud_manifest_harness& h) {
     h.axiom(h.atom("a1"), {}, 0);
     h.axiom(h.atom("a2"), {}, 0);
     h.axiom(h.atom("a3"), {}, 0);
-    return h.start_query(
+    return h.start_conjecture(
         h.functor("q", {h.var(0)}),
         {h.atom("a1"), h.atom("a2"), h.atom("a3"), h.functor("color", {h.var(0)})},
         1);

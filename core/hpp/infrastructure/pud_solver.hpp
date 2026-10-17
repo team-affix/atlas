@@ -9,7 +9,7 @@
 #include "value_objects/pud_node_id.hpp"
 #include "value_objects/pud_solver_step.hpp"
 
-// Grows a query's tree one step per resume: a live leaf with no open goals that was not yielded
+// Grows a root's tree one step per resume: a live leaf with no open goals that was not yielded
 // yet is yielded as a solution; otherwise the injected decision generator chooses which leaf to
 // unfold over which goal. Yielded solutions stay live, so the tree keeps them as witnesses and
 // candidates. The search ends once every live leaf has been yielded.
@@ -30,8 +30,8 @@ struct pud_solver {
         IMakeRootDescent& make_root_descent,
         IStoreNodeDescent& store_node_descent,
         IRefuteNode& refute_node);
-    void start(pud_node_id query_root);
-    coroutine<pud_solver_step, void> solve(pud_node_id query_root);
+    void start(pud_node_id root);
+    coroutine<pud_solver_step, void> solve(pud_node_id root);
 private:
     IFindLiveLeaves& find_live_leaves_;
     IGetNodeDescent& get_node_descent_;
@@ -68,22 +68,22 @@ PUD_SOLVER::pud_solver(
     , refute_node_(refute_node) {}
 
 PUD_SOLVER_TEMPLATE
-void PUD_SOLVER::start(pud_node_id query_root) {
-    auto root_descent = make_root_descent_.make(query_root);
+void PUD_SOLVER::start(pud_node_id root) {
+    auto root_descent = make_root_descent_.make(root);
     const bool goal_refuted = !root_descent.body_goal_pq().refuted_goals().empty();
-    store_node_descent_.store(query_root, std::move(root_descent));
+    store_node_descent_.store(root, std::move(root_descent));
     if (!goal_refuted)
         return;
-    refute_node_.refute(query_root);
+    refute_node_.refute(root);
 }
 
 PUD_SOLVER_TEMPLATE
-coroutine<pud_solver_step, void> PUD_SOLVER::solve(pud_node_id query_root) {
+coroutine<pud_solver_step, void> PUD_SOLVER::solve(pud_node_id root) {
     std::unordered_set<pud_node_id> yielded_solutions;
     while (true) {
         std::optional<pud_node_id> solution;
         std::vector<pud_node_id> open_leaves;
-        for (pud_node_id leaf : find_live_leaves_.find_live_leaves(query_root)) {
+        for (pud_node_id leaf : find_live_leaves_.find_live_leaves(root)) {
             if (yielded_solutions.contains(leaf))
                 continue;
             if (!get_node_descent_.get(leaf).body_goal_expr().body_goal_exprs().empty()) {

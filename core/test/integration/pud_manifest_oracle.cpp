@@ -47,8 +47,8 @@ TEST(PudManifestOracleTest, DatalogAnswersMatchABottomUpFixpoint) {
         SCOPED_TRACE("seed " + std::to_string(seed));
         const datalog_program program = generate_datalog(seed, false);
         auto harness = std::make_unique<pud_manifest_harness>(seed);
-        const pud_node_id query = load_datalog(*harness, program);
-        const std::vector<const expr*> answers = harness->enumerate(query, 5000, 20000);
+        const pud_node_id conjecture = load_datalog(*harness, program);
+        const std::vector<const expr*> answers = harness->enumerate(conjecture, 5000, 20000);
         const std::set<std::vector<int>> expected = datalog_answers(program);
         const std::set<std::vector<int>> found = read_answers(*harness, answers);
         EXPECT_EQ(found, expected) << "found " << describe(found) << " expected " << describe(expected);
@@ -64,9 +64,9 @@ TEST(PudManifestOracleTest, EnumerationIsCompleteForFiniteSearchSpaces) {
         SCOPED_TRACE("seed " + std::to_string(seed));
         const datalog_program program = generate_datalog(seed, false);
         auto harness = std::make_unique<pud_manifest_harness>(seed);
-        const pud_node_id query = load_datalog(*harness, program);
-        const std::vector<const expr*> answers = harness->enumerate(query, 5000, 20000);
-        EXPECT_TRUE(harness->exhausted(query)) << "a finite search space must end exhausted";
+        const pud_node_id conjecture = load_datalog(*harness, program);
+        const std::vector<const expr*> answers = harness->enumerate(conjecture, 5000, 20000);
+        EXPECT_TRUE(harness->exhausted(conjecture)) << "a finite search space must end exhausted";
         EXPECT_EQ(read_answers(*harness, answers).size(), datalog_answers(program).size());
     }
 }
@@ -79,13 +79,13 @@ TEST(PudManifestOracleTest, EveryAnswerIsEntailed) {
         SCOPED_TRACE("seed " + std::to_string(seed));
         const datalog_program program = generate_datalog(seed, true);
         auto harness = std::make_unique<pud_manifest_harness>(seed);
-        const pud_node_id query = load_datalog(*harness, program);
-        const std::vector<const expr*> answers = harness->enumerate(query, 40, 400);
+        const pud_node_id conjecture = load_datalog(*harness, program);
+        const std::vector<const expr*> answers = harness->enumerate(conjecture, 40, 400);
         const std::set<std::vector<int>> expected = datalog_answers(program);
         for (const std::vector<int>& found : read_answers(*harness, answers))
             EXPECT_TRUE(expected.contains(found)) << "unentailed answer " << describe({found});
-        if (harness->exhausted(query))
-            EXPECT_EQ(read_answers(*harness, answers), expected) << "an exhausted recursive query must be complete";
+        if (harness->exhausted(conjecture))
+            EXPECT_EQ(read_answers(*harness, answers), expected) << "an exhausted recursive conjecture must be complete";
         answers_checked += answers.size();
     }
     EXPECT_GE(answers_checked, 150u) << "the random corpus is too easy to be meaningful";
@@ -97,45 +97,45 @@ TEST(PudManifestOracleTest, EnumerationProducesNoDuplicates) {
     {
         pud_manifest_harness harness{0};
         harness.add_append();
-        const pud_node_id query = harness.start_query(
+        const pud_node_id conjecture = harness.start_conjecture(
             harness.functor("q", {harness.var(0), harness.var(1)}),
             {harness.functor("app", {harness.var(0), harness.var(1),
                 harness.list({harness.atom("a"), harness.atom("b"), harness.atom("c"), harness.atom("d")})})},
             2);
-        const std::vector<const expr*> answers = harness.enumerate(query, 100, 500);
+        const std::vector<const expr*> answers = harness.enumerate(conjecture, 100, 500);
         EXPECT_EQ(answers.size(), 5u);
         EXPECT_FALSE(has_duplicates(answers));
-        EXPECT_TRUE(harness.exhausted(query));
+        EXPECT_TRUE(harness.exhausted(conjecture));
     }
     {
         pud_manifest_harness harness{0};
         harness.add_member();
-        const pud_node_id query = harness.start_query(
+        const pud_node_id conjecture = harness.start_conjecture(
             harness.functor("q", {harness.var(0)}),
             {harness.functor("mem", {harness.var(0),
                 harness.list({harness.atom("a"), harness.atom("b"), harness.atom("c"), harness.atom("d")})})},
             1);
-        const std::vector<const expr*> answers = harness.enumerate(query, 100, 500);
+        const std::vector<const expr*> answers = harness.enumerate(conjecture, 100, 500);
         EXPECT_EQ(answers.size(), 4u);
         EXPECT_FALSE(has_duplicates(answers));
     }
     {
         pud_manifest_harness harness{0};
         harness.add_peano_add();
-        const pud_node_id query = harness.start_query(
+        const pud_node_id conjecture = harness.start_conjecture(
             harness.functor("q", {harness.var(0), harness.var(1)}),
             {harness.functor("add", {harness.var(0), harness.var(1), harness.peano(5)})},
             2);
-        const std::vector<const expr*> answers = harness.enumerate(query, 100, 500);
+        const std::vector<const expr*> answers = harness.enumerate(conjecture, 100, 500);
         EXPECT_EQ(answers.size(), 6u);
         EXPECT_FALSE(has_duplicates(answers));
     }
     {
         pud_manifest_harness harness{0};
         harness.add_nat();
-        const pud_node_id query = harness.start_query(
+        const pud_node_id conjecture = harness.start_conjecture(
             harness.functor("q", {harness.var(0)}), {harness.functor("nat", {harness.var(0)})}, 1);
-        const std::vector<const expr*> answers = harness.enumerate(query, 25, 500);
+        const std::vector<const expr*> answers = harness.enumerate(conjecture, 25, 500);
         EXPECT_EQ(answers.size(), 25u);
         EXPECT_FALSE(has_duplicates(answers));
     }
@@ -146,7 +146,7 @@ TEST(PudManifestOracleTest, EnumerationProducesNoDuplicates) {
 namespace {
 
 // Loads the program like load_datalog, but starts every rule's tree and expands it along its open
-// goals before the query starts, so the query also resolves against specialized rule positions.
+// goals before the conjecture starts, so the conjecture also resolves against specialized rule positions.
 pud_node_id load_datalog_with_grown_rules(pud_manifest_harness& harness, const datalog_program& program, uint32_t depth) {
     for (const datalog_atom& fact : program.facts)
         harness.axiom(datalog_expr(harness, fact), {}, 0);
@@ -164,12 +164,12 @@ pud_node_id load_datalog_with_grown_rules(pud_manifest_harness& harness, const d
         harness.grow_along_open_goals(rule_root, depth);
     }
     std::vector<const expr*> answer_args;
-    for (int index = 0; index < program.query_var_count; ++index)
+    for (int index = 0; index < program.conjecture_var_count; ++index)
         answer_args.push_back(harness.var(index));
-    return harness.start_query(
+    return harness.start_conjecture(
         harness.functor("ans", answer_args),
-        {datalog_expr(harness, program.query)},
-        static_cast<uint32_t>(program.query_var_count));
+        {datalog_expr(harness, program.conjecture)},
+        static_cast<uint32_t>(program.conjecture_var_count));
 }
 
 }  // namespace
@@ -179,11 +179,11 @@ TEST(PudManifestOracleTest, GrownRuleTreesLeaveFlatAnswersUnchanged) {
         SCOPED_TRACE("seed " + std::to_string(seed));
         const datalog_program program = generate_datalog(seed, false);
         auto harness = std::make_unique<pud_manifest_harness>(seed);
-        const pud_node_id query = load_datalog_with_grown_rules(*harness, program, 2);
+        const pud_node_id conjecture = load_datalog_with_grown_rules(*harness, program, 2);
         harness->check_all();
-        const std::vector<const expr*> answers = harness->enumerate(query, 5000, 20000);
+        const std::vector<const expr*> answers = harness->enumerate(conjecture, 5000, 20000);
         EXPECT_EQ(read_answers(*harness, answers), datalog_answers(program));
-        EXPECT_TRUE(harness->exhausted(query));
+        EXPECT_TRUE(harness->exhausted(conjecture));
         harness->check_all();
         if (::testing::Test::HasFailure())
             return;
@@ -195,12 +195,12 @@ TEST(PudManifestOracleTest, GrownRuleTreesKeepRecursiveAnswersSound) {
         SCOPED_TRACE("seed " + std::to_string(seed));
         const datalog_program program = generate_datalog(seed, true);
         auto harness = std::make_unique<pud_manifest_harness>(seed);
-        const pud_node_id query = load_datalog_with_grown_rules(*harness, program, 2);
-        const std::vector<const expr*> answers = harness->enumerate(query, 40, 400);
+        const pud_node_id conjecture = load_datalog_with_grown_rules(*harness, program, 2);
+        const std::vector<const expr*> answers = harness->enumerate(conjecture, 40, 400);
         const std::set<std::vector<int>> expected = datalog_answers(program);
         for (const std::vector<int>& found : read_answers(*harness, answers))
             EXPECT_TRUE(expected.contains(found)) << "unentailed answer " << describe({found});
-        if (harness->exhausted(query))
+        if (harness->exhausted(conjecture))
             EXPECT_EQ(read_answers(*harness, answers), expected);
         harness->check_all();
         if (::testing::Test::HasFailure())

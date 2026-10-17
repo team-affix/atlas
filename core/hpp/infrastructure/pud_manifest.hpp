@@ -57,7 +57,7 @@
 #include "infrastructure/pud_root_descent_maker.hpp"
 #include "infrastructure/pud_root_nodes.hpp"
 #include "infrastructure/pud_solver.hpp"
-#include "infrastructure/pud_solver_query_initializer.hpp"
+#include "infrastructure/pud_conjecture_initializer.hpp"
 #include "infrastructure/pud_structure_watch_descent.hpp"
 #include "infrastructure/pud_transient_ubs_state.hpp"
 #include "infrastructure/pud_translating_normalizer.hpp"
@@ -169,7 +169,7 @@ struct pud_manifest {
     using axiom_initializer_t = pud_axiom_initializer<
         pud_node_id_sequencer, pud_node_heads, pud_node_added_body_goals, pud_node_added_var_count,
         pud_root_nodes, pud_leaf_nodes, pud_axioms>;
-    using solver_query_initializer_t = pud_solver_query_initializer<
+    using conjecture_initializer_t = pud_conjecture_initializer<
         pud_node_id_sequencer, pud_node_added_body_goals, pud_node_added_var_count,
         pud_root_nodes, pud_leaf_nodes>;
 
@@ -227,7 +227,7 @@ struct pud_manifest {
     decision_generator_t                    decision_generator_;
     solver_t                                solver_;
     axiom_initializer_t                     axiom_initializer_;
-    solver_query_initializer_t              solver_query_initializer_;
+    conjecture_initializer_t              conjecture_initializer_;
 };
 
 #endif

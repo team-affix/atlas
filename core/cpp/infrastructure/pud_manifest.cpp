@@ -64,6 +64,6 @@ pud_manifest::pud_manifest(uint32_t random_seed)
       axiom_initializer_(
           node_id_sequencer_, node_heads_, node_added_body_goals_, node_added_var_count_,
           root_nodes_, leaf_nodes_, axioms_),
-      solver_query_initializer_(
+      conjecture_initializer_(
           node_id_sequencer_, node_added_body_goals_, node_added_var_count_, root_nodes_,
           leaf_nodes_) {}
