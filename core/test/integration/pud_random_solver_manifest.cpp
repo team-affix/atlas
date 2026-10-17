@@ -18,9 +18,9 @@ using ::testing::UnorderedElementsAre;
 struct PudRandomSolverManifestIntegrationTest : public ::testing::Test {
     pud_random_solver_manifest manifest{0};
     test_functors functors;
-    bool base_descent_ran = false;
     std::optional<coroutine<pud_decision, void>> unfolding;
     std::map<pud_node_id, std::set<pud_node_id>> reported_solutions;
+    std::set<pud_node_id> started_roots;
     std::map<pud_node_id, const expr*> answer_templates;
 
     const expr* var(uint32_t index) { return manifest.expr_pool_.make_var(index); }
@@ -55,17 +55,20 @@ struct PudRandomSolverManifestIntegrationTest : public ::testing::Test {
 
     // The conjecture itself is headless; answer_template only tells the test how to read answers.
     pud_node_id start_conjecture(const expr* answer_template, std::vector<const expr*> goals, uint32_t var_count) {
-        run_base_descent();
         const pud_node_id root = manifest.conjecture_initializer_.initialize_conjecture(goals, var_count);
         answer_templates.emplace(root, answer_template);
+        run_base_descent();
         return root;
     }
 
+    // Runs the base descent over every tree not yet started.
     void run_base_descent() {
-        if (base_descent_ran)
-            return;
-        base_descent_ran = true;
-        manifest.base_descent_runner_.run();
+        for (pud_node_id root : manifest.root_nodes_.get()) {
+            if (started_roots.contains(root))
+                continue;
+            manifest.base_descent_runner_.run(root);
+            started_roots.insert(root);
+        }
     }
 
     const expr* answer(pud_node_id root, pud_node_id solution) {
@@ -637,4 +640,53 @@ TEST_F(PudRandomSolverManifestQueryLifetimeIntegrationTest, SolvingLeavesOnlyThe
         for (const auto& [goal, goal_expr] : manifest.node_descents_.get(leaf).body_goal_expr().body_goal_exprs())
             EXPECT_TRUE(alive(query_of(leaf, goal)));
     }
+}
+
+// ---------- the base descent covers conjecture trees loaded with the database ----------
+
+struct PudRandomSolverManifestLoadedConjectureTest : public PudRandomSolverManifestIntegrationTest {
+    // A conjecture as it would come from a loaded database: stored, but never activated.
+    pud_node_id load_conjecture(const expr* answer_template, std::vector<const expr*> goals, uint32_t var_count) {
+        const pud_node_id root = manifest.node_id_sequencer_.next();
+        manifest.node_added_body_goals_.store(root, std::move(goals));
+        manifest.node_added_var_count_.store(root, var_count);
+        manifest.root_nodes_.mark_root(root);
+        manifest.leaf_nodes_.set_leaf(root);
+        answer_templates.emplace(root, answer_template);
+        return root;
+    }
+};
+
+TEST_F(PudRandomSolverManifestLoadedConjectureTest, BaseDescentActivatesLoadedConjectures) {
+    add_colors();
+    const pud_node_id conjecture = load_conjecture(functor("q", {var(0)}), {functor("color", {var(0)})}, 1);
+    run_base_descent();
+    EXPECT_TRUE(manifest.open_leaves_.check_leaf_open(conjecture));
+    EXPECT_EQ(manifest.open_conjecture_leaves_.get(), (std::set<pud_node_id>{conjecture}));
+}
+
+TEST_F(PudRandomSolverManifestLoadedConjectureTest, LoadedConjectureIsSolvedAfterTheBaseDescent) {
+    add_colors();
+    const pud_node_id conjecture = load_conjecture(
+        functor("q", {var(0)}), {functor("color", {var(0)}), functor("warm", {var(0)})}, 1);
+    run_base_descent();
+    EXPECT_THAT(enumerate(conjecture, 10, 50), ElementsAre(functor("q", {atom("red")})));
+    EXPECT_TRUE(exhausted(conjecture));
+}
+
+TEST_F(PudRandomSolverManifestLoadedConjectureTest, LoadedConjectureWithoutCandidatesIsRefutedByTheBaseDescent) {
+    add_colors();
+    const pud_node_id conjecture = load_conjecture(functor("q", {var(0)}), {functor("missing", {var(0)})}, 1);
+    run_base_descent();
+    EXPECT_TRUE(refuted(conjecture));
+    EXPECT_TRUE(manifest.open_conjecture_leaves_.get().empty());
+}
+
+TEST_F(PudRandomSolverManifestLoadedConjectureTest, LoadedConjectureNeverBecomesACandidate) {
+    add_colors();
+    load_conjecture(functor("color", {atom("green")}), {}, 0);
+    run_base_descent();
+    const pud_node_id colors = start_conjecture(functor("q", {var(0)}), {functor("color", {var(0)})}, 1);
+    EXPECT_THAT(enumerate(colors, 10, 50),
+        UnorderedElementsAre(functor("q", {atom("red")}), functor("q", {atom("blue")})));
 }

@@ -13,22 +13,6 @@
 #include "infrastructure/pud_conjecture_initializer.hpp"
 #include "value_objects/rule.hpp"
 
-namespace {
-
-struct MockDescent {
-    int tag;
-};
-
-struct MockMakeRootDescent {
-    MOCK_METHOD(MockDescent, make, (pud_node_id));
-};
-
-struct MockActivateLeaf {
-    MOCK_METHOD(void, activate, (pud_node_id, MockDescent));
-};
-
-}  // namespace
-
 struct PudConjectureNodeIntegrationTest : public ::testing::Test {
     pud_node_id_sequencer sequencer;
     pud_node_heads heads;
@@ -40,12 +24,9 @@ struct PudConjectureNodeIntegrationTest : public ::testing::Test {
     pud_axiom_initializer<pud_node_id_sequencer, pud_node_heads, pud_node_added_body_goals,
                           pud_node_added_var_count, pud_root_nodes, pud_leaf_nodes, pud_axioms>
         axiom_initializer{sequencer, heads, body_goals, var_counts, roots, leaves, axioms};
-    ::testing::NiceMock<MockMakeRootDescent> make_root_descent;
-    ::testing::NiceMock<MockActivateLeaf> activate_leaf;
     pud_conjecture_initializer<pud_node_id_sequencer, pud_node_added_body_goals,
-                               pud_node_added_var_count, pud_root_nodes, pud_leaf_nodes,
-                               ::testing::NiceMock<MockMakeRootDescent>, ::testing::NiceMock<MockActivateLeaf>>
-        conjecture_initializer{sequencer, body_goals, var_counts, roots, leaves, make_root_descent, activate_leaf};
+                               pud_node_added_var_count, pud_root_nodes, pud_leaf_nodes>
+        conjecture_initializer{sequencer, body_goals, var_counts, roots, leaves};
     expr head_expr{expr::var{0}};
     expr goal_a{expr::var{1}};
     expr goal_b{expr::var{2}};

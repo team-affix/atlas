@@ -26,6 +26,11 @@ struct unfold_program_builder {
         return manifest.axiom_initializer_.initialize_axiom(rule(head, std::move(body), var_count));
     }
 
+    void run_base_descent() {
+        for (pud_node_id root : manifest.root_nodes_.get())
+            manifest.base_descent_runner_.run(root);
+    }
+
     // Axioms 0-3: color/warm facts and warmcolor, a finite rule over them.
     void add_colors() {
         axiom(functor("color", {atom("red")}), {}, 0);
@@ -84,7 +89,7 @@ struct PudRandomUnfoldManifestIntegrationTest : public ::testing::Test {
 TEST_F(PudRandomUnfoldManifestIntegrationTest, RunningTheBaseDescentOpensEveryRuleAndNoFact) {
     program.add_colors();
     program.add_nat();
-    manifest.base_descent_runner_.run();
+    program.run_base_descent();
     EXPECT_EQ(manifest.open_leaves_.get(), (std::set<pud_node_id>{3, 5}));
     check_open_leaves();
 }
@@ -92,7 +97,7 @@ TEST_F(PudRandomUnfoldManifestIntegrationTest, RunningTheBaseDescentOpensEveryRu
 TEST_F(PudRandomUnfoldManifestIntegrationTest, RuleWhoseGoalHasNoCandidatesIsRefutedByTheBaseDescent) {
     const pud_node_id orphan = program.axiom(
         program.functor("p", {program.var(0)}), {program.functor("missing", {program.var(0)})}, 1);
-    manifest.base_descent_runner_.run();
+    program.run_base_descent();
     EXPECT_TRUE(manifest.refuted_node_checker_.check_refuted(orphan));
     EXPECT_THAT(manifest.open_leaves_.get(), IsEmpty());
     check_open_leaves();
@@ -100,7 +105,7 @@ TEST_F(PudRandomUnfoldManifestIntegrationTest, RuleWhoseGoalHasNoCandidatesIsRef
 
 TEST_F(PudRandomUnfoldManifestIntegrationTest, FiniteDatabaseUnfoldsUntilNothingIsOpen) {
     program.add_colors();
-    manifest.base_descent_runner_.run();
+    program.run_base_descent();
     const std::vector<pud_decision> decisions = unfold_steps(manifest, 100);
     EXPECT_LT(decisions.size(), 100u);
     EXPECT_THAT(manifest.open_leaves_.get(), IsEmpty());
@@ -110,7 +115,7 @@ TEST_F(PudRandomUnfoldManifestIntegrationTest, FiniteDatabaseUnfoldsUntilNothing
 TEST_F(PudRandomUnfoldManifestIntegrationTest, EveryDecisionUnfoldsAnOpenLeafOverOneOfItsOpenGoals) {
     program.add_colors();
     program.add_nat();
-    manifest.base_descent_runner_.run();
+    program.run_base_descent();
     coroutine<pud_decision, void> unfolding = manifest.unfold_loop_.drive_unfold_loop();
     for (int step = 0; step < 40; ++step) {
         const std::set<pud_node_id> open_before = manifest.open_leaves_.get();
@@ -127,7 +132,7 @@ TEST_F(PudRandomUnfoldManifestIntegrationTest, EveryDecisionUnfoldsAnOpenLeafOve
 TEST_F(PudRandomUnfoldManifestIntegrationTest, UnfoldingReachesEveryAxiomTree) {
     program.add_colors();
     program.add_nat();
-    manifest.base_descent_runner_.run();
+    program.run_base_descent();
     std::set<pud_node_id> unfolded;
     for (const pud_decision& decision : unfold_steps(manifest, 60))
         unfolded.insert(decision.leaf);
@@ -141,7 +146,7 @@ TEST_F(PudRandomUnfoldManifestIntegrationTest, SameSeedUnfoldsTheSameWay) {
     for (unfold_program_builder* builder : {&program, &again_program}) {
         builder->add_colors();
         builder->add_nat();
-        builder->manifest.base_descent_runner_.run();
+        builder->run_base_descent();
     }
     EXPECT_EQ(unfold_steps(manifest, 30), unfold_steps(again, 30));
 }

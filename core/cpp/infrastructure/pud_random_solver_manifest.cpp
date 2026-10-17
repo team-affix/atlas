@@ -59,7 +59,7 @@ pud_random_solver_manifest::pud_random_solver_manifest(uint32_t random_seed)
           node_descents_, open_conjecture_leaves_, node_descents_),
       leaf_activator_(node_descents_, open_conjecture_leaves_, node_refuter_),
       base_descent_runner_(
-          axioms_, refuted_node_checker_, root_descent_maker_, leaf_nodes_, children_,
+          refuted_node_checker_, root_descent_maker_, leaf_nodes_, children_,
           leaf_activator_, node_refuter_),
       rng_(random_seed),
       random_rule_chooser_(rng_),
@@ -71,4 +71,4 @@ pud_random_solver_manifest::pud_random_solver_manifest(uint32_t random_seed)
           root_nodes_, leaf_nodes_, axioms_),
       conjecture_initializer_(
           node_id_sequencer_, node_added_body_goals_, node_added_var_count_, root_nodes_,
-          leaf_nodes_, root_descent_maker_, leaf_activator_) {}
+          leaf_nodes_) {}

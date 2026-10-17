@@ -20,11 +20,10 @@
 // A manifest plus everything a test needs to build programs, drive the solver and audit every
 // public store against the invariants the PUD relies on.
 struct pud_random_solver_manifest_harness {
-    pud_random_solver_manifest_harness(uint32_t random_seed) : manifest(random_seed), base_descent_ran(false) {}
+    pud_random_solver_manifest_harness(uint32_t random_seed) : manifest(random_seed) {}
 
     pud_random_solver_manifest manifest;
     test_functors functors;
-    bool base_descent_ran;
     std::vector<pud_node_id> started_roots;
     std::map<pud_node_id, const expr*> answer_templates;
     std::optional<coroutine<pud_decision, void>> unfolding;
@@ -62,22 +61,21 @@ struct pud_random_solver_manifest_harness {
         return root;
     }
 
-    // Runs the base descent over every axiom loaded so far, once; axioms added later stay unstarted.
+    // Runs the base descent over every tree not yet started; trees added afterwards wait for the next call.
     void run_base_descent() {
-        if (base_descent_ran)
-            return;
-        base_descent_ran = true;
-        for (pud_node_id axiom_root : manifest.axioms_.get())
-            started_roots.push_back(axiom_root);
-        manifest.base_descent_runner_.run();
+        for (pud_node_id root_node : manifest.root_nodes_.get()) {
+            if (std::find(started_roots.begin(), started_roots.end(), root_node) != started_roots.end())
+                continue;
+            manifest.base_descent_runner_.run(root_node);
+            started_roots.push_back(root_node);
+        }
     }
 
     // The conjecture itself is headless; answer_template only tells the test how to read answers.
     pud_node_id start_conjecture(const expr* answer_template, std::vector<const expr*> goals, uint32_t var_count) {
-        run_base_descent();
         const pud_node_id root = manifest.conjecture_initializer_.initialize_conjecture(goals, var_count);
         answer_templates.emplace(root, answer_template);
-        started_roots.push_back(root);
+        run_base_descent();
         return root;
     }
 

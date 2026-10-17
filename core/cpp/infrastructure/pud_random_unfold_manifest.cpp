@@ -58,7 +58,7 @@ pud_random_unfold_manifest::pud_random_unfold_manifest(uint32_t random_seed)
           node_descents_, open_leaves_, node_descents_),
       leaf_activator_(node_descents_, open_leaves_, node_refuter_),
       base_descent_runner_(
-          axioms_, refuted_node_checker_, root_descent_maker_, leaf_nodes_, children_,
+          refuted_node_checker_, root_descent_maker_, leaf_nodes_, children_,
           leaf_activator_, node_refuter_),
       rng_(random_seed),
       random_rule_chooser_(rng_),

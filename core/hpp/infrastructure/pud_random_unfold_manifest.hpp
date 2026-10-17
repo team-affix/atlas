@@ -167,7 +167,7 @@ struct pud_random_unfold_manifest {
         node_descents_t, pud_open_leaves, node_descents_t>;
     using leaf_activator_t = pud_leaf_activator<base_descent_t, node_descents_t, pud_open_leaves, node_refuter_t>;
     using base_descent_runner_t = pud_base_descent_runner<
-        base_descent_t, pud_axioms, refuted_node_checker_t, root_descent_maker_t, pud_leaf_nodes,
+        base_descent_t, refuted_node_checker_t, root_descent_maker_t, pud_leaf_nodes,
         pud_children, leaf_activator_t, node_refuter_t>;
     using random_subgoal_chooser_t = pud_random_subgoal_chooser<node_descents_t>;
     using decision_generator_t = pud_decision_generator<pud_random_rule_chooser, random_subgoal_chooser_t>;
