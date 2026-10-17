@@ -6,7 +6,7 @@
 #include <set>
 #include <string>
 #include <vector>
-#include "pud_solver_manifest_harness.hpp"
+#include "pud_manifest_harness.hpp"
 
 // Small random function-free programs over a three-constant domain, and their least model.
 // An argument >= 0 is a constant; an argument < 0 is the variable -(argument + 1).
@@ -142,15 +142,17 @@ inline std::set<std::vector<int>> datalog_answers(const datalog_program& program
     return answers;
 }
 
-inline const expr* datalog_expr(pud_random_solver_manifest_harness& harness, const datalog_atom& atom) {
+template<typename Harness>
+const expr* datalog_expr(Harness& harness, const datalog_atom& atom) {
     std::vector<const expr*> args;
     for (int arg : atom.args)
         args.push_back(arg >= 0 ? harness.atom("k" + std::to_string(arg)) : harness.var(-(arg + 1)));
     return harness.functor("p" + std::to_string(atom.predicate), args);
 }
 
-// Loads the program as axioms and starts its conjecture; returns the conjecture root.
-inline pud_node_id load_datalog(pud_random_solver_manifest_harness& harness, const datalog_program& program) {
+// Loads the program's facts and rules as axioms.
+template<typename Harness>
+void load_datalog_axioms(Harness& harness, const datalog_program& program) {
     for (const datalog_atom& fact : program.facts)
         harness.axiom(datalog_expr(harness, fact), {}, 0);
     for (const datalog_rule& rule : program.rules) {
@@ -159,6 +161,20 @@ inline pud_node_id load_datalog(pud_random_solver_manifest_harness& harness, con
             body.push_back(datalog_expr(harness, atom));
         harness.axiom(datalog_expr(harness, rule.head), body, static_cast<uint32_t>(rule.var_count));
     }
+}
+
+// The program's least model, as expressions of the harness's pool.
+template<typename Harness>
+std::set<const expr*> datalog_model_exprs(Harness& harness, const datalog_program& program) {
+    std::set<const expr*> model;
+    for (const datalog_fact& fact : datalog_least_model(program))
+        model.insert(datalog_expr(harness, datalog_atom{fact.first, fact.second}));
+    return model;
+}
+
+// Loads the program as axioms and starts its conjecture; returns the conjecture root.
+inline pud_node_id load_datalog(pud_random_solver_manifest_harness& harness, const datalog_program& program) {
+    load_datalog_axioms(harness, program);
     std::vector<const expr*> answer_args;
     for (int index = 0; index < program.conjecture_var_count; ++index)
         answer_args.push_back(harness.var(index));

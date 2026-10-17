@@ -28,6 +28,7 @@ struct pud_mhcs {
     std::vector<pud_mhcs_head_id> witnesses_refuted(const std::vector<pud_mhws_head_id>& witness_head_ids);
     std::optional<pud_mhcs_head_id> try_fork_head(pud_mhcs_head_id head_id, Descent new_root_descent);
     std::vector<pud_node_id> get_path(pud_mhcs_head_id head_id) const;
+    bool check_head(pud_mhcs_head_id head_id) const;
 private:
     IMakeHead& make_head_;
     IForkHead& fork_head_;
@@ -164,6 +165,16 @@ template<
     typename IRemoveWitnessHead>
 std::vector<pud_node_id> pud_mhcs<D, Head, IMakeHead, IForkHead, IRemoveWitnessHead>::get_path(pud_mhcs_head_id head_id) const {
     return heads_.at(head_id).path();
+}
+
+template<
+    typename D,
+    typename Head,
+    typename IMakeHead,
+    typename IForkHead,
+    typename IRemoveWitnessHead>
+bool pud_mhcs<D, Head, IMakeHead, IForkHead, IRemoveWitnessHead>::check_head(pud_mhcs_head_id head_id) const {
+    return heads_.contains(head_id);
 }
 
 // Resumes a head and links the justification it finds; a head that finds none is dropped.

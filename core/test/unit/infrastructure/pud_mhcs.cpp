@@ -329,3 +329,25 @@ TEST_F(PudMhcsTest, PathIsTheCandidateHeadsPath) {
 }
 
 } // namespace
+
+// ── check_head ───────────────────────────────────────────────────────────────
+
+TEST_F(PudMhcsTest, CheckHeadFollowsAHeadsLife) {
+    EXPECT_CALL(ops, resume()).WillOnce(Return(self_of(leaf))).WillOnce(Return(std::nullopt));
+    const auto id = mhcs.try_add_head(1);
+    ASSERT_TRUE(id.has_value());
+    EXPECT_TRUE(mhcs.check_head(*id));
+    EXPECT_FALSE(mhcs.check_head(*id + 1));
+    mhcs.invalidate_leaf(leaf);
+    EXPECT_FALSE(mhcs.check_head(*id));
+}
+
+TEST_F(PudMhcsTest, CheckHeadIsFalseOnceRemovedOrNeverAdmitted) {
+    EXPECT_CALL(ops, resume()).WillOnce(Return(std::nullopt)).WillOnce(Return(choice_of(3, 4)));
+    EXPECT_FALSE(mhcs.try_add_head(1).has_value());
+    EXPECT_FALSE(mhcs.check_head(0));
+    const auto id = mhcs.try_add_head(1);
+    ASSERT_TRUE(id.has_value());
+    mhcs.remove_head(*id);
+    EXPECT_FALSE(mhcs.check_head(*id));
+}

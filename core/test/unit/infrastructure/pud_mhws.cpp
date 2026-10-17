@@ -127,3 +127,25 @@ TEST_F(PudMhwsTest, AdvanceWithNulloptRemovesHead) {
 }
 
 } // namespace
+
+// ── check_head ───────────────────────────────────────────────────────────────
+
+TEST_F(PudMhwsTest, CheckHeadFollowsAHeadsLife) {
+    EXPECT_CALL(ops, resume()).WillOnce(Return(leaf_a)).WillOnce(Return(std::nullopt));
+    const auto id = mhws.try_add_head(1);
+    ASSERT_TRUE(id.has_value());
+    EXPECT_TRUE(mhws.check_head(*id));
+    EXPECT_FALSE(mhws.check_head(*id + 1));
+    mhws.invalidate_leaf(leaf_a);
+    EXPECT_FALSE(mhws.check_head(*id));
+}
+
+TEST_F(PudMhwsTest, CheckHeadIsFalseOnceRemovedOrNeverAdmitted) {
+    EXPECT_CALL(ops, resume()).WillOnce(Return(std::nullopt)).WillOnce(Return(leaf_a));
+    EXPECT_FALSE(mhws.try_add_head(1).has_value());
+    EXPECT_FALSE(mhws.check_head(0));
+    const auto id = mhws.try_add_head(1);
+    ASSERT_TRUE(id.has_value());
+    mhws.remove_head(*id);
+    EXPECT_FALSE(mhws.check_head(*id));
+}

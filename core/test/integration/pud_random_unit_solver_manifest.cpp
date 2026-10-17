@@ -3,7 +3,7 @@
 #include <vector>
 #include <gtest/gtest.h>
 #include <gmock/gmock.h>
-#include "pud_solver_manifest_harness.hpp"
+#include "pud_manifest_harness.hpp"
 
 using ::testing::ElementsAre;
 using ::testing::UnorderedElementsAre;

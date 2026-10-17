@@ -24,6 +24,7 @@ struct pud_mhws {
     std::vector<pud_mhws_head_id> invalidate_leaf(pud_node_id node);
     std::optional<pud_witness_advance_result<Descent, NodeIterator>> advance_head(pud_mhws_head_id head_id);
     std::optional<pud_mhws_head_id> try_fork_head(pud_mhws_head_id head_id, Descent search_root_descent);
+    bool check_head(pud_mhws_head_id head_id) const;
 private:
     bool try_find_witness(pud_mhws_head_id head_id);
     void link(pud_mhws_head_id head_id, pud_node_id witness);
@@ -192,6 +193,16 @@ std::optional<pud_mhws_head_id> pud_mhws<D, NI, Head, IMakeHead, IForkHead>::try
     if (!try_find_witness(next_head_id_))
         return std::nullopt;
     return next_head_id_++;
+}
+
+template<
+    typename D,
+    typename NI,
+    typename Head,
+    typename IMakeHead,
+    typename IForkHead>
+bool pud_mhws<D, NI, Head, IMakeHead, IForkHead>::check_head(pud_mhws_head_id head_id) const {
+    return heads_.contains(head_id);
 }
 
 #endif

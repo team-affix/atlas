@@ -1,5 +1,5 @@
-#ifndef PUD_SOLVER_MANIFEST_HARNESS_HPP
-#define PUD_SOLVER_MANIFEST_HARNESS_HPP
+#ifndef PUD_MANIFEST_HARNESS_HPP
+#define PUD_MANIFEST_HARNESS_HPP
 
 #include <algorithm>
 #include <map>
@@ -14,6 +14,7 @@
 #include <gtest/gtest.h>
 #include "functor_fixture.hpp"
 #include "infrastructure/pud_random_solver_manifest.hpp"
+#include "infrastructure/pud_random_unfold_manifest.hpp"
 #include "infrastructure/pud_random_unit_solver_manifest.hpp"
 #include "value_objects/pud_unfold.hpp"
 #include "value_objects/rule.hpp"
@@ -21,8 +22,8 @@
 // A manifest plus everything a test needs to build programs, drive the solver and audit every
 // public store against the invariants the PUD relies on.
 template<typename Manifest>
-struct pud_solver_manifest_harness {
-    pud_solver_manifest_harness(uint32_t random_seed) : manifest(random_seed) {}
+struct pud_manifest_harness {
+    pud_manifest_harness(uint32_t random_seed) : manifest(random_seed) {}
 
     Manifest manifest;
     test_functors functors;
@@ -154,8 +155,8 @@ struct pud_solver_manifest_harness {
         return unfolding.value();
     }
 
-    // One unfold of an open conjecture leaf. False once none is open.
-    bool unfold_conjectures_once() {
+    // One step of the manifest's unfold loop. False once the loop has ended.
+    bool advance_unfold_loop() {
         coroutine<pud_unfold, void>& running = unfold_loop();
         running.resume();
         if (!running.has_yield())
@@ -169,7 +170,7 @@ struct pud_solver_manifest_harness {
     bool unfold_once(pud_node_id root) {
         run_base_descent();
         if (!manifest.axioms_.check_axiom(root))
-            return unfold_conjectures_once();
+            return advance_unfold_loop();
         for (pud_node_id leaf_node : manifest.open_leaves_.get()) {
             if (root_of(leaf_node) != root)
                 continue;
@@ -177,6 +178,47 @@ struct pud_solver_manifest_harness {
             return true;
         }
         return false;
+    }
+
+    // Advances the unfold loop until it ends or max_unfolds is reached; returns how many unfolds happened.
+    size_t unfold_until_closed(size_t max_unfolds) {
+        size_t unfolds = 0;
+        while (unfolds < max_unfolds && advance_unfold_loop())
+            ++unfolds;
+        return unfolds;
+    }
+
+    // Like unfold_until_closed, but stops once some open leaf holds more than max_goals open goals.
+    // Self-referential rules without a base (p :- p, p) double a leaf's goals on every unfold, which
+    // is not what tests that bound their unfolds are about.
+    size_t unfold_while_small(size_t max_unfolds, size_t max_goals) {
+        size_t unfolds = 0;
+        while (unfolds < max_unfolds && most_open_goals() <= max_goals && advance_unfold_loop())
+            ++unfolds;
+        return unfolds;
+    }
+
+    size_t most_open_goals() {
+        size_t most = 0;
+        for (pud_node_id leaf_node : manifest.open_leaves_.get())
+            most = std::max(most, open_goals(leaf_node).size());
+        return most;
+    }
+
+    // Everything the axiom trees have proven so far: each axiom's head, normalized at each live leaf of
+    // its tree that has no open goals.
+    std::set<const expr*> proven_heads() {
+        std::set<const expr*> proven;
+        for (pud_node_id axiom_root : manifest.axioms_.get()) {
+            if (!started(axiom_root))
+                continue;
+            for (pud_node_id leaf_node : manifest.live_leaf_finder_.find_live_leaves(axiom_root)) {
+                if (manifest.open_leaves_.check_leaf_open(leaf_node) || !has_descent(leaf_node))
+                    continue;
+                proven.insert(normalize_in(env_at_leaf(leaf_node), manifest.node_heads_.get(axiom_root)));
+            }
+        }
+        return proven;
     }
 
     // A root's solutions are its live leaves without open goals; the oldest unreported one.
@@ -592,7 +634,8 @@ struct pud_solver_manifest_harness {
     void check_all() {
         check_live_leaves_are_exactly_the_stored_descents();
         check_open_leaves_are_exactly_the_live_leaves_with_open_goals();
-        check_open_conjecture_leaves_are_the_open_leaves_under_conjectures();
+        if constexpr (requires (Manifest& any) { any.open_conjecture_leaves_; })
+            check_open_conjecture_leaves_are_the_open_leaves_under_conjectures();
         check_leaf_flag_matches_having_children();
         check_parents_and_children_agree();
         check_live_child_counts_match_unrefuted_children();
@@ -610,7 +653,59 @@ struct pud_solver_manifest_harness {
     }
 };
 
-using pud_random_solver_manifest_harness = pud_solver_manifest_harness<pud_random_solver_manifest>;
-using pud_random_unit_solver_manifest_harness = pud_solver_manifest_harness<pud_random_unit_solver_manifest>;
+// Rebuilds an expression of another harness's pool in this harness's pool, keeping functor ids.
+template<typename Harness>
+const expr* copy_expr(Harness& target, const expr* source) {
+    if (const expr::var* variable = std::get_if<expr::var>(&source->content))
+        return target.manifest.expr_pool_.make_var(variable->index);
+    const expr::functor& functor = std::get<expr::functor>(source->content);
+    std::vector<const expr*> args;
+    for (const expr* arg : functor.args)
+        args.push_back(copy_expr(target, arg));
+    return target.manifest.expr_pool_.make_functor(functor.id, args);
+}
+
+// Copies every node of the source's trees into the target's stores with the same ids, the way a
+// database loaded from file would arrive: structure, deltas and refutations, but no descents.
+template<typename Harness>
+void reload_database(Harness& source, Harness& target) {
+    for (pud_node_id node = 0; node < source.manifest.node_id_sequencer_.peek(); ++node) {
+        EXPECT_EQ(target.manifest.node_id_sequencer_.next(), node);
+        std::vector<const expr*> goals;
+        for (const expr* goal : source.manifest.node_added_body_goals_.get(node))
+            goals.push_back(copy_expr(target, goal));
+        target.manifest.node_added_body_goals_.store(node, goals);
+        target.manifest.node_added_var_count_.store(node, source.manifest.node_added_var_count_.get(node));
+        if (source.root(node)) {
+            target.manifest.root_nodes_.mark_root(node);
+        } else {
+            std::vector<pud_substitution> substitutions;
+            for (const pud_substitution& substitution : source.manifest.node_added_substitutions_.get(node))
+                substitutions.push_back(pud_substitution{substitution.var_idx, copy_expr(target, substitution.value)});
+            target.manifest.node_added_substitutions_.store(node, substitutions);
+            target.manifest.node_parents_.store(node, source.manifest.node_parents_.get(node));
+        }
+        if (source.manifest.axioms_.check_axiom(node)) {
+            target.manifest.axioms_.mark_axiom(node);
+            target.manifest.node_heads_.store(node, copy_expr(target, source.manifest.node_heads_.get(node)));
+        }
+        const auto template_it = source.answer_templates.find(node);
+        if (template_it != source.answer_templates.end())
+            target.answer_templates.emplace(node, copy_expr(target, template_it->second));
+        if (source.leaf(node)) {
+            target.manifest.leaf_nodes_.set_leaf(node);
+            if (source.manifest.refuted_leaves_.check_refuted(node))
+                target.manifest.refuted_leaves_.mark_refuted(node);
+            continue;
+        }
+        target.manifest.call_sites_.store(node, source.manifest.call_sites_.get(node));
+        target.manifest.children_.store(node, source.children_of(node));
+        target.manifest.node_live_child_counts_.store(node, source.manifest.node_live_child_counts_.get(node));
+    }
+}
+
+using pud_random_unfold_manifest_harness = pud_manifest_harness<pud_random_unfold_manifest>;
+using pud_random_solver_manifest_harness = pud_manifest_harness<pud_random_solver_manifest>;
+using pud_random_unit_solver_manifest_harness = pud_manifest_harness<pud_random_unit_solver_manifest>;
 
 #endif
