@@ -250,32 +250,11 @@ struct pud_random_solver_manifest_harness {
 
     bool root(pud_node_id node) { return manifest.root_nodes_.check_root(node); }
 
-    bool alive(pud_mhq_head_id head) {
-        try {
-            manifest.mhq_.get_candidates(head);
-            return true;
-        } catch (const std::out_of_range&) {
-            return false;
-        }
-    }
+    bool alive(pud_mhq_head_id head) { return manifest.mhq_.check_head(head); }
 
-    bool expanded(pud_node_id node) {
-        try {
-            manifest.call_sites_.get(node);
-            return true;
-        } catch (const std::out_of_range&) {
-            return false;
-        }
-    }
+    bool expanded(pud_node_id node) { return manifest.call_sites_.check_call_site(node); }
 
-    bool has_descent(pud_node_id node) {
-        try {
-            manifest.node_descents_.get(node);
-            return true;
-        } catch (const std::out_of_range&) {
-            return false;
-        }
-    }
+    bool has_descent(pud_node_id node) { return manifest.node_descents_.check_descent(node); }
 
     std::optional<pud_mhq_head_id> query_of(pud_node_id leaf_node, body_goal_id goal) {
         return manifest.node_descents_.get(leaf_node).body_goal_pq().find_query_head(goal);

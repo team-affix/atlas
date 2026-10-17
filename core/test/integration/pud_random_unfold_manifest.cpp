@@ -64,14 +64,7 @@ struct PudRandomUnfoldManifestIntegrationTest : public ::testing::Test {
     pud_random_unfold_manifest manifest{0};
     unfold_program_builder program{manifest, {}};
 
-    bool has_descent(pud_node_id node) {
-        try {
-            manifest.node_descents_.get(node);
-            return true;
-        } catch (const std::out_of_range&) {
-            return false;
-        }
-    }
+    bool has_descent(pud_node_id node) { return manifest.node_descents_.check_descent(node); }
 
     // Every live leaf has a stored descent and nothing else does; exactly those with open goals are open.
     void check_open_leaves() {

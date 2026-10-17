@@ -33,6 +33,7 @@ private:
     IForkHead& fork_head_;
     IRemoveWitnessHead& remove_witness_head_;
 
+    bool try_justify(pud_mhcs_head_id head_id);
     void link(pud_mhcs_head_id head_id, pud_candidate_justification justification);
     pud_candidate_justification unlink_head(pud_mhcs_head_id head_id);
     std::unordered_set<pud_mhcs_head_id> unlink_self_witnesses(pud_node_id node);
@@ -40,7 +41,6 @@ private:
     pud_mhcs_head_id next_head_id_;
     
     std::unordered_map<pud_mhcs_head_id, Head> heads_;
-    std::unordered_map<pud_mhcs_head_id, Descent> head_to_descent_;
 
     std::unordered_map<pud_mhcs_head_id, pud_candidate_justification> head_to_justification_;
     std::unordered_map<pud_mhws_head_id, pud_mhcs_head_id> witness_head_to_head_;
@@ -66,27 +66,10 @@ template<
     typename IForkHead,
     typename IRemoveWitnessHead>
 std::optional<pud_mhcs_head_id> pud_mhcs<D, Head, IMakeHead, IForkHead, IRemoveWitnessHead>::try_add_head(D search_root_descent) {
-    auto [head_it, head_inserted] = heads_.emplace(
-        next_head_id_,
-        make_head_.make(std::move(search_root_descent)));
-
+    const bool head_inserted = heads_.emplace(next_head_id_, make_head_.make(std::move(search_root_descent))).second;
     DEBUG_ASSERT(head_inserted);
-
-    Head& head = head_it->second;
-
-    std::optional<pud_candidate_resume_context<D>> resume_context = head.resume();
-
-    if (!resume_context.has_value()) {
-        heads_.erase(head_it);
+    if (!try_justify(next_head_id_))
         return std::nullopt;
-    }
-
-    const pud_candidate_resume_context<D>& context = resume_context.value();
-
-    head_to_descent_.insert({next_head_id_, context.descent});
-
-    link(next_head_id_, context.justification);
-
     return next_head_id_++;
 }
 
@@ -101,7 +84,6 @@ void pud_mhcs<D, Head, IMakeHead, IForkHead, IRemoveWitnessHead>::remove_head(pu
         return;
 
     heads_.erase(head_id);
-    head_to_descent_.erase(head_id);
     const pud_candidate_justification justification = unlink_head(head_id);
     const pud_candidate_choice_point* choice_point = std::get_if<pud_candidate_choice_point>(&justification);
     if (!choice_point)
@@ -117,27 +99,13 @@ template<
     typename IForkHead,
     typename IRemoveWitnessHead>
 std::vector<pud_mhcs_head_id> pud_mhcs<D, Head, IMakeHead, IForkHead, IRemoveWitnessHead>::invalidate_leaf(pud_node_id node) {
-    auto head_ids = unlink_self_witnesses(node);
-
-    std::vector<pud_mhcs_head_id> result;
-
-    for (pud_mhcs_head_id head_id : head_ids) {
-        Head& head = heads_.at(head_id);
-        std::optional<pud_candidate_resume_context<D>> resume_context = head.resume();
-
-        if (!resume_context.has_value()) {
-            heads_.erase(head_id);
-            head_to_descent_.erase(head_id);
-            result.push_back(head_id);
+    std::vector<pud_mhcs_head_id> refuted;
+    for (pud_mhcs_head_id head_id : unlink_self_witnesses(node)) {
+        if (try_justify(head_id))
             continue;
-        }
-
-        const pud_candidate_resume_context<D>& context = resume_context.value();
-        head_to_descent_.at(head_id) = context.descent;
-        link(head_id, context.justification);
+        refuted.push_back(head_id);
     }
-
-    return std::move(result);
+    return refuted;
 }
 
 template<
@@ -165,20 +133,13 @@ std::vector<pud_mhcs_head_id> pud_mhcs<D, Head, IMakeHead, IForkHead, IRemoveWit
         heads_.at(head_id).witness_refuted(witness_head_id);
     }
 
-    std::vector<pud_mhcs_head_id> result;
+    std::vector<pud_mhcs_head_id> refuted;
     for (pud_mhcs_head_id head_id : affected) {
-        std::optional<pud_candidate_resume_context<D>> resume_context = heads_.at(head_id).resume();
-        if (!resume_context.has_value()) {
-            heads_.erase(head_id);
-            head_to_descent_.erase(head_id);
-            result.push_back(head_id);
+        if (try_justify(head_id))
             continue;
-        }
-        const pud_candidate_resume_context<D>& context = resume_context.value();
-        head_to_descent_.at(head_id) = context.descent;
-        link(head_id, context.justification);
+        refuted.push_back(head_id);
     }
-    return result;
+    return refuted;
 }
 
 template<
@@ -188,28 +149,10 @@ template<
     typename IForkHead,
     typename IRemoveWitnessHead>
 std::optional<pud_mhcs_head_id> pud_mhcs<D, Head, IMakeHead, IForkHead, IRemoveWitnessHead>::try_fork_head(pud_mhcs_head_id head_id, D new_root_descent) {
-    Head& old_head = heads_.at(head_id);
-
-    auto [new_head_it, new_head_inserted] = heads_.emplace(
-        next_head_id_,
-        fork_head_.fork(old_head, new_root_descent));
-
-    DEBUG_ASSERT(new_head_inserted);
-
-    Head& new_head = new_head_it->second;
-
-    std::optional<pud_candidate_resume_context<D>> resume_context = new_head.resume();
-
-    if (!resume_context.has_value()) {
-        heads_.erase(new_head_it);
+    const bool head_inserted = heads_.emplace(next_head_id_, fork_head_.fork(heads_.at(head_id), new_root_descent)).second;
+    DEBUG_ASSERT(head_inserted);
+    if (!try_justify(next_head_id_))
         return std::nullopt;
-    }
-
-    const pud_candidate_resume_context<D>& context = resume_context.value();
-
-    head_to_descent_.insert({next_head_id_, context.descent});
-    link(next_head_id_, context.justification);
-
     return next_head_id_++;
 }
 
@@ -221,6 +164,23 @@ template<
     typename IRemoveWitnessHead>
 std::vector<pud_node_id> pud_mhcs<D, Head, IMakeHead, IForkHead, IRemoveWitnessHead>::get_path(pud_mhcs_head_id head_id) const {
     return heads_.at(head_id).path();
+}
+
+// Resumes a head and links the justification it finds; a head that finds none is dropped.
+template<
+    typename D,
+    typename Head,
+    typename IMakeHead,
+    typename IForkHead,
+    typename IRemoveWitnessHead>
+bool pud_mhcs<D, Head, IMakeHead, IForkHead, IRemoveWitnessHead>::try_justify(pud_mhcs_head_id head_id) {
+    std::optional<pud_candidate_resume_context<D>> resume_context = heads_.at(head_id).resume();
+    if (!resume_context.has_value()) {
+        heads_.erase(head_id);
+        return false;
+    }
+    link(head_id, resume_context->justification);
+    return true;
 }
 
 template<

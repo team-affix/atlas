@@ -23,6 +23,7 @@ struct pud_body_goal_expr_descent {
 private:
     void add_body_goals(pud_node_id node, body_goal_id first_body_goal_id);
 
+    // Pointers rather than references, so the descent stays copy-assignable.
     IGetNodeAddedBodyGoals* get_node_added_body_goals_;
     IGetCallSite* get_call_site_;
     immer::map<body_goal_id, const expr*> body_goal_exprs_;

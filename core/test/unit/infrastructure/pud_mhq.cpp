@@ -486,3 +486,30 @@ TEST_F(PudMhqTest, ForkedHeadHasItsOwnCandidates) {
 }
 
 }  // namespace
+
+// ── check_head ───────────────────────────────────────────────────────────────
+
+TEST_F(PudMhqTest, CheckHeadIsTrueForAKeptHead) {
+    add_two_live();
+    EXPECT_TRUE(mhq.check_head(first_id));
+    EXPECT_FALSE(mhq.check_head(second_id));
+}
+
+TEST_F(PudMhqTest, CheckHeadIsFalseForAHeadRefutedOnAdmission) {
+    EXPECT_CALL(ops, resume()).WillOnce(Return(refuted()));
+    mhq.try_add_head(two_axioms);
+    EXPECT_FALSE(mhq.check_head(first_id));
+}
+
+TEST_F(PudMhqTest, CheckHeadIsFalseOnceRemoved) {
+    add_two_live();
+    mhq.remove_head(first_id);
+    EXPECT_FALSE(mhq.check_head(first_id));
+}
+
+TEST_F(PudMhqTest, CheckHeadIsFalseOnceItsLastCandidateIsRefuted) {
+    add_two_live();
+    EXPECT_CALL(ops, candidate_refuted(candidate_a)).WillOnce(Return(pud_forced_unfold_reason::refuted));
+    mhq.candidate_specialization_refuted(candidate_a);
+    EXPECT_FALSE(mhq.check_head(first_id));
+}

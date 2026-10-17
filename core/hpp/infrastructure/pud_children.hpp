@@ -5,6 +5,8 @@
 #include <vector>
 #include "value_objects/pud_node_id.hpp"
 
+// A node's children are stored once and never change, so iterators into the list get() returns stay
+// valid for good; witness and candidate searches keep such iterators across resumes and forks.
 struct pud_children {
     const std::vector<pud_node_id>& get(pud_node_id id) const;
     void store(pud_node_id id, std::vector<pud_node_id> children);

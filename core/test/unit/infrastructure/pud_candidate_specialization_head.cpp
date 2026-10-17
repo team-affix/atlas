@@ -32,6 +32,9 @@ struct MockAdvanceHead {
 struct MockTryForkWitnessHead {
     MOCK_METHOD(std::optional<pud_mhws_head_id>, try_fork_head, (pud_mhws_head_id, descent_t));
 };
+struct MockRemoveWitnessHead {
+    MOCK_METHOD(void, remove_head, (pud_mhws_head_id));
+};
 struct MockCheckLeaf {
     MOCK_METHOD(bool, check_leaf, (pud_node_id));
 };
@@ -54,13 +57,14 @@ std::optional<descent_t> descent_t::descend(pud_node_id child) const {
 
 using test_head_t = pud_candidate_specialization_head<
     descent_t, child_iter,
-    MockTryAddHead, MockAdvanceHead, MockTryForkWitnessHead,
+    MockTryAddHead, MockAdvanceHead, MockTryForkWitnessHead, MockRemoveWitnessHead,
     MockCheckLeaf, MockCheckRefuted, MockGetChildren>;
 
 struct PudCandidateSpecializationHeadTest : public ::testing::Test {
     NiceMock<MockTryAddHead>    try_add;
     NiceMock<MockAdvanceHead>   advance_head;
     NiceMock<MockTryForkWitnessHead> fork_witness;
+    NiceMock<MockRemoveWitnessHead> remove_witness;
     NiceMock<MockCheckLeaf>     leaves;
     NiceMock<MockCheckRefuted> refuted_nodes;
     NiceMock<MockGetChildren>   children;
@@ -75,7 +79,7 @@ struct PudCandidateSpecializationHeadTest : public ::testing::Test {
 
     test_head_t make_head(pud_node_id node) {
         return test_head_t{
-            try_add, advance_head, fork_witness, leaves, refuted_nodes, children,
+            try_add, advance_head, fork_witness, remove_witness, leaves, refuted_nodes, children,
             descent_t{node}};
     }
 
@@ -664,3 +668,45 @@ TEST_F(PudCandidateSpecializationHeadTest, ForkedHeadAtARefutedNodeIsRefuted) {
 }
 
 }  // namespace
+
+// ── Releasing witnesses ──────────────────────────────────────────────────────
+
+TEST_F(PudCandidateSpecializationHeadTest, ResumingARefutedChoicePointReleasesBothWitnesses) {
+    auto head = make_deep_choice_point_head();
+    ON_CALL(refuted_nodes, check_refuted(b)).WillByDefault(Return(true));
+    EXPECT_CALL(remove_witness, remove_head(10u));
+    EXPECT_CALL(remove_witness, remove_head(20u));
+    EXPECT_FALSE(head.resume().has_value());
+}
+
+TEST_F(PudCandidateSpecializationHeadTest, ResumingARefutedHeadReleasesItsSurvivingWitness) {
+    auto head = make_deep_choice_point_head();
+    head.witness_refuted(20);
+    ON_CALL(refuted_nodes, check_refuted(b)).WillByDefault(Return(true));
+    EXPECT_CALL(remove_witness, remove_head(10u));
+    EXPECT_CALL(remove_witness, remove_head(20u)).Times(0);
+    EXPECT_FALSE(head.resume().has_value());
+}
+
+TEST_F(PudCandidateSpecializationHeadTest, RefutedRootWithoutWitnessesReleasesNothing) {
+    ON_CALL(refuted_nodes, check_refuted(root)).WillByDefault(Return(true));
+    EXPECT_CALL(remove_witness, remove_head(_)).Times(0);
+    auto head = make_head(root);
+    EXPECT_FALSE(head.resume().has_value());
+}
+
+TEST_F(PudCandidateSpecializationHeadTest, ResumingAValidChoicePointReleasesNothing) {
+    auto head = make_deep_choice_point_head();
+    EXPECT_CALL(remove_witness, remove_head(_)).Times(0);
+    EXPECT_TRUE(head.resume().has_value());
+}
+
+TEST_F(PudCandidateSpecializationHeadTest, ExhaustedWitnessesAreNotReleasedAgain) {
+    auto head = make_deep_choice_point_head();
+    head.witness_refuted(10);
+    head.witness_refuted(20);
+    sequences[b] = {c, a1};
+    ON_CALL(try_add, try_add_head(_)).WillByDefault(Return(std::nullopt));
+    EXPECT_CALL(remove_witness, remove_head(_)).Times(0);
+    EXPECT_FALSE(head.resume().has_value());
+}

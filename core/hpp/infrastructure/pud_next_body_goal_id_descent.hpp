@@ -10,6 +10,7 @@ struct pud_next_body_goal_id_descent {
     pud_next_body_goal_id_descent descend(pud_node_id child) const;
     body_goal_id next_body_goal_id() const;
 private:
+    // Pointers rather than references, so the descent stays copy-assignable.
     IGetNodeAddedBodyGoals* get_node_added_body_goals_;
     body_goal_id next_body_goal_id_;
 };

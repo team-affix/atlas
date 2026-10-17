@@ -126,8 +126,8 @@ struct PudBodyGoalPqDescentTest : public ::testing::Test {
 
     test_descent_t descend_to_child(
         const test_descent_t& at_root,
-        const std::vector<pud_mhsw_head_id>& structure_changes,
-        const std::vector<pud_mhsw_head_id>& added_watch_head_ids) {
+        const std::vector<pud_watch_head_id>& structure_changes,
+        const std::vector<pud_watch_head_id>& added_watch_head_ids) {
         return at_root.descend(
             3,
             root,
@@ -141,7 +141,7 @@ struct PudBodyGoalPqDescentTest : public ::testing::Test {
 
     test_descent_t descend_below_child(
         const test_descent_t& at_child,
-        const std::vector<pud_mhsw_head_id>& structure_changes) {
+        const std::vector<pud_watch_head_id>& structure_changes) {
         return at_child.descend(5, child, grandchild, child_ubs_state, child_frame_offset, child_exprs, structure_changes, {});
     }
 };

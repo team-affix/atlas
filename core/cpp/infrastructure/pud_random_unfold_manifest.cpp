@@ -21,11 +21,11 @@ pud_random_unfold_manifest::pud_random_unfold_manifest(uint32_t random_seed)
       refuted_node_checker_(leaf_nodes_, refuted_leaves_, node_live_child_counts_),
       normalizer_factory_(globalizer_, expr_pool_),
       unifier_factory_(globalizer_),
-      witness_search_head_factory_(leaf_nodes_, refuted_node_checker_, children_, call_sites_),
+      witness_search_head_factory_(leaf_nodes_, refuted_node_checker_, children_),
       witness_search_head_forker_(),
       mhws_(witness_search_head_factory_, witness_search_head_forker_),
       candidate_specialization_head_factory_(
-          mhws_, mhws_, mhws_, leaf_nodes_, refuted_node_checker_, children_),
+          mhws_, mhws_, mhws_, mhws_, leaf_nodes_, refuted_node_checker_, children_),
       candidate_specialization_head_forker_(),
       mhcs_(candidate_specialization_head_factory_, candidate_specialization_head_forker_, mhws_),
       query_head_factory_(mhcs_, mhcs_),

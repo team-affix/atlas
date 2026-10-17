@@ -30,8 +30,8 @@ struct PudStructureWatchDescentFuzzTest : public ::testing::Test {
     struct level {
         binding_descent_t binding;
         watch_descent_t watch;
-        std::map<pud_mhsw_head_id, const expr*> live_heads;
-        pud_mhsw_head_id next_head_id;
+        std::map<pud_watch_head_id, const expr*> live_heads;
+        pud_watch_head_id next_head_id;
         uint32_t depth;
     };
 
@@ -180,8 +180,8 @@ struct PudStructureWatchDescentFuzzTest : public ::testing::Test {
         node_specs_.store(child, random_substitutions(parent.binding));
         const binding_descent_t child_binding = parent.binding.descend(child);
 
-        std::map<pud_mhsw_head_id, const expr*> live_heads = parent.live_heads;
-        std::vector<pud_mhsw_head_id> unwatch;
+        std::map<pud_watch_head_id, const expr*> live_heads = parent.live_heads;
+        std::vector<pud_watch_head_id> unwatch;
         for (const auto& [head_id, watched_expr] : parent.live_heads) {
             if (!coin(15))
                 continue;
@@ -190,20 +190,20 @@ struct PudStructureWatchDescentFuzzTest : public ::testing::Test {
         }
         const std::vector<const expr*> watch = random_watch_list(child_binding);
 
-        std::set<pud_mhsw_head_id> expected;
+        std::set<pud_watch_head_id> expected;
         for (const auto& [head_id, watched_expr] : live_heads) {
             const bool changed = canonical(parent.binding, watched_expr) != canonical(child_binding, watched_expr);
             if (changed)
                 expected.insert(head_id);
         }
 
-        const watch_descent_t::descend_result result = parent.watch.descend(child, unwatch, watch);
-        const std::set<pud_mhsw_head_id> actual(result.structure_changes.begin(), result.structure_changes.end());
+        const pud_structure_watch_result<watch_descent_t> result = parent.watch.descend(child, unwatch, watch);
+        const std::set<pud_watch_head_id> actual(result.structure_changes.begin(), result.structure_changes.end());
         EXPECT_EQ(actual.size(), result.structure_changes.size()) << "a head was reported twice at node " << child;
         EXPECT_EQ(actual, expected) << "at node " << child << " depth " << parent.depth + 1;
 
-        std::vector<pud_mhsw_head_id> expected_added;
-        pud_mhsw_head_id next_head_id = parent.next_head_id;
+        std::vector<pud_watch_head_id> expected_added;
+        pud_watch_head_id next_head_id = parent.next_head_id;
         for (const expr* watched_expr : watch) {
             expected_added.push_back(next_head_id);
             live_heads.emplace(next_head_id++, watched_expr);

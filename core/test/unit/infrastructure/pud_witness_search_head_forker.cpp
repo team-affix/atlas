@@ -39,12 +39,8 @@ MockDescend* descend_ops = nullptr;
 std::optional<descent_t> descent_t::descend(pud_node_id child) const {
     return descend_ops->descend(*this, child);
 }
-struct MockCallSite {
-    MOCK_METHOD(size_t, get, (pud_node_id));
-};
-
 using test_head_t = pud_witness_search_head<
-    descent_t, child_iter, MockCheckLeaf, MockCheckRefuted, MockGetChildren, MockCallSite>;
+    descent_t, child_iter, MockCheckLeaf, MockCheckRefuted, MockGetChildren>;
 
 struct PudWitnessSearchHeadForkerTest : public ::testing::Test {
     void SetUp() override { descend_ops = &descend; }
@@ -52,8 +48,7 @@ struct PudWitnessSearchHeadForkerTest : public ::testing::Test {
     NiceMock<MockCheckRefuted> refuted_nodes;
     NiceMock<MockGetChildren> children;
     NiceMock<MockDescend> descend;
-    NiceMock<MockCallSite> call_sites;
-    pud_witness_search_head_forker<descent_t, child_iter, MockCheckLeaf, MockCheckRefuted, MockGetChildren, MockCallSite> forker;
+    pud_witness_search_head_forker<descent_t, child_iter, MockCheckLeaf, MockCheckRefuted, MockGetChildren> forker;
     pud_node_id root = 1;
     pud_node_id parent_node = 2;
     pud_node_id leaf = 3;
@@ -63,7 +58,7 @@ struct PudWitnessSearchHeadForkerTest : public ::testing::Test {
 
     test_head_t make_head(pud_node_id node) {
         return test_head_t{
-            leaves, refuted_nodes, children, call_sites,
+            leaves, refuted_nodes, children,
             descent_t{node}};
     }
 };

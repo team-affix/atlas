@@ -47,3 +47,12 @@ TEST_F(PudNodeDescentsTest, SecondStoreOfSameNodeThrows) {
     descents.store(node, 7);
     EXPECT_THROW(descents.store(node, 8), std::logic_error);
 }
+
+TEST_F(PudNodeDescentsTest, CheckDescentFollowsStoreAndErase) {
+    EXPECT_FALSE(descents.check_descent(node));
+    descents.store(node, 7);
+    EXPECT_TRUE(descents.check_descent(node));
+    EXPECT_FALSE(descents.check_descent(other));
+    descents.erase(node);
+    EXPECT_FALSE(descents.check_descent(node));
+}

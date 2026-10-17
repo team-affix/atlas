@@ -94,26 +94,23 @@ struct pud_random_solver_manifest {
         normalizer_factory_t, unifier_factory_t, pud_node_added_substitutions>;
 
     using witness_search_head_t = pud_witness_search_head<
-        replay_descent_t, child_iter_t, pud_leaf_nodes, refuted_node_checker_t, pud_children,
-        pud_call_sites>;
+        replay_descent_t, child_iter_t, pud_leaf_nodes, refuted_node_checker_t, pud_children>;
     using witness_search_head_factory_t = pud_witness_search_head_factory<
-        replay_descent_t, child_iter_t, pud_leaf_nodes, refuted_node_checker_t, pud_children,
-        pud_call_sites>;
+        replay_descent_t, child_iter_t, pud_leaf_nodes, refuted_node_checker_t, pud_children>;
     using witness_search_head_forker_t = pud_witness_search_head_forker<
-        replay_descent_t, child_iter_t, pud_leaf_nodes, refuted_node_checker_t, pud_children,
-        pud_call_sites>;
+        replay_descent_t, child_iter_t, pud_leaf_nodes, refuted_node_checker_t, pud_children>;
     using mhws_t = pud_mhws<
         replay_descent_t, child_iter_t, witness_search_head_t,
         witness_search_head_factory_t, witness_search_head_forker_t>;
 
     using candidate_specialization_head_t = pud_candidate_specialization_head<
-        replay_descent_t, child_iter_t, mhws_t, mhws_t, mhws_t,
+        replay_descent_t, child_iter_t, mhws_t, mhws_t, mhws_t, mhws_t,
         pud_leaf_nodes, refuted_node_checker_t, pud_children>;
     using candidate_specialization_head_factory_t = pud_candidate_specialization_head_factory<
-        replay_descent_t, child_iter_t, mhws_t, mhws_t, mhws_t,
+        replay_descent_t, child_iter_t, mhws_t, mhws_t, mhws_t, mhws_t,
         pud_leaf_nodes, refuted_node_checker_t, pud_children>;
     using candidate_specialization_head_forker_t = pud_candidate_specialization_head_forker<
-        replay_descent_t, child_iter_t, mhws_t, mhws_t, mhws_t,
+        replay_descent_t, child_iter_t, mhws_t, mhws_t, mhws_t, mhws_t,
         pud_leaf_nodes, refuted_node_checker_t, pud_children>;
     using mhcs_t = pud_mhcs<
         replay_descent_t, candidate_specialization_head_t,

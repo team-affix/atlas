@@ -10,6 +10,7 @@ struct pud_lvc_descent {
     pud_lvc_descent descend(pud_node_id child) const;
     uint32_t lvc() const;
 private:
+    // Pointers rather than references, so the descent stays copy-assignable.
     IGetNodeAddedVarCount* get_node_added_var_count_;
     uint32_t lvc_;
 };

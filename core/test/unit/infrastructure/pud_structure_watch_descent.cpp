@@ -18,7 +18,7 @@ struct MockGetNodeAddedSubstitutions {
 };
 
 using test_descent_t = pud_structure_watch_descent<MockGetNodeAddedSubstitutions>;
-using result_t = test_descent_t::descend_result;
+using result_t = pud_structure_watch_result<test_descent_t>;
 
 struct PudStructureWatchDescentTest : public ::testing::Test {
     NiceMock<MockGetNodeAddedSubstitutions> get_substitutions;
@@ -63,7 +63,7 @@ struct PudStructureWatchDescentTest : public ::testing::Test {
         return test_descent_t{get_substitutions, watched};
     }
 
-    static std::vector<pud_mhsw_head_id> changes_at(const test_descent_t& parent, pud_node_id node) {
+    static std::vector<pud_watch_head_id> changes_at(const test_descent_t& parent, pud_node_id node) {
         return parent.descend(node, {}, {}).structure_changes;
     }
 };
@@ -582,7 +582,7 @@ TEST_F(PudStructureWatchDescentTest, RepUpdateOfAnUnseenSurvivingRepCreatesItsEn
 TEST_F(PudStructureWatchDescentTest, ManyHeadsOnDistinctRepsAreReportedInSubstitutionOrder) {
     const uint32_t head_count = 2000;
     std::vector<const expr*> watched;
-    std::vector<pud_mhsw_head_id> expected;
+    std::vector<pud_watch_head_id> expected;
     for (uint32_t index = 0; index < head_count; ++index) {
         watched.push_back(var(index));
         child_substitutions.push_back(rep_instantiated(head_count - 1 - index, functor(a, {})));
@@ -595,7 +595,7 @@ TEST_F(PudStructureWatchDescentTest, ManyHeadsOnOneRepAreEachReportedOnce) {
     const uint32_t head_count = 2000;
     std::vector<const expr*> watched(head_count, var(0));
     child_substitutions = {rep_instantiated(0, functor(a, {})), rep_instantiated(0, functor(a, {}))};
-    std::vector<pud_mhsw_head_id> changes = changes_at(at_root(watched), child);
+    std::vector<pud_watch_head_id> changes = changes_at(at_root(watched), child);
     std::sort(changes.begin(), changes.end());
     ASSERT_EQ(changes.size(), head_count);
     for (uint32_t index = 0; index < head_count; ++index)

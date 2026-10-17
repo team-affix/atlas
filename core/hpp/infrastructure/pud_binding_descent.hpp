@@ -17,6 +17,7 @@ struct pud_binding_descent {
     pud_binding_descent descend(pud_node_id child) const;
     const pud_ubs_state& ubs_state() const;
 private:
+    // Pointers rather than references, so the descent stays copy-assignable.
     IGetNodeAddedSubstitutions* get_node_added_substitutions_;
     IMakeVar* make_var_;
     IMakeFunctor* make_functor_;

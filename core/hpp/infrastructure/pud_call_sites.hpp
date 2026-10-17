@@ -6,6 +6,7 @@
 #include "value_objects/pud_node_id.hpp"
 
 struct pud_call_sites {
+    bool check_call_site(pud_node_id id) const;
     size_t get(pud_node_id id) const;
     void store(pud_node_id id, size_t call_site);
 private:

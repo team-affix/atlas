@@ -495,14 +495,7 @@ struct PudRandomSolverManifestQueryLifetimeIntegrationTest : public PudRandomSol
         return manifest.node_descents_.get(leaf).body_goal_pq().find_query_head(goal).value();
     }
 
-    bool alive(pud_mhq_head_id head) {
-        try {
-            manifest.mhq_.get_candidates(head);
-            return true;
-        } catch (const std::out_of_range&) {
-            return false;
-        }
-    }
+    bool alive(pud_mhq_head_id head) { return manifest.mhq_.check_head(head); }
 
     std::vector<pud_node_id> children_of(pud_node_id node) {
         return manifest.children_.get(node);

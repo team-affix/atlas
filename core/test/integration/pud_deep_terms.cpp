@@ -149,8 +149,8 @@ TEST_F(PudDeepTermsIntegrationTest, StructureWatchWatchesAVeryDeepGoal) {
     pud_structure_watch_descent<pud_node_added_substitutions> watcher{
         substitutions, {functor("p", {deep(k_deep, var(0))})}};
     const auto watched = watcher.descend(1, {}, {deep(k_deep, var(0))});
-    EXPECT_EQ(watched.structure_changes, (std::vector<pud_mhsw_head_id>{0}));
-    EXPECT_EQ(watched.added_head_ids, (std::vector<pud_mhsw_head_id>{1}));
+    EXPECT_EQ(watched.structure_changes, (std::vector<pud_watch_head_id>{0}));
+    EXPECT_EQ(watched.added_head_ids, (std::vector<pud_watch_head_id>{1}));
 }
 
 TEST_F(PudDeepTermsIntegrationTest, NormalizerMatchesARecursiveReferenceOnRandomTerms) {

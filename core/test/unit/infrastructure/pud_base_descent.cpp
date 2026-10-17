@@ -3,7 +3,7 @@
 #include <gmock/gmock.h>
 #include <immer/map.hpp>
 #include "infrastructure/pud_base_descent.hpp"
-#include "value_objects/pud_mhsw_head_id.hpp"
+#include "value_objects/pud_watch_head_id.hpp"
 #include "value_objects/pud_ubs_state.hpp"
 
 using ::testing::_;
@@ -20,8 +20,8 @@ namespace {
 using body_goal_exprs_t = immer::map<body_goal_id, const expr*>;
 
 struct watch_result_t {
-    std::vector<pud_mhsw_head_id> structure_changes;
-    std::vector<pud_mhsw_head_id> added_head_ids;
+    std::vector<pud_watch_head_id> structure_changes;
+    std::vector<pud_watch_head_id> added_head_ids;
     int child_tag;
 };
 
@@ -36,7 +36,7 @@ struct SubDescentOps {
     MOCK_METHOD(
         watch_result_t,
         descend_structure_watch,
-        (int, pud_node_id, const std::vector<pud_mhsw_head_id>&, const std::vector<const expr*>&));
+        (int, pud_node_id, const std::vector<pud_watch_head_id>&, const std::vector<const expr*>&));
     MOCK_METHOD(
         int,
         descend_body_goal_pq,
@@ -47,9 +47,9 @@ struct SubDescentOps {
          const pud_ubs_state&,
          uint32_t,
          const body_goal_exprs_t&,
-         const std::vector<pud_mhsw_head_id>&,
-         const std::vector<pud_mhsw_head_id>&));
-    MOCK_METHOD(pud_mhsw_head_id, find_call_site_watch_head_id, (int, pud_node_id));
+         const std::vector<pud_watch_head_id>&,
+         const std::vector<pud_watch_head_id>&));
+    MOCK_METHOD(pud_watch_head_id, find_call_site_watch_head_id, (int, pud_node_id));
 };
 
 SubDescentOps* sub_descent_ops = nullptr;
@@ -91,19 +91,19 @@ struct MockStructureWatchDescent {
     int tag;
     descend_result descend(
         pud_node_id child,
-        const std::vector<pud_mhsw_head_id>& unwatch,
+        const std::vector<pud_watch_head_id>& unwatch,
         const std::vector<const expr*>& watch) const;
 };
 
 struct MockStructureWatchDescent::descend_result {
-    std::vector<pud_mhsw_head_id> structure_changes;
-    std::vector<pud_mhsw_head_id> added_head_ids;
+    std::vector<pud_watch_head_id> structure_changes;
+    std::vector<pud_watch_head_id> added_head_ids;
     MockStructureWatchDescent child_descent;
 };
 
 MockStructureWatchDescent::descend_result MockStructureWatchDescent::descend(
     pud_node_id child,
-    const std::vector<pud_mhsw_head_id>& unwatch,
+    const std::vector<pud_watch_head_id>& unwatch,
     const std::vector<const expr*>& watch) const {
     watch_result_t watched = sub_descent_ops->descend_structure_watch(tag, child, unwatch, watch);
     return {watched.structure_changes, watched.added_head_ids, MockStructureWatchDescent{watched.child_tag}};
@@ -118,8 +118,8 @@ struct MockBodyGoalPqDescent {
         const pud_ubs_state& child_ubs_state,
         uint32_t child_frame_offset,
         const body_goal_exprs_t& child_body_goal_exprs,
-        const std::vector<pud_mhsw_head_id>& structure_changes,
-        const std::vector<pud_mhsw_head_id>& added_watch_head_ids) const {
+        const std::vector<pud_watch_head_id>& structure_changes,
+        const std::vector<pud_watch_head_id>& added_watch_head_ids) const {
         return {sub_descent_ops->descend_body_goal_pq(
             tag,
             next_body_goal_id,
@@ -131,7 +131,7 @@ struct MockBodyGoalPqDescent {
             structure_changes,
             added_watch_head_ids)};
     }
-    pud_mhsw_head_id find_call_site_watch_head_id(pud_node_id parent) const {
+    pud_watch_head_id find_call_site_watch_head_id(pud_node_id parent) const {
         return sub_descent_ops->find_call_site_watch_head_id(tag, parent);
     }
 };

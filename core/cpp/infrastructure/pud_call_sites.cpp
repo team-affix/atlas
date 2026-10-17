@@ -1,6 +1,10 @@
 #include "infrastructure/pud_call_sites.hpp"
 #include "debug_assert.hpp"
 
+bool pud_call_sites::check_call_site(pud_node_id id) const {
+    return call_sites_.contains(id);
+}
+
 size_t pud_call_sites::get(pud_node_id id) const {
     return call_sites_.at(id);
 }

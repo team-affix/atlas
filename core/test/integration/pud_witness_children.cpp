@@ -38,19 +38,14 @@ std::optional<descent_t> descent_t::descend(pud_node_id child) const {
     return descend_ops->descend(*this, child);
 }
 
-struct MockCallSite {
-    MOCK_METHOD(size_t, get, (pud_node_id));
-};
-
 using test_head_t = pud_witness_search_head<
-    descent_t, child_iter, MockCheckLeaf, MockCheckRefuted, pud_children, MockCallSite>;
+    descent_t, child_iter, MockCheckLeaf, MockCheckRefuted, pud_children>;
 
 struct PudWitnessChildrenIntegrationTest : public ::testing::Test {
     NiceMock<MockCheckLeaf> leaves;
     NiceMock<MockCheckRefuted> refuted_nodes;
     pud_children children;
     NiceMock<MockDescend> descend;
-    NiceMock<MockCallSite> call_sites;
     pud_node_id root       = 1;
     pud_node_id left       = 2;
     pud_node_id right      = 3;
@@ -64,7 +59,7 @@ struct PudWitnessChildrenIntegrationTest : public ::testing::Test {
 
     test_head_t make_head(pud_node_id node) {
         return test_head_t{
-            leaves, refuted_nodes, children, call_sites,
+            leaves, refuted_nodes, children,
             descent_t{node}};
     }
 

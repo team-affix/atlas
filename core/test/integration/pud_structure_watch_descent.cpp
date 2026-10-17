@@ -13,7 +13,7 @@ using ::testing::UnorderedElementsAre;
 
 struct PudStructureWatchDescentIntegrationTest : public ::testing::Test {
     using watch_descent_t = pud_structure_watch_descent<pud_node_added_substitutions>;
-    using result_t = watch_descent_t::descend_result;
+    using result_t = pud_structure_watch_result<watch_descent_t>;
 
     test_functors                  functors;
     expr_pool                      exprs;
@@ -41,7 +41,7 @@ struct PudStructureWatchDescentIntegrationTest : public ::testing::Test {
         return watch_descent_t{node_specs_, watched};
     }
 
-    static std::vector<pud_mhsw_head_id> changes_at(const watch_descent_t& parent, pud_node_id node) {
+    static std::vector<pud_watch_head_id> changes_at(const watch_descent_t& parent, pud_node_id node) {
         return parent.descend(node, {}, {}).structure_changes;
     }
 };

@@ -21,3 +21,10 @@ TEST_F(PudCallSitesTest, StoreThenGet) {
     call_sites.store(node, 4);
     EXPECT_EQ(call_sites.get(node), 4u);
 }
+
+TEST_F(PudCallSitesTest, CheckCallSiteIsFalseUntilStored) {
+    EXPECT_FALSE(call_sites.check_call_site(node));
+    call_sites.store(node, 0);
+    EXPECT_TRUE(call_sites.check_call_site(node));
+    EXPECT_FALSE(call_sites.check_call_site(node + 1));
+}

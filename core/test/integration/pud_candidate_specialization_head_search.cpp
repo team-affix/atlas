@@ -52,16 +52,12 @@ std::optional<descent_t> descent_t::descend(pud_node_id child) const {
     return descend_ops->descend(*this, child);
 }
 
-struct MockCallSite {
-    MOCK_METHOD(size_t, get, (pud_node_id));
-};
-
-using witness_head_t    = pud_witness_search_head<descent_t, child_iter, MockCheckLeaf, MockCheckRefuted, MockGetChildren, MockCallSite>;
-using witness_factory_t = pud_witness_search_head_factory<descent_t, child_iter, MockCheckLeaf, MockCheckRefuted, MockGetChildren, MockCallSite>;
-using witness_forker_t  = pud_witness_search_head_forker<descent_t, child_iter, MockCheckLeaf, MockCheckRefuted, MockGetChildren, MockCallSite>;
+using witness_head_t    = pud_witness_search_head<descent_t, child_iter, MockCheckLeaf, MockCheckRefuted, MockGetChildren>;
+using witness_factory_t = pud_witness_search_head_factory<descent_t, child_iter, MockCheckLeaf, MockCheckRefuted, MockGetChildren>;
+using witness_forker_t  = pud_witness_search_head_forker<descent_t, child_iter, MockCheckLeaf, MockCheckRefuted, MockGetChildren>;
 using mhws_t            = pud_mhws<descent_t, child_iter, witness_head_t, witness_factory_t, witness_forker_t>;
 using candidate_head_t  = pud_candidate_specialization_head<
-    descent_t, child_iter, mhws_t, mhws_t, mhws_t, MockCheckLeaf, MockCheckRefuted, MockGetChildren>;
+    descent_t, child_iter, mhws_t, mhws_t, mhws_t, mhws_t, MockCheckLeaf, MockCheckRefuted, MockGetChildren>;
 
 using optional_context_t = std::optional<pud_candidate_resume_context<descent_t>>;
 
@@ -93,8 +89,7 @@ struct PudCandidateSpecializationHeadSearchIntegrationTest : public ::testing::T
     NiceMock<MockCheckRefuted> refuted_nodes;
     NiceMock<MockGetChildren> children;
     NiceMock<MockDescend>     descend;
-    NiceMock<MockCallSite>    call_sites;
-    witness_factory_t witness_factory{leaves, refuted_nodes, children, call_sites};
+    witness_factory_t witness_factory{leaves, refuted_nodes, children};
     witness_forker_t  witness_forker;
     mhws_t            witnesses{witness_factory, witness_forker};
     std::unordered_map<pud_node_id, std::vector<pud_node_id>> sequences;
@@ -125,7 +120,7 @@ struct PudCandidateSpecializationHeadSearchIntegrationTest : public ::testing::T
 
     candidate_head_t make_head(pud_node_id node) {
         return candidate_head_t{
-            witnesses, witnesses, witnesses, leaves, refuted_nodes, children,
+            witnesses, witnesses, witnesses, witnesses, leaves, refuted_nodes, children,
             descent_t{node}};
     }
 

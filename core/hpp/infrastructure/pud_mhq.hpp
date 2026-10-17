@@ -25,6 +25,7 @@ struct pud_mhq {
     void remove_head(pud_mhq_head_id head_id);
     std::optional<pud_forced_query_propagation> candidate_specialization_refuted(pud_mhcs_head_id candidate_head_id);
     pud_mhq_head_admission try_fork_head(pud_mhq_head_id head_id, const std::vector<ReplayDescent>& root_descents);
+    bool check_head(pud_mhq_head_id head_id) const;
     const std::unordered_set<pud_mhcs_head_id>& get_candidates(pud_mhq_head_id head_id) const;
 private:
     pud_mhq_head_admission try_keep_head(
@@ -144,6 +145,11 @@ std::unordered_set<pud_mhcs_head_id> PUD_MHQ::unlink_head(pud_mhq_head_id head_i
     for (pud_mhcs_head_id candidate_id : extracted.mapped())
         candidate_to_head_.erase(candidate_id);
     return std::move(extracted.mapped());
+}
+
+PUD_MHQ_TEMPLATE
+bool PUD_MHQ::check_head(pud_mhq_head_id head_id) const {
+    return heads_.contains(head_id);
 }
 
 PUD_MHQ_TEMPLATE

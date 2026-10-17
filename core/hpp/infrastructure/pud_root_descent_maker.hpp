@@ -3,7 +3,7 @@
 
 #include <vector>
 #include "value_objects/expr.hpp"
-#include "value_objects/pud_mhsw_head_id.hpp"
+#include "value_objects/pud_watch_head_id.hpp"
 #include "value_objects/pud_node_id.hpp"
 #include "value_objects/pud_ubs_state.hpp"
 
@@ -101,8 +101,8 @@ BaseDescent PUD_ROOT_DESCENT_MAKER::make(pud_node_id root) {
     const LvcDescent lvc{get_node_added_var_count_, root};
     const BodyGoalExprDescent body_goal_expr{get_node_added_body_goals_, get_call_site_, root};
     const std::vector<const expr*>& root_body_goals = get_node_added_body_goals_.get(root);
-    std::vector<pud_mhsw_head_id> root_watch_head_ids;
-    for (pud_mhsw_head_id watch_head_id = 0; watch_head_id < root_body_goals.size(); ++watch_head_id)
+    std::vector<pud_watch_head_id> root_watch_head_ids;
+    for (pud_watch_head_id watch_head_id = 0; watch_head_id < root_body_goals.size(); ++watch_head_id)
         root_watch_head_ids.push_back(watch_head_id);
     return BaseDescent{
         BindingDescent{get_node_added_substitutions_, make_var_, make_functor_},

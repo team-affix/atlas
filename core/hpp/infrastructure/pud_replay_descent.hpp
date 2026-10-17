@@ -32,6 +32,7 @@ struct pud_replay_descent {
     pud_node_id node() const;
     const pud_ubs_state& ubs_state() const;
 private:
+    // Pointers rather than references, so the descent stays copy-assignable.
     IMakeVar* make_var_;
     IMakeFunctor* make_functor_;
     IMakeNormalizer* make_normalizer_;

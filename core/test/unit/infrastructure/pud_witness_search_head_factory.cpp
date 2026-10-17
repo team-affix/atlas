@@ -39,12 +39,8 @@ MockDescend* descend_ops = nullptr;
 std::optional<descent_t> descent_t::descend(pud_node_id child) const {
     return descend_ops->descend(*this, child);
 }
-struct MockCallSite {
-    MOCK_METHOD(size_t, get, (pud_node_id));
-};
-
 using test_factory_t = pud_witness_search_head_factory<
-    descent_t, child_iter, MockCheckLeaf, MockCheckRefuted, MockGetChildren, MockCallSite>;
+    descent_t, child_iter, MockCheckLeaf, MockCheckRefuted, MockGetChildren>;
 
 struct PudWitnessSearchHeadFactoryTest : public ::testing::Test {
     void SetUp() override { descend_ops = &descend; }
@@ -52,8 +48,7 @@ struct PudWitnessSearchHeadFactoryTest : public ::testing::Test {
     NiceMock<MockCheckRefuted> refuted_nodes;
     NiceMock<MockGetChildren> children;
     NiceMock<MockDescend> descend;
-    NiceMock<MockCallSite> call_sites;
-    test_factory_t factory{leaves, refuted_nodes, children, call_sites};
+    test_factory_t factory{leaves, refuted_nodes, children};
     pud_node_id root = 1;
     pud_node_id child = 2;
     pud_node_id grand = 3;
