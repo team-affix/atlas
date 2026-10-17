@@ -14,8 +14,9 @@
 #include "debug_assert.hpp"
 
 // Expands a live leaf at one of its open body goals: every candidate of that goal's query is
-// accepted as a child. The leaf stops being a leaf before any child descent opens a query, and
-// children whose descents arrive with a refuted goal are refuted right away.
+// accepted as a child. The leaf stops being a leaf (and stops being open) before any child descent
+// opens a query; children with open goals become open, and children whose descents arrive with a
+// refuted goal are refuted right away.
 template<
     typename IGetNodeDescent,
     typename IGetQueryCandidates,
@@ -25,6 +26,7 @@ template<
     typename IStoreCallSite,
     typename IStoreChildren,
     typename IUnsetLeaf,
+    typename IMarkLeafClosed,
     typename IStoreLiveChildCount,
     typename IPropagateRefutation,
     typename IInvalidateLeaves,
@@ -32,6 +34,7 @@ template<
     typename IRefuteNode,
     typename ICheckNodeRefuted,
     typename IStoreNodeDescent,
+    typename IMarkLeafOpen,
     typename IEraseNodeDescent>
 struct pud_leaf_expander {
     pud_leaf_expander(
@@ -43,6 +46,7 @@ struct pud_leaf_expander {
         IStoreCallSite& store_call_site,
         IStoreChildren& store_children,
         IUnsetLeaf& unset_leaf,
+        IMarkLeafClosed& mark_leaf_closed,
         IStoreLiveChildCount& store_live_child_count,
         IPropagateRefutation& propagate_refutation,
         IInvalidateLeaves& invalidate_leaves,
@@ -50,6 +54,7 @@ struct pud_leaf_expander {
         IRefuteNode& refute_node,
         ICheckNodeRefuted& check_node_refuted,
         IStoreNodeDescent& store_node_descent,
+        IMarkLeafOpen& mark_leaf_open,
         IEraseNodeDescent& erase_node_descent);
     void expand(pud_node_id leaf, body_goal_id goal);
 private:
@@ -61,6 +66,7 @@ private:
     IStoreCallSite& store_call_site_;
     IStoreChildren& store_children_;
     IUnsetLeaf& unset_leaf_;
+    IMarkLeafClosed& mark_leaf_closed_;
     IStoreLiveChildCount& store_live_child_count_;
     IPropagateRefutation& propagate_refutation_;
     IInvalidateLeaves& invalidate_leaves_;
@@ -68,6 +74,7 @@ private:
     IRefuteNode& refute_node_;
     ICheckNodeRefuted& check_node_refuted_;
     IStoreNodeDescent& store_node_descent_;
+    IMarkLeafOpen& mark_leaf_open_;
     IEraseNodeDescent& erase_node_descent_;
 };
 
@@ -75,15 +82,16 @@ private:
     template<typename IGetNodeDescent, typename IGetQueryCandidates,                       \
              typename IGetCandidatePath, typename IAcceptCandidate, typename IMakeChild, \
              typename IStoreCallSite, typename IStoreChildren, typename IUnsetLeaf,         \
-             typename IStoreLiveChildCount, typename IPropagateRefutation,                  \
-             typename IInvalidateLeaves, typename IGetQueryHeadNode, typename IRefuteNode,  \
-             typename ICheckNodeRefuted, typename IStoreNodeDescent,                        \
-             typename IEraseNodeDescent>
+             typename IMarkLeafClosed, typename IStoreLiveChildCount,                       \
+             typename IPropagateRefutation, typename IInvalidateLeaves,                     \
+             typename IGetQueryHeadNode, typename IRefuteNode, typename ICheckNodeRefuted,  \
+             typename IStoreNodeDescent, typename IMarkLeafOpen, typename IEraseNodeDescent>
 #define PUD_LEAF_EXPANDER                                                                  \
     pud_leaf_expander<IGetNodeDescent, IGetQueryCandidates, IGetCandidatePath,          \
         IAcceptCandidate, IMakeChild, IStoreCallSite, IStoreChildren, IUnsetLeaf,          \
-        IStoreLiveChildCount, IPropagateRefutation, IInvalidateLeaves, IGetQueryHeadNode,  \
-        IRefuteNode, ICheckNodeRefuted, IStoreNodeDescent, IEraseNodeDescent>
+        IMarkLeafClosed, IStoreLiveChildCount, IPropagateRefutation, IInvalidateLeaves,    \
+        IGetQueryHeadNode, IRefuteNode, ICheckNodeRefuted, IStoreNodeDescent,              \
+        IMarkLeafOpen, IEraseNodeDescent>
 
 PUD_LEAF_EXPANDER_TEMPLATE
 PUD_LEAF_EXPANDER::pud_leaf_expander(
@@ -95,6 +103,7 @@ PUD_LEAF_EXPANDER::pud_leaf_expander(
     IStoreCallSite& store_call_site,
     IStoreChildren& store_children,
     IUnsetLeaf& unset_leaf,
+    IMarkLeafClosed& mark_leaf_closed,
     IStoreLiveChildCount& store_live_child_count,
     IPropagateRefutation& propagate_refutation,
     IInvalidateLeaves& invalidate_leaves,
@@ -102,6 +111,7 @@ PUD_LEAF_EXPANDER::pud_leaf_expander(
     IRefuteNode& refute_node,
     ICheckNodeRefuted& check_node_refuted,
     IStoreNodeDescent& store_node_descent,
+    IMarkLeafOpen& mark_leaf_open,
     IEraseNodeDescent& erase_node_descent)
     : get_node_descent_(get_node_descent)
     , get_query_candidates_(get_query_candidates)
@@ -111,6 +121,7 @@ PUD_LEAF_EXPANDER::pud_leaf_expander(
     , store_call_site_(store_call_site)
     , store_children_(store_children)
     , unset_leaf_(unset_leaf)
+    , mark_leaf_closed_(mark_leaf_closed)
     , store_live_child_count_(store_live_child_count)
     , propagate_refutation_(propagate_refutation)
     , invalidate_leaves_(invalidate_leaves)
@@ -118,6 +129,7 @@ PUD_LEAF_EXPANDER::pud_leaf_expander(
     , refute_node_(refute_node)
     , check_node_refuted_(check_node_refuted)
     , store_node_descent_(store_node_descent)
+    , mark_leaf_open_(mark_leaf_open)
     , erase_node_descent_(erase_node_descent) {}
 
 PUD_LEAF_EXPANDER_TEMPLATE
@@ -143,6 +155,7 @@ void PUD_LEAF_EXPANDER::expand(pud_node_id leaf, body_goal_id goal) {
     store_call_site_.store(leaf, goal);
     store_children_.store(leaf, children);
     unset_leaf_.unset_leaf(leaf);
+    mark_leaf_closed_.mark_leaf_closed(leaf);
     store_live_child_count_.store(leaf, children.size());
     if (children.empty())
         propagate_refutation_.refute(leaf);
@@ -160,10 +173,15 @@ void PUD_LEAF_EXPANDER::expand(pud_node_id leaf, body_goal_id goal) {
             continue;
         auto child_descent = leaf_descent.descend(leaf, child);
         const bool goal_refuted = !child_descent.body_goal_pq().refuted_goals().empty();
+        const bool goals_open = !child_descent.body_goal_expr().body_goal_exprs().empty();
         store_node_descent_.store(child, std::move(child_descent));
-        if (!goal_refuted)
+        if (goal_refuted) {
+            children_with_refuted_goals.push_back(child);
             continue;
-        children_with_refuted_goals.push_back(child);
+        }
+        if (!goals_open)
+            continue;
+        mark_leaf_open_.mark_leaf_open(child);
     }
     erase_node_descent_.erase(leaf);
     for (pud_node_id child : children_with_refuted_goals)

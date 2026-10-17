@@ -1,6 +1,6 @@
-#include "infrastructure/pud_manifest.hpp"
+#include "infrastructure/pud_random_solver_manifest.hpp"
 
-pud_manifest::pud_manifest(uint32_t random_seed)
+pud_random_solver_manifest::pud_random_solver_manifest(uint32_t random_seed)
     : expr_pool_(),
       globalizer_(),
       node_id_sequencer_(),
@@ -14,10 +14,12 @@ pud_manifest::pud_manifest(uint32_t random_seed)
       root_nodes_(),
       axioms_(),
       leaf_nodes_(),
+      open_leaves_(),
       refuted_leaves_(),
       node_live_child_counts_(),
       query_head_nodes_(),
       refuted_node_checker_(leaf_nodes_, refuted_leaves_, node_live_child_counts_),
+      open_conjecture_leaves_(open_leaves_, open_leaves_, root_nodes_, axioms_, node_parents_),
       normalizer_factory_(globalizer_, expr_pool_),
       unifier_factory_(globalizer_),
       witness_search_head_factory_(leaf_nodes_, refuted_node_checker_, children_, call_sites_),
@@ -48,22 +50,25 @@ pud_manifest::pud_manifest(uint32_t random_seed)
       refutation_propagator_(root_nodes_, node_parents_, node_live_child_counts_),
       leaf_invalidator_(mhws_, mhcs_, mhcs_, mhq_),
       node_refuter_(
-          live_leaf_finder_, refuted_leaves_, refutation_propagator_, node_descents_,
-          leaf_invalidator_, query_head_nodes_),
+          live_leaf_finder_, refuted_leaves_, open_leaves_, open_conjecture_leaves_, refutation_propagator_,
+          node_descents_, leaf_invalidator_, query_head_nodes_),
       leaf_expander_(
           node_descents_, mhq_, mhcs_, acceptor_, child_maker_, call_sites_, children_,
-          leaf_nodes_, node_live_child_counts_, refutation_propagator_, leaf_invalidator_,
-          query_head_nodes_, node_refuter_, refuted_node_checker_, node_descents_, node_descents_),
+          leaf_nodes_, open_conjecture_leaves_, node_live_child_counts_, refutation_propagator_,
+          leaf_invalidator_, query_head_nodes_, node_refuter_, refuted_node_checker_,
+          node_descents_, open_conjecture_leaves_, node_descents_),
+      leaf_activator_(node_descents_, open_conjecture_leaves_, node_refuter_),
+      base_descent_runner_(
+          axioms_, refuted_node_checker_, root_descent_maker_, leaf_nodes_, children_,
+          leaf_activator_, node_refuter_),
       rng_(random_seed),
-      oldest_rule_chooser_(),
+      random_rule_chooser_(rng_),
       random_subgoal_chooser_(node_descents_, rng_),
-      decision_generator_(oldest_rule_chooser_, random_subgoal_chooser_),
-      solver_(
-          live_leaf_finder_, node_descents_, decision_generator_, leaf_expander_,
-          root_descent_maker_, node_descents_, node_refuter_),
+      decision_generator_(random_rule_chooser_, random_subgoal_chooser_),
+      unfold_loop_(open_conjecture_leaves_, decision_generator_, leaf_expander_),
       axiom_initializer_(
           node_id_sequencer_, node_heads_, node_added_body_goals_, node_added_var_count_,
           root_nodes_, leaf_nodes_, axioms_),
       conjecture_initializer_(
           node_id_sequencer_, node_added_body_goals_, node_added_var_count_, root_nodes_,
-          leaf_nodes_) {}
+          leaf_nodes_, root_descent_maker_, leaf_activator_) {}

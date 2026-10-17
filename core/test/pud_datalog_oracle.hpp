@@ -6,7 +6,7 @@
 #include <set>
 #include <string>
 #include <vector>
-#include "pud_manifest_harness.hpp"
+#include "pud_random_solver_manifest_harness.hpp"
 
 // Small random function-free programs over a three-constant domain, and their least model.
 // An argument >= 0 is a constant; an argument < 0 is the variable -(argument + 1).
@@ -142,7 +142,7 @@ inline std::set<std::vector<int>> datalog_answers(const datalog_program& program
     return answers;
 }
 
-inline const expr* datalog_expr(pud_manifest_harness& harness, const datalog_atom& atom) {
+inline const expr* datalog_expr(pud_random_solver_manifest_harness& harness, const datalog_atom& atom) {
     std::vector<const expr*> args;
     for (int arg : atom.args)
         args.push_back(arg >= 0 ? harness.atom("k" + std::to_string(arg)) : harness.var(-(arg + 1)));
@@ -150,7 +150,7 @@ inline const expr* datalog_expr(pud_manifest_harness& harness, const datalog_ato
 }
 
 // Loads the program as axioms and starts its conjecture; returns the conjecture root.
-inline pud_node_id load_datalog(pud_manifest_harness& harness, const datalog_program& program) {
+inline pud_node_id load_datalog(pud_random_solver_manifest_harness& harness, const datalog_program& program) {
     for (const datalog_atom& fact : program.facts)
         harness.axiom(datalog_expr(harness, fact), {}, 0);
     for (const datalog_rule& rule : program.rules) {
@@ -169,7 +169,7 @@ inline pud_node_id load_datalog(pud_manifest_harness& harness, const datalog_pro
 }
 
 // Reads an answer back into constant indices; nullopt if it is not ground over the domain.
-inline std::optional<std::vector<int>> datalog_read_answer(pud_manifest_harness& harness, const expr* answer) {
+inline std::optional<std::vector<int>> datalog_read_answer(pud_random_solver_manifest_harness& harness, const expr* answer) {
     std::vector<int> values;
     for (const expr* arg : std::get<expr::functor>(answer->content).args) {
         std::optional<int> value;

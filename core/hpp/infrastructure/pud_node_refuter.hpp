@@ -11,6 +11,8 @@
 template<
     typename IFindLiveLeaves,
     typename IMarkLeafRefuted,
+    typename ICheckLeafOpen,
+    typename IMarkLeafClosed,
     typename IPropagateRefutation,
     typename IEraseNodeDescent,
     typename IInvalidateLeaves,
@@ -19,6 +21,8 @@ struct pud_node_refuter {
     pud_node_refuter(
         IFindLiveLeaves& find_live_leaves,
         IMarkLeafRefuted& mark_leaf_refuted,
+        ICheckLeafOpen& check_leaf_open,
+        IMarkLeafClosed& mark_leaf_closed,
         IPropagateRefutation& propagate_refutation,
         IEraseNodeDescent& erase_node_descent,
         IInvalidateLeaves& invalidate_leaves,
@@ -27,6 +31,8 @@ struct pud_node_refuter {
 private:
     IFindLiveLeaves& find_live_leaves_;
     IMarkLeafRefuted& mark_leaf_refuted_;
+    ICheckLeafOpen& check_leaf_open_;
+    IMarkLeafClosed& mark_leaf_closed_;
     IPropagateRefutation& propagate_refutation_;
     IEraseNodeDescent& erase_node_descent_;
     IInvalidateLeaves& invalidate_leaves_;
@@ -34,22 +40,27 @@ private:
 };
 
 #define PUD_NODE_REFUTER_TEMPLATE                                                          \
-    template<typename IFindLiveLeaves, typename IMarkLeafRefuted, typename IPropagateRefutation, \
-             typename IEraseNodeDescent, typename IInvalidateLeaves, typename IGetQueryHeadNode>
+    template<typename IFindLiveLeaves, typename IMarkLeafRefuted, typename ICheckLeafOpen, \
+             typename IMarkLeafClosed, typename IPropagateRefutation, typename IEraseNodeDescent, \
+             typename IInvalidateLeaves, typename IGetQueryHeadNode>
 #define PUD_NODE_REFUTER                                                                   \
-    pud_node_refuter<IFindLiveLeaves, IMarkLeafRefuted, IPropagateRefutation,              \
-        IEraseNodeDescent, IInvalidateLeaves, IGetQueryHeadNode>
+    pud_node_refuter<IFindLiveLeaves, IMarkLeafRefuted, ICheckLeafOpen, IMarkLeafClosed,   \
+        IPropagateRefutation, IEraseNodeDescent, IInvalidateLeaves, IGetQueryHeadNode>
 
 PUD_NODE_REFUTER_TEMPLATE
 PUD_NODE_REFUTER::pud_node_refuter(
     IFindLiveLeaves& find_live_leaves,
     IMarkLeafRefuted& mark_leaf_refuted,
+    ICheckLeafOpen& check_leaf_open,
+    IMarkLeafClosed& mark_leaf_closed,
     IPropagateRefutation& propagate_refutation,
     IEraseNodeDescent& erase_node_descent,
     IInvalidateLeaves& invalidate_leaves,
     IGetQueryHeadNode& get_query_head_node)
     : find_live_leaves_(find_live_leaves)
     , mark_leaf_refuted_(mark_leaf_refuted)
+    , check_leaf_open_(check_leaf_open)
+    , mark_leaf_closed_(mark_leaf_closed)
     , propagate_refutation_(propagate_refutation)
     , erase_node_descent_(erase_node_descent)
     , invalidate_leaves_(invalidate_leaves)
@@ -66,6 +77,9 @@ void PUD_NODE_REFUTER::refute(pud_node_id node) {
             mark_leaf_refuted_.mark_refuted(leaf);
             propagate_refutation_.refute(leaf);
             erase_node_descent_.erase(leaf);
+            if (!check_leaf_open_.check_leaf_open(leaf))
+                continue;
+            mark_leaf_closed_.mark_leaf_closed(leaf);
         }
         for (const pud_forced_query_propagation& forced : invalidate_leaves_.invalidate(live_leaves)) {
             const pud_refuted_query* refuted_query = std::get_if<pud_refuted_query>(&forced);

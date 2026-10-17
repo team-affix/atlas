@@ -21,6 +21,14 @@ struct MockMarkLeafRefuted {
     MOCK_METHOD(void, mark_refuted, (pud_node_id));
 };
 
+struct MockCheckLeafOpen {
+    MOCK_METHOD(bool, check_leaf_open, (pud_node_id));
+};
+
+struct MockMarkLeafClosed {
+    MOCK_METHOD(void, mark_leaf_closed, (pud_node_id));
+};
+
 struct MockPropagateRefutation {
     MOCK_METHOD(void, refute, (pud_node_id));
 };
@@ -40,6 +48,8 @@ struct MockGetQueryHeadNode {
 using test_refuter_t = pud_node_refuter<
     NiceMock<MockFindLiveLeaves>,
     NiceMock<MockMarkLeafRefuted>,
+    NiceMock<MockCheckLeafOpen>,
+    NiceMock<MockMarkLeafClosed>,
     NiceMock<MockPropagateRefutation>,
     NiceMock<MockEraseNodeDescent>,
     NiceMock<MockInvalidateLeaves>,
@@ -48,11 +58,14 @@ using test_refuter_t = pud_node_refuter<
 struct PudNodeRefuterTest : public ::testing::Test {
     NiceMock<MockFindLiveLeaves> live_leaves;
     NiceMock<MockMarkLeafRefuted> refuted_leaves;
+    NiceMock<MockCheckLeafOpen> check_open;
+    NiceMock<MockMarkLeafClosed> close_leaf;
     NiceMock<MockPropagateRefutation> propagator;
     NiceMock<MockEraseNodeDescent> descents;
     NiceMock<MockInvalidateLeaves> invalidator;
     NiceMock<MockGetQueryHeadNode> head_nodes;
-    test_refuter_t refuter{live_leaves, refuted_leaves, propagator, descents, invalidator, head_nodes};
+    test_refuter_t refuter{
+        live_leaves, refuted_leaves, check_open, close_leaf, propagator, descents, invalidator, head_nodes};
     pud_node_id node = 1;
     pud_node_id leaf_a = 2;
     pud_node_id leaf_b = 3;
@@ -130,3 +143,41 @@ TEST_F(PudNodeRefuterTest, AlreadyRefutedNodeMarksNothing) {
 }
 
 }  // namespace
+
+// ---------- open leaves ----------
+
+TEST_F(PudNodeRefuterTest, OpenLiveLeavesAreClosed) {
+    ON_CALL(check_open, check_leaf_open(_)).WillByDefault(Return(true));
+    EXPECT_CALL(close_leaf, mark_leaf_closed(leaf_a));
+    EXPECT_CALL(close_leaf, mark_leaf_closed(leaf_b));
+    refuter.refute(node);
+}
+
+TEST_F(PudNodeRefuterTest, LeavesThatWereNotOpenAreNotClosedAgain) {
+    ON_CALL(check_open, check_leaf_open(leaf_a)).WillByDefault(Return(true));
+    ON_CALL(check_open, check_leaf_open(leaf_b)).WillByDefault(Return(false));
+    EXPECT_CALL(close_leaf, mark_leaf_closed(leaf_a));
+    EXPECT_CALL(close_leaf, mark_leaf_closed(leaf_b)).Times(0);
+    refuter.refute(node);
+}
+
+TEST_F(PudNodeRefuterTest, LeafIsClosedOnlyAfterItIsMarkedRefuted) {
+    ON_CALL(check_open, check_leaf_open(_)).WillByDefault(Return(true));
+    InSequence in_order;
+    EXPECT_CALL(refuted_leaves, mark_refuted(leaf_a));
+    EXPECT_CALL(close_leaf, mark_leaf_closed(leaf_a));
+    EXPECT_CALL(refuted_leaves, mark_refuted(leaf_b));
+    EXPECT_CALL(close_leaf, mark_leaf_closed(leaf_b));
+    refuter.refute(node);
+}
+
+TEST_F(PudNodeRefuterTest, LeavesOfARefutedOpenerAreClosedToo) {
+    ON_CALL(check_open, check_leaf_open(_)).WillByDefault(Return(true));
+    ON_CALL(invalidator, invalidate(std::vector<pud_node_id>{leaf_a, leaf_b}))
+        .WillByDefault(Return(std::vector<pud_forced_query_propagation>{pud_refuted_query{.head_id = 9}}));
+    ON_CALL(head_nodes, get(9)).WillByDefault(Return(opener));
+    EXPECT_CALL(close_leaf, mark_leaf_closed(leaf_a));
+    EXPECT_CALL(close_leaf, mark_leaf_closed(leaf_b));
+    EXPECT_CALL(close_leaf, mark_leaf_closed(opener_leaf));
+    refuter.refute(node);
+}

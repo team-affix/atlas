@@ -7,6 +7,7 @@
 
 // The roots that make up the database. Goals only ever unfold onto these.
 struct pud_axioms {
+    bool check_axiom(pud_node_id id) const;
     void mark_axiom(pud_node_id id);
     const std::vector<pud_node_id>& get() const;
 private:

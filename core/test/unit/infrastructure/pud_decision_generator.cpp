@@ -1,10 +1,9 @@
-#include <vector>
+#include <set>
 #include <gtest/gtest.h>
 #include <gmock/gmock.h>
 #include "infrastructure/pud_decision_generator.hpp"
 
 using ::testing::_;
-using ::testing::ElementsAre;
 using ::testing::InSequence;
 using ::testing::Return;
 using ::testing::StrictMock;
@@ -12,7 +11,7 @@ using ::testing::StrictMock;
 namespace {
 
 struct MockChooseUnfoldLeafRule {
-    MOCK_METHOD(pud_node_id, choose_rule, (const std::vector<pud_node_id>&));
+    MOCK_METHOD(pud_node_id, choose_rule, (const std::set<pud_node_id>&));
 };
 
 struct MockChooseUnfoldSubgoal {
@@ -27,7 +26,7 @@ struct PudDecisionGeneratorTest : public ::testing::Test {
 };
 
 TEST_F(PudDecisionGeneratorTest, DecisionPairsTheChosenRuleWithItsChosenSubgoal) {
-    EXPECT_CALL(rules, choose_rule(ElementsAre(3u, 8u))).WillOnce(Return(8));
+    EXPECT_CALL(rules, choose_rule(std::set<pud_node_id>({3, 8}))).WillOnce(Return(8));
     EXPECT_CALL(subgoals, choose_subgoal(8u)).WillOnce(Return(2));
     EXPECT_EQ(generator.generate({3, 8}), (pud_decision{8, 2}));
 }
@@ -40,7 +39,7 @@ TEST_F(PudDecisionGeneratorTest, SubgoalIsChosenForTheChosenRuleOnly) {
 }
 
 TEST_F(PudDecisionGeneratorTest, EveryOpenLeafIsOfferedToTheRuleChooser) {
-    EXPECT_CALL(rules, choose_rule(ElementsAre(9u, 1u, 4u))).WillOnce(Return(1));
+    EXPECT_CALL(rules, choose_rule(std::set<pud_node_id>({1, 4, 9}))).WillOnce(Return(1));
     EXPECT_CALL(subgoals, choose_subgoal(1u)).WillOnce(Return(0));
     generator.generate({9, 1, 4});
 }

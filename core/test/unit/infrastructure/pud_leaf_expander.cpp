@@ -86,6 +86,12 @@ struct MockStoreChildren {
 struct MockUnsetLeaf {
     MOCK_METHOD(void, unset_leaf, (pud_node_id));
 };
+struct MockMarkLeafClosed {
+    MOCK_METHOD(void, mark_leaf_closed, (pud_node_id));
+};
+struct MockMarkLeafOpen {
+    MOCK_METHOD(void, mark_leaf_open, (pud_node_id));
+};
 struct MockStoreLiveChildCount {
     MOCK_METHOD(void, store, (pud_node_id, size_t));
 };
@@ -114,9 +120,10 @@ struct MockEraseNodeDescent {
 using test_expander_t = pud_leaf_expander<
     NiceMock<MockGetNodeDescent>, NiceMock<MockGetQueryCandidates>, NiceMock<MockGetCandidatePath>,
     NiceMock<MockAcceptCandidate>, NiceMock<MockMakeChild>, NiceMock<MockStoreCallSite>,
-    NiceMock<MockStoreChildren>, NiceMock<MockUnsetLeaf>, NiceMock<MockStoreLiveChildCount>,
-    NiceMock<MockPropagateRefutation>, NiceMock<MockInvalidateLeaves>, NiceMock<MockGetQueryHeadNode>,
-    NiceMock<MockRefuteNode>, NiceMock<MockCheckNodeRefuted>, NiceMock<MockStoreNodeDescent>,
+    NiceMock<MockStoreChildren>, NiceMock<MockUnsetLeaf>, NiceMock<MockMarkLeafClosed>,
+    NiceMock<MockStoreLiveChildCount>, NiceMock<MockPropagateRefutation>,
+    NiceMock<MockInvalidateLeaves>, NiceMock<MockGetQueryHeadNode>, NiceMock<MockRefuteNode>,
+    NiceMock<MockCheckNodeRefuted>, NiceMock<MockStoreNodeDescent>, NiceMock<MockMarkLeafOpen>,
     NiceMock<MockEraseNodeDescent>>;
 
 const expr* expr_at(uintptr_t address) {
@@ -135,6 +142,7 @@ struct PudLeafExpanderTest : public ::testing::Test {
     NiceMock<MockStoreCallSite> call_sites;
     NiceMock<MockStoreChildren> children;
     NiceMock<MockUnsetLeaf> leaves;
+    NiceMock<MockMarkLeafClosed> close_leaf;
     NiceMock<MockStoreLiveChildCount> live_child_counts;
     NiceMock<MockPropagateRefutation> propagator;
     NiceMock<MockInvalidateLeaves> invalidator;
@@ -142,11 +150,12 @@ struct PudLeafExpanderTest : public ::testing::Test {
     NiceMock<MockRefuteNode> refuter;
     NiceMock<MockCheckNodeRefuted> refuted_nodes;
     NiceMock<MockStoreNodeDescent> store_descent;
+    NiceMock<MockMarkLeafOpen> open_leaf;
     NiceMock<MockEraseNodeDescent> erase_descent;
     test_expander_t expander{
         get_descent, query_candidates, candidate_paths, acceptor, child_maker, call_sites,
-        children, leaves, live_child_counts, propagator, invalidator, head_nodes, refuter,
-        refuted_nodes, store_descent, erase_descent};
+        children, leaves, close_leaf, live_child_counts, propagator, invalidator, head_nodes,
+        refuter, refuted_nodes, store_descent, open_leaf, erase_descent};
 
     pud_node_id leaf = 1;
     body_goal_id goal = 2;
@@ -158,6 +167,7 @@ struct PudLeafExpanderTest : public ::testing::Test {
     std::vector<pud_node_id> path_31{50, 70};
     std::vector<body_goal_id> no_refuted_goals;
     std::vector<body_goal_id> one_refuted_goal{4};
+    body_goal_exprs_t no_goals;
     pud_child_delta delta_60{.substitutions = {}, .body_goals = {}, .var_count = 1};
     pud_child_delta delta_70{.substitutions = {}, .body_goals = {}, .var_count = 2};
     pud_node_id next_child = 100;
@@ -293,3 +303,51 @@ TEST_F(PudLeafExpanderTest, UnitQueryFromInvalidationRefutesNothing) {
 }
 
 }  // namespace
+
+// ---------- open leaves ----------
+
+TEST_F(PudLeafExpanderTest, ExpandedLeafIsClosedWhenItStopsBeingALeaf) {
+    InSequence in_order;
+    EXPECT_CALL(leaves, unset_leaf(leaf));
+    EXPECT_CALL(close_leaf, mark_leaf_closed(leaf));
+    EXPECT_CALL(open_leaf, mark_leaf_open(_)).Times(::testing::AnyNumber());
+    expander.expand(leaf, goal);
+}
+
+TEST_F(PudLeafExpanderTest, ChildrenWithOpenGoalsBecomeOpenAfterTheirDescentsAreStored) {
+    InSequence in_order;
+    EXPECT_CALL(store_descent, store(100, _));
+    EXPECT_CALL(open_leaf, mark_leaf_open(100));
+    EXPECT_CALL(store_descent, store(101, _));
+    EXPECT_CALL(open_leaf, mark_leaf_open(101));
+    expander.expand(leaf, goal);
+}
+
+TEST_F(PudLeafExpanderTest, ChildWithoutOpenGoalsStaysClosed) {
+    ON_CALL(ops, body_goal_exprs(1101)).WillByDefault(ReturnRef(no_goals));
+    EXPECT_CALL(open_leaf, mark_leaf_open(100));
+    EXPECT_CALL(open_leaf, mark_leaf_open(101)).Times(0);
+    expander.expand(leaf, goal);
+}
+
+TEST_F(PudLeafExpanderTest, ChildWithARefutedGoalIsRefutedNotOpened) {
+    ON_CALL(ops, refuted_goals(1101)).WillByDefault(ReturnRef(one_refuted_goal));
+    EXPECT_CALL(open_leaf, mark_leaf_open(100));
+    EXPECT_CALL(open_leaf, mark_leaf_open(101)).Times(0);
+    EXPECT_CALL(refuter, refute(101));
+    expander.expand(leaf, goal);
+}
+
+TEST_F(PudLeafExpanderTest, AlreadyRefutedChildIsNeverOpened) {
+    ON_CALL(refuted_nodes, check_refuted(100)).WillByDefault(Return(true));
+    EXPECT_CALL(open_leaf, mark_leaf_open(100)).Times(0);
+    EXPECT_CALL(open_leaf, mark_leaf_open(101));
+    expander.expand(leaf, goal);
+}
+
+TEST_F(PudLeafExpanderTest, LeafWithoutCandidatesIsClosedAndOpensNothing) {
+    candidates.clear();
+    EXPECT_CALL(close_leaf, mark_leaf_closed(leaf));
+    EXPECT_CALL(open_leaf, mark_leaf_open(_)).Times(0);
+    expander.expand(leaf, goal);
+}

@@ -5,7 +5,7 @@
 #include <vector>
 #include <gtest/gtest.h>
 #include "pud_datalog_oracle.hpp"
-#include "pud_manifest_harness.hpp"
+#include "pud_random_solver_manifest_harness.hpp"
 
 namespace {
 
@@ -20,7 +20,7 @@ std::string describe(const std::set<std::vector<int>>& answers) {
     return text + "}";
 }
 
-std::set<std::vector<int>> read_answers(pud_manifest_harness& harness, const std::vector<const expr*>& answers) {
+std::set<std::vector<int>> read_answers(pud_random_solver_manifest_harness& harness, const std::vector<const expr*>& answers) {
     std::set<std::vector<int>> read;
     for (const expr* answer : answers) {
         const std::optional<std::vector<int>> values = datalog_read_answer(harness, answer);
@@ -40,13 +40,13 @@ bool has_duplicates(std::vector<const expr*> answers) {
 
 // ---------- flat (non-recursive) programs: the search space is finite ----------
 
-TEST(PudManifestOracleTest, DatalogAnswersMatchABottomUpFixpoint) {
+TEST(PudRandomSolverManifestOracleTest, DatalogAnswersMatchABottomUpFixpoint) {
     size_t programs_with_answers = 0;
     size_t total_answers = 0;
     for (unsigned seed = 0; seed < 200; ++seed) {
         SCOPED_TRACE("seed " + std::to_string(seed));
         const datalog_program program = generate_datalog(seed, false);
-        auto harness = std::make_unique<pud_manifest_harness>(seed);
+        auto harness = std::make_unique<pud_random_solver_manifest_harness>(seed);
         const pud_node_id conjecture = load_datalog(*harness, program);
         const std::vector<const expr*> answers = harness->enumerate(conjecture, 5000, 20000);
         const std::set<std::vector<int>> expected = datalog_answers(program);
@@ -59,11 +59,11 @@ TEST(PudManifestOracleTest, DatalogAnswersMatchABottomUpFixpoint) {
     EXPECT_GE(total_answers, 150u);
 }
 
-TEST(PudManifestOracleTest, EnumerationIsCompleteForFiniteSearchSpaces) {
+TEST(PudRandomSolverManifestOracleTest, EnumerationIsCompleteForFiniteSearchSpaces) {
     for (unsigned seed = 1000; seed < 1200; ++seed) {
         SCOPED_TRACE("seed " + std::to_string(seed));
         const datalog_program program = generate_datalog(seed, false);
-        auto harness = std::make_unique<pud_manifest_harness>(seed);
+        auto harness = std::make_unique<pud_random_solver_manifest_harness>(seed);
         const pud_node_id conjecture = load_datalog(*harness, program);
         const std::vector<const expr*> answers = harness->enumerate(conjecture, 5000, 20000);
         EXPECT_TRUE(harness->exhausted(conjecture)) << "a finite search space must end exhausted";
@@ -73,12 +73,12 @@ TEST(PudManifestOracleTest, EnumerationIsCompleteForFiniteSearchSpaces) {
 
 // ---------- recursive programs: answers must be sound even when the search never ends ----------
 
-TEST(PudManifestOracleTest, EveryAnswerIsEntailed) {
+TEST(PudRandomSolverManifestOracleTest, EveryAnswerIsEntailed) {
     size_t answers_checked = 0;
     for (unsigned seed = 2000; seed < 2200; ++seed) {
         SCOPED_TRACE("seed " + std::to_string(seed));
         const datalog_program program = generate_datalog(seed, true);
-        auto harness = std::make_unique<pud_manifest_harness>(seed);
+        auto harness = std::make_unique<pud_random_solver_manifest_harness>(seed);
         const pud_node_id conjecture = load_datalog(*harness, program);
         const std::vector<const expr*> answers = harness->enumerate(conjecture, 40, 400);
         const std::set<std::vector<int>> expected = datalog_answers(program);
@@ -93,9 +93,9 @@ TEST(PudManifestOracleTest, EveryAnswerIsEntailed) {
 
 // ---------- programs where every answer has exactly one derivation ----------
 
-TEST(PudManifestOracleTest, EnumerationProducesNoDuplicates) {
+TEST(PudRandomSolverManifestOracleTest, EnumerationProducesNoDuplicates) {
     {
-        pud_manifest_harness harness{0};
+        pud_random_solver_manifest_harness harness{0};
         harness.add_append();
         const pud_node_id conjecture = harness.start_conjecture(
             harness.functor("q", {harness.var(0), harness.var(1)}),
@@ -108,7 +108,7 @@ TEST(PudManifestOracleTest, EnumerationProducesNoDuplicates) {
         EXPECT_TRUE(harness.exhausted(conjecture));
     }
     {
-        pud_manifest_harness harness{0};
+        pud_random_solver_manifest_harness harness{0};
         harness.add_member();
         const pud_node_id conjecture = harness.start_conjecture(
             harness.functor("q", {harness.var(0)}),
@@ -120,7 +120,7 @@ TEST(PudManifestOracleTest, EnumerationProducesNoDuplicates) {
         EXPECT_FALSE(has_duplicates(answers));
     }
     {
-        pud_manifest_harness harness{0};
+        pud_random_solver_manifest_harness harness{0};
         harness.add_peano_add();
         const pud_node_id conjecture = harness.start_conjecture(
             harness.functor("q", {harness.var(0), harness.var(1)}),
@@ -131,7 +131,7 @@ TEST(PudManifestOracleTest, EnumerationProducesNoDuplicates) {
         EXPECT_FALSE(has_duplicates(answers));
     }
     {
-        pud_manifest_harness harness{0};
+        pud_random_solver_manifest_harness harness{0};
         harness.add_nat();
         const pud_node_id conjecture = harness.start_conjecture(
             harness.functor("q", {harness.var(0)}), {harness.functor("nat", {harness.var(0)})}, 1);
@@ -147,7 +147,7 @@ namespace {
 
 // Loads the program like load_datalog, but starts every rule's tree and expands it along its open
 // goals before the conjecture starts, so the conjecture also resolves against specialized rule positions.
-pud_node_id load_datalog_with_grown_rules(pud_manifest_harness& harness, const datalog_program& program, uint32_t depth) {
+pud_node_id load_datalog_with_grown_rules(pud_random_solver_manifest_harness& harness, const datalog_program& program, uint32_t depth) {
     for (const datalog_atom& fact : program.facts)
         harness.axiom(datalog_expr(harness, fact), {}, 0);
     std::vector<pud_node_id> rule_roots;
@@ -157,8 +157,8 @@ pud_node_id load_datalog_with_grown_rules(pud_manifest_harness& harness, const d
             body.push_back(datalog_expr(harness, atom));
         rule_roots.push_back(harness.axiom(datalog_expr(harness, rule.head), body, static_cast<uint32_t>(rule.var_count)));
     }
+    harness.run_base_descent();
     for (pud_node_id rule_root : rule_roots) {
-        harness.start_tree(rule_root);
         if (harness.refuted(rule_root))
             continue;
         harness.grow_along_open_goals(rule_root, depth);
@@ -174,11 +174,11 @@ pud_node_id load_datalog_with_grown_rules(pud_manifest_harness& harness, const d
 
 }  // namespace
 
-TEST(PudManifestOracleTest, GrownRuleTreesLeaveFlatAnswersUnchanged) {
+TEST(PudRandomSolverManifestOracleTest, GrownRuleTreesLeaveFlatAnswersUnchanged) {
     for (unsigned seed = 3000; seed < 3150; ++seed) {
         SCOPED_TRACE("seed " + std::to_string(seed));
         const datalog_program program = generate_datalog(seed, false);
-        auto harness = std::make_unique<pud_manifest_harness>(seed);
+        auto harness = std::make_unique<pud_random_solver_manifest_harness>(seed);
         const pud_node_id conjecture = load_datalog_with_grown_rules(*harness, program, 2);
         harness->check_all();
         const std::vector<const expr*> answers = harness->enumerate(conjecture, 5000, 20000);
@@ -190,11 +190,11 @@ TEST(PudManifestOracleTest, GrownRuleTreesLeaveFlatAnswersUnchanged) {
     }
 }
 
-TEST(PudManifestOracleTest, GrownRuleTreesKeepRecursiveAnswersSound) {
+TEST(PudRandomSolverManifestOracleTest, GrownRuleTreesKeepRecursiveAnswersSound) {
     for (unsigned seed = 4000; seed < 4150; ++seed) {
         SCOPED_TRACE("seed " + std::to_string(seed));
         const datalog_program program = generate_datalog(seed, true);
-        auto harness = std::make_unique<pud_manifest_harness>(seed);
+        auto harness = std::make_unique<pud_random_solver_manifest_harness>(seed);
         const pud_node_id conjecture = load_datalog_with_grown_rules(*harness, program, 2);
         const std::vector<const expr*> answers = harness->enumerate(conjecture, 40, 400);
         const std::set<std::vector<int>> expected = datalog_answers(program);

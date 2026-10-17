@@ -1,5 +1,5 @@
-#ifndef PUD_MANIFEST_HPP
-#define PUD_MANIFEST_HPP
+#ifndef PUD_RANDOM_UNFOLD_MANIFEST_HPP
+#define PUD_RANDOM_UNFOLD_MANIFEST_HPP
 
 #include <cstdint>
 #include <random>
@@ -12,6 +12,7 @@
 #include "infrastructure/pud_acceptor.hpp"
 #include "infrastructure/pud_axiom_initializer.hpp"
 #include "infrastructure/pud_axioms.hpp"
+#include "infrastructure/pud_base_descent_runner.hpp"
 #include "infrastructure/pud_base_descent.hpp"
 #include "infrastructure/pud_binding_descent.hpp"
 #include "infrastructure/pud_body_goal_expr_descent.hpp"
@@ -23,6 +24,7 @@
 #include "infrastructure/pud_child_maker.hpp"
 #include "infrastructure/pud_children.hpp"
 #include "infrastructure/pud_decision_generator.hpp"
+#include "infrastructure/pud_leaf_activator.hpp"
 #include "infrastructure/pud_leaf_expander.hpp"
 #include "infrastructure/pud_leaf_invalidator.hpp"
 #include "infrastructure/pud_leaf_nodes.hpp"
@@ -42,13 +44,14 @@
 #include "infrastructure/pud_node_parents.hpp"
 #include "infrastructure/pud_node_refuter.hpp"
 #include "infrastructure/pud_normalizer_factory.hpp"
-#include "infrastructure/pud_oldest_rule_chooser.hpp"
+#include "infrastructure/pud_open_leaves.hpp"
 #include "infrastructure/pud_open_body_goal_finder.hpp"
 #include "infrastructure/pud_query_head.hpp"
 #include "infrastructure/pud_query_head_factory.hpp"
 #include "infrastructure/pud_query_head_forker.hpp"
 #include "infrastructure/pud_query_head_nodes.hpp"
 #include "infrastructure/pud_query_opener.hpp"
+#include "infrastructure/pud_random_rule_chooser.hpp"
 #include "infrastructure/pud_random_subgoal_chooser.hpp"
 #include "infrastructure/pud_refutation_propagator.hpp"
 #include "infrastructure/pud_refuted_leaves.hpp"
@@ -56,18 +59,19 @@
 #include "infrastructure/pud_replay_descent.hpp"
 #include "infrastructure/pud_root_descent_maker.hpp"
 #include "infrastructure/pud_root_nodes.hpp"
-#include "infrastructure/pud_solver.hpp"
-#include "infrastructure/pud_conjecture_initializer.hpp"
 #include "infrastructure/pud_structure_watch_descent.hpp"
 #include "infrastructure/pud_transient_ubs_state.hpp"
 #include "infrastructure/pud_translating_normalizer.hpp"
 #include "infrastructure/pud_unifier.hpp"
+#include "infrastructure/pud_unfold_loop.hpp"
 #include "infrastructure/pud_unifier_factory.hpp"
 #include "infrastructure/pud_witness_search_head.hpp"
 #include "infrastructure/pud_witness_search_head_factory.hpp"
 #include "infrastructure/pud_witness_search_head_forker.hpp"
 
-struct pud_manifest {
+// The database on its own: axioms are loaded and their trees descended, then the unfold loop
+// expands any open leaf in the database at random, over a random open goal.
+struct pud_random_unfold_manifest {
     using child_iter_t = std::vector<pud_node_id>::const_iterator;
 
     using bind_map_t = ubs_transient_bind_map<expr_pool, expr_pool>;
@@ -153,27 +157,26 @@ struct pud_manifest {
         pud_root_nodes, pud_node_parents, pud_node_live_child_counts>;
     using leaf_invalidator_t = pud_leaf_invalidator<mhws_t, mhcs_t, mhcs_t, mhq_t>;
     using node_refuter_t = pud_node_refuter<
-        live_leaf_finder_t, pud_refuted_leaves, refutation_propagator_t, node_descents_t,
-        leaf_invalidator_t, pud_query_head_nodes>;
+        live_leaf_finder_t, pud_refuted_leaves, pud_open_leaves, pud_open_leaves,
+        refutation_propagator_t, node_descents_t, leaf_invalidator_t, pud_query_head_nodes>;
 
     using leaf_expander_t = pud_leaf_expander<
         node_descents_t, mhq_t, mhcs_t, acceptor_t, child_maker_t, pud_call_sites, pud_children,
-        pud_leaf_nodes, pud_node_live_child_counts, refutation_propagator_t, leaf_invalidator_t,
-        pud_query_head_nodes, node_refuter_t, refuted_node_checker_t, node_descents_t,
-        node_descents_t>;
+        pud_leaf_nodes, pud_open_leaves, pud_node_live_child_counts, refutation_propagator_t,
+        leaf_invalidator_t, pud_query_head_nodes, node_refuter_t, refuted_node_checker_t,
+        node_descents_t, pud_open_leaves, node_descents_t>;
+    using leaf_activator_t = pud_leaf_activator<base_descent_t, node_descents_t, pud_open_leaves, node_refuter_t>;
+    using base_descent_runner_t = pud_base_descent_runner<
+        base_descent_t, pud_axioms, refuted_node_checker_t, root_descent_maker_t, pud_leaf_nodes,
+        pud_children, leaf_activator_t, node_refuter_t>;
     using random_subgoal_chooser_t = pud_random_subgoal_chooser<node_descents_t>;
-    using decision_generator_t = pud_decision_generator<pud_oldest_rule_chooser, random_subgoal_chooser_t>;
-    using solver_t = pud_solver<
-        live_leaf_finder_t, node_descents_t, decision_generator_t, leaf_expander_t,
-        root_descent_maker_t, node_descents_t, node_refuter_t>;
+    using decision_generator_t = pud_decision_generator<pud_random_rule_chooser, random_subgoal_chooser_t>;
+    using unfold_loop_t = pud_unfold_loop<pud_open_leaves, decision_generator_t, leaf_expander_t>;
     using axiom_initializer_t = pud_axiom_initializer<
         pud_node_id_sequencer, pud_node_heads, pud_node_added_body_goals, pud_node_added_var_count,
         pud_root_nodes, pud_leaf_nodes, pud_axioms>;
-    using conjecture_initializer_t = pud_conjecture_initializer<
-        pud_node_id_sequencer, pud_node_added_body_goals, pud_node_added_var_count,
-        pud_root_nodes, pud_leaf_nodes>;
 
-    pud_manifest(uint32_t random_seed);
+    pud_random_unfold_manifest(uint32_t random_seed);
 
     expr_pool                               expr_pool_;
     globalizer                              globalizer_;
@@ -189,6 +192,7 @@ struct pud_manifest {
     pud_root_nodes                          root_nodes_;
     pud_axioms                              axioms_;
     pud_leaf_nodes                          leaf_nodes_;
+    pud_open_leaves                         open_leaves_;
     pud_refuted_leaves                      refuted_leaves_;
     pud_node_live_child_counts              node_live_child_counts_;
     pud_query_head_nodes                    query_head_nodes_;
@@ -221,13 +225,14 @@ struct pud_manifest {
     node_refuter_t                          node_refuter_;
 
     leaf_expander_t                         leaf_expander_;
+    leaf_activator_t                        leaf_activator_;
+    base_descent_runner_t                   base_descent_runner_;
     std::mt19937                            rng_;
-    pud_oldest_rule_chooser                 oldest_rule_chooser_;
+    pud_random_rule_chooser                 random_rule_chooser_;
     random_subgoal_chooser_t                random_subgoal_chooser_;
     decision_generator_t                    decision_generator_;
-    solver_t                                solver_;
+    unfold_loop_t                           unfold_loop_;
     axiom_initializer_t                     axiom_initializer_;
-    conjecture_initializer_t              conjecture_initializer_;
 };
 
 #endif

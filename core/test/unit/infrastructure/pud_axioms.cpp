@@ -23,3 +23,13 @@ TEST_F(PudAxiomsTest, SecondMarkAxiomThrows) {
     axioms.mark_axiom(node);
     EXPECT_THROW(axioms.mark_axiom(node), std::logic_error);
 }
+
+TEST_F(PudAxiomsTest, CheckAxiomIsFalseWhenNeverMarked) {
+    EXPECT_FALSE(axioms.check_axiom(node));
+}
+
+TEST_F(PudAxiomsTest, MarkedAxiomIsAnAxiomAndNoOtherIs) {
+    axioms.mark_axiom(node);
+    EXPECT_TRUE(axioms.check_axiom(node));
+    EXPECT_FALSE(axioms.check_axiom(other));
+}
