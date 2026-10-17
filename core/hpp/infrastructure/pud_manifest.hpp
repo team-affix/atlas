@@ -11,6 +11,7 @@
 
 #include "infrastructure/pud_acceptor.hpp"
 #include "infrastructure/pud_axiom_initializer.hpp"
+#include "infrastructure/pud_axioms.hpp"
 #include "infrastructure/pud_base_descent.hpp"
 #include "infrastructure/pud_binding_descent.hpp"
 #include "infrastructure/pud_body_goal_expr_descent.hpp"
@@ -56,6 +57,7 @@
 #include "infrastructure/pud_root_descent_maker.hpp"
 #include "infrastructure/pud_root_nodes.hpp"
 #include "infrastructure/pud_solver.hpp"
+#include "infrastructure/pud_solver_query_initializer.hpp"
 #include "infrastructure/pud_structure_watch_descent.hpp"
 #include "infrastructure/pud_transient_ubs_state.hpp"
 #include "infrastructure/pud_translating_normalizer.hpp"
@@ -116,7 +118,7 @@ struct pud_manifest {
     using mhq_t = pud_mhq<replay_descent_t, query_head_t, query_head_factory_t, query_head_forker_t, mhcs_t>;
 
     using query_opener_t = pud_query_opener<
-        replay_descent_t, bind_map_t, normalizer_t, unifier_t, pud_root_nodes, pud_node_heads,
+        replay_descent_t, bind_map_t, normalizer_t, unifier_t, pud_axioms, pud_node_heads,
         expr_pool, expr_pool, normalizer_factory_t, unifier_factory_t, pud_node_added_substitutions>;
 
     using binding_descent_t = pud_binding_descent<bind_map_t, pud_node_added_substitutions, expr_pool, expr_pool>;
@@ -166,6 +168,9 @@ struct pud_manifest {
         root_descent_maker_t, node_descents_t, node_refuter_t>;
     using axiom_initializer_t = pud_axiom_initializer<
         pud_node_id_sequencer, pud_node_heads, pud_node_added_body_goals, pud_node_added_var_count,
+        pud_root_nodes, pud_leaf_nodes, pud_axioms>;
+    using solver_query_initializer_t = pud_solver_query_initializer<
+        pud_node_id_sequencer, pud_node_added_body_goals, pud_node_added_var_count,
         pud_root_nodes, pud_leaf_nodes>;
 
     pud_manifest(uint32_t random_seed);
@@ -182,6 +187,7 @@ struct pud_manifest {
     pud_children                            children_;
     pud_node_parents                        node_parents_;
     pud_root_nodes                          root_nodes_;
+    pud_axioms                              axioms_;
     pud_leaf_nodes                          leaf_nodes_;
     pud_refuted_leaves                      refuted_leaves_;
     pud_node_live_child_counts              node_live_child_counts_;
@@ -221,6 +227,7 @@ struct pud_manifest {
     decision_generator_t                    decision_generator_;
     solver_t                                solver_;
     axiom_initializer_t                     axiom_initializer_;
+    solver_query_initializer_t              solver_query_initializer_;
 };
 
 #endif

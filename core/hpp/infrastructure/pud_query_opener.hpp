@@ -9,14 +9,14 @@
 #include "value_objects/pud_node_id.hpp"
 #include "value_objects/pud_ubs_state.hpp"
 
-// Resolves a caller's goal (frame 0) against every root's head lifted to the frame offset,
-// and starts a replay at each root it resolves against.
+// Resolves a caller's goal (frame 0) against every axiom's head lifted to the frame offset,
+// and starts a replay at each axiom it resolves against.
 template<
     typename ReplayDescent,
     typename BindMap,
     typename Normalizer,
     typename Unifier,
-    typename IGetRoots,
+    typename IGetAxioms,
     typename IGetNodeHead,
     typename IMakeVar,
     typename IMakeFunctor,
@@ -25,7 +25,7 @@ template<
     typename IGetNodeAddedSubstitutions>
 struct pud_query_opener {
     pud_query_opener(
-        IGetRoots& get_roots,
+        IGetAxioms& get_axioms,
         IGetNodeHead& get_node_head,
         IMakeVar& make_var,
         IMakeFunctor& make_functor,
@@ -37,7 +37,7 @@ struct pud_query_opener {
         const expr* goal,
         uint32_t frame_offset);
 private:
-    IGetRoots& get_roots_;
+    IGetAxioms& get_axioms_;
     IGetNodeHead& get_node_head_;
     IMakeVar& make_var_;
     IMakeFunctor& make_functor_;
@@ -48,23 +48,23 @@ private:
 
 #define PUD_QUERY_OPENER_TEMPLATE                                                          \
     template<typename ReplayDescent, typename BindMap, typename Normalizer, typename Unifier, \
-             typename IGetRoots, typename IGetNodeHead, typename IMakeVar,                  \
+             typename IGetAxioms, typename IGetNodeHead, typename IMakeVar,                  \
              typename IMakeFunctor, typename IMakeNormalizer, typename IMakeUnifier,         \
              typename IGetNodeAddedSubstitutions>
 #define PUD_QUERY_OPENER                                                                   \
-    pud_query_opener<ReplayDescent, BindMap, Normalizer, Unifier, IGetRoots, IGetNodeHead, \
+    pud_query_opener<ReplayDescent, BindMap, Normalizer, Unifier, IGetAxioms, IGetNodeHead, \
         IMakeVar, IMakeFunctor, IMakeNormalizer, IMakeUnifier, IGetNodeAddedSubstitutions>
 
 PUD_QUERY_OPENER_TEMPLATE
 PUD_QUERY_OPENER::pud_query_opener(
-    IGetRoots& get_roots,
+    IGetAxioms& get_axioms,
     IGetNodeHead& get_node_head,
     IMakeVar& make_var,
     IMakeFunctor& make_functor,
     IMakeNormalizer& make_normalizer,
     IMakeUnifier& make_unifier,
     IGetNodeAddedSubstitutions& get_node_added_substitutions)
-    : get_roots_(get_roots)
+    : get_axioms_(get_axioms)
     , get_node_head_(get_node_head)
     , make_var_(make_var)
     , make_functor_(make_functor)
@@ -77,25 +77,25 @@ std::vector<ReplayDescent> PUD_QUERY_OPENER::open(
     const pud_ubs_state& caller_ubs_state,
     const expr* goal,
     uint32_t frame_offset) {
-    std::vector<ReplayDescent> root_descents;
-    for (pud_node_id root : get_roots_.get()) {
+    std::vector<ReplayDescent> axiom_descents;
+    for (pud_node_id axiom : get_axioms_.get()) {
         pud_transient_ubs_state transient_ubs_state{caller_ubs_state};
         BindMap bind_map = transient_ubs_state.make_bind_map(make_var_, make_functor_);
         Normalizer normalizer = make_normalizer_.make(bind_map);
         Unifier unifier = make_unifier_.make(normalizer, bind_map);
-        if (!unifier.unify(framed_expr{goal, 0}, framed_expr{get_node_head_.get(root), frame_offset}))
+        if (!unifier.unify(framed_expr{goal, 0}, framed_expr{get_node_head_.get(axiom), frame_offset}))
             continue;
-        root_descents.push_back(ReplayDescent{
+        axiom_descents.push_back(ReplayDescent{
             make_var_,
             make_functor_,
             make_normalizer_,
             make_unifier_,
             get_node_added_substitutions_,
-            root,
+            axiom,
             transient_ubs_state.to_persistent_state(),
             frame_offset});
     }
-    return root_descents;
+    return axiom_descents;
 }
 
 #undef PUD_QUERY_OPENER

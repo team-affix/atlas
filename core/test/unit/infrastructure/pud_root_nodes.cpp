@@ -26,13 +26,3 @@ TEST_F(PudRootNodesTest, SecondMarkRootThrows) {
     roots.mark_root(node);
     EXPECT_THROW(roots.mark_root(node), std::logic_error);
 }
-
-TEST_F(PudRootNodesTest, GetIsEmptyBeforeAnyRootIsMarked) {
-    EXPECT_TRUE(roots.get().empty());
-}
-
-TEST_F(PudRootNodesTest, GetListsRootsInMarkingOrder) {
-    roots.mark_root(other);
-    roots.mark_root(node);
-    EXPECT_EQ(roots.get(), (std::vector<pud_node_id>{other, node}));
-}

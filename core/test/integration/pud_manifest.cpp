@@ -18,6 +18,7 @@ struct PudManifestIntegrationTest : public ::testing::Test {
     pud_manifest manifest{0};
     test_functors functors;
     std::map<pud_node_id, coroutine<pud_solver_step, void>> searches;
+    std::map<pud_node_id, const expr*> answer_templates;
 
     const expr* var(uint32_t index) { return manifest.expr_pool_.make_var(index); }
 
@@ -49,8 +50,10 @@ struct PudManifestIntegrationTest : public ::testing::Test {
         return manifest.axiom_initializer_.initialize_axiom(rule(head, std::move(body), var_count));
     }
 
-    pud_node_id start_query(const expr* head, std::vector<const expr*> body, uint32_t var_count) {
-        const pud_node_id query_root = axiom(head, std::move(body), var_count);
+    // The solver query itself is headless; answer_template only tells the test how to read answers.
+    pud_node_id start_query(const expr* answer_template, std::vector<const expr*> goals, uint32_t var_count) {
+        const pud_node_id query_root = manifest.solver_query_initializer_.initialize_query(goals, var_count);
+        answer_templates.emplace(query_root, answer_template);
         manifest.solver_.start(query_root);
         return query_root;
     }
@@ -60,7 +63,7 @@ struct PudManifestIntegrationTest : public ::testing::Test {
             manifest.node_descents_.get(solution).binding().ubs_state()};
         auto bind_map = transient_ubs_state.make_bind_map(manifest.expr_pool_, manifest.expr_pool_);
         auto normalizer = manifest.normalizer_factory_.make(bind_map);
-        return normalizer.normalize(framed_expr{manifest.node_heads_.get(query_root), 0});
+        return normalizer.normalize(framed_expr{answer_templates.at(query_root), 0});
     }
 
     coroutine<pud_solver_step, void>& search_of(pud_node_id query_root) {

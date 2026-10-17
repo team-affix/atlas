@@ -1,6 +1,7 @@
 #include <vector>
 #include <gtest/gtest.h>
 #include "infrastructure/pud_axiom_initializer.hpp"
+#include "infrastructure/pud_axioms.hpp"
 #include "infrastructure/pud_leaf_nodes.hpp"
 #include "infrastructure/pud_node_added_body_goals.hpp"
 #include "infrastructure/pud_node_added_var_count.hpp"
@@ -16,9 +17,10 @@ struct PudAxiomNodeIntegrationTest : public ::testing::Test {
     pud_node_added_var_count var_counts;
     pud_root_nodes roots;
     pud_leaf_nodes leaves;
+    pud_axioms axioms;
     pud_axiom_initializer<pud_node_id_sequencer, pud_node_heads, pud_node_added_body_goals,
-                          pud_node_added_var_count, pud_root_nodes, pud_leaf_nodes>
-        initializer{sequencer, heads, body_goals, var_counts, roots, leaves};
+                          pud_node_added_var_count, pud_root_nodes, pud_leaf_nodes, pud_axioms>
+        initializer{sequencer, heads, body_goals, var_counts, roots, leaves, axioms};
     expr head_expr{expr::var{0}};
     expr body_a{expr::var{1}};
     expr body_b{expr::var{2}};
@@ -50,7 +52,11 @@ TEST_F(PudAxiomNodeIntegrationTest, HeadAndTwoBodyGoalsLandInOrder) {
 TEST_F(PudAxiomNodeIntegrationTest, InitializeAxiomMarksARoot) {
     const pud_node_id id = initializer.initialize_axiom(rule(&head_expr, {}, 0));
     EXPECT_TRUE(roots.check_root(id));
-    EXPECT_EQ(roots.get(), (std::vector<pud_node_id>{id}));
+}
+
+TEST_F(PudAxiomNodeIntegrationTest, InitializeAxiomMarksAnAxiom) {
+    const pud_node_id id = initializer.initialize_axiom(rule(&head_expr, {}, 0));
+    EXPECT_EQ(axioms.get(), (std::vector<pud_node_id>{id}));
 }
 
 TEST_F(PudAxiomNodeIntegrationTest, InitializeAxiomMarksALeaf) {
@@ -58,10 +64,10 @@ TEST_F(PudAxiomNodeIntegrationTest, InitializeAxiomMarksALeaf) {
     EXPECT_TRUE(leaves.check_leaf(id));
 }
 
-TEST_F(PudAxiomNodeIntegrationTest, TwoAxiomsAreRootsInOrder) {
+TEST_F(PudAxiomNodeIntegrationTest, TwoAxiomsAreListedInOrder) {
     const pud_node_id first_id = initializer.initialize_axiom(rule(&head_expr, {}, 0));
     const pud_node_id second_id = initializer.initialize_axiom(rule(&head_expr, {}, 0));
-    EXPECT_EQ(roots.get(), (std::vector<pud_node_id>{first_id, second_id}));
+    EXPECT_EQ(axioms.get(), (std::vector<pud_node_id>{first_id, second_id}));
 }
 
 TEST_F(PudAxiomNodeIntegrationTest, VarCountStoredExactly) {

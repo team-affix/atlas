@@ -4,12 +4,12 @@
 #include "functor_fixture.hpp"
 #include "infrastructure/expr_pool.hpp"
 #include "infrastructure/globalizer.hpp"
+#include "infrastructure/pud_axioms.hpp"
 #include "infrastructure/pud_node_added_substitutions.hpp"
 #include "infrastructure/pud_node_heads.hpp"
 #include "infrastructure/pud_normalizer_factory.hpp"
 #include "infrastructure/pud_query_opener.hpp"
 #include "infrastructure/pud_replay_descent.hpp"
-#include "infrastructure/pud_root_nodes.hpp"
 #include "infrastructure/pud_transient_ubs_state.hpp"
 #include "infrastructure/pud_unifier_factory.hpp"
 
@@ -23,18 +23,18 @@ struct PudQueryOpenerIntegrationTest : public ::testing::Test {
         bind_map_t, normalizer_t, unifier_t, expr_pool, expr_pool, normalizer_factory_t,
         unifier_factory_t, pud_node_added_substitutions>;
     using opener_t = pud_query_opener<
-        replay_descent_t, bind_map_t, normalizer_t, unifier_t, pud_root_nodes, pud_node_heads,
+        replay_descent_t, bind_map_t, normalizer_t, unifier_t, pud_axioms, pud_node_heads,
         expr_pool, expr_pool, normalizer_factory_t, unifier_factory_t, pud_node_added_substitutions>;
 
     test_functors functors;
     expr_pool exprs;
     globalizer globalize;
-    pud_root_nodes roots;
+    pud_axioms axioms;
     pud_node_heads heads;
     pud_node_added_substitutions substitutions;
     normalizer_factory_t normalizer_factory{globalize, exprs};
     unifier_factory_t unifier_factory{globalize};
-    opener_t opener{roots, heads, exprs, exprs, normalizer_factory, unifier_factory, substitutions};
+    opener_t opener{axioms, heads, exprs, exprs, normalizer_factory, unifier_factory, substitutions};
     pud_ubs_state empty_state;
     pud_node_id next_node = 1;
 
@@ -44,9 +44,9 @@ struct PudQueryOpenerIntegrationTest : public ::testing::Test {
     }
     const expr* atom(const char* name) { return functor(name, {}); }
 
-    pud_node_id root(const expr* head) {
+    pud_node_id axiom(const expr* head) {
         const pud_node_id node = next_node++;
-        roots.mark_root(node);
+        axioms.mark_axiom(node);
         heads.store(node, head);
         return node;
     }
@@ -66,16 +66,22 @@ struct PudQueryOpenerIntegrationTest : public ::testing::Test {
     }
 };
 
-TEST_F(PudQueryOpenerIntegrationTest, OnlyRootsWhoseHeadsResolveTheGoalAreOpened) {
-    const pud_node_id red = root(functor("color", {atom("red")}));
-    const pud_node_id blue = root(functor("color", {atom("blue")}));
-    root(functor("warm", {atom("red")}));
+TEST_F(PudQueryOpenerIntegrationTest, OnlyAxiomsWhoseHeadsResolveTheGoalAreOpened) {
+    const pud_node_id red = axiom(functor("color", {atom("red")}));
+    const pud_node_id blue = axiom(functor("color", {atom("blue")}));
+    axiom(functor("warm", {atom("red")}));
     EXPECT_THAT(nodes_of(opener.open(empty_state, functor("color", {var(0)}), 1)), ::testing::ElementsAre(red, blue));
 }
 
+TEST_F(PudQueryOpenerIntegrationTest, HeadedNodesThatAreNotAxiomsAreNeverOpened) {
+    const pud_node_id red = axiom(functor("color", {atom("red")}));
+    heads.store(next_node++, functor("color", {atom("blue")}));
+    EXPECT_THAT(nodes_of(opener.open(empty_state, functor("color", {var(0)}), 1)), ::testing::ElementsAre(red));
+}
+
 TEST_F(PudQueryOpenerIntegrationTest, EachOpenedReplayHoldsItsResolution) {
-    root(functor("color", {atom("red")}));
-    root(functor("color", {atom("blue")}));
+    axiom(functor("color", {atom("red")}));
+    axiom(functor("color", {atom("blue")}));
     const auto opened = opener.open(empty_state, functor("color", {var(0)}), 1);
     ASSERT_EQ(opened.size(), 2u);
     EXPECT_EQ(resolve(opened.at(0).ubs_state(), 0), atom("red"));
@@ -83,8 +89,8 @@ TEST_F(PudQueryOpenerIntegrationTest, EachOpenedReplayHoldsItsResolution) {
 }
 
 TEST_F(PudQueryOpenerIntegrationTest, CallersBindingsAreRespected) {
-    root(functor("color", {atom("red")}));
-    const pud_node_id blue = root(functor("color", {atom("blue")}));
+    axiom(functor("color", {atom("red")}));
+    const pud_node_id blue = axiom(functor("color", {atom("blue")}));
     pud_transient_ubs_state transient_ubs_state{empty_state};
     auto bind_map = transient_ubs_state.make_bind_map(exprs, exprs);
     bind_map.instantiate(0, functors.id("blue"), {});
@@ -93,19 +99,19 @@ TEST_F(PudQueryOpenerIntegrationTest, CallersBindingsAreRespected) {
 }
 
 TEST_F(PudQueryOpenerIntegrationTest, RootHeadIsLiftedToTheFrameOffset) {
-    root(functor("nat", {functor("s", {var(0)})}));
+    axiom(functor("nat", {functor("s", {var(0)})}));
     const auto opened = opener.open(empty_state, functor("nat", {var(0)}), 3);
     ASSERT_EQ(opened.size(), 1u);
     EXPECT_EQ(resolve(opened.at(0).ubs_state(), 0), functor("s", {var(3)}));
 }
 
 TEST_F(PudQueryOpenerIntegrationTest, NoRootResolvesTheGoal) {
-    root(functor("color", {atom("red")}));
+    axiom(functor("color", {atom("red")}));
     EXPECT_TRUE(opener.open(empty_state, functor("warm", {var(0)}), 1).empty());
 }
 
 TEST_F(PudQueryOpenerIntegrationTest, CallersStateIsLeftUntouched) {
-    root(functor("color", {atom("red")}));
+    axiom(functor("color", {atom("red")}));
     opener.open(empty_state, functor("color", {var(0)}), 1);
     EXPECT_EQ(resolve(empty_state, 0), var(0));
 }

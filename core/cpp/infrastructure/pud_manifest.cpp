@@ -12,6 +12,7 @@ pud_manifest::pud_manifest(uint32_t random_seed)
       children_(),
       node_parents_(),
       root_nodes_(),
+      axioms_(),
       leaf_nodes_(),
       refuted_leaves_(),
       node_live_child_counts_(),
@@ -30,7 +31,7 @@ pud_manifest::pud_manifest(uint32_t random_seed)
       query_head_forker_(),
       mhq_(query_head_factory_, query_head_forker_, mhcs_),
       query_opener_(
-          root_nodes_, node_heads_, expr_pool_, expr_pool_, normalizer_factory_, unifier_factory_,
+          axioms_, node_heads_, expr_pool_, expr_pool_, normalizer_factory_, unifier_factory_,
           node_added_substitutions_),
       node_descents_(),
       root_descent_maker_(
@@ -62,4 +63,7 @@ pud_manifest::pud_manifest(uint32_t random_seed)
           root_descent_maker_, node_descents_, node_refuter_),
       axiom_initializer_(
           node_id_sequencer_, node_heads_, node_added_body_goals_, node_added_var_count_,
-          root_nodes_, leaf_nodes_) {}
+          root_nodes_, leaf_nodes_, axioms_),
+      solver_query_initializer_(
+          node_id_sequencer_, node_added_body_goals_, node_added_var_count_, root_nodes_,
+          leaf_nodes_) {}

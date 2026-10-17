@@ -25,6 +25,7 @@ struct pud_manifest_harness {
     pud_manifest manifest;
     test_functors functors;
     std::vector<pud_node_id> started_roots;
+    std::map<pud_node_id, const expr*> answer_templates;
     std::map<pud_node_id, coroutine<pud_solver_step, void>> searches;
 
     // ---------- building ----------
@@ -54,7 +55,9 @@ struct pud_manifest_harness {
     const expr* peano(uint32_t count) { return peano_on(count, "z"); }
 
     pud_node_id axiom(const expr* head, std::vector<const expr*> body, uint32_t var_count) {
-        return manifest.axiom_initializer_.initialize_axiom(rule(head, std::move(body), var_count));
+        const pud_node_id root = manifest.axiom_initializer_.initialize_axiom(rule(head, std::move(body), var_count));
+        answer_templates.emplace(root, head);
+        return root;
     }
 
     void start_tree(pud_node_id root) {
@@ -62,8 +65,10 @@ struct pud_manifest_harness {
         started_roots.push_back(root);
     }
 
-    pud_node_id start_query(const expr* head, std::vector<const expr*> body, uint32_t var_count) {
-        const pud_node_id root = axiom(head, std::move(body), var_count);
+    // The solver query itself is headless; answer_template only tells the test how to read answers.
+    pud_node_id start_query(const expr* answer_template, std::vector<const expr*> goals, uint32_t var_count) {
+        const pud_node_id root = manifest.solver_query_initializer_.initialize_query(goals, var_count);
+        answer_templates.emplace(root, answer_template);
         start_tree(root);
         return root;
     }
@@ -155,7 +160,7 @@ struct pud_manifest_harness {
     bool exhausted(pud_node_id query_root) { return search_of(query_root).done(); }
 
     const expr* answer(pud_node_id query_root, pud_node_id solution) {
-        return normalize_in(env_at_leaf(solution), manifest.node_heads_.get(query_root));
+        return normalize_in(env_at_leaf(solution), answer_templates.at(query_root));
     }
 
     std::vector<const expr*> enumerate(pud_node_id query_root, size_t max_answers, size_t max_steps) {

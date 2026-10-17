@@ -129,25 +129,28 @@ TEST_F(PudManifestScenarioTest, ForkedQueriesOnlyListCandidatesThatStillUnify) {
 
 // ---------- self-reference and lemmas ----------
 
-TEST_F(PudManifestScenarioTest, QueryTreeIsItsOwnCandidate) {
+TEST_F(PudManifestScenarioTest, AxiomTreeIsItsOwnCandidate) {
     const pud_node_id fact = h.axiom(h.functor("nat", {h.atom("z")}), {}, 0);
-    const pud_node_id query = h.start_query(
+    const pud_node_id rule = h.axiom(
         h.functor("nat", {h.functor("s", {h.var(0)})}), {h.functor("nat", {h.var(0)})}, 1);
+    h.start_tree(rule);
     EXPECT_THAT(
-        candidate_paths(query, 0),
-        UnorderedElementsAre(std::vector<pud_node_id>{fact}, std::vector<pud_node_id>{query}));
+        candidate_paths(rule, 0),
+        UnorderedElementsAre(std::vector<pud_node_id>{fact}, std::vector<pud_node_id>{rule}));
+    const pud_node_id query = h.start_query(q({h.var(0)}), {h.functor("nat", {h.functor("s", {h.var(0)})})}, 1);
     const std::optional<pud_node_id> solution = h.next_solution(query, 10);
     ASSERT_TRUE(solution.has_value());
-    EXPECT_EQ(h.answer(query, solution.value()), h.functor("nat", {h.peano(1)}));
+    EXPECT_EQ(h.answer(query, solution.value()), q({h.atom("z")}));
     h.check_all();
 }
 
 TEST_F(PudManifestScenarioTest, ExpandingTheLeafThatIsItsOwnGoalsCandidate) {
     h.axiom(h.functor("nat", {h.atom("z")}), {}, 0);
-    const pud_node_id query = h.start_query(
+    const pud_node_id rule = h.axiom(
         h.functor("nat", {h.functor("s", {h.var(0)})}), {h.functor("nat", {h.var(0)})}, 1);
-    EXPECT_NO_THROW(h.manifest.leaf_expander_.expand(query, 0));
-    EXPECT_EQ(h.children_of(query).size(), 2u);
+    h.start_tree(rule);
+    EXPECT_NO_THROW(h.manifest.leaf_expander_.expand(rule, 0));
+    EXPECT_EQ(h.children_of(rule).size(), 2u);
     h.check_all();
     for (uint32_t count = 1; count <= 6; ++count)
         EXPECT_TRUE(solvable(h, h.functor("nat", {h.peano(count)}), 100)) << count;
@@ -155,16 +158,77 @@ TEST_F(PudManifestScenarioTest, ExpandingTheLeafThatIsItsOwnGoalsCandidate) {
     h.check_all();
 }
 
-TEST_F(PudManifestScenarioTest, OneQueryUsesAnotherQueryAsALemma) {
+TEST_F(PudManifestScenarioTest, OneQueryUsesAnAxiomRuleAsALemma) {
     h.add_colors();
-    const pud_node_id first = h.start_query(
+    const pud_node_id warmcolor = h.axiom(
+        h.functor("warmcolor", {h.var(0)}), {h.functor("color", {h.var(0)}), h.functor("warm", {h.var(0)})}, 1);
+    h.start_tree(warmcolor);
+    const pud_node_id query = h.start_query(q({h.var(0)}), {h.functor("warmcolor", {h.var(0)})}, 1);
+    bool uses_rule = false;
+    for (const std::vector<pud_node_id>& path : candidate_paths(query, 0))
+        uses_rule = uses_rule || path.front() == warmcolor;
+    EXPECT_TRUE(uses_rule);
+    EXPECT_THAT(distinct(h.enumerate(query, 10, 50)), ElementsAre(q({h.atom("red")})));
+    h.check_all();
+}
+
+// ---------- solver queries stay outside the database ----------
+
+TEST_F(PudManifestScenarioTest, SolverQueryIsNeverACandidateForAnotherQuery) {
+    h.add_colors();
+    h.start_query(
         h.functor("warmcolor", {h.var(0)}), {h.functor("color", {h.var(0)}), h.functor("warm", {h.var(0)})}, 1);
     const pud_node_id second = h.start_query(q({h.var(0)}), {h.functor("warmcolor", {h.var(0)})}, 1);
-    bool uses_first = false;
-    for (const std::vector<pud_node_id>& path : candidate_paths(second, 0))
-        uses_first = uses_first || path.front() == first;
-    EXPECT_TRUE(uses_first);
-    EXPECT_THAT(distinct(h.enumerate(second, 10, 50)), ElementsAre(q({h.atom("red")})));
+    EXPECT_TRUE(h.refuted(second));
+    EXPECT_THAT(h.enumerate(second, 10, 50), IsEmpty());
+    EXPECT_TRUE(h.exhausted(second));
+    h.check_all();
+}
+
+TEST_F(PudManifestScenarioTest, SolverQueryIsNeverACandidateForItsOwnGoals) {
+    const pud_node_id fact = h.axiom(h.functor("nat", {h.atom("z")}), {}, 0);
+    const pud_node_id query = h.start_query(
+        h.functor("nat", {h.functor("s", {h.var(0)})}), {h.functor("nat", {h.var(0)})}, 1);
+    EXPECT_THAT(candidate_paths(query, 0), ElementsAre(std::vector<pud_node_id>{fact}));
+    EXPECT_THAT(distinct(h.enumerate(query, 10, 50)),
+        ElementsAre(h.functor("nat", {h.functor("s", {h.atom("z")})})));
+    h.check_all();
+}
+
+TEST_F(PudManifestScenarioTest, SolverQueryNeverAddsAnswersToTheDatabase) {
+    h.add_colors();
+    h.start_query(h.functor("color", {h.atom("green")}), {}, 0);
+    h.start_query(h.functor("color", {h.var(0)}), {h.functor("warm", {h.var(0)})}, 1);
+    const pud_node_id colors = h.start_query(q({h.var(0)}), {h.functor("color", {h.var(0)})}, 1);
+    EXPECT_THAT(distinct(h.enumerate(colors, 10, 50)),
+        UnorderedElementsAre(q({h.atom("red")}), q({h.atom("blue")})));
+    h.check_all();
+}
+
+TEST_F(PudManifestScenarioTest, SolverQueryIsARootLeafButNotAnAxiom) {
+    h.add_colors();
+    const pud_node_id query = h.start_query(q({h.var(0)}), {h.functor("color", {h.var(0)})}, 1);
+    EXPECT_TRUE(h.root(query));
+    EXPECT_THAT(h.manifest.axioms_.get(), ::testing::Not(::testing::Contains(query)));
+    EXPECT_THROW(h.manifest.node_heads_.get(query), std::out_of_range);
+}
+
+TEST_F(PudManifestScenarioTest, ConcurrentSolverQueriesNeverSeeEachOther) {
+    h.add_colors();
+    const pud_node_id first = h.start_query(q({h.var(0)}), {h.functor("color", {h.var(0)})}, 1);
+    const pud_node_id second = h.start_query(q({h.var(0)}), {h.functor("warm", {h.var(0)})}, 1);
+    std::vector<const expr*> first_answers;
+    std::vector<const expr*> second_answers;
+    bool first_running = true;
+    bool second_running = true;
+    for (size_t round = 0; round < 50 && (first_running || second_running); ++round) {
+        if (first_running)
+            first_running = h.step(first, first_answers);
+        if (second_running)
+            second_running = h.step(second, second_answers);
+    }
+    EXPECT_THAT(distinct(first_answers), UnorderedElementsAre(q({h.atom("red")}), q({h.atom("blue")})));
+    EXPECT_THAT(distinct(second_answers), ElementsAre(q({h.atom("red")})));
     h.check_all();
 }
 
@@ -538,8 +602,9 @@ TEST_F(PudManifestScenarioTest, BudgetedSolveResumesWhereItStopped) {
 
 TEST_F(PudManifestScenarioTest, SelfCandidateEnumeratesWithoutGaps) {
     h.axiom(h.functor("nat", {h.atom("z")}), {}, 0);
-    const pud_node_id query = h.start_query(
+    const pud_node_id query = h.axiom(
         h.functor("nat", {h.functor("s", {h.var(0)})}), {h.functor("nat", {h.var(0)})}, 1);
+    h.start_tree(query);
     std::vector<const expr*> answers;
     for (int step = 0; step < 60 && answers.size() < 12; ++step) {
         ASSERT_TRUE(h.step(query, answers));
@@ -558,10 +623,11 @@ TEST_F(PudManifestScenarioTest, SelfCandidateEnumeratesWithoutGaps) {
     h.check_all();
 }
 
-TEST_F(PudManifestScenarioTest, EnumeratedQueryStillServesAsALemma) {
+TEST_F(PudManifestScenarioTest, EnumeratedAxiomTreeStillServesAsALemma) {
     h.add_colors();
-    const pud_node_id first = h.start_query(
+    const pud_node_id first = h.axiom(
         h.functor("warmcolor", {h.var(0)}), {h.functor("color", {h.var(0)}), h.functor("warm", {h.var(0)})}, 1);
+    h.start_tree(first);
     EXPECT_THAT(h.enumerate(first, 10, 50), ElementsAre(h.functor("warmcolor", {h.atom("red")})));
     EXPECT_TRUE(h.exhausted(first));
     EXPECT_FALSE(h.refuted(first));
@@ -572,7 +638,8 @@ TEST_F(PudManifestScenarioTest, EnumeratedQueryStillServesAsALemma) {
 
 TEST_F(PudManifestScenarioTest, YieldedSolutionStaysALiveLeafAndWitness) {
     h.add_colors();
-    const pud_node_id first = h.start_query(h.functor("pick", {h.var(0)}), {h.functor("color", {h.var(0)})}, 1);
+    const pud_node_id first = h.axiom(h.functor("pick", {h.var(0)}), {h.functor("color", {h.var(0)})}, 1);
+    h.start_tree(first);
     const std::optional<pud_node_id> solution = h.next_solution(first, 10);
     ASSERT_TRUE(solution.has_value());
     EXPECT_TRUE(h.leaf(solution.value()));
