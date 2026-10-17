@@ -23,20 +23,17 @@ struct pud_structure_watch_descent {
         const std::vector<pud_watch_head_id>& unwatch,
         const std::vector<const expr*>& watch) const;
 private:
-    using head_set_t = immer::set<pud_watch_head_id>;
-    using rep_set_t = immer::set<uint32_t>;
-
     pud_watch_head_id watch(const expr* watched);
     void unwatch(pud_watch_head_id head_id);
     std::vector<pud_watch_head_id> propagate_rep_updated(uint32_t demoted_rep, uint32_t surviving_rep);
     std::vector<pud_watch_head_id> propagate_rep_instantiated(uint32_t rep, const expr* value);
-    void visit_reps(const expr* visited, rep_set_t& reps) const;
+    void visit_reps(const expr* visited, immer::set<uint32_t>& reps) const;
 
     // Pointers rather than references, so the descent stays copy-assignable.
     IGetNodeAddedSubstitutions* get_node_added_substitutions_;
     pud_watch_head_id next_head_id_;
-    immer::map<uint32_t, head_set_t> rep_to_heads_;
-    immer::map<pud_watch_head_id, rep_set_t> head_to_reps_;
+    immer::map<uint32_t, immer::set<pud_watch_head_id>> rep_to_heads_;
+    immer::map<pud_watch_head_id, immer::set<uint32_t>> head_to_reps_;
 };
 
 #define PUD_STRUCTURE_WATCH_DESCENT_TEMPLATE                                               \
@@ -94,7 +91,7 @@ pud_structure_watch_result<PUD_STRUCTURE_WATCH_DESCENT> PUD_STRUCTURE_WATCH_DESC
 
 PUD_STRUCTURE_WATCH_DESCENT_TEMPLATE
 pud_watch_head_id PUD_STRUCTURE_WATCH_DESCENT::watch(const expr* watched) {
-    rep_set_t reps;
+    immer::set<uint32_t> reps;
     visit_reps(watched, reps);
     const pud_watch_head_id head_id = next_head_id_++;
     head_to_reps_ = head_to_reps_.set(head_id, reps);
@@ -105,9 +102,9 @@ pud_watch_head_id PUD_STRUCTURE_WATCH_DESCENT::watch(const expr* watched) {
 
 PUD_STRUCTURE_WATCH_DESCENT_TEMPLATE
 void PUD_STRUCTURE_WATCH_DESCENT::unwatch(pud_watch_head_id head_id) {
-    const rep_set_t reps = head_to_reps_[head_id];
+    const immer::set<uint32_t> reps = head_to_reps_[head_id];
     for (uint32_t rep : reps) {
-        const head_set_t heads = rep_to_heads_[rep].erase(head_id);
+        const immer::set<pud_watch_head_id> heads = rep_to_heads_[rep].erase(head_id);
         rep_to_heads_ = heads.empty() ? rep_to_heads_.erase(rep) : rep_to_heads_.set(rep, heads);
     }
     head_to_reps_ = head_to_reps_.erase(head_id);
@@ -118,9 +115,9 @@ std::vector<pud_watch_head_id> PUD_STRUCTURE_WATCH_DESCENT::propagate_rep_update
     uint32_t demoted_rep,
     uint32_t surviving_rep) {
     std::vector<pud_watch_head_id> changed;
-    const head_set_t demoted_heads = rep_to_heads_[demoted_rep];
+    const immer::set<pud_watch_head_id> demoted_heads = rep_to_heads_[demoted_rep];
     for (pud_watch_head_id head_id : demoted_heads) {
-        const rep_set_t reps = head_to_reps_[head_id];
+        const immer::set<uint32_t> reps = head_to_reps_[head_id];
         const bool collapsed = reps.count(surviving_rep) != 0;
         head_to_reps_ = head_to_reps_.set(head_id, reps.erase(demoted_rep).insert(surviving_rep));
         rep_to_heads_ = rep_to_heads_.set(surviving_rep, rep_to_heads_[surviving_rep].insert(head_id));
@@ -136,12 +133,12 @@ PUD_STRUCTURE_WATCH_DESCENT_TEMPLATE
 std::vector<pud_watch_head_id> PUD_STRUCTURE_WATCH_DESCENT::propagate_rep_instantiated(
     uint32_t rep,
     const expr* value) {
-    rep_set_t introduced_reps;
+    immer::set<uint32_t> introduced_reps;
     visit_reps(value, introduced_reps);
     std::vector<pud_watch_head_id> changed;
-    const head_set_t instantiated_heads = rep_to_heads_[rep];
+    const immer::set<pud_watch_head_id> instantiated_heads = rep_to_heads_[rep];
     for (pud_watch_head_id head_id : instantiated_heads) {
-        rep_set_t reps = head_to_reps_[head_id].erase(rep);
+        immer::set<uint32_t> reps = head_to_reps_[head_id].erase(rep);
         for (uint32_t introduced_rep : introduced_reps) {
             reps = reps.insert(introduced_rep);
             rep_to_heads_ = rep_to_heads_.set(introduced_rep, rep_to_heads_[introduced_rep].insert(head_id));
@@ -154,7 +151,7 @@ std::vector<pud_watch_head_id> PUD_STRUCTURE_WATCH_DESCENT::propagate_rep_instan
 }
 
 PUD_STRUCTURE_WATCH_DESCENT_TEMPLATE
-void PUD_STRUCTURE_WATCH_DESCENT::visit_reps(const expr* visited, rep_set_t& reps) const {
+void PUD_STRUCTURE_WATCH_DESCENT::visit_reps(const expr* visited, immer::set<uint32_t>& reps) const {
     std::vector<const expr*> pending{visited};
     while (!pending.empty()) {
         const expr* next = pending.back();
