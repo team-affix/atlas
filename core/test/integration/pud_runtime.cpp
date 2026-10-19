@@ -1,5 +1,4 @@
 #include <algorithm>
-#include <map>
 #include <optional>
 #include <set>
 #include <stdexcept>
@@ -16,17 +15,25 @@
 #include "value_objects/rule.hpp"
 
 namespace {
+std::vector<pud_open_goal> goals_of(pud_runtime& runtime, pud_derivation_id derivation) {
+    std::vector<pud_open_goal> goals;
+    coroutine<pud_open_goal, void> body_goals = runtime.iterate_body_goals(derivation);
+    while (const std::optional<pud_open_goal> goal = body_goals.next())
+        goals.push_back(goal.value());
+    return goals;
+}
+
 struct tracked_frontier {
-    std::map<uint32_t, std::vector<pud_open_goal>> open;
+    std::set<uint32_t> open;
     std::set<uint32_t> proven;
     std::set<uint32_t> seen;
     std::set<uint32_t> under_conjecture;
 
     size_t apply(const pud_frontier_change& change, bool conjecture) {
         size_t first_seen = 0;
-        for (const pud_open_derivation& opened : change.opened) {
-            open[opened.derivation.value] = opened.goals;
-            first_seen += note(opened.derivation, conjecture);
+        for (pud_derivation_id derivation : change.opened) {
+            open.insert(derivation.value);
+            first_seen += note(derivation, conjecture);
         }
         for (pud_derivation_id derivation : change.proven) {
             proven.insert(derivation.value);
@@ -36,12 +43,6 @@ struct tracked_frontier {
             open.erase(derivation.value);
             proven.erase(derivation.value);
             first_seen += note(derivation, conjecture);
-        }
-        for (const pud_unit_goal& unit : change.made_unit) {
-            for (pud_open_goal& goal : open.at(unit.derivation.value)) {
-                if (goal.goal == unit.goal)
-                    goal.candidate_count = 1;
-            }
         }
         return first_seen;
     }
@@ -97,14 +98,14 @@ struct PudRuntimeIntegrationTest : public ::testing::Test {
         runtime.open_database();
         const pud_frontier_change change = conjecture(
             functor("q", {var(0)}), {functor("color", {var(0)}), functor("warm", {var(0)})}, 1);
-        return change.opened.at(0).derivation;
+        return change.opened.at(0);
     }
 
     pud_derivation_id add_doomed_p() {
         axiom(functor("t", {atom("a"), atom("b")}), {}, 0);
         axiom(functor("p", {var(0)}), {functor("t", {var(0), var(1)}), functor("t", {var(1), var(0)})}, 2);
         const pud_frontier_change change = runtime.open_database();
-        return change.opened.at(0).derivation;
+        return change.opened.at(0);
     }
 
     void load(db& target, const datalog_program& program) {
@@ -183,7 +184,7 @@ TEST_F(PudRuntimeIntegrationTest, ARuleOpensWithItsGoalsAndExactCounts) {
     axiom(functor("nat", {functor("s", {var(0)})}), {functor("nat", {var(0)})}, 1);
     const pud_frontier_change change = runtime.open_database();
     ASSERT_EQ(change.opened.size(), 1u);
-    EXPECT_EQ(change.opened.at(0).goals, (std::vector<pud_open_goal>{{.goal = 0, .candidate_count = 2}}));
+    EXPECT_EQ(goals_of(runtime, change.opened.at(0)), (std::vector<pud_open_goal>{{.goal = 0, .candidate_count = 2}}));
     EXPECT_EQ(change.proven.size(), 1u);
 }
 
@@ -215,7 +216,7 @@ TEST_F(PudRuntimeIntegrationTest, AConjectureOpensWithExactCountsPerGoal) {
     const pud_frontier_change change = conjecture(
         functor("q", {var(0)}), {functor("color", {var(0)}), functor("warm", {var(0)})}, 1);
     ASSERT_EQ(change.opened.size(), 1u);
-    EXPECT_EQ(change.opened.at(0).goals,
+    EXPECT_EQ(goals_of(runtime, change.opened.at(0)),
               (std::vector<pud_open_goal>{{.goal = 0, .candidate_count = 2}, {.goal = 1, .candidate_count = 1}}));
     EXPECT_TRUE(change.proven.empty());
     EXPECT_TRUE(change.refuted.empty());
@@ -253,7 +254,7 @@ TEST_F(PudRuntimeIntegrationTest, UnfoldingReportsOpenedAndRefutedDerivations) {
     const pud_derivation_id derivation = open_color_conjecture();
     const pud_frontier_change change = runtime.unfold(derivation, 0);
     ASSERT_EQ(change.opened.size(), 1u);
-    EXPECT_EQ(change.opened.at(0).goals, (std::vector<pud_open_goal>{{.goal = 1, .candidate_count = 1}}));
+    EXPECT_EQ(goals_of(runtime, change.opened.at(0)), (std::vector<pud_open_goal>{{.goal = 1, .candidate_count = 1}}));
     EXPECT_TRUE(change.proven.empty());
     EXPECT_EQ(change.refuted.size(), 1u) << "the blue derivation has nothing warm to prove";
     EXPECT_TRUE(change.made_unit.empty()) << "a new derivation's forced goal is carried by its count";
@@ -262,17 +263,17 @@ TEST_F(PudRuntimeIntegrationTest, UnfoldingReportsOpenedAndRefutedDerivations) {
 TEST_F(PudRuntimeIntegrationTest, ARefutedDerivationIsNotAlsoReportedOpened) {
     const pud_derivation_id derivation = open_color_conjecture();
     const pud_frontier_change change = runtime.unfold(derivation, 0);
-    for (const pud_open_derivation& opened : change.opened) {
+    for (pud_derivation_id opened : change.opened) {
         for (pud_derivation_id refuted : change.refuted)
-            EXPECT_NE(opened.derivation, refuted);
+            EXPECT_NE(opened, refuted);
     }
 }
 
 TEST_F(PudRuntimeIntegrationTest, TheUnfoldedDerivationIsNotListed) {
     const pud_derivation_id derivation = open_color_conjecture();
     const pud_frontier_change change = runtime.unfold(derivation, 0);
-    for (const pud_open_derivation& opened : change.opened)
-        EXPECT_NE(opened.derivation, derivation);
+    for (pud_derivation_id opened : change.opened)
+        EXPECT_NE(opened, derivation);
     for (pud_derivation_id listed : change.proven)
         EXPECT_NE(listed, derivation);
     for (pud_derivation_id listed : change.refuted)
@@ -281,7 +282,7 @@ TEST_F(PudRuntimeIntegrationTest, TheUnfoldedDerivationIsNotListed) {
 
 TEST_F(PudRuntimeIntegrationTest, UnfoldingTheLastGoalProvesTheDerivation) {
     const pud_derivation_id derivation = open_color_conjecture();
-    const pud_derivation_id red = runtime.unfold(derivation, 0).opened.at(0).derivation;
+    const pud_derivation_id red = runtime.unfold(derivation, 0).opened.at(0);
     const pud_frontier_change change = runtime.unfold(red, 1);
     EXPECT_TRUE(change.opened.empty());
     ASSERT_EQ(change.proven.size(), 1u);
@@ -293,7 +294,7 @@ TEST_F(PudRuntimeIntegrationTest, AForcedGoalCanBeUnfoldedFirst) {
     const pud_derivation_id derivation = open_color_conjecture();
     const pud_frontier_change change = runtime.unfold(derivation, 1);
     ASSERT_EQ(change.opened.size(), 1u);
-    EXPECT_EQ(change.opened.at(0).goals, (std::vector<pud_open_goal>{{.goal = 0, .candidate_count = 1}}))
+    EXPECT_EQ(goals_of(runtime, change.opened.at(0)), (std::vector<pud_open_goal>{{.goal = 0, .candidate_count = 1}}))
         << "only color(red) is left once X is red";
     EXPECT_TRUE(change.refuted.empty());
 }
@@ -301,7 +302,7 @@ TEST_F(PudRuntimeIntegrationTest, AForcedGoalCanBeUnfoldedFirst) {
 TEST_F(PudRuntimeIntegrationTest, UnfoldingAnAxiomDerivationProvesALemma) {
     axiom(functor("nat", {atom("z")}), {}, 0);
     axiom(functor("nat", {functor("s", {var(0)})}), {functor("nat", {var(0)})}, 1);
-    const pud_derivation_id derivation = runtime.open_database().opened.at(0).derivation;
+    const pud_derivation_id derivation = runtime.open_database().opened.at(0);
     const pud_frontier_change change = runtime.unfold(derivation, 0);
     ASSERT_EQ(change.proven.size(), 1u);
     EXPECT_TRUE(same_structure(
@@ -314,8 +315,8 @@ TEST_F(PudRuntimeIntegrationTest, RefutingACandidateReportsTheExistingGoalItForc
     const pud_derivation_id doomed = add_doomed_p();
     const pud_frontier_change opened = conjecture(functor("ans", {var(0)}), {functor("p", {var(0)})}, 1);
     ASSERT_EQ(opened.opened.size(), 1u);
-    const pud_derivation_id waiting = opened.opened.at(0).derivation;
-    ASSERT_EQ(opened.opened.at(0).goals, (std::vector<pud_open_goal>{{.goal = 0, .candidate_count = 2}}));
+    const pud_derivation_id waiting = opened.opened.at(0);
+    ASSERT_EQ(goals_of(runtime, opened.opened.at(0)), (std::vector<pud_open_goal>{{.goal = 0, .candidate_count = 2}}));
 
     const pud_frontier_change change = runtime.unfold(doomed, 0);
     EXPECT_EQ(change.made_unit, (std::vector<pud_unit_goal>{{.derivation = waiting, .goal = 0}}));
@@ -327,7 +328,7 @@ TEST_F(PudRuntimeIntegrationTest, RefutationKnocksOnToOtherDerivations) {
     const pud_derivation_id doomed = add_doomed_p();
     const pud_frontier_change opened = conjecture(functor("ans", {var(0)}), {functor("p", {var(0)})}, 1);
     ASSERT_EQ(opened.opened.size(), 1u);
-    const pud_derivation_id waiting = opened.opened.at(0).derivation;
+    const pud_derivation_id waiting = opened.opened.at(0);
 
     const pud_frontier_change change = runtime.unfold(doomed, 0);
     EXPECT_NE(std::find(change.refuted.begin(), change.refuted.end(), waiting), change.refuted.end())
@@ -361,7 +362,7 @@ TEST_F(PudRuntimeIntegrationTest, AForgedDerivationCannotBeUsed) {
 
 TEST_F(PudRuntimeIntegrationTest, AProvenDerivationHasNothingToUnfold) {
     const pud_derivation_id derivation = open_color_conjecture();
-    const pud_derivation_id red = runtime.unfold(derivation, 0).opened.at(0).derivation;
+    const pud_derivation_id red = runtime.unfold(derivation, 0).opened.at(0);
     const pud_derivation_id proven = runtime.unfold(red, 1).proven.at(0);
     EXPECT_THROW(runtime.unfold(proven, 0), std::logic_error);
     EXPECT_THROW(runtime.body_goal_expr(proven, 0), std::logic_error);
@@ -370,24 +371,49 @@ TEST_F(PudRuntimeIntegrationTest, AProvenDerivationHasNothingToUnfold) {
 
 TEST_F(PudRuntimeIntegrationTest, AGoalThatIsNoLongerOpenCannotBeUsed) {
     const pud_derivation_id derivation = open_color_conjecture();
-    const pud_derivation_id red = runtime.unfold(derivation, 1).opened.at(0).derivation;
+    const pud_derivation_id red = runtime.unfold(derivation, 1).opened.at(0);
     EXPECT_THROW(runtime.unfold(red, 1), std::logic_error);
     EXPECT_THROW(runtime.body_goal_expr(red, 1), std::logic_error);
     EXPECT_THROW(runtime.unfold(red, 7), std::logic_error);
+}
+
+TEST_F(PudRuntimeIntegrationTest, GoalCountsAreReadWhenIterated) {
+    axiom(functor("p", {atom("c")}), {}, 0);
+    const pud_derivation_id doomed = add_doomed_p();
+    const pud_derivation_id waiting = conjecture(functor("ans", {var(0)}), {functor("p", {var(0)})}, 1).opened.at(0);
+    EXPECT_EQ(goals_of(runtime, waiting), (std::vector<pud_open_goal>{{.goal = 0, .candidate_count = 2}}));
+    runtime.unfold(doomed, 0);
+    EXPECT_EQ(goals_of(runtime, waiting), (std::vector<pud_open_goal>{{.goal = 0, .candidate_count = 1}}));
+}
+
+TEST_F(PudRuntimeIntegrationTest, NothingIsReadBeforeGoalsAreIterated) {
+    open_color_conjecture();
+    EXPECT_NO_THROW(runtime.iterate_body_goals(pud_derivation_id{9999}));
+}
+
+TEST_F(PudRuntimeIntegrationTest, GoalsOfADerivationThatIsNotOpenCannotBeIterated) {
+    const pud_derivation_id derivation = open_color_conjecture();
+    const pud_frontier_change change = runtime.unfold(derivation, 0);
+    const pud_derivation_id red = change.opened.at(0);
+    const pud_derivation_id proven = runtime.unfold(red, 1).proven.at(0);
+    EXPECT_THROW(goals_of(runtime, derivation), std::logic_error) << "consumed";
+    EXPECT_THROW(goals_of(runtime, change.refuted.at(0)), std::logic_error) << "refuted";
+    EXPECT_THROW(goals_of(runtime, proven), std::logic_error) << "proven";
+    EXPECT_THROW(goals_of(runtime, pud_derivation_id{9999}), std::logic_error) << "forged";
 }
 
 TEST_F(PudRuntimeIntegrationTest, GoalsReadInTheDerivationsBindings) {
     const pud_derivation_id derivation = open_color_conjecture();
     EXPECT_TRUE(same_structure(runtime.body_goal_expr(derivation, 0), functor("color", {var(0)})));
     EXPECT_TRUE(same_structure(runtime.body_goal_expr(derivation, 1), functor("warm", {var(0)})));
-    const pud_derivation_id red = runtime.unfold(derivation, 0).opened.at(0).derivation;
+    const pud_derivation_id red = runtime.unfold(derivation, 0).opened.at(0);
     EXPECT_TRUE(same_structure(runtime.body_goal_expr(red, 1), functor("warm", {atom("red")})));
 }
 
 TEST_F(PudRuntimeIntegrationTest, AnOpenDerivationsHeadReadsInItsBindings) {
     const pud_derivation_id derivation = open_color_conjecture();
     EXPECT_TRUE(same_structure(runtime.head_expr(derivation), functor("q", {var(0)})));
-    const pud_derivation_id red = runtime.unfold(derivation, 0).opened.at(0).derivation;
+    const pud_derivation_id red = runtime.unfold(derivation, 0).opened.at(0);
     EXPECT_TRUE(same_structure(runtime.head_expr(red), functor("q", {atom("red")})));
 }
 
@@ -404,8 +430,8 @@ TEST_F(PudRuntimeIntegrationTest, ExhaustingADatabaseWithoutReadingFindsEveryFac
         frontier.apply(add_datalog_conjecture(seed_runtime, program), true);
         size_t unfolds = 0;
         while (!frontier.open.empty() && unfolds < 20000) {
-            const uint32_t derivation = frontier.open.begin()->first;
-            const pud_body_goal_id goal = frontier.open.begin()->second.front().goal;
+            const uint32_t derivation = *frontier.open.begin();
+            const pud_body_goal_id goal = goals_of(seed_runtime, pud_derivation_id{derivation}).front().goal;
             size_t first_seen = 0;
             frontier.unfold(seed_runtime, derivation, goal, first_seen);
             ++unfolds;
@@ -460,17 +486,17 @@ TEST_F(PudRuntimeIntegrationTest, ReportedCountsAreExactWhenReported) {
                 continue;
             }
             const bool fresh_waiting =
-                !latest.opened.empty() && frontier.open.contains(latest.opened.front().derivation.value);
+                !latest.opened.empty() && frontier.open.contains(latest.opened.front().value);
             if (fresh_waiting) {
-                const uint32_t derivation = latest.opened.front().derivation.value;
-                const pud_open_goal goal = latest.opened.front().goals.front();
+                const uint32_t derivation = latest.opened.front().value;
+                const pud_open_goal goal = goals_of(seed_runtime, latest.opened.front()).front();
                 latest = frontier.unfold(seed_runtime, derivation, goal.goal, first_seen);
                 EXPECT_EQ(first_seen, goal.candidate_count) << "a freshly reported count is exact";
                 ++fresh_checks;
                 continue;
             }
-            const uint32_t derivation = frontier.open.begin()->first;
-            const pud_body_goal_id goal = frontier.open.begin()->second.front().goal;
+            const uint32_t derivation = *frontier.open.begin();
+            const pud_body_goal_id goal = goals_of(seed_runtime, pud_derivation_id{derivation}).front().goal;
             latest = frontier.unfold(seed_runtime, derivation, goal, first_seen);
         }
     }
@@ -495,8 +521,10 @@ TEST_F(PudRuntimeIntegrationTest, TheSameCallsGiveTheSameChanges) {
         ASSERT_EQ(conjectured, add_datalog_conjecture(second, program));
         frontier.apply(conjectured, true);
         for (size_t unfolds = 0; !frontier.open.empty() && unfolds < 500; ++unfolds) {
-            const uint32_t derivation = frontier.open.rbegin()->first;
-            const pud_body_goal_id goal = frontier.open.rbegin()->second.back().goal;
+            const uint32_t derivation = *frontier.open.rbegin();
+            const std::vector<pud_open_goal> goals = goals_of(first, pud_derivation_id{derivation});
+            ASSERT_EQ(goals, goals_of(second, pud_derivation_id{derivation}));
+            const pud_body_goal_id goal = goals.back().goal;
             const pud_frontier_change expected = second.unfold(pud_derivation_id{derivation}, goal);
             size_t first_seen = 0;
             ASSERT_EQ(frontier.unfold(first, derivation, goal, first_seen), expected);

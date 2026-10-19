@@ -1,7 +1,7 @@
 #ifndef PUD_RANDOM_DATABASE_UNFOLDER_HPP
 #define PUD_RANDOM_DATABASE_UNFOLDER_HPP
 
-#include <map>
+#include <set>
 #include <vector>
 #include "infrastructure/coroutine.hpp"
 #include "value_objects/pud_body_goal_id.hpp"
@@ -22,7 +22,7 @@ private:
     IOpenDatabase& open_database_;
     IUnfold& unfold_;
     IChooseUnfold& choose_unfold_;
-    std::map<pud_derivation_id, std::vector<pud_body_goal_id>> frontier_;
+    std::set<pud_derivation_id> frontier_;
 };
 
 template<typename IOD, typename IU, typename ICU>
@@ -51,11 +51,8 @@ coroutine<pud_frontier_change, void> pud_random_database_unfolder<IOD, IU, ICU>:
 
 template<typename IOD, typename IU, typename ICU>
 void pud_random_database_unfolder<IOD, IU, ICU>::track(const pud_frontier_change& change) {
-    for (const pud_open_derivation& opened : change.opened) {
-        std::vector<pud_body_goal_id>& goals = frontier_[opened.derivation];
-        for (const pud_open_goal& goal : opened.goals)
-            goals.push_back(goal.goal);
-    }
+    for (pud_derivation_id derivation : change.opened)
+        frontier_.insert(derivation);
     for (pud_derivation_id derivation : change.refuted)
         frontier_.erase(derivation);
 }

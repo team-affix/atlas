@@ -16,14 +16,15 @@
 #include "value_objects/rule.hpp"
 
 namespace {
-using test_unfolder_t = pud_random_database_unfolder<pud_runtime, pud_runtime, pud_random_unfold_chooser>;
+using test_chooser_t = pud_random_unfold_chooser<pud_runtime>;
+using test_unfolder_t = pud_random_database_unfolder<pud_runtime, pud_runtime, test_chooser_t>;
 
 struct database_under_test {
     database_under_test(uint32_t random_seed)
         : database()
         , runtime(database)
         , rng(random_seed)
-        , chooser(rng)
+        , chooser(runtime, rng)
         , unfolder(runtime, runtime, chooser)
         , unfolding(unfolder.unfold_database())
         , proven()
@@ -33,7 +34,7 @@ struct database_under_test {
     db database;
     pud_runtime runtime;
     std::mt19937 rng;
-    pud_random_unfold_chooser chooser;
+    test_chooser_t chooser;
     test_unfolder_t unfolder;
     coroutine<pud_frontier_change, void> unfolding;
     std::set<pud_derivation_id> proven;

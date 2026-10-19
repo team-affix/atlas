@@ -3,6 +3,7 @@
 #include <algorithm>
 #include <set>
 #include <unordered_set>
+#include <utility>
 #include "infrastructure/pud_transient_ubs_state.hpp"
 #include "value_objects/framed_expr.hpp"
 #include "debug_assert.hpp"
@@ -57,6 +58,16 @@ pud_frontier_change pud_runtime::unfold(pud_derivation_id derivation, pud_body_g
     return collect_change(first_new_node, manifest_.children_.get(leaf));
 }
 
+coroutine<pud_open_goal, void> pud_runtime::iterate_body_goals(pud_derivation_id derivation) {
+    const pud_node_id leaf = derivation.value;
+    DEBUG_ASSERT(manifest_.open_leaves_.check_leaf_open(leaf));
+    std::vector<std::pair<pud_body_goal_id, pud_mhq_head_id>> query_heads =
+        manifest_.node_descents_.get(leaf).body_goal_pq().get_query_heads();
+    std::sort(query_heads.begin(), query_heads.end());
+    for (const auto& [goal, head] : query_heads)
+        co_yield pud_open_goal{.goal = goal, .candidate_count = manifest_.mhq_.get_candidates(head).size()};
+}
+
 const expr* pud_runtime::head_expr(pud_derivation_id derivation) {
     const pud_node_id leaf = derivation.value;
     DEBUG_ASSERT(manifest_.node_descents_.check_descent(leaf));
@@ -86,9 +97,7 @@ pud_frontier_change pud_runtime::collect_change(
     for (pud_node_id leaf : manifest_.frontier_recorder_.get_opened_leaves()) {
         if (refuted.contains(leaf))
             continue;
-        change.opened.push_back(pud_open_derivation{
-            .derivation = pud_derivation_id{static_cast<uint32_t>(leaf)},
-            .goals = find_open_goals(leaf)});
+        change.opened.push_back(pud_derivation_id{static_cast<uint32_t>(leaf)});
     }
 
     for (pud_node_id node : produced) {
@@ -123,14 +132,6 @@ pud_frontier_change pud_runtime::collect_change(
     }
     std::sort(change.made_unit.begin(), change.made_unit.end());
     return change;
-}
-
-std::vector<pud_open_goal> pud_runtime::find_open_goals(pud_node_id leaf) {
-    std::vector<pud_open_goal> goals;
-    for (const auto& [goal, head] : manifest_.node_descents_.get(leaf).body_goal_pq().get_query_heads())
-        goals.push_back(pud_open_goal{.goal = goal, .candidate_count = manifest_.mhq_.get_candidates(head).size()});
-    std::sort(goals.begin(), goals.end());
-    return goals;
 }
 
 pud_node_id pud_runtime::find_root(pud_node_id node) {

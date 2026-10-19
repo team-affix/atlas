@@ -2,7 +2,6 @@
 #define PUD_RANDOM_SOLVER_HPP
 
 #include <cstdint>
-#include <map>
 #include <set>
 #include <unordered_map>
 #include <vector>
@@ -34,7 +33,7 @@ private:
     IGetHeadExpr& get_head_expr_;
     IChooseUnfold& choose_unfold_;
     size_t conjecture_count_;
-    std::map<pud_derivation_id, std::vector<pud_body_goal_id>> frontier_;
+    std::set<pud_derivation_id> frontier_;
     std::set<pud_derivation_id> unreported_proven_;
     std::unordered_map<pud_derivation_id, size_t, pud_derivation_id_hash> conjectures_;
 };
@@ -89,11 +88,9 @@ coroutine<pud_solver_step, void> pud_random_solver<IAC, IU, IGHE, ICU>::solve() 
 
 template<typename IAC, typename IU, typename IGHE, typename ICU>
 void pud_random_solver<IAC, IU, IGHE, ICU>::track(const pud_frontier_change& change, size_t conjecture) {
-    for (const pud_open_derivation& opened : change.opened) {
-        std::vector<pud_body_goal_id>& goals = frontier_[opened.derivation];
-        for (const pud_open_goal& goal : opened.goals)
-            goals.push_back(goal.goal);
-        conjectures_.emplace(opened.derivation, conjecture);
+    for (pud_derivation_id derivation : change.opened) {
+        frontier_.insert(derivation);
+        conjectures_.emplace(derivation, conjecture);
     }
     for (pud_derivation_id derivation : change.proven) {
         unreported_proven_.insert(derivation);

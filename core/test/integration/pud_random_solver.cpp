@@ -26,14 +26,15 @@ using ::testing::UnorderedElementsAre;
 namespace {
 MATCHER_P(SameStructureAs, expected, "") { return same_structure(arg, expected); }
 
-using test_solver_t = pud_random_solver<pud_runtime, pud_runtime, pud_runtime, pud_random_unfold_chooser>;
+using test_chooser_t = pud_random_unfold_chooser<pud_runtime>;
+using test_solver_t = pud_random_solver<pud_runtime, pud_runtime, pud_runtime, test_chooser_t>;
 
 struct solver_under_test {
     solver_under_test(uint32_t random_seed)
         : database()
         , runtime(database)
         , rng(random_seed)
-        , chooser(rng)
+        , chooser(runtime, rng)
         , solver(runtime, runtime, runtime, chooser)
         , opened(false)
         , solving()
@@ -43,7 +44,7 @@ struct solver_under_test {
     db database;
     pud_runtime runtime;
     std::mt19937 rng;
-    pud_random_unfold_chooser chooser;
+    test_chooser_t chooser;
     test_solver_t solver;
     bool opened;
     std::optional<coroutine<pud_solver_step, void>> solving;
@@ -189,13 +190,13 @@ struct PudRandomSolverIntegrationTest : public ::testing::Test {
         target.opened = true;
         const pud_frontier_change opening = target.runtime.open_database();
         std::set<pud_derivation_id> refuted;
-        for (const pud_open_derivation& rule_derivation : opening.opened) {
-            std::optional<pud_open_derivation> frontier = rule_derivation;
+        for (pud_derivation_id rule_derivation : opening.opened) {
+            std::optional<pud_derivation_id> frontier = rule_derivation;
             for (uint32_t level = 0; level < depth && frontier.has_value(); ++level) {
-                if (refuted.contains(frontier->derivation))
+                if (refuted.contains(frontier.value()))
                     break;
-                const pud_frontier_change change =
-                    target.runtime.unfold(frontier->derivation, frontier->goals.front().goal);
+                coroutine<pud_open_goal, void> goals = target.runtime.iterate_body_goals(frontier.value());
+                const pud_frontier_change change = target.runtime.unfold(frontier.value(), goals.next()->goal);
                 refuted.insert(change.refuted.begin(), change.refuted.end());
                 frontier.reset();
                 if (!change.opened.empty())
