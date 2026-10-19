@@ -5,34 +5,51 @@
 #include <map>
 #include <cstdint>
 #include <optional>
+#include <random>
 #include <set>
 #include <sstream>
 #include <stdexcept>
 #include <string>
+#include <type_traits>
 #include <variant>
 #include <vector>
 #include <gtest/gtest.h>
 #include "functor_fixture.hpp"
-#include "infrastructure/pud_random_solver_manifest.hpp"
-#include "infrastructure/pud_random_unfold_manifest.hpp"
+#include "infrastructure/pud_manifest.hpp"
+#include "infrastructure/pud_random_rule_chooser.hpp"
+#include "infrastructure/pud_random_subgoal_chooser.hpp"
 #include "infrastructure/pud_random_unit_solver_manifest.hpp"
 #include "value_objects/pud_unfold.hpp"
 #include "value_objects/rule.hpp"
 
-// A manifest plus everything a test needs to build programs, drive the solver and audit every
-// public store against the invariants the PUD relies on.
+enum struct pud_harness_scope { every_open_leaf, conjecture_leaves };
+
 template<typename Manifest>
 struct pud_manifest_harness {
-    pud_manifest_harness(uint32_t random_seed) : manifest(random_seed) {}
+    pud_manifest_harness(uint32_t random_seed, pud_harness_scope scope)
+        : manifest(make_manifest(random_seed))
+        , scope(scope)
+        , rng(random_seed)
+        , rule_chooser(rng)
+        , subgoal_chooser(manifest.node_descents_, rng) {}
+
+    static Manifest make_manifest(uint32_t random_seed) {
+        if constexpr (std::is_constructible_v<Manifest, uint32_t>)
+            return Manifest(random_seed);
+        else
+            return Manifest();
+    }
 
     Manifest manifest;
+    pud_harness_scope scope;
+    std::mt19937 rng;
+    pud_random_rule_chooser rule_chooser;
+    pud_random_subgoal_chooser<typename Manifest::node_descents_t> subgoal_chooser;
     test_functors functors;
     std::vector<pud_node_id> started_roots;
     std::map<pud_node_id, const expr*> answer_templates;
     std::optional<coroutine<pud_unfold, void>> unfolding;
     std::map<pud_node_id, std::set<pud_node_id>> reported_solutions;
-
-    // ---------- building ----------
 
     const expr* var(uint32_t index) { return manifest.expr_pool_.make_var(index); }
 
@@ -64,7 +81,6 @@ struct pud_manifest_harness {
         return root;
     }
 
-    // Runs the base descent over every tree not yet started; trees added afterwards wait for the next call.
     void run_base_descent() {
         for (pud_node_id root_node : manifest.root_nodes_.get()) {
             if (std::find(started_roots.begin(), started_roots.end(), root_node) != started_roots.end())
@@ -74,9 +90,8 @@ struct pud_manifest_harness {
         }
     }
 
-    // The conjecture itself is headless; answer_template only tells the test how to read answers.
     pud_node_id start_conjecture(const expr* answer_template, std::vector<const expr*> goals, uint32_t var_count) {
-        const pud_node_id root = manifest.conjecture_initializer_.initialize_conjecture(goals, var_count);
+        const pud_node_id root = manifest.conjecture_initializer_.initialize_conjecture(answer_template, goals, var_count);
         answer_templates.emplace(root, answer_template);
         run_base_descent();
         return root;
@@ -124,8 +139,6 @@ struct pud_manifest_harness {
             3);
     }
 
-    // Expands a started tree's frontier leaf at its first open goal, `depth` times, always following
-    // the single child that keeps an open goal.
     pud_node_id grow_along_open_goals(pud_node_id root, uint32_t depth) {
         pud_node_id frontier = root;
         for (uint32_t level = 0; level < depth; ++level) {
@@ -143,10 +156,6 @@ struct pud_manifest_harness {
         return frontier;
     }
 
-    // ---------- solving ----------
-
-    // The unfold loop ends once no conjecture leaf is open; a conjecture started afterwards needs a
-    // fresh drive.
     coroutine<pud_unfold, void>& unfold_loop() {
         run_base_descent();
         const bool ended = !unfolding.has_value() || unfolding->done();
@@ -155,18 +164,38 @@ struct pud_manifest_harness {
         return unfolding.value();
     }
 
-    // One step of the manifest's unfold loop. False once the loop has ended.
-    bool advance_unfold_loop() {
-        coroutine<pud_unfold, void>& running = unfold_loop();
-        running.resume();
-        if (!running.has_yield())
-            return false;
-        running.consume_yield();
-        return true;
+    std::set<pud_node_id> drivable_leaves() {
+        if (scope == pud_harness_scope::every_open_leaf)
+            return manifest.open_leaves_.get();
+        std::set<pud_node_id> leaves;
+        for (pud_node_id leaf_node : manifest.open_leaves_.get()) {
+            if (!manifest.axioms_.check_axiom(root_of(leaf_node)))
+                leaves.insert(leaf_node);
+        }
+        return leaves;
     }
 
-    // Conjectures are unfolded by the manifest's unfold loop, which never touches axiom trees; an axiom
-    // tree is grown here instead, oldest open leaf first. False once the root has nothing open.
+    std::optional<pud_unfold> next_unfold() {
+        if constexpr (requires (Manifest& any) { any.unfold_loop_; }) {
+            coroutine<pud_unfold, void>& running = unfold_loop();
+            running.resume();
+            if (!running.has_yield())
+                return std::nullopt;
+            return running.consume_yield();
+        } else {
+            run_base_descent();
+            const std::set<pud_node_id> leaves = drivable_leaves();
+            if (leaves.empty())
+                return std::nullopt;
+            const pud_node_id leaf_node = rule_chooser.choose_rule(leaves);
+            const pud_body_goal_id goal = subgoal_chooser.choose_subgoal(leaf_node);
+            manifest.unfolder_.unfold(leaf_node, goal);
+            return pud_unfold{.leaf = leaf_node, .goal = goal};
+        }
+    }
+
+    bool advance_unfold_loop() { return next_unfold().has_value(); }
+
     bool unfold_once(pud_node_id root) {
         run_base_descent();
         if (!manifest.axioms_.check_axiom(root))
@@ -180,7 +209,6 @@ struct pud_manifest_harness {
         return false;
     }
 
-    // Advances the unfold loop until it ends or max_unfolds is reached; returns how many unfolds happened.
     size_t unfold_until_closed(size_t max_unfolds) {
         size_t unfolds = 0;
         while (unfolds < max_unfolds && advance_unfold_loop())
@@ -188,9 +216,6 @@ struct pud_manifest_harness {
         return unfolds;
     }
 
-    // Like unfold_until_closed, but stops once some open leaf holds more than max_goals open goals.
-    // Self-referential rules without a base (p :- p, p) double a leaf's goals on every unfold, which
-    // is not what tests that bound their unfolds are about.
     size_t unfold_while_small(size_t max_unfolds, size_t max_goals) {
         size_t unfolds = 0;
         while (unfolds < max_unfolds && most_open_goals() <= max_goals && advance_unfold_loop())
@@ -205,8 +230,6 @@ struct pud_manifest_harness {
         return most;
     }
 
-    // Everything the axiom trees have proven so far: each axiom's head, normalized at each live leaf of
-    // its tree that has no open goals.
     std::set<const expr*> proven_heads() {
         std::set<const expr*> proven;
         for (pud_node_id axiom_root : manifest.axioms_.get()) {
@@ -221,7 +244,6 @@ struct pud_manifest_harness {
         return proven;
     }
 
-    // A root's solutions are its live leaves without open goals; the oldest unreported one.
     std::optional<pud_node_id> find_unreported_solution(pud_node_id root) {
         const std::set<pud_node_id>& reported = reported_solutions[root];
         std::optional<pud_node_id> found;
@@ -234,7 +256,6 @@ struct pud_manifest_harness {
         return found;
     }
 
-    // Unfolds at most max_steps times, stopping at the root's next solution.
     std::optional<pud_node_id> next_solution(pud_node_id root, size_t max_steps) {
         for (size_t resumed = 0;; ++resumed) {
             const std::optional<pud_node_id> solution = find_unreported_solution(root);
@@ -247,7 +268,6 @@ struct pud_manifest_harness {
         }
     }
 
-    // Nothing left to find under the root: no open leaf and no unreported solution.
     bool exhausted(pud_node_id root) {
         const std::set<pud_node_id>& reported = reported_solutions[root];
         for (pud_node_id leaf_node : manifest.live_leaf_finder_.find_live_leaves(root)) {
@@ -272,8 +292,6 @@ struct pud_manifest_harness {
         return answers;
     }
 
-    // One step for the root: report its next solution if one is waiting, otherwise make one
-    // decision. False once the root is exhausted.
     bool step(pud_node_id root, std::vector<const expr*>& answers) {
         const std::optional<pud_node_id> solution = find_unreported_solution(root);
         if (solution.has_value()) {
@@ -285,8 +303,6 @@ struct pud_manifest_harness {
             return false;
         return unfold_once(root);
     }
-
-    // ---------- reading the stores ----------
 
     bool refuted(pud_node_id node) { return manifest.refuted_node_checker_.check_refuted(node); }
 
@@ -300,21 +316,21 @@ struct pud_manifest_harness {
 
     bool has_descent(pud_node_id node) { return manifest.node_descents_.check_descent(node); }
 
-    std::optional<pud_mhq_head_id> query_of(pud_node_id leaf_node, body_goal_id goal) {
+    std::optional<pud_mhq_head_id> query_of(pud_node_id leaf_node, pud_body_goal_id goal) {
         return manifest.node_descents_.get(leaf_node).body_goal_pq().find_query_head(goal);
     }
 
     std::vector<pud_node_id> children_of(pud_node_id node) { return manifest.children_.get(node); }
 
-    std::vector<std::pair<body_goal_id, const expr*>> open_goals(pud_node_id leaf_node) {
-        std::vector<std::pair<body_goal_id, const expr*>> goals;
+    std::vector<std::pair<pud_body_goal_id, const expr*>> open_goals(pud_node_id leaf_node) {
+        std::vector<std::pair<pud_body_goal_id, const expr*>> goals;
         for (const auto& [goal, goal_expr] : manifest.node_descents_.get(leaf_node).body_goal_expr().body_goal_exprs())
             goals.emplace_back(goal, goal_expr);
         std::sort(goals.begin(), goals.end());
         return goals;
     }
 
-    body_goal_id first_open_goal(pud_node_id leaf_node) { return open_goals(leaf_node).front().first; }
+    pud_body_goal_id first_open_goal(pud_node_id leaf_node) { return open_goals(leaf_node).front().first; }
 
     std::vector<pud_node_id> all_nodes() {
         std::vector<pud_node_id> nodes;
@@ -360,8 +376,6 @@ struct pud_manifest_harness {
         return heads;
     }
 
-    // ---------- environments, recomputed independently from the stored substitutions ----------
-
     uint32_t lvc_of(pud_node_id node) {
         uint32_t lvc = 0;
         for (pud_node_id on_path : path_to(node))
@@ -371,7 +385,7 @@ struct pud_manifest_harness {
 
     pud_ubs_state env_of(pud_node_id node) {
         const std::vector<pud_node_id> path = path_to(node);
-        pud_random_solver_manifest::binding_descent_t binding{
+        typename Manifest::binding_descent_t binding{
             manifest.node_added_substitutions_, manifest.expr_pool_, manifest.expr_pool_};
         for (size_t index = 1; index < path.size(); ++index)
             binding = binding.descend(path.at(index));
@@ -410,8 +424,6 @@ struct pud_manifest_harness {
         }
         return vars;
     }
-
-    // ---------- invariants ----------
 
     void check_live_leaves_are_exactly_the_stored_descents() {
         for (pud_node_id node : all_nodes()) {
@@ -631,6 +643,34 @@ struct pud_manifest_harness {
         }
     }
 
+    std::map<pud_mhq_head_id, std::set<std::pair<pud_node_id, pud_body_goal_id>>> scan_query_holders() {
+        std::map<pud_mhq_head_id, std::set<std::pair<pud_node_id, pud_body_goal_id>>> holders;
+        for (pud_mhq_head_id head = 0;; ++head) {
+            try {
+                manifest.query_head_nodes_.get(head);
+            } catch (const std::out_of_range&) {
+                break;
+            }
+            holders[head];
+        }
+        for (pud_node_id leaf_node : live_leaves_with_descents()) {
+            for (const auto& [goal, head] : manifest.node_descents_.get(leaf_node).body_goal_pq().get_query_heads())
+                holders[head].emplace(leaf_node, goal);
+        }
+        return holders;
+    }
+
+    void check_query_holders_match_the_stored_descents() {
+        if constexpr (requires (Manifest& any) { any.query_holders_; }) {
+            for (const auto& [head, scanned] : scan_query_holders()) {
+                const std::vector<std::pair<pud_node_id, pud_body_goal_id>> indexed = manifest.query_holders_.get(head);
+                const std::set<std::pair<pud_node_id, pud_body_goal_id>> indexed_set(indexed.begin(), indexed.end());
+                EXPECT_EQ(indexed_set, scanned) << "head " << head;
+                EXPECT_EQ(indexed.size(), scanned.size()) << "head " << head << " lists a holder twice";
+            }
+        }
+    }
+
     void check_all() {
         check_live_leaves_are_exactly_the_stored_descents();
         check_open_leaves_are_exactly_the_live_leaves_with_open_goals();
@@ -650,62 +690,10 @@ struct pud_manifest_harness {
         check_query_head_node_is_an_ancestor_of_every_leaf_holding_it();
         check_every_candidate_path_is_a_real_root_first_chain();
         check_every_candidate_is_acceptable_at_every_leaf_holding_the_query();
+        check_query_holders_match_the_stored_descents();
     }
 };
 
-// Rebuilds an expression of another harness's pool in this harness's pool, keeping functor ids.
-template<typename Harness>
-const expr* copy_expr(Harness& target, const expr* source) {
-    if (const expr::var* variable = std::get_if<expr::var>(&source->content))
-        return target.manifest.expr_pool_.make_var(variable->index);
-    const expr::functor& functor = std::get<expr::functor>(source->content);
-    std::vector<const expr*> args;
-    for (const expr* arg : functor.args)
-        args.push_back(copy_expr(target, arg));
-    return target.manifest.expr_pool_.make_functor(functor.id, args);
-}
-
-// Copies every node of the source's trees into the target's stores with the same ids, the way a
-// database loaded from file would arrive: structure, deltas and refutations, but no descents.
-template<typename Harness>
-void reload_database(Harness& source, Harness& target) {
-    for (pud_node_id node = 0; node < source.manifest.node_id_sequencer_.peek(); ++node) {
-        EXPECT_EQ(target.manifest.node_id_sequencer_.next(), node);
-        std::vector<const expr*> goals;
-        for (const expr* goal : source.manifest.node_added_body_goals_.get(node))
-            goals.push_back(copy_expr(target, goal));
-        target.manifest.node_added_body_goals_.store(node, goals);
-        target.manifest.node_added_var_count_.store(node, source.manifest.node_added_var_count_.get(node));
-        if (source.root(node)) {
-            target.manifest.root_nodes_.mark_root(node);
-        } else {
-            std::vector<pud_substitution> substitutions;
-            for (const pud_substitution& substitution : source.manifest.node_added_substitutions_.get(node))
-                substitutions.push_back(pud_substitution{substitution.var_idx, copy_expr(target, substitution.value)});
-            target.manifest.node_added_substitutions_.store(node, substitutions);
-            target.manifest.node_parents_.store(node, source.manifest.node_parents_.get(node));
-        }
-        if (source.manifest.axioms_.check_axiom(node)) {
-            target.manifest.axioms_.mark_axiom(node);
-            target.manifest.node_heads_.store(node, copy_expr(target, source.manifest.node_heads_.get(node)));
-        }
-        const auto template_it = source.answer_templates.find(node);
-        if (template_it != source.answer_templates.end())
-            target.answer_templates.emplace(node, copy_expr(target, template_it->second));
-        if (source.leaf(node)) {
-            target.manifest.leaf_nodes_.set_leaf(node);
-            if (source.manifest.refuted_leaves_.check_refuted(node))
-                target.manifest.refuted_leaves_.mark_refuted(node);
-            continue;
-        }
-        target.manifest.call_sites_.store(node, source.manifest.call_sites_.get(node));
-        target.manifest.children_.store(node, source.children_of(node));
-        target.manifest.node_live_child_counts_.store(node, source.manifest.node_live_child_counts_.get(node));
-    }
-}
-
-using pud_random_unfold_manifest_harness = pud_manifest_harness<pud_random_unfold_manifest>;
-using pud_random_solver_manifest_harness = pud_manifest_harness<pud_random_solver_manifest>;
 using pud_random_unit_solver_manifest_harness = pud_manifest_harness<pud_random_unit_solver_manifest>;
 
 #endif

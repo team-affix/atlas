@@ -3,7 +3,7 @@
 
 #include <utility>
 #include <vector>
-#include "value_objects/body_goal_id.hpp"
+#include "value_objects/pud_body_goal_id.hpp"
 #include "value_objects/expr.hpp"
 #include "value_objects/pud_node_id.hpp"
 
@@ -61,14 +61,14 @@ PUD_BASE_DESCENT::pud_base_descent(
 
 PUD_BASE_DESCENT_TEMPLATE
 PUD_BASE_DESCENT PUD_BASE_DESCENT::descend(pud_node_id parent, pud_node_id child) const {
-    const body_goal_id next_body_goal_id = next_body_goal_id_.next_body_goal_id();
+    const pud_body_goal_id next_body_goal_id = next_body_goal_id_.next_body_goal_id();
     BindingDescent child_binding = binding_.descend(child);
     LvcDescent child_lvc = lvc_.descend(child);
     NextBodyGoalIdDescent child_next_body_goal_id = next_body_goal_id_.descend(child);
     BodyGoalExprDescent child_body_goal_expr = body_goal_expr_.descend(next_body_goal_id, parent, child);
 
     std::vector<const expr*> watch;
-    for (body_goal_id goal = next_body_goal_id; goal < child_next_body_goal_id.next_body_goal_id(); ++goal)
+    for (pud_body_goal_id goal = next_body_goal_id; goal < child_next_body_goal_id.next_body_goal_id(); ++goal)
         watch.push_back(child_body_goal_expr.body_goal_exprs().at(goal));
     auto watched = structure_watch_.descend(child, {body_goal_pq_.find_call_site_watch_head_id(parent)}, watch);
 

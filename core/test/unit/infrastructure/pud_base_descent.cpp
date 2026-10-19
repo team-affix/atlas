@@ -16,8 +16,7 @@ using ::testing::ReturnRef;
 using ::testing::StrictMock;
 
 namespace {
-
-using body_goal_exprs_t = immer::map<body_goal_id, const expr*>;
+using body_goal_exprs_t = immer::map<pud_body_goal_id, const expr*>;
 
 struct watch_result_t {
     std::vector<pud_watch_head_id> structure_changes;
@@ -30,8 +29,8 @@ struct SubDescentOps {
     MOCK_METHOD(const pud_ubs_state&, ubs_state, (int));
     MOCK_METHOD(int, descend_lvc, (int, pud_node_id));
     MOCK_METHOD(uint32_t, lvc, (int));
-    MOCK_METHOD(body_goal_id, descend_next_body_goal_id, (body_goal_id, pud_node_id));
-    MOCK_METHOD(int, descend_body_goal_expr, (int, body_goal_id, pud_node_id, pud_node_id));
+    MOCK_METHOD(pud_body_goal_id, descend_next_body_goal_id, (pud_body_goal_id, pud_node_id));
+    MOCK_METHOD(int, descend_body_goal_expr, (int, pud_body_goal_id, pud_node_id, pud_node_id));
     MOCK_METHOD(const body_goal_exprs_t&, body_goal_exprs, (int));
     MOCK_METHOD(
         watch_result_t,
@@ -41,7 +40,7 @@ struct SubDescentOps {
         int,
         descend_body_goal_pq,
         (int,
-         body_goal_id,
+         pud_body_goal_id,
          pud_node_id,
          pud_node_id,
          const pud_ubs_state&,
@@ -71,16 +70,16 @@ struct MockLvcDescent {
 };
 
 struct MockNextBodyGoalIdDescent {
-    body_goal_id next;
+    pud_body_goal_id next;
     MockNextBodyGoalIdDescent descend(pud_node_id child) const {
         return {sub_descent_ops->descend_next_body_goal_id(next, child)};
     }
-    body_goal_id next_body_goal_id() const { return next; }
+    pud_body_goal_id next_body_goal_id() const { return next; }
 };
 
 struct MockBodyGoalExprDescent {
     int tag;
-    MockBodyGoalExprDescent descend(body_goal_id next_body_goal_id, pud_node_id parent, pud_node_id child) const {
+    MockBodyGoalExprDescent descend(pud_body_goal_id next_body_goal_id, pud_node_id parent, pud_node_id child) const {
         return {sub_descent_ops->descend_body_goal_expr(tag, next_body_goal_id, parent, child)};
     }
     const body_goal_exprs_t& body_goal_exprs() const { return sub_descent_ops->body_goal_exprs(tag); }
@@ -112,7 +111,7 @@ MockStructureWatchDescent::descend_result MockStructureWatchDescent::descend(
 struct MockBodyGoalPqDescent {
     int tag;
     MockBodyGoalPqDescent descend(
-        body_goal_id next_body_goal_id,
+        pud_body_goal_id next_body_goal_id,
         pud_node_id parent,
         pud_node_id child,
         const pud_ubs_state& child_ubs_state,
@@ -352,4 +351,4 @@ TEST_F(PudBaseDescentTest, PqGetsTheChildNode) {
     at_parent.descend(parent, child);
 }
 
-}  // namespace
+}

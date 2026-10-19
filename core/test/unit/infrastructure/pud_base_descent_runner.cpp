@@ -3,7 +3,7 @@
 #include <gtest/gtest.h>
 #include <gmock/gmock.h>
 #include "infrastructure/pud_base_descent_runner.hpp"
-#include "value_objects/body_goal_id.hpp"
+#include "value_objects/pud_body_goal_id.hpp"
 
 using ::testing::_;
 using ::testing::AnyNumber;
@@ -13,19 +13,17 @@ using ::testing::Return;
 using ::testing::ReturnRef;
 
 namespace {
-
 struct DescentOps {
-    MOCK_METHOD(const std::vector<body_goal_id>&, refuted_goals, (int));
+    MOCK_METHOD(const std::vector<pud_body_goal_id>&, refuted_goals, (int));
     MOCK_METHOD(int, descend, (int, pud_node_id, pud_node_id));
 };
 
 DescentOps* descent_ops = nullptr;
 
-// A descent is a tag; descending from tag t into child c gives tag t * 100 + c.
 struct MockDescent {
     struct pq_view {
         int tag;
-        const std::vector<body_goal_id>& refuted_goals() const { return descent_ops->refuted_goals(tag); }
+        const std::vector<pud_body_goal_id>& refuted_goals() const { return descent_ops->refuted_goals(tag); }
     };
     int tag;
     pq_view body_goal_pq() const { return {tag}; }
@@ -58,8 +56,6 @@ using test_runner_t = pud_base_descent_runner<
     NiceMock<MockCheckNodeLeaf>, NiceMock<MockGetChildren>, NiceMock<MockActivateLeaf>,
     NiceMock<MockRefuteNode>>;
 
-// Root 1 is an interior node with children 10 (interior, child 100) and 11 (leaf); root 2 is
-// itself a leaf. Root descents are tagged with the root id.
 struct PudBaseDescentRunnerTest : public ::testing::Test {
     NiceMock<DescentOps> ops;
     NiceMock<MockCheckNodeRefuted> refuted;
@@ -71,8 +67,8 @@ struct PudBaseDescentRunnerTest : public ::testing::Test {
     test_runner_t runner{refuted, root_descents, leaves, children, activator, refuter};
     std::map<pud_node_id, std::vector<pud_node_id>> children_of{{1, {10, 11}}, {10, {100}}};
     std::vector<pud_node_id> no_children;
-    std::vector<body_goal_id> no_refuted_goals;
-    std::vector<body_goal_id> one_refuted_goal{0};
+    std::vector<pud_body_goal_id> no_refuted_goals;
+    std::vector<pud_body_goal_id> one_refuted_goal{0};
 
     void SetUp() override {
         descent_ops = &ops;
@@ -95,7 +91,7 @@ struct PudBaseDescentRunnerTest : public ::testing::Test {
     void TearDown() override { descent_ops = nullptr; }
 };
 
-}  // namespace
+}
 
 TEST_F(PudBaseDescentRunnerTest, EveryLiveLeafIsActivatedWithTheDescentThatReachedIt) {
     EXPECT_CALL(activator, activate(100, Field(&MockDescent::tag, (1 * 100 + 10) * 100 + 100)));

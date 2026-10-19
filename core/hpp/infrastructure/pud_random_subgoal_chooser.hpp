@@ -4,15 +4,14 @@
 #include <algorithm>
 #include <random>
 #include <vector>
-#include "value_objects/body_goal_id.hpp"
+#include "value_objects/pud_body_goal_id.hpp"
 #include "value_objects/pud_node_id.hpp"
 #include "debug_assert.hpp"
 
-// Chooses uniformly among a leaf's open body goals.
 template<typename IGetNodeDescent>
 struct pud_random_subgoal_chooser {
     pud_random_subgoal_chooser(IGetNodeDescent& get_node_descent, std::mt19937& rng);
-    body_goal_id choose_subgoal(pud_node_id leaf);
+    pud_body_goal_id choose_subgoal(pud_node_id leaf);
 private:
     IGetNodeDescent& get_node_descent_;
     std::mt19937& rng_;
@@ -26,8 +25,8 @@ pud_random_subgoal_chooser<IGetNodeDescent>::pud_random_subgoal_chooser(
     , rng_(rng) {}
 
 template<typename IGetNodeDescent>
-body_goal_id pud_random_subgoal_chooser<IGetNodeDescent>::choose_subgoal(pud_node_id leaf) {
-    std::vector<body_goal_id> open_goals;
+pud_body_goal_id pud_random_subgoal_chooser<IGetNodeDescent>::choose_subgoal(pud_node_id leaf) {
+    std::vector<pud_body_goal_id> open_goals;
     for (const auto& [goal, goal_expr] : get_node_descent_.get(leaf).body_goal_expr().body_goal_exprs())
         open_goals.push_back(goal);
     DEBUG_ASSERT(!open_goals.empty());

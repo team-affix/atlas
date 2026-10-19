@@ -3,16 +3,11 @@
 
 #include <optional>
 #include <vector>
-#include "value_objects/body_goal_id.hpp"
+#include "value_objects/pud_body_goal_id.hpp"
 #include "value_objects/pud_mhq_head_id.hpp"
 #include "value_objects/pud_node_id.hpp"
 #include "value_objects/pud_unfold.hpp"
 
-// Finds the next forced unfold: the first live leaf that still holds the oldest unit query head
-// itself, together with the goal it holds it for. The search starts at the node that opened the
-// query and skips every node where the query was forked, along with its descendants, since those
-// only hold forks. A head that is gone, or that no live leaf holds any more, is popped; one leaf is
-// returned at a time.
 template<
     typename ICheckUnitQueriesEmpty,
     typename IFrontUnitQuery,
@@ -114,7 +109,7 @@ std::optional<pud_unfold> PUD_NEXT_UNIT_UNFOLD::find_holding_leaf(pud_mhq_head_i
                 pending.push_back(child);
             continue;
         }
-        const std::optional<body_goal_id> goal = get_node_descent_.get(node).body_goal_pq().find_goal(head_id);
+        const std::optional<pud_body_goal_id> goal = get_node_descent_.get(node).body_goal_pq().find_goal(head_id);
         if (!goal.has_value())
             continue;
         return pud_unfold{.leaf = node, .goal = goal.value()};

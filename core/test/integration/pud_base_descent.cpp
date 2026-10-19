@@ -27,7 +27,6 @@ using ::testing::NiceMock;
 using ::testing::Return;
 
 namespace {
-
 struct MockOpenQuery {
     MOCK_METHOD(std::vector<int>, open, (const pud_ubs_state&, const expr*, uint32_t));
 };
@@ -56,7 +55,7 @@ pud_mhq_head_admission refuted(pud_mhq_head_id head_id) {
     return {head_id, pud_refuted_query{head_id}};
 }
 
-}  // namespace
+}
 
 struct PudBaseDescentIntegrationTest : public ::testing::Test {
     using bind_map_t = ubs_bind_map<
@@ -137,25 +136,17 @@ struct PudBaseDescentIntegrationTest : public ::testing::Test {
         ON_CALL(try_fork_query_head, try_fork_head(_, _)).WillByDefault([&](pud_mhq_head_id, const std::vector<int>&) {
             return live(next_unique_head_id++);
         });
-        // root: p(X0), q(X1, X2); children expand p(X0).
         store_node(root, 3, {p0, q12}, {});
         call_sites.store(root, 0);
-        // child: X0 := a, adds r(X3) as goal 2; its children expand r(X3).
         store_node(child, 1, {r3}, {pud_substitution{.var_idx = 0, .value = atom("a")}});
         call_sites.store(child, 2);
-        // grandchild: fact binding X3 := b.
         store_node(grandchild, 0, {}, {pud_substitution{.var_idx = 3, .value = atom("b")}});
-        // nephew: X2 := f(X3), adds s as goal 3; its children expand s.
         store_node(nephew, 0, {s}, {pud_substitution{.var_idx = 2, .value = functor("f", {var(3)})}});
         call_sites.store(nephew, 3);
-        // great nephew: fact binding X1 := c.
         store_node(great_nephew, 0, {}, {pud_substitution{.var_idx = 1, .value = atom("c")}});
-        // sibling: fact collapsing X1 and X2.
         store_node(sibling, 0, {}, {pud_substitution{.var_idx = 1, .value = var(2)}});
-        // linker: adds r(X1) as goal 2; its children expand q(X1, X2).
         store_node(linker, 0, {r1}, {});
         call_sites.store(linker, 1);
-        // linked: fact binding X1 := a.
         store_node(linked, 0, {}, {pud_substitution{.var_idx = 1, .value = atom("a")}});
     }
 
@@ -177,7 +168,7 @@ struct PudBaseDescentIntegrationTest : public ::testing::Test {
                 query_head_nodes,
                 query_forks,
                 root,
-                immer::map<body_goal_id, const expr*>{}.set(0, p0).set(1, q12),
+                immer::map<pud_body_goal_id, const expr*>{}.set(0, p0).set(1, q12),
                 pud_ubs_state{},
                 3,
                 {0, 1},
@@ -192,8 +183,6 @@ struct PudBaseDescentIntegrationTest : public ::testing::Test {
     }
 };
 
-// ---------- opening ----------
-
 TEST_F(PudBaseDescentIntegrationTest, ChildOpensItsNewGoalAtItsFrameOffset) {
     base_descent_t at_root = make_live_root();
     EXPECT_CALL(open_query, open(_, r3, 4u)).WillOnce(Return(std::vector<int>{3}));
@@ -206,8 +195,6 @@ TEST_F(PudBaseDescentIntegrationTest, FactChildOpensNothing) {
     EXPECT_CALL(try_add_query_head, try_add_head(_)).Times(0);
     at_root.descend(root, sibling);
 }
-
-// ---------- forking ----------
 
 TEST_F(PudBaseDescentIntegrationTest, BindingTheClosedGoalsVariableForksNothing) {
     base_descent_t at_root = make_live_root();
@@ -264,13 +251,11 @@ TEST_F(PudBaseDescentIntegrationTest, FactBelowClosesTheCallSiteGoalWithoutForki
     at_child.descend(child, grandchild);
 }
 
-// ---------- forced goals ----------
-
 TEST_F(PudBaseDescentIntegrationTest, UnitForkSurfacesThroughTheBase) {
     base_descent_t at_root = make_live_root();
     EXPECT_CALL(try_fork_query_head, try_fork_head(101u, _)).WillOnce(Return(unit(201)));
     base_descent_t at_sibling = at_root.descend(root, sibling);
-    EXPECT_EQ(at_sibling.body_goal_pq().unit_goals(), (std::vector<body_goal_id>{1}));
+    EXPECT_EQ(at_sibling.body_goal_pq().unit_goals(), (std::vector<pud_body_goal_id>{1}));
     EXPECT_TRUE(at_sibling.body_goal_pq().refuted_goals().empty());
 }
 
@@ -278,7 +263,7 @@ TEST_F(PudBaseDescentIntegrationTest, RefutedForkSurfacesThroughTheBase) {
     base_descent_t at_root = make_live_root();
     EXPECT_CALL(try_fork_query_head, try_fork_head(101u, _)).WillOnce(Return(refuted(201)));
     base_descent_t at_sibling = at_root.descend(root, sibling);
-    EXPECT_EQ(at_sibling.body_goal_pq().refuted_goals(), (std::vector<body_goal_id>{1}));
+    EXPECT_EQ(at_sibling.body_goal_pq().refuted_goals(), (std::vector<pud_body_goal_id>{1}));
     EXPECT_TRUE(at_sibling.body_goal_pq().unit_goals().empty());
 }
 
@@ -286,10 +271,8 @@ TEST_F(PudBaseDescentIntegrationTest, RefutedNewGoalSurfacesThroughTheBase) {
     base_descent_t at_root = make_live_root();
     EXPECT_CALL(try_add_query_head, try_add_head(_)).WillOnce(Return(refuted(102)));
     base_descent_t at_child = at_root.descend(root, child);
-    EXPECT_EQ(at_child.body_goal_pq().refuted_goals(), (std::vector<body_goal_id>{2}));
+    EXPECT_EQ(at_child.body_goal_pq().refuted_goals(), (std::vector<pud_body_goal_id>{2}));
 }
-
-// ---------- head lifetime ----------
 
 TEST_F(PudBaseDescentIntegrationTest, HeadsAreRemovedWhenTheirLastDescentDies) {
     base_descent_t at_root = make_live_root();
@@ -312,8 +295,6 @@ TEST_F(PudBaseDescentIntegrationTest, ForkedHeadIsRemovedWithItsDescentOnly) {
     }
     Mock::VerifyAndClearExpectations(&remove_query_head);
 }
-
-// ---------- stress ----------
 
 TEST_F(PudBaseDescentIntegrationTest, DeepChainForksOnlyTheSurvivingGoal) {
     const uint32_t depth = 100;

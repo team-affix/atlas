@@ -12,8 +12,8 @@ using ::testing::ElementsAre;
 using ::testing::IsEmpty;
 using ::testing::UnorderedElementsAre;
 
-struct PudRandomSolverManifestScenarioTest : public ::testing::Test {
-    pud_random_solver_manifest_harness h{0};
+struct PudManifestConjectureScenarioTest : public ::testing::Test {
+    pud_manifest_harness<pud_manifest> h{0, pud_harness_scope::conjecture_leaves};
 
     const expr* q(std::vector<const expr*> args) { return h.functor("q", std::move(args)); }
 
@@ -23,12 +23,12 @@ struct PudRandomSolverManifestScenarioTest : public ::testing::Test {
         return answers;
     }
 
-    bool solvable(pud_random_solver_manifest_harness& harness, const expr* goal, size_t budget) {
+    bool solvable(pud_manifest_harness<pud_manifest>& harness, const expr* goal, size_t budget) {
         const pud_node_id conjecture = harness.start_conjecture(harness.atom("q"), {goal}, 0);
         return harness.next_solution(conjecture, budget).has_value();
     }
 
-    std::vector<std::vector<pud_node_id>> candidate_paths(pud_node_id leaf, body_goal_id goal) {
+    std::vector<std::vector<pud_node_id>> candidate_paths(pud_node_id leaf, pud_body_goal_id goal) {
         std::vector<std::vector<pud_node_id>> paths;
         for (pud_mhcs_head_id candidate : h.manifest.mhq_.get_candidates(h.query_of(leaf, goal).value()))
             paths.push_back(h.manifest.mhcs_.get_path(candidate));
@@ -36,8 +36,6 @@ struct PudRandomSolverManifestScenarioTest : public ::testing::Test {
         return paths;
     }
 
-    // p(X) :- r(X). r(a). The p tree is expanded once, so the only candidate for p(a) is its
-    // child; returns that child.
     pud_node_id add_lemma_through_p() {
         const pud_node_id p_rule = h.axiom(h.functor("p", {h.var(0)}), {h.functor("r", {h.var(0)})}, 1);
         h.axiom(h.functor("r", {h.atom("a")}), {}, 0);
@@ -48,9 +46,7 @@ struct PudRandomSolverManifestScenarioTest : public ::testing::Test {
     }
 };
 
-// ---------- sharing and renames ----------
-
-TEST_F(PudRandomSolverManifestScenarioTest, AcceptingASharedQueryAtADeepDescendantSucceeds) {
+TEST_F(PudManifestConjectureScenarioTest, AcceptingASharedQueryAtADeepDescendantSucceeds) {
     h.add_colors();
     h.axiom(h.atom("a1"), {}, 0);
     h.axiom(h.atom("a2"), {}, 0);
@@ -59,7 +55,7 @@ TEST_F(PudRandomSolverManifestScenarioTest, AcceptingASharedQueryAtADeepDescenda
         q({h.var(0)}), {h.atom("a1"), h.atom("a2"), h.atom("a3"), h.functor("color", {h.var(0)})}, 1);
     const pud_mhq_head_id shared = h.query_of(conjecture, 3).value();
     pud_node_id frontier = conjecture;
-    for (body_goal_id goal = 0; goal < 3; ++goal) {
+    for (pud_body_goal_id goal = 0; goal < 3; ++goal) {
         h.manifest.unfolder_.unfold(frontier, goal);
         ASSERT_EQ(h.children_of(frontier).size(), 1u);
         frontier = h.children_of(frontier).front();
@@ -72,7 +68,7 @@ TEST_F(PudRandomSolverManifestScenarioTest, AcceptingASharedQueryAtADeepDescenda
     EXPECT_THAT(h.enumerate(conjecture, 10, 50), UnorderedElementsAre(q({h.atom("red")}), q({h.atom("blue")})));
 }
 
-TEST_F(PudRandomSolverManifestScenarioTest, CrossGoalVariableMergeIsHandledAtAcceptance) {
+TEST_F(PudManifestConjectureScenarioTest, CrossGoalVariableMergeIsHandledAtAcceptance) {
     h.add_colors();
     h.axiom(h.functor("eq", {h.var(0), h.var(0)}), {}, 1);
     const pud_node_id conjecture = h.start_conjecture(
@@ -87,7 +83,7 @@ TEST_F(PudRandomSolverManifestScenarioTest, CrossGoalVariableMergeIsHandledAtAcc
         UnorderedElementsAre(q({h.atom("red"), h.atom("red")}), q({h.atom("blue"), h.atom("blue")})));
 }
 
-TEST_F(PudRandomSolverManifestScenarioTest, RenameOnlyStepsDoNotForkButStayCorrect) {
+TEST_F(PudManifestConjectureScenarioTest, RenameOnlyStepsDoNotForkButStayCorrect) {
     h.add_colors();
     h.axiom(h.functor("eq", {h.var(0), h.var(0)}), {}, 1);
     const pud_node_id conjecture = h.start_conjecture(
@@ -110,7 +106,7 @@ TEST_F(PudRandomSolverManifestScenarioTest, RenameOnlyStepsDoNotForkButStayCorre
         UnorderedElementsAre(q({h.atom("red"), h.atom("red")}), q({h.atom("blue"), h.atom("blue")})));
 }
 
-TEST_F(PudRandomSolverManifestScenarioTest, ForkedQueriesOnlyListCandidatesThatStillUnify) {
+TEST_F(PudManifestConjectureScenarioTest, ForkedQueriesOnlyListCandidatesThatStillUnify) {
     h.add_colors();
     const pud_node_id conjecture = h.start_conjecture(
         q({h.var(0)}), {h.functor("color", {h.var(0)}), h.functor("warm", {h.var(0)})}, 1);
@@ -127,9 +123,7 @@ TEST_F(PudRandomSolverManifestScenarioTest, ForkedQueriesOnlyListCandidatesThatS
     h.check_every_candidate_is_acceptable_at_every_leaf_holding_the_query();
 }
 
-// ---------- self-reference and lemmas ----------
-
-TEST_F(PudRandomSolverManifestScenarioTest, AxiomTreeIsItsOwnCandidate) {
+TEST_F(PudManifestConjectureScenarioTest, AxiomTreeIsItsOwnCandidate) {
     const pud_node_id fact = h.axiom(h.functor("nat", {h.atom("z")}), {}, 0);
     const pud_node_id rule = h.axiom(
         h.functor("nat", {h.functor("s", {h.var(0)})}), {h.functor("nat", {h.var(0)})}, 1);
@@ -144,7 +138,7 @@ TEST_F(PudRandomSolverManifestScenarioTest, AxiomTreeIsItsOwnCandidate) {
     h.check_all();
 }
 
-TEST_F(PudRandomSolverManifestScenarioTest, ExpandingTheLeafThatIsItsOwnGoalsCandidate) {
+TEST_F(PudManifestConjectureScenarioTest, ExpandingTheLeafThatIsItsOwnGoalsCandidate) {
     h.axiom(h.functor("nat", {h.atom("z")}), {}, 0);
     const pud_node_id rule = h.axiom(
         h.functor("nat", {h.functor("s", {h.var(0)})}), {h.functor("nat", {h.var(0)})}, 1);
@@ -158,7 +152,7 @@ TEST_F(PudRandomSolverManifestScenarioTest, ExpandingTheLeafThatIsItsOwnGoalsCan
     h.check_all();
 }
 
-TEST_F(PudRandomSolverManifestScenarioTest, OneQueryUsesAnAxiomRuleAsALemma) {
+TEST_F(PudManifestConjectureScenarioTest, OneQueryUsesAnAxiomRuleAsALemma) {
     h.add_colors();
     const pud_node_id warmcolor = h.axiom(
         h.functor("warmcolor", {h.var(0)}), {h.functor("color", {h.var(0)}), h.functor("warm", {h.var(0)})}, 1);
@@ -172,9 +166,7 @@ TEST_F(PudRandomSolverManifestScenarioTest, OneQueryUsesAnAxiomRuleAsALemma) {
     h.check_all();
 }
 
-// ---------- conjectures stay outside the database ----------
-
-TEST_F(PudRandomSolverManifestScenarioTest, ConjectureIsNeverACandidateForAnotherConjecture) {
+TEST_F(PudManifestConjectureScenarioTest, ConjectureIsNeverACandidateForAnotherConjecture) {
     h.add_colors();
     h.start_conjecture(
         h.functor("warmcolor", {h.var(0)}), {h.functor("color", {h.var(0)}), h.functor("warm", {h.var(0)})}, 1);
@@ -185,7 +177,7 @@ TEST_F(PudRandomSolverManifestScenarioTest, ConjectureIsNeverACandidateForAnothe
     h.check_all();
 }
 
-TEST_F(PudRandomSolverManifestScenarioTest, ConjectureIsNeverACandidateForItsOwnGoals) {
+TEST_F(PudManifestConjectureScenarioTest, ConjectureIsNeverACandidateForItsOwnGoals) {
     const pud_node_id fact = h.axiom(h.functor("nat", {h.atom("z")}), {}, 0);
     const pud_node_id conjecture = h.start_conjecture(
         h.functor("nat", {h.functor("s", {h.var(0)})}), {h.functor("nat", {h.var(0)})}, 1);
@@ -195,7 +187,7 @@ TEST_F(PudRandomSolverManifestScenarioTest, ConjectureIsNeverACandidateForItsOwn
     h.check_all();
 }
 
-TEST_F(PudRandomSolverManifestScenarioTest, ConjectureNeverAddsAnswersToTheDatabase) {
+TEST_F(PudManifestConjectureScenarioTest, ConjectureNeverAddsAnswersToTheDatabase) {
     h.add_colors();
     h.start_conjecture(h.functor("color", {h.atom("green")}), {}, 0);
     h.start_conjecture(h.functor("color", {h.var(0)}), {h.functor("warm", {h.var(0)})}, 1);
@@ -205,15 +197,15 @@ TEST_F(PudRandomSolverManifestScenarioTest, ConjectureNeverAddsAnswersToTheDatab
     h.check_all();
 }
 
-TEST_F(PudRandomSolverManifestScenarioTest, ConjectureIsARootLeafButNotAnAxiom) {
+TEST_F(PudManifestConjectureScenarioTest, ConjectureIsARootLeafButNotAnAxiom) {
     h.add_colors();
     const pud_node_id conjecture = h.start_conjecture(q({h.var(0)}), {h.functor("color", {h.var(0)})}, 1);
     EXPECT_TRUE(h.root(conjecture));
     EXPECT_THAT(h.manifest.axioms_.get(), ::testing::Not(::testing::Contains(conjecture)));
-    EXPECT_THROW(h.manifest.node_heads_.get(conjecture), std::out_of_range);
+    EXPECT_EQ(h.manifest.node_heads_.get(conjecture), q({h.var(0)})) << "its head is only the answer template";
 }
 
-TEST_F(PudRandomSolverManifestScenarioTest, ConcurrentConjecturesNeverSeeEachOther) {
+TEST_F(PudManifestConjectureScenarioTest, ConcurrentConjecturesNeverSeeEachOther) {
     h.add_colors();
     const pud_node_id first = h.start_conjecture(q({h.var(0)}), {h.functor("color", {h.var(0)})}, 1);
     const pud_node_id second = h.start_conjecture(q({h.var(0)}), {h.functor("warm", {h.var(0)})}, 1);
@@ -232,7 +224,7 @@ TEST_F(PudRandomSolverManifestScenarioTest, ConcurrentConjecturesNeverSeeEachOth
     h.check_all();
 }
 
-TEST_F(PudRandomSolverManifestScenarioTest, CandidatesMoveDeeperWhenAnAxiomTreeGrows) {
+TEST_F(PudManifestConjectureScenarioTest, CandidatesMoveDeeperWhenAnAxiomTreeGrows) {
     const pud_node_id rule = h.add_nat();
     h.run_base_descent();
     h.grow_along_open_goals(rule, 3);
@@ -245,8 +237,8 @@ TEST_F(PudRandomSolverManifestScenarioTest, CandidatesMoveDeeperWhenAnAxiomTreeG
     EXPECT_TRUE(h.next_solution(conjecture, 3).has_value());
 }
 
-TEST_F(PudRandomSolverManifestScenarioTest, LemmaPathReplayMatchesFlatResolution) {
-    pud_random_solver_manifest_harness flat{0};
+TEST_F(PudManifestConjectureScenarioTest, LemmaPathReplayMatchesFlatResolution) {
+    pud_manifest_harness<pud_manifest> flat{0, pud_harness_scope::conjecture_leaves};
     flat.add_nat();
     const pud_node_id rule = h.add_nat();
     h.run_base_descent();
@@ -264,9 +256,7 @@ TEST_F(PudRandomSolverManifestScenarioTest, LemmaPathReplayMatchesFlatResolution
     h.check_all();
 }
 
-// ---------- refutation cascades ----------
-
-TEST_F(PudRandomSolverManifestScenarioTest, RefutingALemmaSubtreeRefutesQueriesThatOnlyHadIt) {
+TEST_F(PudManifestConjectureScenarioTest, RefutingALemmaSubtreeRefutesQueriesThatOnlyHadIt) {
     const pud_node_id lemma = add_lemma_through_p();
     const pud_node_id conjecture = h.start_conjecture(h.atom("q"), {h.functor("p", {h.atom("a")})}, 0);
     ASSERT_THAT(candidate_paths(conjecture, 0), ElementsAre(h.path_to(lemma)));
@@ -276,7 +266,7 @@ TEST_F(PudRandomSolverManifestScenarioTest, RefutingALemmaSubtreeRefutesQueriesT
     h.check_all();
 }
 
-TEST_F(PudRandomSolverManifestScenarioTest, RefutingOneOfTwoCandidatesMakesTheQueryUnit) {
+TEST_F(PudManifestConjectureScenarioTest, RefutingOneOfTwoCandidatesMakesTheQueryUnit) {
     const pud_node_id red = h.axiom(h.functor("color", {h.atom("red")}), {}, 0);
     h.axiom(h.functor("color", {h.atom("blue")}), {}, 0);
     const pud_node_id conjecture = h.start_conjecture(q({h.var(0)}), {h.functor("color", {h.var(0)})}, 1);
@@ -288,7 +278,7 @@ TEST_F(PudRandomSolverManifestScenarioTest, RefutingOneOfTwoCandidatesMakesTheQu
     h.check_all();
 }
 
-TEST_F(PudRandomSolverManifestScenarioTest, AllChildrenRefutedOnArrivalRefuteTheParent) {
+TEST_F(PudManifestConjectureScenarioTest, AllChildrenRefutedOnArrivalRefuteTheParent) {
     h.add_colors();
     h.axiom(h.functor("cold", {h.atom("green")}), {}, 0);
     const pud_node_id conjecture = h.start_conjecture(
@@ -302,7 +292,7 @@ TEST_F(PudRandomSolverManifestScenarioTest, AllChildrenRefutedOnArrivalRefuteThe
     h.check_all();
 }
 
-TEST_F(PudRandomSolverManifestScenarioTest, CascadeCrossesTrees) {
+TEST_F(PudManifestConjectureScenarioTest, CascadeCrossesTrees) {
     const pud_node_id lemma = add_lemma_through_p();
     const pud_node_id first = h.start_conjecture(h.atom("q1"), {h.functor("p", {h.atom("a")})}, 0);
     const pud_node_id second = h.start_conjecture(h.atom("q2"), {h.functor("p", {h.atom("a")})}, 0);
@@ -315,7 +305,7 @@ TEST_F(PudRandomSolverManifestScenarioTest, CascadeCrossesTrees) {
     h.check_all();
 }
 
-TEST_F(PudRandomSolverManifestScenarioTest, RefutingAnAlreadyRefutedNodeIsANoop) {
+TEST_F(PudManifestConjectureScenarioTest, RefutingAnAlreadyRefutedNodeIsANoop) {
     h.add_colors();
     const pud_node_id conjecture = h.start_conjecture(q({h.var(0)}), {h.functor("color", {h.var(0)})}, 1);
     h.manifest.unfolder_.unfold(conjecture, 0);
@@ -327,7 +317,7 @@ TEST_F(PudRandomSolverManifestScenarioTest, RefutingAnAlreadyRefutedNodeIsANoop)
     h.check_all();
 }
 
-TEST_F(PudRandomSolverManifestScenarioTest, RefutedRootStaysUnsolvable) {
+TEST_F(PudManifestConjectureScenarioTest, RefutedRootStaysUnsolvable) {
     h.add_colors();
     const pud_node_id conjecture = h.start_conjecture(q({h.var(0)}), {h.functor("color", {h.var(0)})}, 1);
     h.manifest.node_refuter_.refute(conjecture);
@@ -337,9 +327,7 @@ TEST_F(PudRandomSolverManifestScenarioTest, RefutedRootStaysUnsolvable) {
     h.check_all();
 }
 
-// ---------- unification edge cases ----------
-
-TEST_F(PudRandomSolverManifestScenarioTest, OccursCheckRefutesCyclicGoals) {
+TEST_F(PudManifestConjectureScenarioTest, OccursCheckRefutesCyclicGoals) {
     h.axiom(h.functor("eq", {h.var(0), h.var(0)}), {}, 1);
     const pud_node_id conjecture = h.start_conjecture(h.atom("q"), {h.functor("eq", {h.var(0), h.functor("f", {h.var(0)})})}, 1);
     EXPECT_TRUE(h.refuted(conjecture));
@@ -347,7 +335,7 @@ TEST_F(PudRandomSolverManifestScenarioTest, OccursCheckRefutesCyclicGoals) {
     h.check_all();
 }
 
-TEST_F(PudRandomSolverManifestScenarioTest, RepeatedVariablesInHeadsAreRespected) {
+TEST_F(PudManifestConjectureScenarioTest, RepeatedVariablesInHeadsAreRespected) {
     h.axiom(h.functor("same", {h.var(0), h.var(0)}), {}, 1);
     const pud_node_id different = h.start_conjecture(h.atom("q1"), {h.functor("same", {h.atom("a"), h.atom("b")})}, 0);
     const pud_node_id equal = h.start_conjecture(h.atom("q2"), {h.functor("same", {h.atom("a"), h.atom("a")})}, 0);
@@ -362,7 +350,7 @@ TEST_F(PudRandomSolverManifestScenarioTest, RepeatedVariablesInHeadsAreRespected
     h.check_all();
 }
 
-TEST_F(PudRandomSolverManifestScenarioTest, GroundGoalsNeedNoSubstitutions) {
+TEST_F(PudManifestConjectureScenarioTest, GroundGoalsNeedNoSubstitutions) {
     h.add_colors();
     const pud_node_id conjecture = h.start_conjecture(h.atom("q"), {h.functor("color", {h.atom("red")})}, 0);
     h.manifest.unfolder_.unfold(conjecture, 0);
@@ -374,7 +362,7 @@ TEST_F(PudRandomSolverManifestScenarioTest, GroundGoalsNeedNoSubstitutions) {
     h.check_all();
 }
 
-TEST_F(PudRandomSolverManifestScenarioTest, AnswerKeepsUnboundVariables) {
+TEST_F(PudManifestConjectureScenarioTest, AnswerKeepsUnboundVariables) {
     h.add_append();
     const pud_node_id conjecture = h.start_conjecture(q({h.var(0)}), {h.functor("app", {h.atom("nil"), h.var(0), h.var(0)})}, 1);
     const std::optional<pud_node_id> solution = h.next_solution(conjecture, 10);
@@ -383,7 +371,7 @@ TEST_F(PudRandomSolverManifestScenarioTest, AnswerKeepsUnboundVariables) {
     h.check_all();
 }
 
-TEST_F(PudRandomSolverManifestScenarioTest, LargeFrameOffsetsDoNotCollide) {
+TEST_F(PudManifestConjectureScenarioTest, LargeFrameOffsetsDoNotCollide) {
     std::vector<const expr*> tuple_args;
     for (uint32_t index = 0; index < 10; ++index)
         tuple_args.push_back(h.var(index));
@@ -407,9 +395,7 @@ TEST_F(PudRandomSolverManifestScenarioTest, LargeFrameOffsetsDoNotCollide) {
     h.check_all();
 }
 
-// ---------- scale ----------
-
-TEST_F(PudRandomSolverManifestScenarioTest, LongAppendIsCorrect) {
+TEST_F(PudManifestConjectureScenarioTest, LongAppendIsCorrect) {
     h.add_append();
     std::vector<const expr*> front;
     std::vector<const expr*> back;
@@ -426,7 +412,7 @@ TEST_F(PudRandomSolverManifestScenarioTest, LongAppendIsCorrect) {
     h.check_all();
 }
 
-TEST_F(PudRandomSolverManifestScenarioTest, ManyQueriesInterleaved) {
+TEST_F(PudManifestConjectureScenarioTest, ManyQueriesInterleaved) {
     h.add_colors();
     h.add_nat();
     h.add_member();
@@ -452,7 +438,7 @@ TEST_F(PudRandomSolverManifestScenarioTest, ManyQueriesInterleaved) {
     h.check_all();
 }
 
-TEST_F(PudRandomSolverManifestScenarioTest, VeryDeepTermsDoNotOverflowTheStack) {
+TEST_F(PudManifestConjectureScenarioTest, VeryDeepTermsDoNotOverflowTheStack) {
     h.add_nat();
     const pud_node_id conjecture = h.start_conjecture(h.atom("q"), {h.functor("nat", {h.peano(300000)})}, 0);
     std::vector<const expr*> answers;
@@ -461,14 +447,14 @@ TEST_F(PudRandomSolverManifestScenarioTest, VeryDeepTermsDoNotOverflowTheStack) 
     EXPECT_FALSE(h.refuted(conjecture));
 }
 
-TEST_F(PudRandomSolverManifestScenarioTest, VeryDeepFactIsAcceptedAndAnswered) {
+TEST_F(PudManifestConjectureScenarioTest, VeryDeepFactIsAcceptedAndAnswered) {
     h.axiom(h.functor("big", {h.peano(200000)}), {}, 0);
     const pud_node_id conjecture = h.start_conjecture(q({h.var(0)}), {h.functor("big", {h.var(0)})}, 1);
     EXPECT_THAT(h.enumerate(conjecture, 5, 10), ElementsAre(q({h.peano(200000)})));
     h.check_all();
 }
 
-TEST_F(PudRandomSolverManifestScenarioTest, VeryDeepTermsUnifyThroughAQuery) {
+TEST_F(PudManifestConjectureScenarioTest, VeryDeepTermsUnifyThroughAQuery) {
     h.axiom(h.functor("eq", {h.var(0), h.var(0)}), {}, 1);
     const pud_node_id same = h.start_conjecture(h.atom("q1"), {h.functor("eq", {h.peano(200000), h.peano(200000)})}, 0);
     const pud_node_id different = h.start_conjecture(
@@ -477,7 +463,7 @@ TEST_F(PudRandomSolverManifestScenarioTest, VeryDeepTermsUnifyThroughAQuery) {
     EXPECT_TRUE(h.refuted(different));
 }
 
-TEST_F(PudRandomSolverManifestScenarioTest, VeryDeepOccursCheckRefutesThroughAQuery) {
+TEST_F(PudManifestConjectureScenarioTest, VeryDeepOccursCheckRefutesThroughAQuery) {
     h.axiom(h.functor("eq", {h.var(0), h.var(0)}), {}, 1);
     const expr* cyclic = h.var(0);
     for (int level = 0; level < 200000; ++level)
@@ -486,7 +472,7 @@ TEST_F(PudRandomSolverManifestScenarioTest, VeryDeepOccursCheckRefutesThroughAQu
     EXPECT_TRUE(h.refuted(conjecture));
 }
 
-TEST_F(PudRandomSolverManifestScenarioTest, VeryDeepGoalIsWatchedAndForked) {
+TEST_F(PudManifestConjectureScenarioTest, VeryDeepGoalIsWatchedAndForked) {
     h.add_colors();
     h.axiom(h.functor("deepwarm", {h.peano_on(200000, "red")}), {}, 0);
     const expr* chain = h.var(0);
@@ -507,11 +493,9 @@ TEST_F(PudRandomSolverManifestScenarioTest, VeryDeepGoalIsWatchedAndForked) {
     EXPECT_THAT(h.enumerate(conjecture, 5, 20), ElementsAre(q({h.atom("red")})));
 }
 
-// ---------- lifetime and destruction ----------
-
-TEST_F(PudRandomSolverManifestScenarioTest, ManifestDestroyedMidSolveIsClean) {
+TEST_F(PudManifestConjectureScenarioTest, ManifestDestroyedMidSolveIsClean) {
     for (size_t round = 0; round < 25; ++round) {
-        auto harness = std::make_unique<pud_random_solver_manifest_harness>(static_cast<uint32_t>(round));
+        auto harness = std::make_unique<pud_manifest_harness<pud_manifest>>(static_cast<uint32_t>(round), pud_harness_scope::conjecture_leaves);
         harness->add_nat();
         harness->add_append();
         const pud_node_id numbers = harness->start_conjecture(
@@ -527,7 +511,7 @@ TEST_F(PudRandomSolverManifestScenarioTest, ManifestDestroyedMidSolveIsClean) {
     }
 }
 
-TEST_F(PudRandomSolverManifestScenarioTest, AllQueriesGoneAfterRefutingEveryRoot) {
+TEST_F(PudManifestConjectureScenarioTest, AllQueriesGoneAfterRefutingEveryRoot) {
     h.add_colors();
     h.add_nat();
     h.add_append();
@@ -556,7 +540,7 @@ TEST_F(PudRandomSolverManifestScenarioTest, AllQueriesGoneAfterRefutingEveryRoot
     h.check_all();
 }
 
-TEST_F(PudRandomSolverManifestScenarioTest, AxiomTreeQueriesLiveOnlyWhileItsLeavesDo) {
+TEST_F(PudManifestConjectureScenarioTest, AxiomTreeQueriesLiveOnlyWhileItsLeavesDo) {
     const pud_node_id rule = h.add_nat();
     h.run_base_descent();
     h.grow_along_open_goals(rule, 3);
@@ -570,9 +554,7 @@ TEST_F(PudRandomSolverManifestScenarioTest, AxiomTreeQueriesLiveOnlyWhileItsLeav
     h.check_all();
 }
 
-// ---------- forced queries and budget ----------
-
-TEST_F(PudRandomSolverManifestScenarioTest, SingleCandidateGoalIsReportedUnit) {
+TEST_F(PudManifestConjectureScenarioTest, SingleCandidateGoalIsReportedUnit) {
     h.add_colors();
     const pud_node_id unit = h.start_conjecture(h.atom("q1"), {h.functor("warm", {h.var(0)})}, 1);
     const pud_node_id live = h.start_conjecture(h.atom("q2"), {h.functor("color", {h.var(0)})}, 1);
@@ -581,9 +563,9 @@ TEST_F(PudRandomSolverManifestScenarioTest, SingleCandidateGoalIsReportedUnit) {
     EXPECT_EQ(candidate_paths(unit, 0).size(), 1u);
 }
 
-TEST_F(PudRandomSolverManifestScenarioTest, BudgetedSolveResumesWhereItStopped) {
-    pud_random_solver_manifest_harness whole{0};
-    pud_random_solver_manifest_harness stepped{0};
+TEST_F(PudManifestConjectureScenarioTest, BudgetedSolveResumesWhereItStopped) {
+    pud_manifest_harness<pud_manifest> whole{0, pud_harness_scope::conjecture_leaves};
+    pud_manifest_harness<pud_manifest> stepped{0, pud_harness_scope::conjecture_leaves};
     whole.add_nat();
     stepped.add_nat();
     const pud_node_id whole_conjecture = whole.start_conjecture(whole.atom("q"), {whole.functor("nat", {whole.peano(6)})}, 0);
@@ -598,9 +580,7 @@ TEST_F(PudRandomSolverManifestScenarioTest, BudgetedSolveResumesWhereItStopped) 
     EXPECT_EQ(whole.manifest.node_id_sequencer_.peek(), stepped.manifest.node_id_sequencer_.peek());
 }
 
-// ---------- yielded solutions are reported, never refuted ----------
-
-TEST_F(PudRandomSolverManifestScenarioTest, SelfCandidateEnumeratesWithoutGaps) {
+TEST_F(PudManifestConjectureScenarioTest, SelfCandidateEnumeratesWithoutGaps) {
     h.axiom(h.functor("nat", {h.atom("z")}), {}, 0);
     const pud_node_id query = h.axiom(
         h.functor("nat", {h.functor("s", {h.var(0)})}), {h.functor("nat", {h.var(0)})}, 1);
@@ -623,7 +603,7 @@ TEST_F(PudRandomSolverManifestScenarioTest, SelfCandidateEnumeratesWithoutGaps) 
     h.check_all();
 }
 
-TEST_F(PudRandomSolverManifestScenarioTest, EnumeratedAxiomTreeStillServesAsALemma) {
+TEST_F(PudManifestConjectureScenarioTest, EnumeratedAxiomTreeStillServesAsALemma) {
     h.add_colors();
     const pud_node_id first = h.axiom(
         h.functor("warmcolor", {h.var(0)}), {h.functor("color", {h.var(0)}), h.functor("warm", {h.var(0)})}, 1);
@@ -636,7 +616,7 @@ TEST_F(PudRandomSolverManifestScenarioTest, EnumeratedAxiomTreeStillServesAsALem
     h.check_all();
 }
 
-TEST_F(PudRandomSolverManifestScenarioTest, YieldedSolutionStaysALiveLeafAndWitness) {
+TEST_F(PudManifestConjectureScenarioTest, YieldedSolutionStaysALiveLeafAndWitness) {
     h.add_colors();
     const pud_node_id first = h.axiom(h.functor("pick", {h.var(0)}), {h.functor("color", {h.var(0)})}, 1);
     h.run_base_descent();
@@ -659,7 +639,7 @@ TEST_F(PudRandomSolverManifestScenarioTest, YieldedSolutionStaysALiveLeafAndWitn
     h.check_all();
 }
 
-TEST_F(PudRandomSolverManifestScenarioTest, ExhaustedSearchIsNotARefutation) {
+TEST_F(PudManifestConjectureScenarioTest, ExhaustedSearchIsNotARefutation) {
     h.add_colors();
     const pud_node_id conjecture = h.start_conjecture(q({h.var(0)}), {h.functor("color", {h.var(0)})}, 1);
     EXPECT_THAT(h.enumerate(conjecture, 10, 50), UnorderedElementsAre(q({h.atom("red")}), q({h.atom("blue")})));
@@ -668,7 +648,7 @@ TEST_F(PudRandomSolverManifestScenarioTest, ExhaustedSearchIsNotARefutation) {
     EXPECT_FALSE(h.next_solution(conjecture, 10).has_value());
 }
 
-TEST_F(PudRandomSolverManifestScenarioTest, NoSolutionQueryEndsBothExhaustedAndRefuted) {
+TEST_F(PudManifestConjectureScenarioTest, NoSolutionQueryEndsBothExhaustedAndRefuted) {
     h.add_colors();
     h.axiom(h.functor("cold", {h.atom("blue")}), {}, 0);
     const pud_node_id conjecture = h.start_conjecture(h.atom("q"), {h.functor("warm", {h.var(0)}), h.functor("cold", {h.var(0)})}, 1);
@@ -677,9 +657,7 @@ TEST_F(PudRandomSolverManifestScenarioTest, NoSolutionQueryEndsBothExhaustedAndR
     EXPECT_TRUE(h.refuted(conjecture));
 }
 
-// ---------- forks are recorded where they happen ----------
-
-TEST_F(PudRandomSolverManifestScenarioTest, ForkOfAQueryIsRecordedAtTheChild) {
+TEST_F(PudManifestConjectureScenarioTest, ForkOfAQueryIsRecordedAtTheChild) {
     h.add_colors();
     const pud_node_id conjecture = h.start_conjecture(
         q({h.var(0)}), {h.functor("color", {h.var(0)}), h.functor("warm", {h.var(0)})}, 1);

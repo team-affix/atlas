@@ -8,8 +8,6 @@
 #include <vector>
 #include "pud_manifest_harness.hpp"
 
-// Small random function-free programs over a three-constant domain, and their least model.
-// An argument >= 0 is a constant; an argument < 0 is the variable -(argument + 1).
 struct datalog_atom {
     int predicate;
     std::vector<int> args;
@@ -150,7 +148,6 @@ const expr* datalog_expr(Harness& harness, const datalog_atom& atom) {
     return harness.functor("p" + std::to_string(atom.predicate), args);
 }
 
-// Loads the program's facts and rules as axioms.
 template<typename Harness>
 void load_datalog_axioms(Harness& harness, const datalog_program& program) {
     for (const datalog_atom& fact : program.facts)
@@ -163,7 +160,6 @@ void load_datalog_axioms(Harness& harness, const datalog_program& program) {
     }
 }
 
-// The program's least model, as expressions of the harness's pool.
 template<typename Harness>
 std::set<const expr*> datalog_model_exprs(Harness& harness, const datalog_program& program) {
     std::set<const expr*> model;
@@ -172,8 +168,8 @@ std::set<const expr*> datalog_model_exprs(Harness& harness, const datalog_progra
     return model;
 }
 
-// Loads the program as axioms and starts its conjecture; returns the conjecture root.
-inline pud_node_id load_datalog(pud_random_solver_manifest_harness& harness, const datalog_program& program) {
+template<typename Harness>
+pud_node_id load_datalog(Harness& harness, const datalog_program& program) {
     load_datalog_axioms(harness, program);
     std::vector<const expr*> answer_args;
     for (int index = 0; index < program.conjecture_var_count; ++index)
@@ -184,8 +180,8 @@ inline pud_node_id load_datalog(pud_random_solver_manifest_harness& harness, con
         static_cast<uint32_t>(program.conjecture_var_count));
 }
 
-// Reads an answer back into constant indices; nullopt if it is not ground over the domain.
-inline std::optional<std::vector<int>> datalog_read_answer(pud_random_solver_manifest_harness& harness, const expr* answer) {
+template<typename Harness>
+std::optional<std::vector<int>> datalog_read_answer(Harness& harness, const expr* answer) {
     std::vector<int> values;
     for (const expr* arg : std::get<expr::functor>(answer->content).args) {
         std::optional<int> value;

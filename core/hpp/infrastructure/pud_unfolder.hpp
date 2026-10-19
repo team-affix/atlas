@@ -5,7 +5,7 @@
 #include <optional>
 #include <variant>
 #include <vector>
-#include "value_objects/body_goal_id.hpp"
+#include "value_objects/pud_body_goal_id.hpp"
 #include "value_objects/pud_child_delta.hpp"
 #include "value_objects/pud_forced_query_propagation.hpp"
 #include "value_objects/pud_mhcs_head_id.hpp"
@@ -13,10 +13,6 @@
 #include "value_objects/pud_node_id.hpp"
 #include "debug_assert.hpp"
 
-// Unfolds a live leaf at one of its open body goals: every candidate of that goal's query is
-// accepted as a child. The leaf stops being a leaf (and stops being open) before any child descent
-// opens a query; children with open goals become open, and children whose descents arrive with a
-// refuted goal are refuted right away.
 template<
     typename IGetNodeDescent,
     typename IGetQueryCandidates,
@@ -56,7 +52,7 @@ struct pud_unfolder {
         IStoreNodeDescent& store_node_descent,
         IMarkLeafOpen& mark_leaf_open,
         IEraseNodeDescent& erase_node_descent);
-    void unfold(pud_node_id leaf, body_goal_id goal);
+    void unfold(pud_node_id leaf, pud_body_goal_id goal);
 private:
     IGetNodeDescent& get_node_descent_;
     IGetQueryCandidates& get_query_candidates_;
@@ -133,7 +129,7 @@ PUD_UNFOLDER::pud_unfolder(
     , erase_node_descent_(erase_node_descent) {}
 
 PUD_UNFOLDER_TEMPLATE
-void PUD_UNFOLDER::unfold(pud_node_id leaf, body_goal_id goal) {
+void PUD_UNFOLDER::unfold(pud_node_id leaf, pud_body_goal_id goal) {
     const auto leaf_descent = get_node_descent_.get(leaf);
     const std::optional<pud_mhq_head_id> query_head = leaf_descent.body_goal_pq().find_query_head(goal);
     DEBUG_ASSERT(query_head.has_value());

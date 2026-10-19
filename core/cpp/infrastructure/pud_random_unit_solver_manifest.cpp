@@ -79,5 +79,5 @@ pud_random_unit_solver_manifest::pud_random_unit_solver_manifest(uint32_t random
           node_id_sequencer_, node_heads_, node_added_body_goals_, node_added_var_count_,
           root_nodes_, leaf_nodes_, axioms_),
       conjecture_initializer_(
-          node_id_sequencer_, node_added_body_goals_, node_added_var_count_, root_nodes_,
+          node_id_sequencer_, node_heads_, node_added_body_goals_, node_added_var_count_, root_nodes_,
           leaf_nodes_) {}

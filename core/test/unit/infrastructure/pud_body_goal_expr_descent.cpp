@@ -10,13 +10,12 @@ using ::testing::Return;
 using ::testing::ReturnRef;
 
 namespace {
-
 struct MockGetNodeAddedBodyGoals {
     MOCK_METHOD((const std::vector<const expr*>&), get, (pud_node_id));
 };
 
 struct MockGetCallSite {
-    MOCK_METHOD(body_goal_id, get, (pud_node_id));
+    MOCK_METHOD(pud_body_goal_id, get, (pud_node_id));
 };
 
 using test_descent_t = pud_body_goal_expr_descent<MockGetNodeAddedBodyGoals, MockGetCallSite>;
@@ -201,7 +200,7 @@ TEST_F(PudBodyGoalExprDescentTest, DeepChainReplacesTheCallSiteAtEveryLevel) {
     const std::vector<const expr*> two_goals{left, right};
     test_descent_t at = make_root(two_goals);
     pud_node_id parent_node = root;
-    body_goal_id next_body_goal_id = 2;
+    pud_body_goal_id next_body_goal_id = 2;
     for (uint32_t level = 1; level <= depth; ++level) {
         const pud_node_id level_node = 100 + level;
         EXPECT_CALL(get_call_site, get(parent_node)).WillOnce(Return(next_body_goal_id - 1));
@@ -244,4 +243,4 @@ TEST_F(PudBodyGoalExprDescentTest, CallSiteIsLookedUpOnTheParent) {
     EXPECT_EQ(at_grandchild.body_goal_exprs().count(0), 1u);
 }
 
-}  // namespace
+}

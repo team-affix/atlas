@@ -10,13 +10,12 @@ using ::testing::IsEmpty;
 using ::testing::NiceMock;
 
 namespace {
-
 struct MockGetBodyGoals {
     MOCK_METHOD((const std::vector<const expr*>&), get, (pud_node_id));
 };
 
 struct MockGetCallSite {
-    MOCK_METHOD(body_goal_id, get, (pud_node_id));
+    MOCK_METHOD(pud_body_goal_id, get, (pud_node_id));
 };
 
 const expr* goal_at(uintptr_t address) {
@@ -28,7 +27,7 @@ struct PudOpenBodyGoalFinderTest : public ::testing::Test {
     NiceMock<MockGetCallSite> call_sites;
     pud_open_body_goal_finder<NiceMock<MockGetBodyGoals>, NiceMock<MockGetCallSite>> finder{body_goals, call_sites};
     std::unordered_map<pud_node_id, std::vector<const expr*>> goals_of;
-    std::unordered_map<pud_node_id, body_goal_id> call_site_of;
+    std::unordered_map<pud_node_id, pud_body_goal_id> call_site_of;
 
     void SetUp() override {
         ON_CALL(body_goals, get(_)).WillByDefault([&](pud_node_id node) -> const std::vector<const expr*>& {
@@ -77,4 +76,4 @@ TEST_F(PudOpenBodyGoalFinderTest, LastNodesCallSiteIsNotClosed) {
     EXPECT_THAT(finder.find_open_body_goals({1}), ElementsAre(goal_at(0x10)));
 }
 
-}  // namespace
+}

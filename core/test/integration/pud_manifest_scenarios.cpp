@@ -4,6 +4,7 @@
 #include <stdexcept>
 #include <string>
 #include <vector>
+#include <optional>
 #include <gtest/gtest.h>
 #include <gmock/gmock.h>
 #include "pud_datalog_oracle.hpp"
@@ -12,12 +13,12 @@
 using ::testing::IsEmpty;
 using ::testing::UnorderedElementsAre;
 
-struct PudRandomUnfoldManifestScenarioTest : public ::testing::Test {
-    pud_random_unfold_manifest_harness h{0};
+struct PudManifestScenarioTest : public ::testing::Test {
+    pud_manifest_harness<pud_manifest> h{0, pud_harness_scope::every_open_leaf};
 
     bool open(pud_node_id node) { return h.manifest.open_leaves_.check_leaf_open(node); }
 
-    std::vector<std::vector<pud_node_id>> candidate_paths(pud_node_id leaf, body_goal_id goal) {
+    std::vector<std::vector<pud_node_id>> candidate_paths(pud_node_id leaf, pud_body_goal_id goal) {
         std::vector<std::vector<pud_node_id>> paths;
         for (pud_mhcs_head_id candidate : h.manifest.mhq_.get_candidates(h.query_of(leaf, goal).value()))
             paths.push_back(h.manifest.mhcs_.get_path(candidate));
@@ -25,7 +26,6 @@ struct PudRandomUnfoldManifestScenarioTest : public ::testing::Test {
         return paths;
     }
 
-    // Unfolds through the manifest's loop until the given node has been unfolded or the loop ends.
     bool unfold_until_expanded(pud_node_id node, size_t max_unfolds) {
         for (size_t unfold = 0; unfold < max_unfolds && !h.expanded(node); ++unfold) {
             if (!h.advance_unfold_loop())
@@ -35,16 +35,14 @@ struct PudRandomUnfoldManifestScenarioTest : public ::testing::Test {
     }
 };
 
-// ---------- base descent and loading ----------
-
-TEST_F(PudRandomUnfoldManifestScenarioTest, EmptyDatabaseUnfoldsNothing) {
+TEST_F(PudManifestScenarioTest, EmptyDatabaseUnfoldsNothing) {
     h.run_base_descent();
     EXPECT_FALSE(h.advance_unfold_loop());
     EXPECT_THAT(h.manifest.open_leaves_.get(), IsEmpty());
     EXPECT_THAT(h.proven_heads(), IsEmpty());
 }
 
-TEST_F(PudRandomUnfoldManifestScenarioTest, DatabaseOfFactsLeavesNothingOpen) {
+TEST_F(PudManifestScenarioTest, DatabaseOfFactsLeavesNothingOpen) {
     h.add_colors();
     h.run_base_descent();
     EXPECT_THAT(h.manifest.open_leaves_.get(), IsEmpty());
@@ -54,7 +52,7 @@ TEST_F(PudRandomUnfoldManifestScenarioTest, DatabaseOfFactsLeavesNothingOpen) {
     h.check_all();
 }
 
-TEST_F(PudRandomUnfoldManifestScenarioTest, RuleWithAnEmptyBodyIsAFact) {
+TEST_F(PudManifestScenarioTest, RuleWithAnEmptyBodyIsAFact) {
     const pud_node_id fact = h.axiom(h.functor("p", {h.atom("a")}), {}, 0);
     h.axiom(h.functor("q", {h.var(0)}), {h.functor("p", {h.var(0)})}, 1);
     h.run_base_descent();
@@ -65,10 +63,10 @@ TEST_F(PudRandomUnfoldManifestScenarioTest, RuleWithAnEmptyBodyIsAFact) {
     h.check_all();
 }
 
-TEST_F(PudRandomUnfoldManifestScenarioTest, ChainWithAMissingBaseIsRefutedWhicheverRootRunsFirst) {
+TEST_F(PudManifestScenarioTest, ChainWithAMissingBaseIsRefutedWhicheverRootRunsFirst) {
     for (bool dependent_first : {true, false}) {
         SCOPED_TRACE(dependent_first ? "dependent first" : "dependency first");
-        pud_random_unfold_manifest_harness chain{0};
+        pud_manifest_harness<pud_manifest> chain{0, pud_harness_scope::every_open_leaf};
         pud_node_id a = 0;
         pud_node_id b = 0;
         if (dependent_first) {
@@ -86,13 +84,13 @@ TEST_F(PudRandomUnfoldManifestScenarioTest, ChainWithAMissingBaseIsRefutedWhiche
     }
 }
 
-TEST_F(PudRandomUnfoldManifestScenarioTest, RunningTheSameRootTwiceIsAPreconditionViolation) {
+TEST_F(PudManifestScenarioTest, RunningTheSameRootTwiceIsAPreconditionViolation) {
     const pud_node_id fact = h.axiom(h.atom("s"), {}, 0);
     h.run_base_descent();
     EXPECT_THROW(h.manifest.base_descent_runner_.run(fact), std::logic_error);
 }
 
-TEST_F(PudRandomUnfoldManifestScenarioTest, RunningARefutedRootAgainDoesNothing) {
+TEST_F(PudManifestScenarioTest, RunningARefutedRootAgainDoesNothing) {
     const pud_node_id orphan = h.axiom(h.functor("p", {h.var(0)}), {h.functor("missing", {h.var(0)})}, 1);
     h.run_base_descent();
     ASSERT_TRUE(h.refuted(orphan));
@@ -102,9 +100,7 @@ TEST_F(PudRandomUnfoldManifestScenarioTest, RunningARefutedRootAgainDoesNothing)
     h.check_all();
 }
 
-// Forked queries only narrow the candidates their parent held, so an axiom added after the run is a
-// candidate only for queries opened afterwards, here for the goal an unfold adds.
-TEST_F(PudRandomUnfoldManifestScenarioTest, AxiomAddedAfterTheRunIsACandidateForLaterQueries) {
+TEST_F(PudManifestScenarioTest, AxiomAddedAfterTheRunIsACandidateForLaterQueries) {
     h.axiom(h.functor("color", {h.atom("red")}), {}, 0);
     h.axiom(h.functor("s", {h.var(0)}), {h.functor("color", {h.var(0)})}, 1);
     const pud_node_id user = h.axiom(h.atom("q"), {h.functor("s", {h.atom("green")})}, 0);
@@ -122,7 +118,7 @@ TEST_F(PudRandomUnfoldManifestScenarioTest, AxiomAddedAfterTheRunIsACandidateFor
     h.check_all();
 }
 
-TEST_F(PudRandomUnfoldManifestScenarioTest, ForkedQueryNeverGainsAnAxiomAddedAfterItsParentOpened) {
+TEST_F(PudManifestScenarioTest, ForkedQueryNeverGainsAnAxiomAddedAfterItsParentOpened) {
     h.axiom(h.functor("warm", {h.atom("green")}), {}, 0);
     h.axiom(h.functor("color", {h.atom("red")}), {}, 0);
     const pud_node_id rule = h.axiom(h.functor("q", {h.var(0)}), {h.functor("warm", {h.var(0)}), h.functor("color", {h.var(0)})}, 1);
@@ -134,50 +130,7 @@ TEST_F(PudRandomUnfoldManifestScenarioTest, ForkedQueryNeverGainsAnAxiomAddedAft
     EXPECT_TRUE(h.refuted(rule));
 }
 
-TEST_F(PudRandomUnfoldManifestScenarioTest, ReloadedTreesGetTheDescentsUnfoldingGaveThem) {
-    for (uint32_t random_seed = 0; random_seed < 4; ++random_seed) {
-        SCOPED_TRACE("seed " + std::to_string(random_seed));
-        auto source = std::make_unique<pud_random_unfold_manifest_harness>(random_seed);
-        source->add_colors();
-        source->axiom(source->functor("warmcolor", {source->var(0)}),
-            {source->functor("color", {source->var(0)}), source->functor("warm", {source->var(0)})}, 1);
-        source->add_nat();
-        source->add_graph();
-        source->run_base_descent();
-        source->unfold_until_closed(25);
-
-        auto target = std::make_unique<pud_random_unfold_manifest_harness>(random_seed);
-        reload_database(*source, *target);
-        target->run_base_descent();
-
-        for (pud_node_id node : source->all_nodes()) {
-            SCOPED_TRACE("node " + std::to_string(node));
-            ASSERT_EQ(target->has_descent(node), source->has_descent(node));
-            EXPECT_EQ(target->manifest.open_leaves_.check_leaf_open(node), source->manifest.open_leaves_.check_leaf_open(node));
-            EXPECT_EQ(target->refuted(node), source->refuted(node));
-            if (!source->has_descent(node))
-                continue;
-            std::vector<const expr*> source_goals;
-            for (const auto& [goal, goal_expr] : source->open_goals(node))
-                source_goals.push_back(copy_expr(*target, goal_expr));
-            std::vector<const expr*> target_goals;
-            for (const auto& [goal, goal_expr] : target->open_goals(node))
-                target_goals.push_back(goal_expr);
-            EXPECT_EQ(target_goals, source_goals);
-            const pud_node_id root = source->root_of(node);
-            const expr* source_head = source->normalize_in(source->env_at_leaf(node), source->manifest.node_heads_.get(root));
-            const expr* target_head = target->normalize_in(target->env_at_leaf(node), target->manifest.node_heads_.get(root));
-            EXPECT_EQ(target_head, copy_expr(*target, source_head));
-        }
-        target->check_all();
-        target->unfold_until_closed(25);
-        target->check_all();
-    }
-}
-
-// ---------- unification corner cases ----------
-
-TEST_F(PudRandomUnfoldManifestScenarioTest, RepeatedHeadVariablesOnlyMatchEqualArguments) {
+TEST_F(PudManifestScenarioTest, RepeatedHeadVariablesOnlyMatchEqualArguments) {
     h.axiom(h.functor("pair", {h.atom("a"), h.atom("b")}), {}, 0);
     h.axiom(h.functor("pair", {h.atom("c"), h.atom("c")}), {}, 0);
     h.axiom(h.functor("same", {h.var(0)}), {h.functor("pair", {h.var(0), h.var(0)})}, 1);
@@ -194,7 +147,7 @@ TEST_F(PudRandomUnfoldManifestScenarioTest, RepeatedHeadVariablesOnlyMatchEqualA
     h.check_all();
 }
 
-TEST_F(PudRandomUnfoldManifestScenarioTest, NonGroundFactsAreUsedAsCandidates) {
+TEST_F(PudManifestScenarioTest, NonGroundFactsAreUsedAsCandidates) {
     h.axiom(h.functor("eq", {h.var(0), h.var(0)}), {}, 1);
     h.axiom(h.functor("q", {h.var(0)}), {h.functor("eq", {h.var(0), h.atom("a")})}, 1);
     const pud_node_id unequal = h.axiom(h.atom("r"), {h.functor("eq", {h.atom("b"), h.atom("c")})}, 0);
@@ -205,7 +158,7 @@ TEST_F(PudRandomUnfoldManifestScenarioTest, NonGroundFactsAreUsedAsCandidates) {
     h.check_all();
 }
 
-TEST_F(PudRandomUnfoldManifestScenarioTest, SameNameWithDifferentArityNeverUnifies) {
+TEST_F(PudManifestScenarioTest, SameNameWithDifferentArityNeverUnifies) {
     h.axiom(h.functor("f", {h.atom("a")}), {}, 0);
     const pud_node_id wrong_arity = h.axiom(h.atom("q"), {h.functor("f", {h.atom("a"), h.atom("b")})}, 0);
     h.axiom(h.atom("r"), {h.functor("f", {h.atom("a")})}, 0);
@@ -216,7 +169,7 @@ TEST_F(PudRandomUnfoldManifestScenarioTest, SameNameWithDifferentArityNeverUnifi
     h.check_all();
 }
 
-TEST_F(PudRandomUnfoldManifestScenarioTest, AtomsAndRepeatedGoalsInOneBody) {
+TEST_F(PudManifestScenarioTest, AtomsAndRepeatedGoalsInOneBody) {
     h.axiom(h.atom("s"), {}, 0);
     h.axiom(h.atom("q"), {h.atom("s"), h.atom("s")}, 0);
     h.run_base_descent();
@@ -225,7 +178,7 @@ TEST_F(PudRandomUnfoldManifestScenarioTest, AtomsAndRepeatedGoalsInOneBody) {
     h.check_all();
 }
 
-TEST_F(PudRandomUnfoldManifestScenarioTest, VeryDeepTermsUnifyAndUnfold) {
+TEST_F(PudManifestScenarioTest, VeryDeepTermsUnifyAndUnfold) {
     h.axiom(h.functor("big", {h.peano(5000)}), {}, 0);
     h.axiom(h.functor("q", {h.var(0)}), {h.functor("big", {h.var(0)})}, 1);
     h.axiom(h.atom("r"), {h.functor("big", {h.peano(5000)})}, 0);
@@ -239,10 +192,10 @@ TEST_F(PudRandomUnfoldManifestScenarioTest, VeryDeepTermsUnifyAndUnfold) {
     h.check_all();
 }
 
-TEST_F(PudRandomUnfoldManifestScenarioTest, GoalsJoinedThroughEquatedVariables) {
+TEST_F(PudManifestScenarioTest, GoalsJoinedThroughEquatedVariables) {
     for (uint32_t random_seed = 0; random_seed < 8; ++random_seed) {
         SCOPED_TRACE("seed " + std::to_string(random_seed));
-        pud_random_unfold_manifest_harness join{random_seed};
+        pud_manifest_harness<pud_manifest> join{random_seed, pud_harness_scope::every_open_leaf};
         join.axiom(join.functor("eq", {join.atom("a"), join.atom("a")}), {}, 0);
         join.axiom(join.functor("eq", {join.atom("b"), join.atom("b")}), {}, 0);
         join.axiom(join.functor("pair", {join.atom("a"), join.atom("b")}), {}, 0);
@@ -259,18 +212,15 @@ TEST_F(PudRandomUnfoldManifestScenarioTest, GoalsJoinedThroughEquatedVariables) 
     }
 }
 
-// ---------- the unfold loop ----------
-
-TEST_F(PudRandomUnfoldManifestScenarioTest, EveryUnfoldClosesItsLeafAndOpensExactlyTheChildrenWithGoals) {
+TEST_F(PudManifestScenarioTest, EveryUnfoldClosesItsLeafAndOpensExactlyTheChildrenWithGoals) {
     h.add_colors();
     h.axiom(h.functor("warmcolor", {h.var(0)}), {h.functor("color", {h.var(0)}), h.functor("warm", {h.var(0)})}, 1);
     h.add_nat();
     h.run_base_descent();
-    coroutine<pud_unfold, void>& unfolding = h.unfold_loop();
     for (int step = 0; step < 30; ++step) {
-        unfolding.resume();
-        ASSERT_TRUE(unfolding.has_yield());
-        const pud_unfold unfolded = unfolding.consume_yield();
+        const std::optional<pud_unfold> next = h.next_unfold();
+        ASSERT_TRUE(next.has_value());
+        const pud_unfold unfolded = next.value();
         EXPECT_FALSE(open(unfolded.leaf));
         EXPECT_FALSE(h.leaf(unfolded.leaf));
         EXPECT_EQ(h.manifest.call_sites_.get(unfolded.leaf), unfolded.goal);
@@ -282,24 +232,21 @@ TEST_F(PudRandomUnfoldManifestScenarioTest, EveryUnfoldClosesItsLeafAndOpensExac
     }
 }
 
-TEST_F(PudRandomUnfoldManifestScenarioTest, LoopEndsExactlyWhenNothingIsOpen) {
+TEST_F(PudManifestScenarioTest, LoopEndsExactlyWhenNothingIsOpen) {
     h.add_colors();
     h.axiom(h.functor("warmcolor", {h.var(0)}), {h.functor("color", {h.var(0)}), h.functor("warm", {h.var(0)})}, 1);
     h.run_base_descent();
-    coroutine<pud_unfold, void>& unfolding = h.unfold_loop();
-    for (int step = 0; step < 100; ++step) {
+    bool ended = false;
+    for (int step = 0; step < 100 && !ended; ++step) {
         const bool anything_open = !h.manifest.open_leaves_.get().empty();
-        unfolding.resume();
-        EXPECT_EQ(unfolding.has_yield(), anything_open);
-        if (!unfolding.has_yield())
-            break;
-        unfolding.consume_yield();
+        ended = !h.advance_unfold_loop();
+        EXPECT_EQ(!ended, anything_open);
     }
-    EXPECT_TRUE(unfolding.done());
+    EXPECT_TRUE(ended);
     EXPECT_THAT(h.manifest.open_leaves_.get(), IsEmpty());
 }
 
-TEST_F(PudRandomUnfoldManifestScenarioTest, NewDriveContinuesOnceNewRootsAreRun) {
+TEST_F(PudManifestScenarioTest, NewDriveContinuesOnceNewRootsAreRun) {
     h.add_colors();
     h.run_base_descent();
     EXPECT_FALSE(h.advance_unfold_loop());
@@ -310,7 +257,7 @@ TEST_F(PudRandomUnfoldManifestScenarioTest, NewDriveContinuesOnceNewRootsAreRun)
     h.check_all();
 }
 
-TEST_F(PudRandomUnfoldManifestScenarioTest, OneUnfoldMakesAChildForEveryCandidate) {
+TEST_F(PudManifestScenarioTest, OneUnfoldMakesAChildForEveryCandidate) {
     for (int index = 0; index < 50; ++index)
         h.axiom(h.functor("f", {h.atom("k" + std::to_string(index))}), {}, 0);
     const pud_node_id rule = h.axiom(h.functor("g", {h.var(0)}), {h.functor("f", {h.var(0)})}, 1);
@@ -322,9 +269,7 @@ TEST_F(PudRandomUnfoldManifestScenarioTest, OneUnfoldMakesAChildForEveryCandidat
     h.check_all();
 }
 
-// ---------- refutation across trees ----------
-
-TEST_F(PudRandomUnfoldManifestScenarioTest, RefutationCascadesIntoTheTreesThatDependedOnIt) {
+TEST_F(PudManifestScenarioTest, RefutationCascadesIntoTheTreesThatDependedOnIt) {
     h.axiom(h.functor("base", {h.atom("c")}), {}, 0);
     h.axiom(h.functor("check", {h.atom("a")}), {}, 0);
     const pud_node_id mid = h.axiom(h.functor("mid", {h.var(0)}),
@@ -339,7 +284,7 @@ TEST_F(PudRandomUnfoldManifestScenarioTest, RefutationCascadesIntoTheTreesThatDe
     h.check_all();
 }
 
-TEST_F(PudRandomUnfoldManifestScenarioTest, MutualRecursionWithoutABaseStaysLive) {
+TEST_F(PudManifestScenarioTest, MutualRecursionWithoutABaseStaysLive) {
     const pud_node_id p = h.axiom(h.atom("p"), {h.atom("q")}, 0);
     const pud_node_id q = h.axiom(h.atom("q"), {h.atom("p")}, 0);
     h.run_base_descent();
@@ -353,7 +298,7 @@ TEST_F(PudRandomUnfoldManifestScenarioTest, MutualRecursionWithoutABaseStaysLive
     EXPECT_THAT(h.proven_heads(), IsEmpty());
 }
 
-TEST_F(PudRandomUnfoldManifestScenarioTest, SelfRecursionWithoutABaseGrowsOneNodePerUnfold) {
+TEST_F(PudManifestScenarioTest, SelfRecursionWithoutABaseGrowsOneNodePerUnfold) {
     const pud_node_id p = h.axiom(h.atom("p"), {h.atom("p")}, 0);
     h.run_base_descent();
     for (int step = 1; step <= 40; ++step) {
@@ -365,9 +310,7 @@ TEST_F(PudRandomUnfoldManifestScenarioTest, SelfRecursionWithoutABaseGrowsOneNod
     h.check_all();
 }
 
-// ---------- lemmas and the multi-headed layers ----------
-
-TEST_F(PudRandomUnfoldManifestScenarioTest, GrownRuleTreeOffersDeeperCandidates) {
+TEST_F(PudManifestScenarioTest, GrownRuleTreeOffersDeeperCandidates) {
     const pud_node_id rule = h.add_nat();
     h.run_base_descent();
     h.grow_along_open_goals(rule, 3);
@@ -382,7 +325,7 @@ TEST_F(PudRandomUnfoldManifestScenarioTest, GrownRuleTreeOffersDeeperCandidates)
     h.check_all();
 }
 
-TEST_F(PudRandomUnfoldManifestScenarioTest, SelfReferentialLemmasOnlyProveNumerals) {
+TEST_F(PudManifestScenarioTest, SelfReferentialLemmasOnlyProveNumerals) {
     h.add_nat();
     h.run_base_descent();
     h.unfold_until_closed(60);
@@ -399,10 +342,10 @@ TEST_F(PudRandomUnfoldManifestScenarioTest, SelfReferentialLemmasOnlyProveNumera
     h.check_all();
 }
 
-TEST_F(PudRandomUnfoldManifestScenarioTest, NoMultiHeadedStateOutlivesAnExhaustedDatabase) {
+TEST_F(PudManifestScenarioTest, NoMultiHeadedStateOutlivesAnExhaustedDatabase) {
     for (unsigned seed = 0; seed < 30; ++seed) {
         SCOPED_TRACE("seed " + std::to_string(seed));
-        pud_random_unfold_manifest_harness database{seed};
+        pud_manifest_harness<pud_manifest> database{seed, pud_harness_scope::every_open_leaf};
         load_datalog_axioms(database, generate_datalog(seed, false));
         database.run_base_descent();
         database.unfold_until_closed(20000);
@@ -415,33 +358,27 @@ TEST_F(PudRandomUnfoldManifestScenarioTest, NoMultiHeadedStateOutlivesAnExhauste
     }
 }
 
-// ---------- determinism and isolation ----------
-
-TEST_F(PudRandomUnfoldManifestScenarioTest, SameProgramAndSeedUnfoldIdentically) {
-    pud_random_unfold_manifest_harness first{7};
-    pud_random_unfold_manifest_harness second{7};
-    for (pud_random_unfold_manifest_harness* each : {&first, &second}) {
+TEST_F(PudManifestScenarioTest, SameProgramAndSeedUnfoldIdentically) {
+    pud_manifest_harness<pud_manifest> first{7, pud_harness_scope::every_open_leaf};
+    pud_manifest_harness<pud_manifest> second{7, pud_harness_scope::every_open_leaf};
+    for (pud_manifest_harness<pud_manifest>* each : {&first, &second}) {
         each->add_colors();
         each->add_nat();
         each->add_graph();
         each->run_base_descent();
     }
-    coroutine<pud_unfold, void>& first_unfolding = first.unfold_loop();
-    coroutine<pud_unfold, void>& second_unfolding = second.unfold_loop();
     for (int step = 0; step < 40; ++step) {
-        first_unfolding.resume();
-        second_unfolding.resume();
-        ASSERT_EQ(first_unfolding.has_yield(), second_unfolding.has_yield());
-        if (!first_unfolding.has_yield())
+        const std::optional<pud_unfold> first_next = first.next_unfold();
+        ASSERT_EQ(first_next, second.next_unfold());
+        if (!first_next.has_value())
             break;
-        EXPECT_EQ(first_unfolding.consume_yield(), second_unfolding.consume_yield());
     }
     EXPECT_EQ(first.manifest.node_id_sequencer_.peek(), second.manifest.node_id_sequencer_.peek());
 }
 
-TEST_F(PudRandomUnfoldManifestScenarioTest, InterleavedManifestsDoNotInterfere) {
-    pud_random_unfold_manifest_harness first{1};
-    pud_random_unfold_manifest_harness second{2};
+TEST_F(PudManifestScenarioTest, InterleavedManifestsDoNotInterfere) {
+    pud_manifest_harness<pud_manifest> first{1, pud_harness_scope::every_open_leaf};
+    pud_manifest_harness<pud_manifest> second{2, pud_harness_scope::every_open_leaf};
     load_datalog_axioms(first, generate_datalog(11, false));
     load_datalog_axioms(second, generate_datalog(12, false));
     first.run_base_descent();

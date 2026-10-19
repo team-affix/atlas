@@ -1,13 +1,16 @@
 #include <algorithm>
 #include <map>
 #include <optional>
+#include <random>
 #include <set>
 #include <stdexcept>
 #include <vector>
 #include <gtest/gtest.h>
 #include <gmock/gmock.h>
 #include "functor_fixture.hpp"
-#include "infrastructure/pud_random_solver_manifest.hpp"
+#include "infrastructure/pud_manifest.hpp"
+#include "infrastructure/pud_random_rule_chooser.hpp"
+#include "infrastructure/pud_random_subgoal_chooser.hpp"
 #include "value_objects/pud_unfold.hpp"
 #include "value_objects/rule.hpp"
 
@@ -15,10 +18,12 @@ using ::testing::ElementsAre;
 using ::testing::IsEmpty;
 using ::testing::UnorderedElementsAre;
 
-struct PudRandomSolverManifestIntegrationTest : public ::testing::Test {
-    pud_random_solver_manifest manifest{0};
+struct PudManifestConjectureIntegrationTest : public ::testing::Test {
+    pud_manifest manifest;
     test_functors functors;
-    std::optional<coroutine<pud_unfold, void>> unfolding;
+    std::mt19937 rng{0};
+    pud_random_rule_chooser rule_chooser{rng};
+    pud_random_subgoal_chooser<pud_manifest::node_descents_t> subgoal_chooser{manifest.node_descents_, rng};
     std::map<pud_node_id, std::set<pud_node_id>> reported_solutions;
     std::set<pud_node_id> started_roots;
     std::map<pud_node_id, const expr*> answer_templates;
@@ -53,15 +58,13 @@ struct PudRandomSolverManifestIntegrationTest : public ::testing::Test {
         return manifest.axiom_initializer_.initialize_axiom(rule(head, std::move(body), var_count));
     }
 
-    // The conjecture itself is headless; answer_template only tells the test how to read answers.
     pud_node_id start_conjecture(const expr* answer_template, std::vector<const expr*> goals, uint32_t var_count) {
-        const pud_node_id root = manifest.conjecture_initializer_.initialize_conjecture(goals, var_count);
+        const pud_node_id root = manifest.conjecture_initializer_.initialize_conjecture(answer_template, goals, var_count);
         answer_templates.emplace(root, answer_template);
         run_base_descent();
         return root;
     }
 
-    // Runs the base descent over every tree not yet started.
     void run_base_descent() {
         for (pud_node_id root : manifest.root_nodes_.get()) {
             if (started_roots.contains(root))
@@ -79,15 +82,23 @@ struct PudRandomSolverManifestIntegrationTest : public ::testing::Test {
         return normalizer.normalize(framed_expr{answer_templates.at(root), 0});
     }
 
+    pud_node_id root_of(pud_node_id node) {
+        while (!manifest.root_nodes_.check_root(node))
+            node = manifest.node_parents_.get(node);
+        return node;
+    }
+
     bool unfold_conjectures_once() {
         run_base_descent();
-        const bool ended = !unfolding.has_value() || unfolding->done();
-        if (ended)
-            unfolding.emplace(manifest.unfold_loop_.drive_unfold_loop());
-        unfolding->resume();
-        if (!unfolding->has_yield())
+        std::set<pud_node_id> conjecture_leaves;
+        for (pud_node_id leaf : manifest.open_leaves_.get()) {
+            if (!manifest.axioms_.check_axiom(root_of(leaf)))
+                conjecture_leaves.insert(leaf);
+        }
+        if (conjecture_leaves.empty())
             return false;
-        unfolding->consume_yield();
+        const pud_node_id leaf = rule_chooser.choose_rule(conjecture_leaves);
+        manifest.unfolder_.unfold(leaf, subgoal_chooser.choose_subgoal(leaf));
         return true;
     }
 
@@ -175,15 +186,13 @@ struct PudRandomSolverManifestIntegrationTest : public ::testing::Test {
     }
 };
 
-// ---------- facts ----------
-
-TEST_F(PudRandomSolverManifestIntegrationTest, GroundQueryAgainstAFactIsSolved) {
+TEST_F(PudManifestConjectureIntegrationTest, GroundQueryAgainstAFactIsSolved) {
     add_colors();
     const pud_node_id conjecture = start_conjecture(atom("q"), {functor("color", {atom("red")})}, 0);
     EXPECT_THAT(enumerate(conjecture, 10, 50), ElementsAre(atom("q")));
 }
 
-TEST_F(PudRandomSolverManifestIntegrationTest, QueryVariableIsBoundByEachMatchingFact) {
+TEST_F(PudManifestConjectureIntegrationTest, QueryVariableIsBoundByEachMatchingFact) {
     add_colors();
     const pud_node_id conjecture = start_conjecture(functor("q", {var(0)}), {functor("color", {var(0)})}, 1);
     EXPECT_THAT(
@@ -192,19 +201,19 @@ TEST_F(PudRandomSolverManifestIntegrationTest, QueryVariableIsBoundByEachMatchin
     EXPECT_TRUE(exhausted(conjecture));
 }
 
-TEST_F(PudRandomSolverManifestIntegrationTest, QueryWithNoMatchingAxiomIsRefutedAtStart) {
+TEST_F(PudManifestConjectureIntegrationTest, QueryWithNoMatchingAxiomIsRefutedAtStart) {
     add_colors();
     const pud_node_id conjecture = start_conjecture(atom("q"), {functor("color", {atom("green")})}, 0);
     EXPECT_TRUE(refuted(conjecture));
     EXPECT_FALSE(next_solution(conjecture, 50).has_value());
 }
 
-TEST_F(PudRandomSolverManifestIntegrationTest, QueryWithNoBodyGoalsIsItsOwnSolution) {
+TEST_F(PudManifestConjectureIntegrationTest, QueryWithNoBodyGoalsIsItsOwnSolution) {
     const pud_node_id conjecture = start_conjecture(atom("q"), {}, 0);
     EXPECT_EQ(next_solution(conjecture, 1), conjecture);
 }
 
-TEST_F(PudRandomSolverManifestIntegrationTest, ConjunctionKeepsOnlyBindingsThatSatisfyEveryGoal) {
+TEST_F(PudManifestConjectureIntegrationTest, ConjunctionKeepsOnlyBindingsThatSatisfyEveryGoal) {
     add_colors();
     const pud_node_id conjecture = start_conjecture(
         functor("q", {var(0)}),
@@ -214,7 +223,7 @@ TEST_F(PudRandomSolverManifestIntegrationTest, ConjunctionKeepsOnlyBindingsThatS
     EXPECT_TRUE(exhausted(conjecture));
 }
 
-TEST_F(PudRandomSolverManifestIntegrationTest, ConjunctionWithNoCommonBindingIsRefuted) {
+TEST_F(PudManifestConjectureIntegrationTest, ConjunctionWithNoCommonBindingIsRefuted) {
     add_colors();
     axiom(functor("cold", {atom("blue")}), {}, 0);
     const pud_node_id conjecture = start_conjecture(
@@ -225,9 +234,7 @@ TEST_F(PudRandomSolverManifestIntegrationTest, ConjunctionWithNoCommonBindingIsR
     EXPECT_TRUE(refuted(conjecture));
 }
 
-// ---------- recursion ----------
-
-TEST_F(PudRandomSolverManifestIntegrationTest, NaturalNumbersAreEnumeratedInOrder) {
+TEST_F(PudManifestConjectureIntegrationTest, NaturalNumbersAreEnumeratedInOrder) {
     add_nat();
     const pud_node_id conjecture = start_conjecture(functor("q", {var(0)}), {functor("nat", {var(0)})}, 1);
     EXPECT_THAT(
@@ -241,21 +248,21 @@ TEST_F(PudRandomSolverManifestIntegrationTest, NaturalNumbersAreEnumeratedInOrde
     EXPECT_FALSE(refuted(conjecture));
 }
 
-TEST_F(PudRandomSolverManifestIntegrationTest, GroundNaturalNumberIsChecked) {
+TEST_F(PudManifestConjectureIntegrationTest, GroundNaturalNumberIsChecked) {
     add_nat();
     const pud_node_id conjecture = start_conjecture(atom("q"), {functor("nat", {peano(3)})}, 0);
     EXPECT_THAT(enumerate(conjecture, 10, 100), ElementsAre(atom("q")));
     EXPECT_TRUE(exhausted(conjecture));
 }
 
-TEST_F(PudRandomSolverManifestIntegrationTest, NonNaturalIsRefutedAfterUnfolding) {
+TEST_F(PudManifestConjectureIntegrationTest, NonNaturalIsRefutedAfterUnfolding) {
     add_nat();
     const pud_node_id conjecture = start_conjecture(atom("q"), {functor("nat", {functor("s", {atom("bad")})})}, 0);
     EXPECT_THAT(enumerate(conjecture, 10, 100), IsEmpty());
     EXPECT_TRUE(refuted(conjecture));
 }
 
-TEST_F(PudRandomSolverManifestIntegrationTest, AppendBuildsTheConcatenation) {
+TEST_F(PudManifestConjectureIntegrationTest, AppendBuildsTheConcatenation) {
     add_append();
     const pud_node_id conjecture = start_conjecture(
         functor("q", {var(0)}),
@@ -265,7 +272,7 @@ TEST_F(PudRandomSolverManifestIntegrationTest, AppendBuildsTheConcatenation) {
     EXPECT_TRUE(exhausted(conjecture));
 }
 
-TEST_F(PudRandomSolverManifestIntegrationTest, AppendSplitsAListEveryWay) {
+TEST_F(PudManifestConjectureIntegrationTest, AppendSplitsAListEveryWay) {
     add_append();
     const pud_node_id conjecture = start_conjecture(
         functor("q", {var(0), var(1)}),
@@ -280,7 +287,7 @@ TEST_F(PudRandomSolverManifestIntegrationTest, AppendSplitsAListEveryWay) {
     EXPECT_TRUE(exhausted(conjecture));
 }
 
-TEST_F(PudRandomSolverManifestIntegrationTest, MemberFindsEveryElementInOrder) {
+TEST_F(PudManifestConjectureIntegrationTest, MemberFindsEveryElementInOrder) {
     add_member();
     const pud_node_id conjecture = start_conjecture(
         functor("q", {var(0)}),
@@ -292,7 +299,7 @@ TEST_F(PudRandomSolverManifestIntegrationTest, MemberFindsEveryElementInOrder) {
     EXPECT_TRUE(exhausted(conjecture));
 }
 
-TEST_F(PudRandomSolverManifestIntegrationTest, PeanoAdditionIsInverted) {
+TEST_F(PudManifestConjectureIntegrationTest, PeanoAdditionIsInverted) {
     add_peano_add();
     const pud_node_id conjecture = start_conjecture(
         functor("q", {var(0), var(1)}),
@@ -307,7 +314,7 @@ TEST_F(PudRandomSolverManifestIntegrationTest, PeanoAdditionIsInverted) {
     EXPECT_TRUE(exhausted(conjecture));
 }
 
-TEST_F(PudRandomSolverManifestIntegrationTest, TransitiveClosureTerminatesOnAFiniteGraph) {
+TEST_F(PudManifestConjectureIntegrationTest, TransitiveClosureTerminatesOnAFiniteGraph) {
     axiom(functor("parent", {atom("a"), atom("b")}), {}, 0);
     axiom(functor("parent", {atom("b"), atom("c")}), {}, 0);
     axiom(functor("anc", {var(0), var(1)}), {functor("parent", {var(0), var(1)})}, 2);
@@ -322,7 +329,7 @@ TEST_F(PudRandomSolverManifestIntegrationTest, TransitiveClosureTerminatesOnAFin
     EXPECT_TRUE(exhausted(conjecture));
 }
 
-TEST_F(PudRandomSolverManifestIntegrationTest, SharedVariablesAcrossGoalsAreRespected) {
+TEST_F(PudManifestConjectureIntegrationTest, SharedVariablesAcrossGoalsAreRespected) {
     add_append();
     add_member();
     const pud_node_id conjecture = start_conjecture(
@@ -336,9 +343,7 @@ TEST_F(PudRandomSolverManifestIntegrationTest, SharedVariablesAcrossGoalsAreResp
     EXPECT_TRUE(exhausted(conjecture));
 }
 
-// ---------- budget and tree state ----------
-
-TEST_F(PudRandomSolverManifestIntegrationTest, ExhaustedBudgetLeavesTheQueryLive) {
+TEST_F(PudManifestConjectureIntegrationTest, ExhaustedBudgetLeavesTheQueryLive) {
     add_nat();
     const pud_node_id conjecture = start_conjecture(atom("q"), {functor("nat", {peano(5)})}, 0);
     EXPECT_FALSE(next_solution(conjecture, 2).has_value());
@@ -346,7 +351,7 @@ TEST_F(PudRandomSolverManifestIntegrationTest, ExhaustedBudgetLeavesTheQueryLive
     EXPECT_TRUE(next_solution(conjecture, 100).has_value());
 }
 
-TEST_F(PudRandomSolverManifestIntegrationTest, RefutingOneSolutionKeepsTheOthers) {
+TEST_F(PudManifestConjectureIntegrationTest, RefutingOneSolutionKeepsTheOthers) {
     add_colors();
     const pud_node_id conjecture = start_conjecture(functor("q", {var(0)}), {functor("color", {var(0)})}, 1);
     const std::optional<pud_node_id> first = next_solution(conjecture, 50);
@@ -359,7 +364,7 @@ TEST_F(PudRandomSolverManifestIntegrationTest, RefutingOneSolutionKeepsTheOthers
     EXPECT_NE(second.value(), first.value());
 }
 
-TEST_F(PudRandomSolverManifestIntegrationTest, TwoQueriesShareTheDatabase) {
+TEST_F(PudManifestConjectureIntegrationTest, TwoQueriesShareTheDatabase) {
     add_colors();
     const pud_node_id warm_conjecture = start_conjecture(functor("w", {var(0)}), {functor("warm", {var(0)})}, 1);
     const pud_node_id color_conjecture = start_conjecture(functor("c", {var(0)}), {functor("color", {var(0)})}, 1);
@@ -369,7 +374,7 @@ TEST_F(PudRandomSolverManifestIntegrationTest, TwoQueriesShareTheDatabase) {
         UnorderedElementsAre(functor("c", {atom("red")}), functor("c", {atom("blue")})));
 }
 
-TEST_F(PudRandomSolverManifestIntegrationTest, SolutionLeafHasNoOpenGoals) {
+TEST_F(PudManifestConjectureIntegrationTest, SolutionLeafHasNoOpenGoals) {
     add_nat();
     const pud_node_id conjecture = start_conjecture(functor("q", {var(0)}), {functor("nat", {var(0)})}, 1);
     const std::optional<pud_node_id> solution = next_solution(conjecture, 50);
@@ -378,7 +383,7 @@ TEST_F(PudRandomSolverManifestIntegrationTest, SolutionLeafHasNoOpenGoals) {
     EXPECT_TRUE(manifest.leaf_nodes_.check_leaf(solution.value()));
 }
 
-TEST_F(PudRandomSolverManifestIntegrationTest, ManyNaturalNumbersStayCorrect) {
+TEST_F(PudManifestConjectureIntegrationTest, ManyNaturalNumbersStayCorrect) {
     add_nat();
     const pud_node_id conjecture = start_conjecture(functor("q", {var(0)}), {functor("nat", {var(0)})}, 1);
     const std::vector<const expr*> answers = enumerate(conjecture, 12, 500);
@@ -387,9 +392,7 @@ TEST_F(PudRandomSolverManifestIntegrationTest, ManyNaturalNumbersStayCorrect) {
         EXPECT_EQ(answers.at(count), functor("q", {peano(count)}));
 }
 
-// ---------- expanded axiom trees (lemmas) ----------
-
-struct PudRandomSolverManifestLemmaIntegrationTest : public PudRandomSolverManifestIntegrationTest {
+struct PudManifestConjectureLemmaIntegrationTest : public PudManifestConjectureIntegrationTest {
     pud_node_id nat_fact = 0;
     pud_node_id nat_rule = 0;
 
@@ -410,7 +413,6 @@ struct PudRandomSolverManifestLemmaIntegrationTest : public PudRandomSolverManif
         return open;
     }
 
-    // Expands the nat rule's own tree `depth` times along its recursive branch.
     pud_node_id grow_nat_rule(uint32_t depth) {
         run_base_descent();
         pud_node_id frontier = nat_rule;
@@ -430,7 +432,7 @@ struct PudRandomSolverManifestLemmaIntegrationTest : public PudRandomSolverManif
     }
 };
 
-TEST_F(PudRandomSolverManifestLemmaIntegrationTest, ExpandingTheRuleTreeGivesAFactAndARecursiveChild) {
+TEST_F(PudManifestConjectureLemmaIntegrationTest, ExpandingTheRuleTreeGivesAFactAndARecursiveChild) {
     add_nat_tracked();
     run_base_descent();
     manifest.unfolder_.unfold(nat_rule, 0);
@@ -440,14 +442,14 @@ TEST_F(PudRandomSolverManifestLemmaIntegrationTest, ExpandingTheRuleTreeGivesAFa
     EXPECT_FALSE(refuted(nat_rule));
 }
 
-TEST_F(PudRandomSolverManifestLemmaIntegrationTest, GroundNumbersAreStillSolvedOnceTheRuleTreeHasGrown) {
+TEST_F(PudManifestConjectureLemmaIntegrationTest, GroundNumbersAreStillSolvedOnceTheRuleTreeHasGrown) {
     add_nat_tracked();
     grow_nat_rule(3);
     for (uint32_t count = 0; count <= 6; ++count)
         EXPECT_TRUE(solvable(functor("nat", {peano(count)}))) << count;
 }
 
-TEST_F(PudRandomSolverManifestLemmaIntegrationTest, NonNumbersAreStillRefutedOnceTheRuleTreeHasGrown) {
+TEST_F(PudManifestConjectureLemmaIntegrationTest, NonNumbersAreStillRefutedOnceTheRuleTreeHasGrown) {
     add_nat_tracked();
     grow_nat_rule(3);
     const pud_node_id conjecture = start_conjecture(atom("q"), {functor("nat", {peano_on(2, "bad")})}, 0);
@@ -455,7 +457,7 @@ TEST_F(PudRandomSolverManifestLemmaIntegrationTest, NonNumbersAreStillRefutedOnc
     EXPECT_TRUE(refuted(conjecture));
 }
 
-TEST_F(PudRandomSolverManifestLemmaIntegrationTest, EnumerationIsUnchangedByGrowingTheRuleTree) {
+TEST_F(PudManifestConjectureLemmaIntegrationTest, EnumerationIsUnchangedByGrowingTheRuleTree) {
     add_nat_tracked();
     grow_nat_rule(2);
     const pud_node_id conjecture = start_conjecture(functor("q", {var(0)}), {functor("nat", {var(0)})}, 1);
@@ -472,14 +474,14 @@ TEST_F(PudRandomSolverManifestLemmaIntegrationTest, EnumerationIsUnchangedByGrow
     EXPECT_EQ(std::unique(distinct.begin(), distinct.end()), distinct.end());
 }
 
-TEST_F(PudRandomSolverManifestLemmaIntegrationTest, DeepLemmaResolvesALargeNumberInFewExpansions) {
+TEST_F(PudManifestConjectureLemmaIntegrationTest, DeepLemmaResolvesALargeNumberInFewExpansions) {
     add_nat_tracked();
     grow_nat_rule(6);
     const pud_node_id conjecture = start_conjecture(atom("q"), {functor("nat", {peano(6)})}, 0);
     EXPECT_TRUE(next_solution(conjecture, 3).has_value());
 }
 
-TEST_F(PudRandomSolverManifestLemmaIntegrationTest, RefutingTheRuleTreesRecursiveBranchKeepsQueriesCorrect) {
+TEST_F(PudManifestConjectureLemmaIntegrationTest, RefutingTheRuleTreesRecursiveBranchKeepsQueriesCorrect) {
     add_nat_tracked();
     const pud_node_id recursive = grow_nat_rule(2);
     manifest.node_refuter_.refute(recursive);
@@ -488,10 +490,8 @@ TEST_F(PudRandomSolverManifestLemmaIntegrationTest, RefutingTheRuleTreesRecursiv
     EXPECT_TRUE(solvable(functor("nat", {peano(1)})));
 }
 
-// ---------- query lifetime: a query lives exactly as long as some leaf mentions it ----------
-
-struct PudRandomSolverManifestQueryLifetimeIntegrationTest : public PudRandomSolverManifestIntegrationTest {
-    pud_mhq_head_id query_of(pud_node_id leaf, body_goal_id goal) {
+struct PudManifestConjectureQueryLifetimeIntegrationTest : public PudManifestConjectureIntegrationTest {
+    pud_mhq_head_id query_of(pud_node_id leaf, pud_body_goal_id goal) {
         return manifest.node_descents_.get(leaf).body_goal_pq().find_query_head(goal).value();
     }
 
@@ -502,14 +502,14 @@ struct PudRandomSolverManifestQueryLifetimeIntegrationTest : public PudRandomSol
     }
 };
 
-TEST_F(PudRandomSolverManifestQueryLifetimeIntegrationTest, RootsQueriesLiveWhileTheRootIsALeaf) {
+TEST_F(PudManifestConjectureQueryLifetimeIntegrationTest, RootsQueriesLiveWhileTheRootIsALeaf) {
     add_colors();
     const pud_node_id conjecture = start_conjecture(atom("q"), {functor("color", {var(0)}), functor("warm", {var(1)})}, 2);
     EXPECT_TRUE(alive(query_of(conjecture, 0)));
     EXPECT_TRUE(alive(query_of(conjecture, 1)));
 }
 
-TEST_F(PudRandomSolverManifestQueryLifetimeIntegrationTest, ExpandedLeafKeepsNoStoredDescent) {
+TEST_F(PudManifestConjectureQueryLifetimeIntegrationTest, ExpandedLeafKeepsNoStoredDescent) {
     add_colors();
     const pud_node_id conjecture = start_conjecture(atom("q"), {functor("color", {var(0)})}, 1);
     manifest.unfolder_.unfold(conjecture, 0);
@@ -518,7 +518,7 @@ TEST_F(PudRandomSolverManifestQueryLifetimeIntegrationTest, ExpandedLeafKeepsNoS
         EXPECT_NO_THROW(manifest.node_descents_.get(child));
 }
 
-TEST_F(PudRandomSolverManifestQueryLifetimeIntegrationTest, ExpandedGoalsQueryIsRemovedOnceNoLeafMentionsIt) {
+TEST_F(PudManifestConjectureQueryLifetimeIntegrationTest, ExpandedGoalsQueryIsRemovedOnceNoLeafMentionsIt) {
     add_colors();
     const pud_node_id conjecture = start_conjecture(atom("q"), {functor("color", {var(0)})}, 1);
     const pud_mhq_head_id expanded = query_of(conjecture, 0);
@@ -526,7 +526,7 @@ TEST_F(PudRandomSolverManifestQueryLifetimeIntegrationTest, ExpandedGoalsQueryIs
     EXPECT_FALSE(alive(expanded));
 }
 
-TEST_F(PudRandomSolverManifestQueryLifetimeIntegrationTest, UnchangedGoalsQueryIsSharedByEveryChild) {
+TEST_F(PudManifestConjectureQueryLifetimeIntegrationTest, UnchangedGoalsQueryIsSharedByEveryChild) {
     add_colors();
     const pud_node_id conjecture = start_conjecture(atom("q"), {functor("color", {var(0)}), functor("warm", {var(1)})}, 2);
     const pud_mhq_head_id shared = query_of(conjecture, 1);
@@ -537,7 +537,7 @@ TEST_F(PudRandomSolverManifestQueryLifetimeIntegrationTest, UnchangedGoalsQueryI
     EXPECT_TRUE(alive(shared));
 }
 
-TEST_F(PudRandomSolverManifestQueryLifetimeIntegrationTest, SharedQuerySurvivesUntilItsLastLeafIsRefuted) {
+TEST_F(PudManifestConjectureQueryLifetimeIntegrationTest, SharedQuerySurvivesUntilItsLastLeafIsRefuted) {
     add_colors();
     const pud_node_id conjecture = start_conjecture(atom("q"), {functor("color", {var(0)}), functor("warm", {var(1)})}, 2);
     const pud_mhq_head_id shared = query_of(conjecture, 1);
@@ -550,7 +550,7 @@ TEST_F(PudRandomSolverManifestQueryLifetimeIntegrationTest, SharedQuerySurvivesU
     EXPECT_FALSE(alive(shared));
 }
 
-TEST_F(PudRandomSolverManifestQueryLifetimeIntegrationTest, SharedQuerySurvivesUntilItsLastLeafIsExpandedPastIt) {
+TEST_F(PudManifestConjectureQueryLifetimeIntegrationTest, SharedQuerySurvivesUntilItsLastLeafIsExpandedPastIt) {
     add_colors();
     const pud_node_id conjecture = start_conjecture(atom("q"), {functor("color", {var(0)}), functor("warm", {var(1)})}, 2);
     const pud_mhq_head_id shared = query_of(conjecture, 1);
@@ -563,7 +563,7 @@ TEST_F(PudRandomSolverManifestQueryLifetimeIntegrationTest, SharedQuerySurvivesU
     EXPECT_FALSE(alive(shared));
 }
 
-TEST_F(PudRandomSolverManifestQueryLifetimeIntegrationTest, ForkedQueryReplacesTheParentsQueryForEveryChild) {
+TEST_F(PudManifestConjectureQueryLifetimeIntegrationTest, ForkedQueryReplacesTheParentsQueryForEveryChild) {
     add_colors();
     const pud_node_id conjecture = start_conjecture(
         functor("q", {var(0)}), {functor("color", {var(0)}), functor("warm", {var(0)})}, 1);
@@ -579,7 +579,7 @@ TEST_F(PudRandomSolverManifestQueryLifetimeIntegrationTest, ForkedQueryReplacesT
     }
 }
 
-TEST_F(PudRandomSolverManifestQueryLifetimeIntegrationTest, RefutedChildsForkedQueryIsRemoved) {
+TEST_F(PudManifestConjectureQueryLifetimeIntegrationTest, RefutedChildsForkedQueryIsRemoved) {
     add_colors();
     const pud_node_id conjecture = start_conjecture(
         functor("q", {var(0)}), {functor("color", {var(0)}), functor("warm", {var(0)})}, 1);
@@ -596,7 +596,7 @@ TEST_F(PudRandomSolverManifestQueryLifetimeIntegrationTest, RefutedChildsForkedQ
     EXPECT_FALSE(alive(forked));
 }
 
-TEST_F(PudRandomSolverManifestQueryLifetimeIntegrationTest, RefutingTheRootRemovesEveryQuery) {
+TEST_F(PudManifestConjectureQueryLifetimeIntegrationTest, RefutingTheRootRemovesEveryQuery) {
     add_colors();
     const pud_node_id conjecture = start_conjecture(atom("q"), {functor("color", {var(0)}), functor("warm", {var(1)})}, 2);
     const pud_mhq_head_id colors = query_of(conjecture, 0);
@@ -606,7 +606,7 @@ TEST_F(PudRandomSolverManifestQueryLifetimeIntegrationTest, RefutingTheRootRemov
     EXPECT_FALSE(alive(warmth));
 }
 
-TEST_F(PudRandomSolverManifestQueryLifetimeIntegrationTest, NewGoalsQueryLivesWithTheChildThatAddedIt) {
+TEST_F(PudManifestConjectureQueryLifetimeIntegrationTest, NewGoalsQueryLivesWithTheChildThatAddedIt) {
     add_nat();
     const pud_node_id conjecture = start_conjecture(atom("q"), {functor("nat", {var(0)})}, 1);
     manifest.unfolder_.unfold(conjecture, 0);
@@ -623,7 +623,7 @@ TEST_F(PudRandomSolverManifestQueryLifetimeIntegrationTest, NewGoalsQueryLivesWi
     EXPECT_FALSE(alive(added));
 }
 
-TEST_F(PudRandomSolverManifestQueryLifetimeIntegrationTest, SolvingLeavesOnlyTheFrontiersQueriesAlive) {
+TEST_F(PudManifestConjectureQueryLifetimeIntegrationTest, SolvingLeavesOnlyTheFrontiersQueriesAlive) {
     add_nat();
     const pud_node_id conjecture = start_conjecture(functor("q", {var(0)}), {functor("nat", {var(0)})}, 1);
     const pud_mhq_head_id root_query = query_of(conjecture, 0);
@@ -633,53 +633,4 @@ TEST_F(PudRandomSolverManifestQueryLifetimeIntegrationTest, SolvingLeavesOnlyThe
         for (const auto& [goal, goal_expr] : manifest.node_descents_.get(leaf).body_goal_expr().body_goal_exprs())
             EXPECT_TRUE(alive(query_of(leaf, goal)));
     }
-}
-
-// ---------- the base descent covers conjecture trees loaded with the database ----------
-
-struct PudRandomSolverManifestLoadedConjectureTest : public PudRandomSolverManifestIntegrationTest {
-    // A conjecture as it would come from a loaded database: stored, but never activated.
-    pud_node_id load_conjecture(const expr* answer_template, std::vector<const expr*> goals, uint32_t var_count) {
-        const pud_node_id root = manifest.node_id_sequencer_.next();
-        manifest.node_added_body_goals_.store(root, std::move(goals));
-        manifest.node_added_var_count_.store(root, var_count);
-        manifest.root_nodes_.mark_root(root);
-        manifest.leaf_nodes_.set_leaf(root);
-        answer_templates.emplace(root, answer_template);
-        return root;
-    }
-};
-
-TEST_F(PudRandomSolverManifestLoadedConjectureTest, BaseDescentActivatesLoadedConjectures) {
-    add_colors();
-    const pud_node_id conjecture = load_conjecture(functor("q", {var(0)}), {functor("color", {var(0)})}, 1);
-    run_base_descent();
-    EXPECT_TRUE(manifest.open_leaves_.check_leaf_open(conjecture));
-    EXPECT_EQ(manifest.open_conjecture_leaves_.get(), (std::set<pud_node_id>{conjecture}));
-}
-
-TEST_F(PudRandomSolverManifestLoadedConjectureTest, LoadedConjectureIsSolvedAfterTheBaseDescent) {
-    add_colors();
-    const pud_node_id conjecture = load_conjecture(
-        functor("q", {var(0)}), {functor("color", {var(0)}), functor("warm", {var(0)})}, 1);
-    run_base_descent();
-    EXPECT_THAT(enumerate(conjecture, 10, 50), ElementsAre(functor("q", {atom("red")})));
-    EXPECT_TRUE(exhausted(conjecture));
-}
-
-TEST_F(PudRandomSolverManifestLoadedConjectureTest, LoadedConjectureWithoutCandidatesIsRefutedByTheBaseDescent) {
-    add_colors();
-    const pud_node_id conjecture = load_conjecture(functor("q", {var(0)}), {functor("missing", {var(0)})}, 1);
-    run_base_descent();
-    EXPECT_TRUE(refuted(conjecture));
-    EXPECT_TRUE(manifest.open_conjecture_leaves_.get().empty());
-}
-
-TEST_F(PudRandomSolverManifestLoadedConjectureTest, LoadedConjectureNeverBecomesACandidate) {
-    add_colors();
-    load_conjecture(functor("color", {atom("green")}), {}, 0);
-    run_base_descent();
-    const pud_node_id colors = start_conjecture(functor("q", {var(0)}), {functor("color", {var(0)})}, 1);
-    EXPECT_THAT(enumerate(colors, 10, 50),
-        UnorderedElementsAre(functor("q", {atom("red")}), functor("q", {atom("blue")})));
 }

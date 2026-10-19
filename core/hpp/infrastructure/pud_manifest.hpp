@@ -1,8 +1,7 @@
-#ifndef PUD_RANDOM_UNFOLD_MANIFEST_HPP
-#define PUD_RANDOM_UNFOLD_MANIFEST_HPP
+#ifndef PUD_MANIFEST_HPP
+#define PUD_MANIFEST_HPP
 
 #include <cstdint>
-#include <random>
 #include <vector>
 
 #include "infrastructure/expr_pool.hpp"
@@ -23,7 +22,8 @@
 #include "infrastructure/pud_candidate_specialization_head_forker.hpp"
 #include "infrastructure/pud_child_maker.hpp"
 #include "infrastructure/pud_children.hpp"
-#include "infrastructure/pud_decision_generator.hpp"
+#include "infrastructure/pud_conjecture_initializer.hpp"
+#include "infrastructure/pud_frontier_recorder.hpp"
 #include "infrastructure/pud_leaf_activator.hpp"
 #include "infrastructure/pud_unfolder.hpp"
 #include "infrastructure/pud_leaf_invalidator.hpp"
@@ -33,7 +33,6 @@
 #include "infrastructure/pud_mhcs.hpp"
 #include "infrastructure/pud_mhq.hpp"
 #include "infrastructure/pud_mhws.hpp"
-#include "infrastructure/pud_next_decided_unfold.hpp"
 #include "infrastructure/pud_next_body_goal_id_descent.hpp"
 #include "infrastructure/pud_node_added_body_goals.hpp"
 #include "infrastructure/pud_node_added_substitutions.hpp"
@@ -51,10 +50,9 @@
 #include "infrastructure/pud_query_head_factory.hpp"
 #include "infrastructure/pud_query_head_forker.hpp"
 #include "infrastructure/pud_query_forks.hpp"
+#include "infrastructure/pud_query_holders.hpp"
 #include "infrastructure/pud_query_head_nodes.hpp"
 #include "infrastructure/pud_query_opener.hpp"
-#include "infrastructure/pud_random_rule_chooser.hpp"
-#include "infrastructure/pud_random_subgoal_chooser.hpp"
 #include "infrastructure/pud_refutation_propagator.hpp"
 #include "infrastructure/pud_refuted_leaves.hpp"
 #include "infrastructure/pud_refuted_node_checker.hpp"
@@ -65,15 +63,14 @@
 #include "infrastructure/pud_transient_ubs_state.hpp"
 #include "infrastructure/pud_translating_normalizer.hpp"
 #include "infrastructure/pud_unifier.hpp"
-#include "infrastructure/pud_unfold_loop.hpp"
 #include "infrastructure/pud_unifier_factory.hpp"
+#include "infrastructure/pud_unit_queries.hpp"
+#include "infrastructure/pud_unit_query_recorder.hpp"
 #include "infrastructure/pud_witness_search_head.hpp"
 #include "infrastructure/pud_witness_search_head_factory.hpp"
 #include "infrastructure/pud_witness_search_head_forker.hpp"
 
-// The database on its own: axioms are loaded and their trees descended, then the unfold loop
-// expands any open leaf in the database at random, over a random open goal.
-struct pud_random_unfold_manifest {
+struct pud_manifest {
     using child_iter_t = std::vector<pud_node_id>::const_iterator;
 
     using bind_map_t = ubs_bind_map<
@@ -91,8 +88,6 @@ struct pud_random_unfold_manifest {
     using logging_unifier_t = pud_unifier<globalizer, normalizer_t, bind_map_t, logger_t, logger_t>;
     using translating_normalizer_t = pud_translating_normalizer<globalizer, expr_pool, expr_pool, bind_map_t>;
 
-    // Composed collaborators are named structs rather than aliases, so a type that takes one as a
-    // template argument spells only its short name instead of nesting its full instantiation.
     struct refuted_node_checker_t : pud_refuted_node_checker<
         pud_leaf_nodes, pud_refuted_leaves, pud_node_live_child_counts> {
         using pud_refuted_node_checker::pud_refuted_node_checker;
@@ -150,6 +145,9 @@ struct pud_random_unfold_manifest {
     struct mhq_t : pud_mhq<replay_descent_t, query_head_t, query_head_factory_t, query_head_forker_t, mhcs_t> {
         using pud_mhq::pud_mhq;
     };
+    struct unit_query_recorder_t : pud_unit_query_recorder<replay_descent_t, mhq_t, mhq_t, mhq_t, pud_unit_queries> {
+        using pud_unit_query_recorder::pud_unit_query_recorder;
+    };
 
     struct query_opener_t : pud_query_opener<
         replay_descent_t, bind_map_t, normalizer_t, unifier_t, pud_axioms, pud_node_heads,
@@ -163,19 +161,24 @@ struct pud_random_unfold_manifest {
     using body_goal_expr_descent_t = pud_body_goal_expr_descent<pud_node_added_body_goals, pud_call_sites>;
     using structure_watch_descent_t = pud_structure_watch_descent<pud_node_added_substitutions>;
     using body_goal_pq_descent_t = pud_body_goal_pq_descent<
-        query_opener_t, mhq_t, mhq_t, mhq_t, pud_call_sites, pud_query_head_nodes, pud_query_forks>;
+        query_opener_t, unit_query_recorder_t, unit_query_recorder_t, mhq_t, pud_call_sites,
+        pud_query_head_nodes, pud_query_forks>;
     using base_descent_t = pud_base_descent<
         binding_descent_t, lvc_descent_t, next_body_goal_id_descent_t, body_goal_expr_descent_t,
         structure_watch_descent_t, body_goal_pq_descent_t>;
     struct node_descents_t : pud_node_descents<base_descent_t> {
         using pud_node_descents::pud_node_descents;
     };
+    struct query_holders_t : pud_query_holders<
+        base_descent_t, node_descents_t, node_descents_t, node_descents_t, node_descents_t> {
+        using pud_query_holders::pud_query_holders;
+    };
     struct root_descent_maker_t : pud_root_descent_maker<
         base_descent_t, binding_descent_t, lvc_descent_t, next_body_goal_id_descent_t,
         body_goal_expr_descent_t, structure_watch_descent_t, body_goal_pq_descent_t,
         pud_node_added_substitutions, expr_pool, expr_pool, pud_node_added_var_count,
-        pud_node_added_body_goals, pud_call_sites, query_opener_t, mhq_t, mhq_t, mhq_t,
-        pud_query_head_nodes, pud_query_forks> {
+        pud_node_added_body_goals, pud_call_sites, query_opener_t, unit_query_recorder_t,
+        unit_query_recorder_t, mhq_t, pud_query_head_nodes, pud_query_forks> {
         using pud_root_descent_maker::pud_root_descent_maker;
     };
 
@@ -201,23 +204,26 @@ struct pud_random_unfold_manifest {
         pud_root_nodes, pud_node_parents, pud_node_live_child_counts> {
         using pud_refutation_propagator::pud_refutation_propagator;
     };
-    struct leaf_invalidator_t : pud_leaf_invalidator<mhws_t, mhcs_t, mhcs_t, mhq_t> {
+    struct leaf_invalidator_t : pud_leaf_invalidator<mhws_t, mhcs_t, mhcs_t, unit_query_recorder_t> {
         using pud_leaf_invalidator::pud_leaf_invalidator;
     };
+    struct frontier_recorder_t : pud_frontier_recorder<pud_open_leaves, pud_open_leaves, pud_refuted_leaves> {
+        using pud_frontier_recorder::pud_frontier_recorder;
+    };
     struct node_refuter_t : pud_node_refuter<
-        live_leaf_finder_t, pud_refuted_leaves, pud_open_leaves, pud_open_leaves,
-        refutation_propagator_t, node_descents_t, leaf_invalidator_t, pud_query_head_nodes> {
+        live_leaf_finder_t, frontier_recorder_t, pud_open_leaves, frontier_recorder_t,
+        refutation_propagator_t, query_holders_t, leaf_invalidator_t, pud_query_head_nodes> {
         using pud_node_refuter::pud_node_refuter;
     };
 
     struct unfolder_t : pud_unfolder<
         node_descents_t, mhq_t, mhcs_t, acceptor_t, child_maker_t, pud_call_sites, pud_children,
-        pud_leaf_nodes, pud_open_leaves, pud_node_live_child_counts, refutation_propagator_t,
+        pud_leaf_nodes, frontier_recorder_t, pud_node_live_child_counts, refutation_propagator_t,
         leaf_invalidator_t, pud_query_head_nodes, node_refuter_t, refuted_node_checker_t,
-        node_descents_t, pud_open_leaves, node_descents_t> {
+        query_holders_t, frontier_recorder_t, query_holders_t> {
         using pud_unfolder::pud_unfolder;
     };
-    struct leaf_activator_t : pud_leaf_activator<base_descent_t, node_descents_t, pud_open_leaves, node_refuter_t> {
+    struct leaf_activator_t : pud_leaf_activator<base_descent_t, query_holders_t, frontier_recorder_t, node_refuter_t> {
         using pud_leaf_activator::pud_leaf_activator;
     };
     struct base_descent_runner_t : pud_base_descent_runner<
@@ -225,25 +231,18 @@ struct pud_random_unfold_manifest {
         pud_children, leaf_activator_t, node_refuter_t> {
         using pud_base_descent_runner::pud_base_descent_runner;
     };
-    struct random_subgoal_chooser_t : pud_random_subgoal_chooser<node_descents_t> {
-        using pud_random_subgoal_chooser::pud_random_subgoal_chooser;
-    };
-    struct decision_generator_t : pud_decision_generator<pud_random_rule_chooser, random_subgoal_chooser_t> {
-        using pud_decision_generator::pud_decision_generator;
-    };
-    struct next_decided_unfold_t : pud_next_decided_unfold<decision_generator_t> {
-        using pud_next_decided_unfold::pud_next_decided_unfold;
-    };
-    struct unfold_loop_t : pud_unfold_loop<pud_open_leaves, next_decided_unfold_t, unfolder_t> {
-        using pud_unfold_loop::pud_unfold_loop;
-    };
     struct axiom_initializer_t : pud_axiom_initializer<
         pud_node_id_sequencer, pud_node_heads, pud_node_added_body_goals, pud_node_added_var_count,
         pud_root_nodes, pud_leaf_nodes, pud_axioms> {
         using pud_axiom_initializer::pud_axiom_initializer;
     };
+    struct conjecture_initializer_t : pud_conjecture_initializer<
+        pud_node_id_sequencer, pud_node_heads, pud_node_added_body_goals, pud_node_added_var_count,
+        pud_root_nodes, pud_leaf_nodes> {
+        using pud_conjecture_initializer::pud_conjecture_initializer;
+    };
 
-    pud_random_unfold_manifest(uint32_t random_seed);
+    pud_manifest();
 
     expr_pool                               expr_pool_;
     globalizer                              globalizer_;
@@ -264,7 +263,9 @@ struct pud_random_unfold_manifest {
     pud_node_live_child_counts              node_live_child_counts_;
     pud_query_head_nodes                    query_head_nodes_;
     pud_query_forks                         query_forks_;
+    pud_unit_queries                        unit_queries_;
     refuted_node_checker_t                  refuted_node_checker_;
+    frontier_recorder_t                     frontier_recorder_;
 
     normalizer_factory_t                    normalizer_factory_;
     unifier_factory_t                       unifier_factory_;
@@ -278,9 +279,11 @@ struct pud_random_unfold_manifest {
     query_head_factory_t                    query_head_factory_;
     query_head_forker_t                     query_head_forker_;
     mhq_t                                   mhq_;
+    unit_query_recorder_t                   unit_query_recorder_;
     query_opener_t                          query_opener_;
 
     node_descents_t                         node_descents_;
+    query_holders_t                         query_holders_;
     root_descent_maker_t                    root_descent_maker_;
 
     open_body_goal_finder_t                 open_body_goal_finder_;
@@ -292,16 +295,11 @@ struct pud_random_unfold_manifest {
     leaf_invalidator_t                      leaf_invalidator_;
     node_refuter_t                          node_refuter_;
 
-    unfolder_t                         unfolder_;
+    unfolder_t                              unfolder_;
     leaf_activator_t                        leaf_activator_;
     base_descent_runner_t                   base_descent_runner_;
-    std::mt19937                            rng_;
-    pud_random_rule_chooser                 random_rule_chooser_;
-    random_subgoal_chooser_t                random_subgoal_chooser_;
-    decision_generator_t                    decision_generator_;
-    next_decided_unfold_t                   next_decided_unfold_;
-    unfold_loop_t                           unfold_loop_;
     axiom_initializer_t                     axiom_initializer_;
+    conjecture_initializer_t                conjecture_initializer_;
 };
 
 #endif

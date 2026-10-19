@@ -14,9 +14,8 @@ using ::testing::NiceMock;
 using ::testing::Return;
 
 namespace {
-
 struct DescentOps {
-    MOCK_METHOD(std::optional<body_goal_id>, find_goal, (pud_node_id, pud_mhq_head_id));
+    MOCK_METHOD(std::optional<pud_body_goal_id>, find_goal, (pud_node_id, pud_mhq_head_id));
 };
 
 DescentOps* descent_ops = nullptr;
@@ -24,7 +23,7 @@ DescentOps* descent_ops = nullptr;
 struct MockDescent {
     struct pq_view {
         pud_node_id leaf;
-        std::optional<body_goal_id> find_goal(pud_mhq_head_id head_id) const {
+        std::optional<pud_body_goal_id> find_goal(pud_mhq_head_id head_id) const {
             return descent_ops->find_goal(leaf, head_id);
         }
     };
@@ -69,9 +68,6 @@ using test_next_unit_unfold_t = pud_next_unit_unfold<
     NiceMock<MockCheckQueryForked>, NiceMock<MockCheckNodeLeaf>, NiceMock<MockGetChildren>,
     NiceMock<MockGetNodeDescent>>;
 
-// Heads 40 and 50 were opened at node 1. Node 1 has children 2 and 3; node 2 has leaves 10 and 11;
-// node 3 has leaf 12. Leaf 11 holds head 40 for goal 2 and leaf 12 holds head 50 for goal 0.
-// The unit queue is a real deque the mocks read.
 struct PudNextUnitUnfoldTest : public ::testing::Test {
     NiceMock<DescentOps> ops;
     NiceMock<MockCheckUnitQueriesEmpty> empty_check;
@@ -88,7 +84,7 @@ struct PudNextUnitUnfoldTest : public ::testing::Test {
     std::deque<pud_mhq_head_id> queue;
     std::map<pud_node_id, std::vector<pud_node_id>> children_of{{1, {2, 3}}, {2, {10, 11}}, {3, {12}}};
     std::vector<pud_node_id> no_children;
-    std::map<std::pair<pud_node_id, pud_mhq_head_id>, body_goal_id> held{{{11, 40}, 2}, {{12, 50}, 0}};
+    std::map<std::pair<pud_node_id, pud_mhq_head_id>, pud_body_goal_id> held{{{11, 40}, 2}, {{12, 50}, 0}};
 
     void SetUp() override {
         descent_ops = &ops;
@@ -105,14 +101,14 @@ struct PudNextUnitUnfoldTest : public ::testing::Test {
         ON_CALL(descents, get(_)).WillByDefault([](pud_node_id leaf) { return MockDescent{leaf}; });
         ON_CALL(ops, find_goal(_, _)).WillByDefault([this](pud_node_id leaf, pud_mhq_head_id head_id) {
             const auto found = held.find({leaf, head_id});
-            return found == held.end() ? std::optional<body_goal_id>{} : std::optional<body_goal_id>{found->second};
+            return found == held.end() ? std::optional<pud_body_goal_id>{} : std::optional<pud_body_goal_id>{found->second};
         });
     }
 
     void TearDown() override { descent_ops = nullptr; }
 };
 
-}  // namespace
+}
 
 TEST_F(PudNextUnitUnfoldTest, NothingIsForcedWhenNoQueryIsUnit) {
     EXPECT_FALSE(next.get_next_unit_unfold().has_value());

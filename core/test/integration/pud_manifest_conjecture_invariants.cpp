@@ -6,31 +6,30 @@
 #include "pud_manifest_harness.hpp"
 
 namespace {
+using check_t = void (pud_manifest_harness<pud_manifest>::*)();
+using build_t = pud_node_id (*)(pud_manifest_harness<pud_manifest>&);
 
-using check_t = void (pud_random_solver_manifest_harness::*)();
-using build_t = pud_node_id (*)(pud_random_solver_manifest_harness&);
-
-pud_node_id build_colors_conjunction(pud_random_solver_manifest_harness& h) {
+pud_node_id build_colors_conjunction(pud_manifest_harness<pud_manifest>& h) {
     h.add_colors();
     return h.start_conjecture(h.functor("q", {h.var(0)}), {h.functor("color", {h.var(0)}), h.functor("warm", {h.var(0)})}, 1);
 }
 
-pud_node_id build_colors_independent(pud_random_solver_manifest_harness& h) {
+pud_node_id build_colors_independent(pud_manifest_harness<pud_manifest>& h) {
     h.add_colors();
     return h.start_conjecture(h.atom("q"), {h.functor("color", {h.var(0)}), h.functor("warm", {h.var(1)})}, 2);
 }
 
-pud_node_id build_nat_enumeration(pud_random_solver_manifest_harness& h) {
+pud_node_id build_nat_enumeration(pud_manifest_harness<pud_manifest>& h) {
     h.add_nat();
     return h.start_conjecture(h.functor("q", {h.var(0)}), {h.functor("nat", {h.var(0)})}, 1);
 }
 
-pud_node_id build_nat_ground(pud_random_solver_manifest_harness& h) {
+pud_node_id build_nat_ground(pud_manifest_harness<pud_manifest>& h) {
     h.add_nat();
     return h.start_conjecture(h.atom("q"), {h.functor("nat", {h.peano(4)})}, 0);
 }
 
-pud_node_id build_append_split(pud_random_solver_manifest_harness& h) {
+pud_node_id build_append_split(pud_manifest_harness<pud_manifest>& h) {
     h.add_append();
     return h.start_conjecture(
         h.functor("q", {h.var(0), h.var(1)}),
@@ -38,7 +37,7 @@ pud_node_id build_append_split(pud_random_solver_manifest_harness& h) {
         2);
 }
 
-pud_node_id build_member(pud_random_solver_manifest_harness& h) {
+pud_node_id build_member(pud_manifest_harness<pud_manifest>& h) {
     h.add_member();
     return h.start_conjecture(
         h.functor("q", {h.var(0)}),
@@ -46,17 +45,17 @@ pud_node_id build_member(pud_random_solver_manifest_harness& h) {
         1);
 }
 
-pud_node_id build_peano_add(pud_random_solver_manifest_harness& h) {
+pud_node_id build_peano_add(pud_manifest_harness<pud_manifest>& h) {
     h.add_peano_add();
     return h.start_conjecture(h.functor("q", {h.var(0), h.var(1)}), {h.functor("add", {h.var(0), h.var(1), h.peano(3)})}, 2);
 }
 
-pud_node_id build_graph(pud_random_solver_manifest_harness& h) {
+pud_node_id build_graph(pud_manifest_harness<pud_manifest>& h) {
     h.add_graph();
     return h.start_conjecture(h.functor("q", {h.var(0)}), {h.functor("anc", {h.atom("a"), h.var(0)})}, 1);
 }
 
-pud_node_id build_cross_goal_merge(pud_random_solver_manifest_harness& h) {
+pud_node_id build_cross_goal_merge(pud_manifest_harness<pud_manifest>& h) {
     h.add_colors();
     h.axiom(h.functor("eq", {h.var(0), h.var(0)}), {}, 1);
     return h.start_conjecture(
@@ -65,25 +64,25 @@ pud_node_id build_cross_goal_merge(pud_random_solver_manifest_harness& h) {
         2);
 }
 
-pud_node_id build_self_candidate(pud_random_solver_manifest_harness& h) {
+pud_node_id build_self_candidate(pud_manifest_harness<pud_manifest>& h) {
     h.axiom(h.functor("nat", {h.atom("z")}), {}, 0);
     return h.start_conjecture(h.functor("nat", {h.functor("s", {h.var(0)})}), {h.functor("nat", {h.var(0)})}, 1);
 }
 
-pud_node_id build_grown_lemma(pud_random_solver_manifest_harness& h) {
+pud_node_id build_grown_lemma(pud_manifest_harness<pud_manifest>& h) {
     const pud_node_id rule = h.add_nat();
     h.run_base_descent();
     h.grow_along_open_goals(rule, 3);
     return h.start_conjecture(h.functor("q", {h.var(0)}), {h.functor("nat", {h.var(0)})}, 1);
 }
 
-pud_node_id build_occurs_check(pud_random_solver_manifest_harness& h) {
+pud_node_id build_occurs_check(pud_manifest_harness<pud_manifest>& h) {
     h.add_colors();
     h.axiom(h.functor("eq", {h.var(0), h.var(0)}), {}, 1);
     return h.start_conjecture(h.atom("q"), {h.functor("eq", {h.var(0), h.functor("f", {h.var(0)})}), h.functor("color", {h.var(0)})}, 1);
 }
 
-pud_node_id build_query_as_lemma(pud_random_solver_manifest_harness& h) {
+pud_node_id build_query_as_lemma(pud_manifest_harness<pud_manifest>& h) {
     h.add_colors();
     const pud_node_id first = h.start_conjecture(
         h.functor("warmcolor", {h.var(0)}), {h.functor("color", {h.var(0)}), h.functor("warm", {h.var(0)})}, 1);
@@ -91,7 +90,7 @@ pud_node_id build_query_as_lemma(pud_random_solver_manifest_harness& h) {
     return h.start_conjecture(h.functor("q", {h.var(0)}), {h.functor("warmcolor", {h.var(0)})}, 1);
 }
 
-pud_node_id build_shared_deep(pud_random_solver_manifest_harness& h) {
+pud_node_id build_shared_deep(pud_manifest_harness<pud_manifest>& h) {
     h.add_colors();
     h.axiom(h.atom("a1"), {}, 0);
     h.axiom(h.atom("a2"), {}, 0);
@@ -102,11 +101,11 @@ pud_node_id build_shared_deep(pud_random_solver_manifest_harness& h) {
         1);
 }
 
-pud_node_id build_random_nonrecursive(pud_random_solver_manifest_harness& h) {
+pud_node_id build_random_nonrecursive(pud_manifest_harness<pud_manifest>& h) {
     return load_datalog(h, generate_datalog(7, false));
 }
 
-pud_node_id build_random_recursive(pud_random_solver_manifest_harness& h) {
+pud_node_id build_random_recursive(pud_manifest_harness<pud_manifest>& h) {
     return load_datalog(h, generate_datalog(11, true));
 }
 
@@ -138,12 +137,11 @@ const std::vector<scenario>& corpus() {
     return scenarios;
 }
 
-// Every scenario runs under several random seeds, so the subgoal chooser takes different paths.
 void sweep(check_t check) {
     for (uint32_t random_seed = 0; random_seed < 4; ++random_seed) {
         for (const scenario& each : corpus()) {
             SCOPED_TRACE(each.name + " seed " + std::to_string(random_seed));
-            auto harness = std::make_unique<pud_random_solver_manifest_harness>(random_seed);
+            auto harness = std::make_unique<pud_manifest_harness<pud_manifest>>(random_seed, pud_harness_scope::conjecture_leaves);
             const pud_node_id query = each.build(*harness);
             std::vector<const expr*> answers;
             ((*harness).*check)();
@@ -159,73 +157,77 @@ void sweep(check_t check) {
     }
 }
 
-}  // namespace
-
-TEST(PudRandomSolverManifestInvariantsTest, LiveLeavesAreExactlyTheStoredDescents) {
-    sweep(&pud_random_solver_manifest_harness::check_live_leaves_are_exactly_the_stored_descents);
 }
 
-TEST(PudRandomSolverManifestInvariantsTest, LeafFlagMatchesHavingChildren) {
-    sweep(&pud_random_solver_manifest_harness::check_leaf_flag_matches_having_children);
+TEST(PudManifestConjectureInvariantsTest, LiveLeavesAreExactlyTheStoredDescents) {
+    sweep(&pud_manifest_harness<pud_manifest>::check_live_leaves_are_exactly_the_stored_descents);
 }
 
-TEST(PudRandomSolverManifestInvariantsTest, ParentsAndChildrenAgree) {
-    sweep(&pud_random_solver_manifest_harness::check_parents_and_children_agree);
+TEST(PudManifestConjectureInvariantsTest, LeafFlagMatchesHavingChildren) {
+    sweep(&pud_manifest_harness<pud_manifest>::check_leaf_flag_matches_having_children);
 }
 
-TEST(PudRandomSolverManifestInvariantsTest, LiveChildCountsMatchUnrefutedChildren) {
-    sweep(&pud_random_solver_manifest_harness::check_live_child_counts_match_unrefuted_children);
+TEST(PudManifestConjectureInvariantsTest, ParentsAndChildrenAgree) {
+    sweep(&pud_manifest_harness<pud_manifest>::check_parents_and_children_agree);
 }
 
-TEST(PudRandomSolverManifestInvariantsTest, RefutationIsClosedUpward) {
-    sweep(&pud_random_solver_manifest_harness::check_refutation_is_closed_upward);
+TEST(PudManifestConjectureInvariantsTest, LiveChildCountsMatchUnrefutedChildren) {
+    sweep(&pud_manifest_harness<pud_manifest>::check_live_child_counts_match_unrefuted_children);
 }
 
-TEST(PudRandomSolverManifestInvariantsTest, RefutationIsClosedDownward) {
-    sweep(&pud_random_solver_manifest_harness::check_refutation_is_closed_downward);
+TEST(PudManifestConjectureInvariantsTest, RefutationIsClosedUpward) {
+    sweep(&pud_manifest_harness<pud_manifest>::check_refutation_is_closed_upward);
 }
 
-TEST(PudRandomSolverManifestInvariantsTest, LeafLvcIsTheSumOfVarCountsOnItsPath) {
-    sweep(&pud_random_solver_manifest_harness::check_leaf_lvc_is_the_sum_of_var_counts_on_its_path);
+TEST(PudManifestConjectureInvariantsTest, RefutationIsClosedDownward) {
+    sweep(&pud_manifest_harness<pud_manifest>::check_refutation_is_closed_downward);
 }
 
-TEST(PudRandomSolverManifestInvariantsTest, LeafBindingMatchesItsReplayedSubstitutions) {
-    sweep(&pud_random_solver_manifest_harness::check_leaf_binding_matches_its_replayed_substitutions);
+TEST(PudManifestConjectureInvariantsTest, LeafLvcIsTheSumOfVarCountsOnItsPath) {
+    sweep(&pud_manifest_harness<pud_manifest>::check_leaf_lvc_is_the_sum_of_var_counts_on_its_path);
 }
 
-TEST(PudRandomSolverManifestInvariantsTest, StoredGoalsAreInTheirNodesRepresentatives) {
-    sweep(&pud_random_solver_manifest_harness::check_stored_goals_are_in_their_nodes_representatives);
+TEST(PudManifestConjectureInvariantsTest, LeafBindingMatchesItsReplayedSubstitutions) {
+    sweep(&pud_manifest_harness<pud_manifest>::check_leaf_binding_matches_its_replayed_substitutions);
 }
 
-TEST(PudRandomSolverManifestInvariantsTest, SubstitutionsMeetTheWatchersPreconditions) {
-    sweep(&pud_random_solver_manifest_harness::check_substitutions_meet_the_watchers_preconditions);
+TEST(PudManifestConjectureInvariantsTest, StoredGoalsAreInTheirNodesRepresentatives) {
+    sweep(&pud_manifest_harness<pud_manifest>::check_stored_goals_are_in_their_nodes_representatives);
 }
 
-TEST(PudRandomSolverManifestInvariantsTest, FreshVariablesAreDenseFromTheParentsLvc) {
-    sweep(&pud_random_solver_manifest_harness::check_fresh_variables_are_dense_from_the_parents_lvc);
+TEST(PudManifestConjectureInvariantsTest, SubstitutionsMeetTheWatchersPreconditions) {
+    sweep(&pud_manifest_harness<pud_manifest>::check_substitutions_meet_the_watchers_preconditions);
 }
 
-TEST(PudRandomSolverManifestInvariantsTest, EveryOpenGoalHasALiveQuery) {
-    sweep(&pud_random_solver_manifest_harness::check_every_open_goal_has_a_live_query);
+TEST(PudManifestConjectureInvariantsTest, FreshVariablesAreDenseFromTheParentsLvc) {
+    sweep(&pud_manifest_harness<pud_manifest>::check_fresh_variables_are_dense_from_the_parents_lvc);
 }
 
-TEST(PudRandomSolverManifestInvariantsTest, QueryHeadNodeIsAnAncestorOfEveryLeafHoldingIt) {
-    sweep(&pud_random_solver_manifest_harness::check_query_head_node_is_an_ancestor_of_every_leaf_holding_it);
+TEST(PudManifestConjectureInvariantsTest, EveryOpenGoalHasALiveQuery) {
+    sweep(&pud_manifest_harness<pud_manifest>::check_every_open_goal_has_a_live_query);
 }
 
-TEST(PudRandomSolverManifestInvariantsTest, EveryCandidatePathIsARealRootFirstChain) {
-    sweep(&pud_random_solver_manifest_harness::check_every_candidate_path_is_a_real_root_first_chain);
+TEST(PudManifestConjectureInvariantsTest, QueryHeadNodeIsAnAncestorOfEveryLeafHoldingIt) {
+    sweep(&pud_manifest_harness<pud_manifest>::check_query_head_node_is_an_ancestor_of_every_leaf_holding_it);
 }
 
-TEST(PudRandomSolverManifestInvariantsTest, EveryCandidateIsAcceptableAtEveryLeafHoldingTheQuery) {
-    sweep(&pud_random_solver_manifest_harness::check_every_candidate_is_acceptable_at_every_leaf_holding_the_query);
+TEST(PudManifestConjectureInvariantsTest, EveryCandidatePathIsARealRootFirstChain) {
+    sweep(&pud_manifest_harness<pud_manifest>::check_every_candidate_path_is_a_real_root_first_chain);
 }
 
-TEST(PudRandomSolverManifestInvariantsTest, RandomProgramsKeepInvariants) {
+TEST(PudManifestConjectureInvariantsTest, EveryCandidateIsAcceptableAtEveryLeafHoldingTheQuery) {
+    sweep(&pud_manifest_harness<pud_manifest>::check_every_candidate_is_acceptable_at_every_leaf_holding_the_query);
+}
+
+TEST(PudManifestConjectureInvariantsTest, QueryHoldersMatchTheStoredDescents) {
+    sweep(&pud_manifest_harness<pud_manifest>::check_query_holders_match_the_stored_descents);
+}
+
+TEST(PudManifestConjectureInvariantsTest, RandomProgramsKeepInvariants) {
     for (unsigned seed = 100; seed < 200; ++seed) {
         for (bool recursive : {false, true}) {
             SCOPED_TRACE("seed " + std::to_string(seed) + (recursive ? " recursive" : " flat"));
-            auto harness = std::make_unique<pud_random_solver_manifest_harness>(seed);
+            auto harness = std::make_unique<pud_manifest_harness<pud_manifest>>(seed, pud_harness_scope::conjecture_leaves);
             const pud_node_id query = load_datalog(*harness, generate_datalog(seed, recursive));
             std::vector<const expr*> answers;
             harness->check_all();
@@ -240,8 +242,8 @@ TEST(PudRandomSolverManifestInvariantsTest, RandomProgramsKeepInvariants) {
     }
 }
 
-TEST(PudRandomSolverManifestInvariantsTest, DeepRecursionStaysConsistent) {
-    auto harness = std::make_unique<pud_random_solver_manifest_harness>(0);
+TEST(PudManifestConjectureInvariantsTest, DeepRecursionStaysConsistent) {
+    auto harness = std::make_unique<pud_manifest_harness<pud_manifest>>(0, pud_harness_scope::conjecture_leaves);
     const pud_node_id query = build_nat_enumeration(*harness);
     std::vector<const expr*> answers;
     for (size_t step = 0; step < 150; ++step) {

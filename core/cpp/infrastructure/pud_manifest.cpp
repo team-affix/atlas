@@ -1,6 +1,6 @@
-#include "infrastructure/pud_random_solver_manifest.hpp"
+#include "infrastructure/pud_manifest.hpp"
 
-pud_random_solver_manifest::pud_random_solver_manifest(uint32_t random_seed)
+pud_manifest::pud_manifest()
     : expr_pool_(),
       globalizer_(),
       node_id_sequencer_(),
@@ -19,8 +19,9 @@ pud_random_solver_manifest::pud_random_solver_manifest(uint32_t random_seed)
       node_live_child_counts_(),
       query_head_nodes_(),
       query_forks_(),
+      unit_queries_(),
       refuted_node_checker_(leaf_nodes_, refuted_leaves_, node_live_child_counts_),
-      open_conjecture_leaves_(open_leaves_, open_leaves_, root_nodes_, axioms_, node_parents_),
+      frontier_recorder_(open_leaves_, open_leaves_, refuted_leaves_),
       normalizer_factory_(globalizer_, expr_pool_),
       unifier_factory_(globalizer_),
       witness_search_head_factory_(leaf_nodes_, refuted_node_checker_, children_),
@@ -33,13 +34,16 @@ pud_random_solver_manifest::pud_random_solver_manifest(uint32_t random_seed)
       query_head_factory_(mhcs_, mhcs_),
       query_head_forker_(),
       mhq_(query_head_factory_, query_head_forker_, mhcs_),
+      unit_query_recorder_(mhq_, mhq_, mhq_, unit_queries_),
       query_opener_(
           axioms_, node_heads_, expr_pool_, expr_pool_, normalizer_factory_, unifier_factory_,
           node_added_substitutions_),
       node_descents_(),
+      query_holders_(node_descents_, node_descents_, node_descents_, node_descents_),
       root_descent_maker_(
           node_added_substitutions_, expr_pool_, expr_pool_, node_added_var_count_,
-          node_added_body_goals_, call_sites_, query_opener_, mhq_, mhq_, mhq_, query_head_nodes_,
+          node_added_body_goals_, call_sites_, query_opener_, unit_query_recorder_, unit_query_recorder_,
+          mhq_, query_head_nodes_,
           query_forks_),
       open_body_goal_finder_(node_added_body_goals_, call_sites_),
       acceptor_(
@@ -50,28 +54,22 @@ pud_random_solver_manifest::pud_random_solver_manifest(uint32_t random_seed)
           node_added_var_count_, node_parents_, leaf_nodes_),
       live_leaf_finder_(refuted_node_checker_, leaf_nodes_, children_),
       refutation_propagator_(root_nodes_, node_parents_, node_live_child_counts_),
-      leaf_invalidator_(mhws_, mhcs_, mhcs_, mhq_),
+      leaf_invalidator_(mhws_, mhcs_, mhcs_, unit_query_recorder_),
       node_refuter_(
-          live_leaf_finder_, refuted_leaves_, open_leaves_, open_conjecture_leaves_, refutation_propagator_,
-          node_descents_, leaf_invalidator_, query_head_nodes_),
+          live_leaf_finder_, frontier_recorder_, open_leaves_, frontier_recorder_, refutation_propagator_,
+          query_holders_, leaf_invalidator_, query_head_nodes_),
       unfolder_(
           node_descents_, mhq_, mhcs_, acceptor_, child_maker_, call_sites_, children_,
-          leaf_nodes_, open_conjecture_leaves_, node_live_child_counts_, refutation_propagator_,
+          leaf_nodes_, frontier_recorder_, node_live_child_counts_, refutation_propagator_,
           leaf_invalidator_, query_head_nodes_, node_refuter_, refuted_node_checker_,
-          node_descents_, open_conjecture_leaves_, node_descents_),
-      leaf_activator_(node_descents_, open_conjecture_leaves_, node_refuter_),
+          query_holders_, frontier_recorder_, query_holders_),
+      leaf_activator_(query_holders_, frontier_recorder_, node_refuter_),
       base_descent_runner_(
           refuted_node_checker_, root_descent_maker_, leaf_nodes_, children_,
           leaf_activator_, node_refuter_),
-      rng_(random_seed),
-      random_rule_chooser_(rng_),
-      random_subgoal_chooser_(node_descents_, rng_),
-      decision_generator_(random_rule_chooser_, random_subgoal_chooser_),
-      next_decided_unfold_(decision_generator_),
-      unfold_loop_(open_conjecture_leaves_, next_decided_unfold_, unfolder_),
       axiom_initializer_(
           node_id_sequencer_, node_heads_, node_added_body_goals_, node_added_var_count_,
           root_nodes_, leaf_nodes_, axioms_),
       conjecture_initializer_(
-          node_id_sequencer_, node_added_body_goals_, node_added_var_count_, root_nodes_,
+          node_id_sequencer_, node_heads_, node_added_body_goals_, node_added_var_count_, root_nodes_,
           leaf_nodes_) {}

@@ -17,12 +17,11 @@ using ::testing::Return;
 using ::testing::ReturnRef;
 
 namespace {
-
-using body_goal_exprs_t = immer::map<body_goal_id, const expr*>;
+using body_goal_exprs_t = immer::map<pud_body_goal_id, const expr*>;
 
 struct DescentOps {
-    MOCK_METHOD(std::optional<pud_mhq_head_id>, find_query_head, (int, body_goal_id));
-    MOCK_METHOD(const std::vector<body_goal_id>&, refuted_goals, (int));
+    MOCK_METHOD(std::optional<pud_mhq_head_id>, find_query_head, (int, pud_body_goal_id));
+    MOCK_METHOD(const std::vector<pud_body_goal_id>&, refuted_goals, (int));
     MOCK_METHOD(const body_goal_exprs_t&, body_goal_exprs, (int));
     MOCK_METHOD(const pud_ubs_state&, ubs_state, (int));
     MOCK_METHOD(uint32_t, lvc, (int));
@@ -34,10 +33,10 @@ DescentOps* descent_ops = nullptr;
 struct MockDescent {
     struct pq_view {
         int tag;
-        std::optional<pud_mhq_head_id> find_query_head(body_goal_id goal) const {
+        std::optional<pud_mhq_head_id> find_query_head(pud_body_goal_id goal) const {
             return descent_ops->find_query_head(tag, goal);
         }
-        const std::vector<body_goal_id>& refuted_goals() const { return descent_ops->refuted_goals(tag); }
+        const std::vector<pud_body_goal_id>& refuted_goals() const { return descent_ops->refuted_goals(tag); }
     };
     struct expr_view {
         int tag;
@@ -130,8 +129,6 @@ const expr* expr_at(uintptr_t address) {
     return reinterpret_cast<const expr*>(address);
 }
 
-// Leaf 1 (descent 10) is expanded at goal 2, whose query head 40 has candidates 31 and 30,
-// at the ends of paths {50, 70} and {50, 60}. Children are made as nodes 100, 101 with descents 1000+.
 struct PudUnfolderTest : public ::testing::Test {
     NiceMock<DescentOps> ops;
     NiceMock<MockGetNodeDescent> get_descent;
@@ -158,15 +155,15 @@ struct PudUnfolderTest : public ::testing::Test {
         refuter, refuted_nodes, store_descent, open_leaf, erase_descent};
 
     pud_node_id leaf = 1;
-    body_goal_id goal = 2;
+    pud_body_goal_id goal = 2;
     MockDescent leaf_descent{10};
     pud_ubs_state leaf_ubs_state;
     body_goal_exprs_t leaf_goals = body_goal_exprs_t{}.set(2, expr_at(0x20)).set(3, expr_at(0x30));
     std::unordered_set<pud_mhcs_head_id> candidates{31, 30};
     std::vector<pud_node_id> path_30{50, 60};
     std::vector<pud_node_id> path_31{50, 70};
-    std::vector<body_goal_id> no_refuted_goals;
-    std::vector<body_goal_id> one_refuted_goal{4};
+    std::vector<pud_body_goal_id> no_refuted_goals;
+    std::vector<pud_body_goal_id> one_refuted_goal{4};
     body_goal_exprs_t no_goals;
     pud_child_delta delta_60{.substitutions = {}, .body_goals = {}, .var_count = 1};
     pud_child_delta delta_70{.substitutions = {}, .body_goals = {}, .var_count = 2};
@@ -196,8 +193,6 @@ struct PudUnfolderTest : public ::testing::Test {
 
     void TearDown() override { descent_ops = nullptr; }
 };
-
-// ---------- children ----------
 
 TEST_F(PudUnfolderTest, EveryCandidateIsAcceptedInTheLeafsEnvironment) {
     EXPECT_CALL(acceptor, accept(Ref(leaf_ubs_state), 5u, expr_at(0x20), path_30)).WillOnce(Return(delta_60));
@@ -268,8 +263,6 @@ TEST_F(PudUnfolderTest, ChildrenWithoutRefutedGoalsAreNotRefuted) {
     unfolder.unfold(leaf, goal);
 }
 
-// ---------- no candidates ----------
-
 TEST_F(PudUnfolderTest, LeafWithNoCandidatesDiesWithNoChildren) {
     candidates.clear();
     EXPECT_CALL(children, store(leaf, ElementsAre()));
@@ -283,8 +276,6 @@ TEST_F(PudUnfolderTest, LeafWithCandidatesDoesNotDie) {
     EXPECT_CALL(propagator, refute(_)).Times(0);
     unfolder.unfold(leaf, goal);
 }
-
-// ---------- invalidation ----------
 
 TEST_F(PudUnfolderTest, RefutedQueryFromInvalidationRefutesItsOpeningNode) {
     EXPECT_CALL(invalidator, invalidate(ElementsAre(leaf)))
@@ -302,9 +293,7 @@ TEST_F(PudUnfolderTest, UnitQueryFromInvalidationRefutesNothing) {
     unfolder.unfold(leaf, goal);
 }
 
-}  // namespace
-
-// ---------- open leaves ----------
+}
 
 TEST_F(PudUnfolderTest, ExpandedLeafIsClosedWhenItStopsBeingALeaf) {
     InSequence in_order;

@@ -76,9 +76,6 @@
 #include "infrastructure/pud_witness_search_head_factory.hpp"
 #include "infrastructure/pud_witness_search_head_forker.hpp"
 
-// pud_random_solver_manifest with unit propagation: every query that becomes unit is queued, and the
-// unfold loop forces the leaves holding queued unit queries, anywhere in the database, before deciding
-// among the open conjecture leaves.
 struct pud_random_unit_solver_manifest {
     using child_iter_t = std::vector<pud_node_id>::const_iterator;
 
@@ -97,8 +94,6 @@ struct pud_random_unit_solver_manifest {
     using logging_unifier_t = pud_unifier<globalizer, normalizer_t, bind_map_t, logger_t, logger_t>;
     using translating_normalizer_t = pud_translating_normalizer<globalizer, expr_pool, expr_pool, bind_map_t>;
 
-    // Composed collaborators are named structs rather than aliases, so a type that takes one as a
-    // template argument spells only its short name instead of nesting its full instantiation.
     struct refuted_node_checker_t : pud_refuted_node_checker<
         pud_leaf_nodes, pud_refuted_leaves, pud_node_live_child_counts> {
         using pud_refuted_node_checker::pud_refuted_node_checker;
@@ -262,7 +257,7 @@ struct pud_random_unit_solver_manifest {
         using pud_axiom_initializer::pud_axiom_initializer;
     };
     struct conjecture_initializer_t : pud_conjecture_initializer<
-        pud_node_id_sequencer, pud_node_added_body_goals, pud_node_added_var_count,
+        pud_node_id_sequencer, pud_node_heads, pud_node_added_body_goals, pud_node_added_var_count,
         pud_root_nodes, pud_leaf_nodes> {
         using pud_conjecture_initializer::pud_conjecture_initializer;
     };

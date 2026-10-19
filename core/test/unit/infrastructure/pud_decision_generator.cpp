@@ -9,13 +9,12 @@ using ::testing::Return;
 using ::testing::StrictMock;
 
 namespace {
-
 struct MockChooseUnfoldLeafRule {
     MOCK_METHOD(pud_node_id, choose_rule, (const std::set<pud_node_id>&));
 };
 
 struct MockChooseUnfoldSubgoal {
-    MOCK_METHOD(body_goal_id, choose_subgoal, (pud_node_id));
+    MOCK_METHOD(pud_body_goal_id, choose_subgoal, (pud_node_id));
 };
 
 struct PudDecisionGeneratorTest : public ::testing::Test {
@@ -44,4 +43,4 @@ TEST_F(PudDecisionGeneratorTest, EveryOpenLeafIsOfferedToTheRuleChooser) {
     generator.generate({9, 1, 4});
 }
 
-}  // namespace
+}

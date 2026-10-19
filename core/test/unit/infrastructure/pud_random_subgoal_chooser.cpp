@@ -14,8 +14,7 @@ using ::testing::_;
 using ::testing::NiceMock;
 
 namespace {
-
-using body_goal_exprs_t = immer::map<body_goal_id, const expr*>;
+using body_goal_exprs_t = immer::map<pud_body_goal_id, const expr*>;
 
 struct DescentOps {
     MOCK_METHOD(const body_goal_exprs_t&, body_goal_exprs, (pud_node_id));
@@ -58,7 +57,7 @@ struct PudRandomSubgoalChooserTest : public ::testing::Test {
     void TearDown() override { descent_ops = nullptr; }
 };
 
-}  // namespace
+}
 
 TEST_F(PudRandomSubgoalChooserTest, OnlyOpenGoalIsAlwaysChosen) {
     goals_of[1] = body_goal_exprs_t{}.set(6, expr_at(0x10));
@@ -69,22 +68,22 @@ TEST_F(PudRandomSubgoalChooserTest, OnlyOpenGoalIsAlwaysChosen) {
 TEST_F(PudRandomSubgoalChooserTest, ChosenGoalIsAlwaysOneOfTheLeafsOpenGoals) {
     goals_of[1] = body_goal_exprs_t{}.set(2, expr_at(0x10)).set(5, expr_at(0x20)).set(9, expr_at(0x30));
     for (int draw = 0; draw < 200; ++draw) {
-        const body_goal_id chosen = chooser.choose_subgoal(1);
+        const pud_body_goal_id chosen = chooser.choose_subgoal(1);
         EXPECT_TRUE(chosen == 2 || chosen == 5 || chosen == 9) << chosen;
     }
 }
 
 TEST_F(PudRandomSubgoalChooserTest, EveryOpenGoalIsEventuallyChosen) {
     goals_of[1] = body_goal_exprs_t{}.set(2, expr_at(0x10)).set(5, expr_at(0x20)).set(9, expr_at(0x30));
-    std::set<body_goal_id> chosen;
+    std::set<pud_body_goal_id> chosen;
     for (int draw = 0; draw < 200; ++draw)
         chosen.insert(chooser.choose_subgoal(1));
-    EXPECT_EQ(chosen, (std::set<body_goal_id>{2, 5, 9}));
+    EXPECT_EQ(chosen, (std::set<pud_body_goal_id>{2, 5, 9}));
 }
 
 TEST_F(PudRandomSubgoalChooserTest, ChoicesAreRoughlyUniform) {
     goals_of[1] = body_goal_exprs_t{}.set(0, expr_at(0x10)).set(1, expr_at(0x20)).set(2, expr_at(0x30)).set(3, expr_at(0x40));
-    std::map<body_goal_id, int> counts;
+    std::map<pud_body_goal_id, int> counts;
     for (int draw = 0; draw < 4000; ++draw)
         ++counts[chooser.choose_subgoal(1)];
     for (const auto& [goal, count] : counts)

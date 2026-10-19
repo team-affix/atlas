@@ -10,7 +10,6 @@ using ::testing::Return;
 using ::testing::ReturnRef;
 
 namespace {
-
 struct MockGetOpenLeaves {
     MOCK_METHOD(const std::set<pud_node_id>&, get, ());
 };
@@ -18,13 +17,12 @@ struct MockGetNextUnfold {
     MOCK_METHOD(pud_unfold, get_next_unfold, (const std::set<pud_node_id>&));
 };
 struct MockUnfold {
-    MOCK_METHOD(void, unfold, (pud_node_id, body_goal_id));
+    MOCK_METHOD(void, unfold, (pud_node_id, pud_body_goal_id));
 };
 
 using test_unfold_loop_t = pud_unfold_loop<
     NiceMock<MockGetOpenLeaves>, NiceMock<MockGetNextUnfold>, NiceMock<MockUnfold>>;
 
-// The open set is a real std::set the tests edit; expanding a leaf closes it unless a test says otherwise.
 struct PudUnfoldLoopTest : public ::testing::Test {
     NiceMock<MockGetOpenLeaves> open_leaves;
     NiceMock<MockGetNextUnfold> next_unfolds;
@@ -37,13 +35,13 @@ struct PudUnfoldLoopTest : public ::testing::Test {
         ON_CALL(next_unfolds, get_next_unfold(_)).WillByDefault([](const std::set<pud_node_id>& leaves) {
             return pud_unfold{*leaves.begin(), 0};
         });
-        ON_CALL(unfolder, unfold(_, _)).WillByDefault([this](pud_node_id leaf, body_goal_id) {
+        ON_CALL(unfolder, unfold(_, _)).WillByDefault([this](pud_node_id leaf, pud_body_goal_id) {
             open.erase(leaf);
         });
     }
 };
 
-}  // namespace
+}
 
 TEST_F(PudUnfoldLoopTest, NothingHappensBeforeTheFirstResume) {
     open = {4};
@@ -98,7 +96,7 @@ TEST_F(PudUnfoldLoopTest, EachResumeMakesExactlyOneUnfold) {
 
 TEST_F(PudUnfoldLoopTest, LeavesOpenedByAnExpansionAreOfferedNext) {
     open = {4};
-    ON_CALL(unfolder, unfold(4, _)).WillByDefault([this](pud_node_id, body_goal_id) {
+    ON_CALL(unfolder, unfold(4, _)).WillByDefault([this](pud_node_id, pud_body_goal_id) {
         open.erase(4);
         open.insert({20, 21});
     });
@@ -123,7 +121,7 @@ TEST_F(PudUnfoldLoopTest, SearchEndsOnceTheLastOpenLeafIsExpanded) {
 
 TEST_F(PudUnfoldLoopTest, ExpansionThatKeepsTheLeafOpenOffersItAgain) {
     open = {4};
-    ON_CALL(unfolder, unfold(_, _)).WillByDefault([](pud_node_id, body_goal_id) {});
+    ON_CALL(unfolder, unfold(_, _)).WillByDefault([](pud_node_id, pud_body_goal_id) {});
     coroutine<pud_unfold, void> unfolding = unfold_loop.drive_unfold_loop();
     for (int round = 0; round < 3; ++round) {
         unfolding.resume();

@@ -9,7 +9,7 @@ using ::testing::ElementsAre;
 using ::testing::UnorderedElementsAre;
 
 struct PudRandomUnitSolverManifestTest : public ::testing::Test {
-    pud_random_unit_solver_manifest_harness h{0};
+    pud_random_unit_solver_manifest_harness h{0, pud_harness_scope::conjecture_leaves};
 
     const expr* q(std::vector<const expr*> args) { return h.functor("q", std::move(args)); }
 
@@ -20,11 +20,9 @@ struct PudRandomUnitSolverManifestTest : public ::testing::Test {
     }
 };
 
-// ---------- unit unfolds dominate decisions ----------
-
 TEST_F(PudRandomUnitSolverManifestTest, UnitGoalIsUnfoldedBeforeAnyDecision) {
     for (uint32_t random_seed = 0; random_seed < 8; ++random_seed) {
-        pud_random_unit_solver_manifest_harness seeded{random_seed};
+        pud_random_unit_solver_manifest_harness seeded{random_seed, pud_harness_scope::conjecture_leaves};
         seeded.add_colors();
         const pud_node_id conjecture = seeded.start_conjecture(
             q({seeded.var(0)}), {seeded.functor("color", {seeded.var(0)}), seeded.functor("warm", {seeded.var(0)})}, 1);
@@ -73,13 +71,11 @@ TEST_F(PudRandomUnitSolverManifestTest, UnitUnfoldsKeepAnswersComplete) {
     h.check_all();
 }
 
-// ---------- invariants on well-behaved programs ----------
-
 TEST_F(PudRandomUnitSolverManifestTest, WellBehavedProgramsKeepEveryInvariant) {
     for (uint32_t random_seed = 0; random_seed < 4; ++random_seed) {
         for (int program = 0; program < 5; ++program) {
             SCOPED_TRACE("seed " + std::to_string(random_seed) + " program " + std::to_string(program));
-            pud_random_unit_solver_manifest_harness seeded{random_seed};
+            pud_random_unit_solver_manifest_harness seeded{random_seed, pud_harness_scope::conjecture_leaves};
             pud_node_id conjecture = 0;
             if (program == 0) {
                 seeded.add_colors();
@@ -110,7 +106,7 @@ TEST_F(PudRandomUnitSolverManifestTest, WellBehavedProgramsKeepEveryInvariant) {
 }
 
 TEST_F(PudRandomUnitSolverManifestTest, AnswersMatchTheDecisionOnlyManifest) {
-    pud_random_solver_manifest_harness plain{0};
+    pud_manifest_harness<pud_manifest> plain{0, pud_harness_scope::conjecture_leaves};
     h.add_graph();
     plain.add_graph();
     const pud_node_id forced = h.start_conjecture(q({h.var(0)}), {h.functor("anc", {h.atom("a"), h.var(0)})}, 1);
