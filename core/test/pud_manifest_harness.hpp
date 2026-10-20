@@ -643,8 +643,8 @@ struct pud_manifest_harness {
         }
     }
 
-    std::map<pud_mhq_head_id, std::set<std::pair<pud_node_id, pud_body_goal_id>>> scan_query_holders() {
-        std::map<pud_mhq_head_id, std::set<std::pair<pud_node_id, pud_body_goal_id>>> holders;
+    std::map<pud_mhq_head_id, std::map<pud_node_id, pud_body_goal_id>> scan_query_holders() {
+        std::map<pud_mhq_head_id, std::map<pud_node_id, pud_body_goal_id>> holders;
         for (pud_mhq_head_id head = 0;; ++head) {
             try {
                 manifest.query_head_nodes_.get(head);
@@ -663,10 +663,14 @@ struct pud_manifest_harness {
     void check_query_holders_match_the_stored_descents() {
         if constexpr (requires (Manifest& any) { any.query_holders_; }) {
             for (const auto& [head, scanned] : scan_query_holders()) {
-                const std::vector<std::pair<pud_node_id, pud_body_goal_id>> indexed = manifest.query_holders_.get(head);
-                const std::set<std::pair<pud_node_id, pud_body_goal_id>> indexed_set(indexed.begin(), indexed.end());
-                EXPECT_EQ(indexed_set, scanned) << "head " << head;
-                EXPECT_EQ(indexed.size(), scanned.size()) << "head " << head << " lists a holder twice";
+                std::set<pud_node_id> scanned_leaves;
+                for (const auto& [leaf_node, goal] : scanned) {
+                    scanned_leaves.insert(leaf_node);
+                    EXPECT_EQ(goal, scanned.begin()->second) << "head " << head << " is held under two goals";
+                    EXPECT_EQ(manifest.node_descents_.get(leaf_node).body_goal_pq().find_goal(head), goal)
+                        << "head " << head << " leaf " << leaf_node;
+                }
+                EXPECT_EQ(manifest.query_holders_.get(head), scanned_leaves) << "head " << head;
             }
         }
     }

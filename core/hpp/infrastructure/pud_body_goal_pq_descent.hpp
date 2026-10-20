@@ -72,6 +72,7 @@ private:
         const pud_ubs_state& ubs_state,
         uint32_t frame_offset);
     void close(pud_body_goal_id goal);
+    void erase_query_head_of(pud_body_goal_id goal);
     void record(
         pud_body_goal_id goal,
         pud_node_id node,
@@ -86,6 +87,7 @@ private:
     IStoreQueryHeadNode* store_query_head_node_;
     IMarkQueryForked* mark_query_forked_;
     immer::map<pud_body_goal_id, immer::box<owner_t>> body_goal_queries_;
+    immer::map<pud_mhq_head_id, pud_body_goal_id> query_head_to_body_goal_;
     immer::map<pud_body_goal_id, pud_watch_head_id> body_goal_to_watch_head_;
     immer::map<pud_watch_head_id, pud_body_goal_id> watch_head_to_body_goal_;
     std::vector<pud_body_goal_id> unit_goals_;
@@ -122,6 +124,7 @@ PUD_BODY_GOAL_PQ_DESCENT::pud_body_goal_pq_descent(
     , store_query_head_node_(&store_query_head_node)
     , mark_query_forked_(&mark_query_forked)
     , body_goal_queries_()
+    , query_head_to_body_goal_()
     , body_goal_to_watch_head_()
     , watch_head_to_body_goal_()
     , unit_goals_()
@@ -182,11 +185,10 @@ std::optional<pud_mhq_head_id> PUD_BODY_GOAL_PQ_DESCENT::find_query_head(pud_bod
 
 PUD_BODY_GOAL_PQ_DESCENT_TEMPLATE
 std::optional<pud_body_goal_id> PUD_BODY_GOAL_PQ_DESCENT::find_goal(pud_mhq_head_id head_id) const {
-    for (const auto& [goal, query] : body_goal_queries_) {
-        if (query.get().head_id() == head_id)
-            return goal;
-    }
-    return std::nullopt;
+    const pud_body_goal_id* goal = query_head_to_body_goal_.find(head_id);
+    if (!goal)
+        return std::nullopt;
+    return *goal;
 }
 
 PUD_BODY_GOAL_PQ_DESCENT_TEMPLATE
@@ -240,12 +242,21 @@ void PUD_BODY_GOAL_PQ_DESCENT::fork(
 
 PUD_BODY_GOAL_PQ_DESCENT_TEMPLATE
 void PUD_BODY_GOAL_PQ_DESCENT::close(pud_body_goal_id goal) {
+    erase_query_head_of(goal);
     body_goal_queries_ = body_goal_queries_.erase(goal);
     const pud_watch_head_id* watch_head_id = body_goal_to_watch_head_.find(goal);
     if (!watch_head_id)
         return;
     watch_head_to_body_goal_ = watch_head_to_body_goal_.erase(*watch_head_id);
     body_goal_to_watch_head_ = body_goal_to_watch_head_.erase(goal);
+}
+
+PUD_BODY_GOAL_PQ_DESCENT_TEMPLATE
+void PUD_BODY_GOAL_PQ_DESCENT::erase_query_head_of(pud_body_goal_id goal) {
+    const immer::box<owner_t>* query = body_goal_queries_.find(goal);
+    if (!query)
+        return;
+    query_head_to_body_goal_ = query_head_to_body_goal_.erase(query->get().head_id());
 }
 
 PUD_BODY_GOAL_PQ_DESCENT_TEMPLATE
@@ -256,12 +267,14 @@ void PUD_BODY_GOAL_PQ_DESCENT::record(
     const std::optional<pud_forced_query_propagation>& forced_propagation) {
     const bool refuted =
         forced_propagation.has_value() && std::holds_alternative<pud_refuted_query>(forced_propagation.value());
+    erase_query_head_of(goal);
     if (refuted) {
         body_goal_queries_ = body_goal_queries_.erase(goal);
         refuted_goals_.push_back(goal);
         return;
     }
     body_goal_queries_ = body_goal_queries_.set(goal, immer::box<owner_t>{*remove_query_head_, head_id});
+    query_head_to_body_goal_ = query_head_to_body_goal_.set(head_id, goal);
     store_query_head_node_->store(head_id, node);
     if (!forced_propagation.has_value())
         return;

@@ -121,7 +121,12 @@ pud_frontier_change pud_runtime::collect_change(
         const bool unit = manifest_.mhq_.get_candidates(head).size() == 1;
         if (!unit)
             continue;
-        for (const auto& [leaf, goal] : manifest_.query_holders_.get(head)) {
+        const std::set<pud_node_id>& holders = manifest_.query_holders_.get(head);
+        if (holders.empty())
+            continue;
+        const pud_body_goal_id goal =
+            manifest_.node_descents_.get(*holders.begin()).body_goal_pq().find_goal(head).value();
+        for (pud_node_id leaf : holders) {
             const bool new_leaf = leaf >= first_new_node;
             if (new_leaf)
                 continue;
