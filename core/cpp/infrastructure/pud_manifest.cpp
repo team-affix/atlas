@@ -56,11 +56,11 @@ pud_manifest::pud_manifest()
       node_refuter_(
           live_leaf_finder_, frontier_recorder_, open_leaves_, frontier_recorder_, refutation_propagator_,
           node_descents_, leaf_invalidator_, query_head_nodes_),
-      unfolder_(
-          node_descents_, mhq_, mhcs_, acceptor_, child_maker_, call_sites_, children_,
-          leaf_nodes_, frontier_recorder_, node_live_child_counts_, refutation_propagator_,
-          leaf_invalidator_, query_head_nodes_, node_refuter_, refuted_node_checker_,
-          node_descents_, frontier_recorder_, node_descents_),
+      unfolder_(node_descents_, acceptor_, child_maker_, call_sites_, children_, leaf_nodes_),
+      expander_(
+          node_descents_, mhq_, mhcs_, unfolder_, frontier_recorder_, node_live_child_counts_, refutation_propagator_,
+          leaf_invalidator_, query_head_nodes_, node_refuter_, refuted_node_checker_, node_descents_,
+          frontier_recorder_, node_descents_),
       leaf_activator_(node_descents_, frontier_recorder_, node_refuter_),
       base_descent_runner_(
           refuted_node_checker_, root_descent_maker_, leaf_nodes_, children_,

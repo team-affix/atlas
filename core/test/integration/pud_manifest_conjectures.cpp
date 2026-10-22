@@ -98,7 +98,7 @@ struct PudManifestConjectureIntegrationTest : public ::testing::Test {
         if (conjecture_leaves.empty())
             return false;
         const pud_node_id leaf = rule_chooser.choose_rule(conjecture_leaves);
-        manifest.unfolder_.unfold(leaf, subgoal_chooser.choose_subgoal(leaf));
+        manifest.expander_.expand(leaf, subgoal_chooser.choose_subgoal(leaf));
         return true;
     }
 
@@ -418,7 +418,7 @@ struct PudManifestConjectureLemmaIntegrationTest : public PudManifestConjectureI
         pud_node_id frontier = nat_rule;
         for (uint32_t level = 0; level < depth; ++level) {
             const auto& open_goals = manifest.node_descents_.get(frontier).body_goal_expr().body_goal_exprs();
-            manifest.unfolder_.unfold(frontier, open_goals.begin()->first);
+            manifest.expander_.expand(frontier, open_goals.begin()->first);
             const std::vector<pud_node_id> recursive = open_children(frontier);
             EXPECT_EQ(recursive.size(), 1u);
             frontier = recursive.front();
@@ -435,7 +435,7 @@ struct PudManifestConjectureLemmaIntegrationTest : public PudManifestConjectureI
 TEST_F(PudManifestConjectureLemmaIntegrationTest, ExpandingTheRuleTreeGivesAFactAndARecursiveChild) {
     add_nat_tracked();
     run_base_descent();
-    manifest.unfolder_.unfold(nat_rule, 0);
+    manifest.expander_.expand(nat_rule, 0);
     EXPECT_FALSE(manifest.leaf_nodes_.check_leaf(nat_rule));
     EXPECT_EQ(manifest.children_.get(nat_rule).size(), 2u);
     EXPECT_EQ(open_children(nat_rule).size(), 1u);
@@ -512,7 +512,7 @@ TEST_F(PudManifestConjectureQueryLifetimeIntegrationTest, RootsQueriesLiveWhileT
 TEST_F(PudManifestConjectureQueryLifetimeIntegrationTest, ExpandedLeafKeepsNoStoredDescent) {
     add_colors();
     const pud_node_id conjecture = start_conjecture(atom("q"), {functor("color", {var(0)})}, 1);
-    manifest.unfolder_.unfold(conjecture, 0);
+    manifest.expander_.expand(conjecture, 0);
     EXPECT_THROW(manifest.node_descents_.get(conjecture), std::out_of_range);
     for (pud_node_id child : children_of(conjecture))
         EXPECT_NO_THROW(manifest.node_descents_.get(child));
@@ -522,7 +522,7 @@ TEST_F(PudManifestConjectureQueryLifetimeIntegrationTest, ExpandedGoalsQueryIsRe
     add_colors();
     const pud_node_id conjecture = start_conjecture(atom("q"), {functor("color", {var(0)})}, 1);
     const pud_mhq_head_id expanded = query_of(conjecture, 0);
-    manifest.unfolder_.unfold(conjecture, 0);
+    manifest.expander_.expand(conjecture, 0);
     EXPECT_FALSE(alive(expanded));
 }
 
@@ -530,7 +530,7 @@ TEST_F(PudManifestConjectureQueryLifetimeIntegrationTest, UnchangedGoalsQueryIsS
     add_colors();
     const pud_node_id conjecture = start_conjecture(atom("q"), {functor("color", {var(0)}), functor("warm", {var(1)})}, 2);
     const pud_mhq_head_id shared = query_of(conjecture, 1);
-    manifest.unfolder_.unfold(conjecture, 0);
+    manifest.expander_.expand(conjecture, 0);
     ASSERT_EQ(children_of(conjecture).size(), 2u);
     for (pud_node_id child : children_of(conjecture))
         EXPECT_EQ(query_of(child, 1), shared);
@@ -541,7 +541,7 @@ TEST_F(PudManifestConjectureQueryLifetimeIntegrationTest, SharedQuerySurvivesUnt
     add_colors();
     const pud_node_id conjecture = start_conjecture(atom("q"), {functor("color", {var(0)}), functor("warm", {var(1)})}, 2);
     const pud_mhq_head_id shared = query_of(conjecture, 1);
-    manifest.unfolder_.unfold(conjecture, 0);
+    manifest.expander_.expand(conjecture, 0);
     const std::vector<pud_node_id> children = children_of(conjecture);
     ASSERT_EQ(children.size(), 2u);
     manifest.node_refuter_.refute(children.at(0));
@@ -554,12 +554,12 @@ TEST_F(PudManifestConjectureQueryLifetimeIntegrationTest, SharedQuerySurvivesUnt
     add_colors();
     const pud_node_id conjecture = start_conjecture(atom("q"), {functor("color", {var(0)}), functor("warm", {var(1)})}, 2);
     const pud_mhq_head_id shared = query_of(conjecture, 1);
-    manifest.unfolder_.unfold(conjecture, 0);
+    manifest.expander_.expand(conjecture, 0);
     const std::vector<pud_node_id> children = children_of(conjecture);
     ASSERT_EQ(children.size(), 2u);
-    manifest.unfolder_.unfold(children.at(0), 1);
+    manifest.expander_.expand(children.at(0), 1);
     EXPECT_TRUE(alive(shared));
-    manifest.unfolder_.unfold(children.at(1), 1);
+    manifest.expander_.expand(children.at(1), 1);
     EXPECT_FALSE(alive(shared));
 }
 
@@ -568,7 +568,7 @@ TEST_F(PudManifestConjectureQueryLifetimeIntegrationTest, ForkedQueryReplacesThe
     const pud_node_id conjecture = start_conjecture(
         functor("q", {var(0)}), {functor("color", {var(0)}), functor("warm", {var(0)})}, 1);
     const pud_mhq_head_id parents_query = query_of(conjecture, 1);
-    manifest.unfolder_.unfold(conjecture, 0);
+    manifest.expander_.expand(conjecture, 0);
     EXPECT_FALSE(alive(parents_query));
     for (pud_node_id child : children_of(conjecture)) {
         if (refuted(child))
@@ -583,7 +583,7 @@ TEST_F(PudManifestConjectureQueryLifetimeIntegrationTest, RefutedChildsForkedQue
     add_colors();
     const pud_node_id conjecture = start_conjecture(
         functor("q", {var(0)}), {functor("color", {var(0)}), functor("warm", {var(0)})}, 1);
-    manifest.unfolder_.unfold(conjecture, 0);
+    manifest.expander_.expand(conjecture, 0);
     const std::vector<pud_node_id> children = children_of(conjecture);
     ASSERT_EQ(children.size(), 2u);
     pud_node_id live_child = children.at(0);
@@ -609,7 +609,7 @@ TEST_F(PudManifestConjectureQueryLifetimeIntegrationTest, RefutingTheRootRemoves
 TEST_F(PudManifestConjectureQueryLifetimeIntegrationTest, NewGoalsQueryLivesWithTheChildThatAddedIt) {
     add_nat();
     const pud_node_id conjecture = start_conjecture(atom("q"), {functor("nat", {var(0)})}, 1);
-    manifest.unfolder_.unfold(conjecture, 0);
+    manifest.expander_.expand(conjecture, 0);
     pud_node_id recursive = 0;
     for (pud_node_id child : children_of(conjecture)) {
         if (!manifest.node_descents_.get(child).body_goal_expr().body_goal_exprs().empty())

@@ -46,8 +46,7 @@ pud_frontier_change pud_runtime::expand(pud_derivation_id derivation, pud_body_g
     DEBUG_ASSERT(manifest_.open_leaves_.check_leaf_open(leaf));
     DEBUG_ASSERT(manifest_.node_descents_.get(leaf).body_goal_pq().find_query_head(goal).has_value());
     manifest_.frontier_recorder_.clear();
-    manifest_.unfolder_.unfold(leaf, goal);
-    return collect_change(manifest_.children_.get(leaf));
+    return collect_change(manifest_.expander_.expand(leaf, goal));
 }
 
 const expr* pud_runtime::head(pud_derivation_id derivation) {

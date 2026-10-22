@@ -106,7 +106,7 @@ TEST_F(PudManifestScenarioTest, AxiomAddedAfterTheRunIsACandidateForLaterQueries
     const pud_node_id user = h.axiom(h.atom("q"), {h.functor("s", {h.atom("green")})}, 0);
     h.run_base_descent();
     const pud_node_id late = h.axiom(h.functor("color", {h.atom("green")}), {}, 0);
-    h.manifest.unfolder_.unfold(user, 0);
+    h.manifest.expander_.expand(user, 0);
     EXPECT_FALSE(h.has_descent(late));
     EXPECT_FALSE(open(late));
     ASSERT_EQ(h.children_of(user).size(), 1u);
@@ -124,7 +124,7 @@ TEST_F(PudManifestScenarioTest, ForkedQueryNeverGainsAnAxiomAddedAfterItsParentO
     const pud_node_id rule = h.axiom(h.functor("q", {h.var(0)}), {h.functor("warm", {h.var(0)}), h.functor("color", {h.var(0)})}, 1);
     h.run_base_descent();
     h.axiom(h.functor("color", {h.atom("green")}), {}, 0);
-    h.manifest.unfolder_.unfold(rule, 0);
+    h.manifest.expander_.expand(rule, 0);
     ASSERT_EQ(h.children_of(rule).size(), 1u);
     EXPECT_TRUE(h.refuted(h.children_of(rule).front()));
     EXPECT_TRUE(h.refuted(rule));
@@ -262,7 +262,7 @@ TEST_F(PudManifestScenarioTest, OneUnfoldMakesAChildForEveryCandidate) {
         h.axiom(h.functor("f", {h.atom("k" + std::to_string(index))}), {}, 0);
     const pud_node_id rule = h.axiom(h.functor("g", {h.var(0)}), {h.functor("f", {h.var(0)})}, 1);
     h.run_base_descent();
-    h.manifest.unfolder_.unfold(rule, 0);
+    h.manifest.expander_.expand(rule, 0);
     EXPECT_EQ(h.children_of(rule).size(), 50u);
     EXPECT_EQ(h.manifest.node_live_child_counts_.get(rule), 50u);
     EXPECT_EQ(h.proven_heads().size(), 100u);

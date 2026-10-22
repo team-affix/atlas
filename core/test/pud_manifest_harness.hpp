@@ -142,7 +142,7 @@ struct pud_manifest_harness {
     pud_node_id grow_along_open_goals(pud_node_id root, uint32_t depth) {
         pud_node_id frontier = root;
         for (uint32_t level = 0; level < depth; ++level) {
-            manifest.unfolder_.unfold(frontier, first_open_goal(frontier));
+            manifest.expander_.expand(frontier, first_open_goal(frontier));
             std::optional<pud_node_id> next;
             for (pud_node_id child : children_of(frontier)) {
                 if (refuted(child) || open_goals(child).empty())
@@ -189,7 +189,7 @@ struct pud_manifest_harness {
                 return std::nullopt;
             const pud_node_id leaf_node = rule_chooser.choose_rule(leaves);
             const pud_body_goal_id goal = subgoal_chooser.choose_subgoal(leaf_node);
-            manifest.unfolder_.unfold(leaf_node, goal);
+            manifest.expander_.expand(leaf_node, goal);
             return pud_unfold{.leaf = leaf_node, .goal = goal};
         }
     }
@@ -203,7 +203,7 @@ struct pud_manifest_harness {
         for (pud_node_id leaf_node : manifest.open_leaves_.get()) {
             if (root_of(leaf_node) != root)
                 continue;
-            manifest.unfolder_.unfold(leaf_node, first_open_goal(leaf_node));
+            manifest.expander_.expand(leaf_node, first_open_goal(leaf_node));
             return true;
         }
         return false;

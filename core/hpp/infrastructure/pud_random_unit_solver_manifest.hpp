@@ -26,6 +26,7 @@
 #include "infrastructure/pud_children.hpp"
 #include "infrastructure/pud_conjecture_initializer.hpp"
 #include "infrastructure/pud_decision_generator.hpp"
+#include "infrastructure/pud_expander.hpp"
 #include "infrastructure/pud_exporter.hpp"
 #include "infrastructure/pud_leaf_activator.hpp"
 #include "infrastructure/pud_unfolder.hpp"
@@ -225,11 +226,14 @@ struct pud_random_unit_solver_manifest {
     };
 
     struct unfolder_t : pud_unfolder<
-        node_descents_t, mhq_t, mhcs_t, acceptor_t, child_maker_t, pud_call_sites, pud_children,
-        pud_leaf_nodes, open_conjecture_leaves_t, pud_node_live_child_counts, refutation_propagator_t,
-        leaf_invalidator_t, pud_query_head_nodes, node_refuter_t, refuted_node_checker_t,
-        node_descents_t, open_conjecture_leaves_t, node_descents_t> {
+        node_descents_t, acceptor_t, child_maker_t, pud_call_sites, pud_children, pud_leaf_nodes> {
         using pud_unfolder::pud_unfolder;
+    };
+    struct expander_t : pud_expander<
+        node_descents_t, mhq_t, mhcs_t, unfolder_t, open_conjecture_leaves_t, pud_node_live_child_counts,
+        refutation_propagator_t, leaf_invalidator_t, pud_query_head_nodes, node_refuter_t,
+        refuted_node_checker_t, node_descents_t, open_conjecture_leaves_t, node_descents_t> {
+        using pud_expander::pud_expander;
     };
     struct leaf_activator_t : pud_leaf_activator<base_descent_t, node_descents_t, open_conjecture_leaves_t, node_refuter_t> {
         using pud_leaf_activator::pud_leaf_activator;
@@ -253,7 +257,7 @@ struct pud_random_unit_solver_manifest {
     struct next_unfold_t : pud_next_unfold<next_unit_unfold_t, decision_generator_t> {
         using pud_next_unfold::pud_next_unfold;
     };
-    struct unfold_loop_t : pud_unfold_loop<open_conjecture_leaves_t, next_unfold_t, unfolder_t> {
+    struct unfold_loop_t : pud_unfold_loop<open_conjecture_leaves_t, next_unfold_t, expander_t> {
         using pud_unfold_loop::pud_unfold_loop;
     };
     struct axiom_initializer_t : pud_axiom_initializer<
@@ -321,6 +325,7 @@ struct pud_random_unit_solver_manifest {
     node_refuter_t                          node_refuter_;
 
     unfolder_t                         unfolder_;
+    expander_t                              expander_;
     leaf_activator_t                        leaf_activator_;
     base_descent_runner_t                   base_descent_runner_;
     std::mt19937                            rng_;

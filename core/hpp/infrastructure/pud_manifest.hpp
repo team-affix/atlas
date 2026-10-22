@@ -24,6 +24,7 @@
 #include "infrastructure/pud_cycle_detector_factory.hpp"
 #include "infrastructure/pud_children.hpp"
 #include "infrastructure/pud_conjecture_initializer.hpp"
+#include "infrastructure/pud_expander.hpp"
 #include "infrastructure/pud_exporter.hpp"
 #include "infrastructure/pud_frontier_recorder.hpp"
 #include "infrastructure/pud_leaf_activator.hpp"
@@ -212,11 +213,14 @@ struct pud_manifest {
     };
 
     struct unfolder_t : pud_unfolder<
-        node_descents_t, mhq_t, mhcs_t, acceptor_t, child_maker_t, pud_call_sites, pud_children,
-        pud_leaf_nodes, frontier_recorder_t, pud_node_live_child_counts, refutation_propagator_t,
-        leaf_invalidator_t, pud_query_head_nodes, node_refuter_t, refuted_node_checker_t,
-        node_descents_t, frontier_recorder_t, node_descents_t> {
+        node_descents_t, acceptor_t, child_maker_t, pud_call_sites, pud_children, pud_leaf_nodes> {
         using pud_unfolder::pud_unfolder;
+    };
+    struct expander_t : pud_expander<
+        node_descents_t, mhq_t, mhcs_t, unfolder_t, frontier_recorder_t, pud_node_live_child_counts,
+        refutation_propagator_t, leaf_invalidator_t, pud_query_head_nodes, node_refuter_t,
+        refuted_node_checker_t, node_descents_t, frontier_recorder_t, node_descents_t> {
+        using pud_expander::pud_expander;
     };
     struct leaf_activator_t : pud_leaf_activator<base_descent_t, node_descents_t, frontier_recorder_t, node_refuter_t> {
         using pud_leaf_activator::pud_leaf_activator;
@@ -289,6 +293,7 @@ struct pud_manifest {
     node_refuter_t                          node_refuter_;
 
     unfolder_t                              unfolder_;
+    expander_t                              expander_;
     leaf_activator_t                        leaf_activator_;
     base_descent_runner_t                   base_descent_runner_;
     axiom_initializer_t                     axiom_initializer_;

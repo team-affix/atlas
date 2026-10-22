@@ -58,11 +58,11 @@ pud_random_unit_solver_manifest::pud_random_unit_solver_manifest(uint32_t random
       node_refuter_(
           live_leaf_finder_, refuted_leaves_, open_leaves_, open_conjecture_leaves_, refutation_propagator_,
           node_descents_, leaf_invalidator_, query_head_nodes_),
-      unfolder_(
-          node_descents_, mhq_, mhcs_, acceptor_, child_maker_, call_sites_, children_,
-          leaf_nodes_, open_conjecture_leaves_, node_live_child_counts_, refutation_propagator_,
-          leaf_invalidator_, query_head_nodes_, node_refuter_, refuted_node_checker_,
-          node_descents_, open_conjecture_leaves_, node_descents_),
+      unfolder_(node_descents_, acceptor_, child_maker_, call_sites_, children_, leaf_nodes_),
+      expander_(
+          node_descents_, mhq_, mhcs_, unfolder_, open_conjecture_leaves_, node_live_child_counts_, refutation_propagator_,
+          leaf_invalidator_, query_head_nodes_, node_refuter_, refuted_node_checker_, node_descents_,
+          open_conjecture_leaves_, node_descents_),
       leaf_activator_(node_descents_, open_conjecture_leaves_, node_refuter_),
       base_descent_runner_(
           refuted_node_checker_, root_descent_maker_, leaf_nodes_, children_,
@@ -75,7 +75,7 @@ pud_random_unit_solver_manifest::pud_random_unit_solver_manifest(uint32_t random
           unit_queries_, unit_queries_, unit_queries_, mhq_, query_head_nodes_, refuted_node_checker_,
           query_forks_, leaf_nodes_, children_, node_descents_),
       next_unfold_(next_unit_unfold_, decision_generator_),
-      unfold_loop_(open_conjecture_leaves_, next_unfold_, unfolder_),
+      unfold_loop_(open_conjecture_leaves_, next_unfold_, expander_),
       axiom_initializer_(
           node_id_sequencer_, node_heads_, node_added_body_goals_, node_added_var_count_,
           root_nodes_, leaf_nodes_, axioms_),
