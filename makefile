@@ -6,7 +6,7 @@ MAKEFLAGS += -j$(shell nproc)
 
 CXX      = g++
 DEPFLAGS = -MMD -MP
-CXXFLAGS = -std=c++20 -I. -Icore/hpp -Icli/hpp -Imcts/core/hpp $(DEPFLAGS)
+CXXFLAGS = -std=c++20 -I. -Icore/hpp -Icli/hpp -Imcts/core/hpp -Iimmer $(DEPFLAGS)
 AR       = ar
 ARFLAGS  = rcs
 
@@ -102,8 +102,8 @@ CORE_DEBUG_FAST_GTEST_OBJ = \
 CORE_DEBUG_BIN_OBJ      = $(CORE_DEBUG_TEST_OBJ) $(CORE_DEBUG_GTEST_OBJ)
 CORE_DEBUG_FAST_BIN_OBJ = $(CORE_DEBUG_FAST_TEST_OBJ) $(CORE_DEBUG_FAST_GTEST_OBJ)
 
-CORE_DEBUG_TEST_CXXFLAGS      = $(DEBUG_CXXFLAGS) $(GTEST_CPPFLAGS) -Icore/test
-CORE_DEBUG_FAST_TEST_CXXFLAGS = $(DEBUG_FAST_CXXFLAGS) $(GTEST_CPPFLAGS) -Icore/test
+CORE_DEBUG_TEST_CXXFLAGS      = $(DEBUG_CXXFLAGS) $(GTEST_CPPFLAGS) -Icore/test -Iimmer
+CORE_DEBUG_FAST_TEST_CXXFLAGS = $(DEBUG_FAST_CXXFLAGS) $(GTEST_CPPFLAGS) -Icore/test -Iimmer
 
 # Parser tests
 PARSER_TEST_SRC = $(shell find parser/test -name '*.cpp' | sort)

@@ -47,6 +47,7 @@ protected:
                 case 3: return &var3;
                 case 4: return &var4;
                 case 5: return &var5;
+                case 10: return &var10;
                 default: return &var0;
             }
         });
@@ -76,6 +77,7 @@ protected:
     expr var3{expr::var{3}};
     expr var4{expr::var{4}};
     expr var5{expr::var{5}};
+    expr var10{expr::var{10}};
     expr f_raw{expr::functor{functors.id("f"), {&var0}}};
     expr g_var0{expr::functor{functors.id("g"), {&var0}}};
     expr f_g_var0{expr::functor{functors.id("f"), {&g_var0}}};
@@ -262,4 +264,186 @@ TEST_F(NormalizerUnitTest, SharedTranslationMapRenamesConsistentlyAcrossCalls) {
     EXPECT_EQ(norm.normalize({&var5, 0}, 2, translation), &r3);
     EXPECT_EQ(norm.normalize({&var4, 0}, 2, translation), &r2);
     EXPECT_EQ(translation.size(), 2u);
+}
+
+TEST_F(NormalizerUnitTest, VarAtCutoffIsNotFrozenAndIsRemapped) {
+    expr r2{expr::var{2}};
+    EXPECT_CALL(bm, whnf(framed_expr{&var2, 0})).WillOnce(Return(framed_expr{&var2, 0}));
+    EXPECT_CALL(pool, make_var(2u)).WillOnce(Return(&r2));
+
+    std::unordered_map<uint32_t, uint32_t> translation;
+    EXPECT_EQ(norm.normalize({&var2, 0}, 2, translation), &r2);
+    EXPECT_EQ(translation.at(2u), 2u);
+}
+
+TEST_F(NormalizerUnitTest, FrozenCheckUsesGlobalizedIndexNotRawIndex) {
+    expr r5{expr::var{5}};
+    EXPECT_CALL(bm, whnf(framed_expr{&var0, 10})).WillOnce(Return(framed_expr{&var0, 10}));
+    EXPECT_CALL(pool, make_var(5u)).WillOnce(Return(&r5));
+
+    std::unordered_map<uint32_t, uint32_t> translation;
+    EXPECT_EQ(norm.normalize({&var0, 10}, 5, translation), &r5);
+    EXPECT_EQ(translation.at(10u), 5u);
+}
+
+TEST_F(NormalizerUnitTest, FrozenVarAtNonZeroFrameSkipsWhnfAndKeepsGlobalizedKey) {
+    EXPECT_CALL(bm, whnf(_)).Times(0);
+    EXPECT_CALL(pool, make_var(10u)).WillOnce(Return(&var10));
+
+    std::unordered_map<uint32_t, uint32_t> translation;
+    EXPECT_EQ(norm.normalize({&var0, 10}, 15, translation), &var10);
+    EXPECT_TRUE(translation.empty());
+}
+
+TEST_F(NormalizerUnitTest, PreseededTranslationIsUsedForMatchingKey) {
+    expr r7{expr::var{7}};
+    EXPECT_CALL(pool, make_var(7u)).WillOnce(Return(&r7));
+
+    std::unordered_map<uint32_t, uint32_t> translation;
+    translation.emplace(4u, 7u);
+    EXPECT_EQ(norm.normalize({&var4, 0}, 2, translation), &r7);
+    EXPECT_EQ(translation.size(), 1u);
+}
+
+TEST_F(NormalizerUnitTest, PreseededTranslationAdvancesAssignmentForNewKeys) {
+    expr r3{expr::var{3}};
+    EXPECT_CALL(pool, make_var(3u)).WillOnce(Return(&r3));
+
+    std::unordered_map<uint32_t, uint32_t> translation;
+    translation.emplace(99u, 2u);
+    EXPECT_EQ(norm.normalize({&var4, 0}, 2, translation), &r3);
+    EXPECT_EQ(translation.at(4u), 3u);
+    EXPECT_EQ(translation.at(99u), 2u);
+}
+
+TEST_F(NormalizerUnitTest, FrozenVarIgnoresPreseededTranslationEntry) {
+    EXPECT_CALL(bm, whnf(_)).Times(0);
+    EXPECT_CALL(pool, make_var(0u)).WillOnce(Return(&var0));
+
+    std::unordered_map<uint32_t, uint32_t> translation;
+    translation.emplace(0u, 99u);
+    EXPECT_EQ(norm.normalize({&var0, 0}, 2, translation), &var0);
+    EXPECT_EQ(translation.at(0u), 99u);
+}
+
+TEST_F(NormalizerUnitTest, HighVarThatWhnfsToAnotherHighVarIsRemappedFromResultKey) {
+    expr r2{expr::var{2}};
+    EXPECT_CALL(bm, whnf(framed_expr{&var5, 0})).WillOnce(Return(framed_expr{&var4, 0}));
+    EXPECT_CALL(pool, make_var(2u)).WillOnce(Return(&r2));
+
+    std::unordered_map<uint32_t, uint32_t> translation;
+    EXPECT_EQ(norm.normalize({&var5, 0}, 2, translation), &r2);
+    EXPECT_EQ(translation.size(), 1u);
+    EXPECT_EQ(translation.at(4u), 2u);
+    EXPECT_FALSE(translation.contains(5u));
+}
+
+TEST_F(NormalizerUnitTest, HighVarThatWhnfsToAlreadyTranslatedHighVarReusesEntry) {
+    expr r2{expr::var{2}};
+    EXPECT_CALL(pool, make_var(2u)).Times(2).WillRepeatedly(Return(&r2));
+    EXPECT_CALL(bm, whnf(framed_expr{&var4, 0})).WillOnce(Return(framed_expr{&var4, 0}));
+    EXPECT_CALL(bm, whnf(framed_expr{&var5, 0})).WillOnce(Return(framed_expr{&var4, 0}));
+
+    std::unordered_map<uint32_t, uint32_t> translation;
+    EXPECT_EQ(norm.normalize({&var4, 0}, 2, translation), &r2);
+    EXPECT_EQ(norm.normalize({&var5, 0}, 2, translation), &r2);
+    EXPECT_EQ(translation.size(), 1u);
+    EXPECT_EQ(translation.at(4u), 2u);
+}
+
+TEST_F(NormalizerUnitTest, MixedFrozenAndLeftoverArgsPreserveFrozenAndCompactLeftovers) {
+    expr mixed{expr::functor{functors.id("f"), {&var0, &var4, &var1, &var5}}};
+    expr r0{expr::var{0}};
+    expr r1{expr::var{1}};
+    expr r2{expr::var{2}};
+    expr r3{expr::var{3}};
+
+    EXPECT_CALL(pool, make_var(0u)).WillOnce(Return(&r0));
+    EXPECT_CALL(pool, make_var(2u)).WillOnce(Return(&r2));
+    EXPECT_CALL(pool, make_var(1u)).WillOnce(Return(&r1));
+    EXPECT_CALL(pool, make_var(3u)).WillOnce(Return(&r3));
+    EXPECT_CALL(pool, make_functor(functors.id("f"), ElementsAre(&r0, &r2, &r1, &r3)))
+        .WillOnce(Return(&pooled_f));
+
+    std::unordered_map<uint32_t, uint32_t> translation;
+    EXPECT_EQ(norm.normalize({&mixed, 0}, 2, translation), &pooled_f);
+}
+
+TEST_F(NormalizerUnitTest, LeftoverEncounterOrderFollowsWalkNotNumericOrder) {
+    expr h45{expr::functor{functors.id("h"), {&var4, &var5}}};
+    expr g01{expr::functor{functors.id("g"), {&var0, &var1}}};
+    expr fhg{expr::functor{functors.id("f"), {&h45, &g01}}};
+    expr r0{expr::var{0}};
+    expr r1{expr::var{1}};
+    expr r2{expr::var{2}};
+    expr r3{expr::var{3}};
+
+    EXPECT_CALL(pool, make_var(2u)).WillOnce(Return(&r2));
+    EXPECT_CALL(pool, make_var(3u)).WillOnce(Return(&r3));
+    EXPECT_CALL(pool, make_var(0u)).WillOnce(Return(&r0));
+    EXPECT_CALL(pool, make_var(1u)).WillOnce(Return(&r1));
+    EXPECT_CALL(pool, make_functor(functors.id("h"), ElementsAre(&r2, &r3)))
+        .WillOnce(Return(&pooled_h));
+    EXPECT_CALL(pool, make_functor(functors.id("g"), ElementsAre(&r0, &r1)))
+        .WillOnce(Return(&pooled_g));
+    EXPECT_CALL(pool, make_functor(functors.id("f"), ElementsAre(&pooled_h, &pooled_g)))
+        .WillOnce(Return(&pooled_f));
+
+    std::unordered_map<uint32_t, uint32_t> translation;
+    EXPECT_EQ(norm.normalize({&fhg, 0}, 2, translation), &pooled_f);
+    EXPECT_EQ(translation.at(4u), 2u);
+    EXPECT_EQ(translation.at(5u), 3u);
+}
+
+TEST_F(NormalizerUnitTest, SameRawIndexAtDifferentFramesGetsDistinctTranslations) {
+    expr r2{expr::var{2}};
+    expr r3{expr::var{3}};
+    EXPECT_CALL(pool, make_var(2u)).WillOnce(Return(&r2));
+    EXPECT_CALL(pool, make_var(3u)).WillOnce(Return(&r3));
+
+    std::unordered_map<uint32_t, uint32_t> translation;
+    EXPECT_EQ(norm.normalize({&var4, 0}, 2, translation), &r2);
+    EXPECT_EQ(norm.normalize({&var4, 10}, 2, translation), &r3);
+    EXPECT_EQ(translation.at(4u), 2u);
+    EXPECT_EQ(translation.at(14u), 3u);
+}
+
+TEST_F(NormalizerUnitTest, IndependentMapsDoNotShareTranslations) {
+    expr r2{expr::var{2}};
+    EXPECT_CALL(pool, make_var(2u)).Times(2).WillRepeatedly(Return(&r2));
+
+    std::unordered_map<uint32_t, uint32_t> first;
+    std::unordered_map<uint32_t, uint32_t> second;
+    EXPECT_EQ(norm.normalize({&var4, 0}, 2, first), &r2);
+    EXPECT_EQ(norm.normalize({&var5, 0}, 2, second), &r2);
+    EXPECT_EQ(first.at(4u), 2u);
+    EXPECT_EQ(second.at(5u), 2u);
+    EXPECT_FALSE(first.contains(5u));
+    EXPECT_FALSE(second.contains(4u));
+}
+
+TEST_F(NormalizerUnitTest, FunctorIsWhnfdEvenWhenArgsAreFrozen) {
+    EXPECT_CALL(bm, whnf(framed_expr{&f_raw, 0})).WillOnce(Return(framed_expr{&f_raw, 0}));
+    EXPECT_CALL(bm, whnf(framed_expr{&var0, 0})).Times(0);
+    EXPECT_CALL(pool, make_var(0u)).WillOnce(Return(&var0));
+    EXPECT_CALL(pool, make_functor(functors.id("f"), ElementsAre(&var0)))
+        .WillOnce(Return(&pooled_f));
+
+    std::unordered_map<uint32_t, uint32_t> translation;
+    EXPECT_EQ(norm.normalize({&f_raw, 0}, 2, translation), &pooled_f);
+}
+
+TEST_F(NormalizerUnitTest, HighVarWhnfToFunctorAtDifferentFrameRemapsArgs) {
+    expr r2{expr::var{2}};
+    EXPECT_CALL(bm, whnf(framed_expr{&var4, 0}))
+        .WillOnce(Return(framed_expr{&f_raw, 7}));
+    EXPECT_CALL(bm, whnf(framed_expr{&var0, 7}))
+        .WillOnce(Return(framed_expr{&var0, 7}));
+    EXPECT_CALL(pool, make_var(2u)).WillOnce(Return(&r2));
+    EXPECT_CALL(pool, make_functor(functors.id("f"), ElementsAre(&r2)))
+        .WillOnce(Return(&pooled_f));
+
+    std::unordered_map<uint32_t, uint32_t> translation;
+    EXPECT_EQ(norm.normalize({&var4, 0}, 2, translation), &pooled_f);
+    EXPECT_EQ(translation.at(7u), 2u);
 }

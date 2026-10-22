@@ -221,3 +221,135 @@ TEST_F(NormalizerIntegrationTest, IdempotentAfterCutoffRemap) {
     const expr* p2 = norm->normalize({p1, 0}, 2, again);
     EXPECT_EQ(p1, p2);
 }
+
+TEST_F(NormalizerIntegrationTest, VarAtCutoffIsRemappedNotFrozen) {
+    const expr* p = normalize_at(&var2, 2);
+    ASSERT_TRUE(std::holds_alternative<expr::var>(p->content));
+    EXPECT_EQ(std::get<expr::var>(p->content).index, 2u);
+}
+
+TEST_F(NormalizerIntegrationTest, BindingSubstitutesOnlyNonFrozenArgs) {
+    const expr* a = pool->make_functor(functors.id("a"), {});
+    const expr* b = pool->make_functor(functors.id("b"), {});
+    bm->bind(0, {a, 0});
+    bm->bind(4, {b, 0});
+    expr raw{expr::functor{functors.id("f"), {&var0, &var4}}};
+    std::unordered_map<uint32_t, uint32_t> translation;
+    const expr* p = norm->normalize({&raw, 0}, 2, translation);
+    const expr::functor& out = std::get<expr::functor>(p->content);
+    ASSERT_EQ(out.args.size(), 2u);
+    EXPECT_TRUE(std::holds_alternative<expr::var>(out.args[0]->content));
+    EXPECT_EQ(std::get<expr::var>(out.args[0]->content).index, 0u);
+    EXPECT_EQ(out.args[1], b);
+}
+
+TEST_F(NormalizerIntegrationTest, HighVarChainWhnfsThroughIntermediateToFrozen) {
+    bm->bind(4, {&var0, 0});
+    bm->bind(5, {&var4, 0});
+    std::unordered_map<uint32_t, uint32_t> translation;
+    const expr* p = norm->normalize({&var5, 0}, 2, translation);
+    ASSERT_TRUE(std::holds_alternative<expr::var>(p->content));
+    EXPECT_EQ(std::get<expr::var>(p->content).index, 0u);
+    EXPECT_TRUE(translation.empty());
+}
+
+TEST_F(NormalizerIntegrationTest, HighVarChainWhnfsThroughIntermediateToLeftover) {
+    bm->bind(5, {&var4, 0});
+    std::unordered_map<uint32_t, uint32_t> translation;
+    const expr* p = norm->normalize({&var5, 0}, 2, translation);
+    ASSERT_TRUE(std::holds_alternative<expr::var>(p->content));
+    EXPECT_EQ(std::get<expr::var>(p->content).index, 2u);
+    EXPECT_EQ(translation.at(4u), 2u);
+    EXPECT_FALSE(translation.contains(5u));
+}
+
+TEST_F(NormalizerIntegrationTest, SharedMapAcrossSeparateNormalizeCallsMatchesUnfolder) {
+    expr head{expr::functor{functors.id("f"), {&var4}}};
+    expr body{expr::functor{functors.id("g"), {&var4, &var5}}};
+    std::unordered_map<uint32_t, uint32_t> translation;
+    const expr* new_head = norm->normalize({&head, 0}, 0, translation);
+    const expr* new_body = norm->normalize({&body, 0}, 0, translation);
+    EXPECT_EQ(std::get<expr::var>(std::get<expr::functor>(new_head->content).args[0]->content).index, 0u);
+    const expr::functor& body_f = std::get<expr::functor>(new_body->content);
+    EXPECT_EQ(std::get<expr::var>(body_f.args[0]->content).index, 0u);
+    EXPECT_EQ(std::get<expr::var>(body_f.args[1]->content).index, 1u);
+    EXPECT_EQ(translation.size(), 2u);
+}
+
+TEST_F(NormalizerIntegrationTest, SameRawIndexAtDifferentFramesAreDistinctLeftovers) {
+    std::unordered_map<uint32_t, uint32_t> translation;
+    const expr* first = norm->normalize({&var0, 0}, 0, translation);
+    const expr* second = norm->normalize({&var0, 3}, 0, translation);
+    EXPECT_EQ(std::get<expr::var>(first->content).index, 0u);
+    EXPECT_EQ(std::get<expr::var>(second->content).index, 1u);
+    EXPECT_EQ(translation.size(), 2u);
+}
+
+TEST_F(NormalizerIntegrationTest, SparseVarsCompactInEncounterOrderAtCutoffZero) {
+    expr raw{expr::functor{functors.id("f"), {&var5, &var4}}};
+    const expr* p = norm0(&raw);
+    const expr::functor& out = std::get<expr::functor>(p->content);
+    EXPECT_EQ(std::get<expr::var>(out.args[0]->content).index, 0u);
+    EXPECT_EQ(std::get<expr::var>(out.args[1]->content).index, 1u);
+}
+
+TEST_F(NormalizerIntegrationTest, NestedSharedLeftoverGetsOneIndex) {
+    expr inner_g{expr::functor{functors.id("g"), {&var4}}};
+    expr inner_h{expr::functor{functors.id("h"), {&var4}}};
+    expr raw{expr::functor{functors.id("f"), {&inner_g, &inner_h}}};
+    std::unordered_map<uint32_t, uint32_t> translation;
+    const expr* p = norm->normalize({&raw, 0}, 2, translation);
+    const expr::functor& outer = std::get<expr::functor>(p->content);
+    const expr::functor& g = std::get<expr::functor>(outer.args[0]->content);
+    const expr::functor& h = std::get<expr::functor>(outer.args[1]->content);
+    EXPECT_EQ(std::get<expr::var>(g.args[0]->content).index, 2u);
+    EXPECT_EQ(std::get<expr::var>(h.args[0]->content).index, 2u);
+    EXPECT_EQ(translation.size(), 1u);
+}
+
+TEST_F(NormalizerIntegrationTest, LeftoverBoundToFunctorWithFrozenArg) {
+    expr g_var0{expr::functor{functors.id("g"), {&var0}}};
+    bm->bind(4, {&g_var0, 0});
+    std::unordered_map<uint32_t, uint32_t> translation;
+    const expr* p = norm->normalize({&var4, 0}, 2, translation);
+    const expr::functor& out = std::get<expr::functor>(p->content);
+    EXPECT_EQ(out.id, functors.id("g"));
+    EXPECT_EQ(std::get<expr::var>(out.args[0]->content).index, 0u);
+    EXPECT_TRUE(translation.empty());
+}
+
+TEST_F(NormalizerIntegrationTest, NonZeroFrameBindingIsWhnfdAtCutoffZero) {
+    const expr* f = pool_f();
+    bm->bind(10, {f, 0});
+    std::unordered_map<uint32_t, uint32_t> translation;
+    EXPECT_EQ(norm->normalize({&var0, 10}, 0, translation), f);
+}
+
+TEST_F(NormalizerIntegrationTest, NonZeroFrameFrozenSkipsFrameBinding) {
+    const expr* f = pool_f();
+    bm->bind(10, {f, 0});
+    std::unordered_map<uint32_t, uint32_t> translation;
+    const expr* p = norm->normalize({&var0, 10}, 15, translation);
+    ASSERT_TRUE(std::holds_alternative<expr::var>(p->content));
+    EXPECT_EQ(std::get<expr::var>(p->content).index, 10u);
+}
+
+TEST_F(NormalizerIntegrationTest, CutoffOneFreezesOnlyVarZero) {
+    expr raw{expr::functor{functors.id("f"), {&var0, &var1, &var2}}};
+    std::unordered_map<uint32_t, uint32_t> translation;
+    const expr* p = norm->normalize({&raw, 0}, 1, translation);
+    const expr::functor& out = std::get<expr::functor>(p->content);
+    EXPECT_EQ(std::get<expr::var>(out.args[0]->content).index, 0u);
+    EXPECT_EQ(std::get<expr::var>(out.args[1]->content).index, 1u);
+    EXPECT_EQ(std::get<expr::var>(out.args[2]->content).index, 2u);
+    EXPECT_EQ(translation.size(), 2u);
+    EXPECT_EQ(translation.at(1u), 1u);
+    EXPECT_EQ(translation.at(2u), 2u);
+}
+
+TEST_F(NormalizerIntegrationTest, IndependentNormalizeCallsDoNotShareTranslation) {
+    const expr* p4 = normalize_at(&var4, 2);
+    const expr* p5 = normalize_at(&var5, 2);
+    EXPECT_EQ(std::get<expr::var>(p4->content).index, 2u);
+    EXPECT_EQ(std::get<expr::var>(p5->content).index, 2u);
+}

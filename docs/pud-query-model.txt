@@ -1,0 +1,44 @@
+PUD query model (corrections)
+
+Every callee in a query, axiom or inference, has its expressions lifted to
+QUERY_LVC. There is no "axioms at LVC, inferences at frame 0" split. If a
+sentence starts with "for axioms we do X and for inferences we do Y", it is
+probably wrong. The database is uniform.
+
+Replay is unify, never FPA record. added_unifications stores var indices (lhs)
+and exprs normalized at a prior LVC (rhs). On enter, lift both sides into this
+query:
+
+  unify(framed_expr{make_var(lhs), QUERY_LVC},
+        framed_expr{rhs,            QUERY_LVC})
+
+That is every pair in the vector, including axiom {0, head}. record cannot fail.
+unify can. Unify failure means that node and everything under it in this query
+is refuted.
+
+Query start is not unify. After the query om_interval exists, var(0)@LVC is
+fresh, so bind it to the query body (framed_expr{body, 0}). That cannot fail.
+
+bind, not record. Do not call FPA record for the hole. Use
+hierarchical_bind_map::bind.
+
+try_enter does not bind the hole. try_enter only replays added_unifications and
+sees if they fail.
+
+Even axiom {0, head} replay can fail (functor mismatch against the already-bound
+hole). Query-vs-head is that pair, not a second special unify.
+
+var(0) is reserved as the head hole. Rule vars start at 1. Callers of add_axiom
+stay 0-based. The adder shifts by normalizing head and every body goal at frame
+1 with one shared translation map. lvc = 1 + translation.size().
+
+{0, head} is the head-hole unification, not Prolog var 0 of the rule.
+
+The query root lives in the same om_interval map. Intern key is
+{caller, goal_idx, nullptr}. That interval is the OM parent axioms inherit in
+this query. Do not use make_inference(leaf, idx, leaf) as the query root (that
+intern is the leaf as callee / later unfolded child). A bare nullptr map key is
+not needed.
+
+Hole bind happens at query birth (install / leftover fork), on that query-root
+interval, before search resumes.
