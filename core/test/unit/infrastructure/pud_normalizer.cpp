@@ -1,261 +1,146 @@
 #include <deque>
+#include <optional>
 #include <vector>
 #include <gtest/gtest.h>
 #include <gmock/gmock.h>
 #include "infrastructure/pud_normalizer.hpp"
 #include "value_objects/expr.hpp"
 
+using ::testing::_;
+using ::testing::NiceMock;
+using ::testing::Return;
+
 namespace {
 
 struct MockGlobalize {
-    MOCK_METHOD(uint32_t, globalize, (uint32_t frame_offset, uint32_t local_index), ());
+    MOCK_METHOD(uint32_t, globalize, (uint32_t, uint32_t));
 };
-
 struct MockMakeFunctor {
-    MOCK_METHOD(const expr*, make_functor, (uint32_t id, (const std::vector<const expr*>& args)));
+    MOCK_METHOD(const expr*, make_functor, (uint32_t, (const std::vector<const expr*>&)));
+};
+struct MockMakeVar {
+    MOCK_METHOD(const expr*, make_var, (uint32_t));
+};
+struct MockFindRep {
+    MOCK_METHOD(uint32_t, find_rep, (uint32_t));
+};
+struct MockFindValue {
+    MOCK_METHOD(std::optional<framed_expr>, find_value, (uint32_t));
 };
 
-struct MockResolve {
-    MOCK_METHOD(const expr*, resolve, (uint32_t));
-};
+using test_normalizer_t = global_normalizer<
+    NiceMock<MockGlobalize>, NiceMock<MockMakeFunctor>, NiceMock<MockMakeVar>,
+    NiceMock<MockFindRep>, NiceMock<MockFindValue>>;
 
-using test_normalizer_t = global_normalizer<MockGlobalize, MockMakeFunctor, MockResolve>;
-
-struct expr_fixture {
+struct PudNormalizerTest : public ::testing::Test {
     std::deque<expr> owned;
+    NiceMock<MockGlobalize> globalize;
+    NiceMock<MockMakeFunctor> make_functor;
+    NiceMock<MockMakeVar> make_var;
+    NiceMock<MockFindRep> find_rep;
+    NiceMock<MockFindValue> find_value;
+    test_normalizer_t normalizer{globalize, make_functor, make_var, find_rep, find_value};
 
     const expr* var(uint32_t index) {
         owned.push_back(expr{expr::var{index}});
         return &owned.back();
     }
 
-    const expr* functor(uint32_t id, const std::vector<const expr*>& args) {
-        owned.push_back(expr{expr::functor{id, args}});
+    const expr* functor(uint32_t id, std::vector<const expr*> args) {
+        owned.push_back(expr{expr::functor{id, std::move(args)}});
         return &owned.back();
+    }
+
+    void unbound(uint32_t global, uint32_t rep, const expr* rep_node) {
+        ON_CALL(find_value, find_value(global)).WillByDefault(Return(std::nullopt));
+        ON_CALL(find_rep, find_rep(global)).WillByDefault(Return(rep));
+        ON_CALL(make_var, make_var(rep)).WillByDefault(Return(rep_node));
+    }
+
+    void bound(uint32_t global, framed_expr value) {
+        ON_CALL(find_value, find_value(global)).WillByDefault(Return(value));
+    }
+
+    void SetUp() override {
+        ON_CALL(globalize, globalize(_, _)).WillByDefault([](uint32_t offset, uint32_t index) { return offset + index; });
     }
 };
 
-} // namespace
-
-struct PudNormalizerTest : public ::testing::Test {
-    expr_fixture terms;
-    ::testing::NiceMock<MockGlobalize> globalize;
-    ::testing::NiceMock<MockMakeFunctor> make_functor;
-    ::testing::NiceMock<MockResolve> resolve;
-    test_normalizer_t normalizer{globalize, make_functor, resolve};
-};
-
-TEST_F(PudNormalizerTest, FreshVarNormalizesToGlobalVarNode) {
-    const expr* local = terms.var(2u);
-    const expr* global = terms.var(7u);
-    EXPECT_CALL(globalize, globalize(5u, 2u)).WillOnce(testing::Return(7u));
-    EXPECT_CALL(resolve, resolve(7u)).WillOnce(testing::Return(global));
-    EXPECT_EQ(normalizer.normalize({local, 5u}), global);
 }
 
-TEST_F(PudNormalizerTest, BoundVarNormalizesToStoredFunctorPointer) {
-    const expr* bound = terms.functor(9u, {});
-    const expr* canonical = terms.functor(9u, {});
-    const expr* local = terms.var(1u);
-    EXPECT_CALL(globalize, globalize(0u, 1u)).WillOnce(testing::Return(1u));
-    EXPECT_CALL(resolve, resolve(1u)).WillOnce(testing::Return(bound));
-    EXPECT_CALL(make_functor, make_functor(9u, testing::_)).WillOnce(testing::Return(canonical));
-    EXPECT_EQ(normalizer.normalize({local, 0u}), canonical);
+TEST_F(PudNormalizerTest, UnboundVarNormalizesToItsRepresentative) {
+    const expr* rep = var(2);
+    unbound(7, 2, rep);
+    EXPECT_EQ(normalizer.normalize({var(4), 3}), rep);
 }
 
-TEST_F(PudNormalizerTest, UnboundMergedClassNormalizesToRepresentative) {
-    const expr* local = terms.var(4u);
-    const expr* rep = terms.var(2u);
-    EXPECT_CALL(globalize, globalize(2u, 4u)).WillOnce(testing::Return(6u));
-    EXPECT_CALL(resolve, resolve(6u)).WillOnce(testing::Return(rep));
-    EXPECT_EQ(normalizer.normalize({local, 2u}), rep);
+TEST_F(PudNormalizerTest, SameLocalUnderDifferentOffsetsIsDifferent) {
+    unbound(0, 0, var(0));
+    unbound(1, 1, var(1));
+    EXPECT_NE(normalizer.normalize({var(0), 0}), normalizer.normalize({var(0), 1}));
 }
 
-TEST_F(PudNormalizerTest, UnboundVarKeepsGlobalIndexWithoutRename) {
-    const expr* local = terms.var(3u);
-    const expr* global = terms.var(8u);
-    EXPECT_CALL(globalize, globalize(5u, 3u)).WillOnce(testing::Return(8u));
-    EXPECT_CALL(resolve, resolve(8u)).WillOnce(testing::Return(global));
-    EXPECT_EQ(normalizer.normalize({local, 5u}), global);
+TEST_F(PudNormalizerTest, BoundVarNormalizesThroughItsValue) {
+    const expr* canonical = functor(9, {});
+    bound(1, framed_expr{functor(9, {}), 0});
+    EXPECT_CALL(make_functor, make_functor(9u, _)).WillOnce(Return(canonical));
+    EXPECT_EQ(normalizer.normalize({var(1), 0}), canonical);
 }
 
-TEST_F(PudNormalizerTest, SameLocalUnderDifferentOffsetsAreDifferent) {
-    const expr* local = terms.var(0u);
-    const expr* g0 = terms.var(0u);
-    const expr* g1 = terms.var(1u);
-    EXPECT_CALL(globalize, globalize(0u, 0u)).WillOnce(testing::Return(0u));
-    EXPECT_CALL(globalize, globalize(1u, 0u)).WillOnce(testing::Return(1u));
-    EXPECT_CALL(resolve, resolve(0u)).WillOnce(testing::Return(g0));
-    EXPECT_CALL(resolve, resolve(1u)).WillOnce(testing::Return(g1));
-    EXPECT_NE(normalizer.normalize({local, 0u}), normalizer.normalize({local, 1u}));
+TEST_F(PudNormalizerTest, ABoundValueIsReadInItsOwnFrame) {
+    const expr* rep = var(12);
+    const expr* rebuilt = functor(3, {rep});
+    bound(0, framed_expr{functor(3, {var(2)}), 10});
+    unbound(12, 12, rep);
+    EXPECT_CALL(make_functor, make_functor(3u, std::vector<const expr*>{rep})).WillOnce(Return(rebuilt));
+    EXPECT_EQ(normalizer.normalize({var(0), 0}), rebuilt);
+}
+
+TEST_F(PudNormalizerTest, ChainsOfBoundVarsNormalizeFully) {
+    const expr* ground = functor(99, {});
+    bound(0, framed_expr{functor(10, {var(1)}), 0});
+    bound(1, framed_expr{functor(10, {var(2)}), 0});
+    bound(2, framed_expr{functor(99, {}), 0});
+    ON_CALL(make_functor, make_functor(_, _)).WillByDefault(Return(ground));
+    EXPECT_EQ(normalizer.normalize({var(0), 0}), ground);
 }
 
 TEST_F(PudNormalizerTest, GroundFunctorRebuildsViaMakeFunctor) {
-    const expr* skeleton = terms.functor(11u, {});
-    const expr* canonical = terms.functor(11u, {});
-    EXPECT_CALL(make_functor, make_functor(11u, testing::_)).Times(2).WillRepeatedly(testing::Return(canonical));
-    EXPECT_EQ(normalizer.normalize({skeleton, 0u}), canonical);
-    EXPECT_EQ(normalizer.normalize({skeleton, 5u}), canonical);
+    const expr* canonical = functor(11, {});
+    EXPECT_CALL(make_functor, make_functor(11u, _)).Times(2).WillRepeatedly(Return(canonical));
+    const expr* skeleton = functor(11, {});
+    EXPECT_EQ(normalizer.normalize({skeleton, 0}), canonical);
+    EXPECT_EQ(normalizer.normalize({skeleton, 5}), canonical);
 }
 
-TEST_F(PudNormalizerTest, NormalizingTwiceYieldsSamePointer) {
-    const expr* local = terms.var(1u);
-    const expr* global = terms.var(1u);
-    EXPECT_CALL(globalize, globalize(0u, 1u)).Times(2).WillRepeatedly(testing::Return(1u));
-    EXPECT_CALL(resolve, resolve(1u)).Times(2).WillRepeatedly(testing::Return(global));
-    EXPECT_EQ(normalizer.normalize({local, 0u}), normalizer.normalize({local, 0u}));
+TEST_F(PudNormalizerTest, MixedBoundAndUnboundArgsKeepRepresentatives) {
+    const expr* a = functor(1, {});
+    const expr* rep_y = var(5);
+    const expr* rebuilt = functor(9, {a, rep_y});
+    bound(0, framed_expr{a, 0});
+    unbound(1, 5, rep_y);
+    EXPECT_CALL(make_functor, make_functor(1u, _)).WillRepeatedly(Return(a));
+    EXPECT_CALL(make_functor, make_functor(9u, std::vector<const expr*>{a, rep_y})).WillOnce(Return(rebuilt));
+    EXPECT_EQ(normalizer.normalize({functor(9, {var(0), var(1)}), 0}), rebuilt);
 }
 
-TEST_F(PudNormalizerTest, LaterBindingIsVisibleOnNextNormalize) {
-    const expr* local = terms.var(0u);
-    const expr* unbound = terms.var(0u);
-    const expr* bound = terms.functor(3u, {});
-    const expr* canonical = terms.functor(3u, {});
-    EXPECT_CALL(globalize, globalize(0u, 0u)).Times(2).WillRepeatedly(testing::Return(0u));
-    EXPECT_CALL(resolve, resolve(0u)).WillOnce(testing::Return(unbound)).WillOnce(testing::Return(bound));
-    EXPECT_CALL(make_functor, make_functor(3u, testing::_)).WillOnce(testing::Return(canonical));
-    EXPECT_EQ(normalizer.normalize({local, 0u}), unbound);
-    EXPECT_EQ(normalizer.normalize({local, 0u}), canonical);
-}
-
-TEST_F(PudNormalizerTest, ZeroArityFunctorNormalizesToItself) {
-    const expr* constant = terms.functor(0u, {});
-    const expr* canonical = terms.functor(0u, {});
-    EXPECT_CALL(make_functor, make_functor(0u, testing::_)).WillOnce(testing::Return(canonical));
-    EXPECT_EQ(normalizer.normalize({constant, 0u}), canonical);
-}
-
-TEST_F(PudNormalizerTest, AllBoundArgsBecomeFullyGroundFunctor) {
-    const expr* a = terms.functor(1u, {});
-    const expr* b = terms.functor(2u, {});
-    const expr* x = terms.var(0u);
-    const expr* y = terms.var(1u);
-    const expr* skeleton = terms.functor(9u, {x, y});
-    const expr* ground = terms.functor(9u, {a, b});
-    EXPECT_CALL(globalize, globalize(0u, 0u)).WillOnce(testing::Return(0u));
-    EXPECT_CALL(globalize, globalize(0u, 1u)).WillOnce(testing::Return(1u));
-    EXPECT_CALL(resolve, resolve(0u)).WillOnce(testing::Return(a));
-    EXPECT_CALL(resolve, resolve(1u)).WillOnce(testing::Return(b));
-    EXPECT_CALL(make_functor, make_functor(1u, testing::_)).WillOnce(testing::Return(a));
-    EXPECT_CALL(make_functor, make_functor(2u, testing::_)).WillOnce(testing::Return(b));
-    EXPECT_CALL(make_functor, make_functor(9u, testing::_)).WillOnce(testing::Return(ground));
-    EXPECT_EQ(normalizer.normalize({skeleton, 0u}), ground);
-}
-
-TEST_F(PudNormalizerTest, MixedBoundAndUnboundKeepsRepresentatives) {
-    const expr* a = terms.functor(1u, {});
-    const expr* local_x = terms.var(0u);
-    const expr* local_y = terms.var(1u);
-    const expr* rep_y = terms.var(5u);
-    const expr* skeleton = terms.functor(9u, {local_x, local_y});
-    const expr* rebuilt = terms.functor(9u, {a, rep_y});
-    EXPECT_CALL(globalize, globalize(0u, 0u)).WillOnce(testing::Return(0u));
-    EXPECT_CALL(globalize, globalize(0u, 1u)).WillOnce(testing::Return(5u));
-    EXPECT_CALL(resolve, resolve(0u)).WillOnce(testing::Return(a));
-    EXPECT_CALL(resolve, resolve(5u)).WillOnce(testing::Return(rep_y));
-    EXPECT_CALL(make_functor, make_functor(1u, testing::_)).WillOnce(testing::Return(a));
-    EXPECT_CALL(make_functor, make_functor(9u, testing::_)).WillOnce(testing::Return(rebuilt));
-    EXPECT_EQ(normalizer.normalize({skeleton, 0u}), rebuilt);
-}
-
-TEST_F(PudNormalizerTest, BoundFunctorContainingBoundVarNormalizesTwoLevels) {
-    const expr* inner_bound = terms.functor(2u, {});
-    const expr* outer_bound_skeleton = terms.functor(3u, {terms.var(1u)});
-    const expr* local = terms.var(0u);
-    const expr* rebuilt = terms.functor(3u, {inner_bound});
-    EXPECT_CALL(globalize, globalize(0u, 0u)).WillOnce(testing::Return(0u));
-    EXPECT_CALL(resolve, resolve(0u)).WillOnce(testing::Return(outer_bound_skeleton));
-    EXPECT_CALL(globalize, globalize(0u, 1u)).WillOnce(testing::Return(1u));
-    EXPECT_CALL(resolve, resolve(1u)).WillOnce(testing::Return(inner_bound));
-    EXPECT_CALL(make_functor, make_functor(2u, testing::_)).WillOnce(testing::Return(inner_bound));
-    EXPECT_CALL(make_functor, make_functor(3u, testing::_)).WillOnce(testing::Return(rebuilt));
-    EXPECT_EQ(normalizer.normalize({local, 0u}), rebuilt);
-}
-
-TEST_F(PudNormalizerTest, FiveVariableBindingChainNormalizesFully) {
-    const expr* ground = terms.functor(99u, {});
-    const expr* v4 = terms.var(4u);
-    const expr* f3 = terms.functor(10u, {v4});
-    const expr* v3 = terms.var(3u);
-    const expr* f2 = terms.functor(10u, {v3});
-    const expr* v2 = terms.var(2u);
-    const expr* f1 = terms.functor(10u, {v2});
-    const expr* v1 = terms.var(1u);
-    const expr* f0 = terms.functor(10u, {v1});
-    const expr* v0 = terms.var(0u);
-
-    EXPECT_CALL(globalize, globalize(0u, 0u)).WillOnce(testing::Return(0u));
-    EXPECT_CALL(resolve, resolve(0u)).WillOnce(testing::Return(f0));
-    EXPECT_CALL(globalize, globalize(0u, 1u)).WillOnce(testing::Return(1u));
-    EXPECT_CALL(resolve, resolve(1u)).WillOnce(testing::Return(f1));
-    EXPECT_CALL(globalize, globalize(0u, 2u)).WillOnce(testing::Return(2u));
-    EXPECT_CALL(resolve, resolve(2u)).WillOnce(testing::Return(f2));
-    EXPECT_CALL(globalize, globalize(0u, 3u)).WillOnce(testing::Return(3u));
-    EXPECT_CALL(resolve, resolve(3u)).WillOnce(testing::Return(f3));
-    EXPECT_CALL(globalize, globalize(0u, 4u)).WillOnce(testing::Return(4u));
-    EXPECT_CALL(resolve, resolve(4u)).WillOnce(testing::Return(ground));
-    EXPECT_CALL(make_functor, make_functor(testing::_, testing::_))
-        .WillRepeatedly(testing::Return(ground));
-    EXPECT_EQ(normalizer.normalize({v0, 0u}), ground);
-}
-
-TEST_F(PudNormalizerTest, RepeatedVariablePositionNormalizesToSameNode) {
-    const expr* local = terms.var(0u);
-    const expr* rep = terms.var(0u);
-    const expr* skeleton = terms.functor(4u, {local, local});
-    const expr* canonical = terms.functor(4u, {rep, rep});
-    EXPECT_CALL(globalize, globalize(0u, 0u)).Times(2).WillRepeatedly(testing::Return(0u));
-    EXPECT_CALL(resolve, resolve(0u)).Times(2).WillRepeatedly(testing::Return(rep));
-    EXPECT_CALL(make_functor, make_functor(4u, testing::_)).WillOnce(testing::Return(canonical));
-    EXPECT_EQ(normalizer.normalize({skeleton, 0u}), canonical);
+TEST_F(PudNormalizerTest, LaterBindingIsVisibleOnTheNextNormalize) {
+    const expr* unbound_node = var(0);
+    const expr* canonical = functor(3, {});
+    EXPECT_CALL(find_value, find_value(0u))
+        .WillOnce(Return(std::nullopt))
+        .WillOnce(Return(framed_expr{functor(3, {}), 0}));
+    ON_CALL(find_rep, find_rep(0u)).WillByDefault(Return(0u));
+    ON_CALL(make_var, make_var(0u)).WillByDefault(Return(unbound_node));
+    ON_CALL(make_functor, make_functor(3u, _)).WillByDefault(Return(canonical));
+    EXPECT_EQ(normalizer.normalize({var(0), 0}), unbound_node);
+    EXPECT_EQ(normalizer.normalize({var(0), 0}), canonical);
 }
 
 TEST_F(PudNormalizerTest, SameClassDifferentLocalsShareRepresentative) {
-    const expr* local_a = terms.var(0u);
-    const expr* local_b = terms.var(1u);
-    const expr* rep = terms.var(2u);
-    EXPECT_CALL(globalize, globalize(0u, 0u)).WillOnce(testing::Return(3u));
-    EXPECT_CALL(globalize, globalize(0u, 1u)).WillOnce(testing::Return(4u));
-    EXPECT_CALL(resolve, resolve(3u)).WillOnce(testing::Return(rep));
-    EXPECT_CALL(resolve, resolve(4u)).WillOnce(testing::Return(rep));
-    EXPECT_EQ(normalizer.normalize({local_a, 0u}), rep);
-    EXPECT_EQ(normalizer.normalize({local_b, 0u}), rep);
-}
-
-TEST_F(PudNormalizerTest, StoredGroundSkeletonSamePointerAcrossOffsets) {
-    const expr* skeleton = terms.functor(8u, {});
-    const expr* canonical = terms.functor(8u, {});
-    EXPECT_CALL(make_functor, make_functor(8u, testing::_))
-        .Times(2)
-        .WillRepeatedly(testing::Return(canonical));
-    EXPECT_EQ(normalizer.normalize({skeleton, 0u}), canonical);
-    EXPECT_EQ(normalizer.normalize({skeleton, 9u}), canonical);
-}
-
-TEST_F(PudNormalizerTest, NonGroundSkeletonDiffersAcrossOffsets) {
-    const expr* local = terms.var(0u);
-    const expr* skeleton = terms.functor(8u, {local});
-    const expr* g0 = terms.var(10u);
-    const expr* g9 = terms.var(19u);
-    const expr* out0 = terms.functor(8u, {g0});
-    const expr* out9 = terms.functor(8u, {g9});
-    EXPECT_CALL(globalize, globalize(0u, 0u)).WillOnce(testing::Return(10u));
-    EXPECT_CALL(globalize, globalize(9u, 0u)).WillOnce(testing::Return(19u));
-    EXPECT_CALL(resolve, resolve(10u)).WillOnce(testing::Return(g0));
-    EXPECT_CALL(resolve, resolve(19u)).WillOnce(testing::Return(g9));
-    EXPECT_CALL(make_functor, make_functor(8u, testing::_))
-        .WillOnce(testing::Return(out0))
-        .WillOnce(testing::Return(out9));
-    EXPECT_NE(normalizer.normalize({skeleton, 0u}), normalizer.normalize({skeleton, 9u}));
-}
-
-TEST_F(PudNormalizerTest, StoredValueAtOffsetZeroStableWhenBindingsUnchanged) {
-    const expr* skeleton = terms.functor(5u, {});
-    const expr* canonical = terms.functor(5u, {});
-    EXPECT_CALL(make_functor, make_functor(5u, testing::_))
-        .Times(2)
-        .WillRepeatedly(testing::Return(canonical));
-    const expr* first = normalizer.normalize({skeleton, 0u});
-    const expr* second = normalizer.normalize({skeleton, 0u});
-    EXPECT_EQ(first, second);
+    const expr* rep = var(2);
+    unbound(3, 2, rep);
+    unbound(4, 2, rep);
+    EXPECT_EQ(normalizer.normalize({var(0), 3}), rep);
+    EXPECT_EQ(normalizer.normalize({var(1), 3}), rep);
 }

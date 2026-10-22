@@ -1,3 +1,4 @@
+#include <optional>
 #include <algorithm>
 #include <cstdint>
 #include <map>
@@ -15,18 +16,11 @@
 #include "infrastructure/pud_transient_ubs_state.hpp"
 #include "value_objects/pud_substitution.hpp"
 
-// Oracle: a watched expression's structure changes between parent and child exactly when its
-// canonical form differs, where the canonical form resolves every variable through the real
-// bind map and numbers representatives by first occurrence.
 struct PudStructureWatchDescentFuzzTest : public ::testing::Test {
     using bind_map_t = ubs_bind_map<
-        expr_pool, expr_pool, pud_transient_ubs_state, pud_transient_ubs_state, pud_transient_ubs_state,
-        pud_transient_ubs_state, pud_transient_ubs_state, pud_transient_ubs_state>;
-    using binding_descent_t = pud_binding_descent<
-        bind_map_t,
-        pud_node_added_substitutions,
-        expr_pool,
-        expr_pool>;
+        pud_transient_ubs_state, pud_transient_ubs_state, pud_transient_ubs_state, pud_transient_ubs_state,
+        pud_transient_ubs_state, pud_transient_ubs_state, pud_transient_ubs_state, pud_transient_ubs_state>;
+    using binding_descent_t = pud_binding_descent<pud_node_added_substitutions>;
     using watch_descent_t = pud_structure_watch_descent<pud_node_added_substitutions>;
 
     struct level {
@@ -64,8 +58,7 @@ struct PudStructureWatchDescentFuzzTest : public ::testing::Test {
     std::vector<uint32_t> unbound_reps(bind_map_t& bind_map) {
         std::vector<uint32_t> reps;
         for (uint32_t var_index = 0; var_index < k_var_count; ++var_index) {
-            const expr::var* resolved = std::get_if<expr::var>(&bind_map.resolve(var_index)->content);
-            if (resolved && resolved->index == var_index)
+            if (!bind_map.find_value(var_index).has_value() && bind_map.find_rep(var_index) == var_index)
                 reps.push_back(var_index);
         }
         return reps;
@@ -87,7 +80,7 @@ struct PudStructureWatchDescentFuzzTest : public ::testing::Test {
 
     std::vector<pud_substitution> random_substitutions(const binding_descent_t& parent) {
         pud_transient_ubs_state scratch{parent.ubs_state()};
-        bind_map_t bind_map = scratch.make_bind_map(exprs, exprs);
+        bind_map_t bind_map = scratch.make_bind_map();
         std::vector<pud_substitution> substitutions;
         const uint32_t count = pick(4);
         for (uint32_t substitution_index = 0; substitution_index < count; ++substitution_index) {
@@ -113,9 +106,8 @@ struct PudStructureWatchDescentFuzzTest : public ::testing::Test {
             const expr* value = random_expr(others, 2);
             if (std::holds_alternative<expr::var>(value->content))
                 value = exprs.make_functor(functors.id("w"), {value});
-            const expr::functor& functor = std::get<expr::functor>(value->content);
             substitutions.push_back({.var_idx = rep, .value = value});
-            bind_map.instantiate(rep, functor.id, functor.args);
+            bind_map.instantiate(rep, framed_expr{value, 0});
         }
         return substitutions;
     }
@@ -126,13 +118,14 @@ struct PudStructureWatchDescentFuzzTest : public ::testing::Test {
         std::unordered_map<uint32_t, uint32_t>& numbering,
         std::vector<uint32_t>& tokens) {
         if (const expr::var* var = std::get_if<expr::var>(&visited->content)) {
-            const expr* resolved = bind_map.resolve(var->index);
-            if (const expr::var* rep = std::get_if<expr::var>(&resolved->content)) {
-                const uint32_t number = numbering.emplace(rep->index, numbering.size()).first->second;
+            const std::optional<framed_expr> value = bind_map.find_value(var->index);
+            if (!value.has_value()) {
+                const uint32_t rep = bind_map.find_rep(var->index);
+                const uint32_t number = numbering.emplace(rep, numbering.size()).first->second;
                 tokens.push_back(k_rep_token_base + number);
                 return;
             }
-            visit_canonical(bind_map, resolved, numbering, tokens);
+            visit_canonical(bind_map, value->skeleton, numbering, tokens);
             return;
         }
         const expr::functor& functor = std::get<expr::functor>(visited->content);
@@ -144,7 +137,7 @@ struct PudStructureWatchDescentFuzzTest : public ::testing::Test {
 
     std::vector<uint32_t> canonical(const binding_descent_t& at, const expr* watched) {
         pud_transient_ubs_state transient{at.ubs_state()};
-        bind_map_t bind_map = transient.make_bind_map(exprs, exprs);
+        bind_map_t bind_map = transient.make_bind_map();
         std::unordered_map<uint32_t, uint32_t> numbering;
         std::vector<uint32_t> tokens;
         visit_canonical(bind_map, watched, numbering, tokens);
@@ -153,7 +146,7 @@ struct PudStructureWatchDescentFuzzTest : public ::testing::Test {
 
     std::vector<const expr*> random_watch_list(const binding_descent_t& at) {
         pud_transient_ubs_state transient{at.ubs_state()};
-        bind_map_t bind_map = transient.make_bind_map(exprs, exprs);
+        bind_map_t bind_map = transient.make_bind_map();
         const std::vector<uint32_t> reps = unbound_reps(bind_map);
         std::vector<const expr*> watched;
         const uint32_t count = pick(4);
@@ -164,7 +157,7 @@ struct PudStructureWatchDescentFuzzTest : public ::testing::Test {
 
     level make_root() {
         level root{
-            .binding = binding_descent_t{node_specs_, exprs, exprs},
+            .binding = binding_descent_t{node_specs_},
             .watch = watch_descent_t{node_specs_, {}},
             .live_heads = {},
             .next_head_id = 0,

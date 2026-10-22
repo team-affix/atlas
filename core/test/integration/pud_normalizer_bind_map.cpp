@@ -11,7 +11,7 @@ struct PudNormalizerBindMapIntegrationTest : public ::testing::Test {
 
 TEST_F(PudNormalizerBindMapIntegrationTest, BoundFunctorNormalizesInnerVariables) {
     const expr* y = stack.bind_backing.pool.make_var(1u);
-    stack.bind_map.instantiate(1u, functors.id("a"), {});
+    stack.bind_map.instantiate(1u, framed_expr{stack.bind_backing.pool.make_functor(functors.id("a"), {}), 0u});
     const expr* fx = stack.bind_backing.pool.make_functor(functors.id("wrap"), {y});
     const expr* expected = stack.bind_backing.pool.make_functor(
         functors.id("wrap"), {stack.bind_backing.pool.make_functor(functors.id("a"), {})});
@@ -29,7 +29,7 @@ TEST_F(PudNormalizerBindMapIntegrationTest, NormalizePerformsNoBindMapWrites) {
 TEST_F(PudNormalizerBindMapIntegrationTest, NormalizeAfterEquateUsesNewRepresentative) {
     stack.bind_map.equate(2u, 5u);
     const expr* local = stack.bind_backing.pool.make_var(5u);
-    const expr* rep = stack.bind_map.resolve(2u);
+    const expr* rep = stack.resolve(2u);
     EXPECT_EQ(stack.normalizer.normalize(pud_fe(local, 0)), rep);
 }
 
@@ -39,7 +39,7 @@ TEST_F(PudNormalizerBindMapIntegrationTest, CalleeEquatedWithCallerNormalizesToC
     stack.bind_map.equate(caller, callee);
     const expr* callee_local = stack.bind_backing.pool.make_var(2u);
     const expr* normalized = stack.normalizer.normalize(pud_fe(callee_local, 0));
-    const expr* representative = stack.bind_map.resolve(caller);
+    const expr* representative = stack.resolve(caller);
     EXPECT_EQ(normalized, representative);
     EXPECT_EQ(std::get<expr::var>(normalized->content).index, std::min(caller, callee));
 }
@@ -48,7 +48,7 @@ TEST_F(PudNormalizerBindMapIntegrationTest, BindingAfterTermBuiltIsVisibleOnNorm
     const expr* y = stack.bind_backing.pool.make_var(1u);
     const expr* fx = stack.bind_backing.pool.make_functor(functors.id("wrap"), {y});
     const expr* before = stack.normalizer.normalize(pud_fe(fx, 0));
-    stack.bind_map.instantiate(1u, functors.id("a"), {});
+    stack.bind_map.instantiate(1u, framed_expr{stack.bind_backing.pool.make_functor(functors.id("a"), {}), 0u});
     const expr* after = stack.normalizer.normalize(pud_fe(fx, 0));
     EXPECT_NE(before, after);
     const expr* expected = stack.bind_backing.pool.make_functor(
@@ -59,7 +59,7 @@ TEST_F(PudNormalizerBindMapIntegrationTest, BindingAfterTermBuiltIsVisibleOnNorm
 TEST_F(PudNormalizerBindMapIntegrationTest, UnrelatedBindingDoesNotChangeFramedTermNormalize) {
     const expr* term = stack.bind_backing.pool.make_functor(functors.id("f"), {stack.bind_backing.pool.make_var(0u)});
     const expr* first = stack.normalizer.normalize(pud_fe(term, 0));
-    stack.bind_map.instantiate(9u, functors.id("z"), {});
+    stack.bind_map.instantiate(9u, framed_expr{stack.bind_backing.pool.make_functor(functors.id("z"), {}), 0u});
     const expr* second = stack.normalizer.normalize(pud_fe(term, 0));
     EXPECT_EQ(first, second);
 }

@@ -59,9 +59,9 @@ pud_mhq_head_admission refuted(pud_mhq_head_id head_id) {
 
 struct PudBaseDescentIntegrationTest : public ::testing::Test {
     using bind_map_t = ubs_bind_map<
-        expr_pool, expr_pool, pud_transient_ubs_state, pud_transient_ubs_state, pud_transient_ubs_state,
-        pud_transient_ubs_state, pud_transient_ubs_state, pud_transient_ubs_state>;
-    using binding_descent_t = pud_binding_descent<bind_map_t, pud_node_added_substitutions, expr_pool, expr_pool>;
+        pud_transient_ubs_state, pud_transient_ubs_state, pud_transient_ubs_state, pud_transient_ubs_state,
+        pud_transient_ubs_state, pud_transient_ubs_state, pud_transient_ubs_state, pud_transient_ubs_state>;
+    using binding_descent_t = pud_binding_descent<pud_node_added_substitutions>;
     using lvc_descent_t = pud_lvc_descent<pud_node_added_var_count>;
     using next_body_goal_id_descent_t = pud_next_body_goal_id_descent<pud_node_added_body_goals>;
     using body_goal_expr_descent_t = pud_body_goal_expr_descent<pud_node_added_body_goals, pud_call_sites>;
@@ -154,7 +154,7 @@ struct PudBaseDescentIntegrationTest : public ::testing::Test {
         EXPECT_CALL(try_add_query_head, try_add_head(_)).WillOnce(Return(first)).WillOnce(Return(second));
         const std::vector<const expr*> root_goals{p0, q12};
         base_descent_t descent{
-            binding_descent_t{node_substitutions, exprs, exprs},
+            binding_descent_t{node_substitutions},
             lvc_descent_t{var_counts, root},
             next_body_goal_id_descent_t{body_goals, root},
             body_goal_expr_descent_t{body_goals, call_sites, root},

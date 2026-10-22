@@ -1,4 +1,6 @@
+#include <optional>
 #include <unordered_map>
+#include <variant>
 #include <vector>
 #include <gtest/gtest.h>
 #include <gmock/gmock.h>
@@ -12,17 +14,21 @@ using ::testing::NiceMock;
 
 namespace {
 
-struct MockResolve {
-    MOCK_METHOD(const expr*, resolve, (uint32_t));
+struct MockFindRep {
+    MOCK_METHOD(uint32_t, find_rep, (uint32_t));
+};
+struct MockFindValue {
+    MOCK_METHOD(std::optional<framed_expr>, find_value, (uint32_t));
 };
 
 struct PudTranslatingNormalizerTest : public ::testing::Test {
     test_functors functors;
     expr_pool exprs;
     globalizer globalize;
-    NiceMock<MockResolve> resolve;
-    pud_translating_normalizer<globalizer, expr_pool, expr_pool, NiceMock<MockResolve>>
-        normalizer{globalize, exprs, exprs, resolve};
+    NiceMock<MockFindRep> find_rep;
+    NiceMock<MockFindValue> find_value;
+    pud_translating_normalizer<globalizer, expr_pool, expr_pool, NiceMock<MockFindRep>, NiceMock<MockFindValue>>
+        normalizer{globalize, exprs, exprs, find_rep, find_value};
     std::unordered_map<uint32_t, const expr*> bound;
     std::unordered_map<uint32_t, uint32_t> translation;
     uint32_t fresh_offset = 10;
@@ -33,9 +39,17 @@ struct PudTranslatingNormalizerTest : public ::testing::Test {
     }
 
     void SetUp() override {
-        ON_CALL(resolve, resolve(_)).WillByDefault([&](uint32_t index) {
+        ON_CALL(find_rep, find_rep(_)).WillByDefault([&](uint32_t index) {
             auto found = bound.find(index);
-            return found == bound.end() ? var(index) : found->second;
+            if (found == bound.end())
+                return index;
+            return std::get<expr::var>(found->second->content).index;
+        });
+        ON_CALL(find_value, find_value(_)).WillByDefault([&](uint32_t index) -> std::optional<framed_expr> {
+            auto found = bound.find(index);
+            if (found == bound.end() || std::holds_alternative<expr::var>(found->second->content))
+                return std::nullopt;
+            return framed_expr{found->second, 0};
         });
     }
 
@@ -90,4 +104,4 @@ TEST_F(PudTranslatingNormalizerTest, FrameOffsetIsAppliedToEveryVariable) {
     EXPECT_EQ(normalize(functor("f", {var(3), var(1)}), 10), functor("f", {functor("a", {}), var(10)}));
 }
 
-}  // namespace
+}

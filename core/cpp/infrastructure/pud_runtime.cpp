@@ -148,7 +148,7 @@ pud_node_id pud_runtime::find_root(pud_node_id node) {
 
 const expr* pud_runtime::normalize_at_leaf(pud_node_id leaf, const expr* skeleton) {
     pud_transient_ubs_state transient_ubs_state{manifest_.node_descents_.get(leaf).binding().ubs_state()};
-    auto bind_map = transient_ubs_state.make_bind_map(manifest_.expr_pool_, manifest_.expr_pool_);
+    auto bind_map = transient_ubs_state.make_bind_map();
     auto normalizer = manifest_.normalizer_factory_.make(bind_map);
     return normalizer.normalize(framed_expr{skeleton, 0});
 }

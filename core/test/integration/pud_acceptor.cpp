@@ -10,31 +10,32 @@
 #include "infrastructure/pud_node_added_substitutions.hpp"
 #include "infrastructure/pud_node_heads.hpp"
 #include "infrastructure/pud_node_parents.hpp"
+#include "infrastructure/pud_cycle_detector_factory.hpp"
 #include "infrastructure/pud_normalizer_factory.hpp"
 #include "infrastructure/pud_open_body_goal_finder.hpp"
 #include "infrastructure/pud_root_nodes.hpp"
 #include "infrastructure/pud_transient_ubs_state.hpp"
 #include "infrastructure/pud_translating_normalizer.hpp"
 #include "infrastructure/pud_unifier.hpp"
-#include "infrastructure/representative_change_logger.hpp"
+#include "infrastructure/pud_touched_var_logger.hpp"
 
 using ::testing::ElementsAre;
 using ::testing::IsEmpty;
 
 struct PudAcceptorIntegrationTest : public ::testing::Test {
     using bind_map_t = ubs_bind_map<
-        expr_pool, expr_pool, pud_transient_ubs_state, pud_transient_ubs_state, pud_transient_ubs_state,
-        pud_transient_ubs_state, pud_transient_ubs_state, pud_transient_ubs_state>;
-    using normalizer_factory_t = pud_normalizer_factory<globalizer, expr_pool, bind_map_t>;
-    using normalizer_t = normalizer_factory_t::normalizer_t;
-    using logger_t = representative_change_logger<bind_map_t, bind_map_t, std::vector<uint32_t>>;
-    using unifier_t = pud_unifier<globalizer, normalizer_t, bind_map_t, logger_t, logger_t>;
-    using translating_normalizer_t = pud_translating_normalizer<globalizer, expr_pool, expr_pool, bind_map_t>;
+        pud_transient_ubs_state, pud_transient_ubs_state, pud_transient_ubs_state, pud_transient_ubs_state,
+        pud_transient_ubs_state, pud_transient_ubs_state, pud_transient_ubs_state, pud_transient_ubs_state>;
+    using cycle_detector_factory_t = pud_cycle_detector_factory<globalizer, bind_map_t>;
+    using cycle_detector_t = pud_cycle_detector<globalizer, bind_map_t, bind_map_t>;
+    using logger_t = pud_touched_var_logger<bind_map_t, bind_map_t, std::vector<uint32_t>>;
+    using unifier_t = pud_unifier<globalizer, bind_map_t, bind_map_t, logger_t, logger_t, cycle_detector_t>;
+    using translating_normalizer_t = pud_translating_normalizer<globalizer, expr_pool, expr_pool, bind_map_t, bind_map_t>;
     using open_goal_finder_t = pud_open_body_goal_finder<pud_node_added_body_goals, pud_call_sites>;
     using acceptor_t = pud_acceptor<
-        bind_map_t, normalizer_t, unifier_t, logger_t, translating_normalizer_t,
+        bind_map_t, cycle_detector_t, unifier_t, logger_t, translating_normalizer_t,
         open_goal_finder_t, pud_node_heads, pud_node_added_substitutions, globalizer, expr_pool,
-        expr_pool, normalizer_factory_t>;
+        expr_pool, cycle_detector_factory_t>;
 
     test_functors functors;
     expr_pool exprs;
@@ -45,10 +46,10 @@ struct PudAcceptorIntegrationTest : public ::testing::Test {
     pud_node_added_body_goals body_goals;
     pud_node_added_substitutions substitutions;
     pud_call_sites call_sites;
-    normalizer_factory_t normalizer_factory{globalize, exprs};
+    cycle_detector_factory_t cycle_detector_factory{globalize};
     open_goal_finder_t open_goal_finder{body_goals, call_sites};
     acceptor_t acceptor{
-        open_goal_finder, heads, substitutions, globalize, exprs, exprs, normalizer_factory};
+        open_goal_finder, heads, substitutions, globalize, exprs, exprs, cycle_detector_factory};
     pud_ubs_state empty_state;
     pud_node_id next_node = 1;
 
@@ -81,9 +82,8 @@ struct PudAcceptorIntegrationTest : public ::testing::Test {
 
     pud_ubs_state bound(uint32_t index, const expr* value) {
         pud_transient_ubs_state transient_ubs_state{empty_state};
-        auto bind_map = transient_ubs_state.make_bind_map(exprs, exprs);
-        const expr::functor& value_functor = std::get<expr::functor>(value->content);
-        bind_map.instantiate(index, value_functor.id, value_functor.args);
+        auto bind_map = transient_ubs_state.make_bind_map();
+        bind_map.instantiate(index, framed_expr{value, 0});
         return transient_ubs_state.to_persistent_state();
     }
 };
@@ -151,7 +151,6 @@ TEST_F(PudAcceptorIntegrationTest, UntouchedAcceptorVariablesAreNotSubstituted) 
 }
 
 TEST_F(PudAcceptorIntegrationTest, CandidateDeepInATreeReplaysItsWholePath) {
-    // nat(s(V0)) :- nat(V0), expanded once along its recursive branch: V0 := s(V1), goal nat(V1).
     const pud_node_id rule_root = root(functor("nat", {functor("s", {var(0)})}), {functor("nat", {var(0)})});
     const pud_node_id deeper = child(
         rule_root, 0, {pud_substitution{.var_idx = 0, .value = functor("s", {var(1)})}}, {functor("nat", {var(1)})});

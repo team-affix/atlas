@@ -6,6 +6,7 @@
 #include "infrastructure/expr_pool.hpp"
 #include "infrastructure/globalizer.hpp"
 #include "infrastructure/pud_node_added_substitutions.hpp"
+#include "infrastructure/pud_cycle_detector.hpp"
 #include "infrastructure/pud_normalizer_factory.hpp"
 #include "infrastructure/pud_structure_watch_descent.hpp"
 #include "infrastructure/pud_transient_ubs_state.hpp"
@@ -18,21 +19,23 @@ constexpr uint32_t k_deep = 200000;
 
 struct PudDeepTermsIntegrationTest : public ::testing::Test {
     using bind_map_t = ubs_bind_map<
-        expr_pool, expr_pool, pud_transient_ubs_state, pud_transient_ubs_state, pud_transient_ubs_state,
-        pud_transient_ubs_state, pud_transient_ubs_state, pud_transient_ubs_state>;
-    using normalizer_factory_t = pud_normalizer_factory<globalizer, expr_pool, bind_map_t>;
+        pud_transient_ubs_state, pud_transient_ubs_state, pud_transient_ubs_state, pud_transient_ubs_state,
+        pud_transient_ubs_state, pud_transient_ubs_state, pud_transient_ubs_state, pud_transient_ubs_state>;
+    using normalizer_factory_t = pud_normalizer_factory<globalizer, expr_pool, expr_pool, bind_map_t>;
     using normalizer_t = normalizer_factory_t::normalizer_t;
-    using unifier_factory_t = pud_unifier_factory<globalizer, normalizer_t, bind_map_t>;
-    using translating_normalizer_t = pud_translating_normalizer<globalizer, expr_pool, expr_pool, bind_map_t>;
+    using cycle_detector_t = pud_cycle_detector<globalizer, bind_map_t, bind_map_t>;
+    using unifier_factory_t = pud_unifier_factory<globalizer, cycle_detector_t, bind_map_t>;
+    using translating_normalizer_t = pud_translating_normalizer<globalizer, expr_pool, expr_pool, bind_map_t, bind_map_t>;
 
     test_functors functors;
     expr_pool exprs;
     globalizer globalize;
-    normalizer_factory_t normalizer_factory{globalize, exprs};
+    normalizer_factory_t normalizer_factory{globalize, exprs, exprs};
     unifier_factory_t unifier_factory{globalize};
-    pud_transient_ubs_state transient_ubs_state;
-    bind_map_t bind_map = transient_ubs_state.make_bind_map(exprs, exprs);
+    pud_transient_ubs_state transient_ubs_state{pud_ubs_state{}};
+    bind_map_t bind_map = transient_ubs_state.make_bind_map();
     normalizer_t normalizer = normalizer_factory.make(bind_map);
+    cycle_detector_t cycle_detector{globalize, bind_map, bind_map};
 
     const expr* var(uint32_t index) { return exprs.make_var(index); }
     const expr* functor(const char* name, std::vector<const expr*> args) {
@@ -48,22 +51,20 @@ struct PudDeepTermsIntegrationTest : public ::testing::Test {
     }
 
     bool unify(const expr* lhs, const expr* rhs) {
-        auto unifier = unifier_factory.make(normalizer, bind_map);
+        auto unifier = unifier_factory.make(cycle_detector, bind_map);
         return unifier.unify(framed_expr{lhs, 0}, framed_expr{rhs, 0});
     }
 
     void bind(uint32_t index, const expr* value) {
-        const expr::functor& value_functor = std::get<expr::functor>(value->content);
-        bind_map.instantiate(index, value_functor.id, value_functor.args);
+        bind_map.instantiate(index, framed_expr{value, 0});
     }
 
-    // A straightforward recursive normalization, kept only as an oracle on shallow terms.
     const expr* reference_normalize(bind_map_t& bindings, const expr* skeleton) {
         if (const expr::var* variable = std::get_if<expr::var>(&skeleton->content)) {
-            const expr* value = bindings.resolve(variable->index);
-            if (std::holds_alternative<expr::var>(value->content))
-                return value;
-            skeleton = value;
+            const std::optional<framed_expr> value = bindings.find_value(variable->index);
+            if (!value.has_value())
+                return exprs.make_var(bindings.find_rep(variable->index));
+            skeleton = value->skeleton;
         }
         const expr::functor& term = std::get<expr::functor>(skeleton->content);
         std::vector<const expr*> args;
@@ -87,7 +88,7 @@ struct PudDeepTermsIntegrationTest : public ::testing::Test {
     }
 };
 
-}  // namespace
+}
 
 TEST_F(PudDeepTermsIntegrationTest, GlobalNormalizerHandlesAVeryDeepTerm) {
     bind(0, deep(k_deep, var(1)));
@@ -103,7 +104,7 @@ TEST_F(PudDeepTermsIntegrationTest, GlobalNormalizerHandlesAVeryDeepChainOfBindi
 }
 
 TEST_F(PudDeepTermsIntegrationTest, TranslatingNormalizerHandlesAVeryDeepTerm) {
-    translating_normalizer_t translating{globalize, exprs, exprs, bind_map};
+    translating_normalizer_t translating{globalize, exprs, exprs, bind_map, bind_map};
     std::unordered_map<uint32_t, uint32_t> translation;
     EXPECT_EQ(
         translating.normalize(framed_expr{deep(k_deep, var(3)), 10}, 10, translation),
@@ -159,18 +160,16 @@ TEST_F(PudDeepTermsIntegrationTest, NormalizerMatchesARecursiveReferenceOnRandom
     for (unsigned seed = 0; seed < 300; ++seed) {
         SCOPED_TRACE("seed " + std::to_string(seed));
         std::mt19937 rng{seed};
-        pud_transient_ubs_state seed_state;
-        bind_map_t seed_bind_map = seed_state.make_bind_map(exprs, exprs);
+        pud_transient_ubs_state seed_state{pud_ubs_state{}};
+        bind_map_t seed_bind_map = seed_state.make_bind_map();
         normalizer_t seed_normalizer = normalizer_factory.make(seed_bind_map);
-        // Each variable is bound only to terms over higher variables, so the bindings are acyclic.
         for (uint32_t index = 0; index < 8; ++index) {
             if (rng() % 2 == 0)
                 continue;
             const expr* value = random_term(rng, 3, index + 1, 8);
             if (std::holds_alternative<expr::var>(value->content))
                 continue;
-            const expr::functor& value_functor = std::get<expr::functor>(value->content);
-            seed_bind_map.instantiate(index, value_functor.id, value_functor.args);
+            seed_bind_map.instantiate(index, framed_expr{value, 0});
         }
         const expr* term = random_term(rng, 6, 0, 9);
         EXPECT_EQ(seed_normalizer.normalize(framed_expr{term, 0}), reference_normalize(seed_bind_map, term));

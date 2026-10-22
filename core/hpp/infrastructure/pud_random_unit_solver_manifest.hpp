@@ -7,7 +7,6 @@
 
 #include "infrastructure/expr_pool.hpp"
 #include "infrastructure/globalizer.hpp"
-#include "infrastructure/representative_change_logger.hpp"
 
 #include "infrastructure/pud_acceptor.hpp"
 #include "infrastructure/pud_axiom_initializer.hpp"
@@ -22,6 +21,8 @@
 #include "infrastructure/pud_candidate_specialization_head_factory.hpp"
 #include "infrastructure/pud_candidate_specialization_head_forker.hpp"
 #include "infrastructure/pud_child_maker.hpp"
+#include "infrastructure/pud_cycle_detector.hpp"
+#include "infrastructure/pud_cycle_detector_factory.hpp"
 #include "infrastructure/pud_children.hpp"
 #include "infrastructure/pud_conjecture_initializer.hpp"
 #include "infrastructure/pud_decision_generator.hpp"
@@ -65,6 +66,7 @@
 #include "infrastructure/pud_root_descent_maker.hpp"
 #include "infrastructure/pud_root_nodes.hpp"
 #include "infrastructure/pud_structure_watch_descent.hpp"
+#include "infrastructure/pud_touched_var_logger.hpp"
 #include "infrastructure/pud_transient_ubs_state.hpp"
 #include "infrastructure/pud_translating_normalizer.hpp"
 #include "infrastructure/pud_unifier.hpp"
@@ -80,19 +82,22 @@ struct pud_random_unit_solver_manifest {
     using child_iter_t = std::vector<pud_node_id>::const_iterator;
 
     using bind_map_t = ubs_bind_map<
-        expr_pool, expr_pool, pud_transient_ubs_state, pud_transient_ubs_state, pud_transient_ubs_state,
-        pud_transient_ubs_state, pud_transient_ubs_state, pud_transient_ubs_state>;
-    struct normalizer_factory_t : pud_normalizer_factory<globalizer, expr_pool, bind_map_t> {
+        pud_transient_ubs_state, pud_transient_ubs_state, pud_transient_ubs_state, pud_transient_ubs_state,
+        pud_transient_ubs_state, pud_transient_ubs_state, pud_transient_ubs_state, pud_transient_ubs_state>;
+    struct normalizer_factory_t : pud_normalizer_factory<globalizer, expr_pool, expr_pool, bind_map_t> {
         using pud_normalizer_factory::pud_normalizer_factory;
     };
-    using normalizer_t = normalizer_factory_t::normalizer_t;
-    struct unifier_factory_t : pud_unifier_factory<globalizer, normalizer_t, bind_map_t> {
+    struct cycle_detector_factory_t : pud_cycle_detector_factory<globalizer, bind_map_t> {
+        using pud_cycle_detector_factory::pud_cycle_detector_factory;
+    };
+    using cycle_detector_t = pud_cycle_detector<globalizer, bind_map_t, bind_map_t>;
+    struct unifier_factory_t : pud_unifier_factory<globalizer, cycle_detector_t, bind_map_t> {
         using pud_unifier_factory::pud_unifier_factory;
     };
     using unifier_t = unifier_factory_t::unifier_t;
-    using logger_t = representative_change_logger<bind_map_t, bind_map_t, std::vector<uint32_t>>;
-    using logging_unifier_t = pud_unifier<globalizer, normalizer_t, bind_map_t, logger_t, logger_t>;
-    using translating_normalizer_t = pud_translating_normalizer<globalizer, expr_pool, expr_pool, bind_map_t>;
+    using logger_t = pud_touched_var_logger<bind_map_t, bind_map_t, std::vector<uint32_t>>;
+    using logging_unifier_t = pud_unifier<globalizer, bind_map_t, bind_map_t, logger_t, logger_t, cycle_detector_t>;
+    using translating_normalizer_t = pud_translating_normalizer<globalizer, expr_pool, expr_pool, bind_map_t, bind_map_t>;
 
     struct refuted_node_checker_t : pud_refuted_node_checker<
         pud_leaf_nodes, pud_refuted_leaves, pud_node_live_child_counts> {
@@ -100,8 +105,8 @@ struct pud_random_unit_solver_manifest {
     };
 
     using replay_descent_t = pud_replay_descent<
-        bind_map_t, normalizer_t, unifier_t, expr_pool, expr_pool,
-        normalizer_factory_t, unifier_factory_t, pud_node_added_substitutions>;
+        bind_map_t, cycle_detector_t, unifier_t, expr_pool,
+        cycle_detector_factory_t, unifier_factory_t, pud_node_added_substitutions>;
 
     struct witness_search_head_t : pud_witness_search_head<
         replay_descent_t, child_iter_t, pud_leaf_nodes, refuted_node_checker_t, pud_children> {
@@ -156,12 +161,12 @@ struct pud_random_unit_solver_manifest {
     };
 
     struct query_opener_t : pud_query_opener<
-        replay_descent_t, bind_map_t, normalizer_t, unifier_t, pud_axioms, pud_node_heads,
-        expr_pool, expr_pool, normalizer_factory_t, unifier_factory_t, pud_node_added_substitutions> {
+        replay_descent_t, bind_map_t, cycle_detector_t, unifier_t, pud_axioms, pud_node_heads,
+        expr_pool, cycle_detector_factory_t, unifier_factory_t, pud_node_added_substitutions> {
         using pud_query_opener::pud_query_opener;
     };
 
-    using binding_descent_t = pud_binding_descent<bind_map_t, pud_node_added_substitutions, expr_pool, expr_pool>;
+    using binding_descent_t = pud_binding_descent<pud_node_added_substitutions>;
     using lvc_descent_t = pud_lvc_descent<pud_node_added_var_count>;
     using next_body_goal_id_descent_t = pud_next_body_goal_id_descent<pud_node_added_body_goals>;
     using body_goal_expr_descent_t = pud_body_goal_expr_descent<pud_node_added_body_goals, pud_call_sites>;
@@ -178,7 +183,7 @@ struct pud_random_unit_solver_manifest {
     struct root_descent_maker_t : pud_root_descent_maker<
         base_descent_t, binding_descent_t, lvc_descent_t, next_body_goal_id_descent_t,
         body_goal_expr_descent_t, structure_watch_descent_t, body_goal_pq_descent_t,
-        pud_node_added_substitutions, expr_pool, expr_pool, pud_node_added_var_count,
+        pud_node_added_substitutions, pud_node_added_var_count,
         pud_node_added_body_goals, pud_call_sites, query_opener_t, unit_query_recorder_t,
         unit_query_recorder_t, mhq_t, pud_query_head_nodes, pud_query_forks> {
         using pud_root_descent_maker::pud_root_descent_maker;
@@ -188,9 +193,9 @@ struct pud_random_unit_solver_manifest {
         using pud_open_body_goal_finder::pud_open_body_goal_finder;
     };
     struct acceptor_t : pud_acceptor<
-        bind_map_t, normalizer_t, logging_unifier_t, logger_t, translating_normalizer_t,
+        bind_map_t, cycle_detector_t, logging_unifier_t, logger_t, translating_normalizer_t,
         open_body_goal_finder_t, pud_node_heads, pud_node_added_substitutions,
-        globalizer, expr_pool, expr_pool, normalizer_factory_t> {
+        globalizer, expr_pool, expr_pool, cycle_detector_factory_t> {
         using pud_acceptor::pud_acceptor;
     };
     struct child_maker_t : pud_child_maker<
@@ -288,6 +293,7 @@ struct pud_random_unit_solver_manifest {
     open_conjecture_leaves_t                open_conjecture_leaves_;
 
     normalizer_factory_t                    normalizer_factory_;
+    cycle_detector_factory_t                cycle_detector_factory_;
     unifier_factory_t                       unifier_factory_;
 
     witness_search_head_factory_t           witness_search_head_factory_;

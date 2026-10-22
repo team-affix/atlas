@@ -9,6 +9,7 @@
 #include "infrastructure/globalizer.hpp"
 #include "infrastructure/pud_binding_descent.hpp"
 #include "infrastructure/pud_node_added_substitutions.hpp"
+#include "infrastructure/pud_cycle_detector_factory.hpp"
 #include "infrastructure/pud_normalizer_factory.hpp"
 #include "infrastructure/pud_replay_descent.hpp"
 #include "infrastructure/pud_transient_ubs_state.hpp"
@@ -18,27 +19,29 @@
 
 struct PudReplayDescentIntegrationTest : public ::testing::Test {
     using bind_map_t = ubs_bind_map<
-        expr_pool, expr_pool, pud_transient_ubs_state, pud_transient_ubs_state, pud_transient_ubs_state,
-        pud_transient_ubs_state, pud_transient_ubs_state, pud_transient_ubs_state>;
-    using normalizer_factory_t = pud_normalizer_factory<globalizer, expr_pool, bind_map_t>;
+        pud_transient_ubs_state, pud_transient_ubs_state, pud_transient_ubs_state, pud_transient_ubs_state,
+        pud_transient_ubs_state, pud_transient_ubs_state, pud_transient_ubs_state, pud_transient_ubs_state>;
+    using normalizer_factory_t = pud_normalizer_factory<globalizer, expr_pool, expr_pool, bind_map_t>;
     using normalizer_t = normalizer_factory_t::normalizer_t;
-    using unifier_factory_t = pud_unifier_factory<globalizer, normalizer_t, bind_map_t>;
+    using cycle_detector_factory_t = pud_cycle_detector_factory<globalizer, bind_map_t>;
+    using cycle_detector_t = pud_cycle_detector<globalizer, bind_map_t, bind_map_t>;
+    using unifier_factory_t = pud_unifier_factory<globalizer, cycle_detector_t, bind_map_t>;
     using unifier_t = unifier_factory_t::unifier_t;
-    using binding_descent_t = pud_binding_descent<bind_map_t, pud_node_added_substitutions, expr_pool, expr_pool>;
+    using binding_descent_t = pud_binding_descent<pud_node_added_substitutions>;
     using replay_descent_t = pud_replay_descent<
         bind_map_t,
-        normalizer_t,
+        cycle_detector_t,
         unifier_t,
         expr_pool,
-        expr_pool,
-        normalizer_factory_t,
+        cycle_detector_factory_t,
         unifier_factory_t,
         pud_node_added_substitutions>;
 
     test_functors                  functors;
     expr_pool                      exprs;
     globalizer                     globalize;
-    normalizer_factory_t           normalizer_factory_{globalize, exprs};
+    normalizer_factory_t           normalizer_factory_{globalize, exprs, exprs};
+    cycle_detector_factory_t       cycle_detector_factory_{globalize};
     unifier_factory_t              unifier_factory_{globalize};
     pud_node_added_substitutions node_specs_;
 
@@ -56,15 +59,14 @@ struct PudReplayDescentIntegrationTest : public ::testing::Test {
         const expr* axiom_head,
         uint32_t frame_offset) {
         pud_transient_ubs_state transient{caller_state};
-        bind_map_t bind_map = transient.make_bind_map(exprs, exprs);
-        normalizer_t normalizer = normalizer_factory_.make(bind_map);
-        unifier_t unifier = unifier_factory_.make(normalizer, bind_map);
+        bind_map_t bind_map = transient.make_bind_map();
+        cycle_detector_t cycle_detector = cycle_detector_factory_.make(bind_map);
+        unifier_t unifier = unifier_factory_.make(cycle_detector, bind_map);
         if (!unifier.unify(framed_expr{query_expr, 0u}, framed_expr{axiom_head, frame_offset}))
             return std::nullopt;
         return replay_descent_t{
             exprs,
-            exprs,
-            normalizer_factory_,
+            cycle_detector_factory_,
             unifier_factory_,
             node_specs_,
             root,
@@ -74,8 +76,8 @@ struct PudReplayDescentIntegrationTest : public ::testing::Test {
 
     const expr* resolve_global(const replay_descent_t& descent, uint32_t global_var_index) {
         pud_transient_ubs_state transient{descent.ubs_state()};
-        bind_map_t bind_map = transient.make_bind_map(exprs, exprs);
-        return bind_map.resolve(global_var_index);
+        bind_map_t bind_map = transient.make_bind_map();
+        return normalizer_factory_.make(bind_map).normalize(framed_expr{var(global_var_index), 0});
     }
 
     const expr* resolve_at_frame(const replay_descent_t& descent, uint32_t frame_offset, uint32_t local_var_index) {
@@ -134,7 +136,7 @@ TEST_F(PudReplayDescentIntegrationTest, OpeningFlowFromBindingDescentState) {
 
     node_specs_.store(binding_child, {pud_substitution{.var_idx = 0, .value = functor("a", {})}});
     binding_descent_t caller_binding =
-        binding_descent_t{node_specs_, exprs, exprs}.descend(binding_child);
+        binding_descent_t{node_specs_}.descend(binding_child);
 
     std::optional<replay_descent_t> opened = open(caller_binding.ubs_state(), var(0), var(0), frame_offset);
     ASSERT_TRUE(opened.has_value());
@@ -322,7 +324,7 @@ TEST_F(PudReplayDescentIntegrationTest, AgreesWithTheBindingDescentAtFrameZero) 
         pud_substitution{.var_idx = 3, .value = functor("c", {})},
         pud_substitution{.var_idx = 4, .value = var(2)},
     });
-    binding_descent_t binding = binding_descent_t{node_specs_, exprs, exprs}
+    binding_descent_t binding = binding_descent_t{node_specs_}
         .descend(1)
         .descend(2);
     std::optional<replay_descent_t> replay = open({}, functor("p", {}), functor("p", {}), 0u);
@@ -333,8 +335,9 @@ TEST_F(PudReplayDescentIntegrationTest, AgreesWithTheBindingDescentAtFrameZero) 
     ASSERT_TRUE(replay.has_value());
     for (uint32_t index = 0; index < 6; ++index) {
         pud_transient_ubs_state transient{binding.ubs_state()};
-        bind_map_t bind_map = transient.make_bind_map(exprs, exprs);
-        EXPECT_EQ(resolve_global(*replay, index), bind_map.resolve(index)) << "var " << index;
+        bind_map_t bind_map = transient.make_bind_map();
+        EXPECT_EQ(resolve_global(*replay, index), normalizer_factory_.make(bind_map).normalize(framed_expr{var(index), 0}))
+            << "var " << index;
     }
 }
 

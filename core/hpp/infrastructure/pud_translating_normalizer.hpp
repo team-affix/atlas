@@ -2,22 +2,21 @@
 #define PUD_TRANSLATING_NORMALIZER_HPP
 
 #include <cstdint>
+#include <optional>
 #include <unordered_map>
 #include <variant>
 #include <vector>
 #include "value_objects/expr.hpp"
 #include "value_objects/framed_expr.hpp"
 
-// Fully normalizes a framed expression; representatives at or above fresh_offset are renamed
-// densely from fresh_offset in the order they are first met, shared through translation.
-// Iterative, so term depth is bounded by memory rather than by the call stack.
-template<typename IGlobalize, typename IMakeFunctor, typename IMakeVar, typename IResolve>
+template<typename IGlobalize, typename IMakeFunctor, typename IMakeVar, typename IFindRep, typename IFindValue>
 struct pud_translating_normalizer {
     pud_translating_normalizer(
         IGlobalize& globalize,
         IMakeFunctor& make_functor,
         IMakeVar& make_var,
-        IResolve& resolve);
+        IFindRep& find_rep,
+        IFindValue& find_value);
     const expr* normalize(
         framed_expr framed,
         uint32_t fresh_offset,
@@ -37,24 +36,28 @@ private:
     IGlobalize& globalize_;
     IMakeFunctor& make_functor_;
     IMakeVar& make_var_;
-    IResolve& resolve_;
+    IFindRep& find_rep_;
+    IFindValue& find_value_;
 };
 
 #define PUD_TRANSLATING_NORMALIZER_TEMPLATE                                                \
-    template<typename IGlobalize, typename IMakeFunctor, typename IMakeVar, typename IResolve>
+    template<typename IGlobalize, typename IMakeFunctor, typename IMakeVar, typename IFindRep,       \
+             typename IFindValue>
 #define PUD_TRANSLATING_NORMALIZER                                                         \
-    pud_translating_normalizer<IGlobalize, IMakeFunctor, IMakeVar, IResolve>
+    pud_translating_normalizer<IGlobalize, IMakeFunctor, IMakeVar, IFindRep, IFindValue>
 
 PUD_TRANSLATING_NORMALIZER_TEMPLATE
 PUD_TRANSLATING_NORMALIZER::pud_translating_normalizer(
     IGlobalize& globalize,
     IMakeFunctor& make_functor,
     IMakeVar& make_var,
-    IResolve& resolve)
+    IFindRep& find_rep,
+    IFindValue& find_value)
     : globalize_(globalize)
     , make_functor_(make_functor)
     , make_var_(make_var)
-    , resolve_(resolve) {}
+    , find_rep_(find_rep)
+    , find_value_(find_value) {}
 
 PUD_TRANSLATING_NORMALIZER_TEMPLATE
 const expr* PUD_TRANSLATING_NORMALIZER::normalize(
@@ -81,7 +84,6 @@ const expr* PUD_TRANSLATING_NORMALIZER::normalize(
     return finished;
 }
 
-// A resolved variable is returned (renamed if fresh); a functor is pushed and nullptr returned.
 PUD_TRANSLATING_NORMALIZER_TEMPLATE
 const expr* PUD_TRANSLATING_NORMALIZER::enter(
     framed_expr framed,
@@ -89,16 +91,18 @@ const expr* PUD_TRANSLATING_NORMALIZER::enter(
     std::unordered_map<uint32_t, uint32_t>& translation,
     std::vector<frame>& pending) {
     if (const expr::var* var = std::get_if<expr::var>(&framed.skeleton->content)) {
-        const expr* value = resolve_.resolve(globalize_.globalize(framed.frame_offset, var->index));
-        if (const expr::var* rep = std::get_if<expr::var>(&value->content)) {
-            if (rep->index < fresh_offset)
-                return value;
+        const uint32_t global = globalize_.globalize(framed.frame_offset, var->index);
+        const std::optional<framed_expr> value = find_value_.find_value(global);
+        if (!value.has_value()) {
+            const uint32_t rep = find_rep_.find_rep(global);
+            if (rep < fresh_offset)
+                return make_var_.make_var(rep);
             auto [translated, _] = translation.try_emplace(
-                rep->index,
+                rep,
                 fresh_offset + static_cast<uint32_t>(translation.size()));
             return make_var_.make_var(translated->second);
         }
-        framed = framed_expr{value, 0};
+        framed = value.value();
     }
     pending.push_back(frame{framed, {}});
     return nullptr;

@@ -2,6 +2,7 @@
 #define REFERENCE_PUD_UNIFY_HPP
 
 #include <cstdint>
+#include <optional>
 #include "pud_unifier_bind_map_stack.hpp"
 #include "value_objects/expr.hpp"
 
@@ -16,14 +17,20 @@ inline bool reference_pud_occurs(uint32_t var_index, const expr* term) {
     return false;
 }
 
+inline framed_expr reference_pud_deref(pud_unifier_bind_map_stack& stack, uint32_t global) {
+    if (const std::optional<framed_expr> value = stack.bind_map.find_value(global))
+        return value.value();
+    return framed_expr{stack.bind_backing.pool.make_var(stack.bind_map.find_rep(global)), 0u};
+}
+
 inline bool reference_pud_unify_terms(
     pud_unifier_bind_map_stack& stack,
     framed_expr lhs,
     framed_expr rhs) {
     if (const expr::var* var = std::get_if<expr::var>(&lhs.skeleton->content))
-        lhs = {stack.bind_map.resolve(stack.globalize.globalize(lhs.frame_offset, var->index)), 0u};
+        lhs = reference_pud_deref(stack, stack.globalize.globalize(lhs.frame_offset, var->index));
     if (const expr::var* var = std::get_if<expr::var>(&rhs.skeleton->content))
-        rhs = {stack.bind_map.resolve(stack.globalize.globalize(rhs.frame_offset, var->index)), 0u};
+        rhs = reference_pud_deref(stack, stack.globalize.globalize(rhs.frame_offset, var->index));
 
     const expr::var* lhs_var = std::get_if<expr::var>(&lhs.skeleton->content);
     const expr::var* rhs_var = std::get_if<expr::var>(&rhs.skeleton->content);
@@ -44,16 +51,14 @@ inline bool reference_pud_unify_terms(
         const expr* value = stack.normalizer.normalize(rhs);
         if (reference_pud_occurs(lhs_var->index, value))
             return false;
-        const expr::functor& bound_functor = std::get<expr::functor>(value->content);
-        stack.bind_map.instantiate(lhs_var->index, bound_functor.id, bound_functor.args);
+        stack.bind_map.instantiate(lhs_var->index, framed_expr{value, 0u});
         return true;
     }
     if (rhs_var) {
         const expr* value = stack.normalizer.normalize(lhs);
         if (reference_pud_occurs(rhs_var->index, value))
             return false;
-        const expr::functor& bound_functor = std::get<expr::functor>(value->content);
-        stack.bind_map.instantiate(rhs_var->index, bound_functor.id, bound_functor.args);
+        stack.bind_map.instantiate(rhs_var->index, framed_expr{value, 0u});
         return true;
     }
 

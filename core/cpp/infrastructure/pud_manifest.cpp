@@ -22,7 +22,8 @@ pud_manifest::pud_manifest()
       unit_queries_(),
       refuted_node_checker_(leaf_nodes_, refuted_leaves_, node_live_child_counts_),
       frontier_recorder_(open_leaves_, open_leaves_, refuted_leaves_),
-      normalizer_factory_(globalizer_, expr_pool_),
+      normalizer_factory_(globalizer_, expr_pool_, expr_pool_),
+      cycle_detector_factory_(globalizer_),
       unifier_factory_(globalizer_),
       witness_search_head_factory_(leaf_nodes_, refuted_node_checker_, children_),
       witness_search_head_forker_(),
@@ -36,19 +37,19 @@ pud_manifest::pud_manifest()
       mhq_(query_head_factory_, query_head_forker_, mhcs_),
       unit_query_recorder_(mhq_, mhq_, mhq_, unit_queries_),
       query_opener_(
-          axioms_, node_heads_, expr_pool_, expr_pool_, normalizer_factory_, unifier_factory_,
+          axioms_, node_heads_, expr_pool_, cycle_detector_factory_, unifier_factory_,
           node_added_substitutions_),
       node_descents_(),
       query_holders_(node_descents_, node_descents_, node_descents_, node_descents_),
       root_descent_maker_(
-          node_added_substitutions_, expr_pool_, expr_pool_, node_added_var_count_,
+          node_added_substitutions_, node_added_var_count_,
           node_added_body_goals_, call_sites_, query_opener_, unit_query_recorder_, unit_query_recorder_,
           mhq_, query_head_nodes_,
           query_forks_),
       open_body_goal_finder_(node_added_body_goals_, call_sites_),
       acceptor_(
           open_body_goal_finder_, node_heads_, node_added_substitutions_,
-          globalizer_, expr_pool_, expr_pool_, normalizer_factory_),
+          globalizer_, expr_pool_, expr_pool_, cycle_detector_factory_),
       child_maker_(
           node_id_sequencer_, node_added_substitutions_, node_added_body_goals_,
           node_added_var_count_, node_parents_, leaf_nodes_),

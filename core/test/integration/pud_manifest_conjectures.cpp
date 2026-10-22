@@ -77,7 +77,7 @@ struct PudManifestConjectureIntegrationTest : public ::testing::Test {
     const expr* answer(pud_node_id root, pud_node_id solution) {
         pud_transient_ubs_state transient_ubs_state{
             manifest.node_descents_.get(solution).binding().ubs_state()};
-        auto bind_map = transient_ubs_state.make_bind_map(manifest.expr_pool_, manifest.expr_pool_);
+        auto bind_map = transient_ubs_state.make_bind_map();
         auto normalizer = manifest.normalizer_factory_.make(bind_map);
         return normalizer.normalize(framed_expr{answer_templates.at(root), 0});
     }

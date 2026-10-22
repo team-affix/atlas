@@ -7,6 +7,7 @@
 #include "infrastructure/pud_axioms.hpp"
 #include "infrastructure/pud_node_added_substitutions.hpp"
 #include "infrastructure/pud_node_heads.hpp"
+#include "infrastructure/pud_cycle_detector_factory.hpp"
 #include "infrastructure/pud_normalizer_factory.hpp"
 #include "infrastructure/pud_query_opener.hpp"
 #include "infrastructure/pud_replay_descent.hpp"
@@ -15,18 +16,24 @@
 
 struct PudQueryOpenerIntegrationTest : public ::testing::Test {
     using bind_map_t = ubs_bind_map<
-        expr_pool, expr_pool, pud_transient_ubs_state, pud_transient_ubs_state, pud_transient_ubs_state,
-        pud_transient_ubs_state, pud_transient_ubs_state, pud_transient_ubs_state>;
-    using normalizer_factory_t = pud_normalizer_factory<globalizer, expr_pool, bind_map_t>;
+        pud_transient_ubs_state, pud_transient_ubs_state, pud_transient_ubs_state, pud_transient_ubs_state,
+        pud_transient_ubs_state, pud_transient_ubs_state, pud_transient_ubs_state, pud_transient_ubs_state>;
+    using normalizer_factory_t = pud_normalizer_factory<globalizer, expr_pool, expr_pool, bind_map_t>;
     using normalizer_t = normalizer_factory_t::normalizer_t;
-    using unifier_factory_t = pud_unifier_factory<globalizer, normalizer_t, bind_map_t>;
+    using cycle_detector_factory_t = pud_cycle_detector_factory<globalizer, bind_map_t>;
+    using cycle_detector_t = pud_cycle_detector<globalizer, bind_map_t, bind_map_t>;
+    using unifier_factory_t = pud_unifier_factory<globalizer, cycle_detector_t, bind_map_t>;
     using unifier_t = unifier_factory_t::unifier_t;
     using replay_descent_t = pud_replay_descent<
-        bind_map_t, normalizer_t, unifier_t, expr_pool, expr_pool, normalizer_factory_t,
+        bind_map_t,
+        cycle_detector_t,
+        unifier_t,
+        expr_pool,
+        cycle_detector_factory_t,
         unifier_factory_t, pud_node_added_substitutions>;
     using opener_t = pud_query_opener<
-        replay_descent_t, bind_map_t, normalizer_t, unifier_t, pud_axioms, pud_node_heads,
-        expr_pool, expr_pool, normalizer_factory_t, unifier_factory_t, pud_node_added_substitutions>;
+        replay_descent_t, bind_map_t, cycle_detector_t, unifier_t, pud_axioms, pud_node_heads,
+        expr_pool, cycle_detector_factory_t, unifier_factory_t, pud_node_added_substitutions>;
 
     test_functors functors;
     expr_pool exprs;
@@ -34,9 +41,12 @@ struct PudQueryOpenerIntegrationTest : public ::testing::Test {
     pud_axioms axioms;
     pud_node_heads heads;
     pud_node_added_substitutions substitutions;
-    normalizer_factory_t normalizer_factory{globalize, exprs};
+    normalizer_factory_t normalizer_factory{globalize, exprs, exprs};
+    cycle_detector_factory_t cycle_detector_factory{globalize};
     unifier_factory_t unifier_factory{globalize};
-    opener_t opener{axioms, heads, exprs, exprs, normalizer_factory, unifier_factory, substitutions};
+    opener_t opener{axioms, heads, exprs,
+            cycle_detector_factory,
+            unifier_factory, substitutions};
     pud_ubs_state empty_state;
     pud_node_id next_node = 1;
 
@@ -55,7 +65,7 @@ struct PudQueryOpenerIntegrationTest : public ::testing::Test {
 
     const expr* resolve(const pud_ubs_state& state, uint32_t index) {
         pud_transient_ubs_state transient_ubs_state{state};
-        auto bind_map = transient_ubs_state.make_bind_map(exprs, exprs);
+        auto bind_map = transient_ubs_state.make_bind_map();
         auto normalizer = normalizer_factory.make(bind_map);
         return normalizer.normalize(framed_expr{var(index), 0});
     }
@@ -94,8 +104,8 @@ TEST_F(PudQueryOpenerIntegrationTest, CallersBindingsAreRespected) {
     axiom(functor("color", {atom("red")}));
     const pud_node_id blue = axiom(functor("color", {atom("blue")}));
     pud_transient_ubs_state transient_ubs_state{empty_state};
-    auto bind_map = transient_ubs_state.make_bind_map(exprs, exprs);
-    bind_map.instantiate(0, functors.id("blue"), {});
+    auto bind_map = transient_ubs_state.make_bind_map();
+    bind_map.instantiate(0, framed_expr{exprs.make_functor(functors.id("blue"), {}), 0});
     const pud_ubs_state caller = transient_ubs_state.to_persistent_state();
     EXPECT_THAT(nodes_of(opener.open(caller, functor("color", {var(0)}), 1)), ::testing::ElementsAre(blue));
 }

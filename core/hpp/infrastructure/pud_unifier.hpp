@@ -3,100 +3,94 @@
 
 #include <cstddef>
 #include <cstdint>
+#include <optional>
 #include <utility>
 #include <variant>
 #include <vector>
-#include "value_objects/framed_expr.hpp"
 #include "value_objects/expr.hpp"
+#include "value_objects/framed_expr.hpp"
 
-// Unifies framed terms. Before binding a variable's class to a functor, the
-// functor is normalized and checked for the variable (occurs check). Iterative, so
-// term depth is bounded by memory rather than by the call stack.
 template<
     typename IGlobalize,
-    typename INormalize,
-    typename IResolve,
+    typename IFind,
+    typename IFindValue,
     typename IEquate,
-    typename IInstantiate>
+    typename IInstantiate,
+    typename IDetectCycle>
 struct pud_unifier {
     pud_unifier(
         IGlobalize& globalize,
-        INormalize& normalize,
-        IResolve& resolve,
+        IFind& find,
+        IFindValue& find_value,
         IEquate& equate,
-        IInstantiate& instantiate);
+        IInstantiate& instantiate,
+        IDetectCycle& detect_cycle);
     bool unify(framed_expr lhs, framed_expr rhs);
-
 private:
-    // Whether a variable with this global index occurs in the normalized term.
-    bool occurs(uint32_t var_index, const expr* normalized);
+    uint32_t find_root(framed_expr var);
 
     IGlobalize& globalize_;
-    INormalize& normalize_;
-    IResolve& resolve_;
+    IFind& find_;
+    IFindValue& find_value_;
     IEquate& equate_;
     IInstantiate& instantiate_;
+    IDetectCycle& detect_cycle_;
 };
 
-#define PUD_UNIFIER_TEMPLATE                                                     \
-    template<typename IGlobalize, typename INormalize, typename IResolve,           \
-             typename IEquate, typename IInstantiate>
-#define PUD_UNIFIER pud_unifier<IGlobalize, INormalize, IResolve, IEquate, IInstantiate>
+#define PUD_UNIFIER_TEMPLATE                                                                     \
+    template<typename IGlobalize, typename IFind, typename IFindValue, typename IEquate,        \
+             typename IInstantiate, typename IDetectCycle>
+#define PUD_UNIFIER pud_unifier<IGlobalize, IFind, IFindValue, IEquate, IInstantiate, IDetectCycle>
 
 PUD_UNIFIER_TEMPLATE
 PUD_UNIFIER::pud_unifier(
     IGlobalize& globalize,
-    INormalize& normalize,
-    IResolve& resolve,
+    IFind& find,
+    IFindValue& find_value,
     IEquate& equate,
-    IInstantiate& instantiate)
+    IInstantiate& instantiate,
+    IDetectCycle& detect_cycle)
     : globalize_(globalize)
-    , normalize_(normalize)
-    , resolve_(resolve)
+    , find_(find)
+    , find_value_(find_value)
     , equate_(equate)
-    , instantiate_(instantiate) {}
+    , instantiate_(instantiate)
+    , detect_cycle_(detect_cycle) {}
 
 PUD_UNIFIER_TEMPLATE
 bool PUD_UNIFIER::unify(framed_expr lhs, framed_expr rhs) {
     std::vector<std::pair<framed_expr, framed_expr>> pending{{lhs, rhs}};
+    std::vector<uint32_t> touched;
     while (!pending.empty()) {
-        auto [left, right] = pending.back();
+        const auto [left, right] = pending.back();
         pending.pop_back();
+        const bool left_is_var = std::holds_alternative<expr::var>(left.skeleton->content);
+        const bool right_is_var = std::holds_alternative<expr::var>(right.skeleton->content);
 
-        // Replace each variable with its class's value: a functor, or the rep var.
-        // Values are in global indices, so they carry offset 0.
-        if (const expr::var* var = std::get_if<expr::var>(&left.skeleton->content))
-            left = {resolve_.resolve(globalize_.globalize(left.frame_offset, var->index)), 0u};
-        if (const expr::var* var = std::get_if<expr::var>(&right.skeleton->content))
-            right = {resolve_.resolve(globalize_.globalize(right.frame_offset, var->index)), 0u};
-
-        const expr::var* left_var = std::get_if<expr::var>(&left.skeleton->content);
-        const expr::var* right_var = std::get_if<expr::var>(&right.skeleton->content);
-
-        const uint32_t left_global = left_var ? globalize_.globalize(left.frame_offset, left_var->index) : 0;
-        const uint32_t right_global = right_var ? globalize_.globalize(right.frame_offset, right_var->index) : 0;
-
-        if (left_var && right_var && left_global == right_global)
-            continue;
-
-        if (left_var && right_var) {
-            equate_.equate(left_var->index, right_var->index);
+        if (left_is_var && right_is_var) {
+            const uint32_t left_root = find_root(left);
+            const uint32_t right_root = find_root(right);
+            if (left_root == right_root)
+                continue;
+            const std::optional<framed_expr> left_value = find_value_.find_value(left_root);
+            const std::optional<framed_expr> right_value = find_value_.find_value(right_root);
+            equate_.equate(left_root, right_root);
+            touched.push_back(left_root);
+            if (left_value.has_value() && right_value.has_value())
+                pending.emplace_back(left_value.value(), right_value.value());
             continue;
         }
-        if (left_var) {
-            const expr* value = normalize_.normalize(right);
-            if (occurs(left_var->index, value))
-                return false;
-            const expr::functor& bound_functor = std::get<expr::functor>(value->content);
-            instantiate_.instantiate(left_var->index, bound_functor.id, bound_functor.args);
-            continue;
-        }
-        if (right_var) {
-            const expr* value = normalize_.normalize(left);
-            if (occurs(right_var->index, value))
-                return false;
-            const expr::functor& bound_functor = std::get<expr::functor>(value->content);
-            instantiate_.instantiate(right_var->index, bound_functor.id, bound_functor.args);
+
+        if (left_is_var || right_is_var) {
+            const framed_expr var = left_is_var ? left : right;
+            const framed_expr term = left_is_var ? right : left;
+            const uint32_t root = find_root(var);
+            if (const std::optional<framed_expr> value = find_value_.find_value(root)) {
+                pending.emplace_back(value.value(), term);
+                continue;
+            }
+            instantiate_.instantiate(root, term);
+            touched.push_back(root);
             continue;
         }
 
@@ -104,31 +98,18 @@ bool PUD_UNIFIER::unify(framed_expr lhs, framed_expr rhs) {
         const expr::functor& right_functor = std::get<expr::functor>(right.skeleton->content);
         if (left_functor.id != right_functor.id || left_functor.args.size() != right_functor.args.size())
             return false;
-
-        // Pushed last to first so arguments are unified first to last, as a recursion would.
         for (size_t arg = left_functor.args.size(); arg-- > 0;)
             pending.emplace_back(
                 framed_expr{left_functor.args[arg], left.frame_offset},
                 framed_expr{right_functor.args[arg], right.frame_offset});
     }
-    return true;
+    return !detect_cycle_.detect_cycle(touched);
 }
 
 PUD_UNIFIER_TEMPLATE
-bool PUD_UNIFIER::occurs(uint32_t var_index, const expr* normalized) {
-    std::vector<const expr*> pending{normalized};
-    while (!pending.empty()) {
-        const expr* visited = pending.back();
-        pending.pop_back();
-        if (const expr::var* var = std::get_if<expr::var>(&visited->content)) {
-            if (var->index == var_index)
-                return true;
-            continue;
-        }
-        for (const expr* arg : std::get<expr::functor>(visited->content).args)
-            pending.push_back(arg);
-    }
-    return false;
+uint32_t PUD_UNIFIER::find_root(framed_expr var) {
+    const uint32_t index = std::get<expr::var>(var.skeleton->content).index;
+    return find_.find(globalize_.globalize(var.frame_offset, index));
 }
 
 #undef PUD_UNIFIER

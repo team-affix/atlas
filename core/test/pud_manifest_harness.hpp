@@ -385,8 +385,7 @@ struct pud_manifest_harness {
 
     pud_ubs_state env_of(pud_node_id node) {
         const std::vector<pud_node_id> path = path_to(node);
-        typename Manifest::binding_descent_t binding{
-            manifest.node_added_substitutions_, manifest.expr_pool_, manifest.expr_pool_};
+        typename Manifest::binding_descent_t binding{manifest.node_added_substitutions_};
         for (size_t index = 1; index < path.size(); ++index)
             binding = binding.descend(path.at(index));
         return binding.ubs_state();
@@ -398,13 +397,22 @@ struct pud_manifest_harness {
 
     const expr* resolve_in(const pud_ubs_state& env, uint32_t index) {
         pud_transient_ubs_state transient_ubs_state{env};
-        auto bind_map = transient_ubs_state.make_bind_map(manifest.expr_pool_, manifest.expr_pool_);
-        return bind_map.resolve(index);
+        auto bind_map = transient_ubs_state.make_bind_map();
+        if (const std::optional<framed_expr> value = bind_map.find_value(index))
+            return value->skeleton;
+        return var(bind_map.find_rep(index));
+    }
+
+    template<typename BindMap>
+    const expr* resolve_through(BindMap& bind_map, uint32_t index) {
+        if (const std::optional<framed_expr> value = bind_map.find_value(index))
+            return value->skeleton;
+        return var(bind_map.find_rep(index));
     }
 
     const expr* normalize_in(const pud_ubs_state& env, const expr* skeleton) {
         pud_transient_ubs_state transient_ubs_state{env};
-        auto bind_map = transient_ubs_state.make_bind_map(manifest.expr_pool_, manifest.expr_pool_);
+        auto bind_map = transient_ubs_state.make_bind_map();
         auto normalizer = manifest.normalizer_factory_.make(bind_map);
         return normalizer.normalize(framed_expr{skeleton, 0});
     }
@@ -535,19 +543,18 @@ struct pud_manifest_harness {
             const uint32_t parent_lvc = lvc_of(parent);
             const uint32_t node_lvc = lvc_of(node);
             pud_transient_ubs_state transient_ubs_state{env_of(parent)};
-            auto bind_map = transient_ubs_state.make_bind_map(manifest.expr_pool_, manifest.expr_pool_);
+            auto bind_map = transient_ubs_state.make_bind_map();
             for (const pud_substitution& substitution : manifest.node_added_substitutions_.get(node)) {
                 EXPECT_LT(substitution.var_idx, parent_lvc) << "node " << node;
-                EXPECT_EQ(bind_map.resolve(substitution.var_idx), var(substitution.var_idx))
+                EXPECT_EQ(resolve_through(bind_map, substitution.var_idx), var(substitution.var_idx))
                     << "node " << node << " substitutes non-representative " << substitution.var_idx;
                 if (const expr::var* surviving = std::get_if<expr::var>(&substitution.value->content)) {
                     EXPECT_LT(surviving->index, substitution.var_idx) << "node " << node;
-                    EXPECT_EQ(bind_map.resolve(surviving->index), var(surviving->index)) << "node " << node;
+                    EXPECT_EQ(resolve_through(bind_map, surviving->index), var(surviving->index)) << "node " << node;
                     bind_map.equate(substitution.var_idx, surviving->index);
                     continue;
                 }
-                const expr::functor& value = std::get<expr::functor>(substitution.value->content);
-                bind_map.instantiate(substitution.var_idx, value.id, value.args);
+                bind_map.instantiate(substitution.var_idx, framed_expr{substitution.value, 0});
             }
             const pud_ubs_state env = env_of(node);
             for (const pud_substitution& substitution : manifest.node_added_substitutions_.get(node)) {

@@ -5,6 +5,7 @@
 #include <vector>
 #include "infrastructure/expr_pool.hpp"
 #include "infrastructure/globalizer.hpp"
+#include "infrastructure/pud_cycle_detector.hpp"
 #include "infrastructure/pud_normalizer.hpp"
 #include "infrastructure/pud_unifier.hpp"
 #include "infrastructure/ubs_bind_map.hpp"
@@ -13,91 +14,36 @@
 
 struct ubs_bind_map_expr_pool_backing {
     expr_pool pool;
-    std::unordered_map<uint32_t, uint32_t> parents;
-    std::unordered_map<uint32_t, uint32_t> sizes;
-    std::unordered_map<uint32_t, const expr*> values;
-
-    struct parent_map {
-        std::unordered_map<uint32_t, uint32_t>& map;
-        const uint32_t* get_parent(uint32_t var) const {
-            const auto entry = map.find(var);
-            if (entry == map.end())
-                return nullptr;
-            return &entry->second;
-        }
-        void set_parent(uint32_t child, uint32_t parent) {
-            map[child] = parent;
-        }
-    };
-
-    struct size_map {
-        std::unordered_map<uint32_t, uint32_t>& map;
-        const uint32_t* get_size(uint32_t root) const {
-            const auto entry = map.find(root);
-            if (entry == map.end())
-                return nullptr;
-            return &entry->second;
-        }
-        void set_size(uint32_t root, uint32_t class_size) {
-            map[root] = class_size;
-        }
-    };
-
-    struct value_map {
-        std::unordered_map<uint32_t, const expr*>& map;
-        const expr* const* get_value(uint32_t root) const {
-            const auto entry = map.find(root);
-            if (entry == map.end())
-                return nullptr;
-            return &entry->second;
-        }
-        void set_value(uint32_t root, const expr* value) {
-            map[root] = value;
-        }
-    };
-
-    parent_map parent_access{parents};
-    size_map size_access{sizes};
-    value_map value_access{values};
+    ubs_std_parent_map parents;
+    ubs_std_size_map sizes;
+    ubs_std_rep_map reps;
+    ubs_std_value_map values;
 
     using bind_map_t = ubs_bind_map<
-        expr_pool,
-        expr_pool,
-        parent_map,
-        parent_map,
-        size_map,
-        size_map,
-        value_map,
-        value_map>;
+        ubs_std_parent_map, ubs_std_parent_map, ubs_std_size_map, ubs_std_size_map,
+        ubs_std_rep_map, ubs_std_rep_map, ubs_std_value_map, ubs_std_value_map>;
 
     bind_map_t make_bind_map() {
-        return bind_map_t{
-            pool,
-            pool,
-            parent_access,
-            parent_access,
-            size_access,
-            size_access,
-            value_access,
-            value_access};
+        return bind_map_t{parents, parents, sizes, sizes, reps, reps, values, values};
     }
 };
 
 struct pud_unifier_bind_map_stack {
+    using bind_map_t = ubs_bind_map_expr_pool_backing::bind_map_t;
+    using normalizer_t = global_normalizer<globalizer, expr_pool, expr_pool, bind_map_t, bind_map_t>;
+    using cycle_detector_t = pud_cycle_detector<globalizer, bind_map_t, bind_map_t>;
+    using pud_unifier_t = pud_unifier<globalizer, bind_map_t, bind_map_t, bind_map_t, bind_map_t, cycle_detector_t>;
+
     globalizer globalize;
     ubs_bind_map_expr_pool_backing bind_backing;
-    ubs_bind_map_expr_pool_backing::bind_map_t bind_map{bind_backing.make_bind_map()};
-    global_normalizer<globalizer, expr_pool, ubs_bind_map_expr_pool_backing::bind_map_t> normalizer{
-        globalize, bind_backing.pool, bind_map};
+    bind_map_t bind_map{bind_backing.make_bind_map()};
+    normalizer_t normalizer{globalize, bind_backing.pool, bind_backing.pool, bind_map, bind_map};
+    cycle_detector_t cycle_detector{globalize, bind_map, bind_map};
+    pud_unifier_t framed_unifier{globalize, bind_map, bind_map, bind_map, bind_map, cycle_detector};
 
-    using pud_unifier_t = pud_unifier<
-        globalizer,
-        global_normalizer<globalizer, expr_pool, ubs_bind_map_expr_pool_backing::bind_map_t>,
-        ubs_bind_map_expr_pool_backing::bind_map_t,
-        ubs_bind_map_expr_pool_backing::bind_map_t,
-        ubs_bind_map_expr_pool_backing::bind_map_t>;
-
-    pud_unifier_t framed_unifier{globalize, normalizer, bind_map, bind_map, bind_map};
+    const expr* resolve(uint32_t var) {
+        return normalizer.normalize(framed_expr{bind_backing.pool.make_var(var), 0});
+    }
 };
 
 inline framed_expr pud_fe(const expr* skeleton, uint32_t frame_offset) {
@@ -105,7 +51,7 @@ inline framed_expr pud_fe(const expr* skeleton, uint32_t frame_offset) {
 }
 
 inline ubs_map_snapshot snapshot_bind_backing(const ubs_bind_map_expr_pool_backing& backing) {
-    return ubs_map_snapshot{backing.parents, backing.sizes, backing.values};
+    return ubs_map_snapshot{backing.parents.map, backing.sizes.map, backing.reps.map, backing.values.map};
 }
 
 inline bool pud_expr_bindings_equal(const expr* left, const expr* right) {

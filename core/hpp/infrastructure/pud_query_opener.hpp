@@ -9,18 +9,15 @@
 #include "value_objects/pud_node_id.hpp"
 #include "value_objects/pud_ubs_state.hpp"
 
-// Resolves a caller's goal (frame 0) against every axiom's head lifted to the frame offset,
-// and starts a replay at each axiom it resolves against.
 template<
     typename ReplayDescent,
     typename BindMap,
-    typename Normalizer,
+    typename CycleDetector,
     typename Unifier,
     typename IGetAxioms,
     typename IGetNodeHead,
     typename IMakeVar,
-    typename IMakeFunctor,
-    typename IMakeNormalizer,
+    typename IMakeCycleDetector,
     typename IMakeUnifier,
     typename IGetNodeAddedSubstitutions>
 struct pud_query_opener {
@@ -28,8 +25,7 @@ struct pud_query_opener {
         IGetAxioms& get_axioms,
         IGetNodeHead& get_node_head,
         IMakeVar& make_var,
-        IMakeFunctor& make_functor,
-        IMakeNormalizer& make_normalizer,
+        IMakeCycleDetector& make_cycle_detector,
         IMakeUnifier& make_unifier,
         IGetNodeAddedSubstitutions& get_node_added_substitutions);
     std::vector<ReplayDescent> open(
@@ -40,35 +36,32 @@ private:
     IGetAxioms& get_axioms_;
     IGetNodeHead& get_node_head_;
     IMakeVar& make_var_;
-    IMakeFunctor& make_functor_;
-    IMakeNormalizer& make_normalizer_;
+    IMakeCycleDetector& make_cycle_detector_;
     IMakeUnifier& make_unifier_;
     IGetNodeAddedSubstitutions& get_node_added_substitutions_;
 };
 
 #define PUD_QUERY_OPENER_TEMPLATE                                                          \
-    template<typename ReplayDescent, typename BindMap, typename Normalizer, typename Unifier, \
+    template<typename ReplayDescent, typename BindMap, typename CycleDetector, typename Unifier, \
              typename IGetAxioms, typename IGetNodeHead, typename IMakeVar,                  \
-             typename IMakeFunctor, typename IMakeNormalizer, typename IMakeUnifier,         \
+             typename IMakeCycleDetector, typename IMakeUnifier,         \
              typename IGetNodeAddedSubstitutions>
 #define PUD_QUERY_OPENER                                                                   \
-    pud_query_opener<ReplayDescent, BindMap, Normalizer, Unifier, IGetAxioms, IGetNodeHead, \
-        IMakeVar, IMakeFunctor, IMakeNormalizer, IMakeUnifier, IGetNodeAddedSubstitutions>
+    pud_query_opener<ReplayDescent, BindMap, CycleDetector, Unifier, IGetAxioms, IGetNodeHead, \
+        IMakeVar, IMakeCycleDetector, IMakeUnifier, IGetNodeAddedSubstitutions>
 
 PUD_QUERY_OPENER_TEMPLATE
 PUD_QUERY_OPENER::pud_query_opener(
     IGetAxioms& get_axioms,
     IGetNodeHead& get_node_head,
     IMakeVar& make_var,
-    IMakeFunctor& make_functor,
-    IMakeNormalizer& make_normalizer,
+    IMakeCycleDetector& make_cycle_detector,
     IMakeUnifier& make_unifier,
     IGetNodeAddedSubstitutions& get_node_added_substitutions)
     : get_axioms_(get_axioms)
     , get_node_head_(get_node_head)
     , make_var_(make_var)
-    , make_functor_(make_functor)
-    , make_normalizer_(make_normalizer)
+    , make_cycle_detector_(make_cycle_detector)
     , make_unifier_(make_unifier)
     , get_node_added_substitutions_(get_node_added_substitutions) {}
 
@@ -80,15 +73,14 @@ std::vector<ReplayDescent> PUD_QUERY_OPENER::open(
     std::vector<ReplayDescent> axiom_descents;
     for (pud_node_id axiom : get_axioms_.get()) {
         pud_transient_ubs_state transient_ubs_state{caller_ubs_state};
-        BindMap bind_map = transient_ubs_state.make_bind_map(make_var_, make_functor_);
-        Normalizer normalizer = make_normalizer_.make(bind_map);
-        Unifier unifier = make_unifier_.make(normalizer, bind_map);
+        BindMap bind_map = transient_ubs_state.make_bind_map();
+        CycleDetector cycle_detector = make_cycle_detector_.make(bind_map);
+        Unifier unifier = make_unifier_.make(cycle_detector, bind_map);
         if (!unifier.unify(framed_expr{goal, 0}, framed_expr{get_node_head_.get(axiom), frame_offset}))
             continue;
         axiom_descents.push_back(ReplayDescent{
             make_var_,
-            make_functor_,
-            make_normalizer_,
+            make_cycle_detector_,
             make_unifier_,
             get_node_added_substitutions_,
             axiom,

@@ -2,80 +2,72 @@
 #define UBS_BIND_MAP_HPP
 
 #include <cstdint>
+#include <optional>
 #include <utility>
-#include <vector>
-#include "value_objects/expr.hpp"
+#include "value_objects/framed_expr.hpp"
 #include "debug_assert.hpp"
 
-// Union-find over global variable indices: union by size, no path compression.
-// parent: var -> var, links only ever connect variables to variables.
-// size:   root -> class size. No entry = 1.
-// value:  root -> expr in global indices: a functor (class bound)
-//         or the rep var (class unbound; rep = minimum index in the class).
-//         No entry = unbound, rep is the root.
-// Entries at non-roots are stale and never read, so nothing is ever erased.
 template<
-    typename IMakeVar,
-    typename IMakeFunctor,
     typename IGetParent,
     typename ISetParent,
     typename IGetSize,
     typename ISetSize,
+    typename IGetRep,
+    typename ISetRep,
     typename IGetValue,
     typename ISetValue>
 struct ubs_bind_map {
     ubs_bind_map(
-        IMakeVar& make_var,
-        IMakeFunctor& make_functor,
         IGetParent& get_parent,
         ISetParent& set_parent,
         IGetSize& get_size,
         ISetSize& set_size,
+        IGetRep& get_rep,
+        ISetRep& set_rep,
         IGetValue& get_value,
         ISetValue& set_value);
 
-    // Any variable. Bound class: its functor. Unbound class: its rep var.
-    const expr* resolve(uint32_t var);
-    // Any two variables in different unbound classes. Precondition: roots differ.
+    uint32_t find(uint32_t var);
+    uint32_t find_rep(uint32_t var);
+    std::optional<framed_expr> find_value(uint32_t var);
     void equate(uint32_t var_a, uint32_t var_b);
-    // Any variable. Preconditions: its class is unbound; args are normalized (global indices).
-    void instantiate(uint32_t var, uint32_t functor_id, const std::vector<const expr*>& args);
+    void instantiate(uint32_t var, framed_expr value);
 
 private:
-    uint32_t find(uint32_t var);
-    uint32_t rep(uint32_t root); // DEBUG_ASSERT: class is unbound
+    uint32_t size_of(uint32_t root);
+    uint32_t rep_of(uint32_t root);
 
-    IMakeVar& make_var_;
-    IMakeFunctor& make_functor_;
     IGetParent& get_parent_;
     ISetParent& set_parent_;
     IGetSize& get_size_;
     ISetSize& set_size_;
+    IGetRep& get_rep_;
+    ISetRep& set_rep_;
     IGetValue& get_value_;
     ISetValue& set_value_;
 };
 
-#define UBS_BIND_MAP_TEMPLATE                                                        \
-    template<typename IMakeVar, typename IMakeFunctor, typename IGetParent, typename ISetParent, \
-             typename IGetSize, typename ISetSize, typename IGetValue, typename ISetValue>
-#define UBS_BIND_MAP ubs_bind_map<IMakeVar, IMakeFunctor, IGetParent, ISetParent, IGetSize, ISetSize, IGetValue, ISetValue>
+#define UBS_BIND_MAP_TEMPLATE                                                                     \
+    template<typename IGetParent, typename ISetParent, typename IGetSize, typename ISetSize,     \
+             typename IGetRep, typename ISetRep, typename IGetValue, typename ISetValue>
+#define UBS_BIND_MAP ubs_bind_map<IGetParent, ISetParent, IGetSize, ISetSize, IGetRep, ISetRep, IGetValue, ISetValue>
 
 UBS_BIND_MAP_TEMPLATE
 UBS_BIND_MAP::ubs_bind_map(
-    IMakeVar& make_var,
-    IMakeFunctor& make_functor,
     IGetParent& get_parent,
     ISetParent& set_parent,
     IGetSize& get_size,
     ISetSize& set_size,
+    IGetRep& get_rep,
+    ISetRep& set_rep,
     IGetValue& get_value,
     ISetValue& set_value)
-    : make_var_(make_var)
-    , make_functor_(make_functor)
-    , get_parent_(get_parent)
+    : get_parent_(get_parent)
     , set_parent_(set_parent)
     , get_size_(get_size)
     , set_size_(set_size)
+    , get_rep_(get_rep)
+    , set_rep_(set_rep)
     , get_value_(get_value)
     , set_value_(set_value) {}
 
@@ -87,54 +79,59 @@ uint32_t UBS_BIND_MAP::find(uint32_t var) {
 }
 
 UBS_BIND_MAP_TEMPLATE
-uint32_t UBS_BIND_MAP::rep(uint32_t root) {
-    const expr* const* value = get_value_.get_value(root);
-    if (!value)
-        return root;
-    const expr::var* rep_var = std::get_if<expr::var>(&(*value)->content);
-    DEBUG_ASSERT(rep_var != nullptr);
-    return rep_var->index;
+uint32_t UBS_BIND_MAP::find_rep(uint32_t var) {
+    return rep_of(find(var));
 }
 
 UBS_BIND_MAP_TEMPLATE
-const expr* UBS_BIND_MAP::resolve(uint32_t var) {
-    const uint32_t root = find(var);
-    if (const expr* const* value = get_value_.get_value(root))
-        return *value;
-    return make_var_.make_var(root);
+std::optional<framed_expr> UBS_BIND_MAP::find_value(uint32_t var) {
+    const framed_expr* value = get_value_.get_value(find(var));
+    if (!value)
+        return std::nullopt;
+    return *value;
 }
 
 UBS_BIND_MAP_TEMPLATE
 void UBS_BIND_MAP::equate(uint32_t var_a, uint32_t var_b) {
-    uint32_t root_a = find(var_a);
-    uint32_t root_b = find(var_b);
+    uint32_t survivor = find(var_a);
+    uint32_t absorbed = find(var_b);
+    DEBUG_ASSERT(survivor != absorbed);
+    if (size_of(survivor) < size_of(absorbed))
+        std::swap(survivor, absorbed);
 
-    DEBUG_ASSERT(root_a != root_b);
+    const uint32_t class_size = size_of(survivor) + size_of(absorbed);
+    const uint32_t survivor_rep = rep_of(survivor);
+    const uint32_t absorbed_rep = rep_of(absorbed);
+    const bool survivor_bound = get_value_.get_value(survivor) != nullptr;
+    const framed_expr* absorbed_value = get_value_.get_value(absorbed);
+    const std::optional<framed_expr> moved_value =
+        survivor_bound || !absorbed_value ? std::nullopt : std::optional<framed_expr>(*absorbed_value);
 
-    const uint32_t rep_a = rep(root_a);
-    const uint32_t rep_b = rep(root_b);
-    const uint32_t* size_a_entry = get_size_.get_size(root_a);
-    const uint32_t* size_b_entry = get_size_.get_size(root_b);
-    const uint32_t size_a = size_a_entry ? *size_a_entry : 1u;
-    const uint32_t size_b = size_b_entry ? *size_b_entry : 1u;
-
-    if (size_a < size_b)
-        std::swap(root_a, root_b); // root_a is now the larger root (survivor)
-
-    set_parent_.set_parent(root_b, root_a);
-    set_size_.set_size(root_a, size_a + size_b);
-    set_value_.set_value(root_a, make_var_.make_var(rep_a < rep_b ? rep_a : rep_b));
+    set_parent_.set_parent(absorbed, survivor);
+    set_size_.set_size(survivor, class_size);
+    if (absorbed_rep < survivor_rep)
+        set_rep_.set_rep(survivor, absorbed_rep);
+    if (moved_value.has_value())
+        set_value_.set_value(survivor, moved_value.value());
 }
 
 UBS_BIND_MAP_TEMPLATE
-void UBS_BIND_MAP::instantiate(
-    uint32_t var,
-    uint32_t functor_id,
-    const std::vector<const expr*>& args) {
+void UBS_BIND_MAP::instantiate(uint32_t var, framed_expr value) {
     const uint32_t root = find(var);
-    rep(root);
-    const expr* bound = make_functor_.make_functor(functor_id, args);
-    set_value_.set_value(root, bound);
+    DEBUG_ASSERT(get_value_.get_value(root) == nullptr);
+    set_value_.set_value(root, value);
+}
+
+UBS_BIND_MAP_TEMPLATE
+uint32_t UBS_BIND_MAP::size_of(uint32_t root) {
+    const uint32_t* size = get_size_.get_size(root);
+    return size ? *size : 1u;
+}
+
+UBS_BIND_MAP_TEMPLATE
+uint32_t UBS_BIND_MAP::rep_of(uint32_t root) {
+    const uint32_t* rep = get_rep_.get_rep(root);
+    return rep ? *rep : root;
 }
 
 #undef UBS_BIND_MAP

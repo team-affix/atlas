@@ -1,3 +1,4 @@
+#include <optional>
 #include <string>
 #include <vector>
 #include <gtest/gtest.h>
@@ -10,13 +11,9 @@
 
 struct PudBindingDescentIntegrationTest : public ::testing::Test {
     using bind_map_t = ubs_bind_map<
-        expr_pool, expr_pool, pud_transient_ubs_state, pud_transient_ubs_state, pud_transient_ubs_state,
-        pud_transient_ubs_state, pud_transient_ubs_state, pud_transient_ubs_state>;
-    using binding_descent_t = pud_binding_descent<
-        bind_map_t,
-        pud_node_added_substitutions,
-        expr_pool,
-        expr_pool>;
+        pud_transient_ubs_state, pud_transient_ubs_state, pud_transient_ubs_state, pud_transient_ubs_state,
+        pud_transient_ubs_state, pud_transient_ubs_state, pud_transient_ubs_state, pud_transient_ubs_state>;
+    using binding_descent_t = pud_binding_descent<pud_node_added_substitutions>;
 
     test_functors                  functors;
     expr_pool                      exprs;
@@ -32,13 +29,15 @@ struct PudBindingDescentIntegrationTest : public ::testing::Test {
     }
 
     binding_descent_t at_root() {
-        return binding_descent_t{node_specs_, exprs, exprs};
+        return binding_descent_t{node_specs_};
     }
 
     const expr* resolve(const binding_descent_t& descent, uint32_t var_index) {
         pud_transient_ubs_state transient{descent.ubs_state()};
-        bind_map_t bind_map = transient.make_bind_map(exprs, exprs);
-        return bind_map.resolve(var_index);
+        bind_map_t bind_map = transient.make_bind_map();
+        if (const std::optional<framed_expr> value = bind_map.find_value(var_index))
+            return value->skeleton;
+        return exprs.make_var(bind_map.find_rep(var_index));
     }
 };
 

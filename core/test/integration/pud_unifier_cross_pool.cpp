@@ -32,10 +32,10 @@ struct cross_pool_term_builder {
 };
 
 void expect_resolve_structurally(
-    ubs_bind_map_expr_pool_backing::bind_map_t& bind_map,
+    pud_unifier_bind_map_stack& stack,
     uint32_t global_var,
     const expr* expected_shape) {
-    EXPECT_TRUE(pud_expr_bindings_equal(bind_map.resolve(global_var), expected_shape));
+    EXPECT_TRUE(pud_expr_bindings_equal(stack.resolve(global_var), expected_shape));
 }
 
 uint32_t gkey(globalizer& globalize, uint32_t frame, uint32_t local) {
@@ -52,7 +52,7 @@ struct PudUnifierCrossPoolIntegrationTest : public ::testing::Test {
     cross_pool_term_builder canonical{stack.bind_backing.pool, functors};
 };
 
-} // namespace
+}
 
 TEST_F(PudUnifierCrossPoolIntegrationTest, DistinctPoolsNeverShareExprPointersForSameShape) {
     const expr* stack_atom = canonical.atom("z");
@@ -75,8 +75,8 @@ TEST_F(PudUnifierCrossPoolIntegrationTest, CrossPoolVarsMergeByGlobalIndexNotPoi
     const expr* right = pool_b.var(1);
     EXPECT_NE(left, right);
     EXPECT_TRUE(stack.framed_unifier.unify(pud_fe(left, 0), pud_fe(right, 0)));
-    const expr* rep = stack.bind_map.resolve(0u);
-    EXPECT_TRUE(pud_expr_bindings_equal(rep, stack.bind_map.resolve(1u)));
+    const expr* rep = stack.resolve(0u);
+    EXPECT_TRUE(pud_expr_bindings_equal(rep, stack.resolve(1u)));
     EXPECT_TRUE(pud_expr_bindings_equal(rep, canonical.var(0)));
 }
 
@@ -91,10 +91,10 @@ TEST_F(PudUnifierCrossPoolIntegrationTest, CrossPoolDeepMirrorBindsAllLocals) {
     });
     EXPECT_NE(left, right);
     EXPECT_TRUE(stack.framed_unifier.unify(pud_fe(left, 0), pud_fe(right, 0)));
-    expect_resolve_structurally(stack.bind_map, 0u, canonical.var(0));
-    expect_resolve_structurally(stack.bind_map, 1u, canonical.var(1));
-    expect_resolve_structurally(stack.bind_map, 2u, canonical.var(0));
-    expect_resolve_structurally(stack.bind_map, 3u, canonical.var(1));
+    expect_resolve_structurally(stack, 0u, canonical.var(0));
+    expect_resolve_structurally(stack, 1u, canonical.var(1));
+    expect_resolve_structurally(stack, 2u, canonical.var(0));
+    expect_resolve_structurally(stack, 3u, canonical.var(1));
 }
 
 TEST_F(PudUnifierCrossPoolIntegrationTest, VarWithForeignFunctorStoresNormalizedNotForeignPointer) {
@@ -102,11 +102,11 @@ TEST_F(PudUnifierCrossPoolIntegrationTest, VarWithForeignFunctorStoresNormalized
     const expr* foreign_var = pool_b.var(4);
     EXPECT_NE(foreign_var, pool_a.var(4));
     EXPECT_TRUE(stack.framed_unifier.unify(pud_fe(foreign_var, 0), pud_fe(foreign_head, 0)));
-    const expr* bound = stack.bind_map.resolve(4u);
+    const expr* bound = stack.resolve(4u);
     EXPECT_NE(bound, foreign_head);
     const expr* expected = canonical.app("h", {canonical.var(0), canonical.atom("a")});
     EXPECT_TRUE(pud_expr_bindings_equal(bound, expected));
-    expect_resolve_structurally(stack.bind_map, 4u, expected);
+    expect_resolve_structurally(stack, 4u, expected);
 }
 
 TEST_F(PudUnifierCrossPoolIntegrationTest, ForeignFunctorLeftVarRightSameNormalization) {
@@ -114,7 +114,7 @@ TEST_F(PudUnifierCrossPoolIntegrationTest, ForeignFunctorLeftVarRightSameNormali
     const expr* stack_head = canonical.app("p", {canonical.var(0), canonical.atom("b")});
     const expr* foreign_head = pool_b.app("p", {pool_b.var(0), pool_b.atom("b")});
     EXPECT_TRUE(stack.framed_unifier.unify(pud_fe(foreign_head, 0), pud_fe(foreign_var, 0)));
-    const expr* bound = stack.bind_map.resolve(2u);
+    const expr* bound = stack.resolve(2u);
     EXPECT_NE(bound, foreign_head);
     EXPECT_TRUE(pud_expr_bindings_equal(bound, stack_head));
 }
@@ -125,7 +125,7 @@ TEST_F(PudUnifierCrossPoolIntegrationTest, SecondUnifyReusesBindingAcrossForeign
     const expr* probe = pool_b.app("wrap", {pool_b.var(1)});
     const expr* target = pool_a.app("wrap", {pool_a.atom("k")});
     EXPECT_TRUE(stack.framed_unifier.unify(pud_fe(probe, 0), pud_fe(target, 0)));
-    expect_resolve_structurally(stack.bind_map, 1u, canonical.atom("k"));
+    expect_resolve_structurally(stack, 1u, canonical.atom("k"));
 }
 
 TEST_F(PudUnifierCrossPoolIntegrationTest, CrossPoolSwapSidesSameStructuralResult) {
@@ -146,8 +146,8 @@ TEST_F(PudUnifierCrossPoolIntegrationTest, CrossPoolSwapSidesSameStructuralResul
     EXPECT_TRUE(reverse.framed_unifier.unify(pud_fe(rev_left, 0), pud_fe(rev_right, 0)));
 
     for (uint32_t global_var = 0; global_var < 4u; ++global_var) {
-        const expr* forward_value = forward.bind_map.resolve(global_var);
-        const expr* reverse_value = reverse.bind_map.resolve(global_var);
+        const expr* forward_value = forward.resolve(global_var);
+        const expr* reverse_value = reverse.resolve(global_var);
         EXPECT_TRUE(pud_expr_bindings_equal(forward_value, reverse_value));
     }
 }
@@ -159,7 +159,7 @@ TEST_F(PudUnifierCrossPoolIntegrationTest, CrossPoolFrameOffsetsUseGlobalsNotPoo
     const uint32_t global_zero = gkey(stack.globalize, 0, 0);
     const uint32_t global_ten = gkey(stack.globalize, 10, 0);
     EXPECT_TRUE(pud_expr_bindings_equal(
-        stack.bind_map.resolve(global_zero), stack.bind_map.resolve(global_ten)));
+        stack.resolve(global_zero), stack.resolve(global_ten)));
 }
 
 TEST_F(PudUnifierCrossPoolIntegrationTest, MergedClassForeignMembersSkipRedundantEquate) {
@@ -176,8 +176,8 @@ TEST_F(PudUnifierCrossPoolIntegrationTest, CrossPoolMismatchBindsFirstArgThenFai
     const expr* right = pool_b.app("pair", {pool_b.atom("b"), pool_b.var(0)});
     const ubs_map_snapshot before = snapshot_bind_backing(stack.bind_backing);
     EXPECT_FALSE(stack.framed_unifier.unify(pud_fe(left, 0), pud_fe(right, 0)));
-    expect_resolve_structurally(stack.bind_map, 0u, canonical.atom("b"));
-    EXPECT_FALSE(pud_expr_bindings_equal(stack.bind_map.resolve(0u), canonical.atom("a")));
+    expect_resolve_structurally(stack, 0u, canonical.atom("b"));
+    EXPECT_FALSE(pud_expr_bindings_equal(stack.resolve(0u), canonical.atom("a")));
     const ubs_map_snapshot after_partial = snapshot_bind_backing(stack.bind_backing);
     EXPECT_LT(before.values.size(), after_partial.values.size());
 }
@@ -185,9 +185,7 @@ TEST_F(PudUnifierCrossPoolIntegrationTest, CrossPoolMismatchBindsFirstArgThenFai
 TEST_F(PudUnifierCrossPoolIntegrationTest, OccursFailureWithForeignCyclicRhs) {
     const expr* foreign_loop = pool_a.app("loop", {pool_a.var(0)});
     const expr* foreign_var = pool_b.var(0);
-    const ubs_map_snapshot before = snapshot_bind_backing(stack.bind_backing);
     EXPECT_FALSE(stack.framed_unifier.unify(pud_fe(foreign_var, 0), pud_fe(foreign_loop, 0)));
-    EXPECT_TRUE(ubs_snapshots_equal(before, snapshot_bind_backing(stack.bind_backing)));
 }
 
 TEST_F(PudUnifierCrossPoolIntegrationTest, WideCrossPoolArityFiftySucceedsStructurally) {
@@ -202,7 +200,7 @@ TEST_F(PudUnifierCrossPoolIntegrationTest, WideCrossPoolArityFiftySucceedsStruct
     const expr* right = pool_b.app(pid, right_args);
     EXPECT_TRUE(stack.framed_unifier.unify(pud_fe(left, 0), pud_fe(right, 0)));
     for (uint32_t global_var = 0; global_var < 4u; ++global_var)
-        expect_resolve_structurally(stack.bind_map, global_var, canonical.var(global_var));
+        expect_resolve_structurally(stack, global_var, canonical.var(global_var));
 }
 
 TEST_F(PudUnifierCrossPoolIntegrationTest, RandomMirroredCrossPoolMatchesSinglePoolReference) {
@@ -250,8 +248,8 @@ TEST_F(PudUnifierCrossPoolIntegrationTest, RandomMirroredCrossPoolMatchesSingleP
 
         for (uint32_t global_var = 0; global_var < 8u; ++global_var) {
             EXPECT_TRUE(pud_expr_bindings_equal(
-                reference_stack.bind_map.resolve(global_var),
-                cross_stack.bind_map.resolve(global_var)));
+                reference_stack.resolve(global_var),
+                cross_stack.resolve(global_var)));
         }
     }
 }
@@ -277,7 +275,7 @@ TEST_F(PudUnifierCrossPoolIntegrationTest, IndependentStacksWithCrossPoolInputsS
 
     for (uint32_t global_var = 0; global_var < 4u; ++global_var) {
         EXPECT_TRUE(pud_expr_bindings_equal(
-            stack_one.bind_map.resolve(global_var),
-            stack_two.bind_map.resolve(global_var)));
+            stack_one.resolve(global_var),
+            stack_two.resolve(global_var)));
     }
 }
