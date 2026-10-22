@@ -8,16 +8,16 @@
 #include "functor_fixture.hpp"
 #include "infrastructure/db.hpp"
 #include "infrastructure/expr_pool.hpp"
-#include "infrastructure/pud_random_database_unfolder.hpp"
-#include "infrastructure/pud_random_unfold_chooser.hpp"
+#include "infrastructure/pud_random_database_expander.hpp"
+#include "infrastructure/pud_random_expansion_chooser.hpp"
 #include "infrastructure/pud_runtime.hpp"
 #include "pud_datalog_oracle.hpp"
 #include "pud_expr_structure.hpp"
 #include "value_objects/rule.hpp"
 
 namespace {
-using test_chooser_t = pud_random_unfold_chooser<pud_runtime>;
-using test_unfolder_t = pud_random_database_unfolder<pud_runtime, pud_runtime, test_chooser_t>;
+using test_chooser_t = pud_random_expansion_chooser<pud_runtime>;
+using test_expander_t = pud_random_database_expander<pud_runtime, pud_runtime, test_chooser_t>;
 
 struct database_under_test {
     database_under_test(uint32_t random_seed)
@@ -25,8 +25,8 @@ struct database_under_test {
         , runtime(database)
         , rng(random_seed)
         , chooser(runtime, rng)
-        , unfolder(runtime, runtime, chooser)
-        , unfolding(unfolder.unfold_database())
+        , expander(runtime, runtime, chooser)
+        , expanding(expander.expand_database())
         , proven()
         , opened_count(0)
         , ended(false) {}
@@ -35,19 +35,19 @@ struct database_under_test {
     pud_runtime runtime;
     std::mt19937 rng;
     test_chooser_t chooser;
-    test_unfolder_t unfolder;
-    coroutine<pud_frontier_change, void> unfolding;
+    test_expander_t expander;
+    coroutine<pud_frontier_change, void> expanding;
     std::set<pud_derivation_id> proven;
     size_t opened_count;
     bool ended;
 
     std::optional<pud_frontier_change> next() {
-        unfolding.resume();
-        if (!unfolding.has_yield()) {
+        expanding.resume();
+        if (!expanding.has_yield()) {
             ended = true;
             return std::nullopt;
         }
-        const pud_frontier_change change = unfolding.consume_yield();
+        const pud_frontier_change change = expanding.consume_yield();
         opened_count += change.opened.size();
         for (pud_derivation_id derivation : change.proven)
             proven.insert(derivation);
@@ -64,7 +64,7 @@ struct database_under_test {
     }
 };
 
-struct PudRandomDatabaseUnfolderIntegrationTest : public ::testing::Test {
+struct PudRandomDatabaseExpanderIntegrationTest : public ::testing::Test {
     expr_pool pool;
     test_functors functors;
     database_under_test subject{0};
@@ -104,9 +104,13 @@ struct PudRandomDatabaseUnfolderIntegrationTest : public ::testing::Test {
         }
     }
 
+    static const expr* materialized_head(database_under_test& target, pud_derivation_id derivation) {
+        return target.runtime.whnf(derivation).materialize(target.runtime.head(derivation));
+    }
+
     bool proves(database_under_test& target, const expr* fact) {
         for (pud_derivation_id derivation : target.proven) {
-            if (same_structure(target.runtime.head_expr(derivation), fact))
+            if (same_structure(materialized_head(target, derivation), fact))
                 return true;
         }
         return false;
@@ -115,7 +119,7 @@ struct PudRandomDatabaseUnfolderIntegrationTest : public ::testing::Test {
     std::set<datalog_fact> proven_facts(database_under_test& target) {
         std::set<datalog_fact> facts;
         for (pud_derivation_id derivation : target.proven) {
-            const expr* head = target.runtime.head_expr(derivation);
+            const expr* head = materialized_head(target, derivation);
             const expr::functor& head_functor = std::get<expr::functor>(head->content);
             std::vector<int> args;
             for (const expr* arg : head_functor.args) {
@@ -136,7 +140,7 @@ struct PudRandomDatabaseUnfolderIntegrationTest : public ::testing::Test {
 
 }
 
-TEST_F(PudRandomDatabaseUnfolderIntegrationTest, OpeningTheDatabaseOpensEveryRuleAndProvesEveryFact) {
+TEST_F(PudRandomDatabaseExpanderIntegrationTest, OpeningTheDatabaseOpensEveryRuleAndProvesEveryFact) {
     add_colors(subject);
     add_nat(subject);
     const pud_frontier_change opened = subject.next().value();
@@ -145,19 +149,19 @@ TEST_F(PudRandomDatabaseUnfolderIntegrationTest, OpeningTheDatabaseOpensEveryRul
     EXPECT_TRUE(opened.refuted.empty());
 }
 
-TEST_F(PudRandomDatabaseUnfolderIntegrationTest, RuleWhoseGoalHasNoCandidatesIsRefutedAtOpening) {
+TEST_F(PudRandomDatabaseExpanderIntegrationTest, RuleWhoseGoalHasNoCandidatesIsRefutedAtOpening) {
     axiom(subject, functor("p", {var(0)}), {functor("missing", {var(0)})}, 1);
     const pud_frontier_change opened = subject.next().value();
     EXPECT_EQ(opened.refuted.size(), 1u);
     EXPECT_FALSE(subject.next().has_value());
 }
 
-TEST_F(PudRandomDatabaseUnfolderIntegrationTest, EmptyDatabaseOnlyOpens) {
+TEST_F(PudRandomDatabaseExpanderIntegrationTest, EmptyDatabaseOnlyOpens) {
     EXPECT_EQ(subject.next(), std::optional<pud_frontier_change>{pud_frontier_change{}});
     EXPECT_FALSE(subject.next().has_value());
 }
 
-TEST_F(PudRandomDatabaseUnfolderIntegrationTest, FiniteDatabaseUnfoldsUntilNothingIsOpen) {
+TEST_F(PudRandomDatabaseExpanderIntegrationTest, FiniteDatabaseUnfoldsUntilNothingIsOpen) {
     add_colors(subject);
     EXPECT_LT(subject.drive(100), 100u);
     EXPECT_TRUE(subject.ended);
@@ -165,13 +169,13 @@ TEST_F(PudRandomDatabaseUnfolderIntegrationTest, FiniteDatabaseUnfoldsUntilNothi
     EXPECT_FALSE(proves(subject, functor("warmcolor", {atom("blue")})));
 }
 
-TEST_F(PudRandomDatabaseUnfolderIntegrationTest, EveryChosenUnfoldMeetsTheRuntimesPreconditions) {
+TEST_F(PudRandomDatabaseExpanderIntegrationTest, EveryChosenUnfoldMeetsTheRuntimesPreconditions) {
     add_colors(subject);
     add_nat(subject);
     EXPECT_NO_THROW(subject.drive(60));
 }
 
-TEST_F(PudRandomDatabaseUnfolderIntegrationTest, UnfoldingReachesEveryAxiomTree) {
+TEST_F(PudRandomDatabaseExpanderIntegrationTest, UnfoldingReachesEveryAxiomTree) {
     add_colors(subject);
     add_nat(subject);
     subject.drive(200);
@@ -179,13 +183,13 @@ TEST_F(PudRandomDatabaseUnfolderIntegrationTest, UnfoldingReachesEveryAxiomTree)
     EXPECT_TRUE(proves(subject, functor("nat", {functor("s", {atom("z")})}))) << "nat tree never unfolded";
 }
 
-TEST_F(PudRandomDatabaseUnfolderIntegrationTest, InfiniteRecursionNeverEnds) {
+TEST_F(PudRandomDatabaseExpanderIntegrationTest, InfiniteRecursionNeverEnds) {
     add_nat(subject);
     EXPECT_EQ(subject.drive(80), 80u);
     EXPECT_FALSE(subject.ended);
 }
 
-TEST_F(PudRandomDatabaseUnfolderIntegrationTest, SameSeedUnfoldsTheSameWay) {
+TEST_F(PudRandomDatabaseExpanderIntegrationTest, SameSeedUnfoldsTheSameWay) {
     database_under_test again{0};
     add_colors(subject);
     add_nat(subject);
@@ -195,7 +199,7 @@ TEST_F(PudRandomDatabaseUnfolderIntegrationTest, SameSeedUnfoldsTheSameWay) {
         ASSERT_EQ(subject.next(), again.next()) << "step " << step;
 }
 
-TEST_F(PudRandomDatabaseUnfolderIntegrationTest, FlatProgramsProveExactlyTheLeastModel) {
+TEST_F(PudRandomDatabaseExpanderIntegrationTest, FlatProgramsProveExactlyTheLeastModel) {
     for (unsigned seed = 0; seed < 20; ++seed) {
         SCOPED_TRACE("seed " + std::to_string(seed));
         database_under_test seeded{seed};
@@ -207,7 +211,7 @@ TEST_F(PudRandomDatabaseUnfolderIntegrationTest, FlatProgramsProveExactlyTheLeas
     }
 }
 
-TEST_F(PudRandomDatabaseUnfolderIntegrationTest, EveryUnfoldOrderProvesTheSameModel) {
+TEST_F(PudRandomDatabaseExpanderIntegrationTest, EveryUnfoldOrderProvesTheSameModel) {
     const datalog_program program = generate_datalog(3, false);
     for (uint32_t random_seed = 0; random_seed < 8; ++random_seed) {
         SCOPED_TRACE("random seed " + std::to_string(random_seed));
@@ -218,7 +222,7 @@ TEST_F(PudRandomDatabaseUnfolderIntegrationTest, EveryUnfoldOrderProvesTheSameMo
     }
 }
 
-TEST_F(PudRandomDatabaseUnfolderIntegrationTest, RecursiveProgramsOnlyProveEntailedFacts) {
+TEST_F(PudRandomDatabaseExpanderIntegrationTest, RecursiveProgramsOnlyProveEntailedFacts) {
     for (unsigned seed = 0; seed < 20; ++seed) {
         SCOPED_TRACE("seed " + std::to_string(seed));
         database_under_test seeded{seed};

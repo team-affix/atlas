@@ -655,38 +655,6 @@ struct pud_manifest_harness {
         }
     }
 
-    std::map<pud_mhq_head_id, std::map<pud_node_id, pud_body_goal_id>> scan_query_holders() {
-        std::map<pud_mhq_head_id, std::map<pud_node_id, pud_body_goal_id>> holders;
-        for (pud_mhq_head_id head = 0;; ++head) {
-            try {
-                manifest.query_head_nodes_.get(head);
-            } catch (const std::out_of_range&) {
-                break;
-            }
-            holders[head];
-        }
-        for (pud_node_id leaf_node : live_leaves_with_descents()) {
-            for (const auto& [goal, head] : manifest.node_descents_.get(leaf_node).body_goal_pq().get_query_heads())
-                holders[head].emplace(leaf_node, goal);
-        }
-        return holders;
-    }
-
-    void check_query_holders_match_the_stored_descents() {
-        if constexpr (requires (Manifest& any) { any.query_holders_; }) {
-            for (const auto& [head, scanned] : scan_query_holders()) {
-                std::set<pud_node_id> scanned_leaves;
-                for (const auto& [leaf_node, goal] : scanned) {
-                    scanned_leaves.insert(leaf_node);
-                    EXPECT_EQ(goal, scanned.begin()->second) << "head " << head << " is held under two goals";
-                    EXPECT_EQ(manifest.node_descents_.get(leaf_node).body_goal_pq().find_goal(head), goal)
-                        << "head " << head << " leaf " << leaf_node;
-                }
-                EXPECT_EQ(manifest.query_holders_.get(head), scanned_leaves) << "head " << head;
-            }
-        }
-    }
-
     void check_all() {
         check_live_leaves_are_exactly_the_stored_descents();
         check_open_leaves_are_exactly_the_live_leaves_with_open_goals();
@@ -706,7 +674,6 @@ struct pud_manifest_harness {
         check_query_head_node_is_an_ancestor_of_every_leaf_holding_it();
         check_every_candidate_path_is_a_real_root_first_chain();
         check_every_candidate_is_acceptable_at_every_leaf_holding_the_query();
-        check_query_holders_match_the_stored_descents();
     }
 };
 

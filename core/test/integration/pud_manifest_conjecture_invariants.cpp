@@ -219,10 +219,6 @@ TEST(PudManifestConjectureInvariantsTest, EveryCandidateIsAcceptableAtEveryLeafH
     sweep(&pud_manifest_harness<pud_manifest>::check_every_candidate_is_acceptable_at_every_leaf_holding_the_query);
 }
 
-TEST(PudManifestConjectureInvariantsTest, QueryHoldersMatchTheStoredDescents) {
-    sweep(&pud_manifest_harness<pud_manifest>::check_query_holders_match_the_stored_descents);
-}
-
 TEST(PudManifestConjectureInvariantsTest, RandomProgramsKeepInvariants) {
     for (unsigned seed = 100; seed < 200; ++seed) {
         for (bool recursive : {false, true}) {

@@ -52,7 +52,6 @@
 #include "infrastructure/pud_query_head_factory.hpp"
 #include "infrastructure/pud_query_head_forker.hpp"
 #include "infrastructure/pud_query_forks.hpp"
-#include "infrastructure/pud_query_holders.hpp"
 #include "infrastructure/pud_query_head_nodes.hpp"
 #include "infrastructure/pud_query_opener.hpp"
 #include "infrastructure/pud_refutation_propagator.hpp"
@@ -66,8 +65,6 @@
 #include "infrastructure/pud_transient_ubs_state.hpp"
 #include "infrastructure/pud_unifier.hpp"
 #include "infrastructure/pud_unifier_factory.hpp"
-#include "infrastructure/pud_unit_queries.hpp"
-#include "infrastructure/pud_unit_query_recorder.hpp"
 #include "infrastructure/pud_witness_search_head.hpp"
 #include "infrastructure/pud_witness_search_head_factory.hpp"
 #include "infrastructure/pud_witness_search_head_forker.hpp"
@@ -150,9 +147,6 @@ struct pud_manifest {
     struct mhq_t : pud_mhq<replay_descent_t, query_head_t, query_head_factory_t, query_head_forker_t, mhcs_t> {
         using pud_mhq::pud_mhq;
     };
-    struct unit_query_recorder_t : pud_unit_query_recorder<replay_descent_t, mhq_t, mhq_t, mhq_t, pud_unit_queries> {
-        using pud_unit_query_recorder::pud_unit_query_recorder;
-    };
 
     struct query_opener_t : pud_query_opener<
         replay_descent_t, bind_map_t, cycle_detector_t, unifier_t, pud_axioms, pud_node_heads,
@@ -166,7 +160,7 @@ struct pud_manifest {
     using body_goal_expr_descent_t = pud_body_goal_expr_descent<pud_node_added_body_goals, pud_call_sites>;
     using structure_watch_descent_t = pud_structure_watch_descent<pud_node_added_substitutions>;
     using body_goal_pq_descent_t = pud_body_goal_pq_descent<
-        query_opener_t, unit_query_recorder_t, unit_query_recorder_t, mhq_t, pud_call_sites,
+        query_opener_t, mhq_t, mhq_t, mhq_t, pud_call_sites,
         pud_query_head_nodes, pud_query_forks>;
     using base_descent_t = pud_base_descent<
         binding_descent_t, lvc_descent_t, next_body_goal_id_descent_t, body_goal_expr_descent_t,
@@ -174,16 +168,12 @@ struct pud_manifest {
     struct node_descents_t : pud_node_descents<base_descent_t> {
         using pud_node_descents::pud_node_descents;
     };
-    struct query_holders_t : pud_query_holders<
-        base_descent_t, node_descents_t, node_descents_t, node_descents_t, node_descents_t> {
-        using pud_query_holders::pud_query_holders;
-    };
     struct root_descent_maker_t : pud_root_descent_maker<
         base_descent_t, binding_descent_t, lvc_descent_t, next_body_goal_id_descent_t,
         body_goal_expr_descent_t, structure_watch_descent_t, body_goal_pq_descent_t,
         pud_node_added_substitutions, pud_node_added_var_count,
-        pud_node_added_body_goals, pud_call_sites, query_opener_t, unit_query_recorder_t,
-        unit_query_recorder_t, mhq_t, pud_query_head_nodes, pud_query_forks> {
+        pud_node_added_body_goals, pud_call_sites, query_opener_t, mhq_t,
+        mhq_t, mhq_t, pud_query_head_nodes, pud_query_forks> {
         using pud_root_descent_maker::pud_root_descent_maker;
     };
 
@@ -209,7 +199,7 @@ struct pud_manifest {
         pud_root_nodes, pud_node_parents, pud_node_live_child_counts> {
         using pud_refutation_propagator::pud_refutation_propagator;
     };
-    struct leaf_invalidator_t : pud_leaf_invalidator<mhws_t, mhcs_t, mhcs_t, unit_query_recorder_t> {
+    struct leaf_invalidator_t : pud_leaf_invalidator<mhws_t, mhcs_t, mhcs_t, mhq_t> {
         using pud_leaf_invalidator::pud_leaf_invalidator;
     };
     struct frontier_recorder_t : pud_frontier_recorder<pud_open_leaves, pud_open_leaves, pud_refuted_leaves> {
@@ -217,7 +207,7 @@ struct pud_manifest {
     };
     struct node_refuter_t : pud_node_refuter<
         live_leaf_finder_t, frontier_recorder_t, pud_open_leaves, frontier_recorder_t,
-        refutation_propagator_t, query_holders_t, leaf_invalidator_t, pud_query_head_nodes> {
+        refutation_propagator_t, node_descents_t, leaf_invalidator_t, pud_query_head_nodes> {
         using pud_node_refuter::pud_node_refuter;
     };
 
@@ -225,10 +215,10 @@ struct pud_manifest {
         node_descents_t, mhq_t, mhcs_t, acceptor_t, child_maker_t, pud_call_sites, pud_children,
         pud_leaf_nodes, frontier_recorder_t, pud_node_live_child_counts, refutation_propagator_t,
         leaf_invalidator_t, pud_query_head_nodes, node_refuter_t, refuted_node_checker_t,
-        query_holders_t, frontier_recorder_t, query_holders_t> {
+        node_descents_t, frontier_recorder_t, node_descents_t> {
         using pud_unfolder::pud_unfolder;
     };
-    struct leaf_activator_t : pud_leaf_activator<base_descent_t, query_holders_t, frontier_recorder_t, node_refuter_t> {
+    struct leaf_activator_t : pud_leaf_activator<base_descent_t, node_descents_t, frontier_recorder_t, node_refuter_t> {
         using pud_leaf_activator::pud_leaf_activator;
     };
     struct base_descent_runner_t : pud_base_descent_runner<
@@ -268,7 +258,6 @@ struct pud_manifest {
     pud_node_live_child_counts              node_live_child_counts_;
     pud_query_head_nodes                    query_head_nodes_;
     pud_query_forks                         query_forks_;
-    pud_unit_queries                        unit_queries_;
     refuted_node_checker_t                  refuted_node_checker_;
     frontier_recorder_t                     frontier_recorder_;
 
@@ -285,11 +274,9 @@ struct pud_manifest {
     query_head_factory_t                    query_head_factory_;
     query_head_forker_t                     query_head_forker_;
     mhq_t                                   mhq_;
-    unit_query_recorder_t                   unit_query_recorder_;
     query_opener_t                          query_opener_;
 
     node_descents_t                         node_descents_;
-    query_holders_t                         query_holders_;
     root_descent_maker_t                    root_descent_maker_;
 
     open_body_goal_finder_t                 open_body_goal_finder_;

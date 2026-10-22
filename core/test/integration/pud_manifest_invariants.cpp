@@ -174,10 +174,6 @@ TEST(PudManifestInvariantsTest, EveryCandidateIsAcceptableAtEveryLeafHoldingTheQ
     sweep(&pud_manifest_harness<pud_manifest>::check_every_candidate_is_acceptable_at_every_leaf_holding_the_query);
 }
 
-TEST(PudManifestInvariantsTest, QueryHoldersMatchTheStoredDescents) {
-    sweep(&pud_manifest_harness<pud_manifest>::check_query_holders_match_the_stored_descents);
-}
-
 TEST(PudManifestInvariantsTest, RandomRecursiveProgramsKeepEveryInvariant) {
     for (unsigned seed = 100; seed < 200; ++seed) {
         SCOPED_TRACE("seed " + std::to_string(seed));
