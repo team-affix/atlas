@@ -146,8 +146,8 @@ TEST(PudManifestInvariantsTest, LeafBindingMatchesItsReplayedSubstitutions) {
     sweep(&pud_manifest_harness<pud_manifest>::check_leaf_binding_matches_its_replayed_substitutions);
 }
 
-TEST(PudManifestInvariantsTest, StoredGoalsAreInTheirNodesRepresentatives) {
-    sweep(&pud_manifest_harness<pud_manifest>::check_stored_goals_are_in_their_nodes_representatives);
+TEST(PudManifestInvariantsTest, StoredGoalsUseTheirNodesRepresentatives) {
+    sweep(&pud_manifest_harness<pud_manifest>::check_stored_goals_use_their_nodes_representatives);
 }
 
 TEST(PudManifestInvariantsTest, SubstitutionsMeetTheWatchersPreconditions) {

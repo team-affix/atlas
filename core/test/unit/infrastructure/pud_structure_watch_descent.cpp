@@ -64,11 +64,9 @@ struct PudStructureWatchDescentTest : public ::testing::Test {
     }
 
     static std::vector<pud_watch_head_id> changes_at(const test_descent_t& parent, pud_node_id node) {
-        return parent.descend(node, {}, {}).structure_changes;
+        return parent.descend(node, {}, {}, pud_ubs_state{}).structure_changes;
     }
 };
-
-// ── root ─────────────────────────────────────────────────────────────────────
 
 TEST_F(PudStructureWatchDescentTest, RootHeadIdsAreTheWatchedIndices) {
     child_substitutions = {rep_instantiated(1, functor(a, {}))};
@@ -95,11 +93,9 @@ TEST_F(PudStructureWatchDescentTest, RepeatedRepInOneExpressionIsOneRep) {
     EXPECT_THAT(changes_at(at_root({functor(f, {var(3), var(3)})}), child), IsEmpty());
 }
 
-// ── result ───────────────────────────────────────────────────────────────────
-
 TEST_F(PudStructureWatchDescentTest, ResultCarriesChangesAddedIdsAndChild) {
     child_substitutions = {rep_instantiated(0, functor(g, {var(3)}))};
-    result_t result = at_root({functor(f, {var(0), var(1)})}).descend(child, {}, {var(4)});
+    result_t result = at_root({functor(f, {var(0), var(1)})}).descend(child, {}, {var(4)}, pud_ubs_state{});
     EXPECT_THAT(result.structure_changes, ElementsAre(0u));
     EXPECT_THAT(result.added_head_ids, ElementsAre(1u));
     grandchild_substitutions = {rep_instantiated(4, functor(a, {}))};
@@ -107,80 +103,74 @@ TEST_F(PudStructureWatchDescentTest, ResultCarriesChangesAddedIdsAndChild) {
 }
 
 TEST_F(PudStructureWatchDescentTest, NothingChangedAndNothingAddedIsEmpty) {
-    result_t result = at_root({var(0)}).descend(child, {}, {});
+    result_t result = at_root({var(0)}).descend(child, {}, {}, pud_ubs_state{});
     EXPECT_THAT(result.structure_changes, IsEmpty());
     EXPECT_THAT(result.added_head_ids, IsEmpty());
 }
 
-// ── watching through descend ─────────────────────────────────────────────────
-
 TEST_F(PudStructureWatchDescentTest, AddedIdsFollowTheWatchedOrder) {
-    result_t result = at_root({var(0)}).descend(child, {}, {var(1), var(2), var(3)});
+    result_t result = at_root({var(0)}).descend(child, {}, {var(1), var(2), var(3)}, pud_ubs_state{});
     EXPECT_THAT(result.added_head_ids, ElementsAre(1u, 2u, 3u));
 }
 
 TEST_F(PudStructureWatchDescentTest, AddedIdsKeepCountingAcrossLevels) {
-    result_t at_child = at_root({var(0)}).descend(child, {}, {var(1)});
-    result_t at_grandchild = at_child.child_descent.descend(grandchild, {}, {var(2)});
+    result_t at_child = at_root({var(0)}).descend(child, {}, {var(1)}, pud_ubs_state{});
+    result_t at_grandchild = at_child.child_descent.descend(grandchild, {}, {var(2)}, pud_ubs_state{});
     EXPECT_THAT(at_grandchild.added_head_ids, ElementsAre(2u));
 }
 
 TEST_F(PudStructureWatchDescentTest, UnwatchedIdsAreNotReused) {
-    result_t result = at_root({var(0), var(1)}).descend(child, {0}, {var(2)});
+    result_t result = at_root({var(0), var(1)}).descend(child, {0}, {var(2)}, pud_ubs_state{});
     EXPECT_THAT(result.added_head_ids, ElementsAre(2u));
 }
 
 TEST_F(PudStructureWatchDescentTest, NewlyWatchedIsNotAChangeInItsOwnStep) {
     child_substitutions = {rep_updated(1, 0)};
-    result_t result = at_root({functor(f, {var(0), var(1)})}).descend(child, {}, {functor(g, {var(0)})});
+    result_t result = at_root({functor(f, {var(0), var(1)})}).descend(child, {}, {functor(g, {var(0)})}, pud_ubs_state{});
     EXPECT_THAT(result.structure_changes, ElementsAre(0u));
     EXPECT_THAT(result.added_head_ids, ElementsAre(1u));
 }
 
 TEST_F(PudStructureWatchDescentTest, NewlyWatchedIsTrackedAtTheNextLevel) {
-    result_t at_child = at_root({}).descend(child, {}, {functor(f, {var(3)})});
+    result_t at_child = at_root({}).descend(child, {}, {functor(f, {var(3)})}, pud_ubs_state{});
     grandchild_substitutions = {rep_instantiated(3, functor(a, {}))};
     EXPECT_THAT(changes_at(at_child.child_descent, grandchild), ElementsAre(0u));
 }
 
 TEST_F(PudStructureWatchDescentTest, NewlyWatchedSharesRepsWithExistingHeads) {
-    result_t at_child = at_root({var(0)}).descend(child, {}, {functor(f, {var(0), var(1)})});
+    result_t at_child = at_root({var(0)}).descend(child, {}, {functor(f, {var(0), var(1)})}, pud_ubs_state{});
     grandchild_substitutions = {rep_instantiated(0, functor(a, {}))};
     EXPECT_THAT(changes_at(at_child.child_descent, grandchild), UnorderedElementsAre(0u, 1u));
 }
 
-// ── unwatching through descend ───────────────────────────────────────────────
-
 TEST_F(PudStructureWatchDescentTest, UnwatchedHeadIsNotAChangeInTheSameStep) {
     child_substitutions = {rep_instantiated(0, functor(a, {}))};
-    EXPECT_THAT(at_root({var(0), var(0)}).descend(child, {0}, {}).structure_changes, ElementsAre(1u));
+    EXPECT_THAT(at_root({var(0), var(0)}).descend(child, {0}, {}, pud_ubs_state{}).structure_changes, ElementsAre(1u));
 }
 
 TEST_F(PudStructureWatchDescentTest, UnwatchedHeadStaysGoneAtLaterLevels) {
-    result_t at_child = at_root({var(0), var(1)}).descend(child, {0}, {});
+    result_t at_child = at_root({var(0), var(1)}).descend(child, {0}, {}, pud_ubs_state{});
     grandchild_substitutions = {rep_instantiated(0, functor(a, {})), rep_instantiated(1, functor(a, {}))};
     EXPECT_THAT(changes_at(at_child.child_descent, grandchild), ElementsAre(1u));
 }
 
 TEST_F(PudStructureWatchDescentTest, UnwatchKeepsOtherHeadsOnSharedReps) {
-    result_t at_child = at_root({functor(f, {var(0)}), functor(g, {var(0), var(1)})}).descend(child, {1}, {});
+    result_t at_child = at_root({functor(f, {var(0)}), functor(g, {var(0), var(1)})}).descend(child, {1}, {}, pud_ubs_state{});
     grandchild_substitutions = {rep_instantiated(0, functor(a, {}))};
     EXPECT_THAT(changes_at(at_child.child_descent, grandchild), ElementsAre(0u));
 }
 
 TEST_F(PudStructureWatchDescentTest, UnwatchOfAnUnknownIdIsHarmless) {
     child_substitutions = {rep_instantiated(0, functor(a, {}))};
-    EXPECT_THAT(at_root({var(0)}).descend(child, {42}, {}).structure_changes, ElementsAre(0u));
+    EXPECT_THAT(at_root({var(0)}).descend(child, {42}, {}, pud_ubs_state{}).structure_changes, ElementsAre(0u));
 }
 
 TEST_F(PudStructureWatchDescentTest, UnwatchAndWatchInTheSameStep) {
-    result_t at_child = at_root({var(0)}).descend(child, {0}, {var(0)});
+    result_t at_child = at_root({var(0)}).descend(child, {0}, {var(0)}, pud_ubs_state{});
     EXPECT_THAT(at_child.added_head_ids, ElementsAre(1u));
     grandchild_substitutions = {rep_instantiated(0, functor(a, {}))};
     EXPECT_THAT(changes_at(at_child.child_descent, grandchild), ElementsAre(1u));
 }
-
-// ── descend: no change ───────────────────────────────────────────────────────
 
 TEST_F(PudStructureWatchDescentTest, DescendLooksUpTheChildSubstitutions) {
     EXPECT_CALL(get_substitutions, get(child)).WillOnce(ReturnRef(child_substitutions));
@@ -216,8 +206,6 @@ TEST_F(PudStructureWatchDescentTest, UpdatingRepsOfDifferentHeadsChangesNothing)
     EXPECT_THAT(changes_at(at_root({var(0), var(1)}), child), IsEmpty());
 }
 
-// ── descend: rep instantiated ────────────────────────────────────────────────
-
 TEST_F(PudStructureWatchDescentTest, InstantiatingAWatchedRepChangesItsHead) {
     child_substitutions = {rep_instantiated(1, functor(a, {}))};
     EXPECT_THAT(changes_at(at_root({functor(f, {var(0), var(1)})}), child), ElementsAre(0u));
@@ -231,35 +219,35 @@ TEST_F(PudStructureWatchDescentTest, InstantiatingChangesEveryHeadWatchingThatRe
 
 TEST_F(PudStructureWatchDescentTest, GroundInstantiationLeavesTheOtherRepsWatched) {
     child_substitutions = {rep_instantiated(0, functor(a, {}))};
-    result_t at_child = at_root({functor(f, {var(0), var(1)})}).descend(child, {}, {});
+    result_t at_child = at_root({functor(f, {var(0), var(1)})}).descend(child, {}, {}, pud_ubs_state{});
     grandchild_substitutions = {rep_instantiated(1, functor(a, {}))};
     EXPECT_THAT(changes_at(at_child.child_descent, grandchild), ElementsAre(0u));
 }
 
 TEST_F(PudStructureWatchDescentTest, GroundInstantiationLeavesNothingToCollapse) {
     child_substitutions = {rep_instantiated(0, functor(a, {}))};
-    result_t at_child = at_root({functor(f, {var(0), var(1)})}).descend(child, {}, {});
+    result_t at_child = at_root({functor(f, {var(0), var(1)})}).descend(child, {}, {}, pud_ubs_state{});
     grandchild_substitutions = {rep_updated(1, 5)};
     EXPECT_THAT(changes_at(at_child.child_descent, grandchild), IsEmpty());
 }
 
 TEST_F(PudStructureWatchDescentTest, InstantiationWatchesTheValuesReps) {
     child_substitutions = {rep_instantiated(0, functor(g, {var(3), var(4)}))};
-    result_t at_child = at_root({functor(f, {var(0), var(1)})}).descend(child, {}, {});
+    result_t at_child = at_root({functor(f, {var(0), var(1)})}).descend(child, {}, {}, pud_ubs_state{});
     grandchild_substitutions = {rep_updated(4, 3)};
     EXPECT_THAT(changes_at(at_child.child_descent, grandchild), ElementsAre(0u));
 }
 
 TEST_F(PudStructureWatchDescentTest, InstantiationWatchesRepsNestedInTheValue) {
     child_substitutions = {rep_instantiated(0, functor(g, {functor(f, {var(6)}), var(7)}))};
-    result_t at_child = at_root({var(0)}).descend(child, {}, {});
+    result_t at_child = at_root({var(0)}).descend(child, {}, {}, pud_ubs_state{});
     grandchild_substitutions = {rep_updated(7, 6)};
     EXPECT_THAT(changes_at(at_child.child_descent, grandchild), ElementsAre(0u));
 }
 
 TEST_F(PudStructureWatchDescentTest, InstantiationIntroducingAnAlreadyWatchedRepKeepsWatchingIt) {
     child_substitutions = {rep_instantiated(0, functor(g, {var(1)}))};
-    result_t at_child = at_root({functor(f, {var(0), var(1)})}).descend(child, {}, {});
+    result_t at_child = at_root({functor(f, {var(0), var(1)})}).descend(child, {}, {}, pud_ubs_state{});
     EXPECT_THAT(at_child.structure_changes, ElementsAre(0u));
     grandchild_substitutions = {rep_instantiated(1, functor(a, {}))};
     EXPECT_THAT(changes_at(at_child.child_descent, grandchild), ElementsAre(0u));
@@ -267,12 +255,10 @@ TEST_F(PudStructureWatchDescentTest, InstantiationIntroducingAnAlreadyWatchedRep
 
 TEST_F(PudStructureWatchDescentTest, IntroducedRepsAreWatchedAtTheNextLevel) {
     child_substitutions = {rep_instantiated(0, functor(g, {var(3)}))};
-    result_t at_child = at_root({var(0)}).descend(child, {}, {});
+    result_t at_child = at_root({var(0)}).descend(child, {}, {}, pud_ubs_state{});
     grandchild_substitutions = {rep_instantiated(3, functor(a, {}))};
     EXPECT_THAT(changes_at(at_child.child_descent, grandchild), ElementsAre(0u));
 }
-
-// ── descend: rep updated ─────────────────────────────────────────────────────
 
 TEST_F(PudStructureWatchDescentTest, UpdatingTwoRepsOfTheSameHeadChangesIt) {
     child_substitutions = {rep_updated(1, 0)};
@@ -286,14 +272,14 @@ TEST_F(PudStructureWatchDescentTest, CollapseIsAChangeWhicheverRepSurvives) {
 
 TEST_F(PudStructureWatchDescentTest, CollapsedHeadIsWatchedUnderTheSurvivingRep) {
     child_substitutions = {rep_updated(1, 0)};
-    result_t at_child = at_root({functor(f, {var(0), var(1)})}).descend(child, {}, {});
+    result_t at_child = at_root({functor(f, {var(0), var(1)})}).descend(child, {}, {}, pud_ubs_state{});
     grandchild_substitutions = {rep_instantiated(0, functor(a, {}))};
     EXPECT_THAT(changes_at(at_child.child_descent, grandchild), ElementsAre(0u));
 }
 
 TEST_F(PudStructureWatchDescentTest, DemotedRepIsWatchedThroughTheSurvivingRep) {
     child_substitutions = {rep_updated(4, 1)};
-    result_t at_child = at_root({functor(f, {var(4)})}).descend(child, {}, {});
+    result_t at_child = at_root({functor(f, {var(4)})}).descend(child, {}, {}, pud_ubs_state{});
     EXPECT_THAT(at_child.structure_changes, IsEmpty());
     grandchild_substitutions = {rep_instantiated(1, functor(a, {}))};
     EXPECT_THAT(changes_at(at_child.child_descent, grandchild), ElementsAre(0u));
@@ -301,21 +287,21 @@ TEST_F(PudStructureWatchDescentTest, DemotedRepIsWatchedThroughTheSurvivingRep) 
 
 TEST_F(PudStructureWatchDescentTest, DemotedRepIsNoLongerWatchedUnderItsOldIndex) {
     child_substitutions = {rep_updated(4, 1)};
-    result_t at_child = at_root({functor(f, {var(4)})}).descend(child, {}, {});
+    result_t at_child = at_root({functor(f, {var(4)})}).descend(child, {}, {}, pud_ubs_state{});
     grandchild_substitutions = {rep_instantiated(4, functor(a, {}))};
     EXPECT_THAT(changes_at(at_child.child_descent, grandchild), IsEmpty());
 }
 
 TEST_F(PudStructureWatchDescentTest, RepUpdateFollowsTheSubstitutionNotTheSmallerIndex) {
     child_substitutions = {rep_updated(1, 4)};
-    result_t at_child = at_root({functor(f, {var(1)})}).descend(child, {}, {});
+    result_t at_child = at_root({functor(f, {var(1)})}).descend(child, {}, {}, pud_ubs_state{});
     grandchild_substitutions = {rep_instantiated(4, functor(a, {}))};
     EXPECT_THAT(changes_at(at_child.child_descent, grandchild), ElementsAre(0u));
 }
 
 TEST_F(PudStructureWatchDescentTest, SurvivingRepHeadsStayInPlace) {
     child_substitutions = {rep_updated(4, 1)};
-    result_t at_child = at_root({functor(f, {var(1)})}).descend(child, {}, {});
+    result_t at_child = at_root({functor(f, {var(1)})}).descend(child, {}, {}, pud_ubs_state{});
     EXPECT_THAT(at_child.structure_changes, IsEmpty());
     grandchild_substitutions = {rep_instantiated(1, functor(a, {}))};
     EXPECT_THAT(changes_at(at_child.child_descent, grandchild), ElementsAre(0u));
@@ -323,7 +309,7 @@ TEST_F(PudStructureWatchDescentTest, SurvivingRepHeadsStayInPlace) {
 
 TEST_F(PudStructureWatchDescentTest, MergedClassInstantiationChangesHeadsOfBothSides) {
     child_substitutions = {rep_updated(0, 1)};
-    result_t at_child = at_root({var(0), var(1)}).descend(child, {}, {});
+    result_t at_child = at_root({var(0), var(1)}).descend(child, {}, {}, pud_ubs_state{});
     ASSERT_THAT(at_child.structure_changes, IsEmpty());
     grandchild_substitutions = {rep_instantiated(1, functor(a, {}))};
     EXPECT_THAT(changes_at(at_child.child_descent, grandchild), UnorderedElementsAre(0u, 1u));
@@ -342,13 +328,11 @@ TEST_F(PudStructureWatchDescentTest, ChainedRepUpdatesAtOneNodeCollapseAcrossThr
 
 TEST_F(PudStructureWatchDescentTest, SurvivingRepInstantiatedAtTheSameNodeIsDropped) {
     child_substitutions = {rep_updated(1, 0), rep_instantiated(0, functor(a, {}))};
-    result_t at_child = at_root({functor(f, {var(0), var(1)})}).descend(child, {}, {});
+    result_t at_child = at_root({functor(f, {var(0), var(1)})}).descend(child, {}, {}, pud_ubs_state{});
     EXPECT_THAT(at_child.structure_changes, ElementsAre(0u));
     grandchild_substitutions = {rep_instantiated(0, functor(a, {})), rep_instantiated(1, functor(a, {}))};
     EXPECT_THAT(changes_at(at_child.child_descent, grandchild), IsEmpty());
 }
-
-// ── descend: reporting ───────────────────────────────────────────────────────
 
 TEST_F(PudStructureWatchDescentTest, HeadIsReportedOncePerDescend) {
     child_substitutions = {rep_instantiated(0, functor(a, {})), rep_instantiated(1, functor(a, {}))};
@@ -362,20 +346,18 @@ TEST_F(PudStructureWatchDescentTest, HeadChangedByRepUpdateAndRepInstantiationIs
 
 TEST_F(PudStructureWatchDescentTest, HeadChangedAtChildCanChangeAgainAtGrandchild) {
     child_substitutions = {rep_instantiated(0, functor(a, {}))};
-    result_t at_child = at_root({functor(f, {var(0), var(1)})}).descend(child, {}, {});
+    result_t at_child = at_root({functor(f, {var(0), var(1)})}).descend(child, {}, {}, pud_ubs_state{});
     ASSERT_THAT(at_child.structure_changes, ElementsAre(0u));
     grandchild_substitutions = {rep_instantiated(1, functor(a, {}))};
     EXPECT_THAT(changes_at(at_child.child_descent, grandchild), ElementsAre(0u));
 }
 
-// ── descend: persistence ─────────────────────────────────────────────────────
-
 TEST_F(PudStructureWatchDescentTest, ParentIsUntouchedByDescend) {
     test_descent_t parent = at_root({functor(f, {var(0), var(1)})});
     child_substitutions = {rep_instantiated(0, functor(g, {var(5)}))};
-    parent.descend(child, {0}, {var(7)});
+    parent.descend(child, {0}, {var(7)}, pud_ubs_state{});
     sibling_substitutions = {rep_instantiated(0, functor(a, {}))};
-    result_t at_sibling = parent.descend(sibling, {}, {var(8)});
+    result_t at_sibling = parent.descend(sibling, {}, {var(8)}, pud_ubs_state{});
     EXPECT_THAT(at_sibling.structure_changes, ElementsAre(0u));
     EXPECT_THAT(at_sibling.added_head_ids, ElementsAre(1u));
 }
@@ -391,7 +373,7 @@ TEST_F(PudStructureWatchDescentTest, SiblingsDescendIndependently) {
 TEST_F(PudStructureWatchDescentTest, DescentIsAssignable) {
     child_substitutions = {rep_instantiated(0, functor(a, {}))};
     test_descent_t current = at_root({var(0), var(1)});
-    current = current.descend(child, {}, {}).child_descent;
+    current = current.descend(child, {}, {}, pud_ubs_state{}).child_descent;
     grandchild_substitutions = {rep_instantiated(1, functor(a, {}))};
     EXPECT_THAT(changes_at(current, grandchild), ElementsAre(1u));
 }
@@ -400,7 +382,7 @@ TEST_F(PudStructureWatchDescentTest, CopiedDescentsAreIndependent) {
     test_descent_t original = at_root({var(0), var(1)});
     test_descent_t copy = original;
     child_substitutions = {rep_instantiated(0, functor(a, {}))};
-    copy = copy.descend(child, {1}, {}).child_descent;
+    copy = copy.descend(child, {1}, {}, pud_ubs_state{}).child_descent;
     sibling_substitutions = {rep_instantiated(1, functor(a, {}))};
     EXPECT_THAT(changes_at(original, sibling), ElementsAre(1u));
     EXPECT_THAT(changes_at(copy, sibling), IsEmpty());
@@ -408,12 +390,10 @@ TEST_F(PudStructureWatchDescentTest, CopiedDescentsAreIndependent) {
 
 TEST_F(PudStructureWatchDescentTest, UnwatchInAChildLeavesTheParentWatching) {
     test_descent_t parent = at_root({var(0)});
-    parent.descend(child, {0}, {});
+    parent.descend(child, {0}, {}, pud_ubs_state{});
     sibling_substitutions = {rep_instantiated(0, functor(a, {}))};
     EXPECT_THAT(changes_at(parent, sibling), ElementsAre(0u));
 }
-
-// ── ordering ─────────────────────────────────────────────────────────────────
 
 TEST_F(PudStructureWatchDescentTest, ChangesFollowTheSubstitutionOrder) {
     child_substitutions = {
@@ -443,63 +423,59 @@ TEST_F(PudStructureWatchDescentTest, CollapseReportedAtTheSubstitutionThatCauses
     EXPECT_THAT(changes_at(root, child), ElementsAre(1u, 0u));
 }
 
-// ── unwatch corner cases ─────────────────────────────────────────────────────
-
 TEST_F(PudStructureWatchDescentTest, UnwatchingTheSameIdTwiceIsHarmless) {
     child_substitutions = {rep_instantiated(0, functor(a, {}))};
-    result_t result = at_root({var(0), var(0)}).descend(child, {0, 0}, {var(5)});
+    result_t result = at_root({var(0), var(0)}).descend(child, {0, 0}, {var(5)}, pud_ubs_state{});
     EXPECT_THAT(result.structure_changes, ElementsAre(1u));
     EXPECT_THAT(result.added_head_ids, ElementsAre(2u));
 }
 
 TEST_F(PudStructureWatchDescentTest, UnwatchingAFutureIdDoesNotAffectTheHeadThatLaterGetsIt) {
-    result_t at_child = at_root({var(0)}).descend(child, {3}, {var(1), var(2), var(3)});
+    result_t at_child = at_root({var(0)}).descend(child, {3}, {var(1), var(2), var(3)}, pud_ubs_state{});
     ASSERT_THAT(at_child.added_head_ids, ElementsAre(1u, 2u, 3u));
     grandchild_substitutions = {rep_instantiated(3, functor(a, {}))};
     EXPECT_THAT(changes_at(at_child.child_descent, grandchild), ElementsAre(3u));
 }
 
 TEST_F(PudStructureWatchDescentTest, UnwatchingEveryHeadLeavesNothingToChange) {
-    result_t at_child = at_root({var(0), functor(f, {var(0), var(1)}), var(2)}).descend(child, {0, 1, 2}, {});
+    result_t at_child = at_root({var(0), functor(f, {var(0), var(1)}), var(2)}).descend(child, {0, 1, 2}, {}, pud_ubs_state{});
     grandchild_substitutions = {rep_instantiated(0, functor(a, {})), rep_updated(2, 1)};
     EXPECT_THAT(changes_at(at_child.child_descent, grandchild), IsEmpty());
 }
 
 TEST_F(PudStructureWatchDescentTest, UnwatchingAGroundHeadIsHarmless) {
-    result_t result = at_root({functor(f, {functor(a, {})}), var(0)}).descend(child, {0}, {var(1)});
+    result_t result = at_root({functor(f, {functor(a, {})}), var(0)}).descend(child, {0}, {var(1)}, pud_ubs_state{});
     EXPECT_THAT(result.added_head_ids, ElementsAre(2u));
     grandchild_substitutions = {rep_instantiated(0, functor(a, {}))};
     EXPECT_THAT(changes_at(result.child_descent, grandchild), ElementsAre(1u));
 }
 
 TEST_F(PudStructureWatchDescentTest, RewatchingAnUnwatchedRepWorks) {
-    result_t at_child = at_root({var(0)}).descend(child, {0}, {});
-    result_t at_grandchild = at_child.child_descent.descend(grandchild, {}, {functor(f, {var(0)})});
+    result_t at_child = at_root({var(0)}).descend(child, {0}, {}, pud_ubs_state{});
+    result_t at_grandchild = at_child.child_descent.descend(grandchild, {}, {functor(f, {var(0)})}, pud_ubs_state{});
     sibling_substitutions = {rep_instantiated(0, functor(a, {}))};
     EXPECT_THAT(changes_at(at_grandchild.child_descent, sibling), ElementsAre(1u));
 }
 
 TEST_F(PudStructureWatchDescentTest, UnwatchingAHeadThatWasMovedToTheSurvivingRepForgetsIt) {
     child_substitutions = {rep_updated(4, 1)};
-    result_t at_child = at_root({var(4), var(1)}).descend(child, {}, {});
-    result_t at_grandchild = at_child.child_descent.descend(grandchild, {0}, {});
+    result_t at_child = at_root({var(4), var(1)}).descend(child, {}, {}, pud_ubs_state{});
+    result_t at_grandchild = at_child.child_descent.descend(grandchild, {0}, {}, pud_ubs_state{});
     sibling_substitutions = {rep_instantiated(1, functor(a, {}))};
     EXPECT_THAT(changes_at(at_grandchild.child_descent, sibling), ElementsAre(1u));
 }
 
 TEST_F(PudStructureWatchDescentTest, UnwatchingAHeadThatGainedIntroducedRepsForgetsThemToo) {
     child_substitutions = {rep_instantiated(0, functor(g, {var(5), var(6)}))};
-    result_t at_child = at_root({var(0), var(6)}).descend(child, {}, {});
-    result_t at_grandchild = at_child.child_descent.descend(grandchild, {0}, {});
+    result_t at_child = at_root({var(0), var(6)}).descend(child, {}, {}, pud_ubs_state{});
+    result_t at_grandchild = at_child.child_descent.descend(grandchild, {0}, {}, pud_ubs_state{});
     sibling_substitutions = {rep_instantiated(5, functor(a, {})), rep_instantiated(6, functor(a, {}))};
     EXPECT_THAT(changes_at(at_grandchild.child_descent, sibling), ElementsAre(1u));
 }
 
-// ── watch corner cases ───────────────────────────────────────────────────────
-
 TEST_F(PudStructureWatchDescentTest, WatchingTheSameExpressionTwiceGivesTwoHeads) {
     const expr* watched = functor(f, {var(0)});
-    result_t at_child = at_root({}).descend(child, {}, {watched, watched});
+    result_t at_child = at_root({}).descend(child, {}, {watched, watched}, pud_ubs_state{});
     ASSERT_THAT(at_child.added_head_ids, ElementsAre(0u, 1u));
     grandchild_substitutions = {rep_instantiated(0, functor(a, {}))};
     EXPECT_THAT(changes_at(at_child.child_descent, grandchild), UnorderedElementsAre(0u, 1u));
@@ -513,7 +489,7 @@ TEST_F(PudStructureWatchDescentTest, RootWatchingTheSameExpressionTwiceGivesTwoH
 
 TEST_F(PudStructureWatchDescentTest, WatchingAfterACollapseStartsFromTheCollapsedStructure) {
     child_substitutions = {rep_updated(1, 0)};
-    result_t at_child = at_root({functor(f, {var(0), var(1)})}).descend(child, {}, {functor(g, {var(0), var(0)})});
+    result_t at_child = at_root({functor(f, {var(0), var(1)})}).descend(child, {}, {functor(g, {var(0), var(0)})}, pud_ubs_state{});
     grandchild_substitutions = {rep_updated(2, 0)};
     EXPECT_THAT(changes_at(at_child.child_descent, grandchild), IsEmpty());
 }
@@ -521,14 +497,12 @@ TEST_F(PudStructureWatchDescentTest, WatchingAfterACollapseStartsFromTheCollapse
 TEST_F(PudStructureWatchDescentTest, WatchingOnlyAtADeepLevelWorks) {
     test_descent_t at = at_root({});
     for (pud_node_id level_node = 10; level_node < 20; ++level_node)
-        at = at.descend(level_node, {}, {}).child_descent;
-    result_t deep = at.descend(child, {}, {var(9)});
+        at = at.descend(level_node, {}, {}, pud_ubs_state{}).child_descent;
+    result_t deep = at.descend(child, {}, {var(9)}, pud_ubs_state{});
     ASSERT_THAT(deep.added_head_ids, ElementsAre(0u));
     grandchild_substitutions = {rep_instantiated(9, functor(a, {}))};
     EXPECT_THAT(changes_at(deep.child_descent, grandchild), ElementsAre(0u));
 }
-
-// ── interaction between heads ────────────────────────────────────────────────
 
 TEST_F(PudStructureWatchDescentTest, OneRepUpdateCollapsesEveryHeadContainingBothReps) {
     child_substitutions = {rep_updated(1, 0)};
@@ -538,7 +512,7 @@ TEST_F(PudStructureWatchDescentTest, OneRepUpdateCollapsesEveryHeadContainingBot
 
 TEST_F(PudStructureWatchDescentTest, ThreeWayMergeCollapsesTwice) {
     child_substitutions = {rep_updated(1, 0)};
-    result_t at_child = at_root({functor(f, {var(0), var(1), var(2)})}).descend(child, {}, {});
+    result_t at_child = at_root({functor(f, {var(0), var(1), var(2)})}).descend(child, {}, {}, pud_ubs_state{});
     ASSERT_THAT(at_child.structure_changes, ElementsAre(0u));
     grandchild_substitutions = {rep_updated(2, 0)};
     EXPECT_THAT(changes_at(at_child.child_descent, grandchild), ElementsAre(0u));
@@ -546,7 +520,7 @@ TEST_F(PudStructureWatchDescentTest, ThreeWayMergeCollapsesTwice) {
 
 TEST_F(PudStructureWatchDescentTest, InstantiatingIntoAnotherHeadsRepLeavesThatHeadAlone) {
     child_substitutions = {rep_instantiated(0, functor(g, {var(5)}))};
-    result_t at_child = at_root({var(0), var(5)}).descend(child, {}, {});
+    result_t at_child = at_root({var(0), var(5)}).descend(child, {}, {}, pud_ubs_state{});
     EXPECT_THAT(at_child.structure_changes, ElementsAre(0u));
     grandchild_substitutions = {rep_instantiated(5, functor(a, {}))};
     EXPECT_THAT(changes_at(at_child.child_descent, grandchild), UnorderedElementsAre(0u, 1u));
@@ -554,14 +528,14 @@ TEST_F(PudStructureWatchDescentTest, InstantiatingIntoAnotherHeadsRepLeavesThatH
 
 TEST_F(PudStructureWatchDescentTest, IntroducedRepThatMeetsAnExistingRepCollapsesLater) {
     child_substitutions = {rep_instantiated(0, functor(g, {var(2)}))};
-    result_t at_child = at_root({functor(f, {var(0), var(1)})}).descend(child, {}, {});
+    result_t at_child = at_root({functor(f, {var(0), var(1)})}).descend(child, {}, {}, pud_ubs_state{});
     grandchild_substitutions = {rep_updated(2, 1)};
     EXPECT_THAT(changes_at(at_child.child_descent, grandchild), ElementsAre(0u));
 }
 
 TEST_F(PudStructureWatchDescentTest, RenamingChainWithoutCollapseNeverReports) {
     child_substitutions = {rep_updated(5, 4), rep_updated(4, 3), rep_updated(3, 2)};
-    result_t at_child = at_root({functor(f, {var(5), var(0)})}).descend(child, {}, {});
+    result_t at_child = at_root({functor(f, {var(5), var(0)})}).descend(child, {}, {}, pud_ubs_state{});
     EXPECT_THAT(at_child.structure_changes, IsEmpty());
     grandchild_substitutions = {rep_instantiated(2, functor(a, {}))};
     EXPECT_THAT(changes_at(at_child.child_descent, grandchild), ElementsAre(0u));
@@ -569,15 +543,13 @@ TEST_F(PudStructureWatchDescentTest, RenamingChainWithoutCollapseNeverReports) {
 
 TEST_F(PudStructureWatchDescentTest, RepUpdateOfAnUnseenSurvivingRepCreatesItsEntry) {
     child_substitutions = {rep_updated(3, 7)};
-    result_t at_child = at_root({var(3)}).descend(child, {}, {});
+    result_t at_child = at_root({var(3)}).descend(child, {}, {}, pud_ubs_state{});
     grandchild_substitutions = {rep_updated(7, 0)};
-    result_t at_grandchild = at_child.child_descent.descend(grandchild, {}, {});
+    result_t at_grandchild = at_child.child_descent.descend(grandchild, {}, {}, pud_ubs_state{});
     EXPECT_THAT(at_grandchild.structure_changes, IsEmpty());
     sibling_substitutions = {rep_instantiated(0, functor(a, {}))};
     EXPECT_THAT(changes_at(at_grandchild.child_descent, sibling), ElementsAre(0u));
 }
-
-// ── stress ───────────────────────────────────────────────────────────────────
 
 TEST_F(PudStructureWatchDescentTest, ManyHeadsOnDistinctRepsAreReportedInSubstitutionOrder) {
     const uint32_t head_count = 2000;
@@ -606,7 +578,7 @@ TEST_F(PudStructureWatchDescentTest, LongRenamingChainAtOneNodeCollapsesOnlyAtTh
     const uint32_t chain_length = 1500;
     for (uint32_t rep = chain_length; rep > 1; --rep)
         child_substitutions.push_back(rep_updated(rep, rep - 1));
-    result_t at_child = at_root({functor(f, {var(0), var(chain_length)})}).descend(child, {}, {});
+    result_t at_child = at_root({functor(f, {var(0), var(chain_length)})}).descend(child, {}, {}, pud_ubs_state{});
     EXPECT_THAT(at_child.structure_changes, IsEmpty());
     grandchild_substitutions = {rep_updated(1, 0)};
     EXPECT_THAT(changes_at(at_child.child_descent, grandchild), ElementsAre(0u));
@@ -621,7 +593,7 @@ TEST_F(PudStructureWatchDescentTest, LongRenamingChainAcrossLevelsCollapsesOnlyA
         const pud_node_id level_node = 100 + step;
         level_substitutions.at(step) = {rep_updated(demoted, demoted - 1)};
         ON_CALL(get_substitutions, get(level_node)).WillByDefault(ReturnRef(level_substitutions.at(step)));
-        result_t result = at.descend(level_node, {}, {});
+        result_t result = at.descend(level_node, {}, {}, pud_ubs_state{});
         const bool last_step = step + 1 == chain_length;
         if (last_step) {
             EXPECT_THAT(result.structure_changes, ElementsAre(0u));
@@ -636,7 +608,7 @@ TEST_F(PudStructureWatchDescentTest, DeepPathWithRollingWatchAndUnwatch) {
     const uint32_t depth = 1000;
     test_descent_t at = at_root({var(0)});
     for (uint32_t step = 1; step <= depth; ++step) {
-        result_t result = at.descend(10000 + step, {step - 1}, {var(step)});
+        result_t result = at.descend(10000 + step, {step - 1}, {var(step)}, pud_ubs_state{});
         ASSERT_THAT(result.added_head_ids, ElementsAre(step));
         at = result.child_descent;
     }
@@ -661,4 +633,4 @@ TEST_F(PudStructureWatchDescentTest, WideBranchingFromOneParentStaysIndependent)
     }
 }
 
-}  // namespace
+}

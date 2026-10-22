@@ -5,6 +5,7 @@
 #include "infrastructure/expr_pool.hpp"
 #include "infrastructure/pud_node_added_substitutions.hpp"
 #include "infrastructure/pud_structure_watch_descent.hpp"
+#include "infrastructure/pud_transient_ubs_state.hpp"
 #include "value_objects/pud_substitution.hpp"
 
 using ::testing::ElementsAre;
@@ -42,11 +43,9 @@ struct PudStructureWatchDescentIntegrationTest : public ::testing::Test {
     }
 
     static std::vector<pud_watch_head_id> changes_at(const watch_descent_t& parent, pud_node_id node) {
-        return parent.descend(node, {}, {}).structure_changes;
+        return parent.descend(node, {}, {}, pud_ubs_state{}).structure_changes;
     }
 };
-
-// ── rep instantiated ─────────────────────────────────────────────────────────
 
 TEST_F(PudStructureWatchDescentIntegrationTest, InstantiatingAWatchedRepChangesIt) {
     node_specs_.store(child, {rep_instantiated(0, functor("a", {}))});
@@ -67,7 +66,7 @@ TEST_F(PudStructureWatchDescentIntegrationTest, InstantiationChangesEveryExpress
 TEST_F(PudStructureWatchDescentIntegrationTest, RepsIntroducedByAnInstantiationAreWatched) {
     node_specs_.store(child, {rep_instantiated(0, functor("f", {var(3)}))});
     node_specs_.store(grandchild, {rep_instantiated(3, functor("a", {}))});
-    result_t at_child = at_root({functor("g", {var(0)})}).descend(child, {}, {});
+    result_t at_child = at_root({functor("g", {var(0)})}).descend(child, {}, {}, pud_ubs_state{});
     ASSERT_THAT(at_child.structure_changes, ElementsAre(0u));
     EXPECT_THAT(changes_at(at_child.child_descent, grandchild), ElementsAre(0u));
 }
@@ -75,11 +74,9 @@ TEST_F(PudStructureWatchDescentIntegrationTest, RepsIntroducedByAnInstantiationA
 TEST_F(PudStructureWatchDescentIntegrationTest, GroundInstantiationStopsWatchingThatRep) {
     node_specs_.store(child, {rep_instantiated(0, functor("a", {}))});
     node_specs_.store(grandchild, {rep_updated(1, 5)});
-    result_t at_child = at_root({functor("f", {var(0), var(1)})}).descend(child, {}, {});
+    result_t at_child = at_root({functor("f", {var(0), var(1)})}).descend(child, {}, {}, pud_ubs_state{});
     EXPECT_THAT(changes_at(at_child.child_descent, grandchild), IsEmpty());
 }
-
-// ── rep updated ──────────────────────────────────────────────────────────────
 
 TEST_F(PudStructureWatchDescentIntegrationTest, UpdatingTwoRepsOfTheExpressionChangesIt) {
     node_specs_.store(child, {rep_updated(1, 0)});
@@ -94,7 +91,7 @@ TEST_F(PudStructureWatchDescentIntegrationTest, UpdatingAnOutsideRepChangesNothi
 TEST_F(PudStructureWatchDescentIntegrationTest, DemotedRepIsWatchedThroughTheSurvivingRep) {
     node_specs_.store(child, {rep_updated(4, 1)});
     node_specs_.store(grandchild, {rep_instantiated(1, functor("a", {}))});
-    result_t at_child = at_root({functor("f", {var(4)})}).descend(child, {}, {});
+    result_t at_child = at_root({functor("f", {var(4)})}).descend(child, {}, {}, pud_ubs_state{});
     ASSERT_THAT(at_child.structure_changes, IsEmpty());
     EXPECT_THAT(changes_at(at_child.child_descent, grandchild), ElementsAre(0u));
 }
@@ -102,7 +99,7 @@ TEST_F(PudStructureWatchDescentIntegrationTest, DemotedRepIsWatchedThroughTheSur
 TEST_F(PudStructureWatchDescentIntegrationTest, MergingRepsOfTwoExpressionsLinksBothToTheSurvivingRep) {
     node_specs_.store(child, {rep_updated(1, 0)});
     node_specs_.store(grandchild, {rep_instantiated(0, functor("a", {}))});
-    result_t at_child = at_root({functor("f", {var(0)}), functor("g", {var(1)})}).descend(child, {}, {});
+    result_t at_child = at_root({functor("f", {var(0)}), functor("g", {var(1)})}).descend(child, {}, {}, pud_ubs_state{});
     ASSERT_THAT(at_child.structure_changes, IsEmpty());
     EXPECT_THAT(changes_at(at_child.child_descent, grandchild), UnorderedElementsAre(0u, 1u));
 }
@@ -110,17 +107,15 @@ TEST_F(PudStructureWatchDescentIntegrationTest, MergingRepsOfTwoExpressionsLinks
 TEST_F(PudStructureWatchDescentIntegrationTest, CollapseAcrossTwoLevels) {
     node_specs_.store(child, {rep_updated(2, 1)});
     node_specs_.store(grandchild, {rep_updated(1, 0)});
-    result_t at_child = at_root({functor("f", {var(0), var(2)})}).descend(child, {}, {});
+    result_t at_child = at_root({functor("f", {var(0), var(2)})}).descend(child, {}, {}, pud_ubs_state{});
     ASSERT_THAT(at_child.structure_changes, IsEmpty());
     EXPECT_THAT(changes_at(at_child.child_descent, grandchild), ElementsAre(0u));
 }
 
-// ── watching and unwatching below the root ───────────────────────────────────
-
 TEST_F(PudStructureWatchDescentIntegrationTest, WatchAtAChildTakesTheExpressionInThatNodesReps) {
     node_specs_.store(child, {rep_instantiated(0, functor("f", {var(3)}))});
     node_specs_.store(grandchild, {rep_instantiated(3, functor("a", {}))});
-    result_t at_child = at_root({}).descend(child, {}, {functor("h", {functor("f", {var(3)})})});
+    result_t at_child = at_root({}).descend(child, {}, {functor("h", {functor("f", {var(3)})})}, pud_ubs_state{});
     ASSERT_THAT(at_child.added_head_ids, ElementsAre(0u));
     EXPECT_THAT(changes_at(at_child.child_descent, grandchild), ElementsAre(0u));
 }
@@ -128,7 +123,7 @@ TEST_F(PudStructureWatchDescentIntegrationTest, WatchAtAChildTakesTheExpressionI
 TEST_F(PudStructureWatchDescentIntegrationTest, WatchAtAChildUsesTheSurvivingRep) {
     node_specs_.store(child, {rep_updated(4, 1)});
     node_specs_.store(grandchild, {rep_updated(1, 0)});
-    result_t at_child = at_root({}).descend(child, {}, {functor("h", {var(1), var(0)})});
+    result_t at_child = at_root({}).descend(child, {}, {functor("h", {var(1), var(0)})}, pud_ubs_state{});
     EXPECT_THAT(changes_at(at_child.child_descent, grandchild), ElementsAre(0u));
 }
 
@@ -136,16 +131,14 @@ TEST_F(PudStructureWatchDescentIntegrationTest, WatchUnwatchAcrossThreeLevels) {
     node_specs_.store(child, {rep_instantiated(0, functor("f", {var(5)}))});
     node_specs_.store(grandchild, {rep_updated(6, 5)});
     node_specs_.store(great_grandchild, {rep_instantiated(5, functor("a", {}))});
-    result_t at_child = at_root({var(0), var(1)}).descend(child, {1}, {functor("g", {var(6)})});
+    result_t at_child = at_root({var(0), var(1)}).descend(child, {1}, {functor("g", {var(6)})}, pud_ubs_state{});
     EXPECT_THAT(at_child.structure_changes, ElementsAre(0u));
     EXPECT_THAT(at_child.added_head_ids, ElementsAre(2u));
-    result_t at_grandchild = at_child.child_descent.descend(grandchild, {}, {var(5)});
+    result_t at_grandchild = at_child.child_descent.descend(grandchild, {}, {var(5)}, pud_ubs_state{});
     EXPECT_THAT(at_grandchild.structure_changes, IsEmpty());
     EXPECT_THAT(at_grandchild.added_head_ids, ElementsAre(3u));
     EXPECT_THAT(changes_at(at_grandchild.child_descent, great_grandchild), UnorderedElementsAre(0u, 2u, 3u));
 }
-
-// ── many substitutions at one node ─────────────────────────────────────────
 
 TEST_F(PudStructureWatchDescentIntegrationTest, UnrelatedBindingsLeaveStructureAlone) {
     node_specs_.store(child, {
@@ -165,13 +158,11 @@ TEST_F(PudStructureWatchDescentIntegrationTest, InstantiationValueIsWrittenInThe
     node_specs_.store(child, {rep_updated(3, 1)});
     node_specs_.store(grandchild, {rep_instantiated(0, functor("g", {var(1)}))});
     node_specs_.store(great_grandchild, {rep_instantiated(1, functor("a", {}))});
-    result_t at_child = at_root({functor("f", {var(0), var(1)})}).descend(child, {}, {});
-    result_t at_grandchild = at_child.child_descent.descend(grandchild, {}, {});
+    result_t at_child = at_root({functor("f", {var(0), var(1)})}).descend(child, {}, {}, pud_ubs_state{});
+    result_t at_grandchild = at_child.child_descent.descend(grandchild, {}, {}, pud_ubs_state{});
     ASSERT_THAT(at_grandchild.structure_changes, ElementsAre(0u));
     EXPECT_THAT(changes_at(at_grandchild.child_descent, great_grandchild), ElementsAre(0u));
 }
-
-// ── branching ────────────────────────────────────────────────────────────────
 
 TEST_F(PudStructureWatchDescentIntegrationTest, SiblingBranchesSeeTheirOwnChanges) {
     node_specs_.store(child, {rep_instantiated(0, functor("a", {}))});
@@ -187,7 +178,7 @@ TEST_F(PudStructureWatchDescentIntegrationTest, ChangeInOneBranchDoesNotLeakInto
     node_specs_.store(grandchild, {rep_updated(1, 0)});
     watch_descent_t root = at_root({functor("f", {var(0), var(1)})});
     ASSERT_THAT(changes_at(root, child), ElementsAre(0u));
-    result_t at_sibling = root.descend(sibling, {}, {});
+    result_t at_sibling = root.descend(sibling, {}, {}, pud_ubs_state{});
     EXPECT_THAT(at_sibling.structure_changes, IsEmpty());
     EXPECT_THAT(changes_at(at_sibling.child_descent, grandchild), ElementsAre(0u));
 }
@@ -217,7 +208,7 @@ TEST_F(PudStructureWatchDescentIntegrationTest, LongRenamingChainAcrossStoredLev
         const uint32_t demoted = chain_length - step;
         const pud_node_id level_node = 1000 + step;
         node_specs_.store(level_node, {rep_updated(demoted, demoted - 1)});
-        result_t result = at.descend(level_node, {}, {});
+        result_t result = at.descend(level_node, {}, {}, pud_ubs_state{});
         const bool last_step = step + 1 == chain_length;
         EXPECT_EQ(result.structure_changes.size(), last_step ? 1u : 0u) << "step " << step;
         at = result.child_descent;
@@ -227,7 +218,7 @@ TEST_F(PudStructureWatchDescentIntegrationTest, LongRenamingChainAcrossStoredLev
 TEST_F(PudStructureWatchDescentIntegrationTest, UnwatchedAndRewatchedExpressionAcrossLevels) {
     node_specs_.store(child, {rep_updated(4, 2)});
     node_specs_.store(grandchild, {rep_instantiated(2, functor("a", {}))});
-    result_t at_child = at_root({functor("f", {var(4)})}).descend(child, {0}, {functor("f", {var(2)})});
+    result_t at_child = at_root({functor("f", {var(4)})}).descend(child, {0}, {functor("f", {var(2)})}, pud_ubs_state{});
     ASSERT_THAT(at_child.structure_changes, IsEmpty());
     ASSERT_THAT(at_child.added_head_ids, ElementsAre(1u));
     EXPECT_THAT(changes_at(at_child.child_descent, grandchild), ElementsAre(1u));
@@ -237,6 +228,18 @@ TEST_F(PudStructureWatchDescentIntegrationTest, UnwatchingInOneBranchDoesNotAffe
     node_specs_.store(child, {rep_instantiated(0, functor("a", {}))});
     node_specs_.store(sibling, {rep_instantiated(0, functor("a", {}))});
     watch_descent_t root = at_root({functor("f", {var(0)}), functor("g", {var(0)})});
-    EXPECT_THAT(root.descend(child, {0}, {}).structure_changes, ElementsAre(1u));
+    EXPECT_THAT(root.descend(child, {0}, {}, pud_ubs_state{}).structure_changes, ElementsAre(1u));
     EXPECT_THAT(changes_at(root, sibling), UnorderedElementsAre(0u, 1u));
+}
+
+TEST_F(PudStructureWatchDescentIntegrationTest, AWatchedVarBoundInTheChildIsSeenThroughItsValue) {
+    pud_transient_ubs_state transient_ubs_state{pud_ubs_state{}};
+    transient_ubs_state.make_bind_map().instantiate(0, framed_expr{functor("s", {var(3)}), 0});
+    const pud_ubs_state child_ubs_state = transient_ubs_state.to_persistent_state();
+    node_specs_.store(child, {});
+    node_specs_.store(grandchild, {rep_instantiated(3, functor("a", {}))});
+    result_t at_child = at_root({}).descend(child, {}, {functor("g", {var(0)})}, child_ubs_state);
+    EXPECT_EQ(at_child.added_head_ids, (std::vector<pud_watch_head_id>{0}));
+    result_t at_grandchild = at_child.child_descent.descend(grandchild, {}, {}, pud_ubs_state{});
+    EXPECT_THAT(at_grandchild.structure_changes, ElementsAre(0u));
 }

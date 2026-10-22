@@ -24,6 +24,7 @@
 #include "infrastructure/pud_cycle_detector_factory.hpp"
 #include "infrastructure/pud_children.hpp"
 #include "infrastructure/pud_conjecture_initializer.hpp"
+#include "infrastructure/pud_exporter.hpp"
 #include "infrastructure/pud_frontier_recorder.hpp"
 #include "infrastructure/pud_leaf_activator.hpp"
 #include "infrastructure/pud_unfolder.hpp"
@@ -63,7 +64,6 @@
 #include "infrastructure/pud_structure_watch_descent.hpp"
 #include "infrastructure/pud_touched_var_logger.hpp"
 #include "infrastructure/pud_transient_ubs_state.hpp"
-#include "infrastructure/pud_translating_normalizer.hpp"
 #include "infrastructure/pud_unifier.hpp"
 #include "infrastructure/pud_unifier_factory.hpp"
 #include "infrastructure/pud_unit_queries.hpp"
@@ -91,7 +91,7 @@ struct pud_manifest {
     using unifier_t = unifier_factory_t::unifier_t;
     using logger_t = pud_touched_var_logger<bind_map_t, bind_map_t, std::vector<uint32_t>>;
     using logging_unifier_t = pud_unifier<globalizer, bind_map_t, bind_map_t, logger_t, logger_t, cycle_detector_t>;
-    using translating_normalizer_t = pud_translating_normalizer<globalizer, expr_pool, expr_pool, bind_map_t, bind_map_t>;
+    using exporter_t = pud_exporter<globalizer, expr_pool, expr_pool, bind_map_t, bind_map_t, bind_map_t>;
 
     struct refuted_node_checker_t : pud_refuted_node_checker<
         pud_leaf_nodes, pud_refuted_leaves, pud_node_live_child_counts> {
@@ -191,7 +191,7 @@ struct pud_manifest {
         using pud_open_body_goal_finder::pud_open_body_goal_finder;
     };
     struct acceptor_t : pud_acceptor<
-        bind_map_t, cycle_detector_t, logging_unifier_t, logger_t, translating_normalizer_t,
+        bind_map_t, cycle_detector_t, logging_unifier_t, logger_t, exporter_t,
         open_body_goal_finder_t, pud_node_heads, pud_node_added_substitutions,
         globalizer, expr_pool, expr_pool, cycle_detector_factory_t> {
         using pud_acceptor::pud_acceptor;

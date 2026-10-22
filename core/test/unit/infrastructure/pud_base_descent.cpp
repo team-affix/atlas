@@ -91,7 +91,8 @@ struct MockStructureWatchDescent {
     descend_result descend(
         pud_node_id child,
         const std::vector<pud_watch_head_id>& unwatch,
-        const std::vector<const expr*>& watch) const;
+        const std::vector<const expr*>& watch,
+        const pud_ubs_state& child_ubs_state) const;
 };
 
 struct MockStructureWatchDescent::descend_result {
@@ -103,7 +104,8 @@ struct MockStructureWatchDescent::descend_result {
 MockStructureWatchDescent::descend_result MockStructureWatchDescent::descend(
     pud_node_id child,
     const std::vector<pud_watch_head_id>& unwatch,
-    const std::vector<const expr*>& watch) const {
+    const std::vector<const expr*>& watch,
+    const pud_ubs_state&) const {
     watch_result_t watched = sub_descent_ops->descend_structure_watch(tag, child, unwatch, watch);
     return {watched.structure_changes, watched.added_head_ids, MockStructureWatchDescent{watched.child_tag}};
 }

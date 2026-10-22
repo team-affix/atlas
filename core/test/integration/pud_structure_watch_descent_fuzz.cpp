@@ -192,7 +192,7 @@ struct PudStructureWatchDescentFuzzTest : public ::testing::Test {
                 expected.insert(head_id);
         }
 
-        const pud_structure_watch_result<watch_descent_t> result = parent.watch.descend(child, unwatch, watch);
+        const pud_structure_watch_result<watch_descent_t> result = parent.watch.descend(child, unwatch, watch, child_binding.ubs_state());
         const std::set<pud_watch_head_id> actual(result.structure_changes.begin(), result.structure_changes.end());
         EXPECT_EQ(actual.size(), result.structure_changes.size()) << "a head was reported twice at node " << child;
         EXPECT_EQ(actual, expected) << "at node " << child << " depth " << parent.depth + 1;

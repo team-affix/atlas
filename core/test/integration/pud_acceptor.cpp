@@ -15,7 +15,7 @@
 #include "infrastructure/pud_open_body_goal_finder.hpp"
 #include "infrastructure/pud_root_nodes.hpp"
 #include "infrastructure/pud_transient_ubs_state.hpp"
-#include "infrastructure/pud_translating_normalizer.hpp"
+#include "infrastructure/pud_exporter.hpp"
 #include "infrastructure/pud_unifier.hpp"
 #include "infrastructure/pud_touched_var_logger.hpp"
 
@@ -30,10 +30,10 @@ struct PudAcceptorIntegrationTest : public ::testing::Test {
     using cycle_detector_t = pud_cycle_detector<globalizer, bind_map_t, bind_map_t>;
     using logger_t = pud_touched_var_logger<bind_map_t, bind_map_t, std::vector<uint32_t>>;
     using unifier_t = pud_unifier<globalizer, bind_map_t, bind_map_t, logger_t, logger_t, cycle_detector_t>;
-    using translating_normalizer_t = pud_translating_normalizer<globalizer, expr_pool, expr_pool, bind_map_t, bind_map_t>;
+    using exporter_t = pud_exporter<globalizer, expr_pool, expr_pool, bind_map_t, bind_map_t, bind_map_t>;
     using open_goal_finder_t = pud_open_body_goal_finder<pud_node_added_body_goals, pud_call_sites>;
     using acceptor_t = pud_acceptor<
-        bind_map_t, cycle_detector_t, unifier_t, logger_t, translating_normalizer_t,
+        bind_map_t, cycle_detector_t, unifier_t, logger_t, exporter_t,
         open_goal_finder_t, pud_node_heads, pud_node_added_substitutions, globalizer, expr_pool,
         expr_pool, cycle_detector_factory_t>;
 
@@ -141,7 +141,7 @@ TEST_F(PudAcceptorIntegrationTest, AcceptorsBindingsAreRespected) {
     const pud_node_id same = root(functor("eq", {var(0), var(0)}), {});
     const pud_child_delta delta = acceptor.accept(
         bound(0, atom("a")), 2, functor("eq", {var(0), var(1)}), {same});
-    EXPECT_THAT(delta.substitutions, ElementsAre(pud_substitution{.var_idx = 1, .value = atom("a")}));
+    EXPECT_THAT(delta.substitutions, ElementsAre(pud_substitution{.var_idx = 1, .value = var(0)}));
 }
 
 TEST_F(PudAcceptorIntegrationTest, UntouchedAcceptorVariablesAreNotSubstituted) {
@@ -181,5 +181,14 @@ TEST_F(PudAcceptorIntegrationTest, SharedFreshVariablesAreTranslatedConsistently
     EXPECT_THAT(
         delta.body_goals,
         ElementsAre(functor("q", {functor("g", {var(0)})}), functor("r", {functor("g", {var(0)}), var(0)})));
+    EXPECT_EQ(delta.var_count, 0u);
+}
+
+TEST_F(PudAcceptorIntegrationTest, CallerVarsAreExportedWithoutBeingLookedUp) {
+    const pud_node_id rule = root(functor("q", {var(0)}), {functor("r", {var(0)})});
+    const pud_child_delta delta = acceptor.accept(
+        bound(0, functor("s", {var(1)})), 2, functor("q", {var(0)}), {rule});
+    EXPECT_THAT(delta.substitutions, IsEmpty());
+    EXPECT_THAT(delta.body_goals, ElementsAre(functor("r", {var(0)})));
     EXPECT_EQ(delta.var_count, 0u);
 }

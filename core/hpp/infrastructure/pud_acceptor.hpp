@@ -3,7 +3,6 @@
 
 #include <algorithm>
 #include <cstdint>
-#include <unordered_map>
 #include <vector>
 #include "infrastructure/pud_transient_ubs_state.hpp"
 #include "value_objects/expr.hpp"
@@ -19,7 +18,7 @@ template<
     typename CycleDetector,
     typename Unifier,
     typename Logger,
-    typename TranslatingNormalizer,
+    typename Exporter,
     typename IFindOpenBodyGoals,
     typename IGetNodeHead,
     typename IGetNodeAddedSubstitutions,
@@ -53,12 +52,12 @@ private:
 
 #define PUD_ACCEPTOR_TEMPLATE                                                              \
     template<typename BindMap, typename CycleDetector, typename Unifier, typename Logger,     \
-             typename TranslatingNormalizer, typename IFindOpenBodyGoals,                  \
+             typename Exporter, typename IFindOpenBodyGoals,                  \
              typename IGetNodeHead,                                                         \
              typename IGetNodeAddedSubstitutions, typename IGlobalize, typename IMakeVar,  \
              typename IMakeFunctor, typename IMakeCycleDetector>
 #define PUD_ACCEPTOR                                                                       \
-    pud_acceptor<BindMap, CycleDetector, Unifier, Logger, TranslatingNormalizer,              \
+    pud_acceptor<BindMap, CycleDetector, Unifier, Logger, Exporter,              \
         IFindOpenBodyGoals, IGetNodeHead, IGetNodeAddedSubstitutions,       \
         IGlobalize, IMakeVar, IMakeFunctor, IMakeCycleDetector>
 
@@ -124,20 +123,20 @@ pud_child_delta PUD_ACCEPTOR::accept(
     std::sort(changed_reps.begin(), changed_reps.end());
     changed_reps.erase(std::unique(changed_reps.begin(), changed_reps.end()), changed_reps.end());
 
-    TranslatingNormalizer translating_normalizer{globalize_, make_functor_, make_var_, bind_map, bind_map};
-    std::unordered_map<uint32_t, uint32_t> translation;
+    Exporter exporter{globalize_, make_functor_, make_var_, bind_map, bind_map, bind_map, acceptor_lvc};
     pud_child_delta delta{.substitutions = {}, .body_goals = {}, .var_count = 0};
     for (uint32_t changed_rep : changed_reps) {
+        const uint32_t rep = bind_map.find_rep(changed_rep);
         delta.substitutions.push_back(pud_substitution{
             .var_idx = changed_rep,
-            .value = translating_normalizer.normalize(
-                framed_expr{make_var_.make_var(changed_rep), 0}, acceptor_lvc, translation),
+            .value = rep != changed_rep
+                ? make_var_.make_var(rep)
+                : exporter.export_expr(bind_map.find_value(changed_rep).value()),
         });
     }
     for (const expr* body_goal : open_body_goals)
-        delta.body_goals.push_back(
-            translating_normalizer.normalize(framed_expr{body_goal, acceptor_lvc}, acceptor_lvc, translation));
-    delta.var_count = static_cast<uint32_t>(translation.size());
+        delta.body_goals.push_back(exporter.export_expr(framed_expr{body_goal, acceptor_lvc}));
+    delta.var_count = exporter.fresh_var_count();
     return delta;
 }
 

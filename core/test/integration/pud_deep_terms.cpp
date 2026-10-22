@@ -10,7 +10,7 @@
 #include "infrastructure/pud_normalizer_factory.hpp"
 #include "infrastructure/pud_structure_watch_descent.hpp"
 #include "infrastructure/pud_transient_ubs_state.hpp"
-#include "infrastructure/pud_translating_normalizer.hpp"
+#include "infrastructure/pud_exporter.hpp"
 #include "infrastructure/pud_unifier_factory.hpp"
 
 namespace {
@@ -25,7 +25,7 @@ struct PudDeepTermsIntegrationTest : public ::testing::Test {
     using normalizer_t = normalizer_factory_t::normalizer_t;
     using cycle_detector_t = pud_cycle_detector<globalizer, bind_map_t, bind_map_t>;
     using unifier_factory_t = pud_unifier_factory<globalizer, cycle_detector_t, bind_map_t>;
-    using translating_normalizer_t = pud_translating_normalizer<globalizer, expr_pool, expr_pool, bind_map_t, bind_map_t>;
+    using exporter_t = pud_exporter<globalizer, expr_pool, expr_pool, bind_map_t, bind_map_t, bind_map_t>;
 
     test_functors functors;
     expr_pool exprs;
@@ -103,13 +103,18 @@ TEST_F(PudDeepTermsIntegrationTest, GlobalNormalizerHandlesAVeryDeepChainOfBindi
     EXPECT_EQ(normalizer.normalize(framed_expr{var(0), 0}), deep(chain, var(chain)));
 }
 
-TEST_F(PudDeepTermsIntegrationTest, TranslatingNormalizerHandlesAVeryDeepTerm) {
-    translating_normalizer_t translating{globalize, exprs, exprs, bind_map, bind_map};
-    std::unordered_map<uint32_t, uint32_t> translation;
-    EXPECT_EQ(
-        translating.normalize(framed_expr{deep(k_deep, var(3)), 10}, 10, translation),
-        deep(k_deep, var(10)));
-    EXPECT_EQ(translation.size(), 1u);
+TEST_F(PudDeepTermsIntegrationTest, ExporterHandlesAVeryDeepTerm) {
+    exporter_t exporter{globalize, exprs, exprs, bind_map, bind_map, bind_map, 10};
+    EXPECT_EQ(exporter.export_expr(framed_expr{deep(k_deep, var(3)), 10}), deep(k_deep, var(10)));
+    EXPECT_EQ(exporter.fresh_var_count(), 1u);
+}
+
+TEST_F(PudDeepTermsIntegrationTest, ExporterFollowsAVeryDeepChainOfCalleeBindings) {
+    const uint32_t chain = 50000;
+    for (uint32_t index = 0; index < chain; ++index)
+        bind(10 + index, functor("s", {var(11 + index)}));
+    exporter_t exporter{globalize, exprs, exprs, bind_map, bind_map, bind_map, 10};
+    EXPECT_EQ(exporter.export_expr(framed_expr{var(0), 10}), deep(chain, var(10)));
 }
 
 TEST_F(PudDeepTermsIntegrationTest, UnifierUnifiesTwoVeryDeepTerms) {
@@ -151,7 +156,7 @@ TEST_F(PudDeepTermsIntegrationTest, StructureWatchWatchesAVeryDeepGoal) {
     substitutions.store(1, {pud_substitution{.var_idx = 0, .value = atom("a")}});
     pud_structure_watch_descent<pud_node_added_substitutions> watcher{
         substitutions, {functor("p", {deep(k_deep, var(0))})}};
-    const auto watched = watcher.descend(1, {}, {deep(k_deep, var(0))});
+    const auto watched = watcher.descend(1, {}, {deep(k_deep, var(0))}, pud_ubs_state{});
     EXPECT_EQ(watched.structure_changes, (std::vector<pud_watch_head_id>{0}));
     EXPECT_EQ(watched.added_head_ids, (std::vector<pud_watch_head_id>{1}));
 }

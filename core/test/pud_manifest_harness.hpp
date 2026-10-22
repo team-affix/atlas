@@ -410,6 +410,11 @@ struct pud_manifest_harness {
         return var(bind_map.find_rep(index));
     }
 
+    uint32_t rep_in(const pud_ubs_state& env, uint32_t index) {
+        pud_transient_ubs_state transient_ubs_state{env};
+        return transient_ubs_state.make_bind_map().find_rep(index);
+    }
+
     const expr* normalize_in(const pud_ubs_state& env, const expr* skeleton) {
         pud_transient_ubs_state transient_ubs_state{env};
         auto bind_map = transient_ubs_state.make_bind_map();
@@ -522,14 +527,14 @@ struct pud_manifest_harness {
             EXPECT_EQ(env_at_leaf(node), env_of(node)) << "leaf " << node;
     }
 
-    void check_stored_goals_are_in_their_nodes_representatives() {
+    void check_stored_goals_use_their_nodes_representatives() {
         for (pud_node_id node : all_nodes()) {
             const pud_ubs_state env = env_of(node);
             const uint32_t lvc = lvc_of(node);
             for (const expr* goal : manifest.node_added_body_goals_.get(node)) {
                 for (uint32_t index : vars_in(goal)) {
                     EXPECT_LT(index, lvc) << "node " << node;
-                    EXPECT_EQ(resolve_in(env, index), var(index)) << "node " << node << " var " << index;
+                    EXPECT_EQ(rep_in(env, index), index) << "node " << node << " var " << index;
                 }
             }
         }
@@ -550,7 +555,7 @@ struct pud_manifest_harness {
                     << "node " << node << " substitutes non-representative " << substitution.var_idx;
                 if (const expr::var* surviving = std::get_if<expr::var>(&substitution.value->content)) {
                     EXPECT_LT(surviving->index, substitution.var_idx) << "node " << node;
-                    EXPECT_EQ(resolve_through(bind_map, surviving->index), var(surviving->index)) << "node " << node;
+                    EXPECT_EQ(bind_map.find_rep(surviving->index), surviving->index) << "node " << node;
                     bind_map.equate(substitution.var_idx, surviving->index);
                     continue;
                 }
@@ -558,10 +563,10 @@ struct pud_manifest_harness {
             }
             const pud_ubs_state env = env_of(node);
             for (const pud_substitution& substitution : manifest.node_added_substitutions_.get(node)) {
-                EXPECT_EQ(normalize_in(env, substitution.value), substitution.value)
-                    << "node " << node << " stores an unnormalized value for " << substitution.var_idx;
-                for (uint32_t index : vars_in(substitution.value))
+                for (uint32_t index : vars_in(substitution.value)) {
                     EXPECT_LT(index, node_lvc) << "node " << node;
+                    EXPECT_EQ(rep_in(env, index), index) << "node " << node << " var " << index;
+                }
             }
         }
     }
@@ -694,7 +699,7 @@ struct pud_manifest_harness {
         check_refutation_is_closed_downward();
         check_leaf_lvc_is_the_sum_of_var_counts_on_its_path();
         check_leaf_binding_matches_its_replayed_substitutions();
-        check_stored_goals_are_in_their_nodes_representatives();
+        check_stored_goals_use_their_nodes_representatives();
         check_substitutions_meet_the_watchers_preconditions();
         check_fresh_variables_are_dense_from_the_parents_lvc();
         check_every_open_goal_has_a_live_query();
