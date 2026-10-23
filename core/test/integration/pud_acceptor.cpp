@@ -13,7 +13,7 @@ using ::testing::IsEmpty;
 // straight into the stores, so a test states exactly what each node adds.
 struct PudAcceptorIntegrationTest : public ::testing::Test {
     test_functors functors;
-    pud_manifest manifest{0};
+    pud_manifest manifest;
     pud_manifest::acceptor_t& acceptor = manifest.acceptor_;
     pud_ubs_state empty_state;
     std::set<pud_node_id> expanded;

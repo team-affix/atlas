@@ -1,50 +1,45 @@
 #include "infrastructure/pud_manifest.hpp"
 
-pud_manifest::pud_manifest(uint32_t random_seed)
-    : expr_pool_(),
-      globalizer_(),
-      term_factory_(globalizer_, expr_pool_, expr_pool_),
-      changed_class_finder_(),
-      node_id_sequencer_(),
-      leaf_nodes_(),
-      refuted_leaves_(),
-      root_heads_(),
-      node_parents_(),
-      node_substitutions_(),
-      node_goals_(),
-      node_lvcs_(),
-      call_sites_(),
-      children_(),
-      live_child_counts_(),
-      refuted_node_checker_(leaf_nodes_, refuted_leaves_, live_child_counts_),
-      axioms_(),
-      refutation_propagator_(node_parents_, live_child_counts_),
-      node_maker_(
+pud_manifest::pud_manifest()
+    : expr_pool_()
+    , globalizer_()
+    , term_factory_(globalizer_, expr_pool_, expr_pool_)
+    , changed_class_finder_()
+    , node_id_sequencer_()
+    , leaf_nodes_()
+    , refuted_leaves_()
+    , root_heads_()
+    , node_parents_()
+    , node_substitutions_()
+    , node_goals_()
+    , node_lvcs_()
+    , call_sites_()
+    , children_()
+    , live_child_counts_()
+    , refuted_node_checker_(leaf_nodes_, refuted_leaves_, live_child_counts_)
+    , axioms_()
+    , refutation_propagator_(node_parents_, live_child_counts_)
+    , node_maker_(
           node_id_sequencer_, root_heads_, node_parents_, node_substitutions_, node_goals_, node_goals_,
-          node_lvcs_, node_lvcs_, leaf_nodes_),
-      unit_queries_(),
-      replayer_(root_heads_, node_substitutions_, expr_pool_, term_factory_, term_factory_, term_factory_),
-      mhws_(replayer_, leaf_nodes_, refuted_node_checker_, children_),
-      mhcs_(replayer_, mhws_, mhws_, mhws_, mhws_, mhws_, leaf_nodes_, refuted_node_checker_, children_),
-      mhq_(replayer_, axioms_, mhcs_, mhcs_, mhcs_, mhcs_, unit_queries_),
-      leaf_states_(),
-      query_holders_(),
-      binder_(term_factory_, node_substitutions_),
-      structure_watcher_(term_factory_, node_substitutions_),
-      leaf_query_maker_(mhq_, mhq_, query_holders_, node_goals_, node_lvcs_),
-      leaf_activator_(
-          leaf_states_, leaf_states_, binder_, structure_watcher_, node_goals_, call_sites_, leaf_query_maker_),
-      leaf_releaser_(leaf_states_, leaf_states_, query_holders_, mhq_),
-      leaf_refuter_(refuted_leaves_, refutation_propagator_),
-      leaf_deactivator_(leaf_releaser_, mhq_),
-      change_collector_(refuted_node_checker_),
-      acceptor_(node_goals_, replayer_, replayer_, expr_pool_, term_factory_, term_factory_, changed_class_finder_),
-      resolver_(leaf_states_, node_goals_, node_lvcs_, mhq_, mhcs_, acceptor_),
-      unfolder_(call_sites_, node_maker_, children_, leaf_nodes_, live_child_counts_, refutation_propagator_),
-      expander_(resolver_, unfolder_, leaf_activator_, leaf_refuter_, leaf_releaser_, mhq_, query_holders_, change_collector_),
-      root_opener_(node_maker_, axioms_, leaf_activator_, leaf_refuter_, leaf_releaser_, mhq_, query_holders_, change_collector_),
-      rng_(random_seed),
-      unit_unfold_finder_(unit_queries_, unit_queries_, unit_queries_, query_holders_),
-      expansion_chooser_(node_goals_, rng_),
-      leaf_materializer_(leaf_states_, term_factory_, term_factory_),
-      solver_(root_opener_, root_opener_, expander_, unit_unfold_finder_, expansion_chooser_, node_goals_, leaf_materializer_) {}
+          node_lvcs_, node_lvcs_, leaf_nodes_)
+    , unit_queries_()
+    , replayer_(root_heads_, node_substitutions_, expr_pool_, term_factory_, term_factory_, term_factory_)
+    , mhws_(replayer_, leaf_nodes_, refuted_node_checker_, children_)
+    , mhcs_(replayer_, mhws_, mhws_, mhws_, mhws_, mhws_, leaf_nodes_, refuted_node_checker_, children_)
+    , mhq_(replayer_, axioms_, mhcs_, mhcs_, mhcs_, mhcs_, unit_queries_)
+    , leaf_states_()
+    , query_holders_()
+    , binder_(term_factory_, node_substitutions_)
+    , structure_watcher_(term_factory_, node_substitutions_)
+    , leaf_query_maker_(mhq_, mhq_, query_holders_, node_goals_, node_lvcs_)
+    , leaf_activator_(
+          leaf_states_, leaf_states_, binder_, structure_watcher_, node_goals_, call_sites_, leaf_query_maker_)
+    , leaf_releaser_(leaf_states_, leaf_states_, query_holders_, mhq_)
+    , leaf_refuter_(refuted_leaves_, refutation_propagator_)
+    , leaf_deactivator_(leaf_releaser_, mhq_)
+    , change_collector_(refuted_node_checker_)
+    , acceptor_(node_goals_, replayer_, replayer_, expr_pool_, term_factory_, term_factory_, changed_class_finder_)
+    , resolver_(leaf_states_, node_goals_, node_lvcs_, mhq_, mhcs_, acceptor_)
+    , unfolder_(call_sites_, node_maker_, children_, leaf_nodes_, live_child_counts_, refutation_propagator_)
+    , expander_(resolver_, unfolder_, leaf_activator_, leaf_refuter_, leaf_releaser_, mhq_, query_holders_, change_collector_)
+    , root_opener_(node_maker_, axioms_, leaf_activator_, leaf_refuter_, leaf_releaser_, mhq_, query_holders_, change_collector_) {}

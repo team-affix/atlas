@@ -4,7 +4,6 @@
 #include <cstdint>
 #include <deque>
 #include <optional>
-#include <random>
 #include <vector>
 #include "infrastructure/expr_pool.hpp"
 #include "infrastructure/globalizer.hpp"
@@ -16,7 +15,6 @@
 #include "infrastructure/pud_leaf_deactivator.hpp"
 #include "infrastructure/pud_leaf_refuter.hpp"
 #include "infrastructure/pud_leaf_activator.hpp"
-#include "infrastructure/pud_leaf_materializer.hpp"
 #include "infrastructure/pud_leaf_query_maker.hpp"
 #include "infrastructure/pud_leaf_releaser.hpp"
 #include "infrastructure/pud_leaf_states.hpp"
@@ -32,23 +30,20 @@
 #include "infrastructure/pud_refuted_node_checker.hpp"
 #include "infrastructure/pud_node_table.hpp"
 #include "infrastructure/pud_query_holders.hpp"
-#include "infrastructure/pud_random_expansion_chooser.hpp"
 #include "infrastructure/pud_refutation_propagator.hpp"
 #include "infrastructure/pud_replayer.hpp"
 #include "infrastructure/pud_resolver.hpp"
 #include "infrastructure/pud_root_opener.hpp"
-#include "infrastructure/pud_solver.hpp"
 #include "infrastructure/pud_structure_watcher.hpp"
 #include "infrastructure/pud_term_factory.hpp"
 #include "infrastructure/pud_unfolder.hpp"
-#include "infrastructure/pud_unit_unfold_finder.hpp"
 #include "value_objects/expr.hpp"
 #include "value_objects/pud_body_goal_id.hpp"
 #include "value_objects/pud_mhq_head_id.hpp"
 #include "value_objects/pud_node_id.hpp"
 #include "value_objects/pud_substitution.hpp"
 
-// The composition root of the progressive unfolding database and its solver.
+// Composition root for the progressive unfolding database (open roots, expand leaves).
 struct pud_manifest {
     using term_factory_t = pud_term_factory<globalizer, expr_pool, expr_pool>;
     using root_heads_t = pud_node_table<const expr*>;
@@ -92,13 +87,7 @@ struct pud_manifest {
     using root_opener_t = pud_root_opener<
         node_maker_t, axioms_t, leaf_activator_t, leaf_refuter_t, leaf_releaser_t, mhq_t, pud_query_holders, change_collector_t>;
 
-    using unit_unfold_finder_t = pud_unit_unfold_finder<unit_queries_t, unit_queries_t, unit_queries_t, pud_query_holders>;
-    using expansion_chooser_t = pud_random_expansion_chooser<pud_node_goals>;
-    using leaf_materializer_t = pud_leaf_materializer<pud_leaf_states, term_factory_t, term_factory_t>;
-    using solver_t =
-        pud_solver<root_opener_t, root_opener_t, expander_t, unit_unfold_finder_t, expansion_chooser_t, pud_node_goals, leaf_materializer_t>;
-
-    pud_manifest(uint32_t random_seed);
+    pud_manifest();
 
     expr_pool                  expr_pool_;
     globalizer                 globalizer_;
@@ -143,12 +132,6 @@ struct pud_manifest {
     unfolder_t                 unfolder_;
     expander_t                 expander_;
     root_opener_t              root_opener_;
-
-    std::mt19937               rng_;
-    unit_unfold_finder_t       unit_unfold_finder_;
-    expansion_chooser_t        expansion_chooser_;
-    leaf_materializer_t        leaf_materializer_;
-    solver_t                   solver_;
 };
 
 #endif

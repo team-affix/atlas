@@ -1,7 +1,7 @@
 #include <vector>
 #include <gtest/gtest.h>
 #include <gmock/gmock.h>
-#include "pud_manifest_harness.hpp"
+#include "pud_frontier_test_fixture.hpp"
 
 using ::testing::Contains;
 using ::testing::ElementsAre;
@@ -12,7 +12,7 @@ using ::testing::UnorderedElementsAre;
 namespace {
 
 struct PudFrontierChangesIntegrationTest : public ::testing::Test {
-    pud_manifest_harness h{0, pud_harness_scope::every_open_leaf};
+    pud_frontier_test_fixture h;
 };
 
 }

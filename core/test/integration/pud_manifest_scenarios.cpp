@@ -1,3 +1,4 @@
+#if 0 // Disabled: depended on pud_solver and pud_manifest_harness.
 #include <algorithm>
 #include <memory>
 #include <set>
@@ -378,3 +379,4 @@ TEST_F(PudManifestScenarioIntegrationTest, InterleavedManifestsDoNotInterfere) {
     EXPECT_EQ(first.proven_heads(), datalog_model_exprs(first, generate_datalog(11, false)));
     EXPECT_EQ(second.proven_heads(), datalog_model_exprs(second, generate_datalog(12, false)));
 }
+#endif

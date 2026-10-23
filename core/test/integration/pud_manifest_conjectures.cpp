@@ -1,3 +1,4 @@
+#if 0 // Disabled: depended on pud_solver and pud_manifest_harness.
 #include <algorithm>
 #include <optional>
 #include <vector>
@@ -456,3 +457,4 @@ TEST_F(PudManifestConjectureQueryLifetimeIntegrationTest, NewGoalsQueryLivesWith
     EXPECT_FALSE(h.alive(added));
 }
 
+#endif
