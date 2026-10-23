@@ -18,27 +18,26 @@ struct PudFrontierChangesIntegrationTest : public ::testing::Test {
 }
 
 TEST_F(PudFrontierChangesIntegrationTest, AnEmptyDatabaseOpensNothing) {
-    EXPECT_EQ(h.open_axioms(), (pud_frontier_change{.opened = {}, .proven = {}, .refuted = {}}));
+    EXPECT_EQ(h.open_axioms(), (pud_frontier_change{.offspring = {}, .refuted = {}}));
 }
 
-TEST_F(PudFrontierChangesIntegrationTest, FactsOpenProven) {
+TEST_F(PudFrontierChangesIntegrationTest, FactsReportAsOffspring) {
     h.add_colors();
     const pud_frontier_change change = h.open_axioms();
-    EXPECT_THAT(change.opened, IsEmpty());
-    EXPECT_THAT(change.proven, UnorderedElementsAre(0u, 1u, 2u));
+    EXPECT_THAT(change.offspring, UnorderedElementsAre(0u, 1u, 2u));
     EXPECT_THAT(change.refuted, IsEmpty());
 }
 
 TEST_F(PudFrontierChangesIntegrationTest, ARuleOpensWithItsGoals) {
     h.add_colors();
     const pud_node_id rule = h.axiom(h.functor("q", {h.var(0)}), {h.functor("color", {h.var(0)})}, 1);
-    EXPECT_THAT(h.open_axioms().opened, ElementsAre(rule));
+    EXPECT_THAT(h.open_axioms().offspring, UnorderedElementsAre(0u, 1u, 2u, rule));
 }
 
 TEST_F(PudFrontierChangesIntegrationTest, ARuleWithAnUnprovableGoalOpensRefuted) {
     const pud_node_id rule = h.axiom(h.atom("q"), {h.atom("missing")}, 0);
     const pud_frontier_change change = h.open_axioms();
-    EXPECT_THAT(change.opened, IsEmpty());
+    EXPECT_THAT(change.offspring, IsEmpty());
     EXPECT_THAT(change.refuted, ElementsAre(rule));
 }
 
@@ -47,18 +46,16 @@ TEST_F(PudFrontierChangesIntegrationTest, ExpandingReportsTheChildrenButNeverThe
     const pud_node_id rule = h.axiom(h.functor("q", {h.var(0)}), {h.functor("color", {h.var(0)}), h.functor("color", {h.var(0)})}, 1);
     h.open_axioms();
     const pud_frontier_change change = h.expand(rule, 0);
-    EXPECT_EQ(change.opened, h.children_of(rule));
-    EXPECT_THAT(change.opened, Not(Contains(rule)));
-    EXPECT_THAT(change.proven, IsEmpty());
+    EXPECT_EQ(change.offspring, h.children_of(rule));
+    EXPECT_THAT(change.offspring, Not(Contains(rule)));
 }
 
-TEST_F(PudFrontierChangesIntegrationTest, ExpandingTheLastGoalProvesTheChildren) {
+TEST_F(PudFrontierChangesIntegrationTest, ExpandingTheLastGoalLeavesGoallessChildrenInOffspring) {
     h.add_colors();
     const pud_node_id rule = h.axiom(h.functor("q", {h.var(0)}), {h.functor("color", {h.var(0)})}, 1);
     h.open_axioms();
     const pud_frontier_change change = h.expand(rule, 0);
-    EXPECT_THAT(change.opened, IsEmpty());
-    EXPECT_EQ(change.proven, h.children_of(rule));
+    EXPECT_EQ(change.offspring, h.children_of(rule));
 }
 
 TEST_F(PudFrontierChangesIntegrationTest, AChildRefutedOnArrivalIsReportedRefutedOnly) {
@@ -69,7 +66,7 @@ TEST_F(PudFrontierChangesIntegrationTest, AChildRefutedOnArrivalIsReportedRefute
     ASSERT_EQ(h.children_of(rule).size(), 2u);
     const pud_node_id red = h.children_of(rule).at(0);
     const pud_node_id blue = h.children_of(rule).at(1);
-    EXPECT_THAT(change.opened, ElementsAre(red));
+    EXPECT_THAT(change.offspring, ElementsAre(red));
     EXPECT_THAT(change.refuted, ElementsAre(blue));
 }
 

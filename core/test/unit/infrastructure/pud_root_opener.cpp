@@ -21,23 +21,24 @@ struct MockAddAxiom {
 struct MockActivateRoot {
     MOCK_METHOD(bool, activate_root, (pud_node_id));
 };
-struct MockRetire {
-    MOCK_METHOD(std::vector<pud_node_id>, retire, (const std::vector<pud_node_id>&, const std::vector<pud_node_id>&));
+struct MockRefuteFrontier {
+    MOCK_METHOD(std::vector<pud_node_id>, refute, (const std::vector<pud_node_id>&, const std::vector<pud_node_id>&));
 };
 struct MockCollectChange {
     MOCK_METHOD(pud_frontier_change, collect, (const std::vector<pud_node_id>&, const std::vector<pud_node_id>&));
 };
 
 using test_root_opener_t = pud_root_opener<
-    NiceMock<MockMakeRoot>, NiceMock<MockAddAxiom>, NiceMock<MockActivateRoot>, NiceMock<MockRetire>, NiceMock<MockCollectChange>>;
+    NiceMock<MockMakeRoot>, NiceMock<MockAddAxiom>, NiceMock<MockActivateRoot>, NiceMock<MockRefuteFrontier>,
+    NiceMock<MockCollectChange>>;
 
 struct PudRootOpenerTest : public ::testing::Test {
     NiceMock<MockMakeRoot> node_maker;
     NiceMock<MockAddAxiom> axioms;
     NiceMock<MockActivateRoot> activator;
-    NiceMock<MockRetire> retirer;
+    NiceMock<MockRefuteFrontier> refuter;
     NiceMock<MockCollectChange> collector;
-    test_root_opener_t opener{node_maker, axioms, activator, retirer, collector};
+    test_root_opener_t opener{node_maker, axioms, activator, refuter, collector};
     expr head{expr::functor{1, {}}};
     expr goal{expr::functor{2, {}}};
 };
@@ -65,7 +66,7 @@ TEST_F(PudRootOpenerTest, OpeningActivatesEveryAddedRootInOrderThenRetiresTheRef
     InSequence in_order;
     EXPECT_CALL(activator, activate_root(7)).WillOnce(Return(true));
     EXPECT_CALL(activator, activate_root(8)).WillOnce(Return(false));
-    EXPECT_CALL(retirer, retire(IsEmpty(), ElementsAre(7u))).WillOnce(Return(std::vector<pud_node_id>{7}));
+    EXPECT_CALL(refuter, refute(IsEmpty(), ElementsAre(7u))).WillOnce(Return(std::vector<pud_node_id>{7}));
     EXPECT_CALL(collector, collect(ElementsAre(7u, 8u), ElementsAre(7u)));
     opener.open();
 }

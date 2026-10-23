@@ -14,6 +14,7 @@
 #include "value_objects/pud_node_id.hpp"
 #include "value_objects/pud_solution.hpp"
 #include "value_objects/pud_solver_step.hpp"
+#include "value_objects/pud_goal_list.hpp"
 #include "value_objects/pud_unfold.hpp"
 
 // Solves conjectures over the database; a conjecture is named by its root. Each step reports a solution if one is waiting, else performs
@@ -25,6 +26,7 @@ template<
     typename IExpand,
     typename IFindUnitUnfold,
     typename IChooseExpansion,
+    typename IGetNodeGoals,
     typename IMaterialize>
 struct pud_solver {
     pud_solver(
@@ -33,6 +35,7 @@ struct pud_solver {
         IExpand& expand,
         IFindUnitUnfold& find_unit_unfold,
         IChooseExpansion& choose_expansion,
+        IGetNodeGoals& get_node_goals,
         IMaterialize& materialize);
     pud_node_id add_conjecture(const expr* head, const std::vector<const expr*>& goals, uint32_t var_count);
     coroutine<pud_solver_step, void> solve();
@@ -47,6 +50,7 @@ private:
     IExpand& expand_;
     IFindUnitUnfold& find_unit_unfold_;
     IChooseExpansion& choose_expansion_;
+    IGetNodeGoals& get_node_goals_;
     IMaterialize& materialize_;
     std::map<pud_node_id, const expr*> conjecture_heads_;
     std::map<pud_node_id, size_t> conjecture_leaf_counts_;
@@ -57,9 +61,9 @@ private:
 
 #define PUD_SOLVER_TEMPLATE                                                                \
     template<typename IAddConjecture, typename IOpenRoots, typename IExpand,               \
-             typename IFindUnitUnfold, typename IChooseExpansion, typename IMaterialize>
+             typename IFindUnitUnfold, typename IChooseExpansion, typename IGetNodeGoals, typename IMaterialize>
 #define PUD_SOLVER                                                                         \
-    pud_solver<IAddConjecture, IOpenRoots, IExpand, IFindUnitUnfold, IChooseExpansion, IMaterialize>
+    pud_solver<IAddConjecture, IOpenRoots, IExpand, IFindUnitUnfold, IChooseExpansion, IGetNodeGoals, IMaterialize>
 
 PUD_SOLVER_TEMPLATE
 PUD_SOLVER::pud_solver(
@@ -68,12 +72,14 @@ PUD_SOLVER::pud_solver(
     IExpand& expand,
     IFindUnitUnfold& find_unit_unfold,
     IChooseExpansion& choose_expansion,
+    IGetNodeGoals& get_node_goals,
     IMaterialize& materialize)
     : add_conjecture_(add_conjecture)
     , open_roots_(open_roots)
     , expand_(expand)
     , find_unit_unfold_(find_unit_unfold)
     , choose_expansion_(choose_expansion)
+    , get_node_goals_(get_node_goals)
     , materialize_(materialize)
     , conjecture_heads_()
     , conjecture_leaf_counts_()
@@ -132,15 +138,14 @@ bool PUD_SOLVER::exhausted(pud_node_id conjecture) const {
 
 PUD_SOLVER_TEMPLATE
 void PUD_SOLVER::adopt(const pud_frontier_change& change, pud_node_id conjecture) {
-    for (pud_node_id leaf : change.opened)
-        frontier_.insert(leaf);
-    for (pud_node_id leaf : change.proven)
-        unreported_.insert(leaf);
-    for (const std::vector<pud_node_id>* adopted : {&change.opened, &change.proven}) {
-        for (pud_node_id leaf : *adopted)
-            conjectures_.emplace(leaf, conjecture);
-        conjecture_leaf_counts_.at(conjecture) += adopted->size();
+    for (pud_node_id node : change.offspring) {
+        if (get_node_goals_.get(node).goals.empty())
+            unreported_.insert(node);
+        else
+            frontier_.insert(node);
+        conjectures_.emplace(node, conjecture);
     }
+    conjecture_leaf_counts_.at(conjecture) += change.offspring.size();
 }
 
 PUD_SOLVER_TEMPLATE

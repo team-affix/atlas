@@ -61,7 +61,8 @@ PUD_UNIFIER_TEMPLATE
 bool PUD_UNIFIER::unify(framed_expr lhs, framed_expr rhs) {
     std::vector<pair_t> pending{{lhs, rhs}};
     std::unordered_set<pair_t, pair_hash> unified_functors;
-    std::vector<uint32_t> touched;
+    std::vector<uint32_t> touched_class_roots;
+    typename IDetectCycle::visitation binding_cycle_visitation;
     while (!pending.empty()) {
         const auto [left, right] = pending.back();
         pending.pop_back();
@@ -76,7 +77,7 @@ bool PUD_UNIFIER::unify(framed_expr lhs, framed_expr rhs) {
             if (left_class.root == right_class.root)
                 continue;
             const std::optional<framed_expr> displaced = equate_.equate(left_class, right_class);
-            touched.push_back(left_class.root);
+            touched_class_roots.push_back(left_class.root);
             if (displaced.has_value())
                 pending.emplace_back(left, displaced.value());
             continue;
@@ -90,7 +91,7 @@ bool PUD_UNIFIER::unify(framed_expr lhs, framed_expr rhs) {
                 continue;
             }
             instantiate_.instantiate(var_class, term);
-            touched.push_back(var_class.root);
+            touched_class_roots.push_back(var_class.root);
             continue;
         }
 
@@ -105,7 +106,11 @@ bool PUD_UNIFIER::unify(framed_expr lhs, framed_expr rhs) {
                 framed_expr{left_functor.args[arg], left.frame_offset},
                 framed_expr{right_functor.args[arg], right.frame_offset});
     }
-    return !detect_cycle_.detect_cycle(touched);
+    for (uint32_t class_root : touched_class_roots) {
+        if (detect_cycle_.find_cycle_from_class(class_root, binding_cycle_visitation))
+            return false;
+    }
+    return true;
 }
 
 PUD_UNIFIER_TEMPLATE

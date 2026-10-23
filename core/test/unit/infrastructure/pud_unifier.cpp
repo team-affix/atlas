@@ -33,7 +33,8 @@ struct MockInstantiate {
     MOCK_METHOD(void, instantiate, (const ubs_class&, framed_expr));
 };
 struct MockDetectCycle {
-    MOCK_METHOD(bool, detect_cycle, ((const std::vector<uint32_t>&)));
+    struct visitation {};
+    MOCK_METHOD(bool, find_cycle_from_class, (uint32_t, visitation&));
 };
 
 uint32_t offset_index(uint32_t frame_offset, uint32_t index) {
@@ -65,7 +66,7 @@ struct PudUnifierTest : public ::testing::Test {
         ON_CALL(globalize, globalize(_, _)).WillByDefault(Invoke(&offset_index));
         ON_CALL(find, find(_)).WillByDefault(Invoke(&singleton));
         ON_CALL(equate, equate(_, _)).WillByDefault(Return(std::nullopt));
-        ON_CALL(detect_cycle, detect_cycle(_)).WillByDefault(Return(false));
+        ON_CALL(detect_cycle, find_cycle_from_class(_, _)).WillByDefault(Return(false));
     }
 
     const expr* var(uint32_t index) {
@@ -84,7 +85,7 @@ struct PudUnifierTest : public ::testing::Test {
 TEST_F(PudUnifierTest, EqualGroundTermsSucceedWithoutBinding) {
     EXPECT_CALL(equate, equate(_, _)).Times(0);
     EXPECT_CALL(instantiate, instantiate(_, _)).Times(0);
-    EXPECT_CALL(detect_cycle, detect_cycle(IsEmpty()));
+    EXPECT_CALL(detect_cycle, find_cycle_from_class(_, _)).Times(0);
     const expr* term = functor(1, {functor(2, {})});
     EXPECT_TRUE(unifier.unify({term, 0}, {term, 5}));
 }
@@ -174,18 +175,19 @@ TEST_F(PudUnifierTest, DeepMismatchFails) {
 }
 
 TEST_F(PudUnifierTest, EveryBoundOrMergedClassIsCheckedForCyclesOnce) {
-    EXPECT_CALL(detect_cycle, detect_cycle(UnorderedElementsAre(0u, 1u))).WillOnce(Return(false));
+    EXPECT_CALL(detect_cycle, find_cycle_from_class(0u, _)).WillOnce(Return(false));
+    EXPECT_CALL(detect_cycle, find_cycle_from_class(1u, _)).WillOnce(Return(false));
     EXPECT_TRUE(unifier.unify(
         {functor(1, {var(0), var(1)}), 0},
         {functor(1, {functor(2, {}), var(5)}), 0}));
 }
 
 TEST_F(PudUnifierTest, ACycleFailsTheUnification) {
-    EXPECT_CALL(detect_cycle, detect_cycle(ElementsAre(0u))).WillOnce(Return(true));
+    EXPECT_CALL(detect_cycle, find_cycle_from_class(0u, _)).WillOnce(Return(true));
     EXPECT_FALSE(unifier.unify({var(0), 0}, {functor(1, {var(0)}), 0}));
 }
 
 TEST_F(PudUnifierTest, AFailedUnificationSkipsTheCycleCheck) {
-    EXPECT_CALL(detect_cycle, detect_cycle(_)).Times(0);
+    EXPECT_CALL(detect_cycle, find_cycle_from_class(_, _)).Times(0);
     EXPECT_FALSE(unifier.unify({functor(1, {}), 0}, {functor(2, {}), 0}));
 }

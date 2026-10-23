@@ -5,11 +5,10 @@
 #include <vector>
 #include "value_objects/pud_node_id.hpp"
 
-// What one operation did to the frontier: the leaves it produced that still have open goals, those it
-// produced with none left, and every leaf it refuted anywhere.
+// What one expand or root-open did to the tree: new child node ids from that step, and every leaf
+// refuted anywhere as a result (including query cascades).
 struct pud_frontier_change {
-    std::vector<pud_node_id> opened;
-    std::vector<pud_node_id> proven;
+    std::vector<pud_node_id> offspring;
     std::vector<pud_node_id> refuted;
     auto operator<=>(const pud_frontier_change&) const = default;
 };

@@ -11,13 +11,13 @@
 
 // Adds roots to the database: axioms, which queries search, and conjectures, which are only solved.
 // Roots are added first and opened together, so every query of a batch sees every axiom of it.
-template<typename IMakeRoot, typename IAddAxiom, typename IActivateRoot, typename IRetire, typename ICollectChange>
+template<typename IMakeRoot, typename IAddAxiom, typename IActivateRoot, typename IRefuteFrontier, typename ICollectChange>
 struct pud_root_opener {
     pud_root_opener(
         IMakeRoot& make_root,
         IAddAxiom& add_axiom,
         IActivateRoot& activate_root,
-        IRetire& retire,
+        IRefuteFrontier& refute_frontier,
         ICollectChange& collect_change);
     pud_node_id add_axiom(const rule& axiom);
     pud_node_id add_conjecture(const expr* head, const std::vector<const expr*>& goals, uint32_t var_count);
@@ -26,27 +26,27 @@ private:
     IMakeRoot& make_root_;
     IAddAxiom& add_axiom_;
     IActivateRoot& activate_root_;
-    IRetire& retire_;
+    IRefuteFrontier& refute_frontier_;
     ICollectChange& collect_change_;
     std::vector<pud_node_id> pending_roots_;
 };
 
 #define PUD_ROOT_OPENER_TEMPLATE                                                           \
-    template<typename IMakeRoot, typename IAddAxiom, typename IActivateRoot, typename IRetire, \
+    template<typename IMakeRoot, typename IAddAxiom, typename IActivateRoot, typename IRefuteFrontier, \
              typename ICollectChange>
-#define PUD_ROOT_OPENER pud_root_opener<IMakeRoot, IAddAxiom, IActivateRoot, IRetire, ICollectChange>
+#define PUD_ROOT_OPENER pud_root_opener<IMakeRoot, IAddAxiom, IActivateRoot, IRefuteFrontier, ICollectChange>
 
 PUD_ROOT_OPENER_TEMPLATE
 PUD_ROOT_OPENER::pud_root_opener(
     IMakeRoot& make_root,
     IAddAxiom& add_axiom,
     IActivateRoot& activate_root,
-    IRetire& retire,
+    IRefuteFrontier& refute_frontier,
     ICollectChange& collect_change)
     : make_root_(make_root)
     , add_axiom_(add_axiom)
     , activate_root_(activate_root)
-    , retire_(retire)
+    , refute_frontier_(refute_frontier)
     , collect_change_(collect_change)
     , pending_roots_() {}
 
@@ -75,7 +75,7 @@ pud_frontier_change PUD_ROOT_OPENER::open() {
             continue;
         refuted_roots.push_back(root);
     }
-    return collect_change_.collect(roots, retire_.retire({}, refuted_roots));
+    return collect_change_.collect(roots, refute_frontier_.refute({}, refuted_roots));
 }
 
 #undef PUD_ROOT_OPENER

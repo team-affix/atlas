@@ -57,45 +57,54 @@ struct PudCycleDetectorTest : public ::testing::Test {
         ON_CALL(find, find(root)).WillByDefault(
             Return(ubs_class{.root = root, .size = 1, .rep = root, .value = framed_expr{value, frame_offset}}));
     }
+
+    bool find_cycle_from_class_roots(const std::vector<uint32_t>& class_roots) {
+        test_cycle_detector_t::visitation visitation;
+        for (uint32_t class_root : class_roots) {
+            if (detector.find_cycle_from_class(class_root, visitation))
+                return true;
+        }
+        return false;
+    }
 };
 
 }
 
-TEST_F(PudCycleDetectorTest, NoVarsHaveNoCycle) {
-    EXPECT_FALSE(detector.detect_cycle({}));
+TEST_F(PudCycleDetectorTest, NoEntryRootsHaveNoCycle) {
+    EXPECT_FALSE(find_cycle_from_class_roots({}));
 }
 
 TEST_F(PudCycleDetectorTest, AnUnboundClassHasNoCycle) {
-    EXPECT_FALSE(detector.detect_cycle({4}));
+    EXPECT_FALSE(find_cycle_from_class_roots({4}));
 }
 
 TEST_F(PudCycleDetectorTest, AClassBoundToATermWithoutItselfHasNoCycle) {
     bind(0, functor(1, {var(1), functor(2, {})}), 0);
-    EXPECT_FALSE(detector.detect_cycle({0}));
+    EXPECT_FALSE(find_cycle_from_class_roots({0}));
 }
 
 TEST_F(PudCycleDetectorTest, AClassBoundToATermContainingItselfIsACycle) {
     bind(0, functor(1, {var(0)}), 0);
-    EXPECT_TRUE(detector.detect_cycle({0}));
+    EXPECT_TRUE(find_cycle_from_class_roots({0}));
 }
 
 TEST_F(PudCycleDetectorTest, AValueIsReadInItsOwnFrame) {
     bind(0, functor(1, {var(0)}), 5);
-    EXPECT_FALSE(detector.detect_cycle({0}));
+    EXPECT_FALSE(find_cycle_from_class_roots({0}));
     bind(5, functor(1, {var(0)}), 5);
-    EXPECT_TRUE(detector.detect_cycle({0}));
+    EXPECT_TRUE(find_cycle_from_class_roots({0}));
 }
 
 TEST_F(PudCycleDetectorTest, ACycleThroughTwoClassesIsFound) {
     bind(0, functor(1, {var(1)}), 0);
     bind(1, functor(2, {var(0)}), 0);
-    EXPECT_TRUE(detector.detect_cycle({1}));
+    EXPECT_TRUE(find_cycle_from_class_roots({1}));
 }
 
 TEST_F(PudCycleDetectorTest, TwoRoutesToOneClassAreNoCycle) {
     bind(0, functor(1, {var(1), var(1)}), 0);
     bind(1, functor(2, {}), 0);
-    EXPECT_FALSE(detector.detect_cycle({0}));
+    EXPECT_FALSE(find_cycle_from_class_roots({0}));
 }
 
 TEST_F(PudCycleDetectorTest, ASharedSubtermIsSearchedOnce) {
@@ -103,20 +112,20 @@ TEST_F(PudCycleDetectorTest, ASharedSubtermIsSearchedOnce) {
     bind(0, functor(1, {shared, shared}), 0);
     EXPECT_CALL(find, find(_)).Times(AnyNumber());
     EXPECT_CALL(find, find(1)).Times(1);
-    EXPECT_FALSE(detector.detect_cycle({0}));
+    EXPECT_FALSE(find_cycle_from_class_roots({0}));
 }
 
 TEST_F(PudCycleDetectorTest, ASharedSubtermReachedFromInsideItselfIsACycle) {
     const expr* shared = functor(2, {var(1)});
     bind(0, functor(1, {shared}), 0);
     bind(1, shared, 0);
-    EXPECT_TRUE(detector.detect_cycle({0}));
+    EXPECT_TRUE(find_cycle_from_class_roots({0}));
 }
 
-TEST_F(PudCycleDetectorTest, AClassSearchedFromAnEarlierVarIsNotSearchedAgain) {
+TEST_F(PudCycleDetectorTest, AClassSearchedFromAnEarlierRootIsNotSearchedAgain) {
     bind(0, functor(1, {var(1)}), 0);
     bind(1, functor(2, {var(2)}), 0);
     EXPECT_CALL(find, find(_)).Times(AnyNumber());
     EXPECT_CALL(find, find(2)).Times(1);
-    EXPECT_FALSE(detector.detect_cycle({0, 1}));
+    EXPECT_FALSE(find_cycle_from_class_roots({0, 1}));
 }

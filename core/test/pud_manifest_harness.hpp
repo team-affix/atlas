@@ -138,7 +138,10 @@ struct pud_manifest_harness {
     }
 
     void track(const pud_frontier_change& change) {
-        database_frontier.insert(change.opened.begin(), change.opened.end());
+        for (pud_node_id node : change.offspring) {
+            if (!manifest.node_goals_.get(node).goals.empty())
+                database_frontier.insert(node);
+        }
         for (pud_node_id leaf : change.refuted)
             database_frontier.erase(leaf);
     }
@@ -172,7 +175,7 @@ struct pud_manifest_harness {
             if (std::find(path.begin(), path.end(), node) != path.end())
                 leaves.push_back(descendant);
         }
-        for (pud_node_id refuted_leaf : manifest.frontier_retirer_.retire({}, leaves))
+        for (pud_node_id refuted_leaf : manifest.frontier_refuter_.refute({}, leaves))
             database_frontier.erase(refuted_leaf);
     }
 
