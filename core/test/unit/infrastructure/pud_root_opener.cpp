@@ -27,8 +27,8 @@ struct MockRefuteLeaf {
 struct MockReleaseLeaf {
     MOCK_METHOD(void, release, (pud_node_id));
 };
-struct MockInvalidateQueryLeaves {
-    MOCK_METHOD(std::vector<pud_mhq_head_id>, invalidate_leaves, ((const std::vector<pud_node_id>&)));
+struct MockInvalidateQueryLeaf {
+    MOCK_METHOD(std::vector<pud_mhq_head_id>, invalidate_leaf, (pud_node_id));
 };
 struct MockGetQueryHolders {
     MOCK_METHOD(std::vector<pud_node_id>, get_holders, (pud_mhq_head_id));
@@ -39,7 +39,7 @@ struct MockCollectChange {
 
 using test_root_opener_t = pud_root_opener<
     NiceMock<MockMakeRoot>, NiceMock<MockAddAxiom>, NiceMock<MockActivateRoot>, NiceMock<MockRefuteLeaf>,
-    NiceMock<MockReleaseLeaf>, NiceMock<MockInvalidateQueryLeaves>, NiceMock<MockGetQueryHolders>,
+    NiceMock<MockReleaseLeaf>, NiceMock<MockInvalidateQueryLeaf>, NiceMock<MockGetQueryHolders>,
     NiceMock<MockCollectChange>>;
 
 struct PudRootOpenerTest : public ::testing::Test {
@@ -48,7 +48,7 @@ struct PudRootOpenerTest : public ::testing::Test {
     NiceMock<MockActivateRoot> activator;
     NiceMock<MockRefuteLeaf> refuter;
     NiceMock<MockReleaseLeaf> releaser;
-    NiceMock<MockInvalidateQueryLeaves> queries;
+    NiceMock<MockInvalidateQueryLeaf> queries;
     NiceMock<MockGetQueryHolders> holders;
     NiceMock<MockCollectChange> collector;
     test_root_opener_t opener{node_maker, axioms, activator, refuter, releaser, queries, holders, collector};
@@ -56,7 +56,7 @@ struct PudRootOpenerTest : public ::testing::Test {
     expr goal{expr::functor{2, {}}};
 
     void SetUp() override {
-        ON_CALL(queries, invalidate_leaves(_)).WillByDefault(Return(std::vector<pud_mhq_head_id>{}));
+        ON_CALL(queries, invalidate_leaf(_)).WillByDefault(Return(std::vector<pud_mhq_head_id>{}));
     }
 };
 
@@ -85,7 +85,7 @@ TEST_F(PudRootOpenerTest, OpeningActivatesEveryAddedRootThenRefutesAndReleasesTh
     EXPECT_CALL(activator, activate_root(8)).WillOnce(Return(false));
     EXPECT_CALL(refuter, refute(7));
     EXPECT_CALL(releaser, release(7));
-    EXPECT_CALL(queries, invalidate_leaves(ElementsAre(7u)));
+    EXPECT_CALL(queries, invalidate_leaf(7u));
     EXPECT_CALL(collector, collect(ElementsAre(7u, 8u), ElementsAre(7u)));
     opener.open();
 }

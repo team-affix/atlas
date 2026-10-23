@@ -24,7 +24,7 @@ struct PudMhwsTest : public ::testing::Test {
     // Refutes the leaf and reports which searches it exhausts; a search standing elsewhere is untouched.
     std::vector<pud_mhws_head_id> refute_and_invalidate(pud_node_id leaf) {
         tree.refute(leaf);
-        return mhws.invalidate_leaves({leaf});
+        return mhws.invalidate_leaf(leaf);
     }
 };
 
@@ -57,7 +57,7 @@ TEST_F(PudMhwsTest, TheWitnessIsTheFirstLeafDepthFirstInChildOrder) {
     tree.leaf(3);
     tree.leaf(2);
     const pud_mhws_head_id head = mhws.try_add(pud_replay_at(0, 0)).value();
-    EXPECT_THAT(mhws.invalidate_leaves({2}), IsEmpty());
+    EXPECT_THAT(mhws.invalidate_leaf(2), IsEmpty());
     EXPECT_THAT(refute_and_invalidate(3), IsEmpty());
     EXPECT_THAT(refute_and_invalidate(2), ElementsAre(head));
 }
@@ -89,7 +89,7 @@ TEST_F(PudMhwsTest, AnExpandedWitnessIsSearchedBelow) {
     const pud_mhws_head_id head = mhws.try_add(pud_replay_at(0, 0)).value();
     tree.branch(1, {4});
     tree.leaf(4);
-    EXPECT_THAT(mhws.invalidate_leaves({1}), IsEmpty());
+    EXPECT_THAT(mhws.invalidate_leaf(1), IsEmpty());
     EXPECT_THAT(refute_and_invalidate(4), ElementsAre(head));
 }
 
@@ -109,7 +109,7 @@ TEST_F(PudMhwsTest, AnExhaustedSearchIsReportedOnceAndDropped) {
     tree.leaf(1);
     const pud_mhws_head_id head = mhws.try_add(pud_replay_at(1, 0)).value();
     EXPECT_THAT(refute_and_invalidate(1), ElementsAre(head));
-    EXPECT_THAT(mhws.invalidate_leaves({1}), IsEmpty());
+    EXPECT_THAT(mhws.invalidate_leaf(1), IsEmpty());
 }
 
 TEST_F(PudMhwsTest, InvalidatingAnUnwitnessedLeafChangesNothing) {

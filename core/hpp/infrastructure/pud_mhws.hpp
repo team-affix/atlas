@@ -28,7 +28,7 @@ struct pud_mhws {
     std::optional<pud_mhws_head_id> try_fork(pud_mhws_head_id head_id, pud_replay search_root);
     std::optional<pud_witness_advance> advance(pud_mhws_head_id head_id);
     void remove(pud_mhws_head_id head_id);
-    std::vector<pud_mhws_head_id> invalidate_leaves(const std::vector<pud_node_id>& leaves);
+    std::vector<pud_mhws_head_id> invalidate_leaf(pud_node_id leaf);
 private:
     // One level below the search root: the node the search stands on, none while it moves on to the
     // next sibling, and the position of that next sibling among the parent's children.
@@ -120,14 +120,11 @@ void PUD_MHWS::remove(pud_mhws_head_id head_id) {
 }
 
 PUD_MHWS_TEMPLATE
-std::vector<pud_mhws_head_id> PUD_MHWS::invalidate_leaves(const std::vector<pud_node_id>& leaves) {
+std::vector<pud_mhws_head_id> PUD_MHWS::invalidate_leaf(pud_node_id leaf) {
     std::vector<pud_mhws_head_id> unwitnessed;
-    for (pud_node_id leaf : leaves) {
-        auto holders = witness_to_heads_.extract(leaf);
-        if (holders.empty())
-            continue;
+    auto holders = witness_to_heads_.extract(leaf);
+    if (!holders.empty())
         unwitnessed.insert(unwitnessed.end(), holders.mapped().begin(), holders.mapped().end());
-    }
     std::vector<pud_mhws_head_id> exhausted;
     for (pud_mhws_head_id head_id : unwitnessed) {
         head_to_witness_.erase(head_id);

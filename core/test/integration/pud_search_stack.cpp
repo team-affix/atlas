@@ -215,7 +215,7 @@ TEST_F(PudSearchStackIntegrationTest, ChoicePointRejustifiesThroughAThirdWitness
     const std::optional<pud_mhq_head_id> query = mhq.try_open(empty_state, functor("color", {var(0)}), 1);
     ASSERT_TRUE(query.has_value());
     refute(red, root);
-    EXPECT_TRUE(mhq.invalidate_leaves({red}).empty());
+    EXPECT_TRUE(mhq.invalidate_leaf(red).empty());
     EXPECT_THAT(paths_of(query.value()), ::testing::ElementsAre(::testing::ElementsAre(root)));
 }
 
@@ -227,7 +227,7 @@ TEST_F(PudSearchStackIntegrationTest, ChoicePointLosingAWitnessSpecializesToTheS
     const std::optional<pud_mhq_head_id> query = mhq.try_open(empty_state, functor("color", {var(0)}), 1);
     ASSERT_TRUE(query.has_value());
     refute(red, root);
-    EXPECT_TRUE(mhq.invalidate_leaves({red}).empty());
+    EXPECT_TRUE(mhq.invalidate_leaf(red).empty());
     EXPECT_THAT(paths_of(query.value()), ::testing::ElementsAre(::testing::ElementsAre(root, blue)));
 }
 
@@ -238,7 +238,7 @@ TEST_F(PudSearchStackIntegrationTest, LosingOneOfTwoCandidatesQueuesTheQueryAsUn
     ASSERT_TRUE(query.has_value());
     ASSERT_TRUE(unit_queries.empty());
     refuted_leaves.mark_refuted(red);
-    EXPECT_TRUE(mhq.invalidate_leaves({red}).empty());
+    EXPECT_TRUE(mhq.invalidate_leaf(red).empty());
     EXPECT_THAT(roots_of(query.value()), ::testing::ElementsAre(blue));
     EXPECT_THAT(unit_queries, ::testing::ElementsAre(query.value()));
 }
@@ -248,7 +248,7 @@ TEST_F(PudSearchStackIntegrationTest, LosingTheLastCandidateRefutesTheQuery) {
     const std::optional<pud_mhq_head_id> query = mhq.try_open(empty_state, functor("color", {var(0)}), 1);
     ASSERT_TRUE(query.has_value());
     refuted_leaves.mark_refuted(red);
-    EXPECT_THAT(mhq.invalidate_leaves({red}), ::testing::ElementsAre(query.value()));
+    EXPECT_THAT(mhq.invalidate_leaf(red), ::testing::ElementsAre(query.value()));
 }
 
 TEST_F(PudSearchStackIntegrationTest, ForkKeepsOnlyCandidatesCompatibleWithTheNewState) {

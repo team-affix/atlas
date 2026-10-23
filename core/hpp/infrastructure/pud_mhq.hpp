@@ -23,7 +23,7 @@ template<
     typename ITryAddCandidate,
     typename ITryForkCandidate,
     typename IRemoveCandidate,
-    typename IInvalidateCandidateLeaves,
+    typename IInvalidateCandidateLeaf,
     typename IPushUnitQuery>
 struct pud_mhq {
     pud_mhq(
@@ -32,7 +32,7 @@ struct pud_mhq {
         ITryAddCandidate& try_add_candidate,
         ITryForkCandidate& try_fork_candidate,
         IRemoveCandidate& remove_candidate,
-        IInvalidateCandidateLeaves& invalidate_candidate_leaves,
+        IInvalidateCandidateLeaf& invalidate_candidate_leaf,
         IPushUnitQuery& push_unit_query);
     std::optional<pud_mhq_head_id> try_open(const pud_ubs_state& caller_ubs_state, const expr* goal, uint32_t frame_offset);
     std::optional<pud_mhq_head_id> try_fork(
@@ -41,7 +41,7 @@ struct pud_mhq {
         const expr* goal,
         uint32_t frame_offset);
     void remove(pud_mhq_head_id head_id);
-    std::vector<pud_mhq_head_id> invalidate_leaves(const std::vector<pud_node_id>& leaves);
+    std::vector<pud_mhq_head_id> invalidate_leaf(pud_node_id leaf);
     std::vector<pud_mhcs_head_id> candidates(pud_mhq_head_id head_id) const;
 private:
     struct candidacy {
@@ -56,7 +56,7 @@ private:
     ITryAddCandidate& try_add_candidate_;
     ITryForkCandidate& try_fork_candidate_;
     IRemoveCandidate& remove_candidate_;
-    IInvalidateCandidateLeaves& invalidate_candidate_leaves_;
+    IInvalidateCandidateLeaf& invalidate_candidate_leaf_;
     IPushUnitQuery& push_unit_query_;
 
     pud_mhq_head_id next_head_id_;
@@ -67,10 +67,10 @@ private:
 #define PUD_MHQ_TEMPLATE                                                                   \
     template<typename IEnterReplay, typename IAxioms, typename ITryAddCandidate,        \
              typename ITryForkCandidate, typename IRemoveCandidate,                        \
-             typename IInvalidateCandidateLeaves, typename IPushUnitQuery>
+             typename IInvalidateCandidateLeaf, typename IPushUnitQuery>
 #define PUD_MHQ                                                                            \
     pud_mhq<IEnterReplay, IAxioms, ITryAddCandidate, ITryForkCandidate, IRemoveCandidate, \
-        IInvalidateCandidateLeaves, IPushUnitQuery>
+        IInvalidateCandidateLeaf, IPushUnitQuery>
 
 PUD_MHQ_TEMPLATE
 PUD_MHQ::pud_mhq(
@@ -79,14 +79,14 @@ PUD_MHQ::pud_mhq(
     ITryAddCandidate& try_add_candidate,
     ITryForkCandidate& try_fork_candidate,
     IRemoveCandidate& remove_candidate,
-    IInvalidateCandidateLeaves& invalidate_candidate_leaves,
+    IInvalidateCandidateLeaf& invalidate_candidate_leaf,
     IPushUnitQuery& push_unit_query)
     : enter_replay_(enter_replay)
     , axioms_(axioms)
     , try_add_candidate_(try_add_candidate)
     , try_fork_candidate_(try_fork_candidate)
     , remove_candidate_(remove_candidate)
-    , invalidate_candidate_leaves_(invalidate_candidate_leaves)
+    , invalidate_candidate_leaf_(invalidate_candidate_leaf)
     , push_unit_query_(push_unit_query)
     , next_head_id_(0)
     , queries_()
@@ -140,9 +140,9 @@ void PUD_MHQ::remove(pud_mhq_head_id head_id) {
 }
 
 PUD_MHQ_TEMPLATE
-std::vector<pud_mhq_head_id> PUD_MHQ::invalidate_leaves(const std::vector<pud_node_id>& leaves) {
+std::vector<pud_mhq_head_id> PUD_MHQ::invalidate_leaf(pud_node_id leaf) {
     std::vector<pud_mhq_head_id> refuted;
-    for (pud_mhcs_head_id candidate : invalidate_candidate_leaves_.invalidate_leaves(leaves)) {
+    for (pud_mhcs_head_id candidate : invalidate_candidate_leaf_.invalidate_leaf(leaf)) {
         auto owner = candidate_to_head_.extract(candidate);
         std::vector<candidacy>& candidacies = queries_.at(owner.mapped());
         candidacies.erase(std::ranges::find(candidacies, candidate, &candidacy::candidate));

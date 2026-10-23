@@ -81,7 +81,7 @@ Legend: **Resolved** = removed or redesigned. **Justified** = kept intentionally
 
 | ID | Status | Notes |
 |----|--------|-------|
-| S1 | Resolved | mhws / mhcs / mhq symmetric try_add, try_fork, remove, invalidate_leaves (+ read APIs). |
+| S1 | Resolved | mhws / mhcs / mhq symmetric try_add, try_fork, remove, invalidate_leaf (+ read APIs). |
 | S2 | Resolved | Descents removed; replayer/binder/watcher have one signature each. |
 | S3 | Justified | `const expr*` remains: hash-consed DAG nodes in `expr_pool`; justified by interning, not ownership ambiguity. |
 | S4 | Resolved | Structure watch keyed by goal id, not separate watch-head ids. |

@@ -17,7 +17,7 @@ template<
     typename IActivateChild,
     typename IRefuteLeaf,
     typename IReleaseLeaf,
-    typename IInvalidateQueryLeaves,
+    typename IInvalidateQueryLeaf,
     typename IGetQueryHolders,
     typename ICollectChange>
 struct pud_expander {
@@ -27,7 +27,7 @@ struct pud_expander {
         IActivateChild& activate_child,
         IRefuteLeaf& refute_leaf,
         IReleaseLeaf& release_leaf,
-        IInvalidateQueryLeaves& invalidate_query_leaves,
+        IInvalidateQueryLeaf& invalidate_query_leaf,
         IGetQueryHolders& get_query_holders,
         ICollectChange& collect_change);
     pud_frontier_change expand(pud_node_id leaf, pud_body_goal_id goal);
@@ -37,7 +37,7 @@ private:
     IActivateChild& activate_child_;
     IRefuteLeaf& refute_leaf_;
     IReleaseLeaf& release_leaf_;
-    IInvalidateQueryLeaves& invalidate_query_leaves_;
+    IInvalidateQueryLeaf& invalidate_query_leaf_;
     IGetQueryHolders& get_query_holders_;
     ICollectChange& collect_change_;
 };
@@ -49,7 +49,7 @@ pud_expander<IR, IU, IAC, IRL, IRLS, IIQL, IGQH, ICC>::pud_expander(
     IAC& activate_child,
     IRL& refute_leaf,
     IRLS& release_leaf,
-    IIQL& invalidate_query_leaves,
+    IIQL& invalidate_query_leaf,
     IGQH& get_query_holders,
     ICC& collect_change)
     : resolve_(resolve)
@@ -57,7 +57,7 @@ pud_expander<IR, IU, IAC, IRL, IRLS, IIQL, IGQH, ICC>::pud_expander(
     , activate_child_(activate_child)
     , refute_leaf_(refute_leaf)
     , release_leaf_(release_leaf)
-    , invalidate_query_leaves_(invalidate_query_leaves)
+    , invalidate_query_leaf_(invalidate_query_leaf)
     , get_query_holders_(get_query_holders)
     , collect_change_(collect_change) {}
 
@@ -86,9 +86,11 @@ pud_frontier_change pud_expander<IR, IU, IAC, IRL, IRLS, IIQL, IGQH, ICC>::expan
         for (pud_node_id node : releasable)
             release_leaf_.release(node);
         std::set<pud_node_id> next_refuting;
-        for (pud_mhq_head_id head_id : invalidate_query_leaves_.invalidate_leaves(releasable)) {
-            const std::vector<pud_node_id> held_by = get_query_holders_.get_holders(head_id);
-            next_refuting.insert(held_by.begin(), held_by.end());
+        for (pud_node_id node : releasable) {
+            for (pud_mhq_head_id head_id : invalidate_query_leaf_.invalidate_leaf(node)) {
+                const std::vector<pud_node_id> held_by = get_query_holders_.get_holders(head_id);
+                next_refuting.insert(held_by.begin(), held_by.end());
+            }
         }
         refuting.assign(next_refuting.begin(), next_refuting.end());
     }

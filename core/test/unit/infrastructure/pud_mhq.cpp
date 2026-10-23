@@ -28,8 +28,8 @@ struct MockTryForkCandidate {
 struct MockRemoveCandidate {
     MOCK_METHOD(void, remove, (pud_mhcs_head_id));
 };
-struct MockInvalidateCandidateLeaves {
-    MOCK_METHOD(std::vector<pud_mhcs_head_id>, invalidate_leaves, (const std::vector<pud_node_id>&));
+struct MockInvalidateCandidateLeaf {
+    MOCK_METHOD(std::vector<pud_mhcs_head_id>, invalidate_leaf, (pud_node_id));
 };
 struct MockPushUnitQuery {
     MOCK_METHOD(void, push_back, (pud_mhq_head_id));
@@ -41,14 +41,14 @@ pud_replay replay_at(pud_node_id node, uint32_t frame_offset) {
 
 using test_mhq_t = pud_mhq<
     NiceMock<MockEnterReplay>, std::vector<pud_node_id>, NiceMock<MockTryAddCandidate>, NiceMock<MockTryForkCandidate>,
-    NiceMock<MockRemoveCandidate>, NiceMock<MockInvalidateCandidateLeaves>, NiceMock<MockPushUnitQuery>>;
+    NiceMock<MockRemoveCandidate>, NiceMock<MockInvalidateCandidateLeaf>, NiceMock<MockPushUnitQuery>>;
 
 struct PudMhqTest : public ::testing::Test {
     NiceMock<MockEnterReplay> enter;
     NiceMock<MockTryAddCandidate> add_candidate;
     NiceMock<MockTryForkCandidate> fork_candidate;
     NiceMock<MockRemoveCandidate> remove_candidate;
-    NiceMock<MockInvalidateCandidateLeaves> invalidate_candidates;
+    NiceMock<MockInvalidateCandidateLeaf> invalidate_candidates;
     NiceMock<MockPushUnitQuery> unit_queries;
     std::vector<pud_node_id> axioms{0, 1, 2};
     test_mhq_t mhq{enter, axioms, add_candidate, fork_candidate, remove_candidate, invalidate_candidates, unit_queries};
@@ -75,7 +75,7 @@ struct PudMhqTest : public ::testing::Test {
     }
 
     void refute_candidates(const std::vector<pud_mhcs_head_id>& candidates) {
-        ON_CALL(invalidate_candidates, invalidate_leaves(_)).WillByDefault(Return(candidates));
+        ON_CALL(invalidate_candidates, invalidate_leaf(_)).WillByDefault(Return(candidates));
     }
 };
 
@@ -122,9 +122,9 @@ TEST_F(PudMhqTest, AQueryOpenedWithTwoCandidatesIsNotUnit) {
     open();
 }
 
-TEST_F(PudMhqTest, EveryLeafIsPassedOnToTheCandidates) {
-    EXPECT_CALL(invalidate_candidates, invalidate_leaves(ElementsAre(5u, 6u)));
-    mhq.invalidate_leaves({5, 6});
+TEST_F(PudMhqTest, InvalidatingALeafIsPassedOnToTheCandidates) {
+    EXPECT_CALL(invalidate_candidates, invalidate_leaf(5u));
+    mhq.invalidate_leaf(5);
 }
 
 TEST_F(PudMhqTest, LosingAllButOneCandidateMakesTheQueryUnit) {
@@ -133,7 +133,7 @@ TEST_F(PudMhqTest, LosingAllButOneCandidateMakesTheQueryUnit) {
     const pud_mhq_head_id head = open().value();
     refute_candidates({30});
     EXPECT_CALL(unit_queries, push_back(head));
-    EXPECT_THAT(mhq.invalidate_leaves({5}), IsEmpty());
+    EXPECT_THAT(mhq.invalidate_leaf(5), IsEmpty());
     EXPECT_THAT(mhq.candidates(head), ElementsAre(31u));
 }
 
@@ -141,7 +141,7 @@ TEST_F(PudMhqTest, LosingTheLastCandidateRefutesTheQueryUntilItIsRemoved) {
     candidate_under(0, 30);
     const pud_mhq_head_id head = open().value();
     refute_candidates({30});
-    EXPECT_THAT(mhq.invalidate_leaves({5}), ElementsAre(head));
+    EXPECT_THAT(mhq.invalidate_leaf(5), ElementsAre(head));
     EXPECT_THAT(mhq.candidates(head), IsEmpty());
     EXPECT_CALL(remove_candidate, remove(_)).Times(0);
     mhq.remove(head);
@@ -154,7 +154,7 @@ TEST_F(PudMhqTest, RefutedCandidatesReachOnlyTheirOwnQuery) {
     candidate_under(1, 41);
     const pud_mhq_head_id second = open().value();
     refute_candidates({30, 40});
-    EXPECT_THAT(mhq.invalidate_leaves({5}), ElementsAre(first));
+    EXPECT_THAT(mhq.invalidate_leaf(5), ElementsAre(first));
     EXPECT_THAT(mhq.candidates(second), ElementsAre(41u));
 }
 

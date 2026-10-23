@@ -24,7 +24,7 @@ template<
     typename ITryForkWitnessSearch,
     typename IAdvanceWitnessSearch,
     typename IRemoveWitnessSearch,
-    typename IInvalidateWitnessLeaves,
+    typename IInvalidateWitnessLeaf,
     typename ICheckNodeLeaf,
     typename ICheckNodeRefuted,
     typename IGetChildren>
@@ -35,14 +35,14 @@ struct pud_mhcs {
         ITryForkWitnessSearch& try_fork_witness_search,
         IAdvanceWitnessSearch& advance_witness_search,
         IRemoveWitnessSearch& remove_witness_search,
-        IInvalidateWitnessLeaves& invalidate_witness_leaves,
+        IInvalidateWitnessLeaf& invalidate_witness_leaf,
         ICheckNodeLeaf& check_node_leaf,
         ICheckNodeRefuted& check_node_refuted,
         IGetChildren& get_children);
     std::optional<pud_mhcs_head_id> try_add(pud_replay axiom_root);
     std::optional<pud_mhcs_head_id> try_fork(pud_mhcs_head_id head_id, pud_replay axiom_root);
     void remove(pud_mhcs_head_id head_id);
-    std::vector<pud_mhcs_head_id> invalidate_leaves(const std::vector<pud_node_id>& leaves);
+    std::vector<pud_mhcs_head_id> invalidate_leaf(pud_node_id leaf);
     const std::vector<pud_node_id>& path(pud_mhcs_head_id head_id) const;
 private:
     // A witness search and the child of the candidate it searches under.
@@ -77,7 +77,7 @@ private:
     ITryForkWitnessSearch& try_fork_witness_search_;
     IAdvanceWitnessSearch& advance_witness_search_;
     IRemoveWitnessSearch& remove_witness_search_;
-    IInvalidateWitnessLeaves& invalidate_witness_leaves_;
+    IInvalidateWitnessLeaf& invalidate_witness_leaf_;
     ICheckNodeLeaf& check_node_leaf_;
     ICheckNodeRefuted& check_node_refuted_;
     IGetChildren& get_children_;
@@ -91,11 +91,11 @@ private:
 #define PUD_MHCS_TEMPLATE                                                                  \
     template<typename IDescendReplay, typename ITryAddWitnessSearch,                       \
              typename ITryForkWitnessSearch, typename IAdvanceWitnessSearch,               \
-             typename IRemoveWitnessSearch, typename IInvalidateWitnessLeaves,             \
+             typename IRemoveWitnessSearch, typename IInvalidateWitnessLeaf,             \
              typename ICheckNodeLeaf, typename ICheckNodeRefuted, typename IGetChildren>
 #define PUD_MHCS                                                                           \
     pud_mhcs<IDescendReplay, ITryAddWitnessSearch, ITryForkWitnessSearch,                  \
-        IAdvanceWitnessSearch, IRemoveWitnessSearch, IInvalidateWitnessLeaves,             \
+        IAdvanceWitnessSearch, IRemoveWitnessSearch, IInvalidateWitnessLeaf,             \
         ICheckNodeLeaf, ICheckNodeRefuted, IGetChildren>
 
 PUD_MHCS_TEMPLATE
@@ -105,7 +105,7 @@ PUD_MHCS::pud_mhcs(
     ITryForkWitnessSearch& try_fork_witness_search,
     IAdvanceWitnessSearch& advance_witness_search,
     IRemoveWitnessSearch& remove_witness_search,
-    IInvalidateWitnessLeaves& invalidate_witness_leaves,
+    IInvalidateWitnessLeaf& invalidate_witness_leaf,
     ICheckNodeLeaf& check_node_leaf,
     ICheckNodeRefuted& check_node_refuted,
     IGetChildren& get_children)
@@ -114,7 +114,7 @@ PUD_MHCS::pud_mhcs(
     , try_fork_witness_search_(try_fork_witness_search)
     , advance_witness_search_(advance_witness_search)
     , remove_witness_search_(remove_witness_search)
-    , invalidate_witness_leaves_(invalidate_witness_leaves)
+    , invalidate_witness_leaf_(invalidate_witness_leaf)
     , check_node_leaf_(check_node_leaf)
     , check_node_refuted_(check_node_refuted)
     , get_children_(get_children)
@@ -160,18 +160,13 @@ void PUD_MHCS::remove(pud_mhcs_head_id head_id) {
     candidates_.erase(head_id);
 }
 
-// Every witness search moves before any candidate learns which of its witnesses are exhausted, so
-// no candidate reaches for a witness that is gone but not yet reported.
 PUD_MHCS_TEMPLATE
-std::vector<pud_mhcs_head_id> PUD_MHCS::invalidate_leaves(const std::vector<pud_node_id>& leaves) {
-    const std::vector<pud_mhws_head_id> exhausted = invalidate_witness_leaves_.invalidate_leaves(leaves);
+std::vector<pud_mhcs_head_id> PUD_MHCS::invalidate_leaf(pud_node_id leaf) {
+    const std::vector<pud_mhws_head_id> exhausted = invalidate_witness_leaf_.invalidate_leaf(leaf);
     std::vector<pud_mhcs_head_id> unjustified;
-    for (pud_node_id leaf : leaves) {
-        auto self_witnessed = leaf_to_heads_.extract(leaf);
-        if (self_witnessed.empty())
-            continue;
+    auto self_witnessed = leaf_to_heads_.extract(leaf);
+    if (!self_witnessed.empty())
         unjustified.insert(unjustified.end(), self_witnessed.mapped().begin(), self_witnessed.mapped().end());
-    }
     std::vector<std::pair<pud_mhcs_head_id, pud_mhws_head_id>> lost_witnesses;
     for (pud_mhws_head_id witness_id : exhausted)
         lost_witnesses.emplace_back(witness_to_head_.at(witness_id), witness_id);

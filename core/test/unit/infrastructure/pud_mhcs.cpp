@@ -28,13 +28,13 @@ struct MockAdvanceWitnessSearch {
 struct MockRemoveWitnessSearch {
     MOCK_METHOD(void, remove, (pud_mhws_head_id));
 };
-struct MockInvalidateWitnessLeaves {
-    MOCK_METHOD(std::vector<pud_mhws_head_id>, invalidate_leaves, (const std::vector<pud_node_id>&));
+struct MockInvalidateWitnessLeaf {
+    MOCK_METHOD(std::vector<pud_mhws_head_id>, invalidate_leaf, (pud_node_id));
 };
 
 using test_mhcs_t = pud_mhcs<
     NiceMock<MockDescendReplay>, NiceMock<MockTryAddWitnessSearch>, NiceMock<MockTryForkWitnessSearch>,
-    NiceMock<MockAdvanceWitnessSearch>, NiceMock<MockRemoveWitnessSearch>, NiceMock<MockInvalidateWitnessLeaves>,
+    NiceMock<MockAdvanceWitnessSearch>, NiceMock<MockRemoveWitnessSearch>, NiceMock<MockInvalidateWitnessLeaf>,
     NiceMock<MockCheckNodeLeaf>, NiceMock<MockCheckNodeRefuted>, NiceMock<MockGetChildren>>;
 
 struct PudMhcsTest : public ::testing::Test {
@@ -43,7 +43,7 @@ struct PudMhcsTest : public ::testing::Test {
     NiceMock<MockTryForkWitnessSearch> fork_witness;
     NiceMock<MockAdvanceWitnessSearch> advance_witness;
     NiceMock<MockRemoveWitnessSearch> remove_witness;
-    NiceMock<MockInvalidateWitnessLeaves> invalidate_witnesses;
+    NiceMock<MockInvalidateWitnessLeaf> invalidate_witnesses;
     test_mhcs_t mhcs{
         tree.descend, add_witness, fork_witness, advance_witness, remove_witness, invalidate_witnesses,
         tree.leaves, tree.refuted, tree.children};
@@ -53,7 +53,7 @@ struct PudMhcsTest : public ::testing::Test {
     }
 
     void exhaust(const std::vector<pud_mhws_head_id>& witnesses) {
-        ON_CALL(invalidate_witnesses, invalidate_leaves(_)).WillByDefault(Return(witnesses));
+        ON_CALL(invalidate_witnesses, invalidate_leaf(_)).WillByDefault(Return(witnesses));
     }
 
     // Root 0 has children 1 and 2; only 1 is witnessed, so the candidate steps onto 1, whose children 5
@@ -128,7 +128,7 @@ TEST_F(PudMhcsTest, ASoleWitnessStandingOnItsRootLeavesTheCandidateOnThatLeaf) {
     const pud_mhcs_head_id head = mhcs.try_add(pud_replay_at(0, 0)).value();
     EXPECT_THAT(mhcs.path(head), ElementsAre(0u, 1u));
     tree.refute(1);
-    EXPECT_THAT(mhcs.invalidate_leaves({1}), ElementsAre(head));
+    EXPECT_THAT(mhcs.invalidate_leaf(1), ElementsAre(head));
 }
 
 TEST_F(PudMhcsTest, ACandidateThatStepsOntoARefutedNodeReleasesItsWitness) {
@@ -148,7 +148,7 @@ TEST_F(PudMhcsTest, AnExpandedSelfWitnessIsJustifiedAgainBelowIt) {
     tree.branch(1, {2, 3});
     witnessed_under(2, 10);
     witnessed_under(3, 11);
-    EXPECT_THAT(mhcs.invalidate_leaves({1}), IsEmpty());
+    EXPECT_THAT(mhcs.invalidate_leaf(1), IsEmpty());
     EXPECT_CALL(remove_witness, remove(10u));
     EXPECT_CALL(remove_witness, remove(11u));
     mhcs.remove(head);
@@ -158,12 +158,12 @@ TEST_F(PudMhcsTest, ARefutedSelfWitnessRefutesTheCandidate) {
     tree.leaf(1);
     const pud_mhcs_head_id head = mhcs.try_add(pud_replay_at(1, 0)).value();
     tree.refute(1);
-    EXPECT_THAT(mhcs.invalidate_leaves({1}), ElementsAre(head));
+    EXPECT_THAT(mhcs.invalidate_leaf(1), ElementsAre(head));
 }
 
-TEST_F(PudMhcsTest, EveryLeafIsPassedOnToTheWitnessSearches) {
-    EXPECT_CALL(invalidate_witnesses, invalidate_leaves(ElementsAre(3u, 4u)));
-    mhcs.invalidate_leaves({3, 4});
+TEST_F(PudMhcsTest, InvalidatingALeafIsPassedOnToTheWitnessSearches) {
+    EXPECT_CALL(invalidate_witnesses, invalidate_leaf(3u));
+    mhcs.invalidate_leaf(3);
 }
 
 TEST_F(PudMhcsTest, AnExhaustedWitnessIsReplacedFromTheNextChild) {
@@ -173,7 +173,7 @@ TEST_F(PudMhcsTest, AnExhaustedWitnessIsReplacedFromTheNextChild) {
     witnessed_under(3, 12);
     const pud_mhcs_head_id head = mhcs.try_add(pud_replay_at(0, 0)).value();
     exhaust({10});
-    EXPECT_THAT(mhcs.invalidate_leaves({7}), IsEmpty());
+    EXPECT_THAT(mhcs.invalidate_leaf(7), IsEmpty());
     EXPECT_CALL(remove_witness, remove(11u));
     EXPECT_CALL(remove_witness, remove(12u));
     mhcs.remove(head);
@@ -190,7 +190,7 @@ TEST_F(PudMhcsTest, ACandidateLearnsOfEveryExhaustedWitnessBeforeItResumes) {
     EXPECT_CALL(add_witness, try_add(_)).Times(AnyNumber());
     EXPECT_CALL(add_witness, try_add(Field(&pud_replay::node, 3u))).Times(1);
     EXPECT_CALL(add_witness, try_add(Field(&pud_replay::node, 4u))).Times(1);
-    EXPECT_THAT(mhcs.invalidate_leaves({7}), IsEmpty());
+    EXPECT_THAT(mhcs.invalidate_leaf(7), IsEmpty());
 }
 
 TEST_F(PudMhcsTest, ExhaustingBothWitnessesWithNothingLeftRefutesTheCandidate) {
@@ -200,7 +200,7 @@ TEST_F(PudMhcsTest, ExhaustingBothWitnessesWithNothingLeftRefutesTheCandidate) {
     const pud_mhcs_head_id head = mhcs.try_add(pud_replay_at(0, 0)).value();
     exhaust({10, 11});
     EXPECT_CALL(remove_witness, remove(_)).Times(0);
-    EXPECT_THAT(mhcs.invalidate_leaves({7}), ElementsAre(head));
+    EXPECT_THAT(mhcs.invalidate_leaf(7), ElementsAre(head));
 }
 
 TEST_F(PudMhcsTest, ExhaustedWitnessesReachOnlyTheirOwnCandidate) {
@@ -213,7 +213,7 @@ TEST_F(PudMhcsTest, ExhaustedWitnessesReachOnlyTheirOwnCandidate) {
     const pud_mhcs_head_id first = mhcs.try_add(pud_replay_at(0, 0)).value();
     const pud_mhcs_head_id second = mhcs.try_add(pud_replay_at(20, 0)).value();
     exhaust({10, 11});
-    EXPECT_THAT(mhcs.invalidate_leaves({7}), ElementsAre(first));
+    EXPECT_THAT(mhcs.invalidate_leaf(7), ElementsAre(first));
     EXPECT_CALL(remove_witness, remove(30u));
     EXPECT_CALL(remove_witness, remove(31u));
     mhcs.remove(second);
