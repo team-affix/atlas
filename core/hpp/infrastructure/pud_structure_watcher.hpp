@@ -12,7 +12,7 @@
 #include "value_objects/pud_body_goal.hpp"
 #include "value_objects/pud_body_goal_id.hpp"
 #include "value_objects/pud_goal_list.hpp"
-#include "value_objects/pud_node_id.hpp"
+#include "value_objects/pud_global_node_id.hpp"
 #include "value_objects/pud_structure_watch.hpp"
 #include "value_objects/pud_structure_watch_change.hpp"
 #include "value_objects/pud_substitution.hpp"
@@ -29,7 +29,7 @@ struct pud_structure_watcher {
     pud_structure_watch_change descend(
         const pud_structure_watch& parent_watch,
         const pud_ubs_state& child_bindings,
-        pud_node_id child,
+        pud_global_node_id child,
         pud_body_goal_id closed_goal,
         const pud_goal_list& child_goals) const;
 private:
@@ -72,7 +72,7 @@ PUD_STRUCTURE_WATCHER_TEMPLATE
 pud_structure_watch_change PUD_STRUCTURE_WATCHER::descend(
     const pud_structure_watch& parent_watch,
     const pud_ubs_state& child_bindings,
-    pud_node_id child,
+    pud_global_node_id child,
     pud_body_goal_id closed_goal,
     const pud_goal_list& child_goals) const {
     auto&& bind_map = make_bind_map_.make_bind_map(child_bindings);

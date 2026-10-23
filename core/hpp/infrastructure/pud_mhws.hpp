@@ -8,6 +8,8 @@
 #include <unordered_set>
 #include <utility>
 #include <vector>
+#include "value_objects/pud_global_node_id.hpp"
+#include "value_objects/pud_global_node_id_hash.hpp"
 #include "value_objects/pud_mhws_head_id.hpp"
 #include "value_objects/pud_node_id.hpp"
 #include "value_objects/pud_replay.hpp"
@@ -28,7 +30,7 @@ struct pud_mhws {
     std::optional<pud_mhws_head_id> try_fork(pud_mhws_head_id head_id, pud_replay search_root);
     std::optional<pud_witness_advance> advance(pud_mhws_head_id head_id);
     void remove(pud_mhws_head_id head_id);
-    std::vector<pud_mhws_head_id> invalidate_leaf(pud_node_id leaf);
+    std::vector<pud_mhws_head_id> invalidate_leaf(pud_global_node_id leaf);
 private:
     // One level below the search root: the node the search stands on, none while it moves on to the
     // next sibling, and the position of that next sibling among the parent's children.
@@ -42,9 +44,9 @@ private:
     };
 
     std::optional<pud_mhws_head_id> try_admit(search admitted);
-    std::optional<pud_node_id> resume(search& resumed);
+    std::optional<pud_global_node_id> resume(search& resumed);
     std::optional<pud_replay> try_descend_sibling(const pud_replay& parent, size_t& next_sibling);
-    void link(pud_mhws_head_id head_id, pud_node_id witness);
+    void link(pud_mhws_head_id head_id, pud_global_node_id witness);
     void unlink(pud_mhws_head_id head_id);
 
     IDescendReplay& descend_replay_;
@@ -54,8 +56,8 @@ private:
 
     pud_mhws_head_id next_head_id_;
     std::unordered_map<pud_mhws_head_id, search> searches_;
-    std::unordered_map<pud_mhws_head_id, pud_node_id> head_to_witness_;
-    std::unordered_map<pud_node_id, std::unordered_set<pud_mhws_head_id>> witness_to_heads_;
+    std::unordered_map<pud_mhws_head_id, pud_global_node_id> head_to_witness_;
+    std::unordered_map<pud_global_node_id, std::unordered_set<pud_mhws_head_id>, pud_global_node_id_hash> witness_to_heads_;
 };
 
 #define PUD_MHWS_TEMPLATE                                                                  \
@@ -120,7 +122,7 @@ void PUD_MHWS::remove(pud_mhws_head_id head_id) {
 }
 
 PUD_MHWS_TEMPLATE
-std::vector<pud_mhws_head_id> PUD_MHWS::invalidate_leaf(pud_node_id leaf) {
+std::vector<pud_mhws_head_id> PUD_MHWS::invalidate_leaf(pud_global_node_id leaf) {
     std::vector<pud_mhws_head_id> unwitnessed;
     auto holders = witness_to_heads_.extract(leaf);
     if (!holders.empty())
@@ -128,7 +130,7 @@ std::vector<pud_mhws_head_id> PUD_MHWS::invalidate_leaf(pud_node_id leaf) {
     std::vector<pud_mhws_head_id> exhausted;
     for (pud_mhws_head_id head_id : unwitnessed) {
         head_to_witness_.erase(head_id);
-        const std::optional<pud_node_id> witness = resume(searches_.at(head_id));
+        const std::optional<pud_global_node_id> witness = resume(searches_.at(head_id));
         if (witness.has_value()) {
             link(head_id, witness.value());
             continue;
@@ -141,7 +143,7 @@ std::vector<pud_mhws_head_id> PUD_MHWS::invalidate_leaf(pud_node_id leaf) {
 
 PUD_MHWS_TEMPLATE
 std::optional<pud_mhws_head_id> PUD_MHWS::try_admit(search admitted) {
-    const std::optional<pud_node_id> witness = resume(admitted);
+    const std::optional<pud_global_node_id> witness = resume(admitted);
     if (!witness.has_value())
         return std::nullopt;
     const pud_mhws_head_id head_id = next_head_id_++;
@@ -151,9 +153,9 @@ std::optional<pud_mhws_head_id> PUD_MHWS::try_admit(search admitted) {
 }
 
 PUD_MHWS_TEMPLATE
-std::optional<pud_node_id> PUD_MHWS::resume(search& resumed) {
+std::optional<pud_global_node_id> PUD_MHWS::resume(search& resumed) {
     if (resumed.frames.empty()) {
-        const pud_node_id root = resumed.root.node;
+        const pud_global_node_id root = resumed.root.node;
         if (check_node_refuted_.check_refuted(root))
             return std::nullopt;
         if (check_node_leaf_.check_leaf(root))
@@ -173,7 +175,7 @@ std::optional<pud_node_id> PUD_MHWS::resume(search& resumed) {
                 resumed.frames.back().current = std::nullopt;
             continue;
         }
-        const pud_node_id node = top.current->node;
+        const pud_global_node_id node = top.current->node;
         if (check_node_refuted_.check_refuted(node)) {
             top.current = std::nullopt;
             continue;
@@ -189,7 +191,8 @@ PUD_MHWS_TEMPLATE
 std::optional<pud_replay> PUD_MHWS::try_descend_sibling(const pud_replay& parent, size_t& next_sibling) {
     const std::vector<pud_node_id>& siblings = get_children_.get_children(parent.node);
     while (next_sibling < siblings.size()) {
-        std::optional<pud_replay> sibling = descend_replay_.descend(parent, siblings.at(next_sibling++));
+        const pud_global_node_id next{.module = parent.node.module, .node = siblings.at(next_sibling++)};
+        std::optional<pud_replay> sibling = descend_replay_.descend(parent, next);
         if (sibling.has_value())
             return sibling;
     }
@@ -197,7 +200,7 @@ std::optional<pud_replay> PUD_MHWS::try_descend_sibling(const pud_replay& parent
 }
 
 PUD_MHWS_TEMPLATE
-void PUD_MHWS::link(pud_mhws_head_id head_id, pud_node_id witness) {
+void PUD_MHWS::link(pud_mhws_head_id head_id, pud_global_node_id witness) {
     head_to_witness_.emplace(head_id, witness);
     witness_to_heads_[witness].insert(head_id);
 }

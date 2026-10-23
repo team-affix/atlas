@@ -6,6 +6,7 @@
 #include "value_objects/expr.hpp"
 #include "value_objects/pud_node_delta.hpp"
 #include "value_objects/rule.hpp"
+#include "pud_test_node.hpp"
 
 using ::testing::_;
 using ::testing::InSequence;
@@ -16,10 +17,10 @@ using ::testing::ReturnRef;
 namespace {
 
 struct MockGetAxiom {
-    MOCK_METHOD(const rule&, get_axiom, (pud_node_id));
+    MOCK_METHOD(const rule&, get_axiom, (pud_global_node_id));
 };
 struct MockGetInference {
-    MOCK_METHOD(const pud_node_delta&, get_inference, (pud_node_id));
+    MOCK_METHOD(const pud_node_delta&, get_inference, (pud_global_node_id));
 };
 struct MockMakeVar {
     MOCK_METHOD(const expr*, make_var, (uint32_t));
@@ -84,8 +85,8 @@ struct PudReplayerTest : public ::testing::Test {
         ON_CALL(make_cycle_detector, make_cycle_detector(_)).WillByDefault(ReturnRef(cycle_detector));
         ON_CALL(make_unifier, make_unifier(_, _)).WillByDefault(ReturnRef(unifier));
         ON_CALL(std::move(bind_map), persist()).WillByDefault(Return(persisted_state));
-        ON_CALL(axioms, get_axiom(8)).WillByDefault(ReturnRef(axiom));
-        ON_CALL(inferences, get_inference(9)).WillByDefault(ReturnRef(child_inference));
+        ON_CALL(axioms, get_axiom(pud_test_node(8))).WillByDefault(ReturnRef(axiom));
+        ON_CALL(inferences, get_inference(pud_test_node(9))).WillByDefault(ReturnRef(child_inference));
         ON_CALL(make_var, make_var(3)).WillByDefault(Return(&var_three));
         ON_CALL(make_var, make_var(4)).WillByDefault(Return(&var_four));
         ON_CALL(unifier, unify(_, _)).WillByDefault(Return(k_unified));
@@ -103,29 +104,29 @@ TEST_F(PudReplayerTest, EnteringAnAxiomUnifiesTheGoalWithTheHeadFramedAtTheOffse
     EXPECT_CALL(make_bind_map, make_bind_map(caller_state));
     EXPECT_CALL(unifier, unify((framed_expr{&goal, 0}), (framed_expr{&head, 7}))).WillOnce(Return(k_unified));
     EXPECT_EQ(
-        replayer.enter(caller_state, &goal, 7, 8),
-        (pud_replay{.node = 8, .frame_offset = 7, .ubs_state = persisted_state}));
+        replayer.enter(caller_state, &goal, 7, pud_test_node(8)),
+        (pud_replay{.node = pud_test_node(8), .frame_offset = 7, .ubs_state = persisted_state}));
 }
 
 TEST_F(PudReplayerTest, EnteringFailsWhenTheHeadDoesNotUnify) {
     ON_CALL(unifier, unify(_, _)).WillByDefault(Return(k_not_unified));
-    EXPECT_FALSE(replayer.enter(caller_state, &goal, 7, 8).has_value());
+    EXPECT_FALSE(replayer.enter(caller_state, &goal, 7, pud_test_node(8)).has_value());
 }
 
 TEST_F(PudReplayerTest, DescendingReplaysEverySubstitutionAtTheFrameOffsetInOrder) {
-    const pud_replay parent{.node = 8, .frame_offset = 7, .ubs_state = caller_state};
+    const pud_replay parent{.node = pud_test_node(8), .frame_offset = 7, .ubs_state = caller_state};
     InSequence in_order;
     EXPECT_CALL(make_bind_map, make_bind_map(caller_state));
     EXPECT_CALL(unifier, unify((framed_expr{&var_three, 7}), (framed_expr{&value, 7}))).WillOnce(Return(k_unified));
     EXPECT_CALL(unifier, unify((framed_expr{&var_four, 7}), (framed_expr{&other_value, 7}))).WillOnce(Return(k_unified));
     EXPECT_EQ(
-        replayer.descend(parent, 9),
-        (pud_replay{.node = 9, .frame_offset = 7, .ubs_state = persisted_state}));
+        replayer.descend(parent, pud_test_node(9)),
+        (pud_replay{.node = pud_test_node(9), .frame_offset = 7, .ubs_state = persisted_state}));
 }
 
 TEST_F(PudReplayerTest, DescendingStopsAtTheFirstSubstitutionThatFails) {
-    const pud_replay parent{.node = 8, .frame_offset = 7, .ubs_state = caller_state};
+    const pud_replay parent{.node = pud_test_node(8), .frame_offset = 7, .ubs_state = caller_state};
     EXPECT_CALL(unifier, unify(_, _)).WillOnce(Return(k_not_unified));
     EXPECT_CALL(std::move(bind_map), persist()).Times(0);
-    EXPECT_FALSE(replayer.descend(parent, 9).has_value());
+    EXPECT_FALSE(replayer.descend(parent, pud_test_node(9)).has_value());
 }

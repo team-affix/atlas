@@ -4,6 +4,7 @@
 #include <gmock/gmock.h>
 #include "infrastructure/pud_structure_watcher.hpp"
 #include "value_objects/pud_node_delta.hpp"
+#include "pud_test_node.hpp"
 
 using ::testing::_;
 using ::testing::ElementsAre;
@@ -23,7 +24,7 @@ struct MockMakeBindMap {
     MOCK_METHOD(MockBindMap&, make_bind_map, (const pud_ubs_state&));
 };
 struct MockGetInference {
-    MOCK_METHOD(const pud_node_delta&, get_inference, (pud_node_id));
+    MOCK_METHOD(const pud_node_delta&, get_inference, (pud_global_node_id));
 };
 
 ubs_class singleton(uint32_t var) {
@@ -51,13 +52,13 @@ struct PudStructureWatcherTest : public ::testing::Test {
     void SetUp() override {
         ON_CALL(make_bind_map, make_bind_map(_)).WillByDefault(ReturnRef(bind_map));
         ON_CALL(bind_map, find(_)).WillByDefault(Invoke(&singleton));
-        ON_CALL(inferences, get_inference(9)).WillByDefault(ReturnRef(child_inference));
+        ON_CALL(inferences, get_inference(pud_test_node(9))).WillByDefault(ReturnRef(child_inference));
     }
 
     std::vector<pud_body_goal_id> changed_by(std::vector<pud_substitution> substituted) {
         child_inference.substitutions = std::move(substituted);
         const pud_structure_watch root = watcher.watch_root(pud_ubs_state{}, root_goals);
-        return watcher.descend(root, pud_ubs_state{}, 9, 2, root_goals.closing(2).adding(&k)).changed_goals;
+        return watcher.descend(root, pud_ubs_state{}, pud_test_node(9), 2, root_goals.closing(2).adding(&k)).changed_goals;
     }
 };
 
@@ -103,7 +104,7 @@ TEST_F(PudStructureWatcherTest, TheClosedGoalIsNoLongerWatched) {
 TEST_F(PudStructureWatcherTest, AGoalTheChildAddsIsWatchedButNeverReportedChanged) {
     child_inference.substitutions = {pud_substitution{.var_idx = 4, .value = &ground}};
     const pud_structure_watch root = watcher.watch_root(pud_ubs_state{}, root_goals);
-    const pud_structure_watch_change change = watcher.descend(root, pud_ubs_state{}, 9, 2, root_goals.closing(2).adding(&k));
+    const pud_structure_watch_change change = watcher.descend(root, pud_ubs_state{}, pud_test_node(9), 2, root_goals.closing(2).adding(&k));
     EXPECT_THAT(change.changed_goals, IsEmpty());
     EXPECT_EQ(change.watch.goal_to_reps[3], (immer::set<uint32_t>{}.insert(4)));
     EXPECT_EQ(change.watch.goal_to_reps.find(2), nullptr);
@@ -113,6 +114,6 @@ TEST_F(PudStructureWatcherTest, AnInstantiatedRepresentativeIsReplacedByTheValue
     expr pair{expr::functor{6, {&x3, &x4}}};
     child_inference.substitutions = {pud_substitution{.var_idx = 2, .value = &pair}};
     const pud_structure_watch root = watcher.watch_root(pud_ubs_state{}, root_goals);
-    const pud_structure_watch_change change = watcher.descend(root, pud_ubs_state{}, 9, 2, root_goals.closing(2));
+    const pud_structure_watch_change change = watcher.descend(root, pud_ubs_state{}, pud_test_node(9), 2, root_goals.closing(2));
     EXPECT_EQ(change.watch.goal_to_reps[1], (immer::set<uint32_t>{}.insert(3).insert(4)));
 }

@@ -3,31 +3,22 @@
 #include "parser/hpp/import_database_from_file.hpp"
 #include "parser/hpp/import_goals_from_string.hpp"
 #include <iostream>
+#include <random>
 #include <stdexcept>
 #include <vector>
 
 namespace {
 
-struct pud_goal_exprs {
-    std::vector<const expr*> goals;
-    void push(const expr* goal) { goals.push_back(goal); }
-};
-
-void load_axioms(db& database, pud_manifest& manifest) {
-    std::vector<pud_node_id> roots;
-    coroutine<rule_id, void> rules = database.lookup_all_rules().iterate();
-    while (!rules.done()) {
-        rules.resume();
-        if (!rules.has_yield())
+std::vector<rule> list_rules(db& database) {
+    std::vector<rule> rules;
+    coroutine<rule_id, void> listed = database.lookup_all_rules().iterate();
+    while (!listed.done()) {
+        listed.resume();
+        if (!listed.has_yield())
             break;
-        const rule_id rule = rules.consume_yield();
-        roots.push_back(manifest.node_maker_.make_root(*database.get_rule(rule), manifest.database_axiom_group_));
+        rules.push_back(*database.get_rule(listed.consume_yield()));
     }
-    for (pud_node_id root : roots) {
-        if (!manifest.root_activator_.activate_root(root))
-            continue;
-        manifest.leaf_refuter_.refute(root);
-    }
+    return rules;
 }
 
 } // namespace
@@ -43,23 +34,25 @@ pud_command_handler::pud_command_handler(
     , print_functor_(functor_names_)
     , parse_var_seq_(0)
     , next_functor_id_(k_first_user_functor_id)
-    , manifest_()
+    , expr_pool_()
     , database_()
-    , conjecture_(0)
+    , database_module_()
+    , controller_(expr_pool_)
     , max_unfolds_(max_unfolds)
     , max_answers_(max_answers)
     , printer_() {
     (void)goals_str;
     (void)head_str;
-    (void)seed;
     import_database_from_file(
         file,
-        manifest_.expr_pool_,
-        manifest_.expr_pool_,
+        expr_pool_,
+        expr_pool_,
         database_,
         functor_map_,
         next_functor_id_);
-    load_axioms(database_, manifest_);
+    const pud_module_id module_id = std::mt19937_64{seed}();
+    database_module_.emplace(module_id, std::vector<pud_module_id>{}, list_rules(database_));
+    controller_.register_module(database_module_.value());
 }
 
 void pud_command_handler::operator()() {

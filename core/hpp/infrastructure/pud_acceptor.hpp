@@ -10,14 +10,14 @@
 #include "value_objects/framed_expr.hpp"
 #include "value_objects/pud_body_goal.hpp"
 #include "value_objects/pud_body_goal_id.hpp"
+#include "value_objects/pud_global_node_id.hpp"
 #include "value_objects/pud_node_delta.hpp"
-#include "value_objects/pud_node_id.hpp"
 #include "value_objects/pud_substitution.hpp"
 #include "value_objects/pud_ubs_state.hpp"
 #include "value_objects/ubs_class.hpp"
 #include "debug_assert.hpp"
 
-// Accepts a candidate into an inference of the caller on its call site. The call-site goal enters the
+// Accepts a candidate into an inference of the caller on its call site, in the caller's module. The call-site goal enters the
 // candidate's axiom and the candidate's path is replayed below it, the callee framed at the caller's
 // lvc, in one environment on top of the caller's. Every caller class that was unbound when a
 // unification edited it is noted as it is edited; one that ends up bound, or merged under another
@@ -43,12 +43,12 @@ struct pud_acceptor {
         IMakeUnifier& make_unifier,
         IMakeExporter& make_exporter);
     pud_node_delta accept(
-        pud_node_id acceptor,
+        pud_global_node_id acceptor,
         pud_body_goal_id call_site,
         const pud_ubs_state& acceptor_ubs_state,
         uint32_t acceptor_lvc,
         const expr* call_site_goal,
-        const std::vector<pud_node_id>& candidate_path);
+        const std::vector<pud_global_node_id>& candidate_path);
 private:
     void note_caller_classes(
         const std::optional<std::vector<ubs_class>>& edited,
@@ -94,12 +94,12 @@ PUD_ACCEPTOR::pud_acceptor(
 
 PUD_ACCEPTOR_TEMPLATE
 pud_node_delta PUD_ACCEPTOR::accept(
-    pud_node_id acceptor,
+    pud_global_node_id acceptor,
     pud_body_goal_id call_site,
     const pud_ubs_state& acceptor_ubs_state,
     uint32_t acceptor_lvc,
     const expr* call_site_goal,
-    const std::vector<pud_node_id>& candidate_path) {
+    const std::vector<pud_global_node_id>& candidate_path) {
     auto&& accepted = make_bind_map_.make_bind_map(acceptor_ubs_state);
     auto&& cycle_detector = make_cycle_detector_.make_cycle_detector(accepted);
     auto&& unifier = make_unifier_.make_unifier(accepted, cycle_detector);
@@ -117,7 +117,7 @@ pud_node_delta PUD_ACCEPTOR::accept(
     std::unordered_map<uint32_t, uint32_t> translations;
     auto&& exporter = make_exporter_.make_exporter(accepted, acceptor_lvc, translations);
     pud_node_delta delta{
-        .parent = acceptor, .call_site = call_site, .substitutions = {}, .body_goals = {}, .var_count = 0};
+        .parent = acceptor.node, .call_site = call_site, .substitutions = {}, .body_goals = {}, .var_count = 0};
     for (uint32_t caller_rep : touched_caller_reps) {
         const ubs_class accepted_class = accepted.find(caller_rep);
         const bool unchanged = accepted_class.rep == caller_rep && !accepted_class.value.has_value();

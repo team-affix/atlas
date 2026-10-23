@@ -4,7 +4,7 @@
 #include <vector>
 #include "value_objects/pud_body_goal_id.hpp"
 #include "value_objects/pud_mhq_head_id.hpp"
-#include "value_objects/pud_node_id.hpp"
+#include "value_objects/pud_global_node_id.hpp"
 
 // Drops a node's active state and query holds, removes orphan queries, and stops the node witnessing
 // any candidate. Returns the nodes still holding a query that was left without a candidate.
@@ -23,7 +23,7 @@ struct pud_node_deactivator {
         IRemoveQuery& remove_query,
         IInvalidateQueryLeaf& invalidate_query_leaf,
         IGetQueryHolders& get_query_holders);
-    std::vector<pud_node_id> deactivate(pud_node_id node);
+    std::vector<pud_global_node_id> deactivate(pud_global_node_id node);
 private:
     IGetActiveState& get_active_state_;
     IEraseActiveState& erase_active_state_;
@@ -56,16 +56,16 @@ PUD_NODE_DEACTIVATOR::pud_node_deactivator(
     , get_query_holders_(get_query_holders) {}
 
 PUD_NODE_DEACTIVATOR_TEMPLATE
-std::vector<pud_node_id> PUD_NODE_DEACTIVATOR::deactivate(pud_node_id node) {
+std::vector<pud_global_node_id> PUD_NODE_DEACTIVATOR::deactivate(pud_global_node_id node) {
     for (const auto& [goal, head_id] : get_active_state_.get(node).queries) {
         if (!release_query_.release(head_id, node))
             continue;
         remove_query_.remove(head_id);
     }
     erase_active_state_.erase(node);
-    std::vector<pud_node_id> stranded;
+    std::vector<pud_global_node_id> stranded;
     for (pud_mhq_head_id exhausted : invalidate_query_leaf_.invalidate_leaf(node)) {
-        const std::vector<pud_node_id> holders = get_query_holders_.get_holders(exhausted);
+        const std::vector<pud_global_node_id> holders = get_query_holders_.get_holders(exhausted);
         stranded.insert(stranded.end(), holders.begin(), holders.end());
     }
     return stranded;

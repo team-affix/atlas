@@ -29,7 +29,7 @@ struct MockRemoveWitnessSearch {
     MOCK_METHOD(void, remove, (pud_mhws_head_id));
 };
 struct MockInvalidateWitnessLeaf {
-    MOCK_METHOD(std::vector<pud_mhws_head_id>, invalidate_leaf, (pud_node_id));
+    MOCK_METHOD(std::vector<pud_mhws_head_id>, invalidate_leaf, (pud_global_node_id));
 };
 
 using test_mhcs_t = pud_mhcs<
@@ -49,7 +49,7 @@ struct PudMhcsTest : public ::testing::Test {
         tree.leaves, tree.refuted, tree.children};
 
     void witnessed_under(pud_node_id search_root, pud_mhws_head_id witness) {
-        ON_CALL(add_witness, try_add(Field(&pud_replay::node, search_root))).WillByDefault(Return(witness));
+        ON_CALL(add_witness, try_add(Field(&pud_replay::node, pud_test_node(search_root)))).WillByDefault(Return(witness));
     }
 
     void exhaust(const std::vector<pud_mhws_head_id>& witnesses) {
@@ -74,7 +74,7 @@ struct PudMhcsTest : public ::testing::Test {
 TEST_F(PudMhcsTest, ALeafAxiomRootIsItsOwnWitness) {
     tree.leaf(1);
     const pud_mhcs_head_id head = mhcs.try_add(pud_replay_at(1, 0)).value();
-    EXPECT_THAT(mhcs.path(head), ElementsAre(1u));
+    EXPECT_THAT(mhcs.path(head), ElementsAre(pud_test_node(1)));
     EXPECT_CALL(remove_witness, remove(_)).Times(0);
     mhcs.remove(head);
 }
@@ -95,7 +95,7 @@ TEST_F(PudMhcsTest, WitnessesUnderTwoDistinctChildrenMakeAChoicePoint) {
     witnessed_under(1, 10);
     witnessed_under(2, 11);
     const pud_mhcs_head_id head = mhcs.try_add(pud_replay_at(0, 0)).value();
-    EXPECT_THAT(mhcs.path(head), ElementsAre(0u));
+    EXPECT_THAT(mhcs.path(head), ElementsAre(pud_test_node(0)));
     EXPECT_CALL(remove_witness, remove(10u));
     EXPECT_CALL(remove_witness, remove(11u));
     mhcs.remove(head);
@@ -113,9 +113,20 @@ TEST_F(PudMhcsTest, ChildrenThatCannotBeEnteredOrWitnessedAreSkipped) {
     mhcs.remove(head);
 }
 
+TEST_F(PudMhcsTest, ChildrenAreSteppedIntoInTheirParentsModule) {
+    tree.branch(0, {1, 2});
+    EXPECT_CALL(
+        tree.descend,
+        descend(Field(&pud_replay::node, pud_test_node(0)), pud_global_node_id{.module = k_test_module, .node = 1}));
+    EXPECT_CALL(
+        tree.descend,
+        descend(Field(&pud_replay::node, pud_test_node(0)), pud_global_node_id{.module = k_test_module, .node = 2}));
+    mhcs.try_add(pud_replay_at(0, 0));
+}
+
 TEST_F(PudMhcsTest, ASoleWitnessStepsTheCandidateDownToTheNextChoicePoint) {
     const pud_mhcs_head_id head = add_stepped_choice_point();
-    EXPECT_THAT(mhcs.path(head), ElementsAre(0u, 1u));
+    EXPECT_THAT(mhcs.path(head), ElementsAre(pud_test_node(0), pud_test_node(1)));
     EXPECT_CALL(remove_witness, remove(10u));
     EXPECT_CALL(remove_witness, remove(12u));
     mhcs.remove(head);
@@ -126,9 +137,9 @@ TEST_F(PudMhcsTest, ASoleWitnessStandingOnItsRootLeavesTheCandidateOnThatLeaf) {
     tree.leaf(1);
     witnessed_under(1, 10);
     const pud_mhcs_head_id head = mhcs.try_add(pud_replay_at(0, 0)).value();
-    EXPECT_THAT(mhcs.path(head), ElementsAre(0u, 1u));
+    EXPECT_THAT(mhcs.path(head), ElementsAre(pud_test_node(0), pud_test_node(1)));
     tree.refute(1);
-    EXPECT_THAT(mhcs.invalidate_leaf(1), ElementsAre(head));
+    EXPECT_THAT(mhcs.invalidate_leaf(pud_test_node(1)), ElementsAre(head));
 }
 
 TEST_F(PudMhcsTest, ACandidateThatStepsOntoARefutedNodeReleasesItsWitness) {
@@ -148,7 +159,7 @@ TEST_F(PudMhcsTest, AnExpandedSelfWitnessIsJustifiedAgainBelowIt) {
     tree.branch(1, {2, 3});
     witnessed_under(2, 10);
     witnessed_under(3, 11);
-    EXPECT_THAT(mhcs.invalidate_leaf(1), IsEmpty());
+    EXPECT_THAT(mhcs.invalidate_leaf(pud_test_node(1)), IsEmpty());
     EXPECT_CALL(remove_witness, remove(10u));
     EXPECT_CALL(remove_witness, remove(11u));
     mhcs.remove(head);
@@ -158,12 +169,12 @@ TEST_F(PudMhcsTest, ARefutedSelfWitnessRefutesTheCandidate) {
     tree.leaf(1);
     const pud_mhcs_head_id head = mhcs.try_add(pud_replay_at(1, 0)).value();
     tree.refute(1);
-    EXPECT_THAT(mhcs.invalidate_leaf(1), ElementsAre(head));
+    EXPECT_THAT(mhcs.invalidate_leaf(pud_test_node(1)), ElementsAre(head));
 }
 
 TEST_F(PudMhcsTest, InvalidatingALeafIsPassedOnToTheWitnessSearches) {
-    EXPECT_CALL(invalidate_witnesses, invalidate_leaf(3u));
-    mhcs.invalidate_leaf(3);
+    EXPECT_CALL(invalidate_witnesses, invalidate_leaf(pud_test_node(3)));
+    mhcs.invalidate_leaf(pud_test_node(3));
 }
 
 TEST_F(PudMhcsTest, AnExhaustedWitnessIsReplacedFromTheNextChild) {
@@ -173,7 +184,7 @@ TEST_F(PudMhcsTest, AnExhaustedWitnessIsReplacedFromTheNextChild) {
     witnessed_under(3, 12);
     const pud_mhcs_head_id head = mhcs.try_add(pud_replay_at(0, 0)).value();
     exhaust({10});
-    EXPECT_THAT(mhcs.invalidate_leaf(7), IsEmpty());
+    EXPECT_THAT(mhcs.invalidate_leaf(pud_test_node(7)), IsEmpty());
     EXPECT_CALL(remove_witness, remove(11u));
     EXPECT_CALL(remove_witness, remove(12u));
     mhcs.remove(head);
@@ -188,9 +199,9 @@ TEST_F(PudMhcsTest, ACandidateLearnsOfEveryExhaustedWitnessBeforeItResumes) {
     mhcs.try_add(pud_replay_at(0, 0));
     exhaust({10, 11});
     EXPECT_CALL(add_witness, try_add(_)).Times(AnyNumber());
-    EXPECT_CALL(add_witness, try_add(Field(&pud_replay::node, 3u))).Times(1);
-    EXPECT_CALL(add_witness, try_add(Field(&pud_replay::node, 4u))).Times(1);
-    EXPECT_THAT(mhcs.invalidate_leaf(7), IsEmpty());
+    EXPECT_CALL(add_witness, try_add(Field(&pud_replay::node, pud_test_node(3)))).Times(1);
+    EXPECT_CALL(add_witness, try_add(Field(&pud_replay::node, pud_test_node(4)))).Times(1);
+    EXPECT_THAT(mhcs.invalidate_leaf(pud_test_node(7)), IsEmpty());
 }
 
 TEST_F(PudMhcsTest, ExhaustingBothWitnessesWithNothingLeftRefutesTheCandidate) {
@@ -200,7 +211,7 @@ TEST_F(PudMhcsTest, ExhaustingBothWitnessesWithNothingLeftRefutesTheCandidate) {
     const pud_mhcs_head_id head = mhcs.try_add(pud_replay_at(0, 0)).value();
     exhaust({10, 11});
     EXPECT_CALL(remove_witness, remove(_)).Times(0);
-    EXPECT_THAT(mhcs.invalidate_leaf(7), ElementsAre(head));
+    EXPECT_THAT(mhcs.invalidate_leaf(pud_test_node(7)), ElementsAre(head));
 }
 
 TEST_F(PudMhcsTest, ExhaustedWitnessesReachOnlyTheirOwnCandidate) {
@@ -213,7 +224,7 @@ TEST_F(PudMhcsTest, ExhaustedWitnessesReachOnlyTheirOwnCandidate) {
     const pud_mhcs_head_id first = mhcs.try_add(pud_replay_at(0, 0)).value();
     const pud_mhcs_head_id second = mhcs.try_add(pud_replay_at(20, 0)).value();
     exhaust({10, 11});
-    EXPECT_THAT(mhcs.invalidate_leaf(7), ElementsAre(first));
+    EXPECT_THAT(mhcs.invalidate_leaf(pud_test_node(7)), ElementsAre(first));
     EXPECT_CALL(remove_witness, remove(30u));
     EXPECT_CALL(remove_witness, remove(31u));
     mhcs.remove(second);
@@ -221,12 +232,16 @@ TEST_F(PudMhcsTest, ExhaustedWitnessesReachOnlyTheirOwnCandidate) {
 
 TEST_F(PudMhcsTest, AForkReplaysThePathAndForksBothWitnessesOntoTheNewEnvironment) {
     const pud_mhcs_head_id head = add_stepped_choice_point();
-    EXPECT_CALL(fork_witness, try_fork(10u, AllOf(Field(&pud_replay::node, 5u), Field(&pud_replay::frame_offset, 9u))))
+    EXPECT_CALL(
+        fork_witness,
+        try_fork(10u, AllOf(Field(&pud_replay::node, pud_test_node(5)), Field(&pud_replay::frame_offset, 9u))))
         .WillOnce(Return(20u));
-    EXPECT_CALL(fork_witness, try_fork(12u, AllOf(Field(&pud_replay::node, 6u), Field(&pud_replay::frame_offset, 9u))))
+    EXPECT_CALL(
+        fork_witness,
+        try_fork(12u, AllOf(Field(&pud_replay::node, pud_test_node(6)), Field(&pud_replay::frame_offset, 9u))))
         .WillOnce(Return(21u));
     const pud_mhcs_head_id fork = mhcs.try_fork(head, pud_replay_at(0, 9)).value();
-    EXPECT_THAT(mhcs.path(fork), ElementsAre(0u, 1u));
+    EXPECT_THAT(mhcs.path(fork), ElementsAre(pud_test_node(0), pud_test_node(1)));
     EXPECT_CALL(remove_witness, remove(20u));
     EXPECT_CALL(remove_witness, remove(21u));
     mhcs.remove(fork);
@@ -234,7 +249,8 @@ TEST_F(PudMhcsTest, AForkReplaysThePathAndForksBothWitnessesOntoTheNewEnvironmen
 
 TEST_F(PudMhcsTest, AForkWhosePathNoLongerReplaysIsNotAdmitted) {
     const pud_mhcs_head_id head = add_stepped_choice_point();
-    ON_CALL(tree.descend, descend(Field(&pud_replay::frame_offset, 9u), 1u)).WillByDefault(Return(std::nullopt));
+    ON_CALL(tree.descend, descend(Field(&pud_replay::frame_offset, 9u), pud_test_node(1)))
+        .WillByDefault(Return(std::nullopt));
     EXPECT_CALL(fork_witness, try_fork(_, _)).Times(0);
     EXPECT_FALSE(mhcs.try_fork(head, pud_replay_at(0, 9)).has_value());
 }

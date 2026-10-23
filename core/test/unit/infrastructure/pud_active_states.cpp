@@ -1,5 +1,7 @@
+#include <stdexcept>
 #include <gtest/gtest.h>
 #include "infrastructure/pud_active_states.hpp"
+#include "pud_test_node.hpp"
 
 namespace {
 
@@ -14,14 +16,14 @@ struct PudActiveStatesTest : public ::testing::Test {
 }
 
 TEST_F(PudActiveStatesTest, AStoredStateReadsBack) {
-    states.store(2, with_query(0, 7));
-    EXPECT_EQ(states.get(2), with_query(0, 7));
+    states.store(pud_test_node(2), with_query(0, 7));
+    EXPECT_EQ(states.get(pud_test_node(2)), with_query(0, 7));
 }
 
 TEST_F(PudActiveStatesTest, AnErasedNodeCanNoLongerBeRead) {
-    states.store(0, with_query(0, 1));
-    states.store(1, with_query(0, 2));
-    states.erase(0);
-    EXPECT_THROW(states.get(0), std::bad_optional_access);
-    EXPECT_EQ(states.get(1), with_query(0, 2));
+    states.store(pud_test_node(0), with_query(0, 1));
+    states.store(pud_test_node(1), with_query(0, 2));
+    states.erase(pud_test_node(0));
+    EXPECT_THROW(states.get(pud_test_node(0)), std::out_of_range);
+    EXPECT_EQ(states.get(pud_test_node(1)), with_query(0, 2));
 }

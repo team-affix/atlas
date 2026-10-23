@@ -6,7 +6,7 @@
 #include <utility>
 #include "value_objects/expr.hpp"
 #include "value_objects/framed_expr.hpp"
-#include "value_objects/pud_node_id.hpp"
+#include "value_objects/pud_global_node_id.hpp"
 #include "value_objects/pud_replay.hpp"
 #include "value_objects/pud_substitution.hpp"
 #include "value_objects/pud_ubs_state.hpp"
@@ -32,8 +32,8 @@ struct pud_replayer {
         const pud_ubs_state& caller_ubs_state,
         const expr* goal,
         uint32_t frame_offset,
-        pud_node_id axiom) const;
-    std::optional<pud_replay> descend(const pud_replay& replay, pud_node_id child) const;
+        pud_global_node_id axiom) const;
+    std::optional<pud_replay> descend(const pud_replay& replay, pud_global_node_id child) const;
 private:
     IGetAxiom& get_axiom_;
     IGetInference& get_inference_;
@@ -70,7 +70,7 @@ std::optional<pud_replay> PUD_REPLAYER::enter(
     const pud_ubs_state& caller_ubs_state,
     const expr* goal,
     uint32_t frame_offset,
-    pud_node_id axiom) const {
+    pud_global_node_id axiom) const {
     auto&& bind_map = make_bind_map_.make_bind_map(caller_ubs_state);
     auto&& cycle_detector = make_cycle_detector_.make_cycle_detector(bind_map);
     auto&& unifier = make_unifier_.make_unifier(bind_map, cycle_detector);
@@ -80,7 +80,7 @@ std::optional<pud_replay> PUD_REPLAYER::enter(
 }
 
 PUD_REPLAYER_TEMPLATE
-std::optional<pud_replay> PUD_REPLAYER::descend(const pud_replay& replay, pud_node_id child) const {
+std::optional<pud_replay> PUD_REPLAYER::descend(const pud_replay& replay, pud_global_node_id child) const {
     auto&& bind_map = make_bind_map_.make_bind_map(replay.ubs_state);
     auto&& cycle_detector = make_cycle_detector_.make_cycle_detector(bind_map);
     auto&& unifier = make_unifier_.make_unifier(bind_map, cycle_detector);

@@ -1,31 +1,40 @@
+#include <deque>
 #include <optional>
 #include <string>
 #include <variant>
 #include <vector>
 #include <gtest/gtest.h>
 #include "functor_fixture.hpp"
+#include "pud_test_node.hpp"
 #include "infrastructure/expr_pool.hpp"
 #include "infrastructure/globalizer.hpp"
 #include "infrastructure/pud_binder.hpp"
 #include "infrastructure/pud_data.hpp"
+#include "infrastructure/pud_modules.hpp"
 #include "infrastructure/pud_replayer.hpp"
 #include "infrastructure/pud_term_factory.hpp"
 #include "infrastructure/ubs_bind_map.hpp"
 
-// The replayer over the real database and the real term machinery.
+// The replayer over the real modules and the real term machinery. Every opened axiom is the only
+// axiom of its own module; every inference lives in a scratch module under its one dummy axiom, since
+// the replayer only reads a child's substitutions.
 struct PudReplayerIntegrationTest : public ::testing::Test {
     using term_factory_t = pud_term_factory<globalizer, expr_pool, expr_pool>;
+    using modules_t = pud_modules<pud_data>;
+
+    static constexpr pud_module_id k_scratch_module = 0;
 
     test_functors functors;
     expr_pool exprs;
     globalizer globalize;
     term_factory_t terms{globalize, exprs, exprs};
-    pud_data data;
-    pud_replayer<pud_data, pud_data, expr_pool, term_factory_t, term_factory_t, term_factory_t> replayer{
-        data, data, exprs, terms, terms, terms};
-    pud_binder<term_factory_t, pud_data> binder{terms, data};
-    pud_node_id dummy_root = 0;
-    pud_node_id last_root = 0;
+    pud_data scratch{k_scratch_module, {}, {rule(exprs.make_functor(functors.id("dummy"), {}), {}, 0)}};
+    std::deque<pud_data> opened_modules;
+    modules_t modules;
+    pud_replayer<modules_t, modules_t, expr_pool, term_factory_t, term_factory_t, term_factory_t> replayer{
+        modules, modules, exprs, terms, terms, terms};
+    pud_binder<term_factory_t, modules_t> binder{terms, modules};
+    pud_global_node_id last_root{.module = k_scratch_module, .node = 0};
 
     const expr* var(uint32_t index) { return exprs.make_var(index); }
 
@@ -34,12 +43,12 @@ struct PudReplayerIntegrationTest : public ::testing::Test {
     }
 
     void SetUp() override {
-        dummy_root = data.store_axiom(rule(functor("dummy", {}), {}, 0));
+        modules.register_module(scratch);
     }
 
-    pud_node_id infer(std::vector<pud_substitution> substitutions) {
-        return data.store_inference(pud_node_delta{
-            .parent = dummy_root,
+    pud_global_node_id infer(std::vector<pud_substitution> substitutions) {
+        return modules.store_inference(k_scratch_module, pud_node_delta{
+            .parent = 0,
             .call_site = 0,
             .substitutions = std::move(substitutions),
             .body_goals = {},
@@ -52,7 +61,10 @@ struct PudReplayerIntegrationTest : public ::testing::Test {
         const expr* query_expr,
         const expr* axiom_head,
         uint32_t frame_offset) {
-        last_root = data.store_axiom(rule(axiom_head, {}, 0));
+        const pud_module_id module = k_scratch_module + 1 + opened_modules.size();
+        opened_modules.emplace_back(module, std::vector<pud_module_id>{}, std::vector<rule>{rule(axiom_head, {}, 0)});
+        modules.register_module(opened_modules.back());
+        last_root = modules.list_axioms(module).front();
         return replayer.enter(caller_state, query_expr, frame_offset, last_root);
     }
 
@@ -74,7 +86,7 @@ struct PudReplayerIntegrationTest : public ::testing::Test {
 };
 
 TEST_F(PudReplayerIntegrationTest, SpecsReplayLiftedToFrameOffset) {
-    const pud_node_id child = infer({
+    const pud_global_node_id child = infer({
         pud_substitution{.var_idx = 0, .value = functor("a", {})},
         pud_substitution{.var_idx = 1, .value = functor("b", {})},
     });
@@ -91,7 +103,7 @@ TEST_F(PudReplayerIntegrationTest, SpecsReplayLiftedToFrameOffset) {
 }
 
 TEST_F(PudReplayerIntegrationTest, DifferentFrameOffsetsStayIndependent) {
-    const pud_node_id child = infer({pud_substitution{.var_idx = 0, .value = functor("a", {})}});
+    const pud_global_node_id child = infer({pud_substitution{.var_idx = 0, .value = functor("a", {})}});
     const expr* head = var(0);
     std::optional<pud_replay> at_one = open({}, var(0), head, 1u);
     std::optional<pud_replay> at_five = open({}, var(0), head, 5u);
@@ -109,29 +121,29 @@ TEST_F(PudReplayerIntegrationTest, DifferentFrameOffsetsStayIndependent) {
 
 TEST_F(PudReplayerIntegrationTest, OpeningFlowFromBindingDescentState) {
     const uint32_t frame_offset = 1u;
-    const pud_node_id binding_child = infer({pud_substitution{.var_idx = 0, .value = functor("a", {})}});
+    const pud_global_node_id binding_child = infer({pud_substitution{.var_idx = 0, .value = functor("a", {})}});
     const pud_ubs_state caller_binding = binder.bind(pud_ubs_state{}, binding_child);
 
     std::optional<pud_replay> opened = open(caller_binding, var(0), var(0), frame_offset);
     ASSERT_TRUE(opened.has_value());
 
-    const pud_node_id agree_child = infer({pud_substitution{.var_idx = 0, .value = functor("a", {})}});
+    const pud_global_node_id agree_child = infer({pud_substitution{.var_idx = 0, .value = functor("a", {})}});
     EXPECT_TRUE(replayer.descend(*opened, agree_child).has_value());
 
-    const pud_node_id contradict_child = infer({pud_substitution{.var_idx = 0, .value = functor("b", {})}});
+    const pud_global_node_id contradict_child = infer({pud_substitution{.var_idx = 0, .value = functor("b", {})}});
     EXPECT_FALSE(replayer.descend(*opened, contradict_child).has_value());
 }
 
 TEST_F(PudReplayerIntegrationTest, ContradictsInheritedCallerBindingRefutes) {
-    const pud_node_id child = infer({pud_substitution{.var_idx = 0, .value = functor("b", {})}});
+    const pud_global_node_id child = infer({pud_substitution{.var_idx = 0, .value = functor("b", {})}});
     std::optional<pud_replay> opened = open({}, functor("a", {}), var(0), 1);
     ASSERT_TRUE(opened.has_value());
     EXPECT_FALSE(replayer.descend(*opened, child).has_value());
 }
 
 TEST_F(PudReplayerIntegrationTest, ContradictsEarlierReplayedSpecRefutes) {
-    const pud_node_id good_child = infer({pud_substitution{.var_idx = 0, .value = functor("a", {})}});
-    const pud_node_id bad_child = infer({pud_substitution{.var_idx = 0, .value = functor("x", {})}});
+    const pud_global_node_id good_child = infer({pud_substitution{.var_idx = 0, .value = functor("a", {})}});
+    const pud_global_node_id bad_child = infer({pud_substitution{.var_idx = 0, .value = functor("x", {})}});
     std::optional<pud_replay> opened = open({}, functor("main", {}), functor("main", {}), 0u);
     ASSERT_TRUE(opened.has_value());
     std::optional<pud_replay> at_good = replayer.descend(*opened, good_child);
@@ -146,7 +158,7 @@ TEST_F(PudReplayerIntegrationTest, ManySpecsReplay) {
         std::string label = "v" + std::to_string(substitution_index);
         substitutions.push_back(pud_substitution{.var_idx = substitution_index, .value = functor(label.c_str(), {})});
     }
-    const pud_node_id child = infer(std::move(substitutions));
+    const pud_global_node_id child = infer(std::move(substitutions));
     std::optional<pud_replay> opened = open({}, functor("main", {}), functor("main", {}), 0u);
     ASSERT_TRUE(opened.has_value());
     std::optional<pud_replay> at_child = replayer.descend(*opened, child);
@@ -159,11 +171,11 @@ TEST_F(PudReplayerIntegrationTest, ManySpecsReplay) {
 
 TEST_F(PudReplayerIntegrationTest, ForkedDescentsFromSharedPrefixStayIndependent) {
     const uint32_t frame_offset = 3;
-    const pud_node_id bob_child = infer({
+    const pud_global_node_id bob_child = infer({
         pud_substitution{.var_idx = 0, .value = functor("tom", {})},
         pud_substitution{.var_idx = 1, .value = functor("bob", {})},
     });
-    const pud_node_id x_child = infer({
+    const pud_global_node_id x_child = infer({
         pud_substitution{.var_idx = 0, .value = functor("tom", {})},
         pud_substitution{.var_idx = 1, .value = functor("x", {})},
     });
@@ -181,7 +193,7 @@ TEST_F(PudReplayerIntegrationTest, ForkedDescentsFromSharedPrefixStayIndependent
 
 TEST_F(PudReplayerIntegrationTest, CallerVarThroughHeadBindingSeesCalleeFunctor) {
     const uint32_t frame_offset = 3;
-    const pud_node_id child = infer({
+    const pud_global_node_id child = infer({
         pud_substitution{.var_idx = 0, .value = functor("tom", {})},
         pud_substitution{.var_idx = 1, .value = functor("bob", {})},
     });
@@ -196,7 +208,7 @@ TEST_F(PudReplayerIntegrationTest, CallerVarThroughHeadBindingSeesCalleeFunctor)
 
 TEST_F(PudReplayerIntegrationTest, VarSpecEquatesCalleeVarsAtTheFrameOffset) {
     const uint32_t frame_offset = 3;
-    const pud_node_id child = infer({pud_substitution{.var_idx = 1, .value = var(0)}});
+    const pud_global_node_id child = infer({pud_substitution{.var_idx = 1, .value = var(0)}});
     std::optional<pud_replay> opened = open({}, functor("p", {}), functor("p", {}), frame_offset);
     ASSERT_TRUE(opened.has_value());
     std::optional<pud_replay> at_child = replayer.descend(*opened, child);
@@ -209,8 +221,8 @@ TEST_F(PudReplayerIntegrationTest, VarSpecEquatesCalleeVarsAtTheFrameOffset) {
 
 TEST_F(PudReplayerIntegrationTest, SpecValueVarsAreLiftedToTheFrameOffset) {
     const uint32_t frame_offset = 2;
-    const pud_node_id child = infer({pud_substitution{.var_idx = 0, .value = functor("f", {var(1)})}});
-    const pud_node_id grandchild = infer({pud_substitution{.var_idx = 1, .value = functor("b", {})}});
+    const pud_global_node_id child = infer({pud_substitution{.var_idx = 0, .value = functor("f", {var(1)})}});
+    const pud_global_node_id grandchild = infer({pud_substitution{.var_idx = 1, .value = functor("b", {})}});
     std::optional<pud_replay> opened = open({}, functor("p", {}), functor("p", {}), frame_offset);
     ASSERT_TRUE(opened.has_value());
     std::optional<pud_replay> at_child = replayer.descend(*opened, child);
@@ -223,8 +235,8 @@ TEST_F(PudReplayerIntegrationTest, SpecValueVarsAreLiftedToTheFrameOffset) {
 }
 
 TEST_F(PudReplayerIntegrationTest, SiblingStillDescendsAfterARefutedChild) {
-    const pud_node_id bad_child = infer({pud_substitution{.var_idx = 0, .value = functor("b", {})}});
-    const pud_node_id good_child = infer({pud_substitution{.var_idx = 0, .value = functor("a", {})}});
+    const pud_global_node_id bad_child = infer({pud_substitution{.var_idx = 0, .value = functor("b", {})}});
+    const pud_global_node_id good_child = infer({pud_substitution{.var_idx = 0, .value = functor("a", {})}});
     std::optional<pud_replay> opened = open({}, functor("a", {}), var(0), 1);
     ASSERT_TRUE(opened.has_value());
     ASSERT_FALSE(replayer.descend(*opened, bad_child).has_value());
@@ -234,7 +246,7 @@ TEST_F(PudReplayerIntegrationTest, SiblingStillDescendsAfterARefutedChild) {
 }
 
 TEST_F(PudReplayerIntegrationTest, NodeWithNoSpecsKeepsTheBindings) {
-    const pud_node_id child = infer({});
+    const pud_global_node_id child = infer({});
     std::optional<pud_replay> opened = open({}, functor("a", {}), var(0), 4);
     ASSERT_TRUE(opened.has_value());
     std::optional<pud_replay> at_child = replayer.descend(*opened, child);
@@ -244,12 +256,12 @@ TEST_F(PudReplayerIntegrationTest, NodeWithNoSpecsKeepsTheBindings) {
 
 TEST_F(PudReplayerIntegrationTest, ThreeLevelReplayAccumulates) {
     const uint32_t frame_offset = 5;
-    const pud_node_id first = infer({pud_substitution{.var_idx = 0, .value = functor("f", {var(1)})}});
-    const pud_node_id second = infer({pud_substitution{.var_idx = 1, .value = functor("g", {var(2)})}});
-    const pud_node_id third = infer({pud_substitution{.var_idx = 2, .value = functor("c", {})}});
+    const pud_global_node_id first = infer({pud_substitution{.var_idx = 0, .value = functor("f", {var(1)})}});
+    const pud_global_node_id second = infer({pud_substitution{.var_idx = 1, .value = functor("g", {var(2)})}});
+    const pud_global_node_id third = infer({pud_substitution{.var_idx = 2, .value = functor("c", {})}});
     std::optional<pud_replay> at = open({}, functor("p", {}), functor("p", {}), frame_offset);
-    for (pud_node_id level_node : {first, second, third}) {
-        ASSERT_TRUE(at.has_value()) << "node " << level_node;
+    for (pud_global_node_id level_node : {first, second, third}) {
+        ASSERT_TRUE(at.has_value()) << "node " << level_node.node;
         at = replayer.descend(*at, level_node);
     }
     ASSERT_TRUE(at.has_value());
@@ -262,10 +274,10 @@ TEST_F(PudReplayerIntegrationTest, ThreeLevelReplayAccumulates) {
 
 TEST_F(PudReplayerIntegrationTest, RefutationDeepInTheChainLeavesEarlierLevelsUsable) {
     const uint32_t frame_offset = 1;
-    const pud_node_id first = infer({pud_substitution{.var_idx = 0, .value = functor("a", {})}});
-    const pud_node_id second = infer({pud_substitution{.var_idx = 1, .value = var(0)}});
-    const pud_node_id contradicting = infer({pud_substitution{.var_idx = 1, .value = functor("b", {})}});
-    const pud_node_id agreeing = infer({pud_substitution{.var_idx = 1, .value = functor("a", {})}});
+    const pud_global_node_id first = infer({pud_substitution{.var_idx = 0, .value = functor("a", {})}});
+    const pud_global_node_id second = infer({pud_substitution{.var_idx = 1, .value = var(0)}});
+    const pud_global_node_id contradicting = infer({pud_substitution{.var_idx = 1, .value = functor("b", {})}});
+    const pud_global_node_id agreeing = infer({pud_substitution{.var_idx = 1, .value = functor("a", {})}});
     std::optional<pud_replay> opened = open({}, functor("p", {}), functor("p", {}), frame_offset);
     ASSERT_TRUE(opened.has_value());
     std::optional<pud_replay> at_two = replayer.descend(*opened, first);
@@ -277,11 +289,11 @@ TEST_F(PudReplayerIntegrationTest, RefutationDeepInTheChainLeavesEarlierLevelsUs
 }
 
 TEST_F(PudReplayerIntegrationTest, AgreesWithTheBindingDescentAtFrameZero) {
-    const pud_node_id first = infer({
+    const pud_global_node_id first = infer({
         pud_substitution{.var_idx = 2, .value = var(0)},
         pud_substitution{.var_idx = 1, .value = functor("f", {var(3)})},
     });
-    const pud_node_id second = infer({
+    const pud_global_node_id second = infer({
         pud_substitution{.var_idx = 3, .value = functor("c", {})},
         pud_substitution{.var_idx = 4, .value = var(2)},
     });
@@ -300,7 +312,7 @@ TEST_F(PudReplayerIntegrationTest, AgreesWithTheBindingDescentAtFrameZero) {
 }
 
 TEST_F(PudReplayerIntegrationTest, ParentUnchangedByChild) {
-    const pud_node_id child = infer({pud_substitution{.var_idx = 0, .value = functor("a", {})}});
+    const pud_global_node_id child = infer({pud_substitution{.var_idx = 0, .value = functor("a", {})}});
     std::optional<pud_replay> opened = open({}, var(0), var(0), 2u);
     ASSERT_TRUE(opened.has_value());
     std::optional<pud_replay> at_child = replayer.descend(*opened, child);
@@ -317,8 +329,8 @@ TEST_F(PudReplayerIntegrationTest, OpenedReplayIsAtTheRoot) {
 }
 
 TEST_F(PudReplayerIntegrationTest, DescendedReplayIsAtTheChildAndTheParentStays) {
-    const pud_node_id child = infer({});
-    const pud_node_id grandchild = infer({});
+    const pud_global_node_id child = infer({});
+    const pud_global_node_id grandchild = infer({});
     const expr* head = functor("main", {var(0)});
     std::optional<pud_replay> opened = open({}, head, head, 0);
     ASSERT_TRUE(opened.has_value());

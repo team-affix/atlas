@@ -8,7 +8,7 @@
 #include "value_objects/pud_body_goal.hpp"
 #include "value_objects/pud_body_goal_id.hpp"
 #include "value_objects/pud_mhq_head_id.hpp"
-#include "value_objects/pud_node_id.hpp"
+#include "value_objects/pud_global_node_id.hpp"
 #include "value_objects/pud_structure_watch_change.hpp"
 #include "value_objects/pud_ubs_state.hpp"
 
@@ -40,7 +40,7 @@ struct pud_child_activator {
         IOpenQuery& open_query,
         IHoldQuery& hold_query,
         ICheckQueryExhausted& check_query_exhausted);
-    bool activate_child(pud_node_id parent, pud_node_id child);
+    bool activate_child(pud_global_node_id parent, pud_global_node_id child);
 private:
     IGetActiveState& get_active_state_;
     IStoreActiveState& store_active_state_;
@@ -87,7 +87,7 @@ PUD_CHILD_ACTIVATOR::pud_child_activator(
     , check_query_exhausted_(check_query_exhausted) {}
 
 PUD_CHILD_ACTIVATOR_TEMPLATE
-bool PUD_CHILD_ACTIVATOR::activate_child(pud_node_id parent, pud_node_id child) {
+bool PUD_CHILD_ACTIVATOR::activate_child(pud_global_node_id parent, pud_global_node_id child) {
     const pud_active_state& parent_state = get_active_state_.get(parent);
     const pud_body_goal_id call_site = get_inference_.get_inference(child).call_site;
     pud_ubs_state bindings = bind_.bind(parent_state.bindings, child);

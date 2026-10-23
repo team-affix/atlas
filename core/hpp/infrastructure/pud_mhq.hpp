@@ -8,19 +8,19 @@
 #include <utility>
 #include <vector>
 #include "value_objects/expr.hpp"
-#include "value_objects/pud_axiom_group_id.hpp"
+#include "value_objects/pud_global_node_id.hpp"
 #include "value_objects/pud_mhcs_head_id.hpp"
 #include "value_objects/pud_mhq_head_id.hpp"
-#include "value_objects/pud_node_id.hpp"
+#include "value_objects/pud_module_id.hpp"
 #include "value_objects/pud_replay.hpp"
 #include "value_objects/pud_ubs_state.hpp"
 
 // The multi-headed query. Each head is a goal's query: at most one candidate under each axiom its
-// group sees, kept in axiom order. A head is admitted only with a candidate, and is reported as unit once it is down
+// module sees, kept in axiom order. A head is admitted only with a candidate, and is reported as unit once it is down
 // to one. A head whose last candidate is refuted is reported as refuted; it stays until removed.
 template<
     typename IEnterReplay,
-    typename IListAxiomRoots,
+    typename IListVisibleAxioms,
     typename ITryAddCandidate,
     typename ITryForkCandidate,
     typename IRemoveCandidate,
@@ -29,14 +29,14 @@ template<
 struct pud_mhq {
     pud_mhq(
         IEnterReplay& enter_replay,
-        IListAxiomRoots& list_axiom_roots,
+        IListVisibleAxioms& list_visible_axioms,
         ITryAddCandidate& try_add_candidate,
         ITryForkCandidate& try_fork_candidate,
         IRemoveCandidate& remove_candidate,
         IInvalidateCandidateLeaf& invalidate_candidate_leaf,
         IPushUnitQuery& push_unit_query);
     std::optional<pud_mhq_head_id> try_open(
-        pud_axiom_group_id group,
+        pud_module_id module,
         const pud_ubs_state& caller_ubs_state,
         const expr* goal,
         uint32_t frame_offset);
@@ -46,19 +46,19 @@ struct pud_mhq {
         const expr* goal,
         uint32_t frame_offset);
     void remove(pud_mhq_head_id head_id);
-    std::vector<pud_mhq_head_id> invalidate_leaf(pud_node_id leaf);
+    std::vector<pud_mhq_head_id> invalidate_leaf(pud_global_node_id leaf);
     std::vector<pud_mhcs_head_id> candidates(pud_mhq_head_id head_id) const;
     bool check_exhausted(pud_mhq_head_id head_id) const;
 private:
     struct candidacy {
-        pud_node_id axiom;
+        pud_global_node_id axiom;
         pud_mhcs_head_id candidate;
     };
 
     std::optional<pud_mhq_head_id> admit_candidacy(std::optional<pud_mhq_head_id> head_id, candidacy admitted);
 
     IEnterReplay& enter_replay_;
-    IListAxiomRoots& list_axiom_roots_;
+    IListVisibleAxioms& list_visible_axioms_;
     ITryAddCandidate& try_add_candidate_;
     ITryForkCandidate& try_fork_candidate_;
     IRemoveCandidate& remove_candidate_;
@@ -71,24 +71,24 @@ private:
 };
 
 #define PUD_MHQ_TEMPLATE                                                                   \
-    template<typename IEnterReplay, typename IListAxiomRoots, typename ITryAddCandidate,        \
+    template<typename IEnterReplay, typename IListVisibleAxioms, typename ITryAddCandidate,        \
              typename ITryForkCandidate, typename IRemoveCandidate,                        \
              typename IInvalidateCandidateLeaf, typename IPushUnitQuery>
 #define PUD_MHQ                                                                            \
-    pud_mhq<IEnterReplay, IListAxiomRoots, ITryAddCandidate, ITryForkCandidate, IRemoveCandidate, \
+    pud_mhq<IEnterReplay, IListVisibleAxioms, ITryAddCandidate, ITryForkCandidate, IRemoveCandidate, \
         IInvalidateCandidateLeaf, IPushUnitQuery>
 
 PUD_MHQ_TEMPLATE
 PUD_MHQ::pud_mhq(
     IEnterReplay& enter_replay,
-    IListAxiomRoots& list_axiom_roots,
+    IListVisibleAxioms& list_visible_axioms,
     ITryAddCandidate& try_add_candidate,
     ITryForkCandidate& try_fork_candidate,
     IRemoveCandidate& remove_candidate,
     IInvalidateCandidateLeaf& invalidate_candidate_leaf,
     IPushUnitQuery& push_unit_query)
     : enter_replay_(enter_replay)
-    , list_axiom_roots_(list_axiom_roots)
+    , list_visible_axioms_(list_visible_axioms)
     , try_add_candidate_(try_add_candidate)
     , try_fork_candidate_(try_fork_candidate)
     , remove_candidate_(remove_candidate)
@@ -100,12 +100,12 @@ PUD_MHQ::pud_mhq(
 
 PUD_MHQ_TEMPLATE
 std::optional<pud_mhq_head_id> PUD_MHQ::try_open(
-    pud_axiom_group_id group,
+    pud_module_id module,
     const pud_ubs_state& caller_ubs_state,
     const expr* goal,
     uint32_t frame_offset) {
     std::optional<pud_mhq_head_id> head_id;
-    for (pud_node_id axiom : list_axiom_roots_.axiom_roots(group)) {
+    for (pud_global_node_id axiom : list_visible_axioms_.list_visible_axioms(module)) {
         std::optional<pud_replay> axiom_root = enter_replay_.enter(caller_ubs_state, goal, frame_offset, axiom);
         if (!axiom_root.has_value())
             continue;
@@ -157,7 +157,7 @@ void PUD_MHQ::remove(pud_mhq_head_id head_id) {
 }
 
 PUD_MHQ_TEMPLATE
-std::vector<pud_mhq_head_id> PUD_MHQ::invalidate_leaf(pud_node_id leaf) {
+std::vector<pud_mhq_head_id> PUD_MHQ::invalidate_leaf(pud_global_node_id leaf) {
     std::vector<pud_mhq_head_id> refuted;
     for (pud_mhcs_head_id candidate : invalidate_candidate_leaf_.invalidate_leaf(leaf)) {
         auto owner = candidate_to_head_.extract(candidate);

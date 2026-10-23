@@ -10,6 +10,7 @@
 #include "infrastructure/globalizer.hpp"
 #include "infrastructure/pud_binder.hpp"
 #include "infrastructure/pud_data.hpp"
+#include "infrastructure/pud_modules.hpp"
 #include "infrastructure/pud_structure_watcher.hpp"
 #include "infrastructure/pud_term_factory.hpp"
 #include "infrastructure/ubs_bind_map.hpp"
@@ -19,6 +20,7 @@
 // with unbound classes numbered by first occurrence, differs between parent and child.
 struct PudStructureWatcherFuzzTest : public ::testing::Test {
     using term_factory_t = pud_term_factory<globalizer, expr_pool, expr_pool>;
+    using modules_t = pud_modules<pud_data>;
 
     struct level {
         pud_ubs_state bindings;
@@ -27,6 +29,7 @@ struct PudStructureWatcherFuzzTest : public ::testing::Test {
         uint32_t depth;
     };
 
+    static constexpr pud_module_id k_module = 0;
     static constexpr uint32_t k_var_count = 14;
     static constexpr uint32_t k_rep_token_base = 1000000;
 
@@ -34,16 +37,16 @@ struct PudStructureWatcherFuzzTest : public ::testing::Test {
     expr_pool exprs;
     globalizer globalize;
     term_factory_t terms{globalize, exprs, exprs};
-    pud_data data;
-    pud_binder<term_factory_t, pud_data> binder{terms, data};
-    pud_structure_watcher<term_factory_t, pud_data> watcher{terms, data};
+    pud_data data{k_module, {}, {rule(exprs.make_functor(functors.id("dummy"), {}), {}, 0)}};
+    modules_t modules;
+    pud_binder<term_factory_t, modules_t> binder{terms, modules};
+    pud_structure_watcher<term_factory_t, modules_t> watcher{terms, modules};
     std::mt19937 rng{0};
-    pud_node_id dummy_root = 0;
     uint32_t checked_nodes = 0;
     uint32_t observed_changes = 0;
 
     void SetUp() override {
-        dummy_root = data.store_axiom(rule(exprs.make_functor(functors.id("dummy"), {}), {}, 0));
+        modules.register_module(data);
     }
 
     uint32_t pick(uint32_t bound) {
@@ -162,8 +165,8 @@ struct PudStructureWatcherFuzzTest : public ::testing::Test {
     }
 
     level descend_and_check(const level& parent) {
-        const pud_node_id child = data.store_inference(pud_node_delta{
-            .parent = dummy_root,
+        const pud_global_node_id child = modules.store_inference(k_module, pud_node_delta{
+            .parent = 0,
             .call_site = 0,
             .substitutions = random_substitutions(parent.bindings),
             .body_goals = {},
@@ -186,8 +189,8 @@ struct PudStructureWatcherFuzzTest : public ::testing::Test {
 
         const pud_structure_watch_change change = watcher.descend(parent.watch, child_bindings, child, call_site, goals);
         const std::set<pud_body_goal_id> actual(change.changed_goals.begin(), change.changed_goals.end());
-        EXPECT_EQ(actual.size(), change.changed_goals.size()) << "a goal was reported twice at node " << child;
-        EXPECT_EQ(actual, expected) << "at node " << child << " depth " << parent.depth + 1;
+        EXPECT_EQ(actual.size(), change.changed_goals.size()) << "a goal was reported twice at node " << child.node;
+        EXPECT_EQ(actual, expected) << "at node " << child.node << " depth " << parent.depth + 1;
 
         ++checked_nodes;
         observed_changes += expected.size();

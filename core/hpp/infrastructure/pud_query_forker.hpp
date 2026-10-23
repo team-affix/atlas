@@ -4,7 +4,7 @@
 #include <optional>
 #include "value_objects/pud_body_goal_id.hpp"
 #include "value_objects/pud_mhq_head_id.hpp"
-#include "value_objects/pud_node_id.hpp"
+#include "value_objects/pud_global_node_id.hpp"
 #include "value_objects/pud_ubs_state.hpp"
 
 // Forks a query a leaf inherited, for a goal whose structure changed, into the leaf's environment.
@@ -14,7 +14,7 @@ struct pud_query_forker {
     pud_query_forker(IForkQuery& fork_query, IFindNodeGoal& find_node_goal, IGetNodeLvc& get_node_lvc);
     std::optional<pud_mhq_head_id> fork(
         pud_mhq_head_id inherited,
-        pud_node_id leaf,
+        pud_global_node_id leaf,
         const pud_ubs_state& bindings,
         pud_body_goal_id goal);
 private:
@@ -35,7 +35,7 @@ PUD_QUERY_FORKER::pud_query_forker(IForkQuery& fork_query, IFindNodeGoal& find_n
 PUD_QUERY_FORKER_TEMPLATE
 std::optional<pud_mhq_head_id> PUD_QUERY_FORKER::fork(
     pud_mhq_head_id inherited,
-    pud_node_id leaf,
+    pud_global_node_id leaf,
     const pud_ubs_state& bindings,
     pud_body_goal_id goal) {
     return fork_query_.try_fork(inherited, bindings, find_node_goal_.find(leaf, goal), get_node_lvc_.get(leaf));

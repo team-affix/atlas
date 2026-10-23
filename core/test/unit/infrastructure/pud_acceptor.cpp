@@ -7,6 +7,7 @@
 #include "infrastructure/pud_acceptor.hpp"
 #include "value_objects/pud_goal_list.hpp"
 #include "value_objects/rule.hpp"
+#include "pud_test_node.hpp"
 
 using ::testing::_;
 using ::testing::InSequence;
@@ -21,13 +22,13 @@ using edited_t = std::optional<std::vector<ubs_class>>;
 using translations_t = std::unordered_map<uint32_t, uint32_t>;
 
 struct MockGetNodeGoals {
-    MOCK_METHOD(const pud_goal_list&, get, (pud_node_id));
+    MOCK_METHOD(const pud_goal_list&, get, (pud_global_node_id));
 };
 struct MockGetAxiom {
-    MOCK_METHOD(const rule&, get_axiom, (pud_node_id));
+    MOCK_METHOD(const rule&, get_axiom, (pud_global_node_id));
 };
 struct MockGetInference {
-    MOCK_METHOD(const pud_node_delta&, get_inference, (pud_node_id));
+    MOCK_METHOD(const pud_node_delta&, get_inference, (pud_global_node_id));
 };
 struct MockMakeVar {
     MOCK_METHOD(const expr*, make_var, (uint32_t));
@@ -99,7 +100,7 @@ struct PudAcceptorTest : public ::testing::Test {
         .body_goals = {},
         .var_count = 0,
     };
-    std::vector<pud_node_id> path{2, 6};
+    std::vector<pud_global_node_id> path{pud_test_node(2), pud_test_node(6)};
     framed_expr entering_call_site{&call_site, 0};
     framed_expr entered_head{&axiom_head, 10};
     framed_expr replayed_var{&var_one, 10};
@@ -114,15 +115,15 @@ struct PudAcceptorTest : public ::testing::Test {
 
     void SetUp() override {
         caller_state.parents = caller_state.parents.set(1, 0);
-        ON_CALL(axioms, get_axiom(2)).WillByDefault(ReturnRef(axiom));
-        ON_CALL(inferences, get_inference(6)).WillByDefault(ReturnRef(node_inference));
+        ON_CALL(axioms, get_axiom(pud_test_node(2))).WillByDefault(ReturnRef(axiom));
+        ON_CALL(inferences, get_inference(pud_test_node(6))).WillByDefault(ReturnRef(node_inference));
         ON_CALL(make_bind_map, make_bind_map(_)).WillByDefault(ReturnRef(accepted));
         ON_CALL(make_cycle_detector, make_cycle_detector(_)).WillByDefault(ReturnRef(cycle_detector));
         ON_CALL(make_unifier, make_unifier(_, _)).WillByDefault(ReturnRef(unifier));
         ON_CALL(unifier, unify(_, _)).WillByDefault(Return(edited_t{std::vector<ubs_class>{}}));
         ON_CALL(make_exporter, make_exporter(_, _, _)).WillByDefault(ReturnRef(exporter));
         ON_CALL(accepted, find(_)).WillByDefault(Invoke(&singleton));
-        ON_CALL(goals, get(6)).WillByDefault(ReturnRef(callee_goals));
+        ON_CALL(goals, get(pud_test_node(6))).WillByDefault(ReturnRef(callee_goals));
         ON_CALL(exporter, export_expr((framed_expr{&callee_goal, 10}))).WillByDefault(Return(&exported_goal));
         ON_CALL(exporter, export_expr((framed_expr{&value, 10}))).WillByDefault(Return(&exported_value));
         ON_CALL(make_var, make_var(1)).WillByDefault(Return(&var_one));
@@ -133,7 +134,7 @@ struct PudAcceptorTest : public ::testing::Test {
     }
 
     pud_node_delta accept() {
-        return acceptor.accept(3, 1, caller_state, 10, &call_site, path);
+        return acceptor.accept(pud_test_node(3), 1, caller_state, 10, &call_site, path);
     }
 };
 
@@ -153,6 +154,11 @@ TEST_F(PudAcceptorTest, TheInferenceIsOfTheCallerOnItsCallSiteWithTheCalleesOpen
     EXPECT_EQ(
         accept(),
         (pud_node_delta{.parent = 3, .call_site = 1, .substitutions = {}, .body_goals = {&exported_goal}, .var_count = 3}));
+}
+
+TEST_F(PudAcceptorTest, TheInferencesParentIsTheAcceptorsLocalId) {
+    const pud_global_node_id module_acceptor{.module = k_test_module + 4, .node = 5};
+    EXPECT_EQ(acceptor.accept(module_acceptor, 1, caller_state, 10, &call_site, path).parent, 5u);
 }
 
 TEST_F(PudAcceptorTest, ACallerClassMergedUnderASmallerRepresentativeIsSubstitutedByIt) {

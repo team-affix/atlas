@@ -8,7 +8,7 @@
 #include "value_objects/pud_body_goal.hpp"
 #include "value_objects/pud_body_goal_id.hpp"
 #include "value_objects/pud_mhq_head_id.hpp"
-#include "value_objects/pud_node_id.hpp"
+#include "value_objects/pud_global_node_id.hpp"
 #include "value_objects/pud_ubs_state.hpp"
 
 // Gives a root its active state: empty bindings, a structure watch, and a query per open goal, each
@@ -21,7 +21,7 @@ struct pud_root_activator {
         IGetNodeGoals& get_node_goals,
         IOpenQuery& open_query,
         IHoldQuery& hold_query);
-    bool activate_root(pud_node_id root);
+    bool activate_root(pud_global_node_id root);
 private:
     IStoreActiveState& store_active_state_;
     IWatchRoot& watch_root_;
@@ -49,7 +49,7 @@ PUD_ROOT_ACTIVATOR::pud_root_activator(
     , hold_query_(hold_query) {}
 
 PUD_ROOT_ACTIVATOR_TEMPLATE
-bool PUD_ROOT_ACTIVATOR::activate_root(pud_node_id root) {
+bool PUD_ROOT_ACTIVATOR::activate_root(pud_global_node_id root) {
     const pud_ubs_state bindings{};
     immer::map<pud_body_goal_id, pud_mhq_head_id> queries;
     bool refuted = false;

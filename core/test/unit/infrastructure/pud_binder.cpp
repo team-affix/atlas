@@ -4,6 +4,7 @@
 #include <gmock/gmock.h>
 #include "infrastructure/pud_binder.hpp"
 #include "value_objects/pud_node_delta.hpp"
+#include "pud_test_node.hpp"
 
 using ::testing::_;
 using ::testing::InSequence;
@@ -23,7 +24,7 @@ struct MockMakeBindMap {
     MOCK_METHOD(MockBindMap&, make_bind_map, (const pud_ubs_state&));
 };
 struct MockGetInference {
-    MOCK_METHOD(const pud_node_delta&, get_inference, (pud_node_id));
+    MOCK_METHOD(const pud_node_delta&, get_inference, (pud_global_node_id));
 };
 
 ubs_class singleton(uint32_t var) {
@@ -50,7 +51,7 @@ struct PudBinderTest : public ::testing::Test {
     void SetUp() override {
         child_state.parents = child_state.parents.set(3, 1);
         ON_CALL(make_bind_map, make_bind_map(_)).WillByDefault(ReturnRef(bind_map));
-        ON_CALL(inferences, get_inference(8)).WillByDefault(ReturnRef(child_inference));
+        ON_CALL(inferences, get_inference(pud_test_node(8))).WillByDefault(ReturnRef(child_inference));
         ON_CALL(bind_map, find(_)).WillByDefault(::testing::Invoke(&singleton));
         ON_CALL(std::move(bind_map), persist()).WillByDefault(Return(child_state));
     }
@@ -63,5 +64,5 @@ TEST_F(PudBinderTest, AVariableSubstitutionEquatesAndATermSubstitutionBindsInOrd
     EXPECT_CALL(make_bind_map, make_bind_map(parent_state));
     EXPECT_CALL(bind_map, equate(singleton(3), singleton(1)));
     EXPECT_CALL(bind_map, instantiate(singleton(4), (framed_expr{&value, 0})));
-    EXPECT_EQ(binder.bind(parent_state, 8), child_state);
+    EXPECT_EQ(binder.bind(parent_state, pud_test_node(8)), child_state);
 }

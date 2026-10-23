@@ -2,13 +2,13 @@
 #define PUD_LEAF_REFUTER_HPP
 
 #include <vector>
-#include "value_objects/pud_node_id.hpp"
+#include "value_objects/pud_global_node_id.hpp"
 
 // Refutes a leaf and everything that follows from it: the leaf is marked refuted, its death is
 // propagated up the tree, it is deactivated, and every leaf the deactivation stranded on a query
 // without a candidate is refuted in turn. Returns every leaf refuted, the given one first. A leaf
 // already refuted is left alone, and so is an interior node: its children inherit the exhausted query
-// and arrive refuted.
+// and arrive refuted, or never needed it.
 template<
     typename IMarkLeafRefuted,
     typename IPropagateRefutation,
@@ -22,7 +22,7 @@ struct pud_leaf_refuter {
         IDeactivateNode& deactivate_node,
         ICheckNodeLeaf& check_node_leaf,
         ICheckLeafRefuted& check_leaf_refuted);
-    std::vector<pud_node_id> refute(pud_node_id leaf);
+    std::vector<pud_global_node_id> refute(pud_global_node_id leaf);
 private:
     IMarkLeafRefuted& mark_leaf_refuted_;
     IPropagateRefutation& propagate_refutation_;
@@ -51,15 +51,15 @@ PUD_LEAF_REFUTER::pud_leaf_refuter(
     , check_leaf_refuted_(check_leaf_refuted) {}
 
 PUD_LEAF_REFUTER_TEMPLATE
-std::vector<pud_node_id> PUD_LEAF_REFUTER::refute(pud_node_id leaf) {
+std::vector<pud_global_node_id> PUD_LEAF_REFUTER::refute(pud_global_node_id leaf) {
     const bool left_alone = !check_node_leaf_.check_leaf(leaf) || check_leaf_refuted_.check_refuted(leaf);
     if (left_alone)
         return {};
     mark_leaf_refuted_.mark_refuted(leaf);
     propagate_refutation_.refute(leaf);
-    std::vector<pud_node_id> refuted{leaf};
-    for (pud_node_id stranded : deactivate_node_.deactivate(leaf)) {
-        const std::vector<pud_node_id> cascaded = refute(stranded);
+    std::vector<pud_global_node_id> refuted{leaf};
+    for (pud_global_node_id stranded : deactivate_node_.deactivate(leaf)) {
+        const std::vector<pud_global_node_id> cascaded = refute(stranded);
         refuted.insert(refuted.end(), cascaded.begin(), cascaded.end());
     }
     return refuted;

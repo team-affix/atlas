@@ -105,7 +105,7 @@ int main(int argc, char** argv) {
         "pud",
         "Run the progressive unfolding database (unit propagation, witness search, random expansion)");
     pud_sub->add_option("file", pud_opts.file, "CHC input file")->required();
-    pud_sub->add_option("-g,--goal", pud_opts.goals_str, "Conjecture body, e.g. \"color(X)\"")->required();
+    pud_sub->add_option("-g,--goal", pud_opts.goals_str, "Query body, e.g. \"color(X)\"")->required();
     pud_sub->add_option(
         "--head",
         pud_opts.head_str,

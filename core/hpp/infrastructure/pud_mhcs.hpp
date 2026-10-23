@@ -7,6 +7,8 @@
 #include <unordered_set>
 #include <utility>
 #include <vector>
+#include "value_objects/pud_global_node_id.hpp"
+#include "value_objects/pud_global_node_id_hash.hpp"
 #include "value_objects/pud_mhcs_head_id.hpp"
 #include "value_objects/pud_mhws_head_id.hpp"
 #include "value_objects/pud_node_id.hpp"
@@ -42,8 +44,8 @@ struct pud_mhcs {
     std::optional<pud_mhcs_head_id> try_add(pud_replay axiom_root);
     std::optional<pud_mhcs_head_id> try_fork(pud_mhcs_head_id head_id, pud_replay axiom_root);
     void remove(pud_mhcs_head_id head_id);
-    std::vector<pud_mhcs_head_id> invalidate_leaf(pud_node_id leaf);
-    const std::vector<pud_node_id>& path(pud_mhcs_head_id head_id) const;
+    std::vector<pud_mhcs_head_id> invalidate_leaf(pud_global_node_id leaf);
+    const std::vector<pud_global_node_id>& path(pud_mhcs_head_id head_id) const;
 private:
     // A witness search and the child of the candidate it searches under.
     struct witness {
@@ -58,7 +60,7 @@ private:
     };
     // A candidate holding a witness pair is a choice point; one without is its own witness.
     struct candidate {
-        std::vector<pud_node_id> path;
+        std::vector<pud_global_node_id> path;
         pud_replay current;
         std::optional<witness_pair> witnesses;
     };
@@ -85,7 +87,7 @@ private:
     pud_mhcs_head_id next_head_id_;
     std::unordered_map<pud_mhcs_head_id, candidate> candidates_;
     std::unordered_map<pud_mhws_head_id, pud_mhcs_head_id> witness_to_head_;
-    std::unordered_map<pud_node_id, std::unordered_set<pud_mhcs_head_id>> leaf_to_heads_;
+    std::unordered_map<pud_global_node_id, std::unordered_set<pud_mhcs_head_id>, pud_global_node_id_hash> leaf_to_heads_;
 };
 
 #define PUD_MHCS_TEMPLATE                                                                  \
@@ -125,7 +127,7 @@ PUD_MHCS::pud_mhcs(
 
 PUD_MHCS_TEMPLATE
 std::optional<pud_mhcs_head_id> PUD_MHCS::try_add(pud_replay axiom_root) {
-    std::vector<pud_node_id> path{axiom_root.node};
+    std::vector<pud_global_node_id> path{axiom_root.node};
     return try_admit(candidate{.path = std::move(path), .current = std::move(axiom_root), .witnesses = std::nullopt});
 }
 
@@ -161,7 +163,7 @@ void PUD_MHCS::remove(pud_mhcs_head_id head_id) {
 }
 
 PUD_MHCS_TEMPLATE
-std::vector<pud_mhcs_head_id> PUD_MHCS::invalidate_leaf(pud_node_id leaf) {
+std::vector<pud_mhcs_head_id> PUD_MHCS::invalidate_leaf(pud_global_node_id leaf) {
     const std::vector<pud_mhws_head_id> exhausted = invalidate_witness_leaf_.invalidate_leaf(leaf);
     std::vector<pud_mhcs_head_id> unjustified;
     auto self_witnessed = leaf_to_heads_.extract(leaf);
@@ -197,7 +199,7 @@ std::vector<pud_mhcs_head_id> PUD_MHCS::invalidate_leaf(pud_node_id leaf) {
 
 // Root first, the candidate's node last.
 PUD_MHCS_TEMPLATE
-const std::vector<pud_node_id>& PUD_MHCS::path(pud_mhcs_head_id head_id) const {
+const std::vector<pud_global_node_id>& PUD_MHCS::path(pud_mhcs_head_id head_id) const {
     return candidates_.at(head_id).path;
 }
 
@@ -215,7 +217,7 @@ std::optional<pud_mhcs_head_id> PUD_MHCS::try_admit(candidate admitted) {
 PUD_MHCS_TEMPLATE
 bool PUD_MHCS::try_justify(candidate& justified) {
     while (true) {
-        const pud_node_id node = justified.current.node;
+        const pud_global_node_id node = justified.current.node;
         if (check_node_refuted_.check_refuted(node)) {
             release_witnesses(justified);
             return false;
@@ -245,7 +247,8 @@ std::optional<typename PUD_MHCS::witness> PUD_MHCS::try_add_witness(candidate& s
     const std::vector<pud_node_id>& children = get_children_.get_children(searching.current.node);
     size_t& next_child = searching.witnesses->next_child;
     while (next_child < children.size()) {
-        std::optional<pud_replay> search_root = descend_replay_.descend(searching.current, children.at(next_child++));
+        const pud_global_node_id child{.module = searching.current.node.module, .node = children.at(next_child++)};
+        std::optional<pud_replay> search_root = descend_replay_.descend(searching.current, child);
         if (!search_root.has_value())
             continue;
         const std::optional<pud_mhws_head_id> added = try_add_witness_search_.try_add(search_root.value());
