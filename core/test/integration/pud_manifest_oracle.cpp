@@ -55,7 +55,7 @@ TEST(PudManifestOracleIntegrationTest, RuleTreesGrownByHandStillProveTheSameMode
                 continue;
             harness->grow_along_open_goals(axiom_root, 2);
         }
-        harness->check_all();
+        harness->verify_all();
         harness->unfold_until_closed(20000);
         EXPECT_EQ(harness->proven_heads(), datalog_model_exprs(*harness, generate_datalog(seed, false)));
     }
@@ -72,7 +72,7 @@ TEST(PudManifestOracleIntegrationTest, DuplicateFactsLeaveTheModelUnchanged) {
         harness->open_axioms();
         harness->unfold_until_closed(20000);
         EXPECT_EQ(harness->proven_heads(), datalog_model_exprs(*harness, program));
-        harness->check_all();
+        harness->verify_all();
     }
 }
 

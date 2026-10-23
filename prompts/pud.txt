@@ -146,7 +146,22 @@ HOW MANY TREES ARE THERE?: One. The PUD is the only tree in this system that has
 
 HOW ARE THE `om_interval`s accessed?: Given a pud lineage, there will be several lookup maps which return to you the om_interval for that node, in a specific context. The standard (root) context has an om_interval for each node, but then when querying into the tree, each node also has a totally different om_interval pertaining to that query. We likely will have a storage infrastructure specifically allowing quick lookup of an om_interval given a query root (source pud_lineage* of the rule who owns the body goal where the query is attached) and a second pud_lineage* for the target node. This should be used when doing witness search, since we will know the id of each witness as we go and thus can quickly recover what the om_interval is, as well as recover the bindings for that environment.
 
-WHAT IS STORED IN A CANDIDATE?: 
+WHAT IS STORED IN A CANDIDATE? (implementation, 2026 — see docs/pud-query-model.txt)
+
+Under pud_mhcs, a candidate for one axiom in one query head holds:
+- path: vector of pud_node_id from axiom root to the current resolvent
+- current: pud_replay at the path tip (node, frame_offset, ubs_state)
+- witnesses: optional { witness a, witness b, next_child index } for choice points;
+  absent when the path tip is a self-witnessing leaf
+
+Under pud_mhq, a query head holds an ordered list of candidacies { axiom root,
+mhcs head id }, at most one candidate per axiom. Unit heads are queued on the
+manifest unit_queries deque when only one candidacy remains.
+
+Leaves hold immer::map<body_goal_id, mhq_head_id> plus explicit holder entries
+in pud_query_holders; no shared ownership via destructors.
+
+WHAT IS STORED IN A CANDIDATE? (historical blank below retained for line anchor)
 
 
 

@@ -275,9 +275,9 @@ struct pud_manifest_harness {
         return waiting_solutions[conjecture].empty() && manifest.solver_.exhausted(conjecture);
     }
 
-    bool refuted(pud_node_id node) { return manifest.node_status_.check_refuted(node); }
+    bool refuted(pud_node_id node) { return manifest.node_status_.is_refuted(node); }
 
-    bool leaf(pud_node_id node) { return manifest.node_status_.check_leaf(node); }
+    bool leaf(pud_node_id node) { return manifest.node_status_.is_leaf(node); }
 
     bool root(pud_node_id node) { return !manifest.node_parents_.get(node).has_value(); }
 
@@ -402,7 +402,7 @@ struct pud_manifest_harness {
         return vars;
     }
 
-    void check_parents_and_children_agree() {
+    void verify_parents_and_children_agree() {
         for (pud_node_id node : all_nodes()) {
             for (pud_node_id child : children_of(node))
                 EXPECT_EQ(manifest.node_parents_.get(child), node) << "child " << child;
@@ -413,7 +413,7 @@ struct pud_manifest_harness {
         }
     }
 
-    void check_live_child_counts_match_unrefuted_children() {
+    void verify_live_child_counts_match_unrefuted_children() {
         for (pud_node_id node : all_nodes()) {
             if (leaf(node))
                 continue;
@@ -424,7 +424,7 @@ struct pud_manifest_harness {
         }
     }
 
-    void check_goal_ids_ascend_and_extend_the_parents() {
+    void verify_goal_ids_ascend_and_extend_the_parents() {
         for (pud_node_id node : all_nodes()) {
             const std::vector<pud_body_goal> goals = open_goals(node);
             for (size_t index = 1; index < goals.size(); ++index)
@@ -440,14 +440,14 @@ struct pud_manifest_harness {
         }
     }
 
-    void check_leaf_binding_matches_its_replayed_substitutions() {
+    void verify_leaf_binding_matches_its_replayed_substitutions() {
         for (pud_node_id node : live_leaves())
             EXPECT_EQ(manifest.leaf_states_.get(node).bindings, env_of(node)) << "leaf " << node;
     }
 
     // A goal is written in the representatives of the node that adds it; inherited goals keep the
     // writing of the ancestor that added them.
-    void check_stored_goals_use_their_nodes_representatives() {
+    void verify_stored_goals_use_their_nodes_representatives() {
         for (pud_node_id node : all_nodes()) {
             const pud_ubs_state env = env_of(node);
             const uint32_t lvc = manifest.node_lvcs_.get(node);
@@ -463,7 +463,7 @@ struct pud_manifest_harness {
         }
     }
 
-    void check_substitutions_meet_the_watchers_preconditions() {
+    void verify_substitutions_meet_the_watchers_preconditions() {
         for (pud_node_id node : all_nodes()) {
             if (root(node))
                 continue;
@@ -494,7 +494,7 @@ struct pud_manifest_harness {
         }
     }
 
-    void check_fresh_variables_are_dense_from_the_parents_lvc() {
+    void verify_fresh_variables_are_dense_from_the_parents_lvc() {
         for (pud_node_id node : all_nodes()) {
             if (root(node))
                 continue;
@@ -522,7 +522,7 @@ struct pud_manifest_harness {
         }
     }
 
-    void check_every_open_goal_has_a_query_its_leaf_holds() {
+    void verify_every_open_goal_has_a_query_its_leaf_holds() {
         for (pud_node_id node : live_leaves()) {
             for (const pud_body_goal& goal : open_goals(node)) {
                 const std::optional<pud_mhq_head_id> head = query_of(node, goal.id);
@@ -535,7 +535,7 @@ struct pud_manifest_harness {
         }
     }
 
-    void check_every_candidate_path_is_a_real_root_first_chain() {
+    void verify_every_candidate_path_is_a_real_root_first_chain() {
         for (pud_node_id node : live_leaves()) {
             for (const pud_body_goal& goal : open_goals(node)) {
                 for (pud_mhcs_head_id candidate : manifest.mhq_.candidates(query_of(node, goal.id).value())) {
@@ -551,7 +551,7 @@ struct pud_manifest_harness {
         }
     }
 
-    void check_every_candidate_is_acceptable_at_every_leaf_holding_the_query() {
+    void verify_every_candidate_is_acceptable_at_every_leaf_holding_the_query() {
         for (pud_node_id node : live_leaves()) {
             const pud_leaf_state& state = manifest.leaf_states_.get(node);
             for (const pud_body_goal& goal : open_goals(node)) {
@@ -564,17 +564,17 @@ struct pud_manifest_harness {
         }
     }
 
-    void check_all() {
-        check_parents_and_children_agree();
-        check_live_child_counts_match_unrefuted_children();
-        check_goal_ids_ascend_and_extend_the_parents();
-        check_leaf_binding_matches_its_replayed_substitutions();
-        check_stored_goals_use_their_nodes_representatives();
-        check_substitutions_meet_the_watchers_preconditions();
-        check_fresh_variables_are_dense_from_the_parents_lvc();
-        check_every_open_goal_has_a_query_its_leaf_holds();
-        check_every_candidate_path_is_a_real_root_first_chain();
-        check_every_candidate_is_acceptable_at_every_leaf_holding_the_query();
+    void verify_all() {
+        verify_parents_and_children_agree();
+        verify_live_child_counts_match_unrefuted_children();
+        verify_goal_ids_ascend_and_extend_the_parents();
+        verify_leaf_binding_matches_its_replayed_substitutions();
+        verify_stored_goals_use_their_nodes_representatives();
+        verify_substitutions_meet_the_watchers_preconditions();
+        verify_fresh_variables_are_dense_from_the_parents_lvc();
+        verify_every_open_goal_has_a_query_its_leaf_holds();
+        verify_every_candidate_path_is_a_real_root_first_chain();
+        verify_every_candidate_is_acceptable_at_every_leaf_holding_the_query();
     }
 };
 

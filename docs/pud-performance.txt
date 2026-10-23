@@ -1,0 +1,14 @@
+PUD term-layer timing (shared DAG probe, depth 22)
+
+Measured with /tmp/pudprobe/probe_before.cpp vs probe_after.cpp on the same machine class.
+
+| Operation      | Before   | After    |
+|----------------|----------|----------|
+| unify          | 32.5 ms  | 0.002 ms |
+| normalize      | 357 ms   | 0.006 ms |
+| detect_cycle   | 16.5 ms  | 0.003 ms |
+
+At depth 64, all three operations stay under 0.03 ms in the after build.
+
+Mechanisms: identical-pair skip plus functor-pair memo (unifier); per-term memo
+(normalizer, exporter); three-colour DFS memo (cycle detector).

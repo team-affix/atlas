@@ -7,7 +7,7 @@
 
 namespace {
 
-using check_t = void (pud_manifest_harness::*)();
+using verify_t = void (pud_manifest_harness::*)();
 using build_database_t = void (*)(pud_manifest_harness&);
 using build_conjecture_t = pud_node_id (*)(pud_manifest_harness&);
 
@@ -212,7 +212,7 @@ const std::vector<scenario>& corpus() {
     return scenarios;
 }
 
-void sweep(check_t check) {
+void sweep(verify_t check) {
     for (uint32_t random_seed = 0; random_seed < 4; ++random_seed) {
         for (const scenario& each : corpus()) {
             SCOPED_TRACE(each.name + " seed " + std::to_string(random_seed));
@@ -238,43 +238,43 @@ void sweep(check_t check) {
 }
 
 TEST(PudManifestInvariantsIntegrationTest, ParentsAndChildrenAgree) {
-    sweep(&pud_manifest_harness::check_parents_and_children_agree);
+    sweep(&pud_manifest_harness::verify_parents_and_children_agree);
 }
 
 TEST(PudManifestInvariantsIntegrationTest, LiveChildCountsMatchUnrefutedChildren) {
-    sweep(&pud_manifest_harness::check_live_child_counts_match_unrefuted_children);
+    sweep(&pud_manifest_harness::verify_live_child_counts_match_unrefuted_children);
 }
 
 TEST(PudManifestInvariantsIntegrationTest, GoalIdsAscendAndExtendTheParents) {
-    sweep(&pud_manifest_harness::check_goal_ids_ascend_and_extend_the_parents);
+    sweep(&pud_manifest_harness::verify_goal_ids_ascend_and_extend_the_parents);
 }
 
 TEST(PudManifestInvariantsIntegrationTest, LeafBindingMatchesItsReplayedSubstitutions) {
-    sweep(&pud_manifest_harness::check_leaf_binding_matches_its_replayed_substitutions);
+    sweep(&pud_manifest_harness::verify_leaf_binding_matches_its_replayed_substitutions);
 }
 
 TEST(PudManifestInvariantsIntegrationTest, StoredGoalsUseTheirNodesRepresentatives) {
-    sweep(&pud_manifest_harness::check_stored_goals_use_their_nodes_representatives);
+    sweep(&pud_manifest_harness::verify_stored_goals_use_their_nodes_representatives);
 }
 
 TEST(PudManifestInvariantsIntegrationTest, SubstitutionsMeetTheWatchersPreconditions) {
-    sweep(&pud_manifest_harness::check_substitutions_meet_the_watchers_preconditions);
+    sweep(&pud_manifest_harness::verify_substitutions_meet_the_watchers_preconditions);
 }
 
 TEST(PudManifestInvariantsIntegrationTest, FreshVariablesAreDenseFromTheParentsLvc) {
-    sweep(&pud_manifest_harness::check_fresh_variables_are_dense_from_the_parents_lvc);
+    sweep(&pud_manifest_harness::verify_fresh_variables_are_dense_from_the_parents_lvc);
 }
 
 TEST(PudManifestInvariantsIntegrationTest, EveryOpenGoalHasAQueryItsLeafHolds) {
-    sweep(&pud_manifest_harness::check_every_open_goal_has_a_query_its_leaf_holds);
+    sweep(&pud_manifest_harness::verify_every_open_goal_has_a_query_its_leaf_holds);
 }
 
 TEST(PudManifestInvariantsIntegrationTest, EveryCandidatePathIsARealRootFirstChain) {
-    sweep(&pud_manifest_harness::check_every_candidate_path_is_a_real_root_first_chain);
+    sweep(&pud_manifest_harness::verify_every_candidate_path_is_a_real_root_first_chain);
 }
 
 TEST(PudManifestInvariantsIntegrationTest, EveryCandidateIsAcceptableAtEveryLeafHoldingTheQuery) {
-    sweep(&pud_manifest_harness::check_every_candidate_is_acceptable_at_every_leaf_holding_the_query);
+    sweep(&pud_manifest_harness::verify_every_candidate_is_acceptable_at_every_leaf_holding_the_query);
 }
 
 TEST(PudManifestInvariantsIntegrationTest, RandomRecursiveDatabasesKeepEveryInvariant) {
@@ -283,9 +283,9 @@ TEST(PudManifestInvariantsIntegrationTest, RandomRecursiveDatabasesKeepEveryInva
         auto harness = std::make_unique<pud_manifest_harness>(seed, pud_harness_scope::every_open_leaf);
         load_datalog_axioms(*harness, generate_datalog(seed, true));
         harness->open_axioms();
-        harness->check_all();
+        harness->verify_all();
         for (size_t unfold = 0; unfold < 25 && harness->most_open_goals() <= 64 && harness->advance_unfold_loop(); ++unfold)
-            harness->check_all();
+            harness->verify_all();
     }
 }
 
@@ -295,15 +295,15 @@ TEST(PudManifestInvariantsIntegrationTest, RandomFlatDatabasesKeepEveryInvariant
         auto harness = std::make_unique<pud_manifest_harness>(seed, pud_harness_scope::every_open_leaf);
         load_datalog_axioms(*harness, generate_datalog(seed, false));
         harness->open_axioms();
-        harness->check_all();
+        harness->verify_all();
         size_t unfolds = 0;
         while (unfolds < 5000 && harness->advance_unfold_loop()) {
             ++unfolds;
             if (unfolds % 10 == 0)
-                harness->check_all();
+                harness->verify_all();
         }
         EXPECT_TRUE(harness->database_frontier.empty()) << "a flat program must unfold until nothing is open";
-        harness->check_all();
+        harness->verify_all();
     }
 }
 
@@ -314,9 +314,9 @@ TEST(PudManifestInvariantsIntegrationTest, RandomConjecturesKeepEveryInvariant) 
             auto harness = std::make_unique<pud_manifest_harness>(seed, pud_harness_scope::conjecture_leaves);
             const pud_node_id query = load_datalog(*harness, generate_datalog(seed, recursive));
             std::vector<const expr*> answers;
-            harness->check_all();
+            harness->verify_all();
             for (size_t step = 0; step < 40 && harness->most_open_goals() <= 64 && harness->step(query, answers); ++step) {
-                harness->check_all();
+                harness->verify_all();
                 if (::testing::Test::HasFailure())
                     return;
             }
@@ -332,11 +332,11 @@ TEST(PudManifestInvariantsIntegrationTest, DeepRecursionStaysConsistentAndEnumer
         ASSERT_TRUE(harness->step(query, answers));
         if (step % 5 != 0)
             continue;
-        harness->check_all();
+        harness->verify_all();
         if (::testing::Test::HasFailure())
             return;
     }
-    harness->check_all();
+    harness->verify_all();
     EXPECT_GE(answers.size(), 10u);
     for (size_t index = 0; index < answers.size(); ++index)
         EXPECT_EQ(answers.at(index), harness->functor("q", {harness->peano(static_cast<uint32_t>(index))}));

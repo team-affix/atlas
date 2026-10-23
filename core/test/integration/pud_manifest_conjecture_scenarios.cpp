@@ -71,7 +71,7 @@ TEST_F(PudManifestConjectureScenarioIntegrationTest, AcceptingASharedQueryAtADee
     EXPECT_THAT(d.holders_of(shared), ElementsAre(frontier));
     EXPECT_NO_THROW(d.expand(frontier, 3));
     EXPECT_EQ(d.children_of(frontier).size(), 2u);
-    d.check_all();
+    d.verify_all();
     EXPECT_THAT(d.proven_answers(conjecture, 50), UnorderedElementsAre(q(d, {d.atom("red")}), q(d, {d.atom("blue")})));
 }
 
@@ -85,7 +85,7 @@ TEST_F(PudManifestConjectureScenarioIntegrationTest, CrossGoalVariableMergeIsHan
         2);
     std::vector<const expr*> answers;
     while (h.step(conjecture, answers))
-        h.check_all();
+        h.verify_all();
     EXPECT_THAT(
         answers,
         UnorderedElementsAre(q(h, {h.atom("red"), h.atom("red")}), q(h, {h.atom("blue"), h.atom("blue")})));
@@ -109,7 +109,7 @@ TEST_F(PudManifestConjectureScenarioIntegrationTest, RenameOnlyStepsDoNotForkBut
     EXPECT_THAT(
         d.manifest.node_substitutions_.get(merged),
         ElementsAre(pud_substitution{.var_idx = 1, .value = d.var(0)}));
-    d.check_all();
+    d.verify_all();
     EXPECT_THAT(
         d.proven_answers(conjecture, 50),
         UnorderedElementsAre(q(d, {d.atom("red"), d.atom("red")}), q(d, {d.atom("blue"), d.atom("blue")})));
@@ -130,7 +130,7 @@ TEST_F(PudManifestConjectureScenarioIntegrationTest, ForkedQueriesOnlyListCandid
             EXPECT_EQ(d.manifest.root_heads_.get(path.front()), d.functor("warm", {d.atom("red")}));
     }
     EXPECT_EQ(live_children, 1u);
-    d.check_every_candidate_is_acceptable_at_every_leaf_holding_the_query();
+    d.verify_every_candidate_is_acceptable_at_every_leaf_holding_the_query();
 }
 
 
@@ -146,7 +146,7 @@ TEST_F(PudManifestConjectureScenarioIntegrationTest, AxiomTreeIsItsOwnCandidate)
     const std::optional<pud_solution> solution = h.next_solution(conjecture, 10);
     ASSERT_TRUE(solution.has_value());
     EXPECT_EQ(solution->answer, q(h, {h.atom("z")}));
-    h.check_all();
+    h.verify_all();
 }
 
 
@@ -157,11 +157,11 @@ TEST_F(PudManifestConjectureScenarioIntegrationTest, ExpandingTheLeafThatIsItsOw
     h.open_axioms();
     EXPECT_NO_THROW(h.expand(rule, 0));
     EXPECT_EQ(h.children_of(rule).size(), 2u);
-    h.check_all();
+    h.verify_all();
     for (uint32_t count = 1; count <= 6; ++count)
         EXPECT_TRUE(solvable(h, h.functor("nat", {h.peano(count)}), 100)) << count;
     EXPECT_FALSE(solvable(h, h.functor("nat", {h.peano_on(3, "bad")}), 100));
-    h.check_all();
+    h.verify_all();
 }
 
 
@@ -176,7 +176,7 @@ TEST_F(PudManifestConjectureScenarioIntegrationTest, OneQueryUsesAnAxiomRuleAsAL
         uses_rule = uses_rule || path.front() == warmcolor;
     EXPECT_TRUE(uses_rule);
     EXPECT_THAT(distinct(h.enumerate(conjecture, 10, 50)), ElementsAre(q(h, {h.atom("red")})));
-    h.check_all();
+    h.verify_all();
 }
 
 
@@ -188,7 +188,7 @@ TEST_F(PudManifestConjectureScenarioIntegrationTest, ConjectureIsNeverACandidate
     EXPECT_TRUE(h.refuted(second));
     EXPECT_THAT(h.enumerate(second, 10, 50), IsEmpty());
     EXPECT_TRUE(h.exhausted(second));
-    h.check_all();
+    h.verify_all();
 }
 
 
@@ -199,7 +199,7 @@ TEST_F(PudManifestConjectureScenarioIntegrationTest, ConjectureIsNeverACandidate
     EXPECT_THAT(candidate_paths(h, conjecture, 0), ElementsAre(std::vector<pud_node_id>{fact}));
     EXPECT_THAT(distinct(h.enumerate(conjecture, 10, 50)),
         ElementsAre(h.functor("nat", {h.functor("s", {h.atom("z")})})));
-    h.check_all();
+    h.verify_all();
 }
 
 
@@ -210,7 +210,7 @@ TEST_F(PudManifestConjectureScenarioIntegrationTest, ConjectureNeverAddsAnswersT
     const pud_node_id colors = h.start_conjecture(q(h, {h.var(0)}), {h.functor("color", {h.var(0)})}, 1);
     EXPECT_THAT(distinct(h.enumerate(colors, 10, 50)),
         UnorderedElementsAre(q(h, {h.atom("red")}), q(h, {h.atom("blue")})));
-    h.check_all();
+    h.verify_all();
 }
 
 
@@ -239,7 +239,7 @@ TEST_F(PudManifestConjectureScenarioIntegrationTest, ConcurrentConjecturesNeverS
     }
     EXPECT_THAT(distinct(first_answers), UnorderedElementsAre(q(h, {h.atom("red")}), q(h, {h.atom("blue")})));
     EXPECT_THAT(distinct(second_answers), ElementsAre(q(h, {h.atom("red")})));
-    h.check_all();
+    h.verify_all();
 }
 
 
@@ -252,7 +252,7 @@ TEST_F(PudManifestConjectureScenarioIntegrationTest, CandidatesMoveDeeperWhenAnA
     for (const std::vector<pud_node_id>& path : candidate_paths(h, conjecture, 0))
         deepest = std::max(deepest, path.size());
     EXPECT_GE(deepest, 3u);
-    h.check_all();
+    h.verify_all();
     EXPECT_TRUE(h.next_solution(conjecture, 3).has_value());
 }
 
@@ -273,7 +273,7 @@ TEST_F(PudManifestConjectureScenarioIntegrationTest, LemmaPathReplayMatchesFlatR
     const std::vector<const expr*> answers = distinct(h.enumerate(enumerating, 20, 300));
     for (uint32_t count = 0; count < 4; ++count)
         EXPECT_NE(std::find(answers.begin(), answers.end(), q(h, {h.peano(count)})), answers.end()) << count;
-    h.check_all();
+    h.verify_all();
 }
 
 
@@ -284,7 +284,7 @@ TEST_F(PudManifestConjectureScenarioIntegrationTest, RefutingALemmaSubtreeRefute
     d.refute(lemma);
     EXPECT_TRUE(d.refuted(conjecture));
     EXPECT_THAT(d.proven_answers(conjecture, 50), IsEmpty());
-    d.check_all();
+    d.verify_all();
 }
 
 
@@ -297,7 +297,7 @@ TEST_F(PudManifestConjectureScenarioIntegrationTest, RefutingOneOfTwoCandidatesM
     EXPECT_EQ(candidate_paths(d, conjecture, 0).size(), 1u);
     EXPECT_FALSE(d.refuted(conjecture));
     EXPECT_THAT(d.proven_answers(conjecture, 50), ElementsAre(q(d, {d.atom("blue")})));
-    d.check_all();
+    d.verify_all();
 }
 
 
@@ -312,7 +312,7 @@ TEST_F(PudManifestConjectureScenarioIntegrationTest, AllChildrenRefutedOnArrival
     for (pud_node_id child : d.children_of(conjecture))
         EXPECT_TRUE(d.refuted(child));
     EXPECT_TRUE(d.refuted(conjecture));
-    d.check_all();
+    d.verify_all();
 }
 
 
@@ -326,7 +326,7 @@ TEST_F(PudManifestConjectureScenarioIntegrationTest, CascadeCrossesTrees) {
     EXPECT_TRUE(d.refuted(second));
     EXPECT_FALSE(d.refuted(independent));
     EXPECT_THAT(d.proven_answers(independent, 10), Not(IsEmpty()));
-    d.check_all();
+    d.verify_all();
 }
 
 
@@ -339,7 +339,7 @@ TEST_F(PudManifestConjectureScenarioIntegrationTest, RefutingAnAlreadyRefutedNod
     EXPECT_NO_THROW(d.refute(child));
     EXPECT_NO_THROW(d.refute(child));
     EXPECT_FALSE(d.refuted(conjecture));
-    d.check_all();
+    d.verify_all();
 }
 
 
@@ -350,7 +350,7 @@ TEST_F(PudManifestConjectureScenarioIntegrationTest, RefutedRootStaysUnsolvable)
     for (int attempt = 0; attempt < 3; ++attempt)
         EXPECT_THAT(d.proven_answers(conjecture, 50), IsEmpty());
     EXPECT_NO_THROW(d.refute(conjecture));
-    d.check_all();
+    d.verify_all();
 }
 
 
@@ -359,7 +359,7 @@ TEST_F(PudManifestConjectureScenarioIntegrationTest, OccursCheckRefutesCyclicGoa
     const pud_node_id conjecture = h.start_conjecture(h.atom("q"), {h.functor("eq", {h.var(0), h.functor("f", {h.var(0)})})}, 1);
     EXPECT_TRUE(h.refuted(conjecture));
     EXPECT_FALSE(h.next_solution(conjecture, 10).has_value());
-    h.check_all();
+    h.verify_all();
 }
 
 
@@ -375,7 +375,7 @@ TEST_F(PudManifestConjectureScenarioIntegrationTest, RepeatedVariablesInHeadsAre
     EXPECT_THAT(h.enumerate(equal, 5, 20), ElementsAre(h.atom("q2")));
     EXPECT_THAT(h.enumerate(one_side, 5, 20), ElementsAre(h.functor("q3", {h.atom("c")})));
     EXPECT_THAT(h.enumerate(both_free, 5, 20), ElementsAre(h.functor("q4", {h.var(0), h.var(0)})));
-    h.check_all();
+    h.verify_all();
 }
 
 
@@ -388,7 +388,7 @@ TEST_F(PudManifestConjectureScenarioIntegrationTest, GroundGoalsNeedNoSubstituti
     EXPECT_THAT(d.manifest.node_substitutions_.get(child), IsEmpty());
     EXPECT_EQ(d.manifest.node_lvcs_.get(child), d.manifest.node_lvcs_.get(conjecture));
     EXPECT_THAT(d.open_goals(child), IsEmpty());
-    d.check_all();
+    d.verify_all();
 }
 
 
@@ -398,7 +398,7 @@ TEST_F(PudManifestConjectureScenarioIntegrationTest, AnswerKeepsUnboundVariables
     const std::optional<pud_solution> solution = h.next_solution(conjecture, 10);
     ASSERT_TRUE(solution.has_value());
     EXPECT_EQ(solution->answer, q(h, {h.var(0)}));
-    h.check_all();
+    h.verify_all();
 }
 
 
@@ -423,7 +423,7 @@ TEST_F(PudManifestConjectureScenarioIntegrationTest, LargeFrameOffsetsDoNotColli
         expected_args.push_back(h.var(index));
     expected_args.push_back(h.functor("f", {h.var(5), h.var(14)}));
     EXPECT_EQ(solution->answer, h.functor("q", expected_args));
-    h.check_all();
+    h.verify_all();
 }
 
 
@@ -441,7 +441,7 @@ TEST_F(PudManifestConjectureScenarioIntegrationTest, LongAppendIsCorrect) {
         q(h, {h.var(0)}), {h.functor("app", {h.list(front), h.list(back), h.var(0)})}, 1);
     EXPECT_THAT(h.enumerate(conjecture, 5, 200), ElementsAre(q(h, {h.list(both)})));
     EXPECT_TRUE(h.exhausted(conjecture));
-    h.check_all();
+    h.verify_all();
 }
 
 
@@ -461,14 +461,14 @@ TEST_F(PudManifestConjectureScenarioIntegrationTest, ManyQueriesInterleaved) {
         h.step(numbers, number_answers);
         h.step(members, member_answers);
         if (round % 8 == 0)
-            h.check_all();
+            h.verify_all();
     }
     EXPECT_THAT(color_answers, UnorderedElementsAre(h.functor("c", {h.atom("red")}), h.functor("c", {h.atom("blue")})));
     EXPECT_THAT(member_answers, UnorderedElementsAre(h.functor("m", {h.atom("a")}), h.functor("m", {h.atom("b")})));
     ASSERT_GE(number_answers.size(), 5u);
     for (size_t index = 0; index < number_answers.size(); ++index)
         EXPECT_EQ(number_answers.at(index), h.functor("n", {h.peano(static_cast<uint32_t>(index))}));
-    h.check_all();
+    h.verify_all();
 }
 
 
@@ -486,7 +486,7 @@ TEST_F(PudManifestConjectureScenarioIntegrationTest, VeryDeepFactIsAcceptedAndAn
     h.axiom(h.functor("big", {h.peano(200000)}), {}, 0);
     const pud_node_id conjecture = h.start_conjecture(q(h, {h.var(0)}), {h.functor("big", {h.var(0)})}, 1);
     EXPECT_THAT(h.enumerate(conjecture, 5, 10), ElementsAre(q(h, {h.peano(200000)})));
-    h.check_all();
+    h.verify_all();
 }
 
 
@@ -545,7 +545,7 @@ TEST_F(PudManifestConjectureScenarioIntegrationTest, ManifestDestroyedMidSolveIs
             2);
         harness->next_solution(numbers, round);
         harness->next_solution(splits, round / 2);
-        harness->check_all();
+        harness->verify_all();
         EXPECT_NO_THROW(harness.reset());
     }
 }
@@ -579,7 +579,7 @@ TEST_F(PudManifestConjectureScenarioIntegrationTest, AllQueriesGoneAfterRefuting
     for (pud_mhq_head_id head : seen)
         EXPECT_FALSE(h.alive(head)) << "head " << head;
     EXPECT_TRUE(h.live_leaves().empty());
-    h.check_all();
+    h.verify_all();
 }
 
 
@@ -598,7 +598,7 @@ TEST_F(PudManifestConjectureScenarioIntegrationTest, AxiomTreeQueriesLiveOnlyWhi
     d.refute(rule);
     for (pud_mhq_head_id head : heads)
         EXPECT_FALSE(d.alive(head)) << "head " << head;
-    d.check_all();
+    d.verify_all();
 }
 
 
@@ -637,7 +637,7 @@ TEST_F(PudManifestConjectureScenarioIntegrationTest, SelfCandidateEnumeratesWith
     for (int step = 0; step < 60 && d.proven_answers(rule, 0).size() < 12; ++step) {
         ASSERT_TRUE(d.advance_unfold_loop());
         if (step % 6 == 0)
-            d.check_all();
+            d.verify_all();
     }
     const std::vector<const expr*> answers = d.proven_answers(rule, 0);
     for (uint32_t count = 1; count <= 6; ++count)
@@ -648,7 +648,7 @@ TEST_F(PudManifestConjectureScenarioIntegrationTest, SelfCandidateEnumeratesWith
             small_number = small_number || answer == d.functor("nat", {d.peano(count)});
         EXPECT_TRUE(small_number) << "answers must not jump to huge numbers";
     }
-    d.check_all();
+    d.verify_all();
 }
 
 TEST_F(PudManifestConjectureScenarioIntegrationTest, EnumeratedAxiomTreeStillServesAsALemma) {
@@ -661,7 +661,7 @@ TEST_F(PudManifestConjectureScenarioIntegrationTest, EnumeratedAxiomTreeStillSer
     EXPECT_FALSE(d.refuted(first));
     const pud_node_id second = d.start_conjecture(q(d, {d.var(0)}), {d.functor("warmcolor", {d.var(0)})}, 1);
     EXPECT_THAT(distinct(d.proven_answers(second, 50)), ElementsAre(q(d, {d.atom("red")})));
-    d.check_all();
+    d.verify_all();
 }
 
 
@@ -686,7 +686,7 @@ TEST_F(PudManifestConjectureScenarioIntegrationTest, YieldedSolutionStaysALiveLe
     const expr* picked = std::get<expr::functor>(
         d.manifest.leaf_materializer_.materialize(solution, d.manifest.root_heads_.get(first))->content).args.front();
     EXPECT_THAT(distinct(d.proven_answers(second, 50)), ElementsAre(q(d, {picked})));
-    d.check_all();
+    d.verify_all();
 }
 
 
@@ -719,5 +719,5 @@ TEST_F(PudManifestConjectureScenarioIntegrationTest, AForkedQueryReplacesThePare
     ASSERT_EQ(d.children_of(conjecture).size(), 1u);
     const pud_node_id child = d.children_of(conjecture).front();
     EXPECT_NE(d.query_of(child, 0).value(), color_query);
-    d.check_all();
+    d.verify_all();
 }

@@ -12,7 +12,7 @@ using ::testing::ReturnRef;
 namespace {
 
 struct MockCheckNodeRefuted {
-    MOCK_METHOD(bool, check_refuted, (pud_node_id), (const));
+    MOCK_METHOD(bool, is_refuted, (pud_node_id), (const));
 };
 struct MockGetNodeGoals {
     MOCK_METHOD(const pud_goal_list&, get, (pud_node_id));
@@ -30,7 +30,7 @@ struct PudFrontierChangeCollectorTest : public ::testing::Test {
         ON_CALL(goals, get(1)).WillByDefault(ReturnRef(open_goals));
         ON_CALL(goals, get(2)).WillByDefault(ReturnRef(no_goals));
         ON_CALL(goals, get(3)).WillByDefault(ReturnRef(open_goals));
-        ON_CALL(status, check_refuted(3)).WillByDefault(Return(true));
+        ON_CALL(status, is_refuted(3)).WillByDefault(Return(true));
     }
 };
 

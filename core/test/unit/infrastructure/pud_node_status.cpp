@@ -24,27 +24,27 @@ struct PudNodeStatusTest : public ::testing::Test {
 
 TEST_F(PudNodeStatusTest, ALiveLeafIsALeafAndNotRefuted) {
     ON_CALL(states, get(1)).WillByDefault(Return(pud_node_state::leaf));
-    EXPECT_TRUE(status.check_leaf(1));
-    EXPECT_FALSE(status.check_refuted(1));
+    EXPECT_TRUE(status.is_leaf(1));
+    EXPECT_FALSE(status.is_refuted(1));
 }
 
 TEST_F(PudNodeStatusTest, ARefutedLeafIsStillALeaf) {
     ON_CALL(states, get(1)).WillByDefault(Return(pud_node_state::refuted));
-    EXPECT_TRUE(status.check_leaf(1));
-    EXPECT_TRUE(status.check_refuted(1));
+    EXPECT_TRUE(status.is_leaf(1));
+    EXPECT_TRUE(status.is_refuted(1));
 }
 
 TEST_F(PudNodeStatusTest, AnInteriorNodeIsRefutedExactlyWhenNoChildIsAlive) {
     ON_CALL(states, get(1)).WillByDefault(Return(pud_node_state::expanded));
     ON_CALL(live_child_counts, get(1)).WillByDefault(Return(2));
-    EXPECT_FALSE(status.check_leaf(1));
-    EXPECT_FALSE(status.check_refuted(1));
+    EXPECT_FALSE(status.is_leaf(1));
+    EXPECT_FALSE(status.is_refuted(1));
     ON_CALL(live_child_counts, get(1)).WillByDefault(Return(0));
-    EXPECT_TRUE(status.check_refuted(1));
+    EXPECT_TRUE(status.is_refuted(1));
 }
 
 TEST_F(PudNodeStatusTest, ALeafsChildCountIsNeverRead) {
     ON_CALL(states, get(1)).WillByDefault(Return(pud_node_state::leaf));
     EXPECT_CALL(live_child_counts, get(::testing::_)).Times(0);
-    status.check_refuted(1);
+    status.is_refuted(1);
 }

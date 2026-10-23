@@ -1,44 +1,72 @@
-PUD query model (corrections)
+PUD query model (matches the code in core/hpp/infrastructure, 2026)
 
-Every callee in a query, axiom or inference, has its expressions lifted to
-QUERY_LVC. There is no "axioms at LVC, inferences at frame 0" split. If a
-sentence starts with "for axioms we do X and for inferences we do Y", it is
-probably wrong. The database is uniform.
+Overview
 
-Replay is unify, never FPA record. added_unifications stores var indices (lhs)
-and exprs normalized at a prior LVC (rhs). On enter, lift both sides into this
-query:
+The progressive unfolding database (PUD) is one tree of resolvents under axiom and
+conjecture roots. Each open leaf carries bindings (union-by-size bind map), a
+structure watch keyed by body-goal id, and a map from body-goal id to multi-headed
+query id. Solving is unit-first random expansion via pud_solver.
 
-  unify(framed_expr{make_var(lhs), QUERY_LVC},
-        framed_expr{rhs,            QUERY_LVC})
+Terms and bindings
 
-That is every pair in the vector, including axiom {0, head}. record cannot fail.
-unify can. Unify failure means that node and everything under it in this query
-is refuted.
+- Expressions in the database are unframed const expr* with global variable indices.
+- At query time, pud_replayer lifts axiom heads and replay paths using the callee
+  frame offset (the leaf's LVC).
+- ubs_bind_map owns transient parents/classes, supports find, equate (returns
+  displaced value when both sides were bound), instantiate, and persist() && into
+  pud_ubs_state. Absorbed equivalence classes are erased from the map.
+- pud_unifier memoizes identical pairs and functor-pair work; pud_normalizer and
+  pud_exporter memoize per traversal.
 
-Query start is not unify. After the query om_interval exists, var(0)@LVC is
-fresh, so bind it to the query body (framed_expr{body, 0}). That cannot fail.
+Search stack (no separate query tree)
 
-bind, not record. Do not call FPA record for the hole. Use
-hierarchical_bind_map::bind.
+- pud_replay: { pud_node_id node, uint32_t frame_offset, pud_ubs_state ubs_state }.
+- pud_replayer: enter(caller_state, goal, frame_offset, axiom_root) and
+  descend(replay, child) replay substitutions along the path to a candidate.
+- pud_mhws: witness search under one outgoing edge (DFS, resumable).
+- pud_mhcs: at most one candidate per axiom for a goal; choice point = two witness
+  searches; self-witness = candidate path is a single leaf.
+- pud_mhq: one head per body goal; candidates stored once in axiom order; admits
+  only when at least one candidate exists; pushes unit heads onto an injected
+  deque when a head drops to one candidate.
 
-try_enter does not bind the hole. try_enter only replays added_unifications and
-sees if they fail.
+Query ownership
 
-Even axiom {0, head} replay can fail (functor mismatch against the already-bound
-hole). Query-vs-head is that pair, not a second special unify.
+- pud_query_holders maps head id -> { goal id, set of leaf ids holding it }.
+- Leaves acquire heads in pud_leaf_query_maker::admit_leaf; release via
+  pud_leaf_releaser when a leaf leaves the frontier.
+- When the last holder releases a head, mhq::remove is the only removal path.
+- A refuted head refutes every leaf still holding it (frontier_retirer).
 
-var(0) is reserved as the head hole. Rule vars start at 1. Callers of add_axiom
-stay 0-based. The adder shifts by normalizing head and every body goal at frame
-1 with one shared translation map. lvc = 1 + translation.size().
+Leaf activation (replaces descents)
 
-{0, head} is the head-hole unification, not Prolog var 0 of the rule.
+- pud_binder applies child added_substitutions onto the parent bind map.
+- pud_structure_watcher: goals indexed by pud_body_goal_id; a goal changes when
+  any of its watched reps is instantiated or two of its reps merge.
+- pud_leaf_query_maker: on a child, erase closed goal's head; fork changed goals
+  in the child environment; open queries for newly added goals; hold every head
+  the leaf keeps.
+- pud_leaf_activator stores pud_leaf_state { bindings, watch, queries }.
 
-The query root lives in the same om_interval map. Intern key is
-{caller, goal_idx, nullptr}. That interval is the OM parent axioms inherit in
-this query. Do not use make_inference(leaf, idx, leaf) as the query root (that
-intern is the leaf as callee / later unfolded child). A bare nullptr map key is
-not needed.
+Unfold and solver
 
-Hole bind happens at query birth (install / leftover fork), on that query-root
-interval, before search resumes.
+- pud_resolver accepts a candidate path; pud_unfolder adds children; retire
+  expands/refutes leaves and cascades query invalidation.
+- pud_solver: coroutine yielding pud_unfold or pud_solution; prefers unit deque
+  unfolds, then random open leaf on tracked conjectures.
+
+CLI
+
+- atlas pud <chc> -g "<body goals>" [--head "<answer template>"] runs the manifest
+  solver over file axioms and prints materialized answers.
+
+Deprecated concepts (do not reintroduce)
+
+- Separate query trees, om_interval maps, FPA record/replay, transient bind-map
+  facades, destructor-owned query heads, duplicate candidate storage in mhq,
+  watch-head ids separate from goal ids, dual solver front-ends.
+
+Performance note (depth 22 shared DAG, see /tmp/pudprobe in dev trees)
+
+After memoization: unify ~0.002 ms, normalize ~0.006 ms, detect_cycle ~0.003 ms
+(vs ~32 ms / ~357 ms / ~16 ms before).

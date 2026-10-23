@@ -47,7 +47,7 @@ TEST_F(PudManifestScenarioIntegrationTest, DatabaseOfFactsLeavesNothingOpen) {
     EXPECT_FALSE(h.advance_unfold_loop());
     EXPECT_EQ(h.proven_heads(), (std::set<const expr*>{
         h.functor("color", {h.atom("red")}), h.functor("color", {h.atom("blue")}), h.functor("warm", {h.atom("red")})}));
-    h.check_all();
+    h.verify_all();
 }
 
 TEST_F(PudManifestScenarioIntegrationTest, RuleWithAnEmptyBodyIsAFact) {
@@ -58,7 +58,7 @@ TEST_F(PudManifestScenarioIntegrationTest, RuleWithAnEmptyBodyIsAFact) {
     EXPECT_TRUE(h.live_leaf(fact));
     h.unfold_until_closed(100);
     EXPECT_TRUE(h.proven_heads().contains(h.functor("q", {h.atom("a")})));
-    h.check_all();
+    h.verify_all();
 }
 
 TEST_F(PudManifestScenarioIntegrationTest, ChainWithAMissingBaseIsRefutedWhicheverRootRunsFirst) {
@@ -78,7 +78,7 @@ TEST_F(PudManifestScenarioIntegrationTest, ChainWithAMissingBaseIsRefutedWhichev
         EXPECT_TRUE(chain.refuted(b));
         EXPECT_TRUE(chain.refuted(a));
         EXPECT_THAT(chain.open_leaves(), IsEmpty());
-        chain.check_all();
+        chain.verify_all();
     }
 }
 
@@ -96,7 +96,7 @@ TEST_F(PudManifestScenarioIntegrationTest, AxiomAddedAfterTheRunIsACandidateForL
     h.open_axioms();
     h.unfold_until_closed(50);
     EXPECT_TRUE(h.proven_heads().contains(h.atom("q")));
-    h.check_all();
+    h.verify_all();
 }
 
 TEST_F(PudManifestScenarioIntegrationTest, ForkedQueryNeverGainsAnAxiomAddedAfterItsParentOpened) {
@@ -125,7 +125,7 @@ TEST_F(PudManifestScenarioIntegrationTest, RepeatedHeadVariablesOnlyMatchEqualAr
     EXPECT_FALSE(proven.contains(h.functor("same", {h.atom("a")})));
     EXPECT_TRUE(proven.contains(h.atom("matched")));
     EXPECT_TRUE(h.refuted(mismatched));
-    h.check_all();
+    h.verify_all();
 }
 
 TEST_F(PudManifestScenarioIntegrationTest, NonGroundFactsAreUsedAsCandidates) {
@@ -136,7 +136,7 @@ TEST_F(PudManifestScenarioIntegrationTest, NonGroundFactsAreUsedAsCandidates) {
     h.unfold_until_closed(100);
     EXPECT_TRUE(h.proven_heads().contains(h.functor("q", {h.atom("a")})));
     EXPECT_TRUE(h.refuted(unequal));
-    h.check_all();
+    h.verify_all();
 }
 
 TEST_F(PudManifestScenarioIntegrationTest, SameNameWithDifferentArityNeverUnifies) {
@@ -147,7 +147,7 @@ TEST_F(PudManifestScenarioIntegrationTest, SameNameWithDifferentArityNeverUnifie
     h.unfold_until_closed(100);
     EXPECT_TRUE(h.refuted(wrong_arity));
     EXPECT_TRUE(h.proven_heads().contains(h.atom("r")));
-    h.check_all();
+    h.verify_all();
 }
 
 TEST_F(PudManifestScenarioIntegrationTest, AtomsAndRepeatedGoalsInOneBody) {
@@ -156,7 +156,7 @@ TEST_F(PudManifestScenarioIntegrationTest, AtomsAndRepeatedGoalsInOneBody) {
     h.open_axioms();
     h.unfold_until_closed(100);
     EXPECT_TRUE(h.proven_heads().contains(h.atom("q")));
-    h.check_all();
+    h.verify_all();
 }
 
 TEST_F(PudManifestScenarioIntegrationTest, VeryDeepTermsUnifyAndUnfold) {
@@ -170,7 +170,7 @@ TEST_F(PudManifestScenarioIntegrationTest, VeryDeepTermsUnifyAndUnfold) {
     EXPECT_TRUE(proven.contains(h.functor("q", {h.peano(5000)})));
     EXPECT_TRUE(proven.contains(h.atom("r")));
     EXPECT_TRUE(h.refuted(off_by_one));
-    h.check_all();
+    h.verify_all();
 }
 
 TEST_F(PudManifestScenarioIntegrationTest, GoalsJoinedThroughEquatedVariables) {
@@ -189,7 +189,7 @@ TEST_F(PudManifestScenarioIntegrationTest, GoalsJoinedThroughEquatedVariables) {
         EXPECT_TRUE(proven.contains(join.functor("q", {join.atom("a"), join.atom("a")})));
         EXPECT_FALSE(proven.contains(join.functor("q", {join.atom("a"), join.atom("b")})));
         EXPECT_FALSE(proven.contains(join.functor("q", {join.atom("b"), join.atom("b")})));
-        join.check_all();
+        join.verify_all();
     }
 }
 
@@ -235,7 +235,7 @@ TEST_F(PudManifestScenarioIntegrationTest, NewDriveContinuesOnceNewRootsAreRun) 
     h.open_axioms();
     EXPECT_GT(h.unfold_until_closed(100), 0u);
     EXPECT_TRUE(h.proven_heads().contains(h.functor("q", {h.atom("blue")})));
-    h.check_all();
+    h.verify_all();
 }
 
 TEST_F(PudManifestScenarioIntegrationTest, OneUnfoldMakesAChildForEveryCandidate) {
@@ -247,7 +247,7 @@ TEST_F(PudManifestScenarioIntegrationTest, OneUnfoldMakesAChildForEveryCandidate
     EXPECT_EQ(h.children_of(rule).size(), 50u);
     EXPECT_EQ(h.manifest.live_child_counts_.get(rule), 50u);
     EXPECT_EQ(h.proven_heads().size(), 100u);
-    h.check_all();
+    h.verify_all();
 }
 
 TEST_F(PudManifestScenarioIntegrationTest, RefutationCascadesIntoTheTreesThatDependedOnIt) {
@@ -262,7 +262,7 @@ TEST_F(PudManifestScenarioIntegrationTest, RefutationCascadesIntoTheTreesThatDep
     EXPECT_TRUE(h.refuted(mid));
     EXPECT_TRUE(h.refuted(top));
     EXPECT_THAT(h.open_leaves(), IsEmpty());
-    h.check_all();
+    h.verify_all();
 }
 
 TEST_F(PudManifestScenarioIntegrationTest, MutualRecursionWithoutABaseStaysLive) {
@@ -271,7 +271,7 @@ TEST_F(PudManifestScenarioIntegrationTest, MutualRecursionWithoutABaseStaysLive)
     h.open_axioms();
     for (int step = 0; step < 40; ++step) {
         ASSERT_TRUE(h.advance_unfold_loop());
-        h.check_all();
+        h.verify_all();
     }
     EXPECT_FALSE(h.refuted(p));
     EXPECT_FALSE(h.refuted(q));
@@ -288,7 +288,7 @@ TEST_F(PudManifestScenarioIntegrationTest, SelfRecursionWithoutABaseGrowsOneNode
     }
     EXPECT_FALSE(h.refuted(p));
     EXPECT_EQ(h.open_leaves().size(), 1u);
-    h.check_all();
+    h.verify_all();
 }
 
 TEST_F(PudManifestScenarioIntegrationTest, GrownRuleTreeOffersDeeperCandidates) {
@@ -303,7 +303,7 @@ TEST_F(PudManifestScenarioIntegrationTest, GrownRuleTreeOffersDeeperCandidates) 
     EXPECT_GT(deepest, 1u);
     h.unfold_until_closed(100);
     EXPECT_TRUE(h.proven_heads().contains(h.atom("q")));
-    h.check_all();
+    h.verify_all();
 }
 
 TEST_F(PudManifestScenarioIntegrationTest, SelfReferentialLemmasOnlyProveNumerals) {
@@ -320,7 +320,7 @@ TEST_F(PudManifestScenarioIntegrationTest, SelfReferentialLemmasOnlyProveNumeral
             number = successor->args.front();
         }
     }
-    h.check_all();
+    h.verify_all();
 }
 
 TEST_F(PudManifestScenarioIntegrationTest, NoQueryOutlivesAnExhaustedDatabase) {
