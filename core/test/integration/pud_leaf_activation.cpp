@@ -7,8 +7,9 @@
 #include "infrastructure/expr_pool.hpp"
 #include "infrastructure/globalizer.hpp"
 #include "infrastructure/pud_binder.hpp"
-#include "infrastructure/pud_leaf_activator.hpp"
-#include "infrastructure/pud_leaf_releaser.hpp"
+#include "infrastructure/pud_child_activator.hpp"
+#include "infrastructure/pud_node_deactivator.hpp"
+#include "infrastructure/pud_root_activator.hpp"
 #include "infrastructure/pud_mhcs.hpp"
 #include "infrastructure/pud_mhq.hpp"
 #include "infrastructure/pud_mhws.hpp"
@@ -50,9 +51,12 @@ struct PudLeafActivationIntegrationTest : public ::testing::Test {
     using binder_t = pud_binder<term_factory_t, substitutions_t>;
     using watcher_t = pud_structure_watcher<term_factory_t, substitutions_t>;
     using leaf_query_maker_t = pud_leaf_query_maker<mhq_t, mhq_t, pud_query_holders, pud_node_goals, lvcs_t>;
-    using leaf_activator_t = pud_leaf_activator<
+    using root_activator_t =
+        pud_root_activator<pud_active_states, watcher_t, pud_node_goals, leaf_query_maker_t>;
+    using child_activator_t = pud_child_activator<
         pud_active_states, pud_active_states, binder_t, watcher_t, pud_node_goals, call_sites_t, leaf_query_maker_t>;
-    using leaf_releaser_t = pud_leaf_releaser<pud_active_states, pud_active_states, pud_query_holders, mhq_t>;
+    using node_deactivator_t =
+        pud_node_deactivator<pud_active_states, pud_active_states, pud_query_holders, mhq_t, mhq_t>;
 
     test_functors functors;
     expr_pool exprs;
@@ -79,9 +83,10 @@ struct PudLeafActivationIntegrationTest : public ::testing::Test {
     binder_t binder{terms, substitutions};
     watcher_t structure_watcher{terms, substitutions};
     leaf_query_maker_t leaf_query_maker{mhq, mhq, query_holders, node_goals, lvcs};
-    leaf_activator_t leaf_activator{
+    root_activator_t root_activator{active_states, structure_watcher, node_goals, leaf_query_maker};
+    child_activator_t child_activator{
         active_states, active_states, binder, structure_watcher, node_goals, call_sites, leaf_query_maker};
-    leaf_releaser_t leaf_releaser{active_states, active_states, query_holders, mhq};
+    node_deactivator_t node_deactivator{active_states, active_states, query_holders, mhq, mhq};
 
     pud_node_id next_axiom = 8;
     pud_node_id root = 0;
@@ -128,17 +133,17 @@ struct PudLeafActivationIntegrationTest : public ::testing::Test {
 
     void activate(pud_node_id node) {
         if (node == root)
-            EXPECT_FALSE(leaf_activator.activate_root(root));
+            EXPECT_FALSE(root_activator.activate_root(root));
         else
-            EXPECT_FALSE(leaf_activator.activate_child(find_parent(node), node));
+            EXPECT_FALSE(child_activator.activate_child(find_parent(node), node));
     }
 
     bool activate_refuted(pud_node_id parent, pud_node_id node) {
-        return leaf_activator.activate_child(parent, node);
+        return child_activator.activate_child(parent, node);
     }
 
     void release(pud_node_id node) {
-        leaf_releaser.release(node);
+        node_deactivator.deactivate(node);
     }
 
     pud_node_id find_parent(pud_node_id node) {
@@ -291,5 +296,5 @@ TEST_F(PudLeafActivationIntegrationTest, RefutedOpenSurfacesThroughActivation) {
     const pud_node_id lone = next_axiom++;
     store_leaf(lone, 0, pud_goal_list{.goals = {}, .next_id = 0}.adding(p0), {});
     make_axiom(atom("s"));
-    EXPECT_TRUE(leaf_activator.activate_root(lone));
+    EXPECT_TRUE(root_activator.activate_root(lone));
 }

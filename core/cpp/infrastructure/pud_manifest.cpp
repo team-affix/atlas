@@ -32,14 +32,14 @@ pud_manifest::pud_manifest()
     , binder_(term_factory_, node_substitutions_)
     , structure_watcher_(term_factory_, node_substitutions_)
     , leaf_query_maker_(mhq_, mhq_, query_holders_, node_goals_, node_lvcs_)
-    , leaf_activator_(
+    , root_activator_(active_states_, structure_watcher_, node_goals_, leaf_query_maker_)
+    , child_activator_(
           active_states_, active_states_, binder_, structure_watcher_, node_goals_, call_sites_, leaf_query_maker_)
-    , leaf_releaser_(active_states_, active_states_, query_holders_, mhq_)
+    , node_deactivator_(active_states_, active_states_, query_holders_, mhq_, mhq_)
     , leaf_refuter_(refuted_leaves_, refutation_propagator_)
-    , leaf_deactivator_(leaf_releaser_, mhq_)
     , change_collector_(refuted_node_checker_)
     , acceptor_(node_goals_, replayer_, replayer_, expr_pool_, term_factory_, term_factory_, changed_class_finder_)
     , resolver_(active_states_, node_goals_, node_lvcs_, mhq_, mhcs_, acceptor_)
     , unfolder_(call_sites_, node_maker_, children_, leaf_nodes_, live_child_counts_, refutation_propagator_)
-    , expander_(resolver_, unfolder_, leaf_activator_, leaf_refuter_, leaf_releaser_, mhq_, query_holders_, change_collector_)
-    , root_opener_(node_maker_, axioms_, leaf_activator_, leaf_refuter_, leaf_releaser_, mhq_, query_holders_, change_collector_) {}
+    , expander_(resolver_, unfolder_, child_activator_, leaf_refuter_, node_deactivator_, query_holders_, change_collector_)
+    , root_opener_(node_maker_, axioms_, root_activator_, leaf_refuter_, node_deactivator_, query_holders_, change_collector_) {}

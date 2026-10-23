@@ -34,7 +34,7 @@ Query ownership
 
 - pud_query_holders maps head id -> { goal id, set of leaf ids holding it }.
 - Leaves acquire heads in pud_leaf_query_maker::admit_leaf; release via
-  pud_leaf_releaser when a leaf leaves the frontier.
+  pud_node_deactivator when a node leaves the frontier.
 - When the last holder releases a head, mhq::remove is the only removal path.
 - A refuted head refutes every leaf still holding it (frontier_retirer).
 
@@ -46,7 +46,7 @@ Leaf activation (replaces descents)
 - pud_leaf_query_maker: on a child, erase closed goal's head; fork changed goals
   in the child environment; open queries for newly added goals; hold every head
   the leaf keeps.
-- pud_leaf_activator stores pud_active_state { bindings, watch, queries }.
+- pud_root_activator / pud_child_activator store pud_active_state { bindings, watch, queries }.
 
 Unfold and solver
 

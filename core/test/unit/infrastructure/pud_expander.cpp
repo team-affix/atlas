@@ -25,11 +25,8 @@ struct MockActivateChild {
 struct MockRefuteLeaf {
     MOCK_METHOD(void, refute, (pud_node_id));
 };
-struct MockReleaseLeaf {
-    MOCK_METHOD(void, release, (pud_node_id));
-};
-struct MockInvalidateQueryLeaf {
-    MOCK_METHOD(std::vector<pud_mhq_head_id>, invalidate_leaf, (pud_node_id));
+struct MockDeactivateNode {
+    MOCK_METHOD(std::vector<pud_mhq_head_id>, deactivate, (pud_node_id));
 };
 struct MockGetQueryHolders {
     MOCK_METHOD(std::vector<pud_node_id>, get_holders, (pud_mhq_head_id));
@@ -42,19 +39,17 @@ struct MockCollectChange {
 
 using test_expander_t = pud_expander<
     NiceMock<MockResolve>, NiceMock<MockUnfold>, NiceMock<MockActivateChild>, NiceMock<MockRefuteLeaf>,
-    NiceMock<MockReleaseLeaf>, NiceMock<MockInvalidateQueryLeaf>, NiceMock<MockGetQueryHolders>,
-    NiceMock<MockCollectChange>>;
+    NiceMock<MockDeactivateNode>, NiceMock<MockGetQueryHolders>, NiceMock<MockCollectChange>>;
 
 struct PudExpanderTest : public ::testing::Test {
     NiceMock<MockResolve> resolver;
     NiceMock<MockUnfold> unfolder;
     NiceMock<MockActivateChild> activator;
     NiceMock<MockRefuteLeaf> refuter;
-    NiceMock<MockReleaseLeaf> releaser;
-    NiceMock<MockInvalidateQueryLeaf> queries;
+    NiceMock<MockDeactivateNode> deactivator;
     NiceMock<MockGetQueryHolders> holders;
     NiceMock<MockCollectChange> collector;
-    test_expander_t expander{resolver, unfolder, activator, refuter, releaser, queries, holders, collector};
+    test_expander_t expander{resolver, unfolder, activator, refuter, deactivator, holders, collector};
     pud_child_delta first{.substitutions = {}, .body_goals = {}, .var_count = 1};
     pud_child_delta second{.substitutions = {}, .body_goals = {}, .var_count = 2};
     std::vector<pud_child_delta> two_deltas{first, second};
@@ -63,7 +58,7 @@ struct PudExpanderTest : public ::testing::Test {
         ON_CALL(resolver, resolve(4, 1)).WillByDefault(Return(two_deltas));
         ON_CALL(unfolder, unfold_child(4, 1, first)).WillByDefault(Return(10));
         ON_CALL(unfolder, unfold_child(4, 1, second)).WillByDefault(Return(11));
-        ON_CALL(queries, invalidate_leaf(_)).WillByDefault(Return(std::vector<pud_mhq_head_id>{}));
+        ON_CALL(deactivator, deactivate(_)).WillByDefault(Return(std::vector<pud_mhq_head_id>{}));
         ON_CALL(collector, finish()).WillByDefault(Return(pud_frontier_change{}));
     }
 };
@@ -74,8 +69,7 @@ TEST_F(PudExpanderTest, ChildrenAreActivatedBeforeTheLeafIsReleased) {
     InSequence in_order;
     EXPECT_CALL(activator, activate_child(4, 10));
     EXPECT_CALL(activator, activate_child(4, 11));
-    EXPECT_CALL(releaser, release(4));
-    EXPECT_CALL(queries, invalidate_leaf(4u));
+    EXPECT_CALL(deactivator, deactivate(4u));
     expander.expand(4, 1);
 }
 
@@ -83,10 +77,8 @@ TEST_F(PudExpanderTest, ChildrenRefutedOnArrivalAreRefutedBeforeTheLeafIsRelease
     ON_CALL(activator, activate_child(4, 11)).WillByDefault(Return(true));
     InSequence in_order;
     EXPECT_CALL(refuter, refute(11));
-    EXPECT_CALL(releaser, release(4));
-    EXPECT_CALL(releaser, release(11));
-    EXPECT_CALL(queries, invalidate_leaf(4u));
-    EXPECT_CALL(queries, invalidate_leaf(11u));
+    EXPECT_CALL(deactivator, deactivate(4u));
+    EXPECT_CALL(deactivator, deactivate(11u));
     expander.expand(4, 1);
 }
 
@@ -94,7 +86,7 @@ TEST_F(PudExpanderTest, TheChangeCoversTheChildrenAndEveryRefutedLeaf) {
     const pud_frontier_change change{.offspring = {10}, .refuted = {11, 20}};
     ON_CALL(activator, activate_child(4, 11)).WillByDefault(Return(true));
     ON_CALL(holders, get_holders(_)).WillByDefault(Return(std::vector<pud_node_id>{20}));
-    ON_CALL(queries, invalidate_leaf(11u)).WillByDefault(Return(std::vector<pud_mhq_head_id>{5}));
+    ON_CALL(deactivator, deactivate(11u)).WillByDefault(Return(std::vector<pud_mhq_head_id>{5}));
     EXPECT_CALL(collector, add_produced(10));
     EXPECT_CALL(collector, add_produced(11));
     EXPECT_CALL(collector, add_refuted(11));

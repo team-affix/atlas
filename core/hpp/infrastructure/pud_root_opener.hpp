@@ -18,8 +18,7 @@ template<
     typename IAddAxiom,
     typename IActivateRoot,
     typename IRefuteLeaf,
-    typename IReleaseLeaf,
-    typename IInvalidateQueryLeaf,
+    typename IDeactivateNode,
     typename IGetQueryHolders,
     typename ICollectChange>
 struct pud_root_opener {
@@ -28,8 +27,7 @@ struct pud_root_opener {
         IAddAxiom& add_axiom,
         IActivateRoot& activate_root,
         IRefuteLeaf& refute_leaf,
-        IReleaseLeaf& release_leaf,
-        IInvalidateQueryLeaf& invalidate_query_leaf,
+        IDeactivateNode& deactivate_node,
         IGetQueryHolders& get_query_holders,
         ICollectChange& collect_change);
     pud_node_id add_axiom(const rule& axiom);
@@ -40,8 +38,7 @@ private:
     IAddAxiom& add_axiom_;
     IActivateRoot& activate_root_;
     IRefuteLeaf& refute_leaf_;
-    IReleaseLeaf& release_leaf_;
-    IInvalidateQueryLeaf& invalidate_query_leaf_;
+    IDeactivateNode& deactivate_node_;
     IGetQueryHolders& get_query_holders_;
     ICollectChange& collect_change_;
     std::vector<pud_node_id> pending_roots_;
@@ -49,10 +46,10 @@ private:
 
 #define PUD_ROOT_OPENER_TEMPLATE                                                           \
     template<typename IMakeRoot, typename IAddAxiom, typename IActivateRoot, typename IRefuteLeaf, \
-             typename IReleaseLeaf, typename IInvalidateQueryLeaf, typename IGetQueryHolders, typename ICollectChange>
+             typename IDeactivateNode, typename IGetQueryHolders, typename ICollectChange>
 #define PUD_ROOT_OPENER                                                                    \
-    pud_root_opener<IMakeRoot, IAddAxiom, IActivateRoot, IRefuteLeaf, IReleaseLeaf,            \
-        IInvalidateQueryLeaf, IGetQueryHolders, ICollectChange>
+    pud_root_opener<IMakeRoot, IAddAxiom, IActivateRoot, IRefuteLeaf, IDeactivateNode,         \
+        IGetQueryHolders, ICollectChange>
 
 PUD_ROOT_OPENER_TEMPLATE
 PUD_ROOT_OPENER::pud_root_opener(
@@ -60,16 +57,14 @@ PUD_ROOT_OPENER::pud_root_opener(
     IAddAxiom& add_axiom,
     IActivateRoot& activate_root,
     IRefuteLeaf& refute_leaf,
-    IReleaseLeaf& release_leaf,
-    IInvalidateQueryLeaf& invalidate_query_leaf,
+    IDeactivateNode& deactivate_node,
     IGetQueryHolders& get_query_holders,
     ICollectChange& collect_change)
     : make_root_(make_root)
     , add_axiom_(add_axiom)
     , activate_root_(activate_root)
     , refute_leaf_(refute_leaf)
-    , release_leaf_(release_leaf)
-    , invalidate_query_leaf_(invalidate_query_leaf)
+    , deactivate_node_(deactivate_node)
     , get_query_holders_(get_query_holders)
     , collect_change_(collect_change)
     , pending_roots_() {}
@@ -111,11 +106,9 @@ pud_frontier_change PUD_ROOT_OPENER::open() {
         refuting.clear();
         const std::vector<pud_node_id> releasable = std::move(releasing);
         releasing.clear();
-        for (pud_node_id node : releasable)
-            release_leaf_.release(node);
         std::set<pud_node_id> next_refuting;
         for (pud_node_id node : releasable) {
-            for (pud_mhq_head_id head_id : invalidate_query_leaf_.invalidate_leaf(node)) {
+            for (pud_mhq_head_id head_id : deactivate_node_.deactivate(node)) {
                 const std::vector<pud_node_id> held_by = get_query_holders_.get_holders(head_id);
                 next_refuting.insert(held_by.begin(), held_by.end());
             }

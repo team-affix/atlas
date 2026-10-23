@@ -24,11 +24,8 @@ struct MockActivateRoot {
 struct MockRefuteLeaf {
     MOCK_METHOD(void, refute, (pud_node_id));
 };
-struct MockReleaseLeaf {
-    MOCK_METHOD(void, release, (pud_node_id));
-};
-struct MockInvalidateQueryLeaf {
-    MOCK_METHOD(std::vector<pud_mhq_head_id>, invalidate_leaf, (pud_node_id));
+struct MockDeactivateNode {
+    MOCK_METHOD(std::vector<pud_mhq_head_id>, deactivate, (pud_node_id));
 };
 struct MockGetQueryHolders {
     MOCK_METHOD(std::vector<pud_node_id>, get_holders, (pud_mhq_head_id));
@@ -41,7 +38,7 @@ struct MockCollectChange {
 
 using test_root_opener_t = pud_root_opener<
     NiceMock<MockMakeRoot>, NiceMock<MockAddAxiom>, NiceMock<MockActivateRoot>, NiceMock<MockRefuteLeaf>,
-    NiceMock<MockReleaseLeaf>, NiceMock<MockInvalidateQueryLeaf>, NiceMock<MockGetQueryHolders>,
+    NiceMock<MockDeactivateNode>, NiceMock<MockGetQueryHolders>,
     NiceMock<MockCollectChange>>;
 
 struct PudRootOpenerTest : public ::testing::Test {
@@ -49,16 +46,15 @@ struct PudRootOpenerTest : public ::testing::Test {
     NiceMock<MockAddAxiom> axioms;
     NiceMock<MockActivateRoot> activator;
     NiceMock<MockRefuteLeaf> refuter;
-    NiceMock<MockReleaseLeaf> releaser;
-    NiceMock<MockInvalidateQueryLeaf> queries;
+    NiceMock<MockDeactivateNode> deactivator;
     NiceMock<MockGetQueryHolders> holders;
     NiceMock<MockCollectChange> collector;
-    test_root_opener_t opener{node_maker, axioms, activator, refuter, releaser, queries, holders, collector};
+    test_root_opener_t opener{node_maker, axioms, activator, refuter, deactivator, holders, collector};
     expr head{expr::functor{1, {}}};
     expr goal{expr::functor{2, {}}};
 
     void SetUp() override {
-        ON_CALL(queries, invalidate_leaf(_)).WillByDefault(Return(std::vector<pud_mhq_head_id>{}));
+        ON_CALL(deactivator, deactivate(_)).WillByDefault(Return(std::vector<pud_mhq_head_id>{}));
         ON_CALL(collector, finish()).WillByDefault(Return(pud_frontier_change{}));
     }
 };
@@ -87,8 +83,7 @@ TEST_F(PudRootOpenerTest, OpeningActivatesEveryAddedRootThenRefutesAndReleasesTh
     EXPECT_CALL(activator, activate_root(7)).WillOnce(Return(true));
     EXPECT_CALL(activator, activate_root(8)).WillOnce(Return(false));
     EXPECT_CALL(refuter, refute(7));
-    EXPECT_CALL(releaser, release(7));
-    EXPECT_CALL(queries, invalidate_leaf(7u));
+    EXPECT_CALL(deactivator, deactivate(7u));
     EXPECT_CALL(collector, add_produced(7));
     EXPECT_CALL(collector, add_produced(8));
     EXPECT_CALL(collector, add_refuted(7));

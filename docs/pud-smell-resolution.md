@@ -12,7 +12,7 @@ Legend: **Resolved** = removed or redesigned. **Justified** = kept intentionally
 | ID | Status | Notes |
 |----|--------|-------|
 | D1 | Resolved | `docs/pud-query-model.txt` rewritten for current stack; `prompts/pud.txt` fills candidate storage; old om_interval/FPA narrative deprecated in docs. |
-| D2 | Resolved | Query ownership via `pud_query_holders` + `pud_leaf_releaser`; no destructor-driven head lifetime. |
+| D2 | Resolved | Query ownership via `pud_query_holders` + `pud_node_deactivator`; no destructor-driven head lifetime. |
 | D3 | Resolved | Single removal path: `mhq::remove` when last holder releases; no parallel erase guards. |
 | D4 | Resolved | Holders are authoritative; not rebuilt from side maps on each descent. |
 | D5 | Resolved | One candidacy list per `pud_mhq` head (axiom-ordered); mhcs holds search state only. |
@@ -86,7 +86,7 @@ Legend: **Resolved** = removed or redesigned. **Justified** = kept intentionally
 | S3 | Justified | `const expr*` remains: hash-consed DAG nodes in `expr_pool`; justified by interning, not ownership ambiguity. |
 | S4 | Resolved | Structure watch keyed by goal id, not separate watch-head ids. |
 | S5 | Resolved | `pud_frontier_retirer` / layered invalidate replace indexed invalidator names. |
-| S6 | Resolved | Single `pud_leaf_activator` path (no duplicate activation descents). |
+| S6 | Resolved | `pud_root_activator` / `pud_child_activator` (no duplicate activation descents). |
 | S7 | Resolved | Duplicate value objects (admission, resume contexts, unit/refuted query types, etc.) deleted. |
 | S8 | Resolved | `pud_term_factory` centralizes term collaborators. |
 | S9 | Justified | Store-once `get` asserts or throws in tests via `optional::value()`; matches “fail loud on bug” policy. |

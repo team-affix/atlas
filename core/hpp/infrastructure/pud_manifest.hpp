@@ -12,11 +12,11 @@
 #include "infrastructure/pud_changed_class_finder.hpp"
 #include "infrastructure/pud_expander.hpp"
 #include "infrastructure/pud_frontier_change_collector.hpp"
-#include "infrastructure/pud_leaf_deactivator.hpp"
+#include "infrastructure/pud_child_activator.hpp"
 #include "infrastructure/pud_leaf_refuter.hpp"
-#include "infrastructure/pud_leaf_activator.hpp"
 #include "infrastructure/pud_leaf_query_maker.hpp"
-#include "infrastructure/pud_leaf_releaser.hpp"
+#include "infrastructure/pud_node_deactivator.hpp"
+#include "infrastructure/pud_root_activator.hpp"
 #include "infrastructure/pud_active_states.hpp"
 #include "infrastructure/pud_mhcs.hpp"
 #include "infrastructure/pud_mhq.hpp"
@@ -71,11 +71,14 @@ struct pud_manifest {
     using binder_t = pud_binder<term_factory_t, node_substitutions_t>;
     using structure_watcher_t = pud_structure_watcher<term_factory_t, node_substitutions_t>;
     using leaf_query_maker_t = pud_leaf_query_maker<mhq_t, mhq_t, pud_query_holders, pud_node_goals, node_lvcs_t>;
-    using leaf_activator_t = pud_leaf_activator<
-        pud_active_states, pud_active_states, binder_t, structure_watcher_t, pud_node_goals, call_sites_t, leaf_query_maker_t>;
-    using leaf_releaser_t = pud_leaf_releaser<pud_active_states, pud_active_states, pud_query_holders, mhq_t>;
+    using root_activator_t =
+        pud_root_activator<pud_active_states, structure_watcher_t, pud_node_goals, leaf_query_maker_t>;
+    using child_activator_t = pud_child_activator<
+        pud_active_states, pud_active_states, binder_t, structure_watcher_t, pud_node_goals, call_sites_t,
+        leaf_query_maker_t>;
+    using node_deactivator_t = pud_node_deactivator<
+        pud_active_states, pud_active_states, pud_query_holders, mhq_t, mhq_t>;
     using leaf_refuter_t = pud_leaf_refuter<pud_refuted_leaves, refutation_propagator_t>;
-    using leaf_deactivator_t = pud_leaf_deactivator<leaf_releaser_t, mhq_t>;
     using change_collector_t = pud_frontier_change_collector<refuted_node_checker_t>;
 
     using acceptor_t = pud_acceptor<pud_node_goals, replayer_t, replayer_t, expr_pool, term_factory_t, term_factory_t, pud_changed_class_finder>;
@@ -83,9 +86,9 @@ struct pud_manifest {
     using unfolder_t =
         pud_unfolder<call_sites_t, node_maker_t, children_t, pud_leaf_nodes, pud_node_live_child_counts, refutation_propagator_t>;
     using expander_t = pud_expander<
-        resolver_t, unfolder_t, leaf_activator_t, leaf_refuter_t, leaf_releaser_t, mhq_t, pud_query_holders, change_collector_t>;
+        resolver_t, unfolder_t, child_activator_t, leaf_refuter_t, node_deactivator_t, pud_query_holders, change_collector_t>;
     using root_opener_t = pud_root_opener<
-        node_maker_t, axioms_t, leaf_activator_t, leaf_refuter_t, leaf_releaser_t, mhq_t, pud_query_holders, change_collector_t>;
+        node_maker_t, axioms_t, root_activator_t, leaf_refuter_t, node_deactivator_t, pud_query_holders, change_collector_t>;
 
     pud_manifest();
 
@@ -121,10 +124,10 @@ struct pud_manifest {
     binder_t                   binder_;
     structure_watcher_t        structure_watcher_;
     leaf_query_maker_t         leaf_query_maker_;
-    leaf_activator_t           leaf_activator_;
-    leaf_releaser_t            leaf_releaser_;
+    root_activator_t           root_activator_;
+    child_activator_t          child_activator_;
+    node_deactivator_t         node_deactivator_;
     leaf_refuter_t             leaf_refuter_;
-    leaf_deactivator_t         leaf_deactivator_;
     change_collector_t         change_collector_;
 
     acceptor_t                 acceptor_;

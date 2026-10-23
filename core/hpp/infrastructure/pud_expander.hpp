@@ -17,8 +17,7 @@ template<
     typename IUnfold,
     typename IActivateChild,
     typename IRefuteLeaf,
-    typename IReleaseLeaf,
-    typename IInvalidateQueryLeaf,
+    typename IDeactivateNode,
     typename IGetQueryHolders,
     typename ICollectChange>
 struct pud_expander {
@@ -27,8 +26,7 @@ struct pud_expander {
         IUnfold& unfold,
         IActivateChild& activate_child,
         IRefuteLeaf& refute_leaf,
-        IReleaseLeaf& release_leaf,
-        IInvalidateQueryLeaf& invalidate_query_leaf,
+        IDeactivateNode& deactivate_node,
         IGetQueryHolders& get_query_holders,
         ICollectChange& collect_change);
     pud_frontier_change expand(pud_node_id leaf, pud_body_goal_id goal);
@@ -37,33 +35,30 @@ private:
     IUnfold& unfold_;
     IActivateChild& activate_child_;
     IRefuteLeaf& refute_leaf_;
-    IReleaseLeaf& release_leaf_;
-    IInvalidateQueryLeaf& invalidate_query_leaf_;
+    IDeactivateNode& deactivate_node_;
     IGetQueryHolders& get_query_holders_;
     ICollectChange& collect_change_;
 };
 
-template<typename IR, typename IU, typename IAC, typename IRL, typename IRLS, typename IIQL, typename IGQH, typename ICC>
-pud_expander<IR, IU, IAC, IRL, IRLS, IIQL, IGQH, ICC>::pud_expander(
+template<typename IR, typename IU, typename IAC, typename IRL, typename IDN, typename IGQH, typename ICC>
+pud_expander<IR, IU, IAC, IRL, IDN, IGQH, ICC>::pud_expander(
     IR& resolve,
     IU& unfold,
     IAC& activate_child,
     IRL& refute_leaf,
-    IRLS& release_leaf,
-    IIQL& invalidate_query_leaf,
+    IDN& deactivate_node,
     IGQH& get_query_holders,
     ICC& collect_change)
     : resolve_(resolve)
     , unfold_(unfold)
     , activate_child_(activate_child)
     , refute_leaf_(refute_leaf)
-    , release_leaf_(release_leaf)
-    , invalidate_query_leaf_(invalidate_query_leaf)
+    , deactivate_node_(deactivate_node)
     , get_query_holders_(get_query_holders)
     , collect_change_(collect_change) {}
 
-template<typename IR, typename IU, typename IAC, typename IRL, typename IRLS, typename IIQL, typename IGQH, typename ICC>
-pud_frontier_change pud_expander<IR, IU, IAC, IRL, IRLS, IIQL, IGQH, ICC>::expand(pud_node_id leaf, pud_body_goal_id goal) {
+template<typename IR, typename IU, typename IAC, typename IRL, typename IDN, typename IGQH, typename ICC>
+pud_frontier_change pud_expander<IR, IU, IAC, IRL, IDN, IGQH, ICC>::expand(pud_node_id leaf, pud_body_goal_id goal) {
     unfold_.begin_unfold(leaf, goal);
     std::vector<pud_node_id> children;
     for (const pud_child_delta& delta : resolve_.resolve(leaf, goal))
@@ -88,11 +83,9 @@ pud_frontier_change pud_expander<IR, IU, IAC, IRL, IRLS, IIQL, IGQH, ICC>::expan
         refuting.clear();
         const std::vector<pud_node_id> releasable = std::move(releasing);
         releasing.clear();
-        for (pud_node_id node : releasable)
-            release_leaf_.release(node);
         std::set<pud_node_id> next_refuting;
         for (pud_node_id node : releasable) {
-            for (pud_mhq_head_id head_id : invalidate_query_leaf_.invalidate_leaf(node)) {
+            for (pud_mhq_head_id head_id : deactivate_node_.deactivate(node)) {
                 const std::vector<pud_node_id> held_by = get_query_holders_.get_holders(head_id);
                 next_refuting.insert(held_by.begin(), held_by.end());
             }
